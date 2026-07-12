@@ -14,6 +14,7 @@ func _ready() -> void:
 	# 귀환·사망 모두 거점으로 (가방 처리·손실은 GameState가 시그널로 이미 수행)
 	EventBus.extraction_success.connect(func() -> void: change_scene(&"base"))
 	EventBus.player_died.connect(func() -> void: change_scene(&"base"))
+	SaveManager.load_game()  # 세이브 없으면 false → 아래 시드가 새 게임 구성
 	_seed_prototype()
 	change_scene(&"base")
 

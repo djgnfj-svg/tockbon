@@ -21,6 +21,7 @@ EventBus="*res://src/core/event_bus.gd"
 GameState="*res://src/core/game_state.gd"
 Clock="*res://src/core/clock.gd"
 Db="*res://src/core/db.gd"
+SaveManager="*res://src/core/save_manager.gd"
 
 [display]
 
