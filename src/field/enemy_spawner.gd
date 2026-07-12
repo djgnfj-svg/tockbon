@@ -8,6 +8,7 @@ const SCRIPTS := {
 	&"slime_elite": preload("res://src/field/enemy_slime.gd"),
 	&"mist": preload("res://src/field/enemy_mist.gd"),
 	&"beetle": preload("res://src/field/enemy_beetle.gd"),
+	&"gale": preload("res://src/field/enemy_gale.gd"),
 }
 
 static func spawn(def: EnemyDef) -> CharacterBody2D:

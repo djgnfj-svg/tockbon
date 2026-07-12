@@ -11,6 +11,12 @@ const ExitGateScript := preload("res://src/field/exit_gate.gd")
 const MAP_SIZE := Vector2(1280, 832)
 const WALL_THICKNESS := 24.0
 
+## 북쪽 보스 존 — 중간보스(바람을 품은 존재) 격리 구역. 남쪽 경계(y=0)의
+## BOSS_GATE_X 구간만 뚫려 입구가 된다. 바닥 색으로 본 필드와 구분.
+const BOSS_ZONE := Rect2(440, -420, 400, 420)
+## 북쪽 벽에서 비워 두는 입구 x 구간 (min, max)
+const BOSS_GATE_X := Vector2(576, 704)
+
 ## 페이즈별 CanvasModulate 색 — 낮/밤은 스프라이트 교체가 아니라 조명으로 (GDD §10.5)
 const PHASE_COLORS := {
 	Enums.Phase.MORNING: Color(1.0, 0.96, 0.88),
@@ -32,6 +38,7 @@ const ENEMY_SPAWNS := [
 	{"id": &"mist", "pos": Vector2(180, 420)},
 	{"id": &"mist", "pos": Vector2(1080, 300)},
 	{"id": &"beetle", "pos": Vector2(520, 490)},
+	{"id": &"gale", "pos": Vector2(640, -240)},   # 중간보스 — 북쪽 보스 존
 ]
 
 const GATHER_SPAWNS := [
@@ -55,6 +62,7 @@ var _modulate_node: CanvasModulate
 func _ready() -> void:
 	_build_ground_and_walls()
 	_build_obstacles()
+	_build_boss_zone()
 	_modulate_node = CanvasModulate.new()
 	_modulate_node.color = PHASE_COLORS.get(Clock.phase, Color.WHITE)
 	add_child(_modulate_node)
@@ -108,7 +116,11 @@ func _build_ground_and_walls() -> void:
 	add_child(ground)
 	var half_w := MAP_SIZE.x * 0.5
 	var half_h := MAP_SIZE.y * 0.5
-	_make_wall(Vector2(half_w, -WALL_THICKNESS * 0.5), Vector2(MAP_SIZE.x, WALL_THICKNESS))
+	# 북쪽 벽 — 보스 존 입구(BOSS_GATE_X)만 비우고 좌우 두 조각으로
+	_make_wall(Vector2(BOSS_GATE_X.x * 0.5, -WALL_THICKNESS * 0.5),
+		Vector2(BOSS_GATE_X.x, WALL_THICKNESS))
+	_make_wall(Vector2((BOSS_GATE_X.y + MAP_SIZE.x) * 0.5, -WALL_THICKNESS * 0.5),
+		Vector2(MAP_SIZE.x - BOSS_GATE_X.y, WALL_THICKNESS))
 	_make_wall(Vector2(half_w, MAP_SIZE.y + WALL_THICKNESS * 0.5), Vector2(MAP_SIZE.x, WALL_THICKNESS))
 	_make_wall(Vector2(-WALL_THICKNESS * 0.5, half_h), Vector2(WALL_THICKNESS, MAP_SIZE.y))
 	_make_wall(Vector2(MAP_SIZE.x + WALL_THICKNESS * 0.5, half_h), Vector2(WALL_THICKNESS, MAP_SIZE.y))
@@ -129,3 +141,45 @@ func _build_obstacles() -> void:
 		Util.add_rect_collider(rock, o["size"])
 		Util.add_rect_visual(rock, o["size"], Color(0.32, 0.3, 0.26))
 		add_child(rock)
+
+## 북쪽 보스 존 — 바닥 색으로 구분되는 격리 구역 + 입구 표식.
+## 남쪽 벽은 _build_ground_and_walls의 북쪽 벽 두 조각이 겸한다 (입구 구간만 개방).
+func _build_boss_zone() -> void:
+	var floor_poly := Polygon2D.new()
+	floor_poly.polygon = PackedVector2Array([
+		BOSS_ZONE.position,
+		BOSS_ZONE.position + Vector2(BOSS_ZONE.size.x, 0),
+		BOSS_ZONE.end,
+		BOSS_ZONE.position + Vector2(0, BOSS_ZONE.size.y),
+	])
+	floor_poly.color = Color(0.21, 0.28, 0.32)   # 바람 기운의 냉색 — 본 필드(녹색)와 구분
+	floor_poly.z_index = -10
+	add_child(floor_poly)
+	# 존 외벽 3면 (서·동·북)
+	_make_wall(Vector2(BOSS_ZONE.position.x - WALL_THICKNESS * 0.5, BOSS_ZONE.get_center().y),
+		Vector2(WALL_THICKNESS, BOSS_ZONE.size.y))
+	_make_wall(Vector2(BOSS_ZONE.end.x + WALL_THICKNESS * 0.5, BOSS_ZONE.get_center().y),
+		Vector2(WALL_THICKNESS, BOSS_ZONE.size.y))
+	_make_wall(Vector2(BOSS_ZONE.get_center().x, BOSS_ZONE.position.y - WALL_THICKNESS * 0.5),
+		Vector2(BOSS_ZONE.size.x + WALL_THICKNESS * 2.0, WALL_THICKNESS))
+	# 입구 표식 — 통로 바닥 띠 + 바람 소용돌이 문양
+	var strip := Polygon2D.new()
+	strip.polygon = PackedVector2Array([
+		Vector2(BOSS_GATE_X.x, -WALL_THICKNESS), Vector2(BOSS_GATE_X.y, -WALL_THICKNESS),
+		Vector2(BOSS_GATE_X.y, WALL_THICKNESS), Vector2(BOSS_GATE_X.x, WALL_THICKNESS),
+	])
+	strip.color = Color(0.45, 0.6, 0.62, 0.8)
+	strip.z_index = -9
+	add_child(strip)
+	var swirl := Line2D.new()
+	var pts := PackedVector2Array()
+	for i in range(24):
+		var t := float(i) / 23.0
+		pts.append(Vector2.from_angle(t * TAU * 2.0) * (3.0 + t * 13.0))
+	swirl.points = pts
+	swirl.width = 2.0
+	swirl.default_color = Color(0.75, 0.92, 0.95, 0.9)
+	swirl.position = Vector2((BOSS_GATE_X.x + BOSS_GATE_X.y) * 0.5, -64)
+	add_child(swirl)
+	# NOTE(EA — GDD §9): 보스 격파 후 '에필로그 탐색' 진입 트리거 지점 — 존 북쪽 끝.
+	# EA에서 리드가 scene_change_requested 게이트를 여기(BOSS_ZONE 북단)에 배치한다.

@@ -13,6 +13,7 @@ func _init() -> void:
 	errors += _save(_slime_elite())
 	errors += _save(_mist())
 	errors += _save(_beetle())
+	errors += _save(_gale())
 	if errors == 0:
 		print("MAKE_DEFS_OK")
 	quit(errors)
@@ -144,5 +145,30 @@ func _beetle() -> EnemyDef:
 	d.drops = [
 		_drop(&"mat_beetle_shell", 0.9, 1, 2),
 		_drop(&"charm_basic", 0.08),
+	] as Array[DropEntry]
+	return d
+
+## 중간보스 — 바람을 품은 존재: 바람 룬 탁본 조각 (GDD §6·§7).
+## 약점 충격> — 바람 룬을 주는 보스라 자기 룬이 약점일 수 없다.
+func _gale() -> EnemyDef:
+	var d := EnemyDef.new()
+	d.id = &"gale"
+	d.display_name = "바람을 품은 존재"
+	d.hp = 250.0
+	d.counter_rune = Enums.RuneType.IMPACT
+	d.is_elite = true          # 엘리트 경로 재사용 — 사망 시 탁본 잔류물 스폰
+	d.night_buff = 1.2
+	d.params = {
+		"move_speed": 55.0, "aggro_range": 260.0, "attack_range": 30.0,
+		"attack_cooldown": 1.5, "contact_damage": 10.0, "weakness_mult": 1.6,
+		"gust_period": 3.0, "gust_windup": 0.8, "gust_radius": 90.0,
+		"gust_damage": 8.0, "gust_push_dist": 70.0,
+		"volley_period": 4.5, "volley_count": 3, "volley_interval": 0.25,
+		"proj_speed": 170.0, "proj_damage": 6.0, "proj_lifetime": 2.8,
+		"phase2_speed_mult": 1.3, "phase2_rate_mult": 0.65,
+	}
+	d.drops = [
+		_drop(&"mat_mist_essence", 1.0, 2, 3),
+		_drop(&"fragment_wind", 1.0),    # 직접 드롭 아님 — 탁본 잔류물로 획득
 	] as Array[DropEntry]
 	return d

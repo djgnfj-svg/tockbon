@@ -271,7 +271,91 @@ func _run() -> void:
 	_check(GameState.get_count(&"fragment_water") >= 1, "귀환 확정: 창고에 fragment_water")
 	_check(GameState.bag.is_empty(), "귀환 후 가방 비움")
 
-	# ── 17. 플레이어 피격·사망 → player_died + bag_lost → 가방 손실
+	# ── 17. 중간보스(gale) — def·계약·약점 충격 배율
+	var gale_def: EnemyDef = Db.get_enemy(&"gale")
+	_check(gale_def != null, "EnemyDef 로드: gale")
+	if gale_def != null:
+		_check(gale_def.is_elite, "gale.is_elite == true (탁본 경로 재사용)")
+		_check(gale_def.has_counter and gale_def.counter_rune == Enums.RuneType.IMPACT,
+			"gale 약점 = 충격> (바람 룬 보스는 자기 룬이 약점일 수 없음)")
+		_check(absf(gale_def.night_buff - 1.2) < EPS, "gale.night_buff == 1.2")
+	var gale: Variant = _spawn_enemy(&"gale", Vector2(-1200, 800))
+	if gale == null:
+		_check(false, "보스 스폰 (EnemyDef 누락 — 이후 보스 검증 불가)")
+	else:
+		_check(gale.is_in_group("enemies"), "보스 그룹 'enemies'")
+		_check(gale.collision_layer == 1 << 2, "보스 충돌 레이어 3")
+		_check(gale.has_method("take_hit"), "보스 take_hit 메서드")
+		_check(absf(gale.max_hp - 250.0) < EPS, "보스 HP 250")
+		var g_hp0: float = gale.hp
+		gale.take_hit(10.0, -1, Enums.Status.NONE, 0.0)
+		var g_neutral: float = g_hp0 - gale.hp
+		g_hp0 = gale.hp
+		gale.take_hit(10.0, Enums.RuneType.IMPACT, Enums.Status.NONE, 0.0)
+		var g_impact: float = g_hp0 - gale.hp
+		_check(absf(g_neutral - 10.0) < EPS, "보스 무속성 피해 10")
+		_check(absf(g_impact - 10.0 * gale.weakness_mult) < EPS,
+			"보스 충격 약점 배율 x%.2f" % gale.weakness_mult)
+
+		# ── 17b. 돌풍 밀치기 — 예열 후 반경 내 플레이어 밀어냄 + 피해, 이어서 회오리 3연발
+		player.global_position = Vector2(-1200, 860)   # 보스에서 60px (돌풍 반경 90 안)
+		player._invuln_left = 0.0
+		GameState.reset_player_hp()
+		var pos_before: Vector2 = player.global_position
+		var php0: float = GameState.hp
+		for i in range(60):
+			gale.simulate(0.1, false)   # 6초 — 돌풍(예열 0.8s 포함) + 회오리 1회씩 발동
+		var pushed: float = player.global_position.distance_to(pos_before)
+		_check(pushed >= 50.0, "돌풍 밀치기: 플레이어 밀려남 (실측 %.0fpx)" % pushed)
+		_check(absf((php0 - GameState.hp) - gale.gust_damage) < EPS,
+			"돌풍 밀치기: 피해 %.0f 적용" % gale.gust_damage)
+		var winds := get_tree().get_nodes_in_group("enemy_projectiles")
+		_check(winds.size() >= 3, "회오리 투사체 3연발 스폰 (실측 %d)" % winds.size())
+		if winds.size() > 0:
+			_check(winds[0].collision_layer == 1 << 4, "회오리 레이어 5 (enemy_projectile)")
+			_check(winds[0].collision_mask == 1 << 1, "회오리 마스크 2 (player)")
+		for w: Node in winds:
+			w.queue_free()
+
+		# ── 17c. 2페이즈 전환 (체력 50% 이하 — 속도·주기 격화)
+		var ms0: float = gale.move_speed
+		var gp0: float = gale.gust_period
+		_check(not gale.phase2_active, "50%% 초과 시 1페이즈 유지")
+		gale.take_hit(100.0, -1, Enums.Status.NONE, 0.0)   # 224 → 124 (< 125)
+		_check(gale.phase2_active, "체력 50%% 이하 → 2페이즈 전환")
+		_check(absf(gale.move_speed - ms0 * gale.phase2_speed_mult) < EPS,
+			"2페이즈: 이동 속도 x%.2f" % gale.phase2_speed_mult)
+		_check(absf(gale.gust_period - gp0 * gale.phase2_rate_mult) < EPS,
+			"2페이즈: 돌풍 주기 x%.2f" % gale.phase2_rate_mult)
+
+		# ── 17d. 보스 사망 → fragment_wind 잔류물 + codex_unlocked + 드롭
+		gale.take_hit(9999.0, -1, Enums.Status.NONE, 0.0)
+		await get_tree().process_frame
+		await get_tree().process_frame
+		_check(_died_ids.has(&"gale"), "enemy_died 발신: gale")
+		_check(_unlocked_ids.has(&"enemy_gale"), "첫 처치 → codex_unlocked(enemy_gale)")
+		_check(GameState.is_unlocked(&"enemy_gale"), "GameState 도감 등록: enemy_gale")
+		var wind_spot: Variant = null
+		for s: Node in get_tree().get_nodes_in_group("rubbing_spots"):
+			if s.get("fragment_id") == &"fragment_wind":
+				wind_spot = s
+		_check(wind_spot != null, "보스 사망 → fragment_wind 잔류물 스폰")
+		var essence_count := 0
+		var wind_direct_drop := false
+		for pk: Node in get_tree().get_nodes_in_group("pickups"):
+			if pk.get("item_id") == &"mat_mist_essence":
+				essence_count += 1
+			if pk.get("item_id") == &"fragment_wind":
+				wind_direct_drop = true
+		_check(essence_count >= 2 and essence_count <= 3,
+			"보스 드롭: mat_mist_essence 2~3 (실측 %d)" % essence_count)
+		_check(not wind_direct_drop, "fragment_wind는 픽업으로 직접 드롭되지 않음")
+		if wind_spot != null:
+			wind_spot._complete()
+			_check(_rubbing_completed_id == &"fragment_wind", "rubbing_completed(fragment_wind) 발신")
+			_check(_bag_count(&"fragment_wind") == 1, "가방에 fragment_wind 1개")
+
+	# ── 18. 플레이어 피격·사망 → player_died + bag_lost → 가방 손실
 	player.take_damage(5.0)
 	_check(_player_damaged_seen, "player_damaged 발신")
 	GameState.add_to_bag(&"mat_vine")
@@ -282,7 +366,7 @@ func _run() -> void:
 	_check(_bag_lost_seen, "bag_lost 발신")
 	_check(GameState.bag.is_empty(), "사망 시 가방 손실")
 
-	# ── 18. field.tscn 스모크 (프로토 맵 로드·스폰)
+	# ── 19. field.tscn 스모크 (프로토 맵 로드·스폰·보스 존)
 	player.queue_free()
 	await get_tree().process_frame
 	var enemies_before := get_tree().get_nodes_in_group("enemies").size()
@@ -295,6 +379,12 @@ func _run() -> void:
 	_check(enemies_after - enemies_before >= 12, "필드 맵: 적 12+ 스폰 (실측 +%d)" % (enemies_after - enemies_before))
 	_check(get_tree().get_nodes_in_group("exit_gates").size() >= 1, "필드 맵: 출구 게이트 존재")
 	_check(get_tree().get_nodes_in_group("gather_nodes").size() >= 5, "필드 맵: 채집 노드 5+")
+	var boss_in_field := false
+	for e: Node in get_tree().get_nodes_in_group("enemies"):
+		var edef: EnemyDef = e.get("def")
+		if edef != null and edef.id == &"gale" and (e as Node2D).global_position.y < 0.0:
+			boss_in_field = true
+	_check(boss_in_field, "필드 맵: 북쪽 보스 존(y<0)에 gale 스폰")
 	field.queue_free()
 
 	_finish()
