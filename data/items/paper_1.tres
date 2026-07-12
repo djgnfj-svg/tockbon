@@ -10,6 +10,6 @@ grade = 1
 display_name = "기본 종이"
 params = {
 "durability_bonus": 0,
-"ink_capacity": 20,
+"ink_capacity": 24,
 "mana_discount": 0.0
 }

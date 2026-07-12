@@ -116,7 +116,7 @@ class_name ItemDef extends Resource
 | WAND | `aim_assist` | (예약 — 미구현) |
 | ROBE | `mana_max_add` / `hp_max_add` | 마나·HP 상한 가산 |
 | CHARM | `dash_cooldown_mult` | 대시 쿨다운 배율 (기본 부적. 이후 특수 부적은 자유 키) |
-| PAPER | `ink_capacity` | 캔버스 잉크 상한 (20/32/48) — 초과 획 무효 |
+| PAPER | `ink_capacity` | 캔버스 잉크 상한 (24/32/48) — 초과 획 무효 |
 | PAPER | `mana_discount` | 도안 mana_cost 감면율 (0/0.1/0.2) |
 | PAPER | `durability_bonus` | durability_max 가산 (0/5/12) |
 
