@@ -18,6 +18,8 @@ func take_hit(damage: float, rune_type: int, status: int, status_power: float) -
 	})
 	print("[DummyTarget] 피격 damage=%.2f rune=%d status=%d power=%.2f" % [
 		damage, rune_type, status, status_power])
+	# 적 노드 계약: enemy_hit 발신은 take_hit 내부 책임 (실제 적은 약점 배율 반영 최종 피해로 발신)
+	EventBus.enemy_hit.emit(self, damage, rune_type)
 	_flash()
 
 func _flash() -> void:

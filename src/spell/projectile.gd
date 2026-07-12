@@ -58,8 +58,8 @@ func _handle_collision(node: Node2D) -> void:
 		return
 	_consumed = true
 	if node.is_in_group("enemies"):
+		# enemy_hit 발신은 적의 take_hit 내부 책임 (약점 배율 반영 최종 피해 기준 — 리드 확정)
 		if node.has_method("take_hit"):
 			node.take_hit(damage, rune_type, status, status_power)
-		EventBus.enemy_hit.emit(node, damage, rune_type)
 	# 적이 아니면 마스크상 world(벽)뿐 — 어느 쪽이든 소멸
 	queue_free()
