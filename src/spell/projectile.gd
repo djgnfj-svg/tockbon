@@ -3,12 +3,30 @@ extends Area2D
 ## 파라미터 주입은 spell_system.setup() 경유. class_name 없음 — preload로 참조할 것.
 ## 적 노드 계약: 그룹 "enemies" + take_hit(damage, rune_type, status, status_power).
 
+const SheetLib := preload("res://src/core/sheet_lib.gd")
+
 const RUNE_COLORS: Dictionary = {
 	Enums.RuneType.FIRE: Color(1.0, 0.55, 0.1),    # 불 = 주황
 	Enums.RuneType.IMPACT: Color(1.0, 0.9, 0.2),   # 충격 = 노랑
 	Enums.RuneType.WATER: Color(0.25, 0.55, 1.0),  # 물 = 파랑
 	Enums.RuneType.WIND: Color(0.65, 0.95, 0.45),  # 바람 = 연두
 }
+
+## 룬 투사체 시트 (ART_SPEC P5) — 우향 혜성형 2프레임, rotation이 조준각을 그대로 적용
+const PROJ_SHEET_PATH := "res://assets/sprites/effects/projectiles.png"
+const PROJ_ANIMS := {
+	"fire": [0, 2, 10.0], "impact": [2, 2, 10.0],
+	"water": [4, 2, 10.0], "wind": [6, 2, 10.0],
+}
+const RUNE_ANIM_NAMES := {
+	Enums.RuneType.FIRE: "fire",
+	Enums.RuneType.IMPACT: "impact",
+	Enums.RuneType.WATER: "water",
+	Enums.RuneType.WIND: "wind",
+}
+## 시트는 전 투사체 공유 — 1회만 빌드 (탄막 다발 스폰 대비)
+static var _shared_frames: SpriteFrames = null
+static var _sheet_checked: bool = false
 
 var damage: float = 0.0
 var rune_type: int = Enums.RuneType.FIRE
@@ -38,7 +56,21 @@ func setup(p_damage: float, p_rune_type: int, p_status: int, p_status_power: flo
 	scale = Vector2.ONE * p_size_scale
 	_velocity = Vector2.RIGHT.rotated(p_angle) * p_speed
 	var visual := $Visual as Polygon2D
-	visual.color = RUNE_COLORS.get(p_rune_type, Color.WHITE)
+	if _ensure_shared_frames():
+		visual.visible = false
+		var spr := AnimatedSprite2D.new()
+		spr.sprite_frames = _shared_frames
+		spr.play(StringName(RUNE_ANIM_NAMES.get(p_rune_type, "fire")))
+		add_child(spr)
+	else:
+		visual.color = RUNE_COLORS.get(p_rune_type, Color.WHITE)
+
+static func _ensure_shared_frames() -> bool:
+	if not _sheet_checked:
+		_sheet_checked = true
+		if ResourceLoader.exists(PROJ_SHEET_PATH):
+			_shared_frames = SheetLib.build_sprite_frames(load(PROJ_SHEET_PATH), PROJ_ANIMS, 16)
+	return _shared_frames != null
 
 func _physics_process(delta: float) -> void:
 	position += _velocity * delta
