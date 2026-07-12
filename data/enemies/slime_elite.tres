@@ -1,0 +1,31 @@
+[gd_resource type="Resource" script_class="EnemyDef" format=3]
+
+[ext_resource type="Script" path="res://src/core/schemas/drop_entry.gd" id="1_220r5"]
+[ext_resource type="Script" path="res://src/core/schemas/enemy_def.gd" id="2_v5tjv"]
+
+[sub_resource type="Resource" id="Resource_x3uey"]
+script = ExtResource("1_220r5")
+item_id = &"mat_slime_core"
+min_count = 2
+max_count = 3
+
+[sub_resource type="Resource" id="Resource_ao1ut"]
+script = ExtResource("1_220r5")
+item_id = &"fragment_water"
+
+[resource]
+script = ExtResource("2_v5tjv")
+id = &"slime_elite"
+display_name = "수액 슬라임 우두머리"
+hp = 60.0
+has_counter = false
+params = {
+"aggro_range": 160.0,
+"attack_cooldown": 0.9,
+"attack_range": 22.0,
+"contact_damage": 7.0,
+"move_speed": 45.0
+}
+is_elite = true
+drops = Array[ExtResource("1_220r5")]([SubResource("Resource_x3uey"), SubResource("Resource_ao1ut")])
+night_buff = 1.3

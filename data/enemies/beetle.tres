@@ -1,0 +1,32 @@
+[gd_resource type="Resource" script_class="EnemyDef" format=3]
+
+[ext_resource type="Script" path="res://src/core/schemas/drop_entry.gd" id="1_rfba6"]
+[ext_resource type="Script" path="res://src/core/schemas/enemy_def.gd" id="2_35dfq"]
+
+[sub_resource type="Resource" id="Resource_i5jdj"]
+script = ExtResource("1_rfba6")
+item_id = &"mat_beetle_shell"
+chance = 0.9
+max_count = 2
+
+[sub_resource type="Resource" id="Resource_3t0kw"]
+script = ExtResource("1_rfba6")
+item_id = &"charm_basic"
+chance = 0.08
+
+[resource]
+script = ExtResource("2_35dfq")
+id = &"beetle"
+display_name = "갑주 갑충"
+hp = 55.0
+counter_rune = 2
+params = {
+"aggro_range": 170.0,
+"armor_reduction": 0.7,
+"attack_cooldown": 1.4,
+"attack_range": 24.0,
+"contact_damage": 9.0,
+"move_speed": 40.0,
+"weakness_mult": 1.75
+}
+drops = Array[ExtResource("1_rfba6")]([SubResource("Resource_i5jdj"), SubResource("Resource_3t0kw")])

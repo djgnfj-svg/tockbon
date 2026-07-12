@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="EnemyDef" format=3]
+
+[ext_resource type="Script" path="res://src/core/schemas/drop_entry.gd" id="1_f5jfp"]
+[ext_resource type="Script" path="res://src/core/schemas/enemy_def.gd" id="2_s20qs"]
+
+[sub_resource type="Resource" id="Resource_n28aa"]
+script = ExtResource("1_f5jfp")
+item_id = &"mat_slime_core"
+chance = 0.6
+
+[resource]
+script = ExtResource("2_s20qs")
+id = &"slime"
+display_name = "수액 슬라임"
+hp = 14.0
+has_counter = false
+params = {
+"aggro_range": 160.0,
+"attack_cooldown": 0.9,
+"attack_range": 18.0,
+"contact_damage": 4.0,
+"move_speed": 55.0
+}
+drops = Array[ExtResource("1_f5jfp")]([SubResource("Resource_n28aa")])
+night_buff = 1.4

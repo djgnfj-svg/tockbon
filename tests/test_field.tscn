@@ -1,3 +1,6 @@
-[gd_scene format=3]
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://tests/test_field_auto.gd" id="1_tfauto"]
 
 [node name="TestField" type="Node2D"]
+script = ExtResource("1_tfauto")
