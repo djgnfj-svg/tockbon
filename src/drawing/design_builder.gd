@@ -1,11 +1,15 @@
 extends RefCounted
 ## 인식 결과 → SpellDesign 조립 + 비용 계산 (GDD §4.4, §5 비용 축 분리).
 ## 잉크 = 그린 총량(길이×필압) + 원 크기·조준진 가산 / 마나 = 룬 + 발수 축.
+## 종이 등급(paper_params)은 호출자가 ItemDef.params를 직접 넘긴다 — Db 없이도 테스트 가능.
 ## 사용: const DesignBuilder := preload("res://src/drawing/design_builder.gd")
 
 const Recognizer := preload("res://src/drawing/recognizer.gd")
 
 const INK_ID := &"ink_basic"
+
+## SpellDesign 스키마 기본 내구 — into 재사용 시 durability_bonus가 누적되지 않도록 기준값
+static var _base_durability_max: int = SpellDesign.new().durability_max
 
 const RUNE_NAMES := {
 	Enums.RuneType.FIRE: "불△",
@@ -79,7 +83,10 @@ static func is_complete(parts: Dictionary) -> bool:
 
 
 ## parts → SpellDesign. into를 주면 기존 인스턴스를 갱신한다(id 유지).
-static func build(parts: Dictionary, balance: BalanceData, into: SpellDesign = null) -> SpellDesign:
+## paper_grade·paper_params: 선택된 종이의 등급·ItemDef.params (TECH_SPEC §4.1 PAPER 키).
+## 기본 인자는 무보정(등급 1·감면 0·보너스 0)과 같아 기존 호출과 호환된다.
+static func build(parts: Dictionary, balance: BalanceData, into: SpellDesign = null,
+		paper_grade: int = 1, paper_params: Dictionary = {}) -> SpellDesign:
 	var d := into
 	if d == null:
 		d = SpellDesign.new()
@@ -122,12 +129,18 @@ static func build(parts: Dictionary, balance: BalanceData, into: SpellDesign = n
 		ink *= balance.aimed_circle_ink_mult
 	d.ink_cost = {INK_ID: maxi(1, ceili(ink))}
 
-	# 마나: 룬 + 발수 축 (원 크기와 무관 — 같은 축 삼중 처벌 금지, GDD §5)
+	# 마나: 룬 + 발수 축 (원 크기와 무관 — 같은 축 삼중 처벌 금지, GDD §5) × 종이 감면
 	var rune_idx := int(d.rune_type)
 	var mana_base := 8.0
 	if rune_idx >= 0 and rune_idx < balance.rune_mana_base.size():
 		mana_base = balance.rune_mana_base[rune_idx]
-	d.mana_cost = mana_base + balance.mana_per_arrow * float(arrows.size())
+	var discount := clampf(float(paper_params.get("mana_discount", 0.0)), 0.0, 1.0)
+	d.mana_cost = (mana_base + balance.mana_per_arrow * float(arrows.size())) * (1.0 - discount)
+
+	# 종이 등급: 내구 보정·등급 기록 (GDD §5). 스키마 기본값에서 매번 재계산 — into 재사용 시 비누적
+	d.paper_grade = paper_grade
+	d.durability_max = _base_durability_max + int(paper_params.get("durability_bonus", 0))
+	d.durability = d.durability_max
 
 	var kind := "조준진" if aimed else "고정진"
 	d.display_name = "%s %s ×%d" % [RUNE_NAMES.get(int(d.rune_type), "?"), kind, arrows.size()]
@@ -136,6 +149,12 @@ static func build(parts: Dictionary, balance: BalanceData, into: SpellDesign = n
 
 static func rune_name(rune_type: int) -> String:
 	return RUNE_NAMES.get(rune_type, "?")
+
+
+## 획 하나의 잉크 게이지 사용량 — 종이 ink_capacity 상한 판정 기준 (TECH_SPEC §4.1).
+## 원 크기·조준진 가산은 경제 비용(ink_cost)에만 붙고, 종이 위 물리 잉크량에는 넣지 않는다.
+static func stroke_ink_units(s: StrokeData, balance: BalanceData) -> float:
+	return _ink_length(s) * balance.ink_per_stroke_length
 
 
 ## 획 잉크량 = 경로 길이 × 평균 필압 (잉크 = Σ 길이×폭, TECH_SPEC §6)

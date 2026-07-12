@@ -10,6 +10,8 @@ const StampLibrary := preload("res://src/drawing/stamp_library.gd")
 const PAPER_COLOR := Color(0.93, 0.89, 0.80)
 const BG_COLOR := Color(0.16, 0.13, 0.11)
 const TEXT_COLOR := Color(0.90, 0.86, 0.78)
+const HINT_COLOR := Color(0.7, 0.66, 0.58)
+const WARN_COLOR := Color(0.92, 0.45, 0.35)
 
 const ROLE_NAMES := {
 	Enums.StrokeRole.CIRCLE: "진(원)",
@@ -29,6 +31,11 @@ var _design_label: Label
 var _hint_label: Label
 var _stamp_list: ItemList
 var _trial: Control
+
+var _paper_select: OptionButton
+var _ink_label: Label
+var _paper_ids: Array[StringName] = []   # OptionButton 인덱스 → 종이 id
+var _paper_id: StringName = &""          # 현재 선택 종이 (빈 값 = 미선택)
 
 
 func _ready() -> void:
@@ -89,10 +96,33 @@ func _ready() -> void:
 	ui.add_child(_trial)
 
 	_hint_label = _make_label(ui, Vector2(12, 340), Vector2(620, 14), "", 9)
-	_hint_label.add_theme_color_override(&"font_color", Color(0.7, 0.66, 0.58))
 	_set_default_hint()
 	_refresh_status(_canvas.get_summary())
 	_refresh_design_label()
+
+	# ── 종이 선택 + 잉크 게이지 (GDD §5 종이 등급 — 보유 종이만, 기본 = 최저 등급 자동)
+	_canvas.ink_state_changed.connect(_on_ink_state_changed)
+	_canvas.stroke_rejected.connect(_on_stroke_rejected)
+	_canvas.completion_blocked.connect(_on_completion_blocked)
+	var paper_row := HBoxContainer.new()
+	paper_row.position = Vector2(12, 0)
+	paper_row.size = Vector2(320, 15)
+	paper_row.add_theme_constant_override(&"separation", 8)
+	ui.add_child(paper_row)
+	_make_label(paper_row, Vector2.ZERO, Vector2(28, 14), "종이:", 9)
+	_paper_select = OptionButton.new()
+	_paper_select.add_theme_font_size_override(&"font_size", 9)
+	_paper_select.custom_minimum_size = Vector2(140, 14)
+	_paper_select.item_selected.connect(_on_paper_selected)
+	paper_row.add_child(_paper_select)
+	_ink_label = _make_label(paper_row, Vector2.ZERO, Vector2(110, 14), "", 9)
+	_ink_label.custom_minimum_size = Vector2(110, 14)
+	EventBus.resources_changed.connect(_refresh_paper_options)
+	# 단독 시험대(F6·tests/test_drawing.tscn)에서만: 종이가 전혀 없으면 기본 종이를 시드해
+	# 완성 흐름까지 검증할 수 있게 한다. 게임 씬(Main 하위 드로잉룸)에는 해당 없음.
+	if get_tree().current_scene == self and GameState.get_count(&"paper_1") == 0:
+		GameState.add_item(&"paper_1", 9)
+	_refresh_paper_options()
 
 
 func _unhandled_key_input(event: InputEvent) -> void:
@@ -200,8 +230,76 @@ func _on_stamp_placed() -> void:
 	_set_default_hint()
 
 
+# ─────────────────────────── 종이 선택·잉크 게이지 (GDD §5) ───────────────────────────
+
+## 보유 종이 목록 갱신 — 현재 선택 종이는 소진돼도 목록에 남긴다 (편집 흐름 보존).
+## 미선택 상태에서 보유 종이가 생기면 최저 등급을 자동 선택한다 (비차단).
+func _refresh_paper_options() -> void:
+	var defs: Array[ItemDef] = []
+	for id: StringName in Db.items:
+		var def: ItemDef = Db.items[id]
+		if def != null and def.kind == Enums.ItemKind.PAPER \
+				and (GameState.get_count(id) > 0 or id == _paper_id):
+			defs.append(def)
+	defs.sort_custom(func(a: ItemDef, b: ItemDef) -> bool: return a.grade < b.grade)
+	_paper_select.clear()
+	_paper_ids.clear()
+	for def in defs:
+		_paper_ids.append(def.id)
+		_paper_select.add_item("%s ×%d" % [def.display_name, GameState.get_count(def.id)])
+	_paper_select.disabled = _paper_ids.is_empty()
+	if _paper_ids.is_empty():
+		_paper_select.add_item("종이 없음")
+		_paper_select.select(0)
+		_canvas.set_no_paper()
+		return
+	if _paper_id == StringName():
+		_paper_select.select(0)
+		_on_paper_selected(0)
+	else:
+		_paper_select.select(maxi(_paper_ids.find(_paper_id), 0))
+
+
+func _on_paper_selected(index: int) -> void:
+	if index < 0 or index >= _paper_ids.size():
+		return
+	var id := _paper_ids[index]
+	var def: ItemDef = Db.get_item(id)
+	if def == null or id == _paper_id:
+		return
+	_paper_id = id
+	_canvas.set_paper(id, def.grade, def.params)
+	_set_hint("종이 선택: %s — 캔버스 초기화 (잉크 상한 %d)" % [
+		def.display_name, int(def.params.get("ink_capacity", 0))])
+
+
+func _on_ink_state_changed(used: float, capacity: float) -> void:
+	if is_inf(capacity):
+		_ink_label.text = "잉크 %.0f / —" % used
+		_ink_label.add_theme_color_override(&"font_color", TEXT_COLOR)
+		return
+	_ink_label.text = "잉크 %.0f / %.0f" % [used, capacity]
+	_ink_label.add_theme_color_override(&"font_color",
+		WARN_COLOR if used > capacity * 0.85 else TEXT_COLOR)
+
+
+func _on_stroke_rejected(_reason: StringName) -> void:
+	_set_warn("잉크 상한 초과 — 획이 무효 처리되었습니다. 획을 지우면(우클릭) 잉크가 회복됩니다")
+
+
+func _on_completion_blocked(_reason: StringName) -> void:
+	_design_label.text = "종이가 없어 도안을 완성할 수 없습니다 — 종이를 확보하세요"
+	_set_warn("보유 종이 0장 — 그리기는 가능하지만 도안 완성은 차단됩니다")
+
+
 func _set_hint(text: String) -> void:
 	_hint_label.text = text
+	_hint_label.add_theme_color_override(&"font_color", HINT_COLOR)
+
+
+func _set_warn(text: String) -> void:
+	_hint_label.text = text
+	_hint_label.add_theme_color_override(&"font_color", WARN_COLOR)
 
 
 func _set_default_hint() -> void:

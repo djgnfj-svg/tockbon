@@ -2,6 +2,8 @@ extends Control
 ## 드로잉 캔버스 — 획 캡처(마우스/태블릿 필압)·잉크 렌더·인식 파이프라인·SpellDesign 생성.
 ## 좌클릭 드래그 = 획 / 우클릭 = 획 취소·마지막 획 취소 / undo_last()는 Ctrl+Z용으로 외부에서 호출.
 ## 완성(진1+룬1+화살표1+) 시 EventBus.design_created, 이후 변경마다 design_updated 발신.
+## 종이 등급(GDD §5): set_paper() 호출 시 잉크 상한·완성 시 종이 소모·0장 완성 차단이 활성화.
+## set_paper()를 부르지 않은 캔버스는 기존과 동일하게 동작한다 (레거시 — 단독 테스트 호환).
 
 const Recognizer := preload("res://src/drawing/recognizer.gd")
 const DesignBuilder := preload("res://src/drawing/design_builder.gd")
@@ -11,9 +13,16 @@ const InkStroke := preload("res://src/drawing/ink_stroke.gd")
 signal stroke_classified(result: Dictionary)
 signal design_state_changed(design: SpellDesign, summary: Dictionary)
 signal stamp_placement_done
+## 잉크 사용량 변화 — 게이지 표시용. capacity는 종이 미설정 시 INF
+signal ink_state_changed(used: float, capacity: float)
+## 잉크 상한 초과 등으로 획이 무효 처리됨 (reason: &"ink_over")
+signal stroke_rejected(reason: StringName)
+## 도안 완성 조건은 갖췄으나 보유 종이가 없어 생성이 차단됨 (reason: &"no_paper")
+signal completion_blocked(reason: StringName)
 
 const MIN_PX_DIST := 1.2               # 라이브 점 추가 최소 간격(px)
 const STAMP_SIZE := 0.22               # 스탬프 배치 크기 (캔버스 정규화, 최장변)
+const REJECT_COLOR := Color(0.75, 0.15, 0.10)  # 무효 획 경고색
 
 const ROLE_COLORS := {
 	Enums.StrokeRole.CIRCLE: Color(0.13, 0.11, 0.10),
@@ -39,6 +48,12 @@ var _live_points := PackedVector2Array()
 var _live_pressures := PackedFloat32Array()
 var _stamp_pending: Dictionary = {}
 
+var _paper_mode := false               # false = 종이 미설정(레거시 — 상한·소모·차단 없음)
+var _paper_id: StringName = &""
+var _paper_grade: int = 1
+var _paper_params: Dictionary = {}
+var _ink_used: float = 0.0
+
 
 func _ready() -> void:
 	_balance = load("res://data/balance.tres") as BalanceData
@@ -50,6 +65,36 @@ func _ready() -> void:
 
 func _canvas_scale() -> float:
 	return maxf(minf(size.x, size.y), 1.0)
+
+
+# ─────────────────────────── 종이 등급 (GDD §5) ───────────────────────────
+
+## 종이 선택 — 캔버스를 리셋한다(기존 획 초기화). params = ItemDef.params (TECH_SPEC §4.1 PAPER 키)
+func set_paper(paper_id: StringName, grade: int, params: Dictionary) -> void:
+	_paper_mode = true
+	_paper_id = paper_id
+	_paper_grade = grade
+	_paper_params = params.duplicate()
+	clear_all()
+
+
+## 보유 종이 없음 — 그리기는 허용하되 도안 완성(생성)은 차단
+func set_no_paper() -> void:
+	set_paper(&"", 1, {})
+
+
+func get_paper_id() -> StringName:
+	return _paper_id
+
+
+func get_ink_used() -> float:
+	return _ink_used
+
+
+func get_ink_capacity() -> float:
+	if not _paper_mode or _paper_params.is_empty():
+		return INF
+	return float(_paper_params.get("ink_capacity", INF))
 
 
 func _gui_input(event: InputEvent) -> void:
@@ -120,6 +165,11 @@ func _end_stroke() -> void:
 	var stroke := StrokeData.new()
 	stroke.points = norm
 	stroke.pressures = _live_pressures.duplicate()
+	# 종이 잉크 상한 — 초과하게 되는 획은 무효 처리, 획을 지우면 회복 (TECH_SPEC §4.1)
+	if _ink_used + DesignBuilder.stroke_ink_units(stroke, _balance) > get_ink_capacity():
+		_reject_live_line()
+		stroke_rejected.emit(&"ink_over")
+		return
 	var entry := {"stroke": stroke, "line": _live_line, "locked": false, "result": {}}
 	_live_line.setup(_live_points, _live_pressures)
 	_live_line = null
@@ -140,15 +190,26 @@ func _reclassify_all() -> void:
 	_parts = DesignBuilder.classify_entries(_entries)
 	for e in _entries:
 		_apply_style(e)
+	var blocked := false
 	if DesignBuilder.is_complete(_parts):
 		var was_complete := _design != null
-		_design = DesignBuilder.build(_parts, _balance, _design)
-		var bus := _bus()
-		if bus != null:
-			bus.emit_signal(&"design_updated" if was_complete else &"design_created", _design)
+		# 새 완성은 종이 1장을 소모한다 — 보유 종이가 없으면 생성 차단 (GDD §5)
+		if not was_complete and not _paper_available():
+			_design = null
+			blocked = true
+		else:
+			_design = DesignBuilder.build(_parts, _balance, _design, _paper_grade, _paper_params)
+			if not was_complete:
+				_consume_paper()
+			var bus := _bus()
+			if bus != null:
+				bus.emit_signal(&"design_updated" if was_complete else &"design_created", _design)
 	else:
 		_design = null
+	_recompute_ink()
 	design_state_changed.emit(_design, get_summary())
+	if blocked:
+		completion_blocked.emit(&"no_paper")
 
 
 func _apply_style(e: Dictionary) -> void:
@@ -204,6 +265,7 @@ func clear_all() -> void:
 	_entries.clear()
 	_design = null
 	_parts = {"arrows": [], "extras": [], "strokes_ordered": []}
+	_recompute_ink()
 	design_state_changed.emit(null, get_summary())
 
 
@@ -274,6 +336,24 @@ func _place_stamp_at(pos_px: Vector2) -> void:
 	var pos_n := pos_px.clamp(Vector2.ZERO, size) / s
 	var stamp := _stamp_pending
 	_stamp_pending = {}
+	var pts := PackedVector2Array()
+	for p: Vector2 in stamp.points:
+		pts.append(pos_n + Vector2(p) * STAMP_SIZE)
+	var stroke := StrokeData.new()
+	stroke.points = pts
+	stroke.pressures = stamp.get("pressures", PackedFloat32Array())
+	stroke.role = Enums.StrokeRole.RUNE
+	# 잉크 상한 — 교체로 사라질 기존 룬의 잉크는 회수분으로 계산
+	var freed := 0.0
+	for e in _entries:
+		var prev: Dictionary = e.result
+		if int(prev.get("role", -1)) == Enums.StrokeRole.RUNE:
+			var prev_stroke: StrokeData = e.stroke
+			freed += DesignBuilder.stroke_ink_units(prev_stroke, _balance)
+	if _ink_used - freed + DesignBuilder.stroke_ink_units(stroke, _balance) > get_ink_capacity():
+		stroke_rejected.emit(&"ink_over")
+		stamp_placement_done.emit()
+		return
 	# 기존 룬은 교체 (MVP 룬 1개 규칙)
 	for i in range(_entries.size() - 1, -1, -1):
 		var res: Dictionary = _entries[i].result
@@ -282,13 +362,6 @@ func _place_stamp_at(pos_px: Vector2) -> void:
 			if old != null:
 				old.queue_free()
 			_entries.remove_at(i)
-	var pts := PackedVector2Array()
-	for p: Vector2 in stamp.points:
-		pts.append(pos_n + Vector2(p) * STAMP_SIZE)
-	var stroke := StrokeData.new()
-	stroke.points = pts
-	stroke.pressures = stamp.get("pressures", PackedFloat32Array())
-	stroke.role = Enums.StrokeRole.RUNE
 	var entry := {
 		"stroke": stroke,
 		"line": InkStroke.new(),
@@ -312,6 +385,53 @@ func _place_stamp_at(pos_px: Vector2) -> void:
 ## 헤드리스(-s) 테스트에서도 이 스크립트가 로드되게 한다. 시그널 계약은 TECH_SPEC §5 그대로.
 func _bus() -> Node:
 	return get_node_or_null(^"/root/EventBus")
+
+
+## GameState 오토로드 런타임 조회 — _bus()와 같은 이유
+func _game_state() -> Node:
+	return get_node_or_null(^"/root/GameState")
+
+
+## 완성(생성) 가능 여부 — 종이 미설정(레거시)·GameState 부재(단독 테스트)는 항상 허용
+func _paper_available() -> bool:
+	if not _paper_mode:
+		return true
+	if _paper_id == StringName():
+		return false
+	var gs := _game_state()
+	if gs == null:
+		return true
+	return int(gs.call(&"get_count", _paper_id)) > 0
+
+
+func _consume_paper() -> void:
+	if not _paper_mode or _paper_id == StringName():
+		return
+	var gs := _game_state()
+	if gs != null:
+		gs.call(&"remove_item", _paper_id, 1)
+
+
+func _recompute_ink() -> void:
+	if _balance == null:
+		return
+	_ink_used = 0.0
+	for e in _entries:
+		var stroke: StrokeData = e.stroke
+		_ink_used += DesignBuilder.stroke_ink_units(stroke, _balance)
+	ink_state_changed.emit(_ink_used, get_ink_capacity())
+
+
+## 상한 초과 획 시각 경고 — 경고색으로 바꾼 뒤 페이드아웃하며 제거
+func _reject_live_line() -> void:
+	var line := _live_line
+	_live_line = null
+	if line == null:
+		return
+	line.default_color = REJECT_COLOR
+	var tw := line.create_tween()
+	tw.tween_property(line, ^"modulate:a", 0.0, 0.35)
+	tw.tween_callback(line.queue_free)
 
 
 func _rebuild_line(e: Dictionary) -> void:
