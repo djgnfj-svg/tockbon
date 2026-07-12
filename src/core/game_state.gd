@@ -20,6 +20,9 @@ var codex: Dictionary = {}
 
 func _ready() -> void:
 	mana = balance.mana_max
+	# 시작 해금 — 튜토리얼 지급 룬 (TECH_SPEC §5.1)
+	codex[&"rune_fire"] = true
+	codex[&"rune_impact"] = true
 	EventBus.extraction_success.connect(_on_extraction_success)
 	EventBus.bag_lost.connect(func() -> void: bag.clear())
 	EventBus.research_completed.connect(func(unlock_id: StringName) -> void: codex[unlock_id] = true)
