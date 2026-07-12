@@ -31,17 +31,23 @@ var _bag_shown := -1
 
 func _ready() -> void:
 	_phase = Clock.phase
-	_hp_bar.max_value = GameState.balance.player_hp_max
-	_mana_bar.max_value = GameState.balance.mana_max
+	_refresh_bar_maxes()
 	_style_bars()
 	_build_slots()
 	EventBus.phase_changed.connect(_on_phase_changed)
 	EventBus.day_started.connect(_on_day_started)
 	EventBus.player_hp_changed.connect(_on_player_hp_changed)
+	EventBus.equipment_changed.connect(_on_equipment_changed)
 	EventBus.cast_executed.connect(_on_cast_executed)
 	EventBus.cast_failed.connect(_on_cast_failed)
 	_refresh_hp()
 	_refresh_clock_label()
+
+## 상한은 장비(로브)에 따라 변한다 — balance 직접 참조 금지 (TECH_SPEC §4.2)
+func _refresh_bar_maxes() -> void:
+	_hp_bar.max_value = GameState.hp_max()
+	_mana_bar.max_value = GameState.mana_max()
+	_mana_shown = -1  # 마나 텍스트 분모 갱신 강제
 
 func _process(_delta: float) -> void:
 	# 마나 — 자연 회복으로 매 프레임 변하므로 폴링 (텍스트는 정수 변화 시만)
@@ -49,7 +55,7 @@ func _process(_delta: float) -> void:
 	var mana_now := int(ceilf(GameState.mana))
 	if mana_now != _mana_shown:
 		_mana_shown = mana_now
-		_mana_text.text = "%d/%d" % [mana_now, int(GameState.balance.mana_max)]
+		_mana_text.text = "%d/%d" % [mana_now, int(GameState.mana_max())]
 	_day_bar.value = Clock.day_progress() * 100.0
 	var bag_now := _bag_total()
 	if bag_now != _bag_shown:
@@ -122,7 +128,7 @@ func _refresh_slots() -> void:
 func _refresh_hp() -> void:
 	# HP 원장은 GameState (v1.1 이관) — player_hp_changed로 갱신
 	_hp_bar.value = GameState.hp
-	_hp_text.text = "%d/%d" % [int(ceilf(GameState.hp)), int(GameState.balance.player_hp_max)]
+	_hp_text.text = "%d/%d" % [int(ceilf(GameState.hp)), int(GameState.hp_max())]
 
 func _refresh_clock_label() -> void:
 	_day_label.text = "%d일차 · %s %s" % [
@@ -140,6 +146,10 @@ func _on_phase_changed(phase: int) -> void:
 	_day_bar.add_theme_stylebox_override("fill", InkStyle.make_bar_fill(InkStyle.phase_color(phase)))
 
 func _on_player_hp_changed(_hp: float, _hp_max: float) -> void:
+	_refresh_hp()
+
+func _on_equipment_changed() -> void:
+	_refresh_bar_maxes()
 	_refresh_hp()
 
 func _on_cast_executed(design: SpellDesign, _mana_spent: float) -> void:

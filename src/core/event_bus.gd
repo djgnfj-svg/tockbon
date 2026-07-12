@@ -39,5 +39,9 @@ signal research_completed(unlock_id: StringName)
 signal design_repaired(design: SpellDesign)
 signal resources_changed
 
-# ── 씬 전환 (모듈 → Main)
+# ── 장비 (GameState → C·D·E)
+signal equipment_changed
+
+# ── 씬 전환 (모듈 → Main / Main → 전체)
 signal scene_change_requested(scene_id: StringName)
+signal scene_changed(scene_id: StringName)

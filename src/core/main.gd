@@ -39,6 +39,7 @@ func _change_scene_now(scene_id: StringName) -> void:
 		child.queue_free()
 	var packed := load(path) as PackedScene
 	current_scene.add_child(packed.instantiate())
+	EventBus.scene_changed.emit(scene_id)
 
 ## 프로토 시드 — 튜토리얼(4개월차) 구현 전까지의 시작 물자·도안 (GDD §5 시작 물자)
 func _seed_prototype() -> void:
@@ -52,3 +53,8 @@ func _seed_prototype() -> void:
 		GameState.add_item(&"wand_basic", 1)
 		GameState.add_item(&"robe_basic", 1)
 		GameState.add_item(&"charm_basic", 1)
+	# 시작 장비 자동 착용 (GDD §5 시작 물자 — 세이브에 장비가 없을 때만)
+	if GameState.equipment.is_empty():
+		for gear_id: StringName in [&"wand_basic", &"robe_basic", &"charm_basic"]:
+			if GameState.get_count(gear_id) > 0:
+				GameState.equip_gear(gear_id)

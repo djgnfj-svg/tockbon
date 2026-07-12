@@ -41,6 +41,9 @@ func save_game() -> void:
 	var inventory: Dictionary = {}
 	for item_id: StringName in GameState.inventory:
 		inventory[String(item_id)] = int(GameState.inventory[item_id])
+	var equipment: Dictionary = {}
+	for kind: int in GameState.equipment:
+		equipment[str(kind)] = String(GameState.equipment[kind])
 	var codex: Array = []
 	for unlock_id: StringName in GameState.codex:
 		if GameState.codex[unlock_id]:
@@ -52,6 +55,7 @@ func save_game() -> void:
 		"time_sec": Clock.time_sec,
 		"mana": GameState.mana,
 		"inventory": inventory,
+		"equipment": equipment,
 		"codex": codex,
 		"designs": design_files,
 		"equipped": equipped_idx,
@@ -80,12 +84,17 @@ func load_game() -> bool:
 
 	Clock.day = int(data.get("day", 1))
 	Clock.time_sec = float(data.get("time_sec", 0.0))
-	GameState.mana = float(data.get("mana", GameState.balance.mana_max))
 
 	GameState.inventory.clear()
 	var inventory: Dictionary = data.get("inventory", {})
 	for key: String in inventory:
 		GameState.inventory[StringName(key)] = int(inventory[key])
+	GameState.equipment.clear()
+	var equipment: Dictionary = data.get("equipment", {})
+	for key: String in equipment:
+		GameState.equipment[int(key)] = StringName(equipment[key])
+	# 마나는 장비(로브 상한) 복원 후에 — 상한 getter 기준으로 클램프
+	GameState.mana = minf(float(data.get("mana", GameState.mana_max())), GameState.mana_max())
 	for key: String in data.get("codex", []):
 		GameState.codex[StringName(key)] = true
 

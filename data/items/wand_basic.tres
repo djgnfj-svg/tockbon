@@ -9,5 +9,6 @@ kind = 2
 grade = 1
 display_name = "견습생의 완드"
 params = {
-"attack_rate": 1.0
+"attack_cooldown_mult": 0.9,
+"wand_damage_add": 1.0
 }

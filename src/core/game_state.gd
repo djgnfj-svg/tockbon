@@ -15,14 +15,18 @@ var inventory: Dictionary = {}
 var bag: Array[Dictionary] = []
 ## 장착 도안 4장 — 아침에 확정, 필드 교체 불가 (GDD §4.4)
 var equipped: Array[SpellDesign] = [null, null, null, null]
+## 착용 장비 {Enums.ItemKind.WAND/ROBE/CHARM: item_id} — 가방 아님, 사망에도 보존 (GDD §5)
+var equipment: Dictionary = {}
 ## 보유 도안 전체 (거점 보관)
 var designs: Array[SpellDesign] = []
 ## {unlock_id: true} — 도감 영구 해금 (룬·제법·적 정보)
 var codex: Dictionary = {}
+## UI 모달(게시판·장착·도감) 열림 — ui_root가 설정, 플레이어 이동 계열이 폴링 (TECH_SPEC §4.2)
+var ui_modal_open: bool = false
 
 func _ready() -> void:
-	mana = balance.mana_max
-	hp = balance.player_hp_max
+	mana = mana_max()
+	hp = hp_max()
 	# 시작 해금 — 튜토리얼 지급 룬 (TECH_SPEC §5.1)
 	codex[&"rune_fire"] = true
 	codex[&"rune_impact"] = true
@@ -33,7 +37,7 @@ func _ready() -> void:
 	EventBus.design_created.connect(func(design: SpellDesign) -> void: designs.append(design))
 
 func _process(delta: float) -> void:
-	mana = minf(mana + balance.mana_regen_per_sec * delta, balance.mana_max)
+	mana = minf(mana + balance.mana_regen_per_sec * delta, mana_max())
 
 func spend_mana(amount: float) -> bool:
 	if mana < amount:
@@ -42,21 +46,68 @@ func spend_mana(amount: float) -> bool:
 	return true
 
 func restore_mana_full() -> void:
-	mana = balance.mana_max
+	mana = mana_max()
+
+# ── 파생 스탯 — balance 기본값 + 장비 보정 (TECH_SPEC §4.2). balance 직접 참조 금지, 전부 이 getter
+
+func mana_max() -> float:
+	return balance.mana_max + gear_param(Enums.ItemKind.ROBE, "mana_max_add", 0.0)
+
+func hp_max() -> float:
+	return balance.player_hp_max + gear_param(Enums.ItemKind.ROBE, "hp_max_add", 0.0)
+
+# ── 장비 착용 (TECH_SPEC §4.2) — 창고에 있는 장비만, 착용품은 사망에도 보존
+
+## 착용 장비의 params 값 조회 — 해당 부위 미착용이면 default
+func gear_param(kind: int, key: String, default: float) -> float:
+	if not equipment.has(kind):
+		return default
+	var def: ItemDef = Db.get_item(equipment[kind])
+	if def == null:
+		return default
+	return float(def.params.get(key, default))
+
+## 창고의 장비를 착용 — 창고에서 1개 차감, 기존 착용품은 창고 반환. 성공 시 true
+func equip_gear(item_id: StringName) -> bool:
+	var def: ItemDef = Db.get_item(item_id)
+	if def == null or def.kind not in [Enums.ItemKind.WAND, Enums.ItemKind.ROBE, Enums.ItemKind.CHARM]:
+		return false
+	if get_count(item_id) < 1:
+		return false
+	remove_item(item_id)
+	if equipment.has(def.kind):
+		add_item(equipment[def.kind])
+	equipment[def.kind] = item_id
+	_after_equipment_changed()
+	return true
+
+func unequip_gear(kind: int) -> void:
+	if not equipment.has(kind):
+		return
+	add_item(equipment[kind])
+	equipment.erase(kind)
+	_after_equipment_changed()
+
+func _after_equipment_changed() -> void:
+	# 로브 교체로 상한이 줄면 현재값 클램프 (TECH_SPEC §4.2)
+	hp = minf(hp, hp_max())
+	mana = minf(mana, mana_max())
+	EventBus.player_hp_changed.emit(hp, hp_max())
+	EventBus.equipment_changed.emit()
 
 # ── 플레이어 HP
 
 func damage_player(amount: float) -> void:
 	hp = maxf(0.0, hp - amount)
-	EventBus.player_hp_changed.emit(hp, balance.player_hp_max)
+	EventBus.player_hp_changed.emit(hp, hp_max())
 
 func heal_player(amount: float) -> void:
-	hp = minf(hp + amount, balance.player_hp_max)
-	EventBus.player_hp_changed.emit(hp, balance.player_hp_max)
+	hp = minf(hp + amount, hp_max())
+	EventBus.player_hp_changed.emit(hp, hp_max())
 
 func reset_player_hp() -> void:
-	hp = balance.player_hp_max
-	EventBus.player_hp_changed.emit(hp, balance.player_hp_max)
+	hp = hp_max()
+	EventBus.player_hp_changed.emit(hp, hp_max())
 
 # ── 창고 (영구)
 

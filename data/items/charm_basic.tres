@@ -9,5 +9,5 @@ kind = 4
 grade = 1
 display_name = "낡은 부적"
 params = {
-"mana_regen_bonus": 0.5
+"dash_cooldown_mult": 0.85
 }

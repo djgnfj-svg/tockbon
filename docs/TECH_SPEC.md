@@ -23,6 +23,7 @@ res://
     field/            # [모듈 C] 플레이어·적·맵·낮밤·익스트랙션
     base/             # [모듈 D] 거점·경제·제작·수리·연구·탁본 해독
     ui/               # [모듈 E] HUD·게시판·도감·장착·메뉴
+    quest/            # [모듈 Q] 선형 목표 스택 — quest.tscn을 Main UILayer에 통합 (튜토리얼과 동일 패턴)
   assets/
     sprites/  audio/  fonts/  palettes/
   data/               # .tres 데이터 리소스 (룬·적·아이템 정의) — 스키마는 core, 인스턴스는 담당 모듈
@@ -106,6 +107,34 @@ class_name ItemDef extends Resource
 
 **enum은 전부 `src/core/enums.gd`(class_name Enums)에 정의** — 모듈이 매직 넘버를 각자 만들지 않는다.
 
+### 4.1 ItemDef.params 키 규약 (kind별)
+
+| kind | 키 | 의미 |
+|---|---|---|
+| WAND | `attack_cooldown_mult` | 기본 완드 약공격 쿨다운 배율 (0.9 = 10% 빠름) |
+| WAND | `wand_damage_add` | 약공격 피해 가산 |
+| WAND | `aim_assist` | (예약 — 미구현) |
+| ROBE | `mana_max_add` / `hp_max_add` | 마나·HP 상한 가산 |
+| CHARM | `dash_cooldown_mult` | 대시 쿨다운 배율 (기본 부적. 이후 특수 부적은 자유 키) |
+| PAPER | `ink_capacity` | 캔버스 잉크 상한 (20/32/48) — 초과 획 무효 |
+| PAPER | `mana_discount` | 도안 mana_cost 감면율 (0/0.1/0.2) |
+| PAPER | `durability_bonus` | durability_max 가산 (0/5/12) |
+
+### 4.2 GameState 장비·파생 스탯 API (v1.2)
+
+```gdscript
+GameState.equipment: Dictionary        # {Enums.ItemKind.WAND: StringName, ROBE:…, CHARM:…} — 착용 중 id, 미착용 키 없음
+GameState.equip_gear(item_id) -> bool  # 창고에 있는 장비만. 착용 시 창고에서 1개 차감, 기존 착용품은 창고 반환
+GameState.unequip_gear(kind) -> void   # 해제 → 창고 반환
+GameState.gear_param(kind, key, default) -> float  # 착용 장비의 params 조회 (미착용이면 default)
+GameState.mana_max() -> float          # balance.mana_max + 로브 mana_max_add — balance 직접 참조 금지, 전부 이 getter
+GameState.hp_max() -> float            # balance.player_hp_max + 로브 hp_max_add
+```
+
+- **착용 장비는 가방이 아니다** — 사망(bag_lost)에도 보존된다 (GDD §5: 가방 소지품만 손실)
+- 변경 시 EventBus.equipment_changed 발신. 로브 교체로 상한이 줄면 현재 hp·mana는 새 상한으로 클램프
+- `GameState.ui_modal_open: bool` — UI 모달(게시판·장착·도감) 열림 플래그. ui_root(E)가 설정, 플레이어 이동 계열(C·D)이 폴링해 입력 잠금
+
 ## 5. EventBus 시그널 계약
 
 ```gdscript
@@ -143,6 +172,12 @@ signal codex_unlocked(unlock_id: StringName)         # C: 적 첫 처치 시 ene
 signal research_completed(unlock_id: StringName)     # 룬 해금·제법 해금 → 도감 등록
 signal design_repaired(design: SpellDesign)
 signal resources_changed                             # 잉크·재료 증감 → HUD 갱신
+
+# ── 장비 (GameState → C·D·E) — v1.2
+signal equipment_changed                             # 착용/해제 시 GameState가 발신 (상한·쿨다운 재계산 트리거)
+
+# ── 씬 전환 (v1.2)
+signal scene_changed(scene_id: StringName)           # Main이 전환 완료 후 발신 (요청은 scene_change_requested)
 ```
 
 ### 5.1 unlock_id (도감 해금 키) 규약 — 전 모듈 공통
@@ -152,6 +187,8 @@ signal resources_changed                             # 잉크·재료 증감 →
 | 룬 | `rune_<룬명>` | `rune_water`, `rune_wind` | D · research_completed |
 | 제법 | `recipe_<id>` | `recipe_paper_2`, `recipe_paper_3` | D · research_completed |
 | 적 도감 | `enemy_<EnemyDef.id>` | `enemy_beetle` | C · codex_unlocked (첫 처치 시) |
+| 퀘스트 진행 | `quest_<n>` | `quest_1` (완료된 단계) | Q · codex_unlocked — SaveManager가 자동 커버 |
+| 연출 1회 시청 | `cut_<id>` | `cut_gale_intro` | C · codex_unlocked (컷 재생 직후 — 재진입 시 스킵 판정) |
 
 시작 해금: `rune_fire`, `rune_impact`는 튜토리얼 지급 (통합 시 GameState 초기값으로 등록).
 
@@ -176,6 +213,8 @@ Main.tscn (리드)
  │   ├─ Base.tscn         [D] 거점 오두막 — 이동·상호작용
  │   └─ DrawingRoom.tscn  [A] 드로잉 캔버스 (작업대에서 진입, Base 위 오버레이 가능)
  └─ UILayer (CanvasLayer)  [E] HUD·게시판·도감·장착·메뉴
+     ├─ Tutorial.tscn      [튜토리얼] 필사 수업 (1회성)
+     └─ Quest.tscn         [Q] 목표 1줄 표시 — 기존 시그널 수신만, 신규 시그널 불요
 ```
 
 - 씬 전환은 `Main`이 담당, 모듈은 `EventBus`로 전환 요청 (`signal scene_change_requested(scene_id)` — Phase 0에 포함)
