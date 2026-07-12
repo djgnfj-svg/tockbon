@@ -1,0 +1,61 @@
+class_name SampleDesigns
+## 검증용 샘플 도안 팩토리 — 모듈 B·C·E가 드로잉(A) 완성 전에 사용 (TEAM_PLAN Phase 0-7).
+## strokes는 비어 있다: 렌더 시 strokes가 비었으면 파라미터 기반 대체 렌더를 쓸 것.
+
+## 고정진 + 불△ + 8방향 노바
+static func nova_fire() -> SpellDesign:
+	var d := SpellDesign.new()
+	d.id = &"sample_nova_fire"
+	d.display_name = "샘플: 불꽃 노바"
+	d.circle_type = Enums.CircleType.FIXED
+	d.circle_radius = 0.7
+	d.rune_type = Enums.RuneType.FIRE
+	d.rune_accuracy = 0.9
+	for i in range(8):
+		var a := ArrowData.new()
+		a.direction = TAU * float(i) / 8.0
+		a.magnitude = 0.4
+		d.arrows.append(a)
+	d.mana_cost = 24.0
+	d.ink_cost = {&"ink_basic": 12}
+	return d
+
+## 조준진 + 충격> + 3발 산탄 (±15도)
+static func aimed_shotgun_impact() -> SpellDesign:
+	var d := SpellDesign.new()
+	d.id = &"sample_shotgun_impact"
+	d.display_name = "샘플: 충격 산탄"
+	d.circle_type = Enums.CircleType.AIMED
+	d.circle_radius = 0.5
+	d.aim_axis = 0.0
+	d.rune_type = Enums.RuneType.IMPACT
+	d.rune_accuracy = 0.85
+	for offset: float in [-0.26, 0.0, 0.26]:
+		var a := ArrowData.new()
+		a.direction = offset
+		a.magnitude = 0.5
+		d.arrows.append(a)
+	d.mana_cost = 15.0
+	d.ink_cost = {&"ink_basic": 8}
+	return d
+
+## 조준진 + 물~ + 대형 단발
+static func aimed_lance_water() -> SpellDesign:
+	var d := SpellDesign.new()
+	d.id = &"sample_lance_water"
+	d.display_name = "샘플: 물의 창"
+	d.circle_type = Enums.CircleType.AIMED
+	d.circle_radius = 0.4
+	d.aim_axis = 0.0
+	d.rune_type = Enums.RuneType.WATER
+	d.rune_accuracy = 0.95
+	var a := ArrowData.new()
+	a.direction = 0.0
+	a.magnitude = 1.0
+	d.arrows.append(a)
+	d.mana_cost = 12.0
+	d.ink_cost = {&"ink_basic": 6}
+	return d
+
+static func all() -> Array[SpellDesign]:
+	return [nova_fire(), aimed_shotgun_impact(), aimed_lance_water()]
