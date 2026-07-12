@@ -27,6 +27,7 @@ func _ready() -> void:
 	EventBus.bag_lost.connect(func() -> void: bag.clear())
 	EventBus.research_completed.connect(func(unlock_id: StringName) -> void: codex[unlock_id] = true)
 	EventBus.codex_unlocked.connect(func(unlock_id: StringName) -> void: codex[unlock_id] = true)
+	EventBus.design_created.connect(func(design: SpellDesign) -> void: designs.append(design))
 
 func _process(delta: float) -> void:
 	mana = minf(mana + balance.mana_regen_per_sec * delta, balance.mana_max)

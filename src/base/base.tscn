@@ -209,4 +209,76 @@ offset_bottom = -22.0
 theme_override_font_sizes/font_size = 10
 horizontal_alignment = 1
 
+[node name="Door" type="Area2D" parent="Interactables"]
+position = Vector2(158, 180)
+collision_layer = 64
+collision_mask = 2
+script = ExtResource("3")
+facility_id = &"door"
+title = "숲으로 출격"
+
+[node name="Shape" type="CollisionShape2D" parent="Interactables/Door"]
+shape = SubResource("spot_shape")
+
+[node name="Visual" type="ColorRect" parent="Interactables/Door"]
+offset_left = -10.0
+offset_top = -20.0
+offset_right = 10.0
+offset_bottom = 20.0
+color = Color(0.3, 0.5, 0.32, 1)
+
+[node name="NameTag" type="Label" parent="Interactables/Door"]
+offset_left = -40.0
+offset_top = 22.0
+offset_right = 40.0
+offset_bottom = 38.0
+theme_override_font_sizes/font_size = 10
+horizontal_alignment = 1
+text = "숲"
+
+[node name="Hint" type="Label" parent="Interactables/Door"]
+visible = false
+offset_left = -48.0
+offset_top = -42.0
+offset_right = 48.0
+offset_bottom = -26.0
+theme_override_font_sizes/font_size = 10
+horizontal_alignment = 1
+
+[node name="Easel" type="Area2D" parent="Interactables"]
+position = Vector2(320, 110)
+collision_layer = 64
+collision_mask = 2
+script = ExtResource("3")
+facility_id = &"easel"
+title = "이젤 (드로잉)"
+
+[node name="Shape" type="CollisionShape2D" parent="Interactables/Easel"]
+shape = SubResource("spot_shape")
+
+[node name="Visual" type="ColorRect" parent="Interactables/Easel"]
+offset_left = -14.0
+offset_top = -18.0
+offset_right = 14.0
+offset_bottom = 14.0
+color = Color(0.82, 0.76, 0.62, 1)
+
+[node name="NameTag" type="Label" parent="Interactables/Easel"]
+offset_left = -40.0
+offset_top = 18.0
+offset_right = 40.0
+offset_bottom = 34.0
+theme_override_font_sizes/font_size = 10
+horizontal_alignment = 1
+text = "이젤"
+
+[node name="Hint" type="Label" parent="Interactables/Easel"]
+visible = false
+offset_left = -48.0
+offset_top = -40.0
+offset_right = 48.0
+offset_bottom = -24.0
+theme_override_font_sizes/font_size = 10
+horizontal_alignment = 1
+
 [node name="UI" type="CanvasLayer" parent="."]

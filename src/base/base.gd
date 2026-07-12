@@ -58,6 +58,12 @@ func _on_facility(facility_id: StringName) -> void:
 		Clock.sleep_until_morning()
 		_show_toast("푹 잤다 — Day %d 아침, 마나 회복" % Clock.day)
 		return
+	if facility_id == &"door":
+		EventBus.scene_change_requested.emit(&"field")
+		return
+	if facility_id == &"easel":
+		EventBus.scene_change_requested.emit(&"drawing")
+		return
 	_open(facility_id)
 
 func _open(facility_id: StringName) -> void:
