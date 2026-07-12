@@ -9,6 +9,14 @@ const SCENES: Dictionary = {
 
 @onready var current_scene: Node = $CurrentScene
 
+func _input(event: InputEvent) -> void:
+	# F11 / Alt+Enter — 전체화면 토글. stretch=viewport라 UI·게임 전체가 창 크기를 따라 스케일된다
+	if event.is_action_pressed(&"toggle_fullscreen"):
+		var fullscreen := DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_FULLSCREEN
+		DisplayServer.window_set_mode(
+			DisplayServer.WINDOW_MODE_WINDOWED if fullscreen else DisplayServer.WINDOW_MODE_FULLSCREEN)
+		get_viewport().set_input_as_handled()
+
 func _ready() -> void:
 	EventBus.scene_change_requested.connect(change_scene)
 	# 귀환·사망 모두 거점으로 (가방 처리·손실은 GameState가 시그널로 이미 수행)
