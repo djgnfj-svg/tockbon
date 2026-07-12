@@ -7,6 +7,8 @@ const EQUIP_SLOTS := 4
 var balance: BalanceData = preload("res://data/balance.tres")
 
 var mana: float
+## 플레이어 HP — 출격 시 reset, 표시·판정의 단일 원장 (v1.1: C 로컬에서 이관)
+var hp: float
 ## {item_id: count} — 창고 (영구, 사망에도 유지)
 var inventory: Dictionary = {}
 ## 출격 중 획득 [{ "id": StringName, "count": int }] — 사망 시 손실
@@ -20,6 +22,7 @@ var codex: Dictionary = {}
 
 func _ready() -> void:
 	mana = balance.mana_max
+	hp = balance.player_hp_max
 	# 시작 해금 — 튜토리얼 지급 룬 (TECH_SPEC §5.1)
 	codex[&"rune_fire"] = true
 	codex[&"rune_impact"] = true
@@ -40,6 +43,20 @@ func spend_mana(amount: float) -> bool:
 
 func restore_mana_full() -> void:
 	mana = balance.mana_max
+
+# ── 플레이어 HP
+
+func damage_player(amount: float) -> void:
+	hp = maxf(0.0, hp - amount)
+	EventBus.player_hp_changed.emit(hp, balance.player_hp_max)
+
+func heal_player(amount: float) -> void:
+	hp = minf(hp + amount, balance.player_hp_max)
+	EventBus.player_hp_changed.emit(hp, balance.player_hp_max)
+
+func reset_player_hp() -> void:
+	hp = balance.player_hp_max
+	EventBus.player_hp_changed.emit(hp, balance.player_hp_max)
 
 # ── 창고 (영구)
 

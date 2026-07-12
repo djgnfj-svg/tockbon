@@ -93,7 +93,7 @@ func _run() -> void:
 	add_child(player)
 	_check(player.is_in_group("player"), "플레이어 그룹 'player'")
 	_check(player.collision_layer == 1 << 1, "플레이어 충돌 레이어 2")
-	_check(player.hp == GameState.balance.player_hp_max, "플레이어 HP = balance.player_hp_max")
+	_check(GameState.hp == GameState.balance.player_hp_max, "플레이어 HP = balance.player_hp_max (원장 GameState.hp)")
 
 	# ── 3. 적 스폰 + 노드 계약 (그룹 enemies, 레이어 3, take_hit)
 	var vine: Variant = _spawn_enemy(&"vine", Vector2(600, 0))

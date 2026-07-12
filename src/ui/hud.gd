@@ -17,8 +17,6 @@ const FLASH_RESTORE_SEC := 0.45
 @onready var _slot_bar: HBoxContainer = %SlotBar
 @onready var _bag_label: Label = %BagLabel
 
-## 플레이어 HP는 모듈 C 소관 — HUD는 player_damaged/died로 표시값만 추적
-var _hp: float = 0.0
 ## 마지막으로 방송된 페이즈 — Clock 재조회 대신 시그널 인자를 신뢰한다
 var _phase: int = Enums.Phase.MORNING
 var _slot_panels: Array[PanelContainer] = []
@@ -32,7 +30,6 @@ var _mana_shown := -1
 var _bag_shown := -1
 
 func _ready() -> void:
-	_hp = GameState.balance.player_hp_max
 	_phase = Clock.phase
 	_hp_bar.max_value = GameState.balance.player_hp_max
 	_mana_bar.max_value = GameState.balance.mana_max
@@ -40,8 +37,7 @@ func _ready() -> void:
 	_build_slots()
 	EventBus.phase_changed.connect(_on_phase_changed)
 	EventBus.day_started.connect(_on_day_started)
-	EventBus.player_damaged.connect(_on_player_damaged)
-	EventBus.player_died.connect(_on_player_died)
+	EventBus.player_hp_changed.connect(_on_player_hp_changed)
 	EventBus.cast_executed.connect(_on_cast_executed)
 	EventBus.cast_failed.connect(_on_cast_failed)
 	_refresh_hp()
@@ -124,8 +120,9 @@ func _refresh_slots() -> void:
 				InkStyle.rune_glyph(d.rune_type), InkStyle.rune_name(d.rune_type), int(d.mana_cost)]
 
 func _refresh_hp() -> void:
-	_hp_bar.value = _hp
-	_hp_text.text = "%d/%d" % [int(ceilf(_hp)), int(GameState.balance.player_hp_max)]
+	# HP 원장은 GameState (v1.1 이관) — player_hp_changed로 갱신
+	_hp_bar.value = GameState.hp
+	_hp_text.text = "%d/%d" % [int(ceilf(GameState.hp)), int(GameState.balance.player_hp_max)]
 
 func _refresh_clock_label() -> void:
 	_day_label.text = "%d일차 · %s %s" % [
@@ -142,12 +139,7 @@ func _on_phase_changed(phase: int) -> void:
 	_refresh_clock_label()
 	_day_bar.add_theme_stylebox_override("fill", InkStyle.make_bar_fill(InkStyle.phase_color(phase)))
 
-func _on_player_damaged(amount: float) -> void:
-	_hp = maxf(0.0, _hp - amount)
-	_refresh_hp()
-
-func _on_player_died() -> void:
-	_hp = 0.0
+func _on_player_hp_changed(_hp: float, _hp_max: float) -> void:
 	_refresh_hp()
 
 func _on_cast_executed(design: SpellDesign, _mana_spent: float) -> void:

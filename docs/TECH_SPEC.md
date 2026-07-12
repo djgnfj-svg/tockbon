@@ -122,7 +122,8 @@ signal cast_failed(design: SpellDesign, reason: int)                           #
 # ── 전투 (B ↔ C)
 signal enemy_hit(enemy: Node2D, damage: float, rune_type: int)  # 발신 주체: 적 take_hit 내부 1곳 (약점 반영 최종 피해 기준). 투사체 측 발신 금지
 signal enemy_died(enemy_def: EnemyDef, position: Vector2)
-signal player_damaged(amount: float)
+signal player_damaged(amount: float)                 # 피격 이벤트 (FX용)
+signal player_hp_changed(hp: float, hp_max: float)   # HP 원장 변경 — GameState가 발신 (v1.1: HP는 GameState.hp)
 signal player_died
 
 # ── 탁본·익스트랙션 (C → D·E)

@@ -9,8 +9,6 @@ const StoragePanel := preload("res://src/base/storage_panel.gd")
 const LabPanel := preload("res://src/base/lab_panel.gd")
 const Recipes := preload("res://src/base/recipes.gd")
 
-const PHASE_NAMES: Array[String] = ["아침", "낮", "저녁", "밤"]
-
 var _workbench_service: WorkbenchService
 var _research_service: ResearchService
 ## {facility_id: CenterContainer(래퍼)} / {facility_id: 패널}
@@ -42,9 +40,6 @@ func _ready() -> void:
 func _process(_delta: float) -> void:
 	# 연구는 패널이 닫혀 있어도 진행·완료돼야 한다
 	_research_service.poll()
-	_status.text = "Day %d · %s · %d%% · 마나 %d/%d\n이동 WASD · 상호작용 E · 닫기 ESC" % [
-		Clock.day, PHASE_NAMES[Clock.phase], int(Clock.day_progress() * 100.0),
-		int(GameState.mana), int(GameState.balance.mana_max)]
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed(&"ui_cancel") and _any_panel_open():
@@ -99,8 +94,10 @@ func _add_panel(facility_id: StringName, panel: PanelContainer) -> void:
 	_panels[facility_id] = panel
 
 func _build_hud() -> void:
+	# Day·마나 표시는 전역 HUD(모듈 E) 소관 — 여기는 조작 힌트만 (중복 제거, v1.1)
 	_status = Label.new()
-	_status.position = Vector2(8, 4)
+	_status.text = "이동 WASD · 상호작용 E · 닫기 ESC"
+	_status.position = Vector2(8, 344)
 	_status.theme = _theme
 	_ui.add_child(_status)
 	_toast = Label.new()

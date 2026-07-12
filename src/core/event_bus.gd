@@ -18,6 +18,7 @@ signal cast_failed(design: SpellDesign, reason: int)
 signal enemy_hit(enemy: Node2D, damage: float, rune_type: int)
 signal enemy_died(enemy_def: EnemyDef, position: Vector2)
 signal player_damaged(amount: float)
+signal player_hp_changed(hp: float, hp_max: float)
 signal player_died
 
 # ── 탁본·익스트랙션 (C → D·E)

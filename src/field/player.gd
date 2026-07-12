@@ -11,7 +11,6 @@ const WandBolt := preload("res://src/field/wand_bolt.gd")
 @export var dash_cooldown_sec: float = 0.6
 @export var hit_invuln_sec: float = 0.5
 
-var hp: float = 100.0
 var is_dead: bool = false
 ## 탁본 중 무방비 — 이동·대시·공격·캐스트 전부 불가 (rubbing_spot이 설정)
 var busy: bool = false
@@ -31,7 +30,7 @@ func _ready() -> void:
 	collision_layer = 1 << 1                # 2 = player
 	collision_mask = (1 << 0) | (1 << 2)    # world + enemy
 	_balance = GameState.balance
-	hp = _balance.player_hp_max
+	GameState.reset_player_hp()  # HP 원장은 GameState (출격마다 회복)
 	_build_body()
 	EventBus.phase_changed.connect(_on_phase_changed)
 	_light.enabled = Clock.is_night()
@@ -84,10 +83,10 @@ func try_cast(slot: int) -> bool:
 func take_damage(amount: float) -> void:
 	if is_dead or _invuln_left > 0.0 or _dash_left > 0.0:
 		return
-	hp -= amount
+	GameState.damage_player(amount)
 	_invuln_left = hit_invuln_sec
 	EventBus.player_damaged.emit(amount)
-	if hp <= 0.0:
+	if GameState.hp <= 0.0:
 		_die()
 
 ## 탁본 무방비 상태 토글 (rubbing_spot 전용)
@@ -119,7 +118,6 @@ func _shoot() -> void:
 func _die() -> void:
 	is_dead = true
 	busy = false
-	hp = 0.0
 	modulate = Color(1, 1, 1, 0.35)
 	collision_layer = 0
 	EventBus.player_died.emit()
