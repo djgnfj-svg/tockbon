@@ -6,7 +6,7 @@
 ## 불변 규칙 (먼저 확정, 이후 모든 에셋이 따름)
 
 - 뷰포트 640×360 (정수 스케일) · **타일 16×16 · 캐릭터/적 32×32 · 보스 64×64 · UI 아이콘 16×16**
-- **팔레트 1개 고정** — 첫 작업으로 확정할 것. 후보: Apollo(46색, lospec.com/palette-list/apollo). 모든 에셋(구매 에셋 포함)을 이 팔레트로 리컬러
+- **팔레트 확정: Apollo 46색** (2026-07-13, 사용자 결정. lospec.com/palette-list/apollo) — 원본 `assets/aseprite/apollo.gpl`(Aseprite에서 로드 가능) · 스와치 `assets/aseprite/palette_apollo.aseprite`. 모든 에셋(구매 에셋 포함)을 이 46색으로 리컬러 (`quantize_to_palette` 활용)
 - **낮/밤 톤은 CanvasModulate가 처리** — 스프라이트는 중립(낮) 톤으로만 제작, 밤 버전 별도 제작 금지
 - **마법진·잉크 선은 스프라이트가 아님** — Line2D 프로시저럴 렌더 유지 (픽셀 세계 + 매끄러운 먹선 대비가 아이덴티티)
 - 파일 규칙: 원본 `assets/aseprite/<이름>.aseprite` (git 포함) → 익스포트 `assets/sprites/<분류>/<이름>.png` (스프라이트시트는 가로 스트립). 임포트 필터는 프로젝트 기본(Nearest)이라 별도 설정 불요
