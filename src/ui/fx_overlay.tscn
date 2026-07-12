@@ -1,0 +1,62 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/ui/fx_overlay.gd" id="1"]
+
+[node name="FxOverlay" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("1")
+
+[node name="ToastBox" type="VBoxContainer" parent="."]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -190.0
+offset_top = -150.0
+offset_right = -8.0
+offset_bottom = -30.0
+grow_horizontal = 0
+grow_vertical = 0
+theme_override_constants/separation = 3
+alignment = 2
+
+[node name="RubbingBox" type="VBoxContainer" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 1
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -110.0
+offset_top = -92.0
+offset_right = 110.0
+offset_bottom = -64.0
+grow_horizontal = 2
+grow_vertical = 0
+theme_override_constants/separation = 3
+
+[node name="RubbingLabel" type="Label" parent="RubbingBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 9
+horizontal_alignment = 1
+text = "탁본을 뜨는 중… 무방비!"
+
+[node name="RubbingBar" type="ProgressBar" parent="RubbingBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(220, 8)
+layout_mode = 2
+max_value = 100.0
+value = 0.0
+show_percentage = false

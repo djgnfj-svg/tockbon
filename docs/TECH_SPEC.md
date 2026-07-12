@@ -112,8 +112,8 @@ signal recognition_result(role: int, matched: bool, score: float)  # UI 피드�
 
 # ── 캐스팅 (C → B, B → C·E)
 signal cast_requested(design: SpellDesign, origin: Vector2, aim_dir: Vector2)  # C의 플레이어가 발신
-signal cast_executed(design: SpellDesign, mana_spent: float)                   # B가 발신 (내구 차감 트리거)
-signal cast_failed(design: SpellDesign, reason: int)                           # 마나 부족·내구 0 등
+signal cast_executed(design: SpellDesign, mana_spent: float)                   # B가 발신. 내구 차감은 spell_system이 직접 수행 (수신 측 중복 차감 금지)
+signal cast_failed(design: SpellDesign, reason: int)                           # 검사 순서: INVALID → BROKEN → NO_MANA (손상 도안에 마나 낭비 방지)
 
 # ── 전투 (B ↔ C)
 signal enemy_hit(enemy: Node2D, damage: float, rune_type: int)
@@ -131,11 +131,24 @@ signal bag_lost                                      # 사망 — 가방 손실
 signal phase_changed(phase: int)                     # Phase.MORNING / DAY / EVENING / NIGHT
 signal day_started(day: int)
 
+# ── 도감 해금 (범용 — GameState가 수신해 codex 등록)
+signal codex_unlocked(unlock_id: StringName)         # C: 적 첫 처치 시 enemy_<id> 발신
+
 # ── 거점 (D → E·A)
 signal research_completed(unlock_id: StringName)     # 룬 해금·제법 해금 → 도감 등록
 signal design_repaired(design: SpellDesign)
 signal resources_changed                             # 잉크·재료 증감 → HUD 갱신
 ```
+
+### 5.1 unlock_id (도감 해금 키) 규약 — 전 모듈 공통
+
+| 종류 | 형식 | 예 | 발신 주체·시그널 |
+|---|---|---|---|
+| 룬 | `rune_<룬명>` | `rune_water`, `rune_wind` | D · research_completed |
+| 제법 | `recipe_<id>` | `recipe_paper_2`, `recipe_paper_3` | D · research_completed |
+| 적 도감 | `enemy_<EnemyDef.id>` | `enemy_beetle` | C · codex_unlocked (첫 처치 시) |
+
+시작 해금: `rune_fire`, `rune_impact`는 튜토리얼 지급 (통합 시 GameState 초기값으로 등록).
 
 ## 6. 인식기 설계 (모듈 A)
 

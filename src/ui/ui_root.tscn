@@ -1,0 +1,42 @@
+[gd_scene load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://src/ui/ui_root.gd" id="1"]
+[ext_resource type="PackedScene" path="res://src/ui/hud.tscn" id="2"]
+[ext_resource type="PackedScene" path="res://src/ui/fx_overlay.tscn" id="3"]
+[ext_resource type="PackedScene" path="res://src/ui/bulletin.tscn" id="4"]
+[ext_resource type="PackedScene" path="res://src/ui/loadout.tscn" id="5"]
+[ext_resource type="PackedScene" path="res://src/ui/codex.tscn" id="6"]
+
+[node name="UiRoot" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("1")
+
+[node name="Hud" parent="." instance=ExtResource("2")]
+layout_mode = 1
+
+[node name="FxOverlay" parent="." instance=ExtResource("3")]
+layout_mode = 1
+
+[node name="Screens" type="Control" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Bulletin" parent="Screens" instance=ExtResource("4")]
+layout_mode = 1
+
+[node name="Loadout" parent="Screens" instance=ExtResource("5")]
+layout_mode = 1
+
+[node name="Codex" parent="Screens" instance=ExtResource("6")]
+layout_mode = 1

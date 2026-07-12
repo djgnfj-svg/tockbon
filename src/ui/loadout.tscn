@@ -1,0 +1,100 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/ui/loadout.gd" id="1"]
+
+[node name="Loadout" type="Control"]
+visible = false
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1")
+
+[node name="Dim" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 0
+color = Color(0.1, 0.09, 0.08, 0.45)
+
+[node name="Center" type="CenterContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Panel" type="PanelContainer" parent="Center"]
+custom_minimum_size = Vector2(580, 320)
+layout_mode = 2
+
+[node name="VBox" type="VBoxContainer" parent="Center/Panel"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Title" type="Label" parent="Center/Panel/VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 13
+horizontal_alignment = 1
+text = "장착 선택 — 아침에 고른 4장이 하루의 전부"
+
+[node name="Body" type="HBoxContainer" parent="Center/Panel/VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 10
+
+[node name="LeftBox" type="VBoxContainer" parent="Center/Panel/VBox/Body"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 4
+
+[node name="LeftTitle" type="Label" parent="Center/Panel/VBox/Body/LeftBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 9
+text = "보유 도안"
+
+[node name="DesignScroll" type="ScrollContainer" parent="Center/Panel/VBox/Body/LeftBox"]
+custom_minimum_size = Vector2(310, 190)
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="DesignList" type="VBoxContainer" parent="Center/Panel/VBox/Body/LeftBox/DesignScroll"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 4
+
+[node name="RightBox" type="VBoxContainer" parent="Center/Panel/VBox/Body"]
+custom_minimum_size = Vector2(220, 0)
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="RightTitle" type="Label" parent="Center/Panel/VBox/Body/RightBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 9
+text = "장착 슬롯 (1~4)"
+
+[node name="SlotList" type="VBoxContainer" parent="Center/Panel/VBox/Body/RightBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="Hint" type="Label" parent="Center/Panel/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 9
+autowrap_mode = 2
+text = "도안을 고른 뒤 슬롯을 누르면 배치된다. 같은 슬롯을 다시 누르면 해제."
+
+[node name="Confirm" type="Button" parent="Center/Panel/VBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 24)
+layout_mode = 2
+text = "장착 확정 — 출격 준비"

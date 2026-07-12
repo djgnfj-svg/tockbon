@@ -30,6 +30,9 @@ signal bag_lost
 signal phase_changed(phase: int)
 signal day_started(day: int)
 
+# ── 도감 해금 (C: 적 첫 처치 → enemy_<id> / 누구든 범용 해금)
+signal codex_unlocked(unlock_id: StringName)
+
 # ── 거점 (D → E·A)
 signal research_completed(unlock_id: StringName)
 signal design_repaired(design: SpellDesign)
