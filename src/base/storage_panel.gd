@@ -41,7 +41,8 @@ func refresh() -> void:
 	for kind: int in GEAR_KINDS:
 		var slot_tag: String = KIND_NAMES.get(kind, "?")
 		if GameState.equipment.has(kind):
-			var row := add_row(_list_box, "[%s] %s" % [slot_tag, item_name(GameState.equipment[kind])])
+			var gear: StringName = GameState.equipment[kind]
+			var row := add_item_row(_list_box, gear, "[%s] %s" % [slot_tag, item_name(gear)])
 			add_button(row, "해제", true, func() -> void: GameState.unequip_gear(kind))
 		else:
 			add_row(_list_box, "[%s] (미착용)" % slot_tag)
@@ -66,7 +67,7 @@ func refresh() -> void:
 	for e: Dictionary in entries:
 		var def: ItemDef = Db.get_item(e["id"])
 		var kind_tag: String = KIND_NAMES.get(def.kind, "?") if def != null else "?"
-		var row := add_row(_list_box, "[%s] %s ×%d" % [kind_tag, item_name(e["id"]), e["count"]])
+		var row := add_item_row(_list_box, e["id"], "[%s] %s ×%d" % [kind_tag, item_name(e["id"]), e["count"]])
 		if def != null and def.kind in GEAR_KINDS:
 			var gear_id: StringName = e["id"]
 			add_button(row, "착용", true, func() -> void: GameState.equip_gear(gear_id))
@@ -75,4 +76,4 @@ func refresh() -> void:
 	if GameState.bag.is_empty():
 		add_row(_list_box, "(비어 있음)")
 	for entry: Dictionary in GameState.bag:
-		add_row(_list_box, "%s ×%d" % [item_name(entry["id"]), int(entry["count"])])
+		add_item_row(_list_box, entry["id"], "%s ×%d" % [item_name(entry["id"]), int(entry["count"])])

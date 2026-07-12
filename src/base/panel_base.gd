@@ -2,6 +2,8 @@ extends PanelContainer
 ## 거점 패널 공통 골격 — 제목 + 닫기 버튼 + 내용 VBox (모듈 D 임시 UI).
 ## 본격 UI는 모듈 E 소관 — 여기는 기능 확인용 플레이스홀더.
 
+const ItemIcons := preload("res://src/core/item_icons.gd")
+
 signal close_requested
 
 var content: VBoxContainer
@@ -61,6 +63,20 @@ func add_row(box: Container, text: String) -> HBoxContainer:
 	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(label)
 	box.add_child(row)
+	return row
+
+## 아이템 행 — 아이콘(있으면) + 텍스트. 반환 row에 add_button 가능
+func add_item_row(box: Container, item_id: StringName, text: String) -> HBoxContainer:
+	var row := add_row(box, text)
+	var tex := ItemIcons.icon(item_id)
+	if tex != null:
+		var icon := TextureRect.new()
+		icon.texture = tex
+		icon.custom_minimum_size = Vector2(16, 16)
+		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		row.add_child(icon)
+		row.move_child(icon, 0)
 	return row
 
 func add_button(row: HBoxContainer, text: String, enabled: bool, on_pressed: Callable) -> Button:
