@@ -7,6 +7,19 @@ extends CharacterBody2D
 const Util := preload("res://src/field/field_util.gd")
 const WandBolt := preload("res://src/field/wand_bolt.gd")
 
+## 주인공 스프라이트시트 (ART_SPEC P1) — 32×32 가로 스트립 32프레임, 태그 순서는 아래 _SHEET_ANIMS
+const PLAYER_SHEET_PATH := "res://assets/sprites/player/player.png"
+## { 애니 이름: [시작 프레임, 프레임 수, fps] } — assets/sprites/player/player.json과 동일 배치
+const _SHEET_ANIMS := {
+	"idle_down": [0, 2, 2.5], "idle_up": [2, 2, 2.5],
+	"idle_left": [4, 2, 2.5], "idle_right": [6, 2, 2.5],
+	"walk_down": [8, 4, 7.0], "walk_up": [12, 4, 7.0],
+	"walk_left": [16, 4, 7.0], "walk_right": [20, 4, 7.0],
+	"dash_down": [24, 1, 10.0], "dash_up": [25, 1, 10.0],
+	"dash_left": [26, 1, 10.0], "dash_right": [27, 1, 10.0],
+	"rub": [28, 4, 2.8],
+}
+
 @export var attack_cooldown_sec: float = 0.25
 @export var dash_cooldown_sec: float = 0.6
 @export var hit_invuln_sec: float = 0.5
@@ -24,6 +37,8 @@ var _attack_cd: float = 0.0
 var _invuln_left: float = 0.0
 var _light: PointLight2D
 var _aim_line: Line2D
+var _anim: AnimatedSprite2D
+var _facing: String = "down"
 
 func _ready() -> void:
 	add_to_group("player")
@@ -48,6 +63,7 @@ func _physics_process(delta: float) -> void:
 		_aim_line.rotation = aim_dir.angle()
 	if busy or GameState.ui_modal_open:
 		velocity = Vector2.ZERO
+		_update_anim()
 		return
 	if _dash_left > 0.0:
 		_dash_left -= delta
@@ -56,6 +72,7 @@ func _physics_process(delta: float) -> void:
 		var input_dir := Input.get_vector("move_left", "move_right", "move_up", "move_down")
 		velocity = input_dir * _balance.player_move_speed
 	move_and_slide()
+	_update_anim()
 	if Input.is_action_pressed("attack_basic") and _attack_cd <= 0.0:
 		_shoot()
 
@@ -119,6 +136,8 @@ func _shoot() -> void:
 func _die() -> void:
 	is_dead = true
 	busy = false
+	if _anim != null:
+		_anim.stop()
 	modulate = Color(1, 1, 1, 0.35)
 	collision_layer = 0
 	EventBus.player_died.emit()
@@ -130,13 +149,17 @@ func _on_phase_changed(phase: int) -> void:
 
 func _build_body() -> void:
 	Util.add_circle_collider(self, 8.0)
-	# 먹빛 두건의 견습 필경사 (플레이스홀더)
-	Util.add_circle_visual(self, 8.0, Color(0.16, 0.18, 0.22))
-	var brim := Polygon2D.new()
-	brim.polygon = Util.circle_points(5.0, 10)
-	brim.color = Color(0.85, 0.8, 0.7)
-	brim.position = Vector2(0, -2)
-	add_child(brim)
+	if ResourceLoader.exists(PLAYER_SHEET_PATH):
+		_anim = _build_sprite()
+		add_child(_anim)
+	else:
+		# 미임포트 환경 폴백 — 먹빛 두건의 견습 필경사 (플레이스홀더)
+		Util.add_circle_visual(self, 8.0, Color(0.16, 0.18, 0.22))
+		var brim := Polygon2D.new()
+		brim.polygon = Util.circle_points(5.0, 10)
+		brim.color = Color(0.85, 0.8, 0.7)
+		brim.position = Vector2(0, -2)
+		add_child(brim)
 	_aim_line = Line2D.new()
 	_aim_line.points = PackedVector2Array([Vector2(6, 0), Vector2(15, 0)])
 	_aim_line.width = 2.0
@@ -151,3 +174,45 @@ func _build_body() -> void:
 	_light.energy = 1.2
 	_light.enabled = false
 	add_child(_light)
+
+func _build_sprite() -> AnimatedSprite2D:
+	var tex: Texture2D = load(PLAYER_SHEET_PATH)
+	var frames := SpriteFrames.new()
+	frames.remove_animation(&"default")
+	for anim_name: String in _SHEET_ANIMS:
+		var d: Array = _SHEET_ANIMS[anim_name]
+		var sn := StringName(anim_name)
+		frames.add_animation(sn)
+		frames.set_animation_speed(sn, d[2])
+		frames.set_animation_loop(sn, true)
+		for i in range(d[1]):
+			var at := AtlasTexture.new()
+			at.atlas = tex
+			at.region = Rect2((int(d[0]) + i) * 32, 0, 32, 32)
+			frames.add_frame(sn, at)
+	var sprite := AnimatedSprite2D.new()
+	sprite.sprite_frames = frames
+	sprite.play(&"idle_down")
+	return sprite
+
+func _update_anim() -> void:
+	if _anim == null:
+		return
+	var next: String
+	if busy:
+		next = "rub"
+	elif _dash_left > 0.0:
+		_facing = _dir_name(_dash_dir)
+		next = "dash_" + _facing
+	elif velocity.length_squared() > 1.0:
+		_facing = _dir_name(velocity)
+		next = "walk_" + _facing
+	else:
+		next = "idle_" + _facing
+	if _anim.animation != StringName(next):
+		_anim.play(StringName(next))
+
+func _dir_name(v: Vector2) -> String:
+	if absf(v.x) >= absf(v.y):
+		return "right" if v.x >= 0.0 else "left"
+	return "down" if v.y >= 0.0 else "up"
