@@ -4,6 +4,8 @@ extends Area2D
 
 const Util := preload("res://src/field/field_util.gd")
 
+const SHEET_PATH := "res://assets/sprites/field/rubbing_spot.png"
+
 var fragment_id: StringName = &""
 
 var _progress: float = 0.0
@@ -17,16 +19,22 @@ func _ready() -> void:
 	collision_layer = 1 << 6    # 7 = interaction
 	collision_mask = 1 << 1     # player
 	Util.add_circle_collider(self, 26.0)
-	# 바닥에 남은 글자 무늬 (플레이스홀더 소용돌이)
-	var mark := Line2D.new()
-	var pts := PackedVector2Array()
-	for i in range(24):
-		var t := float(i) / 23.0
-		pts.append(Vector2.from_angle(t * TAU * 2.0) * (3.0 + t * 11.0))
-	mark.points = pts
-	mark.width = 2.0
-	mark.default_color = Color(0.9, 0.85, 0.6, 0.9)
-	add_child(mark)
+	if ResourceLoader.exists(SHEET_PATH):
+		var spr := AnimatedSprite2D.new()
+		spr.sprite_frames = Util.build_sprite_frames(load(SHEET_PATH), {"glow": [0, 2, 2.2]}, 32)
+		spr.autoplay = "glow"
+		add_child(spr)
+	else:
+		# 바닥에 남은 글자 무늬 (플레이스홀더 소용돌이)
+		var mark := Line2D.new()
+		var pts := PackedVector2Array()
+		for i in range(24):
+			var t := float(i) / 23.0
+			pts.append(Vector2.from_angle(t * TAU * 2.0) * (3.0 + t * 11.0))
+		mark.points = pts
+		mark.width = 2.0
+		mark.default_color = Color(0.9, 0.85, 0.6, 0.9)
+		add_child(mark)
 	_bar = Line2D.new()
 	_bar.points = PackedVector2Array([Vector2(-14, -22), Vector2(-14, -22)])
 	_bar.width = 3.0

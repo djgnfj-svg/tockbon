@@ -3,6 +3,8 @@ extends Area2D
 
 const Util := preload("res://src/field/field_util.gd")
 
+const SPRITE_PATH := "res://assets/sprites/field/exit_gate.png"
+
 var _triggered: bool = false
 
 func _ready() -> void:
@@ -10,12 +12,17 @@ func _ready() -> void:
 	collision_layer = 1 << 6    # 7 = interaction
 	collision_mask = 1 << 1     # player
 	Util.add_rect_collider(self, Vector2(28, 56))
-	# 문기둥 2개 + 빛나는 아치 (플레이스홀더)
-	Util.add_rect_visual(self, Vector2(28, 56), Color(0.85, 0.9, 0.75, 0.25))
-	var left := Util.add_rect_visual(self, Vector2(6, 56), Color(0.5, 0.42, 0.3))
-	left.position = Vector2(-11, 0)
-	var right := Util.add_rect_visual(self, Vector2(6, 56), Color(0.5, 0.42, 0.3))
-	right.position = Vector2(11, 0)
+	if ResourceLoader.exists(SPRITE_PATH):
+		var spr := Sprite2D.new()
+		spr.texture = load(SPRITE_PATH)
+		add_child(spr)
+	else:
+		# 문기둥 2개 + 빛나는 아치 (플레이스홀더)
+		Util.add_rect_visual(self, Vector2(28, 56), Color(0.85, 0.9, 0.75, 0.25))
+		var left := Util.add_rect_visual(self, Vector2(6, 56), Color(0.5, 0.42, 0.3))
+		left.position = Vector2(-11, 0)
+		var right := Util.add_rect_visual(self, Vector2(6, 56), Color(0.5, 0.42, 0.3))
+		right.position = Vector2(11, 0)
 	body_entered.connect(_on_body_entered)
 	body_exited.connect(func(body: Node2D) -> void:
 		if body.is_in_group("player"):

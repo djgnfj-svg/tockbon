@@ -4,6 +4,13 @@ extends Area2D
 
 const Util := preload("res://src/field/field_util.gd")
 
+## 채집 노드 시트 (ART_SPEC P3) — 주간 2종·야간 발광 2종, 각 2프레임
+const SHEET_PATH := "res://assets/sprites/field/gather.png"
+const SHEET_ANIMS := {
+	"day_a": [0, 2, 2.0], "day_b": [2, 2, 2.0],
+	"night_a": [4, 2, 2.5], "night_b": [6, 2, 2.5],
+}
+
 var item_id: StringName = &"mat_vine"
 var count: int = 1
 var night_only: bool = false
@@ -18,12 +25,20 @@ func _ready() -> void:
 	collision_mask = 1 << 1     # player
 	_night = Clock.is_night()
 	Util.add_circle_collider(self, 20.0)
-	var color := Color(0.4, 0.65, 0.9) if night_only else Color(0.35, 0.5, 0.3)
-	Util.add_circle_visual(self, 8.0, color)
-	var sprout := Polygon2D.new()
-	sprout.polygon = PackedVector2Array([Vector2(-2, -6), Vector2(2, -6), Vector2(0, -14)])
-	sprout.color = color.lightened(0.3)
-	add_child(sprout)
+	if ResourceLoader.exists(SHEET_PATH):
+		var spr := AnimatedSprite2D.new()
+		spr.sprite_frames = Util.build_sprite_frames(load(SHEET_PATH), SHEET_ANIMS, 16)
+		# 품목별로 배리에이션 고정 (같은 재료 = 같은 생김새)
+		var variant := "_b" if (hash(item_id) & 1) == 1 else "_a"
+		spr.play(StringName(("night" if night_only else "day") + variant))
+		add_child(spr)
+	else:
+		var color := Color(0.4, 0.65, 0.9) if night_only else Color(0.35, 0.5, 0.3)
+		Util.add_circle_visual(self, 8.0, color)
+		var sprout := Polygon2D.new()
+		sprout.polygon = PackedVector2Array([Vector2(-2, -6), Vector2(2, -6), Vector2(0, -14)])
+		sprout.color = color.lightened(0.3)
+		add_child(sprout)
 	EventBus.phase_changed.connect(_on_phase_changed)
 	body_entered.connect(func(body: Node2D) -> void:
 		if body.is_in_group("player"):
