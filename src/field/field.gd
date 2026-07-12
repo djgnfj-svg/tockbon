@@ -12,6 +12,12 @@ const BossIntro := preload("res://src/field/boss_intro.gd")
 const MAP_SIZE := Vector2(1280, 832)
 const WALL_THICKNESS := 24.0
 
+## 지형 타일러블 텍스처 (ART_SPEC P3 경량판 — TileMap 도입 전, Polygon2D repeat로 적용)
+const TEX_GRASS := "res://assets/sprites/field/tile_grass.png"
+const TEX_BOSS_FLOOR := "res://assets/sprites/field/tile_boss_floor.png"
+const TEX_BUSH := "res://assets/sprites/field/tile_bush.png"
+const TEX_ROCK := "res://assets/sprites/field/tile_rock.png"
+
 ## 북쪽 보스 존 — 중간보스(바람을 품은 존재) 격리 구역. 남쪽 경계(y=0)의
 ## BOSS_GATE_X 구간만 뚫려 입구가 된다. 바닥 색으로 본 필드와 구분.
 const BOSS_ZONE := Rect2(440, -420, 400, 420)
@@ -122,6 +128,14 @@ func _spawn_boss_intro() -> void:
 	intro.global_position = Vector2((BOSS_GATE_X.x + BOSS_GATE_X.y) * 0.5, -20.0)
 	add_child(intro)
 
+## 타일러블 텍스처 적용 — 없으면(미임포트) 기존 단색 플레이스홀더 유지
+func _apply_tile_tex(poly: Polygon2D, path: String) -> void:
+	if not ResourceLoader.exists(path):
+		return
+	poly.texture = load(path)
+	poly.texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
+	poly.color = Color.WHITE
+
 func _build_ground_and_walls() -> void:
 	var ground := Polygon2D.new()
 	ground.polygon = PackedVector2Array([
@@ -129,6 +143,7 @@ func _build_ground_and_walls() -> void:
 	])
 	ground.color = Color(0.2, 0.3, 0.18)
 	ground.z_index = -10
+	_apply_tile_tex(ground, TEX_GRASS)
 	add_child(ground)
 	var half_w := MAP_SIZE.x * 0.5
 	var half_h := MAP_SIZE.y * 0.5
@@ -146,7 +161,8 @@ func _make_wall(pos: Vector2, size: Vector2) -> void:
 	wall.collision_layer = 1    # world
 	wall.position = pos
 	Util.add_rect_collider(wall, size)
-	Util.add_rect_visual(wall, size, Color(0.15, 0.2, 0.13))
+	var visual := Util.add_rect_visual(wall, size, Color(0.15, 0.2, 0.13))
+	_apply_tile_tex(visual, TEX_BUSH)
 	add_child(wall)
 
 func _build_obstacles() -> void:
@@ -155,7 +171,8 @@ func _build_obstacles() -> void:
 		rock.collision_layer = 1
 		rock.position = o["pos"]
 		Util.add_rect_collider(rock, o["size"])
-		Util.add_rect_visual(rock, o["size"], Color(0.32, 0.3, 0.26))
+		var visual := Util.add_rect_visual(rock, o["size"], Color(0.32, 0.3, 0.26))
+		_apply_tile_tex(visual, TEX_ROCK)
 		add_child(rock)
 
 ## 북쪽 보스 존 — 바닥 색으로 구분되는 격리 구역 + 입구 표식.
@@ -170,6 +187,7 @@ func _build_boss_zone() -> void:
 	])
 	floor_poly.color = Color(0.21, 0.28, 0.32)   # 바람 기운의 냉색 — 본 필드(녹색)와 구분
 	floor_poly.z_index = -10
+	_apply_tile_tex(floor_poly, TEX_BOSS_FLOOR)
 	add_child(floor_poly)
 	# 존 외벽 3면 (서·동·북)
 	_make_wall(Vector2(BOSS_ZONE.position.x - WALL_THICKNESS * 0.5, BOSS_ZONE.get_center().y),
