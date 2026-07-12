@@ -63,16 +63,17 @@ func _apply_params(params: Dictionary) -> void:
 
 func _build_body() -> void:
 	super._build_body()
-	# 몸통 소용돌이 무늬 — 글자를 품은 존재 (플레이스홀더)
-	var swirl := Line2D.new()
-	var pts := PackedVector2Array()
-	for i in range(20):
-		var t := float(i) / 19.0
-		pts.append(Vector2.from_angle(t * TAU * 1.6) * (2.0 + t * 10.0))
-	swirl.points = pts
-	swirl.width = 1.5
-	swirl.default_color = Color(0.92, 0.98, 0.95, 0.8)
-	add_child(swirl)
+	if _anim_sprite == null:
+		# 몸통 소용돌이 무늬 — 시트 없는 환경의 플레이스홀더 (◎ 무늬는 시트에 포함)
+		var swirl := Line2D.new()
+		var pts := PackedVector2Array()
+		for i in range(20):
+			var t := float(i) / 19.0
+			pts.append(Vector2.from_angle(t * TAU * 1.6) * (2.0 + t * 10.0))
+		swirl.points = pts
+		swirl.width = 1.5
+		swirl.default_color = Color(0.92, 0.98, 0.95, 0.8)
+		add_child(swirl)
 	# 돌풍 예열 텔레그래프 링 — 엘리트 scale(1.35)을 보정해 월드 반경과 일치시킨다
 	_telegraph = Line2D.new()
 	_telegraph.points = Util.circle_points(gust_radius / maxf(scale.x, 0.01), 28)
@@ -187,6 +188,14 @@ func _check_phase2() -> void:
 func _hide_telegraph() -> void:
 	if _telegraph != null:
 		_telegraph.visible = false
+
+func _anim_key() -> String:
+	match _gale_state:
+		GaleState.GUST_WINDUP:
+			return "gust"
+		GaleState.VOLLEY:
+			return "volley"
+	return "idle"
 
 func _post_death() -> void:
 	# 격파 팝 — 간결한 바람 burst (GDD §2: 처치 연출은 무겁지 않게)

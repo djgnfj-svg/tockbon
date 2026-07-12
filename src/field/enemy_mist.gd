@@ -75,3 +75,6 @@ func _update_ai(delta: float) -> void:
 
 func _refresh_alpha() -> void:
 	modulate.a = 0.45 if dispersed else 0.9
+
+func _anim_key() -> String:
+	return "scatter" if dispersed else "gather"

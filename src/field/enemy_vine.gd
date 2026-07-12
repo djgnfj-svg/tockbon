@@ -36,3 +36,11 @@ func _update_ai(_delta: float) -> void:
 			_do_attack(p)
 	else:
 		_state = State.IDLE
+
+func _anim_key() -> String:
+	if _state == State.ATTACK:
+		return "attack"
+	# 재생 중 표시 — 화상이면 재생이 멎으니 idle (약점 카운터의 시각 언어)
+	if hp < max_hp and not is_burning():
+		return "regen"
+	return "idle"

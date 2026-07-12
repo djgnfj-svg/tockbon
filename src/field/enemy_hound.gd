@@ -82,3 +82,12 @@ func _apply_status(status: int, power: float) -> void:
 	if status == Enums.Status.KNOCKBACK and _charge_state != ChargeState.NORMAL:
 		_charge_state = ChargeState.RECOVER
 		_charge_timer = recover_sec
+
+func _anim_key() -> String:
+	# 예열·돌진은 정지 상태라 velocity로 방향을 못 잡는다 — 돌진 방향으로 좌우 반전
+	match _charge_state:
+		ChargeState.WINDUP, ChargeState.DASH:
+			if _anim_sprite != null and absf(_charge_dir.x) > 0.05:
+				_anim_sprite.flip_h = _charge_dir.x < 0.0
+			return "windup" if _charge_state == ChargeState.WINDUP else "dash"
+	return super._anim_key()

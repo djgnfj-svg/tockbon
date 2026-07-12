@@ -176,22 +176,8 @@ func _build_body() -> void:
 	add_child(_light)
 
 func _build_sprite() -> AnimatedSprite2D:
-	var tex: Texture2D = load(PLAYER_SHEET_PATH)
-	var frames := SpriteFrames.new()
-	frames.remove_animation(&"default")
-	for anim_name: String in _SHEET_ANIMS:
-		var d: Array = _SHEET_ANIMS[anim_name]
-		var sn := StringName(anim_name)
-		frames.add_animation(sn)
-		frames.set_animation_speed(sn, d[2])
-		frames.set_animation_loop(sn, true)
-		for i in range(d[1]):
-			var at := AtlasTexture.new()
-			at.atlas = tex
-			at.region = Rect2((int(d[0]) + i) * 32, 0, 32, 32)
-			frames.add_frame(sn, at)
 	var sprite := AnimatedSprite2D.new()
-	sprite.sprite_frames = frames
+	sprite.sprite_frames = Util.build_sprite_frames(load(PLAYER_SHEET_PATH), _SHEET_ANIMS, 32)
 	sprite.play(&"idle_down")
 	return sprite
 

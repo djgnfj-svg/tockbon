@@ -9,6 +9,22 @@ const RubbingSpotScript := preload("res://src/field/rubbing_spot.gd")
 
 enum State { IDLE, CHASE, ATTACK, DEAD }
 
+## ── 스프라이트 (ART_SPEC P2) — 시트 없으면 기존 원형 플레이스홀더 폴백
+const ENEMY_SHEET_DIR := "res://assets/sprites/enemies/"
+const POP_SHEET_PATH := "res://assets/sprites/enemies/pop.png"
+## { 시트 키: { 애니 이름: [시작 프레임, 프레임 수, fps] } } — 키 = def.id (+ 미니는 "_mini")
+const ENEMY_SHEET_ANIMS := {
+	"vine": {"idle": [0, 2, 2.2], "attack": [2, 2, 6.0], "regen": [4, 2, 3.2]},
+	"hound": {"idle": [0, 2, 2.2], "move": [2, 4, 8.0], "windup": [6, 1, 2.0], "dash": [7, 1, 2.5]},
+	"slime": {"idle": [0, 2, 2.4], "move": [2, 2, 5.0]},
+	"slime_mini": {"idle": [0, 2, 2.6], "move": [2, 2, 6.0]},
+	"slime_elite": {"idle": [0, 2, 2.0], "move": [2, 2, 4.5]},
+	"mist": {"gather": [0, 2, 2.4], "scatter": [2, 2, 2.4]},
+	"beetle": {"idle": [0, 2, 2.2], "move": [2, 2, 5.0]},
+	"gale": {"idle": [0, 2, 2.5], "gust": [2, 2, 2.5], "volley": [4, 2, 4.0]},
+}
+const ENEMY_SHEET_SIZES := {"slime_mini": 16, "gale": 64}
+
 const BURN_DURATION := 3.0
 const WET_DURATION := 4.0
 const FLOW_DURATION := 1.2
@@ -40,6 +56,7 @@ var night_mult: float = 1.0
 var knock_velocity: Vector2 = Vector2.ZERO
 
 var _base_max_hp: float = 30.0
+var _anim_sprite: AnimatedSprite2D
 var _state: State = State.IDLE
 var _ai_velocity: Vector2 = Vector2.ZERO
 var _attack_cd: float = 0.0
@@ -86,6 +103,7 @@ func simulate(delta: float, apply_motion: bool = true) -> void:
 	knock_velocity = knock_velocity.move_toward(Vector2.ZERO, KNOCK_DECAY * delta)
 	if apply_motion:
 		move_and_slide()
+	_update_anim_sprite()
 
 # ── 피격 계약 (모듈 B가 투사체에서 호출)
 
@@ -217,8 +235,27 @@ func _die() -> void:
 		_spawn_drops()
 		if def.is_elite:
 			_spawn_rubbing_spot()
+	_spawn_pop()
 	_post_death()
 	queue_free()
+
+## 처치 팝 — 간결한 먹 튀김 (ART_SPEC P2, GDD 톤: 무겁지 않게)
+func _spawn_pop() -> void:
+	if not ResourceLoader.exists(POP_SHEET_PATH):
+		return
+	var parent := get_parent()
+	if parent == null:
+		return
+	var fx := AnimatedSprite2D.new()
+	fx.sprite_frames = Util.build_sprite_frames(
+		load(POP_SHEET_PATH), {"pop": [0, 5, 14.0]}, 32)
+	fx.sprite_frames.set_animation_loop(&"pop", false)
+	fx.autoplay = "pop"
+	fx.global_position = global_position
+	if is_mini:
+		fx.scale = Vector2(0.6, 0.6)
+	fx.animation_finished.connect(fx.queue_free)
+	parent.add_child.call_deferred(fx)
 
 ## 종별 사망 훅 — 슬라임 분열 등
 func _post_death() -> void:
@@ -253,9 +290,23 @@ func _spawn_rubbing_spot() -> void:
 			parent.add_child.call_deferred(spot)
 			return
 
-# ── 플레이스홀더 비주얼
+# ── 비주얼 — 스프라이트 시트 우선, 없으면 원형 플레이스홀더
 
 func _build_body() -> void:
+	var key := _sheet_key()
+	var sheet_path := ENEMY_SHEET_DIR + key + ".png"
+	if not key.is_empty() and ResourceLoader.exists(sheet_path):
+		# 미니는 16×16 리드로잉 시트라 노드 스케일 없이 콜라이더만 축소 (기존 0.6 스케일과 동일 반경)
+		Util.add_circle_collider(self, body_radius * (0.6 if is_mini else 1.0))
+		var frame_size: int = ENEMY_SHEET_SIZES.get(key, 32)
+		_anim_sprite = AnimatedSprite2D.new()
+		_anim_sprite.sprite_frames = Util.build_sprite_frames(
+			load(sheet_path), ENEMY_SHEET_ANIMS[key], frame_size)
+		add_child(_anim_sprite)
+		_update_anim_sprite()
+		if def != null and def.is_elite:
+			scale = Vector2(1.35, 1.35)   # 왕관·무늬는 시트에 포함 — 링 없이 크기만
+		return
 	Util.add_circle_collider(self, body_radius)
 	Util.add_circle_visual(self, body_radius, body_color)
 	if def != null and def.is_elite:
@@ -268,3 +319,32 @@ func _build_body() -> void:
 		add_child(ring)
 	if is_mini:
 		scale = Vector2(0.6, 0.6)
+
+func _sheet_key() -> String:
+	if def == null:
+		return ""
+	var key := String(def.id) + ("_mini" if is_mini else "")
+	return key if ENEMY_SHEET_ANIMS.has(key) else ""
+
+# ── 시트 애니메이션 상태 전환
+
+func _update_anim_sprite() -> void:
+	if _anim_sprite == null:
+		return
+	var next := _anim_key()
+	if not next.is_empty() and _anim_sprite.animation != StringName(next):
+		_anim_sprite.play(StringName(next))
+	if absf(velocity.x) > 1.0:
+		_anim_sprite.flip_h = velocity.x < 0.0
+
+## 종별 오버라이드 훅 — 현재 상태에 맞는 시트 애니 이름
+func _anim_key() -> String:
+	if _state == State.ATTACK and _has_anim("attack"):
+		return "attack"
+	if velocity.length_squared() > 4.0 and _has_anim("move"):
+		return "move"
+	return "idle"
+
+func _has_anim(anim_name: String) -> bool:
+	return _anim_sprite != null and _anim_sprite.sprite_frames != null \
+			and _anim_sprite.sprite_frames.has_animation(StringName(anim_name))
