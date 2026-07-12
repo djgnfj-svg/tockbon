@@ -9,3 +9,4 @@ Godot_v*.exe
 
 # 임시 스크린샷 등 루트 이미지
 /image.png
+/image.png.import
