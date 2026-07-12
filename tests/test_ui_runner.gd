@@ -33,18 +33,21 @@ func _inject_mocks() -> void:
 	# 적 5종 목 데이터 (GDD §7)
 	for def in _mock_enemies():
 		Db.enemies[def.id] = def
-	# 도감 일부 해금 — 불·충격 룬(튜토리얼), 적 2종, 제법 1종
+	# 도감 일부 해금 — 불·충격 룬(튜토리얼), 적 3종(약점 없음 표기 검증용 슬라임 포함), 제법 1종
 	GameState.codex[InkStyle.rune_unlock_id(Enums.RuneType.FIRE)] = true
 	GameState.codex[InkStyle.rune_unlock_id(Enums.RuneType.IMPACT)] = true
 	GameState.codex[InkStyle.enemy_unlock_id(&"vine_regrower")] = true
 	GameState.codex[InkStyle.enemy_unlock_id(&"forest_hound")] = true
+	GameState.codex[InkStyle.enemy_unlock_id(&"sap_slime_elite")] = true
 	GameState.codex[&"recipe_paper_2"] = true
 
 func _mock_enemies() -> Array[EnemyDef]:
 	var defs: Array[EnemyDef] = []
 	defs.append(_enemy(&"vine_regrower", "재생 덩굴", Enums.RuneType.FIRE, false))
 	defs.append(_enemy(&"forest_hound", "숲 사냥개", Enums.RuneType.IMPACT, false))
-	defs.append(_enemy(&"sap_slime_elite", "수액 슬라임", Enums.RuneType.IMPACT, true))
+	var slime := _enemy(&"sap_slime_elite", "수액 슬라임", Enums.RuneType.IMPACT, true)
+	slime.has_counter = false  # 약점 룬 없음 — 다발 도안이 답 (GDD §7)
+	defs.append(slime)
 	defs.append(_enemy(&"mist_wraith", "안개 정령", Enums.RuneType.WIND, false))
 	defs.append(_enemy(&"armored_beetle", "갑주 갑충", Enums.RuneType.WATER, false))
 	return defs
@@ -93,6 +96,8 @@ func _process(_delta: float) -> void:
 			_check((hud.find_child("BagLabel", true, false) as Label).text == "가방 1", "가방 수 갱신 (가방 1)")
 		24:
 			_step_codex()
+		25:
+			_step_live_unlock()
 		26:
 			ui.call("close_top")
 			_check(not codex.visible, "close_top → 도감 닫힘")
@@ -104,13 +109,15 @@ func _process(_delta: float) -> void:
 func _step_bulletin() -> void:
 	_check(bulletin.visible, "day_started → 아침 게시판 자동 표시")
 	var list := bulletin.find_child("EnemyList", true, false) as VBoxContainer
-	_check(list != null and list.get_child_count() == 5, "게시판 적 목록 5행")
+	_check(list != null and list.get_child_count() == Db.enemies.size(),
+		"게시판 적 목록 %d행 (Db 전체)" % Db.enemies.size())
 	var weak_texts: Array[String] = []
 	for row in list.get_children():
 		var hbox := row.get_child(0)
 		weak_texts.append((hbox.get_child(1) as Label).text)
 	_check(weak_texts.any(func(t: String) -> bool: return t.contains("불")), "해금 적 → 약점 룬 표기 (불)")
 	_check(weak_texts.any(func(t: String) -> bool: return t.contains("???")), "미해금 적 → 약점 ???")
+	_check(weak_texts.any(func(t: String) -> bool: return t == "약점 없음"), "해금 + has_counter=false → 약점 없음")
 	var sub := bulletin.find_child("SubTitle", true, false) as Label
 	_check(sub.text.begins_with("%d일차" % Clock.day), "게시판 일차 바인딩")
 
@@ -185,16 +192,27 @@ func _step_codex() -> void:
 	_check(codex.visible, "toggle_codex → 도감 표시")
 	var runes := codex.find_child("RuneList", true, false) as VBoxContainer
 	_check(runes != null and runes.get_child_count() == 4, "도감 룬 탭 4행")
-	var locked_runes := 0
+	_check(_count_locked_runes() == 2, "룬 해금 2 / 실루엣 2 (물·바람 미해금)")
+	var enemies := codex.find_child("EnemyList", true, false) as VBoxContainer
+	_check(enemies.get_child_count() == Db.enemies.size(),
+		"도감 적 탭 %d행 (Db 전체)" % Db.enemies.size())
+	var recipes := codex.find_child("RecipeList", true, false) as VBoxContainer
+	_check(recipes.get_child_count() >= 2, "도감 제법 탭 2행 이상")
+
+## 도감이 열린 채 codex_unlocked 방송 → GameState 등록 + 도감 실시간 리프레시 (TECH_SPEC §5.1)
+func _step_live_unlock() -> void:
+	EventBus.codex_unlocked.emit(InkStyle.rune_unlock_id(Enums.RuneType.WATER))
+	_check(GameState.is_unlocked(&"rune_water"), "codex_unlocked → GameState.codex 등록")
+	_check(_count_locked_runes() == 1, "열린 도감 실시간 갱신 (실루엣 2 → 1)")
+
+func _count_locked_runes() -> int:
+	var runes := codex.find_child("RuneList", true, false) as VBoxContainer
+	var locked := 0
 	for row in runes.get_children():
 		var col := row.get_child(0).get_child(1)
 		if (col.get_child(0) as Label).text == "???":
-			locked_runes += 1
-	_check(locked_runes == 2, "룬 해금 2 / 실루엣 2 (물·바람 미해금)")
-	var enemies := codex.find_child("EnemyList", true, false) as VBoxContainer
-	_check(enemies.get_child_count() == 5, "도감 적 탭 5행")
-	var recipes := codex.find_child("RecipeList", true, false) as VBoxContainer
-	_check(recipes.get_child_count() >= 2, "도감 제법 탭 2행 이상")
+			locked += 1
+	return locked
 
 func _finish() -> void:
 	set_process(false)

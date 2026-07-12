@@ -28,6 +28,13 @@ const KNOWN_RECIPES: Array[Dictionary] = [
 
 func _ready() -> void:
 	_close_button.pressed.connect(func() -> void: closed.emit())
+	# 열려 있는 동안 해금이 일어나면 실시간 갱신 (TECH_SPEC §5.1)
+	EventBus.codex_unlocked.connect(_on_unlock)
+	EventBus.research_completed.connect(_on_unlock)
+
+func _on_unlock(_unlock_id: StringName) -> void:
+	if visible:
+		refresh()
 
 func open() -> void:
 	visible = true
@@ -100,9 +107,12 @@ func _make_enemy_row(def: EnemyDef) -> Control:
 		var name_l := InkStyle.make_label(display, 10)
 		name_l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_child(name_l)
-		row.add_child(InkStyle.make_label(
-			"약점 %s %s" % [InkStyle.rune_glyph(def.counter_rune), InkStyle.rune_name(def.counter_rune)],
-			9, InkStyle.rune_color(def.counter_rune)))
+		if not def.has_counter:
+			row.add_child(InkStyle.make_label("약점 없음", 9, InkStyle.INK_SOFT))
+		else:
+			row.add_child(InkStyle.make_label(
+				"약점 %s %s" % [InkStyle.rune_glyph(def.counter_rune), InkStyle.rune_name(def.counter_rune)],
+				9, InkStyle.rune_color(def.counter_rune)))
 	else:
 		var name_l := InkStyle.make_label("???", 10, InkStyle.INK_FAINT)
 		name_l.size_flags_horizontal = Control.SIZE_EXPAND_FILL

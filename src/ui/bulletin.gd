@@ -12,6 +12,13 @@ const InkStyle := preload("res://src/ui/ink_style.gd")
 
 func _ready() -> void:
 	_close_button.pressed.connect(func() -> void: closed.emit())
+	# 게시판이 열린 채 도감 해금 시 약점 ??? → 룬 표기 실시간 전환 (TECH_SPEC §5.1)
+	EventBus.codex_unlocked.connect(_on_unlock)
+	EventBus.research_completed.connect(_on_unlock)
+
+func _on_unlock(_unlock_id: StringName) -> void:
+	if visible:
+		refresh()
 
 func open() -> void:
 	visible = true
@@ -46,12 +53,14 @@ func _make_enemy_row(def: EnemyDef) -> Control:
 	row.add_child(name_l)
 
 	var weak_l: Label
-	if GameState.is_unlocked(InkStyle.enemy_unlock_id(def.id)):
+	if not GameState.is_unlocked(InkStyle.enemy_unlock_id(def.id)):
+		weak_l = InkStyle.make_label("약점 ???", 9, InkStyle.INK_FAINT)
+	elif not def.has_counter:
+		weak_l = InkStyle.make_label("약점 없음", 9, InkStyle.INK_SOFT)
+	else:
 		weak_l = InkStyle.make_label(
 			"약점 %s %s" % [InkStyle.rune_glyph(def.counter_rune), InkStyle.rune_name(def.counter_rune)],
 			9, InkStyle.rune_color(def.counter_rune))
-	else:
-		weak_l = InkStyle.make_label("약점 ???", 9, InkStyle.INK_FAINT)
 	row.add_child(weak_l)
 
 	panel.add_child(row)
