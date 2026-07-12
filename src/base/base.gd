@@ -9,6 +9,12 @@ const StoragePanel := preload("res://src/base/storage_panel.gd")
 const LabPanel := preload("res://src/base/lab_panel.gd")
 const Recipes := preload("res://src/base/recipes.gd")
 
+## 인테리어 소품 시트 (ART_SPEC P3) — 32×48 가로 스트립, 없으면 ColorRect 플레이스홀더 유지
+const PROPS_SHEET_PATH := "res://assets/sprites/base/props.png"
+const PROP_INDEX := {&"workbench": 0, &"storage": 1, &"lab": 2, &"bed": 3, &"door": 4, &"easel": 5}
+## 거점 임시 플레이어의 겉모습 — 필드 주인공 시트의 정면 idle 1프레임 재사용
+const PLAYER_SHEET_PATH := "res://assets/sprites/player/player.png"
+
 var _workbench_service: WorkbenchService
 var _research_service: ResearchService
 ## {facility_id: CenterContainer(래퍼)} / {facility_id: 패널}
@@ -33,9 +39,40 @@ func _ready() -> void:
 	_add_panel(&"lab", LabPanel.new(_research_service))
 	for node in $Interactables.get_children():
 		node.activated.connect(_on_facility)
+	_apply_sprites()
 	EventBus.research_completed.connect(func(unlock_id: StringName) -> void:
 		var p: Dictionary = Recipes.RESEARCH.get(unlock_id, {})
 		_show_toast("연구 완료: %s" % p.get("name", unlock_id)))
+
+## 플레이스홀더 ColorRect → 스프라이트 교체 (시트 없으면 그대로)
+func _apply_sprites() -> void:
+	if ResourceLoader.exists(PROPS_SHEET_PATH):
+		var tex: Texture2D = load(PROPS_SHEET_PATH)
+		for node in $Interactables.get_children():
+			var idx: int = PROP_INDEX.get(node.get("facility_id"), -1)
+			if idx < 0:
+				continue
+			var visual := node.get_node_or_null("Visual") as CanvasItem
+			if visual != null:
+				visual.visible = false
+			var at := AtlasTexture.new()
+			at.atlas = tex
+			at.region = Rect2(idx * 32, 0, 32, 48)
+			var spr := Sprite2D.new()
+			spr.texture = at
+			spr.position = Vector2(0, -8)   # 하단을 기존 32×32 비주얼 바닥에 맞춤
+			node.add_child(spr)
+	if ResourceLoader.exists(PLAYER_SHEET_PATH):
+		var p_visual := _player.get_node_or_null("Visual") as CanvasItem
+		if p_visual != null:
+			p_visual.visible = false
+		var p_at := AtlasTexture.new()
+		p_at.atlas = load(PLAYER_SHEET_PATH)
+		p_at.region = Rect2(0, 0, 32, 32)
+		var p_spr := Sprite2D.new()
+		p_spr.texture = p_at
+		p_spr.position = Vector2(0, -6)
+		_player.add_child(p_spr)
 
 func _process(_delta: float) -> void:
 	# 연구는 패널이 닫혀 있어도 진행·완료돼야 한다
