@@ -45,5 +45,9 @@ extends Resource
 @export_group("경제")
 ## 수리비 = 원본 ink_cost 대비 비율
 @export var repair_cost_frac: float = 0.2
+## 응급 수리: 비용 배율 (일반 수리비 대비)
+@export var emergency_repair_cost_mult: float = 0.5
+## 응급 수리: 회복 상한 (durability_max 대비 비율)
+@export var emergency_durability_frac: float = 0.3
 ## 해독 소요 (플레이 시간, GDD §6 — 약 10분)
 @export var research_time_sec: float = 600.0

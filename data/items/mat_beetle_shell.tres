@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="ItemDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/core/schemas/item_def.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = &"mat_beetle_shell"
+kind = 5
+grade = 1
+display_name = "갑주 갑충 껍데기"
+params = {}

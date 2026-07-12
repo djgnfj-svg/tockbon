@@ -87,6 +87,8 @@ class_name EnemyDef extends Resource
 @export var display_name: String
 @export var hp: float
 @export var counter_rune: int            # 약점 룬 (게시판·도감 표기용)
+@export var has_counter: bool            # false = 약점 없음 (counter_rune 무시)
+@export var params: Dictionary           # 전투 수치 자유 파라미터 (속도·피해·사거리)
 @export var is_elite: bool
 @export var drops: Array[DropEntry]      # 재료·탁본 조각
 @export var night_buff: float            # 밤 강화 배율
@@ -116,7 +118,7 @@ signal cast_executed(design: SpellDesign, mana_spent: float)                   #
 signal cast_failed(design: SpellDesign, reason: int)                           # 검사 순서: INVALID → BROKEN → NO_MANA (손상 도안에 마나 낭비 방지)
 
 # ── 전투 (B ↔ C)
-signal enemy_hit(enemy: Node2D, damage: float, rune_type: int)
+signal enemy_hit(enemy: Node2D, damage: float, rune_type: int)  # 발신 주체: 적 take_hit 내부 1곳 (약점 반영 최종 피해 기준). 투사체 측 발신 금지
 signal enemy_died(enemy_def: EnemyDef, position: Vector2)
 signal player_damaged(amount: float)
 signal player_died
@@ -185,6 +187,7 @@ Main.tscn (리드)
 - `user://save/` 에 JSON — 영구부(도감·거점·창고·제법)와 하루 상태(장착·가방) 분리
 - `SpellDesign`은 `ResourceSaver`로 `user://designs/*.tres` 저장 (strokes 포함 — 재편집·수리 렌더링에 필요)
 - Phase 0에서는 스텁(인터페이스만), 3개월차 마일스톤에서 구현
+- 저장 구현 시 이관 목록: 연구 진행 상태(현재 src/base/research_service.gd의 static var — 씬 전환은 생존하나 세이브 대상 아님)
 
 ## 10. 코딩 컨벤션
 

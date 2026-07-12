@@ -53,6 +53,10 @@ func remove_item(item_id: StringName, count: int = 1) -> bool:
 func get_count(item_id: StringName) -> int:
 	return int(inventory.get(item_id, 0))
 
+## 창고 열람용 사본 — UI 표시 등 읽기 전용 순회는 이것을 쓴다
+func get_inventory_snapshot() -> Dictionary:
+	return inventory.duplicate()
+
 ## cost = {item_id: amount}
 func can_afford(cost: Dictionary) -> bool:
 	for item_id: StringName in cost:
