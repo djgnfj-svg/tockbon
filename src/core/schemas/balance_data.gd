@@ -14,6 +14,12 @@ extends Resource
 @export var mana_regen_per_sec: float = 2.0
 
 @export_group("드로잉·잉크")
+## 룬별 기본 마나 (인덱스 = Enums.RuneType: 불/충격/물/바람)
+@export var rune_mana_base: PackedFloat32Array = PackedFloat32Array([8.0, 6.0, 7.0, 9.0])
+## 화살표 1발당 마나
+@export var mana_per_arrow: float = 3.0
+## magnitude 1.0이 되는 화살표 획 길이 (캔버스 정규)
+@export var arrow_full_length: float = 0.45
 ## 획 길이(정규)당 잉크 소모
 @export var ink_per_stroke_length: float = 10.0
 ## 인식 정확도 위력 보정 하한 (GDD §4.4)

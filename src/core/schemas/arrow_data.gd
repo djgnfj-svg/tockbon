@@ -6,5 +6,6 @@ extends Resource
 @export var direction: float = 0.0
 ## 0..1 → 투사체 위력·크기
 @export var magnitude: float = 0.5
-## 진 내 상대 발사 기점 (정규 좌표, 진 중심 = 0,0)
+## 발사 기점 — 진 중심 기준, **진 반지름 = 1.0 정규화** (원 가장자리 = 1.0).
+## 월드 오프셋 px = origin × circle_radius × balance.circle_radius_px (모듈 B 공식)
 @export var origin: Vector2 = Vector2.ZERO

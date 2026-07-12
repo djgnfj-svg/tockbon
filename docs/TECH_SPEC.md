@@ -70,7 +70,9 @@ class_name SpellDesign extends Resource
 class_name ArrowData extends Resource
 @export var direction: float             # rad. FIXED=절대각 / AIMED=aim_axis 기준 상대각
 @export var magnitude: float             # 0..1 → 투사체 위력·크기
-@export var origin: Vector2              # 진 내 상대 위치 (발사 기점 오프셋)
+@export var origin: Vector2              # 발사 기점. 진 중심 기준·진 반지름=1.0 정규화 (가장자리=1.0)
+                                         # 월드 px = origin × circle_radius × balance.circle_radius_px
+                                         # circle_radius: 캔버스 꽉 채우는 원(캔버스 반지름 0.5) = 1.0
 
 # rune_def.gd — 룬 정의 (data/runes/*.tres, 인스턴스는 B 소유)
 class_name RuneDef extends Resource
