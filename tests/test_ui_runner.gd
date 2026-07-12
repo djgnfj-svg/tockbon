@@ -1,7 +1,7 @@
 extends Node
 ## 모듈 E 자가 검증 러너 — 목 데이터 주입 후 EventBus 시그널을 프레임 시퀀스로 발화,
 ## 각 화면의 핵심 노드 존재·값 바인딩을 PASS/FAIL 로그로 남긴다.
-## 실행: Godot --headless --path . res://tests/test_ui.tscn --quit-after 30
+## 실행: Godot --headless --path . res://tests/test_ui.tscn --quit-after 60
 
 const InkStyle := preload("res://src/ui/ink_style.gd")
 
@@ -101,7 +101,19 @@ func _process(_delta: float) -> void:
 		26:
 			ui.call("close_top")
 			_check(not codex.visible, "close_top → 도감 닫힘")
+			_check(not GameState.ui_modal_open, "스택 비면 ui_modal_open 해제")
+		27:
+			# 필드 자정 quirk 수정 검증 — 거점 밖 day_started는 게시판 억제·보류 (NEXT_CYCLE §5)
+			EventBus.scene_changed.emit(&"field")
+			EventBus.day_started.emit(Clock.day)
 		28:
+			_check(not bulletin.visible, "필드에서 day_started → 게시판 억제")
+			EventBus.scene_changed.emit(&"base")
+		29:
+			_check(bulletin.visible, "거점 복귀 → 보류된 게시판 표시")
+			_check(GameState.ui_modal_open, "게시판 열림 → ui_modal_open 설정")
+			ui.call("close_top")
+		31:
 			_finish()
 
 # ── 단계별 검증
@@ -177,9 +189,11 @@ func _step_phase() -> void:
 	_check(day_label.text.begins_with("%d일차" % Clock.day), "시계 일차 바인딩")
 
 func _step_damage() -> void:
+	# HP 원장은 GameState (v1.1 이관) — player_damaged는 FX 전용이라 원장 API로 깎는다
+	GameState.damage_player(30.0)
 	EventBus.player_damaged.emit(30.0)
 	var hp_bar := hud.find_child("HpBar", true, false) as ProgressBar
-	_check(is_equal_approx(hp_bar.value, 70.0), "player_damaged(30) → HP 바 70")
+	_check(is_equal_approx(hp_bar.value, 70.0), "damage_player(30) → HP 바 70")
 
 func _step_resources_toast() -> void:
 	var toasts := fx.find_child("ToastBox", true, false) as VBoxContainer
