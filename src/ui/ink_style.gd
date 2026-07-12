@@ -32,6 +32,13 @@ const RUNE_COLORS := {
 	Enums.RuneType.WATER: Color(0.247, 0.420, 0.478),
 	Enums.RuneType.WIND: Color(0.373, 0.478, 0.294),
 }
+## 픽셀 글리프 아이콘 (ART_SPEC P1) — 미임포트 환경(헤드리스 테스트 등)에서는 null → 텍스트 글리프 폴백
+const RUNE_ICON_PATHS := {
+	Enums.RuneType.FIRE: "res://assets/sprites/ui/rune_fire.png",
+	Enums.RuneType.IMPACT: "res://assets/sprites/ui/rune_impact.png",
+	Enums.RuneType.WATER: "res://assets/sprites/ui/rune_water.png",
+	Enums.RuneType.WIND: "res://assets/sprites/ui/rune_wind.png",
+}
 
 # ── 페이즈 표기 (채움 정도 = 하루의 저묾)
 const PHASE_NAMES := {
@@ -61,6 +68,24 @@ static func rune_name(t: int) -> String:
 
 static func rune_color(t: int) -> Color:
 	return RUNE_COLORS.get(t, INK)
+
+static func rune_icon(t: int) -> Texture2D:
+	var path: String = RUNE_ICON_PATHS.get(t, "")
+	if path.is_empty() or not ResourceLoader.exists(path):
+		return null
+	return load(path) as Texture2D
+
+## 16×16 룬 아이콘 TextureRect — 아이콘이 없으면 null (호출부에서 텍스트 폴백)
+static func make_rune_icon(t: int) -> TextureRect:
+	var tex := rune_icon(t)
+	if tex == null:
+		return null
+	var tr := TextureRect.new()
+	tr.texture = tex
+	tr.custom_minimum_size = Vector2(16, 16)
+	tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	tr.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	return tr
 
 static func phase_name(p: int) -> String:
 	return PHASE_NAMES.get(p, "?")

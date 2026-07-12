@@ -59,14 +59,21 @@ func _make_rune_row(t: int) -> Control:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 10)
 
-	var glyph := InkStyle.make_label(
-		InkStyle.rune_glyph(t) if unlocked else "?",
-		16,
-		InkStyle.rune_color(t) if unlocked else InkStyle.INK_FAINT)
-	glyph.custom_minimum_size = Vector2(26, 0)
-	glyph.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	glyph.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	row.add_child(glyph)
+	var icon := InkStyle.make_rune_icon(t) if unlocked else null
+	if icon != null:
+		var icon_box := CenterContainer.new()
+		icon_box.custom_minimum_size = Vector2(26, 0)
+		icon_box.add_child(icon)
+		row.add_child(icon_box)
+	else:
+		var glyph := InkStyle.make_label(
+			InkStyle.rune_glyph(t) if unlocked else "?",
+			16,
+			InkStyle.rune_color(t) if unlocked else InkStyle.INK_FAINT)
+		glyph.custom_minimum_size = Vector2(26, 0)
+		glyph.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		glyph.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		row.add_child(glyph)
 
 	var col := VBoxContainer.new()
 	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -110,9 +117,16 @@ func _make_enemy_row(def: EnemyDef) -> Control:
 		if not def.has_counter:
 			row.add_child(InkStyle.make_label("약점 없음", 9, InkStyle.INK_SOFT))
 		else:
-			row.add_child(InkStyle.make_label(
-				"약점 %s %s" % [InkStyle.rune_glyph(def.counter_rune), InkStyle.rune_name(def.counter_rune)],
-				9, InkStyle.rune_color(def.counter_rune)))
+			var w_icon := InkStyle.make_rune_icon(def.counter_rune)
+			if w_icon != null:
+				row.add_child(InkStyle.make_label("약점", 9, InkStyle.INK_SOFT))
+				row.add_child(w_icon)
+				row.add_child(InkStyle.make_label(
+					InkStyle.rune_name(def.counter_rune), 9, InkStyle.rune_color(def.counter_rune)))
+			else:
+				row.add_child(InkStyle.make_label(
+					"약점 %s %s" % [InkStyle.rune_glyph(def.counter_rune), InkStyle.rune_name(def.counter_rune)],
+					9, InkStyle.rune_color(def.counter_rune)))
 	else:
 		var name_l := InkStyle.make_label("???", 10, InkStyle.INK_FAINT)
 		name_l.size_flags_horizontal = Control.SIZE_EXPAND_FILL

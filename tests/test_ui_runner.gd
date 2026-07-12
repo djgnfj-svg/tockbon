@@ -126,7 +126,13 @@ func _step_bulletin() -> void:
 	var weak_texts: Array[String] = []
 	for row in list.get_children():
 		var hbox := row.get_child(0)
-		weak_texts.append((hbox.get_child(1) as Label).text)
+		# 이름 라벨(0번) 이후의 라벨 텍스트를 전부 합침 — 룬 아이콘(TextureRect)이 끼어도 견딤
+		var parts := PackedStringArray()
+		for i in range(1, hbox.get_child_count()):
+			var l := hbox.get_child(i) as Label
+			if l != null:
+				parts.append(l.text)
+		weak_texts.append(" ".join(parts))
 	_check(weak_texts.any(func(t: String) -> bool: return t.contains("불")), "해금 적 → 약점 룬 표기 (불)")
 	_check(weak_texts.any(func(t: String) -> bool: return t.contains("???")), "미해금 적 → 약점 ???")
 	_check(weak_texts.any(func(t: String) -> bool: return t == "약점 없음"), "해금 + has_counter=false → 약점 없음")

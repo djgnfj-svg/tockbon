@@ -52,16 +52,21 @@ func _make_enemy_row(def: EnemyDef) -> Control:
 	name_l.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	row.add_child(name_l)
 
-	var weak_l: Label
 	if not GameState.is_unlocked(InkStyle.enemy_unlock_id(def.id)):
-		weak_l = InkStyle.make_label("약점 ???", 9, InkStyle.INK_FAINT)
+		row.add_child(InkStyle.make_label("약점 ???", 9, InkStyle.INK_FAINT))
 	elif not def.has_counter:
-		weak_l = InkStyle.make_label("약점 없음", 9, InkStyle.INK_SOFT)
+		row.add_child(InkStyle.make_label("약점 없음", 9, InkStyle.INK_SOFT))
 	else:
-		weak_l = InkStyle.make_label(
-			"약점 %s %s" % [InkStyle.rune_glyph(def.counter_rune), InkStyle.rune_name(def.counter_rune)],
-			9, InkStyle.rune_color(def.counter_rune))
-	row.add_child(weak_l)
+		var w_icon := InkStyle.make_rune_icon(def.counter_rune)
+		if w_icon != null:
+			row.add_child(InkStyle.make_label("약점", 9, InkStyle.INK_SOFT))
+			row.add_child(w_icon)
+			row.add_child(InkStyle.make_label(
+				InkStyle.rune_name(def.counter_rune), 9, InkStyle.rune_color(def.counter_rune)))
+		else:
+			row.add_child(InkStyle.make_label(
+				"약점 %s %s" % [InkStyle.rune_glyph(def.counter_rune), InkStyle.rune_name(def.counter_rune)],
+				9, InkStyle.rune_color(def.counter_rune)))
 
 	panel.add_child(row)
 	return panel
