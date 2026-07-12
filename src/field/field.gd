@@ -7,6 +7,7 @@ const PlayerScript := preload("res://src/field/player.gd")
 const Spawner := preload("res://src/field/enemy_spawner.gd")
 const GatherNodeScript := preload("res://src/field/gather_node.gd")
 const ExitGateScript := preload("res://src/field/exit_gate.gd")
+const BossIntro := preload("res://src/field/boss_intro.gd")
 
 const MAP_SIZE := Vector2(1280, 832)
 const WALL_THICKNESS := 24.0
@@ -58,6 +59,7 @@ const OBSTACLES := [
 ]
 
 var _modulate_node: CanvasModulate
+var _boss_node: Node2D
 
 func _ready() -> void:
 	_build_ground_and_walls()
@@ -71,6 +73,7 @@ func _ready() -> void:
 	_spawn_enemies()
 	_spawn_gathers()
 	_spawn_gate()
+	_spawn_boss_intro()
 
 func _on_phase_changed(phase: int) -> void:
 	if _modulate_node != null and PHASE_COLORS.has(phase):
@@ -91,6 +94,8 @@ func _spawn_enemies() -> void:
 		var enemy: CharacterBody2D = Spawner.spawn(def)
 		enemy.global_position = spawn["pos"]
 		add_child(enemy)
+		if spawn["id"] == &"gale":
+			_boss_node = enemy
 
 func _spawn_gathers() -> void:
 	for g: Dictionary in GATHER_SPAWNS:
@@ -105,6 +110,17 @@ func _spawn_gate() -> void:
 	gate.name = "ExitGate"
 	gate.global_position = Vector2(MAP_SIZE.x - 40.0, 416)
 	add_child(gate)
+
+## 보스 등장 컷 트리거 — 보스 존 입구(BOSS_GATE_X 구간) 첫 통과 시 1회 재생 (boss_intro.gd)
+func _spawn_boss_intro() -> void:
+	if _boss_node == null:
+		return
+	var intro: Variant = BossIntro.new()
+	intro.name = "BossIntro"
+	intro.boss = _boss_node
+	intro.modulate_node = _modulate_node
+	intro.global_position = Vector2((BOSS_GATE_X.x + BOSS_GATE_X.y) * 0.5, -20.0)
+	add_child(intro)
 
 func _build_ground_and_walls() -> void:
 	var ground := Polygon2D.new()
