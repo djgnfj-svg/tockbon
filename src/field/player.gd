@@ -46,7 +46,7 @@ func _physics_process(delta: float) -> void:
 		aim_dir = to_mouse.normalized()
 	if _aim_line != null:
 		_aim_line.rotation = aim_dir.angle()
-	if busy:
+	if busy or GameState.ui_modal_open:
 		velocity = Vector2.ZERO
 		return
 	if _dash_left > 0.0:
@@ -60,7 +60,7 @@ func _physics_process(delta: float) -> void:
 		_shoot()
 
 func _unhandled_input(event: InputEvent) -> void:
-	if is_dead or busy:
+	if is_dead or busy or GameState.ui_modal_open:
 		return
 	if event.is_action_pressed("dash"):
 		_try_dash()
@@ -70,7 +70,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 ## 장착 슬롯 캐스트 요청 — 성공적으로 발신했으면 true
 func try_cast(slot: int) -> bool:
-	if is_dead or busy:
+	if is_dead or busy or GameState.ui_modal_open:
 		return false
 	if slot < 0 or slot >= GameState.equipped.size():
 		return false
@@ -101,16 +101,17 @@ func _try_dash() -> void:
 	var input_dir := Input.get_vector("move_left", "move_right", "move_up", "move_down")
 	_dash_dir = input_dir if input_dir != Vector2.ZERO else aim_dir
 	_dash_left = _balance.dash_duration_sec
-	_dash_cd = dash_cooldown_sec + _balance.dash_duration_sec
+	_dash_cd = dash_cooldown_sec * GameState.gear_param(Enums.ItemKind.CHARM, "dash_cooldown_mult", 1.0) \
+			+ _balance.dash_duration_sec
 	# 대시 중 무적은 _dash_left로 판정 (take_damage 참조)
 
 func _shoot() -> void:
-	_attack_cd = attack_cooldown_sec
+	_attack_cd = attack_cooldown_sec * GameState.gear_param(Enums.ItemKind.WAND, "attack_cooldown_mult", 1.0)
 	var parent := get_parent()
 	if parent == null:
 		return
 	var bolt: Variant = WandBolt.new()
-	bolt.damage = _balance.wand_basic_damage
+	bolt.damage = _balance.wand_basic_damage + GameState.gear_param(Enums.ItemKind.WAND, "wand_damage_add", 0.0)
 	bolt.dir = aim_dir
 	bolt.global_position = global_position + aim_dir * 10.0
 	parent.add_child(bolt)

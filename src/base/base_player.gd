@@ -8,6 +8,9 @@ func _ready() -> void:
 	_speed = GameState.balance.player_move_speed
 
 func _physics_process(_delta: float) -> void:
+	if GameState.ui_modal_open:
+		velocity = Vector2.ZERO
+		return
 	var input := Input.get_vector(&"move_left", &"move_right", &"move_up", &"move_down")
 	velocity = input * _speed
 	move_and_slide()
