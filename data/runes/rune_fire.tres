@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="RuneDef" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://src/core/schemas/rune_def.gd" id="1"]
+[ext_resource type="PackedScene" path="res://src/spell/projectile.tscn" id="2"]
+
+[resource]
+script = ExtResource("1")
+type = 0
+display_name = "불"
+base_damage = 0.9
+status = 1
+status_power = 3.0
+projectile_scene = ExtResource("2")

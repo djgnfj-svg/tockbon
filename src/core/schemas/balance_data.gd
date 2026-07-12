@@ -33,6 +33,14 @@ extends Resource
 @export var wand_basic_damage: float = 4.0
 ## 탁본 모션 무방비 시간 (GDD §6)
 @export var rubbing_duration_sec: float = 1.5
+@export var projectile_lifetime_sec: float = 1.5
+## 위력 배율 = magnitude_damage_base + magnitude (모듈 B)
+@export var magnitude_damage_base: float = 0.5
+## 투사체 크기 배율 = lerp(min, max, magnitude)
+@export var magnitude_size_min: float = 0.6
+@export var magnitude_size_max: float = 1.8
+## circle_radius(정규) → 월드 px 발사 오프셋 스케일
+@export var circle_radius_px: float = 48.0
 
 @export_group("경제")
 ## 수리비 = 원본 ink_cost 대비 비율
