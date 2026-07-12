@@ -1,0 +1,8 @@
+# Godot 캐시
+.godot/
+
+# 엔진 바이너리 (172MB — 커밋 금지)
+Godot_v*.exe
+
+# 임시
+*.tmp
