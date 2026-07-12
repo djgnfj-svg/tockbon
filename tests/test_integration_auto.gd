@@ -21,6 +21,8 @@ func _run() -> void:
 	await process_frame
 	var bus: Node = root.get_node("EventBus")
 	var gs: Node = root.get_node("GameState")
+	var sm: Node = root.get_node("SaveManager")
+	sm.wipe_save()  # 실제 플레이 세이브 오염 방지 — 테스트는 항상 새 게임에서
 
 	var main: Node = (load("res://src/core/main.tscn") as PackedScene).instantiate()
 	root.add_child(main)
@@ -66,5 +68,6 @@ func _run() -> void:
 	await process_frame
 	_check("드로잉룸 → 거점 복귀", holder.get_node_or_null("Base") != null)
 
+	sm.wipe_save()  # 테스트 중 자동 저장(귀환 등)된 상태 제거
 	print("RESULT pass=%d fail=%d" % [_pass, _fail])
 	quit(0 if _fail == 0 else 1)

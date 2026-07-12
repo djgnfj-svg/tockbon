@@ -30,6 +30,8 @@
 ## 알려진 소소한 이슈·기술 부채
 
 - 필드에서 자정 넘기면 아침 게시판이 전투 중에 뜸 (quirk — 거점에서만 뜨게 조건 추가 검토)
+- 게시판 모달이 마우스만 막고 WASD 이동은 안 막음 — 게시판 연 채 씬 이동 가능 (모달 열림 중 이동 잠금 검토)
+- 통합 테스트의 세이브 오염은 수정됨 (시작·종료 시 wipe_save). 다른 씬 테스트는 SaveManager의 _ready_to_save 게이트(load_game 호출 전 저장 불가) 덕분에 원천 차단됨
 - main.gd `_seed_prototype()`은 프로토 임시 — 정식 튜토리얼 지급 흐름으로 교체 시점 결정 필요
 - SaveManager가 research_service(src/base)를 preload — 연구 상태를 GameState로 이관하면 제거 (주석 표시됨)
 - tutorial.gd가 ink_style 팔레트 상수를 복제 보유 — 공용 스타일 core 승격 시 치환 대상
