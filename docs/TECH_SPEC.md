@@ -131,6 +131,12 @@ GameState.mana_max() -> float          # balance.mana_max + 로브 mana_max_add 
 GameState.hp_max() -> float            # balance.player_hp_max + 로브 hp_max_add
 ```
 
+### 4.3 도안 자동 장착 (v1.4)
+
+`design_created` 수신 시 GameState가 `designs`에 추가하고 **빈 슬롯이 있으면 즉시 장착**한다.
+그린 직후 바로 쏴볼 수 있어야 온보딩이 끊기지 않기 때문 (첫 도안 = 슬롯 1 = `cast_slot_1`).
+슬롯 4장이 다 차면 자동 장착하지 않는다 — 교체는 아침 게시판에서 (GDD §4.4 필드 교체 불가는 그대로).
+
 - **착용 장비는 가방이 아니다** — 사망(bag_lost)에도 보존된다 (GDD §5: 가방 소지품만 손실)
 - 변경 시 EventBus.equipment_changed 발신. 로브 교체로 상한이 줄면 현재 hp·mana는 새 상한으로 클램프
 - `GameState.ui_modal_open: bool` — UI 모달(게시판·장착·도감) 열림 플래그. ui_root(E)가 설정, 플레이어 이동 계열(C·D)이 폴링해 입력 잠금
@@ -178,7 +184,22 @@ signal equipment_changed                             # 착용/해제 시 GameSta
 
 # ── 씬 전환 (v1.2)
 signal scene_changed(scene_id: StringName)           # Main이 전환 완료 후 발신 (요청은 scene_change_requested)
+
+# ── 온보딩 (v1.4) — 거점 시험장 ↔ 튜토리얼
+signal training_hit(rune_type: int, damage: float)   # D: 거점 허수아비 명중. enemy_hit은 발신하지 않는다
+signal tutorial_focus(target_id: StringName)         # 튜토리얼 → D: 유도 마커 대상. &"" = 해제
 ```
+
+### 5.2 온보딩 계약 (v1.4)
+
+- **`training_hit`**: 거점 허수아비(`src/base/training_dummy.gd`)가 `take_hit` 안에서 발신한다.
+  적 노드 계약(그룹 `enemies` + `take_hit`)은 구현하지만 **`enemy_hit`·`enemy_died`는 발신하지 않는다** —
+  도감 첫 처치 해금과 퀘스트 단계가 거점에서 오작동하기 때문
+- **`tutorial_focus`**: 유효 `target_id`는 Interactable의 `facility_id`(`easel`·`door`·`workbench`…)와
+  `&"dummy"`(허수아비). 거점(D)이 수신해 대상 위에 마커를 단다. 튜토리얼은 거점 노드에 직접 접근하지 않는다
+- **거점 캐스팅**: `base_player`도 필드 플레이어와 같은 `cast_requested` 계약을 쓴다. base.tscn에
+  `spell_system.tscn` 인스턴스가 있다. **시험 발사도 마나·내구를 실제로 소모한다** (GDD §5 — 공짜면
+  "쓸 때마다 닳는다"를 배울 자리가 없다). `cast_failed`는 거점이 수신해 수리·회복을 안내한다
 
 ### 5.1 unlock_id (도감 해금 키) 규약 — 전 모듈 공통
 
@@ -189,8 +210,12 @@ signal scene_changed(scene_id: StringName)           # Main이 전환 완료 후
 | 적 도감 | `enemy_<EnemyDef.id>` | `enemy_beetle` | C · codex_unlocked (첫 처치 시) |
 | 퀘스트 진행 | `quest_<n>` | `quest_1` (완료된 단계) | Q · codex_unlocked — SaveManager가 자동 커버 |
 | 연출 1회 시청 | `cut_<id>` | `cut_gale_intro` | C · codex_unlocked (컷 재생 직후 — 재진입 시 스킵 판정) |
+| 튜토리얼 완료 | `tutorial_done` | — | 튜토리얼 · codex_unlocked (첫 출격 순간 또는 스킵) |
 
-시작 해금: `rune_fire`, `rune_impact`는 튜토리얼 지급 (통합 시 GameState 초기값으로 등록).
+시작 해금: `rune_fire`, `rune_impact`는 GameState 초기값으로 등록 (`_ready`).
+**새 게임의 시작 도안은 0장이다** — 첫 도안은 튜토리얼에서 플레이어가 직접 그린 불(파이어볼)이다.
+`main.gd _seed_new_game()`은 세이브가 없을 때만 잉크·종이·장비를 지급하고, 도안은 지급하지 않는다.
+`SampleDesigns`는 이제 **테스트 전용**이다 (게임 시작 경로에서 제거됨).
 
 ## 6. 인식기 설계 (모듈 A)
 

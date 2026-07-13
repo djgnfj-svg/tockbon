@@ -8,6 +8,7 @@ const WorkbenchPanel := preload("res://src/base/workbench_panel.gd")
 const StoragePanel := preload("res://src/base/storage_panel.gd")
 const LabPanel := preload("res://src/base/lab_panel.gd")
 const Recipes := preload("res://src/base/recipes.gd")
+const BasePlayer := preload("res://src/base/base_player.gd")
 
 ## 인테리어 소품 시트 (ART_SPEC P3) — 32×48 가로 스트립, 없으면 ColorRect 플레이스홀더 유지
 const PROPS_SHEET_PATH := "res://assets/sprites/base/props.png"
@@ -24,8 +25,10 @@ var _status: Label
 var _toast: Label
 var _toast_seq: int = 0
 var _theme: Theme
+## 튜토리얼 유도 마커 (EventBus.tutorial_focus) — 대상 시설 위에서 까딱이는 ▼
+var _focus_marker: Label
 
-@onready var _player: CharacterBody2D = $Player
+@onready var _player: BasePlayer = $Player
 @onready var _ui: CanvasLayer = $UI
 
 func _ready() -> void:
@@ -43,6 +46,8 @@ func _ready() -> void:
 	EventBus.research_completed.connect(func(unlock_id: StringName) -> void:
 		var p: Dictionary = Recipes.RESEARCH.get(unlock_id, {})
 		_show_toast("연구 완료: %s" % p.get("name", unlock_id)))
+	EventBus.tutorial_focus.connect(_on_tutorial_focus)
+	EventBus.cast_failed.connect(_on_cast_failed)
 
 ## 플레이스홀더 ColorRect → 스프라이트 교체 (시트 없으면 그대로)
 func _apply_sprites() -> void:
@@ -104,18 +109,60 @@ func _open(facility_id: StringName) -> void:
 	_close_all()
 	_wraps[facility_id].visible = true
 	_panels[facility_id].open()
-	_player.set_physics_process(false)
+	_player.locked = true
 
 func _close_all() -> void:
 	for facility_id: StringName in _wraps:
 		_wraps[facility_id].visible = false
-	_player.set_physics_process(true)
+	_player.locked = false
 
 func _any_panel_open() -> bool:
 	for facility_id: StringName in _wraps:
 		if _wraps[facility_id].visible:
 			return true
 	return false
+
+# ── 온보딩 지원 (TECH_SPEC §5 — 튜토리얼이 시그널로만 거점을 유도한다)
+
+## 튜토리얼이 지목한 시설 위에 마커를 옮겨 단다. target_id = &"" 면 해제.
+## 유효 대상: Interactables의 facility_id(easel·door·workbench…) + &"dummy"(허수아비).
+func _on_tutorial_focus(target_id: StringName) -> void:
+	if _focus_marker != null:
+		_focus_marker.queue_free()
+		_focus_marker = null
+	if target_id == StringName():
+		return
+	var target := _find_focus_target(target_id)
+	if target == null:
+		return
+	_focus_marker = Label.new()
+	_focus_marker.text = "▼"
+	_focus_marker.add_theme_font_size_override(&"font_size", 14)
+	_focus_marker.add_theme_color_override(&"font_color", Color(0.710, 0.278, 0.180))
+	_focus_marker.position = Vector2(-6, -46)
+	target.add_child(_focus_marker)
+	var bob := _focus_marker.create_tween().set_loops()
+	bob.tween_property(_focus_marker, "position:y", -40.0, 0.5).set_trans(Tween.TRANS_SINE)
+	bob.tween_property(_focus_marker, "position:y", -46.0, 0.5).set_trans(Tween.TRANS_SINE)
+
+func _find_focus_target(target_id: StringName) -> Node2D:
+	if target_id == &"dummy":
+		return get_node_or_null("TrainingDummy") as Node2D
+	for node in $Interactables.get_children():
+		if node.get("facility_id") == target_id:
+			return node as Node2D
+	return null
+
+## 시험 발사 실패 안내 — 거점에는 작업대(수리)와 침대(마나 회복)가 있다.
+## 여기서 막다른 길에 빠지지 않게 무엇을 하면 되는지 알려준다.
+func _on_cast_failed(_design: SpellDesign, reason: int) -> void:
+	match reason:
+		Enums.CastFailReason.NO_MANA:
+			_show_toast("마나가 모자란다 — 잠시 기다리거나 침대에서 자고 나면 회복된다")
+		Enums.CastFailReason.BROKEN:
+			_show_toast("도안이 손상됐다 — 작업대에서 수리하라")
+		_:
+			_show_toast("아직 그릴 도안이 없다 — 이젤 앞에 앉아라")
 
 # ── UI 조립
 
@@ -133,7 +180,7 @@ func _add_panel(facility_id: StringName, panel: PanelContainer) -> void:
 func _build_hud() -> void:
 	# Day·마나 표시는 전역 HUD(모듈 E) 소관 — 여기는 조작 힌트만 (중복 제거, v1.1)
 	_status = Label.new()
-	_status.text = "이동 WASD · 상호작용 E · 닫기 ESC"
+	_status.text = "이동 WASD · 상호작용 E · 캐스트 1~4 (마우스로 조준) · 닫기 ESC"
 	_status.position = Vector2(8, 344)
 	_status.theme = _theme
 	_ui.add_child(_status)

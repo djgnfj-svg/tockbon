@@ -22,6 +22,9 @@ func _ready() -> void:
 	print("TEST_UI: 목 주입 완료 — 도안 %d장, 적 %d종" % [GameState.designs.size(), Db.enemies.size()])
 
 func _inject_mocks() -> void:
+	# 아침 게시판·장착 화면은 튜토리얼을 마친 필경사의 하루 흐름이다 (ui_root.TUTORIAL_UNLOCK).
+	# 첫날(튜토 전)에는 억제되므로, UI 검증은 수업을 마친 상태를 전제한다.
+	GameState.codex[&"tutorial_done"] = true
 	# 도안: 샘플 3장 + 손상본 1장
 	_designs = SampleDesigns.all()
 	var broken := SampleDesigns.aimed_lance_water()

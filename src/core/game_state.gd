@@ -34,7 +34,7 @@ func _ready() -> void:
 	EventBus.bag_lost.connect(func() -> void: bag.clear())
 	EventBus.research_completed.connect(func(unlock_id: StringName) -> void: codex[unlock_id] = true)
 	EventBus.codex_unlocked.connect(func(unlock_id: StringName) -> void: codex[unlock_id] = true)
-	EventBus.design_created.connect(func(design: SpellDesign) -> void: designs.append(design))
+	EventBus.design_created.connect(_on_design_created)
 
 func _process(delta: float) -> void:
 	mana = minf(mana + balance.mana_regen_per_sec * delta, mana_max())
@@ -157,6 +157,16 @@ func _on_extraction_success() -> void:
 
 func equip(slot: int, design: SpellDesign) -> void:
 	equipped[slot] = design
+
+## 새 도안은 보관고에 들어가고, 빈 슬롯이 있으면 즉시 장착된다.
+## 그린 직후 바로 쏴볼 수 있어야 온보딩이 끊기지 않는다 (첫 도안 = 슬롯 1).
+## 슬롯이 꽉 찼으면 장착은 아침 게시판에서 (GDD §4.4 — 필드 교체 불가는 유지).
+func _on_design_created(design: SpellDesign) -> void:
+	designs.append(design)
+	for slot in range(EQUIP_SLOTS):
+		if equipped[slot] == null:
+			equipped[slot] = design
+			return
 
 func is_unlocked(unlock_id: StringName) -> bool:
 	return bool(codex.get(unlock_id, false))

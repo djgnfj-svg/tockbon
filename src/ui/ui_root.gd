@@ -4,6 +4,11 @@ extends Control
 
 const InkStyle := preload("res://src/ui/ink_style.gd")
 
+## 튜토리얼을 마치기 전(첫 출격 전)에는 아침 게시판·장착 화면을 열지 않는다.
+## 첫날 아침을 이끄는 건 스승의 메모다. 도안이 0장인 상태에서 장착 화면을 강제로 띄우면
+## 플레이어는 빈 슬롯 4칸을 보며 무엇을 해야 할지 알 수 없다 (TECH_SPEC §5.1 — 도안 0장 시작).
+const TUTORIAL_UNLOCK := &"tutorial_done"
+
 @onready var hud: Control = $Hud
 @onready var fx: Control = $FxOverlay
 @onready var bulletin: Control = $Screens/Bulletin
@@ -63,6 +68,9 @@ func is_open(panel: Control) -> bool:
 # ── 하루 흐름: 게시판 → 장착 선택 (거점에서만 — 필드 자정엔 보류 후 복귀 시 표시)
 
 func _on_day_started(_day: int) -> void:
+	if not GameState.is_unlocked(TUTORIAL_UNLOCK):
+		_bulletin_pending = false
+		return
 	if _scene_id != &"base":
 		_bulletin_pending = true
 		return

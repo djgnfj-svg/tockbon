@@ -42,6 +42,10 @@ signal resources_changed
 # ── 장비 (GameState → C·D·E)
 signal equipment_changed
 
+# ── 온보딩 (거점 시험장 ↔ 튜토리얼) — v1.4
+signal training_hit(rune_type: int, damage: float)   # 거점 허수아비 명중 (D → 튜토리얼)
+signal tutorial_focus(target_id: StringName)         # 유도 마커 대상 시설. &"" = 해제 (튜토리얼 → D)
+
 # ── 씬 전환 (모듈 → Main / Main → 전체)
 signal scene_change_requested(scene_id: StringName)
 signal scene_changed(scene_id: StringName)

@@ -31,9 +31,21 @@ func _run() -> void:
 	var holder: Node = main.get_node("CurrentScene")
 
 	_check("부팅: 거점 로드", holder.get_node_or_null("Base") != null)
-	_check("시드: 도안 장착", gs.equipped[0] != null)
-	_check("시드: 시작 물자", gs.get_count(&"ink_basic") > 0)
+	# 새 게임은 도안 0장으로 시작한다 — 첫 도안은 튜토리얼에서 직접 그린다 (TECH_SPEC §5.1)
+	_check("시드: 도안 0장", gs.equipped[0] == null and gs.designs.is_empty())
+	_check("시드: 시작 물자 (잉크·종이)", gs.get_count(&"ink_basic") > 0 and gs.get_count(&"paper_1") > 0)
+	_check("시드: 시작 장비 3부위 착용", gs.equipment.size() == 3)
 	_check("시작 해금: 불·충격", gs.is_unlocked(&"rune_fire") and gs.is_unlocked(&"rune_impact"))
+
+	# 거점 시험장 — 그린 도안을 숲에 나가기 전에 쏴 볼 수 있어야 한다 (TECH_SPEC §5.2)
+	var base: Node = holder.get_node_or_null("Base")
+	_check("거점: 허수아비 배치", base != null and base.get_node_or_null("TrainingDummy") != null)
+	_check("거점: SpellSystem 배치", base != null and base.get_node_or_null("SpellSystem") != null)
+
+	# 튜토리얼에서 첫 도안을 그린 것과 같은 경로 — design_created → 빈 슬롯 자동 장착 (TECH_SPEC §4.3)
+	var first: SpellDesign = SampleDesigns.nova_fire()
+	bus.emit_signal(&"design_created", first)
+	_check("첫 도안이 슬롯 1에 자동 장착", gs.equipped[0] == first)
 
 	# 출격 → 필드
 	bus.emit_signal(&"scene_change_requested", &"field")

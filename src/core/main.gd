@@ -22,8 +22,8 @@ func _ready() -> void:
 	# 귀환·사망 모두 거점으로 (가방 처리·손실은 GameState가 시그널로 이미 수행)
 	EventBus.extraction_success.connect(func() -> void: change_scene(&"base"))
 	EventBus.player_died.connect(func() -> void: change_scene(&"base"))
-	SaveManager.load_game()  # 세이브 없으면 false → 아래 시드가 새 게임 구성
-	_seed_prototype()
+	if not SaveManager.load_game():
+		_seed_new_game()
 	change_scene(&"base")
 
 func change_scene(scene_id: StringName) -> void:
@@ -41,20 +41,14 @@ func _change_scene_now(scene_id: StringName) -> void:
 	current_scene.add_child(packed.instantiate())
 	EventBus.scene_changed.emit(scene_id)
 
-## 프로토 시드 — 튜토리얼(4개월차) 구현 전까지의 시작 물자·도안 (GDD §5 시작 물자)
-func _seed_prototype() -> void:
-	if GameState.designs.is_empty():
-		GameState.designs = SampleDesigns.all()
-		for i in range(mini(GameState.designs.size(), GameState.EQUIP_SLOTS)):
-			GameState.equip(i, GameState.designs[i])
-	if GameState.get_count(&"ink_basic") == 0:
-		GameState.add_item(&"ink_basic", 20)
-		GameState.add_item(&"paper_1", 3)
-		GameState.add_item(&"wand_basic", 1)
-		GameState.add_item(&"robe_basic", 1)
-		GameState.add_item(&"charm_basic", 1)
-	# 시작 장비 자동 착용 (GDD §5 시작 물자 — 세이브에 장비가 없을 때만)
-	if GameState.equipment.is_empty():
-		for gear_id: StringName in [&"wand_basic", &"robe_basic", &"charm_basic"]:
-			if GameState.get_count(gear_id) > 0:
-				GameState.equip_gear(gear_id)
+## 새 게임 시작 물자 (GDD §5 — 빈손 시작 방지). 세이브가 없을 때만 호출된다.
+## **도안은 지급하지 않는다** — 첫 도안은 튜토리얼에서 플레이어가 직접 그린 파이어볼이다.
+## 스승이 남기고 간 것: 갈아 둔 먹, 종이 몇 장, 낡은 장비 한 벌.
+func _seed_new_game() -> void:
+	GameState.add_item(&"ink_basic", 20)
+	GameState.add_item(&"paper_1", 5)   # 튜토 1장 + 실패·재시도 여유
+	GameState.add_item(&"wand_basic", 1)
+	GameState.add_item(&"robe_basic", 1)
+	GameState.add_item(&"charm_basic", 1)
+	for gear_id: StringName in [&"wand_basic", &"robe_basic", &"charm_basic"]:
+		GameState.equip_gear(gear_id)

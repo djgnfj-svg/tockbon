@@ -32,6 +32,7 @@
 ./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_save_auto.gd         # 저장/로드
 ./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_drawing_auto.gd      # 인식기
 ./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_base_auto.gd         # 거점 경제
+./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_onboarding_auto.gd   # 온보딩(튜토·시험발사)
 ./Godot_v4.6.1-stable_win64.exe --headless --path . res://tests/test_field.tscn --quit-after 600   # 필드·전투
 ./Godot_v4.6.1-stable_win64.exe --headless --path . res://tests/test_ui.tscn --quit-after 60       # UI
 ./Godot_v4.6.1-stable_win64.exe --headless --path . res://tests/test_spell.tscn 대신 -s res://tests/test_spell_auto.gd
