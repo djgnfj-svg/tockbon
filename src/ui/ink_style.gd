@@ -110,8 +110,42 @@ static func enemy_unlock_id(enemy_id: StringName) -> StringName:
 
 # ── StyleBox 팩토리
 
+## 한지 9-slice 텍스처 (ART_SPEC P4) — 미임포트 환경(헤드리스 테스트 등)에서는 StyleBoxFlat 폴백
+const PANEL_TEX_L := "res://assets/sprites/ui/panel_paper.png"    # 48×48 마진 12 — 모달·대형 패널
+const PANEL_TEX_S := "res://assets/sprites/ui/panel_paper_s.png"  # 24×24 마진 6 — 행·버튼·칩
+const PANEL_TEX_BAR := "res://assets/sprites/ui/frame_bar.png"    # 12×12 마진 3 — 바 프레임
+
+## 텍스처 원색은 PAPER 톤으로 그려져 있다 — 요청 bg와 PAPER의 비율로 변조해
+## 기존 호출부의 색 변형(묵은 한지·그늘·먹 채움·반투명)을 그대로 살린다
+static func _paper_box(path: String, tex_margin: int, bg: Color,
+		pad_h: int, pad_v: int) -> StyleBoxTexture:
+	if not ResourceLoader.exists(path):
+		return null
+	var sb := StyleBoxTexture.new()
+	sb.texture = load(path) as Texture2D
+	sb.set_texture_margin_all(tex_margin)
+	sb.axis_stretch_horizontal = StyleBoxTexture.AXIS_STRETCH_MODE_TILE
+	sb.axis_stretch_vertical = StyleBoxTexture.AXIS_STRETCH_MODE_TILE
+	sb.modulate_color = Color(
+		minf(bg.r / PAPER.r, 1.0), minf(bg.g / PAPER.g, 1.0), minf(bg.b / PAPER.b, 1.0), bg.a)
+	sb.content_margin_left = pad_h
+	sb.content_margin_right = pad_h
+	sb.content_margin_top = pad_v
+	sb.content_margin_bottom = pad_v
+	return sb
+
+## pad_v로 티어 자동 선택: 대형(모달)·소형(행·버튼)·바 프레임. border/corner는 텍스처 모드에서 무시
 static func make_panel(bg: Color = PAPER, border: Color = INK, border_w: int = 2,
-		corner: int = 3, pad_h: int = 8, pad_v: int = 6) -> StyleBoxFlat:
+		corner: int = 3, pad_h: int = 8, pad_v: int = 6) -> StyleBox:
+	var tex: StyleBoxTexture
+	if pad_v >= 5:
+		tex = _paper_box(PANEL_TEX_L, 12, bg, pad_h, pad_v)
+	elif pad_v >= 2:
+		tex = _paper_box(PANEL_TEX_S, 6, bg, pad_h, pad_v)
+	else:
+		tex = _paper_box(PANEL_TEX_BAR, 3, bg, pad_h, pad_v)
+	if tex != null:
+		return tex
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = bg
 	sb.border_color = border
@@ -123,7 +157,7 @@ static func make_panel(bg: Color = PAPER, border: Color = INK, border_w: int = 2
 	sb.content_margin_bottom = pad_v
 	return sb
 
-static func make_bar_bg() -> StyleBoxFlat:
+static func make_bar_bg() -> StyleBox:
 	var sb := make_panel(Color(PAPER_SHADOW.r, PAPER_SHADOW.g, PAPER_SHADOW.b, 0.85), INK, 1, 2, 1, 1)
 	return sb
 

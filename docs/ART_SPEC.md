@@ -47,11 +47,15 @@ player.aseprite 32프레임(idle·걷기 4방향, 대시 4방향, 탁본 4f) →
 - ✅ 출구 게이트(32×48 나무 문+빛기둥+부적), 탁본 잔류물(금빛 소용돌이 발광 2프레임)
 - ✅ 거점 인테리어: 작업대·창고 궤·연구 책상·침대·창호문·이젤 (sprites/base/props.png 32×48×6, base.gd 배선)
 
-## P4 — UI (한지·먹 질감) 🟡 아이콘 완료
+## P4 — UI (한지·먹 질감) ✅ 완료
 
-- ⬜ 패널 9-slice (한지 질감, 48×48 원본), HP/마나/하루 바 프레임, 장착 슬롯 프레임(24×24)
-  — **UI 전면 룩 변경이라 사용자 확인 후 진행** (현재 InkStyle StyleBoxFlat 단색 유지)
+- ✅ 패널 9-slice 3티어 (2026-07-13 사용자 확정): 대형 48×48 마진12(sprites/ui/panel_paper.png)·
+  소형 24×24 마진6(panel_paper_s.png — 행·버튼·슬롯 카드)·바 프레임 12×12 마진3(frame_bar.png).
+  배선은 InkStyle.make_panel() 단일 지점 — pad_v로 티어 자동 선택, bg색은 modulate(bg/PAPER)로 살림,
+  PNG 없으면 기존 StyleBoxFlat 폴백. 텍스처 반복은 StyleBoxTexture AXIS_STRETCH TILE
+  (반점 해시는 sin 기반 — 선형 해시는 대각 줄무늬 아티팩트 발생, 재발 주의)
 - ✅ 아이템 아이콘 18종 (sprites/ui/items.png — id→인덱스 계약은 src/core/item_icons.gd, 창고 패널 배선)
+- 잔여: tutorial.gd는 자체 복제 스타일이라 아직 단색 (ink_style 공용 승격 시 함께 치환)
 
 ## P5 — 이펙트 ✅ 완료 (보류 항목 제외)
 
