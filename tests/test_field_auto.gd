@@ -385,6 +385,20 @@ func _run() -> void:
 		if edef != null and edef.id == &"gale" and (e as Node2D).global_position.y < 0.0:
 			boss_in_field = true
 	_check(boss_in_field, "필드 맵: 북쪽 보스 존(y<0)에 gale 스폰")
+
+	# ── 19b. 지형 — 타일셋 임포트 시 TileMapLayer 4장, 아니면 폴백 Polygon2D
+	if ResourceLoader.exists("res://assets/sprites/field/tileset_field.png"):
+		for lname: String in ["Ground", "Walls", "Trunks", "Canopy"]:
+			_check(field.find_children(lname, "TileMapLayer", true, false).size() == 1,
+				"타일 지형: %s TileMapLayer 존재" % lname)
+		var grounds := field.find_children("Ground", "TileMapLayer", true, false)
+		if grounds.size() == 1:
+			var used: int = (grounds[0] as TileMapLayer).get_used_cells().size()
+			_check(used > 4000, "타일 지형: Ground used_cells > 4000 (실측 %d)" % used)
+	else:
+		_check(field.find_children("*", "Polygon2D", true, false).size() > 0,
+			"폴백 지형: Polygon2D 존재")
+
 	field.queue_free()
 
 	_finish()
