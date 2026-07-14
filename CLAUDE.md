@@ -6,9 +6,10 @@
 ## 새 세션이 먼저 읽을 것 (순서대로)
 
 1. **docs/STATUS.md** — 현재 진행 상태·다음 작업 (세션 종료 시마다 갱신됨)
-2. **docs/GDD.md** — 기획서 v1.3 (확정 스펙. 마법진 문법·조준진·경제·마일스톤)
+2. **docs/GDD.md** — 기획서 v1.5 (확정 스펙. 마법진 문법·진 1종·작성 순서·경제·마일스톤)
 3. **docs/TECH_SPEC.md** — 스키마·EventBus 시그널 계약. **모듈 간 인터페이스의 유일한 진실** — 변경은 리드만, 이 문서를 먼저 갱신 후 코드
-4. docs/TEAM_PLAN.md — 병렬 에이전트 운영 규칙 (모듈 분담·폴더 소유권)
+4. **docs/BACKLOG.md** — 아이디어·미결 항목 (문양 종류 확장·보정·곡선 궤적). 확정되면 GDD로 승격
+5. docs/TEAM_PLAN.md — 병렬 에이전트 운영 규칙 (모듈 분담·폴더 소유권)
 
 ## 아키텍처 요약
 
@@ -27,16 +28,28 @@
 
 ## 검증 명령 (반드시 Bash에서 — PowerShell은 자식 프로세스 stdout을 안 보여줌)
 
+**전 스위트를 다 돌려라.** 목록에서 빠진 테스트는 낡아 죽는다 — 실제로 세션 7이 문법을 바꾸면서
+`test_paper_auto`(8건)와 `test_drawing_canvas_auto`(1건)가 목록에 없다는 이유로 **조용히 깨진 채
+방치됐다** (세션 8에 발견·복구).
+
 ```bash
-./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_integration_auto.gd  # 통합 스모크
-./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_save_auto.gd         # 저장/로드
-./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_drawing_auto.gd      # 인식기
-./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_base_auto.gd         # 거점 경제
-./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_onboarding_auto.gd   # 온보딩(튜토·시험발사)
+./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_integration_auto.gd     # 통합 스모크
+./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_save_auto.gd            # 저장/로드
+./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_drawing_auto.gd         # 인식기
+./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_drawing_canvas_auto.gd  # 캔버스(작성 순서·스탬프)
+./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_paper_auto.gd           # 종이 등급·잉크 상한
+./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_forge_auto.gd           # 제작대(책 펼침)·종이 경제
+./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_spell_auto.gd           # 발사
+./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_base_auto.gd            # 거점 경제
+./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_onboarding_auto.gd      # 온보딩(튜토·시험발사)
 ./Godot_v4.6.1-stable_win64.exe --headless --path . res://tests/test_field.tscn --quit-after 600   # 필드·전투
 ./Godot_v4.6.1-stable_win64.exe --headless --path . res://tests/test_ui.tscn --quit-after 60       # UI
-./Godot_v4.6.1-stable_win64.exe --headless --path . res://tests/test_spell.tscn 대신 -s res://tests/test_spell_auto.gd
 ```
+
+눈으로 보는 시험대(F6): `tests/test_forge.tscn` — 세계 안에서 작업대(E)로 책을 펼쳐 그리고 곧바로 쏜다.
+
+⚠ `tests/test_tutorial_auto.gd`는 **실행 불가**(-s에서 GameState 컴파일 타임 참조 — 아래 함정).
+온보딩 테스트가 같은 영역을 덮는다. 고치거나 지울 것.
 
 **알려진 함정**: `-s` SceneTree 테스트 스크립트는 오토로드 전역 등록 전에 컴파일된다 — 오토로드 식별자(EventBus 등)를 컴파일 타임 참조하면 에러. `root.get_node("/root/EventBus")` 런타임 조회 + 모듈 스크립트는 첫 프레임 후 `load()` 지연 로드로 우회 (기존 테스트 파일들 참고).
 
