@@ -67,6 +67,7 @@ func _run() -> void:
 	await _test_ink_projectile(system)
 	await _test_cast_circle(system)
 	await _test_no_strokes_fallback(system)
+	await _test_role_axes(system)
 
 	if failures == 0:
 		print("TEST_SPELL_OK — 전 항목 통과")
@@ -144,7 +145,7 @@ func _test_shotgun(system) -> void:
 		await _clear_projectiles(system)
 
 func _test_lance(system) -> void:
-	print("[3] 물의 창 — 1발, magnitude 1.0 위력 배율")
+	print("[3] 물의 창 — 1발, **진 규모** 위력 배율 (TECH_SPEC §4.0)")
 	_gs.restore_mana_full()
 	var design := SampleDesigns.aimed_lance_water()
 	_bus.cast_requested.emit(design, Vector2.ZERO, Vector2.RIGHT)
@@ -154,12 +155,13 @@ func _test_lance(system) -> void:
 		var rune = _db.get_rune(Enums.RuneType.WATER)
 		_check(rune != null, "Db에 물 룬 등록됨")
 		var rune_coef: float = rune.base_damage if rune != null else 1.0
+		# 위력 = 기본 × (circle_damage_base + 진 크기) × 정확도 × 룬 계수 — magnitude 무관
 		var expected: float = system.balance.projectile_base_damage \
-			* (float(system.balance.magnitude_damage_base) + 1.0) \
+			* (float(system.balance.circle_damage_base) + design.circle_radius) \
 			* maxf(design.rune_accuracy, system.balance.accuracy_floor) \
 			* rune_coef
 		_check(is_equal_approx(float(projs[0].damage), expected),
-			"위력 %.2f = 기대 %.2f" % [projs[0].damage, expected])
+			"위력 %.2f = 기대 %.2f (진 %.2f 기준)" % [projs[0].damage, expected, design.circle_radius])
 		_check(int(projs[0].status) == Enums.Status.WET, "status=WET 전달")
 	await _clear_projectiles(system)
 
@@ -232,13 +234,13 @@ func _test_ink_projectile(system) -> void:
 			_check(line.points[0].x < 0.0, "획이 머리 뒤로 끌린다 (꼬리 x=%.1f < 0)" % line.points[0].x)
 			# 붓을 누른 그대로 날아간다 — 진에만 붓맛이 있고 탄에는 없는 비대칭 방지
 			_check(line.width_curve != null, "필압 → width_curve 배선됨 (굵기 변화 보존)")
-		# 먹선은 그린 크기가 곧 크기 — 루트 scale 이중 적용 금지. 히트박스만 기존 배율 유지
-		var size_scale: float = lerpf(system.balance.magnitude_size_min,
-			system.balance.magnitude_size_max, 0.5)
+		# 먹선은 그린 크기가 곧 크기 — 루트 scale 이중 적용 금지. 히트박스만 진 규모 배율
+		var size_scale: float = lerpf(system.balance.circle_size_min,
+			system.balance.circle_size_max, design.circle_radius)
 		_check(proj.scale.is_equal_approx(Vector2.ONE),
 			"루트 scale 미적용 (실제 %.2f — 먹선 이중 확대 방지)" % proj.scale.x)
 		_check(is_equal_approx(proj.get_node("Shape").scale.x, size_scale),
-			"히트박스는 magnitude 배율 유지 (%.2f)" % size_scale)
+			"히트박스는 **진 규모** 배율 (%.2f)" % size_scale)
 		_check(not proj.get_node("Visual").visible, "기존 폴리곤 비주얼 숨김")
 	await _clear_projectiles(system)
 
@@ -301,7 +303,84 @@ func _test_no_strokes_fallback(system) -> void:
 	if projs.size() == 1:
 		_check(_find_line(projs[0]) == null, "path 없으면 먹선 없음 — 기존 스프라이트/폴리곤")
 		_check(projs[0].scale.x > 1.0,
-			"폴백은 기존 magnitude 크기 배율 유지 (scale=%.2f)" % projs[0].scale.x)
+			"폴백은 루트 scale에 진 규모 배율 적용 (scale=%.2f)" % projs[0].scale.x)
+	await _clear_projectiles(system)
+
+## 역할 축 회귀 방지 (TECH_SPEC §4.0) — **진 = 규모 / 룬 = 속성 / 문양 = 방식**.
+## 중간 표현이 아니라 **실제 투사체가 들고 나가는 값**(damage·Shape.scale·_life_left)으로 검증한다.
+## 세션 7 교훈: ArrowData.direction만 보던 테스트가 초록인 채로 모든 문양이 90도 틀어져 나갔다.
+func _test_role_axes(system) -> void:
+	print("[9] 역할 축 — 진이 규모를 정하고, 문양 길이는 위력을 못 건드린다")
+
+	# (1) 진이 크면 위력·탄 크기·사거리가 **셋 다** 커진다
+	_gs.restore_mana_full()
+	var small := _ink_design(Enums.CircleType.AIMED, -PI / 2.0, 0.5)
+	small.circle_radius = 0.2
+	_bus.cast_requested.emit(small, Vector2.ZERO, Vector2.RIGHT)
+	var sp := _projectiles(system)
+	var s_dmg := 0.0
+	var s_size := 0.0
+	var s_life := 0.0
+	if sp.size() == 1:
+		s_dmg = float(sp[0].damage)
+		s_size = float(sp[0].get_node("Shape").scale.x)
+		s_life = float(sp[0]._life_left)
+	_check(sp.size() == 1, "작은 진 — 투사체 1개 (실제 %d)" % sp.size())
+	await _clear_projectiles(system)
+
+	_gs.restore_mana_full()
+	var big := _ink_design(Enums.CircleType.AIMED, -PI / 2.0, 0.5)
+	big.circle_radius = 0.9
+	_bus.cast_requested.emit(big, Vector2.ZERO, Vector2.RIGHT)
+	var bp := _projectiles(system)
+	_check(bp.size() == 1, "큰 진 — 투사체 1개 (실제 %d)" % bp.size())
+	if sp.size() == 1 and bp.size() == 1:
+		var b_dmg := float(bp[0].damage)
+		var b_size := float(bp[0].get_node("Shape").scale.x)
+		var b_life := float(bp[0]._life_left)
+		_check(b_dmg > s_dmg, "진 0.9가 진 0.2보다 아프다 (%.1f > %.1f)" % [b_dmg, s_dmg])
+		_check(b_size > s_size, "진 0.9의 탄이 더 크다 (%.2f > %.2f)" % [b_size, s_size])
+		_check(b_life > s_life, "진 0.9의 탄이 더 멀리 간다 (수명 %.2f > %.2f초)" % [b_life, s_life])
+	await _clear_projectiles(system)
+
+	# (2) **문양 길이는 위력을 못 바꾼다** — v1.6에서 magnitude를 전투 스탯에서 뗐다.
+	#     진·룬·정확도가 같으면 magnitude가 0.05든 1.0이든 위력·크기·사거리가 동일해야 한다
+	_gs.restore_mana_full()
+	var short_arrow := _ink_design(Enums.CircleType.AIMED, -PI / 2.0, 0.05)
+	short_arrow.circle_radius = 0.5
+	_bus.cast_requested.emit(short_arrow, Vector2.ZERO, Vector2.RIGHT)
+	var shp := _projectiles(system)
+	var short_dmg := float(shp[0].damage) if shp.size() == 1 else -1.0
+	var short_size := float(shp[0].get_node("Shape").scale.x) if shp.size() == 1 else -1.0
+	var short_life := float(shp[0]._life_left) if shp.size() == 1 else -1.0
+	await _clear_projectiles(system)
+
+	_gs.restore_mana_full()
+	var long_arrow := _ink_design(Enums.CircleType.AIMED, -PI / 2.0, 1.0)
+	long_arrow.circle_radius = 0.5
+	_bus.cast_requested.emit(long_arrow, Vector2.ZERO, Vector2.RIGHT)
+	var lgp := _projectiles(system)
+	_check(shp.size() == 1 and lgp.size() == 1, "긴 문양·짧은 문양 둘 다 발사됨")
+	if shp.size() == 1 and lgp.size() == 1:
+		_check(is_equal_approx(float(lgp[0].damage), short_dmg),
+			"문양 길이는 위력에 영향 없음 (긴 %.2f = 짧은 %.2f)" % [lgp[0].damage, short_dmg])
+		_check(is_equal_approx(float(lgp[0].get_node("Shape").scale.x), short_size),
+			"문양 길이는 탄 크기에 영향 없음 (%.2f)" % short_size)
+		_check(is_equal_approx(float(lgp[0]._life_left), short_life),
+			"문양 길이는 사거리에 영향 없음 (%.2f초)" % short_life)
+	await _clear_projectiles(system)
+
+	# (3) 한 도안의 모든 탄은 규모가 같다 — 문양은 방식(방향·기점)만 정하므로
+	_gs.restore_mana_full()
+	var nova := SampleDesigns.nova_fire()
+	_bus.cast_requested.emit(nova, Vector2.ZERO, Vector2.RIGHT)
+	var np2 := _projectiles(system)
+	if np2.size() > 1:
+		var same := true
+		for p in np2:
+			if not is_equal_approx(float(p.damage), float(np2[0].damage)):
+				same = false
+		_check(same, "노바 %d발 전부 같은 위력 (규모는 진이 정하므로)" % np2.size())
 	await _clear_projectiles(system)
 
 # ── 헬퍼 ─────────────────────────────────────────────────────

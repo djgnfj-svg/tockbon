@@ -1,6 +1,7 @@
 extends RefCounted
 ## 인식 결과 → SpellDesign 조립 + 비용 계산 (GDD §4.4, §5 비용 축 분리).
-## 잉크 = 그린 총량(길이×필압) + 원 크기·조준진 가산 / 마나 = 룬 + 발수 축.
+## 잉크 = 그린 총량(길이×필압) + 진 크기 가산 / 마나 = 룬 + **진 규모** + 발수 축 (v1.6).
+## 역할 축 (TECH_SPEC §4.0): 진 = 규모 / 룬 = 속성 / 문양 = 방식.
 ## 종이 등급(paper_params)은 호출자가 ItemDef.params를 직접 넘긴다 — Db 없이도 테스트 가능.
 ## 사용: const DesignBuilder := preload("res://src/drawing/design_builder.gd")
 
@@ -114,6 +115,8 @@ static func build(parts: Dictionary, balance: BalanceData, into: SpellDesign = n
 		# 좌표이고, 발사 때 spell_system이 `aim - aim_axis` 만큼 **한 번만** 통째로 회전시킨다.
 		# 여기서 aim_axis를 미리 빼면 발사 때 또 빠져서 **90도 틀어진다** (실측으로 잡힌 버그).
 		ad.direction = wrapf(float(a.direction), -PI, PI)
+		# v1.6: magnitude는 **기록만 남는다** — 위력·크기는 진이 정한다 (TECH_SPEC §4.0).
+		# 필드를 지우지 않는 이유: 문양 종류(증폭·유도…) 도입 시 이 값을 다시 쓴다 (BACKLOG §1)
 		ad.magnitude = clampf(float(a.length) / balance.arrow_full_length, 0.05, 1.0)
 		# origin은 진 반지름 = 1.0 정규화 (가장자리 = 1.0, TECH_SPEC §4)
 		ad.origin = (Vector2(a.start) - Vector2(circle.center)) / radius_cu
@@ -140,13 +143,19 @@ static func build(parts: Dictionary, balance: BalanceData, into: SpellDesign = n
 	ink *= 1.0 + balance.circle_radius_ink_mult * d.circle_radius
 	d.ink_cost = {INK_ID: maxi(1, ceili(ink))}
 
-	# 마나: 룬 + 발수 축 (원 크기와 무관 — 같은 축 삼중 처벌 금지, GDD §5) × 종이 감면
+	# 마나 = 룬 + **진 규모** + 발수 축 × 종이 감면 (v1.6, GDD §5 갱신).
+	# 진이 위력·크기·사거리를 전부 주므로(TECH_SPEC §4.0) 시전 비용에도 진 축이 붙는다 —
+	# 잉크만 물리면 큰 진이 일방적으로 우월해진다. 삼중 처벌은 아니다: 진은 제작 1회·시전 1회
 	var rune_idx := int(d.rune_type)
 	var mana_base := 8.0
 	if rune_idx >= 0 and rune_idx < balance.rune_mana_base.size():
 		mana_base = balance.rune_mana_base[rune_idx]
 	var discount := clampf(float(paper_params.get("mana_discount", 0.0)), 0.0, 1.0)
-	d.mana_cost = (mana_base + balance.mana_per_arrow * float(arrows.size())) * (1.0 - discount)
+	d.mana_cost = (
+		mana_base
+		+ balance.circle_mana_mult * d.circle_radius
+		+ balance.mana_per_arrow * float(arrows.size())
+	) * (1.0 - discount)
 
 	# 종이 등급: 내구 보정·등급 기록 (GDD §5). 스키마 기본값에서 매번 재계산 — into 재사용 시 비누적
 	d.paper_grade = paper_grade

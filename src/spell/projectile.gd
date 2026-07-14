@@ -49,10 +49,13 @@ func _ready() -> void:
 ## p_path: 그린 화살표 획 (ArrowData.path — 시작점=원점·+X=발사방향, 캔버스 단위).
 ## p_pressures: 짝을 이루는 필압 (ArrowData.path_pressures). 비면 균일 굵기 — 마우스로 그린 획.
 ## p_path가 2점 미만이면 기존 스프라이트/폴리곤 비주얼로 폴백 (샘플 도안·구세이브 호환).
+## p_lifetime: 사거리(초) — **진 규모 축** (TECH_SPEC §4.0). 0 이하면 balance 기준값을 쓴다.
+## p_size_scale도 진 규모다 — 문양 길이가 아니다.
 func setup(p_damage: float, p_rune_type: int, p_status: int, p_status_power: float,
 		p_speed: float, p_angle: float, p_size_scale: float,
 		p_path: PackedVector2Array = PackedVector2Array(),
-		p_pressures: PackedFloat32Array = PackedFloat32Array()) -> void:
+		p_pressures: PackedFloat32Array = PackedFloat32Array(),
+		p_lifetime: float = 0.0) -> void:
 	damage = p_damage
 	rune_type = p_rune_type
 	status = p_status
@@ -60,9 +63,11 @@ func setup(p_damage: float, p_rune_type: int, p_status: int, p_status_power: flo
 	direction_angle = p_angle
 	rotation = p_angle
 	_velocity = Vector2.RIGHT.rotated(p_angle) * p_speed
+	if p_lifetime > 0.0:
+		_life_left = p_lifetime
 
 	# 머리를 원점에 맞추는 평행이동은 core가 한다 (TECH_SPEC §4.4 tail_line).
-	# magnitude는 굵기(width_mult)로만 — 길이·모양은 플레이어가 그린 그대로다.
+	# 진 규모는 굵기(width_mult)로만 — 길이·모양은 플레이어가 그린 그대로다.
 	var ink := InkRender.tail_line(p_path, p_pressures, InkRender.unit_px(_balance), {
 		"rune_type": p_rune_type,
 		"bright": true,
@@ -70,7 +75,7 @@ func setup(p_damage: float, p_rune_type: int, p_status: int, p_status_power: flo
 	})
 	if ink != null:
 		# 먹선은 그린 크기가 곧 크기 — 루트 scale로 한 번 더 키우면 이중 적용된다.
-		# 히트박스만 기존 magnitude 배율을 그대로 유지 (Shape 노드 스케일. 형상 리소스는 공유물이라 불변)
+		# 히트박스만 진 규모 배율을 적용 (Shape 노드 스케일. 형상 리소스는 공유물이라 불변)
 		($Visual as Polygon2D).visible = false
 		($Shape as CollisionShape2D).scale = Vector2.ONE * p_size_scale
 		add_child(ink)

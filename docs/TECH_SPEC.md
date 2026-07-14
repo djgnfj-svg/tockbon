@@ -43,6 +43,23 @@ res://
 
 ## 4. 핵심 리소스 스키마 (`src/core/schemas/`)
 
+### 4.0 역할 축 계약 (v1.6) — **그리기는 조준이 아니라 조합이다**
+
+**도안의 세 부품은 서로 다른 질문에 답한다. 한 부품이 남의 축을 먹으면 그 부품은 의미를 잃는다.**
+
+| 부품 | 답하는 질문 | 정하는 값 | 소비처 |
+|---|---|---|---|
+| **진** (원) | **얼마나 큰 마법인가** | `circle_radius` → **위력 · 탄 크기 · 사거리** | `spell_system` |
+| **룬** | **무엇으로 때리는가** | `rune_type` → 피해 계수 · 상태이상 / `rune_accuracy` → 위력 보정 | `RuneDef`, `spell_system` |
+| **문양** (화살표) | **어떻게 나가는가** | `direction`(발사각) · `origin`(기점) · 개수(발수) · `path`(궤적) | `spell_system`, `projectile` |
+
+- **규모는 진의 것이다.** 큰 진 = 크고 아프고 멀리 가는 마법. 문양을 길게 그어도 세지지 않는다
+- **`ArrowData.magnitude`는 v1.6에서 전투 스탯과 분리됐다.** 필드는 남지만(문양 종류 도입 시 재사용
+  예약, BACKLOG §1) **위력·크기 어디에도 물리지 않는다.** 소비하지 말 것
+- **비용 축** (GDD §5 갱신): 잉크 = 그린 총량 + 진 크기 / **마나 = 룬 + 진 규모 + 발수**.
+  진이 위력·크기·사거리 셋을 주므로 시전 비용(마나)에도 진 축이 붙는다 — 잉크만으로는 큰 진이
+  일방적으로 우월해진다. 같은 축을 세 번 처벌하진 않는다(제작 1회 · 시전 1회)
+
 ```gdscript
 # stroke_data.gd — 원본 획 (렌더링·수리·재편집용)
 class_name StrokeData extends Resource
@@ -55,7 +72,8 @@ class_name SpellDesign extends Resource
 @export var id: StringName
 @export var display_name: String
 @export var circle_type: int             # CircleType.FIXED(고정진) / AIMED(조준진)
-@export var circle_radius: float         # 정규화 0..1 (캔버스 대비)
+@export var circle_radius: float         # 정규화 0..1 (캔버스 대비). **v1.6: 규모 축** —
+                                         # 위력·탄 크기·사거리를 전부 이 값이 정한다 (§4.0)
 @export var aim_axis: float              # 조준진 꼬리 방향(rad). FIXED면 무시
 @export var rune_type: int               # RuneType.FIRE / IMPACT / WATER / WIND
 @export var rune_accuracy: float         # 0..1, 인식 정확도 → 위력 보정 (스탬프 시 보존)
@@ -63,7 +81,7 @@ class_name SpellDesign extends Resource
 @export var strokes: Array[StrokeData]   # 원본 전체 획
 @export var paper_grade: int             # 1..3
 @export var ink_cost: Dictionary         # {ink_id: amount} — 제작 시 소모량 (수리비 산정 기준)
-@export var mana_cost: float             # 캐스팅 비용 (룬+발수 축)
+@export var mana_cost: float             # 캐스팅 비용 (v1.6: 룬 + **진 규모** + 발수 축)
 @export var durability_max: int
 @export var durability: int
 
@@ -73,7 +91,9 @@ class_name ArrowData extends Resource
                                          # 발사 시 spell_system이 (aim_angle - aim_axis)만큼 **한 번만**
                                          # 통째로 회전시킨다. 여기에 aim_axis를 미리 빼면 발사 때 또
                                          # 빠져서 **90도 틀어진다** (세션 7에 실측으로 잡힌 버그)
-@export var magnitude: float             # 0..1 → 투사체 위력·크기
+@export var magnitude: float             # 획 길이 0..1. **v1.6: 전투 스탯과 분리됨** —
+                                         # 규모는 진이 정한다(§4.0). 소비 금지.
+                                         # 문양 종류 도입 시 재사용 예약 (BACKLOG §1)
 @export var origin: Vector2              # 발사 기점. 진 중심 기준·진 반지름=1.0 정규화 (가장자리=1.0)
                                          # 월드 px = origin × circle_radius × balance.circle_radius_px
                                          # circle_radius: 캔버스 꽉 채우는 원(캔버스 반지름 0.5) = 1.0

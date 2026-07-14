@@ -1,8 +1,13 @@
 extends Node2D
 ## 스펠 발사 시스템 — 모듈 B. 필드 씬에 자식으로 넣기만 하면 되는 자립 노드.
 ## EventBus.cast_requested 수신 → 내구·마나 검사 → SpellDesign.arrows를 투사체로 컴파일.
-## 진 규칙 (GDD §4.1): FIXED=화살표 절대각 그대로 / AIMED=도안 전체가 에임 방향으로 회전
-## (꼬리 aim_axis가 에임과 일치하도록 회전 → 발사각 = arrow.direction - aim_axis + aim각).
+##
+## **역할 축 (v1.6, TECH_SPEC §4.0)**: 진 = 규모(위력·크기·사거리) / 룬 = 속성 / 문양 = 방식.
+## 그래서 한 도안의 모든 탄은 **위력·크기·사거리가 같고**, 문양마다 다른 건 방향·기점뿐이다.
+## 문양 길이(ArrowData.magnitude)는 전투 스탯에 **쓰지 않는다** — 소비 금지.
+##
+## 진 규칙 (GDD §4.1): AIMED=도안 전체가 에임 방향으로 회전 (발사각 = direction + (에임 − aim_axis)).
+## FIXED는 구세이브 호환용 — 회전 없이 그린 절대각 그대로.
 
 const ProjectileScene := preload("res://src/spell/projectile.tscn")
 const ProjectileScript := preload("res://src/spell/projectile.gd")
@@ -36,11 +41,26 @@ func _on_cast_requested(design: SpellDesign, origin: Vector2, aim_dir: Vector2) 
 	design.durability -= 1
 	EventBus.cast_executed.emit(design, design.mana_cost)
 
-## 위력 = 기본 위력 × magnitude 스케일 × 정확도 보정(하한 accuracy_floor) × 룬 계수
-func compute_damage(design: SpellDesign, arrow: ArrowData, rune: RuneDef) -> float:
+## 위력 = 기본 위력 × **진 규모** × 정확도 보정(하한 accuracy_floor) × 룬 계수 (TECH_SPEC §4.0).
+## v1.6: 규모는 진이 정한다 — 문양 길이(magnitude)는 위력에 물리지 않는다.
+## 도안 하나에서 나가는 모든 탄이 같은 위력이다 (문양은 방식만 정하므로).
+func compute_damage(design: SpellDesign, rune: RuneDef) -> float:
 	var rune_coef := rune.base_damage if rune != null else 1.0
 	var accuracy := maxf(design.rune_accuracy, balance.accuracy_floor)
-	return balance.projectile_base_damage * (balance.magnitude_damage_base + arrow.magnitude) * accuracy * rune_coef
+	return balance.projectile_base_damage * (balance.circle_damage_base + design.circle_radius) \
+		* accuracy * rune_coef
+
+
+## 투사체 크기 배율 — 진 규모 축 (TECH_SPEC §4.0)
+func compute_size_scale(design: SpellDesign) -> float:
+	return lerpf(balance.circle_size_min, balance.circle_size_max,
+		clampf(design.circle_radius, 0.0, 1.0))
+
+
+## 사거리(투사체 수명, 초) — 진 규모 축. 속도는 고정이므로 수명 = 사거리 (TECH_SPEC §4.0)
+func compute_lifetime(design: SpellDesign) -> float:
+	return balance.projectile_lifetime_sec * lerpf(balance.circle_range_min, balance.circle_range_max,
+		clampf(design.circle_radius, 0.0, 1.0))
 
 func _spawn_projectiles(design: SpellDesign, origin: Vector2, aim_dir: Vector2) -> void:
 	var rune: RuneDef = Db.get_rune(design.rune_type)
@@ -56,6 +76,12 @@ func _spawn_projectiles(design: SpellDesign, origin: Vector2, aim_dir: Vector2) 
 	var scene := ProjectileScene
 	if rune != null and rune.projectile_scene != null:
 		scene = rune.projectile_scene
+
+	# 규모는 진이 정하므로 도안당 한 번만 계산한다 — 문양마다 다르지 않다 (TECH_SPEC §4.0)
+	var damage := compute_damage(design, rune)
+	var size_scale := compute_size_scale(design)
+	var lifetime := compute_lifetime(design)
+
 	for arrow: ArrowData in design.arrows:
 		var world_angle := arrow.direction + rotate_by
 		var offset := (arrow.origin * design.circle_radius * balance.circle_radius_px).rotated(rotate_by)
@@ -66,15 +92,16 @@ func _spawn_projectiles(design: SpellDesign, origin: Vector2, aim_dir: Vector2) 
 		add_child(proj)
 		proj.global_position = origin + offset
 		proj.setup(
-			compute_damage(design, arrow, rune),
+			damage,
 			design.rune_type,
 			rune.status if rune != null else Enums.Status.NONE,
 			rune.status_power if rune != null else 0.0,
 			balance.projectile_base_speed,
 			world_angle,
-			lerpf(balance.magnitude_size_min, balance.magnitude_size_max, clampf(arrow.magnitude, 0.0, 1.0)),
+			size_scale,
 			arrow.path,
-			arrow.path_pressures
+			arrow.path_pressures,
+			lifetime
 		)
 
 ## 발밑에 내가 그린 진이 먹선으로 펼쳐졌다 사라진다 (GDD §10.5). 순수 비주얼 — 충돌·물리 없음.

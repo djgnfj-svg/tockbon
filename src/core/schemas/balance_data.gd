@@ -18,7 +18,11 @@ extends Resource
 @export var rune_mana_base: PackedFloat32Array = PackedFloat32Array([8.0, 6.0, 7.0, 9.0])
 ## 화살표 1발당 마나
 @export var mana_per_arrow: float = 3.0
-## magnitude 1.0이 되는 화살표 획 길이 (캔버스 정규)
+## 진 규모 → 마나 가산 (v1.6, TECH_SPEC §4.0). 진이 위력·크기·사거리를 전부 주므로
+## 시전 비용에도 진 축이 붙는다 — 잉크만 물리면 큰 진이 일방적으로 우월해진다
+@export var circle_mana_mult: float = 6.0
+## magnitude 1.0이 되는 화살표 획 길이 (캔버스 정규).
+## v1.6: magnitude는 **전투 스탯에서 분리됐다** — 기록만 남는다 (문양 종류 도입 시 재사용)
 @export var arrow_full_length: float = 0.45
 ## 획 길이(정규)당 잉크 소모
 @export var ink_per_stroke_length: float = 10.0
@@ -39,12 +43,19 @@ extends Resource
 @export var wand_basic_damage: float = 4.0
 ## 탁본 모션 무방비 시간 (GDD §6)
 @export var rubbing_duration_sec: float = 1.5
+## 기준 사거리(초). 실제 수명 = 이 값 × 진 사거리 배율
 @export var projectile_lifetime_sec: float = 1.5
-## 위력 배율 = magnitude_damage_base + magnitude (모듈 B)
-@export var magnitude_damage_base: float = 0.5
-## 투사체 크기 배율 = lerp(min, max, magnitude)
-@export var magnitude_size_min: float = 0.6
-@export var magnitude_size_max: float = 1.8
+
+# ── 진 = 규모 축 (v1.6, TECH_SPEC §4.0) — 위력·크기·사거리를 전부 진이 정한다 ──
+# 셋 다 circle_radius(0..1)를 입력으로 받는다. circle_radius 0.5(캔버스 절반)가 기준점 ≈ 1.0배.
+## 위력 배율 = circle_damage_base + circle_radius
+@export var circle_damage_base: float = 0.5
+## 투사체 크기 배율 = lerp(min, max, circle_radius)
+@export var circle_size_min: float = 0.6
+@export var circle_size_max: float = 1.8
+## 사거리 배율 = lerp(min, max, circle_radius) → projectile_lifetime_sec에 곱해진다
+@export var circle_range_min: float = 0.6
+@export var circle_range_max: float = 1.4
 ## circle_radius(정규) → 월드 px 발사 오프셋 스케일
 @export var circle_radius_px: float = 48.0
 

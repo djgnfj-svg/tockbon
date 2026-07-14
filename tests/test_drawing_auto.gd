@@ -915,14 +915,17 @@ func _test_copy_and_feedback() -> void:
 			"인식기 DECOR 결과에 near_rune·min_score가 담긴다")
 
 	# ── 연출: 노드가 생기고 정리된다 (트윈 후 잔여 노드 없음) ──
-	# 거부된 획의 라인은 붉게 스쳐 사라진다 — 페이드가 끝나면 자식 노드가 남지 않아야 한다
-	_check(canvas.get_child_count() >= canvas._entries.size(), "수락 획마다 먹선 노드 존재")
+	# 거부된 획의 라인은 붉게 스쳐 사라진다 — 페이드가 끝나면 자식 노드가 남지 않아야 한다.
+	# 먹선은 캔버스 직속이 아니라 **_ink_layer**의 자식이다 (v1.7 종이 확대 — 이 레이어에
+	# zoom·pan이 걸린다). 캔버스 직속 자식을 세면 InkLayer 자신이 끼어들어 어긋난다
+	var ink_layer: Node2D = canvas._ink_layer
+	_check(ink_layer.get_child_count() >= canvas._entries.size(), "수락 획마다 먹선 노드 존재")
 	# 트윈은 **실제 시간**으로 돈다 — 헤드리스는 프레임이 실시간보다 훨씬 빨라
 	# 프레임 수로 기다리면 안 된다(그래서 이 검사가 처음엔 헛통과할 뻔했다). 타이머로 기다린다
 	await create_timer(0.8).timeout
-	_check(canvas.get_child_count() == canvas._entries.size(),
-		"거부·번쩍임 연출 후 잔여 노드 없음 (자식 %d == 엔트리 %d)" % [
-			canvas.get_child_count(), canvas._entries.size()])
+	_check(ink_layer.get_child_count() == canvas._entries.size(),
+		"거부·번쩍임 연출 후 잔여 노드 없음 (먹선 %d == 엔트리 %d)" % [
+			ink_layer.get_child_count(), canvas._entries.size()])
 
 	# ── 도안 완성 신호 — 클라이맥스 연출의 방아쇠 ──
 	var completed: Array[SpellDesign] = []
@@ -932,7 +935,7 @@ func _test_copy_and_feedback() -> void:
 	_stroke_on(canvas, _px_line(CV_C, CV_C + Vector2(80, 0)))    # 화살표 추가 → 갱신일 뿐
 	_check(completed.size() == 1, "이후 화살표 추가는 완성 신호를 다시 쏘지 않는다")
 	await create_timer(0.9).timeout      # 완성 번쩍임(0.55s)이 끝날 실제 시간
-	_check(canvas.get_child_count() == canvas._entries.size(), "완성 연출 후에도 잔여 노드 없음")
+	_check(ink_layer.get_child_count() == canvas._entries.size(), "완성 연출 후에도 잔여 노드 없음")
 	canvas.queue_free()
 
 	# ── 체크리스트: 캔버스에 붙여 단계별 문구가 실제로 나오는지 ──
@@ -1159,10 +1162,14 @@ func _test_builder_edges() -> void:
 	_check(is_equal_approx(d.arrows[0].magnitude, 1.0), "초과 길이 → magnitude 1.0 클램프")
 	# origin은 진 반지름=1.0 정규화 (TECH_SPEC §4): 시작점 0.1, 반지름 0.2 → (0.5, 0)
 	_check(d.arrows[1].origin.distance_to(Vector2(0.5, 0.0)) < 0.01, "origin 반지름 정규화")
-	# 마나 = 룬 기본 + 발수 (BalanceData 계수)
+	# 마나 = 룬 기본 + **진 규모** + 발수 (v1.6, TECH_SPEC §4.0 — 진이 위력·크기·사거리를 주므로
+	# 시전 비용에도 진 축이 붙는다)
 	var expected_mana: float = balance.rune_mana_base[Enums.RuneType.WATER] \
+		+ balance.circle_mana_mult * d.circle_radius \
 		+ balance.mana_per_arrow * 2.0
-	_check(is_equal_approx(d.mana_cost, expected_mana), "마나 = 룬 기본 + 발수")
+	_check(is_equal_approx(d.mana_cost, expected_mana), "마나 = 룬 기본 + 진 규모 + 발수")
+	_check(balance.circle_mana_mult > 0.0,
+		"balance.circle_mana_mult > 0 — 위 검사가 진 축의 존재를 실제로 구별한다")
 
 	# 조준진 잉크 가산은 폐지됐다 (v1.6) — 조준이 기본이라 가산할 대상이 없다.
 	# 잉크 = 획 길이 × 계수 × (1 + 원 크기 가산)만으로 정확히 설명된다

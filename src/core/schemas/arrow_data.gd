@@ -6,7 +6,9 @@ extends Resource
 ## 발사 시 spell_system이 `aim_angle - aim_axis` 만큼 **한 번만** 통째로 회전시킨다.
 ## 여기에 aim_axis를 미리 빼 두면 발사 때 또 빠져 90도 틀어진다 (세션 7 실측 버그).
 @export var direction: float = 0.0
-## 0..1 → 투사체 위력·크기
+## 획 길이 0..1. **v1.6: 전투 스탯과 분리됐다** — 위력·탄 크기·사거리는 전부 **진**이 정한다
+## (TECH_SPEC §4.0 역할 축: 진 = 규모 / 룬 = 속성 / 문양 = 방식). **소비 금지 — 기록용이다.**
+## 필드를 지우지 않는 이유: 문양 종류(증폭·유도…) 도입 시 이 값을 다시 쓴다 (BACKLOG §1)
 @export var magnitude: float = 0.5
 ## 발사 기점 — 진 중심 기준, **진 반지름 = 1.0 정규화** (원 가장자리 = 1.0).
 ## 월드 오프셋 px = origin × circle_radius × balance.circle_radius_px (모듈 B 공식)

@@ -42,7 +42,7 @@ const COMPLETE := "「도안이 맺혔다. 먹이 마르기 전에 시험해 보
 const INCOMPLETE := "아직 도안이 아니다 — 진 하나, 룬 하나, 문양 하나."
 
 ## 조작 안내 (순서 안내는 체크리스트가 상시 보여 준다 — 여긴 조작만)
-const CONTROLS := "좌클릭 드래그 = 획 · 우클릭/Ctrl+Z = 취소"
+const CONTROLS := "좌클릭 드래그 = 획 · 우클릭/Ctrl+Z = 취소 · 휠 = 종이 확대(작은 문양)"
 
 ## 자동보정·스탬프
 const AUTOCORRECT_OK := "「형을 바로잡았다. 손맛은 네 것 그대로다.」"

@@ -53,7 +53,10 @@ func _run() -> void:
 func _test_builder(balance: BalanceData, papers: Dictionary) -> void:
 	var builder: GDScript = load("res://src/drawing/design_builder.gd")
 	var base_dura: int = SpellDesign.new().durability_max
-	var mana_raw: float = balance.rune_mana_base[Enums.RuneType.WATER] + balance.mana_per_arrow * 2.0
+	# 마나 = 룬 + 진 규모 + 발수 (v1.6, TECH_SPEC §4.0). _builder_parts의 진 반지름 0.2 → circle_radius 0.4
+	var mana_raw: float = balance.rune_mana_base[Enums.RuneType.WATER] \
+		+ balance.circle_mana_mult * (0.2 / 0.5) \
+		+ balance.mana_per_arrow * 2.0
 	for g: int in [1, 2, 3]:
 		var def: ItemDef = papers[g]
 		var d: SpellDesign = builder.build(_builder_parts(), balance, null, def.grade, def.params)
@@ -163,8 +166,12 @@ func _test_canvas(gs: Node, bus: Node, balance: BalanceData, papers: Dictionary)
 	var d: SpellDesign = canvas.get_design()
 	_check(d != null and d.paper_grade == p2.grade, "캔버스 경유 paper_grade 기록")
 	if d != null:
-		var expect_mana: float = (balance.rune_mana_base[Enums.RuneType.FIRE] + balance.mana_per_arrow) \
-			* (1.0 - float(p2.params.mana_discount))
+		# 진 규모 축 포함 (v1.6) — 캔버스가 실제 인식한 진 크기를 그대로 기준으로 삼는다
+		var expect_mana: float = (
+			balance.rune_mana_base[Enums.RuneType.FIRE]
+			+ balance.circle_mana_mult * d.circle_radius
+			+ balance.mana_per_arrow
+		) * (1.0 - float(p2.params.mana_discount))
 		_check(is_equal_approx(d.mana_cost, expect_mana), "캔버스 경유 마나 감면")
 		_check(d.durability_max == SpellDesign.new().durability_max + int(p2.params.durability_bonus),
 			"캔버스 경유 내구 보정")

@@ -24,6 +24,8 @@ signal design_completed(design: SpellDesign)
 signal stage_changed(stage: int)
 ## 도안 완성 조건은 갖췄으나 보유 종이가 없어 생성이 차단됨 (reason: &"no_paper")
 signal completion_blocked(reason: StringName)
+## 종이 확대 배율이 바뀌었다 (1.0 = 원래 크기) — 배율 표시 UI용
+signal zoom_changed(zoom: float)
 
 const MIN_PX_DIST := 1.2               # 라이브 점 추가 최소 간격(px)
 const STAMP_SIZE := 0.22               # 스탬프 배치 크기 (캔버스 정규화, 최장변)
@@ -91,6 +93,16 @@ const TRACE_ARROW_SPAN := 0.50       # 문양 — 진(0.22)을 뚫고 나가는 
 
 # ── 수락 연출 (v1.6) — 획이 받아들여지는 순간이 보여야 "해냈다"는 감각이 생긴다 ──
 # 연출 수치다(밸런스 아님). Tween은 대상 노드에 묶여 있어 노드가 사라지면 함께 죽는다 — 안전.
+# ── 종이 확대 (v1.7) — **작은 문양을 정밀하게 그리기 위한 돋보기** ──
+# 확대는 **보는 배율만** 바꾼다. 저장되는 획은 언제나 종이 정규 좌표(0..1)라
+# 인식·발사·잉크는 배율과 무관하다 — 4배로 확대해 그린 진도 종이 위 크기 그대로다.
+const ZOOM_MIN := 1.0                # 1.0 = 종이 전체가 보이는 상태. 그보다 축소할 이유는 없다
+const ZOOM_MAX := 4.0
+const ZOOM_STEP := 1.15              # 휠 한 칸 배율 (약 5칸에 2배)
+const ZOOM_EPS := 0.001              # 부동소수 여유 — 1.0 근처에서 "확대 중" 오판 방지
+const ZOOM_LABEL := Color(0.13, 0.11, 0.10, 0.38)
+const ZOOM_LABEL_RATIO := 0.040      # 배율 글자 크기 비율 (캔버스 최단변 대비)
+
 const FLASH_LIGHTEN := 0.55          # 수락된 획이 번쩍이는 밝기
 const FLASH_SEC := 0.30              # 번쩍임이 잦아드는 시간
 const FLASH_WIDTH_MULT := 1.5        # 번쩍일 때 굵어지는 배율
@@ -108,6 +120,15 @@ var _balance: BalanceData
 # 비쌀 이유가 없기 때문이다. _built가 그 "이 종이에서 맺힌 도안"을 계속 쥐고 있다.
 var _built: SpellDesign = null      # 이 종이에서 맺힌 도안 (미완성으로 무너져도 놓지 않는다)
 var _paper_charged := false         # 이 종이 값은 이미 치렀다
+
+# ── 종이 뷰 (확대·이동). 획 좌표는 **종이 픽셀**이고, 화면 픽셀과는 이 둘로만 오간다 ──
+var _zoom := 1.0
+var _pan := Vector2.ZERO            # 종이 원점이 놓이는 화면 위치(px)
+var _panning := false
+var _pan_from := Vector2.ZERO
+## 획(Line2D)이 사는 레이어. 여기에 zoom·pan을 걸면 획·가이드·본보기가 함께 확대된다.
+## 캔버스는 clip_contents=true라 넘치는 부분은 자동으로 잘린다
+var _ink_layer: Node2D = null
 
 var _drawing := false
 var _live_line: Line2D = null
@@ -140,10 +161,66 @@ func _ready() -> void:
 	clip_contents = true
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	set_process(false)                 # 획을 그리는 동안에만 켠다 — 유휴 프레임 비용 0
+	_ink_layer = Node2D.new()
+	_ink_layer.name = "InkLayer"
+	add_child(_ink_layer)
 
 
 func _canvas_scale() -> float:
 	return maxf(minf(size.x, size.y), 1.0)
+
+
+# ─────────────────────────── 종이 확대 (v1.7) ───────────────────────────
+#
+# **좌표계는 둘뿐이다.**
+#   화면 픽셀 — 마우스 이벤트가 오는 좌표. 확대하면 같은 종이 점이 다른 화면 위치에 온다
+#   종이 픽셀 — 획이 저장되는 좌표 (0..size). **확대와 무관하다.** 정규화(÷_canvas_scale)하면 0..1
+# 이 경계를 넘는 건 _to_paper() 하나뿐이다. 나머지 로직은 확대를 모른다 —
+# 그래서 4배로 확대해 그린 획도 인식·잉크·발사가 원래와 완전히 같다.
+
+## 화면 픽셀 → 종이 픽셀
+func _to_paper(screen_px: Vector2) -> Vector2:
+	return (screen_px - _pan) / _zoom
+
+
+## 현재 배율 (1.0 = 종이 전체)
+func get_zoom() -> float:
+	return _zoom
+
+
+## 종이를 원래 크기로 되돌린다 (종이를 갈거나 제작대를 열 때)
+func reset_view() -> void:
+	_set_view(1.0, Vector2.ZERO)
+
+
+## 커서 아래의 **종이 점을 붙잡은 채** 배율만 바꾼다 — 확대해도 보던 자리가 달아나지 않는다
+func zoom_at(screen_px: Vector2, factor: float) -> void:
+	var next := clampf(_zoom * factor, ZOOM_MIN, ZOOM_MAX)
+	if is_equal_approx(next, _zoom):
+		return
+	var anchor := _to_paper(screen_px)          # 이 종이 점을
+	_set_view(next, screen_px - anchor * next)  # 같은 화면 위치에 고정
+
+
+func _set_view(zoom: float, pan: Vector2) -> void:
+	var prev := _zoom
+	_zoom = clampf(zoom, ZOOM_MIN, ZOOM_MAX)
+	_pan = _clamp_pan(pan)
+	if _ink_layer != null:
+		_ink_layer.position = _pan
+		_ink_layer.scale = Vector2.ONE * _zoom
+	queue_redraw()
+	if not is_equal_approx(prev, _zoom):
+		zoom_changed.emit(_zoom)
+
+
+## 종이가 언제나 뷰를 덮게 한다 — 확대해 놓고 종이 밖 허공을 보는 일이 없도록.
+## 배율 1.0에서는 pan이 0으로 고정된다 (종이 = 뷰).
+func _clamp_pan(pan: Vector2) -> Vector2:
+	var span := size * _zoom - size   # 확대로 넘치는 양 (배율 1.0이면 0)
+	return Vector2(
+		clampf(pan.x, -maxf(span.x, 0.0), 0.0),
+		clampf(pan.y, -maxf(span.y, 0.0), 0.0))
 
 
 # ─────────────────────────── 방위 가이드 (배경 렌더) ───────────────────────────
@@ -151,12 +228,17 @@ func _canvas_scale() -> float:
 ## 캔버스 크기가 바뀌면 가이드를 다시 그린다 (시험대·드로잉룸 크기가 다르다)
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_RESIZED:
+		_set_view(_zoom, _pan)   # 크기가 바뀌면 이동 한계도 바뀐다 — 다시 가둔다
 		queue_redraw()
 
 
 ## 종이 위 방위 안내 — 위=앞(조준 방향). 획(자식 Line2D)은 이 위에 그려지므로
 ## 그린 먹선이 언제나 주인공이고 가이드는 그 아래 참고선으로 남는다.
 func _draw() -> void:
+	# 가이드·본보기는 **종이에 인쇄된 것**이다 — 획과 같은 변환을 받아 함께 확대된다.
+	# (배율 표시만 이 변환 밖에 있다. 아래 _draw_zoom_label 참고)
+	draw_set_transform(_pan, 0.0, Vector2.ONE * _zoom)
+
 	var c := size * 0.5
 	var s := _canvas_scale()
 	var m := s * GUIDE_MARGIN
@@ -187,6 +269,21 @@ func _draw() -> void:
 		for p: Vector2 in _trace:
 			px.append(p * s)
 		draw_polyline(px, TRACE_INK, TRACE_WIDTH, true)
+
+	_draw_zoom_label(font, s)
+
+
+## 배율 표시 — **확대 변환 밖**에서 그린다. 돋보기의 눈금은 종이에 인쇄된 게 아니라
+## 들여다보는 사람 쪽에 있다: 4배로 확대해도 글자는 같은 크기로 구석에 남는다.
+func _draw_zoom_label(font: Font, s: float) -> void:
+	if _zoom <= ZOOM_MIN + ZOOM_EPS:
+		return
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	var fs := maxi(int(s * ZOOM_LABEL_RATIO), 8)
+	var text := "×%.1f" % _zoom
+	var w := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+	draw_string(font, Vector2(size.x - w - float(fs) * 0.6, float(fs) * 1.4),
+		text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, ZOOM_LABEL)
 
 
 func _guide_text(font: Font, fs: int, text: String, at: Vector2, col: Color, centered: bool) -> void:
@@ -276,12 +373,29 @@ func get_ink_capacity() -> float:
 func _gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
+		# 휠 = 종이 확대. 획을 긋는 중에는 손대지 않는다 — 그리다 종이가 움직이면 획이 망가진다
+		if mb.button_index == MOUSE_BUTTON_WHEEL_UP and mb.pressed:
+			if not _drawing:
+				zoom_at(mb.position, ZOOM_STEP)
+			accept_event()
+			return
+		if mb.button_index == MOUSE_BUTTON_WHEEL_DOWN and mb.pressed:
+			if not _drawing:
+				zoom_at(mb.position, 1.0 / ZOOM_STEP)
+			accept_event()
+			return
+		# 휠 클릭 드래그 = 종이 밀기. 좌클릭은 획, 우클릭은 취소라 남는 버튼이 이것뿐이다
+		if mb.button_index == MOUSE_BUTTON_MIDDLE:
+			_panning = mb.pressed and not _drawing
+			_pan_from = mb.position
+			accept_event()
+			return
 		if mb.button_index == MOUSE_BUTTON_LEFT:
 			if mb.pressed:
 				if not _stamp_pending.is_empty():
-					_place_stamp_at(mb.position)
+					_place_stamp_at(_to_paper(mb.position))
 				else:
-					_begin_stroke(mb.position)
+					_begin_stroke(_to_paper(mb.position))
 			elif _drawing:
 				_end_stroke()
 			accept_event()
@@ -294,16 +408,24 @@ func _gui_input(event: InputEvent) -> void:
 			else:
 				undo_last()
 			accept_event()
-	elif event is InputEventMouseMotion and _drawing:
+	elif event is InputEventMouseMotion:
 		var mm := event as InputEventMouseMotion
+		if _panning:
+			_set_view(_zoom, _pan + mm.relative)
+			accept_event()
+			return
+		if not _drawing:
+			return
 		if mm.pressure > 0.001:
 			# 진짜 필압 장치 — 합성 경로를 끄고 압력을 그대로 쓴다
 			_tablet = true
-			_append_live(mm.position, mm.pressure)
+			_append_live(_to_paper(mm.position), mm.pressure)
 		else:
-			# 마우스: 이동 거리만 적립하고, 필압은 _process가 시간으로 굴린다
+			# 마우스: 이동 거리만 적립하고, 필압은 _process가 시간으로 굴린다.
+			# **화면 픽셀 그대로 적립한다** — 필압은 손이 얼마나 빨리 움직였는가의 함수이고,
+			# 손 속도는 종이를 확대해도 변하지 않는다. 종이 좌표로 재면 확대할수록 굵어져 버린다
 			_moved_px += mm.relative.length()
-			_append_live(mm.position, _cur_pressure)
+			_append_live(_to_paper(mm.position), _cur_pressure)
 
 
 ## 마우스 필압 합성 — 그리는 중에만 돈다 (set_process 토글, TECH_SPEC §10).
@@ -360,14 +482,18 @@ func _begin_stroke(pos: Vector2) -> void:
 	_cur_pressure = 1.0                # 보통 속도의 필압에서 출발 — 툭 찍으면 1.0
 	_moved_px = 0.0
 	_live_line = InkStroke.new()
-	add_child(_live_line)
+	_ink_layer.add_child(_live_line)
 	_append_live(pos, _cur_pressure)
 	set_process(true)                  # 그리는 동안에만 시간을 돌린다
 
 
+## pos는 **종이 픽셀** (호출자가 _to_paper로 변환해 넘긴다)
 func _append_live(pos: Vector2, pressure: float) -> void:
 	var p := pos.clamp(Vector2.ZERO, size)
-	if not _live_points.is_empty() and _live_points[_live_points.size() - 1].distance_to(p) < MIN_PX_DIST:
+	# 최소 간격은 **화면 기준**으로 판정한다 — 확대하면 종이 좌표 간격이 그만큼 촘촘해져야
+	# 손이 움직인 만큼 점이 찍힌다 (확대의 목적이 정밀도인데 여기서 다시 뭉개면 의미가 없다)
+	var min_dist := MIN_PX_DIST / _zoom
+	if not _live_points.is_empty() and _live_points[_live_points.size() - 1].distance_to(p) < min_dist:
 		return
 	_live_points.append(p)
 	_live_pressures.append(pressure)
@@ -591,6 +717,8 @@ func undo_last() -> void:
 func clear_all() -> void:
 	_cancel_stroke()
 	_stamp_pending = {}
+	_panning = false
+	reset_view()      # 새 종이는 원래 크기로 편다 — 확대한 채로 다음 도안을 시작하지 않는다
 	for e in _entries:
 		var line := e.line as Line2D
 		if line != null:
@@ -669,6 +797,7 @@ func is_placing_stamp() -> bool:
 	return not _stamp_pending.is_empty()
 
 
+## pos_px는 **종이 픽셀** (_gui_input이 _to_paper로 변환해 넘긴다 — 확대해도 찍히는 자리가 맞다)
 func _place_stamp_at(pos_px: Vector2) -> void:
 	# 스탬프는 룬이다 — 진이 없으면 놓을 자리가 없다 (TECH_SPEC §6.2).
 	# RUNE 단계 = 룬을 채움 / ARROW 단계 = 기존 룬 교체 (교체는 순서 위반이 아니라 편집이다)
@@ -717,7 +846,7 @@ func _place_stamp_at(pos_px: Vector2) -> void:
 			"score": float(stamp.score),
 		},
 	}
-	add_child(entry.line)
+	_ink_layer.add_child(entry.line)
 	_entries.append(entry)
 	_rebuild_line(entry)
 	_reclassify_all()
