@@ -57,9 +57,13 @@ func _run() -> void:
 	_feed(canvas, _circle_pts(c, 0.22))
 	_check(_last_recog.size() == 3 and int(_last_recog[0]) == Enums.StrokeRole.CIRCLE,
 		"원 획 → recognition_result CIRCLE")
-	# 2. 꼬리
-	_feed(canvas, _line_pts(Vector2(0.73, 0.5), Vector2(0.86, 0.5)))
-	_check(int(_last_recog[0]) == Enums.StrokeRole.TAIL, "꼬리 획 → TAIL")
+	# 2. 작성 순서 강제 (TECH_SPEC §6.2) — 진 다음은 룬이다. 문양을 먼저 그으면 무효다.
+	# (v1.6에서 조준 꼬리가 폐지됐다 — 이 자리에 있던 TAIL 검사는 그때 죽은 계약이었다)
+	var before := int(canvas.get_summary().stroke_count)
+	_feed(canvas, _line_pts(c, c + Vector2(0.0, -0.38)))
+	_check(int(canvas.get_summary().stroke_count) == before,
+		"순서 위반(룬 차례에 문양) → 획 무효")
+	_check(canvas.get_stage() == Enums.DrawStage.RUNE, "단계는 여전히 룬")
 	# 3. 룬 (불△)
 	_feed(canvas, _triangle_pts(c, 0.10))
 	_check(int(_last_recog[0]) == Enums.StrokeRole.RUNE, "삼각 획 → RUNE")

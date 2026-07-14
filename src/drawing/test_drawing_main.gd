@@ -6,6 +6,9 @@ extends Node2D
 const DrawingCanvas := preload("res://src/drawing/drawing_canvas.gd")
 const DesignBuilder := preload("res://src/drawing/design_builder.gd")
 const StampLibrary := preload("res://src/drawing/stamp_library.gd")
+const DesignChecklist := preload("res://src/drawing/design_checklist.gd")
+const DesignBook := preload("res://src/drawing/design_book.gd")
+const Copy := preload("res://src/drawing/drawing_copy.gd")
 
 const PAPER_COLOR := Color(0.93, 0.89, 0.80)
 const BG_COLOR := Color(0.16, 0.13, 0.11)
@@ -15,7 +18,6 @@ const WARN_COLOR := Color(0.92, 0.45, 0.35)
 
 const ROLE_NAMES := {
 	Enums.StrokeRole.CIRCLE: "진(원)",
-	Enums.StrokeRole.TAIL: "조준 꼬리",
 	Enums.StrokeRole.RUNE: "룬",
 	Enums.StrokeRole.ARROW: "화살표",
 	Enums.StrokeRole.DECOR: "미인식(장식)",
@@ -25,7 +27,8 @@ var _canvas: Control
 var _lib := StampLibrary.new()
 var _design: SpellDesign = null
 
-var _status_label: Label
+var _checklist: VBoxContainer
+var _book: HBoxContainer
 var _recog_label: Label
 var _design_label: Label
 var _hint_label: Label
@@ -68,36 +71,49 @@ func _ready() -> void:
 	var w := 288.0
 	var title := _make_label(ui, Vector2(x, 4), Vector2(w, 14), "탁본 — 드로잉·인식 시험대", 11)
 	title.add_theme_color_override(&"font_color", Color(0.95, 0.85, 0.6))
-	_status_label = _make_label(ui, Vector2(x, 22), Vector2(w, 46), "", 10)
-	_recog_label = _make_label(ui, Vector2(x, 70), Vector2(w, 26), "최근 인식: —", 10)
-	_design_label = _make_label(ui, Vector2(x, 98), Vector2(w, 44), "", 10)
+	# 작성 체크리스트 — 진 → 룬 → 문양 + 완성 문구(4행).
+	# 순서가 강제되므로 지금 차례가 늘 보여야 하고, 해낼 때마다 ✓가 팝한다
+	_checklist = DesignChecklist.new()
+	_checklist.position = Vector2(x, 22)
+	_checklist.size = Vector2(w, 60)
+	ui.add_child(_checklist)
+	_checklist.bind(_canvas)
+
+	# 도안 책자 — 인식기가 실제로 매칭하는 템플릿을 그대로 보여 준다.
+	# 보고 따라 그리면 반드시 인식되므로, 인식 실패의 근본 완화책이기도 하다
+	_book = DesignBook.new()
+	_book.position = Vector2(x, 84)
+	_book.size = Vector2(w, 54)
+	ui.add_child(_book)
+
+	_recog_label = _make_label(ui, Vector2(x, 142), Vector2(w, 24), "최근 인식: —", 9)
+	_design_label = _make_label(ui, Vector2(x, 168), Vector2(w, 40), "", 9)
 
 	var btn_row := HBoxContainer.new()
-	btn_row.position = Vector2(x, 146)
-	btn_row.size = Vector2(w, 22)
+	btn_row.position = Vector2(x, 210)
+	btn_row.size = Vector2(w, 20)
 	ui.add_child(btn_row)
 	_add_button(btn_row, "자동보정", _on_autocorrect)
 	_add_button(btn_row, "스탬프 저장", _on_save_stamp)
 	_add_button(btn_row, "지우기", func() -> void: _canvas.clear_all())
 
-	_make_label(ui, Vector2(x, 172), Vector2(w, 12), "필체 라이브러리 (클릭 → 캔버스 클릭으로 배치)", 9)
+	_make_label(ui, Vector2(x, 234), Vector2(w, 11), "필체 라이브러리 (클릭 → 캔버스 클릭으로 배치)", 8)
 	_stamp_list = ItemList.new()
-	_stamp_list.position = Vector2(x, 186)
-	_stamp_list.size = Vector2(w, 54)
+	_stamp_list.position = Vector2(x, 246)
+	_stamp_list.size = Vector2(w, 40)
 	_stamp_list.add_theme_font_size_override(&"font_size", 9)
 	_stamp_list.item_selected.connect(_on_stamp_selected)
 	ui.add_child(_stamp_list)
 
-	_make_label(ui, Vector2(x, 244), Vector2(w, 12), "시험 발사 (방향·크기 미리보기 — 실발사는 모듈 B)", 9)
+	_make_label(ui, Vector2(x, 290), Vector2(w, 11), "시험 발사 (실발사는 모듈 B)", 8)
 	_trial = Control.new()
-	_trial.position = Vector2(x, 258)
-	_trial.size = Vector2(w, 94)
+	_trial.position = Vector2(x, 302)
+	_trial.size = Vector2(w, 50)
 	_trial.draw.connect(_draw_trial)
 	ui.add_child(_trial)
 
 	_hint_label = _make_label(ui, Vector2(12, 340), Vector2(620, 14), "", 9)
 	_set_default_hint()
-	_refresh_status(_canvas.get_summary())
 	_refresh_design_label()
 
 	# ── 종이 선택 + 잉크 게이지 (GDD §5 종이 등급 — 보유 종이만, 기본 = 최저 등급 자동)
@@ -165,36 +181,18 @@ func _on_stroke_classified(result: Dictionary) -> void:
 	_recog_label.text = text
 
 
-func _on_design_state_changed(design: SpellDesign, summary: Dictionary) -> void:
+func _on_design_state_changed(design: SpellDesign, _summary: Dictionary) -> void:
+	# 부품 상태 표시는 체크리스트가 맡는다 (캔버스 신호에 직접 물려 있다)
 	_design = design
-	_refresh_status(summary)
 	_refresh_design_label()
 	_trial.queue_redraw()
 
 
-func _refresh_status(summary: Dictionary) -> void:
-	var circle_text := "—"
-	if summary.get("has_circle", false):
-		circle_text = "조준진" if summary.get("has_tail", false) else "고정진"
-	var rune_text := "—"
-	if summary.get("has_rune", false):
-		rune_text = "%s (원시 %.2f)" % [
-			DesignBuilder.rune_name(int(summary.rune_type)),
-			float(summary.rune_accuracy_raw),
-		]
-	_status_label.text = "진: %s\n룬: %s\n화살표 %d개 · 장식 %d획 · 총 %d획" % [
-		circle_text, rune_text,
-		int(summary.get("arrow_count", 0)),
-		int(summary.get("extra_count", 0)),
-		int(summary.get("stroke_count", 0)),
-	]
-
-
 func _refresh_design_label() -> void:
 	if _design == null:
-		_design_label.text = "도안 미완성 — 진 1 + 룬 1 + 화살표 1+ 필요"
+		_design_label.text = Copy.INCOMPLETE
 		return
-	_design_label.text = "완성: %s\n정확도 %d%% · 잉크 %d · 마나 %.0f · 내구 %d/%d" % [
+	_design_label.text = "%s\n정확도 %d%% · 잉크 %d · 마나 %.0f · 내구 %d/%d" % [
 		_design.display_name,
 		roundi(_design.rune_accuracy * 100.0),
 		int(_design.ink_cost.get(&"ink_basic", 0)),
@@ -205,24 +203,24 @@ func _refresh_design_label() -> void:
 
 func _on_autocorrect() -> void:
 	if _canvas.autocorrect_rune():
-		_set_hint("자동보정: 룬을 템플릿 형태로 스냅 (정확도는 유지)")
+		_set_hint(Copy.AUTOCORRECT_OK)
 	else:
-		_set_hint("보정할 룬이 없습니다")
+		_set_hint(Copy.AUTOCORRECT_NONE)
 
 
 func _on_save_stamp() -> void:
 	var stamp: Dictionary = _canvas.save_rune_stamp()
 	if stamp.is_empty():
-		_set_hint("저장할 룬이 없습니다 — 먼저 룬을 그려 인식시키세요")
+		_set_hint(Copy.STAMP_NONE)
 		return
 	var idx := _lib.add(stamp)
 	_stamp_list.add_item(_lib.label(idx))
-	_set_hint("스탬프 저장됨 — 목록에서 클릭 후 캔버스를 클릭해 배치")
+	_set_hint(Copy.STAMP_SAVED)
 
 
 func _on_stamp_selected(index: int) -> void:
 	_canvas.begin_stamp_placement(_lib.get_stamp(index))
-	_set_hint("캔버스를 클릭해 스탬프 배치 (우클릭 = 취소) · 정확도는 저장 시점 값 보존")
+	_set_hint(Copy.STAMP_PLACE)
 
 
 func _on_stamp_placed() -> void:
@@ -232,14 +230,17 @@ func _on_stamp_placed() -> void:
 
 # ─────────────────────────── 종이 선택·잉크 게이지 (GDD §5) ───────────────────────────
 
-## 보유 종이 목록 갱신 — 현재 선택 종이는 소진돼도 목록에 남긴다 (편집 흐름 보존).
-## 미선택 상태에서 보유 종이가 생기면 최저 등급을 자동 선택한다 (비차단).
+## 보유 종이 목록 갱신.
+## 소진된 현재 종이는 **그리는 중일 때만** 목록에 남긴다 — 값은 이미 치렀으니 그 도안은
+## 끝까지 고쳐 그릴 수 있어야 한다. 반대로 캔버스가 비어 있으면 소진분을 걷어내고
+## 다음 등급으로 승격한다. 안 그러면 상급 종이를 쥐고도 ×0짜리에 고착돼 완성이 막힌다.
 func _refresh_paper_options() -> void:
+	var drawn := int(_canvas.get_summary().get("stroke_count", 0)) > 0
 	var defs: Array[ItemDef] = []
 	for id: StringName in Db.items:
 		var def: ItemDef = Db.items[id]
 		if def != null and def.kind == Enums.ItemKind.PAPER \
-				and (GameState.get_count(id) > 0 or id == _paper_id):
+				and (GameState.get_count(id) > 0 or (id == _paper_id and drawn)):
 			defs.append(def)
 	defs.sort_custom(func(a: ItemDef, b: ItemDef) -> bool: return a.grade < b.grade)
 	_paper_select.clear()
@@ -253,11 +254,13 @@ func _refresh_paper_options() -> void:
 		_paper_select.select(0)
 		_canvas.set_no_paper()
 		return
-	if _paper_id == StringName():
+	# 쓰던 종이가 목록에서 빠졌다(= 소진 + 캔버스가 빔) → 최저 등급으로 승격
+	var idx := _paper_ids.find(_paper_id)
+	if idx < 0:
 		_paper_select.select(0)
 		_on_paper_selected(0)
 	else:
-		_paper_select.select(maxi(_paper_ids.find(_paper_id), 0))
+		_paper_select.select(idx)
 
 
 func _on_paper_selected(index: int) -> void:
@@ -283,13 +286,15 @@ func _on_ink_state_changed(used: float, capacity: float) -> void:
 		WARN_COLOR if used > capacity * 0.85 else TEXT_COLOR)
 
 
-func _on_stroke_rejected(_reason: StringName) -> void:
-	_set_warn("잉크 상한 초과 — 획이 무효 처리되었습니다. 획을 지우면(우클릭) 잉크가 회복됩니다")
+## 거부는 스승의 목소리로. 순서 위반이면 "지금 무엇을 그려야 하는지",
+## 인식 실패면 "어느 룬에 얼마나 가까웠는지"를 숫자로 말해 준다
+func _on_stroke_rejected(reason: StringName) -> void:
+	_set_warn(Copy.reject_line(reason, _canvas.get_stage(), _canvas.get_last_reject()))
 
 
 func _on_completion_blocked(_reason: StringName) -> void:
-	_design_label.text = "종이가 없어 도안을 완성할 수 없습니다 — 종이를 확보하세요"
-	_set_warn("보유 종이 0장 — 그리기는 가능하지만 도안 완성은 차단됩니다")
+	_design_label.text = Copy.NO_PAPER
+	_set_warn(Copy.NO_PAPER)
 
 
 func _set_hint(text: String) -> void:
@@ -303,7 +308,8 @@ func _set_warn(text: String) -> void:
 
 
 func _set_default_hint() -> void:
-	_set_hint("좌클릭 드래그 = 획 · 우클릭/Ctrl+Z = 취소 · 원 → (꼬리) → 룬 → 화살표 순서 추천")
+	# 순서 안내는 체크리스트가 상시 보여 준다 — 힌트는 조작법만
+	_set_hint(Copy.CONTROLS)
 
 
 # ─────────────────────────── 시험 발사 시각화 ───────────────────────────
@@ -312,7 +318,7 @@ func _draw_trial() -> void:
 	_trial.draw_rect(Rect2(Vector2.ZERO, _trial.size), Color(0.08, 0.07, 0.06, 0.65))
 	var font := ThemeDB.fallback_font
 	if _design == null:
-		_trial.draw_string(font, Vector2(8, 18), "도안 미완성", HORIZONTAL_ALIGNMENT_LEFT, -1, 9,
+		_trial.draw_string(font, Vector2(8, 18), Copy.INCOMPLETE, HORIZONTAL_ALIGNMENT_LEFT, -1, 9,
 			Color(0.8, 0.75, 0.7, 0.6))
 		return
 	var c := _trial.size * 0.5

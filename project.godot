@@ -29,7 +29,12 @@ window/size/viewport_width=640
 window/size/viewport_height=360
 window/size/window_width_override=1280
 window/size/window_height_override=720
-window/stretch/mode="viewport"
+; "viewport"(640×360 버퍼에 그린 뒤 확대)는 **먹선을 픽셀아트로 뭉갠다** — 안티에일리어싱된
+; 가장자리가 4×4 덩어리가 되어 자글거린다. GDD §10.5의 "매끄러운 먹선" 아이덴티티와 원리적으로 충돌.
+; "canvas_items"는 2D를 네이티브 해상도로 렌더하고 캔버스만 스케일한다 —
+; 먹선·글씨는 진짜 고해상도로 매끄럽고, 픽셀아트는 Nearest + 정수 배율로 또렷함을 유지한다.
+window/stretch/mode="canvas_items"
+window/stretch/scale_mode="integer"
 
 [editor_plugins]
 
@@ -131,3 +136,7 @@ toggle_fullscreen={
 textures/canvas_textures/default_texture_filter=0
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
+; canvas_items 스트레치에서 픽셀아트가 반픽셀에 걸려 흔들리지 않게 스냅한다.
+; 먹선(Line2D)은 정점이 스냅돼도 고해상도 렌더라 여전히 매끄럽다.
+2d/snap/snap_2d_transforms_to_pixel=true
+2d/snap/snap_2d_vertices_to_pixel=true

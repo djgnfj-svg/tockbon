@@ -4,6 +4,7 @@ extends Area2D
 ## 적 노드 계약: 그룹 "enemies" + take_hit(damage, rune_type, status, status_power).
 
 const SheetLib := preload("res://src/core/sheet_lib.gd")
+const InkRender := preload("res://src/core/ink_render.gd")
 
 const RUNE_COLORS: Dictionary = {
 	Enums.RuneType.FIRE: Color(1.0, 0.55, 0.1),    # 불 = 주황
@@ -45,16 +46,37 @@ func _ready() -> void:
 	body_entered.connect(_on_body_entered)
 	area_entered.connect(_on_area_entered)
 
+## p_path: 그린 화살표 획 (ArrowData.path — 시작점=원점·+X=발사방향, 캔버스 단위).
+## p_pressures: 짝을 이루는 필압 (ArrowData.path_pressures). 비면 균일 굵기 — 마우스로 그린 획.
+## p_path가 2점 미만이면 기존 스프라이트/폴리곤 비주얼로 폴백 (샘플 도안·구세이브 호환).
 func setup(p_damage: float, p_rune_type: int, p_status: int, p_status_power: float,
-		p_speed: float, p_angle: float, p_size_scale: float) -> void:
+		p_speed: float, p_angle: float, p_size_scale: float,
+		p_path: PackedVector2Array = PackedVector2Array(),
+		p_pressures: PackedFloat32Array = PackedFloat32Array()) -> void:
 	damage = p_damage
 	rune_type = p_rune_type
 	status = p_status
 	status_power = p_status_power
 	direction_angle = p_angle
 	rotation = p_angle
-	scale = Vector2.ONE * p_size_scale
 	_velocity = Vector2.RIGHT.rotated(p_angle) * p_speed
+
+	# 머리를 원점에 맞추는 평행이동은 core가 한다 (TECH_SPEC §4.4 tail_line).
+	# magnitude는 굵기(width_mult)로만 — 길이·모양은 플레이어가 그린 그대로다.
+	var ink := InkRender.tail_line(p_path, p_pressures, InkRender.unit_px(_balance), {
+		"rune_type": p_rune_type,
+		"bright": true,
+		"width_mult": p_size_scale,
+	})
+	if ink != null:
+		# 먹선은 그린 크기가 곧 크기 — 루트 scale로 한 번 더 키우면 이중 적용된다.
+		# 히트박스만 기존 magnitude 배율을 그대로 유지 (Shape 노드 스케일. 형상 리소스는 공유물이라 불변)
+		($Visual as Polygon2D).visible = false
+		($Shape as CollisionShape2D).scale = Vector2.ONE * p_size_scale
+		add_child(ink)
+		return
+
+	scale = Vector2.ONE * p_size_scale
 	var visual := $Visual as Polygon2D
 	if _ensure_shared_frames():
 		visual.visible = false

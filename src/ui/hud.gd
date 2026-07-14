@@ -3,10 +3,17 @@ extends Control
 ## GameState/Clock 폴링 + EventBus 구독만 — 게임 로직 없음 (TECH_SPEC §10).
 
 const InkStyle := preload("res://src/ui/ink_style.gd")
+const DesignThumb := preload("res://src/core/design_thumb.gd")
 
 const FLASH_OK := Color(1.0, 0.9, 0.55)
 const FLASH_FAIL := Color(0.9, 0.35, 0.25)
 const FLASH_RESTORE_SEC := 0.45
+
+## 슬롯 칸 — 먹선 썸네일(왼쪽) + 이름·내구·마나(오른쪽). 4칸이 SlotBar 폭(402)에 들어간다
+const SLOT_MIN := Vector2(96, 44)
+const SLOT_THUMB := Vector2(32, 32)
+## 32px 칸에서 기본 굵기는 뭉갠다 — 절반으로
+const SLOT_THUMB_WIDTH := 0.5
 
 @onready var _hp_bar: ProgressBar = %HpBar
 @onready var _hp_text: Label = %HpText
@@ -20,6 +27,7 @@ const FLASH_RESTORE_SEC := 0.45
 ## 마지막으로 방송된 페이즈 — Clock 재조회 대신 시그널 인자를 신뢰한다
 var _phase: int = Enums.Phase.MORNING
 var _slot_panels: Array[PanelContainer] = []
+var _slot_thumbs: Array[Control] = []
 var _slot_name_labels: Array[Label] = []
 var _slot_dura_labels: Array[Label] = []
 var _slot_mana_labels: Array[Label] = []
@@ -74,25 +82,41 @@ func _build_slots() -> void:
 	for i in GameState.EQUIP_SLOTS:
 		var panel := PanelContainer.new()
 		panel.name = "Slot%d" % (i + 1)
-		panel.custom_minimum_size = Vector2(78, 46)
+		panel.custom_minimum_size = SLOT_MIN
 		panel.add_theme_stylebox_override("panel", InkStyle.make_panel(
 			Color(InkStyle.PAPER.r, InkStyle.PAPER.g, InkStyle.PAPER.b, 0.88),
 			InkStyle.INK, 1, 3, 5, 3))
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 4)
+
+		var thumb := DesignThumb.new()
+		thumb.name = "Thumb"
+		thumb.custom_minimum_size = SLOT_THUMB
+		thumb.width_mult = SLOT_THUMB_WIDTH
+		# strokes 없는 도안(샘플·구세이브)은 룬 표기로 — core는 폴백 모양을 모른다
+		thumb.fallback_builder = InkStyle.make_design_fallback
+		thumb.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		row.add_child(thumb)
+
 		var vb := VBoxContainer.new()
+		vb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		vb.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		vb.add_theme_constant_override("separation", 0)
 		var name_l := InkStyle.make_label("", 9)
-		name_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		name_l.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 		var dura_l := InkStyle.make_label("", 8, InkStyle.INK_SOFT)
-		dura_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		dura_l.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 		var mana_l := InkStyle.make_label("", 8, InkStyle.INK_SOFT)
-		mana_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		mana_l.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 		vb.add_child(name_l)
 		vb.add_child(dura_l)
 		vb.add_child(mana_l)
-		panel.add_child(vb)
+		row.add_child(vb)
+
+		panel.add_child(row)
 		_slot_bar.add_child(panel)
 		_slot_panels.append(panel)
+		_slot_thumbs.append(thumb)
 		_slot_name_labels.append(name_l)
 		_slot_dura_labels.append(dura_l)
 		_slot_mana_labels.append(mana_l)
@@ -107,6 +131,7 @@ func _refresh_slots() -> void:
 			continue
 		_slot_cache_design[i] = d
 		_slot_cache_dura[i] = dura
+		_slot_thumbs[i].call("set_design", d)
 		if d == null:
 			_slot_name_labels[i].text = "%d · 비어 있음" % (i + 1)
 			_slot_name_labels[i].add_theme_color_override("font_color", InkStyle.INK_FAINT)

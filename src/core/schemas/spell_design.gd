@@ -5,11 +5,14 @@ extends Resource
 
 @export var id: StringName
 @export var display_name: String = ""
-@export var circle_type: Enums.CircleType = Enums.CircleType.FIXED
+## v1.5: 진은 한 종류다 (꼬리·고정진 폐지, GDD §4.1) — 새 도안은 전부 AIMED.
+## FIXED는 **구세이브 호환용으로만** 남아 있다 (그 도안은 그린 절대각 그대로 발사된다)
+@export var circle_type: Enums.CircleType = Enums.CircleType.AIMED
 ## 정규화 0..1 (캔버스 대비 원 크기)
 @export var circle_radius: float = 0.5
-## 조준진 꼬리 방향(rad). FIXED면 무시
-@export var aim_axis: float = 0.0
+## 도안의 기준축(rad) — 발사 시 이 축이 에임 방향과 일치하도록 도안 전체가 회전한다.
+## v1.5: **항상 -PI/2 (캔버스 위쪽 = 앞)**. 종이 위쪽을 향해 그린 화살표가 마우스 방향으로 나간다
+@export var aim_axis: float = -PI / 2.0
 @export var rune_type: Enums.RuneType = Enums.RuneType.FIRE
 ## 0..1 인식 정확도 → 위력 보정. 스탬프 사용 시 저장 시점 값 보존 (GDD v1.3)
 @export var rune_accuracy: float = 1.0

@@ -7,7 +7,10 @@ static func nova_fire() -> SpellDesign:
 	var d := SpellDesign.new()
 	d.id = &"sample_nova_fire"
 	d.display_name = "샘플: 불꽃 노바"
-	d.circle_type = Enums.CircleType.FIXED
+	# v1.5: 진은 한 종류다 — 전부 AIMED, 기준축 = 캔버스 위쪽 (GDD §4.1).
+	# 노바는 대칭이라 통째로 회전해도 노바다 — 옛 고정진의 역할이 그대로 흡수된다
+	d.circle_type = Enums.CircleType.AIMED
+	d.aim_axis = -PI / 2.0
 	d.circle_radius = 0.7
 	d.rune_type = Enums.RuneType.FIRE
 	d.rune_accuracy = 0.9

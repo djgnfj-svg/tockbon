@@ -9,9 +9,10 @@ const CURSOR_HOTSPOT := Vector2(2, 28)
 func _ready() -> void:
 	super._ready()
 	var back := Button.new()
-	back.text = "거점으로 돌아가기 (ESC)"
+	back.text = "거점으로 (ESC)"
 	back.add_theme_font_size_override(&"font_size", 10)
-	back.position = Vector2(12, 340)
+	# 하단 힌트 라벨(12, 340)과 겹치면 스승의 경고문이 버튼에 가려진다 — 우상단으로 뺀다
+	back.position = Vector2(524, 1)
 	back.pressed.connect(_go_base)
 	$UI.add_child(back)
 	if ResourceLoader.exists(CURSOR_BRUSH_PATH):

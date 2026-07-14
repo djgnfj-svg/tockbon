@@ -17,7 +17,19 @@ var hit_log: Array[Dictionary] = []
 var _bus = null
 var _gs = null
 var _db = null
+var _ink = null  # src/core/ink_render.gd — 오토로드가 아니므로 런타임 load()
 var _dummy_scene: PackedScene = null
+
+## 그린 화살표 획 (ArrowData.path 계약: 시작=원점, +X=발사방향, 캔버스 단위).
+## 살짝 휜 4점 — 머리는 (0.2, 0)이므로 월드 길이 = 0.2 × unit_px
+func _arrow_path() -> PackedVector2Array:
+	return PackedVector2Array([
+		Vector2(0.0, 0.0), Vector2(0.06, -0.02), Vector2(0.13, -0.015), Vector2(0.2, 0.0),
+	])
+
+## path와 같은 리샘플 인덱스의 필압 (ArrowData.path_pressures) — 눌렀다 떼는 획
+func _arrow_pressures() -> PackedFloat32Array:
+	return PackedFloat32Array([0.3, 0.9, 0.7, 0.2])
 
 func _init() -> void:
 	_run()
@@ -32,6 +44,7 @@ func _run() -> void:
 	_bus = root.get_node("/root/EventBus")
 	_gs = root.get_node("/root/GameState")
 	_db = root.get_node("/root/Db")
+	_ink = load("res://src/core/ink_render.gd")
 
 	var system_scene := load("res://src/spell/spell_system.tscn") as PackedScene
 	_dummy_scene = load("res://src/spell/dummy_target.tscn") as PackedScene
@@ -46,10 +59,14 @@ func _run() -> void:
 		hit_log.append({"enemy": enemy, "damage": damage, "rune_type": rune_type}))
 
 	await _test_nova(system)
+	await _test_fixed_legacy(system)
 	await _test_shotgun(system)
 	await _test_lance(system)
 	await _test_fail_reasons(system)
 	await _test_dummy_hit(system)
+	await _test_ink_projectile(system)
+	await _test_cast_circle(system)
+	await _test_no_strokes_fallback(system)
 
 	if failures == 0:
 		print("TEST_SPELL_OK — 전 항목 통과")
@@ -59,13 +76,44 @@ func _run() -> void:
 
 # ── 개별 테스트 ──────────────────────────────────────────────
 
+## 진이 한 종류(AIMED)가 된 근거를 그대로 테스트로 만든다 (GDD v1.5 §4.1):
+## **대칭 노바는 통째로 회전해도 노바다** — 그래서 고정진 없이도 노바가 성립한다.
+## 인덱스별 절대각이 아니라 "45도 균등 간격이 에임과 무관하게 유지되는가"를 검사한다.
 func _test_nova(system) -> void:
-	print("[1] 노바 (FIXED) — 8발, 절대각 0/45/../315도")
+	print("[1] 노바 — 8발 45도 균등. 에임이 바뀌면 통째로 돌 뿐 간격은 불변")
+	for aim_deg: float in [0.0, 90.0, 137.0]:
+		_gs.restore_mana_full()
+		var design := SampleDesigns.nova_fire()
+		var aim := Vector2.RIGHT.rotated(deg_to_rad(aim_deg))
+		_bus.cast_requested.emit(design, Vector2(100, 100), aim)
+		var projs := _projectiles(system)
+		_check(projs.size() == 8, "에임 %.0f도 — 투사체 8개 (실제 %d)" % [aim_deg, projs.size()])
+		if projs.size() == 8:
+			_check(_gaps_uniform(projs, 8), "에임 %.0f도 — 8발이 45도 균등 간격" % aim_deg)
+			# 도안 전체가 에임을 따라 돈다 — 회전량은 투사체·마법진이 공유하는 aim - aim_axis
+			_check(_has_angle(projs, aim.angle() - design.aim_axis),
+				"에임 %.0f도 — 도안이 aim - aim_axis 만큼 통째 회전" % aim_deg)
+		await _clear_projectiles(system)
+
+	# 내구·마나 차감은 에임과 무관 — 1회 캐스팅으로 확인
 	executed_log.clear()
 	_gs.restore_mana_full()
+	var d := SampleDesigns.nova_fire()
+	var durability_before := d.durability
+	_bus.cast_requested.emit(d, Vector2(100, 100), Vector2.RIGHT)
+	_check(d.durability == durability_before - 1,
+		"내구 1 차감 (%d→%d)" % [durability_before, d.durability])
+	_check(executed_log.size() == 1 and is_equal_approx(float(executed_log[0]["mana"]), d.mana_cost),
+		"cast_executed 1회 (mana=%.0f)" % d.mana_cost)
+	await _clear_projectiles(system)
+
+## FIXED는 v1.5에서 폐지됐지만 **구세이브가 들고 있는 값**이라 발사 경로는 살아 있어야 한다.
+func _test_fixed_legacy(system) -> void:
+	print("[1b] 구세이브 FIXED — 에임을 무시하고 절대각 그대로 (호환 경로 회귀 방지)")
+	_gs.restore_mana_full()
 	var design := SampleDesigns.nova_fire()
-	var durability_before := design.durability
-	_bus.cast_requested.emit(design, Vector2(100, 100), Vector2.RIGHT)
+	design.circle_type = Enums.CircleType.FIXED
+	_bus.cast_requested.emit(design, Vector2.ZERO, Vector2(0, 1))  # 에임 90도 — 무시돼야 한다
 	var projs := _projectiles(system)
 	_check(projs.size() == 8, "투사체 8개 (실제 %d)" % projs.size())
 	var angles_ok := projs.size() == 8
@@ -74,11 +122,7 @@ func _test_nova(system) -> void:
 		if not _angle_close(projs[i].direction_angle, expected):
 			angles_ok = false
 			print("    각도[%d]=%.2f도, 기대=%.2f도" % [i, rad_to_deg(projs[i].direction_angle), rad_to_deg(expected)])
-	_check(angles_ok, "8발 각도 전부 ±1도 이내")
-	_check(design.durability == durability_before - 1,
-		"내구 1 차감 (%d→%d)" % [durability_before, design.durability])
-	_check(executed_log.size() == 1 and is_equal_approx(float(executed_log[0]["mana"]), design.mana_cost),
-		"cast_executed 1회 (mana=%.0f)" % design.mana_cost)
+	_check(angles_ok, "에임 90도여도 절대각 0/45/../315 유지")
 	await _clear_projectiles(system)
 
 func _test_shotgun(system) -> void:
@@ -163,7 +207,163 @@ func _test_dummy_hit(system) -> void:
 	dummy.queue_free()
 	await _clear_projectiles(system)
 
+func _test_ink_projectile(system) -> void:
+	print("[6] 먹선 투사체 — 그린 획이 그대로 탄이 된다 (TECH_SPEC §4.4)")
+	_gs.restore_mana_full()
+	var path := _arrow_path()
+	var design := _ink_design(Enums.CircleType.FIXED, 0.0, 0.5)
+	_bus.cast_requested.emit(design, Vector2.ZERO, Vector2.RIGHT)
+	var projs := _projectiles(system)
+	_check(projs.size() == 1, "투사체 1개 (실제 %d)" % projs.size())
+	if projs.size() == 1:
+		var proj = projs[0]
+		var line: Line2D = _find_line(proj)
+		_check(line != null, "투사체에 Line2D 먹선 자식 생성")
+		if line != null:
+			_check(line.points.size() == path.size(),
+				"점 개수 %d = 그린 획 %d" % [line.points.size(), path.size()])
+			var head: Vector2 = line.points[line.points.size() - 1]
+			_check(head.length() < 0.01, "머리(마지막 점) = 노드 원점 (오차 %.4fpx)" % head.length())
+			var px: float = _ink.unit_px(system.balance)
+			var expected_len: float = path[path.size() - 1].x * px
+			var tail_len: float = line.points[0].length()
+			_check(absf(tail_len - expected_len) < 0.01,
+				"꼬리 길이 %.1fpx = 그린 길이 × unit_px(%.0f) = %.1fpx" % [tail_len, px, expected_len])
+			_check(line.points[0].x < 0.0, "획이 머리 뒤로 끌린다 (꼬리 x=%.1f < 0)" % line.points[0].x)
+			# 붓을 누른 그대로 날아간다 — 진에만 붓맛이 있고 탄에는 없는 비대칭 방지
+			_check(line.width_curve != null, "필압 → width_curve 배선됨 (굵기 변화 보존)")
+		# 먹선은 그린 크기가 곧 크기 — 루트 scale 이중 적용 금지. 히트박스만 기존 배율 유지
+		var size_scale: float = lerpf(system.balance.magnitude_size_min,
+			system.balance.magnitude_size_max, 0.5)
+		_check(proj.scale.is_equal_approx(Vector2.ONE),
+			"루트 scale 미적용 (실제 %.2f — 먹선 이중 확대 방지)" % proj.scale.x)
+		_check(is_equal_approx(proj.get_node("Shape").scale.x, size_scale),
+			"히트박스는 magnitude 배율 유지 (%.2f)" % size_scale)
+		_check(not proj.get_node("Visual").visible, "기존 폴리곤 비주얼 숨김")
+	await _clear_projectiles(system)
+
+	# 마우스로 그린 획 — path는 있지만 필압이 없다. 균일 굵기로 폴백하고 크래시 없어야 한다
+	_gs.restore_mana_full()
+	var no_press := _ink_design(Enums.CircleType.FIXED, 0.0, 0.5, false)
+	_bus.cast_requested.emit(no_press, Vector2.ZERO, Vector2.RIGHT)
+	var np := _projectiles(system)
+	_check(np.size() == 1, "필압 없는 path도 발사됨 (실제 %d)" % np.size())
+	if np.size() == 1:
+		var nline: Line2D = _find_line(np[0])
+		_check(nline != null, "필압 없어도 먹선은 그려진다")
+		if nline != null:
+			_check(nline.width_curve == null, "필압 없으면 균일 굵기 폴백 (width_curve null)")
+			_check(nline.points[nline.points.size() - 1].length() < 0.01, "머리 오프셋은 그대로 원점")
+	await _clear_projectiles(system)
+
+func _test_cast_circle(system) -> void:
+	print("[7] 캐스팅 마법진 — 발밑에 내가 그린 진이 펼쳐졌다 사라진다")
+	_gs.restore_mana_full()
+	var aim := Vector2(0, 1)
+	var aim_axis := 0.4
+	var origin := Vector2(64, 32)
+	var design := _ink_design(Enums.CircleType.AIMED, aim_axis, 0.5)
+	_bus.cast_requested.emit(design, origin, aim)
+	var circle = _cast_circle(system)
+	_check(circle != null, "연출 노드 생성됨")
+	if circle != null:
+		_check(circle.global_position.is_equal_approx(origin),
+			"진 중심 = 캐스팅 원점 %s (실제 %s)" % [origin, circle.global_position])
+		var expected_rot: float = aim.angle() - aim_axis
+		_check(_angle_close(circle.rotation, expected_rot),
+			"AIMED rotation = aim_angle - aim_axis = %.1f도 (실제 %.1f도)"
+				% [rad_to_deg(expected_rot), rad_to_deg(circle.rotation)])
+		_check(circle.z_index < 0, "z_index %d — 지형 위·플레이어 아래" % circle.z_index)
+		_check(not (circle is CollisionObject2D), "충돌 없는 순수 비주얼")
+		# build_design 기본 필터: 화살표는 진에 남지 않는다 (투사체로 날아가므로)
+		_check(_count_lines(circle) == 1,
+			"진 획만 렌더 — 화살표 획 제외 (Line2D %d개)" % _count_lines(circle))
+	await create_timer(0.8).timeout  # 연출 총 0.4초
+	_check(_cast_circle(system) == null, "연출 종료 후 자동 소멸")
+	await _clear_projectiles(system)
+
+	_gs.restore_mana_full()
+	var fixed := _ink_design(Enums.CircleType.FIXED, 0.0, 0.5)
+	_bus.cast_requested.emit(fixed, Vector2.ZERO, Vector2(0, 1))
+	var fixed_circle = _cast_circle(system)
+	_check(fixed_circle != null and is_zero_approx(fixed_circle.rotation),
+		"FIXED 진은 에임과 무관하게 rotation 0")
+	await _clear_projectiles(system)
+
+func _test_no_strokes_fallback(system) -> void:
+	print("[8] 폴백 — strokes·path 없는 도안 (샘플·구세이브 회귀 방지)")
+	_gs.restore_mana_full()
+	var design := SampleDesigns.aimed_lance_water()  # strokes 없음, arrows[].path 비어 있음
+	_bus.cast_requested.emit(design, Vector2.ZERO, Vector2.RIGHT)
+	_check(_cast_circle(system) == null, "strokes 없으면 마법진 조용히 스킵 (크래시 없음)")
+	var projs := _projectiles(system)
+	_check(projs.size() == 1, "폴백 투사체 정상 발사 (실제 %d)" % projs.size())
+	if projs.size() == 1:
+		_check(_find_line(projs[0]) == null, "path 없으면 먹선 없음 — 기존 스프라이트/폴리곤")
+		_check(projs[0].scale.x > 1.0,
+			"폴백은 기존 magnitude 크기 배율 유지 (scale=%.2f)" % projs[0].scale.x)
+	await _clear_projectiles(system)
+
 # ── 헬퍼 ─────────────────────────────────────────────────────
+
+## 모듈 A가 실제로 만드는 형태의 도안 — strokes(원본 획) + arrows[].path·path_pressures
+## with_pressures=false → 마우스로 그린 획 (필압 없음) 재현
+func _ink_design(circle_type: int, aim_axis: float, magnitude: float,
+		with_pressures: bool = true) -> SpellDesign:
+	var d := SpellDesign.new()
+	d.id = &"test_ink_design"
+	d.display_name = "테스트: 먹선 도안"
+	d.circle_type = circle_type
+	d.circle_radius = 0.6
+	d.aim_axis = aim_axis
+	d.rune_type = Enums.RuneType.FIRE
+	d.rune_accuracy = 0.9
+	d.mana_cost = 10.0
+	d.durability_max = 10
+	d.durability = 10
+
+	var circle := StrokeData.new()
+	circle.role = Enums.StrokeRole.CIRCLE
+	var cpts := PackedVector2Array()
+	for i in range(16):
+		cpts.append(Vector2(0.5, 0.5) + Vector2.RIGHT.rotated(TAU * float(i) / 16.0) * 0.3)
+	circle.points = cpts
+	d.strokes.append(circle)
+
+	# 화살표 획도 strokes에 남는다 — build_design이 제외하는지 검증하기 위해 일부러 넣는다
+	var arrow_stroke := StrokeData.new()
+	arrow_stroke.role = Enums.StrokeRole.ARROW
+	arrow_stroke.points = _arrow_path()
+	d.strokes.append(arrow_stroke)
+
+	var a := ArrowData.new()
+	a.direction = 0.0
+	a.magnitude = magnitude
+	a.origin = Vector2.ZERO
+	a.path = _arrow_path()
+	if with_pressures:
+		a.path_pressures = _arrow_pressures()
+	d.arrows.append(a)
+	return d
+
+func _find_line(node: Node) -> Line2D:
+	for child in node.get_children():
+		if child is Line2D:
+			return child
+	return null
+
+func _count_lines(node: Node) -> int:
+	var n := 0
+	for child in node.get_children():
+		if child is Line2D:
+			n += 1
+	return n
+
+func _cast_circle(system):
+	for child in system.get_children():
+		if child.name == "CastCircle" and not child.is_queued_for_deletion():
+			return child
+	return null
 
 func _check(cond: bool, label: String) -> void:
 	if cond:
@@ -175,6 +375,28 @@ func _check(cond: bool, label: String) -> void:
 func _angle_close(a: float, b: float) -> bool:
 	return absf(wrapf(a - b, -PI, PI)) <= ANGLE_TOL_RAD
 
+## 발사각을 정렬해 인접 간격이 전부 TAU/n인지 — "통째로 회전해도 노바"의 형식적 정의.
+## 각도 집합 전체가 회전해도 참이므로 에임에 의존하지 않는다.
+func _gaps_uniform(projs: Array, n: int) -> bool:
+	var angles: Array[float] = []
+	for p in projs:
+		angles.append(wrapf(p.direction_angle, 0.0, TAU))
+	angles.sort()
+	var expected_gap := TAU / float(n)
+	var ok := true
+	for i in range(n):
+		var gap := wrapf(angles[(i + 1) % n] - angles[i], 0.0, TAU)
+		if absf(gap - expected_gap) > ANGLE_TOL_RAD:
+			ok = false
+			print("    간격[%d]=%.2f도, 기대=%.2f도" % [i, rad_to_deg(gap), rad_to_deg(expected_gap)])
+	return ok
+
+func _has_angle(projs: Array, angle: float) -> bool:
+	for p in projs:
+		if _angle_close(p.direction_angle, angle):
+			return true
+	return false
+
 func _projectiles(system) -> Array:
 	var out := []
 	for child in system.get_children():
@@ -182,7 +404,12 @@ func _projectiles(system) -> Array:
 			out.append(child)
 	return out
 
+## 투사체 + 마법진 연출 노드까지 정리 — 연출은 0.4초 살아 있으므로
+## 치우지 않으면 다음 테스트가 이전 진을 주워 온다
 func _clear_projectiles(system) -> void:
 	for p in _projectiles(system):
 		p.queue_free()
+	for child in system.get_children():
+		if child.name == "CastCircle":
+			child.queue_free()
 	await process_frame

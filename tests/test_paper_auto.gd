@@ -119,29 +119,39 @@ func _test_canvas(gs: Node, bus: Node, balance: BalanceData, papers: Dictionary)
 	var p2: ItemDef = papers[2]
 	var p3: ItemDef = papers[3]
 
-	# ── 잉크 상한: 긴 획(길이 0.9 ≈ 잉크 9) — paper_1(상한 20)은 3획째 무효, 지우면 회복
+	# ── 잉크 상한 (TECH_SPEC §4.1) — 반드시 **작성 순서 안에서** 검사한다 (진 → 룬 → 문양).
+	# 순서를 어긴 획은 상한을 따지기도 전에 거부되므로(§6.2), 진·룬을 먼저 앉힌 뒤
+	# 문양으로 먹을 채워 상한에 부딪히게 한다. (세션 7의 순서 강제 이후 이 테스트가 낡아
+	# 진 없이 가로줄만 긋고 있었다 — 그래서 8건이 조용히 깨져 있었다.)
+	var c := Vector2(0.5, 0.5)
 	canvas.set_paper(p1.id, p1.grade, p1.params)
-	_feed(canvas, _line_pts(Vector2(0.05, 0.3), Vector2(0.95, 0.3)))
-	_feed(canvas, _line_pts(Vector2(0.05, 0.5), Vector2(0.95, 0.5)))
-	_check(_rejected == 0 and int(canvas.get_summary().stroke_count) == 2, "paper_1 — 상한 내 2획 허용")
+	_feed(canvas, _circle_pts(c, 0.22))
+	_feed(canvas, _triangle_pts(c, 0.10))
+	_check(_rejected == 0 and int(canvas.get_summary().stroke_count) == 2, "진+룬 2획 허용")
 	var used2: float = canvas.get_ink_used()
-	_check(used2 > 0.0 and used2 <= float(p1.params.ink_capacity), "게이지: 0 < 사용량 ≤ 상한")
-	_feed(canvas, _line_pts(Vector2(0.05, 0.7), Vector2(0.95, 0.7)))
-	_check(_rejected == 1, "초과 획 무효 — stroke_rejected 발신")
-	_check(int(canvas.get_summary().stroke_count) == 2, "초과 획은 엔트리 미추가")
-	_check(is_equal_approx(canvas.get_ink_used(), used2), "초과 획은 사용량 불변")
-	canvas.undo_last()
-	_check(canvas.get_ink_used() < used2, "획 삭제 → 잉크 회복")
-	_feed(canvas, _line_pts(Vector2(0.05, 0.7), Vector2(0.95, 0.7)))
-	_check(_rejected == 1 and int(canvas.get_summary().stroke_count) == 2, "회복 후 같은 획 허용")
+	var cap1: float = float(p1.params.ink_capacity)
+	_check(used2 > 0.0 and used2 <= cap1, "게이지: 0 < 사용량 ≤ 상한")
 
-	# ── 등급별 상한 차이: 4획(≈36)이 paper_3(48)에서는 전부 허용
-	canvas.set_paper(p3.id, p3.grade, p3.params)
+	# 문양을 부채꼴로 여러 획 — paper_1의 남은 먹으로는 다 못 긋는다
 	for i in 4:
-		var y := 0.15 + 0.2 * float(i)
-		_feed(canvas, _line_pts(Vector2(0.05, y), Vector2(0.95, y)))
-	_check(_rejected == 1 and int(canvas.get_summary().stroke_count) == 4,
-		"paper_3 — 같은 4획 전부 허용 (상한 차이)")
+		_feed(canvas, _arrow_at(c, -PI / 2.0 + 0.4 * float(i), 0.42))
+	_check(_rejected >= 1, "먹이 다하면 획이 무효 — stroke_rejected 발신")
+	_check(canvas.get_ink_used() <= cap1, "사용량은 상한을 넘지 않는다")
+	var at_cap: float = canvas.get_ink_used()
+	var count_at_cap: int = int(canvas.get_summary().stroke_count)
+	canvas.undo_last()
+	_check(canvas.get_ink_used() < at_cap, "획 삭제 → 잉크 회복")
+	_check(int(canvas.get_summary().stroke_count) == count_at_cap - 1, "삭제분만큼 획도 준다")
+
+	# ── 등급별 상한 차이: paper_1이 못 받던 같은 문양 4획을 paper_3(상한 48)는 전부 받는다
+	var rejected_before := _rejected
+	canvas.set_paper(p3.id, p3.grade, p3.params)      # set_paper는 캔버스를 비운다
+	_feed(canvas, _circle_pts(c, 0.22))
+	_feed(canvas, _triangle_pts(c, 0.10))
+	for i in 4:
+		_feed(canvas, _arrow_at(c, -PI / 2.0 + 0.4 * float(i), 0.42))
+	_check(_rejected == rejected_before, "paper_3 — 같은 문양 4획 전부 허용 (상한 차이)")
+	_check(int(canvas.get_summary().stroke_count) == 6, "진+룬+문양 4 = 6획")
 
 	# ── 완성 시 종이 1장 소모 (paper_2 — 표준 도안이 상한 안)
 	var before: int = int(gs.call(&"get_count", p2.id))
@@ -180,24 +190,29 @@ func _test_canvas(gs: Node, bus: Node, balance: BalanceData, papers: Dictionary)
 	_check(_created == 3, "종이 재획득 → 다음 획에서 완성")
 	_check(int(gs.call(&"get_count", p2.id)) == before, "재획득분 소모")
 
-	# ── 종이 미선택(set_no_paper): 상한 없음, 완성만 차단
+	# ── 종이 미선택(set_no_paper): 상한 없음(먹이 무한), 완성만 차단
 	var blocked_before := _blocked
-	canvas.set_no_paper()
-	for i in 3:
-		var y := 0.15 + 0.25 * float(i)
-		_feed(canvas, _line_pts(Vector2(0.05, y), Vector2(0.95, y)))
-	_check(_rejected == 1, "미선택 — 잉크 상한 없음(무효 없음)")
-	canvas.clear_all()
-	_draw_design(canvas)
+	var rejected_no_paper := _rejected
+	canvas.set_no_paper()                             # 캔버스를 비운다
+	_feed(canvas, _circle_pts(c, 0.22))
+	_feed(canvas, _triangle_pts(c, 0.10))
+	for i in 6:                                       # paper_1이면 진작 거부됐을 양
+		_feed(canvas, _arrow_at(c, -PI / 2.0 + 0.3 * float(i), 0.42))
+	_check(_rejected == rejected_no_paper, "미선택 — 잉크 상한 없음(무효 없음)")
 	_check(_blocked > blocked_before and canvas.get_design() == null, "미선택 — 완성 차단")
 	canvas.queue_free()
 
 
-## 완성 도안 1세트: 원(r 0.22) + 불룬 삼각(0.10) + 화살표(0.18) — test_drawing_canvas_auto와 동일 기하
+## 완성 도안 1세트: 진(r 0.22) + 불룬 삼각(0.10) + 문양(진을 뚫고 나간다)
 func _draw_design(canvas: Control) -> void:
 	_feed(canvas, _circle_pts(Vector2(0.5, 0.5), 0.22))
 	_feed(canvas, _triangle_pts(Vector2(0.5, 0.5), 0.10))
 	_feed(canvas, _line_pts(Vector2(0.5, 0.5), Vector2(0.68, 0.5)))
+
+
+## 진 중심에서 ang 방향으로 len만큼 뻗는 문양 (진을 뚫고 나간다 — TECH_SPEC §6.1)
+func _arrow_at(c: Vector2, ang: float, len: float) -> PackedVector2Array:
+	return _line_pts(c, c + Vector2(cos(ang), sin(ang)) * len)
 
 
 # ─────────────────────────── 합성 획 주입 (test_drawing_canvas_auto와 동일) ───────────────────────────

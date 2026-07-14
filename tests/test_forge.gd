@@ -1,0 +1,285 @@
+extends Node2D
+## 그리기→발사 시험대 (tests/test_forge.tscn 루트, F6 실행) — 리드 소유.
+##
+## **실제 게임과 같은 구조로 돌린다** (사용자 결정, 세션 8): 세계(아레나)가 항상 살아 있고,
+## 작업대에 다가가 E로 **책을 펼쳐** 그린다. ESC로 책을 덮으면 그 자리에 세계가 그대로 있다 —
+## 그린 도안을 곧바로 허수아비에 쏴 본다. 그리기와 쏘기 사이에 씬 전환이 없다는 게 핵심이다
+## (GDD §10.5 · TECH_SPEC §4.4). 제작 UI 자체는 src/drawing/forge_panel.gd — 본편에 그대로 들어간다.
+##
+## 조작: WASD 이동 / 작업대 앞에서 E = 책 펼침 / ESC = 덮기
+##       (책 펼친 중) 좌클릭 드래그 = 획 · 우클릭·Ctrl+Z = 취소 · 오른쪽 탭 = 책자 열람
+##       (책 덮은 중) 마우스 = 조준 · 좌클릭/Space = 발사 · R = 허수아비 리셋 · C = 종이 비우기
+##
+## 개발용 시험대다 — 기본 무한 자원(마나·내구). 경제 검증은 본편·test_base_auto에서 한다.
+
+const ForgePanel := preload("res://src/drawing/forge_panel.gd")
+const DesignBuilder := preload("res://src/drawing/design_builder.gd")
+const Copy := preload("res://src/drawing/drawing_copy.gd")
+const SpellSystemScene := preload("res://src/spell/spell_system.tscn")
+const DummyScene := preload("res://src/spell/dummy_target.tscn")
+
+const BG_COLOR := Color(0.10, 0.14, 0.11)      # 어두운 숲 바닥 — 발광 먹선이 읽히는지 보려고
+const TEXT_COLOR := Color(0.90, 0.86, 0.78)
+const HINT_COLOR := Color(0.70, 0.66, 0.58)
+const WARN_COLOR := Color(0.92, 0.45, 0.35)
+const OK_COLOR := Color(0.60, 0.85, 0.55)
+const PROMPT_COLOR := Color(0.98, 0.88, 0.55)
+
+# ── 세계 ──
+const PLAYER_SPEED := 90.0
+const PLAYER_START := Vector2(150, 290)
+const BOUNDS := Rect2(14, 14, 612, 332)
+const DESK_POS := Vector2(56, 300)             # 작업대(이젤) — 거점의 그 자리
+const DESK_SIZE := Vector2(34, 40)
+const INTERACT_RANGE := 46.0
+const DUMMY_POS: Array[Vector2] = [
+	Vector2(360, 70), Vector2(470, 44), Vector2(575, 80), Vector2(400, 160),
+	Vector2(570, 175),
+]
+
+var _world: Node2D
+var _forge: Control
+var _player_pos: Vector2 = PLAYER_START
+var _aim: Vector2 = Vector2.UP
+var _dummies: Array[Node2D] = []
+var _infinite := true
+
+var _cast_label: Label
+var _design_label: Label
+var _hint_label: Label
+
+
+func _ready() -> void:
+	_build_world()
+	_build_forge()
+	_build_hud()
+	# 시험대는 자원이 말라 검증이 끊기면 안 된다 — 종이를 넉넉히 시드
+	if GameState.get_count(&"paper_1") < 20:
+		GameState.add_item(&"paper_1", 99)
+	EventBus.cast_executed.connect(_on_cast_executed)
+	EventBus.cast_failed.connect(_on_cast_failed)
+	EventBus.enemy_hit.connect(_on_enemy_hit)
+	_refresh_design_label()
+
+
+func _process(delta: float) -> void:
+	if _infinite:
+		GameState.mana = GameState.mana_max()
+	# 책을 펼친 동안 세계는 멈춘다 — 붓을 든 손으로 걷거나 쏘지 않는다
+	if not _forge.call(&"is_open"):
+		var dir := Input.get_vector(&"move_left", &"move_right", &"move_up", &"move_down")
+		if dir != Vector2.ZERO:
+			_player_pos = (_player_pos + dir.normalized() * PLAYER_SPEED * delta) \
+				.clamp(BOUNDS.position, BOUNDS.end)
+		var to_mouse := get_global_mouse_position() - _player_pos
+		if to_mouse.length_squared() > 1.0:
+			_aim = to_mouse.normalized()
+	_world.queue_redraw()
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if _forge.call(&"is_open"):
+		return                                  # 책이 펼쳐져 있으면 세계는 입력을 받지 않는다
+	if event.is_action_pressed(&"interact") and _near_desk():
+		_forge.call(&"open")
+		get_viewport().set_input_as_handled()
+		return
+	var k := event as InputEventKey
+	if k != null and k.pressed and not k.echo:
+		match k.keycode:
+			KEY_SPACE:
+				_try_cast()
+			KEY_R:
+				_reset_dummies()
+			KEY_C:
+				_forge.call(&"clear_canvas")
+				_refresh_design_label()
+		return
+	var mb := event as InputEventMouseButton
+	if mb != null and mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT:
+		_try_cast()
+
+
+func _near_desk() -> bool:
+	return _player_pos.distance_to(DESK_POS) <= INTERACT_RANGE
+
+
+## 장착 슬롯을 거치지 않고 **지금 종이 위에 맺힌 도안**을 그대로 쏜다 — 그리자마자 검증하려고.
+## 계약은 게임과 동일하다: cast_requested(도안, 원점, 에임) → spell_system이 전부 처리.
+func _try_cast() -> void:
+	var design: SpellDesign = _forge.call(&"get_design")
+	if design == null:
+		_set_warn(Copy.INCOMPLETE)
+		return
+	if _infinite:
+		design.durability = design.durability_max
+	EventBus.cast_requested.emit(design, _player_pos, _aim)
+
+
+# ─────────────────────────── 세계 ───────────────────────────
+
+func _build_world() -> void:
+	_world = Node2D.new()
+	_world.name = "World"
+	_world.draw.connect(_draw_world)
+	add_child(_world)
+
+	# spell_system은 게임 씬과 동일한 인스턴스 — 마법진·투사체가 여기서 나온다
+	_world.add_child(SpellSystemScene.instantiate())
+
+	for p: Vector2 in DUMMY_POS:
+		var d := DummyScene.instantiate() as Node2D
+		d.global_position = p
+		_world.add_child(d)
+		_dummies.append(d)
+
+
+func _build_forge() -> void:
+	var layer := CanvasLayer.new()               # 세계 위에 얹힌다 — 씬 전환이 아니라 오버레이
+	layer.name = "ForgeLayer"
+	add_child(layer)
+	_forge = ForgePanel.new()
+	layer.add_child(_forge)
+	_forge.connect(&"design_completed", _on_design_completed)
+	_forge.connect(&"closed", _on_forge_closed)
+
+
+func _reset_dummies() -> void:
+	for d in _dummies:
+		if is_instance_valid(d) and d.has_method("reset_hits"):
+			d.call("reset_hits")
+	_cast_label.text = "허수아비 리셋"
+	_cast_label.add_theme_color_override(&"font_color", HINT_COLOR)
+
+
+func _draw_world() -> void:
+	_world.draw_rect(get_viewport_rect(), BG_COLOR, true)
+
+	# 작업대 — 거점의 이젤 자리. 다가가면 프롬프트가 뜬다
+	var desk := Rect2(DESK_POS - DESK_SIZE * 0.5, DESK_SIZE)
+	var near := _near_desk()
+	_world.draw_rect(desk, Color(0.30, 0.24, 0.17), true)
+	_world.draw_rect(desk, PROMPT_COLOR if near else Color(0.48, 0.40, 0.30),
+		false, 1.0)
+	# 이젤 위의 종이
+	_world.draw_rect(Rect2(desk.position + Vector2(5, 5), Vector2(24, 22)),
+		Color(0.88, 0.84, 0.75), true)
+	if near and not _forge.call(&"is_open"):
+		var font := ThemeDB.fallback_font
+		var text := Copy.FORGE_OPEN
+		var w := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 9).x
+		_world.draw_string(font, DESK_POS + Vector2(-w * 0.5, -DESK_SIZE.y * 0.5 - 6.0),
+			text, HORIZONTAL_ALIGNMENT_LEFT, -1, 9, PROMPT_COLOR)
+
+	# 플레이어 — 캐스팅 원점
+	_world.draw_circle(_player_pos, 5.0, Color(0.85, 0.80, 0.70, 0.95))
+	_world.draw_arc(_player_pos, 9.0, 0.0, TAU, 24, Color(0.85, 0.80, 0.70, 0.35), 1.0)
+	# 에임 — 진은 한 종류다. 도안은 **항상** 이 방향으로 통째로 회전한다 (캔버스 위쪽 = 앞)
+	var has_design: bool = _forge.call(&"get_design") != null
+	var col: Color = Color(0.95, 0.65, 0.25, 0.8) if has_design \
+		else Color(0.6, 0.6, 0.6, 0.35)
+	_world.draw_line(_player_pos + _aim * 11.0, _player_pos + _aim * 26.0, col, 1.5)
+
+
+# ─────────────────────────── 이벤트 ───────────────────────────
+
+func _on_design_completed(_design: SpellDesign) -> void:
+	_refresh_design_label()
+
+
+## 책을 덮었다 — 이제 쏴 볼 차례다. 그 말을 그 자리에서 해 준다
+func _on_forge_closed() -> void:
+	_refresh_design_label()
+	var design: SpellDesign = _forge.call(&"get_design")
+	if design != null:
+		_set_hint("좌클릭/Space = 발사 · 마우스 = 조준 · R = 리셋")
+	else:
+		_set_hint("작업대(E)로 돌아가 도안을 맺어라 · WASD 이동")
+
+
+func _on_cast_executed(_design_c: SpellDesign, mana: float) -> void:
+	_cast_label.text = "발사 — 마나 %.0f 소모" % mana
+	_cast_label.add_theme_color_override(&"font_color", OK_COLOR)
+
+
+func _on_cast_failed(_design_c: SpellDesign, reason: int) -> void:
+	var why: String = {
+		Enums.CastFailReason.NO_MANA: "마나 부족",
+		Enums.CastFailReason.BROKEN: "도안 손상 (내구 0)",
+		Enums.CastFailReason.INVALID: "도안 무효 (문양 없음)",
+	}.get(reason, "?")
+	_cast_label.text = "발사 실패 — %s" % why
+	_cast_label.add_theme_color_override(&"font_color", WARN_COLOR)
+
+
+func _on_enemy_hit(_enemy: Node2D, damage: float, rune_type: int) -> void:
+	_cast_label.text = "명중! %s · 피해 %.1f" % [DesignBuilder.rune_name(rune_type), damage]
+	_cast_label.add_theme_color_override(&"font_color", OK_COLOR)
+
+
+## 도안 상태 — 곡선 궤적 검증을 위해 문양의 **곡률**(path의 최대 |y|)까지 보여준다.
+## path 좌표계가 (시작=원점, +X=발사방향)이므로 |y|가 곧 그린 획이 얼마나 휘었는지다.
+func _refresh_design_label() -> void:
+	var design: SpellDesign = _forge.call(&"get_design")
+	if design == null:
+		_design_label.text = "도안 없음 — 작업대(E)에서 진·룬·문양을 그린다"
+		_design_label.add_theme_color_override(&"font_color", HINT_COLOR)
+		return
+	var bend := 0.0
+	var has_path := false
+	for a: ArrowData in design.arrows:
+		for p: Vector2 in a.path:
+			has_path = true
+			bend = maxf(bend, absf(p.y))
+	var bend_text := "직선"
+	if not has_path:
+		bend_text = "경로없음(폴백)"
+	elif bend > 0.02:
+		bend_text = "곡선 (휨 %.3f)" % bend
+	_design_label.text = "%s · 정확도 %d%% · 마나 %.0f · %d발 · %s" % [
+		design.display_name,
+		roundi(design.rune_accuracy * 100.0),
+		design.mana_cost,
+		design.arrows.size(),
+		bend_text,
+	]
+	_design_label.add_theme_color_override(&"font_color", OK_COLOR)
+
+
+# ─────────────────────────── HUD ───────────────────────────
+
+func _build_hud() -> void:
+	# 세계(Node2D) 위, 제작대(CanvasLayer) 아래 — 책을 펼치면 HUD도 함께 덮인다
+	var ui := Control.new()
+	ui.name = "HUD"
+	ui.set_anchors_preset(Control.PRESET_FULL_RECT)
+	ui.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(ui)
+
+	_cast_label = _label(ui, Vector2(8, 6), Vector2(400, 14), 10)
+	_design_label = _label(ui, Vector2(8, 22), Vector2(500, 14), 9)
+	_hint_label = _label(ui, Vector2(8, 342), Vector2(620, 14), 9)
+	_set_hint("WASD 이동 · 작업대 앞에서 E = 책 펼침 · 좌클릭/Space = 발사 · R = 리셋")
+
+
+func _label(parent: Control, pos: Vector2, sz: Vector2, font_size: int) -> Label:
+	var l := Label.new()
+	l.position = pos
+	l.size = sz
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	l.add_theme_font_size_override(&"font_size", font_size)
+	l.add_theme_color_override(&"font_color", TEXT_COLOR)
+	parent.add_child(l)
+	return l
+
+
+func _set_hint(text: String) -> void:
+	_hint_label.text = text
+	_hint_label.add_theme_color_override(&"font_color", HINT_COLOR)
+
+
+func _set_warn(text: String) -> void:
+	if text == "":
+		return
+	_hint_label.text = text
+	_hint_label.add_theme_color_override(&"font_color", WARN_COLOR)

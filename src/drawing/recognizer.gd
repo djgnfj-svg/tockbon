@@ -4,11 +4,16 @@ extends RefCounted
 ##
 ## classify_stroke 파이프라인 (획 종료 시 1회):
 ##   (a) 원 기하 판정 — 컨텍스트에 원이 없을 때만. $1 미사용
-##   (b) 조준진 꼬리 판정 — 원이 있고 꼬리가 없을 때만
-##   (c) 직진 사전 게이트 → 화살표 (파라미터 직접 추출)
+##   (b) 탈출 판정 → 화살표 — 진이 있을 때만. 룬은 진 안에 머무르고 화살표는 진을
+##       뚫고 나간다는 기하 규칙 (TECH_SPEC §6.1). 직진성과 무관하므로 곡선 화살표가 산다
+##   (c) 직진 사전 게이트 → 화살표 (진이 없는 첫 획 등, 탈출 판정을 못 할 때)
 ##   (d) $1 룬 인식 — 감김(총 회전각) 밴드로 후보를 먼저 제한해
 ##       물~ / 바람◎ 교차 오인식을 구조적으로 차단 (GDD 리스크 1)
 ##   (e) 폴백 화살표 / DECOR
+##
+## **조준 꼬리는 폐지됐다** (v1.6): 진은 한 종류뿐이고 캔버스 위쪽이 곧 조준 방향이다.
+## 인식기는 TAIL을 더 이상 생산하지 않는다 — enum 값은 구세이브 도안 렌더용으로 core에 남아 있다.
+## 진 경계에서 밖으로 나가는 짧은 획은 이제 **화살표**로 잡힌다 (탈출 판정과 일관).
 ## 사용: const Recognizer := preload("res://src/drawing/recognizer.gd")
 
 const RuneTemplates := preload("res://src/drawing/rune_templates.gd")
@@ -19,14 +24,24 @@ const ANGLE_RANGE := PI / 4.0          # 최적 회전 황금분할 탐색 범�
 const ANGLE_PRECISION := 0.035         # ≈ 2°
 const RUNE_MIN_SCORE := 0.60           # 미달 시 룬으로 인정하지 않음
 
-# ── 감김 밴드 (|총 회전각| rad) — 후보 룬 게이트 ──
-const WINDING_FIRE_MIN := 0.55 * TAU   # 미만 → {충격>, 물~} / 이상 → {불△}
+# ── 감김 밴드 (|총 회전각| rad) — 바람◎ 게이트 ──
+# **불△에는 감김 게이트를 두지 않는다.** 실측 분포(스무딩 후, 손그림 240샘플):
+#     충격> 0.00~0.67 / 물~ 0.00~0.48 / 불△ 0.16~0.90 / 바람◎ 2.05~3.00 (바퀴)
+# 불△는 충격>·물~과 **완전히 겹쳐** 이들을 가르는 문턱이 존재하지 않는다 —
+# 예전엔 0.55바퀴 게이트가 감김이 낮게 측정된 삼각형에서 불△를 후보에서 통째로 빼 버렸고,
+# 그래서 물~/충격> 템플릿에만 매칭돼 0.4점 → DECOR로 떨어졌다 (불이 안 그려지던 원인).
+# 불/충격/물의 구별은 $1 템플릿 매칭이 잘한다(삼각형 0.97 vs 오답 0.40) — 거기에 맡긴다.
+# 하드 게이트는 **바람◎에만** 남긴다: 물~ vs 바람◎ 교차 오인식이 실제 리스크이고(GDD 리스크 1),
+# 이 둘은 감김이 0.48 대 2.05로 확실히 갈린다.
 const WINDING_WIND_MIN := 1.50 * TAU   # 이상 → {바람◎}만
 
 # ── 파형성(곡률 부호 교대) — 충격> vs 물~ 게이트 ──
 const RUN_RESAMPLE_N := 32
 const RUN_MIN_TURN := 0.45             # 유의미한 꺾임 런의 최소 누적 회전(rad)
 const RUN_SMOOTH_PASSES := 2           # 런 계산 전 이동평균 스무딩 횟수 (노이즈 런 억제)
+## 충격>/물~ 점수차가 이 값 미만이면 ($1이 확신 못 함) 곡률런으로 가른다.
+## 0.03~0.12 실측 스윕에서 0.08이 최고(전체 99.5%) — 양 끝이 아니라 중앙값이라 과적합도 아니다
+const RUNS_TIE_MARGIN := 0.08
 
 
 # ── 원 기하 판정 ──
@@ -37,15 +52,15 @@ const CIRCLE_NET_MIN := 0.70 * TAU     # 총 회전각 하한 (한 바퀴 근사
 const CIRCLE_NET_MAX := 1.40 * TAU     # 상한 (나선 배제)
 const CIRCLE_MAX_TURN := 1.15          # 국소 최대 꺾임(rad) — 삼각형 등 다각형 배제
 
-# ── 조준진 꼬리 판정 ──
-const TAIL_ANNULUS_MIN := 0.70         # 시작점 중심거리 ∈ [0.70r, 1.35r]
-const TAIL_ANNULUS_MAX := 1.35
-const TAIL_MAX_LEN_RATIO := 1.10       # 획 길이 ≤ 1.10 × r
-const TAIL_MIN_STRAIGHT := 0.75
-
 # ── 화살표 ──
 const ARROW_STRAIGHT_PRE := 0.90       # 이상이면 룬을 건너뛰고 즉시 화살표
 const ARROW_STRAIGHT_FALLBACK := 0.80  # 룬 실패 시 폴백 화살표 최소 직진성
+
+# ── 탈출 판정 (곡선 화살표, TECH_SPEC §6.1) ──
+# "룬은 진 안에 머무르고, 화살표는 진을 뚫고 나간다" — 직진성이 아니라 기하 위치로 가른다.
+const ARROW_ESCAPE_R := 1.05           # 끝점 중심거리 ≥ radius × 이 값이어야 "진 밖"
+const ARROW_ESCAPE_GAIN := 0.12        # 끝점이 시작점보다 최소 radius × 이 값만큼 더 멀어야 함
+const ARROW_ESCAPE_MAX_WINDING := WINDING_WIND_MIN  # 이상 감기면 바람◎ — 탈출 판정을 양보한다
 
 const MIN_POINTS := 4
 const MIN_STROKE_LEN := 0.02
@@ -66,13 +81,13 @@ static func classify_stroke(points: PackedVector2Array, ctx: Dictionary) -> Dict
 				"role": Enums.StrokeRole.CIRCLE,
 				"center": c.center, "radius": c.radius, "score": c.score,
 			}
-	elif not ctx.get("has_tail", false):
-		var t := detect_tail(
-			points,
-			ctx.get("circle_center", Vector2(0.5, 0.5)),
-			ctx.get("circle_radius", 0.25))
-		if t.is_tail:
-			return {"role": Enums.StrokeRole.TAIL, "aim_axis": t.aim_axis, "score": t.score}
+	else:
+		# 진을 뚫고 나간 획은 직진성과 무관하게 화살표 — 곡선 화살표가 여기서 산다
+		if detect_escape(
+				points,
+				ctx.get("circle_center", Vector2(0.5, 0.5)),
+				ctx.get("circle_radius", 0.25)):
+			return _arrow_result(points, straightness(points))
 
 	var st := straightness(points)
 	if st >= ARROW_STRAIGHT_PRE:
@@ -87,7 +102,13 @@ static func classify_stroke(points: PackedVector2Array, ctx: Dictionary) -> Dict
 			}
 		if st >= ARROW_STRAIGHT_FALLBACK:
 			return _arrow_result(points, st)
-		return {"role": Enums.StrokeRole.DECOR, "score": float(r.score), "reason": "rune_low_score"}
+		# 실패해도 **어느 룬에 얼마나 가까웠는지**를 함께 돌려준다 — "거의 됐다"와
+		# "전혀 아니다"를 플레이어가 구별할 수 있어야 다시 그릴 마음이 생긴다
+		return {
+			"role": Enums.StrokeRole.DECOR, "score": float(r.score),
+			"reason": "rune_low_score",
+			"near_rune": int(r.type), "min_score": RUNE_MIN_SCORE,
+		}
 
 	if st >= ARROW_STRAIGHT_FALLBACK:
 		return _arrow_result(points, st)
@@ -130,72 +151,109 @@ static func detect_circle(points: PackedVector2Array) -> Dictionary:
 	return out
 
 
-# ─────────────────────────── (b) 꼬리 ───────────────────────────
+# ─────────────────────────── (b) 탈출 (곡선 화살표) ───────────────────────────
 
-static func detect_tail(points: PackedVector2Array, center: Vector2, radius: float) -> Dictionary:
-	var out := {"is_tail": false, "aim_axis": 0.0, "score": 0.0}
+## 획이 진을 뚫고 바깥으로 나갔는가 — 곡선 화살표를 룬과 가르는 유일한 판정 (TECH_SPEC §6.1).
+## 조건: 끝점이 진 밖(radius × ARROW_ESCAPE_R) && 끝점이 시작점보다 진 중심에서 유의미하게 멀다.
+## 곡률·직진성은 보지 않는다 — 활처럼 휜 화살표도 그대로 통과한다.
+## 예외: 바람◎ 나선처럼 여러 바퀴 감긴 획은 진을 삐져나가도 룬에 양보한다 (감김 상한).
+static func detect_escape(points: PackedVector2Array, center: Vector2, radius: float) -> bool:
 	if radius <= 1e-6:
-		return out
+		return false
 	var first := points[0]
 	var last := points[points.size() - 1]
 	var d0 := first.distance_to(center)
 	var d1 := last.distance_to(center)
-	var plen := path_length(points)
-	var st := straightness(points)
-	var ok := (
-		d0 >= TAIL_ANNULUS_MIN * radius and d0 <= TAIL_ANNULUS_MAX * radius
-		and d1 > maxf(d0 + 0.02, radius * 1.02)
-		and plen <= TAIL_MAX_LEN_RATIO * radius
-		and st >= TAIL_MIN_STRAIGHT
-	)
-	if ok:
-		out.is_tail = true
-		out.aim_axis = (last - center).angle()
-		out.score = st
+	if d1 < radius * ARROW_ESCAPE_R:
+		return false
+	if d1 < d0 + radius * ARROW_ESCAPE_GAIN:
+		return false
+	return absf(winding(points)) < ARROW_ESCAPE_MAX_WINDING
+
+
+# ─────────────────────────── (d) $1 룬 ───────────────────────────
+
+## 룬 인식 — **후보를 지우지 않고 $1 점수로 고른다.** 피처(감김·곡률런)는 후보를 삭제하는
+## 하드 게이트가 아니라, $1이 확신하지 못할 때만 개입하는 보조 신호다.
+## 옛 방식(피처가 후보를 통째로 지움)은 정답을 지워 버리는 실패가 잦았다 — 실측(4종 × 300샘플):
+##     하드 게이트 96.7% (불△ 100 / 충격> 88.7 / 물~ 99.0 / 바람◎ 99.0)
+##     이 방식     99.5% (불△ 100 / 충격> 100  / 물~ 99.0 / 바람◎ 99.0)   물/바람 교차 둘 다 0
+static func recognize_rune(points: PackedVector2Array) -> Dictionary:
+	_ensure_templates()
+	var net := winding(points)
+	var allowed := winding_candidates(absf(net))
+	var by_type := _type_scores(points, allowed)
+
+	var best_type := int(allowed[0])
+	for t: int in allowed:
+		if float(by_type.get(t, 0.0)) > float(by_type.get(best_type, 0.0)):
+			best_type = t
+
+	# 충격> vs 물~ — 감김이 둘 다 낮아 $1이 흔들릴 수 있다. **점수가 근소할 때만**
+	# 곡률 부호 교대 수로 가른다(">"는 꺾임 런 ≤1, 파형은 ≥2). 점수차가 뚜렷하면 $1을 믿는다 —
+	# 이 조건 없이 무조건 런으로 지우면 노이즈 있는 충격>의 11%가 물~로 새어 나갔다
+	var runner_up := _runner_up(by_type, allowed, best_type)
+	if _is_impact_water_pair(best_type, runner_up) \
+			and float(by_type[best_type]) - float(by_type[runner_up]) < RUNS_TIE_MARGIN:
+		best_type = int(Enums.RuneType.WATER) if curvature_runs(points) >= 2 \
+			else int(Enums.RuneType.IMPACT)
+
+	return {"type": best_type, "score": float(by_type.get(best_type, 0.0)), "net": net}
+
+
+## 허용 후보별 최고 점수 (같은 룬의 여러 템플릿 중 최고)
+static func _type_scores(points: PackedVector2Array, allowed: Array[int]) -> Dictionary:
+	var norm := normalize_for_match(points)
+	var out := {}
+	for t: int in allowed:
+		out[t] = 0.0
+	for t: Dictionary in _templates:
+		var ty := int(t.type)
+		if not allowed.has(ty):
+			continue
+		var score := clampf(
+			1.0 - distance_at_best_angle(norm, t.points) / (0.5 * sqrt(2.0)), 0.0, 1.0)
+		if score > float(out[ty]):
+			out[ty] = score
 	return out
 
 
-# ─────────────────────────── (c) $1 룬 ───────────────────────────
-
-static func recognize_rune(points: PackedVector2Array) -> Dictionary:
-	_ensure_templates()
-	var rs := resample(points, RESAMPLE_N)
-	var net := net_rotation(rs)
-	var allowed := winding_candidates(absf(net))
-	# 저감김 밴드({충격>, 물~})는 곡률 부호 교대 수로 한 번 더 가른다:
-	# ">"는 유의미한 꺾임 런 ≤1, 파형은 교대 런 ≥2.
-	if allowed.has(int(Enums.RuneType.IMPACT)) and allowed.has(int(Enums.RuneType.WATER)):
-		if curvature_runs(points) >= 2:
-			allowed.erase(int(Enums.RuneType.IMPACT))
-		else:
-			allowed.erase(int(Enums.RuneType.WATER))
-	var norm := normalize_for_match(points)
-	var best_d := INF
-	var best_type := int(Enums.RuneType.FIRE)
-	for t: Dictionary in _templates:
-		if not allowed.has(int(t.type)):
+static func _runner_up(by_type: Dictionary, allowed: Array[int], best: int) -> int:
+	var second := -1
+	for t: int in allowed:
+		if t == best:
 			continue
-		var d := distance_at_best_angle(norm, t.points)
-		if d < best_d:
-			best_d = d
-			best_type = int(t.type)
-	var score := 0.0
-	if best_d < INF:
-		score = clampf(1.0 - best_d / (0.5 * sqrt(2.0)), 0.0, 1.0)
-	return {"type": best_type, "score": score, "net": net}
+		if second < 0 or float(by_type.get(t, 0.0)) > float(by_type.get(second, 0.0)):
+			second = t
+	return second
 
 
-## 감김 밴드 → 허용 룬 후보. 물~(|net|≈0)과 바람◎(|net|≥1.5바퀴)은 절대 같은 밴드에 없다.
+static func _is_impact_water_pair(a: int, b: int) -> bool:
+	return (
+		(a == Enums.RuneType.IMPACT and b == Enums.RuneType.WATER)
+		or (a == Enums.RuneType.WATER and b == Enums.RuneType.IMPACT))
+
+
+## 감김 밴드 → 허용 룬 후보. 물~(≤0.48바퀴)과 바람◎(≥2.05바퀴)은 절대 같은 밴드에 없다.
+## 그 아래에서는 불△·충격>·물~을 **전부 후보로 두고 $1이 고르게** 한다 — 이 셋의 감김은
+## 서로 겹쳐서 게이트로 가를 수 없다(위 상수 주석의 실측 분포 참고).
 static func winding_candidates(net_abs: float) -> Array[int]:
 	var out: Array[int] = []
 	if net_abs >= WINDING_WIND_MIN:
 		out.append(Enums.RuneType.WIND)
-	elif net_abs >= WINDING_FIRE_MIN:
-		out.append(Enums.RuneType.FIRE)
 	else:
+		out.append(Enums.RuneType.FIRE)
 		out.append(Enums.RuneType.IMPACT)
 		out.append(Enums.RuneType.WATER)
 	return out
+
+
+## 감김(총 회전각) 피처 — **스무딩 후** 측정한다. 손 지터가 만드는 가짜 꺾임이
+## 서로 상쇄되지 않고 누적되면 값이 크게 튄다(스무딩 전 충격>가 2.14바퀴까지 치솟아
+## 바람◎ 게이트에 잘못 걸릴 수 있었다). 스무딩하면 충격>·물~이 0.67바퀴 아래로 내려앉아
+## 바람◎(≥2.05)과의 간격이 확실해진다.
+static func winding(points: PackedVector2Array) -> float:
+	return net_rotation(smoothed(resample(points, RESAMPLE_N), RUN_SMOOTH_PASSES))
 
 
 static func _ensure_templates() -> void:
@@ -209,7 +267,7 @@ static func _ensure_templates() -> void:
 		_templates.append({"type": raw.type, "points": normalize_for_match(rev)})
 
 
-# ─────────────────────────── (d) 화살표 ───────────────────────────
+# ─────────────────────────── (e) 화살표 ───────────────────────────
 
 static func _arrow_result(points: PackedVector2Array, st: float) -> Dictionary:
 	return {

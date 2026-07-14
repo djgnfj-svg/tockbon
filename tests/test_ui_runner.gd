@@ -4,6 +4,9 @@ extends Node
 ## 실행: Godot --headless --path . res://tests/test_ui.tscn --quit-after 60
 
 const InkStyle := preload("res://src/ui/ink_style.gd")
+const DesignThumb := preload("res://src/core/design_thumb.gd")
+
+const THUMB_BOX := Vector2(64, 64)
 
 @onready var ui: Control = $UiRoot
 @onready var hud: Control = $UiRoot/Hud
@@ -16,17 +19,22 @@ var _frame := 0
 var _passed := 0
 var _failed := 0
 var _designs: Array[SpellDesign] = []
+## 획이 있는 도안(플레이어가 그린 것)과 획이 없는 샘플 도안 — 썸네일 두 경로를 각각 검증한다
+var _drawn_thumb: Control = null
+var _empty_thumb: Control = null
 
 func _ready() -> void:
 	_inject_mocks()
+	_make_probe_thumbs()
 	print("TEST_UI: 목 주입 완료 — 도안 %d장, 적 %d종" % [GameState.designs.size(), Db.enemies.size()])
 
 func _inject_mocks() -> void:
 	# 아침 게시판·장착 화면은 튜토리얼을 마친 필경사의 하루 흐름이다 (ui_root.TUTORIAL_UNLOCK).
 	# 첫날(튜토 전)에는 억제되므로, UI 검증은 수업을 마친 상태를 전제한다.
 	GameState.codex[&"tutorial_done"] = true
-	# 도안: 샘플 3장 + 손상본 1장
-	_designs = SampleDesigns.all()
+	# 도안: 손그림 1장(strokes 있음 — 먹선 썸네일) + 샘플 3장(strokes 없음 — 글리프 폴백) + 손상본 1장
+	_designs = [_hand_drawn_design()]
+	_designs.append_array(SampleDesigns.all())
 	var broken := SampleDesigns.aimed_lance_water()
 	broken.id = &"sample_broken"
 	broken.display_name = "샘플: 찢어진 도안"
@@ -43,6 +51,61 @@ func _inject_mocks() -> void:
 	GameState.codex[InkStyle.enemy_unlock_id(&"forest_hound")] = true
 	GameState.codex[InkStyle.enemy_unlock_id(&"sap_slime_elite")] = true
 	GameState.codex[&"recipe_paper_2"] = true
+
+## 모듈 A가 만들어 낼 도안의 목 — 정규화 캔버스 좌표, 중심에서 벗어난 비대칭 배치.
+## bbox 피팅이 실제로 동작하는지 보려면 도안이 캔버스 중앙에 얌전히 있으면 안 된다.
+func _hand_drawn_design() -> SpellDesign:
+	var d := SpellDesign.new()
+	d.id = &"mock_hand_drawn"
+	d.display_name = "손그림: 불의 진"
+	d.circle_type = Enums.CircleType.AIMED
+	d.circle_radius = 0.5
+	d.rune_type = Enums.RuneType.FIRE
+	d.rune_accuracy = 0.8
+	d.mana_cost = 18.0
+	# 진 — 중심 (0.4, 0.45), 반지름 0.25
+	var circle := PackedVector2Array()
+	for i in 24:
+		var a := TAU * float(i) / 24.0
+		circle.append(Vector2(0.4, 0.45) + Vector2(cos(a), sin(a)) * 0.25)
+	circle.append(circle[0])
+	d.strokes.append(_stroke(circle, Enums.StrokeRole.CIRCLE))
+	# 룬 — 삼각형(불)
+	d.strokes.append(_stroke(PackedVector2Array([
+		Vector2(0.34, 0.52), Vector2(0.40, 0.38), Vector2(0.46, 0.52), Vector2(0.34, 0.52),
+	]), Enums.StrokeRole.RUNE))
+	# 화살표 — 진 밖으로 뻗는다 (썸네일은 이것까지 보여야 한다)
+	d.strokes.append(_stroke(PackedVector2Array([
+		Vector2(0.40, 0.45), Vector2(0.65, 0.38), Vector2(0.92, 0.30),
+	]), Enums.StrokeRole.ARROW))
+	var arrow := ArrowData.new()
+	arrow.direction = 0.0
+	arrow.magnitude = 0.6
+	d.arrows.append(arrow)
+	return d
+
+func _stroke(points: PackedVector2Array, role: int) -> StrokeData:
+	var s := StrokeData.new()
+	s.points = points
+	s.role = role as Enums.StrokeRole
+	var pressures := PackedFloat32Array()
+	for i in points.size():
+		pressures.append(0.55 + 0.45 * sin(PI * float(i) / maxf(float(points.size() - 1), 1.0)))
+	s.pressures = pressures
+	return s
+
+## 위젯 단독 검증용 — UI 트리 밖의 조건(칸 크기·도안 종류)을 직접 통제한다
+func _make_probe_thumbs() -> void:
+	_drawn_thumb = _probe_thumb(_designs[0])
+	_empty_thumb = _probe_thumb(_designs[1])  # 샘플 = strokes 없음
+
+func _probe_thumb(d: SpellDesign) -> Control:
+	var thumb := DesignThumb.new()
+	thumb.fallback_builder = InkStyle.make_design_fallback  # 모듈 E가 주입하는 룬 표기 폴백
+	thumb.call("set_design", d)
+	ui.add_child(thumb)
+	thumb.size = THUMB_BOX  # 컨테이너 밖 — 크기를 직접 준다 (resized → 재렌더)
+	return thumb
 
 func _mock_enemies() -> Array[EnemyDef]:
 	var defs: Array[EnemyDef] = []
@@ -66,6 +129,8 @@ func _enemy(id: StringName, display: String, counter: int, elite: bool) -> Enemy
 func _process(_delta: float) -> void:
 	_frame += 1
 	match _frame:
+		2:
+			_step_thumb_widget()
 		3:
 			_step_bulletin()
 		4:
@@ -117,9 +182,32 @@ func _process(_delta: float) -> void:
 			_check(GameState.ui_modal_open, "게시판 열림 → ui_modal_open 설정")
 			ui.call("close_top")
 		31:
+			GameState.equip(0, null)  # 슬롯 해제 → HUD 썸네일도 사라져야 한다
+		32:
+			_check(not _hud_thumb(0).call("has_ink"), "슬롯 해제 → HUD 썸네일 제거")
+		33:
 			_finish()
 
 # ── 단계별 검증
+
+## 썸네일 위젯 단독 — 먹선 렌더 / bbox 피팅 / strokes 없는 도안 폴백
+func _step_thumb_widget() -> void:
+	_check(_drawn_thumb.call("has_ink"), "획 있는 도안 → 먹선 썸네일 생성")
+	var lines := 0
+	for child in _drawn_thumb.get_children():
+		lines += child.get_child_count()  # InkRender가 만든 Node2D 아래 Line2D들
+	_check(lines >= 3, "획 3개(진·룬·화살표) 전부 Line2D로 — 화살표 포함 (%d개)" % lines)
+
+	var rect: Rect2 = _drawn_thumb.call("ink_rect")
+	var box := Rect2(Vector2.ZERO, THUMB_BOX)
+	_check(box.grow(0.5).encloses(rect),
+		"먹선이 칸 안에 들어옴 — bbox %s ⊂ %s" % [str(rect.abs()), str(box)])
+	# 여백만 남기고 칸을 채워야 한다 — 한쪽 축은 여백을 뺀 만큼 꽉 찬다 (피팅이 실제로 스케일을 맞춘 증거)
+	_check(maxf(rect.size.x, rect.size.y) >= THUMB_BOX.x * 0.7,
+		"먹선이 칸을 채움 (긴 축 %.1f ≥ %.1f)" % [maxf(rect.size.x, rect.size.y), THUMB_BOX.x * 0.7])
+
+	_check(not _empty_thumb.call("has_ink"), "strokes 빈 샘플 도안 → 먹선 없음 (크래시 없이 폴백)")
+	_check(_empty_thumb.get_child_count() == 1, "폴백 표기 노드 1개 (룬 글리프·아이콘)")
 
 func _step_bulletin() -> void:
 	_check(bulletin.visible, "day_started → 아침 게시판 자동 표시")
@@ -146,12 +234,37 @@ func _step_loadout_shown() -> void:
 	_check(not bulletin.visible, "게시판 닫기 → 게시판 숨김")
 	_check(loadout.visible, "게시판 닫기 → 장착 선택 표시")
 	var list := loadout.find_child("DesignList", true, false) as VBoxContainer
-	_check(list != null and list.get_child_count() == 4, "보유 도안 4행 (샘플 3 + 손상 1)")
+	_check(list != null and list.get_child_count() == 5, "보유 도안 5행 (손그림 1 + 샘플 3 + 손상 1)")
 	var has_broken_mark := false
 	for child in list.get_children():
-		if child is Button and (child as Button).text.contains("[손상]"):
+		if _row_text(child).contains("[손상]"):
 			has_broken_mark = true
 	_check(has_broken_mark, "손상 도안 경고 표기 [손상]")
+	# 장착 화면 — 그린 도안은 먹선으로, 획 없는 샘플은 폴백으로
+	var drawn_row := list.get_child(0)
+	var sample_row := list.get_child(1)
+	_check(_row_thumb(drawn_row).call("has_ink"), "장착 화면 — 손그림 도안 행에 먹선 썸네일")
+	_check(not _row_thumb(sample_row).call("has_ink"), "장착 화면 — 샘플 도안 행은 글리프 폴백")
+	var rect: Rect2 = _row_thumb(drawn_row).call("ink_rect")
+	var box := Rect2(Vector2.ZERO, (_row_thumb(drawn_row) as Control).size)
+	_check(rect.size.x > 0.0 and box.grow(0.5).encloses(rect), "장착 화면 썸네일이 칸 안에 피팅")
+	# 슬롯 칸 썸네일 — 아직 배치 전이므로 비어 있다
+	var slots := loadout.find_child("SlotList", true, false) as VBoxContainer
+	_check(not _row_thumb(slots.get_child(0)).call("has_ink"), "빈 슬롯 칸 → 썸네일 없음")
+
+## 버튼 행(Button > HBox > [Thumb, 라벨들])에서 표시 텍스트를 모은다
+func _row_text(row: Node) -> String:
+	var parts := PackedStringArray()
+	for label: Label in row.find_children("*", "Label", true, false):
+		parts.append(label.text)
+	return " ".join(parts)
+
+func _row_thumb(row: Node) -> Control:
+	return row.find_child("Thumb", true, false) as Control
+
+func _hud_thumb(slot: int) -> Control:
+	var panels: Array = hud.get("_slot_panels")
+	return (panels[slot] as Control).find_child("Thumb", true, false) as Control
 
 func _step_loadout_assign() -> void:
 	loadout.call("select_design", _designs[0])
@@ -178,6 +291,13 @@ func _step_hud_slots() -> void:
 	_check((duras[0] as Label).text.contains("내구"), "HUD 슬롯 1 내구도 바인딩")
 	var hp_text := hud.find_child("HpText", true, false) as Label
 	_check(hp_text.text == "100/100", "HUD HP 초기값 100/100")
+	# 장착 도안이 슬롯에 먹선으로 — 빈 슬롯·획 없는 샘플과 구분된다
+	_check(_hud_thumb(0).call("has_ink"), "HUD 슬롯 1 — 장착한 손그림 도안의 먹선 썸네일")
+	var slot_rect: Rect2 = _hud_thumb(0).call("ink_rect")
+	var slot_box := Rect2(Vector2.ZERO, _hud_thumb(0).size)
+	_check(slot_rect.size.x > 0.0 and slot_box.grow(0.5).encloses(slot_rect), "HUD 썸네일이 슬롯 칸 안에 피팅")
+	_check(not _hud_thumb(1).call("has_ink"), "HUD 슬롯 2 — 샘플 도안(획 없음)은 폴백")
+	_check(not _hud_thumb(2).call("has_ink"), "HUD 슬롯 3 — 빈 슬롯은 썸네일 없음")
 
 func _step_cast_executed() -> void:
 	EventBus.cast_executed.emit(_designs[0], _designs[0].mana_cost)

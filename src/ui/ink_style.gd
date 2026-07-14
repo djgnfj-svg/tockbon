@@ -87,6 +87,20 @@ static func make_rune_icon(t: int) -> TextureRect:
 	tr.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	return tr
 
+## core DesignThumb의 fallback_builder — strokes 없는 도안(샘플·구세이브)에 룬 표기를 대신 넣는다.
+## core는 폴백의 생김새를 모른다(의존 방향 유지) — 스타일을 아는 모듈 E가 주입한다.
+## 사용: thumb.fallback_builder = InkStyle.make_design_fallback
+static func make_design_fallback(design: SpellDesign, box_size: Vector2) -> Control:
+	var box := CenterContainer.new()
+	box.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var mark: Control = make_rune_icon(design.rune_type)
+	if mark == null:
+		var font_size := clampi(int(minf(box_size.x, box_size.y) * 0.5), 8, 20)
+		mark = make_label(rune_glyph(design.rune_type), font_size, rune_color(design.rune_type))
+	mark.mouse_filter = Control.MOUSE_FILTER_IGNORE  # 버튼 위에 얹힌다 — 클릭을 먹지 않게
+	box.add_child(mark)
+	return box
+
 static func phase_name(p: int) -> String:
 	return PHASE_NAMES.get(p, "?")
 
