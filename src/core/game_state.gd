@@ -56,6 +56,15 @@ func mana_max() -> float:
 func hp_max() -> float:
 	return balance.player_hp_max + gear_param(Enums.ItemKind.ROBE, "hp_max_add", 0.0)
 
+## 손에 든 지팡이의 **발사 패턴** — v2.0 지팡이 축 (TECH_SPEC §4.0-a).
+## 사용자: *"지팡이에 따라 여러 발이 나가거나 내 주변에서 전체 방향으로 나가거나가 정해짐."*
+##
+## 🔴 **스키마를 안 늘렸다.** `ItemDef.params["wand_pattern"]`을 읽을 뿐이라 **새 지팡이는
+## .tres 하나 추가하면 끝**이다 (선례: hp_max_add·stroke_correct_add). 미착용이면 단발.
+func wand_pattern() -> int:
+	return int(gear_param(Enums.ItemKind.WAND, "wand_pattern",
+		float(Enums.WandPattern.SINGLE)))
+
 ## 획 자동보정 강도 (0..1) — 획을 뗄 때 본보기 쪽으로 얼마나 끌어당기는가.
 ## **보정은 아이템으로 산다** (사용자 확정): 좋은 붓이 형을 잡아 준다. 지금은 붓 = 완드 부위에
 ## 걸어 두었다 — 별도 '붓' 부위가 생기면 **이 함수 한 줄만** 바꾸면 된다 (그래서 getter다).

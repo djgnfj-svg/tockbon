@@ -18,9 +18,12 @@ const INK_ID := &"ink_basic"
 ## ArrowData.path 점 개수 — 저장 크기·투사체 추종 계산 비용과 곡률 보존의 절충
 const ARROW_PATH_POINTS := 14
 
-## 캔버스 위쪽 = 조준 방향 (GDD §4.1). 모든 도안의 aim_axis가 이 값이고,
-## 발사 시 도안이 통째로 마우스 에임 쪽으로 회전한다 — 위로 그은 화살표가 에임으로 나간다.
-const UP_AXIS := -PI / 2.0
+## 캔버스 위쪽 = **앞**. 🔴 **core가 소유한다** (`InkRender.UP_AXIS`) — 이 값이 모듈마다
+## 복제되면 세션 7의 "90도 틀어짐"이 재발한다. 여기서는 별칭으로만 둔다.
+##
+## v2.1에서 의미가 바뀌었다: ~~조준 방향~~ (v2.0에서 발사각이 지팡이로 갔다) →
+## **충격파 방향의 기준** (종이 위쪽 = 탄이 가는 쪽. TECH_SPEC §4.0-b)
+const UP_AXIS := InkRender.UP_AXIS
 
 ## SpellDesign 스키마 기본 내구 — into 재사용 시 durability_bonus가 누적되지 않도록 기준값
 static var _base_durability_max: int = SpellDesign.new().durability_max

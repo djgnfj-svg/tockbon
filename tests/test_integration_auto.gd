@@ -55,12 +55,18 @@ func _run() -> void:
 	_check("필드 전환", field != null)
 	_check("SpellSystem 배치", field != null and field.get_node_or_null("SpellSystem") != null)
 
-	# 장착 1번(노바 8발) 캐스팅 — spell_system이 수신해 투사체 스폰
+	# 캐스팅 — spell_system이 수신해 투사체 스폰.
+	# 🔴 **v2.0: 발수는 지팡이가 정한다** (기본 지팡이 = 단발). 문양 개수가 아니다.
+	# 이 도안은 문양이 8개지만 **8발이 아니라 1발**이고, 그 8개는 **효과로 합쳐진다**
+	# (TECH_SPEC §4.0-a). 방향이 지팡이로 간 순간 "문양 1개 = 1발"은 성립할 수 없다 —
+	# 8발이 전부 에임 방향으로 **같은 자리에 겹쳐** 나가기 때문이다.
+	# ⚠ 그래서 **전방위(노바)는 지팡이가 돌려줘야 한다** — 아직 단발뿐이다
 	var mana_before: float = gs.mana
 	bus.emit_signal(&"cast_requested", gs.equipped[0], Vector2(400, 300), Vector2.RIGHT)
 	await process_frame
 	var shots := get_nodes_in_group(&"player_projectiles").size()
-	_check("캐스팅: 노바 투사체 8+ (실제 %d)" % shots, shots >= 8)
+	_check("캐스팅: 단발 지팡이 → 투사체 1개 (문양 %d개여도 — 실제 %d)"
+		% [gs.equipped[0].arrows.size(), shots], shots == 1)
 	_check("캐스팅: 마나 차감", gs.mana < mana_before)
 	_check("캐스팅: 내구 차감", gs.equipped[0].durability < gs.equipped[0].durability_max)
 

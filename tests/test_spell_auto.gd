@@ -59,7 +59,6 @@ func _run() -> void:
 		hit_log.append({"enemy": enemy, "damage": damage, "rune_type": rune_type}))
 
 	await _test_nova(system)
-	await _test_fixed_legacy(system)
 	await _test_shotgun(system)
 	await _test_lance(system)
 	await _test_fail_reasons(system)
@@ -74,6 +73,16 @@ func _run() -> void:
 	await _test_glyph_bounce(system)
 	await _test_glyph_homing(system)
 	await _test_glyph_pierce(system)
+	await _test_direction_invariant(system)
+	await _test_wand_patterns(system)
+	await _test_glyph_stacking(system)
+	await _test_glyph_reach_sum(system)
+	await _test_shockwave_emergence(system)
+	await _test_shockwave_travel_axis(system)
+	await _test_shockwave_count_matches_arrows(system)
+	await _test_non_basic_glyphs_no_shockwave(system)
+	await _test_shockwave_fires_once(system)
+	await _test_shockwave_passes_through_enemies(system)
 
 	if failures == 0:
 		print("TEST_SPELL_OK — 전 항목 통과")
@@ -83,23 +92,23 @@ func _run() -> void:
 
 # ── 개별 테스트 ──────────────────────────────────────────────
 
-## 진이 한 종류(AIMED)가 된 근거를 그대로 테스트로 만든다 (GDD v1.5 §4.1):
-## **대칭 노바는 통째로 회전해도 노바다** — 그래서 고정진 없이도 노바가 성립한다.
-## 인덱스별 절대각이 아니라 "45도 균등 간격이 에임과 무관하게 유지되는가"를 검사한다.
+## v2.0: 방향·발수는 지팡이의 것이다 (TECH_SPEC §4.0-a). **기본 지팡이(wand_basic)는 SINGLE**이라
+## 문양이 8개(노바 도안)여도 1발이고, 그 발사각은 **에임 그대로**다 — 도안이 회전하지 않는다.
+## 지팡이별 발수·간격은 [W] _test_wand_patterns가 따로 검증한다.
 func _test_nova(system) -> void:
-	print("[1] 노바 — 8발 45도 균등. 에임이 바뀌면 통째로 돌 뿐 간격은 불변")
+	print("[1] 노바 도안(문양 8개) — 기본 지팡이(SINGLE)에서는 1발, 발사각 = 에임 그대로")
 	for aim_deg: float in [0.0, 90.0, 137.0]:
 		_gs.restore_mana_full()
 		var design := SampleDesigns.nova_fire()
 		var aim := Vector2.RIGHT.rotated(deg_to_rad(aim_deg))
 		_bus.cast_requested.emit(design, Vector2(100, 100), aim)
 		var projs := _projectiles(system)
-		_check(projs.size() == 8, "에임 %.0f도 — 투사체 8개 (실제 %d)" % [aim_deg, projs.size()])
-		if projs.size() == 8:
-			_check(_gaps_uniform(projs, 8), "에임 %.0f도 — 8발이 45도 균등 간격" % aim_deg)
-			# 도안 전체가 에임을 따라 돈다 — 회전량은 투사체·마법진이 공유하는 aim - aim_axis
-			_check(_has_angle(projs, aim.angle() - design.aim_axis),
-				"에임 %.0f도 — 도안이 aim - aim_axis 만큼 통째 회전" % aim_deg)
+		_check(projs.size() == 1,
+			"에임 %.0f도 — 투사체 1개 (문양 8개가 8발을 만들지 않는다, 실제 %d)" % [aim_deg, projs.size()])
+		if projs.size() == 1:
+			_check(_angle_close(projs[0]._velocity.angle(), aim.angle()),
+				"에임 %.0f도 — 실제 진행 방향 = 에임 그대로 (실제 %.0f도)"
+					% [aim_deg, rad_to_deg(projs[0]._velocity.angle())])
 		await _clear_projectiles(system)
 
 	# 내구·마나 차감은 에임과 무관 — 1회 캐스팅으로 확인
@@ -109,45 +118,26 @@ func _test_nova(system) -> void:
 	var durability_before := d.durability
 	_bus.cast_requested.emit(d, Vector2(100, 100), Vector2.RIGHT)
 	_check(d.durability == durability_before - 1,
-		"내구 1 차감 (%d→%d)" % [durability_before, d.durability])
+		"내구 1 차감 (%d→%d) — 발수와 무관하게 캐스팅 1회" % [durability_before, d.durability])
 	_check(executed_log.size() == 1 and is_equal_approx(float(executed_log[0]["mana"]), d.mana_cost),
 		"cast_executed 1회 (mana=%.0f)" % d.mana_cost)
 	await _clear_projectiles(system)
 
-## FIXED는 v1.5에서 폐지됐지만 **구세이브가 들고 있는 값**이라 발사 경로는 살아 있어야 한다.
-func _test_fixed_legacy(system) -> void:
-	print("[1b] 구세이브 FIXED — 에임을 무시하고 절대각 그대로 (호환 경로 회귀 방지)")
-	_gs.restore_mana_full()
-	var design := SampleDesigns.nova_fire()
-	design.circle_type = Enums.CircleType.FIXED
-	_bus.cast_requested.emit(design, Vector2.ZERO, Vector2(0, 1))  # 에임 90도 — 무시돼야 한다
-	var projs := _projectiles(system)
-	_check(projs.size() == 8, "투사체 8개 (실제 %d)" % projs.size())
-	var angles_ok := projs.size() == 8
-	for i in range(projs.size()):
-		var expected := TAU * float(i) / 8.0
-		if not _angle_close(projs[i].direction_angle, expected):
-			angles_ok = false
-			print("    각도[%d]=%.2f도, 기대=%.2f도" % [i, rad_to_deg(projs[i].direction_angle), rad_to_deg(expected)])
-	_check(angles_ok, "에임 90도여도 절대각 0/45/../315 유지")
-	await _clear_projectiles(system)
-
+## 산탄 도안(문양 3개, 각각 다른 direction 오프셋)도 기본 지팡이(SINGLE)에서는 **1발**이고,
+## ArrowData.direction 오프셋은 **소비되지 않는다** — 실제 진행 방향은 에임 그대로다.
 func _test_shotgun(system) -> void:
-	print("[2] 산탄 (AIMED) — 에임 (1,0)/(0,1) 상대 회전")
-	var offsets: Array[float] = [-0.26, 0.0, 0.26]
+	print("[2] 산탄 도안(문양 3개, 오프셋 각각) — 기본 지팡이(SINGLE)에서는 1발, 발사각 = 에임")
 	for aim: Vector2 in [Vector2(1, 0), Vector2(0, 1)]:
 		_gs.restore_mana_full()
 		var design := SampleDesigns.aimed_shotgun_impact()
 		_bus.cast_requested.emit(design, Vector2.ZERO, aim)
 		var projs := _projectiles(system)
-		_check(projs.size() == 3, "aim=%s 투사체 3개 (실제 %d)" % [aim, projs.size()])
-		var angles_ok := projs.size() == 3
-		for i in range(projs.size()):
-			var expected := offsets[i] - design.aim_axis + aim.angle()
-			if not _angle_close(projs[i].direction_angle, expected):
-				angles_ok = false
-				print("    각도[%d]=%.2f도, 기대=%.2f도" % [i, rad_to_deg(projs[i].direction_angle), rad_to_deg(expected)])
-		_check(angles_ok, "aim=%s 3발 각도가 에임에 상대 회전" % aim)
+		_check(projs.size() == 1,
+			"aim=%s 투사체 1개 (문양 3개의 direction 오프셋이 3발을 만들지 않는다, 실제 %d)" % [aim, projs.size()])
+		if projs.size() == 1:
+			_check(_angle_close(projs[0]._velocity.angle(), aim.angle()),
+				"aim=%s 발사각 = 에임 그대로 (문양 오프셋 무시, 실제 %.0f도)"
+					% [aim, rad_to_deg(projs[0]._velocity.angle())])
 		await _clear_projectiles(system)
 
 func _test_lance(system) -> void:
@@ -218,87 +208,94 @@ func _test_dummy_hit(system) -> void:
 	dummy.queue_free()
 	await _clear_projectiles(system)
 
+## v2.0 — **몸이 진(+룬)이다** (TECH_SPEC §4.0-a). 그린 진 먹선이 그대로 탄이 되고, 히트박스가
+## 진 반지름(compute_radius_px)을 따른다. 문양 획(ARROW role)은 탄에 안 붙고, 탄은 회전하지 않는다.
 func _test_ink_projectile(system) -> void:
-	print("[6] 먹선 투사체 — 그린 획이 그대로 탄이 된다 (TECH_SPEC §4.4)")
+	print("[6] 먹선 투사체 — 몸 = 진(+룬), 문양 획은 안 붙고, 탄은 돌지 않는다 (v2.0 §4.0-a)")
 	_gs.restore_mana_full()
-	var path := _arrow_path()
 	var design := _ink_design(Enums.CircleType.FIXED, 0.0, 0.5)
 	_bus.cast_requested.emit(design, Vector2.ZERO, Vector2.RIGHT)
 	var projs := _projectiles(system)
 	_check(projs.size() == 1, "투사체 1개 (실제 %d)" % projs.size())
 	if projs.size() == 1:
 		var proj = projs[0]
-		var line: Line2D = _find_line(proj)
-		_check(line != null, "투사체에 Line2D 먹선 자식 생성")
-		if line != null:
-			_check(line.points.size() == path.size(),
-				"점 개수 %d = 그린 획 %d" % [line.points.size(), path.size()])
-			var head: Vector2 = line.points[line.points.size() - 1]
-			_check(head.length() < 0.01, "머리(마지막 점) = 노드 원점 (오차 %.4fpx)" % head.length())
-			var px: float = _ink.unit_px(system.balance)
-			var expected_len: float = path[path.size() - 1].x * px
-			var tail_len: float = line.points[0].length()
-			_check(absf(tail_len - expected_len) < 0.01,
-				"꼬리 길이 %.1fpx = 그린 길이 × unit_px(%.0f) = %.1fpx" % [tail_len, px, expected_len])
-			_check(line.points[0].x < 0.0, "획이 머리 뒤로 끌린다 (꼬리 x=%.1f < 0)" % line.points[0].x)
-			# 붓을 누른 그대로 날아간다 — 진에만 붓맛이 있고 탄에는 없는 비대칭 방지
-			_check(line.width_curve != null, "필압 → width_curve 배선됨 (굵기 변화 보존)")
-		# 먹선은 그린 크기가 곧 크기 — 루트 scale 이중 적용 금지. 히트박스만 진 규모 배율
-		var size_scale: float = lerpf(system.balance.circle_size_min,
-			system.balance.circle_size_max, design.circle_radius)
+		var lines := _find_lines(proj)
+		_check(lines.size() == 1,
+			"먹선 Line2D 정확히 1개 — 진 획만 붙는다, 화살표(ARROW) 획 제외 (실제 %d개)" % lines.size())
+		if lines.size() == 1:
+			var line: Line2D = lines[0]
+			_check(line.points.size() == 16, "점 개수 16 = 그린 진 획 그대로 (실제 %d)" % line.points.size())
+		# 탄의 몸 = 진 — 히트박스 반경이 spell_system.compute_radius_px(design)와 정확히 같다
+		# (둘 다 balance의 같은 두 노브만 읽는다 — 갈라지면 보이는 것과 맞는 것이 어긋난다)
+		var expected_r: float = system.compute_radius_px(design)
+		var base_hit_radius := 5.0  # projectile.gd BASE_HIT_RADIUS — 씬 CircleShape2D의 고정 반경
+		var actual_r: float = proj.get_node("Shape").scale.x * base_hit_radius
+		_check(is_equal_approx(actual_r, expected_r),
+			"히트박스 반경 %.2fpx = compute_radius_px %.2fpx (진이 곧 탄)" % [actual_r, expected_r])
 		_check(proj.scale.is_equal_approx(Vector2.ONE),
-			"루트 scale 미적용 (실제 %.2f — 먹선 이중 확대 방지)" % proj.scale.x)
-		_check(is_equal_approx(proj.get_node("Shape").scale.x, size_scale),
-			"히트박스는 **진 규모** 배율 (%.2f)" % size_scale)
+			"루트 scale 미적용 (실제 %.2f — 반경은 Shape 하나에만 실린다)" % proj.scale.x)
 		_check(not proj.get_node("Visual").visible, "기존 폴리곤 비주얼 숨김")
+		_check(is_zero_approx(proj.rotation), "탄은 회전하지 않는다 (rotation=%.3f, 몸이 진일 때 항상)" % proj.rotation)
 	await _clear_projectiles(system)
 
-	# 마우스로 그린 획 — path는 있지만 필압이 없다. 균일 굵기로 폴백하고 크래시 없어야 한다
+	# 진이 크면 탄도 커진다 — circle_radius가 히트박스에 실제로 비례하는지 실측
 	_gs.restore_mana_full()
-	var no_press := _ink_design(Enums.CircleType.FIXED, 0.0, 0.5, false)
-	_bus.cast_requested.emit(no_press, Vector2.ZERO, Vector2.RIGHT)
-	var np := _projectiles(system)
-	_check(np.size() == 1, "필압 없는 path도 발사됨 (실제 %d)" % np.size())
-	if np.size() == 1:
-		var nline: Line2D = _find_line(np[0])
-		_check(nline != null, "필압 없어도 먹선은 그려진다")
-		if nline != null:
-			_check(nline.width_curve == null, "필압 없으면 균일 굵기 폴백 (width_curve null)")
-			_check(nline.points[nline.points.size() - 1].length() < 0.01, "머리 오프셋은 그대로 원점")
+	var small := _ink_design(Enums.CircleType.FIXED, 0.0, 0.5)
+	small.circle_radius = 0.2
+	_bus.cast_requested.emit(small, Vector2.ZERO, Vector2.RIGHT)
+	var sp := _projectiles(system)
+	var small_r := -1.0
+	if sp.size() == 1:
+		small_r = sp[0].get_node("Shape").scale.x * 5.0
 	await _clear_projectiles(system)
 
+	_gs.restore_mana_full()
+	var big := _ink_design(Enums.CircleType.FIXED, 0.0, 0.5)
+	big.circle_radius = 0.9
+	_bus.cast_requested.emit(big, Vector2.ZERO, Vector2.RIGHT)
+	var bp := _projectiles(system)
+	if bp.size() == 1:
+		var expected_big_r: float = system.compute_radius_px(big)
+		var actual_big_r: float = bp[0].get_node("Shape").scale.x * 5.0
+		_check(is_equal_approx(actual_big_r, expected_big_r),
+			"진 0.9 — 히트박스 %.2fpx = compute_radius_px %.2fpx (진 반지름에 비례)"
+				% [actual_big_r, expected_big_r])
+		_check(sp.size() == 1 and actual_big_r > small_r,
+			"진 0.9의 히트박스(%.2fpx)가 진 0.2의 히트박스(%.2fpx)보다 크다" % [actual_big_r, small_r])
+	await _clear_projectiles(system)
+
+## v2.0 — 회전이 없다 (TECH_SPEC §4.0-a): 방향이 지팡이로 갔으므로 마법진을 에임으로 돌릴 이유가
+## 없다. 그린 자세 그대로 발밑에 펼쳐진다. circle_type·aim_axis가 뭐든 rotation은 항상 0이다.
 func _test_cast_circle(system) -> void:
-	print("[7] 캐스팅 마법진 — 발밑에 내가 그린 진이 펼쳐졌다 사라진다")
+	print("[7] 캐스팅 마법진 — 발밑에 그린 자세 그대로 펼쳐졌다 사라진다 (v2.0: 회전 없음)")
 	_gs.restore_mana_full()
 	var aim := Vector2(0, 1)
-	var aim_axis := 0.4
 	var origin := Vector2(64, 32)
-	var design := _ink_design(Enums.CircleType.AIMED, aim_axis, 0.5)
+	var design := _ink_design(Enums.CircleType.AIMED, 0.4, 0.5)
 	_bus.cast_requested.emit(design, origin, aim)
 	var circle = _cast_circle(system)
 	_check(circle != null, "연출 노드 생성됨")
 	if circle != null:
 		_check(circle.global_position.is_equal_approx(origin),
 			"진 중심 = 캐스팅 원점 %s (실제 %s)" % [origin, circle.global_position])
-		var expected_rot: float = aim.angle() - aim_axis
-		_check(_angle_close(circle.rotation, expected_rot),
-			"AIMED rotation = aim_angle - aim_axis = %.1f도 (실제 %.1f도)"
-				% [rad_to_deg(expected_rot), rad_to_deg(circle.rotation)])
+		_check(is_zero_approx(circle.rotation),
+			"rotation = 0 — 에임·aim_axis 무관, 그린 자세 그대로 (실제 %.1f도)" % rad_to_deg(circle.rotation))
 		_check(circle.z_index < 0, "z_index %d — 지형 위·플레이어 아래" % circle.z_index)
 		_check(not (circle is CollisionObject2D), "충돌 없는 순수 비주얼")
 		# build_design 기본 필터: 화살표는 진에 남지 않는다 (투사체로 날아가므로)
-		_check(_count_lines(circle) == 1,
-			"진 획만 렌더 — 화살표 획 제외 (Line2D %d개)" % _count_lines(circle))
+		_check(_find_lines(circle).size() == 1,
+			"진 획만 렌더 — 화살표 획 제외 (Line2D %d개)" % _find_lines(circle).size())
 	await create_timer(0.8).timeout  # 연출 총 0.4초
 	_check(_cast_circle(system) == null, "연출 종료 후 자동 소멸")
 	await _clear_projectiles(system)
 
+	# circle_type=FIXED + 전혀 다른 에임이어도 여전히 rotation 0
 	_gs.restore_mana_full()
-	var fixed := _ink_design(Enums.CircleType.FIXED, 0.0, 0.5)
-	_bus.cast_requested.emit(fixed, Vector2.ZERO, Vector2(0, 1))
+	var fixed := _ink_design(Enums.CircleType.FIXED, 0.9, 0.5)
+	_bus.cast_requested.emit(fixed, Vector2.ZERO, Vector2(-1, -1).normalized())
 	var fixed_circle = _cast_circle(system)
 	_check(fixed_circle != null and is_zero_approx(fixed_circle.rotation),
-		"FIXED 진은 에임과 무관하게 rotation 0")
+		"FIXED + 다른 에임에도 rotation 0 (circle_type·aim_axis 소비 중단 회귀 방지)")
 	await _clear_projectiles(system)
 
 func _test_no_strokes_fallback(system) -> void:
@@ -310,9 +307,14 @@ func _test_no_strokes_fallback(system) -> void:
 	var projs := _projectiles(system)
 	_check(projs.size() == 1, "폴백 투사체 정상 발사 (실제 %d)" % projs.size())
 	if projs.size() == 1:
-		_check(_find_line(projs[0]) == null, "path 없으면 먹선 없음 — 기존 스프라이트/폴리곤")
-		_check(projs[0].scale.x > 1.0,
-			"폴백은 루트 scale에 진 규모 배율 적용 (scale=%.2f)" % projs[0].scale.x)
+		var proj = projs[0]
+		_check(_find_lines(proj).is_empty(), "path 없으면 먹선 없음 — 기존 스프라이트/폴리곤")
+		var expected_scale: float = system.compute_radius_px(design) / 5.0
+		_check(is_equal_approx(proj.scale.x, expected_scale),
+			"폴백은 루트 scale = compute_radius_px ÷ BASE_HIT_RADIUS(5) = %.2f (실제 %.2f)"
+				% [expected_scale, proj.scale.x])
+		_check(_angle_close(proj.rotation, Vector2.RIGHT.angle()),
+			"폴백(회전 스프라이트)의 초기 rotation = 발사각(에임 그대로)")
 	await _clear_projectiles(system)
 
 ## 역할 축 회귀 방지 (TECH_SPEC §4.0) — **진 = 규모 / 룬 = 속성 / 문양 = 방식**.
@@ -379,18 +381,9 @@ func _test_role_axes(system) -> void:
 			"문양 길이는 사거리에 영향 없음 (%.2f초)" % short_life)
 	await _clear_projectiles(system)
 
-	# (3) 한 도안의 모든 탄은 규모가 같다 — 문양은 방식(방향·기점)만 정하므로
-	_gs.restore_mana_full()
-	var nova := SampleDesigns.nova_fire()
-	_bus.cast_requested.emit(nova, Vector2.ZERO, Vector2.RIGHT)
-	var np2 := _projectiles(system)
-	if np2.size() > 1:
-		var same := true
-		for p in np2:
-			if not is_equal_approx(float(p.damage), float(np2[0].damage)):
-				same = false
-		_check(same, "노바 %d발 전부 같은 위력 (규모는 진이 정하므로)" % np2.size())
-	await _clear_projectiles(system)
+	# (3) v2.0: 한 도안 = 한 탄이다 (기본 지팡이 SINGLE 기준 — [1]이 이미 노바=1발을 실측했다).
+	# "같은 도안의 여러 탄 규모 비교"는 이제 성립하지 않는다 — 지팡이가 다발(MULTI·NOVA)을
+	# 쏠 때 "발마다 규모가 같다"는 [W] _test_wand_patterns가 damage 동일성으로 검증한다.
 
 ## 룬 = 속성 + **농도** 축 (v1.7, TECH_SPEC §4.0).
 ## 룬 크기(rune_fill)는 상태이상 **세기**만 정하고 위력은 절대 못 건드린다 — 위력은 진의 축이다.
@@ -470,11 +463,12 @@ func _test_rune_density_axis(system) -> void:
 ## 아래 넷은 전부 **관측 가능한 결과**로 검증한다 — 실제 속도 반전 · 실제 궤도 각 변화 ·
 ## 실제 take_hit을 받은 적 수 · 실제 이동 거리.
 
-## 구세이브·샘플 도안(glyph 미설정 = BASIC, reach 기본 1.0)이 v1.8과 똑같이 날아가는가.
+## 구세이브·샘플 도안(glyph 미설정 = BASIC, reach 기본 1.0)이 위력·상태이상은 v1.8과 똑같이 날아가고,
+## 몸(=진, 진 반지름 히트박스)·사거리(compute_design_lifetime)·회전(폴백만 회전)은 v2.0 공식을 따른다.
 func _test_glyph_basic_regression(system) -> void:
-	print("[11] BASIC 회귀 — 구세이브 도안은 v1.8과 같은 탄이다")
+	print("[11] BASIC 회귀 — 위력은 v1.8과 같고, 몸·사거리는 v2.0 공식(진이 곧 탄)을 따른다")
 	_gs.restore_mana_full()
-	var design := SampleDesigns.aimed_lance_water()   # arrows[0].glyph·reach 미설정
+	var design := SampleDesigns.aimed_lance_water()   # arrows[0].glyph·reach 미설정, strokes 없음(폴백)
 	_check(int(design.arrows[0].glyph) == Enums.GlyphType.BASIC, "구세이브 화살표 glyph 기본값 = BASIC")
 	_check(is_equal_approx(float(design.arrows[0].reach), 1.0), "구세이브 화살표 reach 기본값 = 1.0")
 	_bus.cast_requested.emit(design, Vector2.ZERO, Vector2.RIGHT)
@@ -482,25 +476,24 @@ func _test_glyph_basic_regression(system) -> void:
 	_check(projs.size() == 1, "투사체 1개 (실제 %d)" % projs.size())
 	if projs.size() == 1:
 		var proj = projs[0]
-		# 위력·크기는 **진의 축** — 문양 도입으로 1비트도 안 움직여야 한다 (v1.8 공식 그대로 재계산)
+		# 위력은 **진의 축** — 문양 도입으로 1비트도 안 움직여야 한다 (v1.8 공식 그대로 재계산)
 		var rune = _db.get_rune(design.rune_type)
 		var legacy_damage: float = system.balance.projectile_base_damage \
 			* (float(system.balance.circle_damage_base) + design.circle_radius) \
 			* (float(rune.base_damage) if rune != null else 1.0)
-		var legacy_size: float = lerpf(float(system.balance.circle_size_min),
-			float(system.balance.circle_size_max), design.circle_radius)
 		_check(is_equal_approx(float(proj.damage), legacy_damage),
 			"위력 %.2f = v1.8 값 %.2f (문양이 위력을 안 건드린다)" % [proj.damage, legacy_damage])
-		var actual_size: float = float(proj.scale.x * proj.get_node("Shape").scale.x)
-		_check(is_equal_approx(actual_size, legacy_size),
-			"탄 크기 %.2f = v1.8 값 %.2f (문양이 크기를 안 건드린다)" % [actual_size, legacy_size])
-		# 사거리 = 진 기준 × 문양 배율. reach 1.0의 배율은 1.0이 **아니다** — 아래 경고 참조
-		var base_life: float = system.balance.projectile_lifetime_sec * lerpf(
-			float(system.balance.circle_range_min), float(system.balance.circle_range_max),
-			design.circle_radius)
+		# v2.0: 크기 = compute_radius_px(design). strokes 없는 폴백이므로 루트 scale에 실린다
+		var expected_r: float = system.compute_radius_px(design)
+		var actual_r: float = proj.scale.x * proj.get_node("Shape").scale.x * 5.0  # BASE_HIT_RADIUS
+		_check(is_equal_approx(actual_r, expected_r),
+			"탄 반경 %.2fpx = compute_radius_px %.2fpx (v2.0: 진이 곧 탄)" % [actual_r, expected_r])
+		# v2.0: 사거리는 도안당 1회, compute_design_lifetime 하나가 전부의 출처다
 		var mult: float = _range_mult(system, 1.0)
-		_check(is_equal_approx(float(proj._life_left), base_life * mult),
-			"사거리 %.3f초 = 진 기준 %.3f × 문양 배율 %.3f" % [proj._life_left, base_life, mult])
+		var expected_life: float = system.compute_design_lifetime(design)
+		_check(is_equal_approx(float(proj._life_left), expected_life),
+			"사거리 %.3f초 = compute_design_lifetime %.3f (기준 × 문양 배율 %.3f)"
+				% [proj._life_left, expected_life, mult])
 		if not is_equal_approx(mult, 1.0):
 			print("  ⚠ 리드 확인 필요: reach 기본값 1.0의 사거리 배율이 %.3f다 (1.0이 아님)." % mult)
 			print("    → **구세이브 도안의 사거리가 %.0f%%로 바뀐다.** TECH_SPEC §4.0-a는" % (mult * 100.0))
@@ -536,7 +529,8 @@ func _test_glyph_range(system) -> void:
 	_check(int(long_shot["status"]) == int(short_shot["status"])
 			and is_equal_approx(float(long_shot["status_power"]), float(short_shot["status_power"])),
 		"문양 세기는 상태이상을 못 건드린다 (룬의 축 — 세기 %.3f)" % short_shot["status_power"])
-	# 두 문양이 한 도안에 섞이면 **탄마다** 사거리가 갈린다 (도안당 1회 계산이 아니라는 증거)
+	# 짧은 문양 + 긴 문양이 한 도안에 섞이면 — v2.0: **1발**이고, 사거리는 **긴 쪽(max)**이 정한다.
+	# 합이 아니다: 합이었다면 더 멀리 갔을 것이다 — 실측으로 못 박는다.
 	_gs.restore_mana_full()
 	var mixed := _glyph_design(Enums.GlyphType.BASIC, 0.6)
 	var far := ArrowData.new()
@@ -548,13 +542,22 @@ func _test_glyph_range(system) -> void:
 	mixed.arrows.append(far)
 	_bus.cast_requested.emit(mixed, Vector2.ZERO, Vector2.RIGHT)
 	var mp := _projectiles(system)
-	_check(mp.size() == 2, "짧은 문양 + 긴 문양 = 2발 (실제 %d)" % mp.size())
-	if mp.size() == 2:
-		_check(not is_equal_approx(float(mp[0]._life_left), float(mp[1]._life_left)),
-			"한 도안 안에서 탄마다 사거리가 다르다 (%.2f초 vs %.2f초)"
-				% [mp[0]._life_left, mp[1]._life_left])
-		_check(is_equal_approx(float(mp[0].damage), float(mp[1].damage)),
-			"같은 도안이므로 위력은 같다 (진의 축, %.2f)" % mp[0].damage)
+	_check(mp.size() == 1,
+		"짧은 문양 + 긴 문양 = 1발 (v2.0: 발수는 지팡이가 정한다, 문양 개수 아님, 실제 %d)" % mp.size())
+	if mp.size() == 1:
+		var expected_life: float = system.compute_design_lifetime(mixed)
+		_check(is_equal_approx(float(mp[0]._life_left), expected_life),
+			"사거리 %.2f초 = compute_design_lifetime (실제 %.2f)" % [expected_life, mp[0]._life_left])
+		var long_only_life: float = system.compute_lifetime(mixed) * _range_mult(system, 3.0)
+		_check(is_equal_approx(float(mp[0]._life_left), long_only_life),
+			"사거리는 max(reach)=3.0 단독 기준과 같다 (%.2f초) — 짧은 문양은 사거리에 안 보탠다"
+				% long_only_life)
+		var short_mult: float = _range_mult(system, 0.6)
+		var long_mult: float = _range_mult(system, 3.0)
+		var sum_life: float = system.compute_lifetime(mixed) * (short_mult + long_mult)
+		_check(float(mp[0]._life_left) < sum_life,
+			"합이었다면 %.2f초였을 것 — 실측 %.2f초는 그보다 짧다 (max이지 합이 아니다)"
+				% [sum_life, mp[0]._life_left])
 	await _clear_projectiles(system)
 
 ## 팅김⚡ — 벽에 **실제로** 반사되는가. 반전 횟수를 세서 검증한다.
@@ -582,8 +585,9 @@ func _test_glyph_bounce(system) -> void:
 		_check(is_instance_valid(proj), "벽에 닿아도 살아 있다 (반사 횟수가 남아 있으므로)")
 		if is_instance_valid(proj):
 			_check(proj._velocity.x < 0.0, "벽에서 속도가 반전됐다 (vx=%.0f < 0)" % proj._velocity.x)
-			_check(_angle_close(proj.rotation, PI),
-				"비주얼 rotation도 진행 방향을 따라간다 (%.0f도)" % rad_to_deg(proj.rotation))
+			_check(is_zero_approx(proj.rotation),
+				"v2.0: 탄은 회전하지 않는다 — 팅김으로 방향이 꺾여도 rotation=0 (실제 %.1f도)"
+					% rad_to_deg(proj.rotation))
 			_check(absf(proj.global_position.x) < 80.0, "벽을 뚫고 지나가지 않았다 (x=%.0f)"
 				% proj.global_position.x)
 			# 나머지 반사까지 세고, 다 쓰면 벽에서 소멸하는지
@@ -653,7 +657,7 @@ func _test_glyph_homing(system) -> void:
 	var turn_after_homing := 0.0
 	var prev_angle: float = proj._velocity.angle()
 	var was_homing: bool = proj._homing_left > 0.0
-	var rotation_follows := true
+	var stays_unrotated := true
 	var frames := 0
 	while is_instance_valid(proj) and frames < 240:
 		dummy.global_position = proj.global_position + Vector2(0, 100).rotated(proj._velocity.angle())
@@ -670,11 +674,12 @@ func _test_glyph_homing(system) -> void:
 		else:
 			turn_after_homing += step
 		was_homing = proj._homing_left > 0.0
-		# 먹선·스프라이트가 진행 방향을 봐야 한다 — 안 그러면 옆으로 게걸음한다 (매 프레임 불변식)
-		if not _angle_close(float(proj.rotation), cur):
-			rotation_follows = false
+		# v2.0: 몸이 진(먹선)이면 궤도가 휘어도 rotation은 안 움직인다 — 매 프레임 불변식
+		if not is_zero_approx(float(proj.rotation)):
+			stays_unrotated = false
 
-	_check(rotation_follows, "매 프레임 rotation = 진행 방향 (게걸음 방지)")
+	_check(stays_unrotated,
+		"매 프레임 rotation = 0 — 궤도가 유도로 휘어도 진(먹선) 몸은 돌지 않는다 (v2.0)")
 
 	_check(turn_while_homing > 0.5,
 		"추적 중 궤도가 실제로 휜다 (총 선회 %.2f rad = %.0f도)"
@@ -790,6 +795,507 @@ func _test_glyph_pierce(system) -> void:
 	for d in dummies:
 		d.queue_free()
 	await _clear_projectiles(system)
+
+## 신규(v2.0의 심장) — ArrowData.direction·SpellDesign.aim_axis·circle_type을 뭘로 바꿔도
+## 실제 발사각은 **에임 하나**다. 중간 표현(direction 필드 등)이 아니라 실제 투사체의
+## 관측 가능한 진행 방향(_velocity.angle())으로 잰다 (세션 7 교훈: 중간 표현은 거짓말할 수 있다).
+func _test_direction_invariant(system) -> void:
+	print("[16] 방향 불변 — 문양의 direction·aim_axis·circle_type을 뭘로 바꿔도 발사각은 에임 그대로")
+	for aim_deg: float in [0.0, 47.0, 200.0]:
+		var aim := Vector2.RIGHT.rotated(deg_to_rad(aim_deg))
+		for junk_direction: float in [0.0, 1.7, -2.3, PI]:
+			_gs.restore_mana_full()
+			var design := SampleDesigns.aimed_shotgun_impact()
+			for arrow: ArrowData in design.arrows:
+				arrow.direction = junk_direction
+			design.aim_axis = 5.5      # 어떤 값이든 무시돼야 한다
+			design.circle_type = Enums.CircleType.FIXED
+			_bus.cast_requested.emit(design, Vector2.ZERO, aim)
+			var projs := _projectiles(system)
+			_check(projs.size() == 1,
+				"발수는 기본 지팡이(SINGLE) 그대로 — 문양 3개여도 1발 (실제 %d)" % projs.size())
+			if projs.size() == 1:
+				var actual: float = projs[0]._velocity.angle()
+				_check(_angle_close(actual, aim.angle()),
+					"direction=%.1f·aim_axis=5.5·circle_type=FIXED여도 실제 진행 방향 = 에임 %.0f도 (실제 %.0f도)"
+						% [junk_direction, aim_deg, rad_to_deg(actual)])
+			await _clear_projectiles(system)
+
+## 신규(v2.0 지팡이 축) — 발수·방향의 유일한 출처는 **지팡이**다 (spell_system.wand_shots).
+## **같은 도안**을 지팡이만 SINGLE→MULTI→NOVA로 바꿔 가며 쏜다. 도안은 한 글자도 안 바꾼다.
+## GameState는 오토로드라 테스트 간에 상태가 새므로, 끝나면 반드시 지팡이를 원상복구한다.
+func _test_wand_patterns(system) -> void:
+	print("[17] 지팡이 패턴 — 같은 도안, 지팡이만 바꾸면 발수·방향이 바뀐다 (SINGLE/MULTI/NOVA)")
+	var design := SampleDesigns.aimed_shotgun_impact()
+	var aim := Vector2.RIGHT
+
+	# SINGLE — 미착용(wand_basic과 동일 취급)이면 단발. 문양 3개여도 1발.
+	_gs.equipment.erase(Enums.ItemKind.WAND)
+	_check(int(_gs.wand_pattern()) == Enums.WandPattern.SINGLE, "미착용 = SINGLE (기본값)")
+	_gs.restore_mana_full()
+	_bus.cast_requested.emit(design, Vector2.ZERO, aim)
+	var single := _projectiles(system)
+	_check(single.size() == 1, "SINGLE — 문양 3개여도 1발 (실제 %d)" % single.size())
+	if single.size() == 1:
+		_check(_angle_close(single[0]._velocity.angle(), aim.angle()), "SINGLE — 발사각 = 에임")
+	await _clear_projectiles(system)
+
+	# MULTI (wand_fork) — wand_multi_count발, 에임이 한가운데, 양 끝 사이 = wand_multi_spread_deg
+	_gs.equipment[Enums.ItemKind.WAND] = &"wand_fork"
+	_check(int(_gs.wand_pattern()) == Enums.WandPattern.MULTI, "wand_fork 착용 → wand_pattern() = MULTI")
+	_gs.restore_mana_full()
+	_bus.cast_requested.emit(design, Vector2.ZERO, aim)
+	var multi := _projectiles(system)
+	var multi_n: int = system.balance.wand_multi_count
+	_check(multi.size() == multi_n, "MULTI — 투사체 %d개 (실제 %d)" % [multi_n, multi.size()])
+	if multi.size() == multi_n and multi_n > 1:
+		var angles: Array[float] = []
+		for p in multi:
+			angles.append(p._velocity.angle())
+		angles.sort()
+		var avg := 0.0
+		for a: float in angles:
+			avg += a
+		avg /= float(angles.size())
+		_check(_angle_close(avg, aim.angle()),
+			"MULTI — %d발 평균 각도 ≈ 에임 (실제 %.1f도)" % [angles.size(), rad_to_deg(avg)])
+		var total_spread_deg: float = rad_to_deg(absf(wrapf(angles[angles.size() - 1] - angles[0], -PI, PI)))
+		_check(absf(total_spread_deg - system.balance.wand_multi_spread_deg) < 1.0,
+			"MULTI — 양 끝 사이 = spread_deg %.1f도 (실측 %.1f도)"
+				% [system.balance.wand_multi_spread_deg, total_spread_deg])
+		var dmg0: float = float(multi[0].damage)
+		var same_damage := true
+		for p in multi:
+			if not is_equal_approx(float(p.damage), dmg0):
+				same_damage = false
+		_check(same_damage, "MULTI — 효과는 발수와 무관, %d발 전부 같은 위력" % multi.size())
+	await _clear_projectiles(system)
+
+	# NOVA (wand_ring) — wand_nova_count발, 에임을 바꿔도 이웃 탄 사이 각은 항상 360/n
+	for aim_deg: float in [0.0, 90.0, 137.0]:
+		_gs.equipment[Enums.ItemKind.WAND] = &"wand_ring"
+		_check(int(_gs.wand_pattern()) == Enums.WandPattern.NOVA, "wand_ring 착용 → wand_pattern() = NOVA")
+		_gs.restore_mana_full()
+		var nova_aim := Vector2.RIGHT.rotated(deg_to_rad(aim_deg))
+		_bus.cast_requested.emit(design, Vector2.ZERO, nova_aim)
+		var nova := _projectiles(system)
+		var nova_n: int = system.balance.wand_nova_count
+		_check(nova.size() == nova_n,
+			"NOVA 에임 %.0f도 — 투사체 %d개 (실제 %d)" % [aim_deg, nova_n, nova.size()])
+		if nova.size() == nova_n:
+			var nova_angles: Array = []
+			for p in nova:
+				nova_angles.append(float(p._velocity.angle()))
+			_check(_gaps_uniform_angles(nova_angles, nova_n),
+				"NOVA 에임 %.0f도 — 이웃한 탄 사이 각이 항상 360/%d (통째로 돌 뿐 간격 불변)"
+					% [aim_deg, nova_n])
+			var dmg0: float = float(nova[0].damage)
+			var same_damage := true
+			for p in nova:
+				if not is_equal_approx(float(p.damage), dmg0):
+					same_damage = false
+			_check(same_damage, "NOVA — 효과는 발수와 무관, %d발 전부 같은 위력" % nova.size())
+		await _clear_projectiles(system)
+
+	_gs.equipment.erase(Enums.ItemKind.WAND)  # 원상복구 — GameState는 오토로드라 테스트 간에 샌다
+
+## 신규(v2.0) — 팅김⚡ + 관통‖을 한 장에 그리면 **한 탄**이 튕기면서 뚫는다 (효과는 동시에 얹힌다).
+## 발사 원점보다 **뒤**에 적을 둬 — 반사가 실제로 일어나야만 닿을 수 있는 자리를 만든다.
+## 그 적들이 실제로 맞았다는 사실 자체가 "튕겼다"와 "뚫었다"를 동시에 증명한다 (중간 표현이 아니라
+## 실제 take_hit 관측).
+func _test_glyph_stacking(system) -> void:
+	print("[18] 효과 중첩 — 팅김+관통을 함께 그린 한 탄이 벽에 튕기고 적을 뚫는다")
+	var wall_r := _make_wall(Vector2(80, 0), Vector2(20, 240))
+	var wall_l := _make_wall(Vector2(-80, 0), Vector2(20, 240))
+	var behind1 = _dummy_scene.instantiate()
+	var behind2 = _dummy_scene.instantiate()
+	root.add_child(behind1)
+	root.add_child(behind2)
+	behind1.global_position = Vector2(-40, 0)
+	behind2.global_position = Vector2(-60, 0)
+
+	_gs.restore_mana_full()
+	var design := _ink_design(Enums.CircleType.FIXED, 0.0, 0.5)
+	design.arrows[0].glyph = Enums.GlyphType.BOUNCE
+	design.arrows[0].reach = 3.0
+	var pierce_arrow := ArrowData.new()
+	pierce_arrow.glyph = Enums.GlyphType.PIERCE
+	pierce_arrow.reach = 3.0
+	design.arrows.append(pierce_arrow)
+
+	_bus.cast_requested.emit(design, Vector2.ZERO, Vector2.RIGHT)
+	var projs := _projectiles(system)
+	_check(projs.size() == 1, "투사체 1개 (효과가 여러 개여도 발수는 그대로, 실제 %d)" % projs.size())
+	if projs.size() == 1:
+		var proj = projs[0]
+		var frames := 0
+		while frames < 400 and is_instance_valid(proj) and (behind1.hits.is_empty() or behind2.hits.is_empty()):
+			await physics_frame
+			frames += 1
+		_check(not behind1.hits.is_empty() and not behind2.hits.is_empty(),
+			"발사 원점보다 뒤의 적 둘 다 맞았다 (반사 없인 닿을 수 없는 자리 — 팅김·관통이 둘 다 실제로 일어났다)")
+		if not behind1.hits.is_empty():
+			_check(behind1.hits.size() == 1, "같은 적을 두 번 안 때린다 (behind1 %d회)" % behind1.hits.size())
+		if not behind2.hits.is_empty():
+			_check(behind2.hits.size() == 1, "같은 적을 두 번 안 때린다 (behind2 %d회)" % behind2.hits.size())
+	behind1.queue_free()
+	behind2.queue_free()
+	wall_r.queue_free()
+	wall_l.queue_free()
+	await _clear_projectiles(system)
+
+## 신규(v2.0) — 같은 글자를 여러 번 그으면 세기가 **합산**된다 (compile_effects: Σreach).
+## 팅김 두 획(reach 각 1.5) = Σ3.0이 팅김 한 획(reach 1.5)보다 실제로 더 많이 튕겨야 한다.
+func _test_glyph_reach_sum(system) -> void:
+	print("[19] 같은 글자 합산 — 팅김 두 획(Σreach 3.0)이 팅김 한 획(reach 1.5)보다 더 많이 튕긴다")
+	var wall_r := _make_wall(Vector2(80, 0), Vector2(20, 240))
+	var wall_l := _make_wall(Vector2(-80, 0), Vector2(20, 240))
+
+	_gs.restore_mana_full()
+	var single := _glyph_design(Enums.GlyphType.BOUNCE, 1.5)
+	_bus.cast_requested.emit(single, Vector2.ZERO, Vector2.RIGHT)
+	var sp := _projectiles(system)
+	_check(sp.size() == 1, "reach 1.5 단독 — 투사체 1개 (실제 %d)" % sp.size())
+	var single_flips := 0
+	if sp.size() == 1:
+		var res = await _track_flips(sp[0], 4.0)
+		single_flips = int(res["flips"])
+	await _clear_projectiles(system)
+
+	_gs.restore_mana_full()
+	var doubled := _glyph_design(Enums.GlyphType.BOUNCE, 1.5)
+	var second := ArrowData.new()
+	second.glyph = Enums.GlyphType.BOUNCE
+	second.reach = 1.5
+	doubled.arrows.append(second)
+	var effects: Dictionary = system.compile_effects(doubled)
+	_check(is_equal_approx(float(effects.get(Enums.GlyphType.BOUNCE, 0.0)), 3.0),
+		"compile_effects — 팅김 Σreach = 1.5+1.5 = 3.0 (합산)")
+	_bus.cast_requested.emit(doubled, Vector2.ZERO, Vector2.RIGHT)
+	var dp := _projectiles(system)
+	_check(dp.size() == 1, "같은 글자 두 획이어도 여전히 1발 (실제 %d)" % dp.size())
+	var doubled_flips := 0
+	if dp.size() == 1:
+		var res2 = await _track_flips(dp[0], 4.0)
+		doubled_flips = int(res2["flips"])
+	print("    단독(reach 1.5) 실제 반사 %d회 / 합산(Σ3.0) 실제 반사 %d회"
+		% [single_flips, doubled_flips])
+	_check(doubled_flips == _bounce_count(system, 3.0),
+		"합산 Σ3.0 — 실제 반사 %d회 = 기대 %d회" % [doubled_flips, _bounce_count(system, 3.0)])
+	_check(single_flips == _bounce_count(system, 1.5),
+		"단독 reach 1.5 — 실제 반사 %d회 = 기대 %d회" % [single_flips, _bounce_count(system, 1.5)])
+	_check(doubled_flips > single_flips,
+		"합산된 팅김이 단독 팅김보다 실제로 더 많이 튕긴다 (%d > %d)" % [doubled_flips, single_flips])
+	wall_r.queue_free()
+	wall_l.queue_free()
+	await _clear_projectiles(system)
+
+# ── 착탄 충격파 (v2.1, TECH_SPEC §4.0-b) ──────────────────────────────────
+# 🔴 규칙은 하나: "화살표 = 충격파 하나가 가는 방향." **기둥은 규칙이 아니라 결과다** —
+# 코드 어디에도 "수렴하면 기둥"이라 적지 않는다. 아래 테스트들은 "기둥이 서는 조건"을
+# 직접 계산하지 않는다 — 도안을 만들고 쏜 뒤 "shockwaves"·"pillars" 그룹을 세는 것만이
+# 창발을 검증하는 유일한 방법이다 (사용자·리드 지시).
+
+## 신규 (v2.1의 심장) — 진 둘레 8개 화살표가 **밖**을 겨누면 사방으로 뻗을 뿐 서로 못 만나
+## 기둥이 안 서고(=폭발), **룬(중심)**을 겨누면 전부 중심으로 모이며 **저절로** 만나 기둥이 선다.
+## 같은 함수 안에서 "기둥 중복 방지"(쌍의 수 28개만큼 겹쳐 서지 않는가)도 함께 확인한다 —
+## `shockwave._spawn_pillar`의 `_pending` static + 근접 병합이 실제로 지키는 자리다.
+func _test_shockwave_emergence(system) -> void:
+	print("[20] 착탄 충격파 창발 — 밖을 겨누면 기둥 0개, 룬(중심)을 겨누면 저절로 만나 기둥이 선다")
+	_gs.equipment.erase(Enums.ItemKind.WAND)   # SINGLE 패턴 보장 — 문양 8개가 8발을 만들면 안 된다
+
+	# (A) 진 둘레 8개 화살표가 밖을 겨눔 — 사방으로 뻗을 뿐 서로 못 만난다 (= 폭발, 기둥 없음)
+	var outward := await _fire_ring(system, false)
+	_check(int(outward["shock_peak"]) == 8,
+		"밖을 겨눔 — 충격파 정확히 8개 스폰 (실측 최대 동시 %d)" % outward["shock_peak"])
+	_check(int(outward["pillar_total"]) == 0,
+		"밖을 겨눔 — 기둥이 전혀 서지 않는다 (실측 %d개)" % outward["pillar_total"])
+
+	# (B) 진 둘레 8개 화살표가 룬(중심)을 겨눔 — 전부 중심으로 모이며 저절로 만난다 (= 기둥)
+	var inward := await _fire_ring(system, true)
+	_check(int(inward["shock_peak"]) == 8,
+		"룬을 겨눔 — 충격파 정확히 8개 스폰 (실측 최대 동시 %d)" % inward["shock_peak"])
+	_check(int(inward["pillar_total"]) >= 1,
+		"룬을 겨눔 — 화살표들이 중심에서 저절로 만나 기둥이 선다 (실측 %d개)" % inward["pillar_total"])
+	# 🔴 기둥 중복 방지 — 8개가 중심에서 만나면 이론상 쌍의 수(C(8,2)=28)만큼 겹쳐 설 수 있다.
+	# call_deferred로 트리에 늦게 들어가는 것과 얽혀 실제로 깨지기 쉬운 자리다 (지시문 참고).
+	_check(int(inward["pillar_total"]) < 28,
+		"기둥이 쌍의 수(28개)만큼 겹쳐 서지 않는다 (실측 %d개 — 근접 병합이 작동했다)"
+			% inward["pillar_total"])
+
+## 신규 — **방위 기준은 탄이 가던 방향이다** (§4.0-b, 세션 7의 "90도 틀어짐"이 정확히 이 축에서
+## 났다). 화살표를 캔버스 "위"(UP_AXIS = 종이 위쪽 = 앞)로 그으면, 에임을 뭘로 바꾸든 충격파는
+## **언제나 탄이 가던 방향(≈에임)** 으로 나가야 한다. 실제 노드의 rotation·속도 방향으로 잰다.
+func _test_shockwave_travel_axis(system) -> void:
+	print("[21] 충격파 방위 기준 — 화살표를 '위'(탄이 가는 쪽)로 그으면 언제나 탄이 가던 방향으로 나간다")
+	_gs.equipment.erase(Enums.ItemKind.WAND)
+	var up_axis: float = _ink.UP_AXIS
+	for aim_deg: float in [0.0, 90.0, 137.0]:
+		var aim := Vector2.RIGHT.rotated(deg_to_rad(aim_deg))
+		_gs.restore_mana_full()
+		var design := _shock_design(0.5)
+		var forward := ArrowData.new()
+		forward.origin = Vector2.ZERO
+		forward.direction = up_axis
+		forward.glyph = Enums.GlyphType.BASIC
+		forward.reach = 1.0
+		design.arrows.append(forward)
+		var dummy = _dummy_scene.instantiate()
+		root.add_child(dummy)
+		dummy.global_position = aim * 40.0
+		_bus.cast_requested.emit(design, Vector2.ZERO, aim)
+		var wave = await _wait_for_group_node("shockwaves", 120)
+		_check(wave != null, "에임 %.0f도 — 충격파가 실제로 스폰됐다 (적을 맞혔다)" % aim_deg)
+		if wave != null:
+			_check(_angle_close(wave._velocity.angle(), aim.angle()),
+				"에임 %.0f도 — 충격파 진행 방향(속도) = 탄이 가던 방향 (실제 %.0f도)"
+					% [aim_deg, rad_to_deg(wave._velocity.angle())])
+			_check(_angle_close(wave.rotation, aim.angle()),
+				"에임 %.0f도 — 충격파 rotation = 탄이 가던 방향 (실제 %.0f도)"
+					% [aim_deg, rad_to_deg(wave.rotation)])
+		dummy.queue_free()
+		_clear_group("shockwaves")
+		_clear_group("pillars")
+		await _clear_projectiles(system)
+
+## 신규 — **화살표 하나 = 충격파 하나.** 밖을 겨눠 서로 못 만나게 해 놓고(=합쳐지지 않으므로
+## 개수가 안 줄어든다) 화살표 개수를 늘려 가며 동시 존재 최대 개수를 잰다.
+func _test_shockwave_count_matches_arrows(system) -> void:
+	print("[22] 화살표 하나 = 충격파 하나 — 화살표 N개 → 충격파 정확히 N개")
+	_gs.equipment.erase(Enums.ItemKind.WAND)
+	for n in [1, 3, 5]:
+		_gs.restore_mana_full()
+		var design := _ring_design(n, false)   # 밖을 겨눔 — 서로 안 만나야 개수를 깔끔히 셀 수 있다
+		var dummy = _dummy_scene.instantiate()
+		root.add_child(dummy)
+		dummy.global_position = Vector2(40, 0)
+		_bus.cast_requested.emit(design, Vector2.ZERO, Vector2.RIGHT)
+		var obs = await _observe_groups(90, ["shockwaves"])
+		_check(int(obs["shockwaves"]["peak"]) == n,
+			"화살표 %d개 — 충격파 정확히 %d개 스폰 (실측 최대 동시 %d)"
+				% [n, n, obs["shockwaves"]["peak"]])
+		dummy.queue_free()
+		_clear_group("shockwaves")
+		_clear_group("pillars")
+		await _clear_projectiles(system)
+
+## 신규 — **곧은 화살표(BASIC)만 충격파를 뿜는다** (현재 계약).
+## ⚠ **미정** (TECH_SPEC §4.0-b, 사용자: *"아직 미정"*): 팅김·유도·관통 획도 충격파를 뿜는지는
+## 손으로 만져 본 뒤 정하기로 했다. 지금 경계는 `projectile._fire_shockwaves()`의
+## `if arrow.glyph != Enums.GlyphType.BASIC: continue` 한 줄이다 — **바뀌면 이 테스트도 갈아야 한다.**
+func _test_non_basic_glyphs_no_shockwave(system) -> void:
+	print("[23] 팅김·유도·관통 획은 충격파를 안 뿜는다 (v2.1 계약 — 미정이라 바뀔 수 있다, 주석 참고)")
+	_gs.equipment.erase(Enums.ItemKind.WAND)
+	for glyph: int in [Enums.GlyphType.BOUNCE, Enums.GlyphType.HOMING, Enums.GlyphType.PIERCE]:
+		_gs.restore_mana_full()
+		var design := _shock_design(0.5)
+		var a := ArrowData.new()
+		a.glyph = glyph
+		a.reach = 3.0
+		design.arrows.append(a)
+		var dummy = _dummy_scene.instantiate()
+		root.add_child(dummy)
+		dummy.global_position = Vector2(40, 0)
+		_bus.cast_requested.emit(design, Vector2.ZERO, Vector2.RIGHT)
+		var frames := 0
+		while dummy.hits.is_empty() and frames < 180:
+			await physics_frame
+			frames += 1
+		_check(not dummy.hits.is_empty(), "glyph=%d — 실제로 적을 맞혔다 (%d 프레임 후)" % [glyph, frames])
+		var obs = await _observe_groups(30, ["shockwaves"])
+		_check(int(obs["shockwaves"]["total"]) == 0,
+			"glyph=%d — 충격파 0개 (곧은 화살표만 뿜는다, 실측 %d개)" % [glyph, obs["shockwaves"]["total"]])
+		dummy.queue_free()
+		_clear_group("shockwaves")
+		_clear_group("pillars")
+		await _clear_projectiles(system)
+
+## 신규 — 관통탄이 적 3마리를 뚫어도 충격파는 **첫 히트에 한 번**뿐이다 (`_shock_fired` 가드).
+## 도안에 BASIC 화살표를 **1개**만 넣어 두고, 스폰된 충격파 노드의 instance_id를 전부 모아 —
+## 매 순간 개수(peak)가 아니라 **누적 종류 수**(총 몇 번 스폰됐는지)를 세는 것이 핵심이다.
+func _test_shockwave_fires_once(system) -> void:
+	print("[24] 충격파는 첫 히트에 한 번만 — 관통탄이 적 3마리를 뚫어도 충격파는 화살표 수(1개)만큼만 나간다")
+	_gs.equipment.erase(Enums.ItemKind.WAND)
+	var dummies: Array = []
+	for i in range(3):
+		var d = _dummy_scene.instantiate()
+		root.add_child(d)
+		d.global_position = Vector2(60.0 + 60.0 * float(i), 0.0)
+		dummies.append(d)
+
+	_gs.restore_mana_full()
+	var design := _ink_design(Enums.CircleType.FIXED, 0.0, 0.5)   # arrows[0] glyph=BASIC(기본값) 1개
+	var pierce_arrow := ArrowData.new()
+	pierce_arrow.glyph = Enums.GlyphType.PIERCE
+	pierce_arrow.reach = 3.0
+	design.arrows.append(pierce_arrow)
+	var expected_pierce: int = _pierce_count(system, 3.0)
+	_check(expected_pierce >= 3, "reach 3.0의 관통 수가 3 이상이어야 이 테스트가 성립한다")
+
+	_bus.cast_requested.emit(design, Vector2.ZERO, Vector2.RIGHT)
+	var seen: Dictionary = {}
+	var frames := 0
+	while frames < 240 and dummies[2].hits.is_empty():
+		await physics_frame
+		frames += 1
+		for n in get_nodes_in_group("shockwaves"):
+			seen[n.get_instance_id()] = true
+	for i in range(20):   # 마지막 적을 맞힌 뒤로도 늦게 추가 스폰되는지 잠깐 더 지켜본다
+		await physics_frame
+		for n in get_nodes_in_group("shockwaves"):
+			seen[n.get_instance_id()] = true
+
+	_check(not dummies[0].hits.is_empty() and not dummies[1].hits.is_empty()
+			and not dummies[2].hits.is_empty(),
+		"적 3마리 모두 관통탄에 맞았다 (충격파 발신 조건이 실제로 여러 번 만족됐다)")
+	_check(seen.size() == 1,
+		"화살표(BASIC) 1개 — 충격파는 세 번이 아니라 총 1번만 스폰됐다 (실측 %d개 — 첫 히트에만, 이중 보상 없음)"
+			% seen.size())
+
+	for d in dummies:
+		d.queue_free()
+	_clear_group("shockwaves")
+	_clear_group("pillars")
+	await _clear_projectiles(system)
+
+## 신규 — 충격파는 **파동이라 적을 뚫고 지나간다** (죽지 않는다). 안 그러면 적이 앞을 막고 선
+## 순간 충격파가 죽어 서로 못 만나 기둥이 영영 안 선다 (shockwave.gd 주석). 최초 피격자 뒤에
+## 두 번째 적을 세워 두고 — 그 적이 실제로 맞고도 충격파가 살아서 계속 나아가는지 잰다.
+func _test_shockwave_passes_through_enemies(system) -> void:
+	print("[25] 충격파는 적을 뚫는다 — 가로막고 선 두 번째 적에 죽지 않고 지나간다")
+	_gs.equipment.erase(Enums.ItemKind.WAND)
+	_gs.restore_mana_full()
+	var design := _shock_design(0.4)
+	var forward := ArrowData.new()
+	forward.origin = Vector2.ZERO
+	forward.direction = float(_ink.UP_AXIS)   # "위" = 탄이 가던 방향 그대로 나간다
+	forward.glyph = Enums.GlyphType.BASIC
+	forward.reach = 1.0
+	design.arrows.append(forward)
+
+	var target = _dummy_scene.instantiate()    # 충격파를 만드는 최초 피격자
+	root.add_child(target)
+	target.global_position = Vector2(30, 0)
+	var blocker = _dummy_scene.instantiate()   # 충격파 진행 경로를 막고 선 두 번째 적
+	root.add_child(blocker)
+	blocker.global_position = Vector2(55, 0)
+
+	_bus.cast_requested.emit(design, Vector2.ZERO, Vector2.RIGHT)
+	var wave = await _wait_for_group_node("shockwaves", 120)
+	_check(wave != null, "충격파가 스폰됐다 (최초 피격자를 맞혔다)")
+	if wave != null:
+		var frames := 0
+		while frames < 60 and blocker.hits.is_empty() and is_instance_valid(wave):
+			await physics_frame
+			frames += 1
+		_check(not blocker.hits.is_empty(),
+			"충격파가 가로막은 두 번째 적을 실제로 때렸다 (%d 프레임 후)" % frames)
+		_check(is_instance_valid(wave),
+			"두 번째 적을 때린 뒤에도 충격파가 소멸하지 않는다 (파동은 적을 뚫는다 — "
+				+ "안 그러면 서로 못 만나 기둥이 영영 안 선다)")
+		if is_instance_valid(wave):
+			var pos_before: Vector2 = wave.global_position
+			await physics_frame
+			await physics_frame
+			var moved: bool = is_instance_valid(wave) and wave.global_position.distance_to(pos_before) > 0.5
+			_check(moved, "적을 지나친 뒤에도 계속 이동한다 (실측 이동 %.2fpx)"
+				% (wave.global_position.distance_to(pos_before) if is_instance_valid(wave) else -1.0))
+
+	target.queue_free()
+	blocker.queue_free()
+	_clear_group("shockwaves")
+	_clear_group("pillars")
+	await _clear_projectiles(system)
+
+# ── 착탄 충격파 헬퍼 ─────────────────────────────────────────
+
+## 문양 축만 얹는 최소 도안 (§4.0-b 테스트 전용) — strokes 없음(폴백), 화살표는 호출부가 채운다.
+## `_design`은 strokes 유무와 무관하게 항상 세팅되므로(projectile._setup_body) 충격파 테스트엔
+## 먹선 렌더가 필요 없다.
+func _shock_design(circle_radius: float) -> SpellDesign:
+	var d := SpellDesign.new()
+	d.id = &"test_shockwave_design"
+	d.display_name = "테스트: 충격파 도안"
+	d.circle_type = Enums.CircleType.AIMED
+	d.circle_radius = circle_radius
+	d.aim_axis = 0.0
+	d.rune_type = Enums.RuneType.FIRE
+	d.rune_accuracy = 0.9
+	d.mana_cost = 10.0
+	d.durability_max = 10
+	d.durability = 10
+	return d
+
+## 진 둘레에 n개 화살표를 균등 배치 — origin = 반지름 1.0(가장자리) 지점, direction = 그 지점에서
+## 밖(inward=false)을 겨누거나 중심의 룬(inward=true)을 겨눈다.
+## circle_radius=0.8 — 진 반지름(px)이 커야 이웃 화살표 사이 간격(현 = 2·r·sin(π/n))이 충격파
+## 히트박스 지름(10px)보다 커져 **밖을 겨눈 경우 스폰 직후 서로 겹쳐 오판정하지 않는다.**
+func _ring_design(n: int, inward: bool, circle_radius: float = 0.8) -> SpellDesign:
+	var d := _shock_design(circle_radius)
+	for i in range(n):
+		var ang := TAU * float(i) / float(maxi(n, 1))
+		var a := ArrowData.new()
+		a.origin = Vector2.RIGHT.rotated(ang)
+		a.direction = (ang + PI) if inward else ang
+		a.glyph = Enums.GlyphType.BASIC
+		a.reach = 1.0
+		d.arrows.append(a)
+	return d
+
+## 링 도안을 쏘고 관측한다 — 반환: shock_peak(동시 최대 개수) · pillar_total(누적 종류 수).
+func _fire_ring(system, inward: bool) -> Dictionary:
+	_gs.restore_mana_full()
+	var design := _ring_design(8, inward)
+	var dummy = _dummy_scene.instantiate()
+	root.add_child(dummy)
+	dummy.global_position = Vector2(40, 0)
+	_bus.cast_requested.emit(design, Vector2.ZERO, Vector2.RIGHT)
+	var obs = await _observe_groups(90, ["shockwaves", "pillars"])   # 리드 실측: 90프레임이면 충분
+	dummy.queue_free()
+	_clear_group("shockwaves")
+	_clear_group("pillars")
+	await _clear_projectiles(system)
+	return {
+		"shock_peak": obs["shockwaves"]["peak"],
+		"pillar_total": obs["pillars"]["total"],
+	}
+
+## 여러 그룹을 max_frames 동안 함께 지켜보며 그룹별 {peak: 동시 최대 개수, total: 누적 종류 수}를 잰다.
+## peak만으로는 "각자 다른 시점에 여러 번 스폰"을 놓친다 — 그래서 instance_id로 총 종류 수도 센다.
+func _observe_groups(max_frames: int, groups: Array) -> Dictionary:
+	var acc := {}
+	for g: String in groups:
+		acc[g] = {"peak": 0, "seen": {}}
+	var frames := 0
+	while frames < max_frames:
+		await physics_frame
+		frames += 1
+		for g: String in groups:
+			var nodes := get_nodes_in_group(g)
+			acc[g]["peak"] = maxi(int(acc[g]["peak"]), nodes.size())
+			for n in nodes:
+				acc[g]["seen"][n.get_instance_id()] = true
+	var out := {}
+	for g: String in groups:
+		out[g] = {"peak": acc[g]["peak"], "total": acc[g]["seen"].size()}
+	return out
+
+## 그룹에 노드가 나타날 때까지 기다렸다가 첫 노드를 돌려준다 (없으면 null — 타임아웃)
+func _wait_for_group_node(group: String, max_frames: int):
+	var frames := 0
+	while frames < max_frames:
+		var nodes := get_nodes_in_group(group)
+		if not nodes.is_empty():
+			return nodes[0]
+		await physics_frame
+		frames += 1
+	return null
+
+## 그룹을 통째로 정리 — 충격파·기둥은 수명이 짧아도 다음 테스트가 이전 잔재를 주워 올 수 있다
+func _clear_group(group: String) -> void:
+	for n in get_nodes_in_group(group):
+		if is_instance_valid(n):
+			n.queue_free()
 
 # ── 헬퍼 ─────────────────────────────────────────────────────
 
@@ -951,18 +1457,20 @@ func _ink_design(circle_type: int, aim_axis: float, magnitude: float,
 	d.arrows.append(a)
 	return d
 
-func _find_line(node: Node) -> Line2D:
+## 재귀 탐색 — build_design은 Node2D root 아래에 Line2D를 넣고, 투사체는 그 root를 자기
+## 자식으로 붙인다. 그래서 Line2D는 proj의 **손자**다 — 직계 자식만 보면 못 찾는다 (실제 버그는
+## 아니었다: 히트박스·damage 등 관측 가능한 값은 정상이었지만, 이 헬퍼가 얕게 탐색해 놓쳤을 뿐).
+func _find_lines(node: Node) -> Array:
+	var out := []
 	for child in node.get_children():
 		if child is Line2D:
-			return child
-	return null
+			out.append(child)
+		out.append_array(_find_lines(child))
+	return out
 
-func _count_lines(node: Node) -> int:
-	var n := 0
-	for child in node.get_children():
-		if child is Line2D:
-			n += 1
-	return n
+func _find_line(node: Node) -> Line2D:
+	var lines := _find_lines(node)
+	return lines[0] if not lines.is_empty() else null
 
 func _cast_circle(system):
 	for child in system.get_children():
@@ -980,12 +1488,13 @@ func _check(cond: bool, label: String) -> void:
 func _angle_close(a: float, b: float) -> bool:
 	return absf(wrapf(a - b, -PI, PI)) <= ANGLE_TOL_RAD
 
-## 발사각을 정렬해 인접 간격이 전부 TAU/n인지 — "통째로 회전해도 노바"의 형식적 정의.
-## 각도 집합 전체가 회전해도 참이므로 에임에 의존하지 않는다.
-func _gaps_uniform(projs: Array, n: int) -> bool:
+## 발사각(라디안) 배열을 정렬해 인접 간격이 전부 TAU/n인지 — "통째로 회전해도 노바"의 형식적
+## 정의 (지팡이의 NOVA 패턴, TECH_SPEC §4.0-a). 각도 집합 전체가 회전해도 참이므로 에임에
+## 의존하지 않는다. **실제 투사체의 _velocity.angle()**을 넘겨라 — 중간 표현이 아니라 관측값.
+func _gaps_uniform_angles(angles_in: Array, n: int) -> bool:
 	var angles: Array[float] = []
-	for p in projs:
-		angles.append(wrapf(p.direction_angle, 0.0, TAU))
+	for a in angles_in:
+		angles.append(wrapf(float(a), 0.0, TAU))
 	angles.sort()
 	var expected_gap := TAU / float(n)
 	var ok := true
@@ -995,12 +1504,6 @@ func _gaps_uniform(projs: Array, n: int) -> bool:
 			ok = false
 			print("    간격[%d]=%.2f도, 기대=%.2f도" % [i, rad_to_deg(gap), rad_to_deg(expected_gap)])
 	return ok
-
-func _has_angle(projs: Array, angle: float) -> bool:
-	for p in projs:
-		if _angle_close(p.direction_angle, angle):
-			return true
-	return false
 
 func _projectiles(system) -> Array:
 	var out := []

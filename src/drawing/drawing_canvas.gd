@@ -81,13 +81,16 @@ const RUNE_COLORS := {
 	Enums.RuneType.WIND: Color(0.18, 0.42, 0.31),
 }
 
-# ── 방위 가이드 (v1.6) — "캔버스 위쪽 = 조준 방향(앞)"을 종이 위에 보이게 한다 ──
-# 규칙이 안 보이면 플레이어가 매번 머릿속으로 방향을 상상하며 그려야 한다. 이 표시가
-# "뒤쪽으로 견제탄을 심는다" 같은 의도적 설계를 떠올리게 하는 장치다 (GDD §4.1).
+# ── 방위 가이드 — **종이 위쪽 = 탄이 가는 쪽** (v2.1) ──
+# 🔴 **의미가 두 번 바뀌었다. 지금 것은 충격파 축이다** (TECH_SPEC §4.0-b):
+#   v1.5~v1.9: **발사 방향** ("위로 그은 화살표가 에임으로 나간다")
+#   v2.0:      **폐지** — 발사 방향이 지팡이로 가면서 종이에 방위가 없어졌다 (지웠다)
+#   v2.1:      **충격파 방향** — 되살아났다. 위로 그으면 적을 **밀어내고**, 아래로 그으면
+#              **나에게 끌어온다.** 화살표 = 착탄 후 충격이 가는 쪽이기 때문이다
 # **순수 배경 렌더다** — _draw()로 그리므로 절대 _entries에 들어가지 않는다(획으로 인식 불가).
 const GUIDE_LINE := Color(0.13, 0.11, 0.10, 0.10)    # 중심 십자 — 먹선보다 훨씬 옅게
 const GUIDE_TEXT := Color(0.13, 0.11, 0.10, 0.26)    # 방위 글자
-const GUIDE_FRONT := Color(0.42, 0.30, 0.12, 0.42)   # 앞(조준 방향)만 살짝 진하게 — 이게 핵심축
+const GUIDE_FRONT := Color(0.42, 0.30, 0.12, 0.42)   # 앞(탄이 가는 쪽)만 살짝 진하게 — 기준축
 const GUIDE_MARGIN := 0.045          # 글자를 가장자리에서 띄우는 비율 (캔버스 최단변 대비)
 const GUIDE_FONT_RATIO := 0.038      # 글자 크기 비율 — 캔버스가 커도 작아도 비슷하게 보이게
 const GUIDE_DOT := 2.0               # 중심점 반지름(px) — 진(원)을 그릴 자리를 암시
@@ -265,8 +268,11 @@ func _notification(what: int) -> void:
 		queue_redraw()
 
 
-## 종이 위 방위 안내 — 위=앞(조준 방향). 획(자식 Line2D)은 이 위에 그려지므로
-## 그린 먹선이 언제나 주인공이고 가이드는 그 아래 참고선으로 남는다.
+## 종이 위 방위 안내 — **위 = 앞 = 탄이 가는 쪽** (v2.1 충격파 축).
+## 획(자식 Line2D)은 이 위에 그려지므로 그린 먹선이 언제나 주인공이고 가이드는 참고선으로 남는다.
+##
+## 🔴 **화살표를 위에 그으면 적을 밀어내고, 아래에 그으면 나에게 끌어온다** — 화살표가
+## **착탄 후 충격이 가는 쪽**이기 때문이다 (TECH_SPEC §4.0-b). 이 표시가 그 설계를 떠올리게 한다.
 func _draw() -> void:
 	# 가이드·본보기는 **종이에 인쇄된 것**이다 — 획과 같은 변환을 받아 함께 확대된다.
 	# (배율 표시만 이 변환 밖에 있다. 아래 _draw_zoom_label 참고)
@@ -283,7 +289,7 @@ func _draw() -> void:
 	draw_line(Vector2(m, c.y), Vector2(size.x - m, c.y), GUIDE_LINE, 1.0)
 	draw_circle(c, GUIDE_DOT, GUIDE_LINE)
 
-	# 위쪽(앞)만 화살촉을 얹어 조준축임을 표시 — 나머지는 글자만
+	# 위쪽(앞 = 탄이 가는 쪽)만 화살촉을 얹어 기준축임을 표시 — 나머지는 글자만
 	var tip := Vector2(c.x, m)
 	var barb := maxf(s * 0.018, 3.0)
 	draw_line(tip, tip + Vector2(-barb, barb * 1.4), GUIDE_FRONT, 1.0)
@@ -348,6 +354,15 @@ func _draw_heading_arrow(from: Vector2, tip: Vector2, col: Color, w: float) -> v
 	]), col, w, true)
 
 
+func _guide_text(font: Font, fs: int, text: String, at: Vector2, col: Color, centered: bool) -> void:
+	var w := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+	var pos := at
+	if centered:
+		pos.x -= w * 0.5
+	pos.y += float(fs) * 0.35   # 베이스라인 → 시각적 중앙 보정
+	draw_string(font, pos, text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, col)
+
+
 ## 배율 표시 — **확대 변환 밖**에서 그린다. 돋보기의 눈금은 종이에 인쇄된 게 아니라
 ## 들여다보는 사람 쪽에 있다: 4배로 확대해도 글자는 같은 크기로 구석에 남는다.
 func _draw_zoom_label(font: Font, s: float) -> void:
@@ -359,15 +374,6 @@ func _draw_zoom_label(font: Font, s: float) -> void:
 	var w := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
 	draw_string(font, Vector2(size.x - w - float(fs) * 0.6, float(fs) * 1.4),
 		text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, ZOOM_LABEL)
-
-
-func _guide_text(font: Font, fs: int, text: String, at: Vector2, col: Color, centered: bool) -> void:
-	var w := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
-	var pos := at
-	if centered:
-		pos.x -= w * 0.5
-	pos.y += float(fs) * 0.35   # 베이스라인 → 시각적 중앙 보정
-	draw_string(font, pos, text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, col)
 
 
 # ─────────────────────────── 본보기 얹기 (v1.7) ───────────────────────────

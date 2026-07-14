@@ -15,6 +15,14 @@ enum GlyphType { BASIC, BOUNCE, HOMING, PIERCE }
 ## 규칙이 아니라 문법이다 — 캔버스가 단계에 안 맞는 획을 거부하고, 체크리스트가 현재 단계를 보여준다.
 ## CIRCLE=진(원) 필요 / RUNE=룬 필요(조준 꼬리는 여기서 선택적으로) / ARROW=문양(화살표) 1개 이상
 enum DrawStage { CIRCLE, RUNE, ARROW }
+## 지팡이의 **발사 패턴** — v2.0 지팡이 축 (TECH_SPEC §4.0-a).
+## 사용자: *"결국 보는 방향으로 발사가 맞고, **지팡이에 따라** 여러 발이 나가거나
+## 내 주변에서 전체 방향으로 나가거나가 정해짐."*
+##
+## 🔴 **도안이 아니라 지팡이가 발수를 정한다.** v1.9까지는 문양 1개 = 1발이었는데, 방향이
+## 지팡이로 간 순간 그게 무너졌다 — 문양이 방향을 안 정하면 N발이 **같은 자리에 겹친다.**
+## SINGLE=단발 / MULTI=산탄(에임 좌우로 퍼짐) / NOVA=전방위(내 주변 사방)
+enum WandPattern { SINGLE, MULTI, NOVA }
 enum Status { NONE, BURN, KNOCKBACK, WET, FLOW }
 enum Phase { MORNING, DAY, EVENING, NIGHT }
 enum ItemKind { INK, PAPER, WAND, ROBE, CHARM, MATERIAL, FRAGMENT }

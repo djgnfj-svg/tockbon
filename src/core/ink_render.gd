@@ -4,6 +4,17 @@ extends RefCounted
 ## GDD §10.5: "드로잉한 그대로가 이펙트가 된다" — 새 에셋 없이 플레이어의 획이 그대로 화면에 나온다.
 ## 계약: TECH_SPEC §4.4. 사용: const InkRender := preload("res://src/core/ink_render.gd")
 
+## **종이 위쪽 = 앞** (rad). 캔버스 좌표계의 기준축이다.
+##
+## 🔴 **이 값이 두 모듈에 복제되면 세션 7의 "90도 틀어짐"이 재발한다** — `design_builder`가
+## 상대각으로 저장하는데 `spell_system`이 절대각으로 알고 **또** 빼서 축이 두 번 빠졌던 버그다.
+## **core에 하나만 둔다.** 쓰는 곳: `design_builder`(도안 기준축) · `projectile`(충격파 회전).
+##
+## v2.1에서 의미가 바뀌었다: ~~발사 방향~~(v2.0에서 지팡이로 갔다) → **충격파 방향의 기준**.
+## 종이 위쪽 = **탄이 가는 쪽**이므로, 위로 그은 화살표는 적을 **밀어내고** 아래로 그은 화살표는
+## **나에게 끌어온다** (TECH_SPEC §4.0-b).
+const UP_AXIS := -PI / 2.0
+
 const BASE_WIDTH := 3.5
 const INK_COLOR := Color(0.13, 0.11, 0.10)
 const MAX_CURVE_POINTS := 16

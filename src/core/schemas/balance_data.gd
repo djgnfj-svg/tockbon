@@ -50,6 +50,41 @@ extends Resource
 ## ⚠ 폐기 — 진 크기 잉크 할증 (v1.8에서 이중 과금으로 판명, 제거됨)
 @export var circle_radius_ink_mult: float = 2.0
 
+@export_group("충격파 = 착탄 축 (v2.1)")
+# 🔴 **화살표 하나 = 충격파 하나** (TECH_SPEC §4.0-b). 적을 맞히면 진이 그 자리에 놓이고,
+# 진 위의 화살표들이 **각자 제자리에서 제 방향으로** 충격파를 뿜는다.
+# **기둥은 여기 없다** — 충격파끼리 부딪히면 저절로 나온다. 규칙이 아니라 결과다.
+## 충격파 속도(px/s) — 탄보다 빨라야 "터졌다"는 느낌이 난다
+@export var shockwave_speed: float = 420.0
+## 충격파 수명(초) — 뻗는 거리 = 속도 × 이 값. 짧아야 착탄 근처의 사건으로 읽힌다
+@export var shockwave_lifetime_sec: float = 0.22
+## 충격파 피해 = 탄 피해 × 이 값. 화살표를 많이 그으면 총량이 늘지만 낱개는 약하다
+@export var shockwave_damage_mult: float = 0.35
+## 충격파 히트박스 반경(px)
+@export var shockwave_radius_px: float = 5.0
+
+# ── 기둥 — **충격파끼리 만난 자리**에 선다 (창발. 코드가 "수렴하면 기둥"이라 정하지 않는다)
+## 기둥 피해 = 탄 피해 × 이 값. 모아 그린 보상이라 낱개 충격파보다 세다
+@export var pillar_damage_mult: float = 0.9
+## 기둥 지속(초) — 이 동안 안에 있는 적을 계속 때린다
+@export var pillar_duration_sec: float = 0.5
+## 기둥이 적을 때리는 간격(초)
+@export var pillar_tick_sec: float = 0.12
+## 기둥 반경(px)
+@export var pillar_radius_px: float = 14.0
+## 같은 기둥이 겹쳐 서지 않는 최소 간격(px) — 충격파 8개가 한 점에서 만나면 기둥이 28개 설 수 있다
+@export var pillar_merge_px: float = 12.0
+
+@export_group("지팡이 = 발사 패턴 축 (v2.0)")
+# 🔴 **방향·발수·기점은 지팡이의 것이다** (TECH_SPEC §4.0-a). 도안은 "무엇이 나가는가"만 정하고
+# "어디로 몇 발"은 손에 든 지팡이가 정한다. 같은 도안도 지팡이를 바꾸면 다르게 나간다.
+## 산탄(MULTI) 발수 — 에임을 중심으로 좌우 균등
+@export var wand_multi_count: int = 3
+## 산탄 총 퍼짐 각도(도) — 발과 발 사이가 아니라 **양 끝 사이**의 각
+@export var wand_multi_spread_deg: float = 24.0
+## 전방위(NOVA) 발수 — 360도 균등 분할. 에임이 바뀌면 통째로 돌 뿐 간격은 불변
+@export var wand_nova_count: int = 8
+
 @export_group("전투")
 @export var projectile_base_speed: float = 260.0
 ## v1.7: 10.0 → 9.0. 위력에서 rune_accuracy(0.6~1.0) 곱을 떼면서(TECH_SPEC §4.0 축 분리)
@@ -69,18 +104,30 @@ extends Resource
 ## 기준 사거리(초). 실제 수명 = 이 값 × 진 사거리 배율
 @export var projectile_lifetime_sec: float = 1.5
 
-# ── 진 = 규모 축 (v1.6, TECH_SPEC §4.0) — 위력·크기·사거리를 전부 진이 정한다 ──
-# 셋 다 circle_radius(0..1)를 입력으로 받는다. circle_radius 0.5(캔버스 절반)가 기준점 ≈ 1.0배.
+# ── 진 = 규모 + **투사체의 모양** 축 (v2.0, TECH_SPEC §4.0) ──
+# 위력·크기·기준 사거리를 진이 정한다. 셋 다 circle_radius(0..1)를 입력으로 받고,
+# circle_radius 0.5(캔버스 절반)가 기준점 ≈ 1.0배.
+# 🔴 **v2.0: 진이 곧 투사체다** (사용자: "투사체의 모양이 진이라고 끝인데?").
+# 그린 진(+룬) 먹선이 그대로 날아가고 **히트박스가 진 반지름을 따른다**.
 ## 위력 배율 = circle_damage_base + circle_radius
 @export var circle_damage_base: float = 0.5
-## 투사체 크기 배율 = lerp(min, max, circle_radius)
+## ⚠ **v2.0에서 소비 중단** — 진이 곧 탄이므로 **탄 크기는 진 반지름이 직접 정한다.**
+## 여기에 또 배율을 곱하면 **같은 축을 두 번 적용**하는 것이다 (v1.6에 탄이 진과 무관한
+## 스프라이트였을 때만 말이 됐던 값). 구세이브·기존 .tres 호환을 위해 필드만 남긴다
 @export var circle_size_min: float = 0.6
 @export var circle_size_max: float = 1.8
 ## 사거리 배율 = lerp(min, max, circle_radius) → projectile_lifetime_sec에 곱해진다
 @export var circle_range_min: float = 0.6
 @export var circle_range_max: float = 1.4
-## circle_radius(정규) → 월드 px 발사 오프셋 스케일
+## circle_radius(정규) → 월드 px 스케일. InkRender.unit_px = 이 값 × 2 (§4.4 — 깨지 말 것)
 @export var circle_radius_px: float = 48.0
+## 🔴 **v2.0: 종이 위의 진 → 날아가는 탄**으로 줄이는 배율. 종이에 그린 크기 그대로 날리면
+## 진 하나가 화면 폭의 상당 부분을 먹는다 (캔버스 절반짜리 진 = 반지름 24px, 적이 32px인 세계에서).
+## 먹선과 히트박스가 **같은 값**을 쓴다 — 갈라지면 보이는 것과 맞는 것이 어긋난다
+@export var projectile_circle_scale: float = 0.5
+## 탄 히트박스 최소 반경(px) — 진을 아주 작게 그려도 **보이고 맞아야 한다**.
+## 없으면 작은 진이 "그렸는데 아무것도 안 맞는" 탄이 된다
+@export var projectile_min_radius_px: float = 4.0
 
 # ── 문양 = 발동 방식 + 세기 축 (v1.9, TECH_SPEC §4.0) — GDD §4.3 ──
 # ArrowData.reach = 문양 획 길이 ÷ 진 반지름. **룬의 rune_fill과 대칭**이다.

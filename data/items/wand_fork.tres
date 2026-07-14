@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="ItemDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/core/schemas/item_def.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = &"wand_fork"
+kind = 2
+grade = 2
+display_name = "세 갈래 붓대"
+params = {
+"attack_cooldown_mult": 1.0,
+"wand_damage_add": 0.0,
+"wand_pattern": 1.0
+}

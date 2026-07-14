@@ -9,6 +9,11 @@ extends Node2D
 ## 조작: WASD 이동 / 작업대 앞에서 E = 책 펼침 / ESC = 덮기
 ##       (책 펼친 중) 좌클릭 드래그 = 획 · 우클릭·Ctrl+Z = 취소 · 오른쪽 탭 = 책자 열람
 ##       (책 덮은 중) 마우스 = 조준 · 좌클릭/Space = 발사 · R = 허수아비 리셋 · C = 종이 비우기
+##       **Tab = 지팡이 바꾸기** (단발 → 세 갈래 → 둘레) — v2.0 지팡이 축을 눈으로 보는 자리
+##
+## **v2.0에서 여기서 확인할 것**: (1) **보는 방향으로 나가는가** (2) **그린 진이 그대로 탄이 되는가**
+## (3) **문양이 효과로 얹히는가** — 팅김+관통을 함께 그리면 **튕기면서 뚫는 탄 하나**
+## (4) **도안을 안 고치고 지팡이만 바꿔도 나가는 그림이 달라지는가** (Tab)
 ##
 ## 개발용 시험대다 — 기본 무한 자원(마나·내구). 경제 검증은 본편·test_base_auto에서 한다.
 
@@ -105,10 +110,28 @@ func _unhandled_input(event: InputEvent) -> void:
 			KEY_C:
 				_forge.call(&"clear_canvas")
 				_refresh_design_label()
+			KEY_TAB:
+				_cycle_wand()
 		return
 	var mb := event as InputEventMouseButton
 	if mb != null and mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT:
 		_try_cast()
+
+
+## **같은 도안을 지팡이만 바꿔 쏴 본다** (Tab) — v2.0 지팡이 축을 눈으로 보는 자리다.
+## 도안은 "무엇이 나가는가"만 정하고 **"어디로 몇 발"은 지팡이가 정한다**:
+## 단발 → 세 갈래(산탄) → 둘레(전방위). 도안을 한 줄도 안 고쳤는데 나가는 그림이 달라진다.
+const WANDS: Array[StringName] = [&"wand_basic", &"wand_fork", &"wand_ring"]
+
+func _cycle_wand() -> void:
+	var cur: StringName = GameState.equipment.get(Enums.ItemKind.WAND, &"")
+	var idx := WANDS.find(cur)
+	var next: StringName = WANDS[(idx + 1) % WANDS.size()]
+	# 시험대는 창고 재고를 거치지 않는다 (equip_gear는 창고에서 1개 차감한다) — 직접 꽂는다
+	GameState.equipment[Enums.ItemKind.WAND] = next
+	var def: ItemDef = Db.get_item(next)
+	_set_hint("지팡이: %s — 도안은 그대로다. 나가는 건 지팡이가 정한다 (Tab)"
+		% (def.display_name if def != null else String(next)))
 
 
 func _near_desk() -> bool:
@@ -128,24 +151,54 @@ func _try_cast() -> void:
 	_report_aim(design)
 
 
-## **그린 방향 vs 실제로 날아간 방향** — 어긋나면 여기서 바로 잡힌다.
-## 종이 각도는 **-90도가 위쪽(앞)**이고, 조준과 발사각이 같아야 정상이다(오차 0).
+## **이 도안이 실제로 무엇을 쏘는가** — 한 줄로 보인다.
 ##
-## 🔴 이 표시가 있는 이유: 세션 7의 "모든 문양이 90도 틀어져 나갔다"와 세션 11의 "관통이
-## 14도 빗나갔다"가 **테스트 전부 초록인 채로** 숨어 있었다. 중간 표현(direction)만 검증하면
-## 두 모듈의 계약이 어긋나도 각자의 테스트는 각자 옳다. **눈으로 볼 수 있어야 한다.**
-## 방향 규칙을 다시 짤 때(진행 중) 이 줄이 그대로 검증 표면이 된다.
+## 🔴 **v2.0에서 볼 것이 바뀌었다.** 발사각은 이제 **언제나 에임**이라(지팡이가 정한다)
+## "그린 방향 vs 날아간 방향"을 견줄 것이 없다 — 어긋날 수가 없는 구조가 됐다.
+## 대신 봐야 할 것은 **"내가 그린 문양들이 한 탄에 어떤 효과로 얹혔는가"**다:
+## 문양 3개를 그렸는데 효과가 2종이면 하나가 BASIC(글자 인식 실패)으로 샌 것이고,
+## 팅김을 둘 그었는데 세기가 안 늘면 합산이 깨진 것이다.
+##
+## (세션 7의 "모든 문양이 90도 틀어져 나갔다" · 세션 11의 "관통이 14도 빗나갔다"는
+##  둘 다 **테스트가 전부 초록인 채로** 숨어 있었다 — 눈으로 볼 수 있어야 잡힌다.
+##  방향이 지팡이로 가면서 그 버그 계열은 **구조적으로 사라졌다.**)
+const GLYPH_MARK := {
+	Enums.GlyphType.BOUNCE: "팅김⚡",
+	Enums.GlyphType.HOMING: "유도∿",
+	Enums.GlyphType.PIERCE: "관통‖",
+}
+
 func _report_aim(design: SpellDesign) -> void:
 	if design.arrows.is_empty():
 		return
-	var aim_deg := rad_to_deg(_aim.angle())
+	var system := _world.get_node_or_null("SpellSystem")
+	if system == null:
+		return
+	var effects: Dictionary = system.call(&"compile_effects", design)
 	var parts: Array[String] = []
+	for glyph: int in effects:
+		parts.append("%s×%.1f" % [GLYPH_MARK.get(glyph, "?"), float(effects[glyph])])
+	# v2.1: 곧은 화살표는 **착탄 충격파**를 뿜는다 — 몇 개를 뿜는지 눈에 보여야
+	# "모아 그리면 기둥이 선다"를 확인할 수 있다
+	var waves := 0
 	for a: ArrowData in design.arrows:
-		var world := rad_to_deg(wrapf(a.direction + (_aim.angle() - design.aim_axis), -PI, PI))
-		var err := rad_to_deg(wrapf(deg_to_rad(world) - _aim.angle(), -PI, PI))
-		parts.append("종이%+.0f°→발사%+.0f°(오차%+.0f°)" % [
-			rad_to_deg(a.direction), world, err])
-	_hint_label.text = "조준 %+.0f° · %s" % [aim_deg, " | ".join(parts)]
+		if a.glyph == Enums.GlyphType.BASIC:
+			waves += 1
+	if waves > 0:
+		parts.append("충격파×%d" % waves)
+	if parts.is_empty():
+		parts.append("효과 없음")
+	# 사거리는 문양 reach의 **최댓값**이 정한다 — 합이 아니다 (합이면 효과를 얹을수록 공짜로 는다).
+	# 발수는 **지팡이**가 정한다 — 도안은 발수에 아무 말도 하지 않는다 (v2.0)
+	var shots: Array = system.call(&"wand_shots", _aim.angle())
+	var wand: ItemDef = Db.get_item(GameState.equipment.get(Enums.ItemKind.WAND, &""))
+	_hint_label.text = "조준 %+.0f° · %s %d발 · 효과 %s · 사거리 %.1f×" % [
+		rad_to_deg(_aim.angle()),
+		wand.display_name if wand != null else "맨손",
+		shots.size(),
+		" ".join(parts),
+		float(system.call(&"design_reach", design)),
+	]
 	_hint_label.add_theme_color_override(&"font_color", OK_COLOR)
 
 
