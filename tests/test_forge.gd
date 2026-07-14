@@ -24,6 +24,8 @@ const HINT_COLOR := Color(0.70, 0.66, 0.58)
 const WARN_COLOR := Color(0.92, 0.45, 0.35)
 const OK_COLOR := Color(0.60, 0.85, 0.55)
 const PROMPT_COLOR := Color(0.98, 0.88, 0.55)
+const WALL_COLOR := Color(0.22, 0.20, 0.19)    # 벽·기둥 — 팅김이 튕기는 면
+const WALL_EDGE := Color(0.38, 0.35, 0.32)
 
 # ── 세계 ──
 const PLAYER_SPEED := 90.0
@@ -35,6 +37,15 @@ const INTERACT_RANGE := 46.0
 const DUMMY_POS: Array[Vector2] = [
 	Vector2(360, 70), Vector2(470, 44), Vector2(575, 80), Vector2(400, 160),
 	Vector2(570, 175),
+]
+
+## 벽 (레이어 1 = world) — **팅김⚡을 눈으로 보려면 튕길 것이 있어야 한다** (v1.9).
+## 아레나 테두리 + 가운데 기둥 둘. 기둥은 **엄폐물**이기도 하다: 뒤에 선 허수아비는
+## 곧은 탄으로는 못 맞히고 **팅김으로 돌아가 맞힌다** — 그게 이 글자의 존재 이유다 (GDD §4.3).
+const WALL_THICK := 10.0
+const PILLAR_RECTS: Array[Rect2] = [
+	Rect2(250, 110, 18, 90),    # 왼쪽 기둥 — 허수아비(400,160) 앞을 가린다
+	Rect2(490, 105, 90, 16),    # 오른쪽 가로 기둥 — (570,175)를 위에서 덮는다
 ]
 
 var _world: Node2D
@@ -127,11 +138,39 @@ func _build_world() -> void:
 	# spell_system은 게임 씬과 동일한 인스턴스 — 마법진·투사체가 여기서 나온다
 	_world.add_child(SpellSystemScene.instantiate())
 
+	_build_walls()
+
 	for p: Vector2 in DUMMY_POS:
 		var d := DummyScene.instantiate() as Node2D
 		d.global_position = p
 		_world.add_child(d)
 		_dummies.append(d)
+
+
+## 벽 = 레이어 1(world). 투사체 마스크가 1|3이라 **곧은 탄은 여기서 죽고 팅김은 튕긴다**.
+## 테두리는 BOUNDS 바깥에 둘러 세워 플레이어 이동 범위(BOUNDS clamp)와 어긋나지 않게 한다.
+func _build_walls() -> void:
+	var b := BOUNDS
+	var rects: Array[Rect2] = [
+		Rect2(b.position.x, b.position.y - WALL_THICK, b.size.x, WALL_THICK),              # 위
+		Rect2(b.position.x, b.end.y, b.size.x, WALL_THICK),                                # 아래
+		Rect2(b.position.x - WALL_THICK, b.position.y - WALL_THICK,
+			WALL_THICK, b.size.y + WALL_THICK * 2.0),                                      # 왼
+		Rect2(b.end.x, b.position.y - WALL_THICK,
+			WALL_THICK, b.size.y + WALL_THICK * 2.0),                                      # 오른
+	]
+	rects.append_array(PILLAR_RECTS)
+	for r: Rect2 in rects:
+		var body := StaticBody2D.new()
+		body.collision_layer = 1      # world
+		body.collision_mask = 0       # 벽은 아무것도 안 쫓는다 — 맞기만 한다
+		body.global_position = r.get_center()
+		var cs := CollisionShape2D.new()
+		var shape := RectangleShape2D.new()
+		shape.size = r.size
+		cs.shape = shape
+		body.add_child(cs)
+		_world.add_child(body)
 
 
 func _build_forge() -> void:
@@ -154,6 +193,14 @@ func _reset_dummies() -> void:
 
 func _draw_world() -> void:
 	_world.draw_rect(get_viewport_rect(), BG_COLOR, true)
+
+	# 벽·기둥 — 팅김⚡이 튕기는 면. **보이지 않으면 왜 튕겼는지 알 수 없다.**
+	# 기둥 뒤 허수아비는 곧은 탄으로 못 맞힌다 — 팅김으로 돌아가 맞히라는 문제 제기다
+	var b := BOUNDS
+	_world.draw_rect(b.grow(WALL_THICK * 0.5), WALL_COLOR, false, WALL_THICK)
+	for r: Rect2 in PILLAR_RECTS:
+		_world.draw_rect(r, WALL_COLOR, true)
+		_world.draw_rect(r, WALL_EDGE, false, 1.0)
 
 	# 작업대 — 거점의 이젤 자리. 다가가면 프롬프트가 뜬다
 	var desk := Rect2(DESK_POS - DESK_SIZE * 0.5, DESK_SIZE)
@@ -217,31 +264,27 @@ func _on_enemy_hit(_enemy: Node2D, damage: float, rune_type: int) -> void:
 	_cast_label.add_theme_color_override(&"font_color", OK_COLOR)
 
 
-## 도안 상태 — 곡선 궤적 검증을 위해 문양의 **곡률**(path의 최대 |y|)까지 보여준다.
-## path 좌표계가 (시작=원점, +X=발사방향)이므로 |y|가 곧 그린 획이 얼마나 휘었는지다.
+## 도안 상태 — **v1.9의 검증 표면이다.** "내가 그린 지그재그가 팅김으로 읽혔는가,
+## 그리고 얼마나 세게(멀리) 나가는가"를 발사 전에 눈으로 확인할 수 있어야 한다.
+##
+## ~~곡률(휨)~~ 표시는 **뺐다** — v1.9가 궤적을 폐기했으므로(GDD §4.3) 그 숫자는 이제
+## 전투에서 아무것도 정하지 않는다. **아무 일도 안 하는 값을 계속 보여 주면 거짓말이 된다.**
+## 그 자리에 **문양별 글자·세기(reach)**를 보여 준다.
 func _refresh_design_label() -> void:
 	var design: SpellDesign = _forge.call(&"get_design")
 	if design == null:
 		_design_label.text = "도안 없음 — 작업대(E)에서 진·룬·문양을 그린다"
 		_design_label.add_theme_color_override(&"font_color", HINT_COLOR)
 		return
-	var bend := 0.0
-	var has_path := false
+	# 문양 하나하나를 낱개로 — "1개는 팅김으로 읽혔는데 2개째는 기본으로 떨어졌다"가 보여야 한다
+	var parts: Array[String] = []
 	for a: ArrowData in design.arrows:
-		for p: Vector2 in a.path:
-			has_path = true
-			bend = maxf(bend, absf(p.y))
-	var bend_text := "직선"
-	if not has_path:
-		bend_text = "경로없음(폴백)"
-	elif bend > 0.02:
-		bend_text = "곡선 (휨 %.3f)" % bend
-	_design_label.text = "%s · 정확도 %d%% · 마나 %.0f · %d발 · %s" % [
+		parts.append("%s %.1f" % [Copy.glyph_label(a.glyph), a.reach])
+	_design_label.text = "%s · 정확도 %d%% · 마나 %.0f · [%s]" % [
 		design.display_name,
 		roundi(design.rune_accuracy * 100.0),
 		design.mana_cost,
-		design.arrows.size(),
-		bend_text,
+		" / ".join(parts),
 	]
 	_design_label.add_theme_color_override(&"font_color", OK_COLOR)
 

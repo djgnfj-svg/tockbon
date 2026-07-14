@@ -43,25 +43,99 @@ res://
 
 ## 4. 핵심 리소스 스키마 (`src/core/schemas/`)
 
-### 4.0-a ⚠ v1.8 예정 변경 — **아직 코드에 없다** (GDD v1.8 확정, 구현 전)
+### 4.0-a v1.9 축 — **문양은 구현됨 ✅ · 진 모양·룬 N개는 미구현 ⚠**
 
-**이 문서의 나머지는 "지금 코드"를 기술한다. 아래는 "확정됐지만 아직 안 짠 것"이다** — 섞지 말 것.
+**섞지 말 것.** 아래 표의 ✅는 **지금 코드에 있다**. ⚠는 **확정됐지만 아직 안 짠 것**이다.
 
-GDD v1.8에서 축이 재배분됐다. **룬 N개·문양 N개가 이 게임의 핵심**이고, **진이 모양(구조) 축을 받았다.**
-현행 코드는 **룬 1개·진=원 고정**을 전제하므로 아래가 전부 바뀐다:
+GDD v1.6~v1.9에서 축이 재배분돼 **세 축이 전부 찼다.** 문양(v1.9)은 세션 10에 구현됐고,
+남은 것은 **진 모양·룬 N개**이며 **둘 다 `$P` 인식기를 전제**한다.
 
-| 대상 | 지금 (v1.7 코드) | v1.8 예정 |
-|---|---|---|
-| **인식기** | `$1` 유니스트로크 — **한붓그리기 전용** | **`$P` 포인트 클라우드** — 다획. **별·용의 진의 전제** |
-| **진** | `circle_radius` 하나 (원 고정, `detect_circle` 기하 판정) | **모양 종류 + 크기.** 닫힌 도형이면 원이 아니어도 된다 |
-| **룬** | `rune_type` · `rune_fill` · `rune_accuracy` — **스칼라 3개** | **`Array[RuneInstance]`** — `{type, fill, accuracy}` 의 배열 |
-| **피격 계약** | `take_hit(damage, rune_type, status, status_power)` — 상태이상 **1개** | 상태이상 **배열**. `rune_type`도 복수 (약점 판정이 "어느 룬이든 맞으면") |
-| **문양** | `Array[ArrowData]` — **이미 N개 ✅** | 유지. `path`(궤적)를 **실제로 소비**한다 (지금은 저장만) |
+| 대상 | 지금 코드 | v1.9 목표 | 상태 |
+|---|---|---|---|
+| **문양 글자** | `ArrowData.glyph` (BASIC/BOUNCE/HOMING/PIERCE) | 발동 방식 축 | **✅ 구현** |
+| **문양 세기** | `ArrowData.reach` (획 길이 ÷ 진 반지름) | 사거리 배율 + 글자별 세기 | **✅ 구현** |
+| **`ArrowData.path`** | **먹선 렌더 전용**(비주얼) | ~~궤적~~ **폐기** — 궤적은 `glyph`가 정한다 | **✅ 반영** |
+| **인식기** | `$1` 유니스트로크 — **한붓그리기 전용** | **`$P` 포인트 클라우드** — 다획 | ⚠ **미구현 — 아래 둘의 전제** |
+| **진** | `circle_radius` 하나 (원 고정, `detect_circle` 기하 판정) | **모양 종류 + 크기.** 닫힌 도형이면 원이 아니어도 된다 | ⚠ 미구현 |
+| **룬** | `rune_type`·`rune_fill`·`rune_accuracy` — **스칼라 3개** | **`Array[RuneInstance]`** + **`angle` = 배선** | ⚠ 미구현 |
+| **피격 계약** | `take_hit(damage, rune_type, status, status_power)` | **현행 시그니처가 그대로 성립한다** (탄 1발 = 룬 1개 — 룬을 섞지 않기로 한 덕분) | ✅ 변경 불필요 |
 
-- **적의 `_statuses`는 이미 Dictionary라 상태이상을 여러 개 동시에 갖는다** — 그쪽은 안 바꿔도 된다
-- **세이브 마이그레이션 1회 필요** (`rune_fill` 스칼라 → 배열). v1.7에서 이미 세이브에 들어갔다
-- **순서를 지켜라**: 인식기($P) → 진 모양 → 룬 N개 → 문양 궤적. 1획 전제로 어휘를 짜 놓고 다획으로
-  가면 전부 다시 그려야 한다 (GDD §4.4)
+> 🔴 **문양을 먼저 구현한 이유** (GDD의 "$P 먼저"를 뒤집었다): $P를 먼저 갈라는 근거는
+> *"1획용으로 구부린 글자는 다획에서 다시 그려야 한다"*인데, **팅김(지그재그)·유도(호)·관통(창)은
+> 애초에 1획이 자연스럽다.** 구부릴 게 없다. **다획이 진짜로 필요한 건 진(별·용)뿐이다.**
+
+#### 구현된 문양 축 (v1.9) — 지금 코드
+
+```gdscript
+# arrow_data.gd
+@export var glyph: Enums.GlyphType = Enums.GlyphType.BASIC
+    # BASIC = **어느 글자도 아닌 획 = 폴백**. 인식 실패는 거부가 아니다 (GDD §4.5).
+    # 구세이브·샘플 도안·튜토리얼 첫 도안이 전부 여기로 — 기본값이 곧 하위 호환이다
+@export var reach: float = 1.0
+    # 획 길이 ÷ 진 반지름. **rune_fill과 정확히 대칭.** 기본 1.0 = 기준 배율 (구세이브 사거리 불변)
+    # 소비: 사거리 배율(공통) + BOUNCE→반사 횟수 / HOMING→추적 지속 / PIERCE→뚫는 수
+```
+
+**소비 지점 (t = `inverse_lerp(glyph_reach_min, glyph_reach_max, reach)` 하나가 전부의 입력)**
+- `projectile.reach_t()` / `range_mult()` — **공식은 여기 하나뿐이다.** spell_system과 투사체가 같은 t를 쓴다
+- `spell_system.compute_arrow_lifetime()` = `compute_lifetime(진 축)` × `range_mult(문양 축)`.
+  🔴 **사거리만 탄마다 갈라진다.** 위력·크기·상태이상은 **도안당 1회** — 문양이 안 건드리는 축이다
+- `design_builder`: 마나에 `glyph_reach_mana_mult × Σt` (공짜면 "문양은 언제나 최대한 길게"가 정답이 된다)
+
+**인식 (recognizer.gd)**
+- `recognize_glyph()` — $1 매칭 + 피처. **점수 미달이면 BASIC** (`GLYPH_MIN_SCORE`)
+- 🔴 **`GLYPH_MIN_BOW = 0.08` (현 이탈도)가 BASIC을 가르는 진짜 잣대다. 직진성으로는 못 가른다** —
+  실측상 BASIC(0.868~1.000)과 유도∿(0.673~0.909)가 **겹친다**. 현 이탈도는
+  BASIC(0.003~0.059) vs 글자(0.112~0.443)로 **빈 구간이 통째로 비어 있다**
+- 🔴 **룬·문양 템플릿 배열은 분리돼 있다** — 두 enum의 정수값이 겹친다 (`FIRE=0=BASIC`).
+  한 배열에 섞으면 조용히 서로를 먹는다
+- 🔴 **U턴 형태의 글자는 금지** — 끝점이 시작점 근처로 오면 `detect_escape`가 "진을 안 뚫었다"로
+  읽어 **룬으로 오인**한다 (§6.1). 모든 문양 글자는 **전진하며 끝난다**
+
+#### 미구현 스키마 (v1.9 목표 — 진 모양 · 룬 N개)
+
+```gdscript
+# rune_instance.gd — 룬 하나 (SpellDesign.runes 의 원소)
+class_name RuneInstance extends Resource
+@export var type: int        # RuneType.FIRE / IMPACT / WATER / WIND
+@export var fill: float      # 0..1 — 농도 (v1.7 rune_fill 과 동일 정의: 외접 반경 ÷ 진 반지름)
+@export var accuracy: float  # 0..1 — 순도
+@export var angle: float     # rad. **v1.9 배선 축** — 룬 무게중심의 **진 중심 대비 방위각**.
+                             # 🔴 글리프의 회전각이 아니다. 회전각을 쓰면 불△(3회 대칭)이
+                             # 120도 돌려도 눈에 똑같아 플레이어가 영원히 알 수 없다.
+                             # **위치는 눈에 보인다.** 캔버스 절대각 (direction·origin 과 같은 좌표계)
+```
+
+⚠ `ArrowData.glyph`·`reach`는 **위에 이미 구현돼 있다** — 여기 다시 적지 않는다.
+(계약 문서에 같은 값을 두 번 적으면 언젠가 갈라진다)
+
+#### 배선 규칙 (v1.9) — 룬 N개 × 문양 N개
+
+```
+탄의 속성 = argmin_i | angdiff(RuneInstance[i].angle, ArrowData.direction) |
+```
+
+- **룬이 1개면 모든 문양이 그 룬을 받는다** → v1.8 이하 도안과 **완전히 하위 호환**
+- **위력 계수는 `fill` 가중 평균** (룬 1개일 때 지금과 **정확히 같다**)
+- 두 방향 계산 모두 **캔버스 절대각**이다 (`direction`·`origin`·`angle` 동일 좌표계).
+  ⚠ 세션 7의 "90도 틀어짐" 버그가 상대각/절대각 혼용에서 나왔다 — **좌표계를 섞지 말 것**
+
+#### 남은 정합성 항목
+
+- **적의 `_statuses`는 이미 Dictionary라 상태이상을 여러 개 동시에 갖는다** — 안 바꿔도 된다
+- **세이브 마이그레이션 1회 필요** (`rune_fill` 스칼라 → `runes` 배열). v1.7에서 이미 세이브에 들어갔다.
+  ✅ `arrows`는 **필드 추가라 기본값으로 흡수됐다** (`glyph=BASIC`, `reach=1.0`) — 마이그레이션 불필요.
+  구세이브 도안이 **예전과 똑같이** 날아간다 (`test_spell_auto`가 실측으로 못 박음)
+- 🔴 **중첩 진이 오면 `circle_radius`도 배열이어야 한다** (BACKLOG §1-6, 사용자 아이디어).
+  **어차피 룬 N개로 마이그레이션을 한 번 하므로 그때 진도 함께 열면 공짜다.**
+  **진 1개를 코드 곳곳에 하드코딩하지 말 것**
+- ✅ **`magnitude`는 되살아났다** — v1.6에서 "소비 금지"로 묶어 둔 필드다. 다만 `reach`는
+  **`magnitude ÷ circle_radius`가 아니다**: 둘은 정규화 기준이 달라(전자는 `arrow_full_length`,
+  후자는 캔버스 반지름 0.5) 나누면 틀린 값이 나온다.
+  **`reach = 원시 획 길이(캔버스 단위) ÷ 진 반지름(캔버스 단위)`** — `design_builder`가 계산한다.
+  `magnitude`는 잉크·렌더·기록용으로 남는다
+- **남은 순서**: **인식기($P) → 진 모양 → 룬 N개(+배선)**. 문양(v1.9)은 이미 끝났다.
+  ⚠ $P는 **진 모양·룬 N개의 전제**다 — 별·용의 진은 한붓그리기로 원리적으로 못 그린다 (GDD §4.4)
 
 ---
 
@@ -76,8 +150,9 @@ GDD v1.8에서 축이 재배분됐다. **룬 N개·문양 N개가 이 게임의 
 | **문양** (화살표) | **어떻게 나가는가** | `direction`(발사각) · `origin`(기점) · 개수(발수) · `path`(궤적) | `spell_system`, `projectile` |
 
 - **규모는 진의 것이다.** 큰 진 = 크고 아프고 멀리 가는 마법. 문양을 길게 그어도 세지지 않는다
-- **`ArrowData.magnitude`는 v1.6에서 전투 스탯과 분리됐다.** 필드는 남지만(문양 종류 도입 시 재사용
-  예약, BACKLOG §1) **위력·크기 어디에도 물리지 않는다.** 소비하지 말 것
+- **`ArrowData.magnitude`는 v1.6에서 전투 스탯과 분리됐다.** 필드는 남지만 **위력·크기 어디에도
+  물리지 않는다.** 소비하지 말 것 — **⚠ v1.9에서 되살아난다** (`reach = magnitude ÷ circle_radius`
+  → 사거리 배율. §4.0-a). **위력이 아니라 사거리**라는 점에서 v1.5의 축 위반과 다르다
 
 #### v1.7 — 룬의 축: **속성의 농도** (`rune_fill`)
 
@@ -142,10 +217,13 @@ class_name ArrowData extends Resource
 @export var origin: Vector2              # 발사 기점. 진 중심 기준·진 반지름=1.0 정규화 (가장자리=1.0)
                                          # 월드 px = origin × circle_radius × balance.circle_radius_px
                                          # circle_radius: 캔버스 꽉 채우는 원(캔버스 반지름 0.5) = 1.0
-@export var path: PackedVector2Array     # v1.5 — 그린 화살표 획의 곡선 경로 (곡선 궤적용)
+@export var path: PackedVector2Array     # v1.5 — 그린 화살표 획의 곡선 경로
                                          # 좌표계: 획 시작점=원점, +X=발사 방향(direction)인 로컬 공간.
                                          #        단위는 캔버스 단위 (월드 px = ×InkRender.unit_px(balance))
                                          # **비어 있으면 직선 폴백** — 샘플 도안·구세이브·직선 화살표 호환
+                                         # 🔴 v1.9: ~~곡선 궤적용~~ **폐기 → 먹선 렌더 전용**(비주얼).
+                                         #    궤적은 `glyph`가 정한다 (GDD §4.3). "내가 그린 획이
+                                         #    날아간다"는 연출은 유지되지만 **날아가는 길은 글자가 정한다**
 
 # rune_def.gd — 룬 정의 (data/runes/*.tres, 인스턴스는 B 소유)
 class_name RuneDef extends Resource

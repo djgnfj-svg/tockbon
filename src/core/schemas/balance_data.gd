@@ -74,6 +74,31 @@ extends Resource
 ## circle_radius(정규) → 월드 px 발사 오프셋 스케일
 @export var circle_radius_px: float = 48.0
 
+# ── 문양 = 발동 방식 + 세기 축 (v1.9, TECH_SPEC §4.0) — GDD §4.3 ──
+# ArrowData.reach = 문양 획 길이 ÷ 진 반지름. **룬의 rune_fill과 대칭**이다.
+# 정규화 t = inverse_lerp(glyph_reach_min, glyph_reach_max, reach) → 0..1 이 아래 전부의 입력.
+# 사거리는 **진이 기준을 주고 문양이 배율을 정한다** — 축을 도로 뺏지 않는다 (GDD §4.1).
+## reach 하한 — 진을 겨우 뚫고 나간 짧은 문양
+@export var glyph_reach_min: float = 0.6
+## reach 상한 — 종이 끝까지 길게 뺀 문양 (이 위는 잘린다)
+@export var glyph_reach_max: float = 3.0
+## 사거리 배율 = lerp(min, max, t) → compute_lifetime의 진 사거리에 **곱해진다**
+@export var glyph_range_min: float = 0.7
+@export var glyph_range_max: float = 1.6
+## 문양 세기 → 발당 마나 가산 (t에 비례). 진·룬과 같은 이유 —
+## 공짜면 "문양은 언제나 최대한 길게"가 유일한 정답이 된다 (GDD §5)
+@export var glyph_reach_mana_mult: float = 2.5
+## 팅김⚡ 벽 반사 횟수 = round(lerp(1, max, t)). 길게 그은 팅김이 더 많이 튕긴다
+@export var glyph_bounce_max: int = 4
+## 관통‖ 뚫는 적 수 = round(lerp(1, max, t)). 길게 그은 관통이 더 많이 뚫는다
+@export var glyph_pierce_max: int = 4
+## 유도∿ 선회 속도 (rad/s) — 클수록 급하게 꺾어 따라간다
+@export var glyph_homing_turn_rate: float = 3.2
+## 유도∿ 표적 탐지 반경 (px)
+@export var glyph_homing_range_px: float = 220.0
+## 유도∿ 추적 지속 = lerp(min, 1.0, t) × 수명. 짧게 그으면 잠깐만 따라가고 놓친다
+@export var glyph_homing_duration_min: float = 0.35
+
 # ── 룬 = 속성 농도 축 (v1.7, TECH_SPEC §4.0) — 상태이상 세기를 룬 크기가 정한다 ──
 # 상태이상 세기 = RuneDef.status_power × lerp(density_min, density_max, rune_fill) × rune_accuracy.
 # rune_fill = 룬 bbox 반경 ÷ 진 반지름. 인식기가 "룬은 진 안"으로 가르므로 자연히 0..1이다.

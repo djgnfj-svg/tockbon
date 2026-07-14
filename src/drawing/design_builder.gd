@@ -1,7 +1,9 @@
 extends RefCounted
 ## 인식 결과 → SpellDesign 조립 + 비용 계산 (GDD §4.4, §5 비용 축 분리).
 ## 잉크 = 그린 총량(길이×필압) + 진 크기 가산 / 마나 = 룬 + **진 규모** + **룬 농도** + 발수 축 (v1.7).
-## 역할 축 (TECH_SPEC §4.0): 진 = 규모 / 룬 = **속성 + 농도** / 문양 = 방식.
+## 역할 축 (TECH_SPEC §4.0): 진 = 규모 / 룬 = **속성 + 농도** / 문양 = **발동 방식 + 세기**.
+## v1.9: 문양이 **글자**(glyph)와 **세기**(reach)를 갖는다. reach = 획 길이 ÷ 진 반지름 —
+## rune_fill과 정확히 대칭이라 진을 키우면 같은 문양도 배율이 줄고, 마나도 그만큼 더 문다.
 ## v1.7: 룬에 농도 축(`rune_fill` — 룬이 진을 얼마나 채우는가)이 붙었다. $1 인식기가 크기를
 ## 정규화해 버리는 탓에 룬을 크게 그리든 작게 그리든 결과가 같았고, 룬 그리기가 4지선다에
 ## 불과했다. 이제 진을 꽉 채운 룬은 깊이 물들고(상태이상 세기 ↑) 구석에 작게 그린 룬은 옅게 스친다.
@@ -29,6 +31,19 @@ const RUNE_NAMES := {
 	Enums.RuneType.WATER: "물~",
 	Enums.RuneType.WIND: "바람◎",
 }
+
+const GLYPH_NAMES := {
+	Enums.GlyphType.BASIC: "기본",
+	Enums.GlyphType.BOUNCE: "팅김⚡",
+	Enums.GlyphType.HOMING: "유도∿",
+	Enums.GlyphType.PIERCE: "관통‖",
+}
+
+## 표기 순서 (Dictionary 순회 순서에 이름을 맡기지 않는다)
+const GLYPH_ORDER: Array[int] = [
+	Enums.GlyphType.BASIC, Enums.GlyphType.BOUNCE,
+	Enums.GlyphType.HOMING, Enums.GlyphType.PIERCE,
+]
 
 static var _seq := 0
 
@@ -75,6 +90,10 @@ static func classify_entries(entries: Array[Dictionary]) -> Dictionary:
 					"direction": res.direction,
 					"length": res.length,
 					"start": res.start,
+					# v1.9 문양 글자 (GDD §4.3). 인식기가 못 읽었으면 BASIC이 들어 있다 —
+					# 폴백이지 실패가 아니다. 스탬프(locked) 엔트리의 옛 result엔 키가 없으므로 기본값
+					"glyph": int(res.get("glyph", Enums.GlyphType.BASIC)),
+					"glyph_score": float(res.get("glyph_score", 0.0)),
 					"stroke": stroke,
 				})
 			_:
@@ -128,7 +147,14 @@ static func build(parts: Dictionary, balance: BalanceData, into: SpellDesign = n
 		ad.magnitude = clampf(float(a.length) / balance.arrow_full_length, 0.05, 1.0)
 		# origin은 진 반지름 = 1.0 정규화 (가장자리 = 1.0, TECH_SPEC §4)
 		ad.origin = (Vector2(a.start) - Vector2(circle.center)) / radius_cu
+		ad.glyph = int(a.get("glyph", Enums.GlyphType.BASIC)) as Enums.GlyphType
 		var arrow_stroke := a.get("stroke") as StrokeData
+		# v1.9 세기 축 — **룬의 rune_fill과 정확히 대칭**이다: 진 대비 비율이라 같은 문양도
+		# 진이 크면 reach가 작아진다. magnitude(원시 길이·잉크·렌더용)와는 **다른 값**이다.
+		# 획이 없는 도안(샘플·구세이브)은 스키마 기본값(1.0 = 기준 배율)을 그대로 둔다
+		if arrow_stroke != null and arrow_stroke.points.size() >= 2:
+			ad.reach = clampf(float(a.length) / radius_cu,
+				balance.glyph_reach_min, balance.glyph_reach_max)
 		ad.path = _arrow_path(arrow_stroke)
 		if not ad.path.is_empty():
 			# path와 같은 리샘플 인덱스 — 붓을 누른 굵기 변화가 그대로 날아간다.
@@ -163,11 +189,19 @@ static func build(parts: Dictionary, balance: BalanceData, into: SpellDesign = n
 	if rune_idx >= 0 and rune_idx < balance.rune_mana_base.size():
 		mana_base = balance.rune_mana_base[rune_idx]
 	var discount := clampf(float(paper_params.get("mana_discount", 0.0)), 0.0, 1.0)
+	# v1.9 문양 축: 발수(mana_per_arrow)에 더해 **각 탄이 얼마나 멀리 가는가**(reach)를 문다.
+	# 공짜면 "문양은 언제나 최대한 길게"가 유일한 정답이 된다 (GDD §4.3·§5) — 농도와 같은 논리다.
+	# 기준 배율(reach=1.0)인 구세이브·샘플 도안도 t>0이라 조금 문다: reach는 0이 아니라 1이 기본이다
+	var reach_t := 0.0
+	for ad: ArrowData in arrows:
+		reach_t += clampf(inverse_lerp(
+			balance.glyph_reach_min, balance.glyph_reach_max, ad.reach), 0.0, 1.0)
 	d.mana_cost = (
 		mana_base
 		+ balance.circle_mana_mult * d.circle_radius
 		+ balance.rune_density_mana_mult * d.rune_fill
 		+ balance.mana_per_arrow * float(arrows.size())
+		+ balance.glyph_reach_mana_mult * reach_t
 	) * (1.0 - discount)
 
 	# 종이 등급: 내구 보정·등급 기록 (GDD §5). 스키마 기본값에서 매번 재계산 — into 재사용 시 비누적
@@ -181,9 +215,28 @@ static func build(parts: Dictionary, balance: BalanceData, into: SpellDesign = n
 	else:
 		d.durability = mini(d.durability, d.durability_max)
 
-	# 진이 한 종류뿐이라 종류 표기가 없다
-	d.display_name = "%s ×%d" % [RUNE_NAMES.get(int(d.rune_type), "?"), arrows.size()]
+	# 진이 한 종류뿐이라 종류 표기가 없다. 문양이 섞여 있으면 **구성**을 보여준다 —
+	# "발수 3"과 "관통 1 + 팅김 2"는 전혀 다른 도안인데 이름이 같으면 슬롯에서 구별이 안 된다
+	d.display_name = "%s %s" % [RUNE_NAMES.get(int(d.rune_type), "?"), glyph_summary(arrows)]
 	return d
+
+
+## 문양 구성 표기 — 전부 기본이면 발수만("×3"), 글자가 섞이면 종류별로("팅김⚡×2 관통‖×1").
+static func glyph_summary(arrows: Array[ArrowData]) -> String:
+	var counts := {}
+	for ad: ArrowData in arrows:
+		counts[int(ad.glyph)] = int(counts.get(int(ad.glyph), 0)) + 1
+	if counts.size() <= 1 and counts.has(int(Enums.GlyphType.BASIC)):
+		return "×%d" % arrows.size()
+	var parts: Array[String] = []
+	for g: int in GLYPH_ORDER:
+		if counts.has(g):
+			parts.append("%s×%d" % [GLYPH_NAMES.get(g, "?"), int(counts[g])])
+	return " ".join(parts)
+
+
+static func glyph_name(glyph_type: int) -> String:
+	return GLYPH_NAMES.get(glyph_type, "?")
 
 
 ## 화살표 획 → ArrowData.path (시작점 = 원점, +X = direction인 로컬 경로, 캔버스 단위).

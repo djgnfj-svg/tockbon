@@ -17,6 +17,7 @@ extends RefCounted
 ## 사용: const Recognizer := preload("res://src/drawing/recognizer.gd")
 
 const RuneTemplates := preload("res://src/drawing/rune_templates.gd")
+const GlyphTemplates := preload("res://src/drawing/glyph_templates.gd")
 
 # ── $1 파라미터 ──
 const RESAMPLE_N := 64
@@ -56,6 +57,32 @@ const CIRCLE_MAX_TURN := 1.15          # 국소 최대 꺾임(rad) — 삼각형
 const ARROW_STRAIGHT_PRE := 0.90       # 이상이면 룬을 건너뛰고 즉시 화살표
 const ARROW_STRAIGHT_FALLBACK := 0.80  # 룬 실패 시 폴백 화살표 최소 직진성
 
+# ── 문양 글자 (v1.9, GDD §4.3) ──
+# **인식 실패는 거부가 아니라 BASIC 폴백이다.** 진을 뚫고 나간 획은 무조건 탄이다 (GDD §4.5) —
+# 아래 상수들은 "글자로 인정할 문턱"이지 "획을 버릴 문턱"이 아니다.
+const GLYPH_MIN_SCORE := 0.62          # 미달 → BASIC
+## 최고점과 차점의 차이가 이 미만이면 ($1이 확신 못 함) 기하 피처로 가른다
+const GLYPH_TIE_MARGIN := 0.08
+## 🔴 **BASIC을 가르는 진짜 잣대.** 현(시작→끝)에서 벗어나는 최대 수직거리 ÷ 현 길이.
+## 미만이면 **템플릿을 태우지 않고** 즉시 BASIC — 글자가 아니라 그냥 곧은 획이다.
+##
+## 직진성으로는 못 가른다. 실측 분포(손그림 6000샘플): **직진성은 BASIC 0.868~1.000 vs
+## 유도∿ 0.673~0.909로 겹친다** — 곡률이 완만한 호는 경로가 거의 안 늘어나기 때문이다
+## (사가타 0.2의 호도 직진성 0.90). 반면 chord_bow는 **BASIC 0.003~0.059 vs 글자 0.112~0.443,
+## 빈 구간이 통째로 비어 있다.** 0.08은 그 한가운데다 (ARROW_ESCAPE_R을 잡은 것과 같은 수법).
+##
+## 이 게이트가 없으면 scale_to_square가 얇은 획의 세로 지터를 bbox 높이로 나눠
+## **화면 가득한 가짜 지그재그**로 부풀려, 살짝 흔들린 직선이 팅김⚡에 붙는다.
+const GLYPH_MIN_BOW := 0.08
+## 이 이상 곧으면 템플릿을 아예 안 태운다 — 튜토리얼의 직선 화살표가 여기로 빠진다.
+## **ARROW_STRAIGHT_PRE(0.90)를 재사용하지 않는다**: 그 값은 "룬이냐 화살표냐"의 잣대이지
+## "글자냐 아니냐"의 잣대가 아니다. 0.90으로 자르면 유도∿의 완만한 호(최대 0.909)를
+## 통째로 BASIC으로 떨궈 인식률이 1.4% 깎였다 (실측). 곧은 획은 직진성 0.99+라 여유가 크다.
+const GLYPH_BASIC_STRAIGHT := 0.95
+## 국소 최대 꺾임(rad, 스무딩 후) — 이상이면 "급반전"(관통‖의 화살촉). 유도∿는 곡률이
+## 호 전체에 퍼져 이 아래에 머문다
+const GLYPH_SHARP_TURN := 0.55
+
 # ── 탈출 판정 (곡선 화살표, TECH_SPEC §6.1) ──
 # "룬은 진 안에 머무르고, 화살표는 진을 뚫고 나간다" — 직진성이 아니라 기하 위치로 가른다.
 const ARROW_ESCAPE_R := 1.05           # 끝점 중심거리 ≥ radius × 이 값이어야 "진 밖"
@@ -66,6 +93,7 @@ const MIN_POINTS := 4
 const MIN_STROKE_LEN := 0.02
 
 static var _templates: Array[Dictionary] = []
+static var _glyph_templates: Array[Dictionary] = []
 
 
 ## ctx: {has_circle, circle_center, circle_radius, has_tail, has_rune}
@@ -203,11 +231,19 @@ static func recognize_rune(points: PackedVector2Array) -> Dictionary:
 
 ## 허용 후보별 최고 점수 (같은 룬의 여러 템플릿 중 최고)
 static func _type_scores(points: PackedVector2Array, allowed: Array[int]) -> Dictionary:
-	var norm := normalize_for_match(points)
+	return _best_scores(normalize_for_match(points), _templates, allowed)
+
+
+## 정규화된 획 vs 템플릿 집합 → 타입별 최고 $1 점수.
+## **룬과 문양은 템플릿 집합이 완전히 분리돼 있다** — 두 enum의 정수값이 겹치므로(FIRE=0=BASIC)
+## 한 배열에 섞으면 조용히 서로를 먹는다. 작성 순서가 후보를 그 단계 것만으로 제한한다는
+## GDD §4.4의 "문법이 인식을 지킨다"가 코드에선 이 분리로 나타난다
+static func _best_scores(norm: PackedVector2Array, templates: Array[Dictionary],
+		allowed: Array[int]) -> Dictionary:
 	var out := {}
 	for t: int in allowed:
 		out[t] = 0.0
-	for t: Dictionary in _templates:
+	for t: Dictionary in templates:
 		var ty := int(t.type)
 		if not allowed.has(ty):
 			continue
@@ -267,16 +303,109 @@ static func _ensure_templates() -> void:
 		_templates.append({"type": raw.type, "points": normalize_for_match(rev)})
 
 
-# ─────────────────────────── (e) 화살표 ───────────────────────────
+# ─────────────────────────── (e) 화살표 + 문양 글자 ───────────────────────────
 
+## 한 획에서 기하와 글자를 **함께** 읽는다 (GDD §4.4). 방향·기점·길이는 시작·끝·총연장만 쓰므로
+## 모양이 그대로 남아 $1 매칭에 넘길 수 있다 — 궤적을 포기했기에 가능해진 일이다.
 static func _arrow_result(points: PackedVector2Array, st: float) -> Dictionary:
+	var g := recognize_glyph(points)
 	return {
 		"role": Enums.StrokeRole.ARROW,
 		"direction": (points[points.size() - 1] - points[0]).angle(),
 		"length": path_length(points),
 		"start": points[0],
 		"score": st,
+		"glyph": int(g.type),
+		"glyph_score": float(g.score),
 	}
+
+
+## 문양 글자 인식 (GDD §4.3) — 팅김⚡ / 유도∿ / 관통‖, **어느 것도 아니면 BASIC**.
+## 반환: {"type": Enums.GlyphType, "score": float}
+##
+## 🔴 **거부가 없다.** 룬은 점수 미달이면 DECOR로 떨궈 획을 버리지만, 문양은 진을 뚫고 나간
+## 이상 무조건 탄이다 — 실패의 값이 BASIC이다 (GDD §4.5).
+static func recognize_glyph(points: PackedVector2Array) -> Dictionary:
+	var basic := {"type": int(Enums.GlyphType.BASIC), "score": 0.0}
+	if points.size() < MIN_POINTS or path_length(points) < MIN_STROKE_LEN:
+		return basic
+	# 아주 곧은 획은 템플릿을 태우지 않고 즉시 BASIC — 튜토리얼의 직선 화살표가 여기로 나간다
+	if straightness(points) >= GLYPH_BASIC_STRAIGHT:
+		return basic
+	# 현에서 거의 안 벗어나는 획도 BASIC — **이쪽이 주 방어선이다** (상수 주석의 실측 분포)
+	if chord_bow(points) < GLYPH_MIN_BOW:
+		return basic
+
+	_ensure_glyph_templates()
+	var allowed: Array[int] = [
+		Enums.GlyphType.BOUNCE, Enums.GlyphType.HOMING, Enums.GlyphType.PIERCE]
+	var by_type := _best_scores(normalize_for_match(points), _glyph_templates, allowed)
+	var best := int(allowed[0])
+	for t: int in allowed:
+		if float(by_type[t]) > float(by_type[best]):
+			best = t
+
+	# 피처는 **후보를 지우지 않는다.** $1이 확신 못 할 때(점수차 < 마진)만 개입하고, 그때도
+	# 접전 중인 둘 중 하나를 가리킬 때만 뒤집는다 — 세 번째 글자를 끌어오지 않는다.
+	# 세션 7 교훈: 피처를 하드 게이트로 쓰면 정답을 통째로 지워 버린다 (recognize_rune 주석)
+	var runner_up := _runner_up(by_type, allowed, best)
+	if runner_up >= 0 \
+			and float(by_type[best]) - float(by_type[runner_up]) < GLYPH_TIE_MARGIN:
+		var hinted := feature_glyph(points)
+		if hinted == best or hinted == runner_up:
+			best = hinted
+
+	var score := float(by_type[best])
+	if score < GLYPH_MIN_SCORE:
+		return basic
+	return {"type": best, "score": score}
+
+
+## 기하 피처가 가리키는 글자 — $1이 흔들릴 때의 보조 신호.
+## 세 글자의 표식은 서로 겹치지 않는다:
+##   팅김⚡ = 부호가 교대하는 꺾임 런이 **여러 개** (지그재그)
+##   관통‖ = 런 1개 + **급반전** (화살촉이 한 점에 꺾임을 몰아 넣는다)
+##   유도∿ = 런 1개 + 완만 (같은 부호의 곡률이 호 전체에 **퍼진다**)
+static func feature_glyph(points: PackedVector2Array) -> int:
+	if curvature_runs(points) >= 2:
+		return int(Enums.GlyphType.BOUNCE)
+	if glyph_max_turn(points) >= GLYPH_SHARP_TURN:
+		return int(Enums.GlyphType.PIERCE)
+	return int(Enums.GlyphType.HOMING)
+
+
+## 국소 최대 꺾임 — **스무딩 후** 잰다. 손 지터가 만드는 가짜 꺾임은 원본에서 1rad을 우습게
+## 넘겨 모든 획을 "급반전"으로 만든다 (curvature_runs가 같은 전처리를 쓰는 이유와 동일)
+static func glyph_max_turn(points: PackedVector2Array) -> float:
+	return max_turn(smoothed(resample(points, RUN_RESAMPLE_N), RUN_SMOOTH_PASSES))
+
+
+## 획이 현(시작→끝)에서 벗어나는 최대 수직거리 ÷ 현 길이. 곧은 획은 0에 가깝다.
+## 직진성(= 현 ÷ 경로길이)과 다른 것을 잰다: 잔물결이 많아 경로가 긴 획도 현 근처에 머물 수 있다.
+static func chord_bow(points: PackedVector2Array) -> float:
+	var pts := smoothed(resample(points, RUN_RESAMPLE_N), RUN_SMOOTH_PASSES)
+	var a: Vector2 = pts[0]
+	var b: Vector2 = pts[pts.size() - 1]
+	var chord := a.distance_to(b)
+	if chord <= 1e-6:
+		return 0.0
+	var axis := (b - a) / chord
+	var m := 0.0
+	for p: Vector2 in pts:
+		m = maxf(m, absf((p - a).cross(axis)))
+	return m / chord
+
+
+## 문양 템플릿은 **역방향 변형을 넣지 않는다** (룬과 다른 점).
+## 관통‖의 화살촉은 **끝**에 있어야 한다 — 획은 진 안에서 시작해 밖에서 끝나므로 방향이
+## 기하로 이미 정해져 있고, 역방향 템플릿을 넣으면 "촉이 진 쪽에 붙은 획"까지 관통으로 읽힌다.
+## 좌우 거울상은 GlyphTemplates.raw_all()이 이미 함께 낸다.
+static func _ensure_glyph_templates() -> void:
+	if not _glyph_templates.is_empty():
+		return
+	for raw: Dictionary in GlyphTemplates.raw_all():
+		var pts: PackedVector2Array = raw.points
+		_glyph_templates.append({"type": raw.type, "points": normalize_for_match(pts)})
 
 
 # ─────────────────────────── $1 기하 유틸 ───────────────────────────

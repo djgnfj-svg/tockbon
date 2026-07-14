@@ -1168,17 +1168,29 @@ func _test_builder_edges() -> void:
 	_check(is_equal_approx(d.arrows[0].magnitude, 1.0), "초과 길이 → magnitude 1.0 클램프")
 	# origin은 진 반지름=1.0 정규화 (TECH_SPEC §4): 시작점 0.1, 반지름 0.2 → (0.5, 0)
 	_check(d.arrows[1].origin.distance_to(Vector2(0.5, 0.0)) < 0.01, "origin 반지름 정규화")
-	# 마나 = 룬 기본 + **진 규모** + **룬 농도** + 발수 (v1.7, TECH_SPEC §4.0 — 진이 위력·크기·사거리를,
-	# 룬 농도가 상태이상 세기를 주므로 시전 비용에도 두 축이 붙는다)
+	# 마나 = 룬 기본 + **진 규모** + **룬 농도** + 발수 + **문양 사거리** (v1.9, TECH_SPEC §4.0 —
+	# 진이 위력·크기·사거리를, 룬 농도가 상태이상 세기를, 문양 reach가 사거리 배율을 주므로
+	# 시전 비용에 세 축이 다 붙는다). reach = 획 길이 ÷ 진 반지름: 0.9/0.2 = 4.5 → 상한 클램프,
+	# 0.2/0.2 = 1.0 (기준 배율) — 문양별로 t가 다르다는 것까지 이 케이스가 덮는다
+	var reach_t := 0.0
+	for ad: ArrowData in d.arrows:
+		reach_t += clampf(inverse_lerp(
+			balance.glyph_reach_min, balance.glyph_reach_max, ad.reach), 0.0, 1.0)
 	var expected_mana: float = balance.rune_mana_base[Enums.RuneType.WATER] \
 		+ balance.circle_mana_mult * d.circle_radius \
 		+ balance.rune_density_mana_mult * d.rune_fill \
-		+ balance.mana_per_arrow * 2.0
-	_check(is_equal_approx(d.mana_cost, expected_mana), "마나 = 룬 기본 + 진 규모 + 룬 농도 + 발수")
+		+ balance.mana_per_arrow * 2.0 \
+		+ balance.glyph_reach_mana_mult * reach_t
+	_check(is_equal_approx(d.mana_cost, expected_mana),
+		"마나 = 룬 기본 + 진 규모 + 룬 농도 + 발수 + 문양 사거리")
 	_check(balance.circle_mana_mult > 0.0,
 		"balance.circle_mana_mult > 0 — 위 검사가 진 축의 존재를 실제로 구별한다")
 	_check(balance.rune_density_mana_mult > 0.0 and d.rune_fill > 0.0,
 		"rune_density_mana_mult > 0 且 rune_fill > 0 — 위 검사가 농도 축을 실제로 구별한다")
+	# 두 문양의 reach가 실제로 다르다 — 위 검사가 문양 축을 뭉뚱그리지 않고 개별로 센다
+	_check(d.arrows[0].reach > d.arrows[1].reach,
+		"긴 문양의 reach > 짧은 문양의 reach (%.2f > %.2f)" % [
+			d.arrows[0].reach, d.arrows[1].reach])
 
 	# 잉크 = **통에서 나온 양**뿐이다 (v1.8, GDD §4.4). 가산·할증이 하나도 안 붙는다:
 	# 조준진 가산(v1.6 폐지)도, 진 크기 할증(v1.8 폐지 — 이중 과금)도 없다.

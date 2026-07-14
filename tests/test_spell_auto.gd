@@ -69,6 +69,11 @@ func _run() -> void:
 	await _test_no_strokes_fallback(system)
 	await _test_role_axes(system)
 	await _test_rune_density_axis(system)
+	await _test_glyph_basic_regression(system)
+	await _test_glyph_range(system)
+	await _test_glyph_bounce(system)
+	await _test_glyph_homing(system)
+	await _test_glyph_pierce(system)
 
 	if failures == 0:
 		print("TEST_SPELL_OK — 전 항목 통과")
@@ -460,7 +465,424 @@ func _test_rune_density_axis(system) -> void:
 			and int(full_fill["status"]) == int(rune.status),
 		"농도와 무관하게 status = 불 룬의 상태이상 (%d)" % int(rune.status))
 
+## 문양 = 발동 방식 + 세기 축 (v1.9, GDD §4.3).
+## 🔴 세션 7 교훈: 중간 표현이 초록이어도 **실제로 날아가는 탄은 90도 틀어져 있을 수 있다.**
+## 아래 넷은 전부 **관측 가능한 결과**로 검증한다 — 실제 속도 반전 · 실제 궤도 각 변화 ·
+## 실제 take_hit을 받은 적 수 · 실제 이동 거리.
+
+## 구세이브·샘플 도안(glyph 미설정 = BASIC, reach 기본 1.0)이 v1.8과 똑같이 날아가는가.
+func _test_glyph_basic_regression(system) -> void:
+	print("[11] BASIC 회귀 — 구세이브 도안은 v1.8과 같은 탄이다")
+	_gs.restore_mana_full()
+	var design := SampleDesigns.aimed_lance_water()   # arrows[0].glyph·reach 미설정
+	_check(int(design.arrows[0].glyph) == Enums.GlyphType.BASIC, "구세이브 화살표 glyph 기본값 = BASIC")
+	_check(is_equal_approx(float(design.arrows[0].reach), 1.0), "구세이브 화살표 reach 기본값 = 1.0")
+	_bus.cast_requested.emit(design, Vector2.ZERO, Vector2.RIGHT)
+	var projs := _projectiles(system)
+	_check(projs.size() == 1, "투사체 1개 (실제 %d)" % projs.size())
+	if projs.size() == 1:
+		var proj = projs[0]
+		# 위력·크기는 **진의 축** — 문양 도입으로 1비트도 안 움직여야 한다 (v1.8 공식 그대로 재계산)
+		var rune = _db.get_rune(design.rune_type)
+		var legacy_damage: float = system.balance.projectile_base_damage \
+			* (float(system.balance.circle_damage_base) + design.circle_radius) \
+			* (float(rune.base_damage) if rune != null else 1.0)
+		var legacy_size: float = lerpf(float(system.balance.circle_size_min),
+			float(system.balance.circle_size_max), design.circle_radius)
+		_check(is_equal_approx(float(proj.damage), legacy_damage),
+			"위력 %.2f = v1.8 값 %.2f (문양이 위력을 안 건드린다)" % [proj.damage, legacy_damage])
+		var actual_size: float = float(proj.scale.x * proj.get_node("Shape").scale.x)
+		_check(is_equal_approx(actual_size, legacy_size),
+			"탄 크기 %.2f = v1.8 값 %.2f (문양이 크기를 안 건드린다)" % [actual_size, legacy_size])
+		# 사거리 = 진 기준 × 문양 배율. reach 1.0의 배율은 1.0이 **아니다** — 아래 경고 참조
+		var base_life: float = system.balance.projectile_lifetime_sec * lerpf(
+			float(system.balance.circle_range_min), float(system.balance.circle_range_max),
+			design.circle_radius)
+		var mult: float = _range_mult(system, 1.0)
+		_check(is_equal_approx(float(proj._life_left), base_life * mult),
+			"사거리 %.3f초 = 진 기준 %.3f × 문양 배율 %.3f" % [proj._life_left, base_life, mult])
+		if not is_equal_approx(mult, 1.0):
+			print("  ⚠ 리드 확인 필요: reach 기본값 1.0의 사거리 배율이 %.3f다 (1.0이 아님)." % mult)
+			print("    → **구세이브 도안의 사거리가 %.0f%%로 바뀐다.** TECH_SPEC §4.0-a는" % (mult * 100.0))
+			print("    '구세이브 기본값 = 1.0 (기존 밸런스 유지)'라고 적혀 있다 — balance의")
+			print("    glyph_range_min/max(%.2f/%.2f) 또는 glyph_reach_min/max(%.2f/%.2f)와 어긋난다"
+				% [system.balance.glyph_range_min, system.balance.glyph_range_max,
+					system.balance.glyph_reach_min, system.balance.glyph_reach_max])
+		# BASIC은 벽에서 소멸한다 (반사하지 않는다) — 팅김과 갈리는 지점
+		var wall := _make_wall(Vector2(80, 0), Vector2(20, 200))
+		var vx_flips := await _track_flips(proj, 2.0)
+		_check(int(vx_flips["flips"]) == 0, "BASIC은 벽에서 안 튕긴다 (반전 %d회)" % vx_flips["flips"])
+		_check(bool(vx_flips["died"]), "BASIC은 벽에 부딪혀 소멸")
+		wall.queue_free()
+	await _clear_projectiles(system)
+
+## 사거리 = 진 기준 × 문양 배율. **탄마다 다르다** — 도안당 1회가 아니다.
+func _test_glyph_range(system) -> void:
+	print("[12] 문양 세기 — 긴 문양이 실제로 더 멀리 간다 (같은 진에서)")
+	var short_shot = await _fire_glyph(system, Enums.GlyphType.BASIC, 0.6)
+	var long_shot = await _fire_glyph(system, Enums.GlyphType.BASIC, 3.0)
+	_check(float(long_shot["life"]) > float(short_shot["life"]),
+		"긴 문양(reach 3.0)이 더 오래 산다 (%.2f초 > %.2f초)" % [long_shot["life"], short_shot["life"]])
+	# 실측 — 죽을 때까지 실제로 이동한 거리
+	_check(float(long_shot["travel"]) > float(short_shot["travel"]) * 1.5,
+		"긴 문양이 실제로 더 멀리 날아갔다 (%.0fpx > %.0fpx)"
+			% [long_shot["travel"], short_shot["travel"]])
+	# 🔴 축 방어: 문양 세기는 사거리 **배율**만 준다 — 위력·크기는 진의 것이다
+	_check(is_equal_approx(float(long_shot["damage"]), float(short_shot["damage"])),
+		"문양 세기는 위력을 못 건드린다 (긴 %.2f = 짧은 %.2f)"
+			% [long_shot["damage"], short_shot["damage"]])
+	_check(is_equal_approx(float(long_shot["size"]), float(short_shot["size"])),
+		"문양 세기는 탄 크기를 못 건드린다 (%.2f)" % short_shot["size"])
+	_check(int(long_shot["status"]) == int(short_shot["status"])
+			and is_equal_approx(float(long_shot["status_power"]), float(short_shot["status_power"])),
+		"문양 세기는 상태이상을 못 건드린다 (룬의 축 — 세기 %.3f)" % short_shot["status_power"])
+	# 두 문양이 한 도안에 섞이면 **탄마다** 사거리가 갈린다 (도안당 1회 계산이 아니라는 증거)
+	_gs.restore_mana_full()
+	var mixed := _glyph_design(Enums.GlyphType.BASIC, 0.6)
+	var far := ArrowData.new()
+	far.direction = 0.0
+	far.magnitude = 0.5
+	far.origin = Vector2.ZERO
+	far.glyph = Enums.GlyphType.BASIC
+	far.reach = 3.0
+	mixed.arrows.append(far)
+	_bus.cast_requested.emit(mixed, Vector2.ZERO, Vector2.RIGHT)
+	var mp := _projectiles(system)
+	_check(mp.size() == 2, "짧은 문양 + 긴 문양 = 2발 (실제 %d)" % mp.size())
+	if mp.size() == 2:
+		_check(not is_equal_approx(float(mp[0]._life_left), float(mp[1]._life_left)),
+			"한 도안 안에서 탄마다 사거리가 다르다 (%.2f초 vs %.2f초)"
+				% [mp[0]._life_left, mp[1]._life_left])
+		_check(is_equal_approx(float(mp[0].damage), float(mp[1].damage)),
+			"같은 도안이므로 위력은 같다 (진의 축, %.2f)" % mp[0].damage)
+	await _clear_projectiles(system)
+
+## 팅김⚡ — 벽에 **실제로** 반사되는가. 반전 횟수를 세서 검증한다.
+func _test_glyph_bounce(system) -> void:
+	print("[13] 팅김⚡ — 벽에서 실제로 방향이 반전되고, 길게 그으면 더 많이 튕긴다")
+	# 양쪽 벽 사이에 가둬 놓고 왼쪽↔오른쪽 반전 횟수를 센다
+	var wall_r := _make_wall(Vector2(80, 0), Vector2(20, 240))
+	var wall_l := _make_wall(Vector2(-80, 0), Vector2(20, 240))
+
+	# (1) 첫 반사 — 속도가 실제로 뒤집히는가
+	_gs.restore_mana_full()
+	var design := _glyph_design(Enums.GlyphType.BOUNCE, 3.0)
+	_bus.cast_requested.emit(design, Vector2.ZERO, Vector2.RIGHT)
+	var projs := _projectiles(system)
+	_check(projs.size() == 1, "투사체 1개 (실제 %d)" % projs.size())
+	if projs.size() == 1:
+		var proj = projs[0]
+		var expected_bounces: int = _bounce_count(system, 3.0)
+		print("    reach 3.0 → 기대 반사 횟수 %d회" % expected_bounces)
+		_check(proj._velocity.x > 0.0, "발사 직후 오른쪽으로 간다 (vx=%.0f)" % proj._velocity.x)
+		var frames := 0
+		while is_instance_valid(proj) and proj._velocity.x > 0.0 and frames < 240:
+			await physics_frame
+			frames += 1
+		_check(is_instance_valid(proj), "벽에 닿아도 살아 있다 (반사 횟수가 남아 있으므로)")
+		if is_instance_valid(proj):
+			_check(proj._velocity.x < 0.0, "벽에서 속도가 반전됐다 (vx=%.0f < 0)" % proj._velocity.x)
+			_check(_angle_close(proj.rotation, PI),
+				"비주얼 rotation도 진행 방향을 따라간다 (%.0f도)" % rad_to_deg(proj.rotation))
+			_check(absf(proj.global_position.x) < 80.0, "벽을 뚫고 지나가지 않았다 (x=%.0f)"
+				% proj.global_position.x)
+			# 나머지 반사까지 세고, 다 쓰면 벽에서 소멸하는지
+			var rest = await _track_flips(proj, 4.0)
+			var total: int = 1 + int(rest["flips"])
+			_check(total == expected_bounces,
+				"reach 3.0 — 실제 반사 %d회 = 기대 %d회" % [total, expected_bounces])
+			_check(bool(rest["died"]), "반사 횟수를 다 쓰면 벽에서 소멸")
+			_check(not bool(rest["expired"]),
+				"수명이 아니라 벽 충돌로 죽었다 (남은 수명 %.2f초)" % rest["life_left"])
+	await _clear_projectiles(system)
+
+	# (2) 짧은 문양은 덜 튕긴다 — reach가 세기를 정한다
+	_gs.restore_mana_full()
+	var weak := _glyph_design(Enums.GlyphType.BOUNCE, 0.6)
+	_bus.cast_requested.emit(weak, Vector2.ZERO, Vector2.RIGHT)
+	var wp := _projectiles(system)
+	if wp.size() == 1:
+		var expected_weak: int = _bounce_count(system, 0.6)
+		var res = await _track_flips(wp[0], 4.0)
+		print("    reach 0.6 → 기대 반사 횟수 %d회 / 실측 %d회" % [expected_weak, res["flips"]])
+		_check(int(res["flips"]) == expected_weak,
+			"reach 0.6 — 실제 반사 %d회 = 기대 %d회" % [res["flips"], expected_weak])
+		_check(int(res["flips"]) < _bounce_count(system, 3.0),
+			"길게 그은 팅김이 더 많이 튕긴다 (%d < %d회)"
+				% [res["flips"], _bounce_count(system, 3.0)])
+		_check(bool(res["died"]), "반사 소진 후 소멸")
+	await _clear_projectiles(system)
+	wall_r.queue_free()
+	wall_l.queue_free()
+	await process_frame
+
+## 유도∿ — 적 쪽으로 **실제로 궤도가 휘는가**. 표적을 매 프레임 직각으로 유지해
+## 선회가 상한에 붙게 만든 뒤, 프레임당 선회각이 glyph_homing_turn_rate를 넘지 않는지 잰다.
+func _test_glyph_homing(system) -> void:
+	print("[14] 유도∿ — 적 쪽으로 실제로 휘고, 선회 속도 상한을 지키고, 지속시간 후 직진한다")
+	# reach 1.5(중간) — reach 상한에서는 추적 지속 = 수명 전체라 "지속 후 직진"을 관측할 수 없다
+	const HOMING_REACH := 1.5
+	_gs.restore_mana_full()
+	var design := _glyph_design(Enums.GlyphType.HOMING, HOMING_REACH)
+	_bus.cast_requested.emit(design, Vector2.ZERO, Vector2.RIGHT)
+	var projs := _projectiles(system)
+	_check(projs.size() == 1, "투사체 1개 (실제 %d)" % projs.size())
+	if projs.size() != 1:
+		await _clear_projectiles(system)
+		return
+	var proj = projs[0]
+	var start_angle: float = proj._velocity.angle()
+	var expected_duration: float = _homing_duration(system, HOMING_REACH, float(proj._life_left))
+	var turn_rate: float = system.balance.glyph_homing_turn_rate
+	var pd: float = 1.0 / float(Engine.physics_ticks_per_second)
+	print("    추적 지속 기대 %.2f초 · 선회 상한 %.2f rad/s (프레임당 %.4f rad)"
+		% [expected_duration, turn_rate, turn_rate * pd])
+
+	# 표적은 매 프레임 투사체 왼쪽 90도·100px에 둔다 — 항상 탐지 반경 안이고 항상 직각으로 어긋난다.
+	# 즉 유도가 살아 있는 동안 선회는 **항상 상한에 붙는다** (측정하기 좋은 조건)
+	var dummy = _dummy_scene.instantiate()
+	root.add_child(dummy)
+	dummy.global_position = proj.global_position + Vector2(0, 100)
+
+	# ⚠ SceneTree.physics_frame은 노드의 _physics_process **전에** 발신된다 — 테스트가 벽시계로
+	# 세면 투사체의 내부 시계보다 한 틱 앞선다. 그래서 각 선회를 **투사체 자신의 _homing_left**로
+	# 가른다: 여기서 읽은 값이 곧 "다음 틱이 추적 중인가"이고, 그 틱의 결과가 다음 샘플의 step이다.
+	# (신호 순서가 어느 쪽이든 이 짝짓기는 성립한다)
+	var max_step := 0.0
+	var turn_while_homing := 0.0
+	var turn_after_homing := 0.0
+	var prev_angle: float = proj._velocity.angle()
+	var was_homing: bool = proj._homing_left > 0.0
+	var rotation_follows := true
+	var frames := 0
+	while is_instance_valid(proj) and frames < 240:
+		dummy.global_position = proj.global_position + Vector2(0, 100).rotated(proj._velocity.angle())
+		await physics_frame
+		frames += 1
+		if not is_instance_valid(proj):
+			break
+		var cur: float = proj._velocity.angle()
+		var step := absf(wrapf(cur - prev_angle, -PI, PI))
+		prev_angle = cur
+		if was_homing:
+			turn_while_homing += step
+			max_step = maxf(max_step, step)
+		else:
+			turn_after_homing += step
+		was_homing = proj._homing_left > 0.0
+		# 먹선·스프라이트가 진행 방향을 봐야 한다 — 안 그러면 옆으로 게걸음한다 (매 프레임 불변식)
+		if not _angle_close(float(proj.rotation), cur):
+			rotation_follows = false
+
+	_check(rotation_follows, "매 프레임 rotation = 진행 방향 (게걸음 방지)")
+
+	_check(turn_while_homing > 0.5,
+		"추적 중 궤도가 실제로 휜다 (총 선회 %.2f rad = %.0f도)"
+			% [turn_while_homing, rad_to_deg(turn_while_homing)])
+	_check(max_step <= turn_rate * pd * 1.05,
+		"프레임당 선회 %.4f rad ≤ 상한 %.4f rad (즉시 꺾이지 않는다)"
+			% [max_step, turn_rate * pd])
+	_check(max_step > turn_rate * pd * 0.9,
+		"직각으로 어긋난 표적에는 선회가 상한까지 붙는다 (%.4f rad)" % max_step)
+	_check(turn_after_homing < 0.001,
+		"지속시간(%.2f초) 후에는 직진한다 (이후 선회 %.4f rad)"
+			% [expected_duration, turn_after_homing])
+	_check(absf(wrapf(prev_angle - start_angle, -PI, PI)) > 0.5,
+		"최종 진행 방향이 초기 방향에서 크게 꺾였다 (%.0f도)"
+			% rad_to_deg(absf(wrapf(prev_angle - start_angle, -PI, PI))))
+	dummy.queue_free()
+	await _clear_projectiles(system)
+
+	# 짧은 문양은 잠깐만 따라간다 — reach가 추적 지속을 정한다
+	_gs.restore_mana_full()
+	var brief := _glyph_design(Enums.GlyphType.HOMING, 0.6)
+	_bus.cast_requested.emit(brief, Vector2.ZERO, Vector2.RIGHT)
+	var bp := _projectiles(system)
+	if bp.size() == 1:
+		var short_dur: float = _homing_duration(system, 0.6, float(bp[0]._life_left))
+		var long_dur: float = expected_duration
+		_check(is_equal_approx(float(bp[0]._homing_left), short_dur),
+			"reach 0.6 — 추적 지속 %.2f초" % bp[0]._homing_left)
+		_check(short_dur < long_dur,
+			"길게 그은 유도가 더 오래 따라간다 (%.2f초 < %.2f초)" % [short_dur, long_dur])
+	await _clear_projectiles(system)
+
+## 관통‖ — 일렬로 둔 적 3마리 중 **실제로 몇 마리가 take_hit을 받았는가**.
+func _test_glyph_pierce(system) -> void:
+	print("[15] 관통‖ — 적을 뚫고 지나가고, 같은 적을 두 번 때리지 않는다")
+	var dummies: Array = []
+	for i in range(3):
+		var d = _dummy_scene.instantiate()
+		root.add_child(d)
+		d.global_position = Vector2(60.0 + 60.0 * float(i), 0.0)
+		dummies.append(d)
+
+	# (1) 길게 그은 관통 — 셋 다 뚫는다
+	_gs.restore_mana_full()
+	var expected_pierce: int = _pierce_count(system, 3.0)
+	print("    reach 3.0 → 기대 관통 수 %d마리 (적 3마리 배치)" % expected_pierce)
+	_check(expected_pierce >= 3, "reach 3.0의 관통 수가 3 이상이어야 이 테스트가 성립한다")
+	var design := _glyph_design(Enums.GlyphType.PIERCE, 3.0)
+	_bus.cast_requested.emit(design, Vector2.ZERO, Vector2.RIGHT)
+	var projs := _projectiles(system)
+	var proj = projs[0] if projs.size() == 1 else null
+	_check(proj != null, "투사체 1개 (실제 %d)" % projs.size())
+	var frames := 0
+	while frames < 180 and (dummies[2].hits.is_empty() and is_instance_valid(proj)):
+		await physics_frame
+		frames += 1
+	var hit_counts: Array[int] = []
+	var all_hit_once := true
+	for d in dummies:
+		hit_counts.append(d.hits.size())
+		if d.hits.size() != 1:
+			all_hit_once = false   # 0 = 못 뚫었다 / 2+ = 같은 적을 두 번 때렸다
+	print("    피격 실측: %s" % str(hit_counts))
+	_check(all_hit_once,
+		"일렬 3마리가 전부 정확히 1번씩 맞았다 (실측 %s)" % str(hit_counts))
+	for d in dummies:
+		d.hits.clear()
+	await _clear_projectiles(system)
+
+	# (2) 짧게 그은 관통 — 뚫는 수를 다 쓰면 소멸한다
+	_gs.restore_mana_full()
+	var weak_pierce: int = _pierce_count(system, 0.6)
+	print("    reach 0.6 → 기대 관통 수 %d마리" % weak_pierce)
+	var weak := _glyph_design(Enums.GlyphType.PIERCE, 0.6)
+	_bus.cast_requested.emit(weak, Vector2.ZERO, Vector2.RIGHT)
+	var wp := _projectiles(system)
+	var wproj = wp[0] if wp.size() == 1 else null
+	frames = 0
+	while frames < 180 and is_instance_valid(wproj):
+		await physics_frame
+		frames += 1
+	var weak_hits: Array[int] = []
+	var total_hits := 0
+	for d in dummies:
+		weak_hits.append(d.hits.size())
+		total_hits += d.hits.size()
+	print("    피격 실측: %s" % str(weak_hits))
+	_check(total_hits == weak_pierce,
+		"뚫는 수 %d마리만 맞았다 (실측 %d마리 — 길게 그은 관통보다 적다)"
+			% [weak_pierce, total_hits])
+	_check(not is_instance_valid(wproj), "뚫는 수를 다 쓰면 소멸")
+	for d in dummies:
+		d.hits.clear()
+	await _clear_projectiles(system)
+
+	# (3) 관통은 **벽에는 막힌다** (적만 뚫는다)
+	_gs.restore_mana_full()
+	var wall := _make_wall(Vector2(30, 0), Vector2(20, 200))
+	var blocked := _glyph_design(Enums.GlyphType.PIERCE, 3.0)
+	_bus.cast_requested.emit(blocked, Vector2.ZERO, Vector2.RIGHT)
+	var bp := _projectiles(system)
+	var bproj = bp[0] if bp.size() == 1 else null
+	frames = 0
+	while frames < 120 and is_instance_valid(bproj):
+		await physics_frame
+		frames += 1
+	_check(not is_instance_valid(bproj), "관통탄도 벽에는 막혀 소멸")
+	var wall_hits := 0
+	for d in dummies:
+		wall_hits += d.hits.size()
+	_check(wall_hits == 0, "벽 뒤의 적은 못 맞힌다 (실측 %d마리)" % wall_hits)
+	wall.queue_free()
+	for d in dummies:
+		d.queue_free()
+	await _clear_projectiles(system)
+
 # ── 헬퍼 ─────────────────────────────────────────────────────
+
+## 벽 (world 레이어 1) — 팅김 반사·관통 차단 검증용
+func _make_wall(pos: Vector2, size: Vector2) -> StaticBody2D:
+	var wall := StaticBody2D.new()
+	wall.collision_layer = 1   # TECH_SPEC §1: 1 = world
+	wall.collision_mask = 0
+	var shape := CollisionShape2D.new()
+	var rect := RectangleShape2D.new()
+	rect.size = size
+	shape.shape = rect
+	wall.add_child(shape)
+	root.add_child(wall)
+	wall.global_position = pos
+	return wall
+
+## 문양 축만 바꾼 도안 (진·룬은 고정) — FIXED라 에임에 안 돈다
+func _glyph_design(glyph: int, reach: float) -> SpellDesign:
+	var d := _ink_design(Enums.CircleType.FIXED, 0.0, 0.5)
+	d.arrows[0].glyph = glyph
+	d.arrows[0].reach = reach
+	return d
+
+## 한 발 쏘고 **죽을 때까지** 지켜보며 실측값을 거둔다 (수명·실제 이동 거리·위력·크기·상태이상)
+func _fire_glyph(system, glyph: int, reach: float) -> Dictionary:
+	_gs.restore_mana_full()
+	var d := _glyph_design(glyph, reach)
+	_bus.cast_requested.emit(d, Vector2.ZERO, Vector2.RIGHT)
+	var projs := _projectiles(system)
+	var out := {"life": -1.0, "travel": -1.0, "damage": -1.0, "size": -1.0,
+		"status": -1, "status_power": -1.0}
+	if projs.size() == 1:
+		var proj = projs[0]
+		var start: Vector2 = proj.global_position
+		out["life"] = float(proj._life_left)
+		out["damage"] = float(proj.damage)
+		out["size"] = float(proj.scale.x * proj.get_node("Shape").scale.x)
+		out["status"] = int(proj.status)
+		out["status_power"] = float(proj.status_power)
+		var travel := 0.0
+		var frames := 0
+		while is_instance_valid(proj) and frames < 400:
+			travel = start.distance_to(proj.global_position)
+			await physics_frame
+			frames += 1
+		out["travel"] = travel
+	await _clear_projectiles(system)
+	return out
+
+## 투사체가 죽을 때까지 x속도 부호가 몇 번 뒤집히는지 (= 좌우 벽 반사 횟수)
+func _track_flips(proj, max_sec: float) -> Dictionary:
+	var pd: float = 1.0 / float(Engine.physics_ticks_per_second)
+	var flips := 0
+	var sign_x: float = signf(proj._velocity.x)
+	var elapsed := 0.0
+	var life_left: float = float(proj._life_left)
+	while is_instance_valid(proj) and elapsed < max_sec:
+		await physics_frame
+		elapsed += pd
+		if not is_instance_valid(proj):
+			break
+		life_left = float(proj._life_left)
+		var cur: float = signf(proj._velocity.x)
+		if cur != 0.0 and cur != sign_x:
+			flips += 1
+			sign_x = cur
+	return {
+		"flips": flips,
+		"died": not is_instance_valid(proj),
+		"expired": life_left <= 0.0,
+		"life_left": life_left,
+	}
+
+## balance에서 읽어 만드는 기대값 — 테스트에도 수치를 박지 않는다 (공식은 코드와 같은 출처)
+func _reach_t(system, reach: float) -> float:
+	return clampf(inverse_lerp(float(system.balance.glyph_reach_min),
+		float(system.balance.glyph_reach_max), reach), 0.0, 1.0)
+
+func _range_mult(system, reach: float) -> float:
+	return lerpf(float(system.balance.glyph_range_min), float(system.balance.glyph_range_max),
+		_reach_t(system, reach))
+
+func _bounce_count(system, reach: float) -> int:
+	return roundi(lerpf(1.0, float(system.balance.glyph_bounce_max), _reach_t(system, reach)))
+
+func _pierce_count(system, reach: float) -> int:
+	return roundi(lerpf(1.0, float(system.balance.glyph_pierce_max), _reach_t(system, reach)))
+
+func _homing_duration(system, reach: float, lifetime: float) -> float:
+	return lerpf(float(system.balance.glyph_homing_duration_min), 1.0,
+		_reach_t(system, reach)) * lifetime
+
 
 ## 룬 농도(fill)·순도(accuracy)만 바꿔 한 발 쏘고, **실제 투사체 노드가 들고 나간 값**을 실측한다.
 func _fire_one(system, rune_fill: float, rune_accuracy: float) -> Dictionary:

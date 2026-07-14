@@ -66,6 +66,26 @@ const BOOK_LOCKED := "?"
 const BOOK_ARROW_STRAIGHT := "곧게"
 const BOOK_ARROW_CURVED := "휘어도 된다"
 
+## 문양 4종 — **탄이 어떻게 나가는가** (v1.9, GDD §4.3). 기본은 글자가 아니다(곧은 획).
+## 룬과 같은 문법으로 읽힌다: **모양 = 방식 / 길이 = 세기**
+const GLYPH_LABEL := {
+	Enums.GlyphType.BASIC: "기본",
+	Enums.GlyphType.BOUNCE: "팅김⚡",
+	Enums.GlyphType.HOMING: "유도∿",
+	Enums.GlyphType.PIERCE: "관통‖",
+}
+## 무엇을 하는 글자인가 + **길게 그으면 무엇이 늘어나는가** (길이 = 세기 축을 눈에 보이게).
+## 길이가 아무것도 안 하면 "짧게 긋는 게 이득"이 되고 표현 수단이 죽는다 (v1.6~v1.8의 교훈)
+const GLYPH_EFFECT := {
+	Enums.GlyphType.BASIC: "곧게 난다 — 길수록 멀리",
+	Enums.GlyphType.BOUNCE: "벽에 튄다 — 길수록 여러 번",
+	Enums.GlyphType.HOMING: "쫓아간다 — 길수록 오래",
+	Enums.GlyphType.PIERCE: "꿰뚫는다 — 길수록 여럿",
+}
+
+static func glyph_label(glyph_type: int) -> String:
+	return String(GLYPH_LABEL.get(glyph_type, "?"))
+
 # ── 제작대(책 펼침 UI) ──
 ## 책자는 **참조**다 — 골라서 찍는 게 아니라 보고 따라 그린다 (사용자 결정, 세션 8)
 const FORGE_TITLE := "도안 제작"
@@ -76,10 +96,14 @@ const FORGE_OPEN := "E — 도안을 그린다"
 const FORGE_BOOK_HINT := "책자는 본보기다. 보고 따라 그으면 진이 알아본다."
 
 ## 책자 탭별 안내 — 그 부품이 **무엇을 정하는가**
+## 세 부품이 **각자 무엇을 정하는가** (GDD §4.0 역할 축). 전부 "모양 = 무엇을 / 크기 = 얼마나"다.
+## ⚠ v1.9 정정: 룬의 정확도는 **위력이 아니라 순도**를 정하고(v1.7 축 분리), 문양의 길이는
+## **크기가 아니라 사거리**를 정한다(v1.6 규모 이관 → v1.9 사거리 배율). 옛 문구는 둘 다
+## 플레이어에게 **틀린 규칙을 가르치고 있었다.**
 const TAB_DESC := {
-	Enums.DrawStage.CIRCLE: "경계를 두른다. 진의 크기가 곧 규모 —\n크게 두를수록 먹과 마나를 더 먹는다.",
-	Enums.DrawStage.RUNE: "진 안에 앉힌다. 한 획이면 충분하다.\n형이 정확할수록 위력이 오른다.",
-	Enums.DrawStage.ARROW: "진을 뚫고 나가는 획. 힘의 방향과 크기.\n여러 번 그으면 여러 발이 나간다.",
+	Enums.DrawStage.CIRCLE: "경계를 두른다. 진의 크기가 곧 규모 —\n위력·탄 크기·사거리를 전부 진이 정한다.",
+	Enums.DrawStage.RUNE: "진 안에 앉힌다. 무엇으로 때리는가.\n진을 꽉 채울수록 속성이 깊이 물든다.",
+	Enums.DrawStage.ARROW: "진을 뚫고 나가는 획 — 하나가 한 발.\n무엇을 그리느냐가 그 탄의 방식이다.",
 }
 
 ## 룬 4종 — 무엇을 하는 글자인가 (GDD §4.2)

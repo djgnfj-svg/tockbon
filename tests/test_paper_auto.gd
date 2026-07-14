@@ -61,10 +61,15 @@ func _test_builder(balance: BalanceData, papers: Dictionary) -> void:
 	# 기울었다는 이유만으로 농도의 29%가 증발한 것이다. 회전 불변 정의가 그걸 고쳤다
 	# (metric 자체의 검증은 test_drawing_fill_auto §1 소관 — 여기는 **종이 감면**이 관심사다)
 	var rune_fill_expect: float = (Vector2(0.2, 0.2).length() * 0.5) / 0.2
+	# v1.9 문양 축: reach = 문양 획 길이 ÷ 진 반지름 = 0.2 / 0.2 = **1.0** (두 문양 모두).
+	# 정규화 t = inverse_lerp(reach_min, reach_max, 1.0) — 기준 배율도 공짜가 아니다 (GDD §4.3)
+	var reach_t: float = clampf(inverse_lerp(
+		balance.glyph_reach_min, balance.glyph_reach_max, 1.0), 0.0, 1.0)
 	var mana_raw: float = balance.rune_mana_base[Enums.RuneType.WATER] \
 		+ balance.circle_mana_mult * (0.2 / 0.5) \
 		+ balance.rune_density_mana_mult * rune_fill_expect \
-		+ balance.mana_per_arrow * 2.0
+		+ balance.mana_per_arrow * 2.0 \
+		+ balance.glyph_reach_mana_mult * reach_t * 2.0
 	for g: int in [1, 2, 3]:
 		var def: ItemDef = papers[g]
 		var d: SpellDesign = builder.build(_builder_parts(), balance, null, def.grade, def.params)
@@ -176,12 +181,16 @@ func _test_canvas(gs: Node, bus: Node, balance: BalanceData, papers: Dictionary)
 	var d: SpellDesign = canvas.get_design()
 	_check(d != null and d.paper_grade == p2.grade, "캔버스 경유 paper_grade 기록")
 	if d != null:
-		# 진 규모(v1.6) + 룬 농도(v1.7) 축 포함 — 캔버스가 실제 인식한 진·룬 크기를 그대로 기준으로 삼는다
+		# 진 규모(v1.6) + 룬 농도(v1.7) + **문양 사거리**(v1.9) 축 포함 —
+		# 캔버스가 실제 인식한 진·룬·문양 크기를 그대로 기준으로 삼는다
+		var glyph_t: float = clampf(inverse_lerp(
+			balance.glyph_reach_min, balance.glyph_reach_max, d.arrows[0].reach), 0.0, 1.0)
 		var expect_mana: float = (
 			balance.rune_mana_base[Enums.RuneType.FIRE]
 			+ balance.circle_mana_mult * d.circle_radius
 			+ balance.rune_density_mana_mult * d.rune_fill
 			+ balance.mana_per_arrow
+			+ balance.glyph_reach_mana_mult * glyph_t
 		) * (1.0 - float(p2.params.mana_discount))
 		_check(is_equal_approx(d.mana_cost, expect_mana), "캔버스 경유 마나 감면")
 		_check(d.durability_max == SpellDesign.new().durability_max + int(p2.params.durability_bonus),

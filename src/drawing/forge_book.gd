@@ -14,6 +14,7 @@ extends Control
 ##       b.show_tab(Enums.DrawStage.RUNE)   # 캔버스 단계를 따라가게 하려면
 
 const RuneTemplates := preload("res://src/drawing/rune_templates.gd")
+const GlyphTemplates := preload("res://src/drawing/glyph_templates.gd")
 const InkRender := preload("res://src/core/ink_render.gd")
 const Copy := preload("res://src/drawing/drawing_copy.gd")
 
@@ -41,6 +42,13 @@ const RUNE_UNLOCK := {
 const RUNE_ORDER: Array[int] = [
 	Enums.RuneType.FIRE, Enums.RuneType.IMPACT,
 	Enums.RuneType.WATER, Enums.RuneType.WIND,
+]
+
+## 문양 4종 (v1.9) — **기본이 첫 칸**이다. 글자가 아니라 폴백이므로 언제나 열려 있고,
+## "글자를 못 그려도 탄은 나간다"를 눈으로 먼저 보여 준다
+const GLYPH_ORDER: Array[int] = [
+	Enums.GlyphType.BASIC, Enums.GlyphType.BOUNCE,
+	Enums.GlyphType.HOMING, Enums.GlyphType.PIERCE,
 ]
 
 # ── 한지·먹 톤 (src/ui의 InkStyle은 타 모듈이라 참조하지 않는다 — CLAUDE.md 모듈 규칙) ──
@@ -245,14 +253,33 @@ func _build_rune_page(top: float) -> void:
 			unlocked)
 
 
-## 문양 — **곡선도 된다**는 걸 보여 주는 게 이 장의 목적 (인식은 "진을 뚫고 나가는가")
+## 문양 4종 — 2×2. **룬 장과 같은 문법으로 읽힌다** (v1.9): 모양이 방식을, 길이가 세기를 정한다.
+## 인식기 템플릿(GlyphTemplates.canonical) 그대로 그린다 — **보이는 게 곧 판정 기준**이고,
+## 보고 따라 그리면 반드시 그 글자로 인식된다 (test_glyph_auto가 못 박는다).
+##
+## **기본은 글자가 아니다** — 어느 글자도 아닌 곧은 획이 곧 기본 탄이다. 그래서 첫 칸에 두고
+## "글자를 못 그려도 탄은 나간다"를 눈으로 보여 준다 (인식 실패는 거부가 아니라 폴백, GDD §4.5).
 func _build_arrow_page(top: float) -> void:
 	var w := _page.size.x
 	var cw := (w - 6.0) * 0.5
-	_cell(Rect2(0.0, top, cw, 100.0), _arrow_pts(0.0), Copy.BOOK_ARROW_STRAIGHT,
-		"곧게 그으면 곧게 난다", true)
-	_cell(Rect2(cw + 6.0, top, cw, 100.0), _arrow_pts(0.32), Copy.BOOK_ARROW_CURVED,
-		"휜 대로 먹선이 난다", true)
+	var ch := 78.0
+	for i in GLYPH_ORDER.size():
+		var g: int = GLYPH_ORDER[i]
+		var unlocked := _is_glyph_unlocked(g)
+		var r := Rect2(float(i % 2) * (cw + 6.0), top + float(i / 2) * (ch + 6.0), cw, ch)
+		_cell(r,
+			GlyphTemplates.canonical(g) if unlocked else PackedVector2Array(),
+			Copy.glyph_label(g) if unlocked else Copy.BOOK_LOCKED,
+			String(Copy.GLYPH_EFFECT.get(g, "")) if unlocked else Copy.BOOK_LOCKED_HINT,
+			unlocked)
+
+
+## 문양 해금 — **기본은 언제나 열려 있다** (글자가 아니므로 배울 것도 없다. 튜토리얼 첫 도안이 이것이다).
+## 나머지 셋은 GDD §6에서 **탁본으로 배우는 세 번째 어휘**다.
+## ⚠ **탁본 콘텐츠(문양 조각 드랍·해독)는 아직 없다** — 지금은 전부 열어 둔다. 안 그러면
+## 어휘를 만들어 놓고 **아무도 쓸 수 없다**. 해금 배선은 콘텐츠가 붙을 때 (BACKLOG §1).
+func _is_glyph_unlocked(_glyph_type: int) -> bool:
+	return true
 
 
 ## 한 칸 = 한지 칸 + 먹선 본보기 + 이름 + 한 줄 설명. 해금된 칸은 **누르면 종이에 얹힌다**
