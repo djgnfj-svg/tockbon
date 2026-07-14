@@ -89,6 +89,9 @@ static func classify_entries(entries: Array[Dictionary]) -> Dictionary:
 				parts.arrows.append({
 					"direction": res.direction,
 					"length": res.length,
+					# 뻗은 거리 — reach(세기 축)의 원료. **총연장(length)과 다른 값이다.**
+					# 스탬프(locked) 엔트리의 옛 result엔 없으므로 총연장으로 폴백 (구세이브 호환)
+					"extent": float(res.get("extent", res.length)),
 					"start": res.start,
 					# v1.9 문양 글자 (GDD §4.3). 인식기가 못 읽었으면 BASIC이 들어 있다 —
 					# 폴백이지 실패가 아니다. 스탬프(locked) 엔트리의 옛 result엔 키가 없으므로 기본값
@@ -151,9 +154,17 @@ static func build(parts: Dictionary, balance: BalanceData, into: SpellDesign = n
 		var arrow_stroke := a.get("stroke") as StrokeData
 		# v1.9 세기 축 — **룬의 rune_fill과 정확히 대칭**이다: 진 대비 비율이라 같은 문양도
 		# 진이 크면 reach가 작아진다. magnitude(원시 길이·잉크·렌더용)와는 **다른 값**이다.
+		# 🔴 **뻗은 거리(extent)로 잰다 — 총연장이 아니다** (사용자 확정). 총연장으로 재면
+		# "얼마나 멀리 뻗었나"가 아니라 "얼마나 구불구불한가"를 재게 되어, 짧게 그려도 지그재그
+		# 진폭만 키우면 최대 사거리·최대 반사를 공짜로 받았다 (InkRender.arrow_extent 주석 참조).
 		# 획이 없는 도안(샘플·구세이브)은 스키마 기본값(1.0 = 기준 배율)을 그대로 둔다
 		if arrow_stroke != null and arrow_stroke.points.size() >= 2:
-			ad.reach = clampf(float(a.length) / radius_cu,
+			# 획이 있으면 획에서 직접 잰다 — parts를 손으로 조립하는 호출자(테스트·스탬프)가
+			# extent를 안 넣어도 옳은 값이 나온다. 키가 있으면 그걸 믿는다 (인식기가 이미 쟀다)
+			var extent := float(a.get("extent", 0.0))
+			if extent <= 0.0:
+				extent = InkRender.arrow_extent(arrow_stroke.points)
+			ad.reach = clampf(extent / radius_cu,
 				balance.glyph_reach_min, balance.glyph_reach_max)
 		ad.path = _arrow_path(arrow_stroke)
 		if not ad.path.is_empty():

@@ -223,10 +223,9 @@ func _rebuild() -> void:
 			_build_rune_page(top)
 		Enums.DrawStage.ARROW:
 			_build_arrow_page(top)
-	# 진은 한 종류다 — 고를 게 없으니 펼치자마자 종이에 얹어 준다.
-	# 룬·문양은 여러 칸이라 플레이어가 고를 때까지 기다린다
-	if _stage == Enums.DrawStage.CIRCLE and not _cells.is_empty():
-		_pick(0)
+	# 🔴 **자동으로 얹지 않는다.** 본보기는 이제 **마우스에 붙어서 종이로 옮기는 물건**이라
+	# (사용자 확정), 펼치자마자 집어 주면 종이의 첫 클릭이 "그리기"가 아니라 "놓기"가 되어
+	# 손이 막힌다. 진도 다른 부품과 똑같이 **눌러서 집는다** — 예외 없는 규칙 하나
 	queue_redraw()
 
 
@@ -317,6 +316,10 @@ func _cell(r: Rect2, pts: PackedVector2Array, name_text: String, desc_text: Stri
 		if not unlocked:
 			line.modulate.a = LOCKED_ALPHA
 		box.add_child(line)
+		# 🔴 문양은 **방향을 가진 글자**다 — 작대기만 보여 주면 어느 쪽이 앞인지 알 수 없고,
+		# 거꾸로 그으면 탄이 정반대로 날아간다. 책자와 종이의 본보기가 같은 화살촉을 달아야 한다
+		if _stage == Enums.DrawStage.ARROW and unlocked:
+			box.add_child(_arrow_head(px))
 	elif not unlocked:
 		# 미해금 — 빈 칸에 물음표. "여기 글자가 하나 들어온다"는 자리를 남긴다
 		var q := Label.new()
@@ -350,6 +353,24 @@ func _cell(r: Rect2, pts: PackedVector2Array, name_text: String, desc_text: Stri
 	d.add_theme_color_override(&"font_color", DESC_COLOR if unlocked else LOCKED_COLOR)
 	d.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	box.add_child(d)
+
+
+## 문양 칸의 화살촉 — 인식기가 실제로 겨누는 점(최원점)을 가리킨다.
+## 관통‖은 촉이 아니라 **창끝**이 겨눈 곳이다 (InkRender.arrow_heading과 같은 정의) —
+## 보이는 화살촉과 날아가는 방향이 갈라지면 책자가 거짓말을 한다
+func _arrow_head(px: PackedVector2Array) -> Line2D:
+	var from := px[0]
+	var tip := InkRender.arrow_tip(px)
+	var dir := (tip - from).normalized()
+	var side := dir.orthogonal()
+	var n := 5.0
+	var head := Line2D.new()
+	head.points = PackedVector2Array([
+		tip - dir * n + side * n * 0.55, tip, tip - dir * n - side * n * 0.55,
+	])
+	head.width = InkRender.BASE_WIDTH * 0.8
+	head.default_color = InkRender.INK_COLOR   # 먹선과 같은 색 — 화살표 **하나**로 읽혀야 한다
+	return head
 
 
 ## GameState는 오토로드 — 없으면(단독 테스트) 전부 열린 것으로 본다

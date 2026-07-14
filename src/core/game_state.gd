@@ -56,6 +56,14 @@ func mana_max() -> float:
 func hp_max() -> float:
 	return balance.player_hp_max + gear_param(Enums.ItemKind.ROBE, "hp_max_add", 0.0)
 
+## 획 자동보정 강도 (0..1) — 획을 뗄 때 본보기 쪽으로 얼마나 끌어당기는가.
+## **보정은 아이템으로 산다** (사용자 확정): 좋은 붓이 형을 잡아 준다. 지금은 붓 = 완드 부위에
+## 걸어 두었다 — 별도 '붓' 부위가 생기면 **이 함수 한 줄만** 바꾸면 된다 (그래서 getter다).
+## 아직 stroke_correct_add를 가진 아이템은 없다 — 자리만 열어 둔 상태다
+func stroke_correction() -> float:
+	return clampf(balance.stroke_correct_strength
+		+ gear_param(Enums.ItemKind.WAND, "stroke_correct_add", 0.0), 0.0, 1.0)
+
 # ── 장비 착용 (TECH_SPEC §4.2) — 창고에 있는 장비만, 착용품은 사망에도 보존
 
 ## 착용 장비의 params 값 조회 — 해당 부위 미착용이면 default

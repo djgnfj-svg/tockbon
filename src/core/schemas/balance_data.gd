@@ -30,6 +30,14 @@ extends Resource
 @export var ink_per_stroke_length: float = 10.0
 ## 인식 정확도 보정 하한 (GDD §4.4). v1.7: 위력이 아니라 **속성 순도**의 하한이다
 @export var accuracy_floor: float = 0.6
+## 획 자동보정 강도 (0 = 없음 / 1 = 예시선 그대로 스냅). 획을 뗄 때 그 획이 인식된 글자의
+## 본보기(canonical) 쪽으로 이만큼 끌어당긴다 — **손맛을 남기는 게 요점이라 기본값은 약하다.**
+##
+## 🔴 **이 값은 아이템이 올린다** (사용자 확정 — 좋은 붓·먹이 형을 잡아 준다). 그래서 코드가
+## 이 상수를 직접 읽으면 안 된다: **GameState.stroke_correction()을 거쳐라** (선례: hp_max·mana_max).
+## 보정된 획은 **재채점된다** — 형이 잡히면 순도도 그만큼 오른다 (사용자 결정). 강도가 약해서
+## 축은 살아 있다: 실측상 막 그린 룬과 잘 그린 룬의 순도 차이가 보정 후에도 유지된다
+@export var stroke_correct_strength: float = 0.55
 ## 룬 농도 → 마나 가산 (v1.7, TECH_SPEC §4.0). 진과 같은 이유로 시전 비용에 붙는다 —
 ## 안 물리면 "룬은 언제나 최대한 크게"가 유일한 정답이 된다
 @export var rune_density_mana_mult: float = 4.0

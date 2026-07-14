@@ -10,6 +10,8 @@ const DesignBuilder := preload("res://src/drawing/design_builder.gd")
 const RuneTemplates := preload("res://src/drawing/rune_templates.gd")
 const InkStroke := preload("res://src/drawing/ink_stroke.gd")
 const Copy := preload("res://src/drawing/drawing_copy.gd")
+const StrokeGuide := preload("res://src/drawing/stroke_guide.gd")
+const InkRender := preload("res://src/core/ink_render.gd")
 
 signal stroke_classified(result: Dictionary)
 signal design_state_changed(design: SpellDesign, summary: Dictionary)
@@ -26,10 +28,19 @@ signal stage_changed(stage: int)
 signal completion_blocked(reason: StringName)
 ## 종이 확대 배율이 바뀌었다 (1.0 = 원래 크기) — 배율 표시 UI용
 signal zoom_changed(zoom: float)
+## 본보기를 들었다/놓았다/걷었다 — 조작 안내 문구용 (active=false면 본보기가 없다)
+signal trace_changed(active: bool)
 
 const MIN_PX_DIST := 1.2               # 라이브 점 추가 최소 간격(px)
 const STAMP_SIZE := 0.22               # 스탬프 배치 크기 (캔버스 정규화, 최장변)
 const REJECT_COLOR := Color(0.75, 0.15, 0.10)  # 무효 획 경고색
+
+# ── 본보기 조절 (휠 = 크기 / Shift+휠 = 회전) ──
+# 크기가 곧 농도(룬)·세기(문양)라 **플레이어가 정할 수 있어야 한다** (StrokeGuide 상단 계약)
+const TRACE_SPAN_STEP := 1.12          # 휠 한 칸 — 곱셈이라 작을 때 곱게 움직인다
+const TRACE_SPAN_MIN := 0.05
+const TRACE_SPAN_MAX := 0.70
+const TRACE_ROT_STEP := PI / 12.0      # Shift+휠 한 칸 (15도)
 
 # ── 마우스 필압 합성 (누적형) ──
 # 마우스엔 필압이 없다. 대신 **한 자리에 머무는 시간**만큼 그 지점이 굵어진다 —
@@ -86,6 +97,9 @@ const GUIDE_DOT := 2.0               # 중심점 반지름(px) — 진(원)을 �
 # **순수 배경 렌더다** — _draw()로 그리므로 _entries에 들어가지 않는다(획으로 인식될 수 없다).
 const TRACE_INK := Color(0.13, 0.11, 0.10, 0.17)   # 먹선보다 훨씬 옅게 — 내 획이 언제나 주인공
 const TRACE_WIDTH := 2.0
+## 문양 본보기의 **화살촉** 길이 (캔버스 최단변 대비). 색·굵기는 선과 같다 —
+## 다르면 "선 + 딴 물건"으로 읽히지 화살표 하나로 안 보인다
+const TRACE_HEAD := 0.030
 ## 본보기 표준 크기 (캔버스 정규 단위). 인식기가 실제로 잘 받는 크기다
 const TRACE_CIRCLE_SPAN := 0.44      # 진 — 지름 0.44 (반지름 0.22)
 const TRACE_RUNE_FRAC := 0.45        # 룬 — 진 지름의 45% (진 안에 넉넉히 앉는다)
@@ -126,6 +140,11 @@ var _zoom := 1.0
 var _pan := Vector2.ZERO            # 종이 원점이 놓이는 화면 위치(px)
 var _panning := false
 var _pan_from := Vector2.ZERO
+
+# ── 우클릭 — **되돌리기가 아니다** (사용자 확정. 되돌리기는 Ctrl+Z만) ──
+# 누르고 있으면 휠이 **회전**이 된다. 떼는 순간의 취소 동작은 회전을 안 했을 때만 발동한다
+var _rmb_held := false
+var _rmb_turned := false
 ## 획(Line2D)이 사는 레이어. 여기에 zoom·pan을 걸면 획·가이드·본보기가 함께 확대된다.
 ## 캔버스는 clip_contents=true라 넘치는 부분은 자동으로 잘린다
 var _ink_layer: Node2D = null
@@ -145,13 +164,27 @@ var _tablet := false                   # 이 획이 진짜 필압 장치로 그�
 var _cur_pressure := 1.0               # 합성 필압 누적값
 var _moved_px := 0.0                   # 이번 프레임에 움직인 거리 — _process에서 속도로 환산 후 리셋
 
-var _trace := PackedVector2Array()     # 종이에 옅게 깔린 본보기 (캔버스 정규 좌표)
+# ── 본보기(트레이스) — 책자에서 집어 종이에 놓는 자국. **놓이면 자석이 된다** ──
+# _trace = 화면에 보이는 선 (캔버스 정규 좌표) — 들고 있는 중이든 놓았든 여기 들어 있다
+# _trace_held = 아직 마우스에 붙어 있다 {unit, span, rot} — 비어 있으면 종이에 놓인 상태
+# _trace_placed = 종이에 앉았다 → 이때만 획을 끌어당긴다 (들고 있는 동안엔 안 끈다)
+var _trace := PackedVector2Array()
+var _trace_held: Dictionary = {}
+var _trace_placed := false
+## 어느 부품의 본보기인가 — 문양일 때만 화살촉을 그린다 (방향이 있는 글자는 문양뿐)
+var _trace_stage: int = -1
+## 자석이 쓰는 종이 픽셀 좌표 캐시 (_live_points와 같은 좌표계) — 획 점마다 다시 만들지 않는다
+var _trace_px := PackedVector2Array()
 
 var _paper_mode := false               # false = 종이 미설정(레거시 — 상한·소모·차단 없음)
 var _paper_id: StringName = &""
 var _paper_grade: int = 1
 var _paper_params: Dictionary = {}
 var _ink_used: float = 0.0
+## 지금 긋는 중인 획이 쓴 먹 — **확정 전 미리보기**다. 게이지는 _ink_used + _live_ink를 보여 준다.
+## 이게 없으면 다 긋고 나서야 상한 초과를 알고 획이 통째로 무효가 된다 (그리는 손이 벌을 받는다).
+## 증분으로 쌓는다 — 점마다 획 전체를 다시 적분하면 긴 획에서 O(n²)가 된다
+var _live_ink: float = 0.0
 
 
 func _ready() -> void:
@@ -269,8 +302,50 @@ func _draw() -> void:
 		for p: Vector2 in _trace:
 			px.append(p * s)
 		draw_polyline(px, TRACE_INK, TRACE_WIDTH, true)
+		_draw_trace_arrow(px, _trace_stage == Enums.DrawStage.ARROW)
+
+	# 🔴 **내가 그린 문양에도 촉이 붙는다** — "이 획이 어디를 가리키는가"가 보여야 한다.
+	# 문양은 방향을 가진 글자이고, 거꾸로 그으면 탄이 정반대로 날아간다. 그린 뒤에 그걸
+	# 확인할 방법이 없으면 플레이어는 왜 빗나갔는지 영영 알 수 없다.
+	# 촉은 인식기가 실제로 읽은 방향(InkRender.arrow_heading)을 그린다 — **보이는 게 진실이다.**
+	# 먹선과 같은 색이라 내 획의 일부로 읽힌다 (딴 물건이 얹힌 게 아니다)
+	var arrow_col: Color = ROLE_COLORS.get(Enums.StrokeRole.ARROW, Color.BLACK)
+	for e in _entries:
+		if int((e.result as Dictionary).get("role", -1)) != Enums.StrokeRole.ARROW:
+			continue
+		var stroke: StrokeData = e.stroke
+		if stroke.points.size() < 2:
+			continue
+		_draw_heading_arrow(stroke.points[0] * s, InkRender.arrow_tip(stroke.points) * s,
+			arrow_col, InkRender.BASE_WIDTH * 0.7)
 
 	_draw_zoom_label(font, s)
+
+
+## 🔴 **문양 본보기는 화살표다.** 작대기만 깔아 두면 어느 쪽이 시작인지 알 수 없고,
+## **거꾸로 그으면 탄이 정반대로 날아간다** (사용자가 실제로 겪은 문제다).
+## 촉을 **선과 같은 먹색·같은 굵기**로 그린다 — 색이 다르면 "선 + 딴 물건"으로 읽히지
+## 화살표 하나로 안 보인다. 룬·진은 방향이 없는 글자라 안 그린다 (없는 방향을 있는 척할 순 없다).
+func _draw_trace_arrow(px: PackedVector2Array, is_arrow: bool) -> void:
+	if not is_arrow or px.size() < 2:
+		return
+	# 인식기가 실제로 겨누는 점(최원점)을 쓴다 — 관통‖은 촉이 아니라 창끝이 겨눈 곳이다.
+	# 보이는 화살촉과 날아가는 방향이 갈라지면 본보기가 거짓말을 한다
+	_draw_heading_arrow(px[0], InkRender.arrow_tip(px), TRACE_INK, TRACE_WIDTH)
+
+
+## 시작점 → 겨눈 점을 화살촉으로. 발사각(InkRender.arrow_heading)과 **같은 두 점**을 쓴다
+func _draw_heading_arrow(from: Vector2, tip: Vector2, col: Color, w: float) -> void:
+	var dir := tip - from
+	if dir.length_squared() < 4.0:
+		return
+	dir = dir.normalized()
+	var side := dir.orthogonal()
+	var len_px := maxf(_canvas_scale() * TRACE_HEAD, 5.0)
+	draw_polyline(PackedVector2Array([
+		tip - dir * len_px + side * len_px * 0.5, tip,
+		tip - dir * len_px - side * len_px * 0.5,
+	]), col, w, true)
 
 
 ## 배율 표시 — **확대 변환 밖**에서 그린다. 돋보기의 눈금은 종이에 인쇄된 게 아니라
@@ -297,47 +372,110 @@ func _guide_text(font: Font, fs: int, text: String, at: Vector2, col: Color, cen
 
 # ─────────────────────────── 본보기 얹기 (v1.7) ───────────────────────────
 
-## 책자에서 고른 본보기를 종이에 옅게 얹는다 — **보고 따라 그으라고.**
-## unit_pts: 중심 0 · 최장변 1 정규화 점열 (RuneTemplates.canonical()과 같은 좌표계).
+## 책자에서 고른 본보기를 **집는다** — 마우스에 붙어 따라다니고, 종이를 누르면 그 자리에 놓인다
+## (스탬프와 같은 문법 — 사용자 확정). 놓인 본보기는 **자석이 된다**: 그 위를 손으로 그으면
+## 획이 선으로 끌린다 (_append_live).
 ##
-## 자리는 **지금 종이 위에 있는 것**에 맞춘다: 진을 이미 둘렀다면 룬·문양 본보기는 그 진의
-## 중심·크기에 맞춰 앉는다. "여기 이만하게 앉혀라"가 말이 아니라 그림으로 보이는 게 핵심이다.
+## 🔴 **본보기는 획이 아니다.** 잉크를 안 먹고, 인식되지도 않는다. 손으로 그어야 획이 된다 —
+## 본보기는 손을 돕기만 한다. 획을 뗄 때 걷힌다 (한 획에 한 본보기).
+##
+## unit_pts: 중심 0 · 최장변 1 정규화 점열 (RuneTemplates.canonical()과 같은 좌표계).
+## 크기는 **지금 종이 위에 있는 것**에서 출발한다 (진을 둘렀으면 그 진에 맞는 크기) —
+## 하지만 **휠로 바꿀 수 있다.** 크기가 곧 농도(룬, v1.7)·세기(문양, v1.9)라서, 고정이면
+## 다들 같은 크기로 그리게 되어 **그 두 축이 통째로 죽는다.**
 func show_trace(stage: int, unit_pts: PackedVector2Array) -> void:
-	_trace = PackedVector2Array()
 	if unit_pts.size() < 2:
-		queue_redraw()
+		clear_trace()
 		return
-	var c := Vector2(0.5, 0.5)
-	var span := TRACE_CIRCLE_SPAN
+	_stamp_pending = {}          # 스탬프와 본보기를 동시에 들 수는 없다
+	_trace_stage = stage
+	_trace_held = {
+		"unit": unit_pts,
+		"span": _trace_span_for(stage),
+		# 문양은 **위로 세워** 얹는다 — 캔버스 위쪽이 조준 방향이다 (GDD §4.1).
+		# 본보기(canonical)는 +X 전진이므로 안 돌리면 옆으로 누워 버린다
+		"rot": (-PI / 2.0) if stage == Enums.DrawStage.ARROW else 0.0,
+	}
+	_trace_placed = false
+	_refresh_trace(_to_paper(get_local_mouse_position()))
+	trace_changed.emit(true)
+
+
+## 지금 종이 위에 있는 것에 맞는 기본 크기 — 진을 둘렀으면 그 진에 어울리는 크기로 시작한다
+func _trace_span_for(stage: int) -> float:
 	var has_circle := _parts.has("circle")
 	match stage:
 		Enums.DrawStage.RUNE:
 			if has_circle:
-				c = Vector2(_parts.circle.center)
-				span = float(_parts.circle.radius) * 2.0 * TRACE_RUNE_FRAC
-			else:
-				span = TRACE_CIRCLE_SPAN * TRACE_RUNE_FRAC
+				return float(_parts.circle.radius) * 2.0 * TRACE_RUNE_FRAC
+			return TRACE_CIRCLE_SPAN * TRACE_RUNE_FRAC
 		Enums.DrawStage.ARROW:
 			if has_circle:
-				c = Vector2(_parts.circle.center)
 				# 그린 진을 확실히 뚫고 나가는 길이로 (짧으면 문양으로 인식되지 않는다)
-				span = maxf(TRACE_ARROW_SPAN, float(_parts.circle.radius) * 2.6)
-			else:
-				span = TRACE_ARROW_SPAN
-	for p: Vector2 in unit_pts:
-		_trace.append(c + p * span)
+				return maxf(TRACE_ARROW_SPAN, float(_parts.circle.radius) * 2.6)
+			return TRACE_ARROW_SPAN
+	return TRACE_CIRCLE_SPAN
+
+
+## 본보기를 앵커 자리에 편다 (종이 정규 좌표). 들고 있는 동안엔 마우스가 앵커다
+func _refresh_trace(paper_pos: Vector2) -> void:
+	if _trace_held.is_empty():
+		return
+	var c := paper_pos / _canvas_scale()
+	var span := float(_trace_held.span)
+	var rot := float(_trace_held.rot)
+	var unit: PackedVector2Array = _trace_held.unit
+	_trace = PackedVector2Array()
+	for p: Vector2 in unit:
+		_trace.append(c + (p * span).rotated(rot))
 	queue_redraw()
 
 
+## 종이에 앉힌다 — 이제부터 이 선이 손을 끈다
+func _place_trace_at(paper_pos: Vector2) -> void:
+	_refresh_trace(paper_pos)
+	_trace_held = {}
+	_trace_placed = true
+	var s := _canvas_scale()
+	_trace_px = PackedVector2Array()
+	for t: Vector2 in _trace:
+		_trace_px.append(t * s)
+	trace_changed.emit(true)
+
+
+## 휠 = 크기 / **우클릭 누른 채 휠 = 회전** (사용자 확정).
+## **크기가 곧 농도(룬)·세기(문양)**라 플레이어가 정해야 한다 (StrokeGuide 상단 계약)
+func _adjust_trace(up: bool, rotating: bool, screen_pos: Vector2) -> void:
+	if rotating:
+		_rmb_turned = true      # 이번 우클릭은 회전용이었다 — 뗄 때 본보기를 물리지 않는다
+		_trace_held["rot"] = wrapf(float(_trace_held.rot)
+			+ (TRACE_ROT_STEP if up else -TRACE_ROT_STEP), -PI, PI)
+	else:
+		_trace_held["span"] = clampf(float(_trace_held.span)
+			* (TRACE_SPAN_STEP if up else 1.0 / TRACE_SPAN_STEP),
+			TRACE_SPAN_MIN, TRACE_SPAN_MAX)
+	_refresh_trace(_to_paper(screen_pos))
+
+
 func clear_trace() -> void:
+	_trace_held = {}
+	_trace_placed = false
+	_trace_stage = -1
+	_trace_px = PackedVector2Array()
 	if _trace.is_empty():
 		return
 	_trace = PackedVector2Array()
 	queue_redraw()
+	trace_changed.emit(false)
 
 
 func has_trace() -> bool:
 	return not _trace.is_empty()
+
+
+## 본보기를 들고 있는 중인가 (아직 종이에 안 놓음) — 좌클릭이 획이 아니라 "놓기"가 된다
+func is_holding_trace() -> bool:
+	return not _trace_held.is_empty()
 
 
 # ─────────────────────────── 종이 등급 (GDD §5) ───────────────────────────
@@ -373,14 +511,20 @@ func get_ink_capacity() -> float:
 func _gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
-		# 휠 = 종이 확대. 획을 긋는 중에는 손대지 않는다 — 그리다 종이가 움직이면 획이 망가진다
+		# 휠 = 종이 확대. 획을 긋는 중에는 손대지 않는다 — 그리다 종이가 움직이면 획이 망가진다.
+		# 단 **본보기를 들고 있으면 휠은 그 본보기의 크기**다 (Shift+휠 = 회전) — 크기가 곧
+		# 농도(룬)·세기(문양)라 플레이어가 반드시 정할 수 있어야 한다 (StrokeGuide 상단 계약)
 		if mb.button_index == MOUSE_BUTTON_WHEEL_UP and mb.pressed:
-			if not _drawing:
+			if is_holding_trace():
+				_adjust_trace(true, _rmb_held, mb.position)
+			elif not _drawing:
 				zoom_at(mb.position, ZOOM_STEP)
 			accept_event()
 			return
 		if mb.button_index == MOUSE_BUTTON_WHEEL_DOWN and mb.pressed:
-			if not _drawing:
+			if is_holding_trace():
+				_adjust_trace(false, _rmb_held, mb.position)
+			elif not _drawing:
 				zoom_at(mb.position, 1.0 / ZOOM_STEP)
 			accept_event()
 			return
@@ -394,25 +538,41 @@ func _gui_input(event: InputEvent) -> void:
 			if mb.pressed:
 				if not _stamp_pending.is_empty():
 					_place_stamp_at(_to_paper(mb.position))
+				elif is_holding_trace():
+					_place_trace_at(_to_paper(mb.position))   # 들고 있던 본보기를 종이에 놓는다
 				else:
 					_begin_stroke(_to_paper(mb.position))
 			elif _drawing:
 				_end_stroke()
 			accept_event()
-		elif mb.button_index == MOUSE_BUTTON_RIGHT and mb.pressed:
-			if _drawing:
-				_cancel_stroke()
-			elif not _stamp_pending.is_empty():
-				_stamp_pending = {}
-				stamp_placement_done.emit()
+		elif mb.button_index == MOUSE_BUTTON_RIGHT:
+			# 🔴 **우클릭은 더 이상 "뒤로가기"가 아니다** (사용자 확정 — 되돌리기는 Ctrl+Z만).
+			# 대신 **누르고 있으면 휠이 회전**이 된다 (본보기를 들고 있을 때).
+			# 누른 동안 휠을 굴렸다면 떼는 순간의 취소 동작은 건너뛴다 — 회전하려다 본보기를
+			# 물려 버리면 손이 배신당한다
+			if mb.pressed:
+				_rmb_held = true
+				_rmb_turned = false
 			else:
-				undo_last()
+				_rmb_held = false
+				if not _rmb_turned:
+					if _drawing:
+						_cancel_stroke()
+					elif not _stamp_pending.is_empty():
+						_stamp_pending = {}
+						stamp_placement_done.emit()
+					elif has_trace():
+						clear_trace()   # 들고 있던 / 놓아 둔 본보기를 걷는다
 			accept_event()
 	elif event is InputEventMouseMotion:
 		var mm := event as InputEventMouseMotion
 		if _panning:
 			_set_view(_zoom, _pan + mm.relative)
 			accept_event()
+			return
+		# 들고 있는 본보기는 마우스를 따라다닌다 (스탬프와 같은 문법)
+		if is_holding_trace():
+			_refresh_trace(_to_paper(mm.position))
 			return
 		if not _drawing:
 			return
@@ -478,6 +638,7 @@ func _begin_stroke(pos: Vector2) -> void:
 	_drawing = true
 	_live_points = PackedVector2Array()
 	_live_pressures = PackedFloat32Array()
+	_live_ink = 0.0                    # 게이지 미리보기를 새 획으로 다시 센다
 	_tablet = false
 	_cur_pressure = 1.0                # 보통 속도의 필압에서 출발 — 툭 찍으면 1.0
 	_moved_px = 0.0
@@ -490,14 +651,41 @@ func _begin_stroke(pos: Vector2) -> void:
 ## pos는 **종이 픽셀** (호출자가 _to_paper로 변환해 넘긴다)
 func _append_live(pos: Vector2, pressure: float) -> void:
 	var p := pos.clamp(Vector2.ZERO, size)
+	# 🔴 본보기 자석 — **여기가 끌어당김이 일어나는 유일한 지점이다.** 그리는 중인 점이 전부
+	# 여길 지나므로, 저장되는 획·보이는 먹선·인식·잉크가 전부 끌린 좌표로 일관된다.
+	# 선에서 멀면 안 끌린다(SNAP_RADIUS) — 본보기가 손을 납치하면 안 된다.
+	# _trace는 **정규 좌표**이고 p는 종이 픽셀이라 배율을 맞춰 넘긴다
+	if _trace_placed and _trace_px.size() >= 2:
+		p = StrokeGuide.pull(p, _trace_px, _correction_strength(),
+			StrokeGuide.SNAP_RADIUS * _canvas_scale())
 	# 최소 간격은 **화면 기준**으로 판정한다 — 확대하면 종이 좌표 간격이 그만큼 촘촘해져야
 	# 손이 움직인 만큼 점이 찍힌다 (확대의 목적이 정밀도인데 여기서 다시 뭉개면 의미가 없다)
 	var min_dist := MIN_PX_DIST / _zoom
 	if not _live_points.is_empty() and _live_points[_live_points.size() - 1].distance_to(p) < min_dist:
 		return
+	var prev := _live_points[_live_points.size() - 1] if not _live_points.is_empty() else p
 	_live_points.append(p)
 	_live_pressures.append(pressure)
 	_live_line.append_live(p)
+	_accrue_live_ink(prev, p, pressure)
+
+
+## 방금 그은 한 구간이 먹은 먹을 게이지에 즉시 얹는다 — **긋는 동안 게이지가 차오른다.**
+## 계산은 확정 잉크(DesignBuilder.stroke_ink_units = ∫굵기 ds)와 **같은 공식**이다:
+## 구간 길이(정규 좌표) × 그 구간의 붓 굵기 × 계수. 안 그러면 미리보기가 거짓말이 된다.
+##
+## ⚠ 마우스 획은 확정 시 필압이 **평균 1.0으로 정규화**되므로(_end_stroke), 미리보기에서도
+## 굵기 1.0으로 본다 — 그래야 긋는 중 숫자와 뗀 뒤 숫자가 일치한다. 태블릿은 진짜 압력을 쓴다.
+func _accrue_live_ink(prev: Vector2, p: Vector2, pressure: float) -> void:
+	if _balance == null or _live_points.size() < 2:
+		return
+	var seg := prev.distance_to(p) / _canvas_scale()   # 종이 픽셀 → 정규 (잉크는 정규 기준)
+	var w := 1.0
+	if _tablet:
+		var n := _live_pressures.size()
+		w = clampf((_live_pressures[n - 2] + pressure) * 0.5, 0.15, 1.5)
+	_live_ink += seg * w * _balance.ink_per_stroke_length
+	ink_state_changed.emit(_ink_used + _live_ink, get_ink_capacity())
 
 
 func _cancel_stroke() -> void:
@@ -506,6 +694,15 @@ func _cancel_stroke() -> void:
 	if _live_line != null:
 		_live_line.queue_free()
 		_live_line = null
+	_clear_live_ink()
+
+
+## 라이브 미리보기를 걷고 게이지를 확정값으로 되돌린다 (획 취소·무효 처리 후)
+func _clear_live_ink() -> void:
+	if _live_ink == 0.0:
+		return
+	_live_ink = 0.0
+	ink_state_changed.emit(_ink_used, get_ink_capacity())
 
 
 func _end_stroke() -> void:
@@ -545,6 +742,9 @@ func _end_stroke() -> void:
 	var entry := {"stroke": stroke, "line": _live_line, "locked": false, "result": {}}
 	_live_line.setup(_live_points, stroke.pressures)
 	_live_line = null
+	# 미리보기는 여기서 끝난다 — 아래 _reclassify_all → _recompute_ink가 **확정값**을 다시 쏜다.
+	# 안 걷으면 이 획의 먹이 두 번 세어진다 (미리보기 + 확정)
+	_live_ink = 0.0
 	_entries.append(entry)
 	var was_complete := _design != null
 	_reclassify_all()
@@ -555,6 +755,10 @@ func _end_stroke() -> void:
 		design_completed.emit(_design)
 	else:
 		_flash_line(entry.line as Line2D, FLASH_LIGHTEN, FLASH_SEC)
+	# 본보기는 **한 획을 돕고 걷힌다** — 놔두면 다음 획(다른 글자)까지 엉뚱하게 끌어당긴다.
+	# 같은 글자를 또 그리려면 책자에서 다시 집는다 (집는 값이 싸므로 번거롭지 않다).
+	# ⚠ 거부된 획(_reject_live_line 경로)에서는 **안 걷는다** — 다시 그려야 하니 남겨 둔다
+	clear_trace()
 	var res: Dictionary = entry.result
 	var role := int(res.get("role", Enums.StrokeRole.DECOR))
 	var bus := _bus()
@@ -728,7 +932,7 @@ func clear_all() -> void:
 	# 종이를 새로 편다 — 다음 도안은 새 종이 값을 치른다
 	_built = null
 	_paper_charged = false
-	_trace = PackedVector2Array()   # 본보기도 걷는다 (진이 사라져 앉을 자리가 없어졌다)
+	clear_trace()                   # 본보기도 걷는다 (진이 사라져 앉을 자리가 없어졌다)
 	_parts = {"arrows": [], "extras": [], "strokes_ordered": []}
 	_recompute_ink()
 	_emit_stage_if_changed()
@@ -866,6 +1070,16 @@ func _game_state() -> Node:
 	return get_node_or_null(^"/root/GameState")
 
 
+## 획 자동보정 강도 — **아이템이 올린다**(좋은 붓), 그래서 GameState.stroke_correction()이
+## 진실이다 (선례: hp_max·mana_max — TECH_SPEC §4.2 balance 직접 참조 금지).
+## GameState가 없는 단독 테스트에서만 balance 기본값으로 폴백한다
+func _correction_strength() -> float:
+	var gs := _game_state()
+	if gs != null and gs.has_method(&"stroke_correction"):
+		return float(gs.call(&"stroke_correction"))
+	return _balance.stroke_correct_strength
+
+
 ## 완성(생성) 가능 여부 — 종이 미설정(레거시)·GameState 부재(단독 테스트)는 항상 허용
 func _paper_available() -> bool:
 	if not _paper_mode:
@@ -898,6 +1112,7 @@ func _recompute_ink() -> void:
 
 ## 상한 초과 획 시각 경고 — 경고색으로 바꾼 뒤 페이드아웃하며 제거
 func _reject_live_line() -> void:
+	_clear_live_ink()          # 무효 획은 먹을 안 먹는다 — 게이지도 되돌린다
 	var line := _live_line
 	_live_line = null
 	if line == null:

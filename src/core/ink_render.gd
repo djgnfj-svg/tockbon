@@ -151,14 +151,68 @@ static func arrow_line(stroke: StrokeData, px_per_unit: float, opts: Dictionary 
 	return make_line(pts, stroke.pressures, BASE_WIDTH * float(opts.get("width_mult", 1.0)), col)
 
 
-## 화살표 획의 로컬 점열 — 시작=원점, 시작→끝 벡터가 +X. 캔버스 단위 × px_per_unit.
+## 문양 획이 **겨눈 방향** (캔버스 절대각) — 시작점 → 시작점에서 가장 먼 점.
+## 발사각(ArrowData.direction)과 먹선 로컬 변환이 **둘 다 이 함수 하나를 쓴다** — 정의가
+## 갈라지면 그린 그림과 날아가는 방향이 어긋난다 (그게 이 게임의 정체성이다).
+##
+## 🔴 **끝점을 쓰면 안 된다.** v1.8까지 문양이 직선 하나뿐일 땐 끝점 = 겨눈 곳이었지만,
+## v1.9에서 문양이 글자가 되면서 **끝점이 더 이상 진행 방향에 있지 않다** — 관통‖은 획이
+## 뒤로 꺾인 **화살촉**으로 끝나서 끝점이 축에서 벗어난다.
+## 실측(손그림 200회): 끝점 기준이면 관통‖이 평균 **14.6도**·최대 22.6도 틀어지고 96%가
+## 10도를 넘겼다. 나머지 문양은 1도 이내였다 — 즉 관통만 조용히 빗나가고 있었다.
+##
+## 최원점은 네 글자 전부에서 사람이 겨눈 곳을 잡는다: 기본·팅김⚡·유도∿는 끝점이 곧
+## 최원점이고(값이 안 바뀐다), 관통‖만 촉이 아니라 **창끝**을 잡는다.
+## 지터로 최원점이 튀지 않게 **최대거리의 HEADING_TIP_BAND 이내 점들을 평균**한다.
+const HEADING_TIP_BAND := 0.97
+
+## 문양이 **겨눈 점** — 방향(arrow_heading)과 세기(arrow_extent)가 **둘 다 이 점을 쓴다.**
+## 한 점에서 두 축이 나오므로 정의가 갈라질 수 없다: 겨눈 쪽으로 날아가고, 겨눈 만큼 멀리 간다.
+static func arrow_tip(points: PackedVector2Array) -> Vector2:
+	var start := points[0]
+	var far := 0.0
+	for p: Vector2 in points:
+		far = maxf(far, start.distance_to(p))
+	if far <= 1e-9:
+		return start
+	var tip := Vector2.ZERO
+	var count := 0
+	var band := far * HEADING_TIP_BAND
+	for p: Vector2 in points:
+		if start.distance_to(p) >= band:
+			tip += p
+			count += 1
+	return tip / float(count) if count > 0 else start
+
+
+static func arrow_heading(points: PackedVector2Array) -> float:
+	if points.size() < 2:
+		return 0.0
+	var v := arrow_tip(points) - points[0]
+	return v.angle() if v.length_squared() > 1e-18 else 0.0
+
+
+## 문양이 **뻗은 거리** — 시작점에서 겨눈 점까지. ArrowData.reach(÷ 진 반지름)의 원료다.
+##
+## 🔴 **총연장(path_length)을 쓰면 안 된다.** v1.9는 reach를 획이 지나간 전체 길이로 쟀는데,
+## 그건 "얼마나 멀리 뻗었나"가 아니라 **"얼마나 구불구불한가"**를 잰다.
+## 실측: 똑같이 0.40을 뻗어도 총연장 기준이면 직선 reach 2.00 / 진폭 큰 지그재그 3.00(상한 포화)
+## /촘촘한 지그재그 3.00 — **짧게 그려도 진폭만 키우면 최대 사거리·최대 반사를 공짜로 받았고**,
+## 팅김⚡·유도∿가 기본보다 구조적으로 유리했다. 뻗은 거리는 모양에 불변이라 그 구멍을 닫는다.
+## (같은 성격의 수정: rune_fill이 AABB → 무게중심 최원거리로 간 것 — 정의가 불변량이 아니었다)
+static func arrow_extent(points: PackedVector2Array) -> float:
+	if points.size() < 2:
+		return 0.0
+	return points[0].distance_to(arrow_tip(points))
+
+
+## 화살표 획의 로컬 점열 — 시작=원점, **겨눈 방향**(arrow_heading)이 +X. 캔버스 단위 × px_per_unit.
 static func arrow_local_points(stroke: StrokeData, px_per_unit: float) -> PackedVector2Array:
 	var out := PackedVector2Array()
-	var n := stroke.points.size()
-	if n < 2:
+	if stroke.points.size() < 2:
 		return out
 	var start := stroke.points[0]
-	var abs_dir := (stroke.points[n - 1] - start).angle()
+	var abs_dir := arrow_heading(stroke.points)
 	for p: Vector2 in stroke.points:
 		out.append((p - start).rotated(-abs_dir) * px_per_unit)
 	return out
@@ -168,11 +222,19 @@ static func arrow_local_points(stroke: StrokeData, px_per_unit: float) -> Packed
 ## 평행이동해 Line2D를 만든다. 꼬리가 x<0으로 뒤에 끌리므로 충돌 지점(원점)과 보이는 머리가 일치.
 ## 투사체 렌더의 보편 규칙이라 core가 소유한다 (모듈 B·적 투사체·곡선 추종이 재구현하지 않게).
 ## path가 2점 미만이면 null — 호출자가 기존 스프라이트로 폴백.
+##
+## 🔴 머리는 **끝점이 아니라 가장 앞선 점**(x 최대)이다. 로컬 +X가 진행 방향이므로 둘은 보통
+## 같지만, 관통‖만 다르다 — 획이 뒤로 꺾인 화살촉으로 끝나므로 끝점을 머리로 잡으면
+## **창끝이 충돌 지점보다 앞으로 튀어나온다.** arrow_heading이 창끝을 겨누게 고친 것과 같은 결.
 static func tail_line(path: PackedVector2Array, pressures: PackedFloat32Array,
 		px_per_unit: float, opts: Dictionary = {}) -> Line2D:
 	if path.size() < 2:
 		return null
-	var head := path[path.size() - 1] * px_per_unit
+	var front := path[0]
+	for p: Vector2 in path:
+		if p.x > front.x:
+			front = p
+	var head := front * px_per_unit
 	var pts := PackedVector2Array()
 	for p: Vector2 in path:
 		pts.append(p * px_per_unit - head)

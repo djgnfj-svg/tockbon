@@ -125,6 +125,28 @@ func _try_cast() -> void:
 	if _infinite:
 		design.durability = design.durability_max
 	EventBus.cast_requested.emit(design, _player_pos, _aim)
+	_report_aim(design)
+
+
+## **그린 방향 vs 실제로 날아간 방향** — 어긋나면 여기서 바로 잡힌다.
+## 종이 각도는 **-90도가 위쪽(앞)**이고, 조준과 발사각이 같아야 정상이다(오차 0).
+##
+## 🔴 이 표시가 있는 이유: 세션 7의 "모든 문양이 90도 틀어져 나갔다"와 세션 11의 "관통이
+## 14도 빗나갔다"가 **테스트 전부 초록인 채로** 숨어 있었다. 중간 표현(direction)만 검증하면
+## 두 모듈의 계약이 어긋나도 각자의 테스트는 각자 옳다. **눈으로 볼 수 있어야 한다.**
+## 방향 규칙을 다시 짤 때(진행 중) 이 줄이 그대로 검증 표면이 된다.
+func _report_aim(design: SpellDesign) -> void:
+	if design.arrows.is_empty():
+		return
+	var aim_deg := rad_to_deg(_aim.angle())
+	var parts: Array[String] = []
+	for a: ArrowData in design.arrows:
+		var world := rad_to_deg(wrapf(a.direction + (_aim.angle() - design.aim_axis), -PI, PI))
+		var err := rad_to_deg(wrapf(deg_to_rad(world) - _aim.angle(), -PI, PI))
+		parts.append("종이%+.0f°→발사%+.0f°(오차%+.0f°)" % [
+			rad_to_deg(a.direction), world, err])
+	_hint_label.text = "조준 %+.0f° · %s" % [aim_deg, " | ".join(parts)]
+	_hint_label.add_theme_color_override(&"font_color", OK_COLOR)
 
 
 # ─────────────────────────── 세계 ───────────────────────────

@@ -186,6 +186,132 @@ func _test_zoom(canvas: Control) -> void:
 	canvas._cancel_stroke()
 	canvas.clear_all()
 
+	_test_trace_magnet(canvas)
+	_test_live_ink(canvas)
+
+
+# ────────── 먹 게이지가 긋는 동안 차오른다 (사용자 요청) ──────────
+# 뗄 때만 갱신하면 **다 긋고 나서야 상한 초과를 알고 획이 통째로 무효가 된다.**
+# 🔴 미리보기가 확정값과 어긋나면 게이지가 거짓말을 한다 — 그게 이 검사의 요점이다.
+
+func _test_live_ink(canvas: Control) -> void:
+	canvas.clear_all()
+	var seen: Array[float] = []
+	var probe := func(used: float, _cap: float) -> void: seen.append(used)
+	canvas.connect(&"ink_state_changed", probe)
+
+	# 원을 긋는다 — 마우스 이벤트를 하나씩 넣으며 게이지를 엿본다
+	var pts := _circle_pts(Vector2(0.5, 0.5), 0.22)
+	var s := 320.0
+	canvas._gui_input(_click(pts[0] * s, true))
+	for i in range(1, pts.size()):
+		canvas._gui_input(_motion(pts[i] * s, (pts[i] - pts[i - 1]) * s))
+	# 아직 떼지 않았다 — 그런데도 게이지가 움직였어야 한다
+	_check(seen.size() >= 5, "긋는 동안 게이지가 갱신된다 (%d회)" % seen.size())
+	var mid_ink := seen[seen.size() - 1] if not seen.is_empty() else 0.0
+	_check(mid_ink > 0.0, "긋는 동안 먹이 차오른다 (뗄 때까지 0이 아니다)")
+	# 단조 증가 — 그을수록 늘어난다
+	var monotonic := true
+	for i in range(1, seen.size()):
+		if seen[i] < seen[i - 1] - 0.001:
+			monotonic = false
+	_check(monotonic, "게이지가 되돌아가지 않는다 (단조 증가)")
+
+	canvas._gui_input(_click(pts[pts.size() - 1] * s, false))
+	# 🔴 뗀 뒤 확정값이 미리보기와 같아야 한다 — 다르면 게이지가 거짓말을 한 것이다
+	var final_ink: float = canvas.get_ink_used()
+	var drift := absf(final_ink - mid_ink) / maxf(final_ink, 1e-6) * 100.0
+	_check(drift < 6.0,
+		"미리보기가 확정값과 일치 (미리보기 %.2f → 확정 %.2f, 오차 %.1f%%)" % [
+			mid_ink, final_ink, drift])
+
+	# 무효 획은 먹을 안 먹는다 — 게이지도 되돌아와야 한다 (순서 위반: 진 다음은 룬이다)
+	var before: float = canvas.get_ink_used()
+	seen.clear()
+	_feed_mouse(canvas, _line_pts(Vector2(0.5, 0.5), Vector2(0.5, 0.12)))
+	_check(is_equal_approx(canvas.get_ink_used(), before),
+		"무효 획 — 확정 먹은 그대로")
+	_check(not seen.is_empty() and is_equal_approx(seen[seen.size() - 1], before),
+		"무효 획 — 게이지도 원래대로 돌아왔다 (미리보기가 안 남는다)")
+
+	canvas.disconnect(&"ink_state_changed", probe)
+	canvas.clear_all()
+
+
+# ────────── 본보기 자석 — 놓은 본보기가 손을 끈다 (사용자 확정) ──────────
+# 조작: 책자에서 집으면 마우스에 붙고(is_holding_trace), 종이를 누르면 앉는다. 앉은 뒤에만 끈다.
+# 🔴 **손이 이겨야 한다** — 본보기에서 멀리 그으면 안 끌린다(SNAP_RADIUS). 안 그러면 본보기가
+# 크기를 강제해 농도(룬, v1.7)·세기(문양, v1.9) 축이 통째로 죽는다.
+
+func _test_trace_magnet(canvas: Control) -> void:
+	var c := Vector2(0.5, 0.5)
+	# 곧은 문양 본보기 — canonical은 **+X 전진**이고 캔버스가 위로 세워 얹는다(GDD §4.1).
+	# 그래서 가로로 주면 종이에선 세로선이 된다
+	var unit := PackedVector2Array()
+	for i in 16:
+		unit.append(Vector2(-0.5 + float(i) / 15.0, 0.0))
+
+	# 자석은 문양 단계에서 잰다 — 작성 순서(진→룬→문양)를 먼저 채운다
+	canvas.clear_all()
+	_feed(canvas, _circle_pts(c, 0.22))
+	_feed(canvas, _triangle_pts(c, 0.10))
+	_check(canvas.get_stage() == Enums.DrawStage.ARROW, "자석 검사 준비 — 문양 차례")
+
+	canvas.show_trace(Enums.DrawStage.ARROW, unit)
+	_check(canvas.is_holding_trace(), "본보기를 집으면 마우스에 붙는다")
+	_check(canvas.has_trace(), "들고 있는 동안에도 종이에 보인다")
+	_check(canvas._trace_px.is_empty(), "안 놓은 본보기는 자석이 아니다")
+
+	# 종이 한가운데를 눌러 앉힌다 (화면 좌표 = 정규 × 320)
+	canvas._gui_input(_click(c * 320.0, true))
+	_check(not canvas.is_holding_trace(), "종이를 누르면 앉는다")
+	_check(canvas._trace_px.size() >= 2, "앉은 본보기가 자석이 됐다")
+
+	# 본보기 옆(자석 안)을 삐뚤빼뚤 긋는다 → 선 쪽으로 끌려야 한다.
+	# 진 중심에서 출발해 위로 뚫고 나간다 (문양의 기하 조건 — TECH_SPEC §6.1)
+	var wobbly := PackedVector2Array()
+	for i in 20:
+		var t := float(i) / 19.0
+		# x가 ±0.02로 흔들리는 세로획 — 본보기(x=0.5)에서 자석 반경(0.05) 안이다
+		wobbly.append(Vector2(0.5 + (0.02 if i % 2 == 0 else -0.02), 0.5 - t * 0.32))
+	_feed_mouse(canvas, wobbly)
+	_check(not canvas._entries.is_empty(), "자석 안 — 획이 받아들여졌다")
+	var drawn: PackedVector2Array = canvas._entries[canvas._entries.size() - 1].stroke.points
+	var pulled_dev := _mean_dev_x(drawn, 0.5)
+	_check(pulled_dev < 0.016,
+		"자석 안 — 삐뚤한 획이 본보기로 끌렸다 (평균 이탈 %.4f, 손은 0.02였다)" % pulled_dev)
+
+	# 🔴 자석 **밖**을 그으면 안 끌린다 — 손이 이긴다.
+	# 이게 살아 있어야 크기 축(농도·세기)이 산다: 본보기와 다른 크기로 그릴 자유
+	canvas.clear_all()
+	_feed(canvas, _circle_pts(c, 0.22))
+	_feed(canvas, _triangle_pts(c, 0.10))
+	canvas.show_trace(Enums.DrawStage.ARROW, unit)
+	canvas._gui_input(_click(c * 320.0, true))
+	var far := PackedVector2Array()
+	for i in 20:
+		# 본보기(x=0.5)에서 0.16 떨어진 세로획 — 자석 반경(0.05) 밖이다
+		far.append(Vector2(0.66, 0.5 - float(i) / 19.0 * 0.32))
+	_feed_mouse(canvas, far)
+	_check(not canvas._entries.is_empty(), "자석 밖 — 획이 받아들여졌다")
+	var far_drawn: PackedVector2Array = canvas._entries[canvas._entries.size() - 1].stroke.points
+	_check(_mean_dev_x(far_drawn, 0.66) < 0.005,
+		"자석 밖 — 손이 이긴다 (본보기가 획을 납치하지 않았다)")
+
+	# 획을 떼면 본보기는 걷힌다 — 다음 획(다른 글자)까지 끌면 안 된다
+	_check(not canvas.has_trace(), "획을 떼면 본보기가 걷힌다")
+	canvas.clear_all()
+
+
+## 점들이 x=target에서 벗어난 평균 거리
+func _mean_dev_x(pts: PackedVector2Array, target: float) -> float:
+	if pts.is_empty():
+		return INF
+	var total := 0.0
+	for p: Vector2 in pts:
+		total += absf(p.x - target)
+	return total / float(pts.size())
+
 
 ## 화면 좌표로 마우스 이벤트를 주입해 그린다 — 실제 플레이어의 입력 경로 그대로.
 ## pts_norm(정규)을 현재 배율의 화면 좌표로 변환해 넣는다.

@@ -18,6 +18,9 @@ extends RefCounted
 
 const RuneTemplates := preload("res://src/drawing/rune_templates.gd")
 const GlyphTemplates := preload("res://src/drawing/glyph_templates.gd")
+## 발사각 정의는 core 소유다 — 먹선 로컬 변환(arrow_local_points)과 **같은 함수**를 써야
+## 그린 획과 날아가는 방향이 어긋나지 않는다 (TECH_SPEC §4.4)
+const InkRender := preload("res://src/core/ink_render.gd")
 
 # ── $1 파라미터 ──
 const RESAMPLE_N := 64
@@ -307,12 +310,19 @@ static func _ensure_templates() -> void:
 
 ## 한 획에서 기하와 글자를 **함께** 읽는다 (GDD §4.4). 방향·기점·길이는 시작·끝·총연장만 쓰므로
 ## 모양이 그대로 남아 $1 매칭에 넘길 수 있다 — 궤적을 포기했기에 가능해진 일이다.
+##
+## 🔴 방향은 **끝점이 아니라 InkRender.arrow_heading**(시작 → 최원점)이다. 관통‖의 획은 뒤로
+## 꺾인 화살촉으로 끝나므로 끝점을 쓰면 겨눈 곳에서 벗어난다 (실측 평균 14.6도). 먹선 렌더도
+## 같은 함수를 쓴다 — 정의가 갈라지면 그린 그림과 날아가는 방향이 어긋난다.
 static func _arrow_result(points: PackedVector2Array, st: float) -> Dictionary:
 	var g := recognize_glyph(points)
 	return {
 		"role": Enums.StrokeRole.ARROW,
-		"direction": (points[points.size() - 1] - points[0]).angle(),
+		"direction": InkRender.arrow_heading(points),
+		# length = 총연장 (잉크·magnitude 기록용) / extent = **뻗은 거리** (세기 축 reach의 원료).
+		# 둘은 다른 값이다 — 지그재그는 짧게 뻗어도 총연장이 길다. reach는 extent를 쓴다
 		"length": path_length(points),
+		"extent": InkRender.arrow_extent(points),
 		"start": points[0],
 		"score": st,
 		"glyph": int(g.type),

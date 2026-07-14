@@ -53,9 +53,19 @@
 ./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_spell_auto.gd           # 발사·문양 거동(팅김·유도·관통)
 ./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_base_auto.gd            # 거점 경제
 ./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_onboarding_auto.gd      # 온보딩(튜토·시험발사)
+./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_drawing_fill_auto.gd    # 룬 농도(rune_fill)·회전 불변
+./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_equip_auto.gd           # 장비 착용·파생 스탯
+./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_quest_auto.gd           # 퀘스트 4단계
+./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_bosscut_auto.gd         # 보스 컷신
 ./Godot_v4.6.1-stable_win64.exe --headless --path . res://tests/test_field.tscn --quit-after 600   # 필드·전투
 ./Godot_v4.6.1-stable_win64.exe --headless --path . res://tests/test_ui.tscn --quit-after 60       # UI
 ```
+
+⚠ **위 4줄(농도·장비·퀘스트·보스컷)은 세션 11에 목록으로 승격됐다** — 통과하고 있는데도 목록에
+없어서 **아무도 안 돌리고 있었다.** 세션 7이 문법을 바꾸며 `test_paper_auto`·`test_drawing_canvas_auto`를
+조용히 깨뜨린 것과 **똑같은 조건**이었다.
+⚠ `tests/test_field_auto.gd`는 **`-s`로 직접 돌리지 말 것** — `test_field.tscn`의 스크립트다
+(씬으로 돌아야 오토로드가 있다). 직접 돌리면 "Identifier not found: EventBus"가 뜨는데 **정상이다.**
 
 눈으로 보는 시험대(F6): `tests/test_forge.tscn` — 세계 안에서 작업대(E)로 책을 펼쳐 그리고 곧바로 쏜다.
 **아레나에 벽·기둥이 있다** — 팅김⚡이 튕기는 면이고, 기둥 뒤 허수아비는 **곧은 탄으로는 못 맞힌다**

@@ -26,6 +26,8 @@ func _init() -> void:
 	_test_glyphs_clean()
 	_test_rotation_invariance()
 	_test_glyph_stress()
+	_test_heading()
+	_test_reach_shape_invariant()
 	_test_never_rejected()
 	_test_reach()
 	_test_mana_axis()
@@ -316,6 +318,96 @@ func _test_glyph_stress() -> void:
 		_check(bad == 0, "손그림 스트레스 %s — %d/%d 오인식" % [_glyph_name(want), bad, n])
 	var rate := 100.0 * float(4 * n - total_bad) / float(4 * n)
 	print("GLYPH_STRESS 인식률 %.1f%% (%d/%d)" % [rate, 4 * n - total_bad, 4 * n])
+
+
+# ────────── 5-b. 그은 방향으로 나간다 (v1.9 회귀) ──────────
+# 🔴 **이 검사가 없어서 관통‖이 조용히 빗나가고 있었다.** 세션 10의 문양 163건은 *어느 글자인가*만
+# 봤고 **방향은 아무도 안 봤다** — 인식률 100%인 채로 관통탄만 평균 14.6도 옆으로 날아갔다.
+# 원인: direction을 획의 **끝점**으로 쟀는데 관통‖은 뒤로 꺾인 **화살촉**으로 끝난다.
+# → InkRender.arrow_heading(시작 → 최원점)으로 교체. 여기서 못 박는다.
+#
+# 이 게임의 정체성이 "그린 대로 나간다"이므로 **방향은 글자 인식만큼 중요한 계약이다.**
+# 세션 7의 90도 버그도 같은 구멍에서 나왔다 (중간 표현만 검증).
+
+func _test_heading() -> void:
+	var n := 50
+	var worst := {}
+	for i in n:
+		var heading := _rng.randf_range(0.0, TAU)
+		var noise := _rng.randf_range(0.002, 0.010)
+		var radius := _rng.randf_range(0.14, 0.24)
+		var span := _rng.randf_range(maxf(0.28, radius * 1.9), 0.48)
+		var cases := {
+			Enums.GlyphType.BASIC: _line_local(),
+			Enums.GlyphType.BOUNCE: _zig_local(
+				_rng.randi_range(2, 4), _rng.randf_range(0.14, 0.28), _rng.randf() < 0.5),
+			Enums.GlyphType.HOMING: _bow_local(
+				_rng.randf_range(0.20, 0.42) * (1.0 if _rng.randf() < 0.5 else -1.0)),
+			Enums.GlyphType.PIERCE: _spear_local(
+				_rng.randf_range(0.22, 0.38), _rng.randf_range(30.0, 58.0), _rng.randf() < 0.5),
+		}
+		for want: int in cases:
+			var r := _classify(_place(cases[want], heading, span, 0.0, noise), radius)
+			if int(r.role) != Enums.StrokeRole.ARROW:
+				continue          # 역할 상실은 _test_glyph_stress가 잡는다
+			var err := absf(rad_to_deg(wrapf(float(r.direction) - heading, -PI, PI)))
+			worst[want] = maxf(float(worst.get(want, 0.0)), err)
+
+	# 손그림 지터로 몇 도는 흔들린다. 8도는 "그린 대로 나간다"가 체감되는 상한이고,
+	# 고치기 전 관통‖의 실측 최대(22.6도)와 명확히 갈라진다 — 회귀하면 반드시 걸린다
+	for want: int in [Enums.GlyphType.BASIC, Enums.GlyphType.BOUNCE,
+			Enums.GlyphType.HOMING, Enums.GlyphType.PIERCE]:
+		var e := float(worst.get(want, 0.0))
+		_check(e <= 8.0, "발사각 %s — 그은 방향에서 최대 %.1f도 벗어남 (상한 8도)" % [
+			_glyph_name(want), e])
+	print("HEADING 최대 오차: 기본 %.1f° · 팅김 %.1f° · 유도 %.1f° · 관통 %.1f°" % [
+		float(worst.get(Enums.GlyphType.BASIC, 0.0)),
+		float(worst.get(Enums.GlyphType.BOUNCE, 0.0)),
+		float(worst.get(Enums.GlyphType.HOMING, 0.0)),
+		float(worst.get(Enums.GlyphType.PIERCE, 0.0))])
+
+
+# ────────── 5-c. reach는 '뻗은 거리'다 — 모양에 흔들리면 안 된다 (v1.9 회귀) ──────────
+# 🔴 **v1.9는 reach를 총연장으로 쟀다** — 그건 "얼마나 멀리 뻗었나"가 아니라 "얼마나
+# 구불구불한가"였다. 실측(고치기 전): 똑같이 0.40을 뻗어도 직선 2.00 / 진폭 큰 지그재그 3.00
+# (상한 포화) / 촘촘한 지그재그 3.00. **짧게 그려도 진폭만 키우면 최대 사거리·최대 반사**를
+# 공짜로 받았고, 팅김⚡·유도∿가 기본보다 구조적으로 유리했다.
+# 세션 9의 rune_fill 수정과 같은 성격이다 — 정의가 불변량이 아니면 숨은 최적 플레이가 생긴다.
+
+func _test_reach_shape_invariant() -> void:
+	var radius := 0.20
+	var span := 0.40
+	var shapes := {
+		"기본(직선)": _line_local(),
+		"팅김 2꺾임 얕게": _zig_local(2, 0.10),
+		"팅김 4꺾임 깊게": _zig_local(4, 0.30),
+		"팅김 8꺾임 촘촘히": _zig_local(8, 0.28),
+		"유도 완만": _bow_local(0.15),
+		"유도 깊게": _bow_local(0.45),
+		"관통 짧은촉": _spear_local(0.22, 34.0, false),
+		"관통 긴촉": _spear_local(0.38, 58.0, true),
+	}
+	# 전부 같은 거리(span)를 뻗었다 → reach가 같아야 한다
+	var reaches: Array[float] = []
+	for name: String in shapes:
+		var pts := _place(shapes[name], -PI / 2.0, span, 0.0, 0.0)
+		var r := _classify(pts, radius)
+		if int(r.role) != Enums.StrokeRole.ARROW:
+			_check(false, "reach 불변성 — %s가 문양으로 안 잡힘" % name)
+			continue
+		reaches.append(float(r.extent) / radius)
+	var lo := reaches[0]
+	var hi := reaches[0]
+	for v: float in reaches:
+		lo = minf(lo, v)
+		hi = maxf(hi, v)
+	# 관통‖은 촉이 뒤로 꺾여 뻗은 거리가 약간 줄어든다(창끝까지가 곧 extent) — 그건 정상이다.
+	# 총연장 기준이면 여기서 2.00~3.00으로 갈렸다. 8%는 그 결함과 명확히 갈라진다
+	var spread := (hi - lo) / maxf(lo, 1e-6) * 100.0
+	_check(spread <= 8.0,
+		"reach 모양 불변성 — 같은 거리를 뻗었는데 %.1f%% 갈림 (%.2f~%.2f, 상한 8%%)" % [
+			spread, lo, hi])
+	print("REACH 모양 불변성: 같은 거리 → reach %.2f~%.2f (%.1f%% 차)" % [lo, hi, spread])
 
 
 # ────────── 6. 문양은 절대 거부되지 않는다 (GDD §4.5) ──────────

@@ -198,18 +198,27 @@ func _refresh_title() -> void:
 # ─────────────────────────── 캔버스 신호 ───────────────────────────
 
 ## 그 부품을 그려냈다 — 밑그림은 걷고, 책은 다음 장을 편다.
-## (follow_stage가 진 장을 열면 책자가 스스로 다음 본보기를 얹어 준다)
 func _on_stage_changed(stage: int) -> void:
 	_canvas.call(&"clear_trace")
 	_book.call(&"follow_stage", stage)
 
 
-## 책자에서 고른 본보기를 종이에 옅게 얹는다 (빈 점열 = 걷는다)
+## 책자에서 본보기를 **집는다** — 마우스에 붙어 따라오다가 종이를 누르면 앉는다 (빈 점열 = 걷는다).
+## 앉은 본보기는 자석이 된다: 그 위를 그으면 획이 끌린다 (StrokeGuide)
 func _on_glyph_picked(stage: int, unit_pts: PackedVector2Array) -> void:
 	if unit_pts.is_empty():
 		_canvas.call(&"clear_trace")
 	else:
 		_canvas.call(&"show_trace", stage, unit_pts)
+
+
+## 본보기를 들었나/놓았나/걷었나 — 지금 뭘 할 수 있는지 말해 준다.
+## 새 조작(휠 = 크기)을 아무도 안 알려 주면 **크기가 세기라는 걸 영영 모른다**
+func _on_trace_changed(active: bool) -> void:
+	if not active:
+		_set_say(Copy.CONTROLS, false)
+		return
+	_set_say(Copy.TRACE_HELD if _canvas.call(&"is_holding_trace") else Copy.TRACE_PLACED, false)
 
 
 func _on_stroke_rejected(reason: StringName) -> void:
@@ -293,6 +302,7 @@ func _build() -> void:
 	_canvas.connect(&"completion_blocked", _on_completion_blocked)
 	_canvas.connect(&"design_completed", _on_design_completed)
 	_canvas.connect(&"ink_state_changed", _on_ink_changed)
+	_canvas.connect(&"trace_changed", _on_trace_changed)
 
 	_ink_bar = Control.new()
 	_ink_bar.position = INK_BAR_RECT.position
