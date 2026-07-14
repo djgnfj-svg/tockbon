@@ -53,14 +53,24 @@ func _run() -> void:
 func _test_builder(balance: BalanceData, papers: Dictionary) -> void:
 	var builder: GDScript = load("res://src/drawing/design_builder.gd")
 	var base_dura: int = SpellDesign.new().durability_max
-	# 마나 = 룬 + 진 규모 + 발수 (v1.6, TECH_SPEC §4.0). _builder_parts의 진 반지름 0.2 → circle_radius 0.4
+	# 마나 = 룬 + 진 규모 + **룬 농도** + 발수 (v1.7, TECH_SPEC §4.0).
+	# _builder_parts의 진 반지름 0.2 → circle_radius 0.4.
+	# 룬 획 = (0.4,0.4)→(0.6,0.6) 직선 (길이 0.2√2). 룬 반경 = **무게중심→최원점** = 0.1√2 = 0.1414
+	# → rune_fill = 0.1414 / 0.2 = **0.7071**.
+	# ⚠ 이 획은 **45도로 기울어져 있다** — 옛 AABB 정의는 여기서 0.5를 내놨다(긴 변 0.2 / 2 / 0.2).
+	# 기울었다는 이유만으로 농도의 29%가 증발한 것이다. 회전 불변 정의가 그걸 고쳤다
+	# (metric 자체의 검증은 test_drawing_fill_auto §1 소관 — 여기는 **종이 감면**이 관심사다)
+	var rune_fill_expect: float = (Vector2(0.2, 0.2).length() * 0.5) / 0.2
 	var mana_raw: float = balance.rune_mana_base[Enums.RuneType.WATER] \
 		+ balance.circle_mana_mult * (0.2 / 0.5) \
+		+ balance.rune_density_mana_mult * rune_fill_expect \
 		+ balance.mana_per_arrow * 2.0
 	for g: int in [1, 2, 3]:
 		var def: ItemDef = papers[g]
 		var d: SpellDesign = builder.build(_builder_parts(), balance, null, def.grade, def.params)
 		var discount := float(def.params.get("mana_discount", 0.0))
+		_check(is_equal_approx(d.rune_fill, rune_fill_expect),
+			"등급 %d rune_fill = 외접반경 0.1414 / 진반지름 0.2 = %.4f" % [g, rune_fill_expect])
 		_check(is_equal_approx(d.mana_cost, mana_raw * (1.0 - discount)),
 			"등급 %d 마나 감면 %.0f%%" % [g, discount * 100.0])
 		_check(d.durability_max == base_dura + int(def.params.get("durability_bonus", 0)),
@@ -166,10 +176,11 @@ func _test_canvas(gs: Node, bus: Node, balance: BalanceData, papers: Dictionary)
 	var d: SpellDesign = canvas.get_design()
 	_check(d != null and d.paper_grade == p2.grade, "캔버스 경유 paper_grade 기록")
 	if d != null:
-		# 진 규모 축 포함 (v1.6) — 캔버스가 실제 인식한 진 크기를 그대로 기준으로 삼는다
+		# 진 규모(v1.6) + 룬 농도(v1.7) 축 포함 — 캔버스가 실제 인식한 진·룬 크기를 그대로 기준으로 삼는다
 		var expect_mana: float = (
 			balance.rune_mana_base[Enums.RuneType.FIRE]
 			+ balance.circle_mana_mult * d.circle_radius
+			+ balance.rune_density_mana_mult * d.rune_fill
 			+ balance.mana_per_arrow
 		) * (1.0 - float(p2.params.mana_discount))
 		_check(is_equal_approx(d.mana_cost, expect_mana), "캔버스 경유 마나 감면")

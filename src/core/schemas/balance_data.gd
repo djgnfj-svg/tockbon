@@ -25,17 +25,32 @@ extends Resource
 ## v1.6: magnitude는 **전투 스탯에서 분리됐다** — 기록만 남는다 (문양 종류 도입 시 재사용)
 @export var arrow_full_length: float = 0.45
 ## 획 길이(정규)당 잉크 소모
+## 먹의 양(길이 × 굵기) → 잉크 단위. **잉크는 통에서 나온 양이다** (v1.8, GDD §4.4).
+## 이 계수 하나가 종이 상한 판정과 제작 비용 **양쪽에 같은 값**으로 쓰인다 — 할증은 없다
 @export var ink_per_stroke_length: float = 10.0
-## 인식 정확도 위력 보정 하한 (GDD §4.4)
+## 인식 정확도 보정 하한 (GDD §4.4). v1.7: 위력이 아니라 **속성 순도**의 하한이다
 @export var accuracy_floor: float = 0.6
-## 조준진 잉크 가산 배율 (GDD §4.1 — 조준 편의는 공짜가 아니게)
+## 룬 농도 → 마나 가산 (v1.7, TECH_SPEC §4.0). 진과 같은 이유로 시전 비용에 붙는다 —
+## 안 물리면 "룬은 언제나 최대한 크게"가 유일한 정답이 된다
+@export var rune_density_mana_mult: float = 4.0
+# ── ⚠ 아래 둘은 **폐기됐다** (v1.8). 스키마에만 남아 있고 **아무도 읽지 않는다** ──
+# 잉크는 통에서 나온 양이므로 **할증을 붙이지 않는다** (GDD §4.4·§5).
+# 큰 진은 둘레가 길어서 **이미** 잉크를 더 먹는다 — 할증은 **이중 과금**이었다.
+# 새 코드에서 이 값을 읽지 말 것. (구세이브 .tres 호환을 위해 필드만 남긴다)
+## ⚠ 폐기 — 미사용 (v1.5 조준진 폐지로 가산할 대상이 없어짐)
 @export var aimed_circle_ink_mult: float = 1.15
-## 원 반지름 → 잉크 계수
+## ⚠ 폐기 — 진 크기 잉크 할증 (v1.8에서 이중 과금으로 판명, 제거됨)
 @export var circle_radius_ink_mult: float = 2.0
 
 @export_group("전투")
 @export var projectile_base_speed: float = 260.0
-@export var projectile_base_damage: float = 10.0
+## v1.7: 10.0 → 9.0. 위력에서 rune_accuracy(0.6~1.0) 곱을 떼면서(TECH_SPEC §4.0 축 분리)
+## 곱하던 값이 사라져 위력이 통째로 올라갔다 — 잘 그린 도안 +11%, 막 그린 도안 **+67%**.
+## 축 분리는 의도했지만 **위력 인플레는 의도한 적 없다.** 기준을 0.9배 낮춰
+## **잘 그린 도안(accuracy≈0.9)의 위력을 v1.6과 같게** 되돌린다.
+## 부수 효과: 이제 막 그린 도안도 같은 위력이 나온다 — 그게 축 분리의 요지다
+## (엉망으로 그린 대가는 위력이 아니라 **속성 순도**로 치른다)
+@export var projectile_base_damage: float = 9.0
 @export var player_move_speed: float = 120.0
 @export var dash_speed: float = 300.0
 @export var dash_duration_sec: float = 0.18
@@ -58,6 +73,15 @@ extends Resource
 @export var circle_range_max: float = 1.4
 ## circle_radius(정규) → 월드 px 발사 오프셋 스케일
 @export var circle_radius_px: float = 48.0
+
+# ── 룬 = 속성 농도 축 (v1.7, TECH_SPEC §4.0) — 상태이상 세기를 룬 크기가 정한다 ──
+# 상태이상 세기 = RuneDef.status_power × lerp(density_min, density_max, rune_fill) × rune_accuracy.
+# rune_fill = 룬 bbox 반경 ÷ 진 반지름. 인식기가 "룬은 진 안"으로 가르므로 자연히 0..1이다.
+# **위력에는 절대 물리지 않는다** — 그건 진의 축이다 (축 위반 방지).
+## 진 구석에 작게 그린 룬 = 옅게 스친다
+@export var rune_density_min: float = 0.5
+## 진을 꽉 채운 룬 = 깊이 물든다
+@export var rune_density_max: float = 1.8
 
 @export_group("경제")
 ## 수리비 = 원본 ink_cost 대비 비율

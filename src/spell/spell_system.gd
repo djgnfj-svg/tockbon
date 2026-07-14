@@ -2,8 +2,9 @@ extends Node2D
 ## 스펠 발사 시스템 — 모듈 B. 필드 씬에 자식으로 넣기만 하면 되는 자립 노드.
 ## EventBus.cast_requested 수신 → 내구·마나 검사 → SpellDesign.arrows를 투사체로 컴파일.
 ##
-## **역할 축 (v1.6, TECH_SPEC §4.0)**: 진 = 규모(위력·크기·사거리) / 룬 = 속성 / 문양 = 방식.
-## 그래서 한 도안의 모든 탄은 **위력·크기·사거리가 같고**, 문양마다 다른 건 방향·기점뿐이다.
+## **역할 축 (v1.7, TECH_SPEC §4.0)**: 진 = 규모(위력·크기·사거리) / 룬 = 속성+농도(상태이상 종류·세기)
+## / 문양 = 방식(방향·기점·발수). 그래서 한 도안의 모든 탄은 **위력·크기·사거리·상태이상이 같고**,
+## 문양마다 다른 건 방향·기점뿐이다.
 ## 문양 길이(ArrowData.magnitude)는 전투 스탯에 **쓰지 않는다** — 소비 금지.
 ##
 ## 진 규칙 (GDD §4.1): AIMED=도안 전체가 에임 방향으로 회전 (발사각 = direction + (에임 − aim_axis)).
@@ -41,14 +42,28 @@ func _on_cast_requested(design: SpellDesign, origin: Vector2, aim_dir: Vector2) 
 	design.durability -= 1
 	EventBus.cast_executed.emit(design, design.mana_cost)
 
-## 위력 = 기본 위력 × **진 규모** × 정확도 보정(하한 accuracy_floor) × 룬 계수 (TECH_SPEC §4.0).
+## 위력 = 기본 위력 × **진 규모** × 룬 계수 (TECH_SPEC §4.0).
 ## v1.6: 규모는 진이 정한다 — 문양 길이(magnitude)는 위력에 물리지 않는다.
+## v1.7: **rune_accuracy를 위력에서 뺐다** (축 위반 해소) — 위력은 진의 축이고,
+## accuracy는 속성 순도로 옮겨 갔다 (compute_status_power). 룬이 위력을 흔들면 진이 의미를 잃는다.
 ## 도안 하나에서 나가는 모든 탄이 같은 위력이다 (문양은 방식만 정하므로).
 func compute_damage(design: SpellDesign, rune: RuneDef) -> float:
 	var rune_coef := rune.base_damage if rune != null else 1.0
-	var accuracy := maxf(design.rune_accuracy, balance.accuracy_floor)
 	return balance.projectile_base_damage * (balance.circle_damage_base + design.circle_radius) \
-		* accuracy * rune_coef
+		* rune_coef
+
+
+## 상태이상 세기 — **룬의 농도 축** (v1.7, TECH_SPEC §4.0).
+## 세기 = RuneDef.status_power × 농도(rune_fill) × 순도(rune_accuracy, 하한 accuracy_floor).
+## 진을 꽉 채운 룬은 깊이 물들고, 구석에 작게 그린 룬은 옅게 스친다. 위력은 건드리지 않는다.
+## 규모와 마찬가지로 도안당 하나의 값 — 문양은 방식만 정하므로 탄마다 다르지 않다.
+func compute_status_power(design: SpellDesign, rune: RuneDef) -> float:
+	if rune == null:
+		return 0.0
+	var density := lerpf(balance.rune_density_min, balance.rune_density_max,
+		clampf(design.rune_fill, 0.0, 1.0))
+	var accuracy := maxf(design.rune_accuracy, balance.accuracy_floor)
+	return rune.status_power * density * accuracy
 
 
 ## 투사체 크기 배율 — 진 규모 축 (TECH_SPEC §4.0)
@@ -77,10 +92,11 @@ func _spawn_projectiles(design: SpellDesign, origin: Vector2, aim_dir: Vector2) 
 	if rune != null and rune.projectile_scene != null:
 		scene = rune.projectile_scene
 
-	# 규모는 진이 정하므로 도안당 한 번만 계산한다 — 문양마다 다르지 않다 (TECH_SPEC §4.0)
+	# 규모(진)·농도(룬)는 도안당 한 번만 계산한다 — 문양마다 다르지 않다 (TECH_SPEC §4.0)
 	var damage := compute_damage(design, rune)
 	var size_scale := compute_size_scale(design)
 	var lifetime := compute_lifetime(design)
+	var status_power := compute_status_power(design, rune)
 
 	for arrow: ArrowData in design.arrows:
 		var world_angle := arrow.direction + rotate_by
@@ -95,7 +111,7 @@ func _spawn_projectiles(design: SpellDesign, origin: Vector2, aim_dir: Vector2) 
 			damage,
 			design.rune_type,
 			rune.status if rune != null else Enums.Status.NONE,
-			rune.status_power if rune != null else 0.0,
+			status_power,
 			balance.projectile_base_speed,
 			world_angle,
 			size_scale,

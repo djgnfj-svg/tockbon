@@ -35,6 +35,8 @@ func _run() -> void:
 	gs.codex[&"rune_water"] = true
 	gs.designs = SampleDesigns.all()
 	gs.designs[0].durability = 7
+	# v1.7 룬 농도 축 (TECH_SPEC §4.0) — 기본값(0.5)과 다른 값을 심어야 라운드트립이 실제로 검증된다
+	gs.designs[0].rune_fill = 0.82
 	gs.equip(0, gs.designs[0])
 	gs.equip(2, gs.designs[2])
 	gs.mana = 42.0
@@ -64,6 +66,8 @@ func _run() -> void:
 	_check("복원: 도안 3종", gs.designs.size() == 3)
 	_check("복원: 도안 내구 7 (라운드트립)", gs.designs.size() == 3 and gs.designs[0].durability == 7)
 	_check("복원: 도안 화살표 보존", gs.designs.size() == 3 and gs.designs[0].arrows.size() == 8)
+	_check("복원: 룬 농도 0.82 (v1.7 라운드트립)",
+		gs.designs.size() == 3 and is_equal_approx(gs.designs[0].rune_fill, 0.82))
 	_check("복원: 장착 0·2 매핑", gs.equipped[0] == gs.designs[0] and gs.equipped[2] == gs.designs[2] and gs.equipped[1] == null)
 	_check("복원: 마나 42", is_equal_approx(gs.mana, 42.0))
 	_check("복원: Day 3 · 123초", clock.day == 3 and is_equal_approx(clock.time_sec, 123.0))

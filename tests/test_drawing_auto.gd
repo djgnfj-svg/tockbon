@@ -667,11 +667,15 @@ func _test_synth_pressure_canvas() -> void:
 	var stroke: StrokeData = canvas._entries[0].stroke
 	_check(stroke.pressures.size() == stroke.points.size(), "필압 개수 == 점 개수")
 
-	# 잉크 중립 — 평균이 정확히 1.0 (밸런스 무변경의 증거)
+	# 합성 필압은 평균 1.0으로 정규화된다 — **계통적 잉크 인플레를 막는 장치** (세션 7)
 	var mean := _mean(stroke.pressures)
 	_check(absf(mean - 1.0) < 1e-3, "합성 필압 평균 == 1.0 (got %.5f)" % mean)
 
-	# 같은 획을 상수 1.0 필압으로 뒀을 때와 잉크 소모가 같다 — 직접 비교
+	# ⚠ v1.8: **"필압은 잉크에 중립"은 더 이상 목표가 아니다.**
+	# 잉크는 **통에서 나온 양**이고(GDD §4.4), 꾹 눌러 굵게 그으면 실제로 더 쓴다.
+	# v1.7까지의 "상수 1.0과 정확히 동일" 보장은 **평균으로 뭉갠 데서 나온 착시**였다 —
+	# 구간별로 적분하면 **어디서 눌렀는지**가 반영되므로 정확히 같을 수 없다.
+	# 여기서 지킬 것은 '동일'이 아니라 **'계통적으로 부풀지 않는다'**이다 (평균 1.0 정규화의 목적).
 	var flat := StrokeData.new()
 	flat.points = stroke.points
 	var ones := PackedFloat32Array()
@@ -680,8 +684,10 @@ func _test_synth_pressure_canvas() -> void:
 	flat.pressures = ones
 	var ink_synth := DesignBuilder.stroke_ink_units(stroke, balance)
 	var ink_flat := DesignBuilder.stroke_ink_units(flat, balance)
-	_check(absf(ink_synth - ink_flat) < 1e-3,
-		"잉크 소모 == 상수 1.0일 때와 동일 (%.5f vs %.5f)" % [ink_synth, ink_flat])
+	var drift := absf(ink_synth - ink_flat) / maxf(ink_flat, 1e-6)
+	_check(drift < 0.05,
+		"필압 합성이 잉크를 계통적으로 부풀리지 않는다 (편차 %.2f%% < 5%%: %.3f vs %.3f)" % [
+			drift * 100.0, ink_synth, ink_flat])
 
 	# 머문 자리가 실제로 굵다 — 정규화 후에도 앞쪽(머문 구간)이 뒤쪽(그은 구간)보다 두껍다
 	_check(stroke.pressures[0] > stroke.pressures[stroke.pressures.size() - 1],
@@ -1162,24 +1168,46 @@ func _test_builder_edges() -> void:
 	_check(is_equal_approx(d.arrows[0].magnitude, 1.0), "초과 길이 → magnitude 1.0 클램프")
 	# origin은 진 반지름=1.0 정규화 (TECH_SPEC §4): 시작점 0.1, 반지름 0.2 → (0.5, 0)
 	_check(d.arrows[1].origin.distance_to(Vector2(0.5, 0.0)) < 0.01, "origin 반지름 정규화")
-	# 마나 = 룬 기본 + **진 규모** + 발수 (v1.6, TECH_SPEC §4.0 — 진이 위력·크기·사거리를 주므로
-	# 시전 비용에도 진 축이 붙는다)
+	# 마나 = 룬 기본 + **진 규모** + **룬 농도** + 발수 (v1.7, TECH_SPEC §4.0 — 진이 위력·크기·사거리를,
+	# 룬 농도가 상태이상 세기를 주므로 시전 비용에도 두 축이 붙는다)
 	var expected_mana: float = balance.rune_mana_base[Enums.RuneType.WATER] \
 		+ balance.circle_mana_mult * d.circle_radius \
+		+ balance.rune_density_mana_mult * d.rune_fill \
 		+ balance.mana_per_arrow * 2.0
-	_check(is_equal_approx(d.mana_cost, expected_mana), "마나 = 룬 기본 + 진 규모 + 발수")
+	_check(is_equal_approx(d.mana_cost, expected_mana), "마나 = 룬 기본 + 진 규모 + 룬 농도 + 발수")
 	_check(balance.circle_mana_mult > 0.0,
 		"balance.circle_mana_mult > 0 — 위 검사가 진 축의 존재를 실제로 구별한다")
+	_check(balance.rune_density_mana_mult > 0.0 and d.rune_fill > 0.0,
+		"rune_density_mana_mult > 0 且 rune_fill > 0 — 위 검사가 농도 축을 실제로 구별한다")
 
-	# 조준진 잉크 가산은 폐지됐다 (v1.6) — 조준이 기본이라 가산할 대상이 없다.
-	# 잉크 = 획 길이 × 계수 × (1 + 원 크기 가산)만으로 정확히 설명된다
-	var total_len := 0.0
+	# 잉크 = **통에서 나온 양**뿐이다 (v1.8, GDD §4.4). 가산·할증이 하나도 안 붙는다:
+	# 조준진 가산(v1.6 폐지)도, 진 크기 할증(v1.8 폐지 — 이중 과금)도 없다.
+	# 큰 진은 **둘레가 길어서** 이미 잉크를 더 먹으므로 할증이 필요 없었다
+	var total_ink := 0.0
 	for s: StrokeData in [circle_stroke, rune_stroke, arrow_stroke, arrow_stroke2]:
-		total_len += Recognizer.path_length(s.points)
-	var expected_ink := balance.ink_per_stroke_length * total_len
-	expected_ink *= 1.0 + balance.circle_radius_ink_mult * d.circle_radius
-	_check(int(d.ink_cost.get(&"ink_basic", 0)) == maxi(1, ceili(expected_ink)),
-		"잉크에 조준 가산이 붙지 않는다 (got %d, expected %d)" % [
-			int(d.ink_cost.get(&"ink_basic", 0)), maxi(1, ceili(expected_ink))])
-	_check(balance.aimed_circle_ink_mult > 1.0,
-		"balance.aimed_circle_ink_mult는 1보다 크다 — 위 검사가 '가산 없음'을 실제로 구별한다")
+		total_ink += DesignBuilder.stroke_ink_units(s, balance)
+	_check(int(d.ink_cost.get(&"ink_basic", 0)) == maxi(1, ceili(total_ink)),
+		"잉크 = Σ(획이 올린 먹의 양). 할증 없음 (got %d, expected %d)" % [
+			int(d.ink_cost.get(&"ink_basic", 0)), maxi(1, ceili(total_ink))])
+	# 🔴 위 검사가 진짜로 '할증 없음'을 구별하는가 — 폐기된 계수들이 1이 아님을 확인해 둔다.
+	# (둘 중 하나라도 다시 곱해지면 위 등식이 즉시 깨진다)
+	_check(balance.aimed_circle_ink_mult > 1.0 and balance.circle_radius_ink_mult > 0.0,
+		"폐기 계수가 여전히 0/1이 아니다 — 위 검사가 '할증 없음'을 실제로 구별한다")
+	# 위 등식의 좌변은 ink_cost(제작 비용), 우변은 stroke_ink_units(종이 상한 판정 기준)이다.
+	# 즉 **둘이 같은 값에서 나온다**는 것까지 위 한 줄이 못 박는다 (v1.8: 잉크는 숫자 하나)
+
+	# 🔴 필압은 **구간별**로 먹힌다 — 평균으로 뭉개지 않는다 (v1.8).
+	# 같은 경로·같은 평균 필압이라도 **어디서 눌렀는지**가 다르면 나온 먹의 양이 다르다
+	var flat := StrokeData.new()
+	flat.points = _gen_line(Vector2(0.2, 0.5), Vector2(0.8, 0.5), 9)
+	flat.pressures = PackedFloat32Array([0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6])
+	var heavy_end := StrokeData.new()
+	heavy_end.points = flat.points
+	# 평균은 같지만(0.6) 굵은 구간이 **뒤쪽에 몰려 있다**
+	heavy_end.pressures = PackedFloat32Array([0.2, 0.2, 0.2, 0.2, 0.2, 1.0, 1.0, 1.0, 1.0])
+	var ink_flat := DesignBuilder.stroke_ink_units(flat, balance)
+	var ink_heavy := DesignBuilder.stroke_ink_units(heavy_end, balance)
+	_check(ink_flat > 0.0 and ink_heavy > 0.0, "필압 획 잉크량 > 0")
+	_check(absf(ink_flat - ink_heavy) > 0.01,
+		"같은 평균 필압이라도 **눌린 위치**가 다르면 먹의 양이 다르다 (평활 %.2f vs 뒤쪽 %.2f)" % [
+			ink_flat, ink_heavy])

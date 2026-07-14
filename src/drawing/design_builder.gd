@@ -1,7 +1,10 @@
 extends RefCounted
 ## 인식 결과 → SpellDesign 조립 + 비용 계산 (GDD §4.4, §5 비용 축 분리).
-## 잉크 = 그린 총량(길이×필압) + 진 크기 가산 / 마나 = 룬 + **진 규모** + 발수 축 (v1.6).
-## 역할 축 (TECH_SPEC §4.0): 진 = 규모 / 룬 = 속성 / 문양 = 방식.
+## 잉크 = 그린 총량(길이×필압) + 진 크기 가산 / 마나 = 룬 + **진 규모** + **룬 농도** + 발수 축 (v1.7).
+## 역할 축 (TECH_SPEC §4.0): 진 = 규모 / 룬 = **속성 + 농도** / 문양 = 방식.
+## v1.7: 룬에 농도 축(`rune_fill` — 룬이 진을 얼마나 채우는가)이 붙었다. $1 인식기가 크기를
+## 정규화해 버리는 탓에 룬을 크게 그리든 작게 그리든 결과가 같았고, 룬 그리기가 4지선다에
+## 불과했다. 이제 진을 꽉 채운 룬은 깊이 물들고(상태이상 세기 ↑) 구석에 작게 그린 룬은 옅게 스친다.
 ## 종이 등급(paper_params)은 호출자가 ItemDef.params를 직접 넘긴다 — Db 없이도 테스트 가능.
 ## 사용: const DesignBuilder := preload("res://src/drawing/design_builder.gd")
 
@@ -101,14 +104,19 @@ static func build(parts: Dictionary, balance: BalanceData, into: SpellDesign = n
 	d.circle_type = Enums.CircleType.AIMED
 	d.aim_axis = UP_AXIS
 	var circle: Dictionary = parts.circle
+	var radius_cu := maxf(float(circle.radius), 1e-6)  # 캔버스 단위 원 반지름
 	# 스키마의 circle_radius(0..1)는 "캔버스를 꽉 채우는 원(반지름 0.5) = 1.0" 기준
 	d.circle_radius = clampf(float(circle.radius) / 0.5, 0.0, 1.0)
 	d.rune_type = parts.rune.type
 	d.rune_accuracy = clampf(
 		maxf(float(parts.rune.accuracy_raw), balance.accuracy_floor), 0.0, 1.0)
+	# v1.7 농도 축 — 룬이 진을 얼마나 채우는가. **진 대비 비율**이라 진을 키우면 같은 룬도 옅어진다.
+	# 획이 없는 도안(샘플·구세이브)은 스키마 기본값(중간 농도)을 그대로 둔다
+	var rune_stroke := parts.rune.get("stroke") as StrokeData
+	if rune_stroke != null and rune_stroke.points.size() >= 2:
+		d.rune_fill = rune_fill_of(rune_stroke, radius_cu)
 
 	var arrows: Array[ArrowData] = []
-	var radius_cu := maxf(float(circle.radius), 1e-6)  # 캔버스 단위 원 반지름
 	for a: Dictionary in parts.arrows:
 		var ad := ArrowData.new()
 		# **캔버스 절대각 그대로 저장한다.** 원본 획(strokes)·발사 기점(origin)도 전부 캔버스
@@ -134,18 +142,22 @@ static func build(parts: Dictionary, balance: BalanceData, into: SpellDesign = n
 	strokes.assign(parts.strokes_ordered)
 	d.strokes = strokes
 
-	# 잉크: 총 획 길이(×필압) 비례 + 원 크기 가산 (GDD §4.1, §4.4).
-	# 조준진 가산은 없다 — 조준이 기본이 됐으니 가산할 대상이 없다 (balance.aimed_circle_ink_mult 미사용)
-	var total_len := 0.0
+	# 잉크 = **통에서 실제로 나온 양** (v1.8, GDD §4.4 — 사용자 확정).
+	# "획"이라는 추상 단위가 아니라 종이에 올라간 먹의 양이다: 지나간 거리 × 그 지점의 붓 굵기.
+	# **가산·할증을 붙이지 않는다.** v1.7까지 있던 진 크기 가산(최대 3배)은 **이중 과금**이었다 —
+	# 큰 진은 둘레가 길어서 **이미** 잉크를 더 먹는다 (반지름 2배 → 둘레 2배 → 잉크 2배).
+	# 그래서 잉크는 **숫자 하나**다: 여기서 쓰는 값과 종이 상한(stroke_ink_units)이 같은 값이다.
+	# v1.7까지는 둘이 달랐다 (상한은 물리량, 비용은 할증 붙은 값) — 같은 이름의 두 숫자였다
+	var ink := 0.0
 	for s: StrokeData in strokes:
-		total_len += _ink_length(s)
-	var ink := balance.ink_per_stroke_length * total_len
-	ink *= 1.0 + balance.circle_radius_ink_mult * d.circle_radius
+		ink += stroke_ink_units(s, balance)
 	d.ink_cost = {INK_ID: maxi(1, ceili(ink))}
 
-	# 마나 = 룬 + **진 규모** + 발수 축 × 종이 감면 (v1.6, GDD §5 갱신).
+	# 마나 = 룬 속성 + **진 규모** + **룬 농도** + 발수 축 × 종이 감면 (v1.7, GDD §5 갱신).
 	# 진이 위력·크기·사거리를 전부 주므로(TECH_SPEC §4.0) 시전 비용에도 진 축이 붙는다 —
-	# 잉크만 물리면 큰 진이 일방적으로 우월해진다. 삼중 처벌은 아니다: 진은 제작 1회·시전 1회
+	# 잉크만 물리면 큰 진이 일방적으로 우월해진다. 삼중 처벌은 아니다: 진은 제작 1회·시전 1회.
+	# 농도(rune_fill)도 같은 논리다: 공짜면 "룬은 언제나 최대한 크게"가 유일한 정답이 된다.
+	# 잉크(제작)는 이미 그린 총량으로 물고 있으니 마나(시전)에도 물린다
 	var rune_idx := int(d.rune_type)
 	var mana_base := 8.0
 	if rune_idx >= 0 and rune_idx < balance.rune_mana_base.size():
@@ -154,6 +166,7 @@ static func build(parts: Dictionary, balance: BalanceData, into: SpellDesign = n
 	d.mana_cost = (
 		mana_base
 		+ balance.circle_mana_mult * d.circle_radius
+		+ balance.rune_density_mana_mult * d.rune_fill
 		+ balance.mana_per_arrow * float(arrows.size())
 	) * (1.0 - discount)
 
@@ -186,22 +199,61 @@ static func _arrow_path(stroke: StrokeData) -> PackedVector2Array:
 	return Recognizer.resample(local, ARROW_PATH_POINTS)
 
 
+## 룬 농도 (v1.7, TECH_SPEC §4.0) — 룬이 진을 얼마나 채우는가. 0..1.
+## 룬 반경 = **획 무게중심에서 가장 먼 점까지의 거리** (외접 반경).
+##
+## **반드시 회전 불변이어야 한다.** $1 인식기는 회전 불변이라 룬을 돌려 그려도 같은 룬으로
+## 인식된다 — 그런데 농도가 회전에 따라 흔들리면 **같은 룬인데 세기만 조용히 달라진다.**
+## 플레이어는 이유를 알 수 없고, 알아도 "룬을 축에 맞춰 그리기"라는 숨은 최적 플레이가 생긴다.
+##
+## 그래서 축 정렬 bbox(AABB)는 **못 쓴다** — AABB는 회전하면 변한다. 실측: 물~처럼 가늘고 긴
+## 획을 45도로 눕히면 긴 변이 L → L/√2로 줄어 **농도가 0.80 → 0.57로 29% 증발했다**.
+## 무게중심 최대거리는 회전해도 그대로다. 가늘고 긴 획도 과대평가하지 않는다(길이 L → 반경 L/2,
+## AABB 긴 변과 같은 값) — AABB의 장점은 전부 가져가면서 회전 결함만 없앤다.
+##
+## 인식기가 "룬은 진 안에 머문다"로 가르므로(recognizer ARROW_ESCAPE_R) 비율은 자연히 0..1에
+## 갇힌다 — 인위적 밴드·리맵 없이 clamp만 한다.
+static func rune_fill_of(rune_stroke: StrokeData, circle_radius_cu: float) -> float:
+	if rune_stroke == null or rune_stroke.points.size() < 2 or circle_radius_cu <= 1e-6:
+		return 0.0
+	var centroid := Vector2.ZERO
+	for p: Vector2 in rune_stroke.points:
+		centroid += p
+	centroid /= float(rune_stroke.points.size())
+	var rune_radius := 0.0
+	for p: Vector2 in rune_stroke.points:
+		rune_radius = maxf(rune_radius, centroid.distance_to(p))
+	return clampf(rune_radius / circle_radius_cu, 0.0, 1.0)
+
+
 static func rune_name(rune_type: int) -> String:
 	return RUNE_NAMES.get(rune_type, "?")
 
 
-## 획 하나의 잉크 게이지 사용량 — 종이 ink_capacity 상한 판정 기준 (TECH_SPEC §4.1).
-## 원 크기·조준진 가산은 경제 비용(ink_cost)에만 붙고, 종이 위 물리 잉크량에는 넣지 않는다.
+## 획 하나가 종이에 올린 **먹의 양** (v1.8, GDD §4.4 — 사용자 확정).
+## **이 값 하나가 종이 상한 판정에도, 제작 비용(ink_cost)에도 그대로 쓰인다** —
+## v1.7까지는 비용에만 진 크기 할증이 따로 붙어 **같은 이름의 두 숫자**가 돌아다녔다.
 static func stroke_ink_units(s: StrokeData, balance: BalanceData) -> float:
-	return _ink_length(s) * balance.ink_per_stroke_length
+	return _ink_amount(s) * balance.ink_per_stroke_length
 
 
-## 획 잉크량 = 경로 길이 × 평균 필압 (잉크 = Σ 길이×폭, TECH_SPEC §6)
-static func _ink_length(s: StrokeData) -> float:
-	var plen := Recognizer.path_length(s.points)
-	if s.pressures.is_empty():
-		return plen
-	var sum := 0.0
-	for p in s.pressures:
-		sum += p
-	return plen * clampf(sum / float(s.pressures.size()), 0.15, 1.5)
+## 통에서 나온 먹의 양 = **∫ 굵기 ds** — 구간 길이 × 그 구간의 붓 굵기를 전부 더한다.
+##
+## **평균 필압 × 전체 길이로 뭉개지 않는다** (v1.7까지 그랬다). 필압은 획 안에서 변한다 —
+## 머물면 굵어지는 누적형이라(drawing_canvas.synth_pressure_step) 한 획에서도 앞은 가늘고 뒤는 굵다.
+## 평균으로 뭉개면 "어디서 눌렀는지"가 사라져 **실제로 나온 양이 아니게 된다.**
+## 필압 없는 획(스탬프·구세이브)은 굵기 1.0로 본다.
+static func _ink_amount(s: StrokeData) -> float:
+	var pts := s.points
+	if pts.size() < 2:
+		return 0.0
+	var has_p := s.pressures.size() == pts.size()
+	var total := 0.0
+	for i in range(1, pts.size()):
+		var seg := pts[i - 1].distance_to(pts[i])
+		var w := 1.0
+		if has_p:
+			# 구간의 굵기 = 양 끝 필압의 평균 (사다리꼴 적분)
+			w = clampf((s.pressures[i - 1] + s.pressures[i]) * 0.5, 0.15, 1.5)
+		total += seg * w
+	return total

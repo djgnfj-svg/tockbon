@@ -68,6 +68,7 @@ func _run() -> void:
 	await _test_cast_circle(system)
 	await _test_no_strokes_fallback(system)
 	await _test_role_axes(system)
+	await _test_rune_density_axis(system)
 
 	if failures == 0:
 		print("TEST_SPELL_OK — 전 항목 통과")
@@ -155,14 +156,17 @@ func _test_lance(system) -> void:
 		var rune = _db.get_rune(Enums.RuneType.WATER)
 		_check(rune != null, "Db에 물 룬 등록됨")
 		var rune_coef: float = rune.base_damage if rune != null else 1.0
-		# 위력 = 기본 × (circle_damage_base + 진 크기) × 정확도 × 룬 계수 — magnitude 무관
+		# v1.7 위력 = 기본 × (circle_damage_base + 진 크기) × 룬 계수 — magnitude·accuracy 무관
 		var expected: float = system.balance.projectile_base_damage \
 			* (float(system.balance.circle_damage_base) + design.circle_radius) \
-			* maxf(design.rune_accuracy, system.balance.accuracy_floor) \
 			* rune_coef
 		_check(is_equal_approx(float(projs[0].damage), expected),
 			"위력 %.2f = 기대 %.2f (진 %.2f 기준)" % [projs[0].damage, expected, design.circle_radius])
 		_check(int(projs[0].status) == Enums.Status.WET, "status=WET 전달")
+		_check(is_equal_approx(float(projs[0].status_power),
+				_expected_status_power(system, design, rune)),
+			"상태이상 세기 %.3f = 기대 %.3f (룬 농도 축)"
+				% [projs[0].status_power, _expected_status_power(system, design, rune)])
 	await _clear_projectiles(system)
 
 func _test_fail_reasons(system) -> void:
@@ -383,7 +387,107 @@ func _test_role_axes(system) -> void:
 		_check(same, "노바 %d발 전부 같은 위력 (규모는 진이 정하므로)" % np2.size())
 	await _clear_projectiles(system)
 
+## 룬 = 속성 + **농도** 축 (v1.7, TECH_SPEC §4.0).
+## 룬 크기(rune_fill)는 상태이상 **세기**만 정하고 위력은 절대 못 건드린다 — 위력은 진의 축이다.
+## 인식 정확도(rune_accuracy)도 v1.7에서 위력에서 떨어져 나와 **속성 순도**가 됐다.
+## 세션 7 교훈대로 중간 표현이 아니라 **실제 투사체가 들고 나간 damage·status_power**를 실측한다.
+func _test_rune_density_axis(system) -> void:
+	print("[10] 룬 농도 축 — 룬 크기·정확도는 위력을 못 건드리고 상태이상 세기만 정한다")
+	var rune = _db.get_rune(Enums.RuneType.FIRE)
+	_check(rune != null, "Db에 불 룬 등록됨")
+	if rune == null:
+		return
+	var floor_acc: float = system.balance.accuracy_floor
+
+	# 실측 격자 — fill 0.0/0.5/1.0 × accuracy 0.6/1.0
+	var shots := {}
+	for fill: float in [0.0, 0.5, 1.0]:
+		for acc: float in [0.6, 1.0]:
+			var s = await _fire_one(system, fill, acc)
+			shots["%.1f/%.1f" % [fill, acc]] = s
+			_check(int(s["count"]) == 1, "fill %.1f · acc %.1f — 투사체 1개 (실제 %d)"
+				% [fill, acc, s["count"]])
+			print("    fill %.1f · acc %.1f → damage %.2f · status_power %.3f"
+				% [fill, acc, s["damage"], s["status_power"]])
+
+	var lo_acc = shots["0.5/0.6"]
+	var hi_acc = shots["0.5/1.0"]
+	var no_fill = shots["0.0/1.0"]
+	var full_fill = shots["1.0/1.0"]
+
+	# (1) **위력이 rune_accuracy에 전혀 반응하지 않는다** — v1.7 축 위반 해소의 핵심
+	_check(is_equal_approx(float(lo_acc["damage"]), float(hi_acc["damage"])),
+		"위력이 정확도에 무반응 (acc 0.6 → %.2f = acc 1.0 → %.2f)"
+			% [lo_acc["damage"], hi_acc["damage"]])
+
+	# (2) 위력이 rune_fill에도 무반응 — 농도는 위력이 아니다
+	_check(is_equal_approx(float(no_fill["damage"]), float(full_fill["damage"])),
+		"위력이 룬 농도에 무반응 (fill 0.0 → %.2f = fill 1.0 → %.2f)"
+			% [no_fill["damage"], full_fill["damage"]])
+
+	# (3) 실제 투사체 status_power = rune.status_power × 농도(fill) × 순도(acc) — 식 자체를 못 박는다
+	for key: String in shots:
+		var s = shots[key]
+		var expected: float = _expected_status_power(system, s["design"], rune)
+		_check(is_equal_approx(float(s["status_power"]), expected),
+			"fill/acc %s — status_power %.3f = 기대 %.3f" % [key, s["status_power"], expected])
+
+	# (4) 농도는 실제로 세기를 **올린다** — 진 구석의 작은 룬 < 진을 꽉 채운 룬
+	_check(float(no_fill["status_power"]) < float(hi_acc["status_power"])
+			and float(hi_acc["status_power"]) < float(full_fill["status_power"]),
+		"세기가 농도에 따라 단조 증가 (%.3f < %.3f < %.3f)"
+			% [no_fill["status_power"], hi_acc["status_power"], full_fill["status_power"]])
+	# 양 끝은 balance의 density_min/max에 정확히 닿는다 (수치는 balance에서 읽어 만든다)
+	_check(is_equal_approx(float(no_fill["status_power"]),
+			float(rune.status_power) * float(system.balance.rune_density_min)),
+		"fill 0.0 = status_power × rune_density_min")
+	_check(is_equal_approx(float(full_fill["status_power"]),
+			float(rune.status_power) * float(system.balance.rune_density_max)),
+		"fill 1.0 = status_power × rune_density_max")
+
+	# (5) 순도 — 세기는 accuracy에 비례하고, accuracy_floor 하한이 걸린다
+	_check(float(lo_acc["status_power"]) < float(hi_acc["status_power"]),
+		"세기가 정확도에 비례 (acc 0.6 %.3f < acc 1.0 %.3f)"
+			% [lo_acc["status_power"], hi_acc["status_power"]])
+	var sloppy = await _fire_one(system, 0.5, 0.05)   # 하한 아래로 그린 엉망 룬
+	var at_floor = await _fire_one(system, 0.5, floor_acc)
+	_check(is_equal_approx(float(sloppy["status_power"]), float(at_floor["status_power"])),
+		"accuracy_floor(%.2f) 하한 — acc 0.05도 바닥값 유지 (%.3f)"
+			% [floor_acc, sloppy["status_power"]])
+
+	# (6) 상태이상 **종류**는 여전히 룬 종류가 정한다 (농도가 종류를 바꾸지 않는다)
+	_check(int(no_fill["status"]) == int(rune.status)
+			and int(full_fill["status"]) == int(rune.status),
+		"농도와 무관하게 status = 불 룬의 상태이상 (%d)" % int(rune.status))
+
 # ── 헬퍼 ─────────────────────────────────────────────────────
+
+## 룬 농도(fill)·순도(accuracy)만 바꿔 한 발 쏘고, **실제 투사체 노드가 들고 나간 값**을 실측한다.
+func _fire_one(system, rune_fill: float, rune_accuracy: float) -> Dictionary:
+	_gs.restore_mana_full()
+	var d := _ink_design(Enums.CircleType.AIMED, -PI / 2.0, 0.5)
+	d.rune_fill = rune_fill
+	d.rune_accuracy = rune_accuracy
+	_bus.cast_requested.emit(d, Vector2.ZERO, Vector2.RIGHT)
+	var projs := _projectiles(system)
+	var out := {"design": d, "count": projs.size(),
+		"damage": -1.0, "status_power": -1.0, "status": -1}
+	if projs.size() == 1:
+		out["damage"] = float(projs[0].damage)
+		out["status_power"] = float(projs[0].status_power)
+		out["status"] = int(projs[0].status)
+	await _clear_projectiles(system)
+	return out
+
+## 기대 상태이상 세기 — 수치는 전부 balance.tres에서 읽는다 (테스트에도 하드코딩 금지)
+func _expected_status_power(system, design: SpellDesign, rune) -> float:
+	if rune == null:
+		return 0.0
+	var density: float = lerpf(float(system.balance.rune_density_min),
+		float(system.balance.rune_density_max), clampf(design.rune_fill, 0.0, 1.0))
+	var accuracy: float = maxf(design.rune_accuracy, float(system.balance.accuracy_floor))
+	return float(rune.status_power) * density * accuracy
+
 
 ## 모듈 A가 실제로 만드는 형태의 도안 — strokes(원본 획) + arrows[].path·path_pressures
 ## with_pressures=false → 마우스로 그린 획 (필압 없음) 재현

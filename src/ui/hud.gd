@@ -147,8 +147,10 @@ func _refresh_slots() -> void:
 			else:
 				_slot_dura_labels[i].text = "내구 %d/%d" % [d.durability, d.durability_max]
 				_slot_dura_labels[i].add_theme_color_override("font_color", InkStyle.INK_SOFT)
-			_slot_mana_labels[i].text = "%s%s · 마나 %d" % [
-				InkStyle.rune_glyph(d.rune_type), InkStyle.rune_name(d.rune_type), int(d.mana_cost)]
+			# 농도(v1.7)는 상태이상 세기다 — 같은 룬이라도 짙은 도안과 옅은 도안은 다른 무기다 (GDD §4.2)
+			_slot_mana_labels[i].text = "%s%s %s · 마나 %d" % [
+				InkStyle.rune_glyph(d.rune_type), InkStyle.rune_name(d.rune_type),
+				InkStyle.density_name(d.rune_fill), int(d.mana_cost)]
 
 func _refresh_hp() -> void:
 	# HP 원장은 GameState (v1.1 이관) — player_hp_changed로 갱신

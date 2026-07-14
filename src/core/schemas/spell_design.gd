@@ -16,7 +16,13 @@ extends Resource
 ## v1.5: **항상 -PI/2 (캔버스 위쪽 = 앞)**. 종이 위쪽을 향해 그린 화살표가 마우스 방향으로 나간다
 @export var aim_axis: float = -PI / 2.0
 @export var rune_type: Enums.RuneType = Enums.RuneType.FIRE
-## 0..1 인식 정확도 → 위력 보정. 스탬프 사용 시 저장 시점 값 보존 (GDD v1.3)
+## 0..1 — 룬이 진을 얼마나 채우는가 (룬 획 bbox 반경 ÷ 진 반지름).
+## **v1.7: 속성의 농도 축** — 상태이상 세기(화상 딜·젖음 둔화·넉백 거리·흐름)를 이 값이 정한다
+## (TECH_SPEC §4.0). 진을 꽉 채운 룬 = 깊이 물든다 / 구석에 작게 그린 룬 = 옅게 스친다.
+## 위력은 건드리지 않는다 — 그건 진의 축이다. 구세이브 도안은 기본값(중간 농도)으로 로드된다
+@export var rune_fill: float = 0.5
+## 0..1 인식 정확도 → **속성 순도** (v1.7: 위력 보정에서 분리됨 — 위력은 진의 축).
+## 스탬프 사용 시 저장 시점 값 보존 (GDD v1.3)
 @export var rune_accuracy: float = 1.0
 @export var arrows: Array[ArrowData] = []
 ## 원본 획 전체 — 샘플 도안은 비어 있을 수 있음 (파라미터 기반 대체 렌더 필요)

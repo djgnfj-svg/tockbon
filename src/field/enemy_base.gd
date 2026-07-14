@@ -28,10 +28,21 @@ const ENEMY_SHEET_SIZES := {"slime_mini": 16, "gale": 64}
 const BURN_DURATION := 3.0
 const WET_DURATION := 4.0
 const FLOW_DURATION := 1.2
-## 젖음 둔화 배율 (GDD §4.2 물~ = 둔화)
+## ── 젖음 둔화 (GDD §4.2 물~ = 둔화) — **룬 농도 축**(v1.7, TECH_SPEC §4.0).
+## 세기는 status_power가 정한다: 진을 꽉 채운 물 룬은 깊이 물들고, 구석에 작게 그린 룬은 옅게 스친다.
+## 기준 농도(rune_fill 0.5·순도 1.0)에서 WET_SLOW — 즉 기존 밸런스가 그대로 보존된다.
 const WET_SLOW := 0.55
+## 최저 농도(rune_fill 0·순도 하한)에서의 둔화 — 옅으면 스치기만 한다
+const WET_SLOW_WEAK := 0.85
+## 둔화 바닥 — 아무리 진해도 완전 정지(0.0)는 없다. 멈춘 적은 적이 아니다
+const WET_SLOW_FLOOR := 0.30
+## ── 밀림 (KNOCKBACK·FLOW) — status_power는 **밀림 속도(px/s)** 그 자체다.
+## 원장이 그렇게 적혀 있다: 충격 룬 status_power=180, 바람 룬=60 (data/runes/*.tres).
+## 예전 코드는 여기에 ×40·×55를 또 곱했다 — power를 1~5짜리 배율로 착각한 단위 오류.
+## 그 결과 충격 한 방이 적을 3만 px 밖으로 날려 보냈다 (기준 농도 실측 36,171px).
 const KNOCK_DECAY := 420.0
-const FLOW_PUSH_SCALE := 55.0
+## 아주 옅은 충격이라도 한 번은 밀린다
+const KNOCK_MIN_SPEED := 80.0
 
 @export var def: EnemyDef
 ## false면 _physics_process 정지 — 테스트가 simulate()를 직접 호출해 결정론적으로 검증
@@ -98,8 +109,7 @@ func simulate(delta: float, apply_motion: bool = true) -> void:
 		_die()
 		return
 	_update_ai(delta)
-	var slow := WET_SLOW if has_status(Enums.Status.WET) else 1.0
-	velocity = _ai_velocity * slow + knock_velocity + _flow_push
+	velocity = _ai_velocity * wet_slow() + knock_velocity + _flow_push
 	knock_velocity = knock_velocity.move_toward(Vector2.ZERO, KNOCK_DECAY * delta)
 	if apply_motion:
 		move_and_slide()
@@ -135,9 +145,10 @@ func _apply_status(status: int, power: float) -> void:
 		Enums.Status.BURN:
 			_statuses[status] = {"time": BURN_DURATION, "power": power}
 		Enums.Status.WET:
-			_statuses[status] = {"time": WET_DURATION, "power": power}
+			# 둔화율은 적용 시점에 한 번만 환산한다 (매 틱 Db 조회 방지)
+			_statuses[status] = {"time": WET_DURATION, "power": power, "slow": _wet_slow_for(power)}
 		Enums.Status.KNOCKBACK:
-			knock_velocity = _push_dir() * maxf(80.0, power * 40.0)
+			knock_velocity = _push_dir() * maxf(KNOCK_MIN_SPEED, power)
 		Enums.Status.FLOW:
 			_statuses[status] = {"time": FLOW_DURATION, "power": power, "dir": _push_dir()}
 
@@ -146,6 +157,36 @@ func has_status(status: int) -> bool:
 
 func is_burning() -> bool:
 	return has_status(Enums.Status.BURN)
+
+## 현재 젖음 둔화 배율 (1.0 = 안 젖음). 젖음 **여부** 판정은 has_status(WET) 그대로 —
+## 갑충의 갑주 무력화는 bool이라 농도와 무관하다 (약한 물도 갑주는 연다, 다만 느려지진 않는다).
+func wet_slow() -> float:
+	if not _statuses.has(Enums.Status.WET):
+		return 1.0
+	return float((_statuses[Enums.Status.WET] as Dictionary).get("slow", WET_SLOW))
+
+## status_power → 둔화 배율.
+## 들어온 power를 물 룬 원장(RuneDef.status_power)으로 나누면 **실효 농도**가 나온다 —
+## 모듈 B가 status_power × 농도 × 순도로 만든 값이기 때문 (spell_system.compute_status_power).
+## 그래서 기준점을 코드에 박지 않고 원장(data/runes + balance)에서 되짚는다: 원장이 바뀌면 같이 따라간다.
+## 실효 농도 범위 = [density_min × accuracy_floor, density_max] = [0.30, 1.80],
+## 기준점 = lerp(density_min, density_max, 0.5) = 1.15 (농도 0.5·순도 1.0).
+## 기준점에서 WET_SLOW를 유지하도록 양쪽을 따로 보간해 기존 밸런스를 깨지 않는다.
+func _wet_slow_for(power: float) -> float:
+	var bal: BalanceData = GameState.balance
+	var mid := lerpf(bal.rune_density_min, bal.rune_density_max, 0.5)
+	var density := mid
+	var water := Db.get_rune(Enums.RuneType.WATER)
+	if water != null and water.status_power > 0.0:
+		density = power / water.status_power
+	var slow := WET_SLOW
+	if density <= mid:
+		var weakest := bal.rune_density_min * bal.accuracy_floor
+		slow = lerpf(WET_SLOW_WEAK, WET_SLOW, clampf(inverse_lerp(weakest, mid, density), 0.0, 1.0))
+	else:
+		slow = lerpf(WET_SLOW, WET_SLOW_FLOOR,
+			clampf(inverse_lerp(mid, bal.rune_density_max, density), 0.0, 1.0))
+	return clampf(slow, WET_SLOW_FLOOR, 1.0)
 
 func _update_statuses(delta: float) -> void:
 	_flow_push = Vector2.ZERO
@@ -156,7 +197,7 @@ func _update_statuses(delta: float) -> void:
 		if s == Enums.Status.BURN:
 			hp -= float(entry["power"]) * t     # power = 초당 화상 피해
 		elif s == Enums.Status.FLOW:
-			_flow_push = (entry["dir"] as Vector2) * float(entry["power"]) * FLOW_PUSH_SCALE
+			_flow_push = (entry["dir"] as Vector2) * float(entry["power"])   # power = 밀림 속도 px/s
 		entry["time"] = float(entry["time"]) - delta
 		if float(entry["time"]) <= 0.0:
 			expired.append(s)

@@ -9,6 +9,8 @@ const ExitGateScript := preload("res://src/field/exit_gate.gd")
 const GatherNodeScript := preload("res://src/field/gather_node.gd")
 
 const EPS := 0.05
+## 뷰포트 가로 (project.godot) — 밀림 거리가 화면을 넘으면 적이 사라진 것과 같다
+const SCREEN_W := 640
 
 var _fails: int = 0
 var _died_ids: Array = []
@@ -67,6 +69,58 @@ func _spawn_enemy(id: StringName, pos: Vector2) -> Variant:
 	e.position = pos
 	add_child(e)
 	return e
+
+# ── 룬 농도 축 실측 도구 (v1.7) ──────────────────────────────────────────
+# 실제로 적에게 들어오는 status_power를 원장에서 되짚는다 —
+# 모듈 B(spell_system.compute_status_power)와 같은 공식: status_power × 농도 × 순도.
+func _power(rune: Enums.RuneType, fill: float, accuracy: float) -> float:
+	var bal: BalanceData = GameState.balance
+	var r: RuneDef = Db.get_rune(rune)
+	if r == null:
+		return 0.0
+	return r.status_power \
+		* lerpf(bal.rune_density_min, bal.rune_density_max, clampf(fill, 0.0, 1.0)) \
+		* maxf(accuracy, bal.accuracy_floor)
+
+## 추적 중 실측 이동속도 — 갑충(물의 지정 카운터)을 플레이어(원점) 추적 사거리 안에 세우고 1틱 굴린다
+func _chase_speed(wet_power: float) -> float:
+	var e: Variant = _spawn_enemy(&"beetle", Vector2(0, 100))
+	if e == null:
+		return -1.0
+	if wet_power > 0.0:
+		e.take_hit(0.0, -1, Enums.Status.WET, wet_power)
+	e.simulate(0.1, false)
+	var speed: float = (e.velocity as Vector2).length()
+	e.queue_free()
+	return speed
+
+## 화상 2초 총딜 — 재생이 없는 갑충으로 (덩굴은 재생이 섞여 측정이 흐려진다)
+func _burn_total(power: float) -> float:
+	var e: Variant = _spawn_enemy(&"beetle", Vector2(0, 3000))   # 어그로 밖 → AI 이동 0
+	if e == null:
+		return -1.0
+	e.take_hit(0.0, -1, Enums.Status.BURN, power)
+	var hp0: float = e.hp
+	e.simulate(1.0, false)
+	e.simulate(1.0, false)
+	var loss: float = hp0 - e.hp
+	e.queue_free()
+	return loss
+
+## 넉백·흐름 실측 밀림 거리 — move_and_slide는 물리 틱 델타를 쓰므로 결정론적 측정이 안 된다.
+## 대신 어그로 밖(AI 속도 0)에 세우고 velocity를 직접 적분한다 (= 실제로 이동할 거리).
+func _push_distance(status: int, power: float) -> float:
+	var e: Variant = _spawn_enemy(&"beetle", Vector2(0, 3000))
+	if e == null:
+		return -1.0
+	e.take_hit(0.0, -1, status, power)
+	var dt := 0.02
+	var dist := 0.0
+	for i in range(250):   # 5초 — 넉백 감쇠·흐름 지속 모두 소진
+		e.simulate(dt, false)
+		dist += (e.velocity as Vector2).length() * dt
+	e.queue_free()
+	return dist
 
 func _run() -> void:
 	await get_tree().process_frame
@@ -182,6 +236,67 @@ func _run() -> void:
 	hp0 = beetle.hp
 	beetle.take_hit(10.0, Enums.RuneType.WATER, Enums.Status.NONE, 0.0)
 	_check(absf((hp0 - beetle.hp) - 10.0 * beetle.weakness_mult) < EPS, "갑충 물 약점 배율 x%.2f" % beetle.weakness_mult)
+
+	# ── 9b. 룬 농도 축 (v1.7) — status_power가 상태이상 세기를 정한다 (TECH_SPEC §4.0)
+	#     원장(data/runes + balance)에서 실제로 들어올 power를 되짚어 넣는다. 매직넘버 금지.
+	print("--- 룬 농도 축: 실효 power = RuneDef.status_power × 농도(0.5~1.8) × 순도(0.6~1.0)")
+
+	# WET — 둔화가 농도에 비례 (갑충으로 검증: 물이 지정 카운터)
+	var wet_weak := _power(Enums.RuneType.WATER, 0.0, 0.6)     # 가장 옅게
+	var wet_mid := _power(Enums.RuneType.WATER, 0.5, 1.0)      # 기준 (1.0배)
+	var wet_strong := _power(Enums.RuneType.WATER, 1.0, 1.0)   # 가장 진하게
+	var sp_dry := _chase_speed(0.0)
+	var sp_weak := _chase_speed(wet_weak)
+	var sp_mid := _chase_speed(wet_mid)
+	var sp_strong := _chase_speed(wet_strong)
+	var sp_absurd := _chase_speed(wet_strong * 100.0)   # 말도 안 되는 농도
+	print("WET power %.3f/%.3f/%.3f → 이동속도 %.1f / %.1f / %.1f (안 젖음 %.1f)"
+		% [wet_weak, wet_mid, wet_strong, sp_weak, sp_mid, sp_strong, sp_dry])
+	_check(sp_weak < sp_dry - EPS, "젖음: 옅어도 안 젖음보다는 느리다 (%.1f < %.1f)" % [sp_weak, sp_dry])
+	_check(sp_mid < sp_weak - EPS, "젖음 농도↑ → 더 느려진다: 옅음 %.1f > 기준 %.1f" % [sp_weak, sp_mid])
+	_check(sp_strong < sp_mid - EPS, "젖음 농도↑ → 더 느려진다: 기준 %.1f > 진함 %.1f" % [sp_mid, sp_strong])
+	_check(sp_absurd > 1.0, "둔화 바닥: 극단 농도(x100)에도 완전 정지 없음 (실측 %.1f)" % sp_absurd)
+	_check(sp_absurd >= sp_strong - EPS, "둔화 바닥: 진함 이상은 더 느려지지 않는다")
+
+	# 젖음 여부(bool) 판정은 농도와 무관 — 갑충 갑주 무력화가 안 깨진다
+	var b_weak: Variant = _spawn_enemy(&"beetle", Vector2(1200, 200))
+	b_weak.take_hit(0.0, -1, Enums.Status.WET, wet_weak)
+	_check(b_weak.has_status(Enums.Status.WET), "옅은 젖음도 has_status(WET) == true")
+	var bhp0: float = b_weak.hp
+	b_weak.take_hit(10.0, -1, Enums.Status.NONE, 0.0)
+	_check(absf((bhp0 - b_weak.hp) - 10.0) < EPS,
+		"옅은 젖음도 갑주 무력화: 10 피해 온전 (실측 %.2f)" % (bhp0 - b_weak.hp))
+	_check(b_weak.wet_slow() > 0.6, "옅은 젖음: 갑주는 열리되 둔화는 약하다 (배율 %.2f)" % b_weak.wet_slow())
+
+	# BURN — 초당 화상 피해가 농도에 비례
+	var burn_mid := _power(Enums.RuneType.FIRE, 0.5, 1.0)
+	var burn_strong := _power(Enums.RuneType.FIRE, 1.0, 1.0)
+	var burn_a := _burn_total(burn_mid)
+	var burn_b := _burn_total(burn_strong)
+	print("BURN power %.2f/%.2f → 2초 총딜 %.2f / %.2f" % [burn_mid, burn_strong, burn_a, burn_b])
+	_check(absf(burn_a - burn_mid * 2.0) < EPS, "화상 2초 총딜 == power×2 (실측 %.2f)" % burn_a)
+	_check(burn_b > burn_a + EPS, "화상 농도↑ → 총딜↑ (%.2f > %.2f)" % [burn_b, burn_a])
+
+	# KNOCKBACK — 넉백 거리가 농도에 비례
+	var kb_mid := _power(Enums.RuneType.IMPACT, 0.5, 1.0)
+	var kb_strong := _power(Enums.RuneType.IMPACT, 1.0, 1.0)
+	var kb_a := _push_distance(Enums.Status.KNOCKBACK, kb_mid)
+	var kb_b := _push_distance(Enums.Status.KNOCKBACK, kb_strong)
+	print("KNOCKBACK power %.1f/%.1f → 넉백 거리 %.1fpx / %.1fpx" % [kb_mid, kb_strong, kb_a, kb_b])
+	_check(kb_a > 1.0, "넉백 거리 > 0 (실측 %.1fpx)" % kb_a)
+	_check(kb_b > kb_a + EPS, "넉백 농도↑ → 거리↑ (%.1f > %.1f)" % [kb_b, kb_a])
+	# 단위 오류 재발 방지 — power는 밀림 속도(px/s)다. 배율로 착각해 곱하면 적이 맵 밖으로 날아간다
+	_check(kb_b < SCREEN_W, "넉백 거리는 한 화면(%dpx) 안 (실측 %.1fpx)" % [SCREEN_W, kb_b])
+
+	# FLOW — 밀림 거리가 농도에 비례
+	var fl_mid := _power(Enums.RuneType.WIND, 0.5, 1.0)
+	var fl_strong := _power(Enums.RuneType.WIND, 1.0, 1.0)
+	var fl_a := _push_distance(Enums.Status.FLOW, fl_mid)
+	var fl_b := _push_distance(Enums.Status.FLOW, fl_strong)
+	print("FLOW power %.1f/%.1f → 밀림 거리 %.1fpx / %.1fpx" % [fl_mid, fl_strong, fl_a, fl_b])
+	_check(fl_a > 1.0, "흐름 밀림 거리 > 0 (실측 %.1fpx)" % fl_a)
+	_check(fl_b > fl_a + EPS, "흐름 농도↑ → 거리↑ (%.1f > %.1f)" % [fl_b, fl_a])
+	_check(fl_b < SCREEN_W, "흐름 밀림 거리는 한 화면(%dpx) 안 (실측 %.1fpx)" % [SCREEN_W, fl_b])
 
 	# ── 10. 밤 강화 (phase_changed를 코드로 발신) + 밤 전용 채집 노드
 	var night_gather: Variant = GatherNodeScript.new()

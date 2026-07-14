@@ -69,6 +69,16 @@ static func rune_name(t: int) -> String:
 static func rune_color(t: int) -> Color:
 	return RUNE_COLORS.get(t, INK)
 
+## 룬 농도(SpellDesign.rune_fill 0..1) → 사람이 읽는 말 (v1.7 속성 농도 축, GDD §4.2).
+## 구간은 **표시용**이다 — 실제 세기는 balance의 rune_density_min/max가 연속으로 정한다.
+## 여기서 밸런스를 만들지 말 것 (이 값을 읽어 계산하는 코드가 생기면 축이 두 곳으로 갈라진다)
+static func density_name(fill: float) -> String:
+	if fill < 0.33:
+		return "옅음"
+	if fill < 0.66:
+		return "보통"
+	return "짙음"
+
 static func rune_icon(t: int) -> Texture2D:
 	var path: String = RUNE_ICON_PATHS.get(t, "")
 	if path.is_empty() or not ResourceLoader.exists(path):
