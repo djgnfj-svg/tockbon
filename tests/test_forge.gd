@@ -19,6 +19,7 @@ extends Node2D
 
 const ForgePanel := preload("res://src/drawing/forge_panel.gd")
 const DesignBuilder := preload("res://src/drawing/design_builder.gd")
+const ExampleDesigns := preload("res://src/core/example_designs.gd")
 const Copy := preload("res://src/drawing/drawing_copy.gd")
 const SpellSystemScene := preload("res://src/spell/spell_system.tscn")
 const DummyScene := preload("res://src/spell/dummy_target.tscn")
@@ -64,8 +65,13 @@ var _cast_label: Label
 var _design_label: Label
 var _hint_label: Label
 
+# ── 예시 카탈로그 (숫자키로 불러와 바로 쏜다 — 복합·중첩을 그리기 없이 확인) ──
+var _catalog: Array = []
+var _loaded: SpellDesign = null     # 불러온 예시 (있으면 이걸 쏜다), null이면 그린 도안
+
 
 func _ready() -> void:
+	_catalog = ExampleDesigns.catalog()
 	_build_world()
 	_build_forge()
 	_build_hud()
@@ -76,6 +82,12 @@ func _ready() -> void:
 	EventBus.cast_failed.connect(_on_cast_failed)
 	EventBus.enemy_hit.connect(_on_enemy_hit)
 	_refresh_design_label()
+	# 카탈로그 목록을 상단에 한 줄로 — 무엇을 불러올 수 있는지 보인다
+	var names: Array[String] = []
+	for i in _catalog.size():
+		names.append("%d.%s" % [i + 1, _catalog[i].name])
+	_cast_label.text = "예시: " + "  ".join(names)
+	_cast_label.add_theme_color_override(&"font_color", PROMPT_COLOR)
 
 
 func _process(delta: float) -> void:
@@ -109,9 +121,16 @@ func _unhandled_input(event: InputEvent) -> void:
 				_reset_dummies()
 			KEY_C:
 				_forge.call(&"clear_canvas")
+				_loaded = null
 				_refresh_design_label()
 			KEY_TAB:
 				_cycle_wand()
+			KEY_0:
+				_loaded = null
+				_set_hint("예시 해제 — 그린 도안을 쏜다")
+				_refresh_design_label()
+			KEY_1, KEY_2, KEY_3, KEY_4, KEY_5, KEY_6, KEY_7, KEY_8, KEY_9:
+				_load_example(k.keycode - KEY_1)
 		return
 	var mb := event as InputEventMouseButton
 	if mb != null and mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT:
@@ -141,7 +160,8 @@ func _near_desk() -> bool:
 ## 장착 슬롯을 거치지 않고 **지금 종이 위에 맺힌 도안**을 그대로 쏜다 — 그리자마자 검증하려고.
 ## 계약은 게임과 동일하다: cast_requested(도안, 원점, 에임) → spell_system이 전부 처리.
 func _try_cast() -> void:
-	var design: SpellDesign = _forge.call(&"get_design")
+	# 예시를 불러왔으면 그걸, 아니면 종이에 그린 도안을 쏜다
+	var design: SpellDesign = _loaded if _loaded != null else _forge.call(&"get_design")
 	if design == null:
 		_set_warn(Copy.INCOMPLETE)
 		return
@@ -149,6 +169,38 @@ func _try_cast() -> void:
 		design.durability = design.durability_max
 	EventBus.cast_requested.emit(design, _player_pos, _aim)
 	_report_aim(design)
+
+
+## 숫자키로 예시 마법진을 불러온다 — 그리기 없이 복합·중첩을 바로 쏴 본다.
+func _load_example(idx: int) -> void:
+	if idx < 0 or idx >= _catalog.size():
+		return
+	var entry: Dictionary = _catalog[idx]
+	_loaded = entry.design as SpellDesign
+	_set_hint("예시 %d: %s — 좌클릭/Space로 발사 · 0=예시 해제" % [idx + 1, entry.name])
+	_design_label.text = "★ 예시 %d: %s · %s" % [idx + 1, entry.name, _composition(_loaded)]
+	_design_label.add_theme_color_override(&"font_color", PROMPT_COLOR)
+
+
+## 책 펼친 중 숫자키 → 그 예시를 **탁본**으로 캔버스에 깐다. 그 위에 필사(따라 그리기)한다.
+func _on_example_requested(idx: int) -> void:
+	if idx < 0 or idx >= _catalog.size():
+		return
+	var entry: Dictionary = _catalog[idx]
+	_forge.call(&"show_rubbing", entry.design as SpellDesign)
+	_set_hint("필사 %d: %s — 탁본을 따라 진·룬·문양을 그리세요 (0=탁본 걷기)"
+		% [idx + 1, entry.name])
+
+
+## 예시 구성 한 줄 — 룬(복합)·안쪽 진(중첩)을 보여 준다
+func _composition(d: SpellDesign) -> String:
+	var runes: Array[String] = []
+	for r: RuneInstance in d.rune_list():
+		runes.append(DesignBuilder.rune_name(r.type))
+	var s := "룬 " + "+".join(runes)
+	if not d.children.is_empty():
+		s += " · 안쪽 %d진" % d.children.size()
+	return s
 
 
 ## **이 도안이 실제로 무엇을 쏘는가** — 한 줄로 보인다.
@@ -256,6 +308,7 @@ func _build_forge() -> void:
 	layer.add_child(_forge)
 	_forge.connect(&"design_completed", _on_design_completed)
 	_forge.connect(&"closed", _on_forge_closed)
+	_forge.connect(&"example_requested", _on_example_requested)
 
 
 func _reset_dummies() -> void:
@@ -377,7 +430,7 @@ func _build_hud() -> void:
 	_cast_label = _label(ui, Vector2(8, 6), Vector2(400, 14), 10)
 	_design_label = _label(ui, Vector2(8, 22), Vector2(500, 14), 9)
 	_hint_label = _label(ui, Vector2(8, 342), Vector2(620, 14), 9)
-	_set_hint("WASD 이동 · 작업대 앞에서 E = 책 펼침 · 좌클릭/Space = 발사 · R = 리셋")
+	_set_hint("이동 WASD · E=책 · 좌클릭/Space=발사 · Tab=지팡이 · 숫자=예시(책 닫힘:발사 / 펼침:탁본 필사) · 0=해제")
 
 
 func _label(parent: Control, pos: Vector2, sz: Vector2, font_size: int) -> Label:

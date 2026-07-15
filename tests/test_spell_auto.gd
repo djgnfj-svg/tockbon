@@ -83,6 +83,9 @@ func _run() -> void:
 	await _test_non_basic_glyphs_no_shockwave(system)
 	await _test_shockwave_fires_once(system)
 	await _test_shockwave_passes_through_enemies(system)
+	await _test_nested_deploy(system)
+	await _test_composite_runes(system)
+	await _test_example_catalog(system)
 
 	if failures == 0:
 		print("TEST_SPELL_OK — 전 항목 통과")
@@ -95,6 +98,114 @@ func _run() -> void:
 ## v2.0: 방향·발수는 지팡이의 것이다 (TECH_SPEC §4.0-a). **기본 지팡이(wand_basic)는 SINGLE**이라
 ## 문양이 8개(노바 도안)여도 1발이고, 그 발사각은 **에임 그대로**다 — 도안이 회전하지 않는다.
 ## 지팡이별 발수·간격은 [W] _test_wand_patterns가 따로 검증한다.
+## 🔴 중첩 진 (재귀, TRUTH §4) — 껍질 탄이 죽는 순간 품은 진(자식)이 그 자리에서 새 탄으로 전개된다.
+## 소멸 경로(_consume)는 착탄·벽·수명 끝을 한데 모으므로, 수명 만료로도 자식이 나온다.
+func _test_nested_deploy(system) -> void:
+	print("[N] 중첩 진 — 껍질이 죽으면 자식이 전개된다 (재귀 발사)")
+	_gs.restore_mana_full()
+	var shell := SampleDesigns.aimed_lance_water()
+	var child := SampleDesigns.aimed_lance_water()
+	var kids: Array[SpellDesign] = [child]
+	shell.children = kids
+	_bus.cast_requested.emit(shell, Vector2.ZERO, Vector2.RIGHT)
+	var projs := _projectiles(system)
+	_check(projs.size() == 1, "껍질 탄 1개 (지팡이 SINGLE)")
+	var deployed: Array = []
+	if not projs.is_empty():
+		projs[0].deploy_children.connect(
+			func(k: Array, _at: Vector2, _ang: float) -> void: deployed.append(k))
+	# 껍질 수명이 다할 때까지 물리 프레임을 돌린다 → _consume → deploy_children
+	var frames := 0
+	while deployed.is_empty() and frames < 600:
+		await physics_frame
+		frames += 1
+	_check(not deployed.is_empty(), "껍질 소멸 시 deploy_children 발신 (%d 프레임)" % frames)
+	# 자식은 지연 스폰된다 (물리 콜백 안전) — 몇 프레임 뒤 새 탄이 있어야 한다
+	await process_frame
+	await process_frame
+	_check(not _projectiles(system).is_empty(), "자식 진이 새 탄으로 전개됨")
+	await _clear_projectiles(system)
+
+
+## 🔴 복합 룬 (N개, TRUTH §4) — 한 진에 불+물을 담으면 한 탄이 BURN·WET 둘 다 얹는다.
+## 위력 계수는 fill 가중평균, 피해는 primary 한 번만(이중 계산 없음 — 적 계약 무변경).
+func _test_composite_runes(system) -> void:
+	print("[C] 복합 룬 — 불+물 한 진이 한 탄에 BURN·WET 둘 다 얹는다")
+	# 위력 계수 = fill 가중평균 (결정적 단위 검증)
+	var fire_bd: float = _db.get_rune(Enums.RuneType.FIRE).base_damage
+	var water_bd: float = _db.get_rune(Enums.RuneType.WATER).base_damage
+	var coef_single: float = system._blended_rune_coef([RuneInstance.make(Enums.RuneType.FIRE, 0.3, 1.0)])
+	_check(is_equal_approx(coef_single, fire_bd), "단일 룬 계수 = base_damage (fill 무관)")
+	var coef_mix: float = system._blended_rune_coef([
+		RuneInstance.make(Enums.RuneType.FIRE, 0.6, 1.0),
+		RuneInstance.make(Enums.RuneType.WATER, 0.4, 1.0)])
+	_check(is_equal_approx(coef_mix, 0.6 * fire_bd + 0.4 * water_bd),
+		"복합 계수 = fill 가중평균 (0.6·불 + 0.4·물)")
+
+	# 착탄 — 두 상태이상이 모두 얹히는가
+	_gs.restore_mana_full()
+	var dummy = _dummy_scene.instantiate()
+	root.add_child(dummy)
+	dummy.global_position = Vector2(140, 0)
+	var design := SampleDesigns.aimed_lance_water()
+	var rl: Array[RuneInstance] = [
+		RuneInstance.make(Enums.RuneType.FIRE, 0.6, 1.0),
+		RuneInstance.make(Enums.RuneType.WATER, 0.4, 1.0),
+	]
+	design.runes = rl
+	design.rune_type = Enums.RuneType.FIRE   # primary = fill 최대
+	_bus.cast_requested.emit(design, Vector2.ZERO, Vector2(1, 0))
+	var frames := 0
+	while dummy.hits.is_empty() and frames < 180:
+		await physics_frame
+		frames += 1
+	_check(not dummy.hits.is_empty(), "복합 탄 명중 (%d 프레임)" % frames)
+	var seen := {}
+	for h: Dictionary in dummy.hits:
+		seen[int(h.status)] = true
+	_check(seen.has(Enums.Status.BURN), "불 룬 → BURN 얹힘")
+	_check(seen.has(Enums.Status.WET), "물 룬 → WET 얹힘")
+	dummy.queue_free()
+	await _clear_projectiles(system)
+
+
+## 🔴 예시 카탈로그 (F6 시험대) — 복합·중첩 예시가 유효하고 실제로 발사되는가.
+## 조용히 안 죽게 목록에 편입 (CLAUDE.md 교훈).
+func _test_example_catalog(system) -> void:
+	print("[E] 예시 카탈로그 — 복합·중첩 예시가 유효한가")
+	var ExampleDesigns: GDScript = load("res://src/core/example_designs.gd")
+	var cat: Array = ExampleDesigns.catalog()
+	_check(cat.size() >= 5, "카탈로그 예시 %d종" % cat.size())
+	var comp: SpellDesign = _find_example(cat, "복합 불+물")
+	_check(comp != null, "복합 불+물 예시 존재")
+	if comp != null:
+		var types := {}
+		for r: RuneInstance in comp.rune_list():
+			types[int(r.type)] = true
+		_check(types.has(Enums.RuneType.FIRE) and types.has(Enums.RuneType.WATER),
+			"복합 예시가 불+물 룬 둘 다")
+	var nest: SpellDesign = _find_example(cat, "중첩 충격→불")
+	_check(nest != null, "중첩 예시 존재")
+	if nest != null:
+		_check(nest.children.size() == 1, "중첩 예시 자식 1개")
+		_check(nest.rune_type == Enums.RuneType.IMPACT, "껍질 룬 = 충격")
+		_check(nest.children[0].rune_type == Enums.RuneType.FIRE, "안쪽 진 룬 = 불")
+	# 실제로 쏴진다 (스모크)
+	if comp != null:
+		_gs.restore_mana_full()
+		_bus.cast_requested.emit(comp, Vector2.ZERO, Vector2.RIGHT)
+		await process_frame
+		_check(not _projectiles(system).is_empty(), "예시가 발사된다")
+		await _clear_projectiles(system)
+
+
+func _find_example(cat: Array, name: String) -> SpellDesign:
+	for e: Dictionary in cat:
+		if String(e.name) == name:
+			return e.design as SpellDesign
+	return null
+
+
 func _test_nova(system) -> void:
 	print("[1] 노바 도안(문양 8개) — 기본 지팡이(SINGLE)에서는 1발, 발사각 = 에임 그대로")
 	for aim_deg: float in [0.0, 90.0, 137.0]:

@@ -99,6 +99,10 @@ const GUIDE_DOT := 2.0               # 중심점 반지름(px) — 진(원)을 �
 # 책자는 참조 전용이므로(골라 찍는 게 아니다) 따라 그을 자리를 보여 주는 것까지가 도움의 끝이다.
 # **순수 배경 렌더다** — _draw()로 그리므로 _entries에 들어가지 않는다(획으로 인식될 수 없다).
 const TRACE_INK := Color(0.13, 0.11, 0.10, 0.17)   # 먹선보다 훨씬 옅게 — 내 획이 언제나 주인공
+## 🔴 **탁본 필사 — 완성된 도안을 옅게 깐다** (2026-07-15). 게임의 심장(탁본)으로 예시를 따라
+## 그린다. 내 획보다 옅되 따라 그릴 만큼은 보인다. 순수 배경 — 인식·잉크·발사에 영향 없다.
+const RUBBING_INK := Color(0.16, 0.13, 0.11, 0.32)
+const RUBBING_WIDTH := 2.0
 const TRACE_WIDTH := 2.0
 ## 문양 본보기의 **화살촉** 길이 (캔버스 최단변 대비). 색·굵기는 선과 같다 —
 ## 다르면 "선 + 딴 물건"으로 읽히지 화살표 하나로 안 보인다
@@ -127,6 +131,10 @@ const COMPLETE_FLASH_SEC := 0.55     # 완성 순간 — 도안 전체가 함께
 const COMPLETE_LIGHTEN := 0.75
 
 var _entries: Array[Dictionary] = []   # {"stroke": StrokeData, "line": Line2D, "locked": bool, "result": Dictionary}
+## 🔴 **중첩 진 트리 (재귀).** assemble_tree의 루트 배열. `_parts`는 그중 첫 루트(=껍질) —
+## parts와 노드 딕셔너리가 같은 키라 기존 접근이 그대로 산다. 단계·수락은 **활성 노드**(방금 그린
+## 원)를 따른다: 껍질을 완성한 뒤 안쪽 진을 그리면 그 안쪽 진의 룬을 받을 수 있어야 하기 때문.
+var _roots: Array = []
 var _parts: Dictionary = {"arrows": [], "extras": [], "strokes_ordered": []}
 var _design: SpellDesign = null
 var _balance: BalanceData
@@ -174,6 +182,8 @@ var _moved_px := 0.0                   # 이번 프레임에 움직인 거리 �
 var _trace := PackedVector2Array()
 var _trace_held: Dictionary = {}
 var _trace_placed := false
+## 탁본 필사 — 깔린 옅은 참조 먹선들 (Line2D). _entries와 무관한 순수 배경.
+var _rubbing_lines: Array[Line2D] = []
 ## 어느 부품의 본보기인가 — 문양일 때만 화살촉을 그린다 (방향이 있는 글자는 문양뿐)
 var _trace_stage: int = -1
 ## 자석이 쓰는 종이 픽셀 좌표 캐시 (_live_points와 같은 좌표계) — 획 점마다 다시 만들지 않는다
@@ -463,6 +473,49 @@ func _adjust_trace(up: bool, rotating: bool, screen_pos: Vector2) -> void:
 	_refresh_trace(_to_paper(screen_pos))
 
 
+## 🔴 완성된 도안을 **옅은 탁본**으로 깐다 — 그 위에 필사(따라 그리기)한다. 사용자 획과 같은
+## _ink_layer에 넣어 줌·팬이 함께 걸리고, z_index로 내 획 뒤에 둔다. 순수 배경이라 _entries에
+## 안 들어가고 인식·잉크·발사에 영향이 없다. 중첩 진은 자식까지 겹쳐 깐다 (착탄 그림 그대로).
+func show_rubbing(design: SpellDesign) -> void:
+	clear_rubbing()
+	if design != null:
+		_add_rubbing_strokes(design)
+	queue_redraw()
+
+
+func _add_rubbing_strokes(design: SpellDesign) -> void:
+	var s := _canvas_scale()
+	for stroke: StrokeData in design.strokes:
+		if stroke.points.size() < 2:
+			continue
+		var line := Line2D.new()
+		var px := PackedVector2Array()
+		for p: Vector2 in stroke.points:
+			px.append(p * s)
+		line.points = px
+		line.width = RUBBING_WIDTH
+		line.default_color = RUBBING_INK
+		line.joint_mode = Line2D.LINE_JOINT_ROUND
+		# ⚠ z_index를 음수로 두지 말 것 — 캔버스 종이 배경 **뒤로** 밀려 탁본이 안 보인다
+		# (실측으로 잡음). 대신 _ink_layer의 맨 앞 자식으로 넣어 그리기 순서로만 내 획 뒤에 둔다.
+		_ink_layer.add_child(line)
+		_ink_layer.move_child(line, 0)
+		_rubbing_lines.append(line)
+	for child: SpellDesign in design.children:
+		_add_rubbing_strokes(child)
+
+
+func clear_rubbing() -> void:
+	for l: Line2D in _rubbing_lines:
+		if is_instance_valid(l):
+			l.queue_free()
+	_rubbing_lines.clear()
+
+
+func has_rubbing() -> bool:
+	return not _rubbing_lines.is_empty()
+
+
 func clear_trace() -> void:
 	_trace_held = {}
 	_trace_placed = false
@@ -729,8 +782,18 @@ func _end_stroke() -> void:
 	# 작성 순서 — 지금 단계가 받지 않는 획은 무효 (TECH_SPEC §6.2).
 	# 엔트리에 넣기 전에 거른다: _ink_used는 _entries에서 재계산되므로 잉크도 소모되지 않는다.
 	# 인식 실패(DECOR)는 **순서 문제가 아니라 형이 흐트러진 것** — 사유를 갈라 다른 말을 해 준다
-	var pre := Recognizer.classify_stroke(stroke.points, _recognizer_ctx())
-	var pre_role := int(pre.get("role", Enums.StrokeRole.DECOR))
+	# 원은 컨텍스트와 무관하게 먼저 가른다 — classify_stroke는 진이 이미 있으면 원을 감지하지
+	# 않기 때문(§6.1). 이걸 안 하면 두 번째(안쪽/껍질) 원이 룬·화살표로 오인돼 중첩이 막힌다.
+	var cdet := Recognizer.detect_circle(stroke.points)
+	var pre: Dictionary
+	var pre_role: int
+	if cdet.is_circle:
+		pre = {"role": Enums.StrokeRole.CIRCLE,
+			"center": cdet.center, "radius": cdet.radius, "score": cdet.score}
+		pre_role = Enums.StrokeRole.CIRCLE
+	else:
+		pre = Recognizer.classify_stroke(stroke.points, _recognizer_ctx())
+		pre_role = int(pre.get("role", Enums.StrokeRole.DECOR))
 	if not _accepts_role(pre_role):
 		_reject_live_line()
 		# 왜 안 됐는지를 구체적으로 남긴다 — 어느 룬에 얼마나 가까웠는지(near_rune/score)까지.
@@ -777,11 +840,22 @@ func _end_stroke() -> void:
 # ─────────────────────────── 상태 재구축 ───────────────────────────
 
 func _reclassify_all() -> void:
-	_parts = DesignBuilder.classify_entries(_entries)
+	# 트리는 항상 조립한다 — 단계·수락(활성 노드)의 진실이 여기에 있다.
+	_roots = DesignBuilder.assemble_tree(_entries)
+	var nested := _count_circles(_roots) >= 2
+	if nested:
+		# 🔴 중첩 — 껍질(첫 루트)이 _parts. 노드 딕셔너리가 parts와 같은 키라 summary·렌더가 산다.
+		_parts = _roots[0] if not _roots.is_empty() else _empty_parts()
+		_apply_tree_results(_roots)
+	else:
+		# 단일 원 — 기존 경로 그대로 (e.result 세팅·_built id 재사용까지 보존)
+		_parts = DesignBuilder.classify_entries(_entries)
 	for e in _entries:
 		_apply_style(e)
 	var blocked := false
-	if DesignBuilder.is_complete(_parts):
+	var complete: bool = (not _roots.is_empty() and _roots[0].has("rune")) if nested \
+		else DesignBuilder.is_complete(_parts)
+	if complete:
 		# 값을 아직 안 치른 종이에서만 보유를 따진다. 이미 치른 종이는 몇 번을 고쳐 그려도
 		# 공짜다 — 종이는 이미 뜯었으니까 (undo → 재작성이 이중 과금되던 버그의 근본)
 		var first := not _paper_charged
@@ -789,8 +863,12 @@ func _reclassify_all() -> void:
 			_design = null
 			blocked = true
 		else:
-			# into=_built — 같은 종이에서 맺힌 도안은 **같은 id·같은 내구**로 이어진다
-			_built = DesignBuilder.build(_parts, _balance, _built, _paper_grade, _paper_params)
+			if nested:
+				# 재귀 트리 — build_tree는 into(id 재사용)를 아직 안 받는다. 껍질+자식을 새로 짓는다.
+				_built = DesignBuilder.build_tree(_roots[0], _balance, _paper_grade, _paper_params)
+			else:
+				# into=_built — 같은 종이에서 맺힌 도안은 **같은 id·같은 내구**로 이어진다
+				_built = DesignBuilder.build(_parts, _balance, _built, _paper_grade, _paper_params)
 			_design = _built
 			if first:
 				_consume_paper()
@@ -806,6 +884,72 @@ func _reclassify_all() -> void:
 	design_state_changed.emit(_design, get_summary())
 	if blocked:
 		completion_blocked.emit(&"no_paper")
+
+
+static func _empty_parts() -> Dictionary:
+	return {"arrows": [], "extras": [], "strokes_ordered": []}
+
+
+## 트리 전체의 원(진) 개수 — 2 이상이면 중첩이다
+static func _count_circles(roots: Array) -> int:
+	var n := 0
+	for node: Dictionary in roots:
+		n += 1 + _count_circles(node.children)
+	return n
+
+
+## 활성 노드 = **마지막으로 그린 원**의 노드. 단계·수락이 이걸 따른다 — 껍질을 완성한 뒤
+## 안쪽 진을 그리면 그 안쪽 진을 채우는 중이므로. 원이 하나면 그 하나 = 루트(기존과 동일).
+func _active_node() -> Dictionary:
+	var last_circle: StrokeData = null
+	for e in _entries:
+		var s: StrokeData = e.stroke
+		if s.role == Enums.StrokeRole.CIRCLE:
+			last_circle = s
+	if last_circle == null:
+		return {}
+	return _find_node_by_circle(_roots, last_circle)
+
+
+static func _find_node_by_circle(roots: Array, circle_stroke: StrokeData) -> Dictionary:
+	for node: Dictionary in roots:
+		if node.circle.stroke == circle_stroke:
+			return node
+		var found := _find_node_by_circle(node.children, circle_stroke)
+		if not found.is_empty():
+			return found
+	return {}
+
+
+## 트리에서 각 획의 역할을 엔트리 result에 반영 — 스타일·자동보정이 e.result를 읽기 때문.
+func _apply_tree_results(roots: Array) -> void:
+	var by_id := {}
+	for node: Dictionary in roots:
+		_collect_node_results(node, by_id)
+	for e in _entries:
+		var s: StrokeData = e.stroke
+		e["result"] = by_id.get(s.get_instance_id(), {"role": Enums.StrokeRole.DECOR})
+
+
+func _collect_node_results(node: Dictionary, by_id: Dictionary) -> void:
+	var cs: StrokeData = node.circle.stroke
+	by_id[cs.get_instance_id()] = {
+		"role": Enums.StrokeRole.CIRCLE,
+		"center": node.circle.center, "radius": node.circle.radius,
+	}
+	if node.has("rune"):
+		var rs: StrokeData = node.rune.stroke
+		by_id[rs.get_instance_id()] = {
+			"role": Enums.StrokeRole.RUNE,
+			"rune_type": node.rune.type, "score": node.rune.accuracy_raw,
+		}
+	for a: Dictionary in node.arrows:
+		var as_: StrokeData = a.stroke
+		by_id[as_.get_instance_id()] = {"role": Enums.StrokeRole.ARROW, "direction": a.direction}
+	for x: StrokeData in node.extras:
+		by_id[x.get_instance_id()] = {"role": Enums.StrokeRole.DECOR}
+	for child: Dictionary in node.children:
+		_collect_node_results(child, by_id)
 
 
 ## 단계는 파생값이라 매번 계산해도 되지만, 시그널은 실제로 바뀔 때만 쏜다
@@ -856,9 +1000,12 @@ func _apply_style(e: Dictionary) -> void:
 
 ## 현재 단계 — 부품 보유 상태에서 파생한다 (상태 변수 없음 → undo·스탬프와 자동 일관)
 func get_stage() -> int:
-	if not _parts.has("circle"):
+	if _roots.is_empty():
 		return Enums.DrawStage.CIRCLE
-	if not _parts.has("rune"):
+	# 활성 노드(방금 그린 원)를 채우는 중이다 — 껍질을 다 그린 뒤 안쪽 진의 룬을 받으려면
+	# 단계가 그 안쪽 진을 따라야 한다. 원이 하나면 활성 노드 = 루트 (기존과 동일).
+	var active := _active_node()
+	if active.is_empty() or not active.has("rune"):
 		return Enums.DrawStage.RUNE
 	return Enums.DrawStage.ARROW
 
@@ -871,6 +1018,9 @@ static func stage_hint(stage: int) -> String:
 ## 이 역할의 획을 지금 단계에서 받을 수 있나. DECOR(인식 실패)는 어느 단계에서도 거부한다 —
 ## "장식으로 남았습니다"보다 "지금은 룬을 그릴 차례"가 플레이어에게 훨씬 쓸모 있다.
 func _accepts_role(role: int) -> bool:
+	# 🔴 원은 언제나 받는다 — 새 원은 **새 노드(껍질 또는 안쪽 진)**를 연다. 중첩의 관문.
+	if role == Enums.StrokeRole.CIRCLE:
+		return true
 	var allowed: Array = STAGE_ROLES.get(get_stage(), [])
 	return allowed.has(role)
 
@@ -878,13 +1028,16 @@ func _accepts_role(role: int) -> bool:
 ## 현재 부품 상태 → 인식기 컨텍스트. classify_entries가 마지막에 도달했을 컨텍스트와 같다.
 ## 새 획을 **엔트리에 넣기 전에** 미리 채점해 단계 위반을 가려내기 위한 것.
 func _recognizer_ctx() -> Dictionary:
+	# 비원 획은 **활성 노드**(방금 그린 원) 컨텍스트로 미리 채점한다 — 안쪽 진에 그린 룬은
+	# 안쪽 진 기준으로 판정돼야 한다. 원이 하나면 그 하나 = 기존과 동일.
+	var active := _active_node()
 	var ctx := {}
-	if _parts.has("circle"):
+	if not active.is_empty():
 		ctx["has_circle"] = true
-		ctx["circle_center"] = _parts.circle.center
-		ctx["circle_radius"] = _parts.circle.radius
-	if _parts.has("rune"):
-		ctx["has_rune"] = true
+		ctx["circle_center"] = active.circle.center
+		ctx["circle_radius"] = active.circle.radius
+		if active.has("rune"):
+			ctx["has_rune"] = true
 	return ctx
 
 
@@ -939,7 +1092,9 @@ func clear_all() -> void:
 	_built = null
 	_paper_charged = false
 	clear_trace()                   # 본보기도 걷는다 (진이 사라져 앉을 자리가 없어졌다)
-	_parts = {"arrows": [], "extras": [], "strokes_ordered": []}
+	clear_rubbing()                 # 탁본도 걷는다 — 새 종이엔 필사할 밑그림이 없다
+	_roots = []
+	_parts = _empty_parts()
 	_recompute_ink()
 	_emit_stage_if_changed()
 	design_state_changed.emit(null, get_summary())

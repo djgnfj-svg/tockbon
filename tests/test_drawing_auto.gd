@@ -31,6 +31,7 @@ func _init() -> void:
 	_test_assembly_aimed()
 	_test_assembly_fixed()
 	_test_builder_edges()
+	_test_nested_tree()
 	_run_tree_tests()
 
 
@@ -40,6 +41,7 @@ func _run_tree_tests() -> void:
 	await process_frame
 	_test_synth_pressure_canvas()
 	_test_draw_order()
+	_test_nested_canvas()
 	await _test_orientation_guide()
 	await _test_copy_and_feedback()
 	await _test_design_book()
@@ -595,6 +597,29 @@ func _px_line(a: Vector2, b: Vector2, n := 16) -> PackedVector2Array:
 	return pts
 
 
+## 반 바퀴 호 — 진 안에 머무는 **굽은** 획. 원이 아니고(0.5바퀴 < CIRCLE_NET_MIN) 직진성도 낮아
+## ARROW 단계에서 DECOR로 떨어진다. (예전엔 _px_circle이 이 역할이었으나 이제 원은 새 노드로 수락됨)
+func _px_arc(r: float) -> PackedVector2Array:
+	var pts := PackedVector2Array()
+	for i in 24:
+		var a := -PI / 2.0 + PI * float(i) / 23.0
+		pts.append(CV_C + Vector2(cos(a), sin(a)) * r)
+	return pts
+
+
+func _px_tri_at(c: Vector2, size: float) -> PackedVector2Array:
+	var verts: Array[Vector2] = []
+	for k in 3:
+		var a := -PI / 2.0 + TAU * float(k) / 3.0
+		verts.append(c + Vector2(cos(a), sin(a)) * size)
+	var pts := PackedVector2Array()
+	for e in 3:
+		for i in 14:
+			pts.append(verts[e].lerp(verts[(e + 1) % 3], float(i) / 14.0))
+	pts.append(verts[0])
+	return pts
+
+
 func _px_triangle(size: float) -> PackedVector2Array:
 	var verts: Array[Vector2] = []
 	for k in 3:
@@ -780,7 +805,7 @@ func _test_draw_order() -> void:
 
 	# ── ARROW 단계: 문양만 수락 ──
 	rejected.clear()
-	_stroke_on(canvas, _px_circle(40.0))     # 진·룬 다 있으니 DECOR로 떨어진다
+	_stroke_on(canvas, _px_arc(40.0))        # 굽은 호 — 원도 룬도 아니라 DECOR로 떨어진다
 	_check(canvas._entries.size() == 2, "ARROW 단계 — 미인식(DECOR) 획 거부")
 	# 형이 흐트러진 것은 순서 위반과 다른 사유 — 다른 말을 해 줘야 한다 (자동보정 유도)
 	_check(rejected.size() == 1 and rejected[0] == &"unrecognized",
@@ -815,6 +840,45 @@ func _test_draw_order() -> void:
 	# ── stage_hint: 각 단계가 "지금 뭘 그려야 하는지" 말해 준다 ──
 	for stage: int in [Enums.DrawStage.CIRCLE, Enums.DrawStage.RUNE, Enums.DrawStage.ARROW]:
 		_check(DrawingCanvas.stage_hint(stage) != "", "stage_hint(%d) 비어 있지 않음" % stage)
+
+
+# ────────── 4.10b 중첩 진 (재귀) — 캔버스가 두 번째 원을 새 노드로 받는다 ──────────
+# 껍질을 완성한 뒤 안쪽 진을 그리면, 단계가 그 안쪽 진을 따라가고(활성 노드) 도안에 자식이 붙는다.
+
+func _test_nested_canvas() -> void:
+	var canvas := _new_canvas()
+	# 껍질: 큰 진 + 룬(안쪽 진과 안 겹치게 위쪽에) + 뚫는 화살표 → 단일 도안 완성
+	_stroke_on(canvas, _px_circle(70.0))
+	_check(canvas.get_stage() == Enums.DrawStage.RUNE, "껍질 진 후 → RUNE 단계")
+	_stroke_on(canvas, _px_tri_at(CV_C + Vector2(0, -45), 15.0))
+	_stroke_on(canvas, _px_line(CV_C, CV_C + Vector2(0, -100)))
+	_check(canvas.get_design() != null, "껍질만으로 도안 완성 (단일)")
+	_check(canvas.get_design().children.is_empty(), "아직 자식 없음")
+
+	# 안쪽 진 — ARROW 단계에서도 원은 수락된다 (새 노드). 활성 노드가 안쪽 진으로 바뀐다
+	_stroke_on(canvas, _px_circle(25.0))
+	_check(canvas._entries.size() == 4, "ARROW 단계에서 두 번째(안쪽) 원 수락")
+	_check(canvas.get_stage() == Enums.DrawStage.RUNE,
+		"활성 노드가 안쪽 진 → 다시 RUNE 단계 (안쪽 진의 룬 차례)")
+
+	# 안쪽 진의 룬
+	_stroke_on(canvas, _px_tri_at(CV_C, 10.0))
+	var d: SpellDesign = canvas.get_design()
+	_check(d != null, "중첩 도안 완성")
+	if d != null:
+		_check(d.children.size() == 1, "껍질 도안이 안쪽 진 1개를 품는다")
+		_check(d.rune_type == Enums.RuneType.FIRE, "껍질 룬 = 불")
+		if d.children.size() == 1:
+			_check(d.children[0].circle_radius < d.circle_radius, "안쪽 진 규모 < 껍질 규모")
+
+	# 탁본 필사 — 완성 도안을 배경으로 깐다. _entries·인식엔 영향 없어야 한다 (순수 배경)
+	var entries_before: int = canvas._entries.size()
+	canvas.show_rubbing(d)
+	_check(canvas.has_rubbing(), "show_rubbing → 탁본 깔림")
+	_check(canvas._entries.size() == entries_before, "탁본은 _entries를 건드리지 않는다")
+	canvas.clear_rubbing()
+	_check(not canvas.has_rubbing(), "clear_rubbing → 탁본 걷힘")
+	canvas.queue_free()
 
 
 # ────────── 4.11 방위 가이드 (v1.6) — 위=앞(조준 방향)을 종이 위에 보이게 ──────────
@@ -897,7 +961,7 @@ func _test_copy_and_feedback() -> void:
 	# 진·룬이 다 있는 상태가 아니어도, RUNE 단계에서 형이 안 잡힌 획은 DECOR로 떨어진다
 	_stroke_on(canvas, _px_triangle(30.0))     # 룬 수락 → ARROW 단계
 	reasons.clear()
-	_stroke_on(canvas, _px_circle(40.0))       # ARROW 단계에서 DECOR
+	_stroke_on(canvas, _px_arc(40.0))          # ARROW 단계에서 굽은 호 = DECOR (원은 이제 새 노드로 수락됨)
 	_check(reasons.size() == 1 and reasons[0] == &"unrecognized",
 		"인식 실패 → unrecognized (순서 위반과 다른 사유)")
 	_check(Copy.UNRECOGNIZED.contains("자동보정"), "인식 실패 문구가 자동보정으로 유도한다")
@@ -1223,3 +1287,76 @@ func _test_builder_edges() -> void:
 	_check(absf(ink_flat - ink_heavy) > 0.01,
 		"같은 평균 필압이라도 **눌린 위치**가 다르면 먹의 양이 다르다 (평활 %.2f vs 뒤쪽 %.2f)" % [
 			ink_flat, ink_heavy])
+
+
+# ────────── 5b. 중첩 진 (재귀, 2026-07-15 — TRUTH §4) ──────────
+# 껍질 진이 안쪽 진을 품는다: 감싸는 가장 작은 진으로 트리를 짠다. 룬은 자기 진에, 화살표는
+# 뚫고 나온 껍질에 붙는다. 단일 원이면 루트 하나·자식 0 = classify_entries와 동치(하위호환).
+
+func _entries_from(point_sets: Array) -> Array[Dictionary]:
+	var entries: Array[Dictionary] = []
+	for pts: PackedVector2Array in point_sets:
+		var s := StrokeData.new()
+		s.points = pts
+		entries.append({"stroke": s, "locked": false, "result": {}})
+	return entries
+
+
+func _test_nested_tree() -> void:
+	var balance := load("res://data/balance.tres") as BalanceData
+	var c := Vector2(0.5, 0.5)
+
+	# 단일 원 — 트리는 루트 1개, 자식 0 (하위호환)
+	var flat_sets: Array = [
+		_gen_circle(c, 0.28),
+		_gen_triangle(c, 0.10),                       # 불 룬
+		_gen_line(c, c + Vector2(0.0, -0.42), 12),    # 위로 뚫는 화살표
+	]
+	var flat_roots := DesignBuilder.assemble_tree(_entries_from(flat_sets))
+	_check(flat_roots.size() == 1, "단일 원 → 루트 1개")
+	if flat_roots.size() == 1:
+		_check((flat_roots[0].children as Array).is_empty(), "단일 원 → 자식 0")
+		_check(flat_roots[0].has("rune"), "단일 원 루트에 룬 있음")
+		_check((flat_roots[0].arrows as Array).size() == 1, "단일 원 루트에 화살표 1개")
+
+	# 중첩 — 큰 껍질(0.30) 안에 작은 진(0.10). 각 진에 자기 불 룬, 껍질에 뚫는 화살표.
+	var nested_sets: Array = [
+		_gen_circle(c, 0.30),                          # 껍질
+		_gen_circle(c, 0.10),                          # 안쪽 진
+		_gen_triangle(c, 0.045),                       # 안쪽 진의 룬 (중심)
+		_gen_triangle(Vector2(0.5, 0.74), 0.04),       # 껍질의 룬 (환형부: 0.10 밖·0.30 안)
+		_gen_line(c, c + Vector2(0.0, -0.46), 12),     # 껍질을 뚫는 화살표
+	]
+	var roots := DesignBuilder.assemble_tree(_entries_from(nested_sets))
+	_check(roots.size() == 1, "중첩 → 루트(껍질) 1개")
+	if roots.size() != 1:
+		return
+	var shell: Dictionary = roots[0]
+	_check((shell.children as Array).size() == 1, "껍질이 안쪽 진 1개를 품는다")
+	_check(shell.has("rune") and int(shell.rune.type) == Enums.RuneType.FIRE,
+		"껍질 룬 = 불 (환형부 획이 껍질에 소속)")
+	_check((shell.arrows as Array).size() == 1, "화살표는 뚫고 나온 껍질에 소속")
+	if (shell.children as Array).size() == 1:
+		var inner: Dictionary = shell.children[0]
+		_check(inner.has("rune") and int(inner.rune.type) == Enums.RuneType.FIRE,
+			"안쪽 진 룬 = 불 (안쪽 획이 안쪽 진에 소속)")
+		_check((inner.arrows as Array).is_empty(), "안쪽 진엔 화살표 없음")
+		_check(float(inner.radius_cu) < float(shell.radius_cu), "안쪽 진이 껍질보다 작다")
+
+	# build_tree → SpellDesign 트리
+	var d := DesignBuilder.build_tree(shell, balance)
+	_check(d != null, "build_tree → SpellDesign")
+	if d != null:
+		_check(d.children.size() == 1, "SpellDesign.children 1개")
+		_check(d.rune_type == Enums.RuneType.FIRE, "껍질 SpellDesign 룬 = 불")
+		if d.children.size() == 1:
+			_check(d.children[0] is SpellDesign, "자식이 SpellDesign 타입")
+			_check(d.children[0].circle_radius < d.circle_radius,
+				"자식 진 규모 < 껍질 진 규모")
+		# 재귀 트리가 .tres로 라운드트립되는가 (Godot 서브리소스 직렬화)
+		var tmp := "user://_nested_roundtrip.tres"
+		ResourceSaver.save(d, tmp)
+		var loaded := ResourceLoader.load(tmp, "", ResourceLoader.CACHE_MODE_IGNORE) as SpellDesign
+		_check(loaded != null and loaded.children.size() == 1,
+			"중첩 SpellDesign .tres 라운드트립 (자식 보존)")
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(tmp))

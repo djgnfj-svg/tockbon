@@ -161,24 +161,35 @@ func compute_design_lifetime(design: SpellDesign) -> float:
 
 
 func _spawn_projectiles(design: SpellDesign, origin: Vector2, aim_dir: Vector2) -> void:
+	# 지팡이 패턴은 **최상위 껍질에만** 적용된다 — 발수(단발·산탄·전방위)는 손에 쥔 지팡이의 몫이다.
+	var aim_angle := aim_dir.angle() if aim_dir.length_squared() > 0.0 else 0.0
+	_spawn_for(design, origin, wand_shots(aim_angle))
+
+
+## 한 진(껍질이든 자식이든)을 주어진 발사각들로 스폰한다. 각 탄에 deploy_children을 이어
+## **재귀 전개**를 잇는다. shot_angles가 하나면 단발 — 자식은 발수 곱셈 없이 하나로 전개된다.
+func _spawn_for(design: SpellDesign, origin: Vector2, shot_angles: Array) -> void:
 	var rune: RuneDef = Db.get_rune(design.rune_type)
 	if rune == null:
 		push_warning("SpellSystem: RuneDef 미등록 (rune_type=%d) — 기본 계수로 발사" % design.rune_type)
-	var aim_angle := aim_dir.angle() if aim_dir.length_squared() > 0.0 else 0.0
 	_spawn_cast_circle(design, origin)
 
 	var scene := ProjectileScene
 	if rune != null and rune.projectile_scene != null:
 		scene = rune.projectile_scene
 
-	# 전부 도안당 1회다 — **탄마다 갈라지는 값이 하나도 없다** (v2.0).
-	# 지팡이가 발수를 정하므로 같은 도안의 탄들은 방향만 다르다.
-	var damage := compute_damage(design, rune)
+	# 전부 진당 1회다 — **탄마다 갈라지는 값이 하나도 없다** (v2.0).
+	# 🔴 복합 (N개) — 위력 계수는 **fill 가중평균**(룬 1개면 그 룬 그대로 = 하위호환), primary(=fill 최대,
+	# design.rune_type)가 탄 색·먹선·충격파·1차 피해, 나머지 룬은 rune_hits로 상태만 얹힌다.
+	var rlist := design.rune_list()
+	var damage := balance.projectile_base_damage \
+		* (balance.circle_damage_base + design.circle_radius) * _blended_rune_coef(rlist)
 	var status_power := compute_status_power(design, rune)
+	var rune_hits := _rune_hits(rlist)
 	var effects := compile_effects(design)
 	var lifetime := compute_design_lifetime(design)
 
-	for shot_angle: float in wand_shots(aim_angle):
+	for shot_angle: float in shot_angles:
 		var proj := scene.instantiate() as ProjectileScript
 		if proj == null:
 			push_warning("SpellSystem: projectile_scene이 투사체 스크립트가 아님 — 스킵")
@@ -194,8 +205,58 @@ func _spawn_projectiles(design: SpellDesign, origin: Vector2, aim_dir: Vector2) 
 			shot_angle,
 			effects,
 			lifetime,
-			design
+			design,
+			rune_hits
 		)
+		# 이 탄이 껍질이면 죽을 때 자식을 전개한다 (재귀는 여기서 이어진다)
+		proj.deploy_children.connect(_on_deploy_children)
+
+
+## 복합 위력 계수 = **fill 가중평균**의 RuneDef.base_damage. 룬 1개면 그 룬의 base_damage 그대로다
+## (fill과 무관 — 위력은 진의 축이고 농도는 상태이상 세기만 정한다, v1.7). fill 총합이 0이면
+## 가중이 무의미하므로 단순 평균으로 물러난다 (안 그러면 fill=0 단일 룬이 base_damage를 잃는다).
+func _blended_rune_coef(rlist: Array) -> float:
+	var wsum := 0.0
+	var w := 0.0
+	var plain := 0.0
+	for r: RuneInstance in rlist:
+		var rd: RuneDef = Db.get_rune(r.type)
+		var bd := rd.base_damage if rd != null else 1.0
+		wsum += r.fill * bd
+		w += r.fill
+		plain += bd
+	if w > 0.0:
+		return wsum / w
+	return (plain / float(rlist.size())) if not rlist.is_empty() else 1.0
+
+
+## 각 룬의 착탄 히트 정보 — [{rune_type, status, status_power}]. 상태 세기는 룬마다 자기 fill·순도로.
+func _rune_hits(rlist: Array) -> Array:
+	var out: Array = []
+	for r: RuneInstance in rlist:
+		var rd: RuneDef = Db.get_rune(r.type)
+		var density := lerpf(balance.rune_density_min, balance.rune_density_max, clampf(r.fill, 0.0, 1.0))
+		var accuracy := maxf(r.accuracy, balance.accuracy_floor)
+		out.append({
+			"rune_type": r.type,
+			"status": rd.status if rd != null else Enums.Status.NONE,
+			"status_power": (rd.status_power * density * accuracy) if rd != null else 0.0,
+		})
+	return out
+
+
+## 껍질이 열렸다 — 품은 진들을 그 자리에서 각자 전개한다. 물리 콜백 중일 수 있으므로 **지연 실행**한다
+## (Area2D를 콜백 안에서 즉시 add_child하면 "flushing queries" 에러로 조용히 안 생긴다 — 충격파와 같은 함정).
+func _on_deploy_children(children: Array, at: Vector2, travel_angle: float) -> void:
+	call_deferred(&"_deploy_children_now", children, at, travel_angle)
+
+
+func _deploy_children_now(children: Array, at: Vector2, travel_angle: float) -> void:
+	# 자식은 껍질이 가던 방향으로 **단발** 전개 (지팡이 발수는 껍질만의 것)
+	for child: Variant in children:
+		var cd := child as SpellDesign
+		if cd != null:
+			_spawn_for(cd, at, [travel_angle])
 
 ## 발밑에 내가 그린 진이 먹선으로 펼쳐졌다 사라진다 (GDD §10.5). 순수 비주얼 — 충돌·물리 없음.
 ## strokes가 없는 샘플·구세이브 도안이면 build_design이 null → 조용히 스킵.

@@ -55,10 +55,18 @@ const BOUNCE_PROBE_PAD_PX := 2.0
 ## 반사 직후 벽에서 밀어내는 거리 — 벽에 파묻혀 매 프레임 재반사하는 걸 막는다
 const BOUNCE_PUSH_PX := 1.0
 
+## 🔴 **중첩 진 (재귀) — 껍질이 열린다.** 이 탄이 죽는 순간(착탄·벽·수명 끝) `_design.children`이
+## 있으면 그 자리에서 각자 전개된다. spell_system이 이 시그널을 받아 자식 진을 새 탄으로 스폰한다.
+signal deploy_children(children: Array, at: Vector2, travel_angle: float)
+
 var damage: float = 0.0
 var rune_type: int = Enums.RuneType.FIRE
 var status: int = Enums.Status.NONE
 var status_power: float = 0.0
+## 🔴 복합 룬 (N개, TRUTH §4) — 이 탄이 싣고 가는 모든 룬의 히트 정보 [{rune_type, status, status_power}].
+## 착탄 시 primary(=rune_type)가 피해+상태, 나머지는 피해 0으로 상태만 얹는다 (적 계약 무변경).
+## 비어 있으면 단일 룬(primary 하나)으로 본다 — 하위호환.
+var rune_hits: Array = []
 ## 발사 시점의 각도. **진행 방향이 아니다** — 유도·반사는 _velocity가 바뀐다
 var direction_angle: float = 0.0
 ## **v2.0 문양 축** — {GlyphType: Σreach}. 여러 효과가 **동시에** 얹힌다 (spell_system.compile_effects)
@@ -115,11 +123,13 @@ func setup(p_damage: float, p_rune_type: int, p_status: int, p_status_power: flo
 		p_speed: float, p_angle: float,
 		p_effects: Dictionary = {},
 		p_lifetime: float = 0.0,
-		p_design: SpellDesign = null) -> void:
+		p_design: SpellDesign = null,
+		p_rune_hits: Array = []) -> void:
 	damage = p_damage
 	rune_type = p_rune_type
 	status = p_status
 	status_power = p_status_power
+	rune_hits = p_rune_hits
 	direction_angle = p_angle
 	_velocity = Vector2.RIGHT.rotated(p_angle) * p_speed
 	if p_lifetime > 0.0:
@@ -214,7 +224,7 @@ func _physics_process(delta: float) -> void:
 	position += _velocity * delta
 	_life_left -= delta
 	if _life_left <= 0.0:
-		queue_free()
+		_consume()   # 수명 끝 = 껍질이 열리는 순간이기도 하다 → _consume 한 곳으로 모은다
 
 # ── 팅김⚡ 벽 반사 ───────────────────────────────────────────
 # 🔴 Area2D는 충돌 법선을 안 준다 (body_entered는 "닿았다"만 알려 준다). 그래서 진행 방향으로
@@ -376,11 +386,23 @@ func _hit_wall() -> void:
 
 func _deal_damage(node: Node2D) -> void:
 	# enemy_hit 발신은 적의 take_hit 내부 책임 (약점 배율 반영 최종 피해 기준 — 리드 확정)
-	if node.has_method("take_hit"):
-		node.take_hit(damage, rune_type, status, status_power)
+	if not node.has_method("take_hit"):
+		return
+	# 🔴 복합 — primary(=rune_type)가 피해+자기 상태를 얹고, 나머지 룬은 **피해 0**으로 상태만
+	# 얹는다 (take_hit의 `if dmg>0` 덕에 피해·enemy_hit 이중 계산 없음 — 적 계약 무변경).
+	node.take_hit(damage, rune_type, status, status_power)
+	for rh: Dictionary in rune_hits:
+		if int(rh.get("rune_type", -1)) == rune_type:
+			continue   # primary는 위에서 이미 얹었다
+		node.take_hit(0.0, int(rh.rune_type), int(rh.status), float(rh.status_power))
 
 func _consume() -> void:
 	if _consumed:
 		return
 	_consumed = true
+	# 🔴 껍질이 열린다 — 품은 진들이 이 자리에서 각자 전개된다 (재귀, TRUTH §4).
+	# 방위 기준 = **탄이 가던 방향** (유도로 꺾였으면 꺾인 뒤). 종이 위쪽이 그쪽을 향한다.
+	if _design != null and not _design.children.is_empty():
+		var travel := _velocity.angle() if not _velocity.is_zero_approx() else direction_angle
+		deploy_children.emit(_design.children, global_position, travel)
 	queue_free()

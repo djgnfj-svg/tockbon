@@ -20,6 +20,9 @@ const Copy := preload("res://src/drawing/drawing_copy.gd")
 signal closed
 ## 도안이 방금 맺혔다 — 여는 쪽(작업대·거점)이 연출·안내에 쓴다
 signal design_completed(design: SpellDesign)
+## 🔴 탁본 필사 — 책 펼친 중 숫자키를 눌렀다. 예시 목록은 바깥(시험대·거점)이 쥐므로 인덱스만
+## 올린다. 받은 쪽이 해당 도안을 show_rubbing으로 깐다.
+signal example_requested(idx: int)
 
 # ── 레이아웃 (뷰포트 640×360 고정) ──
 const BOOK_RECT := Rect2(16, 10, 608, 340)
@@ -85,6 +88,15 @@ func is_open() -> bool:
 	return visible
 
 
+## 🔴 완성된 도안을 캔버스에 옅은 탁본으로 깐다 — 그 위에 필사한다 (캔버스로 forwarding).
+func show_rubbing(design: SpellDesign) -> void:
+	_canvas.call(&"show_rubbing", design)
+
+
+func clear_rubbing() -> void:
+	_canvas.call(&"clear_rubbing")
+
+
 ## 책을 펼친다. 종이는 보유분 중 최저 등급을 자동으로 집는다 — 열자마자 그릴 수 있어야 한다
 func open() -> void:
 	if visible:
@@ -133,6 +145,16 @@ func _unhandled_input(event: InputEvent) -> void:
 	if k != null and k.pressed and not k.echo and k.keycode == KEY_Z and k.ctrl_pressed:
 		_canvas.call(&"undo_last")
 		get_viewport().set_input_as_handled()
+		return
+	# 🔴 탁본 필사 — 숫자키로 예시를 부른다 (책 펼친 중). 실제 예시 목록은 바깥(시험대·거점)이
+	# 쥐고 있으므로 요청만 올린다. 0 = 탁본 걷기.
+	if k != null and k.pressed and not k.echo:
+		if k.keycode == KEY_0:
+			_canvas.call(&"clear_rubbing")
+			get_viewport().set_input_as_handled()
+		elif k.keycode >= KEY_1 and k.keycode <= KEY_9:
+			example_requested.emit(k.keycode - KEY_1)
+			get_viewport().set_input_as_handled()
 
 
 # ─────────────────────────── 종이 ───────────────────────────

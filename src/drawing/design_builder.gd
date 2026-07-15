@@ -112,6 +112,162 @@ static func is_complete(parts: Dictionary) -> bool:
 	return parts.has("circle") and parts.has("rune") and not parts.arrows.is_empty()
 
 
+# ─────────────────────── 중첩 진 (재귀, 2026-07-15 — TRUTH §4) ───────────────────────
+# **진 안 진 = 재귀.** 여러 원을 그리면 "감싸는 가장 작은 진"으로 트리를 짠다 — 바깥 진이 껍질,
+# 안쪽 진들이 그 껍질이 열릴 때 전개되는 내용물. 각 원 노드는 기존 `build()`가 먹는 `parts` 모양
+# 그대로라, **build를 노드마다 재귀 호출**하면 SpellDesign 트리가 나온다. 원이 하나뿐이면 루트
+# 하나짜리 트리 = `classify_entries`와 정확히 같은 결과 (하위호환).
+#
+# **핵심 수법**: 룬/문양 판정을 다시 발명하지 않는다. 각 획을 소속 원의 컨텍스트로 기존
+# `Recognizer.classify_stroke`에 통과시키면, "진 안에 머물면 룬 / 뚫고 나가면 화살표"가 원마다
+# 그대로 성립한다. 인식 규칙이 한 지점(recognizer)에 남는다.
+
+## 원이 점을 감싸는가 (경계에 탈출 여유 ARROW_ESCAPE_R만큼 준다 — 인식기 탈출 판정과 대칭)
+static func _circle_contains(center: Vector2, radius: float, p: Vector2) -> bool:
+	return center.distance_to(p) <= radius * Recognizer.ARROW_ESCAPE_R
+
+
+## 이 노드에 이미 그 종류 룬이 있나 (복합 — 같은 종류 중복 금지)
+static func _node_has_rune_type(node: Dictionary, rtype: int) -> bool:
+	for re: Dictionary in node.runes:
+		if int(re.type) == rtype:
+			return true
+	return false
+
+
+## entries → 원 노드 트리(루트 배열). 각 노드는 build()가 먹는 parts + {"children": [노드…],
+## "radius_cu": 원 반지름(캔버스 단위)}. 원이 없으면 빈 배열.
+##
+## 알고리즘: (1) 획을 원/비원으로 가른다(detect_circle은 ctx 무관·신뢰 가능) (2) 원들을 감싸기로
+## 트리화 — 각 원의 부모 = 그를 감싸는 가장 작은 더 큰 원 (3) 비원 획은 소속 원을 찾아
+## 그 원 컨텍스트로 재인식 → 룬이면 그 원의 룬, 화살표면 그 원의 화살표.
+static func assemble_tree(entries: Array[Dictionary]) -> Array[Dictionary]:
+	var circles: Array[Dictionary] = []
+	var others: Array[StrokeData] = []
+	for e in entries:
+		var stroke: StrokeData = e.stroke
+		var c := Recognizer.detect_circle(stroke.points)
+		if c.is_circle:
+			var node := {
+				"circle": {"center": c.center, "radius": c.radius, "stroke": stroke},
+				"radius_cu": maxf(float(c.radius), 1e-6),
+				"runes": [], "arrows": [], "extras": [], "strokes_ordered": [stroke],
+				"children": [],
+			}
+			stroke.role = Enums.StrokeRole.CIRCLE
+			circles.append(node)
+		else:
+			others.append(stroke)
+
+	if circles.is_empty():
+		return []
+
+	# 감싸기 트리 — 각 원의 부모 = 그 중심을 감싸는 **가장 작은 더 큰 원**
+	var roots: Array[Dictionary] = []
+	for i in circles.size():
+		var me: Dictionary = circles[i]
+		var mc: Dictionary = me.circle
+		var parent: Dictionary = {}
+		var parent_r := INF
+		for j in circles.size():
+			if j == i:
+				continue
+			var other: Dictionary = circles[j]
+			var oc: Dictionary = other.circle
+			if float(oc.radius) <= float(mc.radius):
+				continue  # 부모는 나보다 커야 한다 (같은 크기 두 원은 형제)
+			if not _circle_contains(oc.center, float(oc.radius), mc.center):
+				continue
+			if float(oc.radius) < parent_r:
+				parent_r = float(oc.radius)
+				parent = other
+		if parent.is_empty():
+			roots.append(me)
+		else:
+			(parent.children as Array).append(me)
+
+	# 비원 획 배정 — 룬은 감싸는 가장 작은 진, 화살표는 뚫고 나온 가장 바깥 진
+	for stroke in others:
+		var start := stroke.points[0]
+		# 시작점을 감싸는 원들, 작은 것부터
+		var cand: Array[Dictionary] = []
+		for node: Dictionary in circles:
+			var cc: Dictionary = node.circle
+			if _circle_contains(cc.center, float(cc.radius), start):
+				cand.append(node)
+		cand.sort_custom(func(a, b): return float(a.circle.radius) < float(b.circle.radius))
+		if cand.is_empty():
+			continue  # 어느 진에도 안 걸린 획 — 버린다 (DECOR)
+		# 머무는(탈출 안 하는) 가장 작은 진 = 룬 소속. 다 뚫으면 가장 바깥 = 화살표 소속
+		var owner: Dictionary = {}
+		for node: Dictionary in cand:
+			var cc: Dictionary = node.circle
+			if not Recognizer.detect_escape(stroke.points, cc.center, float(cc.radius)):
+				owner = node
+				break
+		if owner.is_empty():
+			owner = cand.back()  # 전부 뚫음 → 화살표는 가장 바깥 껍질의 것
+		_assign_stroke_to_node(stroke, owner)
+
+	return roots
+
+
+## 획 하나를 소속 원 노드에 넣는다 — 그 원 컨텍스트로 재인식해 룬/문양을 가른다.
+static func _assign_stroke_to_node(stroke: StrokeData, node: Dictionary) -> void:
+	var cc: Dictionary = node.circle
+	var ctx := {
+		"has_circle": true,
+		"circle_center": cc.center,
+		"circle_radius": float(cc.radius),
+	}
+	var res := Recognizer.classify_stroke(stroke.points, ctx)
+	stroke.role = int(res.role)
+	(node.strokes_ordered as Array).append(stroke)
+	match int(res.role):
+		Enums.StrokeRole.RUNE:
+			# 🔴 복합 — 서로 다른 종류는 여럿 담는다. **같은 종류는 하나뿐**(농도 뻥튀기 금지).
+			if _node_has_rune_type(node, int(res.rune_type)):
+				stroke.role = Enums.StrokeRole.DECOR
+				(node.extras as Array).append(stroke)
+			else:
+				var re := {
+					"type": res.rune_type,
+					"accuracy_raw": res.score,
+					"stroke": stroke,
+				}
+				(node.runes as Array).append(re)
+				if not node.has("rune"):
+					node["rune"] = re   # primary = 첫 룬 (build이 fill 최대로 다시 고른다)
+		Enums.StrokeRole.ARROW:
+			(node.arrows as Array).append({
+				"direction": res.direction,
+				"length": res.length,
+				"extent": float(res.get("extent", res.length)),
+				"start": res.start,
+				"glyph": int(res.get("glyph", Enums.GlyphType.BASIC)),
+				"glyph_score": float(res.get("glyph_score", 0.0)),
+				"stroke": stroke,
+			})
+		_:
+			(node.extras as Array).append(stroke)
+
+
+## 노드 트리 → SpellDesign 트리 (재귀). 각 노드를 기존 build()로 짓고 children을 이어 붙인다.
+## 룬이 없는 노드(껍질만 있고 속성 없음)는 아직 미지원 — null 반환(호출자가 스킵). 미완 노드도 같다.
+static func build_tree(node: Dictionary, balance: BalanceData,
+		paper_grade: int = 1, paper_params: Dictionary = {}) -> SpellDesign:
+	if not node.has("rune"):
+		return null
+	var d := build(node, balance, null, paper_grade, paper_params)
+	var kids: Array[SpellDesign] = []
+	for child: Dictionary in node.children:
+		var cd := build_tree(child, balance, paper_grade, paper_params)
+		if cd != null:
+			kids.append(cd)
+	d.children = kids
+	return d
+
+
 ## parts → SpellDesign. into를 주면 기존 인스턴스를 갱신한다(id 유지).
 ## paper_grade·paper_params: 선택된 종이의 등급·ItemDef.params (TECH_SPEC §4.1 PAPER 키).
 ## 기본 인자는 무보정(등급 1·감면 0·보너스 0)과 같아 기존 호출과 호환된다.
@@ -132,14 +288,32 @@ static func build(parts: Dictionary, balance: BalanceData, into: SpellDesign = n
 	var radius_cu := maxf(float(circle.radius), 1e-6)  # 캔버스 단위 원 반지름
 	# 스키마의 circle_radius(0..1)는 "캔버스를 꽉 채우는 원(반지름 0.5) = 1.0" 기준
 	d.circle_radius = clampf(float(circle.radius) / 0.5, 0.0, 1.0)
-	d.rune_type = parts.rune.type
-	d.rune_accuracy = clampf(
-		maxf(float(parts.rune.accuracy_raw), balance.accuracy_floor), 0.0, 1.0)
-	# v1.7 농도 축 — 룬이 진을 얼마나 채우는가. **진 대비 비율**이라 진을 키우면 같은 룬도 옅어진다.
-	# 획이 없는 도안(샘플·구세이브)은 스키마 기본값(중간 농도)을 그대로 둔다
-	var rune_stroke := parts.rune.get("stroke") as StrokeData
-	if rune_stroke != null and rune_stroke.points.size() >= 2:
-		d.rune_fill = rune_fill_of(rune_stroke, radius_cu)
+	# 🔴 복합 룬 (N개, TRUTH §4) — parts.runes(멀티) 우선, 없으면 parts.rune(단일·테스트 폴백) 하나.
+	# 각 룬의 농도(fill)는 **자기 획 ÷ 이 진**이라 진을 키우면 같은 룬도 옅어진다 (v1.7).
+	# 획이 없는 도안(샘플·구세이브)은 스키마 기본값(중간 농도)을 그대로 둔다.
+	var rune_src: Array = parts.get("runes", [])
+	if rune_src.is_empty() and parts.has("rune"):
+		rune_src = [parts.rune]
+	var runes: Array[RuneInstance] = []
+	for re: Dictionary in rune_src:
+		var acc := clampf(maxf(float(re.get("accuracy_raw", 1.0)), balance.accuracy_floor), 0.0, 1.0)
+		var fill := 0.5
+		var rs := re.get("stroke") as StrokeData
+		if rs != null and rs.points.size() >= 2:
+			fill = rune_fill_of(rs, radius_cu)
+		elif re.has("fill"):
+			fill = clampf(float(re.fill), 0.0, 1.0)
+		runes.append(RuneInstance.make(int(re.type), fill, acc))
+	d.runes = runes
+	# primary(스칼라) = fill 최대 룬 — 탄 색·먹선·약점·마나 기준. 단일 룬이면 그 하나 = 지금과 동일.
+	if not runes.is_empty():
+		var primary: RuneInstance = runes[0]
+		for r: RuneInstance in runes:
+			if r.fill > primary.fill:
+				primary = r
+		d.rune_type = primary.type as Enums.RuneType
+		d.rune_fill = primary.fill
+		d.rune_accuracy = primary.accuracy
 
 	var arrows: Array[ArrowData] = []
 	for a: Dictionary in parts.arrows:
@@ -210,10 +384,17 @@ static func build(parts: Dictionary, balance: BalanceData, into: SpellDesign = n
 	for ad: ArrowData in arrows:
 		reach_t += clampf(inverse_lerp(
 			balance.glyph_reach_min, balance.glyph_reach_max, ad.reach), 0.0, 1.0)
+	# 농도 마나는 **룬마다** 문다 — 복합이면 룬 하나 더 얹을 때마다 시전 비용이 오른다 (공짜면
+	# "룬은 언제나 많이"가 정답). 단일 룬이면 Σfill = primary fill이라 기존과 정확히 같다.
+	var fill_sum := 0.0
+	for r: RuneInstance in runes:
+		fill_sum += r.fill
+	if runes.is_empty():
+		fill_sum = d.rune_fill
 	d.mana_cost = (
 		mana_base
 		+ balance.circle_mana_mult * d.circle_radius
-		+ balance.rune_density_mana_mult * d.rune_fill
+		+ balance.rune_density_mana_mult * fill_sum
 		+ balance.mana_per_arrow * float(arrows.size())
 		+ balance.glyph_reach_mana_mult * reach_t
 	) * (1.0 - discount)
