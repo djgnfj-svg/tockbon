@@ -1,17 +1,19 @@
 extends Control
 ## 드로잉 캔버스 — 획 캡처(마우스/태블릿 필압)·잉크 렌더·인식 파이프라인·SpellDesign 생성.
 ## 좌클릭 드래그 = 획 / 우클릭 = 획 취소·마지막 획 취소 / undo_last()는 Ctrl+Z용으로 외부에서 호출.
-## 완성(진1+룬1+화살표1+) 시 EventBus.design_created, 이후 변경마다 design_updated 발신.
+## 🔴 완성(진1+룬1+화살표1+)은 **초안**일 뿐 — commit_design()(Enter/버튼)을 눌러야 EventBus.design_created,
+## 이후 변경마다 design_updated 발신 (F1, 2026-07-15: 화살표 하나로 자동 완성되지 않는다).
 ## 종이 등급(GDD §5): set_paper() 호출 시 잉크 상한·완성 시 종이 소모·0장 완성 차단이 활성화.
 ## set_paper()를 부르지 않은 캔버스는 기존과 동일하게 동작한다 (레거시 — 단독 테스트 호환).
 
 const Recognizer := preload("res://src/drawing/recognizer.gd")
 const DesignBuilder := preload("res://src/drawing/design_builder.gd")
 const RuneTemplates := preload("res://src/drawing/rune_templates.gd")
+const GlyphTemplates := preload("res://src/drawing/glyph_templates.gd")
 const InkStroke := preload("res://src/drawing/ink_stroke.gd")
 const Copy := preload("res://src/drawing/drawing_copy.gd")
 const StrokeGuide := preload("res://src/drawing/stroke_guide.gd")
-const InkRender := preload("res://src/core/ink_render.gd")
+const InkRender := preload("res://src/core/ink_render.gd")   # 화살표 방향·뻗은거리 측정(스탬프용)
 
 signal stroke_classified(result: Dictionary)
 signal design_state_changed(design: SpellDesign, summary: Dictionary)
@@ -26,6 +28,10 @@ signal design_completed(design: SpellDesign)
 signal stage_changed(stage: int)
 ## 도안 완성 조건은 갖췄으나 보유 종이가 없어 생성이 차단됨 (reason: &"no_paper")
 signal completion_blocked(reason: StringName)
+## 🔴 **맺힘 상태가 바뀌었다** (F1, 2026-07-15) — 확정 키/버튼 UI가 이걸 듣는다.
+## can_commit = 초안이 완성 조건을 갖춰 **확정을 기다린다** (종이 아직 미소모).
+## committed = 이미 맺혔다(종이 소모·발사 가능). 확정은 명시적이다 — 화살표 하나로 자동 완성되지 않는다.
+signal commit_state_changed(can_commit: bool, committed: bool)
 ## 종이 확대 배율이 바뀌었다 (1.0 = 원래 크기) — 배율 표시 UI용
 signal zoom_changed(zoom: float)
 ## 본보기를 들었다/놓았다/걷었다 — 조작 안내 문구용 (active=false면 본보기가 없다)
@@ -40,7 +46,7 @@ const REJECT_COLOR := Color(0.75, 0.15, 0.10)  # 무효 획 경고색
 const TRACE_SPAN_STEP := 1.12          # 휠 한 칸 — 곱셈이라 작을 때 곱게 움직인다
 const TRACE_SPAN_MIN := 0.05
 const TRACE_SPAN_MAX := 0.70
-const TRACE_ROT_STEP := PI / 12.0      # Shift+휠 한 칸 (15도)
+# (옛 TRACE_ROT_STEP은 폐지 — 회전이 우클릭+휠에서 고무줄 겨눔으로 바뀌었다, 2026-07-15)
 
 # ── 마우스 필압 합성 (누적형) ──
 # 마우스엔 필압이 없다. 대신 **한 자리에 머무는 시간**만큼 그 지점이 굵어진다 —
@@ -94,6 +100,22 @@ const GUIDE_MARGIN := 0.045          # 글자를 가장자리에서 띄우는 �
 const GUIDE_FONT_RATIO := 0.038      # 글자 크기 비율 — 캔버스가 커도 작아도 비슷하게 보이게
 const GUIDE_DOT := 2.0               # 중심점 반지름(px) — 진(원)을 그릴 자리를 암시
 
+# ── 동심원 안내 링 (참고 이미지의 "층층이 두르는 룩"만 빌려온다) ──
+# 🔴 **순수 배경이다 — 슬롯이 아니다.** 참고 이미지의 마법진은 "고리=처리 단계"라 배치가
+# 스위치가 되지만(TRUTH §1.5 위반), 우리는 **껍데기(정돈된 룩)만 빌리고 기계는 안 빌린다.**
+# 이 링들은 판정하지 않는다 — 어디에 룬을 앉히고 어디까지 문양을 뻗을지 **눈대중**을 돕는 참고선일 뿐.
+# 화살표 방향(안/밖 → 기둥/폭발)이라는 창발은 그대로 살아 있다.
+# 반지름은 표준 진(TRACE_CIRCLE_SPAN=0.44, 반지름 0.22)과 인식 상수에 **정렬**한다 —
+# 책자 본보기가 앉는 자리·문양 탈출선과 눈에 보이는 링이 어긋나지 않게.
+const GUIDE_RING := Color(0.13, 0.11, 0.10, 0.06)      # 보조 링 — 십자보다도 옅게(참고만)
+const GUIDE_RING_MAIN := Color(0.42, 0.30, 0.12, 0.16) # 진 경계 링 — 기준이라 살짝 또렷하게
+const GUIDE_RING_UNIT := 0.22        # 기준 진 반지름 (TRACE_CIRCLE_SPAN * 0.5와 일치)
+# (반지름 배수, 의미) — 룬 농도 눈금 · 진 경계 · 문양 탈출선(ARROW_ESCAPE_R) · 문양 세기 참고
+const GUIDE_RING_RUNE := 0.45        # 룬 fill 기준 (TRACE_RUNE_FRAC와 일치)
+const GUIDE_RING_ESCAPE := 1.20      # 문양이 이 밖으로 나가야 화살표 (recognizer ARROW_ESCAPE_R)
+const GUIDE_RING_REACH := 1.70       # 문양 reach 참고 (더 뻗을수록 세다)
+const GUIDE_RING_SEGS := 48          # 원 근사 분할 수
+
 # ── 본보기 얹기 (v1.7) — 책자에서 고른 형태를 종이에 **옅게** 깔아 준다 ──
 # 책자는 참조 전용이므로(골라 찍는 게 아니다) 따라 그을 자리를 보여 주는 것까지가 도움의 끝이다.
 # **순수 배경 렌더다** — _draw()로 그리므로 _entries에 들어가지 않는다(획으로 인식될 수 없다).
@@ -103,9 +125,6 @@ const TRACE_INK := Color(0.13, 0.11, 0.10, 0.17)   # 먹선보다 훨씬 옅게 
 const RUBBING_INK := Color(0.16, 0.13, 0.11, 0.32)
 const RUBBING_WIDTH := 2.0
 const TRACE_WIDTH := 2.0
-## 문양 본보기의 **화살촉** 길이 (캔버스 최단변 대비). 색·굵기는 선과 같다 —
-## 다르면 "선 + 딴 물건"으로 읽히지 화살표 하나로 안 보인다
-const TRACE_HEAD := 0.030
 ## 본보기 표준 크기 (캔버스 정규 단위). 인식기가 실제로 잘 받는 크기다
 const TRACE_CIRCLE_SPAN := 0.44      # 진 — 지름 0.44 (반지름 0.22)
 const TRACE_RUNE_FRAC := 0.45        # 룬 — 진 지름의 45% (진 안에 넉넉히 앉는다)
@@ -142,8 +161,11 @@ var _balance: BalanceData
 # 값은 **종이 한 장에 한 번만** 치른다. 도안이 맺힌 뒤 undo로 잠시 무너졌다가 다시 맺혀도
 # 종이를 또 뜯지 않고, 새 도안으로 갈라지지도 않는다 — 고쳐 그리는 게 새로 그리는 것보다
 # 비쌀 이유가 없기 때문이다. _built가 그 "이 종이에서 맺힌 도안"을 계속 쥐고 있다.
-var _built: SpellDesign = null      # 이 종이에서 맺힌 도안 (미완성으로 무너져도 놓지 않는다)
-var _paper_charged := false         # 이 종이 값은 이미 치렀다
+var _built: SpellDesign = null      # 이 종이에서 만든 도안 (초안이든 맺힌 것이든 — 무너져도 놓지 않는다)
+var _paper_charged := false         # 이 종이 값은 이미 치렀다 (= 맺혔다/committed)
+## 🔴 **초안이 완성 조건을 갖췄나** (F1) — 진+룬+문양. 맺힘(commit)과 분리된다: 완성 조건을
+## 갖춰도 종이는 확정 키를 눌러야 소모된다. commit_design()이 이 값을 잣대로 삼는다.
+var _complete := false
 
 # ── 종이 뷰 (확대·이동). 획 좌표는 **종이 픽셀**이고, 화면 픽셀과는 이 둘로만 오간다 ──
 var _zoom := 1.0
@@ -151,10 +173,13 @@ var _pan := Vector2.ZERO            # 종이 원점이 놓이는 화면 위치(p
 var _panning := false
 var _pan_from := Vector2.ZERO
 
-# ── 우클릭 — **되돌리기가 아니다** (사용자 확정. 되돌리기는 Ctrl+Z만) ──
-# 누르고 있으면 휠이 **회전**이 된다. 떼는 순간의 취소 동작은 회전을 안 했을 때만 발동한다
-var _rmb_held := false
-var _rmb_turned := false
+# ── 우클릭 = **취소** (되돌리기는 Ctrl+Z만). 그리던 획·집은 스탬프·본보기를 걷는다 ──
+
+# ── 문양 본보기 겨눔 — **고무줄** (사용자 확정 2026-07-15) ──
+# 본보기를 들고 진 위에서 **누른 채 끌면** 방향(끄는 쪽)·세기(끄는 거리)가 정해지고 떼면 앉는다.
+# 옛 "우클릭+휠 = 회전"은 조작이 어려워 폐지 — 마우스 한 동작으로 위치·방향·길이를 다 정한다.
+var _aiming_trace := false          # 지금 고무줄로 겨누는 중인가 (누른 채 끄는 중)
+var _trace_anchor := Vector2.ZERO   # 겨눔 시작점 = 문양의 시작(꼬리) — **종이 픽셀**
 ## 획(Line2D)이 사는 레이어. 여기에 zoom·pan을 걸면 획·가이드·본보기가 함께 확대된다.
 ## 캔버스는 clip_contents=true라 넘치는 부분은 자동으로 잘린다
 var _ink_layer: Node2D = null
@@ -183,7 +208,7 @@ var _trace_held: Dictionary = {}
 var _trace_placed := false
 ## 탁본 필사 — 깔린 옅은 참조 먹선들 (Line2D). _entries와 무관한 순수 배경.
 var _rubbing_lines: Array[Line2D] = []
-## 어느 부품의 본보기인가 — 문양일 때만 화살촉을 그린다 (방향이 있는 글자는 문양뿐)
+## 어느 부품의 본보기인가 — 문양이면 고무줄 겨눔(누른 채 끌기), 그 외는 눌러 앉히기
 var _trace_stage: int = -1
 ## 자석이 쓰는 종이 픽셀 좌표 캐시 (_live_points와 같은 좌표계) — 획 점마다 다시 만들지 않는다
 var _trace_px := PackedVector2Array()
@@ -293,6 +318,9 @@ func _draw() -> void:
 	var font := ThemeDB.fallback_font
 	var fs := maxi(int(s * GUIDE_FONT_RATIO), 7)
 
+	# 동심원 안내 링 — 십자 아래(제일 먼저)에 깔아 참고선으로만 남긴다
+	_draw_guide_rings(c, s)
+
 	# 중심 십자 — 진(원)을 그릴 자리를 암시한다
 	draw_line(Vector2(c.x, m), Vector2(c.x, size.y - m), GUIDE_LINE, 1.0)
 	draw_line(Vector2(m, c.y), Vector2(size.x - m, c.y), GUIDE_LINE, 1.0)
@@ -311,56 +339,34 @@ func _draw() -> void:
 	_guide_text(font, fs, Copy.GUIDE_RIGHT,
 		Vector2(size.x - m - float(fs) * 1.5, c.y), GUIDE_TEXT, false)
 
-	# 책자에서 고른 본보기 — 방위 가이드 위, 내 획 아래(자식 Line2D)에 옅게 깔린다
+	# 책자에서 고른 본보기 — 방위 가이드 위, 내 획 아래(자식 Line2D)에 옅게 깔린다.
+	# 🔴 **문양 본보기는 머리에 화살촉을 얹어 화살표로 보이게 한다** (사용자 확정 2026-07-15 뒤집음).
+	# 촉은 순수 장식이라 인식·잉크·발사와 무관하다 — 손으로 몸통만 따라 그으면 그 글자로 인식된다.
 	if _trace.size() >= 2:
 		var px := PackedVector2Array()
 		for p: Vector2 in _trace:
 			px.append(p * s)
 		draw_polyline(px, TRACE_INK, TRACE_WIDTH, true)
-		_draw_trace_arrow(px, _trace_stage == Enums.DrawStage.ARROW)
-
-	# 🔴 **내가 그린 문양에도 촉이 붙는다** — "이 획이 어디를 가리키는가"가 보여야 한다.
-	# 문양은 방향을 가진 글자이고, 거꾸로 그으면 탄이 정반대로 날아간다. 그린 뒤에 그걸
-	# 확인할 방법이 없으면 플레이어는 왜 빗나갔는지 영영 알 수 없다.
-	# 촉은 인식기가 실제로 읽은 방향(InkRender.arrow_heading)을 그린다 — **보이는 게 진실이다.**
-	# 먹선과 같은 색이라 내 획의 일부로 읽힌다 (딴 물건이 얹힌 게 아니다)
-	var arrow_col: Color = ROLE_COLORS.get(Enums.StrokeRole.ARROW, Color.BLACK)
-	for e in _entries:
-		if int((e.result as Dictionary).get("role", -1)) != Enums.StrokeRole.ARROW:
-			continue
-		var stroke: StrokeData = e.stroke
-		if stroke.points.size() < 2:
-			continue
-		_draw_heading_arrow(stroke.points[0] * s, InkRender.arrow_tip(stroke.points) * s,
-			arrow_col, InkRender.BASE_WIDTH * 0.7)
+		if _trace_stage == Enums.DrawStage.ARROW:
+			var barbs := GlyphTemplates.head_barbs(_trace)
+			if barbs.size() >= 2:
+				var bpx := PackedVector2Array()
+				for p: Vector2 in barbs:
+					bpx.append(p * s)
+				draw_polyline(bpx, TRACE_INK, TRACE_WIDTH, true)
 
 	_draw_zoom_label(font, s)
 
 
-## 🔴 **문양 본보기는 화살표다.** 작대기만 깔아 두면 어느 쪽이 시작인지 알 수 없고,
-## **거꾸로 그으면 탄이 정반대로 날아간다** (사용자가 실제로 겪은 문제다).
-## 촉을 **선과 같은 먹색·같은 굵기**로 그린다 — 색이 다르면 "선 + 딴 물건"으로 읽히지
-## 화살표 하나로 안 보인다. 룬·진은 방향이 없는 글자라 안 그린다 (없는 방향을 있는 척할 순 없다).
-func _draw_trace_arrow(px: PackedVector2Array, is_arrow: bool) -> void:
-	if not is_arrow or px.size() < 2:
-		return
-	# 인식기가 실제로 겨누는 점(최원점)을 쓴다 — 관통‖은 촉이 아니라 창끝이 겨눈 곳이다.
-	# 보이는 화살촉과 날아가는 방향이 갈라지면 본보기가 거짓말을 한다
-	_draw_heading_arrow(px[0], InkRender.arrow_tip(px), TRACE_INK, TRACE_WIDTH)
-
-
-## 시작점 → 겨눈 점을 화살촉으로. 발사각(InkRender.arrow_heading)과 **같은 두 점**을 쓴다
-func _draw_heading_arrow(from: Vector2, tip: Vector2, col: Color, w: float) -> void:
-	var dir := tip - from
-	if dir.length_squared() < 4.0:
-		return
-	dir = dir.normalized()
-	var side := dir.orthogonal()
-	var len_px := maxf(_canvas_scale() * TRACE_HEAD, 5.0)
-	draw_polyline(PackedVector2Array([
-		tip - dir * len_px + side * len_px * 0.5, tip,
-		tip - dir * len_px - side * len_px * 0.5,
-	]), col, w, true)
+## 동심원 안내 링 — 참고 이미지의 "층층이 두르는 룩"을 껍데기만 빌려온다 (판정 아님, §GUIDE_RING).
+## 진 경계 링만 살짝 또렷하게(기준축), 나머지는 눈에 띄지 않을 만큼 옅게 깐다.
+func _draw_guide_rings(c: Vector2, s: float) -> void:
+	var r0 := s * GUIDE_RING_UNIT
+	# 보조 링 3겹 — 룬 농도 눈금 · 문양 탈출선 · 문양 세기 참고
+	for frac: float in [GUIDE_RING_RUNE, GUIDE_RING_ESCAPE, GUIDE_RING_REACH]:
+		draw_arc(c, r0 * frac, 0.0, TAU, GUIDE_RING_SEGS, GUIDE_RING, 1.0, true)
+	# 진 경계 링 — 표준 진이 앉는 자리. 기준이라 한 겹 더 또렷하게
+	draw_arc(c, r0, 0.0, TAU, GUIDE_RING_SEGS, GUIDE_RING_MAIN, 1.0, true)
 
 
 func _guide_text(font: Font, fs: int, text: String, at: Vector2, col: Color, centered: bool) -> void:
@@ -403,6 +409,7 @@ func show_trace(stage: int, unit_pts: PackedVector2Array) -> void:
 		clear_trace()
 		return
 	_stamp_pending = {}          # 스탬프와 본보기를 동시에 들 수는 없다
+	_aiming_trace = false        # 새 본보기를 집으면 이전 겨눔은 버린다
 	_trace_stage = stage
 	_trace_held = {
 		"unit": unit_pts,
@@ -432,7 +439,10 @@ func _trace_span_for(stage: int) -> float:
 	return TRACE_CIRCLE_SPAN
 
 
-## 본보기를 앵커 자리에 편다 (종이 정규 좌표). 들고 있는 동안엔 마우스가 앵커다
+## 본보기를 앵커 자리에 편다 (종이 정규 좌표). 들고 있는 동안엔 마우스가 앵커다.
+## 🔴 기준점은 **놓을 때(_update_trace_aim)와 반드시 같아야** 튀지 않는다. 문양·룬·진 모두
+## **중심(canonical의 0)을 커서에** 둔다 — 문양은 누른 곳이 곧 중앙이고, 거기서 회전한다
+## (사용자 확정 2026-07-15: "중앙을 잡는다").
 func _refresh_trace(paper_pos: Vector2) -> void:
 	if _trace_held.is_empty():
 		return
@@ -446,9 +456,65 @@ func _refresh_trace(paper_pos: Vector2) -> void:
 	queue_redraw()
 
 
-## 종이에 앉힌다 — 이제부터 이 선이 손을 끈다
-func _place_trace_at(paper_pos: Vector2) -> void:
-	_refresh_trace(paper_pos)
+# ─────────────────────────── 클릭→회전→클릭 겨눔 (사용자 확정 2026-07-15) ───────────────────────────
+# 본보기를 들고 **한 번 클릭하면** 그 자리에 문양 **중앙**이 박힌다. 이제 버튼을 놓아도 마우스를
+# 움직이면 그 중앙을 축으로 돌고(방향·세기 갱신), **다시 클릭하면** 그 각도·세기로 확정돼 자석이 된다.
+#   첫 클릭    = 중앙 고정(앵커)
+#   마우스 이동 = 방향(문양 회전) · 세기(문양 reach)·농도(룬 fill) — 룬·진은 방향이 없어 안 돈다
+#   둘째 클릭   = 확정
+# 옛 "누른 채 끌다 떼기(고무줄)"는 조작이 어색해 폐지 — 쥔 채 끌 필요 없이 클릭 두 번이다.
+
+## 앵커→커서가 이보다 짧으면(픽셀) "제자리" — 미리보기 방향·크기를 그대로 둔다
+const TRACE_AIM_MIN_PX := 6.0
+
+## 겨눔 시작 (첫 클릭) — 누른 곳을 중앙(앵커)으로 박는다
+func _begin_trace_aim(paper_px: Vector2) -> void:
+	if _trace_held.is_empty():
+		return
+	_aiming_trace = true
+	_trace_anchor = paper_px
+	_update_trace_aim(paper_px)
+
+
+## 겨누는 중 — 앵커(중앙)→커서 벡터로 방향·세기를 갱신하고 미리보기를 다시 그린다.
+## 문양·룬·진 모두 앵커에 **중심**을 두고, 문양만 커서 쪽으로 회전한다 (룬·진은 방향 없음).
+func _update_trace_aim(paper_px: Vector2) -> void:
+	if _trace_held.is_empty():
+		return
+	var s := _canvas_scale()
+	var unit: PackedVector2Array = _trace_held.unit
+	var v := paper_px - _trace_anchor
+	var is_arrow := _trace_stage == Enums.DrawStage.ARROW
+	var dragging := v.length() >= TRACE_AIM_MIN_PX
+	var span := clampf(v.length() / s, TRACE_SPAN_MIN, TRACE_SPAN_MAX) if dragging \
+		else float(_trace_held.span)
+	# 🔴 문양은 **중앙을 누른 자리에 고정**하고 마우스를 따라 그 중앙을 축으로 돈다 (사용자 확정
+	# 2026-07-15: "누르고 마우스에 따라 회전하다가 확정"). canonical은 +X 전진이라 rot=v.angle()이면
+	# 머리가 커서 쪽을 겨눈다. 룬·진은 방향이 없어 세운 채로 둔다.
+	var rot := (v.angle() if (is_arrow and dragging) else float(_trace_held.rot))
+	_trace_held["span"] = span
+	_trace_held["rot"] = rot
+	# 기준점은 늘 중심(canonical의 0) — 문양이든 룬이든 앵커=중앙. 미리보기(_refresh_trace)와 일치한다
+	var anchor_n := _trace_anchor / s
+	_trace = PackedVector2Array()
+	for p: Vector2 in unit:
+		_trace.append(anchor_n + (p * span).rotated(rot))
+	queue_redraw()
+
+
+## 겨눔을 마친다.
+## 🔴 **문양 = 조준한 그대로 박는다 (인식 없음, 2026-07-15 조합 전환).** 조합의 재미는
+## "어디에·어느 쪽으로"에 있고, 마찰은 손글씨 채점에 있었다 — 채점을 없앤다. 방향·세기는
+## 고무줄/클릭 겨눔이 이미 정했으니 그 기하를 잠긴 ARROW 엔트리로 그대로 앉힌다. **절대 실패 없음.**
+## 룬·진은 아직 자석(본보기 위에 손으로 긋기) — 후속 슬라이스에서 배치로 통일한다.
+func _finish_trace_aim(paper_px: Vector2) -> void:
+	if not _aiming_trace:
+		return
+	_update_trace_aim(paper_px)
+	_aiming_trace = false
+	if _trace_stage == Enums.DrawStage.ARROW:
+		_stamp_trace_as_arrow()
+		return
 	_trace_held = {}
 	_trace_placed = true
 	var s := _canvas_scale()
@@ -458,17 +524,70 @@ func _place_trace_at(paper_pos: Vector2) -> void:
 	trace_changed.emit(true)
 
 
-## 휠 = 크기 / **우클릭 누른 채 휠 = 회전** (사용자 확정).
+## 조준한 문양 본보기를 **인식 없이** 잠긴 ARROW 엔트리로 박는다 (조합 전환, 2026-07-15).
+## _trace = 종이 정규 좌표(0..1)의 화살표 기하. result는 인식기 ARROW 반환과 같은 모양으로
+## 채워 downstream(build)이 손그림 화살표와 정확히 같게 동작하되, **채점 게이트가 없어 튕기지 않는다.**
+## ⚠ 방향·뻗은거리는 인식기가 쓰는 core 함수(InkRender)로 잰다 — 그린 것과 나가는 것이 어긋나지 않게.
+func _stamp_trace_as_arrow() -> void:
+	var pts := _trace.duplicate()
+	if pts.size() < 2:
+		clear_trace()
+		return
+	# 순서 문법은 유지 — 진·룬이 서기 전 문양은 놓을 자리가 없다
+	if get_stage() != Enums.DrawStage.ARROW:
+		clear_trace()
+		_last_reject = {"stage": get_stage()}
+		stroke_rejected.emit(&"out_of_order")
+		return
+	var stroke := StrokeData.new()
+	stroke.points = pts
+	stroke.pressures = PackedFloat32Array()      # 스탬프 = 균일 굵기 (필압 없음)
+	stroke.role = Enums.StrokeRole.ARROW
+	# 잉크 상한 — 초과하면 무효 (손그림 화살표와 같은 규칙)
+	if _ink_used + DesignBuilder.stroke_ink_units(stroke, _balance) > get_ink_capacity():
+		clear_trace()
+		stroke_rejected.emit(&"ink_over")
+		return
+	var entry := {
+		"stroke": stroke,
+		"line": InkStroke.new(),
+		"locked": true,          # 🔴 재인식 금지 — classify_entries가 이 result를 그대로 쓴다
+		"result": {
+			"role": Enums.StrokeRole.ARROW,
+			"direction": InkRender.arrow_heading(pts),
+			"length": Recognizer.path_length(pts),
+			"extent": InkRender.arrow_extent(pts),
+			"start": pts[0],
+			# 화살표 하나로 줄임 (STATUS): 기본 = 착탄 충격파 방향. 문양 종류 확장은 후속.
+			"glyph": Enums.GlyphType.BASIC,
+			"glyph_score": 1.0,
+			"score": 1.0,
+		},
+	}
+	_ink_layer.add_child(entry.line)
+	_entries.append(entry)
+	_rebuild_line(entry)
+	clear_trace()                # 본보기 걷기 (trace_changed(false))
+	_reclassify_all()
+	_flash_line(entry.line as Line2D, FLASH_LIGHTEN, FLASH_SEC)
+	stamp_placement_done.emit()
+
+
+## 룬·진 = 방향이 없다 → 겨눔 없이 **한 번 클릭에 그 자리에 바로 앉힌다** (회전·둘째 클릭 없음).
+## 미리보기 각도·크기 그대로 박힌다 (겨눔 벡터 0 → _update_trace_aim이 회전·크기를 안 바꾼다).
+func _place_trace_now(paper_px: Vector2) -> void:
+	if _trace_held.is_empty():
+		return
+	_begin_trace_aim(paper_px)
+	_finish_trace_aim(paper_px)
+
+
+## 휠 = 크기 (겨눔 전에만 — 룬 본보기 크기를 미리 맞출 때). 문양은 고무줄로 크기를 정하므로 보조.
 ## **크기가 곧 농도(룬)·세기(문양)**라 플레이어가 정해야 한다 (StrokeGuide 상단 계약)
-func _adjust_trace(up: bool, rotating: bool, screen_pos: Vector2) -> void:
-	if rotating:
-		_rmb_turned = true      # 이번 우클릭은 회전용이었다 — 뗄 때 본보기를 물리지 않는다
-		_trace_held["rot"] = wrapf(float(_trace_held.rot)
-			+ (TRACE_ROT_STEP if up else -TRACE_ROT_STEP), -PI, PI)
-	else:
-		_trace_held["span"] = clampf(float(_trace_held.span)
-			* (TRACE_SPAN_STEP if up else 1.0 / TRACE_SPAN_STEP),
-			TRACE_SPAN_MIN, TRACE_SPAN_MAX)
+func _adjust_trace(up: bool, screen_pos: Vector2) -> void:
+	_trace_held["span"] = clampf(float(_trace_held.span)
+		* (TRACE_SPAN_STEP if up else 1.0 / TRACE_SPAN_STEP),
+		TRACE_SPAN_MIN, TRACE_SPAN_MAX)
 	_refresh_trace(_to_paper(screen_pos))
 
 
@@ -516,6 +635,7 @@ func has_rubbing() -> bool:
 
 
 func clear_trace() -> void:
+	_aiming_trace = false
 	_trace_held = {}
 	_trace_placed = false
 	_trace_stage = -1
@@ -531,12 +651,28 @@ func has_trace() -> bool:
 	return not _trace.is_empty()
 
 
-## 본보기를 들고 있는 중인가 (아직 종이에 안 놓음) — 좌클릭이 획이 아니라 "놓기"가 된다
+## 본보기를 들고 있는 중인가 (아직 종이에 안 놓음) — 좌클릭이 획이 아니라 "겨눔 시작"이 된다
 func is_holding_trace() -> bool:
 	return not _trace_held.is_empty()
 
 
+## 지금 든 본보기가 문양(방향 있는 글자)인가 — 안내 문구가 조작을 다르게 설명해야 한다
+## (문양 = 누른 채 끌어 겨눔 / 룬 = 눌러 앉히고 휠로 크기)
+func is_arrow_trace() -> bool:
+	return _trace_stage == Enums.DrawStage.ARROW
+
+
 # ─────────────────────────── 종이 등급 (GDD §5) ───────────────────────────
+
+## 🔴 **개발 시험대용 무한 잉크** — 켜면 종이의 잉크 상한을 무시한다(get_ink_capacity=INF).
+## 종이 등급·소모·완성 판정은 그대로 두고 **상한만** 없앤다 — 시험대에서 마음껏 그려 보려고.
+## set_paper가 캔버스를 리셋해도 이 설정은 유지된다(종이별이 아니라 시험대의 성질이므로).
+var _ink_unlimited := false
+
+func set_ink_unlimited(v: bool) -> void:
+	_ink_unlimited = v
+	ink_state_changed.emit(_ink_used, get_ink_capacity())
+
 
 ## 종이 선택 — 캔버스를 리셋한다(기존 획 초기화). params = ItemDef.params (TECH_SPEC §4.1 PAPER 키)
 func set_paper(paper_id: StringName, grade: int, params: Dictionary) -> void:
@@ -561,6 +697,8 @@ func get_ink_used() -> float:
 
 
 func get_ink_capacity() -> float:
+	if _ink_unlimited:
+		return INF                       # 시험대 무한 잉크 — 상한 무시
 	if not _paper_mode or _paper_params.is_empty():
 		return INF
 	return float(_paper_params.get("ink_capacity", INF))
@@ -570,18 +708,18 @@ func _gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
 		# 휠 = 종이 확대. 획을 긋는 중에는 손대지 않는다 — 그리다 종이가 움직이면 획이 망가진다.
-		# 단 **본보기를 들고 있으면 휠은 그 본보기의 크기**다 (Shift+휠 = 회전) — 크기가 곧
-		# 농도(룬)·세기(문양)라 플레이어가 반드시 정할 수 있어야 한다 (StrokeGuide 상단 계약)
+		# 단 **본보기를 들고 있으면(겨눔 전) 휠은 크기**다 — 룬 본보기 크기(농도)를 미리 맞출 때.
+		# 문양은 고무줄로 끌며 크기가 정해지므로 휠은 보조일 뿐이다.
 		if mb.button_index == MOUSE_BUTTON_WHEEL_UP and mb.pressed:
-			if is_holding_trace():
-				_adjust_trace(true, _rmb_held, mb.position)
+			if is_holding_trace() and not _aiming_trace:
+				_adjust_trace(true, mb.position)
 			elif not _drawing:
 				zoom_at(mb.position, ZOOM_STEP)
 			accept_event()
 			return
 		if mb.button_index == MOUSE_BUTTON_WHEEL_DOWN and mb.pressed:
-			if is_holding_trace():
-				_adjust_trace(false, _rmb_held, mb.position)
+			if is_holding_trace() and not _aiming_trace:
+				_adjust_trace(false, mb.position)
 			elif not _drawing:
 				zoom_at(mb.position, 1.0 / ZOOM_STEP)
 			accept_event()
@@ -596,31 +734,41 @@ func _gui_input(event: InputEvent) -> void:
 			if mb.pressed:
 				if not _stamp_pending.is_empty():
 					_place_stamp_at(_to_paper(mb.position))
+				elif _aiming_trace:
+					# 🔴 **두 번째 클릭 = 확정** — 지금 겨눈 각도·세기 그대로 앉힌다 (사용자 확정
+					# 2026-07-15: "누르고 마우스 따라 회전하다가 다시 눌러 확정"). 버튼을 쥔 채 끄는 게 아니다.
+					_finish_trace_aim(_to_paper(mb.position))
 				elif is_holding_trace():
-					_place_trace_at(_to_paper(mb.position))   # 들고 있던 본보기를 종이에 놓는다
+					if _trace_stage == Enums.DrawStage.ARROW:
+						# 🔴 **문양만 겨눔이 있다** (사용자 확정 2026-07-15: "문양만 회전이 있어야 함").
+						# 첫 클릭 = 중앙 고정 + 회전 시작. 마우스를 움직이면(버튼 안 눌러도) 중앙을 축으로
+						# 돌고, 다시 클릭하면 확정. 룬·진은 방향이 없어 이 단계가 아예 없다.
+						_begin_trace_aim(_to_paper(mb.position))
+					else:
+						# 룬·진 = 방향이 없다 → **한 번 클릭에 바로 앉힌다** (회전·겨눔 단계 없음).
+						# 크기(룬 농도)는 들고 있는 동안 휠로 미리 맞춘다 (_adjust_trace).
+						_place_trace_now(_to_paper(mb.position))
 				else:
 					_begin_stroke(_to_paper(mb.position))
-			elif _drawing:
-				_end_stroke()
+			else:
+				# 뗄 때는 아무 일도 안 한다 — 겨눔은 두 번째 **클릭**으로 확정한다 (쥔 채 끌기 아님)
+				if _drawing:
+					_end_stroke()
 			accept_event()
 		elif mb.button_index == MOUSE_BUTTON_RIGHT:
-			# 🔴 **우클릭은 더 이상 "뒤로가기"가 아니다** (사용자 확정 — 되돌리기는 Ctrl+Z만).
-			# 대신 **누르고 있으면 휠이 회전**이 된다 (본보기를 들고 있을 때).
-			# 누른 동안 휠을 굴렸다면 떼는 순간의 취소 동작은 건너뛴다 — 회전하려다 본보기를
-			# 물려 버리면 손이 배신당한다
+			# 🔴 **우클릭 = 취소** (되돌리기는 Ctrl+Z만). 겨누던 중이면 겨눔을, 그리던 중이면 획을,
+			# 집은 스탬프·놓아 둔 본보기를 걷는다. (옛 "누른 채 휠 = 회전"은 폐지 — 고무줄로 바뀌었다)
 			if mb.pressed:
-				_rmb_held = true
-				_rmb_turned = false
-			else:
-				_rmb_held = false
-				if not _rmb_turned:
-					if _drawing:
-						_cancel_stroke()
-					elif not _stamp_pending.is_empty():
-						_stamp_pending = {}
-						stamp_placement_done.emit()
-					elif has_trace():
-						clear_trace()   # 들고 있던 / 놓아 둔 본보기를 걷는다
+				if _aiming_trace:
+					_aiming_trace = false
+					clear_trace()
+				elif _drawing:
+					_cancel_stroke()
+				elif not _stamp_pending.is_empty():
+					_stamp_pending = {}
+					stamp_placement_done.emit()
+				elif has_trace():
+					clear_trace()
 			accept_event()
 	elif event is InputEventMouseMotion:
 		var mm := event as InputEventMouseMotion
@@ -628,7 +776,11 @@ func _gui_input(event: InputEvent) -> void:
 			_set_view(_zoom, _pan + mm.relative)
 			accept_event()
 			return
-		# 들고 있는 본보기는 마우스를 따라다닌다 (스탬프와 같은 문법)
+		# 겨누는 중 — 끄는 벡터로 방향·세기를 갱신한다 (고무줄)
+		if _aiming_trace:
+			_update_trace_aim(_to_paper(mm.position))
+			return
+		# 들고만 있는 본보기(겨눔 전)는 마우스를 따라다닌다 — 누를 자리를 보여 주는 미리보기
 		if is_holding_trace():
 			_refresh_trace(_to_paper(mm.position))
 			return
@@ -814,15 +966,11 @@ func _end_stroke() -> void:
 	# 안 걷으면 이 획의 먹이 두 번 세어진다 (미리보기 + 확정)
 	_live_ink = 0.0
 	_entries.append(entry)
-	var was_complete := _design != null
 	_reclassify_all()
 	# 수락 확인: 방금 그린 획이 제 역할 색으로 한 번 번쩍인다.
-	# 도안이 이번 획으로 맺혔다면 개별 번쩍임 대신 전체가 함께 빛난다 (클라이맥스를 덮지 않게)
-	if _design != null and not was_complete:
-		_flash_all_lines()
-		design_completed.emit(_design)
-	else:
-		_flash_line(entry.line as Line2D, FLASH_LIGHTEN, FLASH_SEC)
+	# 🔴 **완성 클라이맥스(전체 발광 + design_completed)는 여기서 안 한다** (F1, 2026-07-15) —
+	# 화살표 하나로 자동 완성되던 것을 없앴다. 클라이맥스는 명시적 확정(commit_design)의 몫이다.
+	_flash_line(entry.line as Line2D, FLASH_LIGHTEN, FLASH_SEC)
 	# 본보기는 **한 획을 돕고 걷힌다** — 놔두면 다음 획(다른 글자)까지 엉뚱하게 끌어당긴다.
 	# 같은 글자를 또 그리려면 책자에서 다시 집는다 (집는 값이 싸므로 번거롭지 않다).
 	# ⚠ 거부된 획(_reject_live_line 경로)에서는 **안 걷는다** — 다시 그려야 하니 남겨 둔다
@@ -851,38 +999,72 @@ func _reclassify_all() -> void:
 		_parts = DesignBuilder.classify_entries(_entries)
 	for e in _entries:
 		_apply_style(e)
-	var blocked := false
-	var complete: bool = (not _roots.is_empty() and _roots[0].has("rune")) if nested \
+	_complete = (not _roots.is_empty() and _roots[0].has("rune")) if nested \
 		else DesignBuilder.is_complete(_parts)
-	if complete:
-		# 값을 아직 안 치른 종이에서만 보유를 따진다. 이미 치른 종이는 몇 번을 고쳐 그려도
-		# 공짜다 — 종이는 이미 뜯었으니까 (undo → 재작성이 이중 과금되던 버그의 근본)
-		var first := not _paper_charged
-		if first and not _paper_available():
-			_design = null
-			blocked = true
+	if _complete:
+		# 부품이 다 모였다 — 도안을 짓는다. **하지만 종이는 아직 소모하지 않는다** (F1, 2026-07-15):
+		# 첫 맺힘은 명시적 확정(commit_design)의 몫이다. 여기서는 초안을 준비만 한다.
+		if nested:
+			# 재귀 트리 — build_tree는 into(id 재사용)를 아직 안 받는다. 껍질+자식을 새로 짓는다.
+			_built = DesignBuilder.build_tree(_roots[0], _balance, _paper_grade, _paper_params)
 		else:
-			if nested:
-				# 재귀 트리 — build_tree는 into(id 재사용)를 아직 안 받는다. 껍질+자식을 새로 짓는다.
-				_built = DesignBuilder.build_tree(_roots[0], _balance, _paper_grade, _paper_params)
-			else:
-				# into=_built — 같은 종이에서 맺힌 도안은 **같은 id·같은 내구**로 이어진다
-				_built = DesignBuilder.build(_parts, _balance, _built, _paper_grade, _paper_params)
+			# into=_built — 같은 종이에서 이어 그린 도안은 **같은 id·같은 내구**로 이어진다
+			_built = DesignBuilder.build(_parts, _balance, _built, _paper_grade, _paper_params)
+		if _paper_charged:
+			# 이미 맺힌 종이 — 고쳐 그리기는 자동·공짜다 (종이는 이미 뜯었다). 갱신만 알린다.
 			_design = _built
-			if first:
-				_consume_paper()
-				_paper_charged = true
 			var bus := _bus()
 			if bus != null:
-				bus.emit_signal(&"design_created" if first else &"design_updated", _design)
+				bus.emit_signal(&"design_updated", _design)
+		else:
+			# 🔴 초안 — 발사용 도안(_design)은 아직 없다. 확정 키를 눌러야 실재한다.
+			_design = null
 	else:
 		# 미완성 — 발사는 못 한다. 단 _built는 놓지 않는다: 다시 맺히면 그 도안으로 돌아간다
 		_design = null
 	_recompute_ink()
 	_emit_stage_if_changed()
+	_emit_commit_state()
 	design_state_changed.emit(_design, get_summary())
-	if blocked:
+
+
+## 초안을 맺는다 — **명시적 확정** (사용자 결정 2026-07-15: 전용 키/버튼). 종이를 소모하고
+## 도안을 실재화(design_created)한 뒤 완성 클라이맥스를 낸다. 화살표 하나로 자동 완성되지 않는다.
+##   - 완성 조건 미달이거나 이미 맺혔으면 아무 일도 안 한다 (false).
+##   - 종이가 없으면 completion_blocked(&"no_paper") — 소모 없음.
+## 이미 맺힌 종이의 이후 갱신(고쳐 그리기)은 _reclassify_all이 자동으로 design_updated를 낸다.
+func commit_design() -> bool:
+	if _paper_charged or not _complete or _built == null:
+		return false
+	if not _paper_available():
+		_emit_commit_state()
 		completion_blocked.emit(&"no_paper")
+		return false
+	_design = _built
+	_consume_paper()
+	_paper_charged = true
+	var bus := _bus()
+	if bus != null:
+		bus.emit_signal(&"design_created", _design)
+	_flash_all_lines()                 # 이 화면의 클라이맥스 — 그린 획 전체가 함께 빛난다
+	_emit_commit_state()
+	design_completed.emit(_design)
+	design_state_changed.emit(_design, get_summary())
+	return true
+
+
+## 확정을 눌러도 되는가 — 초안이 완성 조건을 갖췄고, 아직 안 맺혔고, 종이가 있다.
+## 확정 키/버튼의 활성 상태가 이걸 따른다.
+func can_commit() -> bool:
+	return _complete and not _paper_charged and _paper_available()
+
+
+func is_committed() -> bool:
+	return _design != null and _paper_charged
+
+
+func _emit_commit_state() -> void:
+	commit_state_changed.emit(can_commit(), is_committed())
 
 
 static func _empty_parts() -> Dictionary:
@@ -1059,6 +1241,9 @@ func get_summary() -> Dictionary:
 		"arrow_count": (_parts.arrows as Array).size(),
 		"extra_count": (_parts.extras as Array).size(),
 		"stroke_count": _entries.size(),
+		# 🔴 맺힘 상태 (F1) — 체크리스트가 "확정 대기 / 맺혔다"를 가른다
+		"can_commit": can_commit(),
+		"committed": is_committed(),
 	}
 	if _parts.has("rune"):
 		summary.rune_type = int(_parts.rune.type)
@@ -1094,8 +1279,10 @@ func clear_all() -> void:
 	clear_rubbing()                 # 탁본도 걷는다 — 새 종이엔 필사할 밑그림이 없다
 	_roots = []
 	_parts = _empty_parts()
+	_complete = false
 	_recompute_ink()
 	_emit_stage_if_changed()
+	_emit_commit_state()
 	design_state_changed.emit(null, get_summary())
 
 

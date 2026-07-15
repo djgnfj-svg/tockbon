@@ -268,7 +268,7 @@ func _build_arrow_page(top: float) -> void:
 			GlyphTemplates.canonical(g) if unlocked else PackedVector2Array(),
 			Copy.glyph_label(g) if unlocked else Copy.BOOK_LOCKED,
 			String(Copy.GLYPH_EFFECT.get(g, "")) if unlocked else Copy.BOOK_LOCKED_HINT,
-			unlocked)
+			unlocked, true)   # is_glyph=true → 머리에 화살촉을 얹어 **화살표로 보이게** 한다
 
 
 ## 문양 해금 — **기본은 언제나 열려 있다** (글자가 아니므로 배울 것도 없다. 튜토리얼 첫 도안이 이것이다).
@@ -279,9 +279,10 @@ func _is_glyph_unlocked(_glyph_type: int) -> bool:
 	return true
 
 
-## 한 칸 = 한지 칸 + 먹선 본보기 + 이름 + 한 줄 설명. 해금된 칸은 **누르면 종이에 얹힌다**
+## 한 칸 = 한지 칸 + 먹선 본보기 + 이름 + 한 줄 설명. 해금된 칸은 **누르면 종이에 얹힌다**.
+## is_glyph=true면 머리에 화살촉을 얹는다 (문양 장만) — 화살표로 보이게 하는 장식.
 func _cell(r: Rect2, pts: PackedVector2Array, name_text: String, desc_text: String,
-		unlocked: bool) -> void:
+		unlocked: bool, is_glyph: bool = false) -> void:
 	# 클릭 판정은 책자 로컬 좌표로 (칸은 _page 안에 앉아 있다)
 	_cells.append({
 		"rect": Rect2(_page.position + r.position, r.size),
@@ -314,10 +315,19 @@ func _cell(r: Rect2, pts: PackedVector2Array, name_text: String, desc_text: Stri
 		if not unlocked:
 			line.modulate.a = LOCKED_ALPHA
 		box.add_child(line)
-		# 🔴 문양은 **방향을 가진 글자**다 — 작대기만 보여 주면 어느 쪽이 앞인지 알 수 없고,
-		# 거꾸로 그으면 탄이 정반대로 날아간다. 책자와 종이의 본보기가 같은 화살촉을 달아야 한다
-		if _stage == Enums.DrawStage.ARROW and unlocked:
-			box.add_child(_arrow_head(px))
+		# 🔴 문양 장만 머리에 **화살촉**을 얹어 화살표로 보이게 한다 (사용자 확정 2026-07-15 뒤집음).
+		# 순수 장식이라 인식엔 안 들어간다 — GlyphTemplates.head_barbs 주석 참고.
+		if is_glyph:
+			var barbs := GlyphTemplates.head_barbs(pts)
+			if barbs.size() >= 2:
+				var bpx := PackedVector2Array()
+				for p: Vector2 in barbs:
+					bpx.append(c + p * span)
+				var head := InkRender.make_line(bpx, PackedFloat32Array(),
+					InkRender.BASE_WIDTH * 0.8, InkRender.INK_COLOR)
+				if not unlocked:
+					head.modulate.a = LOCKED_ALPHA
+				box.add_child(head)
 	elif not unlocked:
 		# 미해금 — 빈 칸에 물음표. "여기 글자가 하나 들어온다"는 자리를 남긴다
 		var q := Label.new()
@@ -351,24 +361,6 @@ func _cell(r: Rect2, pts: PackedVector2Array, name_text: String, desc_text: Stri
 	d.add_theme_color_override(&"font_color", DESC_COLOR if unlocked else LOCKED_COLOR)
 	d.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	box.add_child(d)
-
-
-## 문양 칸의 화살촉 — 인식기가 실제로 겨누는 점(최원점)을 가리킨다.
-## 관통‖은 촉이 아니라 **창끝**이 겨눈 곳이다 (InkRender.arrow_heading과 같은 정의) —
-## 보이는 화살촉과 날아가는 방향이 갈라지면 책자가 거짓말을 한다
-func _arrow_head(px: PackedVector2Array) -> Line2D:
-	var from := px[0]
-	var tip := InkRender.arrow_tip(px)
-	var dir := (tip - from).normalized()
-	var side := dir.orthogonal()
-	var n := 5.0
-	var head := Line2D.new()
-	head.points = PackedVector2Array([
-		tip - dir * n + side * n * 0.55, tip, tip - dir * n - side * n * 0.55,
-	])
-	head.width = InkRender.BASE_WIDTH * 0.8
-	head.default_color = InkRender.INK_COLOR   # 먹선과 같은 색 — 화살표 **하나**로 읽혀야 한다
-	return head
 
 
 ## GameState는 오토로드 — 없으면(단독 테스트) 전부 열린 것으로 본다

@@ -29,6 +29,8 @@ var _design: SpellDesign = null
 
 var _checklist: VBoxContainer
 var _book: HBoxContainer
+var _commit_btn: Button              # 🔴 확정 버튼 (F1) — 초안을 맺는다 (Enter와 같은 일)
+var _prev_can_commit := false
 var _recog_label: Label
 var _design_label: Label
 var _hint_label: Label
@@ -93,6 +95,14 @@ func _ready() -> void:
 	btn_row.position = Vector2(x, 210)
 	btn_row.size = Vector2(w, 20)
 	ui.add_child(btn_row)
+	# 🔴 확정 버튼 (F1) — 초안을 맺는다. Enter와 같은 일. 준비됐을 때만 눌린다
+	_commit_btn = Button.new()
+	_commit_btn.text = Copy.COMMIT_BUTTON
+	_commit_btn.add_theme_font_size_override(&"font_size", 9)
+	_commit_btn.disabled = true
+	_commit_btn.focus_mode = Control.FOCUS_NONE
+	_commit_btn.pressed.connect(func() -> void: _canvas.commit_design())
+	btn_row.add_child(_commit_btn)
 	_add_button(btn_row, "자동보정", _on_autocorrect)
 	_add_button(btn_row, "스탬프 저장", _on_save_stamp)
 	_add_button(btn_row, "지우기", func() -> void: _canvas.clear_all())
@@ -120,6 +130,7 @@ func _ready() -> void:
 	_canvas.ink_state_changed.connect(_on_ink_state_changed)
 	_canvas.stroke_rejected.connect(_on_stroke_rejected)
 	_canvas.completion_blocked.connect(_on_completion_blocked)
+	_canvas.commit_state_changed.connect(_on_commit_state_changed)
 	var paper_row := HBoxContainer.new()
 	paper_row.position = Vector2(12, 0)
 	paper_row.size = Vector2(320, 15)
@@ -143,8 +154,13 @@ func _ready() -> void:
 
 func _unhandled_key_input(event: InputEvent) -> void:
 	var k := event as InputEventKey
-	if k != null and k.pressed and not k.echo and k.keycode == KEY_Z and k.ctrl_pressed:
+	if k == null or not k.pressed or k.echo:
+		return
+	if k.keycode == KEY_Z and k.ctrl_pressed:
 		_canvas.undo_last()
+	# 🔴 **Enter = 도안을 맺는다** (F1, 2026-07-15) — 명시적 확정. 준비된 초안만 맺힌다
+	elif k.keycode == KEY_ENTER or k.keycode == KEY_KP_ENTER:
+		_canvas.commit_design()
 
 
 # ─────────────────────────── UI 빌더 ───────────────────────────
@@ -295,6 +311,14 @@ func _on_stroke_rejected(reason: StringName) -> void:
 func _on_completion_blocked(_reason: StringName) -> void:
 	_design_label.text = Copy.NO_PAPER
 	_set_warn(Copy.NO_PAPER)
+
+
+## 🔴 맺힘 상태 (F1) — 확정 버튼 활성/안내. 준비된 그 순간에만 안내한다(재출력 소음 방지).
+func _on_commit_state_changed(can_commit: bool, _committed: bool) -> void:
+	_commit_btn.disabled = not can_commit
+	if can_commit and not _prev_can_commit:
+		_set_hint(Copy.READY_TO_COMMIT)
+	_prev_can_commit = can_commit
 
 
 func _set_hint(text: String) -> void:

@@ -88,9 +88,21 @@ const GLYPH_SHARP_TURN := 0.55
 
 # ── 탈출 판정 (곡선 화살표, TECH_SPEC §6.1) ──
 # "룬은 진 안에 머무르고, 화살표는 진을 뚫고 나간다" — 직진성이 아니라 기하 위치로 가른다.
-const ARROW_ESCAPE_R := 1.05           # 끝점 중심거리 ≥ radius × 이 값이어야 "진 밖"
-const ARROW_ESCAPE_GAIN := 0.12        # 끝점이 시작점보다 최소 radius × 이 값만큼 더 멀어야 함
+#
+# 🔴 **v2.2 조임 (F1, 사용자 2026-07-15): "확실히 뚫은 획만 화살표".** 옛 임계(1.05·0.12)는
+# 진을 **살짝 스쳐 나간 획**도 화살표로 잡았다 — 룬을 고치거나 손이 경계를 스치기만 해도
+# BASIC 문양이 되어 도안이 의도치 않게 완료됐다(사용자: *"멋대로 화살표다"*). 끝점이 진 밖으로
+# **분명히**(반지름의 20%) 나가고, 시작보다 반지름의 **1/4**만큼 멀어져야 관통으로 인정한다.
+# 룬은 닫힌 형이라 끝점이 시작 근처(gain 미달)라 자연히 안 걸리고, 관통 화살표는 진 밖으로
+# 뻗으므로 넉넉히 통과한다.
+const ARROW_ESCAPE_R := 1.20           # 끝점 중심거리 ≥ radius × 이 값이어야 "진 밖" (was 1.05)
+const ARROW_ESCAPE_GAIN := 0.25        # 끝점이 시작점보다 최소 radius × 이 값만큼 더 멀어야 함 (was 0.12)
 const ARROW_ESCAPE_MAX_WINDING := WINDING_WIND_MIN  # 이상 감기면 바람◎ — 탈출 판정을 양보한다
+## 원이 점을 감싸는 판정용 여유 — **탈출과 분리한다.** 탈출은 "확실히 뚫었나"(1.20)로 조였지만,
+## 소속 판정("이 획의 시작점이 이 진 안인가", design_builder._circle_contains)은 경계에 걸친 점을
+## 진 안으로 봐야 하므로 느슨한 채(1.05)로 둔다. 둘을 같은 상수로 묶으면 조임이 소속 판정까지
+## 번져 중첩 진 트리 구성이 흔들린다.
+const CIRCLE_CONTAIN_R := 1.05
 
 const MIN_POINTS := 4
 const MIN_STROKE_LEN := 0.02
@@ -105,25 +117,54 @@ static func classify_stroke(points: PackedVector2Array, ctx: Dictionary) -> Dict
 	if points.size() < MIN_POINTS or path_length(points) < MIN_STROKE_LEN:
 		return {"role": Enums.StrokeRole.DECOR, "score": 0.0, "reason": "too_short"}
 
-	if not ctx.get("has_circle", false):
+	var has_circle: bool = ctx.get("has_circle", false)
+
+	if not has_circle:
 		var c := detect_circle(points)
 		if c.is_circle:
 			return {
 				"role": Enums.StrokeRole.CIRCLE,
 				"center": c.center, "radius": c.radius, "score": c.score,
 			}
-	else:
-		# 진을 뚫고 나간 획은 직진성과 무관하게 화살표 — 곡선 화살표가 여기서 산다
-		if detect_escape(
-				points,
-				ctx.get("circle_center", Vector2(0.5, 0.5)),
-				ctx.get("circle_radius", 0.25)):
-			return _arrow_result(points, straightness(points))
+		# 진이 아직 없는 첫 획 등 — 탈출 판정을 할 기준이 없으므로 직진성으로 화살표를 가른다.
+		# (실전 작성 순서에선 진이 먼저라 이 길은 거의 안 밟히지만, 인식기 단독 계약을 위해 남긴다)
+		return _classify_without_circle(points, ctx)
 
+	# 🔴 **진이 있으면 화살표는 오직 진을 뚫어야(escape) 성립한다** (F1 조임, 2026-07-15).
+	# 직진성 게이트는 여기서 쓰지 않는다 — 그게 있으면 **진 안에 머문 곧은 획**까지 화살표가 되어
+	# (룬 단계엔 순서위반, 문양 단계엔 의도치 않은 완성으로) 새어 나갔다. 관통만이 화살표다.
+	if detect_escape(
+			points,
+			ctx.get("circle_center", Vector2(0.5, 0.5)),
+			ctx.get("circle_radius", 0.25)):
+		return _arrow_result(points, straightness(points))
+
+	if not ctx.get("has_rune", false):
+		var r := recognize_rune(points)
+		if r.score >= RUNE_MIN_SCORE:
+			return {
+				"role": Enums.StrokeRole.RUNE,
+				"rune_type": r.type, "score": r.score, "net_rotation": r.net,
+			}
+		# 실패해도 **어느 룬에 얼마나 가까웠는지**를 함께 돌려준다 — "거의 됐다"와
+		# "전혀 아니다"를 플레이어가 구별할 수 있어야 다시 그릴 마음이 생긴다.
+		# (진을 못 뚫었고 룬도 아니다 = 형이 흐트러진 것 → 자동보정 유도)
+		return {
+			"role": Enums.StrokeRole.DECOR, "score": float(r.score),
+			"reason": "rune_low_score",
+			"near_rune": int(r.type), "min_score": RUNE_MIN_SCORE,
+		}
+
+	# 진·룬은 이미 있고 이 획은 진을 안 뚫었다 → 문양이 아니다 (형이 흐트러진 획)
+	return {"role": Enums.StrokeRole.DECOR, "score": 0.0, "reason": "unclassified"}
+
+
+## 진이 없을 때의 분류 — 직진성으로 화살표를, 못 미치면 룬을 가른다.
+## **진이 있을 때는 이 길을 쓰지 않는다** — 그때 화살표는 관통(detect_escape)이 유일한 잣대다.
+static func _classify_without_circle(points: PackedVector2Array, ctx: Dictionary) -> Dictionary:
 	var st := straightness(points)
 	if st >= ARROW_STRAIGHT_PRE:
 		return _arrow_result(points, st)
-
 	if not ctx.get("has_rune", false):
 		var r := recognize_rune(points)
 		if r.score >= RUNE_MIN_SCORE:
@@ -133,14 +174,11 @@ static func classify_stroke(points: PackedVector2Array, ctx: Dictionary) -> Dict
 			}
 		if st >= ARROW_STRAIGHT_FALLBACK:
 			return _arrow_result(points, st)
-		# 실패해도 **어느 룬에 얼마나 가까웠는지**를 함께 돌려준다 — "거의 됐다"와
-		# "전혀 아니다"를 플레이어가 구별할 수 있어야 다시 그릴 마음이 생긴다
 		return {
 			"role": Enums.StrokeRole.DECOR, "score": float(r.score),
 			"reason": "rune_low_score",
 			"near_rune": int(r.type), "min_score": RUNE_MIN_SCORE,
 		}
-
 	if st >= ARROW_STRAIGHT_FALLBACK:
 		return _arrow_result(points, st)
 	return {"role": Enums.StrokeRole.DECOR, "score": 0.0, "reason": "unclassified"}

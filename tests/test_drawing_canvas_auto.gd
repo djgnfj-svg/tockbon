@@ -68,9 +68,13 @@ func _run() -> void:
 	_feed(canvas, _triangle_pts(c, 0.10))
 	_check(int(_last_recog[0]) == Enums.StrokeRole.RUNE, "삼각 획 → RUNE")
 	_check(canvas.get_design() == null, "화살표 전에는 미완성")
-	# 4. 화살표 → 완성
-	_feed(canvas, _line_pts(c, c + Vector2(0.18, 0.0)))
-	_check(_created == 1, "design_created 1회 발신")
+	# 4. 화살표 → **초안** (F1: 자동 완성 없음). 확정을 눌러야 맺힌다.
+	# 진(0.22)을 확실히 뚫는 길이로 그린다 (0.22×1.2=0.264 위)
+	_feed(canvas, _line_pts(c, c + Vector2(0.34, 0.0)))
+	_check(_created == 0, "화살표만으론 아직 안 맺힘 (자동 완성 제거)")
+	_check(canvas.get_design() == null and canvas.can_commit(), "초안 — 확정 대기")
+	_check(canvas.commit_design(), "확정 → 맺힌다")
+	_check(_created == 1, "확정 시 design_created 1회 발신")
 	var d: SpellDesign = canvas.get_design()
 	_check(d != null, "도안 생성됨")
 	if d != null:
@@ -78,8 +82,8 @@ func _run() -> void:
 		_check(d.rune_type == Enums.RuneType.FIRE, "룬 FIRE")
 		_check(d.arrows.size() == 1, "화살표 1")
 		_check(int(d.ink_cost.get(&"ink_basic", 0)) > 0, "잉크 > 0")
-	# 5. 화살표 추가 → design_updated
-	_feed(canvas, _line_pts(c, c + Vector2(0.0, -0.18)))
+	# 5. 화살표 추가 → design_updated (맺힌 종이라 고쳐 그리기는 자동·공짜)
+	_feed(canvas, _line_pts(c, c + Vector2(0.0, -0.34)))
 	_check(_updated >= 1, "design_updated 발신")
 	_check(canvas.get_design().arrows.size() == 2, "화살표 2")
 	# 6. 취소(undo) → 화살표 1
@@ -186,7 +190,7 @@ func _test_zoom(canvas: Control) -> void:
 	canvas._cancel_stroke()
 	canvas.clear_all()
 
-	_test_trace_magnet(canvas)
+	_test_arrow_stamp(canvas)
 	_test_live_ink(canvas)
 
 
@@ -243,64 +247,59 @@ func _test_live_ink(canvas: Control) -> void:
 # 🔴 **손이 이겨야 한다** — 본보기에서 멀리 그으면 안 끌린다(SNAP_RADIUS). 안 그러면 본보기가
 # 크기를 강제해 농도(룬, v1.7)·세기(문양, v1.9) 축이 통째로 죽는다.
 
-func _test_trace_magnet(canvas: Control) -> void:
+## 🔴 문양 = 조준한 그대로 박힌다 (인식 없음, 2026-07-15 조합 전환). 책에서 집어 조준(클릭→회전→클릭)만
+## 하면 손으로 덧그릴 필요 없이 ARROW가 박히고, 채점 게이트가 없어 **절대 튕기지 않는다**. 옛
+## "본보기 자석 + 덧그리기"(인식 실패로 튕기던 경로)를 대체한다. 룬·진 자석은 후속 슬라이스에서 통일.
+func _test_arrow_stamp(canvas: Control) -> void:
 	var c := Vector2(0.5, 0.5)
-	# 곧은 문양 본보기 — canonical은 **+X 전진**이고 캔버스가 위로 세워 얹는다(GDD §4.1).
-	# 그래서 가로로 주면 종이에선 세로선이 된다
+	# 곧은 문양 본보기 — canonical은 **+X 전진**이고 캔버스가 위로 세워 얹는다(GDD §4.1)
 	var unit := PackedVector2Array()
 	for i in 16:
 		unit.append(Vector2(-0.5 + float(i) / 15.0, 0.0))
 
-	# 자석은 문양 단계에서 잰다 — 작성 순서(진→룬→문양)를 먼저 채운다
+	# 작성 순서(진→룬→문양)를 먼저 채운다
 	canvas.clear_all()
 	_feed(canvas, _circle_pts(c, 0.22))
 	_feed(canvas, _triangle_pts(c, 0.10))
-	_check(canvas.get_stage() == Enums.DrawStage.ARROW, "자석 검사 준비 — 문양 차례")
+	_check(canvas.get_stage() == Enums.DrawStage.ARROW, "스탬프 준비 — 문양 차례")
+	var before: int = canvas._entries.size()
 
+	# 책에서 문양을 집어 진 중심 클릭(중앙 고정)→위로 겨눔→다시 클릭(확정)
 	canvas.show_trace(Enums.DrawStage.ARROW, unit)
 	_check(canvas.is_holding_trace(), "본보기를 집으면 마우스에 붙는다")
-	_check(canvas.has_trace(), "들고 있는 동안에도 종이에 보인다")
-	_check(canvas._trace_px.is_empty(), "안 놓은 본보기는 자석이 아니다")
+	_aim_trace(canvas, c, Vector2(0.5, 0.18))
 
-	# 종이 한가운데를 눌러 앉힌다 (화면 좌표 = 정규 × 320)
-	canvas._gui_input(_click(c * 320.0, true))
-	_check(not canvas.is_holding_trace(), "종이를 누르면 앉는다")
-	_check(canvas._trace_px.size() >= 2, "앉은 본보기가 자석이 됐다")
+	# 손으로 덧그리지 않았는데 ARROW가 하나 박혔다 — 인식 없음
+	_check(canvas._entries.size() == before + 1, "문양 조준 확정 = 인식 없이 바로 박힌다")
+	var e: Dictionary = canvas._entries[canvas._entries.size() - 1]
+	_check(bool(e.get("locked", false)), "박힌 문양은 잠긴다 — 재인식 안 함")
+	_check(int(e.result.role) == Enums.StrokeRole.ARROW, "박힌 것은 화살표 역할")
+	# 위로 겨눴으니 충격파 방향은 대략 위(UP_AXIS = -PI/2)
+	var dir: float = float(e.result.direction)
+	_check(absf(wrapf(dir + PI / 2.0, -PI, PI)) < 0.5,
+		"박힌 화살표 방향 = 겨눈 쪽(위) (dir=%.2f)" % dir)
+	# 본보기는 걷혔고, 진+룬+문양 = 완성 조건을 갖췄다
+	_check(not canvas.has_trace(), "박은 뒤 본보기가 걷힌다")
+	_check(canvas._complete, "진+룬+문양 = 완성 조건 충족")
 
-	# 본보기 옆(자석 안)을 삐뚤빼뚤 긋는다 → 선 쪽으로 끌려야 한다.
-	# 진 중심에서 출발해 위로 뚫고 나간다 (문양의 기하 조건 — TECH_SPEC §6.1)
-	var wobbly := PackedVector2Array()
-	for i in 20:
-		var t := float(i) / 19.0
-		# x가 ±0.02로 흔들리는 세로획 — 본보기(x=0.5)에서 자석 반경(0.05) 안이다
-		wobbly.append(Vector2(0.5 + (0.02 if i % 2 == 0 else -0.02), 0.5 - t * 0.32))
-	_feed_mouse(canvas, wobbly)
-	_check(not canvas._entries.is_empty(), "자석 안 — 획이 받아들여졌다")
-	var drawn: PackedVector2Array = canvas._entries[canvas._entries.size() - 1].stroke.points
-	var pulled_dev := _mean_dev_x(drawn, 0.5)
-	_check(pulled_dev < 0.016,
-		"자석 안 — 삐뚤한 획이 본보기로 끌렸다 (평균 이탈 %.4f, 손은 0.02였다)" % pulled_dev)
-
-	# 🔴 자석 **밖**을 그으면 안 끌린다 — 손이 이긴다.
-	# 이게 살아 있어야 크기 축(농도·세기)이 산다: 본보기와 다른 크기로 그릴 자유
-	canvas.clear_all()
-	_feed(canvas, _circle_pts(c, 0.22))
-	_feed(canvas, _triangle_pts(c, 0.10))
+	# 채점 게이트가 없다 = 몇 번을 놓아도 실패 없이 쌓인다 (조합의 자유)
 	canvas.show_trace(Enums.DrawStage.ARROW, unit)
-	canvas._gui_input(_click(c * 320.0, true))
-	var far := PackedVector2Array()
-	for i in 20:
-		# 본보기(x=0.5)에서 0.16 떨어진 세로획 — 자석 반경(0.05) 밖이다
-		far.append(Vector2(0.66, 0.5 - float(i) / 19.0 * 0.32))
-	_feed_mouse(canvas, far)
-	_check(not canvas._entries.is_empty(), "자석 밖 — 획이 받아들여졌다")
-	var far_drawn: PackedVector2Array = canvas._entries[canvas._entries.size() - 1].stroke.points
-	_check(_mean_dev_x(far_drawn, 0.66) < 0.005,
-		"자석 밖 — 손이 이긴다 (본보기가 획을 납치하지 않았다)")
-
-	# 획을 떼면 본보기는 걷힌다 — 다음 획(다른 글자)까지 끌면 안 된다
-	_check(not canvas.has_trace(), "획을 떼면 본보기가 걷힌다")
+	_aim_trace(canvas, c, Vector2(0.82, 0.5))   # 이번엔 오른쪽으로 겨눔
+	_check(canvas._entries.size() == before + 2, "둘째 문양도 실패 없이 박힌다")
 	canvas.clear_all()
+
+
+## 🔴 클릭→회전→클릭으로 본보기를 앉힌다: from(정규)을 클릭해 중앙을 박고, to(정규)로 옮겨
+## 겨눈 뒤 다시 클릭해 확정한다. 실제 조작 경로 그대로 — 첫 클릭(중앙 고정) → 이동(방향·세기) → 둘째 클릭(확정).
+func _aim_trace(canvas: Control, from_norm: Vector2, to_norm: Vector2) -> void:
+	var s := 320.0
+	var press: Vector2 = from_norm * s
+	var rel: Vector2 = to_norm * s
+	canvas._gui_input(_click(press, true))       # 첫 클릭 = 중앙 고정
+	canvas._gui_input(_click(press, false))
+	canvas._gui_input(_motion(rel, rel - press)) # 마우스 이동 = 회전·세기
+	canvas._gui_input(_click(rel, true))         # 둘째 클릭 = 확정
+	canvas._gui_input(_click(rel, false))
 
 
 ## 점들이 x=target에서 벗어난 평균 거리

@@ -195,29 +195,31 @@ func _test_canvas(gs: Node, bus: Node, balance: BalanceData, papers: Dictionary)
 		_check(is_equal_approx(d.mana_cost, expect_mana), "캔버스 경유 마나 감면")
 		_check(d.durability_max == SpellDesign.new().durability_max + int(p2.params.durability_bonus),
 			"캔버스 경유 내구 보정")
-	# 완성 후 갱신(화살표 추가)은 추가 소모 없음
-	_feed(canvas, _line_pts(Vector2(0.5, 0.5), Vector2(0.5, 0.32)))
+	# 완성 후 갱신(화살표 추가)은 추가 소모 없음 (맺힌 종이 — 자동 갱신)
+	_feed(canvas, _line_pts(Vector2(0.5, 0.5), Vector2(0.12, 0.5)))   # 왼쪽 0.38 — 확실히 뚫는다
 	_check(_updated >= 1 and _created == 1, "갱신은 design_updated")
 	_check(int(gs.call(&"get_count", p2.id)) == before + 1, "갱신은 종이 소모 없음")
 	if d != null:
 		_check(d.durability_max == SpellDesign.new().durability_max + int(p2.params.durability_bonus),
 			"갱신 반복에도 내구 보정 비누적")
 
-	# ── 마지막 1장 소모 → 0장 완성 차단 → 재획득 시 해제
+	# ── 마지막 1장 소모 → 0장 확정 차단 → 재획득 시 해제
 	canvas.clear_all()
-	_draw_design(canvas)
+	_draw_design(canvas)                              # 그리고 확정 (아직 1장 있다)
 	_check(_created == 2, "두 번째 도안 완성")
 	_check(int(gs.call(&"get_count", p2.id)) == before, "잔여 0장")
 	canvas.clear_all()
-	_draw_design(canvas)
-	_check(_blocked >= 1, "0장 — completion_blocked 발신")
+	_draw_design(canvas)                              # 그리고 확정 시도 — 0장이라 차단된다
+	_check(_blocked >= 1, "0장 — 확정 시 completion_blocked 발신")
 	_check(canvas.get_design() == null and _created == 2, "0장 — 도안 미생성·미소모")
+	# 초안은 남아 있다 — 종이를 다시 얻어 **확정을 다시 누르면** 맺힌다 (다시 그릴 필요 없다)
 	gs.call(&"add_item", p2.id, 1)
-	_feed(canvas, _line_pts(Vector2(0.5, 0.5), Vector2(0.5, 0.68)))
-	_check(_created == 3, "종이 재획득 → 다음 획에서 완성")
+	_check(canvas.can_commit(), "종이 재획득 → 다시 확정 가능")
+	_check(canvas.commit_design(), "확정 → 맺힌다")
+	_check(_created == 3, "종이 재획득 후 확정 → design_created")
 	_check(int(gs.call(&"get_count", p2.id)) == before, "재획득분 소모")
 
-	# ── 종이 미선택(set_no_paper): 상한 없음(먹이 무한), 완성만 차단
+	# ── 종이 미선택(set_no_paper): 상한 없음(먹이 무한), 확정만 차단
 	var blocked_before := _blocked
 	var rejected_no_paper := _rejected
 	canvas.set_no_paper()                             # 캔버스를 비운다
@@ -226,15 +228,20 @@ func _test_canvas(gs: Node, bus: Node, balance: BalanceData, papers: Dictionary)
 	for i in 6:                                       # paper_1이면 진작 거부됐을 양
 		_feed(canvas, _arrow_at(c, -PI / 2.0 + 0.3 * float(i), 0.42))
 	_check(_rejected == rejected_no_paper, "미선택 — 잉크 상한 없음(무효 없음)")
-	_check(_blocked > blocked_before and canvas.get_design() == null, "미선택 — 완성 차단")
+	# 초안은 완성 조건을 갖췄지만, 확정하면 종이가 없어 차단된다 (자동 완성이 없으므로 명시적으로 눌러 본다)
+	_check(not canvas.commit_design() and canvas.get_design() == null, "미선택 — 확정 차단")
+	_check(_blocked > blocked_before, "미선택 — completion_blocked 발신")
 	canvas.queue_free()
 
 
-## 완성 도안 1세트: 진(r 0.22) + 불룬 삼각(0.10) + 문양(진을 뚫고 나간다)
+## 완성 도안 1세트: 진(r 0.22) + 불룬 삼각(0.10) + 문양(진을 확실히 뚫는다) → **확정**.
+## 🔴 F1: 화살표 하나로 자동 완성되지 않으므로 마지막에 commit_design으로 맺는다.
+## 종이가 없으면 commit이 completion_blocked를 내고 도안은 안 맺힌다 (호출자가 그 경우를 검사).
 func _draw_design(canvas: Control) -> void:
 	_feed(canvas, _circle_pts(Vector2(0.5, 0.5), 0.22))
 	_feed(canvas, _triangle_pts(Vector2(0.5, 0.5), 0.10))
-	_feed(canvas, _line_pts(Vector2(0.5, 0.5), Vector2(0.68, 0.5)))
+	_feed(canvas, _line_pts(Vector2(0.5, 0.5), Vector2(0.5, 0.12)))   # 위로 0.38 — 확실히 뚫는다
+	canvas.commit_design()
 
 
 ## 진 중심에서 ang 방향으로 len만큼 뻗는 문양 (진을 뚫고 나간다 — TECH_SPEC §6.1)

@@ -67,6 +67,34 @@ static func canonical(glyph_type: int) -> PackedVector2Array:
 	return out
 
 
+## 화살촉 — 점열의 **머리(마지막 점)**에 얹는 두 갈래 미늘을 `b1 → 촉 → b2` 한 폴리라인으로 돌려준다.
+## 🔴 **렌더 전용 장식이다** (사용자 확정 2026-07-15 뒤집음): 문양을 화살표로 **보이게** 하려고
+## 그린다. 인식·raw_all에는 절대 들어가지 않는다 — "보고 따라 그리면 그 글자로 인식된다"는 촉 없는
+## 몸통 기준 그대로다 (test_glyph_auto 불변). 촉 길이는 글자 전체 크기의 비율이라 **어느 좌표계
+## (canonical 정규·본보기 캔버스)로 줘도 알아서 비례한다** — 그리는 쪽은 span만 곱하면 된다.
+static func head_barbs(pts: PackedVector2Array) -> PackedVector2Array:
+	if pts.size() < 2:
+		return PackedVector2Array()
+	var tip: Vector2 = pts[pts.size() - 1]
+	var dir: Vector2 = tip - pts[pts.size() - 2]
+	if dir.length() < 1e-6:
+		return PackedVector2Array()
+	dir = dir.normalized()
+	var lo: Vector2 = pts[0]
+	var hi: Vector2 = pts[0]
+	for p: Vector2 in pts:
+		lo = lo.min(p)
+		hi = hi.max(p)
+	var extent := maxf(maxf(hi.x - lo.x, hi.y - lo.y), 1e-6)
+	var barb := extent * 0.30
+	var ang := deg_to_rad(148.0)
+	var out := PackedVector2Array()
+	out.append(tip + dir.rotated(ang) * barb)
+	out.append(tip)
+	out.append(tip + dir.rotated(-ang) * barb)
+	return out
+
+
 ## 원본 + 좌우 거울상을 함께 넣는다 (지그재그가 위로 꺾여 시작하든 아래로 꺾여 시작하든 같은 글자다)
 static func _add(out: Array[Dictionary], type: int, pts: PackedVector2Array) -> void:
 	out.append({"type": type, "points": pts})

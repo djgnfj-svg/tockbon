@@ -8,6 +8,8 @@ extends Node2D
 ##
 ## 조작: WASD 이동 / 작업대 앞에서 E = 책 펼침 / ESC = 덮기
 ##       (책 펼친 중) 좌클릭 드래그 = 획 · 우클릭·Ctrl+Z = 취소 · 오른쪽 탭 = 책자 열람
+##       **Enter(또는 ✓완성 버튼) = 도안을 맺는다** — 화살표 하나로 자동 완성되지 않는다 (F1).
+##       맺혀야 종이가 뜯기고 발사할 수 있다
 ##       (책 덮은 중) 마우스 = 조준 · 좌클릭/Space = 발사 · R = 허수아비 리셋 · C = 종이 비우기
 ##       **Tab = 지팡이 바꾸기** (단발 → 세 갈래 → 둘레) — v2.0 지팡이 축을 눈으로 보는 자리
 ##
@@ -15,7 +17,7 @@ extends Node2D
 ## (3) **문양이 효과로 얹히는가** — 팅김+관통을 함께 그리면 **튕기면서 뚫는 탄 하나**
 ## (4) **도안을 안 고치고 지팡이만 바꿔도 나가는 그림이 달라지는가** (Tab)
 ##
-## 개발용 시험대다 — 기본 무한 자원(마나·내구). 경제 검증은 본편·test_base_auto에서 한다.
+## 개발용 시험대다 — 기본 무한 자원(마나·내구·**잉크**). 경제 검증은 본편·test_base_auto에서 한다.
 
 const ForgePanel := preload("res://src/drawing/forge_panel.gd")
 const DesignBuilder := preload("res://src/drawing/design_builder.gd")
@@ -160,10 +162,14 @@ func _near_desk() -> bool:
 ## 장착 슬롯을 거치지 않고 **지금 종이 위에 맺힌 도안**을 그대로 쏜다 — 그리자마자 검증하려고.
 ## 계약은 게임과 동일하다: cast_requested(도안, 원점, 에임) → spell_system이 전부 처리.
 func _try_cast() -> void:
-	# 예시를 불러왔으면 그걸, 아니면 종이에 그린 도안을 쏜다
+	# 예시를 불러왔으면 그걸, 아니면 종이에 **맺힌** 도안을 쏜다
 	var design: SpellDesign = _loaded if _loaded != null else _forge.call(&"get_design")
 	if design == null:
-		_set_warn(Copy.INCOMPLETE)
+		# 초안이 준비됐는데 안 맺었으면 그걸 짚어 준다 (F1: 발사는 맺힌 도안만)
+		if bool(_forge.call(&"can_commit")):
+			_set_warn("도안이 다 됐다 — 작업대(E)에서 Enter로 맺어야 쏜다")
+		else:
+			_set_warn(Copy.INCOMPLETE)
 		return
 	if _infinite:
 		design.durability = design.durability_max
@@ -306,6 +312,9 @@ func _build_forge() -> void:
 	add_child(layer)
 	_forge = ForgePanel.new()
 	layer.add_child(_forge)
+	# 🔴 시험대는 **무한 잉크** — 잉크 상한(종이 등급)에 막히지 않고 마음껏 그려 본다.
+	# (마나·내구가 이미 무한인 것과 같은 결. 경제 검증은 본편·test_base_auto에서 한다.)
+	_forge.call(&"set_ink_unlimited", true)
 	_forge.connect(&"design_completed", _on_design_completed)
 	_forge.connect(&"closed", _on_forge_closed)
 	_forge.connect(&"example_requested", _on_example_requested)
@@ -430,7 +439,7 @@ func _build_hud() -> void:
 	_cast_label = _label(ui, Vector2(8, 6), Vector2(400, 14), 10)
 	_design_label = _label(ui, Vector2(8, 22), Vector2(500, 14), 9)
 	_hint_label = _label(ui, Vector2(8, 342), Vector2(620, 14), 9)
-	_set_hint("이동 WASD · E=책 · 좌클릭/Space=발사 · Tab=지팡이 · 숫자=예시(책 닫힘:발사 / 펼침:탁본 필사) · 0=해제")
+	_set_hint("이동 WASD · E=책 · (책 안)Enter=맺기 · 좌클릭/Space=발사 · Tab=지팡이 · 숫자=예시(책 닫힘:발사 / 펼침:탁본 필사) · 0=해제")
 
 
 func _label(parent: Control, pos: Vector2, sz: Vector2, font_size: int) -> Label:

@@ -86,11 +86,15 @@ func _run() -> void:
 	_check(int(book.get(&"_stage")) == Enums.DrawStage.ARROW, "책자가 문양 장을 편다")
 	_check(panel.get_design() == null, "문양 전에는 도안이 아니다")
 
-	# 3. 문양 → 도안이 맺힌다. **진(반지름 0.22)을 뚫고 나가야** 문양이다 (TECH_SPEC §6.1)
+	# 3. 문양 → **초안** (F1: 자동 완성 없음). 진(반지름 0.22)을 뚫고 나가야 문양이다 (TECH_SPEC §6.1).
+	# Enter/확정 버튼 = canvas.commit_design(). 확정해야 종이가 뜯기고 도안이 맺힌다.
 	var paper_before := int(gs.call(&"get_count", &"paper_1")) if gs != null else 0
 	_feed(canvas, s, _line_pts(c, c + Vector2(0.0, -0.38)))
+	_check(panel.get_design() == null and bool(canvas.call(&"can_commit")),
+		"문양까지 → 초안 (자동 완성 없음)")
+	_check(bool(canvas.call(&"commit_design")), "확정하면 맺힌다")
 	var d: SpellDesign = panel.get_design()
-	_check(d != null, "진+룬+문양 → 도안이 맺힌다")
+	_check(d != null, "진+룬+문양 → 확정 → 도안이 맺힌다")
 	if d != null:
 		_check(d.rune_type == Enums.RuneType.FIRE, "룬 = 불△")
 		_check(d.arrows.size() == 1, "문양 1획 = 1발")
@@ -134,6 +138,7 @@ func _run_economy_checks(panel: Control, canvas: Control, book: Control, gs: Nod
 	_feed(canvas, s, _circle_pts(c, 0.22))
 	_feed(canvas, s, _triangle_pts(c, 0.10))
 	_feed(canvas, s, _line_pts(c, c + Vector2(0.0, -0.38)))
+	canvas.call(&"commit_design")                        # 확정 (F1)
 	var d1: SpellDesign = panel.get_design()
 	_check(d1 != null, "재작성 검증: 도안 맺힘")
 	_check(int(gs.call(&"get_count", &"paper_1")) == before - 1, "완성 → 종이 1장")
@@ -155,6 +160,7 @@ func _run_economy_checks(panel: Control, canvas: Control, book: Control, gs: Nod
 	_feed(canvas, s, _circle_pts(c, 0.12))
 	_feed(canvas, s, _triangle_pts(c, 0.07))
 	_feed(canvas, s, _line_pts(c, c + Vector2(0.0, -0.24)))
+	canvas.call(&"commit_design")                        # 확정 (F1)
 	var worn: SpellDesign = panel.get_design()
 	_check(worn != null, "내구 검증: 도안 맺힘")
 	if worn != null:
@@ -177,6 +183,8 @@ func _run_economy_checks(panel: Control, canvas: Control, book: Control, gs: Nod
 	_feed(canvas, s, _circle_pts(c, 0.22))
 	_feed(canvas, s, _triangle_pts(c, 0.10))
 	_feed(canvas, s, _line_pts(c, c + Vector2(0.0, -0.38)))
+	# 확정을 눌러도 종이가 없으면 맺히지 않는다 (자동 완성이 없으므로 명시적으로 눌러 본다)
+	_check(not bool(canvas.call(&"commit_design")), "0장 — 확정 차단")
 	_check(panel.get_design() == null, "종이 0장 → 부품이 다 있어도 도안이 맺히지 않는다")
 	var checklist := _find_checklist(panel)
 	_check(checklist != null and checklist.get(&"_design") == null,
@@ -190,6 +198,7 @@ func _run_economy_checks(panel: Control, canvas: Control, book: Control, gs: Nod
 	_feed(canvas, s, _circle_pts(c, 0.22))
 	_feed(canvas, s, _triangle_pts(c, 0.10))
 	_feed(canvas, s, _line_pts(c, c + Vector2(0.0, -0.38)))
+	canvas.call(&"commit_design")                        # 확정 (F1)
 	_check(panel.get_design() != null, "승격한 종이로 도안이 맺힌다")
 	_check(int(gs.call(&"get_count", &"paper_2")) == 2, "중급 종이 1장 소모")
 

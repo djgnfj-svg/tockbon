@@ -115,22 +115,34 @@ func _rebuild(animate: bool) -> void:
 		elif stage == _stage and _prev_stage != _stage:
 			_glow(row)
 
-	# 완성 — **도안이 실제로 맺혔을 때만.** 부품이 다 있어도 종이가 없으면 도안은 없다
-	# (그때 "「도안이 맺혔다」"를 띄우면 옆 라벨의 "「종이가 없다」"와 정면으로 모순된다)
-	var complete := _design != null
-	_complete_row.text = Copy.COMPLETE if complete else ""
-	if complete and not _prev_complete:
+	# 🔴 **맺힘은 명시적이다** (F1, 2026-07-15) — 세 단계를 다 갖춰도 화살표 하나로 자동 완성되지
+	# 않는다. 두 상태를 가른다: **확정 대기**(초안이 준비됨 → 확정 키를 눌러라) / **맺혔다**(종이 소모).
+	# committed = 도안이 실제로 실재하는가 — 종이가 없으면 부품이 다 있어도 맺히지 않는다.
+	var committed: bool = bool(_summary.get("committed", _design != null))
+	var can_commit: bool = bool(_summary.get("can_commit", false))
+	if committed:
+		_complete_row.text = Copy.COMPLETE
+		_complete_row.add_theme_color_override(&"font_color", COMPLETE_COLOR)
+	elif can_commit:
+		_complete_row.text = Copy.COMMIT_PROMPT      # "▶ 완성 — Enter로 맺는다"
+		_complete_row.add_theme_color_override(&"font_color", CURRENT_COLOR)
+	else:
+		_complete_row.text = ""
+	# 맺힌 순간에만 클라이맥스 팝 — 확정 대기 프롬프트는 조용히 나타난다(매번 튀면 소음)
+	if committed and not _prev_complete:
 		_complete_row.modulate.a = 0.0
 		var tw := _complete_row.create_tween()
 		tw.tween_property(_complete_row, ^"modulate:a", 1.0, COMPLETE_FADE_SEC)
 		_pop(_complete_row, COMPLETE_POP_SCALE)
-	elif not complete:
+	elif _complete_row.text == "":
 		_complete_row.modulate.a = 0.0
+	else:
+		_complete_row.modulate.a = 1.0
 
 	for stage: int in _rows:
 		_prev_done[stage] = bool(done[stage])
 	_prev_stage = _stage
-	_prev_complete = complete
+	_prev_complete = committed
 
 
 func _rune_note(has_rune: bool) -> String:

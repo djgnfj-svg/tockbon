@@ -316,7 +316,9 @@ func _test_arrows() -> void:
 		"has_rune": true,
 	}
 	var dirs: Array[float] = [0.0, PI / 2.0, PI, -PI / 2.0]
-	var lens: Array[float] = [0.1, 0.2, 0.4]
+	# 🔴 F1 조임 — 화살표는 진(반지름 0.3)을 **확실히 뚫어야** 한다. 진 안에 머문 짧은 획은
+	# 더 이상 화살표가 아니다. 길이는 전부 관통 임계(0.3×1.2=0.36) 위에서 증가하도록 잡는다.
+	var lens: Array[float] = [0.4, 0.5, 0.6]
 	for d: float in dirs:
 		var prev_len := 0.0
 		for l: float in lens:
@@ -773,10 +775,11 @@ func _test_draw_order() -> void:
 	_check(is_equal_approx(canvas.get_ink_used(), ink_after_circle),
 		"거부 후 잉크 사용량 불변")
 
-	# 꼬리 폐지(v1.6): 예전에 꼬리로 수락되던 획이 이제 화살표라 RUNE 단계에서 거부된다
+	# 꼬리 폐지(v1.6) + F1 조임: 진 안에서 출발해 확실히 뚫는 획은 화살표라 RUNE 단계에서 거부된다.
+	# (진 60px을 30px 자리에서 출발해 90px까지 뚫는다 — F1 이후엔 "확실히 뚫은 획만 화살표"다)
 	rejected.clear()
-	_stroke_on(canvas, _px_line(CV_C + Vector2(66, 0), CV_C + Vector2(80, 0), 8))
-	_check(canvas._entries.size() == 1, "RUNE 단계 — 예전 꼬리 모양 획도 거부 (꼬리 폐지)")
+	_stroke_on(canvas, _px_line(CV_C + Vector2(30, 0), CV_C + Vector2(90, 0), 8))
+	_check(canvas._entries.size() == 1, "RUNE 단계 — 진 뚫는 획도 거부 (화살표는 문양 차례에)")
 	_check(rejected.size() == 1 and rejected[0] == &"out_of_order",
 		"예전 꼬리 획 거부 사유 out_of_order")
 
@@ -796,7 +799,11 @@ func _test_draw_order() -> void:
 	_stroke_on(canvas, _px_line(CV_C, CV_C + Vector2(80, 0)))
 	_check(canvas._entries.size() == 3, "ARROW 단계 — 문양 수락")
 	_check(int(canvas.get_summary().get("arrow_count", 0)) == 1, "문양 1개")
-	_check(canvas.get_design() != null, "진+룬+문양 → 도안 완성")
+	# 🔴 F1: 화살표 하나로 자동 완성되지 않는다 — 초안일 뿐, 확정을 눌러야 맺힌다
+	_check(canvas.get_design() == null, "진+룬+문양 → 아직 초안 (자동 완성 없음)")
+	_check(canvas.can_commit(), "확정 대기 — commit 가능")
+	_check(canvas.commit_design(), "확정하면 맺힌다")
+	_check(canvas.get_design() != null, "확정 후 도안 실재")
 
 	# 진은 한 종류 — 모든 도안이 조준진이고 조준축은 캔버스 위쪽
 	var made: SpellDesign = canvas.get_design()
@@ -834,8 +841,10 @@ func _test_nested_canvas() -> void:
 	_check(canvas.get_stage() == Enums.DrawStage.RUNE, "껍질 진 후 → RUNE 단계")
 	_stroke_on(canvas, _px_tri_at(CV_C + Vector2(0, -45), 15.0))
 	_stroke_on(canvas, _px_line(CV_C, CV_C + Vector2(0, -100)))
-	_check(canvas.get_design() != null, "껍질만으로 도안 완성 (단일)")
-	_check(canvas.get_design().children.is_empty(), "아직 자식 없음")
+	_check(canvas.get_design() == null and canvas.can_commit(), "껍질 = 초안 (확정 대기)")
+	_check(canvas.commit_design(), "확정 → 껍질만으로 도안 완성 (단일)")
+	_check(canvas.get_design() != null and canvas.get_design().children.is_empty(),
+		"맺힌 껍질 · 아직 자식 없음")
 
 	# 안쪽 진 — ARROW 단계에서도 원은 수락된다 (새 노드). 활성 노드가 안쪽 진으로 바뀐다
 	_stroke_on(canvas, _px_circle(25.0))
@@ -979,13 +988,15 @@ func _test_copy_and_feedback() -> void:
 		"거부·번쩍임 연출 후 잔여 노드 없음 (먹선 %d == 엔트리 %d)" % [
 			ink_layer.get_child_count(), canvas._entries.size()])
 
-	# ── 도안 완성 신호 — 클라이맥스 연출의 방아쇠 ──
+	# ── 도안 완성 신호 — 클라이맥스는 **명시적 확정**의 방아쇠다 (F1, 2026-07-15) ──
 	var completed: Array[SpellDesign] = []
 	canvas.design_completed.connect(func(d: SpellDesign) -> void: completed.append(d))
-	_stroke_on(canvas, _px_line(CV_C, CV_C + Vector2(0, -80)))   # 화살표 → 완성
-	_check(completed.size() == 1, "도안이 맺히는 순간 design_completed 1회")
+	_stroke_on(canvas, _px_line(CV_C, CV_C + Vector2(0, -80)))   # 화살표 → 초안 (자동 완성 없음)
+	_check(completed.is_empty(), "화살표만으론 클라이맥스 없음 (자동 완성 제거)")
+	_check(canvas.commit_design(), "확정 → 맺힌다")
+	_check(completed.size() == 1, "확정하는 순간 design_completed 1회")
 	_stroke_on(canvas, _px_line(CV_C, CV_C + Vector2(80, 0)))    # 화살표 추가 → 갱신일 뿐
-	_check(completed.size() == 1, "이후 화살표 추가는 완성 신호를 다시 쏘지 않는다")
+	_check(completed.size() == 1, "맺힌 뒤 화살표 추가는 완성 신호를 다시 쏘지 않는다")
 	await create_timer(0.9).timeout      # 완성 번쩍임(0.55s)이 끝날 실제 시간
 	_check(ink_layer.get_child_count() == canvas._entries.size(), "완성 연출 후에도 잔여 노드 없음")
 	canvas.queue_free()
@@ -1011,8 +1022,12 @@ func _test_copy_and_feedback() -> void:
 	_check(_row_text(cl, 3) == "", "미완성 — 완성 문구는 비어 있다")
 	_stroke_on(c2, _px_line(CV_C, CV_C + Vector2(0, -80)))
 	await process_frame
-	_check(_row_text(cl, 3) == Copy.COMPLETE, "완성 — 클라이맥스 문구가 뜬다")
+	# 🔴 F1: 문양까지 그리면 **확정 대기** 프롬프트, 확정을 눌러야 완성 문구가 뜬다
+	_check(_row_text(cl, 3) == Copy.COMMIT_PROMPT, "문양까지 → 확정 대기 프롬프트")
 	_check(_row_text(cl, 2).contains("1획"), "화살표 개수 표시")
+	c2.commit_design()
+	await process_frame
+	_check(_row_text(cl, 3) == Copy.COMPLETE, "확정 → 완성 클라이맥스 문구")
 	cl.queue_free()
 	c2.queue_free()
 
@@ -1091,7 +1106,8 @@ func _test_assembly_aimed() -> void:
 	var abs_dirs: Array[float] = [-PI / 2.0, -PI / 2.0 + 0.5, -PI / 2.0 - 0.5]
 	var sets: Array = [_gen_circle(c, 0.22), _gen_triangle(c, 0.10)]
 	for ad: float in abs_dirs:
-		sets.append(_gen_line(c, c + Vector2(cos(ad), sin(ad)) * 0.18, 10))
+		# F1: 진(0.22)을 확실히 뚫는 길이 (0.22×1.2=0.264 위)
+		sets.append(_gen_line(c, c + Vector2(cos(ad), sin(ad)) * 0.32, 10))
 	var parts := _run_pipeline(sets)
 	_check(DesignBuilder.is_complete(parts), "도안 완성 조건")
 	if not DesignBuilder.is_complete(parts):
@@ -1154,7 +1170,8 @@ func _test_assembly_fixed() -> void:
 	for k in 8:
 		var d := TAU * float(k) / 8.0
 		dirs.append(d)
-		sets.append(_gen_line(c, c + Vector2(cos(d), sin(d)) * 0.16, 10))
+		# F1: 진(0.26)을 확실히 뚫는 길이 (0.26×1.2=0.312 위)
+		sets.append(_gen_line(c, c + Vector2(cos(d), sin(d)) * 0.36, 10))
 	var parts := _run_pipeline(sets)
 	_check(DesignBuilder.is_complete(parts), "노바 완성 조건")
 	if not DesignBuilder.is_complete(parts):

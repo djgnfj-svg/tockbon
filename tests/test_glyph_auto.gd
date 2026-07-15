@@ -198,8 +198,10 @@ func _test_canonical_contract() -> void:
 # 🔴 튜토리얼 첫 도안이 곧은 화살표다. 여기가 깨지면 온보딩이 깨진다.
 
 func _test_basic_fallback() -> void:
+	# 🔴 F1 조임: 화살표는 진(0.22)을 **확실히 뚫어야** 한다 (0.22×1.2=0.264 위). 진 안에 머문
+	# 짧은 획은 이제 화살표가 아니다 — 곧은 직선 검증도 뚫는 길이에서 한다 (튜토리얼 첫 도안도 뚫는다)
 	for heading: float in [0.0, PI / 2.0, PI, -PI / 2.0, 2.2, -1.1]:
-		for span: float in [0.16, 0.30, 0.44]:
+		for span: float in [0.30, 0.44, 0.58]:
 			_glyph_case(_place(_line_local(), heading, span, 0.0, 0.0),
 				Enums.GlyphType.BASIC, "곧은 직선 (heading=%.1f span=%.2f)" % [heading, span])
 
@@ -207,7 +209,7 @@ func _test_basic_fallback() -> void:
 	# 세로 지터를 bbox 높이로 나눠 화면 가득한 가짜 지그재그로 부풀린다 → 팅김⚡ 오인
 	for i in 30:
 		var pts := _place(_line_local(), _rng.randf_range(0.0, TAU),
-			_rng.randf_range(0.18, 0.45), 0.0, _rng.randf_range(0.002, 0.010))
+			_rng.randf_range(0.32, 0.52), 0.0, _rng.randf_range(0.002, 0.010))
 		var got := _glyph_of(pts)
 		_check(got == Enums.GlyphType.BASIC,
 			"지터 직선 %d → BASIC (got %s)" % [i, _glyph_name(got)])

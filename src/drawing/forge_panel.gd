@@ -31,8 +31,9 @@ const CANVAS_RECT := Rect2(38, 34, 260, 260)         # 왼쪽 페이지의 종�
 const INK_BAR_RECT := Rect2(38, 298, 260, 5)
 const CHECK_RECT := Rect2(38, 307, 260, 42)
 const BOOK_RECT_R := Rect2(332, 24, 280, 262)        # 오른쪽 페이지의 책자
-const SAY_RECT := Rect2(332, 290, 280, 32)           # 스승의 말 — 책의 여백에 적힌다
-const HINT_RECT := Rect2(332, 330, 280, 12)
+const SAY_RECT := Rect2(332, 288, 280, 26)           # 스승의 말 — 책의 여백에 적힌다
+const COMMIT_BTN_RECT := Rect2(332, 316, 150, 20)    # 🔴 확정 버튼 (F1) — 초안을 맺는다
+const HINT_RECT := Rect2(332, 338, 280, 12)
 const TITLE_RECT := Rect2(28, 16, 280, 14)
 
 # ── 한지·먹 톤 (src/ui의 InkStyle은 타 모듈 — CLAUDE.md 모듈 규칙상 참조하지 않는다) ──
@@ -64,6 +65,8 @@ var _ink_bar: Control
 var _title: Label
 var _say: Label
 var _hint: Label
+var _commit_btn: Button              # 🔴 확정 버튼 (F1) — 초안이 준비됐을 때만 눌린다
+var _prev_can_commit := false        # 확정 안내는 준비된 그 순간에만 (매 갱신 재출력 금지)
 var _spread: Control                 # 책 전체 — 펼침 tween이 물리는 노드
 
 var _paper_id: StringName = &""
@@ -106,6 +109,9 @@ func open() -> void:
 	_book.call(&"refresh")                  # 그새 해금된 룬이 있을 수 있다
 	_book.call(&"follow_stage", _canvas.call(&"get_stage"))
 	_say.text = ""
+	# 다시 펼치면 확정 안내를 새로 낼 수 있게 한다 (이미 준비된 초안을 안고 다시 열 수 있다)
+	_prev_can_commit = false
+	_on_commit_state_changed(bool(_canvas.call(&"can_commit")), bool(_canvas.call(&"is_committed")))
 	_spread_open()
 
 
@@ -144,6 +150,12 @@ func _unhandled_input(event: InputEvent) -> void:
 	var k := event as InputEventKey
 	if k != null and k.pressed and not k.echo and k.keycode == KEY_Z and k.ctrl_pressed:
 		_canvas.call(&"undo_last")
+		get_viewport().set_input_as_handled()
+		return
+	# 🔴 **Enter = 도안을 맺는다** (F1, 2026-07-15) — 명시적 확정. 준비된 초안만 맺힌다.
+	if k != null and k.pressed and not k.echo \
+			and (k.keycode == KEY_ENTER or k.keycode == KEY_KP_ENTER):
+		_try_commit()
 		get_viewport().set_input_as_handled()
 		return
 	# 🔴 탁본 필사 — 숫자키로 예시를 부른다 (책 펼친 중). 실제 예시 목록은 바깥(시험대·거점)이
@@ -240,7 +252,12 @@ func _on_trace_changed(active: bool) -> void:
 	if not active:
 		_set_say(Copy.CONTROLS, false)
 		return
-	_set_say(Copy.TRACE_HELD if _canvas.call(&"is_holding_trace") else Copy.TRACE_PLACED, false)
+	if bool(_canvas.call(&"is_holding_trace")):
+		# 문양은 고무줄 겨눔, 룬은 눌러 앉히기 — 조작이 다르므로 문구도 다르다
+		_set_say(Copy.TRACE_HELD_ARROW if bool(_canvas.call(&"is_arrow_trace")) \
+			else Copy.TRACE_HELD, false)
+	else:
+		_set_say(Copy.TRACE_PLACED, false)
 
 
 func _on_stroke_rejected(reason: StringName) -> void:
@@ -256,6 +273,20 @@ func _on_design_completed(design: SpellDesign) -> void:
 	_set_say(Copy.COMPLETE, false)
 	_refresh_title()                        # 종이 한 장이 방금 소모됐다
 	design_completed.emit(design)
+
+
+## 🔴 확정 시도 (F1) — Enter·버튼 공용. 준비 안 됐으면 캔버스가 조용히 무시한다(false).
+func _try_commit() -> void:
+	_canvas.call(&"commit_design")
+
+
+## 맺힘 상태가 바뀌었다 — 버튼 활성/문구를 맞춘다. 준비된 **그 순간에만** 안내를 띄운다
+## (매 갱신 재출력하면 거부 메시지 등을 덮어 소음이 된다).
+func _on_commit_state_changed(can_commit: bool, _committed: bool) -> void:
+	_commit_btn.disabled = not can_commit
+	if can_commit and not _prev_can_commit:
+		_set_say(Copy.READY_TO_COMMIT, false)
+	_prev_can_commit = can_commit
 
 
 func _on_ink_changed(used: float, capacity: float) -> void:
@@ -325,6 +356,7 @@ func _build() -> void:
 	_canvas.connect(&"design_completed", _on_design_completed)
 	_canvas.connect(&"ink_state_changed", _on_ink_changed)
 	_canvas.connect(&"trace_changed", _on_trace_changed)
+	_canvas.connect(&"commit_state_changed", _on_commit_state_changed)
 
 	_ink_bar = Control.new()
 	_ink_bar.position = INK_BAR_RECT.position
@@ -347,11 +379,22 @@ func _build() -> void:
 	_spread.add_child(_book)
 	_book.connect(&"glyph_picked", _on_glyph_picked)
 
+	# 🔴 확정 버튼 (F1) — 초안이 준비됐을 때만 눌린다. Enter와 같은 일을 한다(둘 다 제공).
+	_commit_btn = Button.new()
+	_commit_btn.position = COMMIT_BTN_RECT.position
+	_commit_btn.size = COMMIT_BTN_RECT.size
+	_commit_btn.text = Copy.COMMIT_BUTTON
+	_commit_btn.add_theme_font_size_override(&"font_size", 9)
+	_commit_btn.disabled = true
+	_commit_btn.focus_mode = Control.FOCUS_NONE   # Enter가 버튼 포커스로 새지 않게 — 캔버스가 주인공
+	_commit_btn.pressed.connect(_try_commit)
+	_spread.add_child(_commit_btn)
+
 	_title = _label(TITLE_RECT, 10, TITLE_COLOR)
 	_say = _label(SAY_RECT, 8, SAY_COLOR)
 	_say.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_hint = _label(HINT_RECT, 8, HINT_COLOR)
-	_hint.text = "%s   ·   %s" % [Copy.CONTROLS, Copy.FORGE_CLOSE]
+	_hint.text = "%s   ·   Enter = 맺기   ·   %s" % [Copy.CONTROLS, Copy.FORGE_CLOSE]
 	_refresh_title()
 
 
@@ -395,9 +438,20 @@ func _label(r: Rect2, font_size: int, col: Color) -> Label:
 
 # ─────────────────────────── 외부 조회 ───────────────────────────
 
-## 지금 종이 위에 맺힌 도안 (없으면 null) — 작업대가 "그린 걸 바로 쏴 보기"에 쓴다
+## 지금 종이 위에 **맺힌** 도안 (없으면 null) — 작업대가 "그린 걸 바로 쏴 보기"에 쓴다.
+## 🔴 초안(미확정)은 여기 안 잡힌다 — Enter로 맺어야 실재한다 (F1).
 func get_design() -> SpellDesign:
 	return _canvas.call(&"get_design")
+
+
+## 초안이 준비돼 Enter 한 번이면 맺히는가 — 작업대가 "왜 못 쏘는지"를 안내하는 데 쓴다
+func can_commit() -> bool:
+	return bool(_canvas.call(&"can_commit"))
+
+
+## 🔴 개발 시험대용 무한 잉크 (잉크 상한 무시). 게임 본편에선 쓰지 않는다.
+func set_ink_unlimited(v: bool) -> void:
+	_canvas.call(&"set_ink_unlimited", v)
 
 
 ## 종이를 비운다 — 빈 자리가 났으니 이때 종이도 다시 집는다 (소진분 → 다음 등급 승격)

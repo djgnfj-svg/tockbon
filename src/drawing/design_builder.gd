@@ -122,9 +122,11 @@ static func is_complete(parts: Dictionary) -> bool:
 # `Recognizer.classify_stroke`에 통과시키면, "진 안에 머물면 룬 / 뚫고 나가면 화살표"가 원마다
 # 그대로 성립한다. 인식 규칙이 한 지점(recognizer)에 남는다.
 
-## 원이 점을 감싸는가 (경계에 탈출 여유 ARROW_ESCAPE_R만큼 준다 — 인식기 탈출 판정과 대칭)
+## 원이 점을 감싸는가 (경계에 여유 CIRCLE_CONTAIN_R만큼 준다). **탈출 판정과 분리한다** —
+## 탈출(ARROW_ESCAPE_R)은 F1에서 "확실히 뚫었나"로 조여졌지만, 소속 판정은 경계에 걸친 점을
+## 진 안으로 봐야 하므로 느슨한 채로 둔다 (recognizer.CIRCLE_CONTAIN_R 주석 참조).
 static func _circle_contains(center: Vector2, radius: float, p: Vector2) -> bool:
-	return center.distance_to(p) <= radius * Recognizer.ARROW_ESCAPE_R
+	return center.distance_to(p) <= radius * Recognizer.CIRCLE_CONTAIN_R
 
 
 ## 이 노드에 이미 그 종류 룬이 있나 (복합 — 같은 종류 중복 금지)
