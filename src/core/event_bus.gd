@@ -14,6 +14,12 @@ signal cast_requested(design: SpellDesign, origin: Vector2, aim_dir: Vector2)
 signal cast_executed(design: SpellDesign, mana_spent: float)
 signal cast_failed(design: SpellDesign, reason: int)
 
+# ── 고리 조립 캐스팅 (세션 12~, 평행 경로 — 옛 cast_requested와 별개)
+# 🔴 고리 모델(진=날아가는 몸, 문양=착탄 전개)은 SpellDesign이 아니라 assembly 사전을 싣는다.
+# assembly = ring_board.get_assembly() = {ring_count, rune, rings:[[8칸]], open:[...]}.
+# ring_spell_system(모듈 B)이 수신 → 진(캐리어)을 조준 방향으로 쏜다.
+signal ring_cast_requested(assembly: Dictionary, origin: Vector2, aim_dir: Vector2)
+
 # ── 전투 (B ↔ C)
 signal enemy_hit(enemy: Node2D, damage: float, rune_type: int)
 signal enemy_died(enemy_def: EnemyDef, position: Vector2)

@@ -1,12 +1,44 @@
 # STATUS — 현재 진행 상태
 
-> 최종 갱신: 2026-07-16 (세션 11 — **문서 정비 + 고리 모델 축 분담 확정**, 설계 세션·코드 무변경) ·
-> 세션 10-forge: TODO #15 완료(조립 보드를 forge 책 UI에 통합, 평행 패널, 전 스위트 그린) · **세션 종료마다 갱신**
-> 커밋: 세션 8~11 코드·문서 모두 브랜치 `session-8-forge-ui`에 커밋됨. **main 미병합** (실험 단계, 방향 굳으면 병합)
+> 최종 갱신: 2026-07-16 (세션 12 — **TODO #16 완료: 고리 발사를 실제 spell 파이프라인에 통합**, 전 스위트 그린) ·
+> 세션 11: 문서 정비 + 고리 모델 축 분담 확정 · **세션 종료마다 갱신**
+> 커밋: 세션 8~12 코드·문서 모두 브랜치 `session-8-forge-ui`에 커밋됨. **main 미병합** (실험 단계, 방향 굳으면 병합)
 >
-> 🔴 **지금 게임의 방향 = 「고리 조립」 모델** (세션 9 전환 · 세션 11 축 분담 확정). 아래 세션 11·10·9가 현재
+> 🔴 **지금 게임의 방향 = 「고리 조립」 모델** (세션 9 전환 · 세션 11 축 분담 확정). 아래 세션 12·11·10·9가 현재
 > 세대다. 축 분담(지팡이=발사 · 진=그릇/층·칸 · 룬=속성 · 문양=칸/층별 효과)은 세션 11 참조. 옛
 > 자유드로잉(v1.6~v2.2)은 `STATUS_ARCHIVE.md`. 규칙 정본 = `TRUTH.md` 상단 배너 + memory `takbon-ring-assembly-pivot`.
+
+---
+
+## ✅ 세션 12 (2026-07-16) — **TODO #16 완료: 고리 발사를 실제 spell 파이프라인에 통합** (전 스위트 그린)
+
+> 세션 10~11의 발사가 `test_ring_forge_panel` 안의 **자체 시뮬**이었다 — 데모는 완성이되 실제 적·투사체가
+> 아니었다. 이번 세션에 그걸 **실제 시스템으로 갈아끼웠다.** 진이 진짜 투사체로 날아가 실제 적(take_hit)에
+> 닿으면 전개된다. 옛 SpellDesign 경로는 **그대로 두고 평행**으로 붙였다(#15/#10과 같은 전략).
+
+**신설 파일 (전부 순수 추가, class_name 없음):**
+- `src/spell/ring_carrier.gd` + `.tscn` — **진 = 날아가는 투사체**(Area2D, 레이어 4=player_projectile,
+  마스크 world|enemy). 조준 방향으로 날다 **적에 닿으면 몸으로 때리고**(빈 진도) 그 자리에서 `deployed(ring, at, travel)`
+  발신. **벽·수명으로 죽으면 전개 없음**(안 맞으면 전개 없음 — 데모 규칙). 회전하지 않는다.
+- `src/spell/ring_spell_system.gd` + `.tscn` — `EventBus.ring_cast_requested` 수신 → 캐리어 스폰 →
+  `deployed` 받아 **전개**: 발산→=`projectile.tscn`을 `design=null·effects={}`로 쓴 **순수 직진 불탄환**(기존
+  자산 재사용), 응집←=`pillar.tscn` 불기둥(응집 칸 많을수록 node scale로 굵다). 불 룬 히트정보는 `Db`에서.
+- `tests/test_ring_spell_auto.gd` — 헤드리스 자동 검증 7항목(전개 8발/기둥/빈진/혼합 + 캐리어 비행·착탄·전개·빈진 몸타격·미스). **CLAUDE.md 검증 목록에 추가 필요**(아래 ⚠).
+
+**신설 시그널 (리드, EventBus):** `ring_cast_requested(assembly, origin, aim_dir)` — assembly는 SpellDesign이
+아니라 `ring_board.get_assembly()` 사전. TECH_SPEC §5에 기록함. 옛 `cast_requested`와 완전 별개(평행).
+
+**변경:** `tests/test_ring_forge_panel.gd`(F6) — 자체 전투 시뮬(_carriers/_bolts/_pillars/_targets)을
+**걷어내고** 실제 `ring_spell_system` + 실제 `dummy_target` 적으로 교체. 발사=`EventBus.ring_cast_requested.emit`.
+
+**검증:** 헤드리스 15스위트 + 필드·UI 씬 전부 그린(ring_spell 7항목 신규 포함, 회귀 0). **MCP 시각 검증**(에디터
+frozen+exec 발사+스텝+스샷): 응집 진→가운데 허수아비 기둥 피격(빨강), 발산 진→우상단 허수아비 착탄+8발 전개 확인.
+
+**🔴 남은 폴리시(작음):** 전개 탄·기둥이 게임 크기 자산이라 데모 화면에서 작게 보이고, 기둥이 적 뒤에 그려짐
+(_system이 _world보다 먼저 add_child). 규칙 확정 후 #17에서 본 게임 튜닝과 함께 다듬을 부분.
+
+**🔴 다음:** #17 — 규칙 확정(룬=불만·진=하나 유지? 안/밖 고리=비행/착탄 매핑? 문양본 존폐?) + **본 게임 통합**
+(forge→장착→필드 발사를 고리 모델로 교체, 옛 SpellDesign 은퇴) + **TRUTH.md 전면 재작성**.
 
 ---
 

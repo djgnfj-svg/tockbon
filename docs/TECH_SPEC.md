@@ -517,6 +517,9 @@ signal cast_requested(design: SpellDesign, origin: Vector2, aim_dir: Vector2)  #
 signal cast_executed(design: SpellDesign, mana_spent: float)                   # B가 발신. 내구 차감은 spell_system이 직접 수행 (수신 측 중복 차감 금지)
 signal cast_failed(design: SpellDesign, reason: int)                           # 검사 순서: INVALID → BROKEN → NO_MANA (손상 도안에 마나 낭비 방지)
 
+# ── 고리 조립 캐스팅 (세션 12~, 평행 경로) — cast_requested와 별개. 옛 자유드로잉이 굳으면(#17) 대체
+signal ring_cast_requested(assembly: Dictionary, origin: Vector2, aim_dir: Vector2)  # assembly = ring_board.get_assembly() {ring_count, rune, rings:[[8칸]], open}. ring_spell_system(B) 수신 → 진(캐리어) 발사
+
 # ── 전투 (B ↔ C)
 signal enemy_hit(enemy: Node2D, damage: float, rune_type: int)  # 발신 주체: 적 take_hit 내부 1곳 (약점 반영 최종 피해 기준). 투사체 측 발신 금지
 signal enemy_died(enemy_def: EnemyDef, position: Vector2)
