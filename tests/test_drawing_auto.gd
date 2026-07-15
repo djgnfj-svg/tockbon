@@ -240,16 +240,7 @@ func _test_runes() -> void:
 		_rune_case(_gen_triangle(c, 0.15, 0.1 * float(i), 0.005),
 			Enums.RuneType.FIRE, "불△ 노이즈 %d" % i)
 
-	# 충격> — 깨끗한 획 3 + 노이즈 획 3
-	_rune_case(_gen_angle(Vector2(0.42, 0.36), Vector2(0.60, 0.50), Vector2(0.44, 0.66)),
-		Enums.RuneType.IMPACT, "충격> 기본")
-	_rune_case(_gen_angle(Vector2(0.40, 0.40), Vector2(0.62, 0.52), Vector2(0.42, 0.60)),
-		Enums.RuneType.IMPACT, "충격> 벌림각 변형")
-	_rune_case(_gen_angle(Vector2(0.55, 0.35), Vector2(0.45, 0.55), Vector2(0.60, 0.68)),
-		Enums.RuneType.IMPACT, "충격> 방향 반전(<형)")
-	for i in 3:
-		_rune_case(_gen_angle(Vector2(0.42, 0.36), Vector2(0.61, 0.50), Vector2(0.43, 0.65), 0.005),
-			Enums.RuneType.IMPACT, "충격> 노이즈 %d" % i)
+	# (v2.2: 충격> 룬 제거 — 룬 인식 대상은 불△·물~·바람◎ 셋)
 
 	# 물~ — 깨끗한 획 3 + 노이즈 획 3
 	_rune_case(_gen_wave(Vector2(0.30, 0.50), 0.40, 0.07, 2.0),
@@ -289,13 +280,6 @@ func _test_rune_stress() -> void:
 			Enums.RuneType.FIRE: _gen_triangle(Vector2(0.5, 0.5),
 				_rng.randf_range(0.07, 0.22), _rng.randf_range(0.0, TAU),
 				_rng.randf_range(0.002, 0.012)),
-			Enums.RuneType.IMPACT: _gen_angle(
-				Vector2(0.5, 0.5) + Vector2(-_rng.randf_range(0.08, 0.18),
-					-_rng.randf_range(0.08, 0.18)),
-				Vector2(0.5, 0.5) + Vector2(_rng.randf_range(0.06, 0.14), 0.0),
-				Vector2(0.5, 0.5) + Vector2(-_rng.randf_range(0.08, 0.18),
-					_rng.randf_range(0.08, 0.18)),
-				_rng.randf_range(0.002, 0.010)),
 			Enums.RuneType.WATER: _gen_wave(Vector2(0.30, 0.50),
 				_rng.randf_range(0.24, 0.40), _rng.randf_range(0.05, 0.10),
 				_rng.randf_range(1.4, 2.6), _rng.randf_range(0.0, PI),
@@ -315,7 +299,7 @@ func _test_rune_stress() -> void:
 			if want == Enums.RuneType.WIND and got == Enums.RuneType.WATER:
 				_water_wind_cross += 1
 
-	for want: int in [Enums.RuneType.FIRE, Enums.RuneType.IMPACT,
+	for want: int in [Enums.RuneType.FIRE,
 			Enums.RuneType.WATER, Enums.RuneType.WIND]:
 		var bad := int(miss.get(want, 0))
 		_check(bad == 0, "손그림 스트레스 %s — %d/%d 실패" % [
@@ -386,8 +370,6 @@ func _test_curved_arrows() -> void:
 	_rune_case_r(_gen_spiral(c, 0.12, 2.0, 0.8, 1.0), Enums.RuneType.WIND,
 		"바람◎ 진(0.22) 안", 0.22)
 	_rune_case_r(_gen_triangle(c, 0.12), Enums.RuneType.FIRE, "불△ 진(0.22) 안", 0.22)
-	_rune_case_r(_gen_angle(Vector2(0.42, 0.36), Vector2(0.60, 0.50), Vector2(0.44, 0.66)),
-		Enums.RuneType.IMPACT, "충격> 진(0.28) 안", 0.28)
 
 
 # ────────────── 4.6 ArrowData.path — 곡률 보존 (TECH_SPEC §4) ──────────────
@@ -1051,8 +1033,8 @@ func _test_design_book() -> void:
 
 	# 무리 3개: 진 · 룬 · 문양
 	_check(book.get_child_count() == 3, "책자 무리 3개 (진·룬·문양)")
-	_check(book._rune_cells != null and book._rune_cells.get_child_count() == 4,
-		"룬 칸 4개 (불·충격·물·바람)")
+	_check(book._rune_cells != null and book._rune_cells.get_child_count() == 3,
+		"룬 칸 3개 (불·물·바람 — v2.2: 충격 룬 폐지)")
 
 	# 책자가 그리는 점열이 인식기 템플릿과 **같은 것**이어야 한다
 	for rune: int in DesignBook.RUNE_ORDER:

@@ -52,8 +52,8 @@ func _test_start_state() -> void:
 	_check(not src.contains("SampleDesigns"),
 		"main.gd가 샘플 도안을 지급하지 않음 (도안 0장 시작)")
 	_check(src.contains("_seed_new_game"), "새 게임 시드 함수 존재")
-	_check(gs.is_unlocked(&"rune_fire") and gs.is_unlocked(&"rune_impact"),
-		"시작 해금: 불·충격 룬 (물·바람은 미해금)")
+	_check(gs.is_unlocked(&"rune_fire") and gs.is_unlocked(&"glyph_thrust"),
+		"시작 해금: 불 룬 + 추진 문양 (물·바람은 미해금 — v2.2)")
 	_check(not gs.is_unlocked(&"rune_water"), "물 룬은 해독 보상 — 시작에 없음")
 
 
@@ -119,7 +119,7 @@ func _test_training_dummy() -> void:
 
 	# 여러 번 맞아도 죽지 않는다
 	for i in range(5):
-		dummy.take_hit(99.0, Enums.RuneType.IMPACT, Enums.Status.NONE, 0.0)
+		dummy.take_hit(99.0, Enums.RuneType.FIRE, Enums.Status.NONE, 0.0)
 	await process_frame
 	_check(is_instance_valid(dummy), "여러 번 맞아도 소멸하지 않음")
 	_check(training_hits.size() == 6, "맞을 때마다 발신")

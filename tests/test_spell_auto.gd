@@ -73,6 +73,7 @@ func _run() -> void:
 	await _test_glyph_bounce(system)
 	await _test_glyph_homing(system)
 	await _test_glyph_pierce(system)
+	await _test_glyph_thrust(system)
 	await _test_direction_invariant(system)
 	await _test_wand_patterns(system)
 	await _test_glyph_stacking(system)
@@ -184,11 +185,11 @@ func _test_example_catalog(system) -> void:
 			types[int(r.type)] = true
 		_check(types.has(Enums.RuneType.FIRE) and types.has(Enums.RuneType.WATER),
 			"복합 예시가 불+물 룬 둘 다")
-	var nest: SpellDesign = _find_example(cat, "중첩 충격→불")
+	var nest: SpellDesign = _find_example(cat, "중첩 물→불")
 	_check(nest != null, "중첩 예시 존재")
 	if nest != null:
 		_check(nest.children.size() == 1, "중첩 예시 자식 1개")
-		_check(nest.rune_type == Enums.RuneType.IMPACT, "껍질 룬 = 충격")
+		_check(nest.rune_type == Enums.RuneType.WATER, "껍질 룬 = 물")
 		_check(nest.children[0].rune_type == Enums.RuneType.FIRE, "안쪽 진 룬 = 불")
 	# 실제로 쏴진다 (스모크)
 	if comp != null:
@@ -240,7 +241,7 @@ func _test_shotgun(system) -> void:
 	print("[2] 산탄 도안(문양 3개, 오프셋 각각) — 기본 지팡이(SINGLE)에서는 1발, 발사각 = 에임")
 	for aim: Vector2 in [Vector2(1, 0), Vector2(0, 1)]:
 		_gs.restore_mana_full()
-		var design := SampleDesigns.aimed_shotgun_impact()
+		var design := SampleDesigns.aimed_shotgun_wind()
 		_bus.cast_requested.emit(design, Vector2.ZERO, aim)
 		var projs := _projectiles(system)
 		_check(projs.size() == 1,
@@ -916,7 +917,7 @@ func _test_direction_invariant(system) -> void:
 		var aim := Vector2.RIGHT.rotated(deg_to_rad(aim_deg))
 		for junk_direction: float in [0.0, 1.7, -2.3, PI]:
 			_gs.restore_mana_full()
-			var design := SampleDesigns.aimed_shotgun_impact()
+			var design := SampleDesigns.aimed_shotgun_wind()
 			for arrow: ArrowData in design.arrows:
 				arrow.direction = junk_direction
 			design.aim_axis = 5.5      # 어떤 값이든 무시돼야 한다
@@ -937,7 +938,7 @@ func _test_direction_invariant(system) -> void:
 ## GameState는 오토로드라 테스트 간에 상태가 새므로, 끝나면 반드시 지팡이를 원상복구한다.
 func _test_wand_patterns(system) -> void:
 	print("[17] 지팡이 패턴 — 같은 도안, 지팡이만 바꾸면 발수·방향이 바뀐다 (SINGLE/MULTI/NOVA)")
-	var design := SampleDesigns.aimed_shotgun_impact()
+	var design := SampleDesigns.aimed_shotgun_wind()
 	var aim := Vector2.RIGHT
 
 	# SINGLE — 미착용(wand_basic과 동일 취급)이면 단발. 문양 3개여도 1발.
@@ -1425,6 +1426,37 @@ func _make_wall(pos: Vector2, size: Vector2) -> StaticBody2D:
 	return wall
 
 ## 문양 축만 바꾼 도안 (진·룬은 고정) — FIXED라 에임에 안 돈다
+## 추진» (v2.2 2a) — 탄이 빠르게 날아간다. 기준(BASIC) 대비 속도↑, 길게 그을수록 더 빠르다.
+## 속도는 투사체 _velocity 크기로 실측한다 (방향은 안 건드린다 = 다른 테스트가 각도 불변을 못 박는다).
+func _test_glyph_thrust(system) -> void:
+	print("[추진»] 추진 문양 — 탄이 빠르게 날아간다 (v2.2, 길수록 더 빨리)")
+	_gs.restore_mana_full()
+	_bus.cast_requested.emit(_glyph_design(Enums.GlyphType.BASIC, 1.0), Vector2.ZERO, Vector2.RIGHT)
+	var bp := _projectiles(system)
+	var base_speed: float = bp[0]._velocity.length() if bp.size() == 1 else -1.0
+	await _clear_projectiles(system)
+
+	_gs.restore_mana_full()
+	_bus.cast_requested.emit(_glyph_design(Enums.GlyphType.THRUST, 0.6), Vector2.ZERO, Vector2.RIGHT)
+	var shp := _projectiles(system)
+	var short_speed: float = shp[0]._velocity.length() if shp.size() == 1 else -1.0
+	var short_angle: float = shp[0]._velocity.angle() if shp.size() == 1 else 0.0
+	await _clear_projectiles(system)
+
+	_gs.restore_mana_full()
+	_bus.cast_requested.emit(_glyph_design(Enums.GlyphType.THRUST, 3.0), Vector2.ZERO, Vector2.RIGHT)
+	var lgp := _projectiles(system)
+	var long_speed: float = lgp[0]._velocity.length() if lgp.size() == 1 else -1.0
+	await _clear_projectiles(system)
+
+	_check(bp.size() == 1 and shp.size() == 1 and lgp.size() == 1, "추진 3발 모두 발사됨")
+	if bp.size() == 1 and shp.size() == 1 and lgp.size() == 1:
+		print("    속도: 기준 %.0f / 짧은추진 %.0f / 긴추진 %.0f" % [base_speed, short_speed, long_speed])
+		_check(short_speed > base_speed + 0.5, "추진 = 기준보다 빠르다 (%.0f > %.0f)" % [short_speed, base_speed])
+		_check(long_speed > short_speed + 0.5, "길수록 더 빠르다 (%.0f > %.0f)" % [long_speed, short_speed])
+		_check(_angle_close(short_angle, Vector2.RIGHT.angle()), "추진은 방향을 안 바꾼다 (에임 그대로)")
+
+
 func _glyph_design(glyph: int, reach: float) -> SpellDesign:
 	var d := _ink_design(Enums.CircleType.FIXED, 0.0, 0.5)
 	d.arrows[0].glyph = glyph

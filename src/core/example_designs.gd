@@ -98,28 +98,28 @@ static func catalog() -> Array:
 		[_front_arrow()],
 		[] as Array[SpellDesign])})
 
-	# 3) 복합 불+충격 — 화상 + 넉백을 한 탄에
-	out.append({"name": "복합 불+충격", "design": _mk(
-		"복합 불+충격", 0.55,
-		[_rune(Enums.RuneType.FIRE, 0.5), _rune(Enums.RuneType.IMPACT, 0.5)],
+	# 3) 복합 불+바람 — 화상 + 흐름을 한 탄에
+	out.append({"name": "복합 불+바람", "design": _mk(
+		"복합 불+바람", 0.55,
+		[_rune(Enums.RuneType.FIRE, 0.5), _rune(Enums.RuneType.WIND, 0.5)],
 		[_circle_stroke(C, 0.26),
 			_rune_stroke(Enums.RuneType.FIRE, C + Vector2(-0.10, 0.0), 0.12),
-			_rune_stroke(Enums.RuneType.IMPACT, C + Vector2(0.10, 0.0), 0.12)],
+			_rune_stroke(Enums.RuneType.WIND, C + Vector2(0.10, 0.0), 0.12)],
 		[_front_arrow()],
 		[] as Array[SpellDesign])})
 
-	# 4) 중첩 충격→불 — 껍질(충격)이 날아가 착탄점에서 불을 전개 (재귀 깊이 1)
+	# 4) 중첩 물→불 — 껍질(물)이 날아가 착탄점에서 불을 전개 (재귀 깊이 1)
 	var inner_fire := _mk(
 		"안쪽 불", 0.28,
 		[_rune(Enums.RuneType.FIRE, 0.7)],
 		[_circle_stroke(C, 0.14), _rune_stroke(Enums.RuneType.FIRE, C, 0.10)],
 		[_front_arrow()],
 		[] as Array[SpellDesign])
-	out.append({"name": "중첩 충격→불", "design": _mk(
-		"중첩 충격→불", 0.6,
-		[_rune(Enums.RuneType.IMPACT, 0.6)],
+	out.append({"name": "중첩 물→불", "design": _mk(
+		"중첩 물→불", 0.6,
+		[_rune(Enums.RuneType.WATER, 0.6)],
 		[_circle_stroke(C, 0.28),
-			_rune_stroke(Enums.RuneType.IMPACT, C + Vector2(0.0, -0.16), 0.10)],
+			_rune_stroke(Enums.RuneType.WATER, C + Vector2(0.0, -0.16), 0.10)],
 		[_front_arrow()],
 		[inner_fire] as Array[SpellDesign])})
 

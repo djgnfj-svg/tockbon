@@ -23,15 +23,15 @@ static func nova_fire() -> SpellDesign:
 	d.ink_cost = {&"ink_basic": 12}
 	return d
 
-## 조준진 + 충격> + 3발 산탄 (±15도)
-static func aimed_shotgun_impact() -> SpellDesign:
+## 조준진 + 바람◎ + 3발 산탄 (±15도)
+static func aimed_shotgun_wind() -> SpellDesign:
 	var d := SpellDesign.new()
-	d.id = &"sample_shotgun_impact"
-	d.display_name = "샘플: 충격 산탄"
+	d.id = &"sample_shotgun_wind"
+	d.display_name = "샘플: 바람 산탄"
 	d.circle_type = Enums.CircleType.AIMED
 	d.circle_radius = 0.5
 	d.aim_axis = 0.0
-	d.rune_type = Enums.RuneType.IMPACT
+	d.rune_type = Enums.RuneType.WIND
 	d.rune_accuracy = 0.85
 	for offset: float in [-0.26, 0.0, 0.26]:
 		var a := ArrowData.new()
@@ -61,4 +61,4 @@ static func aimed_lance_water() -> SpellDesign:
 	return d
 
 static func all() -> Array[SpellDesign]:
-	return [nova_fire(), aimed_shotgun_impact(), aimed_lance_water()]
+	return [nova_fire(), aimed_shotgun_wind(), aimed_lance_water()]

@@ -20,7 +20,6 @@ const BASE_RADIUS := 5.0
 
 const RUNE_COLORS: Dictionary = {
 	Enums.RuneType.FIRE: Color(1.0, 0.55, 0.1),
-	Enums.RuneType.IMPACT: Color(1.0, 0.9, 0.2),
 	Enums.RuneType.WATER: Color(0.25, 0.55, 1.0),
 	Enums.RuneType.WIND: Color(0.65, 0.95, 0.45),
 }

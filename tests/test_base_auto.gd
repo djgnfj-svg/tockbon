@@ -162,7 +162,7 @@ func _test_scene_loads() -> void:
 	await process_frame
 	_check(is_instance_valid(scene), "base.tscn 인스턴스 정상 (_ready·_process 1프레임)")
 	# 패널 열기 = refresh() 실행 — 행 구성·Db 조회·정렬 경로 검증
-	var design := SampleDesigns.aimed_shotgun_impact()
+	var design := SampleDesigns.aimed_shotgun_wind()
 	design.durability = 2
 	gs.designs.append(design)
 	for facility_id: StringName in [&"workbench", &"storage", &"lab"]:

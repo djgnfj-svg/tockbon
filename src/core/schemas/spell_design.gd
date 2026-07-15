@@ -60,4 +60,19 @@ func is_broken() -> bool:
 func rune_list() -> Array[RuneInstance]:
 	if not runes.is_empty():
 		return runes
-	return [RuneInstance.make(int(rune_type), rune_fill, rune_accuracy)]
+	return [RuneInstance.make(_elem(int(rune_type)), rune_fill, rune_accuracy)]
+
+
+## 옛 IMPACT(=1) → FIRE. 룬이 순수 원소만 되면서(v2.2) 충격 도안이 사라진 룬을 가리키지 않게.
+static func _elem(t: int) -> int:
+	return int(Enums.RuneType.FIRE) if t == Enums.LEGACY_IMPACT else t
+
+
+## 구세이브 마이그레이션 — 로드 시 1회. 이 진과 룬들·자식 진을 재귀로 훑어 옛 충격을 FIRE로.
+## SaveManager 로드 경로에서 호출한다 (rune_list는 방어적 폴백일 뿐).
+func migrate_legacy_runes() -> void:
+	rune_type = _elem(int(rune_type)) as Enums.RuneType
+	for r: RuneInstance in runes:
+		r.type = _elem(int(r.type))
+	for child: SpellDesign in children:
+		child.migrate_legacy_runes()

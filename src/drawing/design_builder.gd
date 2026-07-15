@@ -30,7 +30,6 @@ static var _base_durability_max: int = SpellDesign.new().durability_max
 
 const RUNE_NAMES := {
 	Enums.RuneType.FIRE: "불△",
-	Enums.RuneType.IMPACT: "충격>",
 	Enums.RuneType.WATER: "물~",
 	Enums.RuneType.WIND: "바람◎",
 }
@@ -40,6 +39,7 @@ const GLYPH_NAMES := {
 	Enums.GlyphType.BOUNCE: "팅김⚡",
 	Enums.GlyphType.HOMING: "유도∿",
 	Enums.GlyphType.PIERCE: "관통‖",
+	Enums.GlyphType.THRUST: "추진»",
 }
 
 ## 표기 순서 (Dictionary 순회 순서에 이름을 맡기지 않는다)

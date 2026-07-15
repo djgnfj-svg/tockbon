@@ -220,14 +220,15 @@ static func recognize_rune(points: PackedVector2Array) -> Dictionary:
 		if float(by_type.get(t, 0.0)) > float(by_type.get(best_type, 0.0)):
 			best_type = t
 
-	# 충격> vs 물~ — 감김이 둘 다 낮아 $1이 흔들릴 수 있다. **점수가 근소할 때만**
-	# 곡률 부호 교대 수로 가른다(">"는 꺾임 런 ≤1, 파형은 ≥2). 점수차가 뚜렷하면 $1을 믿는다 —
-	# 이 조건 없이 무조건 런으로 지우면 노이즈 있는 충격>의 11%가 물~로 새어 나갔다
+	# v2.2: 충격> 룬이 사라져 저감김 밴드는 불△·물~ 둘뿐이다. 대부분 $1이 확실히 가른다(닫힌 삼각
+	# vs 열린 파형). 다만 **저진폭 파형**은 곧게 뻗어 삼각으로 근소하게 오독될 수 있다 — 점수차가
+	# 근소할 때만(옛 충격/물 타이브레이커와 같은 게이트) 곡률 부호 교대 수로 물~로 바로잡는다.
+	# 삼각형은 명확히 이겨 이 게이트에 안 걸린다(꺾임 런 ≤1).
 	var runner_up := _runner_up(by_type, allowed, best_type)
-	if _is_impact_water_pair(best_type, runner_up) \
-			and float(by_type[best_type]) - float(by_type[runner_up]) < RUNS_TIE_MARGIN:
-		best_type = int(Enums.RuneType.WATER) if curvature_runs(points) >= 2 \
-			else int(Enums.RuneType.IMPACT)
+	if best_type == int(Enums.RuneType.FIRE) and runner_up == int(Enums.RuneType.WATER) \
+			and float(by_type[best_type]) - float(by_type[runner_up]) < RUNS_TIE_MARGIN \
+			and curvature_runs(points) >= 2:
+		best_type = int(Enums.RuneType.WATER)
 
 	return {"type": best_type, "score": float(by_type.get(best_type, 0.0)), "net": net}
 
@@ -267,22 +268,14 @@ static func _runner_up(by_type: Dictionary, allowed: Array[int], best: int) -> i
 	return second
 
 
-static func _is_impact_water_pair(a: int, b: int) -> bool:
-	return (
-		(a == Enums.RuneType.IMPACT and b == Enums.RuneType.WATER)
-		or (a == Enums.RuneType.WATER and b == Enums.RuneType.IMPACT))
-
-
 ## 감김 밴드 → 허용 룬 후보. 물~(≤0.48바퀴)과 바람◎(≥2.05바퀴)은 절대 같은 밴드에 없다.
-## 그 아래에서는 불△·충격>·물~을 **전부 후보로 두고 $1이 고르게** 한다 — 이 셋의 감김은
-## 서로 겹쳐서 게이트로 가를 수 없다(위 상수 주석의 실측 분포 참고).
+## 그 아래에서는 불△·물~을 **후보로 두고 $1이 고르게** 한다 (v2.2: 충격 제거).
 static func winding_candidates(net_abs: float) -> Array[int]:
 	var out: Array[int] = []
 	if net_abs >= WINDING_WIND_MIN:
 		out.append(Enums.RuneType.WIND)
 	else:
 		out.append(Enums.RuneType.FIRE)
-		out.append(Enums.RuneType.IMPACT)
 		out.append(Enums.RuneType.WATER)
 	return out
 

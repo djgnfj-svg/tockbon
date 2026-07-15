@@ -27,14 +27,12 @@ const MAX_PRESSURE := 1.6
 ## 종이 위 먹 (드로잉룸·UI 썸네일) — 어두운 안료
 const RUNE_INK := {
 	Enums.RuneType.FIRE: Color(0.48, 0.18, 0.11),
-	Enums.RuneType.IMPACT: Color(0.42, 0.34, 0.08),
 	Enums.RuneType.WATER: Color(0.11, 0.29, 0.42),
 	Enums.RuneType.WIND: Color(0.18, 0.42, 0.31),
 }
 ## 필드 발광 (캐스팅 마법진·투사체) — 어두운 숲 바닥에서 읽히도록. projectile.gd RUNE_COLORS와 동계열
 const RUNE_BRIGHT = {
 	Enums.RuneType.FIRE: Color(1.0, 0.55, 0.1),
-	Enums.RuneType.IMPACT: Color(1.0, 0.9, 0.2),
 	Enums.RuneType.WATER: Color(0.25, 0.55, 1.0),
 	Enums.RuneType.WIND: Color(0.65, 0.95, 0.45),
 }

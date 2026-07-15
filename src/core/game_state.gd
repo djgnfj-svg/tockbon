@@ -27,9 +27,9 @@ var ui_modal_open: bool = false
 func _ready() -> void:
 	mana = mana_max()
 	hp = hp_max()
-	# 시작 해금 — 튜토리얼 지급 룬 (TECH_SPEC §5.1)
+	# 시작 해금 — 튜토가 가르치는 불 룬 + 추진 문양 (v2.2, TRUTH §4 세션 14: 충격 룬 폐지)
 	codex[&"rune_fire"] = true
-	codex[&"rune_impact"] = true
+	codex[&"glyph_thrust"] = true
 	EventBus.extraction_success.connect(_on_extraction_success)
 	EventBus.bag_lost.connect(func() -> void: bag.clear())
 	EventBus.research_completed.connect(func(unlock_id: StringName) -> void: codex[unlock_id] = true)

@@ -21,7 +21,6 @@ const ShockwaveScene := preload("res://src/spell/shockwave.tscn")
 
 const RUNE_COLORS: Dictionary = {
 	Enums.RuneType.FIRE: Color(1.0, 0.55, 0.1),    # 불 = 주황
-	Enums.RuneType.IMPACT: Color(1.0, 0.9, 0.2),   # 충격 = 노랑
 	Enums.RuneType.WATER: Color(0.25, 0.55, 1.0),  # 물 = 파랑
 	Enums.RuneType.WIND: Color(0.65, 0.95, 0.45),  # 바람 = 연두
 }
@@ -30,12 +29,11 @@ const RUNE_COLORS: Dictionary = {
 ## (샘플 도안·구세이브처럼 strokes가 비어 있는 경우)
 const PROJ_SHEET_PATH := "res://assets/sprites/effects/projectiles.png"
 const PROJ_ANIMS := {
-	"fire": [0, 2, 10.0], "impact": [2, 2, 10.0],
+	"fire": [0, 2, 10.0],
 	"water": [4, 2, 10.0], "wind": [6, 2, 10.0],
 }
 const RUNE_ANIM_NAMES := {
 	Enums.RuneType.FIRE: "fire",
-	Enums.RuneType.IMPACT: "impact",
 	Enums.RuneType.WATER: "water",
 	Enums.RuneType.WIND: "wind",
 }
@@ -152,6 +150,11 @@ func _setup_effects() -> void:
 	if effects.has(Enums.GlyphType.HOMING):
 		_homing_left = lerpf(_balance.glyph_homing_duration_min, 1.0,
 			reach_t(_balance, effects[Enums.GlyphType.HOMING])) * _life_left
+	# 추진 (v2.2) — 탄이 빠르게 날아간다. _velocity는 setup()에서 이미 세워졌으니 크기만 키운다.
+	# 방향은 그대로. 길게 그은 추진일수록 더 빠르다 (reach_t).
+	if effects.has(Enums.GlyphType.THRUST):
+		_velocity *= lerpf(_balance.glyph_thrust_speed_min, _balance.glyph_thrust_speed_max,
+			reach_t(_balance, effects[Enums.GlyphType.THRUST]))
 
 
 ## 탄의 몸 = **진**(v2.0). 먹선과 히트박스가 **같은 반지름**을 쓴다 — 갈라지면

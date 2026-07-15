@@ -50,6 +50,8 @@ static func canonical(glyph_type: int) -> PackedVector2Array:
 			pts = _bow(130.0)
 		Enums.GlyphType.PIERCE:
 			pts = _spear(0.28, 42.0)
+		Enums.GlyphType.THRUST:
+			pts = _thrust(0.28, 42.0)
 		_:
 			return PackedVector2Array()
 	var lo: Vector2 = pts[0]
@@ -103,6 +105,21 @@ static func _bow(sweep_deg: float) -> PackedVector2Array:
 	for i in n:
 		var a := a0 + sweep * float(i) / float(n - 1)
 		pts.append(center + Vector2(cos(a), sin(a)) * r)
+	return pts
+
+
+## 추진» — 시작(진 쪽)에 깃(fletching)이 한 번 꺾인 뒤 곧게 전진. 관통‖의 **거울**(촉이 앞이 아니라 뒤).
+## 화살 깃 = 속도. ⚠ **v2.2 2a에서는 canonical(표시)만 있다** — raw_all(매칭)에는 아직 없다.
+## 2b(F1 슬라이스)에서 raw_all에 넣고, 관통‖과 가르는 **꺾임 위치 피처**(시작 near vs 끝 near)를 단다.
+static func _thrust(barb_len: float, barb_deg: float) -> PackedVector2Array:
+	var origin := Vector2.ZERO
+	var barb := origin + Vector2.RIGHT.rotated(PI - deg_to_rad(barb_deg)) * barb_len  # 뒤·위로 벌어진 깃
+	var head: Array[Vector2] = [barb, origin]        # 깃끝 → 원점 (깃을 먼저 긋고)
+	var shaft: Array[Vector2] = [origin, Vector2(1.0, 0.0)]  # → 앞으로 곧게
+	var pts := _polyline(head, 9)
+	var shaft_pts := _polyline(shaft, 26)
+	for i in range(1, shaft_pts.size()):
+		pts.append(shaft_pts[i])
 	return pts
 
 

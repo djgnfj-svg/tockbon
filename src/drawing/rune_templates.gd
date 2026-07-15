@@ -1,5 +1,5 @@
 extends RefCounted
-## 룬 4종 원시 템플릿 도형 (GDD §4.2 — 불△ 닫힌 삼각 / 충격> 꺾인 각선 / 물~ 파형 / 바람◎ 나선).
+## 룬 3종 원시 템플릿 도형 (v2.2: 충격 제거 — 불△ 닫힌 삼각 / 물~ 파형 / 바람◎ 나선).
 ## recognizer가 $1 전처리(리샘플·회전·스케일 정규화) 후 캐시하며, 역방향 변형도 recognizer가 자동 생성한다.
 ## 사용: const RuneTemplates := preload("res://src/drawing/rune_templates.gd")
 
@@ -11,11 +11,6 @@ static func raw_all() -> Array[Dictionary]:
 	out.append(_t(Enums.RuneType.FIRE, _triangle(0.26, 1.0, true)))
 	out.append(_t(Enums.RuneType.FIRE, _triangle(0.1, 0.85, true)))
 	out.append(_t(Enums.RuneType.FIRE, _triangle(0.0, 1.0, false)))
-	# 충격> — 꺾인 각선 (벌림각·팔 길이 변형)
-	out.append(_t(Enums.RuneType.IMPACT, _angle_shape(60.0, 1.0)))
-	out.append(_t(Enums.RuneType.IMPACT, _angle_shape(90.0, 1.0)))
-	out.append(_t(Enums.RuneType.IMPACT, _angle_shape(110.0, 1.0)))
-	out.append(_t(Enums.RuneType.IMPACT, _angle_shape(80.0, 0.65)))
 	# 물~ — 파형 (주기·진폭 변형 + 상하 반전)
 	out.append(_t(Enums.RuneType.WATER, _wave(1.5, 0.45)))
 	out.append(_t(Enums.RuneType.WATER, _wave(2.0, 0.40)))
@@ -35,8 +30,6 @@ static func canonical(rune_type: int) -> PackedVector2Array:
 	match rune_type:
 		Enums.RuneType.FIRE:
 			pts = _triangle(0.0, 1.0, true)
-		Enums.RuneType.IMPACT:
-			pts = _angle_shape(90.0, 1.0)
 		Enums.RuneType.WATER:
 			pts = _wave(2.0, 0.40)
 		Enums.RuneType.WIND:
@@ -76,22 +69,6 @@ static func _triangle(rot: float, squash: float, closed: bool) -> PackedVector2A
 			pts.append(va.lerp(vb, frac * float(i) / float(per_edge)))
 	if closed:
 		pts.append(verts[0])
-	return pts
-
-
-static func _angle_shape(spread_deg: float, arm2: float) -> PackedVector2Array:
-	# 꼭짓점이 오른쪽, 팔이 왼쪽으로 벌어지는 ">" 형태 (회전 정규화로 방향은 무관)
-	var half := deg_to_rad(spread_deg) * 0.5
-	var dir1 := Vector2(cos(PI - half), sin(PI - half))
-	var dir2 := Vector2(cos(PI + half), sin(PI + half))
-	var start := dir1 * 1.0
-	var end := dir2 * arm2
-	var pts := PackedVector2Array()
-	var per_arm := 14
-	for i in per_arm:
-		pts.append(start.lerp(Vector2.ZERO, float(i) / float(per_arm)))
-	for i in per_arm + 1:
-		pts.append(Vector2.ZERO.lerp(end, float(i) / float(per_arm)))
 	return pts
 
 

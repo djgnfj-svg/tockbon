@@ -16,7 +16,7 @@ func _ready() -> void:
 	var damaged := SampleDesigns.nova_fire()
 	damaged.durability = 3
 	GameState.designs.append(damaged)
-	var broken := SampleDesigns.aimed_shotgun_impact()
+	var broken := SampleDesigns.aimed_shotgun_wind()
 	broken.durability = 0
 	GameState.designs.append(broken)
 	GameState.designs.append(SampleDesigns.aimed_lance_water())

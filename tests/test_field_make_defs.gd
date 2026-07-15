@@ -55,13 +55,13 @@ func _vine() -> EnemyDef:
 	d.drops = [_drop(&"mat_vine", 1.0, 1, 2)] as Array[DropEntry]
 	return d
 
-## 숲 사냥개 — 돌진, 약점 충격> (넉백이 돌진 캔슬)
+## 숲 사냥개 — 돌진, 약점 바람◎ (흐름의 밀림이 돌진 캔슬) (v2.2)
 func _hound() -> EnemyDef:
 	var d := EnemyDef.new()
 	d.id = &"hound"
 	d.display_name = "숲 사냥개"
 	d.hp = 26.0
-	d.counter_rune = Enums.RuneType.IMPACT
+	d.counter_rune = Enums.RuneType.WIND
 	d.night_buff = 1.5
 	d.params = {
 		"move_speed": 95.0, "aggro_range": 220.0, "attack_range": 20.0,
@@ -149,13 +149,13 @@ func _beetle() -> EnemyDef:
 	return d
 
 ## 중간보스 — 바람을 품은 존재: 바람 룬 탁본 조각 (GDD §6·§7).
-## 약점 충격> — 바람 룬을 주는 보스라 자기 룬이 약점일 수 없다.
+## 약점 불△ (v2.2: 충격 룬 폐지) — 바람 룬을 주는 보스라 자기 룬이 약점일 수 없다.
 func _gale() -> EnemyDef:
 	var d := EnemyDef.new()
 	d.id = &"gale"
 	d.display_name = "바람을 품은 존재"
 	d.hp = 250.0
-	d.counter_rune = Enums.RuneType.IMPACT
+	d.counter_rune = Enums.RuneType.FIRE
 	d.is_elite = true          # 엘리트 경로 재사용 — 사망 시 탁본 잔류물 스폰
 	d.night_buff = 1.2
 	d.params = {

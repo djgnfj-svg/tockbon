@@ -44,9 +44,8 @@ func _inject_mocks() -> void:
 	# 적 5종 목 데이터 (GDD §7)
 	for def in _mock_enemies():
 		Db.enemies[def.id] = def
-	# 도감 일부 해금 — 불·충격 룬(튜토리얼), 적 3종(약점 없음 표기 검증용 슬라임 포함), 제법 1종
+	# 도감 일부 해금 — 불 룬만(물·바람은 미해금=실루엣 2), 적 3종(약점 없음 슬라임 포함), 제법 1종 (v2.2: 충격 룬 폐지)
 	GameState.codex[InkStyle.rune_unlock_id(Enums.RuneType.FIRE)] = true
-	GameState.codex[InkStyle.rune_unlock_id(Enums.RuneType.IMPACT)] = true
 	GameState.codex[InkStyle.enemy_unlock_id(&"vine_regrower")] = true
 	GameState.codex[InkStyle.enemy_unlock_id(&"forest_hound")] = true
 	GameState.codex[InkStyle.enemy_unlock_id(&"sap_slime_elite")] = true
@@ -110,8 +109,8 @@ func _probe_thumb(d: SpellDesign) -> Control:
 func _mock_enemies() -> Array[EnemyDef]:
 	var defs: Array[EnemyDef] = []
 	defs.append(_enemy(&"vine_regrower", "재생 덩굴", Enums.RuneType.FIRE, false))
-	defs.append(_enemy(&"forest_hound", "숲 사냥개", Enums.RuneType.IMPACT, false))
-	var slime := _enemy(&"sap_slime_elite", "수액 슬라임", Enums.RuneType.IMPACT, true)
+	defs.append(_enemy(&"forest_hound", "숲 사냥개", Enums.RuneType.WIND, false))
+	var slime := _enemy(&"sap_slime_elite", "수액 슬라임", Enums.RuneType.WATER, true)
 	slime.has_counter = false  # 약점 룬 없음 — 다발 도안이 답 (GDD §7)
 	defs.append(slime)
 	defs.append(_enemy(&"mist_wraith", "안개 정령", Enums.RuneType.WIND, false))
@@ -334,8 +333,8 @@ func _step_codex() -> void:
 	ui.call("toggle_codex")
 	_check(codex.visible, "toggle_codex → 도감 표시")
 	var runes := codex.find_child("RuneList", true, false) as VBoxContainer
-	_check(runes != null and runes.get_child_count() == 4, "도감 룬 탭 4행")
-	_check(_count_locked_runes() == 2, "룬 해금 2 / 실루엣 2 (물·바람 미해금)")
+	_check(runes != null and runes.get_child_count() == 3, "도감 룬 탭 3행 (v2.2: 충격 룬 폐지)")
+	_check(_count_locked_runes() == 2, "룬 해금 1 / 실루엣 2 (물·바람 미해금)")
 	var enemies := codex.find_child("EnemyList", true, false) as VBoxContainer
 	_check(enemies.get_child_count() == Db.enemies.size(),
 		"도감 적 탭 %d행 (Db 전체)" % Db.enemies.size())

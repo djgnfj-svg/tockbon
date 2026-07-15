@@ -104,6 +104,7 @@ func load_game() -> bool:
 		var res := ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_IGNORE)
 		var design := res as SpellDesign
 		if design != null:
+			design.migrate_legacy_runes()  # v2.2: 옛 충격(=1) 룬 → FIRE
 			GameState.designs.append(design)
 
 	var equipped_idx: Array = data.get("equipped", [])

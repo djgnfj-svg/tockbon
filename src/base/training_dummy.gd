@@ -17,7 +17,6 @@ const SEAL := Color(0.710, 0.278, 0.180)
 ## 룬별 피해 숫자 색 — projectile.gd RUNE_COLORS와 동일 톤
 const RUNE_COLORS: Dictionary = {
 	Enums.RuneType.FIRE: Color(1.0, 0.55, 0.1),
-	Enums.RuneType.IMPACT: Color(1.0, 0.9, 0.2),
 	Enums.RuneType.WATER: Color(0.25, 0.55, 1.0),
 	Enums.RuneType.WIND: Color(0.65, 0.95, 0.45),
 }

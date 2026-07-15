@@ -85,6 +85,7 @@ const GLYPH_LABEL := {
 	Enums.GlyphType.BOUNCE: "팅김⚡",
 	Enums.GlyphType.HOMING: "유도∿",
 	Enums.GlyphType.PIERCE: "관통‖",
+	Enums.GlyphType.THRUST: "추진»",
 }
 ## 무엇을 하는 글자인가 + **길게 그으면 무엇이 늘어나는가** (길이 = 세기 축을 눈에 보이게).
 ## 길이가 아무것도 안 하면 "짧게 긋는 게 이득"이 되고 표현 수단이 죽는다 (v1.6~v1.8의 교훈)
@@ -93,6 +94,7 @@ const GLYPH_EFFECT := {
 	Enums.GlyphType.BOUNCE: "벽에 튄다 — 길수록 여러 번",
 	Enums.GlyphType.HOMING: "쫓아간다 — 길수록 오래",
 	Enums.GlyphType.PIERCE: "꿰뚫는다 — 길수록 여럿",
+	Enums.GlyphType.THRUST: "빠르게 난다 — 길수록 더 빨리",
 }
 
 static func glyph_label(glyph_type: int) -> String:
@@ -121,10 +123,9 @@ const TAB_DESC := {
 	Enums.DrawStage.ARROW: "곧은 화살표 = 맞은 뒤 충격이 갈 길.\n모아 겨누면 부딪혀 기둥이 선다.",
 }
 
-## 룬 4종 — 무엇을 하는 글자인가 (GDD §4.2)
+## 룬 3종 — 무엇을 하는 글자인가 (v2.2: 충격 제거, 원소만)
 const RUNE_EFFECT := {
 	Enums.RuneType.FIRE: "태운다 — 화상·지속 피해",
-	Enums.RuneType.IMPACT: "때린다 — 넉백·점 타격",
 	Enums.RuneType.WATER: "적신다 — 둔화·갑주 무력",
 	Enums.RuneType.WIND: "흩는다 — 확산·면 제어",
 }
@@ -165,8 +166,6 @@ static func rune_label(rune_type: int) -> String:
 	match rune_type:
 		Enums.RuneType.FIRE:
 			return "불△"
-		Enums.RuneType.IMPACT:
-			return "충격>"
 		Enums.RuneType.WATER:
 			return "물~"
 		Enums.RuneType.WIND:

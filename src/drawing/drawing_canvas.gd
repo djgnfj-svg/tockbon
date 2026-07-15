@@ -76,7 +76,6 @@ const ROLE_COLORS := {
 }
 const RUNE_COLORS := {
 	Enums.RuneType.FIRE: Color(0.48, 0.18, 0.11),
-	Enums.RuneType.IMPACT: Color(0.42, 0.34, 0.08),
 	Enums.RuneType.WATER: Color(0.11, 0.29, 0.42),
 	Enums.RuneType.WIND: Color(0.18, 0.42, 0.31),
 }

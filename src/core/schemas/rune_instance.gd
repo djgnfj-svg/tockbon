@@ -4,7 +4,7 @@ extends Resource
 ## **하나의 탄에 속성을 합친다**: 위력은 fill 가중평균, 상태이상은 룬마다 각각 실린다.
 ## 같은 종류는 하나뿐(불△ 두 번 = 농도 뻥튀기 금지). SpellDesign.runes가 이 배열을 쥔다.
 
-## Enums.RuneType.FIRE/IMPACT/WATER/WIND
+## Enums.RuneType.FIRE/WATER/WIND (v2.2: 충격 제거). 옛 IMPACT(=1)은 로드 시 FIRE로 마이그레이션.
 @export var type: int = Enums.RuneType.FIRE
 ## 0..1 — 룬이 진을 얼마나 채우는가 (rune_fill과 같은 의미). 상태이상 세기 + 위력 가중치.
 @export var fill: float = 0.5

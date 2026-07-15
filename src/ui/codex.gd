@@ -7,11 +7,10 @@ signal closed
 const InkStyle := preload("res://src/ui/ink_style.gd")
 
 const RUNE_ORDER: Array[int] = [
-	Enums.RuneType.FIRE, Enums.RuneType.IMPACT, Enums.RuneType.WATER, Enums.RuneType.WIND,
+	Enums.RuneType.FIRE, Enums.RuneType.WATER, Enums.RuneType.WIND,
 ]
 const RUNE_DESCS := {
 	Enums.RuneType.FIRE: "화상 — 닿은 자리에 오래 타는 먹불을 남긴다.",
-	Enums.RuneType.IMPACT: "넉백 — 한 점을 세게 두드려 밀쳐낸다.",
 	Enums.RuneType.WATER: "젖음 — 둔화시키고 갑주를 무르게 한다.",
 	Enums.RuneType.WIND: "흐름 — 넓게 번져 자리를 다스린다.",
 }

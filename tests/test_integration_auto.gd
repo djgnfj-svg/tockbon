@@ -35,7 +35,7 @@ func _run() -> void:
 	_check("시드: 도안 0장", gs.equipped[0] == null and gs.designs.is_empty())
 	_check("시드: 시작 물자 (잉크·종이)", gs.get_count(&"ink_basic") > 0 and gs.get_count(&"paper_1") > 0)
 	_check("시드: 시작 장비 3부위 착용", gs.equipment.size() == 3)
-	_check("시작 해금: 불·충격", gs.is_unlocked(&"rune_fire") and gs.is_unlocked(&"rune_impact"))
+	_check("시작 해금: 불 룬 + 추진 문양", gs.is_unlocked(&"rune_fire") and gs.is_unlocked(&"glyph_thrust"))
 
 	# 거점 시험장 — 그린 도안을 숲에 나가기 전에 쏴 볼 수 있어야 한다 (TECH_SPEC §5.2)
 	var base: Node = holder.get_node_or_null("Base")

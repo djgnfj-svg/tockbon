@@ -18,7 +18,7 @@ script = ExtResource("2_echfw")
 id = &"hound"
 display_name = "숲 사냥개"
 hp = 26.0
-counter_rune = 1
+counter_rune = 3
 params = {
 "aggro_range": 220.0,
 "attack_cooldown": 1.0,

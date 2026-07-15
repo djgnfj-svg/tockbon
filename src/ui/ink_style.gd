@@ -13,29 +13,25 @@ const INK_FAINT := Color(0.522, 0.478, 0.408)     # 바랜 먹 (비활성·미�
 const SEAL := Color(0.710, 0.278, 0.180)          # 인주 주홍 (경고·강조)
 const DIM := Color(0.100, 0.090, 0.080, 0.45)     # 모달 뒤 어둠
 
-# ── 룬 4종 표기 (GDD §4.2)
+# ── 룬 3종 표기 (v2.2: 충격 제거 — 룬은 순수 원소만)
 const RUNE_GLYPHS := {
 	Enums.RuneType.FIRE: "△",
-	Enums.RuneType.IMPACT: ">",
 	Enums.RuneType.WATER: "~",
 	Enums.RuneType.WIND: "◎",
 }
 const RUNE_NAMES := {
 	Enums.RuneType.FIRE: "불",
-	Enums.RuneType.IMPACT: "충격",
 	Enums.RuneType.WATER: "물",
 	Enums.RuneType.WIND: "바람",
 }
 const RUNE_COLORS := {
 	Enums.RuneType.FIRE: Color(0.659, 0.294, 0.196),
-	Enums.RuneType.IMPACT: Color(0.478, 0.424, 0.247),
 	Enums.RuneType.WATER: Color(0.247, 0.420, 0.478),
 	Enums.RuneType.WIND: Color(0.373, 0.478, 0.294),
 }
 ## 픽셀 글리프 아이콘 (ART_SPEC P1) — 미임포트 환경(헤드리스 테스트 등)에서는 null → 텍스트 글리프 폴백
 const RUNE_ICON_PATHS := {
 	Enums.RuneType.FIRE: "res://assets/sprites/ui/rune_fire.png",
-	Enums.RuneType.IMPACT: "res://assets/sprites/ui/rune_impact.png",
 	Enums.RuneType.WATER: "res://assets/sprites/ui/rune_water.png",
 	Enums.RuneType.WIND: "res://assets/sprites/ui/rune_wind.png",
 }
@@ -124,7 +120,6 @@ static func phase_color(p: int) -> Color:
 static func rune_unlock_id(t: int) -> StringName:
 	match t:
 		Enums.RuneType.FIRE: return &"rune_fire"
-		Enums.RuneType.IMPACT: return &"rune_impact"
 		Enums.RuneType.WATER: return &"rune_water"
 		Enums.RuneType.WIND: return &"rune_wind"
 	return &"rune_unknown"

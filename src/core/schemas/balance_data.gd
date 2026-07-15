@@ -14,7 +14,8 @@ extends Resource
 @export var mana_regen_per_sec: float = 2.0
 
 @export_group("드로잉·잉크")
-## 룬별 기본 마나 (인덱스 = Enums.RuneType: 불/충격/물/바람)
+## 룬별 기본 마나 (인덱스 = Enums.RuneType: 불=0 / (1=옛 충격, 빈 슬롯) / 물=2 / 바람=3).
+## v2.2: 충격 제거로 인덱스 1은 안 쓰인다 — 배열 값을 유지해 물·바람 인덱스가 안 밀리게 둔다.
 @export var rune_mana_base: PackedFloat32Array = PackedFloat32Array([8.0, 6.0, 7.0, 9.0])
 ## 화살표 1발당 마나
 @export var mana_per_arrow: float = 3.0
@@ -153,6 +154,10 @@ extends Resource
 @export var glyph_homing_range_px: float = 220.0
 ## 유도∿ 추적 지속 = lerp(min, 1.0, t) × 수명. 짧게 그으면 잠깐만 따라가고 놓친다
 @export var glyph_homing_duration_min: float = 0.35
+## 추진 속도 배율 (v2.2) = lerp(min, max, t) — 옛 충격의 '힘'이 문양으로. 짧게 그어도 한 번은
+## 빨라지므로 min>1.0이다(길이=0이 무효가 아니게). 길게 그으면 max까지. ⚠ 손맛(F6)에서 조정
+@export var glyph_thrust_speed_min: float = 1.3
+@export var glyph_thrust_speed_max: float = 2.4
 
 # ── 룬 = 속성 농도 축 (v1.7, TECH_SPEC §4.0) — 상태이상 세기를 룬 크기가 정한다 ──
 # 상태이상 세기 = RuneDef.status_power × lerp(density_min, density_max, rune_fill) × rune_accuracy.

@@ -1,5 +1,5 @@
 extends "res://src/field/enemy_base.gd"
-## 숲 사냥개 — 예열 후 직선 돌진, 약점 충격> (넉백이 돌진을 끊는다) (GDD §7).
+## 숲 사냥개 — 예열 후 직선 돌진, 약점 바람◎ (흐름의 밀림이 돌진을 끊는다) (v2.2: 충격 룬 폐지).
 
 enum ChargeState { NORMAL, WINDUP, DASH, RECOVER }
 
@@ -78,8 +78,9 @@ func _update_ai(delta: float) -> void:
 
 func _apply_status(status: int, power: float) -> void:
 	super._apply_status(status, power)
-	# 충격 넉백 = 돌진 캔슬 (약점 룬의 기계적 카운터)
-	if status == Enums.Status.KNOCKBACK and _charge_state != ChargeState.NORMAL:
+	# v2.2: 약점=바람. 흐름(FLOW)의 밀림이 돌진을 끊는다 (넉백도 유지 — 미래 충격파 넉백 대비)
+	if (status == Enums.Status.FLOW or status == Enums.Status.KNOCKBACK) \
+			and _charge_state != ChargeState.NORMAL:
 		_charge_state = ChargeState.RECOVER
 		_charge_timer = recover_sec
 

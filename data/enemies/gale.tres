@@ -18,7 +18,7 @@ script = ExtResource("2_18ucn")
 id = &"gale"
 display_name = "바람을 품은 존재"
 hp = 250.0
-counter_rune = 1
+counter_rune = 0
 params = {
 "aggro_range": 260.0,
 "attack_cooldown": 1.5,

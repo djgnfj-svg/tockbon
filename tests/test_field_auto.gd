@@ -277,9 +277,10 @@ func _run() -> void:
 	_check(absf(burn_a - burn_mid * 2.0) < EPS, "화상 2초 총딜 == power×2 (실측 %.2f)" % burn_a)
 	_check(burn_b > burn_a + EPS, "화상 농도↑ → 총딜↑ (%.2f > %.2f)" % [burn_b, burn_a])
 
-	# KNOCKBACK — 넉백 거리가 농도에 비례
-	var kb_mid := _power(Enums.RuneType.IMPACT, 0.5, 1.0)
-	var kb_strong := _power(Enums.RuneType.IMPACT, 1.0, 1.0)
+	# KNOCKBACK — 밀림 속도(power)에 비례 (v2.2: 룬은 넉백을 안 준다 — 화살표 충격파가 줄 자리.
+	# 여기선 적 밀림 메커니즘 자체를 리터럴 power로 검증한다)
+	var kb_mid := 90.0
+	var kb_strong := 180.0
 	var kb_a := _push_distance(Enums.Status.KNOCKBACK, kb_mid)
 	var kb_b := _push_distance(Enums.Status.KNOCKBACK, kb_strong)
 	print("KNOCKBACK power %.1f/%.1f → 넉백 거리 %.1fpx / %.1fpx" % [kb_mid, kb_strong, kb_a, kb_b])
@@ -386,13 +387,13 @@ func _run() -> void:
 	_check(GameState.get_count(&"fragment_water") >= 1, "귀환 확정: 창고에 fragment_water")
 	_check(GameState.bag.is_empty(), "귀환 후 가방 비움")
 
-	# ── 17. 중간보스(gale) — def·계약·약점 충격 배율
+	# ── 17. 중간보스(gale) — def·계약·약점 불 배율 (v2.2: 충격 룬 폐지 → 불로 이동)
 	var gale_def: EnemyDef = Db.get_enemy(&"gale")
 	_check(gale_def != null, "EnemyDef 로드: gale")
 	if gale_def != null:
 		_check(gale_def.is_elite, "gale.is_elite == true (탁본 경로 재사용)")
-		_check(gale_def.has_counter and gale_def.counter_rune == Enums.RuneType.IMPACT,
-			"gale 약점 = 충격> (바람 룬 보스는 자기 룬이 약점일 수 없음)")
+		_check(gale_def.has_counter and gale_def.counter_rune == Enums.RuneType.FIRE,
+			"gale 약점 = 불△ (바람 룬 보스는 자기 룬이 약점일 수 없음)")
 		_check(absf(gale_def.night_buff - 1.2) < EPS, "gale.night_buff == 1.2")
 	var gale: Variant = _spawn_enemy(&"gale", Vector2(-1200, 800))
 	if gale == null:
@@ -406,11 +407,11 @@ func _run() -> void:
 		gale.take_hit(10.0, -1, Enums.Status.NONE, 0.0)
 		var g_neutral: float = g_hp0 - gale.hp
 		g_hp0 = gale.hp
-		gale.take_hit(10.0, Enums.RuneType.IMPACT, Enums.Status.NONE, 0.0)
-		var g_impact: float = g_hp0 - gale.hp
+		gale.take_hit(10.0, Enums.RuneType.FIRE, Enums.Status.NONE, 0.0)
+		var g_fire: float = g_hp0 - gale.hp
 		_check(absf(g_neutral - 10.0) < EPS, "보스 무속성 피해 10")
-		_check(absf(g_impact - 10.0 * gale.weakness_mult) < EPS,
-			"보스 충격 약점 배율 x%.2f" % gale.weakness_mult)
+		_check(absf(g_fire - 10.0 * gale.weakness_mult) < EPS,
+			"보스 불 약점 배율 x%.2f" % gale.weakness_mult)
 
 		# ── 17b. 돌풍 밀치기 — 예열 후 반경 내 플레이어 밀어냄 + 피해, 이어서 회오리 3연발
 		player.global_position = Vector2(-1200, 860)   # 보스에서 60px (돌풍 반경 90 안)

@@ -32,16 +32,14 @@ const TAB_LABEL := {
 	Enums.DrawStage.ARROW: Copy.BOOK_ARROW,
 }
 
-## 룬 → 해금 id (TECH_SPEC §5.1). 시작은 불·충격만 열려 있다
+## 룬 → 해금 id (TECH_SPEC §5.1). 시작은 불 룬만 (v2.2: 충격 룬 폐지)
 const RUNE_UNLOCK := {
 	Enums.RuneType.FIRE: &"rune_fire",
-	Enums.RuneType.IMPACT: &"rune_impact",
 	Enums.RuneType.WATER: &"rune_water",
 	Enums.RuneType.WIND: &"rune_wind",
 }
 const RUNE_ORDER: Array[int] = [
-	Enums.RuneType.FIRE, Enums.RuneType.IMPACT,
-	Enums.RuneType.WATER, Enums.RuneType.WIND,
+	Enums.RuneType.FIRE, Enums.RuneType.WATER, Enums.RuneType.WIND,
 ]
 
 ## 문양 4종 (v1.9) — **기본이 첫 칸**이다. 글자가 아니라 폴백이므로 언제나 열려 있고,

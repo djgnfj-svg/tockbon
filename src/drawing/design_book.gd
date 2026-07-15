@@ -24,16 +24,14 @@ const LOCKED_ALPHA := 0.30
 const FONT_SIZE := 8
 const GROUP_FONT_SIZE := 9
 
-## 룬 → 해금 id (TECH_SPEC §5.1). 시작은 불·충격만 열려 있다
+## 룬 → 해금 id (TECH_SPEC §5.1). 시작은 불 룬만 (v2.2: 충격 룬 폐지)
 const RUNE_UNLOCK := {
 	Enums.RuneType.FIRE: &"rune_fire",
-	Enums.RuneType.IMPACT: &"rune_impact",
 	Enums.RuneType.WATER: &"rune_water",
 	Enums.RuneType.WIND: &"rune_wind",
 }
 const RUNE_ORDER: Array[int] = [
-	Enums.RuneType.FIRE, Enums.RuneType.IMPACT,
-	Enums.RuneType.WATER, Enums.RuneType.WIND,
+	Enums.RuneType.FIRE, Enums.RuneType.WATER, Enums.RuneType.WIND,
 ]
 
 var _rune_cells: HBoxContainer
