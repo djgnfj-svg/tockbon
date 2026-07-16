@@ -38,6 +38,8 @@ func _run() -> void:
 	_test_glyph_free_edit_and_relock()
 	_test_glyph_per_slot_scale()
 	_test_far_click_does_not_steal_slot()
+	_test_accuracy_has_teeth()
+	_test_gross_miss_is_punished_not_erased()
 
 	if failures == 0:
 		print("TEST_RING_TRACE_OK — 전 항목 통과")
@@ -45,6 +47,42 @@ func _run() -> void:
 	else:
 		print("TEST_RING_TRACE_FAIL — %d개 실패" % failures)
 		quit(1)
+
+
+# ── 🔴 ⑨ 정밀도에 이빨이 있다 (세션 23, 사용자 확정: "벗어난 만큼 벌한다") ──
+# 판 268px → 기준 반지름 ≈118px · 판정 반경(ACC_TOL 0.08) ≈ 9.4px.
+# ⚠ 기존 ②(_test_sloppy_lower_accuracy)는 `정밀도 < 0.8`만 봐서 **옛 관대한 판정(0.20)도
+# 통과했다** — 검출력이 없었다. 여기서 관대함으로 되돌아가는 걸 실제로 잡는다.
+func _test_accuracy_has_teeth() -> void:
+	var b = _make_board()
+	var ctr = Vector2(134, 134)
+	b.call(&"begin_stroke")
+	for p in b.call(&"guide_points"):
+		b.call(&"trace_stroke", p + (ctr - p).normalized() * 4.0)   # 겨우 4px 어긋남
+	var acc = float(b.call(&"accuracy"))
+	# 새 판정(≈9.4px): 1 - 4/9.4 ≈ 0.58 → 통과. 옛 판정(≈23.6px): 1 - 4/23.6 ≈ 0.83 → **실패**.
+	_check(acc < 0.7, "4px만 어긋나도 정밀도가 확 깎인다 (실제 %.2f — 관대하면 0.8+)" % acc)
+	_check(float(b.call(&"coverage")) > 0.9, "그래도 완성도는 높다 (두 축은 별개)")
+	b.queue_free()
+
+
+# ── 🔴 ⑩ 크게 삐끗한 획은 **지워지지 않고 벌받는다** ──
+# 옛 구조는 판정이 거리에 대해 **단조롭지 않았다**: 살짝 삐끗(<0.24R)하면 감점인데
+# 크게 삐끗(>0.24R)하면 아예 무시돼 **공짜**였다. 밴드를 0.32R로 넓혀 "그리려던 획"은
+# 벗어난 만큼 전부 벌하고, 그 바깥(=딴 데 긋기)만 무시한다.
+func _test_gross_miss_is_punished_not_erased() -> void:
+	var b = _make_board()
+	var ctr = Vector2(134, 134)
+	var guide = b.call(&"guide_points")
+	b.call(&"begin_stroke")
+	for p in guide:
+		b.call(&"trace_stroke", p)                                   # 먼저 정확히
+	for p in guide:
+		b.call(&"trace_stroke", p + (ctr - p).normalized() * 30.0)   # 30px = 옛 밴드(28) 밖 · 새 밴드(38) 안
+	var acc = float(b.call(&"accuracy"))
+	# 새: 30px 점들이 채점돼 평균 ≈15px → 정밀도 0. 옛: 통째로 무시돼 정밀도 ≈1로 **남았다**.
+	_check(acc < 0.3, "크게 벗어난 획이 점수를 깎는다 (실제 %.2f — 무시하면 1.0에 가깝다)" % acc)
+	b.queue_free()
 
 
 func _make_board():
