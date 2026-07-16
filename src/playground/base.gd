@@ -4,11 +4,12 @@ extends Node2D
 ## 씬 전환 없음 — ESC로 닫으면 베이스가 그대로 뒤에 남는다.
 ## 원정(필드)은 아직 없음 — 지금은 베이스 + 탁본 책상까지만.
 ##
-## 🔴 2026-07-17 세션 21 (사용자 확정): 책상 UI를 **기지(src/base)에 있던 고리 조립 책으로 교체**.
-## 그 전에는 playground가 옛 자유 드로잉(drawing_panel: DrawingCanvas+ForgeBook = SpellDesign 모델)을
-## 열어서, 확정된 고리 조립 모델([[takbon-ring-assembly-pivot]])이 **여기엔 없었다** — 띄우면
-## 「문양을 칸에 삽입·룬은 중심 원」이 사라진 것처럼 보였다. 본 게임 base.gd의 이젤 배선과 동일하게 맞춘다.
-## 옛 drawing_panel.tscn/.gd는 지우지 않고 남겨 둔다(되돌릴 수 있게).
+## 🔴 2026-07-17 세션 21 (사용자 확정): 여기가 **게임의 진입점**이다 (project.godot run/main_scene).
+## 책상 UI = 고리 조립 책. 그 전에는 옛 자유 드로잉(drawing_panel: DrawingCanvas+ForgeBook =
+## SpellDesign 모델)을 열어서, 확정된 고리 조립 모델이 **여기엔 없었다** — 띄우면 「문양을 칸에 삽입·
+## 룬은 중심 원」이 사라진 것처럼 보였다.
+## 같은 세션의 대청소로 옛 자유 드로잉 경로(drawing_panel·DrawingCanvas·ForgeBook·인식기)와
+## 옛 본 게임(src/base 거점·field·ui·tutorial·quest)은 **삭제됐다** — 되돌리려면 git 이력을 본다.
 
 const RingForgePanel := preload("res://src/drawing/ring_forge_panel.gd")
 

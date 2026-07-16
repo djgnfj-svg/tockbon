@@ -3,39 +3,44 @@
 낮에는 숲에서 사냥하며 글자를 탁본하고, 밤에는 마법진을 손으로 그리는 게임.
 1인 개발(사용자) + Claude 리드 세션 + 서브에이전트 팀으로 개발한다.
 
-## 새 세션이 먼저 읽을 것 (순서대로)
+## 새 세션이 먼저 읽을 것
 
-> 🔴🔴 **게임 방향이 바뀌었다 (2026-07-16, 세션 9~10): 마법진 = 「고리 조립」 모델.** 자유 손그림 +
-> 획 인식이 인식기에 계속 튕겨(마찰) **손글씨 채점을 버리고, 동심원 고정 칸에 조각을 얹어 조립**하는
-> 방식으로 전환(사용자 확정). **진=바깥 그릇(투사체 몸) · 룬=중심(속성) · 문양=진과 룬 사이 고리 칸 ·
-> 문양본(스텐실)=어느 칸을 여는 틀 · 방향=어느 칸을 채우냐 · 발사=진이 통째로 날아가 착탄점에서 전개.**
-> 아직 평행 프로토타입(미커밋)이고 규칙 일부 미정 → **본 게임 통합·TRUTH 전면 재작성 = TODO #17.**
+> 🔴🔴 **세션 21(2026-07-17) 대청소 — 여기부터 읽어라. 아래 docs는 대부분 낡았다.**
 >
-> 🔴 **`docs/TRUTH.md`는 단일 진실원이되, 마법진 모델 부분(§1~§5)은 아직 옛 자유드로잉이다** —
-> **최상단 전환 배너부터 읽어라.** 배너가 새 고리 모델 요지 + 무엇이 살아남고 무엇이 죽는지를 담는다.
-> 나머지(경제·적·기술 계약·저장·검증)는 대부분 그대로 유효하다.
+> **지금 게임 = `src/playground/base.tscn`(베이스캠프, `run/main_scene`) + 고리 조립 책.** 그게 전부다.
+> **마법진 = 「고리 조립」**: 진=바깥 그릇(투사체 몸) · 룬=중심(속성) · 문양=진과 룬 사이 고리 칸 ·
+> 문양본(스텐실)=어느 칸을 여는 틀 · 방향=어느 칸을 채우냐 · 발사=진이 통째로 날아가 착탄점에서 전개.
+> 확정 뒤 손으로 따라 그어(탁본) 맺는다.
 >
-> 📖 **현재 방향의 정본**: `docs/STATUS.md` 최상단(세션 9~10) + memory `takbon-ring-assembly-pivot`.
-> 옛 자유드로잉 세대(v1.6~v2.2, 세션 7~15) 로그는 `docs/STATUS_ARCHIVE.md`로 분리됨(2026-07-16 정비).
+> **사용자 판단: "이전에 AI들이 멋대로 많이 만들어낸 코드" → 삭제했다.** 옛 자유 드로잉($1 인식기·캔버스·
+> 책자·종이/잉크 경제)과 옛 본 게임(src/base 거점·field 원정·ui HUD/도감/게시판·tutorial·quest)이 통째로
+> 사라졌다. 되돌리려면 git 이력(삭제 직전 = `dcc3326`). **"하나씩 다시 만든다"가 방침이다.**
+>
+> ⚠ **docs/ 전체가 옛 자유드로잉 기준이다** — TRUTH·GDD·TECH_SPEC·CHANGELOG는 삭제된 시스템을 설명한다.
+> 사실로 믿지 마라. 아직 안 지운 건 설계 근거가 남아 있어서다.
+> 📖 **현재 정본** = 이 파일 + `docs/STATUS.md` 최상단 + memory `takbon-playground-clean-restart`.
 
-1. **docs/TRUTH.md** ★ — 단일 진실원. **최상단 🔴 전환 배너 필독** → 고리 조립으로 방향 전환. §1이 옛 4축(게임의 심장·현재 코드), §3이 기술 계약(대부분 유효), §4가 옛 미정 로그
-2. **docs/STATUS.md** — 세션별 진행 로그 (현재 세대=세션 9~10 고리 조립. 세션 종료 시마다 갱신). 옛 로그는 **STATUS_ARCHIVE.md**
-3. **docs/CHANGELOG.md** — 버전 변경 이력 (v1.3~v2.1 · "왜 바꿨나"·죽은 결정)
-4. **docs/GDD.md** / **docs/TECH_SPEC.md** — **상세 아카이브** (설계 근거 / 정확한 상수·스키마 주석). ⚠ 둘 다 옛 자유드로잉 모델 기준 — 고리 전환 미반영
-5. docs/BACKLOG.md (남은 아이디어) · docs/TEAM_PLAN.md (병렬 에이전트 운영) · docs/ART_SPEC.md (에셋)
-
-**핵심 4축 (옛 자유드로잉 모델 — TRUTH §1, 현재 코드이되 교체 중):** 지팡이=어디로·몇 발(단발·산탄·
-전방위) / 진=투사체 몸+규모 / 룬=속성+농도 / 문양=효과(날아가는 동안: 팅김⚡·유도∿·관통‖ · 맞은 다음:
-화살표=충격파 방향). 🔴 **기둥은 규칙이 아니라 결과다** — 코드/문서 어디에도 "수렴하면 기둥"을 적지 말 것.
-⚠ **고리 모델에선 방향=칸 채우기, 응집←칸=불기둥 하나**로 재해석된다(상단 배너·STATUS 세션 9~10).
+- **docs/STATUS.md** — 세션별 진행 로그 (세션 종료 시마다 갱신). 옛 로그는 STATUS_ARCHIVE.md
+- docs/TRUTH.md · GDD.md · TECH_SPEC.md · CHANGELOG.md — ⚠ **옛 자유드로잉 아카이브**. 경제·적·저장
+  계약 일부만 유효. 고리 모델 재작성은 아직 안 됐다
+- docs/BACKLOG.md · TEAM_PLAN.md · ART_SPEC.md(에셋·아트 방향 960×540·48px)
 
 ## 아키텍처 요약
 
-- **오토로드**: EventBus(시그널 허브) / GameState(자원·HP·장착 4장·가방·도감) / Clock(낮밤 시간) / Db(data/ 레지스트리) / SaveManager(user://save, 자동 저장)
-- **모듈 폴더 = 소유권**: src/drawing($1 인식·캔버스) · src/spell(도안→발사) · src/field(전투·낮밤·탁본·보스) · src/base(거점 경제) · src/ui(HUD·도감) · src/tutorial(온보딩) · **src/core는 리드 전용**
+- **진입점**: `src/playground/base.tscn` (베이스캠프 — 바닥·탁본 책상·WASD). 책상 E → 고리 조립 책
+- **오토로드**: EventBus(시그널 허브) / GameState(자원·HP·장착·가방·도감) / Clock(낮밤 시간) /
+  Db(data/ 레지스트리) / SaveManager(user://save, 자동 저장)
+  - ⚠ **오토로드엔 옛 SpellDesign 경로가 아직 데이터 구조로 남아 있다** (EventBus 시그널 타입·
+    GameState.designs/equipped·SaveManager 도안 저장). 쓰는 코드는 없지만 스키마를 지우면 파싱이 깨진다
+    → core 수술은 대청소 2단계 (미착수)
+  - ⚠ `save_manager.gd:8`이 `src/base/research_service.gd`를 preload한다(스스로 위반이라고 주석에 적혀
+    있다). 그래서 src/base에 `research_service.gd`·`recipes.gd`만 살아남았다
+- **남은 모듈**: `src/playground`(베이스캠프) · `src/drawing`(고리 조립 = ring_board·ring_book·
+  ring_forge_panel **셋뿐**) · `src/spell`(발사 — projectile/shockwave/pillar는 `data/runes/*.tres`가
+  물고 있어 못 지운다) · `src/core`(리드 전용)
 - 모듈 간 통신은 **EventBus 시그널 + core 스키마만**. 타 모듈 직접 preload/get_node 금지
 - 밸런스 수치는 전부 **data/balance.tres** (BalanceData) — 코드에 수치 금지
-- typed GDScript 강제. 렌더러 Compatibility, 뷰포트 640×360
+- typed GDScript 강제. 렌더러 Compatibility, **뷰포트 960×540**(세션 18에 640×360에서 올림, aspect=expand)
 
 ## 개발 규칙 (병렬 에이전트 운영 시)
 
@@ -67,39 +72,26 @@
 방치됐다** (세션 8에 발견·복구).
 
 ```bash
-./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_integration_auto.gd     # 통합 스모크
-./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_save_auto.gd            # 저장/로드
-./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_drawing_auto.gd         # 룬 인식기
-./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_glyph_auto.gd           # 문양 글자 인식(v1.9)·reach·손그림 스트레스
-./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_drawing_canvas_auto.gd  # 캔버스(작성 순서·스탬프)
-./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_paper_auto.gd           # 종이 등급·잉크 상한
-./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_forge_auto.gd           # 제작대(책 펼침)·종이 경제
-./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_spell_auto.gd           # 발사·지팡이 패턴·문양 효과·**충격파/기둥 창발**
-./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_ring_spell_auto.gd      # **고리 조립 발사(세션 12)**: 진→투사체·착탄 전개(발산 탄환·응집 기둥)·실제 적 take_hit
-./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_ring_trace_auto.gd      # **손그림 탁본(세션 14b)**: 자동추적(선에 붙음)·완성도/정밀도 점수·[다음] 수동 진행·분석 리포트 · 세션 15: 문양 칸 자유 편집·개별 크기
-./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_ring_design_auto.gd     # **고리 도안 통합(#17 1단계, 세션 16)**: RingDesign 라운드트립·ring_design_committed→GameState 자동 장착
-./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_base_auto.gd            # 거점 경제
-./Godot_v4.6.1-stable_win64.exe --headless --path . res://tests/test_base_ring_auto.tscn --quit-after 300  # **거점 고리 시험 발사(세션 21)**: 이젤에서 맺은 고리를 마당 허수아비에 바로 쏜다(RingSpellSystem+base_player 고리 분기) — ⚠ 씬으로 돌린다(오토로드 필요)
-./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_onboarding_auto.gd      # 온보딩(튜토·시험발사)
-./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_drawing_fill_auto.gd    # 룬 농도(rune_fill)·회전 불변
-./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_equip_auto.gd           # 장비 착용·파생 스탯
-./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_quest_auto.gd           # 퀘스트 4단계
-./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_bosscut_auto.gd         # 보스 컷신
-./Godot_v4.6.1-stable_win64.exe --headless --path . res://tests/test_field.tscn --quit-after 600   # 필드·전투
-./Godot_v4.6.1-stable_win64.exe --headless --path . res://tests/test_ui.tscn --quit-after 60       # UI
+./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_save_auto.gd            # 저장/로드 (고리 라운드트립 — 옛 SpellDesign 검증은 세션 21에 걷어냄)
+./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_ring_spell_auto.gd      # **고리 발사**: 진→투사체·착탄 전개(발산 탄환·응집 기둥)·실제 적 take_hit
+./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_ring_trace_auto.gd      # **손그림 탁본**: 자동추적(선에 붙음)·완성도/정밀도 점수·[다음] 수동 진행·분석 리포트·문양 칸 자유 편집
+./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_ring_design_auto.gd     # **고리 도안 통합**: RingDesign 라운드트립·ring_design_committed→GameState 자동 장착
 ```
 
-⚠ **위 4줄(농도·장비·퀘스트·보스컷)은 세션 11에 목록으로 승격됐다** — 통과하고 있는데도 목록에
-없어서 **아무도 안 돌리고 있었다.** 세션 7이 문법을 바꾸며 `test_paper_auto`·`test_drawing_canvas_auto`를
-조용히 깨뜨린 것과 **똑같은 조건**이었다.
-⚠ `tests/test_field_auto.gd`는 **`-s`로 직접 돌리지 말 것** — `test_field.tscn`의 스크립트다
-(씬으로 돌아야 오토로드가 있다). 직접 돌리면 "Identifier not found: EventBus"가 뜨는데 **정상이다.**
+🔴 **세션 21 대청소로 목록이 이만큼 줄었다.** 옛 자유 드로잉(인식기·캔버스·책자·종이/잉크 경제)과
+옛 본 게임(src/base 거점·field·ui·tutorial·quest)이 **삭제**되면서 그 테스트들(integration·drawing·
+glyph·canvas·paper·forge·spell·base·onboarding·fill·equip·quest·bosscut·field·ui·sanity_check)도 함께
+지웠다. **되돌리려면 git 이력**(삭제 직전 커밋 = `dcc3326`).
 
-눈으로 보는 시험대(F6): `tests/test_forge.tscn` — 세계 안에서 작업대(E)로 책을 펼쳐 그리고 곧바로 쏜다.
-**아레나에 벽·기둥이 있다** — 팅김⚡이 튕기는 면이고, 기둥 뒤 허수아비는 **곧은 탄으로는 못 맞힌다**.
-**Tab = 지팡이 교체**(단발→세 갈래→둘레) — **도안을 한 글자도 안 고쳤는데 나가는 그림이 달라지는 것**이
-v2.0 지팡이 축이다. **진 둘레에 화살표를 룬 쪽으로 모아 그으면 착탄 시 기둥이 서고, 밖으로 뻗치면
-사방으로 터진다**(v2.1). 화면 아래 라벨에 **지팡이·발수·얹힌 효과·충격파 수·사거리 배율**이 뜬다.
+눈으로 보는 시험대(F6):
+- `tests/test_ring_forge_panel.tscn` — 책 펼침(진→룬→문양본→문양을 손으로 따라 긋기) + 덮고 발사.
+  조작: Q·W=문양 고르기 · ✓맺기/ESC=덮기 · WASD·마우스=조준 · 좌클릭/Space=발사 · R=리셋 · E=책 · C=비움
+- `tests/test_ring_forge.tscn` — 칸 클릭 조립 **프로토타입**. ⚠ 본 게임과 **분리된 실험 씬**이고
+  팔레트도 다르다(응집◎/확산✳/발산→). 기준 아님 — 헷갈리면 위쪽을 봐라.
+
+**그냥 실행(F5) = 베이스캠프** (`src/playground/base.tscn` = `run/main_scene`): WASD로 책상에 가서 **E** →
+고리 조립 책. 맺으면 `GameState.ring_designs`에 들어간다. ⚠ **아직 발사 경로가 베이스캠프엔 없다**
+(RingSpellSystem 미배선) — 쏘려면 위 시험대를 쓴다.
 
 **알려진 함정**: `-s` SceneTree 테스트 스크립트는 오토로드 전역 등록 전에 컴파일된다 — 오토로드 식별자(EventBus 등)를 컴파일 타임 참조하면 에러. `root.get_node("/root/EventBus")` 런타임 조회 + 모듈 스크립트는 첫 프레임 후 `load()` 지연 로드로 우회 (기존 테스트 파일들 참고).
 

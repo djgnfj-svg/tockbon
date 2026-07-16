@@ -11,7 +11,7 @@ config_version=5
 [application]
 
 config/name="tockbon"
-run/main_scene="res://src/core/main.tscn"
+run/main_scene="res://src/playground/base.tscn"
 config/features=PackedStringArray("4.6", "GL Compatibility")
 
 [autoload]

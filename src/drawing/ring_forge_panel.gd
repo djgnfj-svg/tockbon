@@ -8,7 +8,8 @@ extends Control
 ## 점수를 매긴다. **[다음]**으로 조각을 잠그고 진행(마음에 안 들면 다시 문질러 덮어씀). 진→룬→문양(칸마다).
 ## 다 그리면 **분석 리포트**(조각별 점수+종합+등급)를 띄우고, 거기서 쏘거나 다시 그린다.
 ##
-## 🔴 옛 forge_panel은 그대로 살아 있다 — 이건 방향 전환을 **손맛으로 확인하려는 평행 패널**이다.
+## 🔴 세션 21 대청소: 옛 forge_panel(자유 드로잉)은 **삭제됐다** — 이제 이게 유일한 제작대다.
+## (한때 둘이 평행으로 살아 있었다. 되돌리려면 git 이력.)
 ##
 ## 계약: open() → 열림 / closed 시그널 → 닫힘 / design_committed(assembly) → 맺힘.
 ## 사용: const RingForgePanel := preload("res://src/drawing/ring_forge_panel.gd")

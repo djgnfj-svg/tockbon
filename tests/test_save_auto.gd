@@ -33,13 +33,9 @@ func _run() -> void:
 	gs.add_item(&"ink_basic", 5)
 	gs.add_item(&"fragment_water", 1)
 	gs.codex[&"rune_water"] = true
-	gs.designs = SampleDesigns.all()
-	gs.designs[0].durability = 7
-	# v1.7 룬 농도 축 (TECH_SPEC §4.0) — 기본값(0.5)과 다른 값을 심어야 라운드트립이 실제로 검증된다
-	gs.designs[0].rune_fill = 0.82
-	gs.equip(0, gs.designs[0])
-	gs.equip(2, gs.designs[2])
-	# 🔴 #17 2단계 — 고리 도안(RingDesign) 라운드트립. 칸 2=발산(1)·칸 6=응집(0), 열린 칸 [2,6].
+	# 🔴 세션 21 대청소: 옛 SpellDesign(SampleDesigns·도안 내구·rune_fill·arrows) 검증은 걷어냈다 —
+	# 자유 드로잉 경로가 통째로 삭제됐다. 고리(RingDesign) 라운드트립만 남는다.
+	# 고리 도안 라운드트립. 칸 2=발산(1)·칸 6=응집(0), 열린 칸 [2,6].
 	var ring_a: RingDesign = RingDesign.from_assembly(
 		{"rune": 0, "rings": [[-1, -1, 1, -1, -1, -1, 0, -1]], "open": [2, 6]}, "테스트 진", 0.77)
 	gs.ring_designs = [ring_a] as Array[RingDesign]
@@ -56,8 +52,6 @@ func _run() -> void:
 	# 오염 (로드가 복원해야 함)
 	gs.inventory.clear()
 	gs.codex.erase(&"rune_water")
-	gs.designs = [] as Array[SpellDesign]
-	gs.equipped = [null, null, null, null] as Array[SpellDesign]
 	gs.ring_designs = [] as Array[RingDesign]
 	gs.ring_equipped = [null, null, null, null] as Array[RingDesign]
 	gs.mana = 1.0
@@ -70,13 +64,7 @@ func _run() -> void:
 	_check("복원: 잉크 5", gs.get_count(&"ink_basic") == 5)
 	_check("복원: 조각 1", gs.get_count(&"fragment_water") == 1)
 	_check("복원: 도감 rune_water", gs.is_unlocked(&"rune_water"))
-	_check("복원: 도안 3종", gs.designs.size() == 3)
-	_check("복원: 도안 내구 7 (라운드트립)", gs.designs.size() == 3 and gs.designs[0].durability == 7)
-	_check("복원: 도안 화살표 보존", gs.designs.size() == 3 and gs.designs[0].arrows.size() == 8)
-	_check("복원: 룬 농도 0.82 (v1.7 라운드트립)",
-		gs.designs.size() == 3 and is_equal_approx(gs.designs[0].rune_fill, 0.82))
-	_check("복원: 장착 0·2 매핑", gs.equipped[0] == gs.designs[0] and gs.equipped[2] == gs.designs[2] and gs.equipped[1] == null)
-	# 🔴 #17 2단계 — 고리 도안 라운드트립
+	# 고리 도안 라운드트립
 	_check("복원: 고리 도안 1종", gs.ring_designs.size() == 1)
 	_check("복원: 고리 칸 보존 (2=발산·6=응집)",
 		gs.ring_designs.size() == 1 and int(gs.ring_designs[0].rings[0][2]) == 1
