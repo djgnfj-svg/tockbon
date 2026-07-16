@@ -20,6 +20,9 @@
 > 사실로 믿지 마라. 아직 안 지운 건 설계 근거가 남아 있어서다.
 > 📖 **현재 정본** = 이 파일 + `docs/STATUS.md` 최상단 + memory `takbon-playground-clean-restart`.
 
+- 🔴 **docs/REFACTOR_PLAN.md** — **다음 세션이 할 일 = 이거 전부** (사용자 확정 세션 21).
+  본격 개발 전 뼈대 정비: 죽은 세대 매장(~900줄)·규칙 위반 3건·`ring_board` 분할·실제 버그 I3.
+  **의존성 순서가 있다 — 뒤집으면 부팅 불가.** 문제가 아닌 것(건드리지 말 것)도 판정해 놨다
 - **docs/STATUS.md** — 세션별 진행 로그 (세션 종료 시마다 갱신). 옛 로그는 STATUS_ARCHIVE.md
 - docs/TRUTH.md · GDD.md · TECH_SPEC.md · CHANGELOG.md — ⚠ **옛 자유드로잉 아카이브**. 경제·적·저장
   계약 일부만 유효. 고리 모델 재작성은 아직 안 됐다

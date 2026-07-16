@@ -60,9 +60,23 @@ sanity_check는 옛 모델 전용이라 함께 삭제, test_save_auto는 옛 Spe
 **검증:** 베이스캠프 부팅 에러 0 · 남은 테스트 전부 그린(ring_design·ring_trace·ring_spell·save 17/0) ·
 시험대 2종 부팅 확인.
 
-**🔴 다음 세션:** (a) 대청소 2단계 = ⑤의 셋 풀기(spell·research_service·SpellDesign 스키마).
-(b) 베이스캠프에 발사 경로(RingSpellSystem 미배선 — 지금 쏘려면 `tests/test_ring_forge_panel.tscn`).
-(c) `docs/` 정리 또는 폐기 — 지금은 삭제된 시스템을 가르친다. (d) 에셋(아트 방향 = `takbon-art-direction-lwitw`).
+**⑧ 구조 리뷰 (세션 끝, 사용자: *"이제 본격적인 개발이여서 지금까지는 핵심재미 검증이였고"*):**
+대청소 직후 전체 구조를 리뷰했다. **총평 = 뼈대는 건강하다** — 결함은 "설계가 틀렸다"가 아니라
+**"죽은 세대를 아직 안 묻었다" + "규칙을 스스로 안 지킨 곳 2군데"**. 🔴 **정본 = `docs/REFACTOR_PLAN.md`**
+(항목별 파일:줄 근거 + 의존성 순서). 사용자 확정: **다음 세션에 전부 처리한다.**
+- 🟢 문제 아님(판정 끝): `src/drawing` 이름(손그림 탁본이 본질이라 정확) · `base.gd`의 preload(조합
+  루트라 정당) · `data/runes`→`projectile.tscn` 결합(좋은 설계 — 문제는 새 경로가 그걸 **배신**하고
+  씬을 하드코딩하는 것) · 조용한 발신자들(HUD 삭제 탓, 정상) · 성능·입력·리소스(지적 없음)
+- 🔴 순서: C1(`.call` 44곳→타입 주석, 안전망) → I1(`src/base` 삭제 = save_manager 위반 증발 —
+  `research_service`는 `start()` 부르는 데가 없다) → C3(옛 SpellDesign 매장 ~759줄, **순서 뒤집으면
+  부팅 불가**) → C2+M2(발사 계약 core로) → I4(`src/playground`→`src/base` 개명) → C4(`ring_board`
+  757줄 3분할 — **먼저 조립 상태기계 테스트부터**) → I5(껍데기만 .tscn)
+- 🔴 **실제 버그 I3**: `_nearest_open_slot` 거리 컷오프 없음 → 문양 그리다 획이 옆 칸에 조금 가까우면
+  **현재 칸이 멋대로 자동 확정**된다.
+
+**🔴 다음 세션:** **`docs/REFACTOR_PLAN.md` 순서대로 전부 처리.** 그 뒤: (a) 베이스캠프에 발사 경로
+(RingSpellSystem 미배선 — 지금 쏘려면 `tests/test_ring_forge_panel.tscn`). (b) `docs/` 정리 또는 폐기 —
+지금은 삭제된 시스템을 가르친다. (c) 에셋(아트 방향 = memory `takbon-art-direction-lwitw`).
 
 ---
 
