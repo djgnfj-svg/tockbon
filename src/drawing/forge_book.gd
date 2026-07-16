@@ -227,11 +227,15 @@ func _rebuild() -> void:
 	queue_redraw()
 
 
-## 진 — 한 종류다 (v1.6). 크게 하나 보여 주고, 크기가 곧 규모임을 말한다
+## 진 — 한 종류다 (v1.6). 크게 하나 보여 주고, 크기가 곧 규모임을 말한다.
+## 🔴 모양·이름은 data/shapes/jin_basic.tres에서 읽는다 (단일 진실원, 2026-07-17).
 func _build_circle_page(top: float) -> void:
 	var w := _page.size.x
+	var shape := _jin_shape()
+	var name_text: String = shape.display_name if shape != null and shape.display_name != "" \
+		else Copy.BOOK_CIRCLE_NAME
 	_cell(Rect2(w * 0.5 - 52.0, top, 104.0, 104.0), _circle_pts(),
-		Copy.BOOK_CIRCLE_NAME, "", true)
+		name_text, "", true)
 
 
 ## 룬 4종 — 2×2. 인식기 템플릿 그대로. 미해금은 흐린 빈 칸 + "?"
@@ -373,7 +377,21 @@ func _is_unlocked(rune: int) -> bool:
 
 # ── 진·문양 표본 (중심 0 · 최장변 1 — canonical()과 같은 좌표계) ──
 
+## 진 모양 데이터 (data/shapes/jin_basic.tres). class_name 캐시에 의존하지 않으려 load()로 지연 로드.
+const JIN_SHAPE_PATH := "res://data/shapes/jin_basic.tres"
+static var _jin_shape_cache: Resource = null
+
+func _jin_shape() -> Resource:
+	if _jin_shape_cache == null:
+		_jin_shape_cache = load(JIN_SHAPE_PATH)
+	return _jin_shape_cache
+
+
+## 진 점열 — data에서 읽는다. 데이터가 없으면 옛 절차 생성으로 폴백(안전망).
 func _circle_pts() -> PackedVector2Array:
+	var shape := _jin_shape()
+	if shape != null and shape.points.size() >= 2:
+		return shape.points.duplicate()
 	var pts := PackedVector2Array()
 	for i in 40:
 		var a := -PI / 2.0 + TAU * 0.97 * float(i) / 39.0
