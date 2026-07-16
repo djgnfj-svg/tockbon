@@ -12,10 +12,8 @@ extends Node2D
 ##
 ## 마나·내구 판정 없음 (고리 모델의 경제는 #17에서 정한다 — 지금은 순수 발사 검증).
 
-const RingBoard := preload("res://src/drawing/ring_board.gd")
 const CarrierScene := preload("res://src/spell/ring_carrier.tscn")
 const CarrierScript := preload("res://src/spell/ring_carrier.gd")
-const BoltScene := preload("res://src/spell/projectile.tscn")
 const BoltScript := preload("res://src/spell/projectile.gd")
 const PillarScene := preload("res://src/spell/pillar.tscn")
 const PillarScript := preload("res://src/spell/pillar.gd")
@@ -66,18 +64,26 @@ func _deploy_now(ring: Array, at: Vector2, travel: float) -> void:
 	var gather := 0
 	for k in SLOTS:
 		var g := int(ring[k])
-		if g == RingBoard.G_RADIATE:
+		if g == Enums.GlyphCode.RADIATE:
 			_spawn_bolt(at, travel + TAU * float(k) / float(SLOTS), fire)
-		elif g == RingBoard.G_GATHER:
+		elif g == Enums.GlyphCode.GATHER:
 			gather += 1
 	if gather > 0:
 		_spawn_pillar(at, gather, fire)
 
 
-## 발산 = 순수 직진 불 탄환. projectile.tscn을 design=null·effects={}로 쓰면 팅김·유도·관통
-## 없이 곧게 날아가 적에 닿으면 소멸한다 (기존 자산 재사용).
+## 발산 = 순수 직진 탄환. effects={}로 쓰면 팅김·유도·관통 없이 곧게 날아가 적에 닿으면 소멸한다.
+##
+## 🔴 세션 22 (M2): 탄 씬을 **룬 데이터가 정한다** — 예전엔 `preload(projectile.tscn)`로 박아 놔서
+## `RuneDef.projectile_scene`을 읽는 코드가 죽은 spell_system뿐이었다. 결합 비용만 내고 이득이 0이었고,
+## *"새 룬 = .tres 한 장"*(jin_def.gd:6)이라는 이 프로젝트의 약속이 새 경로에서 깨져 있었다.
+## 이제 물·바람 룬 추가가 진짜로 .tres 한 장이다.
 func _spawn_bolt(at: Vector2, angle: float, fire: Dictionary) -> void:
-	var bolt := BoltScene.instantiate() as BoltScript
+	var scene := fire.get("scene") as PackedScene
+	if scene == null:
+		push_warning("룬에 projectile_scene이 없다 — 발산 탄을 못 쏜다 (data/runes/*.tres 확인)")
+		return
+	var bolt := scene.instantiate() as BoltScript
 	if bolt == null:
 		return
 	add_child(bolt)
@@ -97,12 +103,13 @@ func _spawn_pillar(at: Vector2, gather: int, fire: Dictionary) -> void:
 	pillar.setup(fire.damage, fire.rune_type, fire.status, fire.status_power)
 
 
-## 불 룬 히트 정보 — Db에서 불 RuneDef를 읽어 피해·상태·세기를 뽑는다.
-## 등록이 없으면 기본 불 피해(balance)로 폴백 (테스트·구세이브 견딤).
+## 불 룬 히트 정보 — Db에서 불 RuneDef를 읽어 피해·상태·세기 + **탄 씬**을 뽑는다.
+## 등록이 없으면 기본 불 피해(balance)로 폴백하되 scene은 null (탄은 못 쏜다 — _spawn_bolt가 경고).
 func _fire_hit() -> Dictionary:
 	var rune: RuneDef = Db.get_rune(Enums.RuneType.FIRE)
 	if rune == null:
 		return {"damage": balance.projectile_base_damage, "rune_type": Enums.RuneType.FIRE,
-			"status": Enums.Status.BURN, "status_power": 0.0}
+			"status": Enums.Status.BURN, "status_power": 0.0, "scene": null}
 	return {"damage": balance.projectile_base_damage * rune.base_damage,
-		"rune_type": Enums.RuneType.FIRE, "status": rune.status, "status_power": rune.status_power}
+		"rune_type": Enums.RuneType.FIRE, "status": rune.status, "status_power": rune.status_power,
+		"scene": rune.projectile_scene}

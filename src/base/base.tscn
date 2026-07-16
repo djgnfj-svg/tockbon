@@ -1,8 +1,8 @@
 [gd_scene format=3 uid="uid://c0base01hub00"]
 
-[ext_resource type="Script" path="res://src/playground/base.gd" id="1_base"]
-[ext_resource type="Script" path="res://src/playground/desk.gd" id="2_desk"]
-[ext_resource type="Script" path="res://src/playground/simple_player.gd" id="3_player"]
+[ext_resource type="Script" path="res://src/base/base.gd" id="1_base"]
+[ext_resource type="Script" path="res://src/base/desk.gd" id="2_desk"]
+[ext_resource type="Script" path="res://src/base/simple_player.gd" id="3_player"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_desk"]
 size = Vector2(120, 100)

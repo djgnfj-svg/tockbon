@@ -4,15 +4,16 @@ extends Node2D
 ## 씬 전환 없음 — ESC로 닫으면 베이스가 그대로 뒤에 남는다.
 ## 원정(필드)은 아직 없음 — 지금은 베이스 + 탁본 책상까지만.
 ##
-## 🔴 2026-07-17 세션 21 (사용자 확정): 여기가 **게임의 진입점**이다 (project.godot run/main_scene).
-## 책상 UI = 고리 조립 책. 그 전에는 옛 자유 드로잉(drawing_panel: DrawingCanvas+ForgeBook =
-## SpellDesign 모델)을 열어서, 확정된 고리 조립 모델이 **여기엔 없었다** — 띄우면 「문양을 칸에 삽입·
-## 룬은 중심 원」이 사라진 것처럼 보였다.
-## 같은 세션의 대청소로 옛 자유 드로잉 경로(drawing_panel·DrawingCanvas·ForgeBook·인식기)와
-## 옛 본 게임(src/base 거점·field·ui·tutorial·quest)은 **삭제됐다** — 되돌리려면 git 이력을 본다.
+## 🔴 여기가 **게임의 진입점**이다 (project.godot run/main_scene, 사용자 확정 세션 21).
+## 세션 22에 폴더가 `src/playground` → `src/base`로 바뀌었다 — "버려도 되는 실험"이라는
+## 거짓 신호 때문에 리드가 세션 21에 엉뚱한 씬을 띄워 "다 사라졌다"고 헤맸다.
+##
+## 🔴 이 파일이 preload로 `ring_forge_panel`을 무는 건 **규칙 위반이 아니다** — 진입 씬 =
+## 조합 루트이고 누군가는 모듈을 조립해야 한다. 결합도 얕다(open/design_committed/closed 3계약뿐,
+## 보드 내부를 모른다).
 
 const RingForgePanel := preload("res://src/drawing/ring_forge_panel.gd")
-const Desk := preload("res://src/playground/desk.gd")
+const Desk := preload("res://src/base/desk.gd")
 
 @onready var _desk: Desk = $Desk
 @onready var _player: CharacterBody2D = $Player

@@ -12,6 +12,14 @@ enum RuneType { FIRE = 0, WATER = 2, WIND = 3 }
 ## 룬 이터레이션은 항상 명시적 리스트로 (RuneType.size()/range 금지 — 구멍 때문).
 const RUNE_TYPES: Array[int] = [RuneType.FIRE, RuneType.WATER, RuneType.WIND]
 const LEGACY_IMPACT: int = 1  # 옛 RuneType.IMPACT — 마이그레이션 판정용
+## 🔴 **발사 계약** — 고리의 문양 칸에 들어가는 정수 코드. 착탄 전개를 이 값이 가른다:
+##   GATHER = 착탄점에 기둥(안쪽으로 모인다) · RADIATE = 그 방향으로 탄환(바깥으로 퍼진다).
+## ⚠ 이 값이 **계약이다** — 조립 UI(ring_board)가 쓰고 발사(ring_spell_system)가 읽고
+## `data/glyphs/*.tres`의 `code`가 이 값이다. **밀면 저장된 고리 도안이 조용히 깨진다.**
+## 세션 22: 이게 core에 없어서 발사가 UI(ring_board 757줄 Control)를 preload해 정수 2개를
+## 꺼내 쓰고 있었다 — 발사가 UI에 의존하는 방향이라 헤드리스 발사·UI 교체를 정면으로 막았다.
+enum GlyphCode { GATHER = 0, RADIATE = 1 }
+
 enum StrokeRole { CIRCLE, RUNE, ARROW, TAIL, DECOR }
 ## 문양의 **발동 방식** — v1.9 문양 축 (GDD §4.3, TECH_SPEC §4.0-a).
 ## 문양 1개 = 1발이고, 그 탄이 **어떻게 나가는가**를 이 글자가 정한다.

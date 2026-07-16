@@ -28,8 +28,10 @@ const STAGE_RUNE := Enums.DrawStage.RUNE     # 룬(중심)을 놓을 차례
 const STAGE_GLYPH := Enums.DrawStage.ARROW   # 문양을 한 칸씩 얹을 차례
 
 # ── 어휘 2종 (사용자 확정 2026-07-16) ──
-const G_GATHER := 0    # 응집 ← — 안쪽(룬) 방향 화살표
-const G_RADIATE := 1   # 발산 → — 바깥(진) 방향 화살표
+## 🔴 값은 **core가 쥔다**(Enums.GlyphCode = 발사 계약). 여기서 다시 정의하면 언젠가 갈라진다 —
+## 세션 22 전까지 발사(ring_spell_system)가 이 상수를 꺼내려고 보드 전체를 preload하고 있었다.
+const G_GATHER := Enums.GlyphCode.GATHER    # 응집 ← — 안쪽(룬) 방향 화살표
+const G_RADIATE := Enums.GlyphCode.RADIATE  # 발산 → — 바깥(진) 방향 화살표
 const GLYPH_NAMES := ["응집←", "발산→"]
 const GLYPH_KEYS := ["Q", "W"]
 
