@@ -3,7 +3,7 @@ extends Control
 ## GameState/Clock 폴링 + EventBus 구독만 — 게임 로직 없음 (TECH_SPEC §10).
 
 const InkStyle := preload("res://src/ui/ink_style.gd")
-const DesignThumb := preload("res://src/core/design_thumb.gd")
+const RingThumb := preload("res://src/core/ring_thumb.gd")
 
 const FLASH_OK := Color(1.0, 0.9, 0.55)
 const FLASH_FAIL := Color(0.9, 0.35, 0.25)
@@ -31,8 +31,9 @@ var _slot_thumbs: Array[Control] = []
 var _slot_name_labels: Array[Label] = []
 var _slot_dura_labels: Array[Label] = []
 var _slot_mana_labels: Array[Label] = []
-var _slot_cache_design: Array[SpellDesign] = [null, null, null, null]
-var _slot_cache_dura := PackedInt32Array([-2, -2, -2, -2])
+## 🔴 #17 2단계 — 하단 슬롯은 이제 고리 도안(ring_equipped)을 보여 준다 (옛 SpellDesign 표시 은퇴).
+var _slot_cache_design: Array[RingDesign] = [null, null, null, null]
+var _slot_cache_fill := PackedInt32Array([-2, -2, -2, -2])
 var _slot_tweens: Array[Tween] = [null, null, null, null]
 var _mana_shown := -1
 var _bag_shown := -1
@@ -46,8 +47,7 @@ func _ready() -> void:
 	EventBus.day_started.connect(_on_day_started)
 	EventBus.player_hp_changed.connect(_on_player_hp_changed)
 	EventBus.equipment_changed.connect(_on_equipment_changed)
-	EventBus.cast_executed.connect(_on_cast_executed)
-	EventBus.cast_failed.connect(_on_cast_failed)
+	EventBus.ring_cast_executed.connect(_on_ring_cast_executed)
 	_refresh_hp()
 	_refresh_clock_label()
 
@@ -89,12 +89,9 @@ func _build_slots() -> void:
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 4)
 
-		var thumb := DesignThumb.new()
+		var thumb := RingThumb.new()
 		thumb.name = "Thumb"
 		thumb.custom_minimum_size = SLOT_THUMB
-		thumb.width_mult = SLOT_THUMB_WIDTH
-		# strokes 없는 도안(샘플·구세이브)은 룬 표기로 — core는 폴백 모양을 모른다
-		thumb.fallback_builder = InkStyle.make_design_fallback
 		thumb.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		row.add_child(thumb)
 
@@ -123,14 +120,16 @@ func _build_slots() -> void:
 
 # ── 갱신
 
+# 🔴 #17 2단계 — 고리 도안(ring_equipped)을 그림·구성으로 보여 준다. 경제(내구·마나)는 아직 없어
+# 표시하지 않는다 (#17 3단계에서). 대신 룬·문양 구성(응집/발산 수)을 읽는다.
 func _refresh_slots() -> void:
 	for i in GameState.EQUIP_SLOTS:
-		var d: SpellDesign = GameState.equipped[i]
-		var dura := d.durability if d != null else -1
-		if d == _slot_cache_design[i] and dura == _slot_cache_dura[i]:
+		var d: RingDesign = GameState.ring_equipped[i]
+		var fill := d.filled_count() if d != null else -1
+		if d == _slot_cache_design[i] and fill == _slot_cache_fill[i]:
 			continue
 		_slot_cache_design[i] = d
-		_slot_cache_dura[i] = dura
+		_slot_cache_fill[i] = fill
 		_slot_thumbs[i].call("set_design", d)
 		if d == null:
 			_slot_name_labels[i].text = "%d · 비어 있음" % (i + 1)
@@ -141,16 +140,32 @@ func _refresh_slots() -> void:
 		else:
 			_slot_name_labels[i].text = "%d · %s" % [i + 1, d.display_name]
 			_slot_name_labels[i].add_theme_color_override("font_color", InkStyle.INK)
-			if d.is_broken():
-				_slot_dura_labels[i].text = "손상 — 수리 필요"
-				_slot_dura_labels[i].add_theme_color_override("font_color", InkStyle.SEAL)
-			else:
-				_slot_dura_labels[i].text = "내구 %d/%d" % [d.durability, d.durability_max]
-				_slot_dura_labels[i].add_theme_color_override("font_color", InkStyle.INK_SOFT)
-			# 농도(v1.7)는 상태이상 세기다 — 같은 룬이라도 짙은 도안과 옅은 도안은 다른 무기다 (GDD §4.2)
-			_slot_mana_labels[i].text = "%s%s %s · 마나 %d" % [
-				InkStyle.rune_glyph(d.rune_type), InkStyle.rune_name(d.rune_type),
-				InkStyle.density_name(d.rune_fill), int(d.mana_cost)]
+			_slot_dura_labels[i].text = "%s%s · 문양 %d" % [
+				InkStyle.rune_glyph(Enums.RuneType.FIRE), InkStyle.rune_name(Enums.RuneType.FIRE), fill]
+			_slot_dura_labels[i].add_theme_color_override("font_color", InkStyle.INK_SOFT)
+			_slot_mana_labels[i].text = _composition_text(d)
+			_slot_mana_labels[i].add_theme_color_override("font_color", InkStyle.INK_SOFT)
+
+## 문양 구성 요약 — 응집/발산 각 몇 칸. 빈 진이면 "빈 진" (그래도 날아가 몸으로 맞는다).
+func _composition_text(d: RingDesign) -> String:
+	if d.rings.is_empty():
+		return "빈 진"
+	var ring: Array = d.rings[0]
+	var gather := 0
+	var radiate := 0
+	for v in ring:
+		if int(v) == 0:
+			gather += 1
+		elif int(v) == 1:
+			radiate += 1
+	if gather == 0 and radiate == 0:
+		return "빈 진"
+	var parts: Array[String] = []
+	if gather > 0:
+		parts.append("응집%d" % gather)
+	if radiate > 0:
+		parts.append("발산%d" % radiate)
+	return " ".join(parts)
 
 func _refresh_hp() -> void:
 	# HP 원장은 GameState (v1.1 이관) — player_hp_changed로 갱신
@@ -179,11 +194,8 @@ func _on_equipment_changed() -> void:
 	_refresh_bar_maxes()
 	_refresh_hp()
 
-func _on_cast_executed(design: SpellDesign, _mana_spent: float) -> void:
-	_flash(GameState.equipped.find(design), FLASH_OK)
-
-func _on_cast_failed(design: SpellDesign, _reason: int) -> void:
-	_flash(GameState.equipped.find(design), FLASH_FAIL)
+func _on_ring_cast_executed(slot: int, _design: RingDesign) -> void:
+	_flash(slot, FLASH_OK)
 
 func _flash(slot: int, color: Color) -> void:
 	if slot < 0 or slot >= _slot_panels.size():

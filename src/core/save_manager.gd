@@ -9,6 +9,8 @@ const ResearchService := preload("res://src/base/research_service.gd")
 
 const SAVE_PATH := "user://save/save.json"
 const DESIGN_DIR := "user://save/designs"
+## 🔴 #17 2단계 — 고리 도안(RingDesign) .tres 저장 위치. 옛 designs와 평행(병행 은퇴).
+const RING_DIR := "user://save/rings"
 
 ## 로드(또는 새 게임 확정) 이전의 자동 저장 방지
 var _ready_to_save := false
@@ -38,6 +40,18 @@ func save_game() -> void:
 	for design: SpellDesign in GameState.equipped:
 		equipped_idx.append(GameState.designs.find(design))
 
+	# 🔴 #17 2단계 — 고리 도안 저장 (옛 designs와 같은 방식: 파일 목록 + 장착 인덱스)
+	DirAccess.make_dir_recursive_absolute(RING_DIR)
+	var ring_files: Array = []
+	for i in range(GameState.ring_designs.size()):
+		var rpath := "%s/ring_%d.tres" % [RING_DIR, i]
+		ResourceSaver.save(GameState.ring_designs[i], rpath)
+		ring_files.append(rpath)
+	_prune_ring_files(GameState.ring_designs.size())
+	var ring_equipped_idx: Array = []
+	for rdesign: RingDesign in GameState.ring_equipped:
+		ring_equipped_idx.append(GameState.ring_designs.find(rdesign))
+
 	var inventory: Dictionary = {}
 	for item_id: StringName in GameState.inventory:
 		inventory[String(item_id)] = int(GameState.inventory[item_id])
@@ -59,6 +73,8 @@ func save_game() -> void:
 		"codex": codex,
 		"designs": design_files,
 		"equipped": equipped_idx,
+		"ring_designs": ring_files,
+		"ring_equipped": ring_equipped_idx,
 		"research_id": String(ResearchService.current_id),
 		"research_started": ResearchService.started_at_sec,
 	}
@@ -112,6 +128,18 @@ func load_game() -> bool:
 		var idx: int = int(equipped_idx[slot]) if slot < equipped_idx.size() else -1
 		GameState.equipped[slot] = GameState.designs[idx] if idx >= 0 and idx < GameState.designs.size() else null
 
+	# 🔴 #17 2단계 — 고리 도안 복원 (옛 designs와 같은 방식)
+	GameState.ring_designs.clear()
+	for path: String in data.get("ring_designs", []):
+		var rres := ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_IGNORE)
+		var rdesign := rres as RingDesign
+		if rdesign != null:
+			GameState.ring_designs.append(rdesign)
+	var ring_equipped_idx: Array = data.get("ring_equipped", [])
+	for slot in range(GameState.EQUIP_SLOTS):
+		var ridx: int = int(ring_equipped_idx[slot]) if slot < ring_equipped_idx.size() else -1
+		GameState.ring_equipped[slot] = GameState.ring_designs[ridx] if ridx >= 0 and ridx < GameState.ring_designs.size() else null
+
 	ResearchService.current_id = StringName(String(data.get("research_id", "")))
 	ResearchService.started_at_sec = float(data.get("research_started", -1.0))
 
@@ -124,13 +152,21 @@ func wipe_save() -> void:
 	if FileAccess.file_exists(SAVE_PATH):
 		DirAccess.remove_absolute(SAVE_PATH)
 	_prune_design_files(0)
+	_prune_ring_files(0)
 
 func _prune_design_files(keep_count: int) -> void:
-	var dir := DirAccess.open(DESIGN_DIR)
+	_prune_indexed_files(DESIGN_DIR, "design_", keep_count)
+
+func _prune_ring_files(keep_count: int) -> void:
+	_prune_indexed_files(RING_DIR, "ring_", keep_count)
+
+## <prefix>N.tres 중 인덱스가 keep_count 이상인 것을 지운다 (도안·고리 공용)
+func _prune_indexed_files(dir_path: String, prefix: String, keep_count: int) -> void:
+	var dir := DirAccess.open(dir_path)
 	if dir == null:
 		return
 	for file_name in dir.get_files():
-		if file_name.begins_with("design_") and file_name.ends_with(".tres"):
-			var idx := int(file_name.trim_prefix("design_").trim_suffix(".tres"))
+		if file_name.begins_with(prefix) and file_name.ends_with(".tres"):
+			var idx := int(file_name.trim_prefix(prefix).trim_suffix(".tres"))
 			if idx >= keep_count:
 				dir.remove(file_name)

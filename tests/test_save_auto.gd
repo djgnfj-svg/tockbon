@@ -39,6 +39,11 @@ func _run() -> void:
 	gs.designs[0].rune_fill = 0.82
 	gs.equip(0, gs.designs[0])
 	gs.equip(2, gs.designs[2])
+	# 🔴 #17 2단계 — 고리 도안(RingDesign) 라운드트립. 칸 2=발산(1)·칸 6=응집(0), 열린 칸 [2,6].
+	var ring_a: RingDesign = RingDesign.from_assembly(
+		{"rune": 0, "rings": [[-1, -1, 1, -1, -1, -1, 0, -1]], "open": [2, 6]}, "테스트 진", 0.77)
+	gs.ring_designs = [ring_a] as Array[RingDesign]
+	gs.ring_equipped[1] = ring_a
 	gs.mana = 42.0
 	clock.day = 3
 	clock.time_sec = 123.0
@@ -53,6 +58,8 @@ func _run() -> void:
 	gs.codex.erase(&"rune_water")
 	gs.designs = [] as Array[SpellDesign]
 	gs.equipped = [null, null, null, null] as Array[SpellDesign]
+	gs.ring_designs = [] as Array[RingDesign]
+	gs.ring_equipped = [null, null, null, null] as Array[RingDesign]
 	gs.mana = 1.0
 	clock.day = 1
 	clock.time_sec = 0.0
@@ -69,6 +76,18 @@ func _run() -> void:
 	_check("복원: 룬 농도 0.82 (v1.7 라운드트립)",
 		gs.designs.size() == 3 and is_equal_approx(gs.designs[0].rune_fill, 0.82))
 	_check("복원: 장착 0·2 매핑", gs.equipped[0] == gs.designs[0] and gs.equipped[2] == gs.designs[2] and gs.equipped[1] == null)
+	# 🔴 #17 2단계 — 고리 도안 라운드트립
+	_check("복원: 고리 도안 1종", gs.ring_designs.size() == 1)
+	_check("복원: 고리 칸 보존 (2=발산·6=응집)",
+		gs.ring_designs.size() == 1 and int(gs.ring_designs[0].rings[0][2]) == 1
+		and int(gs.ring_designs[0].rings[0][6]) == 0)
+	_check("복원: 고리 열린칸 보존 [2,6]",
+		gs.ring_designs.size() == 1 and gs.ring_designs[0].open == [2, 6])
+	_check("복원: 고리 채운칸 수 2", gs.ring_designs.size() == 1 and gs.ring_designs[0].filled_count() == 2)
+	_check("복원: 고리 점수 0.77 라운드트립",
+		gs.ring_designs.size() == 1 and is_equal_approx(gs.ring_designs[0].total_score, 0.77))
+	_check("복원: 고리 장착 슬롯1 매핑",
+		gs.ring_equipped[1] == gs.ring_designs[0] and gs.ring_equipped[0] == null)
 	_check("복원: 마나 42", is_equal_approx(gs.mana, 42.0))
 	_check("복원: Day 3 · 123초", clock.day == 3 and is_equal_approx(clock.time_sec, 123.0))
 	_check("복원: 연구 진행", rs.current_id == &"rune_wind" and is_equal_approx(rs.started_at_sec, 999.0))

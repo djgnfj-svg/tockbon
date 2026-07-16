@@ -19,6 +19,8 @@ var _frame := 0
 var _passed := 0
 var _failed := 0
 var _designs: Array[SpellDesign] = []
+## 🔴 #17 2단계 — HUD 하단 슬롯은 이제 고리 도안(ring_equipped)을 보여 준다. 옛 SpellDesign 표시는 은퇴.
+var _ring_design: RingDesign = null
 ## 획이 있는 도안(플레이어가 그린 것)과 획이 없는 샘플 도안 — 썸네일 두 경로를 각각 검증한다
 var _drawn_thumb: Control = null
 var _empty_thumb: Control = null
@@ -41,6 +43,10 @@ func _inject_mocks() -> void:
 	broken.durability = 0
 	_designs.append(broken)
 	GameState.designs = _designs
+	# 🔴 #17 2단계 — 고리 도안: 칸 2=발산·칸 6=응집 → HUD 슬롯 1에 장착 (하단 슬롯 고리 표시 검증용)
+	_ring_design = RingDesign.from_assembly(
+		{"rune": 0, "rings": [[-1, -1, 1, -1, -1, -1, 0, -1]], "open": [2, 6]}, "불의 고리")
+	GameState.ring_equipped[0] = _ring_design
 	# 적 5종 목 데이터 (GDD §7)
 	for def in _mock_enemies():
 		Db.enemies[def.id] = def
@@ -181,9 +187,9 @@ func _process(_delta: float) -> void:
 			_check(GameState.ui_modal_open, "게시판 열림 → ui_modal_open 설정")
 			ui.call("close_top")
 		31:
-			GameState.equip(0, null)  # 슬롯 해제 → HUD 썸네일도 사라져야 한다
+			GameState.ring_equipped[0] = null  # 고리 슬롯 해제 → HUD 썸네일도 사라져야 한다
 		32:
-			_check(not _hud_thumb(0).call("has_ink"), "슬롯 해제 → HUD 썸네일 제거")
+			_check(_hud_thumb(0).get("design") == null, "슬롯 해제 → HUD 고리 썸네일 제거")
 		33:
 			_finish()
 
@@ -280,33 +286,30 @@ func _step_loadout_confirm() -> void:
 	_check(GameState.equipped[2] == null, "빈 슬롯은 null 유지")
 	_check(not loadout.visible, "확정 → 장착 화면 닫힘")
 
+# 🔴 #17 2단계 — HUD 하단 슬롯은 고리 도안(ring_equipped)을 보여 준다 (옛 SpellDesign 표시 은퇴).
 func _step_hud_slots() -> void:
 	var names: Array = hud.get("_slot_name_labels")
 	_check(names.size() == 4, "HUD 장착 슬롯 4개 생성")
-	_check((names[0] as Label).text.contains(_designs[0].display_name), "HUD 슬롯 1 이름 바인딩")
-	var manas: Array = hud.get("_slot_mana_labels")
-	_check((manas[0] as Label).text.contains("마나 %d" % int(_designs[0].mana_cost)), "HUD 슬롯 1 마나 비용 바인딩")
+	_check((names[0] as Label).text.contains(_ring_design.display_name), "HUD 슬롯 1 이름 바인딩 (고리)")
 	var duras: Array = hud.get("_slot_dura_labels")
-	_check((duras[0] as Label).text.contains("내구"), "HUD 슬롯 1 내구도 바인딩")
+	_check((duras[0] as Label).text.contains("문양"), "HUD 슬롯 1 룬·문양 수 바인딩")
+	var manas: Array = hud.get("_slot_mana_labels")
+	var comp := (manas[0] as Label).text
+	_check(comp.contains("발산") and comp.contains("응집"), "HUD 슬롯 1 문양 구성 바인딩 (응집·발산)")
 	var hp_text := hud.find_child("HpText", true, false) as Label
 	_check(hp_text.text == "100/100", "HUD HP 초기값 100/100")
-	# 장착 도안이 슬롯에 먹선으로 — 빈 슬롯·획 없는 샘플과 구분된다
-	_check(_hud_thumb(0).call("has_ink"), "HUD 슬롯 1 — 장착한 손그림 도안의 먹선 썸네일")
-	var slot_rect: Rect2 = _hud_thumb(0).call("ink_rect")
-	var slot_box := Rect2(Vector2.ZERO, _hud_thumb(0).size)
-	_check(slot_rect.size.x > 0.0 and slot_box.grow(0.5).encloses(slot_rect), "HUD 썸네일이 슬롯 칸 안에 피팅")
-	_check(not _hud_thumb(1).call("has_ink"), "HUD 슬롯 2 — 샘플 도안(획 없음)은 폴백")
-	_check(not _hud_thumb(2).call("has_ink"), "HUD 슬롯 3 — 빈 슬롯은 썸네일 없음")
+	# 장착한 고리 도안이 슬롯에 그림으로 — 빈 슬롯과 구분된다
+	_check(_hud_thumb(0).get("design") != null, "HUD 슬롯 1 — 장착한 고리 도안 썸네일")
+	_check(_hud_thumb(2).get("design") == null, "HUD 슬롯 3 — 빈 슬롯은 썸네일 없음")
 
 func _step_cast_executed() -> void:
-	EventBus.cast_executed.emit(_designs[0], _designs[0].mana_cost)
+	EventBus.ring_cast_executed.emit(0, _ring_design)
 	var panels: Array = hud.get("_slot_panels")
-	_check((panels[0] as Control).modulate != Color.WHITE, "cast_executed → 슬롯 1 플래시")
+	_check((panels[0] as Control).modulate != Color.WHITE, "ring_cast_executed → 슬롯 1 플래시")
 
 func _step_cast_failed() -> void:
+	# 고리 발사엔 아직 실패(경제)가 없다 (#17 3단계) — fx 토스트는 옛 cast_failed 경로로 확인
 	EventBus.cast_failed.emit(_designs[1], Enums.CastFailReason.NO_MANA)
-	var panels: Array = hud.get("_slot_panels")
-	_check((panels[1] as Control).modulate != Color.WHITE, "cast_failed → 슬롯 2 플래시")
 	var toasts := fx.find_child("ToastBox", true, false) as VBoxContainer
 	_check(toasts.get_child_count() >= 1, "cast_failed → 사유 토스트")
 

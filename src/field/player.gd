@@ -97,6 +97,7 @@ func try_cast(slot: int) -> bool:
 		var ring_design: RingDesign = GameState.ring_equipped[slot]
 		if ring_design != null:
 			EventBus.ring_cast_requested.emit(ring_design.to_assembly(), global_position, aim_dir)
+			EventBus.ring_cast_executed.emit(slot, ring_design)
 			return true
 	if slot >= GameState.equipped.size():
 		return false

@@ -19,6 +19,9 @@ signal cast_failed(design: SpellDesign, reason: int)
 # assembly = ring_board.get_assembly() = {ring_count, rune, rings:[[8칸]], open:[...]}.
 # ring_spell_system(모듈 B)이 수신 → 진(캐리어)을 조준 방향으로 쏜다.
 signal ring_cast_requested(assembly: Dictionary, origin: Vector2, aim_dir: Vector2)
+# 🔴 #17 2단계 — 고리 슬롯이 발사됐다 (HUD 슬롯 플래시용). player.try_cast가 슬롯 인덱스와 함께 발신.
+# 옛 cast_executed(SpellDesign)와 평행 — HUD가 이걸로 해당 슬롯을 번쩍인다.
+signal ring_cast_executed(slot: int, design: RingDesign)
 # 🔴 #17 1단계 — 고리 도안이 맺혔다 (거점 조립 책 → GameState). 옛 design_created와 평행.
 # GameState가 수신 → ring_designs에 넣고 빈 ring_equipped 슬롯에 즉시 장착.
 signal ring_design_committed(design: RingDesign)
