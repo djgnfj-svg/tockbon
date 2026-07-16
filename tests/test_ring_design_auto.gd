@@ -37,6 +37,8 @@ func _run() -> void:
 	_test_slot_fill()
 	_test_score_carries()
 	_test_power_rule()
+	_test_grade_bands()
+	_test_grade_follows_threshold()
 
 	if _fails == 0:
 		print("TEST_RING_DESIGN_OK")
@@ -96,6 +98,67 @@ func _test_power_rule() -> void:
 		"기준선 앞뒤로 위력이 매끄럽다 (경계가 숫자로 안 보인다)")
 	# 음수 피해 방지 — 점수는 0..1이지만 계약이 밀릴 수 있다
 	_check(RP.power_of(0.0) >= 0.0 and RP.power_of(-1.0) >= 0.0, "위력은 음수가 되지 않는다")
+
+
+## 🔴 등급 구간 (세션 24, 사용자 확정: 65~75 무난 / 75~85 평타 / 85~95 괜찮음 /
+## 95~100 완벽 / 100 퍼펙트 · 65 이하 = 사용 불가).
+func _test_grade_bands() -> void:
+	var RP: GDScript = load("res://src/core/ring_power.gd")
+	_check(RP.grade_of(0.50) == "사용 불가", "50점 = 사용 불가")
+	_check(RP.grade_of(0.65) == "사용 불가", "기준선 정확히 = 사용 불가 ('이하면 터진다'와 같은 경계)")
+	_check(RP.grade_of(0.70) == "무난", "70점 = 무난")
+	_check(RP.grade_of(0.80) == "평타", "80점 = 평타")
+	_check(RP.grade_of(0.90) == "괜찮음", "90점 = 괜찮음")
+	_check(RP.grade_of(0.97) == "완벽", "97점 = 완벽")
+	_check(RP.grade_of(1.0) == "퍼펙트", "만점 = 퍼펙트")
+
+	# 구간 경계는 "이상"이다 — 딱 걸친 점수가 위 칸으로 간다
+	_check(RP.grade_of(0.75) == "평타", "75점은 평타(위 칸)")
+	_check(RP.grade_of(0.85) == "괜찮음", "85점은 괜찮음(위 칸)")
+	_check(RP.grade_of(0.95) == "완벽", "95점은 완벽(위 칸)")
+
+	# 🔴 **퍼펙트 = 화면에 100으로 뜨는 순간** (사용자 확정). 리포트는 round(점수×100)을 찍으므로
+	# 이 둘이 어긋나면 "100점인데 완벽"이라는 어긋남이 눈에 보인다.
+	for i in 60:
+		var s := 0.98 + float(i) * 0.0005          # 98.0% ~ 100.95%
+		var shown := int(round(clampf(s, 0.0, 1.0) * 100.0))
+		if RP.is_perfect(s) != (shown >= 100):
+			_check(false, "퍼펙트와 화면 100이 어긋난다 (%.4f → %d점, perfect=%s)"
+				% [s, shown, RP.is_perfect(s)])
+			return
+	_check(true, "퍼펙트 ⇔ 화면에 100으로 뜬다 (표시 반올림과 묶여 있다)")
+
+
+## 🔴🔴 **「사용 불가」와 「펑」이 정확히 같은 경계다** — 세션 23 어긋남의 회귀 테스트.
+## 그땐 등급이 자기 상수(55/75)를 들고 있어 「무난」(55~75)이 기준선 0.65를 걸쳤다 —
+## **같은 "무난"이 터지기도 견디기도 했다**(61점=무난인데 펑). 등급이 기준선을 베껴 적는 순간
+## 두 경계가 갈라지는데, 0~1 전 구간을 훑어 두 술어가 **한 번도 어긋나지 않음**을 못 박는다.
+##
+## ⚠ **balance를 런타임에 흔드는 방식으론 검증 못 한다** (세션 24에 시도했다가 알아냈다):
+## GDScript는 static func 안의 `const BAL.프로퍼티`를 **컴파일 타임에 굳힌다** — `RP.BAL.x`를
+## 0.8로 바꿔도 `RP.threshold()`는 옛 값을 돌려준다. 게임엔 무해하지만(수치를 런타임에 안 바꾼다)
+## 테스트는 조용히 거짓 통과한다.
+func _test_grade_follows_threshold() -> void:
+	var RP: GDScript = load("res://src/core/ring_power.gd")
+	for i in 201:
+		var s := float(i) / 200.0                       # 0.000 ~ 1.000, 0.5점 간격
+		var unusable: bool = RP.grade_of(s) == "사용 불가"
+		if unusable != (not RP.is_stable(s)):
+			_check(false, "%.1f점에서 등급과 펑 판정이 갈라졌다 (등급=%s, 견딤=%s)"
+				% [s * 100.0, RP.grade_of(s), RP.is_stable(s)])
+			return
+	_check(true, "「사용 불가」 ⇔ 펑 — 0~100점 전 구간에서 경계가 한 번도 안 갈라진다")
+
+	# 등급은 점수에 대해 단조다 — 더 잘 그렸는데 등급이 내려가면 안 된다
+	var order := ["사용 불가", "무난", "평타", "괜찮음", "완벽", "퍼펙트"]
+	var last := -1
+	for i in 101:
+		var idx: int = order.find(RP.grade_of(float(i) / 100.0))
+		if idx < last:
+			_check(false, "%d점에서 등급이 거꾸로 갔다 (%s)" % [i, RP.grade_of(float(i) / 100.0)])
+			return
+		last = idx
+	_check(last == order.size() - 1, "0→100점을 훑으면 등급이 순서대로 올라 퍼펙트로 끝난다")
 
 
 ## 기본 2방 문양본에 발산 하나 채운 assembly (rune=불).

@@ -41,7 +41,39 @@ static func power_display(score: float) -> int:
 
 
 ## 기준선(펑/안 펑 경계).
-## ⚠ **주입 전에 이걸 UI로 흘리지 마라** — "65점 넘겨야 함"을 미리 알려 주면 주입이
-## 결과를 확인하는 형식 절차가 된다. 터진 **뒤에** 왜 터졌는지 알려 줄 때만 쓴다.
+## ⚠ 주입 **전에** 이 숫자를 대놓고 띄우진 마라 ("65점 넘겨야 함"). 등급이 경계를 알려 주는
+## 것과 숫자를 알려 주는 건 다르다 — 전자는 사용자가 고른 것이고, 후자는 목표치를 박아
+## 그리기를 **숫자 맞추기**로 만든다. 터진 뒤 이유를 설명할 때 쓴다.
 static func threshold() -> float:
 	return BAL.ring_stability_min
+
+
+## 🔴 종합 점수 → **등급 이름** (2026-07-17 세션 24, 사용자 확정).
+##
+## 왜 여기 있나 (원래 trace_scorer._grade였다): **최하단 경계 = 펑 기준선**이기 때문이다.
+## 세션 23의 등급은 채점기가 따로 쥔 숫자(55/75)라 기준선 0.65와 어긋났고 — 「무난」(55~75)이
+## 경계를 걸쳐 **같은 "무난"이 터지기도 견디기도 했다**(61점=무난인데 펑). 그래서 등급이
+## 65를 자기 상수로 베껴 적는 대신 `is_stable()`을 **그대로 부른다**: 기준선을 balance에서
+## 0.70으로 올리면 「사용 불가」 칸도 저절로 따라 올라간다. 두 경계는 한 값이지 두 값이 아니다.
+##
+## ⚠ 이 등급은 주입 **전에** 보인다 = 펑 여부를 알려 준다. 그래도 되는지 사용자에게 물어
+## 확정받았다("등급이 알려 줘도 됨"). 세션 23의 「주입 전 안내 금지」는 이제 **명시 문구**
+## ("주입하면 터진다")와 **위력 곡선의 평평한 구간**에만 적용된다 — 등급은 예외다.
+static func grade_of(score: float) -> String:
+	if not is_stable(score):
+		return "사용 불가"            # 🔴 기준선과 같은 술어 — 숫자를 베끼지 않는다
+	if score >= BAL.ring_grade_perfect:
+		return "퍼펙트"
+	if score >= BAL.ring_grade_great:
+		return "완벽"
+	if score >= BAL.ring_grade_good:
+		return "괜찮음"
+	if score >= BAL.ring_grade_fair:
+		return "평타"
+	return "무난"
+
+
+## 이 점수가 「퍼펙트」인가 — UI가 특별 대우(색·강조)를 할지 정할 때 쓴다.
+## 이름 문자열을 UI가 == 로 비교하면 이름을 바꾸는 순간 조용히 깨진다.
+static func is_perfect(score: float) -> bool:
+	return score >= BAL.ring_grade_perfect

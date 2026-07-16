@@ -16,6 +16,12 @@ extends RefCounted
 ##
 ## 사용: const TraceScorer := preload("res://src/drawing/trace_scorer.gd")
 
+## 🔴 등급 이름은 **여기서 정하지 않는다** (세션 24에 `_grade`를 걷어냈다). 등급의 최하단이
+## 곧 펑 기준선이라, 채점기가 자기 상수로 베껴 적으면 balance의 기준선과 조용히 갈라진다 —
+## 세션 23의 「무난인데 터진다」가 정확히 그 어긋남이었다. core가 한 곳에서 판다.
+## (채점기 = "얼마나 잘 그렸나"만 잰다. "그래서 쓸 수 있나"는 다른 관심사다.)
+const RingPower := preload("res://src/core/ring_power.gd")
+
 ## 🔴 **이 조각을 그리려던 획인가**의 경계 (세션 23에 0.24 → 0.32). 이보다 멀면 다른 조각을
 ## 겨눈 획으로 보고 **통째로 무시**한다 (옆 칸 문양을 그리는 중일 수 있다 — 8칸 고리에서
 ## 이웃 칸까지는 약 0.46R이라 그 안쪽에서 끊어야 남의 칸 획을 내 점수로 채점하지 않는다).
@@ -222,21 +228,10 @@ func get_analysis(open: Array) -> Dictionary:
 	total = total / float(vals.size()) if not vals.is_empty() else 0.0
 	return {
 		"jin": _scores.get(KEY_JIN, null), "rune": _scores.get(KEY_RUNE, null),
-		"glyphs": glyphs, "total": total, "grade": _grade(total),
+		"glyphs": glyphs, "total": total, "grade": RingPower.grade_of(total),
 	}
 
 
-## 종합 점수 → 등급 이름 (분석 리포트용).
-func _grade(s: float) -> String:
-	if s >= 0.90:
-		return "명인"
-	if s >= 0.75:
-		return "능숙"
-	if s >= 0.55:
-		return "무난"
-	if s >= 0.35:
-		return "거침"
-	return "서툼"
 
 
 func clear() -> void:

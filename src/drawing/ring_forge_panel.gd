@@ -483,8 +483,16 @@ func _draw_report() -> void:
 	var grade := String(_analysis.get("grade", "?"))
 	_report.draw_string(font, Vector2(14, 26), "마법진 분석",
 		HORIZONTAL_ALIGNMENT_LEFT, -1, 14, TITLE_COLOR)
-	_report.draw_string(font, Vector2(14, 50), "종합 %d점 · %s" % [_pct(total), grade],
-		HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(0.55, 0.30, 0.12))
+
+	# 🔴 「퍼펙트」는 눈에 띄게 다르다 (사용자: *"백은 뭔가 달랐으면 좋겠네"*). 금색 · 크게 · ★.
+	# 등급 **이름을 == 비교하지 않는다** — 이름은 바뀔 수 있고, 그때 조용히 평범해진다.
+	var perfect := RingPower.is_perfect(total)
+	if perfect:
+		_report.draw_rect(Rect2(8, 36, w - 16, 22), Color(1.0, 0.86, 0.45, 0.35), true)
+	_report.draw_string(font, Vector2(14, 52),
+		("종합 %d점 · ★ %s ★" if perfect else "종합 %d점 · %s") % [_pct(total), grade],
+		HORIZONTAL_ALIGNMENT_LEFT, -1, 15 if perfect else 13,
+		Color(0.72, 0.48, 0.05) if perfect else Color(0.55, 0.30, 0.12))
 
 	# 🔴 위력 = 이 진이 **버텨 준다면** 낼 힘. 발사와 같은 함수(RingPower)로 뽑는다.
 	# ⚠ **견디는지는 여기서 말하지 않는다** (사용자 확정: "주입을 하면 그때 평가해서 터지게 할 거임 /
