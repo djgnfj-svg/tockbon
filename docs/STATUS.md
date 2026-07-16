@@ -1,12 +1,77 @@
 # STATUS — 현재 진행 상태
 
-> 최종 갱신: 2026-07-17 (세션 21 — **데이터 단일 진실원 완결: 텍스트 데이터화 + 절차 폴백 제거 + 첫 실제 위임**)
-> · 세션 19: 깨끗한 재시작(src/playground) · 세션 18: 아트 방향 전환(960×540·48px·장비4칸) · **세션 종료마다 갱신**
-> 커밋: 세션 8~12는 `main` 병합됨. **세션 13~18 작업 = 커밋에 함께 저장**
+> 최종 갱신: 2026-07-17 (세션 21 후반 — 🔴 **대청소: 게임 = 베이스캠프 + 고리 조립, 194파일 삭제**)
+> · **세션 종료마다 갱신**
+>
+> 🔴 **아래 세션 20 이하는 대부분 삭제된 코드를 설명한다** — 기록이지 현재 상태가 아니다.
+> 현재 정본 = 최상단 「세션 21 후반」 + `CLAUDE.md` + memory `takbon-basecamp-is-the-game`.
 
 ---
 
-## 🔵 세션 21 (2026-07-17) — **데이터 단일 진실원 완결 (모양 + 텍스트) · 첫 실제 에이전트 위임**
+## 🔴🔴 세션 21 후반 (2026-07-17) — **대청소: 게임 = 베이스캠프 + 고리 조립, 그게 전부다**
+
+> 🔴 **이 절이 현재 정본이다.** 아래 세션 21 전반(데이터 단일 진실원)은 **그 코드가 이번에 삭제되면서
+> 통째로 무의미해졌다** — 기록으로만 남긴다. 상세 = memory `takbon-basecamp-is-the-game`.
+
+**① 방향 확정 (사용자):** *"일단 문양룬까지 있는걸로 베이스에서 작업하자"* → *"지금 니가 띄웠던 게
+베이스캠프고, 이외에는 이전에 AI들이 멋대로 많이 만들어낸 코드들임. 정리가 필요함."* →
+*"지금 사실상 코드가 많을 일이 없음 — 그냥 WASD랑 상호작용이랑 책상이랑 마법진 이것밖에 없거든."*
+**방침 = 하나씩 다시 만든다.**
+
+**② 🔴 리드가 헤맨 경위 (기록 — 같은 함정 재발 방지):** 리드가 "베이스"를 `src/base`(옛 본 게임 거점)로
+단정하고 그쪽을 계속 띄웠다. 사용자가 말한 "베이스"는 **베이스캠프(`src/playground/base.tscn`)**였다.
+게다가 playground는 옛 자유드로잉 UI를 열고 있어서, 띄우면 확정된 고리 조립(문양 칸 삽입·룬=중심 원)이
+**"사라진 것처럼"** 보였다 — 사용자: *"이거 문양 모양 삽입하기로 한건 다 사라졌네? 뭐임?"*
+**직접 원인 = memory `takbon-playground-clean-restart`가 "현재 작업 지점 = playground"라고만 적고
+"거긴 고리가 없다"를 안 적었다.** 작업 지점 메모리는 뒤집히는 순간 고쳐야 한다. (해당 메모리 폐기·대체됨)
+
+**③ 베이스캠프 = 진입점 + 고리 조립 책 (커밋 `dcc3326`):** `playground/base.gd` 책상 E → `RingForgePanel`
+(옛 `drawing_panel` 대신). 맺기 배선은 옛 본 게임 `base.gd`와 동일(`RingDesign.from_assembly` →
+`ring_design_committed`). **전체화면 깨짐 수정** — 책 좌표가 640×360인데 뷰포트는 960×540(세션 18)이라
+왼쪽 위로 몰렸다. 상수를 다시 재는 대신 **논리 무대(_stage 640×360)를 화면에 비율 유지로 확대**
+(매직넘버가 그 좌표계에 묶여 있어 일일이 고치면 반드시 빠뜨린다). 배율은 실측 — `aspect=expand`라
+전체화면에선 화면비에 따라 뷰포트가 더 넓어져 1.5 하드코딩은 21:9에서 또 깨진다.
+⚠ `_spread.scale`은 책 펼침 애니가 이미 써서 별도 무대에 배율을 걸었다.
+
+**④ 🔴 대청소 1단계 (커밋 `f080939` — 194파일 · 19,269줄 삭제):** 진입점을 `src/core/main.tscn` →
+`src/playground/base.tscn`으로 바꾸고, 베이스캠프에서 **도달 불가능한 코드를 전부 삭제**.
+- 삭제: `src/field`(원정·적·보스) · `src/tutorial` · `src/quest` · `src/ui`(HUD·도감·게시판·장착) ·
+  `src/base` 거점 · 옛 자유드로잉 전부(인식기·drawing_canvas·forge_book/panel·design_*·drawing_copy·
+  **rune_templates·glyph_templates·data/shapes**) · `src/core` 옛것(main·thumb·sample_designs 등) ·
+  테스트 16종.
+- **남은 것**: `src/drawing` = ring_board·ring_book·ring_forge_panel **셋뿐** / `src/base` =
+  research_service·recipes **둘뿐** / tests 4개.
+
+**⑤ 🔴 못 지운 것 = 2단계 숙제 (미착수):** 지우면 부팅 전에 죽거나 파싱이 깨진다 —
+(a) **`src/spell`**: `data/runes/*.tres:4`가 `projectile.tscn`을 물고 Db가 부팅 때 무조건 로드한다
+(먼저 `projectile_scene` 세 줄을 떼야 함). (b) **`src/base`의 둘**: `save_manager.gd:8`이
+`research_service`를 preload(주석이 스스로 위반이라 인정). (c) **옛 SpellDesign 스키마**: EventBus
+시그널 타입·`GameState.designs/equipped`가 묶여 있어 **쓰는 코드가 없어도** 지우면 파싱 깨짐.
+
+**⑥ 교훈 — `class_name` 전역 참조는 경로 grep에 안 잡힌다:** 사전 조사가 `sample_designs.gd` "참조 0"이라
+했으나 실제론 `SampleDesigns`로 쓰였고, **지운 뒤 파싱 에러로 드러났다**(test_save_auto·sanity_check).
+sanity_check는 옛 모델 전용이라 함께 삭제, test_save_auto는 옛 SpellDesign 검증을 떼고 고리
+라운드트립만 남겨 17/0. **삭제 전엔 경로와 class_name 이름을 둘 다 grep해라.**
+
+**⑦ 문서:** CLAUDE.md 검증 목록을 남은 4개로 재작성(나열된 대부분이 없는 파일이 됐다) + 아키텍처·읽을거리
+갱신. **`docs/`(TRUTH·GDD·TECH_SPEC·CHANGELOG)는 전부 삭제된 시스템을 설명한다 — 사실로 믿지 말 것**을
+명시. 삭제로 거짓말이 된 주석 2곳 수정.
+
+**검증:** 베이스캠프 부팅 에러 0 · 남은 테스트 전부 그린(ring_design·ring_trace·ring_spell·save 17/0) ·
+시험대 2종 부팅 확인.
+
+**🔴 다음 세션:** (a) 대청소 2단계 = ⑤의 셋 풀기(spell·research_service·SpellDesign 스키마).
+(b) 베이스캠프에 발사 경로(RingSpellSystem 미배선 — 지금 쏘려면 `tests/test_ring_forge_panel.tscn`).
+(c) `docs/` 정리 또는 폐기 — 지금은 삭제된 시스템을 가르친다. (d) 에셋(아트 방향 = `takbon-art-direction-lwitw`).
+
+---
+
+## 🔵 세션 21 전반 (2026-07-17) — 데이터 단일 진실원 완결 · 첫 실제 에이전트 위임
+
+> ⚠ **이 작업의 결과물은 같은 세션 후반 대청소로 전부 삭제됐다** (`rune_templates`·`glyph_templates`·
+> `data/shapes`·`drawing_copy`는 옛 자유드로잉 전용이었고, 고리 조립 경로는 이것들을 안 쓴다 —
+> `ring_board.gd`는 preload가 아예 없고 자기 `TEMPLATES` 상수로 안내선을 그린다).
+> **교훈: "무엇을 정리할까"보다 "이게 지금 게임에 쓰이나"를 먼저 물었어야 했다.** 기록으로만 남긴다.
 
 > 사용자: 세션 목표 = **데이터 단일 진실원 완결**. 세션 20이 모양(points/variants)만 데이터화하고
 > 남긴 (a)이름·설명 (b)절차 폴백 제거를 닫는다. 세션 20이 남긴 (e)"실제 위임 시작"도 이번에 이행.
