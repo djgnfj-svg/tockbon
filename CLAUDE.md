@@ -44,6 +44,22 @@
 - 에이전트는 mcp__godot__* 도구 사용 금지 (에디터는 리드가 관리)
 - 스키마·시그널 추가 요청은 에이전트가 보고 → 리드가 core에 반영 (지금까지 전부 이 방식으로 처리됨)
 
+### 🔴 에이전트 위임 라우팅 (2026-07-17 세션 20 — 사용자: "godot 에이전트를 실제로 써라")
+
+> 로컬 Donchitos 49-에이전트 하네스는 이 1인 playground엔 과함이라 제거했다. **Godot 구현 위임은
+> `godot-prompter` 플러그인 에이전트로 한다.** 리드가 "직접 다 하는" 습관을 버리고, 아래 조건이면 위임한다.
+
+- **구현 위임 대상 = `godot-prompter:godot-game-dev`** (GDScript 구현·씬·시스템). 설계/계획은
+  `godot-prompter:godot-game-architect`, 코드 리뷰는 `godot-prompter:godot-code-reviewer`,
+  Control UI는 `godot-prompter:godot-ui-designer`, 셰이더는 `godot-shader-author`.
+- **언제 위임하나:** 한 모듈(src/drawing·field·base·ui 등) 안에서 닫히고 병렬화 이득이 있는 구현 작업.
+  **언제 리드가 직접:** 인식률·저장 등 회귀 위험이 크고 tight한 검증 루프가 필요한 작업, core 스키마 변경,
+  mcp__godot 필요 작업, 커밋. (세션 20 룬·문양 데이터화는 회귀 위험 커서 리드가 직접 한 정당한 예.)
+- **위임 시 프로젝트 규칙을 프롬프트에 반드시 주입** — 플러그인 에이전트는 이 규칙을 모른다:
+  typed GDScript / class_name 금지(`const X := preload`) / 모듈 간은 EventBus+core 스키마만 /
+  수치는 data/balance.tres / mcp__godot 금지 / 커밋은 리드 / 자기 모듈 폴더+tests 자기 접두사만 수정.
+- 검증·`--import`·커밋은 위임 후에도 **리드가 직접** 돌린다(위 검증 명령).
+
 ## 검증 명령 (반드시 Bash에서 — PowerShell은 자식 프로세스 stdout을 안 보여줌)
 
 **전 스위트를 다 돌려라.** 목록에서 빠진 테스트는 낡아 죽는다 — 실제로 세션 7이 문법을 바꾸면서
