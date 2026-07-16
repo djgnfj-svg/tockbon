@@ -145,8 +145,14 @@ func filled_count() -> int:
 func can_commit() -> bool:
 	return _asm.can_commit()
 
+## 🔴 발사 계약 + **손그림 점수**. 조립기(무엇이 놓였나)와 채점기(얼마나 잘 그렸나)를 합치는
+## 유일한 자리 — 둘 다 쥔 게 보드뿐이다 (조립기는 채점을 모르고, 채점기는 칸을 모른다).
+## `score`가 여기서 안 실리면 발사도 저장도 점수를 알 길이 없다 (세션 22까지가 그랬다).
+## ⚠ 그리는 도중에 불리면 그때까지의 부분 점수다 — 소비자는 맺을 때만 읽는다.
 func get_assembly() -> Dictionary:
-	return _asm.get_assembly()
+	var a := _asm.get_assembly()
+	a["score"] = float(get_analysis().get("total", 0.0))
+	return a
 
 
 # ─────────────────── 손그림 탁본 — 무엇을 그릴지 정하고 가이드를 세운다 ───────────────────

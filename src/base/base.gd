@@ -45,6 +45,8 @@ func _open_drawing() -> void:
 	_forge.open()
 
 ## 고리 마법진이 맺혔다 — RingDesign으로 감싸 GameState에 넘긴다(빈 슬롯에 자동 장착).
+## 🔴 손그림 점수는 `assembly.score`를 타고 들어와 `total_score`가 된다 (세션 23).
+## 세션 22까지 여기가 점수를 안 넘겨서 **저장된 도안의 total_score가 전부 0**이었다.
 func _on_ring_committed(assembly: Dictionary) -> void:
 	var design := RingDesign.from_assembly(assembly, "고리 마법진")
 	EventBus.ring_design_committed.emit(design)

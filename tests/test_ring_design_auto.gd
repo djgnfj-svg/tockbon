@@ -35,6 +35,8 @@ func _run() -> void:
 	_test_roundtrip()
 	_test_auto_equip()
 	_test_slot_fill()
+	_test_score_carries()
+	_test_power_rule()
 
 	if _fails == 0:
 		print("TEST_RING_DESIGN_OK")
@@ -48,6 +50,41 @@ func _reset_ring_state() -> void:
 	gs.ring_designs.clear()
 	for i in gs.ring_equipped.size():
 		gs.ring_equipped[i] = null
+
+
+## 🔴 손그림 점수가 assembly ↔ RingDesign 사이를 **양방향으로** 건넌다 (세션 23).
+## 끊기면 조립대에서 잘 그린 진이 장착·재발사 때 조용히 기준 위력이 된다.
+func _test_score_carries() -> void:
+	var a := _sample_assembly()
+	a["score"] = 0.9
+	# 점수를 명시 안 하면 assembly가 실어 온 값을 쓴다 (base.gd가 이 형태로 부른다)
+	var d = RD.from_assembly(a, "잘 그린 진")
+	_check(is_equal_approx(float(d.total_score), 0.9), "assembly.score → total_score 자동 승계")
+	# 되돌릴 때도 실린다 — 저장해 둔 도안을 다시 쏴도 그때 그 위력이 나온다
+	_check(is_equal_approx(float(d.to_assembly().get("score", -1.0)), 0.9),
+		"to_assembly가 score를 다시 싣는다")
+	# 명시 인자가 이긴다 (테스트·특수 경로)
+	var d2 = RD.from_assembly(a, "덮어쓴 진", 0.5)
+	_check(is_equal_approx(float(d2.total_score), 0.5), "명시 score가 assembly.score를 이긴다")
+	# 점수 없는 옛 assembly → 0.0 (터지지도 0 피해도 아닌, 그냥 없음)
+	var d3 = RD.from_assembly(_sample_assembly(), "옛 진")
+	_check(is_equal_approx(float(d3.total_score), 0.0), "score 없는 assembly는 0.0")
+
+
+## 🔴 펑/위력 규칙 — 조립 리포트와 발사가 **같은 함수**를 본다. 경계는 "이하면 터진다".
+func _test_power_rule() -> void:
+	var RP: GDScript = load("res://src/core/ring_power.gd")
+	var t: float = RP.threshold()
+	_check(not RP.is_stable(t), "기준선 정확히 = 터진다 (사용자: 65퍼 '이하'면 터지고)")
+	_check(not RP.is_stable(t - 0.01), "기준선 아래 = 터진다")
+	_check(RP.is_stable(t + 0.01), "기준선 위 = 견딘다")
+	_check(RP.is_stable(1.0), "만점 = 견딘다")
+	# 위력은 점수에 대해 단조 증가 — "높을수록 성능이 좋아"(사용자)
+	_check(RP.power_of(1.0) > RP.power_of(0.8), "만점이 80점보다 세다")
+	_check(RP.power_of(0.8) > RP.power_of(t + 0.01), "80점이 기준선 언저리보다 세다")
+	# 미달 구간도 음수·0이 아니다 — 발사가 실수로 이 값을 타도 피해가 사라지지 않는다
+	_check(RP.power_of(0.0) > 0.0, "미달 점수도 위력 0이 아니다 (하한 클램프)")
+	_check(RP.power_display(1.0) > 100, "만점 표시 위력 > 기준 100")
 
 
 ## 기본 2방 문양본에 발산 하나 채운 assembly (rune=불).

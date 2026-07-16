@@ -17,27 +17,34 @@ extends Resource
 @export var rings: Array = []
 ## 문양본이 연 칸 인덱스 (렌더·요약용)
 @export var open: Array = []
-## 분석 종합 점수(0~1) — 미래 위력 매핑용. 지금은 저장만 (발사엔 미사용)
+## 🔴 분석 종합 점수(0~1) = **손으로 얼마나 잘 그렸나**. 세션 23부터 **위력을 정한다**
+## (`src/core/ring_power.gd`). 세션 22까지는 계산·저장만 되고 아무도 안 읽어서
+## 잘 그리든 막 그리든 마법이 똑같았다 — 손으로 그리게 한 이유가 없던 셈이다.
 @export var total_score: float = 0.0
 
 
 ## ring_spell_system이 먹는 발사 계약(Dictionary)으로 되돌린다.
+## 🔴 `score`를 실어야 **저장해 둔 도안을 다시 쏴도 그때 그린 위력이 그대로 난다.**
+## 빼면 장착한 진이 조용히 기준 위력으로 발사된다 (tests/test_ring_design_auto가 못 박아 둔다).
 func to_assembly() -> Dictionary:
 	return {
 		"ring_count": 1,
 		"rune": rune,
 		"rings": rings.duplicate(true),
 		"open": open.duplicate(),
+		"score": total_score,
 	}
 
 
-## assembly(get_assembly 결과)를 감싸 RingDesign을 만든다. score = 분석 종합(선택).
-static func from_assembly(a: Dictionary, name: String = "", score: float = 0.0) -> RingDesign:
+## assembly(get_assembly 결과)를 감싸 RingDesign을 만든다.
+## 🔴 점수는 **assembly가 이미 실어 온다**(board.get_assembly가 넣는다) — 기본값이 그걸 쓴다.
+## `score`를 명시로 주면 그게 이긴다 (테스트·특수 경로용). 음수 = "안 줬음" 표식.
+static func from_assembly(a: Dictionary, name: String = "", score: float = -1.0) -> RingDesign:
 	var d := RingDesign.new()
 	d.rune = int(a.get("rune", 0))
 	d.rings = (a.get("rings", []) as Array).duplicate(true)
 	d.open = (a.get("open", []) as Array).duplicate()
-	d.total_score = score
+	d.total_score = score if score >= 0.0 else float(a.get("score", 0.0))
 	if name != "":
 		d.display_name = name
 	return d

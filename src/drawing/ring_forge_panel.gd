@@ -26,6 +26,9 @@ extends Control
 
 const RingBoard := preload("res://src/drawing/ring_board.gd")
 const RingBook := preload("res://src/drawing/ring_book.gd")
+## 점수 → 안정성·위력 규칙. 🔴 **발사와 같은 함수를 쓴다** — 리포트가 보여 준 위력과 실제로
+## 때리는 위력이 갈라지면 안 된다 (src/core/ring_power.gd의 주석 참조).
+const RingPower := preload("res://src/core/ring_power.gd")
 
 signal closed
 ## 도안이 방금 맺혔다 — 여는 쪽(작업대·거점)이 발사·연출에 쓴다. assembly = board.get_assembly()
@@ -60,6 +63,8 @@ const REPORT_DESC := Color(0.44, 0.37, 0.30)
 const OPEN_SEC := 0.20
 const OPEN_FROM_X := 0.04
 const CLOSE_SEC := 0.12
+## 펑 섬광이 가시는 시간 — 연출값(밸런스 아님). 짧아야 "터졌다"로 읽히고 길면 화면 전환처럼 보인다
+const BURST_SEC := 0.45
 
 const Copy_START := "진을 왼쪽 판에 손으로 문질러 그리세요  (진 → 룬 → 문양 순서로 하나씩 · [다음]으로 진행)"
 
@@ -104,7 +109,10 @@ func _ready() -> void:
 
 	_next_btn.pressed.connect(_on_next)
 	_commit_btn.pressed.connect(_finish)
-	($Stage/Spread/Report/ShootBtn as Button).pressed.connect(_on_report_shoot)
+	# 🔴 [쏘기] → **[마력 주입]** (세션 23). 조용히 성공하던 자리에 성공/실패가 갈리는 의식이 들어갔다.
+	var inject_btn := $Stage/Spread/Report/ShootBtn as Button
+	inject_btn.text = "마력 주입"
+	inject_btn.pressed.connect(_on_inject)
 	($Stage/Spread/Report/RedoBtn as Button).pressed.connect(_on_report_redo)
 
 	resized.connect(_fit_stage)   # 창 크기·전체화면 전환마다 다시 맞춘다
@@ -155,10 +163,14 @@ func close() -> void:
 	if not visible:
 		return
 	# 🔴 맺기 버튼을 깜빡해도 쏠 수 있게 — 닫을 때 유효한 조립(진·룬 그려짐)이면 자동으로 맺는다.
+	# ⚠ **단, 견디는 마법진만** (세션 23). 안 그러면 못 그린 진도 책만 덮으면 [마력 주입]을
+	# 건너뛰고 맺히는 셈이라 펑이 **누르지 않으면 그만인 벌**이 된다 — 규칙에 구멍이 뚫린다.
 	if not _committed and _board.can_commit():
-		_committed = true
-		design_committed.emit(_board.get_assembly())
-		_refresh_buttons()
+		var a := _board.get_assembly()
+		if RingPower.is_stable(float(a.get("score", 0.0))):
+			_committed = true
+			design_committed.emit(a)
+			_refresh_buttons()
 	var tw := create_tween()
 	tw.tween_property(_spread, ^"scale", Vector2(OPEN_FROM_X, 1.0), CLOSE_SEC) \
 		.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
@@ -344,25 +356,49 @@ func _finish() -> void:
 	_board.finish()   # → finished 시그널이 리포트를 띄운다
 
 
-## 보드가 마법진을 다 그렸다 — 분석 리포트를 띄운다.
+## 보드가 마법진을 다 그렸다 — 분석 리포트를 띄운다 (위력·안정성 포함).
 func _on_finished(analysis: Dictionary) -> void:
 	_analysis = analysis
-	_set_say("마법진 완성 — 분석을 보고 쏘거나 다시 그리세요", false)
+	var total := float(analysis.get("total", 0.0))
+	if RingPower.is_stable(total):
+		_set_say("마법진 완성 — 분석을 보고 [마력 주입]으로 맺으세요", false)
+	else:
+		# 🔴 미리 경고한다 — 눌러 보고 나서야 알면 "속았다"가 되지 "내 탓"이 안 된다.
+		_set_say("선이 약하다 — 이대로 마력을 넣으면 터진다. [다시] 그리는 게 낫다", true)
 	_report.visible = true
 	_report.queue_redraw()
 	_refresh_buttons()
 
 
-## 리포트에서 [쏘기] — 맺어서 발사로 넘긴다.
-func _on_report_shoot() -> void:
+## 🔴 리포트에서 [마력 주입] — 마법진이 맺히거나 **펑** 한다 (사용자 확정 2026-07-17 세션 23).
+## 기준선(65점) 이하면 도안이 통째로 날아가고 처음부터 다시 그린다. 잃는 건 시간·정성뿐이다.
+func _on_inject() -> void:
+	var total := float(_analysis.get("total", 0.0))
+	if not RingPower.is_stable(total):
+		_burst(total)
+		return
 	_committed = true
 	_report.visible = false
 	design_committed.emit(_board.get_assembly())
-	_set_say("맺혔다 — 책을 덮고(ESC) 쏴 보세요", false)
+	_set_say("마력이 돌았다 — 위력 %d의 마법진이 맺혔다. 책을 덮고(ESC) 쏴 보세요"
+		% RingPower.power_display(total), false)
 	_refresh_buttons()
 
 
-## 리포트에서 [다시] — 처음부터 다시 그린다.
+## 펑 — 도안이 날아간다. 붉은 섬광 뒤 판을 비운다 (연출 중엔 입력을 막아 두 번 못 누른다).
+func _burst(total: float) -> void:
+	_report.visible = false
+	_spread.modulate = Color(1.9, 0.5, 0.4)
+	var tw := create_tween()
+	tw.tween_property(_spread, ^"modulate", Color.WHITE, BURST_SEC) \
+		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+	tw.tween_callback(func() -> void:
+		clear_board()
+		_set_say("펑! — 종합 %d점, %d점을 넘겨야 견딘다. 처음부터 다시."
+			% [_pct(total), _pct(RingPower.threshold())], true))
+
+
+## 리포트에서 [다시] — 처음부터 다시 그린다 (터지기 전에 무르는 길).
 func _on_report_redo() -> void:
 	_report.visible = false
 	clear_board()
@@ -449,12 +485,23 @@ func _draw_report() -> void:
 
 	var total := float(_analysis.get("total", 0.0))
 	var grade := String(_analysis.get("grade", "?"))
+	var stable := RingPower.is_stable(total)
 	_report.draw_string(font, Vector2(14, 26), "마법진 분석",
 		HORIZONTAL_ALIGNMENT_LEFT, -1, 14, TITLE_COLOR)
 	_report.draw_string(font, Vector2(14, 50), "종합 %d점 · %s" % [_pct(total), grade],
 		HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(0.55, 0.30, 0.12))
 
-	var y := 74.0
+	# 🔴 위력 = 이 점수가 실제로 사 오는 것. 발사와 **같은 함수**로 뽑는다 (RingPower).
+	# 터질 마법진엔 위력 대신 경고를 쓴다 — 못 받을 숫자를 보여 주면 거짓말이 된다.
+	if stable:
+		_report.draw_string(font, Vector2(14, 68), "위력 %d  (기준 100)"
+			% RingPower.power_display(total), HORIZONTAL_ALIGNMENT_LEFT, -1, 12,
+			Color(0.20, 0.42, 0.22))
+	else:
+		_report.draw_string(font, Vector2(14, 68), "불안정 — 주입하면 터진다 (%d점 필요)"
+			% _pct(RingPower.threshold()), HORIZONTAL_ALIGNMENT_LEFT, -1, 12, WARN_COLOR)
+
+	var y := 92.0
 	var jin: Variant = _analysis.get("jin", null)
 	if jin != null:
 		y = _report_row(font, y, "진 (바깥 원)", jin)

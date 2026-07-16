@@ -44,6 +44,8 @@ func _run() -> void:
 	await _test_carrier_flies_and_hits(system)
 	await _test_empty_ring_hits_body(system)
 	await _test_miss_no_deploy(system)
+	await _test_score_scales_damage(system)
+	await _test_no_score_is_base_power(system)
 
 	if failures == 0:
 		print("TEST_RING_SPELL_OK — 전 항목 통과")
@@ -74,7 +76,7 @@ func _test_deploy_radiate(system) -> void:
 	print("[1] 발산 8칸 전개 → 불탄환 8발, 기둥 0")
 	_clear(system)
 	# 아무도 없는 먼 곳에서 편다 — 탄이 즉시 뭔가에 닿아 사라지지 않게
-	system._deploy_now(_all(G_RADIATE), Vector2(5000, 5000), 0.0)
+	system._deploy_now(_all(G_RADIATE), Vector2(5000, 5000), 0.0, 1.0)
 	await process_frame
 	_check(_bolts(system).size() == 8, "불탄환 8발 (실제 %d)" % _bolts(system).size())
 	_check(_pillars().size() == 0, "기둥 0 (실제 %d)" % _pillars().size())
@@ -84,7 +86,7 @@ func _test_deploy_gather(system) -> void:
 	print("[2] 응집 4칸 전개 → 기둥 1개, 불탄환 0")
 	_clear(system)
 	system._deploy_now(_ring({0: G_GATHER, 2: G_GATHER, 4: G_GATHER, 6: G_GATHER}),
-		Vector2(5000, 5000), 0.0)
+		Vector2(5000, 5000), 0.0, 1.0)
 	await process_frame
 	_check(_pillars().size() == 1, "기둥 1개 (실제 %d)" % _pillars().size())
 	_check(_bolts(system).size() == 0, "불탄환 0 (실제 %d)" % _bolts(system).size())
@@ -93,7 +95,7 @@ func _test_deploy_gather(system) -> void:
 func _test_deploy_empty(system) -> void:
 	print("[3] 빈 진 전개 → 아무것도 안 나온다")
 	_clear(system)
-	system._deploy_now(_all(GLYPH_NONE), Vector2(5000, 5000), 0.0)
+	system._deploy_now(_all(GLYPH_NONE), Vector2(5000, 5000), 0.0, 1.0)
 	await process_frame
 	_check(_bolts(system).size() == 0 and _pillars().size() == 0,
 		"불탄환·기둥 모두 0 (실제 탄 %d·기둥 %d)" % [_bolts(system).size(), _pillars().size()])
@@ -103,7 +105,7 @@ func _test_deploy_mixed(system) -> void:
 	print("[4] 혼합(발산 2 + 응집 3) → 불탄환 2발 · 기둥 1개")
 	_clear(system)
 	system._deploy_now(_ring({1: G_RADIATE, 5: G_RADIATE, 0: G_GATHER, 2: G_GATHER, 4: G_GATHER}),
-		Vector2(5000, 5000), 0.0)
+		Vector2(5000, 5000), 0.0, 1.0)
 	await process_frame
 	_check(_bolts(system).size() == 2, "불탄환 2발 (실제 %d)" % _bolts(system).size())
 	_check(_pillars().size() == 1, "기둥 1개 (실제 %d)" % _pillars().size())
@@ -179,6 +181,45 @@ func _test_miss_no_deploy(system) -> void:
 			carriers += 1
 	_check(carriers == 0, "진(캐리어)도 수명 끝나 사라짐 (남은 %d)" % carriers)
 	_clear(system)
+
+
+# ── 🔴 손그림 점수 → 위력 (세션 23) ──
+# 세션 22까지 점수는 계산·저장만 되고 **아무도 안 읽어** 잘 그리든 막 그리든 피해가 같았다.
+# 여기가 그 계약을 못 박는다: assembly.score가 실제 take_hit 피해를 바꾼다.
+
+## 빈 진을 쏴 **몸으로** 때린 피해를 잰다 (전개 없이 한 방만 들어와 값이 깔끔하다).
+func _damage_with(system, assembly: Dictionary) -> float:
+	_clear(system)
+	var dummy = _dummy_scene.instantiate()
+	root.add_child(dummy)
+	dummy.global_position = Vector2(140, 0)
+	_bus.ring_cast_requested.emit(assembly, Vector2.ZERO, Vector2(1, 0))
+	var frames := 0
+	while dummy.hits.is_empty() and frames < 180:
+		await physics_frame
+		frames += 1
+	var dmg := float(dummy.hits[0]["damage"]) if not dummy.hits.is_empty() else -1.0
+	dummy.queue_free()
+	_clear(system)
+	return dmg
+
+
+func _test_score_scales_damage(system) -> void:
+	print("[8] 잘 그린 진이 더 세게 때린다 (score → 위력)")
+	# 만점(1.0) vs 기준선을 겨우 넘긴 진(0.66) — 둘 다 견디는 점수라 발사까지 온다
+	var hi := await _damage_with(system, {"rings": [_all(GLYPH_NONE)], "score": 1.0})
+	var lo := await _damage_with(system, {"rings": [_all(GLYPH_NONE)], "score": 0.66})
+	_check(hi > 0.0 and lo > 0.0, "두 진 다 명중 (만점 %.2f · 겨우 %.2f)" % [hi, lo])
+	_check(hi > lo, "만점 진이 더 아프다 (%.2f > %.2f)" % [hi, lo])
+	# 🔴 배율 그대로인지 — balance(0.7~1.6)에서 만점/기준선 ≈ 2.29배.
+	# "더 아프다"만 보면 1% 차이도 통과한다. 차이가 **의미 있는 크기**여야 축이 산다.
+	_check(hi / lo > 2.0, "차이가 의미 있는 크기다 (%.2f배 — 기대 ≈2.3)" % (hi / lo))
+
+
+func _test_no_score_is_base_power(system) -> void:
+	print("[9] 점수 없는 assembly는 기준 위력 — 옛 저장·호출자가 0 피해로 죽지 않는다")
+	var d := await _damage_with(system, {"rings": [_all(GLYPH_NONE)]})
+	_check(d > 0.0, "점수 없이도 때린다 (%.2f)" % d)
 
 
 # ── 헬퍼 ──
