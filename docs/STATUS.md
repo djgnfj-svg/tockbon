@@ -6,6 +6,36 @@
 
 ---
 
+## 🔵 세션 20 (2026-07-17) — **룬·문양 데이터화 완료 (단일 진실원)**
+
+> 사용자: 세션 목표 = **룬·문양 데이터화 마무리**. 세션 19가 진(원)만 `jin_basic.tres`로 뺐고 룬·문양은
+> 여전히 `rune_templates`·`glyph_templates`의 절차 코드에 있었다 → 진과 같은 방식으로 뺀다.
+> 세션 17 미커밋 잔재(옛 고리 HUD·저장)는 **손대지 않고 그대로 둠**(사용자 지시).
+
+**① 회귀 기준선 실측(불변식):** `test_drawing_auto=315/0` · `test_glyph_auto=168/0`. 이 두 숫자가 절대 불변식.
+
+**② bake:** 임시 SceneTree 스크립트로 현재 `canonical()`/`raw_all()` 점열을 그대로 8개
+신규 ShapeDef `.tres`로 구움 (`data/shapes/rune_{fire,water,wind}.tres` · `glyph_{basic,bounce,homing,pierce,thrust}.tres`).
+**규약: `points`=canonical(정규화·책자/트레이스 렌더용) · `variants`=raw_all의 그 타입 점열 그대로(un-normalized·인식기 매칭용).**
+문양의 좌우 거울상(`_flip_y`)은 raw_all이 이미 별도 변형으로 내므로 variants에 그대로 구워짐 → **새 raw_all은 펼치기만, 재-flip 금지**.
+variants 수 검증: 룬 4+4+4=12(raw_all 룬 12), 문양 0+8+6+6+0=20(raw_all 문양 20). 바이트 동일 보장.
+
+**③ 템플릿 데이터 우선화:** `rune_templates.gd`·`glyph_templates.gd`의 `raw_all()`/`canonical()`이 이제
+`data/shapes/*.tres`를 `load()` 지연 로드해서 읽는다. **절차 생성 함수는 `_fallback_*`로 남겨 안전망 유지**
+(진 `jin_basic` 방식과 동일 — 데이터 있으면 절대 실행 안 됨). 모양을 고치려면 그 `.tres` 하나만 열면 되고,
+책자·트레이스·인식기가 전부 같은 파일을 먹으므로 **표시↔인식 mismatch가 구조적으로 불가능**.
+
+**④ 검증:** `--import` 후 **전 자동 스위트 그린(회귀 0)** — drawing 315/0·glyph 168/0 **바이트 동일**,
+canvas 51·paper 47·forge 38·drawing_fill 33·save 22·integration 16 + spell·ring_spell·ring_trace·ring_design·
+base·onboarding·equip·quest·bosscut 전 항목 통과 · 필드 FAIL 0 · UI 54/0. 시각 검증 생략(점열 바이트 동일 →
+렌더 기하 불변, 구조적으로 mismatch 불가).
+
+**🔴 다음:** (a) 책자(forge_book)가 룬·문양 `display_name`/`description`도 같은 `.tres`에서 읽게(지금은
+points/variants만 데이터화, 이름·설명 텍스트는 아직 코드에 있을 수 있음 — 확인 필요). (b) 절차 `_fallback_*`
+제거해 데이터를 유일 진실원으로 승격(충분히 안정되면). (c) 완성 도안 저장(종이 보관함). (d) 원정 clean 경로.
+
+---
+
 ## 🔵 세션 19 (2026-07-17) — **깨끗한 재시작(playground) · 베이스+책상+씬 그리기 UI · 진 데이터화 시작**
 
 > 사용자: 기존 대형 시스템이 **"과함"** → `src/playground/`에서 최소 재구축. 정해진 건 **움직임 + 마법 그리기**.

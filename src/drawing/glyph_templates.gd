@@ -17,29 +17,83 @@ extends RefCounted
 ## 사용: const GlyphTemplates := preload("res://src/drawing/glyph_templates.gd")
 
 
+## 🔴 단일 진실원 (2026-07-17, 세션 20): 모양은 이제 data/shapes/glyph_*.tres(ShapeDef)에서 읽는다.
+## - variants = raw_all()의 매칭 점열(좌우 거울상까지 **이미 구워져 있음** → 여기선 재-flip 안 한다).
+## - points = canonical() 대표 점열(정규화). BASIC·THRUST는 variants가 비어도 points는 있다.
+## 데이터가 없으면 아래 절차 생성으로 폴백한다(rune_templates·jin_basic과 같은 안전망).
+const SHAPE_DIR := "res://data/shapes/"
+const GLYPH_FILES := {
+	Enums.GlyphType.BASIC: "glyph_basic",
+	Enums.GlyphType.BOUNCE: "glyph_bounce",
+	Enums.GlyphType.HOMING: "glyph_homing",
+	Enums.GlyphType.PIERCE: "glyph_pierce",
+	Enums.GlyphType.THRUST: "glyph_thrust",
+}
+## raw_all()이 매칭 템플릿을 내는 글자 순서 (BASIC·THRUST는 매칭 없음 — 폴백/거부).
+const GLYPH_MATCH_TYPES: Array[int] = [Enums.GlyphType.BOUNCE, Enums.GlyphType.HOMING, Enums.GlyphType.PIERCE]
+static var _shape_cache: Dictionary = {}  # type(int) -> ShapeDef Resource 또는 null
+
+
+static func _shape(type: int) -> Resource:
+	if _shape_cache.has(type):
+		return _shape_cache[type]
+	var res: Resource = null
+	var id: String = GLYPH_FILES.get(type, "")
+	if id != "":
+		res = load(SHAPE_DIR + id + ".tres")
+	_shape_cache[type] = res
+	return res
+
+
 static func raw_all() -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
-	# 팅김⚡ — 지그재그 (꺾임 수·진폭 변형). 부호가 교대하는 꺾임이 여러 번 = 이 글자의 표식
-	_add(out, Enums.GlyphType.BOUNCE, _zigzag(3, 0.22))
-	_add(out, Enums.GlyphType.BOUNCE, _zigzag(3, 0.15))
-	_add(out, Enums.GlyphType.BOUNCE, _zigzag(2, 0.24))
-	_add(out, Enums.GlyphType.BOUNCE, _zigzag(4, 0.19))
-	# 유도∿ — 한쪽으로만 휜 호 (스윕 변형). 곡률 부호가 안 바뀌고 꺾임이 호 전체에 퍼진다
-	_add(out, Enums.GlyphType.HOMING, _bow(100.0))
-	_add(out, Enums.GlyphType.HOMING, _bow(130.0))
-	_add(out, Enums.GlyphType.HOMING, _bow(160.0))
-	# 관통‖ — 곧은 축 + 끝의 화살촉 (촉 길이·벌림 변형). 꺾임이 **끝에 한 번**, 급하게
-	_add(out, Enums.GlyphType.PIERCE, _spear(0.28, 42.0))
-	_add(out, Enums.GlyphType.PIERCE, _spear(0.34, 52.0))
-	_add(out, Enums.GlyphType.PIERCE, _spear(0.22, 34.0))
+	for type: int in GLYPH_MATCH_TYPES:
+		var shape := _shape(type)
+		if shape != null and not shape.variants.is_empty():
+			for v: PackedVector2Array in shape.variants:
+				out.append({"type": type, "points": v.duplicate()})
+		else:
+			out.append_array(_fallback_raw(type))
 	return out
 
 
-## 책자가 **보이는 그대로 렌더**하는 대표 형태 — 중심 (0,0)·최장변 1로 정규화된 점열.
+## 책자가 **보이는 그대로 렌더**하는 대표 형태 — 중심 (0,0)·최장변 1로 정규화된 점열. data의 points를 그대로 쓴다.
 ## RuneTemplates.canonical()과 같은 좌표계다. **보고 따라 그리면 반드시 그 글자로 인식된다**
 ## (test_glyph_auto가 못 박는다) — 그게 책자의 존재 이유다.
 ## BASIC은 곧은 직선을 낸다: 매칭 템플릿은 아니지만 "글자 없는 획"의 그림이 곧 직선이다.
 static func canonical(glyph_type: int) -> PackedVector2Array:
+	var shape := _shape(glyph_type)
+	if shape != null and shape.points.size() >= 2:
+		return shape.points.duplicate()
+	return _fallback_canonical(glyph_type)
+
+
+# ─────────────────────────── 절차 폴백 (데이터 없을 때만) ───────────────────────────
+## data/shapes/glyph_*.tres가 있으면 아래는 절대 실행되지 않는다. 모양의 출생 기록이자 안전망이다.
+
+static func _fallback_raw(type: int) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	match type:
+		Enums.GlyphType.BOUNCE:
+			# 팅김⚡ — 지그재그 (꺾임 수·진폭 변형). 부호가 교대하는 꺾임이 여러 번 = 이 글자의 표식
+			_add(out, type, _zigzag(3, 0.22))
+			_add(out, type, _zigzag(3, 0.15))
+			_add(out, type, _zigzag(2, 0.24))
+			_add(out, type, _zigzag(4, 0.19))
+		Enums.GlyphType.HOMING:
+			# 유도∿ — 한쪽으로만 휜 호 (스윕 변형). 곡률 부호가 안 바뀌고 꺾임이 호 전체에 퍼진다
+			_add(out, type, _bow(100.0))
+			_add(out, type, _bow(130.0))
+			_add(out, type, _bow(160.0))
+		Enums.GlyphType.PIERCE:
+			# 관통‖ — 곧은 축 + 끝의 화살촉 (촉 길이·벌림 변형). 꺾임이 **끝에 한 번**, 급하게
+			_add(out, type, _spear(0.28, 42.0))
+			_add(out, type, _spear(0.34, 52.0))
+			_add(out, type, _spear(0.22, 34.0))
+	return out
+
+
+static func _fallback_canonical(glyph_type: int) -> PackedVector2Array:
 	var pts: PackedVector2Array
 	match glyph_type:
 		Enums.GlyphType.BASIC:
