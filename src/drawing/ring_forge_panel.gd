@@ -44,7 +44,7 @@ const OPEN_SEC := 0.20
 const OPEN_FROM_X := 0.04
 const CLOSE_SEC := 0.12
 
-const Copy_START := "문양본(틀)을 삽입하고, 열린 칸을 문양으로 채우세요"
+const Copy_START := "진을 눌러 그릇을 놓으세요  (진 → 룬 → 문양 순서로 하나씩)"
 
 var _board: Control
 var _book: Control
@@ -55,7 +55,8 @@ var _commit_btn: Button
 var _spread: Control
 
 var _committed := false
-var _template_idx := 0        # 지금 삽입된 문양본 (기본 = TEMPLATES[0] = 2방)
+var _template_idx := 0                        # 지금 삽입된 문양본 (기본 = TEMPLATES[0] = 2방)
+var _active_glyph := RingBoard.G_RADIATE      # 지금 고른 문양 (하이라이트)
 
 
 func _init() -> void:
@@ -79,9 +80,12 @@ func open() -> void:
 		return
 	visible = true
 	_committed = false
-	_board.call(&"set_template", RingBoard.TEMPLATES[_template_idx].slots)
-	_board.call(&"set_active_glyph", RingBoard.G_RADIATE)
-	_book.call(&"sync_state", _template_idx, RingBoard.G_RADIATE)
+	_template_idx = 0
+	_active_glyph = RingBoard.G_RADIATE
+	_inject_defs()                              # 🔴 Db에서 진·룬·문양 정의를 읽어 주입 (세션 13 구조화)
+	_board.call(&"clear_all")                   # 🔴 빈 판에서 시작 — 진 → 룬 → 문양 순차
+	_board.call(&"set_active_glyph", _active_glyph)
+	_sync_book()
 	_set_say(Copy_START, false)
 	_refresh_commit()
 	_spread_open()
@@ -126,7 +130,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	match k.keycode:
 		KEY_ENTER, KEY_KP_ENTER:
-			_try_commit()
+			_confirm()
 			get_viewport().set_input_as_handled()
 		KEY_Q:
 			_apply_glyph(RingBoard.G_GATHER)
@@ -136,25 +140,108 @@ func _unhandled_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 
 
-# ─────────────────────────── 선택기 → 보드 ───────────────────────────
+# ─────────────────────────── Db 데이터 주입 (세션 13 구조화) ───────────────────────────
 
-## 문양을 골랐다 — 열린 칸 전체에 자동 적용. 탭 하이라이트도 맞춘다.
+## Db에서 진·룬(불)·문양 정의를 읽어 보드·책에 넣는다. int const 대신 데이터가 UI를 채운다.
+func _inject_defs() -> void:
+	var jins: Array = Db.all_jins()
+	var fire: RuneDef = Db.get_rune(Enums.RuneType.FIRE)
+	var glyphs: Array = Db.all_glyphs()
+	var jin0: JinDef = jins[0] if not jins.is_empty() else null
+	_board.call(&"set_defs", jin0, fire, glyphs)
+	_book.call(&"set_defs", jins, fire, glyphs)
+
+
+# ─────────────────────────── 선택기 → 보드 (순차 조립) ───────────────────────────
+
+## 오른쪽 탭·placed 표식을 보드의 현재 단계에 맞춘다.
+func _sync_book() -> void:
+	var tab := _stage_to_tab(int(_board.call(&"stage")))
+	_book.call(&"go_stage", tab, bool(_board.call(&"has_jin")), bool(_board.call(&"has_rune")))
+	_book.call(&"sync_state", _template_idx, _active_glyph)
+
+
+func _stage_to_tab(stage: int) -> int:
+	match stage:
+		RingBoard.STAGE_JIN:
+			return RingBook.TAB_JIN
+		RingBoard.STAGE_RUNE:
+			return RingBook.TAB_RUNE
+		_:
+			return RingBook.TAB_TEMPLATE
+
+
+## 진을 골랐다 — 보드에 놓는다. **자동으로 안 넘어감** — Enter 확정을 기다린다.
+func _on_jin_selected() -> void:
+	if bool(_board.call(&"place_jin")):
+		_book.call(&"go_stage", RingBook.TAB_JIN, true, bool(_board.call(&"has_rune")))
+		_set_say("진을 놓았다 — [Enter]로 확정하고 룬으로", false)
+		_refresh_commit()
+
+
+## 룬을 골랐다 — 중심에 놓는다. Enter 확정을 기다린다.
+func _on_rune_selected() -> void:
+	if bool(_board.call(&"place_rune")):
+		_book.call(&"go_stage", RingBook.TAB_RUNE, true, true)
+		_set_say("룬을 놓았다 — [Enter]로 확정", false)
+		_refresh_commit()
+
+
+## 🔴 Enter = 현재 단계 확정. 진·룬 단계면 다음으로 넘기고, 문양 단계면 맺는다.
+func _confirm() -> void:
+	var r := String(_board.call(&"confirm"))
+	match r:
+		"advanced":
+			pass   # stage_advanced 시그널이 탭·안내문을 갱신한다
+		"need_jin":
+			_set_say("먼저 진을 눌러 놓으세요", true)
+		"need_rune":
+			_set_say("먼저 룬을 눌러 놓으세요", true)
+		"commit":
+			_try_commit()
+	_refresh_commit()
+
+
+## 🔴 문양을 **한 칸** 얹는다 (일괄 아님). 문양 단계가 아니면 안내만.
 func _apply_glyph(glyph: int) -> void:
-	_board.call(&"apply_ring", glyph)
+	_active_glyph = glyph
+	if bool(_board.call(&"place_glyph_next", glyph)):
+		_book.call(&"sync_state", _template_idx, glyph)
+		_set_say("%s 얹음 — 칸 우클릭=비움 · Enter=맺기" % RingBoard.GLYPH_NAMES[glyph], false)
+		return
 	_book.call(&"sync_state", _template_idx, glyph)
-	_set_say("%s — 칸을 눌러 방향을 뺄 수 있어요 (우클릭=비움)"
-		% RingBoard.GLYPH_NAMES[glyph], false)
+	if int(_board.call(&"stage")) != RingBoard.STAGE_GLYPH:
+		_set_say("먼저 진과 룬을 놓으세요  (진 → 룬 → 문양)", true)
+	else:
+		_set_say("%s — 열린 칸이 다 찼어요 (칸 우클릭=비움)" % RingBoard.GLYPH_NAMES[glyph], false)
 
 
 func _on_glyph_selected(glyph: int) -> void:
 	_apply_glyph(glyph)
 
 
-## 문양본을 삽입했다 — 보드가 그 칸들을 연다.
+## 문양본을 삽입했다 — 보드가 그 칸들을 연다. 이제 문양 탭으로 넘어간다.
 func _on_template_selected(idx: int, slots: Array) -> void:
 	_template_idx = idx
 	_board.call(&"set_template", slots)
-	_set_say("%s 문양본 — 열린 칸을 문양으로 채우세요" % RingBoard.TEMPLATES[idx].name, false)
+	_book.call(&"go_stage", RingBook.TAB_GLYPH, true, true)
+	_book.call(&"sync_state", _template_idx, _active_glyph)
+	_set_say("%s 문양본 — 문양을 하나씩 얹으세요 (Q·W 또는 칸 클릭)"
+		% RingBoard.TEMPLATES[idx].name, false)
+	_refresh_commit()
+
+
+## 보드가 단계를 넘겼다 (진→룬→문양). 탭·안내문을 맞춘다.
+func _on_stage_advanced(stage: int) -> void:
+	_book.call(&"go_stage", _stage_to_tab(stage),
+		bool(_board.call(&"has_jin")), bool(_board.call(&"has_rune")))
+	match stage:
+		RingBoard.STAGE_RUNE:
+			_set_say("진을 놓았다 — 이제 룬(불)을 눌러 중심에 놓으세요", false)
+		RingBoard.STAGE_GLYPH:
+			_set_say("룬을 놓았다 — 문양본으로 칸을 열고 문양을 하나씩 얹으세요", false)
+		RingBoard.STAGE_JIN:
+			_set_say(Copy_START, false)
 	_refresh_commit()
 
 
@@ -166,7 +253,7 @@ func _on_assembly_changed() -> void:
 
 func _try_commit() -> void:
 	if not bool(_board.call(&"can_commit")):
-		_set_say("문양을 하나라도 고리에 얹어야 맺힌다", true)
+		_set_say("진과 룬을 놓아야 맺힌다  (문양은 없어도 빈 진으로 날아간다)", true)
 		return
 	_committed = true
 	_set_say("맺혔다 — 책을 덮고(ESC) 쏴 보세요", false)
@@ -174,9 +261,18 @@ func _try_commit() -> void:
 	_refresh_commit()
 
 
+## 버튼은 단계에 따라 뜻이 바뀐다 — 진·룬 단계=확정/다음, 문양 단계=맺기.
 func _refresh_commit() -> void:
-	_commit_btn.disabled = not bool(_board.call(&"can_commit"))
-	_commit_btn.text = "✓ 맺힘" if _committed else "✓ 맺기 (Enter)"
+	var stage := int(_board.call(&"stage"))
+	if stage == RingBoard.STAGE_GLYPH:
+		_commit_btn.text = "✓ 맺힘" if _committed else "✓ 맺기 (Enter)"
+		_commit_btn.disabled = not bool(_board.call(&"can_commit"))
+	elif stage == RingBoard.STAGE_JIN:
+		_commit_btn.text = "확정 → (Enter)"
+		_commit_btn.disabled = not bool(_board.call(&"has_jin"))
+	else:
+		_commit_btn.text = "확정 → (Enter)"
+		_commit_btn.disabled = not bool(_board.call(&"has_rune"))
 
 
 func _set_say(text: String, warn: bool) -> void:
@@ -201,6 +297,9 @@ func can_commit() -> bool:
 func clear_board() -> void:
 	_board.call(&"clear_all")
 	_committed = false
+	_template_idx = 0
+	_active_glyph = RingBoard.G_RADIATE
+	_sync_book()
 	_set_say(Copy_START, false)
 	_refresh_commit()
 
@@ -244,12 +343,15 @@ func _build() -> void:
 	_board.size = BOARD_RECT.size
 	_spread.add_child(_board)
 	_board.connect(&"assembly_changed", _on_assembly_changed)
+	_board.connect(&"stage_advanced", _on_stage_advanced)
 
 	_book = RingBook.new()
 	_book.name = "RingBook"
 	_book.position = BOOK_RECT_R.position
 	_book.size = BOOK_RECT_R.size
 	_spread.add_child(_book)
+	_book.connect(&"jin_selected", _on_jin_selected)
+	_book.connect(&"rune_selected", _on_rune_selected)
 	_book.connect(&"glyph_selected", _on_glyph_selected)
 	_book.connect(&"template_selected", _on_template_selected)
 
@@ -260,7 +362,7 @@ func _build() -> void:
 	_commit_btn.add_theme_font_size_override(&"font_size", 9)
 	_commit_btn.disabled = true
 	_commit_btn.focus_mode = Control.FOCUS_NONE
-	_commit_btn.pressed.connect(_try_commit)
+	_commit_btn.pressed.connect(_confirm)
 	_spread.add_child(_commit_btn)
 
 	_title = _label(TITLE_RECT, 10, TITLE_COLOR)
@@ -269,7 +371,7 @@ func _build() -> void:
 	_say.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_say.text = Copy_START
 	_hint = _label(HINT_RECT, 8, HINT_COLOR)
-	_hint.text = "문양본 탭=틀 삽입 · 문양 탭/Q·W=채우기 · 칸 클릭=개별 조절 · Enter=맺기 · ESC=덮기"
+	_hint.text = "조각 눌러 놓기 → Enter로 확정하고 다음 단계 · 문양 Q·W/칸 클릭=한 칸씩 · 우클릭=비움 · 문양 단계 Enter=맺기 · ESC=덮기"
 	_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 
 

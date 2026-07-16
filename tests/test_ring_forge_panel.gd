@@ -48,7 +48,10 @@ var _hint_label: Label
 
 func _ready() -> void:
 	# 실제 발사 시스템 — 진·탄·기둥이 이 노드의 자식으로 스폰된다 (월드 좌표)
+	# 🔴 z_index를 올려 아레나 배경(World, z=0) **위에** 그린다 — 안 그러면 발사체가 배경 뒤에
+	# 가려 안 보인다 (세션 13에 발견: _system이 _world보다 먼저 add_child돼 덮였다).
 	_system = RingSpellScene.instantiate()
+	_system.z_index = 10
 	add_child(_system)
 
 	_world = Node2D.new()

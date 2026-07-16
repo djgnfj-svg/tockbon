@@ -15,8 +15,9 @@ extends Area2D
 ##
 ## 적 노드 계약: 그룹 "enemies" + take_hit(damage, rune_type, status, status_power).
 
-const RADIUS_PX := 9.0        # 히트박스·먹선 반지름 (진 몸)
-const RING_COLOR := Color(0.95, 0.62, 0.25)
+const RADIUS_PX := 18.0       # 히트박스·먹선 반지름 (진 몸) — 세션 13: 9→18 (발사체가 안 보였다)
+const RING_COLOR := Color(0.98, 0.66, 0.28)
+const RUNE_FALLBACK := Color(0.95, 0.35, 0.15)
 
 ## 착탄 = 안의 고리를 편다. ring_spell_system이 받아 발산 탄환·응집 기둥을 스폰한다.
 ## travel = 탄이 가던 방향 (전개 회전 기준).
@@ -99,7 +100,45 @@ func _die_without_deploy() -> void:
 	queue_free()
 
 
-## 진 = 작은 이중 고리. 회전하지 않는다 (진행 방향을 안 본다).
+## 진 = **날아가는 마법진**. 조립한 그대로(외곽 진 + 룬 + 문양 화살표)를 그려 통째로 날아가는 게
+## 보이게 한다. 회전하지 않는다 (진행 방향을 안 본다).
 func _draw() -> void:
-	draw_arc(Vector2.ZERO, RADIUS_PX, 0.0, TAU, 24, RING_COLOR, 2.0, true)
-	draw_arc(Vector2.ZERO, RADIUS_PX * 0.5, 0.0, TAU, 16, Color(RING_COLOR, 0.7), 1.5, true)
+	var r := RADIUS_PX
+	# 글로우(은은한 후광) — 배경과 상관없이 눈에 띄게
+	draw_arc(Vector2.ZERO, r, 0.0, TAU, 32, Color(RING_COLOR, 0.30), 6.0, true)
+	# 외곽 진 이중선
+	draw_arc(Vector2.ZERO, r, 0.0, TAU, 32, RING_COLOR, 2.5, true)
+	draw_arc(Vector2.ZERO, r * 0.58, 0.0, TAU, 24, Color(RING_COLOR, 0.85), 1.5, true)
+	# 중심 룬 (삼각) — 룬 색
+	var rc := _rune_color()
+	var s := r * 0.30
+	draw_polyline(PackedVector2Array([
+		Vector2(0, -s), Vector2(s * 0.87, s * 0.5),
+		Vector2(-s * 0.87, s * 0.5), Vector2(0, -s)]), rc, 1.8, true)
+	# 문양 화살표 — 응집=안쪽 / 발산=바깥 (조립한 칸 그대로)
+	var n := _ring.size()
+	if n <= 0:
+		return
+	for k in n:
+		var g := int(_ring[k])
+		if g < 0:
+			continue
+		var ang := TAU * float(k) / float(n) - PI / 2.0
+		var outward := Vector2.from_angle(ang)
+		var p := outward * (r * 0.78)
+		var dir := outward if g == 1 else -outward   # 1=발산(밖) / 0=응집(안)
+		var a := p - dir * (r * 0.14)
+		var b := p + dir * (r * 0.14)
+		draw_line(a, b, RING_COLOR, 1.8, true)
+		draw_line(b, b - dir.rotated(0.5) * (r * 0.1), RING_COLOR, 1.8, true)
+		draw_line(b, b - dir.rotated(-0.5) * (r * 0.1), RING_COLOR, 1.8, true)
+
+
+## 룬 색 — Db에서 읽고, 없으면 폴백. (오토로드 없는 컨텍스트도 견딘다)
+func _rune_color() -> Color:
+	var db := get_node_or_null(^"/root/Db")
+	if db != null:
+		var rune := db.get_rune(rune_type) as RuneDef
+		if rune != null:
+			return rune.ui_color
+	return RUNE_FALLBACK

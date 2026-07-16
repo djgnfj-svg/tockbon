@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="GlyphDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/core/schemas/glyph_def.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = &"radiate"
+display_name = "발산→"
+code = 1
+key_hint = "W"
+inward = false
+ui_color = Color(0.72, 0.28, 0.12, 1.0)
+desc = "바깥(진)으로"

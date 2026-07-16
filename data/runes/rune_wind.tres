@@ -11,3 +11,4 @@ base_damage = 0.7
 status = 4
 status_power = 60.0
 projectile_scene = ExtResource("2")
+ui_color = Color(0.28, 0.5, 0.3, 1.0)
