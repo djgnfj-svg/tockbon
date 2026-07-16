@@ -49,10 +49,25 @@ func _unhandled_input(event: InputEvent) -> void:
 ## 장착 슬롯 캐스트 요청 — 발신했으면 true.
 ## 빈 슬롯은 조용히 무시하고, 손상 도안은 cast_failed(BROKEN)를 받도록 그대로 넘긴다
 ## (거점에는 작업대가 있다 — "수리해라"라는 안내가 나가야 할 자리다).
+##
+## 🔴 고리 우선 (2026-07-17, 세션 21): **이젤에서 맺자마자 마당 허수아비에 쏴 볼 수 있어야 한다.**
+## 그 전에는 거점에 RingSpellSystem이 없고 여기가 옛 SpellDesign만 봐서, 방금 조립한 고리를
+## 확인하려면 **문으로 나가 필드까지 가야 했다** — 조립→확인 루프가 씬 전환을 건너야 닫혔다.
+## 분기 순서·계약은 field/player.gd try_cast와 **동일하게** 맞춘다(두 경로가 갈라지면 안 된다).
 func try_cast(slot: int) -> bool:
 	if locked or GameState.ui_modal_open:
 		return false
-	if slot < 0 or slot >= GameState.equipped.size():
+	if slot < 0 or slot >= GameState.EQUIP_SLOTS:
+		return false
+	# 고리 도안이 장착돼 있으면 그쪽으로 쏜다 (경제 없음, 진이 통째로 날아간다).
+	# 옛 SpellDesign 경로는 아래로 그대로 살아 있다 (병행 은퇴 중).
+	if slot < GameState.ring_equipped.size():
+		var ring_design: RingDesign = GameState.ring_equipped[slot]
+		if ring_design != null:
+			EventBus.ring_cast_requested.emit(ring_design.to_assembly(), global_position, _aim_dir)
+			EventBus.ring_cast_executed.emit(slot, ring_design)
+			return true
+	if slot >= GameState.equipped.size():
 		return false
 	var design: SpellDesign = GameState.equipped[slot]
 	if design == null:

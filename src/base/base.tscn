@@ -1,10 +1,11 @@
-[gd_scene load_steps=9 format=3]
+[gd_scene load_steps=10 format=3]
 
 [ext_resource type="Script" path="res://src/base/base.gd" id="1"]
 [ext_resource type="Script" path="res://src/base/base_player.gd" id="2"]
 [ext_resource type="Script" path="res://src/base/interactable.gd" id="3"]
 [ext_resource type="Script" path="res://src/base/training_dummy.gd" id="4"]
 [ext_resource type="PackedScene" path="res://src/spell/spell_system.tscn" id="5"]
+[ext_resource type="PackedScene" path="res://src/spell/ring_spell_system.tscn" id="6"]
 
 [sub_resource type="RectangleShape2D" id="player_shape"]
 size = Vector2(12, 12)
@@ -288,5 +289,8 @@ position = Vector2(450, 248)
 script = ExtResource("4")
 
 [node name="SpellSystem" parent="." instance=ExtResource("5")]
+
+[node name="RingSpellSystem" parent="." instance=ExtResource("6")]
+z_index = 10
 
 [node name="UI" type="CanvasLayer" parent="."]

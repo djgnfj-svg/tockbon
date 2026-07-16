@@ -20,7 +20,16 @@ signal closed
 ## 도안이 방금 맺혔다 — 여는 쪽(작업대·거점)이 발사·연출에 쓴다. assembly = board.get_assembly()
 signal design_committed(assembly: Dictionary)
 
-# ── 레이아웃 (뷰포트 640×360 고정) ──
+# ── 레이아웃 (**논리 크기** 640×360 — 아래 상수는 전부 이 좌표계다) ──
+## 🔴 2026-07-17 세션 21: 뷰포트는 960×540(세션 18에 올림)이고 `stretch/aspect=expand`라 전체화면에선
+## 그보다 더 넓어지기도 한다. 이 책은 640×360 좌표로 그려져 있어 그대로 두면 **왼쪽 위에 몰려 깨진다.**
+## 고치는 방법은 상수를 다시 재는 게 아니라 **무대(_stage)를 화면에 맞춰 비율 유지로 확대**하는 것이다 —
+## 상수·매직넘버(`_build_report`의 12/60/120/24, `_draw_*`의 오프셋…)가 전부 이 좌표계에 묶여 있어서
+## 일일이 고치면 반드시 뭘 빠뜨린다. RingBoard·RingBook은 자기 size 비례로 그리므로(ring_board.gd
+## `_outer_radius()`) 무대만 키우면 속도 같이 커진다.
+## ⚠ `_spread.scale`은 **책 펼침 애니가 이미 쓴다**(open/close tween) — 배율을 거기 얹으면 애니가 덮어쓴다.
+## 그래서 _spread를 감싸는 별도 무대에 배율을 건다.
+const DESIGN_SIZE := Vector2(640.0, 360.0)
 const BOOK_RECT := Rect2(16, 10, 608, 340)
 const PAGE_W := 304.0
 const BOARD_RECT := Rect2(30, 30, 268, 268)          # 왼쪽 페이지의 조립 보드
@@ -61,6 +70,7 @@ var _hint: Label
 var _score_lbl: Label
 var _next_btn: Button
 var _commit_btn: Button
+var _stage: Control                           # 640×360 논리 무대 — 화면에 맞춰 통째로 확대(_fit_stage)
 var _spread: Control
 var _report: Control                          # 분석 리포트 오버레이 (완성 시 표시)
 
@@ -79,6 +89,21 @@ func _init() -> void:
 
 func _ready() -> void:
 	_build()
+	resized.connect(_fit_stage)   # 창 크기·전체화면 전환마다 다시 맞춘다
+	_fit_stage()
+
+
+## 논리 무대(640×360)를 화면에 **비율 유지로** 꽉 채우고 중앙에 놓는다.
+## 뷰포트는 960×540이지만 `stretch/aspect=expand`라 전체화면에선 화면비에 따라 더 넓어질 수 있다 —
+## 그래서 배율을 상수로 박지 않고 매번 실측해서 잰다(1.5 하드코딩은 21:9 같은 화면에서 다시 깨진다).
+func _fit_stage() -> void:
+	if _stage == null:
+		return
+	var s := minf(size.x / DESIGN_SIZE.x, size.y / DESIGN_SIZE.y)
+	if s <= 0.0:
+		return
+	_stage.scale = Vector2(s, s)
+	_stage.position = (size - DESIGN_SIZE * s) * 0.5   # 남는 여백은 위아래(또는 좌우)로 반씩
 
 
 # ─────────────────────────── 열고 닫기 ───────────────────────────
@@ -91,6 +116,7 @@ func open() -> void:
 	if visible:
 		return
 	visible = true
+	_fit_stage()          # 숨어 있는 동안 창이 바뀌었을 수 있다(resized는 안 왔을 수 있음)
 	_committed = false
 	_template_idx = 0
 	_active_glyph = RingBoard.G_RADIATE
@@ -403,12 +429,20 @@ func _build() -> void:
 	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(dim)
 
+	# 무대 — 640×360 논리 좌표계를 담고, 화면 크기에 맞춰 통째로 확대된다(_fit_stage).
+	# 책과 그 속(보드·선택기·버튼·리포트)은 전부 이 안에서 옛 좌표 그대로 산다.
+	_stage = Control.new()
+	_stage.name = "Stage"
+	_stage.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_stage.size = DESIGN_SIZE
+	add_child(_stage)
+
 	_spread = Control.new()
 	_spread.name = "Spread"
 	_spread.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_spread.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_spread.set_anchors_preset(Control.PRESET_FULL_RECT)   # = 무대 크기(640×360)
 	_spread.pivot_offset = BOOK_RECT.get_center()
-	add_child(_spread)
+	_stage.add_child(_spread)
 
 	var pages := Control.new()
 	pages.mouse_filter = Control.MOUSE_FILTER_IGNORE

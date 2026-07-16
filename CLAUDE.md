@@ -79,6 +79,7 @@
 ./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_ring_trace_auto.gd      # **손그림 탁본(세션 14b)**: 자동추적(선에 붙음)·완성도/정밀도 점수·[다음] 수동 진행·분석 리포트 · 세션 15: 문양 칸 자유 편집·개별 크기
 ./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_ring_design_auto.gd     # **고리 도안 통합(#17 1단계, 세션 16)**: RingDesign 라운드트립·ring_design_committed→GameState 자동 장착
 ./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_base_auto.gd            # 거점 경제
+./Godot_v4.6.1-stable_win64.exe --headless --path . res://tests/test_base_ring_auto.tscn --quit-after 300  # **거점 고리 시험 발사(세션 21)**: 이젤에서 맺은 고리를 마당 허수아비에 바로 쏜다(RingSpellSystem+base_player 고리 분기) — ⚠ 씬으로 돌린다(오토로드 필요)
 ./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_onboarding_auto.gd      # 온보딩(튜토·시험발사)
 ./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_drawing_fill_auto.gd    # 룬 농도(rune_fill)·회전 불변
 ./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_equip_auto.gd           # 장비 착용·파생 스탯
