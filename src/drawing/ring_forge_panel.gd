@@ -356,15 +356,11 @@ func _finish() -> void:
 	_board.finish()   # → finished 시그널이 리포트를 띄운다
 
 
-## 보드가 마법진을 다 그렸다 — 분석 리포트를 띄운다 (위력·안정성 포함).
+## 보드가 마법진을 다 그렸다 — 분석 리포트를 띄운다 (점수·위력. **판정은 없다**).
+## 🔴 견딜지 터질지는 여기서 말하지 않는다 — 알려면 [마력 주입]을 눌러야 한다 (사용자 확정).
 func _on_finished(analysis: Dictionary) -> void:
 	_analysis = analysis
-	var total := float(analysis.get("total", 0.0))
-	if RingPower.is_stable(total):
-		_set_say("마법진 완성 — 분석을 보고 [마력 주입]으로 맺으세요", false)
-	else:
-		# 🔴 미리 경고한다 — 눌러 보고 나서야 알면 "속았다"가 되지 "내 탓"이 안 된다.
-		_set_say("선이 약하다 — 이대로 마력을 넣으면 터진다. [다시] 그리는 게 낫다", true)
+	_set_say("마법진 완성 — 분석을 보고 [마력 주입]으로 맺으세요", false)
 	_report.visible = true
 	_report.queue_redraw()
 	_refresh_buttons()
@@ -485,21 +481,18 @@ func _draw_report() -> void:
 
 	var total := float(_analysis.get("total", 0.0))
 	var grade := String(_analysis.get("grade", "?"))
-	var stable := RingPower.is_stable(total)
 	_report.draw_string(font, Vector2(14, 26), "마법진 분석",
 		HORIZONTAL_ALIGNMENT_LEFT, -1, 14, TITLE_COLOR)
 	_report.draw_string(font, Vector2(14, 50), "종합 %d점 · %s" % [_pct(total), grade],
 		HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(0.55, 0.30, 0.12))
 
-	# 🔴 위력 = 이 점수가 실제로 사 오는 것. 발사와 **같은 함수**로 뽑는다 (RingPower).
-	# 터질 마법진엔 위력 대신 경고를 쓴다 — 못 받을 숫자를 보여 주면 거짓말이 된다.
-	if stable:
-		_report.draw_string(font, Vector2(14, 68), "위력 %d  (기준 100)"
-			% RingPower.power_display(total), HORIZONTAL_ALIGNMENT_LEFT, -1, 12,
-			Color(0.20, 0.42, 0.22))
-	else:
-		_report.draw_string(font, Vector2(14, 68), "불안정 — 주입하면 터진다 (%d점 필요)"
-			% _pct(RingPower.threshold()), HORIZONTAL_ALIGNMENT_LEFT, -1, 12, WARN_COLOR)
+	# 🔴 위력 = 이 진이 **버텨 준다면** 낼 힘. 발사와 같은 함수(RingPower)로 뽑는다.
+	# ⚠ **견디는지는 여기서 말하지 않는다** (사용자 확정: "주입을 하면 그때 평가해서 터지게 할 거임 /
+	# 지금은 안내하는 거 같은데 그러면 안 됨"). 미리 판정을 흘리면 [마력 주입]이 결과를 확인하는
+	# 형식 절차가 된다 — 눌러 봐야 아는 게 이 버튼의 전부다.
+	_report.draw_string(font, Vector2(14, 68), "위력 %d  (기준 100)"
+		% RingPower.power_display(total), HORIZONTAL_ALIGNMENT_LEFT, -1, 12,
+		Color(0.35, 0.30, 0.20))
 
 	var y := 92.0
 	var jin: Variant = _analysis.get("jin", null)

@@ -24,19 +24,24 @@ static func is_stable(score: float) -> bool:
 	return score > BAL.ring_stability_min
 
 
-## 종합 점수 → 위력 배율. 발사 피해에 곱해지고, 리포트가 같은 값을 표시한다.
-## 🔴 터지는 점수대에서도 **0을 주지 않는다** — 이 함수는 "터졌나"를 모른다(is_stable의 일).
-## 미달 구간은 min 아래로 내려가지 않게 잘라, 발사가 실수로 이걸 타도 음수 피해가 안 나온다.
+## 종합 점수 → 위력 배율 = `ring_power_max × 점수^ring_power_curve`.
+## 발사 피해에 곱해지고, 리포트가 **같은 값**을 표시한다.
+##
+## 🔴 이 함수는 "터졌나"를 **모른다** (is_stable의 일). 그래서 기준선 아래에서도 값이 이어진다 —
+## 리포트가 주입 **전에** 위력을 보여 주는데, 미달 구간이 평평하면 그 평평함 자체가
+## "너 지금 미달"이라는 **안내**가 된다 (사용자 확정: 평가는 주입하는 순간에 한다).
+## 곡선이라 0점→0, 만점→max로 끊김 없이 이어지고 어디에도 평평한 구간이 없다.
 static func power_of(score: float) -> float:
-	var t := inverse_lerp(BAL.ring_stability_min, 1.0, score)
-	return lerpf(BAL.ring_power_min, BAL.ring_power_max, clampf(t, 0.0, 1.0))
+	return BAL.ring_power_max * pow(clampf(score, 0.0, 1.0), BAL.ring_power_curve)
 
 
-## 리포트 표시용 정수 (예: "위력 128"). 100 = 기준 위력.
+## 리포트 표시용 정수 (예: "위력 128"). 100 = 기준 위력(≈79점).
 static func power_display(score: float) -> int:
 	return int(round(power_of(score) * 100.0))
 
 
-## 기준선(펑/안 펑 경계) — UI가 "몇 점 넘겨야 하나"를 안내할 때 쓴다.
+## 기준선(펑/안 펑 경계).
+## ⚠ **주입 전에 이걸 UI로 흘리지 마라** — "65점 넘겨야 함"을 미리 알려 주면 주입이
+## 결과를 확인하는 형식 절차가 된다. 터진 **뒤에** 왜 터졌는지 알려 줄 때만 쓴다.
 static func threshold() -> float:
 	return BAL.ring_stability_min
