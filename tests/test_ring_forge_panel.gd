@@ -10,7 +10,7 @@ extends Node2D
 ##   • 응집← 칸: 착탄점에 불기둥 하나 (pillar.tscn, 많을수록 굵다)
 ##   • 빈 진도 몸으로 때린다 · 안 맞으면 전개 없음
 ##
-## 조작: (책 펼침) 탭=진/룬/문양 · 문양 클릭/Q·W=고리에 얹기 · 칸 클릭=방향 조절 · Enter=맺기 · ESC=덮기
+## 조작: (책 펼침) 왼쪽 판에 유령을 손으로 따라 그으기(진→룬→문양) · Q·W=문양 고르기 · ✓맺기/ESC=덮기
 ##       (책 덮음) WASD=이동 · 마우스=조준 · 좌클릭/Space=발사 · R=과녁 리셋 · E=책 펴기 · C=보드 비우기
 
 const RingForgePanel := preload("res://src/drawing/ring_forge_panel.gd")
@@ -67,7 +67,7 @@ func _ready() -> void:
 	_title_label.text = "고리 조립 제작대 — 통합 시험대 (F6) · 실제 시스템 발사 · 진이 날아가 히트하면 전개"
 	_result_label = _label(ui, Vector2(8, 22), 10)
 	_hint_label = _label(ui, Vector2(8, 344), 8)
-	_hint_label.text = "책 펼침: 탭=진/룬/문양 · Q·W=문양 · 칸 클릭=방향 · Enter=맺기 · ESC=덮기   |   덮음: WASD·마우스=조준 · 좌클릭/Space=발사 · R=리셋 · E=책 · C=비움"
+	_hint_label.text = "책 펼침: 왼쪽 판에 손으로 따라 그으기(진→룬→문양) · Q·W=문양 고르기 · ✓맺기/ESC=덮기   |   덮음: WASD·마우스=조준 · 좌클릭/Space=발사 · R=리셋 · E=책 · C=비움"
 	_hint_label.add_theme_color_override(&"font_color", HINT_COLOR)
 
 	var layer := CanvasLayer.new()
@@ -123,9 +123,9 @@ func _fire() -> void:
 	var a: Dictionary = _forge.call(&"get_assembly")
 	if a.is_empty():
 		if bool(_forge.call(&"can_commit")):
-			_set_warn("조립은 됐다 — E로 책을 펴서 Enter로 맺어야 쏜다")
+			_set_warn("조립은 됐다 — E로 책을 펴서 ✓맺기(또는 ESC로 덮으면 자동 맺힘)")
 		else:
-			_set_warn("문양을 고리에 얹어 맺어야 쏜다 (E)")
+			_set_warn("진과 룬을 손으로 그려 맺어야 쏜다 (E)")
 		return
 	# 🔴 실제 발사 — ring_spell_system이 받아 진(캐리어)을 조준 방향으로 쏜다.
 	EventBus.ring_cast_requested.emit(a, _player_pos, _aim)

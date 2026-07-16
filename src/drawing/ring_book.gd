@@ -192,10 +192,10 @@ func _draw() -> void:
 
 	match _stage:
 		TAB_JIN:
-			_draw_single_cell(font, top, _jin_name(), "눌러서 놓기", "jin", "jin",
+			_draw_single_cell(font, top, _jin_name(), "왼쪽에 손으로 그리기", "jin", "jin",
 				_jin_placed, _jin_ui_color())
 		TAB_RUNE:
-			_draw_single_cell(font, top, _rune_name(), "눌러서 놓기", "fire", "rune",
+			_draw_single_cell(font, top, _rune_name(), "왼쪽에 손으로 그리기", "fire", "rune",
 				_rune_placed, _rune_ui_color())
 		TAB_TEMPLATE:
 			_draw_template_cells(font, top)
@@ -212,7 +212,7 @@ func _draw_single_cell(font: Font, top: float, name_text: String, desc: String,
 	draw_rect(r, CELL_SEL_BG if placed else CELL_BG, true)
 	draw_rect(r, SEL_EDGE if placed else CELL_LINE, false, 2.0 if placed else 1.0)
 	_draw_icon(icon, r.get_center() + Vector2(0, -10.0), 30.0, [icon_col])
-	var label := "✓ 놓임" if placed else desc
+	var label := "✓ 그림" if placed else desc
 	_text_center(font, r.position + Vector2(cw * 0.5, ch - 26.0), name_text, NAME_COLOR, 11)
 	_text_center(font, r.position + Vector2(cw * 0.5, ch - 12.0), label,
 		SEL_EDGE if placed else DESC_COLOR, 8)

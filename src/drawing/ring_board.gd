@@ -58,9 +58,39 @@ const RUNE_COLOR := Color(0.62, 0.22, 0.12)   # 불
 
 const RING_RADIUS_FRAC := 0.60
 
+# ── 🔴 손그림 = 탁본 (세션 14b, 사용자 재조율 · 14c 손맛: **그린 대로 남는다**) ──
+## 조립이 정답 모양을 **숨은 선(가이드)**으로 준다. 그 위를 손으로 그리면 **그린 궤적 그대로**(스냅 안 함)
+## 먹선이 남는다 — 구불구불해도 된다, **자기만의 마법진**(사용자 확정). 너무 벗어난 획만 무시한다.
+##   • 완성도(cover) = 가이드를 얼마나 지났나   • 정밀도(acc) = 선에 얼마나 가깝게 그렸나 (관대)
+## 조각마다 점수 → **[다음]으로 수동 진행**(마음에 안 들면 다시 그려 덮어씀) → 다 그리면 분석 리포트.
+## 🔴 잠근 조각은 **그린 먹선을 그대로 유지**한다 — 정답 모양으로 안 바꾼다(사용자: "완료 시 그림 변경 별로").
+## 정본: memory takbon-hand-trace-commit.
+const CONSIDER_FRAC := 0.24           # 가이드에서 이보다 멀면 이 조각과 무관(펜 뗌). 이 안이면 그린 대로 남는다
+const REVEAL_RADIUS_FRAC := 0.08      # 그린 점 주변 이만큼 가이드가 드러난다(완성도)
+const ACC_TOL_FRAC := 0.20            # 평균 이 정도 벗어나면 정밀도 0 — **관대**(구불구불 허용)
+const GUIDE_CIRCLE_N := 72            # 진(원) 가이드 밀도
+# ── 마우스 휠 크기 조절 (진·룬, 세션 14c) ──
+const JIN_SCALE_MIN := 0.72
+const JIN_SCALE_MAX := 1.16
+const RUNE_SCALE_MIN := 0.55
+const RUNE_SCALE_MAX := 1.70
+const SCALE_STEP := 0.06
+const TRACE_INK := Color(0.20, 0.14, 0.09, 0.95)    # 자동추적된 먹선 (선에 붙음)
+const GUIDE_HIDE := Color(0.42, 0.30, 0.12, 0.18)   # 숨은 가이드 (아직 안 드러남)
+const GUIDE_SHOW := Color(0.80, 0.50, 0.16, 0.55)   # 드러난 가이드 강조
+
+## 지금 손으로 그릴 대상. NONE=그릴 것 없음(문양본 대기 / 다 그림)
+enum TraceTarget { NONE, JIN, RUNE, GLYPH }
+
 signal assembly_changed
 ## 단계가 넘어갔다 — 바깥(패널)이 오른쪽 탭·안내문을 맞춘다. (STAGE_*)
 signal stage_advanced(stage: int)
+## 지금 그리는 조각의 점수가 갱신됐다 (실시간) — 패널이 현재 점수를 보여준다.
+signal score_changed(score: float)
+## 한 조각을 [다음]으로 잠갔다 — 패널이 손맛 피드백을 준다. (TraceTarget·칸·그 조각 점수)
+signal piece_locked(target: int, slot: int, score: float)
+## 마법진을 다 그렸다 — 패널이 분석 리포트를 띄운다. (get_analysis 결과)
+signal finished(analysis: Dictionary)
 
 var _stage := STAGE_JIN
 var _has_jin := false
@@ -76,6 +106,20 @@ var _open: Array[int] = [0, 2]      # 지금 문양본이 연 칸들 (기본 2�
 var _slots: Array[int] = []         # SLOTS개, 값 = 문양 or GLYPH_NONE (열린 칸만 채워진다)
 var _cast_t := -1.0
 var _cast_dur := 1.3
+
+# ── 손그림 탁본 상태 ──
+var _trace := TraceTarget.NONE          # 지금 그릴 대상
+var _trace_slot := -1                   # GLYPH일 때 채울 칸 (열린 칸 중 다음 빈 칸)
+var _guide: PackedVector2Array = []     # 숨은 정답 선 (조밀, 로컬 좌표)
+var _revealed: PackedByteArray = []     # 각 가이드 점이 드러났나 (0/1)
+var _ink: PackedVector2Array = []       # 자동추적된 먹선 (선에 붙음, 렌더용)
+var _dev_sum := 0.0                     # 그린 점들의 선-이탈 누적 (정밀도용)
+var _dev_n := 0
+var _drawing := false                   # 마우스 버튼 누른 채 긋는 중
+var _scores := {}                       # 잠근 조각 점수: key("jin"/"rune"/"g<k>") → {cover, acc, score, glyph}
+var _locked: Array = []                 # 🔴 잠근 조각의 손그림: {target, slot, ink, glyph} — 그린 대로 유지
+var _jin_scale := 1.0                   # 진 크기 (마우스 휠)
+var _rune_scale := 1.0                  # 룬 크기 (마우스 휠)
 
 # ── 착지 펄스 ("탁") — 조각이 놓인 자리에서 퍼지는 고리 ──
 var _pulse_t := -1.0
@@ -104,72 +148,269 @@ func has_rune() -> bool:
 	return _has_rune
 
 
-# ─────────────────────────── 순차 배치 (진 → 룬 → 문양) ───────────────────────────
-## 🔴 세션 13 (사용자: "결정하고 넘어가는 과정이 있어야"): 배치는 **자동으로 안 넘어간다.**
-## 조각을 놓으면 보드에 뜨기만 하고(한 박자 = 놓음), **confirm()**(Enter)을 눌러야 다음 단계로
-## 넘어간다(두 박자 = 결정). Enter는 진·룬 단계=확정/다음, 문양 단계=맺기.
+# ─────────────────── 손그림 탁본 (진 → 룬 → 문양, 자동추적 + 점수) ───────────────────
+## 🔴 세션 14b: 조각은 **숨은 선을 문질러(탁본) 드러내고**, [다음]으로 잠근다. 문지르면 먹선이
+## 선에 자동으로 붙어 추적된다(보정). 완성도·정밀도로 점수를 매기고, 다 그리면 분석한다.
 
-## 진을 놓는다 (진 단계에서만). **넘어가지 않는다** — confirm()이 넘긴다.
-func place_jin() -> bool:
-	if _stage != STAGE_JIN:
-		return false
-	_has_jin = true
-	_start_pulse(_area_center())
-	queue_redraw()
-	assembly_changed.emit()
-	return true
-
-
-## 룬을 놓는다 (룬 단계에서만). **넘어가지 않는다.**
-func place_rune() -> bool:
-	if _stage != STAGE_RUNE:
-		return false
-	_has_rune = true
-	_start_pulse(_area_center())
-	queue_redraw()
-	assembly_changed.emit()
-	return true
-
-
-## 🔴 현재 단계를 **확정하고 다음으로** 넘긴다 (Enter). 반환:
-##   "advanced" = 다음 단계로 넘어감 · "commit" = 문양 단계이니 맺을 차례 ·
-##   "need_jin"/"need_rune" = 아직 조각을 안 놓음 (넘길 수 없음)
-func confirm() -> String:
+## 🔴 지금 단계에 맞는 가이드를 세운다 — 무엇을 그릴지 정하고 문지름 상태를 리셋한다.
+func _refresh_trace() -> void:
 	match _stage:
 		STAGE_JIN:
 			if not _has_jin:
-				return "need_jin"
-			_stage = STAGE_RUNE
-			_start_pulse(_area_center())
-			queue_redraw()
-			stage_advanced.emit(_stage)
-			return "advanced"
+				_set_trace(TraceTarget.JIN, -1)
+				return
 		STAGE_RUNE:
 			if not _has_rune:
-				return "need_rune"
-			_stage = STAGE_GLYPH
-			_start_pulse(_area_center())
-			queue_redraw()
-			stage_advanced.emit(_stage)
-			return "advanced"
-		_:
-			return "commit"
+				_set_trace(TraceTarget.RUNE, -1)
+				return
+		STAGE_GLYPH:
+			var k := _next_open_slot()
+			if k >= 0:
+				_set_trace(TraceTarget.GLYPH, k)
+				return
+	_set_trace(TraceTarget.NONE, -1)   # 그릴 것 없음 (문양본 대기 / 다 그림)
 
 
-## 🔴 문양을 **빈 열린 칸 하나에** 얹는다 (일괄 아님 — 한 칸씩). 채울 칸이 없으면 false.
-## 문양 단계에서만. 채우는 순서 = 열린 칸 나열 순서(문양본이 준 순).
-func place_glyph_next(g: int) -> bool:
-	if _stage != STAGE_GLYPH:
-		return false
-	_active = clampi(g, 0, GLYPH_NAMES.size() - 1)
+## 열린 칸 중 아직 빈 첫 칸 (없으면 -1). 채우는 순서 = 문양본이 준 순.
+func _next_open_slot() -> int:
 	for k in _open:
 		if _slots[k] == GLYPH_NONE:
-			_slots[k] = _active
-			_start_pulse(_slot_pos(k))
-			queue_redraw()
-			assembly_changed.emit()
-			return true
-	return false   # 열린 칸이 다 찼다
+			return k
+	return -1
+
+
+## 가이드 대상을 세우고 숨은 선 점을 만든 뒤 문지름 상태를 비운다.
+func _set_trace(target: int, slot: int) -> void:
+	_trace = target
+	_trace_slot = slot
+	_guide = _build_guide(target, slot)
+	_reset_stroke()
+
+
+## 대상별 숨은 정답 선 (조밀, 로컬 좌표). 이 위를 문지르면 드러난다.
+func _build_guide(target: int, slot: int) -> PackedVector2Array:
+	var pts := PackedVector2Array()
+	var ctr := _area_center()
+	var ro := _outer_radius()
+	match target:
+		TraceTarget.JIN:
+			# 바깥 원 둘레 (닫힌 고리) — 휠 크기 반영
+			var jr := _jin_radius()
+			for i in GUIDE_CIRCLE_N + 1:
+				pts.append(ctr + Vector2.from_angle(TAU * float(i) / float(GUIDE_CIRCLE_N)) * jr)
+		TraceTarget.RUNE:
+			# 중심 삼각형 세 변 (_draw_rune과 같은 꼭짓점) — 변마다 촘촘히, 닫힌 형. 휠 크기 반영
+			var s := _rune_size()
+			var v := PackedVector2Array([
+				ctr + Vector2(0, -s), ctr + Vector2(s * 0.87, s * 0.5),
+				ctr + Vector2(-s * 0.87, s * 0.5), ctr + Vector2(0, -s)])
+			for e in 3:
+				for t in 12:
+					pts.append(v[e].lerp(v[e + 1], float(t) / 12.0))
+			pts.append(v[3])
+		TraceTarget.GLYPH:
+			# 그 칸의 화살표 선
+			if slot >= 0:
+				var p := _slot_pos(slot)
+				var outward := Vector2.from_angle(_slot_angle(slot))
+				var sz := ro * 0.12
+				for t in 13:
+					pts.append((p - outward * sz).lerp(p + outward * sz, float(t) / 12.0))
+	return pts
+
+
+## 지금 그릴 대상·현재 점수 조회 (바깥이 안내문·점수 표시에 쓴다).
+func trace_target() -> int:
+	return _trace
+
+func trace_slot() -> int:
+	return _trace_slot
+
+func is_tracing() -> bool:
+	return _trace != TraceTarget.NONE
+
+## 완성도 = 가이드를 얼마나 드러냈나 (0~1).
+func coverage() -> float:
+	if _guide.is_empty():
+		return 0.0
+	var n := 0
+	for r in _revealed:
+		n += r
+	return float(n) / float(_guide.size())
+
+## 정밀도 = 문지른 점들이 선에 얼마나 붙었나 (0~1). 문지른 게 없으면 0.
+func accuracy() -> float:
+	if _dev_n == 0:
+		return 0.0
+	var tol := _outer_radius() * ACC_TOL_FRAC
+	if tol <= 0.0:
+		return 0.0
+	return clampf(1.0 - (_dev_sum / float(_dev_n)) / tol, 0.0, 1.0)
+
+## 지금 조각 점수 = 완성도 × 정밀도 보정. 완성도가 지배하고 정밀도가 품질을 얹는다.
+func piece_score() -> float:
+	return coverage() * (0.5 + 0.5 * accuracy())
+
+## 지금 가이드 점들 (로컬 좌표) — 헤드리스 테스트가 이 위로 가짜 문지름을 태운다.
+func guide_points() -> PackedVector2Array:
+	return _guide
+
+
+# ─────────────────────────── 문지르기 → 자동추적 → 점수 ───────────────────────────
+
+## 문지름 상태를 비운다 (새 가이드 / 다시 그리기 = 덮어쓰기).
+func _reset_stroke() -> void:
+	_revealed = PackedByteArray()
+	_revealed.resize(_guide.size())
+	_ink = PackedVector2Array()
+	_dev_sum = 0.0
+	_dev_n = 0
+
+
+## 🔴 새 획을 시작한다 (마우스 누름) = **다시 그리기**. 이전 문지름을 덮어쓴다.
+## 마음에 들 때까지 다시 그리고 [다음]으로 잠근다 (사용자 확정).
+func begin_stroke() -> void:
+	_reset_stroke()
+	score_changed.emit(0.0)
+
+
+## 한 점을 그었다 (드래그). 🔴 **그린 궤적 그대로** 먹선을 남긴다 (스냅 안 함 — 구불구불 OK).
+## 가이드에서 너무 멀면(CONSIDER 밖) 이 조각과 무관한 획이라 무시한다. 이탈은 정밀도로 채점(관대).
+## public — 헤드리스 테스트가 가짜 궤적을 태운다.
+func trace_stroke(local_pos: Vector2) -> void:
+	if _trace == TraceTarget.NONE or _guide.is_empty():
+		return
+	var best_d2 := INF
+	for j in _guide.size():
+		var d2 := local_pos.distance_squared_to(_guide[j])
+		if d2 < best_d2:
+			best_d2 = d2
+	var consider := _outer_radius() * CONSIDER_FRAC
+	if best_d2 > consider * consider:
+		return   # 가이드에서 너무 멀다 = 이 조각과 무관 (펜 뗌)
+	_dev_sum += sqrt(best_d2)
+	_dev_n += 1
+	_ink.append(local_pos)               # 🔴 그린 대로 남긴다 (선에 안 붙임)
+	var rr := _outer_radius() * REVEAL_RADIUS_FRAC
+	var rr2 := rr * rr
+	for j in _guide.size():
+		if _revealed[j] == 0 and _guide[j].distance_squared_to(local_pos) <= rr2:
+			_revealed[j] = 1
+	queue_redraw()
+	score_changed.emit(piece_score())
+
+
+# ─────────────────────────── [다음] 수동 진행 · 분석 ───────────────────────────
+
+## 🔴 지금 조각을 잠그고(점수 저장) 다음으로 넘어간다 ([다음]). 반환:
+##   "advanced" = 다음 조각 · "finished" = 마지막이라 다 그림(분석) · "none" = 그릴 게 없음
+func advance() -> String:
+	if _trace == TraceTarget.NONE:
+		return "none"
+	var done := _trace
+	var slot := _trace_slot
+	_lock_current()
+	match done:
+		TraceTarget.JIN:
+			_has_jin = true
+			_start_pulse(_area_center())
+			_stage = STAGE_RUNE
+			stage_advanced.emit(_stage)
+		TraceTarget.RUNE:
+			_has_rune = true
+			_start_pulse(_area_center())
+			_stage = STAGE_GLYPH
+			stage_advanced.emit(_stage)
+		TraceTarget.GLYPH:
+			if slot >= 0:
+				_slots[slot] = _active
+				_start_pulse(_slot_pos(slot))
+	var sc := float(_scores[_piece_key(done, slot)].score)
+	_refresh_trace()
+	piece_locked.emit(done, slot, sc)
+	assembly_changed.emit()
+	queue_redraw()
+	if _trace == TraceTarget.NONE:
+		finished.emit(get_analysis())
+		return "finished"
+	return "advanced"
+
+
+## 🔴 지금 그리던 문양 칸까지 잠그고 마법진을 **끝낸다** (맺기 — 남은 칸은 비운 채). 분석을 낸다.
+## 진·룬이 잠겨 있어야 한다(can_commit) — 바깥(패널)이 게이트한다.
+func finish() -> Dictionary:
+	if _trace == TraceTarget.GLYPH and _trace_slot >= 0 and coverage() > 0.0:
+		_lock_current()
+		_slots[_trace_slot] = _active
+		_start_pulse(_slot_pos(_trace_slot))
+	_trace = TraceTarget.NONE
+	_trace_slot = -1
+	queue_redraw()
+	var a := get_analysis()
+	finished.emit(a)
+	return a
+
+
+## 지금 조각의 점수 + **그린 먹선**을 저장한다. 먹선은 잠근 뒤에도 그대로 렌더된다 (정답 모양 교체 없음).
+func _lock_current() -> void:
+	_scores[_piece_key(_trace, _trace_slot)] = {
+		"cover": coverage(), "acc": accuracy(), "score": piece_score(),
+		"glyph": _active if _trace == TraceTarget.GLYPH else -1,
+	}
+	_locked.append({
+		"target": _trace, "slot": _trace_slot,
+		"ink": _ink.duplicate(), "glyph": _active,
+	})
+
+
+func _piece_key(target: int, slot: int) -> String:
+	match target:
+		TraceTarget.JIN:
+			return "jin"
+		TraceTarget.RUNE:
+			return "rune"
+		TraceTarget.GLYPH:
+			return "g%d" % slot
+	return "?"
+
+
+## 마법진 분석 리포트 — 조각별 점수 + 종합 + 등급. 패널이 리포트 UI로 그린다.
+func get_analysis() -> Dictionary:
+	var glyphs: Array = []
+	for k in _open:
+		var key := "g%d" % k
+		if _scores.has(key):
+			var e: Dictionary = _scores[key]
+			glyphs.append({"slot": k, "glyph": int(e.glyph),
+				"cover": float(e.cover), "acc": float(e.acc), "score": float(e.score)})
+	var vals: Array = []
+	if _scores.has("jin"):
+		vals.append(float(_scores["jin"].score))
+	if _scores.has("rune"):
+		vals.append(float(_scores["rune"].score))
+	for g in glyphs:
+		vals.append(float(g.score))
+	var total := 0.0
+	for v in vals:
+		total += float(v)
+	total = total / float(vals.size()) if not vals.is_empty() else 0.0
+	return {
+		"jin": _scores.get("jin", null), "rune": _scores.get("rune", null),
+		"glyphs": glyphs, "total": total, "grade": _grade(total),
+	}
+
+
+## 종합 점수 → 등급 이름 (분석 리포트용).
+func _grade(s: float) -> String:
+	if s >= 0.90:
+		return "명인"
+	if s >= 0.75:
+		return "능숙"
+	if s >= 0.55:
+		return "무난"
+	if s >= 0.35:
+		return "거침"
+	return "서툼"
 
 
 # ─────────────────────────── 데이터 주입 (Db → 보드) ───────────────────────────
@@ -224,6 +465,7 @@ func set_template(open_slots: Array) -> void:
 	for k in SLOTS:
 		if not (k in _open):
 			_slots[k] = GLYPH_NONE       # 닫힌 칸은 비운다
+	_refresh_trace()                     # 새로 열린 칸의 첫 빈 칸에 문양 유령을 세운다
 	queue_redraw()
 	assembly_changed.emit()
 
@@ -233,7 +475,12 @@ func clear_all() -> void:
 	_has_jin = false
 	_has_rune = false
 	_reset_slots()
+	_scores = {}
+	_locked = []
+	_jin_scale = 1.0
+	_rune_scale = 1.0
 	_pulse_t = -1.0
+	_refresh_trace()                     # 진 가이드부터 다시 세운다
 	queue_redraw()
 	stage_advanced.emit(_stage)
 	assembly_changed.emit()
@@ -296,6 +543,14 @@ func _area_center() -> Vector2:
 func _outer_radius() -> float:
 	return minf(size.x, size.y) * 0.44
 
+## 진 반지름 — 마우스 휠 크기 반영. 룬·고리·칸은 기준(_outer_radius)에 고정된다.
+func _jin_radius() -> float:
+	return _outer_radius() * _jin_scale
+
+## 룬 삼각 크기 — 마우스 휠 반영.
+func _rune_size() -> float:
+	return _outer_radius() * 0.16 * _rune_scale
+
 func _ring_radius() -> float:
 	return _outer_radius() * RING_RADIUS_FRAC
 
@@ -306,55 +561,47 @@ func _slot_pos(k: int) -> Vector2:
 	return _area_center() + Vector2.from_angle(_slot_angle(k)) * _ring_radius()
 
 
-# ─────────────────────────── 입력 (클릭으로 순차 배치) ───────────────────────────
+# ─────────────────────────── 입력 (손으로 숨은 선 문지르기) ───────────────────────────
+## 🔴 좌클릭 드래그로 가이드를 문지르면 먹선이 선에 붙어 드러난다. 누를 때마다 = 다시 그리기(덮어씀).
+## 확정은 자동이 아니다 — 패널의 [다음]이 advance()를 부른다.
 
 func _gui_input(event: InputEvent) -> void:
 	var mb := event as InputEventMouseButton
-	if mb == null or not mb.pressed:
-		return
-	if mb.button_index == MOUSE_BUTTON_LEFT:
-		_click(mb.position, true)
+	if mb != null and mb.button_index == MOUSE_BUTTON_LEFT:
+		if mb.pressed:
+			_drawing = true
+			begin_stroke()                # 새 획 = 다시 그리기 (이전 문지름 덮어씀)
+			trace_stroke(mb.position)
+		else:
+			_drawing = false
 		accept_event()
-	elif mb.button_index == MOUSE_BUTTON_RIGHT:
-		_click(mb.position, false)
+		return
+	# 🔴 마우스 휠 — 지금 그릴 조각(진/룬)의 크기 조절 (세션 14c)
+	if mb != null and mb.pressed and mb.button_index == MOUSE_BUTTON_WHEEL_UP:
+		_resize_current(SCALE_STEP)
+		accept_event()
+		return
+	if mb != null and mb.pressed and mb.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+		_resize_current(-SCALE_STEP)
+		accept_event()
+		return
+	var mm := event as InputEventMouseMotion
+	if mm != null and _drawing:
+		trace_stroke(mm.position)
 		accept_event()
 
 
-## 🔴 단계에 맞게 클릭을 처리한다:
-##   • 진 단계 — 판 아무 데나 좌클릭 = 진 놓기
-##   • 룬 단계 — 중심 근처 좌클릭 = 룬 놓기
-##   • 문양 단계 — 열린 칸 좌클릭 = 활성 문양 얹기(같으면 걷기) / 우클릭 = 비움
-func _click(pos: Vector2, place: bool) -> void:
-	match _stage:
-		STAGE_JIN:
-			if place:
-				place_jin()
-		STAGE_RUNE:
-			if place and pos.distance_to(_area_center()) < _ring_radius():
-				place_rune()
-		STAGE_GLYPH:
-			_click_slot(pos, place)
-
-
-func _click_slot(pos: Vector2, place: bool) -> void:
-	var best_k := -1
-	var best_d := _outer_radius() * 0.15
-	for k in _open:
-		var d := pos.distance_to(_slot_pos(k))
-		if d < best_d:
-			best_d = d
-			best_k = k
-	if best_k < 0:
-		return
-	if not place:
-		_slots[best_k] = GLYPH_NONE
-	elif _slots[best_k] == _active:
-		_slots[best_k] = GLYPH_NONE
-	else:
-		_slots[best_k] = _active
-		_start_pulse(_slot_pos(best_k))
+## 지금 그리는 조각(진/룬)의 크기를 바꾼다 — 가이드를 새 크기로 다시 세운다(현재 획은 지워짐).
+func _resize_current(delta: float) -> void:
+	match _trace:
+		TraceTarget.JIN:
+			_jin_scale = clampf(_jin_scale + delta, JIN_SCALE_MIN, JIN_SCALE_MAX)
+		TraceTarget.RUNE:
+			_rune_scale = clampf(_rune_scale + delta, RUNE_SCALE_MIN, RUNE_SCALE_MAX)
+		_:
+			return   # 문양/없음 단계에선 휠 무시
+	_set_trace(_trace, _trace_slot)   # 새 크기로 가이드 재생성
 	queue_redraw()
-	assembly_changed.emit()
 
 
 # ─────────────────────────── 발사 스윕 · 착지 펄스 ───────────────────────────
@@ -400,33 +647,25 @@ func _draw() -> void:
 		sweep_r = _cast_t * (ro * 1.12)
 		draw_arc(ctr, maxf(sweep_r, 1.0), 0.0, TAU, 64, Color(FIRE_HI, 0.5), 3.0, true)
 
-	# 진 = 일반진(그냥 동그라미). 아직 안 놓였으면 유령으로 "여기 놓아라" 안내.
-	if _has_jin:
-		var jc := _jin_color()
-		draw_arc(ctr, ro, 0.0, TAU, 72, jc, 3.0, true)
-		draw_arc(ctr, ro * 0.965, 0.0, TAU, 72, Color(jc, 0.4), 1.5, true)
-	else:
-		draw_arc(ctr, ro, 0.0, TAU, 72, GHOST, 2.0, true)
+	# 🔴 잠근 조각들 — **그린 먹선을 그대로** 유지한다 (정답 모양으로 안 바꾼다).
+	for L in _locked:
+		_draw_locked(L)
 
-	# 룬·고리·칸은 진이 놓인 뒤에만 그린다.
-	if _has_jin:
-		if _has_rune:
-			# 1차 고리 선
-			draw_arc(ctr, _ring_radius(), 0.0, TAU, 64, RING_LINE, 1.5, true)
-			# 🔴 열린 칸만 그린다 (문양본이 연 자리). 닫힌 칸은 아예 안 보인다.
-			var fired := sweep_r >= _ring_radius()
-			for k in _open:
-				var p := _slot_pos(k)
-				var g := _slots[k]
-				if g == GLYPH_NONE:
-					draw_arc(p, ro * 0.05, 0.0, TAU, 16, SLOT_OPEN, 1.5, true)
-				else:
-					_draw_glyph(p, g, _slot_angle(k), ro, fired)
-			# 중심 룬 (불)
-			_draw_rune(ctr, ro, _cast_t >= 0.0 and _cast_t < 0.25)
-		else:
-			# 룬 놓을 차례 — 중심에 유령 표식
-			draw_arc(ctr, ro * 0.16, 0.0, TAU, 24, GHOST, 2.0, true)
+	# 구조 힌트 — 룬까지 그렸으면(문양 단계) 1차 고리 + 열린 빈 칸 위치만 연하게 안내
+	if _has_rune:
+		draw_arc(ctr, _ring_radius(), 0.0, TAU, 64, RING_LINE, 1.0, true)
+		for k in _open:
+			if _slots[k] == GLYPH_NONE:
+				draw_arc(_slot_pos(k), ro * 0.05, 0.0, TAU, 16, SLOT_OPEN, 1.5, true)
+
+	# 🔴 지금 그리는 조각 — 숨은 정답 선(연하게) + 드러난 점(주황) + **그린 먹선 그대로**
+	if _trace != TraceTarget.NONE and _guide.size() >= 2:
+		draw_polyline(_guide, GUIDE_HIDE, 2.0, true)
+		for i in _guide.size():
+			if _revealed[i] == 1:
+				draw_circle(_guide[i], 1.6, GUIDE_SHOW)
+		if _ink.size() >= 2:
+			draw_polyline(_ink, TRACE_INK, 2.6, true)
 
 	# 착지 펄스 ("탁") — 조각이 놓인 자리에서 퍼지는 밝은 고리
 	if _pulse_t >= 0.0:
@@ -435,27 +674,17 @@ func _draw() -> void:
 		draw_arc(_pulse_at, maxf(pr, 1.0), 0.0, TAU, 28, Color(FIRE_HI, pa), 2.5, true)
 
 
-## 문양 하나 — 화살표. 응집=안쪽(룬), 발산=바깥(진).
-func _draw_glyph(p: Vector2, g: int, angle: float, ro: float, fired: bool) -> void:
-	var col := _glyph_color(g)
-	if fired:
-		col = FIRE_HI
-	var sz := ro * 0.09
-	var w := 2.5 if fired else 2.0
-	var outward := Vector2.from_angle(angle)
-	var dir := outward if g == G_RADIATE else -outward
-	var a := p - dir * sz
-	var b := p + dir * sz
-	draw_line(a, b, col, w, true)
-	draw_line(b, b + -dir.rotated(0.5) * sz * 0.7, col, w, true)
-	draw_line(b, b + -dir.rotated(-0.5) * sz * 0.7, col, w, true)
-
-
-func _draw_rune(ctr: Vector2, ro: float, ignite: bool) -> void:
-	var col := FIRE_HI if ignite else _rune_color()
-	var s := ro * 0.16
-	draw_arc(ctr, ro * 0.28, 0.0, TAU, 40, INK_FAINT, 1.0, true)
-	var pts := PackedVector2Array([
-		ctr + Vector2(0, -s), ctr + Vector2(s * 0.87, s * 0.5),
-		ctr + Vector2(-s * 0.87, s * 0.5), ctr + Vector2(0, -s)])
-	draw_polyline(pts, col, 3.0, true)
+## 🔴 잠근 조각 = **그린 먹선 그대로** 렌더 (정답 모양 교체 없음). 색은 조각 종류로 구분.
+func _draw_locked(L: Dictionary) -> void:
+	var ink: PackedVector2Array = L.ink
+	if ink.size() < 2:
+		return
+	var col := TRACE_INK
+	match int(L.target):
+		TraceTarget.JIN:
+			col = _jin_color()
+		TraceTarget.RUNE:
+			col = _rune_color()
+		TraceTarget.GLYPH:
+			col = _glyph_color(int(L.glyph))
+	draw_polyline(ink, col, 2.8, true)
