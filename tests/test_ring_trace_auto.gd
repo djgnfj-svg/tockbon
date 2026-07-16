@@ -6,6 +6,7 @@ extends SceneTree
 ## 검증 대상: ring_board가 숨은 선(가이드)을 세우고, 문지르면 먹선이 선에 붙어 드러나며(자동추적),
 ##   완성도(드러낸 비율)·정밀도(선에 붙은 정도)로 점수를 매긴다. [다음](advance)으로 수동 진행,
 ##   다 그리면 분석 리포트. 커버리지 자동확정 아님 — 못 그려도 넘어가되 점수가 낮다.
+##   세션 15: 문양 칸 자유 편집(select_slot 전환 시 자동 잠금·재편집 교체)·문양 개별 크기(칸마다 휠 스케일).
 ##
 ## 주의: -s 모드는 오토로드보다 먼저 컴파일 — 오토로드 식별자·모듈 preload 금지. 첫 프레임 후 load().
 
@@ -34,6 +35,8 @@ func _run() -> void:
 	_test_partial_lower_coverage()
 	_test_full_flow_and_analysis()
 	_test_empty_jin_finishes_after_rune()
+	_test_glyph_free_edit_and_relock()
+	_test_glyph_per_slot_scale()
 
 	if failures == 0:
 		print("TEST_RING_TRACE_OK — 전 항목 통과")
@@ -149,4 +152,58 @@ func _test_empty_jin_finishes_after_rune() -> void:
 	var r = String(b.call(&"advance"))   # 룬 → 문양 없음 → 완성
 	_check(r == "finished", "빈 진은 룬 다음 바로 완성")
 	_check(bool(b.call(&"can_commit")), "진·룬 그렸으면 맺기 가능")
+	b.queue_free()
+
+
+## 진→룬 그려 문양 단계에 도달한다 (기본 문양본 = 2방 [0,2]).
+func _reach_glyph_stage(b) -> void:
+	_rub_exact(b)
+	b.call(&"advance")   # 진
+	_rub_exact(b)
+	b.call(&"advance")   # 룬 → 문양 단계
+
+
+# ── ⑥ 문양 칸 자유 편집(세션 15): 칸 전환 시 이전 칸 자동 잠금 + 재편집이 교체(중복 아님) ──
+func _test_glyph_free_edit_and_relock() -> void:
+	var b = _make_board()
+	_reach_glyph_stage(b)
+	_check(int(b.call(&"trace_slot")) == 0, "문양 단계 첫 칸=0")
+	# slot0 = 발산(1)
+	b.call(&"set_active_glyph", G_RADIATE)
+	_rub_exact(b)
+	b.call(&"select_slot", 2)             # 다른 칸으로 전환 → slot0 자동 잠금
+	var slots = b.get("_slots")
+	_check(int(slots[0]) == G_RADIATE, "칸 전환 시 이전 칸 자동 잠금")
+	_check(int(b.call(&"trace_slot")) == 2, "고른 칸으로 전환")
+	# slot2 = 응집(0)
+	b.call(&"set_active_glyph", G_GATHER)
+	_rub_exact(b)
+	b.call(&"select_slot", 0)             # slot2 자동 잠금 + slot0 재선택(재편집)
+	slots = b.get("_slots")
+	_check(int(slots[2]) == G_GATHER, "두번째 칸도 잠김")
+	var locked_a := (b.get("_locked") as Array).size()
+	# slot0 재편집 — 발산→응집으로 문양 교체
+	b.call(&"set_active_glyph", G_GATHER)
+	_rub_exact(b)
+	b.call(&"advance")
+	slots = b.get("_slots")
+	_check(int(slots[0]) == G_GATHER, "이미 채운 칸을 다시 골라 문양 교체")
+	_check((b.get("_locked") as Array).size() == locked_a, "재편집은 먹선 교체(중복 추가 아님)")
+	b.queue_free()
+
+
+# ── ⑦ 문양 개별 크기(세션 15): 칸마다 휠 스케일, 서로 독립, 상·하한 클램프 ──
+func _test_glyph_per_slot_scale() -> void:
+	var b = _make_board()
+	_reach_glyph_stage(b)
+	_check(is_equal_approx(float(b.call(&"_glyph_scale_of", 0)), 1.0), "기본 문양 크기 1.0")
+	b.call(&"_resize_current", 0.06)      # 휠 업 (현재 칸=0)
+	_check(float(b.call(&"_glyph_scale_of", 0)) > 1.0, "휠 업 → 그 칸만 커진다")
+	_check(is_equal_approx(float(b.call(&"_glyph_scale_of", 2)), 1.0), "다른 칸 크기는 독립")
+	for i in 60:
+		b.call(&"_resize_current", 0.06)
+	_check(float(b.call(&"_glyph_scale_of", 0)) <= float(b.GLYPH_SCALE_MAX) + 0.001, "상한 클램프")
+	for i in 80:
+		b.call(&"_resize_current", -0.06)
+	_check(float(b.call(&"_glyph_scale_of", 0)) >= float(b.GLYPH_SCALE_MIN) - 0.001, "하한 클램프")
 	b.queue_free()

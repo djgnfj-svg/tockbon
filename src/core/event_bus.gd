@@ -19,6 +19,9 @@ signal cast_failed(design: SpellDesign, reason: int)
 # assembly = ring_board.get_assembly() = {ring_count, rune, rings:[[8칸]], open:[...]}.
 # ring_spell_system(모듈 B)이 수신 → 진(캐리어)을 조준 방향으로 쏜다.
 signal ring_cast_requested(assembly: Dictionary, origin: Vector2, aim_dir: Vector2)
+# 🔴 #17 1단계 — 고리 도안이 맺혔다 (거점 조립 책 → GameState). 옛 design_created와 평행.
+# GameState가 수신 → ring_designs에 넣고 빈 ring_equipped 슬롯에 즉시 장착.
+signal ring_design_committed(design: RingDesign)
 
 # ── 전투 (B ↔ C)
 signal enemy_hit(enemy: Node2D, damage: float, rune_type: int)

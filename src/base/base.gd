@@ -9,6 +9,8 @@ const StoragePanel := preload("res://src/base/storage_panel.gd")
 const LabPanel := preload("res://src/base/lab_panel.gd")
 const Recipes := preload("res://src/base/recipes.gd")
 const BasePlayer := preload("res://src/base/base_player.gd")
+## 🔴 #17 1단계 — 고리 조립 책. 이젤이 옛 자유 드로잉 방 대신 이 오버레이를 연다 (병행: drawing_room은 파킹).
+const RingForgePanel := preload("res://src/drawing/ring_forge_panel.gd")
 
 ## 인테리어 소품 시트 (ART_SPEC P3) — 32×48 가로 스트립, 없으면 ColorRect 플레이스홀더 유지
 const PROPS_SHEET_PATH := "res://assets/sprites/base/props.png"
@@ -27,6 +29,8 @@ var _toast_seq: int = 0
 var _theme: Theme
 ## 튜토리얼 유도 마커 (EventBus.tutorial_focus) — 대상 시설 위에서 까딱이는 ▼
 var _focus_marker: Label
+## 🔴 #17 1단계 — 고리 조립 오버레이 (이젤로 연다)
+var _forge: Control
 
 @onready var _player: BasePlayer = $Player
 @onready var _ui: CanvasLayer = $UI
@@ -48,6 +52,7 @@ func _ready() -> void:
 		_show_toast("연구 완료: %s" % p.get("name", unlock_id)))
 	EventBus.tutorial_focus.connect(_on_tutorial_focus)
 	EventBus.cast_failed.connect(_on_cast_failed)
+	_build_forge()
 
 ## 플레이스홀더 ColorRect → 스프라이트 교체 (시트 없으면 그대로)
 func _apply_sprites() -> void:
@@ -99,7 +104,8 @@ func _on_facility(facility_id: StringName) -> void:
 		EventBus.scene_change_requested.emit(&"field")
 		return
 	if facility_id == &"easel":
-		EventBus.scene_change_requested.emit(&"drawing")
+		# 🔴 #17 1단계 — 이젤 = 고리 조립 책. 옛 자유 드로잉 방(drawing_room)은 파킹(코드는 살아 있음).
+		_open_forge()
 		return
 	_open(facility_id)
 
@@ -121,6 +127,27 @@ func _any_panel_open() -> bool:
 		if _wraps[facility_id].visible:
 			return true
 	return false
+
+# ── 🔴 #17 1단계 — 고리 조립 책 (이젤로 연다)
+
+## 오버레이 책을 미리 만들어 숨겨 둔다 (F6 하네스 test_ring_forge_panel.gd와 같은 배선).
+func _build_forge() -> void:
+	_forge = RingForgePanel.new()
+	_ui.add_child(_forge)
+	_forge.connect(&"design_committed", _on_ring_committed)
+	_forge.connect(&"closed", func() -> void: _player.locked = false)
+
+## 이젤 활성 → 책을 편다. 다른 시설 패널은 닫고 플레이어를 잠근다.
+func _open_forge() -> void:
+	_close_all()
+	_forge.call(&"open")
+	_player.locked = true
+
+## 고리 마법진이 맺혔다 — RingDesign으로 감싸 GameState에 넘긴다(빈 슬롯에 자동 장착).
+func _on_ring_committed(assembly: Dictionary) -> void:
+	var design := RingDesign.from_assembly(assembly, "고리 마법진")
+	EventBus.ring_design_committed.emit(design)
+	_show_toast("고리 마법진을 맺었다 — 문으로 나가 슬롯 1로 쏴 보라")
 
 # ── 온보딩 지원 (TECH_SPEC §5 — 튜토리얼이 시그널로만 거점을 유도한다)
 

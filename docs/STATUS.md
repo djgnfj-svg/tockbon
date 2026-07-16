@@ -1,8 +1,68 @@
 # STATUS — 현재 진행 상태
 
-> 최종 갱신: 2026-07-16 (세션 14c — **손맛 손질: 그린 대로 유지·휠 크기조절·문양본 확정 단계**) ·
-> 세션 14b: 손그림 탁본(자동추적+점수+분석) · **세션 종료마다 갱신**
-> 커밋: 세션 8~12는 `main` 병합됨. **세션 13~14c 작업 = 이 커밋에 함께 저장**
+> 최종 갱신: 2026-07-16 (세션 16 — **#17 1단계: 고리 모델을 본 게임 루프에 배선**) · 세션 15: 문양
+> 개별 크기·칸 자유 편집 · **세션 종료마다 갱신**
+> 커밋: 세션 8~12는 `main` 병합됨. **세션 13~16 작업 = 이 커밋에 함께 저장**
+
+---
+
+## 🔵 세션 16 (2026-07-16) — **🔴 #17 1단계: 고리 조립을 본 게임 루프에 배선** (수직 슬라이스)
+
+> 사용자: *"다 정했으니까 이대로 게임 제작을 실행하면 될듯."* 마법진 메커니즘 확정 → 프로토타입(F6에만
+> 있던 고리 모델)을 **실제 게임(거점 제작 → 장착 → 필드 발사)에 배선**. 매핑에서 드러난 핵심: 본 게임은
+> 아직 옛 자유 드로잉(drawing_room→DrawingCanvas→SpellDesign)을 돌렸고, 고리 모델은 어느 본편 씬에도
+> 없었다. AskUserQuestion 확정: **병행 후 점진 은퇴** · **RingDesign 리소스(.tres)** · **경제 생략** ·
+> 지팡이 발수 보류(단일 진). 계획서 승인 = `~/.claude/plans/vivid-shimmying-whistle.md`.
+
+**① `RingDesign` 리소스 (신규 `src/core/schemas/ring_design.gd`):** assembly(Dictionary)를 감싸는 core
+스키마(class_name). `to_assembly()`/static `from_assembly()`/`filled_count()`. `--import`로 전역 클래스 등록.
+
+**② 배선 (전부 가산적 — 옛 경로 무손상):**
+- `event_bus.gd`: `ring_design_committed(design: RingDesign)` 추가 (옛 design_created와 평행).
+- `game_state.gd`: `ring_designs`·`ring_equipped[4]` + `_on_ring_design_committed`(빈 슬롯 자동 장착, 첫 진=슬롯 1).
+- `base.gd`: **이젤 = 고리 조립 책 오버레이**(옛 drawing_room 진입에서 전환, drawing_room 코드는 파킹).
+  `_build_forge`(RingForgePanel 지연 생성)·`_open_forge`·`_on_ring_committed`(→ RingDesign → EventBus emit).
+- `player.gd` `try_cast`: **ring_equipped[slot] 우선 확인** → 있으면 `ring_cast_requested`(진이 통째로 날아감),
+  없으면 옛 SpellDesign 경로 그대로.
+- `field.tscn`: `RingSpellSystem` 인스턴스 추가(z_index=10, SpellSystem과 평행).
+
+**③ 검증:** 신규 `test_ring_design_auto.gd`(18 assert: 라운드트립·깊은복사·자동 장착·슬롯 소진) 통과.
+**전 자동 스위트 그린(회귀 0)** — 병행이라 옛 테스트 무손상. **MCP 본편 시각 검증**: main.tscn 실행 →
+거점 이젤로 고리 책 열림 → 조립·맺기 → `ring_equipped[0]`=RingDesign 확인 → 필드 전환 → `try_cast(0)`가
+ring 경로로 발신, **진(불 룬 고리)이 조준 방향으로 날아가는 것** 스샷 확인.
+
+**🔴 다음(#17 2~4단계):** (2) SaveManager에 RingDesign .tres 직렬화 + **장착 HUD/게시판에 ring 슬롯 노출**
+(지금 하단 슬롯 HUD는 옛 SpellDesign만 보여줌 — 발사는 되지만 안 보임). (3) 경제(마나·내구·실패).
+(4) 옛 모델 점진 은퇴 + 테스트 마이그레이션 + TRUTH.md 전면 재작성. 미정: 지팡이 발수 통합·진마다 층.
+
+---
+
+## 🔵 세션 15 (2026-07-16) — **문양 개별 크기 + 문양 칸 자유 편집** (사용자 요청)
+
+> 사용자: *"문양·진 크기 조절 할 수 있게 · 문양 틀 삽입한 다음에 문양들을 하나씩 내가 변경."*
+> AskUserQuestion 확정: 크기는 **각각(개별)** — *"문양 모양이 좀 주된 과제, 진마다 층이 있을 거라 고민"* ·
+> 문양 편집은 **"칸 클릭 → 문양 선택 → 내가 다시 그림"** (탁본 손그림 확정 유지).
+
+**① 문양 개별 크기 (`ring_board.gd`):** 진·룬 휠 크기(세션 14c)에 더해 **문양은 칸마다 개별 스케일**
+(`_glyph_scale: Dictionary` slot→배율). `_resize_current`에 GLYPH 분기 추가 — 지금 고른 칸의 화살표만
+휠로 키운다(`GLYPH_SCALE` 0.55~1.85). `_build_guide` GLYPH가 `_glyph_scale_of(slot)`을 곱한다.
+
+**② 문양 칸 자유 편집:** 문양 단계에서 **아무 칸이나 클릭해 고른다**(`select_slot` — 보드 `_gui_input`가
+누른 자리의 `_nearest_open_slot`로 호출). 다른 칸으로 옮기면 **그리던 칸을 자동 잠금**(`COMMIT_COVER` 넘겼을 때,
+`_commit_glyph_slot`). **이미 채운 칸도 다시 골라 문양·먹선을 덮어쓴다** — `_lock_current`가 같은 조각(칸·진·룬)의
+이전 `_locked` 항목을 걷어내고 교체(중복 렌더 방지). 편집 중인 칸은 **주황 강조 링**으로 표시(`_draw`).
+옛 순차 흐름(`advance` [다음]=다음 빈 칸)은 그대로 살아 있어 첫 바퀴는 자동 진행.
+
+**③ 패널 안내 (`ring_forge_panel.gd`):** 힌트·say 문구를 새 조작에 맞춰 갱신
+("칸을 클릭해 골라 Q·W 정하고 손으로 그림 · 휠=크기").
+
+**④ 검증:** `test_ring_trace_auto.gd`에 2항목 추가(⑥ 칸 전환 자동 잠금+재편집 교체·중복 없음 · ⑦ 개별
+스케일 독립·클램프) → 7군 전 통과. 전 자동 스위트 그린(회귀 0). **F6 MCP 시각 검증**: slot0 발산(기본
+크기)·slot2 응집(1.75× + 주황 강조)로 개별 크기·문양 변경·강조 동시 확인. `select_slot` 자동 잠금/재편집
+교체·`_resize_current` GLYPH 클램프를 exec로 확인.
+
+**🔴 다음:** (a) 진마다 **층(중첩 마법진)** — memory `takbon-nested-circle-model`(껍질=재귀·룬=복합). 문양 크기가
+층과 어떻게 엮이나 미정(사용자 "고민"). (b) #17 본 게임 통합. (c) 문양 크기의 발사 의미(지금은 모양만).
 
 ---
 

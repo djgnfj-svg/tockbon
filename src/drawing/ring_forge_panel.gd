@@ -207,7 +207,7 @@ func _select_glyph(glyph: int) -> void:
 	if int(_board.call(&"stage")) != RingBoard.STAGE_GLYPH:
 		_set_say("먼저 진과 룬을 그리세요  (진 → 룬 → 문양)", true)
 	elif bool(_board.call(&"is_tracing")):
-		_set_say("%s 선택 — 열린 칸을 손으로 문질러 채우세요 → [다음]"
+		_set_say("%s 선택 — 칸을 클릭해 손으로 그리세요 · 휠=크기"
 			% RingBoard.GLYPH_NAMES[glyph], false)
 	else:
 		_set_say("%s 선택 — 칸이 다 찼어요. [맺기]로 분석" % RingBoard.GLYPH_NAMES[glyph], false)
@@ -229,7 +229,7 @@ func _on_score_changed(_score: float) -> void:
 func _on_piece_locked(target: int, slot: int, score: float) -> void:
 	if target == RingBoard.TraceTarget.GLYPH:
 		if bool(_board.call(&"is_tracing")):
-			_set_say("%s 새겼다 (%d점) — 다음 칸을 문지르세요"
+			_set_say("%s 새겼다 (%d점) — 다른 칸을 클릭해 이어 그리거나 [맺기]"
 				% [RingBoard.GLYPH_NAMES[_active_glyph], _pct(score)], false)
 		else:
 			_set_say("문양 칸을 다 새겼다 (%d점) — [맺기]로 분석" % _pct(score), false)
@@ -242,7 +242,7 @@ func _on_next() -> void:
 		_picking_template = false
 		_book.call(&"go_stage", RingBook.TAB_GLYPH, true, true)
 		_book.call(&"sync_state", _template_idx, _active_glyph)
-		_set_say("문양을 골라(Q·W) 열린 칸을 손으로 그리세요 → 칸마다 [다음]", false)
+		_set_say("칸을 클릭해 고르고 문양(Q·W) 정해 손으로 그리세요 · 휠=문양 크기 · 다른 칸/[다음]으로 이어가기", false)
 		_update_score()
 		_refresh_buttons()
 		return
@@ -473,7 +473,7 @@ func _build() -> void:
 	_say.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_say.text = Copy_START
 	_hint = _label(HINT_RECT, 8, HINT_COLOR)
-	_hint.text = "왼쪽 판의 숨은 선을 손으로 문지르면 먹선이 붙는다(탁본) · 마음에 들면 [다음] · 문양 Q·W로 고르고 칸마다 · [맺기]=분석"
+	_hint.text = "왼쪽 판의 숨은 선을 손으로 그린다(탁본) · 휠=크기(진·룬·문양 칸) · 문양은 칸을 클릭해 골라 Q·W 정하고 다시 그림 · [다음]/[맺기]=분석"
 	_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 
 	_build_report()

@@ -19,6 +19,10 @@ var equipped: Array[SpellDesign] = [null, null, null, null]
 var equipment: Dictionary = {}
 ## 보유 도안 전체 (거점 보관)
 var designs: Array[SpellDesign] = []
+## 🔴 #17 1단계 — 고리 도안 (새 모델). 옛 designs/equipped와 평행 (병행 은퇴).
+##   ring_designs = 보관 전체 · ring_equipped = 장착 4장. 지금은 메모리만(디스크 저장은 2단계).
+var ring_designs: Array[RingDesign] = []
+var ring_equipped: Array[RingDesign] = [null, null, null, null]
 ## {unlock_id: true} — 도감 영구 해금 (룬·제법·적 정보)
 var codex: Dictionary = {}
 ## UI 모달(게시판·장착·도감) 열림 — ui_root가 설정, 플레이어 이동 계열이 폴링 (TECH_SPEC §4.2)
@@ -35,6 +39,7 @@ func _ready() -> void:
 	EventBus.research_completed.connect(func(unlock_id: StringName) -> void: codex[unlock_id] = true)
 	EventBus.codex_unlocked.connect(func(unlock_id: StringName) -> void: codex[unlock_id] = true)
 	EventBus.design_created.connect(_on_design_created)
+	EventBus.ring_design_committed.connect(_on_ring_design_committed)
 
 func _process(delta: float) -> void:
 	mana = minf(mana + balance.mana_regen_per_sec * delta, mana_max())
@@ -183,6 +188,17 @@ func _on_design_created(design: SpellDesign) -> void:
 	for slot in range(EQUIP_SLOTS):
 		if equipped[slot] == null:
 			equipped[slot] = design
+			return
+
+## 🔴 #17 1단계 — 고리 도안이 맺혔다. 옛 _on_design_created와 같은 흐름(보관 + 빈 슬롯 즉시 장착).
+## 첫 진 = 슬롯 1이라 거점에서 조립하자마자 필드에서 쏴볼 수 있다.
+func _on_ring_design_committed(design: RingDesign) -> void:
+	if design == null:
+		return
+	ring_designs.append(design)
+	for slot in range(EQUIP_SLOTS):
+		if ring_equipped[slot] == null:
+			ring_equipped[slot] = design
 			return
 
 func is_unlocked(unlock_id: StringName) -> bool:

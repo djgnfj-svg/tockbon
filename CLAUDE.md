@@ -60,7 +60,8 @@
 ./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_forge_auto.gd           # 제작대(책 펼침)·종이 경제
 ./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_spell_auto.gd           # 발사·지팡이 패턴·문양 효과·**충격파/기둥 창발**
 ./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_ring_spell_auto.gd      # **고리 조립 발사(세션 12)**: 진→투사체·착탄 전개(발산 탄환·응집 기둥)·실제 적 take_hit
-./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_ring_trace_auto.gd      # **손그림 탁본(세션 14b)**: 자동추적(선에 붙음)·완성도/정밀도 점수·[다음] 수동 진행·분석 리포트
+./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_ring_trace_auto.gd      # **손그림 탁본(세션 14b)**: 자동추적(선에 붙음)·완성도/정밀도 점수·[다음] 수동 진행·분석 리포트 · 세션 15: 문양 칸 자유 편집·개별 크기
+./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_ring_design_auto.gd     # **고리 도안 통합(#17 1단계, 세션 16)**: RingDesign 라운드트립·ring_design_committed→GameState 자동 장착
 ./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_base_auto.gd            # 거점 경제
 ./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_onboarding_auto.gd      # 온보딩(튜토·시험발사)
 ./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_drawing_fill_auto.gd    # 룬 농도(rune_fill)·회전 불변

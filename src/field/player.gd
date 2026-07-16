@@ -89,7 +89,16 @@ func _unhandled_input(event: InputEvent) -> void:
 func try_cast(slot: int) -> bool:
 	if is_dead or busy or GameState.ui_modal_open:
 		return false
-	if slot < 0 or slot >= GameState.equipped.size():
+	if slot < 0 or slot >= GameState.EQUIP_SLOTS:
+		return false
+	# 🔴 #17 1단계 — 고리 도안이 장착돼 있으면 그쪽으로 쏜다 (경제 없음, 진이 통째로 날아감).
+	# 옛 SpellDesign 경로는 아래로 그대로 살아 있다 (병행).
+	if slot < GameState.ring_equipped.size():
+		var ring_design: RingDesign = GameState.ring_equipped[slot]
+		if ring_design != null:
+			EventBus.ring_cast_requested.emit(ring_design.to_assembly(), global_position, aim_dir)
+			return true
+	if slot >= GameState.equipped.size():
 		return false
 	var design: SpellDesign = GameState.equipped[slot]
 	if design == null or design.is_broken():
