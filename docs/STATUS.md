@@ -30,9 +30,19 @@ canvas 51·paper 47·forge 38·drawing_fill 33·save 22·integration 16 + spell�
 base·onboarding·equip·quest·bosscut 전 항목 통과 · 필드 FAIL 0 · UI 54/0. 시각 검증 생략(점열 바이트 동일 →
 렌더 기하 불변, 구조적으로 mismatch 불가).
 
+**⑤ 에이전트 하네스 정리 (사용자: "godot 에이전트가 안 쓰인다 → 실제로 쓰이게"):** 세션 19가 로컬 복사한
+Donchitos 49-에이전트 하네스는 이 1인 playground엔 과함 + 이 프로젝트 규칙을 몰라 오히려 방해 → **전부 제거**
+(`.claude/agents` 49 + skills 73 + rules·hooks·docs·agent-memory·statusline, 커밋 `2eba110`·`5b1bb0e`).
+`.claude/`엔 `settings.json`(플러그인 활성)만 남김. **핵심 오해 정정: 에이전트는 MCP로 설치하는 게 아니라
+`.claude/agents/*.md` 파일이고, 이미 설치돼 있었다 — 문제는 설치가 아니라 라우팅(리드가 직접 다 함).**
+Godot 지원은 이미 설치·활성인 **`godot-prompter` 플러그인**(jame581/skillsmith·54 스킬+9 에이전트)이 전담.
+**CLAUDE.md에 위임 라우팅 규칙 추가**(§개발 규칙): 구현 위임=`godot-prompter:godot-game-dev`, 위임 조건
+(모듈 내 닫힌 병렬화 이득 작업 vs 회귀 위험·core·mcp__godot는 리드 직접), 위임 시 프로젝트 규칙 프롬프트 주입 의무.
+
 **🔴 다음:** (a) 책자(forge_book)가 룬·문양 `display_name`/`description`도 같은 `.tres`에서 읽게(지금은
 points/variants만 데이터화, 이름·설명 텍스트는 아직 코드에 있을 수 있음 — 확인 필요). (b) 절차 `_fallback_*`
 제거해 데이터를 유일 진실원으로 승격(충분히 안정되면). (c) 완성 도안 저장(종이 보관함). (d) 원정 clean 경로.
+(e) **다음 세션부터 위 라우팅 규칙대로 실제 위임 시작** — 적합한 모듈 작업은 `godot-prompter:godot-game-dev`에.
 
 ---
 
