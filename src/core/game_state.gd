@@ -13,14 +13,10 @@ var hp: float
 var inventory: Dictionary = {}
 ## 출격 중 획득 [{ "id": StringName, "count": int }] — 사망 시 손실
 var bag: Array[Dictionary] = []
-## 장착 도안 4장 — 아침에 확정, 필드 교체 불가 (GDD §4.4)
-var equipped: Array[SpellDesign] = [null, null, null, null]
 ## 착용 장비 {Enums.ItemKind.WAND/ROBE/CHARM: item_id} — 가방 아님, 사망에도 보존 (GDD §5)
 var equipment: Dictionary = {}
-## 보유 도안 전체 (거점 보관)
-var designs: Array[SpellDesign] = []
-## 🔴 #17 1단계 — 고리 도안 (새 모델). 옛 designs/equipped와 평행 (병행 은퇴).
-##   ring_designs = 보관 전체 · ring_equipped = 장착 4장. 지금은 메모리만(디스크 저장은 2단계).
+## 🔴 고리 도안 — **유일한 마법진 모델** (세션 22에 옛 designs/equipped를 매장했다).
+##   ring_designs = 보관 전체 · ring_equipped = 장착 4장.
 var ring_designs: Array[RingDesign] = []
 var ring_equipped: Array[RingDesign] = [null, null, null, null]
 ## {unlock_id: true} — 도감 영구 해금 (룬·제법·적 정보)
@@ -36,9 +32,7 @@ func _ready() -> void:
 	codex[&"glyph_thrust"] = true
 	EventBus.extraction_success.connect(_on_extraction_success)
 	EventBus.bag_lost.connect(func() -> void: bag.clear())
-	EventBus.research_completed.connect(func(unlock_id: StringName) -> void: codex[unlock_id] = true)
 	EventBus.codex_unlocked.connect(func(unlock_id: StringName) -> void: codex[unlock_id] = true)
-	EventBus.design_created.connect(_on_design_created)
 	EventBus.ring_design_committed.connect(_on_ring_design_committed)
 
 func _process(delta: float) -> void:
@@ -177,21 +171,9 @@ func _on_extraction_success() -> void:
 
 # ── 장착·도감
 
-func equip(slot: int, design: SpellDesign) -> void:
-	equipped[slot] = design
-
-## 새 도안은 보관고에 들어가고, 빈 슬롯이 있으면 즉시 장착된다.
-## 그린 직후 바로 쏴볼 수 있어야 온보딩이 끊기지 않는다 (첫 도안 = 슬롯 1).
-## 슬롯이 꽉 찼으면 장착은 아침 게시판에서 (GDD §4.4 — 필드 교체 불가는 유지).
-func _on_design_created(design: SpellDesign) -> void:
-	designs.append(design)
-	for slot in range(EQUIP_SLOTS):
-		if equipped[slot] == null:
-			equipped[slot] = design
-			return
-
-## 🔴 #17 1단계 — 고리 도안이 맺혔다. 옛 _on_design_created와 같은 흐름(보관 + 빈 슬롯 즉시 장착).
-## 첫 진 = 슬롯 1이라 거점에서 조립하자마자 필드에서 쏴볼 수 있다.
+## 🔴 고리 도안이 맺혔다 — 보관고에 넣고 빈 슬롯이 있으면 즉시 장착한다.
+## 맺은 직후 바로 쏴볼 수 있어야 흐름이 안 끊긴다 (첫 진 = 슬롯 1).
+## 슬롯이 꽉 찼으면 보관만 한다 (GDD §4.4 — 필드 교체 불가는 유지).
 func _on_ring_design_committed(design: RingDesign) -> void:
 	if design == null:
 		return

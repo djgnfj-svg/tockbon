@@ -22,7 +22,6 @@ func _run() -> void:
 	var gs: Node = root.get_node("GameState")
 	var clock: Node = root.get_node("Clock")
 	var sm: Node = root.get_node("SaveManager")
-	var rs := load("res://src/base/research_service.gd")
 
 	# 클린 시작
 	sm.wipe_save()
@@ -43,8 +42,6 @@ func _run() -> void:
 	gs.mana = 42.0
 	clock.day = 3
 	clock.time_sec = 123.0
-	rs.current_id = &"rune_wind"
-	rs.started_at_sec = 999.0
 
 	sm.save_game()
 	_check("저장: 파일 생성", sm.has_save())
@@ -57,8 +54,6 @@ func _run() -> void:
 	gs.mana = 1.0
 	clock.day = 1
 	clock.time_sec = 0.0
-	rs.current_id = &""
-	rs.started_at_sec = -1.0
 
 	_check("로드: true", sm.load_game())
 	_check("복원: 잉크 5", gs.get_count(&"ink_basic") == 5)
@@ -78,7 +73,6 @@ func _run() -> void:
 		gs.ring_equipped[1] == gs.ring_designs[0] and gs.ring_equipped[0] == null)
 	_check("복원: 마나 42", is_equal_approx(gs.mana, 42.0))
 	_check("복원: Day 3 · 123초", clock.day == 3 and is_equal_approx(clock.time_sec, 123.0))
-	_check("복원: 연구 진행", rs.current_id == &"rune_wind" and is_equal_approx(rs.started_at_sec, 999.0))
 
 	# 뒷정리 — 실제 플레이 세이브 오염 방지
 	sm.wipe_save()

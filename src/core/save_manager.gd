@@ -1,15 +1,12 @@
 extends Node
-## 저장/로드 (TECH_SPEC §9) — 영구부(창고·도감·도안·연구)와 시간·마나.
-## 자동 저장: 귀환·사망 확정(세이브스컴 방지)·하루 시작(취침 포함). 로드: 부팅 시 Main이 1회 호출.
-## 도안은 user://save/designs/*.tres (strokes 포함 — 재편집·수리 렌더에 필요).
-
-# core→base 참조는 원칙 위반이지만 연구 상태(static 2개)가 아직 GameState 밖에 있어 실용적 예외.
-# 연구 상태가 GameState로 이관되면 이 preload를 제거한다.
-const ResearchService := preload("res://src/base/research_service.gd")
+## 저장/로드 (TECH_SPEC §9) — 영구부(창고·도감·고리 도안)와 시간·마나.
+## 자동 저장: 귀환·사망 확정(세이브스컴 방지)·하루 시작(취침 포함). 로드: 부팅 시 1회.
+##
+## 🔴 세션 22: 옛 SpellDesign 도안(user://save/designs)·연구 저장을 매장했다. 세이브 호환은 안전하다 —
+## 로드가 전부 `data.get(키, 기본값)`이라 옛 세이브의 남은 키는 그냥 무시된다.
 
 const SAVE_PATH := "user://save/save.json"
-const DESIGN_DIR := "user://save/designs"
-## 🔴 #17 2단계 — 고리 도안(RingDesign) .tres 저장 위치. 옛 designs와 평행(병행 은퇴).
+## 고리 도안(RingDesign) .tres 저장 위치.
 const RING_DIR := "user://save/rings"
 
 ## 로드(또는 새 게임 확정) 이전의 자동 저장 방지
@@ -28,19 +25,7 @@ func has_save() -> bool:
 func save_game() -> void:
 	if not _ready_to_save:
 		return
-	DirAccess.make_dir_recursive_absolute(DESIGN_DIR)
-	var design_files: Array = []
-	for i in range(GameState.designs.size()):
-		var path := "%s/design_%d.tres" % [DESIGN_DIR, i]
-		ResourceSaver.save(GameState.designs[i], path)
-		design_files.append(path)
-	_prune_design_files(GameState.designs.size())
-
-	var equipped_idx: Array = []
-	for design: SpellDesign in GameState.equipped:
-		equipped_idx.append(GameState.designs.find(design))
-
-	# 🔴 #17 2단계 — 고리 도안 저장 (옛 designs와 같은 방식: 파일 목록 + 장착 인덱스)
+	# 고리 도안 저장 — 파일 목록 + 장착 인덱스
 	DirAccess.make_dir_recursive_absolute(RING_DIR)
 	var ring_files: Array = []
 	for i in range(GameState.ring_designs.size()):
@@ -71,12 +56,8 @@ func save_game() -> void:
 		"inventory": inventory,
 		"equipment": equipment,
 		"codex": codex,
-		"designs": design_files,
-		"equipped": equipped_idx,
 		"ring_designs": ring_files,
 		"ring_equipped": ring_equipped_idx,
-		"research_id": String(ResearchService.current_id),
-		"research_started": ResearchService.started_at_sec,
 	}
 	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if file == null:
@@ -114,23 +95,10 @@ func load_game() -> bool:
 	for key: String in data.get("codex", []):
 		GameState.codex[StringName(key)] = true
 
-	GameState.designs.clear()
-	for path: String in data.get("designs", []):
-		# 캐시 우회 — 같은 세션에서 저장→로드 시 인스턴스 재사용으로 복원이 무효화되는 것 방지
-		var res := ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_IGNORE)
-		var design := res as SpellDesign
-		if design != null:
-			design.migrate_legacy_runes()  # v2.2: 옛 충격(=1) 룬 → FIRE
-			GameState.designs.append(design)
-
-	var equipped_idx: Array = data.get("equipped", [])
-	for slot in range(GameState.EQUIP_SLOTS):
-		var idx: int = int(equipped_idx[slot]) if slot < equipped_idx.size() else -1
-		GameState.equipped[slot] = GameState.designs[idx] if idx >= 0 and idx < GameState.designs.size() else null
-
-	# 🔴 #17 2단계 — 고리 도안 복원 (옛 designs와 같은 방식)
+	# 고리 도안 복원
 	GameState.ring_designs.clear()
 	for path: String in data.get("ring_designs", []):
+		# 캐시 우회 — 같은 세션에서 저장→로드 시 인스턴스 재사용으로 복원이 무효화되는 것 방지
 		var rres := ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_IGNORE)
 		var rdesign := rres as RingDesign
 		if rdesign != null:
@@ -140,9 +108,6 @@ func load_game() -> bool:
 		var ridx: int = int(ring_equipped_idx[slot]) if slot < ring_equipped_idx.size() else -1
 		GameState.ring_equipped[slot] = GameState.ring_designs[ridx] if ridx >= 0 and ridx < GameState.ring_designs.size() else null
 
-	ResearchService.current_id = StringName(String(data.get("research_id", "")))
-	ResearchService.started_at_sec = float(data.get("research_started", -1.0))
-
 	EventBus.resources_changed.emit()
 	_ready_to_save = true
 	return true
@@ -151,22 +116,15 @@ func load_game() -> bool:
 func wipe_save() -> void:
 	if FileAccess.file_exists(SAVE_PATH):
 		DirAccess.remove_absolute(SAVE_PATH)
-	_prune_design_files(0)
 	_prune_ring_files(0)
 
-func _prune_design_files(keep_count: int) -> void:
-	_prune_indexed_files(DESIGN_DIR, "design_", keep_count)
-
+## ring_N.tres 중 인덱스가 keep_count 이상인 것을 지운다 (도안이 줄면 남은 파일이 되살아나는 것 방지)
 func _prune_ring_files(keep_count: int) -> void:
-	_prune_indexed_files(RING_DIR, "ring_", keep_count)
-
-## <prefix>N.tres 중 인덱스가 keep_count 이상인 것을 지운다 (도안·고리 공용)
-func _prune_indexed_files(dir_path: String, prefix: String, keep_count: int) -> void:
-	var dir := DirAccess.open(dir_path)
+	var dir := DirAccess.open(RING_DIR)
 	if dir == null:
 		return
 	for file_name in dir.get_files():
-		if file_name.begins_with(prefix) and file_name.ends_with(".tres"):
-			var idx := int(file_name.trim_prefix(prefix).trim_suffix(".tres"))
+		if file_name.begins_with("ring_") and file_name.ends_with(".tres"):
+			var idx := int(file_name.trim_prefix("ring_").trim_suffix(".tres"))
 			if idx >= keep_count:
 				dir.remove(file_name)

@@ -63,8 +63,10 @@ const CLOSE_SEC := 0.12
 const Copy_START := "진을 왼쪽 판에 손으로 문질러 그리세요  (진 → 룬 → 문양 순서로 하나씩 · [다음]으로 진행)"
 const SCORE_COLOR := Color(0.34, 0.28, 0.20)
 
-var _board: Control
-var _book: Control
+## 🔴 `class_name` 없이도 정적 타입을 받는다 — `const X := preload(...)`를 타입으로 쓸 수 있다.
+## 예전엔 `Control`로 받아 `.call(&"...")`로 더듬었고, 오타가 파싱이 아니라 **런타임에** 터졌다.
+var _board: RingBoard
+var _book: RingBook
 var _title: Label
 var _say: Label
 var _hint: Label
@@ -125,8 +127,8 @@ func open() -> void:
 	_picking_template = false
 	_report.visible = false
 	_inject_defs()                              # 🔴 Db에서 진·룬·문양 정의를 읽어 주입 (세션 13 구조화)
-	_board.call(&"clear_all")                   # 🔴 빈 판에서 시작 — 진 → 룬 → 문양 순차
-	_board.call(&"set_active_glyph", _active_glyph)
+	_board.clear_all()                          # 🔴 빈 판에서 시작 — 진 → 룬 → 문양 순차
+	_board.set_active_glyph(_active_glyph)
 	_sync_book()
 	_set_say(Copy_START, false)
 	_update_score()
@@ -138,9 +140,9 @@ func close() -> void:
 	if not visible:
 		return
 	# 🔴 맺기 버튼을 깜빡해도 쏠 수 있게 — 닫을 때 유효한 조립(진·룬 그려짐)이면 자동으로 맺는다.
-	if not _committed and bool(_board.call(&"can_commit")):
+	if not _committed and _board.can_commit():
 		_committed = true
-		design_committed.emit(_board.call(&"get_assembly"))
+		design_committed.emit(_board.get_assembly())
 		_refresh_buttons()
 	var tw := create_tween()
 	tw.tween_property(_spread, ^"scale", Vector2(OPEN_FROM_X, 1.0), CLOSE_SEC) \
@@ -191,17 +193,17 @@ func _inject_defs() -> void:
 	var fire: RuneDef = Db.get_rune(Enums.RuneType.FIRE)
 	var glyphs: Array = Db.all_glyphs()
 	var jin0: JinDef = jins[0] if not jins.is_empty() else null
-	_board.call(&"set_defs", jin0, fire, glyphs)
-	_book.call(&"set_defs", jins, fire, glyphs)
+	_board.set_defs(jin0, fire, glyphs)
+	_book.set_defs(jins, fire, glyphs)
 
 
 # ─────────────────────────── 선택기 → 보드 (순차 조립) ───────────────────────────
 
 ## 오른쪽 탭·placed 표식을 보드의 현재 단계에 맞춘다.
 func _sync_book() -> void:
-	var tab := _stage_to_tab(int(_board.call(&"stage")))
-	_book.call(&"go_stage", tab, bool(_board.call(&"has_jin")), bool(_board.call(&"has_rune")))
-	_book.call(&"sync_state", _template_idx, _active_glyph)
+	var tab := _stage_to_tab(_board.stage())
+	_book.go_stage(tab, _board.has_jin(), _board.has_rune())
+	_book.sync_state(_template_idx, _active_glyph)
 
 
 func _stage_to_tab(stage: int) -> int:
@@ -216,24 +218,24 @@ func _stage_to_tab(stage: int) -> int:
 
 ## 진 탭 셀을 눌렀다 — 왼쪽 판에 손으로 **문지르라**는 안내만 (열람용).
 func _on_jin_selected() -> void:
-	if int(_board.call(&"stage")) == RingBoard.STAGE_JIN:
+	if _board.stage() == RingBoard.STAGE_JIN:
 		_set_say("진을 왼쪽 판에 손으로 문질러 그리세요 (바깥 원) → [다음]", false)
 
 
 ## 룬 탭 셀 — 마찬가지로 안내만.
 func _on_rune_selected() -> void:
-	if int(_board.call(&"stage")) == RingBoard.STAGE_RUNE:
+	if _board.stage() == RingBoard.STAGE_RUNE:
 		_set_say("룬(불)을 중심에 손으로 문질러 그리세요 (삼각) → [다음]", false)
 
 
 ## 🔴 문양 **고르기** (Q·W 또는 문양 셀). 얹기는 왼쪽 판에 손으로 문지른다 — 칸마다.
 func _select_glyph(glyph: int) -> void:
 	_active_glyph = glyph
-	_board.call(&"set_active_glyph", glyph)
-	_book.call(&"sync_state", _template_idx, glyph)
-	if int(_board.call(&"stage")) != RingBoard.STAGE_GLYPH:
+	_board.set_active_glyph(glyph)
+	_book.sync_state(_template_idx, glyph)
+	if _board.stage() != RingBoard.STAGE_GLYPH:
 		_set_say("먼저 진과 룬을 그리세요  (진 → 룬 → 문양)", true)
-	elif bool(_board.call(&"is_tracing")):
+	elif _board.is_tracing():
 		_set_say("%s 선택 — 칸을 클릭해 손으로 그리세요 · 휠=크기"
 			% RingBoard.GLYPH_NAMES[glyph], false)
 	else:
@@ -255,7 +257,7 @@ func _on_score_changed(_score: float) -> void:
 ## 한 조각을 [다음]으로 잠갔다 (board.piece_locked). 손맛 피드백 — 문양 칸만 별도 문구.
 func _on_piece_locked(target: int, slot: int, score: float) -> void:
 	if target == RingBoard.TraceTarget.GLYPH:
-		if bool(_board.call(&"is_tracing")):
+		if _board.is_tracing():
 			_set_say("%s 새겼다 (%d점) — 다른 칸을 클릭해 이어 그리거나 [맺기]"
 				% [RingBoard.GLYPH_NAMES[_active_glyph], _pct(score)], false)
 		else:
@@ -267,18 +269,18 @@ func _on_next() -> void:
 	# 문양본 확정 → 문양 그리기 단계로 (여기서 비로소 문양 탭으로 넘어간다)
 	if _picking_template:
 		_picking_template = false
-		_book.call(&"go_stage", RingBook.TAB_GLYPH, true, true)
-		_book.call(&"sync_state", _template_idx, _active_glyph)
+		_book.go_stage(RingBook.TAB_GLYPH, true, true)
+		_book.sync_state(_template_idx, _active_glyph)
 		_set_say("칸을 클릭해 고르고 문양(Q·W) 정해 손으로 그리세요 · 휠=문양 크기 · 다른 칸/[다음]으로 이어가기", false)
 		_update_score()
 		_refresh_buttons()
 		return
-	if not bool(_board.call(&"is_tracing")):
+	if not _board.is_tracing():
 		return
-	if float(_board.call(&"coverage")) <= 0.02:
+	if _board.coverage() <= 0.02:
 		_set_say("먼저 왼쪽 선을 손으로 그리세요", true)
 		return
-	var r := String(_board.call(&"advance"))
+	_board.advance()
 	# "advanced" → stage_advanced가 안내 · "finished" → finished 시그널이 리포트를 띄운다
 	_update_score()
 	_refresh_buttons()
@@ -286,8 +288,7 @@ func _on_next() -> void:
 
 ## 보드가 조각을 잠그고 단계를 넘겼다 (진→룬→문양). 탭·안내문을 맞춘다.
 func _on_stage_advanced(stage: int) -> void:
-	_book.call(&"go_stage", _stage_to_tab(stage),
-		bool(_board.call(&"has_jin")), bool(_board.call(&"has_rune")))
+	_book.go_stage(_stage_to_tab(stage), _board.has_jin(), _board.has_rune())
 	match stage:
 		RingBoard.STAGE_RUNE:
 			_set_say("진을 새겼다 — 이제 룬(불)을 중심에 그리세요 → [다음]", false)
@@ -306,8 +307,8 @@ func _on_stage_advanced(stage: int) -> void:
 ## 직접 [문양] 탭으로 넘어간다.
 func _on_template_selected(idx: int, slots: Array) -> void:
 	_template_idx = idx
-	_board.call(&"set_template", slots)
-	_book.call(&"sync_state", _template_idx, _active_glyph)
+	_board.set_template(slots)
+	_book.sync_state(_template_idx, _active_glyph)
 	_set_say("%s 문양본 — 바꿔도 돼요. 정했으면 [다음]으로 문양 그리기"
 		% RingBoard.TEMPLATES[idx].name, false)
 	_update_score()
@@ -322,10 +323,10 @@ func _on_assembly_changed() -> void:
 
 ## 🔴 [맺기] — 마법진을 끝내고 분석한다 (남은 문양 칸은 비운 채). 진·룬을 그렸어야 한다.
 func _finish() -> void:
-	if not bool(_board.call(&"can_commit")):
+	if not _board.can_commit():
 		_set_say("진과 룬을 먼저 그려야 맺힌다  (문양은 없어도 빈 진으로 날아간다)", true)
 		return
-	_board.call(&"finish")   # → finished 시그널이 리포트를 띄운다
+	_board.finish()   # → finished 시그널이 리포트를 띄운다
 
 
 ## 보드가 마법진을 다 그렸다 — 분석 리포트를 띄운다.
@@ -341,7 +342,7 @@ func _on_finished(analysis: Dictionary) -> void:
 func _on_report_shoot() -> void:
 	_committed = true
 	_report.visible = false
-	design_committed.emit(_board.call(&"get_assembly"))
+	design_committed.emit(_board.get_assembly())
 	_set_say("맺혔다 — 책을 덮고(ESC) 쏴 보세요", false)
 	_refresh_buttons()
 
@@ -356,20 +357,20 @@ func _on_report_redo() -> void:
 
 ## 지금 조각 점수(완성도·정밀도·종합)를 라벨에 쓴다. 문양본 고르는 중엔 점수 없음.
 func _update_score() -> void:
-	if _picking_template or not bool(_board.call(&"is_tracing")):
+	if _picking_template or not _board.is_tracing():
 		_score_lbl.text = ""
 		return
-	var cov := int(round(float(_board.call(&"coverage")) * 100.0))
-	var acc := int(round(float(_board.call(&"accuracy")) * 100.0))
-	var sc := _pct(float(_board.call(&"piece_score")))
+	var cov := int(round(_board.coverage() * 100.0))
+	var acc := int(round(_board.accuracy() * 100.0))
+	var sc := _pct(_board.piece_score())
 	_score_lbl.text = "이 조각 — 완성도 %d%% · 정밀도 %d%% · 점수 %d" % [cov, acc, sc]
 
 
 ## 버튼 상태. [다음] = 문양본 고르는 중이면(문양 그리러) 항상 활성 / 그 외엔 지금 조각을 그렸어야 활성.
 ## [맺기] = 문양을 그리는 중(진·룬 완료 & 문양본 확정)에만 — 룬 직후엔 안 뜬다("문양까지 가야 완료").
 func _refresh_buttons() -> void:
-	var tracing := bool(_board.call(&"is_tracing"))
-	var drawn := float(_board.call(&"coverage")) > 0.02
+	var tracing := _board.is_tracing()
+	var drawn := _board.coverage() > 0.02
 	if _picking_template:
 		_next_btn.disabled = false
 		_next_btn.text = "문양 그리기 ▶"
@@ -377,7 +378,7 @@ func _refresh_buttons() -> void:
 		_next_btn.disabled = not (tracing and drawn)
 		_next_btn.text = "다음 ▶"
 	_commit_btn.text = "✓ 맺힘" if _committed else "✓ 맺기 (분석)"
-	_commit_btn.disabled = _picking_template or not bool(_board.call(&"can_commit"))
+	_commit_btn.disabled = _picking_template or not _board.can_commit()
 
 
 func _pct(score: float) -> int:
@@ -396,15 +397,15 @@ func _set_say(text: String, warn: bool) -> void:
 func get_assembly() -> Dictionary:
 	if not _committed:
 		return {}
-	return _board.call(&"get_assembly")
+	return _board.get_assembly()
 
 
 func can_commit() -> bool:
-	return bool(_board.call(&"can_commit"))
+	return _board.can_commit()
 
 
 func clear_board() -> void:
-	_board.call(&"clear_all")
+	_board.clear_all()
 	_committed = false
 	_template_idx = 0
 	_active_glyph = RingBoard.G_RADIATE
@@ -418,7 +419,7 @@ func clear_board() -> void:
 
 
 func play_cast() -> void:
-	_board.call(&"play_cast")
+	_board.play_cast()
 
 
 # ─────────────────────────── 책 만들기 ───────────────────────────
@@ -463,21 +464,21 @@ func _build() -> void:
 	_board.position = BOARD_RECT.position
 	_board.size = BOARD_RECT.size
 	_spread.add_child(_board)
-	_board.connect(&"assembly_changed", _on_assembly_changed)
-	_board.connect(&"stage_advanced", _on_stage_advanced)
-	_board.connect(&"score_changed", _on_score_changed)
-	_board.connect(&"piece_locked", _on_piece_locked)
-	_board.connect(&"finished", _on_finished)
+	_board.assembly_changed.connect(_on_assembly_changed)
+	_board.stage_advanced.connect(_on_stage_advanced)
+	_board.score_changed.connect(_on_score_changed)
+	_board.piece_locked.connect(_on_piece_locked)
+	_board.finished.connect(_on_finished)
 
 	_book = RingBook.new()
 	_book.name = "RingBook"
 	_book.position = BOOK_RECT_R.position
 	_book.size = BOOK_RECT_R.size
 	_spread.add_child(_book)
-	_book.connect(&"jin_selected", _on_jin_selected)
-	_book.connect(&"rune_selected", _on_rune_selected)
-	_book.connect(&"glyph_selected", _on_glyph_selected)
-	_book.connect(&"template_selected", _on_template_selected)
+	_book.jin_selected.connect(_on_jin_selected)
+	_book.rune_selected.connect(_on_rune_selected)
+	_book.glyph_selected.connect(_on_glyph_selected)
+	_book.template_selected.connect(_on_template_selected)
 
 	_next_btn = Button.new()
 	_next_btn.position = NEXT_BTN_RECT.position

@@ -14,10 +14,13 @@ extends Area2D
 ##
 ## 🔴 문양은 **위력·탄 크기·기준 사거리를 건드리지 않는다** — 그건 진의 축이다. 사거리는 **배율만** 준다.
 ## 상태이상 종류·세기도 안 건드린다 — 그건 룬의 축이다.
+##
+## 🔴 2026-07-17 세션 22: **탄의 몸이 SpellDesign이던 시절의 코드를 매장했다.** 먹선 몸(InkRender)·
+## 착탄 충격파(arrows)·중첩 진(children)은 전부 `_design`을 탔는데, 유일한 산 호출자
+## (ring_spell_system)가 design을 안 넘겨 **이미 null로만 돌고 있었다** — 죽은 분기였다.
+## 지금 이 탄 = **순수 직진탄**(고리의 발산→ 칸이 쓴다). 되돌리려면 git 이력.
 
 const SheetLib := preload("res://src/core/sheet_lib.gd")
-const InkRender := preload("res://src/core/ink_render.gd")
-const ShockwaveScene := preload("res://src/spell/shockwave.tscn")
 
 const RUNE_COLORS: Dictionary = {
 	Enums.RuneType.FIRE: Color(1.0, 0.55, 0.1),    # 불 = 주황
@@ -53,10 +56,6 @@ const BOUNCE_PROBE_PAD_PX := 2.0
 ## 반사 직후 벽에서 밀어내는 거리 — 벽에 파묻혀 매 프레임 재반사하는 걸 막는다
 const BOUNCE_PUSH_PX := 1.0
 
-## 🔴 **중첩 진 (재귀) — 껍질이 열린다.** 이 탄이 죽는 순간(착탄·벽·수명 끝) `_design.children`이
-## 있으면 그 자리에서 각자 전개된다. spell_system이 이 시그널을 받아 자식 진을 새 탄으로 스폰한다.
-signal deploy_children(children: Array, at: Vector2, travel_angle: float)
-
 var damage: float = 0.0
 var rune_type: int = Enums.RuneType.FIRE
 var status: int = Enums.Status.NONE
@@ -87,11 +86,6 @@ var _homing_left: float = 0.0
 ## 먹선 진이 몸일 땐 **회전하지 않는다.** 폴백 스프라이트(혜성)일 때만 진행 방향을 본다
 var _rotates := false
 var _ray: RayCast2D = null
-## 착탄 충격파(v2.1)의 재료 — 진 위 화살표들의 **자리와 방향**이 여기 들어 있다
-var _design: SpellDesign = null
-## 충격파는 **한 번만** 뿜는다 — 관통탄이 적마다 뿜으면 "여러 적을 뚫는다"는 보상 위에
-## 충격파까지 얹혀 **이중 보상**이 된다
-var _shock_fired := false
 
 func _ready() -> void:
 	_life_left = _balance.projectile_lifetime_sec
@@ -114,14 +108,11 @@ static func range_mult(balance: BalanceData, p_reach: float) -> float:
 
 
 ## p_effects: **효과 사전** {GlyphType: Σreach} — 한 탄에 여러 개가 얹힌다 (v2.0).
-## p_lifetime: 사거리(초) = 진 규모 × 문양 배율 (spell_system.compute_design_lifetime).
-## p_design: **탄의 몸** — 이 진(+룬)의 먹선이 그대로 날아가고 히트박스가 진 반지름을 따른다.
-##   null이거나 strokes가 비면 기존 스프라이트/폴리곤으로 폴백 (샘플 도안·구세이브 호환).
+## p_lifetime: 사거리(초).
 func setup(p_damage: float, p_rune_type: int, p_status: int, p_status_power: float,
 		p_speed: float, p_angle: float,
 		p_effects: Dictionary = {},
 		p_lifetime: float = 0.0,
-		p_design: SpellDesign = null,
 		p_rune_hits: Array = []) -> void:
 	damage = p_damage
 	rune_type = p_rune_type
@@ -134,7 +125,7 @@ func setup(p_damage: float, p_rune_type: int, p_status: int, p_status_power: flo
 		_life_left = p_lifetime
 	effects = p_effects
 	_setup_effects()
-	_setup_body(p_design, p_rune_type)
+	_setup_body(p_rune_type)
 
 
 ## 효과 세기 배분 — 각 효과는 **자기 reach 합**으로 세기가 정해진다 (GDD §4.3).
@@ -157,29 +148,10 @@ func _setup_effects() -> void:
 			reach_t(_balance, effects[Enums.GlyphType.THRUST]))
 
 
-## 탄의 몸 = **진**(v2.0). 먹선과 히트박스가 **같은 반지름**을 쓴다 — 갈라지면
-## 보이는 것과 맞는 것이 어긋나고, 그건 이 게임의 정체성이 깨지는 것이다.
-func _setup_body(design: SpellDesign, p_rune_type: int) -> void:
-	_design = design
-	var ink: Node2D = null
-	if design != null:
-		# roles 기본값(CIRCLE_ROLES) = 진 + 룬. **문양 획은 안 붙는다** — 문양은 효과이지 몸이 아니다.
-		# build_design은 진 중심을 원점에 두므로 그대로 얹으면 탄의 중심이 곧 진의 중심이다.
-		ink = InkRender.build_design(design,
-			InkRender.unit_px(_balance) * _balance.projectile_circle_scale,
-			{"bright": true})
-	if ink != null:
-		($Visual as Polygon2D).visible = false
-		_set_hit_radius(_design_radius_px(design))
-		add_child(ink)
-		return
-
-	# ── 폴백: strokes가 없는 샘플·구세이브 도안 — 기성 혜성 스프라이트가 진행 방향을 보고 날아간다.
-	# 그릴 진은 없어도 **진 크기는 있다** — 히트박스는 여전히 진을 따른다 (루트 scale로 한 번에).
+## 탄의 몸 — 혜성 스프라이트가 진행 방향을 보고 날아간다. 히트박스는 씬의 기본 반경(BASE_HIT_RADIUS).
+func _setup_body(p_rune_type: int) -> void:
 	_rotates = true
 	rotation = direction_angle
-	if design != null:
-		scale = Vector2.ONE * (_design_radius_px(design) / BASE_HIT_RADIUS)
 	var visual := $Visual as Polygon2D
 	if _ensure_shared_frames():
 		visual.visible = false
@@ -189,23 +161,6 @@ func _setup_body(design: SpellDesign, p_rune_type: int) -> void:
 		add_child(spr)
 	else:
 		visual.color = RUNE_COLORS.get(p_rune_type, Color.WHITE)
-
-
-## 진 반지름 → 월드 px. **spell_system.compute_radius_px와 같은 공식이다** (TECH_SPEC §4.0-a).
-## ⚠ 여기서만 계산하고 spell_system이 또 계산하면 언젠가 갈라진다 — 둘 다 balance의 같은 두
-## 노브(projectile_circle_scale·projectile_min_radius_px)만 읽는다.
-func _design_radius_px(design: SpellDesign) -> float:
-	var r := design.circle_radius * 0.5 * InkRender.unit_px(_balance) \
-		* _balance.projectile_circle_scale
-	return maxf(r, _balance.projectile_min_radius_px)
-
-
-## 히트박스 반경(px)을 맞춘다. 형상 리소스(CircleShape2D)는 씬 간 공유물이라 **scale로만** 만진다
-func _set_hit_radius(radius_px: float) -> void:
-	var cs := get_node_or_null("Shape") as CollisionShape2D
-	if cs == null:
-		return
-	cs.scale = Vector2.ONE * (radius_px / BASE_HIT_RADIUS)
 
 
 static func _ensure_shared_frames() -> bool:
@@ -316,58 +271,7 @@ func _handle_collision(node: Node2D) -> void:
 	# 적이 아니면 마스크상 world(벽)뿐
 	_hit_wall()
 
-# ── 착탄 충격파 (v2.1, TECH_SPEC §4.0-b) ──────────────────────
-# 🔴 **화살표 하나 = 충격파 하나.** **탄이 곧 진**이므로 적에 닿는 순간 진이 히트 지점에 놓이고,
-# 진 위의 화살표들이 **각자 제자리에서 제 방향으로** 뿜는다 — 종이 위 배치가 곧 착탄 그림이다.
-#
-# **기둥을 여기서 만들지 않는다.** 룬을 겨눈 화살표들은 중심에서 **저절로 만나** 기둥이 되고
-# (shockwave._collide_with), 밖을 겨눈 것들은 영영 안 만난다.
-
-## **회전량은 하나다.** 위치와 방향에 **똑같이** 적용된다 — 갈라지면 보이는 배치와
-## 터지는 그림이 어긋난다.
-##
-## 🔴 **회전은 여기서 딱 한 번 건다.** `ArrowData.direction`·`origin`은 **캔버스 절대각**이고
-## (종이 위쪽 = UP_AXIS = -π/2), 여기서 "탄이 가던 방향"으로 옮긴다. 세션 7의 "모든 문양이
-## 90도 틀어져 나갔다"는 버그가 **이 축을 두 번 뺀** 것이었다. 미리 빼 두지 말 것.
-func _shock_rotation() -> float:
-	# 유도∿로 꺾였으면 **꺾인 뒤의 방향**이다 — "탄이 가던 방향"이지 발사각이 아니다
-	var travel := _velocity.angle() if not _velocity.is_zero_approx() else direction_angle
-	return travel - InkRender.UP_AXIS
-
-
-func _fire_shockwaves() -> void:
-	if _shock_fired or _design == null:
-		return
-	_shock_fired = true
-	var parent := get_parent()
-	if parent == null:
-		return
-	var rotate_by := _shock_rotation()
-	var radius_px := _design_radius_px(_design)
-	for arrow: ArrowData in _design.arrows:
-		# ⚠ **미정 (사용자: "아직 미정")**: 팅김·유도·관통 획도 충격파를 뿜는지.
-		# 일단 **곧은 화살표(BASIC)만** — 지금 아무 일도 안 하는 값이라 죽은 값이 살아난다
-		if arrow.glyph != Enums.GlyphType.BASIC:
-			continue
-		var wave := ShockwaveScene.instantiate()
-		# 🔴 **위치·setup을 트리에 넣기 전에 끝낸다.** 여기는 물리 콜백 안이라 Area2D를 즉시
-		# add_child 하면 "Can't change this state while flushing queries"가 뜨고 **조용히
-		# 충격파가 안 생긴다.** 부모 로컬 좌표로 미리 앉힌 뒤 지연 추가한다
-		var at := global_position + (arrow.origin * radius_px).rotated(rotate_by)
-		wave.position = _to_parent_local(parent, at)
-		wave.call(&"setup", damage, rune_type, status, status_power,
-			arrow.direction + rotate_by)
-		parent.call_deferred(&"add_child", wave)
-
-
-## 월드 좌표 → 부모 로컬. 부모가 Node2D가 아니면(테스트 홀더 등) 월드 = 로컬로 본다
-static func _to_parent_local(parent: Node, at: Vector2) -> Vector2:
-	var n2d := parent as Node2D
-	return n2d.to_local(at) if n2d != null else at
-
-
 func _hit_enemy(node: Node2D) -> void:
-	_fire_shockwaves()
 	if _pierces_left > 0:
 		var id := node.get_instance_id()
 		if _pierced_ids.has(id):
@@ -403,9 +307,4 @@ func _consume() -> void:
 	if _consumed:
 		return
 	_consumed = true
-	# 🔴 껍질이 열린다 — 품은 진들이 이 자리에서 각자 전개된다 (재귀, TRUTH §4).
-	# 방위 기준 = **탄이 가던 방향** (유도로 꺾였으면 꺾인 뒤). 종이 위쪽이 그쪽을 향한다.
-	if _design != null and not _design.children.is_empty():
-		var travel := _velocity.angle() if not _velocity.is_zero_approx() else direction_angle
-		deploy_children.emit(_design.children, global_position, travel)
 	queue_free()

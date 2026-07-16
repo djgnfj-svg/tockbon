@@ -2,8 +2,7 @@ extends Node2D
 ## 고리 조립 발사 시스템 — 모듈 B (세션 12~). 필드 씬에 자식으로 넣기만 하면 되는 자립 노드.
 ## EventBus.ring_cast_requested 수신 → 진(캐리어)을 조준 방향으로 쏜다.
 ##
-## 🔴 **옛 spell_system과 평행이다.** SpellDesign 경로(cast_requested)는 그대로 두고, 고리
-## 모델(assembly 사전)만 이쪽으로 흐른다. 방향이 굳으면(#17) 이게 본 게임 발사를 대체한다.
+## 🔴 세션 22: 옛 spell_system(SpellDesign·cast_requested)을 매장해 **이게 유일한 발사 경로**다.
 ##
 ## 발사 모델 (사용자 확정 세션 10):
 ##   1) 발사 = 조립한 마법진(진)이 통째로 조준 방향으로 날아간다 (ring_carrier).
@@ -15,9 +14,11 @@ extends Node2D
 
 const RingBoard := preload("res://src/drawing/ring_board.gd")
 const CarrierScene := preload("res://src/spell/ring_carrier.tscn")
+const CarrierScript := preload("res://src/spell/ring_carrier.gd")
 const BoltScene := preload("res://src/spell/projectile.tscn")
 const BoltScript := preload("res://src/spell/projectile.gd")
 const PillarScene := preload("res://src/spell/pillar.tscn")
+const PillarScript := preload("res://src/spell/pillar.gd")
 
 const SLOTS := 8
 const UP_AXIS := -PI / 2.0
@@ -42,14 +43,16 @@ func _on_ring_cast(assembly: Dictionary, origin: Vector2, aim_dir: Vector2) -> v
 		return
 	var angle := aim_dir.angle() if aim_dir.length_squared() > 0.0 else 0.0
 
-	var carrier := CarrierScene.instantiate()
+	var carrier := CarrierScene.instantiate() as CarrierScript
+	if carrier == null:
+		return
 	add_child(carrier)
 	carrier.global_position = origin
 	var fire := _fire_hit()
-	carrier.call(&"setup", ring, angle,
+	carrier.setup(ring, angle,
 		balance.projectile_base_speed, balance.projectile_lifetime_sec,
 		fire.damage, fire.rune_type, fire.status, fire.status_power)
-	carrier.connect(&"deployed", _on_carrier_deployed)
+	carrier.deployed.connect(_on_carrier_deployed)
 
 
 ## 착탄 = 안의 고리를 편다. 물리 콜백 중일 수 있으니 지연 실행 (Area2D를 콜백 안에서 즉시
@@ -85,11 +88,13 @@ func _spawn_bolt(at: Vector2, angle: float, fire: Dictionary) -> void:
 
 ## 응집 = 착탄점에 불기둥 하나. 응집 칸이 많을수록 굵다 (node scale).
 func _spawn_pillar(at: Vector2, gather: int, fire: Dictionary) -> void:
-	var pillar := PillarScene.instantiate()
+	var pillar := PillarScene.instantiate() as PillarScript
+	if pillar == null:
+		return
 	add_child(pillar)
 	pillar.global_position = at
 	pillar.scale = Vector2.ONE * (1.0 + PILLAR_SCALE_PER_GATHER * float(gather - 1))
-	pillar.call(&"setup", fire.damage, fire.rune_type, fire.status, fire.status_power)
+	pillar.setup(fire.damage, fire.rune_type, fire.status, fire.status_power)
 
 
 ## 불 룬 히트 정보 — Db에서 불 RuneDef를 읽어 피해·상태·세기를 뽑는다.

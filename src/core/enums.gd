@@ -5,7 +5,9 @@ enum CircleType { FIXED, AIMED }
 ## 룬 = 순수 원소만 (v2.2, TRUTH §4 세션 14). **충격(옛 =1)은 룬을 떠나 문양(추진)으로 갔다** —
 ## 충격만 원소가 아니었고(불·물·바람=원소, 충격=물리력), 넉백은 화살표 충격파와 중복이었다.
 ## ⚠ **WATER=2·WIND=3 값을 일부러 유지한다** — 이 값을 밀면 기존 세이브·.tres의 rune_type이
-## 조용히 깨진다. 1은 레거시 IMPACT 구멍으로 비워 둔다(SpellDesign.migrate_legacy_runes가 →FIRE로 remap).
+## 조용히 깨진다. 1은 레거시 IMPACT 구멍으로 비워 둔다 — 세션 22에 마이그레이션 코드
+## (SpellDesign.migrate_legacy_runes)는 도안 모델과 함께 매장했지만, **구멍은 그대로 둔다**:
+## 값을 밀면 남은 세이브·.tres가 조용히 깨진다.
 enum RuneType { FIRE = 0, WATER = 2, WIND = 3 }
 ## 룬 이터레이션은 항상 명시적 리스트로 (RuneType.size()/range 금지 — 구멍 때문).
 const RUNE_TYPES: Array[int] = [RuneType.FIRE, RuneType.WATER, RuneType.WIND]

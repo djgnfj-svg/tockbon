@@ -1,8 +1,8 @@
 class_name RingDesign
 extends Resource
 ## 고리 조립 도안 — 새 마법진 모델의 저장·장착 단위 (#17 1단계, 세션 16).
-## `ring_board.get_assembly()`가 내는 순수 Dictionary(assembly)를 감싸 리소스로 만든다 —
-## SpellDesign과 평행이다(옛 도안 경로는 그대로 살아 있음). 스키마 변경은 리드만.
+## `ring_board.get_assembly()`가 내는 순수 Dictionary(assembly)를 감싸 리소스로 만든다.
+## 🔴 세션 22: 옛 SpellDesign 도안 경로를 매장해 **이제 이게 유일한 마법진 모델**이다. 스키마 변경은 리드만.
 ##
 ## assembly 형태: {ring_count:1, rune:int, rings:[Array[int](8칸)], open:[열린칸]}.
 ## 각 칸 값 = 응집(0)/발산(1)/빈칸(-1) (RingBoard.G_GATHER/G_RADIATE/GLYPH_NONE).

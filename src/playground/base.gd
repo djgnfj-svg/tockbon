@@ -12,12 +12,13 @@ extends Node2D
 ## 옛 본 게임(src/base 거점·field·ui·tutorial·quest)은 **삭제됐다** — 되돌리려면 git 이력을 본다.
 
 const RingForgePanel := preload("res://src/drawing/ring_forge_panel.gd")
+const Desk := preload("res://src/playground/desk.gd")
 
-@onready var _desk = $Desk
+@onready var _desk: Desk = $Desk
 @onready var _player: CharacterBody2D = $Player
 
 var _overlay: CanvasLayer = null
-var _forge: Control = null
+var _forge: RingForgePanel = null
 
 func _ready() -> void:
 	_desk.interacted.connect(_open_drawing)
@@ -32,12 +33,11 @@ func _open_drawing() -> void:
 	add_child(_overlay)
 	_forge = RingForgePanel.new()            # 기지 이젤과 같은 책 (진→룬→문양본→문양, 손으로 따라 그어 확정)
 	_overlay.add_child(_forge)
-	_forge.connect(&"design_committed", _on_ring_committed)
-	_forge.connect(&"closed", _close_drawing)   # ESC(ui_cancel) → 패널이 closed 발신
-	_forge.call(&"open")
+	_forge.design_committed.connect(_on_ring_committed)
+	_forge.closed.connect(_close_drawing)   # ESC(ui_cancel) → 패널이 closed 발신
+	_forge.open()
 
 ## 고리 마법진이 맺혔다 — RingDesign으로 감싸 GameState에 넘긴다(빈 슬롯에 자동 장착).
-## 배선은 본 게임 base.gd._on_ring_committed와 동일하다 — 두 경로가 갈라지면 안 된다.
 func _on_ring_committed(assembly: Dictionary) -> void:
 	var design := RingDesign.from_assembly(assembly, "고리 마법진")
 	EventBus.ring_design_committed.emit(design)
