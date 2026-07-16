@@ -5,7 +5,7 @@
 
 ## 새 세션이 먼저 읽을 것
 
-> 🔴🔴 **세션 21 대청소 + 세션 22 구조 정비(2026-07-17) — 여기부터 읽어라. 아래 docs는 대부분 낡았다.**
+> 🔴🔴 **세션 21 대청소 + 22 구조 정비 + 23 「그리는 재미」(2026-07-17) — 여기부터 읽어라.**
 >
 > **지금 게임 = `src/base/base.tscn`(베이스캠프, `run/main_scene`) + 고리 조립 책.** 그게 전부다.
 > **마법진 = 「고리 조립」**: 진=바깥 그릇(투사체 몸) · 룬=중심(속성) · 문양=진과 룬 사이 고리 칸 ·
@@ -23,6 +23,17 @@
 > ✅ **세션 22: `docs/REFACTOR_PLAN.md`를 전부 처리했다** — 옛 세대(SpellDesign·research·자유드로잉
 > 잔재) 약 1,200줄 매장 · 규칙 위반 3건 해소 · `ring_board` 3분할 · 실제 버그 I3 수정.
 > **뼈대 정비는 끝났다. 이제 기능을 얹는 단계다.**
+>
+> 🔴 **세션 23 = 「그리는 재미」의 첫 조각** (memory `takbon-mana-injection-rule` · `takbon-pen-item`):
+> **다 그림 → 점수·위력 표시 → [마력 주입] → 맺히거나 펑(65점 이하).** 세션 22까지 손그림 점수는
+> 계산·저장만 되고 **아무도 안 읽어** 잘 그리든 막 그리든 마법이 같았다 — 이제 점수가 **위력을 정한다**.
+> 정밀도 판정을 조이고(0.20→0.08 — 그전엔 덧칠이 최적이었다), **펜 아이템**이 보정을 판다.
+> ⚠⚠ **주입 전에 "터진다"고 안내하면 안 된다** (사용자 확정) — 눌러 봐야 아는 게 그 버튼의 전부다.
+> 위력 곡선이 지수인 것도 이 때문이다(평평한 구간 = 숨은 안내).
+>
+> 🔴 **다음 세션이 제일 먼저 할 일 = 손맛 튜닝.** 판정 반경·65점 기준선이 맞는지는 **사용자가
+> 마우스로 직접 그려 봐야** 정해진다. 리드의 측정은 전부 시뮬레이션이다 — **좌표를 그대로 찍어
+> 재면 정밀도 100이 나와 아무것도 검증되지 않는다**(세션 23에 실제로 이 착각을 했다).
 
 - **docs/REFACTOR_PLAN.md** — ✅ **세션 22에 완료** (이력·판단 근거로만 참고). 「문제가 아닌 것」 절은
   아직 유효하다 — 건드리지 마라
@@ -45,7 +56,13 @@
   `src/core`(리드 전용)
   - `src/drawing` = **ring_assembly**(조립 상태기계·순수 데이터) · **trace_scorer**(탁본 채점·순수 수학)
     · **ring_board**(기하·렌더·입력) · ring_book · ring_forge_panel(+`.tscn` 껍데기)
-    🔴 **채점 규칙을 바꿀 땐 `trace_scorer.gd`만 연다** (세션 22 분할의 이유)
+    🔴 **채점(완성도·정밀도·펜 보정)을 바꿀 땐 `trace_scorer.gd`만 연다** (세션 22 분할의 이유)
+  - 🔴 **점수 → 펑/위력 규칙 = `src/core/ring_power.gd`** (세션 23). 조립 리포트(UI)와 발사가
+    **같은 함수를 부른다** — core에 둔 이유가 이것이다. 복사해 두면 한쪽만 고쳐도 아무도 못
+    알아채고 갈라진다(리포트는 "위력 140" 적고 130으로 때리는 식). 수치는 balance.tres
+  - 🔴 **보정은 펜이 판다**: `ItemKind.PEN` → `data/items/pen_*.tres`의 `params.correction` →
+    `GameState.stroke_correction()` → `ring_board._set_trace` → `trace_scorer.set_correction`.
+    **새 펜 = .tres 한 장.** 맨손 = 보정 0 = 그린 대로(정체성은 기본 상태가 지킨다)
   - `src/spell` = ring_spell_system(유일한 발사 경로) · ring_carrier · projectile · pillar · dummy_target
     · ⚠ **shockwave는 지금 참조 0**이다 (세션 22에 projectile의 옛 SpellDesign 충격파 경로가 사라짐)
 - 모듈 간 통신은 **EventBus 시그널 + core 스키마만**. 타 모듈 직접 preload/get_node 금지
@@ -87,7 +104,7 @@
 ```bash
 ./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_save_auto.gd            # 저장/로드 (고리 라운드트립)
 ./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_ring_assembly_auto.gd   # **조립 상태기계 계약**: 단계 전이·문양본이 칸을 여는 규칙·assembly 발사 계약·시그널 (세션 22)
-./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_ring_trace_auto.gd      # **손그림 탁본**: 완성도/정밀도 점수·[다음] 수동 진행·문양 칸 자유 편집·먼 클릭이 칸을 안 뺏음(I3)
+./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_ring_trace_auto.gd      # **손그림 탁본**: 완성도/정밀도·[다음] 수동 진행·칸 자유 편집·I3 · **정밀도 이빨(⑨⑩)·펜 보정(⑪⑫)**
 ./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_ring_spell_auto.gd      # **고리 발사**: 진→투사체·착탄 전개(발산 탄환·응집 기둥)·실제 적 take_hit
 ./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_ring_design_auto.gd     # **고리 도안 통합**: RingDesign 라운드트립·ring_design_committed→GameState 자동 장착
 ```
@@ -96,6 +113,17 @@
 `test_ring_trace_auto`가 내부 필드(`_slots`)를 더듬다가 리팩터로 그게 옮겨가자 에러로 함수가
 **중단**됐는데 `failures=0`이라 통과로 보였다. **grep을 `_OK`만 하지 말고 `SCRIPT ERROR`도 같이 봐라.**
 그리고 **테스트는 공개 API로만 검증해라** — 내부 필드는 리팩터 때 옮겨 다니는 물건이라 계약이 아니다.
+⚠ **세션 23에 재발했다** (`test_ring_spell_auto`가 내부 `_deploy_now`를 옛 인자 수로 호출) —
+같은 함정이 두 세션 연속 나왔다. 그리고 `test_ring_trace_auto`의 `_check`는 **실패할 때만 출력**해서
+**침묵이 곧 통과**다 — 함수가 죽어도 조용하다.
+
+🔴🔴 **그래서 초록불을 근거로 쓰지 마라 — 뮤테이션으로 검출력을 증명해라.** 고친 코드를 일부러
+되돌려 **정확히 몇 개가 실패하는지** 확인한다. 세션 22·23이 전부 이 방식으로 잡았다.
+실제로 세션 23의 기존 테스트 하나(`정밀도 < 0.8`)는 **옛 관대한 판정도 통과**해 검출력이 0이었다.
+
+🔴 **채점 수치는 헤드리스로 못 검증한다.** 테스트가 가이드 좌표를 그대로 찍으면 이탈이 0이라
+**판정 반경을 뭘로 바꾸든 정밀도 100**이다 — 그린 게 아니라 아무것도 안 잰 것이다.
+손맛은 **사용자가 마우스로 직접 그려 봐야** 정해진다(리드의 흔들림 시뮬레이션도 시뮬레이션이다).
 
 🔴 **세션 21 대청소로 목록이 이만큼 줄었다.** 옛 자유 드로잉·옛 본 게임과 함께 그 테스트들도 지웠다.
 **되돌리려면 git 이력**(삭제 직전 커밋 = `dcc3326`).
@@ -107,8 +135,9 @@
   팔레트도 다르다(응집◎/확산✳/발산→). 기준 아님 — 헷갈리면 위쪽을 봐라.
 
 **그냥 실행(F5) = 베이스캠프** (`src/base/base.tscn` = `run/main_scene`): WASD로 책상에 가서 **E** →
-고리 조립 책. 맺으면 `GameState.ring_designs`에 들어간다. ⚠ **아직 발사 경로가 베이스캠프엔 없다**
-(RingSpellSystem 미배선) — 쏘려면 위 시험대를 쓴다.
+고리 조립 책 → 진·룬·문양을 손으로 긋고 **[마력 주입]**(65점 이하면 펑). 맺으면 점수를 실은 채
+`GameState.ring_designs`로 들어가 첫 빈 슬롯에 자동 장착된다(세션 23에 본 게임 경로로 확인).
+⚠ **아직 발사 경로가 베이스캠프엔 없다** (RingSpellSystem 미배선) — 쏘려면 위 시험대를 쓴다.
 
 🔴 **헤드리스는 "존재"만 확인하고 "보인다"는 못 본다** (memory `takbon-mcp-visual-verify`).
 렌더·레이아웃을 건드렸으면 **에디터로 띄워 스샷으로 확인해라** — 세션 22의 `ring_board` 분할과
