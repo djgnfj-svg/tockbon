@@ -63,6 +63,7 @@ var _dev_n := 0
 var _scores: Dictionary = {}            # key → {cover, acc, score, glyph}
 var _locked: Array[LockedPiece] = []    # 잠근 조각의 손그림
 var _radius := 1.0                      # 길이 단위 기준 (보드의 _outer_radius) — 바깥이 준다
+var _correction := 0.0                  # 펜 보정도 (0=그린 대로 · 1=정답선) — 바깥이 준다
 
 
 # ─────────────────────────── 기준 길이 · 가이드 ───────────────────────────
@@ -70,6 +71,16 @@ var _radius := 1.0                      # 길이 단위 기준 (보드의 _outer
 ## 판 크기가 바뀌거나 가이드를 세울 때 바깥이 준다. 모든 거리 임계값이 이 값 비례다.
 func set_reference_radius(r: float) -> void:
 	_radius = maxf(r, 0.001)
+
+
+## 🔴 펜 보정도 (0..1) — 바깥(보드)이 `GameState.stroke_correction()`에서 읽어 준다.
+## 채점기는 아이템도 장비도 모른다 — 숫자 하나만 받는다 (set_reference_radius와 같은 규약).
+func set_correction(v: float) -> void:
+	_correction = clampf(v, 0.0, 1.0)
+
+
+func correction() -> float:
+	return _correction
 
 
 ## 새 가이드를 세운다 (그릴 대상이 바뀜) — 문지름 상태를 비운다.
@@ -112,20 +123,33 @@ func add_point(local_pos: Vector2) -> bool:
 	if _guide.is_empty():
 		return false
 	var best_d2 := INF
+	var best_j := -1
 	for j in _guide.size():
 		var d2 := local_pos.distance_squared_to(_guide[j])
 		if d2 < best_d2:
 			best_d2 = d2
+			best_j = j
 	var consider := _radius * CONSIDER_FRAC
 	if best_d2 > consider * consider:
 		return false   # 가이드에서 너무 멀다 = 이 조각과 무관 (펜 뗌)
-	_dev_sum += sqrt(best_d2)
+
+	# 🔴 **펜 보정** (세션 23) — 그은 점을 가이드 쪽으로 당긴다. 보정도 0이면 손 그대로다.
+	# ⚠ **판정 전에 당긴다** — 보정된 획이 곧 내가 그린 획이다. 먹선·완성도·정밀도가 전부
+	# 이 점을 보므로 좋은 펜은 셋 다 올려 준다 (사용자: "펜등급마다 보정도가 오르는거임").
+	# 당김은 항상 가장 가까운 가이드 점 쪽이라, 이탈은 정확히 (1-보정도)배가 된다.
+	var pt := local_pos
+	var dev := sqrt(best_d2)
+	if _correction > 0.0 and best_j >= 0:
+		pt = local_pos.lerp(_guide[best_j], _correction)
+		dev *= (1.0 - _correction)
+
+	_dev_sum += dev
 	_dev_n += 1
-	_ink.append(local_pos)               # 🔴 그린 대로 남긴다 (선에 안 붙임)
+	_ink.append(pt)                      # 🔴 보정 없으면 그린 대로 (선에 안 붙임)
 	var rr := _radius * REVEAL_RADIUS_FRAC
 	var rr2 := rr * rr
 	for j in _guide.size():
-		if _revealed[j] == 0 and _guide[j].distance_squared_to(local_pos) <= rr2:
+		if _revealed[j] == 0 and _guide[j].distance_squared_to(pt) <= rr2:
 			_revealed[j] = 1
 	return true
 

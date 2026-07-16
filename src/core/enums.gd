@@ -44,5 +44,8 @@ enum DrawStage { CIRCLE, RUNE, ARROW }
 enum WandPattern { SINGLE, MULTI, NOVA }
 enum Status { NONE, BURN, KNOCKBACK, WET, FLOW }
 enum Phase { MORNING, DAY, EVENING, NIGHT }
-enum ItemKind { INK, PAPER, WAND, ROBE, CHARM, MATERIAL, FRAGMENT }
+## 🔴 PEN = 탁본 펜 (세션 23 신설). 등급이 오를수록 **보정도**가 올라 손을 잡아 준다
+## (GameState.stroke_correction → trace_scorer). WAND(지팡이)와 역할이 달라 별도 부위다.
+## ⚠ **끝에 붙였다** — 중간에 끼우면 저장된 equipment의 부위 키가 통째로 밀린다.
+enum ItemKind { INK, PAPER, WAND, ROBE, CHARM, MATERIAL, FRAGMENT, PEN }
 enum CastFailReason { NO_MANA, BROKEN, INVALID }

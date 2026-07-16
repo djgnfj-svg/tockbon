@@ -177,11 +177,20 @@ func _refresh_trace() -> void:
 
 
 ## 가이드 대상을 세우고 숨은 선 점을 만든 뒤 문지름 상태를 비운다.
+## 🔴 여기서 **장착한 펜의 보정도**도 물려 준다 (세션 23) — 조각을 새로 잡을 때마다 다시 읽어,
+## 그리는 도중에 펜을 갈아 껴도 다음 조각부터 반영된다. 채점기는 아이템을 모른다(숫자만 받는다).
 func _set_trace(target: int, slot: int) -> void:
 	_trace = target
 	_trace_slot = slot
 	_scorer.set_reference_radius(_outer_radius())
+	_scorer.set_correction(_pen_correction())
 	_scorer.set_guide(_build_guide(target, slot))
+
+
+## 장착한 펜의 보정도. 오토로드가 없는 환경(순수 단위 테스트)에서도 죽지 않게 0으로 폴백한다.
+func _pen_correction() -> float:
+	var gs := get_node_or_null(^"/root/GameState")
+	return float(gs.stroke_correction()) if gs != null else 0.0
 
 
 ## 대상별 숨은 정답 선 (조밀, 로컬 좌표). 이 위를 문지르면 드러난다.

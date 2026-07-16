@@ -40,6 +40,8 @@ func _run() -> void:
 	_test_far_click_does_not_steal_slot()
 	_test_accuracy_has_teeth()
 	_test_gross_miss_is_punished_not_erased()
+	_test_pen_correction_pulls_strokes()
+	_test_pen_grades_registered()
 
 	if failures == 0:
 		print("TEST_RING_TRACE_OK — 전 항목 통과")
@@ -83,6 +85,65 @@ func _test_gross_miss_is_punished_not_erased() -> void:
 	# 새: 30px 점들이 채점돼 평균 ≈15px → 정밀도 0. 옛: 통째로 무시돼 정밀도 ≈1로 **남았다**.
 	_check(acc < 0.3, "크게 벗어난 획이 점수를 깎는다 (실제 %.2f — 무시하면 1.0에 가깝다)" % acc)
 	b.queue_free()
+
+
+# ── 🔴 ⑪ 펜 보정이 획을 당긴다 (세션 23, 사용자: "펜등급마다 보정도가 오르는거임") ──
+# 채점기를 직접 세워 본다 — 보정은 **아이템 → GameState → 보드 → 채점기** 순으로 흐르는데,
+# 여기선 규칙 자체(당김이 정밀도를 올리나)를 순수 수학으로 못 박는다. 배선은 ⑫가 본다.
+func _test_pen_correction_pulls_strokes() -> void:
+	var Scorer = load("res://src/drawing/trace_scorer.gd")
+	var guide := PackedVector2Array()
+	for i in 60:
+		guide.append(Vector2(float(i) * 2.0, 100.0))     # 수평 직선
+	var accs := []
+	for corr in [0.0, 0.35, 0.6, 1.0]:
+		var s = Scorer.new()
+		s.set_reference_radius(118.0)                     # 판정 반경 ≈9.4px
+		s.set_correction(corr)
+		s.set_guide(guide)
+		for p in guide:
+			s.add_point(p + Vector2(0.0, 8.0))            # 8px 아래로 어긋나게 그음
+		accs.append(float(s.accuracy()))
+	_check(accs[0] < 0.3, "보정 0 = 손 그대로 → 8px 어긋남이 그대로 벌받는다 (%.2f)" % accs[0])
+	_check(accs[1] > accs[0], "보정 0.35가 정밀도를 올린다 (%.2f > %.2f)" % [accs[1], accs[0]])
+	_check(accs[2] > accs[1], "보정 0.6이 더 올린다 — **등급이 오를수록** (%.2f)" % accs[2])
+	_check(accs[3] > 0.99, "보정 1.0 = 정답선에 붙는다 → 정밀도 만점 (%.2f)" % accs[3])
+	# 🔴 먹선 자체가 바뀐다 (사용자 선택: "펜이 손을 잡아준다"). 보정 0이면 그린 그대로다.
+	var raw = Scorer.new()
+	raw.set_reference_radius(118.0)
+	raw.set_guide(guide)
+	raw.add_point(Vector2(20.0, 108.0))
+	_check(is_equal_approx(raw.ink()[0].y, 108.0), "보정 0 → 먹선이 그린 좌표 그대로")
+	var pen = Scorer.new()
+	pen.set_reference_radius(118.0)
+	pen.set_correction(0.5)
+	pen.set_guide(guide)
+	pen.add_point(Vector2(20.0, 108.0))
+	_check(is_equal_approx(pen.ink()[0].y, 104.0), "보정 0.5 → 먹선이 가이드 쪽으로 절반 당겨짐")
+
+
+# ── 🔴 ⑫ 펜 등급이 실제로 등록돼 있고 보정도가 등급 순으로 오른다 ──
+func _test_pen_grades_registered() -> void:
+	var db = root.get_node_or_null(^"/root/Db")
+	var gs = root.get_node_or_null(^"/root/GameState")
+	if db == null or gs == null:
+		_check(false, "Db·GameState 오토로드를 찾을 수 없다")
+		return
+	var last := -1.0
+	for id in [&"pen_basic", &"pen_mid", &"pen_high"]:
+		var it = db.get_item(id)
+		_check(it != null, "%s 등록됨 (data/items/%s.tres)" % [id, id])
+		if it == null:
+			return
+		_check(int(it.kind) == Enums.ItemKind.PEN, "%s의 부위 = PEN" % id)
+		var c := float(it.params.get("correction", -1.0))
+		_check(c > last, "%s 보정도가 앞 등급보다 높다 (%.2f > %.2f)" % [id, c, last])
+		last = c
+	# 배선: 펜을 끼면 GameState가 그 보정도를 돌려준다. 맨손은 0 (그린 대로).
+	_check(is_zero_approx(float(gs.stroke_correction())), "펜 미착용 = 보정 0 (손 그대로)")
+	gs.equipment[Enums.ItemKind.PEN] = &"pen_high"
+	_check(is_equal_approx(float(gs.stroke_correction()), 0.6), "명장의 펜 착용 → 보정 0.6")
+	gs.equipment.erase(Enums.ItemKind.PEN)
 
 
 func _make_board():

@@ -64,13 +64,16 @@ func wand_pattern() -> int:
 	return int(gear_param(Enums.ItemKind.WAND, "wand_pattern",
 		float(Enums.WandPattern.SINGLE)))
 
-## 획 자동보정 강도 (0..1) — 획을 뗄 때 본보기 쪽으로 얼마나 끌어당기는가.
-## **보정은 아이템으로 산다** (사용자 확정): 좋은 붓이 형을 잡아 준다. 지금은 붓 = 완드 부위에
-## 걸어 두었다 — 별도 '붓' 부위가 생기면 **이 함수 한 줄만** 바꾸면 된다 (그래서 getter다).
-## 아직 stroke_correct_add를 가진 아이템은 없다 — 자리만 열어 둔 상태다
+## 🔴 획 보정 강도 (0..1) — 그은 획을 가이드 쪽으로 **얼마나 끌어당기는가** (0=안 당김, 1=정답선).
+## **보정은 펜 아이템으로 산다** (사용자 확정 2026-07-17: *"펜등급마다 보정도가 오르는거임"*).
+## data/items/pen_*.tres의 `params["correction"]` — 새 펜 = **.tres 한 장**이다 (선례: 잉크 3등급).
+##
+## 🔴 **기본값은 0이다** — 펜을 안 끼면 손이 그린 궤적이 **그대로** 남는다(자기만의 마법진,
+## memory takbon-hand-trace-commit). 펜은 그 개성을 덜어내고 정확도를 사는 **교환**이다.
+## ⚠ 세션 23 전엔 balance(0.55)를 바닥에 깔고 WAND 부위에서 읽었다 — 맨손에도 보정이 붙는
+## 셈이라 정체성과 어긋났고, **호출자가 0이라 실제로 돌지도 않았다**(옛 자유드로잉 잔재).
 func stroke_correction() -> float:
-	return clampf(balance.stroke_correct_strength
-		+ gear_param(Enums.ItemKind.WAND, "stroke_correct_add", 0.0), 0.0, 1.0)
+	return clampf(gear_param(Enums.ItemKind.PEN, "correction", 0.0), 0.0, 1.0)
 
 # ── 장비 착용 (TECH_SPEC §4.2) — 창고에 있는 장비만, 착용품은 사망에도 보존
 
