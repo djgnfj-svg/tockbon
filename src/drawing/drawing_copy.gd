@@ -89,25 +89,82 @@ const BOOK_ARROW_CURVED := "휘어도 된다"
 ## 🔴 **v2.0: 문양 하나가 한 발이 아니다.** 여러 개를 그으면 **한 탄에 효과가 여럿 얹힌다** —
 ## 발수와 방향은 **지팡이**가 정한다 (v1.9의 "문양 1개 = 1발"은 방향이 지팡이로 가면서 무너졌다:
 ## 방향이 없으면 N발이 **같은 자리에 겹쳐** 나간다)
-const GLYPH_LABEL := {
-	Enums.GlyphType.BASIC: "기본",
-	Enums.GlyphType.BOUNCE: "팅김⚡",
-	Enums.GlyphType.HOMING: "유도∿",
-	Enums.GlyphType.PIERCE: "관통‖",
-	Enums.GlyphType.THRUST: "추진»",
+##
+## 🔴 단일 진실원 (2026-07-17, 세션 21): 이름·효과 문구는 이제 data/shapes/glyph_*.tres의
+## display_name·description에서 읽는다. 책자·트레이스·인식기가 모양을 이미 같은 파일에서
+## 읽고 있으므로(rune_templates.gd·glyph_templates.gd), 텍스트도 같은 곳에서 읽어야
+## "보이는 모양"과 "뜨는 글"이 갈라질 수 없다.
+const SHAPE_DIR := "res://data/shapes/"
+const GLYPH_FILES := {
+	Enums.GlyphType.BASIC: "glyph_basic",
+	Enums.GlyphType.BOUNCE: "glyph_bounce",
+	Enums.GlyphType.HOMING: "glyph_homing",
+	Enums.GlyphType.PIERCE: "glyph_pierce",
+	Enums.GlyphType.THRUST: "glyph_thrust",
 }
-## 무엇을 하는 글자인가 + **길게 그으면 무엇이 늘어나는가** (길이 = 세기 축을 눈에 보이게).
-## 길이가 아무것도 안 하면 "짧게 긋는 게 이득"이 되고 표현 수단이 죽는다 (v1.6~v1.8의 교훈)
-const GLYPH_EFFECT := {
-	Enums.GlyphType.BASIC: "그저 난다 — 길수록 멀리",
-	Enums.GlyphType.BOUNCE: "벽에 튄다 — 길수록 여러 번",
-	Enums.GlyphType.HOMING: "쫓아간다 — 길수록 오래",
-	Enums.GlyphType.PIERCE: "꿰뚫는다 — 길수록 여럿",
-	Enums.GlyphType.THRUST: "빠르게 난다 — 길수록 더 빨리",
-}
+static var _glyph_shape_cache: Dictionary = {}  # type(int) -> ShapeDef Resource 또는 null(로드 실패 기억)
+
+
+## data/shapes/glyph_<type>.tres. class_name 캐시에 안 의존하려 load()로 지연 로드
+## (rune_templates.gd·glyph_templates.gd와 같은 패턴).
+static func _glyph_shape(glyph_type: int) -> Resource:
+	if _glyph_shape_cache.has(glyph_type):
+		return _glyph_shape_cache[glyph_type]
+	var res: Resource = null
+	var id: String = GLYPH_FILES.get(glyph_type, "")
+	if id != "":
+		res = load(SHAPE_DIR + id + ".tres")
+	_glyph_shape_cache[glyph_type] = res
+	return res
+
 
 static func glyph_label(glyph_type: int) -> String:
-	return String(GLYPH_LABEL.get(glyph_type, "?"))
+	var shape := _glyph_shape(glyph_type)
+	if shape != null and shape.display_name != "":
+		return shape.display_name
+	return _fallback_glyph_label(glyph_type)
+
+
+## 무엇을 하는 글자인가 + **길게 그으면 무엇이 늘어나는가** (길이 = 세기 축을 눈에 보이게).
+## 길이가 아무것도 안 하면 "짧게 긋는 게 이득"이 되고 표현 수단이 죽는다 (v1.6~v1.8의 교훈)
+static func glyph_effect(glyph_type: int) -> String:
+	var shape := _glyph_shape(glyph_type)
+	if shape != null and shape.description != "":
+		return shape.description
+	return _fallback_glyph_effect(glyph_type)
+
+
+# ─────────────────────────── 절차 폴백 (데이터 없을 때만) ───────────────────────────
+## data/shapes/glyph_*.tres가 있으면 아래는 절대 실행되지 않는다. 문구의 출생 기록이자 안전망이다.
+
+static func _fallback_glyph_label(glyph_type: int) -> String:
+	match glyph_type:
+		Enums.GlyphType.BASIC:
+			return "기본"
+		Enums.GlyphType.BOUNCE:
+			return "팅김⚡"
+		Enums.GlyphType.HOMING:
+			return "유도∿"
+		Enums.GlyphType.PIERCE:
+			return "관통‖"
+		Enums.GlyphType.THRUST:
+			return "추진»"
+	return "?"
+
+
+static func _fallback_glyph_effect(glyph_type: int) -> String:
+	match glyph_type:
+		Enums.GlyphType.BASIC:
+			return "그저 난다 — 길수록 멀리"
+		Enums.GlyphType.BOUNCE:
+			return "벽에 튄다 — 길수록 여러 번"
+		Enums.GlyphType.HOMING:
+			return "쫓아간다 — 길수록 오래"
+		Enums.GlyphType.PIERCE:
+			return "꿰뚫는다 — 길수록 여럿"
+		Enums.GlyphType.THRUST:
+			return "빠르게 난다 — 길수록 더 빨리"
+	return ""
 
 # ── 제작대(책 펼침 UI) ──
 ## 책자는 **참조**다 — 골라서 찍는 게 아니라 보고 따라 그린다 (사용자 결정, 세션 8)
@@ -133,11 +190,47 @@ const TAB_DESC := {
 }
 
 ## 룬 3종 — 무엇을 하는 글자인가 (v2.2: 충격 제거, 원소만)
-const RUNE_EFFECT := {
-	Enums.RuneType.FIRE: "태운다 — 화상·지속 피해",
-	Enums.RuneType.WATER: "적신다 — 둔화·갑주 무력",
-	Enums.RuneType.WIND: "흩는다 — 확산·면 제어",
+## 🔴 단일 진실원 (2026-07-17, 세션 21): 이름·효과 문구는 data/shapes/rune_*.tres의
+## display_name·description에서 읽는다 (문양쪽과 같은 이유·같은 패턴).
+const RUNE_FILES := {
+	Enums.RuneType.FIRE: "rune_fire",
+	Enums.RuneType.WATER: "rune_water",
+	Enums.RuneType.WIND: "rune_wind",
 }
+static var _rune_shape_cache: Dictionary = {}  # type(int) -> ShapeDef Resource 또는 null(로드 실패 기억)
+
+
+## data/shapes/rune_<type>.tres. class_name 캐시에 안 의존하려 load()로 지연 로드.
+static func _rune_shape(rune_type: int) -> Resource:
+	if _rune_shape_cache.has(rune_type):
+		return _rune_shape_cache[rune_type]
+	var res: Resource = null
+	var id: String = RUNE_FILES.get(rune_type, "")
+	if id != "":
+		res = load(SHAPE_DIR + id + ".tres")
+	_rune_shape_cache[rune_type] = res
+	return res
+
+
+static func rune_effect(rune_type: int) -> String:
+	var shape := _rune_shape(rune_type)
+	if shape != null and shape.description != "":
+		return shape.description
+	return _fallback_rune_effect(rune_type)
+
+
+# ─────────────────────────── 절차 폴백 (데이터 없을 때만) ───────────────────────────
+## data/shapes/rune_*.tres가 있으면 아래는 절대 실행되지 않는다. 문구의 출생 기록이자 안전망이다.
+
+static func _fallback_rune_effect(rune_type: int) -> String:
+	match rune_type:
+		Enums.RuneType.FIRE:
+			return "태운다 — 화상·지속 피해"
+		Enums.RuneType.WATER:
+			return "적신다 — 둔화·갑주 무력"
+		Enums.RuneType.WIND:
+			return "흩는다 — 확산·면 제어"
+	return ""
 
 ## 진·문양 칸 이름
 const BOOK_CIRCLE_NAME := "진"
@@ -172,6 +265,13 @@ static func unrecognized_line(info: Dictionary) -> String:
 
 
 static func rune_label(rune_type: int) -> String:
+	var shape := _rune_shape(rune_type)
+	if shape != null and shape.display_name != "":
+		return shape.display_name
+	return _fallback_rune_label(rune_type)
+
+
+static func _fallback_rune_label(rune_type: int) -> String:
 	match rune_type:
 		Enums.RuneType.FIRE:
 			return "불△"

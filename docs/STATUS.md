@@ -1,8 +1,58 @@
 # STATUS — 현재 진행 상태
 
-> 최종 갱신: 2026-07-17 (세션 19 — **깨끗한 재시작(src/playground) + 진 모양 데이터화 시작 + 에이전트 하네스 설치**)
-> · 세션 18: 아트 방향 전환(960×540·48px·장비4칸) · **세션 종료마다 갱신**
+> 최종 갱신: 2026-07-17 (세션 21 — **데이터 단일 진실원 완결: 텍스트 데이터화 + 절차 폴백 제거 + 첫 실제 위임**)
+> · 세션 19: 깨끗한 재시작(src/playground) · 세션 18: 아트 방향 전환(960×540·48px·장비4칸) · **세션 종료마다 갱신**
 > 커밋: 세션 8~12는 `main` 병합됨. **세션 13~18 작업 = 커밋에 함께 저장**
+
+---
+
+## 🔵 세션 21 (2026-07-17) — **데이터 단일 진실원 완결 (모양 + 텍스트) · 첫 실제 에이전트 위임**
+
+> 사용자: 세션 목표 = **데이터 단일 진실원 완결**. 세션 20이 모양(points/variants)만 데이터화하고
+> 남긴 (a)이름·설명 (b)절차 폴백 제거를 닫는다. 세션 20이 남긴 (e)"실제 위임 시작"도 이번에 이행.
+
+**① 회귀 기준선 실측(불변식):** `test_drawing_auto=315/0`(water_wind_cross=0) · `test_glyph_auto=168/0`
+(스트레스 160/160). 세션 20과 동일 — 이 숫자가 이번 세션 합격선.
+
+**② 🔴 함정 발견 — description 의미 충돌:** `.tres`의 `description`은 **모양 묘사**("파형 — 흐르고 적신다")인데
+책자에 실제로 뜨는 건 `Copy.RUNE_EFFECT`의 **효과 문구**("적신다 — 둔화·갑주 무력")였다. 세션 20의 bake가
+`ShapeDef` 스키마 주석("책자 셀 아래 한 줄 설명")과 **다른 값을 구웠고**, 그 모양 묘사는 어디에도 표시되지
+않는 **죽은 데이터**였다. 그냥 데이터에서 읽게 바꿨으면 UI 문구가 통째로 바뀌는 회귀. **사용자 확정:
+description = 책자 효과 문구로 덮어쓰고 모양 묘사는 폐기**(스키마 의도와 일치, core 스키마 변경 없음).
+`display_name`은 `.tres`↔`Copy`가 이미 완전 일치(불△·물~·바람◎·기본·팅김⚡·유도∿·관통‖·추진») → 무손상 이관.
+
+**③ 텍스트 데이터화** (`drawing_copy.gd`·`forge_book.gd`·`.tres` 8장): `rune_label`/`rune_effect`/
+`glyph_label`/`glyph_effect`가 `data/shapes/*.tres`의 `display_name`/`description`을 `load()` 지연 로드로
+읽는다(rune_templates와 같은 패턴). 낡은 상수 `RUNE_EFFECT`/`GLYPH_EFFECT`/`GLYPH_LABEL` 제거(잔존
+소비자 0 grep 확인). **`rune_label` 시그니처 유지** → `design_book.gd`·`unrecognized_line()` 호출부 무손상.
+하드코딩 문구는 `_fallback_*`로 격하(텍스트 안전망). ⚠ `jin_basic.tres`는 이미 맞아서 손대지 않음.
+
+**④ 절차 폴백 제거 = 데이터를 유일 진실원으로 승격** (`rune_templates.gd`·`glyph_templates.gd`):
+`_fallback_raw`/`_fallback_canonical`과 그들만 쓰던 헬퍼(`_t`·`_triangle`·`_wave`·`_spiral`·`_flip_y` /
+`_add`·`_straight`·`_zigzag`·`_bow`·`_thrust`·`_spear`·`_polyline`·`_flip_y`) 전부 제거. `head_barbs()`는
+폴백과 무관한 장식 함수라 존치. **데이터 없음 = 조용한 빈 값이 아니라 `push_error`로 크게 실패**(경로를
+찍는다 — 조용히 실패하면 인식기가 아무것도 못 알아보는데 원인이 안 보인다). 상단 주석의 "데이터가 없으면
+절차 생성으로 폴백한다"는 **폴백이 사라진 순간 거짓말이 되므로** 함께 갱신.
+
+**⑤ 🔴 테스트가 못 잡는 구멍 → 센티넬 프로브로 실증:** 폴백 문자열과 `.tres` 문자열이 **똑같아서**,
+코드가 데이터를 읽든 폴백을 타든 **테스트 결과가 동일하다** — 즉 전 스위트 그린은 "데이터화됐다"를
+증명하지 못한다. `rune_fire.tres`의 description에 센티넬을 심어 돌린 결과 `Copy.rune_effect(FIRE)`가
+`SENTINEL_데이터경로_확인`을 반환 → **데이터 경로 실증**(`.tres`를 고치면 게임 문구가 바뀐다). 센티넬 원복·
+임시 파일 제거·원복 후 315/38 재확인까지 완료.
+
+**⑥ 검증:** `--import` 후 **전 자동 스위트 그린(회귀 0)** — drawing 315/0·glyph 168/0(160/160) **불변식 유지**,
+canvas 51·paper 47·forge 38·drawing_fill 33·save 22·integration 16 + spell·ring_spell·ring_trace·ring_design·
+base·onboarding·equip·quest·bosscut 전 항목 통과 · 필드 FAIL 0 · UI 54/0. 시각 검증 생략(UI 문구 값 불변 +
+레이아웃 무변경 + 데이터 경로는 프로브로 실증).
+
+**⑦ 첫 실제 위임 (세션 20의 (e) 이행):** CLAUDE.md 라우팅대로 `godot-prompter:godot-game-dev` 2개 병렬
+(텍스트 데이터화 / 폴백 제거 — 파일 비중첩). **프로젝트 규칙을 프롬프트에 주입**(typed·class_name 금지·
+mcp__godot 금지·커밋 금지·수정 허용 파일 명시·불변식 315/168 명시). 검증·`--import`·커밋은 리드 직접.
+**효과 있었음** — 둘 다 규칙 준수, grep 근거까지 보고. ⚠ **교훈: 위임해도 "무엇이 함정인가"(②의 description
+충돌)는 리드가 먼저 짚어야 한다** — 에이전트에 그냥 "데이터화해라"만 줬으면 UI 문구를 갈아엎었을 것이다.
+
+**🔴 다음:** (a) 완성 도안 저장(종이 보관함). (b) 원정(필드) clean 경로. (c) 미커밋 세션 17 잔재(고리 HUD·
+저장 8파일) 처리 방침 결정. (d) 텍스트 `_fallback_*`도 제거할지(모양처럼) — 지금은 안전망으로 존치.
 
 ---
 

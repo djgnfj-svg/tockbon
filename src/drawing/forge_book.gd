@@ -250,7 +250,7 @@ func _build_rune_page(top: float) -> void:
 		_cell(r,
 			RuneTemplates.canonical(rune) if unlocked else PackedVector2Array(),
 			Copy.rune_label(rune) if unlocked else Copy.BOOK_LOCKED,
-			String(Copy.RUNE_EFFECT.get(rune, "")) if unlocked else Copy.BOOK_LOCKED_HINT,
+			Copy.rune_effect(rune) if unlocked else Copy.BOOK_LOCKED_HINT,
 			unlocked)
 
 
@@ -271,7 +271,7 @@ func _build_arrow_page(top: float) -> void:
 		_cell(r,
 			GlyphTemplates.canonical(g) if unlocked else PackedVector2Array(),
 			Copy.glyph_label(g) if unlocked else Copy.BOOK_LOCKED,
-			String(Copy.GLYPH_EFFECT.get(g, "")) if unlocked else Copy.BOOK_LOCKED_HINT,
+			Copy.glyph_effect(g) if unlocked else Copy.BOOK_LOCKED_HINT,
 			unlocked, true)   # is_glyph=true → 머리에 화살촉을 얹어 **화살표로 보이게** 한다
 
 
