@@ -37,6 +37,7 @@ func _run() -> void:
 	_test_empty_jin_finishes_after_rune()
 	_test_glyph_free_edit_and_relock()
 	_test_glyph_per_slot_scale()
+	_test_far_click_does_not_steal_slot()
 
 	if failures == 0:
 		print("TEST_RING_TRACE_OK — 전 항목 통과")
@@ -63,6 +64,13 @@ func _rub_exact(b) -> void:
 
 func _stage(b) -> int:
 	return int(b.call(&"stage"))
+
+
+## 칸 k에 놓인 문양 코드. 🔴 **내부 필드(_slots)를 더듬지 않는다** — 세션 22 분할 때 그 필드가
+## ring_assembly로 옮겨가면서 이 테스트가 조용히 깨졌었다(런타임 에러로 중단됐는데 failures=0이라
+## "OK"를 찍었다). 발사 계약(assembly)으로 본다.
+func _glyph_at(b, k: int) -> int:
+	return int((b.call(&"get_assembly") as Dictionary).rings[0][k])
 
 
 func _check(cond: bool, msg: String) -> void:
@@ -172,23 +180,20 @@ func _test_glyph_free_edit_and_relock() -> void:
 	b.call(&"set_active_glyph", G_RADIATE)
 	_rub_exact(b)
 	b.call(&"select_slot", 2)             # 다른 칸으로 전환 → slot0 자동 잠금
-	var slots = b.get("_slots")
-	_check(int(slots[0]) == G_RADIATE, "칸 전환 시 이전 칸 자동 잠금")
+	_check(_glyph_at(b, 0) == G_RADIATE, "칸 전환 시 이전 칸 자동 잠금")
 	_check(int(b.call(&"trace_slot")) == 2, "고른 칸으로 전환")
 	# slot2 = 응집(0)
 	b.call(&"set_active_glyph", G_GATHER)
 	_rub_exact(b)
 	b.call(&"select_slot", 0)             # slot2 자동 잠금 + slot0 재선택(재편집)
-	slots = b.get("_slots")
-	_check(int(slots[2]) == G_GATHER, "두번째 칸도 잠김")
-	var locked_a := (b.get("_locked") as Array).size()
+	_check(_glyph_at(b, 2) == G_GATHER, "두번째 칸도 잠김")
+	var locked_a := int(b.call(&"locked_count"))
 	# slot0 재편집 — 발산→응집으로 문양 교체
 	b.call(&"set_active_glyph", G_GATHER)
 	_rub_exact(b)
 	b.call(&"advance")
-	slots = b.get("_slots")
-	_check(int(slots[0]) == G_GATHER, "이미 채운 칸을 다시 골라 문양 교체")
-	_check((b.get("_locked") as Array).size() == locked_a, "재편집은 먹선 교체(중복 추가 아님)")
+	_check(_glyph_at(b, 0) == G_GATHER, "이미 채운 칸을 다시 골라 문양 교체")
+	_check(int(b.call(&"locked_count")) == locked_a, "재편집은 먹선 교체(중복 추가 아님)")
 	b.queue_free()
 
 
@@ -206,4 +211,37 @@ func _test_glyph_per_slot_scale() -> void:
 	for i in 80:
 		b.call(&"_resize_current", -0.06)
 	_check(float(b.call(&"_glyph_scale_of", 0)) >= float(b.GLYPH_SCALE_MIN) - 0.001, "하한 클램프")
+	b.queue_free()
+
+
+# ── ⑧ 🔴 I3 회귀 (세션 22): 칸에서 먼 곳을 클릭해도 **현재 칸을 뺏기지 않는다** ──
+## 버그: _nearest_open_slot에 거리 컷오프가 없어서 판 아무 데나 클릭해도 최근접 열린 칸이 잡혔고,
+## select_slot이 현재 칸 coverage > COMMIT_COVER면 **자동 확정**해 버렸다 →
+## **칸 0을 그리다 획을 칸 2 쪽에 조금 가깝게 시작하면 칸 0이 멋대로 확정되고 넘어갔다.**
+## *"마음에 들 때까지 다시 그린다"* 설계와 정면 충돌.
+func _test_far_click_does_not_steal_slot() -> void:
+	var b = _make_board()
+	_reach_glyph_stage(b)                  # 기본 문양본 2방 [0,2], 현재 칸 = 0
+	_check(int(b.call(&"trace_slot")) == 0, "현재 칸 = 0")
+
+	# 칸 0을 자동확정 문턱 위로 그려 둔다 (버그의 방아쇠 조건)
+	_rub_exact(b)
+	_check(float(b.call(&"coverage")) > float(b.COMMIT_COVER), "칸 0을 문턱 위로 그렸다")
+
+	# 두 칸 모두에서 먼 지점 — 칸 2 쪽으로 치우쳤지만 어느 칸에도 안 붙었다
+	var far := Vector2(150, 134)           # 판 중앙 근처 (칸 2가 최근접이나 한참 멀다)
+	_check(int(b.call(&"_nearest_open_slot", far)) == -1, "칸에서 멀면 -1 (컷오프)")
+
+	# 실제 입력 경로로도 확인 — 먼 곳 클릭이 칸 0을 확정하면 안 된다
+	var ev := InputEventMouseButton.new()
+	ev.button_index = MOUSE_BUTTON_LEFT
+	ev.pressed = true
+	ev.position = far
+	b.call(&"_gui_input", ev)
+	_check(int(b.call(&"trace_slot")) == 0, "먼 곳 클릭 — 현재 칸(0)을 유지한다")
+	_check(_glyph_at(b, 0) == GLYPH_NONE, "먼 곳 클릭 — 칸 0이 멋대로 확정되지 않는다")
+
+	# 반대: 칸 위를 클릭하면 정상적으로 그 칸으로 넘어간다 (컷오프가 기능을 죽이지 않았다)
+	var on_slot2: Vector2 = b.call(&"_slot_pos", 2)
+	_check(int(b.call(&"_nearest_open_slot", on_slot2)) == 2, "칸 위를 클릭하면 그 칸이 잡힌다")
 	b.queue_free()
