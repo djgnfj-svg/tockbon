@@ -12,7 +12,17 @@ extends Control
 ## (한때 둘이 평행으로 살아 있었다. 되돌리려면 git 이력.)
 ##
 ## 계약: open() → 열림 / closed 시그널 → 닫힘 / design_committed(assembly) → 맺힘.
-## 사용: const RingForgePanel := preload("res://src/drawing/ring_forge_panel.gd")
+##
+## 🔴 2026-07-17 세션 22 (I5): 껍데기가 **씬(ring_forge_panel.tscn)으로 나갔다** — 예전엔 _build()가
+## 종이·라벨·버튼·리포트 카드를 전부 `.new()`하고 좌표 상수 14개를 코드에 박아 뒀다. 종이의 "느낌"이
+## 그리는 재미를 좌우해서 계속 만질 곳인데, 한 픽셀 옮기려면 코드를 고쳐야 했다.
+## ⚠ 전부 씬으로 옮기지는 **않았다** — RingBoard·RingBook은 `_draw()` 커스텀 렌더라 에디터에서
+## 드래그할 게 없다. 그 둘은 씬의 노드로 배치하되 스크립트가 계속 그린다. `_draw_pages`(책등 그라데이션)·
+## `_draw_report`(점수 막대)도 코드에 남는다.
+##
+## 🔴 인스턴스화는 **씬으로** 한다 — `RingForgePanel.new()`는 껍데기가 없는 빈 Control이다:
+##   const ForgeScene := preload("res://src/drawing/ring_forge_panel.tscn")
+##   var panel := ForgeScene.instantiate() as RingForgePanelScript
 
 const RingBoard := preload("res://src/drawing/ring_board.gd")
 const RingBook := preload("res://src/drawing/ring_book.gd")
@@ -21,29 +31,20 @@ signal closed
 ## 도안이 방금 맺혔다 — 여는 쪽(작업대·거점)이 발사·연출에 쓴다. assembly = board.get_assembly()
 signal design_committed(assembly: Dictionary)
 
-# ── 레이아웃 (**논리 크기** 640×360 — 아래 상수는 전부 이 좌표계다) ──
-## 🔴 2026-07-17 세션 21: 뷰포트는 960×540(세션 18에 올림)이고 `stretch/aspect=expand`라 전체화면에선
-## 그보다 더 넓어지기도 한다. 이 책은 640×360 좌표로 그려져 있어 그대로 두면 **왼쪽 위에 몰려 깨진다.**
-## 고치는 방법은 상수를 다시 재는 게 아니라 **무대(_stage)를 화면에 맞춰 비율 유지로 확대**하는 것이다 —
-## 상수·매직넘버(`_build_report`의 12/60/120/24, `_draw_*`의 오프셋…)가 전부 이 좌표계에 묶여 있어서
-## 일일이 고치면 반드시 뭘 빠뜨린다. RingBoard·RingBook은 자기 size 비례로 그리므로(ring_board.gd
-## `_outer_radius()`) 무대만 키우면 속도 같이 커진다.
-## ⚠ `_spread.scale`은 **책 펼침 애니가 이미 쓴다**(open/close tween) — 배율을 거기 얹으면 애니가 덮어쓴다.
-## 그래서 _spread를 감싸는 별도 무대에 배율을 건다.
+# ── 레이아웃 (**논리 크기** 640×360 — 씬의 좌표도 전부 이 좌표계다) ──
+## 🔴 세션 21: 뷰포트는 960×540(세션 18에 올림)이고 `stretch/aspect=expand`라 전체화면에선
+## 그보다 더 넓어지기도 한다. 이 책은 640×360 좌표로 짜여 있어 그대로 두면 **왼쪽 위에 몰려 깨진다.**
+## 고치는 방법은 좌표를 다시 재는 게 아니라 **무대(Stage)를 화면에 맞춰 비율 유지로 확대**하는 것이다.
+## RingBoard·RingBook은 자기 size 비례로 그리므로(ring_board.gd `_outer_radius()`) 무대만 키우면
+## 속도 같이 커진다.
+## ⚠ `Spread.scale`은 **책 펼침 애니가 이미 쓴다**(open/close tween) — 배율을 거기 얹으면 애니가 덮어쓴다.
+## 그래서 Spread를 감싸는 별도 무대(Stage)에 배율을 건다.
 const DESIGN_SIZE := Vector2(640.0, 360.0)
+## 책 껍데기 기하 — `_draw_pages`(코드 렌더)가 쓴다. 나머지 좌표는 전부 씬으로 나갔다.
 const BOOK_RECT := Rect2(16, 10, 608, 340)
 const PAGE_W := 304.0
-const BOARD_RECT := Rect2(30, 30, 268, 268)          # 왼쪽 페이지의 조립 보드
-const BOOK_RECT_R := Rect2(332, 24, 280, 262)        # 오른쪽 페이지의 선택기(탭)
-const SAY_RECT := Rect2(30, 302, 268, 40)            # 스승의 말
-const SCORE_RECT := Rect2(332, 288, 280, 12)         # 지금 조각 점수(완성도·정밀도)
-const NEXT_BTN_RECT := Rect2(332, 302, 132, 24)      # [다음 ▶] — 조각 잠그고 진행
-const COMMIT_BTN_RECT := Rect2(472, 302, 140, 24)    # [맺기] — 마법진 끝내고 분석
-const HINT_RECT := Rect2(332, 328, 280, 22)
-const TITLE_RECT := Rect2(28, 14, 300, 14)
 
-# ── 한지·먹 톤 (forge_panel과 동일) ──
-const DIM := Color(0.05, 0.04, 0.03, 0.62)
+# ── 한지·먹 톤 — 코드 렌더(_draw_pages·_draw_report)와 _set_say가 쓰는 것만 남았다 ──
 const PAPER_L := Color(0.93, 0.89, 0.80)
 const PAPER_R := Color(0.89, 0.84, 0.74)
 const SPINE := Color(0.62, 0.55, 0.45, 0.55)
@@ -61,21 +62,21 @@ const OPEN_FROM_X := 0.04
 const CLOSE_SEC := 0.12
 
 const Copy_START := "진을 왼쪽 판에 손으로 문질러 그리세요  (진 → 룬 → 문양 순서로 하나씩 · [다음]으로 진행)"
-const SCORE_COLOR := Color(0.34, 0.28, 0.20)
 
 ## 🔴 `class_name` 없이도 정적 타입을 받는다 — `const X := preload(...)`를 타입으로 쓸 수 있다.
 ## 예전엔 `Control`로 받아 `.call(&"...")`로 더듬었고, 오타가 파싱이 아니라 **런타임에** 터졌다.
-var _board: RingBoard
-var _book: RingBook
-var _title: Label
-var _say: Label
-var _hint: Label
-var _score_lbl: Label
-var _next_btn: Button
-var _commit_btn: Button
-var _stage: Control                           # 640×360 논리 무대 — 화면에 맞춰 통째로 확대(_fit_stage)
-var _spread: Control
-var _report: Control                          # 분석 리포트 오버레이 (완성 시 표시)
+@onready var _stage: Control = $Stage         # 640×360 논리 무대 — 화면에 맞춰 통째로 확대(_fit_stage)
+@onready var _spread: Control = $Stage/Spread
+@onready var _pages: Control = $Stage/Spread/Pages
+@onready var _board: RingBoard = $Stage/Spread/RingBoard
+@onready var _book: RingBook = $Stage/Spread/RingBook
+@onready var _next_btn: Button = $Stage/Spread/NextBtn
+@onready var _commit_btn: Button = $Stage/Spread/CommitBtn
+@onready var _score_lbl: Label = $Stage/Spread/ScoreLabel
+@onready var _title: Label = $Stage/Spread/TitleLabel
+@onready var _say: Label = $Stage/Spread/SayLabel
+@onready var _hint: Label = $Stage/Spread/HintLabel
+@onready var _report: Control = $Stage/Spread/Report   # 분석 리포트 오버레이 (완성 시 표시)
 
 var _committed := false
 var _template_idx := 0                        # 지금 삽입된 문양본 (기본 = TEMPLATES[0] = 2방)
@@ -84,14 +85,28 @@ var _analysis: Dictionary = {}                # 마지막 분석 리포트 (get_
 var _picking_template := false                # 🔴 문양 단계의 하위 단계 — 문양본 고르는 중(아직 안 그림)
 
 
-func _init() -> void:
-	set_anchors_preset(Control.PRESET_FULL_RECT)
-	mouse_filter = Control.MOUSE_FILTER_STOP
-	visible = false
-
-
+## 껍데기는 씬이 만든다 — 여기서는 **코드 렌더와 배선만** 붙인다.
 func _ready() -> void:
-	_build()
+	_pages.draw.connect(_draw_pages)
+	_report.draw.connect(_draw_report)
+	_spread.pivot_offset = BOOK_RECT.get_center()   # 책 펼침 애니의 회전축 = 책 한가운데
+
+	_board.assembly_changed.connect(_on_assembly_changed)
+	_board.stage_advanced.connect(_on_stage_advanced)
+	_board.score_changed.connect(_on_score_changed)
+	_board.piece_locked.connect(_on_piece_locked)
+	_board.finished.connect(_on_finished)
+
+	_book.jin_selected.connect(_on_jin_selected)
+	_book.rune_selected.connect(_on_rune_selected)
+	_book.glyph_selected.connect(_on_glyph_selected)
+	_book.template_selected.connect(_on_template_selected)
+
+	_next_btn.pressed.connect(_on_next)
+	_commit_btn.pressed.connect(_finish)
+	($Stage/Spread/Report/ShootBtn as Button).pressed.connect(_on_report_shoot)
+	($Stage/Spread/Report/RedoBtn as Button).pressed.connect(_on_report_redo)
+
 	resized.connect(_fit_stage)   # 창 크기·전체화면 전환마다 다시 맞춘다
 	_fit_stage()
 
@@ -422,130 +437,7 @@ func play_cast() -> void:
 	_board.play_cast()
 
 
-# ─────────────────────────── 책 만들기 ───────────────────────────
-
-func _build() -> void:
-	var dim := ColorRect.new()
-	dim.color = DIM
-	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
-	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(dim)
-
-	# 무대 — 640×360 논리 좌표계를 담고, 화면 크기에 맞춰 통째로 확대된다(_fit_stage).
-	# 책과 그 속(보드·선택기·버튼·리포트)은 전부 이 안에서 옛 좌표 그대로 산다.
-	_stage = Control.new()
-	_stage.name = "Stage"
-	_stage.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_stage.size = DESIGN_SIZE
-	add_child(_stage)
-
-	_spread = Control.new()
-	_spread.name = "Spread"
-	_spread.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_spread.set_anchors_preset(Control.PRESET_FULL_RECT)   # = 무대 크기(640×360)
-	_spread.pivot_offset = BOOK_RECT.get_center()
-	_stage.add_child(_spread)
-
-	var pages := Control.new()
-	pages.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	pages.set_anchors_preset(Control.PRESET_FULL_RECT)
-	pages.draw.connect(_draw_pages.bind(pages))
-	_spread.add_child(pages)
-
-	var paper := ColorRect.new()
-	paper.color = PAPER_L
-	paper.position = BOARD_RECT.position
-	paper.size = BOARD_RECT.size
-	paper.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_spread.add_child(paper)
-
-	_board = RingBoard.new()
-	_board.name = "RingBoard"
-	_board.position = BOARD_RECT.position
-	_board.size = BOARD_RECT.size
-	_spread.add_child(_board)
-	_board.assembly_changed.connect(_on_assembly_changed)
-	_board.stage_advanced.connect(_on_stage_advanced)
-	_board.score_changed.connect(_on_score_changed)
-	_board.piece_locked.connect(_on_piece_locked)
-	_board.finished.connect(_on_finished)
-
-	_book = RingBook.new()
-	_book.name = "RingBook"
-	_book.position = BOOK_RECT_R.position
-	_book.size = BOOK_RECT_R.size
-	_spread.add_child(_book)
-	_book.jin_selected.connect(_on_jin_selected)
-	_book.rune_selected.connect(_on_rune_selected)
-	_book.glyph_selected.connect(_on_glyph_selected)
-	_book.template_selected.connect(_on_template_selected)
-
-	_next_btn = Button.new()
-	_next_btn.position = NEXT_BTN_RECT.position
-	_next_btn.size = NEXT_BTN_RECT.size
-	_next_btn.text = "다음 ▶"
-	_next_btn.add_theme_font_size_override(&"font_size", 10)
-	_next_btn.disabled = true
-	_next_btn.focus_mode = Control.FOCUS_NONE
-	_next_btn.pressed.connect(_on_next)
-	_spread.add_child(_next_btn)
-
-	_commit_btn = Button.new()
-	_commit_btn.position = COMMIT_BTN_RECT.position
-	_commit_btn.size = COMMIT_BTN_RECT.size
-	_commit_btn.text = "✓ 맺기 (분석)"
-	_commit_btn.add_theme_font_size_override(&"font_size", 9)
-	_commit_btn.disabled = true
-	_commit_btn.focus_mode = Control.FOCUS_NONE
-	_commit_btn.pressed.connect(_finish)
-	_spread.add_child(_commit_btn)
-
-	_score_lbl = _label(SCORE_RECT, 9, SCORE_COLOR)
-	_score_lbl.text = ""
-
-	_title = _label(TITLE_RECT, 10, TITLE_COLOR)
-	_title.text = "고리 조립 마법진"
-	_say = _label(SAY_RECT, 8, SAY_COLOR)
-	_say.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_say.text = Copy_START
-	_hint = _label(HINT_RECT, 8, HINT_COLOR)
-	_hint.text = "왼쪽 판의 숨은 선을 손으로 그린다(탁본) · 휠=크기(진·룬·문양 칸) · 문양은 칸을 클릭해 골라 Q·W 정하고 다시 그림 · [다음]/[맺기]=분석"
-	_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-
-	_build_report()
-
-
-# ─────────────────────────── 분석 리포트 오버레이 ───────────────────────────
-
-## 완성 시 뜨는 분석 리포트 — 조각별 점수 + 종합 + 등급. 오른쪽 페이지를 덮는 카드.
-func _build_report() -> void:
-	_report = Control.new()
-	_report.name = "Report"
-	_report.position = BOOK_RECT_R.position + Vector2(-6, -6)
-	_report.size = BOOK_RECT_R.size + Vector2(12, 60)
-	_report.mouse_filter = Control.MOUSE_FILTER_STOP
-	_report.visible = false
-	_report.draw.connect(_draw_report)
-	_spread.add_child(_report)
-
-	var shoot := Button.new()
-	shoot.position = Vector2(12, _report.size.y - 30)
-	shoot.size = Vector2(120, 24)
-	shoot.text = "쏘기 ▶"
-	shoot.add_theme_font_size_override(&"font_size", 11)
-	shoot.focus_mode = Control.FOCUS_NONE
-	shoot.pressed.connect(_on_report_shoot)
-	_report.add_child(shoot)
-
-	var redo := Button.new()
-	redo.position = Vector2(_report.size.x - 132, _report.size.y - 30)
-	redo.size = Vector2(120, 24)
-	redo.text = "다시 그리기"
-	redo.add_theme_font_size_override(&"font_size", 11)
-	redo.focus_mode = Control.FOCUS_NONE
-	redo.pressed.connect(_on_report_redo)
-	_report.add_child(redo)
-
+# ─────────────────────────── 분석 리포트 렌더 (코드 렌더 — 씬에 없다) ───────────────────────────
 
 ## 분석 리포트 렌더 — 종합 등급·점수 + 조각별(진·룬·문양) 완성도·정밀도·점수 막대.
 func _draw_report() -> void:
@@ -594,7 +486,10 @@ func _report_row(font: Font, y: float, name_text: String, e: Dictionary) -> floa
 	return y + 40.0
 
 
-func _draw_pages(on: Control) -> void:
+## 책 껍데기 렌더 — 종이 두 장 + **책등 그라데이션**(7줄). 씬의 ColorRect로는 못 하는 그림이라
+## 코드에 남는다 (씬으로 옮긴 건 드래그로 만질 수 있는 것들뿐).
+func _draw_pages() -> void:
+	var on := _pages
 	var shadow := BOOK_RECT.grow(3.0)
 	on.draw_rect(shadow, SHADOW, true)
 	on.draw_rect(BOOK_RECT, PAPER_L, true)
@@ -617,14 +512,3 @@ func _draw_pages(on: Control) -> void:
 		Color(0.42, 0.35, 0.27, 0.8), 1.0)
 
 	on.draw_rect(BOOK_RECT, EDGE, false, 1.0)
-
-
-func _label(r: Rect2, font_size: int, col: Color) -> Label:
-	var l := Label.new()
-	l.position = r.position
-	l.size = r.size
-	l.add_theme_font_size_override(&"font_size", font_size)
-	l.add_theme_color_override(&"font_color", col)
-	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_spread.add_child(l)
-	return l

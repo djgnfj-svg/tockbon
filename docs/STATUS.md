@@ -1,10 +1,77 @@
 # STATUS — 현재 진행 상태
 
-> 최종 갱신: 2026-07-17 (세션 21 후반 — 🔴 **대청소: 게임 = 베이스캠프 + 고리 조립, 194파일 삭제**)
+> 최종 갱신: 2026-07-17 (세션 22 — ✅ **구조 정비 완료: REFACTOR_PLAN 전부 처리**)
 > · **세션 종료마다 갱신**
 >
 > 🔴 **아래 세션 20 이하는 대부분 삭제된 코드를 설명한다** — 기록이지 현재 상태가 아니다.
-> 현재 정본 = 최상단 「세션 21 후반」 + `CLAUDE.md` + memory `takbon-basecamp-is-the-game`.
+> 현재 정본 = 최상단 「세션 22」 + `CLAUDE.md` + memory `takbon-basecamp-is-the-game`.
+
+---
+
+## ✅ 세션 22 (2026-07-17) — **구조 정비 완료 (docs/REFACTOR_PLAN.md 전부)**
+
+> 사용자: *"이어서 진행하자."* → 세션 21이 확정한 REFACTOR_PLAN을 **의존성 순서대로 전부** 처리했다.
+> **뼈대 정비는 끝났다 — 이제 기능을 얹는 단계다.**
+
+**커밋 3개** (각 단계 후 테스트로 회귀를 잡고 커밋):
+1. `4d98c73` C1+I1+C3 — 1,219줄 삭제 / 118줄 추가
+2. `c0e57b0` C2+M2+I4 — 발사 계약을 core로, 진입점 폴더 개명
+3. `e8890f0` C4 — ring_board 3분할 + I3 실제 버그 수정
+
+**① C1 — `.call(&"...")` 44곳 → 정적 타입:** `class_name` 금지 규칙을 지키면서도
+`var _board: RingBoard`(= `const preload`를 타입으로)가 된다. `bool()`/`float()` 캐스팅 증발.
+**이게 나머지 전부의 안전망이었다** — 이후 단계에서 오타가 런타임이 아니라 파싱에서 잡혔다.
+
+**② I1 — `src/base`(옛 거점) 삭제:** `research_service.start()`를 부르는 코드가 **없었다**
+(주석의 "거점 씬이 매 프레임 호출" → 그 거점 씬은 세션 21에 삭제됨). SaveManager가 **아무도 만들 수
+없는 상태를 직렬화** 중이었다. save_manager의 자칭 "위반" preload가 저절로 증발.
+
+**③ C3 — 옛 SpellDesign 매장 (~759줄):** 순서 엄수(event_bus → game_state → save_manager →
+projectile → 삭제). 🔴 **계획보다 넓었다** — projectile의 먹선 몸·**착탄 충격파**·**중첩 진**이 전부
+`_design`을 탔는데, 유일한 산 호출자(ring_spell_system)가 design을 안 넘겨 **이미 null로만 돌던
+죽은 분기**였다. 그래서 `ink_render`(320줄)까지 함께 나갔다.
+⚠ **부작용: `src/spell/shockwave.gd`·`.tscn`이 이제 참조 0이다.** 계획의 삭제 목록에 없어 **남겨 뒀다**
+— 지울지는 사용자 판단. (`enums.gd`의 RuneType 구멍·LEGACY_IMPACT는 세이브 호환용이라 유지.)
+
+**④ C2+M2 — 발사 계약을 core로:** `enums.gd`에 `GlyphCode{GATHER=0, RADIATE=1}` 신설.
+발사가 UI(`ring_board` 757줄 Control)를 preload해 정수 2개만 꺼내 쓰던 걸 끊었다 —
+**`src/spell` → `src/drawing` 참조 0.** M2: 탄 씬을 `RuneDef.projectile_scene`이 정하게 해
+*"새 룬 = .tres 한 장"* 약속을 복구.
+
+**⑤ I4 — `src/playground` → `src/base` 개명:** 진입점인데 이름이 "버려도 되는 실험"이라는 거짓
+신호를 줬다(세션 21에 리드가 정확히 이것 때문에 헤맴). I1로 옛 `src/base`가 비어 지금이 제일 쌌다.
+
+**⑥ C4 — `ring_board` 757줄 → 3분할** (계획의 경고대로 **테스트부터**):
+- 신규 `tests/test_ring_assembly_auto.gd` 11항목 — 분할 **전** 모놀리식 코드에서 먼저 그린을 확인해
+  기준선을 잡고, 분할 후 같은 테스트로 회귀를 잡았다.
+- `ring_assembly.gd`(146·순수 데이터) / `trace_scorer.gd`(209·순수 수학) / `ring_board.gd`(625·Control).
+  🔴 **채점 규칙을 바꿀 땐 trace_scorer만 연다.**
+- 🔴 **`test_ring_trace_auto`가 조용히 깨져 있던 걸 발견**: `_slots`/`_locked` 내부 필드를 더듬는데
+  분할로 그게 옮겨가 **런타임 에러로 함수가 중단**됐는데도 `failures=0`이라 "OK"를 찍었다.
+  공개 API로 교체. **교훈 = 테스트는 공개 API로만, grep은 `_OK`뿐 아니라 `SCRIPT ERROR`도.**
+
+**⑦ I5+M1 — 책 껍데기를 `ring_forge_panel.tscn`으로:** `_build()`·`_build_report()`·`_label()` 소멸,
+좌표 상수 14개 대부분 증발. ⚠ **전부 옮기진 않았다** — `RingBoard`·`RingBook`은 `_draw()` 커스텀
+렌더라 씬으로 옮길 게 없다(노드로만 배치). `_draw_pages`(책등 그라데이션)·`_draw_report`도 코드 유지.
+M1: `base.gd`가 `@export var forge_scene: PackedScene`으로 받는다.
+
+**⑧ 마무리:** **I3(실제 버그)** — `_nearest_open_slot`에 거리 컷오프(`SLOT_PICK_FRAC=0.18`) 추가.
+문양 그리다 획 시작점이 옆 칸에 조금 가까우면 **현재 칸이 멋대로 자동 확정**되던 버그.
+회귀 테스트 추가 후 **컷오프를 껐을 때 정확히 3항목이 실패함을 확인**(검출력 검증).
+M6(finish()의 `assembly_changed` 누락)·I2·M4·M5는 주석/코드로 처리.
+
+**검증:** 테스트 5종 전부 그린(save 16/0 · assembly · trace · spell · design) · 베이스캠프 부팅
+에러 0 · 🔴 **에디터 스샷으로 렌더 확인** — C4 분할과 I5 씬화 **둘 다 분할 전과 픽셀 동일**.
+
+**🔴 다음 세션 (뼈대 정비가 끝났으니 이제 기능):**
+- (a) **그리는 재미를 하나씩** — memory `takbon-core-fun-drawing`가 로드맵의 심장이라고 못 박았고,
+  세션 16에 *"다음 세션에서 그리는 재미를 하나씩 정하기로"* 했다. **사용자와 정할 것.**
+  후보: 중첩 마법진(memory `takbon-nested-circle-model` — 진 안 진 = 재귀, 룬 N개 = 복합. 미구현) ·
+  문양 어휘 확장(⚠ memory `takbon-glyph-design-principle`: "외울 글자"를 늘리면 4지선다가 된다)
+- (b) 베이스캠프에 발사 경로 배선 (RingSpellSystem 미배선 — 지금 쏘려면 시험대)
+- (c) `docs/` 정리 또는 폐기 (TRUTH·GDD·TECH_SPEC·CHANGELOG = 삭제된 시스템을 가르친다)
+- (d) 에셋 (memory `takbon-art-direction-lwitw`)
+- (e) 자잘: `shockwave` 참조 0 — 지울지 판단 · `tests/test_ring_forge.tscn`(옛 프로토타입, 팔레트 다름)
 
 ---
 

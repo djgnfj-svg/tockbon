@@ -13,7 +13,8 @@ extends Node2D
 ## 조작: (책 펼침) 왼쪽 판에 유령을 손으로 따라 그으기(진→룬→문양) · Q·W=문양 고르기 · ✓맺기/ESC=덮기
 ##       (책 덮음) WASD=이동 · 마우스=조준 · 좌클릭/Space=발사 · R=과녁 리셋 · E=책 펴기 · C=보드 비우기
 
-const RingForgePanel := preload("res://src/drawing/ring_forge_panel.gd")
+const RingForgePanelScript := preload("res://src/drawing/ring_forge_panel.gd")
+const ForgeScene := preload("res://src/drawing/ring_forge_panel.tscn")
 const RingBoard := preload("res://src/drawing/ring_board.gd")
 const RingSpellScene := preload("res://src/spell/ring_spell_system.tscn")
 const DummyScene := preload("res://src/spell/dummy_target.tscn")
@@ -33,7 +34,7 @@ const TARGET_POS: Array[Vector2] = [
 	Vector2(410, 190), Vector2(540, 210),
 ]
 
-var _forge: Control
+var _forge: RingForgePanelScript
 var _world: Node2D
 var _system: Node2D            # 실제 ring_spell_system (발사·전개를 담당)
 var _enemies: Array = []       # 실제 dummy_target 노드
@@ -73,16 +74,16 @@ func _ready() -> void:
 	var layer := CanvasLayer.new()
 	layer.layer = 1
 	add_child(layer)
-	_forge = RingForgePanel.new()
+	_forge = ForgeScene.instantiate() as RingForgePanelScript
 	layer.add_child(_forge)
-	_forge.connect(&"design_committed", _on_committed)
-	_forge.connect(&"closed", _on_closed)
-	_forge.call(&"open")
+	_forge.design_committed.connect(_on_committed)
+	_forge.closed.connect(_on_closed)
+	_forge.open()
 	_refresh_result()
 
 
 func _process(_delta: float) -> void:
-	if not _forge.call(&"is_open"):
+	if not _forge.is_open():
 		var dir := Input.get_vector(&"move_left", &"move_right", &"move_up", &"move_down")
 		if dir != Vector2.ZERO:
 			_player_pos = (_player_pos + dir.normalized() * PLAYER_SPEED * _delta) \
@@ -94,19 +95,19 @@ func _process(_delta: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if _forge.call(&"is_open"):
+	if _forge.is_open():
 		return
 	var k := event as InputEventKey
 	if k != null and k.pressed and not k.echo:
 		match k.keycode:
 			KEY_E:
-				_forge.call(&"open")
+				_forge.open()
 			KEY_SPACE:
 				_fire()
 			KEY_R:
 				_reset_targets()
 			KEY_C:
-				_forge.call(&"clear_board")
+				_forge.clear_board()
 				_committed = {}
 				_refresh_result()
 		get_viewport().set_input_as_handled()
@@ -120,16 +121,16 @@ func _unhandled_input(event: InputEvent) -> void:
 # ─────────────────────────── 발사 = 실제 시스템에 요청한다 ───────────────────────────
 
 func _fire() -> void:
-	var a: Dictionary = _forge.call(&"get_assembly")
+	var a: Dictionary = _forge.get_assembly()
 	if a.is_empty():
-		if bool(_forge.call(&"can_commit")):
+		if _forge.can_commit():
 			_set_warn("조립은 됐다 — E로 책을 펴서 ✓맺기(또는 ESC로 덮으면 자동 맺힘)")
 		else:
 			_set_warn("진과 룬을 손으로 그려 맺어야 쏜다 (E)")
 		return
 	# 🔴 실제 발사 — ring_spell_system이 받아 진(캐리어)을 조준 방향으로 쏜다.
 	EventBus.ring_cast_requested.emit(a, _player_pos, _aim)
-	_forge.call(&"play_cast")
+	_forge.play_cast()
 	_set_ok("발사 — 마법진이 날아간다 (%s) · 맞으면 전개" % _describe(a))
 
 

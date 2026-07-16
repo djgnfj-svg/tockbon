@@ -8,18 +8,21 @@ extends Node2D
 ## 세션 22에 폴더가 `src/playground` → `src/base`로 바뀌었다 — "버려도 되는 실험"이라는
 ## 거짓 신호 때문에 리드가 세션 21에 엉뚱한 씬을 띄워 "다 사라졌다"고 헤맸다.
 ##
-## 🔴 이 파일이 preload로 `ring_forge_panel`을 무는 건 **규칙 위반이 아니다** — 진입 씬 =
-## 조합 루트이고 누군가는 모듈을 조립해야 한다. 결합도 얕다(open/design_committed/closed 3계약뿐,
-## 보드 내부를 모른다).
+## 🔴 M1 (세션 22): 책을 preload가 아니라 **@export로 받는다** — 진입 씬은 조합 루트라 모듈을
+## 조립하는 게 정당했지만(그래서 preload도 위반은 아니었다), 씬을 인스펙터에서 갈아 끼울 수 있으면
+## 규칙 논쟁 자체가 사라진다. 계약은 여전히 셋뿐: open() / design_committed / closed.
 
-const RingForgePanel := preload("res://src/drawing/ring_forge_panel.gd")
+const RingForgePanelScript := preload("res://src/drawing/ring_forge_panel.gd")
 const Desk := preload("res://src/base/desk.gd")
+
+## 책상에서 펴는 책 (base.tscn이 ring_forge_panel.tscn을 물려 준다).
+@export var forge_scene: PackedScene = preload("res://src/drawing/ring_forge_panel.tscn")
 
 @onready var _desk: Desk = $Desk
 @onready var _player: CharacterBody2D = $Player
 
 var _overlay: CanvasLayer = null
-var _forge: RingForgePanel = null
+var _forge: RingForgePanelScript = null
 
 func _ready() -> void:
 	_desk.interacted.connect(_open_drawing)
@@ -32,7 +35,10 @@ func _open_drawing() -> void:
 	_overlay = CanvasLayer.new()
 	_overlay.layer = 10
 	add_child(_overlay)
-	_forge = RingForgePanel.new()            # 기지 이젤과 같은 책 (진→룬→문양본→문양, 손으로 따라 그어 확정)
+	_forge = forge_scene.instantiate() as RingForgePanelScript   # 진→룬→문양본→문양, 손으로 따라 그어 확정
+	if _forge == null:
+		push_error("forge_scene이 RingForgePanel이 아니다")
+		return
 	_overlay.add_child(_forge)
 	_forge.design_committed.connect(_on_ring_committed)
 	_forge.closed.connect(_close_drawing)   # ESC(ui_cancel) → 패널이 closed 발신

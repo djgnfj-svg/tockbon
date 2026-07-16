@@ -1,6 +1,10 @@
 extends Node
 ## 게임 내 시간 — 상시 진행, 낮밤 페이즈 (GDD §7, TECH_SPEC §3).
 ## 페이즈 전환·하루 시작은 EventBus로 방송된다.
+##
+## 🔴 **실질 역할 = 자동저장 틱** (세션 22 확인). `_process`가 하루를 넘기며 `day_started`를 쏘고
+## `save_manager`가 그걸 받아 저장한다 — 지금 게임에서 **자동저장을 유발하는 유일한 경로**다.
+## 낮밤을 실제로 소비하는 쪽(원정·상점·수면)은 필드 구현 후에 붙는다. 죽은 코드가 아니다.
 
 var balance: BalanceData = preload("res://data/balance.tres")
 

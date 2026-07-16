@@ -5,9 +5,9 @@
 
 ## 새 세션이 먼저 읽을 것
 
-> 🔴🔴 **세션 21(2026-07-17) 대청소 — 여기부터 읽어라. 아래 docs는 대부분 낡았다.**
+> 🔴🔴 **세션 21 대청소 + 세션 22 구조 정비(2026-07-17) — 여기부터 읽어라. 아래 docs는 대부분 낡았다.**
 >
-> **지금 게임 = `src/playground/base.tscn`(베이스캠프, `run/main_scene`) + 고리 조립 책.** 그게 전부다.
+> **지금 게임 = `src/base/base.tscn`(베이스캠프, `run/main_scene`) + 고리 조립 책.** 그게 전부다.
 > **마법진 = 「고리 조립」**: 진=바깥 그릇(투사체 몸) · 룬=중심(속성) · 문양=진과 룬 사이 고리 칸 ·
 > 문양본(스텐실)=어느 칸을 여는 틀 · 방향=어느 칸을 채우냐 · 발사=진이 통째로 날아가 착탄점에서 전개.
 > 확정 뒤 손으로 따라 그어(탁본) 맺는다.
@@ -18,11 +18,14 @@
 >
 > ⚠ **docs/ 전체가 옛 자유드로잉 기준이다** — TRUTH·GDD·TECH_SPEC·CHANGELOG는 삭제된 시스템을 설명한다.
 > 사실로 믿지 마라. 아직 안 지운 건 설계 근거가 남아 있어서다.
-> 📖 **현재 정본** = 이 파일 + `docs/STATUS.md` 최상단 + memory `takbon-playground-clean-restart`.
+> 📖 **현재 정본** = 이 파일 + `docs/STATUS.md` 최상단 + memory `takbon-basecamp-is-the-game`.
+>
+> ✅ **세션 22: `docs/REFACTOR_PLAN.md`를 전부 처리했다** — 옛 세대(SpellDesign·research·자유드로잉
+> 잔재) 약 1,200줄 매장 · 규칙 위반 3건 해소 · `ring_board` 3분할 · 실제 버그 I3 수정.
+> **뼈대 정비는 끝났다. 이제 기능을 얹는 단계다.**
 
-- 🔴 **docs/REFACTOR_PLAN.md** — **다음 세션이 할 일 = 이거 전부** (사용자 확정 세션 21).
-  본격 개발 전 뼈대 정비: 죽은 세대 매장(~900줄)·규칙 위반 3건·`ring_board` 분할·실제 버그 I3.
-  **의존성 순서가 있다 — 뒤집으면 부팅 불가.** 문제가 아닌 것(건드리지 말 것)도 판정해 놨다
+- **docs/REFACTOR_PLAN.md** — ✅ **세션 22에 완료** (이력·판단 근거로만 참고). 「문제가 아닌 것」 절은
+  아직 유효하다 — 건드리지 마라
 - **docs/STATUS.md** — 세션별 진행 로그 (세션 종료 시마다 갱신). 옛 로그는 STATUS_ARCHIVE.md
 - docs/TRUTH.md · GDD.md · TECH_SPEC.md · CHANGELOG.md — ⚠ **옛 자유드로잉 아카이브**. 경제·적·저장
   계약 일부만 유효. 고리 모델 재작성은 아직 안 됐다
@@ -30,18 +33,25 @@
 
 ## 아키텍처 요약
 
-- **진입점**: `src/playground/base.tscn` (베이스캠프 — 바닥·탁본 책상·WASD). 책상 E → 고리 조립 책
+- **진입점**: `src/base/base.tscn` (베이스캠프 — 바닥·탁본 책상·WASD). 책상 E → 고리 조립 책
+  (세션 22에 `src/playground` → `src/base`로 개명 — 옛 이름이 "버려도 되는 실험"이라 거짓 신호였다)
 - **오토로드**: EventBus(시그널 허브) / GameState(자원·HP·장착·가방·도감) / Clock(낮밤 시간) /
   Db(data/ 레지스트리) / SaveManager(user://save, 자동 저장)
-  - ⚠ **오토로드엔 옛 SpellDesign 경로가 아직 데이터 구조로 남아 있다** (EventBus 시그널 타입·
-    GameState.designs/equipped·SaveManager 도안 저장). 쓰는 코드는 없지만 스키마를 지우면 파싱이 깨진다
-    → core 수술은 대청소 2단계 (미착수)
-  - ⚠ `save_manager.gd:8`이 `src/base/research_service.gd`를 preload한다(스스로 위반이라고 주석에 적혀
-    있다). 그래서 src/base에 `research_service.gd`·`recipes.gd`만 살아남았다
-- **남은 모듈**: `src/playground`(베이스캠프) · `src/drawing`(고리 조립 = ring_board·ring_book·
-  ring_forge_panel **셋뿐**) · `src/spell`(발사 — projectile/shockwave/pillar는 `data/runes/*.tres`가
-  물고 있어 못 지운다) · `src/core`(리드 전용)
+  - ✅ 세션 22: 옛 SpellDesign 스키마·research 경로를 **매장했다** (전엔 지우면 파싱이 깨졌다).
+    `Clock`의 실질 역할 = **자동저장 틱**(day_started → SaveManager) — 죽은 코드 아님
+  - ⚠ EventBus의 `extraction_success`·`bag_lost`는 **수신자만 있고 발신자가 없다** — 필드(원정)
+    미구현 탓이다. 필드를 붙이는 쪽이 emit해야 하며, 안 그러면 조용히 안 돈다 (event_bus.gd 주석 참조)
+- **남은 모듈**: `src/base`(베이스캠프) · `src/drawing`(고리 조립 — 아래) · `src/spell`(발사) ·
+  `src/core`(리드 전용)
+  - `src/drawing` = **ring_assembly**(조립 상태기계·순수 데이터) · **trace_scorer**(탁본 채점·순수 수학)
+    · **ring_board**(기하·렌더·입력) · ring_book · ring_forge_panel(+`.tscn` 껍데기)
+    🔴 **채점 규칙을 바꿀 땐 `trace_scorer.gd`만 연다** (세션 22 분할의 이유)
+  - `src/spell` = ring_spell_system(유일한 발사 경로) · ring_carrier · projectile · pillar · dummy_target
+    · ⚠ **shockwave는 지금 참조 0**이다 (세션 22에 projectile의 옛 SpellDesign 충격파 경로가 사라짐)
 - 모듈 간 통신은 **EventBus 시그널 + core 스키마만**. 타 모듈 직접 preload/get_node 금지
+  - 🔴 **발사 계약 = `Enums.GlyphCode`**(GATHER=0/RADIATE=1). 조립 UI·발사·`data/glyphs/*.tres`가
+    이 값을 공유한다 — **밀면 저장된 고리 도안이 조용히 깨진다**
+  - ⚠ 예외로 정당한 것: `base.gd`가 책 씬을 무는 것(진입 씬 = 조합 루트)
 - 밸런스 수치는 전부 **data/balance.tres** (BalanceData) — 코드에 수치 금지
 - typed GDScript 강제. 렌더러 Compatibility, **뷰포트 960×540**(세션 18에 640×360에서 올림, aspect=expand)
 
@@ -75,16 +85,20 @@
 방치됐다** (세션 8에 발견·복구).
 
 ```bash
-./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_save_auto.gd            # 저장/로드 (고리 라운드트립 — 옛 SpellDesign 검증은 세션 21에 걷어냄)
+./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_save_auto.gd            # 저장/로드 (고리 라운드트립)
+./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_ring_assembly_auto.gd   # **조립 상태기계 계약**: 단계 전이·문양본이 칸을 여는 규칙·assembly 발사 계약·시그널 (세션 22)
+./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_ring_trace_auto.gd      # **손그림 탁본**: 완성도/정밀도 점수·[다음] 수동 진행·문양 칸 자유 편집·먼 클릭이 칸을 안 뺏음(I3)
 ./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_ring_spell_auto.gd      # **고리 발사**: 진→투사체·착탄 전개(발산 탄환·응집 기둥)·실제 적 take_hit
-./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_ring_trace_auto.gd      # **손그림 탁본**: 자동추적(선에 붙음)·완성도/정밀도 점수·[다음] 수동 진행·분석 리포트·문양 칸 자유 편집
 ./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_ring_design_auto.gd     # **고리 도안 통합**: RingDesign 라운드트립·ring_design_committed→GameState 자동 장착
 ```
 
-🔴 **세션 21 대청소로 목록이 이만큼 줄었다.** 옛 자유 드로잉(인식기·캔버스·책자·종이/잉크 경제)과
-옛 본 게임(src/base 거점·field·ui·tutorial·quest)이 **삭제**되면서 그 테스트들(integration·drawing·
-glyph·canvas·paper·forge·spell·base·onboarding·fill·equip·quest·bosscut·field·ui·sanity_check)도 함께
-지웠다. **되돌리려면 git 이력**(삭제 직전 커밋 = `dcc3326`).
+🔴 **`-s` 테스트는 런타임 에러가 나도 "OK"를 찍을 수 있다.** 세션 22에 실제로 겪었다 —
+`test_ring_trace_auto`가 내부 필드(`_slots`)를 더듬다가 리팩터로 그게 옮겨가자 에러로 함수가
+**중단**됐는데 `failures=0`이라 통과로 보였다. **grep을 `_OK`만 하지 말고 `SCRIPT ERROR`도 같이 봐라.**
+그리고 **테스트는 공개 API로만 검증해라** — 내부 필드는 리팩터 때 옮겨 다니는 물건이라 계약이 아니다.
+
+🔴 **세션 21 대청소로 목록이 이만큼 줄었다.** 옛 자유 드로잉·옛 본 게임과 함께 그 테스트들도 지웠다.
+**되돌리려면 git 이력**(삭제 직전 커밋 = `dcc3326`).
 
 눈으로 보는 시험대(F6):
 - `tests/test_ring_forge_panel.tscn` — 책 펼침(진→룬→문양본→문양을 손으로 따라 긋기) + 덮고 발사.
@@ -92,9 +106,13 @@ glyph·canvas·paper·forge·spell·base·onboarding·fill·equip·quest·bosscu
 - `tests/test_ring_forge.tscn` — 칸 클릭 조립 **프로토타입**. ⚠ 본 게임과 **분리된 실험 씬**이고
   팔레트도 다르다(응집◎/확산✳/발산→). 기준 아님 — 헷갈리면 위쪽을 봐라.
 
-**그냥 실행(F5) = 베이스캠프** (`src/playground/base.tscn` = `run/main_scene`): WASD로 책상에 가서 **E** →
+**그냥 실행(F5) = 베이스캠프** (`src/base/base.tscn` = `run/main_scene`): WASD로 책상에 가서 **E** →
 고리 조립 책. 맺으면 `GameState.ring_designs`에 들어간다. ⚠ **아직 발사 경로가 베이스캠프엔 없다**
 (RingSpellSystem 미배선) — 쏘려면 위 시험대를 쓴다.
+
+🔴 **헤드리스는 "존재"만 확인하고 "보인다"는 못 본다** (memory `takbon-mcp-visual-verify`).
+렌더·레이아웃을 건드렸으면 **에디터로 띄워 스샷으로 확인해라** — 세션 22의 `ring_board` 분할과
+책 씬화(I5)는 테스트가 전부 그린이어도 스샷으로 최종 확인했다(둘 다 픽셀 동일).
 
 **알려진 함정**: `-s` SceneTree 테스트 스크립트는 오토로드 전역 등록 전에 컴파일된다 — 오토로드 식별자(EventBus 등)를 컴파일 타임 참조하면 에러. `root.get_node("/root/EventBus")` 런타임 조회 + 모듈 스크립트는 첫 프레임 후 `load()` 지연 로드로 우회 (기존 테스트 파일들 참고).
 
