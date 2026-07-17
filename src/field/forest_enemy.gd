@@ -86,9 +86,26 @@ func take_hit(damage: float, rune_type: int, _status: int, _status_power: float)
 		_die()
 
 
-## ⚠ `EnemyDef.drops`를 아직 안 뿌린다 — 사용자 확정 세션 26: *"이번엔 없다 — 싸움 + 귀환만"*.
-## 얻는 게 생기는 순간(탁본) 여기가 그 자리다: 드롭 → `GameState.add_to_bag` → 귀환해야 창고행.
+## 🔴 죽으면 **드롭을 굴려 가방에 넣는다** (세션 27 — 사용자: *"드롭을 먼저"*).
+## 인벤 흐름은 이미 다 배선돼 있다: `add_to_bag` → 귀환(extraction_success) 시 창고로 회수 ·
+## 죽으면(bag_lost) 통째로 사라진다. 그래서 여기서 **넣기만 하면** 익스트랙션 루프가 산다
+## ("주웠다, 살아 돌아가자").
+##
+## 🔴 룬 조각(fragment_*)은 이 풀에 **없어야 한다** — 룬은 드롭이 아니라 보스 퀘스트 보상이다
+## (사용자 확정). 지금 슬라임은 mat_slime_core만 있어 무관하지만, 엘리트를 숲에 넣을 때
+## 그 .tres의 fragment 줄은 **일반 드롭이 아니라 퀘스트로** 빼야 한다 (BACKLOG).
+##
+## 랜덤: Godot 전역 `randf()` — 부팅 시 자동 시드. 이 프로젝트의 첫 게임플레이 랜덤이다
+## (세이브에 안 들어간다 — 드롭은 굴린 결과가 가방에 담길 뿐 RNG 상태를 저장하지 않는다).
 func _die() -> void:
+	if _def != null:
+		for drop: DropEntry in _def.drops:
+			if randf() <= drop.chance:
+				var n := drop.min_count
+				if drop.max_count > drop.min_count:
+					n += randi() % (drop.max_count - drop.min_count + 1)
+				if n > 0:
+					GameState.add_to_bag(drop.item_id, n)
 	died.emit()
 	queue_free()
 

@@ -49,6 +49,8 @@ func _run() -> void:
 	await _test_my_spell_can_hit_and_kill()
 	await _test_extract_banks_the_run()
 	await _test_death_loses_the_bag()
+	await _test_kill_drops_into_bag()
+	await _test_drop_survives_extraction_lost_on_death()
 
 	# 🔴 뒷정리 — **실제 플레이 세이브 오염 방지** (test_save_auto와 같은 이유).
 	# ⚠ 세션 26의 F3(SaveManager._ready → load_game)으로 **저장이 살아나면서 생긴 일**이다:
@@ -187,6 +189,59 @@ func _test_death_loses_the_bag() -> void:
 	await process_frame
 	_check(got.size() == 1, "HP 0 → bag_lost가 한 번 온다 (실제 %d)" % got.size())
 	_bus.bag_lost.disconnect(cb)
+
+
+## [8] 🔴 적을 죽이면 **드롭이 가방에 담긴다** (세션 27 — 사용자: "드롭을 먼저").
+## 슬라임은 `mat_slime_core` chance 0.6 하나뿐이라 확률이다 — 여러 번 죽여 **하나라도**
+## 담기는지 본다(0.6이면 10마리에 사실상 확실). "안 담긴다"(호출 누락)와 "가끔 안 나온다"
+## (확률)를 가르려고 표본을 키운다.
+func _test_kill_drops_into_bag() -> void:
+	print("[8] 적을 죽이면 드롭이 가방에 담긴다")
+	await _fresh()
+	_gs.bag.clear()
+	var enemies := _enemies()
+	_check(enemies.size() >= 5, "표본이 되는 적이 충분하다 (%d)" % enemies.size())
+	for e in enemies:
+		e.take_hit(9999.0, 0, 0, 0.0)
+	await process_frame
+	# 슬라임 7 × 0.6 → 기대 4.2개. 하나도 안 담기면 호출이 누락된 것이다(확률로는 (0.4)^7≈0.16%).
+	var total := 0
+	for entry: Dictionary in _gs.bag:
+		total += int(entry["count"])
+	_check(total > 0, "적 %d마리를 죽이면 가방에 뭔가 담긴다 (실제 %d개 — 0이면 _die가 드롭을 안 굴린 것)"
+		% [enemies.size(), total])
+	# 담긴 게 있으면 그건 이 적의 드롭 테이블 아이템이어야 한다 (엉뚱한 id가 아니라)
+	if not _gs.bag.is_empty():
+		_check(_gs.bag[0]["id"] == &"mat_slime_core",
+			"담긴 것이 슬라임의 드롭이다 (실제 %s)" % str(_gs.bag[0]["id"]))
+	_gs.bag.clear()
+
+
+## [9] 🔴 드롭의 **익스트랙션 계약** — 귀환하면 창고로, 죽으면 사라진다.
+## 드롭 자체(위)와 인벤 배선(가방→창고)이 **이어지는지**를 본다. 이게 루프의 심장이다.
+func _test_drop_survives_extraction_lost_on_death() -> void:
+	print("[9] 드롭 → 귀환하면 창고행 · 죽으면 사라진다")
+	await _fresh()
+	_gs.bag.clear()
+	var before: int = _gs.get_count(&"mat_slime_core")
+
+	# 드롭을 확정으로 하나 넣는다 (확률에 흔들리지 않게 직접 — 인벤 흐름만 본다)
+	_gs.add_to_bag(&"mat_slime_core", 3)
+	_zone(&"extract").interacted.emit()      # 귀환
+	await process_frame
+	_check(_gs.get_count(&"mat_slime_core") == before + 3,
+		"귀환하면 가방이 창고로 회수된다 (%d → %d)" % [before, _gs.get_count(&"mat_slime_core")])
+	_check(_gs.bag.is_empty(), "회수 후 가방은 빈다")
+
+	# 이번엔 죽어서 잃는다 — 창고는 그대로, 가방만 증발
+	await _fresh()
+	var banked: int = _gs.get_count(&"mat_slime_core")
+	_gs.add_to_bag(&"mat_slime_core", 5)
+	_gs.damage_player(99999.0)                # 사망 → bag_lost
+	await process_frame
+	_check(_gs.bag.is_empty(), "죽으면 가방이 비워진다")
+	_check(_gs.get_count(&"mat_slime_core") == banked,
+		"죽어도 창고(이미 회수한 것)는 그대로다 (%d)" % banked)
 
 
 # ── 헬퍼 ──
