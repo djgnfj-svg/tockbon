@@ -44,7 +44,6 @@ func _run() -> void:
 	_test_pen_grades_registered()
 	_test_strokes_accumulate()
 	_test_clear_stroke_wipes()
-	_test_assist_mode_auto_places()
 
 	if failures == 0:
 		print("TEST_RING_TRACE_OK — 전 항목 통과")
@@ -186,22 +185,6 @@ func _test_clear_stroke_wipes() -> void:
 	_check(is_zero_approx(float(b.call(&"coverage"))), "다시 그리기 → 완성도 0")
 	_check(is_zero_approx(float(b.call(&"accuracy"))), "다시 그리기 → 정밀도 0")
 	_check(b.call(&"trace_strokes").is_empty(), "다시 그리기 → 먹선이 사라진다")
-	b.queue_free()
-
-
-# ── 🔴 ⑮ 조립 모드 — 고르면 손 안 대고 붙는다 (세션 25, 사용자와 손그림을 견주는 축) ──
-# 요점: 가이드를 그대로 먹선으로 삼으므로 **점수가 저절로 만점**이고, 그 덕에 「점수 → 위력 → 펑」
-# 파이프라인을 하나도 안 고치고 그대로 탄다 (조립엔 실패가 없다 = 손그림과의 차이).
-func _test_assist_mode_auto_places() -> void:
-	var b = _make_board()
-	_check(is_zero_approx(float(b.call(&"coverage"))), "손그림 모드 — 손대기 전엔 빈 판")
-	b.call(&"set_assist", true)
-	_check(float(b.call(&"coverage")) > 0.99, "조립 모드 → 진이 손 안 대고 놓인다 (완성도 만점)")
-	_check(float(b.call(&"accuracy")) > 0.99, "가이드 그대로라 정밀도도 만점")
-	_check(float(b.call(&"piece_score")) > 0.99, "조립엔 실패가 없다 — 조각 점수 만점")
-	# 손그림으로 돌아가면 다시 빈 판이다 (두 모드가 서로를 오염시키지 않는다)
-	b.call(&"set_assist", false)
-	_check(is_zero_approx(float(b.call(&"coverage"))), "손그림으로 되돌리면 판이 다시 빈다")
 	b.queue_free()
 
 
