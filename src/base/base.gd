@@ -132,6 +132,7 @@ func _open_drawing() -> void:
 		return
 	_overlay.add_child(_forge)
 	_forge.design_committed.connect(_on_ring_committed)
+	_forge.commit_rejected.connect(_on_ring_rejected)
 	_forge.closed.connect(_close_drawing)   # ESC(ui_cancel) → 패널이 closed 발신
 	_forge.open()
 
@@ -141,6 +142,12 @@ func _open_drawing() -> void:
 func _on_ring_committed(assembly: Dictionary) -> void:
 	var design := RingDesign.from_assembly(assembly, "고리 마법진")
 	EventBus.ring_design_committed.emit(design)
+
+## 🔴 책을 덮었는데 **점수 미달로 안 맺혔다** (세션 25). 슬롯이 조용히 빈 채로 남으면
+## "맺었는데 안 나간다"가 된다 — 사용자가 실제로 겪었고, 화면 어디에도 이유가 없었다.
+func _on_ring_rejected(score: float) -> void:
+	_hud.say("마법진이 안 맺혔다 — 종합 %d점 (%d점을 넘겨야 견딘다). 책상에서 E로 다시 그려라"
+		% [RingPower.score_display(score), RingPower.score_display(RingPower.threshold())], true)
 
 func _close_drawing() -> void:
 	if _overlay != null:

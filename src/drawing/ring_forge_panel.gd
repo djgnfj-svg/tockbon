@@ -33,6 +33,9 @@ const RingPower := preload("res://src/core/ring_power.gd")
 signal closed
 ## 도안이 방금 맺혔다 — 여는 쪽(작업대·거점)이 발사·연출에 쓴다. assembly = board.get_assembly()
 signal design_committed(assembly: Dictionary)
+## 🔴 책을 덮었는데 **점수 미달로 안 맺혔다** (세션 25). 여는 쪽이 이유를 화면에 띄운다 —
+## 안 그러면 슬롯이 조용히 빈 채로 남아 "맺었는데 안 나간다"가 된다 (사용자가 실제로 겪었다).
+signal commit_rejected(score: float)
 
 # ── 레이아웃 (**논리 크기** 640×360 — 씬의 좌표도 전부 이 좌표계다) ──
 ## 🔴 세션 21: 뷰포트는 960×540(세션 18에 올림)이고 `stretch/aspect=expand`라 전체화면에선
@@ -168,10 +171,16 @@ func close() -> void:
 	# 건너뛰고 맺히는 셈이라 펑이 **누르지 않으면 그만인 벌**이 된다 — 규칙에 구멍이 뚫린다.
 	if not _committed and _board.can_commit():
 		var a := _board.get_assembly()
-		if RingPower.is_stable(float(a.get("score", 0.0))):
+		var sc := float(a.get("score", 0.0))
+		if RingPower.is_stable(sc):
 			_committed = true
 			design_committed.emit(a)
 			_refresh_buttons()
+		else:
+			# 🔴 **조용히 거부하지 않는다** (세션 25, 사용자: "맽기까지 했는데 안나감").
+			# 거부 자체는 옳다(위 주석) — 문제는 **아무 말도 없었다는 것**이다. 책은 덮이고,
+			# 슬롯은 비어 있고, 좌클릭해도 안 나가는데 이유가 어디에도 안 보였다.
+			commit_rejected.emit(sc)
 	var tw := create_tween()
 	tw.tween_property(_spread, ^"scale", Vector2(OPEN_FROM_X, 1.0), CLOSE_SEC) \
 		.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
@@ -357,9 +366,9 @@ func _on_assembly_changed() -> void:
 ## 🔴 [맺기] — 마법진을 끝내고 분석한다 (남은 문양 칸은 비운 채). 진·룬을 그렸어야 한다.
 func _finish() -> void:
 	if not _board.can_commit():
-		_set_say("진과 룬을 먼저 그려야 맺힌다  (문양은 없어도 빈 진으로 날아간다)", true)
+		_set_say("진과 룬을 먼저 그려야 분석할 수 있다  (문양은 없어도 빈 진으로 날아간다)", true)
 		return
-	_board.finish()   # → finished 시그널이 리포트를 띄운다
+	_board.finish()   # → finished 시그널이 리포트를 띄운다 (아직 **안 맺힌다**)
 
 
 ## 보드가 마법진을 다 그렸다 — 분석 리포트를 띄운다 (점수·위력. **판정은 없다**).
@@ -430,7 +439,11 @@ func _refresh_buttons() -> void:
 	else:
 		_next_btn.disabled = not (tracing and drawn)
 		_next_btn.text = "다음 ▶"
-	_commit_btn.text = "✓ 맺힘" if _committed else "✓ 맺기 (분석)"
+	# 🔴 **"맺기"가 아니다** (세션 25). 이 버튼은 분석 리포트를 띄울 뿐 **아무것도 맺지 않는다** —
+	# 맺는 건 리포트 안의 [마력 주입]이다. 그런데 이름이 "맺기 (분석)"이라, 누른 사람은
+	# 맺힌 줄 알고 책을 덮었다가 "맺었는데 안 나간다"를 겪었다 (사용자가 실제로 겪었다).
+	# 버튼은 자기가 하는 일만 말해야 한다.
+	_commit_btn.text = "✓ 맺힘" if _committed else "분석 ▶"
 	_commit_btn.disabled = _picking_template or not _board.can_commit()
 
 

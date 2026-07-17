@@ -51,6 +51,7 @@ func _run() -> void:
 	await _test_my_body_does_not_block_my_spell()
 	await _test_desk_does_not_eat_the_spell()
 	await _test_desk_still_sees_the_player()
+	await _test_rejected_commit_is_not_silent()
 
 	if failures == 0:
 		print("TEST_BASE_OK — 전 항목 통과")
@@ -137,6 +138,45 @@ func _test_desk_still_sees_the_player() -> void:
 	_check(desk.get_overlapping_bodies().has(player),
 		"책상이 플레이어를 감지 (%d 물리 프레임)" % frames)
 	player.global_position = was
+
+
+## 🔴 [6] 점수 미달로 안 맺히면 **이유가 화면에 뜬다** (세션 25).
+## 사용자: *"맽기까지 했는데 안나감"* — 미달 도안은 책을 덮을 때 조용히 거부됐다.
+## 거부는 옳다(안 그러면 [마력 주입]을 건너뛰는 우회로가 된다). 문제는 **침묵**이었다:
+## 책은 덮이고 슬롯은 빈 채인데 이유가 어디에도 없어 "맺었는데 안 나간다"가 됐다.
+func _test_rejected_commit_is_not_silent() -> void:
+	print("[6] 미달 도안을 거부할 땐 이유를 말해 준다")
+	_base.call(&"_open_drawing")
+	await process_frame
+	var forge = _base.get("_forge")
+	if forge == null:
+		_check(false, "책이 안 열렸다")
+		return
+	var board = forge.get_node("Stage/Spread/RingBoard")
+	# 진·룬을 **미달로** 그린다 (조금만·벗어나게)
+	for step in 2:
+		if step == 0:
+			board.call(&"choose_jin")
+		else:
+			board.call(&"choose_rune")
+		board.call(&"begin_stroke")
+		var g = board.call(&"guide_points")
+		for i in range(0, int(g.size() * 0.4)):
+			board.call(&"trace_stroke", g[i] + Vector2(6.0, 5.0))
+		forge.call(&"_on_next")
+	var sc := float((board.call(&"get_assembly") as Dictionary).get("score", 1.0))
+	_check(sc <= 0.65, "미달 도안을 만들었다 (%.2f)" % sc)
+	_check(bool(board.call(&"can_commit")), "진·룬은 있으니 can_commit은 참 — 그래서 조용히 거부됐었다")
+
+	var rejected := []
+	forge.commit_rejected.connect(func(s: float) -> void: rejected.append(s))
+	var gs = root.get_node("/root/GameState")
+	var before := (gs.ring_designs as Array).size()
+	forge.call(&"close")
+	await process_frame
+	_check(rejected.size() == 1, "책을 덮으면 commit_rejected가 온다 (침묵 금지)")
+	_check((gs.ring_designs as Array).size() == before, "미달 도안은 여전히 안 맺힌다 (거부는 옳다)")
+	_base.call(&"_close_drawing")
 
 
 # ── 헬퍼 ──
