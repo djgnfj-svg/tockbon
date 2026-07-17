@@ -177,6 +177,13 @@
 ./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_forest_auto.gd         # **숲 원정** (세션 26): 출격 만HP · 적이 쫓아옴(그룹 "player") · 접촉 피해 · 🔴**적 레이어 계약**(4=enemy가 아니면 부딪히기만 하고 take_hit이 안 불린다) · 귀환/사망 계약(extraction_success·bag_lost)
 ```
 
+🔴 **스위트를 돌리면 `user://save`가 날아간다** (세션 26 F3 이후). `SaveManager._ready`가 저장을
+살려 놨으므로, `extraction_success`·`bag_lost`·`day_started`를 쏘는 테스트는 **진짜 세이브 파일을
+쓴다** — `test_forest_auto`가 실제로 플레이 세이브를 테스트 찌꺼기로 덮었다. 그래서 세이브를
+건드리는 테스트는 **끝에 `wipe_save()`로 뒷정리한다**(test_save_auto·test_forest_auto).
+⚠ **뒷정리는 지울 뿐 복구가 아니다** — 플레이하던 세이브가 있으면 스위트가 그걸 날린다.
+새 시그널을 쏘는 테스트를 더할 땐 **SaveManager가 물려 있는지 먼저 확인해라**.
+
 🔴 **`-s` 테스트는 런타임 에러가 나도 "OK"를 찍을 수 있다.** 세션 22에 실제로 겪었다 —
 `test_ring_trace_auto`가 내부 필드(`_slots`)를 더듬다가 리팩터로 그게 옮겨가자 에러로 함수가
 **중단**됐는데 `failures=0`이라 통과로 보였다. **grep을 `_OK`만 하지 말고 `SCRIPT ERROR`도 같이 봐라.**

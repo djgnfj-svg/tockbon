@@ -50,6 +50,14 @@ func _run() -> void:
 	await _test_extract_banks_the_run()
 	await _test_death_loses_the_bag()
 
+	# 🔴 뒷정리 — **실제 플레이 세이브 오염 방지** (test_save_auto와 같은 이유).
+	# ⚠ 세션 26의 F3(SaveManager._ready → load_game)으로 **저장이 살아나면서 생긴 일**이다:
+	# 위 [6]·[7]이 쏘는 `extraction_success`·`bag_lost`에 SaveManager가 물려 있어, 이제 이 테스트가
+	# **user://save/save.json을 진짜로 쓴다.** 안 지우면 다음 부팅이 그 빈 껍데기를 이어 받아
+	# **플레이하던 마법진이 사라진다** (실제로 겪었다 — 스위트를 돌리자 세이브가 테스트 찌꺼기로
+	# 덮여 있었다). 🔴 새 시그널을 쏘는 테스트를 더할 땐 SaveManager가 물려 있는지 확인해라.
+	root.get_node("/root/SaveManager").wipe_save()
+
 	if failures == 0:
 		print("TEST_FOREST_OK — 전 항목 통과")
 		quit(0)
