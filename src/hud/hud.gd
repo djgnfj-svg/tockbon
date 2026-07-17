@@ -133,6 +133,6 @@ func _draw_slot(font: Font, at: Vector2, idx: int) -> void:
 		HORIZONTAL_ALIGNMENT_LEFT, -1, 10, NAME_COLOR)
 	# 🔴 점수 반올림도 core가 판다 — 「퍼펙트」가 그 반올림으로 정의돼 있다 (score_display 주석).
 	draw_string(font, at + Vector2(22.0, 38.0),
-		"위력 %d · %d점" % [RingPower.power_display(design.total_score),
+		"위력 %d · %d점" % [RingPower.power_display(design.total_score, Db.ink_mult(design.ink)),
 			RingPower.score_display(design.total_score)],
 		HORIZONTAL_ALIGNMENT_LEFT, -1, 10, POWER_COLOR)

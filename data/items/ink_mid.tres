@@ -9,5 +9,6 @@ kind = 0
 grade = 2
 display_name = "중급 잉크"
 params = {
+"color": Color(0.14, 0.22, 0.34, 1),
 "power_mult": 1.3
 }

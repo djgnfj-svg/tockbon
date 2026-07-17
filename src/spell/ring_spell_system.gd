@@ -45,35 +45,41 @@ func _on_ring_cast(assembly: Dictionary, origin: Vector2, aim_dir: Vector2) -> v
 		return
 	var angle := aim_dir.angle() if aim_dir.length_squared() > 0.0 else 0.0
 	var power := _power_of(assembly)
+	# 🔴 특별잉크 화상 증폭 (세션29) — 위력(피해)과 별개 축이라 따로 나른다. 전개는 나중이라
+	# 그때 assembly가 없으므로, power처럼 캐리어에 실어 착탄까지 들고 간다.
+	var status_mult := Db.status_mult_of(StringName(assembly.get("special_ink", &"")),
+		float(assembly.get("special_ratio", 0.0)))
 
 	var carrier := CarrierScene.instantiate() as CarrierScript
 	if carrier == null:
 		return
 	add_child(carrier)
 	carrier.global_position = origin
-	var fire := _fire_hit(power)
+	var fire := _fire_hit(power, status_mult)
 	carrier.setup(ring, angle,
 		balance.projectile_base_speed, balance.projectile_lifetime_sec,
 		fire.damage, fire.rune_type, fire.status, fire.status_power)
-	# 위력을 **캐리어에 실어** 착탄까지 들고 간다 — 전개는 나중에 일어나고, 그때 assembly는 없다.
-	carrier.deployed.connect(_on_carrier_deployed.bind(power))
+	carrier.deployed.connect(_on_carrier_deployed.bind(power, status_mult))
 
 
-## assembly → 위력 배율. 점수가 없으면 기준(1.0) — 규칙 자체는 core가 쥔다(리포트와 같은 값).
+## assembly → 위력 배율. 손그림 점수(곡선) × **잉크 등급 배수** × **진 크기**(세션29). 규칙은
+## core가 쥔다(리포트·HUD와 같은 값). 점수 없는 옛 도안 = 기준 위력(1.0)에 잉크·크기만 곱한다.
 func _power_of(assembly: Dictionary) -> float:
+	var ink_mult := Db.ink_mult(StringName(assembly.get("ink", &"")))
+	var size := float(assembly.get("size", 1.0))
 	if not assembly.has("score"):
-		return 1.0
-	return RingPower.power_of(float(assembly.get("score", 0.0)))
+		return ink_mult * RingPower.size_mult(size)
+	return RingPower.power_of(float(assembly.get("score", 0.0)), ink_mult, size)
 
 
 ## 착탄 = 안의 고리를 편다. 물리 콜백 중일 수 있으니 지연 실행 (Area2D를 콜백 안에서 즉시
 ## add_child하면 "flushing queries" 에러로 조용히 안 생긴다 — projectile/shockwave와 같은 함정).
-func _on_carrier_deployed(ring: Array, at: Vector2, travel: float, power: float) -> void:
-	call_deferred(&"_deploy_now", ring, at, travel, power)
+func _on_carrier_deployed(ring: Array, at: Vector2, travel: float, power: float, status_mult: float) -> void:
+	call_deferred(&"_deploy_now", ring, at, travel, power, status_mult)
 
 
-func _deploy_now(ring: Array, at: Vector2, travel: float, power: float) -> void:
-	var fire := _fire_hit(power)
+func _deploy_now(ring: Array, at: Vector2, travel: float, power: float, status_mult: float) -> void:
+	var fire := _fire_hit(power, status_mult)
 	var gather := 0
 	for k in SLOTS:
 		var g := int(ring[k])
@@ -119,13 +125,16 @@ func _spawn_pillar(at: Vector2, gather: int, fire: Dictionary) -> void:
 ## 불 룬 히트 정보 — Db에서 불 RuneDef를 읽어 피해·상태·세기 + **탄 씬**을 뽑는다.
 ## 등록이 없으면 기본 불 피해(balance)로 폴백하되 scene은 null (탄은 못 쏜다 — _spawn_bolt가 경고).
 ##
-## 🔴 `power` = 손그림 종합이 정한 위력 배율 (세션 23). **피해에만** 곱한다 —
-## 상태이상 세기는 룬(속성 농도)의 축이라 여기서 건드리면 축을 두 번 적용하는 셈이다.
-func _fire_hit(power: float = 1.0) -> Dictionary:
+## 🔴 `power` = 손그림·잉크·크기가 정한 위력 배율 → **피해에** 곱한다 (세션 23·29).
+## 🔴 `status_mult` = 특별잉크 화상 증폭 (세션29) → **상태이상 세기에만** 곱한다. 피해(power)와
+## 상태(status_mult)는 **다른 축**이다 — 잉크 등급=피해, 특별잉크=상태. 섞으면 축이 겹친다.
+## (룬 농도 세기는 조립 단계에서 status_power에 이미 반영돼 이 rune.status_power로 들어온다.)
+func _fire_hit(power: float = 1.0, status_mult: float = 1.0) -> Dictionary:
 	var rune: RuneDef = Db.get_rune(Enums.RuneType.FIRE)
 	if rune == null:
 		return {"damage": balance.projectile_base_damage * power, "rune_type": Enums.RuneType.FIRE,
 			"status": Enums.Status.BURN, "status_power": 0.0, "scene": null}
 	return {"damage": balance.projectile_base_damage * rune.base_damage * power,
-		"rune_type": Enums.RuneType.FIRE, "status": rune.status, "status_power": rune.status_power,
+		"rune_type": Enums.RuneType.FIRE, "status": rune.status,
+		"status_power": rune.status_power * status_mult,
 		"scene": rune.projectile_scene}

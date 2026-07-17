@@ -203,6 +203,19 @@ extends Resource
 ## 0.999로 올리면 **100점이라 적어 놓고 완벽**이라는 어긋남이 생긴다 — 표시 반올림과 묶인 값이다
 @export var ring_grade_perfect: float = 0.995
 
+@export_group("종이·특별잉크 (세션29)")
+# 🔴 종이=규모·특별잉크=상태증폭 (사용자 확정). 잉크 등급=데미지(power_mult)와 **다른 레버**다.
+## 진 크기(jin_scale) → 데미지 지수. size_mult = jin_scale ^ 이 값 (1=선형: 2배 크게=2배 데미지,
+## <1=완화). 종이 등급이 jin_scale 상한을 올리므로, 이게 "큰 진=데미지↑"의 세기다.
+## ⚠ 잉크 배수와 **겹쳐서** 곱해진다 — 둘 다 데미지라 폭주 주의(사용자와 확인한 지점).
+@export var paper_size_power_exp: float = 1.0
+## 종이 없이 그릴 때의 기본 진 확대 상한 (= paper_basic의 zoom_max와 맞춘다).
+## 종이를 안 골라도 여기까지는 키울 수 있다 — 종이는 이 상한을 **더** 올리는 것.
+@export var paper_zoom_max_default: float = 1.16
+## 특별잉크 획당 소모량 — 그리는 동안 실시간으로 닳는다 (사용자: "그릴 때 실시간으로 소비").
+## 다 떨어지면 소모·효과 적립 없이 계속 그린다(기본잉크처럼) — 그만큼 비율(효과)이 낮아진다.
+@export var special_ink_per_stroke: int = 1
+
 @export_group("경제")
 ## 수리비 = 원본 ink_cost 대비 비율
 @export var repair_cost_frac: float = 0.2

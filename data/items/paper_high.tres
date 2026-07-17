@@ -4,11 +4,10 @@
 
 [resource]
 script = ExtResource("1")
-id = &"ink_basic"
-kind = 0
-grade = 1
-display_name = "기본 잉크"
+id = &"paper_high"
+kind = 1
+grade = 3
+display_name = "고급 종이"
 params = {
-"color": Color(0.2, 0.14, 0.09, 1),
-"power_mult": 1.0
+"zoom_max": 2.0
 }

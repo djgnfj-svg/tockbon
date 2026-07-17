@@ -29,6 +29,8 @@ const RingBook := preload("res://src/drawing/ring_book.gd")
 ## 점수 → 안정성·위력 규칙. 🔴 **발사와 같은 함수를 쓴다** — 리포트가 보여 준 위력과 실제로
 ## 때리는 위력이 갈라지면 안 된다 (src/core/ring_power.gd의 주석 참조).
 const RingPower := preload("res://src/core/ring_power.gd")
+## 종이 기본 확대 상한(paper_zoom_max_default) 등 — 수치는 balance가 쥔다.
+const BAL: BalanceData = preload("res://data/balance.tres")
 
 signal closed
 ## 도안이 방금 맺혔다 — 여는 쪽(작업대·거점)이 발사·연출에 쓴다. assembly = board.get_assembly()
@@ -72,6 +74,21 @@ const BURST_SEC := 0.45
 ## 🔴 세션 25: **고르는 게 먼저다** — 오른쪽 셀을 눌러야 왼쪽에 밑그림이 뜬다 (진·룬·문양 전부).
 const Copy_START := "오른쪽에서 진을 골라 왼쪽 판에 손으로 그리세요  (진 → 룬 → 문양 순서로 하나씩 · [다음]으로 진행)"
 
+## 잉크 스와치 — 왼쪽 페이지 타이틀 줄 오른쪽 빈 곳(보드는 y30부터라 안 겹친다). 640×360 논리 좌표.
+const INK_SWATCH_SIZE := Vector2(24.0, 18.0)
+const INK_SWATCH_X := 176.0
+const INK_SWATCH_Y := 12.0
+const INK_SWATCH_GAP := 5.0
+const INK_EDGE := Color(0.30, 0.24, 0.16, 0.6)
+const INK_EDGE_ON := Color(0.95, 0.82, 0.35)
+
+## 종이 선택 — 잉크 라벨(x142) 왼쪽 빈 곳. 작은 텍스트 버튼(등급 숫자, 툴팁=이름).
+const PAPER_LABEL_X := 14.0
+const PAPER_BTN_X := 40.0
+const PAPER_BTN_Y := 11.0
+const PAPER_BTN_SIZE := Vector2(21.0, 19.0)
+const PAPER_BTN_GAP := 2.0
+
 ## 🔴 `class_name` 없이도 정적 타입을 받는다 — `const X := preload(...)`를 타입으로 쓸 수 있다.
 ## 예전엔 `Control`로 받아 `.call(&"...")`로 더듬었고, 오타가 파싱이 아니라 **런타임에** 터졌다.
 @onready var _stage: Control = $Stage         # 640×360 논리 무대 — 화면에 맞춰 통째로 확대(_fit_stage)
@@ -91,7 +108,23 @@ var _committed := false
 var _template_idx := 0                        # 지금 삽입된 문양본 (기본 = TEMPLATES[0] = 2방)
 var _active_glyph := RingBoard.G_RADIATE      # 지금 고른 문양 (하이라이트)
 var _analysis: Dictionary = {}                # 마지막 분석 리포트 (get_analysis 결과)
+## 🔴 완성 시점의 발사 계약 (세션29) — 리포트가 잉크·크기·특별효과를 여기서 읽는다.
+## _draw 안에서 get_assembly(get_analysis 재계산)를 부르지 않으려고 캐시한다. 잉크/종이를 바꾸면 갱신.
+var _finish_asm: Dictionary = {}
 var _picking_template := false                # 🔴 문양 단계의 하위 단계 — 문양본 고르는 중(아직 안 그림)
+
+## 🔴 잉크 선택 (세션28~29). 고른 잉크의 **색으로 획이 그려지고**, 등급 배수·특별잉크 효과가
+## 도안에 실린다. 세션29: 특별잉크는 **보유량으로 걸러** 보인다(있는 것만 + 수량).
+var _ink_ids: Array = []                      # 지금 고를 수 있는 잉크 id들 (기본=늘·특별=보유분)
+var _active_ink: StringName = &""
+var _ink_swatches: Array = []                 # 스와치 Button들 (색으로 고른다)
+var _ink_nodes: Array = []                    # 잉크 UI 노드 전부(라벨+스와치) — 재빌드 때 free
+## 🔴 종이 선택 (세션29, 종이=규모). 종이 등급이 진 확대 상한을 올린다 → 큰 진=데미지↑.
+## 기본 종이는 늘 있고, 상급 종이는 **보유분만** 뜬다(제작해야 생긴다). 소모는 없다(持有 해금).
+var _paper_ids: Array = []
+var _active_paper: StringName = &""
+var _paper_btns: Array = []
+var _paper_nodes: Array = []
 
 
 ## 껍데기는 씬이 만든다 — 여기서는 **코드 렌더와 배선만** 붙인다.
@@ -121,6 +154,13 @@ func _ready() -> void:
 
 	resized.connect(_fit_stage)   # 창 크기·전체화면 전환마다 다시 맞춘다
 	_fit_stage()
+	# 🔴 잉크·종이 팔레트 (세션28~29) — Db가 오토로드라 이미 준비돼 있다.
+	# 특별잉크는 그리는 동안 닳으므로, 창고가 바뀌면(소모·정제) 팔레트를 다시 그린다.
+	# 🔴 세션29: 좌상단 제목("고리 조립 마법진")을 숨겨 **종이 선택 자리**를 낸다. 제목은 장식이고
+	# 오른쪽 say 텍스트가 맥락을 준다 — 안 숨기면 종이 버튼(x14)과 겹친다(실측 확인).
+	_title.visible = false
+	EventBus.resources_changed.connect(_rebuild_palettes)
+	_rebuild_palettes()
 
 
 ## 논리 무대(640×360)를 화면에 **비율 유지로** 꽉 채우고 중앙에 놓는다.
@@ -156,6 +196,12 @@ func open() -> void:
 	_inject_defs()                              # 🔴 Db에서 진·룬·문양 정의를 읽어 주입 (세션 13 구조화)
 	_board.clear_all()                          # 🔴 빈 판에서 시작 — 진 → 룬 → 문양 순차
 	_board.set_active_glyph(_active_glyph)
+	# 🔴 열 때마다 팔레트를 다시 짠다 (세션29) — 정제로 특별잉크·종이가 늘었을 수 있다.
+	_rebuild_palettes()
+	if not _ink_ids.is_empty():   # 기본 잉크(먹)로 시작 — 색을 판에 걸어 둔다
+		_select_ink(_ink_ids[0])
+	if not _paper_ids.is_empty():   # 기본 종이로 시작 — 확대 상한을 걸어 둔다
+		_select_paper(_paper_ids[0])
 	_sync_book()
 	_set_say(Copy_START, false)
 	_update_score()
@@ -288,6 +334,185 @@ func _on_glyph_selected(glyph: int) -> void:
 	_select_glyph(glyph)
 
 
+# ─────────────────────────── 잉크·종이 선택 (세션28~29) ───────────────────────────
+
+## 🔴 잉크·종이 팔레트를 다시 그린다 — 창고가 바뀌면(특별잉크 소모·정제) 보유분이 달라진다.
+## 버튼을 통째로 갈아 끼운다(몇 개뿐이라 싸다). 고른 것은 유지하되, 사라졌으면 안전한 기본으로.
+func _rebuild_palettes() -> void:
+	_build_ink_palette()
+	_build_paper_palette()
+
+
+## 잉크 스와치 — Db의 잉크마다 색 버튼. 🔴 기본잉크(무한)는 늘 보이고, **특별잉크는 보유분만**
+## (수량을 버튼에 적는다). 소모로 0이 되면 목록에서 빠진다 → 고른 게 사라지면 기본잉크로 되돌린다.
+func _build_ink_palette() -> void:
+	for n: Node in _ink_nodes:
+		n.queue_free()
+	_ink_nodes.clear()
+	_ink_swatches.clear()
+	_ink_ids = _collect_inks()
+	# 고른 잉크가 소모로 사라졌으면 첫 잉크(기본 먹)로 되돌린다 — 없는 잉크로 그리지 않게.
+	if not _ink_ids.has(_active_ink) and not _ink_ids.is_empty():
+		_select_ink(_ink_ids[0])
+
+	var lbl := Label.new()
+	lbl.text = "잉크"
+	lbl.position = Vector2(INK_SWATCH_X - 34.0, INK_SWATCH_Y + 1.0)
+	lbl.add_theme_font_size_override(&"font_size", 9)
+	lbl.add_theme_color_override(&"font_color", HINT_COLOR)
+	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_spread.add_child(lbl)
+	_ink_nodes.append(lbl)
+	for i in _ink_ids.size():
+		var id: StringName = _ink_ids[i]
+		var b := Button.new()
+		b.focus_mode = Control.FOCUS_NONE
+		b.position = Vector2(INK_SWATCH_X + float(i) * (INK_SWATCH_SIZE.x + INK_SWATCH_GAP), INK_SWATCH_Y)
+		b.size = INK_SWATCH_SIZE
+		b.custom_minimum_size = INK_SWATCH_SIZE
+		b.tooltip_text = _ink_name(id)
+		# 특별잉크면 남은 수량을 버튼에 적는다 (그리는 동안 줄어드는 게 보인다).
+		if Db.ink_is_special(id):
+			b.text = str(GameState.get_count(id))
+			b.add_theme_font_size_override(&"font_size", 9)
+			b.add_theme_color_override(&"font_color", Color(1, 1, 1))
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = _ink_color(id)
+		sb.set_border_width_all(1)
+		sb.border_color = INK_EDGE
+		# 세 상태가 같은 인스턴스를 공유 → 선택 강조는 이 하나의 테두리만 바꾸면 된다.
+		b.add_theme_stylebox_override(&"normal", sb)
+		b.add_theme_stylebox_override(&"hover", sb)
+		b.add_theme_stylebox_override(&"pressed", sb)
+		b.pressed.connect(_select_ink.bind(id))
+		_spread.add_child(b)
+		_ink_nodes.append(b)
+		_ink_swatches.append(b)
+	_highlight_ink()
+
+
+## 종이 버튼 — 등급 숫자 텍스트. 🔴 기본 종이는 늘, 상급은 **보유분만**. 고르면 진 확대 상한이 오른다.
+func _build_paper_palette() -> void:
+	for n: Node in _paper_nodes:
+		n.queue_free()
+	_paper_nodes.clear()
+	_paper_btns.clear()
+	_paper_ids = _collect_papers()
+	if not _paper_ids.has(_active_paper) and not _paper_ids.is_empty():
+		_select_paper(_paper_ids[0])
+
+	var lbl := Label.new()
+	lbl.text = "종이"
+	lbl.position = Vector2(PAPER_LABEL_X, PAPER_BTN_Y + 1.0)
+	lbl.add_theme_font_size_override(&"font_size", 9)
+	lbl.add_theme_color_override(&"font_color", HINT_COLOR)
+	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_spread.add_child(lbl)
+	_paper_nodes.append(lbl)
+	for i in _paper_ids.size():
+		var id: StringName = _paper_ids[i]
+		var it := Db.get_item(id)
+		var b := Button.new()
+		b.focus_mode = Control.FOCUS_NONE
+		b.position = Vector2(PAPER_BTN_X + float(i) * (PAPER_BTN_SIZE.x + PAPER_BTN_GAP), PAPER_BTN_Y)
+		b.size = PAPER_BTN_SIZE
+		b.custom_minimum_size = PAPER_BTN_SIZE
+		b.text = str(it.grade) if it != null else "?"
+		b.add_theme_font_size_override(&"font_size", 10)
+		b.tooltip_text = _ink_name(id)   # display_name 폴백 재사용
+		b.pressed.connect(_select_paper.bind(id))
+		_spread.add_child(b)
+		_paper_nodes.append(b)
+		_paper_btns.append(b)
+	_highlight_paper()
+
+
+## 잉크를 골랐다 → 획 색을 그 잉크로 (즉각 피드백) + **등급 배수·특별효과를 도안에 싣는다**(세션29).
+## 색은 그리는 중에만 보이지만, `set_ink`는 assembly에 실려 발사·저장까지 간다.
+func _select_ink(id: StringName) -> void:
+	_active_ink = id
+	_board.set_trace_ink(_ink_color(id))
+	_board.set_ink(id)
+	_highlight_ink()
+	if _report.visible:
+		_finish_asm = _board.get_assembly()   # 리포트가 떠 있으면 새 잉크로 위력·효과 갱신
+		_report.queue_redraw()
+
+
+## 종이를 골랐다 → 진 확대 상한을 그 종이 등급으로 (큰 진=데미지↑). 소모는 없다.
+func _select_paper(id: StringName) -> void:
+	_active_paper = id
+	_board.set_jin_scale_max(Db.paper_zoom_max(id, BAL.paper_zoom_max_default))
+	_highlight_paper()
+	if _report.visible:
+		_finish_asm = _board.get_assembly()
+		_report.queue_redraw()
+
+
+## 🔴 지금 고른 잉크의 데미지 배수 — 리포트·주입 메시지가 **발사와 같은 값**을 보여 준다.
+## 리졸버는 `Db.ink_mult` 하나뿐이다 (발사·HUD도 같은 곳을 부른다).
+func _active_ink_mult() -> float:
+	return Db.ink_mult(_active_ink)
+
+
+func _highlight_ink() -> void:
+	for i in _ink_swatches.size():
+		var b: Button = _ink_swatches[i]
+		var sb := b.get_theme_stylebox(&"normal") as StyleBoxFlat
+		if sb == null:
+			continue
+		var on: bool = _ink_ids[i] == _active_ink
+		sb.set_border_width_all(3 if on else 1)
+		sb.border_color = INK_EDGE_ON if on else INK_EDGE
+
+
+func _highlight_paper() -> void:
+	for i in _paper_btns.size():
+		var b: Button = _paper_btns[i]
+		b.add_theme_color_override(&"font_color",
+			INK_EDGE_ON if _paper_ids[i] == _active_paper else HINT_COLOR)
+
+
+## 지금 고를 수 있는 잉크 — 기본잉크는 늘, **특별잉크는 보유분(수량>0)만**. 등급순.
+func _collect_inks() -> Array:
+	var ids: Array = []
+	for it: ItemDef in Db.items.values():
+		if it == null or it.kind != Enums.ItemKind.INK:
+			continue
+		if Db.ink_is_special(it.id) and GameState.get_count(it.id) <= 0:
+			continue   # 특별잉크는 있어야 보인다 (없으면 못 고른다)
+		ids.append(it.id)
+	ids.sort_custom(func(a: StringName, b: StringName) -> bool:
+		return Db.get_item(a).grade < Db.get_item(b).grade)
+	return ids
+
+
+## 지금 고를 수 있는 종이 — 기본 종이(paper_basic)는 늘, 상급은 **보유분만**. 등급순.
+func _collect_papers() -> Array:
+	var ids: Array = []
+	for it: ItemDef in Db.items.values():
+		if it == null or it.kind != Enums.ItemKind.PAPER:
+			continue
+		if it.id != &"paper_basic" and GameState.get_count(it.id) <= 0:
+			continue
+		ids.append(it.id)
+	ids.sort_custom(func(a: StringName, b: StringName) -> bool:
+		return Db.get_item(a).grade < Db.get_item(b).grade)
+	return ids
+
+
+func _ink_color(id: StringName) -> Color:
+	var it := Db.get_item(id)
+	if it != null and it.params.has("color"):
+		return it.params["color"]
+	return RingBoard.TRACE_INK
+
+
+func _ink_name(id: StringName) -> String:
+	var it := Db.get_item(id)
+	return it.display_name if it != null and it.display_name != "" else String(id)
+
+
 # ─────────────────── 손맛 피드백 (실시간 점수 · [다음] 진행 · 완성 분석) ───────────────────
 
 ## 지금 그리는 조각의 점수가 갱신됐다 (실시간). 완성도·정밀도를 점수 라벨에 보여준다.
@@ -375,6 +600,7 @@ func _finish() -> void:
 ## 🔴 견딜지 터질지는 여기서 말하지 않는다 — 알려면 [마력 주입]을 눌러야 한다 (사용자 확정).
 func _on_finished(analysis: Dictionary) -> void:
 	_analysis = analysis
+	_finish_asm = _board.get_assembly()   # 잉크·크기·특별효과 스냅샷 (리포트가 읽는다)
 	_set_say("마법진 완성 — 분석을 보고 [마력 주입]으로 맺으세요", false)
 	_report.visible = true
 	_report.queue_redraw()
@@ -390,9 +616,11 @@ func _on_inject() -> void:
 		return
 	_committed = true
 	_report.visible = false
-	design_committed.emit(_board.get_assembly())
+	var asm := _board.get_assembly()   # 잉크·크기·특별효과를 실은 최종 계약 (발사·저장이 그대로 쓴다)
+	design_committed.emit(asm)
 	_set_say("마력이 돌았다 — 위력 %d의 마법진이 맺혔다. 책을 덮고(ESC) 쏴 보세요"
-		% RingPower.power_display(total), false)
+		% RingPower.power_display(total, Db.ink_mult(asm.get("ink", &"")),
+			float(asm.get("size", 1.0))), false)
 	_refresh_buttons()
 
 
@@ -519,9 +747,26 @@ func _draw_report() -> void:
 	# ⚠ **견디는지는 여기서 말하지 않는다** (사용자 확정: "주입을 하면 그때 평가해서 터지게 할 거임 /
 	# 지금은 안내하는 거 같은데 그러면 안 됨"). 미리 판정을 흘리면 [마력 주입]이 결과를 확인하는
 	# 형식 절차가 된다 — 눌러 봐야 아는 게 이 버튼의 전부다.
+	# 🔴 위력에 **잉크 등급 배수 + 진 크기**가 실린다 (세션29) — 발사·HUD와 같은 값. 기준 100 = 맨손·기본 종이.
+	var ink_id := StringName(_finish_asm.get("ink", &""))
+	var size := float(_finish_asm.get("size", 1.0))
 	_report.draw_string(font, Vector2(14, 68), "위력 %d  (기준 100)"
-		% RingPower.power_display(total), HORIZONTAL_ALIGNMENT_LEFT, -1, 12,
-		Color(0.35, 0.30, 0.20))
+		% RingPower.power_display(total, Db.ink_mult(ink_id), size),
+		HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(0.35, 0.30, 0.20))
+
+	# 세션29: 잉크·종이·특별효과 요약 한 줄 (있을 때만) — 무엇이 위력·효과를 올렸나.
+	var effects: Array[String] = []
+	if ink_id != &"" and not is_equal_approx(Db.ink_mult(ink_id), 1.0):
+		effects.append("%s ×%.1f뎀" % [_ink_name(ink_id), Db.ink_mult(ink_id)])
+	if size > 1.001:
+		effects.append("큰 진 ×%.1f뎀" % RingPower.size_mult(size))
+	var sratio := float(_finish_asm.get("special_ratio", 0.0))
+	var sink := StringName(_finish_asm.get("special_ink", &""))
+	if sratio > 0.0 and sink != &"":
+		effects.append("%s 화상 ×%.2f" % [_ink_name(sink), Db.status_mult_of(sink, sratio)])
+	if not effects.is_empty():
+		_report.draw_string(font, Vector2(14, 82), " · ".join(effects),
+			HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color(0.50, 0.32, 0.14))
 
 	var y := 92.0
 	var jin: Variant = _analysis.get("jin", null)

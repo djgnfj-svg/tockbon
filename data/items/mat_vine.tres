@@ -8,4 +8,6 @@ id = &"mat_vine"
 kind = 5
 grade = 1
 display_name = "재생 덩굴 줄기"
-params = {}
+params = {
+"cat": "paper_mat"
+}

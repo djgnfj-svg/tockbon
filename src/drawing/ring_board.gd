@@ -115,6 +115,18 @@ var _rune_def: RuneDef = null
 var _glyph_defs: Array[GlyphDef] = []
 
 var _active := G_RADIATE            # 활성 문양 코드 (바깥이 set_active_glyph으로 정한다)
+## 지금 긋는 획의 색 = 고른 잉크 색 (세션28 — "잉크를 골라 그린다"의 즉각 피드백).
+## 잠근 조각은 종류색(진/룬/문양)으로 되므로 이 색은 **그리는 중에만** 보인다. 기본 = 먹.
+var _trace_ink := TRACE_INK
+## 🔴 고른 잉크 id (세션29) — 색과 달리 **assembly에 실려** 발사·저장까지 간다(등급=데미지).
+var _ink_id: StringName = &""
+## 🔴 특별잉크 소모·비율 (세션29). 특별잉크로 그으면 획당 소모하고 _special_strokes를 센다.
+## 완성 시 비율(_special_strokes / _total_strokes)이 화상 증폭 세기를 정한다.
+var _special_ink_used: StringName = &""
+var _special_strokes := 0
+var _total_strokes := 0
+## 🔴 진 확대 상한 (세션29, 종이=규모). 종이 등급이 이 상한을 올린다(set_jin_scale_max). 기본 = 종이 없음.
+var _jin_scale_max := JIN_SCALE_MAX
 var _cast_t := -1.0
 var _cast_dur := 1.3
 
@@ -187,6 +199,11 @@ func can_commit() -> bool:
 func get_assembly() -> Dictionary:
 	var a := _asm.get_assembly()
 	a["score"] = float(get_analysis().get("total", 0.0))
+	a["ink"] = _ink_id      # 🔴 고른 잉크(세션29) — 등급 배수가 발사·저장에 실린다
+	# 🔴 특별잉크(화상 증폭)·크기(종이=규모)도 여기서 싣는다 (세션29) — score를 싣는 그 자리.
+	a["special_ink"] = _special_ink_used
+	a["special_ratio"] = float(_special_strokes) / float(maxi(_total_strokes, 1))
+	a["size"] = _jin_scale
 	return a
 
 
@@ -328,6 +345,29 @@ func locked_count() -> int:
 ## (사용자: "획단위로 초기화되서 화살표를 그리가가 어렵네?"). 다시 그리기는 이제 `clear_stroke`다.
 func begin_stroke() -> void:
 	_scorer.begin_stroke()
+	_note_stroke_ink()
+
+
+## 🔴 획을 시작할 때 잉크를 정산한다 (세션29, 사용자: "그릴 때 실시간으로 소비").
+## 특별잉크면 획당 소모하고 비율에 적립한다. 다 떨어졌으면 소모·적립 없이 계속 그린다
+## (기본잉크처럼 — 그만큼 비율=효과가 낮아진다). 기본잉크는 무한이라 소모가 없다.
+## ⚠ **총 획수(_total_strokes)는 늘 센다** — 비율의 분모다. _trace가 NONE(그릴 것 없음)이면 안 센다.
+func _note_stroke_ink() -> void:
+	if _trace == TraceTarget.NONE:
+		return
+	_total_strokes += 1
+	var gs := get_node_or_null(^"/root/GameState")
+	var db := get_node_or_null(^"/root/Db")
+	if gs == null or db == null or _ink_id == &"":
+		return
+	if not db.ink_is_special(_ink_id):
+		return   # 기본잉크 = 무한, 소모·적립 없음
+	var per := int(gs.balance.special_ink_per_stroke)
+	if gs.get_count(_ink_id) < per:
+		return   # 특별잉크 바닥 = 소모·적립 없이 진행 (비율만 낮아진다)
+	gs.remove_item(_ink_id, per)
+	_special_strokes += 1
+	_special_ink_used = _ink_id
 
 
 ## 지금 조각의 먹선을 **전부 지운다** (다시 그리기 — 우클릭). 점수도 0으로 돌아간다.
@@ -516,6 +556,29 @@ func set_active_glyph(g: int) -> void:
 	queue_redraw()
 
 
+## 지금 긋는 획의 색 = 고른 잉크 색 (세션28). 패널이 잉크를 고를 때마다 부른다.
+func set_trace_ink(c: Color) -> void:
+	_trace_ink = c
+	queue_redraw()
+
+
+## 🔴 고른 잉크 id (세션29) — get_assembly가 실어 발사·저장에 등급 배수를 태운다.
+## ⚠ clear_all은 이걸 안 지운다 — 잉크는 판 기하가 아니라 **지속되는 선택**이다
+## (색도 그대로 남는다). 새로 그려도 골라 둔 잉크가 유지된다.
+func set_ink(id: StringName) -> void:
+	_ink_id = id
+
+
+## 🔴 진 확대 상한 (세션29, 종이=규모) — 종이 등급이 정한다. 패널이 종이를 고를 때마다 부른다.
+## 현재 크기가 새 상한을 넘으면 끌어내린다(상급→기본 종이로 바꿨을 때 진이 상한 밖에 안 남게).
+func set_jin_scale_max(v: float) -> void:
+	_jin_scale_max = maxf(v, JIN_SCALE_MIN)
+	_jin_scale = minf(_jin_scale, _jin_scale_max)
+	if _trace == TraceTarget.JIN:
+		_set_trace(_trace, _trace_slot)   # 상한이 줄어 크기가 바뀌었으면 밑그림 다시
+	queue_redraw()
+
+
 ## 🔴 **진을 고른다** (오른쪽 진 셀 클릭) → 왼쪽에 밑그림이 선다 (세션 25).
 ## idx = 진 종류 (지금은 0만 — Db에 일반진 하나뿐이다. 늘어나면 그대로 인덱스가 는다).
 ## ⚠ 진 단계가 아니면 무시한다 — 이미 잠근 진을 다시 고르는 건 [다시 그리기]의 일이다.
@@ -565,6 +628,11 @@ func clear_all() -> void:
 	_rune_scale = 1.0
 	_glyph_scale = {}
 	_pulse_t = -1.0
+	# 🔴 잉크 소모·비율은 새 진마다 리셋 (세션29). ⚠ _ink_id·_jin_scale_max(종이 상한)은 **안** 지운다 —
+	# 잉크·종이 선택은 지속된다(다시 그려도 유지). 여기서 지우는 건 "이번 진에 얼마나 썼나"뿐.
+	_special_ink_used = &""
+	_special_strokes = 0
+	_total_strokes = 0
 	_refresh_trace()                     # 진 가이드부터 다시 세운다
 	queue_redraw()
 	stage_advanced.emit(_asm.stage())
@@ -664,7 +732,8 @@ func _gui_input(event: InputEvent) -> void:
 func _resize_current(delta: float) -> void:
 	match _trace:
 		TraceTarget.JIN:
-			_jin_scale = clampf(_jin_scale + delta, JIN_SCALE_MIN, JIN_SCALE_MAX)
+			# 🔴 상한은 종이 등급이 정한다 (세션29) — const가 아니라 _jin_scale_max (set_jin_scale_max).
+			_jin_scale = clampf(_jin_scale + delta, JIN_SCALE_MIN, _jin_scale_max)
 		TraceTarget.RUNE:
 			_rune_scale = clampf(_rune_scale + delta, RUNE_SCALE_MIN, RUNE_SCALE_MAX)
 		TraceTarget.GLYPH:
@@ -748,7 +817,7 @@ func _draw() -> void:
 		# 🔴 획마다 따로 긋는다 — 한 줄로 이으면 펜을 뗀 구간이 선이 돼 화살표가 삼각형이 된다
 		for s in _scorer.strokes():
 			if s.size() >= 2:
-				draw_polyline(s, TRACE_INK, 2.6, true)
+				draw_polyline(s, _trace_ink, 2.6, true)
 
 	# 착지 펄스 ("탁") — 조각이 놓인 자리에서 퍼지는 밝은 고리
 	if _pulse_t >= 0.0:

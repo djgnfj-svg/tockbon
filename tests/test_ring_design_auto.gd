@@ -36,6 +36,10 @@ func _run() -> void:
 	_test_auto_equip()
 	_test_slot_fill()
 	_test_score_carries()
+	_test_ink_carries()
+	_test_paper_size()
+	_test_special_ink()
+	_test_recipes()
 	_test_power_rule()
 	_test_grade_bands()
 	_test_grade_follows_threshold()
@@ -71,6 +75,109 @@ func _test_score_carries() -> void:
 	# 점수 없는 옛 assembly → 0.0 (터지지도 0 피해도 아닌, 그냥 없음)
 	var d3 = RD.from_assembly(_sample_assembly(), "옛 진")
 	_check(is_equal_approx(float(d3.total_score), 0.0), "score 없는 assembly는 0.0")
+
+
+## 🔴 잉크 등급(세션29, 사용자: "등급=데미지") = 데미지 배수.
+## 도안↔assembly 라운드트립 + **위력에 곱해진다**. 끊기면 골라도 위력이 안 바뀐다(세션28 상태로 회귀).
+func _test_ink_carries() -> void:
+	var RP: GDScript = load("res://src/core/ring_power.gd")
+	# 🔴 오토로드는 **런타임 조회**로 잡는다 (컴파일 타임 `Db` 참조 = -s 함정, CLAUDE.md).
+	var db: Node = root.get_node(^"Db")
+
+	# 리졸버는 한 곳뿐(Db.ink_mult) — 발사·리포트·HUD가 전부 이걸 부른다. 잉크 없음/미등록 = 1.0.
+	_check(is_equal_approx(db.ink_mult(&""), 1.0), "잉크 없음 = 배수 1.0 (맨손)")
+	_check(is_equal_approx(db.ink_mult(&"없는잉크"), 1.0), "미등록 잉크 = 배수 1.0")
+	_check(db.ink_mult(&"ink_high") > db.ink_mult(&"ink_basic"),
+		"상급 잉크 배수 > 기본 잉크 배수 (.tres가 정한다)")
+
+	# assembly에 실린 잉크가 도안을 왕복한다 — 저장한 도안이 잉크를 기억해야 그때 그 위력이 난다
+	var a := _sample_assembly()
+	a["ink"] = &"ink_high"
+	var d = RD.from_assembly(a, "붉은 진")
+	_check(StringName(d.ink) == &"ink_high", "assembly.ink → RingDesign.ink")
+	_check(StringName(d.to_assembly().get("ink", &"")) == &"ink_high",
+		"to_assembly가 ink를 다시 싣는다")
+
+	# 잉크 없는 옛 assembly → 빈 잉크 → 배수 1.0 (하위 호환)
+	var old = RD.from_assembly(_sample_assembly(), "옛 진")
+	_check(StringName(old.ink) == &"", "잉크 없는 옛 assembly = 빈 잉크")
+	_check(is_equal_approx(db.ink_mult(old.ink), 1.0), "빈 잉크 도안 = 배수 1.0")
+
+	# 🔴 위력에 실제로 곱해진다 — 같은 점수라도 상급 잉크가 더 세다
+	var s := 0.9
+	_check(RP.power_of(s, db.ink_mult(&"ink_high")) > RP.power_of(s, 1.0),
+		"같은 점수라도 상급 잉크가 위력이 세다 (등급=데미지)")
+	_check(RP.power_display(s, db.ink_mult(&"ink_high")) > RP.power_display(s),
+		"표시 위력도 잉크에 따라 오른다")
+	# 조합 규칙 = core 한 곳(곱셈)
+	_check(is_equal_approx(RP.power_of(s, 2.0), RP.power_of(s) * 2.0),
+		"위력 = 손그림 위력 × 잉크 배수 (곱셈)")
+
+
+## 🔴 종이 = 규모 (세션29, 사용자 확정). 종이 등급이 확대 상한을 올리고, 큰 진일수록 위력이 세다.
+func _test_paper_size() -> void:
+	var RP: GDScript = load("res://src/core/ring_power.gd")
+	var db: Node = root.get_node(^"Db")
+	# 종이 등급 → 확대 상한
+	_check(db.paper_zoom_max(&"paper_high", 1.16) > db.paper_zoom_max(&"paper_basic", 1.16),
+		"고급 종이 확대 상한 > 기본 종이")
+	_check(is_equal_approx(db.paper_zoom_max(&"", 1.16), 1.16), "종이 없음 = 폴백 상한")
+	_check(is_equal_approx(db.paper_zoom_max(&"없는종이", 9.0), 9.0), "미등록 종이 = 폴백")
+	# 크기 → 데미지
+	_check(is_equal_approx(RP.size_mult(1.0), 1.0), "기본 크기 = 배수 1.0 (제동 없음)")
+	_check(RP.size_mult(2.0) > RP.size_mult(1.0), "큰 진일수록 배수 크다")
+	_check(RP.power_of(0.9, 1.0, 2.0) > RP.power_of(0.9, 1.0, 1.0),
+		"같은 점수·잉크라도 큰 진이 위력 세다 (종이=규모)")
+	# 라운드트립
+	var a := _sample_assembly()
+	a["size"] = 1.6
+	var d = RD.from_assembly(a, "큰 진")
+	_check(is_equal_approx(float(d.size), 1.6), "assembly.size → RingDesign.size")
+	_check(is_equal_approx(float(d.to_assembly().get("size", -1.0)), 1.6), "to_assembly size 라운드트립")
+
+
+## 🔴 특별잉크 = 화상 증폭 (세션29, 사용자 확정). 잉크 등급(=데미지)과 다른 축.
+func _test_special_ink() -> void:
+	var db: Node = root.get_node(^"Db")
+	_check(db.ink_is_special(&"ink_fire_red"), "붉은 잉크 = 특별잉크 (소모·효과)")
+	_check(not db.ink_is_special(&"ink_basic"), "기본 잉크 = 특별잉크 아님 (무한)")
+	# 화상 증폭 = **얼마나 특별잉크로 그렸나**(ratio)에 비례 — 전부>절반>안 씀(1.0)
+	var full: float = db.status_mult_of(&"ink_fire_red", 1.0)
+	var half: float = db.status_mult_of(&"ink_fire_red", 0.5)
+	_check(full > half and half > 1.0, "화상 증폭이 비율에 비례 (전부>절반>1.0)")
+	_check(is_equal_approx(db.status_mult_of(&"", 1.0), 1.0), "특별잉크 없음 = 증폭 1.0")
+	_check(is_equal_approx(db.status_mult_of(&"ink_fire_red", 0.0), 1.0), "비율 0 = 증폭 1.0 (맨손 화상)")
+	# 라운드트립
+	var a := _sample_assembly()
+	a["special_ink"] = &"ink_fire_red"
+	a["special_ratio"] = 0.75
+	var d = RD.from_assembly(a, "화상 진")
+	_check(StringName(d.special_ink) == &"ink_fire_red", "assembly.special_ink → 도안")
+	_check(is_equal_approx(float(d.special_ratio), 0.75), "special_ratio 라운드트립")
+	_check(StringName(d.to_assembly().get("special_ink", &"")) == &"ink_fire_red",
+		"to_assembly가 special_ink를 다시 싣는다")
+
+
+## 🔴 정제 레시피 = 데이터 (세션29). 정제대가 GameState.spend+add_item으로 재료→결과.
+func _test_recipes() -> void:
+	var db: Node = root.get_node(^"Db")
+	var r = db.get_recipe(&"refine_red_ink")
+	_check(r != null, "정제 레시피가 로드된다 (Db.recipes)")
+	if r == null:
+		return
+	_check(StringName(r.output_id) == &"ink_fire_red", "붉은잉크 정제 결과 = ink_fire_red")
+	_check(int(r.inputs.get(&"mat_slime_core", 0)) == 3, "재료 = 슬라임핵 3")
+	_check(db.all_recipes().size() >= 3, "레시피 3종 이상 (잉크 정제 + 종이 제작)")
+	# 제작 흐름 = 재료 소비 + 결과 지급 (정제대 _craft가 쓰는 GameState 경로)
+	gs.inventory.clear()
+	gs.add_item(&"mat_slime_core", 3)
+	_check(gs.can_afford(r.inputs), "재료 3개면 만들 수 있다")
+	_check(gs.spend(r.inputs), "spend 성공 (재료 차감)")
+	gs.add_item(r.output_id, r.output_count)
+	_check(gs.get_count(&"ink_fire_red") == 1, "제작 결과 = 붉은잉크 1")
+	_check(gs.get_count(&"mat_slime_core") == 0, "재료 소진")
+	_check(not gs.can_afford(r.inputs), "재료 없으면 다시 못 만든다")
+	gs.inventory.clear()
 
 
 ## 🔴 펑/위력 규칙 — 조립 리포트와 발사가 **같은 함수**를 본다. 경계는 "이하면 터진다".

@@ -1,4 +1,4 @@
-[gd_scene load_steps=9 format=3 uid="uid://c0base01hub00"]
+[gd_scene load_steps=11 format=3 uid="uid://c0base01hub00"]
 
 [ext_resource type="Script" path="res://src/base/base.gd" id="1_base"]
 [ext_resource type="Script" path="res://src/actors/interact_zone.gd" id="2_zone"]
@@ -6,12 +6,16 @@
 [ext_resource type="PackedScene" path="res://src/spell/ring_spell_system.tscn" id="4_spell"]
 [ext_resource type="PackedScene" path="res://src/spell/dummy_target.tscn" id="5_dummy"]
 [ext_resource type="Script" path="res://src/hud/hud.gd" id="6_hud"]
+[ext_resource type="PackedScene" path="res://src/hud/inventory_panel.tscn" id="7_inv"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_desk"]
 size = Vector2(120, 100)
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_gate"]
 size = Vector2(100, 100)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_refine"]
+size = Vector2(110, 96)
 
 [node name="Base" type="Node2D"]
 script = ExtResource("1_base")
@@ -77,6 +81,32 @@ offset_bottom = -54.0
 text = "[E] 숲으로"
 horizontal_alignment = 1
 
+[node name="Refine" type="Area2D" parent="."]
+position = Vector2(180, -190)
+collision_layer = 64
+collision_mask = 2
+script = ExtResource("2_zone")
+zone_id = &"refine"
+
+[node name="Body" type="Polygon2D" parent="Refine"]
+color = Color(0.24, 0.2, 0.26, 1)
+polygon = PackedVector2Array(-34, -10, 34, -10, 28, 26, -28, 26)
+
+[node name="Ink" type="Polygon2D" parent="Refine"]
+color = Color(0.5, 0.16, 0.14, 1)
+polygon = PackedVector2Array(-26, -6, 26, -6, 24, 6, -24, 6)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Refine"]
+shape = SubResource("RectangleShape2D_refine")
+
+[node name="Prompt" type="Label" parent="Refine"]
+offset_left = -46.0
+offset_top = -50.0
+offset_right = 46.0
+offset_bottom = -28.0
+text = "[E] 정제대"
+horizontal_alignment = 1
+
 [node name="Player" parent="." instance=ExtResource("3_player")]
 position = Vector2(0, 40)
 
@@ -109,4 +139,6 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("6_hud")
-hint_text = "WASD=이동 · 책상에서 E=고리 조립 책 · 왼쪽 숲길에서 E=원정 · 좌클릭=발사 · 1~4=슬롯"
+hint_text = "WASD=이동 · 책상 E=고리 조립 · 정제대 E=재료 가공 · 왼쪽 숲길 E=원정 · 좌클릭=발사 · 1~4=슬롯 · I=창고"
+
+[node name="Inv" parent="." instance=ExtResource("7_inv")]

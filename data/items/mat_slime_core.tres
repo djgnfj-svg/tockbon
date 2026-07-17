@@ -8,4 +8,6 @@ id = &"mat_slime_core"
 kind = 5
 grade = 1
 display_name = "수액 슬라임 핵"
-params = {}
+params = {
+"cat": "ink_mat"
+}

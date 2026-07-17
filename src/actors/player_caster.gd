@@ -43,7 +43,7 @@ func aim() -> Vector2:
 
 
 func _process(_delta: float) -> void:
-	if not enabled:
+	if not enabled or GameState.ui_modal_open:
 		return
 	var to_mouse := get_global_mouse_position() - global_position
 	if to_mouse.length_squared() > 1.0:
@@ -54,7 +54,7 @@ func _process(_delta: float) -> void:
 ## 🔴 발사는 **좌클릭만**이다 (사용자 확정). Space는 발사가 아니다 — 시험대가 Space도 받는 건
 ## 시험대 사정이다. Space를 다른 용도로 임의 배정하지도 마라: 그건 사용자가 정할 몫이다.
 func _unhandled_input(event: InputEvent) -> void:
-	if not enabled:
+	if not enabled or GameState.ui_modal_open:
 		return
 	for i in GameState.EQUIP_SLOTS:
 		if event.is_action_pressed(StringName("cast_slot_%d" % (i + 1))):
@@ -74,7 +74,7 @@ func select_slot(slot: int) -> void:
 		notice.emit("슬롯 %d — 비어 있다 (1~4로 다른 슬롯)" % (slot + 1), false)
 	else:
 		notice.emit("슬롯 %d — %s (위력 %d)" % [slot + 1, design.display_name,
-			RingPower.power_display(design.total_score)], false)
+			RingPower.power_display(design.total_score, Db.ink_mult(design.ink))], false)
 	queue_redraw()
 
 

@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="RecipeDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/core/schemas/recipe_def.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = &"refine_red_ink"
+display_name = "붉은 잉크 정제"
+inputs = {
+&"mat_slime_core": 3
+}
+output_id = &"ink_fire_red"
+output_count = 1

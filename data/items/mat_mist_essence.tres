@@ -8,4 +8,6 @@ id = &"mat_mist_essence"
 kind = 5
 grade = 1
 display_name = "안개 정수"
-params = {}
+params = {
+"cat": "ink_mat"
+}

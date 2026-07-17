@@ -54,8 +54,11 @@ func _run() -> void:
 	# 🔴 세션 21 대청소: 옛 SpellDesign(SampleDesigns·도안 내구·rune_fill·arrows) 검증은 걷어냈다 —
 	# 자유 드로잉 경로가 통째로 삭제됐다. 고리(RingDesign) 라운드트립만 남는다.
 	# 고리 도안 라운드트립. 칸 2=발산(1)·칸 6=응집(0), 열린 칸 [2,6].
+	# 세션29: 잉크·특별잉크·크기(경제)도 저장에 실린다 — 저장한 진을 다시 쏴도 그때 그 위력·효과가 난다.
 	var ring_a: RingDesign = RingDesign.from_assembly(
-		{"rune": 0, "rings": [[-1, -1, 1, -1, -1, -1, 0, -1]], "open": [2, 6]}, "테스트 진", 0.77)
+		{"rune": 0, "rings": [[-1, -1, 1, -1, -1, -1, 0, -1]], "open": [2, 6],
+		"ink": &"ink_mid", "special_ink": &"ink_fire_red", "special_ratio": 0.5, "size": 1.4},
+		"테스트 진", 0.77)
 	gs.ring_designs = [ring_a] as Array[RingDesign]
 	gs.ring_equipped[1] = ring_a
 	gs.mana = 42.0
@@ -88,6 +91,15 @@ func _run() -> void:
 	_check("복원: 고리 채운칸 수 2", gs.ring_designs.size() == 1 and gs.ring_designs[0].filled_count() == 2)
 	_check("복원: 고리 점수 0.77 라운드트립",
 		gs.ring_designs.size() == 1 and is_equal_approx(gs.ring_designs[0].total_score, 0.77))
+	# 세션29 경제 필드 라운드트립 (ResourceSaver가 @export를 total_score와 같은 기전으로 나른다)
+	_check("복원: 잉크 ink_mid",
+		gs.ring_designs.size() == 1 and StringName(gs.ring_designs[0].ink) == &"ink_mid")
+	_check("복원: 특별잉크 ink_fire_red",
+		gs.ring_designs.size() == 1 and StringName(gs.ring_designs[0].special_ink) == &"ink_fire_red")
+	_check("복원: 특별 비율 0.5",
+		gs.ring_designs.size() == 1 and is_equal_approx(gs.ring_designs[0].special_ratio, 0.5))
+	_check("복원: 진 크기 1.4",
+		gs.ring_designs.size() == 1 and is_equal_approx(gs.ring_designs[0].size, 1.4))
 	_check("복원: 고리 장착 슬롯1 매핑",
 		gs.ring_equipped[1] == gs.ring_designs[0] and gs.ring_equipped[0] == null)
 	_check("복원: 마나 42", is_equal_approx(gs.mana, 42.0))

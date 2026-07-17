@@ -46,6 +46,8 @@ func _run() -> void:
 	_test_clear_stroke_wipes()
 	_test_jin_rune_need_picking()
 	_test_arrowhead_must_be_drawn()
+	_test_ink_rides_assembly()
+	_test_special_ink_consumed_while_drawing()
 
 	if failures == 0:
 		print("TEST_RING_TRACE_OK — 전 항목 통과")
@@ -256,6 +258,54 @@ func _test_arrowhead_must_be_drawn() -> void:
 	_check(with_head > 0.95, "몸통+화살촉 = 완성 (%.2f)" % with_head)
 	_check((b.call(&"trace_strokes") as Array).size() == 2, "두 획이 따로 남는다")
 	b.queue_free()
+
+
+## 🔴 세션29: 고른 잉크 id가 **발사 계약(assembly)에 실린다** — 패널이 `set_ink`를 부르면
+## `get_assembly`가 담아 발사·저장까지 등급 배수를 나른다. 여기가 끊기면 잉크를 골라도
+## 위력이 안 바뀐다(패널→보드 배선 공백). 배수 해석은 Db.ink_mult의 일이고, 여긴 **id 운반**만 본다.
+func _test_ink_rides_assembly() -> void:
+	var b = _make_board()
+	_check(StringName((b.call(&"get_assembly") as Dictionary).get("ink", &"미설정")) == &"",
+		"기본 = 빈 잉크(맨손) — 아무도 안 고르면 배수 없음")
+	b.call(&"set_ink", &"ink_high")
+	_check(StringName((b.call(&"get_assembly") as Dictionary).get("ink", &"")) == &"ink_high",
+		"set_ink 뒤 get_assembly가 그 잉크를 싣는다")
+	# clear_all은 잉크를 안 지운다 — 지속되는 선택이다(다시 그려도 골라 둔 잉크 유지)
+	b.call(&"clear_all")
+	_check(StringName((b.call(&"get_assembly") as Dictionary).get("ink", &"")) == &"ink_high",
+		"clear_all이 잉크를 안 지운다 (판 기하가 아니라 지속 선택)")
+	b.queue_free()
+
+
+## 🔴 특별잉크는 **그리는 동안 실시간으로 닳는다** (세션29, 사용자: "그릴 때 실시간으로 소비").
+## 획당 소모 + 비율 적립 + 바닥나면 소모 없이 계속. 끊기면 "쏘는 순간 차감"으로 회귀(사용자가 3번 반대함).
+func _test_special_ink_consumed_while_drawing() -> void:
+	var gs: Node = root.get_node(^"GameState")
+	gs.inventory.clear()
+	gs.add_item(&"ink_fire_red", 2)   # 2획치 특별잉크
+	var b = _make_board()             # clear_all + choose_jin → 진 가이드가 서 있다(_trace=JIN)
+	b.call(&"set_ink", &"ink_fire_red")
+	b.call(&"begin_stroke")
+	_check(gs.get_count(&"ink_fire_red") == 1, "특별잉크 획당 1 소모 (2→1)")
+	b.call(&"begin_stroke")
+	_check(gs.get_count(&"ink_fire_red") == 0, "또 한 획 = 0")
+	b.call(&"begin_stroke")            # 바닥난 뒤 — 소모·적립 없이 계속 그린다
+	_check(gs.get_count(&"ink_fire_red") == 0, "바닥나면 더 안 닳는다 (음수로 안 감)")
+	var asm: Dictionary = b.call(&"get_assembly")
+	_check(StringName(asm.get("special_ink", &"")) == &"ink_fire_red",
+		"get_assembly가 쓴 특별잉크를 싣는다")
+	var ratio := float(asm.get("special_ratio", -1.0))
+	_check(ratio > 0.0 and ratio < 1.0,
+		"비율 = 특별 2획 / 총 3획 (0<r<1, 바닥난 뒤 획은 안 셈) — 실제 %.2f" % ratio)
+	# 기본잉크(무한)는 안 닳는다 — 회귀 가드
+	gs.inventory.clear()
+	var b2 = _make_board()            # set_ink 안 함 = 기본 먹
+	b2.call(&"begin_stroke")
+	_check(float((b2.call(&"get_assembly") as Dictionary).get("special_ratio", -1.0)) == 0.0,
+		"기본잉크로만 그리면 특별 비율 0 (안 닳고 효과 없음)")
+	b.queue_free()
+	b2.queue_free()
+	gs.inventory.clear()
 
 
 ## 🔴 세션 25: 진·룬도 **골라야** 밑그림이 뜬다 (사용자: "이게 눌러야 뜨게 해줘").

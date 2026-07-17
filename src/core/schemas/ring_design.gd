@@ -21,6 +21,18 @@ extends Resource
 ## (`src/core/ring_power.gd`). 세션 22까지는 계산·저장만 되고 아무도 안 읽어서
 ## 잘 그리든 막 그리든 마법이 똑같았다 — 손으로 그리게 한 이유가 없던 셈이다.
 @export var total_score: float = 0.0
+## 🔴 이 진을 그린 잉크 id (세션29, 사용자: "등급=데미지"). 등급 배수가 발사 위력에 곱해진다.
+## 빈 값(&"") = 맨손/옛 도안 = 배수 1.0. id→배수 해석은 `Db.ink_mult(ink)`가 한다.
+## ⚠ 여기에 `ink_mult()`를 두지 마라 — 이 스키마는 class_name이라 Db를 참조하면 `-s` 테스트가
+## 오토로드 등록 전에 컴파일하다 터진다(item_def.gd·db.gd 주석 참조). 배수는 **호출부**가 Db로 뽑는다.
+@export var ink: StringName = &""
+## 🔴 특별잉크 (세션29, 사용자: "화상 증폭"). 이 진을 그리며 쓴 특별잉크 id + **얼마나 썼나**(0..1).
+## 발사가 `Db.status_mult_of(special_ink, special_ratio)`로 화상 세기를 증폭한다. 빈 값 = 증폭 없음.
+@export var special_ink: StringName = &""
+@export var special_ratio: float = 0.0
+## 🔴 진 크기 (세션29, 종이=규모). 그릴 때의 jin_scale (1.0=기본). 종이 등급이 상한을 올려 크게
+## 그릴 수 있고, 큰 진일수록 발사 데미지가 세다 (`ring_power.power_of`의 size). 옛 도안 = 1.0.
+@export var size: float = 1.0
 
 
 ## ring_spell_system이 먹는 발사 계약(Dictionary)으로 되돌린다.
@@ -33,6 +45,10 @@ func to_assembly() -> Dictionary:
 		"rings": rings.duplicate(true),
 		"open": open.duplicate(),
 		"score": total_score,
+		"ink": ink,
+		"special_ink": special_ink,
+		"special_ratio": special_ratio,
+		"size": size,
 	}
 
 
@@ -45,6 +61,10 @@ static func from_assembly(a: Dictionary, name: String = "", score: float = -1.0)
 	d.rings = (a.get("rings", []) as Array).duplicate(true)
 	d.open = (a.get("open", []) as Array).duplicate()
 	d.total_score = score if score >= 0.0 else float(a.get("score", 0.0))
+	d.ink = StringName(a.get("ink", &""))
+	d.special_ink = StringName(a.get("special_ink", &""))
+	d.special_ratio = float(a.get("special_ratio", 0.0))
+	d.size = float(a.get("size", 1.0))
 	if name != "":
 		d.display_name = name
 	return d

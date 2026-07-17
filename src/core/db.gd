@@ -12,6 +12,8 @@ var items: Dictionary = {}
 var jins: Dictionary = {}
 ## {StringName: GlyphDef} — 고리 조립 문양 (세션 13 구조화)
 var glyphs: Dictionary = {}
+## {StringName: RecipeDef} — 정제·제작 레시피 (세션29 경제)
+var recipes: Dictionary = {}
 
 func _ready() -> void:
 	reload()
@@ -22,6 +24,7 @@ func reload() -> void:
 	items.clear()
 	jins.clear()
 	glyphs.clear()
+	recipes.clear()
 	for res in _load_dir("res://data/runes"):
 		var rune := res as RuneDef
 		if rune:
@@ -42,6 +45,10 @@ func reload() -> void:
 		var glyph := res as GlyphDef
 		if glyph:
 			glyphs[glyph.id] = glyph
+	for res in _load_dir("res://data/recipes"):
+		var recipe := res as RecipeDef
+		if recipe:
+			recipes[recipe.id] = recipe
 
 func get_rune(type: Enums.RuneType) -> RuneDef:
 	return runes.get(type) as RuneDef
@@ -51,6 +58,61 @@ func get_enemy(id: StringName) -> EnemyDef:
 
 func get_item(id: StringName) -> ItemDef:
 	return items.get(id) as ItemDef
+
+
+## 🔴 잉크 id → 데미지 배수 (세션29, 사용자: "등급=데미지"). **한 곳뿐인 리졸버**다 —
+## 발사(ring_spell_system)·리포트(ring_forge_panel)·HUD·캐스터가 전부 이걸 부른다.
+## 잉크 없음(맨손·옛 도안)/미등록 = 1.0. 배수 값 자체는 잉크 .tres(`ItemDef.power_mult`)가 쥔다.
+## ⚠ **여기(레지스트리 오토로드)에 둔다** — 스키마(ItemDef·RingDesign)에 두면 그건 class_name이라
+## `-s` 테스트가 오토로드 등록 전에 컴파일하다 `Db` 참조에서 터진다(CLAUDE.md 오토로드 함정).
+func ink_mult(id: StringName) -> float:
+	if id == &"":
+		return 1.0
+	var it := get_item(id)
+	return it.power_mult() if it != null else 1.0
+
+
+func get_recipe(id: StringName) -> RecipeDef:
+	return recipes.get(id) as RecipeDef
+
+## 정제대가 나열할 레시피 — id 오름차순.
+func all_recipes() -> Array[RecipeDef]:
+	var out: Array[RecipeDef] = []
+	var keys := recipes.keys()
+	keys.sort()
+	for k: StringName in keys:
+		out.append(recipes[k])
+	return out
+
+
+# ── 특별잉크·종이 리졸버 (세션29) — 잉크 등급(ink_mult)과 같은 이유로 레지스트리에 둔다 ──
+
+## 🔴 특별잉크인가 — `params.special_rune`이 있으면 특별잉크다(그리는 동안 **소모**되고 룬 효과를
+## 증폭한다). 기본잉크(ink_basic/mid/high)는 이게 없어 무한이다. 보드가 소모 여부를 이걸로 가른다.
+func ink_is_special(id: StringName) -> bool:
+	var it := get_item(id)
+	return it != null and it.params.has("special_rune")
+
+## 🔴 특별잉크가 완성 진에 박는 **상태이상 증폭 배수** (세션29, 사용자: "화상 증폭").
+## `params.status_mult`(예: 1.5)를, 그 진을 **얼마나 특별잉크로 그렸나**(ratio 0..1)에 비례해 적용한다:
+## 전부 특별=최대, 절반=중간, 안 씀=1.0(그대로). 발사가 status_power에 곱한다.
+func status_mult_of(special_ink: StringName, ratio: float) -> float:
+	if special_ink == &"":
+		return 1.0
+	var it := get_item(special_ink)
+	if it == null:
+		return 1.0
+	var full := float(it.params.get("status_mult", 1.0))
+	return lerpf(1.0, full, clampf(ratio, 0.0, 1.0))
+
+## 종이 id → 진 확대 상한(jin_scale max). 없음/미등록 = 기본 종이 상한(호출부가 넘기는 기본값).
+func paper_zoom_max(id: StringName, fallback: float) -> float:
+	if id == &"":
+		return fallback
+	var it := get_item(id)
+	if it == null:
+		return fallback
+	return float(it.params.get("zoom_max", fallback))
 
 func get_jin(id: StringName) -> JinDef:
 	return jins.get(id) as JinDef

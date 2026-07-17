@@ -24,20 +24,34 @@ static func is_stable(score: float) -> bool:
 	return score > BAL.ring_stability_min
 
 
-## 종합 점수 → 위력 배율 = `ring_power_max × 점수^ring_power_curve`.
+## 종합 점수 → 위력 배율 = `ring_power_max × 점수^curve × ink_mult × size_mult(size)`.
 ## 발사 피해에 곱해지고, 리포트가 **같은 값**을 표시한다.
+##
+## 🔴 데미지 레버 셋이 어떻게 **합쳐지는지(전부 곱)**는 여기 한 곳에서만 정한다 (세션29):
+##   • 손그림 점수 → 곡선 (잘 그릴수록↑)
+##   • `ink_mult` = 잉크 등급 배수 (사용자: "등급=데미지"). 리졸버 = `Db.ink_mult`.
+##   • `size` = 진 크기(jin_scale, 종이=규모). size_mult = `size ^ paper_size_power_exp`
+##     → 큰 진일수록 세다. 종이 등급이 size 상한을 올린다. 기본 크기 size=1.0 → 배수 1.0.
+## ⚠ 잉크·크기 둘 다 데미지라 곱하면 겹쳐서 세진다 — balance로 조율(사용자와 확인).
 ##
 ## 🔴 이 함수는 "터졌나"를 **모른다** (is_stable의 일). 그래서 기준선 아래에서도 값이 이어진다 —
 ## 리포트가 주입 **전에** 위력을 보여 주는데, 미달 구간이 평평하면 그 평평함 자체가
 ## "너 지금 미달"이라는 **안내**가 된다 (사용자 확정: 평가는 주입하는 순간에 한다).
 ## 곡선이라 0점→0, 만점→max로 끊김 없이 이어지고 어디에도 평평한 구간이 없다.
-static func power_of(score: float) -> float:
-	return BAL.ring_power_max * pow(clampf(score, 0.0, 1.0), BAL.ring_power_curve)
+static func power_of(score: float, ink_mult: float = 1.0, size: float = 1.0) -> float:
+	return BAL.ring_power_max * pow(clampf(score, 0.0, 1.0), BAL.ring_power_curve) \
+		* ink_mult * size_mult(size)
 
 
-## 리포트 표시용 정수 (예: "위력 128"). 100 = 기준 위력(≈79점).
-static func power_display(score: float) -> int:
-	return int(round(power_of(score) * 100.0))
+## 진 크기(jin_scale) → 데미지 배수 (세션29, 종이=규모). size 1.0 = 1.0배(제동 없음).
+## 지수는 balance(paper_size_power_exp) — 손맛 조율 지점. 음수 크기 방어로 max(size, 0).
+static func size_mult(size: float) -> float:
+	return pow(maxf(size, 0.0), BAL.paper_size_power_exp)
+
+
+## 리포트 표시용 정수 (예: "위력 128"). 100 = 기준 위력(≈79점, 잉크·종이 없음).
+static func power_display(score: float, ink_mult: float = 1.0, size: float = 1.0) -> int:
+	return int(round(power_of(score, ink_mult, size) * 100.0))
 
 
 ## 🔴 종합 점수 → **화면에 찍는 정수** (예: 89점). 조립 리포트·베이스캠프 HUD가 같이 쓴다.

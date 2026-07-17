@@ -9,5 +9,6 @@ kind = 5
 grade = 2
 display_name = "달빛 수액"
 params = {
+"cat": "ink_mat",
 "night_only": true
 }

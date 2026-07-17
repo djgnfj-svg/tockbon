@@ -40,6 +40,8 @@ extends Node2D
 ##    (같은 이유로 HUD도 IGNORE다 — hud.gd `_ready` 참조.)
 
 const RingForgePanelScript := preload("res://src/drawing/ring_forge_panel.gd")
+## 정제대 패널 (세션29) — 재료→특별잉크·종이. 책과 달리 base를 안 물어 preload가 안전(순환 아님).
+const RefinePanelScene := preload("res://src/base/refine_panel.tscn")
 const InteractZone := preload("res://src/actors/interact_zone.gd")
 const Player := preload("res://src/actors/player.gd")
 const Hud := preload("res://src/hud/hud.gd")
@@ -57,15 +59,19 @@ const RingPower := preload("res://src/core/ring_power.gd")
 
 @onready var _desk: InteractZone = $Desk
 @onready var _gate: InteractZone = $ForestGate
+@onready var _refine_zone: InteractZone = $Refine
 @onready var _player: Player = $Player
 @onready var _hud: Hud = $Hud/Hud
 
+## 🔴 한 번에 하나의 모달만 — 책·정제대가 같은 `_overlay` 슬롯을 쓴다. 하나 열려 있으면 다른 건 안 열린다.
 var _overlay: CanvasLayer = null
 var _forge: RingForgePanelScript = null
+var _refine: Control = null
 
 func _ready() -> void:
 	_desk.interacted.connect(_open_drawing)
 	_gate.interacted.connect(_to_forest)
+	_refine_zone.interacted.connect(_open_refine)
 	_player.caster.notice.connect(_hud.say)
 	_player.caster.slot_changed.connect(_hud.select)
 	_hud.select(_player.caster.slot())
@@ -90,6 +96,7 @@ func _open_drawing() -> void:
 		return
 	_player.set_physics_process(false)  # 조립하는 동안 이동 정지
 	_player.caster.enabled = false      # 조준선·발사·슬롯 정지
+	GameState.ui_modal_open = true      # 창고(I)가 책 위로 겹쳐 열리지 않게 — 모달 하나만
 	_overlay = CanvasLayer.new()
 	_overlay.layer = 10
 	add_child(_overlay)
@@ -121,5 +128,34 @@ func _close_drawing() -> void:
 		_overlay.queue_free()
 		_overlay = null
 		_forge = null
+	_player.set_physics_process(true)
+	_player.caster.enabled = true
+	GameState.ui_modal_open = false
+
+# ─────────────────────────── 정제대 (세션29) ───────────────────────────
+
+## 정제대에서 E — 재료를 특별잉크·종이로 바꾸는 패널을 연다 (책과 같은 오버레이 슬롯·모달 규약).
+## 🔴 책이 열려 있으면(_overlay != null) 안 연다 — 모달은 하나뿐이다.
+func _open_refine() -> void:
+	if _overlay != null:
+		return
+	_player.set_physics_process(false)   # 정제하는 동안 이동 정지
+	_player.caster.enabled = false        # 조준·발사 정지
+	_overlay = CanvasLayer.new()
+	_overlay.layer = 10
+	add_child(_overlay)
+	_refine = RefinePanelScene.instantiate() as Control
+	if _refine == null:
+		push_error("refine_panel 인스턴스가 Control이 아니다")
+		return
+	_overlay.add_child(_refine)
+	_refine.closed.connect(_close_refine)   # ESC → 패널이 closed 발신 (ui_modal_open도 패널이 끈다)
+	_refine.open()
+
+func _close_refine() -> void:
+	if _overlay != null:
+		_overlay.queue_free()
+		_overlay = null
+		_refine = null
 	_player.set_physics_process(true)
 	_player.caster.enabled = true

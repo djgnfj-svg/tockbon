@@ -46,6 +46,8 @@ func _run() -> void:
 	await _test_miss_no_deploy(system)
 	await _test_score_scales_damage(system)
 	await _test_no_score_is_base_power(system)
+	await _test_size_scales_damage(system)
+	await _test_special_ink_amplifies_status(system)
 
 	if failures == 0:
 		print("TEST_RING_SPELL_OK — 전 항목 통과")
@@ -76,7 +78,7 @@ func _test_deploy_radiate(system) -> void:
 	print("[1] 발산 8칸 전개 → 불탄환 8발, 기둥 0")
 	_clear(system)
 	# 아무도 없는 먼 곳에서 편다 — 탄이 즉시 뭔가에 닿아 사라지지 않게
-	system._deploy_now(_all(G_RADIATE), Vector2(5000, 5000), 0.0, 1.0)
+	system._deploy_now(_all(G_RADIATE), Vector2(5000, 5000), 0.0, 1.0, 1.0)
 	await process_frame
 	_check(_bolts(system).size() == 8, "불탄환 8발 (실제 %d)" % _bolts(system).size())
 	_check(_pillars().size() == 0, "기둥 0 (실제 %d)" % _pillars().size())
@@ -86,7 +88,7 @@ func _test_deploy_gather(system) -> void:
 	print("[2] 응집 4칸 전개 → 기둥 1개, 불탄환 0")
 	_clear(system)
 	system._deploy_now(_ring({0: G_GATHER, 2: G_GATHER, 4: G_GATHER, 6: G_GATHER}),
-		Vector2(5000, 5000), 0.0, 1.0)
+		Vector2(5000, 5000), 0.0, 1.0, 1.0)
 	await process_frame
 	_check(_pillars().size() == 1, "기둥 1개 (실제 %d)" % _pillars().size())
 	_check(_bolts(system).size() == 0, "불탄환 0 (실제 %d)" % _bolts(system).size())
@@ -95,7 +97,7 @@ func _test_deploy_gather(system) -> void:
 func _test_deploy_empty(system) -> void:
 	print("[3] 빈 진 전개 → 아무것도 안 나온다")
 	_clear(system)
-	system._deploy_now(_all(GLYPH_NONE), Vector2(5000, 5000), 0.0, 1.0)
+	system._deploy_now(_all(GLYPH_NONE), Vector2(5000, 5000), 0.0, 1.0, 1.0)
 	await process_frame
 	_check(_bolts(system).size() == 0 and _pillars().size() == 0,
 		"불탄환·기둥 모두 0 (실제 탄 %d·기둥 %d)" % [_bolts(system).size(), _pillars().size()])
@@ -105,7 +107,7 @@ func _test_deploy_mixed(system) -> void:
 	print("[4] 혼합(발산 2 + 응집 3) → 불탄환 2발 · 기둥 1개")
 	_clear(system)
 	system._deploy_now(_ring({1: G_RADIATE, 5: G_RADIATE, 0: G_GATHER, 2: G_GATHER, 4: G_GATHER}),
-		Vector2(5000, 5000), 0.0, 1.0)
+		Vector2(5000, 5000), 0.0, 1.0, 1.0)
 	await process_frame
 	_check(_bolts(system).size() == 2, "불탄환 2발 (실제 %d)" % _bolts(system).size())
 	_check(_pillars().size() == 1, "기둥 1개 (실제 %d)" % _pillars().size())
@@ -220,6 +222,51 @@ func _test_no_score_is_base_power(system) -> void:
 	print("[9] 점수 없는 assembly는 기준 위력 — 옛 저장·호출자가 0 피해로 죽지 않는다")
 	var d := await _damage_with(system, {"rings": [_all(GLYPH_NONE)]})
 	_check(d > 0.0, "점수 없이도 때린다 (%.2f)" % d)
+
+
+## 진 몸으로 한 방 때린 **hit 전체**를 잰다 (damage + status_power 둘 다 본다).
+func _hit_with(system, assembly: Dictionary) -> Dictionary:
+	_clear(system)
+	var dummy = _dummy_scene.instantiate()
+	root.add_child(dummy)
+	dummy.global_position = Vector2(140, 0)
+	_bus.ring_cast_requested.emit(assembly, Vector2.ZERO, Vector2(1, 0))
+	var frames := 0
+	while dummy.hits.is_empty() and frames < 180:
+		await physics_frame
+		frames += 1
+	var hit: Dictionary = (dummy.hits[0] as Dictionary).duplicate() if not dummy.hits.is_empty() else {}
+	dummy.queue_free()
+	_clear(system)
+	return hit
+
+
+## 🔴 종이 = 규모 (세션29) — assembly.size가 실제 take_hit 피해를 키운다 (spell이 size를 읽어 태운다).
+func _test_size_scales_damage(system) -> void:
+	print("[10] 큰 진이 더 세게 때린다 (종이=규모 → size → 피해)")
+	var big := await _hit_with(system, {"rings": [_all(GLYPH_NONE)], "score": 0.9, "size": 2.0})
+	var small := await _hit_with(system, {"rings": [_all(GLYPH_NONE)], "score": 0.9, "size": 1.0})
+	var bd := float(big.get("damage", -1.0))
+	var sd := float(small.get("damage", -1.0))
+	_check(bd > 0.0 and sd > 0.0, "두 진 다 명중 (큰 %.2f · 작은 %.2f)" % [bd, sd])
+	_check(bd > sd, "큰 진이 더 아프다 (%.2f > %.2f)" % [bd, sd])
+	_check(bd / sd > 1.5, "차이가 의미 있는 크기 (%.2f배 — size 2.0, 지수 1.0이면 ≈2.0)" % (bd / sd))
+
+
+## 🔴 특별잉크 = 화상 증폭 (세션29) — assembly.special_ink/ratio가 status_power를 키운다.
+## 피해(power)는 안 건드린다: 특별잉크는 **상태 축**이고 등급잉크가 **피해 축**이다.
+func _test_special_ink_amplifies_status(system) -> void:
+	print("[11] 붉은 잉크로 그린 진 = 화상이 세다 (status_power 증폭, 피해는 그대로)")
+	var red := await _hit_with(system, {"rings": [_all(GLYPH_NONE)], "score": 0.9,
+		"special_ink": &"ink_fire_red", "special_ratio": 1.0})
+	var plain := await _hit_with(system, {"rings": [_all(GLYPH_NONE)], "score": 0.9})
+	var rp := float(red.get("status_power", -1.0))
+	var pp := float(plain.get("status_power", -1.0))
+	_check(rp > 0.0 and pp > 0.0, "두 진 다 화상 있음 (붉은 %.2f · 기본 %.2f)" % [rp, pp])
+	_check(rp > pp, "붉은 잉크 진이 화상이 세다 (%.2f > %.2f)" % [rp, pp])
+	_check(is_equal_approx(float(red.get("damage", 0.0)), float(plain.get("damage", 0.0))),
+		"특별잉크는 피해를 안 바꾼다 (상태 축만 — 붉은 %.2f = 기본 %.2f)"
+		% [float(red.get("damage", 0.0)), float(plain.get("damage", 0.0))])
 
 
 # ── 헬퍼 ──
