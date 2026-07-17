@@ -63,7 +63,17 @@ func _make_board():
 
 
 ## 지금 가이드 위를 정확히 문지른다 — 조각을 잠글 수 있는 상태로 만든다.
+## 🔴 세션 25: 진·룬은 **골라야** 밑그림이 뜬다 (사용자: "이게 눌러야 뜨게 해줘").
+## 아직 안 골랐으면 골라 준다 — 이 파일의 관심은 조립 상태기계지 고르기가 아니다
+## (고르기 계약은 test_ring_trace_auto ⑯이 본다).
 func _rub(b) -> void:
+	match int(b.call(&"stage")):
+		b.STAGE_JIN:
+			if int(b.call(&"jin_idx")) < 0:
+				b.call(&"choose_jin")
+		b.STAGE_RUNE:
+			if int(b.call(&"rune_idx")) < 0:
+				b.call(&"choose_rune")
 	b.call(&"begin_stroke")
 	for p in b.call(&"guide_points"):
 		b.call(&"trace_stroke", p)

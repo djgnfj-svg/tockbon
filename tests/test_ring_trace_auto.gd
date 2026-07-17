@@ -44,6 +44,7 @@ func _run() -> void:
 	_test_pen_grades_registered()
 	_test_strokes_accumulate()
 	_test_clear_stroke_wipes()
+	_test_jin_rune_need_picking()
 
 	if failures == 0:
 		print("TEST_RING_TRACE_OK — 전 항목 통과")
@@ -188,16 +189,54 @@ func _test_clear_stroke_wipes() -> void:
 	b.queue_free()
 
 
+# ── 🔴 ⑯ 진·룬도 **골라야** 밑그림이 뜬다 (세션 25) ──
+# 사용자: *"이게 눌러야 뜨게 해줘 룬이 나중에는 추가된다는 것을 전제로 작업해야지 ㅇㅇ 진도 확인해주고"*
+# 예전엔 단계에 들어가는 순간 밑그림이 저절로 서 있었다 — 문양 칸만 클릭식이라 조작이 갈렸고,
+# 룬이 불·물·바람으로 늘면 "어느 룬의 밑그림이냐"에 답할 수가 없다.
+# 🔴 인덱스인 이유: bool은 "골랐나"만 알고 **"어느 룬인가"를 못 담는다**.
+func _test_jin_rune_need_picking() -> void:
+	var b = _BoardScript.new()
+	b.size = Vector2(268, 268)
+	root.add_child(b)
+	b.call(&"clear_all")     # 🔴 _make_board와 달리 **안 고른 채로** 시작한다
+	_check(int(b.call(&"jin_idx")) == -1, "빈 판 = 진 미선택")
+	_check(b.call(&"guide_points").is_empty(), "진을 안 골랐으면 밑그림이 없다")
+	_check(String(b.call(&"advance")) == "none", "안 고른 채 [다음] = 아무 일도 없다")
+	_check(not bool(b.call(&"has_jin")), "그린 적 없는 진이 0점으로 잠기지 않는다")
+
+	b.call(&"choose_jin")
+	_check(int(b.call(&"jin_idx")) == 0, "진을 고르면 인덱스가 잡힌다")
+	_check(b.call(&"guide_points").size() > 2, "진을 고르면 밑그림이 선다")
+	_rub_exact(b)
+	b.call(&"advance")
+
+	# 룬도 같은 규약 — 진을 잠갔다고 룬 밑그림이 저절로 서 있으면 안 된다
+	_check(int(b.call(&"stage")) == b.STAGE_RUNE, "룬 단계")
+	_check(int(b.call(&"rune_idx")) == -1, "룬 단계 도착 = 룬 미선택")
+	_check(b.call(&"guide_points").is_empty(), "룬을 안 골랐으면 밑그림이 없다")
+	_check(String(b.call(&"advance")) == "none", "룬을 안 고른 채 [다음] = 무동작")
+	b.call(&"choose_rune")
+	_check(b.call(&"guide_points").size() > 2, "룬을 고르면 밑그림이 선다")
+	b.queue_free()
+
+
+## 🔴 세션 25: 진·룬도 **골라야** 밑그림이 뜬다 (사용자: "이게 눌러야 뜨게 해줘").
+## 대부분의 테스트는 그리기를 보므로 여기서 진을 골라 준다 — 미선택 계약 자체는 ⑯이 본다.
 func _make_board():
 	var b = _BoardScript.new()
 	b.size = Vector2(268, 268)
 	root.add_child(b)
 	b.call(&"clear_all")
+	b.call(&"choose_jin")
 	return b
 
 
 ## 지금 가이드 위를 정확히 문지른다 (dev=0 → 정밀도 최대).
+## 🔴 세션 25: 룬 단계에 막 닿았으면 **골라 준다** — 안 고르면 밑그림이 없어 그릴 게 없다.
+## (테스트의 관심은 "그리기"다. 고르기 계약 자체는 ⑯이 본다.)
 func _rub_exact(b) -> void:
+	if int(b.call(&"stage")) == b.STAGE_RUNE and int(b.call(&"rune_idx")) < 0:
+		b.call(&"choose_rune")
 	b.call(&"begin_stroke")
 	for p in b.call(&"guide_points"):
 		b.call(&"trace_stroke", p)

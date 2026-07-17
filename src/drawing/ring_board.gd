@@ -100,6 +100,16 @@ var _cast_dur := 1.3
 
 var _trace := TraceTarget.NONE          # 지금 그릴 대상
 var _trace_slot := -1                   # GLYPH일 때 채울 칸
+## 🔴 **고른 진·룬** (세션 25). -1 = 아직 안 골랐다 = 밑그림이 안 뜬다 — 문양 칸(`_trace_slot`)과
+## 같은 규약이다. 예전엔 단계에 들어가는 순간 밑그림이 저절로 서 있었다
+## (사용자: "이게 눌러야 뜨게 해줘").
+##
+## ⚠ **bool이 아니라 인덱스인 이유** (사용자: "룬이 나중에는 추가된다는 것을 전제로 작업해야지"):
+## bool은 "골랐나"만 알고 **"어느 룬인가"를 못 담는다**. 룬이 불·물·바람으로 늘면 그때 bool을
+## 인덱스로 바꾸느라 호출부를 전부 다시 건드려야 한다 — 지금은 종류가 하나씩이라 0만 유효하지만
+## API는 이미 인덱스를 받는다. 늘릴 때 `set_defs`가 배열을 받게 하면 여기는 그대로다.
+var _jin_idx := -1
+var _rune_idx := -1
 var _drawing := false                   # 마우스 버튼 누른 채 긋는 중
 var _jin_scale := 1.0                   # 진 크기 (마우스 휠)
 var _rune_scale := 1.0                  # 룬 크기 (마우스 휠)
@@ -166,6 +176,8 @@ func get_assembly() -> Dictionary:
 func _refresh_trace() -> void:
 	match _asm.stage():
 		STAGE_JIN:
+			# 🔴 진도 **오른쪽에서 골라야** 밑그림이 뜬다 (세션 25) — 문양 칸과 같은 규약이다.
+			# 안 골랐으면 `_jin_idx = -1` → 빈 가이드. (`_build_guide` 참조)
 			if not _asm.has_jin():
 				_set_trace(TraceTarget.JIN, -1)
 				return
@@ -207,11 +219,16 @@ func _build_guide(target: int, slot: int) -> PackedVector2Array:
 	var ro := _outer_radius()
 	match target:
 		TraceTarget.JIN:
+			# 🔴 안 골랐으면 밑그림이 없다 (세션 25) — 오른쪽 진 셀을 클릭해야 뜬다.
+			if _jin_idx < 0:
+				return pts
 			# 바깥 원 둘레 (닫힌 고리) — 휠 크기 반영
 			var jr := _jin_radius()
 			for i in GUIDE_CIRCLE_N + 1:
 				pts.append(ctr + Vector2.from_angle(TAU * float(i) / float(GUIDE_CIRCLE_N)) * jr)
 		TraceTarget.RUNE:
+			if _rune_idx < 0:
+				return pts
 			# 중심 삼각형 세 변 (_draw_rune과 같은 꼭짓점) — 변마다 촘촘히, 닫힌 형. 휠 크기 반영
 			var s := _rune_size()
 			var v := PackedVector2Array([
@@ -317,9 +334,14 @@ func trace_stroke(local_pos: Vector2) -> void:
 func advance() -> String:
 	if _trace == TraceTarget.NONE:
 		return "none"
-	# 🔴 칸을 아직 안 골랐다 (세션 25의 미선택 상태) — 잠글 조각이 없다. 그냥 넘기면
-	# `_piece_key(GLYPH, -1)`이라는 유령 키에 점수가 저장된다.
+	# 🔴 아직 안 골랐다 (세션 25의 미선택 상태) — 잠글 조각이 없다.
+	# 문양: 그냥 넘기면 `_piece_key(GLYPH, -1)`이라는 유령 키에 점수가 저장된다.
+	# 진·룬: 그냥 넘기면 **그린 적 없는 진이 0점으로 잠긴다** (밑그림도 안 떴는데).
 	if _trace == TraceTarget.GLYPH and _trace_slot < 0:
+		return "none"
+	if _trace == TraceTarget.JIN and _jin_idx < 0:
+		return "none"
+	if _trace == TraceTarget.RUNE and _rune_idx < 0:
 		return "none"
 	var done := _trace
 	var slot := _trace_slot
@@ -474,6 +496,38 @@ func set_active_glyph(g: int) -> void:
 	queue_redraw()
 
 
+## 🔴 **진을 고른다** (오른쪽 진 셀 클릭) → 왼쪽에 밑그림이 선다 (세션 25).
+## idx = 진 종류 (지금은 0만 — Db에 일반진 하나뿐이다. 늘어나면 그대로 인덱스가 는다).
+## ⚠ 진 단계가 아니면 무시한다 — 이미 잠근 진을 다시 고르는 건 [다시 그리기]의 일이다.
+func choose_jin(idx: int = 0) -> void:
+	if _asm.stage() != STAGE_JIN or _asm.has_jin():
+		return
+	_jin_idx = maxi(idx, 0)
+	_set_trace(TraceTarget.JIN, -1)     # 고른 진으로 밑그림을 세운다
+	queue_redraw()
+	score_changed.emit(_scorer.piece_score())
+
+
+## 🔴 **룬을 고른다** (오른쪽 룬 셀 클릭) → 중심에 밑그림이 선다 (세션 25).
+## idx = 룬 종류. 지금은 불(0)뿐이지만 물·바람이 늘면 **여기로 들어온다** — 그때
+## `_build_guide`가 idx별로 다른 모양을 그리면 된다 (지금은 어느 idx든 삼각).
+func choose_rune(idx: int = 0) -> void:
+	if _asm.stage() != STAGE_RUNE or _asm.has_rune():
+		return
+	_rune_idx = maxi(idx, 0)
+	_set_trace(TraceTarget.RUNE, -1)
+	queue_redraw()
+	score_changed.emit(_scorer.piece_score())
+
+
+## 고른 진·룬 (테스트·UI의 관측점). -1 = 아직 안 골랐다.
+func jin_idx() -> int:
+	return _jin_idx
+
+func rune_idx() -> int:
+	return _rune_idx
+
+
 ## 🔴 문양본을 삽입한다 — 이 칸들만 열린다. 닫힌 칸의 문양은 걷어낸다.
 func set_template(open_slots: Array) -> void:
 	_asm.set_template(open_slots)
@@ -485,6 +539,8 @@ func set_template(open_slots: Array) -> void:
 func clear_all() -> void:
 	_asm.clear()
 	_scorer.clear()
+	_jin_idx = -1                        # 빈 판 = 아무것도 안 고른 상태 (밑그림 없음)
+	_rune_idx = -1
 	_jin_scale = 1.0
 	_rune_scale = 1.0
 	_glyph_scale = {}

@@ -66,7 +66,8 @@ const CLOSE_SEC := 0.12
 ## 펑 섬광이 가시는 시간 — 연출값(밸런스 아님). 짧아야 "터졌다"로 읽히고 길면 화면 전환처럼 보인다
 const BURST_SEC := 0.45
 
-const Copy_START := "진을 왼쪽 판에 손으로 문질러 그리세요  (진 → 룬 → 문양 순서로 하나씩 · [다음]으로 진행)"
+## 🔴 세션 25: **고르는 게 먼저다** — 오른쪽 셀을 눌러야 왼쪽에 밑그림이 뜬다 (진·룬·문양 전부).
+const Copy_START := "오른쪽에서 진을 골라 왼쪽 판에 손으로 그리세요  (진 → 룬 → 문양 순서로 하나씩 · [다음]으로 진행)"
 
 ## 🔴 `class_name` 없이도 정적 타입을 받는다 — `const X := preload(...)`를 타입으로 쓸 수 있다.
 ## 예전엔 `Control`로 받아 `.call(&"...")`로 더듬었고, 오타가 파싱이 아니라 **런타임에** 터졌다.
@@ -240,16 +241,24 @@ func _stage_to_tab(stage: int) -> int:
 			return RingBook.TAB_TEMPLATE
 
 
-## 진 탭 셀을 눌렀다 — 왼쪽 판에 손으로 **문지르라**는 안내만 (열람용).
+## 🔴 진 탭 셀을 눌렀다 → **왼쪽에 밑그림이 선다** (세션 25). 예전엔 안내만 띄웠고 밑그림은
+## 단계에 들어가는 순간 이미 서 있었다 (사용자: "이게 눌러야 뜨게 해줘").
 func _on_jin_selected() -> void:
-	if _board.stage() == RingBoard.STAGE_JIN:
-		_set_say("진을 왼쪽 판에 손으로 문질러 그리세요 (바깥 원) → [다음]", false)
+	if _board.stage() != RingBoard.STAGE_JIN:
+		return
+	_board.choose_jin()
+	_set_say("진을 왼쪽 판에 손으로 문질러 그리세요 (바깥 원) → [다음]", false)
+	_refresh_buttons()
 
 
-## 룬 탭 셀 — 마찬가지로 안내만.
+## 룬 탭 셀 — 마찬가지. ⚠ 룬이 불·물·바람으로 늘면 **셀마다 idx를 실어** choose_rune(idx)로
+## 넘긴다 (지금은 Db에 불 하나뿐이라 책이 idx를 안 준다).
 func _on_rune_selected() -> void:
-	if _board.stage() == RingBoard.STAGE_RUNE:
-		_set_say("룬(불)을 중심에 손으로 문질러 그리세요 (삼각) → [다음]", false)
+	if _board.stage() != RingBoard.STAGE_RUNE:
+		return
+	_board.choose_rune()
+	_set_say("룬(불)을 중심에 손으로 문질러 그리세요 (삼각) → [다음]", false)
+	_refresh_buttons()
 
 
 ## 🔴 문양 **고르기** (오른쪽 문양 셀 클릭). 얹기는 왼쪽 판에 손으로 문지른다 — 칸마다.
