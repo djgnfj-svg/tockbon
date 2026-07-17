@@ -48,22 +48,27 @@ static func glyph_key(slot: int) -> String:
 
 
 ## 🔴 잠근 조각의 손그림 — 그린 대로 유지된다(정답 모양 교체 없음). 보드가 이 목록을 그린다.
+## 🔴 먹선은 **획들**이다 (세션 25) — 한 조각이 여러 획으로 이뤄진다. 이어 붙이면 안 된다:
+## 획과 획 사이(펜을 뗀 구간)를 선으로 그으면 화살표가 삼각형이 된다.
 class LockedPiece extends RefCounted:
 	var target: int                    # 보드의 TraceTarget (색 구분용 — 채점기는 뜻을 모른다)
 	var slot: int
-	var ink: PackedVector2Array
+	var strokes: Array[PackedVector2Array]
 	var glyph: int
 
-	func _init(p_target: int, p_slot: int, p_ink: PackedVector2Array, p_glyph: int) -> void:
+	func _init(p_target: int, p_slot: int, p_strokes: Array[PackedVector2Array], p_glyph: int) -> void:
 		target = p_target
 		slot = p_slot
-		ink = p_ink
+		strokes = p_strokes
 		glyph = p_glyph
 
 
 var _guide: PackedVector2Array = []     # 숨은 정답 선 (조밀, 로컬 좌표)
 var _revealed: PackedByteArray = []     # 각 가이드 점이 드러났나 (0/1)
-var _ink: PackedVector2Array = []       # 그린 먹선 (그린 대로, 렌더용)
+## 🔴 그린 먹선 = **획의 목록** (그린 대로, 렌더용). 세션 25에 `PackedVector2Array` 하나에서
+## 바뀌었다 — 하나였을 땐 한 조각에 획이 하나뿐이라, 화살표처럼 획이 여러 개인 모양을
+## **물리적으로 그릴 수 없었다** (사용자: "획단위로 초기화되서 화살표를 그리기가 어렵네?").
+var _strokes: Array[PackedVector2Array] = []
 var _dev_sum := 0.0                     # 그린 점들의 선-이탈 누적 (정밀도용)
 var _dev_n := 0
 var _scores: Dictionary = {}            # key → {cover, acc, score, glyph}
@@ -99,8 +104,9 @@ func guide_points() -> PackedVector2Array:
 	return _guide
 
 
-func ink() -> PackedVector2Array:
-	return _ink
+## 그린 먹선 = 획의 목록. 보드가 획마다 따로 polyline을 긋는다 (이어 그으면 안 된다).
+func strokes() -> Array[PackedVector2Array]:
+	return _strokes
 
 
 func is_revealed(i: int) -> bool:
@@ -113,13 +119,22 @@ func locked_pieces() -> Array[LockedPiece]:
 
 # ─────────────────────────── 문지르기 ───────────────────────────
 
-## 문지름 상태를 비운다 (새 가이드 / 다시 그리기 = 덮어쓰기).
+## 문지름 상태를 **전부** 비운다 (새 가이드 / 명시적 다시 그리기). 획이 통째로 사라진다.
+## ⚠ 펜을 다시 대는 건 이게 아니다 — 그건 `begin_stroke`(누적)다.
 func reset_stroke() -> void:
 	_revealed = PackedByteArray()
 	_revealed.resize(_guide.size())
-	_ink = PackedVector2Array()
+	_strokes = []
 	_dev_sum = 0.0
 	_dev_n = 0
+
+
+## 🔴 **새 획을 시작한다** (펜을 다시 댔다) — 앞서 그은 획도 점수도 **그대로 남는다** (세션 25).
+## 세션 24까지 펜을 대는 순간 `reset_stroke`가 불려 한 조각 = **한 획**이 강제됐다: 선을 긋고
+## 펜을 떼서 화살촉을 그리면 앞의 선이 사라져, 획이 여러 개인 모양은 아예 못 그렸다.
+## 완성도·정밀도가 획 사이에 이어지는 게 요점이다 — 조각 하나를 여러 번에 나눠 그린 것이다.
+func begin_stroke() -> void:
+	_strokes.append(PackedVector2Array())
 
 
 ## 한 점을 그었다. 🔴 **그린 궤적 그대로** 먹선을 남긴다 (스냅 안 함 — 구불구불 OK).
@@ -151,7 +166,11 @@ func add_point(local_pos: Vector2) -> bool:
 
 	_dev_sum += dev
 	_dev_n += 1
-	_ink.append(pt)                      # 🔴 보정 없으면 그린 대로 (선에 안 붙임)
+	# 🔴 보정 없으면 그린 대로 (선에 안 붙임). 지금 획에 얹는다 — `begin_stroke` 없이 들어온
+	# 점(헤드리스 테스트가 그런다)도 받도록 획이 없으면 하나 연다.
+	if _strokes.is_empty():
+		_strokes.append(PackedVector2Array())
+	_strokes[_strokes.size() - 1].append(pt)
 	var rr := _radius * REVEAL_RADIUS_FRAC
 	var rr2 := rr * rr
 	for j in _guide.size():
@@ -197,7 +216,10 @@ func lock(key: String, target: int, slot: int, glyph: int) -> float:
 	for i in range(_locked.size() - 1, -1, -1):
 		if _locked[i].target == target and _locked[i].slot == slot:
 			_locked.remove_at(i)
-	_locked.append(LockedPiece.new(target, slot, _ink.duplicate(), glyph))
+	var copy: Array[PackedVector2Array] = []
+	for s in _strokes:
+		copy.append(s.duplicate())     # 획마다 복사 — 얕게 담으면 다음 조각이 덮어쓴다
+	_locked.append(LockedPiece.new(target, slot, copy, glyph))
 	return sc
 
 

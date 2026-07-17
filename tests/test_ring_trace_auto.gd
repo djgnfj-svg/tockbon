@@ -42,6 +42,9 @@ func _run() -> void:
 	_test_gross_miss_is_punished_not_erased()
 	_test_pen_correction_pulls_strokes()
 	_test_pen_grades_registered()
+	_test_strokes_accumulate()
+	_test_clear_stroke_wipes()
+	_test_assist_mode_auto_places()
 
 	if failures == 0:
 		print("TEST_RING_TRACE_OK — 전 항목 통과")
@@ -113,13 +116,13 @@ func _test_pen_correction_pulls_strokes() -> void:
 	raw.set_reference_radius(118.0)
 	raw.set_guide(guide)
 	raw.add_point(Vector2(20.0, 108.0))
-	_check(is_equal_approx(raw.ink()[0].y, 108.0), "보정 0 → 먹선이 그린 좌표 그대로")
+	_check(is_equal_approx(raw.strokes()[0][0].y, 108.0), "보정 0 → 먹선이 그린 좌표 그대로")
 	var pen = Scorer.new()
 	pen.set_reference_radius(118.0)
 	pen.set_correction(0.5)
 	pen.set_guide(guide)
 	pen.add_point(Vector2(20.0, 108.0))
-	_check(is_equal_approx(pen.ink()[0].y, 104.0), "보정 0.5 → 먹선이 가이드 쪽으로 절반 당겨짐")
+	_check(is_equal_approx(pen.strokes()[0][0].y, 104.0), "보정 0.5 → 먹선이 가이드 쪽으로 절반 당겨짐")
 
 
 # ── 🔴 ⑫ 펜 등급이 실제로 등록돼 있고 보정도가 등급 순으로 오른다 ──
@@ -144,6 +147,62 @@ func _test_pen_grades_registered() -> void:
 	gs.equipment[Enums.ItemKind.PEN] = &"pen_high"
 	_check(is_equal_approx(float(gs.stroke_correction()), 0.6), "명장의 펜 착용 → 보정 0.6")
 	gs.equipment.erase(Enums.ItemKind.PEN)
+
+
+# ── 🔴 ⑬ 획이 **누적된다** — 한 조각을 여러 획에 나눠 그린다 (세션 25) ──
+# 사용자: *"획단위로 초기화되서 화살표를 그리가가 어렵네?"* — 세션 24까지 `begin_stroke`가
+# 문지름을 통째로 지워, 선을 긋고 펜을 떼서 화살촉을 그리면 **선이 사라졌다**. 화살표처럼
+# 획이 여러 개인 모양은 물리적으로 그릴 수 없었다.
+# 🔴 검출력: `begin_stroke`가 다시 `reset_stroke`를 부르면 완성도가 **뒤쪽 절반만** 남아 실패한다.
+func _test_strokes_accumulate() -> void:
+	var b = _make_board()
+	var guide = b.call(&"guide_points")
+	var half := int(guide.size() / 2)
+	b.call(&"begin_stroke")                       # 획 1 = 앞쪽 절반
+	for i in half:
+		b.call(&"trace_stroke", guide[i])
+	var cover_one := float(b.call(&"coverage"))
+	b.call(&"begin_stroke")                       # 펜을 뗐다 다시 댔다 = 획 2 = 뒤쪽 절반
+	for i in range(half, guide.size()):
+		b.call(&"trace_stroke", guide[i])
+	var cover_two := float(b.call(&"coverage"))
+	_check(cover_two > cover_one + 0.3,
+		"펜을 다시 대도 앞 획이 남는다 → 완성도가 쌓인다 (%.2f → %.2f)" % [cover_one, cover_two])
+	_check(cover_two > 0.95, "두 획을 합치면 가이드를 다 덮는다 (%.2f)" % cover_two)
+	# 🔴 획은 **따로** 남아야 한다 — 한 줄로 이으면 펜을 뗀 구간이 선이 돼 화살표가 삼각형이 된다
+	var st = b.call(&"trace_strokes")
+	_check(st.size() == 2, "획 2개가 따로 보관된다 (실제 %d개)" % st.size())
+	b.queue_free()
+
+
+# ── 🔴 ⑭ 우클릭(다시 그리기)은 전부 지운다 ──
+# 누적으로 바뀌면서 "지우고 처음부터"가 갈 곳을 잃었다 — 이 경로가 없으면 잘못 그은 획을
+# 무를 방법이 아예 없다 (예전엔 좌클릭이 겸했고, 그래서 여러 획을 못 그렸다).
+func _test_clear_stroke_wipes() -> void:
+	var b = _make_board()
+	_rub_exact(b)
+	_check(float(b.call(&"coverage")) > 0.95, "먼저 그린다")
+	b.call(&"clear_stroke")
+	_check(is_zero_approx(float(b.call(&"coverage"))), "다시 그리기 → 완성도 0")
+	_check(is_zero_approx(float(b.call(&"accuracy"))), "다시 그리기 → 정밀도 0")
+	_check(b.call(&"trace_strokes").is_empty(), "다시 그리기 → 먹선이 사라진다")
+	b.queue_free()
+
+
+# ── 🔴 ⑮ 조립 모드 — 고르면 손 안 대고 붙는다 (세션 25, 사용자와 손그림을 견주는 축) ──
+# 요점: 가이드를 그대로 먹선으로 삼으므로 **점수가 저절로 만점**이고, 그 덕에 「점수 → 위력 → 펑」
+# 파이프라인을 하나도 안 고치고 그대로 탄다 (조립엔 실패가 없다 = 손그림과의 차이).
+func _test_assist_mode_auto_places() -> void:
+	var b = _make_board()
+	_check(is_zero_approx(float(b.call(&"coverage"))), "손그림 모드 — 손대기 전엔 빈 판")
+	b.call(&"set_assist", true)
+	_check(float(b.call(&"coverage")) > 0.99, "조립 모드 → 진이 손 안 대고 놓인다 (완성도 만점)")
+	_check(float(b.call(&"accuracy")) > 0.99, "가이드 그대로라 정밀도도 만점")
+	_check(float(b.call(&"piece_score")) > 0.99, "조립엔 실패가 없다 — 조각 점수 만점")
+	# 손그림으로 돌아가면 다시 빈 판이다 (두 모드가 서로를 오염시키지 않는다)
+	b.call(&"set_assist", false)
+	_check(is_zero_approx(float(b.call(&"coverage"))), "손그림으로 되돌리면 판이 다시 빈다")
+	b.queue_free()
 
 
 func _make_board():

@@ -96,6 +96,8 @@ var _cast_dur := 1.3
 var _trace := TraceTarget.NONE          # 지금 그릴 대상
 var _trace_slot := -1                   # GLYPH일 때 채울 칸
 var _drawing := false                   # 마우스 버튼 누른 채 긋는 중
+## 🔴 조립 모드 (세션 25) — true면 손으로 안 긋고 **고르면 붙는다**. 손그림과 견주려고 있다.
+var _assist := false
 var _jin_scale := 1.0                   # 진 크기 (마우스 휠)
 var _rune_scale := 1.0                  # 룬 크기 (마우스 휠)
 var _glyph_scale: Dictionary = {}       # slot(int) → float, 문양 개별 크기 (마우스 휠, 세션 15)
@@ -185,6 +187,35 @@ func _set_trace(target: int, slot: int) -> void:
 	_scorer.set_reference_radius(_outer_radius())
 	_scorer.set_correction(_pen_correction())
 	_scorer.set_guide(_build_guide(target, slot))
+	if _assist:
+		_auto_trace()   # 🔴 조립 모드 — 고르는 순간 이미 그려져 있다 (휠로 크기를 바꿔도 여기로 온다)
+
+
+## 🔴 **조립 모드** — 손으로 안 긋고 고르면 붙는다 (세션 25, 사용자: *"보기를 누르면 자동으로
+## 마법진에 적용이 되서 조립하는 느낌, 크기만 마우스 휠로 조절"*).
+## ⚠ 손그림 모드와 **비교하려고** 있는 것이다 — 어느 쪽이 재밌는지는 사용자가 정한다.
+## 이게 이기면 [[takbon-hand-trace-commit]]의 탁본 정체성이 뒤집힌다.
+func set_assist(on: bool) -> void:
+	if _assist == on:
+		return
+	_assist = on
+	_set_trace(_trace, _trace_slot)   # 지금 조각을 새 모드로 다시 세운다
+	queue_redraw()
+
+
+func is_assist() -> bool:
+	return _assist
+
+
+## 가이드를 **그대로** 먹선으로 삼는다 → 이탈 0 = 정밀도 만점 · 전 점 드러남 = 완성도 만점.
+## 🔴 그래서 「점수 → 위력 → 펑」 파이프라인을 하나도 안 고치고 그대로 탄다 (조립 = 늘 퍼펙트).
+## 조립엔 실패가 없다 — 그게 손그림과의 차이고, 사용자가 견줄 지점이다.
+func _auto_trace() -> void:
+	_scorer.reset_stroke()
+	_scorer.begin_stroke()
+	for p in _scorer.guide_points():
+		_scorer.add_point(p)
+	score_changed.emit(_scorer.piece_score())
 
 
 ## 장착한 펜의 보정도. 오토로드가 없는 환경(순수 단위 테스트)에서도 죽지 않게 0으로 폴백한다.
@@ -248,6 +279,12 @@ func piece_score() -> float:
 func guide_points() -> PackedVector2Array:
 	return _scorer.guide_points()
 
+
+## 지금 조각의 먹선 **획들**. 획이 따로 보관되는지가 계약이다 (세션 25) — 이어 붙이면
+## 펜을 뗀 구간이 선이 돼 화살표가 삼각형이 된다. 테스트의 관측점.
+func trace_strokes() -> Array[PackedVector2Array]:
+	return _scorer.strokes()
+
 ## 잠긴 손그림 조각 수 = 화면에 남아 있는 먹선 줄 수. 재편집이 **덮어쓰는지**(중복 추가가
 ## 아닌지) 보는 관측점 — 테스트가 쓴다.
 func locked_count() -> int:
@@ -256,10 +293,18 @@ func locked_count() -> int:
 
 # ─────────────────────────── 문지르기 (채점기에 위임) ───────────────────────────
 
-## 🔴 새 획을 시작한다 (마우스 누름) = **다시 그리기**. 이전 문지름을 덮어쓴다.
-## 마음에 들 때까지 다시 그리고 [다음]으로 잠근다 (사용자 확정).
+## 🔴 새 획을 시작한다 (마우스 누름) — **앞서 그은 획은 남는다** (세션 25).
+## 세션 24까지 여기서 전부 지웠다. "마음에 들 때까지 다시 그린다"는 의도였지만, 그 의도가
+## **한 조각 = 한 획**을 강제해 화살표(선+화살촉)처럼 획이 여러 개인 모양을 못 그리게 했다
+## (사용자: "획단위로 초기화되서 화살표를 그리가가 어렵네?"). 다시 그리기는 이제 `clear_stroke`다.
 func begin_stroke() -> void:
+	_scorer.begin_stroke()
+
+
+## 지금 조각의 먹선을 **전부 지운다** (다시 그리기 — 우클릭). 점수도 0으로 돌아간다.
+func clear_stroke() -> void:
 	_scorer.reset_stroke()
+	queue_redraw()
 	score_changed.emit(0.0)
 
 
@@ -423,6 +468,10 @@ func _glyph_color(code: int) -> Color:
 
 func set_active_glyph(g: int) -> void:
 	_active = clampi(g, 0, GLYPH_NAMES.size() - 1)
+	# 🔴 조립 모드에선 고른 문양이 **곧 판 위의 것**이라 가이드를 다시 세워 새로 붙인다 (세션 25).
+	# 손그림 모드에선 필요 없다 — 가이드가 바뀌면 지금 긋던 획이 날아간다.
+	if _assist and _trace == TraceTarget.GLYPH:
+		_set_trace(_trace, _trace_slot)
 	queue_redraw()
 
 
@@ -508,11 +557,20 @@ func _gui_input(event: InputEvent) -> void:
 				var k := _nearest_open_slot(mb.position)
 				if k >= 0 and k != _trace_slot:
 					select_slot(k)
-			_drawing = true
-			begin_stroke()                # 새 획 = 다시 그리기 (이전 문지름 덮어씀)
-			trace_stroke(mb.position)
+			# 🔴 조립 모드는 고르면 이미 붙어 있다 — 손으로 긋지 않는다 (칸 선택·휠은 그대로 산다)
+			if not _assist:
+				_drawing = true
+				begin_stroke()            # 펜을 댔다 = 새 획 (앞 획은 남는다 — 세션 25)
+				trace_stroke(mb.position)
 		else:
 			_drawing = false
+		accept_event()
+		return
+	# 🔴 우클릭 = **다시 그리기** (세션 25). 획 누적으로 바뀌면서 "지우고 처음부터"가 갈 곳이
+	# 없어졌다 — 예전엔 좌클릭이 그 역할을 겸했다(그래서 여러 획을 못 그렸다).
+	if mb != null and mb.pressed and mb.button_index == MOUSE_BUTTON_RIGHT:
+		if not _assist:
+			clear_stroke()   # 조립 모드엔 지울 게 없다 — 다시 고르면 그만이다
 		accept_event()
 		return
 	# 🔴 마우스 휠 — 지금 그릴 조각(진/룬/문양 칸)의 크기 조절 (세션 14c·15)
@@ -615,9 +673,10 @@ func _draw() -> void:
 		for i in guide.size():
 			if _scorer.is_revealed(i):
 				draw_circle(guide[i], 1.6, GUIDE_SHOW)
-		var ink := _scorer.ink()
-		if ink.size() >= 2:
-			draw_polyline(ink, TRACE_INK, 2.6, true)
+		# 🔴 획마다 따로 긋는다 — 한 줄로 이으면 펜을 뗀 구간이 선이 돼 화살표가 삼각형이 된다
+		for s in _scorer.strokes():
+			if s.size() >= 2:
+				draw_polyline(s, TRACE_INK, 2.6, true)
 
 	# 착지 펄스 ("탁") — 조각이 놓인 자리에서 퍼지는 밝은 고리
 	if _pulse_t >= 0.0:
@@ -627,8 +686,6 @@ func _draw() -> void:
 
 ## 🔴 잠근 조각 = **그린 먹선 그대로** 렌더 (정답 모양 교체 없음). 색은 조각 종류로 구분.
 func _draw_locked(L: TraceScorer.LockedPiece) -> void:
-	if L.ink.size() < 2:
-		return
 	var col := TRACE_INK
 	match L.target:
 		TraceTarget.JIN:
@@ -637,4 +694,6 @@ func _draw_locked(L: TraceScorer.LockedPiece) -> void:
 			col = _rune_color()
 		TraceTarget.GLYPH:
 			col = _glyph_color(L.glyph)
-	draw_polyline(L.ink, col, 2.8, true)
+	for s in L.strokes:
+		if s.size() >= 2:
+			draw_polyline(s, col, 2.8, true)

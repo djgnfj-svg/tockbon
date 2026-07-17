@@ -210,6 +210,26 @@ func _unhandled_input(event: InputEvent) -> void:
 		KEY_W:
 			_select_glyph(RingBoard.G_RADIATE)
 			get_viewport().set_input_as_handled()
+		KEY_T:
+			_toggle_assist()
+			get_viewport().set_input_as_handled()
+
+
+## 🔴 **손그림 ⇄ 조립** 전환 (세션 25, T키) — 사용자가 둘을 나란히 견주려고 둔 **임시 스위치**다.
+## 어느 쪽이 재밌는지 정해지면 이긴 쪽만 남고 이 토글은 사라진다. 조립이 이기면
+## [[takbon-hand-trace-commit]]의 탁본 정체성(손으로 그려야 확정)이 통째로 뒤집힌다.
+func _toggle_assist() -> void:
+	_board.set_assist(not _board.is_assist())
+	_set_say(_mode_copy(), false)
+	_update_score()
+	_refresh_buttons()
+
+
+## 지금 모드의 안내 문구 — 조립 모드에서 "손으로 문질러 그리세요"는 거짓말이다.
+func _mode_copy() -> String:
+	if _board.is_assist():
+		return "🔧 조립 모드 — 오른쪽에서 고르면 왼쪽에 바로 붙는다 (휠=크기 · [다음]으로 진행 · T=손그림)"
+	return "✍ 손그림 모드 — 숨은 선을 손으로 그으세요 (여러 획 OK · 우클릭=다시 · 휠=크기 · T=조립)"
 
 
 # ─────────────────────────── Db 데이터 주입 (세션 13 구조화) ───────────────────────────
@@ -243,15 +263,23 @@ func _stage_to_tab(stage: int) -> int:
 			return RingBook.TAB_TEMPLATE
 
 
-## 진 탭 셀을 눌렀다 — 왼쪽 판에 손으로 **문지르라**는 안내만 (열람용).
+## 진 탭 셀을 눌렀다 — 손그림이면 **문지르라는 안내**, 조립이면 **이미 붙었다**.
 func _on_jin_selected() -> void:
-	if _board.stage() == RingBoard.STAGE_JIN:
+	if _board.stage() != RingBoard.STAGE_JIN:
+		return
+	if _board.is_assist():
+		_set_say("진이 판에 놓였다 (바깥 원) — 휠로 크기를 맞추고 [다음]", false)
+	else:
 		_set_say("진을 왼쪽 판에 손으로 문질러 그리세요 (바깥 원) → [다음]", false)
 
 
-## 룬 탭 셀 — 마찬가지로 안내만.
+## 룬 탭 셀 — 마찬가지.
 func _on_rune_selected() -> void:
-	if _board.stage() == RingBoard.STAGE_RUNE:
+	if _board.stage() != RingBoard.STAGE_RUNE:
+		return
+	if _board.is_assist():
+		_set_say("룬(불)이 중심에 놓였다 (삼각) — 휠로 크기를 맞추고 [다음]", false)
+	else:
 		_set_say("룬(불)을 중심에 손으로 문질러 그리세요 (삼각) → [다음]", false)
 
 
@@ -263,8 +291,12 @@ func _select_glyph(glyph: int) -> void:
 	if _board.stage() != RingBoard.STAGE_GLYPH:
 		_set_say("먼저 진과 룬을 그리세요  (진 → 룬 → 문양)", true)
 	elif _board.is_tracing():
-		_set_say("%s 선택 — 칸을 클릭해 손으로 그리세요 · 휠=크기"
-			% RingBoard.GLYPH_NAMES[glyph], false)
+		if _board.is_assist():
+			_set_say("%s 선택 — 칸을 클릭하면 바로 새겨진다 · 휠=크기"
+				% RingBoard.GLYPH_NAMES[glyph], false)
+		else:
+			_set_say("%s 선택 — 칸을 클릭해 손으로 그리세요 · 휠=크기"
+				% RingBoard.GLYPH_NAMES[glyph], false)
 	else:
 		_set_say("%s 선택 — 칸이 다 찼어요. [맺기]로 분석" % RingBoard.GLYPH_NAMES[glyph], false)
 
