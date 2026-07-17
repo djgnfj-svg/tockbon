@@ -127,7 +127,20 @@ func load_game() -> bool:
 	_ready_to_save = true
 	return true
 
-## 테스트·디버그용 — 세이브 전체 삭제
+## 테스트·디버그용 — 세이브 **파일**만 삭제.
+##
+## 🔴🔴 **이건 「새로하기」가 아니다. 새로하기로 쓰지 마라** (세션 26에 실제로 돌려 확인했다):
+##   ① 진행을 만들고 저장 → 보관 1 · 잉크 9 · Day 7
+##   ② wipe_save()      → 파일은 지워지는데 **메모리엔 보관 1 · 잉크 9 · Day 7 그대로**
+##   ③ 귀환 한 번        → **옛 진행이 도로 써진다.** 에러도 경고도 없다
+## `GameState`·`Clock`은 **오토로드라 메모리에 살아 있다** — 파일을 지워도 다음 자동 저장이
+## 그대로 다시 쓴다. 새로하기를 눌렀는데 조용히 안 된 것처럼 보인다.
+##
+## 진짜 새로하기가 지워야 할 것 = **`save_game()`이 쓰는 것 전부** + `bag`·`hp` +
+## 🔴 **시작 해금 재시드**(`GameState._ready`의 `rune_fire`·`glyph_thrust` — 새로하기는 `_ready`를
+## 다시 안 탄다. 안 심으면 **아무것도 못 그리는 새 게임**이 된다).
+## → 설계·미결은 `docs/BACKLOG.md` 「F8 — 새로하기」가 정본. **`GameState.new_game()`을 core에
+## 하나 두는 쪽**이 맞다 (씬마다 손으로 비우면 필드가 늘 때 조용히 갈라진다).
 func wipe_save() -> void:
 	if FileAccess.file_exists(SAVE_PATH):
 		DirAccess.remove_absolute(SAVE_PATH)
