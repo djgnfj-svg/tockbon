@@ -264,7 +264,7 @@ func _draw_glyph_cells(font: Font, top: float) -> void:
 		_text_center(font, r.position + Vector2(cw * 0.5, ch - 15.0), String(row.desc), DESC_COLOR, 8)
 
 
-## 아이콘. template = 8점 고리(열린 칸 강조) / glyph = 8방향 화살표 다발 / jin·fire = 진·룬
+## 아이콘. template = 8점 고리(열린 칸 강조) / glyph = 화살표 하나 / jin·fire = 진·룬
 func _draw_icon(kind: String, c: Vector2, s: float, data: Array) -> void:
 	match kind:
 		"jin":
@@ -290,17 +290,17 @@ func _draw_icon(kind: String, c: Vector2, s: float, data: Array) -> void:
 
 
 ## 문양 아이콘 — 8방향 화살표 다발. 색·방향은 def에서 온다 (inward=응집, outward=발산).
+## 🔴 **화살표 하나** (세션 25, 사용자: "문양 모양도 그냥 문양 하나만 보이게 해줘").
+## 예전엔 8방향 다발을 그렸다 — 한 칸에 들어가는 건 화살표 **하나**인데 아이콘이 여덟을
+## 보여 주니, 셀이 "문양 하나"가 아니라 "문양본(어느 칸을 여는가)"처럼 읽혔다.
+## 방향은 판의 밑그림과 같은 규약이다: 발산=바깥(위) · 응집=룬 쪽(아래).
 func _draw_glyph_icon(c: Vector2, s: float, col: Color, inward: bool) -> void:
-	for k in 8:
-		var outward := Vector2.from_angle(TAU * float(k) / 8.0 - PI / 2.0)
-		var inner := c + outward * (s * 0.45)
-		var outer := c + outward * s
-		var tip := inner if inward else outer
-		var tail := outer if inward else inner
-		var hdir := (tip - tail).normalized()
-		draw_line(tail, tip, col, 1.6, true)
-		draw_line(tip, tip - hdir.rotated(0.5) * s * 0.28, col, 1.6, true)
-		draw_line(tip, tip - hdir.rotated(-0.5) * s * 0.28, col, 1.6, true)
+	var dir := Vector2.DOWN if inward else Vector2.UP
+	var tail := c - dir * s
+	var tip := c + dir * s
+	draw_line(tail, tip, col, 2.2, true)
+	draw_line(tip, tip - dir.rotated(0.5) * s * 0.5, col, 2.2, true)
+	draw_line(tip, tip - dir.rotated(-0.5) * s * 0.5, col, 2.2, true)
 
 
 func _text(font: Font, at: Vector2, text: String, col: Color, fs: int) -> void:
