@@ -7,7 +7,7 @@
 
 > 🔴🔴 **세션 21 대청소 + 22 구조 정비 + 23 「그리는 재미」(2026-07-17) — 여기부터 읽어라.**
 >
-> **지금 게임 = `src/base/base.tscn`(베이스캠프, `run/main_scene`) + 고리 조립 책.** 그게 전부다.
+> **지금 게임 = `src/base/base.tscn`(베이스캠프, `run/main_scene`) + 고리 조립 책 + 숲 원정(세션 26).**
 > **마법진 = 「고리 조립」**: 진=바깥 그릇(투사체 몸) · 룬=중심(속성) · 문양=진과 룬 사이 고리 칸 ·
 > 문양본(스텐실)=어느 칸을 여는 틀 · 방향=어느 칸을 채우냐 · 발사=진이 통째로 날아가 착탄점에서 전개.
 > 확정 뒤 손으로 따라 그어(탁본) 맺는다.
@@ -53,11 +53,24 @@
 > 말했다** — 검증이 전부 Control 계층을 건너뛰었기 때문이다(아래 검증 절 참조). 사용자가
 > *"좌클릭이 안먹나?"*로 맞혔다. **사용자가 "안 된다"고 하면 초록불보다 사용자가 옳다.**
 >
-> 🔴 **다음 세션이 제일 먼저 할 일 = 손맛 튜닝.** 이제야 **그릴 수 있게 됐으니** 판정이 맞는지는
-> 그 다음이다. 판정 반경·65점 기준선은 **사용자가 마우스로 직접 그려 봐야** 정해진다. 리드의
-> 측정은 전부 시뮬레이션이다 — **좌표를 그대로 찍어 재면 정밀도 100이 나와 아무것도 검증되지
-> 않는다**(세션 23에 실제로 이 착각을 했다). 남은 미결 = `docs/BACKLOG.md` 최상단
-> 「고리 모델의 미결」(R1 잉크·종이·마나 = **사용자 TODO** / R2 문양 어휘 / R3 손맛).
+> 🔴🔴 **세션 26 = 숲 원정** (사용자: *"숲원정 만들자"*). **그린 마법이 쓸 데가 생겼다** —
+> 세션 25까지 위력 160을 내도 때릴 게 **허수아비뿐**이었다. 이제 **베이스 왼쪽 숲길 [E] →
+> 숲(슬라임 7마리가 쫓아온다) → 들어온 자리로 돌아가 [E] → 베이스.** 죽으면 그냥 베이스로
+> (벌 없음 — 사용자 확정: 얻는 게 없으니 잃을 것도 없다).
+> 🔴 **먼저 공용 조각을 뺐다**: `src/actors`(player·player_caster·interact_zone) + `src/hud`.
+> **복사가 아니라 추출이어야 했던 이유** = 발사를 복사하면 **`to_assembly()`를 빼먹는 함정까지
+> 복사된다**(손그림 점수가 조용히 빠져 기준 위력이 된다).
+> 🔴 **출격이 HP를 채운다**(`forest.gd _ready`) — 안 그러면 **죽는 게 이득**이 된다(벌이 없으니
+> 다친 몸으로 걸어 돌아오느니 그 자리에서 죽는 게 싸다). **베이스가 아니라 숲이 한다.**
+> ⚠ **저장이 조용히 안 돈다** — `SaveManager._ready_to_save=false`(실측). 세션 21에 부팅 흐름이
+> 지워져 `load_game()`을 아무도 안 부른다 → 껐다 켜면 그린 마법진이 사라진다 (BACKLOG **F3**).
+>
+> 🔴 **다음 세션이 제일 먼저 할 일 = 사용자가 직접 해 보고 정하기.** 원정 손맛(F4)도 문양
+> 손맛(R2a)도 판정 반경·65점 기준선(R3)도 **리드가 못 정한다** — 측정이 전부 시뮬레이션이다
+> (**좌표를 그대로 찍어 재면 정밀도 100이 나와 아무것도 검증되지 않는다** — 세션 23에 실제로
+> 이 착각을 했고, 세션 25에 사용자가 직접 그려 8건을 찾았다). 미결 = `docs/BACKLOG.md` 최상단
+> (F3 저장·F4 원정 손맛·F5 void·F6 드롭=탁본) + 「고리 모델의 미결」(R1 잉크·종이·마나 =
+> **사용자 TODO** / R2 문양 어휘 / R2a 문양 손맛 / R3 판정).
 
 - **docs/REFACTOR_PLAN.md** — ✅ **세션 22에 완료** (이력·판단 근거로만 참고). 「문제가 아닌 것」 절은
   아직 유효하다 — 건드리지 마라
@@ -68,16 +81,30 @@
 
 ## 아키텍처 요약
 
-- **진입점**: `src/base/base.tscn` (베이스캠프 — 바닥·탁본 책상·WASD). 책상 E → 고리 조립 책
-  (세션 22에 `src/playground` → `src/base`로 개명 — 옛 이름이 "버려도 되는 실험"이라 거짓 신호였다)
+- **진입점**: `src/base/base.tscn` (베이스캠프 — 바닥·탁본 책상·연습장·**왼쪽 숲길**). 책상 E →
+  고리 조립 책 · 숲길 E → 원정 (세션 22에 `src/playground` → `src/base`로 개명 — 옛 이름이
+  "버려도 되는 실험"이라 거짓 신호였다)
 - **오토로드**: EventBus(시그널 허브) / GameState(자원·HP·장착·가방·도감) / Clock(낮밤 시간) /
   Db(data/ 레지스트리) / SaveManager(user://save, 자동 저장)
   - ✅ 세션 22: 옛 SpellDesign 스키마·research 경로를 **매장했다** (전엔 지우면 파싱이 깨졌다).
     `Clock`의 실질 역할 = **자동저장 틱**(day_started → SaveManager) — 죽은 코드 아님
   - ⚠ EventBus의 `extraction_success`·`bag_lost`는 **수신자만 있고 발신자가 없다** — 필드(원정)
     미구현 탓이다. 필드를 붙이는 쪽이 emit해야 하며, 안 그러면 조용히 안 돈다 (event_bus.gd 주석 참조)
-- **남은 모듈**: `src/base`(베이스캠프) · `src/drawing`(고리 조립 — 아래) · `src/spell`(발사) ·
+- **남은 모듈**: `src/base`(베이스캠프) · `src/field`(숲 원정 — 세션 26) · `src/actors`·`src/hud`
+  (**공용** — base와 field가 같이 쓴다) · `src/drawing`(고리 조립 — 아래) · `src/spell`(발사) ·
   `src/core`(리드 전용)
+  - 🔴 **`src/actors` = 공용 배우** (세션 26): `player.tscn`(WASD·그룹 `"player"`) ·
+    **`player_caster.gd`**(조준·발사·슬롯) · `interact_zone.gd`(책상·숲 출구·귀환 지점이 **같은
+    물건** — 문구는 씬의 `Prompt.text`, 찾기는 `zone_id`).
+    🔴 **발사를 복사하지 마라 — caster를 써라**: 직접 Dictionary를 만들면 `to_assembly()`가 빠져
+    **손그림 점수가 조용히 사라지고 기준 위력으로 나간다**. 그래서 뽑은 것이다
+  - 🔴 **`src/hud/hud.gd` = 공용 HUD** (옛 `src/base/base_hud.gd`). 씬마다 다른 건 `hint_text`·
+    `show_hp` **@export 둘뿐**이라 상속하지 않았다. ⚠ 안내문에 **있지도 않은 조작을 적지 마라**
+    (숲엔 책상이 없다) — 그 자체가 버그다
+  - 🔴 **`src/field`**: `forest.tscn`(원정) · `forest_enemy`(쫓아와 접촉 피해).
+    **적 수치는 전부 `data/enemies/*.tres`(EnemyDef) — 새 적 = .tres 한 장**이다.
+    **출격 = 만HP**는 `forest.gd _ready`가 한다 (베이스가 아니다 — 다른 진입 경로로 들어가면
+    조용히 달라진다). ⚠ `EnemyDef.drops`는 **아직 아무도 안 뿌린다** (BACKLOG F6)
   - `src/drawing` = **ring_assembly**(조립 상태기계·순수 데이터) · **trace_scorer**(탁본 채점·순수 수학)
     · **ring_board**(기하·렌더·입력) · ring_book · ring_forge_panel(+`.tscn` 껍데기)
     🔴 **채점(완성도·정밀도·펜 보정)을 바꿀 땐 `trace_scorer.gd`만 연다** (세션 22 분할의 이유)
@@ -134,7 +161,8 @@
 ./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_ring_trace_auto.gd      # **손그림 탁본**: 완성도/정밀도·[다음] 수동 진행·칸 자유 편집·I3 · **정밀도 이빨(⑨⑩)·펜 보정(⑪⑫)**
 ./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_ring_spell_auto.gd      # **고리 발사**: 진→투사체·착탄 전개(발산 탄환·응집 기둥)·실제 적 take_hit
 ./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_ring_design_auto.gd     # **고리 도안 통합**: RingDesign 라운드트립·ring_design_committed→GameState 자동 장착 · **등급⇔펑 경계·퍼펙트⇔화면100** (세션 24)
-./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_base_auto.gd            # **베이스캠프 발사 배선** (세션 24): 과녁 사거리 · 🔴**물리 레이어 계약**(내 몸/책상이 world면 진이 총구에서 죽는다 — 에러 없이 조용히)
+./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_base_auto.gd            # **베이스캠프 발사 배선** (세션 24): 과녁 사거리 · 🔴**물리 레이어 계약**(내 몸/책상이 world면 진이 총구에서 죽는다 — 에러 없이 조용히) · [8] 숲길
+./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_forest_auto.gd         # **숲 원정** (세션 26): 출격 만HP · 적이 쫓아옴(그룹 "player") · 접촉 피해 · 🔴**적 레이어 계약**(4=enemy가 아니면 부딪히기만 하고 take_hit이 안 불린다) · 귀환/사망 계약(extraction_success·bag_lost)
 ```
 
 🔴 **`-s` 테스트는 런타임 에러가 나도 "OK"를 찍을 수 있다.** 세션 22에 실제로 겪었다 —
@@ -182,6 +210,8 @@ static 함수 안의 **`const BAL.프로퍼티`를 컴파일 타임에 굳힌다
 **좌클릭=발사**(🔴 Space 아님 — 사용자 확정) · **1~4=슬롯** · HUD가 슬롯 4칸(위력·점수)을 보여 준다.
 쏘는 건 `GameState.ring_equipped[슬롯].to_assembly()` — **`to_assembly()`를 써야** 손그림 점수가
 실려 그때 그 위력이 난다(직접 Dictionary를 만들면 score가 빠져 조용히 기준 위력이 된다).
+✅ **세션 26: 왼쪽 숲길에서 E = 원정** — 숲(슬라임 7)에서 같은 조작으로 싸우고, **들어온
+자리(남쪽)로 돌아가 E**를 누르면 귀환한다. 죽으면 0.9초 뒤 그냥 베이스로 (벌 없음).
 
 🔴🔴 **헤드리스는 「클릭이 닿는다」도 모른다** (세션 25에 뼈아프게 배웠다). 사용자가 *"마법진이 다
 그려져도 발사가 안됨"*이라 했는데 **전 스위트가 그린이었다**. 원인은 `Ground`(화면을 다 덮는
@@ -192,6 +222,11 @@ ColorRect)의 `mouse_filter`가 기본값 **STOP**이라 바닥이 좌클릭을 
 (렌더가 없어 Control 히트 테스트가 실제와 다르다). **에디터로 띄운 실제 게임에서만 0회→1회로
 재현됐다.** → **마우스가 닿는 경로를 바꿨으면 `godot_exec`로 실제 게임에 
 `viewport.push_input(InputEventMouseButton)`을 밀어 확인해라.** 액션 주입은 이 버그를 못 잡는다.
+
+🔴 **이건 베이스만의 얘기가 아니다 — 새 씬을 만들 때마다 되살아난다.** 세션 26에 숲 Ground의
+`mouse_filter = 2`를 빼 보니 **실제 게임에서 발사 0회**였고, 그때도 **헤드리스 전 스위트는
+그린이었다**(신규 `test_forest_auto` 포함). **화면을 덮는 Control을 새로 깔았으면 `mouse_filter = 2`를
+적었는지 확인하고 실제 게임에서 클릭을 밀어 봐라.**
 
 🔴 **헤드리스는 "존재"만 확인하고 "보인다"는 못 본다** (memory `takbon-mcp-visual-verify`).
 렌더·레이아웃을 건드렸으면 **에디터로 띄워 스샷으로 확인해라** — 세션 22의 `ring_board` 분할과

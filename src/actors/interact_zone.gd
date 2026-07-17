@@ -1,0 +1,48 @@
+extends Area2D
+## 상호작용 지점 — 플레이어가 가까이 오면 안내를 띄우고, E에 `interacted`를 쏜다.
+##
+## 🔴 **탁본 책상 · 숲 출구 · 귀환 지점은 같은 물건이다** (세션 26). 세션 25까지 이건 `desk.gd`라는
+## 이름으로 베이스에만 있었는데, 숲을 붙이는 순간 출구와 귀환 지점이 같은 코드를 두 번 더 필요로
+## 했다 — 문구만 다르고 하는 일은 하나다. 문구는 씬의 `Prompt.text`가 정한다.
+##
+## 🔴 **레이어 계약: layer 64(interaction) / mask 2(player)** — 씬에서 설정한다.
+## 기본 레이어 1(world)에 두면 **캐리어(마스크 5 = world+enemy)가 여기 부딪혀 마법이 죽는다**.
+## 그리고 mask에서 2(player)를 빼면 감지가 죽어 **안내가 안 뜨고 E가 안 먹는다** —
+## 베이스에선 그게 곧 "게임이 통째로 막힘"이다 (tests/test_base_auto가 그 짝을 묶는다).
+
+signal interacted  ## 플레이어가 이 지점에서 E를 눌렀다
+
+## 어느 지점인가 — 씬이 잇는 대상을 헷갈리지 않게, 테스트가 노드 이름 대신 이걸로 찾게.
+## (지금: &"desk" 베이스 책상 · &"forest_gate" 베이스→숲 · &"extract" 숲→베이스)
+@export var zone_id: StringName = &""
+
+@onready var _prompt: Label = $Prompt
+
+var _player_in_range: bool = false
+
+func _ready() -> void:
+	add_to_group("interact_zones")
+	body_entered.connect(_on_body_entered)
+	body_exited.connect(_on_body_exited)
+	if _prompt != null:
+		_prompt.visible = false
+
+func _unhandled_input(event: InputEvent) -> void:
+	if _player_in_range and event.is_action_pressed("interact"):
+		interacted.emit()
+
+## 플레이어가 범위 안인가 — 씬·테스트가 읽는 공개 상태 (내부 필드를 더듬지 않게).
+func player_in_range() -> bool:
+	return _player_in_range
+
+func _on_body_entered(body: Node) -> void:
+	if body is CharacterBody2D:
+		_player_in_range = true
+		if _prompt != null:
+			_prompt.visible = true
+
+func _on_body_exited(body: Node) -> void:
+	if body is CharacterBody2D:
+		_player_in_range = false
+		if _prompt != null:
+			_prompt.visible = false

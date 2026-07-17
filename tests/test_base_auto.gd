@@ -53,6 +53,7 @@ func _run() -> void:
 	await _test_desk_still_sees_the_player()
 	await _test_rejected_commit_is_not_silent()
 	await _test_real_left_click_actually_fires()
+	await _test_forest_gate_leads_out()
 
 	if failures == 0:
 		print("TEST_BASE_OK — 전 항목 통과")
@@ -124,7 +125,7 @@ func _test_desk_does_not_eat_the_spell() -> void:
 ## 진을 살리려고 플레이어를 레이어 2로 옮겼으니 책상 마스크도 따라와야 했다 — 그 짝을 여기서 묶는다.
 func _test_desk_still_sees_the_player() -> void:
 	print("[5] 책상이 플레이어를 알아본다 (E 안내가 뜨려면 감지돼야 한다)")
-	var desk = _find_area(_base)   # 동적 타입 — 모듈 preload 금지라 Desk 타입을 못 쓴다
+	var desk = _zone(&"desk")
 	if desk == null:
 		_check(false, "책상(Area2D)을 못 찾았다")
 		return
@@ -202,7 +203,7 @@ func _test_real_left_click_actually_fires() -> void:
 	print("[7] 좌클릭이 발사에 닿는다 ⚠ 헤드리스에선 검출력 0 — 실제 게임에서 확인할 것")
 	var gs = root.get_node("/root/GameState")
 	gs.ring_equipped[0] = RingDesign.from_assembly(_assembly(1.0), "클릭 테스트")
-	_base.call(&"_select_slot", 0)
+	_player().caster.select_slot(0)
 
 	var casts := []
 	_bus.ring_cast_requested.connect(func(_a, _p, _d) -> void: casts.append(1))
@@ -218,6 +219,34 @@ func _test_real_left_click_actually_fires() -> void:
 
 	_check(casts.size() == 1,
 		"🔴 좌클릭이 발사에 닿는다 (실제 발사 %d회 — 0이면 Control이 클릭을 먹고 있다)" % casts.size())
+
+
+## [8] 🔴 숲으로 나가는 길이 있다 (세션 26 — F2).
+## 씬 전환 자체는 여기서 안 시킨다 — 시키면 이 테스트가 딛고 선 `_base`가 통째로 날아간다.
+## 대신 **나갈 수 있는 조건 셋**을 묶는다: 문이 있고 · 나를 감지하고(안 그러면 [E]가 안 뜬다) ·
+## 갈 곳이 실재한다(경로가 깨지면 E를 눌러도 **아무 일도 안 일어난다** — 또 하나의 침묵).
+func _test_forest_gate_leads_out() -> void:
+	print("[8] 숲으로 나가는 길 — 문이 있고, 나를 알아보고, 갈 곳이 실재한다")
+	var gate = _zone(&"forest_gate")
+	if gate == null:
+		_check(false, "숲길(zone_id=forest_gate)을 못 찾았다")
+		return
+	_check(gate.interacted.get_connections().size() >= 1,
+		"숲길의 interacted를 베이스가 받고 있다 (안 이으면 E가 조용히 아무것도 안 한다)")
+
+	var player = _player()
+	var was: Vector2 = player.global_position
+	player.global_position = gate.global_position
+	var frames := 0
+	while not gate.get_overlapping_bodies().has(player) and frames < 10:
+		await physics_frame
+		frames += 1
+	_check(gate.player_in_range(), "숲길이 플레이어를 감지 = [E] 안내가 뜬다 (%d 물리 프레임)" % frames)
+	player.global_position = was
+
+	var forest = _base.get("forest_scene")
+	_check(forest != null and forest.can_instantiate(),
+		"갈 곳(forest_scene)이 실재한다 — 경로가 깨지면 E를 눌러도 아무 일도 안 난다")
 
 
 # ── 헬퍼 ──
@@ -272,14 +301,13 @@ func _find_body(node):
 	return null
 
 
-## 씬 안의 Area2D = 책상 (날아다니는 진도 Area2D라 호출 전에 _clear로 치워 둔다).
-func _find_area(node):
-	if node is Area2D:
-		return node
-	for c in node.get_children():
-		var found = _find_area(c)
-		if found != null:
-			return found
+## 상호작용 지점을 **zone_id로** 찾는다 (interact_zone.gd의 공개 계약).
+## ⚠ 예전엔 "씬에서 처음 나오는 Area2D = 책상"으로 찾았는데, 세션 26에 숲길이 생기면서
+## 그 가정이 깨졌다 — 게다가 **날아다니는 진도 Area2D**라 순서에 기대는 건 애초에 위태로웠다.
+func _zone(id: StringName):
+	for z in get_nodes_in_group("interact_zones"):
+		if z.zone_id == id:
+			return z
 	return null
 
 

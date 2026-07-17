@@ -1,0 +1,24 @@
+[gd_scene load_steps=4 format=3 uid="uid://c0actor01player"]
+
+[ext_resource type="Script" path="res://src/actors/player.gd" id="1_player"]
+[ext_resource type="Script" path="res://src/actors/player_caster.gd" id="2_caster"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_player"]
+radius = 10.0
+
+[node name="Player" type="CharacterBody2D"]
+collision_layer = 2
+collision_mask = 1
+script = ExtResource("1_player")
+
+[node name="Body" type="Polygon2D" parent="."]
+color = Color(0.9, 0.85, 0.75, 1)
+polygon = PackedVector2Array(-10, -10, 10, -10, 10, 10, -10, 10)
+
+[node name="Collision" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_player")
+
+[node name="Caster" type="Node2D" parent="."]
+script = ExtResource("2_caster")
+
+[node name="Camera2D" type="Camera2D" parent="."]

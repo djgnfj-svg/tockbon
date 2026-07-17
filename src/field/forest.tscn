@@ -1,0 +1,117 @@
+[gd_scene load_steps=8 format=3 uid="uid://c0field01forest"]
+
+[ext_resource type="Script" path="res://src/field/forest.gd" id="1_forest"]
+[ext_resource type="Script" path="res://src/actors/interact_zone.gd" id="2_zone"]
+[ext_resource type="PackedScene" path="res://src/actors/player.tscn" id="3_player"]
+[ext_resource type="PackedScene" path="res://src/field/forest_enemy.tscn" id="4_enemy"]
+[ext_resource type="PackedScene" path="res://src/spell/ring_spell_system.tscn" id="5_spell"]
+[ext_resource type="Script" path="res://src/hud/hud.gd" id="6_hud"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_gate"]
+size = Vector2(110, 90)
+
+[node name="Forest" type="Node2D"]
+script = ExtResource("1_forest")
+
+[node name="Ground" type="ColorRect" parent="."]
+mouse_filter = 2
+offset_left = -1200.0
+offset_top = -1000.0
+offset_right = 1200.0
+offset_bottom = 900.0
+color = Color(0.13, 0.19, 0.14, 1)
+
+[node name="Trees" type="Node2D" parent="."]
+
+[node name="Tree1" type="Polygon2D" parent="Trees"]
+position = Vector2(-330, 180)
+color = Color(0.09, 0.14, 0.1, 1)
+polygon = PackedVector2Array(-26, 16, 0, -34, 26, 16)
+
+[node name="Tree2" type="Polygon2D" parent="Trees"]
+position = Vector2(310, 200)
+color = Color(0.09, 0.14, 0.1, 1)
+polygon = PackedVector2Array(-30, 18, 0, -40, 30, 18)
+
+[node name="Tree3" type="Polygon2D" parent="Trees"]
+position = Vector2(-150, -90)
+color = Color(0.09, 0.14, 0.1, 1)
+polygon = PackedVector2Array(-24, 15, 0, -32, 24, 15)
+
+[node name="Tree4" type="Polygon2D" parent="Trees"]
+position = Vector2(180, -200)
+color = Color(0.09, 0.14, 0.1, 1)
+polygon = PackedVector2Array(-28, 17, 0, -38, 28, 17)
+
+[node name="Tree5" type="Polygon2D" parent="Trees"]
+position = Vector2(-290, -330)
+color = Color(0.09, 0.14, 0.1, 1)
+polygon = PackedVector2Array(-26, 16, 0, -34, 26, 16)
+
+[node name="Tree6" type="Polygon2D" parent="Trees"]
+position = Vector2(70, -430)
+color = Color(0.09, 0.14, 0.1, 1)
+polygon = PackedVector2Array(-30, 18, 0, -42, 30, 18)
+
+[node name="ExtractZone" type="Area2D" parent="."]
+position = Vector2(0, 300)
+collision_layer = 64
+collision_mask = 2
+script = ExtResource("2_zone")
+zone_id = &"extract"
+
+[node name="Path" type="Polygon2D" parent="ExtractZone"]
+color = Color(0.3, 0.26, 0.19, 1)
+polygon = PackedVector2Array(-34, -30, 34, -30, 44, 40, -44, 40)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="ExtractZone"]
+shape = SubResource("RectangleShape2D_gate")
+
+[node name="Prompt" type="Label" parent="ExtractZone"]
+offset_left = -60.0
+offset_top = -64.0
+offset_right = 60.0
+offset_bottom = -42.0
+text = "[E] 베이스로 귀환"
+horizontal_alignment = 1
+
+[node name="Player" parent="." instance=ExtResource("3_player")]
+position = Vector2(0, 360)
+
+[node name="Enemies" type="Node2D" parent="."]
+
+[node name="Slime1" parent="Enemies" instance=ExtResource("4_enemy")]
+position = Vector2(-180, 120)
+
+[node name="Slime2" parent="Enemies" instance=ExtResource("4_enemy")]
+position = Vector2(150, 60)
+
+[node name="Slime3" parent="Enemies" instance=ExtResource("4_enemy")]
+position = Vector2(-60, -40)
+
+[node name="Slime4" parent="Enemies" instance=ExtResource("4_enemy")]
+position = Vector2(240, -140)
+
+[node name="Slime5" parent="Enemies" instance=ExtResource("4_enemy")]
+position = Vector2(-260, -180)
+
+[node name="Slime6" parent="Enemies" instance=ExtResource("4_enemy")]
+position = Vector2(60, -280)
+
+[node name="Slime7" parent="Enemies" instance=ExtResource("4_enemy")]
+position = Vector2(-120, -390)
+
+[node name="RingSpellSystem" parent="." instance=ExtResource("5_spell")]
+z_index = 10
+
+[node name="Hud" type="CanvasLayer" parent="."]
+
+[node name="Hud" type="Control" parent="Hud"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("6_hud")
+hint_text = "WASD=이동 · 좌클릭=발사 · 1~4=슬롯 · 들어온 자리(남쪽)에서 E=귀환"
+show_hp = true

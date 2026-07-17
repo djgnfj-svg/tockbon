@@ -2,18 +2,22 @@ extends Node2D
 ## 베이스(허브) — 익스트랙션 루프의 귀환 지점.
 ## 책상에서 E를 누르면 **고리 조립 책**(진·룬·문양)이 베이스 위에 뜬다.
 ## 씬 전환 없음 — ESC로 닫으면 베이스가 그대로 뒤에 남는다.
-## 원정(필드)은 아직 없음 — 지금은 베이스 + 탁본 책상 + **연습장(허수아비)**까지.
+## 왼쪽 숲길에서 E를 누르면 **원정**을 나간다 (씬 전환 — 세션 26).
 ##
 ## 🔴 여기가 **게임의 진입점**이다 (project.godot run/main_scene, 사용자 확정 세션 21).
 ## 세션 22에 폴더가 `src/playground` → `src/base`로 바뀌었다 — "버려도 되는 실험"이라는
 ## 거짓 신호 때문에 리드가 세션 21에 엉뚱한 씬을 띄워 "다 사라졌다"고 헤맸다.
 ##
-## 🔴 M1 (세션 22): 책을 preload가 아니라 **@export로 받는다** — 진입 씬은 조합 루트라 모듈을
+## 🔴 M1 (세션 22): 책·숲을 preload가 아니라 **@export로 받는다** — 진입 씬은 조합 루트라 모듈을
 ## 조립하는 게 정당했지만(그래서 preload도 위반은 아니었다), 씬을 인스펙터에서 갈아 끼울 수 있으면
-## 규칙 논쟁 자체가 사라진다. 계약은 여전히 셋뿐: open() / design_committed / closed.
+## 규칙 논쟁 자체가 사라진다. 책의 계약은 여전히 셋뿐: open() / design_committed / closed.
 ##
 ## 🔴 세션 24: **그린 마법진을 여기서 쏜다.** 그전엔 잘 그려 위력을 올려도 확인할 데가 시험대뿐이라,
 ## 본 게임에서는 손그림 점수가 **보이지 않는 숫자**였다. 이제 책상 옆이 연습장(허수아비)이다.
+##
+## 🔴 세션 26: **조준·발사·슬롯이 여기 없다** — `src/actors/player_caster.gd`가 쥔다.
+## 숲이 같은 로직을 필요로 하는데, 복사하면 **`to_assembly()`를 빼먹는 함정까지 복사된다**
+## (그러면 손그림 점수가 조용히 빠져 기준 위력으로 나간다). 여기는 caster를 HUD에 잇기만 한다.
 ##
 ## 씬(base.tscn) 쪽 결정 — .tscn엔 주석을 못 달아서 여기 적는다:
 ##  • `RingSpellSystem`은 **@export가 아니라 씬에 직접 인스턴스**로 놨다. 책(forge_scene)과 달리
@@ -23,114 +27,65 @@ extends Node2D
 ##    가려 안 보인다**. 시험대가 같은 함정을 세션 13에 밟았다.
 ##  • 허수아비 5개는 전부 플레이어 시작점에서 **사거리 안**(≈390px = 260px/s × 1.5s, balance)에 있다.
 ##    더 멀리 두면 걸어가서 쏘기 전엔 안 닿아 연습장이 장식이 된다 (tests/test_base_auto가 못 박는다).
-##  • Player = 레이어 2(player) / Desk = 레이어 64(interaction). 🔴 둘 다 기본 레이어 1(**world**)에
-##    있었는데, 캐리어 마스크가 5(world+enemy)라 **쏘는 순간 내 몸에 부딪혀 총구에서 죽었다**
-##    (책상 쪽으로 쏘면 책상에서). 레이어 이름표(project.godot)대로 옮겨서 푼 것이다.
-##    Desk의 마스크는 2 — 플레이어를 감지해야 "[E] 탁본"이 뜬다.
+##  • Player = 레이어 2(player) / Desk·ForestGate = 레이어 64(interaction). 🔴 전부 기본 레이어
+##    1(**world**)에 있었는데, 캐리어 마스크가 5(world+enemy)라 **쏘는 순간 내 몸에 부딪혀 총구에서
+##    죽었다** (책상 쪽으로 쏘면 책상에서). 레이어 이름표(project.godot)대로 옮겨서 푼 것이다.
+##    상호작용 지점의 마스크는 2 — 플레이어를 감지해야 "[E]"가 뜬다.
 ##  • 🔴 **`Ground.mouse_filter = 2`(IGNORE) — 지우면 발사가 통째로 죽는다** (세션 25).
 ##    Ground는 화면을 다 덮는 ColorRect인데 **Control의 기본 mouse_filter는 STOP**이라,
 ##    바닥이 좌클릭을 전부 먹어 `_unhandled_input`까지 오지 않았다 → `_fire()`가 아예 안 불렸다.
 ##    사용자: *"마법진이 다 그려져도 발사가 안됨"* → *"좌클릭이 안먹나?"* (사용자가 맞혔다).
 ##    ⚠ **에러도 경고도 없다** — 레이어 함정(위)과 같은 종류의 침묵이다. 그리고 리드의 검증이
 ##    전부 `_fire()` 직접 호출/액션 주입이라 **Control 계층을 건너뛰어** 두 세션을 못 잡았다.
-##    tests/test_base_auto가 이제 **진짜 마우스 이벤트를 뷰포트에 밀어** 넣어 못 박는다.
-##    (같은 이유로 BaseHud도 IGNORE다 — base_hud.gd `_ready` 참조.)
+##    (같은 이유로 HUD도 IGNORE다 — hud.gd `_ready` 참조.)
 
 const RingForgePanelScript := preload("res://src/drawing/ring_forge_panel.gd")
-const Desk := preload("res://src/base/desk.gd")
-const BaseHud := preload("res://src/base/base_hud.gd")
+const InteractZone := preload("res://src/actors/interact_zone.gd")
+const Player := preload("res://src/actors/player.gd")
+const Hud := preload("res://src/hud/hud.gd")
 ## 🔴 위력 표시는 여기서 계산하지 않는다 — 리포트·발사·HUD가 **같은 함수**를 본다 (core에 있는 이유).
 const RingPower := preload("res://src/core/ring_power.gd")
 
 ## 책상에서 펴는 책 (base.tscn이 ring_forge_panel.tscn을 물려 준다).
 @export var forge_scene: PackedScene = preload("res://src/drawing/ring_forge_panel.tscn")
+## 숲길에서 나가는 원정 (세션 26).
+@export var forest_scene: PackedScene = preload("res://src/field/forest.tscn")
 
-## 조준선 길이 (연출값 — 밸런스 아님).
-const AIM_FROM := 14.0
-const AIM_TO := 34.0
-const AIM_ARMED := Color(0.95, 0.65, 0.25, 0.85)
-const AIM_EMPTY := Color(0.6, 0.6, 0.6, 0.35)
-
-@onready var _desk: Desk = $Desk
-@onready var _player: CharacterBody2D = $Player
-@onready var _aim_node: Node2D = $Player/Aim   # 조준선만 그리는 빈 노드 (플레이어 로컬 좌표)
-@onready var _hud: BaseHud = $Hud/BaseHud
+@onready var _desk: InteractZone = $Desk
+@onready var _gate: InteractZone = $ForestGate
+@onready var _player: Player = $Player
+@onready var _hud: Hud = $Hud/Hud
 
 var _overlay: CanvasLayer = null
 var _forge: RingForgePanelScript = null
 
-var _aim := Vector2.RIGHT
-var _slot: int = 0        # 지금 고른 장착 슬롯 (1~4 키)
-
 func _ready() -> void:
 	_desk.interacted.connect(_open_drawing)
-	_aim_node.draw.connect(_draw_aim)
-	_hud.select(_slot)
+	_gate.interacted.connect(_to_forest)
+	_player.caster.notice.connect(_hud.say)
+	_player.caster.slot_changed.connect(_hud.select)
+	_hud.select(_player.caster.slot())
 
-# ─────────────────────────── 조준 · 발사 ───────────────────────────
+# ─────────────────────────── 원정 ───────────────────────────
 
-## 책이 펼쳐져 있는 동안은 베이스가 조작을 받지 않는다 (조준·발사·슬롯 전부).
-## `_forge`로 본다 — `is_open()`은 덮는 애니가 끝날 때까지 참이라, 그동안 클릭이 새어 나가면
-## 책을 덮는 클릭이 그대로 발사가 된다.
-func _is_book_open() -> bool:
-	return _forge != null
-
-func _process(_delta: float) -> void:
-	if _is_book_open():
+## 🔴 출격이 **HP를 되돌리지 않는다** — 그건 숲이 한다 (forest.gd `_ready`).
+## 여기서 하면 "베이스에서 나갈 때만" 만HP고, 시험대·다른 진입 경로로 숲에 들어가면 조용히 다르다.
+func _to_forest() -> void:
+	if _overlay != null:   # 책을 펴 놓고 E를 눌러 나가면 책이 열린 채 씬이 바뀐다
 		return
-	var to_mouse := get_global_mouse_position() - _player.global_position
-	if to_mouse.length_squared() > 1.0:
-		_aim = to_mouse.normalized()
-	_aim_node.queue_redraw()
-
-func _unhandled_input(event: InputEvent) -> void:
-	if _is_book_open():
-		return
-	for i in GameState.EQUIP_SLOTS:
-		if event.is_action_pressed(StringName("cast_slot_%d" % (i + 1))):
-			_select_slot(i)
-			get_viewport().set_input_as_handled()
-			return
-	# 🔴 발사는 **좌클릭만**이다 (사용자 확정). Space는 발사가 아니다 —
-	# 시험대(test_ring_forge_panel)가 Space도 받는 건 시험대 사정이고 본 게임은 아니다.
-	# Space를 다른 용도로 임의 배정하지도 마라: 그건 사용자가 정할 몫이다.
-	if event.is_action_pressed(&"attack_basic"):
-		_fire()
-		get_viewport().set_input_as_handled()
-
-func _select_slot(slot: int) -> void:
-	_slot = slot
-	_hud.select(slot)
-	var design: RingDesign = GameState.ring_equipped[slot]
-	if design == null:
-		_hud.say("슬롯 %d — 비어 있다. 책상에서 E로 마법진을 그려 채워라" % (slot + 1))
-	else:
-		_hud.say("슬롯 %d — %s (위력 %d)" % [slot + 1, design.display_name,
-			RingPower.power_display(design.total_score)])
-	_aim_node.queue_redraw()
-
-## 🔴 `to_assembly()`로 쏜다 — 그래야 `assembly.score`(손그림 점수)가 실려 **그때 그린 위력이 그대로
-## 난다**. 직접 Dictionary를 만들면 score가 빠져 조용히 기준 위력으로 발사된다 (ring_design.gd 주석).
-func _fire() -> void:
-	var design: RingDesign = GameState.ring_equipped[_slot]
-	if design == null:
-		_hud.say("슬롯 %d이 비어 있다 — 1~4로 다른 슬롯을 고르거나 책상에서 E" % (_slot + 1), true)
-		return
-	EventBus.ring_cast_requested.emit(design.to_assembly(), _player.global_position, _aim)
-
-## 조준선 — 장착됐으면 불빛, 빈 슬롯이면 흐리게. 쏘기 전에 슬롯 상태가 손끝에서 보인다.
-func _draw_aim() -> void:
-	var armed := GameState.ring_equipped[_slot] != null
-	_aim_node.draw_line(_aim * AIM_FROM, _aim * AIM_TO,
-		AIM_ARMED if armed else AIM_EMPTY, 2.0)
+	get_tree().change_scene_to_packed(forest_scene)
 
 # ─────────────────────────── 고리 조립 책 ───────────────────────────
 
 ## 책상에서 E — 고리 조립 책을 편다. 이미 열려 있으면 무시.
+## 🔴 책이 펼쳐지는 순간 caster를 끈다 — 안 끄면 **책을 덮는 클릭이 그대로 발사가 된다.**
+## 끄는 시점을 `_forge`(패널 인스턴스)에 묶는 이유: 패널의 `is_open()`은 덮는 애니가 끝날 때까지
+## 참이라, 그동안 클릭이 새어 나간다.
 func _open_drawing() -> void:
 	if _overlay != null:
 		return
 	_player.set_physics_process(false)  # 조립하는 동안 이동 정지
+	_player.caster.enabled = false      # 조준선·발사·슬롯 정지
 	_overlay = CanvasLayer.new()
 	_overlay.layer = 10
 	add_child(_overlay)
@@ -163,3 +118,4 @@ func _close_drawing() -> void:
 		_overlay = null
 		_forge = null
 	_player.set_physics_process(true)
+	_player.caster.enabled = true
