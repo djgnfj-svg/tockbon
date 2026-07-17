@@ -66,6 +66,26 @@ const SCALE_STEP := 0.06
 const GLYPH_SCALE_MIN := 0.55
 const GLYPH_SCALE_MAX := 1.85
 
+# ── 🔴 문양 화살표의 크기·생김새 (세션 25) ────────────────────────────────────────
+# 사용자: *"문양 부분이 좀 별로인게 한 획만 검증하니? 여러획쓸꺼같아서 화살표는"*
+#
+# **화살촉이 그릴 값어치를 가지려면 붓보다 커야 한다.** 세션 25 초에 실측한 옛 수치
+# (0.12 / 0.5 / 0.34)는 이랬다: 판 반지름 118px → 문양 반길이 14px인데 **붓의 드러남
+# 반경이 9.4px**(REVEAL_RADIUS_FRAC 0.08)라, 화살촉 점 전체가 몸통 끝에서 **최대 8.6px** —
+# 즉 몸통을 긋는 순간 화살촉이 통째로 드러났다. 화살표가 **붓 한 자국 크기**였던 것이다.
+# 화살촉은 못 그리는 게 아니라 **그릴 이유가 없었다**.
+#
+# 새 수치의 근거 (반지름 118px 기준):
+#   • 반길이 = 118 × 0.17 ≈ 20px → 전체 40px. 8칸 고리의 이웃 간격은 54px이라 안 겹친다
+#   • 깃 벌어짐 = 20 × 0.62 ≈ 12.4px > 9.4px → **몸통을 그어도 깃은 안 드러난다**
+#     (깃이 몸통에서 옆으로 이만큼 떨어져 있다 — 이 값이 드러남 반경보다 작으면 옛 문제가 그대로다)
+#   • 깃 ~ 머리 거리 = 20 × √(0.5²+0.62²) ≈ 16px > 9.4px → 머리를 찍어도 안 드러난다
+# ⚠ 셋 중 하나라도 만지면 `REVEAL_RADIUS_FRAC`(붓)과의 비율을 다시 재라. 테스트가
+#   「한 획으로는 문양이 안 끝난다」를 못 박지만, 이유는 여기 적힌 비율이다.
+const GLYPH_SIZE_FRAC := 0.17
+const ARROW_BACK_FRAC := 0.5
+const ARROW_SIDE_FRAC := 0.62
+
 ## 🔴 칸을 고르는 **최대 거리** (세션 22, I3 버그 수정). 이 밖을 클릭하면 칸을 안 바꾼다.
 ## 예전엔 컷오프가 없어서 판 아무 데나 클릭해도 최근접 열린 칸이 잡혔고, select_slot이
 ## 현재 칸 coverage > COMMIT_COVER면 **자동 확정**해 버렸다 → **칸 0을 그리다 획을 칸 2 쪽에
@@ -248,15 +268,15 @@ func _build_guide(target: int, slot: int) -> PackedVector2Array:
 				var p := _slot_pos(slot)
 				var outward := Vector2.from_angle(_slot_angle(slot))
 				var dir := outward if _active == G_RADIATE else -outward   # 응집 = 룬 쪽으로
-				var sz := ro * 0.12 * _glyph_scale_of(slot)
+				var sz := ro * GLYPH_SIZE_FRAC * _glyph_scale_of(slot)
 				var tail := p - dir * sz
 				var head := p + dir * sz
 				for t in 9:                                   # 몸통
 					pts.append(tail.lerp(head, float(t) / 8.0))
 				# 화살촉 — **한붓그리기**(머리→왼깃→머리→오른깃)라 가이드 한 줄로 화살표가 된다.
 				# 손은 몇 획으로 나눠 그어도 된다 (세션 25에 획 누적을 고쳤다).
-				var back := -dir * (sz * 0.5)
-				var side := dir.orthogonal() * (sz * 0.34)
+				var back := -dir * (sz * ARROW_BACK_FRAC)
+				var side := dir.orthogonal() * (sz * ARROW_SIDE_FRAC)
 				for w in [head + back + side, head + back - side]:
 					for t in range(1, 5):
 						pts.append(head.lerp(w, float(t) / 4.0))

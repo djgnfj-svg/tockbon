@@ -45,6 +45,7 @@ func _run() -> void:
 	_test_strokes_accumulate()
 	_test_clear_stroke_wipes()
 	_test_jin_rune_need_picking()
+	_test_arrowhead_must_be_drawn()
 
 	if failures == 0:
 		print("TEST_RING_TRACE_OK — 전 항목 통과")
@@ -217,6 +218,43 @@ func _test_jin_rune_need_picking() -> void:
 	_check(String(b.call(&"advance")) == "none", "룬을 안 고른 채 [다음] = 무동작")
 	b.call(&"choose_rune")
 	_check(b.call(&"guide_points").size() > 2, "룬을 고르면 밑그림이 선다")
+	b.queue_free()
+
+
+# ── 🔴 ⑰ 화살촉은 **따로 그어야 한다** — 한 획으로 문양이 안 끝난다 (세션 25) ──
+# 사용자: *"문양 부분이 좀 별로인게 한 획만 검증하니? 여러획쓸꺼같아서 화살표는"*
+# 🔴 옛 수치(GLYPH_SIZE 0.12 / SIDE 0.34)에선 문양 전체가 **붓 한 자국 크기**였다:
+# 반지름 118px → 문양 반길이 14px인데 붓의 드러남 반경이 9.4px라, 화살촉 점 전체가
+# 몸통 끝에서 최대 8.6px — **몸통만 그으면 화살촉이 통째로 드러났다**. 화살촉은 못 그리는 게
+# 아니라 **그릴 이유가 없었다**. 그래서 화살표인데 한 획이면 끝났다.
+# 이 테스트는 「몸통만으로는 완성이 안 된다」를 못 박는다 — 크기를 도로 줄이면 여기서 걸린다.
+func _test_arrowhead_must_be_drawn() -> void:
+	var b = _make_board()
+	_rub_exact(b)
+	b.call(&"advance")            # 진
+	_rub_exact(b)
+	b.call(&"advance")            # 룬 → 문양 단계
+	b.call(&"select_slot", 0)
+	var g = b.call(&"guide_points")
+	_check(g.size() > 9, "화살표 밑그림 = 몸통 + 화살촉 (%d점)" % g.size())
+
+	# 몸통(앞 9점)만 긋는다 — 화살촉은 손도 안 댄다
+	b.call(&"begin_stroke")
+	for i in 9:
+		b.call(&"trace_stroke", g[i])
+	var body_only := float(b.call(&"coverage"))
+	_check(body_only < 0.9,
+		"🔴 몸통만 그으면 문양이 안 끝난다 (%.2f) — 붓보다 화살촉이 커야 한다" % body_only)
+
+	# 화살촉을 **두 번째 획**으로 얹는다 (펜을 뗐다 다시 댄다)
+	b.call(&"begin_stroke")
+	for i in range(9, g.size()):
+		b.call(&"trace_stroke", g[i])
+	var with_head := float(b.call(&"coverage"))
+	_check(with_head > body_only + 0.1,
+		"화살촉을 그으면 완성도가 오른다 (%.2f → %.2f)" % [body_only, with_head])
+	_check(with_head > 0.95, "몸통+화살촉 = 완성 (%.2f)" % with_head)
+	_check((b.call(&"trace_strokes") as Array).size() == 2, "두 획이 따로 남는다")
 	b.queue_free()
 
 
