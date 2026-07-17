@@ -47,9 +47,13 @@ const Hud := preload("res://src/hud/hud.gd")
 const RingPower := preload("res://src/core/ring_power.gd")
 
 ## 책상에서 펴는 책 (base.tscn이 ring_forge_panel.tscn을 물려 준다).
+## 🔴 여긴 PackedScene이어도 된다 — **책은 base를 안 문다**(순환이 아니다). 아래와 대비된다.
 @export var forge_scene: PackedScene = preload("res://src/drawing/ring_forge_panel.tscn")
-## 숲길에서 나가는 원정 (세션 26).
-@export var forest_scene: PackedScene = preload("res://src/field/forest.tscn")
+## 숲길에서 나가는 원정 (세션 26) — 🔴 **PackedScene이 아니라 경로다. 바꾸지 마라.**
+## base가 forest를 preload하고 forest가 base를 preload하면 **순환**이라, 먼저 로드되는 쪽의
+## 상대가 **노드 0개짜리 껍데기**로 굳는다 → 숲에서 귀환·사망해도 베이스로 못 돌아간다.
+## 자세한 근거는 `forest.gd`의 `base_scene_path` 주석. **헤드리스는 이걸 못 잡는다.**
+@export_file("*.tscn") var forest_scene_path: String = "res://src/field/forest.tscn"
 
 @onready var _desk: InteractZone = $Desk
 @onready var _gate: InteractZone = $ForestGate
@@ -73,7 +77,7 @@ func _ready() -> void:
 func _to_forest() -> void:
 	if _overlay != null:   # 책을 펴 놓고 E를 눌러 나가면 책이 열린 채 씬이 바뀐다
 		return
-	get_tree().change_scene_to_packed(forest_scene)
+	get_tree().change_scene_to_file(forest_scene_path)
 
 # ─────────────────────────── 고리 조립 책 ───────────────────────────
 

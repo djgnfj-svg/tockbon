@@ -62,8 +62,14 @@
 > 복사된다**(손그림 점수가 조용히 빠져 기준 위력이 된다).
 > 🔴 **출격이 HP를 채운다**(`forest.gd _ready`) — 안 그러면 **죽는 게 이득**이 된다(벌이 없으니
 > 다친 몸으로 걸어 돌아오느니 그 자리에서 죽는 게 싸다). **베이스가 아니라 숲이 한다.**
-> ⚠ **저장이 조용히 안 돈다** — `SaveManager._ready_to_save=false`(실측). 세션 21에 부팅 흐름이
-> 지워져 `load_game()`을 아무도 안 부른다 → 껐다 켜면 그린 마법진이 사라진다 (BACKLOG **F3**).
+> ✅ **저장이 돈다** (F3, 사용자 확정: *"켜면 이어서 한다"*) — `SaveManager._ready` → `load_game()`.
+> 그전엔 세션 21에 부팅 흐름이 지워져 **아무도 안 불러** 모든 저장이 조용히 return했다(껐다 켜면
+> 마법진이 사라졌다). ⚠ **새 게임 수단이 없다** — 지우려면 `SaveManager.wipe_save()`뿐이다.
+> 🔴 **씬끼리 PackedScene으로 물지 마라 — `@export_file` 경로 + `change_scene_to_file`이다.**
+> base⇄forest **순환 preload**로 숲의 `base_scene`이 **노드 0개 껍데기**가 돼 귀환·사망해도
+> 베이스로 못 돌아갔다. **헤드리스는 절대 못 잡는다**(테스트가 forest를 먼저 로드하면 안 깨진다) —
+> **베이스로 부팅한 실제 게임에서만** 드러났다. `forge_scene`이 PackedScene이어도 되는 건
+> **책이 base를 안 물어 순환이 아니기 때문**이다.
 >
 > 🔴 **다음 세션이 제일 먼저 할 일 = 사용자가 직접 해 보고 정하기.** 원정 손맛(F4)도 문양
 > 손맛(R2a)도 판정 반경·65점 기준선(R3)도 **리드가 못 정한다** — 측정이 전부 시뮬레이션이다
@@ -156,7 +162,7 @@
 방치됐다** (세션 8에 발견·복구).
 
 ```bash
-./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_save_auto.gd            # 저장/로드 (고리 라운드트립)
+./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_save_auto.gd            # 저장/로드 (고리 라운드트립) · 🔴**부팅만으로 자동 저장이 준비되나**(세션 26 F3 — 이 확인은 `load_game()` **호출 전**에 있어야 한다. 순서가 곧 검출력이다)
 ./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_ring_assembly_auto.gd   # **조립 상태기계 계약**: 단계 전이·문양본이 칸을 여는 규칙·assembly 발사 계약·시그널 (세션 22)
 ./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_ring_trace_auto.gd      # **손그림 탁본**: 완성도/정밀도·[다음] 수동 진행·칸 자유 편집·I3 · **정밀도 이빨(⑨⑩)·펜 보정(⑪⑫)**
 ./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_ring_spell_auto.gd      # **고리 발사**: 진→투사체·착탄 전개(발산 탄환·응집 기둥)·실제 적 take_hit

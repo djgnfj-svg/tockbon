@@ -12,12 +12,27 @@ const RING_DIR := "user://save/rings"
 ## 로드(또는 새 게임 확정) 이전의 자동 저장 방지
 var _ready_to_save := false
 
+## 🔴 **부팅 시 1회 로드** (세션 26 — 사용자 확정: *"켜면 이어서 한다"*).
+##
+## 세션 21 대청소가 **부팅 흐름을 지우면서 `load_game()`을 부르는 사람이 아무도 안 남았다.**
+## 그래서 `_ready_to_save`가 영원히 false였고 → `save_game()`이 **전부 조용히 return**했다:
+## 귀환·사망·하루시작 자동 저장이 셋 다 no-op이었고, **게임을 껐다 켜면 그린 마법진이
+## 통째로 사라졌다.** 에러도 경고도 없다 — 세이브가 아예 안 만들어지니 로드가 실패할 일도 없다.
+## 세션 26에 숲 귀환을 붙이면서 드러났다 (`extraction_success`를 쏴도 아무 일도 안 났다).
+##
+## 🔴 **여기가 부를 자리인 이유**: SaveManager는 오토로드 **마지막**이라(project.godot) GameState·
+## Clock·Db가 이미 서 있고, 오토로드는 **부팅에 딱 한 번** _ready한다. 씬에서 부르면 안 된다 —
+## `base.tscn`은 숲에서 돌아올 때마다 다시 _ready하므로 **귀환할 때마다 세이브를 덮어 로드해**
+## 그 판의 진행을 날린다.
+##
+## 세이브가 없으면 `load_game()`이 false를 돌려주고 `_ready_to_save`만 켠다 = 새 게임.
 func _ready() -> void:
 	EventBus.extraction_success.connect(save_game)
 	EventBus.bag_lost.connect(save_game)
 	EventBus.day_started.connect(func(_day: int) -> void:
 		if _ready_to_save:
 			save_game())
+	load_game()
 
 func has_save() -> bool:
 	return FileAccess.file_exists(SAVE_PATH)

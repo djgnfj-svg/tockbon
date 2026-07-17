@@ -244,9 +244,13 @@ func _test_forest_gate_leads_out() -> void:
 	_check(gate.player_in_range(), "숲길이 플레이어를 감지 = [E] 안내가 뜬다 (%d 물리 프레임)" % frames)
 	player.global_position = was
 
-	var forest = _base.get("forest_scene")
-	_check(forest != null and forest.can_instantiate(),
-		"갈 곳(forest_scene)이 실재한다 — 경로가 깨지면 E를 눌러도 아무 일도 안 난다")
+	# ⚠ **경로**를 확인한다 (PackedScene이 아니라) — base⇄forest 순환 preload를 피한 결과다
+	# (base.gd `forest_scene_path` 주석). 순환이면 상대가 노드 0개 껍데기로 굳는데,
+	# 🔴 **헤드리스는 그걸 못 잡는다**: 여기선 base.tscn을 먼저 로드하므로 forest preload가
+	# 멀쩡히 끝난다. 실제 게임(베이스로 부팅)에서만 깨졌다.
+	var path: String = str(_base.get("forest_scene_path"))
+	_check(ResourceLoader.exists(path),
+		"갈 곳(%s)이 실재한다 — 경로가 깨지면 E를 눌러도 아무 일도 안 난다" % path)
 
 
 # ── 헬퍼 ──

@@ -65,6 +65,12 @@ func _test_scene_wired() -> void:
 	_check(_enemies().size() >= 3, "적이 3마리 이상 (실제 %d)" % _enemies().size())
 	_check(_player() != null, "플레이어가 그룹 \"player\"에 있다 = 적이 나를 찾을 수 있다")
 	_check(_zone(&"extract") != null, "귀환 지점(zone_id=extract)이 있다")
+	# ⚠ **경로**로 확인한다 — PackedScene으로 두면 base⇄forest **순환 preload**가 생겨
+	# 돌아갈 곳이 노드 0개 껍데기로 굳는다 (forest.gd `base_scene_path` 주석).
+	# 🔴 **이 확인은 그 버그를 못 잡는다**: 여기선 forest.tscn을 먼저 로드하므로 base preload가
+	# 멀쩡히 끝난다. **베이스로 부팅한 실제 게임에서만** 깨졌다 — 잡는 건 경로라는 설계지 이 줄이 아니다.
+	var back: String = str(_forest.get("base_scene_path"))
+	_check(ResourceLoader.exists(back), "돌아갈 곳(%s)이 실재한다" % back)
 	# 발사 시스템의 존재는 **행동으로** 확인한다 — 노드 이름이 아니라 "쏘면 진이 생기나".
 	_bus.ring_cast_requested.emit(_assembly(1.0), Vector2(9000, 9000), Vector2(1, 0))
 	await physics_frame

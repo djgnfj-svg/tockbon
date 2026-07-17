@@ -31,9 +31,19 @@ const InteractZone := preload("res://src/actors/interact_zone.gd")
 const Player := preload("res://src/actors/player.gd")
 const Hud := preload("res://src/hud/hud.gd")
 
-## 돌아갈 곳. 🔴 @export인 이유 = base.gd의 `forge_scene`과 같다 (세션 22 M1): 씬을 인스펙터에서
-## 갈아 끼울 수 있으면 "모듈이 모듈을 preload한다"는 규칙 논쟁 자체가 사라진다.
-@export var base_scene: PackedScene = preload("res://src/base/base.tscn")
+## 돌아갈 곳 — 🔴 **PackedScene이 아니라 경로다. 바꾸지 마라.**
+##
+## 처음엔 `@export var base_scene: PackedScene = preload(...)`로 썼다 (base.gd의 `forge_scene`
+## 선례를 따라서). **그게 순환 preload를 만들었다**: base.gd가 forest.tscn을 preload하고 forest.gd가
+## 다시 base.tscn을 preload한다 → 베이스로 부팅하면 base.tscn이 **아직 로드 중**일 때 forest.gd가
+## 그걸 preload해서, `base_scene`이 **노드 0개짜리 껍데기**로 굳는다.
+## 결과: 숲에서 귀환·사망해도 **베이스로 못 돌아간다** (`Parameter "new_scene" is null`).
+##
+## 🔴 **경로 문자열엔 로드 시점이 없다** — 전환할 때 처음 읽으므로 순환이 성립하지 않는다.
+## `forge_scene`이 PackedScene이어도 되는 이유는 **책이 base를 안 물기 때문**이다(순환이 아니다).
+## ⚠ 헤드리스는 이걸 못 잡는다: 테스트가 forest.tscn을 **먼저** 로드하므로 base preload가
+## 멀쩡히 끝난다. **베이스로 부팅한 실제 게임에서만** 껍데기가 된다 (세션 26에 실측).
+@export_file("*.tscn") var base_scene_path: String = "res://src/base/base.tscn"
 
 ## 쓰러진 뒤 베이스로 돌아가기까지 (초) — 연출값. 0이면 뭘 맞고 죽었는지 못 보고 화면이 바뀐다.
 const DEATH_BEAT_SEC := 0.9
@@ -89,4 +99,4 @@ func _die() -> void:
 
 
 func _to_base() -> void:
-	get_tree().change_scene_to_packed(base_scene)
+	get_tree().change_scene_to_file(base_scene_path)

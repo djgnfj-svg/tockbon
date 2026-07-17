@@ -22,10 +22,29 @@ func _run() -> void:
 	var gs: Node = root.get_node("GameState")
 	var clock: Node = root.get_node("Clock")
 	var sm: Node = root.get_node("SaveManager")
+	var bus: Node = root.get_node("EventBus")
 
 	# 클린 시작
 	sm.wipe_save()
 	_check("초기: 세이브 없음", not sm.has_save())
+
+	# 🔴 [F3 회귀 · 세션 26] **부팅만으로 자동 저장이 준비된다.**
+	#
+	# 세션 21 대청소가 부팅 흐름을 지우면서 `load_game()`을 부르는 사람이 아무도 안 남았다
+	# → `_ready_to_save`가 영원히 false → `save_game()`이 **전부 조용히 return** →
+	# **게임을 껐다 켜면 그린 마법진이 통째로 사라졌다.** 에러도 경고도 없었다.
+	#
+	# 🔴 **이 테스트는 그 버그를 두 세션 동안 못 잡았다 — 검출력이 0이었다.** 아래 「로드: true」가
+	# `load_game()`을 **테스트가 직접 불러서** `_ready_to_save`를 켜 줬기 때문이다. 게임은 아무도
+	# 안 부르는데 테스트만 불러 준 셈이라, 이후의 저장 검증이 전부 **거짓 초록불**이었다.
+	# → 그래서 이 확인은 **`load_game()`을 부르기 전**에 있어야 한다. 순서가 곧 검출력이다.
+	#
+	# 공개 계약으로만 본다: 귀환(`extraction_success`)했는데 세이브 파일이 생기나.
+	bus.extraction_success.emit()
+	_check("🔴 부팅만으로 귀환 자동 저장이 실제로 돈다 (SaveManager._ready → load_game)",
+		sm.has_save())
+	sm.wipe_save()
+
 	_check("초기: 로드 false (새 게임)", not sm.load_game())
 
 	# 시드
