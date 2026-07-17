@@ -136,9 +136,13 @@ func _test_my_spell_can_hit_and_kill() -> void:
 	await _fresh()
 	var enemy = _enemies()[0]
 	var hits := []
-	_bus.enemy_hit.connect(func(who, dmg, _rune) -> void:
+	# 🔴 Callable을 붙잡아 뒤에서 **끊는다.** 안 끊으면 아래 take_hit이 `enemy`를 지운 뒤에도
+	# 람다가 살아, 이후 테스트([8])가 다른 적을 죽여 enemy_hit을 쏠 때마다 죽은 캡처가 발화해
+	# "Lambda capture was freed" 에러를 쏟는다 (테스트는 통과해도 로그가 오염된다).
+	var on_hit := func(who, dmg, _rune) -> void:
 		if who == enemy:
-			hits.append(dmg))
+			hits.append(dmg)
+	_bus.enemy_hit.connect(on_hit)
 	var from: Vector2 = enemy.global_position + Vector2(-120, 0)
 	_bus.ring_cast_requested.emit(_assembly(1.0), from, Vector2(1, 0))
 	var frames := 0
@@ -154,6 +158,7 @@ func _test_my_spell_can_hit_and_kill() -> void:
 	await process_frame
 	_check(_enemies().size() == before - 1,
 		"치명타를 맞은 적이 사라진다 (%d → %d)" % [before, _enemies().size()])
+	_bus.enemy_hit.disconnect(on_hit)
 
 
 ## [6] 🔴 귀환 = `extraction_success`. 수신자(GameState 가방 정산 · SaveManager 자동 저장)는
@@ -192,28 +197,38 @@ func _test_death_loses_the_bag() -> void:
 
 
 ## [8] 🔴 적을 죽이면 **드롭이 가방에 담긴다** (세션 27 — 사용자: "드롭을 먼저").
-## 슬라임은 `mat_slime_core` chance 0.6 하나뿐이라 확률이다 — 여러 번 죽여 **하나라도**
-## 담기는지 본다(0.6이면 10마리에 사실상 확실). "안 담긴다"(호출 누락)와 "가끔 안 나온다"
-## (확률)를 가르려고 표본을 키운다.
+## 세션 30에 숲이 비엘리트 5종(슬라임·안개·사냥개·덩굴·갑충)으로 늘었다 — 드롭이 전부 확률이라
+## **여럿을 죽여 하나라도** 담기는지 본다. "안 담긴다"(호출 누락)와 "가끔 안 나온다"(확률)를
+## 가르려 표본을 키운다(8마리 중 갑충 0.9·사냥개 0.8·안개 0.7 등이 섞여 사실상 확실).
 func _test_kill_drops_into_bag() -> void:
 	print("[8] 적을 죽이면 드롭이 가방에 담긴다")
 	await _fresh()
 	_gs.bag.clear()
 	var enemies := _enemies()
 	_check(enemies.size() >= 5, "표본이 되는 적이 충분하다 (%d)" % enemies.size())
+
+	# 배치된 적들의 드롭 테이블 합집합 — 담긴 건 반드시 이 안의 id여야 한다 (엉뚱한 id 방지).
+	# 🔴 공개 API로만: enemy_id(@export) + Db.get_enemy. 내부 _def를 더듬지 않는다(리팩터 함정).
+	var db = root.get_node("/root/Db")
+	var valid := {}
+	for e in enemies:
+		var def = db.get_enemy(e.enemy_id)
+		if def != null:
+			for d in def.drops:
+				valid[d.item_id] = true
+
 	for e in enemies:
 		e.take_hit(9999.0, 0, 0, 0.0)
 	await process_frame
-	# 슬라임 7 × 0.6 → 기대 4.2개. 하나도 안 담기면 호출이 누락된 것이다(확률로는 (0.4)^7≈0.16%).
 	var total := 0
 	for entry: Dictionary in _gs.bag:
 		total += int(entry["count"])
 	_check(total > 0, "적 %d마리를 죽이면 가방에 뭔가 담긴다 (실제 %d개 — 0이면 _die가 드롭을 안 굴린 것)"
 		% [enemies.size(), total])
-	# 담긴 게 있으면 그건 이 적의 드롭 테이블 아이템이어야 한다 (엉뚱한 id가 아니라)
-	if not _gs.bag.is_empty():
-		_check(_gs.bag[0]["id"] == &"mat_slime_core",
-			"담긴 것이 슬라임의 드롭이다 (실제 %s)" % str(_gs.bag[0]["id"]))
+	# 담긴 건 전부 이 적들의 드롭 테이블 아이템이어야 한다 (엉뚱한 id가 아니라).
+	for entry: Dictionary in _gs.bag:
+		_check(valid.has(entry["id"]),
+			"담긴 %s가 배치된 적의 드롭 테이블에 있다" % str(entry["id"]))
 	_gs.bag.clear()
 
 

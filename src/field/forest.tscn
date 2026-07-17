@@ -1,4 +1,4 @@
-[gd_scene load_steps=8 format=3 uid="uid://c0field01forest"]
+[gd_scene load_steps=9 format=3 uid="uid://c0field01forest"]
 
 [ext_resource type="Script" path="res://src/field/forest.gd" id="1_forest"]
 [ext_resource type="Script" path="res://src/actors/interact_zone.gd" id="2_zone"]
@@ -6,6 +6,7 @@
 [ext_resource type="PackedScene" path="res://src/field/forest_enemy.tscn" id="4_enemy"]
 [ext_resource type="PackedScene" path="res://src/spell/ring_spell_system.tscn" id="5_spell"]
 [ext_resource type="Script" path="res://src/hud/hud.gd" id="6_hud"]
+[ext_resource type="PackedScene" path="res://src/hud/inventory_panel.tscn" id="7_inv"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_gate"]
 size = Vector2(110, 90)
@@ -82,24 +83,35 @@ position = Vector2(0, 360)
 
 [node name="Slime1" parent="Enemies" instance=ExtResource("4_enemy")]
 position = Vector2(-180, 120)
+enemy_id = &"slime"
+
+[node name="Mist1" parent="Enemies" instance=ExtResource("4_enemy")]
+position = Vector2(150, 60)
+enemy_id = &"mist"
+
+[node name="Hound1" parent="Enemies" instance=ExtResource("4_enemy")]
+position = Vector2(-60, -40)
+enemy_id = &"hound"
 
 [node name="Slime2" parent="Enemies" instance=ExtResource("4_enemy")]
-position = Vector2(150, 60)
-
-[node name="Slime3" parent="Enemies" instance=ExtResource("4_enemy")]
-position = Vector2(-60, -40)
-
-[node name="Slime4" parent="Enemies" instance=ExtResource("4_enemy")]
 position = Vector2(240, -140)
+enemy_id = &"slime"
 
-[node name="Slime5" parent="Enemies" instance=ExtResource("4_enemy")]
+[node name="Vine1" parent="Enemies" instance=ExtResource("4_enemy")]
 position = Vector2(-260, -180)
+enemy_id = &"vine"
 
-[node name="Slime6" parent="Enemies" instance=ExtResource("4_enemy")]
+[node name="Beetle1" parent="Enemies" instance=ExtResource("4_enemy")]
 position = Vector2(60, -280)
+enemy_id = &"beetle"
 
-[node name="Slime7" parent="Enemies" instance=ExtResource("4_enemy")]
+[node name="Mist2" parent="Enemies" instance=ExtResource("4_enemy")]
 position = Vector2(-120, -390)
+enemy_id = &"mist"
+
+[node name="Beetle2" parent="Enemies" instance=ExtResource("4_enemy")]
+position = Vector2(180, -350)
+enemy_id = &"beetle"
 
 [node name="RingSpellSystem" parent="." instance=ExtResource("5_spell")]
 z_index = 10
@@ -113,5 +125,7 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("6_hud")
-hint_text = "WASD=이동 · 좌클릭=발사 · 1~4=슬롯 · 들어온 자리(남쪽)에서 E=귀환"
+hint_text = "WASD=이동 · 좌클릭=발사 · 1~4=슬롯 · 들어온 자리(남쪽)에서 E=귀환 · I=가방/창고"
 show_hp = true
+
+[node name="Inv" parent="." instance=ExtResource("7_inv")]

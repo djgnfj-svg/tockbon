@@ -34,6 +34,23 @@ func _ready() -> void:
 		# 조용히 죽지 않게 — .tres 이름을 틀리면 hp 0짜리 유령이 서 있게 된다.
 		push_warning("EnemyDef '%s'를 못 찾았다 (data/enemies/ 확인) — 기본값으로 선다" % enemy_id)
 	_hp = _def.hp if _def != null else 10.0
+	_apply_look()
+
+
+## 🔴 외형도 .tres가 쥔다 (`params.color`·`params.size`) — "새 적 = .tres 한 장"이 생김새까지
+## 포함하게 하려는 것. 없으면 기본 초록·1배(슬라임 그대로).
+## ⚠ 이건 **표시일 뿐 AI가 아니다** — 세션 30 "데이터만(리스킨)" 방침 그대로다. 행동(추격+접촉)은
+## 한 가지뿐이고, 색·덩치만 .tres로 달라진다. 스키마를 안 늘리고 `params`에 얹은 이유 = enemy_def.gd
+## 주석("스키마 확장 대신 params를 쓴다"). size는 루트 scale이라 **덩치가 곧 히트박스**가 된다.
+func _apply_look() -> void:
+	if _def == null or _visual == null:
+		return
+	var col: Variant = _def.params.get("color")
+	if col is Color:
+		_visual.color = col
+	var s := float(_def.params.get("size", 1.0))
+	if not is_equal_approx(s, 1.0):
+		scale = Vector2(s, s)
 
 
 ## 쫓아오기 + 접촉 피해. **거리 하나로 둘 다 판정한다** — aggro_range 안이면 다가오고,

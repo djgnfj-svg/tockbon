@@ -17,9 +17,11 @@ params = {
 "aggro_range": 80.0,
 "attack_cooldown": 1.2,
 "attack_range": 46.0,
+"color": Color(0.3, 0.52, 0.18, 1),
 "contact_damage": 6.0,
 "move_speed": 0.0,
 "regen_per_sec": 2.5,
+"size": 1.35,
 "weakness_mult": 1.75
 }
 drops = Array[ExtResource("1_l0tf1")]([SubResource("Resource_xrdah")])

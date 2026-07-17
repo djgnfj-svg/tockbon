@@ -23,12 +23,14 @@ params = {
 "aggro_range": 200.0,
 "attack_cooldown": 1.1,
 "attack_range": 30.0,
+"color": Color(0.55, 0.78, 0.85, 1),
 "contact_damage": 5.0,
 "disperse_period": 2.5,
 "dispersed_resist": 0.35,
 "hover_max": 95.0,
 "hover_min": 55.0,
 "move_speed": 70.0,
+"size": 1.0,
 "weakness_mult": 2.0
 }
 drops = Array[ExtResource("1_ed26q")]([SubResource("Resource_l3ft3"), SubResource("Resource_1w7mn")])

@@ -25,8 +25,10 @@ params = {
 "armor_reduction": 0.7,
 "attack_cooldown": 1.4,
 "attack_range": 24.0,
+"color": Color(0.42, 0.34, 0.52, 1),
 "contact_damage": 9.0,
 "move_speed": 40.0,
+"size": 1.5,
 "weakness_mult": 1.75
 }
 drops = Array[ExtResource("1_rfba6")]([SubResource("Resource_i5jdj"), SubResource("Resource_3t0kw")])
