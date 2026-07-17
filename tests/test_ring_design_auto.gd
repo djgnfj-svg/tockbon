@@ -117,11 +117,12 @@ func _test_grade_bands() -> void:
 	_check(RP.grade_of(0.85) == "괜찮음", "85점은 괜찮음(위 칸)")
 	_check(RP.grade_of(0.95) == "완벽", "95점은 완벽(위 칸)")
 
-	# 🔴 **퍼펙트 = 화면에 100으로 뜨는 순간** (사용자 확정). 리포트는 round(점수×100)을 찍으므로
-	# 이 둘이 어긋나면 "100점인데 완벽"이라는 어긋남이 눈에 보인다.
+	# 🔴 **퍼펙트 = 화면에 100으로 뜨는 순간** (사용자 확정).
+	# ⚠ 반올림을 **여기서 다시 구현하지 않는다** — 그러면 UI가 쓰는 함수가 아니라 테스트가 베낀
+	# 사본을 검증하게 돼, 정작 화면과 갈라지는 순간을 못 잡는다. UI와 같은 score_display를 부른다.
 	for i in 60:
 		var s := 0.98 + float(i) * 0.0005          # 98.0% ~ 100.95%
-		var shown := int(round(clampf(s, 0.0, 1.0) * 100.0))
+		var shown: int = RP.score_display(s)
 		if RP.is_perfect(s) != (shown >= 100):
 			_check(false, "퍼펙트와 화면 100이 어긋난다 (%.4f → %d점, perfect=%s)"
 				% [s, shown, RP.is_perfect(s)])

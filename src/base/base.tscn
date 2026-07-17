@@ -3,6 +3,9 @@
 [ext_resource type="Script" path="res://src/base/base.gd" id="1_base"]
 [ext_resource type="Script" path="res://src/base/desk.gd" id="2_desk"]
 [ext_resource type="Script" path="res://src/base/simple_player.gd" id="3_player"]
+[ext_resource type="PackedScene" path="res://src/spell/ring_spell_system.tscn" id="4_spell"]
+[ext_resource type="PackedScene" path="res://src/spell/dummy_target.tscn" id="5_dummy"]
+[ext_resource type="Script" path="res://src/base/base_hud.gd" id="6_hud"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_desk"]
 size = Vector2(120, 100)
@@ -22,6 +25,8 @@ color = Color(0.18, 0.16, 0.14, 1)
 
 [node name="Desk" type="Area2D" parent="."]
 position = Vector2(0, -120)
+collision_layer = 64
+collision_mask = 2
 script = ExtResource("2_desk")
 
 [node name="Body" type="Polygon2D" parent="Desk"]
@@ -45,6 +50,8 @@ horizontal_alignment = 1
 
 [node name="Player" type="CharacterBody2D" parent="."]
 position = Vector2(0, 40)
+collision_layer = 2
+collision_mask = 1
 script = ExtResource("3_player")
 
 [node name="Body" type="Polygon2D" parent="Player"]
@@ -54,4 +61,36 @@ polygon = PackedVector2Array(-10, -10, 10, -10, 10, 10, -10, 10)
 [node name="Collision" type="CollisionShape2D" parent="Player"]
 shape = SubResource("CircleShape2D_player")
 
+[node name="Aim" type="Node2D" parent="Player"]
+
 [node name="Camera2D" type="Camera2D" parent="Player"]
+
+[node name="Targets" type="Node2D" parent="."]
+
+[node name="Dummy1" parent="Targets" instance=ExtResource("5_dummy")]
+position = Vector2(240, -90)
+
+[node name="Dummy2" parent="Targets" instance=ExtResource("5_dummy")]
+position = Vector2(330, -30)
+
+[node name="Dummy3" parent="Targets" instance=ExtResource("5_dummy")]
+position = Vector2(250, 60)
+
+[node name="Dummy4" parent="Targets" instance=ExtResource("5_dummy")]
+position = Vector2(360, 110)
+
+[node name="Dummy5" parent="Targets" instance=ExtResource("5_dummy")]
+position = Vector2(230, 160)
+
+[node name="RingSpellSystem" parent="." instance=ExtResource("4_spell")]
+z_index = 10
+
+[node name="Hud" type="CanvasLayer" parent="."]
+
+[node name="BaseHud" type="Control" parent="Hud"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("6_hud")

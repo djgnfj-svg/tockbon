@@ -1,0 +1,217 @@
+extends SceneTree
+## 베이스캠프(**진입 씬**) 자동 검증 — 헤드리스 실행:
+##   ./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_base_auto.gd
+## 전 항목 통과 시 "TEST_BASE_OK" 출력 후 종료 코드 0.
+##
+## 검증 대상 = **세션 24 발사 배선**: 베이스캠프에서 그린 마법진을 실제로 쏠 수 있나.
+##
+## 🔴 여기서 지키는 건 「물리 레이어 계약」이다. 캐리어 마스크는 5(world+enemy)인데 base.tscn의
+## 플레이어·책상이 기본 레이어 1(world)에 있으면 **쏘는 순간 내 몸에 부딪혀 총구에서 죽는다** —
+## 에러도 경고도 없이 그냥 "마법이 안 나간다". 헤드리스가 잡을 수 있는 종류의 버그라 여기 둔다.
+## (반대로 **화면에 보이는지**는 못 잡는다 — z_index는 리드가 스샷으로 확인해야 한다.)
+##
+## 공개 계약으로만 검증한다 (CLAUDE.md): EventBus 시그널 · 그룹("enemies"/"player_projectiles") ·
+## dummy_target.hits. 노드 경로·내부 필드는 리팩터 때 옮겨 다니는 물건이라 계약이 아니다.
+##
+## 주의: -s 모드는 오토로드 전역 등록보다 먼저 컴파일된다 — 오토로드 식별자·모듈 preload 금지.
+## 첫 프레임 후 load()·/root 접근. 지역 변수는 의도적으로 동적 타입.
+
+const GLYPH_NONE := -1
+
+## 사거리 = projectile_base_speed × projectile_lifetime_sec (data/balance.tres).
+## 여기 베끼지 않고 balance에서 읽는다 — 수치를 바꾸면 이 테스트도 같이 따라와야 한다.
+var _range_px: float = 0.0
+
+var failures: int = 0
+var _bus = null
+var _base = null
+
+
+func _init() -> void:
+	_run()
+
+
+func _run() -> void:
+	create_timer(30.0).timeout.connect(func() -> void:
+		print("TEST_BASE_TIMEOUT — 30초 초과")
+		quit(1))
+	await process_frame  # 오토로드 준비 대기
+
+	_bus = root.get_node("/root/EventBus")
+	var bal = load("res://data/balance.tres")
+	_range_px = bal.projectile_base_speed * bal.projectile_lifetime_sec
+
+	var scene := load("res://src/base/base.tscn") as PackedScene
+	_base = scene.instantiate()
+	root.add_child(_base)
+	await process_frame
+
+	await _test_scene_wired()
+	await _test_targets_in_range()
+	await _test_my_body_does_not_block_my_spell()
+	await _test_desk_does_not_eat_the_spell()
+	await _test_desk_still_sees_the_player()
+
+	if failures == 0:
+		print("TEST_BASE_OK — 전 항목 통과")
+		quit(0)
+	else:
+		print("TEST_BASE_FAIL — %d개 실패" % failures)
+		quit(1)
+
+
+## [1] 진입 씬에 연습장이 있다 — 과녁과 발사 시스템.
+func _test_scene_wired() -> void:
+	print("[1] 베이스캠프에 연습 과녁 + 발사 시스템이 있다")
+	var targets := _targets()
+	_check(targets.size() >= 3, "허수아비 3개 이상 (실제 %d)" % targets.size())
+	_check(_player() != null, "플레이어(CharacterBody2D)를 찾았다")
+	# 발사 시스템의 존재는 **행동으로** 확인한다 — 노드 이름이 아니라 "쏘면 진이 생기나".
+	_bus.ring_cast_requested.emit(_assembly(1.0), Vector2(9000, 9000), Vector2(1, 0))
+	await physics_frame
+	_check(_carriers().size() == 1,
+		"쏘니 진(캐리어)이 생긴다 = RingSpellSystem이 씬에 있다 (실제 %d)" % _carriers().size())
+	_clear()
+
+
+## [2] 🔴 과녁이 사거리 밖이면 연습장이 장식이다 — 걸어가기 전엔 한 발도 안 닿는다.
+func _test_targets_in_range() -> void:
+	print("[2] 연습 과녁이 플레이어 시작점 사거리(%.0fpx) 안에 있다" % _range_px)
+	var from: Vector2 = _player().global_position
+	for t in _targets():
+		var d: float = from.distance_to(t.global_position)
+		_check(d <= _range_px, "허수아비 %s — %.0fpx (사거리 %.0f)" % [t.name, d, _range_px])
+
+
+## [3] 🔴 총구 자살 — 플레이어 자리에서 쏜 진이 **내 몸에 막히지 않고** 날아가 과녁을 때린다.
+## 레이어를 되돌리면(Player → 기본 레이어 1) 여기서 잡힌다: 진이 스폰 즉시 죽어 영영 안 맞는다.
+func _test_my_body_does_not_block_my_spell() -> void:
+	print("[3] 내 몸이 내 마법을 막지 않는다 — 쏜 진이 허수아비에 닿는다")
+	var player = _player()
+	var target = _nearest_target(player.global_position)
+	if target == null:
+		_check(false, "과녁이 하나도 없다")
+		return
+	var aim: Vector2 = (target.global_position - player.global_position).normalized()
+	_bus.ring_cast_requested.emit(_assembly(1.0), player.global_position, aim)
+	var frames := 0
+	while target.hits.is_empty() and frames < 180:
+		await physics_frame
+		frames += 1
+	_check(not target.hits.is_empty(),
+		"허수아비 %s 피격 (%d 물리 프레임)" % [target.name, frames])
+	_clear()
+
+
+## [4] 🔴 책상 너머로 쏴도 진이 산다 — 책상(Area2D)이 world 레이어에 있으면 벽으로 읽혀 먹어 버린다.
+func _test_desk_does_not_eat_the_spell() -> void:
+	print("[4] 책상이 마법을 먹지 않는다 (책상 쪽으로 쏴도 진이 지나간다)")
+	var player = _player()
+	# 책상은 플레이어 위쪽에 있다 — 위로 쏘면 반드시 책상 영역을 지난다.
+	_bus.ring_cast_requested.emit(_assembly(1.0), player.global_position, Vector2.UP)
+	# 40 물리 프레임 ≈ 0.66초 ≈ 173px — 책상 한복판을 지나고도 남는 거리(수명 1.5초 안).
+	for i in 40:
+		await physics_frame
+	_check(_carriers().size() == 1,
+		"진이 책상을 통과해 살아 있다 (남은 %d)" % _carriers().size())
+	_clear()
+
+
+## [5] 🔴 레이어를 옮긴 대가를 확인한다 — 책상이 여전히 플레이어를 **감지**하나.
+## 감지 못 하면 "[E] 탁본"이 안 뜨고 **책이 안 열린다** = 게임이 통째로 막힌다.
+## 진을 살리려고 플레이어를 레이어 2로 옮겼으니 책상 마스크도 따라와야 했다 — 그 짝을 여기서 묶는다.
+func _test_desk_still_sees_the_player() -> void:
+	print("[5] 책상이 플레이어를 알아본다 (E 안내가 뜨려면 감지돼야 한다)")
+	var desk = _find_area(_base)   # 동적 타입 — 모듈 preload 금지라 Desk 타입을 못 쓴다
+	if desk == null:
+		_check(false, "책상(Area2D)을 못 찾았다")
+		return
+	var player = _player()
+	var was: Vector2 = player.global_position
+	player.global_position = desk.global_position   # 책상 위로 걸어간 셈
+	# Area2D 겹침은 물리 프레임마다 갱신된다 — 한 프레임으로는 아직 비어 있다.
+	var frames := 0
+	while not desk.get_overlapping_bodies().has(player) and frames < 10:
+		await physics_frame
+		frames += 1
+	_check(desk.get_overlapping_bodies().has(player),
+		"책상이 플레이어를 감지 (%d 물리 프레임)" % frames)
+	player.global_position = was
+
+
+# ── 헬퍼 ──
+
+## 빈 진 8칸 + 점수. 전개 없이 몸으로만 때려 결과가 깔끔하다.
+func _assembly(score: float) -> Dictionary:
+	var r := []
+	for k in 8:
+		r.append(GLYPH_NONE)
+	return {"rings": [r], "score": score}
+
+
+func _targets() -> Array:
+	var out := []
+	for n in get_nodes_in_group("enemies"):
+		if not n.is_queued_for_deletion():
+			out.append(n)
+	return out
+
+
+func _nearest_target(from: Vector2):
+	var best = null
+	var best_d := INF
+	for t in _targets():
+		var d: float = from.distance_to(t.global_position)
+		if d < best_d:
+			best_d = d
+			best = t
+	return best
+
+
+func _carriers() -> Array:
+	var out := []
+	for n in get_nodes_in_group("player_projectiles"):
+		if not n.is_queued_for_deletion():
+			out.append(n)
+	return out
+
+
+## 씬을 뒤져 플레이어를 찾는다 — 노드 이름이 아니라 **타입**으로 (이름은 바뀔 수 있다).
+func _player():
+	return _find_body(_base)
+
+
+func _find_body(node):
+	if node is CharacterBody2D:
+		return node
+	for c in node.get_children():
+		var found = _find_body(c)
+		if found != null:
+			return found
+	return null
+
+
+## 씬 안의 Area2D = 책상 (날아다니는 진도 Area2D라 호출 전에 _clear로 치워 둔다).
+func _find_area(node):
+	if node is Area2D:
+		return node
+	for c in node.get_children():
+		var found = _find_area(c)
+		if found != null:
+			return found
+	return null
+
+
+func _clear() -> void:
+	for n in _carriers():
+		n.queue_free()
+	for n in get_nodes_in_group("pillars"):
+		n.queue_free()
+
+
+func _check(cond: bool, label: String) -> void:
+	if cond:
+		print("  PASS: " + label)
+	else:
+		failures += 1
+		print("  FAIL: " + label)

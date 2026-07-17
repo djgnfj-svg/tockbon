@@ -117,7 +117,8 @@
 ./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_ring_assembly_auto.gd   # **조립 상태기계 계약**: 단계 전이·문양본이 칸을 여는 규칙·assembly 발사 계약·시그널 (세션 22)
 ./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_ring_trace_auto.gd      # **손그림 탁본**: 완성도/정밀도·[다음] 수동 진행·칸 자유 편집·I3 · **정밀도 이빨(⑨⑩)·펜 보정(⑪⑫)**
 ./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_ring_spell_auto.gd      # **고리 발사**: 진→투사체·착탄 전개(발산 탄환·응집 기둥)·실제 적 take_hit
-./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_ring_design_auto.gd     # **고리 도안 통합**: RingDesign 라운드트립·ring_design_committed→GameState 자동 장착
+./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_ring_design_auto.gd     # **고리 도안 통합**: RingDesign 라운드트립·ring_design_committed→GameState 자동 장착 · **등급⇔펑 경계·퍼펙트⇔화면100** (세션 24)
+./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_base_auto.gd            # **베이스캠프 발사 배선** (세션 24): 과녁 사거리 · 🔴**물리 레이어 계약**(내 몸/책상이 world면 진이 총구에서 죽는다 — 에러 없이 조용히)
 ```
 
 🔴 **`-s` 테스트는 런타임 에러가 나도 "OK"를 찍을 수 있다.** 세션 22에 실제로 겪었다 —
@@ -154,8 +155,11 @@ static 함수 안의 **`const BAL.프로퍼티`를 컴파일 타임에 굳힌다
 
 **그냥 실행(F5) = 베이스캠프** (`src/base/base.tscn` = `run/main_scene`): WASD로 책상에 가서 **E** →
 고리 조립 책 → 진·룬·문양을 손으로 긋고 **[마력 주입]**(65점 이하면 펑). 맺으면 점수를 실은 채
-`GameState.ring_designs`로 들어가 첫 빈 슬롯에 자동 장착된다(세션 23에 본 게임 경로로 확인).
-⚠ **아직 발사 경로가 베이스캠프엔 없다** (RingSpellSystem 미배선) — 쏘려면 위 시험대를 쓴다.
+`GameState.ring_designs`로 들어가 첫 빈 슬롯에 자동 장착된다.
+✅ **세션 24: 베이스캠프에서 쏜다** — 책상 옆이 **연습장**(허수아비 5). 마우스=조준 ·
+**좌클릭=발사**(🔴 Space 아님 — 사용자 확정) · **1~4=슬롯** · HUD가 슬롯 4칸(위력·점수)을 보여 준다.
+쏘는 건 `GameState.ring_equipped[슬롯].to_assembly()` — **`to_assembly()`를 써야** 손그림 점수가
+실려 그때 그 위력이 난다(직접 Dictionary를 만들면 score가 빠져 조용히 기준 위력이 된다).
 
 🔴 **헤드리스는 "존재"만 확인하고 "보인다"는 못 본다** (memory `takbon-mcp-visual-verify`).
 렌더·레이아웃을 건드렸으면 **에디터로 띄워 스샷으로 확인해라** — 세션 22의 `ring_board` 분할과

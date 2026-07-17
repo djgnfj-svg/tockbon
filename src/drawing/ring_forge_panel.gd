@@ -428,8 +428,10 @@ func _refresh_buttons() -> void:
 	_commit_btn.disabled = _picking_template or not _board.can_commit()
 
 
+## 🔴 반올림은 core가 판다 — 「퍼펙트」가 "이 함수가 100을 돌려주는 순간"으로 정의돼 있어서,
+## 여기서 따로 반올림하면 등급과 표시가 갈라진다 (ring_power.score_display 주석).
 func _pct(score: float) -> int:
-	return int(round(clampf(score, 0.0, 1.0) * 100.0))
+	return RingPower.score_display(score)
 
 
 func _set_say(text: String, warn: bool) -> void:
