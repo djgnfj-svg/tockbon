@@ -82,15 +82,16 @@ func set_defs(jins: Array, rune: RuneDef, glyph_defs: Array) -> void:
 
 ## 문양 셀 행 — 주입된 def, 없으면 RingBoard const로 폴백. 통일 딕셔너리로 반환.
 func _glyph_rows() -> Array:
+	# 🔴 `key`(키 힌트)는 여기 없다 — 세션 25에 문양 고르기가 **마우스 클릭 전용**이 됐다.
 	var rows: Array = []
 	if _glyph_defs.is_empty():
 		for g in RingBoard.GLYPH_NAMES.size():
-			rows.append({"name": RingBoard.GLYPH_NAMES[g], "key": RingBoard.GLYPH_KEYS[g],
+			rows.append({"name": RingBoard.GLYPH_NAMES[g],
 				"desc": GLYPH_DESC[g], "color": RingBoard.GLYPH_COLORS[g],
 				"inward": g == RingBoard.G_GATHER, "code": g})
 	else:
 		for d in _glyph_defs:
-			rows.append({"name": d.display_name, "key": d.key_hint, "desc": d.desc,
+			rows.append({"name": d.display_name, "desc": d.desc,
 				"color": d.ui_color, "inward": d.inward, "code": d.code})
 	return rows
 
@@ -256,8 +257,10 @@ func _draw_glyph_cells(font: Font, top: float) -> void:
 		draw_rect(r, CELL_SEL_BG if sel else CELL_BG, true)
 		draw_rect(r, SEL_EDGE if sel else CELL_LINE, false, 2.0 if sel else 1.0)
 		_draw_glyph_icon(r.get_center() + Vector2(0, -14.0), 26.0, row.color, bool(row.inward))
+		# 🔴 키 힌트("[Q]")를 뗐다 (세션 25) — 문양도 **셀을 클릭해서** 고른다.
+		# 진·룬·문양본이 전부 클릭인데 문양만 키를 광고하고 있었다 (클릭도 됐는데 몰랐다).
 		_text_center(font, r.position + Vector2(cw * 0.5, ch - 30.0),
-			"%s [%s]" % [String(row.name), String(row.key)], NAME_COLOR, 11)
+			String(row.name), NAME_COLOR, 11)
 		_text_center(font, r.position + Vector2(cw * 0.5, ch - 15.0), String(row.desc), DESC_COLOR, 8)
 
 

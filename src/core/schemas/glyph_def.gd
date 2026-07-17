@@ -12,8 +12,10 @@ extends Resource
 @export var display_name: String = "발산→"
 ## 발사 계약 코드 (RingBoard.G_* 와 같은 값). 0=응집, 1=발산.
 @export var code: int = 1
-## 키 힌트 (책 셀·안내). 예: "Q"/"W".
-@export var key_hint: String = "W"
+## ⚠ **폐기 — 미사용** (세션 25). 문양은 오른쪽 셀을 **클릭해서** 고른다: 고르기 키가 없으니
+## 힌트도 없다 (사용자: "q w 이런게 아니라 똑같이 마우스로 선택하는걸로해줘").
+## 기존 .tres 호환을 위해 필드만 남긴다 — **새 코드에서 읽지 말 것**.
+@export var key_hint: String = ""
 ## 화살표 방향: true=안쪽(룬)으로(응집) · false=바깥(진)으로(발산).
 @export var inward: bool = false
 ## 조립 보드·책에서 문양을 그리는 색.

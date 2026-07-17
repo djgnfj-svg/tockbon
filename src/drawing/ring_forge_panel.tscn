@@ -138,7 +138,7 @@ offset_bottom = 350.0
 mouse_filter = 2
 theme_override_colors/font_color = Color(0.5, 0.45, 0.38, 1)
 theme_override_font_sizes/font_size = 8
-text = "왼쪽 판의 숨은 선을 손으로 그린다(탁본) · 휠=크기(진·룬·문양 칸) · 문양은 칸을 클릭해 골라 Q·W 정하고 다시 그림 · [다음]/[맺기]=분석"
+text = "왼쪽 판의 숨은 선을 손으로 그린다(탁본) · 여러 획 OK · 우클릭=다시 · 휠=크기(진·룬·문양 칸) · 문양은 칸을 클릭하고 오른쪽에서 골라 그림 · [다음]/[맺기]=분석"
 autowrap_mode = 3
 
 [node name="Report" type="Control" parent="Stage/Spread"]

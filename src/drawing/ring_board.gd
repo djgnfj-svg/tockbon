@@ -33,7 +33,9 @@ const COMMIT_COVER := TraceScorer.COMMIT_COVER
 const G_GATHER := Enums.GlyphCode.GATHER    # 응집 ← — 안쪽(룬) 방향 화살표
 const G_RADIATE := Enums.GlyphCode.RADIATE  # 발산 → — 바깥(진) 방향 화살표
 const GLYPH_NAMES := ["응집←", "발산→"]
-const GLYPH_KEYS := ["Q", "W"]
+## ⚠ **`GLYPH_KEYS`는 지웠다** (세션 25). 문양은 오른쪽 셀을 **클릭해서** 고른다 —
+## 진·룬·문양본이 전부 클릭인데 문양만 키(Q·W)를 광고했다 (사용자: "q w 이런게 아니라
+## 똑같이 마우스로 선택하는걸로해줘"). 죽은 상수를 남기면 다음 세션이 키를 되살린다.
 
 # ── 색 (먹·양피지 톤) ──
 const RING_LINE := Color(0.42, 0.30, 0.12, 0.55)

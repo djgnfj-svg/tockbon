@@ -199,16 +199,13 @@ func _unhandled_input(event: InputEvent) -> void:
 	var k := event as InputEventKey
 	if k == null or not k.pressed or k.echo:
 		return
-	# 🔴 확정은 손으로 문질러 그리고 **[다음]**(또는 Enter)으로 잠근다. Q·W = 문양 고르기.
+	# 🔴 확정은 손으로 문질러 그리고 **[다음]**(또는 Enter)으로 잠근다.
+	# ⚠ **문양 고르기 키(Q·W)는 없다** (세션 25, 사용자: "q w 이런게 아니라 똑같이 마우스로
+	# 선택하는걸로해줘"). 진·룬·문양본이 전부 오른쪽 셀을 클릭해서 고르는데 문양만 키였다 —
+	# 셀 클릭은 그때도 됐지만 UI가 "[Q]"라 적어 놔 키보드를 시키는 것처럼 보였다.
 	match k.keycode:
 		KEY_ENTER, KEY_KP_ENTER:
 			_on_next()
-			get_viewport().set_input_as_handled()
-		KEY_Q:
-			_select_glyph(RingBoard.G_GATHER)
-			get_viewport().set_input_as_handled()
-		KEY_W:
-			_select_glyph(RingBoard.G_RADIATE)
 			get_viewport().set_input_as_handled()
 
 
@@ -255,7 +252,7 @@ func _on_rune_selected() -> void:
 		_set_say("룬(불)을 중심에 손으로 문질러 그리세요 (삼각) → [다음]", false)
 
 
-## 🔴 문양 **고르기** (Q·W 또는 문양 셀). 얹기는 왼쪽 판에 손으로 문지른다 — 칸마다.
+## 🔴 문양 **고르기** (오른쪽 문양 셀 클릭). 얹기는 왼쪽 판에 손으로 문지른다 — 칸마다.
 func _select_glyph(glyph: int) -> void:
 	_active_glyph = glyph
 	_board.set_active_glyph(glyph)
@@ -298,7 +295,7 @@ func _on_next() -> void:
 		_picking_template = false
 		_book.go_stage(RingBook.TAB_GLYPH, true, true)
 		_book.sync_state(_template_idx, _active_glyph)
-		_set_say("칸을 클릭해 고르고 문양(Q·W) 정해 손으로 그리세요 · 휠=문양 크기 · 다른 칸/[다음]으로 이어가기", false)
+		_set_say("칸을 클릭해 고르고 오른쪽에서 문양을 골라 손으로 그리세요 · 휠=문양 크기 · 다른 칸/[다음]으로 이어가기", false)
 		_update_score()
 		_refresh_buttons()
 		return
