@@ -273,10 +273,11 @@ func _test_full_flow_and_analysis() -> void:
 	_rub_exact(b)
 	_check(String(b.call(&"advance")) == "advanced", "룬 다음")
 	_check(_stage(b) == b.STAGE_GLYPH, "문양 단계")
-	# 문양 칸들 (기본 2방 = 2칸). 마지막 칸 advance는 "finished"
+	# 문양 칸들 (기본 2방 = 2칸). 🔴 세션 25: 칸을 **골라야** 그릴 수 있다. 마지막 칸 advance는 "finished"
 	var open = b.call(&"get_open")
 	var last_result := ""
-	for i in open.size():
+	for k in open:
+		b.call(&"select_slot", k)
 		_rub_exact(b)
 		last_result = String(b.call(&"advance"))
 	_check(last_result == "finished", "마지막 문양 칸 다음 = 완성")
@@ -304,19 +305,33 @@ func _test_empty_jin_finishes_after_rune() -> void:
 	b.queue_free()
 
 
-## 진→룬 그려 문양 단계에 도달한다 (기본 문양본 = 2방 [0,2]).
+## 진→룬 그려 문양 단계에 도달하고 **칸 0을 고른다** (기본 문양본 = 2방 [0,2]).
+## 🔴 세션 25: 칸은 자동으로 안 잡힌다 — 도착하면 미선택(-1)이라 여기서 골라 줘야 한다.
+## 미선택 그 자체는 ⑥이 검증한다.
 func _reach_glyph_stage(b) -> void:
 	_rub_exact(b)
 	b.call(&"advance")   # 진
 	_rub_exact(b)
-	b.call(&"advance")   # 룬 → 문양 단계
+	b.call(&"advance")   # 룬 → 문양 단계 (칸 미선택)
+	b.call(&"select_slot", 0)
 
 
 # ── ⑥ 문양 칸 자유 편집(세션 15): 칸 전환 시 이전 칸 자동 잠금 + 재편집이 교체(중복 아님) ──
 func _test_glyph_free_edit_and_relock() -> void:
 	var b = _make_board()
-	_reach_glyph_stage(b)
-	_check(int(b.call(&"trace_slot")) == 0, "문양 단계 첫 칸=0")
+	# 🔴 세션 25: 문양 단계에 **칸이 안 잡힌 채로** 도착한다 (사용자: "8방 했을때 이미
+	# 주황색으로 선택되어있어 그거 지워주고"). 예전엔 첫 빈 칸을 멋대로 잡아, 아무것도
+	# 안 골랐는데 주황 강조가 떠 있었다. 칸을 고르는 건 사용자다.
+	_rub_exact(b)
+	b.call(&"advance")
+	_rub_exact(b)
+	b.call(&"advance")
+	_check(int(b.call(&"trace_slot")) == -1, "문양 단계 도착 = 칸 미선택 (멋대로 안 잡는다)")
+	_check(b.call(&"guide_points").is_empty(), "칸을 안 골랐으면 밑그림도 없다")
+	_check(String(b.call(&"advance")) == "none", "칸을 안 고른 채 [다음] = 아무 일도 없다")
+	b.call(&"select_slot", 0)
+	_check(int(b.call(&"trace_slot")) == 0, "클릭한 칸이 잡힌다")
+	_check(b.call(&"guide_points").size() > 2, "칸을 고르면 밑그림이 선다")
 	# slot0 = 발산(1)
 	b.call(&"set_active_glyph", G_RADIATE)
 	_rub_exact(b)

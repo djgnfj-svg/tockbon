@@ -69,7 +69,8 @@ func _rub(b) -> void:
 		b.call(&"trace_stroke", p)
 
 
-## 진→룬을 그려 문양 단계까지 간다.
+## 진→룬을 그려 문양 단계까지 간다. 🔴 세션 25: 칸은 자동으로 안 잡힌다 —
+## 그릴 칸은 부르는 쪽이 `select_slot`으로 고른다 (미선택 계약은 ②가 못 박는다).
 func _reach_glyph(b) -> void:
 	_rub(b)
 	b.call(&"advance")
@@ -108,7 +109,8 @@ func _test_stage_transitions() -> void:
 	_check(String(b.call(&"advance")) == "advanced", "룬 [다음] = advanced")
 	_check(int(b.call(&"stage")) == b.STAGE_GLYPH, "룬 다음은 문양 단계")
 	_check(bool(b.call(&"has_rune")), "룬이 잠겼다")
-	_check(int(b.call(&"trace_slot")) == 0, "문양 단계 = 열린 첫 칸(0)부터")
+	# 🔴 세션 25: 칸을 **멋대로 안 잡는다** (사용자: "8방 했을때 이미 주황색으로 선택되어있어").
+	_check(int(b.call(&"trace_slot")) == -1, "문양 단계 도착 = 칸 미선택")
 	b.queue_free()
 
 
@@ -131,10 +133,16 @@ func _test_template_opens_slots() -> void:
 	b.call(&"set_template", [1, 2, 3])
 	_check((b.call(&"get_open") as Array) == [1, 2, 3], "문양본이 연 칸 = [1,2,3]")
 	_reach_glyph(b)
-	_check(int(b.call(&"trace_slot")) == 1, "채우는 순서 = 문양본이 준 순(첫 칸 1)")
+	# 🔴 세션 25: 문양본이 정하는 건 **어느 칸을 여는가**뿐이다. 채우는 **순서는 사용자가**
+	# 칸을 클릭해 정한다 — 예전엔 열린 목록 순으로 자동 진행했고, 그래서 도착하자마자
+	# 첫 칸이 잡혀 있었다. 스텐실 계약(닫힌 칸은 못 건드린다)은 그대로다.
+	b.call(&"select_slot", 3)
+	_check(int(b.call(&"trace_slot")) == 3, "열린 칸은 순서와 무관하게 고른다")
+	b.call(&"select_slot", 0)
+	_check(int(b.call(&"trace_slot")) == 3, "닫힌 칸(0)은 못 고른다 — 문양본이 스텐실이다")
 	_rub(b)
 	b.call(&"advance")
-	_check(int(b.call(&"trace_slot")) == 2, "다음 열린 칸으로")
+	_check(int(b.call(&"filled_count")) == 1, "고른 칸이 채워진다")
 	b.queue_free()
 
 
@@ -144,6 +152,7 @@ func _test_template_closes_and_clears() -> void:
 	b.call(&"set_template", [0, 2, 4, 6])
 	b.call(&"set_active_glyph", G_RADIATE)
 	_reach_glyph(b)
+	b.call(&"select_slot", 0)
 	_rub(b)
 	b.call(&"advance")          # 칸 0 채움
 	_check(int(b.call(&"filled_count")) == 1, "칸 하나 채움")
@@ -185,9 +194,11 @@ func _test_assembly_records_glyphs() -> void:
 	var b = _make_board()
 	b.call(&"set_template", [0, 4])
 	_reach_glyph(b)
+	b.call(&"select_slot", 0)
 	b.call(&"set_active_glyph", G_RADIATE)
 	_rub(b)
 	b.call(&"advance")          # 칸 0 = 발산
+	b.call(&"select_slot", 4)
 	b.call(&"set_active_glyph", G_GATHER)
 	_rub(b)
 	b.call(&"advance")          # 칸 4 = 응집

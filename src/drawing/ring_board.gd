@@ -45,7 +45,10 @@ const GLYPH_COLORS := [
 ]
 const RUNE_COLOR := Color(0.62, 0.22, 0.12)   # 불
 const TRACE_INK := Color(0.20, 0.14, 0.09, 0.95)    # 그린 먹선
-const GUIDE_HIDE := Color(0.42, 0.30, 0.12, 0.18)   # 숨은 가이드 (아직 안 드러남)
+## 숨은 가이드 (아직 안 드러남). 🔴 세션 25에 0.18 → 0.32: 0.18은 진(큰 원)에서나 보였고
+## 문양처럼 작은 밑그림은 **사실상 안 보였다** (사용자: "문양을 선택했을때 밑그림이 그려져야지").
+## ⚠ 더 진하게 하면 "숨은 선"이 아니라 그냥 답이 된다 — 따라 그을 만큼만 보여야 한다.
+const GUIDE_HIDE := Color(0.42, 0.30, 0.12, 0.32)
 const GUIDE_SHOW := Color(0.80, 0.50, 0.16, 0.55)   # 드러난 가이드 강조
 
 const RING_RADIUS_FRAC := 0.60
@@ -169,9 +172,11 @@ func _refresh_trace() -> void:
 				_set_trace(TraceTarget.RUNE, -1)
 				return
 		STAGE_GLYPH:
-			var k := _asm.next_open_slot()
-			if k >= 0:
-				_set_trace(TraceTarget.GLYPH, k)
+			# 🔴 칸은 **사용자가 클릭해서 고른다** (세션 25). 예전엔 첫 빈 칸을 멋대로 잡아
+			# 아무것도 안 골랐는데 주황 강조가 떠 있었다 (사용자: "8방 했을때 이미 주황색으로
+			# 선택되어있어 그거 지워주고"). 칸 미선택(-1) = 빈 가이드 = 그릴 게 아직 없다.
+			if _asm.next_open_slot() >= 0:
+				_set_trace(TraceTarget.GLYPH, -1)
 				return
 	_set_trace(TraceTarget.NONE, -1)   # 그릴 것 없음 (문양본 대기 / 다 그림)
 
@@ -215,13 +220,29 @@ func _build_guide(target: int, slot: int) -> PackedVector2Array:
 					pts.append(v[e].lerp(v[e + 1], float(t) / 12.0))
 			pts.append(v[3])
 		TraceTarget.GLYPH:
-			# 그 칸의 화살표 선
+			# 🔴 문양 = **방향을 가진 화살표** (세션 25). 예전엔 방향 없는 짧은 **작대기**였다:
+			# 책의 셀은 화살표(↑↓←→)를 그려 놓고 판의 밑그림은 작대기라, 응집과 발산이
+			# **똑같이 보였다** (GlyphDef.inward를 아무도 안 읽었다). 사용자가 화살표를 그리려다
+			# 막힌 것도, 결과물이 "작대기"인 것도 여기서 나왔다.
+			# ⚠ 칸을 안 골랐으면(-1) 빈 가이드다 — 칸은 사용자가 클릭해서 고른다.
 			if slot >= 0:
 				var p := _slot_pos(slot)
 				var outward := Vector2.from_angle(_slot_angle(slot))
+				var dir := outward if _active == G_RADIATE else -outward   # 응집 = 룬 쪽으로
 				var sz := ro * 0.12 * _glyph_scale_of(slot)
-				for t in 13:
-					pts.append((p - outward * sz).lerp(p + outward * sz, float(t) / 12.0))
+				var tail := p - dir * sz
+				var head := p + dir * sz
+				for t in 9:                                   # 몸통
+					pts.append(tail.lerp(head, float(t) / 8.0))
+				# 화살촉 — **한붓그리기**(머리→왼깃→머리→오른깃)라 가이드 한 줄로 화살표가 된다.
+				# 손은 몇 획으로 나눠 그어도 된다 (세션 25에 획 누적을 고쳤다).
+				var back := -dir * (sz * 0.5)
+				var side := dir.orthogonal() * (sz * 0.34)
+				for w in [head + back + side, head + back - side]:
+					for t in range(1, 5):
+						pts.append(head.lerp(w, float(t) / 4.0))
+					for t in range(1, 5):
+						pts.append(w.lerp(head, float(t) / 4.0))
 	return pts
 
 
@@ -293,6 +314,10 @@ func trace_stroke(local_pos: Vector2) -> void:
 ##   "advanced" = 다음 조각 · "finished" = 마지막이라 다 그림(분석) · "none" = 그릴 게 없음
 func advance() -> String:
 	if _trace == TraceTarget.NONE:
+		return "none"
+	# 🔴 칸을 아직 안 골랐다 (세션 25의 미선택 상태) — 잠글 조각이 없다. 그냥 넘기면
+	# `_piece_key(GLYPH, -1)`이라는 유령 키에 점수가 저장된다.
+	if _trace == TraceTarget.GLYPH and _trace_slot < 0:
 		return "none"
 	var done := _trace
 	var slot := _trace_slot
@@ -437,6 +462,13 @@ func _glyph_color(code: int) -> Color:
 
 func set_active_glyph(g: int) -> void:
 	_active = clampi(g, 0, GLYPH_NAMES.size() - 1)
+	# 🔴 고른 문양이 **밑그림을 정한다** (세션 25) — 응집←과 발산→은 화살표 방향이 반대다.
+	# 예전엔 여기서 가이드를 안 세워, Q·W를 눌러도 판의 밑그림이 그대로였다
+	# (사용자: "문양을 선택했을때 밑그림이 그려져야지"). 어차피 방향 없는 작대기라 티도 안 났다.
+	# ⚠ 그리던 획은 사라진다 (`set_guide` → `reset_stroke`). 밑그림이 통째로 바뀌었으니
+	# 남겨 봐야 **다른 문양을 겨눈 획**이다 — 휠로 크기를 바꿀 때와 같은 이유다.
+	if _trace == TraceTarget.GLYPH and _trace_slot >= 0:
+		_set_trace(_trace, _trace_slot)
 	queue_redraw()
 
 
