@@ -17,6 +17,7 @@ radius = 10.0
 script = ExtResource("1_base")
 
 [node name="Ground" type="ColorRect" parent="."]
+mouse_filter = 2
 offset_left = -960.0
 offset_top = -540.0
 offset_right = 960.0

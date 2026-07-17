@@ -52,6 +52,7 @@ func _run() -> void:
 	await _test_desk_does_not_eat_the_spell()
 	await _test_desk_still_sees_the_player()
 	await _test_rejected_commit_is_not_silent()
+	await _test_real_left_click_actually_fires()
 
 	if failures == 0:
 		print("TEST_BASE_OK — 전 항목 통과")
@@ -177,6 +178,46 @@ func _test_rejected_commit_is_not_silent() -> void:
 	_check(rejected.size() == 1, "책을 덮으면 commit_rejected가 온다 (침묵 금지)")
 	_check((gs.ring_designs as Array).size() == before, "미달 도안은 여전히 안 맺힌다 (거부는 옳다)")
 	_base.call(&"_close_drawing")
+
+
+## [7] 좌클릭이 발사까지 도달한다 (세션 25).
+## 사용자: *"마법진이 다 그려져도 발사가 안됨"* → *"좌클릭이 안먹나?"* — 맞혔다.
+## 버그: `Ground`가 화면을 다 덮는 ColorRect인데 **Control의 기본 mouse_filter는 STOP**이라
+## 바닥이 좌클릭을 전부 먹었다 → `_unhandled_input`에 안 오고 → `_fire()`가 아예 안 불렸다.
+## 에러도 경고도 없다. `base.tscn`의 `Ground.mouse_filter = 2`가 고친 것이다.
+##
+## 🔴🔴 **이 테스트는 그 버그를 못 잡는다 — 검출력이 0이다.** 그런데도 남겨 둔 이유는 아래 경고
+## 때문이지, 이게 지켜 준다고 믿어서가 아니다. `mouse_filter`를 도로 빼고 돌려 봤더니 **그냥
+## 통과했다**: 헤드리스엔 렌더가 없어 Control 히트 테스트가 실제와 다르다 —
+## `push_input`을 써도 GUI 계층을 제대로 안 탄다. 반면 **에디터로 띄운 실제 게임에서는 같은
+## 코드가 발사 0회 → (고친 뒤) 1회로 정확히 재현됐다.**
+##
+## ⚠ **그래서 마우스가 닿는 경로는 헤드리스로 검증할 수 없다.** memory `takbon-mcp-visual-verify`의
+## "헤드리스는 존재만 알고 보인다는 모른다"와 같은 종류다 — **클릭이 닿는다도 모른다.**
+## 바꿨으면 에디터로 띄워 `godot_exec`로 `viewport.push_input(InputEventMouseButton)`을 밀어 봐라.
+##
+## 🔴 왜 두 세션을 놓쳤나: 기존 검증이 전부 `_fire()`를 **직접 부르거나** `attack_basic` 액션을
+## 주입해서 **Control 계층을 건너뛰었다**. 전 스위트가 그린인데 게임에선 아무것도 안 나갔다.
+func _test_real_left_click_actually_fires() -> void:
+	print("[7] 좌클릭이 발사에 닿는다 ⚠ 헤드리스에선 검출력 0 — 실제 게임에서 확인할 것")
+	var gs = root.get_node("/root/GameState")
+	gs.ring_equipped[0] = RingDesign.from_assembly(_assembly(1.0), "클릭 테스트")
+	_base.call(&"_select_slot", 0)
+
+	var casts := []
+	_bus.ring_cast_requested.connect(func(_a, _p, _d) -> void: casts.append(1))
+
+	# 🔴 실제 마우스 이벤트를 **뷰포트에** 민다 — 게임 창에 클릭한 것과 같은 경로다
+	var press := InputEventMouseButton.new()
+	press.button_index = MOUSE_BUTTON_LEFT
+	press.pressed = true
+	press.position = Vector2(480, 270)          # 화면 한복판 = Ground 위
+	_base.get_viewport().push_input(press)
+	await process_frame
+	await process_frame
+
+	_check(casts.size() == 1,
+		"🔴 좌클릭이 발사에 닿는다 (실제 발사 %d회 — 0이면 Control이 클릭을 먹고 있다)" % casts.size())
 
 
 # ── 헬퍼 ──

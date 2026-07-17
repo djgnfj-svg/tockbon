@@ -27,6 +27,14 @@ extends Node2D
 ##    있었는데, 캐리어 마스크가 5(world+enemy)라 **쏘는 순간 내 몸에 부딪혀 총구에서 죽었다**
 ##    (책상 쪽으로 쏘면 책상에서). 레이어 이름표(project.godot)대로 옮겨서 푼 것이다.
 ##    Desk의 마스크는 2 — 플레이어를 감지해야 "[E] 탁본"이 뜬다.
+##  • 🔴 **`Ground.mouse_filter = 2`(IGNORE) — 지우면 발사가 통째로 죽는다** (세션 25).
+##    Ground는 화면을 다 덮는 ColorRect인데 **Control의 기본 mouse_filter는 STOP**이라,
+##    바닥이 좌클릭을 전부 먹어 `_unhandled_input`까지 오지 않았다 → `_fire()`가 아예 안 불렸다.
+##    사용자: *"마법진이 다 그려져도 발사가 안됨"* → *"좌클릭이 안먹나?"* (사용자가 맞혔다).
+##    ⚠ **에러도 경고도 없다** — 레이어 함정(위)과 같은 종류의 침묵이다. 그리고 리드의 검증이
+##    전부 `_fire()` 직접 호출/액션 주입이라 **Control 계층을 건너뛰어** 두 세션을 못 잡았다.
+##    tests/test_base_auto가 이제 **진짜 마우스 이벤트를 뷰포트에 밀어** 넣어 못 박는다.
+##    (같은 이유로 BaseHud도 IGNORE다 — base_hud.gd `_ready` 참조.)
 
 const RingForgePanelScript := preload("res://src/drawing/ring_forge_panel.gd")
 const Desk := preload("res://src/base/desk.gd")
