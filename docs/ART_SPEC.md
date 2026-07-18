@@ -1,7 +1,7 @@
 # ART_SPEC — 이미지 에셋 명세 (Aseprite MCP 작업용)
 
 > 2026-07-12 작성 · **2026-07-13 세션 3~5에 걸쳐 P1~P5 전부 완료** (아래 각 절 상태 표기).
-> GDD §10.5 규칙 기반. 잔여는 소소한 보류 항목뿐 (P4 tutorial.gd 단색·P5 피격 플래시 등).
+> 리드로잉 원칙(AI 직행 금지·손으로 다시) 기반. 잔여는 소소한 보류 항목뿐 (P4 tutorial.gd 단색·P5 피격 플래시 등).
 > 원본 생성 스크립트(Lua)는 세션 scratchpad — 구조는 memory aseprite-mcp-plan.md 참조. 코드 배선은 전부
 > `ResourceLoader.exists()` 가드 + 플레이스홀더 폴백 방식이라 PNG를 지우면 옛 모습으로 돌아간다.
 

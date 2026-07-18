@@ -7,7 +7,7 @@ description: 탁본(TAKBON) 프로젝트의 아키텍처 규칙·모듈 지도·
 
 게임 = `src/base/base.tscn`(베이스캠프) + 고리 조립 책 + 숲 원정. 2D 탑다운 익스트랙션 로그라이트, Godot 4.6.1, 뷰포트 960×540, 렌더러 Compatibility.
 
-**정본은 항상 `CLAUDE.md` 최상단 + `docs/STATUS.md`다.** ⚠ `docs/`의 TRUTH·GDD·TECH_SPEC·CHANGELOG는 **옛 자유드로잉 아카이브**라 삭제된 시스템을 설명한다 — 사실로 믿지 마라. 이 스킬은 그 정본의 규칙만 압축한 것이고, 충돌하면 CLAUDE.md가 이긴다.
+**정본은 항상 `CLAUDE.md` 최상단 + `docs/STATUS.md`다.** ⚠ 옛 자유드로잉 문서(TRUTH·GDD·TECH_SPEC·CHANGELOG 등)는 세션 39에 삭제됐다 — 삭제된 시스템 설명이라 지웠다(필요하면 git 이력). 이 스킬은 정본의 규칙만 압축한 것이고, 충돌하면 CLAUDE.md가 이긴다.
 
 ## 0. 절대 규칙 (어기면 조용히 깨진다)
 

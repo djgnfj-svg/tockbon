@@ -16,8 +16,9 @@
 > 책자·종이/잉크 경제)과 옛 본 게임(src/base 거점·field 원정·ui HUD/도감/게시판·tutorial·quest)이 통째로
 > 사라졌다. 되돌리려면 git 이력(삭제 직전 = `dcc3326`). **"하나씩 다시 만든다"가 방침이다.**
 >
-> ⚠ **docs/ 전체가 옛 자유드로잉 기준이다** — TRUTH·GDD·TECH_SPEC·CHANGELOG는 삭제된 시스템을 설명한다.
-> 사실로 믿지 마라. 아직 안 지운 건 설계 근거가 남아 있어서다.
+> ✅ **세션 39: 옛 자유드로잉 아카이브 문서를 삭제했다** — TRUTH·GDD·TECH_SPEC·CHANGELOG·NEXT_CYCLE·
+> TEAM_PLAN 6개(약 2,400줄, 삭제된 시스템 설명). 유효했던 경제·저장·적 계약은 이미 코드/memory로
+> 대체됨(세션 29 경제 배선 등). 필요하면 git 이력(삭제 직전 = `98e427f`)에서 복구.
 > 📖 **현재 정본** = 이 파일 + `docs/STATUS.md` 최상단 + memory `takbon-basecamp-is-the-game`.
 >
 > ✅ **세션 22: `docs/REFACTOR_PLAN.md`를 전부 처리했다** — 옛 세대(SpellDesign·research·자유드로잉
@@ -188,9 +189,9 @@
 - **docs/REFACTOR_PLAN.md** — ✅ **세션 22에 완료** (이력·판단 근거로만 참고). 「문제가 아닌 것」 절은
   아직 유효하다 — 건드리지 마라
 - **docs/STATUS.md** — 세션별 진행 로그 (세션 종료 시마다 갱신). 옛 로그는 STATUS_ARCHIVE.md
-- docs/TRUTH.md · GDD.md · TECH_SPEC.md · CHANGELOG.md — ⚠ **옛 자유드로잉 아카이브**. 경제·적·저장
-  계약 일부만 유효. 고리 모델 재작성은 아직 안 됐다
-- docs/BACKLOG.md · TEAM_PLAN.md · ART_SPEC.md(에셋·아트 방향 960×540·48px)
+- docs/BACKLOG.md(E4·E5 정본) · ART_SPEC.md(에셋·아트 방향 960×540·48px)
+- ⚠ **세션 39에 옛 자유드로잉 문서 6개(TRUTH·GDD·TECH_SPEC·CHANGELOG·NEXT_CYCLE·TEAM_PLAN) 삭제** —
+  삭제된 시스템 설명이라 지웠다. 고리 모델 GDD 재작성이 필요해지면 git(`98e427f`)의 옛 GDD를 참고 삼아 새로 쓴다
 
 ## 아키텍처 요약
 
