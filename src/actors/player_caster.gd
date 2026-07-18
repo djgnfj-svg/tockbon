@@ -85,6 +85,10 @@ func fire() -> void:
 	if design == null:
 		notice.emit("슬롯 %d이 비어 있다 — 1~4로 다른 슬롯을 골라라" % (_slot + 1), true)
 		return
+	# 🔴 마나 소모 — 이게 없으면 좌클릭 연사다 (세션 35). 비용은 RingPower가 판다(수치 박지 말 것).
+	if not GameState.spend_mana(RingPower.cast_mana_cost()):
+		notice.emit("마나가 부족하다 — 잠시 기다려라", true)
+		return
 	EventBus.ring_cast_requested.emit(design.to_assembly(), global_position, _aim)
 
 

@@ -54,6 +54,13 @@ static func power_display(score: float, ink_mult: float = 1.0, size: float = 1.0
 	return int(round(power_of(score, ink_mult, size) * 100.0))
 
 
+## 🔴 발사 1회당 마나 소모 (세션 35). 위력(power_of)과 **다른 축**이다 — 잘 그렸다고 싸지지
+## 않는다. 지금은 도안과 무관한 고정값이지만, 발사는 반드시 이 함수를 거친다(수치를 fire()에
+## 박지 않게 — 나중에 도안별 비용을 붙일 때 여기 한 곳만 고치면 된다). balance = cast_mana_cost.
+static func cast_mana_cost() -> float:
+	return BAL.cast_mana_cost
+
+
 ## 🔴 종합 점수 → **화면에 찍는 정수** (예: 89점). 조립 리포트·베이스캠프 HUD가 같이 쓴다.
 ##
 ## 왜 core냐: 이 반올림이 **「퍼펙트」의 정의**다 (`ring_grade_perfect = 0.995` = 이 함수가 100을

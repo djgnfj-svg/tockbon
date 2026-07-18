@@ -61,6 +61,11 @@ func _ready() -> void:
 	# 이게 없으면 **죽는 게 이득**이 된다: 죽으면 어차피 베이스로 돌아가는데 HP는 안 깎인 채라,
 	# 다친 몸으로 걸어 돌아오는 것보다 그 자리에서 죽는 편이 싸진다 (벌이 없는 지금은 특히).
 	GameState.reset_player_hp()
+	# 출격 = 만마나 (세션 35). HP와 같은 이유 — 연습장에서 쏘고 저마나로 원정을 시작하면 안 된다.
+	GameState.restore_mana_full()
+	# 🔴 여기서부터 허기가 준다 (세션 35). 만복으로 시작 — 이 플래그가 GameState._process의 유일한 스위치다.
+	GameState.in_expedition = true
+	GameState.restore_hunger_full()
 	# 🔴 모달 플래그를 내린다 — 오토로드라 씬 전환에도 남는다(base.gd _ready와 같은 안전망).
 	GameState.ui_modal_open = false
 	_extract_zone.interacted.connect(_extract)

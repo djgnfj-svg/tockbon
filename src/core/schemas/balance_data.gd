@@ -12,6 +12,23 @@ extends Resource
 @export_group("마나")
 @export var mana_max: float = 100.0
 @export var mana_regen_per_sec: float = 2.0
+## 🔴 발사 1회당 마나 소모 (세션 35 — 좌클릭 연사 차단). 이게 없던 시절엔 fire()가
+## spend_mana를 아예 안 불러 무한 연사가 됐다. 지금은 발당 고정값 하나 — 원정 중 "이 발사
+## 지금 쓸까 아낄까"의 예산이다. mana_max 100·재생 2/s 기준으로 ≈6발 연발 후 throttle.
+## ⚠ 도안별(룬·화살·진 크기) 정밀 비용은 아직 안 붙였다 — rune_mana_base 등 부품 수치는
+## 남아 있으나 합산하는 곳이 없다. 손맛 보고 나눌 몫(BACKLOG). 지금은 이 한 값으로 연사만 끊는다.
+@export var cast_mana_cost: float = 16.0
+
+@export_group("허기 (세션 35 — 원정 지속 제한)")
+# 🔴 무한 파밍 차단 (사용자: "없으면 그냥 원정 나가서 계속 파밍할 수 있어서"). 포만 게이지는
+# **숲에 있는 동안만** 준다(베이스=늘 만복). 0이 되면 HP가 깎여 귀환을 강제한다 = 익스트랙션
+# 압박. 먹는 아이템은 v1엔 없다(귀환=회복). 나중에 "원정 연장" 소비템으로 붙일 몫(BACKLOG).
+@export var hunger_max: float = 100.0
+## 초당 포만 감소 — 만복→0 ≈ 166초(≈2.7분). 정상 원정은 넉넉히 돌 시간, 눌러앉으면 굶는다.
+@export var hunger_drain_per_sec: float = 0.6
+## 포만 0 이후 1초 간격으로 깎는 HP. 즉사 아님(만HP=100 → ≈25초) — 굶기 시작하면 돌아갈 시간은 준다.
+## ⚠ 초당 tick으로 깎는다(연속 아님) — damage_player를 매 프레임 부르면 아픔음이 도배된다.
+@export var starve_damage_per_tick: float = 4.0
 
 @export_group("드로잉·잉크")
 ## 룬별 기본 마나 (인덱스 = Enums.RuneType: 불=0 / (1=옛 충격, 빈 슬롯) / 물=2 / 바람=3).

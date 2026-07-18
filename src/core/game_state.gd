@@ -9,6 +9,11 @@ var balance: BalanceData = preload("res://data/balance.tres")
 var mana: float
 ## 플레이어 HP — 출격 시 reset, 표시·판정의 단일 원장 (v1.1: C 로컬에서 이관)
 var hp: float
+## 포만 게이지 (세션 35) — **숲에 있는 동안만** 준다. 0이면 굶어 HP가 깎인다. 베이스=늘 만복.
+var hunger: float
+## 숲에 있나 — 허기는 이때만 준다. forest/base `_ready`가 설정 (오토로드라 씬 전환에도 남음).
+var in_expedition: bool = false
+var _starve_accum: float = 0.0
 ## {item_id: count} — 창고 (영구, 사망에도 유지)
 var inventory: Dictionary = {}
 ## 출격 중 획득 [{ "id": StringName, "count": int }] — 사망 시 손실
@@ -27,6 +32,7 @@ var ui_modal_open: bool = false
 func _ready() -> void:
 	mana = mana_max()
 	hp = hp_max()
+	hunger = hunger_max()
 	# 시작 해금 — 튜토가 가르치는 불 룬 + 추진 문양 (v2.2, TRUTH §4 세션 14: 충격 룬 폐지)
 	codex[&"rune_fire"] = true
 	codex[&"glyph_thrust"] = true
@@ -37,6 +43,29 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	mana = minf(mana + balance.mana_regen_per_sec * delta, mana_max())
+	if in_expedition:
+		_tick_hunger(delta)
+
+## 숲에 있는 동안만 불린다 (in_expedition). 포만이 남았으면 줄이고, 0이면 1초 간격으로 굶어 HP↓.
+## 🔴 굶주림 피해는 **tick**이다 — damage_player를 매 프레임 부르면 아픔음(player_hp_changed 훅)이
+## 도배된다. accum으로 1초에 한 번만 때린다.
+func _tick_hunger(delta: float) -> void:
+	if hunger > 0.0:
+		hunger = maxf(0.0, hunger - balance.hunger_drain_per_sec * delta)
+		_starve_accum = 0.0
+		return
+	_starve_accum += delta
+	if _starve_accum >= 1.0:
+		_starve_accum -= 1.0
+		damage_player(balance.starve_damage_per_tick)
+
+func hunger_max() -> float:
+	return balance.hunger_max
+
+## 만복으로 되돌린다 — 출격(만복으로 시작)·귀환(집에서 배를 채움) 양쪽이 부른다.
+func restore_hunger_full() -> void:
+	hunger = hunger_max()
+	_starve_accum = 0.0
 
 func spend_mana(amount: float) -> bool:
 	if mana < amount:
