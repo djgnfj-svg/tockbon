@@ -113,6 +113,10 @@ enemy_id = &"mist"
 position = Vector2(180, -350)
 enemy_id = &"beetle"
 
+[node name="Boss" parent="Enemies" instance=ExtResource("4_enemy")]
+position = Vector2(-40, -520)
+enemy_id = &"slime_elite"
+
 [node name="RingSpellSystem" parent="." instance=ExtResource("5_spell")]
 z_index = 10
 

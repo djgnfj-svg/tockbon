@@ -34,11 +34,15 @@ const TEMPLATES := [
 	{"name": "8방", "slots": [0, 1, 2, 3, 4, 5, 6, 7]},  # 전방위
 ]
 
-const RUNE_FIRE := 0   # 지금은 불만
+const RUNE_FIRE := 0   # 기본 룬 (불) — 아직 안 고른 판·옛 도안의 폴백
 
 var _stage: int = STAGE_JIN
 var _has_jin := false
 var _has_rune := false
+## 🔴 고른 룬 종류 (Enums.RuneType). 세션 34 전엔 RUNE_FIRE로 **하드코딩**돼, 물·바람을
+## 그려도 발사가 불로 나갔다 (get_assembly가 늘 불을 실었고 발사도 FIRE를 하드코딩). 이제
+## choose_rune이 set_rune으로 여기 담고, get_assembly가 실어 저장·발사까지 흐른다.
+var _rune: int = RUNE_FIRE
 var _open: Array[int] = [0, 2]      # 지금 문양본이 연 칸들 (기본 2방)
 var _slots: Array[int] = []         # SLOTS개, 값 = 문양 코드 or GLYPH_NONE (열린 칸만 채워진다)
 
@@ -62,7 +66,15 @@ func get_open() -> Array[int]:
 	return _open
 
 func get_rune() -> int:
-	return RUNE_FIRE
+	return _rune
+
+
+## 🔴 룬 종류를 고른다 (Enums.RuneType). 룬 단계에서만 유효 — 이미 잠갔으면 무시한다
+## ([다시 그리기]가 풀기 전엔 못 바꾼다, choose_jin과 같은 규약).
+func set_rune(rune_type: int) -> void:
+	if _stage != STAGE_RUNE or _has_rune:
+		return
+	_rune = rune_type
 
 func glyph_at(slot: int) -> int:
 	return _slots[slot] if slot >= 0 and slot < SLOTS else GLYPH_NONE
@@ -95,7 +107,7 @@ func can_commit() -> bool:
 ## 🔴 조립 결과 스냅샷 = **발사 계약**. 발사(ring_spell_system)·저장(RingDesign)이 이걸 읽는다.
 ## ⚠ 모양을 바꾸면 둘 다 조용히 깨진다 (tests/test_ring_assembly_auto.gd가 못 박아 둔다).
 func get_assembly() -> Dictionary:
-	return {"ring_count": 1, "rune": RUNE_FIRE, "rings": [Array(_slots)],
+	return {"ring_count": 1, "rune": _rune, "rings": [Array(_slots)],
 		"open": _open.duplicate()}
 
 
@@ -137,6 +149,7 @@ func clear() -> void:
 	_stage = STAGE_JIN
 	_has_jin = false
 	_has_rune = false
+	_rune = RUNE_FIRE
 	_reset_slots()
 
 

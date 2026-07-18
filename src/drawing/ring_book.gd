@@ -13,8 +13,8 @@ const RingBoard := preload("res://src/drawing/ring_board.gd")
 
 ## 진을 골랐다 — 보드에 진(그릇)을 놓는다 (세션 13 순차 조립)
 signal jin_selected
-## 룬을 골랐다 — 보드 중심에 룬을 놓는다
-signal rune_selected
+## 룬을 골랐다 — 보드 중심에 그 룬을 놓는다 (rune_type = Enums.RuneType, 세션 34)
+signal rune_selected(rune_type: int)
 ## 문양본을 삽입했다 — 보드가 이 칸들을 연다 (idx = TEMPLATES 인덱스, slots = 열 인덱스 배열)
 signal template_selected(idx: int, slots: Array)
 ## 문양을 골랐다 — 열린 칸을 한 칸 채운다 (RingBoard.G_*)
@@ -47,7 +47,7 @@ const TAB_GAP := 2.0
 
 const TAB_DESC := [
 	"진 — 바깥 그릇. 지금은 일반진 하나.",
-	"룬 — 중심 속성. 지금은 불만.",
+	"룬 — 중심 속성. 탁본으로 해독한 룬을 고른다.",
 	"문양본 — 삽입하면 그 자리가 열린다. 얻은 만큼 넓어진다.",
 	"문양 — 열린 칸을 이걸로 채운다.",
 ]
@@ -58,13 +58,16 @@ var _template_idx := 0                # 지금 삽입된 문양본 (하이라이
 var _active := RingBoard.G_RADIATE    # 지금 고른 문양 코드 (하이라이트)
 var _jin_placed := false              # 진을 이미 놓았나 (탭 표식)
 var _rune_placed := false             # 룬을 이미 놓았나
+var _rune_choice := -1                # 지금 고른 룬 타입 (하이라이트) — -1=아직 (세션 34)
 var _tab_rects: Array[Rect2] = []
 ## 클릭 가능한 칸 — {rect, kind:"jin"/"rune"/"template"/"glyph", value}
 var _cells: Array[Dictionary] = []
 
 # ── 주입 데이터 (세션 13 구조화) — 패널이 Db에서 읽어 넣는다. 없으면 RingBoard const 폴백. ──
 var _jin_defs: Array = []
-var _rune_def: RuneDef = null
+## 🔴 해금된 룬들 (RuneDef 배열, 세션 34). 패널이 `is_unlocked`로 걸러 넘긴다 — 책은
+## 오토로드를 안 봐서(주석 상단) 해금 판정을 직접 못 한다. 잠긴 룬은 셀 자체가 안 뜬다.
+var _rune_defs: Array = []
 var _glyph_defs: Array = []
 
 
@@ -73,9 +76,10 @@ func _init() -> void:
 
 
 ## Db에서 읽은 진·룬·문양 정의를 주입한다 (셀 이름·색을 여기서 열거한다).
-func set_defs(jins: Array, rune: RuneDef, glyph_defs: Array) -> void:
+## 🔴 runes = **해금된 룬만** (패널이 걸러 넘긴다) — 잠긴 룬은 셀이 안 뜬다 (세션 34).
+func set_defs(jins: Array, runes: Array, glyph_defs: Array) -> void:
 	_jin_defs = jins
-	_rune_def = rune
+	_rune_defs = runes
 	_glyph_defs = glyph_defs
 	queue_redraw()
 
@@ -98,12 +102,6 @@ func _glyph_rows() -> Array:
 
 func _jin_name() -> String:
 	return String(_jin_defs[0].display_name) if not _jin_defs.is_empty() else "일반진"
-
-func _rune_name() -> String:
-	return _rune_def.display_name if _rune_def else "불"
-
-func _rune_ui_color() -> Color:
-	return _rune_def.ui_color if _rune_def else RingBoard.RUNE_COLOR
 
 func _jin_ui_color() -> Color:
 	return _jin_defs[0].ui_color if not _jin_defs.is_empty() else RingBoard.RING_LINE
@@ -148,7 +146,8 @@ func _gui_input(event: InputEvent) -> void:
 			"jin":
 				jin_selected.emit()
 			"rune":
-				rune_selected.emit()
+				_rune_choice = int(cell.value)   # 하이라이트 (세션 34: 여러 룬 셀)
+				rune_selected.emit(int(cell.value))
 			"template":
 				_template_idx = int(cell.value)
 				template_selected.emit(_template_idx, RingBoard.TEMPLATES[_template_idx].slots)
@@ -196,8 +195,7 @@ func _draw() -> void:
 			_draw_single_cell(font, top, _jin_name(), "왼쪽에 손으로 그리기", "jin", "jin",
 				_jin_placed, _jin_ui_color())
 		TAB_RUNE:
-			_draw_single_cell(font, top, _rune_name(), "왼쪽에 손으로 그리기", "fire", "rune",
-				_rune_placed, _rune_ui_color())
+			_draw_rune_cells(font, top)
 		TAB_TEMPLATE:
 			_draw_template_cells(font, top)
 		TAB_GLYPH:
@@ -237,6 +235,47 @@ func _draw_template_cells(font: Font, top: float) -> void:
 			RingBoard.TEMPLATES[i].slots)
 		_text_center(font, r.position + Vector2(cw * 0.5, ch - 14.0),
 			String(RingBoard.TEMPLATES[i].name), NAME_COLOR, 10)
+
+
+## 룬 탭 — **해금된 룬**을 셀로 열거 (세션 34). 클릭하면 그 룬 타입이 rune_selected로 나간다.
+## 주입 전(폴백)엔 불 하나만 — set_defs가 오기 전 첫 프레임 대비. 잠긴 룬은 애초에 배열에 없다.
+func _draw_rune_cells(font: Font, top: float) -> void:
+	var defs := _rune_defs if not _rune_defs.is_empty() else []
+	var n := maxi(defs.size(), 1)
+	var gap := 8.0
+	var cw := (size.x - 16.0 - gap * float(n - 1)) / float(n)
+	var ch := 120.0
+	for i in n:
+		var rd := defs[i] as RuneDef if i < defs.size() else null
+		var rtype := int(rd.type) if rd else RingBoard.RUNE_FIRE
+		var rname := String(rd.display_name) if rd else "불"
+		var rcol: Color = rd.ui_color if rd else RingBoard.RUNE_COLOR
+		var r := Rect2(8.0 + float(i) * (cw + gap), top, cw, ch)
+		_cells.append({"rect": r, "kind": "rune", "value": rtype})
+		var sel := _rune_choice == rtype
+		draw_rect(r, CELL_SEL_BG if sel else CELL_BG, true)
+		draw_rect(r, SEL_EDGE if sel else CELL_LINE, false, 2.0 if sel else 1.0)
+		_draw_rune_icon(r.get_center() + Vector2(0, -14.0), 24.0, rcol, rtype)
+		var label := "✓ 그림" if (sel and _rune_placed) else "왼쪽에 손으로 그리기"
+		_text_center(font, r.position + Vector2(cw * 0.5, ch - 30.0), rname, NAME_COLOR, 11)
+		_text_center(font, r.position + Vector2(cw * 0.5, ch - 15.0), label,
+			SEL_EDGE if (sel and _rune_placed) else DESC_COLOR, 8)
+
+
+## 룬 아이콘 — 판의 밑그림과 같은 모양 규약 (세션 34): 불 △ · 물 ▽ · 바람 ◇.
+func _draw_rune_icon(c: Vector2, s: float, col: Color, rune_type: int) -> void:
+	var v: PackedVector2Array
+	match rune_type:
+		Enums.RuneType.WATER:
+			v = PackedVector2Array([c + Vector2(-s * 0.87, -s * 0.5),
+				c + Vector2(s * 0.87, -s * 0.5), c + Vector2(0, s), c + Vector2(-s * 0.87, -s * 0.5)])
+		Enums.RuneType.WIND:
+			v = PackedVector2Array([c + Vector2(0, -s), c + Vector2(s, 0),
+				c + Vector2(0, s), c + Vector2(-s, 0), c + Vector2(0, -s)])
+		_:
+			v = PackedVector2Array([c + Vector2(0, -s),
+				c + Vector2(s * 0.87, s * 0.5), c + Vector2(-s * 0.87, s * 0.5), c + Vector2(0, -s)])
+	draw_polyline(v, col, 2.5, true)
 
 
 ## 문양 탭 — 주입된 문양 def를 열거 (응집·발산…). 하드코딩 없음.

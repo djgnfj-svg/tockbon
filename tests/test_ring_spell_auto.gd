@@ -78,7 +78,7 @@ func _test_deploy_radiate(system) -> void:
 	print("[1] 발산 8칸 전개 → 불탄환 8발, 기둥 0")
 	_clear(system)
 	# 아무도 없는 먼 곳에서 편다 — 탄이 즉시 뭔가에 닿아 사라지지 않게
-	system._deploy_now(_all(G_RADIATE), Vector2(5000, 5000), 0.0, 1.0, 1.0)
+	system._deploy_now(_all(G_RADIATE), Vector2(5000, 5000), 0.0, 1.0, 1.0, 0)
 	await process_frame
 	_check(_bolts(system).size() == 8, "불탄환 8발 (실제 %d)" % _bolts(system).size())
 	_check(_pillars().size() == 0, "기둥 0 (실제 %d)" % _pillars().size())
@@ -88,7 +88,7 @@ func _test_deploy_gather(system) -> void:
 	print("[2] 응집 4칸 전개 → 기둥 1개, 불탄환 0")
 	_clear(system)
 	system._deploy_now(_ring({0: G_GATHER, 2: G_GATHER, 4: G_GATHER, 6: G_GATHER}),
-		Vector2(5000, 5000), 0.0, 1.0, 1.0)
+		Vector2(5000, 5000), 0.0, 1.0, 1.0, 0)
 	await process_frame
 	_check(_pillars().size() == 1, "기둥 1개 (실제 %d)" % _pillars().size())
 	_check(_bolts(system).size() == 0, "불탄환 0 (실제 %d)" % _bolts(system).size())
@@ -97,7 +97,7 @@ func _test_deploy_gather(system) -> void:
 func _test_deploy_empty(system) -> void:
 	print("[3] 빈 진 전개 → 아무것도 안 나온다")
 	_clear(system)
-	system._deploy_now(_all(GLYPH_NONE), Vector2(5000, 5000), 0.0, 1.0, 1.0)
+	system._deploy_now(_all(GLYPH_NONE), Vector2(5000, 5000), 0.0, 1.0, 1.0, 0)
 	await process_frame
 	_check(_bolts(system).size() == 0 and _pillars().size() == 0,
 		"불탄환·기둥 모두 0 (실제 탄 %d·기둥 %d)" % [_bolts(system).size(), _pillars().size()])
@@ -107,7 +107,7 @@ func _test_deploy_mixed(system) -> void:
 	print("[4] 혼합(발산 2 + 응집 3) → 불탄환 2발 · 기둥 1개")
 	_clear(system)
 	system._deploy_now(_ring({1: G_RADIATE, 5: G_RADIATE, 0: G_GATHER, 2: G_GATHER, 4: G_GATHER}),
-		Vector2(5000, 5000), 0.0, 1.0, 1.0)
+		Vector2(5000, 5000), 0.0, 1.0, 1.0, 0)
 	await process_frame
 	_check(_bolts(system).size() == 2, "불탄환 2발 (실제 %d)" % _bolts(system).size())
 	_check(_pillars().size() == 1, "기둥 1개 (실제 %d)" % _pillars().size())
@@ -139,6 +139,24 @@ func _test_carrier_flies_and_hits(system) -> void:
 		pframes += 1
 	_check(not _pillars().is_empty(), "착탄점에 응집 기둥 전개됨")
 	dummy.queue_free()
+	_clear(system)
+
+	# 🔴 세션 34: 룬 사슬 — assembly.rune(=물 2)가 발사까지 흐르는지. 세션 34 전엔 발사가
+	# Db.get_rune(FIRE)를 하드코딩해 물을 그려도 불로 맞았다 (이 검증이 회귀 가드).
+	var wet = _dummy_scene.instantiate()
+	root.add_child(wet)
+	wet.global_position = Vector2(140, 0)
+	# 빈 진 — 진 몸이 때리는 rune_type만 본다 (전개 기둥이 지연 스폰돼 다음 테스트로 새지 않게)
+	_bus.ring_cast_requested.emit(
+		{"rings": [_all(GLYPH_NONE)], "rune": Enums.RuneType.WATER},
+		Vector2.ZERO, Vector2(1, 0))
+	var wframes := 0
+	while wet.hits.is_empty() and wframes < 180:
+		await physics_frame
+		wframes += 1
+	var got := int(wet.hits[0]["rune_type"]) if not wet.hits.is_empty() else -1
+	_check(got == Enums.RuneType.WATER, "물 룬(rune=2)으로 그리면 물 룬으로 맞는다 (rune_type=%d)" % got)
+	wet.queue_free()
 	_clear(system)
 
 

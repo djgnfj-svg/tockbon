@@ -114,7 +114,7 @@ var _scorer := TraceScorer.new()
 
 # ── 데이터 정의 (세션 13 구조화) — 바깥(패널)이 Db에서 읽어 주입한다. 없으면 const 폴백. ──
 var _jin_def: JinDef = null
-var _rune_def: RuneDef = null
+var _rune_defs: Dictionary = {}         # {Enums.RuneType: RuneDef} — 색·이름 조회 (세션 34: 룬 여러 종)
 var _glyph_defs: Array[GlyphDef] = []
 
 var _active := G_RADIATE            # 활성 문양 코드 (바깥이 set_active_glyph으로 정한다)
@@ -270,15 +270,14 @@ func _build_guide(target: int, slot: int) -> PackedVector2Array:
 		TraceTarget.RUNE:
 			if _rune_idx < 0:
 				return pts
-			# 중심 삼각형 세 변 (_draw_rune과 같은 꼭짓점) — 변마다 촘촘히, 닫힌 형. 휠 크기 반영
-			var s := _rune_size()
-			var v := PackedVector2Array([
-				ctr + Vector2(0, -s), ctr + Vector2(s * 0.87, s * 0.5),
-				ctr + Vector2(-s * 0.87, s * 0.5), ctr + Vector2(0, -s)])
-			for e in 3:
+			# 🔴 룬 종류별 밑그림 (세션 34) — 닫힌 다각형의 꼭짓점을 변마다 촘촘히 잇는다.
+			# 렌더는 먹선 그대로라(_draw_locked) 이 밑그림 모양이 곧 "따라 그리는 룬"이다.
+			var v := _rune_guide_verts(_rune_idx, ctr, _rune_size())
+			var seg := v.size() - 1
+			for e in seg:
 				for t in 12:
 					pts.append(v[e].lerp(v[e + 1], float(t) / 12.0))
-			pts.append(v[3])
+			pts.append(v[seg])
 		TraceTarget.GLYPH:
 			# 🔴 문양 = **방향을 가진 화살표** (세션 25). 예전엔 방향 없는 짧은 **작대기**였다:
 			# 책의 셀은 화살표(↑↓←→)를 그려 놓고 판의 밑그림은 작대기라, 응집과 발산이
@@ -304,6 +303,25 @@ func _build_guide(target: int, slot: int) -> PackedVector2Array:
 					for t in range(1, 5):
 						pts.append(w.lerp(head, float(t) / 4.0))
 	return pts
+
+
+## 🔴 룬 종류별 밑그림 꼭짓점 (닫힌 다각형, 마지막=처음). 세션 34 — "새 룬 = 여기 한 갈래".
+## 모양은 손으로 구분해 그릴 수 있게 서로 다른 방향/변수를 준다 (손맛은 R2a처럼 차차 다듬는다):
+##   불 △ 위 꼭짓점 · 물 ▽ 아래 꼭짓점(고이는 방향) · 바람 ◇ 마름모(사방으로 돈다).
+func _rune_guide_verts(rune_type: int, ctr: Vector2, s: float) -> PackedVector2Array:
+	match rune_type:
+		Enums.RuneType.WATER:
+			return PackedVector2Array([
+				ctr + Vector2(-s * 0.87, -s * 0.5), ctr + Vector2(s * 0.87, -s * 0.5),
+				ctr + Vector2(0, s), ctr + Vector2(-s * 0.87, -s * 0.5)])
+		Enums.RuneType.WIND:
+			return PackedVector2Array([
+				ctr + Vector2(0, -s), ctr + Vector2(s, 0),
+				ctr + Vector2(0, s), ctr + Vector2(-s, 0), ctr + Vector2(0, -s)])
+		_:
+			return PackedVector2Array([
+				ctr + Vector2(0, -s), ctr + Vector2(s * 0.87, s * 0.5),
+				ctr + Vector2(-s * 0.87, s * 0.5), ctr + Vector2(0, -s)])
 
 
 ## 지금 그릴 대상·현재 점수 조회 (바깥이 안내문·점수 표시에 쓴다).
@@ -526,9 +544,13 @@ func _nearest_open_slot(pos: Vector2) -> int:
 
 ## 진·룬·문양 정의를 주입한다 (색·이름을 여기서 읽는다). 슬롯은 여전히 int code로 저장 —
 ## 발사 계약(assembly의 정수)은 그대로다. defs 없으면 아래 색 헬퍼가 const로 폴백한다.
-func set_defs(jin: JinDef, rune: RuneDef, glyph_defs: Array) -> void:
+func set_defs(jin: JinDef, runes: Array, glyph_defs: Array) -> void:
 	_jin_def = jin
-	_rune_def = rune
+	_rune_defs.clear()
+	for r in runes:
+		var rd := r as RuneDef
+		if rd:
+			_rune_defs[rd.type] = rd
 	_glyph_defs.clear()
 	for d in glyph_defs:
 		var gd := d as GlyphDef
@@ -541,7 +563,8 @@ func _jin_color() -> Color:
 	return _jin_def.ui_color if _jin_def else RING_LINE
 
 func _rune_color() -> Color:
-	return _rune_def.ui_color if _rune_def else RUNE_COLOR
+	var rd := _rune_defs.get(_rune_idx) as RuneDef   # _rune_idx = 고른 룬 타입 (세션 34)
+	return rd.ui_color if rd else RUNE_COLOR
 
 func _glyph_def_by_code(code: int) -> GlyphDef:
 	for d in _glyph_defs:
@@ -605,13 +628,14 @@ func choose_jin(idx: int = 0) -> void:
 	score_changed.emit(_scorer.piece_score())
 
 
-## 🔴 **룬을 고른다** (오른쪽 룬 셀 클릭) → 중심에 밑그림이 선다 (세션 25).
-## idx = 룬 종류. 지금은 불(0)뿐이지만 물·바람이 늘면 **여기로 들어온다** — 그때
-## `_build_guide`가 idx별로 다른 모양을 그리면 된다 (지금은 어느 idx든 삼각).
-func choose_rune(idx: int = 0) -> void:
+## 🔴 **룬을 고른다** (오른쪽 룬 셀 클릭) → 중심에 룬별 밑그림이 선다 (세션 25·34).
+## rune_type = Enums.RuneType (불0·물2·바람3). `_build_guide`가 type별 모양을 그리고
+## `_asm.set_rune`이 발사·저장 계약에 담는다 — 세션 34 전엔 밑그림만 바뀌고 발사는 늘 불이었다.
+func choose_rune(rune_type: int = Enums.RuneType.FIRE) -> void:
 	if _asm.stage() != STAGE_RUNE or _asm.has_rune():
 		return
-	_rune_idx = maxi(idx, 0)
+	_rune_idx = rune_type
+	_asm.set_rune(rune_type)             # 🔴 발사·저장에 실제 룬 타입을 담는다 (밑그림뿐이 아니다)
 	_set_trace(TraceTarget.RUNE, -1)
 	queue_redraw()
 	score_changed.emit(_scorer.piece_score())

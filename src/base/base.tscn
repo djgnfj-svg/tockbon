@@ -133,6 +133,32 @@ offset_bottom = -28.0
 text = "[E] 공방"
 horizontal_alignment = 1
 
+[node name="Decode" type="Area2D" parent="."]
+position = Vector2(340, -230)
+collision_layer = 64
+collision_mask = 2
+script = ExtResource("2_zone")
+zone_id = &"decode"
+
+[node name="Slab" type="Polygon2D" parent="Decode"]
+color = Color(0.2, 0.26, 0.3, 1)
+polygon = PackedVector2Array(-32, -12, 32, -12, 32, 24, -32, 24)
+
+[node name="Rubbing" type="Polygon2D" parent="Decode"]
+color = Color(0.72, 0.7, 0.62, 1)
+polygon = PackedVector2Array(-24, -6, 24, -6, 24, 14, -24, 14)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Decode"]
+shape = SubResource("RectangleShape2D_refine")
+
+[node name="Prompt" type="Label" parent="Decode"]
+offset_left = -56.0
+offset_top = -50.0
+offset_right = 56.0
+offset_bottom = -28.0
+text = "[E] 탁본 해독대"
+horizontal_alignment = 1
+
 [node name="Player" parent="." instance=ExtResource("3_player")]
 position = Vector2(0, 40)
 
@@ -165,6 +191,6 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("6_hud")
-hint_text = "WASD=이동 · 책상 E=고리 조립 · 정제대 E=재료 가공 · 공방 E=장비 · 왼쪽 숲길 E=원정 · 좌클릭=발사 · 1~4=슬롯 · I=창고"
+hint_text = "WASD=이동 · 책상 E=고리 조립 · 정제대 E=가공 · 공방 E=장비 · 해독대 E=룬 해독 · 왼쪽 숲길 E=원정 · 좌클릭=발사 · 1~4=슬롯 · I=창고"
 
 [node name="Inv" parent="." instance=ExtResource("7_inv")]

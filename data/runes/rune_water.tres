@@ -6,6 +6,7 @@
 [resource]
 script = ExtResource("1")
 type = 2
+unlock_id = &"rune_water"
 display_name = "물"
 base_damage = 1.0
 status = 3

@@ -115,10 +115,24 @@
 > `RecipeDef.station`으로 정제대(잉크·종이)⇔공방(펜) 분리 · `workshop_panel`(제작+장착) · 펜 재료=
 > hound/beetle 드롭. 장착 로직·저장은 이미 있었고 UI만 없었다. 정본 = STATUS 「세션 32」.
 >
-> **🔴 다음 세션 = E4(보스 → 룬 해금)** — 엘리트/fragment_*가 여기서 산다(숲 드롭이 아니라 퀘스트
-> 보상). 또는 E3 밸런스 조이기(잉크·종이·펜 재료 희소성 — 지금 무한·무료라 상급이 최적). 지팡이·
-> 부적·로브는 착용만 되고 제작 레시피 없음(펜과 같은 틀로 `.tres` 추가). 손맛/드롭률은 **직접 싸워
-> 봐야**. 정본 = `docs/BACKLOG.md` E4·E5.
+> ✅ **세션 33 = 사운드 배선** — `Audio` 오토로드(core) + EventBus 9종 구독. **새 소리 = wav 한 장**.
+> ⚠ SFX 17종은 합성 플레이스홀더(진짜 소리·BGM 교체 남음). 정본 = STATUS 「세션 33」 + memory `takbon-sound-system`.
+>
+> 🔴🔴 **세션 34 = E4 룬 해금 (보스→조각→탁본 해독→새 룬을 그린다)**. **그리는 어휘가 처음 늘었다** —
+> 세션 33까지 룬은 불 하나였다. 🔴 **부품은 다 있었는데 룬 사슬이 전 구간 불로 고정**돼 있었다:
+> `ring_assembly`가 `RUNE_FIRE`, 발사가 `Db.get_rune(FIRE)`를 **하드코딩**해 **물을 그려도 불로 맞았다**
+> (`RingDesign.rune`은 저장·라운드트립됐는데 아무도 안 채웠다). 뚫은 곳 = assembly `_rune`·`set_rune` ·
+> `ring_board.choose_rune(type)`+**룬별 밑그림**(불△·물▽·바람◇) · `ring_book` 룬탭 **다중셀(해금된 룬만)** ·
+> `ring_forge_panel._unlocked_runes` · 발사가 `assembly.rune`. 🔴 **해금 판정은 패널이 한다**(책·보드는
+> 오토로드를 안 본다) — `RuneDef.unlock_id` 신설(`rune_<명>`). 보스 = 숲 깊은 곳 `slime_elite`(외형도
+> `.tres`), `fragment_water` 확정 드롭. 해금 = 베이스 새 **탁본 해독대**(`src/base/decode_panel`, refine
+> 패턴) — 조각 소비→`codex_unlocked`→룬. 🔴 **시작=불만, 물·바람은 해독으로만**(사용자: *"얻게 시스템만
+> 갖추고 다시 불만"*). 정본 = STATUS 「세션 34」.
+>
+> **🔴 다음 세션 = 손맛 튜닝** (룬 밑그림 ▽·◇가 그릴 만한지·보스 강도(slime_elite hp 60·1.9배)·드롭
+> 체감 — **직접 싸워 봐야**). 또는 **gale 풀 보스 AI**(돌풍·투사체·페이즈2 — forest_enemy가 아직 이
+> 파라미터를 안 읽는다·바람 룬 조각을 줄 보스가 필요) · E3 밸런스(재료 희소성). 지팡이·부적·로브는
+> 착용만 되고 제작 레시피 없음(펜과 같은 틀로 `.tres` 추가). 정본 = `docs/BACKLOG.md` E4·E5.
 >
 > ⚠ **손맛류는 여전히 사용자가 직접 해 봐야 정해진다** — 원정 손맛(F4)·문양 손맛(R2a)·판정
 > 반경·65점 기준선(R3)·**드롭률 체감**. 측정이 전부 시뮬레이션이다(**좌표를 그대로 찍어 재면 정밀도
@@ -218,6 +232,7 @@
 ./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_forest_auto.gd         # **숲 원정** (세션 26): 출격 만HP · 적이 쫓아옴(그룹 "player") · 접촉 피해 · 🔴**적 레이어 계약**(4=enemy가 아니면 부딪히기만 하고 take_hit이 안 불린다) · 귀환/사망 계약(extraction_success·bag_lost)
 ./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_workshop_auto.gd      # **공방 장비 제작** (세션 32): 레시피 station 분리(정제대⇔공방) · 펜 제작(spend→add) · 장착 라운드트립(equip→correction 0.35→소비, unequip→반환) · 🔴**패널 클릭은 헤드리스가 못 잡는다**(실게임 push_input로 별도 검증)
 ./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_audio_auto.gd         # **사운드 배선** (세션 33): 17 SFX 로드·길이>0 · Audio가 EventBus 9종에 연결 · 발신→올바른 스트림(부작용 순간은 연결만) · 🔴**소리가 실제로 나는지는 헤드리스가 못 잡는다**(오디오 드라이버 없음 — 버스 라우팅·playing은 에디터 실게임 exec로 별도 검증)
+./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_decode_auto.gd        # **탁본 해독** (세션 34 E4): 조각 소비+룬 해금(codex_unlocked) · 이미 배운 룬은 조각 안 닳림 · 해금이 룬 목록에 흐름 · 🔴**룬 탭 다중셀 렌더·클릭은 헤드리스가 못 잡는다**(문양 탭·refine과 동일 패턴 — 에디터 실게임 스샷으로 별도 확인: 불△·물▽ 셀·바람은 잠겨 안 뜸)
 ```
 
 🔴 **스위트를 돌리면 `user://save`가 날아간다** (세션 26 F3 이후). `SaveManager._ready`가 저장을

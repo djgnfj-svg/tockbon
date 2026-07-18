@@ -44,6 +44,8 @@ const RingForgePanelScript := preload("res://src/drawing/ring_forge_panel.gd")
 const RefinePanelScene := preload("res://src/base/refine_panel.tscn")
 ## 공방 패널 (세션32) — 재료→장비 + 착용/해제. 정제대와 같은 이유로 preload가 안전.
 const WorkshopPanelScene := preload("res://src/base/workshop_panel.tscn")
+## 해독대 패널 (세션34) — 룬 조각→룬 해금. 정제대·공방과 같은 이유로 preload가 안전.
+const DecodePanelScene := preload("res://src/base/decode_panel.tscn")
 const InteractZone := preload("res://src/actors/interact_zone.gd")
 const Player := preload("res://src/actors/player.gd")
 const Hud := preload("res://src/hud/hud.gd")
@@ -63,6 +65,7 @@ const RingPower := preload("res://src/core/ring_power.gd")
 @onready var _gate: InteractZone = $ForestGate
 @onready var _refine_zone: InteractZone = $Refine
 @onready var _craft_zone: InteractZone = $Craft
+@onready var _decode_zone: InteractZone = $Decode
 @onready var _player: Player = $Player
 @onready var _hud: Hud = $Hud/Hud
 
@@ -71,6 +74,7 @@ var _overlay: CanvasLayer = null
 var _forge: RingForgePanelScript = null
 var _refine: Control = null
 var _workshop: Control = null
+var _decode: Control = null
 
 func _ready() -> void:
 	# 🔴 씬 진입 시 모달 플래그를 내린다 — ui_modal_open은 오토로드라 씬 전환에도 살아남는다.
@@ -80,6 +84,7 @@ func _ready() -> void:
 	_gate.interacted.connect(_to_forest)
 	_refine_zone.interacted.connect(_open_refine)
 	_craft_zone.interacted.connect(_open_workshop)
+	_decode_zone.interacted.connect(_open_decode)
 	_player.caster.notice.connect(_hud.say)
 	_player.caster.slot_changed.connect(_hud.select)
 	_hud.select(_player.caster.slot())
@@ -194,5 +199,33 @@ func _close_workshop() -> void:
 		_overlay.queue_free()
 		_overlay = null
 		_workshop = null
+	_player.set_physics_process(true)
+	_player.caster.enabled = true
+
+# ─────────────────────────── 탁본 해독대 (세션34 E4) ───────────────────────────
+
+## 해독대에서 E — 룬 조각을 해독해 룬을 배우는 패널을 연다 (다른 모달과 같은 슬롯·모달 규약).
+## 🔴 다른 모달이 열려 있으면(_overlay != null) 안 연다 — 모달은 하나뿐이다.
+func _open_decode() -> void:
+	if _overlay != null:
+		return
+	_player.set_physics_process(false)   # 해독하는 동안 이동 정지
+	_player.caster.enabled = false        # 조준·발사 정지
+	_overlay = CanvasLayer.new()
+	_overlay.layer = 10
+	add_child(_overlay)
+	_decode = DecodePanelScene.instantiate() as Control
+	if _decode == null:
+		push_error("decode_panel 인스턴스가 Control이 아니다")
+		return
+	_overlay.add_child(_decode)
+	_decode.closed.connect(_close_decode)   # ESC → 패널이 closed 발신 (ui_modal_open도 패널이 끈다)
+	_decode.open()
+
+func _close_decode() -> void:
+	if _overlay != null:
+		_overlay.queue_free()
+		_overlay = null
+		_decode = null
 	_player.set_physics_process(true)
 	_player.caster.enabled = true

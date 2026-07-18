@@ -6,6 +6,7 @@
 [resource]
 script = ExtResource("1")
 type = 0
+unlock_id = &"rune_fire"
 display_name = "불"
 base_damage = 0.9
 status = 1

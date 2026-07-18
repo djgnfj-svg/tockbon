@@ -270,14 +270,26 @@ func _unhandled_input(event: InputEvent) -> void:
 
 # ─────────────────────────── Db 데이터 주입 (세션 13 구조화) ───────────────────────────
 
-## Db에서 진·룬(불)·문양 정의를 읽어 보드·책에 넣는다. int const 대신 데이터가 UI를 채운다.
+## Db에서 진·룬·문양 정의를 읽어 보드·책에 넣는다. int const 대신 데이터가 UI를 채운다.
+## 🔴 룬은 **해금된 것만** 넘긴다 (세션 34) — open()마다 불리므로 탁본 해금이 다음 개봉에 반영된다.
 func _inject_defs() -> void:
 	var jins: Array = Db.all_jins()
-	var fire: RuneDef = Db.get_rune(Enums.RuneType.FIRE)
+	var runes: Array = _unlocked_runes()
 	var glyphs: Array = Db.all_glyphs()
 	var jin0: JinDef = jins[0] if not jins.is_empty() else null
-	_board.set_defs(jin0, fire, glyphs)
-	_book.set_defs(jins, fire, glyphs)
+	_board.set_defs(jin0, runes, glyphs)
+	_book.set_defs(jins, runes, glyphs)
+
+
+## 도감에서 해금된 룬만 (Enums.RUNE_TYPES 순서 = 불·물·바람). is_unlocked 판정은 여기(패널)가
+## 한다 — 책·보드는 오토로드를 안 봐서 못 한다. unlock_id 빈 룬은 항상 잠긴 셈이라 안 뜬다.
+func _unlocked_runes() -> Array:
+	var out: Array = []
+	for t: int in Enums.RUNE_TYPES:
+		var rd: RuneDef = Db.get_rune(t)
+		if rd != null and rd.unlock_id != &"" and GameState.is_unlocked(rd.unlock_id):
+			out.append(rd)
+	return out
 
 
 # ─────────────────────────── 선택기 → 보드 (순차 조립) ───────────────────────────
@@ -310,14 +322,15 @@ func _on_jin_selected() -> void:
 	_refresh_buttons()
 
 
-## 룬 탭 셀 — 마찬가지. ⚠ 룬이 불·물·바람으로 늘면 **셀마다 idx를 실어** choose_rune(idx)로
-## 넘긴다 (지금은 Db에 불 하나뿐이라 책이 idx를 안 준다).
-func _on_rune_selected() -> void:
+## 룬 탭 셀 — 책이 고른 룬 타입을 실어 준다 (세션 34). 그 타입이 밑그림·발사·저장까지 흐른다.
+func _on_rune_selected(rune_type: int) -> void:
 	Audio.play(&"ui_click")
 	if _board.stage() != RingBoard.STAGE_RUNE:
 		return
-	_board.choose_rune()
-	_set_say("룬(불)을 중심에 손으로 문질러 그리세요 (삼각) → [다음]", false)
+	_board.choose_rune(rune_type)
+	var rd: RuneDef = Db.get_rune(rune_type)
+	var nm := String(rd.display_name) if rd != null else "룬"
+	_set_say("%s 룬을 중심에 손으로 문질러 그리세요 → [다음]" % nm, false)
 	_refresh_buttons()
 
 
