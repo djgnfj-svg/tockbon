@@ -116,6 +116,7 @@ func take_hit(damage: float, rune_type: int, _status: int, _status_power: float)
 ## 랜덤: Godot 전역 `randf()` — 부팅 시 자동 시드. 이 프로젝트의 첫 게임플레이 랜덤이다
 ## (세이브에 안 들어간다 — 드롭은 굴린 결과가 가방에 담길 뿐 RNG 상태를 저장하지 않는다).
 func _die() -> void:
+	var got_drop := false
 	if _def != null:
 		for drop: DropEntry in _def.drops:
 			if randf() <= drop.chance:
@@ -124,6 +125,9 @@ func _die() -> void:
 					n += randi() % (drop.max_count - drop.min_count + 1)
 				if n > 0:
 					GameState.add_to_bag(drop.item_id, n)
+					got_drop = true
+	if got_drop:
+		Audio.play(&"pickup")   # 뭔가 떨궜을 때만 — 빈손 처치는 조용히
 	died.emit()
 	queue_free()
 

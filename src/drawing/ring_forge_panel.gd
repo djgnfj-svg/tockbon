@@ -302,6 +302,7 @@ func _stage_to_tab(stage: int) -> int:
 ## 🔴 진 탭 셀을 눌렀다 → **왼쪽에 밑그림이 선다** (세션 25). 예전엔 안내만 띄웠고 밑그림은
 ## 단계에 들어가는 순간 이미 서 있었다 (사용자: "이게 눌러야 뜨게 해줘").
 func _on_jin_selected() -> void:
+	Audio.play(&"ui_click")
 	if _board.stage() != RingBoard.STAGE_JIN:
 		return
 	_board.choose_jin()
@@ -312,6 +313,7 @@ func _on_jin_selected() -> void:
 ## 룬 탭 셀 — 마찬가지. ⚠ 룬이 불·물·바람으로 늘면 **셀마다 idx를 실어** choose_rune(idx)로
 ## 넘긴다 (지금은 Db에 불 하나뿐이라 책이 idx를 안 준다).
 func _on_rune_selected() -> void:
+	Audio.play(&"ui_click")
 	if _board.stage() != RingBoard.STAGE_RUNE:
 		return
 	_board.choose_rune()
@@ -334,6 +336,7 @@ func _select_glyph(glyph: int) -> void:
 
 
 func _on_glyph_selected(glyph: int) -> void:
+	Audio.play(&"ui_click")
 	_select_glyph(glyph)
 
 
@@ -589,6 +592,7 @@ func _on_stage_advanced(stage: int) -> void:
 ## "확정 지으면 그때 넘어가야지"). 문양본 탭에 머물러 다른 문양본으로 바꿔도 되고, 준비되면 사용자가
 ## 직접 [문양] 탭으로 넘어간다.
 func _on_template_selected(idx: int, slots: Array) -> void:
+	Audio.play(&"ui_click")
 	_template_idx = idx
 	_board.set_template(slots)
 	_book.sync_state(_template_idx, _active_glyph)

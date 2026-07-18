@@ -1,10 +1,41 @@
 # STATUS — 현재 진행 상태
 
-> 최종 갱신: 2026-07-18 (세션 32 — **공방(장비 제작) + 장착 UI**)
+> 최종 갱신: 2026-07-18 (세션 33 — **사운드 배선 (SFX 전무 → 배선)**)
 > · **세션 종료마다 갱신**
 >
 > 🔴 **아래 세션 20 이하는 대부분 삭제된 코드를 설명한다** — 기록이지 현재 상태가 아니다.
 > 현재 정본 = 최상단 「세션 31」~「세션 23」 + `CLAUDE.md` + memory `takbon-mana-injection-rule`.
+
+---
+
+## 세션 33 (2026-07-18) — **사운드 배선** [SFX가 통째로 없었다]
+
+> 사용자: *"부족한 것부터 전체적인 거 싹 다 리스트업"* → AskUserQuestion으로 **사운드 먼저** 확정.
+> `assets/`에 오디오가 **0개**였다 — 발사·피격·맺힘·획득 전부 무음. "덜 완성돼 보이는" 가장 큰 구멍.
+
+- **Audio 오토로드** `src/core/audio.gd` (core — GameState처럼 모듈이 직접 부른다). 두 갈래:
+  ① EventBus 글로벌 순간 9종 구독(발사·피격·아픔·귀환·사망·해금·맺힘·장착·낮밤) ② 국소 순간은
+  `Audio.play(&"id")`. AudioStreamPlayer 풀 8개로 겹침 처리. 🔴 **새 소리 = `assets/audio/sfx/<id>.wav`
+  한 장** — 파일명이 곧 id, 없는 id는 1회 경고 후 무음(소리 없다고 게임이 멎지 않게).
+- **SFX 17종 플레이스홀더 합성** — numpy로 레트로+소프트 생성(`scratchpad/synth_sfx.py`). ⚠ **배선용
+  플레이스홀더** — 나중에 같은 경로에 진짜 WAV/OGG 덮으면 끝(잉크 경제와 같은 "배선 먼저" 방식).
+- **오디오 버스** `default_bus_layout.tres` = Master→SFX→Music. project.godot에 오토로드+버스 등록.
+- **국소 훅**: 펑(base `commit_rejected`) · 획득(forest_enemy 드롭 시) · 제작(refine·workshop) ·
+  책 조각 선택 딸깍(forge_panel — 그리는 핵심). 장착은 EventBus `equipment_changed`로.
+- 🔴 **피격음은 룬별 변주** — `enemy_hit`의 rune_type으로 hit_fire/water/wind/기본, 피치 흔들림으로
+  반복감 완화. **아픔음은 hp가 줄었을 때만**(출격 만HP·회복은 조용 — 안 그러면 출격마다 아픔음).
+
+### 검증 — 신규 스위트 + 뮤테이션 + 실게임(MCP)
+
+- 신규 `test_audio_auto`(58 PASS): 17 SFX 로드·길이>0 · EventBus 9종 연결 · **발신→올바른 스트림**
+  (부작용 있는 순간=extraction/bag_lost/committed는 연결만, 발신 안 함). 전 8스위트 그린·SCRIPT ERROR 0.
+- 🔴 **뮤테이션**: 불 피격 매핑을 hit_fire→hit로 깨면 정확히 1건 실패, 복원 시 그린. 검출력 증명.
+- 🔴 **실게임(MCP)**: 헤드리스엔 오디오 드라이버가 없어 "소리가 출력에 도달하나"를 못 잡는다 →
+  에디터 실게임에서 확인: SFX/Music 버스 존재 · 드라이버 "Default" · `play(&"cast")` 후 정확히
+  1개 `playing=true` · EventBus 발신 시 hit_fire·cast **동시 재생**(풀 겹침).
+
+**다음** = E4(보스→룬) 또는 E3 밸런스. 사운드는 **진짜 소리 교체**(플레이스홀더→실제 에셋)와
+**BGM**(Music 버스는 만들어 뒀으나 아직 트랙 없음)이 남음.
 
 ---
 

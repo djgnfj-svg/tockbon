@@ -138,6 +138,7 @@ func _craft(recipe_id: StringName) -> void:
 		return
 	if GameState.spend(r.inputs):
 		GameState.add_item(r.output_id, r.output_count)
+		Audio.play(&"craft")
 
 
 # ─────────────────────────── 장착 ───────────────────────────

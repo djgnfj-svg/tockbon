@@ -217,6 +217,7 @@
 ./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_base_auto.gd            # **베이스캠프 발사 배선** (세션 24): 과녁 사거리 · 🔴**물리 레이어 계약**(내 몸/책상이 world면 진이 총구에서 죽는다 — 에러 없이 조용히) · [8] 숲길
 ./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_forest_auto.gd         # **숲 원정** (세션 26): 출격 만HP · 적이 쫓아옴(그룹 "player") · 접촉 피해 · 🔴**적 레이어 계약**(4=enemy가 아니면 부딪히기만 하고 take_hit이 안 불린다) · 귀환/사망 계약(extraction_success·bag_lost)
 ./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_workshop_auto.gd      # **공방 장비 제작** (세션 32): 레시피 station 분리(정제대⇔공방) · 펜 제작(spend→add) · 장착 라운드트립(equip→correction 0.35→소비, unequip→반환) · 🔴**패널 클릭은 헤드리스가 못 잡는다**(실게임 push_input로 별도 검증)
+./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_audio_auto.gd         # **사운드 배선** (세션 33): 17 SFX 로드·길이>0 · Audio가 EventBus 9종에 연결 · 발신→올바른 스트림(부작용 순간은 연결만) · 🔴**소리가 실제로 나는지는 헤드리스가 못 잡는다**(오디오 드라이버 없음 — 버스 라우팅·playing은 에디터 실게임 exec로 별도 검증)
 ```
 
 🔴 **스위트를 돌리면 `user://save`가 날아간다** (세션 26 F3 이후). `SaveManager._ready`가 저장을

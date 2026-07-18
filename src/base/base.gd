@@ -128,6 +128,7 @@ func _on_ring_committed(assembly: Dictionary) -> void:
 ## 🔴 책을 덮었는데 **점수 미달로 안 맺혔다** (세션 25). 슬롯이 조용히 빈 채로 남으면
 ## "맺었는데 안 나간다"가 된다 — 사용자가 실제로 겪었고, 화면 어디에도 이유가 없었다.
 func _on_ring_rejected(score: float) -> void:
+	Audio.play(&"pop")
 	_hud.say("마법진이 안 맺혔다 — 종합 %d점 (%d점을 넘겨야 견딘다). 책상에서 E로 다시 그려라"
 		% [RingPower.score_display(score), RingPower.score_display(RingPower.threshold())], true)
 

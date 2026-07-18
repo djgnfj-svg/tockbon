@@ -142,6 +142,7 @@ func _craft(recipe_id: StringName) -> void:
 		return
 	if GameState.spend(r.inputs):
 		GameState.add_item(r.output_id, r.output_count)
+		Audio.play(&"craft")
 
 
 ## "재생 덩굴 줄기 2/5, …" — 재료마다 필요/보유. 소비자(GameState.spend)가 먹는 형식과 같은 dict.
