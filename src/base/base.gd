@@ -49,6 +49,8 @@ const DecodePanelScene := preload("res://src/base/decode_panel.tscn")
 const InteractZone := preload("res://src/actors/interact_zone.gd")
 const Player := preload("res://src/actors/player.gd")
 const Hud := preload("res://src/hud/hud.gd")
+## 길잡이 NPC(세션37)가 여는 퀘스트 패널 — 타입을 얻어 open()을 정적으로 부른다(class_name 없음).
+const QuestPanel := preload("res://src/hud/quest_panel.gd")
 ## 🔴 위력 표시는 여기서 계산하지 않는다 — 리포트·발사·HUD가 **같은 함수**를 본다 (core에 있는 이유).
 const RingPower := preload("res://src/core/ring_power.gd")
 
@@ -66,8 +68,11 @@ const RingPower := preload("res://src/core/ring_power.gd")
 @onready var _refine_zone: InteractZone = $Refine
 @onready var _craft_zone: InteractZone = $Craft
 @onready var _decode_zone: InteractZone = $Decode
+@onready var _npc: InteractZone = $Npc
 @onready var _player: Player = $Player
 @onready var _hud: Hud = $Hud/Hud
+# 🔴 quest_panel.tscn 루트는 CanvasLayer(layer 5)고, 스크립트(Control)는 그 자식 Panel이다.
+@onready var _quest: QuestPanel = $Quest/Panel
 
 ## 🔴 한 번에 하나의 모달만 — 책·정제대·공방이 같은 `_overlay` 슬롯을 쓴다. 하나 열려 있으면 다른 건 안 열린다.
 var _overlay: CanvasLayer = null
@@ -85,14 +90,22 @@ func _ready() -> void:
 	GameState.restore_hunger_full()
 	_desk.interacted.connect(_open_drawing)
 	_gate.interacted.connect(_to_forest)
-	_refine_zone.interacted.connect(_open_refine)
-	_craft_zone.interacted.connect(_open_workshop)
-	_decode_zone.interacted.connect(_open_decode)
+	# 🔴 건설형 스테이션 (세션37) — 안 지어졌으면 E=건설 시도, 지어졌으면 E=패널. _station_interact가 가른다.
+	_refine_zone.interacted.connect(func() -> void:
+		_station_interact(&"station_refine", "정제대", _refine_zone, _open_refine_panel))
+	_craft_zone.interacted.connect(func() -> void:
+		_station_interact(&"station_craft", "공방", _craft_zone, _open_workshop_panel))
+	_decode_zone.interacted.connect(func() -> void:
+		_station_interact(&"station_decode", "탁본 해독대", _decode_zone, _open_decode_panel))
+	# 길잡이 NPC (세션37) — E로 목표(퀘스트) 패널을 연다. Q 토글과 같은 내용.
+	_npc.interacted.connect(func() -> void: _quest.open())
 	_player.caster.notice.connect(_hud.say)
 	_player.caster.slot_changed.connect(_hud.select)
 	_hud.select(_player.caster.slot())
 	# 퀘스트 완료 알림 (세션36) — GameState가 판정, 씬은 HUD로 알린다(caster.notice와 같은 채널).
 	EventBus.quest_completed.connect(_on_quest_completed)
+	# 🔴 스테이션 건설 상태를 화면에 반영 (안 지어진 것은 어둡게 + "건설" 안내). 저장된 상태 기준.
+	_refresh_stations()
 
 # ─────────────────────────── 원정 ───────────────────────────
 
@@ -108,6 +121,52 @@ func _on_quest_completed(quest_id: StringName) -> void:
 	var q := Db.get_quest(quest_id)
 	if q != null:
 		_hud.say("목표 달성: %s — [Q]로 확인" % q.title)
+
+# ─────────────────────────── 거점 건설 (세션37) ───────────────────────────
+## 🔴 거점은 **재료로 직접 짓는다** (사용자 확정: "거점을 내가 직접 업데이트, 시작은 아무것도 없는 상태").
+## 안 지어졌으면 E=건설 시도(재료 소모), 지어졌으면 E=패널. 건설 상태는 codex(station_*)로 —
+## 저장·is_unlocked·**UNLOCK 퀘스트 자동 진행**("○○를 지어라"가 건설 순간 완료)이 전부 공짜로 재사용된다.
+const NOT_BUILT_MOD := Color(0.46, 0.46, 0.52)
+
+func _station_interact(station_id: StringName, title: String, zone: InteractZone, open_fn: Callable) -> void:
+	if GameState.is_unlocked(station_id):
+		open_fn.call()
+		return
+	var cost: Dictionary = GameState.balance.station_build_costs.get(station_id, {})
+	if not GameState.can_afford(cost):
+		Audio.play(&"pop")
+		_hud.say("%s 건설 재료 부족 — 필요: %s" % [title, _cost_text(station_id)], true)
+		return
+	GameState.spend(cost)
+	# 🔴 codex 심기 + UNLOCK 퀘스트 진행 (GameState._on_codex_unlocked). Audio가 unlock음도 낸다.
+	EventBus.codex_unlocked.emit(station_id)
+	Audio.play(&"craft")
+	_refresh_station(zone, station_id, title)
+	_hud.say("%s 완성! 이제 [E]로 쓸 수 있다" % title)
+
+## 세 건설형 스테이션의 겉모습·안내문을 저장된 건설 상태에 맞춘다 (_ready·건설 직후 호출).
+func _refresh_stations() -> void:
+	_refresh_station(_refine_zone, &"station_refine", "정제대")
+	_refresh_station(_craft_zone, &"station_craft", "공방")
+	_refresh_station(_decode_zone, &"station_decode", "탁본 해독대")
+
+## 안 지어졌으면 어둡게 + "[E] 정제대 건설 (재료…)", 지어졌으면 원색 + "[E] 정제대".
+func _refresh_station(zone: InteractZone, station_id: StringName, title: String) -> void:
+	var built: bool = GameState.is_unlocked(station_id)
+	zone.modulate = Color.WHITE if built else NOT_BUILT_MOD
+	var prompt := zone.get_node_or_null("Prompt") as Label
+	if prompt != null:
+		prompt.text = ("[E] " + title) if built else "[E] %s 건설 (%s)" % [title, _cost_text(station_id)]
+
+## 건설 비용을 "이름 n, 이름 n"으로 (안내·버튼 문구용). balance.station_build_costs가 정본.
+func _cost_text(station_id: StringName) -> String:
+	var cost: Dictionary = GameState.balance.station_build_costs.get(station_id, {})
+	var parts: Array[String] = []
+	for item_id: StringName in cost:
+		var it := Db.get_item(item_id)
+		var nm: String = it.display_name if it != null and it.display_name != "" else String(item_id)
+		parts.append("%s %d" % [nm, int(cost[item_id])])
+	return ", ".join(parts)
 
 # ─────────────────────────── 고리 조립 책 ───────────────────────────
 
@@ -161,7 +220,8 @@ func _close_drawing() -> void:
 
 ## 정제대에서 E — 재료를 특별잉크·종이로 바꾸는 패널을 연다 (책과 같은 오버레이 슬롯·모달 규약).
 ## 🔴 책이 열려 있으면(_overlay != null) 안 연다 — 모달은 하나뿐이다.
-func _open_refine() -> void:
+## 🔴 세션37: 건설된 뒤에만 불린다 (_station_interact가 codex 확인 후 호출). 안 지어졌으면 건설 시도.
+func _open_refine_panel() -> void:
 	if _overlay != null:
 		return
 	_player.set_physics_process(false)   # 정제하는 동안 이동 정지
@@ -189,7 +249,7 @@ func _close_refine() -> void:
 
 ## 공방에서 E — 재료를 장비로 만들고 착용하는 패널을 연다 (책·정제대와 같은 오버레이 슬롯·모달 규약).
 ## 🔴 다른 모달이 열려 있으면(_overlay != null) 안 연다 — 모달은 하나뿐이다.
-func _open_workshop() -> void:
+func _open_workshop_panel() -> void:
 	if _overlay != null:
 		return
 	_player.set_physics_process(false)   # 공방을 쓰는 동안 이동 정지
@@ -217,7 +277,7 @@ func _close_workshop() -> void:
 
 ## 해독대에서 E — 룬 조각을 해독해 룬을 배우는 패널을 연다 (다른 모달과 같은 슬롯·모달 규약).
 ## 🔴 다른 모달이 열려 있으면(_overlay != null) 안 연다 — 모달은 하나뿐이다.
-func _open_decode() -> void:
+func _open_decode_panel() -> void:
 	if _overlay != null:
 		return
 	_player.set_physics_process(false)   # 해독하는 동안 이동 정지

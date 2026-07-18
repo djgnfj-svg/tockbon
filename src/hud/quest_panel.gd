@@ -72,6 +72,13 @@ func _toggle() -> void:
 		_set_open(true)
 
 
+## 🔴 NPC(길잡이)가 E로 여는 공개 진입점 (세션37). Q 토글과 별개로 밖에서 연다 —
+## 퀘스트를 "주는 존재"를 통해 라인을 따라가게(사용자 확정). 모달 규약은 _toggle과 동일.
+func open() -> void:
+	if not _open and not GameState.ui_modal_open:
+		_set_open(true)
+
+
 func _set_open(open: bool) -> void:
 	_open = open
 	visible = open

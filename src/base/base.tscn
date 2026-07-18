@@ -18,6 +18,9 @@ size = Vector2(100, 100)
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_refine"]
 size = Vector2(110, 96)
 
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_npc"]
+size = Vector2(64, 90)
+
 [node name="Base" type="Node2D"]
 script = ExtResource("1_base")
 
@@ -160,6 +163,38 @@ offset_bottom = -28.0
 text = "[E] 탁본 해독대"
 horizontal_alignment = 1
 
+[node name="Npc" type="Area2D" parent="."]
+position = Vector2(130, -20)
+collision_layer = 64
+collision_mask = 2
+script = ExtResource("2_zone")
+zone_id = &"npc"
+
+[node name="Body" type="Polygon2D" parent="Npc"]
+color = Color(0.28, 0.32, 0.5, 1)
+polygon = PackedVector2Array(-13, -4, 13, -4, 10, 30, -10, 30)
+
+[node name="Head" type="Polygon2D" parent="Npc"]
+position = Vector2(0, -16)
+color = Color(0.85, 0.74, 0.6, 1)
+polygon = PackedVector2Array(-8, -8, 8, -8, 8, 8, -8, 8)
+
+[node name="Hat" type="Polygon2D" parent="Npc"]
+position = Vector2(0, -22)
+color = Color(0.22, 0.18, 0.3, 1)
+polygon = PackedVector2Array(-14, 2, 14, 2, 7, -14, -7, -14)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Npc"]
+shape = SubResource("RectangleShape2D_npc")
+
+[node name="Prompt" type="Label" parent="Npc"]
+offset_left = -60.0
+offset_top = -60.0
+offset_right = 60.0
+offset_bottom = -38.0
+text = "[E] 길잡이 · 목표"
+horizontal_alignment = 1
+
 [node name="Player" parent="." instance=ExtResource("3_player")]
 position = Vector2(0, 40)
 
@@ -192,7 +227,7 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("6_hud")
-hint_text = "WASD=이동 · 책상 E=고리 조립 · 정제대 E=가공 · 공방 E=장비 · 해독대 E=룬 해독 · 왼쪽 숲길 E=원정 · 좌클릭=발사 · 1~4=슬롯 · I=창고 · Q=목표"
+hint_text = "WASD=이동 · 길잡이 E=목표 · 책상 E=고리 조립 · 숲길 E=원정 · 정제대·공방·해독대는 재료로 건설 · 좌클릭=발사 · 1~4=슬롯 · I=창고 · Q=목표"
 
 [node name="Inv" parent="." instance=ExtResource("7_inv")]
 

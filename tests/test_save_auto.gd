@@ -105,6 +105,25 @@ func _run() -> void:
 	_check("복원: 마나 42", is_equal_approx(gs.mana, 42.0))
 	_check("복원: Day 3 · 123초", clock.day == 3 and is_equal_approx(clock.time_sec, 123.0))
 
+	# ── 🔴 새로하기 (세션37, F8) — 전부 비우고 시작 해금만 재시드 ──
+	# save_manager 노트의 계약: new_game은 save_game이 쓰는 것 전부 + bag·hp를 비우고, 시작 해금
+	# (rune_fire·glyph_thrust)만 재시드한다. 씬마다 손으로 비우면 필드가 늘 때 조용히 갈라지므로 core에.
+	# 🔴 빈 시작(사용자 확정 세션37): 장비도·지은 스테이션(station_*)도·해독 룬(물)도 남지 않는다.
+	gs.add_item(&"ink_basic", 7)
+	gs.equipment[Enums.ItemKind.PEN] = &"pen_basic"     # 장비 입은 상태를 만든다
+	gs.codex[&"rune_water"] = true                       # 해독으로 얻은 룬
+	gs.codex[&"station_refine"] = true                   # 지은 스테이션
+	gs.quest_done[&"q01_first_hunt"] = true
+	gs.new_game()
+	_check("🔴 새로하기: 창고 비었다", gs.inventory.is_empty())
+	_check("🔴 새로하기: 장비 벗겨졌다 (맨손 시작)", gs.equipment.is_empty())
+	_check("🔴 새로하기: 퀘스트 진행 초기화", gs.quest_done.is_empty() and gs.quest_progress.is_empty())
+	_check("🔴 새로하기: 고리 도안 비었다", gs.ring_designs.is_empty())
+	_check("🔴 새로하기: 시작 해금 재시드 (불 룬·추진 문양) — 안 심으면 아무것도 못 그린다",
+		gs.is_unlocked(&"rune_fire") and gs.is_unlocked(&"glyph_thrust"))
+	_check("🔴 새로하기: 해독 룬(물)은 사라졌다", not gs.is_unlocked(&"rune_water"))
+	_check("🔴 새로하기: 지은 스테이션(정제대)은 사라졌다 — 거점 빈 시작", not gs.is_unlocked(&"station_refine"))
+
 	# 뒷정리 — 실제 플레이 세이브 오염 방지
 	sm.wipe_save()
 	_check("뒷정리: 세이브 삭제", not sm.has_save())

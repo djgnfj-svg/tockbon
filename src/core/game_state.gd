@@ -39,9 +39,7 @@ func _ready() -> void:
 	mana = mana_max()
 	hp = hp_max()
 	hunger = hunger_max()
-	# 시작 해금 — 튜토가 가르치는 불 룬 + 추진 문양 (v2.2, TRUTH §4 세션 14: 충격 룬 폐지)
-	codex[&"rune_fire"] = true
-	codex[&"glyph_thrust"] = true
+	_seed_starting_unlocks()
 	EventBus.extraction_success.connect(_on_extraction_success)
 	EventBus.bag_lost.connect(func() -> void: bag.clear())
 	# 🔴 해금은 codex에 심고 **UNLOCK 퀘스트도 진행**한다 (세션36). 세션21~35엔 codex만 심었다.
@@ -49,6 +47,43 @@ func _ready() -> void:
 	# 🔴 적 처치 → KILL 퀘스트 진행 (세션36). forest_enemy._die가 발신.
 	EventBus.enemy_died.connect(_on_enemy_died)
 	EventBus.ring_design_committed.connect(_on_ring_design_committed)
+
+## 🔴 시작 해금 재시드 — 튜토가 가르치는 불 룬 + 추진 문양 (v2.2, TRUTH §4 세션 14: 충격 룬 폐지).
+## _ready(첫 부팅)와 new_game(새로하기)이 **둘 다** 이걸 부른다. 여기 한 곳에만 두는 이유:
+## save_manager 노트가 경고한 "새로하기는 _ready를 다시 안 타므로 여기 시드를 안 심으면
+## **아무것도 못 그리는 새 게임**이 된다" — 두 경로가 갈라지면 조용히 그 버그가 난다.
+## 🔴 시작엔 룬·문양만 심는다. **장비도 스테이션(station_*)도 없다** — 빈 시작(세션37, 사용자
+## 확정: "시작했을 때 아무것도 없는 상태가 중요"). 거점은 재료로 직접 지어 채운다.
+func _seed_starting_unlocks() -> void:
+	codex[&"rune_fire"] = true
+	codex[&"glyph_thrust"] = true
+
+## 🔴 **진짜 새로하기** (세션37, F8). save_manager 노트가 적어 둔 계약: `save_game()`이 쓰는 것
+## 전부 + `bag`·`hp` + **시작 해금 재시드**를 한 곳에서 처리한다. 씬마다 손으로 비우면 필드가
+## 늘 때 조용히 갈라지므로 core에 하나 둔다. wipe_save(파일 삭제)와 짝 — SaveManager가 부른다.
+## ⚠ GameState·Clock은 오토로드라 메모리에 살아 있다 — 파일만 지우면 옛 진행이 도로 써진다
+## (실측 확인, 세션26). 그래서 **메모리를 여기서 비운다**.
+func new_game() -> void:
+	Clock.day = 1
+	Clock.time_sec = 0.0
+	inventory.clear()
+	bag.clear()
+	equipment.clear()          # 🔴 장비 벗김 — 맨손 시작 (사용자 확정 세션37)
+	ring_designs.clear()
+	ring_equipped = [null, null, null, null]
+	codex.clear()
+	quest_progress.clear()
+	quest_done.clear()
+	in_expedition = false
+	_starve_accum = 0.0
+	_seed_starting_unlocks()   # 룬·문양만 — _ready와 동일 (분기 방지)
+	hp = hp_max()
+	mana = mana_max()
+	hunger = hunger_max()
+	# 구독 UI(HUD·창고·퀘스트 패널)를 새 빈 상태로 깨운다 — 로드 경로(save_manager)와 같은 3종.
+	EventBus.player_hp_changed.emit(hp, hp_max())
+	EventBus.equipment_changed.emit()
+	EventBus.resources_changed.emit()
 
 func _process(delta: float) -> void:
 	mana = minf(mana + balance.mana_regen_per_sec * delta, mana_max())

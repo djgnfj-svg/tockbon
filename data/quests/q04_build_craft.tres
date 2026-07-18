@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="QuestDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/core/schemas/quest_def.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = &"q04_build_craft"
+title = "공방을 세워라"
+desc = "공방 자리에서 재료를 들고 [E]로 건설하라. 펜·장비를 만드는 곳이다."
+goal = 2
+target = &"station_craft"
+count = 1
+reward_items = {
+&"mat_moon_sap": 1
+}
+requires = &"q03_build_refine"

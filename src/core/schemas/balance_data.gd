@@ -233,6 +233,19 @@ extends Resource
 ## 다 떨어지면 소모·효과 적립 없이 계속 그린다(기본잉크처럼) — 그만큼 비율(효과)이 낮아진다.
 @export var special_ink_per_stroke: int = 1
 
+@export_group("거점 건설 (세션37)")
+# 🔴 스테이션 건설 비용 {station_codex_id: {item_id: 수량}}. 거점은 **재료로 직접 짓는다**
+# (사용자 확정 세션37: "거점을 내가 직접 업데이트해야 될 거, 시작했을 때 아무것도 없는 상태가 중요").
+# 🔴 codex를 건설 상태로 쓴다(룬 해금과 같은 기전) → 저장·is_unlocked·**UNLOCK 퀘스트 자동 진행**이
+# 전부 공짜로 재사용된다. "정제대를 지어라" 퀘스트가 건설 순간(codex_unlocked) 저절로 완료된다.
+# 🔴 **새 스테이션 = 여기 한 줄 + base.tscn 노드 하나.** 읽는 곳은 base.gd 하나(런타임 인스턴스 읽기라
+# const-folding 함정 없음). ⚠ 배선이지 튜닝이 아니다 — 개수·재료는 플레이하며 조율(사용자 몫).
+@export var station_build_costs: Dictionary = {
+	&"station_refine": {&"mat_slime_core": 3, &"mat_vine": 2},
+	&"station_craft": {&"mat_hound_fang": 2, &"mat_beetle_shell": 2},
+	&"station_decode": {&"mat_slime_core": 5, &"mat_moon_sap": 1},
+}
+
 @export_group("경제")
 ## 수리비 = 원본 ink_cost 대비 비율
 @export var repair_cost_frac: float = 0.2

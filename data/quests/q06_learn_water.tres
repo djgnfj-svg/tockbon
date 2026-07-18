@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="QuestDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/core/schemas/quest_def.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = &"q06_learn_water"
+title = "물의 힘"
+desc = "숲 깊은 곳의 우두머리를 잡아 조각을 얻고, 탁본 해독대에서 물의 룬을 배워라."
+goal = 2
+target = &"rune_water"
+count = 1
+reward_items = {
+&"mat_night_bloom": 2
+}
+requires = &"q05_build_decode"

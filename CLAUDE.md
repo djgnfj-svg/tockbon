@@ -150,6 +150,24 @@
 > `test_quests_auto` 21/21 + 실게임 push_input로 Q 패널 클릭 차단/도달 증명(액션 주입으론 못 잡는다).
 > ⚠ **배선이지 튜닝이 아니다** — 목표 개수·보상·다음 퀘스트 유혹은 사용자가 플레이하며 조율.
 >
+> 🔴🔴 **세션 37 = 빈 거점 + 재료 건설 + 길잡이 NPC + 진짜 새로하기(F8 완료)** (STATUS 「세션37」이 정본).
+> 사용자: *"퀘스트를 주는 인물 … 거점을 내가 직접 업데이트 … 시작은 아무것도 없는 상태 … 캐릭터가
+> 장비를 입고 있을 거야."* → AskUserQuestion 확정(재료로 건설·빈 시작=NPC+숲길+책상·제대로 된 새로하기·NPC).
+> **① 거점=재료로 짓는다**: 정제대·공방·해독대가 시작 시 **어둡게+"[E] 건설(재료)"**, E→소모→건설.
+> 🔴 **건설 상태=codex(`station_*`)** — 룬 해금과 같은 기전이라 저장·`is_unlocked`·**UNLOCK 퀘스트 자동
+> 진행**이 공짜("정제대를 지어라"가 건설 순간 완료). 비용=`balance.station_build_costs`(런타임 인스턴스
+> 읽기라 const-folding 함정 없음). 🔴 **새 스테이션=balance 한 줄+base.tscn 노드 하나**, 로직은 base.gd.
+> 🔴 미리 지어도 `_auto_complete_satisfied` 소급완료로 사슬 안 막힘. **② 길잡이 NPC**: base.tscn 노드,
+> E→`quest_panel.open()`(신설, Q 토글과 별개). **③ 진짜 새로하기(F8)**: 🔴 `GameState.new_game()`(save_game이
+> 쓰는 것 전부+bag·hp 비우고 `_seed_starting_unlocks()`로 rune_fire/glyph_thrust만 재시드 — `_ready`와 **공유**,
+> 장비·스테이션·해독룬 없이) + `SaveManager.start_new_game()`(wipe+new_game+저장) + **타이틀 메뉴**
+> (`src/menu/title.tscn`=새 main_scene). 🔴 **부팅 흐름(`_ready`→load_game)은 안 건드림 = F3 가드 유지** —
+> 메뉴는 이어갈지/버릴지만 라우팅. ⚠ **wipe_save()는 여전히 새로하기 아님**(메모리는 new_game이 비운다).
+> **④ 스파인**: 첫사냥→귀환→정제대·공방·해독대 **건설**→물 룬→바람 룬(q01~q07). memory
+> `takbon-empty-base-build` · `takbon-new-game-missing`(✅). 🔴 **실게임(godot_exec/step)로 클릭·렌더
+> end-to-end 확인** — 헤드리스가 못 잡는 부분(타이틀 클릭·빈 거점 dim·NPC E·건설 E). ⚠ 캐릭터 스프라이트
+> 겉모습(모자·로브)은 별개 아트 레이어 — 이번은 장비 **데이터** 초기화만.
+>
 > **🔴 다음 세션 = ⓐ 피격 손맛** (몬스터 맞을 때 넉백·히트스톱·팡·숫자·화면 흔들림 — 사용자
 > *"네모 동그라미가 굴러다녀"*. **이미지보다 이게 먼저** — 사용자: 이미지는 나중에) · **ⓑ 깊이 스파인**
 > (나갈 이유=새로 그릴 것) · ⓒ 마나 16·허기 페이스 손맛 튜닝(룬 밑그림·보스 강도도) · **gale 풀 보스

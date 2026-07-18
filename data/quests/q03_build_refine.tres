@@ -4,13 +4,13 @@
 
 [resource]
 script = ExtResource("1")
-id = &"q03_learn_water"
-title = "물의 힘"
-desc = "숲 깊은 곳의 우두머리를 잡아 조각을 얻고, 탁본 해독대에서 물의 룬을 배워라."
+id = &"q03_build_refine"
+title = "정제대를 세워라"
+desc = "정제대 자리에서 재료를 들고 [E]로 건설하라. 재료를 특별잉크·종이로 바꾸는 곳이다."
 goal = 2
-target = &"rune_water"
+target = &"station_refine"
 count = 1
 reward_items = {
-&"mat_night_bloom": 2
+&"mat_beetle_shell": 2
 }
 requires = &"q02_come_home"

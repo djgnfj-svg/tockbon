@@ -172,6 +172,17 @@ func wipe_save() -> void:
 		DirAccess.remove_absolute(SAVE_PATH)
 	_prune_ring_files(0)
 
+## 🔴 **진짜 새로하기** (세션37, F8). 위 wipe_save 노트의 계약을 실제로 실행한다:
+##   ① wipe_save()        — 파일(save.json·고리 .tres)을 지운다
+##   ② GameState.new_game() — 메모리(오토로드라 파일 삭제로 안 지워진다)를 비우고 시작 해금 재시드
+##   ③ save_game()         — 빈 새 상태를 파일에도 즉시 굳힌다 (다음 부팅이 이 빈 상태를 이어받게)
+## 타이틀 메뉴의 [새로하기]가 부른다. 부팅 흐름(_ready→load_game)은 안 건드린다 — F3 가드 유지.
+func start_new_game() -> void:
+	wipe_save()
+	GameState.new_game()
+	_ready_to_save = true
+	save_game()
+
 ## ring_N.tres 중 인덱스가 keep_count 이상인 것을 지운다 (도안이 줄면 남은 파일이 되살아나는 것 방지)
 func _prune_ring_files(keep_count: int) -> void:
 	var dir := DirAccess.open(RING_DIR)

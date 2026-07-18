@@ -4,7 +4,7 @@
 
 [resource]
 script = ExtResource("1")
-id = &"q04_learn_wind"
+id = &"q07_learn_wind"
 title = "바람의 힘"
 desc = "바람 룬 조각을 얻어 해독대에서 바람의 룬을 배워라."
 goal = 2
@@ -13,4 +13,4 @@ count = 1
 reward_items = {
 &"mat_moon_sap": 2
 }
-requires = &"q03_learn_water"
+requires = &"q06_learn_water"
