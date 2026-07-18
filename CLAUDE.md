@@ -246,21 +246,59 @@
 - 에이전트는 mcp__godot__* 도구 사용 금지 (에디터는 리드가 관리)
 - 스키마·시그널 추가 요청은 에이전트가 보고 → 리드가 core에 반영 (지금까지 전부 이 방식으로 처리됨)
 
-### 🔴 에이전트 위임 라우팅 (2026-07-17 세션 20 — 사용자: "godot 에이전트를 실제로 써라")
+### 🔴 하네스: 탁본 전용 에이전트 (2026-07-19 세션 39 — godot-prompter 대체, 자립형)
 
-> 로컬 Donchitos 49-에이전트 하네스는 이 1인 playground엔 과함이라 제거했다. **Godot 구현 위임은
-> `godot-prompter` 플러그인 에이전트로 한다.** 리드가 "직접 다 하는" 습관을 버리고, 아래 조건이면 위임한다.
+> **왜 만들었나:** godot-prompter 플러그인 에이전트는 제네릭 Godot만 알아서, 위임할 때마다 프로젝트
+> 규칙 벽(typed·class_name 금지·EventBus·balance.tres…)을 프롬프트에 통째로 주입해야 했다 — 그러느니
+> 리드가 직접 하는 게 빨라 위임이 안 굴러갔다. **이제 규칙이 에이전트에 박혀 있어 규칙 주입 없이 바로
+> 위임된다.** 로컬 Donchitos 49-에이전트 하네스가 과함이었듯, 이번 하네스도 **린하게** 유지한다
+> (오케스트레이터·에이전트 팀 격식 없음).
+>
+> 🔴 **자립형이다 — godot-prompter 플러그인은 껐다**(`.claude/settings.json`에서 제거). 제네릭 스킬을
+> `.claude/skills/`로 **복사**해서 플러그인 없이 돈다(스킬은 disk에 있어도 트리거될 때만 로드돼 안 쓰면 무해).
+> ✅ **세션 39 정비: 처음 51개 전부 가져왔다가, 구조적으로 무관한 8개를 삭제해 43개로 줄였다**(+takbon 2개=45).
+> 삭제 기준 = **2D·GDScript·데스크톱 확정으로 쓸 일이 없는 것**(3d-essentials·csharp-*·gdextension·
+> xr-development·mobile-development·using-godot-prompter·godot-project-setup). **멀티(basics/sync)·
+> dedicated-server·beehave·limboai·localization은 「휴면 방향」으로 남겼다** — 사용자가 멀티·다국어·BT
+> 보스 AI를 아직 안 접었기 때문(삭제=방향 포기 신호라). 되돌리려면 이 커밋 직전 git 이력.
+>
+> 🔴 **세션 39: 제네릭 43개 SKILL.md를 한국어로 번역했다 = 상류(godot-prompter)와 「관리된 갈라짐」.**
+> 번역 사본이라 상류(`jame581/GodotPrompter`, 현재 `1.11.0`)와 어긋나므로, `.claude/skill-vendor/`가
+> 그 갈라짐을 **관리**한다(막지 않는다): ① `upstream-1.11.0/` = 번역 당시 영어 원본 박제본(diff 기준,
+> 에이전트가 로드 안 함) · ② `VERSION` = 번역 기준 버전 · ③ `check-upstream.sh` = **한 달에 한 번**
+> 돌려 상류 버전이 올랐는지·어느 스킬이 바뀌었는지 출력. 코드 블록·`name:`은 번역 안 함(코드는 상류
+> 대조용 원문, name은 호출 키). 상세 = `.claude/skill-vendor/README.md`.
+> 🔴 **references(심화문서 150개)는 삭제했다** (사용자: *"깔끔하게 관리"*) — 각 스킬 폴더가 SKILL.md
+> 한 장씩만 남아 트리가 깨끗하다. 본문의 "→ references 보라" 죽은 링크도 정리. **영구 손실 아님**:
+> 영어 전문이 `skill-vendor/upstream-1.11.0/`(diff 박제본)와 상류 github에 그대로 있어 언제든 복구.
+> 즉 심화 레시피가 필요하면 그 두 곳에서 꺼내 온다 — skills/ 트리에만 안 둔다.
 
-- **구현 위임 대상 = `godot-prompter:godot-game-dev`** (GDScript 구현·씬·시스템). 설계/계획은
-  `godot-prompter:godot-game-architect`, 코드 리뷰는 `godot-prompter:godot-code-reviewer`,
-  Control UI는 `godot-prompter:godot-ui-designer`, 셰이더는 `godot-shader-author`.
-- **언제 위임하나:** 한 모듈(src/drawing·field·base·ui 등) 안에서 닫히고 병렬화 이득이 있는 구현 작업.
+- **위임 대상 (`.claude/agents/`):** 핵심 = `takbon-dev`(구현) · `takbon-architect`(설계) ·
+  `takbon-reviewer`(리뷰) · `takbon-ui`(패널·모달·HUD) · `takbon-art`(도트 스프라이트). 가끔 =
+  `takbon-shader`(2D 셰이더 효과) · `takbon-animator`(스프라이트 애니 배선) · `takbon-profiler`(성능 진단) ·
+  `takbon-tools`(에디터 플러그인·@tool). 다들 `.claude/skills/takbon-rules`(아키텍처·계약)와
+  `takbon-verify`(검증 규율)를 읽고, 제네릭 Godot
+  지식은 로컬 복사한 제네릭 스킬 43개(`gdscript-patterns`·`animation-system`·`physics-system`·`godot-ui` 등)를
+  Skill 도구로 부른다. 규칙 충돌 시 탁본이 이긴다.
+  - 🔴 **기능 지식은 에이전트가 아니라 스킬에 있다** — 애니/물리/셰이더 등을 만들 때 `takbon-dev`가
+    해당 스킬(`animation-system`·`physics-system`·`shader-basics`…)을 읽고 짠다. 그래서 스킬을 다 가져온
+    것이다. `takbon-dev.md`의 스킬 매핑에 어느 작업에 어느 스킬을 부를지 전부 적혀 있다.
+- **언제 위임하나:** 한 모듈(src/drawing·field·base·hud 등) 안에서 닫히는 구현 작업.
   **언제 리드가 직접:** 인식률·저장 등 회귀 위험이 크고 tight한 검증 루프가 필요한 작업, core 스키마 변경,
   mcp__godot 필요 작업, 커밋. (세션 20 룬·문양 데이터화는 회귀 위험 커서 리드가 직접 한 정당한 예.)
-- **위임 시 프로젝트 규칙을 프롬프트에 반드시 주입** — 플러그인 에이전트는 이 규칙을 모른다:
-  typed GDScript / class_name 금지(`const X := preload`) / 모듈 간은 EventBus+core 스키마만 /
-  수치는 data/balance.tres / mcp__godot 금지 / 커밋은 리드 / 자기 모듈 폴더+tests 자기 접두사만 수정.
-- 검증·`--import`·커밋은 위임 후에도 **리드가 직접** 돌린다(위 검증 명령).
+- 검증·`--import`·커밋은 위임 후에도 **리드가 직접** 돌린다(`takbon-verify` = 위 검증 명령).
+
+**하네스 변경 이력:**
+| 날짜 | 변경 | 대상 | 사유 |
+|------|------|------|------|
+| 2026-07-19 | 초기 구성 | agents/takbon-{dev,architect,reviewer} · skills/takbon-{rules,verify} | godot-prompter가 제네릭이라 위임 시 규칙 주입 비용이 커 위임이 안 굴러감 |
+| 2026-07-19 | UI·아트 에이전트 추가 | agents/takbon-ui(패널·mouse_filter 함정) · agents/takbon-art(aseprite 함정·아트 방향) | 탁본이 실제로 쓰는 영역(패널 천지·직접 스프라이트 제작) 커버 |
+| 2026-07-19 | 자립형 전환 · 플러그인 끔 | 제네릭 스킬 26개 `.claude/skills/`로 복사 · settings.json에서 godot-prompter 제거 · 에이전트 참조를 로컬 이름으로 | 오버레이가 플러그인에 묶여 있어 플러그인을 끄면 참조가 끊김 → 자립형으로 |
+| 2026-07-19 | 스킬 전체(51) 복사 + dev 매핑 완성 | 나머지 25개 스킬 복사(총 51) · takbon-dev 스킬 매핑에 animation/physics/camera/player 등 추가 | 사용자 걱정: "애니 등 만들 때 스킬 안 쓸까 봐" → 기능 지식=스킬이므로 전부 확보 + 에이전트가 부르게 매핑. 노이즈 정비는 추후 |
+| 2026-07-19 | 나머지 에이전트 탁본화(총 9) | agents/takbon-{shader,animator,profiler,tools} 추가 | 사용자 "만들어만 둬줘". csharp만 제외(GDScript 전용 규칙과 충돌). 원본 복사 아닌 규칙 주입 재작성 |
+| 2026-07-19 | 스킬 노이즈 정비 51→43 | 삭제 8: 3d-essentials·csharp-godot·csharp-signals·gdextension·xr-development·mobile-development·using-godot-prompter·godot-project-setup · takbon-dev 매핑·「휴면 방향」주석 갱신 | 2D·GDScript·데스크톱 확정으로 구조적 무관만 삭제. 멀티·dedicated-server·beehave·limboai·localization은 사용자가 방향을 안 접어 유지(삭제=방향 포기 신호) |
+| 2026-07-19 | 제네릭 43개 SKILL.md 한국어 번역 + 벤더링 | skills/*/SKILL.md 본문 번역(references·코드블록·name은 원문) · 신설 `.claude/skill-vendor/`(영어 1.11.0 박제본+VERSION+check-upstream.sh) | 사용자 요청 한국어화. 상류와 갈라지므로 「관리된 갈라짐」 채택 = 월간 대조로 상류 변경분만 반영 |
+| 2026-07-19 | references 심화문서 150개 삭제 | skills/*/references/ 40폴더 + godot-testing 최상위 참조 2개 삭제 · 본문 죽은 링크 정리 | 사용자 "깔끔하게 관리". skills/ 트리를 SKILL.md 한 장씩만 남김. 영어 전문은 skill-vendor 박제본+상류 github에 있어 영구 손실 아님(복구 가능) |
 
 ## 검증 명령 (반드시 Bash에서 — PowerShell은 자식 프로세스 stdout을 안 보여줌)
 
