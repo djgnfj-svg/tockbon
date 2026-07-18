@@ -49,8 +49,8 @@ const DecodePanelScene := preload("res://src/base/decode_panel.tscn")
 const InteractZone := preload("res://src/actors/interact_zone.gd")
 const Player := preload("res://src/actors/player.gd")
 const Hud := preload("res://src/hud/hud.gd")
-## 길잡이 NPC(세션37)가 여는 퀘스트 패널 — 타입을 얻어 open()을 정적으로 부른다(class_name 없음).
-const QuestPanel := preload("res://src/hud/quest_panel.gd")
+## 길잡이 NPC가 여는 통합 시트 패널 (세션40, 옛 quest_panel 흡수) — 퀘스트 탭으로 연다(class_name 없음).
+const TabPanel := preload("res://src/hud/tab_panel.gd")
 ## 🔴 위력 표시는 여기서 계산하지 않는다 — 리포트·발사·HUD가 **같은 함수**를 본다 (core에 있는 이유).
 const RingPower := preload("res://src/core/ring_power.gd")
 
@@ -71,8 +71,10 @@ const RingPower := preload("res://src/core/ring_power.gd")
 @onready var _npc: InteractZone = $Npc
 @onready var _player: Player = $Player
 @onready var _hud: Hud = $Hud/Hud
-# 🔴 quest_panel.tscn 루트는 CanvasLayer(layer 5)고, 스크립트(Control)는 그 자식 Panel이다.
-@onready var _quest: QuestPanel = $Quest/Panel
+# 🔴 tab_panel.tscn 루트는 CanvasLayer(layer 5)고, 스크립트(Control)는 그 자식 Panel이다.
+@onready var _sheet: TabPanel = $Sheet/Panel
+# 🔴 길잡이 머리 위 물음표 (세션40) — 정산할 퀘스트가 있을 때만 보인다. 근접(Prompt)과 별개로 늘 뜬다.
+@onready var _npc_mark: Label = $Npc/Mark
 
 ## 🔴 한 번에 하나의 모달만 — 책·정제대·공방이 같은 `_overlay` 슬롯을 쓴다. 하나 열려 있으면 다른 건 안 열린다.
 var _overlay: CanvasLayer = null
@@ -97,13 +99,20 @@ func _ready() -> void:
 		_station_interact(&"station_craft", "공방", _craft_zone, _open_workshop_panel))
 	_decode_zone.interacted.connect(func() -> void:
 		_station_interact(&"station_decode", "탁본 해독대", _decode_zone, _open_decode_panel))
-	# 길잡이 NPC (세션37) — E로 목표(퀘스트) 패널을 연다. Q 토글과 같은 내용.
-	_npc.interacted.connect(func() -> void: _quest.open())
+	# 길잡이 NPC (세션37→40) — E로 그 자리서 정산하고(claim) 목표 패널을 연다.
+	_npc.interacted.connect(_on_npc_talk)
 	_player.caster.notice.connect(_hud.say)
 	_player.caster.slot_changed.connect(_hud.select)
 	_hud.select(_player.caster.slot())
 	# 퀘스트 완료 알림 (세션36) — GameState가 판정, 씬은 HUD로 알린다(caster.notice와 같은 채널).
 	EventBus.quest_completed.connect(_on_quest_completed)
+	# 🔴 목표 달성 넛지 (세션40 턴인) — 숲에서 목표를 채우면 "돌아가 정산하라"를 HUD로 알린다.
+	EventBus.quest_ready.connect(_on_quest_ready)
+	# 🔴 NPC 머리 위 물음표 (세션40) — 정산할 퀘스트가 생기거나(달성·건설·해금) 없어질 때(정산) 갱신.
+	EventBus.quest_ready.connect(_refresh_npc_mark)
+	EventBus.quest_completed.connect(_refresh_npc_mark)
+	EventBus.codex_unlocked.connect(_refresh_npc_mark)
+	_refresh_npc_mark()
 	# 🔴 스테이션 건설 상태를 화면에 반영 (안 지어진 것은 어둡게 + "건설" 안내). 저장된 상태 기준.
 	_refresh_stations()
 
@@ -116,11 +125,28 @@ func _to_forest() -> void:
 		return
 	get_tree().change_scene_to_file(forest_scene_path)
 
-## 목표 하나를 달성했다 — HUD에 알린다(보상은 GameState가 이미 창고에 넣었다). [Q]로 전체 확인.
+## 🔴 길잡이 정산 (세션40) — 말 걸면 달성(claimable)한 퀘스트를 그 자리서 정산하고 목표 패널을 연다.
+##  quest_completed가 아래 _on_quest_completed로 HUD 완료 팝을 쏘므로 여기선 정산·개방만 한다.
+##  "살아 돌아와라"는 실제 귀환(extraction_success)이 이미 채워 놨을 때만 여기서 함께 정산된다(공짜 완료 없음).
+func _on_npc_talk() -> void:
+	GameState.claim_ready_quests()
+	_sheet.open_quest()
+
+## 목표 하나를 정산 완료했다 — HUD에 알린다(보상은 GameState가 이미 창고에 넣었다). [Q]로 전체 확인.
 func _on_quest_completed(quest_id: StringName) -> void:
 	var q := Db.get_quest(quest_id)
 	if q != null:
-		_hud.say("목표 달성: %s — [Q]로 확인" % q.title)
+		_hud.say("목표 완료: %s (+보상) — [Q]로 확인" % q.title)
+
+## 🔴 목표 달성 넛지 (세션40) — 아직 완료 아님. 길잡이에게 돌아가 정산하라고 HUD로 민다.
+func _on_quest_ready(quest_id: StringName) -> void:
+	var q := Db.get_quest(quest_id)
+	if q != null:
+		_hud.say("목표 달성: %s — 길잡이에게 돌아가 정산하라 [?]" % q.title)
+
+## 🔴 물음표 갱신 — 정산할 퀘스트가 있으면 길잡이 머리 위 [?]를 켠다. 시그널·초기화 양쪽에서 부른다.
+func _refresh_npc_mark(_a: Variant = null) -> void:
+	_npc_mark.visible = GameState.has_claimable_quest()
 
 # ─────────────────────────── 거점 건설 (세션37) ───────────────────────────
 ## 🔴 거점은 **재료로 직접 짓는다** (사용자 확정: "거점을 내가 직접 업데이트, 시작은 아무것도 없는 상태").

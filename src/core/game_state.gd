@@ -291,7 +291,9 @@ func is_quest_done(quest_id: StringName) -> bool:
 func quest_count(quest_id: StringName) -> int:
 	return int(quest_progress.get(quest_id, 0))
 
-## 🔴 goal·target에 맞는 **열린** 퀘스트들의 카운트를 1씩 올린다. 목표에 닿으면 완료 처리.
+## 🔴 goal·target에 맞는 **열린** 퀘스트의 카운트를 1씩 올린다 (세션40 턴인: 완료가 아니라 "정산 대기"까지만).
+##  🔴 목표에 닿아도 여기서 완료하지 않는다 — 길잡이(NPC)에게 말 걸어 claim_ready_quests()로 정산해야 완료된다.
+##  이미 달성한(정산 대기) 퀘스트는 더 세지 않는다(진행 막대가 need에서 멈춘다). 방금 달성하면 quest_ready 발신.
 ##  target 규칙: 퀘스트의 target이 비었으면 아무 대상이나(예: KILL "" = 아무 적), 지정됐으면 일치할 때만.
 func advance_quests(goal: int, target: StringName) -> void:
 	for q: QuestDef in Db.all_quests():
@@ -299,14 +301,54 @@ func advance_quests(goal: int, target: StringName) -> void:
 			continue
 		if q.target != &"" and q.target != target:
 			continue
+		if is_quest_satisfied(q):
+			continue   # 이미 달성 — 길잡이 정산만 남았다. 더 세지 않는다.
 		quest_progress[q.id] = quest_count(q.id) + 1
 		EventBus.quest_advanced.emit(q.id)
-		if quest_count(q.id) >= q.need():
-			_complete_quest(q)
-	# 방금 완료로 새로 열린 UNLOCK 퀘스트가 이미 해금된 룬을 노릴 수 있다 — 소급 완료.
-	_auto_complete_satisfied()
+		if is_quest_satisfied(q):
+			EventBus.quest_ready.emit(q.id)   # 방금 목표 달성 — 길잡이에게 돌아가 정산하라
 
-## 🔴 완료 — 표시하고 보상을 창고에 넣고 알린다. 이미 완료면 아무 일도 안 한다(이중 안전).
+## 목표를 채웠나 (완료와 별개 — 완료는 길잡이 정산에서만 일어난다, 세션40).
+##  UNLOCK/BUILD는 codex 상태로 판정(이벤트를 놓쳐도·소급이어도 옳게 나온다), 나머지(KILL/EXTRACT)는 카운트로.
+func is_quest_satisfied(q: QuestDef) -> bool:
+	if q == null:
+		return false
+	if q.goal == Enums.QuestGoal.UNLOCK:
+		return is_unlocked(q.target)
+	return quest_count(q.id) >= q.need()
+
+## 길잡이에게 정산할 수 있나 — 열려 있고(선행 완료) 목표를 채웠고 아직 미수령.
+func is_quest_claimable(q: QuestDef) -> bool:
+	return is_quest_active(q) and is_quest_satisfied(q)
+
+## NPC(길잡이) 머리 위 물음표용 — 정산할 퀘스트가 하나라도 있나.
+func has_claimable_quest() -> bool:
+	for q: QuestDef in Db.all_quests():
+		if is_quest_claimable(q):
+			return true
+	return false
+
+## 🔴 길잡이 정산 (세션40) — 달성한(claimable) 퀘스트를 실제로 완료(보상·다음 개방)한다. **정산은 여기서만.**
+##  고정점까지 반복: 하나 정산이 다음 퀘스트를 열고, 그게 **이미 달성돼 있으면**(예: 앞서 지은 스테이션·
+##  이미 해금된 룬 — 옛 소급 완료 자리) 같은 방문에 연쇄 정산한다. quest_done가 무한을 막는다.
+##  🔴 EXTRACT("살아 돌아와라")는 **진짜 귀환(`_on_extraction_success`)만** 채운다 — 여기서 크레딧하지
+##  않는다. 안 그러면 원정 없이 말만 걸어도 귀환 목표가 채워져 공짜 보상이 나간다(q02 선행 제거로 시작부터
+##  active라 더 위험). q02는 ⓐ(선행 제거)로 원정 중 이미 active라 실제 extraction_success가 채운다.
+##  반환: 이번에 완료된 퀘스트 id들(HUD 알림용). 각각 quest_completed도 발신된다.
+func claim_ready_quests() -> Array[StringName]:
+	var claimed: Array[StringName] = []
+	var changed := true
+	while changed:
+		changed = false
+		for q: QuestDef in Db.all_quests():
+			if is_quest_claimable(q):
+				_complete_quest(q)
+				claimed.append(q.id)
+				changed = true
+	return claimed
+
+## 🔴 완료 처리 — 표시하고 보상을 창고에 넣고 알린다. 이미 완료면 아무 일도 안 한다(이중 안전).
+##  세션40: 이제 claim_ready_quests()(길잡이 정산)에서만 불린다 — advance_quests는 부르지 않는다.
 func _complete_quest(q: QuestDef) -> void:
 	if quest_done.has(q.id):
 		return
@@ -315,19 +357,8 @@ func _complete_quest(q: QuestDef) -> void:
 		add_item(item_id, int(q.reward_items[item_id]))
 	EventBus.quest_completed.emit(q.id)
 
-## 🔴 이미 조건이 충족된 채로 열린 퀘스트를 소급 완료한다 (세션36).
-##  왜 필요한가: 스파인이 "물의 룬 배우기"에 닿았을 때 플레이어가 **이미** 물 룬을 해독했을 수 있다.
-##  그러면 UNLOCK 이벤트는 지나갔으므로, 열리는 순간 codex를 보고 바로 완료해야 사슬이 안 막힌다.
-##  부팅 로드 직후에도 한 번 부른다(SaveManager) — 저장된 완료 상태로 열린 UNLOCK 퀘스트 정리.
-func _auto_complete_satisfied() -> void:
-	var changed := true
-	while changed:   # 한 번 완료가 다음 UNLOCK을 열 수 있어 고정점까지 반복 (quest_done가 무한을 막는다)
-		changed = false
-		for q: QuestDef in Db.all_quests():
-			if q.goal == Enums.QuestGoal.UNLOCK and is_quest_active(q) and is_unlocked(q.target):
-				_complete_quest(q)
-				changed = true
-
-## 부팅 로드 후 SaveManager가 부른다 — 복원된 완료 상태 기준으로 소급 완료를 한 번 돌린다.
+## 부팅 로드 후 SaveManager가 부른다 — 세션40 턴인부턴 소급 자동완료를 하지 않는다.
+##  이미 조건이 충족된 채 열린 퀘스트는 claimable로 파생돼 물음표로 뜨고, 길잡이 정산에서 완료된다.
+##  (파생 상태라 복원 뒤 재계산이 필요 없다 — 함수는 저장/로드 호출부 안정을 위해 남긴 의도적 no-op.)
 func reevaluate_quests() -> void:
-	_auto_complete_satisfied()
+	pass

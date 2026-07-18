@@ -13,4 +13,4 @@ count = 1
 reward_items = {
 &"mat_hound_fang": 2
 }
-requires = &"q01_first_hunt"
+requires = &""

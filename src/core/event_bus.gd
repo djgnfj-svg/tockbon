@@ -46,6 +46,9 @@ signal codex_unlocked(unlock_id: StringName)
 signal quest_completed(quest_id: StringName)
 ## 진행 카운트가 늘었을 때 (완료 아님) — 패널이 열려 있으면 진행 막대를 다시 그린다.
 signal quest_advanced(quest_id: StringName)
+## 🔴 목표를 방금 채웠다 (세션40 턴인) — 아직 완료는 아니다. 길잡이에게 돌아가 정산하라는 신호.
+## HUD가 "달성! 돌아가라" 넛지를 띄우고, NPC 머리 위 물음표가 켜진다. 완료는 claim_ready_quests()에서만.
+signal quest_ready(quest_id: StringName)
 
 # ── 자원·장비 (GameState → 전체)
 ## ⚠ 둘 다 발신만 있고 수신자 0 (HUD 삭제 탓). 정상 — 발신 측은 계약을 지킨다.

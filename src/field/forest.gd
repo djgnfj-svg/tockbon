@@ -73,16 +73,18 @@ func _ready() -> void:
 	_player.caster.slot_changed.connect(_hud.select)
 	_hud.select(_player.caster.slot())
 	EventBus.player_hp_changed.connect(_on_hp_changed)
-	# 퀘스트 완료 알림 (세션36) — 숲에서 5마리째를 잡는 순간처럼, 완료가 여기서도 뜬다.
-	EventBus.quest_completed.connect(_on_quest_completed)
+	# 🔴 목표 달성 넛지 (세션40 턴인) — 숲에서 5마리째를 잡는 순간이 여기다. **완료가 아니라 정산 대기**라
+	# quest_completed가 아니라 quest_ready를 듣는다(완료는 베이스 길잡이 정산에서만 → 숲에선 절대 안 뜬다).
+	# 넛지가 사라진 그 순간이 "왜 돌아가야 하나"를 알려줄 유일한 타이밍이라 숲에서도 꼭 띄운다.
+	EventBus.quest_ready.connect(_on_quest_ready)
 	_hud.say("숲이다 — 들어온 자리(남쪽)로 돌아가 E를 누르면 귀환한다")
 
 
-## 목표 하나를 달성했다 — HUD에 알린다(보상은 GameState가 이미 처리). [Q]로 전체 확인.
-func _on_quest_completed(quest_id: StringName) -> void:
+## 목표 하나를 달성했다 — 아직 완료 아님. 길잡이에게 돌아가 정산하라고 HUD로 민다.
+func _on_quest_ready(quest_id: StringName) -> void:
 	var q := Db.get_quest(quest_id)
 	if q != null:
-		_hud.say("목표 달성: %s — [Q]로 확인" % q.title)
+		_hud.say("목표 달성: %s — 길잡이에게 돌아가 정산하라 [?]" % q.title)
 
 
 ## 🔴 귀환 성공 — `extraction_success`가 **가방을 창고로 옮기고 자동 저장**한다 (GameState·SaveManager가
