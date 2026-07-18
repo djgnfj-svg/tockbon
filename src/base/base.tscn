@@ -107,6 +107,32 @@ offset_bottom = -28.0
 text = "[E] 정제대"
 horizontal_alignment = 1
 
+[node name="Craft" type="Area2D" parent="."]
+position = Vector2(-180, -170)
+collision_layer = 64
+collision_mask = 2
+script = ExtResource("2_zone")
+zone_id = &"craft"
+
+[node name="Bench" type="Polygon2D" parent="Craft"]
+color = Color(0.36, 0.26, 0.16, 1)
+polygon = PackedVector2Array(-38, -6, 38, -6, 38, 24, -38, 24)
+
+[node name="Anvil" type="Polygon2D" parent="Craft"]
+color = Color(0.32, 0.33, 0.36, 1)
+polygon = PackedVector2Array(-18, -20, 18, -20, 12, -8, -12, -8)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Craft"]
+shape = SubResource("RectangleShape2D_refine")
+
+[node name="Prompt" type="Label" parent="Craft"]
+offset_left = -46.0
+offset_top = -50.0
+offset_right = 46.0
+offset_bottom = -28.0
+text = "[E] 공방"
+horizontal_alignment = 1
+
 [node name="Player" parent="." instance=ExtResource("3_player")]
 position = Vector2(0, 40)
 
@@ -139,6 +165,6 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("6_hud")
-hint_text = "WASD=이동 · 책상 E=고리 조립 · 정제대 E=재료 가공 · 왼쪽 숲길 E=원정 · 좌클릭=발사 · 1~4=슬롯 · I=창고"
+hint_text = "WASD=이동 · 책상 E=고리 조립 · 정제대 E=재료 가공 · 공방 E=장비 · 왼쪽 숲길 E=원정 · 좌클릭=발사 · 1~4=슬롯 · I=창고"
 
 [node name="Inv" parent="." instance=ExtResource("7_inv")]

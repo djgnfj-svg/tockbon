@@ -82,7 +82,8 @@ func _on_draw() -> void:
 func _refresh() -> void:
 	for c in _list.get_children():
 		c.queue_free()
-	var recipes: Array = Db.all_recipes()
+	# 🔴 정제대 레시피(잉크·종이)만 — 공방(장비) 레시피는 station=&"craft"라 여기 안 뜬다 (세션32).
+	var recipes: Array = Db.recipes_for_station(&"refine")
 	if recipes.is_empty():
 		var none := Label.new()
 		none.text = "만들 수 있는 게 없다 (data/recipes 비어 있음)"

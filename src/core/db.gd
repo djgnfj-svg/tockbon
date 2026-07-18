@@ -84,6 +84,15 @@ func all_recipes() -> Array[RecipeDef]:
 		out.append(recipes[k])
 	return out
 
+## 🔴 한 작업대의 레시피만 — 정제대(&"refine")와 공방(&"craft")이 서로 남의 레시피를 안 보이게
+## (세션32). 안 걸러 내면 펜 레시피가 정제대에도 뜬다. 정렬은 all_recipes(id 오름차순)를 물려받는다.
+func recipes_for_station(station: StringName) -> Array[RecipeDef]:
+	var out: Array[RecipeDef] = []
+	for r: RecipeDef in all_recipes():
+		if r.station == station:
+			out.append(r)
+	return out
+
 
 # ── 특별잉크·종이 리졸버 (세션29) — 잉크 등급(ink_mult)과 같은 이유로 레지스트리에 둔다 ──
 

@@ -111,9 +111,14 @@
 > 🔴 **엘리트(gale·slime_elite)는 안 넣음** — fragment_*(룬 조각)는 일반 드롭이 아니라 보스 퀘스트
 > 보상(E4용). 정본 = STATUS 「세션 30」 + memory `takbon-forest-expedition`.
 >
+> ✅ **세션 32 = 공방(장비 제작) + 장착 UI** — 베이스 왼쪽 위 공방 [E]에서 펜 3종 제작·착용/해제.
+> `RecipeDef.station`으로 정제대(잉크·종이)⇔공방(펜) 분리 · `workshop_panel`(제작+장착) · 펜 재료=
+> hound/beetle 드롭. 장착 로직·저장은 이미 있었고 UI만 없었다. 정본 = STATUS 「세션 32」.
+>
 > **🔴 다음 세션 = E4(보스 → 룬 해금)** — 엘리트/fragment_*가 여기서 산다(숲 드롭이 아니라 퀘스트
-> 보상). 그 뒤 장비 제작(펜부터 — `ItemKind.PEN` 배선은 있고 얻는 경로가 없다) · E3 밸런스 조이기
-> (소모·희소성). 손맛/드롭률 체감은 **직접 싸워 봐야**. 정본 = `docs/BACKLOG.md` E4·E5.
+> 보상). 또는 E3 밸런스 조이기(잉크·종이·펜 재료 희소성 — 지금 무한·무료라 상급이 최적). 지팡이·
+> 부적·로브는 착용만 되고 제작 레시피 없음(펜과 같은 틀로 `.tres` 추가). 손맛/드롭률은 **직접 싸워
+> 봐야**. 정본 = `docs/BACKLOG.md` E4·E5.
 >
 > ⚠ **손맛류는 여전히 사용자가 직접 해 봐야 정해진다** — 원정 손맛(F4)·문양 손맛(R2a)·판정
 > 반경·65점 기준선(R3)·**드롭률 체감**. 측정이 전부 시뮬레이션이다(**좌표를 그대로 찍어 재면 정밀도
@@ -211,6 +216,7 @@
 ./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_ring_design_auto.gd     # **고리 도안 통합**: RingDesign 라운드트립·ring_design_committed→GameState 자동 장착 · **등급⇔펑 경계·퍼펙트⇔화면100** (세션 24)
 ./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_base_auto.gd            # **베이스캠프 발사 배선** (세션 24): 과녁 사거리 · 🔴**물리 레이어 계약**(내 몸/책상이 world면 진이 총구에서 죽는다 — 에러 없이 조용히) · [8] 숲길
 ./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_forest_auto.gd         # **숲 원정** (세션 26): 출격 만HP · 적이 쫓아옴(그룹 "player") · 접촉 피해 · 🔴**적 레이어 계약**(4=enemy가 아니면 부딪히기만 하고 take_hit이 안 불린다) · 귀환/사망 계약(extraction_success·bag_lost)
+./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_workshop_auto.gd      # **공방 장비 제작** (세션 32): 레시피 station 분리(정제대⇔공방) · 펜 제작(spend→add) · 장착 라운드트립(equip→correction 0.35→소비, unequip→반환) · 🔴**패널 클릭은 헤드리스가 못 잡는다**(실게임 push_input로 별도 검증)
 ```
 
 🔴 **스위트를 돌리면 `user://save`가 날아간다** (세션 26 F3 이후). `SaveManager._ready`가 저장을

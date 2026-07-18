@@ -13,3 +13,7 @@ extends Resource
 ## 결과 item_id + 개수
 @export var output_id: StringName
 @export var output_count: int = 1
+## 🔴 어느 작업대에서 나오나 — 정제대(&"refine": 잉크·종이) vs 공방(&"craft": 장비). 세션32.
+## 안 적은 옛 레시피는 전부 refine이다(기본값). 두 패널이 이 값으로 자기 레시피만 걸러 낸다 —
+## 안 걸러 내면 공방 레시피가 정제대에도 뜬다(둘 다 Db.all_recipes를 읽으므로).
+@export var station: StringName = &"refine"
