@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://c0hud01dmgnum"]
+
+[ext_resource type="Script" path="res://src/hud/damage_number.gd" id="1_dmg"]
+
+[node name="DamageNumber" type="Label"]
+script = ExtResource("1_dmg")

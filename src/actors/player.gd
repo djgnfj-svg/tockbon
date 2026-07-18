@@ -16,16 +16,35 @@ extends CharacterBody2D
 const PlayerCaster := preload("res://src/actors/player_caster.gd")
 
 @onready var caster: PlayerCaster = $Caster
+@onready var sprite: AnimatedSprite2D = $Sprite
 
 func _ready() -> void:
 	add_to_group("player")
+
+## 이동 방향으로 4방향 걷기 애니메이션을 고른다. 통째로 까딱 2프레임 —
+## 걸을 때만 재생하고, 멈추면 첫 프레임(정지 포즈)으로.
+func _update_anim(dir: Vector2) -> void:
+	if dir == Vector2.ZERO:
+		sprite.pause()
+		sprite.frame = 0
+		return
+	var a: StringName
+	if absf(dir.x) > absf(dir.y):
+		a = &"right" if dir.x > 0.0 else &"left"
+	else:
+		a = &"down" if dir.y > 0.0 else &"up"
+	if sprite.animation != a:
+		sprite.animation = a
+	sprite.play()
 
 ## 🔴 속도는 balance가 쥔다 (수치를 코드에 박지 않는다 — TECH_SPEC §10).
 ## 🔴 UI 모달(창고 등)이 열리면 멎는다 — 안 그러면 창고를 보는 동안 뒤에서 계속 걸어간다.
 func _physics_process(_delta: float) -> void:
 	if GameState.ui_modal_open:
 		velocity = Vector2.ZERO
+		_update_anim(Vector2.ZERO)
 		return
 	var dir := Input.get_vector("move_left", "move_right", "move_up", "move_down")
 	velocity = dir * GameState.balance.player_move_speed
+	_update_anim(dir)
 	move_and_slide()

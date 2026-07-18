@@ -23,9 +23,17 @@ signal died
 
 @onready var _visual: Polygon2D = $Visual
 
+## 🔴 피격 손맛 (세션 38) — 넉백/팝 **연출값**. 밸런스가 아니라 느낌값이라 여기 const
+## (projectile 물리 여유 const 선례). 사용자가 직접 때려 보며 조인다.
+const KNOCKBACK_IMPULSE := 140.0  ## 맞는 순간 플레이어 반대쪽으로 밀려나는 속도
+const KNOCKBACK_DECAY := 600.0    ## 넉백 감쇠(속도/s) — 빨리 원래 추격으로 복귀
+const POP_SCALE := 1.35           ## 팝 순간 시각 크기
+
 var _def: EnemyDef = null
 var _hp: float = 0.0
 var _cool: float = 0.0
+## 피격 넉백 속도 — 추격 속도 위에 얹혀 빠르게 사그라든다.
+var _knockback: Vector2 = Vector2.ZERO
 
 
 func _ready() -> void:
@@ -69,7 +77,10 @@ func _physics_process(delta: float) -> void:
 		velocity = to_player / dist * _param("move_speed", 55.0)
 	else:
 		velocity = Vector2.ZERO
+	# 넉백은 추격 속도 위에 얹혀 빠르게 사그라든다 (피격 손맛)
+	velocity += _knockback
 	move_and_slide()
+	_knockback = _knockback.move_toward(Vector2.ZERO, KNOCKBACK_DECAY * delta)
 
 	if dist <= _param("attack_range", 18.0) and _cool <= 0.0:
 		_cool = _param("attack_cooldown", 0.9)
@@ -99,7 +110,14 @@ func take_hit(damage: float, rune_type: int, _status: int, _status_power: float)
 	var dealt := damage * mult
 	_hp -= dealt
 	EventBus.enemy_hit.emit(self, dealt, rune_type)
-	_flash()
+	# 넉백 = 플레이어 반대쪽으로 (탄이 플레이어→적 방향으로 오므로 그 근사다 — take_hit 계약을
+	# 안 넓히고도 맞는 방향으로 밀린다. 세션 26 forest_enemy 주석의 "계약을 좁히지 않는다"와 같은 결).
+	var p := _player()
+	if p != null:
+		var away := global_position - p.global_position
+		if away.length() > 0.1:
+			_knockback = away.normalized() * KNOCKBACK_IMPULSE
+	_pop()
 	if _hp <= 0.0:
 		_die()
 
@@ -132,12 +150,41 @@ func _die() -> void:
 	# "킬카운트가 붙는 날의 자리표"가 마침내 수신자를 얻었다. enemy_id를 실어 특정 적 목표도 가능.
 	EventBus.enemy_died.emit(enemy_id)
 	died.emit()
+	_spawn_death_puff()
 	queue_free()
 
 
-func _flash() -> void:
+## 팝 — 흰 섬광 + 크기 펀치 (피격 손맛). 🔴 **scale은 _visual에만** 준다: 루트 scale은
+## _apply_look가 쥔 덩치(=히트박스)라 건드리면 히트박스가 출렁인다.
+func _pop() -> void:
 	if _visual == null:
 		return
-	_visual.modulate = Color(1.0, 0.35, 0.35)
+	_visual.modulate = Color(2.2, 2.2, 2.2)  # >1 = 밝게 튄다 (흰 섬광)
+	_visual.scale = Vector2(POP_SCALE, POP_SCALE)
 	var tween := create_tween()
-	tween.tween_property(_visual, "modulate", Color.WHITE, 0.25)
+	tween.set_parallel(true)
+	tween.tween_property(_visual, "modulate", Color.WHITE, 0.18)
+	tween.tween_property(_visual, "scale", Vector2.ONE, 0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+
+## 처치 퍼프 — 적 색으로 확 커지며 사라지는 링. 적은 이 프레임에 queue_free되지만
+## 퍼프는 현재 씬에 따로 붙어 살아남는다.
+func _spawn_death_puff() -> void:
+	var scene := get_tree().current_scene
+	if scene == null:
+		return
+	var puff := Polygon2D.new()
+	var pts := PackedVector2Array()
+	for i in 8:
+		pts.append(Vector2.RIGHT.rotated(TAU * float(i) / 8.0) * 10.0)
+	puff.polygon = pts
+	puff.color = _visual.color if _visual != null else Color.WHITE
+	puff.global_position = global_position
+	puff.z_index = 50
+	scene.add_child(puff)
+	var tween := puff.create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(puff, "scale", Vector2(2.4, 2.4), 0.25).set_ease(Tween.EASE_OUT)
+	tween.tween_property(puff, "modulate:a", 0.0, 0.25)
+	tween.set_parallel(false)
+	tween.tween_callback(puff.queue_free)
