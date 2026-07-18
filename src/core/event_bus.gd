@@ -19,6 +19,10 @@ signal ring_design_committed(design: RingDesign)
 
 # ── 전투 (B ↔ C)
 signal enemy_hit(enemy: Node2D, damage: float, rune_type: int)
+## 🔴 적이 죽었다 (세션 36). forest_enemy._die가 발신 → GameState가 KILL 퀘스트를 센다.
+## enemy_hit(매 타격)과 다르다 — 이건 **처치 순간 1회**다. 세션 26 forest_enemy의 `died`
+## 로컬 시그널("킬카운트가 붙는 날의 자리표")이 마침내 수신자를 얻은 것이다.
+signal enemy_died(enemy_id: StringName)
 ## ⚠ 발신자 없음 = **HUD가 세션 21에 삭제돼서**다. 발신 측(GameState)은 계약을 지키고 있다 — 지우지 마라.
 signal player_hp_changed(hp: float, hp_max: float)
 
@@ -36,6 +40,12 @@ signal day_started(day: int)
 
 # ── 도감 해금 (누구든 범용 해금)
 signal codex_unlocked(unlock_id: StringName)
+
+# ── 퀘스트 (진행 목표 = 깊이 스파인, 세션 36)
+## GameState가 목표를 완료했을 때 발신 → 퀘스트 패널 갱신·HUD 알림·사운드. quest_id로 무엇이 끝났는지.
+signal quest_completed(quest_id: StringName)
+## 진행 카운트가 늘었을 때 (완료 아님) — 패널이 열려 있으면 진행 막대를 다시 그린다.
+signal quest_advanced(quest_id: StringName)
 
 # ── 자원·장비 (GameState → 전체)
 ## ⚠ 둘 다 발신만 있고 수신자 0 (HUD 삭제 탓). 정상 — 발신 측은 계약을 지킨다.

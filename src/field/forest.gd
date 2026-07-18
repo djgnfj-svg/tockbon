@@ -73,7 +73,16 @@ func _ready() -> void:
 	_player.caster.slot_changed.connect(_hud.select)
 	_hud.select(_player.caster.slot())
 	EventBus.player_hp_changed.connect(_on_hp_changed)
+	# 퀘스트 완료 알림 (세션36) — 숲에서 5마리째를 잡는 순간처럼, 완료가 여기서도 뜬다.
+	EventBus.quest_completed.connect(_on_quest_completed)
 	_hud.say("숲이다 — 들어온 자리(남쪽)로 돌아가 E를 누르면 귀환한다")
+
+
+## 목표 하나를 달성했다 — HUD에 알린다(보상은 GameState가 이미 처리). [Q]로 전체 확인.
+func _on_quest_completed(quest_id: StringName) -> void:
+	var q := Db.get_quest(quest_id)
+	if q != null:
+		_hud.say("목표 달성: %s — [Q]로 확인" % q.title)
 
 
 ## 🔴 귀환 성공 — `extraction_success`가 **가방을 창고로 옮기고 자동 저장**한다 (GameState·SaveManager가

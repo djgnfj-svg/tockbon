@@ -26,6 +26,12 @@ var ring_designs: Array[RingDesign] = []
 var ring_equipped: Array[RingDesign] = [null, null, null, null]
 ## {unlock_id: true} — 도감 영구 해금 (룬·제법·적 정보)
 var codex: Dictionary = {}
+## 🔴 퀘스트 진행 (세션36, "진행 목표 = 깊이 스파인"). 둘 다 영구 저장.
+##   quest_progress = {quest_id: 현재 카운트} · quest_done = {quest_id: true}.
+## 퀘스트는 순수 오버레이다 — EventBus 이벤트(처치·귀환·해금)를 여기서 관찰해 카운트를 올릴 뿐,
+## 룬 해금 사슬을 전혀 안 건드린다. 진행 상태·완료 판정·보상 지급이 전부 이 원장에서 닫힌다.
+var quest_progress: Dictionary = {}
+var quest_done: Dictionary = {}
 ## UI 모달(게시판·장착·도감) 열림 — ui_root가 설정, 플레이어 이동 계열이 폴링 (TECH_SPEC §4.2)
 var ui_modal_open: bool = false
 
@@ -38,7 +44,10 @@ func _ready() -> void:
 	codex[&"glyph_thrust"] = true
 	EventBus.extraction_success.connect(_on_extraction_success)
 	EventBus.bag_lost.connect(func() -> void: bag.clear())
-	EventBus.codex_unlocked.connect(func(unlock_id: StringName) -> void: codex[unlock_id] = true)
+	# 🔴 해금은 codex에 심고 **UNLOCK 퀘스트도 진행**한다 (세션36). 세션21~35엔 codex만 심었다.
+	EventBus.codex_unlocked.connect(_on_codex_unlocked)
+	# 🔴 적 처치 → KILL 퀘스트 진행 (세션36). forest_enemy._die가 발신.
+	EventBus.enemy_died.connect(_on_enemy_died)
 	EventBus.ring_design_committed.connect(_on_ring_design_committed)
 
 func _process(delta: float) -> void:
@@ -202,6 +211,8 @@ func _on_extraction_success() -> void:
 	for entry: Dictionary in bag:
 		add_item(entry["id"], entry["count"])
 	bag.clear()
+	# 🔴 보상 지급 후에 EXTRACT 퀘스트를 센다 (세션36) — 살아 돌아온 것 자체가 목표다.
+	advance_quests(Enums.QuestGoal.EXTRACT, &"")
 
 # ── 장착·도감
 
@@ -219,3 +230,69 @@ func _on_ring_design_committed(design: RingDesign) -> void:
 
 func is_unlocked(unlock_id: StringName) -> bool:
 	return bool(codex.get(unlock_id, false))
+
+# ── 퀘스트 (진행 목표 = 깊이 스파인, 세션36) ─────────────────────────────
+# 🔴 순수 오버레이: EventBus 이벤트를 관찰해 카운트를 올리고, 목표에 닿으면 보상을 주고
+#    다음 퀘스트를 연다(requires 사슬 = 스파인). 룬 해금 사슬은 전혀 안 건드린다.
+#    새 퀘스트 = data/quests/*.tres 한 장. 여기 하드코딩된 퀘스트는 없다.
+
+## 해금 → codex에 심고 UNLOCK 퀘스트 진행 (옛 codex-only 람다를 대체).
+func _on_codex_unlocked(unlock_id: StringName) -> void:
+	codex[unlock_id] = true
+	advance_quests(Enums.QuestGoal.UNLOCK, unlock_id)
+
+func _on_enemy_died(enemy_id: StringName) -> void:
+	advance_quests(Enums.QuestGoal.KILL, enemy_id)
+
+## 이 퀘스트가 **열려 있나** — 완료 안 됐고, 선행(requires)이 완료됐으면 열림.
+func is_quest_active(q: QuestDef) -> bool:
+	if q == null or quest_done.has(q.id):
+		return false
+	return q.requires == &"" or quest_done.has(q.requires)
+
+func is_quest_done(quest_id: StringName) -> bool:
+	return quest_done.has(quest_id)
+
+func quest_count(quest_id: StringName) -> int:
+	return int(quest_progress.get(quest_id, 0))
+
+## 🔴 goal·target에 맞는 **열린** 퀘스트들의 카운트를 1씩 올린다. 목표에 닿으면 완료 처리.
+##  target 규칙: 퀘스트의 target이 비었으면 아무 대상이나(예: KILL "" = 아무 적), 지정됐으면 일치할 때만.
+func advance_quests(goal: int, target: StringName) -> void:
+	for q: QuestDef in Db.all_quests():
+		if q.goal != goal or not is_quest_active(q):
+			continue
+		if q.target != &"" and q.target != target:
+			continue
+		quest_progress[q.id] = quest_count(q.id) + 1
+		EventBus.quest_advanced.emit(q.id)
+		if quest_count(q.id) >= q.need():
+			_complete_quest(q)
+	# 방금 완료로 새로 열린 UNLOCK 퀘스트가 이미 해금된 룬을 노릴 수 있다 — 소급 완료.
+	_auto_complete_satisfied()
+
+## 🔴 완료 — 표시하고 보상을 창고에 넣고 알린다. 이미 완료면 아무 일도 안 한다(이중 안전).
+func _complete_quest(q: QuestDef) -> void:
+	if quest_done.has(q.id):
+		return
+	quest_done[q.id] = true
+	for item_id: StringName in q.reward_items:
+		add_item(item_id, int(q.reward_items[item_id]))
+	EventBus.quest_completed.emit(q.id)
+
+## 🔴 이미 조건이 충족된 채로 열린 퀘스트를 소급 완료한다 (세션36).
+##  왜 필요한가: 스파인이 "물의 룬 배우기"에 닿았을 때 플레이어가 **이미** 물 룬을 해독했을 수 있다.
+##  그러면 UNLOCK 이벤트는 지나갔으므로, 열리는 순간 codex를 보고 바로 완료해야 사슬이 안 막힌다.
+##  부팅 로드 직후에도 한 번 부른다(SaveManager) — 저장된 완료 상태로 열린 UNLOCK 퀘스트 정리.
+func _auto_complete_satisfied() -> void:
+	var changed := true
+	while changed:   # 한 번 완료가 다음 UNLOCK을 열 수 있어 고정점까지 반복 (quest_done가 무한을 막는다)
+		changed = false
+		for q: QuestDef in Db.all_quests():
+			if q.goal == Enums.QuestGoal.UNLOCK and is_quest_active(q) and is_unlocked(q.target):
+				_complete_quest(q)
+				changed = true
+
+## 부팅 로드 후 SaveManager가 부른다 — 복원된 완료 상태 기준으로 소급 완료를 한 번 돌린다.
+func reevaluate_quests() -> void:
+	_auto_complete_satisfied()

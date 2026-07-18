@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="QuestDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/core/schemas/quest_def.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = &"q02_come_home"
+title = "살아 돌아와라"
+desc = "들어온 자리(남쪽)로 돌아가 [E]로 살아서 귀환하라."
+goal = 1
+target = &""
+count = 1
+reward_items = {
+&"mat_hound_fang": 2
+}
+requires = &"q01_first_hunt"

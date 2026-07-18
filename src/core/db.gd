@@ -14,6 +14,8 @@ var jins: Dictionary = {}
 var glyphs: Dictionary = {}
 ## {StringName: RecipeDef} — 정제·제작 레시피 (세션29 경제)
 var recipes: Dictionary = {}
+## {StringName: QuestDef} — 진행 목표 퀘스트 (세션36 스파인)
+var quests: Dictionary = {}
 
 func _ready() -> void:
 	reload()
@@ -25,6 +27,7 @@ func reload() -> void:
 	jins.clear()
 	glyphs.clear()
 	recipes.clear()
+	quests.clear()
 	for res in _load_dir("res://data/runes"):
 		var rune := res as RuneDef
 		if rune:
@@ -49,6 +52,10 @@ func reload() -> void:
 		var recipe := res as RecipeDef
 		if recipe:
 			recipes[recipe.id] = recipe
+	for res in _load_dir("res://data/quests"):
+		var quest := res as QuestDef
+		if quest:
+			quests[quest.id] = quest
 
 func get_rune(type: Enums.RuneType) -> RuneDef:
 	return runes.get(type) as RuneDef
@@ -122,6 +129,19 @@ func paper_zoom_max(id: StringName, fallback: float) -> float:
 	if it == null:
 		return fallback
 	return float(it.params.get("zoom_max", fallback))
+
+func get_quest(id: StringName) -> QuestDef:
+	return quests.get(id) as QuestDef
+
+## 퀘스트 목록 — id 오름차순 (사슬 순서 = id 순. q01·q02… 로 이름 지어 스파인 순서를 낸다).
+func all_quests() -> Array[QuestDef]:
+	var out: Array[QuestDef] = []
+	var keys := quests.keys()
+	keys.sort()
+	for k: StringName in keys:
+		out.append(quests[k])
+	return out
+
 
 func get_jin(id: StringName) -> JinDef:
 	return jins.get(id) as JinDef

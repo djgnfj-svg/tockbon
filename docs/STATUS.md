@@ -1,10 +1,39 @@
 # STATUS — 현재 진행 상태
 
-> 최종 갱신: 2026-07-18 (세션 34 — **E4: 룬 해금 (보스→조각→탁본 해독→새 룬을 그린다)**)
+> 최종 갱신: 2026-07-19 (세션 36 — **진행 목표(퀘스트) = 깊이 스파인의 첫 뼈대**)
 > · **세션 종료마다 갱신**
 >
 > 🔴 **아래 세션 20 이하는 대부분 삭제된 코드를 설명한다** — 기록이지 현재 상태가 아니다.
 > 현재 정본 = 최상단 「세션 31」~「세션 23」 + `CLAUDE.md` + memory `takbon-mana-injection-rule`.
+
+---
+
+## 세션 36 (2026-07-19) — **진행 목표(퀘스트) = 깊이 스파인의 첫 뼈대**
+
+> 사용자: *"퀘스트 시스템이 있어야 할 듯함"* → AskUserQuestion으로 **역할=진행 목표(깊이 스파인)**,
+> **순서=퀘스트부터 바로** 확정. 세션35의 "왜 나가나 = 새로 그릴 것을 얻으러"를 **보이는 사슬**로.
+
+**설계: 퀘스트 = 순수 오버레이.** 룬 해금 사슬(보스→조각→해독)을 **전혀 안 건드리고** 그 위에 얹혔다.
+목표는 이미 도는 EventBus 이벤트를 관찰해 자동 진행 → 회귀 위험 0. 완료 시 보상 지급 + `requires`로
+다음 퀘스트 개방(=스파인). 🔴 **새 퀘스트 = `data/quests/*.tres` 한 장**(선례: 룬·펜·잉크·적).
+
+**배선 (전부 기존 패턴 미러):**
+- `QuestDef` 스키마(`src/core/schemas/quest_def.gd`) + `Db.quests`·`all_quests()` 등록.
+- `Enums.QuestGoal { KILL, EXTRACT, UNLOCK }`.
+- **로직은 GameState**(이미 codex_unlocked·extraction_success를 구독 중 → 새 오토로드 없이 최저 위험):
+  `quest_progress`·`quest_done` 원장 + `advance_quests`·`is_quest_active`·`_auto_complete_satisfied`.
+  🔴 **소급 완료** — 스파인이 UNLOCK 퀘스트에 닿았을 때 그 룬을 **이미** 해금했으면 열리는 순간 완료(안 하면 사슬이 막힌다).
+- EventBus 신설 `enemy_died(enemy_id)`(forest_enemy._die가 발신 — 세션26 `died` 자리표가 수신자를 얻음)·
+  `quest_completed`·`quest_advanced`. SaveManager가 진행·완료를 저장/복원(+로드 후 `reevaluate_quests`).
+- **보기 = `Q` 모달 패널**(`src/hud/quest_panel.gd`, 베이스·숲 공용, 창고 `I` 형제). 완료 시 HUD 알림(base·forest)+해금음(Audio).
+- 시작 사슬 4장: q01 첫사냥(적5) → q02 귀환 → q03 물의룬(UNLOCK rune_water) → q04 바람의룬.
+
+### 검증 — 🔴 헤드리스 그린 + 실게임 클릭 둘 다
+
+- **`test_quests_auto` 21/21**(KILL/EXTRACT/UNLOCK 배선·사슬 게이트·보상 지급·소급 완료·저장 라운드트립). 회귀 5종 그린(save 21·decode 8·forest·ring_design·base).
+- 🔴 **실게임(에디터 exec/push_input)**: 패널 렌더 스샷 확인 · **Q 토글 양방향** · **닫힘 시 좌클릭 발사 도달**(전체화면 Control을 하나 더 얹었으나 세션25/26 `mouse_filter` 함정 재발 없음 — `push_input`으로 증명, 액션 주입으론 못 잡는 검증) · **열림 시 발사 차단**(모달 보호).
+
+**다음:** ⓐ 피격 손맛(넉백·히트스톱·숫자) · ⓑ 숲 깊이 스파인(층·깊을수록 강함/보상) — 퀘스트가 이걸 가리키게 · gale 풀 보스 AI(바람 조각). ⚠ 밸런스(퀘스트 보상·목표 개수)·손맛은 사용자가 직접 플레이해야.
 
 ---
 

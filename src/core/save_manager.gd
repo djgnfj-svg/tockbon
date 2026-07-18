@@ -62,6 +62,14 @@ func save_game() -> void:
 	for unlock_id: StringName in GameState.codex:
 		if GameState.codex[unlock_id]:
 			codex.append(String(unlock_id))
+	# 퀘스트 진행·완료 (세션36) — 진행 목표 스파인. 키(quest_id)는 StringName이라 String으로 직렬화.
+	var quest_progress: Dictionary = {}
+	for qid: StringName in GameState.quest_progress:
+		quest_progress[String(qid)] = int(GameState.quest_progress[qid])
+	var quest_done: Array = []
+	for qid: StringName in GameState.quest_done:
+		if GameState.quest_done[qid]:
+			quest_done.append(String(qid))
 
 	var data := {
 		"version": 1,
@@ -73,6 +81,8 @@ func save_game() -> void:
 		"codex": codex,
 		"ring_designs": ring_files,
 		"ring_equipped": ring_equipped_idx,
+		"quest_progress": quest_progress,
+		"quest_done": quest_done,
 	}
 	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if file == null:
@@ -109,6 +119,14 @@ func load_game() -> bool:
 	GameState.mana = minf(float(data.get("mana", GameState.mana_max())), GameState.mana_max())
 	for key: String in data.get("codex", []):
 		GameState.codex[StringName(key)] = true
+	# 퀘스트 진행·완료 복원 (세션36). 옛 세이브엔 없어 get 기본값으로 빈 진행(첫 퀘스트가 열린다).
+	GameState.quest_progress.clear()
+	var qprog: Dictionary = data.get("quest_progress", {})
+	for key: String in qprog:
+		GameState.quest_progress[StringName(key)] = int(qprog[key])
+	GameState.quest_done.clear()
+	for key: String in data.get("quest_done", []):
+		GameState.quest_done[StringName(key)] = true
 
 	# 고리 도안 복원
 	GameState.ring_designs.clear()
@@ -129,6 +147,9 @@ func load_game() -> bool:
 	EventBus.player_hp_changed.emit(GameState.hp, GameState.hp_max())
 	EventBus.equipment_changed.emit()
 	EventBus.resources_changed.emit()
+	# 🔴 복원된 완료 상태 기준으로 소급 완료를 한 번 — 이미 해금된 룬을 노리는 UNLOCK 퀘스트가
+	# 열린 채 막히지 않게 (game_state._auto_complete_satisfied 주석). Db는 오토로드라 이 시점 준비됨.
+	GameState.reevaluate_quests()
 	_ready_to_save = true
 	return true
 

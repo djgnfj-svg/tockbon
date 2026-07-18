@@ -128,6 +128,9 @@ func _die() -> void:
 					got_drop = true
 	if got_drop:
 		Audio.play(&"pickup")   # 뭔가 떨궜을 때만 — 빈손 처치는 조용히
+	# 🔴 처치 순간 1회 — GameState가 KILL 퀘스트를 센다 (세션36). `died` 로컬 시그널의
+	# "킬카운트가 붙는 날의 자리표"가 마침내 수신자를 얻었다. enemy_id를 실어 특정 적 목표도 가능.
+	EventBus.enemy_died.emit(enemy_id)
 	died.emit()
 	queue_free()
 

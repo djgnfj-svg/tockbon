@@ -39,6 +39,7 @@ func _ready() -> void:
 	EventBus.ring_design_committed.connect(_on_commit)
 	EventBus.equipment_changed.connect(_on_equip)
 	EventBus.phase_changed.connect(_on_phase)
+	EventBus.quest_completed.connect(_on_quest_complete)
 
 
 ## 국소 순간 재생 API — 모듈이 직접 부른다. id = 파일명(확장자 없이).
@@ -109,6 +110,11 @@ func _on_commit(_design) -> void:
 func _on_equip() -> void:
 	# 장착·해제 (공방에서 펜 등을 낄 때). 부팅 로드 시엔 Audio가 아직 연결 전이라 조용하다.
 	play(&"equip")
+
+
+func _on_quest_complete(_quest_id: StringName) -> void:
+	# 목표 달성 (세션36) — 전용 소리가 없으면 해금음을 재사용한다(둘 다 "새로 열렸다"의 순간).
+	play(&"unlock")
 
 
 func _on_phase(phase: int) -> void:

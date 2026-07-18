@@ -91,6 +91,8 @@ func _ready() -> void:
 	_player.caster.notice.connect(_hud.say)
 	_player.caster.slot_changed.connect(_hud.select)
 	_hud.select(_player.caster.slot())
+	# 퀘스트 완료 알림 (세션36) — GameState가 판정, 씬은 HUD로 알린다(caster.notice와 같은 채널).
+	EventBus.quest_completed.connect(_on_quest_completed)
 
 # ─────────────────────────── 원정 ───────────────────────────
 
@@ -100,6 +102,12 @@ func _to_forest() -> void:
 	if _overlay != null:   # 책을 펴 놓고 E를 눌러 나가면 책이 열린 채 씬이 바뀐다
 		return
 	get_tree().change_scene_to_file(forest_scene_path)
+
+## 목표 하나를 달성했다 — HUD에 알린다(보상은 GameState가 이미 창고에 넣었다). [Q]로 전체 확인.
+func _on_quest_completed(quest_id: StringName) -> void:
+	var q := Db.get_quest(quest_id)
+	if q != null:
+		_hud.say("목표 달성: %s — [Q]로 확인" % q.title)
 
 # ─────────────────────────── 고리 조립 책 ───────────────────────────
 

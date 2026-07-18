@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="QuestDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/core/schemas/quest_def.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = &"q04_learn_wind"
+title = "바람의 힘"
+desc = "바람 룬 조각을 얻어 해독대에서 바람의 룬을 배워라."
+goal = 2
+target = &"rune_wind"
+count = 1
+reward_items = {
+&"mat_moon_sap": 2
+}
+requires = &"q03_learn_water"

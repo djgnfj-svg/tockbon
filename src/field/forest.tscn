@@ -1,4 +1,4 @@
-[gd_scene load_steps=9 format=3 uid="uid://c0field01forest"]
+[gd_scene load_steps=10 format=3 uid="uid://c0field01forest"]
 
 [ext_resource type="Script" path="res://src/field/forest.gd" id="1_forest"]
 [ext_resource type="Script" path="res://src/actors/interact_zone.gd" id="2_zone"]
@@ -7,6 +7,7 @@
 [ext_resource type="PackedScene" path="res://src/spell/ring_spell_system.tscn" id="5_spell"]
 [ext_resource type="Script" path="res://src/hud/hud.gd" id="6_hud"]
 [ext_resource type="PackedScene" path="res://src/hud/inventory_panel.tscn" id="7_inv"]
+[ext_resource type="PackedScene" path="res://src/hud/quest_panel.tscn" id="8_quest"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_gate"]
 size = Vector2(110, 90)
@@ -129,7 +130,9 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("6_hud")
-hint_text = "WASD=이동 · 좌클릭=발사 · 1~4=슬롯 · 들어온 자리(남쪽)에서 E=귀환 · I=가방/창고"
+hint_text = "WASD=이동 · 좌클릭=발사 · 1~4=슬롯 · 들어온 자리(남쪽)에서 E=귀환 · I=가방/창고 · Q=목표"
 show_hp = true
 
 [node name="Inv" parent="." instance=ExtResource("7_inv")]
+
+[node name="Quest" parent="." instance=ExtResource("8_quest")]
