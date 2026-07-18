@@ -11,11 +11,9 @@ extends Area2D
 ## 지속형이다 — 서 있는 동안 안에 든 적을 tick마다 때린다.
 ## 적 노드 계약: 그룹 "enemies" + take_hit(damage, rune_type, status, status_power).
 
-const RUNE_COLORS: Dictionary = {
-	Enums.RuneType.FIRE: Color(1.0, 0.55, 0.1),
-	Enums.RuneType.WATER: Color(0.25, 0.55, 1.0),
-	Enums.RuneType.WIND: Color(0.65, 0.95, 0.45),
-}
+## 룬 색은 Db에서 읽는다 (`_rune_color`) — "새 룬 = .tres 한 장"이 색까지 지켜지게.
+## 이건 Db에 룬이 없을 때만 쓰는 폴백 (오토로드 없는 컨텍스트도 견딘다 — ring_carrier와 같은 규칙).
+const RUNE_FALLBACK := Color(0.95, 0.35, 0.15)
 
 ## 씬의 CollisionShape2D가 쥔 CircleShape2D 반지름 — **공유 리소스라 불변**. scale로만 키운다
 const BASE_RADIUS := 14.0
@@ -29,6 +27,8 @@ var _balance: BalanceData = preload("res://data/balance.tres")
 var _life_left: float = 0.0
 var _tick_left: float = 0.0
 var _visual: Polygon2D = null
+## 🔴 스폰 직후 첫 물리 프레임은 overlap이 아직 안 잡힌다 — 한 프레임 흘려보낸 뒤부터 때린다.
+var _warmed: bool = false
 
 func _ready() -> void:
 	add_to_group("pillars")
@@ -40,7 +40,9 @@ func setup(p_damage: float, p_rune_type: int, p_status: int, p_status_power: flo
 	status = p_status
 	status_power = p_status_power
 	_life_left = _balance.pillar_duration_sec
-	_tick_left = 0.0   # 서자마자 한 번 때린다 — 안 그러면 짧은 기둥이 아무것도 못 한다
+	# 🔴 warmup 프레임(_warmed) 직후에 첫 타격이 나가도록 0으로 둔다 — _physics_process 참조.
+	# 서자마자 한 번 때린다 (안 그러면 짧은 기둥이 아무것도 못 한다).
+	_tick_left = 0.0
 
 	# 🔴 형상 리소스는 **씬 인스턴스들이 공유하는 물건**이다 — radius를 직접 쓰면 모든 기둥이
 	# 함께 바뀐다. **scale로만 만진다** (projectile.gd·shockwave.gd와 같은 규칙)
@@ -50,7 +52,7 @@ func setup(p_damage: float, p_rune_type: int, p_status: int, p_status_power: flo
 
 	_visual = get_node_or_null("Visual") as Polygon2D
 	if _visual != null:
-		_visual.color = RUNE_COLORS.get(p_rune_type, Color.WHITE)
+		_visual.color = _rune_color(p_rune_type)
 		_visual.polygon = _circle_points(_balance.pillar_radius_px)
 
 
@@ -62,6 +64,13 @@ func _physics_process(delta: float) -> void:
 	# 사그라든다 — 남은 수명이 곧 밝기 (연출. 밸런스 아님)
 	if _visual != null:
 		_visual.modulate.a = clampf(_life_left / maxf(_balance.pillar_duration_sec, 0.001), 0.0, 1.0)
+
+	# 🔴 스폰된 그 프레임엔 get_overlapping_*가 아직 비어 있다 (Area2D 겹침은 물리 스텝 한 번 뒤에
+	# 갱신된다). 한 프레임을 흘려보낸 뒤에 첫 타격을 낸다 — 안 그러면 "서자마자 1타"가 빈 overlap을
+	# 때리고 타이머만 리셋돼 실제 첫 피해가 pillar_tick_sec만큼 밀린다 (짧은 기둥이면 통째로 유실).
+	if not _warmed:
+		_warmed = true
+		return
 
 	_tick_left -= delta
 	if _tick_left > 0.0:
@@ -78,6 +87,16 @@ func _hit(node: Node2D) -> void:
 		return
 	if node.has_method("take_hit"):
 		node.take_hit(damage, rune_type, status, status_power)
+
+
+## 룬 색 — Db에서 읽고, 없으면 폴백 (ring_carrier._rune_color와 같은 규칙).
+func _rune_color(p_rune_type: int) -> Color:
+	var db := get_node_or_null(^"/root/Db")
+	if db != null:
+		var rune := db.get_rune(p_rune_type) as RuneDef
+		if rune != null:
+			return rune.ui_color
+	return RUNE_FALLBACK
 
 
 static func _circle_points(radius: float, segments: int = 12) -> PackedVector2Array:

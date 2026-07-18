@@ -1,10 +1,64 @@
 # STATUS — 현재 진행 상태
 
-> 최종 갱신: 2026-07-18 (세션 30 — **적 5종 다양화 + 확률 드롭 (E5)**)
+> 최종 갱신: 2026-07-18 (세션 31 — **전체 코드 리뷰 + 수정 (병렬 리뷰어 4)**)
 > · **세션 종료마다 갱신**
 >
 > 🔴 **아래 세션 20 이하는 대부분 삭제된 코드를 설명한다** — 기록이지 현재 상태가 아니다.
-> 현재 정본 = 최상단 「세션 30」~「세션 23」 + `CLAUDE.md` + memory `takbon-mana-injection-rule`.
+> 현재 정본 = 최상단 「세션 31」~「세션 23」 + `CLAUDE.md` + memory `takbon-mana-injection-rule`.
+
+---
+
+## 세션 31 (2026-07-18) — **전체 코드 리뷰 + 수정 (병렬 리뷰어 4)**
+
+> 사용자: *"지금까지 작성한 모든 코드 리뷰"* → *"다 수정해줘"* → *"커밋하고 문서 업데이트하고 마무리"*.
+> `godot-prompter:godot-code-reviewer` 4개를 모듈별(core·drawing·spell·gameplay) 병렬로 돌려
+> 37파일 ~5,600줄을 리뷰하고, 나온 항목을 전부 처리했다. **크래시급 버그는 없었다** — 계약 근간
+> (저장 라운드트립·점수 단일소스·GlyphCode·물리 레이어)은 리뷰에서 깨끗하게 통과했다.
+
+### ✅ 동작 버그 수정 (리드 직접 — tight 검증)
+
+- 🔴🔴 **하드 소프트락 차단** — `interact_zone.gd`가 `ui_modal_open`을 안 봐서, 창고를 연 채 숲길
+  E를 누르면 모달이 켜진 채 씬이 바뀌어 **되돌릴 길이 없었다**(player·caster는 게이트가 있는데
+  상호작용만 없었다). 첫 줄에 `if GameState.ui_modal_open: return` + `base`·`forest` `_ready`에
+  플래그 리셋(안전망).
+- 🔴 **붉은잉크 누수 2건** — ① `ring_board._note_stroke_ink`가 `begin_stroke`에서 무조건 정산해
+  **가이드에서 먼 빈 클릭(먹선 없는 획)도 특별잉크를 태우고** 분모를 키웠다 → 정산을 **획 최초
+  유효점**으로 이동(`_stroke_counted`). ② 마지막 특별잉크를 쓰는 획 도중 `resources_changed`가
+  팔레트를 재빌드해 **활성 잉크가 획 중간에 먹으로 튀었다** → `stroke_ended` 시그널 + `is_drawing()`로
+  획이 끝날 때까지 재빌드를 미룬다(`_palette_dirty`).
+- **펜 착용 복구** — `equip_gear` 화이트리스트에 PEN 누락 → 정상 API로 펜을 못 껴 `stroke_correction`이
+  죽어 있었다(테스트가 직접대입 우회 중). `Enums.ItemKind.PEN` 추가.
+- **자잘한 정합** — `add_to_bag`가 `resources_changed` 발신(가방 UI 갱신) · `save_manager` 로드가
+  hp 상한 반영 + `equipment_changed` 발신 · `clock._phase_for` 범위 클램프.
+
+### ✅ spell 정리 (godot-game-dev 위임 — 리드 검토)
+
+죽은 코드 주석 정정(shockwave 미배선·projectile 효과 미배선) · 낡은 레이어 주석 3건(실제 씬값으로) ·
+`ring_carrier` `g==1`→`Enums.GlyphCode.RADIATE` · **RUNE_COLORS 3곳 복붙 → `Db.get_rune().ui_color`
+통일**("새 룬=.tres 한 장"이 색까지) · **pillar warmup 프레임**(스폰 프레임엔 Area2D overlap이 비어
+첫 tick이 빈 곳을 때리던 것을 한 프레임 미뤄 해결).
+
+### 검증 — 전 스위트 + 뮤테이션 + 런타임
+
+- **전 7스위트 그린 · SCRIPT ERROR 0** (save pass21/fail0).
+- `test_ring_trace_auto`에 **「빈 클릭은 특별잉크를 안 태운다」 회귀 가드** 추가.
+- 🔴 **뮤테이션**: 잉크 정산을 옛 버그(begin에서 소모)로 되돌리면 가드가 정확히 2건 실패 → 복원 시
+  그린. 검출력 증명.
+- 🔴 **런타임(MCP)**: pillar warmup은 물리 overlap 타이밍이라 헤드리스 사각지대 — 실제 게임에서
+  적 위에 기둥을 세워 **warmup 뒤 4틱 피해(`enemy_hit`=4) 후 소멸** 확인.
+
+### 🔴 의도적으로 안 건드림 (사용자 결정 대기)
+
+- **화상비율 분모(진·룬 포함)** · **리포트 ESC 자동맺기** — 코드 주석이 의도를 명시 방어하고,
+  경제/연출 튜닝은 사용자 몫(memory `takbon-ink-economy-design`). 리뷰에선 지적됐으나 조용히
+  안 바꿨다.
+- `ring_assembly.get_open()` 참조 반환 — `_draw`에서 매 프레임 불려 per-frame 할당 손해 > 이론적
+  안전 이득이라 문서화된 관례로 유지.
+
+### 다음 세션 = E4(보스 → 룬 해금)
+
+세션 30에서 이어진다 — 엘리트/fragment_*가 여기서 산다. 그 뒤 장비 제작(펜부터 — 이제 착용 경로가
+열렸다) · E3 밸런스 조이기.
 
 ---
 

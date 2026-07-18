@@ -285,22 +285,35 @@ func _test_special_ink_consumed_while_drawing() -> void:
 	gs.add_item(&"ink_fire_red", 2)   # 2획치 특별잉크
 	var b = _make_board()             # clear_all + choose_jin → 진 가이드가 서 있다(_trace=JIN)
 	b.call(&"set_ink", &"ink_fire_red")
+	# 🔴 세션31: 잉크는 **획의 최초 유효점**에서 정산된다 (begin_stroke가 아니라). 그래서 각 획은
+	# begin_stroke + 가이드 위 유효점 하나로 몬다. 빈 클릭(먹선 없는 획)은 안 태운다 — 아래 첫 가드.
+	var gp: PackedVector2Array = b.call(&"guide_points")
+	var p0: Vector2 = gp[0]
+	# ① 빈 클릭 = 유효점 없는 획 → 소모·적립 없음 (세션31 누수 수정의 회귀 가드).
 	b.call(&"begin_stroke")
+	b.call(&"trace_stroke", p0 + Vector2(9999, 9999))   # 가이드에서 멀다 = add_point 거부
+	_check(gs.get_count(&"ink_fire_red") == 2, "빈 클릭(먹선 없는 획)은 특별잉크를 안 태운다 (2 그대로)")
+	# ② 유효점이 찍힌 획만 획당 1 소모.
+	b.call(&"begin_stroke")
+	b.call(&"trace_stroke", p0)
 	_check(gs.get_count(&"ink_fire_red") == 1, "특별잉크 획당 1 소모 (2→1)")
 	b.call(&"begin_stroke")
+	b.call(&"trace_stroke", p0)
 	_check(gs.get_count(&"ink_fire_red") == 0, "또 한 획 = 0")
 	b.call(&"begin_stroke")            # 바닥난 뒤 — 소모·적립 없이 계속 그린다
+	b.call(&"trace_stroke", p0)
 	_check(gs.get_count(&"ink_fire_red") == 0, "바닥나면 더 안 닳는다 (음수로 안 감)")
 	var asm: Dictionary = b.call(&"get_assembly")
 	_check(StringName(asm.get("special_ink", &"")) == &"ink_fire_red",
 		"get_assembly가 쓴 특별잉크를 싣는다")
 	var ratio := float(asm.get("special_ratio", -1.0))
 	_check(ratio > 0.0 and ratio < 1.0,
-		"비율 = 특별 2획 / 총 3획 (0<r<1, 바닥난 뒤 획은 안 셈) — 실제 %.2f" % ratio)
+		"비율 = 특별 2획 / 총 3획 (0<r<1, 바닥난 뒤 획·빈 클릭은 안 셈) — 실제 %.2f" % ratio)
 	# 기본잉크(무한)는 안 닳는다 — 회귀 가드
 	gs.inventory.clear()
 	var b2 = _make_board()            # set_ink 안 함 = 기본 먹
 	b2.call(&"begin_stroke")
+	b2.call(&"trace_stroke", (b2.call(&"guide_points") as PackedVector2Array)[0])
 	_check(float((b2.call(&"get_assembly") as Dictionary).get("special_ratio", -1.0)) == 0.0,
 		"기본잉크로만 그리면 특별 비율 0 (안 닳고 효과 없음)")
 	b.queue_free()

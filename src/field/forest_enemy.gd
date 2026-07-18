@@ -2,7 +2,7 @@ extends CharacterBody2D
 ## 숲의 적 — 쫓아와서 접촉 피해. 사용자 확정 세션 26: *"한 종류만 — 쫓아와서 접촉 피해"*.
 ##
 ## 🔴 **적 노드 계약**을 지킨다 (허수아비 `src/spell/dummy_target.gd`가 그 참고 구현이다):
-##   그룹 `"enemies"` · 레이어 3(enemy) · `take_hit(damage, rune_type, status, status_power)` ·
+##   그룹 `"enemies"` · 레이어 4(enemy) · `take_hit(damage, rune_type, status, status_power)` ·
 ##   그 안에서 `EventBus.enemy_hit`를 **약점 배율까지 반영한 최종 피해**로 발신.
 ## 발사(ring_spell_system)가 이미 이 계약으로 때린다 — 그래서 이 파일은 발사를 전혀 모른다.
 ##
@@ -15,7 +15,8 @@ extends CharacterBody2D
 ##  • layer 4가 곧 **맞는 몸**이다 — 캐리어·탄 마스크가 5(world+enemy)라 여길 본다.
 ##    기본 레이어 1로 되돌리면 world로 읽혀 마법이 **부딪히기만 하고 take_hit이 안 불린다**.
 
-## 적이 죽었다 — 숲이 남은 수를 센다.
+## 적이 죽었다. ⚠ **지금은 수신자가 없다** — 승리 조건 없는 익스트랙션이라 킬카운트를 아무도 안 센다.
+## 킬카운트·웨이브가 붙는 날을 위한 자리표(placeholder)다.
 signal died
 
 @export var enemy_id: StringName = &"slime"

@@ -123,6 +123,11 @@ func load_game() -> bool:
 		var ridx: int = int(ring_equipped_idx[slot]) if slot < ring_equipped_idx.size() else -1
 		GameState.ring_equipped[slot] = GameState.ring_designs[ridx] if ridx >= 0 and ridx < GameState.ring_designs.size() else null
 
+	# 🔴 장비를 복원했으니 상한을 반영한다 — hp는 저장하지 않으므로(출격이 만HP로 덮는다) 부팅은
+	# 복원된 로브 상한 기준 만HP로 맞춘다. equipment_changed는 부팅 시 장비 구독 UI를 깨운다.
+	GameState.hp = GameState.hp_max()
+	EventBus.player_hp_changed.emit(GameState.hp, GameState.hp_max())
+	EventBus.equipment_changed.emit()
 	EventBus.resources_changed.emit()
 	_ready_to_save = true
 	return true

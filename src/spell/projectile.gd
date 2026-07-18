@@ -1,7 +1,13 @@
 extends Area2D
-## 투사체 — 모듈 B (TECH_SPEC §1: 레이어 4=player_projectile, 마스크 1|3=world|enemy).
+## 투사체 — 모듈 B. 씬 실제값: **collision_layer=8(발사체), collision_mask=5(world 1 + enemy 4)**.
 ## 파라미터 주입은 spell_system.setup() 경유. class_name 없음 — preload로 참조할 것.
 ## 적 노드 계약: 그룹 "enemies" + take_hit(damage, rune_type, status, status_power).
+##
+## ⚠ **현 발사 경로는 effects={}·rune_hits=[]로만 이 탄을 부른다** (유일 호출자 =
+## `ring_spell_system._spawn_bolt` → 순수 직진탄). 즉 아래의 **팅김⚡/관통‖/유도∿/추진/복합룬**
+## 기계(`_setup_effects`·`_step_bounce`·`_step_homing`·`_nearest_enemy`·`rune_hits`·`reach_t`·
+## `range_mult`)는 지금 **한 번도 실행되지 않는 미배선 설계 자산**이다. 벽에 닿은 탄은 팅김 없이
+## `_hit_wall`→`_consume`로 소멸한다. 되살리려면 호출자가 effects/rune_hits를 채워 넘기면 된다.
 ##
 ## **v2.0 (TECH_SPEC §4.0-a)**
 ## - 🔴 **몸이 진이다.** 그린 진(+룬) 먹선이 그대로 날아가고 **히트박스가 진 반지름**을 따른다.
@@ -22,11 +28,9 @@ extends Area2D
 
 const SheetLib := preload("res://src/core/sheet_lib.gd")
 
-const RUNE_COLORS: Dictionary = {
-	Enums.RuneType.FIRE: Color(1.0, 0.55, 0.1),    # 불 = 주황
-	Enums.RuneType.WATER: Color(0.25, 0.55, 1.0),  # 물 = 파랑
-	Enums.RuneType.WIND: Color(0.65, 0.95, 0.45),  # 바람 = 연두
-}
+## 룬 색은 Db에서 읽는다 (`_rune_color`) — "새 룬 = .tres 한 장"이 색까지 지켜지게.
+## 이건 Db에 룬이 없을 때만 쓰는 폴백 (오토로드 없는 컨텍스트도 견딘다 — ring_carrier와 같은 규칙).
+const RUNE_FALLBACK := Color(0.95, 0.35, 0.15)
 
 ## 룬 투사체 시트 (ART_SPEC P5) — 우향 혜성형 2프레임. **먹선 진이 없을 때만 쓰는 폴백이다**
 ## (샘플 도안·구세이브처럼 strokes가 비어 있는 경우)
@@ -160,7 +164,17 @@ func _setup_body(p_rune_type: int) -> void:
 		spr.play(StringName(RUNE_ANIM_NAMES.get(p_rune_type, "fire")))
 		add_child(spr)
 	else:
-		visual.color = RUNE_COLORS.get(p_rune_type, Color.WHITE)
+		visual.color = _rune_color(p_rune_type)
+
+
+## 룬 색 — Db에서 읽고, 없으면 폴백 (ring_carrier._rune_color와 같은 규칙).
+func _rune_color(p_rune_type: int) -> Color:
+	var db := get_node_or_null(^"/root/Db")
+	if db != null:
+		var rune := db.get_rune(p_rune_type) as RuneDef
+		if rune != null:
+			return rune.ui_color
+	return RUNE_FALLBACK
 
 
 static func _ensure_shared_frames() -> bool:

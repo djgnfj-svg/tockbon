@@ -1,5 +1,5 @@
 extends StaticBody2D
-## 테스트 허수아비 — 적 노드 계약 검증 전용 (그룹 "enemies", 레이어 3, take_hit).
+## 테스트 허수아비 — 적 노드 계약 검증 전용 (그룹 "enemies", collision_layer=4(enemy), take_hit).
 ## 실제 적 구현은 모듈 C. 이 파일은 src/spell/ 내 테스트 보조로만 사용한다.
 
 var hits: Array[Dictionary] = []

@@ -89,7 +89,7 @@ func gear_param(kind: int, key: String, default: float) -> float:
 ## 창고의 장비를 착용 — 창고에서 1개 차감, 기존 착용품은 창고 반환. 성공 시 true
 func equip_gear(item_id: StringName) -> bool:
 	var def: ItemDef = Db.get_item(item_id)
-	if def == null or def.kind not in [Enums.ItemKind.WAND, Enums.ItemKind.ROBE, Enums.ItemKind.CHARM]:
+	if def == null or def.kind not in [Enums.ItemKind.WAND, Enums.ItemKind.ROBE, Enums.ItemKind.CHARM, Enums.ItemKind.PEN]:
 		return false
 	if get_count(item_id) < 1:
 		return false
@@ -166,6 +166,8 @@ func spend(cost: Dictionary) -> bool:
 
 func add_to_bag(item_id: StringName, count: int = 1) -> void:
 	bag.append({"id": item_id, "count": count})
+	# 🔴 창고(add_item)와 대칭 — 인벤 UI가 이 시그널로 갱신한다. 안 쏘면 열어 둔 가방 구역이 안 는다.
+	EventBus.resources_changed.emit()
 
 func _on_extraction_success() -> void:
 	for entry: Dictionary in bag:

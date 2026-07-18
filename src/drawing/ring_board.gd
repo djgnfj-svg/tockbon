@@ -105,6 +105,9 @@ signal score_changed(score: float)
 signal piece_locked(target: int, slot: int, score: float)
 ## 마법진을 다 그렸다 — 패널이 분석 리포트를 띄운다. (get_analysis 결과)
 signal finished(analysis: Dictionary)
+## 🔴 한 획을 뗐다 (마우스 릴리스) — 패널이 **획이 끝난 뒤에** 잉크 팔레트를 다시 그리게 한다.
+## 특별잉크가 그리는 도중 소모돼 팔레트가 재빌드되면 활성 잉크가 획 중간에 바뀌기 때문이다.
+signal stroke_ended
 
 var _asm := RingAssembly.new()
 var _scorer := TraceScorer.new()
@@ -143,6 +146,7 @@ var _trace_slot := -1                   # GLYPH일 때 채울 칸
 var _jin_idx := -1
 var _rune_idx := -1
 var _drawing := false                   # 마우스 버튼 누른 채 긋는 중
+var _stroke_counted := false            # 🔴 이 획을 잉크 정산에 넣었나 (최초 유효점에서 1회만)
 var _jin_scale := 1.0                   # 진 크기 (마우스 휠)
 var _rune_scale := 1.0                  # 룬 크기 (마우스 휠)
 var _glyph_scale: Dictionary = {}       # slot(int) → float, 문양 개별 크기 (마우스 휠, 세션 15)
@@ -312,6 +316,10 @@ func trace_slot() -> int:
 func is_tracing() -> bool:
 	return _trace != TraceTarget.NONE
 
+## 지금 마우스로 획을 긋는 중인가 — 패널이 잉크 팔레트 재빌드를 획 중간에 안 하려고 읽는다.
+func is_drawing() -> bool:
+	return _drawing
+
 func coverage() -> float:
 	return _scorer.coverage()
 
@@ -345,13 +353,15 @@ func locked_count() -> int:
 ## (사용자: "획단위로 초기화되서 화살표를 그리가가 어렵네?"). 다시 그리기는 이제 `clear_stroke`다.
 func begin_stroke() -> void:
 	_scorer.begin_stroke()
-	_note_stroke_ink()
+	_stroke_counted = false   # 잉크 정산은 이 획의 최초 유효점에서 한다 (trace_stroke)
 
 
-## 🔴 획을 시작할 때 잉크를 정산한다 (세션29, 사용자: "그릴 때 실시간으로 소비").
+## 🔴 이 획을 잉크 정산에 넣는다 — **최초 유효점이 찍혔을 때만** 부른다 (세션31 수정, trace_stroke).
+## 예전엔 begin_stroke가 무조건 불러, 가이드에서 먼 **빈 클릭(먹선이 안 남는 클릭)도** 특별잉크를
+## 태우고 분모(_total_strokes)를 키웠다 — 붉은잉크가 눈에 안 보이게 샜다.
 ## 특별잉크면 획당 소모하고 비율에 적립한다. 다 떨어졌으면 소모·적립 없이 계속 그린다
 ## (기본잉크처럼 — 그만큼 비율=효과가 낮아진다). 기본잉크는 무한이라 소모가 없다.
-## ⚠ **총 획수(_total_strokes)는 늘 센다** — 비율의 분모다. _trace가 NONE(그릴 것 없음)이면 안 센다.
+## ⚠ **총 획수(_total_strokes)는 유효 획마다 센다** — 비율의 분모다. _trace가 NONE이면 안 센다.
 func _note_stroke_ink() -> void:
 	if _trace == TraceTarget.NONE:
 		return
@@ -383,6 +393,10 @@ func trace_stroke(local_pos: Vector2) -> void:
 		return
 	if not _scorer.add_point(local_pos):
 		return   # 가이드에서 너무 멀다 = 이 조각과 무관
+	# 🔴 이 획에서 처음 유효점이 찍힌 순간에만 잉크를 정산한다 — 빈 클릭이 잉크를 태우지 않게.
+	if not _stroke_counted:
+		_stroke_counted = true
+		_note_stroke_ink()
 	queue_redraw()
 	score_changed.emit(_scorer.piece_score())
 
@@ -705,6 +719,7 @@ func _gui_input(event: InputEvent) -> void:
 			trace_stroke(mb.position)
 		else:
 			_drawing = false
+			stroke_ended.emit()           # 🔴 획 끝 — 패널이 미뤄 둔 잉크 팔레트 재빌드를 여기서 흘린다
 		accept_event()
 		return
 	# 🔴 우클릭 = **다시 그리기** (세션 25). 획 누적으로 바뀌면서 "지우고 처음부터"가 갈 곳이

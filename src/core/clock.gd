@@ -47,7 +47,9 @@ func _phase_for(frac: float) -> Enums.Phase:
 	for i in range(balance.phase_fracs.size()):
 		acc += balance.phase_fracs[i]
 		if frac < acc:
-			return i as Enums.Phase
+			# 🔴 phase_fracs(balance)가 Phase enum보다 길어져도 범위 밖으로 안 나가게 클램프한다 —
+			# 안 그러면 .tres 편집만으로 인덱스→Phase가 조용히 밀린다.
+			return mini(i, Enums.Phase.NIGHT) as Enums.Phase
 	return Enums.Phase.NIGHT
 
 func _next_day() -> void:

@@ -125,6 +125,8 @@ var _paper_ids: Array = []
 var _active_paper: StringName = &""
 var _paper_btns: Array = []
 var _paper_nodes: Array = []
+## 🔴 획을 긋는 도중 특별잉크가 소모돼 재빌드가 걸리면, 획이 끝날 때까지 미룬다(활성 잉크가 튀지 않게).
+var _palette_dirty := false
 
 
 ## 껍데기는 씬이 만든다 — 여기서는 **코드 렌더와 배선만** 붙인다.
@@ -138,6 +140,7 @@ func _ready() -> void:
 	_board.score_changed.connect(_on_score_changed)
 	_board.piece_locked.connect(_on_piece_locked)
 	_board.finished.connect(_on_finished)
+	_board.stroke_ended.connect(_on_stroke_ended)   # 🔴 미뤄 둔 잉크 팔레트 재빌드를 획 끝에 흘린다
 
 	_book.jin_selected.connect(_on_jin_selected)
 	_book.rune_selected.connect(_on_rune_selected)
@@ -339,8 +342,21 @@ func _on_glyph_selected(glyph: int) -> void:
 ## 🔴 잉크·종이 팔레트를 다시 그린다 — 창고가 바뀌면(특별잉크 소모·정제) 보유분이 달라진다.
 ## 버튼을 통째로 갈아 끼운다(몇 개뿐이라 싸다). 고른 것은 유지하되, 사라졌으면 안전한 기본으로.
 func _rebuild_palettes() -> void:
+	# 🔴 획을 긋는 도중이면 미룬다 — 특별잉크 소모가 resources_changed를 쏴 이 함수를 부르는데,
+	# 여기서 팔레트를 갈아 끼우면 활성 잉크가 획 중간에 기본 먹으로 바뀐다(색·id가 튄다).
+	# 획이 끝나면 _on_stroke_ended가 다시 부른다.
+	if _board != null and _board.is_drawing():
+		_palette_dirty = true
+		return
 	_build_ink_palette()
 	_build_paper_palette()
+
+
+## 획을 뗐다 — 그리는 도중 미뤄 둔 잉크 팔레트 재빌드가 있으면 지금 흘린다.
+func _on_stroke_ended() -> void:
+	if _palette_dirty:
+		_palette_dirty = false
+		_rebuild_palettes()
 
 
 ## 잉크 스와치 — Db의 잉크마다 색 버튼. 🔴 기본잉크(무한)는 늘 보이고, **특별잉크는 보유분만**

@@ -28,6 +28,10 @@ func _ready() -> void:
 		_prompt.visible = false
 
 func _unhandled_input(event: InputEvent) -> void:
+	# 🔴 모달(창고·책·정제대)이 열려 있으면 E를 먹지 않는다 (player·caster와 같은 게이트).
+	# 안 그러면 창고를 연 채 숲길에서 E → 모달이 켜진 채 씬이 바뀌어 되돌릴 길이 없는 소프트락.
+	if GameState.ui_modal_open:
+		return
 	if _player_in_range and event.is_action_pressed("interact"):
 		interacted.emit()
 
