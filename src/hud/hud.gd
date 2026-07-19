@@ -68,6 +68,7 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE   # 조준 클릭이 HUD에 먹히면 안 된다
 	EventBus.ring_design_committed.connect(_on_design_committed)
 	EventBus.player_hp_changed.connect(_on_hp_changed)
+	EventBus.audio_muted_changed.connect(_on_muted_changed)
 
 
 ## 지금 고른 슬롯 (caster의 slot_changed가 알려 준다).
@@ -93,6 +94,10 @@ func _on_hp_changed(_hp: float, _hp_max: float) -> void:
 	queue_redraw()
 
 
+func _on_muted_changed(_muted: bool) -> void:
+	queue_redraw()
+
+
 func _process(_delta: float) -> void:
 	if not is_equal_approx(GameState.mana, _last_mana) \
 			or not is_equal_approx(GameState.hunger, _last_hunger):
@@ -105,6 +110,11 @@ func _draw() -> void:
 	var font := ThemeDB.fallback_font
 	draw_string(font, Vector2(MARGIN, MARGIN + 12.0), hint_text,
 		HORIZONTAL_ALIGNMENT_LEFT, -1, 11, HINT_COLOR)
+	# 음소거 중이면 우상단에 표시 (O로 다시 켠다). 소리가 꺼진 걸 눈으로 알게 — 안 그러면
+	# "왜 소리가 안 나지" 하고 버그로 오해한다. 이모지는 fallback_font에서 두부가 되니 텍스트로.
+	if Audio.is_muted():
+		draw_string(font, Vector2(size.x - 150.0, MARGIN + 12.0), "[음소거] O로 켜기",
+			HORIZONTAL_ALIGNMENT_LEFT, -1, 11, WARN_COLOR)
 	if _say != "":
 		draw_string(font, Vector2(MARGIN, MARGIN + 32.0), _say,
 			HORIZONTAL_ALIGNMENT_LEFT, -1, 12, WARN_COLOR if _warn else SAY_COLOR)

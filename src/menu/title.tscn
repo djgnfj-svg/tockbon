@@ -63,6 +63,12 @@ layout_mode = 2
 theme_override_font_sizes/font_size = 22
 text = "새로하기"
 
+[node name="SoundButton" type="Button" parent="Center/Box"]
+custom_minimum_size = Vector2(300, 40)
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+text = "소리: 켜짐"
+
 [node name="Hint" type="Label" parent="Center/Box"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.5, 0.47, 0.42, 1)

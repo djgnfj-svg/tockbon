@@ -15,11 +15,17 @@ extends Node
 const _DIR := "res://assets/audio/sfx/"
 const POOL := 8  ## 동시 재생 슬롯 — 겹치는 소리가 서로를 자르지 않게.
 
+## 🔇 소리 설정 (음소거) — Audio가 소유·저장·적용한다. SFX·음악·모든 소리가 Master로 모이므로
+## Master 버스를 음소거하면 전부 꺼진다 (버스별로 끌 일이 생기면 여기서 갈래를 늘린다).
+## 상태는 user://settings.cfg에 남아 껐다 켜도 유지된다. `O` 키로 어느 씬에서든 토글된다.
+const _SETTINGS_PATH := "user://settings.cfg"
+
 var _cache: Dictionary = {}          # id(StringName) → AudioStream (지연 로드)
 var _missing: Dictionary = {}        # 이미 경고한 id (경고 1회)
 var _players: Array[AudioStreamPlayer] = []
 var _next: int = 0
 var _last_hp: float = -1.0           # player_hp_changed에서 "줄었을 때만" 아픔음
+var _muted: bool = false             # 저장에서 부팅 때 복원 → 아래 _apply_mute로 버스에 반영
 
 
 func _ready() -> void:
@@ -28,6 +34,8 @@ func _ready() -> void:
 		p.bus = &"SFX"
 		add_child(p)
 		_players.append(p)
+
+	_load_settings()   # 🔇 저장된 음소거 상태를 부팅 때 곧바로 버스에 적용
 
 	# ── EventBus 글로벌 순간 구독 (발신자는 각 모듈, 여긴 수신만) ──
 	EventBus.ring_cast_requested.connect(_on_cast)
@@ -40,6 +48,58 @@ func _ready() -> void:
 	EventBus.equipment_changed.connect(_on_equip)
 	EventBus.phase_changed.connect(_on_phase)
 	EventBus.quest_completed.connect(_on_quest_complete)
+
+
+# ── 🔇 소리 설정 (음소거) ────────────────────────────────────────
+
+## 어느 씬에서든 `O` 키로 음소거 토글. Audio는 오토로드라 트리 루트에 살아 전역 입력을 받는다
+## → 씬마다 배선하지 않아도 베이스·숲·타이틀 어디서나 먹는다. keycode가 아니라 physical_keycode로
+## 봐야 자판 배열과 무관하다 (프로젝트 입력맵과 같은 규약). O(=79)는 입력맵의 어느 액션과도 안 겹친다.
+func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventKey:
+		var key := event as InputEventKey
+		if key.pressed and not key.echo and key.physical_keycode == KEY_O:
+			toggle_mute()
+			get_viewport().set_input_as_handled()
+
+
+func is_muted() -> bool:
+	return _muted
+
+
+func toggle_mute() -> void:
+	set_muted(not _muted)
+
+
+## 음소거 설정 — 버스에 적용 + 저장 + UI에 알림. 타이틀 버튼·`O` 키가 부른다.
+func set_muted(value: bool) -> void:
+	if value == _muted:
+		return
+	_muted = value
+	_apply_mute()
+	_save_settings()
+	EventBus.audio_muted_changed.emit(_muted)
+
+
+## Master 버스에 음소거를 반영한다 (SFX·음악이 다 Master로 모이므로 하나면 전부 꺼진다).
+func _apply_mute() -> void:
+	var idx := AudioServer.get_bus_index(&"Master")
+	if idx >= 0:
+		AudioServer.set_bus_mute(idx, _muted)
+
+
+func _load_settings() -> void:
+	var cfg := ConfigFile.new()
+	if cfg.load(_SETTINGS_PATH) == OK:
+		_muted = bool(cfg.get_value("audio", "muted", false))
+	_apply_mute()
+
+
+func _save_settings() -> void:
+	var cfg := ConfigFile.new()
+	cfg.load(_SETTINGS_PATH)   # 다른 설정 키가 있으면 보존
+	cfg.set_value("audio", "muted", _muted)
+	cfg.save(_SETTINGS_PATH)
 
 
 ## 국소 순간 재생 API — 모듈이 직접 부른다. id = 파일명(확장자 없이).

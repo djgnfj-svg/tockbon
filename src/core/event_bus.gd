@@ -57,3 +57,7 @@ signal quests_seen
 ## ⚠ 둘 다 발신만 있고 수신자 0 (HUD 삭제 탓). 정상 — 발신 측은 계약을 지킨다.
 signal resources_changed
 signal equipment_changed
+
+# ── 설정 (Audio → UI)
+## 🔴 음소거 상태가 바뀌었다 (설정). Audio가 소유·저장하고 발신 → HUD 표시·타이틀 버튼이 갱신.
+signal audio_muted_changed(muted: bool)

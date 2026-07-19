@@ -17,6 +17,7 @@ const TUTORIAL_SCENE := "res://src/tutorial/intro.tscn"
 
 @onready var _continue_btn: Button = $Center/Box/ContinueButton
 @onready var _new_btn: Button = $Center/Box/NewButton
+@onready var _sound_btn: Button = $Center/Box/SoundButton
 
 ## 진행이 있을 때 새로하기 2단 확인 — 첫 클릭은 무장, 둘째 클릭이 실행 (다이얼로그 없이 = alert 함정 회피).
 var _new_armed: bool = false
@@ -24,10 +25,24 @@ var _new_armed: bool = false
 func _ready() -> void:
 	_continue_btn.pressed.connect(_on_continue)
 	_new_btn.pressed.connect(_on_new)
+	_sound_btn.pressed.connect(_on_sound)
+	# 🔇 소리 토글 — Audio가 상태를 소유(저장까지)한다. 버튼은 그 상태를 비출 뿐이고,
+	# 바뀌면 시그널로 라벨을 갱신한다(O 키로 껐다 켜도 라벨이 따라온다).
+	EventBus.audio_muted_changed.connect(_on_muted_changed)
+	_refresh_sound_label()
 	var has: bool = SaveManager.has_save()
 	_continue_btn.visible = has
 	_continue_btn.disabled = not has
 	(_continue_btn if has else _new_btn).grab_focus()
+
+func _on_sound() -> void:
+	Audio.toggle_mute()
+
+func _on_muted_changed(_muted: bool) -> void:
+	_refresh_sound_label()
+
+func _refresh_sound_label() -> void:
+	_sound_btn.text = "소리: 꺼짐" if Audio.is_muted() else "소리: 켜짐"
 
 func _on_continue() -> void:
 	# 부팅 때 이미 load_game()됐다 — 그 상태 그대로 베이스로.
