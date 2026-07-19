@@ -176,10 +176,19 @@
 > 슬로모에 갇힘). 🔴 **손맛 수치=연출값이라 balance가 아니라 스크립트 const**(사용자가 직접 때려 조인다).
 > 마녀 스프라이트(사용자 제작 2×4 48px + 4방향 걷기 애니)도 함께 묶었다. memory `takbon-hit-feel-juice`.
 >
-> **🔴 다음 세션 = ⓑ 깊이 스파인** (나갈 이유=새로 그릴 것) · 손맛 수치 튜닝(사용자 플레이) ·
-> ⓒ 마나 16·허기 페이스 손맛 튜닝(룬 밑그림·보스 강도도) · **gale 풀 보스
-> AI**(돌풍·투사체·페이즈2 — forest_enemy가 안 읽음·바람 조각 줄 보스 필요) · E3 밸런스. 지팡이·부적·
-> 로브는 착용만 되고 제작 레시피 없음(펜 틀로 `.tres` 추가). 정본 = `docs/BACKLOG.md` E4·E5.
+> 🔴🔴 **세션 41 = 온보딩 흐름** (사용자가 직접 플레이: *"시작하면 마녀 하나 덩그러니, 유도 0 —
+> 중구난방"* → **흐름을 먼저 정하고 개발**. 순서 안 정하고 시스템만 얹어 중구난방이 됐다). 중구난방한
+> 시작을 **하나의 레일**로: 타이틀 [새로하기] → **튜토 방(WASD·Shift 구르기)** → 베이스 → **NPC가 그리기
+> 개념 대사** → 책상서 그리기(**q00 = 첫 강제 목표**, 코어를 첫 비트로) → 정산 → 첫 사냥 → **숲 M 지도로
+> 목표 찍고** 싸움 → 귀환. 🔴 죽어 있던 `dash` 되살려 **Shift 구르기(무적)**(`player.is_rolling()`, 튜토 잔해도
+> 같은 술어) · **`QuestGoal.DRAW`**(상태=ring_designs로 판정→소급 안전) · 재사용 `src/hud/dialogue_box`·
+> `map_panel`(takbon-ui) · `map` 액션(M) 신설. **정본 = `docs/ONBOARDING_FLOW.md`** + STATUS 「세션41」 +
+> memory `takbon-onboarding-flow`. 전체 스위트 13/13 + 실게임 전수 검증. ⚠ **준비물/소모품은 보류**(세션35 허기 충돌).
+>
+> **🔴 다음 세션 = ⑤ 온보딩 전체 플레이 테스트** (사용자 직접, 처음→끝 흐름 = 다음 세션 시작점 — 손맛·
+> 페이스는 직접 해봐야 정해진다). 이후 = 온보딩 다듬기(NPC 대사·구르기 손맛·지도 확장) · ⓑ 깊이 스파인
+> (나갈 이유=새로 그릴 것) · ⓒ 마나/허기 페이스 · **gale 풀 보스 AI**(돌풍·투사체·페이즈2 — forest_enemy가
+> 안 읽음) · E3 밸런스 · 아트(온보딩 1순위, 흐름 확정 후). 지팡이·부적·로브는 착용만·레시피 없음. 정본 = `docs/BACKLOG.md` E4·E5.
 >
 > ⚠ **손맛류는 여전히 사용자가 직접 해 봐야 정해진다** — 원정 손맛(F4)·문양 손맛(R2a)·판정
 > 반경·65점 기준선(R3)·**드롭률 체감**. 측정이 전부 시뮬레이션이다(**좌표를 그대로 찍어 재면 정밀도
@@ -319,6 +328,8 @@
 ./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_audio_auto.gd         # **사운드 배선** (세션 33): 17 SFX 로드·길이>0 · Audio가 EventBus 9종에 연결 · 발신→올바른 스트림(부작용 순간은 연결만) · 🔴**소리가 실제로 나는지는 헤드리스가 못 잡는다**(오디오 드라이버 없음 — 버스 라우팅·playing은 에디터 실게임 exec로 별도 검증)
 ./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_decode_auto.gd        # **탁본 해독** (세션 34 E4): 조각 소비+룬 해금(codex_unlocked) · 이미 배운 룬은 조각 안 닳림 · 해금이 룬 목록에 흐름 · 🔴**룬 탭 다중셀 렌더·클릭은 헤드리스가 못 잡는다**(문양 탭·refine과 동일 패턴 — 에디터 실게임 스샷으로 별도 확인: 불△·물▽ 셀·바람은 잠겨 안 뜸)
 ./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_quests_auto.gd        # **진행 목표(퀘스트)** (세션 36): KILL/EXTRACT/UNLOCK 배선(enemy_died·extraction·codex_unlocked → advance_quests) · 🔴**requires 사슬 게이트**(잠긴 퀘스트는 이벤트로도 안 진행) · 보상 지급 · 🔴**소급 완료**(이미 해금된 룬 노리는 UNLOCK은 열리는 순간 완료 — 안 하면 사슬이 막힌다) · 저장 라운드트립 · 🔴**Q 패널 렌더·클릭 차단은 헤드리스가 못 잡는다**(전체화면 Control — 닫힘=발사 도달·열림=차단을 실게임 push_input으로 별도 확인, 액션 주입으론 못 잡는다)
+./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_dialogue_box_auto.gd  # **온보딩 대사 상자** (세션41): open(lines)→줄 넘김→finished · 빈 배열 즉시 finished · ESC 건너뛰기 · ui_modal_open 토글 · 🔴**클릭 진행·하단 밴드 렌더는 헤드리스가 못 잡는다**(실게임 push_input·스샷으로 별도 확인)
+./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_map_panel_auto.gd     # **원정 지도 패널** (세션41): open(data) 데이터 흡수 · 🔴**world↔map 좌표 왕복**(뮤테이션으로 검출력) · 클릭 역변환→marker_placed(지도 밖 무시) · ui_modal_open 토글 · 🔴**지도 렌더·클릭 도달은 헤드리스가 못 잡는다**(push_input은 **윈도우 픽셀**이라 캔버스 2배 — 실게임 exec push_input·스샷으로 별도 확인)
 ```
 
 🔴 **스위트를 돌리면 `user://save`가 날아간다** (세션 26 F3 이후). `SaveManager._ready`가 저장을

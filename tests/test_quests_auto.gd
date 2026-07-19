@@ -7,7 +7,9 @@ extends SceneTree
 ##  길잡이(NPC)에게 말 걸 때 `claim_ready_quests()`가 (1) 완료 처리 (2) 보상 지급 (3) 다음 퀘스트 개방을 한다.
 ##  advance_quests는 이제 카운트만 올리고 quest_ready만 쏜다. 보상·완료는 정산에서만.
 ## 🔴 "보고 = 귀환": 길잡이 앞에 섰다는 건 집에 왔다는 뜻 → 정산이 "살아 돌아와라"(EXTRACT)도 함께 채운다.
-## 🔴 q02는 세션40에 선행(requires)이 없어져 q01과 나란히 시작한다 (첫 원정 두 목표를 동시에 보여준다).
+## 🔴 세션41 온보딩: q00(첫 마법진 그리기)이 사슬 맨 앞에 끼었다. q01·q02는 q00을 물어(requires),
+##  q00을 정산해야 **나란히** 열린다(첫 원정 두 목표). q02는 여전히 q01과 동시에 열려 원정 중 active다(세션40 취지 유지).
+##  DRAW 목표는 도안 수(ring_designs)로 판정 = 이미 그린 세이브도 소급 충족(UNLOCK/BUILD가 codex로 소급 안전한 것과 같은 결).
 ## 🔴 **공개 API로만 검증**(advance_quests·claim_ready_quests·is_quest_*·quest_count) — 내부 필드는 계약이 아니다.
 ##
 ## 🔴 세션37 스파인: 첫사냥 → (살아 귀환) → 정제대 → 공방 → 해독대 → 물 룬 → 바람 룬.
@@ -31,6 +33,7 @@ func _check(label: String, ok: bool) -> void:
 func _clean(gs: Node) -> void:
 	gs.quest_progress.clear()
 	gs.quest_done.clear()
+	gs.ring_designs.clear()   # q00(DRAW=상태 기반)이 시작부터 미충족이도록 그린 도안을 비운다 (세션41)
 	for k: StringName in [&"rune_water", &"rune_wind",
 			&"station_refine", &"station_craft", &"station_decode"]:
 		gs.codex.erase(k)
@@ -46,6 +49,7 @@ func _run() -> void:
 	_clean(gs)
 	eb.quest_ready.connect(func(_id: StringName) -> void: _ready_fires += 1)
 
+	var q0: QuestDef = db.get_quest(&"q00_first_draw")
 	var q1: QuestDef = db.get_quest(&"q01_first_hunt")
 	var q2: QuestDef = db.get_quest(&"q02_come_home")
 	var q3: QuestDef = db.get_quest(&"q03_build_refine")
@@ -53,15 +57,26 @@ func _run() -> void:
 	var q5: QuestDef = db.get_quest(&"q05_build_decode")
 	var q6: QuestDef = db.get_quest(&"q06_learn_water")
 	var q7: QuestDef = db.get_quest(&"q07_learn_wind")
-	_check("퀘스트 7장이 data/quests에서 로드됐다",
-		q1 != null and q2 != null and q3 != null and q4 != null and q5 != null and q6 != null and q7 != null)
-	if q1 == null or q3 == null:
+	_check("퀘스트 8장이 data/quests에서 로드됐다",
+		q0 != null and q1 != null and q2 != null and q3 != null and q4 != null and q5 != null and q6 != null and q7 != null)
+	if q0 == null or q1 == null or q3 == null:
 		print("RESULT pass=%d fail=%d" % [_pass, _fail]); quit(); return
 
-	# ── ① 시작 상태: q01·q02 둘 다 열림 (q02 선행 없음, 세션40), q03은 q02 미완료라 잠김 ──
-	_check("시작: q01(선행 없음) 열림", gs.is_quest_active(q1))
-	_check("🔴 시작: q02(살아 돌아와라)도 열림 — q01과 나란히 (세션40)", gs.is_quest_active(q2))
-	_check("시작: q03(정제대 건설)는 q02 미완료라 잠김", not gs.is_quest_active(q3))
+	# ── ① 온보딩 시작(세션41): q00(첫 마법진)만 열리고, q01·q02는 q00을 물어 잠긴다 ──
+	_check("시작: q00(첫 마법진) 열림", gs.is_quest_active(q0))
+	_check("시작: q01(첫 사냥)은 q00 미완료라 잠김", not gs.is_quest_active(q1))
+	_check("시작: q02(살아 돌아와라)도 q00 미완료라 잠김", not gs.is_quest_active(q2))
+
+	# 🔴 첫 마법진을 그린다(ring_design_committed) → q00은 상태(ring_designs)로 정산 대기가 된다.
+	#   DRAW는 카운트가 아니라 도안 수로 판정하므로, 이미 그린 세이브도 자동 충족돼 사슬이 안 막힌다.
+	eb.ring_design_committed.emit(RingDesign.new())
+	_check("🔴 그리면 q00 정산 대기(claimable) — 상태(ring_designs)로 판정", gs.is_quest_claimable(q0))
+	_check("🔴 그려도 턴인 전엔 완료 아님", not gs.is_quest_done(&"q00_first_draw"))
+	gs.claim_ready_quests()
+	_check("🔴 정산: q00 완료", gs.is_quest_done(&"q00_first_draw"))
+	_check("🔴 q00 완료로 q01·q02가 나란히 열렸다 (첫 원정 두 목표)",
+		gs.is_quest_active(q1) and gs.is_quest_active(q2))
+	_check("q03(정제대 건설)는 q02 미완료라 아직 잠김", not gs.is_quest_active(q3))
 
 	# ── ② KILL — 5마리째는 "정산 대기"일 뿐. 아직 완료·보상 아님 (턴인 모델) ──
 	var core_before: int = gs.get_count(&"mat_slime_core")
@@ -136,6 +151,7 @@ func _run() -> void:
 
 	# ── ⑦ requires 게이트 + 저장/로드 라운드트립 ──
 	_clean(gs)
+	gs.quest_done[&"q00_first_draw"] = true   # 온보딩 q00 완료 선세팅 — 이래야 q01이 열려 진행된다 (세션41)
 	eb.enemy_died.emit(&"slime")           # q01 진행 1/5
 	eb.codex_unlocked.emit(&"station_refine")   # station_refine 해금, 그러나 q03은 q02 미완료라 잠김
 	_check("🔴 선행(q02) 미완료면 건설해도 q03은 정산 불가 (requires 게이트)", not gs.is_quest_claimable(q3))

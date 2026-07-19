@@ -51,6 +51,10 @@ const Player := preload("res://src/actors/player.gd")
 const Hud := preload("res://src/hud/hud.gd")
 ## 길잡이 NPC가 여는 통합 시트 패널 (세션40, 옛 quest_panel 흡수) — 퀘스트 탭으로 연다(class_name 없음).
 const TabPanel := preload("res://src/hud/tab_panel.gd")
+## 온보딩 그리기 튜토 대사 상자 (세션41) — 첫 마법 전 NPC가 개념을 가르친다. 루트=CanvasLayer, 스크립트=$Box.
+const DialogueBoxScene := preload("res://src/hud/dialogue_box.tscn")
+## 🔴 스크립트 preload = 캐스트 타입 ($Box는 get_node로 Node라, open()/finished를 정적으로 부르려면 이걸로 캐스트).
+const DialogueBox := preload("res://src/hud/dialogue_box.gd")
 ## 🔴 위력 표시는 여기서 계산하지 않는다 — 리포트·발사·HUD가 **같은 함수**를 본다 (core에 있는 이유).
 const RingPower := preload("res://src/core/ring_power.gd")
 
@@ -82,6 +86,9 @@ var _forge: RingForgePanelScript = null
 var _refine: Control = null
 var _workshop: Control = null
 var _decode: Control = null
+## 🔴 온보딩 그리기 튜토 대사 (세션41) — 첫 마법 전 NPC가 개념을 가르친다. 이 베이스 방문에 한 번만.
+var _dialogue: CanvasLayer = null
+var _draw_tut_shown := false
 
 func _ready() -> void:
 	# 🔴 씬 진입 시 모달 플래그를 내린다 — ui_modal_open은 오토로드라 씬 전환에도 살아남는다.
@@ -112,9 +119,15 @@ func _ready() -> void:
 	EventBus.quest_ready.connect(_refresh_npc_mark)
 	EventBus.quest_completed.connect(_refresh_npc_mark)
 	EventBus.codex_unlocked.connect(_refresh_npc_mark)
+	# 🔴 첫 마법진(q00, 세션41) — 그리면 [?]가 켜지도록 그리기 완료도 물음표를 갱신한다
+	#   (그리기는 베이스에서 일어나므로 "숲에서 돌아가라" 넛지 대신 옆의 길잡이 [?]로 안내한다).
+	EventBus.ring_design_committed.connect(_refresh_npc_mark)
 	_refresh_npc_mark()
 	# 🔴 스테이션 건설 상태를 화면에 반영 (안 지어진 것은 어둡게 + "건설" 안내). 저장된 상태 기준.
 	_refresh_stations()
+	# 🔴 온보딩 (세션41) — 첫 마법을 아직 안 그렸으면 길잡이로 유도한다 (q00 완료되면 안 뜬다).
+	if not GameState.is_quest_done(&"q00_first_draw"):
+		_hud.say("길잡이에게 [E]로 말을 걸어라 — 첫 목표는 책상에서 마법진을 그리는 것이다")
 
 # ─────────────────────────── 원정 ───────────────────────────
 
@@ -129,8 +142,37 @@ func _to_forest() -> void:
 ##  quest_completed가 아래 _on_quest_completed로 HUD 완료 팝을 쏘므로 여기선 정산·개방만 한다.
 ##  "살아 돌아와라"는 실제 귀환(extraction_success)이 이미 채워 놨을 때만 여기서 함께 정산된다(공짜 완료 없음).
 func _on_npc_talk() -> void:
+	# 🔴 온보딩 (세션41): 아직 첫 마법진을 안 그렸으면(ring_designs 빔) NPC가 그리기 개념부터 가르친다.
+	#   대사가 끝나면 목표를 시트로 보여준다. 한 번 그리고 나면(또는 이미 봤으면) 정상 흐름(정산+시트).
+	if _dialogue == null and _overlay == null and not _draw_tut_shown \
+			and not GameState.is_quest_done(&"q00_first_draw") and GameState.ring_designs.is_empty():
+		_start_draw_tutorial()
+		return
 	GameState.claim_ready_quests()
 	_sheet.open_quest()
+
+## 🔴 그리기 개념 튜토 대사 (세션41) — 그리기 패널은 단계마다 스스로 안내하므로(ring_forge_panel `_say`),
+##  여기선 **패널을 열기 전의 개념**(마법진=진·룬·문양을 손으로 그린다)만 심고 책상으로 보낸다.
+const DRAW_TUTORIAL_LINES := [
+	"마법은 외우는 게 아니라 그리는 것이라네. 저 책상에서 마법진을 손으로 그려 힘을 담지.",
+	"마법진은 세 겹일세. 진(陣) — 바깥 그릇이자 날아갈 몸통. 룬 — 가운데에 담는 속성(자네는 아직 불뿐이지). 문양 — 진과 룬 사이 칸을 채우는 무늬.",
+	"책을 펴면 오른쪽에서 진·룬·문양을 고르고, 왼쪽 판에 뜬 밑그림을 손으로 따라 긋게. 정성껏 따라 그을수록 마법이 세지네.",
+	"다 그렸으면 [분석]으로 점수를 보고 [마력 주입]으로 맺네. 너무 엉성하면 펑 하고 날아가니 조심.",
+	"자, 저 책상으로 가서 [E]로 첫 마법진을 그려 보게. 목표는 언제든 [Tab] 시트에서 볼 수 있네.",
+]
+
+## 대사 상자를 띄워 그리기 개념을 가르친다. 끝나면(또는 ESC 건너뛰면) 목표를 시트로 보여준다.
+func _start_draw_tutorial() -> void:
+	_draw_tut_shown = true
+	_dialogue = DialogueBoxScene.instantiate() as CanvasLayer
+	add_child(_dialogue)
+	var box := _dialogue.get_node("Box") as DialogueBox
+	# 🔴 대사 끝나면 닫고 책상으로 보낸다 — 시트를 자동으로 또 열지 않는다(마지막 줄이 [Tab]로 안내하므로).
+	box.finished.connect(func() -> void:
+		if _dialogue != null:
+			_dialogue.queue_free()
+			_dialogue = null)
+	box.open(DRAW_TUTORIAL_LINES)
 
 ## 목표 하나를 정산 완료했다 — HUD에 알린다(보상은 GameState가 이미 창고에 넣었다). [Q]로 전체 확인.
 func _on_quest_completed(quest_id: StringName) -> void:

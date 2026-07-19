@@ -18,8 +18,20 @@ const PlayerCaster := preload("res://src/actors/player_caster.gd")
 @onready var caster: PlayerCaster = $Caster
 @onready var sprite: AnimatedSprite2D = $Sprite
 
+## 🔴 구르기(Shift = `dash` 액션) — 짧은 대시 + 그동안 무적 (세션41 온보딩).
+## `forest_enemy`가 접촉 피해 전에 `is_rolling()`을 보고 피해를 흘린다(무적 프레임). 튜토 방의
+## "균열 넘기"도 같은 술어를 읽는다 (docs/ONBOARDING_FLOW.md 구간 A). 수치는 balance(dash_*).
+var _face := Vector2.DOWN      ## 마지막으로 향한 방향 — 제자리에서 굴러도 이쪽으로 대시
+var _roll_time := 0.0          ## 남은 구르기 시간(>0이면 구르는 중 = 무적)
+var _roll_cd := 0.0            ## 다음 구르기까지 쿨다운
+var _roll_dir := Vector2.DOWN  ## 이번 구르기의 대시 방향
+
 func _ready() -> void:
 	add_to_group("player")
+
+## 🔴 구르는 중 = 무적. forest_enemy가 접촉 피해 전에 이것만 본다. 튜토 "균열 넘기"도 이걸 읽는다.
+func is_rolling() -> bool:
+	return _roll_time > 0.0
 
 ## 이동 방향으로 4방향 걷기 애니메이션을 고른다. 통째로 까딱 2프레임 —
 ## 걸을 때만 재생하고, 멈추면 첫 프레임(정지 포즈)으로.
@@ -39,12 +51,33 @@ func _update_anim(dir: Vector2) -> void:
 
 ## 🔴 속도는 balance가 쥔다 (수치를 코드에 박지 않는다 — TECH_SPEC §10).
 ## 🔴 UI 모달(창고 등)이 열리면 멎는다 — 안 그러면 창고를 보는 동안 뒤에서 계속 걸어간다.
-func _physics_process(_delta: float) -> void:
+func _physics_process(delta: float) -> void:
 	if GameState.ui_modal_open:
 		velocity = Vector2.ZERO
 		_update_anim(Vector2.ZERO)
 		return
+
+	if _roll_cd > 0.0:
+		_roll_cd -= delta
+
+	# 구르는 중 — 입력 무시, 대시 방향으로 밀고 무적 유지(is_rolling()==true).
+	if _roll_time > 0.0:
+		_roll_time -= delta
+		velocity = _roll_dir * GameState.balance.dash_speed
+		move_and_slide()
+		return
+
 	var dir := Input.get_vector("move_left", "move_right", "move_up", "move_down")
+	if dir != Vector2.ZERO:
+		_face = dir
+
+	# 구르기 시작(Shift) — 방향은 지금 누른 쪽, 없으면 마지막으로 향한 쪽.
+	if Input.is_action_just_pressed("dash") and _roll_cd <= 0.0:
+		_roll_dir = (dir if dir != Vector2.ZERO else _face).normalized()
+		_roll_time = GameState.balance.dash_duration_sec
+		_roll_cd = GameState.balance.dash_cooldown_sec
+		return
+
 	velocity = dir * GameState.balance.player_move_speed
 	_update_anim(dir)
 	move_and_slide()

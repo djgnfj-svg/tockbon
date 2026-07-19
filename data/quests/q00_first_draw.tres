@@ -4,13 +4,13 @@
 
 [resource]
 script = ExtResource("1")
-id = &"q01_first_hunt"
-title = "첫 사냥"
-desc = "숲으로 나가 적을 5마리 처치하라."
-goal = 0
+id = &"q00_first_draw"
+title = "첫 마법진"
+desc = "책상에서 [E]로 첫 마법진을 그려라. 다 그리면 [분석 ▶] → [마력 주입]으로 맺는다."
+goal = 3
 target = &""
-count = 5
+count = 1
 reward_items = {
-&"mat_slime_core": 3
+&"mat_slime_core": 2
 }
-requires = &"q00_first_draw"
+requires = &""

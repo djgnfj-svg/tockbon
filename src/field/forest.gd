@@ -30,6 +30,11 @@ extends Node2D
 const InteractZone := preload("res://src/actors/interact_zone.gd")
 const Player := preload("res://src/actors/player.gd")
 const Hud := preload("res://src/hud/hud.gd")
+## 원정 지도 (세션41 온보딩 ④) — M으로 열어 클릭해 목표 마커를 찍는다. 루트=CanvasLayer, 스크립트=$Panel.
+const MapPanelScene := preload("res://src/hud/map_panel.tscn")
+const MapPanel := preload("res://src/hud/map_panel.gd")   # 캐스트 타입 ($Panel은 get_node로 Node라)
+const MARKER_COLOR := Color(0.98, 0.82, 0.34)   # 핀·화살표 = 금/노랑 (지도 마커 색과 같게)
+const ARROW_RADIUS := 42.0                        # 길찾기 화살표가 플레이어 주위 이 반경에 뜬다
 
 ## 돌아갈 곳 — 🔴 **PackedScene이 아니라 경로다. 바꾸지 마라.**
 ##
@@ -55,6 +60,13 @@ const DEATH_BEAT_SEC := 0.9
 ## 씬 전환은 한 번뿐 — 귀환 도중 죽거나, 죽는 중에 E를 누르면 두 번 갈아탄다.
 var _leaving: bool = false
 
+## 원정 지도 마커 (세션41) — 지도에서 찍은 목표 지점. 월드 핀 + 플레이어 옆 길찾기 화살표로 안내한다.
+var _map: CanvasLayer = null
+var _has_marker := false
+var _marker_pos := Vector2.ZERO
+var _pin: Polygon2D = null
+var _arrow: Polygon2D = null
+
 
 func _ready() -> void:
 	# 🔴 출격 = 만HP. `GameState.hp` 주석의 "출격 시 reset"이 여기서 지켜진다.
@@ -77,7 +89,10 @@ func _ready() -> void:
 	# quest_completed가 아니라 quest_ready를 듣는다(완료는 베이스 길잡이 정산에서만 → 숲에선 절대 안 뜬다).
 	# 넛지가 사라진 그 순간이 "왜 돌아가야 하나"를 알려줄 유일한 타이밍이라 숲에서도 꼭 띄운다.
 	EventBus.quest_ready.connect(_on_quest_ready)
-	_hud.say("숲이다 — 들어온 자리(남쪽)로 돌아가 E를 누르면 귀환한다")
+	_hud.say("숲이다 — [M]으로 지도를 열어 목표를 찍고, 들어온 자리(남쪽)로 돌아가 E를 누르면 귀환한다")
+	# 길찾기 화살표 (마커를 찍으면 플레이어 옆에서 그쪽을 가리킨다). 처음엔 숨김.
+	_arrow = _make_arrow()
+	_player.add_child(_arrow)
 
 
 ## 목표 하나를 달성했다 — 아직 완료 아님. 길잡이에게 돌아가 정산하라고 HUD로 민다.
@@ -118,3 +133,96 @@ func _die() -> void:
 
 func _to_base() -> void:
 	get_tree().change_scene_to_file(base_scene_path)
+
+
+# ─────────────────────────── 원정 지도 (세션41 온보딩 ④) ───────────────────────────
+
+## M으로 지도를 연다 — 🔴 모달이 열려 있으면(지도 자신 포함) 안 연다. 지도의 M/ESC 닫기는 패널이 한다
+##  (interact_zone·player처럼 ui_modal_open 게이트로 겹침을 막는다 — 지도가 열린 동안엔 여기로 안 온다).
+func _unhandled_input(event: InputEvent) -> void:
+	if GameState.ui_modal_open:
+		return
+	if event.is_action_pressed("map"):
+		_open_map()
+		get_viewport().set_input_as_handled()
+
+
+## 길찾기 화살표 — 마커가 있으면 플레이어 옆에서 마커 쪽을 가리킨다. 거의 도착하면 숨긴다.
+func _process(_dt: float) -> void:
+	if _arrow == null:
+		return
+	if not _has_marker:
+		_arrow.visible = false
+		return
+	var to := _marker_pos - _player.global_position
+	if to.length() < 16.0:   # 마커에 닿음 — 화살표 끈다(목적지 도착)
+		_arrow.visible = false
+		return
+	var dir := to.normalized()
+	_arrow.visible = true
+	_arrow.position = dir * ARROW_RADIUS   # 화살표는 player 자식이라 로컬 = 플레이어 기준 반경
+	_arrow.rotation = dir.angle()          # 삼각형이 +x를 향하므로 각도만 맞추면 마커를 가리킨다
+
+
+func _open_map() -> void:
+	if _map != null:
+		return
+	_map = MapPanelScene.instantiate() as CanvasLayer
+	add_child(_map)
+	var panel := _map.get_node("Panel") as MapPanel
+	panel.marker_placed.connect(_on_marker_placed)
+	panel.closed.connect(_on_map_closed)
+	panel.open(_gather_map_data())
+
+
+func _on_map_closed() -> void:
+	if _map != null:
+		_map.queue_free()
+		_map = null
+
+
+## 지도에서 목표를 찍었다 — 마커를 저장하고 월드 핀을 그 자리에 세운다(화살표는 _process가 갱신).
+func _on_marker_placed(world_pos: Vector2) -> void:
+	_marker_pos = world_pos
+	_has_marker = true
+	if _pin == null:
+		_pin = _make_pin()
+		add_child(_pin)
+	_pin.global_position = world_pos
+	_pin.visible = true
+
+
+## 지도에 넘길 스냅샷 — 경계·내 위치·적·귀환점·(있으면)마커. 적은 살아 있는 것만(죽으면 free됨).
+func _gather_map_data() -> Dictionary:
+	var enemies: Array = []
+	for e in $Enemies.get_children():
+		if e is Node2D:
+			enemies.append((e as Node2D).global_position)
+	var data := {
+		"bounds": ($Ground as Control).get_global_rect(),
+		"player": _player.global_position,
+		"enemies": enemies,
+		"extract": _extract_zone.global_position,
+	}
+	if _has_marker:
+		data["marker"] = _marker_pos
+	return data
+
+
+## 월드 핀 — 금빛 마름모(마커 지점). z_index를 올려 Ground(z=0) 위에 뜨게.
+func _make_pin() -> Polygon2D:
+	var p := Polygon2D.new()
+	p.polygon = PackedVector2Array([Vector2(0, -15), Vector2(9, -2), Vector2(0, 14), Vector2(-9, -2)])
+	p.color = MARKER_COLOR
+	p.z_index = 6
+	return p
+
+
+## 길찾기 화살표 — +x를 향한 삼각형(플레이어 자식). _process가 마커 쪽으로 회전·배치한다.
+func _make_arrow() -> Polygon2D:
+	var a := Polygon2D.new()
+	a.polygon = PackedVector2Array([Vector2(12, 0), Vector2(-7, -7), Vector2(-7, 7)])
+	a.color = MARKER_COLOR
+	a.z_index = 20
+	a.visible = false
+	return a

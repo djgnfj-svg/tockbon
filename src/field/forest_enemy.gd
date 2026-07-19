@@ -84,7 +84,11 @@ func _physics_process(delta: float) -> void:
 
 	if dist <= _param("attack_range", 18.0) and _cool <= 0.0:
 		_cool = _param("attack_cooldown", 0.9)
-		GameState.damage_player(_param("contact_damage", 4.0))
+		# 🔴 구르는 중이면 접촉 피해를 흘린다 (무적 프레임 — 세션41 구르기). player.is_rolling()가 유일 판정.
+		# .call로 부른다: player는 Node2D 타입이라 is_rolling()을 정적으로 못 찾는다(공용 배우 계약 무변경).
+		var dodging: bool = player.has_method(&"is_rolling") and bool(player.call(&"is_rolling"))
+		if not dodging:
+			GameState.damage_player(_param("contact_damage", 4.0))
 
 
 ## 🔴 그룹 `"player"`가 유일한 조준 경로다 (player.gd가 `_ready`에서 넣는다).

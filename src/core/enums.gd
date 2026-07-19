@@ -50,5 +50,6 @@ enum Phase { MORNING, DAY, EVENING, NIGHT }
 enum ItemKind { INK, PAPER, WAND, ROBE, CHARM, MATERIAL, FRAGMENT, PEN }
 enum CastFailReason { NO_MANA, BROKEN, INVALID }
 ## 🔴 퀘스트 목표 종류 (세션 36, "진행 목표 = 깊이 스파인"). data/quests/*.tres의 `goal`이 이 값.
-## KILL=적 처치 · EXTRACT=살아서 귀환 · UNLOCK=도감 해금(룬). ⚠ .tres가 정수로 저장하니 재정렬 금지.
-enum QuestGoal { KILL, EXTRACT, UNLOCK }
+## KILL=적 처치 · EXTRACT=살아서 귀환 · UNLOCK=도감 해금(룬) · DRAW=마법진 그리기(온보딩, 세션41 — count장).
+## ⚠ .tres가 정수로 저장하니 재정렬 금지. DRAW는 **끝에 추가**했다(=3).
+enum QuestGoal { KILL, EXTRACT, UNLOCK, DRAW }

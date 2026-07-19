@@ -13,4 +13,4 @@ count = 1
 reward_items = {
 &"mat_hound_fang": 2
 }
-requires = &""
+requires = &"q00_first_draw"

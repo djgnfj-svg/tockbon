@@ -309,12 +309,16 @@ func advance_quests(goal: int, target: StringName) -> void:
 			EventBus.quest_ready.emit(q.id)   # 방금 목표 달성 — 길잡이에게 돌아가 정산하라
 
 ## 목표를 채웠나 (완료와 별개 — 완료는 길잡이 정산에서만 일어난다, 세션40).
-##  UNLOCK/BUILD는 codex 상태로 판정(이벤트를 놓쳐도·소급이어도 옳게 나온다), 나머지(KILL/EXTRACT)는 카운트로.
+##  UNLOCK/BUILD는 codex 상태·DRAW는 도안 수로 판정(이벤트를 놓쳐도·소급이어도 옳게 나온다), 나머지(KILL/EXTRACT)는 카운트로.
+##  🔴 DRAW를 상태(ring_designs.size)로 판정하는 이유 = 온보딩 q00을 사슬에 끼워도 **이미 그린 세이브가 자동 충족**돼
+##   사슬이 안 막힌다(선례: UNLOCK/BUILD가 codex 상태로 소급 안전한 것과 같은 결, 세션40).
 func is_quest_satisfied(q: QuestDef) -> bool:
 	if q == null:
 		return false
 	if q.goal == Enums.QuestGoal.UNLOCK:
 		return is_unlocked(q.target)
+	if q.goal == Enums.QuestGoal.DRAW:
+		return ring_designs.size() >= q.need()
 	return quest_count(q.id) >= q.need()
 
 ## 길잡이에게 정산할 수 있나 — 열려 있고(선행 완료) 목표를 채웠고 아직 미수령.

@@ -110,8 +110,12 @@ extends Resource
 ## (엉망으로 그린 대가는 위력이 아니라 **속성 순도**로 치른다)
 @export var projectile_base_damage: float = 9.0
 @export var player_move_speed: float = 120.0
-@export var dash_speed: float = 300.0
-@export var dash_duration_sec: float = 0.18
+## 🔴 구르기(Shift) — 짧은 대시 + 대시 동안 무적 프레임 (세션41 온보딩, player.gd가 배선).
+## ⚠ 세션40까지 dash 액션·이 두 수치가 **스텁만 있고 아무도 안 읽었다**(죽은 코드) — 구르기로 되살렸다.
+## 대시 거리 = dash_speed × dash_duration_sec (≈128px). 잠정값 — 손맛 보며 조인다.
+@export var dash_speed: float = 640.0
+@export var dash_duration_sec: float = 0.2
+@export var dash_cooldown_sec: float = 0.6
 @export var player_hp_max: float = 100.0
 @export var wand_basic_damage: float = 4.0
 ## 탁본 모션 무방비 시간 (GDD §6)

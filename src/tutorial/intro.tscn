@@ -1,0 +1,112 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://src/tutorial/intro.gd" id="1_intro"]
+[ext_resource type="PackedScene" path="res://src/actors/player.tscn" id="2_player"]
+
+[sub_resource type="RectangleShape2D" id="rs_wall"]
+size = Vector2(1000, 40)
+
+[sub_resource type="RectangleShape2D" id="rs_barrier"]
+size = Vector2(24, 140)
+
+[sub_resource type="RectangleShape2D" id="rs_door"]
+size = Vector2(60, 120)
+
+[node name="Intro" type="Node2D"]
+script = ExtResource("1_intro")
+
+[node name="Ground" type="ColorRect" parent="."]
+mouse_filter = 2
+offset_left = -520.0
+offset_top = -320.0
+offset_right = 520.0
+offset_bottom = 320.0
+color = Color(0.14, 0.12, 0.16, 1)
+
+[node name="WallTop" type="StaticBody2D" parent="."]
+position = Vector2(0, -80)
+
+[node name="WallTopVis" type="ColorRect" parent="WallTop"]
+offset_left = -500.0
+offset_top = -20.0
+offset_right = 500.0
+offset_bottom = 20.0
+color = Color(0.24, 0.2, 0.26, 1)
+
+[node name="WallTopCol" type="CollisionShape2D" parent="WallTop"]
+shape = SubResource("rs_wall")
+
+[node name="WallBottom" type="StaticBody2D" parent="."]
+position = Vector2(0, 80)
+
+[node name="WallBottomVis" type="ColorRect" parent="WallBottom"]
+offset_left = -500.0
+offset_top = -20.0
+offset_right = 500.0
+offset_bottom = 20.0
+color = Color(0.24, 0.2, 0.26, 1)
+
+[node name="WallBottomCol" type="CollisionShape2D" parent="WallBottom"]
+shape = SubResource("rs_wall")
+
+[node name="Bed" type="ColorRect" parent="."]
+offset_left = -334.0
+offset_top = -26.0
+offset_right = -266.0
+offset_bottom = 26.0
+color = Color(0.42, 0.31, 0.24, 1)
+
+[node name="Barrier" type="StaticBody2D" parent="."]
+collision_layer = 128
+collision_mask = 0
+
+[node name="BarrierVis" type="Polygon2D" parent="Barrier"]
+color = Color(0.32, 0.29, 0.25, 1)
+polygon = PackedVector2Array(-14, -60, 14, -50, 12, 60, -12, 55)
+
+[node name="BarrierCol" type="CollisionShape2D" parent="Barrier"]
+shape = SubResource("rs_barrier")
+
+[node name="Door" type="Area2D" parent="."]
+position = Vector2(320, 0)
+collision_layer = 0
+collision_mask = 2
+
+[node name="DoorVis" type="ColorRect" parent="Door"]
+offset_left = -14.0
+offset_top = -60.0
+offset_right = 14.0
+offset_bottom = 60.0
+color = Color(0.5, 0.42, 0.2, 1)
+
+[node name="DoorCol" type="CollisionShape2D" parent="Door"]
+shape = SubResource("rs_door")
+
+[node name="Player" parent="." instance=ExtResource("2_player")]
+position = Vector2(-300, 0)
+
+[node name="Ui" type="CanvasLayer" parent="."]
+
+[node name="PromptWasd" type="Label" parent="Ui"]
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -140.0
+offset_top = 120.0
+offset_right = 140.0
+offset_bottom = 150.0
+text = "WASD 로 움직여"
+horizontal_alignment = 1
+
+[node name="PromptRoll" type="Label" parent="Ui"]
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -160.0
+offset_top = 120.0
+offset_right = 160.0
+offset_bottom = 150.0
+text = "Shift 로 굴러 넘어"
+horizontal_alignment = 1
