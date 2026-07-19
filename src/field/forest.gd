@@ -50,11 +50,20 @@ const ARROW_RADIUS := 42.0                        # 길찾기 화살표가 플�
 ## 멀쩡히 끝난다. **베이스로 부팅한 실제 게임에서만** 껍데기가 된다 (세션 26에 실측).
 @export_file("*.tscn") var base_scene_path: String = "res://src/base/base.tscn"
 
+## 🔴 다음 난이도 티어 (세션45 — 사용자 확정: "단맵 + 다음 던전 난이도 포탈"). 북쪽 끝 포털을
+## 지나면 이 맵으로 내려간다. 티어마다 **손으로 만든 별도 맵**이다(사용자 확정) — 같은 씬 스케일이 아니라.
+## 🔴 base_scene_path와 같은 이유로 **경로 문자열**이다 (순환 preload F7 회피).
+## 비우면 = 최종 티어(포털이 있어도 막다른 곳). 이 맵에 PortalZone 노드가 없으면 아예 안 쓰인다.
+@export_file("*.tscn") var next_tier_path: String = "res://src/field/forest_t2.tscn"
+
 ## 쓰러진 뒤 베이스로 돌아가기까지 (초) — 연출값. 0이면 뭘 맞고 죽었는지 못 보고 화면이 바뀐다.
 const DEATH_BEAT_SEC := 0.9
 
 @onready var _player: Player = $Player
 @onready var _extract_zone: InteractZone = $ExtractZone
+## 🔴 포털은 있을 수도 없을 수도 있다 — 최종 티어 맵엔 없다. get_node_or_null로 받아 _ready에서 guard한다
+## (없는데 $PortalZone로 받으면 _ready에서 조용히 터진다 = 세션24·25의 침묵).
+@onready var _portal_zone: InteractZone = get_node_or_null("PortalZone")
 @onready var _hud: Hud = $Hud/Hud
 
 ## 씬 전환은 한 번뿐 — 귀환 도중 죽거나, 죽는 중에 E를 누르면 두 번 갈아탄다.
@@ -81,6 +90,8 @@ func _ready() -> void:
 	# 🔴 모달 플래그를 내린다 — 오토로드라 씬 전환에도 남는다(base.gd _ready와 같은 안전망).
 	GameState.ui_modal_open = false
 	_extract_zone.interacted.connect(_extract)
+	if _portal_zone != null:
+		_portal_zone.interacted.connect(_descend)
 	_player.caster.notice.connect(_hud.say)
 	_player.caster.slot_changed.connect(_hud.select)
 	_hud.select(_player.caster.slot())
@@ -110,6 +121,25 @@ func _extract() -> void:
 	_leaving = true
 	EventBus.extraction_success.emit()
 	_to_base()
+
+
+## 🔴 포털 하강 = 더 깊은 티어로 내려간다 (세션45 — "단맵 + 다음 난이도 포탈"). **귀환의 정반대다:**
+##  • `extraction_success`를 **안 쏜다** — 가방을 창고에 넣지 않고 **그대로 들고 내려간다** = 판돈 누적.
+##    (GameState.bag은 오토로드라 씬을 갈아타도 실려 간다. 여기서 손댈 게 없다.)
+##  • 그래서 깊은 곳에서 죽으면 **여태 주운 것 전부**를 잃는다 — 사용자 확정 스테이크스 "가방=이번 판 전부".
+## 🔴 **경로 문자열로 전환** (base_scene_path와 같은 이유 — 순환 preload F7 회피). 티어=별도 손맵.
+## ⚠ **다음 세션 튜닝 자리**: 지금 forest._ready가 진입 때 만HP/만마나로 회복한다 — 하강도 그 코드를
+##   타므로 "깊이 갈수록 위험"이 약해진다(다친 채 못 내려간다). 하강 시 회복 스킵은 t2 난이도 커브와
+##   함께 정한다(세션45는 골격만 — 사용자 확정). t2는 지금 스텁이라 이 결정이 코어 루프에 영향 없다.
+func _descend() -> void:
+	if _leaving:
+		return
+	if next_tier_path.is_empty() or not ResourceLoader.exists(next_tier_path):
+		_hud.say("이 너머는 아직 준비 중이다", true)
+		return
+	_leaving = true
+	_hud.say("더 깊은 곳으로 내려간다 — 가방을 든 채로", true)
+	get_tree().change_scene_to_file(next_tier_path)
 
 
 func _on_hp_changed(hp: float, _hp_max: float) -> void:

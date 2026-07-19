@@ -1,10 +1,94 @@
 # STATUS — 현재 진행 상태
 
-> 최종 갱신: 2026-07-19 (세션 44 — **자유도: 매직볼 바닥 + 관통 문양 + 진=도안(지팡이=진 그릇)**)
+> 최종 갱신: 2026-07-20 (세션 46 — **게임답게: 바닥 드롭 + 몬스터 AI 4종 + 나무·타일 다양성**)
 > · **세션 종료마다 갱신**
 >
 > 🔴 **아래 세션 20 이하는 대부분 삭제된 코드를 설명한다** — 기록이지 현재 상태가 아니다.
 > 현재 정본 = 최상단 「세션 31」~「세션 23」 + `CLAUDE.md` + memory `takbon-mana-injection-rule`.
+
+---
+
+## 세션 46 (2026-07-20) — **"게임답게": 바닥 드롭 + 몬스터 AI 4종 + (진행)나무·타일 다양성**
+
+> 사용자: *"몬스터가 죽으면 템이 아래 떨궈져야 · 몬스터 AI도 좀 넣고 · 나무/비트맵도 다채롭게 · 전반적
+> 게임답게 · **서브에이전트로 하나씩**."* 하네스(takbon-dev/art)에 **하나씩 위임 → 리드가 검증**. ⚠ 미커밋.
+
+**A. 바닥 드롭 픽업** ✅ (takbon-dev) — 죽으면 `add_to_bag` 순간이동 대신 **`src/props/drop_pickup.tscn`을 죽은
+자리에 떨군다**. 등급색 마름모가 튀어나와(scatter) 까딱이고(bob), **플레이어가 걸어가 겹치면** `add_to_bag`+
+`pickup` 사운드. 🔴 `collision_layer=0`(발사 캐리어 마스크5가 픽업에 부딪혀 마법이 죽는 걸 방지)/`mask=2`.
+줍기 지연 0.35s. `forest_enemy._die()`가 픽업을 `current_scene`에 심는다(퍼프와 같은 부모). 신규 `test_drop_pickup_auto`(11체크·뮤테이션3). 🔴 `test_forest_auto` [8]을 "바닥 픽업 생성"으로 갱신 +
+`_fresh`가 **current_scene을 세우게** 고침(안 그럼 픽업이 헤드리스서 조용히 안 떨어짐) + [6] 연타를 **같은 프레임**으로.
+
+**B. 몬스터 AI 4종** ✅ (takbon-dev) — `forest_enemy._physics_process`가 `params.ai`로 분기(기본 chase):
+- **charge**(hound) — APPROACH→**WINDUP**(방향 락·붉은 텔레그래프)→**CHARGE**(락 방향 돌진·오버슛)→RECOVER.
+  피할 수 있는 공격. 실측: 속도 0↔330 파형·플레이어 뚫고 지나침.
+- **hover**(mist) — hover_min/max로 거리 유지+스트레이프, `disperse_period`마다 분산(반투명 α0.4 + 피해 경감).
+- **stationary**(vine) — 안 움직이고 `regen_per_sec` 재생(상한 `_def.hp`). 실측: 20→40 회복 후 멈춤.
+- **방어 경감** — `take_hit`에 `armor_reduction`(beetle)·분산 시 `dispersed_resist`를 `dealt*=(1-frac)`. 🔴 `enemy_hit`은 경감까지 반영한 최종 피해.
+- 공개 API `hp()` 추가. `.tres` 3장에 `"ai"` 한 줄(hound/mist/vine). 신규 `test_enemy_ai_auto`(방어·재생·분산+뮤테이션).
+- 🔴 **밸런스 튜닝은 사용자 몫**: beetle armor 0.7(=70%경감, 100→30 상당히 셈)·돌진 수치·재생 속도 — 실플레이로.
+
+**C. 나무·소품 다양성** ✅ (takbon-art 스프라이트 + 리드 배선) — 나무 단색 삼각형 → **도트 3종**
+(침엽수·활엽수·마른나무) + 소품 3종(덤불·이끼바위·들꽃). 🔴 `tree.gd`가 **위치로 변형을 고른다**
+(북 y<-500=침엽수·마른나무 / 남=활엽수 — forest.tscn 12개 인스턴스 손 안 대고 다양해짐). 소품은
+`decor_scatter.gd`가 `_ready`에 24개 랜덤 배치(손배치 대신). 접지 offset으로 밑동이 지면에 선다.
+아트 6장 = `assets/sprites/field/`(Apollo·소프트도트). 실게임 스샷: 남=활엽수+잔디 · 북=침엽수+어두운
+바닥 = 그라디언트와 맞물림. ⚠ y-sort 없음(나무 뒤로 못 감 — 현행 유지, 후속 폴리시).
+
+🔴 **검증**(A·B): 전 스위트 **16/16 그린**(신규 2 포함) + 실게임 exec/runtime_state 전수(픽업 렌더·걸어가 수집·마법 관통 · 돌진 속도파형·부유 거리유지·재생 상한·분산 α). 🔴 **`takbon-verify` 스위트에 `test_drop_pickup_auto`·`test_enemy_ai_auto` 추가 필요**(CLAUDE.md 목록).
+
+**🔴 다음** = **사용자 전체 플레이 테스트**(시작 밸런스·AI 손맛·그라디언트·드롭 줍는 맛) → 미커밋 커밋
+(세션45+46 통째 미커밋). 이후: forest_t2 실기획 · y-sort 폴리시 · 자유도 문양 축.
+
+---
+
+## 세션 45 (2026-07-20) — **메인 루프를 「루프」로: 던전 깊이 그라디언트 + 다음 난이도 포털(골격)**
+
+> 사용자: *"기본장비만 끼고 나가서 몬스터 잡고 뭔가 얻어서 집에서 작업하는 메인 루프를 구현하자 · 시작
+> 밸런스 + 던전 쪽을 쫙."* 배선(사냥→드롭→귀환→제작)은 세26~32에 다 있었으나 **던전이 평평한 단칸방**
+> 이라 루프로 안 느껴졌다 — 그 구멍을 메웠다. ⚠ **미커밋(main)**, 세44(`632900f`) 위에 얹혔다.
+
+**설계 확정** (AskUserQuestion으로) — ① 스테이크스 = **가방=이번 판 노획물 전부**(죽으면 증발·착용장비/창고
+안전, 이미 `bag_lost` 배선) · ② 첫 상승 = **펜(그리기 보정)** · ③ 던전 = **단맵 + 북쪽 끝 포털로 다음 난이도** ·
+④ 티어 = **손으로 만든 별도 맵**(forest_t1 숲 / t2 깊은숲 / t3 동굴) · ⑤ 이번 범위 = **루프+밸런스 먼저,
+포털은 골격만**(다음 세션: 포털 건너가 실제 난이도 커브 튜닝).
+
+**① 던전 남→북 그라디언트** (`forest.tscn` 재작성) — 적 15마리를 4밴드로: **A 남/안전**(slime·mist=워밍업)
+→ **B 중간=펜 파밍존**(hound=`mat_hound_fang`) → **C 심층**(beetle=`mat_beetle_shell`·vine·hound) →
+**D 포털 수문장**(slime_elite E4보스+hound·beetle). Ground 북쪽 −1000→−1500 확장, 나무 6→12(깊이 밀도).
+다 못 쓸고 나오게 넉넉히 → 허기(세35)가 클럭. 🔴 **초반 루프가 이미 응집**: `craft_pen_basic`=fang×3 +
+공방 건설=fang×2+shell×2 → 사냥개·갑충 잡기→공방 짓기→펜 = 첫 목표와 맞물림(수치 손 안 댐, 튜닝은 플레이 몫).
+
+**② 포털 골격** (`src/props/portal.tscn` + `forest.gd._descend`) — 포털=`interact_zone` 재사용(zone_id=`portal`,
+플레이스홀더 스월 아트). 하강 = **귀환의 정반대**: `extraction_success`를 **안 쏘고** 가방을 **든 채** 다음
+티어로 내려간다(판돈 누적). `@export_file next_tier_path`(경로 문자열 = F7 순환 preload 회피). 포털 없는
+맵도 견디게 `get_node_or_null`+guard. **⚠ 다음 세션 튜닝 자리**: 지금 forest._ready가 진입 때 만HP/만마나
+회복 → 하강도 그 코드를 타 "깊이=위험"이 약함(하강 시 회복 스킵을 t2 커브와 함께 정한다).
+
+**③ forest_t2 스텁** — 하강 메커니즘을 실제로 증명(F7 de-risk). 깊은숲 어두운 Ground(mouse_filter=2!)·
+"준비 중" 안내·적 3·포털 없음(막다른 곳). forest.gd 재사용.
+
+**④ 아트 배선** (같은 세션 추가 요청: *"슬라임 이런것도 스프라이트로 + 타일맵 만들어 적용"*) — 🔴
+**새로 그린 게 아니라 배선**: 적 스프라이트(`assets/sprites/enemies/*.png`)·필드 타일이 **이미 다
+있었는데**(옛 자산) forest_enemy가 **Polygon2D 색 삼각형**으로 그리고 있었다(세30 "외형=params.color").
+- **적 = AnimatedSprite2D** — `forest_enemy.tscn` Visual을 Polygon2D→AnimatedSprite2D. `_apply_look`가
+  `params.sprite` 경로를 읽어 **런타임에 SpriteFrames를 굽는다**(프레임=정사각, 폭÷높이로 프레임 수 —
+  slime 4·hound 8·vine 6·gale 6, 플레이어 시트와 같은 결). 7종 `.tres`에 sprite 한 줄씩. ⚠ `_visual.color`가
+  사라져(AnimatedSprite2D엔 없다) 죽음 퍼프 색을 `params.color`로 옮김.
+- **바닥 = TileMapLayer** — 신설 TileSet `assets/sprites/field/tileset_forest.tres`(64px·source0=풀
+  tile_grass·source1=어두운 바닥 tile_boss_floor). forest.tscn에 `TileGround` 노드, 432셀 배치
+  (🔴 **북쪽 심층=어두운 바닥**으로 그라디언트 강화). Ground ColorRect는 **bounds 참조·backdrop로 유지**
+  (forest.gd `$Ground`·mouse_filter=2). ⚠ forest_t2 스텁은 아직 ColorRect(다음 세션).
+
+🔴 **검증**: 전 스위트 **13/13 그린** + 신규 `test_forest_auto[10]`(포털 존재·경로 실재·**하강≠정산**,
+뮤테이션으로 검출력 2확인) + **실게임 exec 전수**: forest→포털 하강→forest_t2(가방 실림·창고 미정산·
+mouse_filter=2)→귀환→base(가방 fang2 창고 정산·in_expedition=false) **완주** · 좌클릭 push_input→마나
+소모(발사가 Ground 뚫고 도달) · 포털 스월 렌더 · **6종 적 스프라이트 렌더·타일맵 잔디→어두운 북쪽
+그라디언트 스샷 확인**(에디터 format=4 재저장 회귀 0). 실 게임 에러 0(split_container 노이즈만).
+
+**🔴 다음 세션** = ⓐ **사용자 전체 플레이 테스트**(시작 밸런스·그라디언트 손맛 — 헤드리스가 못 재는 것) →
+ⓑ **포털 건너 forest_t2 실제 기획**(별도 손맵·난이도 커브·하강 시 회복 스킵) · t3 동굴 · **미커밋 커밋**.
+이월: 온보딩 전체 플레이(세41~) · 자유도 밀기(유도·팅김·추진 문양) · gale 보스 · 아트.
 
 ---
 

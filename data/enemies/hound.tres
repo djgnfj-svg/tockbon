@@ -20,7 +20,9 @@ display_name = "숲 사냥개"
 hp = 26.0
 counter_rune = 3
 params = {
+"ai": "charge",
 "aggro_range": 220.0,
+"sprite": "res://assets/sprites/enemies/hound.png",
 "attack_cooldown": 1.0,
 "attack_range": 20.0,
 "charge_speed": 330.0,

@@ -22,6 +22,7 @@ hp = 55.0
 counter_rune = 2
 params = {
 "aggro_range": 170.0,
+"sprite": "res://assets/sprites/enemies/beetle.png",
 "armor_reduction": 0.7,
 "attack_cooldown": 1.4,
 "attack_range": 24.0,

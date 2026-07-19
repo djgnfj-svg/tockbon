@@ -9,11 +9,12 @@
 > 지금 게임 = `src/base`(베이스캠프) + 고리 조립 책 + 숲 원정 + 온보딩 레일.
 > 🔴 **기록 규칙: 직전 세션만 상세, 그 전은 아래 「한 줄 지도」로 내려보낸다** — 이 절이 길어지면 정리 신호.
 
-🔴🔴 **직전 세션 = 44 「자유도 첫 균열」** (`632900f` · 정본 STATUS「44」+ memory `takbon-wand-inscribe-circle`):
-**매직볼 바닥 + 관통 문양(그린 문양이 전투를 "종류"로 가름) + 진=발사 형태 결정**(마법봉 인챈트 폐기).
-🔴 **다음 세션 = 자유도 밀기 토론** — 유도·팅김·추진 문양 배선(`projectile.gd`에 효과 기계 이미 완비, `.tres` + deploy 분기만이면 됨). 코어 재미 구멍(memory `takbon-magic-no-freedom`: *"다르게 그려도 전투가 안 달라진다"*)의 첫 균열을 넓히는 단계다. 성급히 코드 얹지 말고 설계 토론부터.
+🔴🔴 **직전 세션 = 45 「메인 루프를 루프로」** (미커밋 · 정본 STATUS「45」+ memory `takbon-main-loop-dungeon`):
+**던전 남→북 깊이 그라디언트(적 15마리 4밴드)+북쪽 끝 포털=다음 난이도(골격)**. 스테이크스=**가방=이번 판 전부**(하강=`extraction_success` 안 쏘고 가방 든 채 내려감), 첫 목표=**펜**, 티어=**손으로 만든 별도 맵**(`forest_t2.tscn` 스텁으로 하강 F7 de-risk 완료).
+🔴 **다음 세션 = ⓐ 사용자 전체 플레이 테스트**(시작 밸런스·그라디언트 손맛 — 헤드리스가 못 잼) → ⓑ **forest_t2 실제 기획**(별도 손맵·난이도 커브·🔴하강 시 회복 스킵 = 지금 forest._ready가 진입 때 만HP회복이라 "깊이=위험"이 약함) · **미커밋 커밋**. ⚠ 성급히 코드 얹지 말고 플레이부터.
 
 **지난 세션 한 줄 지도** (상세는 STATUS/memory — 필요할 때만 캐라):
+- **44** 자유도 첫 균열: 매직볼 바닥 · 관통 문양(그린 게 전투를 "종류"로) · 진=발사 형태(`632900f`)
 - **41~43** 온보딩 레일 · 장비 5부위 · 퀘스트 [!] 새 목표 마크
 - **34~37** 룬 해금(E4) · 마나/허기 페이스 · 퀘스트 스파인 · 빈 거점 재료 건설 + 새로하기(F8)
 - **26~33** 숲 원정 · 드롭 · 잉크 경제 배선 · 적 5종 · 공방 · 사운드
@@ -162,6 +163,8 @@
 ./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_quests_auto.gd        # **진행 목표(퀘스트)** (세션 36): KILL/EXTRACT/UNLOCK 배선(enemy_died·extraction·codex_unlocked → advance_quests) · 🔴**requires 사슬 게이트**(잠긴 퀘스트는 이벤트로도 안 진행) · 보상 지급 · 🔴**소급 완료**(이미 해금된 룬 노리는 UNLOCK은 열리는 순간 완료 — 안 하면 사슬이 막힌다) · 저장 라운드트립 · 🔴**Q 패널 렌더·클릭 차단은 헤드리스가 못 잡는다**(전체화면 Control — 닫힘=발사 도달·열림=차단을 실게임 push_input으로 별도 확인, 액션 주입으론 못 잡는다)
 ./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_dialogue_box_auto.gd  # **온보딩 대사 상자** (세션41): open(lines)→줄 넘김→finished · 빈 배열 즉시 finished · ESC 건너뛰기 · ui_modal_open 토글 · 🔴**클릭 진행·하단 밴드 렌더는 헤드리스가 못 잡는다**(실게임 push_input·스샷으로 별도 확인)
 ./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_map_panel_auto.gd     # **원정 지도 패널** (세션41): open(data) 데이터 흡수 · 🔴**world↔map 좌표 왕복**(뮤테이션으로 검출력) · 클릭 역변환→marker_placed(지도 밖 무시) · ui_modal_open 토글 · 🔴**지도 렌더·클릭 도달은 헤드리스가 못 잡는다**(push_input은 **윈도우 픽셀**이라 캔버스 2배 — 실게임 exec push_input·스샷으로 별도 확인)
+./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_drop_pickup_auto.gd   # **바닥 드롭 픽업** (세션46): setup→그룹 · 줍기 지연(지연 중 무시) · body_entered→add_to_bag+queue_free · 🔴**layer0/mask2 계약**(캐리어가 픽업에 안 부딪히게) · 🔴**물리 겹침으로 실제 주워지는지는 헤드리스가 못 잡는다**(실게임 겹침 별도 확인)
+./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_enemy_ai_auto.gd      # **몬스터 AI** (세션46): 방어(armor_reduction→enemy_hit dealt 경감) · 재생(regen_per_sec, 상한 _def.hp) · 분산 경감 · 🔴**돌진/부유 움직임 "느낌"은 헤드리스가 못 잰다**(실게임 runtime_state로 속도파형·거리유지 별도 확인)
 ```
 
 🔴 **스위트를 돌리면 `user://save`가 날아간다** (세션 26 F3 이후). `SaveManager._ready`가 저장을

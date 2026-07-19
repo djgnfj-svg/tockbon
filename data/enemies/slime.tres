@@ -16,6 +16,7 @@ hp = 14.0
 has_counter = false
 params = {
 "aggro_range": 160.0,
+"sprite": "res://assets/sprites/enemies/slime.png",
 "attack_cooldown": 0.9,
 "attack_range": 18.0,
 "contact_damage": 4.0,

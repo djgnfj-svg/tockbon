@@ -49,8 +49,9 @@ func _run() -> void:
 	await _test_my_spell_can_hit_and_kill()
 	await _test_extract_banks_the_run()
 	await _test_death_loses_the_bag()
-	await _test_kill_drops_into_bag()
+	await _test_kill_drops_onto_ground()
 	await _test_drop_survives_extraction_lost_on_death()
+	await _test_portal_descends_carrying_bag()
 
 	# 🔴 뒷정리 — **실제 플레이 세이브 오염 방지** (test_save_auto와 같은 이유).
 	# ⚠ 세션 26의 F3(SaveManager._ready → load_game)으로 **저장이 살아나면서 생긴 일**이다:
@@ -170,14 +171,15 @@ func _test_extract_banks_the_run() -> void:
 	var got := []
 	var cb := func() -> void: got.append(1)
 	_bus.extraction_success.connect(cb)
-	_zone(&"extract").interacted.emit()
+	# 🔴 연타해도 한 번만 — `_leaving` 가드가 두 번째를 막는다. **두 emit을 await 전에** 붙인다:
+	# 씬 전환(change_scene)은 프레임 끝에 일어나므로 두 emit 시점엔 숲이 아직 살아 있고, 가드만 재게 된다.
+	# (세션46: current_scene을 실게임처럼 세운 뒤로는 await 뒤에 숲이 freeing돼 존을 재조회할 수 없다 —
+	#  그게 실게임의 흐름이고, 가드는 애초에 "같은 프레임 연타"를 막는 것이다.)
+	var zone = _zone(&"extract")
+	zone.interacted.emit()
+	zone.interacted.emit()
 	await process_frame
-	_check(got.size() == 1, "귀환하면 extraction_success가 한 번 온다 (실제 %d)" % got.size())
-
-	# 🔴 두 번 눌러도 한 번만 — 귀환 중에 또 E를 누르면 씬을 두 번 갈아탄다.
-	_zone(&"extract").interacted.emit()
-	await process_frame
-	_check(got.size() == 1, "연타해도 한 번뿐 (실제 %d)" % got.size())
+	_check(got.size() == 1, "귀환은 연타해도 extraction_success가 한 번뿐 (실제 %d)" % got.size())
 	_bus.extraction_success.disconnect(cb)
 
 
@@ -200,15 +202,18 @@ func _test_death_loses_the_bag() -> void:
 ## 세션 30에 숲이 비엘리트 5종(슬라임·안개·사냥개·덩굴·갑충)으로 늘었다 — 드롭이 전부 확률이라
 ## **여럿을 죽여 하나라도** 담기는지 본다. "안 담긴다"(호출 누락)와 "가끔 안 나온다"(확률)를
 ## 가르려 표본을 키운다(8마리 중 갑충 0.9·사냥개 0.8·안개 0.7 등이 섞여 사실상 확실).
-func _test_kill_drops_into_bag() -> void:
-	print("[8] 적을 죽이면 드롭이 가방에 담긴다")
+## [8] 🔴 적을 죽이면 **드롭이 바닥에 떨어진다** (세션46 — 순간이동 대신 바닥 픽업).
+## 그전엔 죽는 즉시 가방에 담겼다(순간이동). 이제 죽은 자리에 DropPickup이 생기고, **주워야** 가방에
+## 든다(줍기는 [9]와 test_drop_pickup_auto가 본다). 여기선 "죽이면 바닥에 떨궈지나"만 본다.
+## 🔴 공개 API로만: 그룹 `"drop_pickups"` + 픽업의 item_id(setup이 실은 공개 필드). 내부 _def·노드 경로 안 더듬는다.
+func _test_kill_drops_onto_ground() -> void:
+	print("[8] 적을 죽이면 드롭이 바닥에 떨어진다 (픽업)")
 	await _fresh()
 	_gs.bag.clear()
 	var enemies := _enemies()
 	_check(enemies.size() >= 5, "표본이 되는 적이 충분하다 (%d)" % enemies.size())
 
-	# 배치된 적들의 드롭 테이블 합집합 — 담긴 건 반드시 이 안의 id여야 한다 (엉뚱한 id 방지).
-	# 🔴 공개 API로만: enemy_id(@export) + Db.get_enemy. 내부 _def를 더듬지 않는다(리팩터 함정).
+	# 배치된 적들의 드롭 테이블 합집합 — 떨어진 건 반드시 이 안의 id여야 한다 (엉뚱한 id 방지).
 	var db = root.get_node("/root/Db")
 	var valid := {}
 	for e in enemies:
@@ -220,15 +225,19 @@ func _test_kill_drops_into_bag() -> void:
 	for e in enemies:
 		e.take_hit(9999.0, 0, 0, 0.0)
 	await process_frame
-	var total := 0
-	for entry: Dictionary in _gs.bag:
-		total += int(entry["count"])
-	_check(total > 0, "적 %d마리를 죽이면 가방에 뭔가 담긴다 (실제 %d개 — 0이면 _die가 드롭을 안 굴린 것)"
-		% [enemies.size(), total])
-	# 담긴 건 전부 이 적들의 드롭 테이블 아이템이어야 한다 (엉뚱한 id가 아니라).
-	for entry: Dictionary in _gs.bag:
-		_check(valid.has(entry["id"]),
-			"담긴 %s가 배치된 적의 드롭 테이블에 있다" % str(entry["id"]))
+	await physics_frame
+	var pickups := get_nodes_in_group("drop_pickups")
+	_check(pickups.size() > 0,
+		"적 %d마리를 죽이면 바닥에 픽업이 생긴다 (실제 %d — 0이면 _die가 드롭을 안 떨군 것)"
+		% [enemies.size(), pickups.size()])
+	# 떨어진 픽업의 id는 전부 이 적들의 드롭 테이블 안이어야 한다 (엉뚱한 id가 아니라).
+	for p in pickups:
+		_check(valid.has(p.item_id), "떨어진 %s가 배치된 적의 드롭 테이블에 있다" % str(p.item_id))
+	# 🔴 아직 가방은 비어 있어야 한다 — 떨어졌을 뿐 안 주웠다 (순간이동이 정말 사라졌는지 가드).
+	_check(_gs.bag.is_empty(), "떨어지기만 하고 가방은 아직 비어 있다 (순간이동이 아니다)")
+	for p in pickups:
+		p.queue_free()
+	await process_frame
 	_gs.bag.clear()
 
 
@@ -259,6 +268,34 @@ func _test_drop_survives_extraction_lost_on_death() -> void:
 		"죽어도 창고(이미 회수한 것)는 그대로다 (%d)" % banked)
 
 
+## [10] 🔴 북쪽 포털 = 다음 티어로 하강 (세션45 — "단맵 + 다음 난이도 포탈" 골격).
+## 하강은 **귀환의 정반대다**: extraction_success를 쏘지 않고 가방을 창고에 넣지 않는다 —
+## 가방을 든 채 더 깊이 내려가 판돈을 쌓는다(사용자 확정 스테이크스). 여기서 잡는 건 배선·계약이지
+## 씬 전환의 F7(순환 preload)이 아니다 — 그건 베이스로 부팅한 실제 게임에서만 깨진다(경로 문자열로 회피).
+func _test_portal_descends_carrying_bag() -> void:
+	print("[10] 북쪽 포털 → 다음 티어(가방 들고 · 정산 안 함)")
+	await _fresh()
+	var portal = _zone(&"portal")
+	_check(portal != null, "포털 지점(zone_id=portal)이 있다")
+	var nxt: String = str(_forest.get("next_tier_path"))
+	_check(ResourceLoader.exists(nxt), "다음 티어 경로(%s)가 실재한다" % nxt)
+
+	# 하강이 귀환과 섞이면 안 된다 — extraction_success를 쏘지 않고 창고를 안 건드린다.
+	_gs.bag.clear()
+	var banked_before: int = _gs.get_count(&"mat_hound_fang")
+	_gs.add_to_bag(&"mat_hound_fang", 2)
+	var extracted := []
+	var cb := func() -> void: extracted.append(1)
+	_bus.extraction_success.connect(cb)
+	if portal != null:
+		portal.interacted.emit()   # → _descend (씬은 forest_t2로 갈아탄다, 여기선 배선만 본다)
+	await process_frame
+	_check(extracted.is_empty(), "하강은 extraction_success를 쏘지 않는다 (가방을 창고에 안 넣는다)")
+	_check(_gs.get_count(&"mat_hound_fang") == banked_before,
+		"창고는 그대로 — 가방을 든 채 내려간다 (%d)" % _gs.get_count(&"mat_hound_fang"))
+	_bus.extraction_success.disconnect(cb)
+
+
 # ── 헬퍼 ──
 
 ## 매번 **새 숲**에서 시작한다. 앞 숲을 남기면 플레이어가 둘이 되고(그룹 "player"가 엉킨다)
@@ -266,14 +303,20 @@ func _test_drop_survives_extraction_lost_on_death() -> void:
 ## ⚠ 귀환·사망 테스트는 `change_scene_to_packed`를 태워 **베이스를 current_scene으로 올린다** —
 ## 그것도 같이 치운다 (안 치우면 다음 테스트에 베이스의 플레이어·발사 시스템이 섞여 든다).
 func _fresh() -> void:
-	if _forest != null:
+	# 앞 판 정리 — 귀환/사망 테스트는 change_scene으로 current_scene을 base로 바꿔 놓는다. 그때
+	# _forest와 current_scene은 다른 노드다(비전환 테스트에선 같다). is_instance_valid로 이중 free를 막는다.
+	if _forest != null and is_instance_valid(_forest):
 		_forest.free()
-		_forest = null
-	if current_scene != null:
+	if current_scene != null and is_instance_valid(current_scene):
 		current_scene.free()
-		current_scene = null
+	_forest = null
+	current_scene = null
 	_forest = _scene.instantiate()
 	root.add_child(_forest)
+	# 🔴 current_scene을 실게임처럼 세운다 — `_die`가 드롭 픽업·죽음 퍼프의 부모로 current_scene을
+	# 쓴다(세션46). 안 세우면 헤드리스에선 current_scene이 null이라 픽업이 조용히 안 떨어진다
+	# (실게임은 change_scene이 세워 줘 정상 — 헤드리스만의 함정이었다).
+	current_scene = _forest
 	await process_frame
 	await physics_frame
 

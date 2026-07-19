@@ -20,7 +20,9 @@ display_name = "안개 정령"
 hp = 20.0
 counter_rune = 3
 params = {
+"ai": "hover",
 "aggro_range": 200.0,
+"sprite": "res://assets/sprites/enemies/mist.png",
 "attack_cooldown": 1.1,
 "attack_range": 30.0,
 "color": Color(0.55, 0.78, 0.85, 1),

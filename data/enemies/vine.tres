@@ -14,7 +14,9 @@ id = &"vine"
 display_name = "재생 덩굴"
 hp = 40.0
 params = {
+"ai": "stationary",
 "aggro_range": 80.0,
+"sprite": "res://assets/sprites/enemies/vine.png",
 "attack_cooldown": 1.2,
 "attack_range": 46.0,
 "color": Color(0.3, 0.52, 0.18, 1),

@@ -19,9 +19,13 @@ extends CharacterBody2D
 ## 킬카운트·웨이브가 붙는 날을 위한 자리표(placeholder)다.
 signal died
 
+## 🔴 바닥 픽업 프롭 (세션46) — 드롭을 가방에 순간이동시키지 않고 이 씬을 죽은 자리에 떨군다.
+## preload가 안전한 이유: 픽업은 forest/actors를 안 물어 **순환 preload가 없다**(base⇄forest 함정 무관).
+const DropPickup := preload("res://src/props/drop_pickup.tscn")
+
 @export var enemy_id: StringName = &"slime"
 
-@onready var _visual: Polygon2D = $Visual
+@onready var _visual: AnimatedSprite2D = $Visual
 
 ## 🔴 피격 손맛 (세션 38) — 넉백/팝 **연출값**. 밸런스가 아니라 느낌값이라 여기 const
 ## (projectile 물리 여유 const 선례). 사용자가 직접 때려 보며 조인다.
@@ -35,6 +39,21 @@ var _cool: float = 0.0
 ## 피격 넉백 속도 — 추격 속도 위에 얹혀 빠르게 사그라든다.
 var _knockback: Vector2 = Vector2.ZERO
 
+## 🔴 행동 갈래 = `params.ai` (기본 "chase" = 현행). "새 적 = .tres 한 장"이 **행동까지**
+## 포함하게 params에 얹었다(스키마 확장 대신 — color·size·sprite 선례 그대로). 수치는 전부
+## `_param`으로 .tres에서 읽는다 — balance.tres가 아니다(적 수치는 EnemyDef가 쥔다는 계약).
+var _ai: String = "chase"
+
+## 돌진(charge) 상태기계 — hound. 텔레그래프(윈드업)가 있어 **피할 수 있는** 공격이 된다.
+enum ChargeState { APPROACH, WINDUP, CHARGE, RECOVER }
+var _charge_state: int = ChargeState.APPROACH
+var _charge_timer: float = 0.0
+var _charge_dir: Vector2 = Vector2.ZERO
+
+## 부유(hover) 분산 상태 — mist. 분산 중엔 받는 피해가 준다(take_hit) + 반투명(때리기 나쁨이 보인다).
+var _disperse_timer: float = 0.0
+var _dispersed: bool = false
+
 
 func _ready() -> void:
 	add_to_group("enemies")
@@ -43,6 +62,9 @@ func _ready() -> void:
 		# 조용히 죽지 않게 — .tres 이름을 틀리면 hp 0짜리 유령이 서 있게 된다.
 		push_warning("EnemyDef '%s'를 못 찾았다 (data/enemies/ 확인) — 기본값으로 선다" % enemy_id)
 	_hp = _def.hp if _def != null else 10.0
+	_ai = str(_def.params.get("ai", "chase")) if _def != null else "chase"
+	# 분산 주기를 처음 채워 둔다 — 곧장 분산으로 튀지 않게(첫 토글은 한 주기 뒤).
+	_disperse_timer = _param("disperse_period", 2.5)
 	_apply_look()
 
 
@@ -54,41 +76,184 @@ func _ready() -> void:
 func _apply_look() -> void:
 	if _def == null or _visual == null:
 		return
-	var col: Variant = _def.params.get("color")
-	if col is Color:
-		_visual.color = col
+	# 🔴 스프라이트 = `params.sprite` 경로 (세션45 — 옛 색 폴리곤에서 실제 도트 시트로). 프레임은
+	# 정사각(높이=한 변)으로 가로 스트립이라, 런타임에 SpriteFrames를 구워 붙인다(플레이어 시트와 같은 결).
+	# "새 적 = .tres 한 장"이 스프라이트까지 포함하게 params에 얹었다(스키마를 안 늘린다 — params.color·size 선례).
+	var sprite_path := str(_def.params.get("sprite", ""))
+	if sprite_path != "":
+		var tex := load(sprite_path) as Texture2D
+		if tex != null:
+			_setup_frames(tex)
 	var s := float(_def.params.get("size", 1.0))
 	if not is_equal_approx(s, 1.0):
 		scale = Vector2(s, s)
 
 
-## 쫓아오기 + 접촉 피해. **거리 하나로 둘 다 판정한다** — aggro_range 안이면 다가오고,
-## attack_range 안이면 attack_cooldown 간격으로 때린다 (수치는 전부 .tres).
+## 가로 스트립 시트(프레임 = 정사각, 한 변 = 시트 높이)를 루프 "idle" 애니로 굽는다.
+## 프레임 수 = 폭 ÷ 높이. slime 128×32=4 · hound 256×32=8 · gale 384×64=6 — 높이 기준이라 다 맞는다.
+func _setup_frames(tex: Texture2D) -> void:
+	var side := tex.get_height()
+	if side <= 0:
+		return
+	var count := maxi(1, tex.get_width() / side)
+	var frames := SpriteFrames.new()
+	frames.remove_animation(&"default")
+	frames.add_animation(&"idle")
+	frames.set_animation_loop(&"idle", true)
+	frames.set_animation_speed(&"idle", 6.0)
+	for i in count:
+		var at := AtlasTexture.new()
+		at.atlas = tex
+		at.region = Rect2(i * side, 0, side, side)
+		frames.add_frame(&"idle", at)
+	_visual.sprite_frames = frames
+	_visual.play(&"idle")
+
+
+## 🔴 행동을 `params.ai`로 가른다 (기본 "chase" = 현행). 각 갈래가 `velocity`(추격 의지)를 세우면
+## 공통 꼬리가 넉백을 얹어 move_and_slide한다. 접촉 피해는 각 갈래가 `_contact`로 부른다.
+## 수치는 전부 `_param`으로 .tres에서 읽는다 (balance.tres 아님 — 적 수치는 EnemyDef가 쥔다).
 func _physics_process(delta: float) -> void:
 	_cool = maxf(0.0, _cool - delta)
+	_regen(delta)
 	var player := _player()
 	if player == null:
 		velocity = Vector2.ZERO
+		_apply_move(delta)
 		return
 	var to_player: Vector2 = player.global_position - global_position
 	var dist := to_player.length()
 
-	if dist <= _param("aggro_range", 160.0) and dist > 1.0:
-		velocity = to_player / dist * _param("move_speed", 55.0)
-	else:
-		velocity = Vector2.ZERO
-	# 넉백은 추격 속도 위에 얹혀 빠르게 사그라든다 (피격 손맛)
+	match _ai:
+		"charge":
+			_ai_charge(delta, player, to_player, dist)
+		"hover":
+			_ai_hover(delta, player, to_player, dist)
+		"stationary":
+			_ai_stationary(player, dist)
+		_:
+			_ai_chase(player, to_player, dist)
+
+	_apply_move(delta)
+
+
+## 넉백을 추격 속도 위에 얹어 움직이고 넉백을 사그라뜨린다 (피격 손맛). 모든 갈래 공통 꼬리.
+func _apply_move(delta: float) -> void:
 	velocity += _knockback
 	move_and_slide()
 	_knockback = _knockback.move_toward(Vector2.ZERO, KNOCKBACK_DECAY * delta)
 
-	if dist <= _param("attack_range", 18.0) and _cool <= 0.0:
-		_cool = _param("attack_cooldown", 0.9)
-		# 🔴 구르는 중이면 접촉 피해를 흘린다 (무적 프레임 — 세션41 구르기). player.is_rolling()가 유일 판정.
-		# .call로 부른다: player는 Node2D 타입이라 is_rolling()을 정적으로 못 찾는다(공용 배우 계약 무변경).
-		var dodging: bool = player.has_method(&"is_rolling") and bool(player.call(&"is_rolling"))
-		if not dodging:
-			GameState.damage_player(_param("contact_damage", 4.0))
+
+## "chase" (기본, 슬라임·갑충·엘리트) — aggro_range 안이면 다가오고 attack_range 안이면 때린다.
+func _ai_chase(player: Node2D, to_player: Vector2, dist: float) -> void:
+	if dist <= _param("aggro_range", 160.0) and dist > 1.0:
+		velocity = to_player / dist * _param("move_speed", 55.0)
+	else:
+		velocity = Vector2.ZERO
+	_contact(player, dist)
+
+
+## "charge" (사냥개) — 접근 → 윈드업(멈춰 텔레그래프·방향 락) → 돌진(락 방향으로 빠르게) →
+## 회복(느림) → 접근. 🔴 락을 **윈드업 시작에** 걸어 두므로, 그 사이 옆으로 피하면 돌진을 흘린다
+## (피할 수 있는 공격이 되게 하는 핵심). 접촉 피해는 접근·돌진에서만 — 윈드업·회복은 무해(빈틈).
+func _ai_charge(delta: float, player: Node2D, to_player: Vector2, dist: float) -> void:
+	match _charge_state:
+		ChargeState.APPROACH:
+			if dist <= _param("aggro_range", 220.0) and dist > 1.0:
+				velocity = to_player / dist * _param("move_speed", 95.0)
+			else:
+				velocity = Vector2.ZERO
+			_contact(player, dist)
+			if dist <= _param("charge_trigger_range", 120.0) and dist > 1.0:
+				_charge_state = ChargeState.WINDUP
+				_charge_timer = _param("windup_sec", 0.5)
+				_charge_dir = to_player / dist  # 방향 락 (지금 이 순간의 플레이어 쪽)
+				_set_telegraph(true)
+		ChargeState.WINDUP:
+			velocity = Vector2.ZERO
+			_charge_timer -= delta
+			if _charge_timer <= 0.0:
+				_charge_state = ChargeState.CHARGE
+				_charge_timer = _param("dash_sec", 0.4)
+				_set_telegraph(false)
+		ChargeState.CHARGE:
+			velocity = _charge_dir * _param("charge_speed", 330.0)
+			_contact(player, dist)
+			_charge_timer -= delta
+			if _charge_timer <= 0.0:
+				_charge_state = ChargeState.RECOVER
+				_charge_timer = _param("recover_sec", 0.8)
+		ChargeState.RECOVER:
+			velocity = Vector2.ZERO
+			_charge_timer -= delta
+			if _charge_timer <= 0.0:
+				_charge_state = ChargeState.APPROACH
+
+
+## "hover" (안개) — 거리 유지: hover_min보다 가까우면 물러나고, hover_max보다 멀면 다가오고,
+## 그 사이면 천천히 스트레이프. disperse_period마다 분산 상태를 토글(분산 중 피해 경감 + 반투명).
+func _ai_hover(delta: float, player: Node2D, to_player: Vector2, dist: float) -> void:
+	var spd := _param("move_speed", 70.0)
+	var dir := to_player / dist if dist > 0.01 else Vector2.ZERO
+	if dist < _param("hover_min", 55.0):
+		velocity = -dir * spd            # 너무 가깝다 → 물러난다
+	elif dist > _param("hover_max", 95.0):
+		velocity = dir * spd             # 너무 멀다 → 다가온다
+	else:
+		velocity = Vector2(-dir.y, dir.x) * spd * 0.5  # 사이 → 천천히 옆으로 돈다
+	_contact(player, dist)
+
+	var period := _param("disperse_period", 0.0)
+	if period > 0.0:
+		_disperse_timer -= delta
+		if _disperse_timer <= 0.0:
+			_disperse_timer = period
+			_set_dispersed(not _dispersed)
+
+
+## "stationary" (덩굴) — 안 움직인다(move_speed 0). 재생은 `_regen`이 공통으로 돌린다.
+## 접촉 피해는 긴 attack_range로 — "빨리 몰아쳐 죽여야 하는" 표적.
+func _ai_stationary(player: Node2D, dist: float) -> void:
+	velocity = Vector2.ZERO
+	_contact(player, dist)
+
+
+## 접촉 피해 — attack_range 안이면 attack_cooldown 간격으로 GameState를 깎는다.
+## 🔴 구르는 중이면 흘린다 (무적 프레임 — 세션41 구르기). player.is_rolling()가 유일 판정.
+## .call로 부른다: player는 Node2D 타입이라 is_rolling()을 정적으로 못 찾는다(공용 배우 계약 무변경).
+func _contact(player: Node2D, dist: float) -> void:
+	if dist > _param("attack_range", 18.0) or _cool > 0.0:
+		return
+	_cool = _param("attack_cooldown", 0.9)
+	var dodging: bool = player.has_method(&"is_rolling") and bool(player.call(&"is_rolling"))
+	if not dodging:
+		GameState.damage_player(_param("contact_damage", 4.0))
+
+
+## 🔴 재생 — `regen_per_sec > 0`이면 초당 회복(상한 = `_def.hp`). 죽은 뒤(_hp<=0)엔 회복 안 한다.
+## "빨리 몰아쳐 죽여야 하는" 표적을 만든다 (덩굴). 대부분 적은 regen_per_sec가 없어 no-op.
+func _regen(delta: float) -> void:
+	if _def == null or _hp <= 0.0:
+		return
+	var rps := _param("regen_per_sec", 0.0)
+	if rps <= 0.0:
+		return
+	_hp = minf(_def.hp, _hp + rps * delta)
+
+
+## 돌진 텔레그래프 — 윈드업 동안 붉게 달아오른다(모으는 중이 보인다 → 피할 수 있다).
+## ⚠ 연출값이다 — 사용자가 실게임에서 보고 조인다. _pop과 modulate를 공유하지만 윈드업이 짧아 무해.
+func _set_telegraph(on: bool) -> void:
+	if _visual == null:
+		return
+	_visual.modulate = Color(1.6, 0.75, 0.55) if on else Color.WHITE
+
+
+## 분산 표시 — 분산 중엔 반투명(지금은 때리기 나쁨이 보인다). 경감 자체는 take_hit이 적용한다.
+func _set_dispersed(on: bool) -> void:
+	_dispersed = on
+	if _visual != null:
+		_visual.modulate.a = 0.4 if on else 1.0
 
 
 ## 🔴 그룹 `"player"`가 유일한 조준 경로다 (player.gd가 `_ready`에서 넣는다).
@@ -104,6 +269,12 @@ func _param(key: String, fallback: float) -> float:
 	return float(_def.params.get(key, fallback))
 
 
+## 🔴 공개 HP 리더 — 재생·피해를 테스트가 공개 API로 확인할 유일 경로다 (`_hp`는 internal이라
+## 리팩터 때 옮겨 다니는 물건 = 계약이 아니다. takbon-verify §3 "공개 API로만").
+func hp() -> float:
+	return _hp
+
+
 ## 🔴 계약: `enemy_hit`는 **약점 배율을 반영한 최종 피해**로 발신한다 (dummy_target 주석).
 ## ⚠ `status`·`status_power`는 아직 안 쓴다 — 적의 상태이상(화상·젖음)은 미구현이다.
 ## 인자는 계약이라 시그니처에 그대로 남긴다 (받아 놓고 버리는 게 계약을 좁히는 것보다 낫다).
@@ -112,6 +283,12 @@ func take_hit(damage: float, rune_type: int, _status: int, _status_power: float)
 	if _def != null and _def.has_counter and rune_type == _def.counter_rune:
 		mult = _param("weakness_mult", 1.0)
 	var dealt := damage * mult
+	# 🔴 피해 경감 — 방어(갑충 armor_reduction) · 분산 중이면(안개 dispersed_resist) "막는 비율"로
+	# 곱한다. 0.95로 상한을 둬 완전 무적은 못 만든다. 🔴 계약: enemy_hit은 **이 경감까지 반영한
+	# 최종 피해**로 발신한다 (리포트·손맛이 실제 든 피해를 봐야 한다) — 약점 배율과 함께 곱해진 값.
+	dealt *= (1.0 - clampf(_param("armor_reduction", 0.0), 0.0, 0.95))
+	if _dispersed:
+		dealt *= (1.0 - clampf(_param("dispersed_resist", 0.0), 0.0, 0.95))
 	_hp -= dealt
 	EventBus.enemy_hit.emit(self, dealt, rune_type)
 	# 넉백 = 플레이어 반대쪽으로 (탄이 플레이어→적 방향으로 오므로 그 근사다 — take_hit 계약을
@@ -126,30 +303,36 @@ func take_hit(damage: float, rune_type: int, _status: int, _status_power: float)
 		_die()
 
 
-## 🔴 죽으면 **드롭을 굴려 가방에 넣는다** (세션 27 — 사용자: *"드롭을 먼저"*).
-## 인벤 흐름은 이미 다 배선돼 있다: `add_to_bag` → 귀환(extraction_success) 시 창고로 회수 ·
-## 죽으면(bag_lost) 통째로 사라진다. 그래서 여기서 **넣기만 하면** 익스트랙션 루프가 산다
-## ("주웠다, 살아 돌아가자").
+## 🔴 죽으면 **드롭을 굴려 바닥에 떨군다** (세션46 — 사용자: *"게임답게 걸어가 줍게"*).
+## 그전엔 여기서 곧장 `add_to_bag`으로 **가방에 순간이동**했다 — 이제 드롭마다 `DropPickup`을
+## 죽은 자리에 심고, 가방에 넣는 건 픽업이 플레이어에 닿을 때 한다(픽업이 `add_to_bag`을 부른다).
+## 인벤 흐름은 그대로다: `add_to_bag` → 귀환(extraction_success) 시 창고로 회수 · 죽으면(bag_lost)
+## 통째로 사라진다. 바뀐 건 **가방에 언제 들어가느냐**뿐이다("주웠다"가 진짜 줍는 행위가 됐다).
 ##
 ## 🔴 룬 조각(fragment_*)은 이 풀에 **없어야 한다** — 룬은 드롭이 아니라 보스 퀘스트 보상이다
 ## (사용자 확정). 지금 슬라임은 mat_slime_core만 있어 무관하지만, 엘리트를 숲에 넣을 때
 ## 그 .tres의 fragment 줄은 **일반 드롭이 아니라 퀘스트로** 빼야 한다 (BACKLOG).
 ##
+## 🔴 `Audio.play(&"pickup")`은 여기서 **뺐다** — 소리는 실제로 주울 때(픽업) 울린다.
+##
 ## 랜덤: Godot 전역 `randf()` — 부팅 시 자동 시드. 이 프로젝트의 첫 게임플레이 랜덤이다
-## (세이브에 안 들어간다 — 드롭은 굴린 결과가 가방에 담길 뿐 RNG 상태를 저장하지 않는다).
+## (세이브에 안 들어간다 — 드롭은 굴린 결과일 뿐 RNG 상태를 저장하지 않는다).
 func _die() -> void:
-	var got_drop := false
-	if _def != null:
+	var scene := get_tree().current_scene
+	if _def != null and scene != null:
 		for drop: DropEntry in _def.drops:
 			if randf() <= drop.chance:
 				var n := drop.min_count
 				if drop.max_count > drop.min_count:
 					n += randi() % (drop.max_count - drop.min_count + 1)
 				if n > 0:
-					GameState.add_to_bag(drop.item_id, n)
-					got_drop = true
-	if got_drop:
-		Audio.play(&"pickup")   # 뭔가 떨궜을 때만 — 빈손 처치는 조용히
+					var pickup := DropPickup.instantiate()
+					scene.add_child(pickup)
+					# 여러 드롭이 겹치지 않게 살짝 흩뿌린 지점에서 심는다 — 픽업 자신이
+					# 여기서 또 튀어나온다(scatter). 🔴 global_position은 add_child 뒤에 잡고,
+					# setup은 그 뒤에 불러야 scatter가 올바른 자리에서 시작한다.
+					pickup.global_position = global_position + Vector2(randf_range(-6.0, 6.0), randf_range(-6.0, 6.0))
+					pickup.setup(drop.item_id, n)
 	# 🔴 처치 순간 1회 — GameState가 KILL 퀘스트를 센다 (세션36). `died` 로컬 시그널의
 	# "킬카운트가 붙는 날의 자리표"가 마침내 수신자를 얻었다. enemy_id를 실어 특정 적 목표도 가능.
 	EventBus.enemy_died.emit(enemy_id)
@@ -182,7 +365,12 @@ func _spawn_death_puff() -> void:
 	for i in 8:
 		pts.append(Vector2.RIGHT.rotated(TAU * float(i) / 8.0) * 10.0)
 	puff.polygon = pts
-	puff.color = _visual.color if _visual != null else Color.WHITE
+	# 🔴 퍼프 색 = params.color (스프라이트로 바꾸며 _visual.color가 사라졌다 — AnimatedSprite2D엔 없다).
+	# .tres의 color는 이제 퍼프/틴트 힌트로만 남는다(생김새는 스프라이트가 쥔다). 없으면 부드러운 흰빛.
+	var pcol := Color(0.82, 0.86, 0.8)
+	if _def != null and _def.params.get("color") is Color:
+		pcol = _def.params.get("color")
+	puff.color = pcol
 	puff.global_position = global_position
 	puff.z_index = 50
 	scene.add_child(puff)

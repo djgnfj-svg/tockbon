@@ -21,6 +21,7 @@ hp = 250.0
 counter_rune = 0
 params = {
 "aggro_range": 260.0,
+"sprite": "res://assets/sprites/enemies/gale.png",
 "attack_cooldown": 1.5,
 "attack_range": 30.0,
 "contact_damage": 10.0,
