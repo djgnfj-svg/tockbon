@@ -33,6 +33,7 @@ const EQUIP_KINDS: Array = [
 	[Enums.ItemKind.WAND, "지팡이"],
 	[Enums.ItemKind.ROBE, "로브"],
 	[Enums.ItemKind.CHARM, "부적"],
+	[Enums.ItemKind.HAT, "모자"],
 ]
 
 @onready var _list: VBoxContainer = $Center/Panel/Margin/VBox/Scroll/List
@@ -298,9 +299,24 @@ func _effect_text(item_id: StringName) -> String:
 				parts.append("마나 +%d" % int(it.params["mana_max_add"]))
 			return " · ".join(parts)
 		Enums.ItemKind.WAND:
-			return "발사 패턴"
+			return _wand_pattern_text(it)
+		Enums.ItemKind.CHARM:
+			return "구르기 쿨 -%d%%" % roundi((1.0 - float(it.params.get("dash_cooldown_mult", 1.0))) * 100.0)
+		Enums.ItemKind.HAT:
+			return "이동 속도 +%d%%" % roundi(float(it.params.get("move_speed_mult", 0.0)) * 100.0)
 		_:
 			return ""
+
+
+## 지팡이 발사 패턴을 사람 말로 — 단발/산탄/전방위.
+func _wand_pattern_text(it: ItemDef) -> String:
+	match int(it.params.get("wand_pattern", Enums.WandPattern.SINGLE)):
+		Enums.WandPattern.MULTI:
+			return "산탄 (여러 발)"
+		Enums.WandPattern.NOVA:
+			return "전방위"
+		_:
+			return "단발"
 
 
 func _inputs_text(r: RecipeDef) -> String:

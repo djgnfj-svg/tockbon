@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="RecipeDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/core/schemas/recipe_def.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = &"craft_hat_basic"
+display_name = "깃털 모자 제작"
+inputs = {
+&"mat_vine": 4,
+&"mat_hound_fang": 2
+}
+output_id = &"hat_basic"
+output_count = 1
+station = &"craft"

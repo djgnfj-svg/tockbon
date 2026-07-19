@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="ItemDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/core/schemas/item_def.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = &"hat_basic"
+kind = 8
+grade = 2
+display_name = "깃털 모자"
+params = {
+"move_speed_mult": 0.15
+}

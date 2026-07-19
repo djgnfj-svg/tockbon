@@ -125,6 +125,18 @@ func restore_mana_full() -> void:
 func mana_max() -> float:
 	return balance.mana_max + gear_param(Enums.ItemKind.ROBE, "mana_max_add", 0.0)
 
+## 🔴 이동 속도 = balance 기본 × (1 + 모자(HAT) 배수) (세션 42). 새 모자 = .tres 하나
+## (`params["move_speed_mult"]`, 0.15 = +15%) — player._physics_process가 이 getter를 읽는다.
+## ⚠ 구르기(dash_speed)는 이 배수를 안 탄다 — 모자는 평상 이동만 빠르게 한다.
+func move_speed() -> float:
+	return balance.player_move_speed * (1.0 + gear_param(Enums.ItemKind.HAT, "move_speed_mult", 0.0))
+
+## 🔴 구르기 쿨다운 = balance 기본 × 부적(CHARM) 배수 (세션 42). 부적의 원래 설계 축을 되살렸다 —
+## `charm_basic.tres`에 `dash_cooldown_mult`(0.85 = 쿨 15%↓)가 있었는데 player가 balance를 직접
+## 읽어 **아무도 안 봤다**. 이제 player._physics_process가 이 getter를 쓴다. 미착용이면 배수 1.0.
+func roll_cooldown() -> float:
+	return balance.dash_cooldown_sec * gear_param(Enums.ItemKind.CHARM, "dash_cooldown_mult", 1.0)
+
 func hp_max() -> float:
 	return balance.player_hp_max + gear_param(Enums.ItemKind.ROBE, "hp_max_add", 0.0)
 
@@ -162,7 +174,7 @@ func gear_param(kind: int, key: String, default: float) -> float:
 ## 창고의 장비를 착용 — 창고에서 1개 차감, 기존 착용품은 창고 반환. 성공 시 true
 func equip_gear(item_id: StringName) -> bool:
 	var def: ItemDef = Db.get_item(item_id)
-	if def == null or def.kind not in [Enums.ItemKind.WAND, Enums.ItemKind.ROBE, Enums.ItemKind.CHARM, Enums.ItemKind.PEN]:
+	if def == null or def.kind not in [Enums.ItemKind.WAND, Enums.ItemKind.ROBE, Enums.ItemKind.CHARM, Enums.ItemKind.PEN, Enums.ItemKind.HAT]:
 		return false
 	if get_count(item_id) < 1:
 		return false

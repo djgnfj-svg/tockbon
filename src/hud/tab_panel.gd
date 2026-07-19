@@ -32,13 +32,12 @@ const CONTENT_TOP := 92.0      # origin.y 기준, 탭 헤더 아래 내용 시�
 
 const TAB_NAMES: Array[String] = ["소지품", "퀘스트", "마법진"]
 
-# ── 소지품 탭: 종이인형(왼쪽) ──
-const DOLL_W := 224.0
-const COL_GAP := 18.0
-const SLOT_H := 58.0
-const SLOT_GAP := 10.0
+# ── 소지품 탭: 상단 착용줄(가로 5부위) ──
+const EQUIP_ROW_H := 68.0
+const EQUIP_SLOT_GAP := 10.0
+const GRID_GAP := 16.0          # 착용줄 아래 카드 격자 시작 간격
 
-# ── 소지품 탭: 카드 격자(오른쪽) ──
+# ── 소지품 탭: 카드 격자(착용줄 아래 전체폭) ──
 const GUTTER := 84.0
 const CARD_SIZE := Vector2(150.0, 40.0)
 const CARD_GAP := 7.0
@@ -73,7 +72,7 @@ const TAB_ACCENT := Color(0.92, 0.78, 0.42)
 const TAB_TEXT := Color(0.72, 0.68, 0.60)
 const TAB_TEXT_ACTIVE := Color(0.98, 0.92, 0.80)
 
-# 종이인형 슬롯
+# 착용 슬롯
 const SLOT_BG := Color(0.16, 0.14, 0.11, 0.95)
 const SLOT_EDGE := Color(0.40, 0.37, 0.31, 0.7)
 const SLOT_KIND_COLOR := Color(0.70, 0.66, 0.58)
@@ -113,12 +112,13 @@ const CATEGORY_ORDER: Array = [
 	[&"material", "기타"],
 ]
 
-## 착용 부위 — 표시 순서·라벨 (workshop_panel의 EQUIP_KINDS 그대로).
+## 착용 부위 — 표시 순서·라벨. 5부위(세션42 모자 추가). 상단 착용줄에 이 순서로 가로 배치.
 const EQUIP_KINDS: Array = [
 	[Enums.ItemKind.PEN, "펜"],
 	[Enums.ItemKind.WAND, "지팡이"],
 	[Enums.ItemKind.ROBE, "로브"],
 	[Enums.ItemKind.CHARM, "부적"],
+	[Enums.ItemKind.HAT, "모자"],
 ]
 
 var _open: bool = false
@@ -219,6 +219,29 @@ func _gui_input(event: InputEvent) -> void:
 			accept_event()
 			return
 
+	# 소지품 탭에서만 착용/해제를 잡는다(탭 헤더 다음).
+	if current_tab != 0:
+		return
+	# 상단 착용 슬롯 클릭 → 그 부위가 차 있으면 해제(창고로 반환). 비면 무시.
+	var slots := _equip_slot_rects()
+	for i in slots.size():
+		if slots[i].has_point(mb.position):
+			var kind := int((EQUIP_KINDS[i] as Array)[0])
+			if GameState.equipment.has(kind):
+				GameState.unequip_gear(kind)   # equipment_changed → _on_changed → queue_redraw
+			accept_event()
+			return
+	# 하단 카드 클릭 → 착용 가능 종류면 착용. 그 외(잉크·재료 등)는 무시.
+	var layout := _grid_sections()
+	for sec: Dictionary in layout["sections"]:
+		for card: Dictionary in sec["cards"]:
+			var card_rect: Rect2 = card["rect"]
+			if card_rect.has_point(mb.position):
+				if _is_equippable(card["id"]):
+					GameState.equip_gear(card["id"])   # 창고 차감·equipment_changed → queue_redraw
+				accept_event()
+				return
+
 
 func _origin() -> Vector2:
 	return ((size - PANEL_SIZE) * 0.5).round()
@@ -281,77 +304,128 @@ func _draw_tab_headers(font: Font) -> void:
 
 # ─────────────────────────── 탭1: 소지품 ───────────────────────────
 
-## 왼쪽 종이인형(착용 4부위) + 오른쪽 가방·창고 격자. ⚠ 이번엔 표시(읽기)만 — 클릭 착용/해제 없음.
-func _draw_items_tab(font: Font, origin: Vector2, content_top: float) -> void:
-	var doll_left := origin.x + PAD
-	_draw_doll(font, doll_left, content_top)
-
-	var col_left := doll_left + DOLL_W + COL_GAP
-	var col_width := PANEL_SIZE.x - PAD * 2.0 - DOLL_W - COL_GAP
-	_draw_bag_and_storage(font, col_left, content_top, col_width)
+## 상단 착용줄(가로 5부위) + 아래 전체폭 카드 격자. 클릭으로 착용/해제한다.
+## 🔴 draw와 클릭이 같은 rect 함수를 본다 — 착용줄=_equip_slot_rects(), 격자=_grid_sections().
+## 그린 곳과 누른 곳이 어긋나지 않게 좌표를 한 함수에서만 만든다.
+func _draw_items_tab(font: Font, _origin: Vector2, _content_top: float) -> void:
+	_draw_equip_row(font)
+	_draw_grid(font)
 
 
-## 종이인형 — 4부위 슬롯을 세로로. 미착용은 "비어 있음". GameState.equipment = {int(ItemKind): item_id}.
-func _draw_doll(font: Font, left: float, top: float) -> void:
-	draw_string(font, Vector2(left, top + 12.0), "착용",
-		HORIZONTAL_ALIGNMENT_LEFT, -1, 13, SECTION_COLOR)
-	var y := top + 24.0
-	for pair: Array in EQUIP_KINDS:
+## 착용줄 5칸 rect(Control 로컬). _draw_equip_row와 _gui_input의 단일 소스. EQUIP_KINDS 순.
+func _equip_slot_rects() -> Array[Rect2]:
+	var o := _origin()
+	var top := o.y + CONTENT_TOP
+	var left := o.x + PAD
+	var total_w := PANEL_SIZE.x - PAD * 2.0
+	var n := EQUIP_KINDS.size()
+	var slot_w := (total_w - EQUIP_SLOT_GAP * float(n - 1)) / float(n)
+	var rects: Array[Rect2] = []
+	var x := left
+	for i in n:
+		rects.append(Rect2(Vector2(x, top), Vector2(slot_w, EQUIP_ROW_H)))
+		x += slot_w + EQUIP_SLOT_GAP
+	return rects
+
+
+## 착용줄 그리기 — 부위 라벨 + 착용 아이템(등급 띠·이름·효과) 또는 "비어 있음".
+## 슬롯 클릭=해제는 _gui_input이 처리(equipment.has(kind)일 때만).
+func _draw_equip_row(font: Font) -> void:
+	var o := _origin()
+	draw_string(font, Vector2(o.x + PAD, o.y + CONTENT_TOP - 8.0), "착용 (슬롯 클릭=해제)",
+		HORIZONTAL_ALIGNMENT_LEFT, -1, 12, SECTION_COLOR)
+	var rects := _equip_slot_rects()
+	for i in rects.size():
+		var r: Rect2 = rects[i]
+		var pair: Array = EQUIP_KINDS[i]
 		var kind: int = pair[0]
 		var kind_label: String = pair[1]
-		var rect := Rect2(Vector2(left, y), Vector2(DOLL_W, SLOT_H))
-		draw_rect(rect, SLOT_BG, true)
-		draw_rect(rect, SLOT_EDGE, false, 1.0)
-		draw_string(font, Vector2(left + 12.0, y + 18.0), kind_label,
-			HORIZONTAL_ALIGNMENT_LEFT, DOLL_W - 20.0, 11, SLOT_KIND_COLOR)
+		draw_rect(r, SLOT_BG, true)
+		draw_rect(r, SLOT_EDGE, false, 1.0)
+		draw_string(font, Vector2(r.position.x + 11.0, r.position.y + 16.0), kind_label,
+			HORIZONTAL_ALIGNMENT_LEFT, r.size.x - 18.0, 11, SLOT_KIND_COLOR)
 		if GameState.equipment.has(kind):
 			var item_id: StringName = GameState.equipment[kind]
 			var item := Db.get_item(item_id)
 			var grade := item.grade if item != null else 1
 			var chip := GRADE_COLORS[clampi(grade - 1, 0, GRADE_COLORS.size() - 1)]
-			draw_rect(Rect2(Vector2(left, y), Vector2(4.0, SLOT_H)), chip, true)
-			draw_string(font, Vector2(left + 12.0, y + 36.0), _item_name(item_id),
-				HORIZONTAL_ALIGNMENT_LEFT, DOLL_W - 20.0, 13, SLOT_ITEM_COLOR)
+			draw_rect(Rect2(r.position, Vector2(4.0, r.size.y)), chip, true)
+			draw_string(font, Vector2(r.position.x + 11.0, r.position.y + 38.0), _item_name(item_id),
+				HORIZONTAL_ALIGNMENT_LEFT, r.size.x - 18.0, 12, SLOT_ITEM_COLOR)
 			var eff := _effect_text(item_id)
 			if eff != "":
-				draw_string(font, Vector2(left + 12.0, y + 51.0), eff,
-					HORIZONTAL_ALIGNMENT_LEFT, DOLL_W - 20.0, 10, SLOT_EFFECT_COLOR)
+				draw_string(font, Vector2(r.position.x + 11.0, r.position.y + 55.0), eff,
+					HORIZONTAL_ALIGNMENT_LEFT, r.size.x - 18.0, 9, SLOT_EFFECT_COLOR)
 		else:
-			draw_string(font, Vector2(left + 12.0, y + 38.0), "비어 있음",
-				HORIZONTAL_ALIGNMENT_LEFT, DOLL_W - 20.0, 12, SLOT_EMPTY_COLOR)
-		y += SLOT_H + SLOT_GAP
+			draw_string(font, Vector2(r.position.x + 11.0, r.position.y + 40.0), "비어 있음",
+				HORIZONTAL_ALIGNMENT_LEFT, r.size.x - 18.0, 11, SLOT_EMPTY_COLOR)
 
 
-## 오른쪽 칸 — 창고(카테고리별) + 가방. inventory_panel의 _draw 로직을 폭·좌표만 파라미터화해 옮김.
-func _draw_bag_and_storage(font: Font, left: float, top: float, region_width: float) -> void:
-	var y := top
-
-	var groups := _grouped(GameState.get_inventory_snapshot())
-	if groups.is_empty():
-		draw_string(font, Vector2(left, y + 12.0),
+## 착용줄 아래 전체폭 카드 격자 그리기. _grid_sections()가 rect를 쥐고, 여기선 그리기만 한다.
+func _draw_grid(font: Font) -> void:
+	var o := _origin()
+	var left := o.x + PAD
+	var region_width := PANEL_SIZE.x - PAD * 2.0
+	var grid_top := o.y + CONTENT_TOP + EQUIP_ROW_H + GRID_GAP
+	var layout := _grid_sections()
+	if bool(layout["empty_msg"]):
+		draw_string(font, Vector2(left, grid_top + 12.0),
 			"창고가 비었다 — 숲에서 적을 잡아 [E]로 귀환하면 여기 쌓인다",
 			HORIZONTAL_ALIGNMENT_LEFT, region_width, 12, EMPTY_COLOR)
+	for sec: Dictionary in layout["sections"]:
+		_draw_section_layout(font, sec, region_width)
+
+
+## 한 구역 그리기(라벨 + 카드들). 좌표는 전부 _section_layout이 이미 계산했다 — 여기선 그리기만.
+func _draw_section_layout(font: Font, sec: Dictionary, region_width: float) -> void:
+	var label_pos: Vector2 = sec["label_pos"]
+	if bool(sec["label_above"]):
+		draw_string(font, label_pos, sec["title"],
+			HORIZONTAL_ALIGNMENT_LEFT, region_width, 13, sec["color"])
+	else:
+		draw_string(font, label_pos, sec["title"],
+			HORIZONTAL_ALIGNMENT_LEFT, GUTTER - 8.0, 13, sec["color"])
+	for card: Dictionary in sec["cards"]:
+		var rect: Rect2 = card["rect"]
+		_draw_card(font, rect.position, card["id"], int(card["count"]))
+
+
+## 🔴 격자 전체 레이아웃(순수) — 창고(카테고리별)+가방을 카드 rect까지 계산한다.
+## _draw_grid와 _gui_input(카드 클릭)의 단일 소스. 그리지 않는다.
+func _grid_sections() -> Dictionary:
+	var o := _origin()
+	var left := o.x + PAD
+	var region_width := PANEL_SIZE.x - PAD * 2.0
+	var y := o.y + CONTENT_TOP + EQUIP_ROW_H + GRID_GAP
+	var sections: Array = []
+
+	var groups := _grouped(GameState.get_inventory_snapshot())
+	var empty_msg := groups.is_empty()
+	if empty_msg:
 		y += 28.0
 	else:
 		for pair: Array in CATEGORY_ORDER:
 			var cat: StringName = pair[0]
 			if groups.has(cat):
-				y = _draw_section(font, pair[1], SECTION_COLOR, left, y, region_width, groups[cat])
-				y += SUB_GAP
+				var sec := _section_layout(pair[1], SECTION_COLOR, left, y, region_width, groups[cat], false)
+				sections.append(sec)
+				y = float(sec["next_y"]) + SUB_GAP
 
 	var bag := _sorted_entries(_bag_counts())
 	if not bag.is_empty():
 		y += SECTION_GAP
-		_draw_section(font, "가방 (들고 있는 것 · 죽으면 사라진다)", BAG_SECTION_COLOR,
+		var sec := _section_layout("가방 (들고 있는 것 · 죽으면 사라진다)", BAG_SECTION_COLOR,
 			left, y, region_width, bag, true)
+		sections.append(sec)
+
+	return {"sections": sections, "empty_msg": empty_msg}
 
 
-## 한 구역 = 라벨 + 카드 격자. 다음 y를 돌려준다. inventory_panel._draw_section을 region_width로 일반화.
-## label_above=false(기본): 라벨을 왼쪽 좁은 칸(GUTTER)에, 카드를 오른쪽에.
+## 한 구역의 좌표를 계산해 Dictionary로. 그리기·클릭이 공유한다(옛 _draw_section의 기하 그대로).
+## label_above=false: 라벨을 왼쪽 좁은 칸(GUTTER)에, 카드를 오른쪽에.
 ## label_above=true: 라벨을 카드 위 전체폭에(가방 — 경고문이 길어 좁은 칸에 안 들어간다).
-func _draw_section(font: Font, title: String, title_color: Color,
-		left: float, top: float, region_width: float, entries: Array,
-		label_above: bool = false) -> float:
+func _section_layout(title: String, color: Color, left: float, top: float,
+		region_width: float, entries: Array, label_above: bool) -> Dictionary:
 	var gutter := 0.0 if label_above else GUTTER
 	var avail := region_width - gutter
 	var cols := maxi(int((avail + CARD_GAP) / (CARD_SIZE.x + CARD_GAP)), 1)
@@ -359,23 +433,35 @@ func _draw_section(font: Font, title: String, title_color: Color,
 	var block_h := float(rows) * (CARD_SIZE.y + CARD_GAP)
 	var cards_top := top
 	var cards_left := left
+	var label_pos := Vector2.ZERO
 	if label_above:
-		draw_string(font, Vector2(left, top + 14.0), title,
-			HORIZONTAL_ALIGNMENT_LEFT, region_width, 13, title_color)
+		label_pos = Vector2(left, top + 14.0)
 		cards_top = top + 22.0
 	else:
 		# 라벨은 카드 블록 세로 중앙에 앉는다(1줄 폰트 보정 +4).
-		draw_string(font, Vector2(left, top + block_h * 0.5 + 4.0), title,
-			HORIZONTAL_ALIGNMENT_LEFT, GUTTER - 8.0, 13, title_color)
+		label_pos = Vector2(left, top + block_h * 0.5 + 4.0)
 		cards_left = left + GUTTER
+	var cards: Array = []
 	for i in entries.size():
 		var entry: Dictionary = entries[i]
 		var col := i % cols
 		var row := i / cols
 		var at := Vector2(cards_left + float(col) * (CARD_SIZE.x + CARD_GAP),
 			cards_top + float(row) * (CARD_SIZE.y + CARD_GAP))
-		_draw_card(font, at, entry["id"], int(entry["count"]))
-	return cards_top + block_h
+		cards.append({"rect": Rect2(at, CARD_SIZE), "id": entry["id"], "count": int(entry["count"])})
+	return {"title": title, "color": color, "label_pos": label_pos,
+		"label_above": label_above, "cards": cards, "next_y": cards_top + block_h}
+
+
+## 착용 가능 종류인가(EQUIP_KINDS의 kind와 일치). 카드 클릭 착용 필터.
+func _is_equippable(id: StringName) -> bool:
+	var it := Db.get_item(id)
+	if it == null:
+		return false
+	for pair: Array in EQUIP_KINDS:
+		if int(pair[0]) == int(it.kind):
+			return true
+	return false
 
 
 ## 카드 한 장 — 등급 색 띠 + 이름 + ★등급 + 수량. 알 수 없는 id도 그린다(정본이 GameState라).
@@ -559,6 +645,21 @@ func _effect_text(item_id: StringName) -> String:
 				parts.append("마나 +%d" % int(it.params["mana_max_add"]))
 			return " · ".join(parts)
 		Enums.ItemKind.WAND:
-			return "발사 패턴"
+			return _wand_pattern_text(it)
+		Enums.ItemKind.CHARM:
+			return "구르기 쿨 -%d%%" % roundi((1.0 - float(it.params.get("dash_cooldown_mult", 1.0))) * 100.0)
+		Enums.ItemKind.HAT:
+			return "이동 속도 +%d%%" % roundi(float(it.params.get("move_speed_mult", 0.0)) * 100.0)
 		_:
 			return ""
+
+
+## 지팡이 발사 패턴을 사람 말로 — 단발/산탄/전방위 (workshop_panel._wand_pattern_text와 동일).
+func _wand_pattern_text(it: ItemDef) -> String:
+	match int(it.params.get("wand_pattern", Enums.WandPattern.SINGLE)):
+		Enums.WandPattern.MULTI:
+			return "산탄 (여러 발)"
+		Enums.WandPattern.NOVA:
+			return "전방위"
+		_:
+			return "단발"

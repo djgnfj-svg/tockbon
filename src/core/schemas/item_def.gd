@@ -18,7 +18,7 @@ func category() -> StringName:
 	match kind:
 		Enums.ItemKind.INK: return &"ink"
 		Enums.ItemKind.PAPER: return &"paper"
-		Enums.ItemKind.WAND, Enums.ItemKind.ROBE, Enums.ItemKind.CHARM, Enums.ItemKind.PEN: return &"equip"
+		Enums.ItemKind.WAND, Enums.ItemKind.ROBE, Enums.ItemKind.CHARM, Enums.ItemKind.PEN, Enums.ItemKind.HAT: return &"equip"
 		Enums.ItemKind.FRAGMENT: return &"fragment"
 		Enums.ItemKind.MATERIAL: return StringName(params.get("cat", "material"))
 		_: return &"material"

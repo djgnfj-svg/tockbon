@@ -51,6 +51,17 @@ func _on_ring_cast(assembly: Dictionary, origin: Vector2, aim_dir: Vector2) -> v
 	var status_mult := Db.status_mult_of(StringName(assembly.get("special_ink", &"")),
 		float(assembly.get("special_ratio", 0.0)))
 
+	# 🔴 지팡이 발사 패턴 부활 (세션 42). 옛 소비자(spell_system.wand_shots)는 세션22에 매장됐고
+	# 그 뒤로 이 새 경로는 무조건 단발이었다 — GameState.wand_pattern()이 정의만 되고 orphan이었다.
+	# 이제 진(캐리어)을 패턴이 정한 각도들로 **여러 개** 쏜다. 착탄 전개는 캐리어당 그대로 돈다.
+	var pattern := GameState.wand_pattern()
+	for a: float in _wand_angles(angle, pattern):
+		_spawn_carrier(ring, origin, a, power, status_mult, rune_type)
+
+
+## 진(캐리어) 하나를 origin에서 angle 방향으로 쏜다. 패턴이 여러 각도면 이걸 여러 번 부른다.
+func _spawn_carrier(ring: Array, origin: Vector2, angle: float,
+		power: float, status_mult: float, rune_type: int) -> void:
 	var carrier := CarrierScene.instantiate() as CarrierScript
 	if carrier == null:
 		return
@@ -61,6 +72,29 @@ func _on_ring_cast(assembly: Dictionary, origin: Vector2, aim_dir: Vector2) -> v
 		balance.projectile_base_speed, balance.projectile_lifetime_sec,
 		fire.damage, fire.rune_type, fire.status, fire.status_power)
 	carrier.deployed.connect(_on_carrier_deployed.bind(power, status_mult, rune_type))
+
+
+## 발사 각도 목록 — 지팡이 패턴이 정한다 (수치는 balance, 선례: wand_multi_count 등).
+## SINGLE=에임 1발 · MULTI=에임 좌우로 퍼진 산탄 · NOVA=내 주변 전방위(에임 무시, 균등 분할).
+func _wand_angles(base: float, pattern: int) -> Array:
+	match pattern:
+		Enums.WandPattern.MULTI:
+			var n := maxi(balance.wand_multi_count, 1)
+			if n == 1:
+				return [base]
+			var spread := deg_to_rad(balance.wand_multi_spread_deg)
+			var out: Array = []
+			for i in n:
+				out.append(base - spread * 0.5 + spread * (float(i) / float(n - 1)))
+			return out
+		Enums.WandPattern.NOVA:
+			var n2 := maxi(balance.wand_nova_count, 1)
+			var out2: Array = []
+			for i in n2:
+				out2.append(base + TAU * float(i) / float(n2))
+			return out2
+		_:
+			return [base]
 
 
 ## assembly → 위력 배율. 손그림 점수(곡선) × **잉크 등급 배수** × **진 크기**(세션29). 규칙은

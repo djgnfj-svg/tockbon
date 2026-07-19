@@ -50,12 +50,14 @@ func _run() -> void:
 			overlap = true
 	_check("🔴 두 작업대 레시피가 겹치지 않는다 (station 필터)", not overlap)
 
+	# 🔴 세션42: 공방이 펜뿐 아니라 지팡이·로브·부적·모자도 만든다 — 계약은 "펜"이 아니라
+	# "장비(equip 카테고리)"다. kind==pen 고정 단정이 새 장비 레시피에서 낡았다.
 	var all_craft_are_equip := true
 	for r in craft:
 		var out_item: ItemDef = db.get_item(r.output_id)
-		if out_item == null or out_item.kind != pen_kind:
+		if out_item == null or out_item.category() != &"equip":
 			all_craft_are_equip = false
-	_check("공방 레시피 결과물은 전부 장비(펜)다", all_craft_are_equip)
+	_check("공방 레시피 결과물은 전부 장비(equip)다", all_craft_are_equip)
 
 	var no_pen_in_refine := true
 	for r in refine:
@@ -96,6 +98,37 @@ func _run() -> void:
 	_check("장비 아닌 재료는 못 낀다", not gs.equip_gear(&"mat_hound_fang"))
 	gs.remove_item(&"pen_mid", gs.get_count(&"pen_mid"))
 	_check("창고에 없는 펜은 못 낀다", not gs.equip_gear(&"pen_mid"))
+
+	# ── ⑤ 세션42 새 부위 효과 — 파생 getter가 실제로 바뀐다 (모자·부적·로브·지팡이) ──
+	# 🔴 이 넷은 착용만 되고 효과가 죽어 있었다(지팡이=orphan wand_pattern, 부적=dash_cooldown_mult
+	# 미배선, 모자=신설). 여기가 "껴도 아무 일 없다"의 회귀 가드다.
+	var base_speed: float = gs.move_speed()
+	gs.add_item(&"hat_basic")
+	_check("모자 장착 성공", gs.equip_gear(&"hat_basic"))
+	_check("🔴 모자가 이동 속도를 올린다 (+15%)", is_equal_approx(gs.move_speed(), base_speed * 1.15))
+	gs.unequip_gear(int(Enums.ItemKind.HAT))
+	_check("모자 해제하면 속도 원복", is_equal_approx(gs.move_speed(), base_speed))
+
+	var base_cd: float = gs.roll_cooldown()
+	gs.add_item(&"charm_basic")
+	_check("부적 장착 성공", gs.equip_gear(&"charm_basic"))
+	_check("🔴 부적이 구르기 쿨을 줄인다 (×0.85)", is_equal_approx(gs.roll_cooldown(), base_cd * 0.85))
+	gs.unequip_gear(int(Enums.ItemKind.CHARM))
+	_check("부적 해제하면 쿨 원복", is_equal_approx(gs.roll_cooldown(), base_cd))
+
+	var base_hp: float = gs.hp_max()
+	var base_mana: float = gs.mana_max()
+	gs.add_item(&"robe_basic")
+	_check("로브 장착 성공", gs.equip_gear(&"robe_basic"))
+	_check("🔴 로브가 HP 상한을 올린다 (+10)", is_equal_approx(gs.hp_max(), base_hp + 10.0))
+	_check("🔴 로브가 마나 상한을 올린다 (+10)", is_equal_approx(gs.mana_max(), base_mana + 10.0))
+	gs.unequip_gear(int(Enums.ItemKind.ROBE))
+
+	gs.add_item(&"wand_fork")
+	_check("지팡이 장착 성공", gs.equip_gear(&"wand_fork"))
+	_check("🔴 지팡이가 발사 패턴을 정한다 (산탄=MULTI)", gs.wand_pattern() == Enums.WandPattern.MULTI)
+	gs.unequip_gear(int(Enums.ItemKind.WAND))
+	_check("지팡이 해제하면 단발(SINGLE)", gs.wand_pattern() == Enums.WandPattern.SINGLE)
 
 	print("RESULT pass=%d fail=%d" % [_pass, _fail])
 	if _fail == 0:

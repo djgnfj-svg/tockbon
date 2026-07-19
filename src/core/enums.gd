@@ -46,8 +46,10 @@ enum Status { NONE, BURN, KNOCKBACK, WET, FLOW }
 enum Phase { MORNING, DAY, EVENING, NIGHT }
 ## 🔴 PEN = 탁본 펜 (세션 23 신설). 등급이 오를수록 **보정도**가 올라 손을 잡아 준다
 ## (GameState.stroke_correction → trace_scorer). WAND(지팡이)와 역할이 달라 별도 부위다.
-## ⚠ **끝에 붙였다** — 중간에 끼우면 저장된 equipment의 부위 키가 통째로 밀린다.
-enum ItemKind { INK, PAPER, WAND, ROBE, CHARM, MATERIAL, FRAGMENT, PEN }
+## 🔴 HAT = 모자 (세션 42 신설, 사용자 확정 "펜 유지 + 모자 추가 = 5부위"). 이동 속도 축
+## (GameState.move_speed → player). 로브(생존)·부적(마나 지속)과 겹치지 않는 별도 축이다.
+## ⚠ **끝에 붙였다** — 중간에 끼우면 저장된 equipment의 부위 키가 통째로 밀린다. HAT도 끝에.
+enum ItemKind { INK, PAPER, WAND, ROBE, CHARM, MATERIAL, FRAGMENT, PEN, HAT }
 enum CastFailReason { NO_MANA, BROKEN, INVALID }
 ## 🔴 퀘스트 목표 종류 (세션 36, "진행 목표 = 깊이 스파인"). data/quests/*.tres의 `goal`이 이 값.
 ## KILL=적 처치 · EXTRACT=살아서 귀환 · UNLOCK=도감 해금(룬) · DRAW=마법진 그리기(온보딩, 세션41 — count장).

@@ -75,9 +75,10 @@ func _physics_process(delta: float) -> void:
 	if Input.is_action_just_pressed("dash") and _roll_cd <= 0.0:
 		_roll_dir = (dir if dir != Vector2.ZERO else _face).normalized()
 		_roll_time = GameState.balance.dash_duration_sec
-		_roll_cd = GameState.balance.dash_cooldown_sec
+		_roll_cd = GameState.roll_cooldown()   # 🔴 부적(CHARM) 배수 반영 (세션42)
 		return
 
-	velocity = dir * GameState.balance.player_move_speed
+	# 🔴 속도 = GameState.move_speed()(balance × 모자 배수) — balance 직접 참조 금지 (세션42).
+	velocity = dir * GameState.move_speed()
 	_update_anim(dir)
 	move_and_slide()

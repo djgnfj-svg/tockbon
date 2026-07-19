@@ -48,6 +48,7 @@ func _run() -> void:
 	await _test_no_score_is_base_power(system)
 	await _test_size_scales_damage(system)
 	await _test_special_ink_amplifies_status(system)
+	await _test_wand_pattern(system)
 
 	if failures == 0:
 		print("TEST_RING_SPELL_OK — 전 항목 통과")
@@ -287,7 +288,53 @@ func _test_special_ink_amplifies_status(system) -> void:
 		% [float(red.get("damage", 0.0)), float(plain.get("damage", 0.0))])
 
 
+# ── 🔴 지팡이 발사 패턴 (세션42) — 옛 spell_system 매장 후 wand_pattern()이 orphan이라
+# 진이 무조건 단발이었다. 이 검증이 그 회귀를 막는다: 착용 지팡이가 진(캐리어) 발수를 정한다.
+# 카운트는 emit 직후 1프레임 — 캐리어는 빈 진·무표적이라 수명 동안 날아다녀 안 사라진다.
+
+func _test_wand_pattern(system) -> void:
+	print("[12] 지팡이 패턴 → 진(캐리어) 발수 (세션42, WandPattern)")
+	var gs = root.get_node("/root/GameState")
+	var saved: Dictionary = gs.equipment.duplicate()
+
+	# 미착용 = 단발 1개
+	gs.equipment = {}
+	_clear(system)
+	_bus.ring_cast_requested.emit({"rings": [_all(GLYPH_NONE)]}, Vector2.ZERO, Vector2(1, 0))
+	await process_frame
+	_check(_carriers(system).size() == 1, "미착용=단발 진 1개 (실제 %d)" % _carriers(system).size())
+	_clear(system)
+
+	# 산탄 지팡이(wand_fork, wand_pattern=1) = balance.wand_multi_count 발
+	gs.equipment = {int(Enums.ItemKind.WAND): &"wand_fork"}
+	_bus.ring_cast_requested.emit({"rings": [_all(GLYPH_NONE)]}, Vector2.ZERO, Vector2(1, 0))
+	await process_frame
+	var mc := int(gs.balance.wand_multi_count)
+	_check(_carriers(system).size() == mc, "산탄 지팡이=%d발 (실제 %d)" % [mc, _carriers(system).size()])
+	_clear(system)
+
+	# 전방위 지팡이(wand_ring, wand_pattern=2) = balance.wand_nova_count 발
+	gs.equipment = {int(Enums.ItemKind.WAND): &"wand_ring"}
+	_bus.ring_cast_requested.emit({"rings": [_all(GLYPH_NONE)]}, Vector2.ZERO, Vector2(1, 0))
+	await process_frame
+	var nc := int(gs.balance.wand_nova_count)
+	_check(_carriers(system).size() == nc, "전방위 지팡이=%d발 (실제 %d)" % [nc, _carriers(system).size()])
+	_clear(system)
+
+	gs.equipment = saved
+
+
 # ── 헬퍼 ──
+
+## 진(캐리어) = ring_carrier.gd 인스턴스 (탄=projectile.gd과 파일명으로 구분).
+func _carriers(system) -> Array:
+	var out := []
+	for c in system.get_children():
+		var s = c.get_script()
+		if s != null and (s.resource_path as String).ends_with("ring_carrier.gd"):
+			out.append(c)
+	return out
+
 
 func _bolts(system) -> Array:
 	# 캐리어를 뺀 순수 탄 = projectile.gd 인스턴스 (파일명으로 구분)
