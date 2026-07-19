@@ -33,7 +33,11 @@ const COMMIT_COVER := TraceScorer.COMMIT_COVER
 const G_GATHER := Enums.GlyphCode.GATHER    # 응집 ← — 안쪽(룬) 방향 화살표
 const G_RADIATE := Enums.GlyphCode.RADIATE  # 발산 → — 바깥(진) 방향 화살표
 const G_PIERCE := Enums.GlyphCode.PIERCE    # 관통 ↠ — 바깥 방향(발산 계열) + 뚫음 효과 (세션44 B)
-const GLYPH_NAMES := ["응집←", "발산→", "관통↠"]   # 인덱스 = GlyphCode 값 (세션44: 관통 추가)
+const G_HOMING := Enums.GlyphCode.HOMING    # 유도 ∿ — 휘어서 쫓아간다 (세션47)
+const G_BOUNCE := Enums.GlyphCode.BOUNCE    # 팅김 ⚡ — 벽에 튕긴다 (세션47)
+const G_THRUST := Enums.GlyphCode.THRUST    # 추진 ↑ — 빠르게 날아간다 (세션47)
+## 인덱스 = GlyphCode 값 (세션44: 관통 · 세션47: 유도·팅김·추진 = 어휘 배증)
+const GLYPH_NAMES := ["응집←", "발산→", "관통↠", "유도∿", "팅김⚡", "추진↑"]
 ## ⚠ **`GLYPH_KEYS`는 지웠다** (세션 25). 문양은 오른쪽 셀을 **클릭해서** 고른다 —
 ## 진·룬·문양본이 전부 클릭인데 문양만 키(Q·W)를 광고했다 (사용자: "q w 이런게 아니라
 ## 똑같이 마우스로 선택하는걸로해줘"). 죽은 상수를 남기면 다음 세션이 키를 되살린다.
@@ -42,9 +46,20 @@ const GLYPH_NAMES := ["응집←", "발산→", "관통↠"]   # 인덱스 = Gly
 const RING_LINE := Color(0.42, 0.30, 0.12, 0.55)
 const SLOT_OPEN := Color(0.42, 0.30, 0.12, 0.5)    # 열린 빈 칸 — 여기 채워라
 const FIRE_HI := Color(0.95, 0.55, 0.15)
+## ⚠ **`data/glyphs/*.tres`의 `ui_color`를 그대로 베낀 폴백이다** — 정본은 .tres고
+## `_glyph_color`가 그걸 읽는다. 여기 값은 defs 주입 전(순수 단위 테스트)에만 쓰인다.
+## 🔴 그래도 **길이와 값을 .tres에 맞춰 둔다** (세션47):
+##   • 길이 — `ring_book`은 `_glyph_color`를 안 거치고 `RingBoard.GLYPH_COLORS[g]`를 **직접**
+##     인덱싱한다. 어휘보다 짧으면 책이 터진다. 즉 길이는 폴백이 아니라 계약이다.
+##   • 값 — 갈라져 있으면 "책이랑 판이랑 색이 다르네"가 어디서 오는지 못 찾는다.
+## **새 문양을 늘릴 땐 .tres·GLYPH_NAMES·여기 셋을 같이 늘려라.**
 const GLYPH_COLORS := [
 	Color(0.16, 0.34, 0.55),   # 응집 = 남색
 	Color(0.72, 0.28, 0.12),   # 발산 = 주홍
+	Color(0.30, 0.72, 0.85),   # 관통 = 하늘
+	Color(0.35, 0.78, 0.42),   # 유도 = 초록
+	Color(0.95, 0.82, 0.25),   # 팅김 = 노랑
+	Color(0.68, 0.38, 0.85),   # 추진 = 보라
 ]
 const RUNE_COLOR := Color(0.62, 0.22, 0.12)   # 불
 const TRACE_INK := Color(0.20, 0.14, 0.09, 0.95)    # 그린 먹선
@@ -286,24 +301,110 @@ func _build_guide(target: int, slot: int) -> PackedVector2Array:
 			# 막힌 것도, 결과물이 "작대기"인 것도 여기서 나왔다.
 			# ⚠ 칸을 안 골랐으면(-1) 빈 가이드다 — 칸은 사용자가 클릭해서 고른다.
 			if slot >= 0:
-				var p := _slot_pos(slot)
-				var outward := Vector2.from_angle(_slot_angle(slot))
-				var dir := -outward if _active == G_GATHER else outward   # 응집만 안쪽(룬), 발산·관통은 바깥
-				var sz := ro * GLYPH_SIZE_FRAC * _glyph_scale_of(slot)
-				var tail := p - dir * sz
-				var head := p + dir * sz
-				for t in 9:                                   # 몸통
-					pts.append(tail.lerp(head, float(t) / 8.0))
-				# 화살촉 — **한붓그리기**(머리→왼깃→머리→오른깃)라 가이드 한 줄로 화살표가 된다.
-				# 손은 몇 획으로 나눠 그어도 된다 (세션 25에 획 누적을 고쳤다).
-				var back := -dir * (sz * ARROW_BACK_FRAC)
-				var side := dir.orthogonal() * (sz * ARROW_SIDE_FRAC)
-				for w in [head + back + side, head + back - side]:
-					for t in range(1, 5):
-						pts.append(head.lerp(w, float(t) / 4.0))
-					for t in range(1, 5):
-						pts.append(w.lerp(head, float(t) / 4.0))
+				pts = glyph_guide_pts(_active, _slot_pos(slot),
+					Vector2.from_angle(_slot_angle(slot)),
+					ro * GLYPH_SIZE_FRAC * _glyph_scale_of(slot))
 	return pts
+
+
+## 🔴 **문양 코드별 밑그림** (세션 47 — "새 문양 = 여기 한 갈래"). `_rune_guide_verts`와 같은 규약이다.
+##
+## 왜 갈랐나: 세션 44까지 이 갈래는 `inward` 하나만 보고 화살표 **방향**만 뒤집었다. 새 문양
+## (유도·팅김·추진)은 전부 `inward = false`라 발산·관통과 **똑같은 화살표**가 떠, 6개 문양이
+## 색·라벨만 다른 4지선다가 될 참이었다 — memory `takbon-glyph-design-principle`이 경고하는 그것.
+## **그리는 궤적이 달라야 손이 문양을 기억한다.**
+##
+## 공통 규율:
+##   • **한붓그리기** — 가이드가 한 줄이어야 채점기가 이탈을 잰다 (손은 여러 획으로 나눠 그어도 된다).
+##   • 꺾쇠·깃은 기준점 q로 **되돌아와서** 다음 구간으로 이어진다 — 끊기면 그 구간이 유령 선이 된다.
+##   • 획수는 화살표(몸통+꺾쇠 2)를 넘지 않는다 — 넘으면 못 그린다.
+##   • ⚠ 총 길이는 이웃 칸 간격(반지름 118px 기준 54px)을 넘지 마라. 추진의 1.1배(≈44px)가 상한선이다.
+##
+## 모양과 이유 — **손으로 긋는 궤적**이 서로 달라야 한다(눈으로만 다른 건 라벨과 같다):
+##   응집← / 발산→  화살표. 방향만 반대 (**세션 25 그대로** — 여기만 점 생성이 verbatim이다)
+##   관통↠         꺾쇠 **2개**(중간·머리)가 겹친 이중 화살표 — 뚫고 나간다
+##   유도∿         S자 물결(사인) — 꺾이지 않고 **휘어서** 쫓아간다. 유일하게 꺾쇠가 없다
+##   팅김⚡        지그재그 — 벽에 튕기는 궤적 그대로. 유일하게 **날카롭게 되꺾인다**
+##   추진↑         긴 직선 + 뒤쪽 **가로 깃 2개**(속도선). 깃이 축과 **직각**이라 관통의 꺾쇠와 손이 다르다
+## 🔴 **static · public인 이유** (세션47): 책의 문양 셀 아이콘(`ring_book._draw_glyph_icon`)이
+## **이 함수를 그대로 부른다**. 예전엔 책이 자기만의 화살표를 직접 그려서, 판의 밑그림을 6종으로
+## 갈라 놔도 **고를 때 보는 셀은 전부 같은 화살표**였다 — 고르는 순간에 구분이 안 되면
+## 밑그림을 가른 의미가 절반 날아간다. `ring_power`가 리포트와 발사에 같은 함수를 주는 것과
+## 같은 이유다: **복사해 두면 한쪽만 고쳐도 아무도 못 알아채고 갈라진다.**
+## ⚠ 그래서 인스턴스 상태를 쓰면 안 된다 — 파라미터와 클래스 상수만 본다.
+static func glyph_guide_pts(code: int, p: Vector2, outward: Vector2, sz: float) -> PackedVector2Array:
+	var dir := -outward if code == G_GATHER else outward   # 응집만 안쪽(룬), 나머지는 바깥
+	var side_u := dir.orthogonal()
+	match code:
+		G_PIERCE:
+			# 몸통을 지나며 중간·머리에서 각각 꺾쇠. 꺾쇠는 q로 되돌아와 다음 구간으로 이어진다.
+			var back := -dir * (sz * ARROW_BACK_FRAC)
+			# ⚠ 0.9배까지만 좁힌다 — 깃 벌어짐 20×0.62×0.9 ≈ 11.2px가 붓의 드러남 반경 9.4px보다
+			# 커야 **몸통을 그어도 꺾쇠가 안 드러난다**(파일 머리 GLYPH_SIZE_FRAC 주석의 그 비율).
+			# 더 좁히면 세션 25의 "화살촉이 그릴 이유가 없다" 문제가 관통에서 되살아난다.
+			var side := side_u * (sz * ARROW_SIDE_FRAC * 0.9)
+			var v := PackedVector2Array([p - dir * sz])
+			for q in [p, p + dir * sz]:
+				v.append_array(PackedVector2Array([q, q + back + side, q, q + back - side, q]))
+			return _densify(v, sz * 0.24)
+		G_HOMING:
+			# 사인 한 주기 = S자. 꺾쇠가 없어 한 획으로 이어지지만 **궤적이 휘어** 화살표와 안 겹친다.
+			var pts := PackedVector2Array()
+			for i in 25:
+				var t := float(i) / 24.0 * 2.0 - 1.0
+				pts.append(p + dir * (t * sz) + side_u * (sin(t * PI) * sz * 0.6))
+			return pts
+		G_BOUNCE:
+			var w := sz * 0.55
+			return _densify(PackedVector2Array([
+				p - dir * sz,
+				p - dir * (sz * 0.5) + side_u * w,
+				p - side_u * w,
+				p + dir * (sz * 0.5) + side_u * w,
+				p + dir * sz]), sz * 0.24)
+		G_THRUST:
+			# 긴 직선을 머리→꼬리로 긋고, **지나는 길에** 가로 깃 2개 (되돌아가는 구간이 없다).
+			var lng := sz * 1.1
+			var bar := side_u * (sz * 0.5)
+			var v2 := PackedVector2Array([p + dir * lng])
+			for q in [p - dir * (sz * 0.45), p - dir * lng]:
+				v2.append_array(PackedVector2Array([q, q + bar, q - bar, q]))
+			return _densify(v2, sz * 0.24)
+	# 응집←/발산→ — 🔴 **세션 25 원본 그대로**. 점 생성 순서가 곧 관측점이다:
+	# `test_ring_trace_auto._test_arrowhead_must_be_drawn`이 "앞 9점 = 몸통"으로 읽는다.
+	var pts2 := PackedVector2Array()
+	var tail := p - dir * sz
+	var head := p + dir * sz
+	for t in 9:                                   # 몸통
+		pts2.append(tail.lerp(head, float(t) / 8.0))
+	# 화살촉 — **한붓그리기**(머리→왼깃→머리→오른깃)라 가이드 한 줄로 화살표가 된다.
+	# 손은 몇 획으로 나눠 그어도 된다 (세션 25에 획 누적을 고쳤다).
+	var back2 := -dir * (sz * ARROW_BACK_FRAC)
+	var side2 := side_u * (sz * ARROW_SIDE_FRAC)
+	for w2 in [head + back2 + side2, head + back2 - side2]:
+		for t in range(1, 5):
+			pts2.append(head.lerp(w2, float(t) / 4.0))
+		for t in range(1, 5):
+			pts2.append(w2.lerp(head, float(t) / 4.0))
+	return pts2
+
+
+## 폴리라인 꼭짓점을 `step`px 간격으로 촘촘히 채운다 (마지막 꼭짓점 포함).
+## 🔴 이 간격이 곧 **채점 밀도**다 — 채점기는 점 하나하나의 드러남으로 완성도를 잰다.
+## 화살표 몸통 간격(반길이 20px에 9점 ≈ 5px)에 맞췄다. 성기면 붓 한 자국에 여러 점이 통째로
+## 드러나 "그릴 이유가 없는" 구간이 생긴다 — 세션 25 화살촉 사건이 정확히 그 원리였다.
+static func _densify(verts: PackedVector2Array, step: float) -> PackedVector2Array:
+	if verts.size() < 2:
+		return verts
+	var out := PackedVector2Array()
+	for i in verts.size() - 1:
+		var a := verts[i]
+		var b := verts[i + 1]
+		var n := maxi(1, int(ceil(a.distance_to(b) / maxf(step, 0.5))))
+		for t in n:
+			out.append(a.lerp(b, float(t) / float(n)))
+	out.append(verts[verts.size() - 1])
+	return out
 
 
 ## 🔴 룬 종류별 밑그림 꼭짓점 (닫힌 다각형, 마지막=처음). 세션 34 — "새 룬 = 여기 한 갈래".
@@ -683,7 +784,12 @@ func clear_all() -> void:
 
 
 func ring_summary() -> String:
-	var counts := {G_GATHER: 0, G_RADIATE: 0}
+	# 🔴 **어휘 전체**로 센다 (세션 47). 예전엔 {응집, 발산} 둘만 세워 놨는데 세션 44에 관통이
+	# 늘면서 관통을 놓은 진을 요약하면 `counts[2] += 1`이 **없는 키**라 런타임 에러였다 —
+	# 어휘를 늘릴 때 여기를 같이 안 늘리면 조용히 깨진다. GLYPH_NAMES에서 세운다.
+	var counts := {}
+	for g in GLYPH_NAMES.size():
+		counts[g] = 0
 	var open := _asm.get_open()
 	for k in open:
 		var g := _asm.glyph_at(k)

@@ -26,6 +26,17 @@ const UP_AXIS := -PI / 2.0
 ## 응집 1개면 기본 크기, 여럿 모이면 굵어진다 ("많을수록 굵다").
 const PILLAR_SCALE_PER_GATHER := 0.22
 
+## 🔴 발사 코드 → 탄 행동 효과 (세션47). RADIATE는 효과 없는 순수 직진탄이고, 2~5는 **같은 탄에
+## 효과 하나가 얹힌 것**이다 — `projectile._setup_effects`가 이미 소비하는 사전 형식({GlyphType: reach}).
+## 세션44 이전엔 이 사전이 늘 비어 있어 팅김·유도·추진 기계가 통째로 잠들어 있었다(미배선 자산).
+## **새 문양 = 여기 한 줄** (+ `Enums.GlyphCode` 값 하나 + `data/glyphs/*.tres` 한 장).
+const BOLT_EFFECTS := {
+	Enums.GlyphCode.PIERCE: Enums.GlyphType.PIERCE,
+	Enums.GlyphCode.HOMING: Enums.GlyphType.HOMING,
+	Enums.GlyphCode.BOUNCE: Enums.GlyphType.BOUNCE,
+	Enums.GlyphCode.THRUST: Enums.GlyphType.THRUST,
+}
+
 var balance: BalanceData = preload("res://data/balance.tres")
 
 
@@ -122,14 +133,15 @@ func _deploy_now(ring: Array, at: Vector2, travel: float, power: float, status_m
 	var gather := 0
 	for k in SLOTS:
 		var g := int(ring[k])
-		if g == Enums.GlyphCode.RADIATE:
-			_spawn_bolt(at, travel + TAU * float(k) / float(SLOTS), fire)
-		elif g == Enums.GlyphCode.PIERCE:
-			# 🔴 관통 (세션44 B): 발산처럼 탄을 쏘되 **이미 있는** 관통 효과(projectile._hit_enemy)를
-			# 실어 적을 뚫는다 — 세기가 아니라 **전투 방식**이 달라진다. reach는 지금 고정
-			# (balance.glyph_reach_max=최대 관통) — 나중에 문양 크기 축과 이을 자리.
-			_spawn_bolt(at, travel + TAU * float(k) / float(SLOTS), fire,
-				{Enums.GlyphType.PIERCE: balance.glyph_reach_max})
+		if g == Enums.GlyphCode.RADIATE or BOLT_EFFECTS.has(g):
+			# 🔴 발산 계열 (세션44 관통 → 세션47 확장): 전부 바깥으로 탄을 쏘고, 다른 건 그 탄이
+			# **어떻게 나는가**뿐이다 — 세기가 아니라 **전투 방식**이 달라진다. RADIATE는 효과 없는
+			# 순수 직진탄. reach는 지금 고정(balance.glyph_reach_max=최대 세기) — 나중에 문양 크기
+			# 축과 이을 자리다.
+			var effects: Dictionary = {}
+			if BOLT_EFFECTS.has(g):
+				effects[BOLT_EFFECTS[g]] = balance.glyph_reach_max
+			_spawn_bolt(at, travel + TAU * float(k) / float(SLOTS), fire, effects)
 		elif g == Enums.GlyphCode.GATHER:
 			gather += 1
 	if gather > 0:

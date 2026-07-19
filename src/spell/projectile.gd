@@ -3,11 +3,16 @@ extends Area2D
 ## 파라미터 주입은 spell_system.setup() 경유. class_name 없음 — preload로 참조할 것.
 ## 적 노드 계약: 그룹 "enemies" + take_hit(damage, rune_type, status, status_power).
 ##
-## ⚠ **현 발사 경로는 effects={}·rune_hits=[]로만 이 탄을 부른다** (유일 호출자 =
-## `ring_spell_system._spawn_bolt` → 순수 직진탄). 즉 아래의 **팅김⚡/관통‖/유도∿/추진/복합룬**
-## 기계(`_setup_effects`·`_step_bounce`·`_step_homing`·`_nearest_enemy`·`rune_hits`·`reach_t`·
-## `range_mult`)는 지금 **한 번도 실행되지 않는 미배선 설계 자산**이다. 벽에 닿은 탄은 팅김 없이
-## `_hit_wall`→`_consume`로 소멸한다. 되살리려면 호출자가 effects/rune_hits를 채워 넘기면 된다.
+## 🔴 **세션 47: 효과 기계가 깨어났다.** 세션 44까지 이 파일의 팅김⚡/관통‖/유도∿/추진 기계는
+## 유일 호출자(`ring_spell_system._spawn_bolt`)가 늘 `effects={}`로만 불러 **한 번도 실행되지 않는
+## 미배선 설계 자산**이었다. 이제 `ring_spell_system.BOLT_EFFECTS`가 발사 코드(GlyphCode 2~5)를
+## GlyphType 효과로 번역해 실어 보낸다 — **그린 문양이 탄의 행동을 가른다.**
+##   `_setup_effects`·`_step_bounce`·`_step_homing`·`_nearest_enemy`·`reach_t` = 전부 산 코드다.
+##
+## ⚠ **아직 잠든 것 = `rune_hits`(복합 룬)**. 한 탄이 여러 룬의 상태이상을 얹는 기계는 여기 다
+## 구현돼 있는데(`_deal_damage`의 순회) 아무도 안 채워 넘긴다 — 조립(`ring_assembly`)이 룬을
+## 하나만 쥐기 때문이다. 되살리려면 호출자가 `rune_hits`를 채우면 된다.
+## ⚠ `range_mult`도 아직 호출자가 없다 (문양 크기 → 사거리 배율 축).
 ##
 ## **v2.0 (TECH_SPEC §4.0-a)**
 ## - 🔴 **몸이 진이다.** 그린 진(+룬) 먹선이 그대로 날아가고 **히트박스가 진 반지름**을 따른다.

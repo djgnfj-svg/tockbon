@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="GlyphDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/core/schemas/glyph_def.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = &"homing"
+display_name = "유도∿"
+code = 3
+key_hint = ""
+inward = false
+ui_color = Color(0.35, 0.78, 0.42, 1.0)
+desc = "적을 쫓아간다"

@@ -12,6 +12,16 @@ extends SceneTree
 # 고리 칸 어휘 (RingBoard와 같은 값 — 여기 하드코딩해 모듈 preload를 피한다)
 const G_GATHER := 0
 const G_RADIATE := 1
+## 세션47 어휘 배증 — Enums.GlyphCode 2~5 (여기 하드코딩해 모듈 preload를 피한다)
+const G_PIERCE := 2
+const G_HOMING := 3
+const G_BOUNCE := 4
+const G_THRUST := 5
+## Enums.GlyphType — 탄 행동 효과 축 (BASIC=0, BOUNCE=1, HOMING=2, PIERCE=3, THRUST=4)
+const GT_BOUNCE := 1
+const GT_HOMING := 2
+const GT_PIERCE := 3
+const GT_THRUST := 4
 const GLYPH_NONE := -1
 
 var failures: int = 0
@@ -49,6 +59,7 @@ func _run() -> void:
 	await _test_size_scales_damage(system)
 	await _test_special_ink_amplifies_status(system)
 	await _test_wand_pattern(system)
+	await _test_glyph_bolt_effects(system)
 
 	if failures == 0:
 		print("TEST_RING_SPELL_OK — 전 항목 통과")
@@ -322,6 +333,60 @@ func _test_wand_pattern(system) -> void:
 	_clear(system)
 
 	gs.equipment = saved
+
+
+# ── 🔴 문양 어휘 → 탄 행동 효과 (세션47) ──
+# 세션44까지 `projectile`의 팅김·유도·추진 기계는 **한 번도 실행되지 않는 미배선 자산**이었다
+# (유일 호출자가 관통 하나만 넘겼다). 여기가 그 배선을 못 박는다: 각 발사 코드가 자기 GlyphType
+# 효과를 **실제로 탄에 싣는지**, 그리고 그 효과가 탄의 행동을 바꾸는지(추진=더 멀리 난다).
+
+func _test_glyph_bolt_effects(system) -> void:
+	print("[13] 문양 코드 → 탄 효과 (세션47: 유도∿·팅김⚡·추진↑ 배선)")
+	var cases := {G_PIERCE: GT_PIERCE, G_HOMING: GT_HOMING, G_BOUNCE: GT_BOUNCE, G_THRUST: GT_THRUST}
+	for code: int in cases:
+		_clear(system)
+		system._deploy_now(_ring({0: code}), Vector2(5000, 5000), 0.0, 1.0, 1.0, 0)
+		await process_frame
+		var bolts := _bolts(system)
+		_check(bolts.size() == 1, "코드 %d = 탄 1발 (실제 %d)" % [code, bolts.size()])
+		if bolts.is_empty():
+			continue
+		var eff: Dictionary = bolts[0].effects
+		_check(eff.has(cases[code]),
+			"코드 %d가 GlyphType %d 효과를 싣는다 (실제 %s)" % [code, cases[code], eff.keys()])
+	_clear(system)
+
+	# 🔴 발산은 **효과 없는** 순수 직진탄이어야 한다 — 매핑이 새면 여기가 잡는다
+	system._deploy_now(_ring({0: G_RADIATE}), Vector2(5000, 5000), 0.0, 1.0, 1.0, 0)
+	await process_frame
+	var plain := _bolts(system)
+	_check(plain.size() == 1 and (plain[0].effects as Dictionary).is_empty(),
+		"발산은 효과 없는 순수 직진탄")
+	_clear(system)
+
+	# 🔴 효과가 **행동을 바꾸는지** — 사전만 보면 projectile이 무시해도 통과한다.
+	# 추진탄은 같은 시간에 더 멀리 난다 (balance.glyph_thrust_speed_max 배).
+	var fast := await _travel_of(system, G_THRUST)
+	var slow := await _travel_of(system, G_RADIATE)
+	_check(fast > slow * 1.5,
+		"추진탄이 실제로 더 빠르다 (%.1f > %.1f px, 기대 ≈2.4배)" % [fast, slow])
+
+
+## 코드 하나짜리 진을 펴서 그 탄이 8 물리 프레임 동안 간 거리 (빈 곳 — 아무것에도 안 닿는다).
+func _travel_of(system, code: int) -> float:
+	_clear(system)
+	system._deploy_now(_ring({0: code}), Vector2(5000, 5000), 0.0, 1.0, 1.0, 0)
+	await process_frame
+	var bolts := _bolts(system)
+	if bolts.is_empty():
+		return -1.0
+	var bolt = bolts[0]
+	var start: Vector2 = bolt.global_position
+	for i in 8:
+		await physics_frame
+	var moved := start.distance_to(bolt.global_position)
+	_clear(system)
+	return moved
 
 
 # ── 헬퍼 ──

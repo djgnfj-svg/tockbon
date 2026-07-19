@@ -51,7 +51,14 @@ const TAB_DESC := [
 	"문양본 — 삽입하면 그 자리가 열린다. 얻은 만큼 넓어진다.",
 	"문양 — 열린 칸을 이걸로 채운다.",
 ]
-const GLYPH_DESC := ["안쪽(룬)으로", "바깥(진)으로"]
+## 문양 셀 설명 — **`_glyph_defs`가 주입 안 됐을 때만 쓰는 폴백**이다 (평소엔 `.tres`의 `desc`).
+## 🔴 인덱스 = GlyphCode 값이라 `GLYPH_NAMES`와 **길이가 같아야 한다**. 세션44(관통 추가)에 여기가
+## 2개인 채로 남아 `_glyph_rows`의 폴백이 인덱스 초과로 죽는 잠복 버그가 생겼다 — 폴백 경로라
+## 아무도 안 밟아 세션47까지 살아 있었다. 아래 `_glyph_desc_at`이 이제 범위를 막는다.
+const GLYPH_DESC := [
+	"안쪽(룬)으로", "바깥(진)으로", "적을 뚫고 지나간다",
+	"적을 쫓아간다", "벽에 튕긴다", "빠르게 날아간다",
+]
 
 var _stage := TAB_JIN                 # 진 탭부터 편다 (순차 조립)
 var _template_idx := 0                # 지금 삽입된 문양본 (하이라이트)
@@ -92,13 +99,20 @@ func _glyph_rows() -> Array:
 	if _glyph_defs.is_empty():
 		for g in RingBoard.GLYPH_NAMES.size():
 			rows.append({"name": RingBoard.GLYPH_NAMES[g],
-				"desc": GLYPH_DESC[g], "color": RingBoard.GLYPH_COLORS[g],
-				"inward": g == RingBoard.G_GATHER, "code": g})
+				"desc": _glyph_desc_at(g), "color": RingBoard.GLYPH_COLORS[g],
+				"code": g})
 	else:
 		for d in _glyph_defs:
 			rows.append({"name": d.display_name, "desc": d.desc,
-				"color": d.ui_color, "inward": d.inward, "code": d.code})
+				"color": d.ui_color, "code": d.code})
 	return rows
+
+
+## 폴백 설명 한 줄 — **어휘가 늘어도 책이 죽지 않게** 범위를 막는다.
+## 새 문양을 `Enums.GlyphCode`에만 더하고 `GLYPH_DESC`를 잊어도 빈 줄이 뜰 뿐 크래시는 없다
+## (세션44의 잠복 인덱스 초과가 세션47까지 살아 있던 이유 = 폴백 경로라 아무도 안 밟았다).
+func _glyph_desc_at(g: int) -> String:
+	return String(GLYPH_DESC[g]) if g >= 0 and g < GLYPH_DESC.size() else ""
 
 
 func _jin_name() -> String:
@@ -306,23 +320,35 @@ func _draw_rune_icon(c: Vector2, s: float, col: Color, rune_type: int) -> void:
 
 
 ## 문양 탭 — 주입된 문양 def를 열거 (응집·발산…). 하드코딩 없음.
+## 🔴 문양 탭 = **격자로 감싼다** (세션47). 세션44까지 셀을 한 줄에 몰아넣어 `cw = 전체폭/n`이었다 —
+## 어휘가 3→6으로 늘자 셀이 1/6 폭으로 쪼그라들어 설명("적을 뚫고 지나간다")이 셀을 넘쳤다.
+## 룬·문양본 탭이 이미 쓰는 격자 규약(`i % cols` / `i / cols`)으로 통일한다. **어휘가 더 늘어도
+## 폭이 아니라 줄 수가 늘어난다** — 문양 축은 앞으로도 늘어날 자리라 여기가 버텨 줘야 한다.
+const GLYPH_COLS := 3
+
 func _draw_glyph_cells(font: Font, top: float) -> void:
 	var rows := _glyph_rows()
 	var n := rows.size()
 	if n == 0:
 		return
 	var gap := 8.0
-	var cw := (size.x - 16.0 - gap * float(n - 1)) / float(n)
-	var ch := 120.0
+	var cols := mini(n, GLYPH_COLS)
+	var nrows := ceili(float(n) / float(cols))
+	var cw := (size.x - 16.0 - gap * float(cols - 1)) / float(cols)
+	# 여러 줄이면 셀을 낮춰 책 밖으로 안 밀린다 (한 줄이면 예전 높이 그대로 — 회귀 0)
+	var ch := 120.0 if nrows <= 1 else 104.0
 	for i in n:
 		var row: Dictionary = rows[i]
 		var code := int(row.code)
-		var r := Rect2(8.0 + float(i) * (cw + gap), top, cw, ch)
+		var r := Rect2(8.0 + float(i % cols) * (cw + gap),
+			top + float(i / cols) * (ch + gap), cw, ch)
 		_cells.append({"rect": r, "kind": "glyph", "value": code})
 		var sel := _active == code
 		draw_rect(r, CELL_SEL_BG if sel else CELL_BG, true)
 		draw_rect(r, SEL_EDGE if sel else CELL_LINE, false, 2.0 if sel else 1.0)
-		_draw_glyph_icon(r.get_center() + Vector2(0, -14.0), 26.0, row.color, bool(row.inward))
+		# 🔴 아이콘 반길이 26 = 예전 화살표와 **같은 전체 크기**(2×26=52px)라 셀 레이아웃은 그대로다.
+		# ⚠ 추진만 1.1배(57px)로 살짝 크다 — 셀 높이 104~120 안이라 이름·설명과 안 겹친다.
+		_draw_glyph_icon(r.get_center() + Vector2(0, -14.0), 26.0, row.color, code)
 		# 🔴 키 힌트("[Q]")를 뗐다 (세션 25) — 문양도 **셀을 클릭해서** 고른다.
 		# 진·룬·문양본이 전부 클릭인데 문양만 키를 광고하고 있었다 (클릭도 됐는데 몰랐다).
 		_text_center(font, r.position + Vector2(cw * 0.5, ch - 30.0),
@@ -355,18 +381,31 @@ func _draw_icon(kind: String, c: Vector2, s: float, data: Array) -> void:
 			pass
 
 
-## 문양 아이콘 — 8방향 화살표 다발. 색·방향은 def에서 온다 (inward=응집, outward=발산).
+## 문양 아이콘 — **판의 밑그림과 같은 함수로 그린다** (세션47).
 ## 🔴 **화살표 하나** (세션 25, 사용자: "문양 모양도 그냥 문양 하나만 보이게 해줘").
-## 예전엔 8방향 다발을 그렸다 — 한 칸에 들어가는 건 화살표 **하나**인데 아이콘이 여덟을
+## 예전엔 8방향 다발을 그렸다 — 한 칸에 들어가는 건 문양 **하나**인데 아이콘이 여덟을
 ## 보여 주니, 셀이 "문양 하나"가 아니라 "문양본(어느 칸을 여는가)"처럼 읽혔다.
-## 방향은 판의 밑그림과 같은 규약이다: 발산=바깥(위) · 응집=룬 쪽(아래).
-func _draw_glyph_icon(c: Vector2, s: float, col: Color, inward: bool) -> void:
-	var dir := Vector2.DOWN if inward else Vector2.UP
-	var tail := c - dir * s
-	var tip := c + dir * s
-	draw_line(tail, tip, col, 2.2, true)
-	draw_line(tip, tip - dir.rotated(0.5) * s * 0.5, col, 2.2, true)
-	draw_line(tip, tip - dir.rotated(-0.5) * s * 0.5, col, 2.2, true)
+##
+## 🔴 세션47 — 그 화살표를 **여기서 직접 그리던 걸 그만뒀다.** 판의 밑그림을 6종으로 갈라 놨는데
+## 이 함수는 `inward`만 봐서 **6개 셀이 전부 같은 화살표**였다(색만 달랐다). 사용자가 문양을
+## **고르는 바로 그 순간** 구분이 안 되면 밑그림을 가른 의미가 절반 날아간다.
+## 이제 `RingBoard.glyph_guide_pts`를 그대로 부른다 — **셀과 밑그림이 구조적으로 못 갈라진다.**
+## ⚠ `inward`를 인자에서 뺐다: `code == G_GATHER`와 같은 뜻이라 둘을 다 받으면 언젠가 어긋난다.
+## 방향 규약은 그대로다 (발산 계열=바깥/위 · 응집=룬 쪽/아래) — outward에 UP을 넘겨 판과 맞춘다.
+func _draw_glyph_icon(c: Vector2, s: float, col: Color, code: int) -> void:
+	var pts := glyph_icon_pts(code, c, s)
+	if pts.size() >= 2:
+		draw_polyline(pts, col, 2.2, true)
+
+
+## 🔴 셀 아이콘의 점 — **판의 밑그림과 같은 함수**에서 온다. `_draw_glyph_icon`이 이걸 그린다.
+## ⚠ **`_draw_*`가 아니라 여기가 관측점인 이유**(세션47, 뮤테이션으로 배웠다): 테스트가
+## `RingBoard.glyph_guide_pts`를 직접 부르면 **책이 자기 화살표를 다시 그려도 초록불이다** —
+## 보드를 검증할 뿐 책을 검증하지 않기 때문이다. 실제로 그 뮤테이션이 그냥 통과했다.
+## 그래서 책 쪽에 관측 가능한 이음매를 뒀다. `draw_polyline`은 헤드리스가 못 보지만 이 점 배열은 본다.
+## ⚠ 그래도 **"보인다"는 여전히 못 잡는다** — 렌더는 리드의 스샷이 최종 판정이다.
+func glyph_icon_pts(code: int, c: Vector2 = Vector2.ZERO, s: float = 26.0) -> PackedVector2Array:
+	return RingBoard.glyph_guide_pts(code, c, Vector2.UP, s)
 
 
 func _text(font: Font, at: Vector2, text: String, col: Color, fs: int) -> void:

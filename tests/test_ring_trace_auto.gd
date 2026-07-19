@@ -46,6 +46,7 @@ func _run() -> void:
 	_test_clear_stroke_wipes()
 	_test_jin_rune_need_picking()
 	_test_arrowhead_must_be_drawn()
+	_test_glyph_shapes_are_distinct()
 	_test_ink_rides_assembly()
 	_test_special_ink_consumed_while_drawing()
 
@@ -257,6 +258,72 @@ func _test_arrowhead_must_be_drawn() -> void:
 		"화살촉을 그으면 완성도가 오른다 (%.2f → %.2f)" % [body_only, with_head])
 	_check(with_head > 0.95, "몸통+화살촉 = 완성 (%.2f)" % with_head)
 	_check((b.call(&"trace_strokes") as Array).size() == 2, "두 획이 따로 남는다")
+	b.queue_free()
+
+
+## 🔴 ⑱ 문양마다 **밑그림 모양이 다르다** (세션 47 — 어휘 3→6).
+##
+## 세션 44까지 `_build_guide`의 문양 갈래는 `inward` 하나만 보고 화살표 **방향**만 뒤집었다.
+## 새 문양(유도3·팅김4·추진5)은 전부 `inward = false`라 그대로 두면 **발산·관통과 똑같은 화살표**가
+## 떠서, 6개 문양이 색·라벨만 다른 4지선다가 된다 — 손으로 긋는 감각이 전부 같아진다는 뜻이고,
+## 그건 memory `takbon-glyph-design-principle`이 경고하는 실패 그 자체다.
+##
+## 🔴 검출력: `_glyph_guide_pts`가 코드를 무시하고 화살표만 돌려주면(=회귀) 2·3·4·5가
+## 1과 **같은 점 집합**이 돼 여기서 빨개진다. 이 테스트가 이번 작업의 유일한 헤드리스 가드다.
+## ⚠ **"보인다"는 못 잰다** — 모양이 예쁜지·구분되어 보이는지는 리드가 실게임 스샷으로 본다.
+func _test_glyph_shapes_are_distinct() -> void:
+	var b = _make_board()
+	_reach_glyph_stage(b)          # 진·룬 그리고 문양 단계, 칸 0 선택
+	var seen := {}                 # 점집합 문자열 → 먼저 그 모양을 쓴 코드
+	for code in range(6):
+		b.call(&"set_active_glyph", code)
+		var g: PackedVector2Array = b.call(&"guide_points")
+		_check(g.size() >= 9, "문양 %d 밑그림이 선다 (%d점)" % [code, g.size()])
+		var key := ""
+		for pt in g:
+			key += "%.1f,%.1f;" % [pt.x, pt.y]
+		_check(not seen.has(key),
+			"🔴 문양 %d의 밑그림이 문양 %s와 똑같다 — 그리는 궤적이 안 갈렸다" % [code, seen.get(key, "?")])
+		seen[key] = code
+
+		# 그 모양을 정확히 따라 그으면 점수가 난다 — 새 모양이 채점기를 이상하게 돌리지 않는지.
+		b.call(&"clear_stroke")
+		b.call(&"begin_stroke")
+		for pt in g:
+			b.call(&"trace_stroke", pt)
+		_check(float(b.call(&"coverage")) > 0.95, "문양 %d — 따라 그으면 완성도≈1" % code)
+		_check(float(b.call(&"accuracy")) > 0.95, "문양 %d — 선 위를 그었으니 정밀도≈1" % code)
+	_check(seen.size() == 6, "6개 문양이 **전부 다른** 모양 (실제 서로 다른 모양 %d개)" % seen.size())
+
+	# 🔴 **책 셀 아이콘도 갈려야 한다** (세션47). 판의 밑그림만 갈라 놓으면, 사용자가 문양을
+	# **고르는 순간** 보는 책 셀은 여전히 똑같은 화살표 6개다 — 고를 때 구분이 안 되면 절반 실패다.
+	#
+	# ⚠ **관측 대상은 책이다.** 처음엔 여기서 `RingBoard.glyph_guide_pts`를 직접 불렀는데,
+	# 뮤테이션(책이 자기 화살표를 다시 그리게 되돌림)을 넣어 보니 **그냥 통과했다** — 보드를
+	# 검증할 뿐 책을 검증하지 않아 검출력이 0이었다. 그래서 책의 `glyph_icon_pts`를 본다.
+	var Book = load("res://src/drawing/ring_book.gd")
+	var bk = Book.new()
+	root.add_child(bk)
+	var icon_seen := {}
+	for code in range(6):
+		var ip: PackedVector2Array = bk.call(&"glyph_icon_pts", code, Vector2.ZERO, 26.0)
+		_check(ip.size() >= 9, "셀 아이콘 %d — 점이 선다 (%d점)" % [code, ip.size()])
+		var ikey := ""
+		for pt in ip:
+			ikey += "%.1f,%.1f;" % [pt.x, pt.y]
+		_check(not icon_seen.has(ikey),
+			"🔴 셀 아이콘 %d가 %s와 똑같다 — 고를 때 구분이 안 된다" % [code, icon_seen.get(ikey, "?")])
+		icon_seen[ikey] = code
+	_check(icon_seen.size() == 6, "책 셀 아이콘 6종도 전부 다른 모양 (%d개)" % icon_seen.size())
+	# 셀과 밑그림이 **같은 모양**인지 — 책이 자기만의 별도 모양을 갖기 시작하면 여기서 갈린다.
+	bk.call(&"queue_free")
+
+	# 🔴 요약 문자열이 새 어휘에서도 안 죽는다 — 세션 44에 관통을 늘리며 counts 딕셔너리를
+	# 같이 안 늘려 `counts[2] += 1`이 없는 키로 터질 뻔했다(런타임 에러 = 조용한 침묵 통과).
+	b.call(&"set_active_glyph", 5)
+	_rub_exact(b)
+	b.call(&"advance")
+	_check(String(b.call(&"ring_summary")).find("추진") >= 0, "요약이 새 문양 이름을 센다")
 	b.queue_free()
 
 

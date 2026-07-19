@@ -21,9 +21,15 @@ const LEGACY_IMPACT: int = 1  # 옛 RuneType.IMPACT — 마이그레이션 판�
 # 🔴 발사 계약 코드 (GlyphDef.code · ring_spell_system._deploy_now가 이 값으로 전개를 가른다).
 # 값을 바꾸면 저장된 도안이 조용히 깨진다 — **끝에만 덧붙인다**.
 #   GATHER(0)=착탄점에 기둥 · RADIATE(1)=그 방향 탄환 · PIERCE(2)=탄환인데 적을 뚫는다(세션44 B).
+#   HOMING(3)=적을 쫓는 탄 · BOUNCE(4)=벽에 튕기는 탄 · THRUST(5)=빠른 탄 (세션47 — 어휘 배증).
 # ⚠ 이건 "착탄 전개" 축이다. 탄의 행동 효과(GlyphType.BOUNCE/PIERCE/HOMING/THRUST)는 별 enum이며
 # projectile.gd가 소비한다 — PIERCE(발사코드 2)는 발사 때 GlyphType.PIERCE 효과로 번역된다.
-enum GlyphCode { GATHER = 0, RADIATE = 1, PIERCE = 2 }
+#
+# 🔴 세션 47: 2~5는 전부 **발산 계열**(바깥으로 탄을 쏜다)이고, 다른 건 그 탄이 **어떻게 나는가**뿐이다.
+# 즉 이 축은 "세기"가 아니라 **전투 방식**을 가른다 — 자유도 구멍(memory takbon-magic-no-freedom)에
+# 대한 답이 여기 있다. 기계(projectile._setup_effects)는 세션44 이전부터 완성돼 있었고 어휘가 없어
+# 잠들어 있었을 뿐이다. **새 문양 = data/glyphs/*.tres 한 장 + 여기 값 하나 + deploy 분기 하나.**
+enum GlyphCode { GATHER = 0, RADIATE = 1, PIERCE = 2, HOMING = 3, BOUNCE = 4, THRUST = 5 }
 
 enum StrokeRole { CIRCLE, RUNE, ARROW, TAIL, DECOR }
 ## 문양의 **발동 방식** — v1.9 문양 축 (GDD §4.3, TECH_SPEC §4.0-a).
