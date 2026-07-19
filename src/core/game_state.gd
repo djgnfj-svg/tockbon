@@ -32,6 +32,10 @@ var codex: Dictionary = {}
 ## 룬 해금 사슬을 전혀 안 건드린다. 진행 상태·완료 판정·보상 지급이 전부 이 원장에서 닫힌다.
 var quest_progress: Dictionary = {}
 var quest_done: Dictionary = {}
+## 🔴 [!] 접수(읽음) 표시 (세션43) — 시트(Tab 퀘스트 탭)를 열어 "읽은" active 퀘스트 id들. 안 읽은
+##  active 퀘스트가 있으면 NPC 머리 위 [!]가 떠 "Tab으로 확인"을 당긴다(정산용 [?]와 별개 축). 영구
+##  저장 — 껐다 켜도 이미 읽은 퀘스트에 [!]가 다시 뜨지 않게. 시트를 열면 mark_quests_seen()이 채운다.
+var quest_seen: Dictionary = {}
 ## UI 모달(게시판·장착·도감) 열림 — ui_root가 설정, 플레이어 이동 계열이 폴링 (TECH_SPEC §4.2)
 var ui_modal_open: bool = false
 
@@ -74,6 +78,7 @@ func new_game() -> void:
 	codex.clear()
 	quest_progress.clear()
 	quest_done.clear()
+	quest_seen.clear()         # 🔴 [!] 접수 초기화 (세션43) — 새 게임은 첫 퀘스트에 [!]가 떠야 한다
 	in_expedition = false
 	_starve_accum = 0.0
 	_seed_starting_unlocks()   # 룬·문양만 — _ready와 동일 (분기 방지)
@@ -343,6 +348,29 @@ func has_claimable_quest() -> bool:
 		if is_quest_claimable(q):
 			return true
 	return false
+
+## 🔴 NPC 머리 위 느낌표용 (세션43) — 아직 "받지 않은" active 퀘스트가 있나.
+##  달성한(claimable) 퀘스트는 [?]로 따로 뜨므로 여기선 **미달성**만 센다 — 같은 퀘가
+##  [!]와 [?]로 동시에 뜨지 않게(마크 우선순위: claimable→[?], 아니면 new→[!]).
+func has_new_quest() -> bool:
+	for q: QuestDef in Db.all_quests():
+		if is_quest_active(q) and not is_quest_satisfied(q) and not quest_seen.has(q.id):
+			return true
+	return false
+
+## 🔴 새 목표를 읽었다 (세션43) — 지금 active인 퀘스트를 전부 "읽은(접수)" 것으로 표시해 [!]를 끈다.
+##  🔴 **접수 = 시트를 여는 순간**(tab_panel이 퀘스트 탭을 열 때 부른다), 정산(턴인)이 아니다. 그래야
+##   정산으로 새 목표가 열려도 시트로 읽기 전까진 [!]가 남아 중간 게임에서도 유도가 산다(세션43 설계).
+##  온보딩 q00만 예외로 base가 튜토 대사 끝에 직접 부른다(대사가 곧 "받기"라 [!]를 끄고 책상으로 보낸다).
+##  실제로 뭔가 새로 접수됐을 때만 quests_seen를 쏜다(불필요한 [!] 재계산·리드로 방지).
+func mark_quests_seen() -> void:
+	var changed := false
+	for q: QuestDef in Db.all_quests():
+		if is_quest_active(q) and not quest_seen.has(q.id):
+			quest_seen[q.id] = true
+			changed = true
+	if changed:
+		EventBus.quests_seen.emit()
 
 ## 🔴 길잡이 정산 (세션40) — 달성한(claimable) 퀘스트를 실제로 완료(보상·다음 개방)한다. **정산은 여기서만.**
 ##  고정점까지 반복: 하나 정산이 다음 퀘스트를 열고, 그게 **이미 달성돼 있으면**(예: 앞서 지은 스테이션·

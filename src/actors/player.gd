@@ -33,29 +33,31 @@ func _ready() -> void:
 func is_rolling() -> bool:
 	return _roll_time > 0.0
 
-## 이동 방향으로 4방향 걷기 애니메이션을 고른다. 통째로 까딱 2프레임 —
-## 걸을 때만 재생하고, 멈추면 첫 프레임(정지 포즈)으로.
-func _update_anim(dir: Vector2) -> void:
-	if dir == Vector2.ZERO:
-		sprite.pause()
-		sprite.frame = 0
-		return
-	var a: StringName
-	if absf(dir.x) > absf(dir.y):
-		a = &"right" if dir.x > 0.0 else &"left"
-	else:
-		a = &"down" if dir.y > 0.0 else &"up"
+## 🔴 좌우 향함은 **마우스가 정한다** (세션43 — 조준하는 게임이라 몸이 커서를 본다).
+## 이동·구르기와 무관하게 매 프레임: 커서가 오른쪽이면 right·왼쪽이면 left. 가만히 서서
+## 커서만 옮겨도 홱 돈다. up/down 로우는 이제 안 쓴다(시트에 남아도 무해 — 뒷태 안 그리기).
+func _face_mouse() -> void:
+	var a: StringName = &"right" if get_global_mouse_position().x >= global_position.x else &"left"
 	if sprite.animation != a:
 		sprite.animation = a
-	sprite.play()
+
+## 걷기 재생/정지 — 걸을 때만 2프레임 까딱, 멈추면 첫 프레임(정지 포즈)으로.
+func _set_walking(moving: bool) -> void:
+	if moving:
+		sprite.play()
+	else:
+		sprite.pause()
+		sprite.frame = 0
 
 ## 🔴 속도는 balance가 쥔다 (수치를 코드에 박지 않는다 — TECH_SPEC §10).
 ## 🔴 UI 모달(창고 등)이 열리면 멎는다 — 안 그러면 창고를 보는 동안 뒤에서 계속 걸어간다.
 func _physics_process(delta: float) -> void:
 	if GameState.ui_modal_open:
 		velocity = Vector2.ZERO
-		_update_anim(Vector2.ZERO)
+		_set_walking(false)
 		return
+
+	_face_mouse()   # 🔴 마우스 쪽 좌우 향함 — 이동·구르기와 무관하게 매 프레임
 
 	if _roll_cd > 0.0:
 		_roll_cd -= delta
@@ -80,5 +82,5 @@ func _physics_process(delta: float) -> void:
 
 	# 🔴 속도 = GameState.move_speed()(balance × 모자 배수) — balance 직접 참조 금지 (세션42).
 	velocity = dir * GameState.move_speed()
-	_update_anim(dir)
+	_set_walking(dir != Vector2.ZERO)
 	move_and_slide()

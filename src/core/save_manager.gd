@@ -70,6 +70,11 @@ func save_game() -> void:
 	for qid: StringName in GameState.quest_done:
 		if GameState.quest_done[qid]:
 			quest_done.append(String(qid))
+	# [!] 접수 표시 (세션43) — 이미 받은 퀘스트. 없으면(옛 세이브) 로드 시 빈 채라 active 퀘가 [!]로 뜬다(무해).
+	var quest_seen: Array = []
+	for qid: StringName in GameState.quest_seen:
+		if GameState.quest_seen[qid]:
+			quest_seen.append(String(qid))
 
 	var data := {
 		"version": 1,
@@ -83,6 +88,7 @@ func save_game() -> void:
 		"ring_equipped": ring_equipped_idx,
 		"quest_progress": quest_progress,
 		"quest_done": quest_done,
+		"quest_seen": quest_seen,
 	}
 	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if file == null:
@@ -127,6 +133,10 @@ func load_game() -> bool:
 	GameState.quest_done.clear()
 	for key: String in data.get("quest_done", []):
 		GameState.quest_done[StringName(key)] = true
+	# [!] 접수 표시 복원 (세션43). 옛 세이브엔 없어 빈 채 — active 퀘가 [!]로 떠도 무해(다시 받으면 됨).
+	GameState.quest_seen.clear()
+	for key: String in data.get("quest_seen", []):
+		GameState.quest_seen[StringName(key)] = true
 
 	# 고리 도안 복원
 	GameState.ring_designs.clear()

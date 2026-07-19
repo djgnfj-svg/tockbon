@@ -49,6 +49,9 @@ signal quest_advanced(quest_id: StringName)
 ## 🔴 목표를 방금 채웠다 (세션40 턴인) — 아직 완료는 아니다. 길잡이에게 돌아가 정산하라는 신호.
 ## HUD가 "달성! 돌아가라" 넛지를 띄우고, NPC 머리 위 물음표가 켜진다. 완료는 claim_ready_quests()에서만.
 signal quest_ready(quest_id: StringName)
+## 🔴 새 목표를 "읽었다" (세션43) — 시트(Tab 퀘스트 탭)를 열어 접수하면 발신. NPC 머리 위 [!]를 끄러
+## base가 _refresh_npc_mark로 받는다. [!] = 아직 안 읽은 active 목표(has_new_quest) → 시트 열람이 끈다.
+signal quests_seen
 
 # ── 자원·장비 (GameState → 전체)
 ## ⚠ 둘 다 발신만 있고 수신자 0 (HUD 삭제 탓). 정상 — 발신 측은 계약을 지킨다.

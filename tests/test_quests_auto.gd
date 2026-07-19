@@ -33,6 +33,7 @@ func _check(label: String, ok: bool) -> void:
 func _clean(gs: Node) -> void:
 	gs.quest_progress.clear()
 	gs.quest_done.clear()
+	gs.quest_seen.clear()     # 🔴 [!] 접수 초기화 (세션43) — 미접수 상태로 되돌린다
 	gs.ring_designs.clear()   # q00(DRAW=상태 기반)이 시작부터 미충족이도록 그린 도안을 비운다 (세션41)
 	for k: StringName in [&"rune_water", &"rune_wind",
 			&"station_refine", &"station_craft", &"station_decode"]:
@@ -162,6 +163,37 @@ func _run() -> void:
 	sm.load_game()
 	_check("🔴 로드: q01 완료 상태 복원", gs.is_quest_done(&"q01_first_hunt"))
 	_check("🔴 로드: q01 진행 카운트(1) 복원", gs.quest_count(&"q01_first_hunt") == 1)
+
+	# ── ⑧ [!] 접수(읽음) 마크 (세션43) — 안 읽은 active 목표에 느낌표, 시트로 읽으면(mark_quests_seen) 꺼진다 ──
+	#  🔴 접수 = 시트 열람이지 정산(턴인)이 아니다 → 정산으로 새 목표가 열려도 읽기 전까진 [!]가 남는다(중간
+	#   게임에서도 [!]가 산다). [!]와 [?]는 배타: 미달성이면 [!](읽으러), 달성하면 [?](정산하러).
+	_clean(gs)
+	# mark_quests_seen이 실제 접수 시 quests_seen를 쏘나 — base가 [!]를 끄는 배선의 핵심(세션43).
+	var seen_emits := [0]
+	var on_seen := func() -> void: seen_emits[0] += 1
+	eb.quests_seen.connect(on_seen)
+	_check("🔴 시작: q00 active·미달성·미접수 → 새 목표 [!] 있음", gs.has_new_quest())
+	_check("[!]/[?] 배타 — 아직 미달성이라 정산할 건 없다", not gs.has_claimable_quest())
+	gs.mark_quests_seen()   # 시트를 열어 읽었다 = 접수
+	_check("🔴 시트로 읽으면(mark_quests_seen) 접수 → [!] 꺼진다", not gs.has_new_quest())
+	_check("🔴 접수되면 quests_seen 발신(base가 [!]를 끈다)", seen_emits[0] == 1)
+	gs.mark_quests_seen()   # 다시 불러도 새로 접수될 게 없다
+	_check("🔴 접수할 게 없으면 quests_seen 안 쏜다(불필요 리드로 방지)", seen_emits[0] == 1)
+	eb.ring_design_committed.emit(RingDesign.new())   # 그린다 → q00 달성
+	_check("🔴 달성하면 [?](claimable)로 넘어간다 — [!] 아님(우선순위 배타)",
+		gs.has_claimable_quest() and not gs.has_new_quest())
+	gs.claim_ready_quests()   # 정산(턴인) → q01·q02 열림(아직 안 읽음). 정산은 접수하지 않는다.
+	_check("🔴 정산 직후 q01·q02 미접수 → [!] 남는다 (턴인은 접수 아님 — 중간 게임 [!])", gs.has_new_quest())
+	gs.mark_quests_seen()   # 그제서 시트를 열어 다음 목표를 읽는다
+	_check("🔴 시트로 읽어야 [!] 꺼진다", not gs.has_new_quest())
+	eb.quests_seen.disconnect(on_seen)
+
+	# ── ⑨ quest_seen 저장 라운드트립 (세션43) — 껐다 켜도 이미 받은 퀘스트에 [!] 안 뜬다 ──
+	sm.save_game()
+	gs.quest_seen.clear()
+	_check("접수를 지우면 다시 [!] (검출력 확인 — 저장이 정말 복원하는지 대조)", gs.has_new_quest())
+	sm.load_game()
+	_check("🔴 로드: 접수(quest_seen) 복원 → [!] 다시 안 뜬다", not gs.has_new_quest())
 
 	# 뒷정리 — 세이브 파일 삭제(스위트 규약) + 메모리 초기화.
 	sm.wipe_save()

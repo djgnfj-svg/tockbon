@@ -119,6 +119,8 @@ func _ready() -> void:
 	EventBus.quest_ready.connect(_refresh_npc_mark)
 	EventBus.quest_completed.connect(_refresh_npc_mark)
 	EventBus.codex_unlocked.connect(_refresh_npc_mark)
+	# 🔴 시트로 새 목표를 읽으면(mark_quests_seen → quests_seen) [!]를 끈다 (세션43).
+	EventBus.quests_seen.connect(_refresh_npc_mark)
 	# 🔴 첫 마법진(q00, 세션41) — 그리면 [?]가 켜지도록 그리기 완료도 물음표를 갱신한다
 	#   (그리기는 베이스에서 일어나므로 "숲에서 돌아가라" 넛지 대신 옆의 길잡이 [?]로 안내한다).
 	EventBus.ring_design_committed.connect(_refresh_npc_mark)
@@ -147,9 +149,17 @@ func _on_npc_talk() -> void:
 	if _dialogue == null and _overlay == null and not _draw_tut_shown \
 			and not GameState.is_quest_done(&"q00_first_draw") and GameState.ring_designs.is_empty():
 		_start_draw_tutorial()
+		GameState.mark_quests_seen()   # 🔴 첫 목표 접수 (세션43) — [!]를 끈다. 튜토 대사가 곧 설명한다
+		_refresh_npc_mark()
 		return
-	GameState.claim_ready_quests()
-	_sheet.open_quest()
+	# 🔴 정산(턴인) + [!] 유도 (세션40→43). 달성한 목표를 정산하고 보상을 준다(_on_quest_completed가
+	#  HUD 완료 팝). 🔴 정산으로 새 목표가 열리면 시트를 **강제로 열지 않는다** — [!]로 남겨 "[Tab]으로
+	#  확인"을 당긴다(그래야 [!]가 중간 게임에서도 산다, 세션43). 정산할 게 없는 순수 방문일 때만 시트를
+	#  열어 목표를 훑게 한다(=열람이 접수 처리 → [!] 꺼짐).
+	var claimed := GameState.claim_ready_quests()
+	if claimed.is_empty():
+		_sheet.open_quest()   # 열람 → tab_panel이 mark_quests_seen → quests_seen → _refresh_npc_mark
+	_refresh_npc_mark()
 
 ## 🔴 그리기 개념 튜토 대사 (세션41) — 그리기 패널은 단계마다 스스로 안내하므로(ring_forge_panel `_say`),
 ##  여기선 **패널을 열기 전의 개념**(마법진=진·룬·문양을 손으로 그린다)만 심고 책상으로 보낸다.
@@ -186,9 +196,22 @@ func _on_quest_ready(quest_id: StringName) -> void:
 	if q != null:
 		_hud.say("목표 달성: %s — 길잡이에게 돌아가 정산하라 [?]" % q.title)
 
-## 🔴 물음표 갱신 — 정산할 퀘스트가 있으면 길잡이 머리 위 [?]를 켠다. 시그널·초기화 양쪽에서 부른다.
+## 🔴 길잡이 머리 위 마크 갱신 (세션40 [?] + 세션43 [!]). 시그널·초기화 양쪽에서 부른다.
+##  우선순위: 정산 대기(claimable)면 [?](보상 받으러) · 아니면 안 읽은 새 목표면 [!]([Tab]으로 확인) ·
+##  둘 다 없으면 숨김. 색으로도 구분 — [!] 노랑(새 목표 있음) · [?] 초록(가서 정산=보상). 연출값이라 const.
+const MARK_NEW := Color(1.0, 0.9, 0.3)      ## [!] 안 읽은 새 목표 — [Tab] 시트로 확인하라
+const MARK_CLAIM := Color(0.5, 0.92, 0.45)  ## [?] 달성 — 길잡이에게 가서 정산(보상)하라
 func _refresh_npc_mark(_a: Variant = null) -> void:
-	_npc_mark.visible = GameState.has_claimable_quest()
+	if GameState.has_claimable_quest():
+		_npc_mark.text = "?"
+		_npc_mark.add_theme_color_override(&"font_color", MARK_CLAIM)
+		_npc_mark.visible = true
+	elif GameState.has_new_quest():
+		_npc_mark.text = "!"
+		_npc_mark.add_theme_color_override(&"font_color", MARK_NEW)
+		_npc_mark.visible = true
+	else:
+		_npc_mark.visible = false
 
 # ─────────────────────────── 거점 건설 (세션37) ───────────────────────────
 ## 🔴 거점은 **재료로 직접 짓는다** (사용자 확정: "거점을 내가 직접 업데이트, 시작은 아무것도 없는 상태").

@@ -184,6 +184,14 @@ func _open_at(tab: int) -> void:
 	elif not GameState.ui_modal_open:
 		current_tab = tab
 		_set_open(true)
+	_mark_seen_if_quest_tab()
+
+## 🔴 퀘스트 탭을 실제로 열어 보면 접수 처리한다 (세션43 [!]) — 시트로 목표를 "읽으면" NPC [!]가 꺼진다.
+##  정산(턴인)이 아니라 이 열람이 접수의 유일한 경로(온보딩 q00 예외는 base가 직접). 열려 있고 퀘스트
+##  탭(1)일 때만. mark_quests_seen이 실제 변화 시 quests_seen를 쏘고 base가 [!]를 끈다.
+func _mark_seen_if_quest_tab() -> void:
+	if _open and current_tab == 1:
+		GameState.mark_quests_seen()
 
 
 func _set_open(open: bool) -> void:
@@ -216,6 +224,7 @@ func _gui_input(event: InputEvent) -> void:
 			if current_tab != i:
 				current_tab = i
 				queue_redraw()
+				_mark_seen_if_quest_tab()   # 🔴 마우스로 퀘스트 탭 전환도 접수 (세션43)
 			accept_event()
 			return
 
