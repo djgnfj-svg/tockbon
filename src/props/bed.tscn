@@ -1,0 +1,8 @@
+[gd_scene format=3 uid="uid://c0prop12bed000"]
+
+[node name="Bed" type="ColorRect"]
+offset_left = -334.0
+offset_top = -26.0
+offset_right = -266.0
+offset_bottom = 26.0
+color = Color(0.42, 0.31, 0.24, 1)

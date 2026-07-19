@@ -1,0 +1,29 @@
+[gd_scene load_steps=4 format=3 uid="uid://c0prop04craft00"]
+
+[ext_resource type="Script" path="res://src/actors/interact_zone.gd" id="1_zone"]
+[ext_resource type="Texture2D" path="res://assets/sprites/base/props.png" id="2_tex"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_craft"]
+size = Vector2(110, 96)
+
+[node name="Craft" type="Area2D"]
+collision_layer = 64
+collision_mask = 2
+script = ExtResource("1_zone")
+zone_id = &"craft"
+
+[node name="Sprite" type="Sprite2D" parent="."]
+texture = ExtResource("2_tex")
+region_enabled = true
+region_rect = Rect2(128, 0, 32, 48)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("RectangleShape2D_craft")
+
+[node name="Prompt" type="Label" parent="."]
+offset_left = -46.0
+offset_top = -50.0
+offset_right = 46.0
+offset_bottom = -28.0
+text = "[E] 공방"
+horizontal_alignment = 1

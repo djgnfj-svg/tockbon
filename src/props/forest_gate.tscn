@@ -1,0 +1,27 @@
+[gd_scene load_steps=4 format=3 uid="uid://c0prop02gate00"]
+
+[ext_resource type="Script" path="res://src/actors/interact_zone.gd" id="1_zone"]
+[ext_resource type="Texture2D" path="res://assets/sprites/field/exit_gate.png" id="2_tex"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_gate"]
+size = Vector2(100, 100)
+
+[node name="ForestGate" type="Area2D"]
+collision_layer = 64
+collision_mask = 2
+script = ExtResource("1_zone")
+zone_id = &"forest_gate"
+
+[node name="Sprite" type="Sprite2D" parent="."]
+texture = ExtResource("2_tex")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("RectangleShape2D_gate")
+
+[node name="Prompt" type="Label" parent="."]
+offset_left = -50.0
+offset_top = -76.0
+offset_right = 50.0
+offset_bottom = -54.0
+text = "[E] 숲으로"
+horizontal_alignment = 1

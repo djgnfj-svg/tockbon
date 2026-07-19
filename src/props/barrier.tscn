@@ -1,0 +1,15 @@
+[gd_scene load_steps=2 format=3 uid="uid://c0prop10barrier"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_barrier"]
+size = Vector2(24, 140)
+
+[node name="Barrier" type="StaticBody2D"]
+collision_layer = 128
+collision_mask = 0
+
+[node name="Vis" type="Polygon2D" parent="."]
+color = Color(0.32, 0.29, 0.25, 1)
+polygon = PackedVector2Array(-14, -60, 14, -50, 12, 60, -12, 55)
+
+[node name="Col" type="CollisionShape2D" parent="."]
+shape = SubResource("RectangleShape2D_barrier")

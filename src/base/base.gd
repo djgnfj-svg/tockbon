@@ -157,7 +157,10 @@ func _on_npc_talk() -> void:
 	#  확인"을 당긴다(그래야 [!]가 중간 게임에서도 산다, 세션43). 정산할 게 없는 순수 방문일 때만 시트를
 	#  열어 목표를 훑게 한다(=열람이 접수 처리 → [!] 꺼짐).
 	var claimed := GameState.claim_ready_quests()
-	if claimed.is_empty():
+	if not claimed.is_empty():
+		# 🔴 정산 대사 (세션44) — 조용히 보상만 주지 않고 길잡이가 치하하고 다음을 가리킨다.
+		_start_turnin_dialogue(claimed)
+	else:
 		_sheet.open_quest()   # 열람 → tab_panel이 mark_quests_seen → quests_seen → _refresh_npc_mark
 	_refresh_npc_mark()
 
@@ -174,15 +177,55 @@ const DRAW_TUTORIAL_LINES := [
 ## 대사 상자를 띄워 그리기 개념을 가르친다. 끝나면(또는 ESC 건너뛰면) 목표를 시트로 보여준다.
 func _start_draw_tutorial() -> void:
 	_draw_tut_shown = true
+	# 🔴 대사 끝나면 닫고 책상으로 보낸다 — 시트를 자동으로 또 열지 않는다(마지막 줄이 [Tab]로 안내하므로).
+	_show_dialogue(DRAW_TUTORIAL_LINES)
+
+## 🔴 공용 대사 헬퍼 (세션41 튜토·세션44 정산이 함께 쓴다) — dialogue_box를 띄우고 끝나면 정리한다.
+##  dialogue_box가 스스로 모달·일시정지를 잡으므로(ui_modal_open) 여기선 인스턴스·해제만 한다.
+##  🔴 이미 대사·다른 모달이 떠 있으면 안 띄운다(모달 하나만 — 책·정제대와 같은 규약).
+func _show_dialogue(lines: Array) -> void:
+	if _dialogue != null or _overlay != null:
+		return
 	_dialogue = DialogueBoxScene.instantiate() as CanvasLayer
 	add_child(_dialogue)
 	var box := _dialogue.get_node("Box") as DialogueBox
-	# 🔴 대사 끝나면 닫고 책상으로 보낸다 — 시트를 자동으로 또 열지 않는다(마지막 줄이 [Tab]로 안내하므로).
 	box.finished.connect(func() -> void:
 		if _dialogue != null:
 			_dialogue.queue_free()
 			_dialogue = null)
-	box.open(DRAW_TUTORIAL_LINES)
+	box.open(lines)
+
+## 🔴 정산(턴인) 대사 (세션44, 사용자: "퀘스트 완료할 때도 대화가 있어야") — 달성한 목표를
+##  치하하고 보상을 밝히고 다음을 가리킨다. 대사는 QuestDef.title·reward_items에서 조립한다
+##  (퀘스트별 전용 대사 필드 없이 = 스키마 불변). 여러 목표를 한 번에 정산하면 각각 한 줄.
+func _start_turnin_dialogue(claimed: Array) -> void:
+	var lines: Array[String] = []
+	for qid: StringName in claimed:
+		var q := Db.get_quest(qid)
+		if q == null:
+			continue
+		var reward := _reward_text(q)
+		if reward != "":
+			lines.append("「%s」— 해냈군! 약속한 삯일세, %s. 잘 챙겨 두게." % [q.title, reward])
+		else:
+			lines.append("「%s」— 해냈군! 자네 솜씨가 여물어 가는군." % q.title)
+	if lines.is_empty():
+		return
+	# 🔴 정산으로 새 목표가 열렸으면 [Tab]으로 유도(시트를 강제로 열지 않는다 = [!] 유지, 세션43).
+	if GameState.has_new_quest():
+		lines.append("새 할 일이 생겼네 — [Tab] 시트에서 다음 목표를 확인하게.")
+	else:
+		lines.append("당분간은 이걸로 됐네. 몸 성히 다녀오게.")
+	_show_dialogue(lines)
+
+## 퀘스트 완료 보상을 "이름 n개, 이름 n개"로 (정산 대사용). QuestDef.reward_items가 정본.
+func _reward_text(q: QuestDef) -> String:
+	var parts: Array[String] = []
+	for item_id: StringName in q.reward_items:
+		var it := Db.get_item(item_id)
+		var nm: String = it.display_name if it != null and it.display_name != "" else String(item_id)
+		parts.append("%s %d개" % [nm, int(q.reward_items[item_id])])
+	return ", ".join(parts)
 
 ## 목표 하나를 정산 완료했다 — HUD에 알린다(보상은 GameState가 이미 창고에 넣었다). [Q]로 전체 확인.
 func _on_quest_completed(quest_id: StringName) -> void:

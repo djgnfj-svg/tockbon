@@ -4,7 +4,9 @@ extends StaticBody2D
 
 var hits: Array[Dictionary] = []
 
-@onready var _visual: Polygon2D = $Visual
+# 🔴 스프라이트로 바뀌어(세션44 허수아비 도트) 타입을 Node2D로 넓혔다 — modulate·scale은
+# CanvasItem/Node2D 공용이라 _pop 연출은 그대로 돈다(Polygon2D로 좁히면 Sprite2D 캐스트가 깨진다).
+@onready var _visual: Node2D = $Visual
 
 func _ready() -> void:
 	add_to_group("enemies")

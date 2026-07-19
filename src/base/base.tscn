@@ -1,24 +1,17 @@
-[gd_scene load_steps=12 format=3 uid="uid://c0base01hub00"]
+[gd_scene load_steps=13 format=3 uid="uid://c0base01hub00"]
 
 [ext_resource type="Script" path="res://src/base/base.gd" id="1_base"]
-[ext_resource type="Script" path="res://src/actors/interact_zone.gd" id="2_zone"]
 [ext_resource type="PackedScene" path="res://src/actors/player.tscn" id="3_player"]
 [ext_resource type="PackedScene" path="res://src/spell/ring_spell_system.tscn" id="4_spell"]
 [ext_resource type="PackedScene" path="res://src/spell/dummy_target.tscn" id="5_dummy"]
 [ext_resource type="Script" path="res://src/hud/hud.gd" id="6_hud"]
 [ext_resource type="PackedScene" path="res://src/hud/tab_panel.tscn" id="7_inv"]
-
-[sub_resource type="RectangleShape2D" id="RectangleShape2D_desk"]
-size = Vector2(120, 100)
-
-[sub_resource type="RectangleShape2D" id="RectangleShape2D_gate"]
-size = Vector2(100, 100)
-
-[sub_resource type="RectangleShape2D" id="RectangleShape2D_refine"]
-size = Vector2(110, 96)
-
-[sub_resource type="RectangleShape2D" id="RectangleShape2D_npc"]
-size = Vector2(64, 90)
+[ext_resource type="PackedScene" path="res://src/props/desk.tscn" id="8_desk"]
+[ext_resource type="PackedScene" path="res://src/props/forest_gate.tscn" id="9_gate"]
+[ext_resource type="PackedScene" path="res://src/props/refine_station.tscn" id="10_refine"]
+[ext_resource type="PackedScene" path="res://src/props/craft_station.tscn" id="11_craft"]
+[ext_resource type="PackedScene" path="res://src/props/decode_station.tscn" id="12_decode"]
+[ext_resource type="PackedScene" path="res://src/props/npc_guide.tscn" id="13_npc"]
 
 [node name="Base" type="Node2D"]
 script = ExtResource("1_base")
@@ -31,179 +24,23 @@ offset_right = 960.0
 offset_bottom = 540.0
 color = Color(0.18, 0.16, 0.14, 1)
 
-[node name="Desk" type="Area2D" parent="."]
+[node name="Desk" parent="." instance=ExtResource("8_desk")]
 position = Vector2(0, -120)
-collision_layer = 64
-collision_mask = 2
-script = ExtResource("2_zone")
-zone_id = &"desk"
 
-[node name="Body" type="Polygon2D" parent="Desk"]
-color = Color(0.45, 0.32, 0.2, 1)
-polygon = PackedVector2Array(-44, -22, 44, -22, 44, 22, -44, 22)
-
-[node name="Top" type="Polygon2D" parent="Desk"]
-color = Color(0.86, 0.82, 0.72, 1)
-polygon = PackedVector2Array(-34, -14, 34, -14, 34, 10, -34, 10)
-
-[node name="CollisionShape2D" type="CollisionShape2D" parent="Desk"]
-shape = SubResource("RectangleShape2D_desk")
-
-[node name="Prompt" type="Label" parent="Desk"]
-offset_left = -40.0
-offset_top = -56.0
-offset_right = 40.0
-offset_bottom = -34.0
-text = "[E] 탁본"
-horizontal_alignment = 1
-
-[node name="ForestGate" type="Area2D" parent="."]
+[node name="ForestGate" parent="." instance=ExtResource("9_gate")]
 position = Vector2(-260, 40)
-collision_layer = 64
-collision_mask = 2
-script = ExtResource("2_zone")
-zone_id = &"forest_gate"
 
-[node name="Path" type="Polygon2D" parent="ForestGate"]
-color = Color(0.3, 0.26, 0.19, 1)
-polygon = PackedVector2Array(-40, -34, 30, -24, 30, 24, -40, 34)
-
-[node name="Canopy" type="Polygon2D" parent="ForestGate"]
-position = Vector2(-46, 0)
-color = Color(0.16, 0.28, 0.18, 1)
-polygon = PackedVector2Array(-18, -46, 18, -46, 18, 46, -18, 46)
-
-[node name="CollisionShape2D" type="CollisionShape2D" parent="ForestGate"]
-shape = SubResource("RectangleShape2D_gate")
-
-[node name="Prompt" type="Label" parent="ForestGate"]
-offset_left = -50.0
-offset_top = -76.0
-offset_right = 50.0
-offset_bottom = -54.0
-text = "[E] 숲으로"
-horizontal_alignment = 1
-
-[node name="Refine" type="Area2D" parent="."]
+[node name="Refine" parent="." instance=ExtResource("10_refine")]
 position = Vector2(180, -190)
-collision_layer = 64
-collision_mask = 2
-script = ExtResource("2_zone")
-zone_id = &"refine"
 
-[node name="Body" type="Polygon2D" parent="Refine"]
-color = Color(0.24, 0.2, 0.26, 1)
-polygon = PackedVector2Array(-34, -10, 34, -10, 28, 26, -28, 26)
-
-[node name="Ink" type="Polygon2D" parent="Refine"]
-color = Color(0.5, 0.16, 0.14, 1)
-polygon = PackedVector2Array(-26, -6, 26, -6, 24, 6, -24, 6)
-
-[node name="CollisionShape2D" type="CollisionShape2D" parent="Refine"]
-shape = SubResource("RectangleShape2D_refine")
-
-[node name="Prompt" type="Label" parent="Refine"]
-offset_left = -46.0
-offset_top = -50.0
-offset_right = 46.0
-offset_bottom = -28.0
-text = "[E] 정제대"
-horizontal_alignment = 1
-
-[node name="Craft" type="Area2D" parent="."]
+[node name="Craft" parent="." instance=ExtResource("11_craft")]
 position = Vector2(-180, -170)
-collision_layer = 64
-collision_mask = 2
-script = ExtResource("2_zone")
-zone_id = &"craft"
 
-[node name="Bench" type="Polygon2D" parent="Craft"]
-color = Color(0.36, 0.26, 0.16, 1)
-polygon = PackedVector2Array(-38, -6, 38, -6, 38, 24, -38, 24)
-
-[node name="Anvil" type="Polygon2D" parent="Craft"]
-color = Color(0.32, 0.33, 0.36, 1)
-polygon = PackedVector2Array(-18, -20, 18, -20, 12, -8, -12, -8)
-
-[node name="CollisionShape2D" type="CollisionShape2D" parent="Craft"]
-shape = SubResource("RectangleShape2D_refine")
-
-[node name="Prompt" type="Label" parent="Craft"]
-offset_left = -46.0
-offset_top = -50.0
-offset_right = 46.0
-offset_bottom = -28.0
-text = "[E] 공방"
-horizontal_alignment = 1
-
-[node name="Decode" type="Area2D" parent="."]
+[node name="Decode" parent="." instance=ExtResource("12_decode")]
 position = Vector2(340, -230)
-collision_layer = 64
-collision_mask = 2
-script = ExtResource("2_zone")
-zone_id = &"decode"
 
-[node name="Slab" type="Polygon2D" parent="Decode"]
-color = Color(0.2, 0.26, 0.3, 1)
-polygon = PackedVector2Array(-32, -12, 32, -12, 32, 24, -32, 24)
-
-[node name="Rubbing" type="Polygon2D" parent="Decode"]
-color = Color(0.72, 0.7, 0.62, 1)
-polygon = PackedVector2Array(-24, -6, 24, -6, 24, 14, -24, 14)
-
-[node name="CollisionShape2D" type="CollisionShape2D" parent="Decode"]
-shape = SubResource("RectangleShape2D_refine")
-
-[node name="Prompt" type="Label" parent="Decode"]
-offset_left = -56.0
-offset_top = -50.0
-offset_right = 56.0
-offset_bottom = -28.0
-text = "[E] 탁본 해독대"
-horizontal_alignment = 1
-
-[node name="Npc" type="Area2D" parent="."]
+[node name="Npc" parent="." instance=ExtResource("13_npc")]
 position = Vector2(130, -20)
-collision_layer = 64
-collision_mask = 2
-script = ExtResource("2_zone")
-zone_id = &"npc"
-
-[node name="Body" type="Polygon2D" parent="Npc"]
-color = Color(0.28, 0.32, 0.5, 1)
-polygon = PackedVector2Array(-13, -4, 13, -4, 10, 30, -10, 30)
-
-[node name="Head" type="Polygon2D" parent="Npc"]
-position = Vector2(0, -16)
-color = Color(0.85, 0.74, 0.6, 1)
-polygon = PackedVector2Array(-8, -8, 8, -8, 8, 8, -8, 8)
-
-[node name="Hat" type="Polygon2D" parent="Npc"]
-position = Vector2(0, -22)
-color = Color(0.22, 0.18, 0.3, 1)
-polygon = PackedVector2Array(-14, 2, 14, 2, 7, -14, -7, -14)
-
-[node name="CollisionShape2D" type="CollisionShape2D" parent="Npc"]
-shape = SubResource("RectangleShape2D_npc")
-
-[node name="Prompt" type="Label" parent="Npc"]
-offset_left = -60.0
-offset_top = -60.0
-offset_right = 60.0
-offset_bottom = -38.0
-text = "[E] 길잡이 · 목표"
-horizontal_alignment = 1
-
-[node name="Mark" type="Label" parent="Npc"]
-visible = false
-offset_left = -20.0
-offset_top = -94.0
-offset_right = 20.0
-offset_bottom = -62.0
-text = "?"
-horizontal_alignment = 1
-theme_override_colors/font_color = Color(0.98, 0.82, 0.32, 1)
-theme_override_font_sizes/font_size = 28
 
 [node name="Player" parent="." instance=ExtResource("3_player")]
 position = Vector2(0, 40)
