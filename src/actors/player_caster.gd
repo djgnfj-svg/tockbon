@@ -16,12 +16,15 @@ signal slot_changed(slot: int)
 
 ## 🔴 위력은 여기서 계산하지 않는다 — 리포트·발사·HUD가 **같은 함수**를 본다 (core에 있는 이유).
 const RingPower := preload("res://src/core/ring_power.gd")
+## 🔴 매직볼(빈 슬롯 바닥, 세션44)의 발사 계약을 **조립 상태기계**가 쥔다 — 여기서 dict를 손으로
+## 지으면 계약(rings 8칸·rune 키)과 조용히 갈라진다(to_assembly 함정과 같은 종류). 초기 상태 =
+## 진·불룬만·문양 0·score 없음(→ ring_power가 기본 위력 1.0으로 폴백).
+const RingAssembly := preload("res://src/drawing/ring_assembly.gd")
 
 ## 조준선 길이·색 (연출값 — 밸런스 아님).
 const AIM_FROM := 14.0
 const AIM_TO := 34.0
 const AIM_ARMED := Color(0.95, 0.65, 0.25, 0.85)
-const AIM_EMPTY := Color(0.6, 0.6, 0.6, 0.35)
 
 ## false면 조준·발사·슬롯이 전부 멎는다 (책이 펼쳐진 동안).
 var enabled: bool = true:
@@ -71,7 +74,7 @@ func select_slot(slot: int) -> void:
 	slot_changed.emit(slot)
 	var design: RingDesign = GameState.ring_equipped[slot]
 	if design == null:
-		notice.emit("슬롯 %d — 비어 있다 (1~4로 다른 슬롯)" % (slot + 1), false)
+		notice.emit("슬롯 %d — 매직볼 (기본 마법 · 다른 슬롯 1~4)" % (slot + 1), false)
 	else:
 		notice.emit("슬롯 %d — %s (위력 %d)" % [slot + 1, design.display_name,
 			RingPower.power_display(design.total_score, Db.ink_mult(design.ink))], false)
@@ -81,20 +84,29 @@ func select_slot(slot: int) -> void:
 ## 🔴 `to_assembly()`로 쏜다 — 그래야 `assembly.score`(손그림 점수)가 실려 **그때 그린 위력이
 ## 그대로 난다**. 직접 Dictionary를 만들면 score가 빠져 조용히 기준 위력이 된다.
 func fire() -> void:
-	var design: RingDesign = GameState.ring_equipped[_slot]
-	if design == null:
-		notice.emit("슬롯 %d이 비어 있다 — 1~4로 다른 슬롯을 골라라" % (_slot + 1), true)
-		return
 	# 🔴 마나 소모 — 이게 없으면 좌클릭 연사다 (세션 35). 비용은 RingPower가 판다(수치 박지 말 것).
+	# 매직볼(빈 슬롯)도 마나를 쓴다 — 바닥이지 공짜가 아니다.
 	if not GameState.spend_mana(RingPower.cast_mana_cost()):
 		notice.emit("마나가 부족하다 — 잠시 기다려라", true)
 		return
-	EventBus.ring_cast_requested.emit(design.to_assembly(), global_position, _aim)
+	# 🔴 매직볼 바닥 (세션44): 슬롯이 비어(=아직 안 그렸어도) **기본 마법**이 나간다. 그전엔 여기서
+	# 거부해 "그릴 게 없으면 못 쏨"이라 시작이 허전했다 → 이제 빈 슬롯 = 매직볼. 지팡이의 진(발사
+	# 형태)은 ring_spell_system이 wand_pattern으로 따르고, 캐리어 몸이 착탄으로 때린다(ring_carrier).
+	var design: RingDesign = GameState.ring_equipped[_slot]
+	var assembly: Dictionary = design.to_assembly() if design != null else _magic_ball_assembly()
+	EventBus.ring_cast_requested.emit(assembly, global_position, _aim)
+
+
+## 🔴 매직볼 = 조립 상태기계 초기 상태의 발사 계약 (세션44 바닥). score가 없어 기본 위력 1.0으로
+## 폴백한다 — 진·불룬만·문양 0. 캐리어 자체가 몸으로 때리므로 빈 고리여도 매직볼로 성립한다.
+func _magic_ball_assembly() -> Dictionary:
+	return RingAssembly.new().get_assembly()
 
 
 ## 조준선 — 장착됐으면 불빛, 빈 슬롯이면 흐리게. 쏘기 전에 슬롯 상태가 손끝에서 보인다.
 func _draw() -> void:
 	if not enabled:
 		return
-	var armed := GameState.ring_equipped[_slot] != null
-	draw_line(_aim * AIM_FROM, _aim * AIM_TO, AIM_ARMED if armed else AIM_EMPTY, 2.0)
+	# 🔴 매직볼 바닥 (세션44) — 빈 슬롯도 항상 쏠 수 있으니 조준선은 늘 켜진다. 그전엔 빈 슬롯이
+	# 흐릿해 "못 쏨"으로 읽혔다(이제 거짓 신호). 그린 도안이든 매직볼이든 발사는 항상 가능하다.
+	draw_line(_aim * AIM_FROM, _aim * AIM_TO, AIM_ARMED, 2.0)

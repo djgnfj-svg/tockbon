@@ -61,6 +61,11 @@ func _ready() -> void:
 func _seed_starting_unlocks() -> void:
 	codex[&"rune_fire"] = true
 	codex[&"glyph_thrust"] = true
+	# 🔴 시작 진 3종 (세션44, 진=형태). "처음부터 여러 진을 주고 골라 그리게"(사용자 확정) — 단발·
+	# 산탄·둘레. 즉시 자유(①학파). 특이한 진은 크래프트/보상으로 늘린다. unlock_id = jin_*.tres와 짝.
+	codex[&"jin_single"] = true
+	codex[&"jin_fork"] = true
+	codex[&"jin_ring"] = true
 
 ## 🔴 **진짜 새로하기** (세션37, F8). save_manager 노트가 적어 둔 계약: `save_game()`이 쓰는 것
 ## 전부 + `bag`·`hp` + **시작 해금 재시드**를 한 곳에서 처리한다. 씬마다 손으로 비우면 필드가

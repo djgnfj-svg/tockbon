@@ -126,7 +126,7 @@ func _draw() -> void:
 		var ang := TAU * float(k) / float(n) - PI / 2.0
 		var outward := Vector2.from_angle(ang)
 		var p := outward * (r * 0.78)
-		var dir := outward if g == Enums.GlyphCode.RADIATE else -outward   # 발산(밖) / 응집(안)
+		var dir := -outward if g == Enums.GlyphCode.GATHER else outward   # 응집만 안쪽 · 발산·관통은 바깥
 		var a := p - dir * (r * 0.14)
 		var b := p + dir * (r * 0.14)
 		draw_line(a, b, RING_COLOR, 1.8, true)

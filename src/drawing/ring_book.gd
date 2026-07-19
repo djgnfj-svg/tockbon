@@ -12,7 +12,7 @@ extends Control
 const RingBoard := preload("res://src/drawing/ring_board.gd")
 
 ## 진을 골랐다 — 보드에 진(그릇)을 놓는다 (세션 13 순차 조립)
-signal jin_selected
+signal jin_selected(jin_id: StringName)
 ## 룬을 골랐다 — 보드 중심에 그 룬을 놓는다 (rune_type = Enums.RuneType, 세션 34)
 signal rune_selected(rune_type: int)
 ## 문양본을 삽입했다 — 보드가 이 칸들을 연다 (idx = TEMPLATES 인덱스, slots = 열 인덱스 배열)
@@ -46,7 +46,7 @@ const TAB_H := 18.0
 const TAB_GAP := 2.0
 
 const TAB_DESC := [
-	"진 — 바깥 그릇. 지금은 일반진 하나.",
+	"진 — 바깥 그릇(형태). 어느 진에 그릴지 고른다 — 진마다 발사 형태가 다르다.",
 	"룬 — 중심 속성. 탁본으로 해독한 룬을 고른다.",
 	"문양본 — 삽입하면 그 자리가 열린다. 얻은 만큼 넓어진다.",
 	"문양 — 열린 칸을 이걸로 채운다.",
@@ -59,6 +59,7 @@ var _active := RingBoard.G_RADIATE    # 지금 고른 문양 코드 (하이라�
 var _jin_placed := false              # 진을 이미 놓았나 (탭 표식)
 var _rune_placed := false             # 룬을 이미 놓았나
 var _rune_choice := -1                # 지금 고른 룬 타입 (하이라이트) — -1=아직 (세션 34)
+var _jin_choice: StringName = &""     # 지금 고른 진 id (하이라이트) — &""=아직 (세션44, 진=형태 선택)
 var _tab_rects: Array[Rect2] = []
 ## 클릭 가능한 칸 — {rect, kind:"jin"/"rune"/"template"/"glyph", value}
 var _cells: Array[Dictionary] = []
@@ -144,7 +145,8 @@ func _gui_input(event: InputEvent) -> void:
 			continue
 		match String(cell.kind):
 			"jin":
-				jin_selected.emit()
+				_jin_choice = StringName(cell.value)   # 하이라이트 (세션44: 여러 진 셀)
+				jin_selected.emit(StringName(cell.value))
 			"rune":
 				_rune_choice = int(cell.value)   # 하이라이트 (세션 34: 여러 룬 셀)
 				rune_selected.emit(int(cell.value))
@@ -192,8 +194,7 @@ func _draw() -> void:
 
 	match _stage:
 		TAB_JIN:
-			_draw_single_cell(font, top, _jin_name(), "왼쪽에 손으로 그리기", "jin", "jin",
-				_jin_placed, _jin_ui_color())
+			_draw_jin_cells(font, top)
 		TAB_RUNE:
 			_draw_rune_cells(font, top)
 		TAB_TEMPLATE:
@@ -235,6 +236,32 @@ func _draw_template_cells(font: Font, top: float) -> void:
 			RingBoard.TEMPLATES[i].slots)
 		_text_center(font, r.position + Vector2(cw * 0.5, ch - 14.0),
 			String(RingBoard.TEMPLATES[i].name), NAME_COLOR, 10)
+
+
+## 진 탭 — **보유 진**을 셀로 열거 (세션44, 진=형태). 클릭 = 그 진 id가 jin_selected로 나간다.
+## 진은 룬·문양과 나란한 선택 축 — 어느 진(단발·산탄·둘레…)에 그릴지 고른다. 잠긴 진은 배열에 없다.
+func _draw_jin_cells(font: Font, top: float) -> void:
+	var defs := _jin_defs
+	var n := maxi(defs.size(), 1)
+	var gap := 8.0
+	var cw := (size.x - 16.0 - gap * float(n - 1)) / float(n)
+	var ch := 120.0
+	for i in n:
+		var jd := defs[i] as JinDef if i < defs.size() else null
+		var jid := StringName(jd.id) if jd else &"jin_single"
+		var jname := String(jd.display_name) if jd else "단발진"
+		var jcol: Color = jd.ui_color if jd else RingBoard.RING_LINE
+		var r := Rect2(8.0 + float(i) * (cw + gap), top, cw, ch)
+		_cells.append({"rect": r, "kind": "jin", "value": jid})
+		var sel := _jin_choice == jid
+		draw_rect(r, CELL_SEL_BG if sel else CELL_BG, true)
+		draw_rect(r, SEL_EDGE if sel else CELL_LINE, false, 2.0 if sel else 1.0)
+		# 진 아이콘 = 바깥 원 (진 색) — 판에 서는 그릇 원과 같은 규약
+		draw_arc(r.get_center() + Vector2(0, -14.0), 20.0, 0.0, TAU, 28, Color(jcol.r, jcol.g, jcol.b, 1.0), 2.5, true)
+		var label := "✓ 그림" if (sel and _jin_placed) else "골라서 그리기"
+		_text_center(font, r.position + Vector2(cw * 0.5, ch - 30.0), jname, NAME_COLOR, 11)
+		_text_center(font, r.position + Vector2(cw * 0.5, ch - 15.0), label,
+			SEL_EDGE if (sel and _jin_placed) else DESC_COLOR, 8)
 
 
 ## 룬 탭 — **해금된 룬**을 셀로 열거 (세션 34). 클릭하면 그 룬 타입이 rune_selected로 나간다.

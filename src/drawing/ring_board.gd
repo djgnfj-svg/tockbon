@@ -32,7 +32,8 @@ const COMMIT_COVER := TraceScorer.COMMIT_COVER
 ## 🔴 값은 **core가 쥔다**(Enums.GlyphCode = 발사 계약). 여기서 다시 정의하면 언젠가 갈라진다.
 const G_GATHER := Enums.GlyphCode.GATHER    # 응집 ← — 안쪽(룬) 방향 화살표
 const G_RADIATE := Enums.GlyphCode.RADIATE  # 발산 → — 바깥(진) 방향 화살표
-const GLYPH_NAMES := ["응집←", "발산→"]
+const G_PIERCE := Enums.GlyphCode.PIERCE    # 관통 ↠ — 바깥 방향(발산 계열) + 뚫음 효과 (세션44 B)
+const GLYPH_NAMES := ["응집←", "발산→", "관통↠"]   # 인덱스 = GlyphCode 값 (세션44: 관통 추가)
 ## ⚠ **`GLYPH_KEYS`는 지웠다** (세션 25). 문양은 오른쪽 셀을 **클릭해서** 고른다 —
 ## 진·룬·문양본이 전부 클릭인데 문양만 키(Q·W)를 광고했다 (사용자: "q w 이런게 아니라
 ## 똑같이 마우스로 선택하는걸로해줘"). 죽은 상수를 남기면 다음 세션이 키를 되살린다.
@@ -287,7 +288,7 @@ func _build_guide(target: int, slot: int) -> PackedVector2Array:
 			if slot >= 0:
 				var p := _slot_pos(slot)
 				var outward := Vector2.from_angle(_slot_angle(slot))
-				var dir := outward if _active == G_RADIATE else -outward   # 응집 = 룬 쪽으로
+				var dir := -outward if _active == G_GATHER else outward   # 응집만 안쪽(룬), 발산·관통은 바깥
 				var sz := ro * GLYPH_SIZE_FRAC * _glyph_scale_of(slot)
 				var tail := p - dir * sz
 				var head := p + dir * sz
@@ -619,10 +620,14 @@ func set_jin_scale_max(v: float) -> void:
 ## 🔴 **진을 고른다** (오른쪽 진 셀 클릭) → 왼쪽에 밑그림이 선다 (세션 25).
 ## idx = 진 종류 (지금은 0만 — Db에 일반진 하나뿐이다. 늘어나면 그대로 인덱스가 는다).
 ## ⚠ 진 단계가 아니면 무시한다 — 이미 잠근 진을 다시 고르는 건 [다시 그리기]의 일이다.
-func choose_jin(idx: int = 0) -> void:
+func choose_jin(jin_def: JinDef = null) -> void:
 	if _asm.stage() != STAGE_JIN or _asm.has_jin():
 		return
-	_jin_idx = maxi(idx, 0)
+	# 🔴 고른 진(세션44, 진=형태) — 색·형태가 이 def에서 온다. 무인자(테스트·폴백)면 기본 진 유지.
+	if jin_def != null:
+		_jin_def = jin_def
+	_jin_idx = 0
+	_asm.set_jin(StringName(_jin_def.id) if _jin_def != null else &"")   # 🔴 발사·저장 계약에 진 담기
 	_set_trace(TraceTarget.JIN, -1)     # 고른 진으로 밑그림을 세운다
 	queue_redraw()
 	score_changed.emit(_scorer.piece_score())

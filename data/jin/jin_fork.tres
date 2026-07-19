@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="JinDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/core/schemas/jin_def.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = &"jin_fork"
+display_name = "세 갈래진"
+slot_count = 8
+body_scale = 1.0
+ui_color = Color(0.30, 0.42, 0.14, 0.55)
+pattern = 1
+unlock_id = &"jin_fork"
+sort = 1

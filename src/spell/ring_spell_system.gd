@@ -54,7 +54,11 @@ func _on_ring_cast(assembly: Dictionary, origin: Vector2, aim_dir: Vector2) -> v
 	# 🔴 지팡이 발사 패턴 부활 (세션 42). 옛 소비자(spell_system.wand_shots)는 세션22에 매장됐고
 	# 그 뒤로 이 새 경로는 무조건 단발이었다 — GameState.wand_pattern()이 정의만 되고 orphan이었다.
 	# 이제 진(캐리어)을 패턴이 정한 각도들로 **여러 개** 쏜다. 착탄 전개는 캐리어당 그대로 돈다.
-	var pattern := GameState.wand_pattern()
+	# 🔴 발사 형태 = 마법진이 그려진 **진**이 정한다 (세션44, 진=형태). 그전엔 장착 지팡이
+	# (wand_pattern)가 쥐었다 — 이제 진이 도안에 저장돼 "이 마법은 이 형태로 나간다"가 도안에 묶인다.
+	# 진 없는 옛 도안·매직볼은 폴백(장착 지팡이 또는 단발) — 하위호환.
+	var jin_def := Db.get_jin(StringName(assembly.get("jin", &"")))
+	var pattern := jin_def.pattern if jin_def != null else GameState.wand_pattern()
 	for a: float in _wand_angles(angle, pattern):
 		_spawn_carrier(ring, origin, a, power, status_mult, rune_type)
 
@@ -120,6 +124,12 @@ func _deploy_now(ring: Array, at: Vector2, travel: float, power: float, status_m
 		var g := int(ring[k])
 		if g == Enums.GlyphCode.RADIATE:
 			_spawn_bolt(at, travel + TAU * float(k) / float(SLOTS), fire)
+		elif g == Enums.GlyphCode.PIERCE:
+			# 🔴 관통 (세션44 B): 발산처럼 탄을 쏘되 **이미 있는** 관통 효과(projectile._hit_enemy)를
+			# 실어 적을 뚫는다 — 세기가 아니라 **전투 방식**이 달라진다. reach는 지금 고정
+			# (balance.glyph_reach_max=최대 관통) — 나중에 문양 크기 축과 이을 자리.
+			_spawn_bolt(at, travel + TAU * float(k) / float(SLOTS), fire,
+				{Enums.GlyphType.PIERCE: balance.glyph_reach_max})
 		elif g == Enums.GlyphCode.GATHER:
 			gather += 1
 	if gather > 0:
@@ -132,7 +142,9 @@ func _deploy_now(ring: Array, at: Vector2, travel: float, power: float, status_m
 ## `RuneDef.projectile_scene`을 읽는 코드가 죽은 spell_system뿐이었다. 결합 비용만 내고 이득이 0이었고,
 ## *"새 룬 = .tres 한 장"*(jin_def.gd:6)이라는 이 프로젝트의 약속이 새 경로에서 깨져 있었다.
 ## 이제 물·바람 룬 추가가 진짜로 .tres 한 장이다.
-func _spawn_bolt(at: Vector2, angle: float, fire: Dictionary) -> void:
+## 🔴 effects (세션44) = 탄 행동 효과 사전 {GlyphType: reach} — 관통·팅김·유도 등. 기본 {}면 순수
+## 직진탄(발산). projectile._setup_effects가 이 사전을 읽어 이미 있는 기계를 켠다(그전엔 늘 {}라 DARK).
+func _spawn_bolt(at: Vector2, angle: float, fire: Dictionary, effects: Dictionary = {}) -> void:
 	var scene := fire.get("scene") as PackedScene
 	if scene == null:
 		push_warning("룬에 projectile_scene이 없다 — 발산 탄을 못 쏜다 (data/runes/*.tres 확인)")
@@ -143,7 +155,7 @@ func _spawn_bolt(at: Vector2, angle: float, fire: Dictionary) -> void:
 	add_child(bolt)
 	bolt.global_position = at
 	bolt.setup(fire.damage, fire.rune_type, fire.status, fire.status_power,
-		balance.projectile_base_speed, angle, {}, balance.projectile_lifetime_sec)
+		balance.projectile_base_speed, angle, effects, balance.projectile_lifetime_sec)
 
 
 ## 응집 = 착탄점에 불기둥 하나. 응집 칸이 많을수록 굵다 (node scale).

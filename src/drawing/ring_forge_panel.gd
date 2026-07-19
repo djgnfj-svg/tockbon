@@ -273,7 +273,7 @@ func _unhandled_input(event: InputEvent) -> void:
 ## Db에서 진·룬·문양 정의를 읽어 보드·책에 넣는다. int const 대신 데이터가 UI를 채운다.
 ## 🔴 룬은 **해금된 것만** 넘긴다 (세션 34) — open()마다 불리므로 탁본 해금이 다음 개봉에 반영된다.
 func _inject_defs() -> void:
-	var jins: Array = Db.all_jins()
+	var jins: Array = _unlocked_jins()
 	var runes: Array = _unlocked_runes()
 	var glyphs: Array = Db.all_glyphs()
 	var jin0: JinDef = jins[0] if not jins.is_empty() else null
@@ -289,6 +289,16 @@ func _unlocked_runes() -> Array:
 		var rd: RuneDef = Db.get_rune(t)
 		if rd != null and rd.unlock_id != &"" and GameState.is_unlocked(rd.unlock_id):
 			out.append(rd)
+	return out
+
+
+## 🔴 해금된 진만 (세션44, 진=형태). 룬과 같은 규약 — is_unlocked 판정은 패널이 한다(책·보드는
+## 오토로드를 안 봐서 못 한다). 시작 시드 = jin_single/fork/ru(GameState). unlock_id 빈 진은 안 뜬다.
+func _unlocked_jins() -> Array:
+	var out: Array = []
+	for jd: JinDef in Db.all_jins():
+		if jd != null and jd.unlock_id != &"" and GameState.is_unlocked(jd.unlock_id):
+			out.append(jd)
 	return out
 
 
@@ -313,12 +323,16 @@ func _stage_to_tab(stage: int) -> int:
 
 ## 🔴 진 탭 셀을 눌렀다 → **왼쪽에 밑그림이 선다** (세션 25). 예전엔 안내만 띄웠고 밑그림은
 ## 단계에 들어가는 순간 이미 서 있었다 (사용자: "이게 눌러야 뜨게 해줘").
-func _on_jin_selected() -> void:
+func _on_jin_selected(jin_id: StringName) -> void:
 	Audio.play(&"ui_click")
 	if _board.stage() != RingBoard.STAGE_JIN:
 		return
-	_board.choose_jin()
-	_set_say("진을 왼쪽 판에 손으로 문질러 그리세요 (바깥 원) → [다음]", false)
+	# 🔴 고른 진을 보드·계약에 담는다 (세션44, 진=형태). Db 조회는 패널이 한다 — 보드는 오토로드를
+	# 안 보므로 JinDef를 받아 색·형태를 반영한다. 이 진이 저장·발사(형태)까지 흐른다.
+	var jd := Db.get_jin(jin_id)
+	_board.choose_jin(jd)
+	var nm := String(jd.display_name) if jd != null else "진"
+	_set_say("%s — 왼쪽 판에 바깥 원을 손으로 문질러 그리세요 → [다음]" % nm, false)
 	_refresh_buttons()
 
 

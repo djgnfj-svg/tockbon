@@ -18,7 +18,12 @@ const LEGACY_IMPACT: int = 1  # 옛 RuneType.IMPACT — 마이그레이션 판�
 ## `data/glyphs/*.tres`의 `code`가 이 값이다. **밀면 저장된 고리 도안이 조용히 깨진다.**
 ## 세션 22: 이게 core에 없어서 발사가 UI(ring_board 757줄 Control)를 preload해 정수 2개를
 ## 꺼내 쓰고 있었다 — 발사가 UI에 의존하는 방향이라 헤드리스 발사·UI 교체를 정면으로 막았다.
-enum GlyphCode { GATHER = 0, RADIATE = 1 }
+# 🔴 발사 계약 코드 (GlyphDef.code · ring_spell_system._deploy_now가 이 값으로 전개를 가른다).
+# 값을 바꾸면 저장된 도안이 조용히 깨진다 — **끝에만 덧붙인다**.
+#   GATHER(0)=착탄점에 기둥 · RADIATE(1)=그 방향 탄환 · PIERCE(2)=탄환인데 적을 뚫는다(세션44 B).
+# ⚠ 이건 "착탄 전개" 축이다. 탄의 행동 효과(GlyphType.BOUNCE/PIERCE/HOMING/THRUST)는 별 enum이며
+# projectile.gd가 소비한다 — PIERCE(발사코드 2)는 발사 때 GlyphType.PIERCE 효과로 번역된다.
+enum GlyphCode { GATHER = 0, RADIATE = 1, PIERCE = 2 }
 
 enum StrokeRole { CIRCLE, RUNE, ARROW, TAIL, DECOR }
 ## 문양의 **발동 방식** — v1.9 문양 축 (GDD §4.3, TECH_SPEC §4.0-a).

@@ -43,6 +43,9 @@ var _has_rune := false
 ## 그려도 발사가 불로 나갔다 (get_assembly가 늘 불을 실었고 발사도 FIRE를 하드코딩). 이제
 ## choose_rune이 set_rune으로 여기 담고, get_assembly가 실어 저장·발사까지 흐른다.
 var _rune: int = RUNE_FIRE
+## 🔴 고른 진 id (세션44, 진=형태). 진은 **손으로 안 긋고 고른다**(선택) — 지팡이(진)를 골라 그 위에
+## 룬·문양을 그린다. get_assembly가 실어 저장·발사(형태)까지 흐른다. 빈 값 = 폴백(발사부가 처리).
+var _jin: StringName = &""
 var _open: Array[int] = [0, 2]      # 지금 문양본이 연 칸들 (기본 2방)
 var _slots: Array[int] = []         # SLOTS개, 값 = 문양 코드 or GLYPH_NONE (열린 칸만 채워진다)
 
@@ -67,6 +70,13 @@ func get_open() -> Array[int]:
 
 func get_rune() -> int:
 	return _rune
+
+func get_jin() -> StringName:
+	return _jin
+
+## 🔴 진을 고른다 (세션44) — 손으로 긋지 않는다. 언제든 바꿀 수 있다(발사 형태 선택).
+func set_jin(id: StringName) -> void:
+	_jin = id
 
 
 ## 🔴 룬 종류를 고른다 (Enums.RuneType). 룬 단계에서만 유효 — 이미 잠갔으면 무시한다
@@ -107,7 +117,7 @@ func can_commit() -> bool:
 ## 🔴 조립 결과 스냅샷 = **발사 계약**. 발사(ring_spell_system)·저장(RingDesign)이 이걸 읽는다.
 ## ⚠ 모양을 바꾸면 둘 다 조용히 깨진다 (tests/test_ring_assembly_auto.gd가 못 박아 둔다).
 func get_assembly() -> Dictionary:
-	return {"ring_count": 1, "rune": _rune, "rings": [Array(_slots)],
+	return {"ring_count": 1, "rune": _rune, "jin": _jin, "rings": [Array(_slots)],
 		"open": _open.duplicate()}
 
 
@@ -150,6 +160,7 @@ func clear() -> void:
 	_has_jin = false
 	_has_rune = false
 	_rune = RUNE_FIRE
+	_jin = &""
 	_reset_slots()
 
 

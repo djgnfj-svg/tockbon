@@ -13,6 +13,10 @@ extends Resource
 @export var display_name: String = "고리 마법진"
 ## 룬 종류 (지금은 불만) — assembly.rune
 @export var rune: int = 0
+## 🔴 진 id (세션44, 진=형태). 이 마법진을 **어느 진에 그렸나** — 발사 형태(단발/산탄/둘레)를 정한다.
+## 빈 값(&"") = 옛 도안/매직볼 = 발사가 폴백(지팡이 장비 또는 단발). id→패턴은 `Db.get_jin(jin).pattern`.
+## ⚠ ink처럼 여기에 Db를 두지 마라(class_name → -s 컴파일 함정). 패턴 해석은 발사부(ring_spell_system)가 한다.
+@export var jin: StringName = &""
 ## 진의 고리들. 지금은 1줄(8칸). rings[0][k] = 문양 코드 or -1
 @export var rings: Array = []
 ## 문양본이 연 칸 인덱스 (렌더·요약용)
@@ -42,6 +46,7 @@ func to_assembly() -> Dictionary:
 	return {
 		"ring_count": 1,
 		"rune": rune,
+		"jin": jin,
 		"rings": rings.duplicate(true),
 		"open": open.duplicate(),
 		"score": total_score,
@@ -58,6 +63,7 @@ func to_assembly() -> Dictionary:
 static func from_assembly(a: Dictionary, name: String = "", score: float = -1.0) -> RingDesign:
 	var d := RingDesign.new()
 	d.rune = int(a.get("rune", 0))
+	d.jin = StringName(a.get("jin", &""))
 	d.rings = (a.get("rings", []) as Array).duplicate(true)
 	d.open = (a.get("open", []) as Array).duplicate()
 	d.total_score = score if score >= 0.0 else float(a.get("score", 0.0))

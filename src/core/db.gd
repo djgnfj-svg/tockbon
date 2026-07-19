@@ -149,13 +149,12 @@ func get_jin(id: StringName) -> JinDef:
 func get_glyph(id: StringName) -> GlyphDef:
 	return glyphs.get(id) as GlyphDef
 
-## 진 목록 — id 오름차순 (UI 열거용).
+## 진 목록 — sort 오름차순 (UI 열거용, 세션44: 단발→산탄→둘레).
 func all_jins() -> Array[JinDef]:
 	var out: Array[JinDef] = []
-	var keys := jins.keys()
-	keys.sort()
-	for k in keys:
-		out.append(jins[k])
+	for j in jins.values():
+		out.append(j)
+	out.sort_custom(func(a: JinDef, b: JinDef) -> bool: return a.sort < b.sort)
 	return out
 
 ## 문양 목록 — **code 오름차순** (응집0·발산1). UI 셀 순서·Q/W 대응이 이 순서다.
