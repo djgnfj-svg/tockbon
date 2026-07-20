@@ -1,6 +1,6 @@
 extends SceneTree
 ## 고리 조립 발사 시스템 자동 검증 (모듈 B, 세션 12~) — 헤드리스 실행:
-##   ./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_ring_spell_auto.gd
+##   ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_ring_spell_auto.gd
 ## 전 항목 통과 시 "TEST_RING_SPELL_OK" 출력 후 종료 코드 0.
 ##
 ## 검증 대상: EventBus.ring_cast_requested → ring_carrier(진)가 조준 방향으로 날아가 적에 닿으면

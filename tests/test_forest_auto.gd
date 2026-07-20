@@ -1,6 +1,6 @@
 extends SceneTree
 ## 숲 원정 자동 검증 (세션 26 — F1·F2) — 헤드리스 실행:
-##   ./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_forest_auto.gd
+##   ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_forest_auto.gd
 ## 전 항목 통과 시 "TEST_FOREST_OK" 출력 후 종료 코드 0.
 ##
 ## 검증 대상 = **원정 루프**: 나가서 · 맞고 · 때리고 · 돌아온다.

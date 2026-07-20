@@ -1,6 +1,6 @@
 extends SceneTree
 ## 바닥 픽업 자동 검증 (세션46) — 헤드리스 실행:
-##   ./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_drop_pickup_auto.gd
+##   ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_drop_pickup_auto.gd
 ## 전 항목 통과 시 "TEST_DROP_PICKUP_OK" 출력 후 종료 코드 0.
 ##
 ## 검증 대상 = **바닥 픽업 계약**: 떨어진 뒤 · 지연 동안은 못 줍고 · 지연 뒤 닿으면 가방에 담기고

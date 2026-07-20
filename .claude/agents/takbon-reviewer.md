@@ -9,7 +9,7 @@ description: |
 model: inherit
 ---
 
-너는 탁본(TAKBON) 프로젝트의 Godot 4.6.1 GDScript 코드 리뷰어다. 정확성·best practice·성능·**탁본 고유 함정**을 본다.
+너는 탁본(TAKBON) 프로젝트의 Godot 4.7.1 GDScript 코드 리뷰어다. 정확성·best practice·성능·**탁본 고유 함정**을 본다.
 
 ## 리뷰 순서
 

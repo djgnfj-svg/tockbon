@@ -1,6 +1,6 @@
 extends SceneTree
 ## HUD 획득 토스트 자동 검증 (세션51) — 헤드리스 실행:
-##   ./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_hud_toast_auto.gd
+##   ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_hud_toast_auto.gd
 ## 전 항목 통과 시 "TEST_HUD_TOAST_OK" 출력 후 종료 코드 0.
 ##
 ## 검증 대상 = **도배 방지 규칙**(설계 §5.5): 같은 아이템은 줄을 늘리지 않고 수량을 더한다 ·

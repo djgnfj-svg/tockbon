@@ -1,6 +1,6 @@
 extends SceneTree
 ## 🔴 고리 **조립 상태기계** 계약 검증 (세션 22) — 헤드리스 실행:
-##   ./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_ring_assembly_auto.gd
+##   ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_ring_assembly_auto.gd
 ## 전 항목 통과 시 "TEST_RING_ASSEMBLY_OK" 출력 후 종료 코드 0.
 ##
 ## 🔴 **왜 따로 있나** (docs/REFACTOR_PLAN.md C4): test_ring_trace_auto는 **추적·점수 중심**이고

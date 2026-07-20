@@ -1,6 +1,6 @@
 extends SceneTree
 ## 대사 상자(dialogue_box) 자동 검증 — 헤드리스 실행:
-##   ./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_dialogue_box_auto.gd
+##   ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_dialogue_box_auto.gd
 ## 전 항목 통과 시 "TEST_DIALOGUE_OK" 출력 후 종료 코드 0.
 ##
 ## 🔴 헤드리스가 **잡을 수 있는** 것만 여기서 검증한다:

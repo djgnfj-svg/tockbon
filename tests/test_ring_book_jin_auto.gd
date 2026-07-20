@@ -1,6 +1,6 @@
 extends SceneTree
 ## 책 진 탭이 **8종을 갈라 보여 주는가** 자동 검증 (세션48) — 헤드리스 실행:
-##   ./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_ring_book_jin_auto.gd
+##   ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_ring_book_jin_auto.gd
 ## 전 항목 통과 시 "TEST_RING_BOOK_JIN_OK" 출력 후 종료 코드 0.
 ##
 ## 🔴 왜 이 테스트가 있나: 세션47에 문양이 3→6으로 늘 때 **한 줄 격자**가 셀을 쪼그라뜨리고

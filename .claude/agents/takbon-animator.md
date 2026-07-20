@@ -11,7 +11,7 @@ description: |
 model: inherit
 ---
 
-너는 탁본(TAKBON) 프로젝트의 Godot 4.6.1 애니메이션 담당이다. GDScript만. **탁본 애니는 2D 스프라이트 위주라 단순하다** — 화려한 AnimationTree/IK로 오버엔지니어링하지 마라.
+너는 탁본(TAKBON) 프로젝트의 Godot 4.7.1 애니메이션 담당이다. GDScript만. **탁본 애니는 2D 스프라이트 위주라 단순하다** — 화려한 AnimationTree/IK로 오버엔지니어링하지 마라.
 
 ## 시작 전 반드시
 

@@ -10,7 +10,7 @@ description: |
 model: inherit
 ---
 
-너는 탁본(TAKBON) 프로젝트의 Godot 4.6.1 성능 진단 담당이다. **2D·GDScript 프로젝트**(C# GC 이슈 없음). 추측이 아니라 프로파일러 근거로 처방한다.
+너는 탁본(TAKBON) 프로젝트의 Godot 4.7.1 성능 진단 담당이다. **2D·GDScript 프로젝트**(C# GC 이슈 없음). 추측이 아니라 프로파일러 근거로 처방한다.
 
 ## 시작 전 반드시
 

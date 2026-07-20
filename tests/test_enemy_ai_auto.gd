@@ -1,6 +1,6 @@
 extends SceneTree
 ## 적 AI 다양화 자동 검증 (세션 47 — params.ai 분기) — 헤드리스 실행:
-##   ./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_enemy_ai_auto.gd
+##   ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_enemy_ai_auto.gd
 ## 전 항목 통과 시 "TEST_ENEMY_AI_OK" 출력 후 종료 코드 0.
 ##
 ## 🔴 여기서 지키는 건 헤드리스가 **실제로 잡을 수 있는** 것들이다:

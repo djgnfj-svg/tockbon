@@ -1,6 +1,6 @@
 extends SceneTree
 ## 🔊 오디오 배선 자동 검증 — 헤드리스 실행:
-##   ./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_audio_auto.gd
+##   ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_audio_auto.gd
 ## 전 항목 통과 시 "TEST_AUDIO_OK" 출력 후 종료 코드 0.
 ##
 ## 검증 대상 = **Audio 오토로드**(src/core/audio.gd)의 계약 세 가지:

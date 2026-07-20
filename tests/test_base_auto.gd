@@ -1,6 +1,6 @@
 extends SceneTree
 ## 베이스캠프(**진입 씬**) 자동 검증 — 헤드리스 실행:
-##   ./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_base_auto.gd
+##   ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_base_auto.gd
 ## 전 항목 통과 시 "TEST_BASE_OK" 출력 후 종료 코드 0.
 ##
 ## 검증 대상 = **세션 24 발사 배선**: 베이스캠프에서 그린 마법진을 실제로 쏠 수 있나.

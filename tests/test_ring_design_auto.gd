@@ -1,6 +1,6 @@
 extends SceneTree
 ## 고리 도안(RingDesign) + 장착 배선 자동 검증 (#17 1단계, 세션 16) — 헤드리스:
-##   ./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_ring_design_auto.gd
+##   ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_ring_design_auto.gd
 ## 전 항목 통과 시 "TEST_RING_DESIGN_OK".
 ##
 ## 검증: (1) RingDesign.from_assembly↔to_assembly 라운드트립·filled_count,
