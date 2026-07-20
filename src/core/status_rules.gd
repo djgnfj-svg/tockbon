@@ -79,22 +79,37 @@ static func duration_of(status: int) -> float:
 
 ## 이동 배율 — 1.0이면 안 느려진다. 젖음<진흙 순으로 세다. 묶임(덩굴·진흙)은 거의 정지.
 ## 🔴 **`_apply_move` 한 곳에만 곱해라** — AI 3종(추격·돌진·부유)이 전부 그 통로를 지난다.
-static func move_mult(status: int) -> float:
+##
+## 🔴 세션50: `power`(세기 배율)를 **먹는다.** 그전엔 감속이 balance 고정이라
+## **감전·덩굴·진흙엔 특별잉크가 아예 안 통했다** — 빚①의 절반이 여기 있었다.
+## ⚠ 상한(`status_slow_cap`)으로 자른다: 완전정지를 허용하면 "느려졌다"와 "죽었다/어그로 풀림"이
+## 구분되지 않아, 감속을 재는 검증이 엉뚱한 이유로 통과한다.
+static func move_mult(status: int, power: float = 1.0) -> float:
+	var slow := 0.0
 	match status:
-		Enums.Status.WET:   return 1.0 - BAL.status_wet_slow
-		Enums.Status.MUD:   return 1.0 - BAL.status_mud_slow
-		Enums.Status.ROOT:  return 1.0 - BAL.status_root_slow
-		Enums.Status.SHOCK: return 1.0 - BAL.status_shock_slow
+		Enums.Status.WET:   slow = BAL.status_wet_slow
+		Enums.Status.MUD:   slow = BAL.status_mud_slow
+		Enums.Status.ROOT:  slow = BAL.status_root_slow
+		Enums.Status.SHOCK: slow = BAL.status_shock_slow
 		_:                  return 1.0
+	return 1.0 - clampf(slow * power, 0.0, BAL.status_slow_cap)
 
 
-## 초당 지속 피해 — 화상 계열만. `power`는 룬이 실어 온 값(특별잉크 증폭이 이미 곱해져 있다).
+## 초당 지속 피해 — 화상 계열만. `power` = **세기 배율**(특별잉크 증폭이 이미 곱해져 있다).
 ## 🔴 산불은 화상보다 세다 — 반응의 보상이 **눈에 띄게** 커야 조합할 이유가 생긴다.
+## ⚠ 세션50 전엔 `power`가 곧 초당피해(불의 3.0)였다 — 기준값이 balance로 나갔다.
 static func dot_per_sec(status: int, power: float) -> float:
 	match status:
-		Enums.Status.BURN:  return power
-		Enums.Status.BLAZE: return power * BAL.status_blaze_dot_mult
+		Enums.Status.BURN:  return BAL.status_burn_dot_base * power
+		Enums.Status.BLAZE: return BAL.status_burn_dot_base * power * BAL.status_blaze_dot_mult
 		_:                  return 0.0
+
+
+## 🔴 반응 버스트(증기·감전연쇄)의 기준 피해 — 실제 피해 = 이 값 × 각 반응의 mult.
+## ⚠ **버스트 피해를 `power`만으로 계산하지 마라** — 세션49엔 그랬고, 배율 통일 때 그대로 두면
+## 피해가 조용히 1/3로 토막 난다(에러도 테스트 실패도 없다). 계산을 여기 한 곳에 모은 이유다.
+static func burst_damage(power: float, mult: float) -> float:
+	return BAL.status_burst_base * power * mult
 
 
 ## 🔴 반응 판정 — 바탕 상태에 새 룬이 들어왔을 때 무엇이 일어나는가.
@@ -105,8 +120,16 @@ static func react(base_status: int, incoming_rune: int) -> Dictionary:
 
 
 ## 취약(흙)이 걸려 있을 때 다음 상태에 곱해지는 세기 배율.
-static func power_mult(has_vulnerable: bool) -> float:
-	return BAL.status_vulnerable_mult if has_vulnerable else 1.0
+##
+## 🔴 세션50(사용자 확정): 취약의 세기축 = **증폭 배수**다(지속시간이 아니라). 취약은 이동도
+## DoT도 없고 유일한 효과가 "다음 상태를 증폭"이라, 지속을 흔들면 조합의 보상이 세기가 아니라
+## **타이밍 여유**로 미끄러진다.
+## ⚠ **선형**이다 — `vuln_power`(취약이 걸릴 때의 세기, 0.0이면 안 걸림)만큼 배수가 자란다.
+## 곱(`mult ** power`)으로 하면 취약 2배가 배수 2.25배로 튀어 특별잉크가 폭주한다.
+static func power_mult(vuln_power: float) -> float:
+	if vuln_power <= 0.0:
+		return 1.0
+	return 1.0 + (BAL.status_vulnerable_mult - 1.0) * vuln_power
 
 
 ## 상태 틴트 색 — **보여야 의미가 있다**(화상 중인 적이 평범해 보이면 룬을 바꿀 이유를 못 느낀다).

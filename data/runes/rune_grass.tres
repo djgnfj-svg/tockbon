@@ -10,6 +10,6 @@ unlock_id = &"rune_grass"
 display_name = "풀"
 base_damage = 0.75
 status = 7
-status_power = 0.5
+status_power = 1.0
 projectile_scene = ExtResource("2")
 ui_color = Color(0.36, 0.66, 0.26, 1.0)

@@ -30,6 +30,12 @@ func _run() -> void:
 	# 깨끗한 시작 — 물 룬은 아직 안 배운 상태여야 검증이 성립한다.
 	gs.codex.erase(&"rune_water")
 	gs.inventory.erase(&"fragment_water")
+	# 🔴 바람도 지운다 — 세션49에 6룬 전부 시작 시드가 됐기 때문(_seed_starting_unlocks).
+	# 안 지우면 아래 "바람은 아직 잠겨 안 뜬다"가 성립하지 않는다.
+	# ⚠ 이 검사는 세션49~50 내내 **엉뚱한 이유로 통과하고 있었다**: rune_wind.tres의 ui_color가
+	# Color 3인자라 파싱에 실패해 Db.get_rune(3)이 null이었다(= 바람 룬이 게임에서 통째로 죽어
+	# 있었다). .tres를 고치자 이 검사가 처음으로 진짜를 재기 시작했다.
+	gs.codex.erase(&"rune_wind")
 
 	var PanelScene: PackedScene = load("res://src/base/decode_panel.tscn")
 	var panel: Control = PanelScene.instantiate()
@@ -62,6 +68,60 @@ func _run() -> void:
 	gs.inventory.erase(&"fragment_water")
 	panel._decode(&"fragment_water")   # 보유 0 — 소비할 게 없다, 터지지 않아야
 	_check("보유 0 조각 해독은 조용히 무해", gs.get_count(&"fragment_water") == 0)
+
+	# ── ④-b 🔴 룬 6종이 전부 실제로 로드된다 ──
+	# 왜 필요한가: rune_wind.tres가 세션49~50 내내 파싱에 실패해 **바람 룬이 게임에서 통째로
+	# 죽어 있었는데 전 스위트가 그린이었다**(뮤테이션으로 확인 — 되돌려도 fail=0). Db는 못 읽은
+	# 리소스를 조용히 건너뛰고, get_rune은 null을 돌려주며, 아무도 그걸 확인하지 않았다.
+	# .tres 한 글자 오타가 룬 하나를 지워도 이제는 여기서 걸린다.
+	for t: int in Enums.RUNE_TYPES:
+		var rd: RuneDef = db.get_rune(t)
+		_check("🔴 룬 타입 %d가 로드된다 (.tres 파싱 실패 = 룬이 통째로 사라짐)" % t, rd != null)
+
+	# ── ⑤ 🔴 새 조각 3종이 실제로 그 룬을 연다 (unlock_id 오타가 조용히 통과하지 못하게) ──
+	# 조각의 params.unlock_id와 룬 .tres의 unlock_id가 어긋나면 해독해도 아무것도 안 열린다 —
+	# 패널은 조용히 아무 일도 안 하므로 에러가 안 난다. 여기서만 잡힌다.
+	var frag_to_rune := {
+		&"fragment_grass": &"rune_grass",
+		&"fragment_earth": &"rune_earth",
+		&"fragment_bolt": &"rune_bolt",
+	}
+	for frag: StringName in frag_to_rune:
+		var want: StringName = frag_to_rune[frag]
+		gs.codex.erase(want)
+		gs.inventory.erase(frag)
+
+		var item: ItemDef = db.get_item(frag)
+		_check("%s 조각이 존재한다" % frag, item != null)
+		if item == null:
+			continue
+		# 조각이 가리키는 룬이 실제 data/runes에 있어야 한다 (오타면 여기서 죽는다).
+		var declared := StringName(item.params.get("unlock_id", &""))
+		var rune_found := false
+		for t: int in Enums.RUNE_TYPES:
+			var rd: RuneDef = db.get_rune(t)
+			if rd != null and rd.unlock_id == declared:
+				rune_found = true
+				break
+		_check("🔴 %s의 unlock_id(%s)가 실재하는 룬을 가리킨다" % [frag, declared], rune_found)
+
+		gs.add_item(frag, 1)
+		panel._decode(frag)
+		_check("🔴 %s 해독 → %s 해금" % [frag, want], gs.is_unlocked(want))
+		_check("%s 해독이 조각을 소비한다" % frag, gs.get_count(frag) == 0)
+		gs.codex.erase(want)
+
+	# ── ⑥ 새 조각을 실제로 뿌리는 적이 있다 (드롭 경로가 없으면 게임에선 영영 못 얻는다) ──
+	for frag: StringName in frag_to_rune:
+		var dropper := ""
+		for e: EnemyDef in db.enemies.values():
+			for d: DropEntry in e.drops:
+				if d.item_id == frag:
+					dropper = String(e.id)
+					break
+			if dropper != "":
+				break
+		_check("🔴 %s를 뿌리는 적이 있다 (%s)" % [frag, dropper], dropper != "")
 
 	# 뒷정리 — 오토로드 GameState 메모리 오염 방지 (codex는 저장 트리거는 아니지만 깔끔하게).
 	gs.codex.erase(&"rune_water")

@@ -26,6 +26,8 @@ const DropPickup := preload("res://src/props/drop_pickup.tscn")
 ## 🔴 상태이상·원소 반응의 **규칙 단일 소스** (세션49). 규칙을 여기 베끼지 마라 — 복사하면
 ## "진흙인데 안 묶인다" 식으로 조용히 갈라진다(ring_power와 같은 이유).
 const SR := preload("res://src/core/status_rules.gd")
+## 🔴 상태 **보유고** (세션50 추출) — 적·허수아비가 같은 물건을 쓴다.
+const SH := preload("res://src/core/status_holder.gd")
 ## 지속·반경·틱 간격 수치는 전부 balance가 쥔다 (연출값이 아니라 밸런스다).
 const BAL := preload("res://data/balance.tres")
 
@@ -60,13 +62,10 @@ var _charge_dir: Vector2 = Vector2.ZERO
 var _disperse_timer: float = 0.0
 var _dispersed: bool = false
 
-## 🔴 상태이상 보유고 (세션49) — `{status(int): {"power": float, "time": float, "seq": int}}`.
-## **여러 상태를 동시에** 가진다(젖음+취약처럼 축이 다른 것들이 겹쳐야 조합이 성립한다).
-## `seq`는 적용 순번 — 틴트를 "가장 최근 것"으로 고르는 데만 쓴다.
-var _statuses: Dictionary = {}
-var _status_seq: int = 0
-## DoT 틱 누적 — `balance.status_tick_sec`마다 한 번 깎는다(매 프레임 깎으면 숫자가 도배된다).
-var _tick_accum: float = 0.0
+## 🔴 상태이상 보유고 (세션49 → 세션50에 `src/core/status_holder.gd`로 **추출**).
+## 보유·틱·반응 해결은 전부 holder가 한다 — 여기 남은 건 **몸의 일**(피해·확산·색)뿐이다.
+## 추출한 이유: 허수아비가 같은 코드를 못 써서 **연습장에서 반응을 시험할 수 없었다**.
+var _status: SH = SH.new()
 ## 🔴 죽음 1회 보장 — DoT·연쇄·즉발이 같은 프레임에 겹쳐도 `_die()`가 두 번 돌면
 ## 드롭이 두 번 떨어지고 퀘스트가 두 번 센다(queue_free는 프레임 끝에야 반영된다).
 var _dead: bool = false
@@ -74,6 +73,7 @@ var _dead: bool = false
 
 func _ready() -> void:
 	add_to_group("enemies")
+	_wire_status()
 	_def = Db.get_enemy(enemy_id)
 	if _def == null:
 		# 조용히 죽지 않게 — .tres 이름을 틀리면 hp 0짜리 유령이 서 있게 된다.
@@ -132,7 +132,9 @@ func _setup_frames(tex: Texture2D) -> void:
 ## 수치는 전부 `_param`으로 .tres에서 읽는다 (balance.tres 아님 — 적 수치는 EnemyDef가 쥔다).
 func _physics_process(delta: float) -> void:
 	_cool = maxf(0.0, _cool - delta)
-	_tick_statuses(delta)
+	# 🔴 `_dead`면 틱 자체를 건너뛴다 — holder는 죽음을 모른다(가드는 몸이 쥔다).
+	if not _dead:
+		_status.tick(delta)
 	if _dead:
 		return  # DoT로 죽었다 — 이 프레임엔 더 움직이지 않는다(queue_free는 프레임 끝에 반영된다)
 	_regen(delta)
@@ -162,7 +164,7 @@ func _physics_process(delta: float) -> void:
 ## 한 줄이 전부를 먹는다. 갈래마다 곱하면 새 AI를 넣을 때 조용히 빠진다.
 ## ⚠ 넉백에는 안 곱한다 — 넉백은 손맛(연출)이지 이동 의지가 아니다.
 func _apply_move(delta: float) -> void:
-	velocity *= _move_mult()
+	velocity *= _status.move_mult()
 	velocity += _knockback
 	move_and_slide()
 	_knockback = _knockback.move_toward(Vector2.ZERO, KNOCKBACK_DECAY * delta)
@@ -270,90 +272,29 @@ func _regen(delta: float) -> void:
 # 일뿐이다 — 어떤 조합이 무엇이 되는지·얼마나 가는지·얼마나 느려지는지를 이 파일에서 판단하지 마라.
 
 
-## 남은 시간을 깎고, 만료된 걸 지우고, `status_tick_sec`마다 지속 피해를 넣는다.
-## 🔴 **지속 피해는 `EventBus.enemy_hit`을 쏘지 않는다** — 그 시그널은 "최종 피해" 계약이라
-## 피해 숫자·히트스톱·피격음이 물려 있다(세38·46). 0.5초마다 쏘면 화면이 숫자로 도배되고
-## 히트스톱에 갇힌다. DoT는 **조용히 hp만 깎고** 표현은 틴트가 맡는다.
-func _tick_statuses(delta: float) -> void:
-	if _statuses.is_empty() or _dead:
-		return
-	var expired: Array[int] = []
-	for key: int in _statuses.keys():
-		var e: Dictionary = _statuses[key]
-		e["time"] = float(e["time"]) - delta
-		if float(e["time"]) <= 0.0:
-			expired.append(key)
-	for key: int in expired:
-		_statuses.erase(key)
-	if not expired.is_empty():
-		_refresh_tint()
-
-	_tick_accum += delta
-	var step: float = BAL.status_tick_sec
-	if step <= 0.0:
-		return
-	while _tick_accum >= step:
-		_tick_accum -= step
-		var dot := 0.0
-		for key: int in _statuses.keys():
-			dot += SR.dot_per_sec(key, float(_statuses[key]["power"]))
-		if dot > 0.0:
-			_hp -= dot * step
-			if _hp <= 0.0:
-				_die()
-				return
+## holder의 콜백을 이 몸에 잇는다 (`_ready`에서 한 번). 🔴 **콜백 경계**가 추출의 핵심이다 —
+## holder는 규칙과 시간만 알고, hp를 깎고 씬을 뒤지고 색을 칠하는 건 전부 여기(몸)다.
+func _wire_status() -> void:
+	_status.on_dot = func(amount: float) -> void:
+		# 🔴 DoT는 `EventBus.enemy_hit`을 **안 쏜다** — 그 시그널은 "최종 피해" 계약이라
+		# 피해 숫자·히트스톱·피격음이 물려 있다(세38·46). 0.5초마다 쏘면 화면이 숫자로
+		# 도배되고 히트스톱에 갇힌다. DoT는 조용히 hp만 깎고 표현은 틴트가 맡는다.
+		_hp -= amount
+		if _hp <= 0.0:
+			_die()
+	_status.on_burst = func(radius: float, amount: float, include_self: bool) -> void:
+		_burst_damage(radius, amount, include_self)
+	_status.on_spread = func(statuses: Dictionary) -> void:
+		_spread_statuses(statuses)
+	_status.on_changed = _refresh_tint
 
 
-## 걸린 상태들 중 **가장 센 감속 하나**만 쓴다 (곱하면 두세 개만 겹쳐도 즉시 정지가 된다).
-func _move_mult() -> float:
-	var m := 1.0
-	for key: int in _statuses.keys():
-		m = minf(m, SR.move_mult(key))
-	return m
-
-
-## 🔴 새로 들어온 룬을 상태로 번역한다 — `take_hit`의 유일한 진입점.
-## 순서가 곧 규칙이다: ① 바람이면 확산만 하고 끝 → ② 반응이 있으면 반응이 이긴다 → ③ 아니면 덮어쓴다.
-func _apply_incoming(rune_type: int, status: int, status_power: float) -> void:
-	# ① 🔴 바람 = 확산자 (원신 Swirl 모델) — **자기 상태를 안 남긴다.** 혼자선 아무것도 아닌데
-	#    조합에선 최고가 되는 자리라, 여기서 일찍 빠져나가는 게 바람의 정체성이다.
-	if SR.spreads(rune_type):
-		_spread_statuses()
-		return
-	# ② 반응 — 이미 붙어 있는 바탕 중 이 룬과 반응하는 게 있으면 그 결과가 이긴다.
-	for base: int in _statuses.keys():
-		var r: Dictionary = SR.react(base, rune_type)
-		if not r.is_empty():
-			_resolve_reaction(base, r, status_power)
-			return
-	# ③ 반응 없음 = 그냥 새 상태.
-	var s := status
-	# 흙은 자기 상태(취약)를 데이터로 못 받은 경우에도 취약을 남긴다 — `amplifies()`가 곧
-	# "이 룬이 취약을 만든다"는 규칙이고, 룬 .tres가 채워지면 위의 `status`가 그대로 이긴다.
-	if s == Enums.Status.NONE and SR.amplifies(rune_type):
-		s = Enums.Status.VULNERABLE
-	_add_status(s, status_power)
-
-
-## 반응 처리 — 바탕은 **소진되고**(반응에 쓰였다), 결과 상태가 있으면 새로 걸린다.
-## kind: convert=조용히 바뀐다 · burst=즉발 폭발(연쇄/증기) · clear=씻겨 사라진다.
-## 세기는 들어온 룬과 바탕 중 **센 쪽**을 쓴다 — 약한 룬으로 강한 바탕을 깎아먹지 않게.
-func _resolve_reaction(base_status: int, r: Dictionary, incoming_power: float) -> void:
-	var power := maxf(incoming_power, status_power_of(base_status))
-	var result := int(r.get("status", Enums.Status.NONE))
-	var kind := str(r.get("kind", "convert"))
-	_statuses.erase(base_status)
-	if kind == "burst":
-		if result == Enums.Status.NONE:
-			# 증기(젖음+불) — 바탕이 날아가며 **제자리 반경 즉발 피해**. 남는 상태가 없다.
-			_burst_damage(BAL.status_steam_px, power * BAL.status_steam_mult, true)
-		else:
-			# 감전 연쇄(젖음+번개) — 주변 적들에게 옮겨 붙는 피해. 맞은 본인은 아래에서 상태를 받는다.
-			_burst_damage(BAL.status_shock_chain_px, power * BAL.status_shock_chain_mult, false)
-	if result != Enums.Status.NONE:
-		_add_status(result, power)
-	else:
-		_refresh_tint()
+## ⚠ **여기 `_exit_tree`로 콜백을 끊지 마라** (세50에 넣었다가 리뷰에서 걷어냈다).
+## 끊을 순환이 없다: Callable은 대상이 RefCounted일 때만 강참조를 잡는데 소유자는 **Node**라
+## ObjectID만 쥔다 — node→holder(강) / holder→node(약)로 이미 비순환이고, node가 free되면
+## 멤버 holder도 같이 죽는다. 반대로 끊어 두면 **`_wire_status`가 `_ready`에만 있어서**
+## 노드를 뺐다 다시 넣는 순간(리페어런팅·풀링) 콜백이 영구히 죽고 **적이 상태를 하나도 안 받는데
+## 에러가 안 난다** — 이 프로젝트가 제일 무서워하는 침묵을 없는 문제를 막으려다 새로 심는 셈이다.
 
 
 ## 반경 안의 다른 적들(그룹 "enemies")에게 즉발 피해. `include_self`면 자신도 맞는다(증기).
@@ -375,8 +316,9 @@ func _burst_damage(radius: float, amount: float, include_self: bool) -> void:
 
 ## 🔴 바람 확산 — **내게 이미 붙은 상태를** 반경 안의 적들에게 옮겨 붙인다.
 ## 내 것은 남긴다(옮기는 게 아니라 번진다) — 안 그러면 바람을 섞을수록 판이 깨끗해진다.
-func _spread_statuses() -> void:
-	if _statuses.is_empty():
+## 🔴 옆 적을 찾는 건 **몸의 일**이라 여기 남았다(holder는 씬을 모른다).
+func _spread_statuses(statuses: Dictionary) -> void:
+	if statuses.is_empty():
 		return
 	for node in get_tree().get_nodes_in_group("enemies"):
 		if node == self or not (node is Node2D):
@@ -385,49 +327,25 @@ func _spread_statuses() -> void:
 			continue
 		if not node.has_method(&"apply_status"):
 			continue
-		for key: int in _statuses.keys():
-			node.apply_status(key, float(_statuses[key]["power"]))
-
-
-## 상태를 건다. 🔴 **중첩 금지 — 재적용은 지속시간 갱신 + 더 센 power 채택**이다
-## (누적시키면 연사만으로 폭발한다). 취약이 걸려 있으면 새로 거는 상태가 더 세진다.
-func _add_status(status: int, power: float) -> void:
-	if _dead:
-		return
-	# 즉발 축(바람 밀림·넉백)은 지속 상태가 아니다 — 이미 다른 축(투사체·넉백)이 처리한다.
-	if status == Enums.Status.NONE or status == Enums.Status.FLOW or status == Enums.Status.KNOCKBACK:
-		return
-	var dur := SR.duration_of(status)
-	if dur <= 0.0:
-		return
-	# 취약 자신에겐 안 곱한다 — 취약이 취약을 키우면 흙만 겹쳐도 무한히 세진다.
-	var amplified := has_status(Enums.Status.VULNERABLE) and status != Enums.Status.VULNERABLE
-	var p := power * SR.power_mult(amplified)
-	var cur: Dictionary = _statuses.get(status, {})
-	_status_seq += 1
-	_statuses[status] = {
-		"power": maxf(p, float(cur.get("power", 0.0))),
-		"time": dur,
-		"seq": _status_seq,
-	}
-	_refresh_tint()
+		for key: int in statuses.keys():
+			node.apply_status(key, float(statuses[key]["power"]))
 
 
 ## 🔴 공개 — 확산이 옆 적에게 상태를 옮길 때 쓰는 유일 경로(내부 필드를 남이 더듬지 않게).
-## 테스트도 이걸로 상태를 세운다.
+## 테스트도 이걸로 상태를 세운다. ⚠ 시그니처는 세션49 그대로다 — 공개 계약이라 안 넓혔다.
 func apply_status(status: int, power: float) -> void:
-	_add_status(status, power)
+	if _dead:
+		return
+	_status.add(status, power)
 
 
 ## 🔴 공개 관측점 — 헤드리스가 상태를 **공개 API로만** 확인하게 (takbon-verify §3, `hp()` 선례).
 func has_status(status: int) -> bool:
-	return _statuses.has(status)
+	return _status.has(status)
 
 
 func status_power_of(status: int) -> float:
-	if not _statuses.has(status):
-		return 0.0
-	return float(_statuses[status]["power"])
+	return _status.power_of(status)
 
 
 ## 🔴 반응 피해 — 조용히 hp만 깎는 DoT와 달리 **한 번뿐인 사건**이라 `enemy_hit`을 쏴 손맛을 준다
@@ -442,17 +360,11 @@ func take_reaction_damage(amount: float) -> void:
 		_die()
 
 
-## 지금 보여 줄 상태 = **가장 최근에 걸린 것** 하나 (여럿이면 최신이 이긴다 — 방금 한 짓이 보여야
-## 룬을 바꾼 보람이 있다). 상태가 다 풀리면 원래 색으로 **반드시 복구**한다.
+## 지금 보여 줄 상태 색 — 고르는 규칙은 holder가 쥔다(적·허수아비가 같게 보이도록).
+## 🔴 `_pop`·`_set_telegraph`의 **복귀 목표가 이 함수**다 — `Color.WHITE`로 돌리면 때릴 때마다
+## 화상 색이 벗겨지는데 **헤드리스가 절대 못 잡는다**(렌더가 없다).
 func _status_tint() -> Color:
-	var best := -1
-	var best_seq := -1
-	for key: int in _statuses.keys():
-		var sq := int(_statuses[key]["seq"])
-		if sq > best_seq:
-			best_seq = sq
-			best = key
-	return Color.WHITE if best < 0 else SR.tint_of(best)
+	return _status.tint()
 
 
 ## 🔴 색 소유권 정리: 상태 틴트는 rgb만 쥐고 **알파는 분산(_set_dispersed)이 쥔다** — 둘이 같은
@@ -523,7 +435,7 @@ func take_hit(damage: float, rune_type: int, status: int, status_power: float) -
 	EventBus.enemy_hit.emit(self, dealt, rune_type)
 	# 🔴 상태·반응은 피해 **뒤에** 판정한다 — 증기·연쇄가 이 한 대의 피해까지 얹은 뒤 터져야
 	# "한 발로 무너졌다"가 성립한다. 여기서 죽었더라도 `_dead` 가드가 이중 처리를 막는다.
-	_apply_incoming(rune_type, status, status_power)
+	_status.apply_incoming(rune_type, status, status_power)
 	# 넉백 = 플레이어 반대쪽으로 (탄이 플레이어→적 방향으로 오므로 그 근사다 — take_hit 계약을
 	# 안 넓히고도 맞는 방향으로 밀린다. 세션 26 forest_enemy 주석의 "계약을 좁히지 않는다"와 같은 결).
 	var p := _player()
@@ -554,6 +466,7 @@ func _die() -> void:
 	if _dead:
 		return  # 🔴 DoT 틱·연쇄·직격이 같은 프레임에 겹쳐도 드롭·퀘스트는 한 번뿐이어야 한다
 	_dead = true
+	_status.clear()  # 남은 DoT 틱이 시체를 더 때리지 않게
 	var scene := get_tree().current_scene
 	if _def != null and scene != null:
 		for drop: DropEntry in _def.drops:

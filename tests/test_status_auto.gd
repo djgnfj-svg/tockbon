@@ -27,6 +27,8 @@ const S_MUD := 8
 const R_FIRE := 0
 const R_WATER := 2
 const R_WIND := 3
+const S_SHOCK := 5
+const R_BOLT := 4
 const R_EARTH := 5
 
 var failures: int = 0
@@ -54,6 +56,10 @@ func _run() -> void:
 	await _test_wind_spreads_status()
 	await _test_reapply_refreshes_not_stacks()
 	await _test_vulnerable_amplifies_next()
+	await _test_burst_uses_balance_base()
+	await _test_power_scales_shock_slow()
+	await _test_slow_cap()
+	await _test_dummy_reacts()
 
 	if failures == 0:
 		print("TEST_STATUS_OK — 전 항목 통과")
@@ -76,7 +82,7 @@ func _test_burn_ticks_hp() -> void:
 			hits[0] += 1
 	_bus.enemy_hit.connect(cb)
 
-	e.take_hit(0.0, R_FIRE, S_BURN, 3.0)  # 직격 피해 0 — 순수 DoT만 본다
+	e.take_hit(0.0, R_FIRE, S_BURN, 1.0)  # 직격 피해 0 — 순수 DoT만 본다
 	_check(e.has_status(S_BURN), "화상이 걸렸다")
 	var h0: float = e.hp()
 	_check(hits[0] == 1, "직격 1회만 enemy_hit이 왔다 (실제 %d)" % hits[0])
@@ -111,7 +117,7 @@ func _test_wet_slows_movement() -> void:
 
 	var dry = await _spawn(&"slime")
 	var wet = await _spawn(&"slime")
-	wet.apply_status(S_WET, 0.35)
+	wet.apply_status(S_WET, 1.0)
 	_check(wet.has_status(S_WET), "젖음이 걸렸다")
 	var d0: Vector2 = dry.global_position
 	var w0: Vector2 = wet.global_position
@@ -143,9 +149,9 @@ func _test_wet_plus_earth_is_mud() -> void:
 	var wet = await _spawn(&"slime")
 	var mud = await _spawn(&"slime")
 	# 🔴 둘 다 take_hit으로 세운다 — 넉백(손맛)이 한쪽에만 붙으면 이동 거리 비교가 오염된다.
-	wet.take_hit(0.0, R_WATER, S_WET, 0.35)
-	mud.apply_status(S_WET, 0.35)
-	mud.take_hit(0.0, R_EARTH, 0, 0.35)  # 흙 룬이 젖음 위에 온다
+	wet.take_hit(0.0, R_WATER, S_WET, 1.0)
+	mud.apply_status(S_WET, 1.0)
+	mud.take_hit(0.0, R_EARTH, 0, 1.0)  # 흙 룬이 젖음 위에 온다
 	_check(mud.has_status(S_MUD), "진흙이 생겼다")
 	_check(not mud.has_status(S_WET), "바탕(젖음)은 반응에 소진돼 사라졌다")
 
@@ -175,8 +181,8 @@ func _test_wet_plus_earth_is_mud() -> void:
 func _test_burn_plus_water_extinguishes() -> void:
 	print("[4] 화상 + 물 = 꺼짐 (반응이 덮어쓰기를 이긴다)")
 	var e = await _spawn(&"slime")
-	e.apply_status(S_BURN, 3.0)
-	e.take_hit(0.0, R_WATER, S_WET, 0.35)
+	e.apply_status(S_BURN, 1.0)
+	e.take_hit(0.0, R_WATER, S_WET, 1.0)
 	_check(not e.has_status(S_BURN), "화상이 꺼졌다")
 	_check(not e.has_status(S_WET), "씻김 반응이라 젖음도 안 남는다 (기본 덮어쓰기가 아니다)")
 	var h0: float = e.hp()
@@ -199,8 +205,8 @@ func _test_wind_spreads_status() -> void:
 	far.global_position = Vector2(400, 0)     # 반경 밖
 	await physics_frame
 
-	a.apply_status(S_BURN, 3.0)
-	a.take_hit(0.0, R_WIND, 4, 60.0)  # 4 = FLOW (바람 룬의 status) — 확산자라 안 남아야 한다
+	a.apply_status(S_BURN, 1.0)
+	a.take_hit(0.0, R_WIND, 4, 1.0)  # 4 = FLOW (바람 룬의 status) — 확산자라 안 남아야 한다
 	_check(near.has_status(S_BURN), "반경 안의 적에게 화상이 번졌다")
 	_check(not far.has_status(S_BURN), "반경 밖 적에겐 안 번졌다")
 	_check(not a.has_status(4), "바람은 자기 상태(밀림)를 안 남긴다")
@@ -214,15 +220,16 @@ func _test_wind_spreads_status() -> void:
 func _test_reapply_refreshes_not_stacks() -> void:
 	print("[6] 재적용 — 누적이 아니라 갱신 (더 센 power 채택)")
 	var e = await _spawn(&"slime")
-	e.apply_status(S_BURN, 3.0)
-	_check(is_equal_approx(e.status_power_of(S_BURN), 3.0),
-		"첫 화상 power 3.0 (실제 %.2f)" % e.status_power_of(S_BURN))
-	e.apply_status(S_BURN, 1.0)  # 더 약한 재적용
-	_check(is_equal_approx(e.status_power_of(S_BURN), 3.0),
-		"약하게 다시 걸어도 누적 안 되고 센 쪽이 남는다 (실제 %.2f, 4.0이면 누적 버그)"
+	# 🔴 세션50: 값이 **세기 배율**이라 1.0 언저리로 잡는다 (옛 3.0/5.0은 "초당피해"였다).
+	e.apply_status(S_BURN, 1.0)
+	_check(is_equal_approx(e.status_power_of(S_BURN), 1.0),
+		"첫 화상 배율 1.0 (실제 %.2f)" % e.status_power_of(S_BURN))
+	e.apply_status(S_BURN, 0.5)  # 더 약한 재적용
+	_check(is_equal_approx(e.status_power_of(S_BURN), 1.0),
+		"약하게 다시 걸어도 누적 안 되고 센 쪽이 남는다 (실제 %.2f, 1.5면 누적 버그)"
 			% e.status_power_of(S_BURN))
-	e.apply_status(S_BURN, 5.0)  # 더 센 재적용
-	_check(is_equal_approx(e.status_power_of(S_BURN), 5.0),
+	e.apply_status(S_BURN, 2.0)  # 더 센 재적용
+	_check(is_equal_approx(e.status_power_of(S_BURN), 2.0),
 		"더 세게 걸면 센 값을 채택한다 (실제 %.2f)" % e.status_power_of(S_BURN))
 	e.free()
 
@@ -242,17 +249,142 @@ func _test_vulnerable_amplifies_next() -> void:
 	_check(is_equal_approx(vuln.status_power_of(S_VULNERABLE), 1.0),
 		"취약 자신은 자기 배율을 안 먹는다 (실제 %.2f)" % vuln.status_power_of(S_VULNERABLE))
 
-	plain.apply_status(S_BURN, 3.0)
-	vuln.apply_status(S_BURN, 3.0)
-	_check(is_equal_approx(plain.status_power_of(S_BURN), 3.0),
-		"취약 없으면 그대로 3.0 (실제 %.2f)" % plain.status_power_of(S_BURN))
+	plain.apply_status(S_BURN, 1.0)
+	vuln.apply_status(S_BURN, 1.0)
+	_check(is_equal_approx(plain.status_power_of(S_BURN), 1.0),
+		"취약 없으면 그대로 1.0 (실제 %.2f)" % plain.status_power_of(S_BURN))
 	_check(vuln.status_power_of(S_BURN) > plain.status_power_of(S_BURN) + 0.1,
 		"취약 위에 걸린 화상이 더 세다 (평시 %.2f → 취약 %.2f)"
 			% [plain.status_power_of(S_BURN), vuln.status_power_of(S_BURN)])
-	_check(is_equal_approx(vuln.status_power_of(S_BURN), 4.5),
-		"정확히 3.0*1.5=4.5 (실제 %.2f)" % vuln.status_power_of(S_BURN))
+	_check(is_equal_approx(vuln.status_power_of(S_BURN), 1.5),
+		"정확히 1.0*1.5=1.5 (실제 %.2f)" % vuln.status_power_of(S_BURN))
 	plain.free()
 	vuln.free()
+
+
+## [8] 🔴 버스트 피해가 **balance 기준값**을 쓴다 (세션50). 세션49엔 `power × mult`였는데,
+## power가 "초당피해 3.0"에서 "배율 1.0"으로 통일되면 피해가 **조용히 1/3로 토막** 난다 —
+## 에러도 없고 기존 테스트도 하나도 안 잡았다. 이 테스트가 그 구멍이다.
+## 계산 = `status_burst_base(3.0) × power(1.0) × steam_mult(0.8)` = 2.4.
+## 뮤테이션(`SR.burst_damage(power, mult)` → `power * mult`) → 0.8이 되어 빨개진다.
+func _test_burst_uses_balance_base() -> void:
+	print("[8] 버스트 피해 = status_burst_base × 배율 (power만 쓰면 1/3 토막)")
+	var a = await _spawn(&"slime")
+	var near = await _spawn(&"slime")
+	a.global_position = Vector2.ZERO
+	near.global_position = Vector2(50, 0)  # 증기 반경(status_steam_px 70) 안
+	await physics_frame
+
+	var h0: float = near.hp()
+	a.apply_status(S_WET, 1.0)
+	a.take_hit(0.0, R_FIRE, S_BURN, 1.0)  # 젖음 + 불 = 증기(burst)
+	var dealt: float = h0 - near.hp()
+	_check(dealt > 0.0, "옆 적이 증기에 맞았다 (%.2f)" % dealt)
+	_check(is_equal_approx(dealt, 2.4),
+		"기준값 3.0 × 배율 1.0 × 증기 0.8 = 2.40 (실제 %.2f — 0.80이면 power만 쓴 것)" % dealt)
+	a.free()
+	near.free()
+
+
+## [9] 🔴 **이 작업의 존재 이유를 지키는 테스트.** 세기 배율(특별잉크 증폭)이 감전에도 통한다.
+## 세션49엔 감속이 balance 고정이라 **번개·흙·풀엔 특별잉크가 아예 안 통했다**(세28~29 경제의 절반).
+## 뮤테이션(`SR.move_mult`에서 `* power` 제거) → 두 거리가 같아져 빨개진다.
+func _test_power_scales_shock_slow() -> void:
+	print("[9] 세기 배율이 감전 감속에도 통한다 (특별잉크가 6룬 전부에 통하는가)")
+	var stub := Node2D.new()
+	stub.add_to_group("player")
+	stub.global_position = Vector2(120, 0)
+	root.add_child(stub)
+
+	var weak = await _spawn(&"slime")
+	var strong = await _spawn(&"slime")
+	weak.apply_status(S_SHOCK, 1.0)
+	strong.apply_status(S_SHOCK, 1.8)  # 특별잉크로 증폭된 셈
+	var w0: Vector2 = weak.global_position
+	var s0: Vector2 = strong.global_position
+	for i in 30:
+		await physics_frame
+	var wd: float = weak.global_position.distance_to(w0)
+	var sd: float = strong.global_position.distance_to(s0)
+	_check(wd > 0.5, "약한 감전 적은 실제로 움직였다 (%.2fpx)" % wd)
+	_check(sd < wd * 0.8,
+		"세게 건 감전이 뚜렷하게 더 묶는다 (배율1.0 %.2f → 배율1.8 %.2f)" % [wd, sd])
+	weak.free()
+	strong.free()
+	stub.free()
+
+
+## [10] 🔴 감속 **상한**(`status_slow_cap` 0.90). 배율이 커져도 완전정지가 되면 안 된다 —
+## "느려졌다"와 "죽었다/어그로가 풀렸다"가 구분이 안 가고, [3]이 이미 그 함정을 밟았다.
+## ⚠ 클램프가 없으면 `1 - 0.85*5 = -3.25`로 **음수 배율**이 돼 적이 플레이어 **반대로** 튄다 —
+## 그래서 "얼마나 움직였나"만 재면 못 잡는다. 방향까지 본다.
+## 뮤테이션(`clampf` 제거) → 두 줄 다 빨개진다.
+func _test_slow_cap() -> void:
+	print("[10] 감속 상한 — 아무리 세도 멈추지도, 거꾸로 가지도 않는다")
+	var stub := Node2D.new()
+	stub.add_to_group("player")
+	stub.global_position = Vector2(120, 0)
+	root.add_child(stub)
+
+	var e = await _spawn(&"slime")
+	e.apply_status(S_MUD, 5.0)  # 0.85 × 5.0 = 4.25 → cap 0.90으로 잘린다
+	var p0: Vector2 = e.global_position
+	var far0: float = e.global_position.distance_to(stub.global_position)
+	for i in 30:
+		await physics_frame
+	var moved: float = e.global_position.distance_to(p0)
+	var far1: float = e.global_position.distance_to(stub.global_position)
+	_check(moved > 0.5, "상한에 걸려도 (느리게나마) 움직인다 = 완전정지가 아니다 (%.2fpx)" % moved)
+	_check(far1 < far0,
+		"플레이어 쪽으로 갔다 = 배율이 음수로 안 뒤집혔다 (%.2f → %.2f)" % [far0, far1])
+	e.free()
+	stub.free()
+
+
+## [11] 🔴 **허수아비도 반응한다** (세션50 빚②). 그전엔 `take_hit`이 상태를 버려서
+## **연습장에서 반응을 시험할 수 없었다** — 마법을 만들고 바로 쏴 보는 자리인데.
+## 연쇄 피해는 HP가 없어 `status_damage_total()`이 유일한 관측점이다.
+## 뮤테이션(dummy의 `_wire_status`/`apply_incoming` 배선 제거) → 전부 빨개진다.
+func _test_dummy_reacts() -> void:
+	print("[11] 허수아비 — 상태를 받고 반응하고 연쇄가 옆 허수아비에 닿는다")
+	var scene = load("res://src/spell/dummy_target.tscn") as PackedScene
+	var a = scene.instantiate()
+	var near = scene.instantiate()
+	root.add_child(a)
+	root.add_child(near)
+	a.global_position = Vector2.ZERO
+	near.global_position = Vector2(60, 0)  # 감전 연쇄 반경(status_shock_chain_px 90) 안
+	await process_frame
+	await physics_frame
+
+	# ⓐ 반응 산물이 실제로 걸린다 (젖음 + 흙 = 진흙)
+	a.apply_status(S_WET, 1.0)
+	a.take_hit(0.0, R_EARTH, 0, 1.0)
+	_check(a.has_status(S_MUD), "허수아비에 진흙이 생겼다")
+	_check(not a.has_status(S_WET), "바탕(젖음)은 반응에 소진됐다")
+
+	# ⓑ 감전 연쇄가 옆 허수아비까지 간다 = 연습장에서 조합이 **눈에 보인다**
+	near.apply_status(S_WET, 1.0)
+	var before: float = a.status_damage_total()
+	near.take_hit(0.0, R_BOLT, S_SHOCK, 1.0)  # 젖음 + 번개 = 감전 연쇄(burst)
+	_check(near.has_status(S_SHOCK), "맞은 허수아비에 감전이 남았다")
+	_check(a.status_damage_total() > before,
+		"연쇄가 옆 허수아비에 닿았다 (%.2f → %.2f)" % [before, a.status_damage_total()])
+
+	# ⓒ DoT가 누적 카운터로 쌓인다 (HP가 없어 이게 유일한 관측점)
+	var burnt = scene.instantiate()
+	root.add_child(burnt)
+	burnt.global_position = Vector2(9000, 0)  # 반경 밖 — 위 연쇄와 섞이지 않게
+	await physics_frame
+	burnt.apply_status(S_BURN, 1.0)
+	var d0: float = burnt.status_damage_total()
+	for i in 70:
+		await physics_frame
+	_check(burnt.status_damage_total() > d0 + 1.0,
+		"화상 DoT가 누적됐다 (%.2f → %.2f)" % [d0, burnt.status_damage_total()])
+	a.free()
+	near.free()
+	burnt.free()
 
 
 # ── 헬퍼 ──

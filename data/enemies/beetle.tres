@@ -14,6 +14,11 @@ script = ExtResource("1_rfba6")
 item_id = &"charm_basic"
 chance = 0.08
 
+[sub_resource type="Resource" id="Resource_ea7th"]
+script = ExtResource("1_rfba6")
+item_id = &"fragment_earth"
+chance = 0.25
+
 [resource]
 script = ExtResource("2_35dfq")
 id = &"beetle"
@@ -32,4 +37,4 @@ params = {
 "size": 1.5,
 "weakness_mult": 1.75
 }
-drops = Array[ExtResource("1_rfba6")]([SubResource("Resource_i5jdj"), SubResource("Resource_3t0kw")])
+drops = Array[ExtResource("1_rfba6")]([SubResource("Resource_i5jdj"), SubResource("Resource_3t0kw"), SubResource("Resource_ea7th")])

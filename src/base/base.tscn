@@ -47,20 +47,25 @@ position = Vector2(0, 40)
 
 [node name="Targets" type="Node2D" parent="."]
 
+; 🔴 허수아비 간격은 **연쇄·확산 반경 안**이어야 한다 (세션50 실측).
+; 세44~49 배치는 최소 간격이 102px였는데 `status_shock_chain_px`가 90이라
+; **연습장에서 감전 연쇄가 한 번도 안 터졌다** — 배선이 맞아도 아무 일이 안 일어난다.
+; 지그재그로 이웃 간 78~82px로 좁혀, 젖음+번개가 옆으로 타고 흐르는 게 보이게 했다.
+; ⚠ 여기 좌표를 벌리려거든 balance의 status_shock_chain_px(90)·status_spread_px(110)를 같이 봐라.
 [node name="Dummy1" parent="Targets" instance=ExtResource("5_dummy")]
-position = Vector2(240, -90)
+position = Vector2(240, -70)
 
 [node name="Dummy2" parent="Targets" instance=ExtResource("5_dummy")]
-position = Vector2(330, -30)
+position = Vector2(312, -40)
 
 [node name="Dummy3" parent="Targets" instance=ExtResource("5_dummy")]
-position = Vector2(250, 60)
+position = Vector2(250, 10)
 
 [node name="Dummy4" parent="Targets" instance=ExtResource("5_dummy")]
-position = Vector2(360, 110)
+position = Vector2(315, 60)
 
 [node name="Dummy5" parent="Targets" instance=ExtResource("5_dummy")]
-position = Vector2(230, 160)
+position = Vector2(250, 105)
 
 [node name="RingSpellSystem" parent="." instance=ExtResource("4_spell")]
 z_index = 10

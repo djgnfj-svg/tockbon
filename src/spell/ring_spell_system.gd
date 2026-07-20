@@ -257,7 +257,11 @@ func _spawn_pillar(at: Vector2, gather: int, fire: Dictionary) -> void:
 ## 🔴 `power` = 손그림·잉크·크기가 정한 위력 배율 → **피해에** 곱한다 (세션 23·29).
 ## 🔴 `status_mult` = 특별잉크 화상 증폭 (세션29) → **상태이상 세기에만** 곱한다. 피해(power)와
 ## 상태(status_mult)는 **다른 축**이다 — 잉크 등급=피해, 특별잉크=상태. 섞으면 축이 겹친다.
-## (룬 농도 세기는 조립 단계에서 status_power에 이미 반영돼 이 rune.status_power로 들어온다.)
+## ⚠ **거짓 주석 정정**(세50): 전엔 여기에 *"룬 농도 세기가 조립 단계에서 status_power에 이미
+## 반영돼 들어온다"*고 적혀 있었는데 **사실이 아니다.** 아래 `rune`은 `Db.get_rune()`으로 갓 꺼낸
+## RuneDef라 조립 결과가 아니고, `balance`의 `rune_density_min/max`·`rune_fill`은 **소비자가 0곳**이다.
+## 즉 "진 안에 룬을 얼마나 크게 그렸나"가 아무 데도 안 쓰인다 = **그리는 재미 축 하나가 죽어 있다**
+## (세50 빚① `status_power`와 정확히 같은 병 — 살릴지 접을지는 다음 세션 결정).
 func _fire_hit(power: float = 1.0, status_mult: float = 1.0,
 		rune_type: int = Enums.RuneType.FIRE) -> Dictionary:
 	var rune: RuneDef = Db.get_rune(rune_type)

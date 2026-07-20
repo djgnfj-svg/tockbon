@@ -13,6 +13,11 @@ script = ExtResource("1_ed26q")
 item_id = &"robe_basic"
 chance = 0.05
 
+[sub_resource type="Resource" id="Resource_b0lt7"]
+script = ExtResource("1_ed26q")
+item_id = &"fragment_bolt"
+chance = 0.25
+
 [resource]
 script = ExtResource("2_6m5mh")
 id = &"mist"
@@ -35,5 +40,5 @@ params = {
 "size": 1.0,
 "weakness_mult": 2.0
 }
-drops = Array[ExtResource("1_ed26q")]([SubResource("Resource_l3ft3"), SubResource("Resource_1w7mn")])
+drops = Array[ExtResource("1_ed26q")]([SubResource("Resource_l3ft3"), SubResource("Resource_1w7mn"), SubResource("Resource_b0lt7")])
 night_buff = 1.6
