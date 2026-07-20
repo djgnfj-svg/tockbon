@@ -108,10 +108,14 @@ func _run() -> void:
 	# ── 🔴 새로하기 (세션37, F8) — 전부 비우고 시작 해금만 재시드 ──
 	# save_manager 노트의 계약: new_game은 save_game이 쓰는 것 전부 + bag·hp를 비우고, 시작 해금
 	# (rune_fire·glyph_thrust)만 재시드한다. 씬마다 손으로 비우면 필드가 늘 때 조용히 갈라지므로 core에.
-	# 🔴 빈 시작(사용자 확정 세션37): 장비도·지은 스테이션(station_*)도·해독 룬(물)도 남지 않는다.
+	# 🔴 빈 시작(사용자 확정 세션37): 장비도·지은 스테이션(station_*)도·해독으로 얻은 해금도 남지 않는다.
+	# ⚠ 세션49에 **룬 6종이 전부 시작 시드가 됐다**(사용자: "룬도 여러개 그냥 미리 열어줘" — 원소
+	# 반응은 두 룬을 이어 써야 보이는데 물·바람은 해독으로만, 번개·흙·풀은 경로가 아예 없었다).
+	# 그래서 "해독 룬(물)이 사라지나"로는 이 계약을 더 못 잰다 — **시드에 없는 임의 해금 키**로
+	# 바꿨다. 시드 목록이 또 바뀌어도 이 검증은 안 죽는다(그게 세49에 이게 깨진 이유다).
 	gs.add_item(&"ink_basic", 7)
 	gs.equipment[Enums.ItemKind.PEN] = &"pen_basic"     # 장비 입은 상태를 만든다
-	gs.codex[&"rune_water"] = true                       # 해독으로 얻은 룬
+	gs.codex[&"__decoded_probe"] = true                  # 해독으로 얻은 해금 (시드에 없는 키)
 	gs.codex[&"station_refine"] = true                   # 지은 스테이션
 	gs.quest_done[&"q01_first_hunt"] = true
 	gs.new_game()
@@ -121,7 +125,7 @@ func _run() -> void:
 	_check("🔴 새로하기: 고리 도안 비었다", gs.ring_designs.is_empty())
 	_check("🔴 새로하기: 시작 해금 재시드 (불 룬·추진 문양) — 안 심으면 아무것도 못 그린다",
 		gs.is_unlocked(&"rune_fire") and gs.is_unlocked(&"glyph_thrust"))
-	_check("🔴 새로하기: 해독 룬(물)은 사라졌다", not gs.is_unlocked(&"rune_water"))
+	_check("🔴 새로하기: 해독으로 얻은 해금은 사라졌다", not gs.is_unlocked(&"__decoded_probe"))
 	_check("🔴 새로하기: 지은 스테이션(정제대)은 사라졌다 — 거점 빈 시작", not gs.is_unlocked(&"station_refine"))
 
 	# 뒷정리 — 실제 플레이 세이브 오염 방지

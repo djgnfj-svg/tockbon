@@ -60,6 +60,15 @@ func _ready() -> void:
 ## 확정: "시작했을 때 아무것도 없는 상태가 중요"). 거점은 재료로 직접 지어 채운다.
 func _seed_starting_unlocks() -> void:
 	codex[&"rune_fire"] = true
+	# 🔴 세션49 룬 6종 전부 시드 (사용자: *"룬도 여러개 그냥 미리 열어줘"*). 원소 반응(진흙·감전
+	# 연쇄·산불·확산)은 **두 룬을 이어 써야** 보이는데, 물·바람은 해독으로만 열리고 번개·흙·풀은
+	# 획득 경로가 아예 없어 **게임에서 반응을 시험할 방법이 없었다**(세48 진 5종과 같은 처지).
+	# ⚠ 해독·보상 경로가 생기면 여기서 빼면 그대로 "얻는 것"이 된다.
+	codex[&"rune_water"] = true
+	codex[&"rune_wind"] = true
+	codex[&"rune_bolt"] = true
+	codex[&"rune_earth"] = true
+	codex[&"rune_grass"] = true
 	codex[&"glyph_thrust"] = true
 	# 🔴 시작 진 3종 (세션44, 진=형태). "처음부터 여러 진을 주고 골라 그리게"(사용자 확정) — 단발·
 	# 산탄·둘레. 즉시 자유(①학파). 특이한 진은 크래프트/보상으로 늘린다. unlock_id = jin_*.tres와 짝.
