@@ -63,6 +63,17 @@ signal equipment_changed
 ## ⚠ 창고 입고·제작 소비·정산은 이 신호를 쓰지 않는다 — 쓰면 공방에서 제작할 때마다 토스트가 뜬다.
 signal item_collected(item_id: StringName, count: int)
 
+# ── 원소 반응 VFX (세션52) — 몸(forest_enemy·dummy_target)이 방송, src/actors/vfx.gd가 그린다.
+## 🔴 연출용 순수 오버레이다 — 게임 로직은 이 신호를 **안 본다**(퀘스트처럼 관찰만). 반응 판정·피해는
+## 이미 status_holder/몸이 다 했고, 이 신호는 "어디서·어디로 뭐가 터졌나"를 VFX에만 알린다.
+## pos·from·to는 전부 **월드 전역 좌표**. status = Enums.Status(색은 VFX가 SR.tint_of로 되쓴다 —
+## 상태 색 단일 소스 재사용). 발신자는 forest_enemy·dummy_target의 `_burst_damage`·`_spread_statuses`.
+## ⚠ 발신자가 몸 두 곳으로 갈려 있으니, 한쪽만 고치면 연습장↔숲에서 연출이 조용히 갈라진다.
+## 반응이 한 자리에서 터졌다(면적). radius = 실제 게임플레이 반경(감전연쇄/증기 px). status=결과 상태(NONE=증기·SHOCK=감전).
+signal reaction_burst(pos: Vector2, radius: float, status: int)
+## 상태가 A→B로 튀었다(감전 연쇄 한 가닥 · 바람 확산 한 가닥). 대상마다 1회. 색은 status로 갈린다.
+signal reaction_chain(from: Vector2, to: Vector2, status: int)
+
 # ── 설정 (Audio → UI)
 ## 🔴 음소거 상태가 바뀌었다 (설정). Audio가 소유·저장하고 발신 → HUD 표시·타이틀 버튼이 갱신.
 signal audio_muted_changed(muted: bool)

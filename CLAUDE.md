@@ -1,4 +1,4 @@
-# 탁본 (TAKBON) — Godot 4.6.1 · 2D 탑다운 익스트랙션 로그라이트
+# 탁본 (TAKBON) — Godot 4.7.1 · 2D 탑다운 익스트랙션 로그라이트
 
 낮에는 숲에서 사냥하며 글자를 탁본하고, 밤에는 마법진을 손으로 그리는 게임.
 1인 개발(사용자) + Claude 리드 세션 + 서브에이전트 팀으로 개발한다.
@@ -9,31 +9,32 @@
 > 지금 게임 = `src/base`(베이스캠프) + 고리 조립 책 + 숲 원정 + 온보딩 레일.
 > 🔴 **기록 규칙: 직전 세션만 상세, 그 전은 아래 「한 줄 지도」로 내려보낸다** — 이 절이 길어지면 정리 신호.
 
-🔴🔴 **직전 세션 = 50 「세션49의 빚 3개 청산 — 그런데 곁가지가 본편보다 컸다」** (정본 STATUS「50」+ memory `takbon-silent-data-death`):
-사용자 *"빚 먼저 처리해줘"*. 파이프라인을 처음으로 제대로 돌렸다: **architect(설계) → dev 2명(병렬) → reviewer(커밋 전) → 리드(검증·커밋)**.
-🔴 **빚① `status_power` = 「세기 배율」로 통일**(전 룬 1.0), 기본 수치는 balance로(`status_burn_dot_base`·`status_burst_base`·`status_slow_cap`). **특별잉크가 6룬 전부에 균일하게 통한다**(전엔 번개·흙·풀에 안 통해 세28~29 경제의 절반이 죽어 있었다). 취약의 세기축 = **증폭 배수**(사용자 확정 — 지속을 흔들면 보상이 「세기」가 아니라 「타이밍 여유」로 미끄러진다).
-🔴 **감전 연쇄만 실제로 세졌다: 0.6 → 1.8(3배)** — 옛값은 번개 세기가 안 읽히던 시절의 사고값. **맞는 세기인지는 사용자가 쏴 봐야 한다.**
-🔴 **빚② `src/core/status_holder.gd` 추출** — `forest_enemy`(−192줄)와 `dummy_target`이 공유해 **연습장에서 반응을 시험할 수 있다**. **역할 3분할 = 규칙(`status_rules`) / 보유·시간(holder) / 몸(소유자)**. 🔴 **콜백 경계**: holder는 hp를 안 깎고·씬을 안 뒤지고·`modulate`를 안 만진다(틴트는 **Color를 반환만** — 아니면 안개 분산 알파가 조용히 사라진다).
-🔴 **빚③ 룬 획득 경로** — 조각 3장 + vine/beetle/mist 드롭 + **gale 숲 심층 배치** + 퀘스트 q08~q10 (사용자 확정 = 기존 적 재활용, 새 적·새 아트 0).
-🔴🔴 **곁가지 둘이 더 컸다 — 둘 다 「배선은 맞는데 데이터가 조용히 안 맞던 것」**:
-  ⓐ **바람 룬이 통째로 죽어 있었다** — `rune_wind.tres`의 `ui_color`가 **3인자 `Color`**라 파싱 실패 → `Db`가 조용히 건너뛰어 `get_rune(3)`이 계속 null. 세49가 시드까지 해 준 룬을 아무도 못 쓰고 있었다. **버그를 되돌려도 전 스위트 `pass=23 fail=0`(검출력 0)** → `test_decode_auto`에 「룬 6종 전부 로드」+「조각→룬 왕복」을 붙여 **이 반복 함정에 처음으로 자동 감시가 생겼다**.
-  ⓑ **연습장에서 감전 연쇄가 한 번도 안 터졌다** — 허수아비 간격 102px vs 연쇄 반경 90px. 78~82px로 좁혔다. 🔴 **정본 주석은 `balance_data.status_shock_chain_px`** (씬의 `;` 주석은 에디터가 저장하면 날아간다).
-⏸ **의도적으로 잠자는 콘텐츠 (버그 아님)**: `_seed_starting_unlocks()`가 룬 6종을 미리 열어 **빚③ 산출물이 전부 소급 완료**된다. 사용자 확정으로 유지 — 다음이 "직접 쏴 보기"인데 시드를 빼면 두 번째 룬까지 막힌다. 🔴 **손맛 확인이 끝나면 `game_state.gd`의 5줄을 지워라**(경로 자체는 실게임 확인됨: gale→드롭→줍기→가방).
-✅🔴🔴 **ⓐ 완료 — 사용자가 직접 플레이하고 확인했다** (세50 말): *"마법진 손으로 해보니까 재미있으니까 지금까지 잘됨."*
-**핵심 가설이 실제 플레이로 확인된 순간이다** — 세13에 세우고 세25에 클릭 조립과 겨뤄 이긴 「손으로 그린다」가, 이제 룬·문양·진이 다 붙은 상태에서도 **재미있다**. 방향 전환 없이 이 축을 계속 키우면 된다([[takbon-hand-trace-commit]]·[[takbon-core-fun-drawing]]).
-🔴 **다음 = ⓐ' 드롭 흡수 애니메이션** (사용자 요청, 세50 말): *"몬스터를 잡았을 때 나에게 흡수되는 애니메이션 필요할듯."* 지금은 세46 설계대로 **걸어가 겹쳐야** 줍는데(`src/props/drop_pickup`), 사용자가 원하는 건 **처치 → 아이템이 플레이어에게 빨려오는** 연출이다. ⚠ **줍는 규칙을 바꾸자는 게 아니라 「보상이 도착하는 느낌」이 없다는 말**로 읽어라 — 자석 반경 안에서 끌려오게 할지, 처치 순간 날아오게 할지는 설계 판단(`takbon-architect`).
-→ ⓑ **임팩트 표현**(사용자: *"재미는 보장된 시스템이고 임팩트를 어떻게 표현할 문제"* — 지금도 색 틴트뿐). **ⓐ'와 같은 결이다**(둘 다 "일어난 일이 눈에 안 보인다") → 묶어서 하는 게 자연스럽다.
-→ ⓒ 아래 남은 빚. 그리고 **연쇄 1.8이 맞는 세기인지는 아직 미확인**(사용자가 반응까지는 안 봤다).
+🔴🔴 **직전 세션 = 52 「임팩트 표현 — 반응이 드디어 눈에 보인다」** (정본 STATUS「52」+ memory `takbon-reaction-vfx`):
+사용자 확정 = **스테이지1+2(감전연쇄·증기·바람 확산), 감전 = 아크 + 중심 스파크**. 파이프라인 완주(architect→dev→reviewer→리드 검증·커밋).
+문제: 세49~50에 원소 반응은 **재미가 확인됐는데 「일어난 일이 눈에 안 보였다」**(색 틴트 + 일반 타격 팝뿐). 감전이 옆 적으로 튀어도 화면엔 피해 숫자만.
+🔴 **병목의 정체 = 반응이 터진 위치·반경·연쇄 대상이 `status_holder.on_burst` 콜백 안에서 죽었다** — 아무도 밖에 안 알려 VFX가 그릴 수가 없었다.
+🔴 **해법 = 몸이 EventBus 신호로 방송 → `src/actors/vfx.gd`(juice.gd의 형제 공용 노드)가 그린다.** 신설 신호 `reaction_burst(pos,radius,status)`·`reaction_chain(from,to,status)`. `on_burst`에 `result_status` 인자 추가(증기=NONE·감전=SHOCK). VFX는 **순수 오버레이**(퀘스트처럼 EventBus 관찰만) = 반응 로직·피해 무변경 = 회귀 0.
+🔴 **왜 juice 형제 공용 노드인가 = 이 작업의 존재 이유**: holder가 세50에 **연습장 허수아비도 쓰도록** 추출됐는데, VFX를 forest_enemy에만 넣으면 **마법을 시험하는 그 연습장에서 반응이 안 보인다**. juice처럼 Player 아래 두면 베이스·숲 자동. 색은 `SR.tint_of` 재사용(색 테이블 단일 소스).
+🔴 **파티클 안 씀 — 전부 Node2D 절차(Line2D+tween, death_puff 결)**: 감전·바람의 핵심이 「두 점 잇는 번개 아크」라 파티클론 안 나온다. 연출값은 vfx.gd `const`(손맛 — balance 아님). 링은 **실제 게임 반경**으로 그려 세50의 「반경 밖이라 안 터졌다」를 눈으로 폭로한다.
+🔴 **곁가지 = `status_holder.representative()` 단일 소스**: seq-최대(최신이 이긴다) 로직이 두 몸에 복제될 뻔(+ `tint()`가 3번째)한 걸 리뷰가 잡아 holder 공개 API로 뽑았다(세51 `grade_colors.gd`와 같은 자리). 몸이 내부 dict `["seq"]`를 안 더듬는다.
+🔴 **연습장↔숲 파리티**: `forest_enemy`·`dummy_target` 두 몸을 **동일하게** 배선(한쪽만 하면 연습장에서 연출이 갈라진다 — 이 작업의 존재 이유).
+✅ 검증: 전 스위트 그린 · `test_status_auto`[12]에 신호 발신 assert(감전=버스트+아크·증기=버스트만·바람=대상마다 아크) + 뮤테이션 검출력(1건) · **실게임 스샷 = 노란 링·번개 아크·중심 스파크 렌더 확인**(반경 90이 옆 허수아비 덮는 걸 링이 폭로).
+🔴 **다음 = 손맛은 사용자 몫**(vfx.gd const로 밝기·지터·수명 조인다 — 아직 안 봄). 스테이지3(진흙·산불·무성함 convert 플레어)·4(DoT 불티)는 보류(틴트로 이미 색이 어느 정도 보임). 그리고 **`take_reaction_damage` FIRE 하드코딩이 더 급해졌다**(아크가 생겨 "어떤 반응이든 불 소리"가 더 드러난다 — 설계·리뷰 둘 다 지적). 그 외 아래 남은 빚.
+🔴 **연쇄 1.8이 맞는 세기인지는 여전히 미확인**(세50 이월 — 이제 아크가 보이니 반응 손맛 확인이 더 쉬워졌다).
+⏸ **의도적으로 잠자는 콘텐츠 (버그 아님)**: `_seed_starting_unlocks()`가 룬 6종을 미리 열어 룬 획득 경로 산출물(조각·드롭·q08~q10)이 소급 완료돼 안 보인다. 🔴 **손맛 확인이 끝나면 `game_state.gd`의 5줄을 지워라**(경로 자체는 실게임 확인됨: gale→드롭→줍기→가방).
 ⏸ **보류 = forest_t2(숲2·티어 하강)** — 사용자 확정(세48): *"숲2는 아직 필요없음."* 딸린 **「하강 시 회복 스킵」도 같이 보류**(`src/field/forest.gd:131` 주석).
 
-🔴 **세션50이 남긴 빚**:
-- 🔴 **`rune_fill`(룬 농도)의 소비자가 0곳** — "진 안에 룬을 얼마나 크게 그렸나"가 **아무 데도 안 쓰인다**. `ring_spell_system`의 주석이 *"조립 단계에서 반영돼 들어온다"*고 **거짓말을 하고 있었다**(세50에 정정). **빚①과 정확히 같은 병인데 이건 「그리는 재미」 축이다** — 살릴지 접을지 결정 필요.
+🔴 **남은 빚** (세50~52 누적):
+- 🔴 **`take_reaction_damage`의 룬이 하드코딩 `FIRE`** — 어떤 반응이든 불 소리가 난다. **세52에 급해졌다**: 감전 아크가 생겨 "번개 반응인데 불 소리"가 더 드러난다(설계·리뷰 둘 다 지적). 반응별 룬을 실어 보내면 소리·(향후)VFX 색이 맞는다.
+- 🔴 **`rune_fill`(룬 농도)의 소비자가 0곳** — "진 안에 룬을 얼마나 크게 그렸나"가 **아무 데도 안 쓰인다**. `ring_spell_system`의 주석이 *"조립 단계에서 반영돼 들어온다"*고 **거짓말을 하고 있었다**(세50에 정정). **「그리는 재미」 축이다** — 살릴지 접을지 결정 필요.
 - **gale은 아직 보스가 아니다** — `params`의 `gust_*`·`volley_*`·`phase2_*` **12개를 읽는 코드가 없어** hp250짜리 평범한 추격체다. `params.ai = "boss_gale"` 분기 하나면 "새 행동 = params 한 줄"이 성립한다(세46 계약).
 - **취약 이중 증폭** — 반응 산물에 배수가 두 번 곱한다(세49부터라 회귀는 아님). 의도인지 사고인지 미정.
-- **`take_reaction_damage`의 룬이 하드코딩 `FIRE`** — 어떤 반응이든 불 소리가 난다.
 - **vine이 숲에 1마리뿐**이라 0.25 드롭이면 풀 조각 하나에 원정 4번(beetle 3·mist 2와 속도가 고르지 않다).
+- **반응 VFX 스테이지3~4 보류** — convert(진흙·산불·무성함) 플레어·DoT 불티는 틴트로 이미 어느 정도 보여 미룸(세52 설계 §5).
 
 **지난 세션 한 줄 지도** (상세는 STATUS/memory — 필요할 때만 캐라):
+- **51** 드롭 흡수 애니메이션 — 처치→균등각 흩뿌림→**자석 반경**(fly-at-kill 각하)→가속 흡수→도착 팝+획득 토스트 · 등급색 단일소스 `grade_colors.gd`(사본 2+토스트가 3번째 될 뻔) · 자석에 물리 안 씀(그룹조회+거리) (`0c1a5bb`)
+- **50** 세49 빚3 청산 — `status_power` 세기배율 통일·`status_holder` 추출·룬 획득경로 + 곁가지 둘(바람룬이 3인자 Color로 죽어 있던 것·연쇄 반경 102>90) (`7791631`)
 - **49** 룬 상태이상·원소 반응 — 룬 축이 실체를 얻었다. **원칙 「단독은 약한 바탕, 조합에서 폭발한다」** · 규칙 단일 소스 `src/core/status_rules.gd`(**반응 추가 = 줄 하나**) · 룬 3→6(바람=**확산자**·흙=**취약**, 원신 Swirl/Crystallize 선례) · **룬 전용 문양 각하** → 문양6×룬6=**36조합**(어휘가 아니라 곱셈이 는다)(`0472cc3`·`c887758`)
 - **48** 진 3→8종: `pattern`×`motion` 축 분리 + 진마다 다른 닫힌 밑그림(`e7674bc`)
 - **47** 문양 어휘 3→6(유도·팅김·추진) — 잠들어 있던 `projectile` 효과 기계를 켠 것(`620f66d`)
@@ -197,23 +198,23 @@
 방치됐다** (세션 8에 발견·복구).
 
 ```bash
-./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_save_auto.gd            # 저장/로드 (고리 라운드트립) · 🔴**부팅만으로 자동 저장이 준비되나**(세션 26 F3 — 이 확인은 `load_game()` **호출 전**에 있어야 한다. 순서가 곧 검출력이다)
-./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_ring_assembly_auto.gd   # **조립 상태기계 계약**: 단계 전이·문양본이 칸을 여는 규칙·assembly 발사 계약·시그널 (세션 22)
-./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_ring_trace_auto.gd      # **손그림 탁본**: 완성도/정밀도·[다음] 수동 진행·칸 자유 편집·I3 · **정밀도 이빨(⑨⑩)·펜 보정(⑪⑫)**
-./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_ring_spell_auto.gd      # **고리 발사**: 진→투사체·착탄 전개(발산 탄환·응집 기둥)·실제 적 take_hit
-./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_ring_design_auto.gd     # **고리 도안 통합**: RingDesign 라운드트립·ring_design_committed→GameState 자동 장착 · **등급⇔펑 경계·퍼펙트⇔화면100** (세션 24)
-./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_base_auto.gd            # **베이스캠프 발사 배선** (세션 24): 과녁 사거리 · 🔴**물리 레이어 계약**(내 몸/책상이 world면 진이 총구에서 죽는다 — 에러 없이 조용히) · [8] 숲길
-./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_forest_auto.gd         # **숲 원정** (세션 26): 출격 만HP · 적이 쫓아옴(그룹 "player") · 접촉 피해 · 🔴**적 레이어 계약**(4=enemy가 아니면 부딪히기만 하고 take_hit이 안 불린다) · 귀환/사망 계약(extraction_success·bag_lost)
-./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_workshop_auto.gd      # **공방 장비 제작** (세션 32): 레시피 station 분리(정제대⇔공방) · 펜 제작(spend→add) · 장착 라운드트립(equip→correction 0.35→소비, unequip→반환) · 🔴**패널 클릭은 헤드리스가 못 잡는다**(실게임 push_input로 별도 검증)
-./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_audio_auto.gd         # **사운드 배선** (세션 33): 17 SFX 로드·길이>0 · Audio가 EventBus 9종에 연결 · 발신→올바른 스트림(부작용 순간은 연결만) · 🔴**소리가 실제로 나는지는 헤드리스가 못 잡는다**(오디오 드라이버 없음 — 버스 라우팅·playing은 에디터 실게임 exec로 별도 검증)
-./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_decode_auto.gd        # **탁본 해독** (세션 34 E4): 조각 소비+룬 해금(codex_unlocked) · 이미 배운 룬은 조각 안 닳림 · 해금이 룬 목록에 흐름 · 🔴**룬 탭 다중셀 렌더·클릭은 헤드리스가 못 잡는다**(문양 탭·refine과 동일 패턴 — 에디터 실게임 스샷으로 별도 확인: 불△·물▽ 셀·바람은 잠겨 안 뜸)
-./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_quests_auto.gd        # **진행 목표(퀘스트)** (세션 36): KILL/EXTRACT/UNLOCK 배선(enemy_died·extraction·codex_unlocked → advance_quests) · 🔴**requires 사슬 게이트**(잠긴 퀘스트는 이벤트로도 안 진행) · 보상 지급 · 🔴**소급 완료**(이미 해금된 룬 노리는 UNLOCK은 열리는 순간 완료 — 안 하면 사슬이 막힌다) · 저장 라운드트립 · 🔴**Q 패널 렌더·클릭 차단은 헤드리스가 못 잡는다**(전체화면 Control — 닫힘=발사 도달·열림=차단을 실게임 push_input으로 별도 확인, 액션 주입으론 못 잡는다)
-./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_dialogue_box_auto.gd  # **온보딩 대사 상자** (세션41): open(lines)→줄 넘김→finished · 빈 배열 즉시 finished · ESC 건너뛰기 · ui_modal_open 토글 · 🔴**클릭 진행·하단 밴드 렌더는 헤드리스가 못 잡는다**(실게임 push_input·스샷으로 별도 확인)
-./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_map_panel_auto.gd     # **원정 지도 패널** (세션41): open(data) 데이터 흡수 · 🔴**world↔map 좌표 왕복**(뮤테이션으로 검출력) · 클릭 역변환→marker_placed(지도 밖 무시) · ui_modal_open 토글 · 🔴**지도 렌더·클릭 도달은 헤드리스가 못 잡는다**(push_input은 **윈도우 픽셀**이라 캔버스 2배 — 실게임 exec push_input·스샷으로 별도 확인)
-./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_hud_toast_auto.gd     # **HUD 획득 토스트** (세션51): 같은 id 합치기(수량+수명 리셋) · 🔴**합친 줄은 맨 뒤로 이동**(안 하면 FIFO가 **방금 주운 줄**을 밀어낸다 — 시각이 아니라 버그) · 최대 3줄 FIFO · 수명 만료 · 🔴**보이는지·슬롯/막대와 겹치는지는 헤드리스가 못 잡는다**(MCP 스샷으로 별도 확인)
-./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_drop_pickup_auto.gd   # **바닥 드롭 픽업 + 자석 흡수** (세션46·51): setup→그룹 · 줍기 지연(지연 중 무시) · body_entered→add_to_bag+queue_free · 🔴**layer0/mask2 계약**(캐리어가 픽업에 안 부딪히게) · 🔴**자석**(반경 안이면 거리 단조감소·밖이면 정지·지연 뒤에만·**켜지면 취소불가**·도착 1회 뱅킹·item_collected 1회) · 🔴**null 가드 없으면 SCRIPT ERROR 36줄 내면서 OK 찍힌다**(grep 필수) · 🔴**반경 72px가 체감되는지·속도가 "빨려온다"로 읽히는지는 헤드리스가 못 잡는다**(실게임 좌표 실측 — 세50 감전연쇄 재발 자리)
-./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_enemy_ai_auto.gd      # **몬스터 AI** (세션46): 방어(armor_reduction→enemy_hit dealt 경감) · 재생(regen_per_sec, 상한 _def.hp) · 분산 경감 · 🔴**돌진/부유 움직임 "느낌"은 헤드리스가 못 잰다**(실게임 runtime_state로 속도파형·거리유지 별도 확인)
-./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_status_auto.gd        # **룬 상태이상·원소 반응** (세션49): 화상 DoT·젖음 감속·🔴**반응**(젖음+흙=진흙·젖음+번개=감전연쇄·화상+물=꺼짐·화상+풀=산불)·🔴**바람=확산**(자기 상태 안 남기고 옆 적에게 옮김)·중첩=갱신(누적 아님)·취약 증폭 · 🔴**DoT는 enemy_hit을 안 쏜다**(쏘면 피해숫자·히트스톱 도배) · 🔴**색으로 보이는지는 헤드리스가 못 잡는다**(실게임 _visual.modulate로 별도 확인)
+./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_save_auto.gd            # 저장/로드 (고리 라운드트립) · 🔴**부팅만으로 자동 저장이 준비되나**(세션 26 F3 — 이 확인은 `load_game()` **호출 전**에 있어야 한다. 순서가 곧 검출력이다)
+./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_ring_assembly_auto.gd   # **조립 상태기계 계약**: 단계 전이·문양본이 칸을 여는 규칙·assembly 발사 계약·시그널 (세션 22)
+./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_ring_trace_auto.gd      # **손그림 탁본**: 완성도/정밀도·[다음] 수동 진행·칸 자유 편집·I3 · **정밀도 이빨(⑨⑩)·펜 보정(⑪⑫)**
+./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_ring_spell_auto.gd      # **고리 발사**: 진→투사체·착탄 전개(발산 탄환·응집 기둥)·실제 적 take_hit
+./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_ring_design_auto.gd     # **고리 도안 통합**: RingDesign 라운드트립·ring_design_committed→GameState 자동 장착 · **등급⇔펑 경계·퍼펙트⇔화면100** (세션 24)
+./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_base_auto.gd            # **베이스캠프 발사 배선** (세션 24): 과녁 사거리 · 🔴**물리 레이어 계약**(내 몸/책상이 world면 진이 총구에서 죽는다 — 에러 없이 조용히) · [8] 숲길
+./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_forest_auto.gd         # **숲 원정** (세션 26): 출격 만HP · 적이 쫓아옴(그룹 "player") · 접촉 피해 · 🔴**적 레이어 계약**(4=enemy가 아니면 부딪히기만 하고 take_hit이 안 불린다) · 귀환/사망 계약(extraction_success·bag_lost)
+./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_workshop_auto.gd      # **공방 장비 제작** (세션 32): 레시피 station 분리(정제대⇔공방) · 펜 제작(spend→add) · 장착 라운드트립(equip→correction 0.35→소비, unequip→반환) · 🔴**패널 클릭은 헤드리스가 못 잡는다**(실게임 push_input로 별도 검증)
+./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_audio_auto.gd         # **사운드 배선** (세션 33): 17 SFX 로드·길이>0 · Audio가 EventBus 9종에 연결 · 발신→올바른 스트림(부작용 순간은 연결만) · 🔴**소리가 실제로 나는지는 헤드리스가 못 잡는다**(오디오 드라이버 없음 — 버스 라우팅·playing은 에디터 실게임 exec로 별도 검증)
+./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_decode_auto.gd        # **탁본 해독** (세션 34 E4): 조각 소비+룬 해금(codex_unlocked) · 이미 배운 룬은 조각 안 닳림 · 해금이 룬 목록에 흐름 · 🔴**룬 탭 다중셀 렌더·클릭은 헤드리스가 못 잡는다**(문양 탭·refine과 동일 패턴 — 에디터 실게임 스샷으로 별도 확인: 불△·물▽ 셀·바람은 잠겨 안 뜸)
+./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_quests_auto.gd        # **진행 목표(퀘스트)** (세션 36): KILL/EXTRACT/UNLOCK 배선(enemy_died·extraction·codex_unlocked → advance_quests) · 🔴**requires 사슬 게이트**(잠긴 퀘스트는 이벤트로도 안 진행) · 보상 지급 · 🔴**소급 완료**(이미 해금된 룬 노리는 UNLOCK은 열리는 순간 완료 — 안 하면 사슬이 막힌다) · 저장 라운드트립 · 🔴**Q 패널 렌더·클릭 차단은 헤드리스가 못 잡는다**(전체화면 Control — 닫힘=발사 도달·열림=차단을 실게임 push_input으로 별도 확인, 액션 주입으론 못 잡는다)
+./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_dialogue_box_auto.gd  # **온보딩 대사 상자** (세션41): open(lines)→줄 넘김→finished · 빈 배열 즉시 finished · ESC 건너뛰기 · ui_modal_open 토글 · 🔴**클릭 진행·하단 밴드 렌더는 헤드리스가 못 잡는다**(실게임 push_input·스샷으로 별도 확인)
+./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_map_panel_auto.gd     # **원정 지도 패널** (세션41): open(data) 데이터 흡수 · 🔴**world↔map 좌표 왕복**(뮤테이션으로 검출력) · 클릭 역변환→marker_placed(지도 밖 무시) · ui_modal_open 토글 · 🔴**지도 렌더·클릭 도달은 헤드리스가 못 잡는다**(push_input은 **윈도우 픽셀**이라 캔버스 2배 — 실게임 exec push_input·스샷으로 별도 확인)
+./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_hud_toast_auto.gd     # **HUD 획득 토스트** (세션51): 같은 id 합치기(수량+수명 리셋) · 🔴**합친 줄은 맨 뒤로 이동**(안 하면 FIFO가 **방금 주운 줄**을 밀어낸다 — 시각이 아니라 버그) · 최대 3줄 FIFO · 수명 만료 · 🔴**보이는지·슬롯/막대와 겹치는지는 헤드리스가 못 잡는다**(MCP 스샷으로 별도 확인)
+./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_drop_pickup_auto.gd   # **바닥 드롭 픽업 + 자석 흡수** (세션46·51): setup→그룹 · 줍기 지연(지연 중 무시) · body_entered→add_to_bag+queue_free · 🔴**layer0/mask2 계약**(캐리어가 픽업에 안 부딪히게) · 🔴**자석**(반경 안이면 거리 단조감소·밖이면 정지·지연 뒤에만·**켜지면 취소불가**·도착 1회 뱅킹·item_collected 1회) · 🔴**null 가드 없으면 SCRIPT ERROR 36줄 내면서 OK 찍힌다**(grep 필수) · 🔴**반경 72px가 체감되는지·속도가 "빨려온다"로 읽히는지는 헤드리스가 못 잡는다**(실게임 좌표 실측 — 세50 감전연쇄 재발 자리)
+./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_enemy_ai_auto.gd      # **몬스터 AI** (세션46): 방어(armor_reduction→enemy_hit dealt 경감) · 재생(regen_per_sec, 상한 _def.hp) · 분산 경감 · 🔴**돌진/부유 움직임 "느낌"은 헤드리스가 못 잰다**(실게임 runtime_state로 속도파형·거리유지 별도 확인)
+./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_status_auto.gd        # **룬 상태이상·원소 반응** (세션49): 화상 DoT·젖음 감속·🔴**반응**(젖음+흙=진흙·젖음+번개=감전연쇄·화상+물=꺼짐·화상+풀=산불)·🔴**바람=확산**(자기 상태 안 남기고 옆 적에게 옮김)·중첩=갱신(누적 아님)·취약 증폭 · 🔴**DoT는 enemy_hit을 안 쏜다**(쏘면 피해숫자·히트스톱 도배) · 🔴**색으로 보이는지는 헤드리스가 못 잡는다**(실게임 _visual.modulate로 별도 확인)
 ```
 
 🔴 **스위트를 돌리면 `user://save`가 날아간다** (세션 26 F3 이후). `SaveManager._ready`가 저장을
@@ -296,5 +297,5 @@ ColorRect)의 `mouse_filter`가 기본값 **STOP**이라 바닥이 좌클릭을 
 
 ## 에디터·MCP
 
-- godot-mcp 애드온 설정됨 (.mcp.json). 에디터 실행: `Start-Process .\Godot_v4.6.1-stable_win64.exe -ArgumentList "--editor","--path","."`
+- godot-mcp 애드온 설정됨 (.mcp.json). 에디터 실행: `Start-Process .\Godot_v4.7.1-stable_win64.exe -ArgumentList "--editor","--path","."`
 - project.godot을 파일로 수정한 후에는 `godot_project check_stale` → 필요시 에디터 restart

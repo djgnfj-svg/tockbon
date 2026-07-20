@@ -1,6 +1,6 @@
 extends SceneTree
 ## 상태이상·원소 반응 자동 검증 (세션 49) — 헤드리스 실행:
-##   ./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_status_auto.gd
+##   ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_status_auto.gd
 ## 전 항목 통과 시 "TEST_STATUS_OK" 출력 후 종료 코드 0.
 ##
 ## 🔴 여기서 지키는 계약: `forest_enemy.take_hit`이 **status를 실제로 쓴다**. 세34~48까지
@@ -60,6 +60,7 @@ func _run() -> void:
 	await _test_power_scales_shock_slow()
 	await _test_slow_cap()
 	await _test_dummy_reacts()
+	await _test_reaction_vfx_signals()
 
 	if failures == 0:
 		print("TEST_STATUS_OK — 전 항목 통과")
@@ -385,6 +386,97 @@ func _test_dummy_reacts() -> void:
 	a.free()
 	near.free()
 	burnt.free()
+
+
+## [12] 🔴 **반응 VFX 신호 계약** (세션52). 반응이 해결되면 몸이 `reaction_burst`·`reaction_chain`을
+## 올바른 페이로드로 쏴야 vfx.gd가 그린다. 헤드리스는 "보이는지"는 못 잡지만 **신호 발신은 잡는다** —
+## 겉모습(아크·링 렌더)은 리드가 실게임 스샷으로 본다.
+##  • 감전(젖음+번개) = 버스트 1회(status=SHOCK, radius=shock_chain_px) + 반경 안 대상마다 아크 1가닥.
+##  • 증기(젖음+불) = 버스트 1회(status=NONE) · **아크 0**(증기는 링만).
+##  • 바람 확산 = 반경 안 대상마다 아크 1가닥(대표 상태색).
+## 🔴 뮤테이션: 몸의 `EventBus.reaction_burst.emit`/`reaction_chain.emit` 줄을 지우면 해당 줄이 빨개진다.
+##   그리고 두 몸(forest_enemy·dummy_target)이 **같은 계약**을 지키는지 — 여긴 dummy로 본다(연습장 파리티).
+func _test_reaction_vfx_signals() -> void:
+	print("[12] 반응 VFX 신호 — 감전=버스트+아크 · 증기=버스트만 · 바람=대상마다 아크")
+	var bal = load("res://data/balance.tres")
+	var scene = load("res://src/spell/dummy_target.tscn") as PackedScene
+
+	var bursts := []
+	var chains := []
+	var on_burst := func(pos, radius, status) -> void:
+		bursts.append({"pos": pos, "radius": radius, "status": status})
+	var on_chain := func(from, to, status) -> void:
+		chains.append({"from": from, "to": to, "status": status})
+	_bus.reaction_burst.connect(on_burst)
+	_bus.reaction_chain.connect(on_chain)
+
+	# ── ⓐ 감전 연쇄: 버스트(SHOCK) 1회 + 반경 안 대상 1마리에게 아크 1가닥 ──
+	var a = scene.instantiate()
+	var near = scene.instantiate()
+	root.add_child(a)
+	root.add_child(near)
+	a.global_position = Vector2.ZERO
+	near.global_position = Vector2(60, 0)  # shock_chain_px(90) 안
+	await process_frame
+	await physics_frame
+	near.apply_status(S_WET, 1.0)
+	near.take_hit(0.0, R_BOLT, S_SHOCK, 1.0)  # near가 반응원 → near에서 a로 연쇄
+	_check(bursts.size() == 1, "감전: 버스트가 정확히 1회 (실제 %d)" % bursts.size())
+	if bursts.size() == 1:
+		_check(int(bursts[0]["status"]) == S_SHOCK, "감전 버스트 status=SHOCK (실제 %d)" % int(bursts[0]["status"]))
+		_check(is_equal_approx(float(bursts[0]["radius"]), bal.status_shock_chain_px),
+			"감전 버스트 radius=shock_chain_px %.1f (실제 %.1f)" % [bal.status_shock_chain_px, float(bursts[0]["radius"])])
+	_check(chains.size() == 1, "감전: 반경 안 대상 1마리에게 아크 1가닥 (실제 %d)" % chains.size())
+	if chains.size() == 1:
+		_check(chains[0]["from"].distance_to(near.global_position) < 1.0, "아크가 반응원(near)에서 출발한다")
+		_check(chains[0]["to"].distance_to(a.global_position) < 1.0, "아크가 대상(a)에 닿는다")
+		_check(int(chains[0]["status"]) == S_SHOCK, "감전 아크 status=SHOCK (실제 %d)" % int(chains[0]["status"]))
+	a.free()
+	near.free()
+
+	# ── ⓑ 증기: 버스트(NONE) 1회 · 아크 0 (증기는 링만) ──
+	bursts.clear()
+	chains.clear()
+	var s = scene.instantiate()
+	var s_near = scene.instantiate()
+	root.add_child(s)
+	root.add_child(s_near)
+	s.global_position = Vector2.ZERO
+	s_near.global_position = Vector2(40, 0)  # steam_px(70) 안 — 그래도 아크는 없어야 한다
+	await process_frame
+	await physics_frame
+	s.apply_status(S_WET, 1.0)
+	s.take_hit(0.0, R_FIRE, S_BURN, 1.0)  # 젖음 + 불 = 증기(burst, NONE)
+	_check(bursts.size() == 1, "증기: 버스트가 정확히 1회 (실제 %d)" % bursts.size())
+	if bursts.size() == 1:
+		_check(int(bursts[0]["status"]) == 0, "증기 버스트 status=NONE(0) (실제 %d)" % int(bursts[0]["status"]))
+	_check(chains.size() == 0, "증기: 아크는 0가닥 — 링만 (실제 %d)" % chains.size())
+	s.free()
+	s_near.free()
+
+	# ── ⓒ 바람 확산: 반경 안 대상마다 아크 1가닥, 대표 상태색(BURN) ──
+	bursts.clear()
+	chains.clear()
+	var w = scene.instantiate()
+	var w_near = scene.instantiate()
+	root.add_child(w)
+	root.add_child(w_near)
+	w.global_position = Vector2.ZERO
+	w_near.global_position = Vector2(50, 0)  # spread_px(110) 안
+	await process_frame
+	await physics_frame
+	w.apply_status(S_BURN, 1.0)
+	w.take_hit(0.0, R_WIND, 4, 1.0)  # 바람 = 확산자
+	_check(chains.size() == 1, "바람: 반경 안 대상 1마리에게 아크 1가닥 (실제 %d)" % chains.size())
+	if chains.size() == 1:
+		_check(int(chains[0]["status"]) == S_BURN, "바람 아크 색=옮긴 상태(화상) (실제 %d)" % int(chains[0]["status"]))
+		_check(chains[0]["to"].distance_to(w_near.global_position) < 1.0, "바람 아크가 옆 표적에 닿는다")
+	_check(bursts.size() == 0, "바람: 버스트는 0회 — 확산은 아크만 (실제 %d)" % bursts.size())
+	w.free()
+	w_near.free()
+
+	_bus.reaction_burst.disconnect(on_burst)
+	_bus.reaction_chain.disconnect(on_chain)
 
 
 # ── 헬퍼 ──

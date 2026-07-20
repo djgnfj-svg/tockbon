@@ -40,7 +40,9 @@ var _tick_accum: float = 0.0
 # ── 소유자 콜백 (전부 선택 — 안 주면 그 축을 안 쓴다는 뜻) ─────────────────────
 ## 지속 피해가 났다. `func(amount: float) -> void`. 🔴 여기서 `enemy_hit`을 쏘지 마라(도배).
 var on_dot: Callable = Callable()
-## 반경 안 즉발 피해. `func(radius: float, amount: float, include_self: bool) -> void`.
+## 반경 안 즉발 피해. `func(radius: float, amount: float, include_self: bool, result_status: int) -> void`.
+## 🔴 result_status(세52) = 증기면 `Enums.Status.NONE`, 감전이면 `Enums.Status.SHOCK`. 몸이 VFX 링
+## 색과 "연쇄 아크를 그릴지"를 정하는 데 쓴다 — include_self로 유추하지 않는다(암묵 결합 회피).
 var on_burst: Callable = Callable()
 ## 붙은 상태를 옆으로 번뜨린다(바람). `func(statuses: Dictionary) -> void`.
 var on_spread: Callable = Callable()
@@ -128,10 +130,12 @@ func _resolve_reaction(base_status: int, r: Dictionary, incoming_power: float) -
 		# 피해가 조용히 1/3로 토막 난다(에러도 테스트 실패도 없다).
 		if result == Enums.Status.NONE:
 			# 증기(젖음+불) — 바탕이 날아가며 **제자리 반경 즉발 피해**. 남는 상태가 없다.
-			on_burst.call(BAL.status_steam_px, SR.burst_damage(power, BAL.status_steam_mult), true)
+			# 🔴 result_status=NONE을 실어 보낸다 — 몸이 흰 링만 그리고 연쇄 아크는 안 그린다(세52).
+			on_burst.call(BAL.status_steam_px, SR.burst_damage(power, BAL.status_steam_mult), true, result)
 		else:
 			# 감전 연쇄(젖음+번개) — 주변 적들에게 옮겨 붙는 피해. 맞은 본인은 아래에서 상태를 받는다.
-			on_burst.call(BAL.status_shock_chain_px, SR.burst_damage(power, BAL.status_shock_chain_mult), false)
+			# 🔴 result_status=SHOCK을 실어 보낸다 — 몸이 노란 링 + 대상마다 번개 아크를 그린다(세52).
+			on_burst.call(BAL.status_shock_chain_px, SR.burst_damage(power, BAL.status_shock_chain_mult), false, result)
 	if result != Enums.Status.NONE:
 		add(result, power)
 	else:
@@ -183,18 +187,27 @@ func clear() -> void:
 	_statuses.clear()
 
 
-## 🔴 지금 보여 줄 색 = **가장 최근에 걸린 상태** 하나 (여럿이면 최신이 이긴다 — 방금 한 짓이
-## 보여야 룬을 바꾼 보람이 있다). 상태가 다 풀리면 흰색.
-## ⚠ **반환만 한다** — 칠하는 건 소유자다(알파 소유권. 파일 상단 주석 참조).
-func tint() -> Color:
-	var best := -1
+## 🔴 지금 대표 상태 = **가장 최근에 걸린 상태** 하나 (여럿이면 최신이 이긴다 — 방금 한 짓이
+## 보여야 룬을 바꾼 보람이 있다). 비었으면 `Enums.Status.NONE`(_statuses엔 NONE이 안 들어가므로
+## NONE == "빔"이 명확하다).
+## 🔴 세52: 공개로 뽑았다 — 틴트(색)와 바람 확산 아크(색)가 **같은 "최신이 이긴다" 규칙**을 써야 하는데
+## 그전엔 몸(forest_enemy·dummy_target)이 이 seq-최대 로직을 **각자 복제**하고 holder 내부 dict의
+## `["seq"]`를 더듬었다(공개 API 위반·사본 3개). 이제 한 곳이다 — tint()도 이걸 쓴다.
+func representative() -> int:
+	var best := int(Enums.Status.NONE)
 	var best_seq := -1
 	for key: int in _statuses.keys():
 		var sq := int(_statuses[key]["seq"])
 		if sq > best_seq:
 			best_seq = sq
 			best = key
-	return Color.WHITE if best < 0 else SR.tint_of(best)
+	return best
+
+
+## 🔴 지금 보여 줄 색 = 대표 상태의 틴트. 상태가 다 풀리면 흰색(tint_of(NONE) == WHITE).
+## ⚠ **반환만 한다** — 칠하는 건 소유자다(알파 소유권. 파일 상단 주석 참조).
+func tint() -> Color:
+	return SR.tint_of(representative())
 
 
 func _notify_changed() -> void:

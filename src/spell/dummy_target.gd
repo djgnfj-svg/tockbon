@@ -38,8 +38,8 @@ func _wire_status() -> void:
 		# 🔴 DoT는 조용히 쌓인다 — `enemy_hit`을 쏘면 0.5초마다 피해 숫자·히트스톱이 도배된다
 		# (forest_enemy와 같은 이유). 지지는 게 보이는 건 틴트가 맡는다.
 		_status_damage += amount
-	_status.on_burst = func(radius: float, amount: float, include_self: bool) -> void:
-		_burst_damage(radius, amount, include_self)
+	_status.on_burst = func(radius: float, amount: float, include_self: bool, result_status: int) -> void:
+		_burst_damage(radius, amount, include_self, result_status)
 	_status.on_spread = func(statuses: Dictionary) -> void:
 		_spread_statuses(statuses)
 	_status.on_changed = _refresh_tint
@@ -102,7 +102,10 @@ func take_reaction_damage(amount: float) -> void:
 
 ## 반경 안의 다른 적들에게 즉발 피해. `include_self`면 자신도 맞는다(증기).
 ## 씬을 뒤지는 건 **몸의 일**이라 여기 있다(holder는 씬을 모른다).
-func _burst_damage(radius: float, amount: float, include_self: bool) -> void:
+func _burst_damage(radius: float, amount: float, include_self: bool, result_status: int) -> void:
+	# 🔴 VFX 방송 (세52) — forest_enemy와 **동일**해야 연습장↔숲 연출이 안 갈라진다. 링이 반경을
+	# 폭로하므로 amount 가드 **앞에** 둔다(반응은 일어났으니 링은 늘 뜬다). 피해 계산은 안 바뀐다.
+	EventBus.reaction_burst.emit(global_position, radius, result_status)
 	if amount <= 0.0:
 		return
 	if include_self:
@@ -113,6 +116,9 @@ func _burst_damage(radius: float, amount: float, include_self: bool) -> void:
 		if (node as Node2D).global_position.distance_to(global_position) > radius:
 			continue
 		if node.has_method(&"take_reaction_damage"):
+			# 🔴 감전(SHOCK)만 대상마다 번개 아크 — 증기(NONE)는 링만(설계 §4). 피해 전에 쏜다.
+			if result_status == Enums.Status.SHOCK:
+				EventBus.reaction_chain.emit(global_position, (node as Node2D).global_position, result_status)
 			node.take_reaction_damage(amount)
 
 
@@ -120,6 +126,9 @@ func _burst_damage(radius: float, amount: float, include_self: bool) -> void:
 func _spread_statuses(statuses: Dictionary) -> void:
 	if statuses.is_empty():
 		return
+	# 🔴 VFX (세52) — forest_enemy와 **동일**. 여러 상태를 옮겨도 아크는 한 대상에 한 가닥, 대표 상태색.
+	# 대표 상태는 holder 공개 API로 얻는다(세52 리뷰) — 몸이 내부 dict의 ["seq"]를 더듬지 않는다.
+	var rep := _status.representative()
 	for node in get_tree().get_nodes_in_group("enemies"):
 		if node == self or not (node is Node2D):
 			continue
@@ -127,6 +136,7 @@ func _spread_statuses(statuses: Dictionary) -> void:
 			continue
 		if not node.has_method(&"apply_status"):
 			continue
+		EventBus.reaction_chain.emit(global_position, (node as Node2D).global_position, rep)
 		for key: int in statuses.keys():
 			node.apply_status(key, float(statuses[key]["power"]))
 

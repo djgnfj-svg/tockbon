@@ -1,9 +1,10 @@
-[gd_scene load_steps=15 format=3 uid="uid://c0actor01player"]
+[gd_scene load_steps=16 format=3 uid="uid://c0actor01player"]
 
 [ext_resource type="Script" path="res://src/actors/player.gd" id="1_player"]
 [ext_resource type="Script" path="res://src/actors/player_caster.gd" id="2_caster"]
 [ext_resource type="Texture2D" path="res://assets/sprites/player/player_witch_sheet.png" id="3_sheet"]
 [ext_resource type="Script" path="res://src/actors/juice.gd" id="4_juice"]
+[ext_resource type="Script" path="res://src/actors/vfx.gd" id="5_vfx"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_player"]
 radius = 10.0
@@ -84,3 +85,6 @@ script = ExtResource("2_caster")
 
 [node name="Juice" type="Node2D" parent="."]
 script = ExtResource("4_juice")
+
+[node name="Vfx" type="Node2D" parent="."]
+script = ExtResource("5_vfx")
