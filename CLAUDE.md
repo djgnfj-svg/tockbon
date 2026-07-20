@@ -149,6 +149,12 @@
 - **기본 파이프라인:** `takbon-architect`(설계 먼저 — 씬 트리·시그널·데이터 흐름) →
   `takbon-dev`/`takbon-ui`/`takbon-art`(구현) → `takbon-reviewer`(커밋 전 리뷰).
   큰 기능은 **설계를 먼저 받아 사용자와 합의하고** 구현에 넘긴다 — 코드부터 얹지 마라.
+- 🔴🔴 **에이전트에게 「보고서를 파일로 써라」고 지시해라** (2026-07-20 세션49에 알아냄).
+  **채팅으로 낸 최종 보고는 리드에게 안 온다** — 세48~49에 `jin-ui`·`jin-tests`·`jin-shapes`·
+  `status-design` 네 번이 전부 idle 알림만 오고 **내용이 증발했다**(리드가 매번 `git diff`로
+  역추적해야 했다). 반면 *"`scratch_<이름>.md`를 리포 루트에 써라"*고 지시한 `status-core`·
+  `rune-data`는 **멀쩡히 도착했다**. ⚠ 특히 **`takbon-architect`·`takbon-reviewer`는 산출물이
+  보고서뿐이라, 파일로 안 시키면 작업 전체가 사라진다.** 읽고 나면 리드가 scratch 파일을 지운다.
 - 🔴 **리드가 절대 안 놓는 것 = 검증과 커밋** (위임하는 게 아니라 리드의 직무다):
   검증·`--import`·커밋(`takbon-verify` = 위 검증 명령). **에이전트의 "그린 나왔습니다"를 근거로
   쓰지 마라** — 리드가 직접 돌리고 뮤테이션으로 검출력을 확인한다.
@@ -167,6 +173,8 @@
 | 2026-07-19 | 나머지 에이전트 탁본화(총 9) | agents/takbon-{shader,animator,profiler,tools} 추가 | 사용자 "만들어만 둬줘". csharp만 제외(GDScript 전용 규칙과 충돌). 원본 복사 아닌 규칙 주입 재작성 |
 | 2026-07-19 | 스킬 노이즈 정비 51→43 | 삭제 8: 3d-essentials·csharp-godot·csharp-signals·gdextension·xr-development·mobile-development·using-godot-prompter·godot-project-setup · takbon-dev 매핑·「휴면 방향」주석 갱신 | 2D·GDScript·데스크톱 확정으로 구조적 무관만 삭제. 멀티·dedicated-server·beehave·limboai·localization은 사용자가 방향을 안 접어 유지(삭제=방향 포기 신호) |
 | 2026-07-19 | 제네릭 43개 SKILL.md 한국어 번역 + 벤더링 | skills/*/SKILL.md 본문 번역(references·코드블록·name은 원문) · 신설 `.claude/skill-vendor/`(영어 1.11.0 박제본+VERSION+check-upstream.sh) | 사용자 요청 한국어화. 상류와 갈라지므로 「관리된 갈라짐」 채택 = 월간 대조로 상류 변경분만 반영 |
+| 2026-07-20 | 위임 예외 목록 걷어냄 · 파이프라인 기본화 | CLAUDE.md 「개발 규칙」 | 사용자 세48: *"기획을 처음에 빡세게 잡고 가고 싶고, 코드의 퀄리티를 신경쓰고 싶어."* 옛 예외("회귀 위험·core 스키마·mcp__godot·커밋은 리드")가 너무 넓어 재밌는 작업이 죄다 예외에 걸려 위임이 안 굴러갔다 |
+| 2026-07-20 | 🔴 보고서는 **파일로** 지시 | 위임 프롬프트 규약 | 세48~49에 채팅 보고 4건이 **증발**(idle 알림만 옴) · 파일로 시킨 2건은 도착. architect·reviewer는 산출물이 보고서뿐이라 치명적 |
 | 2026-07-19 | references 심화문서 150개 삭제 | skills/*/references/ 40폴더 + godot-testing 최상위 참조 2개 삭제 · 본문 죽은 링크 정리 | 사용자 "깔끔하게 관리". skills/ 트리를 SKILL.md 한 장씩만 남김. 영어 전문은 skill-vendor 박제본+상류 github에 있어 영구 손실 아님(복구 가능) |
 
 ## 검증 명령 (반드시 Bash에서 — PowerShell은 자식 프로세스 stdout을 안 보여줌)
