@@ -53,6 +53,8 @@ func _run() -> void:
 	_test_rune_shape_reaches_the_board()
 	_test_ink_rides_assembly()
 	_test_special_ink_consumed_while_drawing()
+	_test_accuracy_tol_tightened()
+	_test_low_precision_piece_score_penalized()
 
 	if failures == 0:
 		print("TEST_RING_TRACE_OK — 전 항목 통과")
@@ -73,7 +75,7 @@ func _test_accuracy_has_teeth() -> void:
 	for p in b.call(&"guide_points"):
 		b.call(&"trace_stroke", p + (ctr - p).normalized() * 4.0)   # 겨우 4px 어긋남
 	var acc = float(b.call(&"accuracy"))
-	# 새 판정(≈9.4px): 1 - 4/9.4 ≈ 0.58 → 통과. 옛 판정(≈23.6px): 1 - 4/23.6 ≈ 0.83 → **실패**.
+	# 세션53 판정(tol≈5.9px): 1 - 4/5.9 ≈ 0.32 → 통과. 옛(≈23.6px): 1 - 4/23.6 ≈ 0.83 → **실패**.
 	_check(acc < 0.7, "4px만 어긋나도 정밀도가 확 깎인다 (실제 %.2f — 관대하면 0.8+)" % acc)
 	_check(float(b.call(&"coverage")) > 0.9, "그래도 완성도는 높다 (두 축은 별개)")
 	b.queue_free()
@@ -109,7 +111,7 @@ func _test_pen_correction_pulls_strokes() -> void:
 	var accs := []
 	for corr in [0.0, 0.35, 0.6, 1.0]:
 		var s = Scorer.new()
-		s.set_reference_radius(118.0)                     # 판정 반경 ≈9.4px
+		s.set_reference_radius(118.0)                     # 판정 반경 ≈5.9px (세션53, ACC_TOL 0.05)
 		s.set_correction(corr)
 		s.set_guide(guide)
 		for p in guide:
@@ -796,3 +798,58 @@ func _test_far_click_does_not_steal_slot() -> void:
 	var on_slot2: Vector2 = b.call(&"_slot_pos", 2)
 	_check(int(b.call(&"_nearest_open_slot", on_slot2)) == 2, "칸 위를 클릭하면 그 칸이 잡힌다")
 	b.queue_free()
+
+
+# ── 🔴 ㉔ ACC_TOL을 조였다 — 작은 이탈이 이제 더 아프다 (세션 53) ──
+# 사용자: *"마법진이 그냥 대충 그려도 인정되는 게 별로네."* → ACC_TOL_FRAC 0.08 → 0.05.
+# ⑨(_test_accuracy_has_teeth)는 `< 0.7`만 봐서 0.08→0.05 조임을 못 잡는다(둘 다 0.7 아래).
+# 여기선 채점기를 직접 세워, **알려진 4px 이탈** 궤적의 accuracy를 **좁은 밴드**로 못 박아
+# 조임 자체를 검출한다. ⑪처럼 수평 직선 가이드라 이탈이 정확히 4px로 통제된다(원 가이드의
+# 기하 잡음 없음). 4px는 CONSIDER(37.8px) 안이라 유효점으로 카운트된다.
+# 🔴 검출력: ACC_TOL_FRAC을 0.08로 되돌리면 tol이 9.44px가 돼 accuracy가 ≈0.58로
+#    밴드(0.25~0.42) 위로 나가 FAIL한다.
+func _test_accuracy_tol_tightened() -> void:
+	var Scorer = load("res://src/drawing/trace_scorer.gd")
+	var guide := PackedVector2Array()
+	for i in 60:
+		guide.append(Vector2(float(i) * 2.0, 100.0))     # 수평 직선 (⑪과 같은 판)
+	var s = Scorer.new()
+	s.set_reference_radius(118.0)                         # tol = 118 * 0.05 ≈ 5.9px
+	s.set_guide(guide)
+	for p in guide:
+		s.add_point(p + Vector2(0.0, 4.0))               # 알려진 4px 이탈 (드러남 9.4px·CONSIDER 37.8px 안)
+	var acc := float(s.accuracy())
+	# 새(tol 5.9): 1 - 4/5.9 ≈ 0.32.  옛(tol 9.44): 1 - 4/9.44 ≈ 0.58 → 밴드 밖.
+	_check(acc > 0.25 and acc < 0.42,
+		"🔴 4px 이탈 정밀도가 0.05-tol 밴드(0.25~0.42) 안 (실제 %.2f — 0.08로 되돌리면 ≈0.58)" % acc)
+	# 완성도는 별개 축이라 여전히 높다 (4px는 드러남 반경 9.4px 안이라 가이드가 다 드러난다).
+	_check(float(s.coverage()) > 0.9,
+		"4px 이탈은 완성도엔 영향 없다 — 두 축은 별개 (%.2f)" % float(s.coverage()))
+
+
+# ── 🔴 ㉕ 완성-저정밀 궤적은 이제 낮은 점수다 — 정밀도 바닥 0.5 → 0.25 (세션 53) ──
+# 사용자: *"대충 그려도 인정되는 게 별로네."* piece_score = coverage*(0.5+0.5*acc)에서
+# 바닥 0.5를 0.25로 낮췄다. 예전엔 정밀도 0이어도 완성도의 절반을 먹어 "가이드만 훑으면 고득점"
+# 이었다. 완성도 만점인데 정밀도 0인(=선엔 안 붙고 근처만 훑은) 궤적을 태워, 그 조각 점수가
+# 예전 바닥(0.5)이면 못 내려가는 밴드 **아래**로 떨어지는지 못 박는다.
+# ⑨⑩은 accuracy 축만 보지 piece_score는 안 본다 — 이번 조임(바닥)의 정면 가드는 여기다.
+# 🔴 검출력: piece_score의 바닥을 0.5로 되돌리면(0.5+0.5*acc, acc=0 → 0.5) 점수가 밴드
+#    (0.15~0.35) 위로 나가 FAIL한다.
+func _test_low_precision_piece_score_penalized() -> void:
+	var Scorer = load("res://src/drawing/trace_scorer.gd")
+	var guide := PackedVector2Array()
+	for i in 60:
+		guide.append(Vector2(float(i) * 2.0, 100.0))
+	var s = Scorer.new()
+	s.set_reference_radius(118.0)                         # tol 5.9px · 드러남 9.4px · CONSIDER 37.8px
+	s.set_guide(guide)
+	for p in guide:
+		s.add_point(p + Vector2(0.0, 8.0))               # 8px 이탈: 드러남 안(완성도↑)·tol 밖(정밀도 0)
+	var cover := float(s.coverage())
+	var acc := float(s.accuracy())
+	var ps := float(s.piece_score())
+	_check(cover > 0.9, "가이드는 다 훑었다 → 완성도 높음 (%.2f)" % cover)
+	_check(acc < 0.05, "8px 이탈 = tol 밖 → 정밀도 바닥 (%.2f)" % acc)
+	# 새 바닥(0.25): 완성도≈1 × (0.25 + 0.75*0) ≈ 0.25.  옛 바닥(0.5): ≈ 0.5 → 밴드 위.
+	_check(ps > 0.15 and ps < 0.35,
+		"🔴 완성-저정밀 조각 점수가 0.25 바닥 밴드(0.15~0.35) 안 (실제 %.2f — 0.5로 되돌리면 ≈0.5)" % ps)
