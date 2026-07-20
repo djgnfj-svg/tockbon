@@ -70,13 +70,26 @@ func _on_ring_cast(assembly: Dictionary, origin: Vector2, aim_dir: Vector2) -> v
 	# 진 없는 옛 도안·매직볼은 폴백(장착 지팡이 또는 단발) — 하위호환.
 	var jin_def := Db.get_jin(StringName(assembly.get("jin", &"")))
 	var pattern := jin_def.pattern if jin_def != null else GameState.wand_pattern()
-	for a: float in _wand_angles(angle, pattern):
-		_spawn_carrier(ring, origin, a, power, status_mult, rune_type)
+	# 🔴 세션48: 진의 **규모**(body_scale)가 그 진의 발사 형태를 키운다 — 발수·진폭·몸집. 진이 없는
+	# 매직볼·옛 도안은 1.0(예전과 동일). 사용자 확정: "크면 진마다 있는 발사 형태가 강해지게."
+	var scale := jin_def.body_scale if jin_def != null else 1.0
+	# 🔴 타겟팅(SEEK)은 조준이 아니라 **적 위치**가 각도를 정하므로 origin이 필요하다.
+	for shot: Dictionary in _shot_plan(angle, pattern, scale, origin):
+		var delay := float(shot["delay"])
+		if delay <= 0.0:
+			_spawn_carrier(ring, origin, float(shot["angle"]), power, status_mult, rune_type, jin_def)
+		else:
+			# 연발·분사 = 시간차. 타이머가 죽어도 게임이 안 멈추게 캐리어 스폰만 지연한다.
+			get_tree().create_timer(delay).timeout.connect(
+				_spawn_carrier.bind(ring, origin, float(shot["angle"]),
+					power, status_mult, rune_type, jin_def), CONNECT_ONE_SHOT)
 
 
 ## 진(캐리어) 하나를 origin에서 angle 방향으로 쏜다. 패턴이 여러 각도면 이걸 여러 번 부른다.
 func _spawn_carrier(ring: Array, origin: Vector2, angle: float,
-		power: float, status_mult: float, rune_type: int) -> void:
+		power: float, status_mult: float, rune_type: int, jin_def: JinDef = null) -> void:
+	if not is_inside_tree():
+		return   # 지연 발사 도중 씬이 바뀌었다 (귀환·사망) — 조용히 접는다
 	var carrier := CarrierScene.instantiate() as CarrierScript
 	if carrier == null:
 		return
@@ -86,30 +99,87 @@ func _spawn_carrier(ring: Array, origin: Vector2, angle: float,
 	carrier.setup(ring, angle,
 		balance.projectile_base_speed, balance.projectile_lifetime_sec,
 		fire.damage, fire.rune_type, fire.status, fire.status_power)
+	# 🔴 경로·규모는 setup **뒤에** 얹는다. 진 없는 도안(매직볼)은 안 부르므로 예전과 픽셀 동일.
+	if jin_def != null:
+		carrier.set_motion(jin_def.motion, jin_def.body_scale,
+			balance.jin_spiral_amplitude_px, balance.jin_spiral_period_sec,
+			balance.jin_boomerang_turn_ratio)
 	carrier.deployed.connect(_on_carrier_deployed.bind(power, status_mult, rune_type))
 
 
-## 발사 각도 목록 — 지팡이 패턴이 정한다 (수치는 balance, 선례: wand_multi_count 등).
-## SINGLE=에임 1발 · MULTI=에임 좌우로 퍼진 산탄 · NOVA=내 주변 전방위(에임 무시, 균등 분할).
-func _wand_angles(base: float, pattern: int) -> Array:
+## 발사 계획 — 진의 패턴이 "어디로(angle) 언제(delay)"를 정한다. 수치는 balance.
+##
+## 🔴 세션48에 반환형이 **각도 배열 → {angle, delay} 사전 배열**로 넓어졌다. 연발·분사가 들어오며
+## "몇 발"만으로는 부족해졌기 때문이다 — 시간축이 곧 그 두 진의 정체성이다(산탄과 갈리는 지점).
+## 🔴 `scale`(진 규모)은 **발수를 늘린다** — 큰 산탄진 = 갈래가 많다. 각도 하나뿐인 단발·타겟팅은
+## 발수가 안 늘고 대신 캐리어 몸집이 커진다(set_motion). "크다"의 의미가 진마다 다른 게 설계다.
+func _shot_plan(base: float, pattern: int, scale: float, origin: Vector2) -> Array:
 	match pattern:
 		Enums.WandPattern.MULTI:
-			var n := maxi(balance.wand_multi_count, 1)
-			if n == 1:
-				return [base]
-			var spread := deg_to_rad(balance.wand_multi_spread_deg)
-			var out: Array = []
-			for i in n:
-				out.append(base - spread * 0.5 + spread * (float(i) / float(n - 1)))
-			return out
+			return _fan(base, _scaled(balance.wand_multi_count, scale),
+				balance.wand_multi_spread_deg, 0.0)
 		Enums.WandPattern.NOVA:
-			var n2 := maxi(balance.wand_nova_count, 1)
+			var n2 := _scaled(balance.wand_nova_count, scale)
 			var out2: Array = []
 			for i in n2:
-				out2.append(base + TAU * float(i) / float(n2))
+				out2.append({"angle": base + TAU * float(i) / float(n2), "delay": 0.0})
 			return out2
+		Enums.WandPattern.BURST:
+			# 연발 = **같은 각도**로 시간차. 전부 조준선에 맞지만, 적이 움직이면 뒷발이 빗나간다
+			# (산탄은 한순간에 퍼지고 연발은 조준을 계속 유지해야 한다 — 손이 다르게 쓰인다).
+			var n3 := _scaled(balance.jin_burst_count, scale)
+			var out3: Array = []
+			for i in n3:
+				out3.append({"angle": base, "delay": balance.jin_burst_interval_sec * float(i)})
+			return out3
+		Enums.WandPattern.SPRAY:
+			# 분사 = 좁은 각 + 촘촘한 시간차. 산탄(넓게 한 방)과 연발(한 점 시간차) 사이.
+			return _fan(base, _scaled(balance.jin_spray_count, scale),
+				balance.jin_spray_spread_deg, balance.jin_spray_interval_sec)
+		Enums.WandPattern.SEEK:
+			# 타겟팅 = 진이 **가장 가까운 적을 골라** 그리로 간다 (조준 무시).
+			# ⚠ 유도 문양(GlyphCode.HOMING)과 층이 다르다: 저건 착탄 후 **탄**이 쫓는 것이고,
+			# 이건 **진 자체**가 표적을 정해 날아가는 것이다. 둘은 겹쳐 쓸 수 있다.
+			return [{"angle": _nearest_enemy_angle(origin, base), "delay": 0.0}]
 		_:
-			return [base]
+			return [{"angle": base, "delay": 0.0}]
+
+
+## 부채꼴 n발 — 양 끝 사이 총각이 spread_deg. interval>0이면 순서대로 시간차를 준다(분사).
+func _fan(base: float, n: int, spread_deg: float, interval: float) -> Array:
+	var out: Array = []
+	if n <= 1:
+		return [{"angle": base, "delay": 0.0}]
+	var spread := deg_to_rad(spread_deg)
+	for i in n:
+		out.append({
+			"angle": base - spread * 0.5 + spread * (float(i) / float(n - 1)),
+			"delay": interval * float(i),
+		})
+	return out
+
+
+## 규모가 곱해진 발수 — 최소 1발은 보장한다 (작은 진이 아예 안 나가면 버그로 보인다).
+func _scaled(count: int, scale: float) -> int:
+	return maxi(int(round(float(count) * scale)), 1)
+
+
+## origin에서 가장 가까운 적 방향. 사거리 안에 아무도 없으면 조준 각도 그대로 (헛발질 방지).
+## 그룹 "enemies" = 적 노드 계약 (ring_carrier 상단 주석과 같은 계약).
+func _nearest_enemy_angle(origin: Vector2, fallback: float) -> float:
+	var best: Node2D = null
+	var best_d := balance.jin_seek_radius_px * balance.jin_seek_radius_px
+	for e in get_tree().get_nodes_in_group("enemies"):
+		var n2d := e as Node2D
+		if n2d == null or not n2d.is_inside_tree():
+			continue
+		var d := origin.distance_squared_to(n2d.global_position)
+		if d < best_d:
+			best_d = d
+			best = n2d
+	if best == null:
+		return fallback
+	return (best.global_position - origin).angle()
 
 
 ## assembly → 위력 배율. 손그림 점수(곡선) × **잉크 등급 배수** × **진 크기**(세션29). 규칙은

@@ -70,7 +70,17 @@ const GUIDE_HIDE := Color(0.42, 0.30, 0.12, 0.32)
 const GUIDE_SHOW := Color(0.80, 0.50, 0.16, 0.55)   # 드러난 가이드 강조
 
 const RING_RADIUS_FRAC := 0.60
-const GUIDE_CIRCLE_N := 72            # 진(원) 가이드 밀도
+const GUIDE_CIRCLE_N := 72            # 진 가이드 밀도 (도형이 뭐든 이 등분 수에 맞춘다 — 아래 주석)
+
+# ── 🔴 진 밑그림 도형의 기하 상수 (세션48) ────────────────────────────────────────
+# ⚠ 셋 다 **룬 자리를 남기는 하한**에 걸려 있다. 진은 룬을 담는 **그릇**이라, 도형이 중심을
+# 향해 파고들면 안쪽에 그릴 룬(최대 `_outer_radius()*0.16*RUNE_SCALE_MAX` ≈ 0.27R)과 겹친다.
+# 가장 깊이 파고드는 도형은 정삼각(내접원 = 반지름의 0.5)이고, 그 아래로 내려가는 값을 주면
+# **밑그림끼리 겹쳐도 에러가 안 난다** — 그려 보고서야 안다.
+const JIN_ELLIPSE_X := 0.68           # 세로 긴 타원의 가로 반지름 비 (최소 거리 0.68R)
+const JIN_FLOWER_PETALS := 6
+const JIN_FLOWER_DEPTH := 0.13        # 물결 골의 깊이 = 반지름의 13% (얕게 — 골이 깊으면 룬 자리를 먹는다)
+const JIN_LENS_X := 0.60              # 렌즈 허리의 가로 반지름 비 (최소 거리 0.60R)
 
 # ── 마우스 휠 크기 조절 (진·룬, 세션 14c) ──
 const JIN_SCALE_MIN := 0.72
@@ -279,10 +289,9 @@ func _build_guide(target: int, slot: int) -> PackedVector2Array:
 			# 🔴 안 골랐으면 밑그림이 없다 (세션 25) — 오른쪽 진 셀을 클릭해야 뜬다.
 			if _jin_idx < 0:
 				return pts
-			# 바깥 원 둘레 (닫힌 고리) — 휠 크기 반영
-			var jr := _jin_radius()
-			for i in GUIDE_CIRCLE_N + 1:
-				pts.append(ctr + Vector2.from_angle(TAU * float(i) / float(GUIDE_CIRCLE_N)) * jr)
+			# 🔴 진 종류별 **닫힌 도형** (세션48) — 휠 크기 반영. 예전엔 종류와 무관하게 원 하나라
+			# 진을 8종으로 늘려도 **손 궤적이 똑같았다**(색만 다른 8지선다).
+			pts = jin_guide_pts(_jin_shape(), ctr, _jin_radius())
 		TraceTarget.RUNE:
 			if _rune_idx < 0:
 				return pts
@@ -405,6 +414,94 @@ static func _densify(verts: PackedVector2Array, step: float) -> PackedVector2Arr
 			out.append(a.lerp(b, float(t) / float(n)))
 	out.append(verts[verts.size() - 1])
 	return out
+
+
+## 지금 고른 진의 밑그림 도형 (`Enums.JinShape`). def가 없으면(순수 단위 테스트·폴백) 원.
+func _jin_shape() -> int:
+	return int(_jin_def.guide_shape) if _jin_def != null else Enums.JinShape.CIRCLE
+
+
+## 🔴 **진 종류별 밑그림** (세션 48 — "새 진 = 여기 한 갈래"). `_rune_guide_verts`·`glyph_guide_pts`와
+## 같은 규약이다. 세션 44~47엔 진만 이 처리를 못 받아 8종이 **전부 같은 원**이었다.
+##
+## 공통 규율 (사용자 확정: *"진의 궤적은 원처럼 닫힌 도형이어야 함. 그 안에 룬이 들어가야 해서"*):
+##   • 🔴 **반드시 닫힌다** — 마지막 점이 첫 점으로 돌아온다(`_closed`가 그 한 점을 책임진다).
+##     진은 룬을 담는 **그릇**이라 터진 도형은 그릇이 아니다.
+##   • 🔴 **중심을 비워 둔다** — 안에 룬이 들어갈 자리가 남아야 한다. 가장 깊이 파고드는 게
+##     정삼각(내접원 0.5R)이고 룬은 최대 0.27R이라, 그 아래로 내려가는 도형을 새로 넣지 마라.
+##   • 🔴 **점 밀도를 맞춘다** — 완성도는 "가이드 점 중 몇 %를 드러냈나"라 점 수가 도형마다 크게
+##     다르면 **채점이 도형마다 유불리**를 갖는다. 전부 `GUIDE_CIRCLE_N` 등분(≈73점)에 맞춘다.
+## 🔴 **static · public인 이유**: 책의 진 셀 아이콘(`ring_book.jin_icon_marks`)이 이 함수를 그대로
+## 부른다 — 세션 47 문양과 같은 이유다. **셀에서 본 모양 = 손으로 그을 모양**이 구조적으로 못 갈라진다.
+static func jin_guide_pts(shape: int, ctr: Vector2, r: float) -> PackedVector2Array:
+	match shape:
+		Enums.JinShape.TRIANGLE:
+			return _jin_poly(3, ctr, r)
+		Enums.JinShape.OCTAGON:
+			return _jin_poly(8, ctr, r)
+		Enums.JinShape.PENTAGON:
+			return _jin_poly(5, ctr, r)
+		Enums.JinShape.DIAMOND:
+			return _jin_poly(4, ctr, r)
+		Enums.JinShape.ELLIPSE:
+			var e := PackedVector2Array()
+			for i in GUIDE_CIRCLE_N:
+				var a := TAU * float(i) / float(GUIDE_CIRCLE_N)
+				e.append(ctr + Vector2(cos(a) * r * JIN_ELLIPSE_X, sin(a) * r))
+			return _closed(e)
+		Enums.JinShape.FLOWER:
+			# 물결 원 — 반지름이 꽃잎 수만큼 오르내린다. 골은 얕게(0.87R) 파 룬 자리를 안 먹는다.
+			var f := PackedVector2Array()
+			for i in GUIDE_CIRCLE_N:
+				var a2 := TAU * float(i) / float(GUIDE_CIRCLE_N)
+				var rr := r * (1.0 + JIN_FLOWER_DEPTH * cos(float(JIN_FLOWER_PETALS) * a2))
+				f.append(ctr + Vector2.from_angle(a2) * rr)
+			return _closed(f)
+		Enums.JinShape.LENS:
+			return _jin_lens(ctr, r)
+	# CIRCLE(0) · 모르는 도형 = 원. ⚠ 폴백이 크래시가 아니라 원인 게 계약이다 (진이 늘어도 안 죽는다).
+	var c := PackedVector2Array()
+	for i in GUIDE_CIRCLE_N:
+		c.append(ctr + Vector2.from_angle(TAU * float(i) / float(GUIDE_CIRCLE_N)) * r)
+	return _closed(c)
+
+
+## 정n각형 둘레 (꼭짓점 하나가 위). 변마다 등분해 **총 점 수를 원과 맞춘다** — 밀도 규율.
+static func _jin_poly(sides: int, ctr: Vector2, r: float) -> PackedVector2Array:
+	var per := maxi(1, ceili(float(GUIDE_CIRCLE_N) / float(sides)))
+	var pts := PackedVector2Array()
+	for e in sides:
+		var v0 := ctr + Vector2.from_angle(TAU * float(e) / float(sides) - PI / 2.0) * r
+		var v1 := ctr + Vector2.from_angle(TAU * float(e + 1) / float(sides) - PI / 2.0) * r
+		for t in per:
+			pts.append(v0.lerp(v1, float(t) / float(per)))
+	return _closed(pts)
+
+
+## 렌즈 — 위·아래 꼭짓점(0,∓r)에서 만나고 좌우로 볼록한 **원호 2개**. 타원과 달리 꼭짓점이 뾰족해
+## 손이 거기서 한 번 꺾인다 (같은 "둥근 것"인 ELLIPSE와 궤적이 갈리는 지점).
+static func _jin_lens(ctr: Vector2, r: float) -> PackedVector2Array:
+	var w := r * JIN_LENS_X                       # 허리 반폭
+	var rad := (r * r + w * w) / (2.0 * w)        # (0,±r)과 (w,0)을 지나는 원의 반지름
+	var cx := w - rad                             # 오른쪽 호의 중심 x (음수 — 중심 왼쪽에 있다)
+	var phi := atan2(r, -cx)                      # 꼭짓점까지의 호 반각
+	var half := maxi(2, GUIDE_CIRCLE_N / 2)
+	var pts := PackedVector2Array()
+	for i in half:                                # 오른쪽 호: 위 꼭짓점 → 허리 → 아래 꼭짓점
+		var a := -phi + 2.0 * phi * float(i) / float(half)
+		pts.append(ctr + Vector2(cx + rad * cos(a), rad * sin(a)))
+	for i in half:                                # 왼쪽 호: 좌우 대칭으로 되돌아온다
+		var a2 := phi - 2.0 * phi * float(i) / float(half)
+		pts.append(ctr + Vector2(-(cx + rad * cos(a2)), rad * sin(a2)))
+	return _closed(pts)
+
+
+## 🔴 점열을 **닫는다** — 첫 점을 끝에 한 번 더. 여기가 "진 = 그릇" 계약의 유일한 집행 지점이다
+## (각 도형이 저마다 닫으면 하나가 빠져도 아무도 못 알아챈다).
+static func _closed(pts: PackedVector2Array) -> PackedVector2Array:
+	if not pts.is_empty():
+		pts.append(pts[0])
+	return pts
 
 
 ## 🔴 룬 종류별 밑그림 꼭짓점 (닫힌 다각형, 마지막=처음). 세션 34 — "새 룬 = 여기 한 갈래".

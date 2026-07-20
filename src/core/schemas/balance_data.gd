@@ -100,6 +100,26 @@ extends Resource
 ## 전방위(NOVA) 발수 — 360도 균등 분할. 에임이 바뀌면 통째로 돌 뿐 간격은 불변
 @export var wand_nova_count: int = 8
 
+@export_subgroup("세션48 새 진")
+## 연발(BURST) 발수 — 같은 각도로 시간차. 산탄과 달리 전부 조준선에 맞지만 적이 움직이면 빗나간다
+@export var jin_burst_count: int = 3
+## 연발 발 간격(초). 너무 길면 한 발씩 쏘는 것과 같고, 짧으면 산탄과 구분이 안 간다
+@export var jin_burst_interval_sec: float = 0.10
+## 분사(SPRAY) 발수 — 좁은 각으로 연속. 근거리 압박용
+@export var jin_spray_count: int = 5
+## 분사 총 퍼짐 각도(도) — 산탄(24도)보다 좁아야 "분사"로 읽힌다
+@export var jin_spray_spread_deg: float = 10.0
+## 분사 발 간격(초) — 연발보다 촘촘
+@export var jin_spray_interval_sec: float = 0.05
+## 타겟팅(SEEK) 탐색 반경(px). 이 안에 적이 없으면 조준 방향으로 그냥 나간다
+@export var jin_seek_radius_px: float = 420.0
+## 나선(SPIRAL) 진폭(px) — 진행축에 수직으로 흔들리는 폭. 충돌 경로가 그만큼 넓어진다
+@export var jin_spiral_amplitude_px: float = 26.0
+## 나선 주기(초) — 한 번 좌우로 훑는 데 걸리는 시간
+@export var jin_spiral_period_sec: float = 0.45
+## 부메랑(BOOMERANG) 되돌아오기 시점 — 수명 대비 비율. 0.5면 절반 날아가고 절반 돌아온다
+@export var jin_boomerang_turn_ratio: float = 0.5
+
 @export_group("전투")
 @export var projectile_base_speed: float = 260.0
 ## v1.7: 10.0 → 9.0. 위력에서 rune_accuracy(0.6~1.0) 곱을 떼면서(TECH_SPEC §4.0 축 분리)

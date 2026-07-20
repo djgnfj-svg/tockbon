@@ -47,6 +47,8 @@ func _run() -> void:
 	_test_jin_rune_need_picking()
 	_test_arrowhead_must_be_drawn()
 	_test_glyph_shapes_are_distinct()
+	_test_jin_shapes_are_closed_and_distinct()
+	_test_jin_shape_reaches_the_board()
 	_test_ink_rides_assembly()
 	_test_special_ink_consumed_while_drawing()
 
@@ -386,6 +388,101 @@ func _test_special_ink_consumed_while_drawing() -> void:
 	b.queue_free()
 	b2.queue_free()
 	gs.inventory.clear()
+
+
+# ── 🔴 ⑳ 진 밑그림 8도형: **닫혀 있고 · 서로 다르고 · 룬 자리를 남긴다** (세션 48) ──
+# 사용자 확정: *"진의 궤적은 원처럼 닫힌 도형이어야 함. 그 안에 룬이 들어가야 해서."*
+# 세션 44~47엔 진이 종류와 무관하게 전부 같은 원이라 8종을 만들어도 **손 궤적이 똑같았다**.
+# 🔴 뮤테이션: `jin_guide_pts`의 match를 지워 늘 원을 돌려주면 「서로 다르다」가 7개 실패한다.
+#    `_closed`의 append를 지우면 「닫혀 있다」가 8개 실패한다.
+func _test_jin_shapes_are_closed_and_distinct() -> void:
+	var ctr := Vector2(134.0, 134.0)
+	var r := 100.0
+	var seen := {}
+	for shape in range(8):
+		var g: PackedVector2Array = _BoardScript.jin_guide_pts(shape, ctr, r)
+		_check(g.size() >= 60, "진 도형 %d 밑그림이 선다 (%d점)" % [shape, g.size()])
+		if g.size() < 2:
+			continue
+		# ① 🔴 닫혔다 — 진은 룬을 담는 그릇이라 터진 도형은 그릇이 아니다.
+		_check(g[0].is_equal_approx(g[g.size() - 1]),
+			"🔴 진 도형 %d이 안 닫혔다 (%s → %s)" % [shape, g[0], g[g.size() - 1]])
+		# 중간에 끊기지도 않는다 — 이웃 점이 멀면 그 구간은 긋는 사람에게 유령 선이다.
+		var worst := 0.0
+		for i in g.size() - 1:
+			worst = maxf(worst, g[i].distance_to(g[i + 1]))
+		_check(worst < r * 0.35, "진 도형 %d 점열이 중간에 끊긴다 (최대 간격 %.1f)" % [shape, worst])
+		# ② 🔴 룬 자리가 남는다 — 도형이 중심을 향해 파고들면 안 된다(가장 깊은 정삼각 = 0.5R).
+		var dmin := INF
+		for p in g:
+			dmin = minf(dmin, p.distance_to(ctr))
+		_check(dmin >= r * 0.45,
+			"🔴 진 도형 %d이 중심을 먹는다 — 룬이 들어갈 자리가 없다 (최소 %.2fR)" % [shape, dmin / r])
+		# ③ 🔴 채점 밀도가 도형마다 크게 다르면 **완성도가 도형마다 유불리**를 갖는다.
+		_check(absi(g.size() - 73) <= 8,
+			"진 도형 %d 점 밀도가 원(73점)과 벌어졌다 (%d점)" % [shape, g.size()])
+		# ④ 🔴 서로 다르다 — 안 다르면 8종으로 가른 의미가 없다(색만 다른 8지선다).
+		var key := ""
+		for pt in g:
+			key += "%.1f,%.1f;" % [pt.x, pt.y]
+		_check(not seen.has(key),
+			"🔴 진 도형 %d의 밑그림이 도형 %s와 똑같다 — 손 궤적이 안 갈렸다" % [shape, seen.get(key, "?")])
+		seen[key] = shape
+	# 모르는 도형은 크래시가 아니라 원 폴백 (진이 늘어도 안 죽는다 — GLYPH_DESC가 밟은 그 함정).
+	var fallback: PackedVector2Array = _BoardScript.jin_guide_pts(99, ctr, r)
+	_check(fallback.size() >= 60, "모르는 진 도형도 밑그림이 나온다 (폴백=원)")
+
+
+# ── 🔴 ㉑ 그 도형이 **판까지 온다** — `guide_shape`를 보드가 실제로 읽는가 (세션 48) ──
+# 위 ⑳은 함수만 본다. 이 테스트가 없으면 `_jin_shape()`이 늘 CIRCLE을 돌려줘도 초록불이다
+# (세션47 문양이 정확히 이걸로 뮤테이션을 통과시켰다 — 보드를 검증할 뿐 배선을 안 봤다).
+func _test_jin_shape_reaches_the_board() -> void:
+	var JinDefScript = load("res://src/core/schemas/jin_def.gd")
+	var jd = JinDefScript.new()
+	jd.id = &"jin_fork"
+	jd.guide_shape = 1                 # Enums.JinShape.TRIANGLE
+	var b = _BoardScript.new()
+	b.size = Vector2(268, 268)
+	root.add_child(b)
+	b.call(&"clear_all")
+	b.call(&"choose_jin", jd)
+	var g: PackedVector2Array = b.call(&"guide_points")
+	var ctr := Vector2(134.0, 134.0)
+	var expect: PackedVector2Array = _BoardScript.jin_guide_pts(1, ctr, 268.0 * 0.44)
+	_check(g.size() == expect.size() and g.size() > 2,
+		"삼각 진의 밑그림이 판에 선다 (%d점, 기대 %d점)" % [g.size(), expect.size()])
+	if g.size() == expect.size():
+		var far := 0.0
+		for i in g.size():
+			far = maxf(far, g[i].distance_to(expect[i]))
+		_check(far < 0.5, "🔴 판의 밑그림이 그 진의 도형과 다르다 (최대 %.1fpx 어긋남)" % far)
+	# 원 진과 실제로 갈리는가 — 같은 점열이면 guide_shape가 배선까지 안 온 것이다.
+	var circle: PackedVector2Array = _BoardScript.jin_guide_pts(0, ctr, 268.0 * 0.44)
+	var same := g.size() == circle.size()
+	if same:
+		for i in g.size():
+			if not g[i].is_equal_approx(circle[i]):
+				same = false
+				break
+	_check(not same, "🔴 삼각 진인데 밑그림이 원 그대로다 — guide_shape가 판까지 안 온다")
+	b.queue_free()
+
+	# 🔴 **책 셀 아이콘도 같은 도형이다** (세션47 문양 규약). 셀은 열린 획(세로선·화살표)만
+	# 그려 진처럼 보이지 않았고, 무엇보다 **고르는 순간 손으로 그을 도형과 아무 관계가 없었다**.
+	# ⚠ 여기서 재는 건 `jin_icon_marks`의 첫 획(=윤곽)뿐이다 — 셀이 그 진의 shape를 실제로
+	#   넘기는지(`_draw_jin_cells`)와 "보인다"는 헤드리스가 못 잡는다(리드의 스샷이 최종 판정).
+	var BookScript = load("res://src/drawing/ring_book.gd")
+	var marks: Array = BookScript.jin_icon_marks(0, 0, Vector2.ZERO, 17.0, 1)
+	_check(not marks.is_empty(), "책 진 셀 아이콘에 획이 있다")
+	var outline: PackedVector2Array = marks[0] if not marks.is_empty() else PackedVector2Array()
+	var want: PackedVector2Array = _BoardScript.jin_guide_pts(1, Vector2.ZERO, 17.0)
+	_check(outline.size() == want.size() and outline.size() > 2,
+		"책 셀의 바깥 윤곽 = 판의 닫힌 도형 (%d점, 기대 %d점)" % [outline.size(), want.size()])
+	if outline.size() == want.size():
+		var off := 0.0
+		for i in outline.size():
+			off = maxf(off, outline[i].distance_to(want[i]))
+		_check(off < 0.5, "🔴 책 셀 아이콘이 판의 도형과 갈라졌다 (최대 %.1fpx)" % off)
 
 
 ## 🔴 세션 25: 진·룬도 **골라야** 밑그림이 뜬다 (사용자: "이게 눌러야 뜨게 해줘").

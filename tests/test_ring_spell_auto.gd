@@ -60,6 +60,13 @@ func _run() -> void:
 	await _test_special_ink_amplifies_status(system)
 	await _test_wand_pattern(system)
 	await _test_glyph_bolt_effects(system)
+	await _test_jin_burst(system)
+	await _test_jin_spray(system)
+	await _test_jin_seek(system)
+	await _test_jin_spiral(system)
+	await _test_jin_boomerang(system)
+	await _test_jin_body_scale(system)
+	await _test_jin_legacy_patterns(system)
 
 	if failures == 0:
 		print("TEST_RING_SPELL_OK — 전 항목 통과")
@@ -387,6 +394,297 @@ func _travel_of(system, code: int) -> float:
 	var moved := start.distance_to(bolt.global_position)
 	_clear(system)
 	return moved
+
+
+# ── 🔴 진 5종 = 발사 형태 (세션48) ──
+# 세션44에 진 3개가 WandPattern 3개를 1:1로 소진해 "새 진 = .tres 한 장"이 깨져 있었다. 세션48이
+# 패턴 3종(연발·분사·타겟팅)과 **직교 축인 경로**(나선·부메랑)를 더해 그걸 열었다.
+# 🔴 여기가 그 축들을 못 박는다. 진 5종을 "발수만" 세면 검출력이 0이다 — 연발과 산탄은 발수가
+# 같을 수도 있고, 갈리는 건 **시간축**이다. 그래서 아래는 전부 **관측 가능한 행동**으로 잰다:
+#   발수는 세되 **언제** 생겼는지 · 각도는 **캐리어가 실제로 간 방향**으로 · 경로는 **위치 궤적**으로.
+# 내부 필드(_velocity·_shot_plan)는 안 더듬는다 — 리팩터 때 조용히 깨지는 물건이라 계약이 아니다.
+
+## 진 id로 빈 진을 쏜다 (전개 없음 — 캐리어만 본다). aim 기본 = 오른쪽.
+func _cast_jin(system, jin_id: StringName, aim: Vector2 = Vector2(1, 0)) -> void:
+	_bus.ring_cast_requested.emit(
+		{"rings": [_all(GLYPH_NONE)], "jin": jin_id}, Vector2.ZERO, aim)
+
+
+## 캐리어들이 **실제로 간 방향** (원점 기준 각도). 위치는 공개(global_position)라 계약이 안전하다.
+## 아직 안 움직인 캐리어(막 생김)는 방향이 없으므로 뺀다 — 부르기 전에 충분히 기다릴 것.
+func _carrier_angles(system) -> Array:
+	var out: Array = []
+	for c in _carriers(system):
+		var p: Vector2 = c.global_position
+		if p.length() > 1.0:
+			out.append(p.angle())
+	return out
+
+
+## 지연 발사 타이머가 다 터지도록 물리 프레임을 흘린다 (연발·분사는 시간축이 정체성이다).
+func _drain(frames: int) -> void:
+	for i in frames:
+		await physics_frame
+
+
+## 앞 테스트의 허수아비가 "enemies" 그룹에 남으면 타겟팅이 엉뚱한 걸 문다 — queue_free는 지연이라
+## 프레임을 흘려 실제로 빠질 때까지 기다린다.
+func _purge_enemies() -> void:
+	for e in get_nodes_in_group("enemies"):
+		e.queue_free()
+	await process_frame
+	await process_frame
+
+
+## 🔴 연발 = **같은 각도 N발인데 시간이 다르다.** 산탄과 갈리는 지점이 오직 시간축이므로,
+## delay가 전부 0이 되는 순간(뮤테이션) 이 테스트가 빨개져야 한다.
+func _test_jin_burst(system) -> void:
+	print("[14] 연발진 = 같은 각도로 시간차 N발 (세션48 BURST)")
+	_clear(system)
+	await _purge_enemies()
+	var bal = system.balance
+	var n := int(bal.jin_burst_count)
+
+	_cast_jin(system, &"jin_burst")
+	await process_frame
+	# 🔴 검출력의 핵심: 첫 프레임엔 **1발뿐**이어야 한다. delay가 전부 0이면 여기서 n발이 나온다.
+	_check(_carriers(system).size() == 1,
+		"연발은 첫 프레임에 1발만 (실제 %d — 전부 나오면 delay가 죽은 것)" % _carriers(system).size())
+	# 마지막 발이 나올 시간(간격×(n-1))을 넉넉히 넘겨 기다린다
+	await _drain(40)
+	_check(_carriers(system).size() == n,
+		"기다리면 %d발 다 나온다 (실제 %d)" % [n, _carriers(system).size()])
+
+	# 같은 각도인지 — 연발은 조준선 한 줄에 다 실린다 (퍼지면 그건 산탄·분사다)
+	var angles := _carrier_angles(system)
+	var spread := _angle_spread(angles)
+	_check(angles.size() == n and spread < 0.02,
+		"연발 %d발이 전부 같은 각도 (퍼짐 %.4f rad — 0이어야)" % [angles.size(), spread])
+	_clear(system)
+	await _drain(20)
+
+
+## 🔴 분사 = 각도도 퍼지고 시간도 다르다. 연발(한 점·시간차)·산탄(퍼짐·동시) **둘 다와** 갈린다.
+## 그래서 세 축을 다 잰다: 첫 프레임 발수 · 총 발수 · 퍼짐(산탄보다 좁은지).
+func _test_jin_spray(system) -> void:
+	print("[15] 분사진 = 좁게 퍼지며 시간차 (세션48 SPRAY — 연발·산탄 둘 다와 구분)")
+	_clear(system)
+	await _purge_enemies()
+	var bal = system.balance
+	var n := int(bal.jin_spray_count)
+
+	_cast_jin(system, &"jin_spray")
+	await process_frame
+	_check(_carriers(system).size() == 1,
+		"분사도 첫 프레임엔 1발 (실제 %d — 연발과 같은 시간축)" % _carriers(system).size())
+	await _drain(40)
+	_check(_carriers(system).size() == n,
+		"기다리면 %d발 다 나온다 (실제 %d)" % [n, _carriers(system).size()])
+
+	var spray_spread := _angle_spread(_carrier_angles(system))
+	_check(spray_spread > 0.02,
+		"분사는 각도가 퍼진다 (%.4f rad — 연발이면 0이다)" % spray_spread)
+	_clear(system)
+	await _drain(20)
+
+	# 🔴 산탄보다 **좁다** — 좁은 각이 분사의 정체성이다 (넓으면 산탄과 구별이 안 된다)
+	_cast_jin(system, &"jin_fork")
+	await _drain(10)
+	var fork_spread := _angle_spread(_carrier_angles(system))
+	_check(fork_spread > spray_spread,
+		"분사(%.4f)가 산탄(%.4f)보다 좁다" % [spray_spread, fork_spread])
+	_clear(system)
+	await _drain(10)
+
+
+## 🔴 타겟팅 = **조준을 무시하고** 가장 가까운 적으로 간다.
+## 검출력의 핵심: 조준을 적과 **정반대**로 준다 — fallback 각도만 반환하는 뮤테이션이면 여기서 죽는다.
+func _test_jin_seek(system) -> void:
+	print("[16] 타겟진 = 조준 무시하고 가장 가까운 적으로 (세션48 SEEK)")
+	_clear(system)
+	await _purge_enemies()
+
+	# 적은 **위쪽**(0,-300), 조준은 **아래쪽**(0,+1) = 정반대
+	var dummy = _dummy_scene.instantiate()
+	root.add_child(dummy)
+	dummy.global_position = Vector2(0, -300)
+	await process_frame
+	_cast_jin(system, &"jin_seek", Vector2(0, 1))
+	await _drain(8)   # 적까지 300px — 8프레임(≈35px)이면 아직 안 닿아 캐리어가 살아 있다
+	var seek_angles := _carrier_angles(system)
+	var got := float(seek_angles[0]) if not seek_angles.is_empty() else 999.0
+	# 위쪽 = -PI/2. 조준(아래=+PI/2)을 그대로 썼으면 부호가 반대라 크게 빗나간다.
+	_check(seek_angles.size() == 1 and absf(angle_difference(got, -PI / 2.0)) < 0.15,
+		"조준이 정반대여도 적 쪽(-1.571)으로 간다 (실제 %.3f rad)" % got)
+	_clear(system)
+	await _purge_enemies()
+
+	# 🔴 사거리 **밖**이면 조준으로 폴백 — 안 그러면 지평선 너머 적에게 끌려간다
+	var far = _dummy_scene.instantiate()
+	root.add_child(far)
+	far.global_position = Vector2(0, -900)   # jin_seek_radius_px=420 밖
+	await process_frame
+	_cast_jin(system, &"jin_seek", Vector2(1, 0))
+	await _drain(8)
+	var fb := _carrier_angles(system)
+	var fa := float(fb[0]) if not fb.is_empty() else 999.0
+	_check(fb.size() == 1 and absf(angle_difference(fa, 0.0)) < 0.15,
+		"사거리 밖 적은 무시하고 조준(0.000)으로 폴백 (실제 %.3f rad)" % fa)
+	_clear(system)
+	await _purge_enemies()
+
+
+## 🔴 나선 = 진행축에서 **벗어나며** 난다. 직진 진과 **같은 각도로 쏴서** 궤적을 비교한다 —
+## 직진은 축 이탈이 ~0이고 나선은 유의미하게 벗어나야 한다. 분기를 직진으로 되돌리면 여기가 죽는다.
+func _test_jin_spiral(system) -> void:
+	print("[17] 나선진 = 진행축을 벗어나며 훑는다 (세션48 JinMotion.SPIRAL)")
+	var spiral := await _axis_deviation(system, &"jin_spiral")
+	var straight := await _axis_deviation(system, &"jin_single")
+	_check(straight < 1.0, "직진진은 축 이탈 ~0 (실제 %.2f px)" % straight)
+	_check(spiral > 5.0, "나선진은 축에서 벗어난다 (%.2f px)" % spiral)
+	_check(spiral > straight * 10.0 + 5.0,
+		"나선 이탈이 직진보다 압도적 (%.2f ≫ %.2f px)" % [spiral, straight])
+
+
+## 오른쪽(1,0)으로 쏜 캐리어가 진행축(y=0)에서 벗어난 **최대 거리**. 직진이면 0에 붙는다.
+func _axis_deviation(system, jin_id: StringName) -> float:
+	_clear(system)
+	await _purge_enemies()
+	_cast_jin(system, jin_id)
+	await process_frame
+	var cs := _carriers(system)
+	if cs.is_empty():
+		return -1.0
+	var carrier = cs[0]
+	var worst := 0.0
+	for i in 12:
+		await physics_frame
+		if not is_instance_valid(carrier):
+			break
+		worst = maxf(worst, absf(carrier.global_position.y))
+	_clear(system)
+	await _drain(4)
+	return worst
+
+
+## 🔴 부메랑 = 나갔다가 **되돌아온다.** origin과의 거리가 한 번 늘었다가 **줄어야** 한다 —
+## 최대 거리만 재면 직진도 통과하므로, 끝 거리가 최대보다 확실히 작은지가 계약이다.
+func _test_jin_boomerang(system) -> void:
+	print("[18] 새의진 = 나갔다 되돌아온다 (세션48 JinMotion.BOOMERANG)")
+	_clear(system)
+	await _purge_enemies()
+	_cast_jin(system, &"jin_bird")
+	await process_frame
+	var cs := _carriers(system)
+	_check(cs.size() == 1, "부메랑 진 1발 (실제 %d)" % cs.size())
+	if cs.is_empty():
+		return
+	var carrier = cs[0]
+	var peak := 0.0
+	var last := 0.0
+	# 수명 1.5초 · turn_ratio 0.5 → 0.75초에 유턴. 죽기 전(≈1.3초)까지만 본다.
+	for i in 78:
+		await physics_frame
+		if not is_instance_valid(carrier):
+			break
+		last = carrier.global_position.length()
+		peak = maxf(peak, last)
+	_check(peak > 100.0, "일단 멀리 나간다 (최대 %.1f px)" % peak)
+	_check(last < peak - 30.0,
+		"그리고 되돌아온다 (끝 %.1f px < 최대 %.1f px — 직진이면 끝=최대)" % [last, peak])
+	_clear(system)
+	await _drain(4)
+
+
+## 🔴 body_scale이 **실제로 먹는가** (세션48에 DARK에서 깨어난 필드).
+## 두 갈래로 잰다: ① 규모가 발수를 늘린다(산탄) ② 규모가 몸집을 키운다(body_radius).
+## ①은 scale≠1.0인 산탄 진이 data에 없어 **테스트 전용 JinDef를 Db에 임시 등록**해 잰다
+## (data/·src/는 리드 영역이라 손대지 않는다 — 등록은 테스트가 끝나며 되돌린다).
+func _test_jin_body_scale(system) -> void:
+	print("[19] 진 규모(body_scale) → 발수·몸집 (세션48)")
+	_clear(system)
+	await _purge_enemies()
+	var db = root.get_node("/root/Db")
+
+	var big := JinDef.new()
+	big.id = &"__test_big_fork"
+	big.pattern = Enums.WandPattern.MULTI
+	big.body_scale = 2.0
+	db.jins[big.id] = big
+
+	_cast_jin(system, &"jin_fork")
+	await _drain(4)
+	var base_n := _carriers(system).size()
+	_clear(system)
+	await _drain(4)
+
+	_cast_jin(system, &"__test_big_fork")
+	await _drain(4)
+	var big_n := _carriers(system).size()
+	_check(big_n > base_n,
+		"큰 산탄진이 갈래가 더 많다 (규모2.0=%d발 > 규모1.0=%d발)" % [big_n, base_n])
+	_clear(system)
+	await _drain(4)
+	db.jins.erase(big.id)
+
+	# ② 몸집 — body_radius()가 규모에 비례한다 (먹선·히트박스가 같이 보는 공개 함수)
+	_cast_jin(system, &"jin_single")     # body_scale 1.0
+	await process_frame
+	var r1 := float(_carriers(system)[0].body_radius()) if not _carriers(system).is_empty() else -1.0
+	_clear(system)
+	await _drain(4)
+	_cast_jin(system, &"jin_spiral")     # body_scale 1.2
+	await process_frame
+	var r2 := float(_carriers(system)[0].body_radius()) if not _carriers(system).is_empty() else -1.0
+	_check(r1 > 0.0 and r2 > r1,
+		"규모 1.2 진이 몸집이 크다 (%.1f > %.1f px)" % [r2, r1])
+	_clear(system)
+	await _drain(4)
+
+
+## 🔴 회귀 가드 — 새 축을 얹었어도 **옛 진·매직볼은 예전과 똑같이** 나가야 한다.
+## 진이 없는 도안(매직볼)은 set_motion을 아예 안 부르는 경로라 특히 중요하다.
+func _test_jin_legacy_patterns(system) -> void:
+	print("[20] 회귀 — 매직볼·옛 진 3종은 예전 그대로 (세션48 전과 동일)")
+	_clear(system)
+	await _purge_enemies()
+	var gs = root.get_node("/root/GameState")
+	var saved: Dictionary = gs.equipment.duplicate()
+	gs.equipment = {}   # 지팡이 폴백이 끼어들지 않게 (진 없는 도안은 장비를 본다)
+	var bal = system.balance
+
+	# 진 없는 도안 = 매직볼 = 단발 · 시간차 없음
+	_bus.ring_cast_requested.emit({"rings": [_all(GLYPH_NONE)]}, Vector2.ZERO, Vector2(1, 0))
+	await process_frame
+	_check(_carriers(system).size() == 1,
+		"매직볼(진 없음)=즉시 단발 (실제 %d)" % _carriers(system).size())
+	_clear(system)
+	await _drain(4)
+
+	# 옛 진 3종 — 전부 **첫 프레임에** 제 발수가 다 나온다 (시간차는 신규 진만의 것이다)
+	var expect := {&"jin_single": 1, &"jin_fork": int(bal.wand_multi_count),
+		&"jin_ring": int(bal.wand_nova_count)}
+	for jid: StringName in expect:
+		_cast_jin(system, jid)
+		await process_frame
+		var n := _carriers(system).size()
+		_check(n == int(expect[jid]), "%s = 첫 프레임에 %d발 (실제 %d)" % [jid, int(expect[jid]), n])
+		_clear(system)
+		await _drain(4)
+
+	gs.equipment = saved
+
+
+## 각도 배열의 퍼짐 (최대 - 최소, wrap 안전 — 여기 각도들은 다 같은 사분면대라 단순 차로 충분).
+func _angle_spread(angles: Array) -> float:
+	if angles.size() < 2:
+		return 0.0
+	var lo := 999.0
+	var hi := -999.0
+	for a: float in angles:
+		lo = minf(lo, a)
+		hi = maxf(hi, a)
+	return hi - lo
 
 
 # ── 헬퍼 ──

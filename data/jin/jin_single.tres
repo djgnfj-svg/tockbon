@@ -10,5 +10,7 @@ slot_count = 8
 body_scale = 1.0
 ui_color = Color(0.42, 0.30, 0.12, 0.55)
 pattern = 0
+motion = 0
+guide_shape = 0
 unlock_id = &"jin_single"
 sort = 0

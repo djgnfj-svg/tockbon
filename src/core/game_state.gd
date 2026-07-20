@@ -66,6 +66,14 @@ func _seed_starting_unlocks() -> void:
 	codex[&"jin_single"] = true
 	codex[&"jin_fork"] = true
 	codex[&"jin_ring"] = true
+	# 🔴 세션48 새 진 5종 — 연발·분사·타겟·나선·새의진. 지금은 **손맛을 재려고 전부 시드한다**
+	# (획득 경로가 아직 없어 안 심으면 아무도 못 쏴 본다 — 세션44 지팡이가 정확히 그렇게 죽었다).
+	# ⚠ 크래프트·보상으로 옮길 때 여기서 빼면 그대로 "얻는 것"이 된다.
+	codex[&"jin_burst"] = true
+	codex[&"jin_spray"] = true
+	codex[&"jin_seek"] = true
+	codex[&"jin_spiral"] = true
+	codex[&"jin_bird"] = true
 
 ## 🔴 **진짜 새로하기** (세션37, F8). save_manager 노트가 적어 둔 계약: `save_game()`이 쓰는 것
 ## 전부 + `bag`·`hp` + **시작 해금 재시드**를 한 곳에서 처리한다. 씬마다 손으로 비우면 필드가

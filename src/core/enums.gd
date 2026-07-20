@@ -52,7 +52,28 @@ enum DrawStage { CIRCLE, RUNE, ARROW }
 ## 🔴 **도안이 아니라 지팡이가 발수를 정한다.** v1.9까지는 문양 1개 = 1발이었는데, 방향이
 ## 지팡이로 간 순간 그게 무너졌다 — 문양이 방향을 안 정하면 N발이 **같은 자리에 겹친다.**
 ## SINGLE=단발 / MULTI=산탄(에임 좌우로 퍼짐) / NOVA=전방위(내 주변 사방)
-enum WandPattern { SINGLE, MULTI, NOVA }
+##
+## 🔴 세션48: BURST·SPRAY·SEEK를 **끝에 덧붙였다** (문양 GlyphCode와 같은 규약 — 중간에 끼우면
+## 저장된 JinDef.pattern·옛 도안이 통째로 밀린다). 이제 이 enum은 지팡이가 아니라 **진**의 축이다.
+##   BURST=연발(같은 각도로 시간차) · SPRAY=분사(좁은 각 연속) · SEEK=타겟팅(가장 가까운 적을 골라 감)
+enum WandPattern { SINGLE, MULTI, NOVA, BURST, SPRAY, SEEK }
+## 🔴 진의 **비행 경로** (세션48 신설). WandPattern이 "언제·어디로 몇 발"이라면 이건 "어떻게 나는가"다.
+##
+## 두 축을 가른 이유: 세션44에 진 3개가 WandPattern 3개를 1:1로 소진해 **"새 진 = .tres 한 장"이
+## 깨져 있었다**(4번째 진 = 새 발사 기하 = 코드). 경로를 독립 축으로 빼면 둘이 **직교**해 조합이
+## 열린다 — 나선 산탄·부메랑 연발이 전부 데이터 한 장이다. 축을 늘리는 게 진을 늘리는 것보다 싸다.
+##   STRAIGHT=직진 · SPIRAL=나선(사인파로 훑으며 전진) · BOOMERANG=부메랑(나갔다 되돌아온다)
+enum JinMotion { STRAIGHT, SPIRAL, BOOMERANG }
+## 🔴 진의 **밑그림 도형** (세션48 신설, 사용자 확정: *"진의 궤적은 원처럼 닫힌 도형이어야 함 —
+## 그 안에 룬이 들어가야 해서"*). 진 = 룬을 담는 **그릇**이라 궤적이 반드시 **닫혀** 있어야 한다.
+##
+## 세션44~48까지 진은 종류와 무관하게 **전부 같은 원**이었다 — 룬이 세션34에 종류별 닫힌 다각형을
+## 받은 것(`_rune_guide_verts`: 불△·물▽·바람◇)과 달리 진만 그 처리를 못 받았다. 그래서 진을
+## 8개로 늘려도 **손 궤적이 똑같아 "색만 다른 8지선다"**가 된다(memory `takbon-glyph-design-principle`).
+## 🔴 **`pattern`에서 유추하지 말고 데이터로 둔다** — pattern×motion 조합이 열리면 유추가 깨진다.
+##   CIRCLE=원 · TRIANGLE=정삼각 · OCTAGON=팔각 · ELLIPSE=세로 긴 타원
+##   PENTAGON=오각 · DIAMOND=마름모 · FLOWER=물결 원(꽃잎) · LENS=렌즈(양쪽 볼록)
+enum JinShape { CIRCLE, TRIANGLE, OCTAGON, ELLIPSE, PENTAGON, DIAMOND, FLOWER, LENS }
 enum Status { NONE, BURN, KNOCKBACK, WET, FLOW }
 enum Phase { MORNING, DAY, EVENING, NIGHT }
 ## 🔴 PEN = 탁본 펜 (세션 23 신설). 등급이 오를수록 **보정도**가 올라 손을 잡아 준다

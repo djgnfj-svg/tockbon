@@ -16,6 +16,9 @@ extends Area2D
 ## 적 노드 계약: 그룹 "enemies" + take_hit(damage, rune_type, status, status_power).
 
 const RADIUS_PX := 18.0       # 히트박스·먹선 반지름 (진 몸) — 세션 13: 9→18 (발사체가 안 보였다)
+## 부메랑 선회 각속도(rad/s) — 연출값이라 balance 아닌 여기 상수 (선례: juice의 손맛 수치).
+## 8.0 = 180도 유턴에 약 0.4초. 낮추면 크게 휘고 높이면 칼같이 꺾인다 — 사용자가 쏴 보고 조인다.
+const BOOMERANG_TURN_RATE := 8.0
 const RING_COLOR := Color(0.98, 0.66, 0.28)
 const RUNE_FALLBACK := Color(0.95, 0.35, 0.15)
 
@@ -33,6 +36,16 @@ var _velocity := Vector2.ZERO
 var _life_left: float = 0.0
 var _consumed := false
 
+# 🔴 비행 경로 (세션48). motion=STRAIGHT면 아래 전부 안 쓰이고 예전과 픽셀 동일하게 돈다.
+var _motion: int = Enums.JinMotion.STRAIGHT
+var _scale: float = 1.0
+var _age: float = 0.0            # 발사 후 경과 — 나선 위상·부메랑 반환 시점의 기준
+var _lifetime: float = 0.0       # 처음 받은 수명 (부메랑이 반환 시점을 재는 데 쓴다)
+var _origin := Vector2.ZERO      # 발사 지점 — 부메랑이 돌아올 목표
+var _spiral_amp: float = 0.0
+var _spiral_period: float = 0.45
+var _turn_ratio: float = 0.5
+
 
 func _ready() -> void:
 	add_to_group("player_projectiles")
@@ -46,21 +59,69 @@ func setup(p_ring: Array, p_angle: float, p_speed: float, p_lifetime: float,
 	_ring = p_ring.duplicate()
 	_velocity = Vector2.RIGHT.rotated(p_angle) * p_speed
 	_life_left = maxf(p_lifetime, 0.05)
+	_lifetime = _life_left
+	_origin = global_position
 	damage = p_damage
 	rune_type = p_rune_type
 	status = p_status
 	status_power = p_status_power
-	# 히트박스를 진 반지름에 맞춘다 (형상 리소스는 공유물 — scale로만)
+	_apply_body_radius()
+	queue_redraw()
+
+
+## 🔴 비행 경로·규모를 얹는다 (세션48). setup **뒤에** 부른다 — 안 부르면 예전 그대로 직진 1.0배라
+## 옛 호출자·테스트가 그대로 돈다. 진(JinDef)이 없는 매직볼·옛 도안이 정확히 그 경로다.
+func set_motion(p_motion: int, p_scale: float, p_spiral_amp: float,
+		p_spiral_period: float, p_turn_ratio: float) -> void:
+	_motion = p_motion
+	_scale = maxf(p_scale, 0.1)
+	_spiral_amp = p_spiral_amp
+	_spiral_period = maxf(p_spiral_period, 0.05)
+	_turn_ratio = clampf(p_turn_ratio, 0.05, 0.95)
+	_apply_body_radius()
+	queue_redraw()
+
+
+## 히트박스를 진 몸 반지름에 맞춘다 (형상 리소스는 공유물 — scale로만 건드린다).
+func _apply_body_radius() -> void:
 	var cs := get_node_or_null("Shape") as CollisionShape2D
 	if cs != null and cs.shape is CircleShape2D:
-		cs.scale = Vector2.ONE * (RADIUS_PX / (cs.shape as CircleShape2D).radius)
-	queue_redraw()
+		cs.scale = Vector2.ONE * (body_radius() / (cs.shape as CircleShape2D).radius)
+
+
+## 진 몸 반지름 — 규모가 곱해진다. 먹선(_draw)과 히트박스가 **같은 함수**를 봐야 갈라지지 않는다
+## (선례: ring_power의 is_stable — 보이는 크기와 맞는 크기가 다르면 아무도 못 알아챈다).
+func body_radius() -> float:
+	return RADIUS_PX * _scale
 
 
 func _physics_process(delta: float) -> void:
 	if _consumed:
 		return
-	position += _velocity * delta
+	_age += delta
+	match _motion:
+		Enums.JinMotion.SPIRAL:
+			# 진행축에 **수직**으로 사인 흔들림 — 경로가 넓어져 밀집한 적을 훑는다.
+			# 위치를 직접 찍지 않고 속도에 수직 성분을 더한다(충돌이 매 프레임 연속으로 잡히게).
+			var perp := _velocity.orthogonal().normalized()
+			var w := TAU / _spiral_period
+			var swing := perp * (_spiral_amp * _scale) * w * cos(w * _age)
+			position += (_velocity + swing) * delta
+		Enums.JinMotion.BOOMERANG:
+			# 반환 시점을 넘기면 발사 지점 쪽으로 속도를 꺾는다 — 유턴이 곡선으로 그려진다.
+			# 놓친 적을 **돌아오는 길에** 한 번 더 만난다(진짜 두 번째 기회).
+			if _age >= _lifetime * _turn_ratio:
+				# 🔴 속도를 **회전**시킨다 — `lerp`로 하면 안 된다. 되돌아올 방향은 지금 방향의
+				# 거의 정반대라 두 벡터가 상쇄돼 **속도가 0으로 죽고 진이 공중에 멈춘다**
+				# (세션48에 실제로 그렇게 났다: 최대거리 = 끝거리 218.6px로 제자리). 각도만 돌리면
+				# 속력이 보존돼 나간 만큼의 기세로 돌아온다.
+				var speed := _velocity.length()
+				var want := (_origin - global_position).angle()
+				var turned := rotate_toward(_velocity.angle(), want, BOOMERANG_TURN_RATE * delta)
+				_velocity = Vector2.from_angle(turned) * speed
+			position += _velocity * delta
+		_:
+			position += _velocity * delta
 	_life_left -= delta
 	if _life_left <= 0.0:
 		_die_without_deploy()   # 수명 끝 = 못 맞음 → 전개 없이 사라진다
@@ -103,7 +164,7 @@ func _die_without_deploy() -> void:
 ## 진 = **날아가는 마법진**. 조립한 그대로(외곽 진 + 룬 + 문양 화살표)를 그려 통째로 날아가는 게
 ## 보이게 한다. 회전하지 않는다 (진행 방향을 안 본다).
 func _draw() -> void:
-	var r := RADIUS_PX
+	var r := body_radius()   # 🔴 히트박스와 같은 함수 — 보이는 크기 ≠ 맞는 크기가 되면 아무도 못 알아챈다
 	# 글로우(은은한 후광) — 배경과 상관없이 눈에 띄게
 	draw_arc(Vector2.ZERO, r, 0.0, TAU, 32, Color(RING_COLOR, 0.30), 6.0, true)
 	# 외곽 진 이중선

@@ -332,8 +332,23 @@ func _on_jin_selected(jin_id: StringName) -> void:
 	var jd := Db.get_jin(jin_id)
 	_board.choose_jin(jd)
 	var nm := String(jd.display_name) if jd != null else "진"
-	_set_say("%s — 왼쪽 판에 바깥 원을 손으로 문질러 그리세요 → [다음]" % nm, false)
+	# 🔴 세션48: 진마다 밑그림 도형이 다르다 — "바깥 **원**"으로 고정돼 있으면 삼각·타원을 그리라
+	# 해 놓고 원이라 부른다. 안내문이 화면과 어긋나는 것 자체가 버그다(hud.gd 상단 주석과 같은 규율).
+	_set_say("%s — 왼쪽 판에 바깥 %s을 손으로 문질러 그리세요 → [다음]"
+		% [nm, _jin_shape_word(jd)], false)
 	_refresh_buttons()
+
+
+## 진 밑그림 도형의 우리말 이름 — 안내문이 실제로 그릴 모양을 부른다 (세션48).
+## `Enums.JinShape` 순서와 짝. 새 도형을 넣으면 여기도 한 줄 는다 — 안 늘리면 "테두리"로 폴백한다
+## (인덱스 초과 크래시를 내지 않는다. 세션44~47에 `GLYPH_DESC`가 정확히 그 사고를 냈다).
+const JIN_SHAPE_WORDS := ["원", "삼각", "팔각", "타원", "오각", "마름모", "물결 원", "렌즈"]
+
+func _jin_shape_word(jd: JinDef) -> String:
+	if jd == null:
+		return "테두리"
+	var i := int(jd.guide_shape)
+	return JIN_SHAPE_WORDS[i] if i >= 0 and i < JIN_SHAPE_WORDS.size() else "테두리"
 
 
 ## 룬 탭 셀 — 책이 고른 룬 타입을 실어 준다 (세션 34). 그 타입이 밑그림·발사·저장까지 흐른다.

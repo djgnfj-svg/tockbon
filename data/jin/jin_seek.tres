@@ -4,13 +4,13 @@
 
 [resource]
 script = ExtResource("1")
-id = &"jin_fork"
-display_name = "세 갈래진"
+id = &"jin_seek"
+display_name = "타겟진"
 slot_count = 8
-body_scale = 1.0
-ui_color = Color(0.30, 0.42, 0.14, 0.55)
-pattern = 1
+body_scale = 0.9
+ui_color = Color(0.34, 0.14, 0.40, 0.55)
+pattern = 5
 motion = 0
-guide_shape = 1
-unlock_id = &"jin_fork"
-sort = 1
+guide_shape = 5
+unlock_id = &"jin_seek"
+sort = 5

@@ -10,5 +10,7 @@ slot_count = 8
 body_scale = 1.0
 ui_color = Color(0.14, 0.34, 0.46, 0.55)
 pattern = 2
+motion = 0
+guide_shape = 2
 unlock_id = &"jin_ring"
 sort = 2
