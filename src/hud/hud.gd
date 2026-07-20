@@ -55,6 +55,26 @@ const MANA_LOW := Color(0.90, 0.45, 0.35)
 const HUNGER_FILL := Color(0.62, 0.72, 0.32)
 const HUNGER_LOW := Color(0.90, 0.45, 0.35)
 
+# ── 획득 토스트 (세션51) ──
+## 🔴 **별도 씬·자식 Control을 만들지 않고 여기 `_draw`에 얹는다.** `hud.tscn`이 없다 —
+## `hud.gd`가 `base.tscn`·`forest.tscn`에 **각각 Control 노드로** 붙어 있어서, 토스트를 노드로
+## 만들면 .tscn 두 곳을 고쳐야 하고 **한 곳만 고치면 숲에서만 토스트가 뜨는 조용한 갈라짐**이 된다.
+## 여기 두면 두 씬이 공짜로 같이 받는다 (juice.gd가 player 자식이라 자동 적용인 것과 같은 논리).
+## 덤으로 새 Control을 안 까니 세션25의 `mouse_filter` 함정(화면 덮는 Control이 좌클릭을 다 먹어
+## 발사가 에러 없이 죽는다)에 아예 안 걸린다.
+##
+## 수치는 연출값이라 balance.tres가 아니라 스크립트 const다 (juice.gd·damage_number.gd 선례).
+const TOAST_LIFE := 1.6      ## 한 줄이 살아 있는 시간(초)
+const TOAST_MAX := 3         ## 동시에 보이는 최대 줄 수 — 넘치면 가장 오래된 줄이 밀려난다
+const TOAST_FADE := 0.4      ## 마지막 이만큼 동안 페이드아웃
+const TOAST_ROW_H := 19.0
+const TOAST_W := 240.0
+const TOAST_GAP := 10.0      ## 슬롯 윗변과 가장 아랫줄 사이 여백
+const TOAST_FONT_SIZE := 12
+
+## 등급 색 — 🔴 단일 소스는 `src/core/grade_colors.gd`다 (세션51에 사본 셋을 여기로 합쳤다).
+const GradeColors := preload("res://src/core/grade_colors.gd")
+
 var _selected: int = 0
 var _say: String = ""
 var _warn: bool = false
@@ -62,6 +82,9 @@ var _warn: bool = false
 ## 🔴 둘 다 봐야 한다: 숲에서 마나가 만땅(안 변함)이어도 허기는 줄어 막대가 얼어붙으면 안 된다.
 var _last_mana: float = -1.0
 var _last_hunger: float = -1.0
+## 획득 토스트 줄들. 각 항목 = {id: StringName, name: String, grade: int, count: int, t: float}.
+## 앞이 오래된 줄, 뒤가 최근 줄 (화면에선 최근 줄이 맨 아래).
+var _toasts: Array[Dictionary] = []
 
 
 func _ready() -> void:
@@ -69,6 +92,7 @@ func _ready() -> void:
 	EventBus.ring_design_committed.connect(_on_design_committed)
 	EventBus.player_hp_changed.connect(_on_hp_changed)
 	EventBus.audio_muted_changed.connect(_on_muted_changed)
+	EventBus.item_collected.connect(_on_item_collected)
 
 
 ## 지금 고른 슬롯 (caster의 slot_changed가 알려 준다).
@@ -98,11 +122,61 @@ func _on_muted_changed(_muted: bool) -> void:
 	queue_redraw()
 
 
-func _process(_delta: float) -> void:
+## 🔴 바닥 픽업이 흡수돼 가방에 도착했다 (drop_pickup이 도착 순간 1회 발신).
+## **같은 아이템은 새 줄을 만들지 않고 수량을 더하고 수명을 리셋한다** — 안 그러면 드롭 셋이
+## 동시에 도착할 때 "풀 조각 x1"이 세 줄 떠서 화면이 도배된다.
+## 🔴 합칠 때 **그 줄을 배열 맨 뒤로 옮긴다** (세51 리뷰 ⚠④). 안 옮기면 두 가지가 조용히 어긋난다:
+##   ① `_draw_toasts`가 배열 순서로 위치를 정하므로 **방금 갱신된 줄이 위쪽 낡은 자리에 남는다**
+##      — "최근 획득이 항상 같은 자리(맨 아래)"라는 규약이 합치기 경로에서만 깨진다.
+##   ② 아래 FIFO가 **방금 수량이 갱신된 줄을 "가장 오래됐다"며 밀어낸다**
+##      (A·B·C가 뜬 상태에서 A를 또 줍고 D를 주우면 A가 날아간다). 이건 시각이 아니라 버그다.
+## ⚠ 3줄짜리 배열이라 remove+append 비용은 0이다.
+func _on_item_collected(item_id: StringName, count: int) -> void:
+	for i in _toasts.size():
+		var t: Dictionary = _toasts[i]
+		if t["id"] == item_id:
+			t["count"] = int(t["count"]) + count
+			t["t"] = TOAST_LIFE
+			_toasts.remove_at(i)
+			_toasts.append(t)
+			queue_redraw()
+			return
+
+	var item: ItemDef = Db.get_item(item_id)
+	_toasts.append({
+		"id": item_id,
+		# 이름 없는(미등록) 아이템도 뭔가는 보여 준다 — 조용히 빈 줄이 뜨는 게 최악이다.
+		"name": item.display_name if item != null and item.display_name != "" else str(item_id),
+		"grade": item.grade if item != null else 1,
+		"count": count,
+		"t": TOAST_LIFE,
+	})
+	# 넘치면 가장 오래된 줄부터 밀어낸다 (FIFO).
+	while _toasts.size() > TOAST_MAX:
+		_toasts.remove_at(0)
+	queue_redraw()
+
+
+## 토스트 스택 열람 (테스트·디버그용). 사본을 준다 — 밖에서 고쳐도 HUD가 안 흔들리게.
+func toast_lines() -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for t: Dictionary in _toasts:
+		out.append(t.duplicate())
+	return out
+
+
+func _process(delta: float) -> void:
 	if not is_equal_approx(GameState.mana, _last_mana) \
 			or not is_equal_approx(GameState.hunger, _last_hunger):
 		_last_mana = GameState.mana
 		_last_hunger = GameState.hunger
+		queue_redraw()
+	# 토스트가 살아 있는 동안만 매 프레임 다시 그린다 (평소엔 redraw 비용 0).
+	if not _toasts.is_empty():
+		for i in range(_toasts.size() - 1, -1, -1):
+			_toasts[i]["t"] = float(_toasts[i]["t"]) - delta
+			if float(_toasts[i]["t"]) <= 0.0:
+				_toasts.remove_at(i)
 		queue_redraw()
 
 
@@ -120,6 +194,7 @@ func _draw() -> void:
 			HORIZONTAL_ALIGNMENT_LEFT, -1, 12, WARN_COLOR if _warn else SAY_COLOR)
 
 	var y := size.y - MARGIN - SLOT_SIZE.y
+	_draw_toasts(font, y)
 	for i in GameState.EQUIP_SLOTS:
 		_draw_slot(font, Vector2(MARGIN + float(i) * (SLOT_SIZE.x + SLOT_GAP), y), i)
 	# 마나 막대는 늘 그린다 — 베이스 연습장에서도 발사에 마나가 드니까 (HP·허기는 숲만).
@@ -130,6 +205,26 @@ func _draw() -> void:
 		_draw_hp(font, Vector2(MARGIN, hp_y))
 		# 허기는 베이스에선 늘 만복이라 장식이 된다 — HP와 같은 이유로 숲(show_hp)만 그린다.
 		_draw_hunger(font, Vector2(MARGIN, hp_y - HP_GAP - HUNGER_SIZE.y))
+
+
+## 획득 토스트 — **우측 하단, 슬롯 4칸 윗쪽**. 슬롯은 왼쪽(MARGIN부터 4칸)에 있고 HP·마나·허기
+## 막대도 전부 좌측이라, 오른쪽 끝에 붙이면 어느 것과도 안 겹친다.
+## 최근 줄이 맨 아래고 오래된 줄이 위로 밀린다 — 눈이 마지막 획득을 같은 자리에서 본다.
+## `slots_top` = 슬롯 윗변 y (여기서부터 위로 쌓는다).
+func _draw_toasts(font: Font, slots_top: float) -> void:
+	var right := size.x - MARGIN
+	var n := _toasts.size()
+	for i in n:
+		var t: Dictionary = _toasts[i]
+		var left := float(t["t"])
+		# 마지막 TOAST_FADE 동안만 흐려진다 — 그전엔 또렷해야 읽힌다.
+		var alpha := clampf(left / TOAST_FADE, 0.0, 1.0) if TOAST_FADE > 0.0 else 1.0
+		var col := GradeColors.of(int(t["grade"]))
+		col.a = alpha
+		var row_y := slots_top - TOAST_GAP - float(n - 1 - i) * TOAST_ROW_H
+		draw_string(font, Vector2(right - TOAST_W, row_y),
+			"%s ×%d" % [t["name"], int(t["count"])],
+			HORIZONTAL_ALIGNMENT_RIGHT, TOAST_W, TOAST_FONT_SIZE, col)
 
 
 ## HP 막대 — GameState가 원장이다 (씬을 갈아타도 남는 값). 숫자도 같이 적는다:

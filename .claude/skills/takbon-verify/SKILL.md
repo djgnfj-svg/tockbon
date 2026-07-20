@@ -27,7 +27,17 @@ PowerShell은 자식 프로세스 stdout을 안 보여준다 — **테스트는 
 ./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_audio_auto.gd           # 사운드 배선 (17 SFX 로드·EventBus 9종 연결)
 ./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_decode_auto.gd          # 탁본 해독 (조각 소비+룬 해금)
 ./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_quests_auto.gd          # 진행 목표(퀘스트) (KILL/EXTRACT/UNLOCK·requires 사슬·소급 완료)
+./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_dialogue_box_auto.gd    # 온보딩 대사 상자 (줄 넘김·ESC 건너뛰기·ui_modal_open)
+./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_map_panel_auto.gd       # 원정 지도 패널 (world↔map 좌표 왕복·marker_placed)
+./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_drop_pickup_auto.gd     # 바닥 드롭 픽업 + 자석 흡수 (layer0/mask2 계약·줍기 지연·자석 반경/취소불가·1회 뱅킹)
+./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_enemy_ai_auto.gd        # 몬스터 AI (방어·재생·분산 경감)
+./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_status_auto.gd          # 룬 상태이상·원소 반응 (반응표·바람 확산·중첩 갱신)
+./Godot_v4.6.1-stable_win64.exe --headless --path . -s res://tests/test_hud_toast_auto.gd       # HUD 획득 토스트 (같은 id 합치기+맨뒤 이동·최대3줄 FIFO·수명)
 ```
+
+⚠ **이 목록이 세션51에 5개 뒤처져 있었다** (dialogue_box·map_panel·drop_pickup·enemy_ai·status). 정본은
+CLAUDE.md의 「검증 명령」 절이다 — **새 테스트를 더하면 두 곳을 같이 갱신해라.** 목록이 갈라지면
+이 스킬을 읽은 에이전트가 "전 스위트를 돌렸다"고 믿으면서 절반만 돌린다.
 
 **목록에서 빠진 테스트는 낡아 죽는다** — 세션 7이 문법을 바꾸며 두 테스트가 "목록에 없다"는 이유로 조용히 깨진 채 방치됐다(세션 8에 발견). 새 테스트를 더하면 이 목록도 갱신해라.
 

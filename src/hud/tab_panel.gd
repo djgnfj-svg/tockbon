@@ -89,14 +89,9 @@ const Q_DONE := Color(0.55, 0.80, 0.50)     # 완료 (녹)
 const Q_BAR_BG := Color(0.28, 0.25, 0.20, 1.0)
 const Q_REWARD := Color(0.70, 0.66, 0.58)
 
-## 등급 색 — 흔함→전설 (Db.get_item.grade). 없는 등급은 양끝으로 clamp.
-const GRADE_COLORS: Array[Color] = [
-	Color(0.72, 0.70, 0.66),  # 1 흔함 (회백)
-	Color(0.55, 0.80, 0.50),  # 2 (녹)
-	Color(0.42, 0.66, 0.95),  # 3 (청)
-	Color(0.74, 0.52, 0.95),  # 4 (자)
-	Color(0.98, 0.70, 0.32),  # 5 전설 (금)
-]
+## 등급 색 — 흔함→전설 (Db.get_item.grade). 없는 등급은 `of()`가 양끝으로 clamp한다.
+## 🔴 단일 소스는 `src/core/grade_colors.gd` (세션51에 사본 셋을 합쳤다).
+const GradeColors := preload("res://src/core/grade_colors.gd")
 
 ## 창고를 나누는 카테고리 순서·라벨 (inventory_panel과 동일 — `ItemDef.category()` 키).
 const CATEGORY_ORDER: Array = [
@@ -357,7 +352,7 @@ func _draw_equip_row(font: Font) -> void:
 			var item_id: StringName = GameState.equipment[kind]
 			var item := Db.get_item(item_id)
 			var grade := item.grade if item != null else 1
-			var chip := GRADE_COLORS[clampi(grade - 1, 0, GRADE_COLORS.size() - 1)]
+			var chip := GradeColors.of(grade)
 			draw_rect(Rect2(r.position, Vector2(4.0, r.size.y)), chip, true)
 			draw_string(font, Vector2(r.position.x + 11.0, r.position.y + 38.0), _item_name(item_id),
 				HORIZONTAL_ALIGNMENT_LEFT, r.size.x - 18.0, 12, SLOT_ITEM_COLOR)
@@ -481,7 +476,7 @@ func _draw_card(font: Font, at: Vector2, id: StringName, count: int) -> void:
 	draw_rect(rect, CARD_EDGE, false, 1.0)
 
 	var grade := item.grade if item != null else 1
-	var chip := GRADE_COLORS[clampi(grade - 1, 0, GRADE_COLORS.size() - 1)]
+	var chip := GradeColors.of(grade)
 	draw_rect(Rect2(at, Vector2(4.0, CARD_SIZE.y)), chip, true)
 
 	var name_text := item.display_name if item != null and item.display_name != "" else str(id)

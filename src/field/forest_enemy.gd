@@ -469,19 +469,28 @@ func _die() -> void:
 	_status.clear()  # 남은 DoT 틱이 시체를 더 때리지 않게
 	var scene := get_tree().current_scene
 	if _def != null and scene != null:
+		# 🔴 먼저 **굴리기만** 하고(확률·수량 로직은 한 글자도 안 바뀐다), 실제로 나온 개수를
+		# 안 뒤에 심는다 — 개수를 알아야 **균등 각도**를 나눌 수 있기 때문이다(세션51).
+		# 전엔 각 픽업이 각자 랜덤 각도로 튀어서 3개를 떨궈도 **겹쳐서 하나로 보였다** —
+		# "여러 개 나왔다"가 눈에 읽히는 게 보상 체감의 절반이다.
+		var rolled: Array[Dictionary] = []
 		for drop: DropEntry in _def.drops:
 			if randf() <= drop.chance:
 				var n := drop.min_count
 				if drop.max_count > drop.min_count:
 					n += randi() % (drop.max_count - drop.min_count + 1)
 				if n > 0:
-					var pickup := DropPickup.instantiate()
-					scene.add_child(pickup)
-					# 여러 드롭이 겹치지 않게 살짝 흩뿌린 지점에서 심는다 — 픽업 자신이
-					# 여기서 또 튀어나온다(scatter). 🔴 global_position은 add_child 뒤에 잡고,
-					# setup은 그 뒤에 불러야 scatter가 올바른 자리에서 시작한다.
-					pickup.global_position = global_position + Vector2(randf_range(-6.0, 6.0), randf_range(-6.0, 6.0))
-					pickup.setup(drop.item_id, n)
+					rolled.append({"id": drop.item_id, "n": n})
+		var base_angle := randf() * TAU
+		for i in rolled.size():
+			var pickup := DropPickup.instantiate()
+			scene.add_child(pickup)
+			# 여러 드롭이 겹치지 않게 살짝 흩뿌린 지점에서 심는다 — 픽업 자신이
+			# 여기서 또 튀어나온다(scatter). 🔴 global_position은 add_child 뒤에 잡고,
+			# setup은 그 뒤에 불러야 scatter가 올바른 자리에서 시작한다.
+			pickup.global_position = global_position + Vector2(randf_range(-6.0, 6.0), randf_range(-6.0, 6.0))
+			# i번째 드롭 = base_angle + i·TAU/n → 2개면 정반대, 3개면 삼각형으로 흩어진다.
+			pickup.setup(rolled[i]["id"], int(rolled[i]["n"]), base_angle + float(i) * TAU / float(rolled.size()))
 	# 🔴 처치 순간 1회 — GameState가 KILL 퀘스트를 센다 (세션36). `died` 로컬 시그널의
 	# "킬카운트가 붙는 날의 자리표"가 마침내 수신자를 얻었다. enemy_id를 실어 특정 적 목표도 가능.
 	EventBus.enemy_died.emit(enemy_id)

@@ -57,6 +57,11 @@ signal quests_seen
 ## ⚠ 둘 다 발신만 있고 수신자 0 (HUD 삭제 탓). 정상 — 발신 측은 계약을 지킨다.
 signal resources_changed
 signal equipment_changed
+## 🔴 바닥 픽업이 플레이어에게 흡수돼 가방에 들어갔다 (세션51). drop_pickup이 **도착 순간 1회** 발신.
+## HUD가 획득 토스트를 띄운다. `resources_changed`(가방/창고 내용이 변했다)와 **다르다** — 이건
+## "방금 이게 도착했다"는 연출용 이벤트다. 무엇이 얼마나 들어왔는지가 실린다.
+## ⚠ 창고 입고·제작 소비·정산은 이 신호를 쓰지 않는다 — 쓰면 공방에서 제작할 때마다 토스트가 뜬다.
+signal item_collected(item_id: StringName, count: int)
 
 # ── 설정 (Audio → UI)
 ## 🔴 음소거 상태가 바뀌었다 (설정). Audio가 소유·저장하고 발신 → HUD 표시·타이틀 버튼이 갱신.
