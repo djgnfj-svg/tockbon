@@ -1,0 +1,137 @@
+extends RefCounted
+## 🔴 상태이상·원소 반응의 **규칙 단일 소스** (세션49 신설). class_name 없음 — `const SR := preload(...)`.
+##
+## 왜 core에 있나: `ring_power.gd`와 같은 이유다 — **적·플레이어·허수아비·UI가 같은 함수를 부른다.**
+## 복사해 두면 한쪽만 고쳐도 아무도 못 알아채고 갈라진다("진흙인데 안 묶인다" 식).
+## 여기는 **순수 규칙**만 둔다(시간·노드·씬을 모른다). 상태를 **보유하고 틱을 도는 건 각 배우**다.
+##
+## 🔴 설계 원칙 (사용자 확정 세션49):
+##   **단독은 약한 바탕, 조합에서 폭발한다.**
+##   단독 효과가 다 없으면 한 발이 밋밋하고, 단독이 다 세면 조합할 이유가 없다.
+##   그래서 룬마다 약한 상태를 남기고, 그 위에 다른 룬이 오면 여기서 **반응**시킨다.
+##   선례 = 원신 Swirl(바람=확산)/Crystallize(흙=굳힘) — **바람·흙은 자체 효과를 억지로 만들지 않는다.**
+##
+## 🔴 이 파일이 곧 기획서다. 반응을 늘리는 건 `REACTIONS`에 **줄 하나**다.
+
+const BAL := preload("res://data/balance.tres")
+
+
+## 룬이 남기는 **바탕 상태** — 단독으로는 약하다. RuneDef.status가 이미 데이터로 들고 있으므로
+## 그 값을 그대로 쓴다(여기서 룬→상태를 다시 정의하지 않는다 — 두 소스가 되면 갈라진다).
+## ⚠ 바람(WIND)은 **상태를 안 남긴다**(FLOW = 즉발 밀림). 대신 아래 `spreads()`가 참이다.
+
+
+## 🔴 **반응 표** — {바탕 상태: {들어온 룬: 결과}}.
+## 결과 = { "status": 새 상태(NONE이면 바탕이 사라지고 끝) , "kind": 연출·처리 갈래 }
+##   kind: "convert"=바탕이 새 상태로 바뀐다 · "burst"=즉발 폭발(피해·연쇄) · "clear"=씻겨 사라진다
+##
+## ⚠ **의미 있는 쌍만 적는다.** 안 적힌 조합은 그냥 새 상태가 덮어쓴다(기본 동작).
+## 6룬이라 15쌍이지만 전부 채울 필요가 없다 — 사용자: *"쏴 보고 정한다."*
+const REACTIONS := {
+	Enums.Status.WET: {
+		# 젖음 + 번개 = 강한 감전 + 주변 연쇄 (사용자가 제일 먼저 떠올린 조합)
+		Enums.RuneType.BOLT: {"status": Enums.Status.SHOCK, "kind": "burst"},
+		# 젖음 + 흙 = 진흙 (강한 속박) — 사용자 아이디어
+		Enums.RuneType.EARTH: {"status": Enums.Status.MUD, "kind": "convert"},
+		# 젖음 + 불 = 증기 (젖음이 날아간다 — 물로 불을 막는 게 아니라 서로 상쇄)
+		Enums.RuneType.FIRE: {"status": Enums.Status.NONE, "kind": "burst"},
+		# 젖음 + 풀 = 무성함 (덩굴이 크게 자라 오래 묶는다)
+		Enums.RuneType.GRASS: {"status": Enums.Status.ROOT, "kind": "convert"},
+	},
+	Enums.Status.BURN: {
+		# 화상 + 풀 = 산불 (더 세고 오래 타며 번진다)
+		Enums.RuneType.GRASS: {"status": Enums.Status.BLAZE, "kind": "convert"},
+		# 화상 + 물 = 꺼진다
+		Enums.RuneType.WATER: {"status": Enums.Status.NONE, "kind": "clear"},
+	},
+	Enums.Status.ROOT: {
+		# 덩굴 + 불 = 산불 (마른 덩굴이 잘 탄다)
+		Enums.RuneType.FIRE: {"status": Enums.Status.BLAZE, "kind": "convert"},
+	},
+}
+
+
+## 🔴 **바람 = 확산자** (원신 Swirl 모델). 자기 상태를 남기지 않고, 적에게 **이미 붙은 상태를
+## 주변 적들에게 퍼뜨린다.** 혼자선 아무것도 아닌데 조합에선 최고가 되는 자리 —
+## 둘레진·나선진처럼 여러 적을 스치는 진과 궁합이 폭발한다.
+static func spreads(rune_type: int) -> bool:
+	return rune_type == Enums.RuneType.WIND
+
+
+## 🔴 **흙 = 취약(밑작업)** — 다음에 걸리는 상태를 더 세게 만든다. 물(감속)과 축이 안 겹치게
+## "둔화"가 아니라 "취약"으로 뒀다(검색 선례: Earth = Vulnerability).
+static func amplifies(rune_type: int) -> bool:
+	return rune_type == Enums.RuneType.EARTH
+
+
+## 상태가 지속되는 시간(초). 반응 산물(진흙·산불)은 더 오래 간다 — 조합의 보상이다.
+static func duration_of(status: int) -> float:
+	match status:
+		Enums.Status.BURN:       return BAL.status_burn_sec
+		Enums.Status.WET:        return BAL.status_wet_sec
+		Enums.Status.SHOCK:      return BAL.status_shock_sec
+		Enums.Status.VULNERABLE: return BAL.status_vulnerable_sec
+		Enums.Status.ROOT:       return BAL.status_root_sec
+		Enums.Status.MUD:        return BAL.status_mud_sec
+		Enums.Status.BLAZE:      return BAL.status_blaze_sec
+		_:                       return 0.0
+
+
+## 이동 배율 — 1.0이면 안 느려진다. 젖음<진흙 순으로 세다. 묶임(덩굴·진흙)은 거의 정지.
+## 🔴 **`_apply_move` 한 곳에만 곱해라** — AI 3종(추격·돌진·부유)이 전부 그 통로를 지난다.
+static func move_mult(status: int) -> float:
+	match status:
+		Enums.Status.WET:   return 1.0 - BAL.status_wet_slow
+		Enums.Status.MUD:   return 1.0 - BAL.status_mud_slow
+		Enums.Status.ROOT:  return 1.0 - BAL.status_root_slow
+		Enums.Status.SHOCK: return 1.0 - BAL.status_shock_slow
+		_:                  return 1.0
+
+
+## 초당 지속 피해 — 화상 계열만. `power`는 룬이 실어 온 값(특별잉크 증폭이 이미 곱해져 있다).
+## 🔴 산불은 화상보다 세다 — 반응의 보상이 **눈에 띄게** 커야 조합할 이유가 생긴다.
+static func dot_per_sec(status: int, power: float) -> float:
+	match status:
+		Enums.Status.BURN:  return power
+		Enums.Status.BLAZE: return power * BAL.status_blaze_dot_mult
+		_:                  return 0.0
+
+
+## 🔴 반응 판정 — 바탕 상태에 새 룬이 들어왔을 때 무엇이 일어나는가.
+## 반환 {"status": 결과 상태, "kind": 갈래} · 반응이 없으면 빈 사전(호출부가 기본 덮어쓰기).
+static func react(base_status: int, incoming_rune: int) -> Dictionary:
+	var by_rune: Dictionary = REACTIONS.get(base_status, {})
+	return by_rune.get(incoming_rune, {})
+
+
+## 취약(흙)이 걸려 있을 때 다음 상태에 곱해지는 세기 배율.
+static func power_mult(has_vulnerable: bool) -> float:
+	return BAL.status_vulnerable_mult if has_vulnerable else 1.0
+
+
+## 상태 틴트 색 — **보여야 의미가 있다**(화상 중인 적이 평범해 보이면 룬을 바꿀 이유를 못 느낀다).
+## 연출값이라 balance가 아니라 여기 둔다(선례: juice의 손맛 수치).
+static func tint_of(status: int) -> Color:
+	match status:
+		Enums.Status.BURN:       return Color(1.35, 0.75, 0.55)
+		Enums.Status.BLAZE:      return Color(1.60, 0.60, 0.35)
+		Enums.Status.WET:        return Color(0.65, 0.85, 1.35)
+		Enums.Status.MUD:        return Color(0.75, 0.62, 0.45)
+		Enums.Status.SHOCK:      return Color(1.25, 1.20, 0.55)
+		Enums.Status.ROOT:       return Color(0.70, 1.25, 0.70)
+		Enums.Status.VULNERABLE: return Color(1.15, 0.95, 1.15)
+		_:                       return Color.WHITE
+
+
+## 사람이 읽는 이름 — HUD·도감·디버그가 같은 말을 쓰게. 범위 밖은 빈 문자열(크래시 금지).
+static func name_of(status: int) -> String:
+	match status:
+		Enums.Status.BURN:       return "화상"
+		Enums.Status.BLAZE:      return "산불"
+		Enums.Status.WET:        return "젖음"
+		Enums.Status.MUD:        return "진흙"
+		Enums.Status.SHOCK:      return "감전"
+		Enums.Status.ROOT:       return "덩굴"
+		Enums.Status.VULNERABLE: return "취약"
+		Enums.Status.FLOW:       return "밀림"
+		_:                       return ""

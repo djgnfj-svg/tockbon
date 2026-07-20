@@ -297,7 +297,7 @@ func _build_guide(target: int, slot: int) -> PackedVector2Array:
 				return pts
 			# 🔴 룬 종류별 밑그림 (세션 34) — 닫힌 다각형의 꼭짓점을 변마다 촘촘히 잇는다.
 			# 렌더는 먹선 그대로라(_draw_locked) 이 밑그림 모양이 곧 "따라 그리는 룬"이다.
-			var v := _rune_guide_verts(_rune_idx, ctr, _rune_size())
+			var v := rune_guide_verts(_rune_idx, ctr, _rune_size())
 			var seg := v.size() - 1
 			for e in seg:
 				for t in 12:
@@ -316,7 +316,7 @@ func _build_guide(target: int, slot: int) -> PackedVector2Array:
 	return pts
 
 
-## 🔴 **문양 코드별 밑그림** (세션 47 — "새 문양 = 여기 한 갈래"). `_rune_guide_verts`와 같은 규약이다.
+## 🔴 **문양 코드별 밑그림** (세션 47 — "새 문양 = 여기 한 갈래"). `rune_guide_verts`와 같은 규약이다.
 ##
 ## 왜 갈랐나: 세션 44까지 이 갈래는 `inward` 하나만 보고 화살표 **방향**만 뒤집었다. 새 문양
 ## (유도·팅김·추진)은 전부 `inward = false`라 발산·관통과 **똑같은 화살표**가 떠, 6개 문양이
@@ -421,7 +421,7 @@ func _jin_shape() -> int:
 	return int(_jin_def.guide_shape) if _jin_def != null else Enums.JinShape.CIRCLE
 
 
-## 🔴 **진 종류별 밑그림** (세션 48 — "새 진 = 여기 한 갈래"). `_rune_guide_verts`·`glyph_guide_pts`와
+## 🔴 **진 종류별 밑그림** (세션 48 — "새 진 = 여기 한 갈래"). `rune_guide_verts`·`glyph_guide_pts`와
 ## 같은 규약이다. 세션 44~47엔 진만 이 처리를 못 받아 8종이 **전부 같은 원**이었다.
 ##
 ## 공통 규율 (사용자 확정: *"진의 궤적은 원처럼 닫힌 도형이어야 함. 그 안에 룬이 들어가야 해서"*):
@@ -505,9 +505,20 @@ static func _closed(pts: PackedVector2Array) -> PackedVector2Array:
 
 
 ## 🔴 룬 종류별 밑그림 꼭짓점 (닫힌 다각형, 마지막=처음). 세션 34 — "새 룬 = 여기 한 갈래".
-## 모양은 손으로 구분해 그릴 수 있게 서로 다른 방향/변수를 준다 (손맛은 R2a처럼 차차 다듬는다):
-##   불 △ 위 꼭짓점 · 물 ▽ 아래 꼭짓점(고이는 방향) · 바람 ◇ 마름모(사방으로 돈다).
-func _rune_guide_verts(rune_type: int, ctr: Vector2, s: float) -> PackedVector2Array:
+## 모양은 손으로 구분해 그릴 수 있게 서로 다른 방향/꼭짓점 수를 준다:
+##   불 △ 위 꼭짓점 · 물 ▽ 아래 꼭짓점(고이는 방향) · 바람 ◇ 마름모(사방으로 돈다)
+##   번개 ⚡ 닫힌 지그재그(꺾임이 많다) · 흙 □ 축에 나란한 사각(무겁게 앉는다) · 풀 🍃 잎사귀(뾰족한 위 끝 + 넓은 밑동)
+##
+## 🔴 공통 규율 (세션 49에 3→6종으로 늘리며 명문화 — 진 `jin_guide_pts`와 같은 이유):
+##   • **반드시 닫힌다** — 마지막 점 = 첫 점. 룬은 진 안에 앉는 **하나의 인장**이라 터진 획은 룬이 아니다.
+##   • **서로 다른 손 궤적을 준다** — 색만 다르면 "6지선다"가 된다(memory `takbon-glyph-design-principle`).
+##     그래서 흙(축 나란한 사각)과 바람(45° 돌린 마름모)처럼 **같은 변 수라도 꺾이는 자리가 다르게** 둔다.
+##   • **꼭짓점 수를 3~7에 둔다** — 호출부(`_build_guide`)가 변마다 12등분하므로 꼭짓점이 많으면
+##     그 룬만 가이드 점이 촘촘해져 **완성도 채점이 룬마다 유불리**를 갖는다.
+## 🔴 **static · public인 이유**: 책의 룬 셀 아이콘(`ring_book._draw_rune_icon`)이 이 함수를 그대로
+## 부른다 — 진(`jin_guide_pts`)·문양(`glyph_guide_pts`)과 같은 규약이다. 세션 48까지 책이 같은 모양을
+## **따로 베껴** 갖고 있어, 여기만 고치면 "셀에서 본 모양"과 "손으로 그을 모양"이 갈라질 수 있었다.
+static func rune_guide_verts(rune_type: int, ctr: Vector2, s: float) -> PackedVector2Array:
 	match rune_type:
 		Enums.RuneType.WATER:
 			return PackedVector2Array([
@@ -517,7 +528,29 @@ func _rune_guide_verts(rune_type: int, ctr: Vector2, s: float) -> PackedVector2A
 			return PackedVector2Array([
 				ctr + Vector2(0, -s), ctr + Vector2(s, 0),
 				ctr + Vector2(0, s), ctr + Vector2(-s, 0), ctr + Vector2(0, -s)])
+		Enums.RuneType.BOLT:
+			# 닫힌 번개 — 위 끝에서 왼쪽으로 꺾여 내려왔다 아래 끝에서 오른쪽으로 되꺾인다.
+			# 손이 **네 번 되돌아가는** 유일한 룬이라 다른 다각형과 궤적이 확실히 갈린다.
+			return PackedVector2Array([
+				ctr + Vector2(s * 0.22, -s), ctr + Vector2(-s * 0.62, s * 0.06),
+				ctr + Vector2(-s * 0.06, s * 0.06), ctr + Vector2(-s * 0.22, s),
+				ctr + Vector2(s * 0.62, -s * 0.06), ctr + Vector2(s * 0.06, -s * 0.06),
+				ctr + Vector2(s * 0.22, -s)])
+		Enums.RuneType.EARTH:
+			# 축에 나란한 정사각 — 바람 ◇와 변 수는 같지만 꼭짓점이 45° 어긋나 손 궤적이 다르다.
+			# 위·아래 변이 수평이라 "땅에 앉은" 무게가 읽힌다.
+			return PackedVector2Array([
+				ctr + Vector2(-s * 0.8, -s * 0.8), ctr + Vector2(s * 0.8, -s * 0.8),
+				ctr + Vector2(s * 0.8, s * 0.8), ctr + Vector2(-s * 0.8, s * 0.8),
+				ctr + Vector2(-s * 0.8, -s * 0.8)])
+		Enums.RuneType.GRASS:
+			# 잎사귀 — 위로 길게 뽑은 오각. 뾰족한 끝(불 △와 달리 어깨가 벌어져 있다) + 넓은 밑동.
+			return PackedVector2Array([
+				ctr + Vector2(0, -s * 1.15), ctr + Vector2(s * 0.72, -s * 0.15),
+				ctr + Vector2(s * 0.45, s * 0.85), ctr + Vector2(-s * 0.45, s * 0.85),
+				ctr + Vector2(-s * 0.72, -s * 0.15), ctr + Vector2(0, -s * 1.15)])
 		_:
+			# 불(FIRE=0) · 모르는 룬 = △. ⚠ 폴백이 크래시가 아니라 삼각형인 게 계약이다.
 			return PackedVector2Array([
 				ctr + Vector2(0, -s), ctr + Vector2(s * 0.87, s * 0.5),
 				ctr + Vector2(-s * 0.87, s * 0.5), ctr + Vector2(0, -s)])
@@ -832,7 +865,7 @@ func choose_jin(jin_def: JinDef = null) -> void:
 
 
 ## 🔴 **룬을 고른다** (오른쪽 룬 셀 클릭) → 중심에 룬별 밑그림이 선다 (세션 25·34).
-## rune_type = Enums.RuneType (불0·물2·바람3). `_build_guide`가 type별 모양을 그리고
+## rune_type = Enums.RuneType (불0·물2·바람3·번개4·흙5·풀6 — 세션49에 3→6종). `_build_guide`가 type별 모양을 그리고
 ## `_asm.set_rune`이 발사·저장 계약에 담는다 — 세션 34 전엔 밑그림만 바뀌고 발사는 늘 불이었다.
 func choose_rune(rune_type: int = Enums.RuneType.FIRE) -> void:
 	if _asm.stage() != STAGE_RUNE or _asm.has_rune():

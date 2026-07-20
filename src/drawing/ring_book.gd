@@ -420,43 +420,56 @@ static func _jin_shaft(motion: int, from: Vector2, dir: Vector2, length: float) 
 
 ## 룬 탭 — **해금된 룬**을 셀로 열거 (세션 34). 클릭하면 그 룬 타입이 rune_selected로 나간다.
 ## 주입 전(폴백)엔 불 하나만 — set_defs가 오기 전 첫 프레임 대비. 잠긴 룬은 애초에 배열에 없다.
+##
+## 🔴 세션49 — **격자로 감쌌다.** 세션34까지 셀을 한 줄에 몰아넣어 `cw = 전체폭/n`이었다. 룬이
+## 3→6으로 늘자 셀이 1/6 폭으로 쪼그라들어 이름·안내가 넘쳤다 — **문양 탭(세션47)·진 탭(세션48)이
+## 밟은 것과 같은 함정이다**(어휘 축이 늘면 폭이 아니라 줄 수가 늘어야 한다). 같은 규약으로 통일.
+const RUNE_COLS := 3
+const RUNE_GAP := 8.0
+
+## 🔴 룬 셀 격자 — **순수 함수**라 헤드리스가 잰다(`jin_cell_rects`와 같은 이유: `_draw_*` 안에
+## 계산을 두면 레이아웃 회귀를 못 잡는다). 셀 높이는 줄 수에 따라 낮춘다 — 두 줄이 책 밖으로 안 밀리게.
+static func rune_cell_rects(n: int, book_size: Vector2, top: float) -> Array:
+	var out: Array = []
+	var cols := maxi(mini(n, RUNE_COLS), 1)
+	var nrows := ceili(float(n) / float(cols))
+	var cw := (book_size.x - 16.0 - RUNE_GAP * float(cols - 1)) / float(cols)
+	var ch := 120.0 if nrows <= 1 else 104.0
+	for i in n:
+		out.append(Rect2(8.0 + float(i % cols) * (cw + RUNE_GAP),
+			top + float(i / cols) * (ch + RUNE_GAP), cw, ch))
+	return out
+
+
 func _draw_rune_cells(font: Font, top: float) -> void:
 	var defs := _rune_defs if not _rune_defs.is_empty() else []
 	var n := maxi(defs.size(), 1)
-	var gap := 8.0
-	var cw := (size.x - 16.0 - gap * float(n - 1)) / float(n)
-	var ch := 120.0
+	var rects := rune_cell_rects(n, size, top)
 	for i in n:
 		var rd := defs[i] as RuneDef if i < defs.size() else null
 		var rtype := int(rd.type) if rd else RingBoard.RUNE_FIRE
 		var rname := String(rd.display_name) if rd else "불"
 		var rcol: Color = rd.ui_color if rd else RingBoard.RUNE_COLOR
-		var r := Rect2(8.0 + float(i) * (cw + gap), top, cw, ch)
+		var r: Rect2 = rects[i]
+		var cw: float = r.size.x
+		var ch: float = r.size.y
 		_cells.append({"rect": r, "kind": "rune", "value": rtype})
 		var sel := _rune_choice == rtype
 		draw_rect(r, CELL_SEL_BG if sel else CELL_BG, true)
 		draw_rect(r, SEL_EDGE if sel else CELL_LINE, false, 2.0 if sel else 1.0)
-		_draw_rune_icon(r.get_center() + Vector2(0, -14.0), 24.0, rcol, rtype)
+		_draw_rune_icon(r.get_center() + Vector2(0, -14.0), 22.0, rcol, rtype)
 		var label := "✓ 그림" if (sel and _rune_placed) else "왼쪽에 손으로 그리기"
 		_text_center(font, r.position + Vector2(cw * 0.5, ch - 30.0), rname, NAME_COLOR, 11)
 		_text_center(font, r.position + Vector2(cw * 0.5, ch - 15.0), label,
 			SEL_EDGE if (sel and _rune_placed) else DESC_COLOR, 8)
 
 
-## 룬 아이콘 — 판의 밑그림과 같은 모양 규약 (세션 34): 불 △ · 물 ▽ · 바람 ◇.
+## 룬 아이콘 — 🔴 **판의 밑그림과 같은 함수를 부른다**(`RingBoard.rune_guide_verts`, 세션49).
+## 세션34~48엔 여기가 같은 모양을 **따로 베끼고** 있어, 룬을 6종으로 늘릴 때 한쪽만 갈라질 수 있었다
+## (진이 세션48에 `jin_guide_pts`로, 문양이 세션47에 같은 이유로 합쳐진 그 자리다).
+## **셀에서 본 모양 = 손으로 그을 모양**이 이제 구조적으로 못 갈라진다.
 func _draw_rune_icon(c: Vector2, s: float, col: Color, rune_type: int) -> void:
-	var v: PackedVector2Array
-	match rune_type:
-		Enums.RuneType.WATER:
-			v = PackedVector2Array([c + Vector2(-s * 0.87, -s * 0.5),
-				c + Vector2(s * 0.87, -s * 0.5), c + Vector2(0, s), c + Vector2(-s * 0.87, -s * 0.5)])
-		Enums.RuneType.WIND:
-			v = PackedVector2Array([c + Vector2(0, -s), c + Vector2(s, 0),
-				c + Vector2(0, s), c + Vector2(-s, 0), c + Vector2(0, -s)])
-		_:
-			v = PackedVector2Array([c + Vector2(0, -s),
-				c + Vector2(s * 0.87, s * 0.5), c + Vector2(-s * 0.87, s * 0.5), c + Vector2(0, -s)])
-	draw_polyline(v, col, 2.5, true)
+	draw_polyline(RingBoard.rune_guide_verts(rune_type, c, s), col, 2.5, true)
 
 
 ## 문양 탭 — 주입된 문양 def를 열거 (응집·발산…). 하드코딩 없음.

@@ -120,6 +120,40 @@ extends Resource
 ## 부메랑(BOOMERANG) 되돌아오기 시점 — 수명 대비 비율. 0.5면 절반 날아가고 절반 돌아온다
 @export var jin_boomerang_turn_ratio: float = 0.5
 
+@export_group("상태이상 · 원소 반응 (세션49)")
+# 🔴 규칙은 `src/core/status_rules.gd`가 쥔다 — 여기는 **수치만**. 세기는 룬(.tres)의 status_power다.
+# 🔴 원칙: **단독은 약한 바탕, 조합(반응 산물)이 세다.** 아래 지속시간·배율이 그 차이를 만든다.
+## 화상 지속(초) — 초당 피해는 룬의 status_power
+@export var status_burn_sec: float = 3.0
+## 젖음 지속(초) · 감속 비율(0.35 = 35% 느려짐)
+@export var status_wet_sec: float = 2.5
+@export var status_wet_slow: float = 0.35
+## 감전 지속(초) · 감속(경직에 가깝게 짧고 강하게)
+@export var status_shock_sec: float = 1.2
+@export var status_shock_slow: float = 0.55
+## 취약(흙) 지속(초) · 다음 상태 세기 배율 — "밑작업 룬"의 값
+@export var status_vulnerable_sec: float = 4.0
+@export var status_vulnerable_mult: float = 1.5
+## 덩굴(풀) 지속(초) · 감속
+@export var status_root_sec: float = 2.0
+@export var status_root_slow: float = 0.55
+## 🔴 진흙(젖음+흙) — 반응 산물이라 **더 오래·더 세다**(거의 정지)
+@export var status_mud_sec: float = 3.5
+@export var status_mud_slow: float = 0.85
+## 🔴 산불(화상+풀) — 반응 산물. 화상보다 오래 타고 초당 피해가 배로 든다
+@export var status_blaze_sec: float = 5.0
+@export var status_blaze_dot_mult: float = 2.0
+## 감전 연쇄(젖음+번개) — 주변 이 반경(px) 안의 적에게 튄다 · 그 피해 배율
+@export var status_shock_chain_px: float = 90.0
+@export var status_shock_chain_mult: float = 0.6
+## 증기(젖음+불) — 즉발 폭발 반경(px) · 피해 배율
+@export var status_steam_px: float = 70.0
+@export var status_steam_mult: float = 0.8
+## 🔴 확산(바람) — 붙은 상태가 이 반경(px) 안의 적에게 퍼진다 (원신 Swirl 모델)
+@export var status_spread_px: float = 110.0
+## 상태 틱 간격(초) — 지속 피해를 이 주기로 넣는다. 짧을수록 부드럽고 무겁다
+@export var status_tick_sec: float = 0.5
+
 @export_group("전투")
 @export var projectile_base_speed: float = 260.0
 ## v1.7: 10.0 → 9.0. 위력에서 rune_accuracy(0.6~1.0) 곱을 떼면서(TECH_SPEC §4.0 축 분리)

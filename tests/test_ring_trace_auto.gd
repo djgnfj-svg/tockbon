@@ -49,6 +49,8 @@ func _run() -> void:
 	_test_glyph_shapes_are_distinct()
 	_test_jin_shapes_are_closed_and_distinct()
 	_test_jin_shape_reaches_the_board()
+	_test_rune_shapes_are_closed_and_distinct()
+	_test_rune_shape_reaches_the_board()
 	_test_ink_rides_assembly()
 	_test_special_ink_consumed_while_drawing()
 
@@ -483,6 +485,95 @@ func _test_jin_shape_reaches_the_board() -> void:
 		for i in outline.size():
 			off = maxf(off, outline[i].distance_to(want[i]))
 		_check(off < 0.5, "🔴 책 셀 아이콘이 판의 도형과 갈라졌다 (최대 %.1fpx)" % off)
+
+
+# ── 🔴 ㉒ 룬 밑그림 6종: **닫혀 있고 · 서로 다르고 · 폴백(△)으로 새지 않는다** (세션 49) ──
+# 룬이 3→6으로 늘었다(번개·흙·풀). 세션 34의 `rune_guide_verts`는 셋만 알고 나머지를 전부 △로
+# 폴백했으므로, 새 룬을 데이터로만 더하면 **불과 똑같은 삼각형 = 색만 다른 6지선다**가 된다
+# (진이 세션 48에 밟은 그 함정 · memory `takbon-glyph-design-principle`).
+# 🔴 뮤테이션: `rune_guide_verts`의 match를 지워 늘 △를 돌려주면 「서로 다르다」5 + 「폴백이 아니다」5
+#    = 10개가 실패한다. 마지막 꼭짓점(=첫 점)을 빼면 「닫혔다」가 그 룬 수만큼 실패한다.
+const RUNE_TYPES_6 := [0, 2, 3, 4, 5, 6]   # 불·물·바람·번개·흙·풀 (Enums.RuneType — 1은 옛 IMPACT 구멍)
+
+func _test_rune_shapes_are_closed_and_distinct() -> void:
+	var ctr := Vector2(134.0, 134.0)
+	var s := 40.0
+	var fire: PackedVector2Array = _BoardScript.rune_guide_verts(0, ctr, s)
+	var seen := {}
+	for rt in RUNE_TYPES_6:
+		var v: PackedVector2Array = _BoardScript.rune_guide_verts(rt, ctr, s)
+		_check(v.size() >= 4, "룬 %d 밑그림 꼭짓점이 선다 (%d개)" % [rt, v.size()])
+		if v.size() < 4:
+			continue
+		# ① 🔴 닫혔다 — 룬은 진 안에 앉는 하나의 인장이라 터진 획은 룬이 아니다.
+		_check(v[0].is_equal_approx(v[v.size() - 1]),
+			"🔴 룬 %d 밑그림이 안 닫혔다 (%s → %s)" % [rt, v[0], v[v.size() - 1]])
+		# ② 🔴 채점 밀도 — 호출부가 변마다 12등분하므로 꼭짓점이 많으면 그 룬만 가이드가 촘촘해져
+		#    완성도가 룬마다 유불리를 갖는다 (진 ⑳의 밀도 규율과 같은 이유).
+		_check(v.size() - 1 >= 3 and v.size() - 1 <= 7,
+			"룬 %d 변 수가 3~7을 벗어났다 (%d변)" % [rt, v.size() - 1])
+		# ③ 🔴 서로 다르다 — 안 다르면 6종으로 가른 의미가 없다.
+		var key := ""
+		for pt in v:
+			key += "%.1f,%.1f;" % [pt.x, pt.y]
+		_check(not seen.has(key),
+			"🔴 룬 %d의 밑그림이 룬 %s와 똑같다 — 손 궤적이 안 갈렸다" % [rt, seen.get(key, "?")])
+		seen[key] = rt
+		# ④ 🔴 새 룬이 **불(△) 폴백으로 새지 않는다** — ③만으론 못 잡는다(둘이 같이 새면
+		#    서로 다르다는 검사도 같이 무너지지만, 여기가 원인을 정확히 짚는다).
+		if rt != 0:
+			var same := v.size() == fire.size()
+			if same:
+				for i in v.size():
+					if not v[i].is_equal_approx(fire[i]):
+						same = false
+						break
+			_check(not same, "🔴 룬 %d이 불 삼각형 폴백으로 샌다 — 모양을 안 가졌다" % rt)
+	# 모르는 룬은 크래시가 아니라 △ 폴백 (룬이 늘어도 안 죽는다 — GLYPH_DESC가 밟은 그 함정).
+	var fallback: PackedVector2Array = _BoardScript.rune_guide_verts(99, ctr, s)
+	_check(fallback.size() >= 4, "모르는 룬도 밑그림이 나온다 (폴백=△)")
+
+
+# ── 🔴 ㉓ 그 모양이 **판까지 온다** + **책 셀 아이콘도 같은 함수** (세션 49) ──
+# 위 ㉒는 함수만 본다. 이게 없으면 `_build_guide`가 늘 불을 그려도 초록불이다
+# (세션 47 문양·세션 48 진이 똑같이 배선을 안 봐서 뮤테이션을 통과시켰다).
+func _test_rune_shape_reaches_the_board() -> void:
+	var b = _make_board()
+	_rub_exact(b)                       # 진을 그리고
+	b.call(&"advance")                  # 룬 단계로
+	b.call(&"choose_rune", 4)           # 번개
+	var g: PackedVector2Array = b.call(&"guide_points")
+	_check(g.size() > 2, "번개 룬 밑그림이 판에 선다 (%d점)" % g.size())
+	var b2 = _make_board()
+	_rub_exact(b2)
+	b2.call(&"advance")
+	b2.call(&"choose_rune", 0)          # 불
+	var gf: PackedVector2Array = b2.call(&"guide_points")
+	var same := g.size() == gf.size()
+	if same:
+		for i in g.size():
+			if not g[i].is_equal_approx(gf[i]):
+				same = false
+				break
+	_check(not same, "🔴 번개 룬인데 판의 밑그림이 불(△) 그대로다 — 룬 타입이 판까지 안 온다")
+	b.queue_free()
+	b2.queue_free()
+
+	# 🔴 **책 셀 아이콘도 같은 함수를 부른다** (진 셀이 세션48에 그랬듯). 셀에서 본 모양과
+	# 손으로 그을 모양이 갈라지면 고르는 순간의 의미가 절반 날아간다.
+	# ⚠ 여기서 재는 건 함수 공유뿐이다 — 셀이 실제로 그려져 **보이는지**는 헤드리스가 못 잡는다.
+	var BookScript = load("res://src/drawing/ring_book.gd")
+	var rects: Array = BookScript.rune_cell_rects(6, Vector2(300.0, 300.0), 40.0)
+	_check(rects.size() == 6, "룬 셀 6칸이 잡힌다")
+	if rects.size() == 6:
+		# 🔴 6칸이 한 줄에 몰리면 셀이 1/6 폭으로 쭈그러든다 (진 탭이 세션48에 밟은 함정).
+		_check(float(rects[0].size.x) > 80.0,
+			"🔴 룬 셀이 너무 좁다 (%.0fpx) — 6칸을 한 줄에 몰아넣었다" % rects[0].size.x)
+		_check(float(rects[3].position.y) > float(rects[0].position.y),
+			"🔴 넷째 룬 셀이 둘째 줄로 내려간다 (격자)")
+		for r0: Rect2 in rects:
+			_check(r0.position.x >= 0.0 and r0.position.x + r0.size.x <= 300.0 + 0.01,
+				"룬 셀이 책 밖으로 안 나간다")
 
 
 ## 🔴 세션 25: 진·룬도 **골라야** 밑그림이 뜬다 (사용자: "이게 눌러야 뜨게 해줘").

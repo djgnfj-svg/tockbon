@@ -5,11 +5,11 @@
 
 [resource]
 script = ExtResource("1")
-type = 3
-unlock_id = &"rune_wind"
-display_name = "바람"
-base_damage = 0.7
-status = 4
-status_power = 60.0
+type = 4
+unlock_id = &"rune_bolt"
+display_name = "번개"
+base_damage = 0.95
+status = 5
+status_power = 1.0
 projectile_scene = ExtResource("2")
-ui_color = Color(0.30, 0.62, 0.66)
+ui_color = Color(0.78, 0.7, 0.22, 1.0)

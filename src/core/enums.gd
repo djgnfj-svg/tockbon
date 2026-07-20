@@ -8,9 +8,11 @@ enum CircleType { FIXED, AIMED }
 ## 조용히 깨진다. 1은 레거시 IMPACT 구멍으로 비워 둔다 — 세션 22에 마이그레이션 코드
 ## (SpellDesign.migrate_legacy_runes)는 도안 모델과 함께 매장했지만, **구멍은 그대로 둔다**:
 ## 값을 밀면 남은 세이브·.tres가 조용히 깨진다.
-enum RuneType { FIRE = 0, WATER = 2, WIND = 3 }
+## 🔴 세션49: BOLT=4·EARTH=5·GRASS=6 추가 (1은 옛 IMPACT 자리라 비워 둔 채 끝에 붙였다).
+enum RuneType { FIRE = 0, WATER = 2, WIND = 3, BOLT = 4, EARTH = 5, GRASS = 6 }
 ## 룬 이터레이션은 항상 명시적 리스트로 (RuneType.size()/range 금지 — 구멍 때문).
-const RUNE_TYPES: Array[int] = [RuneType.FIRE, RuneType.WATER, RuneType.WIND]
+const RUNE_TYPES: Array[int] = [RuneType.FIRE, RuneType.WATER, RuneType.WIND,
+	RuneType.BOLT, RuneType.EARTH, RuneType.GRASS]
 const LEGACY_IMPACT: int = 1  # 옛 RuneType.IMPACT — 마이그레이션 판정용
 ## 🔴 **발사 계약** — 고리의 문양 칸에 들어가는 정수 코드. 착탄 전개를 이 값이 가른다:
 ##   GATHER = 착탄점에 기둥(안쪽으로 모인다) · RADIATE = 그 방향으로 탄환(바깥으로 퍼진다).
@@ -74,7 +76,18 @@ enum JinMotion { STRAIGHT, SPIRAL, BOOMERANG }
 ##   CIRCLE=원 · TRIANGLE=정삼각 · OCTAGON=팔각 · ELLIPSE=세로 긴 타원
 ##   PENTAGON=오각 · DIAMOND=마름모 · FLOWER=물결 원(꽃잎) · LENS=렌즈(양쪽 볼록)
 enum JinShape { CIRCLE, TRIANGLE, OCTAGON, ELLIPSE, PENTAGON, DIAMOND, FLOWER, LENS }
-enum Status { NONE, BURN, KNOCKBACK, WET, FLOW }
+## 🔴 상태이상 (세션49에 비로소 **실제로 적용**된다 — 세34~48까지 `forest_enemy.take_hit`이
+## `_status`를 밑줄로 버려 불·물·바람의 실질 차이가 **색 + 데미지 ±15%**뿐이었다).
+##
+## 🔴 **설계 원칙 (사용자 확정 세션49): 단독은 약한 바탕, 조합에서 폭발한다.**
+## 단독 효과를 다 없애면 한 발 쏠 때 아무 일도 안 나 밋밋하고, 단독이 다 세면 조합할 이유가 없다.
+## 그래서 룬마다 **약한** 상태를 남기고, 그 위에 다른 룬이 오면 `StatusRules`가 **반응**시킨다.
+## (선례 = 원신 Swirl/Crystallize — 바람·흙은 자체 효과를 억지로 만들지 않고 촉매로 둔다.)
+##
+## ⚠ **끝에만 붙여라** — 중간에 끼우면 저장된 RuneDef.status·옛 세이브가 통째로 밀린다.
+##   SHOCK=감전(약한 경직) · VULNERABLE=취약(다음 상태가 더 세게 걸림, 흙) · ROOT=덩굴(약한 묶임, 풀)
+##   MUD=진흙(**반응 산물** — 젖음+흙, 강한 속박) · BLAZE=산불(**반응 산물** — 화상+풀)
+enum Status { NONE, BURN, KNOCKBACK, WET, FLOW, SHOCK, VULNERABLE, ROOT, MUD, BLAZE }
 enum Phase { MORNING, DAY, EVENING, NIGHT }
 ## 🔴 PEN = 탁본 펜 (세션 23 신설). 등급이 오를수록 **보정도**가 올라 손을 잡아 준다
 ## (GameState.stroke_correction → trace_scorer). WAND(지팡이)와 역할이 달라 별도 부위다.
