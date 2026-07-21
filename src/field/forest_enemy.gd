@@ -62,6 +62,17 @@ var _charge_dir: Vector2 = Vector2.ZERO
 var _disperse_timer: float = 0.0
 var _dispersed: bool = false
 
+## 🔴 뱀 보스(boss_snake) 전용 상태 (세션 A). charge 변수를 재사용하지 않는다 — 두 AI가 섞이면
+## 조용히 깨진다(설계 A-5). 위브 추격 → 텔레그래프 러시 → 회복 → 다시 위브.
+enum SnakeState { WEAVE, RUSH_WINDUP, RUSH, RECOVER }
+var _snake_state: int = SnakeState.WEAVE
+var _snake_timer: float = 0.0     ## 현재 상태 잔여 시간
+var _snake_rush_cd: float = 0.0   ## 러시 재사용 대기(위브 중에만 감소)
+var _weave_t: float = 0.0         ## 위브 사인파의 시간 누적(boss 틱 delta)
+var _snake_dir: Vector2 = Vector2.RIGHT  ## 러시 락 방향 + 머리 바라보는 방향
+## hp 절반 페이즈 전이 — 1회 플래그. 위브 진폭·러시 빈도·이동속도 배율이 오른다.
+var _phase2: bool = false
+
 ## 🔴 상태이상 보유고 (세션49 → 세션50에 `src/core/status_holder.gd`로 **추출**).
 ## 보유·틱·반응 해결은 전부 holder가 한다 — 여기 남은 건 **몸의 일**(피해·확산·색)뿐이다.
 ## 추출한 이유: 허수아비가 같은 코드를 못 써서 **연습장에서 반응을 시험할 수 없었다**.
@@ -153,6 +164,8 @@ func _physics_process(delta: float) -> void:
 			_ai_hover(delta, player, to_player, dist)
 		"stationary":
 			_ai_stationary(player, dist)
+		"boss_snake":
+			_ai_boss_snake(delta, player, to_player, dist)
 		_:
 			_ai_chase(player, to_player, dist)
 
@@ -242,6 +255,77 @@ func _ai_hover(delta: float, player: Node2D, to_player: Vector2, dist: float) ->
 func _ai_stationary(player: Node2D, dist: float) -> void:
 	velocity = Vector2.ZERO
 	_contact(player, dist)
+
+
+## "boss_snake" (뱀 보스, 세션 A) — 세그먼트 몸통(snake_body.gd)을 **살리는** 이동이 핵심이다.
+##  • **위브 추격**: 플레이어를 향하는 진행 벡터에 그 수직 방향으로 sin(t·freq)·amp를 얹어 머리가
+##    S자로 미끄러진다 → 몸통이 그 S를 물려받아 물결친다(설계 A-3·A-5).
+##  • **텔레그래프 러시**: 짧게 멈춰 붉게 달아오른 뒤(기존 `_set_telegraph` 재사용) 플레이어 쪽으로
+##    확 뻗고 회복한다. 방향은 윈드업 시작에 락(그 사이 피하면 흘린다 — charge와 같은 손맛).
+##  • **hp 절반 페이즈**: 위브 진폭·러시 빈도·이동속도 배율이 오른다(1회 플래그).
+## 🔴 수치는 전부 `_param`으로 .tres(EnemyDef)에서 읽는다 — balance.tres 아님(적 수치는 EnemyDef).
+## 🔴 머리 회전은 **`_visual.rotation`만** 돌린다(루트 rotation은 SnakeBody 자식 좌표를 꼬는다, A-6).
+func _ai_boss_snake(delta: float, player: Node2D, to_player: Vector2, dist: float) -> void:
+	# 페이즈 전이 — hp가 임계 밑으로 처음 떨어지는 순간 1회.
+	if not _phase2 and _def != null and _hp <= _def.hp * _param("phase2_hp_frac", 0.5):
+		_phase2 = true
+
+	_weave_t += delta
+	_snake_rush_cd = maxf(0.0, _snake_rush_cd - delta)
+	var speed_mult := _param("phase2_speed_mult", 1.35) if _phase2 else 1.0
+	var weave_amp := _param("phase2_weave_amp", 90.0) if _phase2 else _param("weave_amp", 60.0)
+
+	match _snake_state:
+		SnakeState.WEAVE:
+			if dist > 1.0:
+				var fwd := to_player / dist
+				var perp := Vector2(-fwd.y, fwd.x)
+				var base_speed := _param("move_speed", 72.0) * speed_mult
+				var lateral := sin(_weave_t * _param("weave_freq", 3.2)) * weave_amp
+				velocity = fwd * base_speed + perp * lateral
+			else:
+				velocity = Vector2.ZERO
+			_contact(player, dist)
+			# 러시 발동 — 쿨다운이 끝났고 사거리 안이면 윈드업으로.
+			if _snake_rush_cd <= 0.0 and dist <= _param("rush_range", 240.0) and dist > 1.0:
+				_snake_state = SnakeState.RUSH_WINDUP
+				_snake_timer = _param("rush_windup", 0.6)
+				_snake_dir = to_player / dist  # 방향 락(지금 이 순간)
+				_set_telegraph(true)
+		SnakeState.RUSH_WINDUP:
+			velocity = Vector2.ZERO
+			_snake_timer -= delta
+			if _snake_timer <= 0.0:
+				_snake_state = SnakeState.RUSH
+				_snake_timer = _param("rush_dur", 0.5)
+				_set_telegraph(false)
+		SnakeState.RUSH:
+			velocity = _snake_dir * _param("rush_speed", 340.0) * speed_mult
+			_contact(player, dist)
+			_snake_timer -= delta
+			if _snake_timer <= 0.0:
+				_snake_state = SnakeState.RECOVER
+				_snake_timer = _param("rush_recover", 0.8)
+		SnakeState.RECOVER:
+			velocity = Vector2.ZERO
+			_snake_timer -= delta
+			if _snake_timer <= 0.0:
+				_snake_state = SnakeState.WEAVE
+				var cd := _param("phase2_rush_cd", 1.8) if _phase2 else _param("rush_cd", 3.0)
+				_snake_rush_cd = cd
+
+	# 머리는 진행 방향(러시 중이면 락 방향)을 바라본다. 멈춰 있으면 마지막 방향 유지.
+	if velocity.length_squared() > 1.0:
+		_snake_dir = velocity.normalized()
+	_face(_snake_dir)
+
+
+## 🔴 머리만 회전 — `_visual.rotation`(설계 A-6). boss_snake 분기에서만 부른다(다른 AI 무영향).
+## 스프라이트/플레이스홀더는 진행 방향 +x 기준이라 각도를 그대로 준다.
+func _face(dir: Vector2) -> void:
+	if _visual == null or dir.length_squared() < 0.0001:
+		return
+	_visual.rotation = dir.angle()
 
 
 ## 접촉 피해 — attack_range 안이면 attack_cooldown 간격으로 GameState를 깎는다.
@@ -423,6 +507,12 @@ func _param(key: String, fallback: float) -> float:
 ## 리팩터 때 옮겨 다니는 물건 = 계약이 아니다. takbon-verify §3 "공개 API로만").
 func hp() -> float:
 	return _hp
+
+
+## 🔴 공개 페이즈 리더 — boss_snake 페이즈 전이를 헤드리스가 공개 API로 확인한다(`hp()` 선례).
+## 1 = 기본, 2 = hp 절반 이후. 뱀이 아닌 적은 항상 1(플래그가 안 세워진다).
+func phase() -> int:
+	return 2 if _phase2 else 1
 
 
 ## 🔴 계약: `enemy_hit`는 **약점 배율을 반영한 최종 피해**로 발신한다 (dummy_target 주석).

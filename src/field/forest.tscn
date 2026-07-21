@@ -3,6 +3,7 @@
 [ext_resource type="Script" uid="uid://dn4fiawn2ylc3" path="res://src/field/forest.gd" id="1_forest"]
 [ext_resource type="PackedScene" uid="uid://s4r8t5nlu1i8" path="res://src/actors/player.tscn" id="3_player"]
 [ext_resource type="PackedScene" uid="uid://npif0xytsegm" path="res://src/field/forest_enemy.tscn" id="4_enemy"]
+[ext_resource type="PackedScene" uid="uid://c0field02snakeboss" path="res://src/field/snake_boss.tscn" id="13_snakeboss"]
 [ext_resource type="PackedScene" path="res://src/spell/ring_spell_system.tscn" id="5_spell"]
 [ext_resource type="Script" uid="uid://c3ot4vtjrqv0s" path="res://src/hud/hud.gd" id="6_hud"]
 [ext_resource type="PackedScene" uid="uid://lueejjqono0r" path="res://src/hud/tab_panel.tscn" id="7_inv"]
@@ -140,6 +141,9 @@ enemy_id = &"beetle"
 [node name="D_Gale" parent="Enemies" unique_id=1740033921 instance=ExtResource("4_enemy")]
 position = Vector2(0, -1040)
 enemy_id = &"gale"
+
+[node name="D_SnakeBoss" parent="Enemies" instance=ExtResource("13_snakeboss")]
+position = Vector2(-380, -900)
 
 [node name="RingSpellSystem" parent="." unique_id=308245641 instance=ExtResource("5_spell")]
 z_index = 10
