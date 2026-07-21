@@ -34,6 +34,8 @@ PowerShell은 자식 프로세스 stdout을 안 보여준다 — **테스트는 
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_status_auto.gd          # 룬 상태이상·원소 반응 (반응표·바람 확산·중첩 갱신)
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_hud_toast_auto.gd       # HUD 획득 토스트 (같은 id 합치기+맨뒤 이동·최대3줄 FIFO·수명)
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_snake_boss_auto.gd      # 뱀 보스 (Db로드·약점배율·페이즈2 전이·세그먼트 추종·위브 전진)
+./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_chest_auto.gd           # 상자 + 능동 루팅 (drops_chest 분기·loot_panel 루팅·상자 자기소멸)
+./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_gale_boss_auto.gd       # gale 보스 (Db로드+17키·페이즈2·돌풍 피해/밀림·볼리 발수·적탄 히트/수명·반응 룬=BOLT/WATER)
 ```
 
 ⚠ **이 목록이 세션51에 5개 뒤처져 있었다** (dialogue_box·map_panel·drop_pickup·enemy_ai·status). 정본은

@@ -9,14 +9,13 @@
 > 지금 게임 = `src/base`(베이스캠프) + 고리 조립 책 + 숲 원정 + 온보딩 레일.
 > 🔴 **기록 규칙: 직전 세션만 상세, 그 전은 아래 「한 줄 지도」로 내려보낸다** — 이 절이 길어지면 정리 신호.
 
-🔴🔴 **직전 세션 = 55 「상자 + 능동 루팅」** (세54 세션 B 구현 · 정본 STATUS「55」 + memory `takbon-chest-loot`):
-설계가 이미 architect 승인·사용자 합의라 구현 직행. 파이프라인: 리드(스키마·리팩터·배선·검증) ∥ takbon-art(상자 스프라이트) ∥ takbon-ui(loot_panel).
-🔴 **스키마 = `EnemyDef.drops_chest: bool`**(리드): true = 낱개 픽업 대신 **상자 하나**. `is_elite`·`params.ai`에 커플 안 하고 **드롭 형태만** 명시로 가른다. `forest_enemy._die`가 굴림을 `_roll_drops()`로 추출(dict 키 "n"→**"count"** 통일 = drop_pickup·loot_panel 계약과 일치) + `_spawn_loose`(잡몹, 바이트 동일)/`_spawn_chest`(보스) 분기.
-🔴 **상자 = `src/props/chest.gd`+`.tscn`**(interact_zone 합성, zone_id=&"chest"·layer64/mask2): **자기완결적** — forest.gd가 배선 안 함(동적 스폰). 상자가 자기 zone을 잇고 loot_panel을 **온디맨드 인스턴스**(map_panel 선례). 내용물 = `EnemyDef.drops` 재사용, loot_panel에 **참조로** 넘겨 다 비면 상자가 스스로 free. 스프라이트 = 96×48 스트립 region 토글(닫힘 0 / 열림 48, 몸통 y27-41 고정이라 뚜껑만 열림).
-🔴 **loot_panel = `src/hud/loot_panel`**(takbon-ui, CanvasLayer5·모달 STOP·ui_modal_open): 카드 클릭 → **등급별 진행 바 자동 채움**(`LOOT_TIMES=[0.2,0.45,0.8,1.2,1.6]`초, 홀드 아님) → `add_to_bag`+`item_collected`(세51 토스트 재사용)+remove_at+비면 자동 닫힘. **EventBus 신규 시그널 0 = 순수 오버레이**. `loot_card(i)`·`advance(delta)` 공개 = 헤드리스가 클릭·시간 못 잡아 이 둘로 로직만 검증.
-🔴 **아트 = takbon-art 실제 도트**(`chest.png` 닫힘/열림 2프레임, Apollo·숲 프롭 톤). 🔴🔴 **세54 도형 금지 규칙의 첫 준수** — 팔각형 대신 진짜 보물 상자. 배선 = `snake_boss.tres drops_chest=true`(보스=forest.tscn 배치 → 잡으면 상자 실재).
-✅ 검증: 전 스위트 **20 그린**(신설 `test_chest_auto`) + **뮤테이션 3/3**(분기 반전·loot remove_at·상자 queue_free). 🔴 **실게임 MCP** = 상자 스프라이트 렌더(도형 아님)·패널 카드+등급 띠 렌더·**실제 좌클릭이 카드에 닿아**(세25 함정 회피) 루팅→가방→자동닫힘→상자 소멸 전 루프.
-🔴 **다음 = 손맛**(사용자 F5: `LOOT_TIMES`·진행 바·개봉 연출) + **미해결 균형**(memory `takbon-chest-loot-idea`): ① **열기 전 값어치 겉보기**(지금 상자 겉모습이 등급 안 알려줘 "다 열어봐야 안다" 노동 위험 — 상자 등급 힌트 실을지) ② 익스트랙션 긴장 vs 파밍 리듬. **미개봉 상자 = 씬 free 자연 소멸**(나가면 손실 = 코드 0 기본값). + **코브라 형태**·**마디 히트박스**(세54 이월).
+🔴🔴 **직전 세션 = 56 「gale 보스 실체화 + 반응 룬 청산」** (정본 STATUS「56」 + memory `takbon-gale-boss`):
+세48 파이프라인 첫 완주: architect 설계(scratch 파일 보고) → AskUserQuestion 합의 → 리드 core → dev 구현 → reviewer → 리드 검증(뮤테이션·실게임 MCP). **잠자던 params 12개를 읽는 `"ai": "boss_gale"` 분기 하나로 "새 행동 = params 한 줄"(세46 계약)이 보스급에서도 성립.**
+🔴 **boss_gale AI**(`forest_enemy.gd`): hover형 거리 유지(신규 `hover_min` 110/`hover_max` 170 — gust_radius 90 밖에 서서 "돌풍=붙은 플레이어 징벌"이 성립) · **돌풍**(쿨 소진+반경 안 → 0.8s 윈드업(붉은 달아오름+Line2D 반경 링 z40) → 피해+`apply_push` 밀치기, 구르면 다 흘림) · **볼리**(이동 유지한 채 `volley_interval`마다 **발사 순간 재조준** 1발 — 락 조준은 밋밋해서 각하) · 페이즈2(`_phase2`·`phase()` **보스 공용** 재사용, 배율은 **쿨 리셋 시점에만** 곱함 — 진행 중 타이머 불가침).
+🔴 **신설 2**: `src/field/enemy_projectile.gd/.tscn`(**첫 적탄** — 플레이어 탄은 발사 계약에 물려 재사용 부적합. layer0/**mask3**(world+player)·`is_rolling()` 관통·free 3경로. 겉모습=projectiles.png **wind 혜성 재사용 = 신규 아트 0장**, 도형 금지 충족) · `player.apply_push(dir, dist)`(**첫 플레이어 밀림 채널** — 감쇠 임펄스 `sqrt(2·DECAY·dist)`라 밀리는 중에도 조작 유지. 🔴 구르기 시작 시 `_push=0`으로 흘림 — 리뷰가 잡음: 안 지우면 잔량이 구르기 끝에 도로 온다).
+🔴 **반응 룬 청산**: `status_rules.gd` REACTIONS burst 줄에 `"rune"` 키(감전=BOLT·증기=**WATER**, 폴백=들어온 룬) → `status_holder` on_burst **5인자** → 두 몸 `take_reaction_damage(amount, rune := FIRE)`. "반응 추가 = 줄 하나" 유지·EventBus 신규 0. ⚠ **BOLT 피격음은 당분간 기본음**(hit_bolt.wav가 없어 match 폴백 — match만 추가하면 침묵=개악. "새 소리 = wav 한 장" 후속).
+✅ 검증: 전 스위트 **22 그린** + **뮤테이션 4/4**(페이즈 반전·rune FIRE 고정 **두 몸 각각**·볼리 1발 고정). 🔴 **dummy_target 쪽 rune은 검출력 0이었다**(리뷰 지적 — dummy만 되돌려도 전 스위트 그린) → `test_status_auto` [11]ⓑ에 그물 추가(**두 몸은 따로 갈라진다**). 실게임 MCP = 텔레그래프 링·wind 탄 렌더(z 문제 없음)·돌풍/볼리 실발동·좌표 실작동 확인.
+🔴 **다음 = 손맛**(사용자 F5: hover 110~170 거리감·`PUSH_DECAY` 900 밀림감·gust_windup 0.8 피할 만한지·볼리 페이스·감전이 기본음으로 나는지 귀 확인) + ⚠ **gale은 FIRE 약점 1.6배가 이미 살아 있다**(`has_counter` 스키마 기본 true + `counter_rune=0` — "바람 보스=불 약점"이 그럴듯해 유지했지만 의도인지 사용자 확인 필요). + 세55 이월: 상자 값어치 겉보기·코브라 형태·마디 히트박스.
 
 <!-- 지지난 세션 52 상세 (직전만 상세 규칙 — 다음 세션에 아래를 한 줄 지도로 내려라):
 사용자 확정 = **스테이지1+2(감전연쇄·증기·바람 확산), 감전 = 아크 + 중심 스파크**. 파이프라인 완주(architect→dev→reviewer→리드 검증·커밋).
@@ -35,15 +34,15 @@
 ⏸ **의도적으로 잠자는 콘텐츠 (버그 아님)**: `_seed_starting_unlocks()`가 룬 6종을 미리 열어 룬 획득 경로 산출물(조각·드롭·q08~q10)이 소급 완료돼 안 보인다. 🔴 **손맛 확인이 끝나면 `game_state.gd`의 5줄을 지워라**(경로 자체는 실게임 확인됨: gale→드롭→줍기→가방).
 ⏸ **보류 = forest_t2(숲2·티어 하강)** — 사용자 확정(세48): *"숲2는 아직 필요없음."* 딸린 **「하강 시 회복 스킵」도 같이 보류**(`src/field/forest.gd:131` 주석).
 
-🔴 **남은 빚** (세50~52 누적):
-- 🔴 **`take_reaction_damage`의 룬이 하드코딩 `FIRE`** — 어떤 반응이든 불 소리가 난다. **세52에 급해졌다**: 감전 아크가 생겨 "번개 반응인데 불 소리"가 더 드러난다(설계·리뷰 둘 다 지적). 반응별 룬을 실어 보내면 소리·(향후)VFX 색이 맞는다.
+🔴 **남은 빚** (세50~56 누적):
 - 🔴 **`rune_fill`(룬 농도)의 소비자가 0곳** — "진 안에 룬을 얼마나 크게 그렸나"가 **아무 데도 안 쓰인다**. `ring_spell_system`의 주석이 *"조립 단계에서 반영돼 들어온다"*고 **거짓말을 하고 있었다**(세50에 정정). **「그리는 재미」 축이다** — 살릴지 접을지 결정 필요.
-- **gale은 아직 보스가 아니다** — `params`의 `gust_*`·`volley_*`·`phase2_*` **12개를 읽는 코드가 없어** hp250짜리 평범한 추격체다. `params.ai = "boss_gale"` 분기 하나면 "새 행동 = params 한 줄"이 성립한다(세46 계약).
+- **BOLT·EARTH·GRASS 전용 피격음이 없다**(세56) — 감전 연쇄가 기본 피격음으로 난다("불 소리" 거짓은 청산됨). "새 소리 = wav 한 장"(세33 방식) + audio.gd match 세 줄이면 끝.
 - **취약 이중 증폭** — 반응 산물에 배수가 두 번 곱한다(세49부터라 회귀는 아님). 의도인지 사고인지 미정.
 - **vine이 숲에 1마리뿐**이라 0.25 드롭이면 풀 조각 하나에 원정 4번(beetle 3·mist 2와 속도가 고르지 않다).
 - **반응 VFX 스테이지3~4 보류** — convert(진흙·산불·무성함) 플레어·DoT 불티는 틴트로 이미 어느 정도 보여 미룸(세52 설계 §5).
 
 **지난 세션 한 줄 지도** (상세는 STATUS/memory — 필요할 때만 캐라):
+- **55** 상자 + 능동 루팅 — `EnemyDef.drops_chest`로 낱개/상자 분기(`_die`→`_roll_drops` 추출) · `chest.gd` 자기완결(자기 zone+loot_panel 온디맨드·비면 스스로 free) · loot_panel 등급별 진행 바(`loot_card`/`advance` 공개=헤드리스 훅) · 도형 금지 첫 준수(진짜 상자 도트) · 미해결=열기 전 값어치 겉보기·루팅 손맛 (`73d91ee`, memory `takbon-chest-loot`)
 - **54** 대형 뱀 보스(세그먼트 몸통) — 머리=`forest_enemy` 재사용·몸통=신설 `snake_body.gd`(부모 위치만 샘플=디커플·top_level 월드좌표) · 추종=히스토리 버퍼+머리 위브(S자) · `boss_snake` AI(위브→러시→hp절반 페이즈) · **도형 금지 규칙** 하네스에 박음(생명체·프롭=takbon-art 도트 필수) · 🔴헤드리스가 못 잡은 렌더 버그 3(마디 z·`_pop` scale·정지 뭉침, memory `takbon-snake-boss`)(`ac2e733`)
 - **51** 드롭 흡수 애니메이션 — 처치→균등각 흩뿌림→**자석 반경**(fly-at-kill 각하)→가속 흡수→도착 팝+획득 토스트 · 등급색 단일소스 `grade_colors.gd`(사본 2+토스트가 3번째 될 뻔) · 자석에 물리 안 씀(그룹조회+거리) (`0c1a5bb`)
 - **50** 세49 빚3 청산 — `status_power` 세기배율 통일·`status_holder` 추출·룬 획득경로 + 곁가지 둘(바람룬이 3인자 Color로 죽어 있던 것·연쇄 반경 102>90) (`7791631`)
@@ -231,6 +230,7 @@
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_status_auto.gd        # **룬 상태이상·원소 반응** (세션49): 화상 DoT·젖음 감속·🔴**반응**(젖음+흙=진흙·젖음+번개=감전연쇄·화상+물=꺼짐·화상+풀=산불)·🔴**바람=확산**(자기 상태 안 남기고 옆 적에게 옮김)·중첩=갱신(누적 아님)·취약 증폭 · 🔴**DoT는 enemy_hit을 안 쏜다**(쏘면 피해숫자·히트스톱 도배) · 🔴**색으로 보이는지는 헤드리스가 못 잡는다**(실게임 _visual.modulate로 별도 확인)
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_snake_boss_auto.gd    # **뱀 보스** (세션54 A): Db 로드(hp600·boss_snake) · take_hit→약점배율 · hp절반→페이즈2 전이(공개 `phase()`) · 세그먼트 몸통(마디 12==SEGMENT_COUNT·머리 이동→마디 추종) · 위브 추격 전진 · 🔴**세그먼트 물결·러시 채찍·머리 회전 "느낌"은 헤드리스가 못 잡는다**(실게임 확인) · 🔴**뮤테이션(페이즈·위브·추종) 검출력 확인됨**(세54)
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_chest_auto.gd         # **상자 + 능동 루팅** (세션55 = 세54 세션B): `EnemyDef.drops_chest` Db 로드(snake_boss=true·vine=false) · 🔴**`_die` 분기**(drops_chest 적→상자1·픽업0 / 잡몹→픽업·상자0) · loot_panel(`loot_card`→`advance` 완료 = add_to_bag+item_collected+**contents 참조 remove_at**+비면 자동 닫힘) · 🔴**상자 통합**([E] interacted→패널→다 루팅→상자 스스로 free) · 🔴**카드 클릭 도달·진행 바 렌더·상자 스프라이트는 헤드리스가 못 잡는다**(실게임 MCP push_input·스샷 — 세55에 전 루프 확인) · 🔴**뮤테이션 3/3 검출력**(분기·remove_at·상자소멸)
+./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_gale_boss_auto.gd     # **gale 보스** (세션56): Db 로드+**params 17키 전수**(세50 그물) · 페이즈2 전이(`phase()`) · 돌풍(플레이어 hp 감소+`apply_push` 밀림 거리≈gust_push_dist) · 볼리(그룹 `"enemy_projectiles"` 수 ==volley_count — 초과도 잡음) · 적탄(히트→hp 감소+free·수명 만료 free — mask2 침묵 함정 그물) · 🔴**반응 룬**(연쇄=BOLT·증기=WATER — FIRE 하드코딩 청산 직접 그물. 연습장 몸 쪽은 test_status_auto [11]ⓑ가 잰다 — **두 몸은 따로 갈라진다**, 세56에 dummy만 되돌려도 전 스위트 그린이었다) · 🔴**링·탄 렌더·밀림 손맛·hover 거리감은 헤드리스가 못 잡는다**(세56 실게임 MCP로 링·탄 렌더 확인, 손맛=사용자 F5) · 🔴**뮤테이션 4/4 검출력**(페이즈·rune 두 몸 각각·볼리)
 ```
 
 🔴 **스위트를 돌리면 `user://save`가 날아간다** (세션 26 F3 이후). `SaveManager._ready`가 저장을

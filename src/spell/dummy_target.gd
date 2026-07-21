@@ -38,8 +38,8 @@ func _wire_status() -> void:
 		# 🔴 DoT는 조용히 쌓인다 — `enemy_hit`을 쏘면 0.5초마다 피해 숫자·히트스톱이 도배된다
 		# (forest_enemy와 같은 이유). 지지는 게 보이는 건 틴트가 맡는다.
 		_status_damage += amount
-	_status.on_burst = func(radius: float, amount: float, include_self: bool, result_status: int) -> void:
-		_burst_damage(radius, amount, include_self, result_status)
+	_status.on_burst = func(radius: float, amount: float, include_self: bool, result_status: int, rune: int) -> void:
+		_burst_damage(radius, amount, include_self, result_status, rune)
 	_status.on_spread = func(statuses: Dictionary) -> void:
 		_spread_statuses(statuses)
 	_status.on_changed = _refresh_tint
@@ -92,24 +92,27 @@ func status_damage_total() -> float:
 ## 🔴 반응 피해 — 조용한 DoT와 달리 **한 번뿐인 사건**이라 `enemy_hit`을 쏴 손맛을 준다.
 ## 연습장에서 **연쇄가 눈에 보여야** 조합할 이유가 생긴다(피해 숫자 + 히트스톱 + 팝).
 ## 상태를 안 만들어 재귀가 없다 — `take_hit`으로 때리면 연쇄가 연쇄를 낳는다.
-func take_reaction_damage(amount: float) -> void:
+## 🔴 rune(세56) = 이 반응의 정체 룬(감전=BOLT·증기=WATER) — enemy_hit에 그대로 실어야 소리가
+## 반응과 맞는다(그전엔 FIRE 하드코딩이라 감전 연쇄가 불 소리를 냈다). 기본 인자 = 하위호환.
+func take_reaction_damage(amount: float, rune: int = Enums.RuneType.FIRE) -> void:
 	if amount <= 0.0:
 		return
 	_status_damage += amount
-	EventBus.enemy_hit.emit(self, amount, Enums.RuneType.FIRE)
+	EventBus.enemy_hit.emit(self, amount, rune)
 	_pop()
 
 
 ## 반경 안의 다른 적들에게 즉발 피해. `include_self`면 자신도 맞는다(증기).
 ## 씬을 뒤지는 건 **몸의 일**이라 여기 있다(holder는 씬을 모른다).
-func _burst_damage(radius: float, amount: float, include_self: bool, result_status: int) -> void:
+## rune = 이 버스트의 정체 룬(세56) — 자신·연쇄 대상 모두 take_reaction_damage에 그대로 넘긴다.
+func _burst_damage(radius: float, amount: float, include_self: bool, result_status: int, rune: int) -> void:
 	# 🔴 VFX 방송 (세52) — forest_enemy와 **동일**해야 연습장↔숲 연출이 안 갈라진다. 링이 반경을
 	# 폭로하므로 amount 가드 **앞에** 둔다(반응은 일어났으니 링은 늘 뜬다). 피해 계산은 안 바뀐다.
 	EventBus.reaction_burst.emit(global_position, radius, result_status)
 	if amount <= 0.0:
 		return
 	if include_self:
-		take_reaction_damage(amount)
+		take_reaction_damage(amount, rune)
 	for node in get_tree().get_nodes_in_group("enemies"):
 		if node == self or not (node is Node2D):
 			continue
@@ -119,7 +122,7 @@ func _burst_damage(radius: float, amount: float, include_self: bool, result_stat
 			# 🔴 감전(SHOCK)만 대상마다 번개 아크 — 증기(NONE)는 링만(설계 §4). 피해 전에 쏜다.
 			if result_status == Enums.Status.SHOCK:
 				EventBus.reaction_chain.emit(global_position, (node as Node2D).global_position, result_status)
-			node.take_reaction_damage(amount)
+			node.take_reaction_damage(amount, rune)
 
 
 ## 바람 확산 — 붙은 상태를 반경 안의 다른 표적에게 번뜨린다. 내 것은 남는다.

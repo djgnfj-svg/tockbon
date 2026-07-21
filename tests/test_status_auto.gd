@@ -367,10 +367,22 @@ func _test_dummy_reacts() -> void:
 	# ⓑ 감전 연쇄가 옆 허수아비까지 간다 = 연습장에서 조합이 **눈에 보인다**
 	near.apply_status(S_WET, 1.0)
 	var before: float = a.status_damage_total()
+	# 🔴 세56: 연쇄 대상(a)이 받는 enemy_hit의 rune == BOLT — **연습장 몸의 하드코딩 청산 그물**.
+	# forest_enemy 쪽은 test_gale_boss_auto [6]이 재지만, 두 몸은 따로 갈라질 수 있다(세56 리뷰에서
+	# dummy 쪽만 FIRE로 되돌려도 전 스위트가 그린이었다 — 검출력 0이던 자리). a는 직격을 안 맞고
+	# 연쇄 반응 피해만 받으므로, 여기 잡히는 rune은 take_reaction_damage가 실은 값 그 자체다.
+	var chain_runes: Array = []
+	var rune_cb := func(who, _d, r) -> void:
+		if who == a:
+			chain_runes.append(r)
+	_bus.enemy_hit.connect(rune_cb)
 	near.take_hit(0.0, R_BOLT, S_SHOCK, 1.0)  # 젖음 + 번개 = 감전 연쇄(burst)
+	_bus.enemy_hit.disconnect(rune_cb)
 	_check(near.has_status(S_SHOCK), "맞은 허수아비에 감전이 남았다")
 	_check(a.status_damage_total() > before,
 		"연쇄가 옆 허수아비에 닿았다 (%.2f → %.2f)" % [before, a.status_damage_total()])
+	_check(chain_runes == [R_BOLT],
+		"연습장 연쇄 피해의 rune == BOLT — FIRE 하드코딩 청산 (실제 %s)" % str(chain_runes))
 
 	# ⓒ DoT가 누적 카운터로 쌓인다 (HP가 없어 이게 유일한 관측점)
 	var burnt = scene.instantiate()

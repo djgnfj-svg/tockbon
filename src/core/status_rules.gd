@@ -22,19 +22,21 @@ const BAL := preload("res://data/balance.tres")
 
 
 ## 🔴 **반응 표** — {바탕 상태: {들어온 룬: 결과}}.
-## 결과 = { "status": 새 상태(NONE이면 바탕이 사라지고 끝) , "kind": 연출·처리 갈래 }
+## 결과 = { "status": 새 상태(NONE이면 바탕이 사라지고 끝) , "kind": 연출·처리 갈래 ,
+##          "rune": 버스트 피해가 실려 나가는 룬(소리·색의 정체 — burst 줄에만) }
 ##   kind: "convert"=바탕이 새 상태로 바뀐다 · "burst"=즉발 폭발(피해·연쇄) · "clear"=씻겨 사라진다
+##   "rune"이 없으면 **들어온 룬**이 폴백이다 — FIRE 고정(세49~55의 하드코딩)보다 늘 진실에 가깝다.
 ##
 ## ⚠ **의미 있는 쌍만 적는다.** 안 적힌 조합은 그냥 새 상태가 덮어쓴다(기본 동작).
 ## 6룬이라 15쌍이지만 전부 채울 필요가 없다 — 사용자: *"쏴 보고 정한다."*
 const REACTIONS := {
 	Enums.Status.WET: {
-		# 젖음 + 번개 = 강한 감전 + 주변 연쇄 (사용자가 제일 먼저 떠올린 조합)
-		Enums.RuneType.BOLT: {"status": Enums.Status.SHOCK, "kind": "burst"},
+		# 젖음 + 번개 = 강한 감전 + 주변 연쇄 (사용자가 제일 먼저 떠올린 조합) — 연쇄는 번개 사건
+		Enums.RuneType.BOLT: {"status": Enums.Status.SHOCK, "kind": "burst", "rune": Enums.RuneType.BOLT},
 		# 젖음 + 흙 = 진흙 (강한 속박) — 사용자 아이디어
 		Enums.RuneType.EARTH: {"status": Enums.Status.MUD, "kind": "convert"},
-		# 젖음 + 불 = 증기 (젖음이 날아간다 — 물로 불을 막는 게 아니라 서로 상쇄)
-		Enums.RuneType.FIRE: {"status": Enums.Status.NONE, "kind": "burst"},
+		# 젖음 + 불 = 증기 (젖음이 날아간다 — 물로 불을 막는 게 아니라 서로 상쇄) — 끓는 물 사건
+		Enums.RuneType.FIRE: {"status": Enums.Status.NONE, "kind": "burst", "rune": Enums.RuneType.WATER},
 		# 젖음 + 풀 = 무성함 (덩굴이 크게 자라 오래 묶는다)
 		Enums.RuneType.GRASS: {"status": Enums.Status.ROOT, "kind": "convert"},
 	},

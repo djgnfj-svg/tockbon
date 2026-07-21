@@ -40,9 +40,13 @@ var _tick_accum: float = 0.0
 # ── 소유자 콜백 (전부 선택 — 안 주면 그 축을 안 쓴다는 뜻) ─────────────────────
 ## 지속 피해가 났다. `func(amount: float) -> void`. 🔴 여기서 `enemy_hit`을 쏘지 마라(도배).
 var on_dot: Callable = Callable()
-## 반경 안 즉발 피해. `func(radius: float, amount: float, include_self: bool, result_status: int) -> void`.
+## 반경 안 즉발 피해.
+## `func(radius: float, amount: float, include_self: bool, result_status: int, rune: int) -> void`.
 ## 🔴 result_status(세52) = 증기면 `Enums.Status.NONE`, 감전이면 `Enums.Status.SHOCK`. 몸이 VFX 링
 ## 색과 "연쇄 아크를 그릴지"를 정하는 데 쓴다 — include_self로 유추하지 않는다(암묵 결합 회피).
+## 🔴 rune(세56) = 이 버스트의 **정체 룬**(REACTIONS의 "rune" 키, 없으면 들어온 룬 폴백). 몸이
+## `take_reaction_damage`→`enemy_hit`에 그대로 실어야 소리·(향후)색이 반응과 맞는다 — 그전엔
+## FIRE 하드코딩이라 감전 연쇄가 불 소리를 냈다.
 var on_burst: Callable = Callable()
 ## 붙은 상태를 옆으로 번뜨린다(바람). `func(statuses: Dictionary) -> void`.
 var on_spread: Callable = Callable()
@@ -106,7 +110,7 @@ func apply_incoming(rune_type: int, status: int, status_power: float) -> void:
 	for base: int in _statuses.keys():
 		var r: Dictionary = SR.react(base, rune_type)
 		if not r.is_empty():
-			_resolve_reaction(base, r, status_power)
+			_resolve_reaction(base, r, status_power, rune_type)
 			return
 	# ③ 반응 없음 = 그냥 새 상태.
 	var s := status
@@ -120,10 +124,12 @@ func apply_incoming(rune_type: int, status: int, status_power: float) -> void:
 ## 반응 처리 — 바탕은 **소진되고**(반응에 쓰였다), 결과 상태가 있으면 새로 걸린다.
 ## kind: convert=조용히 바뀐다 · burst=즉발 폭발(연쇄/증기) · clear=씻겨 사라진다.
 ## 세기는 들어온 룬과 바탕 중 **센 쪽**을 쓴다 — 약한 룬으로 강한 바탕을 깎아먹지 않게.
-func _resolve_reaction(base_status: int, r: Dictionary, incoming_power: float) -> void:
+## 🔴 incoming_rune(세56) = "rune" 키가 없을 때의 폴백 — 버스트의 정체 룬을 on_burst 5번째로 싣는다.
+func _resolve_reaction(base_status: int, r: Dictionary, incoming_power: float, incoming_rune: int) -> void:
 	var power := maxf(incoming_power, power_of(base_status))
 	var result := int(r.get("status", Enums.Status.NONE))
 	var kind := str(r.get("kind", "convert"))
+	var burst_rune := int(r.get("rune", incoming_rune))
 	_statuses.erase(base_status)
 	if kind == "burst" and on_burst.is_valid():
 		# 🔴 피해 계산은 `SR.burst_damage` 한 곳 — `power * mult`로 되돌리면 배율 통일 뒤
@@ -131,11 +137,11 @@ func _resolve_reaction(base_status: int, r: Dictionary, incoming_power: float) -
 		if result == Enums.Status.NONE:
 			# 증기(젖음+불) — 바탕이 날아가며 **제자리 반경 즉발 피해**. 남는 상태가 없다.
 			# 🔴 result_status=NONE을 실어 보낸다 — 몸이 흰 링만 그리고 연쇄 아크는 안 그린다(세52).
-			on_burst.call(BAL.status_steam_px, SR.burst_damage(power, BAL.status_steam_mult), true, result)
+			on_burst.call(BAL.status_steam_px, SR.burst_damage(power, BAL.status_steam_mult), true, result, burst_rune)
 		else:
 			# 감전 연쇄(젖음+번개) — 주변 적들에게 옮겨 붙는 피해. 맞은 본인은 아래에서 상태를 받는다.
 			# 🔴 result_status=SHOCK을 실어 보낸다 — 몸이 노란 링 + 대상마다 번개 아크를 그린다(세52).
-			on_burst.call(BAL.status_shock_chain_px, SR.burst_damage(power, BAL.status_shock_chain_mult), false, result)
+			on_burst.call(BAL.status_shock_chain_px, SR.burst_damage(power, BAL.status_shock_chain_mult), false, result, burst_rune)
 	if result != Enums.Status.NONE:
 		add(result, power)
 	else:

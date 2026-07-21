@@ -27,6 +27,9 @@ const DropPickup := preload("res://src/props/drop_pickup.tscn")
 ## 픽업과 같은 이유로 preload 안전(상자는 forest/actors를 안 문다).
 const Chest := preload("res://src/props/chest.tscn")
 
+## 🔴 적 투사체 (세56 gale 연사) — 픽업·상자와 같은 이유로 preload 안전(탄은 field/actors를 안 문다).
+const GaleProj := preload("res://src/field/enemy_projectile.tscn")
+
 ## 🔴 상태이상·원소 반응의 **규칙 단일 소스** (세션49). 규칙을 여기 베끼지 마라 — 복사하면
 ## "진흙인데 안 묶인다" 식으로 조용히 갈라진다(ring_power와 같은 이유).
 const SR := preload("res://src/core/status_rules.gd")
@@ -74,8 +77,25 @@ var _snake_timer: float = 0.0     ## 현재 상태 잔여 시간
 var _snake_rush_cd: float = 0.0   ## 러시 재사용 대기(위브 중에만 감소)
 var _weave_t: float = 0.0         ## 위브 사인파의 시간 누적(boss 틱 delta)
 var _snake_dir: Vector2 = Vector2.RIGHT  ## 러시 락 방향 + 머리 바라보는 방향
-## hp 절반 페이즈 전이 — 1회 플래그. 위브 진폭·러시 빈도·이동속도 배율이 오른다.
+## hp 절반 페이즈 전이 — 1회 플래그. 🔴 **보스 공용**이다(세56) — 뱀은 위브 진폭·러시 빈도,
+## gale은 돌풍·연사 빈도·이동속도 배율이 오른다. 전이 판정 패턴도 두 분기가 같다.
 var _phase2: bool = false
+
+## 🔴 gale 보스(boss_gale) 전용 상태 (세56). charge/snake 변수를 재사용하지 않는다 — 두 AI가
+## 섞이면 조용히 깨진다(뱀과 같은 원칙). 거리 유지(DRIFT) → 붙으면 돌풍 윈드업 → 밀쳐내기.
+enum GaleState { DRIFT, GUST_WINDUP }
+var _gale_state: int = GaleState.DRIFT
+var _gale_timer: float = 0.0        ## 윈드업 잔여 시간
+var _gale_gust_cd: float = 0.0      ## 다음 돌풍까지 (DRIFT에서만 감소)
+var _gale_volley_cd: float = 0.0    ## 다음 연사까지 (DRIFT에서만 감소)
+var _gale_volley_left: int = 0      ## 이번 연사의 남은 발수 (DRIFT 위 오버레이 카운터 — 이동은 계속)
+var _gale_shot_timer: float = 0.0   ## 다음 발까지
+var _gale_ring: Line2D = null       ## 돌풍 반경 텔레그래프 링 (지연 생성 — gale이 아니면 안 만든다)
+
+## 돌풍 텔레그래프 링 **연출값** (밸런스 아님 — vfx.gd 링 상수 선례). 반경은 gust_radius(.tres)가 쥔다.
+const GUST_RING_SEGMENTS := 24      ## 링 원 분할 수 (vfx._spawn_ring과 같은 결)
+const GUST_RING_WIDTH := 2.5        ## 링 선 굵기(px)
+const GUST_RING_COLOR := Color(0.75, 0.95, 1.0, 0.85)  ## 옅은 바람색
 
 ## 🔴 상태이상 보유고 (세션49 → 세션50에 `src/core/status_holder.gd`로 **추출**).
 ## 보유·틱·반응 해결은 전부 holder가 한다 — 여기 남은 건 **몸의 일**(피해·확산·색)뿐이다.
@@ -97,6 +117,9 @@ func _ready() -> void:
 	_ai = str(_def.params.get("ai", "chase")) if _def != null else "chase"
 	# 분산 주기를 처음 채워 둔다 — 곧장 분산으로 튀지 않게(첫 토글은 한 주기 뒤).
 	_disperse_timer = _param("disperse_period", 2.5)
+	# gale 쿨도 한 주기 채워 시작한다 — 조우 즉시 돌풍/연사가 터지지 않게 (disperse_timer 선례).
+	_gale_gust_cd = _param("gust_period", 3.0)
+	_gale_volley_cd = _param("volley_period", 4.5)
 	_apply_look()
 
 
@@ -170,6 +193,8 @@ func _physics_process(delta: float) -> void:
 			_ai_stationary(player, dist)
 		"boss_snake":
 			_ai_boss_snake(delta, player, to_player, dist)
+		"boss_gale":
+			_ai_boss_gale(delta, player, to_player, dist)
 		_:
 			_ai_chase(player, to_player, dist)
 
@@ -324,6 +349,122 @@ func _ai_boss_snake(delta: float, player: Node2D, to_player: Vector2, dist: floa
 	_face(_snake_dir)
 
 
+## "boss_gale" (바람 보스, 세56) — hover형 거리 유지 + 근접 징벌(돌풍) + 원거리 압박(연사).
+##  • **DRIFT**: hover_min~hover_max 거리 유지(가까우면 물러나고 멀면 다가오고 사이면 스트레이프).
+##    `_ai_hover` 함수를 재사용하지 않고 분기 안에 다시 쓴다 — 그 함수엔 disperse(안개)가 얽혀 있다.
+##  • **돌풍(gust)**: 쿨 소진 && dist ≤ gust_radius → 윈드업(붉은 텔레그래프 + 반경 링) →
+##    끝나는 순간 반경 안이고 구르는 중이 아니면 피해 + 밀쳐내기(`player.apply_push`).
+##    플레이어가 안 붙으면 안 쓴다 — 낭비 텔레그래프 없음.
+##  • **연사(volley)**: DRIFT에서만 쿨 감소(윈드업과 안 겹치게). 발동하면 **이동을 유지한 채**
+##    volley_interval마다 1발 — 매 발 발사 순간의 플레이어 위치로 **재조준**(움직이며 피하는 재미).
+##  • **hp 절반 페이즈**: `_phase2` 공용 재사용 — 돌풍·연사 쿨(rate_mult)·이동속도(speed_mult)가 오른다.
+##    배율은 **쿨 리셋 시점에** 곱한다(진행 중 타이머를 건드리면 전이 순간 이중 적용).
+## 🔴 수치는 전부 `_param`으로 .tres(EnemyDef)에서 읽는다 — balance.tres 아님(적 수치는 EnemyDef).
+func _ai_boss_gale(delta: float, player: Node2D, to_player: Vector2, dist: float) -> void:
+	# 페이즈 전이 — hp가 임계 밑으로 처음 떨어지는 순간 1회 (boss_snake 첫 줄과 동일 패턴).
+	if not _phase2 and _def != null and _hp <= _def.hp * _param("phase2_hp_frac", 0.5):
+		_phase2 = true
+	var rate_mult := _param("phase2_rate_mult", 0.65) if _phase2 else 1.0
+	var speed_mult := _param("phase2_speed_mult", 1.3) if _phase2 else 1.0
+
+	match _gale_state:
+		GaleState.DRIFT:
+			# 거리 유지 (hover형 재작성 — 로직 ~8줄이라 분기 내가 깨끗하다).
+			var spd := _param("move_speed", 55.0) * speed_mult
+			var dir := to_player / dist if dist > 0.01 else Vector2.ZERO
+			if dist < _param("hover_min", 110.0):
+				velocity = -dir * spd            # 너무 가깝다 → 물러난다
+			elif dist > _param("hover_max", 170.0):
+				velocity = dir * spd             # 너무 멀다 → 다가온다
+			else:
+				velocity = Vector2(-dir.y, dir.x) * spd * 0.5  # 사이 → 천천히 옆으로 돈다
+			_contact(player, dist)               # attack_range 30 근접 징벌은 그대로 산다
+			_gale_gust_cd = maxf(0.0, _gale_gust_cd - delta)
+			_gale_volley_cd = maxf(0.0, _gale_volley_cd - delta)
+			# 돌풍 — 쿨 소진 && 플레이어가 반경 안일 때만 (안 붙으면 낭비 텔레그래프 없음).
+			if _gale_gust_cd <= 0.0 and dist <= _param("gust_radius", 90.0) and dist > 1.0:
+				_gale_state = GaleState.GUST_WINDUP
+				_gale_timer = _param("gust_windup", 0.8)
+				_set_telegraph(true)             # 기존 붉은 달아오름 재사용 (charge·snake와 같은 규약)
+				_show_gust_ring(true)
+			# 연사 — 진행 중이 아닐 때만 새로 발동. 쿨 리셋 시점에 페이즈 배율을 곱는다.
+			elif _gale_volley_cd <= 0.0 and _gale_volley_left <= 0 and dist <= _param("aggro_range", 260.0):
+				_gale_volley_left = int(_param("volley_count", 3.0))
+				_gale_shot_timer = 0.0           # 첫 발은 다음 틱 즉시
+				_gale_volley_cd = _param("volley_period", 4.5) * rate_mult
+		GaleState.GUST_WINDUP:
+			velocity = Vector2.ZERO
+			_gale_timer -= delta
+			if _gale_timer <= 0.0:
+				_gale_state = GaleState.DRIFT
+				_set_telegraph(false)
+				_show_gust_ring(false)
+				_resolve_gust(player, dist)
+				_gale_gust_cd = _param("gust_period", 3.0) * rate_mult
+
+	# 연사 발사 — DRIFT 위 오버레이 카운터(전용 상태 아님 — 이동하며 쏘는 바람 궁수 느낌).
+	# 윈드업 중엔 멈춘다(돌풍과 안 겹치게) — DRIFT로 돌아오면 남은 발수를 이어 쏜다.
+	if _gale_volley_left > 0 and _gale_state == GaleState.DRIFT:
+		_gale_shot_timer -= delta
+		if _gale_shot_timer <= 0.0:
+			_gale_shot_timer = _param("volley_interval", 0.25)
+			_gale_volley_left -= 1
+			_fire_gale_shot(player)
+
+
+## 돌풍 판정 — 윈드업이 끝나는 순간 1회. 반경 밖이면 헛방(윈드업을 보고 걸어나가면 피한다),
+## 구르는 중이면 피해·밀림 다 흘린다(구르기 = 무적 계약 — `_contact`와 동일 규약).
+func _resolve_gust(player: Node2D, dist: float) -> void:
+	if player == null or dist > _param("gust_radius", 90.0):
+		return
+	var dodging: bool = player.has_method(&"is_rolling") and bool(player.call(&"is_rolling"))
+	if dodging:
+		return
+	GameState.damage_player(_param("gust_damage", 8.0))
+	# 밀쳐내기 — 방향 = 나 → 플레이어. has_method 가드: 테스트 더미(Node2D)도 견딘다.
+	if player.has_method(&"apply_push"):
+		var away := player.global_position - global_position
+		if away.length() > 0.1:
+			player.call(&"apply_push", away.normalized(), _param("gust_push_dist", 70.0))
+
+
+## 연사 1발 — **발사 순간의 플레이어 위치**로 재조준(락 조준은 3발이 같은 자리에 몰려 밋밋).
+## 탄은 현재 씬에 붙는다(death_puff·drop_pickup 규약 — 적이 죽어도 탄은 남는다: 유언 탄).
+func _fire_gale_shot(player: Node2D) -> void:
+	var scene := get_tree().current_scene
+	if scene == null or player == null:
+		return
+	var dir := player.global_position - global_position
+	if dir.length() < 0.1:
+		return
+	var proj := GaleProj.instantiate()
+	scene.add_child(proj)
+	proj.global_position = global_position
+	proj.setup(dir.normalized(), _param("proj_damage", 6.0),
+		_param("proj_speed", 170.0), _param("proj_lifetime", 2.8))
+
+
+## 돌풍 반경 텔레그래프 링 — 윈드업 동안만 보인다. **절차적 VFX라 도형이 맞다**(takbon-rules §0
+## 예외 — 돌풍은 형태 없는 공기 흐름, death_puff·vfx.gd 링과 같은 "그림"이다). 지연 생성이라
+## gale이 아닌 적은 노드 자체가 없다. 🔴 z_index 양수 명시 — 세54에 음수 z 마디가 Ground(z0)
+## 뒤로 숨은 함정의 재발 자리다.
+func _show_gust_ring(on: bool) -> void:
+	if on and _gale_ring == null:
+		_gale_ring = Line2D.new()
+		_gale_ring.width = GUST_RING_WIDTH
+		_gale_ring.default_color = GUST_RING_COLOR
+		var radius := _param("gust_radius", 90.0)
+		var pts := PackedVector2Array()
+		for i in GUST_RING_SEGMENTS:
+			pts.append(Vector2.RIGHT.rotated(TAU * float(i) / float(GUST_RING_SEGMENTS)) * radius)
+		pts.append(pts[0])  # 닫는다 (vfx._spawn_ring과 같은 결)
+		_gale_ring.points = pts
+		_gale_ring.z_index = 40
+		add_child(_gale_ring)
+	if _gale_ring != null:
+		_gale_ring.visible = on
+
+
 ## 🔴 머리만 회전 — `_visual.rotation`(설계 A-6). boss_snake 분기에서만 부른다(다른 AI 무영향).
 ## 스프라이트/플레이스홀더는 진행 방향 +x 기준이라 각도를 그대로 준다.
 func _face(dir: Vector2) -> void:
@@ -370,8 +511,8 @@ func _wire_status() -> void:
 		_hp -= amount
 		if _hp <= 0.0:
 			_die()
-	_status.on_burst = func(radius: float, amount: float, include_self: bool, result_status: int) -> void:
-		_burst_damage(radius, amount, include_self, result_status)
+	_status.on_burst = func(radius: float, amount: float, include_self: bool, result_status: int, rune: int) -> void:
+		_burst_damage(radius, amount, include_self, result_status, rune)
 	_status.on_spread = func(statuses: Dictionary) -> void:
 		_spread_statuses(statuses)
 	_status.on_changed = _refresh_tint
@@ -388,14 +529,15 @@ func _wire_status() -> void:
 ## 반경 안의 다른 적들(그룹 "enemies")에게 즉발 피해. `include_self`면 자신도 맞는다(증기).
 ## 🔴 `take_hit`이 아니라 `take_reaction_damage`로 때린다 — take_hit을 부르면 상태 판정이 다시
 ## 돌아 **연쇄가 연쇄를 낳는다**(무한 재귀). 반응 피해는 피해일 뿐 새 상태를 안 만든다.
-func _burst_damage(radius: float, amount: float, include_self: bool, result_status: int) -> void:
+## rune = 이 버스트의 정체 룬(세56) — 자신·연쇄 대상 모두 take_reaction_damage에 그대로 넘긴다.
+func _burst_damage(radius: float, amount: float, include_self: bool, result_status: int, rune: int) -> void:
 	# 🔴 VFX 방송 (세52) — 터진 자리·**게임 반경**·결과 상태(증기=NONE·감전=SHOCK). 링이 반경을
 	# 폭로하므로 amount 가드 **앞에** 둔다(반응은 일어났으니 링은 늘 뜬다). 피해 계산은 안 바뀐다.
 	EventBus.reaction_burst.emit(global_position, radius, result_status)
 	if amount <= 0.0:
 		return
 	if include_self:
-		take_reaction_damage(amount)
+		take_reaction_damage(amount, rune)
 	for node in get_tree().get_nodes_in_group("enemies"):
 		if node == self or not (node is Node2D):
 			continue
@@ -405,7 +547,7 @@ func _burst_damage(radius: float, amount: float, include_self: bool, result_stat
 			# 🔴 감전(SHOCK)만 대상마다 번개 아크 — 증기(NONE)는 링만(설계 §4). 피해 전에 쏜다.
 			if result_status == Enums.Status.SHOCK:
 				EventBus.reaction_chain.emit(global_position, (node as Node2D).global_position, result_status)
-			node.take_reaction_damage(amount)
+			node.take_reaction_damage(amount, rune)
 
 
 ## 🔴 바람 확산 — **내게 이미 붙은 상태를** 반경 안의 적들에게 옮겨 붙인다.
@@ -448,11 +590,13 @@ func status_power_of(status: int) -> float:
 
 ## 🔴 반응 피해 — 조용히 hp만 깎는 DoT와 달리 **한 번뿐인 사건**이라 `enemy_hit`을 쏴 손맛을 준다
 ## (연쇄가 눈에 보여야 조합할 이유가 생긴다). 상태를 안 만들어 재귀가 없다.
-func take_reaction_damage(amount: float) -> void:
+## 🔴 rune(세56) = 이 반응의 정체 룬(감전=BOLT·증기=WATER) — enemy_hit에 그대로 실어야 소리가
+## 반응과 맞는다(그전엔 FIRE 하드코딩이라 감전 연쇄가 불 소리를 냈다). 기본 인자 = 하위호환.
+func take_reaction_damage(amount: float, rune: int = Enums.RuneType.FIRE) -> void:
 	if _dead or amount <= 0.0:
 		return
 	_hp -= amount
-	EventBus.enemy_hit.emit(self, amount, Enums.RuneType.FIRE)
+	EventBus.enemy_hit.emit(self, amount, rune)
 	_pop()
 	if _hp <= 0.0:
 		_die()
@@ -513,8 +657,8 @@ func hp() -> float:
 	return _hp
 
 
-## 🔴 공개 페이즈 리더 — boss_snake 페이즈 전이를 헤드리스가 공개 API로 확인한다(`hp()` 선례).
-## 1 = 기본, 2 = hp 절반 이후. 뱀이 아닌 적은 항상 1(플래그가 안 세워진다).
+## 🔴 공개 페이즈 리더 — **보스 공용**(세56: boss_snake·boss_gale) 페이즈 전이를 헤드리스가
+## 공개 API로 확인한다(`hp()` 선례). 1 = 기본, 2 = hp 절반 이후. 보스가 아닌 적은 항상 1.
 func phase() -> int:
 	return 2 if _phase2 else 1
 

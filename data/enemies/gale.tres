@@ -22,6 +22,7 @@ counter_rune = 0
 params = {
 "aggro_range": 260.0,
 "sprite": "res://assets/sprites/enemies/gale.png",
+"ai": "boss_gale",
 "attack_cooldown": 1.5,
 "attack_range": 30.0,
 "contact_damage": 10.0,
@@ -30,6 +31,8 @@ params = {
 "gust_push_dist": 70.0,
 "gust_radius": 90.0,
 "gust_windup": 0.8,
+"hover_max": 170.0,
+"hover_min": 110.0,
 "move_speed": 55.0,
 "phase2_rate_mult": 0.65,
 "phase2_speed_mult": 1.3,

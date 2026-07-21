@@ -1,10 +1,58 @@
 # STATUS — 현재 진행 상태
 
-> 최종 갱신: 2026-07-21 (세션 54 — **뱀 보스(세그먼트 몸통) + 도형 플레이스홀더 금지 규칙**)
+> 최종 갱신: 2026-07-22 (세션 56 — **gale 보스 실체화 + 반응 룬 청산**)
 > · **세션 종료마다 갱신**
 >
 > 🔴 **아래 세션 20 이하는 대부분 삭제된 코드를 설명한다** — 기록이지 현재 상태가 아니다.
 > 현재 정본 = 최상단 「세션 31」~「세션 23」 + `CLAUDE.md` + memory `takbon-mana-injection-rule`.
+
+---
+
+## 세션 56 (2026-07-22) — **gale 보스 실체화 + 반응 룬 하드코딩 청산**
+
+> "이제 뭐 하지 → 스테이지 단위로?"에서 출발 — **스테이지 1(숲)이 완결이 아니라는 진단**으로
+> 방향 확정(사용자 AskUserQuestion): gale의 잠자던 params 12개를 깨워 두 번째 보스를 실체화.
+> 세48 파이프라인 **첫 완주**: takbon-architect 설계(scratch 파일) → AskUserQuestion 합의 →
+> 리드 core → takbon-dev 구현 → takbon-reviewer → 리드 검증(뮤테이션 4·실게임 MCP).
+
+### 한 일
+- 🔴 **boss_gale AI**(`forest_enemy.gd` `"ai": "boss_gale"` 분기 — params 12개 전부 소비):
+  hover형 거리 유지(신규 `hover_min` 110/`hover_max` 170 — gust_radius 90 밖에 서서 "돌풍 =
+  붙은 플레이어 징벌"이 성립) · **돌풍**(쿨 소진+반경 안 → 0.8s 윈드업(붉은 달아오름 + Line2D
+  반경 링 z40) → 피해 + `apply_push` 밀치기, 구르면 다 흘림) · **볼리**(이동 유지한 채
+  `volley_interval`마다 **발사 순간 재조준** 1발) · 페이즈2(`_phase2`·`phase()` **보스 공용**
+  재사용, 배율은 쿨 리셋 시점에만). `gale.tres` 변경 = `"ai"`+`hover_min/max` 세 줄.
+- 🔴 **`src/field/enemy_projectile.gd/.tscn` 신설** — 이 게임 **첫 적 투사체**(플레이어 탄은 발사
+  계약에 물려 재사용 부적합). layer 0 / **mask 3**(world+player) · `is_rolling()` 관통 · free
+  3경로(히트·벽·수명) · 그룹 `"enemy_projectiles"`. 겉모습 = projectiles.png **wind 혜성 재사용
+  = 신규 아트 0장**(도형 금지 충족).
+- 🔴 **`player.apply_push(dir, dist)` 신설** — **첫 플레이어 밀림 채널**(그전엔 플레이어를 밀
+  방법이 없었다 — velocity를 매 프레임 입력으로 덮어써서). 감쇠 임펄스 `sqrt(2·DECAY·dist)`라
+  **밀리는 중에도 조작 유지**(경직 아님). 🔴 구르기 시작 시 `_push = 0`으로 흘림(리뷰가 잡음 —
+  안 지우면 잔량이 구르기 끝에 도로 온다).
+- 🔴 **반응 룬 청산**(세52부터 급했던 빚): `status_rules.gd` REACTIONS burst 줄에 `"rune"` 키
+  (감전=BOLT·증기=**WATER**, 폴백=들어온 룬 — FIRE 고정보다 늘 진실에 가깝다) →
+  `status_holder` on_burst **4→5인자** → 두 몸(forest_enemy·dummy_target)
+  `take_reaction_damage(amount, rune := FIRE)` 하위호환 확장. "반응 추가 = 줄 하나" 유지 ·
+  EventBus 신규 0. ⚠ **BOLT 피격음은 당분간 기본음**(hit_bolt.wav가 없어 match 폴백 — match만
+  추가하면 침묵=개악. "새 소리 = wav 한 장" 후속).
+
+### 검증
+전 스위트 **22개 그린**(기존 21 + 신설 `test_gale_boss_auto`) · SCRIPT ERROR 0 · **뮤테이션 4/4**
+(① 페이즈 조건 반전 → [2] 1실패 ② rune 도로 FIRE — **forest_enemy** → [6] 3실패 ③ 볼리 1발
+고정 → [4] 1실패 ④ rune 도로 FIRE — **dummy_target** → 처음엔 **전 스위트 그린 = 검출력 0**
+(리뷰 지적 — 두 몸은 따로 갈라진다) → `test_status_auto` [11]ⓑ에 그물 추가 후 1실패 확인).
+🔴 **실게임 MCP**(헤드리스 불가분): 숲 frozen 실행 + 플레이어 핀 봇 → ① 돌풍 텔레그래프 링
+렌더(타일 위, z 문제 없음) ② wind 혜성 탄 렌더(digest 좌표와 스샷 대조 일치, onscreen=true)
+③ 돌풍·볼리가 예측 시점(쿨 시딩 3.0s/5.3s)에 실발동 ④ 접촉·돌풍 피해로 HP 실감소.
+
+### 다음 / 넘긴 것
+- **손맛 = 사용자 F5**: hover 110~170 거리감 · `PUSH_DECAY` 900 밀림감("훅" vs "미끄러짐") ·
+  gust_windup 0.8이 피할 만한지 · 볼리 페이스 · 감전 연쇄가 기본음으로 나는지(귀).
+- ⚠ **gale은 FIRE 약점 1.6배가 이미 살아 있다**(`has_counter` 스키마 기본 true + `counter_rune=0`,
+  dev가 발견). "바람 보스 = 불 약점"이 그럴듯해 유지 — 의도인지 사용자 확인 필요.
+- BOLT·EARTH·GRASS 전용 피격음(wav 한 장 + match 세 줄) · 세55 이월(상자 값어치 겉보기 ·
+  코브라 형태·마디 히트박스) · 손맛 확인 끝나면 `_seed_starting_unlocks` 5줄 삭제(세53).
 
 ---
 

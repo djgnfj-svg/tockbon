@@ -26,6 +26,16 @@ var _roll_time := 0.0          ## 남은 구르기 시간(>0이면 구르는 중
 var _roll_cd := 0.0            ## 다음 구르기까지 쿨다운
 var _roll_dir := Vector2.DOWN  ## 이번 구르기의 대시 방향
 
+## 🔴 외부 밀림 채널 (세56 — gale 돌풍이 첫 호출자). 적 `_knockback`과 같은 감쇠 additive 모델이라
+## **밀리는 중에도 조작이 살아 있다**(경직 아님). 호출자가 없으면 no-op — 공용 배우 최소 침습.
+## PUSH_DECAY는 연출값(손맛) const다 (forest_enemy KNOCKBACK_DECAY 선례 — 밸런스 아님).
+const PUSH_DECAY := 900.0      ## 밀림 감쇠(속도/s)
+var _push := Vector2.ZERO      ## 남은 밀림 속도 — 걷기 velocity 위에 얹힌다
+
+## 밀쳐낸다 — 초기 속도 = sqrt(2·감쇠·거리)라 감쇠 적분 이동거리 ≈ dist(밀 거리는 호출자 .tres가 쥔다).
+func apply_push(dir: Vector2, dist: float) -> void:
+	_push = dir.normalized() * sqrt(2.0 * PUSH_DECAY * maxf(dist, 0.0))
+
 func _ready() -> void:
 	add_to_group("player")
 
@@ -78,9 +88,12 @@ func _physics_process(delta: float) -> void:
 		_roll_dir = (dir if dir != Vector2.ZERO else _face).normalized()
 		_roll_time = GameState.balance.dash_duration_sec
 		_roll_cd = GameState.roll_cooldown()   # 🔴 부적(CHARM) 배수 반영 (세션42)
+		_push = Vector2.ZERO   # 구르기로 밀림을 **흘린다** — 안 지우면 잔량이 구르기 끝에 도로 온다(세56 리뷰)
 		return
 
 	# 🔴 속도 = GameState.move_speed()(balance × 모자 배수) — balance 직접 참조 금지 (세션42).
-	velocity = dir * GameState.move_speed()
+	# 밀림(_push)은 걷기 위에 얹는다(additive) — 구르기 중엔 위 early-return이라 밀림 무시(흘린 게 맞다).
+	velocity = dir * GameState.move_speed() + _push
+	_push = _push.move_toward(Vector2.ZERO, PUSH_DECAY * delta)
 	_set_walking(dir != Vector2.ZERO)
 	move_and_slide()
