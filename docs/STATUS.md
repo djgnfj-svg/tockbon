@@ -8,6 +8,47 @@
 
 ---
 
+## 세션 55 (2026-07-21) — **상자 + 능동 루팅** (세54 세션 B 구현)
+
+> 세54에 설계만 잡고 보류했던 「보스 → 상자 → [E]로 눌러 담기 → 등급별 루팅 타이머」를 구현.
+> 설계가 이미 architect 승인·사용자 합의라(memory `takbon-chest-loot-idea` §세54 확정 설계) 구현 단계로 직행.
+> 파이프라인: 리드(스키마·리팩터·배선·검증) ∥ takbon-art(상자 스프라이트) ∥ takbon-ui(loot_panel).
+
+### 한 일
+- 🔴 **core 스키마**: `EnemyDef.drops_chest: bool` 신설(리드). true = 낱개 픽업 대신 **상자 하나**.
+  `is_elite`·`params.ai`에 커플하지 않고 **드롭 형태만** 명시로 가른다.
+- 🔴 **`forest_enemy._die` 리팩터**: 드롭 굴림을 `_roll_drops()`로 추출(dict 키 "n"→"count"로 통일 —
+  drop_pickup·loot_panel 계약과 일치) + `_spawn_loose`(잡몹, 바이트 동일)/`_spawn_chest`(보스) 분기.
+- 🔴 **`src/props/chest.gd`+`chest.tscn`**: interact_zone 합성([E], zone_id=&"chest"·layer64/mask2).
+  **자기완결적** — forest.gd가 배선 안 함(동적 스폰이라). 상자가 자기 zone을 잇고 loot_panel을
+  **온디맨드 인스턴스**(map_panel 선례). 내용물 = `EnemyDef.drops` 재사용, loot_panel에 **참조로**
+  넘겨 다 비면 상자가 스스로 free. 스프라이트 = 96×48 스트립을 region 토글(닫힘 0 / 열림 48).
+- 🔴 **`src/hud/loot_panel.gd`+`.tscn`**(takbon-ui, CanvasLayer layer5): 모달 규약(STOP·ui_modal_open).
+  카드 클릭 → **등급별 진행 바 자동 채움**(`[0.2,0.45,0.8,1.2,1.6]`초, 홀드 아님) → `add_to_bag` +
+  `item_collected`(세51 토스트 재사용) + contents remove_at + 비면 자동 닫힘. **EventBus 신규 시그널 0**.
+  `loot_card(i)`·`advance(delta)` 공개 = 헤드리스가 클릭·시간을 못 잡아 이 둘로 로직만 검증.
+- 🔴 **아트 = takbon-art 실제 도트**(`chest.png` 닫힘/열림 2프레임, Apollo·숲 프롭 톤). 🔴🔴 세54
+  도형 금지 규칙의 첫 준수 사례 — 팔각형 대신 진짜 보물 상자. **몸통 y27-41 고정이라 region만 바꾸면
+  뚜껑만 열린다**(상자 안 튐).
+- 🔴 **배선**: `snake_boss.tres drops_chest = true` — 보스(forest.tscn 배치)를 잡으면 상자가 실제로 나온다.
+
+### 검증
+전 스위트 **20개 그린**(기존 19 + 신설 `test_chest_auto`) · SCRIPT ERROR 0 · **뮤테이션 3/3 검출력**
+(분기 반전 → [2][3] 4실패 · loot remove_at 제거 → 참조·자동닫힘·상자소멸 6실패 · 상자 queue_free 제거 → [5] 1실패).
+🔴 **실게임 MCP 확인**(헤드리스 불가분): ① 상자가 **도형 아닌 진짜 스프라이트**로 렌더(풀 위 가독) ②
+loot_panel 카드 3장+등급 색 띠 렌더 ③ **실제 좌클릭이 카드에 닿아**(win 960,290 → `_loot_active=0`,
+세25 함정 회피) 루팅 시작 → 실시간 완료 → 가방 적재 → 패널 자동닫힘 → 상자 자기소멸 전 루프.
+
+### 🔴 다음 (사용자 몫 · 손맛 튜닝)
+- **손맛**: 등급별 루팅 시간(loot_panel `LOOT_TIMES`)·진행 바 연출·상자 개봉 연출을 F5로 조인다.
+- **미해결 균형**(memory `takbon-chest-loot-idea`): ① **열기 전 값어치 겉보기** — 지금은 상자 겉모습이
+  등급을 안 알려줘 "다 열어봐야 안다"(노동 위험). 상자 등급 힌트(테두리 빛)를 겉에 실을지. ② 잡몹은
+  아직 낱개 픽업(상자 아님) — 여러 상자 노동 우려는 보스만 상자라 지금은 없음. ③ 익스트랙션 긴장 vs
+  파밍 리듬 조율. **미개봉 상자 = 씬 free로 자연 소멸**(나가면 손실 = 코드 0 기본값).
+- **코브라 형태**(세54 이월) · **마디 히트박스**(세54 이월).
+
+---
+
 ## 세션 54 (2026-07-21) — **대형 뱀 보스(세그먼트 몸통) + 도형 플레이스홀더 금지 하네스 규칙**
 
 > 사용자: *"보스 하나 만들어줘 뱀으로 해서 엄청 클꺼임."* → 세그먼트 물결 추종 뱀 보스(세션 A).

@@ -9,14 +9,14 @@
 > 지금 게임 = `src/base`(베이스캠프) + 고리 조립 책 + 숲 원정 + 온보딩 레일.
 > 🔴 **기록 규칙: 직전 세션만 상세, 그 전은 아래 「한 줄 지도」로 내려보낸다** — 이 절이 길어지면 정리 신호.
 
-🔴🔴 **직전 세션 = 54 「대형 뱀 보스(세그먼트 몸통) + 도형 플레이스홀더 금지 규칙」** (정본 STATUS「54」 + memory `takbon-no-shape-placeholders`):
-사용자: *"보스 하나 만들어줘 뱀으로 해서 엄청 클꺼임."* → 세그먼트 물결 추종 뱀 보스(세션 A). 상자/능동 루팅(세션 B)은 설계만 잡고 보류. 파이프라인 완주(architect→dev→art→리드 검증·커밋).
-🔴 **구조 = 하이브리드**: 머리 = `forest_enemy.gd` 재사용(적 계약·상태이상·드롭·죽음 공짜) + 몸통 = 신설 `src/field/snake_body.gd`(독립 컴포넌트 — `get_parent().global_position`만 샘플 → forest_enemy는 SnakeBody를 **모른다**). 마디 = `top_level` 월드좌표. 추종 = 위치 히스토리 버퍼 + **머리 위브**(측면 사인파)로 S자 물결. `boss_snake` AI(위브→텔레그래프 러시→hp절반 페이즈), 기존 5갈래 무변경. `data/enemies/snake_boss.tres`(hp600·풀 약점·loose). v1 = **머리만 맞는 몸**(마디 히트박스는 다음).
-🔴 **아트 = takbon-art 실제 도트**(snake_head 4프레임·body·tail, Apollo·+x). 18마디·완만 taper(0.65)로 전신이 꽉 찬 뱀. 머리 = `params.sprite`+`_setup_frames`, 몸통·꼬리 = Sprite2D.
-🔴🔴 **실게임에서만 드러난 버그 3 (헤드리스 그린이었다 — 「보인다」를 못 잡는다)**: ① 마디 z가 음수라 숲 `Ground`(ColorRect z0) 뒤로 숨어 **몸통 안 보임** → 양수 z(`COUNT-i`)·머리 z30. ② 머리를 `Visual.scale`로 키워 공용 `_pop()`이 1.0으로 되돌려 **맞으면 작아짐** → **루트 scale**로(마디는 top_level 무영향, _pop은 Visual만 만짐). ③ 트레일 추종이라 정지 시 머리에 뭉침 → **스폰 때 초기 자취를 뒤로 미리 깔아** 정지에도 전신.
-🔴🔴 **하네스 = 「도형 플레이스홀더 금지」 규칙 박음** (사용자: *"뱀이 그냥 도형이네, 도형으로 대체하지 말라고 했는데"*): 진단 = **하네스 구멍**(architect·dev가 "아트 병렬이니 도형으로 먼저"=drop_pickup 마름모 선례를 관행처럼 씀, 금지 규칙 부재). → CLAUDE.md 살아있는 함정 + takbon-rules §0 + architect·dev + 이력표 + memory `takbon-no-shape-placeholders`. **생명체·프롭 = takbon-art 도트 필수**(VFX·가이드선 예외).
-✅ 검증: 전 스위트 18 그린 · 신설 `test_snake_boss_auto`(Db로드·약점배율·페이즈전이·세그먼트 추종·위브 전진) + **뮤테이션 3/3 검출력**(페이즈·위브·추종). 🔴 렌더/피격/물결은 헤드리스 불가 = 사용자 F5 확인(세 버그 다 그렇게 잡았다).
-🔴 **다음 = 세션 B 상자+능동 루팅**(memory `takbon-chest-loot-idea` + 세54 설계): 보스 상자 드롭→[E]→눌러담기→등급별 루팅 타이머·방해 없음. `drops_chest` 스키마(리드)·chest.tscn(interact_zone 합성)·loot_panel(tab_panel 모달). + **코브라 형태**(사용자 희망: 목 후드·세운 자세 — 머리 스프라이트 개선) + 손맛 튜닝(사용자 몫).
+🔴🔴 **직전 세션 = 55 「상자 + 능동 루팅」** (세54 세션 B 구현 · 정본 STATUS「55」 + memory `takbon-chest-loot`):
+설계가 이미 architect 승인·사용자 합의라 구현 직행. 파이프라인: 리드(스키마·리팩터·배선·검증) ∥ takbon-art(상자 스프라이트) ∥ takbon-ui(loot_panel).
+🔴 **스키마 = `EnemyDef.drops_chest: bool`**(리드): true = 낱개 픽업 대신 **상자 하나**. `is_elite`·`params.ai`에 커플 안 하고 **드롭 형태만** 명시로 가른다. `forest_enemy._die`가 굴림을 `_roll_drops()`로 추출(dict 키 "n"→**"count"** 통일 = drop_pickup·loot_panel 계약과 일치) + `_spawn_loose`(잡몹, 바이트 동일)/`_spawn_chest`(보스) 분기.
+🔴 **상자 = `src/props/chest.gd`+`.tscn`**(interact_zone 합성, zone_id=&"chest"·layer64/mask2): **자기완결적** — forest.gd가 배선 안 함(동적 스폰). 상자가 자기 zone을 잇고 loot_panel을 **온디맨드 인스턴스**(map_panel 선례). 내용물 = `EnemyDef.drops` 재사용, loot_panel에 **참조로** 넘겨 다 비면 상자가 스스로 free. 스프라이트 = 96×48 스트립 region 토글(닫힘 0 / 열림 48, 몸통 y27-41 고정이라 뚜껑만 열림).
+🔴 **loot_panel = `src/hud/loot_panel`**(takbon-ui, CanvasLayer5·모달 STOP·ui_modal_open): 카드 클릭 → **등급별 진행 바 자동 채움**(`LOOT_TIMES=[0.2,0.45,0.8,1.2,1.6]`초, 홀드 아님) → `add_to_bag`+`item_collected`(세51 토스트 재사용)+remove_at+비면 자동 닫힘. **EventBus 신규 시그널 0 = 순수 오버레이**. `loot_card(i)`·`advance(delta)` 공개 = 헤드리스가 클릭·시간 못 잡아 이 둘로 로직만 검증.
+🔴 **아트 = takbon-art 실제 도트**(`chest.png` 닫힘/열림 2프레임, Apollo·숲 프롭 톤). 🔴🔴 **세54 도형 금지 규칙의 첫 준수** — 팔각형 대신 진짜 보물 상자. 배선 = `snake_boss.tres drops_chest=true`(보스=forest.tscn 배치 → 잡으면 상자 실재).
+✅ 검증: 전 스위트 **20 그린**(신설 `test_chest_auto`) + **뮤테이션 3/3**(분기 반전·loot remove_at·상자 queue_free). 🔴 **실게임 MCP** = 상자 스프라이트 렌더(도형 아님)·패널 카드+등급 띠 렌더·**실제 좌클릭이 카드에 닿아**(세25 함정 회피) 루팅→가방→자동닫힘→상자 소멸 전 루프.
+🔴 **다음 = 손맛**(사용자 F5: `LOOT_TIMES`·진행 바·개봉 연출) + **미해결 균형**(memory `takbon-chest-loot-idea`): ① **열기 전 값어치 겉보기**(지금 상자 겉모습이 등급 안 알려줘 "다 열어봐야 안다" 노동 위험 — 상자 등급 힌트 실을지) ② 익스트랙션 긴장 vs 파밍 리듬. **미개봉 상자 = 씬 free 자연 소멸**(나가면 손실 = 코드 0 기본값). + **코브라 형태**·**마디 히트박스**(세54 이월).
 
 <!-- 지지난 세션 52 상세 (직전만 상세 규칙 — 다음 세션에 아래를 한 줄 지도로 내려라):
 사용자 확정 = **스테이지1+2(감전연쇄·증기·바람 확산), 감전 = 아크 + 중심 스파크**. 파이프라인 완주(architect→dev→reviewer→리드 검증·커밋).
@@ -44,6 +44,7 @@
 - **반응 VFX 스테이지3~4 보류** — convert(진흙·산불·무성함) 플레어·DoT 불티는 틴트로 이미 어느 정도 보여 미룸(세52 설계 §5).
 
 **지난 세션 한 줄 지도** (상세는 STATUS/memory — 필요할 때만 캐라):
+- **54** 대형 뱀 보스(세그먼트 몸통) — 머리=`forest_enemy` 재사용·몸통=신설 `snake_body.gd`(부모 위치만 샘플=디커플·top_level 월드좌표) · 추종=히스토리 버퍼+머리 위브(S자) · `boss_snake` AI(위브→러시→hp절반 페이즈) · **도형 금지 규칙** 하네스에 박음(생명체·프롭=takbon-art 도트 필수) · 🔴헤드리스가 못 잡은 렌더 버그 3(마디 z·`_pop` scale·정지 뭉침, memory `takbon-snake-boss`)(`ac2e733`)
 - **51** 드롭 흡수 애니메이션 — 처치→균등각 흩뿌림→**자석 반경**(fly-at-kill 각하)→가속 흡수→도착 팝+획득 토스트 · 등급색 단일소스 `grade_colors.gd`(사본 2+토스트가 3번째 될 뻔) · 자석에 물리 안 씀(그룹조회+거리) (`0c1a5bb`)
 - **50** 세49 빚3 청산 — `status_power` 세기배율 통일·`status_holder` 추출·룬 획득경로 + 곁가지 둘(바람룬이 3인자 Color로 죽어 있던 것·연쇄 반경 102>90) (`7791631`)
 - **49** 룬 상태이상·원소 반응 — 룬 축이 실체를 얻었다. **원칙 「단독은 약한 바탕, 조합에서 폭발한다」** · 규칙 단일 소스 `src/core/status_rules.gd`(**반응 추가 = 줄 하나**) · 룬 3→6(바람=**확산자**·흙=**취약**, 원신 Swirl/Crystallize 선례) · **룬 전용 문양 각하** → 문양6×룬6=**36조합**(어휘가 아니라 곱셈이 는다)(`0472cc3`·`c887758`)
@@ -229,6 +230,7 @@
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_enemy_ai_auto.gd      # **몬스터 AI** (세션46): 방어(armor_reduction→enemy_hit dealt 경감) · 재생(regen_per_sec, 상한 _def.hp) · 분산 경감 · 🔴**돌진/부유 움직임 "느낌"은 헤드리스가 못 잰다**(실게임 runtime_state로 속도파형·거리유지 별도 확인)
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_status_auto.gd        # **룬 상태이상·원소 반응** (세션49): 화상 DoT·젖음 감속·🔴**반응**(젖음+흙=진흙·젖음+번개=감전연쇄·화상+물=꺼짐·화상+풀=산불)·🔴**바람=확산**(자기 상태 안 남기고 옆 적에게 옮김)·중첩=갱신(누적 아님)·취약 증폭 · 🔴**DoT는 enemy_hit을 안 쏜다**(쏘면 피해숫자·히트스톱 도배) · 🔴**색으로 보이는지는 헤드리스가 못 잡는다**(실게임 _visual.modulate로 별도 확인)
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_snake_boss_auto.gd    # **뱀 보스** (세션54 A): Db 로드(hp600·boss_snake) · take_hit→약점배율 · hp절반→페이즈2 전이(공개 `phase()`) · 세그먼트 몸통(마디 12==SEGMENT_COUNT·머리 이동→마디 추종) · 위브 추격 전진 · 🔴**세그먼트 물결·러시 채찍·머리 회전 "느낌"은 헤드리스가 못 잡는다**(실게임 확인) · 🔴**뮤테이션(페이즈·위브·추종) 검출력 확인됨**(세54)
+./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_chest_auto.gd         # **상자 + 능동 루팅** (세션55 = 세54 세션B): `EnemyDef.drops_chest` Db 로드(snake_boss=true·vine=false) · 🔴**`_die` 분기**(drops_chest 적→상자1·픽업0 / 잡몹→픽업·상자0) · loot_panel(`loot_card`→`advance` 완료 = add_to_bag+item_collected+**contents 참조 remove_at**+비면 자동 닫힘) · 🔴**상자 통합**([E] interacted→패널→다 루팅→상자 스스로 free) · 🔴**카드 클릭 도달·진행 바 렌더·상자 스프라이트는 헤드리스가 못 잡는다**(실게임 MCP push_input·스샷 — 세55에 전 루프 확인) · 🔴**뮤테이션 3/3 검출력**(분기·remove_at·상자소멸)
 ```
 
 🔴 **스위트를 돌리면 `user://save`가 날아간다** (세션 26 F3 이후). `SaveManager._ready`가 저장을

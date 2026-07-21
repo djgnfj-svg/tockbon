@@ -1,0 +1,34 @@
+[gd_scene format=3 uid="uid://xysks3awjsnn"]
+
+[ext_resource type="Script" path="res://src/props/chest.gd" id="1_chest"]
+[ext_resource type="Script" path="res://src/actors/interact_zone.gd" id="2_zone"]
+[ext_resource type="Texture2D" path="res://assets/sprites/field/chest.png" id="3_tex"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_chest"]
+size = Vector2(44, 40)
+
+[node name="Chest" type="Node2D"]
+script = ExtResource("1_chest")
+
+[node name="Sprite" type="Sprite2D" parent="."]
+z_index = 3
+texture = ExtResource("3_tex")
+region_enabled = true
+region_rect = Rect2(0, 0, 48, 48)
+
+[node name="InteractZone" type="Area2D" parent="."]
+collision_layer = 64
+collision_mask = 2
+script = ExtResource("2_zone")
+zone_id = &"chest"
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="InteractZone"]
+shape = SubResource("RectangleShape2D_chest")
+
+[node name="Prompt" type="Label" parent="InteractZone"]
+offset_left = -48.0
+offset_top = -52.0
+offset_right = 48.0
+offset_bottom = -30.0
+text = "[E] 상자 열기"
+horizontal_alignment = 1

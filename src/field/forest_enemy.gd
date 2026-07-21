@@ -23,6 +23,10 @@ signal died
 ## preload가 안전한 이유: 픽업은 forest/actors를 안 물어 **순환 preload가 없다**(base⇄forest 함정 무관).
 const DropPickup := preload("res://src/props/drop_pickup.tscn")
 
+## 🔴 상자 프롭 (세55 능동 루팅) — `drops_chest` 적은 낱개 픽업 대신 상자 하나를 떨군다.
+## 픽업과 같은 이유로 preload 안전(상자는 forest/actors를 안 문다).
+const Chest := preload("res://src/props/chest.tscn")
+
 ## 🔴 상태이상·원소 반응의 **규칙 단일 소스** (세션49). 규칙을 여기 베끼지 마라 — 복사하면
 ## "진흙인데 안 묶인다" 식으로 조용히 갈라진다(ring_power와 같은 이유).
 const SR := preload("res://src/core/status_rules.gd")
@@ -569,34 +573,62 @@ func _die() -> void:
 	_status.clear()  # 남은 DoT 틱이 시체를 더 때리지 않게
 	var scene := get_tree().current_scene
 	if _def != null and scene != null:
-		# 🔴 먼저 **굴리기만** 하고(확률·수량 로직은 한 글자도 안 바뀐다), 실제로 나온 개수를
-		# 안 뒤에 심는다 — 개수를 알아야 **균등 각도**를 나눌 수 있기 때문이다(세션51).
-		# 전엔 각 픽업이 각자 랜덤 각도로 튀어서 3개를 떨궈도 **겹쳐서 하나로 보였다** —
-		# "여러 개 나왔다"가 눈에 읽히는 게 보상 체감의 절반이다.
-		var rolled: Array[Dictionary] = []
-		for drop: DropEntry in _def.drops:
-			if randf() <= drop.chance:
-				var n := drop.min_count
-				if drop.max_count > drop.min_count:
-					n += randi() % (drop.max_count - drop.min_count + 1)
-				if n > 0:
-					rolled.append({"id": drop.item_id, "n": n})
-		var base_angle := randf() * TAU
-		for i in rolled.size():
-			var pickup := DropPickup.instantiate()
-			scene.add_child(pickup)
-			# 여러 드롭이 겹치지 않게 살짝 흩뿌린 지점에서 심는다 — 픽업 자신이
-			# 여기서 또 튀어나온다(scatter). 🔴 global_position은 add_child 뒤에 잡고,
-			# setup은 그 뒤에 불러야 scatter가 올바른 자리에서 시작한다.
-			pickup.global_position = global_position + Vector2(randf_range(-6.0, 6.0), randf_range(-6.0, 6.0))
-			# i번째 드롭 = base_angle + i·TAU/n → 2개면 정반대, 3개면 삼각형으로 흩어진다.
-			pickup.setup(rolled[i]["id"], int(rolled[i]["n"]), base_angle + float(i) * TAU / float(rolled.size()))
+		# 🔴 먼저 **굴리기만** 하고, 실제로 나온 걸 안 뒤에 심는다 — 개수를 알아야 낱개 픽업이
+		# **균등 각도**를 나눌 수 있고(세51), 상자는 한 번에 담아야 하기 때문이다(세55).
+		var rolled := _roll_drops()
+		if not rolled.is_empty():
+			# 🔴 드롭 **형태**만 가른다(세55): 보스/특별 적은 상자 하나, 잡몹은 낱개 픽업.
+			# `drops_chest` 하나로 명시 분기 — `is_elite`나 `params.ai`에 커플하지 않는다.
+			if _def.drops_chest:
+				_spawn_chest(scene, rolled)
+			else:
+				_spawn_loose(scene, rolled)
 	# 🔴 처치 순간 1회 — GameState가 KILL 퀘스트를 센다 (세션36). `died` 로컬 시그널의
 	# "킬카운트가 붙는 날의 자리표"가 마침내 수신자를 얻었다. enemy_id를 실어 특정 적 목표도 가능.
 	EventBus.enemy_died.emit(enemy_id)
 	died.emit()
 	_spawn_death_puff()
 	queue_free()
+
+
+## 🔴 드롭 테이블을 굴린다 (세51에 _die 안에 있던 로직 — 세55에 상자/낱개가 공유하려고 추출).
+## 반환 = `[{"id": StringName, "count": int}]`. 확률·수량 로직은 한 글자도 안 바꿨다(키만 "n"→"count"로
+## 통일 — drop_pickup·loot_panel 계약이 "count"라 세 곳이 같은 이름을 본다).
+## 랜덤: Godot 전역 `randf()`/`randi()` — 부팅 시 자동 시드. 세이브에 안 들어간다(굴린 결과만 남는다).
+func _roll_drops() -> Array[Dictionary]:
+	var rolled: Array[Dictionary] = []
+	for drop: DropEntry in _def.drops:
+		if randf() <= drop.chance:
+			var n := drop.min_count
+			if drop.max_count > drop.min_count:
+				n += randi() % (drop.max_count - drop.min_count + 1)
+			if n > 0:
+				rolled.append({"id": drop.item_id, "count": n})
+	return rolled
+
+
+## 낱개 바닥 픽업 (잡몹, 세46·51) — 죽은 자리에 드롭마다 하나씩 심고 균등 각도로 흩뿌린다.
+## 🔴 로직은 추출 전과 동일하다(키 "n"→"count"만 반영). global_position은 add_child 뒤에 잡고
+## setup은 그 뒤에 불러야 scatter가 올바른 자리에서 시작한다.
+func _spawn_loose(scene: Node, rolled: Array[Dictionary]) -> void:
+	var base_angle := randf() * TAU
+	for i in rolled.size():
+		var pickup := DropPickup.instantiate()
+		scene.add_child(pickup)
+		# 여러 드롭이 겹치지 않게 살짝 흩뿌린 지점에서 심는다(픽업이 여기서 또 scatter).
+		pickup.global_position = global_position + Vector2(randf_range(-6.0, 6.0), randf_range(-6.0, 6.0))
+		# i번째 드롭 = base_angle + i·TAU/n → 2개면 정반대, 3개면 삼각형으로 흩어진다.
+		pickup.setup(rolled[i]["id"], int(rolled[i]["count"]), base_angle + float(i) * TAU / float(rolled.size()))
+
+
+## 🔴 상자 하나 (보스/특별 적, 세55) — 낱개로 흩뿌리는 대신 죽은 자리에 상자 하나를 심고 내용물을
+## 통째로 넘긴다. 플레이어가 [E]로 열어 눌러 담는다(chest.gd + loot_panel). global_position을
+## add_child 뒤에 잡는 건 픽업과 같은 이유(setup이 위치 기준 연출을 시작할 수 있게).
+func _spawn_chest(scene: Node, rolled: Array[Dictionary]) -> void:
+	var chest := Chest.instantiate()
+	scene.add_child(chest)
+	chest.global_position = global_position
+	chest.setup(rolled)
 
 
 ## 팝 — 흰 섬광 + 크기 펀치 (피격 손맛). 🔴 **scale은 _visual에만** 준다: 루트 scale은
