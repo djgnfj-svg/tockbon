@@ -10,7 +10,7 @@
 [ext_resource type="PackedScene" path="res://src/props/forest_gate.tscn" id="9_gate"]
 [ext_resource type="PackedScene" path="res://src/props/refine_station.tscn" id="10_refine"]
 [ext_resource type="PackedScene" path="res://src/props/craft_station.tscn" id="11_craft"]
-[ext_resource type="PackedScene" path="res://src/props/decode_station.tscn" id="12_decode"]
+[ext_resource type="PackedScene" path="res://src/props/shop_station.tscn" id="12_shop"]
 [ext_resource type="PackedScene" path="res://src/props/npc_guide.tscn" id="13_npc"]
 
 [node name="Base" type="Node2D"]
@@ -36,8 +36,8 @@ position = Vector2(180, -190)
 [node name="Craft" parent="." instance=ExtResource("11_craft")]
 position = Vector2(-180, -170)
 
-[node name="Decode" parent="." instance=ExtResource("12_decode")]
-position = Vector2(340, -230)
+[node name="Shop" parent="." instance=ExtResource("12_shop")]
+position = Vector2(340, -190)
 
 [node name="Npc" parent="." instance=ExtResource("13_npc")]
 position = Vector2(130, -20)
