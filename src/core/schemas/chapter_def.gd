@@ -20,3 +20,7 @@ extends Resource
 ## 챕터 분위기 바닥 틴트. ⚠ .tres에서 Color는 **반드시 4인자** — 3인자면 파서가 리소스 전체를
 ## 조용히 버린다(세50 바람 룬). test_chapter_auto의 「챕터 로드」 그물이 이걸 잡는다.
 @export var room_ground_color: Color = Color(0.13, 0.19, 0.14, 1.0)
+## 잡몹 길 (세66 도파민 — 즉시 보상 무대). 방 앞쪽에 까는 잡몹 배치. 비면 보스만 있는 방(세58-B 원형).
+## 🔴 잡몹 = forest_enemy 범용 스폰(그룹 enemies·layer4·_die→coin 드롭). 클리어는 여전히 보스 처치만.
+##  "새 잡몹 배치 = 여기 MobSpawn 항목 하나". boss_room._spawn_mobs가 읽는다.
+@export var mob_spawns: Array[MobSpawn] = []

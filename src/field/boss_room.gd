@@ -87,6 +87,7 @@ func _ready() -> void:
 	_ground.color = _chapter.room_ground_color
 	_fill_tiles()
 	_spawn_boss()
+	_spawn_mobs()
 	var boss_def := Db.get_enemy(_chapter.boss_enemy_id)
 	var boss_name := boss_def.display_name if boss_def != null else String(_chapter.boss_enemy_id)
 	_hud.say("%s — %s를 쓰러뜨려라. 잡으면 귀환 포탈이 열린다" % [_chapter.title, boss_name])
@@ -127,6 +128,21 @@ func _spawn_boss() -> void:
 	# 원점→boss_spawn으로 끌려간다(세54 「정지 뭉침」 재림). 루트가 원점이라 position == global.
 	_boss.position = _chapter.boss_spawn
 	add_child(_boss)
+
+
+## 잡몹 길 (세66 도파민 — 즉시 보상 무대) — 방 앞쪽에 잡몹을 깐다. 플레이어가 뚫고 보스에 닿는다.
+## 🔴 잡몹은 forest_enemy 범용 계약(그룹 enemies·layer4·take_hit·_die→coin 드롭). 신규 씬 0.
+##  🔴 enemy_id·위치 대입은 add_child **앞** (보스와 같은 계약 — _ready가 그 id로 .tres를 문다).
+##  클리어 판정은 안 건드린다 — 잡몹 죽음은 _on_enemy_died에서 boss_enemy_id가 아니라 무시된다
+##  (잡몹=돈·손맛 1층, 보스=clear 2·3층). 웨이브 게이팅 없이 배치만(v1).
+func _spawn_mobs() -> void:
+	for spawn: MobSpawn in _chapter.mob_spawns:
+		if spawn == null or spawn.enemy_id == &"":
+			continue
+		var mob := EnemyScene.instantiate() as Node2D
+		mob.set(&"enemy_id", spawn.enemy_id)
+		mob.position = spawn.position
+		add_child(mob)
 
 
 ## 🔴 클리어 판정 = **보스 처치 순간** (루팅·귀환과 무관 — 죽어서 가방을 잃어도 클리어는 남는다.

@@ -23,6 +23,10 @@ extends Resource
 @export var count: int = 1
 ## 완료 보상 {item_id: 수량} — 창고에 지급 (GameState.add_item).
 @export var reward_items: Dictionary = {}
+## 🔴 완료 시 해금할 codex id (룬/진, 세66 도파민 — 룬=퀘스트 턴인 통로). 비면 해금 없음.
+##  reward_items(아이템)와 별개 — 이건 codex_unlocked를 쏴 룬/진을 배우고 예식(unlock_ceremony)을 띄운다.
+##  "보스 잡아와(KILL) → 마을 턴인 → 새 룬"의 그 「새 룬」이 여기 들어간다.
+@export var reward_unlock: StringName = &""
 ## 🔴 선행 퀘스트 id — 이게 완료돼야 이 퀘스트가 열린다. 비면 처음부터 열림. **이 줄이 스파인이다.**
 @export var requires: StringName = &""
 

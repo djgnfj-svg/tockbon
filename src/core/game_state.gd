@@ -398,6 +398,11 @@ func _complete_quest(q: QuestDef) -> void:
 	quest_done[q.id] = true
 	for item_id: StringName in q.reward_items:
 		add_item(item_id, int(q.reward_items[item_id]))
+	# 🔴 룬/진 해금 보상 (세66 도파민 — 룬=퀘스트 턴인 통로). codex_unlocked 한 발로 codex 심기 +
+	#  UNLOCK 사슬 진행 + Audio unlock음 + 예식(unlock_ceremony)이 전부 따라온다. 이미 해금이면
+	#  재발신 안 함 — 재정산·소급에 예식이 두 번 안 뜨게 (station 시드·chapter_clear 가드와 같은 결).
+	if q.reward_unlock != &"" and not is_unlocked(q.reward_unlock):
+		EventBus.codex_unlocked.emit(q.reward_unlock)
 	EventBus.quest_completed.emit(q.id)
 
 ## 부팅 로드 후 SaveManager가 부른다 — 세션40 턴인부턴 소급 자동완료를 하지 않는다.

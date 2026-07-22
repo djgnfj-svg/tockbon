@@ -208,6 +208,38 @@ func _run() -> void:
 	sm.load_game()
 	_check("🔴 로드: 접수(quest_seen) 복원 → [!] 다시 안 뜬다", not gs.has_new_quest())
 
+	# ── ⑩ reward_unlock (세66 도파민 — 룬=퀘스트 턴인 통로) — 정산이 룬/진 codex를 해금한다 ──
+	#  🔴 D의 핵심 그물: "보스 잡아와(KILL) → 마을 턴인 → 새 룬". reward_unlock이 codex_unlocked를 쏴
+	#   룬을 심고 예식(unlock_ceremony)을 띄운다. 조각→해독 우회 없이 퀘스트가 해금의 실제 주체다.
+	_clean(gs)
+	gs.codex.erase(&"rune_test66")
+	var qr := QuestDef.new()
+	qr.id = &"qr_test66"
+	qr.goal = Enums.QuestGoal.KILL
+	qr.target = &"slime"
+	qr.count = 1
+	qr.reward_unlock = &"rune_test66"   # 🔴 완료 시 이 codex(룬)를 해금
+	db.quests[qr.id] = qr
+	var unlock_emits := [0]
+	var on_unlock := func(id: StringName) -> void:
+		if id == &"rune_test66": unlock_emits[0] += 1
+	eb.codex_unlocked.connect(on_unlock)
+	_check("qr: 처치 전 룬 미해금", not gs.is_unlocked(&"rune_test66"))
+	eb.enemy_died.emit(&"slime")
+	_check("qr: 처치 = 정산 대기 (아직 해금 아님 — 턴인 전)",
+		gs.is_quest_claimable(qr) and not gs.is_unlocked(&"rune_test66"))
+	gs.claim_ready_quests()
+	# 🔴 뮤테이션: _complete_quest의 reward_unlock emit을 지우면 아래 두 줄이 빨감 (D의 검출자).
+	_check("🔴 qr 정산: reward_unlock이 codex_unlocked를 쐈다 (정확히 1 — 예식 트리거)", unlock_emits[0] == 1)
+	_check("🔴 qr 정산: 룬이 실제로 codex에 심겼다 (turn-in = 해금 주체)", gs.is_unlocked(&"rune_test66"))
+	# 🔴 재정산·소급에 이중 발신 안 함 (is_unlocked 가드 — 예식이 두 번 안 뜨게)
+	gs.reevaluate_quests()
+	gs.claim_ready_quests()
+	_check("🔴 이미 해금이면 reward_unlock 재발신 안 함 (is_unlocked 가드)", unlock_emits[0] == 1)
+	eb.codex_unlocked.disconnect(on_unlock)
+	db.quests.erase(&"qr_test66")
+	gs.codex.erase(&"rune_test66")
+
 	# 뒷정리 — 세이브 파일 삭제(스위트 규약) + 메모리 초기화 + 주입 퀘스트 제거(공유 레지스트리).
 	sm.wipe_save()
 	_clean(gs)
