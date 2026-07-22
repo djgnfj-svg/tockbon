@@ -40,15 +40,28 @@ const RUNE_FALLBACK := Color(0.95, 0.35, 0.15)
 ## 룬 투사체 시트 (ART_SPEC P5) — 우향 혜성형 2프레임. **먹선 진이 없을 때만 쓰는 폴백이다**
 ## (샘플 도안·구세이브처럼 strokes가 비어 있는 경우)
 const PROJ_SHEET_PATH := "res://assets/sprites/effects/projectiles.png"
+## 세션59: earth/bolt/grass 행은 takbon-art가 병렬 제작 중 — 시트에 아직 없으면
+## `_ensure_shared_frames`의 폭 가드가 그 애니만 걸러 해당 룬은 폴백(Polygon2D)으로 남는다(정상).
 const PROJ_ANIMS := {
 	"fire": [0, 2, 10.0],
 	"water": [4, 2, 10.0], "wind": [6, 2, 10.0],
+	"earth": [8, 2, 10.0], "bolt": [10, 2, 10.0], "grass": [12, 2, 10.0],
 }
 const RUNE_ANIM_NAMES := {
 	Enums.RuneType.FIRE: "fire",
 	Enums.RuneType.WATER: "water",
 	Enums.RuneType.WIND: "wind",
+	Enums.RuneType.EARTH: "earth",
+	Enums.RuneType.BOLT: "bolt",
+	Enums.RuneType.GRASS: "grass",
 }
+## 시트 프레임 한 변(px) — ART_SPEC P5 (16×16 우향 혜성)
+const PROJ_FRAME_PX := 16
+
+const Trail := preload("res://src/spell/carrier_trail.gd")
+## 트레일 연출값 — 캐리어(0.25s·body×0.9)보다 짧고 가늘게 (설계 §2-B)
+const TRAIL_LIFE := 0.16
+const TRAIL_WIDTH := 4.0
 ## 시트는 전 투사체 공유 — 1회만 빌드 (탄막 다발 스폰 대비)
 static var _shared_frames: SpriteFrames = null
 static var _sheet_checked: bool = false
@@ -162,14 +175,32 @@ func _setup_body(p_rune_type: int) -> void:
 	_rotates = true
 	rotation = direction_angle
 	var visual := $Visual as Polygon2D
-	if _ensure_shared_frames():
+	# 🔴 has_animation 검사 (세션59): 시트에 그 룬의 행이 아직 없으면(폭 가드가 걸렀다) 폴백으로 —
+	# 없는 애니를 play하면 탄이 에러 없이 투명해진다.
+	var anim := StringName(RUNE_ANIM_NAMES.get(p_rune_type, "fire"))
+	if _ensure_shared_frames() and _shared_frames.has_animation(anim):
 		visual.visible = false
 		var spr := AnimatedSprite2D.new()
 		spr.sprite_frames = _shared_frames
-		spr.play(StringName(RUNE_ANIM_NAMES.get(p_rune_type, "fire")))
+		spr.play(anim)
 		add_child(spr)
 	else:
 		visual.color = _rune_color(p_rune_type)
+	_spawn_trail(p_rune_type)
+
+
+## 트레일 — 캐리어와 같은 규칙(설계 §2-C): 형제로 스폰해 탄이 죽어도 잔상이 페이드한다.
+## player_projectiles 그룹 무가입(carrier_trail 계약 — 테스트가 이 그룹으로 탄을 센다).
+func _spawn_trail(p_rune_type: int) -> void:
+	# 🔴 null 가드 — 트리 밖 setup(헤드리스가 setup만 부르는 경우)·부모 없음이면 조용히 생략
+	if not is_inside_tree():
+		return
+	var parent := get_parent()
+	if parent == null:
+		return
+	var trail := Trail.new()
+	parent.add_child(trail)
+	trail.setup(self, _rune_color(p_rune_type), TRAIL_WIDTH, TRAIL_LIFE)
 
 
 ## 룬 색 — Db에서 읽고, 없으면 폴백 (ring_carrier._rune_color와 같은 규칙).
@@ -186,7 +217,18 @@ static func _ensure_shared_frames() -> bool:
 	if not _sheet_checked:
 		_sheet_checked = true
 		if ResourceLoader.exists(PROJ_SHEET_PATH):
-			_shared_frames = SheetLib.build_sprite_frames(load(PROJ_SHEET_PATH), PROJ_ANIMS, 16)
+			var tex := load(PROJ_SHEET_PATH) as Texture2D
+			if tex != null:
+				# 🔴 시트 폭 가드 (세션59): 시트에 아직 없는 행(earth 등)을 그대로 빌드하면 빈
+				# AtlasTexture 애니가 등록돼 탄이 **에러 없이 투명**해진다. 폭 안에 다 들어가는
+				# 애니만 빌드한다 — 걸러진 룬은 _setup_body의 has_animation 검사로 폴백에 남는다.
+				var fits := {}
+				for anim_name: String in PROJ_ANIMS:
+					var d: Array = PROJ_ANIMS[anim_name]
+					if (int(d[0]) + int(d[1])) * PROJ_FRAME_PX <= tex.get_width():
+						fits[anim_name] = d
+				if not fits.is_empty():
+					_shared_frames = SheetLib.build_sprite_frames(tex, fits, PROJ_FRAME_PX)
 	return _shared_frames != null
 
 
@@ -314,6 +356,9 @@ func _deal_damage(node: Node2D) -> void:
 	# enemy_hit 발신은 적의 take_hit 내부 책임 (약점 배율 반영 최종 피해 기준 — 리드 확정)
 	if not node.has_method("take_hit"):
 		return
+	# "탄이 박혔다" 연출 신호 (세션59 설계 §3) — 관통이면 뚫는 적마다 1회 = 의도.
+	# 벽(_hit_wall)·수명 소멸(_consume 직행)에는 안 쏜다. 위치는 carrier와 통일(take_hit 계약 통과 뒤).
+	EventBus.spell_impact.emit(global_position, rune_type)
 	# 🔴 복합 — primary(=rune_type)가 피해+자기 상태를 얹고, 나머지 룬은 **피해 0**으로 상태만
 	# 얹는다 (take_hit의 `if dmg>0` 덕에 피해·enemy_hit 이중 계산 없음 — 적 계약 무변경).
 	node.take_hit(damage, rune_type, status, status_power)

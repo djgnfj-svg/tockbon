@@ -74,6 +74,14 @@ signal reaction_burst(pos: Vector2, radius: float, status: int)
 ## 상태가 A→B로 튀었다(감전 연쇄 한 가닥 · 바람 확산 한 가닥). 대상마다 1회. 색은 status로 갈린다.
 signal reaction_chain(from: Vector2, to: Vector2, status: int)
 
+# ── 착탄 연출 (세션59) — 탄(ring_carrier·projectile)이 방송, src/actors/vfx.gd가 그린다.
+## 🔴 연출용 순수 오버레이다 — 게임 로직은 이 신호를 **안 본다** (reaction_burst 규약과 동일).
+## "탄이 적에 박혔다"는 사건 — `enemy_hit`("피해가 들었다")과 **다르다**: enemy_hit은 기둥 틱·반응
+## 피해도 쏴서 버스트 도배가 된다(DoT 도배 함정의 사촌). 발신은 적 착탄 순간 1회
+## (ring_carrier._hit_enemy · projectile._deal_damage — 관통 탄은 뚫는 적마다 1회 = 의도).
+## ⚠ 벽·수명 소멸·기둥 틱·DoT 틱에는 쏘지 않는다. pos = 월드 전역 좌표.
+signal spell_impact(pos: Vector2, rune_type: int)
+
 # ── 설정 (Audio → UI)
 ## 🔴 음소거 상태가 바뀌었다 (설정). Audio가 소유·저장하고 발신 → HUD 표시·타이틀 버튼이 갱신.
 signal audio_muted_changed(muted: bool)

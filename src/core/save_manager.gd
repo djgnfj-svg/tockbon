@@ -5,9 +5,23 @@ extends Node
 ## 🔴 세션 22: 옛 SpellDesign 도안(user://save/designs)·연구 저장을 매장했다. 세이브 호환은 안전하다 —
 ## 로드가 전부 `data.get(키, 기본값)`이라 옛 세이브의 남은 키는 그냥 무시된다.
 
-const SAVE_PATH := "user://save/save.json"
+## 🔴 테스트 격리 (세션59): `-s`(헤드리스 테스트 스크립트) 부팅이면 세이브 뿌리가 user://save_test로
+## 갈라진다. 전엔 스위트가 실제 플레이 세이브를 자동 저장으로 덮고 wipe_save()로 지워 —
+## **스위트 한 번 돌 때마다 타이틀 「이어하기」가 사라졌다**(사용자가 실제로 밟음, *"자꾸 없어지네"*).
+## 격리 후 테스트의 wipe_save()는 테스트 세이브만 지우는 뒷정리다. 실게임(F5·에디터 run·익스포트)은
+## -s가 없어 예전 경로 그대로 — 세이브 호환 무변경.
+var _save_root: String = "user://save_test" if _is_test_boot() else "user://save"
+var _save_path: String = _save_root + "/save.json"
 ## 고리 도안(RingDesign) .tres 저장 위치.
-const RING_DIR := "user://save/rings"
+var _ring_dir: String = _save_root + "/rings"
+
+static func _is_test_boot() -> bool:
+	var args := OS.get_cmdline_args()
+	return args.has("-s") or args.has("--script")
+
+## 테스트가 격리를 검증하는 공개 훅 (test_save_auto [0]) — 경로 문자열 자체는 내부 사정이다.
+func save_root() -> String:
+	return _save_root
 
 ## 로드(또는 새 게임 확정) 이전의 자동 저장 방지
 var _ready_to_save := false
@@ -35,16 +49,16 @@ func _ready() -> void:
 	load_game()
 
 func has_save() -> bool:
-	return FileAccess.file_exists(SAVE_PATH)
+	return FileAccess.file_exists(_save_path)
 
 func save_game() -> void:
 	if not _ready_to_save:
 		return
 	# 고리 도안 저장 — 파일 목록 + 장착 인덱스
-	DirAccess.make_dir_recursive_absolute(RING_DIR)
+	DirAccess.make_dir_recursive_absolute(_ring_dir)
 	var ring_files: Array = []
 	for i in range(GameState.ring_designs.size()):
-		var rpath := "%s/ring_%d.tres" % [RING_DIR, i]
+		var rpath := "%s/ring_%d.tres" % [_ring_dir, i]
 		ResourceSaver.save(GameState.ring_designs[i], rpath)
 		ring_files.append(rpath)
 	_prune_ring_files(GameState.ring_designs.size())
@@ -90,9 +104,9 @@ func save_game() -> void:
 		"quest_done": quest_done,
 		"quest_seen": quest_seen,
 	}
-	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
+	var file := FileAccess.open(_save_path, FileAccess.WRITE)
 	if file == null:
-		push_warning("저장 실패: %s" % SAVE_PATH)
+		push_warning("저장 실패: %s" % _save_path)
 		return
 	file.store_string(JSON.stringify(data, "\t"))
 	file.close()
@@ -102,11 +116,11 @@ func load_game() -> bool:
 	if not has_save():
 		_ready_to_save = true
 		return false
-	var file := FileAccess.open(SAVE_PATH, FileAccess.READ)
+	var file := FileAccess.open(_save_path, FileAccess.READ)
 	var data: Variant = JSON.parse_string(file.get_as_text())
 	file.close()
 	if typeof(data) != TYPE_DICTIONARY:
-		push_warning("세이브 파일 손상 — 새 게임으로 시작: %s" % SAVE_PATH)
+		push_warning("세이브 파일 손상 — 새 게임으로 시작: %s" % _save_path)
 		_ready_to_save = true
 		return false
 
@@ -178,8 +192,8 @@ func load_game() -> bool:
 ## → 설계·미결은 `docs/BACKLOG.md` 「F8 — 새로하기」가 정본. **`GameState.new_game()`을 core에
 ## 하나 두는 쪽**이 맞다 (씬마다 손으로 비우면 필드가 늘 때 조용히 갈라진다).
 func wipe_save() -> void:
-	if FileAccess.file_exists(SAVE_PATH):
-		DirAccess.remove_absolute(SAVE_PATH)
+	if FileAccess.file_exists(_save_path):
+		DirAccess.remove_absolute(_save_path)
 	_prune_ring_files(0)
 
 ## 🔴 **진짜 새로하기** (세션37, F8). 위 wipe_save 노트의 계약을 실제로 실행한다:
@@ -195,7 +209,7 @@ func start_new_game() -> void:
 
 ## ring_N.tres 중 인덱스가 keep_count 이상인 것을 지운다 (도안이 줄면 남은 파일이 되살아나는 것 방지)
 func _prune_ring_files(keep_count: int) -> void:
-	var dir := DirAccess.open(RING_DIR)
+	var dir := DirAccess.open(_ring_dir)
 	if dir == null:
 		return
 	for file_name in dir.get_files():

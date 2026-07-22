@@ -221,14 +221,17 @@
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_chest_auto.gd         # **상자 + 능동 루팅** (세션55 = 세54 세션B): `EnemyDef.drops_chest` Db 로드(snake_boss=true·vine=false) · 🔴**`_die` 분기**(drops_chest 적→상자1·픽업0 / 잡몹→픽업·상자0) · loot_panel(`loot_card`→`advance` 완료 = add_to_bag+item_collected+**contents 참조 remove_at**+비면 자동 닫힘) · 🔴**상자 통합**([E] interacted→패널→다 루팅→상자 스스로 free) · 🔴**카드 클릭 도달·진행 바 렌더·상자 스프라이트는 헤드리스가 못 잡는다**(실게임 MCP push_input·스샷 — 세55에 전 루프 확인) · 🔴**뮤테이션 3/3 검출력**(분기·remove_at·상자소멸)
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_progression_auto.gd   # **진행 관문** (세션58, 정본 docs/PROGRESSION.md): 편집 적 6종 Db 로드+until_unlock 드롭 위치(세50 파싱 침묵사 그물) · 🔴**미해금=확정 드롭·해금=중단**(codex 직접 꺼서 시드 무력화 — 시드가 살아 있는 동안 관문은 잠잔다) · 🔴**불변식: 순수 확률 fragment 0곳 + 관문표 매핑 {water→slime_elite, wind→gale, grass→snake_boss} + 관문 수==표 3줄**(md 표는 테스트가 못 읽어 이게 표↔데이터 갈라짐 그물이다 — D6 네임드가 붙으면 관문 수 기대치 갱신) · 허기 잔재 0 · 🔴**상자 경유 조각 실드롭·HUD 레이아웃은 헤드리스가 못 잡는다**(실게임 확인) · ⚠[2] 확정드롭은 chance 1.0이라 관문 판정 뮤테이션을 못 잡는다 — 검출자는 [3](해금=중단)
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_gale_boss_auto.gd     # **gale 보스** (세션56): Db 로드+**params 17키 전수**(세50 그물) · 페이즈2 전이(`phase()`) · 돌풍(플레이어 hp 감소+`apply_push` 밀림 거리≈gust_push_dist) · 볼리(그룹 `"enemy_projectiles"` 수 ==volley_count — 초과도 잡음) · 적탄(히트→hp 감소+free·수명 만료 free — mask2 침묵 함정 그물) · 🔴**반응 룬**(연쇄=BOLT·증기=WATER — FIRE 하드코딩 청산 직접 그물. 연습장 몸 쪽은 test_status_auto [11]ⓑ가 잰다 — **두 몸은 따로 갈라진다**, 세56에 dummy만 되돌려도 전 스위트 그린이었다) · 🔴**링·탄 렌더·밀림 손맛·hover 거리감은 헤드리스가 못 잡는다**(세56 실게임 MCP로 링·탄 렌더 확인, 손맛=사용자 F5) · 🔴**뮤테이션 4/4 검출력**(페이즈·rune 두 몸 각각·볼리)
+./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_spell_vfx_auto.gd     # **마법 연출 배선** (세션59): vfx가 `ring_cast_requested`·`spell_impact`에 연결(배선 침묵사 그물) · 트레일 형제 스폰 + 🔴**`player_projectiles` 그룹 무가입**(트레일이 가입하면 탄 수 세는 테스트 4곳이 거짓으로 는다) · 트리 밖 setup 무에러(null 가드 — ⚠ 이 항목의 진짜 검출자는 **SCRIPT ERROR grep**이다, 테스트는 가드가 없어도 OK를 찍는다) · 🔴**빈 진 착탄 = emit 정확히 1**(캐리어 emit 전용 그물 — 발산 탄이 있으면 캐리어 emit 부재가 가려진다, 뮤테이션으로 실증) · 발산 진 착탄 ≥2(탄 emit) · 🔴**볼 코어·자전·펄스·트레일·머즐/착탄 렌더는 헤드리스가 못 잡는다**(실게임 MCP 필수)
 ```
 
-🔴 **스위트를 돌리면 `user://save`가 날아간다** (세션 26 F3 이후). `SaveManager._ready`가 저장을
-살려 놨으므로, `extraction_success`·`bag_lost`·`day_started`를 쏘는 테스트는 **진짜 세이브 파일을
-쓴다** — 옛 test_forest_auto가 실제로 플레이 세이브를 테스트 찌꺼기로 덮었다. 그래서 세이브를
-건드리는 테스트는 **끝에 `wipe_save()`로 뒷정리한다**(test_save_auto·test_chapter_auto).
-⚠ **뒷정리는 지울 뿐 복구가 아니다** — 플레이하던 세이브가 있으면 스위트가 그걸 날린다.
-새 시그널을 쏘는 테스트를 더할 땐 **SaveManager가 물려 있는지 먼저 확인해라**.
+✅ **세션59: 스위트가 실제 세이브를 못 건드리게 격리했다.** `SaveManager`가 `-s` 부팅(헤드리스
+테스트)을 감지하면 세이브 뿌리를 `user://save_test`로 가른다 — 세션26 F3 이후 스위트의 자동
+저장·`wipe_save()`가 진짜 플레이 세이브를 덮고 지워서 **스위트 한 번에 타이틀 「이어하기」가
+사라졌다**(사용자가 실제로 밟음: *"자꾸 없어지네"*). 이제 테스트의 `wipe_save()`는 테스트 세이브만
+지우는 뒷정리다(관행 유지 — test_save_auto·test_chapter_auto). 격리 그물 = `test_save_auto [0]`
+(-s 부팅이면 `save_root()`에 save_test — 격리 로직이 지워지면 이게 빨개진다, 뮤테이션 확인됨).
+실측: 실세이브 마커 md5 유지한 채 세이브 만지는 테스트 3종 통과(세션59). ⚠ 실게임(F5·에디터
+run·익스포트)은 -s가 없어 예전 경로 그대로 = 세이브 호환 무변경.
 
 🔴 **`-s` 테스트는 런타임 에러가 나도 "OK"를 찍을 수 있다.** 세션 22에 실제로 겪었다 —
 `test_ring_trace_auto`가 내부 필드(`_slots`)를 더듬다가 리팩터로 그게 옮겨가자 에러로 함수가

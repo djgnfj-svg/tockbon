@@ -24,7 +24,14 @@ func _run() -> void:
 	var sm: Node = root.get_node("SaveManager")
 	var bus: Node = root.get_node("EventBus")
 
-	# 클린 시작
+	# 🔴 [0] 테스트 격리 (세션59) — **-s 부팅은 세이브 뿌리가 save_test로 갈라져야 한다.**
+	# 전엔 스위트의 자동 저장·wipe_save()가 실제 플레이 세이브(user://save)를 그대로 때려서
+	# **스위트 한 번에 타이틀 「이어하기」가 사라졌다** (사용자: *"자꾸 없어지네"*). 이 확인이
+	# 없으면 격리 로직이 지워져도 전 스위트가 그린인 채 옛 사고가 조용히 재발한다.
+	_check("🔴 -s 부팅 = 세이브 격리 (root=%s)" % sm.save_root(),
+		String(sm.save_root()).contains("save_test"))
+
+	# 클린 시작 (격리 확인 뒤 — 여기서부터의 wipe는 테스트 세이브만 지운다)
 	sm.wipe_save()
 	_check("초기: 세이브 없음", not sm.has_save())
 

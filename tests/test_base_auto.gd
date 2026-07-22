@@ -53,6 +53,7 @@ func _run() -> void:
 	await _test_desk_still_sees_the_player()
 	await _test_rejected_commit_is_not_silent()
 	await _test_real_left_click_actually_fires()
+	await _test_empty_slot_refuses_to_fire()
 	await _test_forest_gate_leads_out()
 
 	if failures == 0:
@@ -219,6 +220,41 @@ func _test_real_left_click_actually_fires() -> void:
 
 	_check(casts.size() == 1,
 		"🔴 좌클릭이 발사에 닿는다 (실제 발사 %d회 — 0이면 Control이 클릭을 먹고 있다)" % casts.size())
+
+
+## [7-b] 🔴 빈 슬롯은 발사를 거부한다 (세션59 — 세44 「매직볼 바닥」 은퇴, 사용자 확정).
+## 연출 개편으로 매직볼이 "진짜 마법"처럼 보이자 *"아무 마법도 없는데 발사되는 게 뭐지"* → 은퇴.
+## 계약 셋: ① ring_cast_requested가 안 나간다 ② 마나를 안 태운다(거부는 공짜) ③ 거부가 조용하지
+## 않다(notice — commit_rejected 규칙과 같은 병). ⚠ 옛 도안(진 없음)의 스펠시스템 폴백은 별개로
+## 살아 있다 — test_ring_spell_auto [20]이 그쪽 그물이다(여기서 겹쳐 재지 마라).
+func _test_empty_slot_refuses_to_fire() -> void:
+	print("[7-b] 빈 슬롯 발사 거부 — 캐스트 0·마나 무소모·안내 발신 (매직볼 은퇴)")
+	var gs = root.get_node("/root/GameState")
+	gs.ring_equipped[1] = null
+	var caster = _player().caster
+	caster.select_slot(1)
+
+	var casts := []
+	var cb := func(_a, _p, _d) -> void: casts.append(1)
+	_bus.ring_cast_requested.connect(cb)
+	var notices := []
+	var ncb := func(text: String, warn: bool) -> void:
+		if warn:
+			notices.append(text)
+	caster.notice.connect(ncb)
+	var mana_before: float = gs.mana
+
+	caster.fire()
+	await process_frame
+
+	_check(casts.is_empty(), "빈 슬롯 fire() = ring_cast_requested 0회 (실제 %d)" % casts.size())
+	# ⚠ 동등 비교 금지 — 프레임 사이 마나 **자연 재생**이 올려서 갈라진다. 계약은 "안 깎는다"다.
+	_check(gs.mana >= mana_before - 0.001,
+		"거부에 마나를 안 태운다 (전 %.1f → 후 %.1f — 깎였으면 거부 전에 spend가 돈 것)" % [mana_before, gs.mana])
+	_check(not notices.is_empty(), "거부가 조용하지 않다 — warn 안내가 나간다")
+	_bus.ring_cast_requested.disconnect(cb)
+	caster.notice.disconnect(ncb)
+	caster.select_slot(0)
 
 
 ## [8] 🔴 숲으로 나가는 길이 있다 (세션 26 — F2).
