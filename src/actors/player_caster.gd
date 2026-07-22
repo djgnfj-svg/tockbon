@@ -31,6 +31,9 @@ var enabled: bool = true:
 
 var _aim := Vector2.RIGHT
 var _slot: int = 0
+## 🔴 떠있는 지팡이(형제 노드) — 발사 총구가 지팡이 끝이 된다(세피리아식). 지연 조회(노드 준비
+## 순서 무관). 장착한 지팡이가 없어 지팡이가 숨으면 총구는 몸 중심으로 폴백한다(맨손 캐스팅).
+var _wand: Node2D = null
 
 
 ## 지금 고른 슬롯 · 조준 방향 — 씬이 읽는다 (테스트도 이 API로만 본다).
@@ -91,7 +94,17 @@ func fire() -> void:
 	if not GameState.debug_free_cast and not GameState.spend_mana(RingPower.cast_mana_cost()):
 		notice.emit("마나가 부족하다 — 잠시 기다려라", true)
 		return
-	EventBus.ring_cast_requested.emit(design.to_assembly(), global_position, _aim)
+	EventBus.ring_cast_requested.emit(design.to_assembly(), _muzzle(), _aim)
+
+
+## 🔴 발사 원점 = 떠있는 지팡이 끝(총구 단일 소스는 floating_wand). 지팡이가 없거나 숨었으면
+## 몸 중심(global_position)으로 폴백 — 맨손도 쏠 수 있다.
+func _muzzle() -> Vector2:
+	if _wand == null:
+		_wand = get_parent().get_node_or_null("FloatingWand")
+	if _wand and _wand.visible:
+		return _wand.muzzle_position()
+	return global_position
 
 
 ## 조준선 — 장착됐으면 불빛, 빈 슬롯이면 흐리게. 쏘기 전에 슬롯 상태가 손끝에서 보인다.

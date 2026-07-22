@@ -1,4 +1,4 @@
-[gd_scene load_steps=20 format=3 uid="uid://c0actor01player"]
+[gd_scene load_steps=22 format=3 uid="uid://c0actor01player"]
 
 [ext_resource type="Script" path="res://src/actors/player.gd" id="1_player"]
 [ext_resource type="Script" path="res://src/actors/player_caster.gd" id="2_caster"]
@@ -7,6 +7,8 @@
 [ext_resource type="Script" path="res://src/actors/vfx.gd" id="5_vfx"]
 [ext_resource type="Script" path="res://src/actors/shadow.gd" id="6_shadow"]
 [ext_resource type="Script" path="res://src/actors/dust.gd" id="7_dust"]
+[ext_resource type="Script" path="res://src/actors/floating_wand.gd" id="8_fwand"]
+[ext_resource type="Texture2D" uid="uid://bdlpu0qilthte" path="res://assets/sprites/player/floating_wand.png" id="9_fwtex"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_player"]
 radius = 10.0
@@ -117,3 +119,8 @@ script = ExtResource("5_vfx")
 
 [node name="Dust" type="Node2D" parent="."]
 script = ExtResource("7_dust")
+
+[node name="FloatingWand" type="Sprite2D" parent="."]
+z_index = 3
+texture = ExtResource("9_fwtex")
+script = ExtResource("8_fwand")

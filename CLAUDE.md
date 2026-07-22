@@ -9,11 +9,11 @@
 > 지금 게임 = `src/base`(베이스캠프) + 고리 조립 책 + 숲 원정 + 온보딩 레일.
 > 🔴 **기록 규칙: 직전 세션만 상세, 그 전은 아래 「한 줄 지도」로 내려보낸다** — 이 절이 길어지면 정리 신호.
 
-🔴🔴 **직전 세션 = 64 「HUD 정리 — 좌상단 HP·마나·슬롯 진 다이어그램·C 상태창·슬롯 4→3」** (정본 STATUS「64」):
-사용자 *"HP 바랑 스킬 등을 좀 더 깔끔하게, 화면에 글자가 너무 많음"* → AskUserQuestion 4결정 + F5 반복 조정 후속 3라운드. 위임(takbon-ui) Fable 한도로 실패 → 리드 직접. **① 상단 조작문(hint_text) 통째 제거**(온보딩 대사가 조작을 가르침 — base·boss_room .tscn 속성 줄도). **② HP·마나 → 좌상단, 숫자 막대 안**(옆 텍스트 삭제) + 🔴 **HP 늘 그린다**(사용자 "hp바 안 보임" = 베이스 `show_hp=false`가 원인 → show_hp export 폐지, 씬별 HUD 차이 0). **③ 슬롯 = 진 미니 다이어그램**(원+열린 칸 점+중심 룬색, 🔴 각도는 `RingBoard.jin_slot_dots` static 재사용 — 베끼지 마라 세60 단일 소스) **+ 선택 슬롯만 상세 한 줄**(칸마다 적던 이름·위력 삭제, 124×48→58×58). **④ 톤=세62 책 UI(양피지·먹·가죽) 색 통일**(반투명 오버레이 유지). **⑤ C 상태창** = tab_panel 4번째 「캐릭터」 탭(C키, I·Q 패턴) — 생명력·능력치(getter라 장비 보정 반영)·착용 요약 + 🔴 우하단 **사람 실루엣+"C" 아이콘**(시각 표시 전용 — HUD `mouse_filter=IGNORE` 계약이라 클릭 안 받음). **⑥ "그려 장착" 2줄 겹침** = caster.select_slot notice(→say)가 HUD 상시 상세 줄과 겹친 것 → 슬롯 선택 notice 제거(발사 거부 notice는 순간 피드백이라 유지). **⑦ 슬롯 4→3** = `EQUIP_SLOTS` 3·`ring_equipped`·new_game·`cast_slot_4` 입력·테스트 하드코딩 동기화.
-✅ 검증: 전 스위트 **23종** 그린+SCRIPT ERROR 0 · 🔴 뮤테이션(`EQUIP_SLOTS`=4→save 로드 루프가 3칸 배열 인덱스 3 대입 에러) · 🔴 헤드리스가 _draw 안 돌려 **던지는 스모크**(씬→탭/HUD 강제 그리기→SCRIPT ERROR grep→삭제)로 캐릭터 탭·상태 아이콘·다이어그램 무에러 확인 · 겉보기=**사용자 F5**("잘된다").
-🔴 **이 세션 내내 godot MCP 브리지가 이 세션에 안 붙었다**(서버 node·에디터는 생존, 클라 연결만 끊김 — 앞 세션 프로세스 정리 여파로 추정). 리드가 스샷을 못 찍어 **F5가 유일한 겉보기 검증**이었고 실제로 2건 잡았다(HP 미표시·아이콘 배치). 다음 세션은 `/mcp` 또는 재시작으로 붙여야 실게임 검증이 돌아온다.
-잔여: 상태 아이콘·다이어그램 점·막대 높이 전부 const(F5 손맛) · tab_panel 「마법진」 탭은 여전히 스텁(세40 이후).
+🔴🔴 **직전 세션 = 65 「세피리아식 떠있는 지팡이 — 손에서 완드 떼어 몸 옆에 둥둥·조준 회전·끝에서 발사」** (정본 STATUS「65」):
+사용자 *"마법사 이미지를 수정하고 세피리아처럼 지팡이를 마법사한테 빼고 둥둥 뜨게해서 장착하는 걸로"* → AskUserQuestion 3결정(움직임=옆에 둥둥+커서 회전 · 총구=지팡이 끝 · 아트=우선 1종 통일). **① 아트(takbon-art 위임)**: `player_witch_sheet.png` 8프레임(정면·좌·우·피격)에서 손에 쥔 완드 제거 → **빈손 마녀**(up 뒷모습은 완드 없어 원본 유지) · 신설 `floating_wand.png`(32×16, +X 향함, 보라 폼멜 손잡이→나무 샤프트→금빛 코어 빛끝). **② 코드(리드)**: 신설 `src/actors/floating_wand.gd`(Sprite2D, 플레이어 자식) — `GameState.equipment[WAND]` 있을 때만 표시(**맨손이면 숨고 몸 중심 캐스팅** 보존), 몸 옆 `HOVER_RADIUS`+`SIDE_ANGLE` 감쇠 추종 + 상하 `BOB`, `rotation`=조준각·왼쪽 겨눔이면 `flip_v` · 🔴 **총구 단일 소스 = `muzzle_position()`**(지팡이 끝 `to_global(MUZZLE_LEN,0)`) — caster가 이 함수를 부른다, 지오메트리 복제 금지. **③ `player_caster.gd`**: 발사 origin을 `global_position`→`_muzzle()`(지팡이 끝, 없으면 몸 중심 폴백). **④ `player.tscn`** FloatingWand 노드 배선(z 3). **떠있는 지팡이 = 장착한 WAND 아이템의 표현**, 그 안으로 그린 진이 발사(세피리아 그림).
+✅ 검증: 전 스위트 **24종** 그린+SCRIPT ERROR 0(신설 `test_floating_wand_auto` = 발사 origin 계약 그물, 🔴 뮤테이션 `_muzzle`→몸중심 되돌리면 [2] 2건 빨감·dist=0.0으로 검출력 확인) · 🔴 **실게임 MCP 복귀**(브리지 재연결) — 4방향 조준 회전+왼쪽 flip 정상·bob ±2.5px 실측(watch)·발사=RingCarrier가 총구 좌표에 정확 스폰(화염 진이 지팡이 끝에서 나감)·빈손 마녀 스샷 확인 · 사용자 F5 "잘된다".
+🔴 **이 세션 실수 = 실게임 exec `new_game()`이 실세이브(`user://save`)를 fresh로 덮음** — MCP 검증 전 **실세이브 백업→복원** 규칙(memory `takbon-jin-slots`·`takbon-content-reset`)을 첫 실행 때 안 지켰다(덮이기 전도 fresh였을 가능성 높지만 확인 못 함). 두 번째 테스트 땐 백업→복원해 안전. **다음엔 실게임 `new_game()`·저장 건드리기 전 무조건 백업 먼저.**
+잔여: `floating_wand.gd`의 `HOVER_RADIUS 22`·`SIDE_ANGLE 0.7`·`BOB_*` 전부 손맛 const(위/왼쪽 조준 시 손잡이가 몸에 살짝 겹침 — 26~30 조정 여지, F5) · 지팡이 3종 시각은 1종 통일(나중 확장) · 지팡이 그림자·per-wand 스프라이트 안 붙임.
 
 🔴 **지지난 = 57** 「세피리아식 스테이지 형식 확정 + 퀘스트 은퇴 방향」(설계·결정 세션 — STATUS 항목 없음, 정본 = memory `takbon-stage-format-decision`) — 동기 = *"언제 룬을 얻을지 설계를 못 해 불안"* → 「뼈대는 확정, 살은 랜덤」. 곁가지: 밑그림 커스텀 완성본을 git stash에 보류(memory `takbon-guide-editor-stashed`) · 중첩진 architect 설계 = `scratch_nested_design.md` 대기(결정점 8개 미합의).
 ⏸ **보류 = forest_t2(숲2·티어 하강)** — 사용자 확정(세48): *"숲2는 아직 필요없음."* 딸린 **「하강 시 회복 스킵」도 같이 보류**(`src/field/forest.gd:131` 주석). 관문이 enemy_id 기준이라 스테이지 형식과 충돌 없음(세58).
@@ -26,6 +26,7 @@
 - **미결 결정**: D5 진 카탈로그 재구축(세61 개편 — 복원 순서·칸 차등 배치·획득 경로를 진마다 사용자가 확정) · D3 문양 게이트 · D6 흙·번개 네임드(룬 복원 순서에 종속) · 🔴 잡몹 공급원 무대 0곳. 정리는 `docs/PROGRESSION.md` 「미결」절.
 
 **지난 세션 한 줄 지도** (상세는 STATUS/memory — 필요할 때만 캐라):
+- **64** HUD 정리(좌상단 HP·마나·슬롯 진 다이어그램·C 상태창·슬롯 4→3) — 조작 hint_text 통째 제거(온보딩이 조작 가르침)·HP/마나 숫자 막대 안+🔴HP 늘 그림(show_hp 폐지=씬별 HUD 차이 0)·슬롯=진 미니 다이어그램(`RingBoard.jin_slot_dots` 재사용, 각도 베끼지 마라)+선택만 상세·톤 책 UI 통일·C 상태창(tab_panel 「캐릭터」 탭+우하단 사람 실루엣 아이콘=mouse_filter IGNORE 클릭 안 받음)·"그려 장착" 2줄 겹침 수정(caster notice 제거)·슬롯 4→3 (`e288810`, memory `takbon-hud-cleanup`)
 - **63** 손맛·아트 개편 — 히트 플래시 셰이더(`hit_flash.gdshader` mix-to-white, modulate 곱셈은 어두운 픽셀이 안 하얘짐) + 🔴modulate 소유권 3파전 청산(팝·텔레그래프가 셰이더 uniform으로 이사 → modulate=rgb 틴트·a 분산 2축만)·🔴함정 둘(셰이더 TEXTURE 직접 샘플 금지·ShaderMaterial per-instance=공유하면 전원 플래시)·피격 애니(`EventBus.player_hurt` 단일 발신+사망 가드·플레이어 시트 144×192 오른쪽 덧대기=기존 좌표 불변·보스 `params.hurt_sprite`)·그림자(`shadow.gd` forest_enemy 자동 부착·z≥0)·먼지(`dust.gd` juice 형제)·카메라(trauma²+킥 5px+발사 반동 2px) · 🔴실게임이 잡은 것 2(그림자 로브 가림·먼지 뭉개짐 — 테스트 전부 그린이었다) (`1c4d995`, memory `takbon-hit-feel-overhaul`)
 - **62** 고리 조립 책 UI 세련화 + debug_free_cast — 양피지 책·한지 카드(세21 고아 에셋 부활)·가죽 버튼(테마는 색만+StyleBox 코드 주입 — PNG를 .tres에 물면 침묵사)·그리기 연출(전부 ring_board _draw const, 손맛 F5 대기)·debug_free_cast(에디터=마나 무소모·HUD ∞ 표기) · 🔴push_input=윈도우 좌표(캔버스 ×2)·`"editor"` 피처는 헤드리스에서도 true(자명 통과 함정)·const에 PackedFloat32Array 생성자 불가 (`807e172`, memory `takbon-forge-book-ui`)
 - **61** 콘텐츠 카탈로그 리셋 — 진·룬·문양 각 1종(jin_single·rune_fire·radiate)만 남기고 .tres 27장 삭제, **기계는 전량 유지**(복원 레시피=PROGRESSION.md — 진 복원 땐 glyph_slots 진마다 직접 확정) · 시드 2종(🔴문양은 해금 게이트 자체가 없다 — D3 때 스키마·판정·시드 한 세트) · 테스트=in-memory 주입으로 커버리지 유지(⚠progression·decode 스캔 그물 3곳 자명 통과 — 복원 세션이 뮤테이션 재점화) · 잔여=snake counter_rune 사장·wand_fork/ring 폴백으로 MULTI/NOVA는 진 없이도 열림·q05가 사슬 끝 (`43937c8`, memory `takbon-content-reset`)
@@ -83,8 +84,10 @@
   (**공용** — base와 field가 같이 쓴다) · `src/drawing`(고리 조립 — 아래) · `src/spell`(발사) ·
   `src/core`(리드 전용)
   - 🔴 **`src/actors` = 공용 배우** (세션 26): `player.tscn`(WASD·그룹 `"player"`) ·
-    **`player_caster.gd`**(조준·발사·슬롯) · `interact_zone.gd`(책상·숲 출구·귀환 지점이 **같은
-    물건** — 문구는 씬의 `Prompt.text`, 찾기는 `zone_id`).
+    **`player_caster.gd`**(조준·발사·슬롯) · **`floating_wand.gd`**(세65 — 세피리아식 떠있는
+    지팡이. `equipment[WAND]` 있을 때만 표시, 옆에 둥둥+조준 회전. 🔴 **발사 총구 = 지팡이 끝
+    `muzzle_position()`** 단일 소스, caster가 부른다 — 없으면 몸 중심 폴백) · `interact_zone.gd`(책상·
+    숲 출구·귀환 지점이 **같은 물건** — 문구는 씬의 `Prompt.text`, 찾기는 `zone_id`).
     🔴 **발사를 복사하지 마라 — caster를 써라**: 직접 Dictionary를 만들면 `to_assembly()`가 빠져
     **손그림 점수가 조용히 사라지고 기준 위력으로 나간다**. 그래서 뽑은 것이다
   - 🔴 **`src/hud/hud.gd` = 공용 HUD** (옛 `src/base/base_hud.gd`). 씬마다 다른 건 `hint_text`·
@@ -226,6 +229,7 @@
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_gale_boss_auto.gd     # **gale 보스** (세션56): Db 로드+**params 17키 전수**(세50 그물) · 페이즈2 전이(`phase()`) · 돌풍(플레이어 hp 감소+`apply_push` 밀림 거리≈gust_push_dist) · 볼리(그룹 `"enemy_projectiles"` 수 ==volley_count — 초과도 잡음) · 적탄(히트→hp 감소+free·수명 만료 free — mask2 침묵 함정 그물) · 🔴**반응 룬**(연쇄=BOLT·증기=WATER — FIRE 하드코딩 청산 직접 그물. 연습장 몸 쪽은 test_status_auto [11]ⓑ가 잰다 — **두 몸은 따로 갈라진다**, 세56에 dummy만 되돌려도 전 스위트 그린이었다) · 🔴**링·탄 렌더·밀림 손맛·hover 거리감은 헤드리스가 못 잡는다**(세56 실게임 MCP로 링·탄 렌더 확인, 손맛=사용자 F5) · 🔴**뮤테이션 4/4 검출력**(페이즈·rune 두 몸 각각·볼리)
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_spell_vfx_auto.gd     # **마법 연출 배선** (세션59): vfx가 `ring_cast_requested`·`spell_impact`에 연결(배선 침묵사 그물) · 트레일 형제 스폰 + 🔴**`player_projectiles` 그룹 무가입**(트레일이 가입하면 탄 수 세는 테스트 4곳이 거짓으로 는다) · 트리 밖 setup 무에러(null 가드 — ⚠ 이 항목의 진짜 검출자는 **SCRIPT ERROR grep**이다, 테스트는 가드가 없어도 OK를 찍는다) · 🔴**빈 진 착탄 = emit 정확히 1**(캐리어 emit 전용 그물 — 발산 탄이 있으면 캐리어 emit 부재가 가려진다, 뮤테이션으로 실증) · 발산 진 착탄 ≥2(탄 emit) · 🔴**볼 코어·자전·펄스·트레일·머즐/착탄 렌더는 헤드리스가 못 잡는다**(실게임 MCP 필수)
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_ring_book_jin_auto.gd # **책 진 셀 격자·아이콘** (세61에 목록 편입 — 세션7 함정「목록에서 빠진 테스트는 낡아 죽는다」의 그 자리에 있었다): Db 진 ≥1종 · 격자 계약 = 합성 8개(순수 함수 `jin_cell_rects` — 카탈로그 1종이면 cols=1이라 폭 비교가 무의미해져 합성으로 잰다) · 아이콘 구분 = pattern×motion 조합 합성 순회 · 🔴**실제 셀 겉보기·클릭은 헤드리스가 못 잡는다**(실게임 확인)
+./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_floating_wand_auto.gd    # **떠있는 지팡이 + 발사 총구 계약** (세션65 — 세피리아식): 미장착→FloatingWand 숨김+발사 origin 몸중심 폴백(맨손 캐스팅 보존) · 장착→표시+🔴**발사 origin == 지팡이 끝 muzzle_position** + 몸과 뚜렷이 떨어짐(총구가 몸이 아니라 지팡이 끝이라는 계약 자체 — 뮤테이션 `_muzzle`→몸중심 되돌리면 [2] 2건 빨감) · 총구 기하 단일 소스(원점·무회전에서 tip==MUZZLE_LEN) · 🔴**둥둥·회전·flip·머즐 연출·지팡이 겉보기는 헤드리스가 못 본다**(실게임 MCP — 세65에 4방향 조준·발사 tip 스폰·bob 실측)
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_feel_auto.gd            # **손맛 개편** (세션63): player_hurt 발신 단일 소스+🔴사망 가드(hp 0 뒤 무발신) · 🔴히트 플래시 material **per-instance**(공유=전원 플래시) · 텔레그래프=셰이더 uniform+**modulate 불가침**(rgb=상태 틴트·a=분산 2축 계약) · hurt 애니 굽기(있으면 비루프/없으면 무변경) · 보스 2종 hurt_sprite 로드(세50 침묵사 그물) · 그림자(z≥0·그룹 무가입·첫 자식·뱀 마디 수 일치) · dust 구르기 엣지 버스트 · 카메라 킥 방향(발사=조준 반대·피격=가해자 반대) · 플레이어 hurt 애니 가드 · 🔴허수아비 파리티(세56 두 몸 그물) · 🔴**플래시가 실제로 하얗게 보이나·그림자/먼지 겉보기·수치 손맛은 헤드리스가 못 잡는다**(세63에 그림자 가림·먼지 뭉개짐을 실게임이 잡았다 — 전 그물 그린이었다)
 ```
 

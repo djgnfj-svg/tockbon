@@ -1,10 +1,62 @@
 # STATUS — 현재 진행 상태
 
-> 최종 갱신: 2026-07-23 (세션 64 — **HUD 정리: 좌상단 HP·마나·슬롯 다이어그램·C 상태창·슬롯 4→3**)
+> 최종 갱신: 2026-07-23 (세션 65 — **세피리아식 떠있는 지팡이: 손에서 완드 떼어 몸 옆에 둥둥·조준 회전·끝에서 발사**)
 > · **세션 종료마다 갱신**
 >
 > 🔴 **아래 세션 20 이하는 대부분 삭제된 코드를 설명한다** — 기록이지 현재 상태가 아니다.
 > 현재 정본 = 최상단 「세션 31」~「세션 23」 + `CLAUDE.md` + memory `takbon-mana-injection-rule`.
+
+---
+
+## 세션 65 (2026-07-23) — **세피리아식 떠있는 지팡이 (손에서 완드 떼어 몸 옆에 둥둥 · 조준 회전 · 끝에서 발사)**
+
+> 발단 = 사용자: *"마법사 이미지를 수정하고 세피리아처럼 지팡이를 마법사한테 빼고 둥둥 뜨게해서
+> 장착하는 걸로 하려고함."* 지금 지팡이(WAND) 아이템은 스탯만 있고(발사 패턴) 화면에 안 그려졌고,
+> 마녀는 손에 작은 완드를 쥐고 있었다. 세피리아식 = 완드를 손에서 떼어 **몸 옆에 둥둥 뜨는 별도
+> 오브젝트**로. 게임 구조상 **떠있는 지팡이 = 도구(장착한 WAND)**, 그 안으로 **그린 진이 발사**된다.
+> AskUserQuestion 3결정 후 아트 위임(takbon-art) + 코드는 리드(발사 계약·손맛·검증이라).
+
+### 결정 (AskUserQuestion)
+- **움직임** = 옆에 둥둥 + 커서로 회전 (궤도·항상 커서겨냥 각하)
+- **총구** = 떠있는 지팡이 끝에서 발사 (몸 중심 각하)
+- **아트** = 우선 1종 통일 (3종 각각은 나중 확장)
+
+### 한 일
+- **① 아트 (takbon-art 위임, 보고서 파일 규약 준수)** — `player_witch_sheet.png`의 손에 쥔 완드를
+  8프레임(down·left·right·hurt)에서 제거 → **빈손 마녀**. up(뒷모습) 2프레임은 완드가 없어 원본 유지.
+  신설 `floating_wand.png`(32×16, 투명, **+X 향함** — 코드가 회전시켜 커서 겨눔): 보라 폼멜+금 페룰
+  손잡이(왼쪽) → 나무 샤프트 → 흰 코어 글로우+금 헤일로 끝(오른쪽). Apollo 팔레트.
+- **② 신설 `src/actors/floating_wand.gd`** (Sprite2D, 플레이어 자식) — `GameState.equipment[WAND]`가
+  있을 때만 `visible`(맨손이면 숨고 몸 중심 캐스팅 보존 = 비파괴). 위치 = 몸에서 `HOVER_RADIUS`
+  떨어져 조준각+`SIDE_ANGLE`(옆으로 벌림)로 **감쇠 추종**(흐느적) + 상하 `BOB`. `rotation`=조준각,
+  왼쪽 겨눔이면 `flip_v`(뒤집힘 방지). 🔴 **총구 단일 소스 `muzzle_position()`** = `to_global(MUZZLE_LEN,0)`
+  (지팡이 끝). 손맛값(HOVER_*·BOB_*·MUZZLE_LEN) 전부 연출 const(PUSH_DECAY 선례).
+- **③ `player_caster.gd`** — 발사 origin을 `global_position` → 신설 `_muzzle()`로. `_muzzle()`는 형제
+  FloatingWand를 지연 조회해 `visible`이면 `muzzle_position()`(지팡이 끝), 아니면 `global_position`
+  폴백. `fire()`의 `ring_cast_requested.emit(..., _muzzle(), _aim)`.
+- **④ `player.tscn`** — FloatingWand(Sprite2D, z 3) 노드 배선 + 텍스처/스크립트 ext_resource.
+
+### 검증
+- 전 스위트 **24종 그린** + SCRIPT ERROR 0. **신설 `test_floating_wand_auto`** = 발사 origin 계약
+  그물(공개 경로 = `fire()`가 emit하는 origin을 붙잡음): [1] 미장착→숨김+origin 몸중심 폴백 · [2]
+  장착→표시+**origin==지팡이 끝**+몸과 뚜렷이 떨어짐 · [3] 총구 기하 단일 소스(원점·무회전 tip==MUZZLE_LEN).
+  🔴 **뮤테이션**: `_muzzle`을 몸 중심으로 되돌리면 [2] 2건 빨감(dist=0.0) — 검출력 확인.
+- 🔴 **실게임 MCP**(브리지 재연결됨 — 세64에 끊겼던 것): 빈손 마녀 스샷 확인 · 4방향 조준(우·상·좌)
+  회전+왼쪽 flip 정상 · bob pos.y ±2.5px 진동 실측(runtime_state watch) · 발사→**RingCarrier가 총구
+  좌표(3,57)에 정확 스폰**, 화염 진이 지팡이 끝에서 나가고 머즐 연출까지 · caster `_muzzle`==wand
+  tip·몸에서 33px 확인 · 사용자 F5 "잘된다".
+
+### 🔴 이 세션 실수 (기록)
+- 실게임 검증 중 exec `GameState.new_game()`을 돌려 **실세이브(`user://save/save.json`)를 fresh로
+  덮었다** — memory `takbon-jin-slots`·`takbon-content-reset`의 "실게임 MCP는 실세이브 백업→복원"을
+  **첫 실행 때 안 지켰다**. 덮이기 전도 day1·time0 fresh였을 가능성이 높으나 확인 못 함. 두 번째
+  테스트(발사)는 백업→복원해 안전. **다음엔 실게임 new_game/저장 건드리기 전 무조건 백업 먼저.**
+
+### 잔여·미결
+- `floating_wand.gd` 손맛 const 전부 F5 대상: 위/왼쪽 조준 시 `HOVER_RADIUS 22`가 조금 가까워
+  손잡이가 몸에 살짝 겹침(26~30 조정 여지) · `SIDE_ANGLE 0.7`·`BOB_AMP 2.5`/`BOB_SPEED 3.5`.
+- 지팡이 3종(basic/fork/ring) 시각은 1종 통일 상태 — per-wand 스프라이트는 나중 확장.
+- 지팡이 그림자(둥둥 강조) 미구현.
 
 ---
 
