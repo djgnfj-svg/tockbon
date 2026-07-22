@@ -702,9 +702,9 @@ func take_hit(damage: float, rune_type: int, status: int, status_power: float) -
 ## 인벤 흐름은 그대로다: `add_to_bag` → 귀환(extraction_success) 시 창고로 회수 · 죽으면(bag_lost)
 ## 통째로 사라진다. 바뀐 건 **가방에 언제 들어가느냐**뿐이다("주웠다"가 진짜 줍는 행위가 됐다).
 ##
-## 🔴 룬 조각(fragment_*)은 이 풀에 **없어야 한다** — 룬은 드롭이 아니라 보스 퀘스트 보상이다
-## (사용자 확정). 지금 슬라임은 mat_slime_core만 있어 무관하지만, 엘리트를 숲에 넣을 때
-## 그 .tres의 fragment 줄은 **일반 드롭이 아니라 퀘스트로** 빼야 한다 (BACKLOG).
+## 🔴 룬 조각(fragment_*)은 **`until_unlock` 관문 드롭으로만** 나온다 (세58, 정본 docs/PROGRESSION.md
+## — 「뼈대는 확정, 살은 랜덤」). 잡몹 순수 확률 조각은 세58에 은퇴했다 — 조각을 확률 줄로 되살리면
+## test_progression_auto [4]·test_decode_auto ⑥이 붉는다. 새 관문 = 적 .tres의 until_unlock 드롭 한 줄.
 ##
 ## 🔴 `Audio.play(&"pickup")`은 여기서 **뺐다** — 소리는 실제로 주울 때(픽업) 울린다.
 ##
@@ -736,18 +736,26 @@ func _die() -> void:
 
 
 ## 🔴 드롭 테이블을 굴린다 (세51에 _die 안에 있던 로직 — 세55에 상자/낱개가 공유하려고 추출).
-## 반환 = `[{"id": StringName, "count": int}]`. 확률·수량 로직은 한 글자도 안 바꿨다(키만 "n"→"count"로
-## 통일 — drop_pickup·loot_panel 계약이 "count"라 세 곳이 같은 이름을 본다).
+## 반환 = `[{"id": StringName, "count": int}]` — drop_pickup·loot_panel 계약이 "count"라 세 곳이 같은 이름을 본다.
+## 세58: until_unlock(관문 드롭)만 확률 대신 해금 상태로 갈린다 — 나머지 확률·수량 로직은 그대로.
 ## 랜덤: Godot 전역 `randf()`/`randi()` — 부팅 시 자동 시드. 세이브에 안 들어간다(굴린 결과만 남는다).
 func _roll_drops() -> Array[Dictionary]:
 	var rolled: Array[Dictionary] = []
+	var gs := get_node_or_null("/root/GameState")
 	for drop: DropEntry in _def.drops:
-		if randf() <= drop.chance:
-			var n := drop.min_count
-			if drop.max_count > drop.min_count:
-				n += randi() % (drop.max_count - drop.min_count + 1)
-			if n > 0:
-				rolled.append({"id": drop.item_id, "count": n})
+		# 🔴 관문 드롭 (세58, 정본 docs/PROGRESSION.md): until_unlock가 있으면 확률이 아니라
+		# 해금 상태가 정한다 — 미해금 = 확정, 해금됨 = 스킵. GameState가 없으면(고립 테스트)
+		# 관문을 못 재므로 순수 확률로 폴백한다.
+		if drop.until_unlock != &"" and gs != null:
+			if gs.is_unlocked(drop.until_unlock):
+				continue
+		elif randf() > drop.chance:
+			continue
+		var n := drop.min_count
+		if drop.max_count > drop.min_count:
+			n += randi() % (drop.max_count - drop.min_count + 1)
+		if n > 0:
+			rolled.append({"id": drop.item_id, "count": n})
 	return rolled
 
 

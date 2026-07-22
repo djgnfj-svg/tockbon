@@ -31,7 +31,6 @@ const SLOT_GAP := 8.0
 const MARGIN := 16.0
 const HP_SIZE := Vector2(240.0, 12.0)
 const MANA_SIZE := Vector2(240.0, 10.0)
-const HUNGER_SIZE := Vector2(240.0, 10.0)
 const HP_GAP := 10.0
 
 const SLOT_BG := Color(0.10, 0.09, 0.08, 0.72)
@@ -52,8 +51,6 @@ const HP_LOW := Color(0.95, 0.55, 0.20)
 const HP_EDGE := Color(0.45, 0.42, 0.36, 0.75)
 const MANA_FILL := Color(0.34, 0.55, 0.88)
 const MANA_LOW := Color(0.90, 0.45, 0.35)
-const HUNGER_FILL := Color(0.62, 0.72, 0.32)
-const HUNGER_LOW := Color(0.90, 0.45, 0.35)
 
 # ── 획득 토스트 (세션51) ──
 ## 🔴 **별도 씬·자식 Control을 만들지 않고 여기 `_draw`에 얹는다.** `hud.tscn`이 없다 —
@@ -78,10 +75,8 @@ const GradeColors := preload("res://src/core/grade_colors.gd")
 var _selected: int = 0
 var _say: String = ""
 var _warn: bool = false
-## 마나·허기는 매 프레임 변해 시그널이 없다 — 값이 바뀐 프레임만 다시 그린다 (매 프레임 redraw 회피).
-## 🔴 둘 다 봐야 한다: 숲에서 마나가 만땅(안 변함)이어도 허기는 줄어 막대가 얼어붙으면 안 된다.
+## 마나는 매 프레임 변해 시그널이 없다 — 값이 바뀐 프레임만 다시 그린다 (매 프레임 redraw 회피).
 var _last_mana: float = -1.0
-var _last_hunger: float = -1.0
 ## 획득 토스트 줄들. 각 항목 = {id: StringName, name: String, grade: int, count: int, t: float}.
 ## 앞이 오래된 줄, 뒤가 최근 줄 (화면에선 최근 줄이 맨 아래).
 var _toasts: Array[Dictionary] = []
@@ -166,10 +161,8 @@ func toast_lines() -> Array[Dictionary]:
 
 
 func _process(delta: float) -> void:
-	if not is_equal_approx(GameState.mana, _last_mana) \
-			or not is_equal_approx(GameState.hunger, _last_hunger):
+	if not is_equal_approx(GameState.mana, _last_mana):
 		_last_mana = GameState.mana
-		_last_hunger = GameState.hunger
 		queue_redraw()
 	# 토스트가 살아 있는 동안만 매 프레임 다시 그린다 (평소엔 redraw 비용 0).
 	if not _toasts.is_empty():
@@ -197,17 +190,15 @@ func _draw() -> void:
 	_draw_toasts(font, y)
 	for i in GameState.EQUIP_SLOTS:
 		_draw_slot(font, Vector2(MARGIN + float(i) * (SLOT_SIZE.x + SLOT_GAP), y), i)
-	# 마나 막대는 늘 그린다 — 베이스 연습장에서도 발사에 마나가 드니까 (HP·허기는 숲만).
+	# 마나 막대는 늘 그린다 — 베이스 연습장에서도 발사에 마나가 드니까 (HP는 숲만).
 	var mana_y := y - HP_GAP - MANA_SIZE.y
 	_draw_mana(font, Vector2(MARGIN, mana_y))
 	if show_hp:
 		var hp_y := mana_y - HP_GAP - HP_SIZE.y
 		_draw_hp(font, Vector2(MARGIN, hp_y))
-		# 허기는 베이스에선 늘 만복이라 장식이 된다 — HP와 같은 이유로 숲(show_hp)만 그린다.
-		_draw_hunger(font, Vector2(MARGIN, hp_y - HP_GAP - HUNGER_SIZE.y))
 
 
-## 획득 토스트 — **우측 하단, 슬롯 4칸 윗쪽**. 슬롯은 왼쪽(MARGIN부터 4칸)에 있고 HP·마나·허기
+## 획득 토스트 — **우측 하단, 슬롯 4칸 윗쪽**. 슬롯은 왼쪽(MARGIN부터 4칸)에 있고 HP·마나
 ## 막대도 전부 좌측이라, 오른쪽 끝에 붙이면 어느 것과도 안 겹친다.
 ## 최근 줄이 맨 아래고 오래된 줄이 위로 밀린다 — 눈이 마지막 획득을 같은 자리에서 본다.
 ## `slots_top` = 슬롯 윗변 y (여기서부터 위로 쌓는다).
@@ -254,21 +245,6 @@ func _draw_mana(font: Font, at: Vector2) -> void:
 	draw_rect(Rect2(at, MANA_SIZE), HP_EDGE, false, 1.0)
 	draw_string(font, at + Vector2(MANA_SIZE.x + 8.0, MANA_SIZE.y - 1.0),
 		"마나 %d / %d" % [floori(GameState.mana), roundi(mana_max)],
-		HORIZONTAL_ALIGNMENT_LEFT, -1, 11, HINT_COLOR)
-
-
-## 허기(포만) 막대 — 숲에서만 준다. 0이면 굶어 HP가 깎인다(GameState._tick_hunger). 낮으면 붉게.
-## 이게 무한 파밍을 막는다: 눌러앉으면 굶어 귀환을 강제당한다 (세션 35).
-func _draw_hunger(font: Font, at: Vector2) -> void:
-	var hunger_max := GameState.hunger_max()
-	var frac := clampf(GameState.hunger / hunger_max, 0.0, 1.0) if hunger_max > 0.0 else 0.0
-	draw_rect(Rect2(at, HUNGER_SIZE), HP_BG, true)
-	if frac > 0.0:
-		draw_rect(Rect2(at, Vector2(HUNGER_SIZE.x * frac, HUNGER_SIZE.y)),
-			HUNGER_LOW if frac <= 0.25 else HUNGER_FILL, true)
-	draw_rect(Rect2(at, HUNGER_SIZE), HP_EDGE, false, 1.0)
-	draw_string(font, at + Vector2(HUNGER_SIZE.x + 8.0, HUNGER_SIZE.y - 1.0),
-		"허기 %d / %d" % [floori(GameState.hunger), roundi(hunger_max)],
 		HORIZONTAL_ALIGNMENT_LEFT, -1, 11, HINT_COLOR)
 
 

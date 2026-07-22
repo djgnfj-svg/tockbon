@@ -94,9 +94,8 @@ func _ready() -> void:
 	# 🔴 씬 진입 시 모달 플래그를 내린다 — ui_modal_open은 오토로드라 씬 전환에도 살아남는다.
 	# 어떤 경로로든 모달이 켜진 채 씬이 바뀌면 새 패널은 _open=false인데 플래그만 true라 잠긴다.
 	GameState.ui_modal_open = false
-	# 🔴 베이스=집. 허기가 멎고 배를 채운다 (세션 35 — 귀환·사망이 다 여기로 오므로 회복도 여기서).
+	# 베이스=집 — 원정 플래그를 내린다 (귀환·사망이 다 여기로 온다).
 	GameState.in_expedition = false
-	GameState.restore_hunger_full()
 	_desk.interacted.connect(_open_drawing)
 	_gate.interacted.connect(_to_forest)
 	# 🔴 건설형 스테이션 (세션37) — 안 지어졌으면 E=건설 시도, 지어졌으면 E=패널. _station_interact가 가른다.

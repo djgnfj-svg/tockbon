@@ -9,11 +9,10 @@ var balance: BalanceData = preload("res://data/balance.tres")
 var mana: float
 ## 플레이어 HP — 출격 시 reset, 표시·판정의 단일 원장 (v1.1: C 로컬에서 이관)
 var hp: float
-## 포만 게이지 (세션 35) — **숲에 있는 동안만** 준다. 0이면 굶어 HP가 깎인다. 베이스=늘 만복.
-var hunger: float
-## 숲에 있나 — 허기는 이때만 준다. forest/base `_ready`가 설정 (오토로드라 씬 전환에도 남음).
+## 숲에 있나 — forest/base/intro `_ready`가 설정 (오토로드라 씬 전환에도 남음).
+## ⚠ 세58 허기 은퇴(docs/PROGRESSION.md D1)로 읽는 곳이 0이다 — "원정 중" 상태 자체는 의미가
+## 살아 있어 플래그만 남긴다 (원정 전용 기능이 다시 붙으면 이걸 읽는다).
 var in_expedition: bool = false
-var _starve_accum: float = 0.0
 ## {item_id: count} — 창고 (영구, 사망에도 유지)
 var inventory: Dictionary = {}
 ## 출격 중 획득 [{ "id": StringName, "count": int }] — 사망 시 손실
@@ -42,7 +41,6 @@ var ui_modal_open: bool = false
 func _ready() -> void:
 	mana = mana_max()
 	hp = hp_max()
-	hunger = hunger_max()
 	_seed_starting_unlocks()
 	EventBus.extraction_success.connect(_on_extraction_success)
 	EventBus.bag_lost.connect(func() -> void: bag.clear())
@@ -65,12 +63,14 @@ func _seed_starting_unlocks() -> void:
 	# 획득 경로가 아예 없어 **게임에서 반응을 시험할 방법이 없었다**(세48 진 5종과 같은 처지).
 	# ⚠ 해독·보상 경로가 생기면 여기서 빼면 그대로 "얻는 것"이 된다.
 	#
-	# 🔴🔴 **세션50: 그 경로가 생겼는데도 시드를 유지했다** (사용자 확정). 조각 6종·vine/beetle/mist
-	# 드롭·숲 심층 gale·퀘스트 q08~q10이 전부 배선됐지만, 여기서 미리 열어 주므로 **UNLOCK 퀘스트가
-	# 소급 완료되고 조각은 해독해도 아무 일이 안 난다** = 지금은 **의도적으로 잠자는 콘텐츠**다.
-	# ⚠ **"왜 안 뜨지"로 시간 태우지 마라 — 버그가 아니다.** 유지한 이유는 다음 순서가 "사용자가
-	# 직접 쏴 보며 반응 손맛을 정하기"인데, 시드를 빼면 두 번째 룬을 얻기까지 그게 막히기 때문이다.
-	# 🔴 **손맛 확인이 끝나면 아래 5줄을 지워라** — 그 순간 이번 세션의 획득 경로가 통째로 살아난다.
+	# 🔴🔴 **세션50: 그 경로가 생겼는데도 시드를 유지했다** (사용자 확정). 여기서 미리 열어 주므로
+	# **UNLOCK 퀘스트가 소급 완료되고 조각은 해독해도 아무 일이 안 난다** = **의도적으로 잠자는
+	# 콘텐츠**다. ⚠ **"왜 안 뜨지"로 시간 태우지 마라 — 버그가 아니다.** 유지한 이유는 다음 순서가
+	# "사용자가 직접 쏴 보며 반응 손맛을 정하기"인데, 시드를 빼면 두 번째 룬부터 그게 막히기 때문.
+	# 🔴🔴 **세션58: 이 함수 = docs/PROGRESSION.md 관문표 0행(시작 지급)의 구현이다** — 표 0행과
+	# 여기가 1:1이어야 한다. 획득 경로는 이제 **관문 드롭**(until_unlock — 물=slime_elite·바람=gale·
+	# 풀=snake_boss, 잡몹 랜덤 조각은 은퇴)이고 시드가 그 관문을 덮어 재우는 중이다.
+	# 🔴 **손맛 확인이 끝나면 아래 룬 5줄을 지워라 — 그게 관문 가동 스위치다** (PROGRESSION.md 「시드」절).
 	codex[&"rune_water"] = true
 	codex[&"rune_wind"] = true
 	codex[&"rune_bolt"] = true
@@ -109,11 +109,9 @@ func new_game() -> void:
 	quest_done.clear()
 	quest_seen.clear()         # 🔴 [!] 접수 초기화 (세션43) — 새 게임은 첫 퀘스트에 [!]가 떠야 한다
 	in_expedition = false
-	_starve_accum = 0.0
 	_seed_starting_unlocks()   # 룬·문양만 — _ready와 동일 (분기 방지)
 	hp = hp_max()
 	mana = mana_max()
-	hunger = hunger_max()
 	# 구독 UI(HUD·창고·퀘스트 패널)를 새 빈 상태로 깨운다 — 로드 경로(save_manager)와 같은 3종.
 	EventBus.player_hp_changed.emit(hp, hp_max())
 	EventBus.equipment_changed.emit()
@@ -121,29 +119,6 @@ func new_game() -> void:
 
 func _process(delta: float) -> void:
 	mana = minf(mana + balance.mana_regen_per_sec * delta, mana_max())
-	if in_expedition:
-		_tick_hunger(delta)
-
-## 숲에 있는 동안만 불린다 (in_expedition). 포만이 남았으면 줄이고, 0이면 1초 간격으로 굶어 HP↓.
-## 🔴 굶주림 피해는 **tick**이다 — damage_player를 매 프레임 부르면 아픔음(player_hp_changed 훅)이
-## 도배된다. accum으로 1초에 한 번만 때린다.
-func _tick_hunger(delta: float) -> void:
-	if hunger > 0.0:
-		hunger = maxf(0.0, hunger - balance.hunger_drain_per_sec * delta)
-		_starve_accum = 0.0
-		return
-	_starve_accum += delta
-	if _starve_accum >= 1.0:
-		_starve_accum -= 1.0
-		damage_player(balance.starve_damage_per_tick)
-
-func hunger_max() -> float:
-	return balance.hunger_max
-
-## 만복으로 되돌린다 — 출격(만복으로 시작)·귀환(집에서 배를 채움) 양쪽이 부른다.
-func restore_hunger_full() -> void:
-	hunger = hunger_max()
-	_starve_accum = 0.0
 
 func spend_mana(amount: float) -> bool:
 	if mana < amount:

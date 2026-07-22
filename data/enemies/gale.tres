@@ -12,6 +12,7 @@ max_count = 3
 [sub_resource type="Resource" id="Resource_4cclg"]
 script = ExtResource("1_algcq")
 item_id = &"fragment_wind"
+until_unlock = &"rune_wind"
 
 [resource]
 script = ExtResource("2_18ucn")

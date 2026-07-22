@@ -23,7 +23,7 @@ var _exited := false
 
 func _ready() -> void:
 	GameState.ui_modal_open = false
-	GameState.in_expedition = false   # 튜토엔 허기 없음
+	GameState.in_expedition = false   # 튜토방은 원정이 아니다
 	_player.caster.enabled = false    # 이동만 익힌다 — 조준·발사 끔
 	# 잔해(layer 8)와 부딪히도록 플레이어 마스크에 8을 얹는다 (런타임 = 튜토 한정).
 	_player.set_collision_mask_value(BARRIER_LAYER, true)

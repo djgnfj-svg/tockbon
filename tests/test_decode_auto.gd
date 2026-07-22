@@ -111,17 +111,25 @@ func _run() -> void:
 		_check("%s 해독이 조각을 소비한다" % frag, gs.get_count(frag) == 0)
 		gs.codex.erase(want)
 
-	# ── ⑥ 새 조각을 실제로 뿌리는 적이 있다 (드롭 경로가 없으면 게임에선 영영 못 얻는다) ──
+	# ── ⑥ 조각의 획득 경로 = 관문 드롭뿐 (세58, docs/PROGRESSION.md) ──
+	# ⚠ 옛 ⑥이 보장하던 「획득 경로가 존재한다」는 test_progression_auto [4]의 GATES 매핑이 인계받았다
+	# (water·wind·grass 한정 — earth·bolt는 의도적 구멍, D6 네임드 대기). 여기 ⑥은 은퇴 원칙 감시만 한다.
+	# 옛 그물("조각 3종 모두 뿌리는 적이 있다")은 세58 랜덤 조각 은퇴로 전제가 뒤집혔다:
+	# grass는 snake_boss 관문(until_unlock)으로 나오고, earth·bolt는 **의도적으로 획득 경로가
+	# 없다**(관문표 단계 4·5 = 구멍, 신규 네임드 대기 = D6). 그래서 지금의 불변식은 —
+	#   • 조각이 뿌려진다면 반드시 until_unlock 관문이어야 한다 (순수 확률 fragment = 은퇴 위반)
+	# D6에서 네임드가 붙으면 earth·bolt도 관문 드롭이 생겨 그대로 통과한다 (기대치 수정 불필요).
 	for frag: StringName in frag_to_rune:
-		var dropper := ""
+		var loose_dropper := ""
 		for e: EnemyDef in db.enemies.values():
 			for d: DropEntry in e.drops:
-				if d.item_id == frag:
-					dropper = String(e.id)
+				if d.item_id == frag and d.until_unlock == &"":
+					loose_dropper = String(e.id)
 					break
-			if dropper != "":
+			if loose_dropper != "":
 				break
-		_check("🔴 %s를 뿌리는 적이 있다 (%s)" % [frag, dropper], dropper != "")
+		_check("🔴 %s가 관문 없이(순수 확률로) 뿌려지는 곳 0 (%s)" % [frag, loose_dropper],
+			loose_dropper == "")
 
 	# 뒷정리 — 오토로드 GameState 메모리 오염 방지 (codex는 저장 트리거는 아니지만 깔끔하게).
 	gs.codex.erase(&"rune_water")

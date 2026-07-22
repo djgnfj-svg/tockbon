@@ -84,9 +84,8 @@ func _ready() -> void:
 	GameState.reset_player_hp()
 	# 출격 = 만마나 (세션 35). HP와 같은 이유 — 연습장에서 쏘고 저마나로 원정을 시작하면 안 된다.
 	GameState.restore_mana_full()
-	# 🔴 여기서부터 허기가 준다 (세션 35). 만복으로 시작 — 이 플래그가 GameState._process의 유일한 스위치다.
+	# 원정 시작 플래그 (오토로드라 씬 전환에도 남는다 — base가 되돌린다).
 	GameState.in_expedition = true
-	GameState.restore_hunger_full()
 	# 🔴 모달 플래그를 내린다 — 오토로드라 씬 전환에도 남는다(base.gd _ready와 같은 안전망).
 	GameState.ui_modal_open = false
 	_extract_zone.interacted.connect(_extract)
