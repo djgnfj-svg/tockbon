@@ -23,9 +23,6 @@ signal died
 ## preload가 안전한 이유: 픽업은 forest/actors를 안 물어 **순환 preload가 없다**(base⇄forest 함정 무관).
 const DropPickup := preload("res://src/props/drop_pickup.tscn")
 
-## 🔴 상자 프롭 (세55 능동 루팅) — `drops_chest` 적은 낱개 픽업 대신 상자 하나를 떨군다.
-## 픽업과 같은 이유로 preload 안전(상자는 forest/actors를 안 문다).
-const Chest := preload("res://src/props/chest.tscn")
 
 ## 🔴 적 투사체 (세56 gale 연사) — 픽업·상자와 같은 이유로 preload 안전(탄은 field/actors를 안 문다).
 const GaleProj := preload("res://src/field/enemy_projectile.tscn")
@@ -789,12 +786,10 @@ func _die() -> void:
 		# **균등 각도**를 나눌 수 있고(세51), 상자는 한 번에 담아야 하기 때문이다(세55).
 		var rolled := _roll_drops()
 		if not rolled.is_empty():
-			# 🔴 드롭 **형태**만 가른다(세55): 보스/특별 적은 상자 하나, 잡몹은 낱개 픽업.
-			# `drops_chest` 하나로 명시 분기 — `is_elite`나 `params.ai`에 커플하지 않는다.
-			if _def.drops_chest:
-				_spawn_chest(scene, rolled)
-			else:
-				_spawn_loose(scene, rolled)
+			# 🔴 세66: 상자 은퇴 (사용자 확정 "상자 시스템 기각, 그냥 다 떨구는 걸로"). 모든 적이
+			# 보스 포함 재료를 **낱개로** 떨군다(자석 픽업). 값어치는 픽업의 **등급 후광**이 알린다
+			# (상자가 하던 "열기 전 값어치 겉보기"를 후광이 대체 — drop_pickup 등급 halo).
+			_spawn_loose(scene, rolled)
 	# 🔴 처치 순간 1회 — GameState가 KILL 퀘스트를 센다 (세션36). `died` 로컬 시그널의
 	# "킬카운트가 붙는 날의 자리표"가 마침내 수신자를 얻었다. enemy_id를 실어 특정 적 목표도 가능.
 	EventBus.enemy_died.emit(enemy_id)
@@ -839,16 +834,6 @@ func _spawn_loose(scene: Node, rolled: Array[Dictionary]) -> void:
 		pickup.global_position = global_position + Vector2(randf_range(-6.0, 6.0), randf_range(-6.0, 6.0))
 		# i번째 드롭 = base_angle + i·TAU/n → 2개면 정반대, 3개면 삼각형으로 흩어진다.
 		pickup.setup(rolled[i]["id"], int(rolled[i]["count"]), base_angle + float(i) * TAU / float(rolled.size()))
-
-
-## 🔴 상자 하나 (보스/특별 적, 세55) — 낱개로 흩뿌리는 대신 죽은 자리에 상자 하나를 심고 내용물을
-## 통째로 넘긴다. 플레이어가 [E]로 열어 눌러 담는다(chest.gd + loot_panel). global_position을
-## add_child 뒤에 잡는 건 픽업과 같은 이유(setup이 위치 기준 연출을 시작할 수 있게).
-func _spawn_chest(scene: Node, rolled: Array[Dictionary]) -> void:
-	var chest := Chest.instantiate()
-	scene.add_child(chest)
-	chest.global_position = global_position
-	chest.setup(rolled)
 
 
 ## 팝 — 셰이더 플래시 + 스쿼시 (피격 손맛, 세63 개편). modulate를 **아예 안 만진다** — 흰 섬광은

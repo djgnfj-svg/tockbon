@@ -9,15 +9,13 @@ extends SceneTree
 ##   • [2] 미해금 = **확정** 드롭 — 관문 줄의 chance를 메모리 0으로 내리고 3연속 처치로 "항상"을 잰다
 ##     (chance **무시** 계약을 [2]가 직접 잰다 — 안 내리면 chance 1.0이라 확률 폴백 회귀를 못 잡는다)
 ##   • [3] 해금 = 드롭 **중단** (나머지 드롭은 그대로 나온다 — 관문이 남을 안 건드리는 것까지)
-##   ⚠ [2][3]의 처치 표본 slime_elite는 세58-B 챕터부터 `drops_chest = true`다(챕터 보상 = 상자
-##   문법) — 낱개 픽업 그룹만 보면 항상 0개라 거짓 판정이 된다. 그래서 수확은 낱개 픽업 +
-##   **상자 공개 루팅 흐름**(interacted → loot_card/advance, test_chest_auto [5] 선례) 둘 다 걷는다.
-##   상자 `_contents`는 비공개라 직접 읽지 않는다(계약 아님).
+##   ⚠ 세66: 상자 은퇴 — 모든 적이 낱개로 떨군다(slime_elite 포함). 수확은 drop_pickups 그룹의
+##   공개 `item_id`만 걷으면 된다(옛 상자 루팅 흐름은 제거됐다).
 ##   • [4] 불변식: fragment_*가 until_unlock 없이(순수 확률로) 등장하는 곳 0 · until_unlock 중복 0 ·
 ##     관문표 매핑 일치 · 조각 아이템의 params.unlock_id와 드롭의 until_unlock이 짝이다
 ##     (PROGRESSION.md의 표는 테스트가 못 읽는다 — 이 불변식이 표↔데이터 갈라짐을 대신 감시한다)
 ##   • [5] 허기 은퇴 잔재 0 (GameState·BalanceData에 hunger 계열 프로퍼티·함수 없음)
-## ⚠ 못 잡는 것: 상자 카드 렌더·실게임 드롭 좌표 — 상자 경유 흐름 자체는 test_chest_auto가 잰다.
+## ⚠ 못 잡는 것: 실게임 드롭 좌표·등급 후광 겉보기 (헤드리스는 렌더를 못 본다).
 ##
 ## 🔴 세이브 안전: 이 테스트는 enemy_died만 쏜다 — SaveManager가 저장하는 트리거는
 ## extraction_success·bag_lost·day_started 뿐이라 **진짜 세이브 파일을 안 건드린다**(wipe_save 불필요).
@@ -222,10 +220,9 @@ func _gate_entry_of(enemy_id: StringName):
 	return found if n == 1 else null
 
 
-## 적 하나를 처치하고 **실제로 나온 드롭의 item_id 전부**를 걷어 온다 — 낱개 픽업(공개 `item_id`)
-## + 상자(공개 루팅 흐름: interacted → loot_card/advance → EventBus `item_collected` 관찰).
-## 🔴 상자 `_contents`를 직접 읽지 않는다(비공개 = 계약 아님, takbon-verify §3) — 루팅이 곧 관찰이다.
-## 루팅이 가방에 넣은 항목은 되돌린다(bag resize — test_chest_auto 선례).
+## 적 하나를 처치하고 **실제로 나온 드롭의 item_id 전부**를 걷어 온다 — 전부 **낱개 픽업**(공개 `item_id`).
+## 🔴 세66: 상자 은퇴로 보스도 낱개로 떨군다 — 옛 상자 루팅 흐름(interacted→loot_card/advance)은
+## 사라졌다. 이제 slime_elite도 drop_pickups 그룹에 그대로 뜬다(형태 분기 없음).
 func _kill_and_collect(id: StringName) -> Array:
 	_clear_drops()
 	_gs.ui_modal_open = false
@@ -238,35 +235,6 @@ func _kill_and_collect(id: StringName) -> Array:
 	for p in get_nodes_in_group("drop_pickups"):
 		ids.append(p.item_id)
 
-	var chests := get_nodes_in_group("chests")
-	if not chests.is_empty():
-		var collected := []
-		var cb := func(iid, _n) -> void: collected.append(iid)
-		_bus.item_collected.connect(cb)
-		var bag_before: int = _gs.bag.size()
-		# [E]를 흉내 — 상자가 loot_panel을 current_scene에 "Loot"로 띄운다 (test_chest_auto [5]).
-		chests[0].get_node("InteractZone").interacted.emit()
-		await process_frame
-		var loot_layer = _container.get_node_or_null("Loot")
-		if loot_layer != null:
-			var panel = loot_layer.get_node("Panel")
-			var guard := 0   # 패널이 안 닫히는 회귀가 나도 테스트가 영원히 안 돌게
-			# 🔴 다 루팅하면 패널이 자동 닫힘 + free된다 — freed에 is_open()을 부르면 SCRIPT ERROR로
-			# 함수째 중단돼 수확이 증발한다(침묵 통과의 사촌). is_instance_valid가 먼저다.
-			while is_instance_valid(panel) and panel.is_open() and guard < 16:
-				panel.loot_card(0)
-				panel.advance(999.0)   # 즉시 완료 — remove_at으로 0번이 다음 카드가 된다
-				await process_frame
-				guard += 1
-			if guard >= 16:
-				# 드롭이 16종을 넘으면 다 못 걷어 거짓 FAIL이 된다 — 침묵 대신 경고를 찍는다.
-				print("  ⚠ _kill_and_collect: 루팅 guard 16 소진 — 수확이 잘렸을 수 있다")
-			await process_frame   # 상자·패널 queue_free 반영
-		_bus.item_collected.disconnect(cb)
-		if _gs.bag.size() > bag_before:
-			_gs.bag.resize(bag_before)   # 루팅이 넣은 항목 되돌림
-		ids.append_array(collected)
-
 	_clear_drops()
 	return ids
 
@@ -275,12 +243,6 @@ func _clear_drops() -> void:
 	for n in get_nodes_in_group("drop_pickups"):
 		if is_instance_valid(n):
 			n.free()
-	for n in get_nodes_in_group("chests"):
-		if is_instance_valid(n):
-			n.free()
-	var stray = _container.get_node_or_null("Loot")
-	if stray != null and is_instance_valid(stray):
-		stray.free()
 	_gs.ui_modal_open = false
 
 

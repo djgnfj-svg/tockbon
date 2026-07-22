@@ -43,5 +43,4 @@ params = {
 }
 is_elite = true
 drops = Array[ExtResource("1_algcq")]([SubResource("Resource_xf2oc")])
-drops_chest = true
 night_buff = 1.2

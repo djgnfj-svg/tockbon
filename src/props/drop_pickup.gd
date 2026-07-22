@@ -44,11 +44,17 @@ const BOB_TIME := 0.9
 const SPAWN_POP_TIME := 0.22  ## Visual.scale 0.2 → 1.0
 const ARC_HEIGHT := 14.0      ## 위로 튀었다 내려오는 높이 (루트는 평면 이동, 시각만 튄다)
 
-## 등급 반짝임 — 🔴 **이 등급 이상만** 반짝인다. 전부 반짝이면 반짝임이 정보가 아니라
-## 배경이 된다 — 반짝임이 곧 "이건 챙겨라" 신호여야 한다.
-const GLOW_MIN_GRADE := 3
-const GLOW_TIME := 1.1
-const GLOW_STRENGTH := 1.45
+## 🔴 등급 후광 (세66, 사용자 확정 "등급에 따라 후광이 다른 걸로") — 바닥 드롭 뒤에 **등급색 halo**를
+## 깐다. 상자를 기각했으므로 이 후광이 "줍기 전에 값어치를 알린다"(상자의 역할 대체). 등급이 높을수록
+## 크고 진하고 세게 숨 쉰다 — 흔한 건 거의 안 보이고, 귀한 건 멀리서도 "챙겨라"로 읽힌다.
+## 🔴 절차적 VFX(등급색 원 glow)라 도형 금지 예외 — 스프라이트가 아니라 그림이다(vfx.gd·가이드선 결).
+const HALO_SIDES := 20            ## 원 근사 다각형 변 수
+const HALO_BASE_R := 10.0         ## 반지름 = BASE + grade·PER_GRADE (등급이 클수록 넓다)
+const HALO_R_PER_GRADE := 2.6
+const HALO_ALPHA_PER_GRADE := 0.2 ## 알파 = grade·PER_GRADE (등급 1은 0 = 안 보임)
+const HALO_ALPHA_MAX := 0.82
+const HALO_PULSE_TIME := 0.85     ## 숨쉬기 한 결
+const HALO_PULSE_LOW := 0.45      ## 알파가 이 비율까지 줄었다 돌아온다 (등급 높을수록 눈에 띄게 맥동)
 
 ## 🔴 자석 — `MAGNET_RADIUS`만은 "얼마나 편한가"라 밸런스에 가깝고 장래에 부적/모자로
 ## **키우고 싶은 축**이다. 그래도 **지금은 const로 둔다**: 소비자가 없는 밸런스 필드를 미리
@@ -86,14 +92,18 @@ var _state: State = State.IDLE
 var _collected: bool = false
 var _speed: float = 0.0
 var _bob_tw: Tween = null
-var _glow_tw: Tween = null
+var _halo_tw: Tween = null
 var _scatter_tw: Tween = null
+## 등급 후광 — _ready에서 만들어 Visual 뒤에 깐다. 등급색·크기·맥동은 _apply_halo가 정한다.
+var _halo: Polygon2D = null
+var _halo_base_alpha: float = 0.0
 
 
 func _ready() -> void:
 	# 테스트가 찾는 그룹 (숲 어디에 떨어졌든 훑을 수 있다).
 	add_to_group("drop_pickups")
 	body_entered.connect(_on_body_entered)
+	_make_halo()   # 등급 후광 노드 (Visual 뒤) — 색·크기·맥동은 setup→_apply_halo가 정한다
 	_start_bob()
 	# 줍기 지연 — 끝나면 이미 겹쳐 있는지 재확인한다.
 	get_tree().create_timer(PICKUP_DELAY).timeout.connect(_enable_pickup)
@@ -109,9 +119,9 @@ func setup(p_item_id: StringName, p_count: int, p_scatter_angle: float = -1.0) -
 	item_id = p_item_id
 	count = p_count
 	_apply_color()
+	_apply_halo()
 	_start_scatter(p_scatter_angle)
 	_start_spawn_pop()
-	_start_glow_if_rare()
 
 
 ## 🔴 스프라이트 우선, 마름모 폴백 (세66) — 아이템 `params.sprite`가 있고 로드 가능하면 진짜 도트를
@@ -181,17 +191,50 @@ func _start_spawn_pop() -> void:
 	arc.tween_callback(_start_bob)
 
 
-## 🔴 등급 반짝임은 `_visual.modulate`를 쓴다 — **도착 팝의 `modulate:a`와 충돌**하므로
-## HOMING 진입에서 반드시 kill + 리셋한다(세50 `_pop` ↔ `_status_tint` 충돌과 정확히 같은 함정).
-func _start_glow_if_rare() -> void:
-	if _visual == null or _grade() < GLOW_MIN_GRADE:
+## 🔴 등급 후광 노드 — 단위원 폴리곤을 만들어 Visual 뒤(z=4)에 깐다. 반지름은 _apply_halo가 scale로
+## 준다(등급마다 다른 크기). 맥동은 **_halo 자신의 modulate:a**를 쓴다 — _visual(도착 팝의 modulate)와
+## 노드가 달라 세50식 충돌이 원천적으로 없다(옛 glow가 _visual.modulate를 공유하던 함정 청산).
+func _make_halo() -> void:
+	_halo = Polygon2D.new()
+	_halo.name = &"Halo"
+	_halo.z_index = 4                     # Visual(5) 뒤 · Ground(0) 앞
+	var pts := PackedVector2Array()
+	for i in HALO_SIDES:
+		pts.append(Vector2.from_angle(TAU * float(i) / float(HALO_SIDES)))   # 단위원
+	_halo.polygon = pts
+	_halo.visible = false
+	add_child(_halo)
+	move_child(_halo, 0)                  # 트리 맨 앞 = 형제 중 먼저 그려진다(그림자·Visual 뒤로)
+
+## 등급 후광을 아이템 등급에 맞춘다 (setup에서). 등급 1 = 알파 0 = 안 보임 · 높을수록 크고 진하고 세게 맥동.
+## 색은 등급색 단일 소스(grade_colors) — 창고·토스트·마름모 폴백과 같은 색이라 등급이 한눈에 읽힌다.
+func _apply_halo() -> void:
+	if _halo == null:
 		return
-	_glow_tw = create_tween()
-	_glow_tw.set_loops()
-	var bright := Color(GLOW_STRENGTH, GLOW_STRENGTH, GLOW_STRENGTH, 1.0)
-	_glow_tw.tween_property(_visual, "modulate", bright, GLOW_TIME) \
+	var g := _grade()
+	_halo_base_alpha = clampf(float(g - 1) * HALO_ALPHA_PER_GRADE, 0.0, HALO_ALPHA_MAX)
+	if _halo_base_alpha <= 0.001:
+		_halo.visible = false             # 흔한 것(등급 1)은 후광 없음 — 후광이 곧 "챙겨라" 신호
+		return
+	var gc := GradeColors.of(g)
+	_halo.color = Color(gc.r, gc.g, gc.b, _halo_base_alpha)
+	var r := HALO_BASE_R + float(g) * HALO_R_PER_GRADE
+	_halo.scale = Vector2(r, r)
+	_halo.modulate.a = 1.0
+	_halo.visible = true
+	_start_halo_pulse()
+
+## 숨쉬기 — modulate:a를 LOW↔1.0으로 무한 왕복. 귀한 드롭이 멀리서도 눈에 들어오게.
+func _start_halo_pulse() -> void:
+	if _halo == null:
+		return
+	if _halo_tw != null and _halo_tw.is_valid():
+		_halo_tw.kill()
+	_halo_tw = create_tween()
+	_halo_tw.set_loops()
+	_halo_tw.tween_property(_halo, "modulate:a", HALO_PULSE_LOW, HALO_PULSE_TIME) \
 		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-	_glow_tw.tween_property(_visual, "modulate", Color.WHITE, GLOW_TIME) \
+	_halo_tw.tween_property(_halo, "modulate:a", 1.0, HALO_PULSE_TIME) \
 		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 
 
@@ -254,12 +297,13 @@ func _begin_homing() -> void:
 		_scatter_tw.kill()
 	if _bob_tw != null and _bob_tw.is_valid():
 		_bob_tw.kill()
-	# 🔴 반짝임(modulate)을 안 죽이면 도착 팝의 modulate:a와 경쟁해 아이템이 안 사라지거나
-	# 색이 이상하게 굳는다. 죽이고 **1.0으로 되돌린다**.
-	if _glow_tw != null and _glow_tw.is_valid():
-		_glow_tw.kill()
+	# 🔴 등급 후광을 접는다 — 빨려 들어가며 halo도 같이 페이드아웃(맥동 트윈 kill 후 알파 0).
+	#  halo는 **자기 modulate만** 쓰므로 도착 팝의 _visual.modulate와 충돌하지 않는다(옛 glow 함정 청산).
+	if _halo_tw != null and _halo_tw.is_valid():
+		_halo_tw.kill()
+	if _halo != null and _halo.visible:
+		create_tween().tween_property(_halo, "modulate:a", 0.0, 0.14)
 	if _visual != null:
-		_visual.modulate = Color.WHITE
 		var tw := create_tween()
 		tw.tween_property(_visual, "position:y", 0.0, 0.12)
 		tw.parallel().tween_property(_visual, "scale", Vector2(HOMING_SCALE, HOMING_SCALE), 0.18)

@@ -13,10 +13,8 @@ extends Resource
 @export var params: Dictionary = {}
 @export var is_elite: bool = false
 @export var drops: Array[DropEntry] = []
-## 🔴 죽으면 낱개 바닥 픽업(세46) 대신 **상자 하나**를 떨군다 (세55 능동 루팅).
-## true = 보스/특별 적: `drops`를 굴려 나온 걸 상자에 담고, 플레이어가 [E]로 열어 눌러 담는다.
-## false = 잡몹(기본): 지금 그대로 낱개 픽업 + 자석(세51). 굴림 로직(_roll_drops)은 두 갈래가 공유해
-## loose 경로 바이트 동일 — `params.ai`나 `is_elite`에 커플하지 않고 **드롭 형태만** 명시로 가른다.
-@export var drops_chest: bool = false
+## 🔴 세66: `drops_chest`는 은퇴했다 (상자 시스템 기각 — 사용자 확정). 모든 적이 보스 포함
+## `drops`를 굴려 **낱개 픽업**(drop_pickup + 자석, 세46·51)으로 떨군다. 값어치는 픽업의
+## **등급 후광**이 알린다(상자의 "열기 전 값어치"를 대체). 형태 분기 자체가 사라졌다.
 ## 밤 강화 배율 (HP·공격력 공통, 프로토 단순화)
 @export var night_buff: float = 1.5
