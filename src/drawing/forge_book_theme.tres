@@ -1,0 +1,10 @@
+[gd_resource type="Theme" format=3]
+
+; 고리 조립 책 버튼 테마 (세62 UI 세련화). 🔴 여기엔 **색만** 둔다 — 가죽 버튼 StyleBoxTexture는
+; ring_forge_panel.gd `_apply_book_theme()`가 btn_leather*.png의 존재를 확인하고 런타임에 채운다.
+; .tres가 ExtResource로 PNG를 직접 물면 에셋 미도착 시 리소스 전체가 로드 실패한다(세50 침묵사 계열)
+; — 그래서 텍스처 참조를 코드로 뺐다. PNG가 없으면 기본 버튼 스타일로 폴백한다(계약).
+; ⚠ 폰트·폰트 크기는 안 건드린다 — 씬의 per-node theme_override가 그대로 이긴다.
+
+[resource]
+Button/colors/font_disabled_color = Color(0.55, 0.5, 0.42, 1.0)

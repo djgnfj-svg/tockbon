@@ -42,6 +42,13 @@ const SHUT_DOT := Color(0.30, 0.26, 0.20, 0.4)     # 닫힌 칸
 const TAB_H := 18.0
 const TAB_GAP := 2.0
 
+## 세62 — 탭·셀 카드 배경 한지 나인패치(panel_paper_s 24×24 m6, 세션21 대청소로 고아가 된 걸 되살림).
+## 🔴 exists 가드로 첫 `_draw`에서 한 번 만들어 캐시 — PNG가 없으면 현 draw_rect 플랫 폴백(계약).
+## off 탭/비선택 셀 = 같은 StyleBox 복제 + modulate_color 0.85 어둡게 — 상태별 텍스처를 늘리지 않는다.
+const CARD_TEX := "res://assets/sprites/ui/panel_paper_s.png"
+const CARD_TEX_MARGIN := 6.0
+const CARD_OFF_MOD := Color(0.85, 0.85, 0.85, 1.0)
+
 const TAB_DESC := [
 	"진 — 바깥 그릇(형태). 발사 형태와 열리는 칸이 진마다 다르다.",
 	"룬 — 중심 속성. 탁본으로 해독한 룬을 고른다.",
@@ -68,6 +75,10 @@ var _cells: Array[Dictionary] = []
 
 # ── 주입 데이터 (세션 13 구조화) — 패널이 Db에서 읽어 넣는다. 없으면 RingBoard const 폴백. ──
 var _jin_defs: Array = []
+## 카드 StyleBox 캐시 (세62) — null이면 플랫 폴백. `_tried`로 매 프레임 exists 조회를 막는다.
+var _card_sb_on: StyleBoxTexture = null
+var _card_sb_off: StyleBoxTexture = null
+var _card_sb_tried := false
 ## 🔴 해금된 룬들 (RuneDef 배열, 세션 34). 패널이 `is_unlocked`로 걸러 넘긴다 — 책은
 ## 오토로드를 안 봐서(주석 상단) 해금 판정을 직접 못 한다. 잠긴 룬은 셀 자체가 안 뜬다.
 var _rune_defs: Array = []
@@ -168,6 +179,33 @@ func _gui_input(event: InputEvent) -> void:
 
 # ─────────────────────────── 렌더 ───────────────────────────
 
+## 탭·셀 카드 배경 StyleBox — 첫 호출에 exists 가드로 만들어 캐시. PNG가 없으면 null을 돌려주고
+## 호출한 쪽이 현 draw_rect 플랫 렌더로 폴백한다(세62 계약 — 헤드리스·에셋 미도착에서 안 죽는다).
+func _card_sb(on: bool) -> StyleBoxTexture:
+	if not _card_sb_tried:
+		_card_sb_tried = true
+		if ResourceLoader.exists(CARD_TEX):
+			_card_sb_on = StyleBoxTexture.new()
+			_card_sb_on.texture = load(CARD_TEX) as Texture2D
+			_card_sb_on.set_texture_margin_all(CARD_TEX_MARGIN)
+			_card_sb_off = _card_sb_on.duplicate() as StyleBoxTexture
+			_card_sb_off.modulate_color = CARD_OFF_MOD
+	return _card_sb_on if on else _card_sb_off
+
+
+## 카드 하나(탭·셀 공용) — 텍스처가 있으면 나인패치 + 선택 시 SEL_EDGE 코드 테두리(설계 §테마),
+## 없으면 옛 플랫 렌더 그대로. `flat_bg`/`flat_edge`는 폴백 전용 색.
+func _draw_card(r: Rect2, on: bool, flat_bg: Color, flat_edge: Color, edge_w: float) -> void:
+	var sb := _card_sb(on)
+	if sb != null:
+		draw_style_box(sb, r)
+		if on:
+			draw_rect(r, SEL_EDGE, false, 2.0)
+	else:
+		draw_rect(r, flat_bg, true)
+		draw_rect(r, flat_edge, false, edge_w)
+
+
 func _draw() -> void:
 	_tab_rects.clear()
 	_cells.clear()
@@ -179,10 +217,14 @@ func _draw() -> void:
 		var r := Rect2(float(i) * (tab_w + TAB_GAP), 0.0, tab_w, TAB_H)
 		_tab_rects.append(r)
 		var on := stage == _stage
-		draw_rect(r, TAB_ON_BG if on else TAB_OFF_BG, true)
-		draw_line(r.position, r.position + Vector2(r.size.x, 0.0), CELL_LINE, 1.0)
-		if not on:
-			draw_line(r.position + Vector2(0.0, r.size.y), r.position + r.size, CELL_LINE, 1.0)
+		var tab_sb := _card_sb(on)
+		if tab_sb != null:
+			draw_style_box(tab_sb, r)
+		else:
+			draw_rect(r, TAB_ON_BG if on else TAB_OFF_BG, true)
+			draw_line(r.position, r.position + Vector2(r.size.x, 0.0), CELL_LINE, 1.0)
+			if not on:
+				draw_line(r.position + Vector2(0.0, r.size.y), r.position + r.size, CELL_LINE, 1.0)
 		var text: String = TAB_LABEL[i]
 		var fs := 10
 		var tw := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
@@ -271,8 +313,8 @@ func _draw_jin_cells(font: Font, top: float) -> void:
 		var r: Rect2 = rects[i]
 		_cells.append({"rect": r, "kind": "jin", "value": jid})
 		var sel := _jin_choice == jid
-		draw_rect(r, CELL_SEL_BG if sel else CELL_BG, true)
-		draw_rect(r, SEL_EDGE if sel else CELL_LINE, false, 2.0 if sel else 1.0)
+		_draw_card(r, sel, CELL_SEL_BG if sel else CELL_BG,
+			SEL_EDGE if sel else CELL_LINE, 2.0 if sel else 1.0)
 		# 진 아이콘 = 발사 형태(패턴) × 비행 경로(motion). 색만으로는 8지선다가 된다.
 		var opaque := Color(jcol.r, jcol.g, jcol.b, 1.0)
 		var icon_c := r.get_center() + Vector2(0.0, -8.0)
@@ -431,8 +473,8 @@ func _draw_rune_cells(font: Font, top: float) -> void:
 		var ch: float = r.size.y
 		_cells.append({"rect": r, "kind": "rune", "value": rtype})
 		var sel := _rune_choice == rtype
-		draw_rect(r, CELL_SEL_BG if sel else CELL_BG, true)
-		draw_rect(r, SEL_EDGE if sel else CELL_LINE, false, 2.0 if sel else 1.0)
+		_draw_card(r, sel, CELL_SEL_BG if sel else CELL_BG,
+			SEL_EDGE if sel else CELL_LINE, 2.0 if sel else 1.0)
 		_draw_rune_icon(r.get_center() + Vector2(0, -14.0), 22.0, rcol, rtype)
 		var label := "✓ 그림" if (sel and _rune_placed) else "왼쪽에 손으로 그리기"
 		_text_center(font, r.position + Vector2(cw * 0.5, ch - 30.0), rname, NAME_COLOR, 11)
@@ -473,8 +515,8 @@ func _draw_glyph_cells(font: Font, top: float) -> void:
 			top + float(i / cols) * (ch + gap), cw, ch)
 		_cells.append({"rect": r, "kind": "glyph", "value": code})
 		var sel := _active == code
-		draw_rect(r, CELL_SEL_BG if sel else CELL_BG, true)
-		draw_rect(r, SEL_EDGE if sel else CELL_LINE, false, 2.0 if sel else 1.0)
+		_draw_card(r, sel, CELL_SEL_BG if sel else CELL_BG,
+			SEL_EDGE if sel else CELL_LINE, 2.0 if sel else 1.0)
 		# 🔴 아이콘 반길이 26 = 예전 화살표와 **같은 전체 크기**(2×26=52px)라 셀 레이아웃은 그대로다.
 		# ⚠ 추진만 1.1배(57px)로 살짝 크다 — 셀 높이 104~120 안이라 이름·설명과 안 겹친다.
 		_draw_glyph_icon(r.get_center() + Vector2(0, -14.0), 26.0, row.color, code)

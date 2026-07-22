@@ -179,7 +179,36 @@ var _glyph_scale: Dictionary = {}       # slot(int) → float, 문양 개별 크
 # ── 착지 펄스 ("탁") — 조각이 놓인 자리에서 퍼지는 고리 ──
 var _pulse_t := -1.0
 var _pulse_at := Vector2.ZERO
-const PULSE_DUR := 0.28
+var _pulse_color := FIRE_HI             # ⓒ 잠근 조각의 색으로 펄스를 물들인다 (_start_pulse가 받는다)
+const PULSE_DUR := 0.35
+
+# ── 그리기 연출 (세션62 ⓐⓑⓒⓓⓕ — 렌더 전용, 채점·조립 무관) ─────────────────────
+# ⚠ 전부 연출값(손맛)이라 스크립트 const다 — 사용자가 F5로 조인다. balance.tres 아님.
+const GLOW_WIDTH := 7.0                 # ⓐ 먹선 밑 글로우 패스 폭 (먹선 2.6~2.8px보다 넓게)
+const GLOW_ALPHA_DRAWING := 0.12        # ⓐ 그리는 중 획 글로우 알파 (잉크색)
+const GLOW_ALPHA_LOCKED := 0.10         # ⓐ 잠긴 조각 글로우 알파 (조각색)
+const SPARK_DUR := 0.25                 # ⓑ 반짝임 수명(초)
+const SPARK_R0 := 1.2                   # ⓑ 광점 시작 반지름
+const SPARK_R1 := 4.5                   # ⓑ 광점 끝 반지름 (커지며 사라진다)
+const SPARK_ALPHA := 0.8                # ⓑ 광점 시작 알파 ((1-t)×이 값)
+const SPARK_COLOR := Color(1.0, 0.88, 0.55)   # ⓑ 광점 색 (따뜻한 금빛)
+const PULSE_BLOOM_FRAC := 0.10          # ⓒ 중심 블룸 반지름 (판 반지름 비례)
+const FINISH_GLOW_DUR := 0.8            # ⓓ 완성 발광 시간(초)
+const FINISH_GLOW_ALPHA := 0.5          # ⓓ 발광 시작 알파 ((1-t)×이 값)
+const FINISH_ARC_SPAN := TAU * 0.22     # ⓓ 바깥 반경을 훑는 밝은 호의 길이(라디안)
+const FINISH_ARC_COLOR := Color(1.0, 0.92, 0.6)   # ⓓ 훑는 호의 색
+## ⓕ 붓끝 발광 — 동심원 3장, 바깥(크고 흐림)부터 그려 안쪽(작고 밝음)이 위에 얹힌다.
+## ⚠ 무타입 Array인 이유: GDScript는 const에 PackedFloat32Array(...) 생성자를 상수식으로 안 받는다
+## (세62 실측 — 파스 에러). 소비처가 float() 캐스트로 받는다.
+const BRUSH_GLOW_RADII := [10.0, 6.0, 3.0]
+const BRUSH_GLOW_ALPHA := [0.06, 0.14, 0.30]
+
+## ⓑ 렌더 전용 — 가이드 점의 드러남을 지난 프레임과 비교해 false→true 순간을 잡는다.
+## 🔴 채점기(`_scorer`)는 `is_revealed(i)` 공개 조회만 쓴다 — 채점 상태를 복사하는 게 아니라
+## "언제 드러났나"라는 렌더만의 관심사를 따로 든다. `_reset_reveal_fx`가 가이드와 크기를 맞춘다.
+var _was_revealed := PackedByteArray()
+var _sparks: Array[Dictionary] = []     # ⓑ {pos: Vector2, t: float} — 광점들
+var _finish_glow_t := -1.0              # ⓓ 완성 발광 타이머 (-1 = 꺼짐)
 
 
 func _init() -> void:
@@ -270,6 +299,15 @@ func _set_trace(target: int, slot: int) -> void:
 	_scorer.set_reference_radius(_outer_radius())
 	_scorer.set_correction(_pen_correction())
 	_scorer.set_guide(_build_guide(target, slot))
+	_reset_reveal_fx()   # ⓑ 가이드가 바뀌었다 — 옛 가이드의 유령 반짝임을 남기지 않는다
+
+
+## ⓑ 드러남 반짝임의 렌더 상태를 지금 가이드에 맞춰 비운다 (렌더 위생 — 채점 무관).
+## 가이드가 바뀌거나(_set_trace) 먹선을 지울 때(clear_stroke·clear_all) 부른다.
+func _reset_reveal_fx() -> void:
+	_sparks.clear()
+	_was_revealed = PackedByteArray()
+	_was_revealed.resize(_scorer.guide_points().size())   # resize는 0으로 채운다
 
 
 ## 장착한 펜의 보정도. 오토로드가 없는 환경(순수 단위 테스트)에서도 죽지 않게 0으로 폴백한다.
@@ -657,6 +695,7 @@ func _note_stroke_ink() -> void:
 ## 지금 조각의 먹선을 **전부 지운다** (다시 그리기 — 우클릭). 점수도 0으로 돌아간다.
 func clear_stroke() -> void:
 	_scorer.reset_stroke()
+	_reset_reveal_fx()   # ⓑ 드러남이 처음부터다 — 옛 반짝임·비교 기록을 같이 지운다
 	queue_redraw()
 	score_changed.emit(0.0)
 
@@ -671,6 +710,18 @@ func trace_stroke(local_pos: Vector2) -> void:
 	if not _stroke_counted:
 		_stroke_counted = true
 		_note_stroke_ink()
+	# ⓑ 이 문지름으로 **새로 드러난** 가이드 점 → 반짝임 적립. 채점기는 is_revealed 조회만 —
+	# 가이드 ≤150점이라 유효점마다 훑어도 싸다. 크기가 어긋나면(이론상 없음) 조용히 건너뛴다.
+	var guide := _scorer.guide_points()
+	if _was_revealed.size() == guide.size():
+		var sparked := false
+		for i in guide.size():
+			if _was_revealed[i] == 0 and _scorer.is_revealed(i):
+				_was_revealed[i] = 1
+				_sparks.append({"pos": guide[i], "t": 0.0})
+				sparked = true
+		if sparked:
+			set_process(true)
 	queue_redraw()
 	score_changed.emit(_scorer.piece_score())
 
@@ -697,21 +748,24 @@ func advance() -> String:
 	match done:
 		TraceTarget.JIN:
 			_asm.lock_jin()
-			_start_pulse(_area_center())
+			_start_pulse(_area_center(), _jin_color())
 			stage_advanced.emit(_asm.stage())
 		TraceTarget.RUNE:
 			_asm.lock_rune()
-			_start_pulse(_area_center())
+			_start_pulse(_area_center(), _rune_color())
 			stage_advanced.emit(_asm.stage())
 		TraceTarget.GLYPH:
 			if slot >= 0:
 				_asm.place_glyph(slot, _active)
-				_start_pulse(_slot_pos(slot))
+				_start_pulse(_slot_pos(slot), _glyph_color(_active))
 	_refresh_trace()
 	piece_locked.emit(done, slot, sc)
 	assembly_changed.emit()
 	queue_redraw()
 	if _trace == TraceTarget.NONE:
+		# ⓓ 완성 발광 — 렌더 타이머 시작만 (로직 분기 불변).
+		_finish_glow_t = 0.0
+		set_process(true)
 		finished.emit(get_analysis())
 		return "finished"
 	return "advanced"
@@ -723,9 +777,12 @@ func finish() -> Dictionary:
 	if _trace == TraceTarget.GLYPH and _trace_slot >= 0 and _scorer.coverage() > 0.0:
 		_lock_current()
 		_asm.place_glyph(_trace_slot, _active)
-		_start_pulse(_slot_pos(_trace_slot))
+		_start_pulse(_slot_pos(_trace_slot), _glyph_color(_active))
 	_trace = TraceTarget.NONE
 	_trace_slot = -1
+	# ⓓ 완성 발광 — 렌더 타이머 시작만 (로직 분기 불변).
+	_finish_glow_t = 0.0
+	set_process(true)
 	queue_redraw()
 	# 🔴 M6 (세션 22): 여기서 _slots가 바뀌는데 예전엔 assembly_changed를 안 쏴서 advance()와
 	# 불일치였다. 지금은 증상이 없지만 구독자가 늘면 [맺기] 경로만 갱신을 놓친다.
@@ -758,7 +815,7 @@ func select_slot(k: int) -> void:
 func _commit_glyph_slot(slot: int) -> void:
 	var sc := _lock_current()
 	_asm.place_glyph(slot, _active)
-	_start_pulse(_slot_pos(slot))
+	_start_pulse(_slot_pos(slot), _glyph_color(_active))
 	piece_locked.emit(TraceTarget.GLYPH, slot, sc)
 	assembly_changed.emit()
 
@@ -932,6 +989,8 @@ func clear_all() -> void:
 	_rune_scale = 1.0
 	_glyph_scale = {}
 	_pulse_t = -1.0
+	_finish_glow_t = -1.0                # ⓓ 새 판에 옛 완성 발광이 남지 않게 (렌더 위생)
+	_reset_reveal_fx()                   # ⓑ 반짝임도 — 아래 _refresh_trace가 다시 세우지만 명시가 계약이다
 	# 🔴 잉크 소모·비율은 새 진마다 리셋 (세션29). ⚠ _ink_id·_jin_scale_max(종이 상한)은 **안** 지운다 —
 	# 잉크·종이 선택은 지속된다(다시 그려도 유지). 여기서 지우는 건 "이번 진에 얼마나 썼나"뿐.
 	_special_ink_used = &""
@@ -1066,8 +1125,11 @@ func play_cast() -> void:
 	set_process(true)
 
 
-func _start_pulse(at: Vector2) -> void:
+## ⓒ 색 인자 (세션62) — 잠근 조각의 색(진/룬/문양색)으로 펄스가 물든다. 내부 함수라
+## (tests 미참조 — 설계에서 그렙 확인) 시그니처 변경이 안전하다. 기본값 = 옛 주홍.
+func _start_pulse(at: Vector2, col: Color = FIRE_HI) -> void:
 	_pulse_at = at
+	_pulse_color = col
 	_pulse_t = 0.0
 	set_process(true)
 
@@ -1084,6 +1146,24 @@ func _process(delta: float) -> void:
 		_pulse_t += delta / PULSE_DUR
 		if _pulse_t >= 1.0:
 			_pulse_t = -1.0
+		else:
+			busy = true
+	# ⓑ 반짝임 — 수명이 다한 광점을 걷어내고, 남아 있으면 계속 돈다.
+	if not _sparks.is_empty():
+		var alive: Array[Dictionary] = []
+		for sp in _sparks:
+			var t := float(sp["t"]) + delta / SPARK_DUR
+			if t < 1.0:
+				sp["t"] = t
+				alive.append(sp)
+		_sparks = alive
+		if not _sparks.is_empty():
+			busy = true
+	# ⓓ 완성 발광 타이머
+	if _finish_glow_t >= 0.0:
+		_finish_glow_t += delta / FINISH_GLOW_DUR
+		if _finish_glow_t >= 1.0:
+			_finish_glow_t = -1.0
 		else:
 			busy = true
 	if not busy:
@@ -1125,27 +1205,73 @@ func _draw() -> void:
 		for i in guide.size():
 			if _scorer.is_revealed(i):
 				draw_circle(guide[i], 1.6, GUIDE_SHOW)
+		# ⓐ 먹선 마법 글로우 — 먹선마다 밑에 넓은 저알파 패스 한 장(잉크색). 정적 렌더.
 		# 🔴 획마다 따로 긋는다 — 한 줄로 이으면 펜을 뗀 구간이 선이 돼 화살표가 삼각형이 된다
 		for s in _scorer.strokes():
 			if s.size() >= 2:
+				draw_polyline(s, Color(_trace_ink, GLOW_ALPHA_DRAWING), GLOW_WIDTH, true)
+		for s in _scorer.strokes():
+			if s.size() >= 2:
 				draw_polyline(s, _trace_ink, 2.6, true)
+		# ⓕ 붓끝 발광 — 현재 획의 마지막 유효점에서 "마법 먹"이 손끝에 고이는 느낌. 정적 렌더.
+		if _drawing:
+			var strokes := _scorer.strokes()
+			if not strokes.is_empty():
+				var last := strokes[strokes.size() - 1]
+				if not last.is_empty():
+					var tip := last[last.size() - 1]
+					for j in BRUSH_GLOW_RADII.size():
+						draw_circle(tip, float(BRUSH_GLOW_RADII[j]),
+							Color(_trace_ink, float(BRUSH_GLOW_ALPHA[j])))
 
-	# 착지 펄스 ("탁") — 조각이 놓인 자리에서 퍼지는 밝은 고리
+	# ⓑ 가이드 드러남 반짝임 — 커지며 사라지는 광점 (수명·제거는 _process가 든다)
+	for sp in _sparks:
+		var st := float(sp["t"])
+		var spos := sp["pos"] as Vector2
+		draw_circle(spos, lerpf(SPARK_R0, SPARK_R1, st),
+			Color(SPARK_COLOR, (1.0 - st) * SPARK_ALPHA))
+
+	# ⓓ 완성 발광 — 잠긴 획 전체에 추가 글로우 + 바깥 반경을 훑는 밝은 호.
+	# 기존 play_cast 스윕(_cast_t)과 별개다 — 그건 발사 연출, 이건 "다 그렸다" 연출.
+	if _finish_glow_t >= 0.0:
+		var fa := (1.0 - _finish_glow_t) * FINISH_GLOW_ALPHA
+		for L in _scorer.locked_pieces():
+			for s in L.strokes:
+				if s.size() >= 2:
+					draw_polyline(s, Color(_locked_color(L), fa), GLOW_WIDTH * 1.4, true)
+		var a0 := _finish_glow_t * TAU - PI / 2.0
+		draw_arc(ctr, ro, a0, a0 + FINISH_ARC_SPAN, 24, Color(FINISH_ARC_COLOR, fa), 3.0, true)
+
+	# ⓒ 착지 펄스 ("탁") — 조각색 이중 고리(r·0.7r) + 중심 블룸 페이드
 	if _pulse_t >= 0.0:
-		draw_arc(_pulse_at, maxf(_pulse_t * (ro * 0.34), 1.0), 0.0, TAU, 28,
-			Color(FIRE_HI, (1.0 - _pulse_t) * 0.85), 2.5, true)
+		var pa := (1.0 - _pulse_t) * 0.85
+		var pr := maxf(_pulse_t * (ro * 0.34), 1.0)
+		draw_arc(_pulse_at, pr, 0.0, TAU, 28, Color(_pulse_color, pa), 2.5, true)
+		draw_arc(_pulse_at, maxf(pr * 0.7, 1.0), 0.0, TAU, 24,
+			Color(_pulse_color, pa * 0.55), 1.8, true)
+		draw_circle(_pulse_at, ro * PULSE_BLOOM_FRAC * (1.0 - _pulse_t),
+			Color(1.0, 0.95, 0.8, pa * 0.35))
+
+
+## 잠근 조각의 렌더 색 (조각 종류색). ⓓ 완성 발광도 같은 색을 쓴다 — 베끼면 갈라진다.
+func _locked_color(L: TraceScorer.LockedPiece) -> Color:
+	match L.target:
+		TraceTarget.JIN:
+			return _jin_color()
+		TraceTarget.RUNE:
+			return _rune_color()
+		TraceTarget.GLYPH:
+			return _glyph_color(L.glyph)
+	return TRACE_INK
 
 
 ## 🔴 잠근 조각 = **그린 먹선 그대로** 렌더 (정답 모양 교체 없음). 색은 조각 종류로 구분.
+## ⓐ 먹선마다 밑에 조각색 저알파 글로우 패스를 먼저 깐다 (정적 — process 부담 0).
 func _draw_locked(L: TraceScorer.LockedPiece) -> void:
-	var col := TRACE_INK
-	match L.target:
-		TraceTarget.JIN:
-			col = _jin_color()
-		TraceTarget.RUNE:
-			col = _rune_color()
-		TraceTarget.GLYPH:
-			col = _glyph_color(L.glyph)
+	var col := _locked_color(L)
+	for s in L.strokes:
+		if s.size() >= 2:
+			draw_polyline(s, Color(col, GLOW_ALPHA_LOCKED), GLOW_WIDTH, true)
 	for s in L.strokes:
 		if s.size() >= 2:
 			draw_polyline(s, col, 2.8, true)

@@ -243,9 +243,11 @@ func _draw_mana(font: Font, at: Vector2) -> void:
 		draw_rect(Rect2(at, Vector2(MANA_SIZE.x * frac, MANA_SIZE.y)),
 			MANA_LOW if GameState.mana < RingPower.cast_mana_cost() else MANA_FILL, true)
 	draw_rect(Rect2(at, MANA_SIZE), HP_EDGE, false, 1.0)
+	# ⚠ 무소모 테스트 모드는 겉으로 적는다 — 안 적으면 "에디터에선 마나가 안 닳네"가 버그로 읽힌다.
+	var mana_text := "마나 ∞ (테스트)" if GameState.debug_free_cast \
+		else "마나 %d / %d" % [floori(GameState.mana), roundi(mana_max)]
 	draw_string(font, at + Vector2(MANA_SIZE.x + 8.0, MANA_SIZE.y - 1.0),
-		"마나 %d / %d" % [floori(GameState.mana), roundi(mana_max)],
-		HORIZONTAL_ALIGNMENT_LEFT, -1, 11, HINT_COLOR)
+		mana_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, HINT_COLOR)
 
 
 ## 슬롯 한 칸 — 빈 칸은 비어 보이고, 찬 칸은 **손그림 점수와 그게 만든 위력**을 보여 준다.

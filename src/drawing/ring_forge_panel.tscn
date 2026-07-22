@@ -1,8 +1,9 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=5 format=3]
 
 [ext_resource type="Script" path="res://src/drawing/ring_forge_panel.gd" id="1_panel"]
 [ext_resource type="Script" path="res://src/drawing/ring_board.gd" id="2_board"]
 [ext_resource type="Script" path="res://src/drawing/ring_book.gd" id="3_book"]
+[ext_resource type="Theme" path="res://src/drawing/forge_book_theme.tres" id="4_theme"]
 
 [node name="RingForgePanel" type="Control"]
 visible = false
@@ -29,6 +30,7 @@ layout_mode = 0
 offset_right = 640.0
 offset_bottom = 360.0
 mouse_filter = 2
+theme = ExtResource("4_theme")
 
 [node name="Spread" type="Control" parent="Stage"]
 layout_mode = 1
@@ -49,14 +51,21 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 
-[node name="Paper" type="ColorRect" parent="Stage/Spread"]
+[node name="BookArt" type="TextureRect" parent="Stage/Spread/Pages"]
+layout_mode = 0
+offset_left = 16.0
+offset_top = 10.0
+offset_right = 624.0
+offset_bottom = 350.0
+mouse_filter = 2
+
+[node name="Paper" type="TextureRect" parent="Stage/Spread"]
 layout_mode = 0
 offset_left = 30.0
 offset_top = 30.0
 offset_right = 298.0
 offset_bottom = 298.0
 mouse_filter = 2
-color = Color(0.93, 0.89, 0.8, 1)
 
 [node name="RingBoard" type="Control" parent="Stage/Spread"]
 layout_mode = 0
@@ -132,14 +141,13 @@ autowrap_mode = 3
 [node name="HintLabel" type="Label" parent="Stage/Spread"]
 layout_mode = 0
 offset_left = 332.0
-offset_top = 328.0
+offset_top = 330.0
 offset_right = 612.0
-offset_bottom = 350.0
+offset_bottom = 344.0
 mouse_filter = 2
 theme_override_colors/font_color = Color(0.5, 0.45, 0.38, 1)
 theme_override_font_sizes/font_size = 8
-text = "왼쪽 판의 숨은 선을 손으로 그린다(탁본) · 여러 획 OK · 우클릭=다시 · 휠=크기(진·룬·문양 칸) · 문양은 칸을 클릭하고 오른쪽에서 골라 그림 · [다음]/[맺기]=분석"
-autowrap_mode = 3
+text = "여러 획 OK · 우클릭=다시 · 휠=크기 · ESC=덮기"
 
 [node name="Report" type="Control" parent="Stage/Spread"]
 visible = false

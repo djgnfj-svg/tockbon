@@ -70,21 +70,45 @@ const OPEN_FROM_X := 0.04
 const CLOSE_SEC := 0.12
 ## 펑 섬광이 가시는 시간 — 연출값(밸런스 아님). 짧아야 "터졌다"로 읽히고 길면 화면 전환처럼 보인다
 const BURST_SEC := 0.45
+## 주입 **성공** 금빛 섬광 — `_burst`(실패=붉은 섬광)와 대칭인 짝 (세62 UI 세련화).
+const INJECT_FLASH_SEC := 0.4
+const INJECT_FLASH_COLOR := Color(1.4, 1.28, 0.75)
+
+# ── 책 겉모습 텍스처 (세62 UI 세련화) — 🔴 전부 `ResourceLoader.exists` 가드로 로드한다.
+# PNG가 아직 없거나(아트 병렬 제작 중) 지워져도 옛 코드 렌더로 폴백해 안 죽는 게 계약이다.
+# ⚠ .tscn/.tres의 ExtResource로 물면 에셋 부재 시 리소스 전체가 로드 실패한다(세50 침묵사 계열) —
+# 그래서 씬은 빈 TextureRect만 두고 텍스처는 여기서 채운다.
+const BOOK_ART_TEX := "res://assets/sprites/ui/book_spread.png"
+const BOARD_PAPER_TEX := "res://assets/sprites/ui/board_paper.png"
+const BTN_LEATHER_TEX := "res://assets/sprites/ui/btn_leather.png"
+const BTN_LEATHER_PRESSED_TEX := "res://assets/sprites/ui/btn_leather_pressed.png"
+const REPORT_PAPER_TEX := "res://assets/sprites/ui/panel_paper.png"
+const BTN_TEX_MARGIN := 6.0        # btn_leather 24×24 나인패치 마진
+const REPORT_TEX_MARGIN := 12.0    # panel_paper 48×48 나인패치 마진
+
+# ── 점수 라벨 색 (세62) — 안정권이면 먹빛 강조, 이하면 흐린 회갈. 🔴 빨강 금지(그리는 중
+# 위협 신호는 소음 — 설계 §잔손질 3). 경계 판정은 `RingPower.is_stable` 그대로(65 복사 금지).
+const SCORE_STRONG := Color(0.20, 0.15, 0.10)
+const SCORE_WEAK := Color(0.55, 0.48, 0.40)
 
 ## 🔴 세션 25: **고르는 게 먼저다** — 오른쪽 셀을 눌러야 왼쪽에 밑그림이 뜬다 (진·룬·문양 전부).
 const Copy_START := "오른쪽에서 진을 골라 왼쪽 판에 손으로 그리세요  (진 → 룬 → 문양 순서로 하나씩 · [다음]으로 진행)"
 
 ## 잉크 스와치 — 왼쪽 페이지 타이틀 줄 오른쪽 빈 곳(보드는 y30부터라 안 겹친다). 640×360 논리 좌표.
 const INK_SWATCH_SIZE := Vector2(24.0, 18.0)
-const INK_SWATCH_X := 176.0
+const INK_SWATCH_X := 184.0
 const INK_SWATCH_Y := 12.0
 const INK_SWATCH_GAP := 5.0
 const INK_EDGE := Color(0.30, 0.24, 0.16, 0.6)
 const INK_EDGE_ON := Color(0.95, 0.82, 0.35)
 
-## 종이 선택 — 잉크 라벨(x142) 왼쪽 빈 곳. 작은 텍스트 버튼(등급 숫자, 툴팁=이름).
-const PAPER_LABEL_X := 14.0
-const PAPER_BTN_X := 40.0
+## 종이 선택 — 잉크 라벨 왼쪽 빈 곳. 작은 텍스트 버튼(등급 숫자, 툴팁=이름).
+## 🔴 세62: x14는 **책 왼쪽 끝(BOOK_RECT.x=16)보다 왼쪽**이라 라벨이 책 밖 허공에 떠 있었다 —
+## 줄 전체를 오른쪽으로 8px 옮겨 책 안(문방구 선반 띠)에 앉힌다. 잉크 라벨은 INK_SWATCH_X-34
+## 상대라 자동으로 따라온다. ⚠ 특별잉크 4종 이상이면 스와치 줄이 왼 페이지 끝(x320)을 넘는다 —
+## 잉크 축이 늘어나는 세션의 과제(설계 §잔손질 2에 명기).
+const PAPER_LABEL_X := 22.0
+const PAPER_BTN_X := 48.0
 const PAPER_BTN_Y := 11.0
 const PAPER_BTN_SIZE := Vector2(21.0, 19.0)
 const PAPER_BTN_GAP := 2.0
@@ -94,6 +118,8 @@ const PAPER_BTN_GAP := 2.0
 @onready var _stage: Control = $Stage         # 640×360 논리 무대 — 화면에 맞춰 통째로 확대(_fit_stage)
 @onready var _spread: Control = $Stage/Spread
 @onready var _pages: Control = $Stage/Spread/Pages
+@onready var _book_art: TextureRect = $Stage/Spread/Pages/BookArt   # 책 스프레드 텍스처 (세62 — 없으면 코드 렌더 폴백)
+@onready var _paper: TextureRect = $Stage/Spread/Paper              # 탁본지 텍스처 (세62 — 없으면 책 텍스처/코드 렌더가 비친다)
 @onready var _board: RingBoard = $Stage/Spread/RingBoard
 @onready var _book: RingBook = $Stage/Spread/RingBook
 @onready var _next_btn: Button = $Stage/Spread/NextBtn
@@ -125,6 +151,9 @@ var _paper_btns: Array = []
 var _paper_nodes: Array = []
 ## 🔴 획을 긋는 도중 특별잉크가 소모돼 재빌드가 걸리면, 획이 끝날 때까지 미룬다(활성 잉크가 튀지 않게).
 var _palette_dirty := false
+## 분석 리포트 배경 한지 나인패치 (세62) — _ready에서 exists 가드로 한 번 만들어 캐시.
+## null이면 `_draw_report`가 옛 플랫 rect로 폴백한다.
+var _report_sb: StyleBoxTexture = null
 
 
 ## 껍데기는 씬이 만든다 — 여기서는 **코드 렌더와 배선만** 붙인다.
@@ -152,6 +181,14 @@ func _ready() -> void:
 	inject_btn.pressed.connect(_on_inject)
 	($Stage/Spread/Report/RedoBtn as Button).pressed.connect(_on_report_redo)
 
+	# ── 책 겉모습 텍스처 (세62) — 전부 exists 가드. 없으면 옛 코드 렌더/기본 버튼으로 폴백.
+	if ResourceLoader.exists(BOOK_ART_TEX):
+		_book_art.texture = load(BOOK_ART_TEX) as Texture2D
+	if ResourceLoader.exists(BOARD_PAPER_TEX):
+		_paper.texture = load(BOARD_PAPER_TEX) as Texture2D
+	_report_sb = _make_paper_sb(REPORT_PAPER_TEX, REPORT_TEX_MARGIN)
+	_apply_book_theme()
+
 	resized.connect(_fit_stage)   # 창 크기·전체화면 전환마다 다시 맞춘다
 	_fit_stage()
 	# 🔴 잉크·종이 팔레트 (세션28~29) — Db가 오토로드라 이미 준비돼 있다.
@@ -174,6 +211,44 @@ func _fit_stage() -> void:
 		return
 	_stage.scale = Vector2(s, s)
 	_stage.position = (size - DESIGN_SIZE * s) * 0.5   # 남는 여백은 위아래(또는 좌우)로 반씩
+
+
+# ─────────────────────────── 책 겉모습 텍스처 · 테마 (세62) ───────────────────────────
+
+## 한지 나인패치 StyleBox — PNG가 없으면 null(호출한 쪽이 플랫 렌더로 폴백한다).
+func _make_paper_sb(path: String, margin: float) -> StyleBoxTexture:
+	if not ResourceLoader.exists(path):
+		return null
+	var sb := StyleBoxTexture.new()
+	sb.texture = load(path) as Texture2D
+	sb.set_texture_margin_all(margin)
+	return sb
+
+
+## 가죽 버튼 StyleBox 4종을 **런타임에** 테마에 채운다. 🔴 forge_book_theme.tres에는 색만 있다 —
+## .tres가 ExtResource로 PNG를 물면 에셋 미도착 시 리소스 전체가 로드 실패한다(세50 침묵사 계열).
+## PNG가 없으면 테마에 StyleBox가 안 들어가 **기본 버튼 스타일로 폴백**한다(계약).
+## hover/disabled는 같은 텍스처 + modulate_color 차이 — 상태별 텍스처를 늘리지 않는다(설계 §테마).
+func _apply_book_theme() -> void:
+	var th: Theme = _stage.theme
+	if th == null or not ResourceLoader.exists(BTN_LEATHER_TEX):
+		return
+	var tex := load(BTN_LEATHER_TEX) as Texture2D
+	var pressed_tex := tex
+	if ResourceLoader.exists(BTN_LEATHER_PRESSED_TEX):
+		pressed_tex = load(BTN_LEATHER_PRESSED_TEX) as Texture2D
+	th.set_stylebox(&"normal", &"Button", _leather_sb(tex, Color.WHITE))
+	th.set_stylebox(&"hover", &"Button", _leather_sb(tex, Color(1.08, 1.08, 1.08)))
+	th.set_stylebox(&"pressed", &"Button", _leather_sb(pressed_tex, Color.WHITE))
+	th.set_stylebox(&"disabled", &"Button", _leather_sb(tex, Color(0.72, 0.72, 0.72)))
+
+
+func _leather_sb(tex: Texture2D, mod: Color) -> StyleBoxTexture:
+	var sb := StyleBoxTexture.new()
+	sb.texture = tex
+	sb.set_texture_margin_all(BTN_TEX_MARGIN)
+	sb.modulate_color = mod
+	return sb
 
 
 # ─────────────────────────── 열고 닫기 ───────────────────────────
@@ -655,6 +730,11 @@ func _on_inject() -> void:
 		return
 	_committed = true
 	_report.visible = false
+	# 세62: 성공 = 금빛 섬광 — `_burst`(실패=붉은 섬광)와 대칭인 짝. 같은 modulate tween 방식.
+	_spread.modulate = INJECT_FLASH_COLOR
+	var flash := create_tween()
+	flash.tween_property(_spread, ^"modulate", Color.WHITE, INJECT_FLASH_SEC) \
+		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
 	var asm := _board.get_assembly()   # 잉크·크기·특별효과를 실은 최종 계약 (발사·저장이 그대로 쓴다)
 	design_committed.emit(asm)
 	_set_say("마력이 돌았다 — 위력 %d의 마법진이 맺혔다. 책을 덮고(ESC) 쏴 보세요"
@@ -685,14 +765,18 @@ func _on_report_redo() -> void:
 # ─────────────────────────── 버튼·점수 라벨 ───────────────────────────
 
 ## 지금 조각 점수(완성도·정밀도·종합)를 라벨에 쓴다.
+## 세62: 숫자는 고정폭(%3d)으로 — 그리는 동안 자릿수가 바뀔 때마다 줄 전체가 흔들리는 지터 제거.
+## 색 = 안정권이면 먹빛 강조·이하면 흐린 회갈(빨강 금지). 경계는 `is_stable` 그대로(65 복사 금지).
 func _update_score() -> void:
 	if not _board.is_tracing():
 		_score_lbl.text = ""
 		return
 	var cov := int(round(_board.coverage() * 100.0))
 	var acc := int(round(_board.accuracy() * 100.0))
-	var sc := _pct(_board.piece_score())
-	_score_lbl.text = "이 조각 — 완성도 %d%% · 정밀도 %d%% · 점수 %d" % [cov, acc, sc]
+	var piece := _board.piece_score()
+	_score_lbl.text = "이 조각 · 완성도 %3d%% · 정밀도 %3d%% · 점수 %3d" % [cov, acc, _pct(piece)]
+	_score_lbl.add_theme_color_override(&"font_color",
+		SCORE_STRONG if RingPower.is_stable(piece) else SCORE_WEAK)
 
 
 ## 버튼 상태. [다음] = 지금 조각을 그렸어야 활성. [분석] = 진·룬을 그렸어야 활성.
@@ -756,8 +840,12 @@ func play_cast() -> void:
 func _draw_report() -> void:
 	var w := _report.size.x
 	var h := _report.size.y
-	_report.draw_rect(Rect2(Vector2.ZERO, Vector2(w, h)), Color(0.94, 0.90, 0.82, 0.98), true)
-	_report.draw_rect(Rect2(Vector2.ZERO, Vector2(w, h)), EDGE, false, 2.0)
+	# 세62: 배경 = 한지 나인패치(panel_paper 48×48 m12). 없으면 옛 플랫 렌더 폴백.
+	if _report_sb != null:
+		_report.draw_style_box(_report_sb, Rect2(Vector2.ZERO, Vector2(w, h)))
+	else:
+		_report.draw_rect(Rect2(Vector2.ZERO, Vector2(w, h)), Color(0.94, 0.90, 0.82, 0.98), true)
+		_report.draw_rect(Rect2(Vector2.ZERO, Vector2(w, h)), EDGE, false, 2.0)
 	var font := ThemeDB.fallback_font
 
 	var total := float(_analysis.get("total", 0.0))
@@ -832,12 +920,14 @@ func _report_row(font: Font, y: float, name_text: String, e: Dictionary) -> floa
 	return y + 40.0
 
 
-## 책 껍데기 렌더 — 종이 두 장 + **책등 그라데이션**(7줄). 씬의 ColorRect로는 못 하는 그림이라
-## 코드에 남는다 (씬으로 옮긴 건 드래그로 만질 수 있는 것들뿐).
+## 책 껍데기 렌더. 세62: 책 몸은 BookArt 텍스처가 그린다 — 여기는 **그림자만** 깔고, 텍스처가
+## 없을 때(아트 미도착·삭제)만 옛 코드 렌더(종이 두 장 + 책등 그라데이션)로 폴백한다.
 func _draw_pages() -> void:
 	var on := _pages
 	var shadow := BOOK_RECT.grow(3.0)
 	on.draw_rect(shadow, SHADOW, true)
+	if _book_art != null and _book_art.texture != null:
+		return   # 책 몸·책등·페이지 결은 텍스처(자식 BookArt)가 이 위에 얹힌다
 	on.draw_rect(BOOK_RECT, PAPER_L, true)
 
 	var right := Rect2(BOOK_RECT.position + Vector2(PAGE_W, 0.0),

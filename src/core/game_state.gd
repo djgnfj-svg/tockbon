@@ -41,6 +41,11 @@ var quest_done: Dictionary = {}
 var quest_seen: Dictionary = {}
 ## UI 모달(게시판·장착·도감) 열림 — ui_root가 설정, 플레이어 이동 계열이 폴링 (TECH_SPEC §4.2)
 var ui_modal_open: bool = false
+## 🔴 테스트 편의: 발사 마나 무소모 (사용자 요청 2026-07-23 — "테스트할 때 귀찮음").
+## 에디터 실행(F5·MCP run·헤드리스)에서만 켜진다 — 익스포트 빌드엔 "editor" 피처가 없어 꺼진다.
+## ⚠ 조용한 갈라짐 방지: 켜져 있으면 HUD 마나 막대가 "∞ 테스트"를 적는다(hud._draw_mana).
+## 소비자는 player_caster.fire() 한 곳 — spend_mana 자체는 안 건드린다(테스트가 직접 재는 API라).
+var debug_free_cast: bool = OS.has_feature("editor")
 
 func _ready() -> void:
 	mana = mana_max()

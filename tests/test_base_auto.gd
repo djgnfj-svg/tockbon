@@ -230,6 +230,10 @@ func _test_real_left_click_actually_fires() -> void:
 func _test_empty_slot_refuses_to_fire() -> void:
 	print("[7-b] 빈 슬롯 발사 거부 — 캐스트 0·마나 무소모·안내 발신 (매직볼 은퇴)")
 	var gs = root.get_node("/root/GameState")
+	# 🔴 debug_free_cast(에디터 실행 마나 무소모, 세62)는 "editor" 피처라 **헤드리스 -s에서도 켜진다** —
+	# 켜진 채면 spend 줄 자체가 스킵돼 아래 ②(거부는 공짜)가 자명 통과가 된다(검출력 0, 리뷰 발각).
+	# 꺼서 그물을 재점화한다. 뮤테이션 실증: spend를 거부 앞으로 옮기면 ②가 빨개진다 (세62 확인).
+	gs.debug_free_cast = false
 	gs.ring_equipped[1] = null
 	var caster = _player().caster
 	caster.select_slot(1)

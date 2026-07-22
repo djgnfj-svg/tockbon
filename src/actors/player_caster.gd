@@ -90,7 +90,8 @@ func fire() -> void:
 		notice.emit("장착된 진이 없다 — 책상(E)에서 그려 장착해라", true)
 		return
 	# 🔴 마나 소모 — 이게 없으면 좌클릭 연사다 (세션 35). 비용은 RingPower가 판다(수치 박지 말 것).
-	if not GameState.spend_mana(RingPower.cast_mana_cost()):
+	# ⚠ debug_free_cast(에디터 실행 전용) = 테스트 편의 무소모 — 익스포트에선 항상 false.
+	if not GameState.debug_free_cast and not GameState.spend_mana(RingPower.cast_mana_cost()):
 		notice.emit("마나가 부족하다 — 잠시 기다려라", true)
 		return
 	EventBus.ring_cast_requested.emit(design.to_assembly(), global_position, _aim)
