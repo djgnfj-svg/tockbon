@@ -32,12 +32,24 @@ var _roll_dir := Vector2.DOWN  ## 이번 구르기의 대시 방향
 const PUSH_DECAY := 900.0      ## 밀림 감쇠(속도/s)
 var _push := Vector2.ZERO      ## 남은 밀림 속도 — 걷기 velocity 위에 얹힌다
 
+## 🔴 피격 애니 (세63) — `EventBus.player_hurt`(발신 = `GameState.damage_player` 한 곳)를 받아
+## HURT_ANIM_SEC 동안 hurt 프레임을 유지한다. 이동은 안 막는다(경직 아님 — apply_push additive 철학).
+## 복구 코드는 없다: `_face_mouse`가 매 프레임 animation을 덮는 성질을 역이용해, 타이머가 소진되면
+## 다음 프레임에 자연 복귀한다. HURT_ANIM_SEC는 연출값(손맛) const다 (PUSH_DECAY 선례 — 밸런스 아님).
+const HURT_ANIM_SEC := 0.25    ## 피격 프레임 유지 시간(s)
+var _hurt_time := 0.0          ## 남은 피격 표시 시간(>0이면 hurt 애니 유지)
+
 ## 밀쳐낸다 — 초기 속도 = sqrt(2·감쇠·거리)라 감쇠 적분 이동거리 ≈ dist(밀 거리는 호출자 .tres가 쥔다).
 func apply_push(dir: Vector2, dist: float) -> void:
 	_push = dir.normalized() * sqrt(2.0 * PUSH_DECAY * maxf(dist, 0.0))
 
 func _ready() -> void:
 	add_to_group("player")
+	EventBus.player_hurt.connect(_on_hurt)
+
+
+func _on_hurt(_amount: float, _source_pos: Vector2) -> void:
+	_hurt_time = HURT_ANIM_SEC
 
 ## 🔴 구르는 중 = 무적. forest_enemy가 접촉 피해 전에 이것만 본다. 튜토 "균열 넘기"도 이걸 읽는다.
 func is_rolling() -> bool:
@@ -48,6 +60,15 @@ func is_rolling() -> bool:
 ## 커서만 옮겨도 홱 돈다. up/down 로우는 이제 안 쓴다(시트에 남아도 무해 — 뒷태 안 그리기).
 func _face_mouse() -> void:
 	var a: StringName = &"right" if get_global_mouse_position().x >= global_position.x else &"left"
+	if sprite.animation != a:
+		sprite.animation = a
+
+
+## 피격 중 향한 쪽의 hurt 프레임 유지 — left 계열이면 hurt_left, 아니면 hurt_right
+## (down/up 잔재도 오른쪽으로 — 좌우는 마우스가 정하는 게임이라 첫 프레임부터 좌우만 남는다).
+func _hold_hurt_anim() -> void:
+	var left := sprite.animation == &"left" or sprite.animation == &"hurt_left"
+	var a: StringName = &"hurt_left" if left else &"hurt_right"
 	if sprite.animation != a:
 		sprite.animation = a
 
@@ -62,12 +83,19 @@ func _set_walking(moving: bool) -> void:
 ## 🔴 속도는 balance가 쥔다 (수치를 코드에 박지 않는다 — TECH_SPEC §10).
 ## 🔴 UI 모달(창고 등)이 열리면 멎는다 — 안 그러면 창고를 보는 동안 뒤에서 계속 걸어간다.
 func _physics_process(delta: float) -> void:
+	# 🔴 피격 타이머 감쇠는 최상단 — 모달 early-return 안쪽에 두면 창고를 연 채로 hurt가 영구히 굳는다.
+	if _hurt_time > 0.0:
+		_hurt_time -= delta
+
 	if GameState.ui_modal_open:
 		velocity = Vector2.ZERO
 		_set_walking(false)
 		return
 
-	_face_mouse()   # 🔴 마우스 쪽 좌우 향함 — 이동·구르기와 무관하게 매 프레임
+	if _hurt_time > 0.0:
+		_hold_hurt_anim()   # 피격 중엔 _face_mouse·_set_walking을 건너뛰어 hurt 프레임을 지킨다
+	else:
+		_face_mouse()   # 🔴 마우스 쪽 좌우 향함 — 이동·구르기와 무관하게 매 프레임
 
 	if _roll_cd > 0.0:
 		_roll_cd -= delta
@@ -89,11 +117,13 @@ func _physics_process(delta: float) -> void:
 		_roll_time = GameState.balance.dash_duration_sec
 		_roll_cd = GameState.roll_cooldown()   # 🔴 부적(CHARM) 배수 반영 (세션42)
 		_push = Vector2.ZERO   # 구르기로 밀림을 **흘린다** — 안 지우면 잔량이 구르기 끝에 도로 온다(세56 리뷰)
+		_hurt_time = 0.0       # 구르기가 피격 표시를 이긴다 — 구르기 조작감 우선(세63 설계 §B)
 		return
 
 	# 🔴 속도 = GameState.move_speed()(balance × 모자 배수) — balance 직접 참조 금지 (세션42).
 	# 밀림(_push)은 걷기 위에 얹는다(additive) — 구르기 중엔 위 early-return이라 밀림 무시(흘린 게 맞다).
 	velocity = dir * GameState.move_speed() + _push
 	_push = _push.move_toward(Vector2.ZERO, PUSH_DECAY * delta)
-	_set_walking(dir != Vector2.ZERO)
+	if _hurt_time <= 0.0:
+		_set_walking(dir != Vector2.ZERO)
 	move_and_slide()

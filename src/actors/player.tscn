@@ -1,10 +1,12 @@
-[gd_scene load_steps=16 format=3 uid="uid://c0actor01player"]
+[gd_scene load_steps=20 format=3 uid="uid://c0actor01player"]
 
 [ext_resource type="Script" path="res://src/actors/player.gd" id="1_player"]
 [ext_resource type="Script" path="res://src/actors/player_caster.gd" id="2_caster"]
 [ext_resource type="Texture2D" path="res://assets/sprites/player/player_witch_sheet.png" id="3_sheet"]
 [ext_resource type="Script" path="res://src/actors/juice.gd" id="4_juice"]
 [ext_resource type="Script" path="res://src/actors/vfx.gd" id="5_vfx"]
+[ext_resource type="Script" path="res://src/actors/shadow.gd" id="6_shadow"]
+[ext_resource type="Script" path="res://src/actors/dust.gd" id="7_dust"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_player"]
 radius = 10.0
@@ -41,6 +43,14 @@ region = Rect2(0, 144, 48, 48)
 atlas = ExtResource("3_sheet")
 region = Rect2(48, 144, 48, 48)
 
+[sub_resource type="AtlasTexture" id="at_hurt_left"]
+atlas = ExtResource("3_sheet")
+region = Rect2(96, 96, 48, 48)
+
+[sub_resource type="AtlasTexture" id="at_hurt_right"]
+atlas = ExtResource("3_sheet")
+region = Rect2(96, 144, 48, 48)
+
 [sub_resource type="SpriteFrames" id="SpriteFrames_player"]
 animations = [{
 "frames": [{"duration": 1.0, "texture": SubResource("at_down0")}, {"duration": 1.0, "texture": SubResource("at_down1")}],
@@ -62,6 +72,16 @@ animations = [{
 "loop": true,
 "name": &"right",
 "speed": 6.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("at_hurt_left")}],
+"loop": false,
+"name": &"hurt_left",
+"speed": 6.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("at_hurt_right")}],
+"loop": false,
+"name": &"hurt_right",
+"speed": 6.0
 }]
 
 [node name="Player" type="CharacterBody2D"]
@@ -69,7 +89,13 @@ collision_layer = 2
 collision_mask = 1
 script = ExtResource("1_player")
 
+[node name="Shadow" type="Sprite2D" parent="."]
+position = Vector2(0, 10)
+script = ExtResource("6_shadow")
+radius_px = 12.0
+
 [node name="Sprite" type="AnimatedSprite2D" parent="."]
+z_index = 2
 position = Vector2(0, -12)
 sprite_frames = SubResource("SpriteFrames_player")
 animation = &"down"
@@ -88,3 +114,6 @@ script = ExtResource("4_juice")
 
 [node name="Vfx" type="Node2D" parent="."]
 script = ExtResource("5_vfx")
+
+[node name="Dust" type="Node2D" parent="."]
+script = ExtResource("7_dust")

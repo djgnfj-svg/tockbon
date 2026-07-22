@@ -24,7 +24,6 @@ var _cache: Dictionary = {}          # id(StringName) → AudioStream (지연 �
 var _missing: Dictionary = {}        # 이미 경고한 id (경고 1회)
 var _players: Array[AudioStreamPlayer] = []
 var _next: int = 0
-var _last_hp: float = -1.0           # player_hp_changed에서 "줄었을 때만" 아픔음
 var _muted: bool = false             # 저장에서 부팅 때 복원 → 아래 _apply_mute로 버스에 반영
 
 
@@ -40,7 +39,7 @@ func _ready() -> void:
 	# ── EventBus 글로벌 순간 구독 (발신자는 각 모듈, 여긴 수신만) ──
 	EventBus.ring_cast_requested.connect(_on_cast)
 	EventBus.enemy_hit.connect(_on_enemy_hit)
-	EventBus.player_hp_changed.connect(_on_hp)
+	EventBus.player_hurt.connect(_on_hurt)
 	EventBus.extraction_success.connect(_on_extract)
 	EventBus.bag_lost.connect(_on_death)
 	EventBus.codex_unlocked.connect(_on_unlock)
@@ -144,11 +143,10 @@ func _on_enemy_hit(_enemy: Node2D, _damage: float, rune_type: int) -> void:
 		_:                    play(&"hit", randf_range(0.95, 1.05))
 
 
-func _on_hp(hp: float, _hp_max: float) -> void:
-	# 줄었을 때만 아픔음 — 출격 만HP·회복은 조용히. 첫 프레임(_last_hp<0)은 기준값만 잡는다.
-	if _last_hp >= 0.0 and hp < _last_hp:
-		play(&"hurt")
-	_last_hp = hp
+func _on_hurt(_amount: float, _source_pos: Vector2) -> void:
+	# 🔴 세션63: `player_hurt`(damage_player만 발신)로 이관 — 옛 "hp 직전값 비교로 감소 추측"이
+	# 필요 없어졌다(회복·출격 만HP는 이 신호를 안 쏜다 — 신호 자체가 오발을 막는다).
+	play(&"hurt")
 
 
 func _on_extract() -> void:

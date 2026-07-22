@@ -27,6 +27,7 @@ has_counter = true
 params = {
 "ai": "boss_snake",
 "sprite": "res://assets/sprites/enemies/snake_head.png",
+"hurt_sprite": "res://assets/sprites/enemies/snake_head_hurt.png",
 "aggro_range": 320.0,
 "attack_cooldown": 1.0,
 "attack_range": 34.0,

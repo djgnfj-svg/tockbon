@@ -38,15 +38,28 @@ const SH := preload("res://src/core/status_holder.gd")
 ## 지속·반경·틱 간격 수치는 전부 balance가 쥔다 (연출값이 아니라 밸런스다).
 const BAL := preload("res://data/balance.tres")
 
+## 🔴 히트 플래시 셰이더 (세63 설계 §A) — modulate 곱셈(어두운 픽셀이 안 하얘짐) 대신 mix-to-white.
+## Shader **리소스** 공유는 안전 — 인스턴스마다 갈라야 하는 건 uniform을 쥔 ShaderMaterial 쪽이다
+## (`_ready`가 per-instance 생성. 공유하면 한 마리의 플래시가 전원 플래시다).
+const FLASH_SHADER := preload("res://src/actors/hit_flash.gdshader")
+## 발밑 그림자 (세63 설계 §D) — 공용 배우 컴포넌트. 여기서 자동 부착하므로 **미래의 모든 적이
+## 공짜**다("새 적 = .tres 한 장" 계약 — 씬마다 노드를 요구하면 새 적마다 침묵 누락이 생긴다).
+const ShadowScript := preload("res://src/actors/shadow.gd")
+
 @export var enemy_id: StringName = &"slime"
 
 @onready var _visual: AnimatedSprite2D = $Visual
 
-## 🔴 피격 손맛 (세션 38) — 넉백/팝 **연출값**. 밸런스가 아니라 느낌값이라 여기 const
-## (projectile 물리 여유 const 선례). 사용자가 직접 때려 보며 조인다.
+## 🔴 피격 손맛 (세션 38 · 세63 개편) — 넉백/플래시/스쿼시 **연출값**. 밸런스가 아니라 느낌값이라
+## 여기 const (projectile 물리 여유 const 선례). 사용자가 직접 때려 보며 조인다.
 const KNOCKBACK_IMPULSE := 140.0  ## 맞는 순간 플레이어 반대쪽으로 밀려나는 속도
 const KNOCKBACK_DECAY := 600.0    ## 넉백 감쇠(속도/s) — 빨리 원래 추격으로 복귀
-const POP_SCALE := 1.35           ## 팝 순간 시각 크기
+const POP_SQUASH := Vector2(1.25, 0.78)  ## 피격 스쿼시 — 가로로 눌리며 "맞았다"가 읽힌다
+const POP_SEC := 0.18             ## 플래시 감쇠·스쿼시 복귀 시간(s)
+const TELEGRAPH_AMOUNT := 0.6     ## 윈드업 붉은 달아오름 세기 (셰이더 telegraph_amount)
+const HURT_HOLD_SEC := 0.15       ## 1프레임 hurt 스트립의 홀드 시간 (설계 §C 함정 — 아래 _play_hurt)
+const SHADOW_RADIUS_FRAC := 0.30  ## 그림자 반경 = 프레임 한 변 × 이 값
+const SHADOW_OFFSET_FRAC := 0.35  ## 발밑 오프셋 = 프레임 한 변 × 이 값 (프레임 바닥 근사)
 
 var _def: EnemyDef = null
 var _hp: float = 0.0
@@ -104,6 +117,8 @@ var _status: SH = SH.new()
 ## 🔴 죽음 1회 보장 — DoT·연쇄·즉발이 같은 프레임에 겹쳐도 `_die()`가 두 번 돌면
 ## 드롭이 두 번 떨어지고 퀘스트가 두 번 센다(queue_free는 프레임 끝에야 반영된다).
 var _dead: bool = false
+## hurt 홀드 세대 토큰 (세63) — 연타 시 마지막 발동의 타이머만 idle 복귀시킨다 (_play_hurt).
+var _hurt_gen: int = 0
 
 
 func _ready() -> void:
@@ -120,7 +135,17 @@ func _ready() -> void:
 	# gale 쿨도 한 주기 채워 시작한다 — 조우 즉시 돌풍/연사가 터지지 않게 (disperse_timer 선례).
 	_gale_gust_cd = _param("gust_period", 3.0)
 	_gale_volley_cd = _param("volley_period", 4.5)
+	# 🔴 히트 플래시 material은 **per-instance 생성** (세63 설계 §A) — 같은 ShaderMaterial 리소스를
+	# 전원이 공유하면 한 마리의 플래시가 전원 플래시다. .tscn에 박지 않는 이유도 이것
+	# (박으면 resource_local_to_scene이 필요한데 코드 생성이 더 단순하고 검증 가능하다).
+	if _visual != null:
+		var mat := ShaderMaterial.new()
+		mat.shader = FLASH_SHADER
+		mat.set_shader_parameter(&"flash_amount", 0.0)
+		mat.set_shader_parameter(&"telegraph_amount", 0.0)
+		_visual.material = mat
 	_apply_look()
+	_attach_shadow()
 
 
 ## 🔴 외형도 .tres가 쥔다 (`params.color`·`params.size`) — "새 적 = .tres 한 장"이 생김새까지
@@ -146,23 +171,59 @@ func _apply_look() -> void:
 
 ## 가로 스트립 시트(프레임 = 정사각, 한 변 = 시트 높이)를 루프 "idle" 애니로 굽는다.
 ## 프레임 수 = 폭 ÷ 높이. slime 128×32=4 · hound 256×32=8 · gale 384×64=6 — 높이 기준이라 다 맞는다.
+## 🔴 세63 확장: `params.hurt_sprite` 경로가 있으면 **같은 규약**으로 비루프 "hurt"를 얹는다.
+## 없으면 기존과 완전 동일 — **기존 경로 무변경이 하위호환 계약**이다(전 적 공용 함수).
 func _setup_frames(tex: Texture2D) -> void:
-	var side := tex.get_height()
-	if side <= 0:
-		return
-	var count := maxi(1, tex.get_width() / side)
 	var frames := SpriteFrames.new()
 	frames.remove_animation(&"default")
-	frames.add_animation(&"idle")
-	frames.set_animation_loop(&"idle", true)
-	frames.set_animation_speed(&"idle", 6.0)
+	if not _bake_strip(frames, &"idle", tex, true):
+		return
+	var hurt_path := str(_def.params.get("hurt_sprite", "")) if _def != null else ""
+	if hurt_path != "":
+		if ResourceLoader.exists(hurt_path):
+			var htex := load(hurt_path) as Texture2D
+			if htex != null:
+				_bake_strip(frames, &"hurt", htex, false)
+		else:
+			# 시트가 없으면 hurt 없이 선다 — 침묵 대신 경고 (enemy_projectile 시트 부재 선례).
+			push_warning("hurt_sprite를 못 찾았다 (%s) — hurt 애니 없이 선다" % hurt_path)
+	_visual.sprite_frames = frames
+	_visual.play(&"idle")
+
+
+## 가로 스트립 한 장 → 애니 하나 (idle·hurt 공용 굽기). 성공하면 true.
+func _bake_strip(frames: SpriteFrames, anim: StringName, tex: Texture2D, loop: bool) -> bool:
+	var side := tex.get_height()
+	if side <= 0:
+		return false
+	var count := maxi(1, tex.get_width() / side)
+	frames.add_animation(anim)
+	frames.set_animation_loop(anim, loop)
+	frames.set_animation_speed(anim, 6.0)
 	for i in count:
 		var at := AtlasTexture.new()
 		at.atlas = tex
 		at.region = Rect2(i * side, 0, side, side)
-		frames.add_frame(&"idle", at)
-	_visual.sprite_frames = frames
-	_visual.play(&"idle")
+		frames.add_frame(anim, at)
+	return true
+
+
+## 🔴 발밑 그림자 자동 부착 (세63 설계 §D) — 루트 scale의 자식이라 `params.size`(=덩치)를 공짜로
+## 추종한다. 크기·오프셋은 idle 첫 프레임의 한 변에서 근사(연출 시작값 — 사용자 튜닝).
+## z는 **0 유지 + move_child(…, 0)** — 음수 z는 Ground(z0) 뒤로 숨는다(세54 마디 실증).
+func _attach_shadow() -> void:
+	var side := 32.0
+	if _visual != null and _visual.sprite_frames != null \
+			and _visual.sprite_frames.has_animation(&"idle") \
+			and _visual.sprite_frames.get_frame_count(&"idle") > 0:
+		var t := _visual.sprite_frames.get_frame_texture(&"idle", 0)
+		if t != null:
+			side = float(t.get_height())
+	var shadow: Sprite2D = ShadowScript.new()
+	shadow.radius_px = side * SHADOW_RADIUS_FRAC
+	shadow.position = Vector2(0.0, side * SHADOW_OFFSET_FRAC)
+	add_child(shadow)
+	move_child(shadow, 0)
 
 
 ## 🔴 행동을 `params.ai`로 가른다 (기본 "chase" = 현행). 각 갈래가 `velocity`(추격 의지)를 세우면
@@ -420,7 +481,8 @@ func _resolve_gust(player: Node2D, dist: float) -> void:
 	var dodging: bool = player.has_method(&"is_rolling") and bool(player.call(&"is_rolling"))
 	if dodging:
 		return
-	GameState.damage_player(_param("gust_damage", 8.0))
+	# 🔴 source_pos(세63) = 내 위치 — player_hurt에 실려 방향성 카메라 킥이 쓴다.
+	GameState.damage_player(_param("gust_damage", 8.0), global_position)
 	# 밀쳐내기 — 방향 = 나 → 플레이어. has_method 가드: 테스트 더미(Node2D)도 견딘다.
 	if player.has_method(&"apply_push"):
 		var away := player.global_position - global_position
@@ -482,7 +544,8 @@ func _contact(player: Node2D, dist: float) -> void:
 	_cool = _param("attack_cooldown", 0.9)
 	var dodging: bool = player.has_method(&"is_rolling") and bool(player.call(&"is_rolling"))
 	if not dodging:
-		GameState.damage_player(_param("contact_damage", 4.0))
+		# 🔴 source_pos(세63) = 내 위치 — player_hurt에 실려 방향성 카메라 킥이 쓴다.
+		GameState.damage_player(_param("contact_damage", 4.0), global_position)
 
 
 ## 🔴 재생 — `regen_per_sec > 0`이면 초당 회복(상한 = `_def.hp`). 죽은 뒤(_hp<=0)엔 회복 안 한다.
@@ -598,19 +661,21 @@ func take_reaction_damage(amount: float, rune: int = Enums.RuneType.FIRE) -> voi
 	_hp -= amount
 	EventBus.enemy_hit.emit(self, amount, rune)
 	_pop()
+	_play_hurt()
 	if _hp <= 0.0:
 		_die()
 
 
 ## 지금 보여 줄 상태 색 — 고르는 규칙은 holder가 쥔다(적·허수아비가 같게 보이도록).
-## 🔴 `_pop`·`_set_telegraph`의 **복귀 목표가 이 함수**다 — `Color.WHITE`로 돌리면 때릴 때마다
-## 화상 색이 벗겨지는데 **헤드리스가 절대 못 잡는다**(렌더가 없다).
+## 세63: 팝·텔레그래프가 셰이더로 옮겨가 "복귀 목표" 곡예가 소멸했다 — 이 색을 쓰는 곳은
+## 이제 `_refresh_tint` 하나뿐이다.
 func _status_tint() -> Color:
 	return _status.tint()
 
 
-## 🔴 색 소유권 정리: 상태 틴트는 rgb만 쥐고 **알파는 분산(_set_dispersed)이 쥔다** — 둘이 같은
-## modulate를 나눠 쓰므로 서로의 축을 덮어쓰지 않게 나눴다. 팝·텔레그래프도 복귀 목표를 이 색으로 쓴다.
+## 🔴 modulate 소유권 계약 (세63 개편): modulate는 **rgb=상태 틴트 · a=분산** 두 축만 남았다.
+## 팝(흰 섬광)·텔레그래프(붉음)는 셰이더 uniform(flash_amount·telegraph_amount)이 쥔다 —
+## modulate를 만지는 코드는 이 함수와 `_set_dispersed`뿐이어야 한다(3파전으로 되돌리지 마라).
 func _refresh_tint() -> void:
 	if _visual == null:
 		return
@@ -620,15 +685,17 @@ func _refresh_tint() -> void:
 
 
 ## 돌진 텔레그래프 — 윈드업 동안 붉게 달아오른다(모으는 중이 보인다 → 피할 수 있다).
-## ⚠ 연출값이다 — 사용자가 실게임에서 보고 조인다. _pop과 modulate를 공유하지만 윈드업이 짧아 무해.
+## 세63 개편: modulate 대신 셰이더 `telegraph_amount` — 팝 uniform(flash_amount)과 갈라져 있어
+## **윈드업 중에 맞아도 섬광이 텔레그래프를 지우는 사고가 없다**(단일 amount로 합치면 팝 트윈이
+## 0으로 감쇠하며 텔레그래프까지 끄는 함정). 붉은색은 셰이더 기본 uniform(telegraph_color).
+## ⚠ 연출값이다 — 사용자가 실게임에서 보고 조인다.
 func _set_telegraph(on: bool) -> void:
 	if _visual == null:
 		return
-	# 🔴 복귀 목표가 Color.WHITE면 **상태 틴트가 지워진다**(윈드업 한 번에 화상이 안 보이게 된다).
-	if on:
-		_visual.modulate = Color(1.6, 0.75, 0.55)
-	else:
-		_refresh_tint()
+	var mat := _visual.material as ShaderMaterial
+	if mat == null:
+		return
+	mat.set_shader_parameter(&"telegraph_amount", TELEGRAPH_AMOUNT if on else 0.0)
 
 
 ## 분산 표시 — 분산 중엔 반투명(지금은 때리기 나쁨이 보인다). 경감 자체는 take_hit이 적용한다.
@@ -692,6 +759,7 @@ func take_hit(damage: float, rune_type: int, status: int, status_power: float) -
 		if away.length() > 0.1:
 			_knockback = away.normalized() * KNOCKBACK_IMPULSE
 	_pop()
+	_play_hurt()
 	if _hp <= 0.0:
 		_die()
 
@@ -783,18 +851,59 @@ func _spawn_chest(scene: Node, rolled: Array[Dictionary]) -> void:
 	chest.setup(rolled)
 
 
-## 팝 — 흰 섬광 + 크기 펀치 (피격 손맛). 🔴 **scale은 _visual에만** 준다: 루트 scale은
-## _apply_look가 쥔 덩치(=히트박스)라 건드리면 히트박스가 출렁인다.
+## 팝 — 셰이더 플래시 + 스쿼시 (피격 손맛, 세63 개편). modulate를 **아예 안 만진다** — 흰 섬광은
+## 셰이더 `flash_amount`(mix-to-white라 어두운 픽셀도 하얘진다). 🔴 **scale은 _visual에만** 준다:
+## 루트 scale은 _apply_look가 쥔 덩치(=히트박스)라 건드리면 히트박스가 출렁인다.
+## 연타 시 트윈 중첩은 기존 규약 그대로(마지막 승리) — 단 flash는 트윈 전에 1.0을 직접 찍어
+## **매 타마다 만빛에서 다시 시작**한다.
 func _pop() -> void:
 	if _visual == null:
 		return
-	_visual.modulate = Color(2.2, 2.2, 2.2)  # >1 = 밝게 튄다 (흰 섬광)
-	_visual.scale = Vector2(POP_SCALE, POP_SCALE)
+	var mat := _visual.material as ShaderMaterial
+	if mat != null:
+		mat.set_shader_parameter(&"flash_amount", 1.0)
+	_visual.scale = POP_SQUASH
 	var tween := create_tween()
 	tween.set_parallel(true)
-	# 🔴 팝의 복귀 목표도 **상태 틴트**다 — Color.WHITE로 돌리면 때릴 때마다 화상 색이 벗겨진다.
-	tween.tween_property(_visual, "modulate", _status_tint(), 0.18)
-	tween.tween_property(_visual, "scale", Vector2.ONE, 0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	if mat != null:
+		tween.tween_property(mat, "shader_parameter/flash_amount", 0.0, POP_SEC)
+	tween.tween_property(_visual, "scale", Vector2.ONE, POP_SEC).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+
+## 피격 프레임 재생 (세63 설계 §C — 보스처럼 `params.hurt_sprite`가 있는 적만). 플래시+스쿼시(_pop)
+## 위에 **얹는 층**이다 — hurt가 없는 적은 no-op(기존 무변경). 뱀 머리 회전(_face)은 노드 속성이라
+## 애니와 직교 — hurt 재생 중에도 머리가 진행 방향을 본다.
+func _play_hurt() -> void:
+	if _visual == null or _visual.sprite_frames == null:
+		return
+	if not _visual.sprite_frames.has_animation(&"hurt"):
+		return
+	_visual.play(&"hurt")
+	# 🔴 1프레임 스트립이면 `animation_finished`가 즉시 온다(설계 §C 함정) — 그대로 두면 한 틱
+	# 번쩍하고 끝나 "안 보인다". 타이머로 홀드한 뒤 idle 복귀로 분기한다.
+	# 🔴 세대 토큰(juice 히트스톱 선례) — 연타 시 **첫** 타이머가 뒤 hurt를 일찍 끊지 않게, 마지막
+	# 발동의 타이머만 복귀시킨다(세63 리뷰). 람다가 아니라 bind인 이유 = 메서드 Callable은 노드가
+	# free되면 소멸돼 안 불리지만, 람다는 free된 self를 만져 에러가 난다.
+	if _visual.sprite_frames.get_frame_count(&"hurt") <= 1:
+		_hurt_gen += 1
+		get_tree().create_timer(HURT_HOLD_SEC).timeout.connect(_back_to_idle_gen.bind(_hurt_gen))
+	elif not _visual.animation_finished.is_connected(_back_to_idle):
+		_visual.animation_finished.connect(_back_to_idle, CONNECT_ONE_SHOT)
+
+
+## 세대 토큰 검문 — 내 세대가 마지막이 아니면(그 뒤에 또 맞았으면) 복귀를 양보한다.
+func _back_to_idle_gen(gen: int) -> void:
+	if gen != _hurt_gen:
+		return
+	_back_to_idle()
+
+
+## hurt에서 idle로 복귀. 노드가 이미 free됐으면 시그널 연결이 소멸돼 안 불린다(타이머도 안전).
+func _back_to_idle() -> void:
+	if _dead or _visual == null or _visual.sprite_frames == null:
+		return
+	if _visual.sprite_frames.has_animation(&"idle"):
+		_visual.play(&"idle")
 
 
 ## 처치 퍼프 — 적 색으로 확 커지며 사라지는 링. 적은 이 프레임에 queue_free되지만

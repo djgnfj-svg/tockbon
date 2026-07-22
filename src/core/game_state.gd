@@ -195,9 +195,17 @@ func _after_equipment_changed() -> void:
 
 # ── 플레이어 HP
 
-func damage_player(amount: float) -> void:
+## 🔴 source_pos(세션63) = 가해자 월드 좌표 — `player_hurt`에 실려 방향성 카메라 킥이 쓴다.
+## 기본 인자 INF 센티널 = "방향 모름"(수신자가 is_finite()로 가드) — 기존 호출자 무수정 하위호환.
+## `player_hurt`는 **여기서만** 발신한다(heal/reset은 안 쏜다) — 피격 연출이 회복에 오발하지 않는 근거.
+## 🔴 죽은 뒤(hp 0)엔 발신하지 않는다 — 사망 연출 0.9초 동안 접촉 피해가 계속 들어와 아픔음·
+## 트라우마가 스팸된다(세63 리뷰). 죽는 마지막 일격까지는 발신한다(그 한 방은 아파야 맞다).
+func damage_player(amount: float, source_pos: Vector2 = Vector2(INF, INF)) -> void:
+	var was_alive := hp > 0.0
 	hp = maxf(0.0, hp - amount)
 	EventBus.player_hp_changed.emit(hp, hp_max())
+	if was_alive:
+		EventBus.player_hurt.emit(amount, source_pos)
 
 func heal_player(amount: float) -> void:
 	hp = minf(hp + amount, hp_max())

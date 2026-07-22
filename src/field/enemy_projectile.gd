@@ -79,7 +79,8 @@ func _on_body_entered(body: Node2D) -> void:
 		# 🔴 구르는 중이면 관통·무해 (구르기 = 무적 계약, forest_enemy._contact와 동일 규약).
 		if body.has_method(&"is_rolling") and bool(body.call(&"is_rolling")):
 			return
-		GameState.damage_player(_damage)
+		# 🔴 source_pos(세63) = 탄의 위치 — player_hurt에 실려 방향성 카메라 킥이 쓴다.
+		GameState.damage_player(_damage, global_position)
 		_consume()
 		return
 	# 마스크상 남은 건 world(벽) — 그냥 죽는다.

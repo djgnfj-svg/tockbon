@@ -41,6 +41,14 @@ const BREATH_FREQ: float = 3.0
 const BREATH_PHASE: float = 0.6   ## 마디마다 위상차 → 물결이 몸을 타고 흐른다
 const BREATH_AMP: float = 0.08
 
+## 🔴 마디 그림자 (세63 설계 §D) — 공용 배우 컴포넌트. 마디가 top_level이라 그림자도 top_level +
+## **절대 z 0**(z_as_relative=false)로 깐다: 마디가 절대 z 1~18이므로 늘 그 아래, Ground(z0)와는
+## 동률이지만 보스 씬이 Ground 뒤에 인스턴스돼 트리 순서로 위에 그려진다.
+## ⚠ 이 동률 의존은 헤드리스가 못 잡는다 — 실게임 MCP 스샷 필수(세54 재발 자리).
+const ShadowScript := preload("res://src/actors/shadow.gd")
+const SHADOW_RADIUS_FRAC: float = 0.30  ## 그림자 반경 = 마디 겉보기 크기 × 이 값 (연출)
+const SHADOW_OFFSET_Y: float = 10.0     ## 마디 중심에서 발밑까지 (연출 — 사용자 튜닝)
+
 ## 🔴 마디 z (세54 실게임 함정): **양수여야 한다.** 음수로 두면 숲 `Ground`(ColorRect, z0)
 ## **뒤로 숨어 몸통이 통째로 안 보인다**("대가리밖에 없다"). 헤드리스엔 바닥이 없어 위치 테스트는
 ## 통과하고 실게임에서만 드러난다(렌더는 헤드리스가 못 잡는다 — takbon-verify). 앞 마디(seg0)가
@@ -50,6 +58,8 @@ const BREATH_AMP: float = 0.08
 ## `_visual.scale`을 1.0으로 되돌려서 Visual을 키우면 "맞으면 작아진다"(세54). 루트를 키우면
 ## _pop은 Visual만 1.0으로 두고 루트 배율이 남는다. 마디는 top_level이라 루트 scale 무영향.
 var _segments: Array[Sprite2D] = []
+## 마디 발밑 그림자 — _segments와 1:1 (i번 마디의 그림자 = _shadows[i], taper 배율 추종).
+var _shadows: Array[Sprite2D] = []
 ## 머리 위치 히스토리(월드 좌표) — index 0 = 가장 최근(현재 머리).
 var _history: Array[Vector2] = []
 var _t: float = 0.0
@@ -79,6 +89,16 @@ func _ready() -> void:
 		seg.scale = Vector2.ONE * _base_scale(i)
 		add_child(seg)
 		_segments.append(seg)
+		# 마디 그림자 — 마디의 **자식이 아니라** 형제로 둔다: 마디는 진행 방향으로 회전하는데
+		# 자식이면 타원이 같이 기울어 그림자가 아니라 바닥이 도는 그림이 된다. 위치는 물리 틱이 잇는다.
+		var shadow: Sprite2D = ShadowScript.new()
+		shadow.top_level = true
+		shadow.z_as_relative = false
+		shadow.z_index = 0
+		shadow.radius_px = float(BODY_TEX.get_height()) * _base_scale(i) * SHADOW_RADIUS_FRAC
+		add_child(shadow)
+		shadow.global_position = seg.global_position + Vector2(0.0, SHADOW_OFFSET_Y)
+		_shadows.append(shadow)
 
 
 ## 🔴 이동은 물리 틱에서 — 부모(머리)의 자취를 기록하고 마디를 과거 위치에 놓는다.
@@ -108,6 +128,9 @@ func _physics_process(delta: float) -> void:
 		# 🔴 기본 배율(taper) 위에 호흡 펄스를 곱한다 — taper를 덮어쓰지 않게(둘 다 scale을 쓴다).
 		var pulse := 1.0 + sin(_t * BREATH_FREQ + float(i) * BREATH_PHASE) * BREATH_AMP
 		seg.scale = Vector2.ONE * _base_scale(i) * pulse
+		# 그림자는 마디를 따라온다 (호흡 펄스는 안 받는다 — 바닥은 숨을 안 쉰다).
+		if i < _shadows.size():
+			_shadows[i].global_position = pos + Vector2(0.0, SHADOW_OFFSET_Y)
 
 
 ## 🔴 히스토리 폴리라인에서 머리로부터 **경로 거리 d** 떨어진 지점을 샘플한다.

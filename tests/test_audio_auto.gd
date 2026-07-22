@@ -25,7 +25,7 @@ const IDS := [
 ]
 # EventBus 글로벌 순간 — Audio가 이 전부에 붙어 있어야 한다.
 const SIGNALS := [
-	"ring_cast_requested", "enemy_hit", "player_hp_changed", "extraction_success",
+	"ring_cast_requested", "enemy_hit", "player_hurt", "extraction_success",
 	"bag_lost", "codex_unlocked", "ring_design_committed", "equipment_changed", "phase_changed",
 ]
 # 룬 타입 리터럴 (Enums.RuneType — FIRE=0·WATER=2·WIND=3).
@@ -127,13 +127,12 @@ func _test_events_reach_correct_sound() -> void:
 	_clear(); _bus.phase_changed.emit(1)  # DAY = 조용
 	_check(not _any_played(), "phase DAY → 조용 (소리 없음)")
 
-	# HP: 줄었을 때만 아픔음
-	_clear(); _bus.player_hp_changed.emit(100.0, 100.0)  # 기준값만 — 조용
-	_check(not _any_played(), "hp 첫 신호(기준) → 조용")
-	_clear(); _bus.player_hp_changed.emit(90.0, 100.0)   # 감소 → 아픔
-	_check(_played("hurt"), "hp 감소 → hurt")
-	_clear(); _bus.player_hp_changed.emit(100.0, 100.0)  # 회복(증가) → 조용
-	_check(not _any_played(), "hp 회복 → 조용 (출격 만HP가 아픔음을 안 낸다)")
+	# 아픔음 (세63 이관): `player_hurt`(damage_player만 발신)가 유일 트리거 — 옛 "hp 직전값
+	# 비교로 감소 추측"은 은퇴했다. 회복·출격 만HP는 player_hurt 자체가 안 실리므로 오발이 없다.
+	_clear(); _bus.player_hurt.emit(10.0, Vector2(INF, INF))
+	_check(_played("hurt"), "player_hurt → hurt")
+	_clear(); _bus.player_hp_changed.emit(100.0, 100.0)  # hp 변화만(회복 계열) → 조용
+	_check(not _any_played(), "hp 변화만 → 조용 (아픔음은 player_hurt만 듣는다)")
 
 	# 해금 (부작용 없음 — id는 임의 프로브 키, 세61에 rune_water .tres 은퇴로 개명)
 	_clear(); _bus.codex_unlocked.emit(&"__probe_unlock")

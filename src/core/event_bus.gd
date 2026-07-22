@@ -25,6 +25,12 @@ signal enemy_hit(enemy: Node2D, damage: float, rune_type: int)
 signal enemy_died(enemy_id: StringName)
 ## ⚠ 발신자 없음 = **HUD가 세션 21에 삭제돼서**다. 발신 측(GameState)은 계약을 지키고 있다 — 지우지 마라.
 signal player_hp_changed(hp: float, hp_max: float)
+## 🔴 플레이어가 **피해를 입었다** (세션63 손맛). `player_hp_changed`("hp가 변했다")와 다르다 —
+## 이건 damage_player 한 곳만 발신하는 1급 사건이라, 수신자(juice 방향성 킥·player 피격 애니·
+## audio 아픔음)가 "직전값 비교로 감소를 추측"하던 사본들을 대체한다. 회복·출격 만HP·장비 클램프는
+## 이 신호를 **안 쏜다**(그래서 오발 가드가 필요 없다). source_pos = 가해자 월드 좌표 —
+## 방향성 카메라 킥이 쓴다. 방향을 모르는 피해는 Vector2(INF, INF) 센티널(수신자는 is_finite() 가드).
+signal player_hurt(amount: float, source_pos: Vector2)
 
 # ── 익스트랙션 (C → D·E)
 ## 🔴 **발신자 없음 = 필드(원정)가 아직 없어서**다. 수신자는 이미 연결돼 있다

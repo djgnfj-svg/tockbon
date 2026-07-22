@@ -15,6 +15,12 @@ extends StaticBody2D
 const SH := preload("res://src/core/status_holder.gd")
 ## 확산 반경 등 수치는 balance가 쥔다 (연출값이 아니라 밸런스다 — forest_enemy와 같은 소스).
 const BAL := preload("res://data/balance.tres")
+## 🔴 히트 플래시 셰이더 (세63) — 적과 **같은 파일**이라 연습장⇔숲 손맛이 같은 소스에서 나온다.
+## 두 몸 파리티(세56 교훈): 여기만 옛 modulate 곱셈으로 남으면 연습장에서 시험한 손맛이 거짓말이 된다.
+const FLASH_SHADER := preload("res://src/actors/hit_flash.gdshader")
+## 팝 연출값 — forest_enemy와 같은 수치(파리티). 밸런스 아님.
+const POP_SQUASH := Vector2(1.25, 0.78)
+const POP_SEC := 0.18
 
 var hits: Array[Dictionary] = []
 
@@ -30,6 +36,14 @@ var _status_damage: float = 0.0
 func _ready() -> void:
 	add_to_group("enemies")
 	_wire_status()
+	# 🔴 per-instance ShaderMaterial (세63, forest_enemy와 같은 이유) — Material 리소스를 공유하면
+	# 허수아비 하나 맞을 때 다섯이 같이 번쩍인다. Shader 리소스 공유는 안전(상태 없음).
+	if _visual != null:
+		var mat := ShaderMaterial.new()
+		mat.shader = FLASH_SHADER
+		mat.set_shader_parameter(&"flash_amount", 0.0)
+		mat.set_shader_parameter(&"telegraph_amount", 0.0)
+		_visual.material = mat
 
 
 ## holder 콜백을 이 몸에 잇는다. 🔴 규칙은 holder가, 몸의 반응은 여기가 — 적과 같은 경계다.
@@ -154,16 +168,18 @@ func _refresh_tint() -> void:
 	_visual.modulate = c
 
 
-## 팝 — 흰 섬광 + 크기 펀치 (피격 손맛, 세션 38). 허수아비는 StaticBody라 넉백은 없다.
-## forest_enemy._pop과 같은 연출 (연습장에서도 손맛이 같게).
+## 팝 — 셰이더 흰 섬광 + 스쿼시 (세63, forest_enemy._pop과 같은 연출 — 연습장에서도 손맛이 같게).
+## 🔴 modulate는 안 만진다 — 세63 소유권 계약(rgb=상태 틴트·a=분산)이 여기도 똑같이 적용된다.
+## 플래시는 트윈 전에 1.0을 직접 찍어 매 타마다 만빛에서 다시 시작한다(forest_enemy 규약).
 func _pop() -> void:
 	if _visual == null:
 		return
-	_visual.modulate = Color(2.2, 2.2, 2.2)
-	_visual.scale = Vector2(1.35, 1.35)
+	var mat := _visual.material as ShaderMaterial
+	if mat != null:
+		mat.set_shader_parameter(&"flash_amount", 1.0)
+	_visual.scale = POP_SQUASH
 	var tween := create_tween()
 	tween.set_parallel(true)
-	# 🔴 복귀 목표는 **상태 틴트**다 — Color.WHITE로 돌리면 때릴 때마다 화상 색이 벗겨진다
-	# (헤드리스가 절대 못 잡는다 — 렌더가 없다).
-	tween.tween_property(_visual, "modulate", _status.tint(), 0.18)
-	tween.tween_property(_visual, "scale", Vector2.ONE, 0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	if mat != null:
+		tween.tween_property(mat, "shader_parameter/flash_amount", 0.0, POP_SEC)
+	tween.tween_property(_visual, "scale", Vector2.ONE, POP_SEC).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
