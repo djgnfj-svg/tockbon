@@ -30,7 +30,7 @@ const TAB_H := 30.0
 const TAB_GAP := 6.0
 const CONTENT_TOP := 92.0      # origin.y 기준, 탭 헤더 아래 내용 시작 y
 
-const TAB_NAMES: Array[String] = ["소지품", "퀘스트", "마법진"]
+const TAB_NAMES: Array[String] = ["소지품", "퀘스트", "마법진", "캐릭터"]
 
 # ── 소지품 탭: 상단 착용줄(가로 5부위) ──
 const EQUIP_ROW_H := 68.0
@@ -133,9 +133,9 @@ func _ready() -> void:
 
 # ─────────────────────────── 열고 닫기 ───────────────────────────
 
-## 🔴 토글·지름길 키는 _unhandled_input에서 잡는다 — 발사(좌클릭)·슬롯(1~4)과 안 겹친다.
+## 🔴 토글·지름길 키는 _unhandled_input에서 잡는다 — 발사(좌클릭)·슬롯(1~3)과 안 겹친다.
 ## 닫힌 Control도 _unhandled_input은 받는다(mouse_filter는 마우스만 가른다).
-## Tab=열기/닫기(기본 탭=소지품) · I=소지품 탭 · Q=퀘스트 탭 · ESC=닫기.
+## Tab=열기/닫기(기본 탭=소지품) · I=소지품 탭 · Q=퀘스트 탭 · C=캐릭터 탭 · ESC=닫기.
 func _unhandled_input(event: InputEvent) -> void:
 	if not (event is InputEventKey and event.pressed and not event.echo):
 		return
@@ -150,6 +150,9 @@ func _unhandled_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 		KEY_Q:
 			_open_at(1)
+			get_viewport().set_input_as_handled()
+		KEY_C:
+			_open_at(3)   # 캐릭터 탭 (세64 — HUD 좌하단 레전드의 [C]와 짝)
 			get_viewport().set_input_as_handled()
 		KEY_ESCAPE:
 			if _open:
@@ -288,6 +291,8 @@ func _draw() -> void:
 			_draw_quests_tab(font, origin, content_top)
 		2:
 			_draw_magic_tab(font, origin, content_top)
+		3:
+			_draw_character_tab(font, origin, content_top)
 
 
 func _draw_tab_headers(font: Font) -> void:
@@ -575,6 +580,83 @@ func _draw_magic_tab(font: Font, origin: Vector2, content_top: float) -> void:
 	draw_string(font, Vector2(left, content_top + 66.0),
 		"장착한 고리 도안이 여기에 표시될 예정이다.",
 		HORIZONTAL_ALIGNMENT_LEFT, -1, 12, HINT_COLOR)
+
+
+# ─────────────────────────── 탭4: 캐릭터 (세64) ───────────────────────────
+
+## 읽기 전용 캐릭터 정보 — 생명력·파생 스탯·착용 요약. 착용/해제는 소지품 탭이 한다(여긴 요약만).
+## 🔴 스탯은 전부 GameState getter로 읽는다(hp_max·mana_max·move_speed·roll_cooldown·
+## stroke_correction·wand_pattern) — balance를 직접 읽으면 장비 보정이 빠져 조용히 어긋난다.
+const CHAR_VALUE_X := 200.0     # 라벨 왼쪽 정렬, 값은 여기서 시작
+const CHAR_ROW_H := 26.0
+const CHAR_SECTION_GAP := 20.0
+
+func _draw_character_tab(font: Font, origin: Vector2, content_top: float) -> void:
+	var left := origin.x + PAD
+	var y := content_top
+
+	# ── 생명력 ──
+	draw_string(font, Vector2(left, y), "생명력",
+		HORIZONTAL_ALIGNMENT_LEFT, -1, 14, SECTION_COLOR)
+	y += CHAR_ROW_H
+	y = _draw_stat(font, left, y, "HP",
+		"%d / %d" % [ceili(GameState.hp), roundi(GameState.hp_max())])
+	y = _draw_stat(font, left, y, "마나",
+		"%d / %d" % [floori(GameState.mana), roundi(GameState.mana_max())])
+
+	# ── 능력치 (파생 스탯) ──
+	y += CHAR_SECTION_GAP
+	draw_string(font, Vector2(left, y), "능력치",
+		HORIZONTAL_ALIGNMENT_LEFT, -1, 14, SECTION_COLOR)
+	y += CHAR_ROW_H
+	y = _draw_stat(font, left, y, "이동 속도", "%d" % roundi(GameState.move_speed()))
+	y = _draw_stat(font, left, y, "구르기 쿨", "%.2f초" % GameState.roll_cooldown())
+	var corr := GameState.stroke_correction()
+	y = _draw_stat(font, left, y, "손그림 보정",
+		"+%.2f (펜)" % corr if corr > 0.0 else "없음 (맨손 — 그린 대로)")
+	y = _draw_stat(font, left, y, "발사 패턴", _pattern_label(GameState.wand_pattern()))
+
+	# ── 착용 요약 (읽기 전용 — 착용/해제는 [소지품] 탭) ──
+	y += CHAR_SECTION_GAP
+	draw_string(font, Vector2(left, y), "착용 (착용·해제는 소지품 탭에서)",
+		HORIZONTAL_ALIGNMENT_LEFT, -1, 14, SECTION_COLOR)
+	y += CHAR_ROW_H
+	for pair: Array in EQUIP_KINDS:
+		var kind: int = pair[0]
+		var kind_label: String = pair[1]
+		var val := "비어 있음"
+		var col := SLOT_EMPTY_COLOR
+		if GameState.equipment.has(kind):
+			val = _item_name(GameState.equipment[kind])
+			var eff := _effect_text(GameState.equipment[kind])
+			if eff != "":
+				val += "  ·  " + eff
+			col = NAME_COLOR
+		draw_string(font, Vector2(left, y), kind_label,
+			HORIZONTAL_ALIGNMENT_LEFT, -1, 12, KIND_COLOR)
+		draw_string(font, Vector2(left + CHAR_VALUE_X, y), val,
+			HORIZONTAL_ALIGNMENT_LEFT, -1, 12, col)
+		y += CHAR_ROW_H
+
+
+## 스탯 한 줄 — 라벨(왼쪽) + 값(CHAR_VALUE_X). 다음 줄 y를 돌려준다.
+func _draw_stat(font: Font, left: float, y: float, label: String, value: String) -> float:
+	draw_string(font, Vector2(left, y), label, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, KIND_COLOR)
+	draw_string(font, Vector2(left + CHAR_VALUE_X, y), value,
+		HORIZONTAL_ALIGNMENT_LEFT, -1, 13, NAME_COLOR)
+	return y + CHAR_ROW_H
+
+
+## 발사 패턴(Enums.WandPattern) → 사람 말. _wand_pattern_text와 달리 패턴 값을 직접 받는다
+## (착용 지팡이가 없어도 GameState.wand_pattern()이 단발을 돌려줘 늘 뭔가 보여 준다).
+func _pattern_label(pattern: int) -> String:
+	match pattern:
+		Enums.WandPattern.MULTI:
+			return "산탄 (여러 발)"
+		Enums.WandPattern.NOVA:
+			return "전방위"
+		_:
+			return "단발"
 
 
 # ─────────────────────────── 공용 헬퍼 ───────────────────────────

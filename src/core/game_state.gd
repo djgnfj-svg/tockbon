@@ -1,8 +1,10 @@
 extends Node
-## 전역 상태 원장 — 자원·장착 4장·가방·도감 (TECH_SPEC §3).
+## 전역 상태 원장 — 자원·장착 3장·가방·도감 (TECH_SPEC §3).
 ## 모듈은 이 API로만 자원을 만진다. inventory에 직접 접근하지 말 것.
 
-const EQUIP_SLOTS := 4
+## 세션64에 4→3 (사용자 확정 — HUD 정리). 옛 저장의 4번째 장착은 로드에서 조용히 해제되고
+## 보관(ring_designs)에는 남는다 — save_manager가 EQUIP_SLOTS만큼만 복원한다.
+const EQUIP_SLOTS := 3
 
 var balance: BalanceData = preload("res://data/balance.tres")
 
@@ -24,9 +26,9 @@ var bag: Array[Dictionary] = []
 ## 착용 장비 {Enums.ItemKind.WAND/ROBE/CHARM: item_id} — 가방 아님, 사망에도 보존 (GDD §5)
 var equipment: Dictionary = {}
 ## 🔴 고리 도안 — **유일한 마법진 모델** (세션 22에 옛 designs/equipped를 매장했다).
-##   ring_designs = 보관 전체 · ring_equipped = 장착 4장.
+##   ring_designs = 보관 전체 · ring_equipped = 장착 EQUIP_SLOTS장.
 var ring_designs: Array[RingDesign] = []
-var ring_equipped: Array[RingDesign] = [null, null, null, null]
+var ring_equipped: Array[RingDesign] = [null, null, null]
 ## {unlock_id: true} — 도감 영구 해금 (룬·제법·적 정보)
 var codex: Dictionary = {}
 ## 🔴 퀘스트 진행 (세션36, "진행 목표 = 깊이 스파인"). 둘 다 영구 저장.
@@ -88,7 +90,7 @@ func new_game() -> void:
 	bag.clear()
 	equipment.clear()          # 🔴 장비 벗김 — 맨손 시작 (사용자 확정 세션37)
 	ring_designs.clear()
-	ring_equipped = [null, null, null, null]
+	ring_equipped = [null, null, null]
 	codex.clear()
 	quest_progress.clear()
 	quest_done.clear()

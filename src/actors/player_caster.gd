@@ -68,13 +68,10 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func select_slot(slot: int) -> void:
 	_slot = slot
+	# 🔴 슬롯 선택 안내(notice→HUD.say)를 더 안 쏜다 (세64). HUD가 선택 슬롯 상세를 **상시 한 줄**로
+	# 그려서, 여기서 또 say를 띄우면 같은 "슬롯 N … 그려 장착"이 두 줄로 겹친다(사용자 지적). 강조 칸
+	# 이동만 알린다. 발사 거부 안내(fire의 notice)는 그대로 — 그건 상시 줄이 못 보여 주는 순간 피드백이다.
 	slot_changed.emit(slot)
-	var design: RingDesign = GameState.ring_equipped[slot]
-	if design == null:
-		notice.emit("슬롯 %d — 비었다 (책상 E에서 그려 장착)" % (slot + 1), false)
-	else:
-		notice.emit("슬롯 %d — %s (위력 %d)" % [slot + 1, design.display_name,
-			RingPower.power_display(design.total_score, Db.ink_mult(design.ink))], false)
 	queue_redraw()
 
 

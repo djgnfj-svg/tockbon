@@ -80,7 +80,7 @@ func _run() -> void:
 	gs.inventory.clear()
 	gs.codex.erase(&"__probe_unlock")
 	gs.ring_designs = [] as Array[RingDesign]
-	gs.ring_equipped = [null, null, null, null] as Array[RingDesign]
+	gs.ring_equipped = [null, null, null] as Array[RingDesign]
 	gs.mana = 1.0
 	clock.day = 1
 	clock.time_sec = 0.0

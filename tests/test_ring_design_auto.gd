@@ -304,12 +304,14 @@ func _test_auto_equip() -> void:
 
 func _test_slot_fill() -> void:
 	_reset_ring_state()
+	# 슬롯 수를 하드코딩하지 않는다 — 세션64에 4→3이 됐고, 다시 바뀌어도 이 테스트는 계약만 잰다.
+	var n: int = gs.EQUIP_SLOTS
 	var made: Array = []
-	for i in 5:
+	for i in n + 1:
 		var d = RD.from_assembly(_sample_assembly(), "진%d" % i)
 		made.append(d)
 		eb.ring_design_committed.emit(d)
-	_check(gs.ring_designs.size() == 5, "5장 모두 보관")
-	for slot in 4:
+	_check(gs.ring_designs.size() == n + 1, "%d장 모두 보관" % (n + 1))
+	for slot in n:
 		_check(gs.ring_equipped[slot] == made[slot], "슬롯 %d에 순서대로 장착" % slot)
-	_check(not (made[4] in gs.ring_equipped), "5장째는 슬롯이 꽉 차 장착 안 됨(보관만)")
+	_check(not (made[n] in gs.ring_equipped), "%d장째는 슬롯이 꽉 차 장착 안 됨(보관만)" % (n + 1))

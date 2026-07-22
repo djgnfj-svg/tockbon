@@ -63,7 +63,5 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("4_hud")
-hint_text = "WASD=이동 · 좌클릭=발사 · Shift=구르기 · 1~4=슬롯 · 보스를 잡으면 귀환 포탈이 열린다 · 포탈 E=귀환(가방→창고) · Tab=시트"
-show_hp = true
 
 [node name="Sheet" parent="." instance=ExtResource("5_inv")]
