@@ -1,10 +1,59 @@
 # STATUS — 현재 진행 상태
 
-> 최종 갱신: 2026-07-22 (세션 60 — **문양본 축을 진에 흡수 — 진·룬·문양 3축 체제**)
+> 최종 갱신: 2026-07-22 (세션 61 — **콘텐츠 카탈로그 리셋 — 각 1종만 남기고 사용자 큐레이션 체제**)
 > · **세션 종료마다 갱신**
 >
 > 🔴 **아래 세션 20 이하는 대부분 삭제된 코드를 설명한다** — 기록이지 현재 상태가 아니다.
 > 현재 정본 = 최상단 「세션 31」~「세션 23」 + `CLAUDE.md` + memory `takbon-mana-injection-rule`.
+
+---
+
+## 세션 61 (2026-07-22) — **콘텐츠 카탈로그 리셋 — 진·룬·문양 각 1종만 남기고 사용자 큐레이션 체제**
+
+> 발단은 설계 문답: *"진마다 룬·문양 위치가 정해져 있는 건 별로인가?"* → 리드 의견 = 자유 배치가
+> 아니라 **진마다 다른 칸 배치(D5)**가 답 → 사용자 확정: *"진마다 다르게는 확정, 하나씩 내가 정할게.
+> 일단 지금 있는 거 일반진+화염룬+확산문양 빼고 다 지워줘, 내가 하나씩 추가할게"* + *"진마다 룬의
+> 갯수도 다양하게 할 수 있으면 좋을듯"*(방향만 기록 — 복합 룬 발사와 한 몸이라 첫 다중룬 진 때 같이).
+> 파이프라인: 리드 조사·AskUserQuestion 4건 확정 → takbon-dev(삭제+시드+테스트 수술, 보고서
+> `scratch_content_reset.md`) → takbon-reviewer(치명 0, `scratch_review_reset.md`) → 리드 재검증·문서.
+
+### 한 일
+- 🔴 **.tres 27장 삭제**: 진 7(fork·ring·burst·spray·seek·spiral·bird) · 룬 5(water·wind·bolt·earth·
+  grass) · 문양 5(gather·pierce·homing·bounce·thrust) · 조각 5 · 퀘스트 q06~q10. + 보스 3장
+  (slime_elite·gale·snake_boss)의 `until_unlock` 관문 드롭 줄 제거(다른 드롭·sub_resource 정합 유지).
+  남은 카탈로그 = **jin_single · rune_fire · radiate(발산)** 각 1종. 아트 에셋은 전부 보존(복원용).
+- 🔴 **기계는 전부 유지** — 발사 pattern/motion 8종 분기·문양 효과(BOLT_EFFECTS)·반응표(status_rules)·
+  해독대·관문 판정(_roll_drops)·balance 필드. 데이터가 돌아오면 그대로 산다. 복원 절차 =
+  **PROGRESSION.md 「콘텐츠 복원 레시피」절**(룬=.tres 3장+드롭 한 줄 · 진=.tres 한 장+**glyph_slots
+  진마다 직접 확정**+JIN_DESC 한 줄 · 문양=.tres 한 장).
+- **시드 = rune_fire+jin_single 2종** — 문양 시드는 안 넣음(GlyphDef에 unlock_id 없음·패널 무필터라
+  어떤 문양 시드도 소비자 0 유령 — dev 보고 §3, D3 때 스키마·판정·시드 한 세트). 세49~58의
+  「임시 전부 시드」와 「룬 5줄 삭제=관문 가동 스위치」 과제는 리셋으로 자연 소멸.
+- **세이브 호환**: 지워진 id를 문 옛 도안의 로드→HUD→발사 전 경로 추적 — 크래시 경로 없음(진=지팡이
+  폴백·룬=기본 피해·문양=enum이라 Db 무관). 세50 원칙대로 가드 안 심음. (실세이브는 애초에 비어 있었음.)
+- 🔴 **테스트 수술 — 기계 커버리지 전량 유지(축소 0곳)**: 죽은 데이터가 검증하던 기계는 **in-memory
+  주입**(Db 레지스트리=평범한 Dictionary)으로 잼 — spell=합성 JinDef 7종(pattern·motion 전량),
+  progression=합성 관문 드롭, decode=합성 RuneDef+조각, quests=합성 q06/q07 사슬. 기대치 갱신 =
+  진 1종·룬 1종·관문표 0줄. `test_ring_book_jin_auto`를 CLAUDE.md·takbon-verify 목록에 편입(세션7
+  함정의 그 자리 — 목록 밖에서 살고 있었다).
+
+### 검증
+- 전 스위트 **22종 그린 + SCRIPT ERROR 0** (리드 재실행). 뮤테이션: dev 3종(관문 분기·BURST delay·
+  해독 소비) + 리드 재현 1종(관문 분기→progression [3] 빨강) — 주입 테스트가 진짜 src 기계를 무는 것 실증.
+- **실게임 MCP 전 루프**: 새로하기→베이스→책(진 탭 1셀+8점 다이어그램 렌더)→진 셀 실클릭(칸 8 안내·
+  밑그림)→진·룬·문양 손그림(guide_points 주입, 정밀도 100)→분석 100점 퍼펙트·위력 160→마력 주입·
+  자동 장착→ESC→실클릭 발사(투사체 스폰·마나 100→84). 에러 로그 0. 실세이브 원상복구(빈 상태).
+- ⚠ **실게임 스트로크 주입 요령**(이번에 밟음): ① freeze(트리 pause) 중엔 `_gui_input`에 입력이 안
+  배달된다 — thaw 상태에서 push ② 한 exec의 연속 모션은 `Input.use_accumulated_input=false` 없이는
+  병합돼 획이 뭉개진다(완성도 11%가 그 증상) ③ 보드 `guide_points()`=모델 좌표, 화면=×1.5(Control scale).
+
+### 남은 것 / 이월
+- ⚠ **progression·decode 스캔 그물 3곳 = 지금 자명 통과(검출력 0)** — 관문·조각을 복원하는 세션에서
+  뮤테이션으로 재점화 확인 필수.
+- snake_boss `counter_rune=6`(GRASS) 사장(살아있는 약점은 gale FIRE뿐) · wand_fork/ring 지팡이 폴백으로
+  MULTI/NOVA 발사는 진 없이도 열림(장비 축 — 큐레이션 때 인지) · q05가 퀘스트 사슬 끝.
+- 「진마다 룬 갯수」= PROGRESSION.md 복원 레시피 절에 방향 기록(rune_slots 미리 파면 안 켠 배선).
+- 손맛 F5(세58-B 것) 계속 이월 · 해독대는 조각 0이라 빈 패널이 정상(건설 후 겉보기만 확인하면 됨).
 
 ---
 

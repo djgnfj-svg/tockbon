@@ -54,10 +54,11 @@ func _run() -> void:
 
 	_check("초기: 로드 false (새 게임)", not sm.load_game())
 
-	# 시드
+	# 시드 — ⚠ 아래 두 키는 **Db 무관 순수 라운드트립 프로브**다 (저장/로드는 id를 해석하지 않는다).
+	# 세61 전엔 fragment_water/rune_water였는데 그 .tres가 은퇴해 이름만 프로브로 바꿨다(계약 동일).
 	gs.add_item(&"ink_basic", 5)
-	gs.add_item(&"fragment_water", 1)
-	gs.codex[&"rune_water"] = true
+	gs.add_item(&"__probe_item", 1)
+	gs.codex[&"__probe_unlock"] = true
 	# 🔴 세션 21 대청소: 옛 SpellDesign(SampleDesigns·도안 내구·rune_fill·arrows) 검증은 걷어냈다 —
 	# 자유 드로잉 경로가 통째로 삭제됐다. 고리(RingDesign) 라운드트립만 남는다.
 	# 고리 도안 라운드트립. 칸 2=발산(1)·칸 6=응집(0), 열린 칸 [2,6].
@@ -77,7 +78,7 @@ func _run() -> void:
 
 	# 오염 (로드가 복원해야 함)
 	gs.inventory.clear()
-	gs.codex.erase(&"rune_water")
+	gs.codex.erase(&"__probe_unlock")
 	gs.ring_designs = [] as Array[RingDesign]
 	gs.ring_equipped = [null, null, null, null] as Array[RingDesign]
 	gs.mana = 1.0
@@ -86,8 +87,8 @@ func _run() -> void:
 
 	_check("로드: true", sm.load_game())
 	_check("복원: 잉크 5", gs.get_count(&"ink_basic") == 5)
-	_check("복원: 조각 1", gs.get_count(&"fragment_water") == 1)
-	_check("복원: 도감 rune_water", gs.is_unlocked(&"rune_water"))
+	_check("복원: 프로브 아이템 1", gs.get_count(&"__probe_item") == 1)
+	_check("복원: 도감 프로브 키", gs.is_unlocked(&"__probe_unlock"))
 	# 고리 도안 라운드트립
 	_check("복원: 고리 도안 1종", gs.ring_designs.size() == 1)
 	_check("복원: 고리 칸 보존 (2=발산·6=응집)",
@@ -114,12 +115,10 @@ func _run() -> void:
 
 	# ── 🔴 새로하기 (세션37, F8) — 전부 비우고 시작 해금만 재시드 ──
 	# save_manager 노트의 계약: new_game은 save_game이 쓰는 것 전부 + bag·hp를 비우고, 시작 해금
-	# (rune_fire·glyph_thrust)만 재시드한다. 씬마다 손으로 비우면 필드가 늘 때 조용히 갈라지므로 core에.
+	# (세61: rune_fire·jin_single)만 재시드한다. 씬마다 손으로 비우면 필드가 늘 때 조용히 갈라지므로 core에.
 	# 🔴 빈 시작(사용자 확정 세션37): 장비도·지은 스테이션(station_*)도·해독으로 얻은 해금도 남지 않는다.
-	# ⚠ 세션49에 **룬 6종이 전부 시작 시드가 됐다**(사용자: "룬도 여러개 그냥 미리 열어줘" — 원소
-	# 반응은 두 룬을 이어 써야 보이는데 물·바람은 해독으로만, 번개·흙·풀은 경로가 아예 없었다).
-	# 그래서 "해독 룬(물)이 사라지나"로는 이 계약을 더 못 잰다 — **시드에 없는 임의 해금 키**로
-	# 바꿨다. 시드 목록이 또 바뀌어도 이 검증은 안 죽는다(그게 세49에 이게 깨진 이유다).
+	# "해독 룬이 사라지나"는 **시드에 없는 임의 해금 키**로 잰다 — 시드 목록이 바뀌어도 안 죽는다
+	# (세49에 시드가 6룬으로 불어 이 검증이 깨졌던 교훈. 세61에 시드가 2종으로 줄어도 그대로 유효).
 	gs.add_item(&"ink_basic", 7)
 	gs.equipment[Enums.ItemKind.PEN] = &"pen_basic"     # 장비 입은 상태를 만든다
 	gs.codex[&"__decoded_probe"] = true                  # 해독으로 얻은 해금 (시드에 없는 키)
@@ -130,8 +129,8 @@ func _run() -> void:
 	_check("🔴 새로하기: 장비 벗겨졌다 (맨손 시작)", gs.equipment.is_empty())
 	_check("🔴 새로하기: 퀘스트 진행 초기화", gs.quest_done.is_empty() and gs.quest_progress.is_empty())
 	_check("🔴 새로하기: 고리 도안 비었다", gs.ring_designs.is_empty())
-	_check("🔴 새로하기: 시작 해금 재시드 (불 룬·추진 문양) — 안 심으면 아무것도 못 그린다",
-		gs.is_unlocked(&"rune_fire") and gs.is_unlocked(&"glyph_thrust"))
+	_check("🔴 새로하기: 시작 해금 재시드 (불 룬·단발진, 세61) — 안 심으면 아무것도 못 그린다",
+		gs.is_unlocked(&"rune_fire") and gs.is_unlocked(&"jin_single"))
 	_check("🔴 새로하기: 해독으로 얻은 해금은 사라졌다", not gs.is_unlocked(&"__decoded_probe"))
 	_check("🔴 새로하기: 지은 스테이션(정제대)은 사라졌다 — 거점 빈 시작", not gs.is_unlocked(&"station_refine"))
 

@@ -288,7 +288,7 @@ func _unlocked_runes() -> Array:
 
 
 ## 🔴 해금된 진만 (세션44, 진=형태). 룬과 같은 규약 — is_unlocked 판정은 패널이 한다(책·보드는
-## 오토로드를 안 봐서 못 한다). 시작 시드 = jin_single/fork/ru(GameState). unlock_id 빈 진은 안 뜬다.
+## 오토로드를 안 봐서 못 한다). 시작 시드 = jin_single 하나(GameState, 세션61). unlock_id 빈 진은 안 뜬다.
 func _unlocked_jins() -> Array:
 	var out: Array = []
 	for jd: JinDef in Db.all_jins():

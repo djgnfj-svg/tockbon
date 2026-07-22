@@ -35,8 +35,9 @@ PowerShell은 자식 프로세스 stdout을 안 보여준다 — **테스트는 
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_snake_boss_auto.gd      # 뱀 보스 (Db로드·약점배율·페이즈2 전이·세그먼트 추종·위브 전진)
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_chest_auto.gd           # 상자 + 능동 루팅 (drops_chest 분기·loot_panel 루팅·상자 자기소멸)
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_gale_boss_auto.gd       # gale 보스 (Db로드+17키·페이즈2·돌풍 피해/밀림·볼리 발수·적탄 히트/수명·반응 룬=BOLT/WATER)
-./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_progression_auto.gd     # 진행 관문 (until_unlock 확정드롭/해금중단·관문표 매핑 불변식·허기 잔재 0 — 정본 docs/PROGRESSION.md)
+./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_progression_auto.gd     # 진행 관문 (until_unlock 확정드롭/해금중단 — 세61부터 in-memory 관문 주입으로 기계를 잼·불변식 스캔은 관문 0줄 동안 자명 통과 — 정본 docs/PROGRESSION.md)
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_spell_vfx_auto.gd       # 마법 연출 배선 (세션59: vfx 연결 2종·트레일 형제 스폰+그룹 무가입·spell_impact emit 캐리어/탄 각각 — 🔴 렌더(색·펄스·자전·트레일)는 못 잡음 · [3] null 가드의 검출자는 SCRIPT ERROR grep)
+./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_ring_book_jin_auto.gd   # 책 진 셀 격자·아이콘 (세61 목록 편입: Db 진 ≥1·격자/아이콘 계약은 합성 8조합으로 잼)
 ```
 
 ⚠ **이 목록이 세션51에 5개 뒤처져 있었다** (dialogue_box·map_panel·drop_pickup·enemy_ai·status). 정본은

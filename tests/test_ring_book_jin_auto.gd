@@ -71,7 +71,8 @@ func _load_jins() -> Array:
 
 
 func _test_all_jins_present(jins: Array) -> void:
-	_check(jins.size() >= 8, "진이 8종 이상이어야 한다 (실제 %d)" % jins.size())
+	# 세61 콘텐츠 리셋: 카탈로그를 jin_single 1종으로 비웠다 — 사용자가 되살릴 때마다 늘어난다.
+	_check(jins.size() >= 1, "진이 1종 이상이어야 한다 (실제 %d)" % jins.size())
 
 
 ## 🔴 격자 계약 — 8칸이 다 생기고, 책 안에 들어가고, 서로 안 겹친다.
@@ -80,9 +81,12 @@ func _test_all_jins_present(jins: Array) -> void:
 ## 겹치지 않으므로, 폭 하한(48px)으로 잡는다.
 func _test_cells_fit_and_dont_overlap(jins: Array) -> void:
 	var top: float = _BookScript.body_top()
-	var rects: Array = _BookScript.jin_cell_rects(jins.size(), BOOK_SIZE, top)
-	_check(rects.size() == jins.size(),
-		"진 셀이 %d칸이어야 한다 (실제 %d)" % [jins.size(), rects.size()])
+	# 세61 콘텐츠 리셋로 Db엔 1종뿐 — 격자 계약(8칸 배치·겹침 없음)은 합성 개수 8로 계속 잰다.
+	# jin_cell_rects는 순수 함수라 Db와 무관하다. 진이 되살아나도 이 검사는 그대로 유효하다.
+	var grid_n := maxi(jins.size(), 8)
+	var rects: Array = _BookScript.jin_cell_rects(grid_n, BOOK_SIZE, top)
+	_check(rects.size() == grid_n,
+		"진 셀이 %d칸이어야 한다 (실제 %d)" % [grid_n, rects.size()])
 
 	# 격자 아래엔 고른 진의 설명 한 줄이 들어간다 — 그 자리(12px)까지 남겨야 한다
 	var bounds := Rect2(Vector2.ZERO, BOOK_SIZE - Vector2(0.0, 12.0))
@@ -107,20 +111,36 @@ func _test_cells_fit_and_dont_overlap(jins: Array) -> void:
 ## 패턴(몇 발)과 경로(어떻게 나는가) 둘 중 하나라도 다르면 획 배열이 달라야 한다.
 ## 뮤테이션: `jin_icon_marks`의 match를 지우고 항상 단발 획만 돌려주면 여기가 대량 실패한다.
 func _test_icons_differ(jins: Array) -> void:
-	var seen: Dictionary = {}
+	# 세61 콘텐츠 리셋: Db엔 jin_single 1종뿐이라 실데이터로는 "서로 다르다"를 못 잰다.
+	# jin_icon_marks는 (pattern, motion)만 먹는 순수 함수 — 옛 8종의 조합을 합성으로 돌려
+	# 기계(축 직교 아이콘)의 검출력을 유지한다. 진을 되살리면 Db 순회로 되돌려도 된다.
+	var combos: Array = [
+		[Enums.WandPattern.SINGLE, Enums.JinMotion.STRAIGHT],
+		[Enums.WandPattern.MULTI, Enums.JinMotion.STRAIGHT],
+		[Enums.WandPattern.NOVA, Enums.JinMotion.STRAIGHT],
+		[Enums.WandPattern.BURST, Enums.JinMotion.STRAIGHT],
+		[Enums.WandPattern.SPRAY, Enums.JinMotion.STRAIGHT],
+		[Enums.WandPattern.SEEK, Enums.JinMotion.STRAIGHT],
+		[Enums.WandPattern.SINGLE, Enums.JinMotion.SPIRAL],
+		[Enums.WandPattern.SINGLE, Enums.JinMotion.BOOMERANG],
+	]
 	for jd in jins:
+		combos.append([int(jd.pattern), int(jd.motion)])
+	var seen: Dictionary = {}
+	for c in combos:
+		var label := "pattern%d·motion%d" % [int(c[0]), int(c[1])]
 		var marks: Array = _BookScript.jin_icon_marks(
-			int(jd.pattern), int(jd.motion), Vector2(50.0, 50.0), 17.0)
-		_check(not marks.is_empty(), "%s: 아이콘 획이 비었다" % jd.id)
+			int(c[0]), int(c[1]), Vector2(50.0, 50.0), 17.0)
+		_check(not marks.is_empty(), "%s: 아이콘 획이 비었다" % label)
 		var total := 0
 		for m in marks:
 			total += (m as PackedVector2Array).size()
-		_check(total >= 2, "%s: 아이콘 점이 너무 적다 (%d)" % [jd.id, total])
+		_check(total >= 2, "%s: 아이콘 점이 너무 적다 (%d)" % [label, total])
 		var key := _fingerprint(marks)
-		if seen.has(key):
+		if seen.has(key) and String(seen[key]) != label:
 			failures += 1
-			print("  FAIL: %s 아이콘이 %s와 똑같다 — 색만 다른 셈" % [jd.id, seen[key]])
-		seen[key] = String(jd.id)
+			print("  FAIL: %s 아이콘이 %s와 똑같다 — 색만 다른 셈" % [label, seen[key]])
+		seen[key] = label
 
 
 func _fingerprint(marks: Array) -> String:

@@ -38,7 +38,7 @@ extends Resource
 ## (wand_pattern)가 쥐던 축을 진으로 옮겼다 — 이제 "진 = 발사 형태"이고 마법진이 이 진을 저장·발사한다.
 @export var pattern: int = 0
 ## 🔴 해금 id (codex). 빈 값 = 항상 보유. RuneDef.unlock_id와 같은 규약 — 패널이 해금된 진만 보여준다.
-## 시작엔 jin_single/fork/ring 셋을 시드한다(GameState._seed_starting_unlocks). 나머진 크래프트/보상.
+## 시작 시드는 jin_single 하나다(GameState._seed_starting_unlocks, 세션61 콘텐츠 리셋). 나머진 큐레이션으로 는다.
 @export var unlock_id: StringName = &""
 ## 🔴 UI 열거 순서 (작을수록 앞). all_jins가 id가 아니라 이 값으로 정렬 — 단발→산탄→둘레.
 @export var sort: int = 0

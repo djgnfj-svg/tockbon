@@ -50,16 +50,30 @@ func _run() -> void:
 	_clean(gs)
 	eb.quest_ready.connect(func(_id: StringName) -> void: _ready_fires += 1)
 
+	# 🔴 세61 콘텐츠 리셋: 해독 퀘스트 q06~q10 .tres가 은퇴했다. UNLOCK(룬)·소급 사슬 **기계**는
+	# 그대로라, q06/q07을 in-memory QuestDef로 Db에 주입해 계속 잰다(끝나면 제거 — 룬 퀘스트를
+	# 되살리면 실데이터 검증으로 되돌려도 된다). Db.quests는 평범한 Dictionary다.
+	var q6 := QuestDef.new()
+	q6.id = &"q06_learn_water"
+	q6.goal = Enums.QuestGoal.UNLOCK
+	q6.target = &"rune_water"
+	q6.requires = &"q05_build_decode"
+	db.quests[q6.id] = q6
+	var q7 := QuestDef.new()
+	q7.id = &"q07_learn_wind"
+	q7.goal = Enums.QuestGoal.UNLOCK
+	q7.target = &"rune_wind"
+	q7.requires = &"q06_learn_water"
+	db.quests[q7.id] = q7
+
 	var q0: QuestDef = db.get_quest(&"q00_first_draw")
 	var q1: QuestDef = db.get_quest(&"q01_first_hunt")
 	var q2: QuestDef = db.get_quest(&"q02_come_home")
 	var q3: QuestDef = db.get_quest(&"q03_build_refine")
 	var q4: QuestDef = db.get_quest(&"q04_build_craft")
 	var q5: QuestDef = db.get_quest(&"q05_build_decode")
-	var q6: QuestDef = db.get_quest(&"q06_learn_water")
-	var q7: QuestDef = db.get_quest(&"q07_learn_wind")
-	_check("퀘스트 8장이 data/quests에서 로드됐다",
-		q0 != null and q1 != null and q2 != null and q3 != null and q4 != null and q5 != null and q6 != null and q7 != null)
+	_check("퀘스트 6장이 data/quests에서 로드됐다 (세61: q06+는 은퇴 — 위 주입 2장은 기계 검증용)",
+		q0 != null and q1 != null and q2 != null and q3 != null and q4 != null and q5 != null)
 	if q0 == null or q1 == null or q3 == null:
 		print("RESULT pass=%d fail=%d" % [_pass, _fail]); quit(); return
 
@@ -194,9 +208,11 @@ func _run() -> void:
 	sm.load_game()
 	_check("🔴 로드: 접수(quest_seen) 복원 → [!] 다시 안 뜬다", not gs.has_new_quest())
 
-	# 뒷정리 — 세이브 파일 삭제(스위트 규약) + 메모리 초기화.
+	# 뒷정리 — 세이브 파일 삭제(스위트 규약) + 메모리 초기화 + 주입 퀘스트 제거(공유 레지스트리).
 	sm.wipe_save()
 	_clean(gs)
+	db.quests.erase(&"q06_learn_water")
+	db.quests.erase(&"q07_learn_wind")
 
 	print("RESULT pass=%d fail=%d" % [_pass, _fail])
 	if _fail == 0:

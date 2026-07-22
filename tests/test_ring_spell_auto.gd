@@ -47,6 +47,13 @@ func _run() -> void:
 	root.add_child(system)
 	await process_frame
 
+	# 🔴 세61 콘텐츠 리셋: 진 .tres가 jin_single 하나로 줄었다. 발사 **기계**(pattern·motion 분기,
+	# ring_spell_system._shot_plan / ring_carrier.set_motion)는 전부 남아 있으므로, 옛 진들이 덮던
+	# 축을 **in-memory JinDef를 Db에 임시 등록**해 계속 잰다([19]의 __test_big_fork 선례).
+	# 진을 되살리면 해당 축의 id를 실데이터로 되돌려도 된다. 끝나면 _remove_test_jins가 걷는다.
+	var db_reg = root.get_node("/root/Db")
+	_register_test_jins(db_reg)
+
 	await _test_deploy_radiate(system)
 	await _test_deploy_gather(system)
 	await _test_deploy_empty(system)
@@ -68,12 +75,41 @@ func _run() -> void:
 	await _test_jin_body_scale(system)
 	await _test_jin_legacy_patterns(system)
 
+	_remove_test_jins(db_reg)
 	if failures == 0:
 		print("TEST_RING_SPELL_OK — 전 항목 통과")
 		quit(0)
 	else:
 		print("TEST_RING_SPELL_FAIL — %d개 실패" % failures)
 		quit(1)
+
+
+## 세61: 옛 진 7종이 덮던 발사 축을 재는 테스트 전용 JinDef들 — Db.jins는 평범한 Dictionary다.
+## body_scale 1.2(옛 jin_spiral 값)는 [19]②의 몸집 비교가 그대로 쓴다.
+const TEST_JINS := {
+	&"__t_fork": {"pattern": Enums.WandPattern.MULTI},
+	&"__t_ring": {"pattern": Enums.WandPattern.NOVA},
+	&"__t_burst": {"pattern": Enums.WandPattern.BURST},
+	&"__t_spray": {"pattern": Enums.WandPattern.SPRAY},
+	&"__t_seek": {"pattern": Enums.WandPattern.SEEK},
+	&"__t_spiral": {"motion": Enums.JinMotion.SPIRAL, "body_scale": 1.2},
+	&"__t_bird": {"motion": Enums.JinMotion.BOOMERANG},
+}
+
+
+func _register_test_jins(db) -> void:
+	for id: StringName in TEST_JINS:
+		var jd := JinDef.new()
+		jd.id = id
+		var fields: Dictionary = TEST_JINS[id]
+		for key: String in fields:
+			jd.set(key, fields[key])
+		db.jins[id] = jd
+
+
+func _remove_test_jins(db) -> void:
+	for id: StringName in TEST_JINS:
+		db.jins.erase(id)
 
 
 ## 8칸 배열을 만든다 — glyphs에 준 칸만 채우고 나머지는 빈 칸(GLYPH_NONE).
@@ -445,7 +481,7 @@ func _test_jin_burst(system) -> void:
 	var bal = system.balance
 	var n := int(bal.jin_burst_count)
 
-	_cast_jin(system, &"jin_burst")
+	_cast_jin(system, &"__t_burst")
 	await process_frame
 	# 🔴 검출력의 핵심: 첫 프레임엔 **1발뿐**이어야 한다. delay가 전부 0이면 여기서 n발이 나온다.
 	_check(_carriers(system).size() == 1,
@@ -473,7 +509,7 @@ func _test_jin_spray(system) -> void:
 	var bal = system.balance
 	var n := int(bal.jin_spray_count)
 
-	_cast_jin(system, &"jin_spray")
+	_cast_jin(system, &"__t_spray")
 	await process_frame
 	_check(_carriers(system).size() == 1,
 		"분사도 첫 프레임엔 1발 (실제 %d — 연발과 같은 시간축)" % _carriers(system).size())
@@ -488,7 +524,7 @@ func _test_jin_spray(system) -> void:
 	await _drain(20)
 
 	# 🔴 산탄보다 **좁다** — 좁은 각이 분사의 정체성이다 (넓으면 산탄과 구별이 안 된다)
-	_cast_jin(system, &"jin_fork")
+	_cast_jin(system, &"__t_fork")
 	await _drain(10)
 	var fork_spread := _angle_spread(_carrier_angles(system))
 	_check(fork_spread > spray_spread,
@@ -509,7 +545,7 @@ func _test_jin_seek(system) -> void:
 	root.add_child(dummy)
 	dummy.global_position = Vector2(0, -300)
 	await process_frame
-	_cast_jin(system, &"jin_seek", Vector2(0, 1))
+	_cast_jin(system, &"__t_seek", Vector2(0, 1))
 	await _drain(8)   # 적까지 300px — 8프레임(≈35px)이면 아직 안 닿아 캐리어가 살아 있다
 	var seek_angles := _carrier_angles(system)
 	var got := float(seek_angles[0]) if not seek_angles.is_empty() else 999.0
@@ -524,7 +560,7 @@ func _test_jin_seek(system) -> void:
 	root.add_child(far)
 	far.global_position = Vector2(0, -900)   # jin_seek_radius_px=420 밖
 	await process_frame
-	_cast_jin(system, &"jin_seek", Vector2(1, 0))
+	_cast_jin(system, &"__t_seek", Vector2(1, 0))
 	await _drain(8)
 	var fb := _carrier_angles(system)
 	var fa := float(fb[0]) if not fb.is_empty() else 999.0
@@ -538,7 +574,7 @@ func _test_jin_seek(system) -> void:
 ## 직진은 축 이탈이 ~0이고 나선은 유의미하게 벗어나야 한다. 분기를 직진으로 되돌리면 여기가 죽는다.
 func _test_jin_spiral(system) -> void:
 	print("[17] 나선진 = 진행축을 벗어나며 훑는다 (세션48 JinMotion.SPIRAL)")
-	var spiral := await _axis_deviation(system, &"jin_spiral")
+	var spiral := await _axis_deviation(system, &"__t_spiral")
 	var straight := await _axis_deviation(system, &"jin_single")
 	_check(straight < 1.0, "직진진은 축 이탈 ~0 (실제 %.2f px)" % straight)
 	_check(spiral > 5.0, "나선진은 축에서 벗어난다 (%.2f px)" % spiral)
@@ -573,7 +609,7 @@ func _test_jin_boomerang(system) -> void:
 	print("[18] 새의진 = 나갔다 되돌아온다 (세션48 JinMotion.BOOMERANG)")
 	_clear(system)
 	await _purge_enemies()
-	_cast_jin(system, &"jin_bird")
+	_cast_jin(system, &"__t_bird")
 	await process_frame
 	var cs := _carriers(system)
 	_check(cs.size() == 1, "부메랑 진 1발 (실제 %d)" % cs.size())
@@ -612,7 +648,7 @@ func _test_jin_body_scale(system) -> void:
 	big.body_scale = 2.0
 	db.jins[big.id] = big
 
-	_cast_jin(system, &"jin_fork")
+	_cast_jin(system, &"__t_fork")
 	await _drain(4)
 	var base_n := _carriers(system).size()
 	_clear(system)
@@ -633,7 +669,7 @@ func _test_jin_body_scale(system) -> void:
 	var r1 := float(_carriers(system)[0].body_radius()) if not _carriers(system).is_empty() else -1.0
 	_clear(system)
 	await _drain(4)
-	_cast_jin(system, &"jin_spiral")     # body_scale 1.2
+	_cast_jin(system, &"__t_spiral")     # body_scale 1.2
 	await process_frame
 	var r2 := float(_carriers(system)[0].body_radius()) if not _carriers(system).is_empty() else -1.0
 	_check(r1 > 0.0 and r2 > r1,
@@ -662,8 +698,8 @@ func _test_jin_legacy_patterns(system) -> void:
 	await _drain(4)
 
 	# 옛 진 3종 — 전부 **첫 프레임에** 제 발수가 다 나온다 (시간차는 신규 진만의 것이다)
-	var expect := {&"jin_single": 1, &"jin_fork": int(bal.wand_multi_count),
-		&"jin_ring": int(bal.wand_nova_count)}
+	var expect := {&"jin_single": 1, &"__t_fork": int(bal.wand_multi_count),
+		&"__t_ring": int(bal.wand_nova_count)}
 	for jid: StringName in expect:
 		_cast_jin(system, jid)
 		await process_frame

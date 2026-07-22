@@ -135,8 +135,8 @@ func _test_events_reach_correct_sound() -> void:
 	_clear(); _bus.player_hp_changed.emit(100.0, 100.0)  # 회복(증가) → 조용
 	_check(not _any_played(), "hp 회복 → 조용 (출격 만HP가 아픔음을 안 낸다)")
 
-	# 해금 (부작용 없음)
-	_clear(); _bus.codex_unlocked.emit(&"rune_water")
+	# 해금 (부작용 없음 — id는 임의 프로브 키, 세61에 rune_water .tres 은퇴로 개명)
+	_clear(); _bus.codex_unlocked.emit(&"__probe_unlock")
 	_check(_played("unlock"), "codex_unlocked → unlock")
 
 	# 장착 (equipment_changed — 자동저장 안 함)

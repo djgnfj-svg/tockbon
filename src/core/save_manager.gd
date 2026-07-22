@@ -187,7 +187,7 @@ func load_game() -> bool:
 ## 그대로 다시 쓴다. 새로하기를 눌렀는데 조용히 안 된 것처럼 보인다.
 ##
 ## 진짜 새로하기가 지워야 할 것 = **`save_game()`이 쓰는 것 전부** + `bag`·`hp` +
-## 🔴 **시작 해금 재시드**(`GameState._ready`의 `rune_fire`·`glyph_thrust` — 새로하기는 `_ready`를
+## 🔴 **시작 해금 재시드**(`GameState._ready`의 `rune_fire`·`jin_single` — 새로하기는 `_ready`를
 ## 다시 안 탄다. 안 심으면 **아무것도 못 그리는 새 게임**이 된다).
 ## → 설계·미결은 `docs/BACKLOG.md` 「F8 — 새로하기」가 정본. **`GameState.new_game()`을 core에
 ## 하나 두는 쪽**이 맞다 (씬마다 손으로 비우면 필드가 늘 때 조용히 갈라진다).

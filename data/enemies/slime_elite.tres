@@ -9,12 +9,6 @@ item_id = &"mat_slime_core"
 min_count = 2
 max_count = 3
 
-[sub_resource type="Resource" id="Resource_ao1ut"]
-script = ExtResource("1_220r5")
-item_id = &"fragment_water"
-chance = 1.0
-until_unlock = &"rune_water"
-
 [resource]
 script = ExtResource("2_v5tjv")
 id = &"slime_elite"
@@ -32,6 +26,6 @@ params = {
 "size": 1.9
 }
 is_elite = true
-drops = Array[ExtResource("1_220r5")]([SubResource("Resource_x3uey"), SubResource("Resource_ao1ut")])
+drops = Array[ExtResource("1_220r5")]([SubResource("Resource_x3uey")])
 drops_chest = true
 night_buff = 1.3

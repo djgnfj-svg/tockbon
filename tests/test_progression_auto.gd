@@ -27,11 +27,10 @@ extends SceneTree
 ## -s 모드는 오토로드 등록보다 먼저 컴파일된다 — 오토로드 식별자·모듈 preload 금지. 동적 타입.
 
 ## 관문표 (docs/PROGRESSION.md §관문표와 1:1 — 표를 바꾸면 여기도 바꾼다).
-const GATES := {
-	&"rune_water": &"slime_elite",
-	&"rune_wind": &"gale",
-	&"rune_grass": &"snake_boss",
-}
+## 🔴 세61 콘텐츠 리셋: 룬 조각·관문 드롭을 전부 걷어 관문표 = 0줄. 관문 **기계**(until_unlock
+## 판정, forest_enemy._roll_drops)는 남아 있으므로 [2][3]이 in-memory DropEntry 주입으로 계속
+## 잰다. 사용자가 관문을 되살리면 여기 한 줄 + 적 .tres 한 줄이 짝으로 는다.
+const GATES := {}
 ## 관문 조각을 잃은(랜덤 은퇴) 잡몹 3종 — fragment 줄이 아예 없어야 한다.
 const RETIRED := [&"vine", &"beetle", &"mist"]
 
@@ -77,10 +76,11 @@ func _run() -> void:
 		quit(1)
 
 
-## [1] 🔴 편집한 적 6종이 Db를 거쳐 로드된다 + until_unlock가 제자리에 있다 (세50 그물).
+## [1] 🔴 편집한 적 6종이 Db를 거쳐 로드된다 + 관문표와 데이터가 1:1이다 (세50 그물).
 ## .tres 한 글자가 틀리면 파서가 리소스 전체를 거부하고 Db가 말없이 건너뛴다 — 로드 자체가 검증이다.
+## 세61: 관문 드롭 줄을 걷어냈으므로 GATES = 0줄 — 루프는 자명 통과지만 관문 복원 시 바로 산다.
 func _test_db_loads() -> void:
-	print("[1] 편집한 적 6종 Db 로드 + until_unlock 존재")
+	print("[1] 편집한 적 6종 Db 로드 + 관문표 1:1")
 	for id in [&"vine", &"beetle", &"mist", &"slime_elite", &"gale", &"snake_boss"]:
 		_check(_db.get_enemy(id) != null, "%s가 Db에서 로드된다" % id)
 	for unlock_id in GATES:
@@ -97,33 +97,34 @@ func _test_db_loads() -> void:
 ## 이래야 "chance 무시" 계약을 [2]가 직접 재고, 판정이 확률로 되돌아가는 회귀([3]의 반대 방향)도
 ## [2] 단독으로 붉는다 (chance 1.0인 채로는 확률 폴백도 항상 떨어져 검출력 0 — 세58 리뷰).
 ## ⚠ Db의 DropEntry는 공유 리소스다 — 끝에 chance 원상복구 필수.
+## 🔴 세61: 실데이터 관문 줄이 0이라 **in-memory DropEntry를 slime_elite에 주입**해서 기계를 잰다
+## (Db 딕셔너리·EnemyDef.drops는 평범한 컨테이너다 — 끝나면 제거). 조각 ItemDef도 같이 주입한다
+## (루팅 패널이 Db.get_item으로 이름을 찾는다). 관문을 되살리면 실데이터 검증으로 되돌려도 된다.
 func _test_locked_guaranteed_drop() -> void:
-	print("[2] 미해금 = 확정 드롭 (slime_elite → fragment_water, chance를 0으로 내려 잰다)")
-	var had: bool = _gs.is_unlocked(&"rune_water")
-	_gs.codex.erase(&"rune_water")   # 🔴 시드가 룬 6종을 미리 여니 테스트가 직접 끈다
+	print("[2] 미해금 = 확정 드롭 (in-memory 관문 주입, chance를 0으로 내려 잰다)")
+	_inject_gate()
+	_gs.codex.erase(&"rune_water")
 	var gate = _gate_entry_of(&"slime_elite")
 	if gate == null:
-		_check(false, "관문 줄을 못 찾았다 — [1]이 먼저 붉었을 것")
+		_check(false, "주입한 관문 줄을 못 찾았다 — _inject_gate가 깨졌다")
 		return
-	var old_chance: float = gate.chance
-	gate.chance = 0.0
+	gate.chance = 0.0   # chance **무시** 계약을 직접 잰다 — 확률 폴백 회귀면 여기서 붉는다
 	for i in 3:
 		var ids: Array = await _kill_and_collect(&"slime_elite")
 		_check(ids.has(&"fragment_water"),
 			"처치 %d/3: fragment_water가 나왔다 (실제 %s)" % [i + 1, str(ids)])
-	gate.chance = old_chance   # 🔴 공유 리소스 원상복구
-	if had:
-		_gs.codex[&"rune_water"] = true   # 원상복구
 
 
 ## [3] 🔴 해금됐으면 조각은 안 나오고, 나머지 드롭(mat_slime_core, chance 1.0)은 그대로 나온다 —
-## 관문이 "그 줄만" 걸러야지 테이블 전체를 삼키면 안 된다.
+## 관문이 "그 줄만" 걸러야지 테이블 전체를 삼키면 안 된다. [2]가 주입한 관문을 이어 쓰고 여기서 걷는다.
 func _test_unlocked_stops_drop() -> void:
 	print("[3] 해금 = 조각 드롭 중단 (나머지 드롭은 유지)")
 	_gs.codex[&"rune_water"] = true
 	var ids: Array = await _kill_and_collect(&"slime_elite")
 	_check(not ids.has(&"fragment_water"), "🔴 fragment_water가 안 나왔다 (실제 %s)" % str(ids))
 	_check(ids.has(&"mat_slime_core"), "mat_slime_core(확률 1.0)는 그대로 나온다 (실제 %s)" % str(ids))
+	_remove_gate()
+	_gs.codex.erase(&"rune_water")   # 세61 시드엔 rune_water가 없다 — 깨끗이 되돌린다
 
 
 ## [4] 🔴 랜덤 조각 은퇴 불변식 — Db의 **모든** 적 드롭 전수 (PROGRESSION.md 표의 감시자).
@@ -167,6 +168,37 @@ func _test_hunger_retired() -> void:
 
 
 # ── 헬퍼 ──
+
+## 세61: in-memory 관문 주입 — slime_elite에 fragment_water(until_unlock=rune_water) 한 줄 +
+## 조각 ItemDef. EnemyDef·Db.items는 공유 리소스라 [3] 끝에서 _remove_gate로 반드시 걷는다.
+var _injected_gate = null
+var _injected_item := false
+
+func _inject_gate() -> void:
+	if _injected_gate != null:
+		return
+	var entry = DropEntry.new()
+	entry.item_id = &"fragment_water"
+	entry.chance = 1.0
+	entry.until_unlock = &"rune_water"
+	_injected_gate = entry
+	_db.get_enemy(&"slime_elite").drops.append(entry)
+	if _db.get_item(&"fragment_water") == null:
+		var frag = ItemDef.new()
+		frag.id = &"fragment_water"
+		frag.kind = Enums.ItemKind.FRAGMENT
+		frag.display_name = "물 조각(테스트)"
+		frag.params = {"unlock_id": &"rune_water"}
+		_db.items[&"fragment_water"] = frag
+		_injected_item = true
+
+func _remove_gate() -> void:
+	if _injected_gate != null:
+		_db.get_enemy(&"slime_elite").drops.erase(_injected_gate)
+		_injected_gate = null
+	if _injected_item:
+		_db.items.erase(&"fragment_water")
+		_injected_item = false
 
 func _make_enemy(id: StringName):
 	var e = _enemy_scene.instantiate()

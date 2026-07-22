@@ -17,11 +17,6 @@ chance = 1.0
 min_count = 1
 max_count = 1
 
-[sub_resource type="Resource" id="Resource_frag"]
-script = ExtResource("1_drop")
-item_id = &"fragment_grass"
-until_unlock = &"rune_grass"
-
 [resource]
 script = ExtResource("2_def")
 id = &"snake_boss"
@@ -52,6 +47,6 @@ params = {
 "weakness_mult": 1.6
 }
 is_elite = true
-drops = Array[ExtResource("1_drop")]([SubResource("Resource_core"), SubResource("Resource_sap"), SubResource("Resource_frag")])
+drops = Array[ExtResource("1_drop")]([SubResource("Resource_core"), SubResource("Resource_sap")])
 drops_chest = true
 night_buff = 1.2

@@ -9,11 +9,6 @@ item_id = &"mat_mist_essence"
 min_count = 2
 max_count = 3
 
-[sub_resource type="Resource" id="Resource_4cclg"]
-script = ExtResource("1_algcq")
-item_id = &"fragment_wind"
-until_unlock = &"rune_wind"
-
 [resource]
 script = ExtResource("2_18ucn")
 id = &"gale"
@@ -46,6 +41,6 @@ params = {
 "weakness_mult": 1.6
 }
 is_elite = true
-drops = Array[ExtResource("1_algcq")]([SubResource("Resource_xf2oc"), SubResource("Resource_4cclg")])
+drops = Array[ExtResource("1_algcq")]([SubResource("Resource_xf2oc")])
 drops_chest = true
 night_buff = 1.2

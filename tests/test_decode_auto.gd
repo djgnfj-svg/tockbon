@@ -7,6 +7,11 @@ extends SceneTree
 ## (codex_unlocked → GameState.codex). 이미 배운 룬은 다시 해독해도 조각이 안 닳는다(낭비 방지).
 ## 🔴 그리고 해금이 **조립 책의 룬 목록**(forge_panel._unlocked_runes)에 흘러 그릴 수 있게 된다.
 ## **패널 클릭은 헤드리스가 못 잡는다** — _decode를 공개 로직으로 직접 부른다(workshop 테스트와 같은 방침).
+##
+## 🔴 세61 콘텐츠 리셋: 룬은 rune_fire 1종, 조각 .tres는 0장이 됐다. 해독 **기계**(조각 소비→해금→
+## 책 목록 유입)는 그대로 살아 있으므로, 흐름 검증은 **in-memory ItemDef+RuneDef를 Db 딕셔너리에
+## 주입**해서 유지한다(Db 레지스트리는 평범한 Dictionary — 끝나면 제거). 룬/조각을 되살리면
+## 실데이터 검증(로드 개수 기대치)을 같이 올려라.
 
 var _pass := 0
 var _fail := 0
@@ -27,15 +32,22 @@ func _run() -> void:
 	var gs: Node = root.get_node("GameState")
 	var db: Node = root.get_node("Db")
 
+	# ── in-memory 주입: 물 룬 + 물 조각 (세61 — 실 .tres가 없어 기계 검증용으로 만든다) ──
+	var test_rune := RuneDef.new()
+	test_rune.type = Enums.RuneType.WATER
+	test_rune.unlock_id = &"rune_water"
+	test_rune.display_name = "물(테스트)"
+	db.runes[Enums.RuneType.WATER] = test_rune
+	var test_frag := ItemDef.new()
+	test_frag.id = &"fragment_water"
+	test_frag.kind = Enums.ItemKind.FRAGMENT
+	test_frag.display_name = "물 조각(테스트)"
+	test_frag.params = {"unlock_id": &"rune_water"}
+	db.items[&"fragment_water"] = test_frag
+
 	# 깨끗한 시작 — 물 룬은 아직 안 배운 상태여야 검증이 성립한다.
 	gs.codex.erase(&"rune_water")
 	gs.inventory.erase(&"fragment_water")
-	# 🔴 바람도 지운다 — 세션49에 6룬 전부 시작 시드가 됐기 때문(_seed_starting_unlocks).
-	# 안 지우면 아래 "바람은 아직 잠겨 안 뜬다"가 성립하지 않는다.
-	# ⚠ 이 검사는 세션49~50 내내 **엉뚱한 이유로 통과하고 있었다**: rune_wind.tres의 ui_color가
-	# Color 3인자라 파싱에 실패해 Db.get_rune(3)이 null이었다(= 바람 룬이 게임에서 통째로 죽어
-	# 있었다). .tres를 고치자 이 검사가 처음으로 진짜를 재기 시작했다.
-	gs.codex.erase(&"rune_wind")
 
 	var PanelScene: PackedScene = load("res://src/base/decode_panel.tscn")
 	var panel: Control = PanelScene.instantiate()
@@ -55,6 +67,7 @@ func _run() -> void:
 
 	# ── ③ 해금이 조립 책의 룬 목록에 흐른다 — 이제 물 룬을 그릴 수 있다 ──
 	# forge_panel._unlocked_runes와 같은 규약을 여기서 직접 확인 (패널 인스턴스는 무거워 로직만).
+	# 바람(3)은 세61부터 .tres 자체가 없다 — get_rune(3)=null이라 필터가 거른다(같은 계약).
 	var unlocked_types: Array = []
 	for t in [0, 2, 3]:   # Enums.RuneType FIRE·WATER·WIND (구멍 1 때문에 명시 리스트)
 		var rd: RuneDef = db.get_rune(t)
@@ -62,77 +75,52 @@ func _run() -> void:
 			unlocked_types.append(t)
 	_check("불(0)은 시작부터 해금", 0 in unlocked_types)
 	_check("🔴 물(2)이 해금 목록에 들어와 그릴 수 있다", 2 in unlocked_types)
-	_check("바람(3)은 아직 잠겨 안 뜬다", not (3 in unlocked_types))
+	_check("바람(3)은 등록이 없어 안 뜬다", not (3 in unlocked_types))
 
 	# ── ④ unlock_id 없는 조각/미보유는 무해 ──
 	gs.inventory.erase(&"fragment_water")
 	panel._decode(&"fragment_water")   # 보유 0 — 소비할 게 없다, 터지지 않아야
 	_check("보유 0 조각 해독은 조용히 무해", gs.get_count(&"fragment_water") == 0)
 
-	# ── ④-b 🔴 룬 6종이 전부 실제로 로드된다 ──
-	# 왜 필요한가: rune_wind.tres가 세션49~50 내내 파싱에 실패해 **바람 룬이 게임에서 통째로
-	# 죽어 있었는데 전 스위트가 그린이었다**(뮤테이션으로 확인 — 되돌려도 fail=0). Db는 못 읽은
-	# 리소스를 조용히 건너뛰고, get_rune은 null을 돌려주며, 아무도 그걸 확인하지 않았다.
-	# .tres 한 글자 오타가 룬 하나를 지워도 이제는 여기서 걸린다.
+	# ── 주입 제거 — 이후 검증은 **실데이터만** 본다 ──
+	db.runes.erase(Enums.RuneType.WATER)
+	db.items.erase(&"fragment_water")
+	gs.codex.erase(&"rune_water")
+
+	# ── ④-b 🔴 룬이 실제로 로드된다 (.tres 파싱 침묵사 그물 — 세50 함정) ──
+	# rune_wind.tres가 세션49~50 내내 파싱에 실패해 룬이 통째로 죽었는데 전 스위트가 그린이었다.
+	# 세61 콘텐츠 리셋: 실데이터 룬 = rune_fire 1종. 룬을 되살릴 때마다 이 기대치를 +1.
+	_check("🔴 불 룬(FIRE)이 로드된다 (.tres 파싱 실패 = 룬이 통째로 사라짐)",
+		db.get_rune(Enums.RuneType.FIRE) != null)
+	var loaded_runes := 0
 	for t: int in Enums.RUNE_TYPES:
-		var rd: RuneDef = db.get_rune(t)
-		_check("🔴 룬 타입 %d가 로드된다 (.tres 파싱 실패 = 룬이 통째로 사라짐)" % t, rd != null)
+		if db.get_rune(t) != null:
+			loaded_runes += 1
+	_check("🔴 로드된 룬 = 정확히 1종 (지금 %d — 늘었으면 기대치 갱신, 줄었으면 침묵사)" % loaded_runes,
+		loaded_runes == 1)
 
-	# ── ⑤ 🔴 새 조각 3종이 실제로 그 룬을 연다 (unlock_id 오타가 조용히 통과하지 못하게) ──
-	# 조각의 params.unlock_id와 룬 .tres의 unlock_id가 어긋나면 해독해도 아무것도 안 열린다 —
-	# 패널은 조용히 아무 일도 안 하므로 에러가 안 난다. 여기서만 잡힌다.
-	var frag_to_rune := {
-		&"fragment_grass": &"rune_grass",
-		&"fragment_earth": &"rune_earth",
-		&"fragment_bolt": &"rune_bolt",
-	}
-	for frag: StringName in frag_to_rune:
-		var want: StringName = frag_to_rune[frag]
-		gs.codex.erase(want)
-		gs.inventory.erase(frag)
-
-		var item: ItemDef = db.get_item(frag)
-		_check("%s 조각이 존재한다" % frag, item != null)
-		if item == null:
+	# ── ⑤ 🔴 실데이터 조각의 unlock_id는 실재하는 룬을 가리킨다 (오타 그물 — 미래용) ──
+	# 세61: 조각 .tres 0장이라 지금은 자명하게 통과한다. 조각을 되살리면 이 스캔이 바로 산다.
+	for it: ItemDef in db.items.values():
+		if it == null or it.kind != Enums.ItemKind.FRAGMENT:
 			continue
-		# 조각이 가리키는 룬이 실제 data/runes에 있어야 한다 (오타면 여기서 죽는다).
-		var declared := StringName(item.params.get("unlock_id", &""))
+		var declared := StringName(it.params.get("unlock_id", &""))
 		var rune_found := false
 		for t: int in Enums.RUNE_TYPES:
 			var rd: RuneDef = db.get_rune(t)
 			if rd != null and rd.unlock_id == declared:
 				rune_found = true
 				break
-		_check("🔴 %s의 unlock_id(%s)가 실재하는 룬을 가리킨다" % [frag, declared], rune_found)
+		_check("🔴 %s의 unlock_id(%s)가 실재하는 룬을 가리킨다" % [it.id, declared], rune_found)
 
-		gs.add_item(frag, 1)
-		panel._decode(frag)
-		_check("🔴 %s 해독 → %s 해금" % [frag, want], gs.is_unlocked(want))
-		_check("%s 해독이 조각을 소비한다" % frag, gs.get_count(frag) == 0)
-		gs.codex.erase(want)
+	# ── ⑥ 조각의 획득 경로 = 관문 드롭뿐 (세58 은퇴 원칙 감시 — 세61에도 그물 유지) ──
+	# 조각이 뿌려진다면 반드시 until_unlock 관문이어야 한다 (순수 확률 fragment = 은퇴 위반).
+	# 지금은 관문 드롭도 0줄(세61)이라 자명 통과 — 조각·관문을 되살리면 바로 산다.
+	for e: EnemyDef in db.enemies.values():
+		for d: DropEntry in e.drops:
+			if String(d.item_id).begins_with("fragment_") and d.until_unlock == &"":
+				_check("🔴 %s가 %s에서 관문 없이(순수 확률로) 뿌려진다" % [d.item_id, e.id], false)
 
-	# ── ⑥ 조각의 획득 경로 = 관문 드롭뿐 (세58, docs/PROGRESSION.md) ──
-	# ⚠ 옛 ⑥이 보장하던 「획득 경로가 존재한다」는 test_progression_auto [4]의 GATES 매핑이 인계받았다
-	# (water·wind·grass 한정 — earth·bolt는 의도적 구멍, D6 네임드 대기). 여기 ⑥은 은퇴 원칙 감시만 한다.
-	# 옛 그물("조각 3종 모두 뿌리는 적이 있다")은 세58 랜덤 조각 은퇴로 전제가 뒤집혔다:
-	# grass는 snake_boss 관문(until_unlock)으로 나오고, earth·bolt는 **의도적으로 획득 경로가
-	# 없다**(관문표 단계 4·5 = 구멍, 신규 네임드 대기 = D6). 그래서 지금의 불변식은 —
-	#   • 조각이 뿌려진다면 반드시 until_unlock 관문이어야 한다 (순수 확률 fragment = 은퇴 위반)
-	# D6에서 네임드가 붙으면 earth·bolt도 관문 드롭이 생겨 그대로 통과한다 (기대치 수정 불필요).
-	for frag: StringName in frag_to_rune:
-		var loose_dropper := ""
-		for e: EnemyDef in db.enemies.values():
-			for d: DropEntry in e.drops:
-				if d.item_id == frag and d.until_unlock == &"":
-					loose_dropper = String(e.id)
-					break
-			if loose_dropper != "":
-				break
-		_check("🔴 %s가 관문 없이(순수 확률로) 뿌려지는 곳 0 (%s)" % [frag, loose_dropper],
-			loose_dropper == "")
-
-	# 뒷정리 — 오토로드 GameState 메모리 오염 방지 (codex는 저장 트리거는 아니지만 깔끔하게).
-	gs.codex.erase(&"rune_water")
 	panel.queue_free()
 
 	print("RESULT pass=%d fail=%d" % [_pass, _fail])
