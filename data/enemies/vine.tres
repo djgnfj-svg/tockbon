@@ -3,10 +3,12 @@
 [ext_resource type="Script" path="res://src/core/schemas/drop_entry.gd" id="1_l0tf1"]
 [ext_resource type="Script" path="res://src/core/schemas/enemy_def.gd" id="2_j8lpj"]
 
-[sub_resource type="Resource" id="Resource_xrdah"]
+[sub_resource type="Resource" id="Resource_coin"]
 script = ExtResource("1_l0tf1")
-item_id = &"mat_vine"
-max_count = 2
+item_id = &"coin"
+chance = 1.0
+min_count = 3
+max_count = 5
 
 [resource]
 script = ExtResource("2_j8lpj")
@@ -26,5 +28,5 @@ params = {
 "size": 1.35,
 "weakness_mult": 1.75
 }
-drops = Array[ExtResource("1_l0tf1")]([SubResource("Resource_xrdah")])
+drops = Array[ExtResource("1_l0tf1")]([SubResource("Resource_coin")])
 night_buff = 1.4

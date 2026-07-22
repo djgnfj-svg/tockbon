@@ -22,3 +22,6 @@ polygon = PackedVector2Array(7, 7, 6.062, 8.75, 3.5, 10.031, 0, 10.5, -3.5, 10.0
 z_index = 5
 color = Color(0.72, 0.7, 0.66, 1)
 polygon = PackedVector2Array(0, -8, 6, 0, 0, 8, -6, 0)
+
+[node name="Sprite" type="Sprite2D" parent="Visual"]
+visible = false

@@ -67,6 +67,26 @@ const OPEN_DOT := Color(0.85, 0.50, 0.18)          # 열린 문양 칸
 const FILLED_DOT := Color(0.95, 0.68, 0.30)        # 열렸고 문양이 놓인 칸 (더 밝게)
 const SHUT_DOT := Color(0.34, 0.30, 0.24, 0.55)    # 닫힌 칸
 
+# ── 돈 카운터 (세66 도파민 경제 1층) ──
+## 🔴 좌상단 HP·마나 막대 **아래** 한 줄. 표시값 = 창고 coin + 가방 coin 합 (HUD가 직접 합산한다 —
+## 돈은 「아이템 한 종(coin)」이라 전용 필드가 아니라 inventory/bag dict의 키다. core에 coin_total()
+## 헬퍼를 안 만드는 게 이번 계약, 합산은 HUD가 진다). resources_changed 하나가 창고·가방 변화를 다 실어 온다.
+## 🔴 톡톡 = 돈이 **늘 때만** _coin_punch를 1.0으로 찍고 _process가 감쇠한다(폰트·색 부풀림). 감소(구매)엔
+## 안 튄다. 연출 수치라 전부 스크립트 const(밸런스 아님 — 토스트 수명 상수 선례).
+## ⚠ HUD _draw는 헤드리스에서 안 돈다(세64) — 카운터 렌더·톡톡 겉보기는 리드가 실게임 MCP로 확인한다.
+const COIN_ID := &"coin"
+const COIN_FONT_SIZE := 13
+const COIN_PUNCH_BUMP := 5.0       ## 풀 톡톡에서 폰트가 이만큼(px) 커진다
+const COIN_PUNCH_DECAY := 4.0      ## 초당 감쇠 — 약 0.25초에 가라앉는다
+const COIN_ICON_R := 5.5           ## 엽전 도트 반지름 (UI 아이콘 — 게임 프롭 아님이라 도형 허용, 상태창 아이콘 선례)
+const COIN_GAP := 8.0              ## 마나 막대 아래 ↔ 코인 줄
+const COIN_ROW_H := 20.0
+const COIN_FILL := Color(0.86, 0.68, 0.26)         # 엽전 금빛
+const COIN_EDGE := Color(0.55, 0.40, 0.14)         # 테두리 (어두운 금)
+const COIN_HOLE := Color(0.16, 0.13, 0.10, 0.85)   # 엽전 네모 구멍
+const COIN_TEXT := Color(0.90, 0.78, 0.42)
+const COIN_TEXT_PUNCH := Color(1.0, 0.94, 0.62)    # 톡톡 순간 밝게
+
 # ── 우하단 상태창(C) 아이콘 (세64 — 사용자: "상태창만 C로 아이콘 만들어 우하단에") ──
 ## 조작 레전드는 뺐다(사용자: "상호작용 구르기 이런 거 다 필요없어"). 캐릭터/상태창 진입만 남긴다.
 ## 아이콘 위에 "C" 키를 얹어 "C 누르면 상태창"을 알린다. 시각 표시다 — 클릭은 안 받는다
@@ -101,6 +121,11 @@ var _warn: bool = false
 var _last_mana: float = -1.0
 ## 획득 토스트 줄들. 각 항목 = {id, name, grade, count, t}. 앞이 오래된 줄, 뒤가 최근 줄.
 var _toasts: Array[Dictionary] = []
+## 🔴 돈 카운터 (세66). _coin = 마지막으로 계산한 총액(창고+가방). resources_changed마다 재계산해
+## 늘었으면 _coin_punch를 1.0으로 찍고 _process가 감쇠한다. _draw가 _coin·_coin_punch를 읽는다
+## (토스트 수명 t가 draw를 모는 것과 같은 결 — draw는 tween을 못 쓰니 상태값을 draw가 읽는다).
+var _coin: int = 0
+var _coin_punch: float = 0.0
 
 
 func _ready() -> void:
@@ -109,6 +134,8 @@ func _ready() -> void:
 	EventBus.player_hp_changed.connect(_on_hp_changed)
 	EventBus.audio_muted_changed.connect(_on_muted_changed)
 	EventBus.item_collected.connect(_on_item_collected)
+	EventBus.resources_changed.connect(_on_resources_changed)
+	_coin = _coin_total()   # 첫 표시값 — 시그널을 기다리지 않고 부팅 세이브의 잔액을 곧장 보여 준다
 
 
 ## 지금 고른 슬롯 (caster의 slot_changed가 알려 준다).
@@ -135,6 +162,27 @@ func _on_hp_changed(_hp: float, _hp_max: float) -> void:
 
 func _on_muted_changed(_muted: bool) -> void:
 	queue_redraw()
+
+
+## 🔴 자원(창고·가방)이 변했다 — 돈 총액을 다시 세고, **늘었으면** 톡톡을 찍는다 (세66).
+## resources_changed는 add_item·remove_item·add_to_bag이 다 쏘므로 coin 픽업·상점 구매·귀환 정산을
+## 전부 잡는다(coin 픽업은 add_to_bag→resources_changed라 item_collected와 동시 발신 — 여기 하나로 충분).
+func _on_resources_changed() -> void:
+	var was := _coin
+	_coin = _coin_total()
+	if _coin > was:
+		_coin_punch = 1.0
+	queue_redraw()
+
+
+## 창고 coin + 가방 coin 합. GameState.bag은 [{id, count}] 배열이라 직접 훑는다 — coin 전용 합산
+## 헬퍼(coin_total)를 core에 안 만드는 게 이번 계약이라, 합산 책임은 HUD가 진다.
+func _coin_total() -> int:
+	var total := GameState.get_count(COIN_ID)
+	for entry: Dictionary in GameState.bag:
+		if StringName(entry.get("id", &"")) == COIN_ID:
+			total += int(entry.get("count", 0))
+	return total
 
 
 ## 🔴 바닥 픽업이 흡수돼 가방에 도착했다 (drop_pickup이 도착 순간 1회 발신).
@@ -185,6 +233,10 @@ func _process(delta: float) -> void:
 			if float(_toasts[i]["t"]) <= 0.0:
 				_toasts.remove_at(i)
 		queue_redraw()
+	# 돈 톡톡 감쇠 — 튄 동안만 매 프레임 다시 그린다 (평소엔 redraw 비용 0).
+	if _coin_punch > 0.0:
+		_coin_punch = maxf(0.0, _coin_punch - COIN_PUNCH_DECAY * delta)
+		queue_redraw()
 
 
 func _draw() -> void:
@@ -196,6 +248,11 @@ func _draw() -> void:
 	bar_y += HP_SIZE.y + BAR_GAP
 	_draw_mana(font, Vector2(MARGIN, bar_y))
 	bar_y += MANA_SIZE.y
+
+	# ── 돈 카운터 — 막대 바로 아래 (세66 도파민 경제 1층). ──
+	bar_y += COIN_GAP
+	_draw_coin(font, Vector2(MARGIN, bar_y))
+	bar_y += COIN_ROW_H
 
 	# 상황 메시지 — 막대 바로 아래 좌상단 (마나 부족·새 마법진 맺힘 등). 상단 hint를 걷어낸 자리.
 	if _say != "":
@@ -272,6 +329,24 @@ func _draw_selected_detail(font: Font, at: Vector2) -> void:
 		RingPower.power_display(design.total_score, Db.ink_mult(design.ink)),
 		RingPower.score_display(design.total_score)]
 	draw_string(font, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, POWER_COLOR)
+
+
+## 돈 카운터 — 엽전 도트 + "N닢". 톡톡: 늘면 _coin_punch가 폰트를 키우고 색을 밝힌다(→ _process 감쇠).
+## at.y = 이 줄의 윗변(다른 좌상단 텍스트가 top+오프셋을 baseline으로 쓰는 관례와 동일). 엽전은 UI
+## 아이콘이라 도형(원+구멍) 드로잉 허용 — 바닥 픽업 스프라이트(drop_pickup, coin.png)와는 별개다.
+func _draw_coin(font: Font, at: Vector2) -> void:
+	var baseline := at.y + float(COIN_FONT_SIZE)
+	var punch := _coin_punch
+	var r := COIN_ICON_R + punch * 1.5
+	var icon_c := Vector2(at.x + r, baseline - float(COIN_FONT_SIZE) * 0.35)
+	draw_circle(icon_c, r, COIN_FILL)
+	draw_arc(icon_c, r, 0.0, TAU, 20, COIN_EDGE, 1.5)
+	var hole := r * 0.36
+	draw_rect(Rect2(icon_c - Vector2(hole, hole), Vector2(hole * 2.0, hole * 2.0)), COIN_HOLE, true)
+	var col := COIN_TEXT.lerp(COIN_TEXT_PUNCH, punch)
+	var fs := COIN_FONT_SIZE + int(round(punch * COIN_PUNCH_BUMP))
+	draw_string(font, Vector2(icon_c.x + r + 6.0, baseline), "%d닢" % _coin,
+		HORIZONTAL_ALIGNMENT_LEFT, -1, fs, col)
 
 
 ## HP 막대 — GameState가 원장이다 (씬을 갈아타도 남는 값). 숫자를 **막대 안**에 넣는다:

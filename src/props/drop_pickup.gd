@@ -25,8 +25,9 @@ extends Area2D
 ##   (juice.gd·forest_enemy 넉백 const 선례). 사용자가 직접 주워 보며 조인다.
 
 ## 등급 색 — 🔴 단일 소스는 `src/core/grade_colors.gd` (세션51에 사본 셋을 합쳤다).
-## 픽업은 플레이스홀더 마름모지만, 창고·획득 토스트와 **같은 아이템이 같은 색**이어야 등급이
-## 정보로 읽힌다 — 진짜 도트 스프라이트로 바뀌어도 등급 색 규약은 여기서 온다.
+## 🔴 세66: 아이템에 `params.sprite`가 있으면 **진짜 도트 스프라이트**를 그리고(`_apply_color`), 없으면
+## 등급색 **마름모 폴백**. 마름모일 때는 창고·획득 토스트와 **같은 아이템이 같은 색**이어야 등급이
+## 정보로 읽힌다 — 등급 색 규약은 폴백 경로에서 여기서 온다.
 const GradeColors := preload("res://src/core/grade_colors.gd")
 
 ## 🔴 줍기 지연 — 생성 직후 짧게 못 줍게 한다. 적을 **붙어서** 잡으면 픽업이 뜨는 프레임에
@@ -113,10 +114,34 @@ func setup(p_item_id: StringName, p_count: int, p_scatter_angle: float = -1.0) -
 	_start_glow_if_rare()
 
 
+## 🔴 스프라이트 우선, 마름모 폴백 (세66) — 아이템 `params.sprite`가 있고 로드 가능하면 진짜 도트를
+## 그리고 마름모(Polygon2D)는 투명하게 숨긴다. 없으면 등급색 마름모(기존 플레이스홀더).
+##   • `_visual`은 여전히 Polygon2D라 모든 연출 트윈(scale·position:y·**modulate**)이 그대로 돌고,
+##     modulate는 자식 CanvasItem(`Sprite`)에 곱셈 전파되므로 pop 페이드·rare glow가 스프라이트에도 먹는다.
+##   • 마름모 숨김 = `color.a=0`(폴리곤 필드만 투명, 자식 스프라이트는 자기 텍스처로 보인다).
+##   • 스프라이트는 **등급 틴트 없이 그대로**(엽전은 금색 자체가 정보 — art 판단). 폴백 마름모만 등급색.
+##   • ResourceLoader.exists 가드 = import 전이거나 경로 오타면 조용히 마름모 폴백(크래시 금지).
 func _apply_color() -> void:
 	if _visual == null:
 		return
-	_visual.color = GradeColors.of(_grade())
+	var spr := _sprite_path()
+	var sprite := _visual.get_node_or_null("Sprite") as Sprite2D
+	if spr != "" and ResourceLoader.exists(spr) and sprite != null:
+		sprite.texture = load(spr)
+		sprite.visible = true
+		_visual.color = Color(0.0, 0.0, 0.0, 0.0)  # 마름모 숨김 — 스프라이트로 대체
+	else:
+		if sprite != null:
+			sprite.visible = false
+		_visual.color = GradeColors.of(_grade())
+
+
+## 아이템 params의 sprite 경로(없으면 빈 문자열).
+func _sprite_path() -> String:
+	var it := Db.get_item(item_id)
+	if it != null and it.params.has("sprite"):
+		return str(it.params["sprite"])
+	return ""
 
 
 func _grade() -> int:
