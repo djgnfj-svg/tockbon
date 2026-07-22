@@ -5,10 +5,10 @@ extends RefCounted
 ## 완전히 테스트된다(tests/test_ring_assembly_auto.gd).
 ##
 ## 모델 (사용자 확정 2026-07-16 · memory takbon-ring-assembly-pivot):
-##   • 진 = 바깥 그릇(경계) — 지금은 일반진 하나
+##   • 진 = 바깥 그릇(경계) — 그리고 🔴 **진이 칸을 연다** (세션60 — 틀(템플릿) 축을 진에
+##     흡수, `JinDef.glyph_slots`). 어느 칸이 열리는지가 진마다 다르다 — **새 진 = 새 칸 배치**.
+##     "얻어 삽입할수록 넓어진다"는 진 해금(unlock_id)으로 이관됐다. 진 미선택 = 폴백 [0, 2].
 ##   • 룬 = 중심 속성 — 지금은 불만
-##   • 🔴 **문양본(틀)이 칸을 연다** (스텐실). 2방 문양본 = 정해진 2자리만 열린다.
-##     문양본 없으면 빈 진(그냥 날아가 맞기만). 얻어 삽입할수록 넓어진다 (2방→4방→8방).
 ##   • 문양 = 열린 칸을 채우는 조각 (응집←/발산→)
 ##
 ## 🔴 **순차 조립** (세션 13): 빈 판 → 진 → 룬 → 문양 한 칸씩. 일괄 자동채움은 "툭 완성"돼
@@ -25,15 +25,6 @@ const STAGE_JIN := Enums.DrawStage.CIRCLE    # 진(그릇)을 놓을 차례
 const STAGE_RUNE := Enums.DrawStage.RUNE     # 룬(중심)을 놓을 차례
 const STAGE_GLYPH := Enums.DrawStage.ARROW   # 문양을 한 칸씩 얹을 차례
 
-## 🔴 문양본(틀) — 각 틀이 **어느 칸을 여는지** 정한다 (칸 0=위, 시계방향으로 2=오른쪽…).
-## 얻어서 삽입한다. 배치가 곧 콘텐츠 — 2방은 좁고 8방은 전방위. (지금은 전부 보유로 친다.)
-const TEMPLATES := [
-	{"name": "2방", "slots": [0, 2]},          # 위·오른쪽
-	{"name": "3방(우)", "slots": [1, 2, 3]},    # 오른쪽으로 몰린 셋
-	{"name": "4방", "slots": [0, 2, 4, 6]},     # 십자
-	{"name": "8방", "slots": [0, 1, 2, 3, 4, 5, 6, 7]},  # 전방위
-]
-
 const RUNE_FIRE := 0   # 기본 룬 (불) — 아직 안 고른 판·옛 도안의 폴백
 
 var _stage: int = STAGE_JIN
@@ -46,7 +37,7 @@ var _rune: int = RUNE_FIRE
 ## 🔴 고른 진 id (세션44, 진=형태). 진은 **손으로 안 긋고 고른다**(선택) — 지팡이(진)를 골라 그 위에
 ## 룬·문양을 그린다. get_assembly가 실어 저장·발사(형태)까지 흐른다. 빈 값 = 폴백(발사부가 처리).
 var _jin: StringName = &""
-var _open: Array[int] = [0, 2]      # 지금 문양본이 연 칸들 (기본 2방)
+var _open: Array[int] = [0, 2]      # 열린 칸들 — **진 미선택 폴백** (진을 고르면 JinDef.glyph_slots가 덮는다)
 var _slots: Array[int] = []         # SLOTS개, 값 = 문양 코드 or GLYPH_NONE (열린 칸만 채워진다)
 
 
@@ -97,7 +88,7 @@ func filled_count() -> int:
 	return n
 
 
-## 열린 칸 중 아직 빈 첫 칸 (없으면 -1). 채우는 순서 = 문양본이 준 순.
+## 열린 칸 중 아직 빈 첫 칸 (없으면 -1). 채우는 순서 = 진이 연 순.
 func next_open_slot() -> int:
 	for k in _open:
 		if _slots[k] == GLYPH_NONE:
@@ -141,9 +132,9 @@ func place_glyph(slot: int, glyph: int) -> void:
 		_slots[slot] = glyph
 
 
-## 🔴 문양본을 삽입한다 — 이 칸들만 열린다. **닫힌 칸의 문양은 걷어낸다.**
-## 범위 밖·중복은 걸러진다. 빈 배열 = 빈 진.
-func set_template(open_slots: Array) -> void:
+## 🔴 열린 칸을 지정한다 (세션60 — 주는 쪽 = 진, `choose_jin`이 `JinDef.glyph_slots`를 넘긴다).
+## 이 칸들만 열린다. **닫힌 칸의 문양은 걷어낸다.** 범위 밖·중복은 걸러진다. 빈 배열 = 빈 진.
+func set_open_slots(open_slots: Array) -> void:
 	var next: Array[int] = []
 	for s in open_slots:
 		var k := int(s)

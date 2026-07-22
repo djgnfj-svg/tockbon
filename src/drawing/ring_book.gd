@@ -1,11 +1,11 @@
 extends Control
 ## 조각 선택기 — 고리 조립 제작대의 **오른쪽 페이지** (2026-07-16 방향 전환).
 ##
-## 옛 forge_book처럼 **탭으로 넘겨 본다**: 진 · 룬 · 문양본 · 문양. 고른 것이 왼쪽 보드에 곧바로 적용된다.
-##   • 🔴 진 탭 — **보유한 진을 격자로 열거**(세션48에 3→8종). 고른 진이 발사 형태·비행 경로를 정한다.
+## 옛 forge_book처럼 **탭으로 넘겨 본다**: 진 · 룬 · 문양. 고른 것이 왼쪽 보드에 곧바로 적용된다.
+##   • 🔴 진 탭 — **보유한 진을 격자로 열거**(세션48에 3→8종). 고른 진이 발사 형태·비행 경로와
+##     **어느 문양 칸이 열리는지**(JinDef.glyph_slots — 옛 문양본 축을 세션60에 진으로 흡수)를 정한다.
 ##   • 룬 탭 — 불 하나 (열람용)
-##   • 🔴 문양본 탭 — **틀을 삽입한다**(2방/3방/4방/8방). 얻은 문양본이 **어느 칸을 열지** 정한다.
-##   • 문양 탭 — 응집←·발산→ (열린 칸을 이걸로 채운다)
+##   • 문양 탭 — 응집←·발산→ (진이 연 칸을 이걸로 채운다)
 ##
 ## 오토로드 의존 없음. 사용: const RingBook := preload("res://src/drawing/ring_book.gd")
 
@@ -15,17 +15,14 @@ const RingBoard := preload("res://src/drawing/ring_board.gd")
 signal jin_selected(jin_id: StringName)
 ## 룬을 골랐다 — 보드 중심에 그 룬을 놓는다 (rune_type = Enums.RuneType, 세션 34)
 signal rune_selected(rune_type: int)
-## 문양본을 삽입했다 — 보드가 이 칸들을 연다 (idx = TEMPLATES 인덱스, slots = 열 인덱스 배열)
-signal template_selected(idx: int, slots: Array)
 ## 문양을 골랐다 — 열린 칸을 한 칸 채운다 (RingBoard.G_*)
 signal glyph_selected(glyph: int)
 
 const TAB_JIN := 0
 const TAB_RUNE := 1
-const TAB_TEMPLATE := 2
-const TAB_GLYPH := 3
-const TAB_ORDER := [TAB_JIN, TAB_RUNE, TAB_TEMPLATE, TAB_GLYPH]
-const TAB_LABEL := ["진", "룬", "문양본", "문양"]
+const TAB_GLYPH := 2
+const TAB_ORDER := [TAB_JIN, TAB_RUNE, TAB_GLYPH]
+const TAB_LABEL := ["진", "룬", "문양"]
 
 # ── 한지·먹 톤 ──
 const INK := Color(0.13, 0.11, 0.10)
@@ -39,16 +36,15 @@ const TAB_ON_BG := Color(0.80, 0.74, 0.62, 0.95)
 const TAB_OFF_BG := Color(0.68, 0.62, 0.52, 0.75)
 const TAB_ON_TEXT := Color(0.22, 0.16, 0.10)
 const TAB_OFF_TEXT := Color(0.42, 0.37, 0.30)
-const OPEN_DOT := Color(0.85, 0.50, 0.18)          # 문양본 아이콘: 열린 칸
+const OPEN_DOT := Color(0.85, 0.50, 0.18)          # 진 셀 8점 다이어그램: 열린 문양 칸
 const SHUT_DOT := Color(0.30, 0.26, 0.20, 0.4)     # 닫힌 칸
 
 const TAB_H := 18.0
 const TAB_GAP := 2.0
 
 const TAB_DESC := [
-	"진 — 바깥 그릇(형태). 몇 발이 어떤 경로로 나가는지가 진마다 다르다.",
+	"진 — 바깥 그릇(형태). 발사 형태와 열리는 칸이 진마다 다르다.",
 	"룬 — 중심 속성. 탁본으로 해독한 룬을 고른다.",
-	"문양본 — 삽입하면 그 자리가 열린다. 얻은 만큼 넓어진다.",
 	"문양 — 열린 칸을 이걸로 채운다.",
 ]
 ## 문양 셀 설명 — **`_glyph_defs`가 주입 안 됐을 때만 쓰는 폴백**이다 (평소엔 `.tres`의 `desc`).
@@ -61,14 +57,13 @@ const GLYPH_DESC := [
 ]
 
 var _stage := TAB_JIN                 # 진 탭부터 편다 (순차 조립)
-var _template_idx := 0                # 지금 삽입된 문양본 (하이라이트)
 var _active := RingBoard.G_RADIATE    # 지금 고른 문양 코드 (하이라이트)
 var _jin_placed := false              # 진을 이미 놓았나 (탭 표식)
 var _rune_placed := false             # 룬을 이미 놓았나
 var _rune_choice := -1                # 지금 고른 룬 타입 (하이라이트) — -1=아직 (세션 34)
 var _jin_choice: StringName = &""     # 지금 고른 진 id (하이라이트) — &""=아직 (세션44, 진=형태 선택)
 var _tab_rects: Array[Rect2] = []
-## 클릭 가능한 칸 — {rect, kind:"jin"/"rune"/"template"/"glyph", value}
+## 클릭 가능한 칸 — {rect, kind:"jin"/"rune"/"glyph", value}
 var _cells: Array[Dictionary] = []
 
 # ── 주입 데이터 (세션 13 구조화) — 패널이 Db에서 읽어 넣는다. 없으면 RingBoard const 폴백. ──
@@ -123,8 +118,7 @@ func _jin_ui_color() -> Color:
 
 
 ## 보드의 현재 상태를 받아 하이라이트를 맞춘다 (열 때·키 입력 시)
-func sync_state(template_idx: int, active_glyph: int) -> void:
-	_template_idx = template_idx
+func sync_state(active_glyph: int) -> void:
 	_active = active_glyph
 	queue_redraw()
 
@@ -164,9 +158,6 @@ func _gui_input(event: InputEvent) -> void:
 			"rune":
 				_rune_choice = int(cell.value)   # 하이라이트 (세션 34: 여러 룬 셀)
 				rune_selected.emit(int(cell.value))
-			"template":
-				_template_idx = int(cell.value)
-				template_selected.emit(_template_idx, RingBoard.TEMPLATES[_template_idx].slots)
 			_:
 				_active = int(cell.value)
 				glyph_selected.emit(_active)
@@ -211,8 +202,6 @@ func _draw() -> void:
 			_draw_jin_cells(font, top)
 		TAB_RUNE:
 			_draw_rune_cells(font, top)
-		TAB_TEMPLATE:
-			_draw_template_cells(font, top)
 		TAB_GLYPH:
 			_draw_glyph_cells(font, top)
 
@@ -232,38 +221,20 @@ func _draw_single_cell(font: Font, top: float, name_text: String, desc: String,
 		SEL_EDGE if placed else DESC_COLOR, 8)
 
 
-## 문양본 탭 — 2×2 격자. 각 칸에 **8점 고리 다이어그램**(열린 자리만 채워짐)으로 모양을 보여 준다
-func _draw_template_cells(font: Font, top: float) -> void:
-	var n := RingBoard.TEMPLATES.size()
-	var gap := 6.0
-	var cw := (size.x - 16.0 - gap) * 0.5
-	var ch := 82.0
-	for i in n:
-		var col := i % 2
-		var row := i / 2
-		var r := Rect2(8.0 + float(col) * (cw + gap), top + float(row) * (ch + gap), cw, ch)
-		_cells.append({"rect": r, "kind": "template", "value": i})
-		var sel := _template_idx == i
-		draw_rect(r, CELL_SEL_BG if sel else CELL_BG, true)
-		draw_rect(r, SEL_EDGE if sel else CELL_LINE, false, 2.0 if sel else 1.0)
-		_draw_icon("template", r.get_center() + Vector2(0, -8.0), 22.0,
-			RingBoard.TEMPLATES[i].slots)
-		_text_center(font, r.position + Vector2(cw * 0.5, ch - 14.0),
-			String(RingBoard.TEMPLATES[i].name), NAME_COLOR, 10)
-
-
 ## 진 탭 — **보유 진**을 셀로 열거 (세션44, 진=형태). 클릭 = 그 진 id가 jin_selected로 나간다.
 ## 진은 룬·문양과 나란한 선택 축 — 어느 진(단발·산탄·둘레…)에 그릴지 고른다. 잠긴 진은 배열에 없다.
 ##
 ## 🔴 세션48 — **격자로 감쌌다.** 세션44까지 셀을 한 줄에 몰아넣어 `cw = 전체폭/n`이었다. 진이
 ## 3→8로 늘자 셀이 1/8 폭(약 30px)으로 쪼그라들어 이름조차 넘쳤다 — **문양 탭이 세션47에 밟은
-## 함정과 같은 것이다**(어휘 축이 늘면 폭이 아니라 줄 수가 늘어야 한다). 룬·문양본·문양이 이미
+## 함정과 같은 것이다**(어휘 축이 늘면 폭이 아니라 줄 수가 늘어야 한다). 룬·문양이 이미
 ## 쓰는 규약(`i % cols` / `i / cols`)으로 통일했다.
 ## 🔴 설명은 **셀 안이 아니라 격자 아래 한 줄**(고른 진 것만)에 쓴다 — 3열 셀 폭(84px)에 한 줄
 ## 설명("가장 가까운 적을 스스로 겨눈다")이 안 들어간다. 문양 탭(2줄·6칸)은 들어가서 셀 안에 쓴다.
 const JIN_COLS := 3
 const JIN_CELL_H := 62.0
 const JIN_GAP := 6.0
+## 진 셀 아이콘의 윤곽 반지름 — 8점 칸 다이어그램도 이 원주 위에 앉는다 (세션60).
+const JIN_ICON_S := 17.0
 
 ## 🔴 진 셀 격자 — **순수 함수**라 헤드리스가 잰다. `_draw_jin_cells`가 이걸 그대로 쓴다.
 ## ⚠ `_draw_*` 안에 계산을 두면 테스트가 렌더를 기다려야 하고(헤드리스는 `_draw`를 못 믿는다)
@@ -304,10 +275,20 @@ func _draw_jin_cells(font: Font, top: float) -> void:
 		draw_rect(r, SEL_EDGE if sel else CELL_LINE, false, 2.0 if sel else 1.0)
 		# 진 아이콘 = 발사 형태(패턴) × 비행 경로(motion). 색만으로는 8지선다가 된다.
 		var opaque := Color(jcol.r, jcol.g, jcol.b, 1.0)
+		var icon_c := r.get_center() + Vector2(0.0, -8.0)
 		for mark in jin_icon_marks(_jin_pattern_of(jd), _jin_motion_of(jd),
-				r.get_center() + Vector2(0.0, -8.0), 17.0, _jin_shape_of(jd)):
+				icon_c, JIN_ICON_S, _jin_shape_of(jd)):
 			if mark.size() >= 2:
 				draw_polyline(mark, opaque, 2.0, true)
+		# 🔴 8점 칸 다이어그램 — 이 진이 여는 문양 칸 (세션60, 옛 문양본 축을 진으로 흡수).
+		# 단일 소스 = `JinDef.glyph_slots`를 **직접** 읽는다(사본 금지). 점 위치·열림 계산은
+		# `RingBoard.jin_slot_dots`(순수 static = 헤드리스 관측점). ⚠ 점은 윤곽 반지름의 **원주
+		# 고정**이다 — 진 윤곽이 삼각·타원이어도 판의 칸은 원 위라, 판과 읽는 방식이 같다.
+		if jd != null:
+			for dot: Dictionary in RingBoard.jin_slot_dots(jd.glyph_slots, icon_c, JIN_ICON_S):
+				var open := bool(dot.open)
+				draw_circle(dot.pos, JIN_ICON_S * (0.16 if open else 0.10),
+					OPEN_DOT if open else SHUT_DOT)
 		_text_center(font, r.position + Vector2(cw * 0.5, ch - 12.0), jname, NAME_COLOR, 10)
 		if sel:
 			sel_desc = ("✓ 그림 — " if _jin_placed else "") + _jin_desc_of(jd)
@@ -475,7 +456,7 @@ func _draw_rune_icon(c: Vector2, s: float, col: Color, rune_type: int) -> void:
 ## 문양 탭 — 주입된 문양 def를 열거 (응집·발산…). 하드코딩 없음.
 ## 🔴 문양 탭 = **격자로 감싼다** (세션47). 세션44까지 셀을 한 줄에 몰아넣어 `cw = 전체폭/n`이었다 —
 ## 어휘가 3→6으로 늘자 셀이 1/6 폭으로 쪼그라들어 설명("적을 뚫고 지나간다")이 셀을 넘쳤다.
-## 룬·문양본 탭이 이미 쓰는 격자 규약(`i % cols` / `i / cols`)으로 통일한다. **어휘가 더 늘어도
+## 룬 탭이 이미 쓰는 격자 규약(`i % cols` / `i / cols`)으로 통일한다. **어휘가 더 늘어도
 ## 폭이 아니라 줄 수가 늘어난다** — 문양 축은 앞으로도 늘어날 자리라 여기가 버텨 줘야 한다.
 const GLYPH_COLS := 3
 
@@ -503,13 +484,13 @@ func _draw_glyph_cells(font: Font, top: float) -> void:
 		# ⚠ 추진만 1.1배(57px)로 살짝 크다 — 셀 높이 104~120 안이라 이름·설명과 안 겹친다.
 		_draw_glyph_icon(r.get_center() + Vector2(0, -14.0), 26.0, row.color, code)
 		# 🔴 키 힌트("[Q]")를 뗐다 (세션 25) — 문양도 **셀을 클릭해서** 고른다.
-		# 진·룬·문양본이 전부 클릭인데 문양만 키를 광고하고 있었다 (클릭도 됐는데 몰랐다).
+		# 진·룬이 전부 클릭인데 문양만 키를 광고하고 있었다 (클릭도 됐는데 몰랐다).
 		_text_center(font, r.position + Vector2(cw * 0.5, ch - 30.0),
 			String(row.name), NAME_COLOR, 11)
 		_text_center(font, r.position + Vector2(cw * 0.5, ch - 15.0), String(row.desc), DESC_COLOR, 8)
 
 
-## 아이콘. template = 8점 고리(열린 칸 강조) / glyph = 화살표 하나 / jin·fire = 진·룬
+## 아이콘. jin·fire = 진·룬 (폴백 단일 셀 전용 — 격자 셀은 각자 전용 렌더를 쓴다)
 func _draw_icon(kind: String, c: Vector2, s: float, data: Array) -> void:
 	match kind:
 		"jin":
@@ -521,15 +502,6 @@ func _draw_icon(kind: String, c: Vector2, s: float, data: Array) -> void:
 			draw_polyline(PackedVector2Array([
 				c + Vector2(0, -s), c + Vector2(s * 0.87, s * 0.5),
 				c + Vector2(-s * 0.87, s * 0.5), c + Vector2(0, -s)]), col, 2.5, true)
-		"template":
-			# 8점 고리 — 열린 자리는 주황 채움, 닫힌 자리는 흐린 점
-			draw_arc(c, s, 0.0, TAU, 32, Color(RingBoard.RING_LINE, 0.5), 1.0, true)
-			for k in RingBoard.SLOTS:
-				var p := c + Vector2.from_angle(TAU * float(k) / float(RingBoard.SLOTS) - PI / 2.0) * s
-				if k in data:
-					draw_circle(p, s * 0.16, OPEN_DOT)
-				else:
-					draw_circle(p, s * 0.10, SHUT_DOT)
 		_:
 			pass
 
@@ -537,7 +509,7 @@ func _draw_icon(kind: String, c: Vector2, s: float, data: Array) -> void:
 ## 문양 아이콘 — **판의 밑그림과 같은 함수로 그린다** (세션47).
 ## 🔴 **화살표 하나** (세션 25, 사용자: "문양 모양도 그냥 문양 하나만 보이게 해줘").
 ## 예전엔 8방향 다발을 그렸다 — 한 칸에 들어가는 건 문양 **하나**인데 아이콘이 여덟을
-## 보여 주니, 셀이 "문양 하나"가 아니라 "문양본(어느 칸을 여는가)"처럼 읽혔다.
+## 보여 주니, 셀이 "문양 하나"가 아니라 "어느 칸을 여는 틀"처럼 읽혔다.
 ##
 ## 🔴 세션47 — 그 화살표를 **여기서 직접 그리던 걸 그만뒀다.** 판의 밑그림을 6종으로 갈라 놨는데
 ## 이 함수는 `inward`만 봐서 **6개 셀이 전부 같은 화살표**였다(색만 달랐다). 사용자가 문양을

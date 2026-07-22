@@ -2,7 +2,7 @@ extends Control
 ## 고리 조립 제작대 — **책을 좌우로 펼친다.** forge_panel(자유 드로잉)의 껍데기를 그대로
 ## 잇되(사용자 요청 "이전 왼쪽 UI를 그대로 쓰고 적용되는 형식으로"), 속을 조립 모델로 바꾼다.
 ##
-## 왼쪽 페이지 = **조립 보드**(RingBoard) · 오른쪽 페이지 = **조각 선택기**(RingBook — 문양본·문양 탭).
+## 왼쪽 페이지 = **조립 보드**(RingBoard) · 오른쪽 페이지 = **조각 선택기**(RingBook — 진·룬·문양 탭).
 ##
 ## 🔴 세션 14b — 탁본: 왼쪽 판의 **숨은 선을 손으로 문질러**(자동추적·보정) 드러내고, 조각마다
 ## 점수를 매긴다. **[다음]**으로 조각을 잠그고 진행(마음에 안 들면 다시 문질러 덮어씀). 진→룬→문양(칸마다).
@@ -105,13 +105,11 @@ const PAPER_BTN_GAP := 2.0
 @onready var _report: Control = $Stage/Spread/Report   # 분석 리포트 오버레이 (완성 시 표시)
 
 var _committed := false
-var _template_idx := 0                        # 지금 삽입된 문양본 (기본 = TEMPLATES[0] = 2방)
 var _active_glyph := RingBoard.G_RADIATE      # 지금 고른 문양 (하이라이트)
 var _analysis: Dictionary = {}                # 마지막 분석 리포트 (get_analysis 결과)
 ## 🔴 완성 시점의 발사 계약 (세션29) — 리포트가 잉크·크기·특별효과를 여기서 읽는다.
 ## _draw 안에서 get_assembly(get_analysis 재계산)를 부르지 않으려고 캐시한다. 잉크/종이를 바꾸면 갱신.
 var _finish_asm: Dictionary = {}
-var _picking_template := false                # 🔴 문양 단계의 하위 단계 — 문양본 고르는 중(아직 안 그림)
 
 ## 🔴 잉크 선택 (세션28~29). 고른 잉크의 **색으로 획이 그려지고**, 등급 배수·특별잉크 효과가
 ## 도안에 실린다. 세션29: 특별잉크는 **보유량으로 걸러** 보인다(있는 것만 + 수량).
@@ -145,7 +143,6 @@ func _ready() -> void:
 	_book.jin_selected.connect(_on_jin_selected)
 	_book.rune_selected.connect(_on_rune_selected)
 	_book.glyph_selected.connect(_on_glyph_selected)
-	_book.template_selected.connect(_on_template_selected)
 
 	_next_btn.pressed.connect(_on_next)
 	_commit_btn.pressed.connect(_finish)
@@ -191,10 +188,8 @@ func open() -> void:
 	visible = true
 	_fit_stage()          # 숨어 있는 동안 창이 바뀌었을 수 있다(resized는 안 왔을 수 있음)
 	_committed = false
-	_template_idx = 0
 	_active_glyph = RingBoard.G_RADIATE
 	_analysis = {}
-	_picking_template = false
 	_report.visible = false
 	_inject_defs()                              # 🔴 Db에서 진·룬·문양 정의를 읽어 주입 (세션 13 구조화)
 	_board.clear_all()                          # 🔴 빈 판에서 시작 — 진 → 룬 → 문양 순차
@@ -260,7 +255,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	# 🔴 확정은 손으로 문질러 그리고 **[다음]**(또는 Enter)으로 잠근다.
 	# ⚠ **문양 고르기 키(Q·W)는 없다** (세션 25, 사용자: "q w 이런게 아니라 똑같이 마우스로
-	# 선택하는걸로해줘"). 진·룬·문양본이 전부 오른쪽 셀을 클릭해서 고르는데 문양만 키였다 —
+	# 선택하는걸로해줘"). 진·룬이 전부 오른쪽 셀을 클릭해서 고르는데 문양만 키였다 —
 	# 셀 클릭은 그때도 됐지만 UI가 "[Q]"라 적어 놔 키보드를 시키는 것처럼 보였다.
 	match k.keycode:
 		KEY_ENTER, KEY_KP_ENTER:
@@ -308,7 +303,7 @@ func _unlocked_jins() -> Array:
 func _sync_book() -> void:
 	var tab := _stage_to_tab(_board.stage())
 	_book.go_stage(tab, _board.has_jin(), _board.has_rune())
-	_book.sync_state(_template_idx, _active_glyph)
+	_book.sync_state(_active_glyph)
 
 
 func _stage_to_tab(stage: int) -> int:
@@ -318,7 +313,7 @@ func _stage_to_tab(stage: int) -> int:
 		RingBoard.STAGE_RUNE:
 			return RingBook.TAB_RUNE
 		_:
-			return RingBook.TAB_TEMPLATE
+			return RingBook.TAB_GLYPH
 
 
 ## 🔴 진 탭 셀을 눌렀다 → **왼쪽에 밑그림이 선다** (세션 25). 예전엔 안내만 띄웠고 밑그림은
@@ -334,8 +329,14 @@ func _on_jin_selected(jin_id: StringName) -> void:
 	var nm := String(jd.display_name) if jd != null else "진"
 	# 🔴 세션48: 진마다 밑그림 도형이 다르다 — "바깥 **원**"으로 고정돼 있으면 삼각·타원을 그리라
 	# 해 놓고 원이라 부른다. 안내문이 화면과 어긋나는 것 자체가 버그다(hud.gd 상단 주석과 같은 규율).
-	_set_say("%s — 왼쪽 판에 바깥 %s을 손으로 문질러 그리세요 → [다음]"
-		% [nm, _jin_shape_word(jd)], false)
+	# 🔴 세션60: **칸 수를 여기서 처음 알린다** — 어느 문양 칸이 열리는지는 진이 정한다
+	# (JinDef.glyph_slots — 옛 문양본 축 흡수). 칸 열기 자체는 choose_jin이 내부에서 한다.
+	if jd != null:
+		_set_say("%s — 칸 %d개 · 왼쪽 판에 바깥 %s을 손으로 문질러 그리세요 → [다음]"
+			% [nm, jd.glyph_slots.size(), _jin_shape_word(jd)], false)
+	else:
+		_set_say("%s — 왼쪽 판에 바깥 %s을 손으로 문질러 그리세요 → [다음]"
+			% [nm, _jin_shape_word(jd)], false)
 	_refresh_buttons()
 
 
@@ -367,7 +368,7 @@ func _on_rune_selected(rune_type: int) -> void:
 func _select_glyph(glyph: int) -> void:
 	_active_glyph = glyph
 	_board.set_active_glyph(glyph)
-	_book.sync_state(_template_idx, glyph)
+	_book.sync_state(glyph)
 	if _board.stage() != RingBoard.STAGE_GLYPH:
 		_set_say("먼저 진과 룬을 그리세요  (진 → 룬 → 문양)", true)
 	elif _board.is_tracing():
@@ -592,17 +593,8 @@ func _on_piece_locked(target: int, slot: int, score: float) -> void:
 			_set_say("문양 칸을 다 새겼다 (%d점) — [맺기]로 분석" % _pct(score), false)
 
 
-## 🔴 [다음] (또는 Enter) — 문양본 고르는 단계면 **문양 그리기로 넘어가고**, 아니면 지금 조각을 잠근다.
+## 🔴 [다음] (또는 Enter) — 지금 그린 조각을 잠그고 다음으로 넘긴다.
 func _on_next() -> void:
-	# 문양본 확정 → 문양 그리기 단계로 (여기서 비로소 문양 탭으로 넘어간다)
-	if _picking_template:
-		_picking_template = false
-		_book.go_stage(RingBook.TAB_GLYPH, true, true)
-		_book.sync_state(_template_idx, _active_glyph)
-		_set_say("칸을 클릭해 고르고 오른쪽에서 문양을 골라 손으로 그리세요 · 휠=문양 크기 · 다른 칸/[다음]으로 이어가기", false)
-		_update_score()
-		_refresh_buttons()
-		return
 	if not _board.is_tracing():
 		return
 	if _board.coverage() <= 0.02:
@@ -621,25 +613,10 @@ func _on_stage_advanced(stage: int) -> void:
 		RingBoard.STAGE_RUNE:
 			_set_say("진을 새겼다 — 이제 룬(불)을 중심에 그리세요 → [다음]", false)
 		RingBoard.STAGE_GLYPH:
-			# 🔴 문양 단계 진입 = 먼저 문양본을 고르는 하위 단계. [다음]으로 확정해야 그리기로 넘어간다.
-			_picking_template = true
-			_set_say("룬을 새겼다 — 문양본(칸 배치)을 고르세요 (바꿔도 됨) → [다음]", false)
+			# 🔴 세션60: 하위 단계(옛 문양본 고르기)가 없다 — 칸은 진을 고를 때 이미 열렸다. 바로 그린다.
+			_set_say("룬을 새겼다 — 칸을 클릭해 문양을 골라 손으로 그리세요 · 휠=크기", false)
 		RingBoard.STAGE_JIN:
 			_set_say(Copy_START, false)
-	_update_score()
-	_refresh_buttons()
-
-
-## 문양본을 삽입했다 — 보드가 그 칸들을 연다. 🔴 **자동으로 문양 탭으로 넘어가지 않는다** (사용자:
-## "확정 지으면 그때 넘어가야지"). 문양본 탭에 머물러 다른 문양본으로 바꿔도 되고, 준비되면 사용자가
-## 직접 [문양] 탭으로 넘어간다.
-func _on_template_selected(idx: int, slots: Array) -> void:
-	Audio.play(&"ui_click")
-	_template_idx = idx
-	_board.set_template(slots)
-	_book.sync_state(_template_idx, _active_glyph)
-	_set_say("%s 문양본 — 바꿔도 돼요. 정했으면 [다음]으로 문양 그리기"
-		% RingBoard.TEMPLATES[idx].name, false)
 	_update_score()
 	_refresh_buttons()
 
@@ -707,9 +684,9 @@ func _on_report_redo() -> void:
 
 # ─────────────────────────── 버튼·점수 라벨 ───────────────────────────
 
-## 지금 조각 점수(완성도·정밀도·종합)를 라벨에 쓴다. 문양본 고르는 중엔 점수 없음.
+## 지금 조각 점수(완성도·정밀도·종합)를 라벨에 쓴다.
 func _update_score() -> void:
-	if _picking_template or not _board.is_tracing():
+	if not _board.is_tracing():
 		_score_lbl.text = ""
 		return
 	var cov := int(round(_board.coverage() * 100.0))
@@ -718,23 +695,18 @@ func _update_score() -> void:
 	_score_lbl.text = "이 조각 — 완성도 %d%% · 정밀도 %d%% · 점수 %d" % [cov, acc, sc]
 
 
-## 버튼 상태. [다음] = 문양본 고르는 중이면(문양 그리러) 항상 활성 / 그 외엔 지금 조각을 그렸어야 활성.
-## [맺기] = 문양을 그리는 중(진·룬 완료 & 문양본 확정)에만 — 룬 직후엔 안 뜬다("문양까지 가야 완료").
+## 버튼 상태. [다음] = 지금 조각을 그렸어야 활성. [분석] = 진·룬을 그렸어야 활성.
 func _refresh_buttons() -> void:
 	var tracing := _board.is_tracing()
 	var drawn := _board.coverage() > 0.02
-	if _picking_template:
-		_next_btn.disabled = false
-		_next_btn.text = "문양 그리기 ▶"
-	else:
-		_next_btn.disabled = not (tracing and drawn)
-		_next_btn.text = "다음 ▶"
+	_next_btn.disabled = not (tracing and drawn)
+	_next_btn.text = "다음 ▶"
 	# 🔴 **"맺기"가 아니다** (세션 25). 이 버튼은 분석 리포트를 띄울 뿐 **아무것도 맺지 않는다** —
 	# 맺는 건 리포트 안의 [마력 주입]이다. 그런데 이름이 "맺기 (분석)"이라, 누른 사람은
 	# 맺힌 줄 알고 책을 덮었다가 "맺었는데 안 나간다"를 겪었다 (사용자가 실제로 겪었다).
 	# 버튼은 자기가 하는 일만 말해야 한다.
 	_commit_btn.text = "✓ 맺힘" if _committed else "분석 ▶"
-	_commit_btn.disabled = _picking_template or not _board.can_commit()
+	_commit_btn.disabled = not _board.can_commit()
 
 
 ## 🔴 반올림은 core가 판다 — 「퍼펙트」가 "이 함수가 100을 돌려주는 순간"으로 정의돼 있어서,
@@ -765,10 +737,8 @@ func can_commit() -> bool:
 func clear_board() -> void:
 	_board.clear_all()
 	_committed = false
-	_template_idx = 0
 	_active_glyph = RingBoard.G_RADIATE
 	_analysis = {}
-	_picking_template = false
 	_report.visible = false
 	_sync_book()
 	_set_say(Copy_START, false)

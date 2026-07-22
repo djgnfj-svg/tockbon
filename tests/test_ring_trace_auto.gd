@@ -689,10 +689,10 @@ func _test_full_flow_and_analysis() -> void:
 	b.queue_free()
 
 
-# ── ⑤ 빈 진(문양본 없음): 룬까지 그리면 바로 완성된다 ──
+# ── ⑤ 빈 진(열린 칸 없음): 룬까지 그리면 바로 완성된다 ──
 func _test_empty_jin_finishes_after_rune() -> void:
 	var b = _make_board()
-	b.call(&"set_template", [])   # 열린 칸 없음 = 빈 진
+	b.call(&"set_open_slots", [])   # 열린 칸 없음 = 빈 진 (세션60: set_template 개명)
 	_rub_exact(b)
 	b.call(&"advance")            # 진
 	_rub_exact(b)
@@ -702,7 +702,7 @@ func _test_empty_jin_finishes_after_rune() -> void:
 	b.queue_free()
 
 
-## 진→룬 그려 문양 단계에 도달하고 **칸 0을 고른다** (기본 문양본 = 2방 [0,2]).
+## 진→룬 그려 문양 단계에 도달하고 **칸 0을 고른다** (진 미선택 폴백 = 2방 [0,2]).
 ## 🔴 세션 25: 칸은 자동으로 안 잡힌다 — 도착하면 미선택(-1)이라 여기서 골라 줘야 한다.
 ## 미선택 그 자체는 ⑥이 검증한다.
 func _reach_glyph_stage(b) -> void:
@@ -774,7 +774,7 @@ func _test_glyph_per_slot_scale() -> void:
 ## *"마음에 들 때까지 다시 그린다"* 설계와 정면 충돌.
 func _test_far_click_does_not_steal_slot() -> void:
 	var b = _make_board()
-	_reach_glyph_stage(b)                  # 기본 문양본 2방 [0,2], 현재 칸 = 0
+	_reach_glyph_stage(b)                  # 진 미선택 폴백 2방 [0,2], 현재 칸 = 0
 	_check(int(b.call(&"trace_slot")) == 0, "현재 칸 = 0")
 
 	# 칸 0을 자동확정 문턱 위로 그려 둔다 (버그의 방아쇠 조건)

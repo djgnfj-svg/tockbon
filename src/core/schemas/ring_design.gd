@@ -19,7 +19,7 @@ extends Resource
 @export var jin: StringName = &""
 ## 진의 고리들. 지금은 1줄(8칸). rings[0][k] = 문양 코드 or -1
 @export var rings: Array = []
-## 문양본이 연 칸 인덱스 (렌더·요약용)
+## 진이 연 칸 인덱스 (렌더·요약용 — 세션60부터 출처 = JinDef.glyph_slots. 도안은 그때의 스냅샷)
 @export var open: Array = []
 ## 🔴 분석 종합 점수(0~1) = **손으로 얼마나 잘 그렸나**. 세션 23부터 **위력을 정한다**
 ## (`src/core/ring_power.gd`). 세션 22까지는 계산·저장만 되고 아무도 안 읽어서

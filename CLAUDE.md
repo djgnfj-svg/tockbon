@@ -9,13 +9,11 @@
 > 지금 게임 = `src/base`(베이스캠프) + 고리 조립 책 + 숲 원정 + 온보딩 레일.
 > 🔴 **기록 규칙: 직전 세션만 상세, 그 전은 아래 「한 줄 지도」로 내려보낸다** — 이 절이 길어지면 정리 신호.
 
-🔴🔴 **직전 세션 = 58·58-B 「진행 관문 + 허기 은퇴 + 세피리아식 챕터(보스방) 메인 루프」** (정본 STATUS「58」「58-B」 + `docs/PROGRESSION.md`):
-세57 확정(스테이지 형식 — 「뼈대는 확정, 살은 랜덤」)의 실체화 2연타. **58**: `DropEntry.until_unlock` 1필드 — 미해금 동안 chance 무시 **확정 드롭·해금 후 중단**(「첫 처치 1회」는 가방 증발 데드락이라 각하 — codex 파생·저장 필드 0). 잡몹 랜덤 조각 0.25 은퇴 → 물=slime_elite·바람=gale·풀=snake_boss(상자 경유), earth/bolt는 의도적 무경로(D6 네임드 대기). **"새 관문 = 적 .tres 드롭 한 줄"** · 허기 축 전면 은퇴(원정 루프는 유지). 표↔데이터 갈라짐은 `test_progression_auto` [4] 불변식이 감시.
-🔴 **58-B = 새 메인 루프**: 베이스 숲길 [E] → **챕터 선택 패널**(순서 잠금: ch1 우두머리슬라임→ch2 gale(hp150)→ch3 뱀(hp320)) → `boss_room.tscn` **보스만 있는 단칸방** → 처치 = `chapter_clear_*` codex(파생 = `Db.chapter_clear_id` 한 곳 — 🔴 룬 해금 기반 판정은 시드가 덮어 전 챕터 클리어로 보이는 함정) + 상자(관문 조각 동승) + 귀환 포탈 → [E] = extraction_success(가방→창고) → 베이스. 죽으면 bag_lost 후 베이스(클리어는 남음). **"새 챕터 = data/chapters/*.tres 한 장"**(`ChapterDef`·`Db.chapters`·`GameState.pending_chapter` = 세58-B core). **옛 숲(잡몹·깊이 밴드)·map_panel·forest_t2는 삭제**(git 이력) — 그물은 `test_chapter_auto`로 먼저 이식.
-🔴 **밟은 함정 2 (리뷰·MCP가 잡음)**: ①보스 스폰 **위치 대입도 add_child 앞이 계약**(뒤면 snake_body 자취 프리시드가 원점 기준 — 마디가 끌려온다, 세54 재림) ②forest 그물 이식 때 접촉 피해를 빠뜨리면 **적→플레이어 피해 채널이 전 스위트 어디에도 없게 된다**(ch1 보스는 접촉이 유일한 공격 — 조용히 죽어도 그린). + push_input은 **윈도우 픽셀 = 캔버스 2배**(세41 함정 재확인 — 실클릭 검증 시 좌표 2배).
-✅ 검증: 전 스위트 21종 그린(리드 직접) · 뮤테이션 5종 리드 재현(클리어 emit·잠금식 반전·관문 판정·조각 제거·접촉 차단 — 전부 검출·복구) · **실게임 MCP 전 루프**(게이트→패널 렌더/실클릭→보스방 클릭 발사→처치→상자에 물 조각 확정→포탈→창고 이관) · ch3 마디 스폰 정렬.
-🔴 **다음 = 손맛(사용자 F5)**: 보스 HP 150/320 체감 · 방 크기·챕터 틴트(약함)·남쪽 경계 밖 회색(카메라 한계 미설정)·포탈=옛 도형 프롭(아트 여지)·패널 E 열자마자 닫힘 여부. + 🔴 **잡몹 공급원 무대 0곳**(beetle·mist·vine·hound 재료·장비 드롭이 등장할 곳이 없다 — 챕터 잡몹 동반·재료 챕터·마을 납품 퀘스트와 묶어 설계, PROGRESSION.md 「살」절). + **관문은 시드가 덮어 잠잔다 — 룬 5줄 삭제 = 가동 스위치**(⚠ 챕터4·5보다 먼저면 q09·q10 막힘).
-🔴 미결: D5 진 배치(스테이지 클리어 보상 vs 보스 보상) · D3 문양 게이트 · D6 흙·번개 네임드 2(다음 세션 후보) · D7 퀘스트 = 개념 유지, 사용자가 하나씩 직접 설계.
+🔴🔴 **직전 세션 = 60 「문양본 축을 진에 흡수 — 진·룬·문양 3축 체제」** (정본 STATUS「60」):
+사용자 *"진 룬 문양 이렇게 3개만 있게하고 싶은데"* → 조사하니 문양본은 **획득 배선 0인 죽은 축**(TEMPLATES 4종 전부 공짜, 세22부터)이었고 칸 배치는 게임플레이에 실재(`ring_spell_system`의 착탄 각 `TAU*k/8` = 칸 위치가 발산 탄 방향). **A안 확정: `JinDef.glyph_slots`가 칸을 연다**(기본값 [0..7] — 필드 깜빡한 새 진이 조용히 약해지지 않게) — jin_def.gd의 "진마다 다른 칸 구조를 줄 자리" 예약석이 채워졌고, "얻을수록 넓어진다"는 진 해금(unlock_id)으로 이관. **단일 소스 한 방향**: glyph_slots → `choose_jin`(원자적·null 폴백) → `set_open_slots`(옛 set_template 개명·걷어내기 유지) → assembly.open → RingDesign.open(스키마 무변경 = 옛 도안 회귀 0, 발사부는 open 안 읽음). **UI 탭 4→3** + `_picking_template` 하위 단계 삭제(흐름: 진 선택→룬 그림→문양 그림→분석) + 8점 다이어그램을 진 셀 원주로 이식 + "칸 %d개" 안내. 🔴 **칸 각도 정본 = `RingBoard.slot_angle(k)`**(판·책 다이어그램 공용 — 베끼면 조용히 어긋난다, 리뷰가 잡음). **당장 전 진 8칸(보수안 = 회귀 0)** — 차등 배치는 D5와 같은 테이블(칸 수 = 위력 축), 전환 비용 = .tres 8장 한 줄씩.
+✅ 검증: 전 스위트 21종 그린 + 뮤테이션 5종(배선 제거·tres 빈 배열·tres 문법 오류 침묵사 재현·걷어내기 제거·각도 -PI/2 탈락) 전부 검출 · 실게임 MCP 전 루프(탭 3 실클릭 전환→진 셀 클릭=칸 열림→다이어그램 렌더→하위 단계 없이 문양→분석·주입 실클릭→발사). ⚠ **실게임 MCP는 실세이브를 백업→복원해라**(세59 격리는 `-s`만 — 실게임 검증의 자동저장이 실세이브에 남는다, 이번에 실제로 도안 1장 들어갔다 복원). ⚠ test_save_auto만 성공 마커가 `RESULT pass/fail` 형식(grep `_OK`가 헛잡음).
+🔴 이월: 손맛 F5(세58-B 것 + 진 셀 다이어그램 가독) · 잔여 Minor = `clear()`가 `_open`·`_jin_def`를 안 되돌리는 옛 경로(기존 동작 — 중첩진 때 정리) · `ring_book._draw_single_cell` 기존 죽은 코드.
+🔴 미결: D5 진 배치(이제 **칸 차등 배치와 한 몸**) · D3 문양 게이트 · D6 흙·번개 네임드 2 · D7 퀘스트 = 사용자가 직접 설계 · 🔴 잡몹 공급원 무대 0곳(PROGRESSION.md 「살」절).
 
 🔴 **지지난 = 57** 「세피리아식 스테이지 형식 확정 + 퀘스트 은퇴 방향」(설계·결정 세션 — STATUS 항목 없음, 정본 = memory `takbon-stage-format-decision`) — 동기 = *"언제 룬을 얻을지 설계를 못 해 불안"* → 「뼈대는 확정, 살은 랜덤」. 곁가지: 밑그림 커스텀 완성본을 git stash에 보류(memory `takbon-guide-editor-stashed`) · 중첩진 architect 설계 = `scratch_nested_design.md` 대기(결정점 8개 미합의).
 ⏸ **의도적으로 잠자는 콘텐츠 (버그 아님)**: `_seed_starting_unlocks()`가 룬 6종을 미리 열어 관문·해독 산출물이 소급 완료돼 안 보인다. 🔴 **손맛 확인이 끝나면 `game_state.gd`의 룬 5줄을 지워라 = 세58 관문 가동 스위치**(PROGRESSION.md 「시드」절 — 삭제 후 전 루프 실게임 확인까지). ⚠ **단 챕터4·5(흙·번개 네임드)보다 먼저 지우면 q09·q10 사슬이 실제로 막힌다** — fragment_earth/bolt는 의도적 무경로(공급원 = D6 네임드 대기)라서다.
@@ -29,6 +27,8 @@
 - **미결 결정(세58)**: D5 진 8종 배치(스테이지 클리어 보상 vs 보스 보상) · D3 문양 게이트 · D6 흙·번개 관문 네임드 2(적 .tres+도트+배치 — 다음 세션 후보). 정리는 `docs/PROGRESSION.md` 「미결」절.
 
 **지난 세션 한 줄 지도** (상세는 STATUS/memory — 필요할 때만 캐라):
+- **59** 마법 발사 연출 개편 + 매직볼 은퇴 + 세이브 격리 — 속성형 볼(바깥 진 고정·안쪽만 _draw 자전, node.rotation 0 불변)·트레일 `carrier_trail`(🔴player_projectiles 무가입)·착탄=신규 `spell_impact`(enemy_hit 재사용은 기둥 틱 도배라 각하)·발산 탄 6/6(시트 224px+폭 가드=투명탄 침묵사 방지)·🔴매직볼 은퇴(빈 슬롯=거부+안내+마나 무소모)·`-s` 세이브 뿌리 save_test 격리 (`8aef329`, memory `takbon-spell-vfx`)
+- **58·58-B** 진행 관문 + 허기 은퇴 + 세피리아식 챕터(보스방) 루프 — `DropEntry.until_unlock`(미해금=확정 드롭·해금=중단, "새 관문=적 .tres 한 줄") · 물=slime_elite·바람=gale·풀=snake_boss·earth/bolt 의도적 무경로(D6 대기) · 챕터 패널(순서 잠금 ch1~3)→`boss_room` 단칸방→클리어 codex+상자+포탈→창고("새 챕터=.tres 한 장") · 옛 숲·map_panel 삭제 · 🔴함정=①스폰 위치 대입도 add_child 앞 ②그물 이식 시 접촉 피해 채널 누락 ③클리어 판정에 룬 해금 쓰면 시드가 덮음 ④push_input 윈도우=캔버스 2배 (`e6af1eb`·`f28b66a`, memory `takbon-progression-gates`·`takbon-chapter-loop`)
 - **56** gale 보스 실체화 + 반응 룬 청산 — 잠자던 params 12개 → `"ai": "boss_gale"`(hover 거리유지·돌풍 밀치기·재조준 볼리·페이즈2) · 첫 적탄 `enemy_projectile`(layer0/mask3) · 첫 밀림 `player.apply_push`(구르기 시작 시 `_push=0`) · REACTIONS `"rune"` 키로 FIRE 하드코딩 청산 · 🔴두 몸 복제 계약은 그물도 두 개(dummy 쪽 검출력 0이었다) · 이월=손맛 F5·gale FIRE 약점 의도 확인·BOLT 피격음 wav (`1cb72b3`, memory `takbon-gale-boss`)
 - **53** 「대충 그려도 인정」 채점 조이기 — 정밀도 비중 50→75%·`ACC_TOL_FRAC` 0.08→0.05(`trace_scorer.gd`) · CONSIDER는 조이면 역효과(무효=공짜)라 못 건드림 · 판 위치 자유화 보류 (`c3426ee`, memory `takbon-scoring-tightened`)
 - **52** 원소 반응 임팩트 VFX — 반응 위치·반경이 on_burst 콜백서 죽던 걸 EventBus(`reaction_burst`·`reaction_chain`) 방송 → `src/actors/vfx.gd`(juice 형제 공용 — 연습장·숲 파리티)가 Line2D+tween으로 그림(파티클 안 씀) · 순수 오버레이=회귀 0 (memory `takbon-reaction-vfx`)
@@ -202,7 +202,7 @@
 
 ```bash
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_save_auto.gd            # 저장/로드 (고리 라운드트립) · 🔴**부팅만으로 자동 저장이 준비되나**(세션 26 F3 — 이 확인은 `load_game()` **호출 전**에 있어야 한다. 순서가 곧 검출력이다)
-./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_ring_assembly_auto.gd   # **조립 상태기계 계약**: 단계 전이·문양본이 칸을 여는 규칙·assembly 발사 계약·시그널 (세션 22)
+./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_ring_assembly_auto.gd   # **조립 상태기계 계약**: 단계 전이·🔴**진이 칸을 여는 규칙**(세션60 — JinDef.glyph_slots→choose_jin, Db 진 8종 로드 그물 포함)·assembly 발사 계약·시그널·다이어그램 기하(slot_angle)
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_ring_trace_auto.gd      # **손그림 탁본**: 완성도/정밀도·[다음] 수동 진행·칸 자유 편집·I3 · **정밀도 이빨(⑨⑩)·펜 보정(⑪⑫)**
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_ring_spell_auto.gd      # **고리 발사**: 진→투사체·착탄 전개(발산 탄환·응집 기둥)·실제 적 take_hit
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_ring_design_auto.gd     # **고리 도안 통합**: RingDesign 라운드트립·ring_design_committed→GameState 자동 장착 · **등급⇔펑 경계·퍼펙트⇔화면100** (세션 24)
@@ -260,8 +260,8 @@ static 함수 안의 **`const BAL.프로퍼티`를 컴파일 타임에 굳힌다
 **되돌리려면 git 이력**(삭제 직전 커밋 = `dcc3326`).
 
 눈으로 보는 시험대(F6):
-- `tests/test_ring_forge_panel.tscn` — 책 펼침(진→룬→문양본→문양을 손으로 따라 긋기) + 덮고 발사.
-  조작: **오른쪽 셀 클릭=진·룬·문양본·문양 고르기**(세션 25에 Q·W 키 폐지) · 왼쪽 판에 손으로 긋기
+- `tests/test_ring_forge_panel.tscn` — 책 펼침(진→룬→문양을 손으로 따라 긋기 — 칸은 고른 진이 연다, 세션60) + 덮고 발사.
+  조작: **오른쪽 셀 클릭=진·룬·문양 고르기**(세션 25에 Q·W 키 폐지) · 왼쪽 판에 손으로 긋기
   (**여러 획 OK** · **우클릭=다시 그리기** · 휠=크기) · ESC=덮기 · WASD·마우스=조준 · R=리셋 · E=책
   ⚠ 시험대는 Space도 발사로 받는다 — **시험대 사정이고 본 게임은 좌클릭만**이다(사용자 확정)
 - `tests/test_ring_forge.tscn` — 칸 클릭 조립 **프로토타입**. ⚠ 본 게임과 **분리된 실험 씬**이고

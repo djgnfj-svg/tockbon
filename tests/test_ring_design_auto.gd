@@ -269,7 +269,7 @@ func _test_grade_follows_threshold() -> void:
 	_check(last == order.size() - 1, "0→100점을 훑으면 등급이 순서대로 올라 퍼펙트로 끝난다")
 
 
-## 기본 2방 문양본에 발산 하나 채운 assembly (rune=불).
+## 폴백 2방 [0,2]에 발산 하나 채운 assembly (rune=불 — 세션60: 열린 칸의 출처는 진, 이 딕셔너리는 스냅샷).
 func _sample_assembly() -> Dictionary:
 	# 8칸: 칸0=발산(1), 칸2=응집(0), 나머지 빈칸(-1). 열린 칸 = [0, 2]
 	var ring := [1, -1, 0, -1, -1, -1, -1, -1]

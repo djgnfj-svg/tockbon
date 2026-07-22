@@ -10,21 +10,20 @@ extends Control
 ##
 ## 모델·규칙의 정본은 각 파일 머리말에 있다. 여기 남은 건 **화면 위의 일**뿐이다.
 ##
-## 🔴 이 보드는 **선택을 스스로 쥐지 않는다.** 문양본·활성 문양은 바깥(오른쪽 탭)이 set_*로
-## 주입한다. 오토로드·모듈 의존 없음.
+## 🔴 이 보드는 **선택을 스스로 쥐지 않는다.** 활성 문양·진(JinDef)은 바깥(오른쪽 탭)이
+## set_*/choose_*로 주입한다. 오토로드·모듈 의존 없음.
 ##
 ## 사용: const RingBoard := preload("res://src/drawing/ring_board.gd")
 
 const RingAssembly := preload("res://src/drawing/ring_assembly.gd")
 const TraceScorer := preload("res://src/drawing/trace_scorer.gd")
 
-# ── 조립 계약 재노출 — 바깥(패널·책·테스트)이 RingBoard.STAGE_*/TEMPLATES로 읽어 왔다 ──
+# ── 조립 계약 재노출 — 바깥(패널·책·테스트)이 RingBoard.STAGE_* 등으로 읽어 왔다 ──
 const SLOTS := RingAssembly.SLOTS
 const GLYPH_NONE := RingAssembly.GLYPH_NONE
 const STAGE_JIN := RingAssembly.STAGE_JIN
 const STAGE_RUNE := RingAssembly.STAGE_RUNE
 const STAGE_GLYPH := RingAssembly.STAGE_GLYPH
-const TEMPLATES := RingAssembly.TEMPLATES
 const RUNE_FIRE := RingAssembly.RUNE_FIRE
 const COMMIT_COVER := TraceScorer.COMMIT_COVER
 
@@ -39,7 +38,7 @@ const G_THRUST := Enums.GlyphCode.THRUST    # 추진 ↑ — 빠르게 날아간
 ## 인덱스 = GlyphCode 값 (세션44: 관통 · 세션47: 유도·팅김·추진 = 어휘 배증)
 const GLYPH_NAMES := ["응집←", "발산→", "관통↠", "유도∿", "팅김⚡", "추진↑"]
 ## ⚠ **`GLYPH_KEYS`는 지웠다** (세션 25). 문양은 오른쪽 셀을 **클릭해서** 고른다 —
-## 진·룬·문양본이 전부 클릭인데 문양만 키(Q·W)를 광고했다 (사용자: "q w 이런게 아니라
+## 진·룬 선택이 전부 클릭인데 문양만 키(Q·W)를 광고했다 (사용자: "q w 이런게 아니라
 ## 똑같이 마우스로 선택하는걸로해줘"). 죽은 상수를 남기면 다음 세션이 키를 되살린다.
 
 # ── 색 (먹·양피지 톤) ──
@@ -119,7 +118,7 @@ const ARROW_SIDE_FRAC := 0.62
 ## 설계와 정면 충돌. 값은 아래 칸 표시(ro*0.05)·강조(ro*0.11)와 맞췄다.
 const SLOT_PICK_FRAC := 0.18
 
-## 지금 손으로 그릴 대상. NONE=그릴 것 없음(문양본 대기 / 다 그림)
+## 지금 손으로 그릴 대상. NONE=그릴 것 없음(열린 빈 칸 없음 / 다 그림)
 enum TraceTarget { NONE, JIN, RUNE, GLYPH }
 
 signal assembly_changed
@@ -259,7 +258,7 @@ func _refresh_trace() -> void:
 			if _asm.next_open_slot() >= 0:
 				_set_trace(TraceTarget.GLYPH, -1)
 				return
-	_set_trace(TraceTarget.NONE, -1)   # 그릴 것 없음 (문양본 대기 / 다 그림)
+	_set_trace(TraceTarget.NONE, -1)   # 그릴 것 없음 (열린 빈 칸 없음 / 다 그림)
 
 
 ## 가이드 대상을 세우고 숨은 선 점을 만든 뒤 문지름 상태를 비운다.
@@ -502,6 +501,31 @@ static func _closed(pts: PackedVector2Array) -> PackedVector2Array:
 	if not pts.is_empty():
 		pts.append(pts[0])
 	return pts
+
+
+## 🔴 진 셀의 8점 칸 다이어그램 (세션60 — 진이 칸을 연다). 칸 k(0=위, 시계방향)마다
+## `{pos: Vector2, open: bool}`을 담아 SLOTS개를 돌려준다 — 책의 진 셀이 그대로 그린다.
+## slots = 그 진이 여는 칸들(JinDef.glyph_slots). c = 중심 · s = 점을 얹을 원주 반지름.
+## ⚠ 점은 **원주 고정**이다 — 진 윤곽이 삼각·타원이어도 판의 칸은 원 위에 있으니
+## 다이어그램도 원 기준이 맞다(판과 읽는 방식 일치).
+## 🔴 **static · public인 이유**: `jin_guide_pts`·`glyph_guide_pts`와 같은 규약 —
+## `_draw_*` 안에 계산을 두면 헤드리스가 못 잰다(관측점). 인스턴스 상태 금지.
+static func jin_slot_dots(slots: Array, c: Vector2, s: float) -> Array:
+	var out: Array = []
+	for k in SLOTS:
+		out.append({
+			"pos": c + Vector2.from_angle(slot_angle(k)) * s,
+			"open": k in slots,
+		})
+	return out
+
+
+## 🔴 칸 k의 각도 — **"칸 0=위, 시계방향" 규약의 단일 소스** (세션60 리뷰). 판의 칸 위치
+## (`_slot_pos`)와 책 다이어그램(`jin_slot_dots`)이 같이 부른다 — 한쪽에 식을 베끼면
+## 규약이 바뀔 때 책과 판이 조용히 어긋난다. 착탄 전개 각도(ring_spell_system의
+## `TAU*k/8`)와도 같은 회전 방향이다(기준 0이 진행 방향이냐 위냐만 다르다).
+static func slot_angle(k: int) -> float:
+	return TAU * float(k) / float(SLOTS) - PI / 2.0
 
 
 ## 🔴 룬 종류별 밑그림 꼭짓점 (닫힌 다각형, 마지막=처음). 세션 34 — "새 룬 = 여기 한 갈래".
@@ -859,6 +883,10 @@ func choose_jin(jin_def: JinDef = null) -> void:
 		_jin_def = jin_def
 	_jin_idx = 0
 	_asm.set_jin(StringName(_jin_def.id) if _jin_def != null else &"")   # 🔴 발사·저장 계약에 진 담기
+	# 🔴 **진이 칸을 연다** (세션60 — JinDef.glyph_slots). 진 선택에 원자적으로 붙어야
+	# "진은 골랐는데 칸은 옛것"인 순간이 없다. null(무인자 테스트·폴백)이면 현 칸 유지.
+	if jin_def != null:
+		_asm.set_open_slots(jin_def.glyph_slots)
 	_set_trace(TraceTarget.JIN, -1)     # 고른 진으로 밑그림을 세운다
 	queue_redraw()
 	score_changed.emit(_scorer.piece_score())
@@ -885,9 +913,11 @@ func rune_idx() -> int:
 	return _rune_idx
 
 
-## 🔴 문양본을 삽입한다 — 이 칸들만 열린다. 닫힌 칸의 문양은 걷어낸다.
-func set_template(open_slots: Array) -> void:
-	_asm.set_template(open_slots)
+## 🔴 열린 칸을 지정한다 — 이 칸들만 열린다. 닫힌 칸의 문양은 걷어낸다.
+## 보통은 `choose_jin`이 내부에서 부른다(진이 칸을 연다, 세션60) — 이 공개 래퍼는
+## 테스트·미래 경로(중첩진 등)의 직접 주입구다.
+func set_open_slots(open_slots: Array) -> void:
+	_asm.set_open_slots(open_slots)
 	_refresh_trace()                     # 새로 열린 칸의 첫 빈 칸에 문양 유령을 세운다
 	queue_redraw()
 	assembly_changed.emit()
@@ -957,8 +987,9 @@ func _glyph_scale_of(slot: int) -> float:
 func _ring_radius() -> float:
 	return _outer_radius() * RING_RADIUS_FRAC
 
+## 각도 식의 정본은 static `slot_angle`(세션60) — 여기는 편의 별칭이다.
 func _slot_angle(k: int) -> float:
-	return TAU * float(k) / float(SLOTS) - PI / 2.0
+	return slot_angle(k)
 
 func _slot_pos(k: int) -> Vector2:
 	return _area_center() + Vector2.from_angle(_slot_angle(k)) * _ring_radius()
@@ -1023,7 +1054,7 @@ func _resize_current(delta: float) -> void:
 			_glyph_scale[_trace_slot] = clampf(_glyph_scale_of(_trace_slot) + delta,
 				GLYPH_SCALE_MIN, GLYPH_SCALE_MAX)
 		_:
-			return   # 없음 단계(문양본 대기/완성)에선 휠 무시
+			return   # 없음 단계(열린 빈 칸 없음/완성)에선 휠 무시
 	_set_trace(_trace, _trace_slot)   # 새 크기로 가이드 재생성
 	queue_redraw()
 

@@ -343,7 +343,7 @@ func _open_drawing() -> void:
 	_overlay = CanvasLayer.new()
 	_overlay.layer = 10
 	add_child(_overlay)
-	_forge = forge_scene.instantiate() as RingForgePanelScript   # 진→룬→문양본→문양, 손으로 따라 그어 확정
+	_forge = forge_scene.instantiate() as RingForgePanelScript   # 진→룬→문양, 손으로 따라 그어 확정
 	if _forge == null:
 		push_error("forge_scene이 RingForgePanel이 아니다")
 		return
