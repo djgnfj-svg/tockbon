@@ -1,0 +1,203 @@
+extends Node2D
+## 챕터 보스방 (세58-B 세피리아식 메인 루프) — forest.gd의 원정 계약을 물려받은 축소판.
+##
+## 루프: 베이스 숲길 [E] → 챕터 선택 → 이 방(보스 하나) → 처치 → 상자 루팅 → 포탈 [E] → 베이스.
+## 죽으면 즉시 베이스 + 가방 손실(bag_lost). 어느 챕터인가는 `GameState.pending_chapter`가 나른다
+## (change_scene_to_file이 인자를 못 실어 오토로드가 나른다 — in_expedition과 같은 결).
+##
+## 🔴 **한 씬 + ChapterDef 파라미터다** — 챕터별 씬 3장을 만들지 않는다(설계 확정). 방 구성이
+## 동일(바닥·보스 하나·입구)하고 다른 건 데이터(보스·색)뿐이라, 씬을 늘리면 mouse_filter·z_index·
+## 레이어 함정을 그 수만큼 다시 밟는다. "새 챕터 = data/chapters/*.tres 한 장"이 여기서 성립한다.
+##
+## 🔴 **HP는 GameState가 쥔다** — 오토로드라 씬을 갈아타도 남는다 (forest.gd와 같은 이유).
+## 출격 = 만HP/만마나는 **이 씬이 한다** (베이스가 아니다 — 다른 진입 경로로 들어가면 조용히 달라진다).
+##
+## 씬(boss_room.tscn) 쪽 결정 — .tscn엔 주석을 못 달아서 여기 적는다 (forest.tscn 주석 이관):
+##  • 🔴 **`Ground.mouse_filter = 2`(IGNORE) — 지우면 발사가 통째로 죽는다.** Ground는 화면을
+##    다 덮는 ColorRect인데 Control의 기본 mouse_filter는 STOP이라 바닥이 좌클릭을 전부 먹는다
+##    → `_unhandled_input`에 안 와서 발사가 아예 안 불린다. **에러도 경고도 없고, 헤드리스로는
+##    절대 못 잡는다** (세25 베이스·세26 숲이 정확히 이걸로 밟았다 — 새 씬마다 되살아나는 함정).
+##  • `RingSpellSystem.z_index = 10` — 안 올리면 날아가는 진·탄·기둥이 Ground(z=0) 뒤에 가려 안 보인다.
+##  • 나무는 **물리 없는 장식**(tree.tscn) — StaticBody2D로 만들면 world 레이어라 캐리어(마스크 5)가
+##    나무마다 터진다.
+##  • 방 크기 ≈1200×1040 단칸 — gale hover_max 170·snake rush 240이 돌아갈 최소 폭. 씬에서 튜닝.
+##
+## 🔴 바닥 타일은 `_ready`가 코드로 깐다 — .tscn에 tile_map_data 베이스64를 손으로 굳히면
+## 방 크기를 바꿀 때마다 에디터로 다시 칠해야 한다. Ground rect에서 셀 범위를 파생시켜 늘 맞는다.
+
+const InteractZone := preload("res://src/actors/interact_zone.gd")
+const Player := preload("res://src/actors/player.gd")
+const Hud := preload("res://src/hud/hud.gd")
+## 범용 보스 스폰 몸 — ChapterDef.boss_scene_path가 비면 이 씬 + enemy_id로 스폰한다.
+## preload가 안전한 이유: forest_enemy는 boss_room을 안 문다 (base⇄forest 순환 함정 무관).
+const EnemyScene := preload("res://src/field/forest_enemy.tscn")
+## 귀환 포탈 — 기존 portal.tscn 재사용(신규 프롭 0). 보스를 잡아야 스폰되므로 씬에 미리 안 놓는다
+## (미리 놓으면 "안 잡고 나가기"가 공짜가 된다). Prompt 문구는 세44 프롭 계약대로 부모가 덮는다.
+const PortalScene := preload("res://src/props/portal.tscn")
+
+## 돌아갈 곳 — 🔴 **PackedScene이 아니라 경로다. 바꾸지 마라.** base가 boss_room을 경로로 물고
+## boss_room이 base를 PackedScene으로 물면 **순환 preload**로 한쪽이 노드 0개 껍데기가 돼
+## 귀환·사망 시 베이스로 못 돌아간다 (세26 forest가 실측 — 헤드리스는 못 잡고 실게임 부팅에서만 드러난다).
+@export_file("*.tscn") var base_scene_path: String = "res://src/base/base.tscn"
+
+## 쓰러진 뒤 베이스로 돌아가기까지 (초) — 연출값. 0이면 뭘 맞고 죽었는지 못 보고 화면이 바뀐다.
+const DEATH_BEAT_SEC := 0.9
+## 귀환 포탈이 보스가 죽은 자리에서 비켜 서는 거리 — 상자(보스 자리에 떨어진다)와 안 겹치게 (연출값).
+const PORTAL_OFFSET := Vector2(88.0, 0.0)
+
+@onready var _ground: ColorRect = $Ground
+@onready var _tiles: TileMapLayer = $TileGround
+@onready var _player: Player = $Player
+@onready var _hud: Hud = $Hud/Hud
+
+var _chapter: ChapterDef = null
+var _boss: Node2D = null
+## 클리어 처리는 한 번뿐 — enemy_died는 EventBus 전역이라 가드 없이는 무엇이든 두 번 처리될 수 있다.
+var _cleared: bool = false
+## 씬 전환은 한 번뿐 — 귀환 도중 죽거나, 죽는 중에 E를 누르면 두 번 갈아탄다 (forest 계약 이관).
+var _leaving: bool = false
+
+
+func _ready() -> void:
+	# 🔴 출격 = 만HP/만마나 (forest.gd 계약 이관). 이게 없으면 죽는 게 이득이 된다 —
+	# 다친 몸으로 포탈까지 버티느니 그 자리에서 죽는 편이 싸진다.
+	GameState.reset_player_hp()
+	GameState.restore_mana_full()
+	GameState.in_expedition = true
+	# 🔴 모달 플래그를 내린다 — 오토로드라 씬 전환에도 남는다 (base.gd _ready와 같은 안전망).
+	GameState.ui_modal_open = false
+	_player.caster.notice.connect(_hud.say)
+	_player.caster.slot_changed.connect(_hud.select)
+	_hud.select(_player.caster.slot())
+	EventBus.player_hp_changed.connect(_on_hp_changed)
+	EventBus.enemy_died.connect(_on_enemy_died)
+	# 목표 달성 넛지 (세40 턴인 — forest 선례): 완료가 아니라 정산 대기라 quest_ready를 듣는다.
+	EventBus.quest_ready.connect(_on_quest_ready)
+
+	# 🔴 어느 챕터인가 — 비었거나 미등록이면 **조용히 빈 방을 띄우지 않는다** (침묵 금지).
+	# F6으로 이 씬을 직접 실행하면 pending_chapter가 비어 여기로 온다 — 베이스로 되돌린다.
+	_chapter = Db.get_chapter(GameState.pending_chapter)
+	if _chapter == null:
+		push_error("boss_room: pending_chapter '%s'가 Db.chapters에 없다 — 베이스로 되돌아간다"
+			% String(GameState.pending_chapter))
+		_leaving = true
+		_to_base.call_deferred()
+		return
+
+	_ground.color = _chapter.room_ground_color
+	_fill_tiles()
+	_spawn_boss()
+	var boss_def := Db.get_enemy(_chapter.boss_enemy_id)
+	var boss_name := boss_def.display_name if boss_def != null else String(_chapter.boss_enemy_id)
+	_hud.say("%s — %s를 쓰러뜨려라. 잡으면 귀환 포탈이 열린다" % [_chapter.title, boss_name])
+
+
+## 바닥 타일을 Ground rect에 맞춰 깐다 — 챕터 분위기 틴트(room_ground_color)는 Ground(ColorRect)가
+## 가장자리로 내보이고, 타일은 보스방 전용 어두운 바닥(source 1 = tile_boss_floor)로 통일한다.
+func _fill_tiles() -> void:
+	var ts: Vector2i = _tiles.tile_set.tile_size
+	var rect := Rect2(_ground.position, _ground.size).grow(-float(ts.x))   # 가장자리 한 칸은 틴트가 보이게
+	var from := Vector2i(floori(rect.position.x / ts.x), floori(rect.position.y / ts.y))
+	var to := Vector2i(ceili(rect.end.x / ts.x), ceili(rect.end.y / ts.y))
+	for y in range(from.y, to.y):
+		for x in range(from.x, to.x):
+			_tiles.set_cell(Vector2i(x, y), 1, Vector2i.ZERO)
+
+
+## 보스 동적 스폰 — 두 경로 (ChapterDef 계약):
+##  • boss_scene_path가 있으면 그 전용 씬 (snake_boss.tscn — enemy_id는 씬이 이미 품고 있다)
+##  • 비면 forest_enemy.tscn 범용 스폰 — 🔴 **add_child 전에 enemy_id 대입** (forest.tscn이
+##    인스턴스 오버라이드로 하던 것을 코드로. _ready가 이 id로 .tres를 물기 때문에 순서가 계약이다).
+func _spawn_boss() -> void:
+	if _chapter.boss_scene_path != "":
+		var packed := load(_chapter.boss_scene_path) as PackedScene
+		if packed == null:
+			push_error("boss_room: boss_scene_path '%s'를 못 읽었다 — 베이스로 되돌아간다"
+				% _chapter.boss_scene_path)
+			_leaving = true
+			_to_base.call_deferred()
+			return
+		_boss = packed.instantiate() as Node2D
+	else:
+		var enemy := EnemyScene.instantiate() as Node2D
+		enemy.set(&"enemy_id", _chapter.boss_enemy_id)
+		_boss = enemy
+	# 🔴 위치도 add_child **앞**이 계약이다 (enemy_id와 같은 이유) — snake_body가 _ready에서
+	# 부모의 그 시점 위치로 자취를 프리시드하므로, 뒤에 옮기면 ch3 입장 첫 프레임에 마디 12개가
+	# 원점→boss_spawn으로 끌려간다(세54 「정지 뭉침」 재림). 루트가 원점이라 position == global.
+	_boss.position = _chapter.boss_spawn
+	add_child(_boss)
+
+
+## 🔴 클리어 판정 = **보스 처치 순간** (루팅·귀환과 무관 — 죽어서 가방을 잃어도 클리어는 남는다.
+## "이기면 열림"이 순수해서 억울함이 없다). 키는 `Db.chapter_clear_id` 파생 한 곳 — 여기서 문자열을
+## 조립하지 않는다(세50 계열 오타 함정). codex_unlocked 한 발로 codex 심기 + UNLOCK 퀘스트 진행 +
+## Audio unlock음이 전부 따라온다 (세37 station_* 패턴).
+func _on_enemy_died(enemy_id: StringName) -> void:
+	if _cleared or _chapter == null or enemy_id != _chapter.boss_enemy_id:
+		return
+	_cleared = true
+	var clear_id := Db.chapter_clear_id(_chapter)
+	# ⚠ 재입장(파밍 재방문)이면 codex가 이미 있다 — 다시 쏘면 UNLOCK 퀘스트·해금음이 중복으로
+	# 반응하므로 첫 클리어에만 쏜다. **포탈은 매번 뜬다** (안 뜨면 재방문이 소프트락이 된다).
+	if not GameState.is_unlocked(clear_id):
+		EventBus.codex_unlocked.emit(clear_id)
+	_spawn_return_portal()
+	_hud.say("%s 클리어! 상자를 챙기고, 포탈에서 E로 귀환하라" % _chapter.title)
+
+
+## 귀환 포탈 — 보스가 죽은 자리 옆에 스폰 (상자가 보스 자리에 떨어지므로 PORTAL_OFFSET만큼 비킨다).
+## enemy_died 발신 시점엔 보스 노드가 아직 살아 있다(queue_free 전) — 위치를 여기서 읽을 수 있다.
+func _spawn_return_portal() -> void:
+	var portal := PortalScene.instantiate() as InteractZone
+	var pos := _chapter.boss_spawn + PORTAL_OFFSET
+	if _boss != null and is_instance_valid(_boss):
+		pos = _boss.global_position + PORTAL_OFFSET
+	add_child(portal)
+	portal.global_position = pos
+	# 세44 프롭 계약 — 문구는 부모가 덮는다 (기본 문구는 옛 「하강」 용법이라 여기선 거짓말이 된다).
+	var prompt := portal.get_node_or_null("Prompt") as Label
+	if prompt != null:
+		prompt.text = "[E] 마을로 귀환"
+	portal.interacted.connect(_extract)
+
+
+## 🔴 귀환 성공 — `extraction_success`가 **가방(루팅분 포함)을 창고로 옮기고 자동 저장**한다
+## (GameState·SaveManager가 이미 이 시그널에 연결돼 있다). 안 쏘면 루팅한 게 다음 사망 때 증발하고
+## q02(EXTRACT)가 영영 안 찬다 — forest._extract 계약 그대로.
+func _extract() -> void:
+	if _leaving:
+		return
+	_leaving = true
+	EventBus.extraction_success.emit()
+	_to_base()
+
+
+func _on_hp_changed(hp: float, _hp_max: float) -> void:
+	if hp <= 0.0:
+		_die()
+
+
+## 쓰러졌다 — `bag_lost`가 가방을 비우고 자동 저장한다(세이브스컴 방지). 클리어 codex는 처치 순간
+## 이미 심겼으므로(§클리어 판정) 죽어도 다음 챕터는 열려 있다. forest._die 계약 그대로.
+func _die() -> void:
+	if _leaving:
+		return
+	_leaving = true
+	_player.caster.enabled = false
+	_player.set_physics_process(false)
+	_hud.say("쓰러졌다 — 베이스로 돌아온다", true)
+	EventBus.bag_lost.emit()
+	await get_tree().create_timer(DEATH_BEAT_SEC).timeout
+	_to_base()
+
+
+func _to_base() -> void:
+	get_tree().change_scene_to_file(base_scene_path)
+
+
+## 목표 하나를 달성했다 — 아직 완료 아님. 길잡이에게 돌아가 정산하라고 HUD로 민다 (forest 선례).
+func _on_quest_ready(quest_id: StringName) -> void:
+	var q := Db.get_quest(quest_id)
+	if q != null:
+		_hud.say("목표 달성: %s — 길잡이에게 돌아가 정산하라 [?]" % q.title)

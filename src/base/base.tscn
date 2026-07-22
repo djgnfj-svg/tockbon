@@ -79,6 +79,6 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("6_hud")
-hint_text = "WASD=이동 · 길잡이 E=목표 · 책상 E=고리 조립 · 숲길 E=원정 · 정제대·공방·해독대는 재료로 건설 · 좌클릭=발사 · 1~4=슬롯 · Tab=시트(I 소지품·Q 목표)"
+hint_text = "WASD=이동 · 길잡이 E=목표 · 책상 E=고리 조립 · 숲길 E=챕터 선택 · 정제대·공방·해독대는 재료로 건설 · 좌클릭=발사 · 1~4=슬롯 · Tab=시트(I 소지품·Q 목표)"
 
 [node name="Sheet" parent="." instance=ExtResource("7_inv")]

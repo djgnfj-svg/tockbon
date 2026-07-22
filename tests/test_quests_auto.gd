@@ -79,20 +79,19 @@ func _run() -> void:
 		gs.is_quest_active(q1) and gs.is_quest_active(q2))
 	_check("q03(정제대 건설)는 q02 미완료라 아직 잠김", not gs.is_quest_active(q3))
 
-	# ── ② KILL — 5마리째는 "정산 대기"일 뿐. 아직 완료·보상 아님 (턴인 모델) ──
+	# ── ② KILL — 처치(=count 충족)는 "정산 대기"일 뿐. 아직 완료·보상 아님 (턴인 모델) ──
+	# 세58-B: 잡몹 무리 은퇴로 q01 count 5→1 (보스 1처치). 잡기 전엔 대기가 아님도 함께 잰다.
 	var core_before: int = gs.get_count(&"mat_slime_core")
-	for i in range(4):
-		eb.enemy_died.emit(&"slime")
-	_check("4마리: q01 진행 4/5, 아직 정산 대기 아님",
-		gs.quest_count(&"q01_first_hunt") == 4 and not gs.is_quest_claimable(q1))
-	eb.enemy_died.emit(&"slime")   # 5마리째
-	_check("🔴 5마리: q01 정산 대기(claimable)", gs.is_quest_claimable(q1))
-	_check("🔴 5마리: 아직 완료 아님 (턴인 전)", not gs.is_quest_done(&"q01_first_hunt"))
-	_check("🔴 5마리: 보상도 아직 없음 (완료 전)", gs.get_count(&"mat_slime_core") == core_before)
+	_check("처치 전: q01 진행 0, 정산 대기 아님",
+		gs.quest_count(&"q01_first_hunt") == 0 and not gs.is_quest_claimable(q1))
+	eb.enemy_died.emit(&"slime")   # 1마리 = count(1) 충족
+	_check("🔴 처치: q01 정산 대기(claimable)", gs.is_quest_claimable(q1))
+	_check("🔴 처치: 아직 완료 아님 (턴인 전)", not gs.is_quest_done(&"q01_first_hunt"))
+	_check("🔴 처치: 보상도 아직 없음 (완료 전)", gs.get_count(&"mat_slime_core") == core_before)
 	_check("🔴 달성 순간 quest_ready가 발신됐다 (넛지 배선)", _ready_fires >= 1)
 	_check("🔴 아직 귀환 안 함 → q02(살아 돌아와라)는 정산 대기 아님", not gs.is_quest_claimable(q2))
-	eb.enemy_died.emit(&"slime")   # 6마리째
-	_check("달성 뒤엔 더 세지 않는다 (진행 막대가 need에서 멈춘다)", gs.quest_count(&"q01_first_hunt") == 5)
+	eb.enemy_died.emit(&"slime")   # 한 마리 더
+	_check("달성 뒤엔 더 세지 않는다 (진행 막대가 need에서 멈춘다)", gs.quest_count(&"q01_first_hunt") == 1)
 
 	# ── ③ 귀환 없이 말 걸기 — q01만 정산된다. 🔴 **원정 없이 q02가 공짜로 완료되지 않는다** ──
 	var claimed: Array = gs.claim_ready_quests()
@@ -153,7 +152,7 @@ func _run() -> void:
 	# ── ⑦ requires 게이트 + 저장/로드 라운드트립 ──
 	_clean(gs)
 	gs.quest_done[&"q00_first_draw"] = true   # 온보딩 q00 완료 선세팅 — 이래야 q01이 열려 진행된다 (세션41)
-	eb.enemy_died.emit(&"slime")           # q01 진행 1/5
+	eb.enemy_died.emit(&"slime")           # q01 진행 1/1 (세58-B count 1)
 	eb.codex_unlocked.emit(&"station_refine")   # station_refine 해금, 그러나 q03은 q02 미완료라 잠김
 	_check("🔴 선행(q02) 미완료면 건설해도 q03은 정산 불가 (requires 게이트)", not gs.is_quest_claimable(q3))
 	gs.quest_done[&"q01_first_hunt"] = true

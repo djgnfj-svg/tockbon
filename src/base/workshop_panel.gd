@@ -157,7 +157,7 @@ func _add_equip_rows() -> void:
 
 	var owned := _owned_equippable()
 	if owned.is_empty():
-		_list.add_child(_hint_label("보유한 장비가 없다 — 공방에서 만들거나 숲에서 얻는다"))
+		_list.add_child(_hint_label("보유한 장비가 없다 — 공방에서 만들거나 챕터에서 얻는다"))
 		return
 	for entry: Dictionary in owned:
 		_list.add_child(_make_owned_row(entry["id"], int(entry["count"])))

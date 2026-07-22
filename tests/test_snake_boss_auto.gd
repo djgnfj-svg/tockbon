@@ -58,7 +58,7 @@ func _test_def_loads() -> void:
 	var def = _db.get_enemy(&"snake_boss")
 	_check(def != null, "Db.get_enemy(&\"snake_boss\")가 null이 아니다 (파서가 거부하면 조용히 스킵)")
 	if def != null:
-		_check(is_equal_approx(def.hp, 600.0), "hp = 600 (실제 %.0f)" % def.hp)
+		_check(is_equal_approx(def.hp, 320.0), "hp = 320 (세58-B 챕터 하향, 실제 %.0f)" % def.hp)
 		_check(str(def.params.get("ai", "")) == "boss_snake", "params.ai == boss_snake")
 		_check(def.is_elite, "is_elite = true")
 		# drops가 기존 아이템 id인지 (엉뚱한 id가 아니라).
@@ -74,7 +74,7 @@ func _test_scene_and_segments() -> void:
 	print("[2] 씬 인스턴스 · SnakeBody 마디 수")
 	var boss = _make_boss(Vector2.ZERO)
 	await physics_frame
-	_check(is_equal_approx(boss.hp(), 600.0), "hp() == 600 (tres에서 왔다, 실제 %.0f)" % boss.hp())
+	_check(is_equal_approx(boss.hp(), 320.0), "hp() == 320 (tres에서 왔다, 실제 %.0f)" % boss.hp())
 	_check(boss.phase() == 1, "초기 페이즈 == 1")
 	var body = boss.get_node("SnakeBody")
 	_check(body != null, "SnakeBody 자식이 있다")
@@ -124,8 +124,8 @@ func _test_phase_transition() -> void:
 	var player = _make_player(Vector2(120, 0))  # aggro 안 → boss가 틱한다
 	await physics_frame
 	_check(boss.phase() == 1, "전이 전 페이즈 == 1")
-	# 비약점 350 → hp 600→250 (< 임계 300, 하지만 살아 있음).
-	boss.take_hit(350.0, 0, 0, 0.0)
+	# 비약점 170 → hp 320→150 (< 임계 160, 하지만 살아 있음. 세58-B hp 하향에 맞춘 수치).
+	boss.take_hit(170.0, 0, 0, 0.0)
 	for i in 5:
 		await physics_frame
 	_check(boss.hp() > 0.0, "아직 살아 있다 (%.0f)" % boss.hp())

@@ -226,11 +226,12 @@ func _test_real_left_click_actually_fires() -> void:
 ## 대신 **나갈 수 있는 조건 셋**을 묶는다: 문이 있고 · 나를 감지하고(안 그러면 [E]가 안 뜬다) ·
 ## 갈 곳이 실재한다(경로가 깨지면 E를 눌러도 **아무 일도 안 일어난다** — 또 하나의 침묵).
 func _test_forest_gate_leads_out() -> void:
-	print("[8] 숲으로 나가는 길 — 문이 있고, 나를 알아보고, 갈 곳이 실재한다")
+	print("[8] 챕터로 나가는 길 — 문이 있고, 나를 알아보고, 갈 곳(보스방)이 실재한다")
 	var gate = _zone(&"forest_gate")
 	if gate == null:
 		_check(false, "숲길(zone_id=forest_gate)을 못 찾았다")
 		return
+	# 세58-B: 게이트 E = 씬 전환이 아니라 챕터 선택 패널을 연다 — 연결만 있으면 계약은 같다.
 	_check(gate.interacted.get_connections().size() >= 1,
 		"숲길의 interacted를 베이스가 받고 있다 (안 이으면 E가 조용히 아무것도 안 한다)")
 
@@ -244,13 +245,13 @@ func _test_forest_gate_leads_out() -> void:
 	_check(gate.player_in_range(), "숲길이 플레이어를 감지 = [E] 안내가 뜬다 (%d 물리 프레임)" % frames)
 	player.global_position = was
 
-	# ⚠ **경로**를 확인한다 (PackedScene이 아니라) — base⇄forest 순환 preload를 피한 결과다
-	# (base.gd `forest_scene_path` 주석). 순환이면 상대가 노드 0개 껍데기로 굳는데,
-	# 🔴 **헤드리스는 그걸 못 잡는다**: 여기선 base.tscn을 먼저 로드하므로 forest preload가
-	# 멀쩡히 끝난다. 실제 게임(베이스로 부팅)에서만 깨졌다.
-	var path: String = str(_base.get("forest_scene_path"))
+	# ⚠ **경로**를 확인한다 (PackedScene이 아니라) — base⇄boss_room 순환 preload를 피한 결과다
+	# (base.gd `boss_room_scene_path` 주석). 순환이면 상대가 노드 0개 껍데기로 굳는데,
+	# 🔴 **헤드리스는 그걸 못 잡는다**: 여기선 base.tscn을 먼저 로드하므로 boss_room preload가
+	# 멀쩡히 끝난다. 실제 게임(베이스로 부팅)에서만 깨졌다 (세26 forest 실측).
+	var path: String = str(_base.get("boss_room_scene_path"))
 	_check(ResourceLoader.exists(path),
-		"갈 곳(%s)이 실재한다 — 경로가 깨지면 E를 눌러도 아무 일도 안 난다" % path)
+		"갈 곳(%s)이 실재한다 — 경로가 깨지면 챕터를 골라도 아무 일도 안 난다" % path)
 
 
 # ── 헬퍼 ──

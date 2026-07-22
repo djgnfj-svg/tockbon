@@ -9,17 +9,16 @@
 > 지금 게임 = `src/base`(베이스캠프) + 고리 조립 책 + 숲 원정 + 온보딩 레일.
 > 🔴 **기록 규칙: 직전 세션만 상세, 그 전은 아래 「한 줄 지도」로 내려보낸다** — 이 절이 길어지면 정리 신호.
 
-🔴🔴 **직전 세션 = 58 「진행 관문(until_unlock) + 허기 은퇴 + PROGRESSION.md 정본」** (정본 STATUS「58」 + `docs/PROGRESSION.md`):
-세57 확정(세피리아식 스테이지 형식 — 「뼈대는 확정, 살은 랜덤」, memory `takbon-stage-format-decision`)의 실체화. architect 실측의 반전: **룬 해금의 절반은 이미 결정적**(물·바람 조각 chance 1.0)이었고 **원칙 위반은 잡몹 0.25 세 줄뿐** — 관문화 = 그 세 줄의 이동이 알맹이.
-🔴 **`docs/PROGRESSION.md` = 진행의 단일 정본** (티어×관문×확정 획득 표 — 위 정본 목록에 등재). 관문은 `enemy_id` 기준이라 **맵 구조와 디커플**(숲2 보류와 충돌 없음). 표↔데이터 갈라짐은 `test_progression_auto` [4] 불변식이 감시.
-🔴 **core = `DropEntry.until_unlock` 1필드**: 비면 순수 확률(하위호환), 채우면 **미해금 동안 chance 무시 확정 드롭·해금 후 중단**. 「첫 처치 1회」각하 이유 = 조각이 가방째 증발(bag_lost)하면 영구 데드락 — 반복 확정은 데드락 0·저장 신규 필드 0(codex 파생). **"새 관문 = 적 .tres 드롭 한 줄"** · 신규 시스템·EventBus 0(조각→해독대→codex 세34 기계 재사용). 데이터: vine/beetle/mist 0.25 삭제 → 물=slime_elite·바람=gale·풀=snake_boss(상자 경유), earth/bolt는 의도적 무경로(관문표 구멍 — D6 네임드 2 다음 세션).
-🔴 **허기 은퇴**(사용자 확정 D1 — 익스트랙션 루프 자체는 유지): 대응 수단 없는 순수 타이머(≈167초)였다. game_state·balance 3필드·HUD 막대·base/forest 호출 제거. `in_expedition`은 소비자 0인 채 유지(주석 명시).
-🔴 **미결 결정 3**: D5 진 배치 보류(*"스테이지 클리어 보상과 보스 보상 고민"* — 진 시드 유지) · D3 문양 게이트(*"디자인에 따라 다를듯"* — 전부 개방 유지) · **D7 퀘스트 = 개념 유지, 사용자가 하나씩 직접 설계**(세57 「전면 은퇴」에서 후퇴).
-✅ 검증: 전 스위트 22+1 그린 · 뮤테이션(판정 무력화 → **[2]가 chance를 메모리 0으로 내려 4 FAIL** — 개선 전 [2]는 chance 1.0이라 검출력 0이었다 · snake_boss 조각 제거 → 3 FAIL) · 실게임 MCP(허기 빠진 HUD 정상 · snake_boss 상자에 fragment_grass 확정 실림).
-🔴🔴 **관문은 지금 잠잔다 — 시드 룬 5줄 삭제가 가동 스위치다**(시점 = 세56 손맛 F5 뒤. 삭제 후 "처치→조각→해독→룬 등장" 전 루프 실게임 확인 필요 — PROGRESSION.md 「시드」절).
+🔴🔴 **직전 세션 = 58·58-B 「진행 관문 + 허기 은퇴 + 세피리아식 챕터(보스방) 메인 루프」** (정본 STATUS「58」「58-B」 + `docs/PROGRESSION.md`):
+세57 확정(스테이지 형식 — 「뼈대는 확정, 살은 랜덤」)의 실체화 2연타. **58**: `DropEntry.until_unlock` 1필드 — 미해금 동안 chance 무시 **확정 드롭·해금 후 중단**(「첫 처치 1회」는 가방 증발 데드락이라 각하 — codex 파생·저장 필드 0). 잡몹 랜덤 조각 0.25 은퇴 → 물=slime_elite·바람=gale·풀=snake_boss(상자 경유), earth/bolt는 의도적 무경로(D6 네임드 대기). **"새 관문 = 적 .tres 드롭 한 줄"** · 허기 축 전면 은퇴(원정 루프는 유지). 표↔데이터 갈라짐은 `test_progression_auto` [4] 불변식이 감시.
+🔴 **58-B = 새 메인 루프**: 베이스 숲길 [E] → **챕터 선택 패널**(순서 잠금: ch1 우두머리슬라임→ch2 gale(hp150)→ch3 뱀(hp320)) → `boss_room.tscn` **보스만 있는 단칸방** → 처치 = `chapter_clear_*` codex(파생 = `Db.chapter_clear_id` 한 곳 — 🔴 룬 해금 기반 판정은 시드가 덮어 전 챕터 클리어로 보이는 함정) + 상자(관문 조각 동승) + 귀환 포탈 → [E] = extraction_success(가방→창고) → 베이스. 죽으면 bag_lost 후 베이스(클리어는 남음). **"새 챕터 = data/chapters/*.tres 한 장"**(`ChapterDef`·`Db.chapters`·`GameState.pending_chapter` = 세58-B core). **옛 숲(잡몹·깊이 밴드)·map_panel·forest_t2는 삭제**(git 이력) — 그물은 `test_chapter_auto`로 먼저 이식.
+🔴 **밟은 함정 2 (리뷰·MCP가 잡음)**: ①보스 스폰 **위치 대입도 add_child 앞이 계약**(뒤면 snake_body 자취 프리시드가 원점 기준 — 마디가 끌려온다, 세54 재림) ②forest 그물 이식 때 접촉 피해를 빠뜨리면 **적→플레이어 피해 채널이 전 스위트 어디에도 없게 된다**(ch1 보스는 접촉이 유일한 공격 — 조용히 죽어도 그린). + push_input은 **윈도우 픽셀 = 캔버스 2배**(세41 함정 재확인 — 실클릭 검증 시 좌표 2배).
+✅ 검증: 전 스위트 21종 그린(리드 직접) · 뮤테이션 5종 리드 재현(클리어 emit·잠금식 반전·관문 판정·조각 제거·접촉 차단 — 전부 검출·복구) · **실게임 MCP 전 루프**(게이트→패널 렌더/실클릭→보스방 클릭 발사→처치→상자에 물 조각 확정→포탈→창고 이관) · ch3 마디 스폰 정렬.
+🔴 **다음 = 손맛(사용자 F5)**: 보스 HP 150/320 체감 · 방 크기·챕터 틴트(약함)·남쪽 경계 밖 회색(카메라 한계 미설정)·포탈=옛 도형 프롭(아트 여지)·패널 E 열자마자 닫힘 여부. + 🔴 **잡몹 공급원 무대 0곳**(beetle·mist·vine·hound 재료·장비 드롭이 등장할 곳이 없다 — 챕터 잡몹 동반·재료 챕터·마을 납품 퀘스트와 묶어 설계, PROGRESSION.md 「살」절). + **관문은 시드가 덮어 잠잔다 — 룬 5줄 삭제 = 가동 스위치**(⚠ 챕터4·5보다 먼저면 q09·q10 막힘).
+🔴 미결: D5 진 배치(스테이지 클리어 보상 vs 보스 보상) · D3 문양 게이트 · D6 흙·번개 네임드 2(다음 세션 후보) · D7 퀘스트 = 개념 유지, 사용자가 하나씩 직접 설계.
 
 🔴 **지지난 = 57** 「세피리아식 스테이지 형식 확정 + 퀘스트 은퇴 방향」(설계·결정 세션 — STATUS 항목 없음, 정본 = memory `takbon-stage-format-decision`) — 동기 = *"언제 룬을 얻을지 설계를 못 해 불안"* → 「뼈대는 확정, 살은 랜덤」. 곁가지: 밑그림 커스텀 완성본을 git stash에 보류(memory `takbon-guide-editor-stashed`) · 중첩진 architect 설계 = `scratch_nested_design.md` 대기(결정점 8개 미합의).
-⏸ **의도적으로 잠자는 콘텐츠 (버그 아님)**: `_seed_starting_unlocks()`가 룬 6종을 미리 열어 관문·해독 산출물이 소급 완료돼 안 보인다. 🔴 **손맛 확인이 끝나면 `game_state.gd`의 룬 5줄을 지워라 = 세58 관문 가동 스위치**(PROGRESSION.md 「시드」절 — 삭제 후 전 루프 실게임 확인까지).
+⏸ **의도적으로 잠자는 콘텐츠 (버그 아님)**: `_seed_starting_unlocks()`가 룬 6종을 미리 열어 관문·해독 산출물이 소급 완료돼 안 보인다. 🔴 **손맛 확인이 끝나면 `game_state.gd`의 룬 5줄을 지워라 = 세58 관문 가동 스위치**(PROGRESSION.md 「시드」절 — 삭제 후 전 루프 실게임 확인까지). ⚠ **단 챕터4·5(흙·번개 네임드)보다 먼저 지우면 q09·q10 사슬이 실제로 막힌다** — fragment_earth/bolt는 의도적 무경로(공급원 = D6 네임드 대기)라서다.
 ⏸ **보류 = forest_t2(숲2·티어 하강)** — 사용자 확정(세48): *"숲2는 아직 필요없음."* 딸린 **「하강 시 회복 스킵」도 같이 보류**(`src/field/forest.gd:131` 주석). 관문이 enemy_id 기준이라 스테이지 형식과 충돌 없음(세58).
 
 🔴 **남은 빚** (세50~58 누적):
@@ -208,13 +207,12 @@
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_ring_spell_auto.gd      # **고리 발사**: 진→투사체·착탄 전개(발산 탄환·응집 기둥)·실제 적 take_hit
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_ring_design_auto.gd     # **고리 도안 통합**: RingDesign 라운드트립·ring_design_committed→GameState 자동 장착 · **등급⇔펑 경계·퍼펙트⇔화면100** (세션 24)
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_base_auto.gd            # **베이스캠프 발사 배선** (세션 24): 과녁 사거리 · 🔴**물리 레이어 계약**(내 몸/책상이 world면 진이 총구에서 죽는다 — 에러 없이 조용히) · [8] 숲길
-./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_forest_auto.gd         # **숲 원정** (세션 26): 출격 만HP · 적이 쫓아옴(그룹 "player") · 접촉 피해 · 🔴**적 레이어 계약**(4=enemy가 아니면 부딪히기만 하고 take_hit이 안 불린다) · 귀환/사망 계약(extraction_success·bag_lost)
+./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_chapter_auto.gd        # **챕터 보스방 루프** (세션58-B — 옛 test_forest_auto의 그물을 이식·계승): 챕터 3장 Db 로드+order+클리어 키 파생 · 🔴**보스 스폰 두 경로**(범용 forest_enemy·전용 씬 — 두 경로 각각 뮤테이션 검출 확인, 세56 교훈) · 출격 만HP · 🔴**적 레이어 계약**(4=enemy) · 처치→chapter_clear codex+포탈 스폰(처치 전 부재) · 포탈 연타 1회 extraction+가방→창고 · 사망→bag_lost+창고 보존 · 🔴**잠금 판정 = chapter_panel 공개 `is_chapter_open`을 직접**(복사 금지) · 미등록 챕터→빈 방 금지·베이스 복귀(⚠ [8]의 USER ERROR 한 줄은 의도된 것 — SCRIPT ERROR와 다르다) · 끝에 wipe_save() 뒷정리 · 🔴**Ground 클릭 도달·패널 카드 클릭·포탈/상자 렌더는 헤드리스가 못 잡는다**(새 씬+새 패널 = 세25 함정 정확히 그 자리 — 실게임 MCP 필수)
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_workshop_auto.gd      # **공방 장비 제작** (세션 32): 레시피 station 분리(정제대⇔공방) · 펜 제작(spend→add) · 장착 라운드트립(equip→correction 0.35→소비, unequip→반환) · 🔴**패널 클릭은 헤드리스가 못 잡는다**(실게임 push_input로 별도 검증)
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_audio_auto.gd         # **사운드 배선** (세션 33): 17 SFX 로드·길이>0 · Audio가 EventBus 9종에 연결 · 발신→올바른 스트림(부작용 순간은 연결만) · 🔴**소리가 실제로 나는지는 헤드리스가 못 잡는다**(오디오 드라이버 없음 — 버스 라우팅·playing은 에디터 실게임 exec로 별도 검증)
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_decode_auto.gd        # **탁본 해독** (세션 34 E4): 조각 소비+룬 해금(codex_unlocked) · 이미 배운 룬은 조각 안 닳림 · 해금이 룬 목록에 흐름 · 🔴**룬 탭 다중셀 렌더·클릭은 헤드리스가 못 잡는다**(문양 탭·refine과 동일 패턴 — 에디터 실게임 스샷으로 별도 확인: 불△·물▽ 셀·바람은 잠겨 안 뜸)
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_quests_auto.gd        # **진행 목표(퀘스트)** (세션 36): KILL/EXTRACT/UNLOCK 배선(enemy_died·extraction·codex_unlocked → advance_quests) · 🔴**requires 사슬 게이트**(잠긴 퀘스트는 이벤트로도 안 진행) · 보상 지급 · 🔴**소급 완료**(이미 해금된 룬 노리는 UNLOCK은 열리는 순간 완료 — 안 하면 사슬이 막힌다) · 저장 라운드트립 · 🔴**Q 패널 렌더·클릭 차단은 헤드리스가 못 잡는다**(전체화면 Control — 닫힘=발사 도달·열림=차단을 실게임 push_input으로 별도 확인, 액션 주입으론 못 잡는다)
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_dialogue_box_auto.gd  # **온보딩 대사 상자** (세션41): open(lines)→줄 넘김→finished · 빈 배열 즉시 finished · ESC 건너뛰기 · ui_modal_open 토글 · 🔴**클릭 진행·하단 밴드 렌더는 헤드리스가 못 잡는다**(실게임 push_input·스샷으로 별도 확인)
-./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_map_panel_auto.gd     # **원정 지도 패널** (세션41): open(data) 데이터 흡수 · 🔴**world↔map 좌표 왕복**(뮤테이션으로 검출력) · 클릭 역변환→marker_placed(지도 밖 무시) · ui_modal_open 토글 · 🔴**지도 렌더·클릭 도달은 헤드리스가 못 잡는다**(push_input은 **윈도우 픽셀**이라 캔버스 2배 — 실게임 exec push_input·스샷으로 별도 확인)
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_hud_toast_auto.gd     # **HUD 획득 토스트** (세션51): 같은 id 합치기(수량+수명 리셋) · 🔴**합친 줄은 맨 뒤로 이동**(안 하면 FIFO가 **방금 주운 줄**을 밀어낸다 — 시각이 아니라 버그) · 최대 3줄 FIFO · 수명 만료 · 🔴**보이는지·슬롯/막대와 겹치는지는 헤드리스가 못 잡는다**(MCP 스샷으로 별도 확인)
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_drop_pickup_auto.gd   # **바닥 드롭 픽업 + 자석 흡수** (세션46·51): setup→그룹 · 줍기 지연(지연 중 무시) · body_entered→add_to_bag+queue_free · 🔴**layer0/mask2 계약**(캐리어가 픽업에 안 부딪히게) · 🔴**자석**(반경 안이면 거리 단조감소·밖이면 정지·지연 뒤에만·**켜지면 취소불가**·도착 1회 뱅킹·item_collected 1회) · 🔴**null 가드 없으면 SCRIPT ERROR 36줄 내면서 OK 찍힌다**(grep 필수) · 🔴**반경 72px가 체감되는지·속도가 "빨려온다"로 읽히는지는 헤드리스가 못 잡는다**(실게임 좌표 실측 — 세50 감전연쇄 재발 자리)
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_enemy_ai_auto.gd      # **몬스터 AI** (세션46): 방어(armor_reduction→enemy_hit dealt 경감) · 재생(regen_per_sec, 상한 _def.hp) · 분산 경감 · 🔴**돌진/부유 움직임 "느낌"은 헤드리스가 못 잰다**(실게임 runtime_state로 속도파형·거리유지 별도 확인)
@@ -227,8 +225,8 @@
 
 🔴 **스위트를 돌리면 `user://save`가 날아간다** (세션 26 F3 이후). `SaveManager._ready`가 저장을
 살려 놨으므로, `extraction_success`·`bag_lost`·`day_started`를 쏘는 테스트는 **진짜 세이브 파일을
-쓴다** — `test_forest_auto`가 실제로 플레이 세이브를 테스트 찌꺼기로 덮었다. 그래서 세이브를
-건드리는 테스트는 **끝에 `wipe_save()`로 뒷정리한다**(test_save_auto·test_forest_auto).
+쓴다** — 옛 test_forest_auto가 실제로 플레이 세이브를 테스트 찌꺼기로 덮었다. 그래서 세이브를
+건드리는 테스트는 **끝에 `wipe_save()`로 뒷정리한다**(test_save_auto·test_chapter_auto).
 ⚠ **뒷정리는 지울 뿐 복구가 아니다** — 플레이하던 세이브가 있으면 스위트가 그걸 날린다.
 새 시그널을 쏘는 테스트를 더할 땐 **SaveManager가 물려 있는지 먼저 확인해라**.
 

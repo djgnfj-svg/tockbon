@@ -85,7 +85,7 @@ func _refresh() -> void:
 	var frags := _fragments()
 	if frags.is_empty():
 		var none := Label.new()
-		none.text = "해독할 조각이 없다 — 숲 깊은 곳의 우두머리를 잡아라"
+		none.text = "해독할 조각이 없다 — 챕터의 우두머리를 잡아라"
 		none.add_theme_color_override(&"font_color", HINT_COLOR)
 		_list.add_child(none)
 		return

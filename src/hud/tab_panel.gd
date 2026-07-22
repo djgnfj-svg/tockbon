@@ -374,7 +374,7 @@ func _draw_grid(font: Font) -> void:
 	var layout := _grid_sections()
 	if bool(layout["empty_msg"]):
 		draw_string(font, Vector2(left, grid_top + 12.0),
-			"창고가 비었다 — 숲에서 적을 잡아 [E]로 귀환하면 여기 쌓인다",
+			"창고가 비었다 — 챕터의 보스를 잡고 포탈로 귀환하면 여기 쌓인다",
 			HORIZONTAL_ALIGNMENT_LEFT, region_width, 12, EMPTY_COLOR)
 	for sec: Dictionary in layout["sections"]:
 		_draw_section_layout(font, sec, region_width)
@@ -499,7 +499,7 @@ func _draw_quests_tab(font: Font, origin: Vector2, content_top: float) -> void:
 
 	if rows.is_empty():
 		draw_string(font, Vector2(left, y + 14.0),
-			"목표가 없다 — 숲으로 나가 사냥을 시작하라",
+			"목표가 없다 — 숲길에서 챕터를 골라 사냥을 시작하라",
 			HORIZONTAL_ALIGNMENT_LEFT, -1, 13, EMPTY_COLOR)
 		return
 

@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="ChapterDef" format=3]
+
+[ext_resource type="Script" path="res://src/core/schemas/chapter_def.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = &"ch3"
+order = 3
+title = "깊은 숲"
+boss_enemy_id = &"snake_boss"
+boss_scene_path = "res://src/field/snake_boss.tscn"
+boss_spawn = Vector2(0, -260)
+room_ground_color = Color(0.09, 0.14, 0.10, 1.0)

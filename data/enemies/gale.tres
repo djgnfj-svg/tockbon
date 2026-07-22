@@ -18,7 +18,7 @@ until_unlock = &"rune_wind"
 script = ExtResource("2_18ucn")
 id = &"gale"
 display_name = "바람을 품은 존재"
-hp = 250.0
+hp = 150.0
 counter_rune = 0
 params = {
 "aggro_range": 260.0,
@@ -47,4 +47,5 @@ params = {
 }
 is_elite = true
 drops = Array[ExtResource("1_algcq")]([SubResource("Resource_xf2oc"), SubResource("Resource_4cclg")])
+drops_chest = true
 night_buff = 1.2

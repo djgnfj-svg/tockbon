@@ -6,10 +6,10 @@
 script = ExtResource("1")
 id = &"q01_first_hunt"
 title = "첫 사냥"
-desc = "숲으로 나가 적을 5마리 처치하라."
+desc = "숲길에서 챕터를 골라 들어가, 보스를 처치하라."
 goal = 0
 target = &""
-count = 5
+count = 1
 reward_items = {
 &"mat_slime_core": 3
 }

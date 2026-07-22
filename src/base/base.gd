@@ -2,7 +2,7 @@ extends Node2D
 ## 베이스(허브) — 익스트랙션 루프의 귀환 지점.
 ## 책상에서 E를 누르면 **고리 조립 책**(진·룬·문양)이 베이스 위에 뜬다.
 ## 씬 전환 없음 — ESC로 닫으면 베이스가 그대로 뒤에 남는다.
-## 왼쪽 숲길에서 E를 누르면 **원정**을 나간다 (씬 전환 — 세션 26).
+## 왼쪽 숲길에서 E를 누르면 **챕터 선택**이 뜨고, 골라서 보스방 원정을 나간다 (세58-B — 옛 숲 즉시 전환 대체).
 ##
 ## 🔴 여기가 **게임의 진입점**이다 (project.godot run/main_scene, 사용자 확정 세션 21).
 ## 세션 22에 폴더가 `src/playground` → `src/base`로 바뀌었다 — "버려도 되는 실험"이라는
@@ -57,15 +57,19 @@ const DialogueBoxScene := preload("res://src/hud/dialogue_box.tscn")
 const DialogueBox := preload("res://src/hud/dialogue_box.gd")
 ## 🔴 위력 표시는 여기서 계산하지 않는다 — 리포트·발사·HUD가 **같은 함수**를 본다 (core에 있는 이유).
 const RingPower := preload("res://src/core/ring_power.gd")
+## 챕터 선택 패널 (세58-B) — 숲길 게이트 [E]가 씬 전환 대신 이 모달을 연다. 루트=CanvasLayer,
+## 스크립트=$Panel (chest·dialogue_box 선례). 패널은 base를 안 물어 preload가 안전(순환 아님).
+const ChapterPanelScene := preload("res://src/hud/chapter_panel.tscn")
+const ChapterPanel := preload("res://src/hud/chapter_panel.gd")   # 캐스트 타입 ($Panel은 get_node로 Node라)
 
 ## 책상에서 펴는 책 (base.tscn이 ring_forge_panel.tscn을 물려 준다).
 ## 🔴 여긴 PackedScene이어도 된다 — **책은 base를 안 문다**(순환이 아니다). 아래와 대비된다.
 @export var forge_scene: PackedScene = preload("res://src/drawing/ring_forge_panel.tscn")
-## 숲길에서 나가는 원정 (세션 26) — 🔴 **PackedScene이 아니라 경로다. 바꾸지 마라.**
-## base가 forest를 preload하고 forest가 base를 preload하면 **순환**이라, 먼저 로드되는 쪽의
-## 상대가 **노드 0개짜리 껍데기**로 굳는다 → 숲에서 귀환·사망해도 베이스로 못 돌아간다.
-## 자세한 근거는 `forest.gd`의 `base_scene_path` 주석. **헤드리스는 이걸 못 잡는다.**
-@export_file("*.tscn") var forest_scene_path: String = "res://src/field/forest.tscn"
+## 숲길 게이트가 여는 챕터 보스방 (세58-B — 옛 forest_scene_path 자리). 🔴 **PackedScene이 아니라
+## 경로다. 바꾸지 마라.** base가 boss_room을 preload하고 boss_room이 base를 preload하면 **순환**이라,
+## 먼저 로드되는 쪽의 상대가 **노드 0개짜리 껍데기**로 굳는다 → 귀환·사망해도 베이스로 못 돌아간다.
+## 자세한 근거는 `boss_room.gd`의 `base_scene_path` 주석. **헤드리스는 이걸 못 잡는다.**
+@export_file("*.tscn") var boss_room_scene_path: String = "res://src/field/boss_room.tscn"
 
 @onready var _desk: InteractZone = $Desk
 @onready var _gate: InteractZone = $ForestGate
@@ -89,6 +93,10 @@ var _decode: Control = null
 ## 🔴 온보딩 그리기 튜토 대사 (세션41) — 첫 마법 전 NPC가 개념을 가르친다. 이 베이스 방문에 한 번만.
 var _dialogue: CanvasLayer = null
 var _draw_tut_shown := false
+## 챕터 선택 패널 인스턴스 (세58-B) — 온디맨드 인스턴스·닫히면 치운다 (dialogue와 같은 결.
+## _overlay 슬롯을 안 쓰는 이유: 이 패널은 ui_modal_open을 스스로 토글하고 플레이어 정지도
+## 폴링으로 해결돼, 책·정제대처럼 base가 물리·caster를 껐다 켤 필요가 없다).
+var _chapter_sel: CanvasLayer = null
 
 func _ready() -> void:
 	# 🔴 씬 진입 시 모달 플래그를 내린다 — ui_modal_open은 오토로드라 씬 전환에도 살아남는다.
@@ -97,7 +105,7 @@ func _ready() -> void:
 	# 베이스=집 — 원정 플래그를 내린다 (귀환·사망이 다 여기로 온다).
 	GameState.in_expedition = false
 	_desk.interacted.connect(_open_drawing)
-	_gate.interacted.connect(_to_forest)
+	_gate.interacted.connect(_open_chapter_panel)
 	# 🔴 건설형 스테이션 (세션37) — 안 지어졌으면 E=건설 시도, 지어졌으면 E=패널. _station_interact가 가른다.
 	_refine_zone.interacted.connect(func() -> void:
 		_station_interact(&"station_refine", "정제대", _refine_zone, _open_refine_panel))
@@ -130,14 +138,33 @@ func _ready() -> void:
 	if not GameState.is_quest_done(&"q00_first_draw"):
 		_hud.say("길잡이에게 [E]로 말을 걸어라 — 첫 목표는 책상에서 마법진을 그리는 것이다")
 
-# ─────────────────────────── 원정 ───────────────────────────
+# ─────────────────────────── 원정 (챕터 보스방, 세58-B) ───────────────────────────
 
-## 🔴 출격이 **HP를 되돌리지 않는다** — 그건 숲이 한다 (forest.gd `_ready`).
-## 여기서 하면 "베이스에서 나갈 때만" 만HP고, 시험대·다른 진입 경로로 숲에 들어가면 조용히 다르다.
-func _to_forest() -> void:
-	if _overlay != null:   # 책을 펴 놓고 E를 눌러 나가면 책이 열린 채 씬이 바뀐다
+## 🔴 출격이 **HP를 되돌리지 않는다** — 그건 보스방이 한다 (boss_room.gd `_ready`).
+## 여기서 하면 "베이스에서 나갈 때만" 만HP고, 다른 진입 경로로 들어가면 조용히 다르다.
+## 숲길 [E] = 챕터 선택 모달 — 순서 잠금 3챕터를 보여주고, 고르면 pending_chapter에 실어
+## 보스방으로 전환한다. 잠금 판정은 패널이 한다 (해금 판정은 패널이 — 룬 셀 선례).
+func _open_chapter_panel() -> void:
+	if _overlay != null or _dialogue != null or _chapter_sel != null:   # 모달은 하나뿐
 		return
-	get_tree().change_scene_to_file(forest_scene_path)
+	_chapter_sel = ChapterPanelScene.instantiate() as CanvasLayer
+	add_child(_chapter_sel)
+	var panel := _chapter_sel.get_node("Panel") as ChapterPanel
+	panel.chapter_selected.connect(_on_chapter_selected)
+	panel.closed.connect(_on_chapter_panel_closed)
+	panel.open()
+
+## 챕터를 골랐다 — 오토로드에 실어 보스방으로. change_scene_to_file은 인자를 못 실으므로
+## `GameState.pending_chapter`가 나른다 (boss_room._ready가 읽어 보스·바닥색을 세운다).
+func _on_chapter_selected(id: StringName) -> void:
+	GameState.pending_chapter = id
+	get_tree().change_scene_to_file(boss_room_scene_path)
+
+## 패널이 닫혔다 (선택 완료·ESC 취소 둘 다 온다) — 인스턴스만 치운다 (ui_modal_open은 패널이 끈다).
+func _on_chapter_panel_closed() -> void:
+	if _chapter_sel != null:
+		_chapter_sel.queue_free()
+		_chapter_sel = null
 
 ## 🔴 길잡이 정산 (세션40) — 말 걸면 달성(claimable)한 퀘스트를 그 자리서 정산하고 목표 패널을 연다.
 ##  quest_completed가 아래 _on_quest_completed로 HUD 완료 팝을 쏘므로 여기선 정산·개방만 한다.

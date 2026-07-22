@@ -81,7 +81,7 @@ func _test_def_loads() -> void:
 	_check(def != null, "Db.get_enemy(&\"gale\")가 null이 아니다 (파서가 거부하면 조용히 스킵)")
 	if def == null:
 		return
-	_check(is_equal_approx(def.hp, 250.0), "hp = 250 (실제 %.0f)" % def.hp)
+	_check(is_equal_approx(def.hp, 150.0), "hp = 150 (세58-B 챕터 하향, 실제 %.0f)" % def.hp)
 	_check(str(def.params.get("ai", "")) == "boss_gale", "params.ai == boss_gale")
 	# boss_gale 분기·투사체가 읽는 키 전부 — 하나라도 빠지면 폴백으로 조용히 돈다.
 	var keys := ["gust_damage", "gust_period", "gust_push_dist", "gust_radius", "gust_windup",
@@ -106,9 +106,9 @@ func _test_phase_transition() -> void:
 	var dummy = _make_dummy_player(Vector2(140, 0))  # hover 밴드 안 → 틱만 돈다
 	await physics_frame
 	_check(boss.phase() == 1, "전이 전 페이즈 == 1")
-	# 비약점 WATER(2) 130 → hp 250→120 (< 임계 125, 하지만 살아 있음).
-	# ⚠ FIRE(0)를 쓰지 마라 — gale은 counter_rune=FIRE·weakness_mult 1.6이라 208이 박혀 의도가 흐려진다.
-	boss.take_hit(130.0, Enums.RuneType.WATER, 0, 0.0)
+	# 비약점 WATER(2) 80 → hp 150→70 (< 임계 75, 하지만 살아 있음. 세58-B hp 하향에 맞춘 수치).
+	# ⚠ FIRE(0)를 쓰지 마라 — gale은 counter_rune=FIRE·weakness_mult 1.6이라 128이 박혀 의도가 흐려진다.
+	boss.take_hit(80.0, Enums.RuneType.WATER, 0, 0.0)
 	for i in 5:
 		await physics_frame
 	_check(boss.hp() > 0.0, "아직 살아 있다 (%.0f)" % boss.hp())

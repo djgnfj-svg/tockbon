@@ -9,6 +9,10 @@ extends SceneTree
 ##   • [2] 미해금 = **확정** 드롭 — 관문 줄의 chance를 메모리 0으로 내리고 3연속 처치로 "항상"을 잰다
 ##     (chance **무시** 계약을 [2]가 직접 잰다 — 안 내리면 chance 1.0이라 확률 폴백 회귀를 못 잡는다)
 ##   • [3] 해금 = 드롭 **중단** (나머지 드롭은 그대로 나온다 — 관문이 남을 안 건드리는 것까지)
+##   ⚠ [2][3]의 처치 표본 slime_elite는 세58-B 챕터부터 `drops_chest = true`다(챕터 보상 = 상자
+##   문법) — 낱개 픽업 그룹만 보면 항상 0개라 거짓 판정이 된다. 그래서 수확은 낱개 픽업 +
+##   **상자 공개 루팅 흐름**(interacted → loot_card/advance, test_chest_auto [5] 선례) 둘 다 걷는다.
+##   상자 `_contents`는 비공개라 직접 읽지 않는다(계약 아님).
 ##   • [4] 불변식: fragment_*가 until_unlock 없이(순수 확률로) 등장하는 곳 0 · until_unlock 중복 0 ·
 ##     관문표 매핑 일치 · 조각 아이템의 params.unlock_id와 드롭의 until_unlock이 짝이다
 ##     (PROGRESSION.md의 표는 테스트가 못 읽는다 — 이 불변식이 표↔데이터 갈라짐을 대신 감시한다)
@@ -33,6 +37,7 @@ const RETIRED := [&"vine", &"beetle", &"mist"]
 
 var failures: int = 0
 var _db = null
+var _bus = null
 var _gs = null
 var _enemy_scene = null
 var _container = null   # get_tree().current_scene 역할 — _die가 드롭을 여기 심는다
@@ -49,6 +54,7 @@ func _run() -> void:
 	await process_frame  # 오토로드 준비 대기
 
 	_db = root.get_node("/root/Db")
+	_bus = root.get_node("/root/EventBus")
 	_gs = root.get_node("/root/GameState")
 	_enemy_scene = load("res://src/field/forest_enemy.tscn") as PackedScene
 
@@ -102,15 +108,10 @@ func _test_locked_guaranteed_drop() -> void:
 	var old_chance: float = gate.chance
 	gate.chance = 0.0
 	for i in 3:
-		_clear_drops()
-		var enemy = _make_enemy(&"slime_elite")
-		await physics_frame
-		enemy.take_hit(9999.0, 0, 0, 0.0)
-		await physics_frame
-		_check(_dropped_ids().has(&"fragment_water"),
-			"처치 %d/3: fragment_water가 떨어졌다 (실제 %s)" % [i + 1, str(_dropped_ids())])
+		var ids: Array = await _kill_and_collect(&"slime_elite")
+		_check(ids.has(&"fragment_water"),
+			"처치 %d/3: fragment_water가 나왔다 (실제 %s)" % [i + 1, str(ids)])
 	gate.chance = old_chance   # 🔴 공유 리소스 원상복구
-	_clear_drops()
 	if had:
 		_gs.codex[&"rune_water"] = true   # 원상복구
 
@@ -120,15 +121,9 @@ func _test_locked_guaranteed_drop() -> void:
 func _test_unlocked_stops_drop() -> void:
 	print("[3] 해금 = 조각 드롭 중단 (나머지 드롭은 유지)")
 	_gs.codex[&"rune_water"] = true
-	_clear_drops()
-	var enemy = _make_enemy(&"slime_elite")
-	await physics_frame
-	enemy.take_hit(9999.0, 0, 0, 0.0)
-	await physics_frame
-	var ids := _dropped_ids()
-	_check(not ids.has(&"fragment_water"), "🔴 fragment_water가 안 떨어졌다 (실제 %s)" % str(ids))
+	var ids: Array = await _kill_and_collect(&"slime_elite")
+	_check(not ids.has(&"fragment_water"), "🔴 fragment_water가 안 나왔다 (실제 %s)" % str(ids))
 	_check(ids.has(&"mat_slime_core"), "mat_slime_core(확률 1.0)는 그대로 나온다 (실제 %s)" % str(ids))
-	_clear_drops()
 
 
 ## [4] 🔴 랜덤 조각 은퇴 불변식 — Db의 **모든** 적 드롭 전수 (PROGRESSION.md 표의 감시자).
@@ -195,13 +190,52 @@ func _gate_entry_of(enemy_id: StringName):
 	return found if n == 1 else null
 
 
-## 지금 떨어져 있는 낱개 픽업들의 item_id. ⚠ 상자 내용물은 안 걷는다 — chest의 `_contents`는
-## 비공개라 계약이 아니다(takbon-verify §3). 이 테스트의 처치 검증은 잡몹(slime_elite)만 쓰고,
-## snake_boss 관문은 데이터 수준([1]·[4])으로 잰다 — 상자 경유 흐름 자체는 test_chest_auto의 몫.
-func _dropped_ids() -> Array:
+## 적 하나를 처치하고 **실제로 나온 드롭의 item_id 전부**를 걷어 온다 — 낱개 픽업(공개 `item_id`)
+## + 상자(공개 루팅 흐름: interacted → loot_card/advance → EventBus `item_collected` 관찰).
+## 🔴 상자 `_contents`를 직접 읽지 않는다(비공개 = 계약 아님, takbon-verify §3) — 루팅이 곧 관찰이다.
+## 루팅이 가방에 넣은 항목은 되돌린다(bag resize — test_chest_auto 선례).
+func _kill_and_collect(id: StringName) -> Array:
+	_clear_drops()
+	_gs.ui_modal_open = false
+	var enemy = _make_enemy(id)
+	await physics_frame
+	enemy.take_hit(9999.0, 0, 0, 0.0)
+	await physics_frame
+
 	var ids := []
 	for p in get_nodes_in_group("drop_pickups"):
 		ids.append(p.item_id)
+
+	var chests := get_nodes_in_group("chests")
+	if not chests.is_empty():
+		var collected := []
+		var cb := func(iid, _n) -> void: collected.append(iid)
+		_bus.item_collected.connect(cb)
+		var bag_before: int = _gs.bag.size()
+		# [E]를 흉내 — 상자가 loot_panel을 current_scene에 "Loot"로 띄운다 (test_chest_auto [5]).
+		chests[0].get_node("InteractZone").interacted.emit()
+		await process_frame
+		var loot_layer = _container.get_node_or_null("Loot")
+		if loot_layer != null:
+			var panel = loot_layer.get_node("Panel")
+			var guard := 0   # 패널이 안 닫히는 회귀가 나도 테스트가 영원히 안 돌게
+			# 🔴 다 루팅하면 패널이 자동 닫힘 + free된다 — freed에 is_open()을 부르면 SCRIPT ERROR로
+			# 함수째 중단돼 수확이 증발한다(침묵 통과의 사촌). is_instance_valid가 먼저다.
+			while is_instance_valid(panel) and panel.is_open() and guard < 16:
+				panel.loot_card(0)
+				panel.advance(999.0)   # 즉시 완료 — remove_at으로 0번이 다음 카드가 된다
+				await process_frame
+				guard += 1
+			if guard >= 16:
+				# 드롭이 16종을 넘으면 다 못 걷어 거짓 FAIL이 된다 — 침묵 대신 경고를 찍는다.
+				print("  ⚠ _kill_and_collect: 루팅 guard 16 소진 — 수확이 잘렸을 수 있다")
+			await process_frame   # 상자·패널 queue_free 반영
+		_bus.item_collected.disconnect(cb)
+		if _gs.bag.size() > bag_before:
+			_gs.bag.resize(bag_before)   # 루팅이 넣은 항목 되돌림
+		ids.append_array(collected)
+
+	_clear_drops()
 	return ids
 
 
@@ -212,6 +246,10 @@ func _clear_drops() -> void:
 	for n in get_nodes_in_group("chests"):
 		if is_instance_valid(n):
 			n.free()
+	var stray = _container.get_node_or_null("Loot")
+	if stray != null and is_instance_valid(stray):
+		stray.free()
+	_gs.ui_modal_open = false
 
 
 func _check(cond: bool, label: String) -> void:

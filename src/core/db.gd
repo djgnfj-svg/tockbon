@@ -16,6 +16,8 @@ var glyphs: Dictionary = {}
 var recipes: Dictionary = {}
 ## {StringName: QuestDef} — 진행 목표 퀘스트 (세션36 스파인)
 var quests: Dictionary = {}
+## {StringName: ChapterDef} — 챕터(보스방 스테이지) (세58-B 세피리아식 루프)
+var chapters: Dictionary = {}
 
 func _ready() -> void:
 	reload()
@@ -28,6 +30,7 @@ func reload() -> void:
 	glyphs.clear()
 	recipes.clear()
 	quests.clear()
+	chapters.clear()
 	for res in _load_dir("res://data/runes"):
 		var rune := res as RuneDef
 		if rune:
@@ -56,6 +59,10 @@ func reload() -> void:
 		var quest := res as QuestDef
 		if quest:
 			quests[quest.id] = quest
+	for res in _load_dir("res://data/chapters"):
+		var chapter := res as ChapterDef
+		if chapter:
+			chapters[chapter.id] = chapter
 
 func get_rune(type: Enums.RuneType) -> RuneDef:
 	return runes.get(type) as RuneDef
@@ -141,6 +148,28 @@ func all_quests() -> Array[QuestDef]:
 	for k: StringName in keys:
 		out.append(quests[k])
 	return out
+
+
+# ── 챕터 (세58-B 보스방 루프) ──
+
+func get_chapter(id: StringName) -> ChapterDef:
+	return chapters.get(id) as ChapterDef
+
+## 챕터 목록 — order 오름차순 (선택 패널 카드 순서 = 잠금 순서).
+func chapters_sorted() -> Array[ChapterDef]:
+	var out: Array[ChapterDef] = []
+	for c in chapters.values():
+		out.append(c)
+	out.sort_custom(func(a: ChapterDef, b: ChapterDef) -> bool: return a.order < b.order)
+	return out
+
+## 🔴 챕터 클리어 codex 키 — **파생 규칙 한 곳**(&"chapter_clear_" + id). ChapterDef 필드로 두면
+## .tres마다 베껴 적다 한 글자 틀리는 세50 계열 함정이라 여기서만 만든다. boss_room(클리어 emit)과
+## chapter_panel(잠금 판정)이 같은 함수를 부른다 — 복사 금지.
+## ⚠ 룬 해금으로 클리어를 판정하면 안 된다 — `_seed_starting_unlocks`가 룬 6종을 덮고 있어
+## 부팅 즉시 전 챕터가 클리어로 보인다. 이 키는 시드 무접촉이라 안전하다.
+func chapter_clear_id(chapter: ChapterDef) -> StringName:
+	return StringName("chapter_clear_" + String(chapter.id))
 
 
 func get_jin(id: StringName) -> JinDef:

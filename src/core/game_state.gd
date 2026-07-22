@@ -13,6 +13,10 @@ var hp: float
 ## ⚠ 세58 허기 은퇴(docs/PROGRESSION.md D1)로 읽는 곳이 0이다 — "원정 중" 상태 자체는 의미가
 ## 살아 있어 플래그만 남긴다 (원정 전용 기능이 다시 붙으면 이걸 읽는다).
 var in_expedition: bool = false
+## 🔴 어느 챕터로 들어가나 (세58-B) — `change_scene_to_file`이 인자를 못 실어 오토로드가 나른다
+## (in_expedition과 같은 결). 챕터 패널이 쓰고 boss_room `_ready`가 읽는다. **저장 안 함**(일시 상태).
+## boss_room은 이게 비었거나 미등록이면 조용히 빈 방을 띄우지 않고 베이스로 되돌린다.
+var pending_chapter: StringName = &""
 ## {item_id: count} — 창고 (영구, 사망에도 유지)
 var inventory: Dictionary = {}
 ## 출격 중 획득 [{ "id": StringName, "count": int }] — 사망 시 손실
