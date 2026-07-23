@@ -1,4 +1,4 @@
-[gd_scene load_steps=8 format=3 uid="uid://c0field03bossroom"]
+[gd_scene load_steps=9 format=3 uid="uid://c0field03bossroom"]
 
 [ext_resource type="Script" path="res://src/field/boss_room.gd" id="1_room"]
 [ext_resource type="PackedScene" uid="uid://s4r8t5nlu1i8" path="res://src/actors/player.tscn" id="2_player"]
@@ -7,6 +7,7 @@
 [ext_resource type="PackedScene" uid="uid://lueejjqono0r" path="res://src/hud/tab_panel.tscn" id="5_inv"]
 [ext_resource type="PackedScene" uid="uid://xyskn5r7jetn" path="res://src/props/tree.tscn" id="6_tree"]
 [ext_resource type="TileSet" path="res://assets/sprites/field/tileset_forest.tres" id="7_tileset"]
+[ext_resource type="Texture2D" uid="uid://tpkchxq4kttn" path="res://assets/light_soft.tres" id="8_light"]
 
 [node name="BossRoom" type="Node2D"]
 script = ExtResource("1_room")
@@ -21,6 +22,49 @@ color = Color(0.13, 0.19, 0.14, 1)
 
 [node name="TileGround" type="TileMapLayer" parent="."]
 tile_set = ExtResource("7_tileset")
+
+; 밝게 유지 + 조명만 (세73): 앰비언트를 살짝만 눌러(여전히 밝음) 빛 웅덩이가 대비로 읽히게 한다.
+; 플레이어 아우라(player.tscn)가 중앙을, 아래 횃불 4개가 가장자리를, 강조광이 보스 쪽을 밝힌다.
+; ⚠ 씬 .tscn 주석은 에디터 저장 시 날아간다 — 이 설명의 정본은 boss_room.gd 상단 주석 블록.
+[node name="Dusk" type="CanvasModulate" parent="."]
+color = Color(0.85, 0.84, 0.93, 1)
+
+[node name="Lights" type="Node2D" parent="."]
+
+[node name="Torch1" type="PointLight2D" parent="Lights"]
+position = Vector2(-430, -430)
+color = Color(1, 0.68, 0.38, 1)
+energy = 0.9
+texture = ExtResource("8_light")
+texture_scale = 1.7
+
+[node name="Torch2" type="PointLight2D" parent="Lights"]
+position = Vector2(430, -430)
+color = Color(1, 0.68, 0.38, 1)
+energy = 0.9
+texture = ExtResource("8_light")
+texture_scale = 1.7
+
+[node name="Torch3" type="PointLight2D" parent="Lights"]
+position = Vector2(-450, 120)
+color = Color(1, 0.68, 0.38, 1)
+energy = 0.9
+texture = ExtResource("8_light")
+texture_scale = 1.7
+
+[node name="Torch4" type="PointLight2D" parent="Lights"]
+position = Vector2(450, 120)
+color = Color(1, 0.68, 0.38, 1)
+energy = 0.9
+texture = ExtResource("8_light")
+texture_scale = 1.7
+
+[node name="BossGlow" type="PointLight2D" parent="Lights"]
+position = Vector2(0, -520)
+color = Color(0.6, 0.72, 1, 1)
+energy = 0.7
+texture = ExtResource("8_light")
+texture_scale = 2.3
 
 [node name="Trees" type="Node2D" parent="."]
 
