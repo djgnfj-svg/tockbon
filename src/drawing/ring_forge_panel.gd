@@ -29,8 +29,6 @@ const RingBook := preload("res://src/drawing/ring_book.gd")
 ## 점수 → 안정성·위력 규칙. 🔴 **발사와 같은 함수를 쓴다** — 리포트가 보여 준 위력과 실제로
 ## 때리는 위력이 갈라지면 안 된다 (src/core/ring_power.gd의 주석 참조).
 const RingPower := preload("res://src/core/ring_power.gd")
-## 종이 기본 확대 상한(paper_zoom_max_default) 등 — 수치는 balance가 쥔다.
-const BAL: BalanceData = preload("res://data/balance.tres")
 
 signal closed
 ## 도안이 방금 맺혔다 — 여는 쪽(작업대·거점)이 발사·연출에 쓴다. assembly = board.get_assembly()
@@ -64,6 +62,12 @@ const SAY_COLOR := Color(0.30, 0.24, 0.18)
 const WARN_COLOR := Color(0.62, 0.22, 0.14)
 const REPORT_NAME := Color(0.24, 0.19, 0.14)
 const REPORT_DESC := Color(0.44, 0.37, 0.30)
+## 세71b 결과 '탁본 종이' — 내가 그은 획을 종이 톤 위에 눌러 찍은 프리뷰(연출 개편, 결과 데이터 무변경).
+## 종이 톤은 살짝 어둡게(먹이 배어든 한지) + 네 귀퉁이 눌린 자국으로 "탁본"임을 읽힌다.
+const RUBBING_BG := Color(0.85, 0.80, 0.70, 1.0)
+const RUBBING_EDGE := Color(0.42, 0.35, 0.27, 0.75)
+const RUBBING_CORNER := Color(0.34, 0.28, 0.20, 0.55)
+const RUBBING_PAD := 10.0   # 프리뷰 상자 안쪽 여백(획이 테두리에 안 닿게)
 
 const OPEN_SEC := 0.20
 const OPEN_FROM_X := 0.04
@@ -94,28 +98,20 @@ const SCORE_WEAK := Color(0.55, 0.48, 0.40)
 ## 🔴 세71 조립→탁본 — **조립이 먼저, 탁본은 통째로.** 오른쪽에서 진·룬을 고르고 진의 층에
 ## 문양-고리를 끼우면 왼쪽에 전체 밑그림이 뜬다. 그 전체를 손으로 **한 번에** 따라 긋는다.
 const Copy_START := "오른쪽에서 진·룬을 고르고 진의 층에 문양-고리를 끼우세요 — 왼쪽 밑그림 전체를 손으로 한 번에 따라 그으면 [분석 ▶]"
-## 층(band) 수 — 동심원 2겹 (RingBoard.BAND_RADII과 짝, 슬라이스 패널 BANDS와 동일). 진마다 차등은
-## JinDef.band_count 신설이 필요해 지금 팔지 않는다(설계 §진의 층 수 — 상수 2).
-const BANDS := 2
+## 🔴 세71c 층(band) 수는 이제 **진이 정한다**(`JinDef.band_count`) — 옛 `const BANDS := 2`를 걷어냈다.
+## `_bands` 크기가 선택 진 band_count에서 파생되고(`_resize_bands`), 진 미선택이면 소켓 0(`_reset_selection`).
+## 일반진(jin_single) = 1층. RingBoard.BAND_RADII가 반경 목록을 쥐고 진은 앞 band_count개만 쓴다.
 
-## 잉크 스와치 — 왼쪽 페이지 타이틀 줄 오른쪽 빈 곳(보드는 y30부터라 안 겹친다). 640×360 논리 좌표.
+## 잉크 스와치 — 세71d [그리기 시작] 뒤 오른쪽 「그리기 도구」 패널(DrawTools) 안에 뜬다.
+## 좌표는 DrawTools 로컬(292×280). 종이 축은 은퇴(세71d) — 잉크만 남았다.
+## ⚠ 특별잉크 6종 이상이면 스와치 줄이 패널 폭(280)을 넘는다 — 잉크 축이 늘어나는 세션의 과제.
 const INK_SWATCH_SIZE := Vector2(24.0, 18.0)
-const INK_SWATCH_X := 184.0
-const INK_SWATCH_Y := 12.0
+const INK_LABEL_POS := Vector2(12.0, 40.0)
+const INK_SWATCH_X := 44.0
+const INK_SWATCH_Y := 37.0
 const INK_SWATCH_GAP := 5.0
 const INK_EDGE := Color(0.30, 0.24, 0.16, 0.6)
 const INK_EDGE_ON := Color(0.95, 0.82, 0.35)
-
-## 종이 선택 — 잉크 라벨 왼쪽 빈 곳. 작은 텍스트 버튼(등급 숫자, 툴팁=이름).
-## 🔴 세62: x14는 **책 왼쪽 끝(BOOK_RECT.x=16)보다 왼쪽**이라 라벨이 책 밖 허공에 떠 있었다 —
-## 줄 전체를 오른쪽으로 8px 옮겨 책 안(문방구 선반 띠)에 앉힌다. 잉크 라벨은 INK_SWATCH_X-34
-## 상대라 자동으로 따라온다. ⚠ 특별잉크 4종 이상이면 스와치 줄이 왼 페이지 끝(x320)을 넘는다 —
-## 잉크 축이 늘어나는 세션의 과제(설계 §잔손질 2에 명기).
-const PAPER_LABEL_X := 22.0
-const PAPER_BTN_X := 48.0
-const PAPER_BTN_Y := 11.0
-const PAPER_BTN_SIZE := Vector2(21.0, 19.0)
-const PAPER_BTN_GAP := 2.0
 
 ## 🔴 `class_name` 없이도 정적 타입을 받는다 — `const X := preload(...)`를 타입으로 쓸 수 있다.
 ## 예전엔 `Control`로 받아 `.call(&"...")`로 더듬었고, 오타가 파싱이 아니라 **런타임에** 터졌다.
@@ -128,11 +124,22 @@ const PAPER_BTN_GAP := 2.0
 @onready var _book: RingBook = $Stage/Spread/RingBook
 @onready var _next_btn: Button = $Stage/Spread/NextBtn
 @onready var _commit_btn: Button = $Stage/Spread/CommitBtn
-@onready var _score_lbl: Label = $Stage/Spread/ScoreLabel
+## 세71d [그리기 시작] 뒤 오른쪽 「그리기 도구」 패널 — 잉크 스와치(코드가 채움) + 큰 실시간 점수.
+## DRAW 단계에서만 보인다(_set_phase). ASSEMBLE=RingBook(조립)·RESULT=Report(리포트)가 그 자리를 쓴다.
+@onready var _draw_tools: Control = $Stage/Spread/DrawTools
+@onready var _score_num: Label = $Stage/Spread/DrawTools/ScoreNum   # 큰 종합 점수 (세71d 실시간)
+@onready var _score_sub: Label = $Stage/Spread/DrawTools/ScoreSub   # 완성도·정밀도 보조 줄
 @onready var _title: Label = $Stage/Spread/TitleLabel
 @onready var _say: Label = $Stage/Spread/SayLabel
 @onready var _hint: Label = $Stage/Spread/HintLabel
 @onready var _report: Control = $Stage/Spread/Report   # 분석 리포트 오버레이 (완성 시 표시)
+@onready var _redraw_btn: Button = $Stage/Spread/RedrawBtn   # 세71b [다시 조립] — 게이트 풀고 ASSEMBLE 복귀
+
+## 🔴 세71b 점진 조립 게이트 — 조립(ASSEMBLE) → 그리기(DRAW) → 탁본 종이(RESULT) 3단계.
+## 단일 소스 = 이 변수 하나. `_set_phase()`가 보드/책 mouse_filter·버튼·탭 잠금을 여기서 파생한다
+## (동기화 지점 최소화 — 리뷰 각주 ⑥). ASSEMBLE=조립만(손 긋기 잠금)·DRAW=손 긋기·RESULT=결과.
+enum Phase { ASSEMBLE, DRAW, RESULT }
+var _phase := Phase.ASSEMBLE
 
 var _committed := false
 ## 🔴 세71 조립→탁본 — **패널이 조립 상태를 쥔다** (슬라이스 패널 규율). RingAssembly는 Db를 몰라
@@ -140,8 +147,14 @@ var _committed := false
 var _bands: Array[StringName] = []            # 밴드 idx → 문양-고리 id (&"" = 빈 밴드)
 var _sel_band := 0                            # 지금 고른(강조) 밴드
 var _sel_jin: StringName = &""                # 고른 진 id (&"" = 아직 — 밑그림 안 뜸)
-var _sel_rune := RingBoard.RUNE_FIRE          # 고른 룬 타입 (기본 불)
-var _size_mult := 1.0                         # 종이 규모 스칼라 (Db.paper_zoom_max) — build_assembly.size
+## 🔴 세71b 점진 조립 — 룬은 **골라야** 밑그림에 뜬다(옛 기본 불 주입 제거). 안 골랐으면 compose에
+## 센티넬 -1을 넘겨 진 윤곽만 합성한다. `_sel_rune`는 발사 계약용 캐시라 값은 유지(build_assembly).
+var _sel_rune := RingBoard.RUNE_FIRE          # 고른 룬 타입 (발사 계약 캐시 — 표시는 _rune_picked가 판다)
+var _rune_picked := false                     # 룬을 실제로 골랐나 (false=밑그림에 룬 없음·[그리기 시작] 잠금)
+## 🔴 세71d 종이 축 은퇴 — 진 규모는 **1.0 고정**. `RingDesign.size`·`build_assembly["size"]` 스키마·
+## 계약은 남긴다(ring_spell_system이 소비·test_ring_design/spell/save가 잰다) — 값만 1.0으로 굳힌다.
+## 기본 종이(등급1)도 옛날부터 size 1.0이었다("기준 100 = 기본 종이") → 발사 baseline 무변경.
+var _size_mult := 1.0                         # 진 규모 스칼라 — build_assembly.size (세71d 이후 1.0 고정)
 ## 🔴 맺은 발사 계약 캐시 (세71) — 통째 흐름에선 `_board.get_assembly()`가 COMBINED라 빈 값이라,
 ## `build_assembly()`로 직접 조립해 여기 담는다. 공개 `get_assembly()`가 이걸 돌려준다(F6·base 발사).
 var _committed_asm: Dictionary = {}
@@ -156,12 +169,6 @@ var _ink_ids: Array = []                      # 지금 고를 수 있는 잉크 
 var _active_ink: StringName = &""
 var _ink_swatches: Array = []                 # 스와치 Button들 (색으로 고른다)
 var _ink_nodes: Array = []                    # 잉크 UI 노드 전부(라벨+스와치) — 재빌드 때 free
-## 🔴 종이 선택 (세션29, 종이=규모). 종이 등급이 진 확대 상한을 올린다 → 큰 진=데미지↑.
-## 기본 종이는 늘 있고, 상급 종이는 **보유분만** 뜬다(제작해야 생긴다). 소모는 없다(持有 해금).
-var _paper_ids: Array = []
-var _active_paper: StringName = &""
-var _paper_btns: Array = []
-var _paper_nodes: Array = []
 ## 🔴 획을 긋는 도중 특별잉크가 소모돼 재빌드가 걸리면, 획이 끝날 때까지 미룬다(활성 잉크가 튀지 않게).
 var _palette_dirty := false
 ## 분석 리포트 배경 한지 나인패치 (세62) — _ready에서 exists 가드로 한 번 만들어 캐시.
@@ -185,7 +192,13 @@ func _ready() -> void:
 	_book.band_selected.connect(_on_band_selected)   # 세71: 강조 밴드 선택
 	_book.ring_picked.connect(_on_ring_picked)       # 세71: 선택 밴드에 문양-고리 끼움
 
-	_next_btn.visible = false   # 🔴 [다음] 은퇴 — 단계 이동이 사라졌다(통째로 긋는다)
+	# 🔴 세71b: 은퇴했던 NextBtn을 **[그리기 시작] 게이트**로 되살린다(리뷰 각주 ⑤ — 죽은 노드 안 남긴다).
+	# text·핸들러를 갈아 끼운다. ASSEMBLE에서만 보이고, 진+룬을 골라야 활성.
+	_next_btn.text = "그리기 시작 ✎"
+	_next_btn.pressed.connect(_on_start_draw)
+	_redraw_btn.text = "◀ 다시 조립"
+	_redraw_btn.visible = false
+	_redraw_btn.pressed.connect(_on_redraw_assemble)
 	_commit_btn.pressed.connect(_finish)
 	# 🔴 [쏘기] → **[마력 주입]** (세션 23). 조용히 성공하던 자리에 성공/실패가 갈리는 의식이 들어갔다.
 	var inject_btn := $Stage/Spread/Report/ShootBtn as Button
@@ -283,15 +296,15 @@ func open() -> void:
 	_board.clear_all()                          # 🔴 빈 판에서 시작 — clear_all은 _trace를 JIN으로 돌린다
 	# 🔴 열 때마다 팔레트를 다시 짠다 (세션29) — 정제로 특별잉크·종이가 늘었을 수 있다.
 	_rebuild_palettes()
+	# 🔴 세71d 잉크 초기화는 open()에 유지(스와치 UI 가시성만 DRAW 게이팅) — 기본잉크 색을
+	# 지금 보드에 걸어 둬야 DRAW 첫 획이 먹빛으로 나간다(통짜로 DRAW에 미루면 초기화가 깨진다).
 	if not _ink_ids.is_empty():   # 기본 잉크(먹)로 시작 — 색을 판에 걸어 둔다
 		_select_ink(_ink_ids[0])
-	if not _paper_ids.is_empty():   # 기본 종이로 시작 — 규모 스칼라를 걸어 둔다
-		_select_paper(_paper_ids[0])
 	_sync_book_bands()                          # 🔴 층 소켓·보유 목록을 책에 주입 (세71)
 	recompose()                                 # 🔴 clear_all 뒤 COMBINED 모드로 재진입 (빈 진이면 빈 가이드)
+	_set_phase(Phase.ASSEMBLE)                  # 🔴 세71b: 조립 단계부터 — 손 긋기 잠금·룬/층 탭 잠금
 	_set_say(Copy_START, false)
 	_update_score()
-	_refresh_buttons()
 	_spread_open()
 
 
@@ -324,13 +337,14 @@ func close() -> void:
 
 
 func _spread_open() -> void:
-	_board.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_board.mouse_filter = Control.MOUSE_FILTER_IGNORE   # 펼치는 동안은 잠금
 	_spread.scale = Vector2(OPEN_FROM_X, 1.0)
 	var tw := create_tween()
 	tw.tween_property(_spread, ^"scale", Vector2.ONE, OPEN_SEC) \
 		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
-	tw.tween_callback(func() -> void:
-		_board.mouse_filter = Control.MOUSE_FILTER_STOP)
+	# 🔴 세71b: 펼침이 끝나면 **현재 단계**가 손 긋기 잠금을 판다 — ASSEMBLE이면 IGNORE 유지, DRAW면 STOP.
+	# (옛 코드는 무조건 STOP이라 새 게이트 전에 손 긋기가 열려 버렸다.)
+	tw.tween_callback(_apply_phase_filters)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -343,10 +357,13 @@ func _unhandled_input(event: InputEvent) -> void:
 	var k := event as InputEventKey
 	if k == null or not k.pressed or k.echo:
 		return
-	# 🔴 세71: 조립본을 통째로 그은 뒤 Enter = [분석 ▶](옛 [다음]은 은퇴). 맺음은 리포트의 [마력 주입].
+	# 🔴 세71b: Enter는 단계별로 다르다 — ASSEMBLE=[그리기 시작], DRAW=[분석 ▶]. RESULT는 리포트 버튼으로.
 	match k.keycode:
 		KEY_ENTER, KEY_KP_ENTER:
-			_finish()
+			if _phase == Phase.ASSEMBLE:
+				_on_start_draw()
+			elif _phase == Phase.DRAW:
+				_finish()
 			get_viewport().set_input_as_handled()
 
 
@@ -390,13 +407,14 @@ func _unlocked_jins() -> Array:
 ## 층 전개를 못 하므로 조립 상태는 패널의 소유다.
 
 ## 진·룬·밴드 선택을 비운다 (열 때·펑·[다시] 뒤). 진 미선택(&"") = 밑그림 없음.
+## 🔴 세71c: `_reset_selection`은 `_sel_jin=&""`에서 불려 band_count를 **모른다** → 소켓 0(빈 배열).
+## 진을 고르는 `_on_jin_selected`가 그때 선택 진 band_count로 `_resize_bands`한다(制約④ 시점 규율).
 func _reset_selection() -> void:
-	_bands = []
-	for _i in BANDS:
-		_bands.append(&"")
+	_bands = []                          # 진 미선택 = 소켓 없음 (band_count는 진 선택 때 파생)
 	_sel_band = 0
 	_sel_jin = &""
 	_sel_rune = RingBoard.RUNE_FIRE
+	_rune_picked = false
 
 
 ## 각 밴드의 GlyphRingDef(or null) — compose_guide·flatten_bands가 받는 형식. Db 조회는 패널이 한다.
@@ -441,8 +459,16 @@ func recompose() -> void:
 		ro = _board._outer_radius()
 	# 🔴 합성 가이드 기하는 **고정 ro** — 종이 규모는 스칼라(size)로만 싣는다(설계 §종이 안전안).
 	# 가이드를 키우면 판을 넘칠 위험(세50 좌표 실측 자리)이라 이번 슬라이스는 안 키운다.
-	var guide := RingBoard.compose_guide(shape, _sel_rune, _band_defs(), ctr, ro)
-	_board.enter_combined_trace(guide)
+	# 🔴 세71b 점진 조립: 룬을 아직 안 골랐으면 **센티넬 -1**을 넘겨 진 윤곽만 뜬다(compose_guide 시그니처 불변).
+	var rune_arg := _sel_rune if _rune_picked else -1
+	# 🔴 세71c: 조각별 서브패스로 합성 → flat은 그 flatten(한 소스, 制約 flat=flatten(subpaths)). 보드가
+	# 서브패스를 받아 조각마다 별도 폴리라인으로 그린다(이음선 제거) + 밴드 수만큼 빈 층 동심원을 그린다.
+	var band_defs := _band_defs()
+	var paths := RingBoard.compose_guide_paths(shape, rune_arg, band_defs, ctr, ro)
+	var flat := PackedVector2Array()
+	for sub in paths:
+		flat.append_array(sub)
+	_board.enter_combined_trace(flat, paths, band_defs.size())
 	_update_score()
 	_refresh_buttons()
 
@@ -459,23 +485,48 @@ func _on_jin_selected(jin_id: StringName) -> void:
 	_sel_jin = jin_id
 	var jd := Db.get_jin(jin_id)
 	var nm := String(jd.display_name) if jd != null else "진"
+	# 🔴 세71c: **진이 층 수를 정한다**(JinDef.band_count) — 선택 진 band_count로 소켓을 리사이즈.
+	# 겹치는 옛 끼움은 보존하고 `_sel_band`를 새 범위로 clamp(制約⑤ 시점). 그 뒤 책에 재주입.
+	_resize_bands(_band_count_of(jd))
 	recompose()
-	_set_say("%s 골랐다 — 룬·층을 더해 왼쪽 밑그림 전체를 손으로 한 번에 따라 그으세요" % nm, false)
+	_sync_book_bands()   # 🔴 층 소켓 수(=band_count)를 책에 재주입
+	_sync_book_tabs()    # 🔴 세71b: 진 골랐다 → 룬 탭 열림
+	_set_say("%s 골랐다 (%d층) — 이제 룬 탭에서 속성을 고르세요" % [nm, _bands.size()], false)
+
+
+## 진의 층 수 (JinDef.band_count, 없으면 1). RingBoard.BAND_RADII 개수로 클램프(반경이 없는 층은 못 쓴다).
+func _band_count_of(jd: JinDef) -> int:
+	var n := int(jd.band_count) if jd != null else 1
+	return clampi(n, 0, RingBoard.BAND_RADII.size())
+
+
+## `_bands`를 n칸으로 맞춘다 — 겹치는 옛 끼움은 보존하고 `_sel_band`를 범위로 clamp(制約⑤).
+func _resize_bands(n: int) -> void:
+	var old := _bands
+	_bands = []
+	for i in n:
+		_bands.append(old[i] if i < old.size() else &"")
+	_sel_band = clampi(_sel_band, 0, maxi(n - 1, 0))
 
 
 ## 룬 탭 셀 클릭 → 룬을 고르고 재합성. 룬 타입이 밑그림·발사·저장까지 흐른다(하드코딩 금지).
 func _on_rune_selected(rune_type: int) -> void:
 	Audio.play(&"ui_click")
 	_sel_rune = rune_type
+	_rune_picked = true   # 🔴 세71b: 룬이 밑그림 중심에 뜨고 [그리기 시작]·층 탭이 열린다
 	var rd: RuneDef = Db.get_rune(rune_type)
 	var nm := String(rd.display_name) if rd != null else "룬"
 	recompose()
-	_set_say("%s 룬 골랐다 — 밑그림 중심에 반영됐다. 진·층을 마저 고르고 통째로 그으세요" % nm, false)
+	_sync_book_tabs()
+	_set_say("%s 룬 골랐다 — 중심에 반영됐다. 층을 더하거나 [그리기 시작]" % nm, false)
 
 
 ## 층 소켓 클릭 → 강조 밴드를 바꾼다 (책이 자기 _sel_band를 갱신하지만 단일 소스는 패널).
 func _on_band_selected(i: int) -> void:
-	_sel_band = clampi(i, 0, BANDS - 1)
+	# 🔴 세71c: 상수 BANDS → `_bands.size()`. size 0 가드(진 미선택) — clampi(i,0,-1)이면 max<min이 된다.
+	if _bands.is_empty():
+		return
+	_sel_band = clampi(i, 0, _bands.size() - 1)
 	_sync_book_bands()
 
 
@@ -492,6 +543,79 @@ func _on_ring_picked(gr_id: StringName) -> void:
 	_set_say("%s 을(를) 밴드 %d에 끼웠다 — 밑그림에 층이 더해졌다" % [nm, _sel_band + 1], false)
 
 
+# ─────────────────── 🔴 세71b 단계 게이트 (ASSEMBLE ↔ DRAW ↔ RESULT) ───────────────────
+
+## 단계에 맞춰 보드/책 잠금·버튼·탭을 통째로 세운다 — 파생의 단일 소스.
+##   ASSEMBLE = 손 긋기 잠금(board IGNORE)·조립 열림(book STOP)·룬/층 탭 순서 잠금.
+##   DRAW     = 손 긋기 열림(board STOP)·조립 잠금(book IGNORE)·"밑그림 확정".
+##   RESULT   = 리포트 오버레이(탁본 종이). 둘 다 잠금.
+func _set_phase(p: Phase) -> void:
+	_phase = p
+	_report.visible = p == Phase.RESULT
+	# 🔴 세71d: 잉크·큰 점수 「그리기 도구」는 **DRAW에서만** 뜬다 = 사용자 요청("그리기 시작하면
+	# 옆에 잉크"). ASSEMBLE=RingBook(조립)·RESULT=Report(리포트)가 같은 오른쪽 페이지를 쓴다.
+	_draw_tools.visible = p == Phase.DRAW
+	# 🔴 세71e: 오른쪽 페이지는 **단계마다 한 물건만** 쓴다 — DRAW/RESULT엔 책을 **숨긴다**(mouse_filter만
+	# 끄면 회색 탭·칸이 반투명 도구 패널 뒤로 비쳐 지저분했다, 사용자 지적). ASSEMBLE에서만 책을 보인다.
+	_book.visible = p == Phase.ASSEMBLE
+	_apply_phase_filters()
+	_sync_book_tabs()
+	_refresh_buttons()
+	_update_score()
+
+
+## 🔴 손 긋기 잠금은 **board.mouse_filter 토글**로만 한다(리뷰 각주 ② — 새 보드 플래그 없음).
+## 조립 잠금은 **book.mouse_filter 토글**로 한다(대칭). 공개 API `trace_stroke`는 안 막힌다(헤드리스 훅).
+func _apply_phase_filters() -> void:
+	var drawing := _phase == Phase.DRAW
+	_board.mouse_filter = Control.MOUSE_FILTER_STOP if drawing else Control.MOUSE_FILTER_IGNORE
+	# ASSEMBLE에서만 조립을 만진다. DRAW/RESULT엔 책을 얼려 "본 것=그은 것"이 안 갈린다.
+	_book.mouse_filter = Control.MOUSE_FILTER_STOP if _phase == Phase.ASSEMBLE else Control.MOUSE_FILTER_IGNORE
+
+
+## 열린 탭 집합 — 선택에서 **파생**한다(잠금 단일 소스=선택 상태, 리뷰 각주 ④). 진 선택⇒룬 탭,
+## 룬 선택⇒층 탭. ASSEMBLE이 아니면 전부 잠금(조립 얼림). open·clear·[다시 조립]·펑이 선택을
+## 리셋하면 잠금도 자동으로 따라 닫힌다.
+func _open_tabs() -> Array:
+	if _phase != Phase.ASSEMBLE:
+		return [false, false, false]
+	return [true, String(_sel_jin) != "", _rune_picked]
+
+
+func _sync_book_tabs() -> void:
+	_book.set_open_tabs(_open_tabs())
+
+
+## 진+룬을 모두 골랐나 — [그리기 시작] 게이트 활성 조건(층은 선택 사항).
+func _can_start_draw() -> bool:
+	return String(_sel_jin) != "" and _rune_picked
+
+
+## 🔴 [그리기 시작] — 조립을 잠그고 손 긋기로 넘어간다. **순서 못박음(리뷰 각주 ③)**:
+##   ① 룬 확정(이미 _rune_picked) → ② recompose(룬 포함 full 가이드=진+룬+밴드)
+##   ③ enter_combined_trace(recompose 안에서) — 채점 가이드 = 최종 조립본과 일치("본 것=그은 것=쏜 것")
+##   ④ 조립 잠금 + board STOP (= _set_phase(DRAW))
+func _on_start_draw() -> void:
+	if not _can_start_draw():
+		_set_say("진과 룬을 먼저 고르세요", true)
+		return
+	Audio.play(&"ui_click")
+	recompose()               # ②③ 룬 포함 full 가이드로 재합성 + enter_combined_trace
+	_board.clear_stroke()     # 새 밑그림 위에 옛 획이 남지 않게
+	_set_phase(Phase.DRAW)    # ④ 조립 잠금 + 손 긋기 열림
+	_set_say("이제 이 밑그림을 손으로 따라 그으세요 — 다 그으면 [분석 ▶]", false)
+
+
+## 🔴 [다시 조립] — 게이트를 풀고 ASSEMBLE로 되돌린다(획 리셋·조립 다시 열림). 안전장치.
+func _on_redraw_assemble() -> void:
+	Audio.play(&"ui_click")
+	_committed = false
+	_committed_asm = {}
+	_board.clear_stroke()     # 그은 획을 비운다(선택·가이드는 유지 — 조립을 이어서 고친다)
+	_set_phase(Phase.ASSEMBLE)
+	_set_say("다시 조립하세요 — 진·룬·층을 바꾼 뒤 [그리기 시작]", false)
+
+
 # ─────────────────────────── 잉크·종이 선택 (세션28~29) ───────────────────────────
 
 ## 🔴 잉크·종이 팔레트를 다시 그린다 — 창고가 바뀌면(특별잉크 소모·정제) 보유분이 달라진다.
@@ -504,7 +628,6 @@ func _rebuild_palettes() -> void:
 		_palette_dirty = true
 		return
 	_build_ink_palette()
-	_build_paper_palette()
 
 
 ## 획을 뗐다 — 그리는 도중 미뤄 둔 잉크 팔레트 재빌드가 있으면 지금 흘린다.
@@ -526,13 +649,15 @@ func _build_ink_palette() -> void:
 	if not _ink_ids.has(_active_ink) and not _ink_ids.is_empty():
 		_select_ink(_ink_ids[0])
 
+	# 🔴 세71d: 잉크 노드는 「그리기 도구」 패널(DrawTools)의 자식이다 — DRAW에서만 뜨는 컨테이너라
+	# 가시성은 자동 게이팅된다(스와치 UI만 DRAW, 수집·기본선택은 open()에 유지 — architect (c)).
 	var lbl := Label.new()
 	lbl.text = "잉크"
-	lbl.position = Vector2(INK_SWATCH_X - 34.0, INK_SWATCH_Y + 1.0)
+	lbl.position = INK_LABEL_POS
 	lbl.add_theme_font_size_override(&"font_size", 9)
 	lbl.add_theme_color_override(&"font_color", HINT_COLOR)
 	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_spread.add_child(lbl)
+	_draw_tools.add_child(lbl)
 	_ink_nodes.append(lbl)
 	for i in _ink_ids.size():
 		var id: StringName = _ink_ids[i]
@@ -556,46 +681,10 @@ func _build_ink_palette() -> void:
 		b.add_theme_stylebox_override(&"hover", sb)
 		b.add_theme_stylebox_override(&"pressed", sb)
 		b.pressed.connect(_select_ink.bind(id))
-		_spread.add_child(b)
+		_draw_tools.add_child(b)
 		_ink_nodes.append(b)
 		_ink_swatches.append(b)
 	_highlight_ink()
-
-
-## 종이 버튼 — 등급 숫자 텍스트. 🔴 기본 종이는 늘, 상급은 **보유분만**. 고르면 진 확대 상한이 오른다.
-func _build_paper_palette() -> void:
-	for n: Node in _paper_nodes:
-		n.queue_free()
-	_paper_nodes.clear()
-	_paper_btns.clear()
-	_paper_ids = _collect_papers()
-	if not _paper_ids.has(_active_paper) and not _paper_ids.is_empty():
-		_select_paper(_paper_ids[0])
-
-	var lbl := Label.new()
-	lbl.text = "종이"
-	lbl.position = Vector2(PAPER_LABEL_X, PAPER_BTN_Y + 1.0)
-	lbl.add_theme_font_size_override(&"font_size", 9)
-	lbl.add_theme_color_override(&"font_color", HINT_COLOR)
-	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_spread.add_child(lbl)
-	_paper_nodes.append(lbl)
-	for i in _paper_ids.size():
-		var id: StringName = _paper_ids[i]
-		var it := Db.get_item(id)
-		var b := Button.new()
-		b.focus_mode = Control.FOCUS_NONE
-		b.position = Vector2(PAPER_BTN_X + float(i) * (PAPER_BTN_SIZE.x + PAPER_BTN_GAP), PAPER_BTN_Y)
-		b.size = PAPER_BTN_SIZE
-		b.custom_minimum_size = PAPER_BTN_SIZE
-		b.text = str(it.grade) if it != null else "?"
-		b.add_theme_font_size_override(&"font_size", 10)
-		b.tooltip_text = _ink_name(id)   # display_name 폴백 재사용
-		b.pressed.connect(_select_paper.bind(id))
-		_spread.add_child(b)
-		_paper_nodes.append(b)
-		_paper_btns.append(b)
-	_highlight_paper()
 
 
 ## 잉크를 골랐다 → 획 색을 그 잉크로 (즉각 피드백) + **등급 배수·특별효과를 도안에 싣는다**(세션29).
@@ -607,23 +696,6 @@ func _select_ink(id: StringName) -> void:
 	_highlight_ink()
 	if _report.visible:
 		_finish_asm = build_assembly()   # 리포트가 떠 있으면 새 잉크로 위력·효과 갱신 (세71: build_assembly)
-		_report.queue_redraw()
-
-
-## 종이를 골랐다 → 규모 스칼라를 그 종이 등급으로 (큰 진=데미지↑). 소모는 없다.
-## 🔴 세71: 통째 흐름엔 진 크기 휠이 없다 — 종이 등급을 **스칼라(size)로만** 싣는다(설계 §종이 안전안).
-## 합성 가이드 기하는 안 키운다(recompose는 고정 ro) — 오버플로우 회귀(세50 좌표) 방지.
-func _select_paper(id: StringName) -> void:
-	_active_paper = id
-	# 🔴 세71: 통째 흐름엔 크기 휠이 없다 — 종이 등급을 스칼라(size)로만 싣는다(설계 §종이 안전안).
-	# 🔴 **기본 종이(등급 1) = size 1.0** — 「기준 100 = 기본 종이」 계약(power_display baseline).
-	#   옛 흐름은 크기 휠이 [1.0, zoom_max]였고 미조작 기본이 1.0이었다(zoom_max는 상한이지 크기가 아님).
-	#   휠이 은퇴한 지금은 **등급이 곧 규모 배수**다 — 기본은 1.0, 상급만 zoom_max만큼 커진다(종이=규모 보존).
-	var it := Db.get_item(id)
-	_size_mult = 1.0 if (it != null and it.grade <= 1) else Db.paper_zoom_max(id, BAL.paper_zoom_max_default)
-	_highlight_paper()
-	if _report.visible:
-		_finish_asm = build_assembly()
 		_report.queue_redraw()
 
 
@@ -644,13 +716,6 @@ func _highlight_ink() -> void:
 		sb.border_color = INK_EDGE_ON if on else INK_EDGE
 
 
-func _highlight_paper() -> void:
-	for i in _paper_btns.size():
-		var b: Button = _paper_btns[i]
-		b.add_theme_color_override(&"font_color",
-			INK_EDGE_ON if _paper_ids[i] == _active_paper else HINT_COLOR)
-
-
 ## 지금 고를 수 있는 잉크 — 기본잉크는 늘, **특별잉크는 보유분(수량>0)만**. 등급순.
 func _collect_inks() -> Array:
 	var ids: Array = []
@@ -659,20 +724,6 @@ func _collect_inks() -> Array:
 			continue
 		if Db.ink_is_special(it.id) and GameState.get_count(it.id) <= 0:
 			continue   # 특별잉크는 있어야 보인다 (없으면 못 고른다)
-		ids.append(it.id)
-	ids.sort_custom(func(a: StringName, b: StringName) -> bool:
-		return Db.get_item(a).grade < Db.get_item(b).grade)
-	return ids
-
-
-## 지금 고를 수 있는 종이 — 기본 종이(paper_basic)는 늘, 상급은 **보유분만**. 등급순.
-func _collect_papers() -> Array:
-	var ids: Array = []
-	for it: ItemDef in Db.items.values():
-		if it == null or it.kind != Enums.ItemKind.PAPER:
-			continue
-		if it.id != &"paper_basic" and GameState.get_count(it.id) <= 0:
-			continue
 		ids.append(it.id)
 	ids.sort_custom(func(a: StringName, b: StringName) -> bool:
 		return Db.get_item(a).grade < Db.get_item(b).grade)
@@ -712,10 +763,9 @@ func _finish() -> void:
 	var total := _board.combined_total()
 	_analysis = {"total": total}   # 통째 점수 — per-piece 없음
 	_finish_asm = build_assembly()   # 잉크·크기·특별효과 스냅샷 (리포트가 읽는다)
-	_set_say("마법진 완성 — 분석을 보고 [마력 주입]으로 맺으세요", false)
-	_report.visible = true
+	_set_say("마법진 완성 — 탁본 종이를 보고 [마력 주입]으로 맺으세요", false)
+	_set_phase(Phase.RESULT)   # 🔴 세71b: 결과=탁본 종이 오버레이 (리포트 렌더는 _set_phase가 켠다)
 	_report.queue_redraw()
-	_refresh_buttons()
 
 
 ## 🔴 리포트에서 [마력 주입] — 마법진이 맺히거나 **펑** 한다 (사용자 확정 2026-07-17 세션 23).
@@ -792,23 +842,35 @@ func _on_report_redo() -> void:
 ## 세62: 숫자는 고정폭(%3d)으로 — 그리는 동안 자릿수가 바뀔 때마다 줄 전체가 흔들리는 지터 제거.
 ## 색 = 안정권이면 먹빛 강조·이하면 흐린 회갈(빨강 금지). 경계는 `is_stable` 그대로(65 복사 금지).
 func _update_score() -> void:
-	if not _board.is_tracing():
-		_score_lbl.text = ""
+	# 🔴 세71b: 조립 단계(ASSEMBLE)엔 아직 안 그었으니 점수 줄을 비운다 — 0% 잡음 제거.
+	#   (DrawTools 자체가 DRAW에서만 보이지만, 라벨 텍스트도 비워 잔상을 없앤다.)
+	if _phase == Phase.ASSEMBLE or not _board.is_tracing():
+		_score_num.text = ""
+		_score_sub.text = ""
 		return
 	var cov := int(round(_board.coverage() * 100.0))
 	var acc := int(round(_board.accuracy() * 100.0))
 	var total := _board.combined_total()
-	_score_lbl.text = "완성도 %3d%% · 정밀도 %3d%% · 점수 %3d" % [cov, acc, _pct(total)]
-	_score_lbl.add_theme_color_override(&"font_color",
+	# 🔴 세71d: 종합 점수를 **크게** — 그으면서 바로 오른다(실시간, score_changed 배선 재사용).
+	_score_num.text = "%d" % _pct(total)
+	_score_num.add_theme_color_override(&"font_color",
 		SCORE_STRONG if RingPower.is_stable(total) else SCORE_WEAK)
+	_score_sub.text = "완성도 %d%% · 정밀도 %d%%" % [cov, acc]
 
 
-## 버튼 상태. [분석 ▶] = 진을 골랐고 통째로 뭔가 그었어야 활성 (세71). [다음]은 은퇴(숨김).
+## 🔴 세71b 단계별 버튼:
+##   ASSEMBLE → [그리기 시작](NextBtn), 진+룬 골라야 활성. [분석 ▶]·[다시 조립] 숨김.
+##   DRAW     → [분석 ▶](CommitBtn), 통째로 뭔가 그었어야 활성. [다시 조립] 보임. [그리기 시작] 숨김.
+##   RESULT   → 리포트 오버레이(마력 주입·다시). [다시 조립] 보임.
 func _refresh_buttons() -> void:
-	# 🔴 **"맺기"가 아니다** (세션 25). 이 버튼은 분석 리포트를 띄울 뿐 **아무것도 맺지 않는다** —
-	# 맺는 건 리포트 안의 [마력 주입]이다 (이름이 하는 일만 말한다).
+	var assemble := _phase == Phase.ASSEMBLE
+	_next_btn.visible = assemble
+	_next_btn.disabled = not _can_start_draw()
+	# [분석 ▶]은 DRAW에서만 — 아무것도 맺지 않는다(맺음은 리포트의 [마력 주입], 세션25). 이름=하는 일.
+	_commit_btn.visible = _phase == Phase.DRAW
 	_commit_btn.text = "✓ 맺힘" if _committed else "분석 ▶"
 	_commit_btn.disabled = not _has_attempt()
+	_redraw_btn.visible = not assemble
 
 
 ## 🔴 반올림은 core가 판다 — 「퍼펙트」가 "이 함수가 100을 돌려주는 순간"으로 정의돼 있어서,
@@ -844,13 +906,11 @@ func clear_board() -> void:
 	_committed = false
 	_committed_asm = {}
 	_analysis = {}
-	_report.visible = false
 	_reset_selection()
 	_sync_book_bands()
 	recompose()            # 진 미선택 = 빈 가이드
+	_set_phase(Phase.ASSEMBLE)   # 🔴 세71b: 펑·[다시]는 조립 단계로 되돌린다(리포트 닫힘·탭 잠금 리셋)
 	_set_say(Copy_START, false)
-	_update_score()
-	_refresh_buttons()
 
 
 func play_cast() -> void:
@@ -901,8 +961,7 @@ func _draw_report() -> void:
 	var effects: Array[String] = []
 	if ink_id != &"" and not is_equal_approx(Db.ink_mult(ink_id), 1.0):
 		effects.append("%s ×%.1f뎀" % [_ink_name(ink_id), Db.ink_mult(ink_id)])
-	if size > 1.001:
-		effects.append("큰 진 ×%.1f뎀" % RingPower.size_mult(size))
+	# 🔴 세71d: 종이(규모) 축 은퇴 — size는 1.0 고정이라 "큰 진 ×뎀" 가지는 영구히 죽어 지웠다.
 	var sratio := float(_finish_asm.get("special_ratio", 0.0))
 	var sink := StringName(_finish_asm.get("special_ink", &""))
 	if sratio > 0.0 and sink != &"":
@@ -923,6 +982,54 @@ func _draw_report() -> void:
 		"완성도 %d%% · 정밀도 %d%%" % [
 			int(round(_board.coverage() * 100.0)), int(round(_board.accuracy() * 100.0))],
 		HORIZONTAL_ALIGNMENT_LEFT, -1, 8, REPORT_DESC)
+
+	# 🔴 세71b '탁본 종이' — 내가 그은 획을 종이 위에 눌러 찍은 프리뷰(연출 개편). 버튼(y292) 위 공간.
+	_report.draw_string(font, Vector2(14, 160), "탁본", HORIZONTAL_ALIGNMENT_LEFT, -1, 9, REPORT_NAME)
+	_draw_rubbing(Rect2(14.0, 166.0, w - 28.0, 118.0))
+
+
+## 내가 그은 먹선을 종이 톤 상자 안에 **자동 맞춤**해 그린다(탁본을 뜬 종이처럼). 좌표는 board-local이라
+## 획들의 실제 경계로 스케일·정렬한다(빈 획이면 상자만). 획 색 = 지금 고른 잉크색(그린 그대로).
+func _draw_rubbing(box: Rect2) -> void:
+	_report.draw_rect(box, RUBBING_BG, true)
+	_report.draw_rect(box, RUBBING_EDGE, false, 1.5)
+	# 네 귀퉁이 눌린 자국 — "탁본지" 질감 힌트(절차 렌더, 도형금지 예외).
+	var cl := 7.0
+	for corner in [box.position, box.position + Vector2(box.size.x, 0.0),
+			box.position + Vector2(0.0, box.size.y), box.position + box.size]:
+		var ix := -1.0 if corner.x > box.get_center().x else 1.0
+		var iy := -1.0 if corner.y > box.get_center().y else 1.0
+		_report.draw_line(corner, corner + Vector2(ix * cl, 0.0), RUBBING_CORNER, 1.5)
+		_report.draw_line(corner, corner + Vector2(0.0, iy * cl), RUBBING_CORNER, 1.5)
+
+	var strokes: Array = _board.trace_strokes()
+	var used := Rect2()
+	var first := true
+	for s: PackedVector2Array in strokes:
+		for p: Vector2 in s:
+			if first:
+				used = Rect2(p, Vector2.ZERO)
+				first = false
+			else:
+				used = used.expand(p)
+	if first:
+		_report.draw_string(ThemeDB.fallback_font, box.get_center() + Vector2(-30.0, 0.0),
+			"(획 없음)", HORIZONTAL_ALIGNMENT_LEFT, -1, 9, REPORT_DESC)
+		return
+	# 종횡비 유지 자동 맞춤 (여백 안). 한 점짜리 획 대비 0 나눗셈 가드.
+	var inner := box.grow(-RUBBING_PAD)
+	var sw := maxf(used.size.x, 1.0)
+	var sh := maxf(used.size.y, 1.0)
+	var sc := minf(inner.size.x / sw, inner.size.y / sh)
+	var off := inner.get_center() - used.get_center() * sc
+	var ink := _ink_color(_active_ink)
+	for s2: PackedVector2Array in strokes:
+		if s2.size() < 2:
+			continue
+		var out := PackedVector2Array()
+		for p2: Vector2 in s2:
+			out.append(p2 * sc + off)
+		_report.draw_polyline(out, ink, 1.6, true)
 
 
 ## 리포트의 "무엇을 조립했나" 한 줄 — 진 · 룬 · 층(밴드별 문양-고리). per-piece 점수는 없다.

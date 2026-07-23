@@ -127,8 +127,15 @@ enum TraceTarget { NONE, JIN, RUNE, GLYPH, COMBINED }
 
 # ── 🔴 세68 조립→탁본 합성 상수 (연출/레이아웃 → 스크립트 const, 밸런스 아님) ──
 const RUNE_GUIDE_FRAC := 0.18        # 합성 가이드에서 룬(중심)의 크기 (판 반지름 비)
-const BAND_RADII := [0.42, 0.68]     # 동심원 밴드 2겹의 반지름 비 (안쪽·바깥쪽 — 정본 3-(a))
+const BAND_RADII := [0.42, 0.68]     # 동심원 밴드 반경 비 목록 (안쪽부터). 진은 앞 band_count개만 쓴다
 const MOTIF_SIZE_FRAC := 0.14        # 밴드 반경 대비 문양-고리 낱개 모티프 크기
+
+# ── 🔴 세71c 조립→탁본 빈 층/룬 자리 가이드 (연출값 — 절차 렌더라 도형금지 예외, 손맛 F5) ──
+# COMBINED 모드에서만 그린다(per-piece 경로 무변경). band_count만큼 흐린 동심원 + 룬 미선택 시 중앙 마커.
+const BAND_GUIDE_COLOR := Color(0.42, 0.30, 0.12, 0.22)   # 빈 층 흐린 동심원 톤 (따라 그을 만큼만, 답 아님)
+const BAND_GUIDE_WIDTH := 1.5
+const RUNE_SLOT_COLOR := Color(0.42, 0.30, 0.12, 0.28)    # 룬 미선택 자리 마커(중앙 링)
+const RUNE_SLOT_WIDTH := 1.5
 
 signal assembly_changed
 ## 단계가 넘어갔다 — 바깥(패널)이 오른쪽 탭·안내문을 맞춘다. (STAGE_*)
@@ -218,6 +225,13 @@ const BRUSH_GLOW_ALPHA := [0.06, 0.14, 0.30]
 var _was_revealed := PackedByteArray()
 var _sparks: Array[Dictionary] = []     # ⓑ {pos: Vector2, t: float} — 광점들
 var _finish_glow_t := -1.0              # ⓓ 완성 발광 타이머 (-1 = 꺼짐)
+
+## 🔴 세71c 조립→탁본 이음선 제거 — COMBINED 서브패스(진·룬·밴드 각각)를 **별도 폴리라인**으로 그린다.
+## 비었으면 옛 동작(flat 가이드를 한 줄로). `enter_combined_trace`의 선택 인자로 들어온다.
+## 🔴 채점기(`_scorer`)는 flat만 본다 — 이 멤버는 **렌더 전용**이라 채점·발사와 무관(이음선은 draw 아티팩트).
+var _combined_subpaths: Array = []
+## COMBINED에서 그릴 흐린 동심원(빈 층 자리) 개수 = 진 band_count. 0 = 안 그림(옛 동작).
+var _combined_band_count := 0
 
 
 func _init() -> void:
@@ -316,12 +330,19 @@ func _set_trace(target: int, slot: int) -> void:
 ## 대신 넘어온 점열을 쓴다). 슬라이스 패널이 조립 상태가 바뀔 때마다 부른다.
 ## 🔴 기존 JIN/RUNE/GLYPH 경로 불변 — COMBINED는 per-piece 잠금 분기를 안 타 `_draw`·`_gui_input`이
 ## 자동으로 그리기·입력을 처리한다(가이드+먹선 렌더는 `_trace != NONE` 공통 분기가 든다).
-func enter_combined_trace(guide_pts: PackedVector2Array) -> void:
+## 🔴 세71c 선택 인자 확장 — `flat`은 지금처럼 scorer에(채점 무변경). `subpaths`가 오면 `_draw`가
+## flat 한 줄 대신 **서브패스별 별도 폴리라인**으로 그린다(이음선 제거). `band_count`는 빈 층 흐린
+## 동심원 개수. **둘 다 옛 기본값이면(subpaths=[]·band_count=0) 옛 동작 그대로** — 슬라이스 패널·
+## test의 1인자 호출이 무변경으로 산다(회귀 그물). subpaths flatten = flat이라는 계약은 **호출자(패널)가**
+## 한 소스(compose_guide_paths)에서 만들어 지킨다(制약 flat=flatten(subpaths)).
+func enter_combined_trace(flat: PackedVector2Array, subpaths := [], band_count := 0) -> void:
 	_trace = TraceTarget.COMBINED
 	_trace_slot = -1
 	_scorer.set_reference_radius(_outer_radius())
 	_scorer.set_correction(_pen_correction())
-	_scorer.set_guide(guide_pts)
+	_scorer.set_guide(flat)
+	_combined_subpaths = subpaths
+	_combined_band_count = band_count
 	_reset_reveal_fx()   # ⓑ 옛 가이드의 유령 반짝임을 남기지 않는다
 	queue_redraw()
 
@@ -491,26 +512,50 @@ static func _densify(verts: PackedVector2Array, step: float) -> PackedVector2Arr
 ## ⚠ static·인스턴스 상태 금지 — 헤드리스 테스트가 이 함수를 관측점으로 쓴다.
 static func compose_guide(jin_shape: int, rune_type: int, band_defs: Array,
 		ctr: Vector2, ro: float) -> PackedVector2Array:
+	# 🔴 세71c: **`compose_guide_paths`를 flatten한 단일 소스에서 파생**한다(制약③). flat과 subpaths를
+	# 따로 만들면 언젠가 갈라진다 — 채점(flat)과 렌더(subpaths)가 반드시 같은 점열을 봐야 한다.
+	# 시그니처·반환 점열은 리팩터 전과 **점 단위로 동일**(scratch_golden.txt로 대조).
 	var out := PackedVector2Array()
+	for sub in compose_guide_paths(jin_shape, rune_type, band_defs, ctr, ro):
+		out.append_array(sub)
+	return out
+
+
+## 🔴 세71c 조립본을 **조각별 서브패스 배열**로 합성한다 — 이음선 제거·빈 층 렌더의 단일 소스.
+## 반환 = `[진 윤곽, (룬), 밴드0, 밴드1…]`. 룬 센티넬(rune_type < 0)이면 룬 서브패스를 **생략**한다.
+## 🔴 **null 밴드 = 빈 서브패스로 자리만 남긴다**(制약①) — flatten엔 무영향(빈 배열)이면서 보드가
+## "빈 층 자리"를 셀 수 있게 한다. `compose_guide`(flat)가 이걸 flatten해 채점에 넣는다(둘이 한 소스).
+## ⚠ static·인스턴스 상태 금지 — 헤드리스 테스트가 관측점으로 쓴다. band_defs[i] = GlyphRingDef(or null).
+## 🔴 재구현 시 갈라지는 세 자리(制約②, verbatim): ⓐ 룬 가드 `if seg >= 0: out.append(v[seg])`+변마다
+## 12등분 · ⓑ 밴드 frac은 **band_defs 원본 인덱스 i**로 BAND_RADII[i](null 건너뛴 압축 카운터 금지) · ⓒ
+## flat = flatten(subpaths)(위 compose_guide). 이 세 자리를 바꾸면 골든과 어긋난다.
+static func compose_guide_paths(jin_shape: int, rune_type: int, band_defs: Array,
+		ctr: Vector2, ro: float) -> Array[PackedVector2Array]:
+	var paths: Array[PackedVector2Array] = []
 	# ① 진 윤곽 (바깥 닫힌 도형)
-	out.append_array(jin_guide_pts(jin_shape, ctr, ro))
+	paths.append(jin_guide_pts(jin_shape, ctr, ro))
 	# ② 룬 (중심) — `_build_guide`의 RUNE 분기와 **똑같이** 변마다 12등분해 이어붙인다(밀도 규율).
-	var v := rune_guide_verts(rune_type, ctr, ro * RUNE_GUIDE_FRAC)
-	var seg := v.size() - 1
-	for e in seg:
-		for t in 12:
-			out.append(v[e].lerp(v[e + 1], float(t) / 12.0))
-	if seg >= 0:
-		out.append(v[seg])
-	# ③ 밴드별 문양-고리 — 동심원 반경에 count번 깐다
+	# 🔴 세71b 점진 조립: `rune_type < 0`은 **센티넬(룬 미선택)** — 룬 서브패스 자체를 안 만든다.
+	if rune_type >= 0:
+		var rune_pts := PackedVector2Array()
+		var v := rune_guide_verts(rune_type, ctr, ro * RUNE_GUIDE_FRAC)
+		var seg := v.size() - 1
+		for e in seg:
+			for t in 12:
+				rune_pts.append(v[e].lerp(v[e + 1], float(t) / 12.0))
+		if seg >= 0:
+			rune_pts.append(v[seg])
+		paths.append(rune_pts)
+	# ③ 밴드별 문양-고리 — 동심원 반경에 count번 깐다. null 밴드 = 빈 서브패스(자리만).
 	for i in band_defs.size():
 		var gr: GlyphRingDef = band_defs[i] as GlyphRingDef
 		if gr == null:
+			paths.append(PackedVector2Array())   # 빈 층 자리 — flatten엔 무영향, 렌더는 흐린 동심원
 			continue
 		var frac := float(BAND_RADII[i]) if i < BAND_RADII.size() \
 			else float(BAND_RADII[BAND_RADII.size() - 1])
-		out.append_array(glyph_ring_pts(gr, ctr, ro * frac))
-	return out
+		paths.append(glyph_ring_pts(gr, ctr, ro * frac))
+	return paths
 
 
 ## 문양-고리 한 장을 밴드 둘레에 `gr.count`번 깐다 — 각 인스턴스는 기존 `glyph_guide_pts` 재사용.
@@ -1293,10 +1338,30 @@ func _draw() -> void:
 		if _trace == TraceTarget.GLYPH and _trace_slot >= 0:
 			draw_arc(_slot_pos(_trace_slot), ro * 0.11, 0.0, TAU, 24, Color(FIRE_HI, 0.7), 1.5, true)
 
+	# 🔴 세71c COMBINED 빈 층/룬 자리 가이드 (制約⑥ — COMBINED에서만, per-piece 경로 무변경).
+	# band_count만큼 흐린 동심원(빈 층도 늘 보여 "여기가 1층" 구조가 읽힌다) + 룬 미선택 시 중앙 마커.
+	# subpaths가 없으면(1인자 옛 호출·슬라이스·test) 건너뛴다 — band_count=0이라 옛 동작 유지.
+	if _trace == TraceTarget.COMBINED and not _combined_subpaths.is_empty():
+		for bi in _combined_band_count:
+			var br := ro * (float(BAND_RADII[bi]) if bi < BAND_RADII.size() \
+				else float(BAND_RADII[BAND_RADII.size() - 1]))
+			draw_arc(ctr, br, 0.0, TAU, 48, BAND_GUIDE_COLOR, BAND_GUIDE_WIDTH, true)
+		# 룬 미선택 = 룬 서브패스가 없다(진 + 밴드 = band_count+1개. 룬 있으면 +1). 중앙 자리 마커.
+		if _combined_subpaths.size() <= _combined_band_count + 1:
+			draw_arc(ctr, ro * RUNE_GUIDE_FRAC, 0.0, TAU, 24, RUNE_SLOT_COLOR, RUNE_SLOT_WIDTH, true)
+
 	# 🔴 지금 그리는 조각 — 숨은 정답 선(연하게) + 드러난 점(주황) + **그린 먹선 그대로**
 	var guide := _scorer.guide_points()
 	if _trace != TraceTarget.NONE and guide.size() >= 2:
-		draw_polyline(guide, GUIDE_HIDE, 2.0, true)
+		# 🔴 세71c 이음선 제거 — COMBINED에서 서브패스가 있으면 조각마다 별도 폴리라인(진 끝→룬 첫 점을
+		# 잇는 연결선이 안 생긴다). 없으면(옛 1인자 호출·per-piece) flat 한 줄 그대로. 드러난 점·먹선은 불변.
+		if _trace == TraceTarget.COMBINED and not _combined_subpaths.is_empty():
+			for sub_v in _combined_subpaths:
+				var sub := sub_v as PackedVector2Array
+				if sub.size() >= 2:
+					draw_polyline(sub, GUIDE_HIDE, 2.0, true)
+		else:
+			draw_polyline(guide, GUIDE_HIDE, 2.0, true)
 		for i in guide.size():
 			if _scorer.is_revealed(i):
 				draw_circle(guide[i], 1.6, GUIDE_SHOW)

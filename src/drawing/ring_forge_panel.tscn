@@ -92,7 +92,18 @@ offset_bottom = 326.0
 focus_mode = 0
 theme_override_font_sizes/font_size = 10
 disabled = true
-text = "다음 ▶"
+text = "그리기 시작 ✎"
+
+[node name="RedrawBtn" type="Button" parent="Stage/Spread"]
+visible = false
+layout_mode = 0
+offset_left = 332.0
+offset_top = 302.0
+offset_right = 464.0
+offset_bottom = 326.0
+focus_mode = 0
+theme_override_font_sizes/font_size = 10
+text = "◀ 다시 조립"
 
 [node name="CommitBtn" type="Button" parent="Stage/Spread"]
 layout_mode = 0
@@ -104,16 +115,6 @@ focus_mode = 0
 theme_override_font_sizes/font_size = 9
 disabled = true
 text = "✓ 맺기 (분석)"
-
-[node name="ScoreLabel" type="Label" parent="Stage/Spread"]
-layout_mode = 0
-offset_left = 332.0
-offset_top = 288.0
-offset_right = 612.0
-offset_bottom = 300.0
-mouse_filter = 2
-theme_override_colors/font_color = Color(0.34, 0.28, 0.2, 1)
-theme_override_font_sizes/font_size = 9
 
 [node name="TitleLabel" type="Label" parent="Stage/Spread"]
 layout_mode = 0
@@ -135,7 +136,7 @@ offset_bottom = 342.0
 mouse_filter = 2
 theme_override_colors/font_color = Color(0.3, 0.24, 0.18, 1)
 theme_override_font_sizes/font_size = 8
-text = "진을 왼쪽 판에 손으로 문질러 그리세요  (진 → 룬 → 문양 순서로 하나씩 · [다음]으로 진행)"
+text = "오른쪽에서 진 → 룬 → 층 순서로 조립하고 [그리기 시작]"
 autowrap_mode = 3
 
 [node name="HintLabel" type="Label" parent="Stage/Spread"]
@@ -147,7 +148,72 @@ offset_bottom = 344.0
 mouse_filter = 2
 theme_override_colors/font_color = Color(0.5, 0.45, 0.38, 1)
 theme_override_font_sizes/font_size = 8
-text = "여러 획 OK · 우클릭=다시 · 휠=크기 · ESC=덮기"
+text = "여러 획 OK · 우클릭=다시 · ESC=덮기"
+
+[node name="DrawTools" type="Control" parent="Stage/Spread"]
+visible = false
+layout_mode = 0
+offset_left = 326.0
+offset_top = 18.0
+offset_right = 618.0
+offset_bottom = 298.0
+mouse_filter = 2
+
+[node name="Bg" type="ColorRect" parent="Stage/Spread/DrawTools"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.82, 0.76, 0.64, 0.96)
+
+[node name="Title" type="Label" parent="Stage/Spread/DrawTools"]
+layout_mode = 0
+offset_left = 12.0
+offset_top = 6.0
+offset_right = 280.0
+offset_bottom = 24.0
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.36, 0.26, 0.16, 1)
+theme_override_font_sizes/font_size = 12
+text = "그리기 도구"
+
+[node name="ScoreCaption" type="Label" parent="Stage/Spread/DrawTools"]
+layout_mode = 0
+offset_left = 12.0
+offset_top = 78.0
+offset_right = 280.0
+offset_bottom = 92.0
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.5, 0.45, 0.38, 1)
+theme_override_font_sizes/font_size = 11
+text = "종합 점수"
+horizontal_alignment = 1
+
+[node name="ScoreNum" type="Label" parent="Stage/Spread/DrawTools"]
+layout_mode = 0
+offset_left = 12.0
+offset_top = 92.0
+offset_right = 280.0
+offset_bottom = 160.0
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.2, 0.15, 0.1, 1)
+theme_override_font_sizes/font_size = 52
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="ScoreSub" type="Label" parent="Stage/Spread/DrawTools"]
+layout_mode = 0
+offset_left = 12.0
+offset_top = 168.0
+offset_right = 280.0
+offset_bottom = 188.0
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.34, 0.28, 0.2, 1)
+theme_override_font_sizes/font_size = 13
+horizontal_alignment = 1
 
 [node name="Report" type="Control" parent="Stage/Spread"]
 visible = false

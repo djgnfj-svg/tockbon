@@ -38,6 +38,10 @@ const TAB_ON_BG := Color(0.80, 0.74, 0.62, 0.95)
 const TAB_OFF_BG := Color(0.68, 0.62, 0.52, 0.75)
 const TAB_ON_TEXT := Color(0.22, 0.16, 0.10)
 const TAB_OFF_TEXT := Color(0.42, 0.37, 0.30)
+# 세71b — 순서 잠금 탭(아직 못 여는 탭). 회색 베일 + 흐린 글자로 "지금은 못 연다"를 알린다.
+const TAB_LOCK_BG := Color(0.58, 0.53, 0.46, 0.55)
+const TAB_LOCK_VEIL := Color(0.50, 0.46, 0.40, 0.45)
+const TAB_LOCK_TEXT := Color(0.52, 0.48, 0.42, 0.7)
 const OPEN_DOT := Color(0.85, 0.50, 0.18)          # 진 셀 8점 다이어그램: 열린 문양 칸
 const SHUT_DOT := Color(0.30, 0.26, 0.20, 0.4)     # 닫힌 칸
 # ── 층(band) 소켓 톤 (세71 — 슬라이스 패널 SOCKET_* 계열) ──
@@ -61,6 +65,10 @@ const TAB_DESC := [
 ]
 
 var _stage := TAB_JIN                 # 진 탭부터 편다 (순차 조립)
+## 🔴 세71b 점진 조립 — 어느 탭이 열렸나 (진 선택⇒룬 탭·룬 선택⇒층 탭). 패널이 선택 상태에서
+## 파생해 `set_open_tabs`로 주입한다(단일 소스=패널 선택, `set_defs`와 동형·module-local). 잠긴 탭은
+## 회색으로 그리고 클릭을 거부한다. 기본 = 전부 열림(옛 호출부·주입 전 첫 프레임 호환).
+var _open_tabs: Array = [true, true, true]
 var _rune_choice := -1                # 지금 고른 룬 타입 (하이라이트) — -1=아직 (세션 34)
 var _jin_choice: StringName = &""     # 지금 고른 진 id (하이라이트) — &""=아직 (세션44, 진=형태 선택)
 var _tab_rects: Array[Rect2] = []
@@ -105,6 +113,20 @@ func set_bands(bands: Array, sel_band: int, available_rings: Array) -> void:
 	queue_redraw()
 
 
+## 🔴 세71b 점진 조립 — 열린 탭 집합을 주입한다(`set_defs`/`set_bands`와 동형). `open[stage]`가 false면
+## 그 탭은 회색·클릭 거부. 지금 펼친 탭이 잠겼으면(리셋·펑) 진 탭으로 되돌린다 — 잠긴 탭이 펼쳐진 채
+## 남지 않게. 잠금 판정 단일 소스는 패널의 선택 상태다(책은 오토로드·Db를 안 본다).
+func set_open_tabs(open: Array) -> void:
+	_open_tabs = open
+	if not _tab_is_open(_stage):
+		_stage = TAB_JIN
+	queue_redraw()
+
+
+func _tab_is_open(stage: int) -> bool:
+	return stage >= 0 and stage < _open_tabs.size() and bool(_open_tabs[stage])
+
+
 func _jin_name() -> String:
 	return String(_jin_defs[0].display_name) if not _jin_defs.is_empty() else "일반진"
 
@@ -125,6 +147,10 @@ func _gui_input(event: InputEvent) -> void:
 		return
 	for i in _tab_rects.size():
 		if _tab_rects[i].has_point(mb.position):
+			# 🔴 세71b: 잠긴 탭(진 안 고름=룬 탭 잠김 등)은 클릭을 먹되 무시한다 — 순서를 건너뛸 수 없다.
+			if not _tab_is_open(TAB_ORDER[i]):
+				accept_event()
+				return
 			_stage = TAB_ORDER[i]
 			queue_redraw()
 			accept_event()
@@ -189,19 +215,23 @@ func _draw() -> void:
 		var r := Rect2(float(i) * (tab_w + TAB_GAP), 0.0, tab_w, TAB_H)
 		_tab_rects.append(r)
 		var on := stage == _stage
+		var locked := not _tab_is_open(stage)   # 🔴 세71b: 아직 못 여는 탭(순서 잠금)
 		var tab_sb := _card_sb(on)
 		if tab_sb != null:
 			draw_style_box(tab_sb, r)
+			if locked:
+				draw_rect(r, TAB_LOCK_VEIL, true)   # 나인패치 위에 회색 베일
 		else:
-			draw_rect(r, TAB_ON_BG if on else TAB_OFF_BG, true)
+			draw_rect(r, TAB_LOCK_BG if locked else (TAB_ON_BG if on else TAB_OFF_BG), true)
 			draw_line(r.position, r.position + Vector2(r.size.x, 0.0), CELL_LINE, 1.0)
 			if not on:
 				draw_line(r.position + Vector2(0.0, r.size.y), r.position + r.size, CELL_LINE, 1.0)
 		var text: String = TAB_LABEL[i]
 		var fs := 10
 		var tw := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+		var tcol: Color = TAB_LOCK_TEXT if locked else (TAB_ON_TEXT if on else TAB_OFF_TEXT)
 		draw_string(font, r.position + Vector2((r.size.x - tw) * 0.5, TAB_H * 0.72),
-			text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, TAB_ON_TEXT if on else TAB_OFF_TEXT)
+			text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, tcol)
 
 	var body := Rect2(0.0, TAB_H, size.x, size.y - TAB_H)
 	draw_rect(body, TAB_ON_BG, true)

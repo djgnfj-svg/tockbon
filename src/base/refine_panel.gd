@@ -82,8 +82,16 @@ func _on_draw() -> void:
 func _refresh() -> void:
 	for c in _list.get_children():
 		c.queue_free()
-	# 🔴 정제대 레시피(잉크·종이)만 — 공방(장비) 레시피는 station=&"craft"라 여기 안 뜬다 (세션32).
-	var recipes: Array = Db.recipes_for_station(&"refine")
+	# 🔴 정제대 레시피(잉크)만 — 공방(장비) 레시피는 station=&"craft"라 여기 안 뜬다 (세션32).
+	# 🔴 세71d 종이 축 은퇴: 종이(kind==PAPER) 결과 레시피(craft_paper_mid/high)는 목록에서 숨긴다 —
+	# size가 1.0 고정이라 효과 없는 종이를 mat_vine 써서 만드는 dead affordance다. 레시피 .tres·
+	# 아이템은 삭제하지 않고 **필터로만 숨긴다**(휴면 — 종이 축을 되살리면 이 필터만 빼면 된다).
+	var recipes: Array = []
+	for r: RecipeDef in Db.recipes_for_station(&"refine"):
+		var out := Db.get_item(r.output_id)
+		if out != null and out.kind == Enums.ItemKind.PAPER:
+			continue
+		recipes.append(r)
 	if recipes.is_empty():
 		var none := Label.new()
 		none.text = "만들 수 있는 게 없다 (data/recipes 비어 있음)"
