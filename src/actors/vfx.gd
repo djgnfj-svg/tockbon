@@ -68,7 +68,7 @@ const IMPACT_TIME := 0.15         ## 팝 시간(s)
 const IMPACT_SPIKES := 4          ## 방사 틱 개수 (반응 스파크 6개와 구분)
 const IMPACT_START_SCALE := 0.3   ## 팝 시작 배율 (작게 시작 → IMPACT_RADIUS)
 const IMPACT_POP_SEGMENTS := 16   ## 팝 원 분할 수
-const FLASH_LIGHTEN := 0.35     ## ui_color는 UI 셀용이라 어둡다 — 플래시용 밝힘(머즐·착탄 공용, carrier GLOW_LIGHTEN 결)
+const FLASH_LIGHTEN := 0.35     ## ui_color는 UI 셀용이라 어둡다 — 플래시용 밝힘(머즐·착탄 공용, 룬색의 lightened 파생)
 const IMPACT_Z := 54              ## 🔴 반응 링(VFX_Z=55) 아래 — 머즐도 같은 층
 ## Db에 룬이 없을 때 폴백 (ring_carrier와 같은 규칙)
 const RUNE_FALLBACK := Color(0.95, 0.35, 0.15)

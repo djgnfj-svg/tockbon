@@ -1,9 +1,11 @@
 extends Area2D
 ## 고리 조립 캐리어 — 모듈 B (세션 12~). class_name 없음 — preload로 참조할 것.
 ##
-## 🔴 **진이 곧 투사체다** (고리 모델, 사용자 확정 세션 10). 조립한 마법진(진)이 통째로 조준
-## 방향으로 날아가고, **적에 닿는 순간 안의 고리 패턴이 그 자리에서 전개된다** — 껍질이 내용물을
-## 착탄점에 배달한다. [[takbon-nested-circle-model]] 껍질=배달.
+## 🔴 **해석된 원소 마법이 날아간다** (세72 재정의 — GDD §3·§5). 마법진(공식)은 발사 순간 총구에
+## 잠깐 빛나고(vfx 머즐 링 = "식이 계산되는 순간"), 날아가는 건 그것을 **해석한 원소 마법 = 불덩이
+## (파이어볼)**다. 마법진 자체는 안 날아간다 — 세71까지의 "진이 곧 투사체(날아가는 마법진 볼)"를
+## 은퇴시켰다(사용자: *"진이 날아갈 필요없는데… 마법진은 수학이고 해석된 마법이 나간다"*).
+## 착탄 시 안의 고리(_ring)가 그 자리에서 전개되는 계약은 그대로다 — 껍질=배달. [[takbon-nested-circle-model]]
 ##   • 발산→ 칸: 그 화살표 방향으로 불 탄환이 퍼진다 (ring_spell_system이 projectile.tscn 스폰)
 ##   • 응집← 칸: 하나로 모여 불기둥 하나 (pillar.tscn, 많을수록 굵다)
 ##
@@ -11,38 +13,30 @@ extends Area2D
 ##   → 캐리어 자체가 착탄 시 damage를 얹는다. 전개는 그 위에 덤이다.
 ##
 ## **전개는 적에 닿을 때만.** 벽·수명으로 죽으면 조용히 사라진다 (안 맞으면 전개 없음 — 데모 규칙).
-## **회전하지 않는다.** 진은 진행 방향을 보고 빙글 돌지 않는다 (방향은 _velocity만 안다).
+## **node.rotation은 영원히 0** — 대신 자식 Fireball **스프라이트만** 진행 방향으로 회전한다(혜성형
+## 꼬리가 뒤로 뻗게, 세72). 히트박스(자식 Shape)는 원형이라 회전 무관하지만, node를 안 돌려 계약을
+## 지킨다(스프라이트 로컬 회전은 Shape에 영향 0).
 ##
 ## 적 노드 계약: 그룹 "enemies" + take_hit(damage, rune_type, status, status_power).
 
-const RADIUS_PX := 18.0       # 히트박스·먹선 반지름 (진 몸) — 세션 13: 9→18 (발사체가 안 보였다)
+const RADIUS_PX := 12.0       # 히트박스 반지름 (진 몸) — 세13: 9→18(안 보였다) → 세72: 18→12
+                              # (혜성 스프라이트+꼬리가 커서 축소. 꼬리 달린 스프라이트라 히트박스 작아도 잘 보인다)
 ## 부메랑 선회 각속도(rad/s) — 연출값이라 balance 아닌 여기 상수 (선례: juice의 손맛 수치).
 ## 8.0 = 180도 유턴에 약 0.4초. 낮추면 크게 휘고 높이면 칼같이 꺾인다 — 사용자가 쏴 보고 조인다.
 const BOOMERANG_TURN_RATE := 8.0
-const RING_COLOR := Color(0.98, 0.66, 0.28)
+## 트레일·룬 색이 Db에 룬이 없을 때 폴백 (vfx와 같은 규칙).
 const RUNE_FALLBACK := Color(0.95, 0.35, 0.15)
 
 const Trail := preload("res://src/spell/carrier_trail.gd")
 
-# ── 속성형 볼 연출 (세션59 설계 §2-A) — 전부 손맛값(스크립트 const, balance 아님). 사용자가 쏴 보고 조인다.
-## 🔴 자전은 전부 `_draw` 안의 위상값(_spin)이다 — **node.rotation은 영원히 0** ("회전하지 않는다"
-## 계약은 노드 수준 불변. rotation을 돌리면 자식 Shape까지 돌아 계약이 깨진다).
-const SPIN_RATE := 0.8            ## 안쪽 장식 자전 각속도(rad/s) — 바깥 진 링은 고정(사용자 확정)
-const GLYPH_SPIN_RATIO := 1.0     ## 문양 화살표 자전 배율 (안쪽 대시 링 대비)
-const RING_TINT_MIX := 0.45       ## 바깥 진 링 색 = RING_COLOR.lerp(룬색, 이 값) — 0=먹선 주황, 1=룬색
-const GLOW_LIGHTEN := 0.45        ## 코어 색 = ui_color.lightened(이 값) — UI 셀 색은 글로우로 쓰기엔 어둡다
-const GLOW_ALPHA := 0.85          ## 코어 글로우 기준 알파
-const PULSE_PERIOD := 0.9         ## 코어 펄스 주기(s)
-const PULSE_SCALE_AMP := 0.12     ## 펄스 크기 진폭 (기준 배율 대비 ±)
-const PULSE_ALPHA_AMP := 0.18     ## 펄스 알파 진폭
-## body_radius 대비 코어 반지름 — 글로우가 히트박스보다 **커 보이면 안 된다**
-## (세50 "보이는 크기 ≠ 맞는 크기" 함정의 시각 버전 — 스침 판정이 거짓말이 된다)
-const CORE_RADIUS_FRAC := 0.62
-const GLOW_TEX_SIZE := 64         ## 정적 캐시 radial 텍스처 픽셀 폭
-const INNER_DASH_COUNT := 7       ## 안쪽 대시 링 조각 수 — 매끈한 원은 돌아도 안 보인다, 대시여야 읽힌다
-const INNER_DASH_FILL := 0.55     ## 대시 조각의 채움 비율 (나머지는 틈)
+# ── 트레일 연출 (세션59) — 손맛값(스크립트 const, balance 아님). 사용자가 쏴 보고 조인다.
 const TRAIL_LIFE := 0.25          ## 트레일 포인트 수명(s)
 const TRAIL_WIDTH_FRAC := 0.9     ## 트레일 굵기 = body_radius × 이 값
+## 🔴 불덩이 **코어**의 반지름(px) — 혜성형 92×48 프레임, 코어 중심 (74,24), 반지름 13(나머지는
+## 왼쪽 화염 꼬리 + 투명 패딩). body_radius를 **코어**에 맞춰 스케일해 **보이는 코어 = 히트박스**가
+## 되게 한다(세50 "보이는 크기 ≠ 맞는 크기" — 코어 반지름을 안 쓰면 스침 판정이 거짓말). 코어 뒤로
+## 뻗는 화염 꼬리가 히트박스를 넘는 건 당연(꼬리는 안 맞는 잔염 = 빛). 🔴 값은 F5로 조인다.
+const SPRITE_FRAME_RADIUS := 13.0
 
 ## 착탄 = 안의 고리를 편다. ring_spell_system이 받아 발산 탄환·응집 기둥을 스폰한다.
 ## travel = 탄이 가던 방향 (전개 회전 기준).
@@ -68,45 +62,19 @@ var _spiral_amp: float = 0.0
 var _spiral_period: float = 0.45
 var _turn_ratio: float = 0.5
 
-# 연출 상태 (세션59) — 전부 시각. 헤드리스에선 _draw가 안 돌 뿐 위상 변수는 무해.
-var _spin: float = 0.0            ## 안쪽 장식 자전 위상 — _draw 전용, node.rotation 아님
-var _glow: Sprite2D = null        ## 코어 글로우 (CoreGlow — _ready가 코드로 만든다)
-var _glow_base: float = 1.0       ## 펄스의 기준 scale
+## 불덩이 스프라이트 (씬 자식 Fireball) — 이글거림 루프는 SpriteFrames가 담당(자전·글로우 코드 제거).
+var _fireball: AnimatedSprite2D = null
 var _trail_spawned := false
-
-## 코어 글로우 텍스처 — 정적 캐시 radial GradientTexture2D (전 캐리어 공유, 셰이더·아트 0).
-static var _glow_tex: GradientTexture2D = null
-
-
-static func _core_glow_tex() -> GradientTexture2D:
-	if _glow_tex == null:
-		var g := Gradient.new()
-		g.offsets = PackedFloat32Array([0.0, 0.55, 1.0])
-		g.colors = PackedColorArray([Color(1, 1, 1, 1), Color(1, 1, 1, 0.55), Color(1, 1, 1, 0)])
-		var t := GradientTexture2D.new()
-		t.gradient = g
-		t.fill = GradientTexture2D.FILL_RADIAL
-		t.fill_from = Vector2(0.5, 0.5)
-		t.fill_to = Vector2(1.0, 0.5)
-		t.width = GLOW_TEX_SIZE
-		t.height = GLOW_TEX_SIZE
-		_glow_tex = t
-	return _glow_tex
 
 
 func _ready() -> void:
 	add_to_group("player_projectiles")
 	body_entered.connect(_on_body_entered)
 	area_entered.connect(_on_area_entered)
-	# 룬색 에너지 코어 — ADD 블렌드라 배경 위에서 빛으로 읽힌다 (설계 §2-A)
-	_glow = Sprite2D.new()
-	_glow.name = "CoreGlow"
-	_glow.texture = _core_glow_tex()
-	var mat := CanvasItemMaterial.new()
-	mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
-	_glow.material = mat
-	add_child(_glow)
-	_refresh_glow()
+	_fireball = get_node_or_null(^"Fireball") as AnimatedSprite2D
+	if _fireball != null:
+		_fireball.play(&"fireball")
+	_apply_sprite_scale()
 
 
 ## p_ring: 8칸 배열 (RingBoard.G_GATHER / G_RADIATE / GLYPH_NONE). p_angle: 조준각.
@@ -122,14 +90,13 @@ func setup(p_ring: Array, p_angle: float, p_speed: float, p_lifetime: float,
 	status = p_status
 	status_power = p_status_power
 	_apply_body_radius()
-	_refresh_glow()
+	_apply_sprite_scale()
 	# 트레일은 지연 스폰 — set_motion(규모)이 setup **뒤에** 오므로, 굵기가 최종 body_radius를 보게.
 	call_deferred(&"_spawn_trail")
-	queue_redraw()
 
 
 ## 🔴 비행 경로·규모를 얹는다 (세션48). setup **뒤에** 부른다 — 안 부르면 예전 그대로 직진 1.0배라
-## 옛 호출자·테스트가 그대로 돈다. 진(JinDef)이 없는 매직볼·옛 도안이 정확히 그 경로다.
+## 옛 호출자·테스트가 그대로 돈다. 진(JinDef)이 없는 옛 도안이 정확히 그 경로다.
 func set_motion(p_motion: int, p_scale: float, p_spiral_amp: float,
 		p_spiral_period: float, p_turn_ratio: float) -> void:
 	_motion = p_motion
@@ -138,8 +105,7 @@ func set_motion(p_motion: int, p_scale: float, p_spiral_amp: float,
 	_spiral_period = maxf(p_spiral_period, 0.05)
 	_turn_ratio = clampf(p_turn_ratio, 0.05, 0.95)
 	_apply_body_radius()
-	_refresh_glow()
-	queue_redraw()
+	_apply_sprite_scale()
 
 
 ## 히트박스를 진 몸 반지름에 맞춘다 (형상 리소스는 공유물 — scale로만 건드린다).
@@ -149,22 +115,17 @@ func _apply_body_radius() -> void:
 		cs.scale = Vector2.ONE * (body_radius() / (cs.shape as CircleShape2D).radius)
 
 
-## 진 몸 반지름 — 규모가 곱해진다. 먹선(_draw)과 히트박스가 **같은 함수**를 봐야 갈라지지 않는다
+## 진 몸 반지름 — 규모가 곱해진다. 스프라이트·히트박스가 **같은 함수**를 봐야 갈라지지 않는다
 ## (선례: ring_power의 is_stable — 보이는 크기와 맞는 크기가 다르면 아무도 못 알아챈다).
 func body_radius() -> float:
 	return RADIUS_PX * _scale
 
 
-## 코어 글로우의 색·기준 크기 갱신 — _ready(생성)·setup(룬 확정)·set_motion(규모 확정)이 부른다.
-## 색은 Db `ui_color`의 **파생**(lightened)이다 — 새 색 테이블이 아니라 단일 소스의 변환 (설계 §2-A).
-func _refresh_glow() -> void:
-	if _glow == null:
-		return   # setup이 add_child(_ready)보다 먼저 불린 컨텍스트(헤드리스) — _ready가 다시 부른다
-	var col := _rune_color().lightened(GLOW_LIGHTEN)
-	col.a = GLOW_ALPHA
-	_glow.modulate = col
-	_glow_base = body_radius() * CORE_RADIUS_FRAC * 2.0 / float(GLOW_TEX_SIZE)
-	_glow.scale = Vector2.ONE * _glow_base
+## 불덩이 스프라이트를 body_radius에 맞춘다 — 프레임 반지름(24px)을 body_radius로 스케일.
+## _ready(생성)·setup(룬 확정)·set_motion(규모 확정)이 부른다.
+func _apply_sprite_scale() -> void:
+	if _fireball != null:
+		_fireball.scale = Vector2.ONE * (body_radius() / SPRITE_FRAME_RADIUS)
 
 
 ## 트레일 스폰 — **형제**(spell_system의 자식)로 단다. 캐리어가 착탄으로 죽어도 잔상이 페이드하게
@@ -200,8 +161,7 @@ func _physics_process(delta: float) -> void:
 			if _age >= _lifetime * _turn_ratio:
 				# 🔴 속도를 **회전**시킨다 — `lerp`로 하면 안 된다. 되돌아올 방향은 지금 방향의
 				# 거의 정반대라 두 벡터가 상쇄돼 **속도가 0으로 죽고 진이 공중에 멈춘다**
-				# (세션48에 실제로 그렇게 났다: 최대거리 = 끝거리 218.6px로 제자리). 각도만 돌리면
-				# 속력이 보존돼 나간 만큼의 기세로 돌아온다.
+				# (세션48에 실제로 그렇게 났다). 각도만 돌리면 속력이 보존돼 나간 만큼의 기세로 돌아온다.
 				var speed := _velocity.length()
 				var want := (_origin - global_position).angle()
 				var turned := rotate_toward(_velocity.angle(), want, BOOMERANG_TURN_RATE * delta)
@@ -209,13 +169,10 @@ func _physics_process(delta: float) -> void:
 			position += _velocity * delta
 		_:
 			position += _velocity * delta
-	# 연출 구동 (세션59) — 자전 위상·코어 펄스. node.rotation은 건드리지 않는다.
-	_spin += SPIN_RATE * delta
-	if _glow != null:
-		var ph := sin(TAU * _age / PULSE_PERIOD)
-		_glow.scale = Vector2.ONE * (_glow_base * (1.0 + PULSE_SCALE_AMP * ph))
-		_glow.modulate.a = clampf(GLOW_ALPHA + PULSE_ALPHA_AMP * ph, 0.0, 1.0)
-	queue_redraw()
+	# 🔴 스프라이트를 진행 방향으로 정렬(혜성형 — 꼬리가 뒤로). **스프라이트만** 돌린다: node.rotation·
+	# 자식 히트박스는 0 불변. 이글거림·나부낌은 SpriteFrames 루프가 담당(옛 볼의 _spin·글로우 은퇴).
+	if _fireball != null and _velocity.length_squared() > 0.01:
+		_fireball.rotation = _velocity.angle()
 	_life_left -= delta
 	if _life_left <= 0.0:
 		_die_without_deploy()   # 수명 끝 = 못 맞음 → 전개 없이 사라진다
@@ -257,42 +214,7 @@ func _die_without_deploy() -> void:
 	queue_free()
 
 
-## 진 = **날아가는 마법진** → 세션59: **속성형 볼**. 바깥 이중 진 링(먹선 정체성, 룬색으로 살짝
-## 틴트)은 고정이고, 안쪽 대시 링·문양 화살표만 `_spin` 위상으로 천천히 자전한다(사용자 확정).
-## 중심 삼각 룬은 삭제 — CoreGlow 볼이 그 자리를 차지한다. node.rotation은 영원히 0.
-func _draw() -> void:
-	var r := body_radius()   # 🔴 히트박스와 같은 함수 — 보이는 크기 ≠ 맞는 크기가 되면 아무도 못 알아챈다
-	var ring_col := RING_COLOR.lerp(_rune_color(), RING_TINT_MIX)
-	# 글로우(은은한 후광) — 배경과 상관없이 눈에 띄게
-	draw_arc(Vector2.ZERO, r, 0.0, TAU, 32, Color(ring_col, 0.30), 6.0, true)
-	# 바깥 진 링 — **고정, 자전 없음** (사용자 확정: 바깥 진은 돌지 않는다)
-	draw_arc(Vector2.ZERO, r, 0.0, TAU, 32, ring_col, 2.5, true)
-	# 안쪽 대시 링 — _spin 위상 자전 (매끈한 원은 돌아도 안 보인다 — 대시여야 자전이 읽힌다)
-	var dash_arc := TAU / float(INNER_DASH_COUNT)
-	for d in INNER_DASH_COUNT:
-		var a0 := _spin + dash_arc * float(d)
-		draw_arc(Vector2.ZERO, r * 0.58, a0, a0 + dash_arc * INNER_DASH_FILL, 6,
-			Color(ring_col, 0.85), 1.5, true)
-	# 문양 화살표 — 응집=안쪽 / 발산=바깥 (조립한 칸 그대로) · _spin으로 천천히 자전
-	var n := _ring.size()
-	if n <= 0:
-		return
-	for k in n:
-		var g := int(_ring[k])
-		if g < 0:
-			continue
-		var ang := TAU * float(k) / float(n) - PI / 2.0 + _spin * GLYPH_SPIN_RATIO
-		var outward := Vector2.from_angle(ang)
-		var p := outward * (r * 0.78)
-		var dir := -outward if g == Enums.GlyphCode.GATHER else outward   # 응집만 안쪽 · 발산·관통은 바깥
-		var a := p - dir * (r * 0.14)
-		var b := p + dir * (r * 0.14)
-		draw_line(a, b, ring_col, 1.8, true)
-		draw_line(b, b - dir.rotated(0.5) * (r * 0.1), ring_col, 1.8, true)
-		draw_line(b, b - dir.rotated(-0.5) * (r * 0.1), ring_col, 1.8, true)
-
-
-## 룬 색 — Db에서 읽고, 없으면 폴백. (오토로드 없는 컨텍스트도 견딘다)
+## 룬 색 — Db에서 읽고, 없으면 폴백. (오토로드 없는 컨텍스트도 견딘다) 트레일 색이 이걸 쓴다.
 func _rune_color() -> Color:
 	var db := get_node_or_null(^"/root/Db")
 	if db != null:
