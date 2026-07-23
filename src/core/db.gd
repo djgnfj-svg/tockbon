@@ -175,9 +175,6 @@ func chapter_clear_id(chapter: ChapterDef) -> StringName:
 func get_jin(id: StringName) -> JinDef:
 	return jins.get(id) as JinDef
 
-func get_glyph(id: StringName) -> GlyphDef:
-	return glyphs.get(id) as GlyphDef
-
 ## 진 목록 — sort 오름차순 (UI 열거용, 세션44: 단발→산탄→둘레).
 func all_jins() -> Array[JinDef]:
 	var out: Array[JinDef] = []

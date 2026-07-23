@@ -240,10 +240,6 @@ func lock(key: String, target: int, slot: int, glyph: int) -> float:
 	return sc
 
 
-func score_of(key: String) -> float:
-	return float(_scores[key].score) if _scores.has(key) else 0.0
-
-
 ## 마법진 분석 리포트 — 조각별 점수 + 종합 + 등급. 패널이 리포트 UI로 그린다.
 ## open = 지금 진이 연 칸들 (JinDef.glyph_slots → 조립 상태기계가 쥔 값 — 채점기는 모른다).
 func get_analysis(open: Array) -> Dictionary:

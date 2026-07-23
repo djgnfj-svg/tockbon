@@ -146,17 +146,3 @@ static func tint_of(status: int) -> Color:
 		Enums.Status.ROOT:       return Color(0.70, 1.25, 0.70)
 		Enums.Status.VULNERABLE: return Color(1.15, 0.95, 1.15)
 		_:                       return Color.WHITE
-
-
-## 사람이 읽는 이름 — HUD·도감·디버그가 같은 말을 쓰게. 범위 밖은 빈 문자열(크래시 금지).
-static func name_of(status: int) -> String:
-	match status:
-		Enums.Status.BURN:       return "화상"
-		Enums.Status.BLAZE:      return "산불"
-		Enums.Status.WET:        return "젖음"
-		Enums.Status.MUD:        return "진흙"
-		Enums.Status.SHOCK:      return "감전"
-		Enums.Status.ROOT:       return "덩굴"
-		Enums.Status.VULNERABLE: return "취약"
-		Enums.Status.FLOW:       return "밀림"
-		_:                       return ""

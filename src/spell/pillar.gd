@@ -2,7 +2,7 @@ extends Area2D
 ## 기둥 — v2.1 (TECH_SPEC §4.0-b). 모듈 B. class_name 없음 — preload로 참조할 것.
 ##
 ## 🔴 **기둥은 규칙이 아니라 결과다.** 아무도 "기둥을 만들어라"라고 하지 않는다 —
-## **충격파끼리 부딪히면** 그 자리에 선다 (shockwave._collide_with).
+## **응집(←) 칸이 모인 착탄점**에 선다 (ring_spell_system._spawn_pillar, 옛 충격파 수렴 모델은 은퇴).
 ## 사용자: *"그 충격파끼리 맞으면 기둥이 되는 거임."*
 ##
 ## 룬을 겨눈 화살표 8개는 **중심에서 저절로 만난다.** 밖을 겨눈 8개는 영영 안 만난다.
@@ -45,7 +45,7 @@ func setup(p_damage: float, p_rune_type: int, p_status: int, p_status_power: flo
 	_tick_left = 0.0
 
 	# 🔴 형상 리소스는 **씬 인스턴스들이 공유하는 물건**이다 — radius를 직접 쓰면 모든 기둥이
-	# 함께 바뀐다. **scale로만 만진다** (projectile.gd·shockwave.gd와 같은 규칙)
+	# 함께 바뀐다. **scale로만 만진다** (projectile.gd와 같은 규칙)
 	var shape := get_node_or_null("Shape") as CollisionShape2D
 	if shape != null:
 		shape.scale = Vector2.ONE * (_balance.pillar_radius_px / BASE_RADIUS)

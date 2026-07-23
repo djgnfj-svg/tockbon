@@ -20,7 +20,6 @@ const PillarScene := preload("res://src/spell/pillar.tscn")
 const PillarScript := preload("res://src/spell/pillar.gd")
 
 const SLOTS := 8
-const UP_AXIS := -PI / 2.0
 
 ## 응집 굵기 — 기둥 하나당 scale 증가분 (연출값, 밸런스 아님. 선례: spell_system CIRCLE_* 연출 상수).
 ## 응집 1개면 기본 크기, 여럿 모이면 굵어진다 ("많을수록 굵다").
@@ -193,7 +192,7 @@ func _power_of(assembly: Dictionary) -> float:
 
 
 ## 착탄 = 안의 고리를 편다. 물리 콜백 중일 수 있으니 지연 실행 (Area2D를 콜백 안에서 즉시
-## add_child하면 "flushing queries" 에러로 조용히 안 생긴다 — projectile/shockwave와 같은 함정).
+## add_child하면 "flushing queries" 에러로 조용히 안 생긴다 — projectile와 같은 함정).
 func _on_carrier_deployed(ring: Array, at: Vector2, travel: float, power: float, status_mult: float, rune_type: int) -> void:
 	call_deferred(&"_deploy_now", ring, at, travel, power, status_mult, rune_type)
 

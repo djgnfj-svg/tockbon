@@ -54,21 +54,9 @@ extends Resource
 ## ⚠ 폐기 — 진 크기 잉크 할증 (v1.8에서 이중 과금으로 판명, 제거됨)
 @export var circle_radius_ink_mult: float = 2.0
 
-@export_group("충격파 = 착탄 축 (v2.1)")
-# 🔴 **화살표 하나 = 충격파 하나** (TECH_SPEC §4.0-b). 적을 맞히면 진이 그 자리에 놓이고,
-# 진 위의 화살표들이 **각자 제자리에서 제 방향으로** 충격파를 뿜는다.
-# **기둥은 여기 없다** — 충격파끼리 부딪히면 저절로 나온다. 규칙이 아니라 결과다.
-## 충격파 속도(px/s) — 탄보다 빨라야 "터졌다"는 느낌이 난다
-@export var shockwave_speed: float = 420.0
-## 충격파 수명(초) — 뻗는 거리 = 속도 × 이 값. 짧아야 착탄 근처의 사건으로 읽힌다
-@export var shockwave_lifetime_sec: float = 0.22
-## 충격파 피해 = 탄 피해 × 이 값. 화살표를 많이 그으면 총량이 늘지만 낱개는 약하다
-@export var shockwave_damage_mult: float = 0.35
-## 충격파 히트박스 반경(px)
-@export var shockwave_radius_px: float = 5.0
-
-# ── 기둥 — **충격파끼리 만난 자리**에 선다 (창발. 코드가 "수렴하면 기둥"이라 정하지 않는다)
-## 기둥 피해 = 탄 피해 × 이 값. 모아 그린 보상이라 낱개 충격파보다 세다
+@export_group("기둥 = 응집(←) 착탄 축")
+# ── 기둥 — 응집(←) 칸이 모인 착탄점에 선다 (ring_spell_system._spawn_pillar, gather 수만큼 굵다)
+## 기둥 피해 = 탄 피해 × 이 값. 모아 그린 보상이라 세다
 @export var pillar_damage_mult: float = 0.9
 ## 기둥 지속(초) — 이 동안 안에 있는 적을 계속 때린다
 @export var pillar_duration_sec: float = 0.5
@@ -76,7 +64,7 @@ extends Resource
 @export var pillar_tick_sec: float = 0.12
 ## 기둥 반경(px)
 @export var pillar_radius_px: float = 14.0
-## 같은 기둥이 겹쳐 서지 않는 최소 간격(px) — 충격파 8개가 한 점에서 만나면 기둥이 28개 설 수 있다
+## 같은 기둥이 겹쳐 서지 않는 최소 간격(px)
 @export var pillar_merge_px: float = 12.0
 
 @export_group("지팡이 = 발사 패턴 축 (v2.0)")

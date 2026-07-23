@@ -619,9 +619,6 @@ static func rune_guide_verts(rune_type: int, ctr: Vector2, s: float) -> PackedVe
 
 
 ## 지금 그릴 대상·현재 점수 조회 (바깥이 안내문·점수 표시에 쓴다).
-func trace_target() -> int:
-	return _trace
-
 func trace_slot() -> int:
 	return _trace_slot
 
