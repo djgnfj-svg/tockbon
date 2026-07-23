@@ -38,6 +38,8 @@ PowerShell은 자식 프로세스 stdout을 안 보여준다 — **테스트는 
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_spell_vfx_auto.gd       # 마법 연출 배선 (세션59: vfx 연결 2종·트레일 형제 스폰+그룹 무가입·spell_impact emit 캐리어/탄 각각 — 🔴 렌더(색·펄스·자전·트레일)는 못 잡음 · [3] null 가드의 검출자는 SCRIPT ERROR grep)
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_ring_book_jin_auto.gd   # 책 진 셀 격자·아이콘 (세61 목록 편입: Db 진 ≥1·격자/아이콘 계약은 합성 8조합으로 잼)
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_feel_auto.gd            # 손맛 개편 (세63: player_hurt 단일 발신+사망 가드·플래시 material per-instance·modulate 불가침·hurt 굽기·그림자·dust·카메라 킥·허수아비 파리티 — 🔴 "보인다"는 못 잡음: 세63에 그림자 가림·먼지 뭉개짐을 실게임만 잡았다)
+./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_floating_wand_auto.gd   # 떠있는 지팡이 + 발사 총구 계약 (세65: 미장착=숨김+발사 origin 몸중심 폴백·장착=지팡이 끝 muzzle_position 발사·총구 기하 단일 소스 — 🔴 둥둥/회전/flip/겉보기는 실게임만)
+./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_assembly_slice_auto.gd  # 조립→탁본 최소 슬라이스 (세68: 문양-고리 Db 2종 로드·compose_guide 합성(진+룬+밴드 2겹, 기존 static 재사용)·flatten_bands 발사계약(밴드→8칸 라운드로빈·순서·truncate — 뮤테이션 idx+=0 7건)·통째 채점·플래튼 발사 dummy take_hit·build_assembly score 실음 — 🔴 mouse_filter 클릭 도달·가이드 렌더·트레이스 손맛은 실게임만)
 ```
 
 ⚠ **이 목록이 세션51에 5개 뒤처져 있었다** (dialogue_box·map_panel·drop_pickup·enemy_ai·status). 정본은

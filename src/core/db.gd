@@ -12,6 +12,8 @@ var items: Dictionary = {}
 var jins: Dictionary = {}
 ## {StringName: GlyphDef} — 고리 조립 문양 (세션 13 구조화)
 var glyphs: Dictionary = {}
+## {StringName: GlyphRingDef} — 문양-고리 (세68 조립→탁본 모델의 파밍 단위)
+var glyph_rings: Dictionary = {}
 ## {StringName: RecipeDef} — 정제·제작 레시피 (세션29 경제)
 var recipes: Dictionary = {}
 ## {StringName: QuestDef} — 진행 목표 퀘스트 (세션36 스파인)
@@ -28,6 +30,7 @@ func reload() -> void:
 	items.clear()
 	jins.clear()
 	glyphs.clear()
+	glyph_rings.clear()
 	recipes.clear()
 	quests.clear()
 	chapters.clear()
@@ -51,6 +54,10 @@ func reload() -> void:
 		var glyph := res as GlyphDef
 		if glyph:
 			glyphs[glyph.id] = glyph
+	for res in _load_dir("res://data/glyph_rings"):
+		var gr := res as GlyphRingDef
+		if gr:
+			glyph_rings[gr.id] = gr
 	for res in _load_dir("res://data/recipes"):
 		var recipe := res as RecipeDef
 		if recipe:
@@ -190,6 +197,21 @@ func all_glyphs() -> Array[GlyphDef]:
 		out.append(g)
 	out.sort_custom(func(a: GlyphDef, b: GlyphDef) -> bool: return a.code < b.code)
 	return out
+
+
+# ── 문양-고리 (세68 조립→탁본 모델) ──
+
+func get_glyph_ring(id: StringName) -> GlyphRingDef:
+	return glyph_rings.get(id) as GlyphRingDef
+
+## 문양-고리 목록 — sort 오름차순 (조립 패널 목록 순서).
+func all_glyph_rings() -> Array[GlyphRingDef]:
+	var out: Array[GlyphRingDef] = []
+	for gr in glyph_rings.values():
+		out.append(gr)
+	out.sort_custom(func(a: GlyphRingDef, b: GlyphRingDef) -> bool: return a.sort < b.sort)
+	return out
+
 
 func _load_dir(path: String) -> Array[Resource]:
 	var out: Array[Resource] = []

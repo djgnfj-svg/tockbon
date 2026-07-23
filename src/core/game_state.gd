@@ -77,6 +77,10 @@ func _seed_starting_unlocks() -> void:
 	# 시드는 소비자 0인 유령이었다. 문양에 해금 축을 세우면 그때 시드·판정을 같이 만든다.
 	codex[&"rune_fire"] = true
 	codex[&"jin_single"] = true
+	# 🔴 세68 조립→탁본 최소 슬라이스 시드 — 문양-고리 2종을 지급해 조립대에서 바로 쥐어 본다.
+	# 필드 드롭(원정에서 줍기)은 최소 슬라이스 밖(아트 필요)이라 시작 지급으로 대신한다.
+	codex[&"gr_radiate5"] = true
+	codex[&"gr_gather3"] = true
 
 ## 🔴 **진짜 새로하기** (세션37, F8). save_manager 노트가 적어 둔 계약: `save_game()`이 쓰는 것
 ## 전부 + `bag`·`hp` + **시작 해금 재시드**를 한 곳에서 처리한다. 씬마다 손으로 비우면 필드가

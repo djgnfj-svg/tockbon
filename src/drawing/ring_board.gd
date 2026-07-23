@@ -119,7 +119,16 @@ const ARROW_SIDE_FRAC := 0.62
 const SLOT_PICK_FRAC := 0.18
 
 ## 지금 손으로 그릴 대상. NONE=그릴 것 없음(열린 빈 칸 없음 / 다 그림)
-enum TraceTarget { NONE, JIN, RUNE, GLYPH }
+## 🔴 COMBINED (세68 조립→탁본) = 진+룬+밴드 문양-고리를 **한 장의 가이드로 합성**해 통째로
+## 긋는 슬라이스 모드. 기존 JIN/RUNE/GLYPH 경로는 손 안 댄다 — COMBINED는 `enter_combined_trace`가
+## 가이드를 직접 넣고, `_draw`·`_gui_input`의 per-piece 잠금 분기(_asm.stage()·has_rune)를 안 타
+## 자동으로 그리기·입력이 정상 처리된다(가산일 뿐).
+enum TraceTarget { NONE, JIN, RUNE, GLYPH, COMBINED }
+
+# ── 🔴 세68 조립→탁본 합성 상수 (연출/레이아웃 → 스크립트 const, 밸런스 아님) ──
+const RUNE_GUIDE_FRAC := 0.18        # 합성 가이드에서 룬(중심)의 크기 (판 반지름 비)
+const BAND_RADII := [0.42, 0.68]     # 동심원 밴드 2겹의 반지름 비 (안쪽·바깥쪽 — 정본 3-(a))
+const MOTIF_SIZE_FRAC := 0.14        # 밴드 반경 대비 문양-고리 낱개 모티프 크기
 
 signal assembly_changed
 ## 단계가 넘어갔다 — 바깥(패널)이 오른쪽 탭·안내문을 맞춘다. (STAGE_*)
@@ -302,6 +311,27 @@ func _set_trace(target: int, slot: int) -> void:
 	_reset_reveal_fx()   # ⓑ 가이드가 바뀌었다 — 옛 가이드의 유령 반짝임을 남기지 않는다
 
 
+# ─────────────────── 🔴 세68 조립→탁본: 합성 가이드 통째 트레이스 ───────────────────
+## 합성된 조립본 가이드를 통째로 긋는 모드로 들어간다 (`_set_trace`와 동형이되 `_build_guide`
+## 대신 넘어온 점열을 쓴다). 슬라이스 패널이 조립 상태가 바뀔 때마다 부른다.
+## 🔴 기존 JIN/RUNE/GLYPH 경로 불변 — COMBINED는 per-piece 잠금 분기를 안 타 `_draw`·`_gui_input`이
+## 자동으로 그리기·입력을 처리한다(가이드+먹선 렌더는 `_trace != NONE` 공통 분기가 든다).
+func enter_combined_trace(guide_pts: PackedVector2Array) -> void:
+	_trace = TraceTarget.COMBINED
+	_trace_slot = -1
+	_scorer.set_reference_radius(_outer_radius())
+	_scorer.set_correction(_pen_correction())
+	_scorer.set_guide(guide_pts)
+	_reset_reveal_fx()   # ⓑ 옛 가이드의 유령 반짝임을 남기지 않는다
+	queue_redraw()
+
+
+## 합성 가이드를 통째로 그은 종합 점수 (완성도×정밀도). 슬라이스 리포트·발사가 이 값을 쓴다.
+## per-piece 평균(get_analysis)이 아니라 한 조각 점수 — 조립본을 한 번에 그은 것이라 통째다.
+func combined_total() -> float:
+	return _scorer.piece_score()
+
+
 ## ⓑ 드러남 반짝임의 렌더 상태를 지금 가이드에 맞춰 비운다 (렌더 위생 — 채점 무관).
 ## 가이드가 바뀌거나(_set_trace) 먹선을 지울 때(clear_stroke·clear_all) 부른다.
 func _reset_reveal_fx() -> void:
@@ -451,6 +481,74 @@ static func _densify(verts: PackedVector2Array, step: float) -> PackedVector2Arr
 			out.append(a.lerp(b, float(t) / float(n)))
 	out.append(verts[verts.size() - 1])
 	return out
+
+
+# ─────────────────── 🔴 세68 조립→탁본: 조립본 → 한 장의 합성 가이드 ───────────────────
+## 조립본(진 + 룬 + 밴드별 문양-고리)을 **한 장의 따라긋기 가이드**로 합성한다.
+## 🔴 기존 static 팩토리만 불러 이어 붙인다 — **새 기하 규칙 0**. 그래서 "셀에서 본 모양 =
+## 손으로 그을 모양" 규율이 자동 유지된다(문양·진 셀이 같은 함수를 쓰는 것과 같은 이유).
+## band_defs[i] = 그 밴드의 GlyphRingDef(or null). ro = 판 바깥 반지름(_outer_radius()).
+## ⚠ static·인스턴스 상태 금지 — 헤드리스 테스트가 이 함수를 관측점으로 쓴다.
+static func compose_guide(jin_shape: int, rune_type: int, band_defs: Array,
+		ctr: Vector2, ro: float) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	# ① 진 윤곽 (바깥 닫힌 도형)
+	out.append_array(jin_guide_pts(jin_shape, ctr, ro))
+	# ② 룬 (중심) — `_build_guide`의 RUNE 분기와 **똑같이** 변마다 12등분해 이어붙인다(밀도 규율).
+	var v := rune_guide_verts(rune_type, ctr, ro * RUNE_GUIDE_FRAC)
+	var seg := v.size() - 1
+	for e in seg:
+		for t in 12:
+			out.append(v[e].lerp(v[e + 1], float(t) / 12.0))
+	if seg >= 0:
+		out.append(v[seg])
+	# ③ 밴드별 문양-고리 — 동심원 반경에 count번 깐다
+	for i in band_defs.size():
+		var gr: GlyphRingDef = band_defs[i] as GlyphRingDef
+		if gr == null:
+			continue
+		var frac := float(BAND_RADII[i]) if i < BAND_RADII.size() \
+			else float(BAND_RADII[BAND_RADII.size() - 1])
+		out.append_array(glyph_ring_pts(gr, ctr, ro * frac))
+	return out
+
+
+## 문양-고리 한 장을 밴드 둘레에 `gr.count`번 깐다 — 각 인스턴스는 기존 `glyph_guide_pts` 재사용.
+## 회전 규약 = `slot_angle`과 같다(TAU·i/n − PI/2, 위=0 시계방향). 바깥방향(outward) = 발산 방향.
+static func glyph_ring_pts(gr: GlyphRingDef, ctr: Vector2, band_r: float) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	if gr == null:
+		return out
+	var n := maxi(gr.count, 1)
+	for i in n:
+		var a := TAU * float(i) / float(n) - PI / 2.0
+		var p := ctr + Vector2.from_angle(a) * band_r
+		var outward := Vector2.from_angle(a)
+		out.append_array(glyph_guide_pts(gr.motif, p, outward, band_r * MOTIF_SIZE_FRAC))
+	return out
+
+
+## 🔴 밴드별 (motif × count)를 **기존 8칸 링 하나로 플래튼**한다 (세68 발사 계약 — 발사부 무변경).
+## 밴드 순서대로 빈 칸을 채우고(band0 먼저), 8칸 상한(넘치면 버림). 빈 칸 = GLYPH_NONE(-1).
+## 예: 발산(1)×3 + 응집(0)×3 → [1,1,1,0,0,0,-1,-1]. 발사부(ring_spell_system)가 이 8칸을
+## 슬롯별로 전개한다(발산→탄·응집→기둥). defs를 아는 자리(패널·테스트)가 부른다 — 순수 데이터
+## RingAssembly는 Db를 몰라 여기 못 둔다. ⚠ static·인스턴스 상태 금지(관측점).
+static func flatten_bands(band_defs: Array) -> Array:
+	var ring: Array = []
+	for k in SLOTS:
+		ring.append(GLYPH_NONE)
+	var idx := 0
+	for gr_v in band_defs:
+		var gr: GlyphRingDef = gr_v as GlyphRingDef
+		if gr == null:
+			continue
+		var n := maxi(gr.count, 1)
+		for i in n:
+			if idx >= SLOTS:
+				return ring
+			ring[idx] = int(gr.motif)
+			idx += 1
+	return ring
 
 
 ## 지금 고른 진의 밑그림 도형 (`Enums.JinShape`). def가 없으면(순수 단위 테스트·폴백) 원.

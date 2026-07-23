@@ -9,6 +9,55 @@
 
 ---
 
+## 세션 70 (2026-07-23) — **조립→탁본 마법 모델 최소 슬라이스 구현 (세68 확정 모델을 손에 쥐기)**
+
+> 발단 = 세68 설계 대화에서 사용자: *"이제 확정이고 안 바꿀 듯. 다음 세션에서 테스트해보자."*
+> (정본 = memory `takbon-assemble-trace-model` + `scratch_takbon_model.md`). 모델 한 문장 =
+> **파밍한 문양-고리를 진의 밴드에 조립 → 조립본이 통째로 탁본 밑그림 → 손으로 한 번에 따라 긋기
+> (완성도×정밀도=위력) → 발사.** 문자 그대로 탁본 = 게임 이름이 곧 루프.
+
+### 파이프라인 (architect 설계 → dev 구현 → 리드 검증)
+- **설계**(takbon-architect, `scratch_assemble_trace_slice_design.md`): 핵심 통찰 = **`trace_scorer`가
+  이미 임의 길이 단일 가이드를 채점**한다 → 조립본을 한 장의 긴 가이드로 합성해 넘기면 "전체를 한 번에
+  따라 긋기"가 **채점기 무변경**으로 성립. 그래서 슬라이스가 얇다. 회귀 = **병렬 신설로 구조적 0**
+  (라이브 포지·기존 트레이스 경로 무손 — 세36 순수 오버레이 방식).
+- **최소 슬라이스 = F6 시험대 씬에서 먼저**(사용자 결정 — base 통합은 손맛 확정 후).
+
+### 한 일 (전부 가산 — 기존 경로 불변)
+- **① core (리드 직접)**: 신설 `GlyphRingDef` 스키마(`motif`=Enums.GlyphCode + `count` — 좌표 안 박고
+  절차 생성) · `Db`에 `glyph_rings` 로더+`get_glyph_ring`/`all_glyph_rings` · `GameState._seed_starting_unlocks`
+  시드 2종 · `data/glyph_rings/gr_radiate5.tres`(발산×5)·`gr_gather3.tres`(응집×3).
+- **② ring_board 가산 (dev)**: `TraceTarget.COMBINED` · static `compose_guide`(진 윤곽+룬 12등분+밴드
+  2겹 문양-고리 — 🔴**기존 static 팩토리만 재사용=새 기하 0**) · static `glyph_ring_pts`(`slot_angle`
+  회전 규약) · static `flatten_bands`(밴드 motif×count→8칸 라운드로빈, **발사부 무변경**) ·
+  `enter_combined_trace`·`combined_total`. `_draw`/`_gui_input`에 exhaustive `match _trace`가 없어
+  COMBINED가 공통 경로로 정상 처리 — 가산 외 수정 불필요.
+- **③ 슬라이스 조립 패널 (dev)**: `assembly_slice_panel.gd/.tscn`(루트 IGNORE·Board/RightPane STOP
+  구조=세25) — 진 자동선택·밴드 소켓 2·해금 문양-고리 목록·[분석 ▶]/[마력 주입]·`committed` 시그널.
+  `build_assembly`가 🔴**score/rings/rune/jin 싣음**(세26 to_assembly 계약). 발사=기존 `ring_cast_requested` 재사용.
+- **④ F6 시험대** `tests/test_assembly_slice.tscn`(허수아비+spell_system, base.tscn 무변경) + 신규 헤드리스
+  `test_assembly_slice_auto.gd`(29건).
+
+### ✅ 검증 (리드 직접)
+- 전 스위트 **24종 그린 + SCRIPT ERROR 0**, 회귀 없음(신규 1 + 회귀 확인). 신규 테스트를 **CLAUDE.md
+  「검증 명령」 + takbon-verify 스킬 목록에 등록**(세7 함정 — 겸사겸사 세65 누락 `test_floating_wand_auto`도 추가).
+- 🔴 **뮤테이션 리드 재확인**: `flatten_bands` `idx+=1`→`idx+=0`으로 flatten·발사 계약 **7건 정확히 빨감** → 원복.
+- **core 로드 실측**: `Db.all_glyph_rings()`==2·시드 codex true (세50 파싱 침묵사 그물 통과).
+
+### 🔴 남은 것 (실게임 미확인 — 다음 세션·F5)
+- 🔴🔴 **mouse_filter 클릭 도달**(세25 함정의 정확히 그 자리 — 새 화면 덮는 패널): 패널 덮임=발사 닿음/열림=차단. **헤드리스 절대 못 잡음.**
+- 합성 가이드 렌더(진+룬+밴드 2겹이 "따라 그을 만큼" 보이나·밴드 겹침) · 밴드 간격 실측(세50 감전연쇄 자리).
+- 🔴 **통째 트레이스 손맛**(긴 탁본이 재밌나/지겹나) = 정본의 실측 목표. **순서=수식 승격 여부도 여기서 결정**(지금은 플래튼=스탯 스택. 다겹 링 발사 스키마 이미 준비).
+- 🔴 **이 세션 사고 = 실게임 MCP 연결 실패**: 실게임 확인하려 중복 godot-mcp node 프로세스 정리 중
+  **이 세션의 클라이언트를 잘못 종료**해 브리지 라우팅이 끊김(세션 내 재연결 불가). 에디터는 떠 있었고
+  실세이브는 무손(md5 유지·백업 `save_BACKUP_s70`). 다음엔 `Get-CimInstance ... CreationDate`로 stale만 골라 죽이거나 건들지 말 것.
+- 잔여 손맛 const: `RUNE_GUIDE_FRAC 0.18`·`BAND_RADII [0.42,0.68]`·`MOTIF_SIZE_FRAC 0.14`(F5 조정 여지).
+- **미커밋 대기 = 세69 relight 45장 + tools/**(별개 작업 — 이번 슬라이스와 안 섞음).
+
+정본 = memory `takbon-assemble-trace-slice`.
+
+---
+
 ## 세션 67 (2026-07-23) — **미사용 정리 (ultracode 감사 — 죽은 스크립트·씬·에셋·심볼 청산)**
 
 > 발단 = 사용자: *"ultracode로 한번 안쓰는것들 정리하고 가자."* 자동 "미사용" 판정은 이 프로젝트에서
