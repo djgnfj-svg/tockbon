@@ -52,6 +52,7 @@ func _run() -> void:
 	await _test_desk_does_not_eat_the_spell()
 	await _test_desk_still_sees_the_player()
 	await _test_rejected_commit_is_not_silent()
+	await _test_book_assembles_the_firing_contract()
 	await _test_real_left_click_actually_fires()
 	await _test_empty_slot_refuses_to_fire()
 	await _test_forest_gate_leads_out()
@@ -143,33 +144,32 @@ func _test_desk_still_sees_the_player() -> void:
 	player.global_position = was
 
 
-## 🔴 [6] 점수 미달로 안 맺히면 **이유가 화면에 뜬다** (세션 25).
+## 🔴 [6] 점수 미달로 안 맺히면 **이유가 화면에 뜬다** (세션 25 · 세71 통째 흐름으로 갱신).
 ## 사용자: *"맽기까지 했는데 안나감"* — 미달 도안은 책을 덮을 때 조용히 거부됐다.
 ## 거부는 옳다(안 그러면 [마력 주입]을 건너뛰는 우회로가 된다). 문제는 **침묵**이었다:
 ## 책은 덮이고 슬롯은 빈 채인데 이유가 어디에도 없어 "맺었는데 안 나간다"가 됐다.
+## 🔴 세71: 책이 **단계별 긋기 → 조립 후 통째 트레이스**로 바뀌었다([다음] 은퇴). 진을 고르면
+##   합성 밑그림(진+룬+층)이 통째로 뜨고, 그걸 미달로 그은 채 닫으면 commit_rejected가 온다.
+##   판정 점수 = `combined_total()`(get_assembly().score는 COMBINED라 빈 값 — 세26 이번 판).
 func _test_rejected_commit_is_not_silent() -> void:
-	print("[6] 미달 도안을 거부할 땐 이유를 말해 준다")
+	print("[6] 미달 조립본을 거부할 땐 이유를 말해 준다 (세71 통째 흐름)")
 	_base.call(&"_open_drawing")
 	await process_frame
 	var forge = _base.get("_forge")
 	if forge == null:
 		_check(false, "책이 안 열렸다")
 		return
+	# 세71: 진을 고르면 왼쪽에 합성 밑그림이 통째로 뜬다 — 진·룬을 따로 안 긋는다.
+	forge.call(&"_on_jin_selected", &"jin_single")
 	var board = forge.get_node("Stage/Spread/RingBoard")
-	# 진·룬을 **미달로** 그린다 (조금만·벗어나게)
-	for step in 2:
-		if step == 0:
-			board.call(&"choose_jin")
-		else:
-			board.call(&"choose_rune")
-		board.call(&"begin_stroke")
-		var g = board.call(&"guide_points")
-		for i in range(0, int(g.size() * 0.4)):
-			board.call(&"trace_stroke", g[i] + Vector2(6.0, 5.0))
-		forge.call(&"_on_next")
-	var sc := float((board.call(&"get_assembly") as Dictionary).get("score", 1.0))
-	_check(sc <= 0.65, "미달 도안을 만들었다 (%.2f)" % sc)
-	_check(bool(board.call(&"can_commit")), "진·룬은 있으니 can_commit은 참 — 그래서 조용히 거부됐었다")
+	# 합성 밑그림을 **미달로** 그린다 (일부만·벗어나게 → 완성도·정밀도 둘 다 낮게)
+	board.call(&"begin_stroke")
+	var g = board.call(&"guide_points")
+	for i in range(0, int(g.size() * 0.3)):
+		board.call(&"trace_stroke", g[i] + Vector2(9.0, 8.0))
+	var sc := float(board.call(&"combined_total"))
+	_check(sc <= 0.65, "미달 조립본을 만들었다 (%.2f)" % sc)
+	_check(bool(forge.call(&"can_commit")), "진 고르고 그렸으니 can_commit 참 — 그래서 조용히 거부됐었다")
 
 	var rejected := []
 	forge.commit_rejected.connect(func(s: float) -> void: rejected.append(s))
@@ -178,7 +178,46 @@ func _test_rejected_commit_is_not_silent() -> void:
 	forge.call(&"close")
 	await process_frame
 	_check(rejected.size() == 1, "책을 덮으면 commit_rejected가 온다 (침묵 금지)")
-	_check((gs.ring_designs as Array).size() == before, "미달 도안은 여전히 안 맺힌다 (거부는 옳다)")
+	_check((gs.ring_designs as Array).size() == before, "미달 조립본은 여전히 안 맺힌다 (거부는 옳다)")
+	_base.call(&"_close_drawing")
+
+
+## 🔴 [6b] 세71 통째 흐름 해피패스 — 조립(진 + 층에 문양-고리) → 정확히 그림 → `build_assembly`가
+## 발사 계약을 싣는다: 🔴 **score**(세26 — 없으면 조용히 기준 위력) + 🔴 **flatten rings**(층→8칸).
+## 책이 이제 **라이브 발사 경로**라(base가 book을 연다) 여기서 못박는다(슬라이스 test [5] 이관).
+## COMBINED 모드라 `_board.get_assembly()`는 빈 값 — 패널 `build_assembly`가 직접 조립해야 한다.
+func _test_book_assembles_the_firing_contract() -> void:
+	print("[6b] 책 조립본이 발사 계약을 싣는다 (score · flatten rings — 세26)")
+	var gs = root.get_node("/root/GameState")
+	gs.codex[&"gr_radiate5"] = true   # 보상 문양 링을 해금 상태로 (조립 목록에 뜨게 — 맨몸 시작이라 시드 아님)
+	_base.call(&"_open_drawing")
+	await process_frame
+	var forge = _base.get("_forge")
+	if forge == null:
+		_check(false, "책이 안 열렸다")
+		return
+	forge.call(&"_on_jin_selected", &"jin_single")
+	forge.call(&"_on_band_selected", 0)
+	forge.call(&"_on_ring_picked", &"gr_radiate5")   # 밴드0에 발산×5
+	# 합성 밑그림 전체를 **정확히** 따라 긋는다 (완성도·정밀도 높게 → score>0)
+	var board = forge.get_node("Stage/Spread/RingBoard")
+	board.call(&"begin_stroke")
+	var g = board.call(&"guide_points")
+	for pt in g:
+		board.call(&"trace_stroke", pt)
+	var asm: Dictionary = forge.call(&"build_assembly")
+	_check(asm.has("score"), "🔴 build_assembly가 score를 싣는다 (세26 — 없으면 조용히 기준 위력)")
+	_check(float(asm.get("score", -1.0)) > 0.0,
+		"정확히 그었으니 score>0 (실제 %.2f)" % float(asm.get("score", -1.0)))
+	_check(asm.has("rings") and (asm["rings"] as Array).size() == 1, "rings 8칸 배열이 실린다")
+	var flat: Array = asm["rings"][0]
+	var radiate := 0
+	for k in flat:
+		if int(k) == 1:   # Enums.GlyphCode.RADIATE = 1
+			radiate += 1
+	_check(radiate == 5, "밴드에 발산×5 → flatten에 발산 코드가 5칸 (실제 %d)" % radiate)
+	_check(StringName(asm.get("jin", &"")) == &"jin_single" and int(asm.get("rune", -1)) == 0,
+		"jin=jin_single · rune=불(0)이 실린다")
 	_base.call(&"_close_drawing")
 
 

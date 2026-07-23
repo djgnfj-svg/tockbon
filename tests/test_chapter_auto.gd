@@ -11,6 +11,9 @@ extends SceneTree
 ##   • 보스 스폰 **두 경로 각각** — ch1=forest_enemy 범용(enemy_id 대입)·ch3=전용 씬(snake_boss)
 ##     (세56 교훈: 두 몸 계약은 그물도 두 개 — 한쪽만 재면 다른 쪽이 조용히 갈라진다)
 ##   • 처치 → chapter_clear codex 심김(파생 키) · 귀환 포탈 스폰
+##   • 🔴 세71 보상 해금 — ch1 클리어 시 ChapterDef.reward_unlock(gr_radiate5)이 codex에 심긴다
+##     (chapter_clear와 별도 축 — 조립→탁본 루프의 이음매. 발신 줄 뮤테이션으로 검출력 확인)
+##   • 🔴 세71 잡몹 길 — ch1은 이제 보스 1 + mob_spawns N. "enemies"에 섞이므로 보스는 enemy_id로 특정
 ##   • 포탈 [E] → extraction_success 1회(가방→창고 정산) · 사망 → bag_lost
 ##   • 잠금 판정식 — chapter_panel의 공개 is_chapter_open()이 단일 소스 (ch2는 ch1 클리어 전 잠김)
 ##   • 🔴 물리 레이어 계약 — 적 4=enemy가 아니면 부딪히기만 하고 take_hit이 안 불린다 (forest [1][5] 이식)
@@ -101,29 +104,33 @@ func _test_boss_spawn_both_paths() -> void:
 	await _fresh(&"ch1")
 	_check(is_equal_approx(_gs.hp, _gs.hp_max()),
 		"출격하면 HP가 찬다 %.0f/%.0f (안 그러면 죽는 게 이득)" % [_gs.hp, _gs.hp_max()])
-	var enemies := _enemies()
-	_check(enemies.size() == 1, "ch1: 방에 보스 하나뿐 (실제 %d)" % enemies.size())
-	if enemies.size() == 1:
-		_check(enemies[0].enemy_id == &"slime_elite",
-			"ch1 보스 enemy_id == slime_elite (실제 %s)" % enemies[0].enemy_id)
-		var want: Vector2 = _db.get_chapter(&"ch1").boss_spawn
-		_check(enemies[0].global_position.distance_to(want) < 2.0,
-			"ch1 보스가 boss_spawn(%s)에 섰다" % want)
+	# 🔴 세71: ch1은 이제 잡몹 길(mob_spawns)이 깔린다 — "enemies"에 보스 1 + 잡몹 N. 보스는 enemy_id로 특정.
+	var ch1 = _db.get_chapter(&"ch1")
+	var want_count = 1 + ch1.mob_spawns.size()
+	_check(_enemies().size() == want_count,
+		"ch1: 보스 1 + 잡몹 %d = %d (실제 %d)" % [ch1.mob_spawns.size(), want_count, _enemies().size()])
+	var boss = _boss(&"ch1")
+	_check(boss != null, "ch1 보스(slime_elite)가 잡몹 사이에 스폰됐다")
+	if boss != null:
+		var want: Vector2 = ch1.boss_spawn
+		_check(boss.global_position.distance_to(want) < 2.0,
+			"ch1 보스가 boss_spawn(%s)에 섰다 (실제 %s)" % [want, boss.global_position])
 
 	await _fresh(&"ch3")
-	enemies = _enemies()
-	_check(enemies.size() == 1, "ch3: 방에 보스 하나뿐 (실제 %d)" % enemies.size())
-	if enemies.size() == 1:
-		_check(enemies[0].enemy_id == &"snake_boss",
-			"ch3 보스 enemy_id == snake_boss (실제 %s)" % enemies[0].enemy_id)
-		_check(enemies[0].get_node_or_null("SnakeBody") != null,
+	var ch3 = _db.get_chapter(&"ch3")
+	_check(_enemies().size() == 1 + ch3.mob_spawns.size(),
+		"ch3: 보스 1 + 잡몹 %d (실제 %d)" % [ch3.mob_spawns.size(), _enemies().size()])
+	var boss3 = _boss(&"ch3")
+	_check(boss3 != null, "ch3 보스(snake_boss)가 스폰됐다")
+	if boss3 != null:
+		_check(boss3.get_node_or_null("SnakeBody") != null,
 			"ch3 보스에 SnakeBody가 있다 = 전용 씬이 진짜 로드됐다 (범용 스폰이면 없다)")
 		# 🔴 전용 씬도 boss_spawn에 서야 한다 — 위치 대입이 add_child **앞**이어야 snake_body가
 		# 그 자리 기준으로 자취를 프리시드한다(뒤면 첫 프레임에 마디가 원점→스폰으로 끌려간다,
 		# 세54 「정지 뭉침」 재림 — 세58-B 리뷰가 잡았다).
 		var want3: Vector2 = _db.get_chapter(&"ch3").boss_spawn
-		_check(enemies[0].global_position.distance_to(want3) < 2.0,
-			"ch3 보스가 boss_spawn(%s)에 섰다 (실제 %s)" % [want3, enemies[0].global_position])
+		_check(boss3.global_position.distance_to(want3) < 2.0,
+			"ch3 보스가 boss_spawn(%s)에 섰다 (실제 %s)" % [want3, boss3.global_position])
 
 
 ## [2b] 접촉 피해 — 붙으면 HP가 깎인다 (옛 forest [4] 이식 — 세58-B 리뷰 지적: 이걸 빼먹으면
@@ -132,7 +139,7 @@ func _test_boss_spawn_both_paths() -> void:
 func _test_contact_damage() -> void:
 	print("[2b] 보스에 닿으면 아프다 (적→플레이어 피해 채널)")
 	await _fresh(&"ch1")
-	var enemy = _enemies()[0]
+	var enemy = _boss(&"ch1")   # 🔴 보스에 붙는다 (잡몹이 아니라 — 보스 접촉 채널을 잰다)
 	var player = get_first_node_in_group("player")
 	player.global_position = enemy.global_position   # attack_range 안
 	var before: float = _gs.hp
@@ -156,7 +163,7 @@ func _test_my_spell_can_hit_boss() -> void:
 		"쏘니 진(캐리어)이 생긴다 = RingSpellSystem이 방에 있다 (실제 %d)" % _carriers().size())
 	_clear()
 
-	var boss = _enemies()[0]
+	var boss = _boss(&"ch1")   # 🔴 보스를 특정 (잡몹 섞임)
 	var hits := []
 	var on_hit := func(who, dmg, _rune) -> void:
 		if who == boss:
@@ -176,17 +183,25 @@ func _test_my_spell_can_hit_boss() -> void:
 ## [4] 🔴 처치 → chapter_clear codex + 귀환 포탈 스폰. 클리어 판정 = 처치 순간(루팅·귀환 무관).
 ## 포탈은 처치 전엔 **없어야** 한다 — 미리 있으면 "안 잡고 나가기"가 공짜가 된다.
 func _test_kill_plants_clear_and_portal() -> void:
-	print("[4] 처치 → 클리어 codex 심김 + 포탈 스폰")
+	print("[4] 처치 → 클리어 codex + 보상 문양 링 해금 + 포탈 스폰")
 	_gs.codex.erase(&"chapter_clear_ch1")   # 앞 테스트·저장 잔재 제거 — 첫 클리어 경로를 잰다
+	_gs.codex.erase(&"gr_radiate5")         # 🔴 세71 보상 첫 획득 경로를 잰다 (맨몸 시작 = 시드 아님)
 	await _fresh(&"ch1")
 	_check(_zone(&"portal") == null, "처치 전엔 포탈이 없다 (미리 있으면 안 잡고 나가기가 공짜)")
 	_check(not _gs.is_unlocked(&"chapter_clear_ch1"), "처치 전엔 클리어 codex가 없다")
+	_check(not _gs.is_unlocked(&"gr_radiate5"), "처치 전엔 보상 문양 링(gr_radiate5)이 없다 (맨몸 시작)")
 
-	_enemies()[0].take_hit(99999.0, 0, 0, 0.0)
+	# 🔴 보스를 특정해 잡는다 — 잡몹을 잡으면 클리어가 안 된다 (mob_spawns 섞임)
+	_boss(&"ch1").take_hit(99999.0, 0, 0, 0.0)
 	await process_frame
 	await physics_frame
 	_check(_gs.is_unlocked(&"chapter_clear_ch1"),
 		"보스를 잡으면 chapter_clear_ch1이 심긴다 (codex_unlocked 경유)")
+	# 🔴 보상 해금 (세71) — ChapterDef.reward_unlock가 처치 순간 codex에 심긴다. chapter_clear와 **별도 축**.
+	# 뮤테이션: boss_room._on_enemy_died의 reward_unlock 발신 줄을 지우면 이 검사가 빨개진다(검출력).
+	# 이게 조립→탁본 루프의 이음매다 — ch1 클리어 → gr_radiate5 → 조립대에서 파이어볼 5갈래 진화.
+	_check(_gs.is_unlocked(&"gr_radiate5"),
+		"보스를 잡으면 보상 문양 링 gr_radiate5가 해금된다 (ChapterDef.reward_unlock)")
 	var portal = _zone(&"portal")
 	_check(portal != null, "보스를 잡으면 귀환 포탈이 뜬다 (zone_id=portal)")
 
@@ -196,7 +211,7 @@ func _test_kill_plants_clear_and_portal() -> void:
 func _test_portal_banks_the_run() -> void:
 	print("[5] 포탈 E → extraction_success 1회 · 가방이 창고로 간다 (재클리어 포함)")
 	await _fresh(&"ch1")   # [4]에서 chapter_clear_ch1이 이미 있다 = 재클리어 경로
-	_enemies()[0].take_hit(99999.0, 0, 0, 0.0)
+	_boss(&"ch1").take_hit(99999.0, 0, 0, 0.0)   # 🔴 보스를 특정 (잡몹 섞임)
 	await process_frame
 	await physics_frame
 	var portal = _zone(&"portal")
@@ -327,6 +342,18 @@ func _enemies() -> Array:
 		if not n.is_queued_for_deletion():
 			out.append(n)
 	return out
+
+
+## 🔴 보스만 집는다 (세71 — ch1에 잡몹 길이 깔려 "enemies"에 보스+잡몹이 섞인다). enemy_id로 가른다:
+## 접촉·발사·클리어 검사가 `_enemies()[0]`을 쓰면 잡몹을 집어 보스를 못 잡는다(클리어 안 됨).
+func _boss(chapter_id: StringName):
+	var ch = _db.get_chapter(chapter_id)
+	if ch == null:
+		return null
+	for n in _enemies():
+		if n.enemy_id == ch.boss_enemy_id:
+			return n
+	return null
 
 
 func _carriers() -> Array:

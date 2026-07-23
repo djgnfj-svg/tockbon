@@ -91,8 +91,12 @@ const REPORT_TEX_MARGIN := 12.0    # panel_paper 48×48 나인패치 마진
 const SCORE_STRONG := Color(0.20, 0.15, 0.10)
 const SCORE_WEAK := Color(0.55, 0.48, 0.40)
 
-## 🔴 세션 25: **고르는 게 먼저다** — 오른쪽 셀을 눌러야 왼쪽에 밑그림이 뜬다 (진·룬·문양 전부).
-const Copy_START := "오른쪽에서 진을 골라 왼쪽 판에 손으로 그리세요  (진 → 룬 → 문양 순서로 하나씩 · [다음]으로 진행)"
+## 🔴 세71 조립→탁본 — **조립이 먼저, 탁본은 통째로.** 오른쪽에서 진·룬을 고르고 진의 층에
+## 문양-고리를 끼우면 왼쪽에 전체 밑그림이 뜬다. 그 전체를 손으로 **한 번에** 따라 긋는다.
+const Copy_START := "오른쪽에서 진·룬을 고르고 진의 층에 문양-고리를 끼우세요 — 왼쪽 밑그림 전체를 손으로 한 번에 따라 그으면 [분석 ▶]"
+## 층(band) 수 — 동심원 2겹 (RingBoard.BAND_RADII과 짝, 슬라이스 패널 BANDS와 동일). 진마다 차등은
+## JinDef.band_count 신설이 필요해 지금 팔지 않는다(설계 §진의 층 수 — 상수 2).
+const BANDS := 2
 
 ## 잉크 스와치 — 왼쪽 페이지 타이틀 줄 오른쪽 빈 곳(보드는 y30부터라 안 겹친다). 640×360 논리 좌표.
 const INK_SWATCH_SIZE := Vector2(24.0, 18.0)
@@ -131,10 +135,19 @@ const PAPER_BTN_GAP := 2.0
 @onready var _report: Control = $Stage/Spread/Report   # 분석 리포트 오버레이 (완성 시 표시)
 
 var _committed := false
-var _active_glyph := RingBoard.G_RADIATE      # 지금 고른 문양 (하이라이트)
-var _analysis: Dictionary = {}                # 마지막 분석 리포트 (get_analysis 결과)
+## 🔴 세71 조립→탁본 — **패널이 조립 상태를 쥔다** (슬라이스 패널 규율). RingAssembly는 Db를 몰라
+## 층 전개를 못 한다. 선택이 바뀔 때마다 `recompose()`로 왼쪽 합성 가이드를 다시 세운다.
+var _bands: Array[StringName] = []            # 밴드 idx → 문양-고리 id (&"" = 빈 밴드)
+var _sel_band := 0                            # 지금 고른(강조) 밴드
+var _sel_jin: StringName = &""                # 고른 진 id (&"" = 아직 — 밑그림 안 뜸)
+var _sel_rune := RingBoard.RUNE_FIRE          # 고른 룬 타입 (기본 불)
+var _size_mult := 1.0                         # 종이 규모 스칼라 (Db.paper_zoom_max) — build_assembly.size
+## 🔴 맺은 발사 계약 캐시 (세71) — 통째 흐름에선 `_board.get_assembly()`가 COMBINED라 빈 값이라,
+## `build_assembly()`로 직접 조립해 여기 담는다. 공개 `get_assembly()`가 이걸 돌려준다(F6·base 발사).
+var _committed_asm: Dictionary = {}
+var _analysis: Dictionary = {}                # 마지막 분석 {total} (리포트 렌더가 읽는다)
 ## 🔴 완성 시점의 발사 계약 (세션29) — 리포트가 잉크·크기·특별효과를 여기서 읽는다.
-## _draw 안에서 get_assembly(get_analysis 재계산)를 부르지 않으려고 캐시한다. 잉크/종이를 바꾸면 갱신.
+## _draw 안에서 build_assembly를 매번 부르지 않으려고 캐시한다. 잉크/종이를 바꾸면 갱신.
 var _finish_asm: Dictionary = {}
 
 ## 🔴 잉크 선택 (세션28~29). 고른 잉크의 **색으로 획이 그려지고**, 등급 배수·특별잉크 효과가
@@ -162,18 +175,17 @@ func _ready() -> void:
 	_report.draw.connect(_draw_report)
 	_spread.pivot_offset = BOOK_RECT.get_center()   # 책 펼침 애니의 회전축 = 책 한가운데
 
-	_board.assembly_changed.connect(_on_assembly_changed)
-	_board.stage_advanced.connect(_on_stage_advanced)
-	_board.score_changed.connect(_on_score_changed)
-	_board.piece_locked.connect(_on_piece_locked)
-	_board.finished.connect(_on_finished)
+	# 🔴 세71 통째 흐름 — stage machine 시그널(stage_advanced·piece_locked·finished)은 **안 구독**한다.
+	# 조립본을 한 번에 긋는 COMBINED 모드라 per-piece 잠금이 없다. score_changed만 통째 점수 라벨에 쓴다.
+	_board.score_changed.connect(_on_combined_score)
 	_board.stroke_ended.connect(_on_stroke_ended)   # 🔴 미뤄 둔 잉크 팔레트 재빌드를 획 끝에 흘린다
 
 	_book.jin_selected.connect(_on_jin_selected)
 	_book.rune_selected.connect(_on_rune_selected)
-	_book.glyph_selected.connect(_on_glyph_selected)
+	_book.band_selected.connect(_on_band_selected)   # 세71: 강조 밴드 선택
+	_book.ring_picked.connect(_on_ring_picked)       # 세71: 선택 밴드에 문양-고리 끼움
 
-	_next_btn.pressed.connect(_on_next)
+	_next_btn.visible = false   # 🔴 [다음] 은퇴 — 단계 이동이 사라졌다(통째로 긋는다)
 	_commit_btn.pressed.connect(_finish)
 	# 🔴 [쏘기] → **[마력 주입]** (세션 23). 조용히 성공하던 자리에 성공/실패가 갈리는 의식이 들어갔다.
 	var inject_btn := $Stage/Spread/Report/ShootBtn as Button
@@ -263,19 +275,20 @@ func open() -> void:
 	visible = true
 	_fit_stage()          # 숨어 있는 동안 창이 바뀌었을 수 있다(resized는 안 왔을 수 있음)
 	_committed = false
-	_active_glyph = RingBoard.G_RADIATE
+	_committed_asm = {}
 	_analysis = {}
 	_report.visible = false
-	_inject_defs()                              # 🔴 Db에서 진·룬·문양 정의를 읽어 주입 (세션 13 구조화)
-	_board.clear_all()                          # 🔴 빈 판에서 시작 — 진 → 룬 → 문양 순차
-	_board.set_active_glyph(_active_glyph)
+	_reset_selection()                          # 🔴 세71: 진·룬·밴드 선택을 비운다 (진 안 고름 = 밑그림 없음)
+	_inject_defs()                              # 🔴 Db에서 진·룬 정의를 읽어 책 탭에 주입 (세션 13 구조화)
+	_board.clear_all()                          # 🔴 빈 판에서 시작 — clear_all은 _trace를 JIN으로 돌린다
 	# 🔴 열 때마다 팔레트를 다시 짠다 (세션29) — 정제로 특별잉크·종이가 늘었을 수 있다.
 	_rebuild_palettes()
 	if not _ink_ids.is_empty():   # 기본 잉크(먹)로 시작 — 색을 판에 걸어 둔다
 		_select_ink(_ink_ids[0])
-	if not _paper_ids.is_empty():   # 기본 종이로 시작 — 확대 상한을 걸어 둔다
+	if not _paper_ids.is_empty():   # 기본 종이로 시작 — 규모 스칼라를 걸어 둔다
 		_select_paper(_paper_ids[0])
-	_sync_book()
+	_sync_book_bands()                          # 🔴 층 소켓·보유 목록을 책에 주입 (세71)
+	recompose()                                 # 🔴 clear_all 뒤 COMBINED 모드로 재진입 (빈 진이면 빈 가이드)
 	_set_say(Copy_START, false)
 	_update_score()
 	_refresh_buttons()
@@ -285,15 +298,17 @@ func open() -> void:
 func close() -> void:
 	if not visible:
 		return
-	# 🔴 맺기 버튼을 깜빡해도 쏠 수 있게 — 닫을 때 유효한 조립(진·룬 그려짐)이면 자동으로 맺는다.
-	# ⚠ **단, 견디는 마법진만** (세션 23). 안 그러면 못 그린 진도 책만 덮으면 [마력 주입]을
+	# 🔴 맺기 버튼을 깜빡해도 쏠 수 있게 — 닫을 때 유효한 시도(진 고름 + 통째로 그음)면 자동으로 맺는다.
+	# ⚠ **단, 견디는 마법진만** (세션 23). 안 그러면 대충 그린 진도 책만 덮으면 [마력 주입]을
 	# 건너뛰고 맺히는 셈이라 펑이 **누르지 않으면 그만인 벌**이 된다 — 규칙에 구멍이 뚫린다.
-	if not _committed and _board.can_commit():
-		var a := _board.get_assembly()
-		var sc := float(a.get("score", 0.0))
+	# 🔴 세71: 판정 점수 = `combined_total()`(통째 트레이스), `_board.get_assembly().score` 아님
+	#   (COMBINED 모드에선 그게 빈 값이다 — 세26 「score 안 실으면 조용히 기준 위력」의 이번 판).
+	if not _committed and _has_attempt():
+		var sc := _board.combined_total()
 		if RingPower.is_stable(sc):
 			_committed = true
-			design_committed.emit(a)
+			_committed_asm = build_assembly()
+			design_committed.emit(_committed_asm)
 			_refresh_buttons()
 		else:
 			# 🔴 **조용히 거부하지 않는다** (세션 25, 사용자: "맽기까지 했는데 안나감").
@@ -328,13 +343,10 @@ func _unhandled_input(event: InputEvent) -> void:
 	var k := event as InputEventKey
 	if k == null or not k.pressed or k.echo:
 		return
-	# 🔴 확정은 손으로 문질러 그리고 **[다음]**(또는 Enter)으로 잠근다.
-	# ⚠ **문양 고르기 키(Q·W)는 없다** (세션 25, 사용자: "q w 이런게 아니라 똑같이 마우스로
-	# 선택하는걸로해줘"). 진·룬이 전부 오른쪽 셀을 클릭해서 고르는데 문양만 키였다 —
-	# 셀 클릭은 그때도 됐지만 UI가 "[Q]"라 적어 놔 키보드를 시키는 것처럼 보였다.
+	# 🔴 세71: 조립본을 통째로 그은 뒤 Enter = [분석 ▶](옛 [다음]은 은퇴). 맺음은 리포트의 [마력 주입].
 	match k.keycode:
 		KEY_ENTER, KEY_KP_ENTER:
-			_on_next()
+			_finish()
 			get_viewport().set_input_as_handled()
 
 
@@ -372,90 +384,112 @@ func _unlocked_jins() -> Array:
 	return out
 
 
-# ─────────────────────────── 선택기 → 보드 (순차 조립) ───────────────────────────
+# ─────────────────── 🔴 세71 조립 → 합성 가이드 (통째 트레이스) ───────────────────
+## 슬라이스 패널(assembly_slice_panel) 규율 이식 — 패널이 `_bands`/`_sel_jin`/`_sel_rune`을 쥐고,
+## 선택이 바뀔 때마다 `recompose()`로 왼쪽 합성 가이드를 다시 세운다. RingAssembly는 Db를 몰라
+## 층 전개를 못 하므로 조립 상태는 패널의 소유다.
 
-## 오른쪽 탭·placed 표식을 보드의 현재 단계에 맞춘다.
-func _sync_book() -> void:
-	var tab := _stage_to_tab(_board.stage())
-	_book.go_stage(tab, _board.has_jin(), _board.has_rune())
-	_book.sync_state(_active_glyph)
-
-
-func _stage_to_tab(stage: int) -> int:
-	match stage:
-		RingBoard.STAGE_JIN:
-			return RingBook.TAB_JIN
-		RingBoard.STAGE_RUNE:
-			return RingBook.TAB_RUNE
-		_:
-			return RingBook.TAB_GLYPH
+## 진·룬·밴드 선택을 비운다 (열 때·펑·[다시] 뒤). 진 미선택(&"") = 밑그림 없음.
+func _reset_selection() -> void:
+	_bands = []
+	for _i in BANDS:
+		_bands.append(&"")
+	_sel_band = 0
+	_sel_jin = &""
+	_sel_rune = RingBoard.RUNE_FIRE
 
 
-## 🔴 진 탭 셀을 눌렀다 → **왼쪽에 밑그림이 선다** (세션 25). 예전엔 안내만 띄웠고 밑그림은
-## 단계에 들어가는 순간 이미 서 있었다 (사용자: "이게 눌러야 뜨게 해줘").
+## 각 밴드의 GlyphRingDef(or null) — compose_guide·flatten_bands가 받는 형식. Db 조회는 패널이 한다.
+func _band_defs() -> Array:
+	var out: Array = []
+	for id in _bands:
+		out.append(Db.get_glyph_ring(id) if String(id) != "" else null)
+	return out
+
+
+## 보유(해금)한 문양-고리 목록 — codex 미해금은 뺀다. 판정은 패널이(책·보드는 오토로드를 안 본다).
+func _available_rings() -> Array:
+	var out: Array = []
+	for gr: GlyphRingDef in Db.all_glyph_rings():
+		if gr == null:
+			continue
+		if String(gr.unlock_id).is_empty() or GameState.is_unlocked(gr.unlock_id):
+			out.append(gr)
+	return out
+
+
+## 층 소켓·보유 목록을 책에 주입한다 (set_defs와 동형 — 패널이 Db·codex를 해석해 넘긴다).
+func _sync_book_bands() -> void:
+	_book.set_bands(_band_defs(), _sel_band, _available_rings())
+
+
+## 🔴 조립본을 한 장의 합성 가이드로 만들어 보드에 통째 트레이스로 넣는다.
+## 진을 아직 안 골랐으면(&"") 빈 가이드 — 오른쪽에서 진을 먼저 고르는 게 순서다(세25 규율).
+func recompose() -> void:
+	if _board == null:
+		return
+	if String(_sel_jin) == "":
+		_board.enter_combined_trace(PackedVector2Array())
+		_update_score()
+		_refresh_buttons()
+		return
+	var jd := Db.get_jin(_sel_jin)
+	var shape := int(jd.guide_shape) if jd != null else int(Enums.JinShape.CIRCLE)
+	var ctr: Vector2 = _board.size * 0.5
+	var ro := float(_board.size.x)
+	if _board.has_method("_outer_radius"):
+		ro = _board._outer_radius()
+	# 🔴 합성 가이드 기하는 **고정 ro** — 종이 규모는 스칼라(size)로만 싣는다(설계 §종이 안전안).
+	# 가이드를 키우면 판을 넘칠 위험(세50 좌표 실측 자리)이라 이번 슬라이스는 안 키운다.
+	var guide := RingBoard.compose_guide(shape, _sel_rune, _band_defs(), ctr, ro)
+	_board.enter_combined_trace(guide)
+	_update_score()
+	_refresh_buttons()
+
+
+## 맺을 만한 시도가 있었나 — 진을 골랐고 통째로 뭔가 그었나. close 자동맺음·거부의 게이트다
+## (아무것도 안 하고 닫으면 commit_rejected를 안 쏜다 — 헛된 "흩어졌다"를 피한다).
+func _has_attempt() -> bool:
+	return String(_sel_jin) != "" and _board.coverage() > 0.02
+
+
+## 진 탭 셀 클릭 → 진을 고르고 왼쪽 밑그림 재합성 (세71: 밑그림은 통째, 진만 따로 안 긋는다).
 func _on_jin_selected(jin_id: StringName) -> void:
 	Audio.play(&"ui_click")
-	if _board.stage() != RingBoard.STAGE_JIN:
-		return
-	# 🔴 고른 진을 보드·계약에 담는다 (세션44, 진=형태). Db 조회는 패널이 한다 — 보드는 오토로드를
-	# 안 보므로 JinDef를 받아 색·형태를 반영한다. 이 진이 저장·발사(형태)까지 흐른다.
+	_sel_jin = jin_id
 	var jd := Db.get_jin(jin_id)
-	_board.choose_jin(jd)
 	var nm := String(jd.display_name) if jd != null else "진"
-	# 🔴 세션48: 진마다 밑그림 도형이 다르다 — "바깥 **원**"으로 고정돼 있으면 삼각·타원을 그리라
-	# 해 놓고 원이라 부른다. 안내문이 화면과 어긋나는 것 자체가 버그다(hud.gd 상단 주석과 같은 규율).
-	# 🔴 세션60: **칸 수를 여기서 처음 알린다** — 어느 문양 칸이 열리는지는 진이 정한다
-	# (JinDef.glyph_slots — 옛 문양본 축 흡수). 칸 열기 자체는 choose_jin이 내부에서 한다.
-	if jd != null:
-		_set_say("%s — 칸 %d개 · 왼쪽 판에 바깥 %s을 손으로 문질러 그리세요 → [다음]"
-			% [nm, jd.glyph_slots.size(), _jin_shape_word(jd)], false)
-	else:
-		_set_say("%s — 왼쪽 판에 바깥 %s을 손으로 문질러 그리세요 → [다음]"
-			% [nm, _jin_shape_word(jd)], false)
-	_refresh_buttons()
+	recompose()
+	_set_say("%s 골랐다 — 룬·층을 더해 왼쪽 밑그림 전체를 손으로 한 번에 따라 그으세요" % nm, false)
 
 
-## 진 밑그림 도형의 우리말 이름 — 안내문이 실제로 그릴 모양을 부른다 (세션48).
-## `Enums.JinShape` 순서와 짝. 새 도형을 넣으면 여기도 한 줄 는다 — 안 늘리면 "테두리"로 폴백한다
-## (인덱스 초과 크래시를 내지 않는다. 세션44~47에 `GLYPH_DESC`가 정확히 그 사고를 냈다).
-const JIN_SHAPE_WORDS := ["원", "삼각", "팔각", "타원", "오각", "마름모", "물결 원", "렌즈"]
-
-func _jin_shape_word(jd: JinDef) -> String:
-	if jd == null:
-		return "테두리"
-	var i := int(jd.guide_shape)
-	return JIN_SHAPE_WORDS[i] if i >= 0 and i < JIN_SHAPE_WORDS.size() else "테두리"
-
-
-## 룬 탭 셀 — 책이 고른 룬 타입을 실어 준다 (세션 34). 그 타입이 밑그림·발사·저장까지 흐른다.
+## 룬 탭 셀 클릭 → 룬을 고르고 재합성. 룬 타입이 밑그림·발사·저장까지 흐른다(하드코딩 금지).
 func _on_rune_selected(rune_type: int) -> void:
 	Audio.play(&"ui_click")
-	if _board.stage() != RingBoard.STAGE_RUNE:
-		return
-	_board.choose_rune(rune_type)
+	_sel_rune = rune_type
 	var rd: RuneDef = Db.get_rune(rune_type)
 	var nm := String(rd.display_name) if rd != null else "룬"
-	_set_say("%s 룬을 중심에 손으로 문질러 그리세요 → [다음]" % nm, false)
-	_refresh_buttons()
+	recompose()
+	_set_say("%s 룬 골랐다 — 밑그림 중심에 반영됐다. 진·층을 마저 고르고 통째로 그으세요" % nm, false)
 
 
-## 🔴 문양 **고르기** (오른쪽 문양 셀 클릭). 얹기는 왼쪽 판에 손으로 문지른다 — 칸마다.
-func _select_glyph(glyph: int) -> void:
-	_active_glyph = glyph
-	_board.set_active_glyph(glyph)
-	_book.sync_state(glyph)
-	if _board.stage() != RingBoard.STAGE_GLYPH:
-		_set_say("먼저 진과 룬을 그리세요  (진 → 룬 → 문양)", true)
-	elif _board.is_tracing():
-		_set_say("%s 선택 — 칸을 클릭해 손으로 그리세요 · 휠=크기"
-			% RingBoard.GLYPH_NAMES[glyph], false)
-	else:
-		_set_say("%s 선택 — 칸이 다 찼어요. [맺기]로 분석" % RingBoard.GLYPH_NAMES[glyph], false)
+## 층 소켓 클릭 → 강조 밴드를 바꾼다 (책이 자기 _sel_band를 갱신하지만 단일 소스는 패널).
+func _on_band_selected(i: int) -> void:
+	_sel_band = clampi(i, 0, BANDS - 1)
+	_sync_book_bands()
 
 
-func _on_glyph_selected(glyph: int) -> void:
+## 문양-고리 클릭 → 선택 밴드에 끼우고 재합성.
+func _on_ring_picked(gr_id: StringName) -> void:
 	Audio.play(&"ui_click")
-	_select_glyph(glyph)
+	if _sel_band < 0 or _sel_band >= _bands.size():
+		return
+	_bands[_sel_band] = gr_id
+	recompose()
+	_sync_book_bands()
+	var gr := Db.get_glyph_ring(gr_id)
+	var nm := String(gr.display_name) if gr != null else "문양-고리"
+	_set_say("%s 을(를) 밴드 %d에 끼웠다 — 밑그림에 층이 더해졌다" % [nm, _sel_band + 1], false)
 
 
 # ─────────────────────────── 잉크·종이 선택 (세션28~29) ───────────────────────────
@@ -572,17 +606,24 @@ func _select_ink(id: StringName) -> void:
 	_board.set_ink(id)
 	_highlight_ink()
 	if _report.visible:
-		_finish_asm = _board.get_assembly()   # 리포트가 떠 있으면 새 잉크로 위력·효과 갱신
+		_finish_asm = build_assembly()   # 리포트가 떠 있으면 새 잉크로 위력·효과 갱신 (세71: build_assembly)
 		_report.queue_redraw()
 
 
-## 종이를 골랐다 → 진 확대 상한을 그 종이 등급으로 (큰 진=데미지↑). 소모는 없다.
+## 종이를 골랐다 → 규모 스칼라를 그 종이 등급으로 (큰 진=데미지↑). 소모는 없다.
+## 🔴 세71: 통째 흐름엔 진 크기 휠이 없다 — 종이 등급을 **스칼라(size)로만** 싣는다(설계 §종이 안전안).
+## 합성 가이드 기하는 안 키운다(recompose는 고정 ro) — 오버플로우 회귀(세50 좌표) 방지.
 func _select_paper(id: StringName) -> void:
 	_active_paper = id
-	_board.set_jin_scale_max(Db.paper_zoom_max(id, BAL.paper_zoom_max_default))
+	# 🔴 세71: 통째 흐름엔 크기 휠이 없다 — 종이 등급을 스칼라(size)로만 싣는다(설계 §종이 안전안).
+	# 🔴 **기본 종이(등급 1) = size 1.0** — 「기준 100 = 기본 종이」 계약(power_display baseline).
+	#   옛 흐름은 크기 휠이 [1.0, zoom_max]였고 미조작 기본이 1.0이었다(zoom_max는 상한이지 크기가 아님).
+	#   휠이 은퇴한 지금은 **등급이 곧 규모 배수**다 — 기본은 1.0, 상급만 zoom_max만큼 커진다(종이=규모 보존).
+	var it := Db.get_item(id)
+	_size_mult = 1.0 if (it != null and it.grade <= 1) else Db.paper_zoom_max(id, BAL.paper_zoom_max_default)
 	_highlight_paper()
 	if _report.visible:
-		_finish_asm = _board.get_assembly()
+		_finish_asm = build_assembly()
 		_report.queue_redraw()
 
 
@@ -650,71 +691,27 @@ func _ink_name(id: StringName) -> String:
 	return it.display_name if it != null and it.display_name != "" else String(id)
 
 
-# ─────────────────── 손맛 피드백 (실시간 점수 · [다음] 진행 · 완성 분석) ───────────────────
+# ─────────────────── 손맛 피드백 (통째 트레이스 실시간 점수 · 분석) ───────────────────
 
-## 지금 그리는 조각의 점수가 갱신됐다 (실시간). 완성도·정밀도를 점수 라벨에 보여준다.
-func _on_score_changed(_score: float) -> void:
-	_update_score()
-	_refresh_buttons()
-
-
-## 한 조각을 [다음]으로 잠갔다 (board.piece_locked). 손맛 피드백 — 문양 칸만 별도 문구.
-func _on_piece_locked(target: int, slot: int, score: float) -> void:
-	if target == RingBoard.TraceTarget.GLYPH:
-		if _board.is_tracing():
-			_set_say("%s 새겼다 (%d점) — 다른 칸을 클릭해 이어 그리거나 [맺기]"
-				% [RingBoard.GLYPH_NAMES[_active_glyph], _pct(score)], false)
-		else:
-			_set_say("문양 칸을 다 새겼다 (%d점) — [맺기]로 분석" % _pct(score), false)
-
-
-## 🔴 [다음] (또는 Enter) — 지금 그린 조각을 잠그고 다음으로 넘긴다.
-func _on_next() -> void:
-	if not _board.is_tracing():
-		return
-	if _board.coverage() <= 0.02:
-		_set_say("먼저 왼쪽 선을 손으로 그리세요", true)
-		return
-	_board.advance()
-	# "advanced" → stage_advanced가 안내 · "finished" → finished 시그널이 리포트를 띄운다
-	_update_score()
-	_refresh_buttons()
-
-
-## 보드가 조각을 잠그고 단계를 넘겼다 (진→룬→문양). 탭·안내문을 맞춘다.
-func _on_stage_advanced(stage: int) -> void:
-	_book.go_stage(_stage_to_tab(stage), _board.has_jin(), _board.has_rune())
-	match stage:
-		RingBoard.STAGE_RUNE:
-			_set_say("진을 새겼다 — 이제 룬(불)을 중심에 그리세요 → [다음]", false)
-		RingBoard.STAGE_GLYPH:
-			# 🔴 세션60: 하위 단계(옛 문양본 고르기)가 없다 — 칸은 진을 고를 때 이미 열렸다. 바로 그린다.
-			_set_say("룬을 새겼다 — 칸을 클릭해 문양을 골라 손으로 그리세요 · 휠=크기", false)
-		RingBoard.STAGE_JIN:
-			_set_say(Copy_START, false)
+## 🔴 세71: 통째 트레이스 중 점수가 갱신됐다 (board.score_changed). 종합 점수 라벨·버튼 갱신.
+func _on_combined_score(_score: float) -> void:
 	_update_score()
 	_refresh_buttons()
 
 
 # ─────────────────────────── 맺기 · 분석 리포트 ───────────────────────────
 
-func _on_assembly_changed() -> void:
-	_refresh_buttons()
-
-
-## 🔴 [맺기] — 마법진을 끝내고 분석한다 (남은 문양 칸은 비운 채). 진·룬을 그렸어야 한다.
+## 🔴 [분석 ▶] — 통째로 그은 조립본을 분석한다 (판정은 없다 — 맺음은 [마력 주입]).
 func _finish() -> void:
-	if not _board.can_commit():
-		_set_say("진과 룬을 먼저 그려야 분석할 수 있다  (문양은 없어도 빈 진으로 날아간다)", true)
+	if String(_sel_jin) == "":
+		_set_say("먼저 오른쪽에서 진을 고르세요", true)
 		return
-	_board.finish()   # → finished 시그널이 리포트를 띄운다 (아직 **안 맺힌다**)
-
-
-## 보드가 마법진을 다 그렸다 — 분석 리포트를 띄운다 (점수·위력. **판정은 없다**).
-## 🔴 견딜지 터질지는 여기서 말하지 않는다 — 알려면 [마력 주입]을 눌러야 한다 (사용자 확정).
-func _on_finished(analysis: Dictionary) -> void:
-	_analysis = analysis
-	_finish_asm = _board.get_assembly()   # 잉크·크기·특별효과 스냅샷 (리포트가 읽는다)
+	if _board.coverage() <= 0.02:
+		_set_say("먼저 왼쪽 밑그림 전체를 손으로 따라 그으세요", true)
+		return
+	var total := _board.combined_total()
+	_analysis = {"total": total}   # 통째 점수 — per-piece 없음
+	_finish_asm = build_assembly()   # 잉크·크기·특별효과 스냅샷 (리포트가 읽는다)
 	_set_say("마법진 완성 — 분석을 보고 [마력 주입]으로 맺으세요", false)
 	_report.visible = true
 	_report.queue_redraw()
@@ -724,23 +721,50 @@ func _on_finished(analysis: Dictionary) -> void:
 ## 🔴 리포트에서 [마력 주입] — 마법진이 맺히거나 **펑** 한다 (사용자 확정 2026-07-17 세션 23).
 ## 기준선(65점) 이하면 도안이 통째로 날아가고 처음부터 다시 그린다. 잃는 건 시간·정성뿐이다.
 func _on_inject() -> void:
-	var total := float(_analysis.get("total", 0.0))
+	var total := _board.combined_total()   # 🔴 통째 점수 (get_assembly().score 아님 — COMBINED라 빈 값)
 	if not RingPower.is_stable(total):
 		_burst(total)
 		return
 	_committed = true
+	_committed_asm = build_assembly()   # 잉크·크기·특별효과를 실은 최종 계약 (발사·저장이 그대로 쓴다)
 	_report.visible = false
 	# 세62: 성공 = 금빛 섬광 — `_burst`(실패=붉은 섬광)와 대칭인 짝. 같은 modulate tween 방식.
 	_spread.modulate = INJECT_FLASH_COLOR
 	var flash := create_tween()
 	flash.tween_property(_spread, ^"modulate", Color.WHITE, INJECT_FLASH_SEC) \
 		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
-	var asm := _board.get_assembly()   # 잉크·크기·특별효과를 실은 최종 계약 (발사·저장이 그대로 쓴다)
-	design_committed.emit(asm)
+	design_committed.emit(_committed_asm)
 	_set_say("마력이 돌았다 — 위력 %d의 마법진이 맺혔다. 책을 덮고(ESC) 쏴 보세요"
-		% RingPower.power_display(total, Db.ink_mult(asm.get("ink", &"")),
-			float(asm.get("size", 1.0))), false)
+		% RingPower.power_display(total, Db.ink_mult(_committed_asm.get("ink", &"")),
+			float(_committed_asm.get("size", 1.0))), false)
 	_refresh_buttons()
+
+
+## 🔴 세71 발사 계약 조립 — 밴드→플래튼 8칸 + 통째 점수 + 잉크/크기. `_board.get_assembly()`를
+## **안 쓴다**(COMBINED 모드라 rings·score가 빈 값 — 세26 「score 안 실으면 조용히 기준 위력」의 이번 판).
+## 특별잉크(화상 증폭)는 보드가 트레이스 중 집계하므로 그 필드만 board_asm에서 뽑는다.
+func build_assembly() -> Dictionary:
+	var band_defs := _band_defs()
+	var ring := RingBoard.flatten_bands(band_defs)
+	var open: Array = []
+	for k in ring.size():
+		if int(ring[k]) != RingBoard.GLYPH_NONE:
+			open.append(k)
+	var score := _board.combined_total()
+	# 🔴 rings/score는 아래서 직접 싣는다 — board_asm은 **특별잉크 집계**(보드 private)의 유일한 창구다.
+	var board_asm := _board.get_assembly()
+	return {
+		"ring_count": 1,
+		"rune": _sel_rune,
+		"jin": _sel_jin,
+		"rings": [ring],
+		"open": open,
+		"score": score,
+		"ink": _active_ink,
+		"special_ink": board_asm.get("special_ink", &""),
+		"special_ratio": float(board_asm.get("special_ratio", 0.0)),
+		"size": _size_mult,
+	}
 
 
 ## 펑 — 도안이 날아간다. 붉은 섬광 뒤 판을 비운다 (연출 중엔 입력을 막아 두 번 못 누른다).
@@ -773,24 +797,18 @@ func _update_score() -> void:
 		return
 	var cov := int(round(_board.coverage() * 100.0))
 	var acc := int(round(_board.accuracy() * 100.0))
-	var piece := _board.piece_score()
-	_score_lbl.text = "이 조각 · 완성도 %3d%% · 정밀도 %3d%% · 점수 %3d" % [cov, acc, _pct(piece)]
+	var total := _board.combined_total()
+	_score_lbl.text = "완성도 %3d%% · 정밀도 %3d%% · 점수 %3d" % [cov, acc, _pct(total)]
 	_score_lbl.add_theme_color_override(&"font_color",
-		SCORE_STRONG if RingPower.is_stable(piece) else SCORE_WEAK)
+		SCORE_STRONG if RingPower.is_stable(total) else SCORE_WEAK)
 
 
-## 버튼 상태. [다음] = 지금 조각을 그렸어야 활성. [분석] = 진·룬을 그렸어야 활성.
+## 버튼 상태. [분석 ▶] = 진을 골랐고 통째로 뭔가 그었어야 활성 (세71). [다음]은 은퇴(숨김).
 func _refresh_buttons() -> void:
-	var tracing := _board.is_tracing()
-	var drawn := _board.coverage() > 0.02
-	_next_btn.disabled = not (tracing and drawn)
-	_next_btn.text = "다음 ▶"
 	# 🔴 **"맺기"가 아니다** (세션 25). 이 버튼은 분석 리포트를 띄울 뿐 **아무것도 맺지 않는다** —
-	# 맺는 건 리포트 안의 [마력 주입]이다. 그런데 이름이 "맺기 (분석)"이라, 누른 사람은
-	# 맺힌 줄 알고 책을 덮었다가 "맺었는데 안 나간다"를 겪었다 (사용자가 실제로 겪었다).
-	# 버튼은 자기가 하는 일만 말해야 한다.
+	# 맺는 건 리포트 안의 [마력 주입]이다 (이름이 하는 일만 말한다).
 	_commit_btn.text = "✓ 맺힘" if _committed else "분석 ▶"
-	_commit_btn.disabled = not _board.can_commit()
+	_commit_btn.disabled = not _has_attempt()
 
 
 ## 🔴 반올림은 core가 판다 — 「퍼펙트」가 "이 함수가 100을 돌려주는 순간"으로 정의돼 있어서,
@@ -808,23 +826,28 @@ func _set_say(text: String, warn: bool) -> void:
 
 # ─────────────────────────── 외부 조회 ───────────────────────────
 
+## 🔴 세71: 맺은 발사 계약 = `_committed_asm`(build_assembly 캐시). `_board.get_assembly()`는
+## COMBINED 모드라 rings·score가 빈 값이라 못 쓴다 (F6·base가 이 값으로 발사한다).
 func get_assembly() -> Dictionary:
 	if not _committed:
 		return {}
-	return _board.get_assembly()
+	return _committed_asm
 
 
+## 맺을 만한 시도가 있나 — base·시험대가 "쏠 수 있나"를 물을 때 쓴다 (세71: 통째 흐름 게이트).
 func can_commit() -> bool:
-	return _board.can_commit()
+	return _has_attempt()
 
 
 func clear_board() -> void:
 	_board.clear_all()
 	_committed = false
-	_active_glyph = RingBoard.G_RADIATE
+	_committed_asm = {}
 	_analysis = {}
 	_report.visible = false
-	_sync_book()
+	_reset_selection()
+	_sync_book_bands()
+	recompose()            # 진 미선택 = 빈 가이드
 	_set_say(Copy_START, false)
 	_update_score()
 	_refresh_buttons()
@@ -849,7 +872,7 @@ func _draw_report() -> void:
 	var font := ThemeDB.fallback_font
 
 	var total := float(_analysis.get("total", 0.0))
-	var grade := String(_analysis.get("grade", "?"))
+	var grade := RingPower.grade_of(total)   # 🔴 세71: 등급은 core가 판다(_analysis엔 total만 있다)
 	_report.draw_string(font, Vector2(14, 26), "마법진 분석",
 		HORIZONTAL_ALIGNMENT_LEFT, -1, 14, TITLE_COLOR)
 
@@ -888,36 +911,33 @@ func _draw_report() -> void:
 		_report.draw_string(font, Vector2(14, 82), " · ".join(effects),
 			HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color(0.50, 0.32, 0.14))
 
-	var y := 92.0
-	var jin: Variant = _analysis.get("jin", null)
-	if jin != null:
-		y = _report_row(font, y, "진 (바깥 원)", jin)
-	var rune: Variant = _analysis.get("rune", null)
-	if rune != null:
-		y = _report_row(font, y, "룬 (불)", rune)
-	for g in (_analysis.get("glyphs", []) as Array):
-		var gname := "문양"
-		if int(g.get("glyph", -1)) >= 0:
-			gname = RingBoard.GLYPH_NAMES[int(g.glyph)]
-		y = _report_row(font, y, "%s (칸 %d)" % [gname, int(g.slot)], g)
-
-
-## 한 조각 행 — 이름 + 점수 + 막대 + 완성도·정밀도. 다음 y를 돌려준다.
-func _report_row(font: Font, y: float, name_text: String, e: Dictionary) -> float:
-	var val := clampf(float(e.get("score", 0.0)), 0.0, 1.0)
-	var cov := int(round(float(e.get("cover", 0.0)) * 100.0))
-	var acc := int(round(float(e.get("acc", 0.0)) * 100.0))
-	_report.draw_string(font, Vector2(14, y), name_text,
+	# 🔴 세71: per-piece 행이 없다 — 통째로 그은 종합 하나다. 대신 **무엇을 조립했나** 한 줄.
+	_report.draw_string(font, Vector2(14, 106), "조립: " + _compose_summary(),
 		HORIZONTAL_ALIGNMENT_LEFT, -1, 10, REPORT_NAME)
-	_report.draw_string(font, Vector2(_report.size.x - 46.0, y), "%d점" % _pct(val),
-		HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.45, 0.28, 0.12))
-	var bar := Rect2(14, y + 6, _report.size.x - 28, 6)
+	# 종합 트레이스 막대 (완성도×정밀도).
+	var bar := Rect2(14, 118, _report.size.x - 28, 7)
 	_report.draw_rect(bar, Color(0.80, 0.74, 0.62, 0.7), true)
-	_report.draw_rect(Rect2(bar.position, Vector2(bar.size.x * val, bar.size.y)),
+	_report.draw_rect(Rect2(bar.position, Vector2(bar.size.x * clampf(total, 0.0, 1.0), bar.size.y)),
 		Color(0.72, 0.45, 0.15), true)
-	_report.draw_string(font, Vector2(14, y + 26), "완성도 %d%% · 정밀도 %d%%" % [cov, acc],
+	_report.draw_string(font, Vector2(14, 142),
+		"완성도 %d%% · 정밀도 %d%%" % [
+			int(round(_board.coverage() * 100.0)), int(round(_board.accuracy() * 100.0))],
 		HORIZONTAL_ALIGNMENT_LEFT, -1, 8, REPORT_DESC)
-	return y + 40.0
+
+
+## 리포트의 "무엇을 조립했나" 한 줄 — 진 · 룬 · 층(밴드별 문양-고리). per-piece 점수는 없다.
+func _compose_summary() -> String:
+	var jd := Db.get_jin(_sel_jin)
+	var jin_name := String(jd.display_name) if jd != null else "?"
+	var rd: RuneDef = Db.get_rune(_sel_rune)
+	var rune_name := String(rd.display_name) if rd != null else "?"
+	var layers: Array[String] = []
+	for i in _bands.size():
+		var gr := Db.get_glyph_ring(_bands[i]) if String(_bands[i]) != "" else null
+		if gr != null:
+			layers.append("%s×%d" % [String(gr.display_name), gr.count])
+	var layer_str := ", ".join(layers) if not layers.is_empty() else "빈 층"
+	return "%s · 룬 %s · 층 [%s]" % [jin_name, rune_name, layer_str]
 
 
 ## 책 껍데기 렌더. 세62: 책 몸은 BookArt 텍스처가 그린다 — 여기는 **그림자만** 깔고, 텍스처가

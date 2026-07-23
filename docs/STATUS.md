@@ -12,12 +12,12 @@
 ## 세션 70 (2026-07-23) — **조립→탁본 마법 모델 최소 슬라이스 구현 (세68 확정 모델을 손에 쥐기)**
 
 > 발단 = 세68 설계 대화에서 사용자: *"이제 확정이고 안 바꿀 듯. 다음 세션에서 테스트해보자."*
-> (정본 = memory `takbon-assemble-trace-model` + `scratch_takbon_model.md`). 모델 한 문장 =
+> (정본 = memory `takbon-assemble-trace-model` + `docs/takbon-design/takbon_model.md`). 모델 한 문장 =
 > **파밍한 문양-고리를 진의 밴드에 조립 → 조립본이 통째로 탁본 밑그림 → 손으로 한 번에 따라 긋기
 > (완성도×정밀도=위력) → 발사.** 문자 그대로 탁본 = 게임 이름이 곧 루프.
 
 ### 파이프라인 (architect 설계 → dev 구현 → 리드 검증)
-- **설계**(takbon-architect, `scratch_assemble_trace_slice_design.md`): 핵심 통찰 = **`trace_scorer`가
+- **설계**(takbon-architect, `docs/takbon-design/assemble_trace_slice_design.md`): 핵심 통찰 = **`trace_scorer`가
   이미 임의 길이 단일 가이드를 채점**한다 → 조립본을 한 장의 긴 가이드로 합성해 넘기면 "전체를 한 번에
   따라 긋기"가 **채점기 무변경**으로 성립. 그래서 슬라이스가 얇다. 회귀 = **병렬 신설로 구조적 0**
   (라이브 포지·기존 트레이스 경로 무손 — 세36 순수 오버레이 방식).
@@ -2713,5 +2713,5 @@ frozen+exec 발사+스텝+스샷): 응집 진→가운데 허수아비 기둥 �
 ## 📦 그 이전 (옛 자유드로잉 세대 v1.6~v2.2 · 세션 7~15) → `STATUS_ARCHIVE.md`
 
 세션 8-forge 아래로는 **자유 손그림 + $1 인식 + 화살표 충격파 창발** 세대의 세션 로그다.
-2026-07-16 세션 9의 「고리 조립」 전환으로 **대부분 대체**됐고, 정비 때 `docs/STATUS_ARCHIVE.md`로 옮겼다.
+2026-07-16 세션 9의 「고리 조립」 전환으로 **대부분 대체**됐고, 정비 때 STATUS_ARCHIVE.md로 옮겼고, 세71에 그 아카이브를 삭제했다(git 이력).
 버전 서사·죽은 결정은 `CHANGELOG.md`, 확정 스펙 아카이브는 `GDD.md`·`TECH_SPEC.md`(전부 옛 모델 기준).

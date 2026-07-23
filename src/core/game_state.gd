@@ -77,10 +77,11 @@ func _seed_starting_unlocks() -> void:
 	# 시드는 소비자 0인 유령이었다. 문양에 해금 축을 세우면 그때 시드·판정을 같이 만든다.
 	codex[&"rune_fire"] = true
 	codex[&"jin_single"] = true
-	# 🔴 세68 조립→탁본 최소 슬라이스 시드 — 문양-고리 2종을 지급해 조립대에서 바로 쥐어 본다.
-	# 필드 드롭(원정에서 줍기)은 최소 슬라이스 밖(아트 필요)이라 시작 지급으로 대신한다.
-	codex[&"gr_radiate5"] = true
-	codex[&"gr_gather3"] = true
+	# 🔴 세71 첫 스테이지 슬라이스 — **맨몸 파이어볼로 출발**(사용자 확정: "시작은 일반진+불 룬만").
+	# 문양 링(gr_*)은 더는 시드가 아니다 — 스테이지 클리어 보상으로만 얻는다(ChapterDef.reward_unlock):
+	#   ch1(숲 어귀) 클리어 → gr_radiate5(발산×5) 해금 → 조립대에서 밴드에 끼워 파이어볼을 5갈래로.
+	# ⚠ gr_gather3는 당분간 획득 경로가 없다(후속 챕터 reward_unlock 대기) — .tres는 남겨 둔다.
+	#   세68 시드 2줄(gr_radiate5·gr_gather3)은 이 결정으로 삭제됐다.
 
 ## 🔴 **진짜 새로하기** (세션37, F8). save_manager 노트가 적어 둔 계약: `save_game()`이 쓰는 것
 ## 전부 + `bag`·`hp` + **시작 해금 재시드**를 한 곳에서 처리한다. 씬마다 손으로 비우면 필드가

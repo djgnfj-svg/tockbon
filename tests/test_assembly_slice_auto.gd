@@ -244,6 +244,16 @@ func _test_panel() -> void:
 		"패널 flatten = 발산5+응집3 (실제 %s)" % str(flat))
 	_check(int(asm.get("rune", -1)) == 0 and StringName(asm.get("jin", &"")) == &"jin_single",
 		"rune=불 · jin=jin_single 실림")
+
+	# 🔴 미달 거부는 침묵이 아니다 (세71 — 세25 「맺었는데 안 나감」 계약이 구 책→슬라이스로 이관).
+	# 통째 트레이스를 안 했으니 점수 0 = 미달 → try_inject는 committed를 안 쏘고 false를 돌려준다
+	# (거부 사유는 패널 내부 notice가 화면에 띄운다 — base는 이 무발신에 기대 빈 슬롯을 안 만든다).
+	# 뮤테이션: try_inject의 is_stable 가드를 지우면 committed가 새어 이 검사가 빨개진다.
+	var committed_got := []
+	panel.committed.connect(func(_a: Dictionary) -> void: committed_got.append(1))
+	var injected: bool = panel.try_inject()
+	_check(not injected and committed_got.is_empty(),
+		"미달(안 그림·점수 0)은 맺히지 않는다 — try_inject false·committed 무발신 (침묵 거부 금지)")
 	panel.queue_free()
 
 

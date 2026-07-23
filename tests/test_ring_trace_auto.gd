@@ -301,28 +301,22 @@ func _test_glyph_shapes_are_distinct() -> void:
 		_check(float(b.call(&"accuracy")) > 0.95, "문양 %d — 선 위를 그었으니 정밀도≈1" % code)
 	_check(seen.size() == 6, "6개 문양이 **전부 다른** 모양 (실제 서로 다른 모양 %d개)" % seen.size())
 
-	# 🔴 **책 셀 아이콘도 갈려야 한다** (세션47). 판의 밑그림만 갈라 놓으면, 사용자가 문양을
-	# **고르는 순간** 보는 책 셀은 여전히 똑같은 화살표 6개다 — 고를 때 구분이 안 되면 절반 실패다.
-	#
-	# ⚠ **관측 대상은 책이다.** 처음엔 여기서 `RingBoard.glyph_guide_pts`를 직접 불렀는데,
-	# 뮤테이션(책이 자기 화살표를 다시 그리게 되돌림)을 넣어 보니 **그냥 통과했다** — 보드를
-	# 검증할 뿐 책을 검증하지 않아 검출력이 0이었다. 그래서 책의 `glyph_icon_pts`를 본다.
+	# 🔴 세71: 책의 **문양 개별 셀(glyph_icon_pts)은 은퇴**했다 — 문양은 이제 진의 **층(band)**에
+	# 문양-고리로 끼운다. 6종 구분은 위 `glyph_guide_pts`(모티프별 모양)가 이미 지키고, 책의
+	# `_ring_icon`은 그 함수를 **그대로** 불러 아이콘을 그리므로(구조적 재사용) 책이 자기 화살표로
+	# 갈라질 여지 자체가 없다(옛 glyph_icon_pts 관측점이 막던 그 갈라짐이 구조적으로 불가능해짐).
+	# 대신 새 UI(층 소켓)의 관측점 = 소켓·목록 레이아웃 static이 겹치지 않고 세로로 쌓이는가.
 	var Book = load("res://src/drawing/ring_book.gd")
-	var bk = Book.new()
-	root.add_child(bk)
-	var icon_seen := {}
-	for code in range(6):
-		var ip: PackedVector2Array = bk.call(&"glyph_icon_pts", code, Vector2.ZERO, 26.0)
-		_check(ip.size() >= 9, "셀 아이콘 %d — 점이 선다 (%d점)" % [code, ip.size()])
-		var ikey := ""
-		for pt in ip:
-			ikey += "%.1f,%.1f;" % [pt.x, pt.y]
-		_check(not icon_seen.has(ikey),
-			"🔴 셀 아이콘 %d가 %s와 똑같다 — 고를 때 구분이 안 된다" % [code, icon_seen.get(ikey, "?")])
-		icon_seen[ikey] = code
-	_check(icon_seen.size() == 6, "책 셀 아이콘 6종도 전부 다른 모양 (%d개)" % icon_seen.size())
-	# 셀과 밑그림이 **같은 모양**인지 — 책이 자기만의 별도 모양을 갖기 시작하면 여기서 갈린다.
-	bk.call(&"queue_free")
+	var bsz := Vector2(280, 262)
+	var socks: Array = Book.band_socket_rects(2, bsz, 46.0)
+	_check(socks.size() == 2, "층 소켓 2칸 rect가 선다 (실제 %d)" % socks.size())
+	_check((socks[1] as Rect2).position.y >= (socks[0] as Rect2).end.y - 0.01,
+		"소켓 2칸이 세로로 안 겹친다 (밴드1 아래 밴드2)")
+	var lt: float = Book.band_list_top(2, 46.0)
+	_check(lt > (socks[1] as Rect2).end.y, "보유 고리 목록이 소켓 아래에서 시작한다")
+	var lrects: Array = Book.ring_list_rects(2, bsz, lt)
+	_check(lrects.size() == 2 and (lrects[1] as Rect2).position.y > (lrects[0] as Rect2).position.y,
+		"고리 목록 rect가 세로로 쌓인다 (어휘가 늘면 줄 수로)")
 
 	# 🔴 요약 문자열이 새 어휘에서도 안 죽는다 — 세션 44에 관통을 늘리며 counts 딕셔너리를
 	# 같이 안 늘려 `counts[2] += 1`이 없는 키로 터질 뻔했다(런타임 에러 = 조용한 침묵 통과).

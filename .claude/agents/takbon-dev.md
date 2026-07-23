@@ -31,7 +31,6 @@ model: inherit
 - 저장/로드 → `save-load` · Resource(.tres) 데이터 → `resource-pattern`
 - 플레이어/캐릭터 이동 → `player-controller` · 입력 → `input-handling`
 - 물리/충돌/레이어/Area/레이캐스트 → `physics-system` (🔴 탁본 레이어 계약과 함께 — takbon-rules §5)
-- 적 AI/추격/네비 → `ai-navigation`
 - HUD/체력바/피해숫자/알림 → `hud-system` · 인벤토리 → `inventory-system`
 - **애니메이션(AnimationPlayer·AnimatedSprite·코드 애니) → `animation-system`** · 트윈(UI·연출 모션) → `tween-animation`
 - 파티클/VFX → `particles-vfx` · 카메라(스무스팔로·화면흔들림·줌) → `camera-system`
@@ -39,13 +38,11 @@ model: inherit
 - 오디오(버스·SFX·음악) → `audio-system`
 - 셰이더 → `shader-basics` · 수학(벡터·보간·RNG·기하) → `math-essentials`
 - 디버깅 → `godot-debugging` · 성능 최적화 → `godot-optimization`
-- 절차적 생성(노이즈·던전) → `procedural-generation`
 
 거의 안 쓰지만 로컬에 있음 (그 작업이 진짜로 필요할 때만):
-- UI 반응형/다해상도 → `responsive-ui`(탁본은 960×540 고정) · 대사 → `dialogue-system`(NPC가 자라면)
-- 능력 시스템 → `ability-system` · 에셋 임포트 → `assets-pipeline` · 익스포트 → `export-pipeline`
+- 대사 → `dialogue-system`(NPC가 자라면)
 - 테스트 프레임워크(GUT/gdUnit) → `godot-testing` (⚠ 탁본은 `-s` 스크립트 방식 — **검증은 `takbon-verify`가 정본**)
-- 멀티스레딩 → `multithreading` · 에디터 애드온 → `addon-development`
+- 에디터 애드온·@tool → `addon-development`
 
 지금 안 쓰지만 로컬에 남긴 「휴면 방향」 — 그 방향을 **실제로 착수할 때만** 불러라:
 - 멀티플레이어(basics/sync)·dedicated-server (사용자: 멀티 포기 안 함) · beehave·limboai (보스 AI가 BT로 커질 여지) · localization (다국어 미착수)

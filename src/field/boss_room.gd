@@ -158,8 +158,18 @@ func _on_enemy_died(enemy_id: StringName) -> void:
 	# 반응하므로 첫 클리어에만 쏜다. **포탈은 매번 뜬다** (안 뜨면 재방문이 소프트락이 된다).
 	if not GameState.is_unlocked(clear_id):
 		EventBus.codex_unlocked.emit(clear_id)
+	# 🔴 클리어 보상 해금 (세71 첫 스테이지) — ChapterDef.reward_unlock가 있으면 codex에 심는다.
+	# chapter_clear와 **별도 축**이다(clear_id는 챕터 게이트, reward_unlock은 획득물=문양 링/룬/진).
+	# 첫 처치에만: 재방문 파밍 때 다시 쏘면 Audio 해금음·UNLOCK 퀘스트가 중복 반응한다(clear 가드와 같은 결).
+	# codex_unlocked 한 발로 codex 심기 + 해금음 + UNLOCK 퀘스트 진행이 전부 따라온다(세37 station_* 패턴).
+	var reward_line := ""
+	if _chapter.reward_unlock != &"" and not GameState.is_unlocked(_chapter.reward_unlock):
+		EventBus.codex_unlocked.emit(_chapter.reward_unlock)
+		var rew := Db.get_glyph_ring(_chapter.reward_unlock)
+		var rew_name := rew.display_name if rew != null else String(_chapter.reward_unlock)
+		reward_line = " 보상: %s(책상에서 밴드에 끼워라)" % rew_name
 	_spawn_return_portal()
-	_hud.say("%s 클리어! 상자를 챙기고, 포탈에서 E로 귀환하라" % _chapter.title)
+	_hud.say("%s 클리어!%s 포탈에서 E로 귀환하라" % [_chapter.title, reward_line])
 
 
 ## 귀환 포탈 — 보스가 죽은 자리 옆에 스폰 (상자가 보스 자리에 떨어지므로 PORTAL_OFFSET만큼 비킨다).

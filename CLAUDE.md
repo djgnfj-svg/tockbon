@@ -5,7 +5,10 @@
 
 ## 새 세션이 먼저 읽을 것
 
-> 📖 **정본 = 이 파일 + `docs/STATUS.md` 최상단(직전 세션 상세) + `docs/WAND_CIRCLE.md` + `docs/PROGRESSION.md`(진행 관문표, 세58~) + memory.**
+> 📖 **진실원 = `docs/GDD.md`** — "게임이 무엇인가"(비전·코어 재미·마법 모델·축·루프·아트)의 단일 정본.
+> 🔴🔴 **GDD는 사용자의 명시적 허락 없이 수정 금지** (settings.json `ask` 규칙이 매 수정에 허락 프롬프트를 띄운다).
+> 나머지 정본은 역할별: 이 파일(아키텍처·함정·검증) · `docs/STATUS.md` 최상단(직전 세션 상세) ·
+> `docs/PROGRESSION.md`(진행 관문표, 세58~) · `docs/takbon-design/`(진행 중·대기 설계) · memory(세부 이력).
 > 지금 게임 = `src/base`(베이스캠프) + 고리 조립 책 + 숲 원정 + 온보딩 레일.
 > 🔴 **기록 규칙: 직전 세션만 상세, 그 전은 아래 「한 줄 지도」로 내려보낸다** — 이 절이 길어지면 정리 신호.
 
@@ -15,13 +18,13 @@
 🔴 **이 세션 실수 = 실게임 exec `new_game()`이 실세이브(`user://save`)를 fresh로 덮음** — MCP 검증 전 **실세이브 백업→복원** 규칙(memory `takbon-jin-slots`·`takbon-content-reset`)을 첫 실행 때 안 지켰다(덮이기 전도 fresh였을 가능성 높지만 확인 못 함). 두 번째 테스트 땐 백업→복원해 안전. **다음엔 실게임 `new_game()`·저장 건드리기 전 무조건 백업 먼저.**
 잔여: `floating_wand.gd`의 `HOVER_RADIUS 22`·`SIDE_ANGLE 0.7`·`BOB_*` 전부 손맛 const(위/왼쪽 조준 시 손잡이가 몸에 살짝 겹침 — 26~30 조정 여지, F5) · 지팡이 3종 시각은 1종 통일(나중 확장) · 지팡이 그림자·per-wand 스프라이트 안 붙임.
 
-🔴 **지지난 = 57** 「세피리아식 스테이지 형식 확정 + 퀘스트 은퇴 방향」(설계·결정 세션 — STATUS 항목 없음, 정본 = memory `takbon-stage-format-decision`) — 동기 = *"언제 룬을 얻을지 설계를 못 해 불안"* → 「뼈대는 확정, 살은 랜덤」. 곁가지: 밑그림 커스텀 완성본을 git stash에 보류(memory `takbon-guide-editor-stashed`) · 중첩진 architect 설계 = `scratch_nested_design.md` 대기(결정점 8개 미합의).
+🔴 **지지난 = 57** 「세피리아식 스테이지 형식 확정 + 퀘스트 은퇴 방향」(설계·결정 세션 — STATUS 항목 없음, 정본 = memory `takbon-stage-format-decision`) — 동기 = *"언제 룬을 얻을지 설계를 못 해 불안"* → 「뼈대는 확정, 살은 랜덤」. 곁가지: 밑그림 커스텀 완성본을 git stash에 보류(memory `takbon-guide-editor-stashed`) · 중첩진 architect 설계 = `docs/takbon-design/nested_design.md` 대기(결정점 8개 미합의).
 ⏸ **보류 = forest_t2(숲2·티어 하강)** — 사용자 확정(세48): *"숲2는 아직 필요없음."* 딸린 **「하강 시 회복 스킵」도 같이 보류**(`src/field/forest.gd:131` 주석). 관문이 enemy_id 기준이라 스테이지 형식과 충돌 없음(세58).
 
 🔴 **남은 빚** (세50~58 누적):
 - 🔴 **`rune_fill`(룬 농도)의 소비자가 0곳** — "진 안에 룬을 얼마나 크게 그렸나"가 **아무 데도 안 쓰인다**. `ring_spell_system`의 주석이 *"조립 단계에서 반영돼 들어온다"*고 **거짓말을 하고 있었다**(세50에 정정). **「그리는 재미」 축이다** — 살릴지 접을지 결정 필요.
 - **BOLT·EARTH·GRASS 전용 피격음이 없다**(세56) — "새 소리 = wav 한 장"(세33 방식) + audio.gd match 세 줄이면 끝. ⚠ 세61 리셋으로 그 룬들 자체가 은퇴 — **해당 룬을 복원하는 세션의 과제**로 이월.
-- **취약 이중 증폭** — 반응 산물에 배수가 두 번 곱한다(세49부터라 회귀는 아님). 의도인지 사고인지 미정. ⚠ 복합 룬(중첩진 M1)이 오면 커진다 — 그때 같이 결정(`scratch_nested_design.md` ⑧-7).
+- **취약 이중 증폭** — 반응 산물에 배수가 두 번 곱한다(세49부터라 회귀는 아님). 의도인지 사고인지 미정. ⚠ 복합 룬(중첩진 M1)이 오면 커진다 — 그때 같이 결정(`docs/takbon-design/nested_design.md` ⑧-7).
 - **반응 VFX 스테이지3~4 보류** — convert(진흙·산불·무성함) 플레어·DoT 불티는 틴트로 이미 어느 정도 보여 미룸(세52 설계 §5).
 - **미결 결정**: D5 진 카탈로그 재구축(세61 개편 — 복원 순서·칸 차등 배치·획득 경로를 진마다 사용자가 확정) · D3 문양 게이트 · D6 흙·번개 네임드(룬 복원 순서에 종속) · 🔴 잡몹 공급원 무대 0곳. 정리는 `docs/PROGRESSION.md` 「미결」절.
 
@@ -62,12 +65,13 @@
 - **`wipe_save()`는 새로하기가 아니다** — 오토로드(GameState·Clock)가 메모리에 남아 귀환 한 번에 옛 진행이 되살아난다. 진짜 새로하기 = `GameState.new_game()` (세37).
 - **초록불을 근거로 쓰지 마라** — 헤드리스는 클릭 도달·렌더·시간 경과를 못 잡고 `-s`는 런타임 에러가 나도 "OK"를 찍는다. **뮤테이션으로 검출력 증명 + 실게임 확인** (세22·23·25, skill `takbon-verify`).
 
-- **docs/REFACTOR_PLAN.md** — ✅ **세션 22에 완료** (이력·판단 근거로만 참고). 「문제가 아닌 것」 절은
-  아직 유효하다 — 건드리지 마라
-- **docs/STATUS.md** — 세션별 진행 로그 (세션 종료 시마다 갱신). 옛 로그는 STATUS_ARCHIVE.md
-- docs/BACKLOG.md(E4·E5 정본) · ART_SPEC.md(에셋·아트 방향 960×540·48px)
-- ⚠ **세션 39에 옛 자유드로잉 문서 6개(TRUTH·GDD·TECH_SPEC·CHANGELOG·NEXT_CYCLE·TEAM_PLAN) 삭제** —
-  삭제된 시스템 설명이라 지웠다. 고리 모델 GDD 재작성이 필요해지면 git(`98e427f`)의 옛 GDD를 참고 삼아 새로 쓴다
+- **docs/GDD.md** — 🔒 게임 정체성 진실원 (사용자 허락 없이 수정 금지 — 세71 신설)
+- **docs/STATUS.md** — 세션별 진행 로그 (세션 종료 시마다 갱신)
+- docs/BACKLOG.md(E4·E5 정본) · ART_SPEC.md(에셋·아트 방향 960×540·48px) · PROGRESSION.md(관문표) · ONBOARDING_FLOW.md(온보딩 레일)
+- ⚠ **세71에 죽은 문서 삭제**: `STATUS_ARCHIVE.md`(옛 자유드로잉 세대 로그) · `REFACTOR_PLAN.md`(세22 완료 —
+  「문제가 아닌 것」 유효 판단은 이 아키텍처 절과 memory에 흡수됨). 필요하면 git 이력.
+- ⚠ **세39에 옛 자유드로잉 문서 6개(TRUTH·GDD·TECH_SPEC·CHANGELOG·NEXT_CYCLE·TEAM_PLAN) 삭제** —
+  삭제된 시스템 설명이라 지웠다. (세71에 신설한 GDD.md는 고리/조립→탁본 모델의 새 진실원이다.)
 
 ## 아키텍처 요약
 
@@ -141,23 +145,23 @@
 > dedicated-server·beehave·limboai·localization은 「휴면 방향」으로 남겼다** — 사용자가 멀티·다국어·BT
 > 보스 AI를 아직 안 접었기 때문(삭제=방향 포기 신호라). 되돌리려면 이 커밋 직전 git 이력.
 >
-> 🔴 **세션 39: 제네릭 43개 SKILL.md를 한국어로 번역했다 = 상류(godot-prompter)와 「관리된 갈라짐」.**
-> 번역 사본이라 상류(`jame581/GodotPrompter`, 현재 `1.11.0`)와 어긋나므로, `.claude/skill-vendor/`가
-> 그 갈라짐을 **관리**한다(막지 않는다): ① `upstream-1.11.0/` = 번역 당시 영어 원본 박제본(diff 기준,
-> 에이전트가 로드 안 함) · ② `VERSION` = 번역 기준 버전 · ③ `check-upstream.sh` = **한 달에 한 번**
-> 돌려 상류 버전이 올랐는지·어느 스킬이 바뀌었는지 출력. 코드 블록·`name:`은 번역 안 함(코드는 상류
-> 대조용 원문, name은 호출 키). 상세 = `.claude/skill-vendor/README.md`.
-> 🔴 **references(심화문서 150개)는 삭제했다** (사용자: *"깔끔하게 관리"*) — 각 스킬 폴더가 SKILL.md
-> 한 장씩만 남아 트리가 깨끗하다. 본문의 "→ references 보라" 죽은 링크도 정리. **영구 손실 아님**:
-> 영어 전문이 `skill-vendor/upstream-1.11.0/`(diff 박제본)와 상류 github에 그대로 있어 언제든 복구.
-> 즉 심화 레시피가 필요하면 그 두 곳에서 꺼내 온다 — skills/ 트리에만 안 둔다.
+> 🔴 **세션 39: 제네릭 SKILL.md는 한국어로 번역돼 있다** — 상류(`jame581/GodotPrompter`, 번역 기준 `1.11.0`)의
+> 번역 사본이다. 코드 블록·`name:`은 원문 유지(name은 호출 키). ⚠ **세71에 `.claude/skill-vendor/`
+> (상류 대조용 박제본+check-upstream.sh)를 제거했다** — 상류와 계속 맞추지 않기로 함(사용자 확정). 즉
+> 이 스킬들은 이제 상류를 따라가지 않는 **탁본 로컬 포크**다. 영어 원본이 필요하면 상류 github에서 꺼낸다.
+> 🔴 **references(심화문서 150개)도 삭제했다** (사용자: *"깔끔하게 관리"*) — 각 스킬 폴더가 SKILL.md
+> 한 장씩만 남아 트리가 깨끗하다. 본문의 "→ references 보라" 죽은 링크도 정리. 심화 레시피가 필요하면
+> 상류 github에서 꺼내 온다.
 
-- **위임 대상 (`.claude/agents/`):** 핵심 = `takbon-dev`(구현) · `takbon-architect`(설계) ·
-  `takbon-reviewer`(리뷰) · `takbon-ui`(패널·모달·HUD) · `takbon-art`(도트 스프라이트). 가끔 =
-  `takbon-shader`(2D 셰이더 효과) · `takbon-animator`(스프라이트 애니 배선) · `takbon-profiler`(성능 진단) ·
-  `takbon-tools`(에디터 플러그인·@tool). 다들 `.claude/skills/takbon-rules`(아키텍처·계약)와
+- 🔴 **기획은 에이전트가 아니라 리드가 한다** — 새 기능·시스템·콘텐츠는 리드가 `takbon-design` 스킬을
+  켜서 **사용자와 대화하며** 확정한다(한 번에 질문 하나·2~3안+추천·섹션별 승인·하드게이트·scratch 착지).
+  서브에이전트는 대화를 못 해 혼자 정하므로(사용자가 싫어함, 세71) 기획을 위임하지 마라. memory `takbon-design-dialogue`.
+- **위임 대상 (`.claude/agents/`):** 핵심 = `takbon-dev`(구현) · `takbon-architect`(**확정 설계 리뷰·기술 설계** —
+  게임 방향은 안 정함) · `takbon-reviewer`(리뷰) · `takbon-ui`(패널·모달·HUD) · `takbon-art`(도트 스프라이트) ·
+  `takbon-relight`(스프라이트 입체화 — 세69 relight). 가끔 = `takbon-shader`(2D 셰이더 효과) ·
+  `takbon-animator`(스프라이트 애니 배선). 다들 `.claude/skills/takbon-rules`(아키텍처·계약)와
   `takbon-verify`(검증 규율)를 읽고, 제네릭 Godot
-  지식은 로컬 복사한 제네릭 스킬 43개(`gdscript-patterns`·`animation-system`·`physics-system`·`godot-ui` 등)를
+  지식은 로컬 복사한 제네릭 스킬 36개(`gdscript-patterns`·`animation-system`·`physics-system`·`godot-ui` 등)를
   Skill 도구로 부른다. 규칙 충돌 시 탁본이 이긴다.
   - 🔴 **기능 지식은 에이전트가 아니라 스킬에 있다** — 애니/물리/셰이더 등을 만들 때 `takbon-dev`가
     해당 스킬(`animation-system`·`physics-system`·`shader-basics`…)을 읽고 짠다. 그래서 스킬을 다 가져온
@@ -199,6 +203,12 @@
 | 2026-07-20 | 🔴 보고서는 **파일로** 지시 | 위임 프롬프트 규약 | 세48~49에 채팅 보고 4건이 **증발**(idle 알림만 옴) · 파일로 시킨 2건은 도착. architect·reviewer는 산출물이 보고서뿐이라 치명적 |
 | 2026-07-21 | 🔴 **도형 플레이스홀더 금지** 규칙 박음 | CLAUDE.md 살아있는 함정 + skills/takbon-rules §0 + agents/takbon-{architect,dev} | 사용자 확정(세54): 뱀 보스가 Polygon2D 도형으로 나감. 설계·구현이 "아트 병렬이니 도형으로 먼저"(drop_pickup 마름모 선례)를 관행처럼 써왔는데 **하네스 어디에도 금지 규칙이 없어** 재발. 이제 생명체·프롭 = takbon-art 도트 스프라이트 필수(VFX·가이드선은 예외) |
 | 2026-07-19 | references 심화문서 150개 삭제 | skills/*/references/ 40폴더 + godot-testing 최상위 참조 2개 삭제 · 본문 죽은 링크 정리 | 사용자 "깔끔하게 관리". skills/ 트리를 SKILL.md 한 장씩만 남김. 영어 전문은 skill-vendor 박제본+상류 github에 있어 영구 손실 아님(복구 가능) |
+| 2026-07-24 | 🔴 **기획 스킬 `takbon-design` 신설 + architect 역할 재정의** | skills/takbon-design(신설) · agents/takbon-architect | 사용자: architect가 **혼자 정해 생각과 다르게** 나옴 → 서브에이전트는 구조상 대화 불가라 대화형 기획엔 부적합. 게임 방향(무엇/왜/재밌게)은 **리드가 `takbon-design`으로 사용자와 대화하며 확정**(한 번에 질문 하나·2~3안+추천·섹션별 승인·하드게이트·scratch 문서 착지), architect는 **확정된 설계를 받아 훑는 리뷰어**로 재정의(방향 뒤집기 금지). superpowers `brainstorming` 스킬의 탁본판. 구현 계획서 단계는 안 넣음(설계→dev 직행, 사용자 확정) |
+| 2026-07-24 | **슬림화: 에이전트 9→7 · 제네릭 스킬 43→36** | 삭제 agents/takbon-{profiler,tools} · 삭제 skills 7(responsive-ui·multithreading·ai-navigation·ability-system·assets-pipeline·export-pipeline·procedural-generation) · takbon-dev 매핑 갱신 | 사용자 "슬림화 해줘". description은 매 세션 상주 로드라 안 쓰는 걸 줄이면 실익. 삭제 기준 = 2D 싱글 데스크톱 로그라이트 형식상 안 쓰는 순수 기술 스킬(방향 신호 아님) + profiler(성능 이슈 0회)·tools(에디터 툴링 거의 안 씀). 필요 시 git 복구·dev가 스킬 직접 로드. ⚠ 방향 신호 6(멀티×2·dedicated-server·beehave·limboai·localization)은 이번엔 유지 |
+| 2026-07-24 | **입체화 에이전트 `takbon-relight` 신설** | agents/takbon-relight(신설) · agents/takbon-art(입체 규율 포인터) | 사용자: 스프라이트를 "하앙 입체적으로". 세69 relight 기법(`tools/relight_sprites.lua`·실루엣 재조명·건물 기준)을 전담 에이전트로. 방식 A(기존 PNG 후처리) + B(신규를 처음부터 입체). 🔴🔴 재익스포트 시 음영 침묵 원복 함정 내장. art는 신규를 입체로 그리고 큰 입체화는 relight에 위임 |
+| 2026-07-24 | **기획 문서 보관소 `docs/takbon-design/` 신설** | 루트 scratch 설계 7개 이동(scratch_ 접두어 제거)·보고 3개 삭제·README 인덱스·takbon-design 스킬 착지 경로 변경·memory/CLAUDE.md/STATUS/PROGRESSION 살아있는 참조 갱신 | 사용자: 기획 문서를 리포 루트 흩뿌림 말고 영구 폴더에. 앞으로 `takbon-design`이 `docs/takbon-design/<주제>_design.md`로 착지. 구현 보고·리뷰는 여전히 일회성 루트 scratch(반영 뒤 삭제). ⚠ 이미 삭제된 옛 scratch 로그 참조(STATUS의 school_village·jin_slots 등)는 과거 기록이라 안 건드림 |
+| 2026-07-24 | **`.claude/skill-vendor/` 통째 제거** | skill-vendor 폴더(upstream-1.11.0 박제본 43+VERSION+check-upstream.sh) 삭제·CLAUDE.md 「관리된 갈라짐」 서술 정리 | 사용자 확정: 상류(godot-prompter)와 계속 맞추지 않기로 함. 번역 스킬은 이제 상류 추종 안 하는 **탁본 로컬 포크**. 영어 원본이 필요하면 상류 github에서 꺼냄(세39 번역 이후 상류 대조를 실제로 돌린 적 없어 무게만 됐다) |
+| 2026-07-24 | 🔴 **단일 진실원 `docs/GDD.md` 신설 + 수정 잠금** | 신설 docs/GDD.md(안정된 진실만) · settings.json `ask` 잠금 · WAND_CIRCLE.md 은퇴 스텁 · CLAUDE.md 정본 포인터 단순화(5곳→GDD 헤드) · memory 주 정본 갱신 | 사용자: "진실원(GDD)을 두고 허락 받아야 수정하게, 문서가 많아서". 진실이 5곳(CLAUDE.md·STATUS·WAND_CIRCLE·PROGRESSION·memory)에 흩어져 있던 걸 GDD가 "게임이 무엇인가"의 단일 정본으로 흡수. 잠금 = settings.json `Edit/Write(docs/GDD.md)=ask`(매 수정에 허락 프롬프트). 세39에 지운 옛 TRUTH.md의 부활 격 |
 
 ## 검증 명령 (반드시 Bash에서 — PowerShell은 자식 프로세스 stdout을 안 보여줌)
 

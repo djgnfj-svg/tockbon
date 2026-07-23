@@ -15,14 +15,16 @@ const RingBoard := preload("res://src/drawing/ring_board.gd")
 signal jin_selected(jin_id: StringName)
 ## 룬을 골랐다 — 보드 중심에 그 룬을 놓는다 (rune_type = Enums.RuneType, 세션 34)
 signal rune_selected(rune_type: int)
-## 문양을 골랐다 — 열린 칸을 한 칸 채운다 (RingBoard.G_*)
-signal glyph_selected(glyph: int)
+## 🔴 세71 조립→탁본 — 밴드 소켓을 골랐다(강조 대상) / 소켓에 끼울 문양-고리를 골랐다.
+## 옛 `glyph_selected`(개별 문양 배치)를 대체한다 — 문양은 이제 진의 **층(band)**에 끼운다.
+signal band_selected(i: int)
+signal ring_picked(gr_id: StringName)
 
 const TAB_JIN := 0
 const TAB_RUNE := 1
-const TAB_GLYPH := 2
+const TAB_GLYPH := 2                    # 세71: "문양 개별" → "층 소켓" 탭 (라벨=층)
 const TAB_ORDER := [TAB_JIN, TAB_RUNE, TAB_GLYPH]
-const TAB_LABEL := ["진", "룬", "문양"]
+const TAB_LABEL := ["진", "룬", "층"]
 
 # ── 한지·먹 톤 ──
 const INK := Color(0.13, 0.11, 0.10)
@@ -38,6 +40,9 @@ const TAB_ON_TEXT := Color(0.22, 0.16, 0.10)
 const TAB_OFF_TEXT := Color(0.42, 0.37, 0.30)
 const OPEN_DOT := Color(0.85, 0.50, 0.18)          # 진 셀 8점 다이어그램: 열린 문양 칸
 const SHUT_DOT := Color(0.30, 0.26, 0.20, 0.4)     # 닫힌 칸
+# ── 층(band) 소켓 톤 (세71 — 슬라이스 패널 SOCKET_* 계열) ──
+const SOCKET_BG := Color(0.84, 0.78, 0.66)
+const SOCKET_EMPTY := Color(0.20, 0.14, 0.09, 0.28)
 
 const TAB_H := 18.0
 const TAB_GAP := 2.0
@@ -52,26 +57,19 @@ const CARD_OFF_MOD := Color(0.85, 0.85, 0.85, 1.0)
 const TAB_DESC := [
 	"진 — 바깥 그릇(형태). 발사 형태와 열리는 칸이 진마다 다르다.",
 	"룬 — 중심 속성. 탁본으로 해독한 룬을 고른다.",
-	"문양 — 열린 칸을 이걸로 채운다.",
-]
-## 문양 셀 설명 — **`_glyph_defs`가 주입 안 됐을 때만 쓰는 폴백**이다 (평소엔 `.tres`의 `desc`).
-## 🔴 인덱스 = GlyphCode 값이라 `GLYPH_NAMES`와 **길이가 같아야 한다**. 세션44(관통 추가)에 여기가
-## 2개인 채로 남아 `_glyph_rows`의 폴백이 인덱스 초과로 죽는 잠복 버그가 생겼다 — 폴백 경로라
-## 아무도 안 밟아 세션47까지 살아 있었다. 아래 `_glyph_desc_at`이 이제 범위를 막는다.
-const GLYPH_DESC := [
-	"안쪽(룬)으로", "바깥(진)으로", "적을 뚫고 지나간다",
-	"적을 쫓아간다", "벽에 튕긴다", "빠르게 날아간다",
+	"층 — 진의 층에 문양-고리를 끼운다.",
 ]
 
 var _stage := TAB_JIN                 # 진 탭부터 편다 (순차 조립)
-var _active := RingBoard.G_RADIATE    # 지금 고른 문양 코드 (하이라이트)
-var _jin_placed := false              # 진을 이미 놓았나 (탭 표식)
-var _rune_placed := false             # 룬을 이미 놓았나
 var _rune_choice := -1                # 지금 고른 룬 타입 (하이라이트) — -1=아직 (세션 34)
 var _jin_choice: StringName = &""     # 지금 고른 진 id (하이라이트) — &""=아직 (세션44, 진=형태 선택)
 var _tab_rects: Array[Rect2] = []
-## 클릭 가능한 칸 — {rect, kind:"jin"/"rune"/"glyph", value}
+## 클릭 가능한 칸 — {rect, kind:"jin"/"rune"/"band"/"ring", value}
 var _cells: Array[Dictionary] = []
+# ── 🔴 세71 층 소켓 상태 — 패널이 `set_bands`로 주입한다 (책은 오토로드·Db를 안 본다). ──
+var _bands: Array = []                # 밴드 idx → GlyphRingDef(or null) — 패널이 Db로 해석해 넘긴다
+var _sel_band := 0                    # 지금 고른(강조) 밴드
+var _available_rings: Array = []      # 보유(해금) 문양-고리 GlyphRingDef 목록 — 패널이 필터해 넘긴다
 
 # ── 주입 데이터 (세션 13 구조화) — 패널이 Db에서 읽어 넣는다. 없으면 RingBoard const 폴백. ──
 var _jin_defs: Array = []
@@ -91,34 +89,20 @@ func _init() -> void:
 
 ## Db에서 읽은 진·룬·문양 정의를 주입한다 (셀 이름·색을 여기서 열거한다).
 ## 🔴 runes = **해금된 룬만** (패널이 걸러 넘긴다) — 잠긴 룬은 셀이 안 뜬다 (세션 34).
-func set_defs(jins: Array, runes: Array, glyph_defs: Array) -> void:
+func set_defs(jins: Array, runes: Array, glyph_defs: Array = []) -> void:
 	_jin_defs = jins
 	_rune_defs = runes
-	_glyph_defs = glyph_defs
+	_glyph_defs = glyph_defs   # 세71: 개별 문양 탭 은퇴로 미사용 — 옛 호출부 호환용으로만 받는다
 	queue_redraw()
 
 
-## 문양 셀 행 — 주입된 def, 없으면 RingBoard const로 폴백. 통일 딕셔너리로 반환.
-func _glyph_rows() -> Array:
-	# 🔴 `key`(키 힌트)는 여기 없다 — 세션 25에 문양 고르기가 **마우스 클릭 전용**이 됐다.
-	var rows: Array = []
-	if _glyph_defs.is_empty():
-		for g in RingBoard.GLYPH_NAMES.size():
-			rows.append({"name": RingBoard.GLYPH_NAMES[g],
-				"desc": _glyph_desc_at(g), "color": RingBoard.GLYPH_COLORS[g],
-				"code": g})
-	else:
-		for d in _glyph_defs:
-			rows.append({"name": d.display_name, "desc": d.desc,
-				"color": d.ui_color, "code": d.code})
-	return rows
-
-
-## 폴백 설명 한 줄 — **어휘가 늘어도 책이 죽지 않게** 범위를 막는다.
-## 새 문양을 `Enums.GlyphCode`에만 더하고 `GLYPH_DESC`를 잊어도 빈 줄이 뜰 뿐 크래시는 없다
-## (세션44의 잠복 인덱스 초과가 세션47까지 살아 있던 이유 = 폴백 경로라 아무도 안 밟았다).
-func _glyph_desc_at(g: int) -> String:
-	return String(GLYPH_DESC[g]) if g >= 0 and g < GLYPH_DESC.size() else ""
+## 🔴 세71 조립→탁본 — 층 소켓 상태를 주입한다 (`set_defs`와 동형). 패널이 Db·codex를 해석해
+## 밴드별 GlyphRingDef(or null)와 보유 목록을 넘긴다 — 책은 오토로드를 안 봐서 직접 못 한다.
+func set_bands(bands: Array, sel_band: int, available_rings: Array) -> void:
+	_bands = bands
+	_sel_band = sel_band
+	_available_rings = available_rings
+	queue_redraw()
 
 
 func _jin_name() -> String:
@@ -126,20 +110,6 @@ func _jin_name() -> String:
 
 func _jin_ui_color() -> Color:
 	return _jin_defs[0].ui_color if not _jin_defs.is_empty() else RingBoard.RING_LINE
-
-
-## 보드의 현재 상태를 받아 하이라이트를 맞춘다 (열 때·키 입력 시)
-func sync_state(active_glyph: int) -> void:
-	_active = active_glyph
-	queue_redraw()
-
-
-## 바깥(패널)이 단계 진행에 맞춰 탭을 넘겨 준다. placed 표식도 갱신.
-func go_stage(tab: int, jin_placed: bool, rune_placed: bool) -> void:
-	_stage = clampi(tab, 0, TAB_ORDER.size() - 1)
-	_jin_placed = jin_placed
-	_rune_placed = rune_placed
-	queue_redraw()
 
 
 func _notification(what: int) -> void:
@@ -169,9 +139,11 @@ func _gui_input(event: InputEvent) -> void:
 			"rune":
 				_rune_choice = int(cell.value)   # 하이라이트 (세션 34: 여러 룬 셀)
 				rune_selected.emit(int(cell.value))
-			_:
-				_active = int(cell.value)
-				glyph_selected.emit(_active)
+			"band":
+				_sel_band = int(cell.value)      # 세71: 강조할 밴드 (패널이 set_bands로 되돌림)
+				band_selected.emit(int(cell.value))
+			"ring":
+				ring_picked.emit(StringName(cell.value))   # 세71: 선택 밴드에 이 고리를 끼운다
 		queue_redraw()
 		accept_event()
 		return
@@ -245,7 +217,7 @@ func _draw() -> void:
 		TAB_RUNE:
 			_draw_rune_cells(font, top)
 		TAB_GLYPH:
-			_draw_glyph_cells(font, top)
+			_draw_band_sockets(font, top)
 
 
 func _draw_single_cell(font: Font, top: float, name_text: String, desc: String,
@@ -333,12 +305,13 @@ func _draw_jin_cells(font: Font, top: float) -> void:
 					OPEN_DOT if open else SHUT_DOT)
 		_text_center(font, r.position + Vector2(cw * 0.5, ch - 12.0), jname, NAME_COLOR, 10)
 		if sel:
-			sel_desc = ("✓ 그림 — " if _jin_placed else "") + _jin_desc_of(jd)
+			sel_desc = _jin_desc_of(jd)
 	# 고른 진의 설명 한 줄 (격자 바로 아래). 아직 안 골랐으면 무엇을 하라는지 알린다.
+	var chosen := _jin_choice != &""
 	var dy := top + float(nrows) * (ch + JIN_GAP) + 2.0
 	if sel_desc.is_empty():
 		sel_desc = "셀을 클릭하면 왼쪽 판에 그 진의 밑그림이 뜬다."
-	_text(font, Vector2(8.0, dy), sel_desc, SEL_EDGE if _jin_placed else DESC_COLOR, 8)
+	_text(font, Vector2(8.0, dy), sel_desc, SEL_EDGE if chosen else DESC_COLOR, 8)
 
 
 ## 진 설명 한 줄 — **id로 찾는다**(인덱스 아님). 🔴 `GLYPH_DESC`가 세션44에 인덱스 초과로
@@ -372,7 +345,7 @@ func _jin_shape_of(jd: JinDef) -> int:
 ## (직진=곧은 선 · 나선=물결 · 부메랑=나갔다 도는 활), **패턴이 그 획을 몇 개 어느 각도로 놓을지**
 ## 정한다. 그래서 새 조합(나선 산탄 등)이 .tres 한 장으로 늘어도 아이콘이 저절로 갈린다.
 ##
-## ⚠ **`_draw_*`가 아니라 여기가 관측점이다** (문양 `glyph_icon_pts`와 같은 이유): 헤드리스는
+## ⚠ **`_draw_*`가 아니라 여기가 관측점이다** (`RingBoard.glyph_guide_pts`와 같은 이유): 헤드리스는
 ## `draw_polyline`을 못 보지만 이 점 배열은 본다. "보인다"는 여전히 리드의 스샷이 최종 판정.
 ## ⚠ 이건 **셀 아이콘 전용**이다 — 판의 진 밑그림(둘레 원)은 채점(trace_scorer) 대상이라 안 건드렸다.
 ## 🔴 세션48 후반 — **바깥 윤곽은 `RingBoard.jin_guide_pts`가 만든 닫힌 도형이다.** 그전엔 셀이
@@ -476,10 +449,10 @@ func _draw_rune_cells(font: Font, top: float) -> void:
 		_draw_card(r, sel, CELL_SEL_BG if sel else CELL_BG,
 			SEL_EDGE if sel else CELL_LINE, 2.0 if sel else 1.0)
 		_draw_rune_icon(r.get_center() + Vector2(0, -14.0), 22.0, rcol, rtype)
-		var label := "✓ 그림" if (sel and _rune_placed) else "왼쪽에 손으로 그리기"
+		var label := "✓ 선택" if sel else "고르기"
 		_text_center(font, r.position + Vector2(cw * 0.5, ch - 30.0), rname, NAME_COLOR, 11)
 		_text_center(font, r.position + Vector2(cw * 0.5, ch - 15.0), label,
-			SEL_EDGE if (sel and _rune_placed) else DESC_COLOR, 8)
+			SEL_EDGE if sel else DESC_COLOR, 8)
 
 
 ## 룬 아이콘 — 🔴 **판의 밑그림과 같은 함수를 부른다**(`RingBoard.rune_guide_verts`, 세션49).
@@ -490,41 +463,91 @@ func _draw_rune_icon(c: Vector2, s: float, col: Color, rune_type: int) -> void:
 	draw_polyline(RingBoard.rune_guide_verts(rune_type, c, s), col, 2.5, true)
 
 
-## 문양 탭 — 주입된 문양 def를 열거 (응집·발산…). 하드코딩 없음.
-## 🔴 문양 탭 = **격자로 감싼다** (세션47). 세션44까지 셀을 한 줄에 몰아넣어 `cw = 전체폭/n`이었다 —
-## 어휘가 3→6으로 늘자 셀이 1/6 폭으로 쪼그라들어 설명("적을 뚫고 지나간다")이 셀을 넘쳤다.
-## 룬 탭이 이미 쓰는 격자 규약(`i % cols` / `i / cols`)으로 통일한다. **어휘가 더 늘어도
-## 폭이 아니라 줄 수가 늘어난다** — 문양 축은 앞으로도 늘어날 자리라 여기가 버텨 줘야 한다.
-const GLYPH_COLS := 3
+## 🔴 세71 층 탭 — 진의 **층(band) 소켓** N칸 + 보유 문양-고리 목록. 소켓 클릭=강조 밴드 선택,
+## 고리 클릭=선택 밴드에 끼움. 개별 문양 배치(옛 `_draw_glyph_cells`)를 대체한다.
+## 밴드·고리 상태는 패널이 `set_bands`로 주입한다(책은 오토로드를 안 본다 = 기존 규율).
+## 🔴 소켓/목록 rect는 **순수 static**(`band_socket_rects`·`ring_list_rects`) — `_draw_*` 안에
+## 계산을 두면 헤드리스가 레이아웃을 못 잰다(`jin_cell_rects`·`rune_cell_rects`와 같은 규율).
+const BAND_SOCKET_H := 40.0
+const BAND_SOCKET_GAP := 6.0
+const RING_ROW_H := 30.0
+const RING_ROW_GAP := 4.0
+const RING_LIST_HEADER := 20.0        # 소켓 아래 "보유 문양-고리" 머리글 높이
 
-func _draw_glyph_cells(font: Font, top: float) -> void:
-	var rows := _glyph_rows()
-	var n := rows.size()
-	if n == 0:
-		return
-	var gap := 8.0
-	var cols := mini(n, GLYPH_COLS)
-	var nrows := ceili(float(n) / float(cols))
-	var cw := (size.x - 16.0 - gap * float(cols - 1)) / float(cols)
-	# 여러 줄이면 셀을 낮춰 책 밖으로 안 밀린다 (한 줄이면 예전 높이 그대로 — 회귀 0)
-	var ch := 120.0 if nrows <= 1 else 104.0
+static func band_socket_rects(n: int, book_size: Vector2, top: float) -> Array:
+	var out: Array = []
 	for i in n:
-		var row: Dictionary = rows[i]
-		var code := int(row.code)
-		var r := Rect2(8.0 + float(i % cols) * (cw + gap),
-			top + float(i / cols) * (ch + gap), cw, ch)
-		_cells.append({"rect": r, "kind": "glyph", "value": code})
-		var sel := _active == code
-		_draw_card(r, sel, CELL_SEL_BG if sel else CELL_BG,
-			SEL_EDGE if sel else CELL_LINE, 2.0 if sel else 1.0)
-		# 🔴 아이콘 반길이 26 = 예전 화살표와 **같은 전체 크기**(2×26=52px)라 셀 레이아웃은 그대로다.
-		# ⚠ 추진만 1.1배(57px)로 살짝 크다 — 셀 높이 104~120 안이라 이름·설명과 안 겹친다.
-		_draw_glyph_icon(r.get_center() + Vector2(0, -14.0), 26.0, row.color, code)
-		# 🔴 키 힌트("[Q]")를 뗐다 (세션 25) — 문양도 **셀을 클릭해서** 고른다.
-		# 진·룬이 전부 클릭인데 문양만 키를 광고하고 있었다 (클릭도 됐는데 몰랐다).
-		_text_center(font, r.position + Vector2(cw * 0.5, ch - 30.0),
-			String(row.name), NAME_COLOR, 11)
-		_text_center(font, r.position + Vector2(cw * 0.5, ch - 15.0), String(row.desc), DESC_COLOR, 8)
+		out.append(Rect2(8.0, top + float(i) * (BAND_SOCKET_H + BAND_SOCKET_GAP),
+			book_size.x - 16.0, BAND_SOCKET_H))
+	return out
+
+## 소켓 밑 목록의 시작 y — 소켓 N칸 + 머리글 높이. 소켓 rect와 같은 top을 넘긴다.
+static func band_list_top(band_n: int, top: float) -> float:
+	return top + float(band_n) * (BAND_SOCKET_H + BAND_SOCKET_GAP) + RING_LIST_HEADER
+
+static func ring_list_rects(n: int, book_size: Vector2, list_top: float) -> Array:
+	var out: Array = []
+	for i in n:
+		out.append(Rect2(8.0, list_top + float(i) * (RING_ROW_H + RING_ROW_GAP),
+			book_size.x - 16.0, RING_ROW_H))
+	return out
+
+
+func _draw_band_sockets(font: Font, top: float) -> void:
+	var n := _bands.size()
+	var srects := band_socket_rects(n, size, top)
+	for i in n:
+		var r: Rect2 = srects[i]
+		var gr := _bands[i] as GlyphRingDef
+		var sel := i == _sel_band
+		_cells.append({"rect": r, "kind": "band", "value": i})
+		draw_rect(r, SOCKET_BG, true)
+		draw_rect(r, SEL_EDGE if sel else SOCKET_EMPTY, false, 2.5 if sel else 1.0)
+		if gr != null:
+			_ring_icon(r.position + Vector2(r.size.y * 0.5, r.size.y * 0.5), r.size.y * 0.34, gr)
+			_text(font, r.position + Vector2(r.size.y + 6.0, r.size.y * 0.5 - 6.0),
+				"%s  (%s×%d)" % [gr.display_name, _motif_name(gr.motif), gr.count], NAME_COLOR, 9)
+		else:
+			_text(font, r.position + Vector2(10.0, r.size.y * 0.5 - 6.0),
+				"밴드 %d — 비었다 (아래 고리 클릭)" % (i + 1), DESC_COLOR, 9)
+
+	# 보유 문양-고리 목록 (선택 밴드에 끼운다)
+	var list_top := band_list_top(n, top)
+	_text(font, Vector2(8.0, list_top - RING_LIST_HEADER + 2.0),
+		"보유 문양-고리 (클릭 → 밴드 %d)" % (_sel_band + 1), DESC_COLOR, 9)
+	var lrects := ring_list_rects(_available_rings.size(), size, list_top)
+	for i in _available_rings.size():
+		var gr2 := _available_rings[i] as GlyphRingDef
+		if gr2 == null:
+			continue
+		var rr: Rect2 = lrects[i]
+		_cells.append({"rect": rr, "kind": "ring", "value": gr2.id})
+		draw_rect(rr, Color(gr2.ui_color, 0.10), true)
+		draw_rect(rr, Color(gr2.ui_color, 0.7), false, 1.5)
+		_ring_icon(rr.position + Vector2(rr.size.y * 0.5, rr.size.y * 0.5), rr.size.y * 0.34, gr2)
+		_text(font, rr.position + Vector2(rr.size.y + 8.0, rr.size.y * 0.5 - 5.0),
+			"%s  %s×%d" % [gr2.display_name, _motif_name(gr2.motif), gr2.count], NAME_COLOR, 9)
+
+
+## 문양-고리 아이콘 — 밴드 원 + count번 낱개 모티프(절차 가이드선 = 규칙 §0 도형금지 예외).
+## `RingBoard.glyph_guide_pts`를 그대로 부른다(셀=밑그림 규율) — 슬라이스 패널 `_ring_icon` 이식.
+func _ring_icon(c: Vector2, radius: float, gr: GlyphRingDef) -> void:
+	if gr == null:
+		return
+	draw_arc(c, radius, 0.0, TAU, 24, Color(gr.ui_color, 0.35), 1.0, true)
+	var n := maxi(gr.count, 1)
+	for i in n:
+		var a := TAU * float(i) / float(n) - PI / 2.0
+		var p := c + Vector2.from_angle(a) * radius
+		var outward := Vector2.from_angle(a)
+		var mk := RingBoard.glyph_guide_pts(gr.motif, p, outward, radius * 0.42)
+		if mk.size() >= 2:
+			draw_polyline(mk, gr.ui_color, 1.5, true)
+
+
+func _motif_name(code: int) -> String:
+	var names := RingBoard.GLYPH_NAMES
+	return String(names[code]) if code >= 0 and code < names.size() else "?"
 
 
 ## 아이콘. jin·fire = 진·룬 (폴백 단일 셀 전용 — 격자 셀은 각자 전용 렌더를 쓴다)
@@ -541,33 +564,6 @@ func _draw_icon(kind: String, c: Vector2, s: float, data: Array) -> void:
 				c + Vector2(-s * 0.87, s * 0.5), c + Vector2(0, -s)]), col, 2.5, true)
 		_:
 			pass
-
-
-## 문양 아이콘 — **판의 밑그림과 같은 함수로 그린다** (세션47).
-## 🔴 **화살표 하나** (세션 25, 사용자: "문양 모양도 그냥 문양 하나만 보이게 해줘").
-## 예전엔 8방향 다발을 그렸다 — 한 칸에 들어가는 건 문양 **하나**인데 아이콘이 여덟을
-## 보여 주니, 셀이 "문양 하나"가 아니라 "어느 칸을 여는 틀"처럼 읽혔다.
-##
-## 🔴 세션47 — 그 화살표를 **여기서 직접 그리던 걸 그만뒀다.** 판의 밑그림을 6종으로 갈라 놨는데
-## 이 함수는 `inward`만 봐서 **6개 셀이 전부 같은 화살표**였다(색만 달랐다). 사용자가 문양을
-## **고르는 바로 그 순간** 구분이 안 되면 밑그림을 가른 의미가 절반 날아간다.
-## 이제 `RingBoard.glyph_guide_pts`를 그대로 부른다 — **셀과 밑그림이 구조적으로 못 갈라진다.**
-## ⚠ `inward`를 인자에서 뺐다: `code == G_GATHER`와 같은 뜻이라 둘을 다 받으면 언젠가 어긋난다.
-## 방향 규약은 그대로다 (발산 계열=바깥/위 · 응집=룬 쪽/아래) — outward에 UP을 넘겨 판과 맞춘다.
-func _draw_glyph_icon(c: Vector2, s: float, col: Color, code: int) -> void:
-	var pts := glyph_icon_pts(code, c, s)
-	if pts.size() >= 2:
-		draw_polyline(pts, col, 2.2, true)
-
-
-## 🔴 셀 아이콘의 점 — **판의 밑그림과 같은 함수**에서 온다. `_draw_glyph_icon`이 이걸 그린다.
-## ⚠ **`_draw_*`가 아니라 여기가 관측점인 이유**(세션47, 뮤테이션으로 배웠다): 테스트가
-## `RingBoard.glyph_guide_pts`를 직접 부르면 **책이 자기 화살표를 다시 그려도 초록불이다** —
-## 보드를 검증할 뿐 책을 검증하지 않기 때문이다. 실제로 그 뮤테이션이 그냥 통과했다.
-## 그래서 책 쪽에 관측 가능한 이음매를 뒀다. `draw_polyline`은 헤드리스가 못 보지만 이 점 배열은 본다.
-## ⚠ 그래도 **"보인다"는 여전히 못 잡는다** — 렌더는 리드의 스샷이 최종 판정이다.
-func glyph_icon_pts(code: int, c: Vector2 = Vector2.ZERO, s: float = 26.0) -> PackedVector2Array:
-	return RingBoard.glyph_guide_pts(code, c, Vector2.UP, s)
 
 
 func _text(font: Font, at: Vector2, text: String, col: Color, fs: int) -> void:

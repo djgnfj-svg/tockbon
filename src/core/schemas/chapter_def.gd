@@ -24,3 +24,10 @@ extends Resource
 ## 🔴 잡몹 = forest_enemy 범용 스폰(그룹 enemies·layer4·_die→coin 드롭). 클리어는 여전히 보스 처치만.
 ##  "새 잡몹 배치 = 여기 MobSpawn 항목 하나". boss_room._spawn_mobs가 읽는다.
 @export var mob_spawns: Array[MobSpawn] = []
+## 클리어 보상 해금 (세71 첫 스테이지 슬라이스) — 보스 첫 처치 시 이 codex id를 해금한다.
+## 🔴 문양 링(GlyphRingDef)·룬·진 등 codex 게이트 어휘를 그대로 쓴다: 예 &"gr_radiate5"(발산×5).
+## 비면(&"") 무발신 = 기존 챕터 회귀 0. boss_room._on_enemy_died가 chapter_clear 바로 옆에서 발신(is_unlocked 가드).
+## 🔴 도파민 설계의 QuestDef.reward_unlock 턴인 예식이 아니라 **ChapterDef 직접 해금**을 택한 이유:
+##  첫 슬라이스엔 마을 턴인 예식이 과함 — 보스 처치=즉시 해금이 조립→탁본 루프를 가장 짧게 닫는다
+##  (파밍 문양 링을 밴드에 끼워 파이어볼 진화). 퀘스트 턴인은 콘텐츠가 늘 때(qR* 사슬) 도입.
+@export var reward_unlock: StringName = &""

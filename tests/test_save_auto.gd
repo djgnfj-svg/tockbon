@@ -131,6 +131,10 @@ func _run() -> void:
 	_check("🔴 새로하기: 고리 도안 비었다", gs.ring_designs.is_empty())
 	_check("🔴 새로하기: 시작 해금 재시드 (불 룬·단발진, 세61) — 안 심으면 아무것도 못 그린다",
 		gs.is_unlocked(&"rune_fire") and gs.is_unlocked(&"jin_single"))
+	# 🔴 세71 맨몸 파이어볼 계약 — 문양 링(gr_*)은 더는 시드가 아니다(스테이지 클리어 보상으로만).
+	#   시드를 되돌리면 이 검사가 빨개진다(시작이 맨몸이어야 조립→탁본 보상 루프가 산다).
+	_check("🔴 새로하기: 문양 링(gr_radiate5)은 시드가 아니다 — 스테이지 보상으로만 (맨몸 시작)",
+		not gs.is_unlocked(&"gr_radiate5"))
 	_check("🔴 새로하기: 해독으로 얻은 해금은 사라졌다", not gs.is_unlocked(&"__decoded_probe"))
 	_check("🔴 새로하기: 지은 스테이션(정제대)은 사라졌다 — 거점 빈 시작", not gs.is_unlocked(&"station_refine"))
 
