@@ -1,10 +1,47 @@
 # STATUS — 현재 진행 상태
 
-> 최종 갱신: 2026-07-23 (세션 65 — **세피리아식 떠있는 지팡이: 손에서 완드 떼어 몸 옆에 둥둥·조준 회전·끝에서 발사**)
+> 최종 갱신: 2026-07-23 (세션 67 — **미사용 정리: ultracode 감사로 죽은 스크립트·씬·에셋·심볼 청산**)
 > · **세션 종료마다 갱신**
+> ⚠ 세66(도파민 설계·마법사 학교 마을)은 STATUS에 항목이 없다 — 정본 = memory `takbon-dopamine-loop`·`takbon-school-village` + 커밋 `760ea9d`~`8038c91`.
 >
 > 🔴 **아래 세션 20 이하는 대부분 삭제된 코드를 설명한다** — 기록이지 현재 상태가 아니다.
 > 현재 정본 = 최상단 「세션 31」~「세션 23」 + `CLAUDE.md` + memory `takbon-mana-injection-rule`.
+
+---
+
+## 세션 67 (2026-07-23) — **미사용 정리 (ultracode 감사 — 죽은 스크립트·씬·에셋·심볼 청산)**
+
+> 발단 = 사용자: *"ultracode로 한번 안쓰는것들 정리하고 가자."* 자동 "미사용" 판정은 이 프로젝트에서
+> 위험하다(문자열 참조·`Db` 디렉터리 스캔 로딩·`params.sprite` 런타임 경로·`@export_file`) — 그래서
+> **감사 워크플로**(에이전트 38, 카테고리별 병렬 finder + 각 후보를 "아직 쓰인다"로 **반증 시도**하는
+> 적대적 검증)로 찾고, 통과분만 삭제. 지우기 전 사용자에게 Tier별 확인.
+
+### 한 일 (커밋 `09b0976`)
+- **삭제 27** (전부 git 추적분 — 복구 가능):
+  - `shockwave.gd`+`shockwave.tscn` — 세22부터 참조 0인 죽은 파일. **pillar는 `ring_spell_system._spawn_pillar`가
+    직접 생성**하지 shockwave와 무관함을 확인(그래서 지워도 기둥 안전).
+  - `decode_station.tscn`·`extract_zone.tscn` — 해독대 은퇴 프롭 / 익스트랙션은 `portal.tscn`이 대체.
+  - 옛 에셋 10 (+`.import`): exit_gate·rubbing_spot·tileset_field·slime_mini·tile_bush·tile_rock·cursor_brush(x2)·frame_bar·rune_impact.
+  - `paper_1/2/3.tres` — 지급 레시피 0인 도달 불가 옛 종이(현행은 paper_mid/high).
+- **정리 (수정 8파일)**: 죽은 심볼 6(`db.get_glyph`·`status_rules.name_of`·`trace_scorer.score_of`·
+  `ring_board.trace_target`·`hud.CREAM`·`ring_spell_system.UP_AXIS`) · `balance_data`의 `shockwave_*` 필드 4 +
+  죽은 충격파 수렴 모델 주석 · pillar/ring_spell_system의 삭제된 shockwave dead-link 주석.
+- **scratch**: 소비된 school_village·school_art 삭제 / 보류 3종(nested·guide_editor·dopamine) untracked 유지.
+
+### 🔴 두 함정 (둘 다 그물이 잡음 — 자동 판정을 그대로 믿으면 안 되는 이유)
+1. **`decode_panel.gd/tscn`을 Tier A로 성급히 지웠다 → `test_decode_auto.gd:52`가 소비 중이라 회귀·복원.**
+   base.gd가 preload 안 한다고 죽은 걸로 봤으나 **테스트가 산 소비자**였다. 해독대 완전 은퇴는 세66 도파민
+   설계의 다음 세션 과제(test_decode 폐기 포함)지 이번 정리 범위가 아니다. → **"테스트만 쓰는 것"도 산 것.**
+2. **`git add -A`가 보류 scratch 3종을 새 추적 파일로 커밋에 쓸어 넣음** → `git rm --cached`+amend로 untracked 복원.
+
+### 🟡 감사가 오검출했으나 리드가 걸러 살린 것
+- `bush/flowers/rock.png` — 감사는 "미사용"이라 했으나 `scratch_school_village_design.md`가 마을 데코 **재사용**으로
+  명시(tree.gd 배선만 대기). 유지.
+- `clock.is_night`/`day_progress`/`sleep_until_morning` — memory `takbon-school-village`의 **"낮밤순환 v2" 로드맵**
+  스캐폴딩. 유지.
+
+✅ 검증: 전 스위트 24종 그린 + SCRIPT ERROR 0 · 테스트가 삭제 심볼/파일 참조 0 확인(decode_panel 소비를 테스트가 잡아 복원).
+정본 = memory `takbon-dead-code-cleanup`.
 
 ---
 

@@ -110,7 +110,7 @@
     `GameState.stroke_correction()` → `ring_board._set_trace` → `trace_scorer.set_correction`.
     **새 펜 = .tres 한 장.** 맨손 = 보정 0 = 그린 대로(정체성은 기본 상태가 지킨다)
   - `src/spell` = ring_spell_system(유일한 발사 경로) · ring_carrier · projectile · pillar · dummy_target
-    · ⚠ **shockwave는 지금 참조 0**이다 (세션 22에 projectile의 옛 SpellDesign 충격파 경로가 사라짐)
+    · ⚠ **shockwave는 세67에 삭제됐다** (세22부터 참조 0인 죽은 파일 — pillar는 ring_spell_system._spawn_pillar가 직접 생성)
 - 모듈 간 통신은 **EventBus 시그널 + core 스키마만**. 타 모듈 직접 preload/get_node 금지
   - 🔴 **발사 계약 = `Enums.GlyphCode`**(GATHER=0/RADIATE=1). 조립 UI·발사·`data/glyphs/*.tres`가
     이 값을 공유한다 — **밀면 저장된 고리 도안이 조용히 깨진다**
