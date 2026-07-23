@@ -325,5 +325,15 @@ ColorRect)의 `mouse_filter`가 기본값 **STOP**이라 바닥이 좌클릭을 
 
 ## 에디터·MCP
 
-- godot-mcp 애드온 설정됨 (.mcp.json). 에디터 실행: `Start-Process .\Godot_v4.7.1-stable_win64.exe -ArgumentList "--editor","--path","."`
-- project.godot을 파일로 수정한 후에는 `godot_project check_stale` → 필요시 에디터 restart
+🔴🔴 **리드가 에디터를 자동으로 켜지 마라** (2026-07-24 사용자 확정). 사용자가 자기 워크플로로
+에디터를 직접 관리한다 — 리드가 `--editor`로 띄우거나 MCP로 붙으면 **사용자 콘솔에 연결 메시지가
+계속 떠 개발을 방해**한다(실제로 겪음). 규칙:
+- **기본 검증 = 헤드리스 테스트(Bash `-s`) + 뮤테이션.** 에디터·MCP 없이 여기까지 한다.
+- **실게임 시각 확인이 필요하면** 리드가 켜지 말고 **사용자에게 F5(또는 에디터 열기)를 부탁**한다
+  ("이 부분은 클릭 도달·렌더라 헤드리스가 못 잡아요 — F5로 확인해 주실래요?"). 스샷이 필요하면 사용자가 준다.
+- **에디터/MCP는 사용자가 "켜줘"라고 명시할 때만** 리드가 띄운다. 그때만 `Start-Process
+  .\Godot_v4.7.1-stable_win64.exe -ArgumentList "--editor","--path","."` + MCP 사용.
+- ⚠ 게임만 독립 실행(에디터 없이)은 `--path .`만: `Start-Process .\Godot_v4.7.1-stable_win64.exe -ArgumentList "--path","."`.
+- ⚠ 위 「실게임 MCP 필수」 서술들은 **검출력의 근거**(헤드리스 한계)이지 리드가 자동으로 MCP를 켜라는
+  뜻이 아니다 — 그 확인은 이제 **사용자 손(F5)**으로 넘긴다.
+- project.godot을 파일로 수정한 후에는 (에디터가 켜져 있을 때) `godot_project check_stale` → 필요시 에디터 restart
