@@ -11,9 +11,8 @@ extends Control
 ## Ground STOP 함정(바닥이 좌클릭을 먹음)과 무관하다 — 발사 계층이 아예 없다.
 
 const BASE_SCENE := "res://src/base/base.tscn"
-## 🔴 새 게임은 **이동 튜토 방**부터 (세션41 온보딩 구간 A) → 문을 나가면 베이스로.
-## 이어하기는 튜토를 건너뛰고 바로 베이스 (튜토는 새로 시작할 때만).
-const TUTORIAL_SCENE := "res://src/tutorial/intro.tscn"
+## 🔴 이동/구르기 튜토방은 은퇴했다 (세71 — 초반에 구르기(Shift)를 안 주기로 해 방의 목적이 사라짐).
+##   새 게임도 이어하기와 똑같이 베이스로 직행한다. 그리기 개념은 base.gd의 NPC 대사가 가르친다.
 
 @onready var _continue_btn: Button = $Center/Box/ContinueButton
 @onready var _new_btn: Button = $Center/Box/NewButton
@@ -54,4 +53,4 @@ func _on_new() -> void:
 		_new_btn.text = "정말? 진행이 사라진다 — 다시 누르면 새로 시작"
 		return
 	SaveManager.start_new_game()
-	get_tree().change_scene_to_file(TUTORIAL_SCENE)
+	get_tree().change_scene_to_file(BASE_SCENE)
