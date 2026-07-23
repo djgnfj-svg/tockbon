@@ -9,5 +9,6 @@ kind = 5
 grade = 1
 display_name = "갑주 갑충 껍데기"
 params = {
+"sprite": "res://assets/sprites/props/mat_beetle_shell.png",
 "cat": "equip_mat"
 }

@@ -9,5 +9,6 @@ kind = 5
 grade = 1
 display_name = "재생 덩굴 줄기"
 params = {
+"sprite": "res://assets/sprites/props/mat_vine.png",
 "cat": "paper_mat"
 }

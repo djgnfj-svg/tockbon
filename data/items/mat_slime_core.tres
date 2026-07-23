@@ -9,5 +9,6 @@ kind = 5
 grade = 1
 display_name = "수액 슬라임 핵"
 params = {
+"sprite": "res://assets/sprites/props/mat_slime_core.png",
 "cat": "ink_mat"
 }
