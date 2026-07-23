@@ -1,10 +1,14 @@
-[gd_scene load_steps=4 format=3 uid="uid://c0prop06shop00"]
+[gd_scene load_steps=6 format=3 uid="uid://xyskn4qwtptn"]
 
 [ext_resource type="Script" path="res://src/actors/interact_zone.gd" id="1_zone"]
-[ext_resource type="Texture2D" uid="uid://bjo6a38f3c2pj" path="res://assets/sprites/props/shopkeeper.png" id="2_tex"]
+[ext_resource type="Texture2D" path="res://assets/sprites/base/bld_market.png" id="2_tex"]
+[ext_resource type="Texture2D" uid="uid://bjo6a38f3c2pj" path="res://assets/sprites/props/shopkeeper.png" id="3_keeper"]
 
-[sub_resource type="RectangleShape2D" id="RectangleShape2D_shop"]
-size = Vector2(110, 96)
+[sub_resource type="RectangleShape2D" id="trigger"]
+size = Vector2(120, 92)
+
+[sub_resource type="RectangleShape2D" id="solid"]
+size = Vector2(136, 82)
 
 [node name="Shop" type="Area2D"]
 collision_layer = 64
@@ -13,15 +17,29 @@ script = ExtResource("1_zone")
 zone_id = &"shop"
 
 [node name="Sprite" type="Sprite2D" parent="."]
+offset = Vector2(0, -64)
 texture = ExtResource("2_tex")
 
+[node name="Keeper" type="Sprite2D" parent="."]
+position = Vector2(2, -22)
+texture = ExtResource("3_keeper")
+
+[node name="Body" type="StaticBody2D" parent="."]
+collision_layer = 1
+collision_mask = 0
+
+[node name="Shape" type="CollisionShape2D" parent="Body"]
+position = Vector2(0, -41)
+shape = SubResource("solid")
+
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
-shape = SubResource("RectangleShape2D_shop")
+position = Vector2(0, 26)
+shape = SubResource("trigger")
 
 [node name="Prompt" type="Label" parent="."]
-offset_left = -46.0
-offset_top = -50.0
-offset_right = 46.0
-offset_bottom = -28.0
-text = "[E] 상점"
+offset_left = -50.0
+offset_top = -52.0
+offset_right = 50.0
+offset_bottom = -30.0
+text = "[E] 매점"
 horizontal_alignment = 1

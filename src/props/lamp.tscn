@@ -1,0 +1,15 @@
+[gd_scene format=3 uid="uid://xyskoxjprptn"]
+
+[ext_resource type="Texture2D" path="res://assets/sprites/base/lamp_post.png" id="1_tex"]
+[ext_resource type="Texture2D" path="res://assets/light_soft.tres" id="2_light"]
+
+[node name="Lamp" type="Sprite2D"]
+offset = Vector2(0, -36)
+texture = ExtResource("1_tex")
+
+[node name="Light" type="PointLight2D" parent="."]
+position = Vector2(0, -54)
+color = Color(1, 0.83, 0.52, 1)
+energy = 1.05
+texture = ExtResource("2_light")
+texture_scale = 1.7

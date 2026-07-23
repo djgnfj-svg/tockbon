@@ -1,4 +1,4 @@
-[gd_scene load_steps=13 format=3 uid="uid://c0base01hub00"]
+[gd_scene load_steps=22 format=3 uid="uid://c0base01hub00"]
 
 [ext_resource type="Script" path="res://src/base/base.gd" id="1_base"]
 [ext_resource type="PackedScene" path="res://src/actors/player.tscn" id="3_player"]
@@ -12,60 +12,189 @@
 [ext_resource type="PackedScene" path="res://src/props/craft_station.tscn" id="11_craft"]
 [ext_resource type="PackedScene" path="res://src/props/shop_station.tscn" id="12_shop"]
 [ext_resource type="PackedScene" path="res://src/props/npc_guide.tscn" id="13_npc"]
+[ext_resource type="PackedScene" path="res://src/props/monument.tscn" id="14_monu"]
+[ext_resource type="PackedScene" path="res://src/props/tree.tscn" id="15_tree"]
+[ext_resource type="TileSet" path="res://assets/sprites/field/tileset_campus.tres" id="16_tiles"]
+[ext_resource type="PackedScene" path="res://src/props/lamp.tscn" id="17_lamp"]
+[ext_resource type="Texture2D" path="res://assets/sprites/base/bench.png" id="18_bench"]
+[ext_resource type="Texture2D" path="res://assets/sprites/base/fence_hedge.png" id="19_hedge"]
+
+[sub_resource type="RectangleShape2D" id="wall_v"]
+size = Vector2(24, 1600)
+
+[sub_resource type="RectangleShape2D" id="wall_h"]
+size = Vector2(2400, 24)
 
 [node name="Base" type="Node2D"]
+y_sort_enabled = true
 script = ExtResource("1_base")
 
 [node name="Ground" type="ColorRect" parent="."]
+z_index = -11
 mouse_filter = 2
-offset_left = -960.0
-offset_top = -540.0
-offset_right = 960.0
-offset_bottom = 540.0
-color = Color(0.18, 0.16, 0.14, 1)
+offset_right = 2400.0
+offset_bottom = 1600.0
+color = Color(0.275, 0.51, 0.196, 1)
+
+[node name="TileGrass" type="TileMapLayer" parent="."]
+z_index = -10
+tile_set = ExtResource("16_tiles")
+
+[node name="TileRoad" type="TileMapLayer" parent="."]
+z_index = -9
+tile_set = ExtResource("16_tiles")
+
+[node name="Dusk" type="CanvasModulate" parent="."]
+color = Color(0.66, 0.64, 0.8, 1)
+
+[node name="Border" type="Node2D" parent="."]
+
+[node name="WallW" type="StaticBody2D" parent="Border"]
+position = Vector2(0, 800)
+[node name="Shape" type="CollisionShape2D" parent="Border/WallW"]
+shape = SubResource("wall_v")
+
+[node name="WallE" type="StaticBody2D" parent="Border"]
+position = Vector2(2400, 800)
+[node name="Shape" type="CollisionShape2D" parent="Border/WallE"]
+shape = SubResource("wall_v")
+
+[node name="WallN" type="StaticBody2D" parent="Border"]
+position = Vector2(1200, 0)
+[node name="Shape" type="CollisionShape2D" parent="Border/WallN"]
+shape = SubResource("wall_h")
+
+[node name="WallS" type="StaticBody2D" parent="Border"]
+position = Vector2(1200, 1600)
+[node name="Shape" type="CollisionShape2D" parent="Border/WallS"]
+shape = SubResource("wall_h")
 
 [node name="Desk" parent="." instance=ExtResource("8_desk")]
-position = Vector2(0, -120)
-
-[node name="ForestGate" parent="." instance=ExtResource("9_gate")]
-position = Vector2(-260, 40)
-
-[node name="Refine" parent="." instance=ExtResource("10_refine")]
-position = Vector2(180, -190)
+position = Vector2(1200, 520)
 
 [node name="Craft" parent="." instance=ExtResource("11_craft")]
-position = Vector2(-180, -170)
+position = Vector2(600, 560)
+
+[node name="Refine" parent="." instance=ExtResource("10_refine")]
+position = Vector2(1800, 560)
 
 [node name="Shop" parent="." instance=ExtResource("12_shop")]
-position = Vector2(340, -190)
+position = Vector2(1980, 900)
+
+[node name="ForestGate" parent="." instance=ExtResource("9_gate")]
+position = Vector2(200, 820)
 
 [node name="Npc" parent="." instance=ExtResource("13_npc")]
-position = Vector2(130, -20)
+position = Vector2(1060, 980)
+
+[node name="Monument" parent="." instance=ExtResource("14_monu")]
+position = Vector2(1200, 780)
+
+[node name="Tree1" parent="." instance=ExtResource("15_tree")]
+position = Vector2(110, 320)
+
+[node name="Tree2" parent="." instance=ExtResource("15_tree")]
+position = Vector2(2300, 340)
+
+[node name="Tree3" parent="." instance=ExtResource("15_tree")]
+position = Vector2(120, 1420)
+
+[node name="Tree4" parent="." instance=ExtResource("15_tree")]
+position = Vector2(2290, 1400)
+
+[node name="Tree5" parent="." instance=ExtResource("15_tree")]
+position = Vector2(430, 1240)
+
+[node name="Tree6" parent="." instance=ExtResource("15_tree")]
+position = Vector2(1980, 1260)
+
+[node name="Tree7" parent="." instance=ExtResource("15_tree")]
+position = Vector2(340, 400)
+
+[node name="Tree8" parent="." instance=ExtResource("15_tree")]
+position = Vector2(2060, 420)
+
+[node name="Lamp1" parent="." instance=ExtResource("17_lamp")]
+position = Vector2(1000, 588)
+
+[node name="Lamp2" parent="." instance=ExtResource("17_lamp")]
+position = Vector2(1400, 588)
+
+[node name="Lamp3" parent="." instance=ExtResource("17_lamp")]
+position = Vector2(760, 700)
+
+[node name="Lamp4" parent="." instance=ExtResource("17_lamp")]
+position = Vector2(1640, 700)
+
+[node name="Lamp5" parent="." instance=ExtResource("17_lamp")]
+position = Vector2(1000, 972)
+
+[node name="Lamp6" parent="." instance=ExtResource("17_lamp")]
+position = Vector2(1400, 972)
+
+[node name="Bench1" type="Sprite2D" parent="."]
+position = Vector2(1070, 700)
+offset = Vector2(0, -12)
+texture = ExtResource("18_bench")
+
+[node name="Bench2" type="Sprite2D" parent="."]
+position = Vector2(1330, 700)
+offset = Vector2(0, -12)
+texture = ExtResource("18_bench")
+
+[node name="Hedge1" type="Sprite2D" parent="."]
+position = Vector2(840, 1500)
+offset = Vector2(0, -24)
+texture = ExtResource("19_hedge")
+
+[node name="Hedge2" type="Sprite2D" parent="."]
+position = Vector2(904, 1500)
+offset = Vector2(0, -24)
+texture = ExtResource("19_hedge")
+
+[node name="Hedge3" type="Sprite2D" parent="."]
+position = Vector2(968, 1500)
+offset = Vector2(0, -24)
+texture = ExtResource("19_hedge")
+
+[node name="Hedge4" type="Sprite2D" parent="."]
+position = Vector2(1432, 1500)
+offset = Vector2(0, -24)
+texture = ExtResource("19_hedge")
+
+[node name="Hedge5" type="Sprite2D" parent="."]
+position = Vector2(1496, 1500)
+offset = Vector2(0, -24)
+texture = ExtResource("19_hedge")
+
+[node name="Hedge6" type="Sprite2D" parent="."]
+position = Vector2(1560, 1500)
+offset = Vector2(0, -24)
+texture = ExtResource("19_hedge")
 
 [node name="Player" parent="." instance=ExtResource("3_player")]
-position = Vector2(0, 40)
+position = Vector2(1150, 1040)
 
-[node name="Targets" type="Node2D" parent="."]
+[node name="Sprite" parent="Player"]
+z_index = 0
 
-; 🔴 허수아비 간격은 **연쇄·확산 반경 안**이어야 한다 (세션50 실측).
-; 세44~49 배치는 최소 간격이 102px였는데 `status_shock_chain_px`가 90이라
-; **연습장에서 감전 연쇄가 한 번도 안 터졌다** — 배선이 맞아도 아무 일이 안 일어난다.
-; 지그재그로 이웃 간 78~82px로 좁혀, 젖음+번개가 옆으로 타고 흐르는 게 보이게 했다.
-; ⚠ 여기 좌표를 벌리려거든 balance의 status_shock_chain_px(90)·status_spread_px(110)를 같이 봐라.
-[node name="Dummy1" parent="Targets" instance=ExtResource("5_dummy")]
-position = Vector2(240, -70)
+[node name="FloatingWand" parent="Player"]
+z_index = 0
 
-[node name="Dummy2" parent="Targets" instance=ExtResource("5_dummy")]
-position = Vector2(312, -40)
+[node name="Dummy1" parent="." instance=ExtResource("5_dummy")]
+position = Vector2(1140, 1160)
 
-[node name="Dummy3" parent="Targets" instance=ExtResource("5_dummy")]
-position = Vector2(250, 10)
+[node name="Dummy2" parent="." instance=ExtResource("5_dummy")]
+position = Vector2(1212, 1190)
 
-[node name="Dummy4" parent="Targets" instance=ExtResource("5_dummy")]
-position = Vector2(315, 60)
+[node name="Dummy3" parent="." instance=ExtResource("5_dummy")]
+position = Vector2(1150, 1240)
 
-[node name="Dummy5" parent="Targets" instance=ExtResource("5_dummy")]
-position = Vector2(250, 105)
+[node name="Dummy4" parent="." instance=ExtResource("5_dummy")]
+position = Vector2(1215, 1290)
+
+[node name="Dummy5" parent="." instance=ExtResource("5_dummy")]
+position = Vector2(1150, 1335)
 
 [node name="RingSpellSystem" parent="." instance=ExtResource("4_spell")]
 z_index = 10

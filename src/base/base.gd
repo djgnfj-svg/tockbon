@@ -80,6 +80,10 @@ const ChapterPanel := preload("res://src/hud/chapter_panel.gd")   # 캐스트 �
 @onready var _npc: InteractZone = $Npc
 @onready var _player: Player = $Player
 @onready var _hud: Hud = $Hud/Hud
+# 🔴 캠퍼스 바닥 (세66-4 마법학교 마을) — 잔디·돌포장 길을 코드로 깐다 (boss_room `_fill_tiles` 선례).
+@onready var _ground: ColorRect = $Ground
+@onready var _grass: TileMapLayer = $TileGrass
+@onready var _road: TileMapLayer = $TileRoad
 # 🔴 tab_panel.tscn 루트는 CanvasLayer(layer 5)고, 스크립트(Control)는 그 자식 Panel이다.
 @onready var _sheet: TabPanel = $Sheet/Panel
 # 🔴 길잡이 머리 위 물음표 (세션40) — 정산할 퀘스트가 있을 때만 보인다. 근접(Prompt)과 별개로 늘 뜬다.
@@ -105,6 +109,9 @@ func _ready() -> void:
 	GameState.ui_modal_open = false
 	# 베이스=집 — 원정 플래그를 내린다 (귀환·사망이 다 여기로 온다).
 	GameState.in_expedition = false
+	# 🔴 마법학교 캠퍼스 (세66-4) — 잔디·돌포장 길을 깔고 카메라 경계를 월드에 물린다.
+	_build_campus()
+	_setup_camera()
 	_desk.interacted.connect(_open_drawing)
 	_gate.interacted.connect(_open_chapter_panel)
 	# 🔴 마을 완비 (세66 도파민 재편, 설계 B) — 스테이션은 처음부터 다 있다. 건설 게이트 없이 바로 패널을 연다.
@@ -142,6 +149,68 @@ func _ready() -> void:
 	# 🔴 온보딩 (세션41) — 첫 마법을 아직 안 그렸으면 길잡이로 유도한다 (q00 완료되면 안 뜬다).
 	if not GameState.is_quest_done(&"q00_first_draw"):
 		_hud.say("길잡이에게 [E]로 말을 걸어라 — 첫 목표는 책상에서 마법진을 그리는 것이다")
+
+# ─────────────────────────── 캠퍼스 바닥 (세66-4 마법학교 마을) ───────────────────────────
+
+## 잔디·돌포장 길을 코드로 깐다 — boss_room `_fill_tiles` 선례. Ground(ColorRect) rect에서
+## 셀 범위를 파생시켜 월드 크기를 바꿔도 자동으로 맞는다(.tscn에 tile_map_data를 굳히지 않는다).
+## 🔴 아틀라스 좌표 계약(tileset_campus.tres): 잔디 (0,0)A·(1,0)B흙·(2,0)꽃 / 돌 (0,1)·plaza중심 (2,1).
+func _build_campus() -> void:
+	if _grass == null or _road == null or _ground == null:
+		return
+	var ts: int = _grass.tile_set.tile_size.x
+	var w := int(_ground.size.x)
+	var h := int(_ground.size.y)
+	# 잔디 전역 (변형은 위치 해시로 — 장식이라 세이브 무관, 부팅마다 동일)
+	for cy in range(0, ceili(float(h) / ts)):
+		for cx in range(0, ceili(float(w) / ts)):
+			_grass.set_cell(Vector2i(cx, cy), 0, _grass_variant(cx, cy))
+	# 돌포장 길·안뜰 (설계 §3 밴드 rect — 정문↔안뜰↔건물을 잇는다)
+	var bands: Array[Rect2] = [
+		Rect2(240, 716, 1740, 128),    # 수평 척추: 정문↔안뜰↔매점
+		Rect2(1136, 560, 128, 800),    # 수직 척추: 서고↔안뜰↔수련장
+		Rect2(536, 585, 128, 259),     # 공방 분기
+		Rect2(1736, 585, 128, 259),    # 실습동 분기
+		Rect2(1916, 716, 128, 194),    # 매점 분기
+		Rect2(1000, 580, 400, 400),    # 중앙 안뜰(plaza)
+	]
+	for band in bands:
+		_fill_road(band, Vector2i(0, 1))
+	# 안뜰 중심 = 마법진 무늬 자국 (기념비 발밑)
+	_road.set_cell(Vector2i(int(1200.0 / ts), int(780.0 / ts)), 0, Vector2i(2, 1))
+
+
+func _grass_variant(cx: int, cy: int) -> Vector2i:
+	var hsh: int = absi((cx * 73856093) ^ (cy * 19349663)) % 100
+	if hsh < 7:
+		return Vector2i(2, 0)   # 꽃 7%
+	elif hsh < 24:
+		return Vector2i(1, 0)   # 흙 변형 17%
+	return Vector2i(0, 0)
+
+
+func _fill_road(rect: Rect2, atlas: Vector2i) -> void:
+	var ts: int = _road.tile_set.tile_size.x
+	var from := Vector2i(floori(rect.position.x / ts), floori(rect.position.y / ts))
+	var to := Vector2i(ceili(rect.end.x / ts), ceili(rect.end.y / ts))
+	for cy in range(from.y, to.y):
+		for cx in range(from.x, to.x):
+			_road.set_cell(Vector2i(cx, cy), 0, atlas)
+
+
+## 카메라 경계·부드러운 추적 — Camera2D는 이미 player.tscn에 있다(공유 씬). limit·smoothing은
+## 🔴 여기서 런타임에만 세팅한다 — player.tscn에 baked하면 boss_room(월드 1200×1040)이 오염된다.
+func _setup_camera() -> void:
+	var cam := _player.get_node_or_null("Camera2D") as Camera2D
+	if cam == null:
+		return
+	cam.limit_left = 0
+	cam.limit_top = 0
+	cam.limit_right = int(_ground.size.x)
+	cam.limit_bottom = int(_ground.size.y)
+	cam.position_smoothing_enabled = true
+	cam.position_smoothing_speed = 6.0
+
 
 # ─────────────────────────── 원정 (챕터 보스방, 세58-B) ───────────────────────────
 

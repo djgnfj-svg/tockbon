@@ -1,10 +1,13 @@
-[gd_scene load_steps=4 format=3 uid="uid://c0prop03refine0"]
+[gd_scene load_steps=5 format=3 uid="uid://c0prop03refine0"]
 
 [ext_resource type="Script" path="res://src/actors/interact_zone.gd" id="1_zone"]
-[ext_resource type="Texture2D" path="res://assets/sprites/base/props.png" id="2_tex"]
+[ext_resource type="Texture2D" path="res://assets/sprites/base/bld_alchemy.png" id="2_tex"]
 
-[sub_resource type="RectangleShape2D" id="RectangleShape2D_refine"]
-size = Vector2(110, 96)
+[sub_resource type="RectangleShape2D" id="trigger"]
+size = Vector2(118, 80)
+
+[sub_resource type="RectangleShape2D" id="solid"]
+size = Vector2(118, 130)
 
 [node name="Refine" type="Area2D"]
 collision_layer = 64
@@ -13,17 +16,25 @@ script = ExtResource("1_zone")
 zone_id = &"refine"
 
 [node name="Sprite" type="Sprite2D" parent="."]
+offset = Vector2(0, -80)
 texture = ExtResource("2_tex")
-region_enabled = true
-region_rect = Rect2(64, 0, 32, 48)
+
+[node name="Body" type="StaticBody2D" parent="."]
+collision_layer = 1
+collision_mask = 0
+
+[node name="Shape" type="CollisionShape2D" parent="Body"]
+position = Vector2(0, -65)
+shape = SubResource("solid")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
-shape = SubResource("RectangleShape2D_refine")
+position = Vector2(0, 26)
+shape = SubResource("trigger")
 
 [node name="Prompt" type="Label" parent="."]
-offset_left = -46.0
+offset_left = -60.0
 offset_top = -50.0
-offset_right = 46.0
+offset_right = 60.0
 offset_bottom = -28.0
-text = "[E] 정제대"
+text = "[E] 연금술 실습동"
 horizontal_alignment = 1
