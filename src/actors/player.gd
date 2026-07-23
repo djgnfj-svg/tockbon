@@ -19,8 +19,11 @@ const PlayerCaster := preload("res://src/actors/player_caster.gd")
 @onready var sprite: AnimatedSprite2D = $Sprite
 
 ## 🔴 구르기(Shift = `dash` 액션) — 짧은 대시 + 그동안 무적 (세션41 온보딩).
-## `forest_enemy`가 접촉 피해 전에 `is_rolling()`을 보고 피해를 흘린다(무적 프레임). 튜토 방의
-## "균열 넘기"도 같은 술어를 읽는다 (docs/ONBOARDING_FLOW.md 구간 A). 수치는 balance(dash_*).
+## `forest_enemy`가 접촉 피해 전에 `is_rolling()`을 보고 피해를 흘린다(무적 프레임). 수치는 balance(dash_*).
+## 🔴 세71f: **구르기 처음엔 없다**(사용자 확정) — 나중에 **장비 착용이 이동수단을 정하게** 할 예정이라
+## 지금은 입력만 막는다. 기계(대시·무적·먼지 버스트·is_rolling)는 **전부 남겨** 그때 게이트만 켜면 된다.
+## 게이팅 지점은 여기 하나(`_roll_enabled()`) — 나중에 이 함수를 장비 조회로 바꾼다.
+const ROLL_ENABLED := false
 var _face := Vector2.DOWN      ## 마지막으로 향한 방향 — 제자리에서 굴러도 이쪽으로 대시
 var _roll_time := 0.0          ## 남은 구르기 시간(>0이면 구르는 중 = 무적)
 var _roll_cd := 0.0            ## 다음 구르기까지 쿨다운
@@ -112,7 +115,8 @@ func _physics_process(delta: float) -> void:
 		_face = dir
 
 	# 구르기 시작(Shift) — 방향은 지금 누른 쪽, 없으면 마지막으로 향한 쪽.
-	if Input.is_action_just_pressed("dash") and _roll_cd <= 0.0:
+	# 🔴 세71f: ROLL_ENABLED=false면 Shift 무시(구르기 제거) — 나중에 장비 게이트로 켠다.
+	if ROLL_ENABLED and Input.is_action_just_pressed("dash") and _roll_cd <= 0.0:
 		_roll_dir = (dir if dir != Vector2.ZERO else _face).normalized()
 		_roll_time = GameState.balance.dash_duration_sec
 		_roll_cd = GameState.roll_cooldown()   # 🔴 부적(CHARM) 배수 반영 (세션42)
