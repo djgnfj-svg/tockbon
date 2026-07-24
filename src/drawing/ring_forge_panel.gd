@@ -482,7 +482,10 @@ func recompose() -> void:
 	var flat := PackedVector2Array()
 	for sub in paths:
 		flat.append_array(sub)
-	_board.enter_combined_trace(flat, paths, band_defs.size())
+	# 🔴 세81: 층 구분 동심원은 **조립 미리보기(ASSEMBLE)에서만** 보인다 — 실제로 그릴 때(DRAW)는
+	# 문양이 그 선에 걸쳐 지저분하다는 사용자 지적으로 끈다. 그래서 _on_start_draw가 phase를 DRAW로
+	# 바꾼 **뒤에** recompose를 부른다(아래).
+	_board.enter_combined_trace(flat, paths, band_defs.size(), _phase != Phase.DRAW)
 	_update_score()
 	_refresh_buttons()
 
@@ -694,9 +697,11 @@ func _on_start_draw() -> void:
 		_set_say("진과 룬을 먼저 고르세요", true)
 		return
 	Audio.play(&"ui_click")
-	recompose()               # ②③ 룬 포함 full 가이드로 재합성 + enter_combined_trace
-	_board.clear_stroke()     # 새 밑그림 위에 옛 획이 남지 않게
+	# 🔴 세81: phase를 **먼저** DRAW로 바꾼 뒤 recompose한다 — recompose가 `_phase != Phase.DRAW`로
+	# 층 구분 동심원을 끄기 때문(그릴 때 선이 문양에 걸치는 걸 없앤다). 순서가 곧 그 신호다.
 	_set_phase(Phase.DRAW)    # ④ 조립 잠금 + 손 긋기 열림
+	recompose()               # ②③ 룬 포함 full 가이드로 재합성 + enter_combined_trace (DRAW라 밴드선 없이)
+	_board.clear_stroke()     # 새 밑그림 위에 옛 획이 남지 않게
 	_set_say("이제 이 밑그림을 손으로 따라 그으세요 — 다 그으면 [분석 ▶]", false)
 
 

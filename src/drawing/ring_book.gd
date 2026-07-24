@@ -68,6 +68,9 @@ const TAB_DESC := [
 ]
 
 var _stage := TAB_JIN                 # 진 탭부터 편다 (순차 조립)
+## 🔴 세81: 층 탭 「보유 문양-고리」 목록 세로 스크롤(px) — 목록이 책을 넘치면 마우스 휠로 굴린다
+## (사용자 지적: 폭발진 등이 UI 밖으로 넘어감). 클램프는 `_draw_band_sockets`가 콘텐츠·가시영역으로.
+var _ring_scroll := 0.0
 ## 🔴 세71b 점진 조립 — 어느 탭이 열렸나 (진 선택⇒룬 탭·룬 선택⇒층 탭). 패널이 선택 상태에서
 ## 파생해 `set_open_tabs`로 주입한다(단일 소스=패널 선택, `set_defs`와 동형·module-local). 잠긴 탭은
 ## 회색으로 그리고 클릭을 거부한다. 기본 = 전부 열림(옛 호출부·주입 전 첫 프레임 호환).
@@ -156,9 +159,27 @@ func _notification(what: int) -> void:
 
 # ─────────────────────────── 입력 ───────────────────────────
 
+## 🔴 세81: 넘치는 목록이 책 밖으로 흘러 다른 UI를 덮지 않게 Control 경계로 클립한다(스크롤과 한 쌍).
+func _ready() -> void:
+	clip_contents = true
+
+
 func _gui_input(event: InputEvent) -> void:
 	var mb := event as InputEventMouseButton
-	if mb == null or not mb.pressed or mb.button_index != MOUSE_BUTTON_LEFT:
+	if mb == null or not mb.pressed:
+		return
+	# 🔴 세81: 층 탭 문양-고리 목록 휠 스크롤 — 굴린 뒤 클램프는 draw가 한다(콘텐츠 크기를 draw가 안다).
+	if _stage == TAB_GLYPH and mb.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+		_ring_scroll += RING_ROW_H + RING_ROW_GAP
+		queue_redraw()
+		accept_event()
+		return
+	if _stage == TAB_GLYPH and mb.button_index == MOUSE_BUTTON_WHEEL_UP:
+		_ring_scroll = maxf(0.0, _ring_scroll - (RING_ROW_H + RING_ROW_GAP))
+		queue_redraw()
+		accept_event()
+		return
+	if mb.button_index != MOUSE_BUTTON_LEFT:
 		return
 	for i in _tab_rects.size():
 		if _tab_rects[i].has_point(mb.position):
@@ -618,22 +639,40 @@ func _draw_band_sockets(font: Font, top: float) -> void:
 			_text(font, r.position + Vector2(10.0, r.size.y * 0.5 - 6.0),
 				"밴드 %d — 비었다 (아래 고리 클릭)" % (i + 1), DESC_COLOR, 9)
 
-	# 보유 문양-고리 목록 (선택 밴드에 끼운다)
+	# 보유 문양-고리 목록 (선택 밴드에 끼운다) — 머리글은 고정, 행만 휠 스크롤(세81).
 	var list_top := band_list_top(n, top)
 	_text(font, Vector2(8.0, list_top - RING_LIST_HEADER + 2.0),
 		"보유 문양-고리 (클릭 → 밴드 %d)" % (_sel_band + 1), DESC_COLOR, 9)
+	# 🔴 세81: 스크롤 클램프 — 콘텐츠 높이가 가시영역(list_top→책 바닥)을 넘칠 때만 굴러간다.
+	var row_pitch := RING_ROW_H + RING_ROW_GAP
+	var content_h := float(_available_rings.size()) * row_pitch
+	var visible_h := size.y - list_top
+	var max_scroll := maxf(0.0, content_h - visible_h)
+	_ring_scroll = clampf(_ring_scroll, 0.0, max_scroll)
 	var lrects := ring_list_rects(_available_rings.size(), size, list_top)
 	for i in _available_rings.size():
 		var gr2 := _available_rings[i] as GlyphRingDef
 		if gr2 == null:
 			continue
 		var rr: Rect2 = lrects[i]
+		rr.position.y -= _ring_scroll
+		# 가시영역 밖(위·아래로 완전히 벗어난) 행은 안 그리고 _cells에도 안 담는다(클릭 못 함).
+		if rr.position.y + rr.size.y < list_top or rr.position.y > size.y:
+			continue
 		_cells.append({"rect": rr, "kind": "ring", "value": gr2.id})
 		draw_rect(rr, Color(gr2.ui_color, 0.10), true)
 		draw_rect(rr, Color(gr2.ui_color, 0.7), false, 1.5)
 		_ring_icon(rr.position + Vector2(rr.size.y * 0.5, rr.size.y * 0.5), rr.size.y * 0.34, gr2)
 		_text(font, rr.position + Vector2(rr.size.y + 8.0, rr.size.y * 0.5 - 5.0),
 			"%s  %s×%d" % [gr2.display_name, _motif_name(gr2.motif), gr2.count], NAME_COLOR, 9)
+	# 🔴 세81: 넘칠 때만 오른쪽에 얇은 스크롤 썸(있다는 신호 — 없으면 휠 되는지 모른다).
+	if max_scroll > 0.0:
+		var track_x := size.x - 5.0
+		var track_h := visible_h
+		var thumb_h := maxf(18.0, track_h * (visible_h / content_h))
+		var thumb_y := list_top + (track_h - thumb_h) * (_ring_scroll / max_scroll)
+		draw_rect(Rect2(track_x, list_top, 3.0, track_h), Color(0.42, 0.30, 0.12, 0.12), true)
+		draw_rect(Rect2(track_x, thumb_y, 3.0, thumb_h), Color(0.42, 0.30, 0.12, 0.5), true)
 
 
 ## 문양-고리 아이콘 — 밴드 원 + count번 낱개 모티프(절차 가이드선 = 규칙 §0 도형금지 예외).
