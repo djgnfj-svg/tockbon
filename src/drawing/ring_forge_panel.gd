@@ -147,10 +147,13 @@ var _committed := false
 var _bands: Array[StringName] = []            # 밴드 idx → 문양-고리 id (&"" = 빈 밴드)
 var _sel_band := 0                            # 지금 고른(강조) 밴드
 var _sel_jin: StringName = &""                # 고른 진 id (&"" = 아직 — 밑그림 안 뜸)
-## 🔴 세71b 점진 조립 — 룬은 **골라야** 밑그림에 뜬다(옛 기본 불 주입 제거). 안 골랐으면 compose에
-## 센티넬 -1을 넘겨 진 윤곽만 합성한다. `_sel_rune`는 발사 계약용 캐시라 값은 유지(build_assembly).
-var _sel_rune := RingBoard.RUNE_FIRE          # 고른 룬 타입 (발사 계약 캐시 — 표시는 _rune_picked가 판다)
-var _rune_picked := false                     # 룬을 실제로 골랐나 (false=밑그림에 룬 없음·[그리기 시작] 잠금)
+## 🔴 세81 M2 융합진 — 룬이 **자리별**이 됐다(일반진=자리 1·융합진=자리 2). 진의 rune_slots만큼
+## `_sel_runes`를 잡고(진 선택 때 `_resize_runes`), 자리마다 룬 타입 or RUNE_NONE. `_sel_rune_slot` =
+## 지금 채우는 활성 자리(융합진 소켓 선택). 옛 `_sel_rune`(단일)+`_rune_picked`(bool)를 대체한다 —
+## 자리 1개면 `_sel_runes=[불]` 하나라 옛 흐름과 계산·밑그림이 동일(무회귀).
+const RUNE_NONE := -1                          # 룬 자리 미선택 (compose 센티넬·RingAssembly.RUNE_NONE과 같은 값)
+var _sel_runes: Array[int] = [RUNE_NONE]       # 자리별 고른 룬 (RUNE_NONE=미선택). size = 진의 rune_slots
+var _sel_rune_slot := 0                        # 지금 채울 활성 자리 (융합진 소켓 선택)
 ## 🔴 세71d 종이 축 은퇴 — 진 규모는 **1.0 고정**. `RingDesign.size`·`build_assembly["size"]` 스키마·
 ## 계약은 남긴다(ring_spell_system이 소비·test_ring_design/spell/save가 잰다) — 값만 1.0으로 굳힌다.
 ## 기본 종이(등급1)도 옛날부터 size 1.0이었다("기준 100 = 기본 종이") → 발사 baseline 무변경.
@@ -189,6 +192,7 @@ func _ready() -> void:
 
 	_book.jin_selected.connect(_on_jin_selected)
 	_book.rune_selected.connect(_on_rune_selected)
+	_book.rune_slot_selected.connect(_on_rune_slot_selected)   # 세81 M2: 융합진 룬 소켓 선택
 	_book.band_selected.connect(_on_band_selected)   # 세71: 강조 밴드 선택
 	_book.ring_picked.connect(_on_ring_picked)       # 세71: 선택 밴드에 문양-고리 끼움
 
@@ -301,6 +305,7 @@ func open() -> void:
 	if not _ink_ids.is_empty():   # 기본 잉크(먹)로 시작 — 색을 판에 걸어 둔다
 		_select_ink(_ink_ids[0])
 	_sync_book_bands()                          # 🔴 층 소켓·보유 목록을 책에 주입 (세71)
+	_sync_book_runes()                          # 🔴 세81 M2: 룬 소켓(자리) 상태를 책에 주입
 	recompose()                                 # 🔴 clear_all 뒤 COMBINED 모드로 재진입 (빈 진이면 빈 가이드)
 	_set_phase(Phase.ASSEMBLE)                  # 🔴 세71b: 조립 단계부터 — 손 긋기 잠금·룬/층 탭 잠금
 	_set_say(Copy_START, false)
@@ -413,8 +418,9 @@ func _reset_selection() -> void:
 	_bands = []                          # 진 미선택 = 소켓 없음 (band_count는 진 선택 때 파생)
 	_sel_band = 0
 	_sel_jin = &""
-	_sel_rune = RingBoard.RUNE_FIRE
-	_rune_picked = false
+	# 🔴 세81 M2: 룬 자리도 옛 판(자리 1·미선택)으로 — 진 선택이 그 진의 rune_slots로 다시 잡는다.
+	_sel_runes = [RUNE_NONE]
+	_sel_rune_slot = 0
 
 
 ## 각 밴드의 GlyphRingDef(or null) — `compose_guide`(밑그림)·`layer_rings`(발사 계약)가 받는 형식.
@@ -442,6 +448,12 @@ func _sync_book_bands() -> void:
 	_book.set_bands(_band_defs(), _sel_band, _available_rings())
 
 
+## 🔴 세81 M2: 룬 소켓(자리별 선택·활성 자리)을 책에 주입한다 (set_bands와 동형). 자리 1개면 책이
+## 소켓을 안 그린다(무회귀) — 융합진(자리 ≥2)에서만 룬 소켓 줄이 룬 탭 위에 뜬다.
+func _sync_book_runes() -> void:
+	_book.set_rune_slots(_sel_runes, _sel_rune_slot)
+
+
 ## 🔴 조립본을 한 장의 합성 가이드로 만들어 보드에 통째 트레이스로 넣는다.
 ## 진을 아직 안 골랐으면(&"") 빈 가이드 — 오른쪽에서 진을 먼저 고르는 게 순서다(세25 규율).
 func recompose() -> void:
@@ -460,12 +472,13 @@ func recompose() -> void:
 		ro = _board._outer_radius()
 	# 🔴 합성 가이드 기하는 **고정 ro** — 종이 규모는 스칼라(size)로만 싣는다(설계 §종이 안전안).
 	# 가이드를 키우면 판을 넘칠 위험(세50 좌표 실측 자리)이라 이번 슬라이스는 안 키운다.
-	# 🔴 세71b 점진 조립: 룬을 아직 안 골랐으면 **센티넬 -1**을 넘겨 진 윤곽만 뜬다(compose_guide 시그니처 불변).
-	var rune_arg := _sel_rune if _rune_picked else -1
+	# 🔴 세81 M2: 룬을 **자리별 목록**으로 넘긴다(`_sel_runes`, 미선택 자리 = RUNE_NONE 센티넬).
+	# 목록째 넘겨야 자리 좌표가 안 흔들린다 — 융합진 슬롯0을 먼저 골라도 왼쪽에 고정(compose가 센티넬
+	# 자리는 서브패스만 건너뛴다). 아무 자리도 안 골랐으면(전부 -1) 룬 서브패스 0 = 진 윤곽만(무회귀).
 	# 🔴 세71c: 조각별 서브패스로 합성 → flat은 그 flatten(한 소스, 制約 flat=flatten(subpaths)). 보드가
 	# 서브패스를 받아 조각마다 별도 폴리라인으로 그린다(이음선 제거) + 밴드 수만큼 빈 층 동심원을 그린다.
 	var band_defs := _band_defs()
-	var paths := RingBoard.compose_guide_paths(shape, rune_arg, band_defs, ctr, ro)
+	var paths := RingBoard.compose_guide_paths(shape, _sel_runes, band_defs, ctr, ro)
 	var flat := PackedVector2Array()
 	for sub in paths:
 		flat.append_array(sub)
@@ -489,10 +502,14 @@ func _on_jin_selected(jin_id: StringName) -> void:
 	# 🔴 세71c: **진이 층 수를 정한다**(JinDef.band_count) — 선택 진 band_count로 소켓을 리사이즈.
 	# 겹치는 옛 끼움은 보존하고 `_sel_band`를 새 범위로 clamp(制約⑤ 시점). 그 뒤 책에 재주입.
 	_resize_bands(_band_count_of(jd))
+	# 🔴 세81 M2: 진이 **룬 자리 수**도 정한다(융합진 rune_slots=2). 겹치는 옛 선택 보존·활성 자리 clamp.
+	_resize_runes(int(jd.rune_slots) if jd != null else 1)
 	recompose()
 	_sync_book_bands()   # 🔴 층 소켓 수(=band_count)를 책에 재주입
+	_sync_book_runes()   # 🔴 세81 M2: 룬 소켓 수(=rune_slots)를 책에 재주입
 	_sync_book_tabs()    # 🔴 세71b: 진 골랐다 → 룬 탭 열림
-	_set_say("%s 골랐다 (%d층) — 이제 룬 탭에서 속성을 고르세요" % [nm, _bands.size()], false)
+	var rmsg := " · 룬 자리 %d개(융합진)" % _sel_runes.size() if _sel_runes.size() >= 2 else ""
+	_set_say("%s 골랐다 (%d층)%s — 이제 룬 탭에서 속성을 고르세요" % [nm, _bands.size(), rmsg], false)
 
 
 ## 진의 층 수 (JinDef.band_count, 없으면 1). RingBoard.BAND_RADII 개수로 클램프(반경이 없는 층은 못 쓴다).
@@ -510,16 +527,89 @@ func _resize_bands(n: int) -> void:
 	_sel_band = clampi(_sel_band, 0, maxi(n - 1, 0))
 
 
-## 룬 탭 셀 클릭 → 룬을 고르고 재합성. 룬 타입이 밑그림·발사·저장까지 흐른다(하드코딩 금지).
+## 🔴 세81 M2: `_sel_runes`를 n(진의 rune_slots)칸으로 맞춘다 — `_resize_bands` 선례 그대로.
+## 최소 1칸(진 미선택·일반진). 겹치는 옛 선택은 보존, 활성 자리를 새 범위로 clamp.
+func _resize_runes(n: int) -> void:
+	var old := _sel_runes
+	_sel_runes = []
+	for i in maxi(n, 1):
+		_sel_runes.append(old[i] if i < old.size() else RUNE_NONE)
+	_sel_rune_slot = clampi(_sel_rune_slot, 0, _sel_runes.size() - 1)
+
+
+## 룬 자리를 전부 채웠나 (융합진 [그리기 시작] 게이트). 자리 1개면 하나 고르면 참(옛 흐름).
+func _runes_ready() -> bool:
+	if _sel_runes.is_empty():
+		return false
+	for r in _sel_runes:
+		if r == RUNE_NONE:
+			return false
+	return true
+
+
+## 룬을 **적어도 하나** 골랐나 (밑그림에 룬이 뜨나·층 탭이 열리나 = 옛 `_rune_picked`).
+func _any_rune() -> bool:
+	for r in _sel_runes:
+		if r != RUNE_NONE:
+			return true
+	return false
+
+
+## primary 룬 (첫 채운 자리, 없으면 불 폴백) — 옛 `_sel_rune` 자리(요약·발사 rune 키).
+func _primary_rune() -> int:
+	for r in _sel_runes:
+		if r != RUNE_NONE:
+			return r
+	return RingBoard.RUNE_FIRE
+
+
+## 발사 계약 룬 목록 (자리 순서, 미선택 제외). build_assembly의 "runes" 정본.
+func _chosen_runes() -> Array[int]:
+	var out: Array[int] = []
+	for r in _sel_runes:
+		if r != RUNE_NONE:
+			out.append(r)
+	return out
+
+
+## 다음 빈 룬 자리 (없으면 -1). 룬을 고른 뒤 활성 자리를 자동으로 다음 빈 칸으로 옮긴다(융합진 편의).
+func _next_empty_rune_slot() -> int:
+	for i in _sel_runes.size():
+		if _sel_runes[i] == RUNE_NONE:
+			return i
+	return -1
+
+
+## 룬 탭 셀 클릭 → **활성 자리**에 룬을 넣고 재합성. 룬 타입이 밑그림·발사·저장까지 흐른다(하드코딩 금지).
+## 🔴 세81 M2: 융합진은 활성 자리(`_sel_rune_slot`)를 채우고, 고른 뒤 다음 빈 자리로 활성을 옮긴다
+## (소켓을 안 눌러도 두 룬을 연속으로 고를 수 있게). 자리 1개면 늘 슬롯0 = 옛 흐름.
 func _on_rune_selected(rune_type: int) -> void:
 	Audio.play(&"ui_click")
-	_sel_rune = rune_type
-	_rune_picked = true   # 🔴 세71b: 룬이 밑그림 중심에 뜨고 [그리기 시작]·층 탭이 열린다
+	if _sel_rune_slot < 0 or _sel_rune_slot >= _sel_runes.size():
+		_sel_rune_slot = 0
+	_sel_runes[_sel_rune_slot] = rune_type
+	var nxt := _next_empty_rune_slot()
+	if nxt >= 0:
+		_sel_rune_slot = nxt          # 다음 빈 자리로 활성 이동 (없으면 방금 자리 유지)
 	var rd: RuneDef = Db.get_rune(rune_type)
 	var nm := String(rd.display_name) if rd != null else "룬"
 	recompose()
+	_sync_book_runes()
 	_sync_book_tabs()
-	_set_say("%s 룬 골랐다 — 중심에 반영됐다. 층을 더하거나 [그리기 시작]" % nm, false)
+	if _sel_runes.size() >= 2:
+		var filled := _sel_runes.size() - _sel_runes.count(RUNE_NONE)
+		var tail := "모두 채웠으면 [그리기 시작]" if _runes_ready() else "남은 룬 자리를 채우세요"
+		_set_say("%s 넣었다 (룬 %d/%d) — %s" % [nm, filled, _sel_runes.size(), tail], false)
+	else:
+		_set_say("%s 룬 골랐다 — 중심에 반영됐다. 층을 더하거나 [그리기 시작]" % nm, false)
+
+
+## 🔴 세81 M2: 융합진 룬 소켓 클릭 → 채울 활성 자리를 바꾼다(단일 소스는 패널, 책은 반영만).
+func _on_rune_slot_selected(i: int) -> void:
+	if _sel_runes.is_empty():
+		return
+	_sel_rune_slot = clampi(i, 0, _sel_runes.size() - 1)
+	_sync_book_runes()
 
 
 ## 층 소켓 클릭 → 강조 밴드를 바꾼다 (책이 자기 _sel_band를 갱신하지만 단일 소스는 패널).
@@ -580,7 +670,9 @@ func _apply_phase_filters() -> void:
 func _open_tabs() -> Array:
 	if _phase != Phase.ASSEMBLE:
 		return [false, false, false]
-	return [true, String(_sel_jin) != "", _rune_picked]
+	# 🔴 세81 M2: 층 탭은 룬을 **적어도 하나** 골랐으면 열린다(융합진은 자리를 다 안 채워도 층을 얹을 수
+	# 있게 — [그리기 시작] 게이트만 전부 채움을 요구한다). 자리 1개면 하나 고르면 열림 = 옛 흐름.
+	return [true, String(_sel_jin) != "", _any_rune()]
 
 
 func _sync_book_tabs() -> void:
@@ -588,8 +680,9 @@ func _sync_book_tabs() -> void:
 
 
 ## 진+룬을 모두 골랐나 — [그리기 시작] 게이트 활성 조건(층은 선택 사항).
+## 🔴 세81 M2: 융합진은 룬 자리를 **전부** 채워야 시작(runes_ready). 자리 1개면 하나면 된다(옛 흐름).
 func _can_start_draw() -> bool:
-	return String(_sel_jin) != "" and _rune_picked
+	return String(_sel_jin) != "" and _runes_ready()
 
 
 ## 🔴 [그리기 시작] — 조립을 잠그고 손 긋기로 넘어간다. **순서 못박음(리뷰 각주 ③)**:
@@ -834,9 +927,12 @@ func build_assembly() -> Dictionary:
 	var score := _board.combined_total()
 	# 🔴 rings/score는 아래서 직접 싣는다 — board_asm은 **특별잉크 집계**(보드 private)의 유일한 창구다.
 	var board_asm := _board.get_assembly()
+	# 🔴 세81 M2: 발사·저장 계약에 룬 **목록**을 싣는다("runes", 미선택 제외). "rune"(primary)은
+	# 옛 소비자(단일 룬을 읽던 발사·요약·HUD) 무회귀용 — ring_spell_system이 "runes"로 융합한다.
 	return {
 		"ring_count": 1,
-		"rune": _sel_rune,
+		"rune": _primary_rune(),
+		"runes": _chosen_runes(),
 		"jin": _sel_jin,
 		"rings": rings,
 		"open": open,
@@ -1067,8 +1163,12 @@ func _draw_rubbing(box: Rect2) -> void:
 func _compose_summary() -> String:
 	var jd := Db.get_jin(_sel_jin)
 	var jin_name := String(jd.display_name) if jd != null else "?"
-	var rd: RuneDef = Db.get_rune(_sel_rune)
-	var rune_name := String(rd.display_name) if rd != null else "?"
+	# 🔴 세81 M2: 융합진은 룬이 여럿 — 다 적는다(불+물 …). 없으면 "?".
+	var rune_names: Array[String] = []
+	for r in _chosen_runes():
+		var rd2: RuneDef = Db.get_rune(r)
+		rune_names.append(String(rd2.display_name) if rd2 != null else "?")
+	var rune_name := "+".join(rune_names) if not rune_names.is_empty() else "?"
 	var layers: Array[String] = []
 	for i in _bands.size():
 		var gr := Db.get_glyph_ring(_bands[i]) if String(_bands[i]) != "" else null

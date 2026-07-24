@@ -37,6 +37,8 @@ var damage: float = 0.0
 var rune_type: int = Enums.RuneType.FIRE
 var status: int = Enums.Status.NONE
 var status_power: float = 0.0
+## 🔴 복합 룬 (세81 M2 융합진) — primary 외 룬을 피해 0으로 상태만 얹는다(적 0-피해 가드가 도배 차단).
+var rune_hits: Array = []
 ## 폭발 반경(px) — 안쪽 층의 결과에 따라 달라져 **호출자가 정한다**
 var radius_px: float = BASE_RADIUS
 
@@ -58,11 +60,12 @@ func _ready() -> void:
 
 
 func setup(p_damage: float, p_rune_type: int, p_status: int, p_status_power: float,
-		p_radius_px: float) -> void:
+		p_radius_px: float, p_rune_hits: Array = []) -> void:
 	damage = p_damage
 	rune_type = p_rune_type
 	status = p_status
 	status_power = p_status_power
+	rune_hits = p_rune_hits
 	radius_px = maxf(p_radius_px, 1.0)
 	_life_left = FLASH_SEC
 
@@ -133,6 +136,11 @@ func _hit(node: Node2D) -> void:
 	_hit_ids.append(id)
 	if node.has_method("take_hit"):
 		node.take_hit(damage, rune_type, status, status_power)
+		# 🔴 세81 M2: 보조 룬 상태 (피해 0 — 적 0-피해 가드가 도배 차단). 원샷이라 적당 한 번.
+		for rh: Dictionary in rune_hits:
+			if int(rh.get("rune_type", -1)) == rune_type:
+				continue
+			node.take_hit(0.0, int(rh.rune_type), int(rh.status), float(rh.status_power))
 
 
 ## 룬 색 — Db에서 읽고, 없으면 폴백 (pillar._rune_color와 같은 규칙).

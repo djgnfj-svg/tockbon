@@ -733,6 +733,13 @@ func phase() -> int:
 func take_hit(damage: float, rune_type: int, status: int, status_power: float) -> void:
 	if _dead:
 		return
+	# 🔴 세81 M2 (융합진): 직격 피해가 0 = 보조 룬의 **상태 전용 히트**. 손맛·발신·넉백·죽음판정을
+	# 건너뛰고 상태만 얹는다 — 안 그러면 한 발이 룬 수만큼 `enemy_hit`·팝·피해숫자 "0"을 도배한다
+	# (`juice.gd`가 발신마다 무조건 그린다). 반응은 `apply_incoming`이 판정하므로 여기서 얹으면 충분하다.
+	# ⚠ 반응 **버스트**는 `take_reaction_damage` 별도 경로라 이 가드와 무관하다(그쪽은 계속 pop을 낸다).
+	if damage <= 0.0:
+		_status.apply_incoming(rune_type, status, status_power)
+		return
 	var mult := 1.0
 	if _def != null and _def.has_counter and rune_type == _def.counter_rune:
 		mult = _param("weakness_mult", 1.0)

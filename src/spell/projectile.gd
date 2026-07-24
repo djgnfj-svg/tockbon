@@ -359,8 +359,10 @@ func _deal_damage(node: Node2D) -> void:
 	# "탄이 박혔다" 연출 신호 (세션59 설계 §3) — 관통이면 뚫는 적마다 1회 = 의도.
 	# 벽(_hit_wall)·수명 소멸(_consume 직행)에는 안 쏜다. 위치는 carrier와 통일(take_hit 계약 통과 뒤).
 	EventBus.spell_impact.emit(global_position, rune_type)
-	# 🔴 복합 — primary(=rune_type)가 피해+자기 상태를 얹고, 나머지 룬은 **피해 0**으로 상태만
-	# 얹는다 (take_hit의 `if dmg>0` 덕에 피해·enemy_hit 이중 계산 없음 — 적 계약 무변경).
+	# 🔴 복합 (세81 M2 융합진) — primary(=rune_type)가 피해+자기 상태를 얹고, 나머지 룬은 **피해 0**
+	# 으로 상태만 얹는다. 🔴 도배(피해숫자 "0"·히트스톱·팝 중복)는 **적 계약의 0-피해 가드**가 막는다
+	# (`forest_enemy`·`dummy_target`의 take_hit이 damage<=0이면 발신·손맛을 스킵) — 세81에 적 계약을
+	# 실제로 바꿨다(그전엔 이 주석이 "if dmg>0 가드 덕에"라 **거짓**이었다, 잠든 기계라 안 밟혔다).
 	node.take_hit(damage, rune_type, status, status_power)
 	for rh: Dictionary in rune_hits:
 		if int(rh.get("rune_type", -1)) == rune_type:

@@ -136,6 +136,10 @@ enum TraceTarget { NONE, JIN, RUNE, GLYPH, COMBINED }
 
 # ── 🔴 세68 조립→탁본 합성 상수 (연출/레이아웃 → 스크립트 const, 밸런스 아님) ──
 const RUNE_GUIDE_FRAC := 0.18        # 합성 가이드에서 룬(중심)의 크기 (판 반지름 비)
+## 🔴 세81 M2 융합진 — 룬 자리가 여럿일 때의 배치(손맛/레이아웃 const, 밸런스 아님·시작값·F5 튜닝).
+## 자리 1개(일반진·M1까지 전부)는 이 상수를 **안 탄다** → 룬은 중심 하나로 픽셀 무회귀.
+const RUNE_SPLIT_FRAC := 0.28        # 융합진 룬 자리를 중심에서 벌리는 거리 (판 반지름 비)
+const RUNE_MULTI_SIZE_FRAC := 0.68   # 자리 2개 이상일 때 룬 하나를 이만큼 줄인다 (겹침 방지)
 const BAND_RADII := [0.42, 0.68]     # 동심원 밴드 반경 비 목록 (안쪽부터). 진은 앞 band_count개만 쓴다
 const MOTIF_SIZE_FRAC := 0.14        # 밴드 반경 대비 문양-고리 낱개 모티프 크기
 
@@ -390,16 +394,22 @@ func _build_guide(target: int, slot: int) -> PackedVector2Array:
 			# 진을 8종으로 늘려도 **손 궤적이 똑같았다**(색만 다른 8지선다).
 			pts = jin_guide_pts(_jin_shape(), ctr, _jin_radius())
 		TraceTarget.RUNE:
-			if _rune_idx < 0:
-				return pts
 			# 🔴 룬 종류별 밑그림 (세션 34) — 닫힌 다각형의 꼭짓점을 변마다 촘촘히 잇는다.
 			# 렌더는 먹선 그대로라(_draw_locked) 이 밑그림 모양이 곧 "따라 그리는 룬"이다.
-			var v := rune_guide_verts(_rune_idx, ctr, _rune_size())
-			var seg := v.size() - 1
-			for e in seg:
-				for t in 12:
-					pts.append(v[e].lerp(v[e + 1], float(t) / 12.0))
-			pts.append(v[seg])
+			# 🔴 세81 M2: 룬 하나(`_rune_idx`)가 아니라 **자리별 목록**(`_asm.get_runes()`)을 그린다 —
+			# 융합진은 룬을 여럿 감싼다. 자리 1개(일반진)면 목록 하나 = 중심 하나 = 옛 그림과 동일.
+			var rlist := _asm.get_runes()
+			if rlist.is_empty():
+				return pts
+			var rpos := rune_slot_positions(rlist.size(), ctr, ro)
+			for ri in rlist.size():
+				var v := rune_guide_verts(int(rlist[ri]), rpos[ri], _rune_size())
+				var seg := v.size() - 1
+				for e in seg:
+					for t in 12:
+						pts.append(v[e].lerp(v[e + 1], float(t) / 12.0))
+				if seg >= 0:
+					pts.append(v[seg])
 		TraceTarget.GLYPH:
 			# 🔴 문양 = **방향을 가진 화살표** (세션 25). 예전엔 방향 없는 짧은 **작대기**였다:
 			# 책의 셀은 화살표(↑↓←→)를 그려 놓고 판의 밑그림은 작대기라, 응집과 발산이
@@ -553,13 +563,37 @@ static func _densify(verts: PackedVector2Array, step: float) -> PackedVector2Arr
 ## 손으로 그을 모양" 규율이 자동 유지된다(문양·진 셀이 같은 함수를 쓰는 것과 같은 이유).
 ## band_defs[i] = 그 밴드의 GlyphRingDef(or null). ro = 판 바깥 반지름(_outer_radius()).
 ## ⚠ static·인스턴스 상태 금지 — 헤드리스 테스트가 이 함수를 관측점으로 쓴다.
-static func compose_guide(jin_shape: int, rune_type: int, band_defs: Array,
+## 🔴 세81 M2 융합진 룬 자리 좌표 (static·순수 = 헤드리스 관측점). 룬을 어디에 그리(고 감싸)나.
+## count ≤ 1 = **[중심]** — M1까지 룬은 늘 중심 하나였다. 🔴 이 경로가 곧 룬 1개 무회귀의 보장이다
+##   (아래 compose는 size도 자리 1개면 안 줄여 픽셀 동일).
+## count 2 = 중심 좌우로 `RUNE_SPLIT_FRAC` 벌린 두 점. count ≥ 3 = 위(−90°)부터 균등 원배치.
+static func rune_slot_positions(count: int, ctr: Vector2, ro: float) -> Array[Vector2]:
+	var out: Array[Vector2] = []
+	if count <= 1:
+		out.append(ctr)
+		return out
+	if count == 2:
+		var dx := ro * RUNE_SPLIT_FRAC
+		out.append(ctr + Vector2(-dx, 0.0))
+		out.append(ctr + Vector2(dx, 0.0))
+		return out
+	var r := ro * RUNE_SPLIT_FRAC
+	for i in count:
+		var a := TAU * float(i) / float(count) - PI / 2.0
+		out.append(ctr + Vector2.from_angle(a) * r)
+	return out
+
+
+## 🔴 세81 M2: `rune_type: int` → `runes: Array`(int 배열, 자리 순서). 빈 배열 = 룬 미선택(진 윤곽만).
+## 목록의 음수(RUNE_NONE) 자리는 서브패스를 건너뛴다 — 자리 개수는 유지해 **위치가 안 흔들리게**.
+## 자리 1개면 옛 단일 룬과 점 단위 동일(rune_slot_positions·size 무변경).
+static func compose_guide(jin_shape: int, runes: Array, band_defs: Array,
 		ctr: Vector2, ro: float) -> PackedVector2Array:
 	# 🔴 세71c: **`compose_guide_paths`를 flatten한 단일 소스에서 파생**한다(制약③). flat과 subpaths를
 	# 따로 만들면 언젠가 갈라진다 — 채점(flat)과 렌더(subpaths)가 반드시 같은 점열을 봐야 한다.
 	# 시그니처·반환 점열은 리팩터 전과 **점 단위로 동일**(scratch_golden.txt로 대조).
 	var out := PackedVector2Array()
-	for sub in compose_guide_paths(jin_shape, rune_type, band_defs, ctr, ro):
+	for sub in compose_guide_paths(jin_shape, runes, band_defs, ctr, ro):
 		out.append_array(sub)
 	return out
 
@@ -572,16 +606,25 @@ static func compose_guide(jin_shape: int, rune_type: int, band_defs: Array,
 ## 🔴 재구현 시 갈라지는 세 자리(制約②, verbatim): ⓐ 룬 가드 `if seg >= 0: out.append(v[seg])`+변마다
 ## 12등분 · ⓑ 밴드 frac은 **band_defs 원본 인덱스 i**로 BAND_RADII[i](null 건너뛴 압축 카운터 금지) · ⓒ
 ## flat = flatten(subpaths)(위 compose_guide). 이 세 자리를 바꾸면 골든과 어긋난다.
-static func compose_guide_paths(jin_shape: int, rune_type: int, band_defs: Array,
+static func compose_guide_paths(jin_shape: int, runes: Array, band_defs: Array,
 		ctr: Vector2, ro: float) -> Array[PackedVector2Array]:
 	var paths: Array[PackedVector2Array] = []
 	# ① 진 윤곽 (바깥 닫힌 도형)
 	paths.append(jin_guide_pts(jin_shape, ctr, ro))
-	# ② 룬 (중심) — `_build_guide`의 RUNE 분기와 **똑같이** 변마다 12등분해 이어붙인다(밀도 규율).
-	# 🔴 세71b 점진 조립: `rune_type < 0`은 **센티넬(룬 미선택)** — 룬 서브패스 자체를 안 만든다.
-	if rune_type >= 0:
+	# ② 룬(들) — `_build_guide`의 RUNE 분기와 **똑같이** 변마다 12등분해 이어붙인다(밀도 규율).
+	# 🔴 세81 M2: 자리별 목록. 각 룬은 **자기 서브패스** — count 1이면 서브패스 하나(옛 단일 룬 무회귀),
+	# count ≥ 2면 갈래마다 별도 폴리라인(이음선 없음). 음수(RUNE_NONE) 자리는 서브패스를 건너뛴다
+	# (센티넬 = 그 자리 룬 미선택). 자리 좌표는 `rune_slot_positions`가 준다(위치 단일 소스).
+	var rpos := rune_slot_positions(runes.size(), ctr, ro)
+	var rsz := ro * RUNE_GUIDE_FRAC
+	if runes.size() >= 2:
+		rsz *= RUNE_MULTI_SIZE_FRAC   # 자리 여럿이면 겹치지 않게 룬을 줄인다 (1개면 무변경)
+	for ri in runes.size():
+		var rt := int(runes[ri])
+		if rt < 0:
+			continue                  # 미선택 자리 — 서브패스 생략 (옛 센티넬 -1과 같은 뜻)
 		var rune_pts := PackedVector2Array()
-		var v := rune_guide_verts(rune_type, ctr, ro * RUNE_GUIDE_FRAC)
+		var v := rune_guide_verts(rt, rpos[ri], rsz)
 		var seg := v.size() - 1
 		for e in seg:
 			for t in 12:
@@ -1162,6 +1205,9 @@ func choose_jin(jin_def: JinDef = null) -> void:
 	# "진은 골랐는데 칸은 옛것"인 순간이 없다. null(무인자 테스트·폴백)이면 현 칸 유지.
 	if jin_def != null:
 		_asm.set_open_slots(jin_def.glyph_slots)
+		# 🔴 세81 M2: 진이 **룬 자리 수**도 정한다(융합진=2). 진 선택에 원자적으로 붙인다 —
+		# glyph_slots와 같은 자리. 자리 1(일반진)이면 옛 흐름과 동일(무회귀).
+		_asm.set_rune_slots(jin_def.rune_slots)
 	_set_trace(TraceTarget.JIN, -1)     # 고른 진으로 밑그림을 세운다
 	queue_redraw()
 	score_changed.emit(_scorer.piece_score())
@@ -1170,11 +1216,14 @@ func choose_jin(jin_def: JinDef = null) -> void:
 ## 🔴 **룬을 고른다** (오른쪽 룬 셀 클릭) → 중심에 룬별 밑그림이 선다 (세션 25·34).
 ## rune_type = Enums.RuneType (불0·물2·바람3·번개4·흙5·풀6 — 세션49에 3→6종). `_build_guide`가 type별 모양을 그리고
 ## `_asm.set_rune`이 발사·저장 계약에 담는다 — 세션 34 전엔 밑그림만 바뀌고 발사는 늘 불이었다.
-func choose_rune(rune_type: int = Enums.RuneType.FIRE) -> void:
-	if _asm.stage() != STAGE_RUNE or _asm.has_rune():
+## 🔴 세81 M2: `slot` = 넣을 룬 자리(0부터·-1=다음 빈 자리). 가드가 `has_rune()`→**`runes_ready()`**로
+## 바뀐 게 핵심이다 — 융합진은 자리를 **다 채우기 전까지** 계속 고를 수 있어야 한다(한 번 고르면
+## 막던 옛 규칙이면 두 번째 룬을 못 넣는다). 자리 1개 진은 한 번 고르면 runes_ready라 옛 흐름과 동일.
+func choose_rune(rune_type: int = Enums.RuneType.FIRE, slot: int = -1) -> void:
+	if _asm.stage() != STAGE_RUNE or _asm.runes_ready():
 		return
-	_rune_idx = rune_type
-	_asm.set_rune(rune_type)             # 🔴 발사·저장에 실제 룬 타입을 담는다 (밑그림뿐이 아니다)
+	_asm.set_rune(rune_type, slot)       # 🔴 발사·저장에 실제 룬 타입을 담는다 (밑그림뿐이 아니다)
+	_rune_idx = _asm.get_rune()          # 관측점(primary) — 색·아이콘 폴백이 읽는다
 	_set_trace(TraceTarget.RUNE, -1)
 	queue_redraw()
 	score_changed.emit(_scorer.piece_score())

@@ -15,6 +15,9 @@ const RingBoard := preload("res://src/drawing/ring_board.gd")
 signal jin_selected(jin_id: StringName)
 ## 룬을 골랐다 — 보드 중심에 그 룬을 놓는다 (rune_type = Enums.RuneType, 세션 34)
 signal rune_selected(rune_type: int)
+## 🔴 세81 M2 융합진 — 룬 소켓(자리)을 골랐다(강조 대상). 다음에 고르는 룬이 이 자리에 들어간다.
+## 자리 1개 진에선 소켓이 안 그려져 이 시그널이 안 난다(무회귀).
+signal rune_slot_selected(i: int)
 ## 🔴 세71 조립→탁본 — 밴드 소켓을 골랐다(강조 대상) / 소켓에 끼울 문양-고리를 골랐다.
 ## 옛 `glyph_selected`(개별 문양 배치)를 대체한다 — 문양은 이제 진의 **층(band)**에 끼운다.
 signal band_selected(i: int)
@@ -70,6 +73,10 @@ var _stage := TAB_JIN                 # 진 탭부터 편다 (순차 조립)
 ## 회색으로 그리고 클릭을 거부한다. 기본 = 전부 열림(옛 호출부·주입 전 첫 프레임 호환).
 var _open_tabs: Array = [true, true, true]
 var _rune_choice := -1                # 지금 고른 룬 타입 (하이라이트) — -1=아직 (세션 34)
+## 🔴 세81 M2 융합진 룬 소켓 — 패널이 `set_rune_slots`로 주입한다(책은 오토로드를 안 본다). 자리별
+## 고른 룬(or -1) 목록 + 활성 자리. size ≤ 1이면 소켓을 안 그린다(일반진 무회귀).
+var _rune_picks: Array = []
+var _sel_rune_slot := 0
 var _jin_choice: StringName = &""     # 지금 고른 진 id (하이라이트) — &""=아직 (세션44, 진=형태 선택)
 var _tab_rects: Array[Rect2] = []
 ## 클릭 가능한 칸 — {rect, kind:"jin"/"rune"/"band"/"ring", value}
@@ -110,6 +117,14 @@ func set_bands(bands: Array, sel_band: int, available_rings: Array) -> void:
 	_bands = bands
 	_sel_band = sel_band
 	_available_rings = available_rings
+	queue_redraw()
+
+
+## 🔴 세81 M2 융합진 — 룬 소켓 상태를 주입한다 (`set_bands`와 동형). picks[i] = 그 자리 룬(or -1),
+## sel_slot = 활성 자리. size ≤ 1이면 룬 탭이 소켓을 안 그린다(일반진 = 옛 흐름 그대로).
+func set_rune_slots(picks: Array, sel_slot: int) -> void:
+	_rune_picks = picks
+	_sel_rune_slot = sel_slot
 	queue_redraw()
 
 
@@ -165,6 +180,9 @@ func _gui_input(event: InputEvent) -> void:
 			"rune":
 				_rune_choice = int(cell.value)   # 하이라이트 (세션 34: 여러 룬 셀)
 				rune_selected.emit(int(cell.value))
+			"rune_slot":
+				_sel_rune_slot = int(cell.value)   # 세81 M2: 채울 활성 자리 (패널이 set_rune_slots로 되돌림)
+				rune_slot_selected.emit(int(cell.value))
 			"band":
 				_sel_band = int(cell.value)      # 세71: 강조할 밴드 (패널이 set_bands로 되돌림)
 				band_selected.emit(int(cell.value))
@@ -447,6 +465,25 @@ static func _jin_shaft(motion: int, from: Vector2, dir: Vector2, length: float) 
 ## 밟은 것과 같은 함정이다**(어휘 축이 늘면 폭이 아니라 줄 수가 늘어야 한다). 같은 규약으로 통일.
 const RUNE_COLS := 3
 const RUNE_GAP := 8.0
+## 🔴 세81 M2 융합진 룬 소켓 (룬 탭 위, 자리 ≥2일 때만). 한 줄 가로 배치 — 자리마다 미니 룬 아이콘.
+const RUNE_SOCKET_H := 34.0
+const RUNE_SOCKET_GAP := 6.0
+const RUNE_SOCKET_MARGIN := 8.0        # 소켓 줄과 아래 룬 격자 사이 여백
+
+## 룬 소켓이 룬 탭 본문에서 차지하는 세로 높이 (자리 ≤1이면 0 = 소켓 없음 = 무회귀).
+static func rune_socket_reserved(n: int) -> float:
+	return (RUNE_SOCKET_H + RUNE_SOCKET_MARGIN) if n >= 2 else 0.0
+
+## 🔴 룬 소켓 rect — 순수 함수(헤드리스 관측점). 자리 ≤1이면 빈 배열(소켓 안 그림).
+static func rune_socket_rects(n: int, book_size: Vector2, top: float) -> Array:
+	var out: Array = []
+	if n < 2:
+		return out
+	var sw := (book_size.x - 16.0 - RUNE_SOCKET_GAP * float(n - 1)) / float(n)
+	for i in n:
+		out.append(Rect2(8.0 + float(i) * (sw + RUNE_SOCKET_GAP), top, sw, RUNE_SOCKET_H))
+	return out
+
 
 ## 🔴 룬 셀 격자 — **순수 함수**라 헤드리스가 잰다(`jin_cell_rects`와 같은 이유: `_draw_*` 안에
 ## 계산을 두면 레이아웃 회귀를 못 잡는다). 셀 높이는 줄 수에 따라 낮춘다 — 두 줄이 책 밖으로 안 밀리게.
@@ -463,6 +500,12 @@ static func rune_cell_rects(n: int, book_size: Vector2, top: float) -> Array:
 
 
 func _draw_rune_cells(font: Font, top: float) -> void:
+	# 🔴 세81 M2: 융합진(룬 자리 ≥2)이면 룬 격자 위에 **룬 소켓 줄**을 그리고, 격자를 그만큼 내린다.
+	# 자리 1개(일반진)면 예약 높이 0 = 소켓 없음 = 옛 룬 탭 그대로(무회귀).
+	var slot_n := _rune_picks.size()
+	_draw_rune_sockets(font, top, slot_n)
+	top += rune_socket_reserved(slot_n)
+
 	var defs := _rune_defs if not _rune_defs.is_empty() else []
 	var n := maxi(defs.size(), 1)
 	var rects := rune_cell_rects(n, size, top)
@@ -491,6 +534,40 @@ func _draw_rune_cells(font: Font, top: float) -> void:
 ## **셀에서 본 모양 = 손으로 그을 모양**이 이제 구조적으로 못 갈라진다.
 func _draw_rune_icon(c: Vector2, s: float, col: Color, rune_type: int) -> void:
 	draw_polyline(RingBoard.rune_guide_verts(rune_type, c, s), col, 2.5, true)
+
+
+## 🔴 세81 M2 융합진 룬 소켓 줄 — 자리 N칸(자리 ≥2일 때만). 각 소켓 = 자리번호 + 채운 룬 미니 아이콘,
+## 활성 자리는 강조 테두리. 클릭 = 그 자리를 활성으로(rune_slot_selected). 자리 1개면 아무것도 안 그린다.
+## 소켓 상태는 패널이 `set_rune_slots`로 주입한다(책은 오토로드를 안 본다 = 밴드 소켓과 같은 규율).
+func _draw_rune_sockets(font: Font, top: float, slot_n: int) -> void:
+	if slot_n < 2:
+		return
+	var srects := rune_socket_rects(slot_n, size, top)
+	for i in slot_n:
+		var r: Rect2 = srects[i]
+		var pick := int(_rune_picks[i]) if i < _rune_picks.size() else -1
+		var active := i == _sel_rune_slot
+		_cells.append({"rect": r, "kind": "rune_slot", "value": i})
+		draw_rect(r, SOCKET_BG, true)
+		draw_rect(r, SEL_EDGE if active else SOCKET_EMPTY, false, 2.5 if active else 1.0)
+		if pick >= 0:
+			var rd: RuneDef = _rune_def_of(pick)
+			var rcol: Color = rd.ui_color if rd != null else RingBoard.RUNE_COLOR
+			_draw_rune_icon(r.position + Vector2(r.size.y * 0.5, r.size.y * 0.5), r.size.y * 0.30, rcol, pick)
+			var rnm := String(rd.display_name) if rd != null else "룬"
+			_text(font, r.position + Vector2(r.size.y + 2.0, r.size.y * 0.5 - 6.0), rnm, NAME_COLOR, 9)
+		else:
+			_text(font, r.position + Vector2(6.0, r.size.y * 0.5 - 6.0), "자리 %d" % (i + 1),
+				DESC_COLOR, 9)
+
+
+## 주입된 해금 룬 정의 중 타입이 일치하는 것 (소켓 아이콘 색·이름용). 없으면 null.
+func _rune_def_of(rune_type: int) -> RuneDef:
+	for rd_v in _rune_defs:
+		var rd := rd_v as RuneDef
+		if rd != null and int(rd.type) == rune_type:
+			return rd
+	return null
 
 
 ## 🔴 세71 층 탭 — 진의 **층(band) 소켓** N칸 + 보유 문양-고리 목록. 소켓 클릭=강조 밴드 선택,

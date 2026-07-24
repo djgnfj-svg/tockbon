@@ -76,6 +76,12 @@ func take_hit(damage: float, rune_type: int, status: int, status_power: float) -
 	})
 	print("[DummyTarget] 피격 damage=%.2f rune=%d status=%d power=%.2f" % [
 		damage, rune_type, status, status_power])
+	# 🔴 세81 M2 (융합진): 직격 피해 0 = 보조 룬 상태 전용 히트 — `enemy_hit`·팝을 건너뛰고
+	# 상태만 얹는다(forest_enemy와 같은 계약 — 한쪽만 바꾸면 두 몸이 갈라진다, 세56). `hits[]`엔
+	# **담아 둔다**(테스트가 두 상태가 다 얹혔는지 관측하되, 도배는 enemy_hit 발신 수로 잰다).
+	if damage <= 0.0:
+		_status.apply_incoming(rune_type, status, status_power)
+		return
 	# 적 노드 계약: enemy_hit 발신은 take_hit 내부 책임 (실제 적은 약점 배율 반영 최종 피해로 발신)
 	EventBus.enemy_hit.emit(self, damage, rune_type)
 	# 🔴 상태·반응은 피해 **뒤에** 판정한다 (forest_enemy와 같은 순서 — 계약을 한쪽만 바꾸면 갈라진다).

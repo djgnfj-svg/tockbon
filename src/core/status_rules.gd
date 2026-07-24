@@ -121,6 +121,34 @@ static func react(base_status: int, incoming_rune: int) -> Dictionary:
 	return by_rune.get(incoming_rune, {})
 
 
+## 🔴 바탕 상태에 이 룬이 들어오면 반응하나 (세81 M2 융합진 정렬용) — `react`의 bool 래퍼.
+static func reacts(base_status: int, incoming_rune: int) -> bool:
+	return not react(base_status, incoming_rune).is_empty()
+
+
+## 🔴 **룬 뭉치를 반응이 나는 순서로 정렬한다** (세81 M2 융합진).
+## `apply_incoming`은 **순차**라 얹는 순서가 반응 유무를 정하는데(REACTIONS 표가 비대칭 —
+## base 키가 WET·BURN·ROOT뿐), 이 정렬이 없으면 **같은 두 룬이 자리 순서에 따라 반응하기도
+## 안 하기도** 한다(물→번개=감전 / 번개→물=무반응). 이걸 두면 자리 순서와 무관하게 같은 반응이 난다.
+##
+## entries = `[{status:int, rune:int, …}, …]` (다른 키는 보존 — 호출부가 피해·세기를 함께 싣는다).
+## 규칙: 앞의 상태에 뒤의 룬이 반응하는 순서가 되게 인접 스왑(안정 — 반응 안 나면 원래 순서).
+## 🔴 2룬(M2) 기준으로 정확하다. 3룬+는 한 번 훑는 휴리스틱이라 모든 반응을 최적 배치하진 않는다
+## (M2는 2룬이라 안 닿는다 — 필요해지면 그때 넓힌다, YAGNI). ⚠ 순수 int 판별뿐이라 `-s` 안전.
+static func order_for_reaction(entries: Array) -> Array:
+	var out := entries.duplicate()
+	for i in range(out.size() - 1):
+		var a: Dictionary = out[i]
+		var b: Dictionary = out[i + 1]
+		var ab := reacts(int(a.get("status", -1)), int(b.get("rune", -1)))
+		var ba := reacts(int(b.get("status", -1)), int(a.get("rune", -1)))
+		# 뒤(b)의 상태가 바탕이 돼야 반응하는데 앞(a)으론 안 되면 스왑 — b를 primary(앞)로.
+		if ba and not ab:
+			out[i] = b
+			out[i + 1] = a
+	return out
+
+
 ## 취약(흙)이 걸려 있을 때 다음 상태에 곱해지는 세기 배율.
 ##
 ## 🔴 세션50(사용자 확정): 취약의 세기축 = **증폭 배수**다(지속시간이 아니라). 취약은 이동도

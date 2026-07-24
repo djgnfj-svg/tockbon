@@ -120,7 +120,7 @@ func recompose() -> void:
 	var ro := float(_board.size.x)
 	if _board.has_method("_outer_radius"):
 		ro = _board._outer_radius()
-	var guide := RingBoard.compose_guide(_jin_shape(), RUNE_FIRE, band_defs(), ctr, ro)
+	var guide := RingBoard.compose_guide(_jin_shape(), [RUNE_FIRE], band_defs(), ctr, ro)
 	if _board.has_method("enter_combined_trace"):
 		_board.enter_combined_trace(guide)
 	queue_redraw()

@@ -51,6 +51,10 @@ var damage: float = 0.0
 var rune_type: int = Enums.RuneType.FIRE
 var status: int = Enums.Status.NONE
 var status_power: float = 0.0
+## 🔴 복합 룬 (세81 M2 융합진) — 이 캐리어가 몸으로 직격할 때 얹는 모든 룬 상태
+## [{rune_type, status, status_power}]. primary(=rune_type)는 위 필드로 얹고, 나머지는 **피해 0**으로
+## 상태만 얹는다(적 계약 0-피해 가드가 도배를 막는다). 룬 1개면 [primary] 하나라 부작용 0(무회귀).
+var rune_hits: Array = []
 
 var _ring: Array = []
 var _velocity := Vector2.ZERO
@@ -104,7 +108,8 @@ func _apply_ball_anim() -> void:
 ## p_ring: **층 배열** `[[8칸]…]` (세79 M1) — 옛 8칸 한 겹도 그대로 받는다(발사부가 정규화).
 ## 캐리어는 내용을 안 본다. p_angle: 조준각.
 func setup(p_ring: Array, p_angle: float, p_speed: float, p_lifetime: float,
-		p_damage: float, p_rune_type: int, p_status: int, p_status_power: float) -> void:
+		p_damage: float, p_rune_type: int, p_status: int, p_status_power: float,
+		p_rune_hits: Array = []) -> void:
 	_ring = p_ring.duplicate()
 	_velocity = Vector2.RIGHT.rotated(p_angle) * p_speed
 	_life_left = maxf(p_lifetime, 0.05)
@@ -114,6 +119,7 @@ func setup(p_ring: Array, p_angle: float, p_speed: float, p_lifetime: float,
 	rune_type = p_rune_type
 	status = p_status
 	status_power = p_status_power
+	rune_hits = p_rune_hits
 	_apply_ball_anim()   # 룬 확정 → 워터볼/윈드볼로 갈아 끼운다 (없으면 fireball 폴백)
 	_apply_body_radius()
 	_apply_sprite_scale()
@@ -226,6 +232,11 @@ func _hit_enemy(node: Node2D) -> void:
 	_consumed = true
 	if node.has_method("take_hit"):
 		node.take_hit(damage, rune_type, status, status_power)
+		# 🔴 세81 M2: 보조 룬 상태 — 피해 0으로 얹는다(적 계약 0-피해 가드가 도배를 막는다).
+		for rh: Dictionary in rune_hits:
+			if int(rh.get("rune_type", -1)) == rune_type:
+				continue   # primary는 위에서 이미 얹었다
+			node.take_hit(0.0, int(rh.rune_type), int(rh.status), float(rh.status_power))
 	# "탄이 박혔다" 연출 신호 (세션59 설계 §3) — 적 착탄 1회만. 벽·수명 소멸(_die_without_deploy)엔 없다.
 	EventBus.spell_impact.emit(global_position, rune_type)
 	var travel := _velocity.angle() if not _velocity.is_zero_approx() else 0.0

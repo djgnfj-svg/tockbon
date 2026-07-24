@@ -133,7 +133,7 @@ func _test_deploy_radiate(system) -> void:
 	print("[1] 발산 8칸 전개 → 불탄환 8발, 기둥 0")
 	_clear(system)
 	# 아무도 없는 먼 곳에서 편다 — 탄이 즉시 뭔가에 닿아 사라지지 않게
-	system._deploy_now(_all(G_RADIATE), Vector2(5000, 5000), 0.0, 1.0, 1.0, 0)
+	system._deploy_now(_all(G_RADIATE), Vector2(5000, 5000), 0.0, 1.0, 1.0, [0])
 	await process_frame
 	_check(_bolts(system).size() == 8, "불탄환 8발 (실제 %d)" % _bolts(system).size())
 	_check(_pillars().size() == 0, "기둥 0 (실제 %d)" % _pillars().size())
@@ -143,7 +143,7 @@ func _test_deploy_gather(system) -> void:
 	print("[2] 응집 4칸 전개 → 기둥 1개, 불탄환 0")
 	_clear(system)
 	system._deploy_now(_ring({0: G_GATHER, 2: G_GATHER, 4: G_GATHER, 6: G_GATHER}),
-		Vector2(5000, 5000), 0.0, 1.0, 1.0, 0)
+		Vector2(5000, 5000), 0.0, 1.0, 1.0, [0])
 	await process_frame
 	_check(_pillars().size() == 1, "기둥 1개 (실제 %d)" % _pillars().size())
 	_check(_bolts(system).size() == 0, "불탄환 0 (실제 %d)" % _bolts(system).size())
@@ -152,7 +152,7 @@ func _test_deploy_gather(system) -> void:
 func _test_deploy_empty(system) -> void:
 	print("[3] 빈 진 전개 → 아무것도 안 나온다")
 	_clear(system)
-	system._deploy_now(_all(GLYPH_NONE), Vector2(5000, 5000), 0.0, 1.0, 1.0, 0)
+	system._deploy_now(_all(GLYPH_NONE), Vector2(5000, 5000), 0.0, 1.0, 1.0, [0])
 	await process_frame
 	_check(_bolts(system).size() == 0 and _pillars().size() == 0,
 		"불탄환·기둥 모두 0 (실제 탄 %d·기둥 %d)" % [_bolts(system).size(), _pillars().size()])
@@ -162,7 +162,7 @@ func _test_deploy_mixed(system) -> void:
 	print("[4] 혼합(발산 2 + 응집 3) → 불탄환 2발 · 기둥 1개")
 	_clear(system)
 	system._deploy_now(_ring({1: G_RADIATE, 5: G_RADIATE, 0: G_GATHER, 2: G_GATHER, 4: G_GATHER}),
-		Vector2(5000, 5000), 0.0, 1.0, 1.0, 0)
+		Vector2(5000, 5000), 0.0, 1.0, 1.0, [0])
 	await process_frame
 	_check(_bolts(system).size() == 2, "불탄환 2발 (실제 %d)" % _bolts(system).size())
 	_check(_pillars().size() == 1, "기둥 1개 (실제 %d)" % _pillars().size())
@@ -388,7 +388,7 @@ func _test_glyph_bolt_effects(system) -> void:
 	var cases := {G_PIERCE: GT_PIERCE, G_HOMING: GT_HOMING, G_BOUNCE: GT_BOUNCE, G_THRUST: GT_THRUST}
 	for code: int in cases:
 		_clear(system)
-		system._deploy_now(_ring({0: code}), Vector2(5000, 5000), 0.0, 1.0, 1.0, 0)
+		system._deploy_now(_ring({0: code}), Vector2(5000, 5000), 0.0, 1.0, 1.0, [0])
 		await process_frame
 		var bolts := _bolts(system)
 		_check(bolts.size() == 1, "코드 %d = 탄 1발 (실제 %d)" % [code, bolts.size()])
@@ -400,7 +400,7 @@ func _test_glyph_bolt_effects(system) -> void:
 	_clear(system)
 
 	# 🔴 발산은 **효과 없는** 순수 직진탄이어야 한다 — 매핑이 새면 여기가 잡는다
-	system._deploy_now(_ring({0: G_RADIATE}), Vector2(5000, 5000), 0.0, 1.0, 1.0, 0)
+	system._deploy_now(_ring({0: G_RADIATE}), Vector2(5000, 5000), 0.0, 1.0, 1.0, [0])
 	await process_frame
 	var plain := _bolts(system)
 	_check(plain.size() == 1 and (plain[0].effects as Dictionary).is_empty(),
@@ -418,7 +418,7 @@ func _test_glyph_bolt_effects(system) -> void:
 ## 코드 하나짜리 진을 펴서 그 탄이 8 물리 프레임 동안 간 거리 (빈 곳 — 아무것에도 안 닿는다).
 func _travel_of(system, code: int) -> float:
 	_clear(system)
-	system._deploy_now(_ring({0: code}), Vector2(5000, 5000), 0.0, 1.0, 1.0, 0)
+	system._deploy_now(_ring({0: code}), Vector2(5000, 5000), 0.0, 1.0, 1.0, [0])
 	await process_frame
 	var bolts := _bolts(system)
 	if bolts.is_empty():

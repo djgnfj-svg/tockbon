@@ -73,9 +73,12 @@ func _run() -> void:
 ## [1] 🔴 화상이 **시간에 따라** hp를 깎고, 그 피해로 죽는 경로도 정상이다.
 ## 그리고 DoT는 `enemy_hit`을 **쏘지 않는다** — 그 시그널은 "최종 피해" 계약이라 피해 숫자·
 ## 히트스톱이 물려 있어서(세38·46), 0.5초마다 쏘면 화면이 도배되고 히트스톱에 갇힌다.
-## 뮤테이션(`_tick_statuses`의 dot 적용 제거) → 첫 두 줄이 빨개진다.
+## 뮤테이션(`_tick_statuses`의 dot 적용 제거) → hp 안 깎임 줄이 빨개진다.
+## 🔴 세81 M2: **0-피해(상태 전용) 히트도 `enemy_hit`을 안 쏜다** — 융합진 보조 룬 도배 방지의
+## `forest_enemy.take_hit` 0-피해 가드 그물이다(뮤테이션: 그 가드 제거 → 이 히트가 enemy_hit을 쏴
+## hits[0]==1이 돼 빨개진다). dummy 쪽 그물은 test_jin_fusion_auto[6]이 쥔다(세56 두 몸 계약).
 func _test_burn_ticks_hp() -> void:
-	print("[1] 화상 — 시간이 지나면 hp가 깎이고, DoT는 enemy_hit을 안 쏜다")
+	print("[1] 화상 — 시간이 지나면 hp가 깎이고, DoT·0-피해 히트는 enemy_hit을 안 쏜다")
 	var e = await _spawn(&"slime")
 	var hits := [0]
 	var cb := func(who, _d, _r) -> void:
@@ -83,15 +86,15 @@ func _test_burn_ticks_hp() -> void:
 			hits[0] += 1
 	_bus.enemy_hit.connect(cb)
 
-	e.take_hit(0.0, R_FIRE, S_BURN, 1.0)  # 직격 피해 0 — 순수 DoT만 본다
+	e.take_hit(0.0, R_FIRE, S_BURN, 1.0)  # 직격 피해 0 = 상태 전용 히트 (세81 M2: 손맛·발신 스킵)
 	_check(e.has_status(S_BURN), "화상이 걸렸다")
 	var h0: float = e.hp()
-	_check(hits[0] == 1, "직격 1회만 enemy_hit이 왔다 (실제 %d)" % hits[0])
+	_check(hits[0] == 0, "🔴 세81 M2: 0-피해(상태 전용) 히트는 enemy_hit을 안 쏜다 (실제 %d)" % hits[0])
 	# 틱 간격 0.5s를 두 번 넘긴다(~1.1s = 66 물리 프레임) → dot 3.0/s면 약 -3.0.
 	for i in 70:
 		await physics_frame
 	_check(e.hp() < h0 - 1.0, "화상이 hp를 깎았다 (%.2f → %.2f)" % [h0, e.hp()])
-	_check(hits[0] == 1, "DoT는 enemy_hit을 안 쐈다 (누적 %d, 1이어야 한다)" % hits[0])
+	_check(hits[0] == 0, "DoT도 enemy_hit을 안 쐈다 (누적 %d, 0이어야 한다)" % hits[0])
 
 	# 화상 지속(3.0s) 동안 3.0/s → 총 9. slime hp 14라 안 죽는다 → 만료 후 상태가 사라져야 한다.
 	for i in 140:

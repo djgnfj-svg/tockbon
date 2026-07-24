@@ -326,9 +326,9 @@ func _test_jin_db_loaded() -> void:
 	var db: Node = root.get_node("/root/Db")
 	var jins: Array = db.call(&"all_jins")
 	# 세61 콘텐츠 리셋: 진 8종 → 1종(jin_single). 사용자가 진을 하나 되살릴 때마다 이 기대치를 +1.
-	# 🔴 세79 M1: 1종(jin_single) → **2종**. 새 진 = `jin_plain_g2`(band_count=2 = 「2등급」) —
-	# 1등급은 층이 1겹이라 **문양을 감쌀 순서 자체가 안 생겨서** 순서=연산 실증에 2겹 진이 필요했다.
-	_check(jins.size() == 2, "🔴 진 2종(jin_single·jin_plain_g2)이 Db에 로드된다 (지금 %d종 — 줄었으면 .tres 침묵사 의심, 새 진을 추가했으면 기대치를 갱신)" % jins.size())
+	# 🔴 세79 M1: 1종 → 2종(jin_plain_g2 = band_count 2 = 「2등급」, 층 감쌈 순서 실증).
+	# 🔴 세81 M2: 2종 → **3종**. 새 진 = `jin_fuse`(rune_slots=2 = 융합진, 룬 둘을 한 발에 실어 반응).
+	_check(jins.size() == 3, "🔴 진 3종(jin_single·jin_plain_g2·jin_fuse)이 Db에 로드된다 (지금 %d종 — 줄었으면 .tres 침묵사 의심, 새 진을 추가했으면 기대치를 갱신)" % jins.size())
 	for jd in jins:
 		var jid := String(jd.get(&"id"))
 		var slots: Array = jd.get(&"glyph_slots")

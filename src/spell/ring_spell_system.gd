@@ -13,6 +13,7 @@ extends Node2D
 ## 마나·내구 판정 없음 (고리 모델의 경제는 #17에서 정한다 — 지금은 순수 발사 검증).
 
 const RingPower := preload("res://src/core/ring_power.gd")
+const StatusRules := preload("res://src/core/status_rules.gd")   # 🔴 세81 M2: 융합 룬 반응 순서 정렬
 const CarrierScene := preload("res://src/spell/ring_carrier.tscn")
 const CarrierScript := preload("res://src/spell/ring_carrier.gd")
 const BoltScript := preload("res://src/spell/projectile.gd")
@@ -58,7 +59,9 @@ func _on_ring_cast(assembly: Dictionary, origin: Vector2, aim_dir: Vector2) -> v
 	if layers.is_empty():
 		return
 	var angle := aim_dir.angle() if aim_dir.length_squared() > 0.0 else 0.0
-	var rune_type := int(assembly.get("rune", Enums.RuneType.FIRE))   # 🔴 세션 34: 발사가 고른 룬을 쓴다
+	# 🔴 세81 M2: 발사가 **룬 목록**을 쓴다(융합진). 승격 판별은 core 단일 소스(`runes_of`) — 옛 도안은
+	# `rune` 하나에서 `[rune]`로 올라와 예전과 똑같이 돈다(룬 1개 = 세션34 경로와 계산 동일).
+	var runes := RingDesign.runes_of(assembly.get("runes", []), int(assembly.get("rune", Enums.RuneType.FIRE)))
 	var power := _power_of(assembly)
 	# 🔴 특별잉크 화상 증폭 (세션29) — 위력(피해)과 별개 축이라 따로 나른다. 전개는 나중이라
 	# 그때 assembly가 없으므로, power처럼 캐리어에 실어 착탄까지 들고 간다.
@@ -80,12 +83,12 @@ func _on_ring_cast(assembly: Dictionary, origin: Vector2, aim_dir: Vector2) -> v
 	for shot: Dictionary in _shot_plan(angle, pattern, scale, origin):
 		var delay := float(shot["delay"])
 		if delay <= 0.0:
-			_spawn_carrier(layers, origin, float(shot["angle"]), power, status_mult, rune_type, jin_def)
+			_spawn_carrier(layers, origin, float(shot["angle"]), power, status_mult, runes, jin_def)
 		else:
 			# 연발·분사 = 시간차. 타이머가 죽어도 게임이 안 멈추게 캐리어 스폰만 지연한다.
 			get_tree().create_timer(delay).timeout.connect(
 				_spawn_carrier.bind(layers, origin, float(shot["angle"]),
-					power, status_mult, rune_type, jin_def), CONNECT_ONE_SHOT)
+					power, status_mult, runes, jin_def), CONNECT_ONE_SHOT)
 
 
 ## 🔴 `rings`를 **층 배열**로 정규화한다 (세79 M1) — 저장 도안·옛 호출자 흡수.
@@ -98,7 +101,7 @@ static func _as_layers(rings: Array) -> Array:
 ## 진(캐리어) 하나를 origin에서 angle 방향으로 쏜다. 패턴이 여러 각도면 이걸 여러 번 부른다.
 ## `layers` = 층 배열 — 캐리어는 이걸 **해석하지 않고 착탄까지 나르기만** 한다(payload).
 func _spawn_carrier(layers: Array, origin: Vector2, angle: float,
-		power: float, status_mult: float, rune_type: int, jin_def: JinDef = null) -> void:
+		power: float, status_mult: float, runes: Array, jin_def: JinDef = null) -> void:
 	if not is_inside_tree():
 		return   # 지연 발사 도중 씬이 바뀌었다 (귀환·사망) — 조용히 접는다
 	var carrier := CarrierScene.instantiate() as CarrierScript
@@ -106,16 +109,18 @@ func _spawn_carrier(layers: Array, origin: Vector2, angle: float,
 		return
 	add_child(carrier)
 	carrier.global_position = origin
-	var fire := _fire_hit(power, status_mult, rune_type)
+	var fire := _fire_hit(power, status_mult, runes)
+	# 🔴 세81 M2: 캐리어도 몸으로 직격할 때 **모든 룬 상태**를 얹어야 한다(rune_hits) — 안 그러면
+	# 캐리어가 처음 스친 적만 반응이 안 나고 전개 탄은 나는 갈라짐이 생긴다.
 	carrier.setup(layers, angle,
 		balance.projectile_base_speed, balance.projectile_lifetime_sec,
-		fire.damage, fire.rune_type, fire.status, fire.status_power)
+		fire.damage, fire.rune_type, fire.status, fire.status_power, fire.get("rune_hits", []))
 	# 🔴 경로·규모는 setup **뒤에** 얹는다. 진 없는 도안(매직볼)은 안 부르므로 예전과 픽셀 동일.
 	if jin_def != null:
 		carrier.set_motion(jin_def.motion, jin_def.body_scale,
 			balance.jin_spiral_amplitude_px, balance.jin_spiral_period_sec,
 			balance.jin_boomerang_turn_ratio)
-	carrier.deployed.connect(_on_carrier_deployed.bind(power, status_mult, rune_type))
+	carrier.deployed.connect(_on_carrier_deployed.bind(power, status_mult, runes))
 
 
 ## 발사 계획 — 진의 패턴이 "어디로(angle) 언제(delay)"를 정한다. 수치는 balance.
@@ -205,8 +210,8 @@ func _power_of(assembly: Dictionary) -> float:
 
 ## 착탄 = 안의 고리를 편다. 물리 콜백 중일 수 있으니 지연 실행 (Area2D를 콜백 안에서 즉시
 ## add_child하면 "flushing queries" 에러로 조용히 안 생긴다 — projectile와 같은 함정).
-func _on_carrier_deployed(layers: Array, at: Vector2, travel: float, power: float, status_mult: float, rune_type: int) -> void:
-	call_deferred(&"_deploy_now", layers, at, travel, power, status_mult, rune_type)
+func _on_carrier_deployed(layers: Array, at: Vector2, travel: float, power: float, status_mult: float, runes: Array) -> void:
+	call_deferred(&"_deploy_now", layers, at, travel, power, status_mult, runes)
 
 
 # ─────────────── 🔴 세79 M1: 층 해석기 (안→밖 = 연산 순서) ───────────────
@@ -225,8 +230,8 @@ func _on_carrier_deployed(layers: Array, at: Vector2, travel: float, power: floa
 ## payload를 그대로 받는 자리라 **옛 8칸 한 겹**으로 부르는 호출자(저장 도안·기존 테스트)가 실재한다 —
 ## 정규화를 진입점 한쪽에만 두면 그쪽이 `Invalid cast` 로 조용히 죽는다(세23 「테스트가 옛 인자로
 ## 내부 API를 부른다」 함정을 이번에 그대로 밟았다).
-func _deploy_now(rings: Array, at: Vector2, travel: float, power: float, status_mult: float, rune_type: int) -> void:
-	var fire := _fire_hit(power, status_mult, rune_type)
+func _deploy_now(rings: Array, at: Vector2, travel: float, power: float, status_mult: float, runes: Array) -> void:
+	var fire := _fire_hit(power, status_mult, runes)
 	var plan: Array = []
 	for layer_v in _as_layers(rings):
 		if not (layer_v is Array):
@@ -395,7 +400,8 @@ func _spawn_bolt(at: Vector2, angle: float, fire: Dictionary, effects: Dictionar
 	add_child(bolt)
 	bolt.global_position = at
 	bolt.setup(fire.damage, fire.rune_type, fire.status, fire.status_power,
-		balance.projectile_base_speed, angle, effects, balance.projectile_lifetime_sec)
+		balance.projectile_base_speed, angle, effects, balance.projectile_lifetime_sec,
+		fire.get("rune_hits", []))
 
 
 ## 응집 = 착탄점에 불기둥 하나. 응집 칸이 많을수록 굵다 (node scale).
@@ -406,7 +412,8 @@ func _spawn_pillar(at: Vector2, gather: int, fire: Dictionary) -> void:
 	add_child(pillar)
 	pillar.global_position = at
 	pillar.scale = Vector2.ONE * (1.0 + PILLAR_SCALE_PER_GATHER * float(gather - 1))
-	pillar.setup(fire.damage, fire.rune_type, fire.status, fire.status_power)
+	pillar.setup(fire.damage, fire.rune_type, fire.status, fire.status_power,
+		fire.get("rune_hits", []))
 
 
 ## 🔴 폭발 = 착탄점 광역 1회 타격 (세79 M1 변형형 문양 EXPLODE의 결과물).
@@ -419,7 +426,8 @@ func _spawn_blast(at: Vector2, radius: float, fire: Dictionary) -> void:
 		return
 	add_child(blast)
 	blast.global_position = at
-	blast.setup(fire.damage, fire.rune_type, fire.status, fire.status_power, radius)
+	blast.setup(fire.damage, fire.rune_type, fire.status, fire.status_power, radius,
+		fire.get("rune_hits", []))
 
 
 ## 룬 히트 정보 — Db에서 **고른 룬** RuneDef를 읽어 피해·상태·세기 + **탄 씬**을 뽑는다 (세션 34).
@@ -433,13 +441,37 @@ func _spawn_blast(at: Vector2, radius: float, fire: Dictionary) -> void:
 ## RuneDef라 조립 결과가 아니고, `balance`의 `rune_density_min/max`·`rune_fill`은 **소비자가 0곳**이다.
 ## 즉 "진 안에 룬을 얼마나 크게 그렸나"가 아무 데도 안 쓰인다 = **그리는 재미 축 하나가 죽어 있다**
 ## (세50 빚① `status_power`와 정확히 같은 병 — 살릴지 접을지는 다음 세션 결정).
+## 🔴 세81 M2: `runes` = 이 발사가 실은 룬 목록(융합진). 룬 1개면 예전과 **계산 완전 동일**
+## (share 1.0 · rune_hits=[primary] 하나라 projectile 루프가 primary를 건너뛰어 부작용 0).
+## 반환 = primary 히트 정보 + `rune_hits`(전 룬 상태, 자리 순서 = 반응 순서로 정렬됨).
+## 🔴 **총 직격 = 각 룬 피해의 합**을 primary가 진다(사용자 확정: 둘 다 0.7씩, 합 1.4). 보조 룬은
+## 0-피해 상태 히트로 나가고, 도배는 적 계약의 0-피해 가드가 막는다(세81).
 func _fire_hit(power: float = 1.0, status_mult: float = 1.0,
-		rune_type: int = Enums.RuneType.FIRE) -> Dictionary:
-	var rune: RuneDef = Db.get_rune(rune_type)
-	if rune == null:
-		return {"damage": balance.projectile_base_damage * power, "rune_type": rune_type,
-			"status": Enums.Status.NONE, "status_power": 0.0, "scene": null}
-	return {"damage": balance.projectile_base_damage * rune.base_damage * power,
-		"rune_type": rune_type, "status": rune.status,
-		"status_power": rune.status_power * status_mult,
-		"scene": rune.projectile_scene}
+		runes: Array = []) -> Dictionary:
+	var rlist: Array = runes if not runes.is_empty() else [Enums.RuneType.FIRE]
+	# 🔴 세기 배분 — 2룬+면 각 룬에 multi_rune_share(0.7)를 곱해 합산(합 1.4). 1룬은 1.0(무회귀).
+	var share := balance.multi_rune_share if rlist.size() > 1 else 1.0
+	var entries: Array = []
+	var total_damage := 0.0
+	var scene: PackedScene = null
+	for rt in rlist:
+		var rune: RuneDef = Db.get_rune(int(rt))
+		var base_dmg := rune.base_damage if rune != null else 1.0
+		total_damage += balance.projectile_base_damage * base_dmg * power * share
+		entries.append({
+			"rune": int(rt),
+			"status": rune.status if rune != null else Enums.Status.NONE,
+			"status_power": (rune.status_power * status_mult) if rune != null else 0.0,
+			"scene": rune.projectile_scene if rune != null else null,
+		})
+	# 🔴 반응이 나는 순서로 정렬 — 자리 순서와 무관하게 물+번개가 늘 감전이 되게(status_rules 단일 소스).
+	entries = StatusRules.order_for_reaction(entries)
+	var primary: Dictionary = entries[0]
+	scene = primary["scene"]
+	var rune_hits: Array = []
+	for e: Dictionary in entries:
+		rune_hits.append({"rune_type": int(e["rune"]), "status": int(e["status"]),
+			"status_power": float(e["status_power"])})
+	return {"damage": total_damage, "rune_type": int(primary["rune"]),
+		"status": int(primary["status"]), "status_power": float(primary["status_power"]),
+		"scene": scene, "rune_hits": rune_hits}

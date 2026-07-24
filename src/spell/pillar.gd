@@ -22,6 +22,8 @@ var damage: float = 0.0
 var rune_type: int = Enums.RuneType.FIRE
 var status: int = Enums.Status.NONE
 var status_power: float = 0.0
+## 🔴 복합 룬 (세81 M2 융합진) — primary 외 룬을 피해 0으로 상태만 얹는다(적 0-피해 가드가 도배 차단).
+var rune_hits: Array = []
 
 var _balance: BalanceData = preload("res://data/balance.tres")
 var _life_left: float = 0.0
@@ -34,11 +36,13 @@ func _ready() -> void:
 	add_to_group("pillars")
 
 
-func setup(p_damage: float, p_rune_type: int, p_status: int, p_status_power: float) -> void:
+func setup(p_damage: float, p_rune_type: int, p_status: int, p_status_power: float,
+		p_rune_hits: Array = []) -> void:
 	damage = p_damage
 	rune_type = p_rune_type
 	status = p_status
 	status_power = p_status_power
+	rune_hits = p_rune_hits
 	_life_left = _balance.pillar_duration_sec
 	# 🔴 warmup 프레임(_warmed) 직후에 첫 타격이 나가도록 0으로 둔다 — _physics_process 참조.
 	# 서자마자 한 번 때린다 (안 그러면 짧은 기둥이 아무것도 못 한다).
@@ -87,6 +91,12 @@ func _hit(node: Node2D) -> void:
 		return
 	if node.has_method("take_hit"):
 		node.take_hit(damage, rune_type, status, status_power)
+		# 🔴 세81 M2: 보조 룬 상태 (피해 0 — 적 0-피해 가드가 도배 차단). 기둥은 틱마다 갱신이라
+		# 반응도 틱마다 다시 날 수 있다(강함) — 밸런스 영역이라 F5로 조인다.
+		for rh: Dictionary in rune_hits:
+			if int(rh.get("rune_type", -1)) == rune_type:
+				continue
+			node.take_hit(0.0, int(rh.rune_type), int(rh.status), float(rh.status_power))
 
 
 ## 룬 색 — Db에서 읽고, 없으면 폴백 (ring_carrier._rune_color와 같은 규칙).

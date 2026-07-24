@@ -87,7 +87,7 @@ func _test_compose_guide() -> void:
 	var r5 = _db.get_glyph_ring(&"gr_radiate5")
 	var g3 = _db.get_glyph_ring(&"gr_gather3")
 	var guide: PackedVector2Array = _RingBoard.compose_guide(
-		int(Enums.JinShape.CIRCLE), 0, [r5, g3], ctr, ro)
+		int(Enums.JinShape.CIRCLE), [0], [r5, g3], ctr, ro)
 	_check(guide.size() > 40, "합성 가이드 점 다수 (실제 %d)" % guide.size())
 
 	# 진 윤곽 — 반지름 ≈ ro인 점이 있다
@@ -102,7 +102,7 @@ func _test_compose_guide() -> void:
 
 	# 🔴 빈 밴드는 점을 안 더한다 — 밴드 하나만 끼운 것 vs 둘 끼운 것의 점 수 비교
 	var one: PackedVector2Array = _RingBoard.compose_guide(
-		int(Enums.JinShape.CIRCLE), 0, [r5, null], ctr, ro)
+		int(Enums.JinShape.CIRCLE), [0], [r5, null], ctr, ro)
 	_check(one.size() < guide.size(),
 		"빈 밴드는 점을 안 더한다 (한 밴드 %d < 두 밴드 %d)" % [one.size(), guide.size()])
 
@@ -160,7 +160,7 @@ func _test_combined_scoring() -> void:
 	var r5 = _db.get_glyph_ring(&"gr_radiate5")
 	var g3 = _db.get_glyph_ring(&"gr_gather3")
 	var guide: PackedVector2Array = _RingBoard.compose_guide(
-		int(Enums.JinShape.CIRCLE), 0, [r5, g3], ctr, ro)
+		int(Enums.JinShape.CIRCLE), [0], [r5, g3], ctr, ro)
 	board.enter_combined_trace(guide)
 
 	var gp: PackedVector2Array = board.guide_points()
@@ -194,7 +194,7 @@ func _test_flatten_fire() -> void:
 	var g3 = _db.get_glyph_ring(&"gr_gather3")
 	var ring: Array = _RingBoard.flatten_bands([r5, g3])   # [1×5, 0×3]
 	# 빈 곳에서 전개 — 발산 5 → 탄 5, 응집 3 → 기둥 1
-	system._deploy_now(ring, Vector2(5000, 5000), 0.0, 1.0, 1.0, 0)
+	system._deploy_now(ring, Vector2(5000, 5000), 0.0, 1.0, 1.0, [0])   # 세81 M2: 룬 목록(배열)
 	await process_frame
 	_check(_bolts(system).size() == 5,
 		"발산5 → 불탄 5발 (실제 %d)" % _bolts(system).size())

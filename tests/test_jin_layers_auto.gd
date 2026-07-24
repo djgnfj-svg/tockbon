@@ -146,7 +146,7 @@ func _test_order_changes_result(system) -> void:
 	# ⓐ 안=확산 · 밖=폭발 → 3갈래를 **융합** → 큰 폭발 **하나**
 	_clear(system)
 	system._deploy_now([_ring({0: G_SPREAD, 1: G_SPREAD, 2: G_SPREAD}), _ring({0: G_EXPLODE})],
-		FAR, 0.0, 1.0, 1.0, 0)
+		FAR, 0.0, 1.0, 1.0, [0])
 	await process_frame
 	var merged: Array = _blasts()
 	_check(merged.size() == 1, "폭발(확산(불)) = 융합해 폭발 1개 (실제 %d)" % merged.size())
@@ -155,7 +155,7 @@ func _test_order_changes_result(system) -> void:
 	# ⓑ 안=폭발 · 밖=확산 → 폭발 하나를 **복제** → 작은 폭발 **셋**
 	_clear(system)
 	system._deploy_now([_ring({0: G_EXPLODE}), _ring({0: G_SPREAD, 1: G_SPREAD, 2: G_SPREAD})],
-		FAR, 0.0, 1.0, 1.0, 0)
+		FAR, 0.0, 1.0, 1.0, [0])
 	await process_frame
 	var scattered: Array = _blasts()
 	_check(scattered.size() == 3, "확산(폭발(불)) = 복제해 폭발 3개 (실제 %d)" % scattered.size())
@@ -177,20 +177,20 @@ func _test_order_changes_result(system) -> void:
 func _test_legacy_single_layer(system) -> void:
 	print("[5] 🔴 회귀: 옛 도안(층 1개·전개형만)은 예전 그대로")
 	_clear(system)
-	system._deploy_now([_all(G_RADIATE)], FAR, 0.0, 1.0, 1.0, 0)
+	system._deploy_now([_all(G_RADIATE)], FAR, 0.0, 1.0, 1.0, [0])
 	await process_frame
 	_check(_bolts(system).size() == 8, "발산 8칸 → 탄 8발 (실제 %d)" % _bolts(system).size())
 	_check(_blasts().is_empty(), "변형형이 없으면 폭발은 안 생긴다 (실제 %d)" % _blasts().size())
 
 	_clear(system)
-	system._deploy_now([_ring({0: G_GATHER, 2: G_GATHER})], FAR, 0.0, 1.0, 1.0, 0)
+	system._deploy_now([_ring({0: G_GATHER, 2: G_GATHER})], FAR, 0.0, 1.0, 1.0, [0])
 	await process_frame
 	_check(_pillars().size() == 1, "응집 2칸 → 기둥 1개 (실제 %d)" % _pillars().size())
 	_check(_blasts().is_empty(), "응집만으로 폭발이 생기지 않는다")
 
 	# 🔴 빈 진은 여전히 아무것도 안 나온다 (씨앗은 **변형형이 있을 때만** 생긴다)
 	_clear(system)
-	system._deploy_now([_all(GLYPH_NONE)], FAR, 0.0, 1.0, 1.0, 0)
+	system._deploy_now([_all(GLYPH_NONE)], FAR, 0.0, 1.0, 1.0, [0])
 	await process_frame
 	_check(_bolts(system).is_empty() and _pillars().is_empty() and _blasts().is_empty(),
 		"빈 진 = 전개 0 (씨앗이 새어 나오면 여기가 빨개진다)")
@@ -202,7 +202,7 @@ func _test_seed_when_nothing_to_wrap(system) -> void:
 	print("[6] 감쌀 안쪽이 없으면 룬 씨앗을 감싼다 (설계: 문양의 대상 = 룬 또는 안쪽 뭉치)")
 	# 확산만 = 씨앗 탄 1발을 3갈래로
 	_clear(system)
-	system._deploy_now([_ring({0: G_SPREAD, 1: G_SPREAD, 2: G_SPREAD})], FAR, 0.0, 1.0, 1.0, 0)
+	system._deploy_now([_ring({0: G_SPREAD, 1: G_SPREAD, 2: G_SPREAD})], FAR, 0.0, 1.0, 1.0, [0])
 	await process_frame
 	var fan: Array = _bolts(system)
 	_check(fan.size() == 3, "확산×3만 → 씨앗이 3갈래로 (실제 %d)" % fan.size())
@@ -210,14 +210,14 @@ func _test_seed_when_nothing_to_wrap(system) -> void:
 
 	# 폭발만 = 씨앗 1발을 융합해 폭발 1개
 	_clear(system)
-	system._deploy_now([_ring({0: G_EXPLODE})], FAR, 0.0, 1.0, 1.0, 0)
+	system._deploy_now([_ring({0: G_EXPLODE})], FAR, 0.0, 1.0, 1.0, [0])
 	await process_frame
 	_check(_blasts().size() == 1, "폭발×1만 → 폭발 1개 (실제 %d)" % _blasts().size())
 
 	# 🔴 세기 = 그 층에서 그 문양이 차지한 칸 수 (응집의 "많을수록 굵다"와 같은 결)
 	_clear(system)
 	system._deploy_now([_ring({0: G_SPREAD, 1: G_SPREAD, 2: G_SPREAD, 3: G_SPREAD, 4: G_SPREAD})],
-		FAR, 0.0, 1.0, 1.0, 0)
+		FAR, 0.0, 1.0, 1.0, [0])
 	await process_frame
 	_check(_bolts(system).size() == 5, "확산 5칸 → 5갈래 (칸 수 = 세기) (실제 %d)" % _bolts(system).size())
 	_clear(system)
@@ -274,7 +274,7 @@ func _test_damage_distribution(system) -> void:
 	print("[8] 🔴 변형형이 피해를 실제로 배분한다 (mult가 스폰 노드까지 도달)")
 	# ⚠ **수치를 하드코딩하지 않는다** — 씨앗 1발 대비 **관계**로 잰다(이 파일의 규율).
 	_clear(system)
-	system._deploy_now([_ring({0: G_RADIATE})], FAR, 0.0, 1.0, 1.0, 0)
+	system._deploy_now([_ring({0: G_RADIATE})], FAR, 0.0, 1.0, 1.0, [0])
 	await process_frame
 	var base_bolts: Array = _bolts(system)
 	var base_dmg := float(base_bolts[0].damage) if not base_bolts.is_empty() else 0.0
@@ -282,7 +282,7 @@ func _test_damage_distribution(system) -> void:
 
 	# 확산 3갈래 — 갈래마다 세기는 줄되(단독보다 약함) **합은 커야** 그릴 이유가 생긴다
 	_clear(system)
-	system._deploy_now([_ring({0: G_SPREAD, 1: G_SPREAD, 2: G_SPREAD})], FAR, 0.0, 1.0, 1.0, 0)
+	system._deploy_now([_ring({0: G_SPREAD, 1: G_SPREAD, 2: G_SPREAD})], FAR, 0.0, 1.0, 1.0, [0])
 	await process_frame
 	var fan: Array = _bolts(system)
 	var total := 0.0
@@ -297,7 +297,7 @@ func _test_damage_distribution(system) -> void:
 
 	# 폭발 융합 — 안쪽 세기 **합**을 물려받는다(merge_mult가 0이면 여기서 잡힌다)
 	system._deploy_now([_ring({0: G_SPREAD, 1: G_SPREAD, 2: G_SPREAD}), _ring({0: G_EXPLODE})],
-		FAR, 0.0, 1.0, 1.0, 0)
+		FAR, 0.0, 1.0, 1.0, [0])
 	await process_frame
 	var bl: Array = _blasts()
 	_check(bl.size() == 1 and float(bl[0].damage) > 0.0,

@@ -13,8 +13,14 @@ extends Resource
 
 @export var id: StringName
 @export var display_name: String = "고리 마법진"
-## 룬 종류 (지금은 불만) — assembly.rune
+## 🔴 룬 종류 — **첫 룬**(primary). 세81 M2 전엔 룬이 하나뿐이라 이게 전부였다. 지금은 아래
+## `runes`가 다중 룬의 정본이고, 이 필드는 **옛 소비자 무회귀**를 위해 첫 룬으로 계속 채운다
+## (발사·요약이 `rune` 하나를 읽던 자리가 조용히 안 깨지게). 읽을 땐 `runes_of()`를 거쳐라.
 @export var rune: int = 0
+## 🔴 룬 목록 (세81 M2 융합진). 진에 룬이 2개+면 자리 순서대로 담긴다. **읽을 땐 `runes_of()`를
+## 거쳐라** — 옛 도안은 이 필드가 없어(기본 `[]`) 로드되고, `runes_of`가 `rune`(정수)에서 `[rune]`로
+## 승격한다(저장 무회귀 = `layers_of` 선례). ⚠ 값은 `Enums.RuneType` 정수 배열.
+@export var runes: Array = []
 ## 🔴 진 id (세션44, 진=형태). 이 마법진을 **어느 진에 그렸나** — 발사 형태(단발/산탄/둘레)를 정한다.
 ## 빈 값(&"") = 옛 도안/매직볼 = 발사가 폴백(지팡이 장비 또는 단발). id→패턴은 `Db.get_jin(jin).pattern`.
 ## ⚠ ink처럼 여기에 Db를 두지 마라(class_name → -s 컴파일 함정). 패턴 해석은 발사부(ring_spell_system)가 한다.
@@ -50,6 +56,7 @@ func to_assembly() -> Dictionary:
 	return {
 		"ring_count": 1,
 		"rune": rune,
+		"runes": runes_of(runes, rune),
 		"jin": jin,
 		"rings": rings.duplicate(true),
 		"open": open.duplicate(),
@@ -67,6 +74,11 @@ func to_assembly() -> Dictionary:
 static func from_assembly(a: Dictionary, name: String = "", score: float = -1.0) -> RingDesign:
 	var d := RingDesign.new()
 	d.rune = int(a.get("rune", 0))
+	# 🔴 룬 목록 정본 — assembly가 `runes`를 실어 오면 그걸, 아니면 `rune` 하나에서 승격(옛 경로).
+	d.runes = runes_of(a.get("runes", []), d.rune)
+	# 🔴 `rune`(primary) = 목록 첫 룬으로 맞춘다 — 둘이 갈라지면 옛 소비자가 다른 룬을 본다.
+	if not d.runes.is_empty():
+		d.rune = int(d.runes[0])
 	d.jin = StringName(a.get("jin", &""))
 	d.rings = (a.get("rings", []) as Array).duplicate(true)
 	d.open = (a.get("open", []) as Array).duplicate()
@@ -92,6 +104,20 @@ static func layers_of(rings_v: Array) -> Array:
 	if rings_v.is_empty():
 		return []
 	return rings_v if rings_v[0] is Array else [rings_v]
+
+
+## 🔴 **룬을 목록으로 정규화한다 — 이 승격의 단일 소스** (세81 M2, `layers_of` 선례).
+##   • `runes_v`가 비지 않았으면 그 정수 목록을 그대로(자리 순서).
+##   • 비었으면(=옛 도안·룬 하나 경로) `fallback_rune` 하나로 `[rune]` 승격.
+## 🔴 **이 판별을 호출부에 복사하지 마라** — 발사·저장·요약이 같은 함수를 봐야 룬 1개 진이
+## M1과 정확히 같게 돈다(무회귀의 증명 자리). ⚠ static·순수 배열 판별뿐이라 `-s` 안전(Db 무참조).
+static func runes_of(runes_v: Array, fallback_rune: int) -> Array:
+	var out: Array = []
+	for r in runes_v:
+		out.append(int(r))
+	if out.is_empty():
+		out.append(int(fallback_rune))
+	return out
 
 
 ## 🔴 **층별 문양 요약** — 안→밖 순서로 `[[{code, count}, …], …]` (세79 M1).

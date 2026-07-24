@@ -1,12 +1,58 @@
 # STATUS — 현재 진행 상태
 
-> 최종 갱신: 2026-07-25 (세션 80 — **M1 F5 확인 + 밀린 잔재 커밋**)
+> 최종 갱신: 2026-07-25 (세션 81 — **M2 융합진 구현 완료**)
 > · **세션 종료마다 갱신**
 > ⚠ 세74~76은 STATUS 항목 없음 — 정본 = memory(`takbon-launch-game-not-editor`·`takbon-hood-player-penzilla`·`takbon-player-2-direction`).
 > ⚠ 세66(도파민 설계·마법사 학교 마을)은 STATUS에 항목이 없다 — 정본 = memory `takbon-dopamine-loop`·`takbon-school-village` + 커밋 `760ea9d`~`8038c91`.
 >
 > 🔴 **아래 세션 20 이하는 대부분 삭제된 코드를 설명한다** — 기록이지 현재 상태가 아니다.
 > 현재 정본 = 최상단 「세션 31」~「세션 23」 + `CLAUDE.md` + memory `takbon-mana-injection-rule`.
+
+---
+
+## 세션 81 (2026-07-25) — **진별 해석 M2 — 룬 2개 + 융합진** (F5 시각 확인은 사용자 몫)
+
+사용자 *"M2 시작"* → `takbon-design`으로 결정점 6개를 대화로 닫고(설계 문서 「M2 확정 설계」), 구현.
+🔴 **대화 중 사용자가 코어 재미 축을 다시 못박음**: *"그리는게 맞다"*(조립식 전환은 먼 여지) ·
+*"2겹 긋기 지겹다"*(→ **M2 하드 제약 = 긋는 양이 곱으로 안 늘게, 층 공용**) · 융합진 · **둘 다 0.7씩 피해(합 1.4)**.
+
+**한 문장**: 진의 씨앗이 룬 하나 → **룬 목록**이 됐고, 융합진 = 두 룬을 한 발에 실어 명중 시 두 속성 →
+기존 원소 반응(`status_rules`)이 그대로 터진다. `폭발(확산(불))`의 M1 위에 「어떤 둘을 붙이느냐」가 얹혔다.
+
+🔴 **architect 리뷰가 심장 주장 3개를 라이브 코드로 반박 → 전부 닫음**:
+- ① 내가 "잠든 `rune_hits` 채우면 적 계약 무변경"이라 적었는데 **거짓**(`take_hit`이 0-피해에도 무조건
+  `enemy_hit`·팝을 쏜다, `projectile.gd` 주석부터 거짓이었다) → **적 계약에 0-피해 히트 가드** 신설(회귀
+  위험 커 뮤테이션 필수). ② 반응이 **룬 자리 순서에 의존**(물→번개=감전 / 번개→물=무반응) → `status_rules.
+  order_for_reaction`로 정렬해 제거. ③ 내가 사용자 "0.7씩"을 "보조 피해 0"으로 **조용히 재해석** → 사용자
+  재확인으로 **둘 다 0.7씩(합 1.4)** 원복.
+- 🟢 승인 축: `runes_of` 승격(옛 도안 무회귀)·`rings` 다겹 재사용·EventBus 불필요·도형 예외.
+
+**한 일** (리드 직접 = core·발사·저장·적 계약 / takbon-dev 위임 = 조립 UI·밑그림):
+- 스키마: `JinDef.rune_slots`(기본 1) · `RingDesign.runes`+`runes_of()` 승격 · `RingAssembly` 자리별 룬
+  목록 · `balance.multi_rune_share=0.7`.
+- 발사: `ring_spell_system`이 룬 목록 스레딩(`_on_ring_cast`→carrier `bind`→`_deploy_now`→`_fire_hit`) —
+  **두 룬 피해 primary에 합산** + `rune_hits` + 반응 정렬. 캐리어·기둥·폭발 모두 `rune_hits` 이식.
+- 적 계약: `forest_enemy`·`dummy_target` `take_hit`에 **0-피해 히트 가드**(보조 룬 상태 히트 도배 차단).
+- UI(위임): 융합진이면 룬 소켓 2칸(밴드 소켓 미러링)·밑그림 룬 좌우(`rune_slot_positions`·자리1 픽셀
+  무회귀)·`build_assembly`가 `runes` 동승. 🔴 위임이 원문을 개선(센티넬 목록째 넘겨 첫 룬 위치 안정).
+- 콘텐츠: `jin_fuse.tres`(rune_slots 2·band_count 2) + `GameState` 임시 시드 한 줄.
+
+✅ **검증**: 전 스위트 **26종** 그린 + SCRIPT ERROR 0(신설 `test_jin_fusion_auto` 34항목) · 🔴 **뮤테이션
+7/7 검출+원상복구**(0-피해 가드 dummy·forest_enemy 각각 / rune_hits 안 채움 / 정렬 헬퍼 / share 1.0 /
+pillar·blast 이식 / runes_of 승격). 🔴 회귀 근거 = **룬 1개 = share 1.0 + rune_hits=[primary] 하나라
+옛 계산 완전 동일**. `test_status_auto[1]`을 **forest_enemy 0-피해 가드 그물로 전환**(0-피해 = enemy_hit 0).
+
+🔴 **함정(실제로 밟음)**: `_deploy_now` 인자를 `rune_type: int` → `runes: Array`로 바꾸자 **기존 테스트 18곳이
+옛 정수 인자로 직접 호출**해 `Invalid cast`(세23 재발) — `1.0, 1.0, 0)` → `[0])` 일괄 수정. · `test_status_auto`
+등 **0-피해 take_hit을 상태 적용 관용구로 쓰던 곳**이 새 가드와 충돌(has_status는 살고 enemy_hit 기대만 정정).
+
+⚠ **F5 미확인(사용자 손)**: 룬 소켓 2칸 클릭·룬 2개 밑그림이 그을 만한가(지겨움)·반응 가시성.
+🔴 **게임에서 볼 수 있는 반응은 물+불=증기뿐** — 번개·흙·풀 룬은 데이터가 없다(세61 리셋). 융합 *기계*는
+번개로도 됨(테스트 증명)이나 UI는 해금된 불·물·바람만.
+
+🔴 **다음 = M3** (설계 문서 「M3 착수 킷」에 실측 지도) — 세 덩어리(문양 어휘 확장·문양 2층 점유·진 규칙
+데이터화), 서로 독립이라 조각으로. **추천 = 어휘 확장 먼저**(M1 레시피 "새 변형형=3곳"이 이미 있음). 2층
+점유는 스키마 필요, 데이터화는 규칙이 2개+ 생긴 뒤. 딸린 미결 = 번개·흙·풀 룬 복원 + 임시 시드 획득 경로.
 
 ---
 
