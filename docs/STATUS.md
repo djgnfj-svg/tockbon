@@ -1,11 +1,54 @@
 # STATUS — 현재 진행 상태
 
-> 최종 갱신: 2026-07-24 (세션 73 — **조명으로 화면 깊이: 밝게 유지 + 빛 웅덩이(PointLight2D)만**)
+> 최종 갱신: 2026-07-24 (세션 77 — **오블리크 파이어볼: 새 혜성 스프라이트 + 바닥 그림자 + 두 겹 착탄**)
 > · **세션 종료마다 갱신**
+> ⚠ 세74~76은 STATUS 항목 없음 — 정본 = memory(`takbon-launch-game-not-editor`·`takbon-hood-player-penzilla`·`takbon-player-2-direction`).
 > ⚠ 세66(도파민 설계·마법사 학교 마을)은 STATUS에 항목이 없다 — 정본 = memory `takbon-dopamine-loop`·`takbon-school-village` + 커밋 `760ea9d`~`8038c91`.
 >
 > 🔴 **아래 세션 20 이하는 대부분 삭제된 코드를 설명한다** — 기록이지 현재 상태가 아니다.
 > 현재 정본 = 최상단 「세션 31」~「세션 23」 + `CLAUDE.md` + memory `takbon-mana-injection-rule`.
+
+---
+
+## 세션 77 (2026-07-24) — **오블리크 파이어볼: 새 혜성 스프라이트 + 발사체 그림자 + 두 겹 착탄**
+
+> 발단 = 사용자 *"마법 임팩트를 탑뷰에서 잘 표현할 수 있나 고민중"* → 진짜 질문 = *"방향에 따라 날아가는
+> 모양이 달라야 하나?"* → 시각 관점 = **약간 ¾ 오블리크**(AskUserQuestion). takbon-design 대화로 착지.
+
+### 결론 (원래 질문의 답)
+**발사체를 방향별로 다시 그릴 필요 없다.** 혜성/불덩이는 앞뒤 없는 에너지라 스프라이트를 한 방향으로만 그리고
+`velocity.angle()`로 **회전**하면 360° 커버(세72부터 `ring_carrier`가 이미 함). 오블리크에서 붕 떠 보이는 원인은
+방향이 아니라 **높이감 부재** → 해결 = **바닥 그림자 하나**. "다르게 보이는 것"은 방향이 아니라 원소별 색·꼬리로.
+
+### 한 일 (전부 절차 VFX·재사용 — 신규 스키마/시그널 0, 회귀 구조적 0)
+- **아트(takbon-art)**: 기존 밋밋한 파이어볼 폐기(사용자 *"기존껀 별로, 니가 뽑아봐"*) → 혜성형 재작업(뜨거운
+  코어 흰노랑→주황→빨강 3단 + 이글거리는 잉걸불 꼬리). `fireball_sheet.png` 552×48·6f·코어 (74,24) 반경 14 —
+  규격 유지라 재임포트만. 🔴 코어 6프레임 바이트 동일(히트박스 안 흔들림)·꼬리만 난류.
+- **발사체 그림자**: `ring_carrier.tscn` `Shadow` 노드 = `shadow.gd` 재활용(신규 스크립트 0)·z_index 1·
+  position (0,+8)(뜬 높이)·radius_px 9. 🔴 층위 근거 = **z_index**(Fireball `z_index=2` 명시라 트리순서 아님 —
+  architect가 잡음). node.rotation=0 계약이라 그림자는 방향 무관 납작.
+- **착탄 두 겹**: `vfx.gd._on_spell_impact` = ① 바닥 데칼(`_spawn_ring`에 `flatten` 인자 추가 → 세로 눌린 팽창
+  링·z53) + ② 솟는 플레어(신규 `_spawn_flare`·세로 길쭉 Polygon2D 위로 상승·z54). 옛 `_spawn_pop` 은퇴. z 둘 다
+  반응 링(55) 아래 = "박혔다(54)→퍼졌다(55)" 유지.
+- `SPRITE_FRAME_RADIUS` 13→14(새 코어 반경 = 보이는 코어=히트박스 정직성, 세50 함정).
+
+### 🔴 architect 리뷰가 잡은 것 (반영)
+- **`spell_impact`는 착탄점마다 emit** — `ring_carrier.gd`(캐리어) + `projectile.gd`(발산·관통 탄이 뚫는 적마다).
+  `test_spell_vfx_auto [5]`가 발산 진 → ≥2로 못 박음. 그래서 **플레어 가볍게**(폭 좁게·수명 0.16s) → 다중 착탄
+  도배 방지. 검증은 **발산 진으로 F5**(빈 진 하나만 보면 못 잡음).
+
+### 곁가지 — 장착 도안 테스트 세이브
+사용자 *"마법 그리기 너무 어려운데 테스트 파이어볼 세이브 만들어줘"* → `user://save`에 직접 쓰는 스크립트로
+파이어볼 도안 2개(단발 슬롯0·발산 슬롯1) 장착 세이브 작성. 🔴🔴 **실세이브 백업 먼저**(→`user://save_backup`,
+세65 사고 방지)·게임 종료 후 작성. 방법 = memory `takbon-oblique-fireball`.
+
+### 검증
+- 전 스위트 **24종 그린** + SCRIPT ERROR 0 · 발사/emit 계약 보존(순수 렌더 오버레이). 🔴 겉보기·손맛은 헤드리스
+  못 잡음 → 사용자 F5 "잘되는데? 좋은데?". 커밋 `e9a777f`.
+
+### 잔여 (F5 손맛)
+`shadow.gd` SHADOW_DROP·radius_px / vfx DECAL_RADIUS·DECAL_FLATTEN·FLARE_H·FLARE_RISE·FLARE_TIME 전부 const.
+원소 확장(물·번개) 시 두 겹 구조는 색·모양만 교체. 정본 = `docs/takbon-design/oblique_impact_design.md`.
 
 ---
 
