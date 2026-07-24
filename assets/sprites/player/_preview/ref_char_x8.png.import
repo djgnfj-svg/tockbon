@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://840dko1pfsss"
-path="res://.godot/imported/player_witch.png-bf407ce98d3828d61940da468b70820e.ctex"
+uid="uid://c26b4e31pquis"
+path="res://.godot/imported/ref_char_x8.png-2aa5359db00f29fe513d25a626e6a3ac.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/sprites/player/player_witch.png"
-dest_files=["res://.godot/imported/player_witch.png-bf407ce98d3828d61940da468b70820e.ctex"]
+source_file="res://assets/sprites/player/_preview/ref_char_x8.png"
+dest_files=["res://.godot/imported/ref_char_x8.png-2aa5359db00f29fe513d25a626e6a3ac.ctex"]
 
 [params]
 
