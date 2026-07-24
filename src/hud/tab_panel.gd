@@ -93,6 +93,16 @@ const Q_REWARD := Color(0.70, 0.66, 0.58)
 ## 🔴 단일 소스는 `src/core/grade_colors.gd` (세션51에 사본 셋을 합쳤다).
 const GradeColors := preload("res://src/core/grade_colors.gd")
 
+## 🔴 위력·점수·등급은 **전부 core가 판다** — 여기서 계산하면 리포트·HUD와 갈라진다
+## (`ring_power.gd` 머리 주석: 리포트가 "위력 140"이라 적고 130으로 때리는 식).
+const RingPower := preload("res://src/core/ring_power.gd")
+
+## 마법진 탭이 쓰는 표시 어휘 — 문양 이름·색·칸 각도(`slot_angle`→`jin_slot_dots`).
+## ⚠ `ring_board.gd`엔 `class_name`이 없다 — 이 preload가 유일한 진입로다(hud.gd:29 선례).
+## 🔴 core(`RingDesign.layer_summary`)는 문양 이름·색을 **일부러 안 갖는다**(drawing 참조 금지) —
+## 코드→말/색 해석은 표시하는 쪽인 여기 몫이다.
+const RingBoard := preload("res://src/drawing/ring_board.gd")
+
 ## 창고를 나누는 카테고리 순서·라벨 (inventory_panel과 동일 — `ItemDef.category()` 키).
 const CATEGORY_ORDER: Array = [
 	[&"equip", "장비"],
@@ -569,17 +579,319 @@ func _reward_text(q: QuestDef) -> String:
 	return ", ".join(parts)
 
 
-# ─────────────────────────── 탭3: 마법진 (스텁) ───────────────────────────
+# ─────────────────────────── 탭3: 마법진 (세79 M1) ───────────────────────────
 
-## 🔴 지금은 자리표만 — 실제 레이아웃은 나중에 붙인다. 탭 자리·헤더는 있어야 해 여기만 안내문 한 줄.
+## 🔴 **이 탭의 존재 이유 = 층 순서(안→밖)를 읽게 하는 것** (세79 M1).
+## 진의 층(밴드)이 곧 연산 순서라 같은 재료로도 `폭발(확산(불))` ≠ `확산(폭발(불))`인데,
+## 그전엔 플레이어가 **자기 도안의 순서를 확인할 수단이 하나도 없었다** — HUD 슬롯 미니
+## 다이어그램은 8칸 점 원 **하나**라 층을 못 보여 주고, 책은 그리는 동안만 보인다.
+## 그래서 여기선 예쁨보다 **"안쪽이 먼저"가 한눈에 읽히는가**가 먼저다:
+##   왼쪽 = 동심원(고리 겹 = 층. 안쪽 고리가 층0) · 오른쪽 = 수식 한 줄 + 층별 목록.
+##
+## 🔴 **`rings`를 직접 뜯지 않는다** — 층 판별은 core 단일 소스(`RingDesign.layers_of`/
+## `layer_summary`)가 쥔다. 세79 첫 판에 발사·요약·HUD 세 곳으로 갈라져 HUD가 조용히
+## 거짓말한 전례가 있다. 문양 이름·색만 표시하는 쪽(여기)이 `RingBoard`에서 해석한다
+## (core는 drawing을 참조할 수 없어 이름·색을 안 갖는다 — `layer_summary` 주석).
+##
+## 🔴 **넘침 = 잘림이 아니라 상한으로 막는다** (960×540). 층 줄 수를 MAGIC_MAX_LAYER_LINES로
+## 캡해 **행 높이에 상한**을 두면 장착 3칸이 어떤 도안이든 반드시 들어간다(아래 산식 참조).
+## 스크롤을 안 넣은 이유 = 이 패널은 즉시모드 `_draw`라 스크롤엔 새 입력 경로가 붙고,
+## 그 순간 세25 `mouse_filter` 함정 자리가 하나 더 생긴다 — 보여 줄 게 3칸뿐인데 값이 안 맞다.
+## 미장착 보관은 **남는 높이에 들어가는 만큼만** 한 줄 요약으로 붙이고 나머지는 "외 N장"이다.
+
+# ── 레이아웃 (연출값 — 밸런스 아님) ──
+const MAGIC_ROW_GAP := 10.0
+const MAGIC_DIAG_COL := 104.0        ## 왼쪽 동심원 칸 폭 (텍스트는 이 오른쪽부터)
+const MAGIC_DIAG_R_MAX := 32.0       ## 가장 바깥 층 반지름
+const MAGIC_DIAG_R_MIN := 10.0       ## 가장 안쪽 층 반지름 하한 (층이 많아도 안 뭉개지게)
+const MAGIC_DIAG_R_STEP := 8.0       ## 층 간격(층이 적을 때). 많아지면 MIN에 맞춰 좁아진다
+const MAGIC_HEAD_H := 46.0           ## 수식 줄 + 진 이름 줄
+const MAGIC_LINE_H := 15.0           ## 층 한 줄
+const MAGIC_FOOT_H := 22.0           ## 위력·점수 줄
+const MAGIC_EMPTY_ROW_H := 46.0      ## 빈 슬롯 행
+## 🔴 층 줄 상한 — 이게 행 높이 상한을 만든다. 46+4×15+22 = **128**,
+## 3행 + 간격 2×10 = **404** ≤ 내용 높이 406(=520-92-22). 즉 **어떤 도안이든 안 잘린다.**
+## 넘는 층은 마지막 줄을 "… 외 N층"으로 접는다. 이 값을 올리려면 위 산식을 다시 재라.
+const MAGIC_MAX_LAYER_LINES := 4
+const MAGIC_STORE_ROW_H := 18.0
+const MAGIC_STORE_HEAD_H := 20.0
+
+# ── 색 (퀘스트 행·HUD 다이어그램과 같은 팔레트) ──
+const MAGIC_ROW_BG := Color(0.17, 0.15, 0.12, 0.95)
+const MAGIC_ROW_EDGE := Color(0.40, 0.37, 0.31, 0.7)
+const MAGIC_FORMULA_COLOR := Color(0.96, 0.90, 0.78)
+const MAGIC_RING_COLOR := Color(0.55, 0.48, 0.38, 0.60)
+const MAGIC_OPEN_DOT := Color(0.62, 0.55, 0.44, 0.80)   # 열렸지만 빈 칸
+const MAGIC_SHUT_DOT := Color(0.34, 0.30, 0.24, 0.55)   # 진이 닫은 칸
+const MAGIC_POWER_COLOR := Color(0.90, 0.60, 0.25)
+const MAGIC_INDEX_COLOR := Color(0.72, 0.64, 0.50)
+
+
 func _draw_magic_tab(font: Font, origin: Vector2, content_top: float) -> void:
 	var left := origin.x + PAD
-	draw_string(font, Vector2(left, content_top + 40.0),
-		"마법진 — 준비 중",
-		HORIZONTAL_ALIGNMENT_LEFT, -1, 16, SECTION_COLOR)
-	draw_string(font, Vector2(left, content_top + 66.0),
-		"장착한 고리 도안이 여기에 표시될 예정이다.",
-		HORIZONTAL_ALIGNMENT_LEFT, -1, 12, HINT_COLOR)
+	var width := PANEL_SIZE.x - PAD * 2.0
+	var bottom := origin.y + PANEL_SIZE.y - PAD
+
+	draw_string(font, Vector2(left, content_top - 8.0),
+		"장착 마법진 — 안쪽 고리(층0)부터 바깥으로 걸린다 = 시전 순서",
+		HORIZONTAL_ALIGNMENT_LEFT, -1, 12, SECTION_COLOR)
+
+	var y := content_top
+	for i in GameState.ring_equipped.size():
+		y = _draw_magic_row(font, Vector2(left, y), width, i,
+			GameState.ring_equipped[i] as RingDesign) + MAGIC_ROW_GAP
+
+	_draw_magic_storage(font, left, y, width, bottom)
+
+
+## 슬롯 한 행 — 왼쪽 동심원 + 오른쪽(수식·진·층 목록·위력). 다음 행의 y(=이 행 아랫변)를 돌려준다.
+func _draw_magic_row(font: Font, at: Vector2, width: float, idx: int, design: RingDesign) -> float:
+	if design == null:
+		var er := Rect2(at, Vector2(width, MAGIC_EMPTY_ROW_H))
+		draw_rect(er, MAGIC_ROW_BG, true)
+		draw_rect(er, MAGIC_ROW_EDGE, false, 1.0)
+		draw_string(font, Vector2(at.x + 14.0, at.y + 28.0),
+			"슬롯 %d — 비어 있음 (책상 [E]에서 그려 장착)" % (idx + 1),
+			HORIZONTAL_ALIGNMENT_LEFT, width - 28.0, 12, EMPTY_COLOR)
+		return at.y + MAGIC_EMPTY_ROW_H
+
+	var summary := design.layer_summary()
+	var lines := layer_lines(summary, MAGIC_MAX_LAYER_LINES)
+	var h := _magic_row_height(lines.size())
+	var rect := Rect2(at, Vector2(width, h))
+	draw_rect(rect, MAGIC_ROW_BG, true)
+	draw_rect(rect, MAGIC_ROW_EDGE, false, 1.0)
+	draw_rect(Rect2(at, Vector2(4.0, h)), _rune_color(design), true)   # 룬 색 띠
+
+	draw_string(font, Vector2(at.x + 14.0, at.y + 15.0), "슬롯 %d" % (idx + 1),
+		HORIZONTAL_ALIGNMENT_LEFT, MAGIC_DIAG_COL - 20.0, 11, MAGIC_INDEX_COLOR)
+	_draw_magic_diagram(Vector2(at.x + MAGIC_DIAG_COL * 0.5, at.y + h * 0.5 + 8.0), design)
+
+	var tx := at.x + MAGIC_DIAG_COL
+	var tw := width - MAGIC_DIAG_COL - 16.0
+	draw_string(font, Vector2(tx, at.y + 24.0), spell_formula(summary, _rune_name(design)),
+		HORIZONTAL_ALIGNMENT_LEFT, tw, 15, MAGIC_FORMULA_COLOR)
+	draw_string(font, Vector2(tx, at.y + 41.0), _jin_text(design, summary.size()),
+		HORIZONTAL_ALIGNMENT_LEFT, tw, 11, KIND_COLOR)
+
+	var ly := at.y + MAGIC_HEAD_H + 13.0
+	for i in lines.size():
+		draw_string(font, Vector2(tx + 6.0, ly), lines[i],
+			HORIZONTAL_ALIGNMENT_LEFT, tw - 6.0, 11, _magic_line_color(summary, i))
+		ly += MAGIC_LINE_H
+
+	# 🔴 변형형(확산·폭발)이 끼면 이 숫자는 **갈래당**이다 — `ring_power` 머리 주석의 경계.
+	# 그냥 "위력 N"이라 적으면 리포트가 거짓말하는 걸로 읽힌다(ring_forge_panel과 같은 표기).
+	var unit := "갈래당 위력" if has_modifier(summary) else "위력"
+	draw_string(font, Vector2(tx, at.y + h - 8.0),
+		"%s %d · %d점 · %s" % [unit,
+			RingPower.power_display(design.total_score, Db.ink_mult(design.ink), design.size),
+			RingPower.score_display(design.total_score),
+			RingPower.grade_of(design.total_score)],
+		HORIZONTAL_ALIGNMENT_LEFT, tw, 12, MAGIC_POWER_COLOR)
+	return at.y + h
+
+
+## 층 겹 다이어그램 — 고리 하나 = 층 하나, **안쪽이 층0**. 칸 점은 그 층에 놓인 문양 색으로,
+## 비었지만 열린 칸은 흐리게, 진이 닫은 칸은 더 흐리게. 중심 = 룬 색(감싸이는 씨앗).
+## 🔴 칸 각도는 `RingBoard.jin_slot_dots`(=`slot_angle`)를 그대로 부른다 — 식을 베끼면 책·HUD와
+## 조용히 어긋난다(세60). 층 배열은 `RingDesign.layers_of` 단일 소스로 편다.
+func _draw_magic_diagram(center: Vector2, design: RingDesign) -> void:
+	var layers := RingDesign.layers_of(design.rings)
+	var n := maxi(layers.size(), 1)
+	for i in n:
+		var r := _magic_ring_radius(i, n)
+		draw_arc(center, r, 0.0, TAU, 28, MAGIC_RING_COLOR, 1.0)
+		var layer: Array = []
+		if i < layers.size():
+			layer = layers[i]
+		var dots: Array = RingBoard.jin_slot_dots(design.open, center, r)
+		for k in dots.size():
+			var d: Dictionary = dots[k]
+			var pos: Vector2 = d["pos"]
+			var code := int(layer[k]) if k < layer.size() else -1
+			if code != -1:
+				draw_circle(pos, 3.0, _glyph_color(code))
+			elif bool(d["open"]):
+				draw_circle(pos, 1.8, MAGIC_OPEN_DOT)
+			else:
+				draw_circle(pos, 1.4, MAGIC_SHUT_DOT)
+	draw_circle(center, 4.0, _rune_color(design))
+
+
+## 층 i의 고리 반지름 — 바깥(마지막 층)이 R_MAX. 층이 많으면 간격이 좁아져 R_MIN 안으로 안 파고든다.
+func _magic_ring_radius(i: int, n: int) -> float:
+	if n <= 1:
+		return MAGIC_DIAG_R_MAX
+	var step := minf(MAGIC_DIAG_R_STEP,
+		(MAGIC_DIAG_R_MAX - MAGIC_DIAG_R_MIN) / float(n - 1))
+	return MAGIC_DIAG_R_MAX - float(n - 1 - i) * step
+
+
+func _magic_row_height(line_count: int) -> float:
+	return MAGIC_HEAD_H + float(maxi(line_count, 1)) * MAGIC_LINE_H + MAGIC_FOOT_H
+
+
+## 층 줄 색 = 그 층 첫 문양의 색(층을 색으로도 구분). 빈 층·접힌 줄은 흐린 설명색.
+func _magic_line_color(summary: Array, i: int) -> Color:
+	if i >= summary.size():
+		return HINT_COLOR
+	var entries: Array = summary[i]
+	if entries.is_empty():
+		return HINT_COLOR
+	return _glyph_color(int((entries[0] as Dictionary)["code"]))
+
+
+## "진: 단발진 2등급 · 2층". 진이 없거나(옛 도안) Db에 없으면 이름을 흐리게 대체한다.
+func _jin_text(design: RingDesign, layer_count: int) -> String:
+	var jin := Db.get_jin(design.jin)
+	var nm := jin.display_name if jin != null and jin.display_name != "" else "진 없음 (옛 도안)"
+	return "진: %s · %d층" % [nm, maxi(layer_count, 1)]
+
+
+func _rune_color(design: RingDesign) -> Color:
+	var r := Db.get_rune(design.rune)
+	# 폴백은 hud.gd `_draw_jin_diagram` 선례와 같은 값(불) — 룬이 안 실린 옛 도안도 뭔가 보인다.
+	return r.ui_color if r != null else Color(0.62, 0.22, 0.12)
+
+
+func _rune_name(design: RingDesign) -> String:
+	var r := Db.get_rune(design.rune)
+	return r.display_name if r != null and r.display_name != "" else "룬"
+
+
+## 문양 코드 → 색. 🔴 정본은 `data/glyphs/*.tres`의 ui_color이고 `RingBoard.GLYPH_COLORS`가
+## 그 사본이다 — 책(`ring_book`)도 여길 직접 인덱싱한다(같은 선례를 따른다).
+func _glyph_color(code: int) -> Color:
+	var cols: Array = RingBoard.GLYPH_COLORS
+	return cols[clampi(code, 0, cols.size() - 1)]
+
+
+## 미장착 보관 도안 — 남는 높이에 들어가는 만큼만. 못 담으면 마지막 줄이 "… 외 N장"이다.
+## 🔴 잘려서 반쯤 그려지는 게 제일 나쁘다 — 그래서 **먼저 수용량을 세고** 그 안에서만 그린다.
+func _draw_magic_storage(font: Font, left: float, top: float, width: float, bottom: float) -> void:
+	var rest := _unequipped_designs()
+	if rest.is_empty():
+		return
+	var cap := int(floor((bottom - top - MAGIC_STORE_HEAD_H) / MAGIC_STORE_ROW_H))
+	if cap <= 0:
+		return
+	draw_string(font, Vector2(left, top + 12.0), "보관 (미장착 — 책상 [E]에서 장착)",
+		HORIZONTAL_ALIGNMENT_LEFT, width, 12, SECTION_COLOR)
+	var y := top + MAGIC_STORE_HEAD_H
+	var shown := rest.size() if rest.size() <= cap else maxi(cap - 1, 0)
+	for i in shown:
+		var d: RingDesign = rest[i]
+		var s := d.layer_summary()
+		draw_string(font, Vector2(left + 8.0, y + 12.0),
+			"· %s   %s %d · %d점" % [spell_formula(s, _rune_name(d)),
+				"갈래당" if has_modifier(s) else "위력",
+				RingPower.power_display(d.total_score, Db.ink_mult(d.ink), d.size),
+				RingPower.score_display(d.total_score)],
+			HORIZONTAL_ALIGNMENT_LEFT, width - 16.0, 11, HINT_COLOR)
+		y += MAGIC_STORE_ROW_H
+	if shown < rest.size():
+		draw_string(font, Vector2(left + 8.0, y + 12.0),
+			"… 외 %d장" % (rest.size() - shown),
+			HORIZONTAL_ALIGNMENT_LEFT, width - 16.0, 11, EMPTY_COLOR)
+
+
+## 보관 전체(ring_designs)에서 장착 중인 것을 뺀다. 같은 도안 인스턴스가 슬롯에 꽂혀 있다.
+func _unequipped_designs() -> Array[RingDesign]:
+	var out: Array[RingDesign] = []
+	for d: RingDesign in GameState.ring_designs:
+		if d != null and not GameState.ring_equipped.has(d):
+			out.append(d)
+	return out
+
+
+# ── 순수 함수 (헤드리스가 잴 수 있는 자리 — 렌더는 못 재도 이건 잰다) ──
+
+## 🔴 **수식 문자열** — 안쪽 층부터 바깥으로 감싼다. 씨앗 = 룬 이름.
+##   `[[확산×3], [폭발×1]]`, "불"  →  `폭발(확산(불))`
+##   순서를 뒤집으면                →  `확산(폭발(불))`   ← M1의 전부가 이 차이다
+## 규칙:
+##   • **빈 층은 건너뛴다** — 감싸는 게 없으니 괄호도 안 는다(자리는 `layer_summary`가 유지한다).
+##   • 한 층에 여러 종류면 `+`로 잇는다 (`확산+폭발(불)`). 개수는 수식에 안 싣는다 — 층 목록의 일.
+##   • **옛 한 겹 도안**은 `layers_of`가 층 1개로 승격하므로 괄호가 한 겹만 생긴다 (`발산(불)`).
+##   • 문양이 하나도 없으면 룬 이름만 남는다 (`불`).
+## 🔴 이름은 `RingBoard.GLYPH_NAMES`에서 꼬리 기호(⋔·∗ 등)를 떼서 쓴다 — 수식에 기호까지
+## 들어가면 `폭발∗(확산⋔(불))`이라 읽는 게 목적인 줄이 못 읽히게 된다.
+static func spell_formula(summary: Array, rune_name: String) -> String:
+	var out := rune_name
+	for entries_v in summary:
+		var entries: Array = entries_v
+		if entries.is_empty():
+			continue
+		var parts: Array[String] = []
+		for e: Dictionary in entries:
+			parts.append(glyph_word(int(e["code"])))
+		out = "%s(%s)" % ["+".join(parts), out]
+	return out
+
+
+## 층별 목록 줄 — `├ 층0(안) 확산 ×3` / `└ 층1(밖) 폭발 ×1`.
+## 층이 max_lines를 넘으면 마지막 줄을 "… 외 N층"으로 접는다(잘려 보이는 것보다 낫다).
+## 층이 하나면 (안)·(밖) 꼬리표를 안 붙인다 — 감쌈이 없는데 방향을 말하면 거짓 신호다.
+static func layer_lines(summary: Array, max_lines: int) -> Array[String]:
+	var out: Array[String] = []
+	var n := summary.size()
+	if n == 0:
+		out.append("문양이 없다 — 룬만 나간다")
+		return out
+	var folded := n > max_lines
+	var draw_n := (max_lines - 1) if folded else n
+	for i in draw_n:
+		var last := (not folded) and i == n - 1
+		var tag := ""
+		if n > 1:
+			tag = "(안)" if i == 0 else ("(밖)" if i == n - 1 else "")
+		out.append("%s 층%d%s %s" % ["└" if last else "├", i, tag, _entries_text(summary[i])])
+	if folded:
+		out.append("└ … 외 %d층" % (n - draw_n))
+	return out
+
+
+## 한 층의 내용 — "확산 ×3" (여러 종류면 콤마). 빈 층도 자리를 지킨다.
+static func _entries_text(entries_v: Variant) -> String:
+	var entries: Array = entries_v
+	if entries.is_empty():
+		return "비어 있음"
+	var parts: Array[String] = []
+	for e: Dictionary in entries:
+		parts.append("%s ×%d" % [glyph_word(int(e["code"])), int(e["count"])])
+	return ", ".join(parts)
+
+
+## 변형형(확산·폭발)이 어느 층에든 있나 — 위력 표기를 "갈래당"으로 가른다.
+## 🔴 계열 판별은 `Enums.is_modifier_glyph` 단일 소스를 쓴다(복사 금지).
+static func has_modifier(summary: Array) -> bool:
+	for entries_v in summary:
+		var entries: Array = entries_v
+		for e: Dictionary in entries:
+			if Enums.is_modifier_glyph(int(e["code"])):
+				return true
+	return false
+
+
+## 문양 코드 → 수식·목록에 쓰는 **말**(꼬리 기호 뗀 이름). 어휘 밖 코드는 "?".
+static func glyph_word(code: int) -> String:
+	var names: Array = RingBoard.GLYPH_NAMES
+	if code < 0 or code >= names.size():
+		return "?"
+	return _strip_symbol(String(names[code]))
+
+
+## 꼬리의 비-한글 문자를 떼어 낸다("확산⋔"→"확산"). 이름 길이를 2자로 가정하지 않는다 —
+## 나중에 3자 문양이 와도 안 깨진다.
+static func _strip_symbol(s: String) -> String:
+	var n := s.length()
+	while n > 0:
+		var c := s.unicode_at(n - 1)
+		if c >= 0xAC00 and c <= 0xD7A3:   # 한글 음절
+			break
+		n -= 1
+	return s.substr(0, n) if n > 0 else s
 
 
 # ─────────────────────────── 탭4: 캐릭터 (세64) ───────────────────────────

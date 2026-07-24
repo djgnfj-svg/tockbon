@@ -94,6 +94,46 @@ static func layers_of(rings_v: Array) -> Array:
 	return rings_v if rings_v[0] is Array else [rings_v]
 
 
+## 🔴 **층별 문양 요약** — 안→밖 순서로 `[[{code, count}, …], …]` (세79 M1).
+## 층 i의 항목 = 그 층에 놓인 문양 종류별 개수(대개 한 종류 — 밴드 하나엔 문양-고리 하나라).
+## 빈 층은 빈 배열이라 **자리는 유지된다**(감쌈 깊이가 밀리면 안 되므로).
+##
+## 🔴 왜 core에 있나: "내 마법진이 어떻게 생겼나"를 읽는 자리가 UI마다 생길 텐데(Tab 마법진 탭·
+## 책 리포트·HUD), 각자 `rings`를 직접 뜯으면 **층 판별이 또 갈라진다**(세79에 발사·요약·HUD
+## 세 곳으로 갈라져 HUD가 조용히 거짓말한 전례). ⚠ **문양 이름·색은 여기 안 넣는다** —
+## 이 스키마는 core라 drawing(`RingBoard.GLYPH_NAMES`)을 참조하면 모듈 경계가 깨진다.
+## 코드→이름 해석은 **표시하는 쪽**이 한다.
+func layer_summary() -> Array:
+	var out: Array = []
+	for layer_v in layers_of(rings):
+		var counts: Dictionary = {}
+		for g in (layer_v as Array):
+			var c := int(g)
+			if c != -1:
+				counts[c] = int(counts.get(c, 0)) + 1
+		var entries: Array = []
+		for c: int in counts.keys():
+			entries.append({"code": c, "count": int(counts[c])})
+		# 🔴 코드 오름차순 고정 — Dictionary 키 순서에 기대면 같은 도안이 열 때마다 다르게 보인다.
+		entries.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+			return int(a["code"]) < int(b["code"]))
+		out.append(entries)
+	return out
+
+
+## 이 도안에 변형형 문양(확산·폭발)이 끼어 있나 — **위력 표시 단위를 가른다** (세79 M1).
+## 🔴 끼어 있으면 `RingPower.power_display`가 내는 숫자는 **갈래 하나의 위력**이다(확산이 위력을
+## 갈래로 배분하므로 — `ring_power.gd` 머리 주석의 경계). 그냥 "위력 N"이라 적으면 리포트가
+## 거짓말하는 걸로 읽히므로, 표시하는 쪽은 이 값을 보고 "갈래당 위력 N"이라 적는다.
+## 계열 판별 자체는 `Enums.is_modifier_glyph` 단일 소스가 쥔다(여긴 순회만 한다).
+func has_modifier_glyph() -> bool:
+	for layer_v in layers_of(rings):
+		for g in (layer_v as Array):
+			if Enums.is_modifier_glyph(int(g)):
+				return true
+	return false
+
+
 ## 🔴 칸 k에 문양이 놓였나 — **어느 층에든** 놓였으면 참 (세79 M1).
 ## HUD 슬롯 다이어그램·요약이 **같은 판정**을 써야 한다: `rings[0]`만 보면 2등급 진에서 바깥 층
 ## 문양이 통째로 안 그려지는데, `open`은 층들의 합집합이라 **"열렸는데 비었다"로 조용히 거짓말한다**.

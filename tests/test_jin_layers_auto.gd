@@ -59,6 +59,7 @@ func _run() -> void:
 	await _test_seed_when_nothing_to_wrap(system)
 	await _test_panel_carries_layers()
 	await _test_damage_distribution(system)
+	_test_formula_text()
 
 	if failures == 0:
 		print("TEST_JIN_LAYERS_OK — 전 항목 통과")
@@ -302,6 +303,41 @@ func _test_damage_distribution(system) -> void:
 	_check(bl.size() == 1 and float(bl[0].damage) > 0.0,
 		"융합 폭발이 피해를 물려받는다 (실제 %.2f)" % (float(bl[0].damage) if bl.size() > 0 else 0.0))
 	_clear(system)
+
+
+# ── [9] 🔴 순서를 **사람에게 보여 주는 문자열** (Tab 마법진 탭) ──
+## M1의 심장이 "순서가 결과를 바꾼다"인데, 플레이어가 그 순서를 확인하는 유일한 통로가 이 수식이다.
+## 발사만 맞고 표시가 뒤집혀 있으면 사용자는 **자기 도안을 반대로 이해한 채 조립한다**.
+func _test_formula_text() -> void:
+	print("[9] 🔴 마법진 탭 수식 — 안→밖 감쌈이 글로도 뒤집히지 않는다")
+	var tab = load("res://src/hud/tab_panel.gd")
+	var inner_spread: Array = [[{"code": G_SPREAD, "count": 3}], [{"code": G_EXPLODE, "count": 1}]]
+	var inner_explode: Array = [[{"code": G_EXPLODE, "count": 1}], [{"code": G_SPREAD, "count": 3}]]
+	var f1: String = tab.spell_formula(inner_spread, "불")
+	var f2: String = tab.spell_formula(inner_explode, "불")
+	_check(f1 == "폭발(확산(불))", "층0 확산·층1 폭발 → 폭발(확산(불)) (실제 %s)" % f1)
+	_check(f2 == "확산(폭발(불))", "층0 폭발·층1 확산 → 확산(폭발(불)) (실제 %s)" % f2)
+	_check(f1 != f2, "🔴 순서가 다르면 수식도 다르다 (발사만 갈리고 표시가 같으면 무용지물)")
+	# 빈 층은 감싸지 않는다 · 문양이 없으면 룬 이름만 (옛 도안·빈 진)
+	_check(tab.spell_formula([[], [{"code": G_EXPLODE, "count": 1}]], "물") == "폭발(물)",
+		"빈 층은 괄호를 안 만든다")
+	_check(tab.spell_formula([], "불") == "불", "층이 없으면 룬 이름만")
+	_check(tab.spell_formula([[]], "불") == "불", "빈 층뿐이어도 룬 이름만")
+	# 🔴 실제 도안에서 뽑은 summary로도 같은 결과가 나오나 (core→UI 연결이 끊기면 여기가 잡는다)
+	var d := RingDesign.from_assembly(
+		{"rune": 0, "jin": &"jin_plain_g2",
+		"rings": [[G_SPREAD, G_SPREAD, G_SPREAD, -1, -1, -1, -1, -1],
+			[G_EXPLODE, -1, -1, -1, -1, -1, -1, -1]], "open": [0, 1, 2]}, "실도안", 1.0)
+	var f3: String = tab.spell_formula(d.layer_summary(), "불")
+	_check(f3 == "폭발(확산(불))", "실제 도안 layer_summary → 같은 수식 (실제 %s)" % f3)
+	_check(d.has_modifier_glyph(), "변형형 판정 = 참 (위력이 「갈래당」으로 표기된다)")
+	# 옛 한 겹 도안 — 괄호가 한 겹만 (저장 무회귀가 표시까지 이어지나)
+	var old_d := RingDesign.from_assembly(
+		{"rune": 0, "rings": [G_RADIATE, G_RADIATE, -1, -1, -1, -1, -1, -1], "open": [0, 1]},
+		"옛 도안", 1.0)
+	_check(tab.spell_formula(old_d.layer_summary(), "불") == "발산(불)",
+		"옛 8칸 한 겹 → 괄호 한 겹 (층 1개로 승격)")
+	_check(not old_d.has_modifier_glyph(), "옛 도안엔 변형형이 없다 = 그냥 「위력」 표기")
 
 
 # ─────────────────────────── 헬퍼 ───────────────────────────
