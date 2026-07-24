@@ -75,13 +75,50 @@ func _seed_starting_unlocks() -> void:
 	# ⚠ 문양(발산)은 시드가 없다 — **문양엔 해금 게이트 자체가 없다**: GlyphDef에 unlock_id 필드가
 	# 없고 책도 `Db.all_glyphs()`를 무필터로 띄운다(ring_forge_panel._inject_defs). 옛 `glyph_thrust`
 	# 시드는 소비자 0인 유령이었다. 문양에 해금 축을 세우면 그때 시드·판정을 같이 만든다.
+	# 🔴 세78 시작 룬 3개 지급 (사용자 확정: "시작할 때 룬 3개") — 불·물·바람.
+	#   물(rune_water)=WET 감속·바람(rune_wind)=FLOW 밀림+확산. 각각 워터볼·윈드볼로 발사된다.
 	codex[&"rune_fire"] = true
+	codex[&"rune_water"] = true
+	codex[&"rune_wind"] = true
 	codex[&"jin_single"] = true
-	# 🔴 세71 첫 스테이지 슬라이스 — **맨몸 파이어볼로 출발**(사용자 확정: "시작은 일반진+불 룬만").
+	# 🔴 세71 첫 스테이지 슬라이스 — 진은 일반진 1종으로 출발(진·문양은 여전히 하나).
 	# 문양 링(gr_*)은 더는 시드가 아니다 — 스테이지 클리어 보상으로만 얻는다(ChapterDef.reward_unlock):
 	#   ch1(숲 어귀) 클리어 → gr_radiate5(발산×5) 해금 → 조립대에서 밴드에 끼워 파이어볼을 5갈래로.
 	# ⚠ gr_gather3는 당분간 획득 경로가 없다(후속 챕터 reward_unlock 대기) — .tres는 남겨 둔다.
 	#   세68 시드 2줄(gr_radiate5·gr_gather3)은 이 결정으로 삭제됐다.
+	_seed_starting_rings()
+
+
+## 🔴 세78 시작 퀵슬롯 미리 장착 (사용자 확정: "1 파이어볼·2 워터볼·3 윈드볼로 넣은 걸로 시작").
+## 시작하자마자 슬롯 1/2/3에 불·물·바람 마법진이 물려 있어 1·2·3 키로 바로 세 원소 볼을 쏜다.
+## 조립을 거치지 않고 완성된 도안을 심는다 — 각각 단발진(jin_single)에 빈 고리(문양 없음)+해당 룬,
+## 점수 1.0(안정, 펑 안 남). 빈 고리도 캐리어 몸이 착탄 피해를 주므로 볼만 날리는 데 충분하다.
+## ⚠ Db 미준비 시점(GameState._ready가 Db._ready보다 먼저)이라 정적 값만 쓴다 — Db 조회 금지.
+## 기존 세이브는 load_game이 이 시드를 덮으므로(옛 슬롯 유지), 세 볼은 **새 게임**에서만 뜬다(룬 시드와 동일).
+func _seed_starting_rings() -> void:
+	ring_designs.clear()
+	ring_equipped = [null, null, null]
+	var d_fire := _make_seed_ring(Enums.RuneType.FIRE, "불 마법진")
+	var d_water := _make_seed_ring(Enums.RuneType.WATER, "물 마법진")
+	var d_wind := _make_seed_ring(Enums.RuneType.WIND, "바람 마법진")
+	ring_designs.append(d_fire)
+	ring_designs.append(d_water)
+	ring_designs.append(d_wind)
+	ring_equipped[0] = d_fire   # 슬롯 1 = 파이어볼
+	ring_equipped[1] = d_water  # 슬롯 2 = 워터볼
+	ring_equipped[2] = d_wind   # 슬롯 3 = 윈드볼
+
+
+## 완성된 시작 도안 한 장 (단발진 + 빈 고리 + 룬). Db 없이 정적 값으로만 조립한다.
+func _make_seed_ring(rune_type: int, name: String) -> RingDesign:
+	var d := RingDesign.new()
+	d.rune = rune_type
+	d.jin = &"jin_single"
+	d.rings = [[-1, -1, -1, -1, -1, -1, -1, -1]]   # 빈 고리 8칸 (문양 없음 = 몸으로 때리는 원소 볼)
+	d.open = [0, 1, 2, 3, 4, 5, 6, 7]              # jin_single.glyph_slots 스냅샷 (정적 — Db 미조회)
+	d.total_score = 1.0                            # 안정(>0.65) — 펑 안 남, 기준 위력
+	d.size = 1.0
+	return d
 
 ## 🔴 **진짜 새로하기** (세션37, F8). save_manager 노트가 적어 둔 계약: `save_game()`이 쓰는 것
 ## 전부 + `bag`·`hp` + **시작 해금 재시드**를 한 곳에서 처리한다. 씬마다 손으로 비우면 필드가

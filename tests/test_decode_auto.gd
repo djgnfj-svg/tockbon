@@ -32,22 +32,23 @@ func _run() -> void:
 	var gs: Node = root.get_node("GameState")
 	var db: Node = root.get_node("Db")
 
-	# ── in-memory 주입: 물 룬 + 물 조각 (세61 — 실 .tres가 없어 기계 검증용으로 만든다) ──
+	# ── in-memory 주입: 흙 룬 + 흙 조각 (세78 — 물·바람은 이제 실데이터+시작 지급이라 해독 기계
+	# 검증용으로 못 쓴다. 흙(EARTH)은 아직 실 .tres도 시드도 없어 "아직 안 배운 룬" 자리로 딱 맞다) ──
 	var test_rune := RuneDef.new()
-	test_rune.type = Enums.RuneType.WATER
-	test_rune.unlock_id = &"rune_water"
-	test_rune.display_name = "물(테스트)"
-	db.runes[Enums.RuneType.WATER] = test_rune
+	test_rune.type = Enums.RuneType.EARTH
+	test_rune.unlock_id = &"rune_earth"
+	test_rune.display_name = "흙(테스트)"
+	db.runes[Enums.RuneType.EARTH] = test_rune
 	var test_frag := ItemDef.new()
-	test_frag.id = &"fragment_water"
+	test_frag.id = &"fragment_earth"
 	test_frag.kind = Enums.ItemKind.FRAGMENT
-	test_frag.display_name = "물 조각(테스트)"
-	test_frag.params = {"unlock_id": &"rune_water"}
-	db.items[&"fragment_water"] = test_frag
+	test_frag.display_name = "흙 조각(테스트)"
+	test_frag.params = {"unlock_id": &"rune_earth"}
+	db.items[&"fragment_earth"] = test_frag
 
-	# 깨끗한 시작 — 물 룬은 아직 안 배운 상태여야 검증이 성립한다.
-	gs.codex.erase(&"rune_water")
-	gs.inventory.erase(&"fragment_water")
+	# 깨끗한 시작 — 흙 룬은 아직 안 배운 상태여야 검증이 성립한다.
+	gs.codex.erase(&"rune_earth")
+	gs.inventory.erase(&"fragment_earth")
 
 	var PanelScene: PackedScene = load("res://src/base/decode_panel.tscn")
 	var panel: Control = PanelScene.instantiate()
@@ -55,49 +56,54 @@ func _run() -> void:
 	await process_frame
 
 	# ── ① 해독 = 조각 소비 + 룬 해금 ──
-	_check("시작: 물 룬 미해금", not gs.is_unlocked(&"rune_water"))
-	gs.add_item(&"fragment_water", 2)
-	panel._decode(&"fragment_water")
-	_check("🔴 해독하면 물 룬이 해금된다 (codex_unlocked → codex)", gs.is_unlocked(&"rune_water"))
-	_check("해독이 조각 하나를 소비한다 (2 → 1)", gs.get_count(&"fragment_water") == 1)
+	_check("시작: 흙 룬 미해금", not gs.is_unlocked(&"rune_earth"))
+	gs.add_item(&"fragment_earth", 2)
+	panel._decode(&"fragment_earth")
+	_check("🔴 해독하면 흙 룬이 해금된다 (codex_unlocked → codex)", gs.is_unlocked(&"rune_earth"))
+	_check("해독이 조각 하나를 소비한다 (2 → 1)", gs.get_count(&"fragment_earth") == 1)
 
 	# ── ② 이미 배운 룬은 다시 해독해도 조각이 안 닳는다 ──
-	panel._decode(&"fragment_water")
-	_check("🔴 이미 배운 룬은 조각을 낭비하지 않는다 (1 그대로)", gs.get_count(&"fragment_water") == 1)
+	panel._decode(&"fragment_earth")
+	_check("🔴 이미 배운 룬은 조각을 낭비하지 않는다 (1 그대로)", gs.get_count(&"fragment_earth") == 1)
 
-	# ── ③ 해금이 조립 책의 룬 목록에 흐른다 — 이제 물 룬을 그릴 수 있다 ──
+	# ── ③ 해금이 조립 책의 룬 목록에 흐른다 — 이제 흙 룬을 그릴 수 있다 ──
 	# forge_panel._unlocked_runes와 같은 규약을 여기서 직접 확인 (패널 인스턴스는 무거워 로직만).
-	# 바람(3)은 세61부터 .tres 자체가 없다 — get_rune(3)=null이라 필터가 거른다(같은 계약).
+	# 세78: 불·물·바람은 시작부터 해금(시드 3종), 흙은 방금 해독으로 붙었다.
 	var unlocked_types: Array = []
-	for t in [0, 2, 3]:   # Enums.RuneType FIRE·WATER·WIND (구멍 1 때문에 명시 리스트)
+	for t in [0, 2, 3, 5]:   # Enums.RuneType FIRE·WATER·WIND·EARTH (구멍 1 때문에 명시 리스트)
 		var rd: RuneDef = db.get_rune(t)
 		if rd != null and rd.unlock_id != &"" and gs.is_unlocked(rd.unlock_id):
 			unlocked_types.append(t)
 	_check("불(0)은 시작부터 해금", 0 in unlocked_types)
-	_check("🔴 물(2)이 해금 목록에 들어와 그릴 수 있다", 2 in unlocked_types)
-	_check("바람(3)은 등록이 없어 안 뜬다", not (3 in unlocked_types))
+	_check("🔴 물(2)이 시작부터 해금돼 그릴 수 있다 (세78 시드)", 2 in unlocked_types)
+	_check("🔴 바람(3)이 시작부터 해금돼 그릴 수 있다 (세78 시드)", 3 in unlocked_types)
+	_check("🔴 흙(5)이 해독으로 목록에 들어왔다", 5 in unlocked_types)
 
 	# ── ④ unlock_id 없는 조각/미보유는 무해 ──
-	gs.inventory.erase(&"fragment_water")
-	panel._decode(&"fragment_water")   # 보유 0 — 소비할 게 없다, 터지지 않아야
-	_check("보유 0 조각 해독은 조용히 무해", gs.get_count(&"fragment_water") == 0)
+	gs.inventory.erase(&"fragment_earth")
+	panel._decode(&"fragment_earth")   # 보유 0 — 소비할 게 없다, 터지지 않아야
+	_check("보유 0 조각 해독은 조용히 무해", gs.get_count(&"fragment_earth") == 0)
 
 	# ── 주입 제거 — 이후 검증은 **실데이터만** 본다 ──
-	db.runes.erase(Enums.RuneType.WATER)
-	db.items.erase(&"fragment_water")
-	gs.codex.erase(&"rune_water")
+	db.runes.erase(Enums.RuneType.EARTH)
+	db.items.erase(&"fragment_earth")
+	gs.codex.erase(&"rune_earth")
 
 	# ── ④-b 🔴 룬이 실제로 로드된다 (.tres 파싱 침묵사 그물 — 세50 함정) ──
 	# rune_wind.tres가 세션49~50 내내 파싱에 실패해 룬이 통째로 죽었는데 전 스위트가 그린이었다.
-	# 세61 콘텐츠 리셋: 실데이터 룬 = rune_fire 1종. 룬을 되살릴 때마다 이 기대치를 +1.
+	# 세78: 실데이터 룬 = 불·물·바람 3종(rune_fire·rune_water·rune_wind). 룬을 되살릴 때마다 이 기대치를 갱신.
 	_check("🔴 불 룬(FIRE)이 로드된다 (.tres 파싱 실패 = 룬이 통째로 사라짐)",
 		db.get_rune(Enums.RuneType.FIRE) != null)
+	_check("🔴 물 룬(WATER)이 로드된다 (rune_water.tres 파싱 그물)",
+		db.get_rune(Enums.RuneType.WATER) != null)
+	_check("🔴 바람 룬(WIND)이 로드된다 (rune_wind.tres 파싱 그물 — 세50 3인자 Color 침묵사 자리)",
+		db.get_rune(Enums.RuneType.WIND) != null)
 	var loaded_runes := 0
 	for t: int in Enums.RUNE_TYPES:
 		if db.get_rune(t) != null:
 			loaded_runes += 1
-	_check("🔴 로드된 룬 = 정확히 1종 (지금 %d — 늘었으면 기대치 갱신, 줄었으면 침묵사)" % loaded_runes,
-		loaded_runes == 1)
+	_check("🔴 로드된 룬 = 정확히 3종 (지금 %d — 늘었으면 기대치 갱신, 줄었으면 침묵사)" % loaded_runes,
+		loaded_runes == 3)
 
 	# ── ⑤ 🔴 실데이터 조각의 unlock_id는 실재하는 룬을 가리킨다 (오타 그물 — 미래용) ──
 	# 세61: 조각 .tres 0장이라 지금은 자명하게 통과한다. 조각을 되살리면 이 스캔이 바로 산다.

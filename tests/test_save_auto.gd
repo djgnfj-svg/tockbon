@@ -128,9 +128,14 @@ func _run() -> void:
 	_check("🔴 새로하기: 창고 비었다", gs.inventory.is_empty())
 	_check("🔴 새로하기: 장비 벗겨졌다 (맨손 시작)", gs.equipment.is_empty())
 	_check("🔴 새로하기: 퀘스트 진행 초기화", gs.quest_done.is_empty() and gs.quest_progress.is_empty())
-	_check("🔴 새로하기: 고리 도안 비었다", gs.ring_designs.is_empty())
-	_check("🔴 새로하기: 시작 해금 재시드 (불 룬·단발진, 세61) — 안 심으면 아무것도 못 그린다",
-		gs.is_unlocked(&"rune_fire") and gs.is_unlocked(&"jin_single"))
+	# 🔴 세78: 새로하기가 시작 퀵슬롯을 미리 장착한다 (1=불·2=물·3=바람). 빈 시작이 아니라 3볼 시작.
+	_check("🔴 새로하기: 시작 고리 도안 3장 (불·물·바람)", gs.ring_designs.size() == 3)
+	_check("🔴 새로하기: 슬롯1=불볼", gs.ring_equipped[0] != null and gs.ring_equipped[0].rune == Enums.RuneType.FIRE)
+	_check("🔴 새로하기: 슬롯2=물볼", gs.ring_equipped[1] != null and gs.ring_equipped[1].rune == Enums.RuneType.WATER)
+	_check("🔴 새로하기: 슬롯3=바람볼", gs.ring_equipped[2] != null and gs.ring_equipped[2].rune == Enums.RuneType.WIND)
+	_check("🔴 새로하기: 시작 해금 재시드 (불·물·바람 룬·단발진) — 안 심으면 아무것도 못 그린다",
+		gs.is_unlocked(&"rune_fire") and gs.is_unlocked(&"rune_water")
+		and gs.is_unlocked(&"rune_wind") and gs.is_unlocked(&"jin_single"))
 	# 🔴 세71 맨몸 파이어볼 계약 — 문양 링(gr_*)은 더는 시드가 아니다(스테이지 클리어 보상으로만).
 	#   시드를 되돌리면 이 검사가 빨개진다(시작이 맨몸이어야 조립→탁본 보상 루프가 산다).
 	_check("🔴 새로하기: 문양 링(gr_radiate5)은 시드가 아니다 — 스테이지 보상으로만 (맨몸 시작)",

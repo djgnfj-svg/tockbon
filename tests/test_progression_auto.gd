@@ -122,7 +122,7 @@ func _test_unlocked_stops_drop() -> void:
 	_check(not ids.has(&"fragment_water"), "🔴 fragment_water가 안 나왔다 (실제 %s)" % str(ids))
 	_check(ids.has(&"mat_slime_core"), "mat_slime_core(확률 1.0)는 그대로 나온다 (실제 %s)" % str(ids))
 	_remove_gate()
-	_gs.codex.erase(&"rune_water")   # 세61 시드엔 rune_water가 없다 — 깨끗이 되돌린다
+	_gs.codex.erase(&"rune_water")   # 세78: rune_water는 이제 시드지만, 이 관문 테스트는 잠긴 상태를 봐야 해 되돌린다
 
 
 ## [4] 🔴 랜덤 조각 은퇴 불변식 — Db의 **모든** 적 드롭 전수 (PROGRESSION.md 표의 감시자).
