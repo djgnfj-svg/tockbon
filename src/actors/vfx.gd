@@ -59,17 +59,23 @@ const MUZZLE_TICK_SPREAD := 0.55  ## 부채 전체 각(rad)
 const MUZZLE_TICK_WIDTH := 2.0    ## 틱 굵기(px)
 const MUZZLE_END_SCALE := 1.4     ## 틱이 바깥으로 튀는 최종 배율
 
-# ── 착탄 버스트 (세션59 설계 §2-D) — 신규 `spell_impact`("탄이 박혔다") 수신.
-## 🔴 reaction_burst와의 시각 분리: 착탄 = **작고 짧은 속 찬 플래시**(16px·0.15s·z=54) /
-## 반응 = 크고 긴 팽창 **외곽선** 링(실반경·0.28s·z=55). 형태·크기·수명·z가 전부 달라
-## 동시에 터져도 "박혔다 → 퍼졌다" 순서로 읽힌다. 착탄 z는 반응 아래(54).
-const IMPACT_RADIUS := 16.0       ## 속 찬 팝 최종 반지름(px)
-const IMPACT_TIME := 0.15         ## 팝 시간(s)
-const IMPACT_SPIKES := 4          ## 방사 틱 개수 (반응 스파크 6개와 구분)
-const IMPACT_START_SCALE := 0.3   ## 팝 시작 배율 (작게 시작 → IMPACT_RADIUS)
-const IMPACT_POP_SEGMENTS := 16   ## 팝 원 분할 수
+# ── 착탄 두 겹 (세77 오블리크 — 바닥 데칼 + 솟는 플레어). `spell_impact`("탄이 박혔다") 수신.
+## 🔴 오블리크 표현: 착탄점에 ① **바닥 데칼**(세로로 눌린 팽창 링 = 지면 파장) + ② **솟는 플레어**
+## (세로 길쭉한 불꽃이 위로 올라가며 페이드 = 높이감). "바닥에 꽂혀 위로 터졌다"를 두 겹으로 그린다.
+## 🔴 reaction_burst(z55, 실반경 외곽선 링)와의 시각 분리 유지 — 데칼(z53)·플레어(z54) 둘 다 55 아래라
+## 반응 링이 위에 그려져 "박혔다(54) → 퍼졌다(55)" 순서로 읽힌다.
+## 🔴 발산 진은 착탄점마다(캐리어+전개 탄) emit돼 _on_spell_impact가 N번 불린다 — 그래서 플레어를
+## **가볍게**(짧은 수명·좁은 폭) 잡아 다중 착탄에서 뭉개지지 않게 한다(architect 리뷰 ②).
+const DECAL_RADIUS := 20.0        ## 바닥 데칼 최종 반지름(px)
+const DECAL_TIME := 0.22          ## 데칼 팽창·페이드 시간(s)
+const DECAL_FLATTEN := 0.4        ## 데칼 세로 눌림(오블리크 지면 타원 — shadow.gd FLATTEN 결)
+const FLARE_W := 9.0              ## 플레어 밑동 반폭(px)
+const FLARE_H := 24.0             ## 플레어 높이(px) — 폭보다 커 세로 길쭉(높이 신호)
+const FLARE_RISE := 10.0          ## 플레어가 위로 올라가는 양(px)
+const FLARE_TIME := 0.16          ## 플레어 수명(s) — 짧게(다중 착탄 도배 방지)
+const FLARE_START_SCALE := 0.5    ## 플레어 시작 배율(작게 시작 → 자라며 상승)
 const FLASH_LIGHTEN := 0.35     ## ui_color는 UI 셀용이라 어둡다 — 플래시용 밝힘(머즐·착탄 공용, 룬색의 lightened 파생)
-const IMPACT_Z := 54              ## 🔴 반응 링(VFX_Z=55) 아래 — 머즐도 같은 층
+const IMPACT_Z := 54              ## 🔴 반응 링(VFX_Z=55) 아래 — 머즐·플레어 층 / 데칼은 IMPACT_Z-1(53)
 ## Db에 룬이 없을 때 폴백 (ring_carrier와 같은 규칙)
 const RUNE_FALLBACK := Color(0.95, 0.35, 0.15)
 
@@ -112,15 +118,17 @@ func _on_ring_cast_fx(assembly: Dictionary, origin: Vector2, aim_dir: Vector2) -
 	_spawn_muzzle_ticks(scene, origin, aim_dir, col)
 
 
-## 탄이 적에 박혔다 (세션59) — 룬색 속 찬 팝 + 방사 틱. 발신원이 spell_impact인 게 핵심 계약:
-## enemy_hit을 쓰면 기둥 틱·반응 피해마다 버스트가 도배된다 (설계 §3 — DoT 도배 함정의 사촌).
+## 탄이 적에 박혔다 (세77 오블리크 두 겹) — 바닥 데칼 + 솟는 플레어. 발신원이 spell_impact인 게 핵심
+## 계약: enemy_hit을 쓰면 기둥 틱·반응 피해마다 버스트가 도배된다 (설계 §3 — DoT 도배 함정의 사촌).
 func _on_spell_impact(pos: Vector2, rune_type: int) -> void:
 	var scene := get_tree().current_scene
 	if scene == null:
 		return
 	var col := _rune_flash_color(rune_type)
-	_spawn_pop(scene, pos, col)
-	_spawn_sparks(scene, pos, col, IMPACT_SPIKES, IMPACT_Z)
+	# ① 바닥 데칼 = 세로로 눌린 팽창 링(지면 파장). z=IMPACT_Z-1로 플레어 아래.
+	_spawn_ring(scene, pos, DECAL_RADIUS, col, DECAL_TIME, IMPACT_Z - 1, DECAL_FLATTEN)
+	# ② 솟는 플레어 = 세로 길쭉한 불꽃이 위로 올라가며 페이드(높이감).
+	_spawn_flare(scene, pos, col)
 
 
 ## 룬 → 플래시 색. vfx는 Player 자식(오토로드 컨텍스트 보장)이라 Db 직접 호출 OK —
@@ -134,8 +142,10 @@ func _rune_flash_color(rune_type: int) -> Color:
 ## 🔴 링을 **실제 게임 반경**으로 그린다(작게 시작→반경까지 팽창) — "여기까지 튄다"가 눈에 보이고,
 ## 세50의 「반경 밖이라 연쇄가 한 번도 안 터졌다」 함정을 링이 폭로한다.
 ## 세션59: 머즐 플래시가 재사용할 수 있게 시간·z를 선택 인자로 열었다 — 기존 호출은 기본값 그대로.
+## flatten: 세로 스케일 배수(1.0=정원). 착탄 바닥 데칼이 <1로 눌린 오블리크 지면 타원을 만든다.
+## 기존 호출(반응 링·머즐)은 flatten 생략 → 1.0 → 정원 그대로(회귀 0).
 func _spawn_ring(scene: Node, pos: Vector2, radius: float, col: Color,
-		time: float = RING_TIME, z: int = VFX_Z) -> void:
+		time: float = RING_TIME, z: int = VFX_Z, flatten: float = 1.0) -> void:
 	var ring := Line2D.new()
 	ring.width = RING_WIDTH
 	ring.default_color = col
@@ -146,12 +156,12 @@ func _spawn_ring(scene: Node, pos: Vector2, radius: float, col: Color,
 	ring.points = pts
 	ring.global_position = pos
 	ring.z_index = z
-	ring.scale = Vector2(RING_START_SCALE, RING_START_SCALE)
+	ring.scale = Vector2(RING_START_SCALE, RING_START_SCALE * flatten)
 	ring.modulate.a = RING_START_ALPHA
 	scene.add_child(ring)
 	var tw := ring.create_tween()
 	tw.set_parallel(true)
-	tw.tween_property(ring, "scale", Vector2.ONE, time).set_ease(Tween.EASE_OUT)
+	tw.tween_property(ring, "scale", Vector2(1.0, flatten), time).set_ease(Tween.EASE_OUT)
 	tw.tween_property(ring, "modulate:a", 0.0, time)
 	tw.set_parallel(false)
 	tw.tween_callback(ring.queue_free)
@@ -183,25 +193,32 @@ func _spawn_sparks(scene: Node, pos: Vector2, col: Color,
 	tw.tween_callback(holder.queue_free)
 
 
-## 착탄 팝 (세션59) — 룬색 **속 찬** 원이 작게 시작해 IMPACT_RADIUS까지 커지며 사라진다.
-## Polygon2D 도형이지만 절차 VFX 예외에 해당(빛 이펙트 — 도트로 그릴 물건이 아니다).
-func _spawn_pop(scene: Node, pos: Vector2, col: Color) -> void:
-	var pop := Polygon2D.new()
-	var pts := PackedVector2Array()
-	for i in IMPACT_POP_SEGMENTS:
-		pts.append(Vector2.RIGHT.rotated(TAU * float(i) / float(IMPACT_POP_SEGMENTS)) * IMPACT_RADIUS)
-	pop.polygon = pts
-	pop.color = col
-	pop.global_position = pos
-	pop.z_index = IMPACT_Z
-	pop.scale = Vector2.ONE * IMPACT_START_SCALE
-	scene.add_child(pop)
-	var tw := pop.create_tween()
+## 솟는 플레어 (세77 오블리크) — 세로 길쭉한 불꽃 실루엣이 착탄점에서 위로 올라가며 자라고 페이드한다.
+## Polygon2D 절차 도형(빛 이펙트 — VFX 예외, 도트로 그릴 물건 아님). 원점 = 밑동 중심이라 위(-y)로 자란다.
+## 🔴 가볍게 유지(FLARE_TIME 짧게·FLARE_W 좁게) — 발산 진 다중 착탄에서 N개가 동시에 솟아도 안 뭉개지게.
+func _spawn_flare(scene: Node, pos: Vector2, col: Color) -> void:
+	var flare := Polygon2D.new()
+	# 밑동 중심(0,0)에서 위로 솟는 불꽃 물방울 — 폭보다 높이가 커 세로 길쭉.
+	flare.polygon = PackedVector2Array([
+		Vector2(0.0, 0.0),
+		Vector2(FLARE_W, -FLARE_H * 0.35),
+		Vector2(FLARE_W * 0.4, -FLARE_H * 0.75),
+		Vector2(0.0, -FLARE_H),
+		Vector2(-FLARE_W * 0.4, -FLARE_H * 0.75),
+		Vector2(-FLARE_W, -FLARE_H * 0.35),
+	])
+	flare.color = col
+	flare.global_position = pos
+	flare.z_index = IMPACT_Z
+	flare.scale = Vector2.ONE * FLARE_START_SCALE
+	scene.add_child(flare)
+	var tw := flare.create_tween()
 	tw.set_parallel(true)
-	tw.tween_property(pop, "scale", Vector2.ONE, IMPACT_TIME).set_ease(Tween.EASE_OUT)
-	tw.tween_property(pop, "modulate:a", 0.0, IMPACT_TIME)
+	tw.tween_property(flare, "scale", Vector2.ONE, FLARE_TIME).set_ease(Tween.EASE_OUT)
+	tw.tween_property(flare, "global_position:y", pos.y - FLARE_RISE, FLARE_TIME).set_ease(Tween.EASE_OUT)
+	tw.tween_property(flare, "modulate:a", 0.0, FLARE_TIME)
 	tw.set_parallel(false)
-	tw.tween_callback(pop.queue_free)
+	tw.tween_callback(flare.queue_free)
 
 
 ## 머즐 부채 틱 (세션59) — 조준 방향으로 짧은 선 몇 개가 바깥으로 튄다 (발사 방향이 읽히게).
