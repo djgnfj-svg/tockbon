@@ -35,6 +35,11 @@ var _roll_dir := Vector2.DOWN  ## 이번 구르기의 대시 방향
 const PUSH_DECAY := 900.0      ## 밀림 감쇠(속도/s)
 var _push := Vector2.ZERO      ## 남은 밀림 속도 — 걷기 velocity 위에 얹힌다
 
+## 🔴 이동 속도 램프 (세74 이동 필) — 즉시 대입 대신 목표 속도로 move_toward해 스냅·무게감을 준다.
+## 입력 있음 → balance.player_accel로 가속 · 입력 없음 → player_friction으로 감속. 최종 velocity =
+## _move_vel + _push(밀림 additive 계약 보존). 구르기 중엔 물리 process가 early-return이라 무관(걷기 전용).
+var _move_vel := Vector2.ZERO  ## 입력 구동 속도(밀림 제외) — 램프의 대상
+
 ## 🔴 피격 애니 (세63) — `EventBus.player_hurt`(발신 = `GameState.damage_player` 한 곳)를 받아
 ## HURT_ANIM_SEC 동안 hurt 프레임을 유지한다. 이동은 안 막는다(경직 아님 — apply_push additive 철학).
 ## 복구 코드는 없다: `_face_mouse`가 매 프레임 animation을 덮는 성질을 역이용해, 타이머가 소진되면
@@ -92,6 +97,7 @@ func _physics_process(delta: float) -> void:
 
 	if GameState.ui_modal_open:
 		velocity = Vector2.ZERO
+		_move_vel = Vector2.ZERO   # 램프도 리셋 — 모달 닫을 때 잔여 속도로 미끄러지지 않게
 		_set_walking(false)
 		return
 
@@ -124,10 +130,15 @@ func _physics_process(delta: float) -> void:
 		_hurt_time = 0.0       # 구르기가 피격 표시를 이긴다 — 구르기 조작감 우선(세63 설계 §B)
 		return
 
-	# 🔴 속도 = GameState.move_speed()(balance × 모자 배수) — balance 직접 참조 금지 (세션42).
-	# 밀림(_push)은 걷기 위에 얹는다(additive) — 구르기 중엔 위 early-return이라 밀림 무시(흘린 게 맞다).
-	velocity = dir * GameState.move_speed() + _push
+	# 🔴 이동 램프 — 목표 속도(입력 방향 × move_speed)로 move_toward. 즉시 대입이 아니라 가속/감속이라
+	# 스냅·무게감이 생긴다 (세74). 🔴 속도 = GameState.move_speed()(balance × 모자 배수) — 직접 참조 금지(세42).
+	var target := dir * GameState.move_speed()
+	var rate := GameState.balance.player_accel if dir != Vector2.ZERO else GameState.balance.player_friction
+	_move_vel = _move_vel.move_toward(target, rate * delta)
+	# 밀림(_push)은 이동 위에 얹는다(additive) — 구르기 중엔 위 early-return이라 밀림 무시(흘린 게 맞다).
+	velocity = _move_vel + _push
 	_push = _push.move_toward(Vector2.ZERO, PUSH_DECAY * delta)
+	# 걷기 애니는 실제 이동(_move_vel)에 맞춘다 — 입력을 떼도 감속하며 미끄러지는 동안 발이 움직인다.
 	if _hurt_time <= 0.0:
-		_set_walking(dir != Vector2.ZERO)
+		_set_walking(_move_vel.length() > 8.0)
 	move_and_slide()
