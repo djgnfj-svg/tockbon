@@ -408,14 +408,17 @@ func _draw_slot(font: Font, at: Vector2, idx: int) -> void:
 ## 문양이 놓인 칸은 더 밝게, 닫힌 칸은 흐리게. 중심은 룬 색 점. 진의 "형태"가 손끝에서 읽힌다.
 func _draw_jin_diagram(center: Vector2, design: RingDesign) -> void:
 	draw_arc(center, DIAG_RADIUS, 0.0, TAU, 24, DIAG_RING, 1.0)
-	var ring: Array = design.rings[0] if not design.rings.is_empty() else []
+	# 🔴 세79 M1: 진이 **여러 층**을 가질 수 있다(2등급 = 2겹). `rings[0]`만 보면 바깥 층에만
+	# 놓인 문양이 통째로 안 그려져 **HUD가 조용히 거짓말한다** — `open`은 층들의 합집합이라
+	# "열렸는데 비었다"로 보인다. 판정은 core 단일 소스 `design.is_slot_filled(k)`가 쥔다
+	# (여기 인라인으로 두면 헤드리스가 못 재서 회귀 검출이 0이 된다 — 세79에 실측).
 	var dots: Array = RingBoard.jin_slot_dots(design.open, center, DIAG_RADIUS)
 	for k in dots.size():
 		var d: Dictionary = dots[k]
 		var pos: Vector2 = d["pos"]
 		var is_open: bool = d["open"]
 		if is_open:
-			var filled := k < ring.size() and int(ring[k]) != -1
+			var filled := design.is_slot_filled(k)   # 어느 층에든 놓였으면 채워진 칸
 			draw_circle(pos, 3.0 if filled else 2.4, FILLED_DOT if filled else OPEN_DOT)
 		else:
 			draw_circle(pos, 1.6, SHUT_DOT)

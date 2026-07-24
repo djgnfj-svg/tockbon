@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="JinDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/core/schemas/jin_def.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = &"jin_plain_g2"
+display_name = "단발진 2등급"
+slot_count = 8
+glyph_slots = Array[int]([0, 1, 2, 3, 4, 5, 6, 7])
+band_count = 2
+body_scale = 1.0
+ui_color = Color(0.42, 0.30, 0.12, 0.55)
+pattern = 0
+motion = 0
+guide_shape = 0
+unlock_id = &"jin_plain_g2"
+sort = 1

@@ -417,7 +417,8 @@ func _reset_selection() -> void:
 	_rune_picked = false
 
 
-## 각 밴드의 GlyphRingDef(or null) — compose_guide·flatten_bands가 받는 형식. Db 조회는 패널이 한다.
+## 각 밴드의 GlyphRingDef(or null) — `compose_guide`(밑그림)·`layer_rings`(발사 계약)가 받는 형식.
+## Db 조회는 패널이 한다. ⚠ 세79부터 발사는 `flatten_bands`가 아니라 `layer_rings`다(순서 보존).
 func _band_defs() -> Array:
 	var out: Array = []
 	for id in _bands:
@@ -784,22 +785,52 @@ func _on_inject() -> void:
 	flash.tween_property(_spread, ^"modulate", Color.WHITE, INJECT_FLASH_SEC) \
 		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
 	design_committed.emit(_committed_asm)
-	_set_say("마력이 돌았다 — 위력 %d의 마법진이 맺혔다. 책을 덮고(ESC) 쏴 보세요"
-		% RingPower.power_display(total, Db.ink_mult(_committed_asm.get("ink", &"")),
-			float(_committed_asm.get("size", 1.0))), false)
+	# 🔴 세79 M1: 변형형 문양(확산·폭발)이 위력을 **갈래로 배분**하므로, 그게 끼어 있으면 이 숫자는
+	# "한 갈래당"이다. 그냥 "위력 N"이라 적으면 리포트가 거짓말하는 걸로 읽힌다(ring_power 머리 주석의 경계).
+	var pw := RingPower.power_display(total, Db.ink_mult(_committed_asm.get("ink", &"")),
+		float(_committed_asm.get("size", 1.0)))
+	var unit := "갈래당 위력" if _has_modifier_glyph() else "위력"
+	_set_say("마력이 돌았다 — %s %d의 마법진이 맺혔다. 책을 덮고(ESC) 쏴 보세요" % [unit, pw], false)
 	_refresh_buttons()
 
 
-## 🔴 세71 발사 계약 조립 — 밴드→플래튼 8칸 + 통째 점수 + 잉크/크기. `_board.get_assembly()`를
+## 맺은 도안에 변형형 문양(확산·폭발)이 끼어 있나 — 리포트 위력 표시 단위를 가른다.
+## 계열 판별은 `Enums.is_modifier_glyph` 단일 소스를 쓴다(복사 금지).
+func _has_modifier_glyph() -> bool:
+	for layer_v in RingDesign.layers_of(_committed_asm.get("rings", []) as Array):
+		for g in (layer_v as Array):
+			if Enums.is_modifier_glyph(int(g)):
+				return true
+	return false
+
+
+## 🔴 **헤드리스 조립 seam** (세79) — 클릭 경로(헤드리스가 못 잡는 것)를 안 타고 층 상태를 세운다.
+## 테스트가 private(`_sel_jin`·`_bands`)을 직접 더듬으면 리팩터 때 **조용히** 죽는다: `-s`는 런타임
+## 에러가 나도 `failures=0`으로 OK를 찍어서 **빨개지지도 않는다**(세22·23에 두 세션 연속 밟은 그 함정).
+## 없는 메서드 호출은 `SCRIPT ERROR`로 grep에 잡힌다 — 그 차이 하나 때문에 이 함수가 있다.
+func set_assembly_state(jin: StringName, bands: Array[StringName]) -> void:
+	_sel_jin = jin
+	_resize_bands(bands.size())
+	for i in mini(bands.size(), _bands.size()):
+		_bands[i] = bands[i]
+
+
+## 🔴 세71 발사 계약 조립 — 밴드→**층 배열**(세79 M1: 플래튼은 순서를 버려서 걷었다) + 통째 점수 +
+## 잉크/크기. `_board.get_assembly()`를
 ## **안 쓴다**(COMBINED 모드라 rings·score가 빈 값 — 세26 「score 안 실으면 조용히 기준 위력」의 이번 판).
 ## 특별잉크(화상 증폭)는 보드가 트레이스 중 집계하므로 그 필드만 board_asm에서 뽑는다.
 func build_assembly() -> Dictionary:
 	var band_defs := _band_defs()
-	var ring := RingBoard.flatten_bands(band_defs)
+	# 🔴 세79 M1: 밴드를 **층 배열**로 싣는다(`layer_rings`). 옛 `flatten_bands`는 밴드를 8칸 하나로
+	# 뭉개 **감쌈 순서를 버렸다** — 순서가 곧 연산인 지금은 그게 곧 기능 손실이다.
+	# ⚠ 밴드가 하나뿐인 진(지금 살아있는 전부)은 층 1개라 발사 결과가 예전과 점 단위로 같다.
+	var rings := RingBoard.layer_rings(band_defs)
 	var open: Array = []
-	for k in ring.size():
-		if int(ring[k]) != RingBoard.GLYPH_NONE:
-			open.append(k)
+	for ring_v in rings:
+		for k in (ring_v as Array).size():
+			if int((ring_v as Array)[k]) != RingBoard.GLYPH_NONE and not (k in open):
+				open.append(k)   # 층들의 **합집합** — 렌더·요약용(발사는 층 배열을 그대로 본다)
+	open.sort()
 	var score := _board.combined_total()
 	# 🔴 rings/score는 아래서 직접 싣는다 — board_asm은 **특별잉크 집계**(보드 private)의 유일한 창구다.
 	var board_asm := _board.get_assembly()
@@ -807,7 +838,7 @@ func build_assembly() -> Dictionary:
 		"ring_count": 1,
 		"rune": _sel_rune,
 		"jin": _sel_jin,
-		"rings": [ring],
+		"rings": rings,
 		"open": open,
 		"score": score,
 		"ink": _active_ink,

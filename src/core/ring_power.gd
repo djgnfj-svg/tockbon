@@ -13,6 +13,15 @@ extends RefCounted
 ##
 ## 수치는 전부 data/balance.tres (코드에 수치 금지).
 ##
+## 🔴 **경계 (세79 M1 — 여기까지가 이 파일의 관할이다)**: `power_of`/`power_display`가 정하는 건
+## **한 갈래의 기준 위력**이다. 변형형 문양(확산·폭발)이 그 위력을 **여러 갈래로 배분·융합**하는 건
+## `ring_spell_system._spread`/`_explode`가 하고, 수치는 `balance.spread_branch_mult`·
+## `blast_merge_mult`다. 규칙이 **복사된 게 아니라 축이 다른 것**이다 — 여긴 "한 발이 얼마나 센가",
+## 저긴 "그 한 발이 몇 개로 갈라지나".
+## ⚠ 그래서 확산을 낀 도안은 **리포트의 위력 ≠ 갈래 하나의 피해**다(리포트가 "갈래당"이라 적는다).
+## 🔴 **진 규칙(②·M2)이 위력에 개입하게 되면 그건 이쪽으로 와야 한다** — 그때는 축이 같아진다
+## (설계 문서 「못박을 계약」: *"진 규칙이 위력에 개입하면 반드시 ring_power 단일 소스"*).
+##
 ## 사용: const RingPower := preload("res://src/core/ring_power.gd")
 
 const BAL: BalanceData = preload("res://data/balance.tres")

@@ -31,7 +31,24 @@ const LEGACY_IMPACT: int = 1  # 옛 RuneType.IMPACT — 마이그레이션 판�
 # 즉 이 축은 "세기"가 아니라 **전투 방식**을 가른다 — 자유도 구멍(memory takbon-magic-no-freedom)에
 # 대한 답이 여기 있다. 기계(projectile._setup_effects)는 세션44 이전부터 완성돼 있었고 어휘가 없어
 # 잠들어 있었을 뿐이다. **새 문양 = data/glyphs/*.tres 한 장 + 여기 값 하나 + deploy 분기 하나.**
-enum GlyphCode { GATHER = 0, RADIATE = 1, PIERCE = 2, HOMING = 3, BOUNCE = 4, THRUST = 5 }
+# 🔴 세79 M1 「진별 해석」: SPREAD(6)·EXPLODE(7) = **변형형 문양**. 위 0~5와 **계열이 다르다** —
+# 0~5는 착탄점에서 스스로 전개하는 **전개형**이고, 6~7은 **안쪽 층의 결과를 받아 바꾸는 연산자**다
+# (`폭발(확산(불))`). 그래서 칸 값 하나로 안 끝나고 **층(밴드) 순서**가 의미를 갖는다 —
+# 해석은 `ring_spell_system._deploy_now`의 층 루프가 한다. 끝에만 덧붙였다(저장 도안 무회귀).
+#   SPREAD(6)=확산: 안쪽 결과의 **각 갈래를 여러 개로 복제해 부채꼴로 벌린다**(넓힘, 갈래마다 세기↓)
+#   EXPLODE(7)=폭발: 안쪽 결과를 **통째로 하나의 광역 폭발로 융합한다**(안쪽이 넓게 퍼져 있을수록 반경↑)
+# 🔴 두 문양의 성격이 갈려야 순서가 눈에 보인다 (사용자 확정 세79): 폭발이 "각 갈래를 각각 터뜨림"이면
+# `폭발(확산(불))`과 `확산(폭발(불))`이 둘 다 "작은 폭발 여러 개"가 돼 순서 실증이 실패한다.
+enum GlyphCode { GATHER = 0, RADIATE = 1, PIERCE = 2, HOMING = 3, BOUNCE = 4, THRUST = 5,
+	SPREAD = 6, EXPLODE = 7 }
+## 🔴 **변형형 문양 집합** — 이 값이 계열 판별의 **단일 소스**다. 발사(층 해석기)·조립 UI·책이
+## "이 문양은 전개형인가 변형형인가"를 물을 때 전부 여기를 본다. 복사해 두면 갈라진다
+## (`ring_power`가 리포트·발사에 같은 함수를 주는 것과 같은 이유).
+## **새 변형형 문양 = GlyphCode 값 하나 + 여기 한 줄 + `_apply_modifier` 분기 하나.**
+const MODIFIER_GLYPHS: Array[int] = [GlyphCode.SPREAD, GlyphCode.EXPLODE]
+
+static func is_modifier_glyph(code: int) -> bool:
+	return code in MODIFIER_GLYPHS
 
 enum StrokeRole { CIRCLE, RUNE, ARROW, TAIL, DECOR }
 ## 문양의 **발동 방식** — v1.9 문양 축 (GDD §4.3, TECH_SPEC §4.0-a).

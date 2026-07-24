@@ -81,6 +81,15 @@ func _seed_starting_unlocks() -> void:
 	codex[&"rune_water"] = true
 	codex[&"rune_wind"] = true
 	codex[&"jin_single"] = true
+	# 🔴🔴 **세79 M1 임시 시드 — 획득 경로 미설계** (사용자 확정: *"일단 만들기만 하면 됨,
+	# 얻는 곳은 추후에 설계"*). 「진별 해석」 M1의 실증 재료 3종을 시작부터 준다:
+	#   jin_plain_g2(2등급 진 = 층 2겹 — 🔴 1등급은 1겹이라 **감쌀 순서 자체가 안 생긴다**)
+	#   gr_spread3(확산×3) · gr_explode1(폭발×1) — 이 둘의 **층 순서**가 발사를 통째로 바꾼다.
+	# ⚠ **경로를 붙이는 세션이 이 세 줄을 지운다**(ChapterDef.reward_unlock 등으로 이관).
+	#   지금 ch1은 gr_radiate5로 이미 차 있고 codex 해금 경로는 챕터당 하나뿐이라 자리가 모자랐다.
+	codex[&"jin_plain_g2"] = true
+	codex[&"gr_spread3"] = true
+	codex[&"gr_explode1"] = true
 	# 🔴 세71 첫 스테이지 슬라이스 — 진은 일반진 1종으로 출발(진·문양은 여전히 하나).
 	# 문양 링(gr_*)은 더는 시드가 아니다 — 스테이지 클리어 보상으로만 얻는다(ChapterDef.reward_unlock):
 	#   ch1(숲 어귀) 클리어 → gr_radiate5(발산×5) 해금 → 조립대에서 밴드에 끼워 파이어볼을 5갈래로.

@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="GlyphDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/core/schemas/glyph_def.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = &"spread"
+display_name = "확산⋔"
+code = 6
+key_hint = ""
+inward = false
+ui_color = Color(0.93, 0.47, 0.66, 1.0)
+desc = "안쪽 마법을 여러 갈래로 편다"

@@ -35,8 +35,15 @@ const G_PIERCE := Enums.GlyphCode.PIERCE    # 관통 ↠ — 바깥 방향(발�
 const G_HOMING := Enums.GlyphCode.HOMING    # 유도 ∿ — 휘어서 쫓아간다 (세션47)
 const G_BOUNCE := Enums.GlyphCode.BOUNCE    # 팅김 ⚡ — 벽에 튕긴다 (세션47)
 const G_THRUST := Enums.GlyphCode.THRUST    # 추진 ↑ — 빠르게 날아간다 (세션47)
-## 인덱스 = GlyphCode 값 (세션44: 관통 · 세션47: 유도·팅김·추진 = 어휘 배증)
-const GLYPH_NAMES := ["응집←", "발산→", "관통↠", "유도∿", "팅김⚡", "추진↑"]
+## 🔴 세79 M1 — **변형형** 문양 2종. 위 6종(전개형)과 계열이 다르다: 착탄에서 스스로 전개하는 게
+## 아니라 **안쪽 층의 결과를 받아 바꾸는 연산자**다(`Enums.MODIFIER_GLYPHS`가 계열 판별의 단일 소스).
+## 여기(보드)에선 계열을 안 가른다 — 판이 하는 일은 **밑그림 한 갈래**뿐이라 전개형과 똑같이 다룬다.
+const G_SPREAD := Enums.GlyphCode.SPREAD    # 확산 ⋔ — 안쪽 결과를 여러 갈래로 편다 (세79)
+const G_EXPLODE := Enums.GlyphCode.EXPLODE  # 폭발 ∗ — 안쪽 결과를 한 점에서 터뜨린다 (세79)
+## 인덱스 = GlyphCode 값 (세션44: 관통 · 세션47: 유도·팅김·추진 = 어휘 배증 · 세79: 확산·폭발)
+## 🔴 **길이가 계약이다** — `ring_summary`가 이 크기로 카운터를 세운다. 어휘보다 짧으면
+## 그 문양을 칸에 놓는 순간 `counts[g] += 1`이 **없는 키**라 런타임 에러다 (세션47 주석 참조).
+const GLYPH_NAMES := ["응집←", "발산→", "관통↠", "유도∿", "팅김⚡", "추진↑", "확산⋔", "폭발∗"]
 ## ⚠ **`GLYPH_KEYS`는 지웠다** (세션 25). 문양은 오른쪽 셀을 **클릭해서** 고른다 —
 ## 진·룬 선택이 전부 클릭인데 문양만 키(Q·W)를 광고했다 (사용자: "q w 이런게 아니라
 ## 똑같이 마우스로 선택하는걸로해줘"). 죽은 상수를 남기면 다음 세션이 키를 되살린다.
@@ -59,6 +66,8 @@ const GLYPH_COLORS := [
 	Color(0.35, 0.78, 0.42),   # 유도 = 초록
 	Color(0.95, 0.82, 0.25),   # 팅김 = 노랑
 	Color(0.68, 0.38, 0.85),   # 추진 = 보라
+	Color(0.93, 0.47, 0.66),   # 확산 = 분홍 (세79)
+	Color(0.82, 0.14, 0.20),   # 폭발 = 진홍 (세79)
 ]
 const RUNE_COLOR := Color(0.62, 0.22, 0.12)   # 불
 const TRACE_INK := Color(0.20, 0.14, 0.09, 0.95)    # 그린 먹선
@@ -423,6 +432,14 @@ func _build_guide(target: int, slot: int) -> PackedVector2Array:
 ##   유도∿         S자 물결(사인) — 꺾이지 않고 **휘어서** 쫓아간다. 유일하게 꺾쇠가 없다
 ##   팅김⚡        지그재그 — 벽에 튕기는 궤적 그대로. 유일하게 **날카롭게 되꺾인다**
 ##   추진↑         긴 직선 + 뒤쪽 **가로 깃 2개**(속도선). 깃이 축과 **직각**이라 관통의 꺾쇠와 손이 다르다
+##   확산⋔         줄기 하나가 **뒤쪽 뿌리 한 점**에서 앞으로 3갈래로 갈라지는 부채(삼지창). 세79
+##                 손 = "뿌리를 축으로 앞쪽으로 펴 나간다". 갈래가 **앞으로** 뻗어 화살촉·관통 꺾쇠
+##                 (머리에서 **뒤로** 접히는 깃)와 반대이고, 팅김 지그재그처럼 전진하지 않고
+##                 **한 뿌리로 되돌아온다**. 의미(안쪽 결과를 여러 갈래로 편다)가 궤적 그대로다.
+##   폭발∗         중심에서 사방으로 뻗는 **방사 살 5개**. 세79 — 유일하게 **한 점(중심)을 반복해 지나며**,
+##                 유일하게 **dir 축이 아니라 사방으로** 퍼진다(중심이 곧 p라 앞뒤 대칭). 나머지 7종이
+##                 전부 dir 방향 진행형이라 손이 확실히 갈린다. 확산과도 갈린다: 확산은 앞쪽 부채,
+##                 폭발은 360°(뒤쪽에도 살이 간다) — 🔴 이 둘이 손으로 안 갈리면 층 순서가 안 읽힌다.
 ## 🔴 **static · public인 이유** (세션47): 책의 문양 셀 아이콘(`ring_book._draw_glyph_icon`)이
 ## **이 함수를 그대로 부른다**. 예전엔 책이 자기만의 화살표를 직접 그려서, 판의 밑그림을 6종으로
 ## 갈라 놔도 **고를 때 보는 셀은 전부 같은 화살표**였다 — 고르는 순간에 구분이 안 되면
@@ -467,6 +484,32 @@ static func glyph_guide_pts(code: int, p: Vector2, outward: Vector2, sz: float) 
 			for q in [p - dir * (sz * 0.45), p - dir * lng]:
 				v2.append_array(PackedVector2Array([q, q + bar, q - bar, q]))
 			return _densify(v2, sz * 0.24)
+		G_SPREAD:
+			# 뒤쪽 뿌리로 짧은 줄기가 들어오고, 거기서 앞으로 3갈래(±FAN·정면)가 펴진다.
+			# 갈래마다 뿌리로 **되돌아와** 다음 갈래로 이어진다(꺾쇠 규약과 같은 한붓그리기).
+			# ⚠ 갈래 벌어짐 = 뿌리에서 d만큼 나간 지점에서 이웃 갈래와 2·d·sin(FAN) ≈ 1.16d 떨어진다 —
+			# 붓 드러남 반경(≈9.4px)을 넘으려면 d ≳ 8px. 즉 **뿌리 근처만** 서로 드러나고
+			# 갈래 몸통(26px 중 바깥 18px)은 각각 그어야 드러난다.
+			var fan := 0.62                       # 갈래 벌어짐(rad) ≈ 35.5°
+			var arm := sz * 1.3                   # 뿌리→갈래 끝
+			var root := p - dir * (sz * 0.7)      # 뿌리 = 뒤쪽 한 점 (여기가 손의 축이다)
+			var v3 := PackedVector2Array([p - dir * (sz * 1.1)])   # 줄기 꼬리 (추진과 같은 1.1sz 상한)
+			for a in [-fan, 0.0, fan]:
+				v3.append_array(PackedVector2Array([root, root + dir.rotated(float(a)) * arm]))
+			return _densify(v3, sz * 0.24)
+		G_EXPLODE:
+			# 중심(p)에서 사방 5방향으로 뻗는 살. 살마다 중심으로 되돌아오므로 **한 점을 5번 지난다** —
+			# 이 파일의 어떤 갈래도 안 하는 손이다. 이웃 살과 72°라 2·d·sin36° ≈ 1.18d 떨어진다.
+			# ⚠ 연속 살이 72°(중심에서 108° 꺾임)라 **중심을 곧게 통과하는 구간이 없다** —
+			# 180°짜리(살 짝수 개, 마주보는 순서)로 만들면 두 살이 한 직선이 돼 손이 뭉개진다.
+			var spokes := 5
+			var ray := sz * 0.95
+			var v4 := PackedVector2Array()
+			for i in spokes:
+				if i > 0:
+					v4.append(p)
+				v4.append(p + dir.rotated(TAU * float(i) / float(spokes)) * ray)
+			return _densify(v4, sz * 0.24)
 	# 응집←/발산→ — 🔴 **세션 25 원본 그대로**. 점 생성 순서가 곧 관측점이다:
 	# `test_ring_trace_auto._test_arrowhead_must_be_drawn`이 "앞 9점 = 몸통"으로 읽는다.
 	var pts2 := PackedVector2Array()
@@ -573,7 +616,42 @@ static func glyph_ring_pts(gr: GlyphRingDef, ctr: Vector2, band_r: float) -> Pac
 	return out
 
 
+## 🔴 밴드별 (motif × count)를 **층 배열**로 만든다 — 세79 M1 「진별 해석」의 발사 계약.
+## 반환 = `[[8칸], [8칸], …]` (밴드 순서 = 안→밖 = **연산 순서**). 발사부(`ring_spell_system.
+## _deploy_now`)가 이 순서대로 층을 훑으며 전개형은 명령을 만들고 변형형은 안쪽 결과를 감싼다.
+##
+## 🔴 **이게 `flatten_bands`를 대체한다.** 플래튼은 밴드들을 8칸 하나로 뭉개 **순서를 버렸다** —
+## `폭발(확산(불))`과 `확산(폭발(불))`이 구분이 안 됐다(라운드로빈이라 배치만 달랐다).
+## ⚠ 회귀: 밴드가 **하나뿐이면** 층 1개 = 플래튼 결과와 **점 단위로 같다**(둘 다 칸 0부터 count개).
+## 지금 살아있는 진은 전부 `band_count = 1`이라 저장된 도안의 발사가 픽셀 동일하다.
+## ⚠ static·인스턴스 상태 금지(관측점) — 헤드리스 테스트가 이 함수를 그물로 쓴다.
+static func layer_rings(band_defs: Array) -> Array:
+	var out: Array = []
+	for gr_v in band_defs:
+		var ring: Array = []
+		for k in SLOTS:
+			ring.append(GLYPH_NONE)
+		var gr: GlyphRingDef = gr_v as GlyphRingDef
+		if gr != null:
+			# 🔴 칸 0부터 count개 — 발산 계열은 **칸 인덱스가 곧 탄 각도**다(세44 계약).
+			# 빈 밴드도 층 자리를 지킨다(순서가 밴드 인덱스라 건너뛰면 감쌈 깊이가 밀린다).
+			for i in mini(maxi(gr.count, 1), SLOTS):
+				ring[i] = int(gr.motif)
+		out.append(ring)
+	# 🔴 밴드 0개(진 미선택)여도 **빈 층 하나는 돌려준다** — 옛 `flatten_bands([])`가 `[-1×8]` 한 줄을
+	# 줬기 때문이다. 빈 배열을 주면 `ring_spell_system._on_ring_cast`의 `rings.is_empty()`에서 발사가
+	# 통째로 접혀 **"빈 진도 날아가 몸으로 때린다"**(ring_carrier.gd 계약)가 조용히 깨진다.
+	if out.is_empty():
+		var empty: Array = []
+		for k in SLOTS:
+			empty.append(GLYPH_NONE)
+		out.append(empty)
+	return out
+
+
 ## 🔴 밴드별 (motif × count)를 **기존 8칸 링 하나로 플래튼**한다 (세68 발사 계약 — 발사부 무변경).
+## ⚠ **세79에 발사 경로는 `layer_rings`로 갔다** — 층 순서를 버리기 때문이다. 이 함수는 이제
+## F6 대조군(`assembly_slice_panel`) 전용 레거시다. **새 코드에서 부르지 마라**(순서가 조용히 사라진다).
 ## 밴드 순서대로 빈 칸을 채우고(band0 먼저), 8칸 상한(넘치면 버림). 빈 칸 = GLYPH_NONE(-1).
 ## 예: 발산(1)×3 + 응집(0)×3 → [1,1,1,0,0,0,-1,-1]. 발사부(ring_spell_system)가 이 8칸을
 ## 슬롯별로 전개한다(발산→탄·응집→기둥). defs를 아는 자리(패널·테스트)가 부른다 — 순수 데이터

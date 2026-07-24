@@ -4,8 +4,10 @@ extends Resource
 ## `ring_board.get_assembly()`가 내는 순수 Dictionary(assembly)를 감싸 리소스로 만든다.
 ## 🔴 세션 22: 옛 SpellDesign 도안 경로를 매장해 **이제 이게 유일한 마법진 모델**이다. 스키마 변경은 리드만.
 ##
-## assembly 형태: {ring_count:1, rune:int, rings:[Array[int](8칸)], open:[열린칸]}.
-## 각 칸 값 = 응집(0)/발산(1)/빈칸(-1) (RingBoard.G_GATHER/G_RADIATE/GLYPH_NONE).
+## assembly 형태: {ring_count:1, rune:int, rings:[[8칸], …], open:[열린칸]}.
+## 각 칸 값 = 문양 코드(Enums.GlyphCode) 또는 빈칸(-1).
+## 🔴 세79 M1: `rings`는 **층(밴드) 배열**이다 — 인덱스가 곧 감쌈 깊이(안→밖 = 연산 순서).
+## 세78까지의 8칸 **한 겹**도 그대로 로드된다(`layers_of`가 층 1개로 승격 — 저장 무회귀).
 ##
 ## ⚠ 경제(마나·내구)는 아직 없다 — #17 3단계에서 정한다.
 
@@ -17,7 +19,9 @@ extends Resource
 ## 빈 값(&"") = 옛 도안/매직볼 = 발사가 폴백(지팡이 장비 또는 단발). id→패턴은 `Db.get_jin(jin).pattern`.
 ## ⚠ ink처럼 여기에 Db를 두지 마라(class_name → -s 컴파일 함정). 패턴 해석은 발사부(ring_spell_system)가 한다.
 @export var jin: StringName = &""
-## 진의 고리들. 지금은 1줄(8칸). rings[0][k] = 문양 코드 or -1
+## 진의 고리들 = **층 배열**. `rings[i][k]` = 층 i·칸 k의 문양 코드 or -1 (세79 M1).
+## 🔴 층 인덱스 = 감쌈 깊이(0이 가장 안쪽). ⚠ 읽을 땐 반드시 `layers_of()`를 거쳐라 —
+## 옛 도안은 `rings`가 **정수 8칸**이라 `rings[0]`이 칸 값이지 층이 아니다.
 @export var rings: Array = []
 ## 진이 연 칸 인덱스 (렌더·요약용 — 세션60부터 출처 = JinDef.glyph_slots. 도안은 그때의 스냅샷)
 @export var open: Array = []
@@ -76,14 +80,43 @@ static func from_assembly(a: Dictionary, name: String = "", score: float = -1.0)
 	return d
 
 
+## 🔴 **`rings`를 층 배열로 정규화한다 — 이 판별의 단일 소스** (세79 M1).
+##   • `[[1,1,-1,…], [7,-1,…]]` (배열의 배열) = 이미 층 배열 → 그대로.
+##   • `[1,1,-1,…]` (8칸 한 겹, 세78까지의 모양) = **층 1개로 승격**.
+## 🔴 **이 판별을 호출부에 복사하지 마라** — 한쪽만 고치면 옛 도안이 조용히 안 나가거나(발사)
+## 바깥 층이 통째로 안 보인다(HUD). 실제로 세79 첫 판에 발사·요약·HUD 세 곳으로 갈라졌었다.
+## static인 이유 = 발사부(`ring_spell_system`)·HUD처럼 RingDesign 인스턴스가 없는 자리에서도
+## 같은 함수를 불러야 해서다. ⚠ 이 스키마는 `class_name`이라 Db·오토로드를 참조하면 `-s` 테스트가
+## 오토로드 등록 전에 컴파일하다 터진다 — 여긴 순수 배열 판별뿐이라 안전하다.
+static func layers_of(rings_v: Array) -> Array:
+	if rings_v.is_empty():
+		return []
+	return rings_v if rings_v[0] is Array else [rings_v]
+
+
+## 🔴 칸 k에 문양이 놓였나 — **어느 층에든** 놓였으면 참 (세79 M1).
+## HUD 슬롯 다이어그램·요약이 **같은 판정**을 써야 한다: `rings[0]`만 보면 2등급 진에서 바깥 층
+## 문양이 통째로 안 그려지는데, `open`은 층들의 합집합이라 **"열렸는데 비었다"로 조용히 거짓말한다**.
+## ⚠ `_draw` 안에 인라인으로 두면 헤드리스가 못 재서 회귀가 **검출 0**이 된다(세79에 실측했다) —
+## 그래서 core의 순수 함수로 뽑았다.
+func is_slot_filled(k: int) -> bool:
+	for layer_v in layers_of(rings):
+		var layer: Array = layer_v
+		if k >= 0 and k < layer.size() and int(layer[k]) != -1:
+			return true
+	return false
+
+
 ## 채워진 칸 수 (열린 칸 중 문양이 놓인 것). 요약·표시용.
+## 🔴 세79 M1: `rings`가 **층 배열**이 될 수 있어 **모든 층을 센다** — `rings[0]`만 보면
+## 2등급 진에서 바깥 층이 통째로 안 세어져 요약이 조용히 거짓말을 한다.
 func filled_count() -> int:
-	if rings.is_empty():
-		return 0
-	var ring: Array = rings[0]
+	var layers := layers_of(rings)
 	var n := 0
-	for k in open:
-		var idx := int(k)
-		if idx >= 0 and idx < ring.size() and int(ring[idx]) != -1:
-			n += 1
+	for layer_v in layers:
+		var ring: Array = layer_v
+		for k in open:
+			var idx := int(k)
+			if idx >= 0 and idx < ring.size() and int(ring[idx]) != -1:
+				n += 1
 	return n

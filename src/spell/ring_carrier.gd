@@ -6,6 +6,10 @@ extends Area2D
 ## (파이어볼)**다. 마법진 자체는 안 날아간다 — 세71까지의 "진이 곧 투사체(날아가는 마법진 볼)"를
 ## 은퇴시켰다(사용자: *"진이 날아갈 필요없는데… 마법진은 수학이고 해석된 마법이 나간다"*).
 ## 착탄 시 안의 고리(_ring)가 그 자리에서 전개되는 계약은 그대로다 — 껍질=배달. [[takbon-nested-circle-model]]
+## 🔴 세79 M1: `_ring`이 나르는 건 이제 **층(밴드) 배열** `[[8칸], [8칸]…]`이다(옛 8칸 한 겹도
+## 그대로 흐른다 — `RingDesign.layers_of`가 흡수). 🔴 **캐리어는 이걸 해석하지 않는다 —
+## 불투명한 payload로 나르기만 한다.** 그래서 층 모델이 들어와도 캐리어는 한 줄도 안 바뀌었다.
+## ⚠ 그러니 `_ring[0]`을 **칸으로 읽지 마라** — 2등급 진에선 그게 배열이다. 해석은 발사부만 한다.
 ##   • 발산→ 칸: 그 화살표 방향으로 불 탄환이 퍼진다 (ring_spell_system이 projectile.tscn 스폰)
 ##   • 응집← 칸: 하나로 모여 불기둥 하나 (pillar.tscn, 많을수록 굵다)
 ##
@@ -38,8 +42,9 @@ const TRAIL_WIDTH_FRAC := 0.9     ## 트레일 굵기 = body_radius × 이 값
 ## 뻗는 화염 꼬리가 히트박스를 넘는 건 당연(꼬리는 안 맞는 잔염 = 빛). 🔴 값은 F5로 조인다.
 const SPRITE_FRAME_RADIUS := 14.0
 
-## 착탄 = 안의 고리를 편다. ring_spell_system이 받아 발산 탄환·응집 기둥을 스폰한다.
+## 착탄 = 안의 고리를 편다. ring_spell_system이 받아 층을 안→밖으로 해석해 전개한다.
 ## travel = 탄이 가던 방향 (전개 회전 기준).
+## ⚠ 인자 이름은 옛 `ring`을 유지한다(시그널 계약) — 실제로 실려 오는 건 **층 배열**이다.
 signal deployed(ring: Array, at: Vector2, travel: float)
 
 var damage: float = 0.0
@@ -96,7 +101,8 @@ func _apply_ball_anim() -> void:
 	_fireball.play(want)
 
 
-## p_ring: 8칸 배열 (RingBoard.G_GATHER / G_RADIATE / GLYPH_NONE). p_angle: 조준각.
+## p_ring: **층 배열** `[[8칸]…]` (세79 M1) — 옛 8칸 한 겹도 그대로 받는다(발사부가 정규화).
+## 캐리어는 내용을 안 본다. p_angle: 조준각.
 func setup(p_ring: Array, p_angle: float, p_speed: float, p_lifetime: float,
 		p_damage: float, p_rune_type: int, p_status: int, p_status_power: float) -> void:
 	_ring = p_ring.duplicate()

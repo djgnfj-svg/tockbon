@@ -67,7 +67,15 @@ func _run() -> void:
 		{"rune": 0, "rings": [[-1, -1, 1, -1, -1, -1, 0, -1]], "open": [2, 6],
 		"ink": &"ink_mid", "special_ink": &"ink_fire_red", "special_ratio": 0.5, "size": 1.4},
 		"테스트 진", 0.77)
-	gs.ring_designs = [ring_a] as Array[RingDesign]
+	# 🔴 세79 M1: **2겹(층 배열) 도안**도 같이 저장한다 — `rings`가 배열의 배열이 되면서
+	# `ResourceSaver`가 중첩 배열을 제대로 나르는지가 **저장 무회귀의 유일한 실측**이다
+	# (그 전엔 "문법상 문제 없다"는 추론뿐이었다). 층0=확산×3 · 층1=폭발×1.
+	var ring_b: RingDesign = RingDesign.from_assembly(
+		{"rune": 0, "jin": &"jin_plain_g2",
+		"rings": [[6, 6, 6, -1, -1, -1, -1, -1], [7, -1, -1, -1, -1, -1, -1, -1]],
+		"open": [0, 1, 2]},
+		"2겹 테스트 진", 0.81)
+	gs.ring_designs = [ring_a, ring_b] as Array[RingDesign]
 	gs.ring_equipped[1] = ring_a
 	gs.mana = 42.0
 	clock.day = 3
@@ -90,24 +98,37 @@ func _run() -> void:
 	_check("복원: 프로브 아이템 1", gs.get_count(&"__probe_item") == 1)
 	_check("복원: 도감 프로브 키", gs.is_unlocked(&"__probe_unlock"))
 	# 고리 도안 라운드트립
-	_check("복원: 고리 도안 1종", gs.ring_designs.size() == 1)
+	_check("복원: 고리 도안 2종", gs.ring_designs.size() == 2)
 	_check("복원: 고리 칸 보존 (2=발산·6=응집)",
-		gs.ring_designs.size() == 1 and int(gs.ring_designs[0].rings[0][2]) == 1
+		gs.ring_designs.size() == 2 and int(gs.ring_designs[0].rings[0][2]) == 1
 		and int(gs.ring_designs[0].rings[0][6]) == 0)
 	_check("복원: 고리 열린칸 보존 [2,6]",
-		gs.ring_designs.size() == 1 and gs.ring_designs[0].open == [2, 6])
-	_check("복원: 고리 채운칸 수 2", gs.ring_designs.size() == 1 and gs.ring_designs[0].filled_count() == 2)
+		gs.ring_designs.size() == 2 and gs.ring_designs[0].open == [2, 6])
+	_check("복원: 고리 채운칸 수 2", gs.ring_designs.size() == 2 and gs.ring_designs[0].filled_count() == 2)
 	_check("복원: 고리 점수 0.77 라운드트립",
-		gs.ring_designs.size() == 1 and is_equal_approx(gs.ring_designs[0].total_score, 0.77))
+		gs.ring_designs.size() == 2 and is_equal_approx(gs.ring_designs[0].total_score, 0.77))
 	# 세션29 경제 필드 라운드트립 (ResourceSaver가 @export를 total_score와 같은 기전으로 나른다)
 	_check("복원: 잉크 ink_mid",
-		gs.ring_designs.size() == 1 and StringName(gs.ring_designs[0].ink) == &"ink_mid")
+		gs.ring_designs.size() == 2 and StringName(gs.ring_designs[0].ink) == &"ink_mid")
 	_check("복원: 특별잉크 ink_fire_red",
-		gs.ring_designs.size() == 1 and StringName(gs.ring_designs[0].special_ink) == &"ink_fire_red")
+		gs.ring_designs.size() == 2 and StringName(gs.ring_designs[0].special_ink) == &"ink_fire_red")
 	_check("복원: 특별 비율 0.5",
-		gs.ring_designs.size() == 1 and is_equal_approx(gs.ring_designs[0].special_ratio, 0.5))
+		gs.ring_designs.size() == 2 and is_equal_approx(gs.ring_designs[0].special_ratio, 0.5))
 	_check("복원: 진 크기 1.4",
-		gs.ring_designs.size() == 1 and is_equal_approx(gs.ring_designs[0].size, 1.4))
+		gs.ring_designs.size() == 2 and is_equal_approx(gs.ring_designs[0].size, 1.4))
+	# 🔴 세79 M1: 다겹 도안 라운드트립 — 층 수·층별 칸·요약이 전부 살아 돌아오나
+	var rb: RingDesign = gs.ring_designs[1] if gs.ring_designs.size() == 2 else null
+	_check("복원: 🔴 2겹 도안의 층 수 2 (ResourceSaver가 중첩 배열을 나른다)",
+		rb != null and rb.rings.size() == 2)
+	_check("복원: 🔴 층0=확산(6)×3 · 층1=폭발(7) — 층 순서가 보존된다",
+		rb != null and rb.rings.size() == 2
+		and int(rb.rings[0][0]) == 6 and int(rb.rings[0][2]) == 6
+		and int(rb.rings[1][0]) == 7)
+	# 🔴 `filled_count`가 **모든 층**을 센다 — rings[0]만 보면 3이 나온다(바깥 층 누락)
+	_check("복원: 🔴 2겹 채운칸 수 4 (층0 3칸 + 층1 1칸 — rings[0]만 세면 3이다)",
+		rb != null and rb.filled_count() == 4)
+	_check("복원: 2겹 도안 진 id jin_plain_g2",
+		rb != null and StringName(rb.jin) == &"jin_plain_g2")
 	_check("복원: 고리 장착 슬롯1 매핑",
 		gs.ring_equipped[1] == gs.ring_designs[0] and gs.ring_equipped[0] == null)
 	_check("복원: 마나 42", is_equal_approx(gs.mana, 42.0))
