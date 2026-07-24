@@ -1,7 +1,10 @@
 # 설계: 첫 스테이지 수직 슬라이스 — 조립→탁본 파이어볼 루프 base 편입
 
-> 산출물 = 구조 설계(코드 없음). 게임 디자인은 확정, 재논의 없음.
-> 작성 = takbon-architect. 리드가 읽고 나면 이 파일 삭제.
+> ⚠ **부분 구현 (세78 교차 감사).** 🔴 **핵심(base 책상 [E] → 조립 슬라이스 패널 편입)은 반려됐다** —
+> `base.gd`가 여전히 **책(`ring_forge_panel`)**을 연다. `book_redesign_design.md`가 "슬라이스 base 편입 = 너무 큰 변경"으로
+> 반려하고 되돌려, 조립은 **책 안에서만** 돈다. **살아있는 것 = `ChapterDef.reward_unlock` 첫 클리어 해금 · gr_radiate5 맨몸
+> 시드 제거 · ch1 reward** 뿐. 정합 후계 = `book_redesign_design.md`.
+> 작성 = takbon-architect. (「읽고 나면 삭제」는 옛 관행 — 지금은 docs/takbon-design/ 영구 보관.)
 
 ---
 

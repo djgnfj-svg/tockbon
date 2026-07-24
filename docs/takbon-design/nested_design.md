@@ -1,5 +1,11 @@
 # 설계: 중첩 마법진 통합 (복합 룬 × 재귀 진 × rune_fill)
 
+> ⚠🔴 **프레임 은퇴 (세78 교차 감사).** 이 문서의 개념 프레임(진이 날아가 **자식 진을 착탄점서 재발사=재귀 배달** ·
+> 문양=8칸 착탄 · 평평한 `runes[]` 자동 반응)은 **세72(진 안 날아감)·세68(문양=조립 감쌈)에 토대가 은퇴**했다.
+> **`jin_interpretation_design.md`(세78)가 이 프레임을 대체한다 — 공존 아님.** 문서대로 구현하면 은퇴한 발사 모델을 되살린다.
+> **살아있는 것 = 참고 자산뿐**: ①의 코드 인벤토리(`projectile.rune_hits`·`ring_carrier.deployed` 실사) + rune_fill 소비자
+> 0곳 진단 + "원소 반응(status_holder) = jin_interpretation ②「진 규칙」의 한 인스턴스(융합진)"라는 흡수. 삭제는 안 함(이 자산 때문).
+>
 > takbon-architect(nested-design) 산출물. 코드 없음 — 설계안만.
 > 정본 대조: memory `takbon-nested-circle-model` · `docs/WAND_CIRCLE.md` · takbon-rules 스킬 읽음.
 > 아래 "검증한 것"은 전부 현재 코드를 직접 Read/Grep으로 확인한 사실이다.

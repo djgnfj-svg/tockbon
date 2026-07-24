@@ -1,5 +1,11 @@
 # 설계: 도파민 보상 루프 + 경제 재편  (개정 2 — 결정 A~D 확정 반영)
 
+> ⚠ **부분 구현 (세78 교차 감사 — 방향은 사용자 확정이라 유지, "아직 안 된 것"만 표시).** 실측 체크리스트:
+> - **A(돈=가방)·B(마을 완비)** = coin.tres·shop_panel 착지 (부분 O).
+> - **C(잡몹=coin·보스=상자)** = 부분 O.
+> - 🔴 **D(룬/진=퀘스트 턴인) = 전량 미구현**: `decode_panel.gd`·`test_decode_auto`·`test_progression_auto` **여전히 존재**(해독/until_unlock 은퇴 미실행) · 퀘스트 `q03~q05` 건설퀘 **그대로**·`qR_*` 룬 퀘스트 **0개** · `unlock_ceremony.gd` **없음** · base에 `station_build` 배선 잔존.
+> - ⚠ **D의 은퇴는 회귀 위험**(test 2종 폐기·base 배선 제거) → **별도 세션 + 뮤테이션 그물.** 한 번에 몰지 마라.
+>
 > 작성 = takbon-architect (dopamine-arch). 구현 위임 = takbon-dev / takbon-ui / takbon-art.
 > 정합 기준 = CLAUDE.md 최상단 · docs/PROGRESSION.md · memory(ink-economy·chapter-loop·chest-loot·
 > drop-absorb-magnet·empty-base-build·onboarding-flow·quest-system·stage-format-decision).
