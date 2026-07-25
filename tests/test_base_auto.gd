@@ -151,7 +151,16 @@ func _test_desk_still_sees_the_player() -> void:
 ## 🔴 세71: 책이 **단계별 긋기 → 조립 후 통째 트레이스**로 바뀌었다([다음] 은퇴). 진을 고르면
 ##   합성 밑그림(진+룬+층)이 통째로 뜨고, 그걸 미달로 그은 채 닫으면 commit_rejected가 온다.
 ##   판정 점수 = `combined_total()`(get_assembly().score는 COMBINED라 빈 값 — 세26 이번 판).
+## 🔴🔴 **세83: 이 계약은 모드마다 갈린다.** 그리기를 폐지하면(`balance.skip_drawing`) 「미달」이라는
+## 개념 자체가 없다 — 점수를 부품이 정하니 더 잘 그어서 만회할 수단이 없고, 그래서 **펑도 없다**.
+## 그물을 모드로 갈라 세운다(세56 「두 몸 복제 계약은 그물도 두 개」와 같은 규율):
+##   • 그리기 모드 = 옛 계약 그대로 (미달 → 침묵 아닌 거부)
+##   • 폐지 모드   = 조립을 마치고 덮으면 **맺힌다**(거부 없음). 이게 폐지의 심장 계약이라
+##     여기가 빨개지지 않으면 「조립했는데 안 나간다」가 조용히 돌아온다.
 func _test_rejected_commit_is_not_silent() -> void:
+	if bool(load("res://src/core/ring_power.gd").skip_drawing()):
+		await _test_assemble_only_commits()
+		return
 	print("[6] 미달 조립본을 거부할 땐 이유를 말해 준다 (세71 통째 흐름)")
 	_base.call(&"_open_drawing")
 	await process_frame
@@ -179,6 +188,46 @@ func _test_rejected_commit_is_not_silent() -> void:
 	await process_frame
 	_check(rejected.size() == 1, "책을 덮으면 commit_rejected가 온다 (침묵 금지)")
 	_check((gs.ring_designs as Array).size() == before, "미달 조립본은 여전히 안 맺힌다 (거부는 옳다)")
+	_base.call(&"_close_drawing")
+
+
+## 🔴 [6-폐지] 그리기 폐지 모드 — **조립만으로 맺힌다**(세83, 사용자: *"그리기없이 바로나오는거임"*).
+## 계약 셋: ① 한 획도 안 그었는데 맺힌다 ② 펑(commit_rejected)이 없다 ③ 점수는 부품이 정한 값이라
+## 기준선 위다. ⚠ ③이 없으면 `assemble_score_base`를 기준선 아래로 잘못 내려도 아무도 안 빨개진다.
+func _test_assemble_only_commits() -> void:
+	print("[6] 그리기 폐지 — 조립만으로 맺힌다 (펑 없음, 세83)")
+	_base.call(&"_open_drawing")
+	await process_frame
+	var forge = _base.get("_forge")
+	if forge == null:
+		_check(false, "책이 안 열렸다")
+		return
+	forge.call(&"_on_jin_selected", &"jin_single")
+	forge.call(&"_on_rune_selected", 0)          # 불 — 룬 자리를 채워야 조립이 끝난다
+	var board = forge.get_node("Stage/Spread/RingBoard")
+	_check(float(board.call(&"coverage")) <= 0.02, "한 획도 안 그었다 (폐지 모드의 전제)")
+	_check(bool(forge.call(&"can_commit")), "🔴 안 그었어도 조립이 끝났으면 맺을 수 있다")
+
+	# 🔴🔴 **버튼 경로** — `close()` 자동 맺기만 재면 **버튼이 조용히 아무것도 안 하는** 상태를
+	# 못 잡는다(세83 뮤테이션 실측: `_finish`의 coverage 가드에서 폐지 예외를 빼도 전 항목 그린이었다.
+	# 실게임에선 [마법진 완성 ✦]을 눌러도 아무 일이 안 일어난다 — 세25 「에러도 경고도 없다」 그 자리).
+	forge.call(&"_on_start_draw")
+	await process_frame
+	_check(forge.get_node("Stage/Spread/Report").visible,
+		"🔴 [마법진 완성 ✦]을 누르면 리포트가 뜬다 (안 뜨면 버튼이 조용히 죽어 있다)")
+
+	var rejected := []
+	forge.commit_rejected.connect(func(s: float) -> void: rejected.append(s))
+	var gs = root.get_node("/root/GameState")
+	var before := (gs.ring_designs as Array).size()
+	forge.call(&"close")
+	await process_frame
+	_check(rejected.is_empty(), "🔴 폐지 모드엔 펑이 없다 (commit_rejected %d회)" % rejected.size())
+	_check((gs.ring_designs as Array).size() == before + 1,
+		"🔴 조립만으로 도안이 맺혔다 (%d → %d)" % [before, (gs.ring_designs as Array).size()])
+	var asm: Dictionary = forge.call(&"get_assembly")
+	var sc := float(asm.get("score", -1.0))
+	_check(sc > 0.65, "🔴 부품이 정한 점수가 기준선 위다 (%.2f) — 아니면 조립하고도 펑이 난다" % sc)
 	_base.call(&"_close_drawing")
 
 

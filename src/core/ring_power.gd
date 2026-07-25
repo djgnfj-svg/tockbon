@@ -42,6 +42,24 @@ static func is_stable(score: float) -> bool:
 	return score > BAL.ring_stability_min
 
 
+## 🔴 손 긋기를 건너뛰나 (세83 실험 스위치 — `balance.skip_drawing`).
+## **이 술어를 통해서만 묻는다** — `BAL.skip_drawing`을 여기저기서 직접 읽으면 한 곳을 되돌릴 때
+## 다른 곳이 조용히 남는다(세24 「등급 경계를 베끼면 갈라진다」와 같은 이유).
+static func skip_drawing() -> bool:
+	return BAL.skip_drawing
+
+
+## 🔴 **조립 점수** — 그리기를 폐지하면 점수의 출처가 손이 아니라 **부품**이 된다 (세83).
+## *"좋은 부품을 모으면 세진다"* = 원정 보상이 곧 위력으로 이어지는 축.
+## 반환은 손그림 점수와 **같은 0~1 척도**라 아래 위력·등급 함수가 전부 그대로 돈다(새 축 아님).
+## ⚠ 하한을 기준선 위로 **클램프하지 않는다** — 대신 `assemble_score_base`가 기준선보다 크다는
+## 규율을 balance 주석에 박았다. 여기서 clamp하면 base를 잘못 내려도 아무도 못 알아챈다.
+static func assembled_score(glyph_count: int, layer_count: int) -> float:
+	return clampf(BAL.assemble_score_base
+		+ BAL.assemble_score_per_glyph * float(maxi(glyph_count, 0))
+		+ BAL.assemble_score_per_layer * float(maxi(layer_count - 1, 0)), 0.0, 1.0)
+
+
 ## 종합 점수 → 위력 배율 = `ring_power_max × 점수^curve × ink_mult × size_mult(size)`.
 ## 발사 피해에 곱해지고, 리포트가 **같은 값**을 표시한다.
 ##

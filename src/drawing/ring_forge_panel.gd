@@ -98,6 +98,9 @@ const SCORE_WEAK := Color(0.55, 0.48, 0.40)
 ## 🔴 세71 조립→탁본 — **조립이 먼저, 탁본은 통째로.** 오른쪽에서 진·룬을 고르고 진의 층에
 ## 문양-고리를 끼우면 왼쪽에 전체 밑그림이 뜬다. 그 전체를 손으로 **한 번에** 따라 긋는다.
 const Copy_START := "오른쪽에서 진·룬을 고르고 진의 층에 문양-고리를 끼우세요 — 왼쪽 밑그림 전체를 손으로 한 번에 따라 그으면 [분석 ▶]"
+## 세83 그리기 폐지 모드의 안내문 — 손 긋기를 안내하면 있지도 않은 조작을 적는 셈이다
+## (CLAUDE.md 「안내문에 없는 조작을 적지 마라 — 그 자체가 버그다」).
+const Copy_START_ASSEMBLE := "오른쪽에서 진·룬을 고르고 진의 층에 문양-고리를 끼우세요 — 다 끼웠으면 [마법진 완성 ✦]"
 ## 🔴 세71c 층(band) 수는 이제 **진이 정한다**(`JinDef.band_count`) — 옛 `const BANDS := 2`를 걷어냈다.
 ## `_bands` 크기가 선택 진 band_count에서 파생되고(`_resize_bands`), 진 미선택이면 소켓 0(`_reset_selection`).
 ## 일반진(jin_single) = 1층. RingBoard.BAND_RADII가 반경 목록을 쥐고 진은 앞 band_count개만 쓴다.
@@ -198,7 +201,8 @@ func _ready() -> void:
 
 	# 🔴 세71b: 은퇴했던 NextBtn을 **[그리기 시작] 게이트**로 되살린다(리뷰 각주 ⑤ — 죽은 노드 안 남긴다).
 	# text·핸들러를 갈아 끼운다. ASSEMBLE에서만 보이고, 진+룬을 골라야 활성.
-	_next_btn.text = "그리기 시작 ✎"
+	# 세83: 폐지 모드면 이 버튼이 곧 완성 버튼이다 — 이름이 하는 일과 같아야 한다(세25 「분석 ▶」 교훈).
+	_next_btn.text = _start_btn_name()
 	_next_btn.pressed.connect(_on_start_draw)
 	_redraw_btn.text = "◀ 다시 조립"
 	_redraw_btn.visible = false
@@ -308,7 +312,7 @@ func open() -> void:
 	_sync_book_runes()                          # 🔴 세81 M2: 룬 소켓(자리) 상태를 책에 주입
 	recompose()                                 # 🔴 clear_all 뒤 COMBINED 모드로 재진입 (빈 진이면 빈 가이드)
 	_set_phase(Phase.ASSEMBLE)                  # 🔴 세71b: 조립 단계부터 — 손 긋기 잠금·룬/층 탭 잠금
-	_set_say(Copy_START, false)
+	_set_say(Copy_START_ASSEMBLE if RingPower.skip_drawing() else Copy_START, false)
 	_update_score()
 	_spread_open()
 
@@ -322,7 +326,7 @@ func close() -> void:
 	# 🔴 세71: 판정 점수 = `combined_total()`(통째 트레이스), `_board.get_assembly().score` 아님
 	#   (COMBINED 모드에선 그게 빈 값이다 — 세26 「score 안 실으면 조용히 기준 위력」의 이번 판).
 	if not _committed and _has_attempt():
-		var sc := _board.combined_total()
+		var sc := _score_now()
 		if RingPower.is_stable(sc):
 			_committed = true
 			_committed_asm = build_assembly()
@@ -493,7 +497,25 @@ func recompose() -> void:
 ## 맺을 만한 시도가 있었나 — 진을 골랐고 통째로 뭔가 그었나. close 자동맺음·거부의 게이트다
 ## (아무것도 안 하고 닫으면 commit_rejected를 안 쏜다 — 헛된 "흩어졌다"를 피한다).
 func _has_attempt() -> bool:
+	if RingPower.skip_drawing():
+		return _can_start_draw()   # 폐지 모드 = 「그을 것」이 없다. 조립이 끝났으면 시도가 있는 것
 	return String(_sel_jin) != "" and _board.coverage() > 0.02
+
+
+## 🔴🔴 **점수의 유일한 출처** (세83). 그리기가 살아 있으면 손그림 통째 점수, 폐지 모드면
+## 부품이 정한 점수. 🔴 `combined_total()`을 직접 부르는 자리를 하나라도 남기면 **모드가 조용히
+## 갈린다** — 폐지 모드에서 그 자리만 0점을 읽어 「조립했는데 펑」이 난다(세26 「score 안 실으면
+## 조용히 기준 위력」의 이번 판). 부르는 곳 = close·_finish·_on_inject·build_assembly 넷 전부.
+func _score_now() -> float:
+	if not RingPower.skip_drawing():
+		return _board.combined_total()
+	var rings := RingBoard.layer_rings(_band_defs())
+	var glyphs := 0
+	for ring_v in rings:
+		for g in (ring_v as Array):
+			if int(g) != RingBoard.GLYPH_NONE:
+				glyphs += 1
+	return RingPower.assembled_score(glyphs, rings.size())
 
 
 ## 진 탭 셀 클릭 → 진을 고르고 왼쪽 밑그림 재합성 (세71: 밑그림은 통째, 진만 따로 안 긋는다).
@@ -601,10 +623,10 @@ func _on_rune_selected(rune_type: int) -> void:
 	_sync_book_tabs()
 	if _sel_runes.size() >= 2:
 		var filled := _sel_runes.size() - _sel_runes.count(RUNE_NONE)
-		var tail := "모두 채웠으면 [그리기 시작]" if _runes_ready() else "남은 룬 자리를 채우세요"
+		var tail := ("모두 채웠으면 [%s]" % _start_btn_name()) if _runes_ready() else "남은 룬 자리를 채우세요"
 		_set_say("%s 넣었다 (룬 %d/%d) — %s" % [nm, filled, _sel_runes.size(), tail], false)
 	else:
-		_set_say("%s 룬 골랐다 — 중심에 반영됐다. 층을 더하거나 [그리기 시작]" % nm, false)
+		_set_say("%s 룬 골랐다 — 중심에 반영됐다. 층을 더하거나 [%s]" % [nm, _start_btn_name()], false)
 
 
 ## 🔴 세81 M2: 융합진 룬 소켓 클릭 → 채울 활성 자리를 바꾼다(단일 소스는 패널, 책은 반영만).
@@ -684,6 +706,11 @@ func _sync_book_tabs() -> void:
 
 ## 진+룬을 모두 골랐나 — [그리기 시작] 게이트 활성 조건(층은 선택 사항).
 ## 🔴 세81 M2: 융합진은 룬 자리를 **전부** 채워야 시작(runes_ready). 자리 1개면 하나면 된다(옛 흐름).
+## 시작 버튼의 이름 — 안내문이 버튼과 어긋나지 않게 **한 곳**에서 낸다.
+func _start_btn_name() -> String:
+	return "마법진 완성 ✦" if RingPower.skip_drawing() else "그리기 시작 ✎"
+
+
 func _can_start_draw() -> bool:
 	return String(_sel_jin) != "" and _runes_ready()
 
@@ -697,6 +724,12 @@ func _on_start_draw() -> void:
 		_set_say("진과 룬을 먼저 고르세요", true)
 		return
 	Audio.play(&"ui_click")
+	# 🔴🔴 세83 그리기 폐지 실험 — 조립이 끝나는 순간 마법진이 완성된다(사용자: *"조립해서 자신의
+	# 마법을 만드는거지"*). **아래 옛 흐름은 한 줄도 안 지웠다** — `balance.skip_drawing = false`면
+	# 이 갈래만 빠지고 손 긋기가 그대로 돌아온다(사용자 확정: *"먼저 꺼보고 판단"*).
+	if RingPower.skip_drawing():
+		_finish()
+		return
 	# 🔴 세81: phase를 **먼저** DRAW로 바꾼 뒤 recompose한다 — recompose가 `_phase != Phase.DRAW`로
 	# 층 구분 동심원을 끄기 때문(그릴 때 선이 문양에 걸치는 걸 없앤다). 순서가 곧 그 신호다.
 	_set_phase(Phase.DRAW)    # ④ 조립 잠금 + 손 긋기 열림
@@ -712,7 +745,7 @@ func _on_redraw_assemble() -> void:
 	_committed_asm = {}
 	_board.clear_stroke()     # 그은 획을 비운다(선택·가이드는 유지 — 조립을 이어서 고친다)
 	_set_phase(Phase.ASSEMBLE)
-	_set_say("다시 조립하세요 — 진·룬·층을 바꾼 뒤 [그리기 시작]", false)
+	_set_say("다시 조립하세요 — 진·룬·층을 바꾼 뒤 [%s]" % _start_btn_name(), false)
 
 
 # ─────────────────────────── 잉크·종이 선택 (세션28~29) ───────────────────────────
@@ -856,13 +889,15 @@ func _finish() -> void:
 	if String(_sel_jin) == "":
 		_set_say("먼저 오른쪽에서 진을 고르세요", true)
 		return
-	if _board.coverage() <= 0.02:
+	# ⚠ 폐지 모드엔 「그은 양」이라는 게 없다 — 이 가드를 그대로 두면 완성이 **영원히 막힌다**.
+	if not RingPower.skip_drawing() and _board.coverage() <= 0.02:
 		_set_say("먼저 왼쪽 밑그림 전체를 손으로 따라 그으세요", true)
 		return
-	var total := _board.combined_total()
+	var total := _score_now()
 	_analysis = {"total": total}   # 통째 점수 — per-piece 없음
 	_finish_asm = build_assembly()   # 잉크·크기·특별효과 스냅샷 (리포트가 읽는다)
-	_set_say("마법진 완성 — 탁본 종이를 보고 [마력 주입]으로 맺으세요", false)
+	_set_say("마법진 완성 — 위력을 보고 [마력 주입]으로 맺으세요" if RingPower.skip_drawing()
+		else "마법진 완성 — 탁본 종이를 보고 [마력 주입]으로 맺으세요", false)
 	_set_phase(Phase.RESULT)   # 🔴 세71b: 결과=탁본 종이 오버레이 (리포트 렌더는 _set_phase가 켠다)
 	_report.queue_redraw()
 
@@ -870,7 +905,7 @@ func _finish() -> void:
 ## 🔴 리포트에서 [마력 주입] — 마법진이 맺히거나 **펑** 한다 (사용자 확정 2026-07-17 세션 23).
 ## 기준선(65점) 이하면 도안이 통째로 날아가고 처음부터 다시 그린다. 잃는 건 시간·정성뿐이다.
 func _on_inject() -> void:
-	var total := _board.combined_total()   # 🔴 통째 점수 (get_assembly().score 아님 — COMBINED라 빈 값)
+	var total := _score_now()   # 🔴 점수 출처는 _score_now 하나 (모드가 갈리는 자리)
 	if not RingPower.is_stable(total):
 		_burst(total)
 		return
@@ -933,7 +968,7 @@ func build_assembly() -> Dictionary:
 			if int((ring_v as Array)[k]) != RingBoard.GLYPH_NONE and not (k in open):
 				open.append(k)   # 층들의 **합집합** — 렌더·요약용(발사는 층 배열을 그대로 본다)
 	open.sort()
-	var score := _board.combined_total()
+	var score := _score_now()
 	# 🔴 rings/score는 아래서 직접 싣는다 — board_asm은 **특별잉크 집계**(보드 private)의 유일한 창구다.
 	var board_asm := _board.get_assembly()
 	# 🔴 세81 M2: 발사·저장 계약에 룬 **목록**을 싣는다("runes", 미선택 제외). "rune"(primary)은
