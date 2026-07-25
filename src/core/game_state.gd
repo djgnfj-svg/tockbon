@@ -80,6 +80,15 @@ func _seed_starting_unlocks() -> void:
 	codex[&"rune_fire"] = true
 	codex[&"rune_water"] = true
 	codex[&"rune_wind"] = true
+	# 🔴🔴 **세83 룬 6종 복원** (사용자: *"룬을 일단 다 살려줘 6개로"*). 세61 리셋으로 잠들었던
+	# 번개·흙·풀을 되살렸다 — `.tres`는 세49 원본을 git(`43937c8^`)에서 그대로 꺼냈다(값을 지어내지
+	# 않았다). 🔴 **기계는 처음부터 전량 살아 있었다**: `rune_guide_verts` 6갈래(⚡□🍃)·`status_rules`
+	# 반응표(감전 연쇄·진흙·속박·산불)·`RUNE_TYPES` 6종 — 빠진 건 데이터 3장뿐이었다.
+	# ⚠ **이것도 임시 시드다**(위 M1 시드와 같은 처지) — 획득 경로는 미설계(D5·D6). 경로를 붙이는
+	#   세션이 이 세 줄을 지운다. 🔴 룬이 살아나면 관문 드롭(`until_unlock`)이 **바로 산다**.
+	codex[&"rune_bolt"] = true
+	codex[&"rune_earth"] = true
+	codex[&"rune_grass"] = true
 	codex[&"jin_single"] = true
 	# 🔴🔴 **세79 M1 임시 시드 — 획득 경로 미설계** (사용자 확정: *"일단 만들기만 하면 됨,
 	# 얻는 곳은 추후에 설계"*). 「진별 해석」 M1의 실증 재료 3종을 시작부터 준다:
