@@ -74,8 +74,11 @@ func take_hit(damage: float, rune_type: int, status: int, status_power: float) -
 		"status": status,
 		"status_power": status_power,
 	})
-	print("[DummyTarget] 피격 damage=%.2f rune=%d status=%d power=%.2f" % [
-		damage, rune_type, status, status_power])
+	# ⚠ **여기에 `print`를 되살리지 마라** (세84 감사 #39 — `src/` 전체의 유일한 print였다).
+	# 가드 위에 있어 0-피해 히트까지 찍었고, `pillar`가 `get_overlapping_bodies()`로 StaticBody2D
+	# 허수아비를 **매 틱** 잡으므로 연습장(허수아비 5)에서 표적당 4~5줄이 쏟아져 **진짜
+	# `push_warning`이 그 사이에 묻혔다**(이 프로젝트의 검증은 로그 grep에 얹혀 있다).
+	# 관측이 필요하면 콘솔이 아니라 공개 API로 재라 — `hits[]`·`status_damage_total()`이 그 자리다.
 	# 🔴 세81 M2 (융합진): 직격 피해 0 = 보조 룬 상태 전용 히트 — `enemy_hit`·팝을 건너뛰고
 	# 상태만 얹는다(forest_enemy와 같은 계약 — 한쪽만 바꾸면 두 몸이 갈라진다, 세56). `hits[]`엔
 	# **담아 둔다**(테스트가 두 상태가 다 얹혔는지 관측하되, 도배는 enemy_hit 발신 수로 잰다).

@@ -271,9 +271,15 @@ func _apply_move(delta: float) -> void:
 
 
 ## "chase" (기본, 슬라임·갑충·엘리트) — aggro_range 안이면 다가오고 attack_range 안이면 때린다.
+## 🔴🔴 세84: 여기 폴백이 **`slime.tres`의 실값을 그대로 베낀 사본**(160.0·55.0)이었다 —
+## slime.tres가 파싱에 실패해 `_def == null`이 돼도 **슬라임과 똑같이 움직여서** 데이터 죽음이
+## 행동에 안 드러났다(`test_status_auto`가 slime을 16회 스폰하는데 전부 통과했다. 세50 바람 룬과
+## 같은 침묵). 이 두 값은 「없으면 중립」이 아니라 **필수 수치**라 `_param_req`로 바꿨다 —
+## 결손이면 적이 굳고 `push_warning`이 뜬다(= 조용하지 않다). 데이터 쪽 짝그물은
+## `test_progression_auto [1]`("chase는 aggro_range·move_speed를 .tres로 쥔다").
 func _ai_chase(player: Node2D, to_player: Vector2, dist: float) -> void:
-	if dist <= _param("aggro_range", 160.0) and dist > 1.0:
-		velocity = to_player / dist * _param("move_speed", 55.0)
+	if dist <= _param_req("aggro_range") and dist > 1.0:
+		velocity = to_player / dist * _param_req("move_speed")
 	else:
 		velocity = Vector2.ZERO
 	_contact(player, dist)
@@ -713,6 +719,23 @@ func _param(key: String, fallback: float) -> float:
 	if _def == null:
 		return fallback
 	return float(_def.params.get(key, fallback))
+
+
+## 🔴 **필수 수치**용 (세84) — 코드에 밸런스 상수를 두지 않는다(탁본 규칙: 적 수치는 EnemyDef가 쥔다).
+## `_param`의 fallback은 「없으면 중립」인 값(`regen_per_sec` 0.0·`armor_reduction` 0.0 등)에는 맞지만,
+## 없으면 안 되는 값에 쓰면 **그 폴백이 특정 .tres의 사본**이 되어 데이터 죽음을 가려 준다.
+## 여기선 0.0을 돌려주되(적이 굳는다 = 눈에 보인다) 키마다 **한 번** 경고한다
+## (매 프레임 경고하면 로그가 잠겨 진짜 경고가 묻힌다 — `dummy_target.print` 선례).
+var _warned_params := {}
+
+func _param_req(key: String) -> float:
+	if _def != null and _def.params.has(key):
+		return float(_def.params[key])
+	if not _warned_params.has(key):
+		_warned_params[key] = true
+		push_warning("적 '%s'의 필수 수치 '%s'가 없다 (data/enemies/%s.tres 확인) — 0으로 선다"
+			% [enemy_id, key, enemy_id])
+	return 0.0
 
 
 ## 🔴 공개 HP 리더 — 재생·피해를 테스트가 공개 API로 확인할 유일 경로다 (`_hp`는 internal이라

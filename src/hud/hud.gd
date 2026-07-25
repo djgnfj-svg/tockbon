@@ -16,7 +16,14 @@ extends Control
 ## 갈라진다 — HUD는 "위력 140"이라 적어 놓고 130으로 때리는 식으로.
 ##
 ## 🔴 슬롯 미니 다이어그램의 칸 각도는 `RingBoard.jin_slot_dots`(static·순수 기하)를 쓴다 —
-## "칸 0=위·시계방향" 규약의 단일 소스다(세션60). 식을 베끼면 책의 진 셀과 조용히 어긋난다.
+## "칸 0=위·시계방향" 규약(`slot_angle`)의 단일 소스다(세션60). 식을 베끼면 **같은 함수를 쓰는
+## 다른 소비자와 조용히 어긋난다** — 실측 소비자는 이 파일(`_draw_jin_diagram`)과
+## `tab_panel._draw_magic_diagram` **둘뿐**이다(+ `test_ring_assembly_auto`의 그물).
+## ⚠ **책의 진 셀은 이제 이 함수를 안 쓴다** — 세83에 셀이 「진 모양 + 룬 자리」만 답하게 좁혀져
+## `ring_book.jin_icon_paths`(→ `jin_guide_pts`·`rune_slot_positions`)로 갈라졌다. 세84 감사 #28에
+## 옛 주석("책의 진 셀과 어긋난다")이 낡은 것으로 잡혔다.
+## 🔴 대신 **룬 자리 좌표는 책 셀과 같은 함수**(`RingBoard.rune_slot_positions`)를 부른다 —
+## 그쪽이 판·책 셀·HUD 셋이 공유하는 자리다(세84 #12).
 ##
 ## 🔴 CanvasLayer 위에 산다 — 플레이어를 카메라가 따라다녀서 월드에 그리면 HUD가 같이 흘러간다.
 ##
@@ -24,8 +31,9 @@ extends Control
 ## `queue_redraw()` 하나로 끝나고, 같은 시그널을 받는 GameState와의 **연결 순서를 따질 필요가 없다**.
 
 const RingPower := preload("res://src/core/ring_power.gd")
-## 🔴 진 미니 다이어그램 기하만 쓴다 (jin_slot_dots·SLOTS = static 순수 함수, 세션60 단일 소스).
-## 코드를 베끼면 규약이 바뀔 때 책 진 셀과 어긋나므로 preload로 그 함수를 그대로 부른다.
+## 🔴 진 미니 다이어그램 기하만 쓴다 (`jin_slot_dots`·`rune_slot_positions`·`SLOTS` = static 순수
+## 함수, 세션60·세81 단일 소스). 코드를 베끼면 규약이 바뀔 때 판·Tab 다이어그램과 어긋나므로
+## preload로 그 함수를 그대로 부른다. ⚠ `class_name`이 없어 이 preload가 유일한 진입로다.
 const RingBoard := preload("res://src/drawing/ring_board.gd")
 
 ## 🔴 HP 막대는 **늘 그린다** (세64, 사용자: "hp바가 안 보이고"). 예전엔 show_hp 익스포트로 숲만
@@ -110,12 +118,25 @@ const TOAST_W := 240.0
 const TOAST_GAP := 10.0
 const TOAST_FONT_SIZE := 12
 
+# ── 한 줄 안내문(say) 수명 (세84 감사 #36) ──
+## 🔴 **안내문도 만료된다** — 옛 `say()`는 대입만 하고 타이머·비우기 호출자가 **하나도 없어**
+## "마나가 부족하다" 경고 한 번이 보스방 목표 줄을 덮고 **씬이 끝날 때까지 상주했다**.
+## 같은 파일 토스트가 이미 `TOAST_LIFE` + 감쇠를 갖고 있었으니 **두 채널 규약이 갈라져 있던 것**이다.
+## 🔴 계속 떠 있어야 하는 문구(보스방 목표·클리어 안내)는 호출부가 `sticky := true`로 **명시**한다 —
+## 기본이 만료인 이유: 순간 피드백(발사 거부·목표 완료 토스트성 안내)이 압도적으로 많고,
+## 그것이 상주하면 **거짓 경고**(이미 마나가 찼는데 "부족하다")가 화면에 남는다.
+const SAY_LIFE := 4.5
+const SAY_FADE := 0.6   ## 마지막 이만큼 동안 흐려진다 (토스트 TOAST_FADE와 같은 결)
+
 ## 등급 색 — 🔴 단일 소스는 `src/core/grade_colors.gd`다 (세션51에 사본 셋을 여기로 합쳤다).
 const GradeColors := preload("res://src/core/grade_colors.gd")
 
 var _selected: int = 0
 var _say: String = ""
 var _warn: bool = false
+## 안내문 남은 수명(초). sticky면 안 줄어든다.
+var _say_t: float = 0.0
+var _say_sticky: bool = false
 ## 마나는 매 프레임 변해 시그널이 없다 — 값이 바뀐 프레임만 다시 그린다 (매 프레임 redraw 회피).
 var _last_mana: float = -1.0
 ## 획득 토스트 줄들. 각 항목 = {id, name, grade, count, t}. 앞이 오래된 줄, 뒤가 최근 줄.
@@ -144,9 +165,14 @@ func select(slot: int) -> void:
 
 
 ## 한 줄 안내문. warn=true면 붉게 (빈 슬롯에 쏘려 한 경우 등).
-func say(text: String, warn: bool = false) -> void:
+## 🔴 `sticky = false`(기본)면 `SAY_LIFE` 뒤에 스스로 사라진다 — 순간 피드백이 화면에 굳지 않게.
+## 🔴 **씬이 끝날 때까지 떠 있어야 하는 문구는 `sticky := true`로 명시해라**(보스방 목표·클리어 안내).
+## 빈 문자열을 넣으면 즉시 지운다(수명 계산 없이).
+func say(text: String, warn: bool = false, sticky: bool = false) -> void:
 	_say = text
 	_warn = warn
+	_say_sticky = sticky
+	_say_t = 0.0 if (sticky or text == "") else SAY_LIFE
 	queue_redraw()
 
 
@@ -213,6 +239,12 @@ func _on_item_collected(item_id: StringName, count: int) -> void:
 	queue_redraw()
 
 
+## 지금 뜬 한 줄 안내문 (테스트·디버그용 관측점 — 만료됐으면 빈 문자열).
+## 🔴 `_say`를 밖에서 더듬으면 리팩터 때 조용히 죽는다(`toast_lines()`와 같은 규약, takbon-verify §3).
+func say_line() -> String:
+	return _say
+
+
 ## 토스트 스택 열람 (테스트·디버그용). 사본을 준다 — 밖에서 고쳐도 HUD가 안 흔들리게.
 func toast_lines() -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
@@ -231,6 +263,12 @@ func _process(delta: float) -> void:
 			_toasts[i]["t"] = float(_toasts[i]["t"]) - delta
 			if float(_toasts[i]["t"]) <= 0.0:
 				_toasts.remove_at(i)
+		queue_redraw()
+	# 안내문 수명 — 살아 있는 동안만 매 프레임 다시 그린다(흐려지는 구간이 있어서). sticky는 안 준다.
+	if _say != "" and not _say_sticky:
+		_say_t = maxf(0.0, _say_t - delta)
+		if _say_t <= 0.0:
+			_say = ""
 		queue_redraw()
 	# 돈 톡톡 감쇠 — 튄 동안만 매 프레임 다시 그린다 (평소엔 redraw 비용 0).
 	if _coin_punch > 0.0:
@@ -254,9 +292,13 @@ func _draw() -> void:
 	bar_y += COIN_ROW_H
 
 	# 상황 메시지 — 막대 바로 아래 좌상단 (마나 부족·새 마법진 맺힘 등). 상단 hint를 걷어낸 자리.
+	# 만료 직전 SAY_FADE 동안 흐려진다(토스트와 같은 결). sticky 문구는 안 흐려진다.
 	if _say != "":
+		var say_col := WARN_COLOR if _warn else SAY_COLOR
+		if not _say_sticky and SAY_FADE > 0.0:
+			say_col.a *= clampf(_say_t / SAY_FADE, 0.0, 1.0)
 		draw_string(font, Vector2(MARGIN, bar_y + 16.0), _say,
-			HORIZONTAL_ALIGNMENT_LEFT, -1, 12, WARN_COLOR if _warn else SAY_COLOR)
+			HORIZONTAL_ALIGNMENT_LEFT, -1, 12, say_col)
 
 	# 음소거 표시 — 우상단. 소리가 꺼진 걸 눈으로 알게 (안 그러면 "왜 소리가 안 나지"가 버그로
 	# 오해된다). 이모지는 fallback_font에서 두부가 되니 텍스트로.
@@ -408,8 +450,9 @@ func _draw_slot(font: Font, at: Vector2, idx: int) -> void:
 	_draw_jin_diagram(center, design)
 
 
-## 진 미니 다이어그램 — 책의 진 셀과 같은 규약(`jin_slot_dots`). 원 둘레 8칸: 열린 칸은 주황,
-## 문양이 놓인 칸은 더 밝게, 닫힌 칸은 흐리게. 중심은 룬 색 점. 진의 "형태"가 손끝에서 읽힌다.
+## 진 미니 다이어그램 — 칸 규약은 `jin_slot_dots`(Tab 마법진 탭과 공유), 룬 자리는
+## `rune_slot_positions`(판·책 셀과 공유). 원 둘레 8칸: 열린 칸은 주황, 문양이 놓인 칸은 더 밝게,
+## 닫힌 칸은 흐리게. 중심은 룬 색 점(융합진이면 둘). 진의 "형태"가 손끝에서 읽힌다.
 func _draw_jin_diagram(center: Vector2, design: RingDesign) -> void:
 	draw_arc(center, DIAG_RADIUS, 0.0, TAU, 24, DIAG_RING, 1.0)
 	# 🔴 세79 M1: 진이 **여러 층**을 가질 수 있다(2등급 = 2겹). `rings[0]`만 보면 바깥 층에만
@@ -426,7 +469,17 @@ func _draw_jin_diagram(center: Vector2, design: RingDesign) -> void:
 			draw_circle(pos, 3.0 if filled else 2.4, FILLED_DOT if filled else OPEN_DOT)
 		else:
 			draw_circle(pos, 1.6, SHUT_DOT)
-	# 중심 룬 색 — 어느 속성 진인지 색으로.
-	var rune_def: RuneDef = Db.get_rune(design.rune)
-	var rune_col := rune_def.ui_color if rune_def != null else Color(0.62, 0.22, 0.12)
-	draw_circle(center, 3.0, rune_col)
+	# ── 중심 룬 색 — 어느 속성 진인지 색으로. 융합진(룬 2개)이면 점이 둘이다. ──
+	# 🔴 세84 #12: 옛 코드는 `design.rune`(첫 룬)만 읽어 **융합진의 두 번째 룬이 HUD에서 사라졌다**
+	# — 두 슬롯의 중심 점 색이 똑같아 1·2 키로 뭘 쏘는지 구분이 안 됐다(쏘는 것 ≠ 보이는 것).
+	# 목록 정본은 `RingDesign.runes_of`다(`ring_design.gd:18`: *"읽을 땐 runes_of()를 거쳐라"*).
+	# 🔴 자리 좌표는 `RingBoard.rune_slot_positions`를 **그대로 부른다** — 각도를 베끼면 판·책 셀·
+	# HUD 셋이 조용히 어긋난다(`jin_slot_dots`를 부르는 것과 같은 이유, 세60).
+	var runes := RingDesign.runes_of(design.runes, design.rune)
+	var seeds := RingBoard.rune_slot_positions(runes.size(), center, DIAG_RADIUS)
+	# 자리가 여럿이면 점을 줄인다 — 판의 룬 축소(RUNE_MULTI_SIZE_FRAC)와 같은 규약.
+	var dot_r := 3.0 if runes.size() <= 1 else 3.0 * RingBoard.RUNE_MULTI_SIZE_FRAC
+	for i in seeds.size():
+		var rune_def: RuneDef = Db.get_rune(int(runes[i]))
+		draw_circle(seeds[i], dot_r,
+			rune_def.ui_color if rune_def != null else Color(0.62, 0.22, 0.12))

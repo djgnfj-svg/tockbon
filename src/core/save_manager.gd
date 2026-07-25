@@ -1,6 +1,12 @@
 extends Node
 ## 저장/로드 (TECH_SPEC §9) — 영구부(창고·도감·고리 도안)와 시간·마나.
-## 자동 저장: 귀환·사망 확정(세이브스컴 방지)·하루 시작(취침 포함). 로드: 부팅 시 1회.
+## 자동 저장: 귀환·사망 확정(세이브스컴 방지)·하루 시작(취침 포함) · 🔴 **창닫기(종료 훅)** ·
+## 🔴 **영구부를 바꾼 순간**(도안 맺기·해금·장비 — 같은 프레임은 한 번으로 합침).
+## 로드: 부팅 시 1회.
+##
+## 🔴🔴 뒤의 두 줄이 세84 감사 #1의 수정이다. 그전엔 트리거가 앞의 셋뿐이었고 종료 훅이 **0건**이라,
+## `day_length_sec` 실시간 12분 경계 전에 창을 닫으면 **마을에서 한 일이 통째로 롤백됐다** —
+## 에러도 경고도 없이. 트리거를 늘릴 땐 「영구 상태를 바꾸는 자리」와 짝이 맞는지 같이 훑어라.
 ##
 ## 🔴 세션 22: 옛 SpellDesign 도안(user://save/designs)·연구 저장을 매장했다. 세이브 호환은 안전하다 —
 ## 로드가 전부 `data.get(키, 기본값)`이라 옛 세이브의 남은 키는 그냥 무시된다.
@@ -26,6 +32,28 @@ func save_root() -> String:
 ## 로드(또는 새 게임 확정) 이전의 자동 저장 방지
 var _ready_to_save := false
 
+## 세이브 스키마 버전. 🔴 전엔 **저장만 하고 읽는 곳이 없었다**(세84 감사 #4) — 지금 쓰임은
+## 「이 빌드가 모르는 미래 세이브를 만나면 시끄럽게 알린다」 하나다. 마이그레이션이 필요해지면
+## 여기서 갈린다(옛 세이브 호환은 지금도 `data.get(키, 기본값)`이 맡는다).
+const SAVE_VERSION := 1
+
+## 🔴 로드가 고리 도안을 **하나라도 잃었나**(세84 #4). 잃은 채로 프룬하면 남아 있는 원본 .tres가
+## 영구 삭제된다 — 「배열이 줄었다」와 「도안이 줄었다」는 다른 사건인데 프룬이 그걸 구분 못 했다.
+var _load_lost_designs := false
+
+## 🔴 같은 프레임 다중 저장 예약을 한 번으로 합친다 — #1의 트리거는 연달아 온다(챕터 클리어가
+## `codex_unlocked`를 여러 번 쏘고, 도안을 맺으면 `ring_design_committed` + 자동 장착
+## `equipment_changed`가 같이 온다).
+## ⚠ **디바운스가 종료 저장을 삼키면 #1이 그대로 재발한다** — 그래서 `save_game()`이 첫 줄에서
+## 이 예약을 걷는다(직접 호출은 예약을 기다리지 않는다).
+var _save_queued := false
+
+## 🔴 지금 로드 중인가 — **로드는 「변경」이 아니다.** `load_game`이 끝에서 `equipment_changed`·
+## `resources_changed`를 쏘는데(구독 UI 깨우기), 그걸 저장 트리거로 받으면 **방금 읽은 것을 곧바로
+## 되쓴다**. 첫 부팅은 `_ready_to_save`가 아직 false라 우연히 막히지만 두 번째 로드부터는 안 막힌다
+## — 우연에 기대지 않고 명시로 막는다.
+var _loading := false
+
 ## 🔴 **부팅 시 1회 로드** (세션 26 — 사용자 확정: *"켜면 이어서 한다"*).
 ##
 ## 세션 21 대청소가 **부팅 흐름을 지우면서 `load_game()`을 부르는 사람이 아무도 안 남았다.**
@@ -46,25 +74,117 @@ func _ready() -> void:
 	EventBus.day_started.connect(func(_day: int) -> void:
 		if _ready_to_save:
 			save_game())
+	# 🔴🔴 **영구 상태를 바꾸는 자리를 저장 트리거로** (세84 감사 #1 — 방어선 ②).
+	# 위 셋만으로는 트리거가 「귀환·사망·하루경계(실시간 12분)」뿐이라, **마을에서 도안을 맺고
+	# 장비를 바꾸고 창을 닫으면 전부 롤백됐다.** 영구부를 바꾸는 신호를 여기에 건다:
+	#   ring_design_committed = 도안 보관·자동 장착 · codex_unlocked = 해금(룬·챕터 클리어·스테이션)
+	#   equipment_changed = 착·탈용
+	# ⚠ `equipment_changed`는 `load_game`·`new_game`도 쏘는데, 그때는 `_ready_to_save`가 아직
+	#   false거나(로드) 직후 `save_game()`이 예약을 걷는다(새로하기) — 방금 읽은 것을 되쓰지 않는다.
+	# 🔴🔴 **`resources_changed`는 일부러 안 건다** (세84에 실측하고 각하): 창고 증감(제작·상점·
+	#   퀘스트 보상)만 쏘는 게 아니라 **`GameState.add_to_bag`도 같이 쏜다** — 그러면 원정 중
+	#   드롭을 주울 때마다 세이브 파일 + 도안 .tres 전량을 다시 쓴다. 그런데 **가방은 애초에 저장
+	#   대상이 아니라**(사망 시 소실이 설계다) 순수 낭비다. 창고 변화를 트리거로 삼으려면
+	#   신호를 갈라야 한다(`inventory_changed` 신설 or `add_to_bag`을 분리) = 리드의 core 작업.
+	#   그때까지 **제작·상점은 종료 훅(방어선 ①)이 덮는다.**
+	EventBus.ring_design_committed.connect(func(_design: RingDesign) -> void: _queue_save())
+	EventBus.codex_unlocked.connect(func(_unlock_id: StringName) -> void: _queue_save())
+	EventBus.equipment_changed.connect(_queue_save)
+	# 🔴 창닫기를 우리가 받는다 — 아래 `_notification` 주석 참조. 이 줄이 없으면 엔진이
+	# 알림만 보내고 **곧바로** 종료해 저장이 끝나기 전에 프로세스가 사라질 수 있다.
+	get_tree().auto_accept_quit = false
 	load_game()
+
+
+## 🔴🔴 **창을 닫아도 저장한다** (세84 감사 #1 — 사용자가 실제로 데이터를 잃고 있던 자리).
+## 세26의 「껐다 켜면 그린 마법진이 사라졌다」와 사용자 체감이 같다(원인만 다르다 — 그때는
+## `load_game()` 호출자가 없어 저장이 no-op이었고, 이번엔 저장할 **계기**가 없었다).
+##
+## 🔴 `auto_accept_quit = false`면 엔진은 창닫기를 종료로 바꾸지 않고 이 알림만 보낸다 —
+## **종료는 우리가 직접 해야 한다.** 그래서 `quit`을 **먼저 예약**하고 저장한다: 예약(deferred)은
+## 이 함수가 반환한 뒤 처리되니 저장이 먼저 끝나고, **저장이 런타임 에러로 중단돼도 창은 닫힌다.**
+## 순서를 뒤집으면(저장 → quit) 저장 중 에러 한 번에 **닫히지 않는 창**이 된다 — 없는 문제를 막다
+## 진짜 함정을 심는 자리다(세50 `_exit_tree` 교훈).
+##
+## ⚠ **이 훅이 못 잡는 종료**: 에디터 [정지] 버튼·강제 종료(프로세스 kill)는 알림 없이 죽는다.
+## 그건 방어선 ②(위 `_ready`의 신호 트리거)가 덮는다 — 그래서 둘을 다 깐 것이다.
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_CLOSE_REQUEST:
+		get_tree().quit.call_deferred()
+		# 🔴 **예약을 기다리지 않고 직접 쓴다.** `save_game()`이 첫 줄에서 예약을 걷으므로
+		# 디바운스가 종료 저장을 삼키는 일이 없다(그러면 #1이 그대로 재발한다).
+		save_game()
+
+
+## 🔴 저장 **예약** — 같은 프레임에 몇 번 불려도 파일은 한 번만 쓴다.
+## ⚠ 예약은 **연기**일 뿐이다 — 종료 훅·귀환·사망은 `save_game()`을 직접 부르고, 그게 예약을
+## 걷어 이중 저장도 막는다.
+func _queue_save() -> void:
+	if _loading or not _ready_to_save or _save_queued:
+		return
+	_save_queued = true
+	_flush_save.call_deferred()
+
+
+func _flush_save() -> void:
+	# 사이에 누가 `save_game()`을 직접 불렀으면 예약이 이미 걷혔다 = 여기선 할 일이 없다.
+	if not _save_queued:
+		return
+	# 🔴 **트리를 떠난 뒤엔 쓰지 않는다.** 예약은 다음 프레임에 깨어나므로 그 사이에 종료가
+	# 시작될 수 있고, 그러면 이미 해체 중인 오토로드(GameState·Clock)를 만진다.
+	# 종료 저장은 `_notification`이 **동기로** 이미 했다 — 여기서 다시 쓸 일이 없다.
+	if not is_inside_tree():
+		_save_queued = false
+		return
+	save_game()
 
 func has_save() -> bool:
 	return FileAccess.file_exists(_save_path)
 
 func save_game() -> void:
+	# 🔴 예약을 걷는다 — 직접 호출이 예약보다 앞서면 예약은 할 일이 없다(_flush_save 참조).
+	_save_queued = false
 	if not _ready_to_save:
 		return
-	# 고리 도안 저장 — 파일 목록 + 장착 인덱스
+	# 고리 도안 저장 — 파일 목록 + 🔴 장착은 **파일 경로**(안정 키)
 	DirAccess.make_dir_recursive_absolute(_ring_dir)
 	var ring_files: Array = []
+	## 보관 **인덱스** → 그 도안이 실제로 쓰인 경로. 장착 참조가 이걸로 나간다.
+	## ⚠ 사전 키를 `RingDesign`(객체)으로 두지 마라 — 그러면 사전이 도안들을 강참조해 붙들고,
+	##   종료 중 해체 순서에 얽힌다(세84에 실측: 종료 시 간헐 segfault). 정수 키면 그 결합이 없다.
+	var path_by_index: Dictionary = {}
+	var lost := 0
 	for i in range(GameState.ring_designs.size()):
 		var rpath := "%s/ring_%d.tres" % [_ring_dir, i]
-		ResourceSaver.save(GameState.ring_designs[i], rpath)
+		# 🔴 전엔 반환값을 **아무도 안 봤다**(세84 감사 #4). 쓰기가 실패했는데 경로를 목록에
+		# 실으면, 다음 부팅이 그 경로 로드에 실패해 배열이 줄고 → 인덱스로 저장된 장착이
+		# 한 칸씩 밀려 **슬롯이 남의 마법을 쏜다** → 그 다음 자동 저장의 프룬이 원본을 지운다.
+		var err := ResourceSaver.save(GameState.ring_designs[i], rpath)
+		if err != OK:
+			lost += 1
+			push_warning("고리 도안 저장 실패 — 이 도안은 세이브 목록에서 빠진다: %s (err %d)"
+				% [rpath, err])
+			continue
 		ring_files.append(rpath)
-	_prune_ring_files(GameState.ring_designs.size())
+		path_by_index[i] = rpath
+	# 🔴 프룬 = 「도안이 줄었으면 남은 ring_N.tres를 지운다」. 그런데 **줄어든 이유가 저장·로드
+	# 실패**라면 그 삭제가 살아 있는 원본을 영구히 없앤다(#4의 진짜 피해). 실패를 알고 있으면
+	# 건너뛴다 — 남는 파일은 세이브 목록에 없는 고아라 무해하고, 지운 도안은 되돌릴 수 없다.
+	if lost == 0 and not _load_lost_designs:
+		_prune_ring_files(GameState.ring_designs.size())
+	else:
+		push_warning("고리 도안 유실을 알고 있어 ring_*.tres 프룬을 건너뛴다 (원본 보호)")
+	# 🔴 장착 참조 = **파일 경로**(세84 #4). 전엔 `ring_designs`의 **목록 인덱스**였는데, 도안
+	# 한 장이 로드에 실패해 배열이 줄면 뒤 슬롯이 전부 한 칸씩 밀렸다. 경로는 그 도안에 붙어
+	# 있어 밀리지 않는다. 빈 슬롯·저장 실패한 도안은 "".
+	# ⚠ 인덱스도 **계속 같이 쓴다** — 이 변경을 되돌려도(옛 코드가 읽어도) 세이브가 그대로 열린다.
+	var ring_equipped_paths: Array = []
 	var ring_equipped_idx: Array = []
 	for rdesign: RingDesign in GameState.ring_equipped:
-		ring_equipped_idx.append(GameState.ring_designs.find(rdesign))
+		# 빈 슬롯이면 find가 -1 → 경로도 "" (path_by_index에 -1 키가 없다).
+		var di := GameState.ring_designs.find(rdesign)
+		ring_equipped_idx.append(di)
+		ring_equipped_paths.append(String(path_by_index.get(di, "")))
 
 	var inventory: Dictionary = {}
 	for item_id: StringName in GameState.inventory:
@@ -91,7 +211,7 @@ func save_game() -> void:
 			quest_seen.append(String(qid))
 
 	var data := {
-		"version": 1,
+		"version": SAVE_VERSION,
 		"day": Clock.day,
 		"time_sec": Clock.time_sec,
 		"mana": GameState.mana,
@@ -100,6 +220,7 @@ func save_game() -> void:
 		"codex": codex,
 		"ring_designs": ring_files,
 		"ring_equipped": ring_equipped_idx,
+		"ring_equipped_paths": ring_equipped_paths,
 		"quest_progress": quest_progress,
 		"quest_done": quest_done,
 		"quest_seen": quest_seen,
@@ -117,6 +238,15 @@ func load_game() -> bool:
 		_ready_to_save = true
 		return false
 	var file := FileAccess.open(_save_path, FileAccess.READ)
+	# 🔴 **저장 경로엔 있던 null 가드가 로드엔 없었다**(세84 감사 #4 — 「저장/로드 비대칭을
+	# 의심해라」). 없으면 다음 줄 `file.get_as_text()`가 null 참조로 터지고, 그러면
+	# `_ready_to_save`가 false로 남아 **이후 모든 자동 저장이 조용한 no-op**이 된다(세26 상태).
+	# 그런데 `-s`는 그래도 OK를 찍는다. 이번 판의 진행은 잃어도 다음 저장은 살린다.
+	if file == null:
+		push_warning("세이브 열기 실패 — 새 게임으로 시작: %s (err %d)"
+			% [_save_path, FileAccess.get_open_error()])
+		_ready_to_save = true
+		return false
 	var data: Variant = JSON.parse_string(file.get_as_text())
 	file.close()
 	if typeof(data) != TYPE_DICTIONARY:
@@ -124,6 +254,17 @@ func load_game() -> bool:
 		_ready_to_save = true
 		return false
 
+	# 🔴 저장만 하고 **읽는 곳이 없던** 필드(세84 #4). 모르는 미래 세이브는 조용히 반쯤
+	# 읽히는 게 가장 나쁘다 — 시끄럽게 알리고, 아는 키만 읽는다(옛 세이브는 get 기본값이 덮는다).
+	var version := int(data.get("version", SAVE_VERSION))
+	if version > SAVE_VERSION:
+		push_warning("세이브 버전 %d은 이 빌드(%d)보다 새롭다 — 모르는 키는 무시된다: %s"
+			% [version, SAVE_VERSION, _save_path])
+
+	# 🔴 여기서부터 복원 = **「변경」이 아니다.** 아래 `equipment_changed`·`resources_changed`와
+	# `reevaluate_quests`(소급 완료 보상)가 저장 트리거를 때리면 방금 읽은 것을 곧바로 되쓴다.
+	# (위 early return들은 이 플래그를 켜기 전이라 새는 자리가 없다.)
+	_loading = true
 	Clock.day = int(data.get("day", 1))
 	Clock.time_sec = float(data.get("time_sec", 0.0))
 
@@ -154,16 +295,38 @@ func load_game() -> bool:
 
 	# 고리 도안 복원
 	GameState.ring_designs.clear()
+	## 경로 → 복원된 도안. 장착 참조(안정 키)가 이걸로 풀린다 — 인덱스가 아니라서 **한 장이
+	## 빠져도 나머지 슬롯이 밀리지 않는다**.
+	var design_by_path: Dictionary = {}
+	_load_lost_designs = false
 	for path: String in data.get("ring_designs", []):
 		# 캐시 우회 — 같은 세션에서 저장→로드 시 인스턴스 재사용으로 복원이 무효화되는 것 방지
 		var rres := ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_IGNORE)
 		var rdesign := rres as RingDesign
-		if rdesign != null:
-			GameState.ring_designs.append(rdesign)
-	var ring_equipped_idx: Array = data.get("ring_equipped", [])
+		# 🔴 전엔 `if rdesign != null: append`로 실패를 **조용히 버렸다**(세84 감사 #4).
+		# 배열이 줄면 인덱스로 저장된 장착이 밀리고, 다음 자동 저장의 프룬이 남은 원본을
+		# **영구 삭제**했다. 이제 시끄럽게 알리고 프룬을 멈춘다(save_game의 `_load_lost_designs`).
+		if rdesign == null:
+			_load_lost_designs = true
+			push_warning("고리 도안 로드 실패 — 빠진 채 계속하고 프룬을 멈춘다: %s" % path)
+			continue
+		GameState.ring_designs.append(rdesign)
+		design_by_path[path] = rdesign
+	# 🔴 장착 복원 — 새 세이브는 **경로**(안정 키), 옛 세이브는 목록 인덱스.
+	# ⚠ 형식을 슬롯마다 섞지 않고 **파일 단위로** 고른다 — 섞으면 한쪽이 조용히 엉뚱한 도안을 집는다.
+	var eq_by_path: bool = (data as Dictionary).has("ring_equipped_paths")
+	var eq_paths: Array = data.get("ring_equipped_paths", [])
+	var eq_idx: Array = data.get("ring_equipped", [])
 	for slot in range(GameState.EQUIP_SLOTS):
-		var ridx: int = int(ring_equipped_idx[slot]) if slot < ring_equipped_idx.size() else -1
-		GameState.ring_equipped[slot] = GameState.ring_designs[ridx] if ridx >= 0 and ridx < GameState.ring_designs.size() else null
+		var equipped: RingDesign = null
+		if eq_by_path:
+			if slot < eq_paths.size():
+				equipped = design_by_path.get(String(eq_paths[slot])) as RingDesign
+		elif slot < eq_idx.size():
+			var ridx := int(eq_idx[slot])
+			if ridx >= 0 and ridx < GameState.ring_designs.size():
+				equipped = GameState.ring_designs[ridx]
+		GameState.ring_equipped[slot] = equipped
 
 	# 🔴 장비를 복원했으니 상한을 반영한다 — hp는 저장하지 않으므로(출격이 만HP로 덮는다) 부팅은
 	# 복원된 로브 상한 기준 만HP로 맞춘다. equipment_changed는 부팅 시 장비 구독 UI를 깨운다.
@@ -174,6 +337,7 @@ func load_game() -> bool:
 	# 🔴 복원된 완료 상태 기준으로 소급 완료를 한 번 — 이미 해금된 룬을 노리는 UNLOCK 퀘스트가
 	# 열린 채 막히지 않게 (game_state._auto_complete_satisfied 주석). Db는 오토로드라 이 시점 준비됨.
 	GameState.reevaluate_quests()
+	_loading = false
 	_ready_to_save = true
 	return true
 
@@ -192,6 +356,12 @@ func load_game() -> bool:
 ## → 설계·미결은 `docs/BACKLOG.md` 「F8 — 새로하기」가 정본. **`GameState.new_game()`을 core에
 ## 하나 두는 쪽**이 맞다 (씬마다 손으로 비우면 필드가 늘 때 조용히 갈라진다).
 func wipe_save() -> void:
+	# 🔴 **예약된 저장을 걷는다** (세84 #1의 디바운스가 만든 새 함정 — 실측으로 밟았다):
+	# 지우기 직전에 누가 `_queue_save()`를 했으면 그 예약이 **다음 프레임에 파일을 되살린다.**
+	# 실측: test_save_auto가 `new_game()`(→`equipment_changed`) 뒤 `wipe_save()`로 끝나는데,
+	# 이 줄이 없으면 뒷정리 검사를 통과한 뒤 `ring_*.tres` 3장이 **다시 생겨 남았다.**
+	# ⚠ 이 파일이 위에서 경고하는 「wipe 뒤 자동 저장 한 번에 옛 진행이 도로 써진다」의 새 판이다.
+	_save_queued = false
 	if FileAccess.file_exists(_save_path):
 		DirAccess.remove_absolute(_save_path)
 	_prune_ring_files(0)
@@ -204,6 +374,8 @@ func wipe_save() -> void:
 func start_new_game() -> void:
 	wipe_save()
 	GameState.new_game()
+	# 🔴 새 판은 잃은 도안이 없다 — 이 플래그를 안 걷으면 옛 실패가 남아 프룬이 영구히 멈춘다.
+	_load_lost_designs = false
 	_ready_to_save = true
 	save_game()
 

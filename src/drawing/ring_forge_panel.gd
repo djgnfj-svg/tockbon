@@ -68,6 +68,12 @@ const RUBBING_BG := Color(0.85, 0.80, 0.70, 1.0)
 const RUBBING_EDGE := Color(0.42, 0.35, 0.27, 0.75)
 const RUBBING_CORNER := Color(0.34, 0.28, 0.20, 0.55)
 const RUBBING_PAD := 10.0   # 프리뷰 상자 안쪽 여백(획이 테두리에 안 닿게)
+## 세84 폐지 모드 「점수 근거」 상자 — 탁본 프리뷰가 있던 자리를 부품 근거가 쓴다. 같은 한지
+## 톤이되 **귀퉁이 눌린 자국은 없다**(그건 "탁본지"라는 신호라 폐지 모드에서 거짓말이 된다).
+const PARTS_BG := Color(0.87, 0.83, 0.74, 1.0)
+const PARTS_EDGE := Color(0.42, 0.35, 0.27, 0.55)
+const PARTS_PAD := 10.0
+const PARTS_ROW_H := 13.0
 
 const OPEN_SEC := 0.20
 const OPEN_FROM_X := 0.04
@@ -101,6 +107,17 @@ const Copy_START := "오른쪽에서 진·룬을 고르고 진의 층에 문양-
 ## 세83 그리기 폐지 모드의 안내문 — 손 긋기를 안내하면 있지도 않은 조작을 적는 셈이다
 ## (CLAUDE.md 「안내문에 없는 조작을 적지 마라 — 그 자체가 버그다」).
 const Copy_START_ASSEMBLE := "오른쪽에서 진·룬을 고르고 진의 층에 문양-고리를 끼우세요 — 다 끼웠으면 [마법진 완성 ✦]"
+
+## 🔴 세84: 하단 조작 안내(HintLabel)는 **단계에서 파생한다**(`_update_hint`). 예전엔 씬에
+## "여러 획 OK · 우클릭=다시 · ESC=덮기"가 박혀 있고 갱신 코드가 한 줄도 없어 **모든 단계에
+## 상주**했다 — 폐지 모드엔 손 긋기가 아예 없으니(보드가 영구 IGNORE) 있지도 않은 조작을
+## 안내하는 셈이다(CLAUDE.md·감사 #11).
+## ⚠ **모드(`skip_drawing`)를 여기서 읽지 않는다** — DRAW 단계는 폐지 모드에서 도달 불가라
+## (`_on_start_draw`가 바로 `_finish`) 단계만 보면 모드 분기가 저절로 맞는다. 모드를 또 읽으면
+## 같은 사실을 두 소스가 쥐게 되고, 스위치를 되돌릴 때 한쪽만 남는다(세84 감사 T1).
+const HINT_ASSEMBLE := "오른쪽 칸 클릭=조각 고르기 · ESC=덮기"
+const HINT_DRAW := "여러 획 OK · 우클릭=다시 · ESC=덮기"
+const HINT_RESULT := "[마력 주입]으로 맺는다 · ESC=덮기"
 ## 🔴 세71c 층(band) 수는 이제 **진이 정한다**(`JinDef.band_count`) — 옛 `const BANDS := 2`를 걷어냈다.
 ## `_bands` 크기가 선택 진 band_count에서 파생되고(`_resize_bands`), 진 미선택이면 소켓 0(`_reset_selection`).
 ## 일반진(jin_single) = 1층. RingBoard.BAND_RADII가 반경 목록을 쥐고 진은 앞 band_count개만 쓴다.
@@ -134,6 +151,7 @@ const INK_EDGE_ON := Color(0.95, 0.82, 0.35)
 @onready var _score_sub: Label = $Stage/Spread/DrawTools/ScoreSub   # 완성도·정밀도 보조 줄
 @onready var _title: Label = $Stage/Spread/TitleLabel
 @onready var _say: Label = $Stage/Spread/SayLabel
+## 하단 조작 안내 — 텍스트는 씬이 아니라 `_update_hint`(단계 파생)가 쥔다 (세84).
 @onready var _hint: Label = $Stage/Spread/HintLabel
 @onready var _report: Control = $Stage/Spread/Report   # 분석 리포트 오버레이 (완성 시 표시)
 @onready var _redraw_btn: Button = $Stage/Spread/RedrawBtn   # 세71b [다시 조립] — 게이트 풀고 ASSEMBLE 복귀
@@ -312,7 +330,7 @@ func open() -> void:
 	_sync_book_runes()                          # 🔴 세81 M2: 룬 소켓(자리) 상태를 책에 주입
 	recompose()                                 # 🔴 clear_all 뒤 COMBINED 모드로 재진입 (빈 진이면 빈 가이드)
 	_set_phase(Phase.ASSEMBLE)                  # 🔴 세71b: 조립 단계부터 — 손 긋기 잠금·룬/층 탭 잠금
-	_set_say(Copy_START_ASSEMBLE if RingPower.skip_drawing() else Copy_START, false)
+	_set_say(_start_copy(), false)
 	_update_score()
 	_spread_open()
 
@@ -489,7 +507,10 @@ func recompose() -> void:
 	# 🔴 세81: 층 구분 동심원은 **조립 미리보기(ASSEMBLE)에서만** 보인다 — 실제로 그릴 때(DRAW)는
 	# 문양이 그 선에 걸쳐 지저분하다는 사용자 지적으로 끈다. 그래서 _on_start_draw가 phase를 DRAW로
 	# 바꾼 **뒤에** recompose를 부른다(아래).
-	_board.enter_combined_trace(flat, paths, band_defs.size(), _phase != Phase.DRAW)
+	# 🔴 세84 #22: `_sel_runes`를 **한 번 더** 넘긴다(503의 compose와 같은 값) — 판이 미선택 룬 자리
+	# 마커를 **상태**로 그리게 하는 유일한 입력이다. 4인자로 남기면 보드가 하위 호환 폴백(개수 유추)을
+	# 타서 융합진(자리 2개)의 빈 자리 표식이 중심에 하나만 뜨거나 통째로 사라진다 — 에러는 안 난다.
+	_board.enter_combined_trace(flat, paths, band_defs.size(), _phase != Phase.DRAW, _sel_runes)
 	_update_score()
 	_refresh_buttons()
 
@@ -505,17 +526,33 @@ func _has_attempt() -> bool:
 ## 🔴🔴 **점수의 유일한 출처** (세83). 그리기가 살아 있으면 손그림 통째 점수, 폐지 모드면
 ## 부품이 정한 점수. 🔴 `combined_total()`을 직접 부르는 자리를 하나라도 남기면 **모드가 조용히
 ## 갈린다** — 폐지 모드에서 그 자리만 0점을 읽어 「조립했는데 펑」이 난다(세26 「score 안 실으면
-## 조용히 기준 위력」의 이번 판). 부르는 곳 = close·_finish·_on_inject·build_assembly 넷 전부.
+## 조용히 기준 위력」의 이번 판).
+## 부르는 곳 = `close`·`_finish`·`_on_inject`·`build_assembly`·`_update_score` **다섯 전부**
+## (세84에 `_update_score`가 이 규율을 어긴 다섯 번째 자리라 여기로 합쳤다 — 감사 #11).
+## ⚠ 이 목록은 계약 문서다. `combined_total()`을 새로 직접 부르는 자리를 만들지 말고, 이 함수의
+## 호출자가 늘면 **이 줄도 같이 늘려라**(주석이 코드와 함께 늙지 않으면 다음 사람을 잘못 이끈다).
 func _score_now() -> float:
 	if not RingPower.skip_drawing():
 		return _board.combined_total()
+	var parts := assembled_parts()
+	return RingPower.assembled_score(parts.x, parts.y)
+
+
+## 🔴 조립 부품 수 — `x` = 문양 수, `y` = 층 수. `RingPower.assembled_score`의 **두 입력**이고
+## 폐지 모드 리포트가 「점수 근거」로 그대로 적는다(세84). 같은 숫자를 두 곳에서 따로 세면
+## 리포트와 점수가 갈라진다 — 그래서 세는 자리는 이 함수 하나다.
+## ⚠ `layer_rings`는 밴드 0개(진 미선택·band_count 0)여도 **빈 층 하나**를 돌려준다 —
+## 그게 발사 계약이라 층 수도 그 값을 그대로 쓴다(패널이 따로 세면 점수와 어긋난다).
+## 🔴 **공개인 이유 = 그물의 관측점**(세84). 리포트 렌더는 헤드리스가 못 보지만 이 숫자는 볼 수
+## 있다 — private을 더듬는 그물은 리팩터 때 조용히 죽는다(감사 #40 · 세22·23의 그 함정).
+func assembled_parts() -> Vector2i:
 	var rings := RingBoard.layer_rings(_band_defs())
 	var glyphs := 0
 	for ring_v in rings:
 		for g in (ring_v as Array):
 			if int(g) != RingBoard.GLYPH_NONE:
 				glyphs += 1
-	return RingPower.assembled_score(glyphs, rings.size())
+	return Vector2i(glyphs, rings.size())
 
 
 ## 진 탭 셀 클릭 → 진을 고르고 왼쪽 밑그림 재합성 (세71: 밑그림은 통째, 진만 따로 안 긋는다).
@@ -678,6 +715,19 @@ func _set_phase(p: Phase) -> void:
 	_sync_book_tabs()
 	_refresh_buttons()
 	_update_score()
+	_update_hint()
+
+
+## 하단 조작 안내를 **지금 단계에 실제로 있는 조작**으로 갈아 끼운다 (세84 — 씬에 박힌
+## 상주 문구를 대체). DRAW는 폐지 모드에서 도달 불가라 모드를 안 읽는다(위 HINT_* 주석).
+func _update_hint() -> void:
+	match _phase:
+		Phase.DRAW:
+			_hint.text = HINT_DRAW
+		Phase.RESULT:
+			_hint.text = HINT_RESULT
+		_:
+			_hint.text = HINT_ASSEMBLE
 
 
 ## 🔴 손 긋기 잠금은 **board.mouse_filter 토글**로만 한다(리뷰 각주 ② — 새 보드 플래그 없음).
@@ -709,6 +759,14 @@ func _sync_book_tabs() -> void:
 ## 시작 버튼의 이름 — 안내문이 버튼과 어긋나지 않게 **한 곳**에서 낸다.
 func _start_btn_name() -> String:
 	return "마법진 완성 ✦" if RingPower.skip_drawing() else "그리기 시작 ✎"
+
+
+## 🔴 세84: 시작 안내문도 **한 곳**에서 낸다(`_start_btn_name` 선례). 예전엔 `open()`만 모드를
+## 갈랐고 `clear_board()`는 무조건 손 긋기 문구를 적어, 실경로인 리포트 **[다시]** →
+## `_on_report_redo` → `clear_board()`를 타면 폐지 모드인데 "손으로 한 번에 따라 그으면"이
+## 떴다(감사 #11). 술어가 하나면 스위치를 되돌릴 때 두 자리가 같이 따라온다.
+func _start_copy() -> String:
+	return Copy_START_ASSEMBLE if RingPower.skip_drawing() else Copy_START
 
 
 func _can_start_draw() -> bool:
@@ -1019,14 +1077,22 @@ func _update_score() -> void:
 		_score_num.text = ""
 		_score_sub.text = ""
 		return
-	var cov := int(round(_board.coverage() * 100.0))
-	var acc := int(round(_board.accuracy() * 100.0))
-	var total := _board.combined_total()
+	# 🔴🔴 세84: 점수 출처는 `_score_now()` **하나**다(위 505 규율). 예전엔 여기서
+	# `combined_total()`을 직접 읽어 **다섯 번째 자리**가 됐고, 폐지 모드 RESULT에서 가드를
+	# 통과해 실제로 돌면서 "0" + 미달색을 세팅했다(안 보이던 이유는 `_draw_tools.visible`
+	# 가시성 가드 하나뿐 — 그 가드를 건드리는 순간 「조립했는데 0점」이 뜬다).
+	var total := _score_now()
 	# 🔴 세71d: 종합 점수를 **크게** — 그으면서 바로 오른다(실시간, score_changed 배선 재사용).
 	_score_num.text = "%d" % _pct(total)
 	_score_num.add_theme_color_override(&"font_color",
 		SCORE_STRONG if RingPower.is_stable(total) else SCORE_WEAK)
-	_score_sub.text = "완성도 %d%% · 정밀도 %d%%" % [cov, acc]
+	# 완성도·정밀도는 **손 긋기 축**이다 — 폐지 모드엔 그을 것이 없어 영구 0%다(없는 축을
+	# 0으로 적으면 상단 점수와 모순된다, 감사 #11). 부품 근거는 리포트가 보여 준다.
+	if RingPower.skip_drawing():
+		_score_sub.text = ""
+	else:
+		_score_sub.text = "완성도 %d%% · 정밀도 %d%%" % [
+			int(round(_board.coverage() * 100.0)), int(round(_board.accuracy() * 100.0))]
 
 
 ## 🔴 세71b 단계별 버튼:
@@ -1081,7 +1147,7 @@ func clear_board() -> void:
 	_sync_book_bands()
 	recompose()            # 진 미선택 = 빈 가이드
 	_set_phase(Phase.ASSEMBLE)   # 🔴 세71b: 펑·[다시]는 조립 단계로 되돌린다(리포트 닫힘·탭 잠금 리셋)
-	_set_say(Copy_START, false)
+	_set_say(_start_copy(), false)   # 🔴 세84: open()과 **같은 술어** — 모드를 여기서 다시 갈래 치지 않는다
 
 
 func play_cast() -> void:
@@ -1144,19 +1210,29 @@ func _draw_report() -> void:
 	# 🔴 세71: per-piece 행이 없다 — 통째로 그은 종합 하나다. 대신 **무엇을 조립했나** 한 줄.
 	_report.draw_string(font, Vector2(14, 106), "조립: " + _compose_summary(),
 		HORIZONTAL_ALIGNMENT_LEFT, -1, 10, REPORT_NAME)
-	# 종합 트레이스 막대 (완성도×정밀도).
+	# 종합 막대 — 그리기 모드=완성도×정밀도, 폐지 모드=부품 점수(둘 다 같은 0~1 척도라 막대는 하나다).
 	var bar := Rect2(14, 118, _report.size.x - 28, 7)
 	_report.draw_rect(bar, Color(0.80, 0.74, 0.62, 0.7), true)
 	_report.draw_rect(Rect2(bar.position, Vector2(bar.size.x * clampf(total, 0.0, 1.0), bar.size.y)),
 		Color(0.72, 0.45, 0.15), true)
-	_report.draw_string(font, Vector2(14, 142),
-		"완성도 %d%% · 정밀도 %d%%" % [
-			int(round(_board.coverage() * 100.0)), int(round(_board.accuracy() * 100.0))],
-		HORIZONTAL_ALIGNMENT_LEFT, -1, 8, REPORT_DESC)
 
-	# 🔴 세71b '탁본 종이' — 내가 그은 획을 종이 위에 눌러 찍은 프리뷰(연출 개편). 버튼(y292) 위 공간.
-	_report.draw_string(font, Vector2(14, 160), "탁본", HORIZONTAL_ALIGNMENT_LEFT, -1, 9, REPORT_NAME)
-	_draw_rubbing(Rect2(14.0, 166.0, w - 28.0, 118.0))
+	# 🔴🔴 세84: **아래 절반이 모드로 갈린다.** 예전엔 폐지 모드에서도 `coverage`·`accuracy`를
+	# 그대로 읽어 상단의 「종합 70점」과 「완성도 0% · 정밀도 0%」가 **같은 카드에** 떴고, 그 아래
+	# 탁본 프리뷰가 "(획 없음)"을 찍었다(감사 #11 — `_draw_report`에 모드 분기가 하나도 없었다).
+	# 폐지 모드엔 「그은 양」이라는 축 자체가 없으니 그 자리에 **점수 근거**를 적는다 —
+	# 사용자 세83 F5 숙제(*"탁본 종이를 보여주던 자리인데 그릴 게 없다"*)를 채우는 자리다.
+	if RingPower.skip_drawing():
+		_report.draw_string(font, Vector2(14, 142), "점수 근거",
+			HORIZONTAL_ALIGNMENT_LEFT, -1, 9, REPORT_NAME)
+		_draw_parts(Rect2(14.0, 148.0, w - 28.0, 136.0))
+	else:
+		_report.draw_string(font, Vector2(14, 142),
+			"완성도 %d%% · 정밀도 %d%%" % [
+				int(round(_board.coverage() * 100.0)), int(round(_board.accuracy() * 100.0))],
+			HORIZONTAL_ALIGNMENT_LEFT, -1, 8, REPORT_DESC)
+		# 🔴 세71b '탁본 종이' — 내가 그은 획을 종이 위에 눌러 찍은 프리뷰(연출 개편). 버튼(y292) 위 공간.
+		_report.draw_string(font, Vector2(14, 160), "탁본", HORIZONTAL_ALIGNMENT_LEFT, -1, 9, REPORT_NAME)
+		_draw_rubbing(Rect2(14.0, 166.0, w - 28.0, 118.0))
 
 
 ## 내가 그은 먹선을 종이 톤 상자 안에 **자동 맞춤**해 그린다(탁본을 뜬 종이처럼). 좌표는 board-local이라
@@ -1201,6 +1277,69 @@ func _draw_rubbing(box: Rect2) -> void:
 		for p2: Vector2 in s2:
 			out.append(p2 * sc + off)
 		_report.draw_polyline(out, ink, 1.6, true)
+
+
+## 🔴 세84 폐지 모드 리포트 — **무엇이 이 점수를 만들었나**. 손 긋기가 없으니 점수는 전부
+## 부품에서 온다(`RingPower.assembled_score`의 두 입력 = 문양 수·층 수) — 그게 폐지 이후 유일한
+## 성장 축이라 리포트가 그걸 보여줘야 「좋은 부품을 모으면 세진다」가 손끝에 닿는다.
+##
+## 🔴 그리는 문자열은 전부 `parts_headline()`·`score_reason()`(순수·공개)이 만든다 — 렌더는
+## 헤드리스가 못 보지만 **문자열은 볼 수 있어** 숫자가 틀어지는 건 그물이 잡는다. 여기 남는 건
+## 좌표·색뿐이고, 그게 F5로만 확인되는 부분이다.
+## ⚠ 부품 수는 `assembled_parts()`(=`_score_now()`가 쓰는 그 함수)에서 온다 — 따로 세지 않는다.
+func _draw_parts(box: Rect2) -> void:
+	_report.draw_rect(box, PARTS_BG, true)
+	_report.draw_rect(box, PARTS_EDGE, false, 1.5)
+	var font := ThemeDB.fallback_font
+	var x := box.position.x + PARTS_PAD
+	var y := box.position.y + PARTS_PAD + 12.0
+	_report.draw_string(font, Vector2(x, y), parts_headline(),
+		HORIZONTAL_ALIGNMENT_LEFT, -1, 12, REPORT_NAME)
+	y += 18.0
+	# 층마다 무엇이 끼었나 — 안쪽(1층)부터 = 연산 순서(세79 M1). **빈 층도 적는다**: 층 자리
+	# 자체가 점수에 들어가므로 안 적으면 "왜 이 점수인가"가 안 맞는다.
+	# ⚠ 진의 band_count가 0이면 `_bands`가 비는데 `layer_rings`는 빈 층 하나를 세므로 행이 0개다 —
+	# 그 경우만 층 수를 위 줄이 대신 말한다(지금 진 전부 band_count ≥ 1이라 발생 0).
+	for i in _bands.size():
+		if y + PARTS_ROW_H > box.end.y - PARTS_PAD - 26.0:
+			_report.draw_string(font, Vector2(x + 6.0, y), "… 외 %d층" % (_bands.size() - i),
+				HORIZONTAL_ALIGNMENT_LEFT, -1, 9, REPORT_DESC)
+			y += PARTS_ROW_H
+			break
+		var gr := Db.get_glyph_ring(_bands[i]) if String(_bands[i]) != "" else null
+		var row := "%d층 · 빈 층" % (i + 1)
+		if gr != null:
+			row = "%d층 · %s ×%d" % [i + 1, String(gr.display_name), gr.count]
+		_report.draw_string(font, Vector2(x + 6.0, y), row,
+			HORIZONTAL_ALIGNMENT_LEFT, -1, 9, REPORT_DESC)
+		y += PARTS_ROW_H
+	y += 6.0
+	_report.draw_string(font, Vector2(x, y), score_reason(),
+		HORIZONTAL_ALIGNMENT_LEFT, -1, 10, REPORT_NAME)
+	y += 14.0
+	_report.draw_string(font, Vector2(x, y), "더 좋은 부품을 모아 층을 채우면 세진다",
+		HORIZONTAL_ALIGNMENT_LEFT, -1, 9, REPORT_DESC)
+
+
+## 🔴 폐지 모드 리포트의 「부품」 머리줄 — `_draw_parts`가 그리고 **그물이 읽는다**(세84).
+## 렌더는 헤드리스가 못 보지만 문자열은 볼 수 있으니, 숫자가 틀어지는 건 그물이 잡는다.
+func parts_headline() -> String:
+	var parts := assembled_parts()
+	return "층 %d겹 · 문양 %d개" % [parts.y, parts.x]
+
+
+## 🔴 폐지 모드 리포트의 「점수 근거」 한 줄 — 무엇이 이 점수를 만들었나.
+## 기여도를 **`RingPower.assembled_score`의 차이로** 뽑는다(balance 수치를 베끼면 조율할 때
+## 리포트만 거짓말한다 — 세24 「경계를 상수로 베끼면 갈라진다」와 같은 함정).
+## 🔴 셋을 「반올림한 값의 차」로 내므로 **바탕+문양+층 = 종합**이 표시상 정확히 맞는다
+## (`assembled_score`가 1.0에서 클램프돼도 등식이 안 깨진다).
+func score_reason() -> String:
+	var parts := assembled_parts()
+	var base := _pct(RingPower.assembled_score(0, 1))
+	var with_glyphs := _pct(RingPower.assembled_score(parts.x, 1))
+	var full := _pct(RingPower.assembled_score(parts.x, parts.y))
+	return "바탕 %d + 문양 %d + 층 %d = 종합 %d점" % [
+		base, with_glyphs - base, full - with_glyphs, full]
 
 
 ## 리포트의 "무엇을 조립했나" 한 줄 — 진 · 룬 · 층(밴드별 문양-고리). per-piece 점수는 없다.

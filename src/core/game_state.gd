@@ -28,7 +28,11 @@ var equipment: Dictionary = {}
 ## 🔴 고리 도안 — **유일한 마법진 모델** (세션 22에 옛 designs/equipped를 매장했다).
 ##   ring_designs = 보관 전체 · ring_equipped = 장착 EQUIP_SLOTS장.
 var ring_designs: Array[RingDesign] = []
-var ring_equipped: Array[RingDesign] = [null, null, null]
+## 🔴 크기는 **항상 `EQUIP_SLOTS`에서 파생**한다 — `_reset_equipped()`만 이 배열의 크기를 정한다
+## (세84 감사 #34). 전엔 `[null, null, null]` 리터럴이 세 곳에 있어 상수를 4로 고치면 크기는 3인
+## 채로 `save_manager.load_game`이 슬롯 3을 짚어 **부팅 즉시 out of bounds**로 죽고,
+## `_ready_to_save`가 false로 남아 이후 자동 저장이 조용한 no-op이 됐다(`-s`는 failures=0).
+var ring_equipped: Array[RingDesign] = []
 ## {unlock_id: true} — 도감 영구 해금 (룬·제법·적 정보)
 var codex: Dictionary = {}
 ## 🔴 퀘스트 진행 (세션36, "진행 목표 = 깊이 스파인"). 둘 다 영구 저장.
@@ -48,6 +52,18 @@ var ui_modal_open: bool = false
 ## ⚠ 조용한 갈라짐 방지: 켜져 있으면 HUD 마나 막대가 "∞ 테스트"를 적는다(hud._draw_mana).
 ## 소비자는 player_caster.fire() 한 곳 — spend_mana 자체는 안 건드린다(테스트가 직접 재는 API라).
 var debug_free_cast: bool = OS.has_feature("editor")
+
+## 🔴 장착 배열을 `EQUIP_SLOTS` 크기의 빈 슬롯으로 세운다 — **크기의 단일 소스**(세84 #34).
+## 타입 배열의 `resize`는 빈 자리를 null로 채운다(`Array[RingDesign]`의 기본값).
+func _reset_equipped() -> void:
+	ring_equipped.clear()
+	ring_equipped.resize(EQUIP_SLOTS)
+
+
+## 🔴 `_ready`가 아니라 `_init`에서 세운다 — 오토로드는 **생성 즉시** 남이 읽을 수 있어야 하고,
+## 크기가 0인 순간이 존재하면 그게 곧 #34가 말하는 out of bounds다.
+func _init() -> void:
+	_reset_equipped()
 
 func _ready() -> void:
 	mana = mana_max()
@@ -124,7 +140,7 @@ func _seed_starting_unlocks() -> void:
 ## 기존 세이브는 load_game이 이 시드를 덮으므로(옛 슬롯 유지), 세 볼은 **새 게임**에서만 뜬다(룬 시드와 동일).
 func _seed_starting_rings() -> void:
 	ring_designs.clear()
-	ring_equipped = [null, null, null]
+	_reset_equipped()
 	var d_fire := _make_seed_ring(Enums.RuneType.FIRE, "불 마법진")
 	var d_water := _make_seed_ring(Enums.RuneType.WATER, "물 마법진")
 	var d_wind := _make_seed_ring(Enums.RuneType.WIND, "바람 마법진")
@@ -159,7 +175,7 @@ func new_game() -> void:
 	bag.clear()
 	equipment.clear()          # 🔴 장비 벗김 — 맨손 시작 (사용자 확정 세션37)
 	ring_designs.clear()
-	ring_equipped = [null, null, null]
+	_reset_equipped()
 	codex.clear()
 	quest_progress.clear()
 	quest_done.clear()

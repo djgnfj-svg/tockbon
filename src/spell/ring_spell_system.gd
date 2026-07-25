@@ -326,17 +326,35 @@ func _apply_modifier(code: int, count: int, plan: Array, travel: float) -> Array
 	return plan
 
 
+## 🔴 변형형 문양의 수치 조회 — **`GlyphRules.DEFAULTS`의 값을 여기 베끼지 않는다** (세84 감사 #27).
+## 옛 코드는 `param_f(def, &"fan_deg", 46.0)`처럼 표와 **똑같은 리터럴 10개**를 폴백 인자로 들고 있었다.
+## 그 리터럴은 **한 번도 안 쓰인다** — `_apply_modifier`가 `def.behavior`로 분기하니 def는 늘 non-null이고
+## `param()`이 `.tres` → `DEFAULTS` 순으로 반드시 값을 찾는다. 그런데 읽는 사람에겐 **거짓 손잡이**였다:
+## 여기 46.0을 70.0으로 고쳐도 부채각이 한 톨도 안 벌어진다(`spread.tres`가 이긴다).
+## 이제 폴백이 걸리는 경우 = `BEHAVIORS`에 이름만 넣고 `DEFAULTS` 행·키를 빠뜨린 **데이터 결손**이므로,
+## 조용히 그럴듯한 값을 쓰지 않고 경고한다 (이 파일의 「미등록 behavior = 경고 + 건너뜀」과 같은 규약).
+## ⚠ `param_f(def, &"reach", balance.glyph_reach_max)`(발산)는 이걸로 바꾸지 마라 — **살아 있는**
+##   폴백이다(`bolt` DEFAULTS에 reach 키가 없고 그 기본값의 단일 소스는 balance다).
+func _glyph_param(def: GlyphDef, key: StringName) -> float:
+	var v: Variant = GlyphRules.param(def, key, null)
+	if v == null:
+		push_warning("문양(behavior=%s)의 `%s` 기본값이 GlyphRules.DEFAULTS에 없다 — 0으로 본다"
+			% [def.behavior if def != null else &"<null>", key])
+		return 0.0
+	return float(v)
+
+
 ## **확산 = 복제 산개** (사용자 확정 세79). 안쪽 각 갈래를 n개로 복제해 부채꼴로 벌린다.
 ## 탄은 **각도**가 벌어지고, 제자리 명령(기둥·폭발)은 착탄점 둘레로 **위치**가 벌어진다.
 ## 갈래마다 세기는 줄지만(balance) 합은 늘어난다 — 안 그러면 그릴 이유가 없다.
 ## 🔴 세82: 수치가 `balance` 전역이 아니라 **그 문양의 `params`**에서 온다. 그래서 「확산 46°」 옆에
 ## 「돌풍 120°·약함」을 `.tres` 한 장으로 세울 수 있다 — 같은 알고리즘, 다른 문양.
-func _spread(inner: Array, count: int, def: GlyphDef = null) -> Array:
-	var min_branches := int(GlyphRules.param(def, &"min_branches", 2))
+func _spread(inner: Array, count: int, def: GlyphDef) -> Array:
+	var min_branches := int(_glyph_param(def, &"min_branches"))
 	var n := maxi(count, maxi(min_branches, 2))   # 1갈래는 확산이 아니다 — 최소 2갈래
-	var spread := deg_to_rad(GlyphRules.param_f(def, &"fan_deg", 46.0))
-	var branch_mult := GlyphRules.param_f(def, &"branch_mult", 0.6)
-	var offset_px := GlyphRules.param_f(def, &"offset_px", 44.0)
+	var spread := deg_to_rad(_glyph_param(def, &"fan_deg"))
+	var branch_mult := _glyph_param(def, &"branch_mult")
+	var offset_px := _glyph_param(def, &"offset_px")
 	var out: Array = []
 	for cmd: Dictionary in inner:
 		for i in n:
@@ -368,7 +386,7 @@ func _spread(inner: Array, count: int, def: GlyphDef = null) -> Array:
 ## 거꾸로 커진다. 기본값(양수 계수)에선 무변경이라 회귀 0이고 부호 함정만 구조적으로 막힌다.
 ## ⚠ 바닥이 둘인 건 의도다: `blast.gd`의 `maxf(p_radius_px, 1.0)`은 **노드의 안전 바닥**,
 ## `min_radius_px`는 **게임 규칙**이다. 역할이 다르니 하나를 지우지 마라.
-func _explode(inner: Array, count: int, def: GlyphDef = null) -> Array:
+func _explode(inner: Array, count: int, def: GlyphDef) -> Array:
 	var branches := maxi(inner.size(), 1)
 	var total := 0.0
 	var center := Vector2.ZERO
@@ -377,12 +395,12 @@ func _explode(inner: Array, count: int, def: GlyphDef = null) -> Array:
 		center += Vector2(cmd.get("offset", Vector2.ZERO))
 	center /= float(branches)
 	var n := maxi(count, 1)
-	var radius := GlyphRules.param_f(def, &"base_radius_px", 54.0) \
-		* maxf(1.0 + GlyphRules.param_f(def, &"radius_per_branch", 0.18) * float(branches - 1), 0.0) \
-		* maxf(1.0 + GlyphRules.param_f(def, &"radius_per_count", 0.25) * float(n - 1), 0.0)
-	radius = maxf(radius, GlyphRules.param_f(def, &"min_radius_px", 12.0))
-	var merge := GlyphRules.param_f(def, &"merge_mult", 0.85) \
-		+ GlyphRules.param_f(def, &"merge_mult_per_count", 0.0) * float(n - 1)
+	var radius := _glyph_param(def, &"base_radius_px") \
+		* maxf(1.0 + _glyph_param(def, &"radius_per_branch") * float(branches - 1), 0.0) \
+		* maxf(1.0 + _glyph_param(def, &"radius_per_count") * float(n - 1), 0.0)
+	radius = maxf(radius, _glyph_param(def, &"min_radius_px"))
+	var merge := _glyph_param(def, &"merge_mult") \
+		+ _glyph_param(def, &"merge_mult_per_count") * float(n - 1)
 	return [{
 		"kind": &"blast",
 		"offset": center,
@@ -413,10 +431,15 @@ func _spawn_cmd(cmd: Dictionary, at: Vector2, fire: Dictionary) -> void:
 		&"pillar":
 			_spawn_pillar(pos, int(cmd.get("gather", 1)), hit)
 		&"blast":
-			# ⚠ 폴백은 실제로 안 쓰인다(`_explode`가 늘 radius를 싣는다). 세82에 balance에서
-			# `blast_base_radius_px`가 문양 params로 이사해, 폴백도 그 기본값 표를 본다.
-			_spawn_blast(pos, float(cmd.get("radius",
-				GlyphRules.DEFAULTS[&"blast"]["base_radius_px"])), hit)
+			# 🔴 반경은 **호출자가 계산해 넘긴다**(`_explode`가 늘 싣는다) — 여기서 기본값을 보충하면
+			# `GlyphRules.DEFAULTS`를 읽는 **세 번째 방식**이 되어 갈라진다(세84 감사 #27).
+			# radius 없는 blast 명령이 오는 건 `_explode` 경로가 샌 것이므로 **경고 + 건너뜀**이다
+			# (조용히 그럴듯한 크기로 터뜨리면 「반경이 순서를 폭로한다」는 M1 계약이 거짓이 된다).
+			var radius := float(cmd.get("radius", 0.0))
+			if radius <= 0.0:
+				push_warning("blast 명령에 radius가 없다 — 그 폭발을 건너뛴다 (_explode 경로 확인)")
+				return
+			_spawn_blast(pos, radius, hit)
 
 
 ## 발산 = 순수 직진 탄환. effects={}로 쓰면 팅김·유도·관통 없이 곧게 날아가 적에 닿으면 소멸한다.

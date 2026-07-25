@@ -86,11 +86,17 @@ func _ready() -> void:
 
 	_ground.color = _chapter.room_ground_color
 	_fill_tiles()
-	_spawn_boss()
+	# 🔴 스폰이 실패하면 **여기서 멈춘다** — `_spawn_boss` 안의 `return`은 자기 함수만 벗어나므로,
+	# 예전엔 이미 떠나기로 한 방(`_leaving = true`)이 잡몹을 깔고 「…를 쓰러뜨려라」를 한 프레임
+	# 띄웠다(세84 감사 #38). 챕터-null 분기(위)는 return이 `_ready` 자신이라 원래부터 제대로 멈춘다.
+	if not _spawn_boss():
+		return
 	_spawn_mobs()
 	var boss_def := Db.get_enemy(_chapter.boss_enemy_id)
 	var boss_name := boss_def.display_name if boss_def != null else String(_chapter.boss_enemy_id)
-	_hud.say("%s — %s를 쓰러뜨려라. 잡으면 귀환 포탈이 열린다" % [_chapter.title, boss_name])
+	# 🔴 세84 #36: `sticky` — **방의 목표 줄이다**. say()에 수명이 붙었으므로(경고가 목표를 덮고
+	# 영구 상주하던 걸 고쳤다) 여기 안 붙이면 목표가 4.5초 뒤 조용히 사라진다.
+	_hud.say("%s — %s를 쓰러뜨려라. 잡으면 귀환 포탈이 열린다" % [_chapter.title, boss_name], false, true)
 
 
 ## 바닥 타일을 Ground rect에 맞춰 깐다 — 챕터 분위기 틴트(room_ground_color)는 Ground(ColorRect)가
@@ -109,7 +115,10 @@ func _fill_tiles() -> void:
 ##  • boss_scene_path가 있으면 그 전용 씬 (snake_boss.tscn — enemy_id는 씬이 이미 품고 있다)
 ##  • 비면 forest_enemy.tscn 범용 스폰 — 🔴 **add_child 전에 enemy_id 대입** (forest.tscn이
 ##    인스턴스 오버라이드로 하던 것을 코드로. _ready가 이 id로 .tres를 물기 때문에 순서가 계약이다).
-func _spawn_boss() -> void:
+##
+## 🔴 반환 = **계속 진행해도 되는가**. `boss_scene_path`는 「새 챕터 = .tres 한 장」에서 실제로
+## 편집되는 자리라 오타가 나기 쉽고, 실패하면 `_ready`의 나머지(잡몹·목표 안내)를 **건너뛰어야 한다**.
+func _spawn_boss() -> bool:
 	if _chapter.boss_scene_path != "":
 		var packed := load(_chapter.boss_scene_path) as PackedScene
 		if packed == null:
@@ -117,7 +126,7 @@ func _spawn_boss() -> void:
 				% _chapter.boss_scene_path)
 			_leaving = true
 			_to_base.call_deferred()
-			return
+			return false
 		_boss = packed.instantiate() as Node2D
 	else:
 		var enemy := EnemyScene.instantiate() as Node2D
@@ -128,6 +137,7 @@ func _spawn_boss() -> void:
 	# 원점→boss_spawn으로 끌려간다(세54 「정지 뭉침」 재림). 루트가 원점이라 position == global.
 	_boss.position = _chapter.boss_spawn
 	add_child(_boss)
+	return true
 
 
 ## 잡몹 길 (세66 도파민 — 즉시 보상 무대) — 방 앞쪽에 잡몹을 깐다. 플레이어가 뚫고 보스에 닿는다.
@@ -169,7 +179,8 @@ func _on_enemy_died(enemy_id: StringName) -> void:
 		var rew_name := rew.display_name if rew != null else String(_chapter.reward_unlock)
 		reward_line = " 보상: %s(책상에서 밴드에 끼워라)" % rew_name
 	_spawn_return_portal()
-	_hud.say("%s 클리어!%s 포탈에서 E로 귀환하라" % [_chapter.title, reward_line])
+	# 🔴 세84 #36: `sticky` — 「포탈에서 E로 귀환하라」는 **아직 유효한 지시**다(귀환까지 남아야 한다).
+	_hud.say("%s 클리어!%s 포탈에서 E로 귀환하라" % [_chapter.title, reward_line], false, true)
 
 
 ## 귀환 포탈 — 보스가 죽은 자리 옆에 스폰 (상자가 보스 자리에 떨어지므로 PORTAL_OFFSET만큼 비킨다).
@@ -206,6 +217,15 @@ func _on_hp_changed(hp: float, _hp_max: float) -> void:
 
 ## 쓰러졌다 — `bag_lost`가 가방을 비우고 자동 저장한다(세이브스컴 방지). 클리어 codex는 처치 순간
 ## 이미 심겼으므로(§클리어 판정) 죽어도 다음 챕터는 열려 있다. forest._die 계약 그대로.
+##
+## 🔴 **사망 후 HP 복구를 쥐는 건 이 함수다** (세84 감사 #37). HP는 오토로드(GameState)가 쥐고
+## 세이브에 없어서, 예전엔 되돌리는 경로가 **어디에도 없었다** — 베이스로 걸어 나가는 몸이 HP 0이었다
+## (마을에 피해원이 0곳이라 표시 문제로만 보였지, 피해원이 하나 생기는 날 즉사 버그가 된다).
+## ⚠ **「출격 = 만HP」의 단일 소스는 `_ready`**(base.gd:217이 *"출격이 HP를 되돌리지 않는다 — 그건
+## 보스방이 한다"*고 선언한다). 그래서 복구도 베이스가 아니라 **여기**가 쥔다 — 베이스에 두면
+## 「베이스를 거쳐 들어올 때만」 맞고 다른 진입 경로에선 조용히 달라진다(그 주석이 경고한 그 함정).
+## 🔴 복구는 **연출(DEATH_BEAT_SEC) 뒤**다: 먼저 되돌리면 「쓰러졌다」를 띄운 채 HP 막대가 꽉 차
+## "안 죽었다"로 읽힌다. 되돌리는 emit이 `_on_hp_changed`를 다시 태우지만 `_leaving` 가드가 막는다.
 func _die() -> void:
 	if _leaving:
 		return
@@ -215,6 +235,7 @@ func _die() -> void:
 	_hud.say("쓰러졌다 — 베이스로 돌아온다", true)
 	EventBus.bag_lost.emit()
 	await get_tree().create_timer(DEATH_BEAT_SEC).timeout
+	GameState.reset_player_hp()
 	_to_base()
 
 

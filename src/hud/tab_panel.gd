@@ -97,6 +97,10 @@ const GradeColors := preload("res://src/core/grade_colors.gd")
 ## (`ring_power.gd` 머리 주석: 리포트가 "위력 140"이라 적고 130으로 때리는 식).
 const RingPower := preload("res://src/core/ring_power.gd")
 
+## 🔴 장비 효과 문구·발사 패턴 라벨 = core 단일 소스 (세84 감사 #21 — 옛 사본 셋을 합쳤다).
+## `workshop_panel`(src/base)도 같은 파일을 부른다 — 그래서 `src/hud`가 아니라 core에 있다.
+const ItemText := preload("res://src/core/item_text.gd")
+
 ## 마법진 탭이 쓰는 표시 어휘 — 문양 이름·색·칸 각도(`slot_angle`→`jin_slot_dots`).
 ## ⚠ `ring_board.gd`엔 `class_name`이 없다 — 이 preload가 유일한 진입로다(hud.gd:29 선례).
 ## 🔴 core(`RingDesign.layer_summary`)는 문양 이름·색을 **일부러 안 갖는다**(drawing 참조 금지) —
@@ -371,7 +375,7 @@ func _draw_equip_row(font: Font) -> void:
 			draw_rect(Rect2(r.position, Vector2(4.0, r.size.y)), chip, true)
 			draw_string(font, Vector2(r.position.x + 11.0, r.position.y + 38.0), _item_name(item_id),
 				HORIZONTAL_ALIGNMENT_LEFT, r.size.x - 18.0, 12, SLOT_ITEM_COLOR)
-			var eff := _effect_text(item_id)
+			var eff := ItemText.effect_text(item)
 			if eff != "":
 				draw_string(font, Vector2(r.position.x + 11.0, r.position.y + 55.0), eff,
 					HORIZONTAL_ALIGNMENT_LEFT, r.size.x - 18.0, 9, SLOT_EFFECT_COLOR)
@@ -393,6 +397,11 @@ func _draw_grid(font: Font) -> void:
 			HORIZONTAL_ALIGNMENT_LEFT, region_width, 12, EMPTY_COLOR)
 	for sec: Dictionary in layout["sections"]:
 		_draw_section_layout(font, sec, region_width)
+	# 접힌 구역 — 잘려 반쯤 보이는 것보다 "몇 종이 더 있다"가 낫다(마법진 탭 보관 목록과 같은 규약).
+	var hidden := int(layout["hidden"])
+	if hidden > 0:
+		draw_string(font, Vector2(left + 8.0, float(layout["fold_y"]) + 12.0),
+			"… 외 %d종" % hidden, HORIZONTAL_ALIGNMENT_LEFT, region_width - 16.0, 11, EMPTY_COLOR)
 
 
 ## 한 구역 그리기(라벨 + 카드들). 좌표는 전부 _section_layout이 이미 계산했다 — 여기선 그리기만.
@@ -411,12 +420,27 @@ func _draw_section_layout(font: Font, sec: Dictionary, region_width: float) -> v
 
 ## 🔴 격자 전체 레이아웃(순수) — 창고(카테고리별)+가방을 카드 rect까지 계산한다.
 ## _draw_grid와 _gui_input(카드 클릭)의 단일 소스. 그리지 않는다.
+##
+## 🔴 **패널 아랫변을 넘는 카드는 아예 만들지 않는다** (세84 감사 #35 — 퀘스트 탭과 같은 규율).
+## 옛 코드는 캡이 없어 아이템 종류가 늘면 아래 구역이 패널·화면 밖으로 밀려 **반쯤 잘린 카드**가 됐다.
+## 🔴 여기서 거르는 게 중요한 이유: 이 함수가 **클릭 rect의 단일 소스**라, 안 그린 카드를 목록에
+## 남기면 **화면 밖 카드가 클릭으로 착용되는** 유령 판정이 생긴다(그린 곳=누른 곳 규율).
+##
+## 접는 방식 = **구역째 버리지 않고 줄 단위로 자른다.** 구역 통째로 버리면 아이템이 많을 때
+## "… 외 60종" **한 줄만 남고 화면이 텅 빈다**(실측했다) — 잘림보다 나쁘다. 그래서 남은 높이를
+## `_section_layout`에 넘겨 들어가는 줄까지만 카드를 만들고, 못 담은 종 수를 `hidden`으로 모은다.
+## ⚠ 한 구역이 잘리면 **그 뒤 구역은 통째로** 접는다(중간을 건너뛰면 순서가 거짓이 된다) —
+## 그래서 마지막인 가방 구역도 같이 접힐 수 있다. `_draw_grid`가 "… 외 N종"을 찍는다.
+const GRID_FOLD_H := 16.0     ## "… 외 N종" 한 줄이 차지하는 높이
+
 func _grid_sections() -> Dictionary:
 	var o := _origin()
 	var left := o.x + PAD
 	var region_width := PANEL_SIZE.x - PAD * 2.0
+	var bottom := o.y + PANEL_SIZE.y - PAD - GRID_FOLD_H
 	var y := o.y + CONTENT_TOP + EQUIP_ROW_H + GRID_GAP
 	var sections: Array = []
+	var hidden := 0
 
 	var groups := _grouped(GameState.get_inventory_snapshot())
 	var empty_msg := groups.is_empty()
@@ -425,43 +449,66 @@ func _grid_sections() -> Dictionary:
 	else:
 		for pair: Array in CATEGORY_ORDER:
 			var cat: StringName = pair[0]
-			if groups.has(cat):
-				var sec := _section_layout(pair[1], SECTION_COLOR, left, y, region_width, groups[cat], false)
-				sections.append(sec)
-				y = float(sec["next_y"]) + SUB_GAP
+			if not groups.has(cat):
+				continue
+			var entries: Array = groups[cat]
+			if hidden > 0:
+				hidden += entries.size()   # 앞이 잘렸으면 뒤는 통째로 접는다 (순서 보존)
+				continue
+			var sec := _section_layout(pair[1], SECTION_COLOR, left, y, region_width,
+				entries, false, bottom - y)
+			if (sec["cards"] as Array).is_empty():
+				hidden += entries.size()   # 한 줄도 못 들어간다
+				continue
+			sections.append(sec)
+			hidden += int(sec["hidden"])
+			y = float(sec["next_y"]) + SUB_GAP
 
 	var bag := _sorted_entries(_bag_counts())
 	if not bag.is_empty():
-		y += SECTION_GAP
+		var bag_top := y + SECTION_GAP
 		var sec := _section_layout("가방 (들고 있는 것 · 죽으면 사라진다)", BAG_SECTION_COLOR,
-			left, y, region_width, bag, true)
-		sections.append(sec)
+			left, bag_top, region_width, bag, true, bottom - bag_top)
+		if hidden > 0 or (sec["cards"] as Array).is_empty():
+			hidden += bag.size()
+		else:
+			sections.append(sec)
+			hidden += int(sec["hidden"])
+			y = float(sec["next_y"])
 
-	return {"sections": sections, "empty_msg": empty_msg}
+	return {"sections": sections, "empty_msg": empty_msg, "hidden": hidden, "fold_y": y}
 
 
 ## 한 구역의 좌표를 계산해 Dictionary로. 그리기·클릭이 공유한다(옛 _draw_section의 기하 그대로).
 ## label_above=false: 라벨을 왼쪽 좁은 칸(GUTTER)에, 카드를 오른쪽에.
 ## label_above=true: 라벨을 카드 위 전체폭에(가방 — 경고문이 길어 좁은 칸에 안 들어간다).
+## 🔴 `max_h` = 이 구역이 쓸 수 있는 높이. 넘는 줄은 **카드를 안 만들고** 그 종 수를 `hidden`으로
+## 돌려준다(세84 #35). `INF`를 주면 옛 동작(무제한)이라 호출부가 캡을 안 걸 수도 있다.
 func _section_layout(title: String, color: Color, left: float, top: float,
-		region_width: float, entries: Array, label_above: bool) -> Dictionary:
+		region_width: float, entries: Array, label_above: bool,
+		max_h: float = INF) -> Dictionary:
 	var gutter := 0.0 if label_above else GUTTER
 	var avail := region_width - gutter
 	var cols := maxi(int((avail + CARD_GAP) / (CARD_SIZE.x + CARD_GAP)), 1)
+	var head := 22.0 if label_above else 0.0
 	var rows := int(ceil(float(entries.size()) / float(cols))) if not entries.is_empty() else 0
+	if max_h < INF:
+		# 블록 높이 = rows × (카드+간격)이라 그 산식을 그대로 뒤집어 줄 수 상한을 낸다.
+		rows = mini(rows, maxi(int(floor((max_h - head) / (CARD_SIZE.y + CARD_GAP))), 0))
+	var shown := mini(entries.size(), rows * cols)
 	var block_h := float(rows) * (CARD_SIZE.y + CARD_GAP)
 	var cards_top := top
 	var cards_left := left
 	var label_pos := Vector2.ZERO
 	if label_above:
 		label_pos = Vector2(left, top + 14.0)
-		cards_top = top + 22.0
+		cards_top = top + head
 	else:
 		# 라벨은 카드 블록 세로 중앙에 앉는다(1줄 폰트 보정 +4).
 		label_pos = Vector2(left, top + block_h * 0.5 + 4.0)
 		cards_left = left + GUTTER
 	var cards: Array = []
-	for i in entries.size():
+	for i in shown:
 		var entry: Dictionary = entries[i]
 		var col := i % cols
 		var row := i / cols
@@ -469,7 +516,8 @@ func _section_layout(title: String, color: Color, left: float, top: float,
 			cards_top + float(row) * (CARD_SIZE.y + CARD_GAP))
 		cards.append({"rect": Rect2(at, CARD_SIZE), "id": entry["id"], "count": int(entry["count"])})
 	return {"title": title, "color": color, "label_pos": label_pos,
-		"label_above": label_above, "cards": cards, "next_y": cards_top + block_h}
+		"label_above": label_above, "cards": cards, "next_y": cards_top + block_h,
+		"hidden": entries.size() - shown}
 
 
 ## 착용 가능 종류인가(EQUIP_KINDS의 kind와 일치). 카드 클릭 착용 필터.
@@ -506,11 +554,22 @@ func _draw_card(font: Font, at: Vector2, id: StringName, count: int) -> void:
 # ─────────────────────────── 탭2: 퀘스트 ───────────────────────────
 
 ## quest_panel의 _draw 본문·_visible_quests·_draw_row·_reward_text를 그대로 이관(내용 동일).
+##
+## 🔴 **넘침 = 잘림이 아니라 상한으로 막는다** (세84 감사 #35 — 마법진 탭이 이미 쓰는 규율).
+## q00~q05 여섯이 길잡이 대화 한 번에 **연쇄 완료**되면 6행이 되고, 옛 코드는 캡이 없어
+## 6번째 행이 패널 아랫변을 뚫고 진행 바가 화면(540) 밖으로 나갔다(스크롤 없음).
+## 수용량은 마법진 탭 보관 목록과 **같은 방식으로 실측 계산**한다(상수 하드코딩 금지 —
+## PANEL_SIZE·ROW_H를 건드리면 자동으로 따라온다). 넘치면 마지막 줄이 "… 외 N개"다.
+## 스크롤을 안 넣은 이유도 같다: 즉시모드 `_draw`에 스크롤을 붙이면 새 입력 경로가 생기고
+## 그 순간 세25 `mouse_filter` 함정 자리가 하나 더 는다.
+const QUEST_FOLD_H := 16.0    ## "… 외 N개" 한 줄이 차지하는 높이
+
 func _draw_quests_tab(font: Font, origin: Vector2, content_top: float) -> void:
 	var rows := _visible_quests()
 	var y := content_top
 	var left := origin.x + PAD
 	var width := PANEL_SIZE.x - PAD * 2.0
+	var bottom := origin.y + PANEL_SIZE.y - PAD
 
 	if rows.is_empty():
 		draw_string(font, Vector2(left, y + 14.0),
@@ -518,9 +577,14 @@ func _draw_quests_tab(font: Font, origin: Vector2, content_top: float) -> void:
 			HORIZONTAL_ALIGNMENT_LEFT, -1, 13, EMPTY_COLOR)
 		return
 
-	for q: QuestDef in rows:
-		_draw_quest_row(font, Vector2(left, y), width, q)
+	var shown := quest_rows_shown(rows.size(), bottom - content_top)
+	for i in shown:
+		_draw_quest_row(font, Vector2(left, y), width, rows[i])
 		y += ROW_H + ROW_GAP
+	if shown < rows.size():
+		draw_string(font, Vector2(left + 8.0, y + 12.0),
+			"… 외 %d개" % (rows.size() - shown),   # ⚠ 조작 안내를 붙이지 마라 — 목록을 줄이는 수단이 없다
+			HORIZONTAL_ALIGNMENT_LEFT, width - 16.0, 11, EMPTY_COLOR)
 
 
 ## 그릴 퀘스트 = 열린 것(진행 중) + 완료한 것. 잠긴 것(선행 미완료)은 뺀다. 열린 것 먼저.
@@ -567,6 +631,19 @@ func _draw_quest_row(font: Font, at: Vector2, width: float, q: QuestDef) -> void
 	var frac := 1.0 if done else (float(cur) / float(need) if need > 0 else 0.0)
 	if frac > 0.0:
 		draw_rect(Rect2(bar_rect.position, Vector2(bar_rect.size.x * frac, BAR_H)), accent, true)
+
+
+## 🔴 `avail` 높이에 실제로 그릴 행 수 — **순수 함수라 헤드리스가 잰다**(세84 #35).
+## 렌더는 못 재도 「6행이면 5행만 그린다」는 여기서 잰다. 접을 게 있으면 "… 외 N개" 한 줄
+## 자리를 남긴다(자리가 모자라면 행을 하나 덜 그린다 — 마법진 탭 보관 목록과 같은 규약).
+## 마지막 행은 ROW_GAP을 안 쓰므로 수용량 계산에 + ROW_GAP을 얹는다.
+static func quest_rows_shown(total: int, avail: float) -> int:
+	var cap := maxi(int(floor((avail + ROW_GAP) / (ROW_H + ROW_GAP))), 1)
+	if total <= cap:
+		return total
+	if float(cap) * (ROW_H + ROW_GAP) + QUEST_FOLD_H > avail:
+		cap = maxi(cap - 1, 0)
+	return cap
 
 
 ## 보상 아이템들을 "이름 ×n" 로(여러 개면 콤마). 없으면 빈 문자열.
@@ -661,7 +738,7 @@ func _draw_magic_row(font: Font, at: Vector2, width: float, idx: int, design: Ri
 	var rect := Rect2(at, Vector2(width, h))
 	draw_rect(rect, MAGIC_ROW_BG, true)
 	draw_rect(rect, MAGIC_ROW_EDGE, false, 1.0)
-	draw_rect(Rect2(at, Vector2(4.0, h)), _rune_color(design), true)   # 룬 색 띠
+	_draw_rune_band(at, h, design)   # 룬 색 띠 (융합진이면 룬마다 한 토막)
 
 	draw_string(font, Vector2(at.x + 14.0, at.y + 15.0), "슬롯 %d" % (idx + 1),
 		HORIZONTAL_ALIGNMENT_LEFT, MAGIC_DIAG_COL - 20.0, 11, MAGIC_INDEX_COLOR)
@@ -669,7 +746,8 @@ func _draw_magic_row(font: Font, at: Vector2, width: float, idx: int, design: Ri
 
 	var tx := at.x + MAGIC_DIAG_COL
 	var tw := width - MAGIC_DIAG_COL - 16.0
-	draw_string(font, Vector2(tx, at.y + 24.0), spell_formula(summary, _rune_name(design)),
+	draw_string(font, Vector2(tx, at.y + 24.0),
+		spell_formula(summary, rune_seed(_design_runes(design))),
 		HORIZONTAL_ALIGNMENT_LEFT, tw, 15, MAGIC_FORMULA_COLOR)
 	draw_string(font, Vector2(tx, at.y + 41.0), _jin_text(design, summary.size()),
 		HORIZONTAL_ALIGNMENT_LEFT, tw, 11, KIND_COLOR)
@@ -694,8 +772,12 @@ func _draw_magic_row(font: Font, at: Vector2, width: float, idx: int, design: Ri
 
 ## 층 겹 다이어그램 — 고리 하나 = 층 하나, **안쪽이 층0**. 칸 점은 그 층에 놓인 문양 색으로,
 ## 비었지만 열린 칸은 흐리게, 진이 닫은 칸은 더 흐리게. 중심 = 룬 색(감싸이는 씨앗).
-## 🔴 칸 각도는 `RingBoard.jin_slot_dots`(=`slot_angle`)를 그대로 부른다 — 식을 베끼면 책·HUD와
-## 조용히 어긋난다(세60). 층 배열은 `RingDesign.layers_of` 단일 소스로 편다.
+## 🔴 칸 각도는 `RingBoard.jin_slot_dots`(=`slot_angle`)를 그대로 부른다 — 식을 베끼면 판과 HUD
+## 슬롯 다이어그램이 조용히 어긋난다(세60). 실측 소비자는 여기와 `hud._draw_jin_diagram` **둘뿐**이다
+## (⚠ **책의 진 셀은 세83에 `jin_icon_paths`로 갈라져 이 함수를 안 쓴다** — 옛 주석이 책 셀을
+## 가리키고 있었고 세84 감사 #28에 낡은 것으로 잡혔다). 층 배열은 `RingDesign.layers_of` 단일 소스.
+## 🔴 세84 #12: 중심 씨앗도 **룬 자리마다** 찍는다(융합진 = 점 2개). 자리 좌표는
+## `RingBoard.rune_slot_positions`를 그대로 부른다 — 각도를 베끼면 판·책 셀·HUD가 어긋난다.
 func _draw_magic_diagram(center: Vector2, design: RingDesign) -> void:
 	var layers := RingDesign.layers_of(design.rings)
 	var n := maxi(layers.size(), 1)
@@ -716,7 +798,13 @@ func _draw_magic_diagram(center: Vector2, design: RingDesign) -> void:
 				draw_circle(pos, 1.8, MAGIC_OPEN_DOT)
 			else:
 				draw_circle(pos, 1.4, MAGIC_SHUT_DOT)
-	draw_circle(center, 4.0, _rune_color(design))
+	# 중심 씨앗 = 룬. 자리 좌표는 판과 같은 함수, 반경 기준은 **가장 안쪽 고리**(층0)다 —
+	# 룬은 모든 층 안쪽에 앉으므로 안쪽 고리보다 안에 있어야 읽힌다.
+	var cols := _rune_colors(design)
+	var seeds := RingBoard.rune_slot_positions(cols.size(), center, _magic_ring_radius(0, n))
+	var seed_r := 4.0 if cols.size() <= 1 else 4.0 * RingBoard.RUNE_MULTI_SIZE_FRAC
+	for i in seeds.size():
+		draw_circle(seeds[i], seed_r, cols[i])
 
 
 ## 층 i의 고리 반지름 — 바깥(마지막 층)이 R_MAX. 층이 많으면 간격이 좁아져 R_MIN 안으로 안 파고든다.
@@ -749,15 +837,32 @@ func _jin_text(design: RingDesign, layer_count: int) -> String:
 	return "진: %s · %d층" % [nm, maxi(layer_count, 1)]
 
 
-func _rune_color(design: RingDesign) -> Color:
-	var r := Db.get_rune(design.rune)
-	# 폴백은 hud.gd `_draw_jin_diagram` 선례와 같은 값(불) — 룬이 안 실린 옛 도안도 뭔가 보인다.
-	return r.ui_color if r != null else Color(0.62, 0.22, 0.12)
+## 🔴 도안의 룬 목록 — **반드시 `RingDesign.runes_of`를 거친다**(`ring_design.gd:18`이 *"읽을 땐
+## `runes_of()`를 거쳐라"*라고 못 박았다). 세84 감사 #12: 표시부 셋이 `design.rune`(첫 룬)만 읽어
+## **융합진의 두 번째 룬이 화면에서 통째로 사라졌다** — 발사부는 두 룬을 쏘는데 수식·색 띠·
+## 다이어그램은 하나만 보여 줘 「쏘는 것 ≠ 보이는 것」이 됐다(1·2 키로 뭘 쏘는지 손끝에서 구분 불가).
+func _design_runes(design: RingDesign) -> Array:
+	return RingDesign.runes_of(design.runes, design.rune)
 
 
-func _rune_name(design: RingDesign) -> String:
-	var r := Db.get_rune(design.rune)
-	return r.display_name if r != null and r.display_name != "" else "룬"
+## 룬 자리별 색 — 자리 수만큼(융합진 = 2개). 폴백은 hud.gd `_draw_jin_diagram` 선례와 같은 값(불)
+## — 룬이 안 실린 옛 도안도 뭔가 보인다.
+func _rune_colors(design: RingDesign) -> Array[Color]:
+	var out: Array[Color] = []
+	for rt in _design_runes(design):
+		var r := Db.get_rune(int(rt))
+		out.append(r.ui_color if r != null else Color(0.62, 0.22, 0.12))
+	return out
+
+
+## 행 왼쪽 룬 색 띠 — 융합진이면 룬마다 한 토막씩 세로로 나눈다(색 하나만 칠하면 둘째 룬이
+## 띠에서도 사라진다). 자리 1개면 옛 그림과 픽셀 동일하다.
+func _draw_rune_band(at: Vector2, h: float, design: RingDesign) -> void:
+	var cols := _rune_colors(design)
+	var n := maxi(cols.size(), 1)
+	var seg := h / float(n)
+	for i in n:
+		draw_rect(Rect2(Vector2(at.x, at.y + float(i) * seg), Vector2(4.0, seg)), cols[i], true)
 
 
 ## 문양 코드 → 색. 🔴 세82: 정본은 `data/glyphs/*.tres`의 `ui_color` **하나뿐**이다
@@ -770,6 +875,14 @@ func _glyph_color(code: int) -> Color:
 
 ## 미장착 보관 도안 — 남는 높이에 들어가는 만큼만. 못 담으면 마지막 줄이 "… 외 N장"이다.
 ## 🔴 잘려서 반쯤 그려지는 게 제일 나쁘다 — 그래서 **먼저 수용량을 세고** 그 안에서만 그린다.
+##
+## 🔴 **머리글에 없는 조작을 적지 마라** (세84 감사 #6 — 옛 문구는 "책상 [E]에서 장착"이었다).
+## 보관 도안을 슬롯에 **올리는 API가 리포에 없다**(`equip_design` 0건). `ring_equipped`에 쓰는
+## 자리는 시드·새로하기·로드·`_on_ring_design_committed`의 **빈 슬롯 자동 장착**뿐이다.
+## 즉 옛 문구는 존재하지 않는 조작을 지시했다 = hud 규율(*"안내문에 없는 조작을 적지 마라"*) 위반.
+## ⚠ 슬롯 교체를 넣기로 하면 리드가 `GameState.equip_design(slot, design)`을 core에 세운 뒤
+## 이 목록에서 슬롯을 고르게 하고 문구를 되살려라 — **사용자 결정 대기 중이라 여기선 문구만 고쳤다.**
+## (⚠ 대조: 빈 슬롯 행·HUD의 "책상 [E]에서 그려 장착"은 **사실이다** — 맺으면 빈 슬롯에 자동 장착된다.)
 func _draw_magic_storage(font: Font, left: float, top: float, width: float, bottom: float) -> void:
 	var rest := _unequipped_designs()
 	if rest.is_empty():
@@ -777,7 +890,8 @@ func _draw_magic_storage(font: Font, left: float, top: float, width: float, bott
 	var cap := int(floor((bottom - top - MAGIC_STORE_HEAD_H) / MAGIC_STORE_ROW_H))
 	if cap <= 0:
 		return
-	draw_string(font, Vector2(left, top + 12.0), "보관 (미장착 — 책상 [E]에서 장착)",
+	draw_string(font, Vector2(left, top + 12.0),
+		"보관 (미장착 — 슬롯이 비면 다음에 맺은 진이 자동 장착된다)",
 		HORIZONTAL_ALIGNMENT_LEFT, width, 12, SECTION_COLOR)
 	var y := top + MAGIC_STORE_HEAD_H
 	var shown := rest.size() if rest.size() <= cap else maxi(cap - 1, 0)
@@ -785,7 +899,7 @@ func _draw_magic_storage(font: Font, left: float, top: float, width: float, bott
 		var d: RingDesign = rest[i]
 		var s := d.layer_summary()
 		draw_string(font, Vector2(left + 8.0, y + 12.0),
-			"· %s   %s %d · %d점" % [spell_formula(s, _rune_name(d)),
+			"· %s   %s %d · %d점" % [spell_formula(s, rune_seed(_design_runes(d))),
 				"갈래당" if has_modifier(s, Db.modifier_codes()) else "위력",
 				RingPower.power_display(d.total_score, Db.ink_mult(d.ink), d.size),
 				RingPower.score_display(d.total_score)],
@@ -879,6 +993,24 @@ static func has_modifier(summary: Array, modifier_codes: Array) -> bool:
 	return false
 
 
+## 🔴 **수식의 씨앗 문자열** — 룬 자리 목록을 `물+번개`로 잇는다 (세84 #12 · 융합진).
+## 자리 1개면 룬 이름 하나라 옛 수식과 글자 하나까지 같다(무회귀). 빈 목록은 "룬"으로 폴백
+## (`runes_of`가 늘 1개 이상을 주므로 실경로에선 안 온다 — 방어일 뿐).
+## 🔴 `+` 규약은 `spell_formula`의 한 층 여러 문양 표기와 **같은 규약**을 재사용한 것이다.
+## static인 이유 = 헤드리스 관측점(`glyph_word` 선례 — 여기도 `Db`만 읽는 순수 조회다).
+static func rune_seed(runes: Array) -> String:
+	var parts: Array[String] = []
+	for r in runes:
+		parts.append(rune_word(int(r)))
+	return "+".join(parts) if not parts.is_empty() else "룬"
+
+
+## 룬 종류 → 수식에 쓰는 **말**. Db에 없는 값은 "룬"(옛 도안·데이터 결손도 뭔가 읽히게).
+static func rune_word(rune_type: int) -> String:
+	var r := Db.get_rune(rune_type)
+	return r.display_name if r != null and r.display_name != "" else "룬"
+
+
 ## 문양 코드 → 수식·목록에 쓰는 **말**(꼬리 기호 뗀 이름). 어휘 밖 코드는 "?".
 static func glyph_word(code: int) -> String:
 	var gd := Db.glyph_by_code(code)
@@ -931,7 +1063,7 @@ func _draw_character_tab(font: Font, origin: Vector2, content_top: float) -> voi
 	var corr := GameState.stroke_correction()
 	y = _draw_stat(font, left, y, "손그림 보정",
 		"+%.2f (펜)" % corr if corr > 0.0 else "없음 (맨손 — 그린 대로)")
-	y = _draw_stat(font, left, y, "발사 패턴", _pattern_label(GameState.wand_pattern()))
+	y = _draw_stat(font, left, y, "발사 패턴", ItemText.pattern_label(GameState.wand_pattern()))
 
 	# ── 착용 요약 (읽기 전용 — 착용/해제는 [소지품] 탭) ──
 	y += CHAR_SECTION_GAP
@@ -945,7 +1077,7 @@ func _draw_character_tab(font: Font, origin: Vector2, content_top: float) -> voi
 		var col := SLOT_EMPTY_COLOR
 		if GameState.equipment.has(kind):
 			val = _item_name(GameState.equipment[kind])
-			var eff := _effect_text(GameState.equipment[kind])
+			var eff := ItemText.effect_text(Db.get_item(GameState.equipment[kind]))
 			if eff != "":
 				val += "  ·  " + eff
 			col = NAME_COLOR
@@ -962,18 +1094,6 @@ func _draw_stat(font: Font, left: float, y: float, label: String, value: String)
 	draw_string(font, Vector2(left + CHAR_VALUE_X, y), value,
 		HORIZONTAL_ALIGNMENT_LEFT, -1, 13, NAME_COLOR)
 	return y + CHAR_ROW_H
-
-
-## 발사 패턴(Enums.WandPattern) → 사람 말. _wand_pattern_text와 달리 패턴 값을 직접 받는다
-## (착용 지팡이가 없어도 GameState.wand_pattern()이 단발을 돌려줘 늘 뭔가 보여 준다).
-func _pattern_label(pattern: int) -> String:
-	match pattern:
-		Enums.WandPattern.MULTI:
-			return "산탄 (여러 발)"
-		Enums.WandPattern.NOVA:
-			return "전방위"
-		_:
-			return "단발"
 
 
 # ─────────────────────────── 공용 헬퍼 ───────────────────────────
@@ -1032,37 +1152,6 @@ func _item_name(id: StringName) -> String:
 	return it.display_name if it != null and it.display_name != "" else String(id)
 
 
-## 장비 효과 한 줄 — 펜=보정, 로브=HP/마나, 지팡이=발사 패턴 (workshop_panel._effect_text와 동일).
-func _effect_text(item_id: StringName) -> String:
-	var it := Db.get_item(item_id)
-	if it == null:
-		return ""
-	match int(it.kind):
-		Enums.ItemKind.PEN:
-			return "손그림 보정 +%.2f" % float(it.params.get("correction", 0.0))
-		Enums.ItemKind.ROBE:
-			var parts: Array[String] = []
-			if it.params.has("hp_max_add"):
-				parts.append("HP +%d" % int(it.params["hp_max_add"]))
-			if it.params.has("mana_max_add"):
-				parts.append("마나 +%d" % int(it.params["mana_max_add"]))
-			return " · ".join(parts)
-		Enums.ItemKind.WAND:
-			return _wand_pattern_text(it)
-		Enums.ItemKind.CHARM:
-			return "구르기 쿨 -%d%%" % roundi((1.0 - float(it.params.get("dash_cooldown_mult", 1.0))) * 100.0)
-		Enums.ItemKind.HAT:
-			return "이동 속도 +%d%%" % roundi(float(it.params.get("move_speed_mult", 0.0)) * 100.0)
-		_:
-			return ""
-
-
-## 지팡이 발사 패턴을 사람 말로 — 단발/산탄/전방위 (workshop_panel._wand_pattern_text와 동일).
-func _wand_pattern_text(it: ItemDef) -> String:
-	match int(it.params.get("wand_pattern", Enums.WandPattern.SINGLE)):
-		Enums.WandPattern.MULTI:
-			return "산탄 (여러 발)"
-		Enums.WandPattern.NOVA:
-			return "전방위"
-		_:
-			return "단발"
+## 🔴 장비 효과 문구·발사 패턴 라벨은 **여기 없다** — `ItemText`(core) 단일 소스다(세84 #21).
+## 옛 `_effect_text`/`_wand_pattern_text`/`_pattern_label` 사본 셋은 은퇴했다.
+## `workshop_panel`이 같은 함수를 부르므로 문구를 고치면 두 패널이 같이 따라온다.

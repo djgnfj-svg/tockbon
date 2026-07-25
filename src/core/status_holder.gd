@@ -113,12 +113,17 @@ func apply_incoming(rune_type: int, status: int, status_power: float) -> void:
 			_resolve_reaction(base, r, status_power, rune_type)
 			return
 	# ③ 반응 없음 = 그냥 새 상태.
-	var s := status
-	# 흙은 자기 상태(취약)를 데이터로 못 받은 경우에도 취약을 남긴다 — `amplifies()`가 곧
-	# "이 룬이 취약을 만든다"는 규칙이고, 룬 .tres가 채워지면 위의 `status`가 그대로 이긴다.
-	if s == Enums.Status.NONE and SR.amplifies(rune_type):
-		s = Enums.Status.VULNERABLE
-	add(s, status_power)
+	# 🔴 **룬→상태의 정본은 `RuneDef.status`(.tres) 하나다** (세84 감사 #30에 청소). 전엔 여기에
+	#   *"status가 NONE인데 `SR.amplifies(rune)`이면 취약을 남긴다"*는 폴백 두 줄이 있었는데,
+	#   `rune_earth.tres`가 세83부터 `status = 6`(VULNERABLE)을 실제로 들어 **라이브에선 도달
+	#   불가**였고 유일한 도달 경로(`ring_spell_system`의 rune def null)는 같은 자리에서
+	#   `status_power`도 0.0으로 떨궈 `power_mult(0.0)==1.0` = **증폭 0의 무의미한 취약**을 걸었다
+	#   (안전망이라 적혀 있었지만 무력). 그래서 「흙이 취약을 만든다」의 출처가 `.tres`인지
+	#   `SR.amplifies()`인지 헷갈리는 값만 남았다 — 지금 `amplifies()`는 **증폭 여부 판정 전용**이다
+	#   (`add()`가 취약의 세기를 곱할 때 쓴다).
+	# ⚠ 데이터 결손(룬 .tres에 status 누락)은 여기서 조용히 메우지 마라 — 그건 `Db` 로드 경고가
+	#   맡는 자리다(세50 「파일을 만들었다」≠완료). `add(NONE, …)`은 스스로 아무 일도 안 한다.
+	add(status, status_power)
 
 
 ## 반응 처리 — 바탕은 **소진되고**(반응에 쓰였다), 결과 상태가 있으면 새로 걸린다.

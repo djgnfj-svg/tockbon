@@ -27,6 +27,11 @@ const EQUIPPED_COLOR := Color(0.98, 0.86, 0.52)
 const ROW_BG := Color(0.17, 0.15, 0.12, 0.95)
 const EQUIPPED_ROW_BG := Color(0.20, 0.18, 0.11, 0.98)
 
+## 🔴 장비 효과 문구·발사 패턴 라벨 = core 단일 소스 (세84 감사 #21 — 옛 사본 셋을 합쳤다).
+## `tab_panel`(src/hud)도 같은 파일을 부른다 — **`src/hud`에 두면 모듈 경계 위반**이라 core다
+## (`grade_colors.gd` 선례). 문구를 고치면 공방·개인 시트가 같이 따라온다.
+const ItemText := preload("res://src/core/item_text.gd")
+
 ## 착용 부위 — 표시 순서·라벨. PEN을 앞에 둔다(공방을 여는 주된 이유가 펜이라).
 const EQUIP_KINDS: Array = [
 	[Enums.ItemKind.PEN, "펜"],
@@ -174,7 +179,7 @@ func _make_equipped_row(kind: int, kind_label: String) -> Control:
 	name_lbl.add_theme_color_override(&"font_color", EQUIPPED_COLOR)
 	info.add_child(name_lbl)
 
-	var hint := _effect_text(item_id)
+	var hint := ItemText.effect_text(Db.get_item(item_id))
 	if hint != "":
 		var eff := Label.new()
 		eff.text = hint
@@ -198,7 +203,7 @@ func _make_owned_row(item_id: StringName, count: int) -> Control:
 	name_lbl.add_theme_color_override(&"font_color", NAME_COLOR)
 	info.add_child(name_lbl)
 
-	var hint := _effect_text(item_id)
+	var hint := ItemText.effect_text(Db.get_item(item_id))
 	if hint != "":
 		var eff := Label.new()
 		eff.text = hint
@@ -283,40 +288,8 @@ func _hint_label(text: String) -> Label:
 	return lbl
 
 
-## 장비 효과 한 줄 — 펜=보정, 로브=HP/마나, 지팡이=발사 패턴. 없으면 빈 문자열.
-func _effect_text(item_id: StringName) -> String:
-	var it := Db.get_item(item_id)
-	if it == null:
-		return ""
-	match int(it.kind):
-		Enums.ItemKind.PEN:
-			return "손그림 보정 +%.2f" % float(it.params.get("correction", 0.0))
-		Enums.ItemKind.ROBE:
-			var parts: Array[String] = []
-			if it.params.has("hp_max_add"):
-				parts.append("HP +%d" % int(it.params["hp_max_add"]))
-			if it.params.has("mana_max_add"):
-				parts.append("마나 +%d" % int(it.params["mana_max_add"]))
-			return " · ".join(parts)
-		Enums.ItemKind.WAND:
-			return _wand_pattern_text(it)
-		Enums.ItemKind.CHARM:
-			return "구르기 쿨 -%d%%" % roundi((1.0 - float(it.params.get("dash_cooldown_mult", 1.0))) * 100.0)
-		Enums.ItemKind.HAT:
-			return "이동 속도 +%d%%" % roundi(float(it.params.get("move_speed_mult", 0.0)) * 100.0)
-		_:
-			return ""
-
-
-## 지팡이 발사 패턴을 사람 말로 — 단발/산탄/전방위.
-func _wand_pattern_text(it: ItemDef) -> String:
-	match int(it.params.get("wand_pattern", Enums.WandPattern.SINGLE)):
-		Enums.WandPattern.MULTI:
-			return "산탄 (여러 발)"
-		Enums.WandPattern.NOVA:
-			return "전방위"
-		_:
-			return "단발"
+## 🔴 장비 효과 문구·발사 패턴 라벨은 **여기 없다** — `ItemText`(core) 단일 소스다(세84 #21).
+## 옛 `_effect_text`/`_wand_pattern_text` 사본은 은퇴했다(`tab_panel`에 같은 사본이 있었다).
 
 
 func _inputs_text(r: RecipeDef) -> String:

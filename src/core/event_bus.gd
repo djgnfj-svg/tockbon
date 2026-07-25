@@ -23,7 +23,12 @@ signal enemy_hit(enemy: Node2D, damage: float, rune_type: int)
 ## enemy_hit(매 타격)과 다르다 — 이건 **처치 순간 1회**다. 세션 26 forest_enemy의 `died`
 ## 로컬 시그널("킬카운트가 붙는 날의 자리표")이 마침내 수신자를 얻은 것이다.
 signal enemy_died(enemy_id: StringName)
-## ⚠ 발신자 없음 = **HUD가 세션 21에 삭제돼서**다. 발신 측(GameState)은 계약을 지키고 있다 — 지우지 마라.
+## 🔴 hp가 변했다 — **양쪽이 다 붙어 있다**(세84 감사 #28에 실측 갱신. 옛 주석은 *"발신자 없음"*이라
+## 적어 두고 다음 문장과 자기모순이었다 — 세21에 HUD가 삭제됐던 시절의 유물이다).
+## ⚠ 아래 목록은 **함수 이름**으로 적는다 — 줄 번호는 코드와 함께 늙어 다시 거짓이 된다(감사 T4).
+##   발신 6곳: `game_state`의 `new_game`·`_after_equipment_changed`·`damage_player`·`heal_player`·
+##             `reset_player_hp` · `save_manager.load_game`(복원된 로브 상한 기준 만HP)
+##   수신 2곳: `hud._on_hp_changed`(HP 막대) · `boss_room._on_hp_changed`(사망 판정)
 signal player_hp_changed(hp: float, hp_max: float)
 ## 🔴 플레이어가 **피해를 입었다** (세션63 손맛). `player_hp_changed`("hp가 변했다")와 다르다 —
 ## 이건 damage_player 한 곳만 발신하는 1급 사건이라, 수신자(juice 방향성 킥·player 피격 애니·
@@ -33,9 +38,13 @@ signal player_hp_changed(hp: float, hp_max: float)
 signal player_hurt(amount: float, source_pos: Vector2)
 
 # ── 익스트랙션 (C → D·E)
-## 🔴 **발신자 없음 = 필드(원정)가 아직 없어서**다. 수신자는 이미 연결돼 있다
-## (GameState 가방 정산 · SaveManager 자동 저장). 필드를 붙이는 쪽이 이 둘을 emit해야 하며,
-## 안 그러면 **조용히 안 도는 채로** 시작한다 — 계약이지 죽은 코드가 아니다. 지우지 마라.
+## 🔴 **세58-B에 발신자가 붙었다 — 이제 양쪽이 다 산다**(세84 감사 #28에 실측 갱신. 옛 주석은
+## *"발신자 없음 = 필드가 아직 없어서"*라 적혀 있었는데, 그 서술을 믿고 귀환·사망 경로를 옮기면
+## **가방 정산과 자동 저장이 두 번 돈다**).
+##   발신: `boss_room._extract`(포탈 귀환) · `boss_room._die`(사망) — 챕터 보스방이 유일한 무대다.
+##   수신 각 3곳: `game_state._ready`(가방 정산·가방 소실) · `save_manager._ready`
+##                (자동 저장 — 세이브스컴 방지) · `audio._ready`(귀환·사망 소리).
+## ⚠ 새 무대(필드·던전)를 붙이는 쪽이 이 둘을 emit해야 한다 — 안 쏘면 **조용히** 정산도 저장도 안 된다.
 signal extraction_success
 signal bag_lost
 
@@ -60,7 +69,23 @@ signal quest_ready(quest_id: StringName)
 signal quests_seen
 
 # ── 자원·장비 (GameState → 전체)
-## ⚠ 둘 다 발신만 있고 수신자 0 (HUD 삭제 탓). 정상 — 발신 측은 계약을 지킨다.
+## 🔴🔴 **둘 다 수신자가 많다 — 걷으면 UI가 한 번에 죽는다**(세84 감사 #28에 실측 갱신).
+## 옛 주석은 *"둘 다 발신만 있고 수신자 0"*이라 적어 놨는데(세21 HUD 삭제 시절의 유물),
+## 그걸 믿고 지우면 **잉크 팔레트·정제대·공방·상점·해독대·HUD·Tab 갱신이 통째로 멎는다.**
+## ⚠ 목록은 **함수 이름**으로 적는다 — 줄 번호는 코드와 함께 늙어 다시 거짓이 된다(감사 T4).
+##   `resources_changed` 발신 5곳: `game_state`의 `new_game`·`add_item`·`remove_item`·**`add_to_bag`**
+##                                 · `save_manager.load_game`
+##     수신 7곳: `hud` · `tab_panel` · `ring_forge_panel`(잉크 팔레트) · `refine_panel`
+##               · `workshop_panel` · `shop_panel` · `decode_panel`
+##   `equipment_changed` 발신 3곳: `game_state.new_game`·`game_state._after_equipment_changed`
+##                                 · `save_manager.load_game`
+##     수신 4곳: `tab_panel` · `workshop_panel` · `audio` · 🔴 `save_manager._queue_save`(자동 저장)
+## 🔴 세84 #1: **`equipment_changed`는 이제 자동 저장 트리거다** — 장비 변경에서 이 신호를 빼먹으면
+##   화면만 안 갱신되는 게 아니라 **진행이 저장되지 않는다.**
+## 🔴🔴 반대로 `resources_changed`는 **저장 트리거로 쓸 수 없다**: 창고 증감만 쏘는 게 아니라
+##   **`add_to_bag`(원정 중 드롭 획득)도 같이 쏘는데** 가방은 애초에 저장 대상이 아니다(사망 시
+##   소실이 설계). 창고 변화를 저장 계기로 쓰려면 **신호를 갈라야 한다**(`inventory_changed` 신설
+##   또는 `add_to_bag`을 이 신호에서 떼기) — 그때까지 제작·상점은 종료 훅이 덮는다.
 signal resources_changed
 signal equipment_changed
 ## 🔴 바닥 픽업이 플레이어에게 흡수돼 가방에 들어갔다 (세션51). drop_pickup이 **도착 순간 1회** 발신.

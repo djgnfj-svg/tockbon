@@ -234,6 +234,14 @@ var _combined_subpaths: Array = []
 var _combined_show_bands := true
 ## COMBINED에서 그릴 흐린 동심원(빈 층 자리) 개수 = 진 band_count. 0 = 안 그림(옛 동작).
 var _combined_band_count := 0
+## 🔴 세84 #22: COMBINED의 **룬 자리 상태** — 자리 순서대로 룬 타입, 음수(RUNE_NONE)=미선택.
+## 미선택 자리 마커를 이걸로 그린다. 예전엔 서브패스 **개수를 유추**해서(`size() <= band_count + 1`)
+## 「룬이 하나도 없다」를 판정하고 마커를 **중심 하나**만 찍었는데, 세81에 밴드가 모티프마다 append로
+## 바뀌면서 그 유추가 깨졌다: 융합진(자리 2·밴드 2)은 고른 직후 3 ≤ 3이라 **엉뚱한 중심**에 마커가
+## 뜨고(실제 자리는 좌우 ±`RUNE_SPLIT_FRAC`), 한 자리를 채우면 판별식이 거짓이 되어 **아직 빈 나머지
+## 자리의 표식이 통째로 사라졌다**. 개수 유추는 밴드 모티프 수에 오염되므로 **상태를 받는다**.
+## 비었으면 = 호출자가 안 넘겼다(1~4인자 옛 호출) → 아래 `_draw`가 옛 유추 폴백을 쓴다(무회귀).
+var _combined_runes: Array = []
 
 
 func _init() -> void:
@@ -337,8 +345,12 @@ func _set_trace(target: int, slot: int) -> void:
 ## 동심원 개수. **둘 다 옛 기본값이면(subpaths=[]·band_count=0) 옛 동작 그대로** — 슬라이스 패널·
 ## test의 1인자 호출이 무변경으로 산다(회귀 그물). subpaths flatten = flat이라는 계약은 **호출자(패널)가**
 ## 한 소스(compose_guide_paths)에서 만들어 지킨다(制약 flat=flatten(subpaths)).
+## 🔴 세84 #22 `runes` — `compose_guide_paths`에 넘긴 **그 자리별 룬 목록을 그대로** 한 번 더 넘긴다
+## (자리 순서 유지·음수=미선택). 미선택 자리 마커를 개수 유추가 아니라 **상태**로 그리기 위한 것이고,
+## 채점·발사와는 무관한 **렌더 전용**이다(`_combined_runes` 주석 참조). ⚠ 안 넘기면(옛 4인자 호출)
+## 마커가 세81에 깨진 옛 유추 폴백으로 떨어진다 — 융합진을 쓰는 호출자는 **반드시 넘겨라**.
 func enter_combined_trace(flat: PackedVector2Array, subpaths := [], band_count := 0,
-		show_band_lines := true) -> void:
+		show_band_lines := true, runes := []) -> void:
 	_trace = TraceTarget.COMBINED
 	_trace_slot = -1
 	_scorer.set_reference_radius(_outer_radius())
@@ -346,6 +358,9 @@ func enter_combined_trace(flat: PackedVector2Array, subpaths := [], band_count :
 	_scorer.set_guide(flat)
 	_combined_subpaths = subpaths
 	_combined_band_count = band_count
+	# 🔴 스냅샷(duplicate)이다 — 호출자의 배열을 물면 룬을 골라도 recompose를 안 부른 경우에 마커만
+	# 몰래 갱신돼 「가이드는 옛것, 마커는 새것」이 된다. 마커는 가이드와 같은 시점을 봐야 한다.
+	_combined_runes = runes.duplicate()
 	# 🔴 세81: 층 구분 동심원을 그릴까 — 조립 미리보기(ASSEMBLE)엔 켜 층 구조를 보여주고, **실제로
 	# 그릴 때(DRAW)는 끈다**(사용자 지적: 문양이 층 나눈 선에 걸쳐 지저분하다). 층은 문양 반경으로 읽힌다.
 	_combined_show_bands = show_band_lines
@@ -594,6 +609,34 @@ static func rune_slot_positions(count: int, ctr: Vector2, ro: float) -> Array[Ve
 	return out
 
 
+## 🔴 합성 가이드에서 **룬 하나의 크기**. `compose_guide_paths`(그을 것)와 미선택 자리 마커(볼 것)가
+## 반드시 같은 값을 써야 「본 것 = 그을 것」이 유지된다 — 식을 두 벌로 두면 자리 2개일 때 마커만
+## 0.18R로 커져 실제 룬(0.1224R)과 어긋난다. static·순수 = 헤드리스 관측점.
+static func combined_rune_size(ro: float, slot_count: int) -> float:
+	var s := ro * RUNE_GUIDE_FRAC
+	if slot_count >= 2:
+		s *= RUNE_MULTI_SIZE_FRAC   # 자리 여럿이면 겹치지 않게 룬을 줄인다 (1개면 무변경)
+	return s
+
+
+## 🔴 세84 #22 — **아직 룬을 안 고른 자리**의 마커 좌표·반지름. `runes`는 자리 순서대로의 룬 타입
+## 목록이고 음수(RUNE_NONE)가 미선택이다. 반환 = `[{at: Vector2, r: float}, …]`(빈 배열 = 다 골랐다).
+## 🔴 좌표는 `rune_slot_positions`, 크기는 `combined_rune_size` **정본을 그대로 부른다** — 각도·반지름을
+## 베끼면 판 마커와 책 셀(`ring_book.jin_icon_paths`도 같은 두 함수를 쓴다)·HUD가 조용히 어긋난다
+## (세48이 진 윤곽에서, 세83 뮤테이션이 셀 룬 자리에서 각각 밟은 자리다).
+## ⚠ static·public인 이유 = 마커는 `draw_arc` 렌더라 헤드리스가 못 보지만 **이 좌표는 잴 수 있다**.
+static func empty_rune_slot_marks(runes: Array, ctr: Vector2, ro: float) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	if runes.is_empty():
+		return out
+	var pos := rune_slot_positions(runes.size(), ctr, ro)
+	var r := combined_rune_size(ro, runes.size())
+	for i in runes.size():
+		if int(runes[i]) < 0:       # 🔴 음수 판정 — 타 모듈의 RUNE_NONE 상수를 참조하지 않는다
+			out.append({"at": pos[i], "r": r})
+	return out
+
+
 ## 🔴 세81 M2: `rune_type: int` → `runes: Array`(int 배열, 자리 순서). 빈 배열 = 룬 미선택(진 윤곽만).
 ## 목록의 음수(RUNE_NONE) 자리는 서브패스를 건너뛴다 — 자리 개수는 유지해 **위치가 안 흔들리게**.
 ## 자리 1개면 옛 단일 룬과 점 단위 동일(rune_slot_positions·size 무변경).
@@ -626,9 +669,9 @@ static func compose_guide_paths(jin_shape: int, runes: Array, band_defs: Array,
 	# count ≥ 2면 갈래마다 별도 폴리라인(이음선 없음). 음수(RUNE_NONE) 자리는 서브패스를 건너뛴다
 	# (센티넬 = 그 자리 룬 미선택). 자리 좌표는 `rune_slot_positions`가 준다(위치 단일 소스).
 	var rpos := rune_slot_positions(runes.size(), ctr, ro)
-	var rsz := ro * RUNE_GUIDE_FRAC
-	if runes.size() >= 2:
-		rsz *= RUNE_MULTI_SIZE_FRAC   # 자리 여럿이면 겹치지 않게 룬을 줄인다 (1개면 무변경)
+	# 🔴 세84 #22: 크기도 `combined_rune_size` 정본을 부른다 — 미선택 자리 마커가 같은 함수를 써야
+	# 「마커 크기 = 실제로 그을 룬 크기」다(식이 두 벌이던 자리를 합쳤다. 값은 비트 동일).
+	var rsz := combined_rune_size(ro, runes.size())
 	for ri in runes.size():
 		var rt := int(runes[ri])
 		if rt < 0:
@@ -757,7 +800,7 @@ func _jin_shape() -> int:
 ##     정삼각(내접원 0.5R)이고 룬은 최대 0.27R이라, 그 아래로 내려가는 도형을 새로 넣지 마라.
 ##   • 🔴 **점 밀도를 맞춘다** — 완성도는 "가이드 점 중 몇 %를 드러냈나"라 점 수가 도형마다 크게
 ##     다르면 **채점이 도형마다 유불리**를 갖는다. 전부 `GUIDE_CIRCLE_N` 등분(≈73점)에 맞춘다.
-## 🔴 **static · public인 이유**: 책의 진 셀 아이콘(`ring_book.jin_icon_marks`)이 이 함수를 그대로
+## 🔴 **static · public인 이유**: 책의 진 셀 아이콘(`ring_book.jin_icon_paths`)이 이 함수를 그대로
 ## 부른다 — 세션 47 문양과 같은 이유다. **셀에서 본 모양 = 손으로 그을 모양**이 구조적으로 못 갈라진다.
 static func jin_guide_pts(shape: int, ctr: Vector2, r: float) -> PackedVector2Array:
 	match shape:
@@ -1531,9 +1574,17 @@ func _draw() -> void:
 				var br := ro * (float(BAND_RADII[bi]) if bi < BAND_RADII.size() \
 					else float(BAND_RADII[BAND_RADII.size() - 1]))
 				draw_arc(ctr, br, 0.0, TAU, 48, BAND_GUIDE_COLOR, BAND_GUIDE_WIDTH, true)
-		# 룬 미선택 = 룬 서브패스가 없다(진 + 밴드 = band_count+1개. 룬 있으면 +1). 중앙 자리 마커.
-		if _combined_subpaths.size() <= _combined_band_count + 1:
-			draw_arc(ctr, ro * RUNE_GUIDE_FRAC, 0.0, TAU, 24, RUNE_SLOT_COLOR, RUNE_SLOT_WIDTH, true)
+		# 🔴 세84 #22 룬 미선택 자리 마커 — **상태(`_combined_runes`)로** 자리마다 그린다.
+		# 좌표·크기는 `empty_rune_slot_marks`가 정본(`rune_slot_positions`·`combined_rune_size`)에서 뽑는다.
+		if not _combined_runes.is_empty():
+			for m: Dictionary in empty_rune_slot_marks(_combined_runes, ctr, ro):
+				draw_arc(m["at"], float(m["r"]), 0.0, TAU, 24, RUNE_SLOT_COLOR, RUNE_SLOT_WIDTH, true)
+		# ⚠ 하위 호환 폴백 = 룬 목록을 **안 넘긴** 호출자용. 서브패스 개수 유추라 세81 이후 밴드 모티프
+		# 수에 오염된다(위 상태 경로가 정본) — 이 갈래에 남는 건 「자리가 하나」인 진에서만 옳다.
+		# 🔴 융합진을 띄우는 호출자(`ring_forge_panel.recompose`)가 `runes`를 넘기면 이 갈래를 안 탄다.
+		# 넘기기 전까지는 융합진 마커가 옛 버그 그대로다 — 걷어야 하는 폴백이지 목표 상태가 아니다.
+		elif _combined_subpaths.size() <= _combined_band_count + 1:
+			draw_arc(ctr, combined_rune_size(ro, 1), 0.0, TAU, 24, RUNE_SLOT_COLOR, RUNE_SLOT_WIDTH, true)
 
 	# 🔴 지금 그리는 조각 — 숨은 정답 선(연하게) + 드러난 점(주황) + **그린 먹선 그대로**
 	var guide := _scorer.guide_points()

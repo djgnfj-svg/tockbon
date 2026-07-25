@@ -40,41 +40,70 @@ func reload() -> void:
 	chapters.clear()
 	for res in _load_dir("res://data/runes"):
 		var rune := res as RuneDef
-		if rune:
-			runes[rune.type] = rune
+		if rune == null:
+			_warn_wrong_type("data/runes", res, "RuneDef")
+			continue
+		runes[rune.type] = rune
 	for res in _load_dir("res://data/enemies"):
 		var enemy := res as EnemyDef
-		if enemy:
-			enemies[enemy.id] = enemy
+		if enemy == null:
+			_warn_wrong_type("data/enemies", res, "EnemyDef")
+			continue
+		enemies[enemy.id] = enemy
 	for res in _load_dir("res://data/items"):
 		var item := res as ItemDef
-		if item:
-			items[item.id] = item
+		if item == null:
+			_warn_wrong_type("data/items", res, "ItemDef")
+			continue
+		items[item.id] = item
 	for res in _load_dir("res://data/jin"):
 		var jin := res as JinDef
-		if jin:
-			jins[jin.id] = jin
+		if jin == null:
+			_warn_wrong_type("data/jin", res, "JinDef")
+			continue
+		jins[jin.id] = jin
 	for res in _load_dir("res://data/glyphs"):
 		var glyph := res as GlyphDef
-		if glyph:
-			glyphs[glyph.id] = glyph
+		if glyph == null:
+			_warn_wrong_type("data/glyphs", res, "GlyphDef")
+			continue
+		glyphs[glyph.id] = glyph
 	for res in _load_dir("res://data/glyph_rings"):
 		var gr := res as GlyphRingDef
-		if gr:
-			glyph_rings[gr.id] = gr
+		if gr == null:
+			_warn_wrong_type("data/glyph_rings", res, "GlyphRingDef")
+			continue
+		glyph_rings[gr.id] = gr
 	for res in _load_dir("res://data/recipes"):
 		var recipe := res as RecipeDef
-		if recipe:
-			recipes[recipe.id] = recipe
+		if recipe == null:
+			_warn_wrong_type("data/recipes", res, "RecipeDef")
+			continue
+		recipes[recipe.id] = recipe
 	for res in _load_dir("res://data/quests"):
 		var quest := res as QuestDef
-		if quest:
-			quests[quest.id] = quest
+		if quest == null:
+			_warn_wrong_type("data/quests", res, "QuestDef")
+			continue
+		quests[quest.id] = quest
 	for res in _load_dir("res://data/chapters"):
 		var chapter := res as ChapterDef
-		if chapter:
-			chapters[chapter.id] = chapter
+		if chapter == null:
+			_warn_wrong_type("data/chapters", res, "ChapterDef")
+			continue
+		chapters[chapter.id] = chapter
 	reindex_glyphs()
+
+
+## 🔴🔴 **캐스트 실패를 시끄럽게 만든다** (세84 감사 #10). 전엔 아홉 루프가 다 `if x:`로
+## 캐스트 실패를 **조용히 버렸다** — 그리고 이건 **완전 무음**이다: 파싱 실패는 엔진이 최소한
+## `Parse Error`를 찍지만(관행인 `SCRIPT ERROR` grep엔 안 걸려도 로그엔 남는다), 폴더에 엉뚱한
+## 타입의 .tres가 들어간 경우는 **엔진 로그조차 없다.** 세50에 바람 룬이 두 세션 죽어 있던 게
+## 이 계열이고, 그때 전 스위트가 그린이었다. Db가 「빠졌다」를 알 수 있는 유일한 자리라 여기서 짖는다.
+func _warn_wrong_type(dir: String, res: Resource, expected: String) -> void:
+	var where := res.resource_path if res != null else "<null>"
+	push_warning("%s에 %s가 아닌 리소스가 있다 — 이 파일은 등록되지 않는다: %s"
+		% [dir, expected, where])
 
 func get_rune(type: Enums.RuneType) -> RuneDef:
 	return runes.get(type) as RuneDef
@@ -270,12 +299,21 @@ func _load_dir(path: String) -> Array[Resource]:
 	var out: Array[Resource] = []
 	var dir := DirAccess.open(path)
 	if dir == null:
+		# 🔴 폴더가 없으면 그 축의 콘텐츠가 **통째로** 빠지는데 전엔 조용히 빈 배열이었다(세84 #10).
+		push_warning("data 폴더를 열 수 없다 — 이 축의 콘텐츠가 통째로 빠진다: %s (err %d)"
+			% [path, DirAccess.get_open_error()])
 		return out
 	for file in dir.get_files():
 		# 익스포트 빌드에서는 .tres가 .tres.remap으로 바뀌므로 양쪽 처리
 		var clean := file.trim_suffix(".remap")
 		if clean.ends_with(".tres") or clean.ends_with(".res"):
-			var res := load(path.path_join(clean)) as Resource
-			if res:
-				out.append(res)
+			var full := path.path_join(clean)
+			var res := load(full) as Resource
+			# 🔴 로드 실패(대개 **파싱 오류** — `Color`를 3인자로 쓰면 파서가 리소스 전체를
+			# 거부한다, 세50 바람 룬)를 전엔 `if res:`로 조용히 버렸다. 엔진 `Parse Error`는
+			# `SCRIPT ERROR` grep에 안 걸리고 `-s`는 OK를 찍는다 — 그래서 여기서 한 번 더 짖는다.
+			if res == null:
+				push_warning("리소스 로드 실패 (파싱 오류일 수 있다 — 세50 함정): %s" % full)
+				continue
+			out.append(res)
 	return out
