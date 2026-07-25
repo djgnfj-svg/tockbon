@@ -40,11 +40,20 @@ PowerShell은 자식 프로세스 stdout을 안 보여준다 — **테스트는 
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_feel_auto.gd            # 손맛 개편 (세63: player_hurt 단일 발신+사망 가드·플래시 material per-instance·modulate 불가침·hurt 굽기·그림자·dust·카메라 킥·허수아비 파리티 — 🔴 "보인다"는 못 잡음: 세63에 그림자 가림·먼지 뭉개짐을 실게임만 잡았다)
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_floating_wand_auto.gd   # 떠있는 지팡이 + 발사 총구 계약 (세65: 미장착=숨김+발사 origin 몸중심 폴백·장착=지팡이 끝 muzzle_position 발사·총구 기하 단일 소스 — 🔴 둥둥/회전/flip/겉보기는 실게임만)
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_assembly_slice_auto.gd  # 조립→탁본 최소 슬라이스 (세68: 문양-고리 Db 2종 로드·compose_guide 합성(진+룬+밴드 2겹, 기존 static 재사용)·flatten_bands 발사계약(밴드→8칸 라운드로빈·순서·truncate — 뮤테이션 idx+=0 7건)·통째 채점·플래튼 발사 dummy take_hit·build_assembly score 실음 — 🔴 mouse_filter 클릭 도달·가이드 렌더·트레이스 손맛은 실게임만)
+./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_jin_layers_auto.gd       # 🔴 진별 해석 M1 — 층(밴드) 순서 = 연산 순서 (세79: 심장 = 폭발(확산(불)) 1개 큰 반경 vs 확산(폭발(불)) 3개 작은 반경 — 개수·대소 관계로만 잼(balance 수치 미기입)·빈 밴드도 층 자리 지킴·씨앗·build_assembly가 rings 다겹 실음 — 🔴 폭발이 "크게 터졌다"로 보이나는 실게임만)
+./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_jin_fusion_auto.gd       # 🔴 진별 해석 M2 — 룬 2개 + 융합진 (세81: 심장 = 한 발이 두 상태 → 반응(SHOCK)·자리 순서 무의존·합산 0.7×두 룬 단독합·도배 방지 enemy_hit 발신 == 1·룬 1개 회귀 완전 동일 — 🔴 룬 소켓 클릭·반응 가시성은 실게임만)
+./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_glyph_data_auto.gd       # 🔴 문양 효과·표현 데이터화 + 응축 (세82: GlyphCode 전 9값 Db 로드·behavior/params 파싱·심장 = 응축은 폭발의 반대를 **단조성**으로(대소 비교만으론 부호 뒤집기를 못 잡는다)·계열 분기가 실제로 _apply_layer를 지나나·code 중복 결정적 승자 — 🔴 응축이 "집중 한 방"으로 보이나는 실게임만)
+./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_scene_contract_auto.gd   # 🔴🔴 씬 계약 — mouse_filter 정적 그물 (세84 #14: 게임플레이 씬을 **스캔**해 「보이는 채로 화면 덮는 Control이면 mouse_filter==IGNORE」. **두 번 밟은 최다 재발 버그**(세25·26 — 바닥이 좌클릭 먹어 발사가 조용히 죽는데 전 스위트 그린)가 처음으로 헤드리스에 걸린다 — 실패 형태가 늘 「씬에서 그 줄이 빠진다」라서 .tscn 프로퍼티로 잴 수 있다. 씬 목록 하드코딩 안 함 = 새 씬 자동 포함. 🔴 F5의 대체가 아니라 1차 방어선)
+./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_ui_text_auto.gd          # 🔴 표시부 계약 (세84 감사 #12·#21·#35·#36 — 그전엔 그물 0건이었다): 융합 씨앗 문자열·`runes_of` 경유(표시부가 design.rune만 읽어 **두 번째 룬이 사라지던** 자리)·rune_slot_positions 정본 호출·ItemText 단일 소스 + **사본 재발 감지 스캔**·행 캡 관계식·say 수명 — 🔴 겉보기는 실게임만
 ```
 
-⚠ **이 목록이 세션51에 5개 뒤처져 있었다** (dialogue_box·map_panel·drop_pickup·enemy_ai·status). 정본은
-CLAUDE.md의 「검증 명령」 절이다 — **새 테스트를 더하면 두 곳을 같이 갱신해라.** 목록이 갈라지면
+⚠ **이 목록이 세션51에 5개 뒤처져 있었고, 세84에 또 4개 뒤처진 걸 발견했다**
+(`test_jin_layers`·`test_jin_fusion`·`test_glyph_data`·`test_ui_text` — **지난 세 세션의 심장 테스트가 전부 빠져 있었다**).
+정본은 CLAUDE.md의 「검증 명령」 절이다 — **새 테스트를 더하면 두 곳을 같이 갱신해라.** 목록이 갈라지면
 이 스킬을 읽은 에이전트가 "전 스위트를 돌렸다"고 믿으면서 절반만 돌린다.
+🔴 **세84 교훈: 이 경고가 여기 적혀 있는데도 세 세션 연속 갈라졌다** — 경고문에 의존하지 말고
+**대조를 기계로 해라**: `for t in $(ls tests/*_auto.gd); do grep -q $(basename $t) CLAUDE.md || echo 누락; done`
+(스킬 파일에도 같은 걸 돌려라). 세션 종료 전 이 한 줄이 목록 갈라짐을 끝낸다.
 
 **목록에서 빠진 테스트는 낡아 죽는다** — 세션 7이 문법을 바꾸며 두 테스트가 "목록에 없다"는 이유로 조용히 깨진 채 방치됐다(세션 8에 발견). 새 테스트를 더하면 이 목록도 갱신해라.
 
