@@ -630,11 +630,18 @@ func _draw_band_sockets(font: Font, top: float) -> void:
 		var sel := i == _sel_band
 		_cells.append({"rect": r, "kind": "band", "value": i})
 		draw_rect(r, SOCKET_BG, true)
-		draw_rect(r, SEL_EDGE if sel else SOCKET_EMPTY, false, 2.5 if sel else 1.0)
+		# ⚠ 선택 강조는 **얇게**(2.5→1.6). 굵은 주황 테두리가 카드보다 더 눈에 띄어
+		# 목록 전체가 시끄러웠다(세82 사용자 지적).
+		draw_rect(r, SEL_EDGE if sel else SOCKET_EMPTY, false, 1.6 if sel else 1.0)
+		# 밴드 번호는 **늘** 왼쪽 위에 — 끼웠든 비었든 "몇 층인가"가 이 칸의 정체다.
+		_text(font, r.position + Vector2(4.0, 2.0), "%d" % (i + 1),
+			SEL_EDGE if sel else DESC_COLOR, 8)
 		if gr != null:
 			_ring_icon(r.position + Vector2(r.size.y * 0.5, r.size.y * 0.5), r.size.y * 0.34, gr)
+			# ⚠ 이름을 두 번 적지 마라 — `display_name`이 이미 "발산 고리 ×5"라
+			# 뒤에 `모티프×개수`를 붙이면 **"발산 고리 ×5 (발산→×5)"**가 된다(세82 사용자 지적).
 			_text(font, r.position + Vector2(r.size.y + 6.0, r.size.y * 0.5 - 6.0),
-				"%s  (%s×%d)" % [gr.display_name, _motif_name(gr.motif), gr.count], NAME_COLOR, 9)
+				gr.display_name, NAME_COLOR, 9)
 		else:
 			_text(font, r.position + Vector2(10.0, r.size.y * 0.5 - 6.0),
 				"밴드 %d — 비었다 (아래 고리 클릭)" % (i + 1), DESC_COLOR, 9)
@@ -656,15 +663,17 @@ func _draw_band_sockets(font: Font, top: float) -> void:
 			continue
 		var rr: Rect2 = lrects[i]
 		rr.position.y -= _ring_scroll
-		# 가시영역 밖(위·아래로 완전히 벗어난) 행은 안 그리고 _cells에도 안 담는다(클릭 못 함).
-		if rr.position.y + rr.size.y < list_top or rr.position.y > size.y:
+		# 🔴 세82: 가시영역에 **온전히 들어오는 행만** 그린다. 예전엔 걸친 행도 그려서
+		# 책 아래쪽에 **반쯤 잘린 카드**가 남았다(사용자: "좀 깔끔했으면"). _cells에도 안 담아
+		# 반쯤 보이는 걸 클릭하는 일이 없다.
+		if rr.position.y < list_top or rr.position.y + rr.size.y > size.y:
 			continue
 		_cells.append({"rect": rr, "kind": "ring", "value": gr2.id})
 		draw_rect(rr, Color(gr2.ui_color, 0.10), true)
 		draw_rect(rr, Color(gr2.ui_color, 0.7), false, 1.5)
 		_ring_icon(rr.position + Vector2(rr.size.y * 0.5, rr.size.y * 0.5), rr.size.y * 0.34, gr2)
 		_text(font, rr.position + Vector2(rr.size.y + 8.0, rr.size.y * 0.5 - 5.0),
-			"%s  %s×%d" % [gr2.display_name, _motif_name(gr2.motif), gr2.count], NAME_COLOR, 9)
+			gr2.display_name, NAME_COLOR, 9)
 	# 🔴 세81: 넘칠 때만 오른쪽에 얇은 스크롤 썸(있다는 신호 — 없으면 휠 되는지 모른다).
 	if max_scroll > 0.0:
 		var track_x := size.x - 5.0
@@ -691,14 +700,9 @@ func _ring_icon(c: Vector2, radius: float, gr: GlyphRingDef) -> void:
 			draw_polyline(mk, gr.ui_color, 1.5, true)
 
 
-## 🔴 세82: 이름의 정본은 `GlyphDef.display_name`이다(옛 `RingBoard.GLYPH_NAMES` 배열 은퇴).
-## 책은 오토로드를 안 보므로 패널이 주입한 `_glyph_defs`에서 읽는다(`ring_forge_panel:385`).
-func _motif_name(code: int) -> String:
-	for d in _glyph_defs:
-		var gd := d as GlyphDef
-		if gd != null and gd.code == code:
-			return String(gd.display_name)
-	return "문양%d" % code if code >= 0 else "?"
+## ⚠ 옛 `_motif_name(code)`은 세82에 지웠다 — 소켓·목록이 `display_name`("발산 고리 ×5")에
+## 모티프 이름을 **또** 붙여 "발산 고리 ×5 (발산→×5)"로 나오던 걸 걷어내자 **소비자가 0**이 됐다.
+## 문양 이름이 다시 필요해지면 주입된 `_glyph_defs`에서 `code`로 찾아라(책은 오토로드를 안 본다).
 
 
 ## 아이콘. jin·fire = 진·룬 (폴백 단일 셀 전용 — 격자 셀은 각자 전용 렌더를 쓴다)
