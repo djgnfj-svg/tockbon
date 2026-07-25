@@ -98,6 +98,24 @@ func _test_chapters_load() -> void:
 
 ## [2] 🔴 보스 스폰 **두 경로 각각** + 출격 만HP (forest [2] 이식).
 ## ch1 = forest_enemy 범용(add_child 전 enemy_id 대입 — 순서가 계약) · ch3 = snake_boss 전용 씬.
+## 🔴 스폰 위치 허용 반경 — **등가가 아니라 반경으로 재는 이유**(세84에 flake를 실측해 고쳤다):
+## 보스는 살아 움직인다. 검사가 도는 프레임까지 추격 AI가 전진하므로 **부하가 걸리면**(다른 에이전트가
+## 동시에 테스트를 돌 때 등) 몇 px 어긋나 `< 2.0`이 3~4회 중 1회 빨개졌다 — 계약이 깨진 게 아니라
+## **계약을 잘못 표현한 것**이었다(재는 것은 「지금 어디 있나」가 아니라 「거기서 **시작했나**」다).
+## 값 근거 = 관측된 정상 드리프트 **8.5px**의 7배 여유. 이 검사가 실제로 잡는 것은
+## 「위치를 **아예 대입하지 않는다**」(보스가 원점 = `boss_spawn`이 `(0,-260)`이라 260px 어긋남)다.
+##
+## 🔴🔴 **이 검사는 위쪽 주석이 말하는 「대입이 `add_child` 앞」 계약을 재지 않는다 — 세84에 실측했다.**
+## 뮤테이션(`boss_room.gd`의 대입을 `add_child` 뒤로) → **3회 전부 그린**. 대입이 같은 프레임에
+## 일어나므로 검사 시점엔 보스가 제자리다. 그 계약이 진짜로 망가뜨리는 것은 **보스 위치가 아니라
+## `snake_body`의 자취 프리시드**다(`snake_body.gd:70`이 `_ready`에서 **부모의 그 시점** 위치를 읽어
+## 마디 12개를 깐다 → 뒤에 옮기면 마디가 원점 기준으로 깔린다 = 세54 「정지 뭉침」).
+## ⚠ 그런데 이후 프레임에 자취가 따라잡아 **검사 시점엔 복구돼 있다** → 지금 **어느 그물도 안 잰다.**
+## → 다음 세션 몫: 프레임 타이밍에 의존하지 않는 형태로 재라(추천 = `snake_body`를 **단위로** 세워
+##   부모 위치를 정해 놓고 자식을 붙인 뒤 「마디가 부모 근처에 깔린다」를 재는 순수 계약 검사.
+##   씬을 통과시키면 다시 부하-의존 flake가 된다 — 이 파일이 방금 그걸로 데였다).
+const SPAWN_TOL := 60.0
+
 func _test_boss_spawn_both_paths() -> void:
 	print("[2] 보스 스폰 두 경로 (ch1 범용 · ch3 전용 씬) + 출격 만HP")
 	_gs.hp = 7.0
@@ -113,8 +131,8 @@ func _test_boss_spawn_both_paths() -> void:
 	_check(boss != null, "ch1 보스(slime_elite)가 잡몹 사이에 스폰됐다")
 	if boss != null:
 		var want: Vector2 = ch1.boss_spawn
-		_check(boss.global_position.distance_to(want) < 2.0,
-			"ch1 보스가 boss_spawn(%s)에 섰다 (실제 %s)" % [want, boss.global_position])
+		_check(boss.global_position.distance_to(want) < SPAWN_TOL,
+			"ch1 보스가 boss_spawn(%s) 근처에서 시작했다 (실제 %s)" % [want, boss.global_position])
 
 	await _fresh(&"ch3")
 	var ch3 = _db.get_chapter(&"ch3")
@@ -129,8 +147,8 @@ func _test_boss_spawn_both_paths() -> void:
 		# 그 자리 기준으로 자취를 프리시드한다(뒤면 첫 프레임에 마디가 원점→스폰으로 끌려간다,
 		# 세54 「정지 뭉침」 재림 — 세58-B 리뷰가 잡았다).
 		var want3: Vector2 = _db.get_chapter(&"ch3").boss_spawn
-		_check(boss3.global_position.distance_to(want3) < 2.0,
-			"ch3 보스가 boss_spawn(%s)에 섰다 (실제 %s)" % [want3, boss3.global_position])
+		_check(boss3.global_position.distance_to(want3) < SPAWN_TOL,
+			"ch3 보스가 boss_spawn(%s) 근처에서 시작했다 (실제 %s)" % [want3, boss3.global_position])
 
 
 ## [2b] 접촉 피해 — 붙으면 HP가 깎인다 (옛 forest [4] 이식 — 세58-B 리뷰 지적: 이걸 빼먹으면
