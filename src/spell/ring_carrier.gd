@@ -72,16 +72,21 @@ var _spiral_period: float = 0.45
 var _turn_ratio: float = 0.5
 
 ## 원소 볼 스프라이트 (씬 자식 Fireball — 노드명은 유지) — 이글거림·찰랑임 루프는 SpriteFrames가
-## 담당(자전·글로우 코드 제거). 룬에 따라 애니를 갈아 끼운다: 불→fireball·물→waterball·바람→windball.
+## 담당(자전·글로우 코드 제거). 룬에 따라 애니를 갈아 끼운다 — 표는 아래 `BALL_ANIM`(룬 6종 전원).
 var _fireball: AnimatedSprite2D = null
 var _trail_spawned := false
 
-## 🔴 세78 룬→볼 애니 (파이어볼·워터볼·윈드볼). 같은 92×48 혜성 지오메트리라 오프셋·히트박스·회전은
-## 애니와 무관하게 그대로 돈다 — 색·질감만 다르다. 목록에 없는 룬(흙·번개·풀)은 fireball 폴백.
+## 🔴 룬→볼 애니 (세78 불·물·바람 + 세84 번개·흙·풀 = **룬 6종 전원**). 전부 같은 92×48 혜성
+## 지오메트리라 오프셋·히트박스·회전은 애니와 무관하게 그대로 돈다 — 색·질감만 다르다
+## (색 근거 = `data/runes/*.tres`의 `ui_color` — 볼·트레일·상태 틴트가 갈리면 같은 마법으로 안 읽힌다).
+## ⚠ 폴백(`_apply_ball_anim`의 fireball)은 **지우지 마라** — 룬이 늘거나 시트가 빠졌을 때의 안전망이다.
 const BALL_ANIM := {
 	Enums.RuneType.FIRE:  &"fireball",
 	Enums.RuneType.WATER: &"waterball",
 	Enums.RuneType.WIND:  &"windball",
+	Enums.RuneType.BOLT:  &"boltball",
+	Enums.RuneType.EARTH: &"earthball",
+	Enums.RuneType.GRASS: &"grassball",
 }
 
 
@@ -120,7 +125,7 @@ func setup(p_ring: Array, p_angle: float, p_speed: float, p_lifetime: float,
 	status = p_status
 	status_power = p_status_power
 	rune_hits = p_rune_hits
-	_apply_ball_anim()   # 룬 확정 → 워터볼/윈드볼로 갈아 끼운다 (없으면 fireball 폴백)
+	_apply_ball_anim()   # 룬 확정 → 그 룬의 볼로 갈아 끼운다 (BALL_ANIM에 없으면 fireball 폴백)
 	_apply_body_radius()
 	_apply_sprite_scale()
 	# 트레일은 지연 스폰 — set_motion(규모)이 setup **뒤에** 오므로, 굵기가 최종 body_radius를 보게.

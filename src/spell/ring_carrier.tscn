@@ -1,10 +1,13 @@
-[gd_scene load_steps=26 format=3]
+[gd_scene load_steps=47 format=3]
 
 [ext_resource type="Script" path="res://src/spell/ring_carrier.gd" id="1"]
 [ext_resource type="Texture2D" path="res://assets/sprites/effects/fireball_sheet.png" id="2"]
 [ext_resource type="Script" path="res://src/actors/shadow.gd" id="3"]
 [ext_resource type="Texture2D" path="res://assets/sprites/effects/waterball_sheet.png" id="4"]
 [ext_resource type="Texture2D" path="res://assets/sprites/effects/windball_sheet.png" id="5"]
+[ext_resource type="Texture2D" path="res://assets/sprites/effects/boltball_sheet.png" id="6"]
+[ext_resource type="Texture2D" path="res://assets/sprites/effects/earthball_sheet.png" id="7"]
+[ext_resource type="Texture2D" path="res://assets/sprites/effects/grassball_sheet.png" id="8"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_carrier"]
 radius = 9.0
@@ -81,6 +84,78 @@ region = Rect2(368, 0, 92, 48)
 atlas = ExtResource("5")
 region = Rect2(460, 0, 92, 48)
 
+[sub_resource type="AtlasTexture" id="lb0"]
+atlas = ExtResource("6")
+region = Rect2(0, 0, 92, 48)
+
+[sub_resource type="AtlasTexture" id="lb1"]
+atlas = ExtResource("6")
+region = Rect2(92, 0, 92, 48)
+
+[sub_resource type="AtlasTexture" id="lb2"]
+atlas = ExtResource("6")
+region = Rect2(184, 0, 92, 48)
+
+[sub_resource type="AtlasTexture" id="lb3"]
+atlas = ExtResource("6")
+region = Rect2(276, 0, 92, 48)
+
+[sub_resource type="AtlasTexture" id="lb4"]
+atlas = ExtResource("6")
+region = Rect2(368, 0, 92, 48)
+
+[sub_resource type="AtlasTexture" id="lb5"]
+atlas = ExtResource("6")
+region = Rect2(460, 0, 92, 48)
+
+[sub_resource type="AtlasTexture" id="eb0"]
+atlas = ExtResource("7")
+region = Rect2(0, 0, 92, 48)
+
+[sub_resource type="AtlasTexture" id="eb1"]
+atlas = ExtResource("7")
+region = Rect2(92, 0, 92, 48)
+
+[sub_resource type="AtlasTexture" id="eb2"]
+atlas = ExtResource("7")
+region = Rect2(184, 0, 92, 48)
+
+[sub_resource type="AtlasTexture" id="eb3"]
+atlas = ExtResource("7")
+region = Rect2(276, 0, 92, 48)
+
+[sub_resource type="AtlasTexture" id="eb4"]
+atlas = ExtResource("7")
+region = Rect2(368, 0, 92, 48)
+
+[sub_resource type="AtlasTexture" id="eb5"]
+atlas = ExtResource("7")
+region = Rect2(460, 0, 92, 48)
+
+[sub_resource type="AtlasTexture" id="gb0"]
+atlas = ExtResource("8")
+region = Rect2(0, 0, 92, 48)
+
+[sub_resource type="AtlasTexture" id="gb1"]
+atlas = ExtResource("8")
+region = Rect2(92, 0, 92, 48)
+
+[sub_resource type="AtlasTexture" id="gb2"]
+atlas = ExtResource("8")
+region = Rect2(184, 0, 92, 48)
+
+[sub_resource type="AtlasTexture" id="gb3"]
+atlas = ExtResource("8")
+region = Rect2(276, 0, 92, 48)
+
+[sub_resource type="AtlasTexture" id="gb4"]
+atlas = ExtResource("8")
+region = Rect2(368, 0, 92, 48)
+
+[sub_resource type="AtlasTexture" id="gb5"]
+atlas = ExtResource("8")
+region = Rect2(460, 0, 92, 48)
+
 [sub_resource type="SpriteFrames" id="SpriteFrames_fireball"]
 animations = [{
 "frames": [{"duration": 1.0, "texture": SubResource("fb0")}, {"duration": 1.0, "texture": SubResource("fb1")}, {"duration": 1.0, "texture": SubResource("fb2")}, {"duration": 1.0, "texture": SubResource("fb3")}, {"duration": 1.0, "texture": SubResource("fb4")}, {"duration": 1.0, "texture": SubResource("fb5")}],
@@ -96,6 +171,21 @@ animations = [{
 "frames": [{"duration": 1.0, "texture": SubResource("nb0")}, {"duration": 1.0, "texture": SubResource("nb1")}, {"duration": 1.0, "texture": SubResource("nb2")}, {"duration": 1.0, "texture": SubResource("nb3")}, {"duration": 1.0, "texture": SubResource("nb4")}, {"duration": 1.0, "texture": SubResource("nb5")}],
 "loop": true,
 "name": &"windball",
+"speed": 10.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("lb0")}, {"duration": 1.0, "texture": SubResource("lb1")}, {"duration": 1.0, "texture": SubResource("lb2")}, {"duration": 1.0, "texture": SubResource("lb3")}, {"duration": 1.0, "texture": SubResource("lb4")}, {"duration": 1.0, "texture": SubResource("lb5")}],
+"loop": true,
+"name": &"boltball",
+"speed": 10.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("eb0")}, {"duration": 1.0, "texture": SubResource("eb1")}, {"duration": 1.0, "texture": SubResource("eb2")}, {"duration": 1.0, "texture": SubResource("eb3")}, {"duration": 1.0, "texture": SubResource("eb4")}, {"duration": 1.0, "texture": SubResource("eb5")}],
+"loop": true,
+"name": &"earthball",
+"speed": 10.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("gb0")}, {"duration": 1.0, "texture": SubResource("gb1")}, {"duration": 1.0, "texture": SubResource("gb2")}, {"duration": 1.0, "texture": SubResource("gb3")}, {"duration": 1.0, "texture": SubResource("gb4")}, {"duration": 1.0, "texture": SubResource("gb5")}],
+"loop": true,
+"name": &"grassball",
 "speed": 10.0
 }]
 
