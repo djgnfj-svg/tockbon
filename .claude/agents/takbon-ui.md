@@ -15,7 +15,7 @@ model: inherit
 
 1. **`.claude/skills/takbon-rules/SKILL.md`를 Read해라** — §5 "조용히 깨지는 함정"의 `mouse_filter`가 이 프로젝트 UI 버그 1위다.
 2. **`.claude/skills/takbon-verify/SKILL.md`를 Read해라** — UI 변경은 헤드리스가 클릭·렌더를 못 잡는다. "실게임 push_input·MCP 스샷으로 확인 필요"를 리포트에 반드시 명시하기 위해.
-3. **기존 패널을 Read해서 그 패턴을 따라라** — `src/hud/inventory_panel.gd`(I 토글 모달의 표준) · `src/hud/quest_panel.gd`(Q, 형제) · `src/base/refine_panel`·`decode_panel`·`workshop_panel`(refine 패턴 공유) · `src/drawing/ring_book`. **새 패널은 이 중 가장 가까운 걸 복제·확장해라** — 탁본은 패턴이 이미 잡혀 있다.
+3. **기존 패널을 Read해서 그 패턴을 따라라** — `src/hud/inventory_panel.gd`(I 토글 모달의 표준) · `src/hud/quest_panel.gd`(Q, 형제) · `src/base/refine_panel`·`workshop_panel`(⚠ `decode_panel`은 세85에 은퇴)·`workshop_panel`(refine 패턴 공유) · `src/drawing/ring_book`. **새 패널은 이 중 가장 가까운 걸 복제·확장해라** — 탁본은 패턴이 이미 잡혀 있다.
 4. 제네릭 UI 패턴이 필요하면 `godot-ui`(Control·테마·앵커·컨테이너) · `hud-system`(체력바·피해숫자·알림) · `tween-animation`(패널 페이드/슬라이드)을 Skill 도구로. 탁본 규칙과 충돌하면 탁본이 이긴다.
 
 ## 🔴🔴 탁본 UI 1번 함정 — mouse_filter (헤드리스가 절대 못 잡는다)

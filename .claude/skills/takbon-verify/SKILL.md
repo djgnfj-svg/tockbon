@@ -17,15 +17,15 @@ PowerShell은 자식 프로세스 stdout을 안 보여준다 — **테스트는 
 
 ```bash
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_save_auto.gd            # 저장/로드 (고리 라운드트립) · 부팅만으로 자동저장 준비되나(load_game 호출 전 확인)
-./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_ring_assembly_auto.gd   # 조립 상태기계 계약
-./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_ring_trace_auto.gd      # 손그림 탁본 (완성도/정밀도·펜 보정)
+./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_ring_assembly_auto.gd   # 고리 조립 계약 (세85: per-piece·칸 규칙 은퇴 — 진 Db 로드·glyph_slots 부재·은퇴 API 재발 감지)
+./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_ring_trace_auto.gd      # 손그림 탁본 (🔴폐지 스위치를 되돌리면 살아나는 축의 유일한 상시 그물 — 합성 밑그림 계약 포함)
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_ring_spell_auto.gd      # 고리 발사 (진→투사체·착탄·적 take_hit)
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_ring_design_auto.gd     # 고리 도안 통합 (등급⇔펑 경계·퍼펙트)
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_base_auto.gd            # 베이스캠프 발사 배선 (물리 레이어 계약·좌클릭)
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_chapter_auto.gd         # 챕터 보스방 루프 (세58-B, 옛 test_forest_auto 계승 — 스폰 두 경로·클리어 codex·포탈 extraction·사망 bag_lost·잠금 판정)
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_workshop_auto.gd        # 공방 장비 제작 (station 분리·제작·장착 라운드트립)
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_audio_auto.gd           # 사운드 배선 (17 SFX 로드·EventBus 9종 연결)
-./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_decode_auto.gd          # 탁본 해독 (조각 소비+룬 해금)
+./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_rune_unlock_auto.gd     # 🔴 룬 해금 (세85에 `test_decode_auto`에서 개명 — 해독대가 은퇴해 이름이 거짓이었다): **룬 6종 로드 + 6종 개별 확인**이 세50 Color 침묵사의 유일한 감지기다
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_quests_auto.gd          # 진행 목표(퀘스트) (KILL/EXTRACT/UNLOCK·requires 사슬·소급 완료)
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_dialogue_box_auto.gd    # 온보딩 대사 상자 (줄 넘김·ESC 건너뛰기·ui_modal_open)
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_drop_pickup_auto.gd     # 바닥 드롭 픽업 + 자석 흡수 (layer0/mask2 계약·줍기 지연·자석 반경/취소불가·1회 뱅킹)
@@ -39,7 +39,6 @@ PowerShell은 자식 프로세스 stdout을 안 보여준다 — **테스트는 
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_ring_book_jin_auto.gd   # 책 진 셀 격자·아이콘 (세61 목록 편입: Db 진 ≥1·격자/아이콘 계약은 합성 8조합으로 잼)
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_feel_auto.gd            # 손맛 개편 (세63: player_hurt 단일 발신+사망 가드·플래시 material per-instance·modulate 불가침·hurt 굽기·그림자·dust·카메라 킥·허수아비 파리티 — 🔴 "보인다"는 못 잡음: 세63에 그림자 가림·먼지 뭉개짐을 실게임만 잡았다)
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_floating_wand_auto.gd   # 떠있는 지팡이 + 발사 총구 계약 (세65: 미장착=숨김+발사 origin 몸중심 폴백·장착=지팡이 끝 muzzle_position 발사·총구 기하 단일 소스 — 🔴 둥둥/회전/flip/겉보기는 실게임만)
-./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_assembly_slice_auto.gd  # 조립→탁본 최소 슬라이스 (세68: 문양-고리 Db 2종 로드·compose_guide 합성(진+룬+밴드 2겹, 기존 static 재사용)·flatten_bands 발사계약(밴드→8칸 라운드로빈·순서·truncate — 뮤테이션 idx+=0 7건)·통째 채점·플래튼 발사 dummy take_hit·build_assembly score 실음 — 🔴 mouse_filter 클릭 도달·가이드 렌더·트레이스 손맛은 실게임만)
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_jin_layers_auto.gd       # 🔴 진별 해석 M1 — 층(밴드) 순서 = 연산 순서 (세79: 심장 = 폭발(확산(불)) 1개 큰 반경 vs 확산(폭발(불)) 3개 작은 반경 — 개수·대소 관계로만 잼(balance 수치 미기입)·빈 밴드도 층 자리 지킴·씨앗·build_assembly가 rings 다겹 실음 — 🔴 폭발이 "크게 터졌다"로 보이나는 실게임만)
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_jin_fusion_auto.gd       # 🔴 진별 해석 M2 — 룬 2개 + 융합진 (세81: 심장 = 한 발이 두 상태 → 반응(SHOCK)·자리 순서 무의존·합산 0.7×두 룬 단독합·도배 방지 enemy_hit 발신 == 1·룬 1개 회귀 완전 동일 — 🔴 룬 소켓 클릭·반응 가시성은 실게임만)
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_glyph_data_auto.gd       # 🔴 문양 효과·표현 데이터화 + 응축 (세82: GlyphCode 전 9값 Db 로드·behavior/params 파싱·심장 = 응축은 폭발의 반대를 **단조성**으로(대소 비교만으론 부호 뒤집기를 못 잡는다)·계열 분기가 실제로 _apply_layer를 지나나·code 중복 결정적 승자 — 🔴 응축이 "집중 한 방"으로 보이나는 실게임만)

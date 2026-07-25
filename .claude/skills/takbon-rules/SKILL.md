@@ -63,7 +63,9 @@ description: 탁본(TAKBON) 프로젝트의 아키텍처 규칙·모듈 지도·
 - 새 퀘스트 = `data/quests/*.tres` (KILL/EXTRACT/UNLOCK, `requires`로 사슬)
 - 새 룬 = `data/runes/*.tres` (`unlock_id`=`rune_<명>`)
 - 새 소리 = `assets/audio/sfx/<id>.wav` (파일명=id)
-- 새 스테이션 = `balance.station_build_costs` 한 줄 + `base.tscn` 노드 하나 (로직은 base.gd)
+- 새 스테이션 = `src/props/` 씬 하나(`zone_id`) + `base.gd`가 그 `zone_id`에서 여는 패널
+  ⚠ **세85 정정: `balance.station_build_costs`는 은퇴했다**(세66에 건설이 은퇴한 뒤 소비자 0곳이었다).
+  스테이션은 이제 **짓는 게 아니라 마을에 이미 있다** — 「건설 비용 한 줄」은 더는 존재하지 않는 단계다.
 
 ## 5. 조용히 깨지는 함정 (에러 없이)
 
