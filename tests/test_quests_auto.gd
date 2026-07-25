@@ -30,6 +30,36 @@ func _check(label: String, ok: bool) -> void:
 		_fail += 1
 		print("FAIL: ", label)
 
+## 🔴 세84 #42: Db 레지스트리에 테스트 대역을 주입할 때 **원본을 보관한다.** 세83 사고(흙 룬)와
+## 같은 자리 — 「빈 자리라 빌려 쓴다」는 전제는 그 콘텐츠가 복원되는 순간 거짓이 되고, 그때
+## 뒷정리의 `erase`가 **진짜 .tres를 지운다**(그리고 실데이터 그물이 조용히 사라진다).
+## `{id: QuestDef|null}` — null = 원래 없었다(그때만 erase한다).
+var _quest_backup := {}
+
+func _backup_quest(db: Node, id: StringName) -> void:
+	if not _quest_backup.has(id):
+		_quest_backup[id] = db.quests.get(id, null)
+
+func _inject_quest(db: Node, id: StringName, target: StringName, requires: StringName) -> QuestDef:
+	_backup_quest(db, id)
+	var q := QuestDef.new()
+	q.id = id
+	q.goal = Enums.QuestGoal.UNLOCK
+	q.target = target
+	q.requires = requires
+	db.quests[id] = q
+	return q
+
+## 있으면 되돌리고, 없을 때만 지운다 (test_decode_auto의 흙 룬 원복 패턴과 같은 규약).
+func _restore_quests(db: Node) -> void:
+	for id: StringName in _quest_backup:
+		var orig = _quest_backup[id]
+		if orig != null:
+			db.quests[id] = orig
+		else:
+			db.quests.erase(id)
+	_quest_backup.clear()
+
 func _clean(gs: Node) -> void:
 	gs.quest_progress.clear()
 	gs.quest_done.clear()
@@ -40,11 +70,22 @@ func _clean(gs: Node) -> void:
 		gs.codex.erase(k)
 
 func _run() -> void:
+	# 🔴 세84 #44: 워치독 — `_run`이 중간에 죽으면(런타임 에러로 함수 중단) `quit()`에 못 닿아
+	# 프로세스가 **영구 hang**했다(다른 22종엔 이 안전망이 있었다. takbon-verify §3의 침묵 통과 계열).
+	create_timer(30.0).timeout.connect(func() -> void:
+		print("TEST_QUESTS_TIMEOUT — 30초 초과 (테스트가 중간에 죽었을 수 있다)")
+		quit(1))
 	await process_frame
 	var gs: Node = root.get_node("GameState")
 	var db: Node = root.get_node("Db")
 	var eb: Node = root.get_node("EventBus")
 	var sm: Node = root.get_node("SaveManager")
+
+	# 🔴 세84 #42: 주입 전 **Db 퀘스트 목록을 스냅샷**한다. 이 테스트는 공유 레지스트리(Db.quests)에
+	#   대역을 심으므로, 끝나고 원래 목록으로 정확히 돌아왔는지가 계약이다 — 안 돌아오면 같은
+	#   프로세스의 뒤쪽 실데이터 검증이 조용히 갈린다(세83 흙 룬 사고가 정확히 그 형태였다).
+	var quests_at_start: Array = db.quests.keys()
+	quests_at_start.sort()
 
 	# 깨끗한 시작 — 실게임 세이브가 이 프로세스에 로드됐을 수 있어 퀘스트·해금·건설을 초기화한다.
 	_clean(gs)
@@ -53,18 +94,13 @@ func _run() -> void:
 	# 🔴 세61 콘텐츠 리셋: 해독 퀘스트 q06~q10 .tres가 은퇴했다. UNLOCK(룬)·소급 사슬 **기계**는
 	# 그대로라, q06/q07을 in-memory QuestDef로 Db에 주입해 계속 잰다(끝나면 제거 — 룬 퀘스트를
 	# 되살리면 실데이터 검증으로 되돌려도 된다). Db.quests는 평범한 Dictionary다.
-	var q6 := QuestDef.new()
-	q6.id = &"q06_learn_water"
-	q6.goal = Enums.QuestGoal.UNLOCK
-	q6.target = &"rune_water"
-	q6.requires = &"q05_build_decode"
-	db.quests[q6.id] = q6
-	var q7 := QuestDef.new()
-	q7.id = &"q07_learn_wind"
-	q7.goal = Enums.QuestGoal.UNLOCK
-	q7.target = &"rune_wind"
-	q7.requires = &"q06_learn_water"
-	db.quests[q7.id] = q7
+	# 🔴🔴 세84: **「빈 자리를 빌려 쓴다」 수법을 걷었다.** 전엔 존재 확인 없이 대입하고 끝에 무조건
+	# `erase`했다 — 세83에 `test_decode_auto`가 똑같은 방식으로 **복원된 진짜 흙 룬을 지운** 사고가
+	# 났다(로드 6→5). q06·q07 .tres를 되살리는 세션이 오면 이 테스트가 그 실데이터를 지워
+	# **실데이터 검증이 조용히 사라진다.** → 원본을 보관했다가 **있으면 되돌리고 없을 때만 erase**한다
+	# (`_inject_quest`/`_restore_quest` 헬퍼 = test_decode_auto의 흙 룬 패턴).
+	var q6: QuestDef = _inject_quest(db, &"q06_learn_water", &"rune_water", &"q05_build_decode")
+	var q7: QuestDef = _inject_quest(db, &"q07_learn_wind", &"rune_wind", &"q06_learn_water")
 
 	var q0: QuestDef = db.get_quest(&"q00_first_draw")
 	var q1: QuestDef = db.get_quest(&"q01_first_hunt")
@@ -75,7 +111,11 @@ func _run() -> void:
 	_check("퀘스트 6장이 data/quests에서 로드됐다 (세61: q06+는 은퇴 — 위 주입 2장은 기계 검증용)",
 		q0 != null and q1 != null and q2 != null and q3 != null and q4 != null and q5 != null)
 	if q0 == null or q1 == null or q3 == null:
-		print("RESULT pass=%d fail=%d" % [_pass, _fail]); quit(); return
+		# 여기까지 왔으면 위 _check가 이미 빨개졌다 — 종료코드도 실패로 (세84 #44).
+		print("RESULT pass=%d fail=%d" % [_pass, _fail])
+		_restore_quests(db)
+		quit(1)
+		return
 
 	# ── ① 온보딩 시작(세션41): q00(첫 마법진)만 열리고, q01·q02는 q00을 물어 잠긴다 ──
 	_check("시작: q00(첫 마법진) 열림", gs.is_quest_active(q0))
@@ -219,6 +259,7 @@ func _run() -> void:
 	qr.target = &"slime"
 	qr.count = 1
 	qr.reward_unlock = &"rune_test66"   # 🔴 완료 시 이 codex(룬)를 해금
+	_backup_quest(db, qr.id)           # 세84: 합성 id라도 같은 규약으로 (뒷정리를 한 곳에 모은다)
 	db.quests[qr.id] = qr
 	var unlock_emits := [0]
 	var on_unlock := func(id: StringName) -> void:
@@ -237,16 +278,22 @@ func _run() -> void:
 	gs.claim_ready_quests()
 	_check("🔴 이미 해금이면 reward_unlock 재발신 안 함 (is_unlocked 가드)", unlock_emits[0] == 1)
 	eb.codex_unlocked.disconnect(on_unlock)
-	db.quests.erase(&"qr_test66")
 	gs.codex.erase(&"rune_test66")
 
-	# 뒷정리 — 세이브 파일 삭제(스위트 규약) + 메모리 초기화 + 주입 퀘스트 제거(공유 레지스트리).
+	# 뒷정리 — 세이브 파일 삭제(스위트 규약) + 메모리 초기화 + 주입 퀘스트 **원상복구**(공유 레지스트리).
 	sm.wipe_save()
 	_clean(gs)
-	db.quests.erase(&"q06_learn_water")
-	db.quests.erase(&"q07_learn_wind")
+	_restore_quests(db)   # 🔴 세84: 무조건 erase가 아니라 원본 복원 (없던 것만 지운다)
+
+	# 🔴 세84 #42의 검출자 — 뒷정리가 Db를 **시작과 똑같이** 되돌렸다. 대역이 남아도(누수) 실데이터가
+	#   지워져도(세83 사고) 여기가 빨개진다. 그래서 q06·q07 .tres가 복원돼도 이 테스트는 그걸 안 먹는다.
+	var quests_at_end: Array = db.quests.keys()
+	quests_at_end.sort()
+	_check("🔴 뒷정리: Db.quests가 시작 상태와 같다 (주입 대역 누수 0 · 실데이터 삭제 0)",
+		quests_at_end == quests_at_start)
 
 	print("RESULT pass=%d fail=%d" % [_pass, _fail])
 	if _fail == 0:
 		print("TEST_QUESTS_OK — 전 항목 통과")
-	quit()
+	# 🔴 세84 #44: 실패하면 종료코드 1 (전엔 인자 없는 quit() = 실패해도 0이라 러너가 못 걸렀다).
+	quit(0 if _fail == 0 else 1)

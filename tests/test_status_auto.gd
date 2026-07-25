@@ -13,6 +13,10 @@ extends SceneTree
 ## 🔴 감속은 **실제로 움직인 거리**로 잰다 — `_move_mult()`를 직접 부르면 `_apply_move` 통로를
 ## 건너뛰어 "곱하는 걸 잊었다"를 못 잡는다 (세션25 Control 우회와 같은 종류의 착각).
 ##
+## 🔴 세84: **풀 계열 반응 3종(무성함·산불×2)과 반응 VFX의 두 몸 파리티**를 추가했다(감사 #16·#15).
+## 그전엔 ROOT·BLAZE가 tests/ 전체에 0건이라 세83이 되살린 반응표 세 줄을 지워도 전 스위트 그린이었고,
+## VFX 신호는 `dummy_target`만 재서 **실제로 싸우는 `forest_enemy`의 emit 세 줄이 무측정**이었다.
+##
 ## ⚠ 못 잡는 것: 틴트가 **보이는지**(헤드리스는 렌더가 없다) · 연쇄/증기가 실제 전투에서
 ## 시원한지(손맛). 리드가 실게임 스샷·플레이로 확인해야 한다.
 ##
@@ -30,6 +34,12 @@ const R_WIND := 3
 const S_SHOCK := 5
 const R_BOLT := 4
 const R_EARTH := 5
+# 🔴 세84 감사 #16 — 세83이 룬 6종을 복원해 **풀 계열 반응 전체**(무성함·산불·속박)가 살아났는데
+# 이 목록에 ROOT·BLAZE·GRASS가 없어 **이 파일이 그 조합을 부를 방법 자체가 없었다** = 세 반응 줄과
+# `duration_of`/`move_mult`의 ROOT·BLAZE 팔, `status_blaze_dot_mult`를 지워도 전 스위트 그린이었다.
+const S_ROOT := 7
+const S_BLAZE := 9
+const R_GRASS := 6
 
 var failures: int = 0
 var _bus = null
@@ -61,6 +71,9 @@ func _run() -> void:
 	await _test_slow_cap()
 	await _test_dummy_reacts()
 	await _test_reaction_vfx_signals()
+	await _test_wet_plus_grass_is_root()
+	await _test_burn_plus_grass_is_blaze()
+	await _test_root_plus_fire_is_blaze()
 
 	if failures == 0:
 		print("TEST_STATUS_OK — 전 항목 통과")
@@ -155,7 +168,7 @@ func _test_wet_plus_earth_is_mud() -> void:
 	# 🔴 둘 다 take_hit으로 세운다 — 넉백(손맛)이 한쪽에만 붙으면 이동 거리 비교가 오염된다.
 	wet.take_hit(0.0, R_WATER, S_WET, 1.0)
 	mud.apply_status(S_WET, 1.0)
-	mud.take_hit(0.0, R_EARTH, 0, 1.0)  # 흙 룬이 젖음 위에 온다
+	mud.take_hit(0.0, R_EARTH, S_VULNERABLE, 1.0)  # 흙 룬(.tres status=6)이 젖음 위에 온다 → 반응이 이긴다
 	_check(mud.has_status(S_MUD), "진흙이 생겼다")
 	_check(not mud.has_status(S_WET), "바탕(젖음)은 반응에 소진돼 사라졌다")
 
@@ -246,9 +259,12 @@ func _test_vulnerable_amplifies_next() -> void:
 	print("[7] 취약 — 다음에 거는 상태가 더 세게 걸린다")
 	var plain = await _spawn(&"slime")
 	var vuln = await _spawn(&"slime")
-	# 흙 룬은 status를 데이터로 아직 안 들고 오므로(rune .tres 미신설) 0으로 보낸다 —
-	# `StatusRules.amplifies()`가 취약을 만드는 규칙이라 그대로 취약이 걸려야 한다.
-	vuln.take_hit(0.0, R_EARTH, 0, 1.0)
+	# 🔴 흙 룬의 **실제 데이터 값**을 보낸다 — `rune_earth.tres`의 `status = 6`(VULNERABLE).
+	# ⚠ 전엔 `0`(NONE)을 손으로 넣고 *"흙 룬은 status를 데이터로 아직 안 들고 온다"*는
+	# **세83 이후 낡은 전제**로 `status_holder`의 폴백(NONE + amplifies → VULNERABLE)을 재고 있었다.
+	# 그 폴백은 라이브에서 도달 불가라 세84에 지웠고(감사 #30), 이 인자가 그 청소의 나머지 반쪽이다 —
+	# 재는 계약은 그대로다(「취약이 다음에 거는 상태를 1.5배로」).
+	vuln.take_hit(0.0, R_EARTH, S_VULNERABLE, 1.0)
 	_check(vuln.has_status(S_VULNERABLE), "흙이 취약을 남겼다")
 	_check(is_equal_approx(vuln.status_power_of(S_VULNERABLE), 1.0),
 		"취약 자신은 자기 배율을 안 먹는다 (실제 %.2f)" % vuln.status_power_of(S_VULNERABLE))
@@ -363,7 +379,7 @@ func _test_dummy_reacts() -> void:
 
 	# ⓐ 반응 산물이 실제로 걸린다 (젖음 + 흙 = 진흙)
 	a.apply_status(S_WET, 1.0)
-	a.take_hit(0.0, R_EARTH, 0, 1.0)
+	a.take_hit(0.0, R_EARTH, S_VULNERABLE, 1.0)  # 흙 룬의 실제 .tres status
 	_check(a.has_status(S_MUD), "허수아비에 진흙이 생겼다")
 	_check(not a.has_status(S_WET), "바탕(젖음)은 반응에 소진됐다")
 
@@ -410,11 +426,23 @@ func _test_dummy_reacts() -> void:
 ##  • 증기(젖음+불) = 버스트 1회(status=NONE) · **아크 0**(증기는 링만).
 ##  • 바람 확산 = 반경 안 대상마다 아크 1가닥(대표 상태색).
 ## 🔴 뮤테이션: 몸의 `EventBus.reaction_burst.emit`/`reaction_chain.emit` 줄을 지우면 해당 줄이 빨개진다.
-##   그리고 두 몸(forest_enemy·dummy_target)이 **같은 계약**을 지키는지 — 여긴 dummy로 본다(연습장 파리티).
+## 🔴🔴 **두 몸을 각각 돈다** (세84 감사 #15 — 세56 「두 몸 복제 계약은 그물도 두 개」의 반대 방향).
+##   전엔 세 갈래가 전부 `dummy_target`만 인스턴스했고 `forest_enemy`의 emit 세 줄은 피해·상태 적용과
+##   **독립**이라(첫 줄은 `amount <= 0` 가드보다 앞) 지워도 게임 로직은 그대로 돌았다 →
+##   **챕터 보스방의 실제로 싸우는 모든 적에서 감전 아크·증기 링이 사라지는데 전 스위트 그린**이었다.
+##   페이로드 계약이 동일하므로 검사 본문을 재사용하고 **몸만 팩토리로 갈아 끼운다**.
 func _test_reaction_vfx_signals() -> void:
-	print("[12] 반응 VFX 신호 — 감전=버스트+아크 · 증기=버스트만 · 바람=대상마다 아크")
+	print("[12] 반응 VFX 신호 — 감전=버스트+아크 · 증기=버스트만 · 바람=대상마다 아크 (두 몸 각각)")
+	for kind in ["dummy", "enemy"]:
+		await _check_reaction_vfx(kind)
+
+
+## [12]의 본문 — `kind`("dummy"=연습장 허수아비 · "enemy"=실제로 싸우는 forest_enemy)만 갈린다.
+func _check_reaction_vfx(kind: String) -> void:
+	print("  ── 몸 = %s ──" % kind)
 	var bal = load("res://data/balance.tres")
-	var scene = load("res://src/spell/dummy_target.tscn") as PackedScene
+	# 🔴 실패 줄이 **어느 몸인지** 스스로 말해야 한다 — 두 몸이 같은 라벨을 쓰면 grep으로 갈라지지 않는다.
+	var tag := "[%s] " % kind
 
 	var bursts := []
 	var chains := []
@@ -426,67 +454,58 @@ func _test_reaction_vfx_signals() -> void:
 	_bus.reaction_chain.connect(on_chain)
 
 	# ── ⓐ 감전 연쇄: 버스트(SHOCK) 1회 + 반경 안 대상 1마리에게 아크 1가닥 ──
-	var a = scene.instantiate()
-	var near = scene.instantiate()
-	root.add_child(a)
-	root.add_child(near)
+	var a = await _make_body(kind)
+	var near = await _make_body(kind)
 	a.global_position = Vector2.ZERO
 	near.global_position = Vector2(60, 0)  # shock_chain_px(90) 안
-	await process_frame
 	await physics_frame
 	near.apply_status(S_WET, 1.0)
 	near.take_hit(0.0, R_BOLT, S_SHOCK, 1.0)  # near가 반응원 → near에서 a로 연쇄
-	_check(bursts.size() == 1, "감전: 버스트가 정확히 1회 (실제 %d)" % bursts.size())
+	_check(bursts.size() == 1, tag + "감전: 버스트가 정확히 1회 (실제 %d)" % bursts.size())
 	if bursts.size() == 1:
-		_check(int(bursts[0]["status"]) == S_SHOCK, "감전 버스트 status=SHOCK (실제 %d)" % int(bursts[0]["status"]))
+		_check(int(bursts[0]["status"]) == S_SHOCK, tag + "감전 버스트 status=SHOCK (실제 %d)" % int(bursts[0]["status"]))
 		_check(is_equal_approx(float(bursts[0]["radius"]), bal.status_shock_chain_px),
-			"감전 버스트 radius=shock_chain_px %.1f (실제 %.1f)" % [bal.status_shock_chain_px, float(bursts[0]["radius"])])
-	_check(chains.size() == 1, "감전: 반경 안 대상 1마리에게 아크 1가닥 (실제 %d)" % chains.size())
+			tag + "감전 버스트 radius=shock_chain_px %.1f (실제 %.1f)" % [bal.status_shock_chain_px, float(bursts[0]["radius"])])
+	_check(chains.size() == 1, tag + "감전: 반경 안 대상 1마리에게 아크 1가닥 (실제 %d)" % chains.size())
 	if chains.size() == 1:
-		_check(chains[0]["from"].distance_to(near.global_position) < 1.0, "아크가 반응원(near)에서 출발한다")
-		_check(chains[0]["to"].distance_to(a.global_position) < 1.0, "아크가 대상(a)에 닿는다")
-		_check(int(chains[0]["status"]) == S_SHOCK, "감전 아크 status=SHOCK (실제 %d)" % int(chains[0]["status"]))
+		_check(chains[0]["from"].distance_to(near.global_position) < 1.0, tag + "아크가 반응원(near)에서 출발한다")
+		_check(chains[0]["to"].distance_to(a.global_position) < 1.0, tag + "아크가 대상(a)에 닿는다")
+		_check(int(chains[0]["status"]) == S_SHOCK, tag + "감전 아크 status=SHOCK (실제 %d)" % int(chains[0]["status"]))
 	a.free()
 	near.free()
 
 	# ── ⓑ 증기: 버스트(NONE) 1회 · 아크 0 (증기는 링만) ──
 	bursts.clear()
 	chains.clear()
-	var s = scene.instantiate()
-	var s_near = scene.instantiate()
-	root.add_child(s)
-	root.add_child(s_near)
+	var s = await _make_body(kind)
+	var s_near = await _make_body(kind)
 	s.global_position = Vector2.ZERO
 	s_near.global_position = Vector2(40, 0)  # steam_px(70) 안 — 그래도 아크는 없어야 한다
-	await process_frame
 	await physics_frame
 	s.apply_status(S_WET, 1.0)
 	s.take_hit(0.0, R_FIRE, S_BURN, 1.0)  # 젖음 + 불 = 증기(burst, NONE)
-	_check(bursts.size() == 1, "증기: 버스트가 정확히 1회 (실제 %d)" % bursts.size())
+	_check(bursts.size() == 1, tag + "증기: 버스트가 정확히 1회 (실제 %d)" % bursts.size())
 	if bursts.size() == 1:
-		_check(int(bursts[0]["status"]) == 0, "증기 버스트 status=NONE(0) (실제 %d)" % int(bursts[0]["status"]))
-	_check(chains.size() == 0, "증기: 아크는 0가닥 — 링만 (실제 %d)" % chains.size())
+		_check(int(bursts[0]["status"]) == 0, tag + "증기 버스트 status=NONE(0) (실제 %d)" % int(bursts[0]["status"]))
+	_check(chains.size() == 0, tag + "증기: 아크는 0가닥 — 링만 (실제 %d)" % chains.size())
 	s.free()
 	s_near.free()
 
 	# ── ⓒ 바람 확산: 반경 안 대상마다 아크 1가닥, 대표 상태색(BURN) ──
 	bursts.clear()
 	chains.clear()
-	var w = scene.instantiate()
-	var w_near = scene.instantiate()
-	root.add_child(w)
-	root.add_child(w_near)
+	var w = await _make_body(kind)
+	var w_near = await _make_body(kind)
 	w.global_position = Vector2.ZERO
 	w_near.global_position = Vector2(50, 0)  # spread_px(110) 안
-	await process_frame
 	await physics_frame
 	w.apply_status(S_BURN, 1.0)
 	w.take_hit(0.0, R_WIND, 4, 1.0)  # 바람 = 확산자
-	_check(chains.size() == 1, "바람: 반경 안 대상 1마리에게 아크 1가닥 (실제 %d)" % chains.size())
+	_check(chains.size() == 1, tag + "바람: 반경 안 대상 1마리에게 아크 1가닥 (실제 %d)" % chains.size())
 	if chains.size() == 1:
-		_check(int(chains[0]["status"]) == S_BURN, "바람 아크 색=옮긴 상태(화상) (실제 %d)" % int(chains[0]["status"]))
-		_check(chains[0]["to"].distance_to(w_near.global_position) < 1.0, "바람 아크가 옆 표적에 닿는다")
-	_check(bursts.size() == 0, "바람: 버스트는 0회 — 확산은 아크만 (실제 %d)" % bursts.size())
+		_check(int(chains[0]["status"]) == S_BURN, tag + "바람 아크 색=옮긴 상태(화상) (실제 %d)" % int(chains[0]["status"]))
+		_check(chains[0]["to"].distance_to(w_near.global_position) < 1.0, tag + "바람 아크가 옆 표적에 닿는다")
+	_check(bursts.size() == 0, tag + "바람: 버스트는 0회 — 확산은 아크만 (실제 %d)" % bursts.size())
 	w.free()
 	w_near.free()
 
@@ -494,7 +513,121 @@ func _test_reaction_vfx_signals() -> void:
 	_bus.reaction_chain.disconnect(on_chain)
 
 
+## [13] 🔴 **젖음 + 풀 = 무성함(ROOT)** — 세83 룬 복원으로 살아난 반응(세84 감사 #16).
+## 바탕(젖음)은 소진되고 덩굴만 남으며, 덩굴이 젖음보다 **더 센 속박**이라 이동이 더 줄어야 한다
+## ([3] 진흙과 같은 규율 — `status_root_slow` 0.55 > `status_wet_slow` 0.35).
+## 🔴 감속은 **실제로 움직인 거리**로 잰다(파일 머리 규율) — `move_mult`를 직접 부르면 `_apply_move`
+## 통로를 건너뛰어 "곱하는 걸 잊었다"를 못 잡는다.
+## 🔴🔴 **검출력의 한계를 알고 써라** (세84에 뮤테이션으로 실측): `REACTIONS`의 `WET→GRASS` 줄을
+##   지워도 **빨개지는 건 「젖음 소진」 한 줄뿐**이다 — `rune_grass.tres`의 `status`가 이미 ROOT라
+##   반응이 없어도 덩굴은 **기본 덮어쓰기로** 걸린다. 즉 이 반응의 **현재 유일한 관측 가능한 효과가
+##   「젖음을 소진한다」**이고, 그건 감사 #33이 *"보상 없는 손해"*라 부른 밸런스 미결(사용자 F5 결정
+##   대기)과 같은 사실이다. 무성함이 전용 상태를 받으면(MUD·BLAZE 선례) **여기에 산물 검사를 더해라.**
+## 뮤테이션: `WET→GRASS` 줄 삭제 → 1건(젖음 소진) · `move_mult`의 ROOT 팔 삭제 → 1건(거리 비교) ·
+##   `duration_of`의 ROOT 팔 삭제 → `add()`가 일찍 빠져 덩굴 자체가 안 걸린다.
+func _test_wet_plus_grass_is_root() -> void:
+	print("[13] 젖음 + 풀 = 무성함 (젖음보다 더 센 속박)")
+	var stub := Node2D.new()
+	stub.add_to_group("player")
+	# [3]과 같은 120px — 넉백에 밀린 뒤에도 aggro_range(160) 안이어야 어그로가 살아 있다.
+	stub.global_position = Vector2(120, 0)
+	root.add_child(stub)
+
+	var wet = await _spawn(&"slime")
+	var rooted = await _spawn(&"slime")
+	# 🔴 둘 다 take_hit으로 세운다 — 넉백(손맛)이 한쪽에만 붙으면 이동 거리 비교가 오염된다([3] 교훈).
+	wet.take_hit(0.0, R_WATER, S_WET, 1.0)
+	rooted.apply_status(S_WET, 1.0)
+	rooted.take_hit(0.0, R_GRASS, S_ROOT, 1.0)  # 풀 룬(.tres status=7)이 젖음 위에 온다
+	_check(rooted.has_status(S_ROOT), "무성함(덩굴)이 생겼다")
+	_check(not rooted.has_status(S_WET), "바탕(젖음)은 반응에 소진돼 사라졌다")
+
+	for i in 20:  # 넉백이 사그라들 때까지
+		await physics_frame
+	var w0: Vector2 = wet.global_position
+	var r0: Vector2 = rooted.global_position
+	for i in 30:
+		await physics_frame
+	var wet_dist: float = wet.global_position.distance_to(w0)
+	var root_dist: float = rooted.global_position.distance_to(r0)
+	# 🔴 "0px" 가드 — 0이면 감속이 아니라 **어그로가 풀린** 것일 수 있다([3]에서 실제로 밟았다).
+	_check(root_dist > 0.5, "덩굴 적도 (느리게나마) 움직였다 = 어그로는 살아 있다 (%.2fpx)" % root_dist)
+	_check(root_dist < wet_dist * 0.85,
+		"덩굴이 젖음보다 뚜렷하게 더 묶는다 (젖음 %.2f → 덩굴 %.2f)" % [wet_dist, root_dist])
+	wet.free()
+	rooted.free()
+	stub.free()
+
+
+## [14] 🔴 **화상 + 풀 = 산불(BLAZE)** — 그리고 산불 DoT가 화상보다 **세다**(세84 감사 #16).
+## 🔴 세기는 **단조성**으로만 잰다(세82 응축 교훈 — 수치를 박으면 손맛 튜닝 한 번에 거짓 빨강이 된다).
+## `status_blaze_dot_mult`를 1.0으로 내리거나 `dot_per_sec`의 BLAZE 팔을 지우면 빨개진다.
+## HP가 없는 허수아비의 `status_damage_total()`이 **누적 DoT의 유일한 관측점**이다([11]ⓒ 선례).
+func _test_burn_plus_grass_is_blaze() -> void:
+	print("[14] 화상 + 풀 = 산불 (DoT가 화상보다 세다 — 단조성)")
+	var scene = load("res://src/spell/dummy_target.tscn") as PackedScene
+	var burning = scene.instantiate()
+	var blazing = scene.instantiate()
+	root.add_child(burning)
+	root.add_child(blazing)
+	# 🔴 서로 반경 밖 — 반응 버스트·확산이 섞이면 누적 피해 비교가 오염된다.
+	burning.global_position = Vector2(9000, 0)
+	blazing.global_position = Vector2(-9000, 0)
+	await process_frame
+	await physics_frame
+
+	burning.apply_status(S_BURN, 1.0)
+	blazing.apply_status(S_BURN, 1.0)
+	blazing.take_hit(0.0, R_GRASS, S_ROOT, 1.0)  # 화상 + 풀 = 산불(convert)
+	_check(blazing.has_status(S_BLAZE), "산불이 생겼다")
+	_check(not blazing.has_status(S_BURN), "바탕(화상)은 반응에 소진돼 사라졌다")
+	_check(not blazing.has_status(S_ROOT), "반응이 기본 덮어쓰기를 이긴다 = 풀의 덩굴은 안 남는다")
+
+	var b0: float = burning.status_damage_total()
+	var z0: float = blazing.status_damage_total()
+	for i in 70:  # 틱 0.5s를 두 번 넘긴다 (화상 3.0s·산불 5.0s 둘 다 살아 있는 구간)
+		await physics_frame
+	var burn_gain: float = burning.status_damage_total() - b0
+	var blaze_gain: float = blazing.status_damage_total() - z0
+	_check(burn_gain > 0.0, "화상이 DoT를 냈다 (%.2f)" % burn_gain)
+	_check(blaze_gain > burn_gain * 1.05,
+		"🔴 산불 DoT가 화상보다 세다 = 조합의 보상 (화상 %.2f → 산불 %.2f)" % [burn_gain, blaze_gain])
+	burning.free()
+	blazing.free()
+
+
+## [15] 🔴 **덩굴 + 불 = 산불** — 반응표에서 base 키가 `ROOT`인 **유일한 줄**(세84 감사 #16).
+## [14]와 산물은 같지만 **다른 표 줄**이라 따로 잰다(그 줄만 지워도 [14]는 그린이다).
+## 마른 덩굴이 잘 탄다 = 속박이 사라지고 지속 피해로 바뀐다.
+func _test_root_plus_fire_is_blaze() -> void:
+	print("[15] 덩굴 + 불 = 산불 (마른 덩굴이 잘 탄다)")
+	var e = await _spawn(&"slime")
+	e.apply_status(S_ROOT, 1.0)
+	e.take_hit(0.0, R_FIRE, S_BURN, 1.0)
+	_check(e.has_status(S_BLAZE), "산불이 생겼다")
+	_check(not e.has_status(S_ROOT), "바탕(덩굴)은 반응에 소진돼 사라졌다")
+	_check(not e.has_status(S_BURN), "반응이 덮어쓰기를 이긴다 = 그냥 화상이 아니다")
+	var h0: float = e.hp()
+	for i in 70:
+		await physics_frame
+	_check(e.hp() < h0 - 1.0, "산불이 hp를 깎았다 (%.2f → %.2f)" % [h0, e.hp()])
+	e.free()
+
+
 # ── 헬퍼 ──
+
+## 🔴 **상태·반응을 쥔 두 몸**의 팩토리 (세84 감사 #15). 계약이 같아야 하는 자리를 파라미터화한다:
+##   "dummy" = 연습장 허수아비(HP 없음·`status_damage_total`) · "enemy" = 실제로 싸우는 forest_enemy.
+## 세56 교훈 그대로 — 두 몸은 **따로 갈라진다**(한쪽만 되돌려도 다른 쪽 그물은 그린이다).
+func _make_body(kind: String):
+	if kind == "dummy":
+		var n = load("res://src/spell/dummy_target.tscn").instantiate()
+		root.add_child(n)
+		await process_frame
+		await physics_frame
+		return n
+	return await _spawn(&"slime")
+
 
 ## 적 하나를 스폰한다 — enemy_id는 **_ready 전에** 세워야 _def가 그 적으로 잡힌다.
 func _spawn(id):

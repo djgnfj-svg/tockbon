@@ -128,31 +128,67 @@ func _t3_regression_params_moved() -> void:
 	sys.queue_free()
 
 
-# ── [4] 🔴🔴 심장 — 응축은 폭발의 **반대**다. **단조성**으로 잰다 ──
+# ── [4] 🔴🔴 심장 — 응축은 폭발의 **반대**다. **단조성**으로, **라이브 경로**로 잰다 ──
 # ⚠ 대소 비교만으로는 **부호 뒤집기 뮤테이션을 못 잡는다**: 폭발 계수(0.18)가 응축 계수(0.12)보다
 # 커서, 응축 부호를 뒤집어도(54×1.24=66.96) 폭발(73.44)보다 여전히 작아 그린이 된다.
 # 그래서 **값이 아니라 방향**을 잰다 — 튜닝에도 안 부서지고 부호가 뒤집히면 즉시 빨개진다.
+#
+# 🔴🔴 **세84 감사 #40·#2: 이 항목이 `_spread`/`_explode`를 직접 부르며 def를 손으로 넘기고 있었다.**
+# 그래서 라이브 경로(`_apply_layer` → `_apply_modifier` → **`Db.glyph_by_code(code)`로 def 조회**)가
+# def를 잃어버려도 **전부 그린**이었다(1차 갈래가 뮤테이션으로 실측 — 빨개지는 건 다른 파일 하나뿐).
+# 지금은 **층(8칸)만 넘긴다** — def를 넘기지 않으므로 조회가 죽으면 params가 통째로 0이 되어
+# 반경·세기 방향이 무너지고 여기가 빨개진다. (`_apply_layer`는 세82 [7]도 쓰는 그 통로다.)
 func _t4_condense_is_the_opposite_of_explode() -> void:
-	print("[4] 🔴 응축 = 좁게 모아 세게 (폭발의 반대) — 단조성")
+	print("[4] 🔴 응축 = 좁게 모아 세게 (폭발의 반대) — 단조성 · **라이브 경로**")
 	var sys = _Sys.new()
 	root.add_child(sys)
-	var ex = _db.glyph_by_code(Enums.GlyphCode.EXPLODE)
-	var cd = _db.glyph_by_code(Enums.GlyphCode.CONDENSE)
-	var one: Array = [{"kind": &"bolt", "angle": 0.0, "offset": Vector2.ZERO, "mult": 1.0, "effects": {}}]
-	var three: Array = sys._spread(one, 3, _db.glyph_by_code(Enums.GlyphCode.SPREAD))
+	var s: int = Enums.GlyphCode.SPREAD
+	var e: int = Enums.GlyphCode.EXPLODE
+	var c: int = Enums.GlyphCode.CONDENSE
 
-	var cd1 := float((sys._explode(one, 1, cd)[0] as Dictionary)["radius"])
-	var cd3 := float((sys._explode(three, 1, cd)[0] as Dictionary)["radius"])
-	var ex1 := float((sys._explode(one, 1, ex)[0] as Dictionary)["radius"])
-	var ex3 := float((sys._explode(three, 1, ex)[0] as Dictionary)["radius"])
-	_check(cd3 < cd1, "🔴 응축은 갈래가 늘수록 **좁아진다** (%.1f < %.1f)" % [cd3, cd1])
-	_check(ex3 > ex1, "🔴 폭발은 갈래가 늘수록 **넓어진다** — 대조군 (%.1f > %.1f)" % [ex3, ex1])
+	# 🔴 확산 3칸이 먼저 걸려 갈래 3개를 만들고(변형형 순서 = code 오름차순) 그 위를 폭발/응축이 감싼다.
+	#   = 실게임에서 「확산 안쪽, 폭발 바깥쪽」 층을 그린 것과 같은 명령이 나온다.
+	var cd1 := _blast_of(sys, [c, -1, -1, -1, -1, -1, -1, -1])
+	var cd3 := _blast_of(sys, [s, s, s, c, -1, -1, -1, -1])
+	var ex1 := _blast_of(sys, [e, -1, -1, -1, -1, -1, -1, -1])
+	var ex3 := _blast_of(sys, [s, s, s, e, -1, -1, -1, -1])
+	if cd1.is_empty() or cd3.is_empty() or ex1.is_empty() or ex3.is_empty():
+		sys.queue_free()
+		return
+	_check(float(cd3["radius"]) < float(cd1["radius"]),
+		"🔴 응축은 갈래가 늘수록 **좁아진다** (%.1f < %.1f)" % [float(cd3["radius"]), float(cd1["radius"])])
+	_check(float(ex3["radius"]) > float(ex1["radius"]),
+		"🔴 폭발은 갈래가 늘수록 **넓어진다** — 대조군 (%.1f > %.1f)"
+			% [float(ex3["radius"]), float(ex1["radius"])])
 
 	# 위력: 응축은 융합에 **이득**, 폭발은 **손실** (같은 안쪽을 감쌌을 때)
-	var cd_m := float((sys._explode(three, 1, cd)[0] as Dictionary)["mult"])
-	var ex_m := float((sys._explode(three, 1, ex)[0] as Dictionary)["mult"])
-	_check(cd_m > ex_m, "🔴 응축이 폭발보다 세다 (%.2f > %.2f — 좁게 모은 대가)" % [cd_m, ex_m])
+	_check(float(cd3["mult"]) > float(ex3["mult"]),
+		"🔴 응축이 폭발보다 세다 (%.2f > %.2f — 좁게 모은 대가)"
+			% [float(cd3["mult"]), float(ex3["mult"])])
+
+	# 🔴 **확산의 `params`도 라이브 경로로 도착하나** — 부채각(fan_deg)과 갈래 세기(branch_mult)는
+	# 명령 목록에서 바로 보인다. def 조회가 죽으면 각도가 전부 같아지고 세기 합이 0이 된다.
+	var fan: Array = sys._apply_layer([], [s, s, s, -1, -1, -1, -1, -1], 0.0)
+	_check(fan.size() == 3, "확산 3칸 → 갈래 3개 (실제 %d)" % fan.size())
+	if fan.size() == 3:
+		_check(not is_equal_approx(float(fan[0]["angle"]), float(fan[2]["angle"])),
+			"🔴 갈래 각도가 벌어진다 (fan_deg가 라이브 경로로 도착했다)")
+		var total := 0.0
+		for cmd: Dictionary in fan:
+			total += float(cmd["mult"])
+		_check(total > 1.0,
+			"🔴 갈래 세기 합이 1.0을 넘는다 (%.2f — branch_mult가 도착했다·안 넘으면 그릴 이유가 없다)" % total)
 	sys.queue_free()
+
+
+## 층 하나를 **라이브 경로**(`_apply_layer`)로 흘려 유일한 blast 명령을 꺼낸다.
+## 🔴 def를 넘기지 않는 게 요점이다 — `_apply_modifier`가 스스로 `Db.glyph_by_code`로 찾아야 한다.
+func _blast_of(sys, layer: Array) -> Dictionary:
+	var plan: Array = sys._apply_layer([], layer, 0.0)
+	if plan.size() != 1 or StringName((plan[0] as Dictionary).get("kind", &"")) != &"blast":
+		_check(false, "층 %s → blast 명령 하나가 나와야 한다 (실제 %d개)" % [str(layer), plan.size()])
+		return {}
+	return plan[0] as Dictionary
 
 
 # ── [5] `merge_mult_per_count` 훅이 실제 경로에 걸린다 ──

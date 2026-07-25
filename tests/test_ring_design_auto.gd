@@ -28,6 +28,11 @@ func _check(cond: bool, label: String) -> void:
 
 
 func _run() -> void:
+	# 🔴 워치독 (세84 감사 #44) — `_run`이 중간에 죽으면 `-s` 프로세스가 **영구 hang**한다
+	# (다른 22종엔 있었고 이 파일에만 없었다). 여기서 죽는 건 곧 계약 위반이므로 종료 코드 1.
+	create_timer(30.0).timeout.connect(func() -> void:
+		print("TEST_RING_DESIGN_TIMEOUT — 30초 초과")
+		quit(1))
 	gs = root.get_node(^"GameState")
 	eb = root.get_node(^"EventBus")
 	RD = load("res://src/core/schemas/ring_design.gd")
@@ -41,6 +46,7 @@ func _run() -> void:
 	_test_special_ink()
 	_test_recipes()
 	_test_power_rule()
+	_test_assembled_score_axis()
 	_test_grade_bands()
 	_test_grade_follows_threshold()
 
@@ -205,6 +211,81 @@ func _test_power_rule() -> void:
 		"기준선 앞뒤로 위력이 매끄럽다 (경계가 숫자로 안 보인다)")
 	# 음수 피해 방지 — 점수는 0..1이지만 계약이 밀릴 수 있다
 	_check(RP.power_of(0.0) >= 0.0 and RP.power_of(-1.0) >= 0.0, "위력은 음수가 되지 않는다")
+
+
+## 🔴🔴 **조립 점수 = 폐지 이후 유일한 성장 축** (세84 감사 #3 — `RingPower.assembled_score`).
+## 그전엔 `grep assembled_score tests/`가 **0건**이었다: `assemble_score_per_glyph`/`per_layer`를
+## 0.0으로 내려도 **전 스위트가 그린**이라, 문양-고리를 몇 개 끼우고 2등급 진을 써도 점수·위력이
+## 0.70에 굳는데 아무도 못 알아챈다 = **원정 보상이 전투에 영향을 안 준다**(그리기를 폐지한 뒤
+## 위력이 오르는 길은 이 함수 하나뿐이다).
+##
+## ⚠ **수치를 박지 않는다** — 손맛 튜닝 한 번에 거짓 빨강이 되면 안 된다(세79 [4]·세82 [3] 관행).
+##   대신 ①두 입력 각각에 대한 **단조성** ②`assemble_score_base > 기준선` 불변식(지금까진
+##   `balance_data.gd` 주석에만 있었다) ③클램프·음수 방어로 잰다.
+## ⚠ **단조성이어야 하는 이유**(세82 응축 교훈): 한 점 대소 비교는 **부호 뒤집기를 못 잡는다** —
+##   계수를 음수로 내려도 다른 항이 커서 비교가 여전히 참이 되는 자리가 생긴다.
+func _test_assembled_score_axis() -> void:
+	var RP: GDScript = load("res://src/core/ring_power.gd")
+
+	# ① 🔴 두 입력이 **각각 독립으로** 점수를 올린다 (한쪽만 살아 있어도 반쪽 죽음이다)
+	_check(RP.assembled_score(0, 1) < RP.assembled_score(5, 1),
+		"🔴 문양을 끼우면 점수가 오른다 (%.3f → %.3f — 같으면 per_glyph가 죽었다)"
+			% [RP.assembled_score(0, 1), RP.assembled_score(5, 1)])
+	_check(RP.assembled_score(0, 1) < RP.assembled_score(0, 2),
+		"🔴 층이 깊어지면 점수가 오른다 (%.3f → %.3f — 같으면 per_layer가 죽었다)"
+			% [RP.assembled_score(0, 1), RP.assembled_score(0, 2)])
+
+	# 단조 — 클램프(1.0)에 닿기 전까지 **한 번도 안 꺾인다**. 문양 8칸 × 층 9겹이 현행 상한.
+	var glyph_mono := true
+	for k in 8:
+		var lo: float = RP.assembled_score(k, 1)
+		var hi: float = RP.assembled_score(k + 1, 1)
+		if hi < lo or (lo < 1.0 and is_equal_approx(hi, lo)):
+			glyph_mono = false
+			_check(false, "문양 %d→%d에서 점수가 안 올랐다 (%.4f → %.4f)" % [k, k + 1, lo, hi])
+			break
+	if glyph_mono:
+		_check(true, "문양 0~8칸 전 구간에서 점수가 단조 증가한다")
+	var layer_mono := true
+	for n in range(1, 9):
+		var lo: float = RP.assembled_score(0, n)
+		var hi: float = RP.assembled_score(0, n + 1)
+		if hi < lo or (lo < 1.0 and is_equal_approx(hi, lo)):
+			layer_mono = false
+			_check(false, "층 %d→%d에서 점수가 안 올랐다 (%.4f → %.4f)" % [n, n + 1, lo, hi])
+			break
+	if layer_mono:
+		_check(true, "층 1~9겹 전 구간에서 점수가 단조 증가한다 (진 등급 = 층 수, 상한 9)")
+
+	# ② 🔴🔴 **불변식: 가장 초라한 조립본도 펑이 안 난다.** `assemble_score_base > ring_stability_min`은
+	#   지금까지 `balance_data.gd` 주석에만 있던 규율이다 — 어기면 멀쩡히 조립하고도 「펑」이 나는데
+	#   폐지 모드엔 그 펑을 만회할 수단(더 잘 긋기)이 **아예 없다**. 술어를 그대로 부른다(65를 안 베낀다).
+	_check(RP.is_stable(RP.assembled_score(0, 1)),
+		"🔴 진만 고른 최소 조립본도 기준선 위다 (%.3f > %.3f) — assemble_score_base > ring_stability_min"
+			% [RP.assembled_score(0, 1), RP.threshold()])
+	_check(RP.grade_of(RP.assembled_score(0, 1)) != "사용 불가",
+		"최소 조립본의 등급이 「사용 불가」가 아니다 (등급·기준선은 한 술어다)")
+	var all_stable := true
+	for g in 9:
+		for n in range(1, 10):
+			if not RP.is_stable(RP.assembled_score(g, n)):
+				all_stable = false
+				_check(false, "문양 %d·층 %d 조립본이 펑 난다 (%.3f)" % [g, n, RP.assembled_score(g, n)])
+				break
+		if not all_stable:
+			break
+	if all_stable:
+		_check(true, "🔴 어떤 조립본도 펑이 안 난다 (폐지 모드엔 펑이 없다 — 세83 심장 계약)")
+
+	# ③ 척도·방어 — 손그림 점수와 **같은 0~1 척도**여야 위력·등급 함수가 그대로 돈다
+	_check(RP.assembled_score(999, 999) <= 1.0,
+		"점수가 1.0을 안 넘는다 (%.3f — 넘으면 위력·등급이 척도 밖으로 나간다)"
+			% RP.assembled_score(999, 999))
+	_check(is_equal_approx(RP.assembled_score(-3, -3), RP.assembled_score(0, 1)),
+		"음수 입력은 0·1로 접힌다 (계약이 밀려도 점수가 내려가지 않는다)")
+	# 위력 축까지 이어진다 — 점수만 오르고 위력이 안 오르면 「부품이 세게 만든다」가 거짓이 된다
+	_check(RP.power_of(RP.assembled_score(5, 2)) > RP.power_of(RP.assembled_score(0, 1)),
+		"🔴 좋은 부품이 실제로 **위력**을 올린다 (점수 축이 위력 축까지 이어진다)")
 
 
 ## 🔴 등급 구간 (세션 24, 사용자 확정: 65~75 무난 / 75~85 평타 / 85~95 괜찮음 /

@@ -51,7 +51,9 @@ func _run() -> void:
 	await _test_my_body_does_not_block_my_spell()
 	await _test_desk_does_not_eat_the_spell()
 	await _test_desk_still_sees_the_player()
-	await _test_rejected_commit_is_not_silent()
+	await _test_hand_scoring_axis_alive()
+	await _test_commit_gate_for_this_mode()
+	await _test_rejection_notice_reaches_base()
 	await _test_book_assembles_the_firing_contract()
 	await _test_real_left_click_actually_fires()
 	await _test_empty_slot_refuses_to_fire()
@@ -157,10 +159,109 @@ func _test_desk_still_sees_the_player() -> void:
 ##   • 그리기 모드 = 옛 계약 그대로 (미달 → 침묵 아닌 거부)
 ##   • 폐지 모드   = 조립을 마치고 덮으면 **맺힌다**(거부 없음). 이게 폐지의 심장 계약이라
 ##     여기가 빨개지지 않으면 「조립했는데 안 나간다」가 조용히 돌아온다.
-func _test_rejected_commit_is_not_silent() -> void:
-	if bool(load("res://src/core/ring_power.gd").skip_drawing()):
+##
+## 🔴🔴 **세84: 모드 갈래는 갈라 세우고, 갈릴 수 없는 것은 모드 무관 층에서 잡는다** (감사 #2).
+## 예전엔 이 함수가 `if skip_drawing(): await 폐지판(); return`으로 **한 갈래만** 돌려, 폐지 모드가
+## 기본인 지금 그리기 갈래(아래 `_test_rejected_commit_is_not_silent`)가 **스위트에서 한 줄도 안 돌았다**.
+## 즉 CLAUDE.md가 *"이 실험의 안전장치"*라 적은 스위치가 **검증되지 않은 안전장치**였다.
+##
+## 🔴 **왜 한 프로세스에서 두 모드를 다 돌릴 수 없나 (세84 실측)**: `RingPower.skip_drawing()`은
+## static func 안의 `const BAL.skip_drawing`이라 **컴파일 타임에 굳는다** — 프로브로 확인했다:
+## `balance.tres`의 필드를 런타임에 false로 바꾸면 `RP.BAL.skip_drawing`은 false가 되는데
+## `RP.skip_drawing()`은 여전히 **true**를 돌려준다(CLAUDE.md 「const RES.프로퍼티 폴딩」의 이번 판).
+## 그래서 모드를 흔들어 반대 갈래를 돌리는 건 **불가능**하고, 흔든 척하면 조용히 거짓 통과한다.
+## → 대신 그물을 **세 층**으로 세운다:
+##   [6-A] 모드 무관 = 손 긋기 채점 축이 살아 있나 (스위치를 되돌리면 정말 돌아오나)
+##   [6]   현재 모드의 패널 계약 (폐지판 / 그리기판 — 스위치를 되돌리면 반대판이 자동으로 돈다)
+##   [6-C] 모드 무관 = 거부 신호가 화면 안내까지 닿나 (`base._on_ring_rejected`)
+func _test_commit_gate_for_this_mode() -> void:
+	if _skip_drawing():
 		await _test_assemble_only_commits()
+	else:
+		await _test_rejected_commit_is_not_silent()
+
+
+## 🔴 [6-A] **모드 무관 — 손 긋기 채점 축이 살아 있다** (세84 감사 #2).
+## 세83 폐지는 「스위치」이고 그 근거는 *"되돌리면 손 긋기가 그대로 돌아온다"*였다. 그런데 폐지
+## 모드가 기본이 된 뒤로 **그걸 재는 그물이 하나도 없었다** — 채점기·합성 밑그림·`combined_total`이
+## 통째로 죽어도 전 스위트가 그린이다(폐지 모드는 그 값을 안 읽는다).
+## 여기서 재는 건 `skip_drawing`을 **한 번도 읽지 않는 층**이다: 합성 밑그림이 점열로 서고,
+## 미달로 그은 궤적은 `RingPower.is_stable()`이 거짓이고, 정확히 그은 궤적은 참이다.
+## ⚠ 수치를 박지 않는다 — 기준선·정밀도 상수를 조율해도 안 부서지고, 축이 죽으면 즉시 빨개진다.
+func _test_hand_scoring_axis_alive() -> void:
+	print("[6-A] 🔴 모드 무관 — 손 긋기 채점 축이 살아 있다 (스위치를 되돌리면 돌아온다)")
+	var RP: GDScript = load("res://src/core/ring_power.gd")
+	_base.call(&"_open_drawing")
+	await process_frame
+	var forge = _base.get("_forge")
+	if forge == null:
+		_check(false, "책이 안 열렸다")
 		return
+	forge.call(&"_on_jin_selected", &"jin_single")
+	forge.call(&"_on_rune_selected", 0)
+	var board = forge.get_node("Stage/Spread/RingBoard")
+	var g = board.call(&"guide_points")
+	_check(g.size() > 0, "합성 밑그림이 점열로 선다 (%d점 — 0이면 그을 것이 없다)" % g.size())
+	if g.size() == 0:
+		_base.call(&"_close_drawing")
+		return
+
+	# 미달: 앞쪽 일부만, 게다가 밑그림에서 벗어나게 (완성도·정밀도 둘 다 낮게)
+	board.call(&"begin_stroke")
+	for i in range(0, int(g.size() * 0.3)):
+		board.call(&"trace_stroke", g[i] + Vector2(9.0, 8.0))
+	var poor := float(board.call(&"combined_total"))
+	_check(not RP.is_stable(poor),
+		"🔴 일부만·벗어나게 그은 궤적은 기준선 아래다 (%.2f) — 참이면 「대충 그려도 통과」로 돌아간 것" % poor)
+
+	# 충분: 밑그림 전체를 정확히
+	board.call(&"clear_stroke")
+	board.call(&"begin_stroke")
+	for pt in g:
+		board.call(&"trace_stroke", pt)
+	var good := float(board.call(&"combined_total"))
+	_check(good > poor, "🔴 잘 그으면 점수가 오른다 (%.2f > %.2f — 같으면 채점 축이 죽었다)" % [good, poor])
+	_check(RP.is_stable(good), "🔴 밑그림을 정확히 따라 그은 궤적은 기준선 위다 (%.2f)" % good)
+	_base.call(&"_close_drawing")
+
+
+## 🔴 [6-C] **모드 무관 — 거부가 화면까지 닿는다** (세84 감사 #2 ③).
+## 폐지 모드에선 `close()`의 거부 갈래가 **도달 불가**다(점수를 부품이 정하고 그 바탕이 기준선
+## 위라서 — 그 불변식은 `test_ring_design_auto`가 잰다). 그래서 「침묵 금지」 계약의 마지막 구간
+## (`commit_rejected` → `base._on_ring_rejected` → HUD 한 줄)은 **신호를 직접 쏴서** 잰다.
+## 🔴 이 배선이 끊기면 폐지를 되돌린 세션에 세25가 그대로 돌아온다: 책은 덮이고 슬롯은 빈 채인데
+## 이유가 화면 어디에도 없다. 신호 자체는 모드와 무관하므로 이 그물은 양쪽 모드에서 다 돈다.
+func _test_rejection_notice_reaches_base() -> void:
+	print("[6-C] 🔴 모드 무관 — commit_rejected가 HUD 안내까지 닿는다 (침묵 금지)")
+	var RP: GDScript = load("res://src/core/ring_power.gd")
+	var hud = _base.get("_hud")
+	if hud == null:
+		_check(false, "HUD를 못 찾았다")
+		return
+	_base.call(&"_open_drawing")
+	await process_frame
+	var forge = _base.get("_forge")
+	if forge == null:
+		_check(false, "책이 안 열렸다")
+		return
+	_check(forge.commit_rejected.get_connections().size() >= 1,
+		"베이스가 commit_rejected를 받고 있다 (안 이으면 거부가 통째로 조용해진다)")
+	hud.say("", false)
+	var poor := 0.10
+	forge.commit_rejected.emit(poor)
+	await process_frame
+	var line: String = String(hud.call(&"say_line"))
+	_check(line != "", "🔴 거부하면 HUD에 한 줄이 뜬다 (빈 줄 = 세25의 그 침묵)")
+	# 🔴 **점수가 실려 간다** — 안내가 "왜 안 맺혔나"를 말하려면 그 점수를 그대로 보여줘야 한다.
+	#   (연결만 재면 핸들러가 페이로드를 버려도 그린이다.)
+	_check(line.contains(str(RP.score_display(poor))),
+		"안내에 그 점수(%d)가 실려 있다 — 실제 안내: %s" % [RP.score_display(poor), line])
+	_base.call(&"_close_drawing")
+
+
+## 🔴 [6] 점수 미달로 안 맺히면 **이유가 화면에 뜬다** — **그리기 모드 갈래**
+## (`balance.skip_drawing = false`로 되돌리면 이 갈래가 돈다).
+func _test_rejected_commit_is_not_silent() -> void:
 	print("[6] 미달 조립본을 거부할 땐 이유를 말해 준다 (세71 통째 흐름)")
 	_base.call(&"_open_drawing")
 	await process_frame
@@ -245,10 +346,18 @@ func _test_book_assembles_the_firing_contract() -> void:
 	if forge == null:
 		_check(false, "책이 안 열렸다")
 		return
+	var RP: GDScript = load("res://src/core/ring_power.gd")
 	forge.call(&"_on_jin_selected", &"jin_single")
+	forge.call(&"_on_rune_selected", 0)
+	# 🔴 세84 감사 #2[6b]: **점수가 무엇에서 오는지**를 모드마다 갈라 잰다. 예전엔 `score > 0`만
+	# 봤는데, 폐지 모드에선 점수가 부품에서 와 **트레이스 루프를 통째로 주석 처리해도 그린**이었다
+	# (= 「책에서 그은 게 도안 점수로 흘러간다」를 어느 테스트도 안 재고 있었다).
+	# 그래서 세 지점을 찍는다: 진만 → 문양 끼움 → 정확히 긋기.
+	var score_jin_only := float((forge.call(&"build_assembly") as Dictionary).get("score", -1.0))
 	forge.call(&"_on_band_selected", 0)
 	forge.call(&"_on_ring_picked", &"gr_radiate5")   # 밴드0에 발산×5
-	# 합성 밑그림 전체를 **정확히** 따라 긋는다 (완성도·정밀도 높게 → score>0)
+	var score_with_glyphs := float((forge.call(&"build_assembly") as Dictionary).get("score", -1.0))
+	# 합성 밑그림 전체를 **정확히** 따라 긋는다 (완성도·정밀도 높게)
 	var board = forge.get_node("Stage/Spread/RingBoard")
 	board.call(&"begin_stroke")
 	var g = board.call(&"guide_points")
@@ -256,8 +365,27 @@ func _test_book_assembles_the_firing_contract() -> void:
 		board.call(&"trace_stroke", pt)
 	var asm: Dictionary = forge.call(&"build_assembly")
 	_check(asm.has("score"), "🔴 build_assembly가 score를 싣는다 (세26 — 없으면 조용히 기준 위력)")
-	_check(float(asm.get("score", -1.0)) > 0.0,
-		"정확히 그었으니 score>0 (실제 %.2f)" % float(asm.get("score", -1.0)))
+	var score_traced := float(asm.get("score", -1.0))
+	if _skip_drawing():
+		# 🔴 폐지 모드 = **부품이 점수를 정한다.** 문양 5개·층 1개면 `assembled_score(5, 1)`과 정확히
+		# 같아야 한다(수치는 안 박는다 — 함수를 부른다). 부품 세기가 틀리면 여기서 갈라진다.
+		_check(int(forge.call(&"assembled_parts").x) == 5 and int(forge.call(&"assembled_parts").y) == 1,
+			"부품 수 = 문양 5·층 1 (실제 %s)" % str(forge.call(&"assembled_parts")))
+		_check(is_equal_approx(score_traced, RP.assembled_score(5, 1)),
+			"🔴 폐지 모드 점수 == assembled_score(5,1) (실제 %.4f / 기대 %.4f)"
+				% [score_traced, RP.assembled_score(5, 1)])
+		_check(score_with_glyphs > score_jin_only,
+			"🔴 문양-고리를 끼우면 점수가 오른다 (%.3f > %.3f — 안 오르면 원정 보상이 위력과 무관해진다)"
+				% [score_with_glyphs, score_jin_only])
+		_check(is_equal_approx(score_traced, score_with_glyphs),
+			"폐지 모드에선 그은 것이 점수를 안 바꾼다 (%.3f == %.3f — 그게 폐지의 정의다)"
+				% [score_traced, score_with_glyphs])
+	else:
+		# 🔴 그리기 모드 = **손이 점수를 정한다.** 안 그은 대조군보다 커야 한다(수치 무기입).
+		_check(score_traced > score_with_glyphs,
+			"🔴 그은 게 도안 점수로 흘러간다 (%.3f > %.3f — 같으면 트레이스가 build_assembly에 안 닿는다)"
+				% [score_traced, score_with_glyphs])
+		_check(score_traced > 0.0, "정확히 그었으니 score>0 (실제 %.2f)" % score_traced)
 	_check(asm.has("rings") and (asm["rings"] as Array).size() == 1, "rings 8칸 배열이 실린다")
 	var flat: Array = asm["rings"][0]
 	var radiate := 0
@@ -285,6 +413,11 @@ func _test_book_assembles_the_firing_contract() -> void:
 ## ⚠ **그래서 마우스가 닿는 경로는 헤드리스로 검증할 수 없다.** memory `takbon-mcp-visual-verify`의
 ## "헤드리스는 존재만 알고 보인다는 모른다"와 같은 종류다 — **클릭이 닿는다도 모른다.**
 ## 바꿨으면 에디터로 띄워 `godot_exec`로 `viewport.push_input(InputEventMouseButton)`을 밀어 봐라.
+##
+## ✅ **세84: 이 버그를 실제로 잡는 그물이 생겼다 — `tests/test_scene_contract_auto.gd`** (감사 #14).
+## 히트 테스트는 못 재도 **`mouse_filter` 값 자체는 렌더 없이 읽힌다**: 실패 형태가 늘 「씬에서
+## 그 줄이 빠진다」이므로, 게임플레이 씬을 붙여 「보이는 채로 화면을 덮는 Control은 IGNORE」를
+## 정적으로 잰다. 여기(검출력 0)는 **경고 문서**로만 남긴다 — 근거는 그쪽 파일이다.
 ##
 ## 🔴 왜 두 세션을 놓쳤나: 기존 검증이 전부 `_fire()`를 **직접 부르거나** `attack_basic` 액션을
 ## 주입해서 **Control 계층을 건너뛰었다**. 전 스위트가 그린인데 게임에선 아무것도 안 나갔다.
@@ -383,6 +516,12 @@ func _test_forest_gate_leads_out() -> void:
 
 
 # ── 헬퍼 ──
+
+## 🔴 그리기 폐지 모드인가 — **`RingPower`의 술어를 그대로 부른다**(`balance.skip_drawing`을 직접
+## 읽으면 스위치를 되돌릴 때 이 그물만 조용히 남는다, ring_power.gd 주석의 그 규율).
+func _skip_drawing() -> bool:
+	return bool(load("res://src/core/ring_power.gd").skip_drawing())
+
 
 ## 빈 진 8칸 + 점수. 전개 없이 몸으로만 때려 결과가 깔끔하다.
 func _assembly(score: float) -> Dictionary:

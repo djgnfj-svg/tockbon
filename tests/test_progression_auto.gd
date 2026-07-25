@@ -4,8 +4,11 @@ extends SceneTree
 ## 전 항목 통과 시 "TEST_PROGRESSION_OK" 출력 후 종료 코드 0. 정본 = docs/PROGRESSION.md.
 ##
 ## 🔴 여기서 헤드리스가 **실제로 잡는** 것:
-##   • [1] 편집한 적 6종 .tres가 Db를 거쳐 로드된다 (세50 침묵 파싱사 그물 — "파일 고쳤다"≠완료)
-##     + until_unlock 드롭이 slime_elite·gale·snake_boss에 정확히 있다
+##   • [1] `data/enemies/`의 적 .tres **전수**가 Db를 거쳐 로드된다 (세50 침묵 파싱사 그물 —
+##     "파일 고쳤다"≠완료) + until_unlock 드롭이 관문표와 1:1
+##     🔴 세84: 여기가 **손으로 적은 6종 목록**이라 **최다 스폰 slime과 hound를 빼먹고 있었다**
+##     (ch1 mob_spawns 4칸 중 3칸이 slime인데 그 .tres가 죽어도 전 스위트 그린이었다).
+##     이제 목록을 안 적고 **디렉터리를 스캔**한다 — 새 적 .tres는 자동으로 그물에 든다.
 ##   • [2] 미해금 = **확정** 드롭 — 관문 줄의 chance를 메모리 0으로 내리고 3연속 처치로 "항상"을 잰다
 ##     (chance **무시** 계약을 [2]가 직접 잰다 — 안 내리면 chance 1.0이라 확률 폴백 회귀를 못 잡는다)
 ##   • [3] 해금 = 드롭 **중단** (나머지 드롭은 그대로 나온다 — 관문이 남을 안 건드리는 것까지)
@@ -32,7 +35,16 @@ const GATES := {}
 ## 관문 조각을 잃은(랜덤 은퇴) 잡몹 3종 — fragment 줄이 아예 없어야 한다.
 const RETIRED := [&"vine", &"beetle", &"mist"]
 
+## 🔴 적 .tres 전수 스캔 (세84) — 파일명 == `id`가 규약이라 스캔한 파일명으로 Db를 조회한다.
+## 기대치를 **명시 숫자로도** 박는다: 스캔만 하면 「폴더가 통째로 비어도 0/0 통과」가 되기 때문.
+## 적을 더하면(또는 hound를 접으면) 이 숫자를 같이 고친다 = 그게 그물의 값이다.
+const ENEMY_DIR := "res://data/enemies"
+const ENEMY_COUNT_EXPECTED := 8
+
 var failures: int = 0
+## 🔴 세84 #41: 0행 스캔은 PASS가 아니라 **SKIP**으로 찍는다. 그린만 보고 「불변식이 지켜졌다」로
+## 읽던 자리 — 지금은 잴 데이터가 없다는 사실이 로그에 남고, 복원 세션이 여기서 자동 가동된다.
+var skips: int = 0
 var _db = null
 var _bus = null
 var _gs = null
@@ -66,6 +78,8 @@ func _run() -> void:
 	_test_gate_invariants()
 	_test_hunger_retired()
 
+	if skips > 0:
+		print("TEST_PROGRESSION_SKIPS — %d개 스캔이 0행이라 잠들어 있다 (위 SKIP 줄 참조)" % skips)
 	if failures == 0:
 		print("TEST_PROGRESSION_OK — 전 항목 통과")
 		quit(0)
@@ -74,13 +88,37 @@ func _run() -> void:
 		quit(1)
 
 
-## [1] 🔴 편집한 적 6종이 Db를 거쳐 로드된다 + 관문표와 데이터가 1:1이다 (세50 그물).
+## [1] 🔴 `data/enemies/`의 적 .tres **전수**가 Db를 거쳐 로드된다 + 관문표와 데이터가 1:1이다 (세50 그물).
 ## .tres 한 글자가 틀리면 파서가 리소스 전체를 거부하고 Db가 말없이 건너뛴다 — 로드 자체가 검증이다.
-## 세61: 관문 드롭 줄을 걷어냈으므로 GATES = 0줄 — 루프는 자명 통과지만 관문 복원 시 바로 산다.
+## 🔴 세84: 손으로 적은 6종 목록이 slime·hound를 빼먹어 **최다 스폰 적의 파싱사를 못 잡았다**.
+##   목록 대신 폴더를 스캔하고, 기대 수를 명시 숫자로 박는다(빈 폴더 자명 통과 방지).
+##   + `params.sprite` 존재 = 스프라이트 유실을 싸게 잡는 곁그물(도형 금지 규칙의 데이터 쪽 짝).
+##   + chase 갈래는 `aggro_range`·`move_speed`를 .tres가 **반드시** 쥔다 — 세84에 코드 쪽 폴백
+##     (= slime 실값을 그대로 베낀 사본)을 걷었기 때문에 이제 데이터가 결손이면 적이 안 움직인다.
+## 세61: 관문 드롭 줄을 걷어냈으므로 GATES = 0줄 — 그 루프는 SKIP으로 찍고 관문 복원 시 바로 산다.
 func _test_db_loads() -> void:
-	print("[1] 편집한 적 6종 Db 로드 + 관문표 1:1")
-	for id in [&"vine", &"beetle", &"mist", &"slime_elite", &"gale", &"snake_boss"]:
-		_check(_db.get_enemy(id) != null, "%s가 Db에서 로드된다" % id)
+	print("[1] 적 .tres 전수 Db 로드(폴더 스캔) + 관문표 1:1")
+	var ids: Array = []
+	for f: String in DirAccess.get_files_at(ENEMY_DIR):
+		if f.ends_with(".tres"):
+			ids.append(StringName(f.get_basename()))
+	_check(ids.size() == ENEMY_COUNT_EXPECTED,
+		"data/enemies에 적 .tres %d장 (실제 %d — 적을 더했으면 기대치를 같이 올려라)"
+			% [ENEMY_COUNT_EXPECTED, ids.size()])
+	for id in ids:
+		var def = _db.get_enemy(id)
+		_check(def != null, "🔴 %s.tres가 Db에서 로드된다 (파일명 == id 규약)" % id)
+		if def == null:
+			continue
+		_check(def.params.has("sprite"), "%s의 params.sprite가 살아 있다 (도트 유실 그물)" % id)
+		if str(def.params.get("ai", "chase")) == "chase":
+			_check(def.params.has("aggro_range") and def.params.has("move_speed"),
+				"🔴 %s(chase)가 aggro_range·move_speed를 .tres로 쥔다 (코드 폴백은 세84에 걷었다)" % id)
+	_check(_db.enemies.size() == ENEMY_COUNT_EXPECTED,
+		"🔴 Db.enemies == %d종 (실제 %d — 파싱사면 여기서 줄어든다)"
+			% [ENEMY_COUNT_EXPECTED, _db.enemies.size()])
+	if GATES.is_empty():
+		_skip("관문표(GATES) 0줄 → 「관문 1:1 대조」 루프")
 	for unlock_id in GATES:
 		var enemy_id: StringName = GATES[unlock_id]
 		var entry = _gate_entry_of(enemy_id)
@@ -126,13 +164,21 @@ func _test_unlocked_stops_drop() -> void:
 
 
 ## [4] 🔴 랜덤 조각 은퇴 불변식 — Db의 **모든** 적 드롭 전수 (PROGRESSION.md 표의 감시자).
+## 🔴 세84 #41: 이 스캔은 관문 0줄인 동안 **자명 통과**였다. 두 가지를 더했다 —
+##   ① `scanned_drops > 0` = 스캔이 실제로 돌았다(드롭 필드 개명·루프 파손이면 여기가 빨개진다.
+##      불변식 자체는 「없음」을 재므로 루프가 죽어도 늘 그린이 되는 구조였다)
+##   ② 관문이 0줄이면 중복·짝 검사는 **SKIP으로 명시** (PASS로 위장하지 않는다)
+## 🔴 양방향 묶기는 마지막 `seen_gates.size() == GATES.size()`가 한다 — 데이터만 늘어도, 표만
+##   늘어도 빨개진다. 그래서 관문을 복원하는 세션은 **두 곳을 짝으로** 고칠 수밖에 없다.
 func _test_gate_invariants() -> void:
 	print("[4] 불변식: 순수 확률 fragment 0곳 · 관문 중복 0 · 관문표 매핑 · 조각 unlock_id 짝")
 	var seen_gates := {}   # {until_unlock: enemy_id}
 	var loose_fragments := []
+	var scanned_drops := 0
 	for enemy_id in _db.enemies:
 		var def = _db.enemies[enemy_id]
 		for drop in def.drops:
+			scanned_drops += 1
 			if drop.until_unlock == &"":
 				if String(drop.item_id).begins_with("fragment_"):
 					loose_fragments.append("%s→%s" % [enemy_id, drop.item_id])
@@ -145,13 +191,24 @@ func _test_gate_invariants() -> void:
 			var item = _db.get_item(drop.item_id)
 			_check(item != null and item.params.get("unlock_id", &"") == drop.until_unlock,
 				"%s의 %s: 조각 unlock_id == until_unlock (%s)" % [enemy_id, drop.item_id, drop.until_unlock])
+	# 🔴 스캔이 실제로 돌았다 — 이게 없으면 「없음」을 재는 불변식들이 루프 파손 시에도 전부 그린이다.
+	_check(scanned_drops > 0,
+		"🔴 적 드롭 줄을 실제로 훑었다 (%d줄 — 0이면 스캔이 죽어 아래 불변식이 통째로 자명 통과다)"
+			% scanned_drops)
 	_check(loose_fragments.is_empty(),
 		"🔴 until_unlock 없는 fragment 드롭 0곳 (잔재: %s)" % str(loose_fragments))
+	# 은퇴 3종엔 관문·조각 줄이 아예 없다 (RETIRED 상수의 실제 사용처 — 세84까지 선언만 있었다).
+	for retired_id in RETIRED:
+		_check(_gate_entry_of(retired_id) == null,
+			"랜덤 조각 은퇴: %s엔 until_unlock 드롭이 없다" % retired_id)
+	if seen_gates.is_empty():
+		_skip("실데이터 관문 0줄 → 「중복 0 · 조각 unlock_id 짝 · 관문표 매핑」 검사")
 	for unlock_id in GATES:
 		_check(seen_gates.get(unlock_id) == GATES[unlock_id],
 			"관문표 매핑: %s → %s (실제 %s)" % [unlock_id, GATES[unlock_id], seen_gates.get(unlock_id)])
+	# 🔴 양방향: 데이터가 늘면 표를, 표가 늘면 데이터를 요구한다 (한쪽만 고치면 여기가 빨개진다).
 	_check(seen_gates.size() == GATES.size(),
-		"관문 수 == 관문표 %d줄 (실제 %d — 표에 없는 관문이 데이터에 있다)" % [GATES.size(), seen_gates.size()])
+		"🔴 양방향: 데이터 관문 수(%d) == 관문표 줄 수(%d)" % [seen_gates.size(), GATES.size()])
 
 
 ## [5] 🔴 허기 은퇴 (세58 D1) — 프로퍼티·함수·balance 필드가 전부 사라졌다.
@@ -252,3 +309,11 @@ func _check(cond: bool, label: String) -> void:
 	else:
 		failures += 1
 		print("  FAIL: " + label)
+
+
+## 🔴 세84 #41: 잴 데이터가 0행이면 **PASS로 위장하지 않는다.** 그린만 보고 "불변식이 지켜졌다"로
+## 읽던 자리 — 복원 세션(관문·조각)이 오타를 내도 초록불이었다. SKIP은 실패가 아니지만 로그에 남아
+## "이 그물은 지금 잠들어 있다"를 리드가 볼 수 있게 한다.
+func _skip(label: String) -> void:
+	skips += 1
+	print("  SKIP(0행): " + label + " — 잴 데이터가 없다 (복원되면 자동 가동)")

@@ -18,6 +18,13 @@ func _check(label: String, ok: bool) -> void:
 		print("FAIL: ", label)
 
 func _run() -> void:
+	# 🔴 워치독 + 완료 마커 (세84 감사 #44) — 이 파일만 다른 27종과 규약이 갈려 있었다:
+	#   ① `TEST_*_OK` 마커가 없어 **리드의 grep 관행(`_OK` + `SCRIPT ERROR`)에 안 걸렸다**
+	#     (저장 테스트가 조용히 안 돌아도 "스위트 그린"으로 읽힌다).
+	#   ② 워치독이 없어 `_run`이 await에서 죽으면 프로세스가 **영구 hang**한다.
+	create_timer(60.0).timeout.connect(func() -> void:
+		print("TEST_SAVE_TIMEOUT — 60초 초과")
+		quit(1))
 	await process_frame
 	var gs: Node = root.get_node("GameState")
 	var clock: Node = root.get_node("Clock")
@@ -75,7 +82,18 @@ func _run() -> void:
 		"rings": [[6, 6, 6, -1, -1, -1, -1, -1], [7, -1, -1, -1, -1, -1, -1, -1]],
 		"open": [0, 1, 2]},
 		"2겹 테스트 진", 0.81)
-	gs.ring_designs = [ring_a, ring_b] as Array[RingDesign]
+	# 🔴🔴 세81 M2: **룬 2개(융합진) 도안**도 같이 저장한다 (세84 감사 #17). `rings`(중첩 배열)에
+	# 프로브를 세운 것과 **같은 종류의 리스크**인데 `runes`엔 프로브가 없었다 —
+	# `test_jin_fusion_auto`의 라운드트립은 in-memory라 **디스크를 안 지난다**.
+	# 유실되면 `runes_of([], rune)`가 `[rune]`로 폴백해 **에러 없이 단일 룬으로 퇴화**한다
+	# (반응 소멸·피해 감소 — 「쏘는 게 조용히 약해진다」).
+	# 룬 값 = WATER(2)·BOLT(4) → 자리 순서가 뒤집히면 primary(젖음 바탕)가 갈린다.
+	var ring_c: RingDesign = RingDesign.from_assembly(
+		{"rune": 2, "runes": [2, 4], "jin": &"jin_fuse",
+		"rings": [[-1, -1, -1, -1, -1, -1, -1, -1], [-1, -1, -1, -1, -1, -1, -1, -1]],
+		"open": [0, 1]},
+		"융합 테스트 진", 0.9)
+	gs.ring_designs = [ring_a, ring_b, ring_c] as Array[RingDesign]
 	gs.ring_equipped[1] = ring_a
 	gs.mana = 42.0
 	clock.day = 3
@@ -88,7 +106,11 @@ func _run() -> void:
 	gs.inventory.clear()
 	gs.codex.erase(&"__probe_unlock")
 	gs.ring_designs = [] as Array[RingDesign]
-	gs.ring_equipped = [null, null, null] as Array[RingDesign]
+	# 🔴 크기를 **리터럴로 쓰지 않는다** (세84 감사 #34 — `EQUIP_SLOTS`를 4로 고치면 이 줄이
+	# 3칸 배열을 만들어 `load_game`이 슬롯 3을 짚고 **부팅 즉시 out of bounds**로 죽는다).
+	# 오염은 「비운다」면 충분하다 — 크기의 단일 소스는 `GameState._reset_equipped()`다.
+	for i in range(gs.ring_equipped.size()):
+		gs.ring_equipped[i] = null
 	gs.mana = 1.0
 	clock.day = 1
 	clock.time_sec = 0.0
@@ -98,26 +120,26 @@ func _run() -> void:
 	_check("복원: 프로브 아이템 1", gs.get_count(&"__probe_item") == 1)
 	_check("복원: 도감 프로브 키", gs.is_unlocked(&"__probe_unlock"))
 	# 고리 도안 라운드트립
-	_check("복원: 고리 도안 2종", gs.ring_designs.size() == 2)
+	_check("복원: 고리 도안 3종 (1겹·2겹·융합)", gs.ring_designs.size() == 3)
 	_check("복원: 고리 칸 보존 (2=발산·6=응집)",
-		gs.ring_designs.size() == 2 and int(gs.ring_designs[0].rings[0][2]) == 1
+		gs.ring_designs.size() == 3 and int(gs.ring_designs[0].rings[0][2]) == 1
 		and int(gs.ring_designs[0].rings[0][6]) == 0)
 	_check("복원: 고리 열린칸 보존 [2,6]",
-		gs.ring_designs.size() == 2 and gs.ring_designs[0].open == [2, 6])
-	_check("복원: 고리 채운칸 수 2", gs.ring_designs.size() == 2 and gs.ring_designs[0].filled_count() == 2)
+		gs.ring_designs.size() == 3 and gs.ring_designs[0].open == [2, 6])
+	_check("복원: 고리 채운칸 수 2", gs.ring_designs.size() == 3 and gs.ring_designs[0].filled_count() == 2)
 	_check("복원: 고리 점수 0.77 라운드트립",
-		gs.ring_designs.size() == 2 and is_equal_approx(gs.ring_designs[0].total_score, 0.77))
+		gs.ring_designs.size() == 3 and is_equal_approx(gs.ring_designs[0].total_score, 0.77))
 	# 세션29 경제 필드 라운드트립 (ResourceSaver가 @export를 total_score와 같은 기전으로 나른다)
 	_check("복원: 잉크 ink_mid",
-		gs.ring_designs.size() == 2 and StringName(gs.ring_designs[0].ink) == &"ink_mid")
+		gs.ring_designs.size() == 3 and StringName(gs.ring_designs[0].ink) == &"ink_mid")
 	_check("복원: 특별잉크 ink_fire_red",
-		gs.ring_designs.size() == 2 and StringName(gs.ring_designs[0].special_ink) == &"ink_fire_red")
+		gs.ring_designs.size() == 3 and StringName(gs.ring_designs[0].special_ink) == &"ink_fire_red")
 	_check("복원: 특별 비율 0.5",
-		gs.ring_designs.size() == 2 and is_equal_approx(gs.ring_designs[0].special_ratio, 0.5))
+		gs.ring_designs.size() == 3 and is_equal_approx(gs.ring_designs[0].special_ratio, 0.5))
 	_check("복원: 진 크기 1.4",
-		gs.ring_designs.size() == 2 and is_equal_approx(gs.ring_designs[0].size, 1.4))
+		gs.ring_designs.size() == 3 and is_equal_approx(gs.ring_designs[0].size, 1.4))
 	# 🔴 세79 M1: 다겹 도안 라운드트립 — 층 수·층별 칸·요약이 전부 살아 돌아오나
-	var rb: RingDesign = gs.ring_designs[1] if gs.ring_designs.size() == 2 else null
+	var rb: RingDesign = gs.ring_designs[1] if gs.ring_designs.size() == 3 else null
 	_check("복원: 🔴 2겹 도안의 층 수 2 (ResourceSaver가 중첩 배열을 나른다)",
 		rb != null and rb.rings.size() == 2)
 	_check("복원: 🔴 층0=확산(6)×3 · 층1=폭발(7) — 층 순서가 보존된다",
@@ -129,10 +151,58 @@ func _run() -> void:
 		rb != null and rb.filled_count() == 4)
 	_check("복원: 2겹 도안 진 id jin_plain_g2",
 		rb != null and StringName(rb.jin) == &"jin_plain_g2")
+	# 🔴🔴 세81 M2 융합진 라운드트립 (세84 감사 #17) — **디스크를 지나 룬 목록이 살아 돌아오나.**
+	# ⚠ `runes`가 유실되면 `runes_of([], rune)`가 `[rune]`을 돌려줘 **에러도 경고도 없이** 단일 룬이
+	# 된다(반응이 통째로 사라진다) — 그래서 `size() == 2`를 **직접** 재고, 자리 순서까지 본다.
+	var rc: RingDesign = gs.ring_designs[2] if gs.ring_designs.size() == 3 else null
+	_check("복원: 🔴 융합 도안의 룬 2개 (ResourceSaver가 runes 배열을 나른다)",
+		rc != null and rc.runes.size() == 2)
+	_check("복원: 🔴 룬 자리 순서 보존 [물(2), 번개(4)] — 뒤집히면 primary 바탕이 갈린다",
+		rc != null and rc.runes.size() == 2
+		and int(rc.runes[0]) == 2 and int(rc.runes[1]) == 4)
+	_check("복원: 융합 도안의 primary(rune) == 첫 룬 물(2) — 옛 소비자 무회귀",
+		rc != null and int(rc.rune) == 2)
+	_check("복원: 융합 도안 진 id jin_fuse",
+		rc != null and StringName(rc.jin) == &"jin_fuse")
+	# 🔴 발사 계약까지 이어지나 — `to_assembly()`가 `runes`를 실어야 반응이 난다(세26 to_assembly 규율).
+	_check("복원: 🔴 to_assembly가 룬 목록을 그대로 싣는다 (발사가 두 상태를 건다)",
+		rc != null and (rc.to_assembly().get("runes", []) as Array) == [2, 4])
 	_check("복원: 고리 장착 슬롯1 매핑",
 		gs.ring_equipped[1] == gs.ring_designs[0] and gs.ring_equipped[0] == null)
 	_check("복원: 마나 42", is_equal_approx(gs.mana, 42.0))
 	_check("복원: Day 3 · 123초", clock.day == 3 and is_equal_approx(clock.time_sec, 123.0))
+
+	# ── 🔴🔴 옛 세이브 호환 (세84 #4) — 장착 참조가 **인덱스 → 파일 경로**로 바뀌었다.
+	# 그 변경의 핵심 계약은 「옛 세이브가 그대로 열린다」인데, 새 형식만 재면 **옛 세이브가 조용히
+	# 「전 슬롯 빈 채」로 열리는** 회귀를 못 잡는다(사용자 체감 = 맺어 둔 마법진이 사라졌다, 세26).
+	# 그래서 방금 쓴 세이브에서 새 키를 **떼어** 세83까지의 형식으로 만들고 다시 읽는다.
+	var spath: String = sm.save_root() + "/save.json"
+	var rf := FileAccess.open(spath, FileAccess.READ)
+	var raw: Variant = JSON.parse_string(rf.get_as_text()) if rf != null else null
+	if rf != null:
+		rf.close()
+	_check("옛 형식 프로브: save.json을 읽었다", typeof(raw) == TYPE_DICTIONARY)
+	if typeof(raw) == TYPE_DICTIONARY:
+		var raw_d: Dictionary = raw
+		_check("옛 형식 프로브: 새 세이브는 ring_equipped_paths(안정 키)를 싣는다",
+			raw_d.has("ring_equipped_paths"))
+		_check("옛 형식 프로브: 인덱스도 계속 같이 싣는다 (되돌려도 열린다)",
+			raw_d.has("ring_equipped"))
+		raw_d.erase("ring_equipped_paths")          # ← 세83까지의 세이브 형식
+		var wf := FileAccess.open(spath, FileAccess.WRITE)
+		if wf != null:
+			wf.store_string(JSON.stringify(raw_d, "\t"))
+			wf.close()
+		gs.ring_designs = [] as Array[RingDesign]
+		for i in range(gs.ring_equipped.size()):
+			gs.ring_equipped[i] = null
+		_check("옛 형식: 로드 true", sm.load_game())
+		_check("옛 형식: 도안 3종 그대로", gs.ring_designs.size() == 3)
+		_check("🔴 옛 형식(인덱스 장착): 슬롯1 매핑이 그대로 복원된다 — 옛 세이브 호환",
+			gs.ring_designs.size() == 3 and gs.ring_equipped[1] == gs.ring_designs[0]
+			and gs.ring_equipped[0] == null and gs.ring_equipped[2] == null)
+		_check("옛 형식: 융합 룬 목록도 그대로 (형식은 장착 참조만 가른다)",
+			gs.ring_designs.size() == 3 and gs.ring_designs[2].runes.size() == 2)
 
 	# ── 🔴 새로하기 (세션37, F8) — 전부 비우고 시작 해금만 재시드 ──
 	# save_manager 노트의 계약: new_game은 save_game이 쓰는 것 전부 + bag·hp를 비우고, 시작 해금
@@ -161,6 +231,39 @@ func _run() -> void:
 	#   시드를 되돌리면 이 검사가 빨개진다(시작이 맨몸이어야 조립→탁본 보상 루프가 산다).
 	_check("🔴 새로하기: 문양 링(gr_radiate5)은 시드가 아니다 — 스테이지 보상으로만 (맨몸 시작)",
 		not gs.is_unlocked(&"gr_radiate5"))
+	# 🔴🔴 **시드 집합 == 기대 집합** (세84 감사 #19 · 구조적 테마 T7). 전엔 넷(불·물·바람·단발진)만
+	# 세서 **세83이 심은 번개·흙·풀 룬과 세79~82의 임시 시드(jin_plain_g2·jin_fuse·gr_*)가 무측정**
+	# 이었다 → 임시 시드를 걷는 세션이 관문·보상 배선을 깜빡하면 **새 게임에서 그 콘텐츠가 책에
+	# 아예 안 뜨는데 전 스위트 그린**이다(그리고 세83 「반응 6룬 복원」이 조용히 원상복구된다).
+	# 🔴 **명시 열거인 이유**: 「시드를 걷는 세션이 이 줄을 같이 줄이도록 강제」한다 —
+	#   CLAUDE.md의 *"관문을 붙이는 세션은 해당 시드 줄을 같이 지워야 한다"*를 기계로 만든 장치다.
+	#   ⚠ 그러니 이 목록이 빨개지면 **먼저 `_seed_starting_unlocks`가 의도대로인지 보고**,
+	#   의도한 변경이면 여기서 같은 줄을 지워라(기대치를 실측에 맞춰 늘리기만 하면 장치가 죽는다).
+	var expect_seed: Array = [
+		# 룬 6종 — 불·물·바람(세78 시작 지급) + 번개·흙·풀(세83 복원, **임시 시드**)
+		"rune_fire", "rune_water", "rune_wind", "rune_bolt", "rune_earth", "rune_grass",
+		# 진 — 단발(세71) + 2등급 일반진(세79 M1) + 융합진(세81 M2, 둘 다 **임시 시드**)
+		"jin_single", "jin_plain_g2", "jin_fuse",
+		# 문양-고리 — M1 실증 2종(세79) + 응축(세82). **전부 임시 시드**(획득 경로 미설계)
+		"gr_spread3", "gr_explode1", "gr_condense2",
+	]
+	var got_seed: Array = []
+	for key: StringName in gs.codex:
+		if gs.codex[key]:
+			got_seed.append(String(key))
+	got_seed.sort()
+	expect_seed.sort()
+	var seed_missing: Array = []
+	for key: String in expect_seed:
+		if not key in got_seed:
+			seed_missing.append(key)
+	var seed_extra: Array = []
+	for key: String in got_seed:
+		if not key in expect_seed:
+			seed_extra.append(key)
+	_check("🔴🔴 새로하기: 시드 집합 == 기대 집합 %d개 (없는 것 %s · 더 있는 것 %s)"
+			% [expect_seed.size(), str(seed_missing), str(seed_extra)],
+		got_seed == expect_seed)
 	_check("🔴 새로하기: 해독으로 얻은 해금은 사라졌다", not gs.is_unlocked(&"__decoded_probe"))
 	_check("🔴 새로하기: 지은 스테이션(정제대)은 사라졌다 — 거점 빈 시작", not gs.is_unlocked(&"station_refine"))
 
@@ -169,4 +272,8 @@ func _run() -> void:
 	_check("뒷정리: 세이브 삭제", not sm.has_save())
 
 	print("RESULT pass=%d fail=%d" % [_pass, _fail])
+	if _fail == 0:
+		print("TEST_SAVE_OK — 전 항목 통과")
+	else:
+		print("TEST_SAVE_FAIL — %d개 실패" % _fail)
 	quit(0 if _fail == 0 else 1)

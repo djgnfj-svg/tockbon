@@ -28,6 +28,11 @@ func _ids(recipes: Array) -> Array:
 	return out
 
 func _run() -> void:
+	# 🔴 세84 #44: 워치독 — `_run`이 중간에 죽으면(런타임 에러로 함수 중단) `quit()`에 못 닿아
+	# 프로세스가 **영구 hang**했다(다른 22종엔 이 안전망이 있었다).
+	create_timer(30.0).timeout.connect(func() -> void:
+		print("TEST_WORKSHOP_TIMEOUT — 30초 초과 (테스트가 중간에 죽었을 수 있다)")
+		quit(1))
 	await process_frame
 	var gs: Node = root.get_node("GameState")
 	var db: Node = root.get_node("Db")
@@ -133,4 +138,5 @@ func _run() -> void:
 	print("RESULT pass=%d fail=%d" % [_pass, _fail])
 	if _fail == 0:
 		print("TEST_WORKSHOP_OK — 전 항목 통과")
-	quit()
+	# 🔴 세84 #44: 실패하면 종료코드 1 (전엔 인자 없는 quit() = 실패해도 0).
+	quit(0 if _fail == 0 else 1)

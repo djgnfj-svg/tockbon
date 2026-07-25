@@ -15,6 +15,8 @@ extends SceneTree
 
 var _pass := 0
 var _fail := 0
+## 🔴 세84 #41: 0행 스캔은 PASS가 아니라 SKIP으로 찍는다 (조각 .tres가 0장인 동안 ⑤⑥은 잠들어 있다).
+var _skips := 0
 
 func _init() -> void:
 	_run.call_deferred()
@@ -27,7 +29,17 @@ func _check(label: String, ok: bool) -> void:
 		_fail += 1
 		print("FAIL: ", label)
 
+## 잴 데이터가 0행일 때 — 실패는 아니지만 **PASS로 위장하지 않는다**(복원 세션이 오타를 내도
+## 초록불이던 자리). 로그에 남아 "이 그물은 지금 잠들어 있다"를 리드가 본다.
+func _skip(label: String) -> void:
+	_skips += 1
+	print("SKIP(0행): ", label, " — 잴 데이터가 없다 (복원되면 자동 가동)")
+
 func _run() -> void:
+	# 🔴 세84 #44: 워치독 — `_run`이 중간에 죽으면 `quit()`에 못 닿아 프로세스가 영구 hang했다.
+	create_timer(30.0).timeout.connect(func() -> void:
+		print("TEST_DECODE_TIMEOUT — 30초 초과 (테스트가 중간에 죽었을 수 있다)")
+		quit(1))
 	await process_frame
 	var gs: Node = root.get_node("GameState")
 	var db: Node = root.get_node("Db")
@@ -75,11 +87,18 @@ func _run() -> void:
 	# ── ③ 해금이 조립 책의 룬 목록에 흐른다 — 이제 흙 룬을 그릴 수 있다 ──
 	# forge_panel._unlocked_runes와 같은 규약을 여기서 직접 확인 (패널 인스턴스는 무거워 로직만).
 	# 세78: 불·물·바람은 시작부터 해금(시드 3종), 흙은 방금 해독으로 붙었다.
+	# 🔴 세84 #43: 손으로 적은 `[0, 2, 3, 5]`를 **정본 `Enums.RUNE_TYPES` 순회**로 바꿨다 —
+	#   7번째 룬이 오면 그 룬이 「책 목록에 흘러드나」를 한 번도 안 재는 사본이었다(같은 파일 아래
+	#   ④-b·⑤가 이미 정본을 쓰고 있어 컴파일 함정 변명도 안 섰다).
 	var unlocked_types: Array = []
-	for t in [0, 2, 3, 5]:   # Enums.RuneType FIRE·WATER·WIND·EARTH (구멍 1 때문에 명시 리스트)
+	var visited := 0
+	for t: int in Enums.RUNE_TYPES:
+		visited += 1
 		var rd: RuneDef = db.get_rune(t)
 		if rd != null and rd.unlock_id != &"" and gs.is_unlocked(rd.unlock_id):
 			unlocked_types.append(t)
+	_check("🔴 룬 목록 순회가 정본 %d종을 다 훑었다 (손 사본이 아니라 Enums.RUNE_TYPES)"
+		% Enums.RUNE_TYPES.size(), visited == Enums.RUNE_TYPES.size() and visited > 0)
 	_check("불(0)은 시작부터 해금", 0 in unlocked_types)
 	_check("🔴 물(2)이 시작부터 해금돼 그릴 수 있다 (세78 시드)", 2 in unlocked_types)
 	_check("🔴 바람(3)이 시작부터 해금돼 그릴 수 있다 (세78 시드)", 3 in unlocked_types)
@@ -127,10 +146,13 @@ func _run() -> void:
 		loaded_runes == 6)
 
 	# ── ⑤ 🔴 실데이터 조각의 unlock_id는 실재하는 룬을 가리킨다 (오타 그물 — 미래용) ──
-	# 세61: 조각 .tres 0장이라 지금은 자명하게 통과한다. 조각을 되살리면 이 스캔이 바로 산다.
+	# 세61: 조각 .tres 0장이라 이 루프는 **0번 돈다**. 🔴 세84: 그걸 PASS로 위장하지 않고 SKIP으로
+	# 찍는다 — 조각을 되살리는 세션이 오타를 내도 초록불이던 자리(#41).
+	var frag_scanned := 0
 	for it: ItemDef in db.items.values():
 		if it == null or it.kind != Enums.ItemKind.FRAGMENT:
 			continue
+		frag_scanned += 1
 		var declared := StringName(it.params.get("unlock_id", &""))
 		var rune_found := false
 		for t: int in Enums.RUNE_TYPES:
@@ -139,18 +161,32 @@ func _run() -> void:
 				rune_found = true
 				break
 		_check("🔴 %s의 unlock_id(%s)가 실재하는 룬을 가리킨다" % [it.id, declared], rune_found)
+	if frag_scanned == 0:
+		_skip("⑤ 조각 아이템(FRAGMENT) 0장 → 「unlock_id 오타」 스캔")
 
 	# ── ⑥ 조각의 획득 경로 = 관문 드롭뿐 (세58 은퇴 원칙 감시 — 세61에도 그물 유지) ──
 	# 조각이 뿌려진다면 반드시 until_unlock 관문이어야 한다 (순수 확률 fragment = 은퇴 위반).
-	# 지금은 관문 드롭도 0줄(세61)이라 자명 통과 — 조각·관문을 되살리면 바로 산다.
+	# 🔴 세84: 전엔 위반을 찾을 때만 `_check(false)`를 불러 **위반이 없으면 단정이 0개**였다 —
+	#   드롭 스캔이 파손돼도(필드 개명 등) 통째로 침묵. 이제 ①훑은 줄 수를 세고 ②위반 목록을
+	#   한 번의 단정으로 낸다(0행이면 SKIP과 함께 「스캔이 실제로 돌았다」가 남는다).
+	var drops_scanned := 0
+	var loose_fragments: Array = []
 	for e: EnemyDef in db.enemies.values():
 		for d: DropEntry in e.drops:
+			drops_scanned += 1
 			if String(d.item_id).begins_with("fragment_") and d.until_unlock == &"":
-				_check("🔴 %s가 %s에서 관문 없이(순수 확률로) 뿌려진다" % [d.item_id, e.id], false)
+				loose_fragments.append("%s→%s" % [e.id, d.item_id])
+	_check("🔴 적 드롭 줄을 실제로 훑었다 (%d줄 — 0이면 스캔이 죽어 아래 단정이 자명 통과다)"
+		% drops_scanned, drops_scanned > 0)
+	_check("🔴 관문 없이(순수 확률로) 뿌려지는 조각 0곳 (잔재: %s)" % str(loose_fragments),
+		loose_fragments.is_empty())
 
 	panel.queue_free()
 
 	print("RESULT pass=%d fail=%d" % [_pass, _fail])
+	if _skips > 0:
+		print("TEST_DECODE_SKIPS — %d개 스캔이 0행이라 잠들어 있다 (위 SKIP 줄 참조)" % _skips)
 	if _fail == 0:
 		print("TEST_DECODE_OK — 전 항목 통과")
-	quit()
+	# 🔴 세84 #44: 실패하면 종료코드 1 (전엔 인자 없는 quit() = 실패해도 0).
+	quit(0 if _fail == 0 else 1)

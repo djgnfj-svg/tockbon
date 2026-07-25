@@ -493,14 +493,18 @@ func _test_jin_shape_reaches_the_board() -> void:
 # (진이 세션 48에 밟은 그 함정 · memory `takbon-glyph-design-principle`).
 # 🔴 뮤테이션: `rune_guide_verts`의 match를 지워 늘 △를 돌려주면 「서로 다르다」5 + 「폴백이 아니다」5
 #    = 10개가 실패한다. 마지막 꼭짓점(=첫 점)을 빼면 「닫혔다」가 그 룬 수만큼 실패한다.
-const RUNE_TYPES_6 := [0, 2, 3, 4, 5, 6]   # 불·물·바람·번개·흙·풀 (Enums.RuneType — 1은 옛 IMPACT 구멍)
+## 🔴 세84 #43: 여기 `[0, 2, 3, 4, 5, 6]` **손 사본**이 있었다 — 룬이 7종이 되면 그 룬은
+## 「닫힘·서로 다름·△ 폴백 금지」를 **한 번도 안 지난다**(세49에 실제로 난 버그가 정확히 그것이다).
+## 정본은 `Enums.RUNE_TYPES` 하나 — 같은 파일이 이미 `Enums.ItemKind`를 쓰므로 컴파일 함정도 없다.
 
 func _test_rune_shapes_are_closed_and_distinct() -> void:
 	var ctr := Vector2(134.0, 134.0)
 	var s := 40.0
 	var fire: PackedVector2Array = _BoardScript.rune_guide_verts(0, ctr, s)
 	var seen := {}
-	for rt in RUNE_TYPES_6:
+	var visited := 0
+	for rt: int in Enums.RUNE_TYPES:
+		visited += 1
 		var v: PackedVector2Array = _BoardScript.rune_guide_verts(rt, ctr, s)
 		_check(v.size() >= 4, "룬 %d 밑그림 꼭짓점이 선다 (%d개)" % [rt, v.size()])
 		if v.size() < 4:
@@ -529,6 +533,13 @@ func _test_rune_shapes_are_closed_and_distinct() -> void:
 						same = false
 						break
 			_check(not same, "🔴 룬 %d이 불 삼각형 폴백으로 샌다 — 모양을 안 가졌다" % rt)
+	# 🔴 순회가 실제로 정본 전량을 돌았다 (세84 #43의 검출자). ⚠ 처음엔 `RUNE_TYPES.size() >= 6`만
+	#   세웠는데 **루프를 `[]`로 돌려도 전 항목 그린이었다** — 위 단정들은 "없음"이 아니라 "각 룬"을
+	#   재므로 루프가 죽으면 통째로 사라지고 failures는 0이다(자명 통과의 교과서적 형태).
+	#   그래서 「몇 종을 실제로 훑었나」를 센다.
+	_check(visited == Enums.RUNE_TYPES.size() and visited >= 6,
+		"🔴 룬 정본 %d종을 실제로 다 훑었다 (실제 %d — 0이면 위 단정이 통째로 자명 통과다)"
+			% [Enums.RUNE_TYPES.size(), visited])
 	# 모르는 룬은 크래시가 아니라 △ 폴백 (룬이 늘어도 안 죽는다 — GLYPH_DESC가 밟은 그 함정).
 	var fallback: PackedVector2Array = _BoardScript.rune_guide_verts(99, ctr, s)
 	_check(fallback.size() >= 4, "모르는 룬도 밑그림이 나온다 (폴백=△)")
