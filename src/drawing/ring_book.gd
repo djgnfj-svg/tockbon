@@ -45,8 +45,7 @@ const TAB_OFF_TEXT := Color(0.42, 0.37, 0.30)
 const TAB_LOCK_BG := Color(0.58, 0.53, 0.46, 0.55)
 const TAB_LOCK_VEIL := Color(0.50, 0.46, 0.40, 0.45)
 const TAB_LOCK_TEXT := Color(0.52, 0.48, 0.42, 0.7)
-const OPEN_DOT := Color(0.85, 0.50, 0.18)          # 진 셀 8점 다이어그램: 열린 문양 칸
-const SHUT_DOT := Color(0.30, 0.26, 0.20, 0.4)     # 닫힌 칸
+const RUNE_SLOT_LINE := Color(0.30, 0.26, 0.20, 0.45)   # 진 셀: 아직 안 고른 룬 자리(빈 자리라 흐리게)
 # ── 층(band) 소켓 톤 (세71 — 슬라이스 패널 SOCKET_* 계열) ──
 const SOCKET_BG := Color(0.84, 0.78, 0.66)
 const SOCKET_EMPTY := Color(0.20, 0.14, 0.09, 0.28)
@@ -356,22 +355,16 @@ func _draw_jin_cells(font: Font, top: float) -> void:
 		var sel := _jin_choice == jid
 		_draw_card(r, sel, CELL_SEL_BG if sel else CELL_BG,
 			SEL_EDGE if sel else CELL_LINE, 2.0 if sel else 1.0)
-		# 진 아이콘 = 발사 형태(패턴) × 비행 경로(motion). 색만으로는 8지선다가 된다.
+		# 진 아이콘 = 진 모양(윤곽) + 룬 자리. 획 굵기·색은 여기, 기하는 `jin_icon_paths`(관측점).
 		var opaque := Color(jcol.r, jcol.g, jcol.b, 1.0)
 		var icon_c := r.get_center() + Vector2(0.0, -8.0)
-		for mark in jin_icon_marks(_jin_pattern_of(jd), _jin_motion_of(jd),
-				icon_c, JIN_ICON_S, _jin_shape_of(jd)):
-			if mark.size() >= 2:
-				draw_polyline(mark, opaque, 2.0, true)
-		# 🔴 8점 칸 다이어그램 — 이 진이 여는 문양 칸 (세션60, 옛 문양본 축을 진으로 흡수).
-		# 단일 소스 = `JinDef.glyph_slots`를 **직접** 읽는다(사본 금지). 점 위치·열림 계산은
-		# `RingBoard.jin_slot_dots`(순수 static = 헤드리스 관측점). ⚠ 점은 윤곽 반지름의 **원주
-		# 고정**이다 — 진 윤곽이 삼각·타원이어도 판의 칸은 원 위라, 판과 읽는 방식이 같다.
-		if jd != null:
-			for dot: Dictionary in RingBoard.jin_slot_dots(jd.glyph_slots, icon_c, JIN_ICON_S):
-				var open := bool(dot.open)
-				draw_circle(dot.pos, JIN_ICON_S * (0.16 if open else 0.10),
-					OPEN_DOT if open else SHUT_DOT)
+		for path: Dictionary in jin_icon_paths(_jin_shape_of(jd), _jin_rune_slots_of(jd),
+				icon_c, JIN_ICON_S):
+			var pts: PackedVector2Array = path["pts"]
+			if pts.size() >= 2:
+				var faint := bool(path["faint"])
+				draw_polyline(pts, RUNE_SLOT_LINE if faint else opaque,
+					1.0 if faint else 2.0, true)
 		_text_center(font, r.position + Vector2(cw * 0.5, ch - 12.0), jname, NAME_COLOR, 10)
 		if sel:
 			sel_desc = _jin_desc_of(jd)
@@ -399,20 +392,26 @@ func _jin_desc_of(jd: JinDef) -> String:
 	return String(JIN_DESC.get(StringName(jd.id), "이 진만의 발사 형태가 있다."))
 
 
-func _jin_pattern_of(jd: JinDef) -> int:
-	return int(jd.pattern) if jd != null else 0
-
-func _jin_motion_of(jd: JinDef) -> int:
-	return int(jd.motion) if jd != null else 0
-
 func _jin_shape_of(jd: JinDef) -> int:
 	return int(jd.guide_shape) if jd != null else Enums.JinShape.CIRCLE
 
+func _jin_rune_slots_of(jd: JinDef) -> int:
+	return maxi(int(jd.rune_slots), 1) if jd != null else 1
 
-## 🔴 진 셀 아이콘의 획들 — **패턴(몇 발·어디로) × 경로(어떻게 나는가)를 곱해서 그린다** (세션48).
-## 두 축이 `Enums`에서 직교하므로 아이콘도 직교해야 한다: **경로가 획의 모양**을 정하고
-## (직진=곧은 선 · 나선=물결 · 부메랑=나갔다 도는 활), **패턴이 그 획을 몇 개 어느 각도로 놓을지**
-## 정한다. 그래서 새 조합(나선 산탄 등)이 .tres 한 장으로 늘어도 아이콘이 저절로 갈린다.
+
+## 🔴 진 셀 아이콘 = **진 모양(윤곽) + 룬 자리**, 그 둘뿐이다 (세83, 사용자 확정:
+## *"진은 진모양만 있었으면 하고 룬 위치만 표시하고 싶고"*).
+## 반환 = `[{"pts": PackedVector2Array, "faint": bool}, …]` — [0]이 윤곽, 나머지가 룬 자리.
+## `faint` = 아직 안 고른 빈 자리라 흐리게 긋는다(색·굵기는 `_draw_jin_cells`가 쥔다).
+##
+## 🔴 **세83에 뺀 것 둘** (이 셀이 답하는 질문을 좁혔다):
+##   • **8칸 점 다이어그램**(세60) — 주황 점 8개가 윤곽 원 **위에** 얹혀 원을 8토막으로 갉아먹었고,
+##     지금 진 3종이 전부 `glyph_slots=[0..7]`이라 **정보량이 0인데 노이즈만 컸다**(사용자 지적:
+##     *"원에 주황색으로 표시되어있음"*). 칸이 채워졌나는 **완성된 도안**을 그리는 HUD
+##     (`hud._draw_jin_diagram`)·Tab 「마법진」 탭이 답한다 — 거긴 점이 실제 정보를 나른다.
+##   • **패턴×경로 힌트 획**(세48) — `pattern`·`motion`은 여전히 살아있는 발사 축이지만
+##     (`ring_spell_system`이 읽는다) 진 3종이 전부 SINGLE·STRAIGHT라 셀에선 정보가 0이었다.
+##     되살릴 자리는 아이콘이 아니라 **고른 진의 설명 줄**이다(셀은 17px라 이미 빽빽하다).
 ##
 ## ⚠ **`_draw_*`가 아니라 여기가 관측점이다** (`RingBoard.glyph_guide_pts`와 같은 이유): 헤드리스는
 ## `draw_polyline`을 못 보지만 이 점 배열은 본다. "보인다"는 여전히 리드의 스샷이 최종 판정.
@@ -421,61 +420,22 @@ func _jin_shape_of(jd: JinDef) -> int:
 ## 열린 획(세로선·화살표·S자)만 그려 **진처럼 보이지가 않았고**(사용자 지적), 무엇보다 왼쪽 판에
 ## 손으로 그을 도형과 셀에서 본 모양이 **아무 관계가 없었다**. 세션47 문양이 밟은 그 함정이다:
 ## 고르는 순간에 안 갈리면 밑그림을 가른 의미가 절반 날아간다. 이제 같은 함수를 부른다.
-## 발사 형태(패턴×경로) 힌트는 **닫힌 도형 안쪽에** `JIN_ICON_INNER`배로 줄여 얹는다 —
-## 윤곽이 그릇이고 그 안이 내용물이라, 판의 "진 안에 룬" 구조와 읽는 방식이 같다.
-## ⚠ `shape` 기본값이 CIRCLE이라 옛 4인자 호출도 그대로 산다(윤곽만 원으로 붙는다).
-const JIN_ICON_INNER := 0.55
+## 🔴 룬 자리도 **판과 같은 단일 소스**를 쓴다: 위치 = `RingBoard.rune_slot_positions`(세81 융합진이
+## 좌우로 벌리는 그 함수) · 크기 = `RUNE_GUIDE_FRAC`(×자리 2개면 `RUNE_MULTI_SIZE_FRAC`).
+## 식을 베끼면 "셀에서 본 자리"와 "판에서 그을 자리"가 조용히 어긋난다 — 세48이 윤곽에서 밟은 그것.
+## ⚠ 자리 표식만 판보다 키운다(`JIN_ICON_RUNE_SCALE`) — 셀 반지름이 17px라 판 비율 그대로면
+## 반지름 3px 점이 되어 "자리가 둘"이 안 읽힌다. **비율이 아니라 가독성 때문**이라 상수로 분리했다.
+const JIN_ICON_RUNE_SCALE := 1.6
 
-static func jin_icon_marks(pattern: int, motion: int, c: Vector2, s: float,
-		shape: int = Enums.JinShape.CIRCLE) -> Array:
-	var marks: Array = [RingBoard.jin_guide_pts(shape, c, s)]
-	s *= JIN_ICON_INNER                        # 힌트는 윤곽 안쪽에 (가장 좁은 정삼각 내접원 0.5s 안)
-	var base := c + Vector2(0.0, s * 0.85)     # 총구(아래) → 위로 나간다
-	match pattern:
-		Enums.WandPattern.MULTI:               # 산탄 = 넓은 부채 3
-			for a in [-0.6, 0.0, 0.6]:
-				marks.append(_jin_shaft(motion, base, Vector2.UP.rotated(a), s * 1.5))
-		Enums.WandPattern.NOVA:                # 둘레 = 사방으로
-			for k in 4:
-				marks.append(_jin_shaft(motion, c, Vector2.UP.rotated(TAU * float(k) / 4.0), s * 0.95))
-		Enums.WandPattern.BURST:               # 연발 = 같은 선 위 시간차 3발 (끊어진 획)
-			for k in 3:
-				var y := base.y - s * (0.25 + 0.55 * float(k))
-				marks.append(_jin_shaft(motion, Vector2(base.x, y), Vector2.UP, s * 0.38))
-		Enums.WandPattern.SPRAY:               # 분사 = 좁은 부채 5, 짧게
-			for a in [-0.26, -0.13, 0.0, 0.13, 0.26]:
-				marks.append(_jin_shaft(motion, base, Vector2.UP.rotated(a), s * 0.95))
-		Enums.WandPattern.SEEK:                # 타겟 = 한 발 + 조준 꺾쇠
-			marks.append(_jin_shaft(motion, base, Vector2.UP, s * 1.25))
-			var t := c + Vector2(0.0, -s * 0.55)
-			var b := s * 0.4
-			for q in [Vector2(-1, -1), Vector2(1, -1), Vector2(1, 1), Vector2(-1, 1)]:
-				marks.append(PackedVector2Array([t + Vector2(q.x * b, q.y * b * 0.55),
-					t + Vector2(q.x * b, q.y * b), t + Vector2(q.x * b * 0.55, q.y * b)]))
-		_:                                     # 단발(SINGLE) · 미지의 패턴 = 한 발
-			marks.append(_jin_shaft(motion, base, Vector2.UP, s * 1.7))
-	return marks
-
-
-## 획 하나 = **비행 경로의 모양**. 직진=선 · 나선=물결 · 부메랑=나갔다 되돌아오는 활.
-static func _jin_shaft(motion: int, from: Vector2, dir: Vector2, length: float) -> PackedVector2Array:
-	var pts := PackedVector2Array()
-	var side := Vector2(-dir.y, dir.x)
-	match motion:
-		Enums.JinMotion.SPIRAL:
-			for i in 13:
-				var t := float(i) / 12.0
-				pts.append(from + dir * (length * t) + side * (sin(t * TAU * 1.5) * length * 0.22))
-		Enums.JinMotion.BOOMERANG:
-			for i in 15:
-				var t := float(i) / 14.0
-				# 나갔다(0→0.5) 돌아온다(0.5→1) — 앞으로 갔다 오는 동안 옆으로 부푼다
-				var fwd: float = sin(t * PI) * 1.0
-				pts.append(from + dir * (length * fwd) + side * (sin(t * TAU) * length * 0.30))
-		_:
-			pts.append(from)
-			pts.append(from + dir * length)
-	return pts
+static func jin_icon_paths(shape: int, rune_slots: int, c: Vector2, s: float) -> Array:
+	var out: Array = [{"pts": RingBoard.jin_guide_pts(shape, c, s), "faint": false}]
+	var n := maxi(rune_slots, 1)
+	var rr := s * RingBoard.RUNE_GUIDE_FRAC * JIN_ICON_RUNE_SCALE
+	if n >= 2:
+		rr *= RingBoard.RUNE_MULTI_SIZE_FRAC   # 자리 여럿이면 겹치지 않게 (판과 같은 규칙)
+	for p: Vector2 in RingBoard.rune_slot_positions(n, c, s):
+		out.append({"pts": RingBoard.jin_guide_pts(Enums.JinShape.CIRCLE, p, rr), "faint": true})
+	return out
 
 
 ## 룬 탭 — **해금된 룬**을 셀로 열거 (세션 34). 클릭하면 그 룬 타입이 rune_selected로 나간다.

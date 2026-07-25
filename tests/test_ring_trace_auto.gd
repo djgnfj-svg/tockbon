@@ -471,12 +471,12 @@ func _test_jin_shape_reaches_the_board() -> void:
 
 	# 🔴 **책 셀 아이콘도 같은 도형이다** (세션47 문양 규약). 셀은 열린 획(세로선·화살표)만
 	# 그려 진처럼 보이지 않았고, 무엇보다 **고르는 순간 손으로 그을 도형과 아무 관계가 없었다**.
-	# ⚠ 여기서 재는 건 `jin_icon_marks`의 첫 획(=윤곽)뿐이다 — 셀이 그 진의 shape를 실제로
+	# ⚠ 여기서 재는 건 `jin_icon_paths`의 첫 획(=윤곽)뿐이다 — 셀이 그 진의 shape를 실제로
 	#   넘기는지(`_draw_jin_cells`)와 "보인다"는 헤드리스가 못 잡는다(리드의 스샷이 최종 판정).
 	var BookScript = load("res://src/drawing/ring_book.gd")
-	var marks: Array = BookScript.jin_icon_marks(0, 0, Vector2.ZERO, 17.0, 1)
+	var marks: Array = BookScript.jin_icon_paths(1, 1, Vector2.ZERO, 17.0)
 	_check(not marks.is_empty(), "책 진 셀 아이콘에 획이 있다")
-	var outline: PackedVector2Array = marks[0] if not marks.is_empty() else PackedVector2Array()
+	var outline: PackedVector2Array = marks[0]["pts"] if not marks.is_empty() else PackedVector2Array()
 	var want: PackedVector2Array = _BoardScript.jin_guide_pts(1, Vector2.ZERO, 17.0)
 	_check(outline.size() == want.size() and outline.size() > 2,
 		"책 셀의 바깥 윤곽 = 판의 닫힌 도형 (%d점, 기대 %d점)" % [outline.size(), want.size()])
