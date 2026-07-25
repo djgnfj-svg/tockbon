@@ -66,16 +66,17 @@ enum GlyphType { BASIC, BOUNCE, HOMING, PIERCE, THRUST }
 ## 규칙이 아니라 문법이다 — 캔버스가 단계에 안 맞는 획을 거부하고, 체크리스트가 현재 단계를 보여준다.
 ## CIRCLE=진(원) 필요 / RUNE=룬 필요(조준 꼬리는 여기서 선택적으로) / ARROW=문양(화살표) 1개 이상
 enum DrawStage { CIRCLE, RUNE, ARROW }
-## 지팡이의 **발사 패턴** — v2.0 지팡이 축 (TECH_SPEC §4.0-a).
-## 사용자: *"결국 보는 방향으로 발사가 맞고, **지팡이에 따라** 여러 발이 나가거나
-## 내 주변에서 전체 방향으로 나가거나가 정해짐."*
-##
-## 🔴 **도안이 아니라 지팡이가 발수를 정한다.** v1.9까지는 문양 1개 = 1발이었는데, 방향이
-## 지팡이로 간 순간 그게 무너졌다 — 문양이 방향을 안 정하면 N발이 **같은 자리에 겹친다.**
+## 🔴 **진의 발사 패턴** — "언제·어디로 몇 발". 이름의 `Wand`는 **출신지일 뿐 지금 주인이 아니다**
+## (v2.0엔 지팡이 축이었다 — 이름을 바꾸면 저장된 `JinDef.pattern`이 아니라 참조가 통째로 흔들려
+## 그대로 뒀다). 소비자는 `ring_spell_system._shot_plan(jin_def.pattern)` 하나다.
 ## SINGLE=단발 / MULTI=산탄(에임 좌우로 퍼짐) / NOVA=전방위(내 주변 사방)
 ##
+## 🔴 **세85: 지팡이는 이 축에서 완전히 손을 뗐다** (감사 #5, 사용자 확정). `GameState.wand_pattern()`
+## 폴백은 `jin_def == null`일 때만 걸려 **도달 불가**였고, 형태는 진·문양·층이 이미 답하는 질문이라
+## 두 축이 같은 자리를 다퉜다. 지팡이는 이제 세기·속도 스칼라(`wand_speed_mult`·`wand_mana_mult`)다.
+##
 ## 🔴 세션48: BURST·SPRAY·SEEK를 **끝에 덧붙였다** (문양 GlyphCode와 같은 규약 — 중간에 끼우면
-## 저장된 JinDef.pattern·옛 도안이 통째로 밀린다). 이제 이 enum은 지팡이가 아니라 **진**의 축이다.
+## 저장된 JinDef.pattern·옛 도안이 통째로 밀린다).
 ##   BURST=연발(같은 각도로 시간차) · SPRAY=분사(좁은 각 연속) · SEEK=타겟팅(가장 가까운 적을 골라 감)
 enum WandPattern { SINGLE, MULTI, NOVA, BURST, SPRAY, SEEK }
 ## 🔴 진의 **비행 경로** (세션48 신설). WandPattern이 "언제·어디로 몇 발"이라면 이건 "어떻게 나는가"다.

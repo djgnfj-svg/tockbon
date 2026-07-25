@@ -1,17 +1,25 @@
 extends SceneTree
-## 탁본 해독대 자동 검증 — 세션34 E4 (룬 조각 → 룬 해금).
-## 실행: Godot --headless --path . -s res://tests/test_decode_auto.gd
+## 룬 해금 자동 검증 — 세션34 E4에 「해독대」로 태어나 **세85에 해독대가 은퇴하며 남은 그물**.
+## 실행: Godot --headless --path . -s res://tests/test_rune_unlock_auto.gd
 ## 오토로드는 런타임 get_node로만 접근 (-s 컴파일 시점 미등록 함정).
 ##
-## 🔴 계약: fragment_*를 해독하면 (1) 조각이 소비되고 (2) params.unlock_id 룬이 해금된다
-## (codex_unlocked → GameState.codex). 이미 배운 룬은 다시 해독해도 조각이 안 닳는다(낭비 방지).
-## 🔴 그리고 해금이 **조립 책의 룬 목록**(forge_panel._unlocked_runes)에 흘러 그릴 수 있게 된다.
-## **패널 클릭은 헤드리스가 못 잡는다** — _decode를 공개 로직으로 직접 부른다(workshop 테스트와 같은 방침).
+## 🔴🔴 **이 파일을 통째로 지우지 마라.** 아래 ④-b 「룬 6종 로드 + 6종 개별 확인」이 **세50 침묵사의
+## 유일한 감지기**다 — `.tres`의 `Color`를 3인자로 쓰면 파서가 리소스 전체를 거부하고 `Db`가
+## **말없이 건너뛰는데**, 그때 빨개지는 곳이 여기뿐이다(바람 룬이 두 세션 죽어 있는 동안 전 스위트가
+## 그린이었다). 합계만 재면 하나 죽고 하나 살아도 6이라 **개별 확인이 같이 있어야** 한다.
 ##
-## 🔴 세61 콘텐츠 리셋: 룬은 rune_fire 1종, 조각 .tres는 0장이 됐다. 해독 **기계**(조각 소비→해금→
-## 책 목록 유입)는 그대로 살아 있으므로, 흐름 검증은 **in-memory ItemDef+RuneDef를 Db 딕셔너리에
-## 주입**해서 유지한다(Db 레지스트리는 평범한 Dictionary — 끝나면 제거). 룬/조각을 되살리면
-## 실데이터 검증(로드 개수 기대치)을 같이 올려라.
+## 🔴 남은 계약 = **해금이 조립 책의 룬 목록에 흐른다**(codex → forge_panel._unlocked_runes 규약).
+##  해금의 주체는 이제 **퀘스트 턴인**(`reward_unlock`, 세66 도파민 D)이라 어느 주체가 codex를
+##  심든 이 흐름이 성립해야 한다 — 그래서 아래 ③은 **codex를 직접 심어** 통로만 잰다.
+##
+## ⚠ **세85에 걷은 것**: 조각(FRAGMENT) 소비 → 해독 패널 → 해금 경로. `decode_panel`은 진입 경로가
+##  0곳이었고(`zone_id=decode`인 프롭이 없다) `data/items`에 kind 6(FRAGMENT)이 0장이라 실게임에선
+##  늘 빈 목록이었다 — 이 테스트가 씬을 로드하는 **유일한 곳**이었다(세84 감사 #32 · 사용자 결정 ⑩).
+##  ⑤(unlock_id 오타 스캔)·⑥(조각 관문 드롭 감시)은 **남긴다**: 조각을 되살리는 세션이 오면
+##  자동으로 다시 가동되고, 지금은 0행이라 SKIP으로 찍힌다.
+##
+## 🔴 파일 이름이 더는 내용과 안 맞는다(해독대가 없다) — 개명은 CLAUDE.md·`takbon-verify`의 검증
+##  목록과 같이 움직여야 해서(세 세션 연속 갈라진 자리) **리드가 한 번에** 한다. 제안: `test_rune_unlock_auto.gd`.
 
 var _pass := 0
 var _fail := 0
@@ -35,88 +43,58 @@ func _skip(label: String) -> void:
 	_skips += 1
 	print("SKIP(0행): ", label, " — 잴 데이터가 없다 (복원되면 자동 가동)")
 
+## 🔴 「조립 책이 그릴 수 있다고 보는 룬」의 규약 — `forge_panel._unlocked_runes`와 같은 판정.
+## 세85에 두 번(해금 전·후) 부르게 되면서 뽑았다. `_visited`는 순회가 정본 전량을 훑었는지의 그물.
+var _visited := 0
+
+func _unlocked_types(gs: Node, db: Node) -> Array:
+	var out: Array = []
+	_visited = 0
+	for t: int in Enums.RUNE_TYPES:
+		_visited += 1
+		var rd: RuneDef = db.get_rune(t)
+		if rd != null and rd.unlock_id != &"" and gs.is_unlocked(rd.unlock_id):
+			out.append(t)
+	return out
+
 func _run() -> void:
 	# 🔴 세84 #44: 워치독 — `_run`이 중간에 죽으면 `quit()`에 못 닿아 프로세스가 영구 hang했다.
 	create_timer(30.0).timeout.connect(func() -> void:
-		print("TEST_DECODE_TIMEOUT — 30초 초과 (테스트가 중간에 죽었을 수 있다)")
+		print("TEST_RUNE_UNLOCK_TIMEOUT — 30초 초과 (테스트가 중간에 죽었을 수 있다)")
 		quit(1))
 	await process_frame
 	var gs: Node = root.get_node("GameState")
 	var db: Node = root.get_node("Db")
 
-	# ── in-memory 주입: 흙 룬 + 흙 조각 (해독 기계 검증용 대역) ──
-	# 🔴🔴 **세83: 전제가 뒤집혔다.** 세78 주석은 *"흙은 아직 실 .tres도 시드도 없어 「아직 안 배운
-	# 룬」 자리로 딱 맞다"*였는데, 세83에 룬 6종을 복원해 **흙도 실데이터 + 시작 지급**이 됐다.
-	# 그래서 주입 뒤 `db.runes.erase(EARTH)`가 **진짜 흙 룬까지 지워** ④-b의 로드 수가 6→5로
-	# 떨어졌다(그물이 실제로 잡았다). → 주입 전에 **원본을 보관했다가 되돌린다**.
-	# ⚠ 룬이 전부 실재하게 된 이상 「빈 자리를 빌려 쓴다」는 수법은 이제 못 쓴다.
-	var real_earth: RuneDef = db.get_rune(Enums.RuneType.EARTH)
+	# 🔴 세85: 흙 룬을 **미해금 상태로 되돌려** 아래 ③이 「해금 전 → 해금 후」를 실제로 대조하게 한다.
+	#   (세83에 흙이 시작 지급으로 바뀌어, 안 지우면 ③이 「이미 켜져 있던 것」을 재는 자명 통과가 된다.)
+	#   ⚠ 실데이터 룬 자체는 **건드리지 않는다** — 세83 사고(주입 뒤 `erase`가 진짜 흙 룬을 지워
+	#   ④-b가 6→5로 떨어진 자리)의 재발 자리다. 여기서 만지는 건 GameState.codex뿐이다.
 	var had_earth_codex: bool = gs.is_unlocked(&"rune_earth")
-	var test_rune := RuneDef.new()
-	test_rune.type = Enums.RuneType.EARTH
-	test_rune.unlock_id = &"rune_earth"
-	test_rune.display_name = "흙(테스트)"
-	db.runes[Enums.RuneType.EARTH] = test_rune
-	var test_frag := ItemDef.new()
-	test_frag.id = &"fragment_earth"
-	test_frag.kind = Enums.ItemKind.FRAGMENT
-	test_frag.display_name = "흙 조각(테스트)"
-	test_frag.params = {"unlock_id": &"rune_earth"}
-	db.items[&"fragment_earth"] = test_frag
-
-	# 깨끗한 시작 — 흙 룬은 아직 안 배운 상태여야 검증이 성립한다.
 	gs.codex.erase(&"rune_earth")
-	gs.inventory.erase(&"fragment_earth")
 
-	var PanelScene: PackedScene = load("res://src/base/decode_panel.tscn")
-	var panel: Control = PanelScene.instantiate()
-	root.add_child(panel)   # _ready가 돈다 (EventBus 연결·_list 주입)
-	await process_frame
-
-	# ── ① 해독 = 조각 소비 + 룬 해금 ──
-	_check("시작: 흙 룬 미해금", not gs.is_unlocked(&"rune_earth"))
-	gs.add_item(&"fragment_earth", 2)
-	panel._decode(&"fragment_earth")
-	_check("🔴 해독하면 흙 룬이 해금된다 (codex_unlocked → codex)", gs.is_unlocked(&"rune_earth"))
-	_check("해독이 조각 하나를 소비한다 (2 → 1)", gs.get_count(&"fragment_earth") == 1)
-
-	# ── ② 이미 배운 룬은 다시 해독해도 조각이 안 닳는다 ──
-	panel._decode(&"fragment_earth")
-	_check("🔴 이미 배운 룬은 조각을 낭비하지 않는다 (1 그대로)", gs.get_count(&"fragment_earth") == 1)
-
-	# ── ③ 해금이 조립 책의 룬 목록에 흐른다 — 이제 흙 룬을 그릴 수 있다 ──
+	# ── ③ 해금이 조립 책의 룬 목록에 흐른다 — 해금되면 그릴 수 있다 ──
 	# forge_panel._unlocked_runes와 같은 규약을 여기서 직접 확인 (패널 인스턴스는 무거워 로직만).
-	# 세78: 불·물·바람은 시작부터 해금(시드 3종), 흙은 방금 해독으로 붙었다.
+	# 세78: 불·물·바람은 시작부터 해금(시드 3종).
 	# 🔴 세84 #43: 손으로 적은 `[0, 2, 3, 5]`를 **정본 `Enums.RUNE_TYPES` 순회**로 바꿨다 —
 	#   7번째 룬이 오면 그 룬이 「책 목록에 흘러드나」를 한 번도 안 재는 사본이었다(같은 파일 아래
 	#   ④-b·⑤가 이미 정본을 쓰고 있어 컴파일 함정 변명도 안 섰다).
-	var unlocked_types: Array = []
-	var visited := 0
-	for t: int in Enums.RUNE_TYPES:
-		visited += 1
-		var rd: RuneDef = db.get_rune(t)
-		if rd != null and rd.unlock_id != &"" and gs.is_unlocked(rd.unlock_id):
-			unlocked_types.append(t)
+	# 🔴 세85: 해금 **주체**가 해독대에서 **퀘스트 턴인**으로 옮겨갔으므로(세66 도파민 D) 여기서는
+	#   주체를 흉내내지 않고 **통로만** 잰다 — `EventBus.codex_unlocked` 한 발이 곧 해금이고
+	#   (`GameState._on_codex_unlocked`), 그게 책 목록에 흘러야 한다. 어느 주체가 쏘든 같은 계약이다.
+	_check("🔴 검출력 대조: 해금 전엔 흙(5)이 책 목록에 없다", not _unlocked_types(gs, db).has(5))
+	root.get_node("EventBus").codex_unlocked.emit(&"rune_earth")
+	_check("🔴 codex_unlocked 한 발이 해금이다 (GameState.codex에 심긴다)", gs.is_unlocked(&"rune_earth"))
+
+	var unlocked_types: Array = _unlocked_types(gs, db)
 	_check("🔴 룬 목록 순회가 정본 %d종을 다 훑었다 (손 사본이 아니라 Enums.RUNE_TYPES)"
-		% Enums.RUNE_TYPES.size(), visited == Enums.RUNE_TYPES.size() and visited > 0)
+		% Enums.RUNE_TYPES.size(), _visited == Enums.RUNE_TYPES.size() and _visited > 0)
 	_check("불(0)은 시작부터 해금", 0 in unlocked_types)
 	_check("🔴 물(2)이 시작부터 해금돼 그릴 수 있다 (세78 시드)", 2 in unlocked_types)
 	_check("🔴 바람(3)이 시작부터 해금돼 그릴 수 있다 (세78 시드)", 3 in unlocked_types)
-	_check("🔴 흙(5)이 해독으로 목록에 들어왔다", 5 in unlocked_types)
+	_check("🔴 흙(5)이 해금되자 책 목록에 들어왔다 (codex → 그릴 수 있는 룬)", 5 in unlocked_types)
 
-	# ── ④ unlock_id 없는 조각/미보유는 무해 ──
-	gs.inventory.erase(&"fragment_earth")
-	panel._decode(&"fragment_earth")   # 보유 0 — 소비할 게 없다, 터지지 않아야
-	_check("보유 0 조각 해독은 조용히 무해", gs.get_count(&"fragment_earth") == 0)
-
-	# ── 주입 제거 — 이후 검증은 **실데이터만** 본다 ──
-	# 🔴 흙은 **되돌린다**(지우지 않는다) — 세83에 실데이터가 됐다. 지우면 ④-b가 5종을 세고,
-	#   그건 「.tres가 죽었다」와 구분이 안 되는 거짓 빨강이다.
-	if real_earth != null:
-		db.runes[Enums.RuneType.EARTH] = real_earth
-	else:
-		db.runes.erase(Enums.RuneType.EARTH)
-	db.items.erase(&"fragment_earth")
+	# ── 원상복구 — 이후 검증은 **실데이터만** 본다 ──
 	if had_earth_codex:
 		gs.codex[&"rune_earth"] = true
 	else:
@@ -181,12 +159,10 @@ func _run() -> void:
 	_check("🔴 관문 없이(순수 확률로) 뿌려지는 조각 0곳 (잔재: %s)" % str(loose_fragments),
 		loose_fragments.is_empty())
 
-	panel.queue_free()
-
 	print("RESULT pass=%d fail=%d" % [_pass, _fail])
 	if _skips > 0:
-		print("TEST_DECODE_SKIPS — %d개 스캔이 0행이라 잠들어 있다 (위 SKIP 줄 참조)" % _skips)
+		print("TEST_RUNE_UNLOCK_SKIPS — %d개 스캔이 0행이라 잠들어 있다 (위 SKIP 줄 참조)" % _skips)
 	if _fail == 0:
-		print("TEST_DECODE_OK — 전 항목 통과")
+		print("TEST_RUNE_UNLOCK_OK — 전 항목 통과")
 	# 🔴 세84 #44: 실패하면 종료코드 1 (전엔 인자 없는 quit() = 실패해도 0).
 	quit(0 if _fail == 0 else 1)

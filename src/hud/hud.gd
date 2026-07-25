@@ -415,7 +415,9 @@ func _draw_mana(font: Font, at: Vector2) -> void:
 	draw_rect(Rect2(at, MANA_SIZE), BAR_BG, true)
 	if frac > 0.0:
 		draw_rect(Rect2(at, Vector2(MANA_SIZE.x * frac, MANA_SIZE.y)),
-			MANA_LOW if GameState.mana < RingPower.cast_mana_cost() else MANA_FILL, true)
+			# 🔴 세85: 「부족」 경계는 **`GameState.cast_mana_cost()`** — 장착 지팡이의 `wand_mana_mult`가
+			# 얹힌 값이다. `RingPower.cast_mana_cost()`를 직접 부르면 값싼 지팡이를 껴도 막대만 빨갛다.
+			MANA_LOW if GameState.mana < GameState.cast_mana_cost() else MANA_FILL, true)
 	draw_rect(Rect2(at, MANA_SIZE), BAR_EDGE, false, 1.0)
 	var mana_text := "마나 ∞ (테스트)" if GameState.debug_free_cast \
 		else "마나 %d / %d" % [floori(GameState.mana), roundi(mana_max)]

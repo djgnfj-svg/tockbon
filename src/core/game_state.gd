@@ -6,6 +6,9 @@ extends Node
 ## 보관(ring_designs)에는 남는다 — save_manager가 EQUIP_SLOTS만큼만 복원한다.
 const EQUIP_SLOTS := 3
 
+## 🔴 발사 마나 기본값의 단일 소스 — 여기선 장비 보정만 얹는다(`cast_mana_cost()`).
+const RingPower := preload("res://src/core/ring_power.gd")
+
 var balance: BalanceData = preload("res://data/balance.tres")
 
 var mana: float
@@ -85,7 +88,8 @@ func _ready() -> void:
 ## 확정: "시작했을 때 아무것도 없는 상태가 중요"). 거점은 재료로 직접 지어 채운다.
 func _seed_starting_unlocks() -> void:
 	# 🔴 세션61 콘텐츠 리셋 — 카탈로그를 진 1(jin_single)·룬 1(rune_fire)·문양 1(radiate)로 비웠다.
-	# 앞으로 사용자가 큐레이션하며 하나씩 되살린다(진마다 glyph_slots 배치도 그때 정한다).
+	# 앞으로 사용자가 큐레이션하며 하나씩 되살린다(진의 개성 = band_count·rune_slots·guide_shape —
+	# 🔴 세85 ⑦에 칸 축 glyph_slots는 은퇴했다).
 	# 시드 = 시작 지급뿐: 세49~58의 룬 6종·진 8종 전부 시드는 은퇴했다(그 시드가 관문·해독을
 	# 소급 완료로 덮어 재우던 것도 같이 끝 — 룬을 되살리면 관문 드롭(until_unlock)이 바로 산다).
 	# ⚠ 문양(발산)은 시드가 없다 — **문양엔 해금 게이트 자체가 없다**: GlyphDef에 unlock_id 필드가
@@ -158,7 +162,7 @@ func _make_seed_ring(rune_type: int, name: String) -> RingDesign:
 	d.rune = rune_type
 	d.jin = &"jin_single"
 	d.rings = [[-1, -1, -1, -1, -1, -1, -1, -1]]   # 빈 고리 8칸 (문양 없음 = 몸으로 때리는 원소 볼)
-	d.open = [0, 1, 2, 3, 4, 5, 6, 7]              # jin_single.glyph_slots 스냅샷 (정적 — Db 미조회)
+	d.open = [0, 1, 2, 3, 4, 5, 6, 7]              # 층 합집합 규약의 정적 스냅샷 (Db 미조회 — 세85 ⑦에 glyph_slots 은퇴)
 	d.total_score = 1.0                            # 안정(>0.65) — 펑 안 남, 기준 위력
 	d.size = 1.0
 	return d
@@ -221,14 +225,27 @@ func roll_cooldown() -> float:
 func hp_max() -> float:
 	return balance.player_hp_max + gear_param(Enums.ItemKind.ROBE, "hp_max_add", 0.0)
 
-## 손에 든 지팡이의 **발사 패턴** — v2.0 지팡이 축 (TECH_SPEC §4.0-a).
-## 사용자: *"지팡이에 따라 여러 발이 나가거나 내 주변에서 전체 방향으로 나가거나가 정해짐."*
+## 🔴 **지팡이 = 세기·속도 스칼라 축** (세85, 사용자 확정 — 감사 #5).
+## 옛 `wand_pattern()`(지팡이가 발사 **형태**를 정한다)은 **은퇴했다**. 이유:
+##   ① 형태는 이미 **진**이 답하는 질문이다(세44에 진으로 옮겼다) — 두 축이 같은 자리를 다투면
+##      진을 늘릴 때마다 지팡이 폴백이 조용히 끼어든다(세60에 문양본을 진에 흡수시킨 것과 같은 논리).
+##   ② 실제로 **도달 불가**였다: 폴백이 `jin_def == null`일 때만 걸리는데 도안 생성 두 경로가
+##      전부 진을 채웠다 → 산탄·전방위 지팡이를 껴도 **아무 일도 안 일어났다**.
+## 🔴 그래서 지팡이는 이제 **관측 가능한 스칼라**를 준다. 되살리지 마라 — 소스가 둘이 된다.
 ##
-## 🔴 **스키마를 안 늘렸다.** `ItemDef.params["wand_pattern"]`을 읽을 뿐이라 **새 지팡이는
-## .tres 하나 추가하면 끝**이다 (선례: hp_max_add·stroke_correct_add). 미착용이면 단발.
-func wand_pattern() -> int:
-	return int(gear_param(Enums.ItemKind.WAND, "wand_pattern",
-		float(Enums.WandPattern.SINGLE)))
+## 진(캐리어) 비행 속도 배수 — 미착용 1.0(맨손도 쏜다). 소비자 = `ring_spell_system._spawn_carrier`.
+## ⚠ **위력(피해)에는 안 곱한다**: 리포트·HUD가 `RingPower.power_display`로 같은 숫자를 보여 주는데
+## 발사만 배수를 얹으면 세23의 「리포트는 140인데 130으로 때린다」가 그대로 재발한다.
+func wand_speed_mult() -> float:
+	return maxf(gear_param(Enums.ItemKind.WAND, "wand_speed_mult", 1.0), 0.0)
+
+
+## 🔴 발사 1회당 마나 = **balance 기본 × 지팡이 배수** (세85). `move_speed`·`roll_cooldown`과 같은
+## 결의 파생 스탯 getter다 — 기본값은 `RingPower.cast_mana_cost()`가 쥐고 장비 보정만 여기서 얹는다.
+## 🔴 **발사·HUD가 둘 다 이 함수를 부른다** — `RingPower.cast_mana_cost()`를 직접 부르면
+## 마나 막대의 「부족」 경계와 실제 소모가 갈라진다(빨간 막대인데 쏴지거나 그 반대).
+func cast_mana_cost() -> float:
+	return RingPower.cast_mana_cost() * maxf(gear_param(Enums.ItemKind.WAND, "wand_mana_mult", 1.0), 0.0)
 
 ## 🔴 획 보정 강도 (0..1) — 그은 획을 가이드 쪽으로 **얼마나 끌어당기는가** (0=안 당김, 1=정답선).
 ## **보정은 펜 아이템으로 산다** (사용자 확정 2026-07-17: *"펜등급마다 보정도가 오르는거임"*).

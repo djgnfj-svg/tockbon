@@ -5,9 +5,9 @@ extends RefCounted
 ## 완전히 테스트된다(tests/test_ring_assembly_auto.gd).
 ##
 ## 모델 (사용자 확정 2026-07-16 · memory takbon-ring-assembly-pivot):
-##   • 진 = 바깥 그릇(경계) — 그리고 🔴 **진이 칸을 연다** (세션60 — 틀(템플릿) 축을 진에
-##     흡수, `JinDef.glyph_slots`). 어느 칸이 열리는지가 진마다 다르다 — **새 진 = 새 칸 배치**.
-##     "얻어 삽입할수록 넓어진다"는 진 해금(unlock_id)으로 이관됐다. 진 미선택 = 폴백 [0, 2].
+##   • 진 = 바깥 그릇(경계). ⚠ **세85 ⑦: 「진이 칸을 연다」(`glyph_slots`) 축은 은퇴했다** —
+##     라이브에서 열린 칸은 `ring_forge_panel.build_assembly()`가 층에 놓인 칸의 합집합으로 만든다.
+##     여기 `_open`은 이제 **아무도 안 바꾸는 폴백 [0, 2]**다(진의 개성은 band_count·rune_slots가 쥔다).
 ##   • 룬 = 중심 속성 — 지금은 불만
 ##   • 문양 = 열린 칸을 채우는 조각 (응집←/발산→)
 ##
@@ -45,7 +45,7 @@ var _rune_slots := 1
 ## 🔴 고른 진 id (세션44, 진=형태). 진은 **손으로 안 긋고 고른다**(선택) — 지팡이(진)를 골라 그 위에
 ## 룬·문양을 그린다. get_assembly가 실어 저장·발사(형태)까지 흐른다. 빈 값 = 폴백(발사부가 처리).
 var _jin: StringName = &""
-var _open: Array[int] = [0, 2]      # 열린 칸들 — **진 미선택 폴백** (진을 고르면 JinDef.glyph_slots가 덮는다)
+var _open: Array[int] = [0, 2]      # 열린 칸들 — 폴백 고정값 (세85 ⑦에 이걸 덮던 축이 은퇴했다)
 var _slots: Array[int] = []         # SLOTS개, 값 = 문양 코드 or GLYPH_NONE (열린 칸만 채워진다)
 
 
@@ -206,20 +206,10 @@ func place_glyph(slot: int, glyph: int) -> void:
 		_slots[slot] = glyph
 
 
-## 🔴 열린 칸을 지정한다 (세션60 — 주는 쪽 = 진, `choose_jin`이 `JinDef.glyph_slots`를 넘긴다).
-## 이 칸들만 열린다. **닫힌 칸의 문양은 걷어낸다.** 범위 밖·중복은 걸러진다. 빈 배열 = 빈 진.
-func set_open_slots(open_slots: Array) -> void:
-	var next: Array[int] = []
-	for s in open_slots:
-		var k := int(s)
-		if k >= 0 and k < SLOTS and not (k in next):
-			next.append(k)
-	_open = next
-	for k in SLOTS:
-		if not (k in _open):
-			_slots[k] = GLYPH_NONE       # 닫힌 칸은 비운다
-
-
+## ⚠ **`set_open_slots`는 세85 ⑦에 은퇴했다** (사용자 결정 · 감사 #8). 세60에 「진이 칸을 연다」
+## (`JinDef.glyph_slots` → `choose_jin` → 여기)를 배선했지만, 라이브에서 열린 칸을 만드는 자리는
+## `ring_forge_panel.build_assembly()`(층에 놓인 칸의 합집합)이고 이 경로의 src 호출자는 0이었다.
+## 축이 통째로 은퇴했으므로 진입점(`JinDef.glyph_slots`)과 함께 걷었다 — 그물만 남기면 거짓 신호다.
 func clear() -> void:
 	_stage = STAGE_JIN
 	_has_jin = false

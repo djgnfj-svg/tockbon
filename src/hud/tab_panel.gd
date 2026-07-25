@@ -557,6 +557,7 @@ func _draw_card(font: Font, at: Vector2, id: StringName, count: int) -> void:
 ##
 ## 🔴 **넘침 = 잘림이 아니라 상한으로 막는다** (세84 감사 #35 — 마법진 탭이 이미 쓰는 규율).
 ## q00~q05 여섯이 길잡이 대화 한 번에 **연쇄 완료**되면 6행이 되고, 옛 코드는 캡이 없어
+## (⚠ 세85에 q05가 은퇴해 지금 실데이터는 **다섯**이다 — 아래 계산은 실측이라 무영향, 이 문장만 당시 기록)
 ## 6번째 행이 패널 아랫변을 뚫고 진행 바가 화면(540) 밖으로 나갔다(스크롤 없음).
 ## 수용량은 마법진 탭 보관 목록과 **같은 방식으로 실측 계산**한다(상수 하드코딩 금지 —
 ## PANEL_SIZE·ROW_H를 건드리면 자동으로 따라온다). 넘치면 마지막 줄이 "… 외 N개"다.
@@ -1035,7 +1036,8 @@ static func _strip_symbol(s: String) -> String:
 
 ## 읽기 전용 캐릭터 정보 — 생명력·파생 스탯·착용 요약. 착용/해제는 소지품 탭이 한다(여긴 요약만).
 ## 🔴 스탯은 전부 GameState getter로 읽는다(hp_max·mana_max·move_speed·roll_cooldown·
-## stroke_correction·wand_pattern) — balance를 직접 읽으면 장비 보정이 빠져 조용히 어긋난다.
+## stroke_correction·wand_speed_mult·cast_mana_cost) — balance나 RingPower를 직접 읽으면
+## 장비 보정이 빠져 조용히 어긋난다.
 const CHAR_VALUE_X := 200.0     # 라벨 왼쪽 정렬, 값은 여기서 시작
 const CHAR_ROW_H := 26.0
 const CHAR_SECTION_GAP := 20.0
@@ -1063,7 +1065,10 @@ func _draw_character_tab(font: Font, origin: Vector2, content_top: float) -> voi
 	var corr := GameState.stroke_correction()
 	y = _draw_stat(font, left, y, "손그림 보정",
 		"+%.2f (펜)" % corr if corr > 0.0 else "없음 (맨손 — 그린 대로)")
-	y = _draw_stat(font, left, y, "발사 패턴", ItemText.pattern_label(GameState.wand_pattern()))
+	# 🔴 세85: 옛 "발사 패턴" 줄(`wand_pattern`)은 은퇴했다 — 형태는 지팡이가 아니라 **진**이 정한다
+	# (그 줄은 늘 "단발"이라 거짓 신호였다). 대신 지팡이의 **실효 스칼라 둘**을 적는다.
+	y = _draw_stat(font, left, y, "진 속도", "%d%%" % roundi(GameState.wand_speed_mult() * 100.0))
+	y = _draw_stat(font, left, y, "발사 마나", "%.1f" % GameState.cast_mana_cost())
 
 	# ── 착용 요약 (읽기 전용 — 착용/해제는 [소지품] 탭) ──
 	y += CHAR_SECTION_GAP
@@ -1152,6 +1157,7 @@ func _item_name(id: StringName) -> String:
 	return it.display_name if it != null and it.display_name != "" else String(id)
 
 
-## 🔴 장비 효과 문구·발사 패턴 라벨은 **여기 없다** — `ItemText`(core) 단일 소스다(세84 #21).
-## 옛 `_effect_text`/`_wand_pattern_text`/`_pattern_label` 사본 셋은 은퇴했다.
+## 🔴 장비 효과 문구는 **여기 없다** — `ItemText`(core) 단일 소스다(세84 #21).
+## 옛 `_effect_text`/`_wand_pattern_text`/`_pattern_label` 사본 셋은 은퇴했다
+## (패턴 라벨은 세85에 `ItemText`에서도 사라졌다 — 지팡이가 형태를 안 정한다).
 ## `workshop_panel`이 같은 함수를 부르므로 문구를 고치면 두 패널이 같이 따라온다.

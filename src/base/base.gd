@@ -138,12 +138,18 @@ func _ready() -> void:
 	#   (그리기는 베이스에서 일어나므로 "숲에서 돌아가라" 넛지 대신 옆의 길잡이 [?]로 안내한다).
 	EventBus.ring_design_committed.connect(_refresh_npc_mark)
 	_refresh_npc_mark()
-	# 🔴 세66-2 인터림 브리지: 마을 완비 = 스테이션 codex를 미리 심어 옛 건설 퀘스트(q03~q05 UNLOCK station_*)를
-	#   소급 완료시킨다 (세36 소급 경로 재사용). 건설이 사라졌으니 이 시드가 없으면 q05가 영영 미완이라 온보딩 사슬이 막힌다.
-	#   station_decode도 심는다 — 해독대 자체는 은퇴했지만 q05가 그걸 노리면 소급 완료돼야 사슬이 안 막힌다.
+	# 🔴 세66-2 인터림 브리지: 마을 완비 = 스테이션 codex를 미리 심어 옛 건설 퀘스트(q03·q04 UNLOCK station_*)를
+	#   소급 완료시킨다 (세36 소급 경로 재사용). 건설이 사라졌으니 이 시드가 없으면 그 퀘스트가 영영 미완이라 온보딩 사슬이 막힌다.
 	#   ⚠ is_unlocked 가드로 매 방문 재발신·중복 완료·audio 도배를 막는다.
-	#   3단계에서 q03~q05를 삭제하고 qR1(첫 보스→첫 룬)로 교체하면 이 루프는 제거한다.
-	for sid: StringName in [&"station_refine", &"station_craft", &"station_shop", &"station_decode"]:
+	#   3단계에서 q03·q04를 삭제하고 qR1(첫 보스→첫 룬)로 교체하면 이 루프는 제거한다.
+	#
+	# 🔴 **세85: `station_decode`를 목록에서 뺐다** (세84 감사 #32 · 사용자 결정 ⑩ — 해독대 은퇴).
+	#   `q05_build_decode.tres`를 같이 삭제했기 때문에 이제 심을 이유가 없다. 🔴 **둘은 한 세트다** —
+	#   시드만 빼면 q05가 **영영 정산 불가**가 되어 *"해독대 자리에서 재료를 들고 [E]로 건설하라"*가
+	#   Q 패널에 **영구히 걸린 채** 남는다(그 자리에 존이 없다. `src/props/*.tscn`의 zone_id에
+	#   refine·craft·shop은 실재하는데 decode만 없었던 게 이 문제의 뿌리였다).
+	#   ⚠ q05의 보상 `mat_night_bloom ×2`는 **q04로 합쳤다**(온보딩 총 보상량 보존, 사용자 확정).
+	for sid: StringName in [&"station_refine", &"station_craft", &"station_shop"]:
 		if not GameState.is_unlocked(sid):
 			EventBus.codex_unlocked.emit(sid)
 	# 🔴 온보딩 (세션41) — 첫 마법을 아직 안 그렸으면 길잡이로 유도한다 (q00 완료되면 안 뜬다).

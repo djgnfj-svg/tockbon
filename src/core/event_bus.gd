@@ -75,8 +75,8 @@ signal quests_seen
 ## ⚠ 목록은 **함수 이름**으로 적는다 — 줄 번호는 코드와 함께 늙어 다시 거짓이 된다(감사 T4).
 ##   `resources_changed` 발신 5곳: `game_state`의 `new_game`·`add_item`·`remove_item`·**`add_to_bag`**
 ##                                 · `save_manager.load_game`
-##     수신 7곳: `hud` · `tab_panel` · `ring_forge_panel`(잉크 팔레트) · `refine_panel`
-##               · `workshop_panel` · `shop_panel` · `decode_panel`
+##     수신 6곳: `hud` · `tab_panel` · `ring_forge_panel`(잉크 팔레트) · `refine_panel`
+##               · `workshop_panel` · `shop_panel`
 ##   `equipment_changed` 발신 3곳: `game_state.new_game`·`game_state._after_equipment_changed`
 ##                                 · `save_manager.load_game`
 ##     수신 4곳: `tab_panel` · `workshop_panel` · `audio` · 🔴 `save_manager._queue_save`(자동 저장)

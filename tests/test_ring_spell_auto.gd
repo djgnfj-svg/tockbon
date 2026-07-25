@@ -65,7 +65,7 @@ func _run() -> void:
 	await _test_no_score_is_base_power(system)
 	await _test_size_scales_damage(system)
 	await _test_special_ink_amplifies_status(system)
-	await _test_wand_pattern(system)
+	await _test_wand_axis(system)
 	await _test_glyph_bolt_effects(system)
 	await _test_jin_burst(system)
 	await _test_jin_spray(system)
@@ -342,40 +342,131 @@ func _test_special_ink_amplifies_status(system) -> void:
 		% [float(red.get("damage", 0.0)), float(plain.get("damage", 0.0))])
 
 
-# ── 🔴 지팡이 발사 패턴 (세션42) — 옛 spell_system 매장 후 wand_pattern()이 orphan이라
-# 진이 무조건 단발이었다. 이 검증이 그 회귀를 막는다: 착용 지팡이가 진(캐리어) 발수를 정한다.
+# ── 🔴 지팡이 축 = 세기·속도 스칼라 (세85, 감사 #5 — 옛 `wand_pattern` 은퇴) ──
+#
+# 세42~84의 이 자리는 *"착용 지팡이가 진(캐리어) 발수를 정한다"*를 쟀다. 그 축은 세85에 은퇴했다:
+# 폴백이 `jin_def == null`일 때만 걸리는데 **도안 생성 두 경로가 전부 진을 채워** 산탄·전방위 지팡이가
+# 게임에서 한 번도 도달한 적이 없었고(제작이 순수 손실), 형태는 진·문양·층이 이미 답하는 질문이다.
+#
+# 🔴 **옛 그물의 결함**: 합성 assembly(`{"rings": …}`, 진 없음)로 재서 **진이 있는 실경로를 안 지났다**
+# → 도달 불가를 못 잡고 초록불이었다. 그래서 아래는 전부 **실제 `JinDef`를 태운 도안**으로 잰다.
 # 카운트는 emit 직후 1프레임 — 캐리어는 빈 진·무표적이라 수명 동안 날아다녀 안 사라진다.
 
-func _test_wand_pattern(system) -> void:
-	print("[12] 지팡이 패턴 → 진(캐리어) 발수 (세션42, WandPattern)")
+func _test_wand_axis(system) -> void:
+	print("[12] 지팡이 축 = 세기·속도 스칼라 (세85 — 형태는 진이 정한다)")
 	var gs = root.get_node("/root/GameState")
 	var saved: Dictionary = gs.equipment.duplicate()
-
-	# 미착용 = 단발 1개
-	gs.equipment = {}
 	_clear(system)
-	_bus.ring_cast_requested.emit({"rings": [_all(GLYPH_NONE)]}, Vector2.ZERO, Vector2(1, 0))
-	await process_frame
-	_check(_carriers(system).size() == 1, "미착용=단발 진 1개 (실제 %d)" % _carriers(system).size())
-	_clear(system)
-
-	# 산탄 지팡이(wand_fork, wand_pattern=1) = balance.wand_multi_count 발
-	gs.equipment = {int(Enums.ItemKind.WAND): &"wand_fork"}
-	_bus.ring_cast_requested.emit({"rings": [_all(GLYPH_NONE)]}, Vector2.ZERO, Vector2(1, 0))
-	await process_frame
+	await _purge_enemies()
 	var mc := int(gs.balance.wand_multi_count)
-	_check(_carriers(system).size() == mc, "산탄 지팡이=%d발 (실제 %d)" % [mc, _carriers(system).size()])
-	_clear(system)
 
-	# 전방위 지팡이(wand_ring, wand_pattern=2) = balance.wand_nova_count 발
-	gs.equipment = {int(Enums.ItemKind.WAND): &"wand_ring"}
-	_bus.ring_cast_requested.emit({"rings": [_all(GLYPH_NONE)]}, Vector2.ZERO, Vector2(1, 0))
+	# ⓐ 🔴 형태는 **진**이 정한다 — 실제 JinDef(`__t_fork`, pattern=MULTI)를 태운 도안으로.
+	gs.equipment = {}
+	_cast_jin(system, &"__t_fork")
 	await process_frame
-	var nc := int(gs.balance.wand_nova_count)
-	_check(_carriers(system).size() == nc, "전방위 지팡이=%d발 (실제 %d)" % [nc, _carriers(system).size()])
+	var jin_n := _carriers(system).size()
+	_check(jin_n == mc, "진(MULTI)이 발수를 정한다 = %d발 (실제 %d)" % [mc, jin_n])
 	_clear(system)
+	await _drain(2)
+
+	# ⓑ 🔴 **은퇴 회귀 그물** — 지팡이를 껴도 발수가 안 변한다. 두 입구를 다 막는다:
+	#    진이 있는 도안(발수는 진 그대로) · **진 없는 도안**(옛 폴백의 유일한 입구 = 여기가 심장).
+	for wid: StringName in [&"wand_fork", &"wand_ring"]:
+		gs.equipment = {int(Enums.ItemKind.WAND): wid}
+		_cast_jin(system, &"__t_fork")
+		await process_frame
+		var n := _carriers(system).size()
+		_check(n == mc, "%s를 껴도 발수는 진 그대로 %d발 (실제 %d)" % [wid, mc, n])
+		_clear(system)
+		await _drain(2)
+
+		_bus.ring_cast_requested.emit({"rings": [_all(GLYPH_NONE)]}, Vector2.ZERO, Vector2(1, 0))
+		await process_frame
+		var n0 := _carriers(system).size()
+		_check(n0 == 1, "🔴 %s + 진 없는 도안 = 단발 (옛 폴백 자리 — 실제 %d)" % [wid, n0])
+		_clear(system)
+		await _drain(2)
+
+	# ⓒ 🔴 **속도 파라미터가 발사에 도달하나** — `wand_speed_mult`를 안 읽으면 두 거리가 같아진다.
+	#    ⚠ 배수 값을 박지 않는다(1.5) — 튜닝 한 번에 거짓 빨강이 되지 않게 **대소 관계**로만 잰다.
+	gs.equipment = {}
+	var bare := await _carrier_travel(system)
+	gs.equipment = {int(Enums.ItemKind.WAND): &"wand_fork"}
+	var fast := await _carrier_travel(system)
+	_check(bare > 0.0 and fast > bare * 1.2,
+		"빠른 지팡이가 진을 더 멀리 보낸다 (%.1f > %.1f px)" % [fast, bare])
 
 	gs.equipment = saved
+	_clear(system)
+	await _drain(2)
+
+	await _test_wand_mana_reaches_fire(system)
+
+
+## 진 하나가 6 물리 프레임 동안 간 거리 (빈 곳 — 아무것에도 안 닿는다).
+func _carrier_travel(system) -> float:
+	_clear(system)
+	await _drain(2)
+	_bus.ring_cast_requested.emit({"rings": [_all(GLYPH_NONE)]}, Vector2.ZERO, Vector2(1, 0))
+	await process_frame
+	var cs := _carriers(system)
+	if cs.is_empty():
+		return -1.0
+	var carrier = cs[0]
+	var start: Vector2 = carrier.global_position
+	for i in 6:
+		await physics_frame
+	var moved := start.distance_to(carrier.global_position)
+	_clear(system)
+	await _drain(2)
+	return moved
+
+
+## 🔴 **마나 파라미터가 실제 발사 경로에 도달하나** (세85). `GameState.cast_mana_cost()`가 옳은 값을
+## 돌려줘도 `player_caster.fire()`가 `RingPower.cast_mana_cost()`를 그대로 부르면 **장비 보정이
+## 조용히 빠진다** — 그게 이 은퇴가 고치려는 병(`attack_cooldown_mult`)의 정확한 재발 형태다.
+## 그래서 getter가 아니라 **fire()가 실제로 깎은 양**으로 잰다.
+##
+## ⚠ 도안의 `rings`가 비어 있어 `_on_ring_cast`는 즉시 돌아간다 — 마나만 깎이고 캐리어는 안 난다
+##   (fire()는 emit **전에** 마나를 판다). 부작용 없는 측정 자리다.
+## ⚠ `debug_free_cast`는 헤드리스에서도 true다("editor" 피처 — 세62 함정) → 꺼야 마나가 닳는다.
+func _test_wand_mana_reaches_fire(system) -> void:
+	var gs = root.get_node("/root/GameState")
+	var saved_eq: Dictionary = gs.equipment.duplicate()
+	var saved_free: bool = gs.debug_free_cast
+	var saved_slot0 = gs.ring_equipped[0]
+	gs.debug_free_cast = false
+	gs.ring_equipped[0] = RingDesign.new()
+
+	var caster = load("res://src/actors/player_caster.gd").new()
+	root.add_child(caster)
+	caster.select_slot(0)
+	await process_frame
+
+	var spent := {}
+	for wid: StringName in [&"", &"wand_ring"]:
+		gs.equipment = {} if wid == &"" else {int(Enums.ItemKind.WAND): wid}
+		gs.mana = gs.mana_max()
+		var before: float = gs.mana
+		# ⚠ 프레임을 흘리지 않고 **즉시** 잰다 — `GameState._process`의 마나 재생이 끼어들면
+		#   측정값이 재생분만큼 어긋나 등식 검사가 거짓 빨강이 된다(fire·emit은 동기라 대기 불필요).
+		caster.fire()
+		spent[wid] = before - gs.mana
+		await process_frame
+		_check(is_equal_approx(float(spent[wid]), gs.cast_mana_cost()),
+			"fire()가 깎은 마나 == GameState.cast_mana_cost() (%s: %.2f vs %.2f)"
+			% [wid if wid != &"" else &"맨손", float(spent[wid]), gs.cast_mana_cost()])
+	_check(float(spent[&"wand_ring"]) < float(spent[&""]) - 0.01,
+		"싼 지팡이가 실제로 마나를 덜 먹는다 (%.2f < %.2f)"
+		% [float(spent[&"wand_ring"]), float(spent[&""])])
+
+	caster.queue_free()
+	gs.ring_equipped[0] = saved_slot0
+	gs.debug_free_cast = saved_free
+	gs.equipment = saved_eq
+	gs.mana = gs.mana_max()
+	_clear(system)
+	await _drain(2)
 
 
 # ── 🔴 문양 어휘 → 탄 행동 효과 (세션47) ──

@@ -3,10 +3,24 @@ extends SceneTree
 ##   ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_ring_trace_auto.gd
 ## 전 항목 통과 시 "TEST_RING_TRACE_OK" 출력 후 종료 코드 0.
 ##
-## 검증 대상: ring_board가 숨은 선(가이드)을 세우고, 문지르면 먹선이 선에 붙어 드러나며(자동추적),
-##   완성도(드러낸 비율)·정밀도(선에 붙은 정도)로 점수를 매긴다. [다음](advance)으로 수동 진행,
-##   다 그리면 분석 리포트. 커버리지 자동확정 아님 — 못 그려도 넘어가되 점수가 낮다.
-##   세션 15: 문양 칸 자유 편집(select_slot 전환 시 자동 잠금·재편집 교체)·문양 개별 크기(칸마다 휠 스케일).
+## 검증 대상: ring_board에 **합성 밑그림**(진 윤곽 + 룬 + 밴드별 문양-고리)을 통째로 넣으면
+##   문지른 궤적이 먹선으로 남고, 완성도(드러낸 비율)·정밀도(선에 붙은 정도)로 점수가 난다.
+##   🔴 **여기가 세83 「그리기 폐지 스위치」가 되살리는 몸이다** — `balance.skip_drawing`을 false로
+##   되돌리면 이 축이 그대로 돌아온다. 폐지 모드가 기본인 동안 이 파일이 그 축의 **유일한 상시 그물**이다.
+##
+## 🔴🔴 **세85 ⑨ 재편**: 옛 판본은 진·룬·문양 칸을 **하나씩 골라 하나씩 긋고 [다음](advance)으로
+##   잠그는** per-piece 흐름을 몰았다. 그 흐름은 세70에 은퇴했고(라이브는 COMBINED 통째 하나)
+##   src 호출자가 0이었다 — **그물이 죽은 몸을 재고 있었다**(세84 감사 T2). 세85 ⑨가 그 몸을
+##   걷었고, 여기 검사도 **라이브 진입점(`enter_combined_trace`)으로 갈아탔다**.
+##   사라진 검사: ④전 흐름·분석 리포트 · ⑤빈 진 완성 · ⑥칸 자유 편집 · ⑦칸별 휠 크기 ·
+##   ⑧먼 클릭 칸 뺏김(I3) · ⑯진·룬 고르기 · ⑰화살촉 따로 긋기.
+##   🔴 ⑰만 **계약 자체가 사라졌다**(나머지는 몸이 옮겨간 것): 통째 밑그림의 낱개 모티프는
+##   `band_r × MOTIF_SIZE_FRAC`(판 268px 기준 6.9~11.2px)이라 깃 벌어짐이 붓의 드러남 반경
+##   (9.44px)보다 **작다** — 즉 「몸통만 그으면 화살촉이 통째로 드러난다」는 세25의 그 상태가
+##   통째 흐름에선 이미 참이다. **손맛 문제라 F5로 판단할 일**이고 그물로 못 박을 수 없어 뺐다.
+##
+## 🔴 세85 ⑪ 이관: F6 조립 슬라이스 벤치가 은퇴하며 `compose_guide` **합성 계약**(진 윤곽·룬·밴드
+##   반경·빈 밴드)이 여기로 왔다 — 밑그림을 만드는 자리라 「긋기」와 한 파일에 있는 게 맞다.
 ##
 ## 주의: -s 모드는 오토로드보다 먼저 컴파일 — 오토로드 식별자·모듈 preload 금지. 첫 프레임 후 load().
 
@@ -30,27 +44,21 @@ func _run() -> void:
 
 	_BoardScript = load("res://src/drawing/ring_board.gd")
 
+	_test_compose_guide_layout()
 	_test_exact_trace_high_score()
 	_test_sloppy_lower_accuracy()
 	_test_partial_lower_coverage()
-	_test_full_flow_and_analysis()
-	_test_empty_jin_finishes_after_rune()
-	_test_glyph_free_edit_and_relock()
-	_test_glyph_per_slot_scale()
-	_test_far_click_does_not_steal_slot()
 	_test_accuracy_has_teeth()
 	_test_gross_miss_is_punished_not_erased()
 	_test_pen_correction_pulls_strokes()
 	_test_pen_grades_registered()
 	_test_strokes_accumulate()
 	_test_clear_stroke_wipes()
-	_test_jin_rune_need_picking()
-	_test_arrowhead_must_be_drawn()
 	_test_glyph_shapes_are_distinct()
 	_test_jin_shapes_are_closed_and_distinct()
-	_test_jin_shape_reaches_the_board()
+	await _test_jin_shape_reaches_the_board()
 	_test_rune_shapes_are_closed_and_distinct()
-	_test_rune_shape_reaches_the_board()
+	await _test_rune_shape_reaches_the_board()
 	_test_ink_rides_assembly()
 	_test_special_ink_consumed_while_drawing()
 	_test_accuracy_tol_tightened()
@@ -199,74 +207,6 @@ func _test_clear_stroke_wipes() -> void:
 	b.queue_free()
 
 
-# ── 🔴 ⑯ 진·룬도 **골라야** 밑그림이 뜬다 (세션 25) ──
-# 사용자: *"이게 눌러야 뜨게 해줘 룬이 나중에는 추가된다는 것을 전제로 작업해야지 ㅇㅇ 진도 확인해주고"*
-# 예전엔 단계에 들어가는 순간 밑그림이 저절로 서 있었다 — 문양 칸만 클릭식이라 조작이 갈렸고,
-# 룬이 불·물·바람으로 늘면 "어느 룬의 밑그림이냐"에 답할 수가 없다.
-# 🔴 인덱스인 이유: bool은 "골랐나"만 알고 **"어느 룬인가"를 못 담는다**.
-func _test_jin_rune_need_picking() -> void:
-	var b = _BoardScript.new()
-	b.size = Vector2(268, 268)
-	root.add_child(b)
-	b.call(&"clear_all")     # 🔴 _make_board와 달리 **안 고른 채로** 시작한다
-	_check(int(b.call(&"jin_idx")) == -1, "빈 판 = 진 미선택")
-	_check(b.call(&"guide_points").is_empty(), "진을 안 골랐으면 밑그림이 없다")
-	_check(String(b.call(&"advance")) == "none", "안 고른 채 [다음] = 아무 일도 없다")
-	_check(not bool(b.call(&"has_jin")), "그린 적 없는 진이 0점으로 잠기지 않는다")
-
-	b.call(&"choose_jin")
-	_check(int(b.call(&"jin_idx")) == 0, "진을 고르면 인덱스가 잡힌다")
-	_check(b.call(&"guide_points").size() > 2, "진을 고르면 밑그림이 선다")
-	_rub_exact(b)
-	b.call(&"advance")
-
-	# 룬도 같은 규약 — 진을 잠갔다고 룬 밑그림이 저절로 서 있으면 안 된다
-	_check(int(b.call(&"stage")) == b.STAGE_RUNE, "룬 단계")
-	_check(int(b.call(&"rune_idx")) == -1, "룬 단계 도착 = 룬 미선택")
-	_check(b.call(&"guide_points").is_empty(), "룬을 안 골랐으면 밑그림이 없다")
-	_check(String(b.call(&"advance")) == "none", "룬을 안 고른 채 [다음] = 무동작")
-	b.call(&"choose_rune")
-	_check(b.call(&"guide_points").size() > 2, "룬을 고르면 밑그림이 선다")
-	b.queue_free()
-
-
-# ── 🔴 ⑰ 화살촉은 **따로 그어야 한다** — 한 획으로 문양이 안 끝난다 (세션 25) ──
-# 사용자: *"문양 부분이 좀 별로인게 한 획만 검증하니? 여러획쓸꺼같아서 화살표는"*
-# 🔴 옛 수치(GLYPH_SIZE 0.12 / SIDE 0.34)에선 문양 전체가 **붓 한 자국 크기**였다:
-# 반지름 118px → 문양 반길이 14px인데 붓의 드러남 반경이 9.4px라, 화살촉 점 전체가
-# 몸통 끝에서 최대 8.6px — **몸통만 그으면 화살촉이 통째로 드러났다**. 화살촉은 못 그리는 게
-# 아니라 **그릴 이유가 없었다**. 그래서 화살표인데 한 획이면 끝났다.
-# 이 테스트는 「몸통만으로는 완성이 안 된다」를 못 박는다 — 크기를 도로 줄이면 여기서 걸린다.
-func _test_arrowhead_must_be_drawn() -> void:
-	var b = _make_board()
-	_rub_exact(b)
-	b.call(&"advance")            # 진
-	_rub_exact(b)
-	b.call(&"advance")            # 룬 → 문양 단계
-	b.call(&"select_slot", 0)
-	var g = b.call(&"guide_points")
-	_check(g.size() > 9, "화살표 밑그림 = 몸통 + 화살촉 (%d점)" % g.size())
-
-	# 몸통(앞 9점)만 긋는다 — 화살촉은 손도 안 댄다
-	b.call(&"begin_stroke")
-	for i in 9:
-		b.call(&"trace_stroke", g[i])
-	var body_only := float(b.call(&"coverage"))
-	_check(body_only < 0.9,
-		"🔴 몸통만 그으면 문양이 안 끝난다 (%.2f) — 붓보다 화살촉이 커야 한다" % body_only)
-
-	# 화살촉을 **두 번째 획**으로 얹는다 (펜을 뗐다 다시 댄다)
-	b.call(&"begin_stroke")
-	for i in range(9, g.size()):
-		b.call(&"trace_stroke", g[i])
-	var with_head := float(b.call(&"coverage"))
-	_check(with_head > body_only + 0.1,
-		"화살촉을 그으면 완성도가 오른다 (%.2f → %.2f)" % [body_only, with_head])
-	_check(with_head > 0.95, "몸통+화살촉 = 완성 (%.2f)" % with_head)
-	_check((b.call(&"trace_strokes") as Array).size() == 2, "두 획이 따로 남는다")
-	b.queue_free()
-
-
 ## 🔴 ⑱ 문양마다 **밑그림 모양이 다르다** (세션 47 — 어휘 3→6).
 ##
 ## 세션 44까지 `_build_guide`의 문양 갈래는 `inward` 하나만 보고 화살표 **방향**만 뒤집었다.
@@ -274,20 +214,24 @@ func _test_arrowhead_must_be_drawn() -> void:
 ## 떠서, 6개 문양이 색·라벨만 다른 4지선다가 된다 — 손으로 긋는 감각이 전부 같아진다는 뜻이고,
 ## 그건 memory `takbon-glyph-design-principle`이 경고하는 실패 그 자체다.
 ##
-## 🔴 검출력: `_glyph_guide_pts`가 코드를 무시하고 화살표만 돌려주면(=회귀) 2·3·4·5가
+## 🔴 검출력: `glyph_guide_pts`가 코드를 무시하고 화살표만 돌려주면(=회귀) 2·3·4·5가
 ## 1과 **같은 점 집합**이 돼 여기서 빨개진다. 이 테스트가 이번 작업의 유일한 헤드리스 가드다.
 ## ⚠ **"보인다"는 못 잰다** — 모양이 예쁜지·구분되어 보이는지는 리드가 실게임 스샷으로 본다.
+##
+## 🔴 세85 ⑨: 옛 판본은 은퇴한 `set_active_glyph`으로 판에 문양 하나씩 꽂아 `guide_points`를 읽었다.
+## 이제 **정본 static을 직접** 부른다 — 그게 합성 밑그림(`glyph_ring_subpaths`)과 책 셀 아이콘이
+## **둘 다 부르는 바로 그 함수**라, 오히려 재는 몸이 라이브에 더 가깝다.
 func _test_glyph_shapes_are_distinct() -> void:
-	var b = _make_board()
-	_reach_glyph_stage(b)          # 진·룬 그리고 문양 단계, 칸 0 선택
+	var p := Vector2(60.0, 0.0)
+	var outward := Vector2(1.0, 0.0)
+	var sz := 20.0
 	var seen := {}                 # 점집합 문자열 → 먼저 그 모양을 쓴 코드
 	# 🔴 세79 M1: 6 → **8**(확산·폭발) · 세82: 8 → **9**(응축). 이 수를 안 늘리면 새 문양은
 	# 헤드리스 커버리지가 **0**이다 — 밑그림이 폴백 화살표로 떨어져도(=손이 안 갈려도),
 	# 폭발과 궤적이 같아도 아무도 안 잡는다.
 	# ⚠ `Enums.GlyphCode`에 문양을 늘릴 때 여기와 아래 기대치도 같이 늘려라.
 	for code in range(9):
-		b.call(&"set_active_glyph", code)
-		var g: PackedVector2Array = b.call(&"guide_points")
+		var g: PackedVector2Array = _BoardScript.glyph_guide_pts(code, p, outward, sz)
 		_check(g.size() >= 9, "문양 %d 밑그림이 선다 (%d점)" % [code, g.size()])
 		var key := ""
 		for pt in g:
@@ -296,14 +240,39 @@ func _test_glyph_shapes_are_distinct() -> void:
 			"🔴 문양 %d의 밑그림이 문양 %s와 똑같다 — 그리는 궤적이 안 갈렸다" % [code, seen.get(key, "?")])
 		seen[key] = code
 
-		# 그 모양을 정확히 따라 그으면 점수가 난다 — 새 모양이 채점기를 이상하게 돌리지 않는지.
-		b.call(&"clear_stroke")
-		b.call(&"begin_stroke")
+		# 그 모양을 판에 넣고 정확히 따라 그으면 점수가 난다 — 새 모양이 채점기를 이상하게 돌리지 않는지.
+		var bb = _BoardScript.new()
+		bb.size = Vector2(268, 268)
+		root.add_child(bb)
+		var moved := PackedVector2Array()
 		for pt in g:
-			b.call(&"trace_stroke", pt)
-		_check(float(b.call(&"coverage")) > 0.95, "문양 %d — 따라 그으면 완성도≈1" % code)
-		_check(float(b.call(&"accuracy")) > 0.95, "문양 %d — 선 위를 그었으니 정밀도≈1" % code)
+			moved.append(pt + Vector2(134.0, 134.0))
+		bb.call(&"enter_combined_trace", moved)
+		bb.call(&"begin_stroke")
+		for pt in moved:
+			bb.call(&"trace_stroke", pt)
+		_check(float(bb.call(&"coverage")) > 0.95, "문양 %d — 따라 그으면 완성도≈1" % code)
+		_check(float(bb.call(&"accuracy")) > 0.95, "문양 %d — 선 위를 그었으니 정밀도≈1" % code)
+		bb.queue_free()
 	_check(seen.size() == 9, "9개 문양이 **전부 다른** 모양 (실제 서로 다른 모양 %d개)" % seen.size())
+	# 🔴 합성 밑그림이 **이 함수를 그대로** 부른다 — 사본이 생기면 「셀에서 본 모양 ≠ 그을 모양」.
+	var gr := GlyphRingDef.new()
+	gr.motif = 1          # 발산
+	gr.count = 1
+	var subs: Array = _BoardScript.glyph_ring_subpaths(gr, Vector2.ZERO, 50.0)
+	_check(subs.size() == 1, "문양-고리 count 1 → 서브패스 1개 (실제 %d)" % subs.size())
+	if subs.size() == 1:
+		var band_p := Vector2.from_angle(-PI / 2.0) * 50.0
+		var expect: PackedVector2Array = _BoardScript.glyph_guide_pts(
+			1, band_p, Vector2.from_angle(-PI / 2.0), 50.0 * 0.14)
+		var sub0: PackedVector2Array = subs[0]
+		var far := 0.0
+		var ok: bool = sub0.size() == expect.size()
+		if ok:
+			for i in sub0.size():
+				far = maxf(far, sub0[i].distance_to(expect[i]))
+		_check(ok and far < 0.001,
+			"밴드 모티프 = glyph_guide_pts 정본 그대로 (크기 = band_r × MOTIF_SIZE_FRAC)")
 
 	# 🔴 세71: 책의 **문양 개별 셀(glyph_icon_pts)은 은퇴**했다 — 문양은 이제 진의 **층(band)**에
 	# 문양-고리로 끼운다. 6종 구분은 위 `glyph_guide_pts`(모티프별 모양)가 이미 지키고, 책의
@@ -322,13 +291,8 @@ func _test_glyph_shapes_are_distinct() -> void:
 	_check(lrects.size() == 2 and (lrects[1] as Rect2).position.y > (lrects[0] as Rect2).position.y,
 		"고리 목록 rect가 세로로 쌓인다 (어휘가 늘면 줄 수로)")
 
-	# 🔴 요약 문자열이 새 어휘에서도 안 죽는다 — 세션 44에 관통을 늘리며 counts 딕셔너리를
-	# 같이 안 늘려 `counts[2] += 1`이 없는 키로 터질 뻔했다(런타임 에러 = 조용한 침묵 통과).
-	b.call(&"set_active_glyph", 5)
-	_rub_exact(b)
-	b.call(&"advance")
-	_check(String(b.call(&"ring_summary")).find("추진") >= 0, "요약이 새 문양 이름을 센다")
-	b.queue_free()
+	# ⚠ 세85 ⑨: 옛 「요약 문자열(`ring_summary`)이 새 문양 이름을 센다」 검사는 그 함수와 함께
+	# 은퇴했다. 라이브 요약은 패널 `_compose_summary()`가 `GlyphRingDef.display_name`으로 만든다.
 
 
 ## 🔴 세션29: 고른 잉크 id가 **발사 계약(assembly)에 실린다** — 패널이 `set_ink`를 부르면
@@ -354,7 +318,7 @@ func _test_special_ink_consumed_while_drawing() -> void:
 	var gs: Node = root.get_node(^"GameState")
 	gs.inventory.clear()
 	gs.add_item(&"ink_fire_red", 2)   # 2획치 특별잉크
-	var b = _make_board()             # clear_all + choose_jin → 진 가이드가 서 있다(_trace=JIN)
+	var b = _make_board()             # 합성 밑그림(진 윤곽)이 서 있다 — 그 위를 긋는다
 	b.call(&"set_ink", &"ink_fire_red")
 	# 🔴 세션31: 잉크는 **획의 최초 유효점**에서 정산된다 (begin_stroke가 아니라). 그래서 각 획은
 	# begin_stroke + 가이드 위 유효점 하나로 몬다. 빈 클릭(먹선 없는 획)은 안 태운다 — 아래 첫 가드.
@@ -435,22 +399,37 @@ func _test_jin_shapes_are_closed_and_distinct() -> void:
 	_check(fallback.size() >= 60, "모르는 진 도형도 밑그림이 나온다 (폴백=원)")
 
 
-# ── 🔴 ㉑ 그 도형이 **판까지 온다** — `guide_shape`를 보드가 실제로 읽는가 (세션 48) ──
-# 위 ⑳은 함수만 본다. 이 테스트가 없으면 `_jin_shape()`이 늘 CIRCLE을 돌려줘도 초록불이다
-# (세션47 문양이 정확히 이걸로 뮤테이션을 통과시켰다 — 보드를 검증할 뿐 배선을 안 봤다).
+# ── 🔴 ㉑ 그 도형이 **판까지 온다** — `guide_shape`가 라이브 배선을 통과하는가 (세션 48) ──
+# 위 ⑳은 함수만 본다. 이 테스트가 없으면 합성이 늘 CIRCLE을 그려도 초록불이다
+# (세션47 문양이 정확히 이걸로 뮤테이션을 통과시켰다 — 함수를 검증할 뿐 배선을 안 봤다).
+#
+# 🔴 세85 ⑨: 옛 판본은 은퇴한 `choose_jin(jd)`로 판에 직접 꽂았다 — **라이브가 아닌 문**이었다.
+# 이제 **책 패널의 실경로**를 탄다: `_on_jin_selected(id)` → `recompose()` →
+# `compose_guide_paths(jd.guide_shape, …)` → `enter_combined_trace`.
+# ⚠ Db의 진 3종이 전부 CIRCLE이라, 살아있는 데이터만으로는 「늘 원을 그린다」는 회귀를 못 잡는다 —
+#   그래서 **삼각 진을 in-memory로 주입한다**(세61 이후 이 리포의 관행). 끝나면 원상복구한다
+#   (세83에 `erase`가 진짜 데이터를 지운 사고의 재발 방지).
 func _test_jin_shape_reaches_the_board() -> void:
+	var db = root.get_node("/root/Db")
 	var JinDefScript = load("res://src/core/schemas/jin_def.gd")
 	var jd = JinDefScript.new()
-	jd.id = &"jin_fork"
+	jd.id = &"jin_probe_tri"
 	jd.guide_shape = 1                 # Enums.JinShape.TRIANGLE
-	var b = _BoardScript.new()
-	b.size = Vector2(268, 268)
-	root.add_child(b)
-	b.call(&"clear_all")
-	b.call(&"choose_jin", jd)
-	var g: PackedVector2Array = b.call(&"guide_points")
-	var ctr := Vector2(134.0, 134.0)
-	var expect: PackedVector2Array = _BoardScript.jin_guide_pts(1, ctr, 268.0 * 0.44)
+	jd.band_count = 1
+	jd.rune_slots = 1
+	var had: bool = db.jins.has(&"jin_probe_tri")
+	db.jins[&"jin_probe_tri"] = jd
+
+	var scene := load("res://src/drawing/ring_forge_panel.tscn") as PackedScene
+	var panel = scene.instantiate()
+	root.add_child(panel)
+	await process_frame
+	panel.call(&"_on_jin_selected", &"jin_probe_tri")
+	var board = panel.get_node("Stage/Spread/RingBoard")
+	var g: PackedVector2Array = board.call(&"guide_points")
+	var ro: float = board.call(&"_outer_radius")
+	var bctr: Vector2 = board.size * 0.5
+	var expect: PackedVector2Array = _BoardScript.jin_guide_pts(1, bctr, ro)
 	_check(g.size() == expect.size() and g.size() > 2,
 		"삼각 진의 밑그림이 판에 선다 (%d점, 기대 %d점)" % [g.size(), expect.size()])
 	if g.size() == expect.size():
@@ -459,7 +438,7 @@ func _test_jin_shape_reaches_the_board() -> void:
 			far = maxf(far, g[i].distance_to(expect[i]))
 		_check(far < 0.5, "🔴 판의 밑그림이 그 진의 도형과 다르다 (최대 %.1fpx 어긋남)" % far)
 	# 원 진과 실제로 갈리는가 — 같은 점열이면 guide_shape가 배선까지 안 온 것이다.
-	var circle: PackedVector2Array = _BoardScript.jin_guide_pts(0, ctr, 268.0 * 0.44)
+	var circle: PackedVector2Array = _BoardScript.jin_guide_pts(0, bctr, ro)
 	var same := g.size() == circle.size()
 	if same:
 		for i in g.size():
@@ -467,7 +446,13 @@ func _test_jin_shape_reaches_the_board() -> void:
 				same = false
 				break
 	_check(not same, "🔴 삼각 진인데 밑그림이 원 그대로다 — guide_shape가 판까지 안 온다")
-	b.queue_free()
+	panel.queue_free()
+	await process_frame
+	if not had:
+		db.jins.erase(&"jin_probe_tri")   # 🔴 주입 원상복구 (실데이터를 안 건드린다)
+	_check(int((db.call(&"all_jins") as Array).size()) == 3,
+		"주입을 되돌렸다 — Db 진은 다시 3종 (누수 감지기)")
+
 
 	# 🔴 **책 셀 아이콘도 같은 도형이다** (세션47 문양 규약). 셀은 열린 획(세로선·화살표)만
 	# 그려 진처럼 보이지 않았고, 무엇보다 **고르는 순간 손으로 그을 도형과 아무 관계가 없었다**.
@@ -548,18 +533,25 @@ func _test_rune_shapes_are_closed_and_distinct() -> void:
 # ── 🔴 ㉓ 그 모양이 **판까지 온다** + **책 셀 아이콘도 같은 함수** (세션 49) ──
 # 위 ㉒는 함수만 본다. 이게 없으면 `_build_guide`가 늘 불을 그려도 초록불이다
 # (세션 47 문양·세션 48 진이 똑같이 배선을 안 봐서 뮤테이션을 통과시켰다).
+## 🔴 세85 ⑨: 옛 판본은 은퇴한 `choose_rune`으로 판에 직접 꽂았다. 이제 **책 패널의 실경로**를
+## 탄다: `_on_rune_selected(type)` → `recompose()` → `compose_guide_paths(shape, [type], …)`.
+## 이게 끊기면 어떤 룬을 골라도 밑그림이 불(△) 그대로가 된다 — 에러는 안 난다.
 func _test_rune_shape_reaches_the_board() -> void:
-	var b = _make_board()
-	_rub_exact(b)                       # 진을 그리고
-	b.call(&"advance")                  # 룬 단계로
-	b.call(&"choose_rune", 4)           # 번개
-	var g: PackedVector2Array = b.call(&"guide_points")
+	var scene := load("res://src/drawing/ring_forge_panel.tscn") as PackedScene
+	var guides: Array = []
+	var panels: Array = []
+	for rt in [4, 0]:                   # 번개 · 불
+		var panel = scene.instantiate()
+		root.add_child(panel)
+		await process_frame
+		panel.call(&"_on_jin_selected", &"jin_single")
+		panel.call(&"_on_rune_selected", rt)
+		var bd = panel.get_node("Stage/Spread/RingBoard")
+		guides.append(bd.call(&"guide_points"))
+		panels.append(panel)
+	var g: PackedVector2Array = guides[0]
+	var gf: PackedVector2Array = guides[1]
 	_check(g.size() > 2, "번개 룬 밑그림이 판에 선다 (%d점)" % g.size())
-	var b2 = _make_board()
-	_rub_exact(b2)
-	b2.call(&"advance")
-	b2.call(&"choose_rune", 0)          # 불
-	var gf: PackedVector2Array = b2.call(&"guide_points")
 	var same := g.size() == gf.size()
 	if same:
 		for i in g.size():
@@ -567,8 +559,9 @@ func _test_rune_shape_reaches_the_board() -> void:
 				same = false
 				break
 	_check(not same, "🔴 번개 룬인데 판의 밑그림이 불(△) 그대로다 — 룬 타입이 판까지 안 온다")
-	b.queue_free()
-	b2.queue_free()
+	for pn in panels:
+		pn.queue_free()
+	await process_frame
 
 	# 🔴 **책 셀 아이콘도 같은 함수를 부른다** (진 셀이 세션48에 그랬듯). 셀에서 본 모양과
 	# 손으로 그을 모양이 갈라지면 고르는 순간의 의미가 절반 날아간다.
@@ -587,42 +580,30 @@ func _test_rune_shape_reaches_the_board() -> void:
 				"룬 셀이 책 밖으로 안 나간다")
 
 
-## 🔴 세션 25: 진·룬도 **골라야** 밑그림이 뜬다 (사용자: "이게 눌러야 뜨게 해줘").
-## 대부분의 테스트는 그리기를 보므로 여기서 진을 골라 준다 — 미선택 계약 자체는 ⑯이 본다.
+## 판 하나를 세우고 **라이브와 같은 방식으로** 합성 밑그림을 넣는다 (세85 ⑨).
+## 🔴 진입점이 `enter_combined_trace` 하나다 — 라이브(`ring_forge_panel.recompose`)와 같은 문이다.
+## 여기선 진 윤곽만 넣는다(룬·밴드 없음 = 가장 단순한 밑그림). 합성 자체는 아래 [0]이 잰다.
+## 🔴 세82: 문양 색의 정본이 `data/glyphs/*.tres`라 **보드는 주입받아야 안다**
+## (라이브 경로 = `ring_forge_panel._inject_defs`가 `Db.all_glyphs()`를 넘긴다).
 func _make_board():
 	var b = _BoardScript.new()
 	b.size = Vector2(268, 268)
 	root.add_child(b)
-	# 🔴 세82: 문양 이름·색의 정본이 `data/glyphs/*.tres`로 옮겨서 **보드는 주입받아야 안다**
-	# (라이브 경로 = `ring_forge_panel:384`가 `Db.all_glyphs()`를 넘긴다). 안 주입하면
-	# `ring_summary`가 "문양5"로, `set_active_glyph`가 카탈로그 검증을 못 해 실게임과 갈라진다.
 	var db = root.get_node("/root/Db")
 	b.call(&"set_defs", null, [], db.all_glyphs())
 	b.call(&"clear_all")
-	b.call(&"choose_jin")
+	var ctr := Vector2(134.0, 134.0)          # size * 0.5
+	var ro := 268.0 * 0.44                    # _outer_radius()
+	b.call(&"enter_combined_trace",
+		_BoardScript.compose_guide(int(Enums.JinShape.CIRCLE), [], [], ctr, ro))
 	return b
 
 
 ## 지금 가이드 위를 정확히 문지른다 (dev=0 → 정밀도 최대).
-## 🔴 세션 25: 룬 단계에 막 닿았으면 **골라 준다** — 안 고르면 밑그림이 없어 그릴 게 없다.
-## (테스트의 관심은 "그리기"다. 고르기 계약 자체는 ⑯이 본다.)
 func _rub_exact(b) -> void:
-	if int(b.call(&"stage")) == b.STAGE_RUNE and int(b.call(&"rune_idx")) < 0:
-		b.call(&"choose_rune")
 	b.call(&"begin_stroke")
 	for p in b.call(&"guide_points"):
 		b.call(&"trace_stroke", p)
-
-
-func _stage(b) -> int:
-	return int(b.call(&"stage"))
-
-
-## 칸 k에 놓인 문양 코드. 🔴 **내부 필드(_slots)를 더듬지 않는다** — 세션 22 분할 때 그 필드가
-## ring_assembly로 옮겨가면서 이 테스트가 조용히 깨졌었다(런타임 에러로 중단됐는데 failures=0이라
-## "OK"를 찍었다). 발사 계약(assembly)으로 본다.
-func _glyph_at(b, k: int) -> int:
-	return int((b.call(&"get_assembly") as Dictionary).rings[0][k])
 
 
 func _check(cond: bool, msg: String) -> void:
@@ -631,10 +612,109 @@ func _check(cond: bool, msg: String) -> void:
 		print("  ✗ ", msg)
 
 
+# ── [0] 🔴 합성 밑그림 = 진 윤곽 + 룬 + 밴드별 문양-고리 (세85 ⑪ 이관) ──
+## 옛 `test_assembly_slice_auto[1]`. F6 벤치가 은퇴하며 여기로 왔다 — 밑그림을 **만드는** 계약이라
+## 「긋기」와 한 파일에 있는 게 맞다. 🔴 라이브가 부르는 건 `compose_guide_paths`(서브패스)이고
+## `compose_guide`는 그 flatten이다 — **산 쪽을 재고** flatten 동치를 따로 못 박는다.
+func _test_compose_guide_layout() -> void:
+	var db = root.get_node("/root/Db")
+	var ctr := Vector2(200, 200)
+	var ro := 180.0
+	var r5 = db.get_glyph_ring(&"gr_radiate5")
+	var g3 = db.get_glyph_ring(&"gr_gather3")
+	if r5 == null or g3 == null:
+		_check(false, "대조군 문양-고리(gr_radiate5·gr_gather3)가 Db에 없다")
+		return
+	var paths: Array = _BoardScript.compose_guide_paths(
+		int(Enums.JinShape.CIRCLE), [0], [r5, g3], ctr, ro)
+	var guide := PackedVector2Array()
+	for sub in paths:
+		guide.append_array(sub)
+	_check(guide.size() > 40, "합성 가이드 점 다수 (실제 %d)" % guide.size())
+	# 🔴 flat = flatten(subpaths) — 채점(flat)과 렌더(subpaths)가 갈라지면 「본 것 ≠ 그은 것」이 된다
+	var flat: PackedVector2Array = _BoardScript.compose_guide(
+		int(Enums.JinShape.CIRCLE), [0], [r5, g3], ctr, ro)
+	_check(flat.size() == guide.size(), "compose_guide = compose_guide_paths의 flatten (점 수 동일)")
+
+	# 진 윤곽 — 반지름 ≈ ro인 점이 있다
+	_check(_has_at_radius(guide, ctr, ro, ro * 0.06), "진 윤곽(반경 ~ro) 점 존재")
+	# 룬(중심) — 반경 ro*RUNE_GUIDE_FRAC(0.18)≈32 근처 점
+	_check(_has_at_radius(guide, ctr, ro * 0.18, ro * 0.10), "룬(중심) 클러스터 존재")
+	# 밴드 0 (0.42R) · 밴드 1 (0.68R) — 낱개 모티프가 그 반경대에 깔린다
+	_check(_has_at_radius(guide, ctr, ro * 0.42, ro * 0.16), "안쪽 밴드(0.42R) 클러스터 존재")
+	_check(_has_at_radius(guide, ctr, ro * 0.68, ro * 0.16), "바깥 밴드(0.68R) 클러스터 존재")
+
+	# 🔴 빈 밴드는 **점을 안 더한다**(자리는 지킨다 — 서브패스 하나가 빈 배열로 남는다)
+	var one_paths: Array = _BoardScript.compose_guide_paths(
+		int(Enums.JinShape.CIRCLE), [0], [r5, null], ctr, ro)
+	var one := PackedVector2Array()
+	for sub in one_paths:
+		one.append_array(sub)
+	_check(one.size() < guide.size(),
+		"빈 밴드는 점을 안 더한다 (한 밴드 %d < 두 밴드 %d)" % [one.size(), guide.size()])
+	# 🔴 룬 미선택(센티넬 -1) = 룬 서브패스 생략 — 자리 좌표는 안 흔들린다
+	var no_rune := PackedVector2Array()
+	for sub in _BoardScript.compose_guide_paths(
+			int(Enums.JinShape.CIRCLE), [-1], [r5, g3], ctr, ro):
+		no_rune.append_array(sub)
+	_check(no_rune.size() < guide.size(),
+		"룬 미선택 자리는 서브패스를 건너뛴다 (%d < %d)" % [no_rune.size(), guide.size()])
+
+	# 🔴 세85 ⑨(감사 #26): 룬 점열의 단일 소스 `rune_subpath` — 합성이 이걸 그대로 부른다.
+	var rsz: float = _BoardScript.combined_rune_size(ro, 1)
+	var want: PackedVector2Array = _BoardScript.rune_subpath(0, ctr, rsz)
+	var got: PackedVector2Array = paths[1]      # [진 윤곽, 룬, 밴드…]
+	_check(got.size() == want.size() and got.size() > 2,
+		"합성의 룬 서브패스 = rune_subpath 정본 (%d점, 기대 %d점)" % [got.size(), want.size()])
+	if got.size() == want.size():
+		var off := 0.0
+		for i in got.size():
+			off = maxf(off, got[i].distance_to(want[i]))
+		_check(off < 0.001, "🔴 룬 점열이 정본과 갈라졌다 (최대 %.3fpx — 12등분 사본 부활 의심)" % off)
+
+	# 🔴 **룬은 닫힌 인장이다** — `rune_subpath`의 `if seg >= 0` 가드가 마지막 꼭짓점을 되돌려
+	# 첫 점과 만나게 한다. 가드를 빼면 마지막 변이 열려 **터진 획**이 된다(세49 규율).
+	# ⚠ 위 「정본과 같다」 비교만으로는 이걸 못 잡는다 — 둘 다 같은 함수라 같이 열린다(실측).
+	var verts: PackedVector2Array = _BoardScript.rune_guide_verts(0, ctr, rsz)
+	_check(want.size() == (verts.size() - 1) * 12 + 1,
+		"룬 점열 = 변마다 12등분 + 마지막 꼭짓점 (%d점, 기대 %d점)"
+			% [want.size(), (verts.size() - 1) * 12 + 1])
+	_check(want.size() > 1 and want[0].is_equal_approx(want[want.size() - 1]),
+		"🔴 룬 밑그림이 닫힌다 (첫 점 == 끝 점 — `if seg >= 0` 가드가 빠지면 열린다)")
+
+	# 🔴 **자리가 2개면 합성이 실제로 작은 룬을 그린다**(감사 #26의 심장 — 옛 per-piece 식엔
+	# 이 축소가 없어 0.16R 룬 둘이 ±0.28R에서 겹쳤다). ⚠ `combined_rune_size`만 부르면
+	# **합성이 그 함수를 안 써도 그린이다** — 합성 결과의 실제 반경으로 재야 검출력이 생긴다(실측).
+	var rsz2: float = _BoardScript.combined_rune_size(ro, 2)
+	_check(rsz2 < rsz, "자리 2개면 룬 크기 상수가 작아진다 (%.2f < %.2f)" % [rsz2, rsz])
+	var two: Array = _BoardScript.compose_guide_paths(
+		int(Enums.JinShape.CIRCLE), [0, 2], [], ctr, ro)
+	_check(two.size() == 3, "자리 2개 = [진 윤곽, 룬0, 룬1] 세 서브패스 (실제 %d)" % two.size())
+	if two.size() == 3:
+		var slots: Array = _BoardScript.rune_slot_positions(2, ctr, ro)
+		var e0: PackedVector2Array = _BoardScript.rune_subpath(0, slots[0], rsz2)
+		var sub: PackedVector2Array = two[1]
+		var d := 0.0
+		var ok: bool = sub.size() == e0.size()
+		if ok:
+			for i in sub.size():
+				d = maxf(d, sub[i].distance_to(e0[i]))
+		_check(ok and d < 0.001,
+			"🔴 융합진(자리 2)의 룬이 축소된 크기로 합성된다 (어긋남 %.3fpx — 크기 식이 두 벌이면 여기가 빨개진다)" % d)
+
+
+## 중심에서 반경 r ± tol 안에 점이 하나라도 있나.
+func _has_at_radius(pts: PackedVector2Array, c: Vector2, r: float, tol: float) -> bool:
+	for p in pts:
+		if absf(p.distance_to(c) - r) <= tol:
+			return true
+	return false
+
+
 # ── ① 정확히 문지르면 완성도·정밀도·점수가 높다 ──
 func _test_exact_trace_high_score() -> void:
 	var b = _make_board()
-	_check(bool(b.call(&"is_tracing")), "시작 시 진 가이드가 서 있어야")
+	_check(bool(b.call(&"is_tracing")), "합성 밑그림을 넣으면 그릴 것이 선다")
 	_rub_exact(b)
 	_check(float(b.call(&"coverage")) > 0.95, "정확히 문지르면 완성도≈1")
 	_check(float(b.call(&"accuracy")) > 0.95, "선 위를 정확히 → 정밀도≈1")
@@ -665,152 +745,11 @@ func _test_partial_lower_coverage() -> void:
 	for i in mini(pts.size() / 4, pts.size()):
 		b.call(&"trace_stroke", pts[i])
 	_check(float(b.call(&"coverage")) < 0.5, "일부만 문지르면 완성도 낮다")
-	_check(_stage(b) == b.STAGE_JIN, "자동 확정 없음 — 아직 진 단계")
-	# 수동 진행은 여전히 가능(점수만 낮게 기록)
-	_check(String(b.call(&"advance")) == "advanced", "적게 그려도 [다음] 가능")
-	_check(bool(b.call(&"has_jin")), "진 잠김")
-	b.queue_free()
-
-
-# ── ④ 진→룬→문양 전 흐름 + 분석 리포트 ──
-func _test_full_flow_and_analysis() -> void:
-	var b = _make_board()
-	b.call(&"set_active_glyph", G_RADIATE)
-	# 진
-	_rub_exact(b)
-	_check(String(b.call(&"advance")) == "advanced", "진 다음")
-	_check(_stage(b) == b.STAGE_RUNE, "룬 단계")
-	# 룬
-	_rub_exact(b)
-	_check(String(b.call(&"advance")) == "advanced", "룬 다음")
-	_check(_stage(b) == b.STAGE_GLYPH, "문양 단계")
-	# 문양 칸들 (기본 2방 = 2칸). 🔴 세션 25: 칸을 **골라야** 그릴 수 있다. 마지막 칸 advance는 "finished"
-	var open = b.call(&"get_open")
-	var last_result := ""
-	for k in open:
-		b.call(&"select_slot", k)
-		_rub_exact(b)
-		last_result = String(b.call(&"advance"))
-	_check(last_result == "finished", "마지막 문양 칸 다음 = 완성")
-	_check(int(b.call(&"filled_count")) == open.size(), "열린 칸 다 채움")
-
-	var a = b.call(&"get_analysis")
-	_check(a.has("jin") and a.jin != null, "분석에 진 점수")
-	_check(a.has("rune") and a.rune != null, "분석에 룬 점수")
-	_check((a.get("glyphs", []) as Array).size() == open.size(), "분석에 문양 칸별 점수")
-	_check(float(a.get("total", 0.0)) > 0.9, "정확히 그렸으니 종합 점수 높음")
-	_check(String(a.get("grade", "")) != "", "등급 부여됨")
-	b.queue_free()
-
-
-# ── ⑤ 빈 진(열린 칸 없음): 룬까지 그리면 바로 완성된다 ──
-func _test_empty_jin_finishes_after_rune() -> void:
-	var b = _make_board()
-	b.call(&"set_open_slots", [])   # 열린 칸 없음 = 빈 진 (세션60: set_template 개명)
-	_rub_exact(b)
-	b.call(&"advance")            # 진
-	_rub_exact(b)
-	var r = String(b.call(&"advance"))   # 룬 → 문양 없음 → 완성
-	_check(r == "finished", "빈 진은 룬 다음 바로 완성")
-	_check(bool(b.call(&"can_commit")), "진·룬 그렸으면 맺기 가능")
-	b.queue_free()
-
-
-## 진→룬 그려 문양 단계에 도달하고 **칸 0을 고른다** (진 미선택 폴백 = 2방 [0,2]).
-## 🔴 세션 25: 칸은 자동으로 안 잡힌다 — 도착하면 미선택(-1)이라 여기서 골라 줘야 한다.
-## 미선택 그 자체는 ⑥이 검증한다.
-func _reach_glyph_stage(b) -> void:
-	_rub_exact(b)
-	b.call(&"advance")   # 진
-	_rub_exact(b)
-	b.call(&"advance")   # 룬 → 문양 단계 (칸 미선택)
-	b.call(&"select_slot", 0)
-
-
-# ── ⑥ 문양 칸 자유 편집(세션 15): 칸 전환 시 이전 칸 자동 잠금 + 재편집이 교체(중복 아님) ──
-func _test_glyph_free_edit_and_relock() -> void:
-	var b = _make_board()
-	# 🔴 세션 25: 문양 단계에 **칸이 안 잡힌 채로** 도착한다 (사용자: "8방 했을때 이미
-	# 주황색으로 선택되어있어 그거 지워주고"). 예전엔 첫 빈 칸을 멋대로 잡아, 아무것도
-	# 안 골랐는데 주황 강조가 떠 있었다. 칸을 고르는 건 사용자다.
-	_rub_exact(b)
-	b.call(&"advance")
-	_rub_exact(b)
-	b.call(&"advance")
-	_check(int(b.call(&"trace_slot")) == -1, "문양 단계 도착 = 칸 미선택 (멋대로 안 잡는다)")
-	_check(b.call(&"guide_points").is_empty(), "칸을 안 골랐으면 밑그림도 없다")
-	_check(String(b.call(&"advance")) == "none", "칸을 안 고른 채 [다음] = 아무 일도 없다")
-	b.call(&"select_slot", 0)
-	_check(int(b.call(&"trace_slot")) == 0, "클릭한 칸이 잡힌다")
-	_check(b.call(&"guide_points").size() > 2, "칸을 고르면 밑그림이 선다")
-	# slot0 = 발산(1)
-	b.call(&"set_active_glyph", G_RADIATE)
-	_rub_exact(b)
-	b.call(&"select_slot", 2)             # 다른 칸으로 전환 → slot0 자동 잠금
-	_check(_glyph_at(b, 0) == G_RADIATE, "칸 전환 시 이전 칸 자동 잠금")
-	_check(int(b.call(&"trace_slot")) == 2, "고른 칸으로 전환")
-	# slot2 = 응집(0)
-	b.call(&"set_active_glyph", G_GATHER)
-	_rub_exact(b)
-	b.call(&"select_slot", 0)             # slot2 자동 잠금 + slot0 재선택(재편집)
-	_check(_glyph_at(b, 2) == G_GATHER, "두번째 칸도 잠김")
-	var locked_a := int(b.call(&"locked_count"))
-	# slot0 재편집 — 발산→응집으로 문양 교체
-	b.call(&"set_active_glyph", G_GATHER)
-	_rub_exact(b)
-	b.call(&"advance")
-	_check(_glyph_at(b, 0) == G_GATHER, "이미 채운 칸을 다시 골라 문양 교체")
-	_check(int(b.call(&"locked_count")) == locked_a, "재편집은 먹선 교체(중복 추가 아님)")
-	b.queue_free()
-
-
-# ── ⑦ 문양 개별 크기(세션 15): 칸마다 휠 스케일, 서로 독립, 상·하한 클램프 ──
-func _test_glyph_per_slot_scale() -> void:
-	var b = _make_board()
-	_reach_glyph_stage(b)
-	_check(is_equal_approx(float(b.call(&"_glyph_scale_of", 0)), 1.0), "기본 문양 크기 1.0")
-	b.call(&"_resize_current", 0.06)      # 휠 업 (현재 칸=0)
-	_check(float(b.call(&"_glyph_scale_of", 0)) > 1.0, "휠 업 → 그 칸만 커진다")
-	_check(is_equal_approx(float(b.call(&"_glyph_scale_of", 2)), 1.0), "다른 칸 크기는 독립")
-	for i in 60:
-		b.call(&"_resize_current", 0.06)
-	_check(float(b.call(&"_glyph_scale_of", 0)) <= float(b.GLYPH_SCALE_MAX) + 0.001, "상한 클램프")
-	for i in 80:
-		b.call(&"_resize_current", -0.06)
-	_check(float(b.call(&"_glyph_scale_of", 0)) >= float(b.GLYPH_SCALE_MIN) - 0.001, "하한 클램프")
-	b.queue_free()
-
-
-# ── ⑧ 🔴 I3 회귀 (세션 22): 칸에서 먼 곳을 클릭해도 **현재 칸을 뺏기지 않는다** ──
-## 버그: _nearest_open_slot에 거리 컷오프가 없어서 판 아무 데나 클릭해도 최근접 열린 칸이 잡혔고,
-## select_slot이 현재 칸 coverage > COMMIT_COVER면 **자동 확정**해 버렸다 →
-## **칸 0을 그리다 획을 칸 2 쪽에 조금 가깝게 시작하면 칸 0이 멋대로 확정되고 넘어갔다.**
-## *"마음에 들 때까지 다시 그린다"* 설계와 정면 충돌.
-func _test_far_click_does_not_steal_slot() -> void:
-	var b = _make_board()
-	_reach_glyph_stage(b)                  # 진 미선택 폴백 2방 [0,2], 현재 칸 = 0
-	_check(int(b.call(&"trace_slot")) == 0, "현재 칸 = 0")
-
-	# 칸 0을 자동확정 문턱 위로 그려 둔다 (버그의 방아쇠 조건)
-	_rub_exact(b)
-	_check(float(b.call(&"coverage")) > float(b.COMMIT_COVER), "칸 0을 문턱 위로 그렸다")
-
-	# 두 칸 모두에서 먼 지점 — 칸 2 쪽으로 치우쳤지만 어느 칸에도 안 붙었다
-	var far := Vector2(150, 134)           # 판 중앙 근처 (칸 2가 최근접이나 한참 멀다)
-	_check(int(b.call(&"_nearest_open_slot", far)) == -1, "칸에서 멀면 -1 (컷오프)")
-
-	# 실제 입력 경로로도 확인 — 먼 곳 클릭이 칸 0을 확정하면 안 된다
-	var ev := InputEventMouseButton.new()
-	ev.button_index = MOUSE_BUTTON_LEFT
-	ev.pressed = true
-	ev.position = far
-	b.call(&"_gui_input", ev)
-	_check(int(b.call(&"trace_slot")) == 0, "먼 곳 클릭 — 현재 칸(0)을 유지한다")
-	_check(_glyph_at(b, 0) == GLYPH_NONE, "먼 곳 클릭 — 칸 0이 멋대로 확정되지 않는다")
-
-	# 반대: 칸 위를 클릭하면 정상적으로 그 칸으로 넘어간다 (컷오프가 기능을 죽이지 않았다)
-	var on_slot2: Vector2 = b.call(&"_slot_pos", 2)
-	_check(int(b.call(&"_nearest_open_slot", on_slot2)) == 2, "칸 위를 클릭하면 그 칸이 잡힌다")
+	# 🔴 **자동 확정이 없다** — 적게 그었다고 판이 멋대로 맺거나 되돌리지 않는다.
+	# 맺을지 말지는 패널의 [분석 ▶]→[마력 주입]이 정하고, 판은 점수만 낮게 준다.
+	_check(bool(b.call(&"is_tracing")), "적게 그려도 계속 그릴 수 있다 (자동 확정·리셋 없음)")
+	_check(float(b.call(&"piece_score")) < float(b.call(&"coverage")) + 0.001,
+		"점수는 완성도를 못 넘는다 (완성도 × 정밀도 보정)")
 	b.queue_free()
 
 

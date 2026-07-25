@@ -14,8 +14,9 @@ signal notice(text: String, warn: bool)
 ## 고른 슬롯이 바뀌었다 — HUD가 강조 칸을 옮긴다.
 signal slot_changed(slot: int)
 
-## 🔴 위력은 여기서 계산하지 않는다 — 리포트·발사·HUD가 **같은 함수**를 본다 (core에 있는 이유).
-const RingPower := preload("res://src/core/ring_power.gd")
+## 🔴 위력·마나 비용은 여기서 계산하지 않는다 — 리포트·발사·HUD가 **같은 함수**를 본다.
+## 마나는 `GameState.cast_mana_cost()`(= `RingPower` 기본값 × 장비 보정)를 부른다 — 세85에
+## `RingPower`를 직접 preload하던 줄을 걷었다(중간 참조가 남으면 장비 보정을 빼먹기 쉽다).
 ## 조준선 길이·색 (연출값 — 밸런스 아님). 빈 슬롯은 흐리게 — "못 쏨"이 손끝에서 보인다 (세션59
 ## 매직볼 은퇴 후 이 흐림이 다시 **참 신호**다).
 const AIM_FROM := 14.0
@@ -89,9 +90,12 @@ func fire() -> void:
 	if design == null:
 		notice.emit("장착된 진이 없다 — 책상(E)에서 그려 장착해라", true)
 		return
-	# 🔴 마나 소모 — 이게 없으면 좌클릭 연사다 (세션 35). 비용은 RingPower가 판다(수치 박지 말 것).
+	# 🔴 마나 소모 — 이게 없으면 좌클릭 연사다 (세션 35). 수치를 여기 박지 마라.
+	# 🔴 세85: **`GameState.cast_mana_cost()`를 부른다** — 장착 지팡이의 `wand_mana_mult`가 얹힌 값이다
+	# (은퇴한 `wand_pattern`을 대신하는 실효 축). HUD 마나 막대도 같은 함수를 봐야 「부족」 경계와
+	# 실제 소모가 안 갈라진다.
 	# ⚠ debug_free_cast(에디터 실행 전용) = 테스트 편의 무소모 — 익스포트에선 항상 false.
-	if not GameState.debug_free_cast and not GameState.spend_mana(RingPower.cast_mana_cost()):
+	if not GameState.debug_free_cast and not GameState.spend_mana(GameState.cast_mana_cost()):
 		notice.emit("마나가 부족하다 — 잠시 기다려라", true)
 		return
 	EventBus.ring_cast_requested.emit(design.to_assembly(), _muzzle(), _aim)

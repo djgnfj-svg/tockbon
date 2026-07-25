@@ -11,6 +11,7 @@ goal = 2
 target = &"station_craft"
 count = 1
 reward_items = {
-&"mat_moon_sap": 1
+&"mat_moon_sap": 1,
+&"mat_night_bloom": 2
 }
 requires = &"q03_build_refine"

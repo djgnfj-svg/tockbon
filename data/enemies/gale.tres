@@ -41,6 +41,4 @@ params = {
 "volley_period": 4.5,
 "weakness_mult": 1.6
 }
-is_elite = true
 drops = Array[ExtResource("1_algcq")]([SubResource("Resource_xf2oc")])
-night_buff = 1.2

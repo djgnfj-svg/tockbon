@@ -5,7 +5,7 @@
 [resource]
 script = ExtResource("1")
 id = &"craft_wand_ring"
-display_name = "둘레의 지팡이 제작"
+display_name = "샘의 지팡이 제작"
 inputs = {
 &"mat_beetle_shell": 5,
 &"mat_mist_essence": 4

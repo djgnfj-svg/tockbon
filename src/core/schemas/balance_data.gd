@@ -56,8 +56,12 @@ extends Resource
 
 @export_group("기둥 = 응집(←) 착탄 축")
 # ── 기둥 — 응집(←) 칸이 모인 착탄점에 선다 (ring_spell_system._spawn_pillar, gather 수만큼 굵다)
-## 기둥 피해 = 탄 피해 × 이 값. 모아 그린 보상이라 세다
-@export var pillar_damage_mult: float = 0.9
+# 🔴 **세85: `pillar_damage_mult`(피해 배수)를 걷었다** (세84 감사 #20 · 사용자 결정 ⑧).
+# 소비자가 0곳이었다 — `_spawn_pillar`는 `pillar.setup(fire.damage, …)`로 **배수 없이** 넘기고,
+# 옛 소비자였던 `shockwave.gd`는 세67에 삭제됐다. 그런데 주석은 「기둥 피해 = 탄 피해 × 이 값」이라
+# 적혀 있어 **0.9→0.4로 내려도 한 톨도 안 변하는데** 조인 줄 알게 만들었다(감사 T3 「거짓 손잡이」).
+# 지금 기둥 세기를 쥔 값은 아래 **지속·틱**뿐이다(수명 0.5 ÷ 틱 0.12 = 4~5틱).
+# ⚠ 되살리려면 **소비자를 같은 커밋에** 붙여라(`_spawn_pillar`가 곱하게) — 그게 ⑧의 규율이다.
 ## 기둥 지속(초) — 이 동안 안에 있는 적을 계속 때린다
 @export var pillar_duration_sec: float = 0.5
 ## 기둥이 적을 때리는 간격(초)
@@ -208,7 +212,6 @@ extends Resource
 @export var dash_duration_sec: float = 0.2
 @export var dash_cooldown_sec: float = 0.6
 @export var player_hp_max: float = 100.0
-@export var wand_basic_damage: float = 4.0
 ## 탁본 모션 무방비 시간 (GDD §6)
 @export var rubbing_duration_sec: float = 1.5
 ## 기준 사거리(초). 실제 수명 = 이 값 × 진 사거리 배율
@@ -342,18 +345,13 @@ extends Resource
 ## 다 떨어지면 소모·효과 적립 없이 계속 그린다(기본잉크처럼) — 그만큼 비율(효과)이 낮아진다.
 @export var special_ink_per_stroke: int = 1
 
-@export_group("거점 건설 (세션37)")
-# 🔴 스테이션 건설 비용 {station_codex_id: {item_id: 수량}}. 거점은 **재료로 직접 짓는다**
-# (사용자 확정 세션37: "거점을 내가 직접 업데이트해야 될 거, 시작했을 때 아무것도 없는 상태가 중요").
-# 🔴 codex를 건설 상태로 쓴다(룬 해금과 같은 기전) → 저장·is_unlocked·**UNLOCK 퀘스트 자동 진행**이
-# 전부 공짜로 재사용된다. "정제대를 지어라" 퀘스트가 건설 순간(codex_unlocked) 저절로 완료된다.
-# 🔴 **새 스테이션 = 여기 한 줄 + base.tscn 노드 하나.** 읽는 곳은 base.gd 하나(런타임 인스턴스 읽기라
-# const-folding 함정 없음). ⚠ 배선이지 튜닝이 아니다 — 개수·재료는 플레이하며 조율(사용자 몫).
-@export var station_build_costs: Dictionary = {
-	&"station_refine": {&"mat_slime_core": 3, &"mat_vine": 2},
-	&"station_craft": {&"mat_hound_fang": 2, &"mat_beetle_shell": 2},
-	&"station_decode": {&"mat_slime_core": 5, &"mat_moon_sap": 1},
-}
+# ── 🔴 세85: `station_build_costs`(거점 건설 비용 dict)를 통째로 걷었다 ──────────────────
+# (세84 감사 #20·#32 · 사용자 결정 ⑧·⑩). **dict 전체의 소비자가 0곳**이었다.
+# 세66 도파민 재편이 「빈 거점 재료 건설」을 은퇴시켜(마을은 처음부터 완비) `base.gd`가 더는
+# 비용을 사지 않는데, 비용표만 남아 「건설 게이트가 아직 있다」는 거짓 신호를 줬다(감사 T2·T3).
+# ⚠ **「새 스테이션 = 여기 한 줄」은 이제 거짓이다** — 새 스테이션 = `base.tscn` 노드 + `base.gd`
+#   존 배선뿐이다(건설 단계가 없다). 되살리려면 `base.gd`의 `_station_interact` 계열을 같이 살려라.
+# 되돌림 = git 이력.
 
 @export_group("경제")
 ## 수리비 = 원본 ink_cost 대비 비율

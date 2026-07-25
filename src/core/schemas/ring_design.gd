@@ -29,7 +29,8 @@ extends Resource
 ## 🔴 층 인덱스 = 감쌈 깊이(0이 가장 안쪽). ⚠ 읽을 땐 반드시 `layers_of()`를 거쳐라 —
 ## 옛 도안은 `rings`가 **정수 8칸**이라 `rings[0]`이 칸 값이지 층이 아니다.
 @export var rings: Array = []
-## 진이 연 칸 인덱스 (렌더·요약용 — 세션60부터 출처 = JinDef.glyph_slots. 도안은 그때의 스냅샷)
+## 진이 연 칸 인덱스 (렌더·요약용 — 🔴 세85 정정: 출처는 `build_assembly()`의 **층 합집합**이다.
+## `JinDef.glyph_slots`는 은퇴했다 — 그 필드를 되살려 여기에 실어도 발사·저장은 안 읽는다)
 @export var open: Array = []
 ## 🔴 분석 종합 점수(0~1) = **손으로 얼마나 잘 그렸나**. 세션 23부터 **위력을 정한다**
 ## (`src/core/ring_power.gd`). 세션 22까지는 계산·저장만 되고 아무도 안 읽어서

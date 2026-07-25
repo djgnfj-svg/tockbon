@@ -5,7 +5,7 @@
 [resource]
 script = ExtResource("1")
 id = &"craft_wand_fork"
-display_name = "세 갈래 붓대 제작"
+display_name = "쾌속 붓대 제작"
 inputs = {
 &"mat_hound_fang": 4,
 &"mat_beetle_shell": 2,

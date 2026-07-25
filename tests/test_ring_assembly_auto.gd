@@ -1,22 +1,27 @@
 extends SceneTree
-## 🔴 고리 **조립 상태기계** 계약 검증 (세션 22) — 헤드리스 실행:
+## 🔴 고리 **조립 계약** 검증 (세션 22 신설 · 세85 ⑦⑨ 재편) — 헤드리스 실행:
 ##   ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_ring_assembly_auto.gd
 ## 전 항목 통과 시 "TEST_RING_ASSEMBLY_OK" 출력 후 종료 코드 0.
 ##
-## 🔴 **왜 따로 있나** (docs/REFACTOR_PLAN.md C4): test_ring_trace_auto는 **추적·점수 중심**이고
-## 조립 상태기계(단계 전이·진이 칸을 여는 규칙·assembly 계약)를 검증하지 않는다.
-## 세션60: 문양본(템플릿) 축이 진에 흡수됐다 — 열린 칸 = `JinDef.glyph_slots` →
-## `choose_jin(jd)` → `set_open_slots`. 스텐실·걷어내기·필터 계약(④⑤⑥)은 그대로다.
-## ring_board(757줄)를 ring_assembly/trace_scorer/ring_board로 쪼개기 **전에** 이 계약을 못 박아,
-## 쪼개다 조용히 깨지는 걸 잡는다.
+## 🔴🔴 **세85 ⑦⑨에 이 파일의 절반이 사라졌다 — 재는 몸이 죽어 있었기 때문이다.**
+## 옛 판본은 판(`RingBoard`)의 **per-piece 상태기계**를 쟀다: `choose_jin`→`_rub`→`advance`로
+## 진→룬→문양 단계를 밟고 `select_slot`으로 칸을 고르고 `set_open_slots`로 스텐실을 확인했다.
+## 그런데 그 경로는 **세70에 은퇴**했고(라이브는 조립본을 통째로 긋는 COMBINED 하나) src 호출자가
+## 0이었다 — 즉 **그물이 죽은 몸을 성실히 통과시켜 「전 스위트 그린」이 라이브의 근거로
+## 과대평가되고 있었다**(세84 감사 T2). 세85 ⑨가 그 몸을 걷었고, 여기서 그 그물도 같이 걷는다.
+## 「진이 칸을 연다」(`JinDef.glyph_slots`) 축도 세85 ⑦에 은퇴했다(감사 #8) — ④⑤⑥⑧⑫⑬⑮ 소멸.
 ##
-## 여기 있는 건 전부 **public API 계약**이다 — 분할 전후 **양쪽 모두** 통과해야 한다.
-## 내부 필드(_slots 등)를 더듬지 않는다: 그건 쪼개면 옮겨 다니는 물건이라 계약이 아니다.
+## 🔴 **남은 것 = 지금도 살아 있는 계약뿐**:
+##   • assembly 스냅샷의 **모양**(발사·저장이 읽는 dict — 바뀌면 둘 다 조용히 깨진다)
+##   • `clear_all`이 판을 처음으로 돌린다
+##   • 🔴 **진 .tres Db 로드**(세50 파싱 침묵사 그물 — 진 하나가 증발해도 다른 데선 안 빨개진다)
+##   • 🔴 **`jin_slot_dots` 기하**(「칸 0=위, 시계방향」 — HUD·Tab 미니 다이어그램의 **라이브** 소비자)
+##
+## 여기 있는 건 전부 **public API 계약**이다. 내부 필드(_slots 등)를 더듬지 않는다:
+## 그건 리팩터 때 옮겨 다니는 물건이라 계약이 아니다.
 ##
 ## 주의: -s 모드는 오토로드보다 먼저 컴파일 — 오토로드 식별자·모듈 preload 금지. 첫 프레임 후 load().
 
-const G_GATHER := 0
-const G_RADIATE := 1
 const GLYPH_NONE := -1
 const SLOTS := 8
 
@@ -37,21 +42,12 @@ func _run() -> void:
 	_BoardScript = load("res://src/drawing/ring_board.gd")
 
 	_test_initial_state()
-	_test_stage_transitions()
-	_test_can_commit_gate()
-	_test_open_slots_stencil()
-	_test_open_slots_shrink_clears()
-	_test_open_slots_filters_garbage()
 	_test_assembly_shape()
-	_test_assembly_records_glyphs()
 	_test_clear_all_resets()
-	_test_signals()
-	_test_finish_without_glyphs()
-	_test_jin_opens_slots()
-	_test_jin_swap_before_lock()
 	_test_jin_db_loaded()
-	_test_jin_default_slots()
+	_test_jin_schema_defaults()
 	_test_jin_slot_dots()
+	_test_retired_api_stays_retired()
 
 	if failures == 0:
 		print("TEST_RING_ASSEMBLY_OK — 전 항목 통과")
@@ -69,32 +65,6 @@ func _make_board():
 	return b
 
 
-## 지금 가이드 위를 정확히 문지른다 — 조각을 잠글 수 있는 상태로 만든다.
-## 🔴 세션 25: 진·룬은 **골라야** 밑그림이 뜬다 (사용자: "이게 눌러야 뜨게 해줘").
-## 아직 안 골랐으면 골라 준다 — 이 파일의 관심은 조립 상태기계지 고르기가 아니다
-## (고르기 계약은 test_ring_trace_auto ⑯이 본다).
-func _rub(b) -> void:
-	match int(b.call(&"stage")):
-		b.STAGE_JIN:
-			if int(b.call(&"jin_idx")) < 0:
-				b.call(&"choose_jin")
-		b.STAGE_RUNE:
-			if int(b.call(&"rune_idx")) < 0:
-				b.call(&"choose_rune")
-	b.call(&"begin_stroke")
-	for p in b.call(&"guide_points"):
-		b.call(&"trace_stroke", p)
-
-
-## 진→룬을 그려 문양 단계까지 간다. 🔴 세션 25: 칸은 자동으로 안 잡힌다 —
-## 그릴 칸은 부르는 쪽이 `select_slot`으로 고른다 (미선택 계약은 ②가 못 박는다).
-func _reach_glyph(b) -> void:
-	_rub(b)
-	b.call(&"advance")
-	_rub(b)
-	b.call(&"advance")
-
-
 func _check(cond: bool, msg: String) -> void:
 	if not cond:
 		failures += 1
@@ -102,225 +72,66 @@ func _check(cond: bool, msg: String) -> void:
 
 
 # ── ① 빈 판의 초기 계약 ──
+## 🔴 세85 ⑨: `is_tracing()`이 **거짓**인 게 새 계약이다. 예전엔 `clear_all`이 per-piece 진
+## 가이드를 세워 참이었는데, 지금은 합성 밑그림의 소유자가 패널이라 판은 비운 채로 기다린다
+## (라이브는 `clear_all()` 직후 `recompose()`가 COMBINED를 넣는다 — `test_base_auto`가 그 경로를 잰다).
 func _test_initial_state() -> void:
 	var b = _make_board()
-	_check(int(b.call(&"stage")) == b.STAGE_JIN, "빈 판은 진 단계에서 시작")
 	_check(not bool(b.call(&"has_jin")), "초기: 진 없음")
 	_check(not bool(b.call(&"has_rune")), "초기: 룬 없음")
 	_check(not bool(b.call(&"can_commit")), "초기: 맺기 불가")
-	_check(bool(b.call(&"is_tracing")), "초기: 진 가이드가 서 있다")
+	_check(not bool(b.call(&"is_tracing")),
+		"🔴 빈 판은 그릴 것이 없다 (참이면 판이 제멋대로 가이드를 세운 것 — 패널 소유 계약 위반)")
 	_check(int(b.call(&"filled_count")) == 0, "초기: 채운 칸 0")
-	_check((b.call(&"get_open") as Array) == [0, 2], "진 미선택 폴백 = [0,2]")
 	b.queue_free()
 
 
-# ── ② 단계 전이는 진→룬→문양 순서다 ──
-func _test_stage_transitions() -> void:
-	var b = _make_board()
-	_rub(b)
-	_check(String(b.call(&"advance")) == "advanced", "진 [다음] = advanced")
-	_check(int(b.call(&"stage")) == b.STAGE_RUNE, "진 다음은 룬 단계")
-	_check(bool(b.call(&"has_jin")), "진이 잠겼다")
-	_check(not bool(b.call(&"has_rune")), "아직 룬은 안 잠김")
-	_rub(b)
-	_check(String(b.call(&"advance")) == "advanced", "룬 [다음] = advanced")
-	_check(int(b.call(&"stage")) == b.STAGE_GLYPH, "룬 다음은 문양 단계")
-	_check(bool(b.call(&"has_rune")), "룬이 잠겼다")
-	# 🔴 세션 25: 칸을 **멋대로 안 잡는다** (사용자: "8방 했을때 이미 주황색으로 선택되어있어").
-	_check(int(b.call(&"trace_slot")) == -1, "문양 단계 도착 = 칸 미선택")
-	b.queue_free()
-
-
-# ── ③ can_commit = 진·룬이 있어야 참 (문양은 없어도 된다 = 빈 진) ──
-func _test_can_commit_gate() -> void:
-	var b = _make_board()
-	_check(not bool(b.call(&"can_commit")), "아무것도 안 그림 → 맺기 불가")
-	_rub(b)
-	b.call(&"advance")
-	_check(not bool(b.call(&"can_commit")), "진만 그림 → 여전히 맺기 불가")
-	_rub(b)
-	b.call(&"advance")
-	_check(bool(b.call(&"can_commit")), "진+룬 → 문양 없어도 맺기 가능(빈 진)")
-	b.queue_free()
-
-
-# ── ④ 🔴 열린 칸 = 스텐실 — 열린 칸만 채울 수 있다 (세션60: 여는 주체가 문양본→진으로 바뀜) ──
-func _test_open_slots_stencil() -> void:
-	var b = _make_board()
-	b.call(&"set_open_slots", [1, 2, 3])
-	_check((b.call(&"get_open") as Array) == [1, 2, 3], "열린 칸 = [1,2,3]")
-	_reach_glyph(b)
-	# 🔴 세션 25: 열린 칸 목록이 정하는 건 **어느 칸을 여는가**뿐이다. 채우는 **순서는 사용자가**
-	# 칸을 클릭해 정한다 — 예전엔 열린 목록 순으로 자동 진행했고, 그래서 도착하자마자
-	# 첫 칸이 잡혀 있었다. 스텐실 계약(닫힌 칸은 못 건드린다)은 그대로다.
-	b.call(&"select_slot", 3)
-	_check(int(b.call(&"trace_slot")) == 3, "열린 칸은 순서와 무관하게 고른다")
-	b.call(&"select_slot", 0)
-	_check(int(b.call(&"trace_slot")) == 3, "닫힌 칸(0)은 못 고른다 — 열린 칸이 스텐실이다")
-	_rub(b)
-	b.call(&"advance")
-	_check(int(b.call(&"filled_count")) == 1, "고른 칸이 채워진다")
-	b.queue_free()
-
-
-# ── ⑤ 🔴 열린 칸을 좁히면 닫힌 칸의 문양은 걷힌다 (걷어내기 계약 — 방어선·미래 경로) ──
-func _test_open_slots_shrink_clears() -> void:
-	var b = _make_board()
-	b.call(&"set_open_slots", [0, 2, 4, 6])
-	b.call(&"set_active_glyph", G_RADIATE)
-	_reach_glyph(b)
-	b.call(&"select_slot", 0)
-	_rub(b)
-	b.call(&"advance")          # 칸 0 채움
-	_check(int(b.call(&"filled_count")) == 1, "칸 하나 채움")
-	# 칸 0을 닫는 목록으로 교체 → 그 문양은 사라져야 한다
-	b.call(&"set_open_slots", [2, 6])
-	_check((b.call(&"get_open") as Array) == [2, 6], "새로 연 칸 목록")
-	_check(int(b.call(&"filled_count")) == 0, "닫힌 칸(0)의 문양은 걷힌다")
-	var rings: Array = (b.call(&"get_assembly") as Dictionary).rings[0]
-	_check(int(rings[0]) == GLYPH_NONE, "assembly에도 닫힌 칸은 빈칸")
-	b.queue_free()
-
-
-# ── ⑥ set_open_slots는 범위 밖·중복을 걸러낸다 (.tres 오염값도 이 필터가 마지막 방어선) ──
-func _test_open_slots_filters_garbage() -> void:
-	var b = _make_board()
-	b.call(&"set_open_slots", [2, 2, -1, 99, 5])
-	_check((b.call(&"get_open") as Array) == [2, 5], "중복·범위 밖(-1·99)은 걸러진다")
-	b.call(&"set_open_slots", [])
-	_check((b.call(&"get_open") as Array).is_empty(), "빈 목록 = 빈 진(열린 칸 없음)")
-	b.queue_free()
-
-
-# ── ⑦ 🔴 assembly = 발사 계약. 모양이 바뀌면 발사·저장이 조용히 깨진다 ──
+# ── ② 🔴 assembly = 발사·저장 계약. 모양이 바뀌면 둘 다 조용히 깨진다 ──
 func _test_assembly_shape() -> void:
 	var b = _make_board()
 	var a: Dictionary = b.call(&"get_assembly")
 	_check(int(a.get("ring_count", -1)) == 1, "assembly.ring_count = 1 (진 하나)")
-	_check(a.has("rune"), "assembly에 rune")
+	_check(a.has("rune") and a.has("runes"), "assembly에 rune(primary)·runes(목록)")
 	_check(a.has("rings") and (a.rings as Array).size() == 1, "assembly.rings = 1줄")
 	_check((a.rings[0] as Array).size() == SLOTS, "고리 한 줄 = 8칸 고정")
 	_check(a.has("open"), "assembly에 open(열린 칸)")
 	for k in SLOTS:
 		_check(int(a.rings[0][k]) == GLYPH_NONE, "빈 판의 모든 칸 = 빈칸(-1)")
+	# 🔴 세26 계약 — 판의 assembly에도 score·잉크가 실린다(안 실으면 조용히 기준 위력).
+	# ⚠ 라이브 발사 계약은 `ring_forge_panel.build_assembly()`가 만든다(`test_jin_layers_auto[7]`).
+	#   판의 이 dict는 **특별잉크 집계 창구**로 그쪽이 부른다 — 키가 빠지면 그 경로가 죽는다.
+	_check(a.has("score") and a.has("ink") and a.has("special_ink") and a.has("special_ratio"),
+		"판 assembly에 score·ink·special_ink·special_ratio (패널이 특별잉크를 여기서 뽑는다)")
 	b.queue_free()
 
 
-# ── ⑧ 채운 문양이 assembly의 **그 칸에** 그 코드로 들어간다 ──
-func _test_assembly_records_glyphs() -> void:
-	var b = _make_board()
-	b.call(&"set_open_slots", [0, 4])
-	_reach_glyph(b)
-	b.call(&"select_slot", 0)
-	b.call(&"set_active_glyph", G_RADIATE)
-	_rub(b)
-	b.call(&"advance")          # 칸 0 = 발산
-	b.call(&"select_slot", 4)
-	b.call(&"set_active_glyph", G_GATHER)
-	_rub(b)
-	b.call(&"advance")          # 칸 4 = 응집
-	var a: Dictionary = b.call(&"get_assembly")
-	_check(int(a.rings[0][0]) == G_RADIATE, "칸 0 = 발산(1)")
-	_check(int(a.rings[0][4]) == G_GATHER, "칸 4 = 응집(0)")
-	_check(int(a.rings[0][2]) == GLYPH_NONE, "안 연 칸(2)은 빈칸")
-	_check((a.open as Array) == [0, 4], "assembly.open = 열린 칸")
-	_check(int(b.call(&"filled_count")) == 2, "채운 칸 2")
-	b.queue_free()
-
-
-# ── ⑨ clear_all은 상태기계를 처음으로 되돌린다 ──
+# ── ③ clear_all은 판을 처음으로 되돌린다 ──
 func _test_clear_all_resets() -> void:
 	var b = _make_board()
-	_reach_glyph(b)
-	_rub(b)
-	b.call(&"advance")
+	# 합성 가이드를 넣고 좀 그은 뒤 비운다 (라이브가 하는 그대로)
+	var ctr: Vector2 = b.size * 0.5
+	var guide := PackedVector2Array()
+	for i in 40:
+		guide.append(ctr + Vector2.from_angle(TAU * float(i) / 40.0) * 60.0)
+	b.call(&"enter_combined_trace", guide)
+	b.call(&"begin_stroke")
+	for p in guide:
+		b.call(&"trace_stroke", p)
+	_check(float(b.call(&"coverage")) > 0.0, "그었으니 완성도 > 0 (대조군)")
 	b.call(&"clear_all")
-	_check(int(b.call(&"stage")) == b.STAGE_JIN, "clear_all → 진 단계로")
 	_check(not bool(b.call(&"has_jin")) and not bool(b.call(&"has_rune")), "clear_all → 진·룬 없음")
 	_check(not bool(b.call(&"can_commit")), "clear_all → 맺기 불가")
 	_check(int(b.call(&"filled_count")) == 0, "clear_all → 채운 칸 0")
+	_check(is_zero_approx(float(b.call(&"coverage"))), "clear_all → 먹선·점수도 비운다")
+	_check(not bool(b.call(&"is_tracing")), "clear_all → 그릴 것 없음 (패널이 recompose로 다시 넣는다)")
 	var a: Dictionary = b.call(&"get_assembly")
 	for k in SLOTS:
 		_check(int(a.rings[0][k]) == GLYPH_NONE, "clear_all → assembly 전 칸 비움")
 	b.queue_free()
 
 
-# ── ⑩ 상태가 바뀌면 바깥(패널)에 알린다 — 시그널이 계약이다 ──
-func _test_signals() -> void:
-	var b = _make_board()
-	var stages: Array = []
-	var changed := [0]
-	b.stage_advanced.connect(func(s: int) -> void: stages.append(s))
-	b.assembly_changed.connect(func() -> void: changed[0] += 1)
-
-	_rub(b)
-	b.call(&"advance")
-	_check(stages.size() == 1 and int(stages[0]) == b.STAGE_RUNE, "진 잠금 → stage_advanced(룬)")
-	_check(changed[0] >= 1, "진 잠금 → assembly_changed")
-
-	var before: int = changed[0]
-	b.call(&"set_open_slots", [0, 2, 4, 6])
-	_check(changed[0] > before, "열린 칸 교체 → assembly_changed (칸이 바뀌었다)")
-	b.queue_free()
-
-
-# ── ⑪ 빈 진: 문양 하나 없이 맺어도 유효한 assembly가 나온다 ──
-func _test_finish_without_glyphs() -> void:
-	var b = _make_board()
-	b.call(&"set_open_slots", [])
-	_rub(b)
-	b.call(&"advance")
-	_rub(b)
-	_check(String(b.call(&"advance")) == "finished", "빈 진은 룬 다음 바로 완성")
-	_check(bool(b.call(&"can_commit")), "빈 진도 맺을 수 있다")
-	var a: Dictionary = b.call(&"get_assembly")
-	_check((a.rings[0] as Array).size() == SLOTS, "빈 진도 8칸 계약을 지킨다")
-	_check(int(b.call(&"filled_count")) == 0, "빈 진 = 채운 칸 0")
-	b.queue_free()
-
-
-## JinDef 인스턴스를 런타임 load로 만든다 — -s 컴파일 시점의 전역 클래스 캐시에 기대지 않는다
-## (glyph_slots는 typed Array[int]라 대입도 typed 지역변수로 — 형 불일치가 조용히 새지 않게).
-func _make_jin(slots: Array) -> Resource:
-	var jd: Resource = (load("res://src/core/schemas/jin_def.gd") as GDScript).new()
-	var typed: Array[int] = []
-	for s in slots:
-		typed.append(int(s))
-	jd.set(&"glyph_slots", typed)
-	return jd
-
-
-# ── ⑫ 🔴 진이 칸을 연다 (세션60 — 문양본 축 흡수의 심장) ──
-# choose_jin(jd)가 jd.glyph_slots를 set_open_slots로 흘려야 한다. 이 배선 한 줄이 빠지면
-# 모든 진이 폴백 [0,2]로 조용히 굳는다 — 에러 없이 게임 전체의 칸 배치가 죽는 자리다.
-func _test_jin_opens_slots() -> void:
-	var b = _make_board()
-	b.call(&"choose_jin", _make_jin([1, 5]))
-	_check((b.call(&"get_open") as Array) == [1, 5], "🔴 choose_jin(jd) → jd.glyph_slots가 칸을 연다")
-	# jd=null(테스트·폴백 경로) = 현 _open 유지 — 덮어쓰지 않는다
-	b.call(&"choose_jin")
-	_check((b.call(&"get_open") as Array) == [1, 5], "choose_jin(null)은 현 열린 칸을 유지")
-	b.queue_free()
-	# 새 판: 진을 한 번도 안 고르면 폴백 그대로 (①의 폴백 계약과 한 쌍)
-	var b2 = _make_board()
-	b2.call(&"choose_jin")
-	_check((b2.call(&"get_open") as Array) == [0, 2], "진 미선택 + choose_jin(null) = 폴백 [0,2] 유지")
-	b2.queue_free()
-
-
-# ── ⑬ 진 교체(잠금 전) → 칸이 두 번째 진을 따라간다 ──
-# choose_jin은 has_jin()이면 거부하므로(잠근 진은 [다시 그리기]로만) 이 경로는 진 잠금 전
-# 셀 재클릭에서만 돈다 — 그래도 "마지막으로 고른 진이 이긴다"는 계약이다.
-func _test_jin_swap_before_lock() -> void:
-	var b = _make_board()
-	b.call(&"choose_jin", _make_jin([1, 5]))
-	b.call(&"choose_jin", _make_jin([0, 4, 6]))
-	_check((b.call(&"get_open") as Array) == [0, 4, 6], "진 재선택 → 열린 칸 = 두 번째 진의 것")
-	b.queue_free()
-
-
-# ── ⑭ 🔴 Db 로드 그물 — .tres 파싱 침묵사 방지 (세50 함정: 한 글자 오타 = 리소스 전체 증발) ──
-# test_decode_auto의 「룬 6종 로드」와 같은 역할. Db는 못 읽은 리소스를 조용히 건너뛰므로
+# ── ④ 🔴 Db 로드 그물 — .tres 파싱 침묵사 방지 (세50 함정: 한 글자 오타 = 리소스 전체 증발) ──
+# test_rune_unlock_auto의 「룬 6종 로드」와 같은 역할. Db는 못 읽은 리소스를 조용히 건너뛰므로
 # 개수를 세지 않으면 진 하나가 게임에서 통째로 사라져도 전 스위트가 그린이다.
 func _test_jin_db_loaded() -> void:
 	var db: Node = root.get_node("/root/Db")
@@ -329,31 +140,44 @@ func _test_jin_db_loaded() -> void:
 	# 🔴 세79 M1: 1종 → 2종(jin_plain_g2 = band_count 2 = 「2등급」, 층 감쌈 순서 실증).
 	# 🔴 세81 M2: 2종 → **3종**. 새 진 = `jin_fuse`(rune_slots=2 = 융합진, 룬 둘을 한 발에 실어 반응).
 	_check(jins.size() == 3, "🔴 진 3종(jin_single·jin_plain_g2·jin_fuse)이 Db에 로드된다 (지금 %d종 — 줄었으면 .tres 침묵사 의심, 새 진을 추가했으면 기대치를 갱신)" % jins.size())
+	# 🔴 세85 ⑦: 검사 축이 `glyph_slots`(은퇴) → **진의 개성을 실제로 쥐는 두 값**으로 바뀌었다.
+	# 값이 파싱에 실패하면 필드가 조용히 기본값(1)로 떨어지므로 **실값을 명시로 확인**한다 —
+	# 합계나 "비어 있지 않다"로 재면 한 진이 1층으로 주저앉아도 그린이다.
+	var want := {&"jin_single": [1, 1], &"jin_plain_g2": [2, 1], &"jin_fuse": [2, 2]}
 	for jd in jins:
-		var jid := String(jd.get(&"id"))
-		var slots: Array = jd.get(&"glyph_slots")
-		_check(not slots.is_empty(), "%s: glyph_slots가 비어 있지 않다" % jid)
-		var seen: Dictionary = {}
-		var valid := true
-		for s in slots:
-			var k := int(s)
-			if k < 0 or k >= SLOTS or seen.has(k):
-				valid = false
-			seen[k] = true
-		_check(valid, "%s: glyph_slots 전 원소 0..7 · 중복 없음 (지금 %s)" % [jid, str(slots)])
+		var jid := StringName(jd.get(&"id"))
+		var band := int(jd.get(&"band_count"))
+		var rslots := int(jd.get(&"rune_slots"))
+		if want.has(jid):
+			var w: Array = want[jid]
+			_check(band == int(w[0]) and rslots == int(w[1]),
+				"%s: band_count %d·rune_slots %d (기대 %d·%d — 어긋나면 .tres 필드가 조용히 기본값으로 떨어진 것)"
+					% [jid, band, rslots, int(w[0]), int(w[1])])
+		else:
+			_check(false, "예상 밖의 진 %s — 새 진을 넣었으면 위 기대표에 한 줄 더해라" % jid)
+		_check(band >= 1 and rslots >= 1, "%s: band_count·rune_slots는 1 이상" % jid)
 
 
-# ── ⑮ JinDef 기본값 계약 — 필드 누락 .tres도 8칸 전부로 산다 ──
-# .tres에 glyph_slots가 없으면 @export 기본값이 적용된다 — "깜빡한 새 진"이 조용히 약해지지 않는다.
-func _test_jin_default_slots() -> void:
+# ── ⑤ JinDef 기본값 계약 — 필드 누락 .tres도 조용히 안 깨진다 ──
+## ⚠ 세85 ⑦: 옛 검사(`glyph_slots` 기본 = [0..7])는 필드와 함께 은퇴했다.
+## 🔴 **`glyph_slots`가 정말 사라졌는지도 여기서 잰다** — 필드만 남기고 소비자를 지우면 그게
+##   딱 「거짓 손잡이」(감사 T3)다. .tres에 다시 적히면 이 검사가 빨개진다.
+func _test_jin_schema_defaults() -> void:
 	var jd: Resource = (load("res://src/core/schemas/jin_def.gd") as GDScript).new()
-	_check((jd.get(&"glyph_slots") as Array) == [0, 1, 2, 3, 4, 5, 6, 7],
-		"JinDef.new().glyph_slots 기본값 = 8칸 전부 [0..7]")
+	_check(int(jd.get(&"band_count")) == 1, "JinDef.new().band_count 기본 = 1 (옛 .tres도 1층으로 산다)")
+	_check(int(jd.get(&"rune_slots")) == 1, "JinDef.new().rune_slots 기본 = 1 (일반진)")
+	_check(int(jd.get(&"slot_count")) == SLOTS, "JinDef.new().slot_count 기본 = 8 (고리 기하 계약)")
+	var props: Array = []
+	for pd in jd.get_property_list():
+		props.append(String(pd.get("name", "")))
+	_check(not ("glyph_slots" in props),
+		"🔴 `glyph_slots` 필드가 스키마에서 사라졌다 (세85 ⑦ — 남아 있으면 소비자 0인 거짓 손잡이)")
 
 
-# ── ⑯ 진 셀 다이어그램 관측점 — 「칸 0=위, 시계방향」 기하 규약 (세션60 리뷰 지적) ──
-# jin_slot_dots는 순수 static 관측점인데 소비자가 렌더뿐이면 각도(-PI/2 탈락)·open 반전
-# 회귀를 아무도 못 잡는다 — MCP 스샷은 커밋 시점 1회 스냅샷이다. 여기가 상시 그물.
+# ── ⑥ 진 셀 다이어그램 관측점 — 「칸 0=위, 시계방향」 기하 규약 (세션60 리뷰 지적) ──
+# jin_slot_dots는 순수 static 관측점이고 **라이브 소비자가 둘**이다(hud.gd·tab_panel.gd의
+# 슬롯 미니 다이어그램). 각도(-PI/2 탈락)·open 반전 회귀를 렌더로는 못 잡는다 —
+# MCP 스샷은 커밋 시점 1회 스냅샷이다. 여기가 상시 그물.
 func _test_jin_slot_dots() -> void:
 	var b = _make_board()
 	var dots: Array = b.call(&"jin_slot_dots", [1, 5], Vector2.ZERO, 10.0)
@@ -367,4 +191,33 @@ func _test_jin_slot_dots() -> void:
 		if bool(dots[k]["open"]):
 			opens.append(k)
 	_check(opens == [1, 5], "열린 표시 = 정확히 [1,5] (지금 %s)" % str(opens))
+	# 🔴 각도의 정본이 static `slot_angle`인지 — 식을 베끼면 판·책·HUD가 조용히 어긋난다(세60).
+	for k in SLOTS:
+		var want: Vector2 = Vector2.from_angle(float(b.call(&"slot_angle", k))) * 10.0
+		_check((dots[k]["pos"] as Vector2).distance_to(want) < 0.001,
+			"칸 %d 좌표 = slot_angle(%d) 그대로 (베낀 식이면 여기가 빨개진다)" % [k, k])
+	b.queue_free()
+
+
+# ── ⑦ 🔴 은퇴한 per-piece API가 **되살아나지 않았나** (세85 ⑨ 재발 감지) ──
+## 이 프로젝트의 실패 방식은 「지웠는데 다음 세션이 되살린다」다(세25의 Q·W 키, 세82의 옛 배열
+## 폴백이 그랬다). 판이 다시 per-piece를 갖는 순간 **라이브(COMBINED)와 두 몸이 되고**, 그물이
+## 다시 죽은 몸을 재기 시작한다. 이름이 돌아오면 여기가 빨개진다.
+## ⚠ `get_analysis`는 목록에 없다 — 라이브 `build_assembly()`가 부르는 산 코드다(감사 「손대지 말 것」1).
+func _test_retired_api_stays_retired() -> void:
+	var b = _make_board()
+	var retired := ["advance", "finish", "select_slot", "set_active_glyph", "active_glyph",
+		"ring_summary", "choose_jin", "choose_rune", "jin_idx", "rune_idx",
+		"set_open_slots", "trace_slot", "locked_count"]
+	var alive: Array = []
+	for m in retired:
+		if b.has_method(m):
+			alive.append(m)
+	_check(alive.is_empty(),
+		"🔴 per-piece API가 은퇴 상태다 (되살아난 것: %s — 되살리려면 COMBINED와의 두 몸 문제를 먼저 풀어라)"
+			% str(alive))
+	# 판이 실제로 쓰는 진입점은 살아 있어야 한다 (반대 방향 대조 — 위 목록이 자명 통과가 아니게)
+	for m in ["enter_combined_trace", "combined_total", "coverage", "accuracy",
+			"begin_stroke", "trace_stroke", "clear_stroke", "get_assembly", "get_analysis"]:
+		_check(b.has_method(m), "라이브 진입점 `%s`는 살아 있다" % m)
 	b.queue_free()

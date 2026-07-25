@@ -43,30 +43,21 @@ const REVEAL_RADIUS_FRAC := 0.08      # 그린 점 주변 이만큼 가이드가
 ## ⚠ 이 값은 `piece_score` 바닥(0.25)과 **곱해져 펑(65) 기준선을 함께 움직인다** — 따로 조이지
 ## 말고 같이 봐라(자세한 상호작용은 `piece_score` 주석). 둘을 동시에 조이면 "완성했는데 펑"이 난다.
 const ACC_TOL_FRAC := 0.05
-const COMMIT_COVER := 0.15            # 칸을 바꿀 때 이만큼 그렸으면 이전 칸을 자동 잠근다
+## ⚠ **세85 ⑨ 은퇴: 조각 잠금(`lock`/`locked_pieces`/`LockedPiece`)** — 진·룬·문양 칸을 하나씩
+## 그리고 [다음]으로 잠그던 per-piece 흐름의 저장고였다. 세70부터 조립본을 **통째로** 한 번에
+## 긋기 때문에 잠글 「조각」이 없다 — 라이브에선 한 번도 안 불렸다.
+## 🔴 남은 것 = **지금 획의 점수**(`coverage`·`accuracy`·`piece_score`). 세83 그리기 폐지 스위치를
+## 되돌리면 되살아나는 건 이쪽이다 — 절대 지우지 마라.
+## ⚠ `COMMIT_COVER`(칸 전환 시 자동 잠금 문턱)도 같이 걷었다. `RingBoard.COMMIT_COVER` 재노출도 함께.
 
-## 조각 점수 키 — 바깥(보드)과 공유하는 규약. get_analysis가 이 키로 찾는다.
+## 조각 점수 키 — `get_analysis`가 이 키로 찾는다. ⚠ 잠금이 은퇴해 **아무도 이 키를 안 쓴다**
+## (`_scores`가 늘 비어 total 0). 통째 점수의 정본은 `piece_score()`이고 소비자는
+## `RingBoard.combined_total()` → `ring_forge_panel._score_now()`다.
 const KEY_JIN := "jin"
 const KEY_RUNE := "rune"
 
 static func glyph_key(slot: int) -> String:
 	return "g%d" % slot
-
-
-## 🔴 잠근 조각의 손그림 — 그린 대로 유지된다(정답 모양 교체 없음). 보드가 이 목록을 그린다.
-## 🔴 먹선은 **획들**이다 (세션 25) — 한 조각이 여러 획으로 이뤄진다. 이어 붙이면 안 된다:
-## 획과 획 사이(펜을 뗀 구간)를 선으로 그으면 화살표가 삼각형이 된다.
-class LockedPiece extends RefCounted:
-	var target: int                    # 보드의 TraceTarget (색 구분용 — 채점기는 뜻을 모른다)
-	var slot: int
-	var strokes: Array[PackedVector2Array]
-	var glyph: int
-
-	func _init(p_target: int, p_slot: int, p_strokes: Array[PackedVector2Array], p_glyph: int) -> void:
-		target = p_target
-		slot = p_slot
-		strokes = p_strokes
-		glyph = p_glyph
 
 
 var _guide: PackedVector2Array = []     # 숨은 정답 선 (조밀, 로컬 좌표)
@@ -77,8 +68,7 @@ var _revealed: PackedByteArray = []     # 각 가이드 점이 드러났나 (0/1
 var _strokes: Array[PackedVector2Array] = []
 var _dev_sum := 0.0                     # 그린 점들의 선-이탈 누적 (정밀도용)
 var _dev_n := 0
-var _scores: Dictionary = {}            # key → {cover, acc, score, glyph}
-var _locked: Array[LockedPiece] = []    # 잠근 조각의 손그림
+var _scores: Dictionary = {}            # key → {cover, acc, score, glyph} (세85 ⑨ 이후 늘 빈다)
 var _radius := 1.0                      # 길이 단위 기준 (보드의 _outer_radius) — 바깥이 준다
 var _correction := 0.0                  # 펜 보정도 (0=그린 대로 · 1=정답선) — 바깥이 준다
 
@@ -117,10 +107,6 @@ func strokes() -> Array[PackedVector2Array]:
 
 func is_revealed(i: int) -> bool:
 	return i >= 0 and i < _revealed.size() and _revealed[i] == 1
-
-
-func locked_pieces() -> Array[LockedPiece]:
-	return _locked
 
 
 # ─────────────────────────── 문지르기 ───────────────────────────
@@ -223,22 +209,7 @@ func piece_score() -> float:
 	return coverage() * (0.25 + 0.75 * accuracy())
 
 
-# ─────────────────────────── 잠금 · 분석 ───────────────────────────
-
-## 지금 조각의 점수 + **그린 먹선**을 저장한다. 먹선은 잠근 뒤에도 그대로 렌더된다.
-## 🔴 같은 조각(같은 key)을 다시 그리면 이전 먹선을 걷어내고 새것으로 교체한다 (재편집).
-func lock(key: String, target: int, slot: int, glyph: int) -> float:
-	var sc := piece_score()
-	_scores[key] = {"cover": coverage(), "acc": accuracy(), "score": sc, "glyph": glyph}
-	for i in range(_locked.size() - 1, -1, -1):
-		if _locked[i].target == target and _locked[i].slot == slot:
-			_locked.remove_at(i)
-	var copy: Array[PackedVector2Array] = []
-	for s in _strokes:
-		copy.append(s.duplicate())     # 획마다 복사 — 얕게 담으면 다음 조각이 덮어쓴다
-	_locked.append(LockedPiece.new(target, slot, copy, glyph))
-	return sc
-
+# ─────────────────────────── 분석 ───────────────────────────
 
 ## 마법진 분석 리포트 — 조각별 점수 + 종합 + 등급. 패널이 리포트 UI로 그린다.
 ## open = 지금 진이 연 칸들 (JinDef.glyph_slots → 조립 상태기계가 쥔 값 — 채점기는 모른다).
@@ -271,5 +242,4 @@ func get_analysis(open: Array) -> Dictionary:
 
 func clear() -> void:
 	_scores = {}
-	_locked = []
 	set_guide(PackedVector2Array())

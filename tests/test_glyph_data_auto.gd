@@ -346,26 +346,40 @@ func _t11_radius_never_inverts() -> void:
 # ── [12] 🔴 UI 표현도 데이터에서 온다 ──
 # 옛 `RingBoard.GLYPH_NAMES`/`GLYPH_COLORS` 배열은 **길이가 계약**이라, 어휘를 늘리며 배열을 안
 # 늘리면 요약이 런타임 에러를 내고 `clampi`가 **응축을 골랐는데 폭발 밑그림을 띄웠다**(에러 없음).
+#
+# 🔴 세85 ⑨ 개정: 옛 판본은 `choose_jin`·`set_active_glyph`·`active_glyph`(전부 **per-piece
+# 선택** API — src 호출자 0)로 「어휘 밖 코드가 조용히 눌리지 않는다」를 쟀는데, 그 셋이 은퇴하며
+# 같이 걷혔다. **그 함정 자체는 이미 구조적으로 사라졌다** — 눌렀던 주체가 `clampi(g, 0,
+# GLYPH_NAMES.size()-1)`이고 그 배열이 세82에 은퇴했다. 지금 그 자리를 지키는 건 [1](전 9값 Db
+# 로드 + behavior/params 파싱)이다.
+# 여기 남는 건 **색의 정본이 `.tres`인가** 하나이고, 이번에 **전 9값 전수**로 조였다(옛 판본은
+# 응축 한 값만 봐서, 배열 폴백이 되살아나 8개가 어긋나도 그린이었다).
 func _t12_ui_reads_names_from_data() -> void:
-	print("[12] 🔴 이름·색·선택이 .tres에서 온다")
+	print("[12] 🔴 문양 색의 정본 = GlyphDef.ui_color (전 9값 전수)")
 	var b = _Board.new()
 	b.size = Vector2(268, 268)
 	root.add_child(b)
 	b.call(&"set_defs", null, [], _db.all_glyphs())
-	b.call(&"clear_all")
-	b.call(&"choose_jin")
-	# 🔴 어휘 밖 코드가 **조용히 눌리지 않는다** (옛 clampi 자리)
-	b.call(&"set_active_glyph", Enums.GlyphCode.CONDENSE)
-	_check(int(b.call(&"active_glyph")) == Enums.GlyphCode.CONDENSE,
-		"응축(8)을 고르면 8로 남는다 (실제 %d — 7이면 clampi가 눌러 폭발 밑그림이 뜬다)"
-			% int(b.call(&"active_glyph")))
-	b.call(&"set_active_glyph", 99)
-	_check(int(b.call(&"active_glyph")) == Enums.GlyphCode.CONDENSE,
-		"카탈로그에 없는 코드는 **거부**된다 (선택이 안 바뀐다)")
-	# 색이 .tres에서 온다
+	var mismatched: Array = []
+	for code in Enums.GlyphCode.values():
+		var gd = _db.glyph_by_code(int(code))
+		if gd == null:
+			mismatched.append("code %d = Db 미등록" % int(code))
+			continue
+		if b.call(&"glyph_color_of", int(code)) != gd.ui_color:
+			mismatched.append("code %d" % int(code))
+	_check(mismatched.is_empty(),
+		"문양 %d종 전부 색 = GlyphDef.ui_color (어긋난 것: %s)"
+			% [Enums.GlyphCode.values().size(), str(mismatched)])
+	# 🔴 검출력 대조 — defs를 안 주입하면 **중립 먹선으로 떨어진다**(옛 배열 폴백을 되살리지 않는다).
+	# 이게 없으면 `glyph_color_of`가 늘 같은 색을 돌려줘도 위 검사가 그린일 수 있다.
+	var bare = _Board.new()
+	bare.size = Vector2(268, 268)
+	root.add_child(bare)
 	var cd = _db.glyph_by_code(Enums.GlyphCode.CONDENSE)
-	_check(b.call(&"glyph_color_of", Enums.GlyphCode.CONDENSE) == cd.ui_color,
-		"문양 색 = GlyphDef.ui_color")
+	_check(bare.call(&"glyph_color_of", Enums.GlyphCode.CONDENSE) != cd.ui_color,
+		"defs 미주입 = 중립 폴백 (색이 .tres에서 온다는 증거)")
+	bare.queue_free()
 	b.queue_free()
 
 

@@ -12,7 +12,9 @@ extends SceneTree
 ##  DRAW 목표는 도안 수(ring_designs)로 판정 = 이미 그린 세이브도 소급 충족(UNLOCK/BUILD가 codex로 소급 안전한 것과 같은 결).
 ## 🔴 **공개 API로만 검증**(advance_quests·claim_ready_quests·is_quest_*·quest_count) — 내부 필드는 계약이 아니다.
 ##
-## 🔴 세션37 스파인: 첫사냥 → (살아 귀환) → 정제대 → 공방 → 해독대 → 물 룬 → 바람 룬.
+## 🔴 세션37 스파인: 첫사냥 → (살아 귀환) → 정제대 → 공방 → 물 룬 → 바람 룬.
+##  ⚠ **세85에 「해독대」 칸이 빠졌다** (감사 #32 · 결정 ⑩ — `q05_build_decode` 은퇴).
+##  실데이터 사슬은 이제 **q00~q04**로 끝나고, 룬 사슬(q06·q07)은 주입 대역이 q04에 붙어 잰다.
 ## 🔴 **건설도 UNLOCK 목표다** — 스테이션은 codex(station_*)로 관리하므로 codex_unlocked(station_*)로 달성된다.
 
 var _pass := 0
@@ -50,7 +52,7 @@ func _inject_quest(db: Node, id: StringName, target: StringName, requires: Strin
 	db.quests[id] = q
 	return q
 
-## 있으면 되돌리고, 없을 때만 지운다 (test_decode_auto의 흙 룬 원복 패턴과 같은 규약).
+## 있으면 되돌리고, 없을 때만 지운다 (test_rune_unlock_auto의 흙 룬 원복 패턴과 같은 규약).
 func _restore_quests(db: Node) -> void:
 	for id: StringName in _quest_backup:
 		var orig = _quest_backup[id]
@@ -65,8 +67,9 @@ func _clean(gs: Node) -> void:
 	gs.quest_done.clear()
 	gs.quest_seen.clear()     # 🔴 [!] 접수 초기화 (세션43) — 미접수 상태로 되돌린다
 	gs.ring_designs.clear()   # q00(DRAW=상태 기반)이 시작부터 미충족이도록 그린 도안을 비운다 (세션41)
+	# 🔴 세85: `station_decode`를 뺐다 — 해독대 은퇴로 q05와 시드가 같이 걷혔다(감사 #32 · 결정 ⑩).
 	for k: StringName in [&"rune_water", &"rune_wind",
-			&"station_refine", &"station_craft", &"station_decode"]:
+			&"station_refine", &"station_craft"]:
 		gs.codex.erase(k)
 
 func _run() -> void:
@@ -95,11 +98,15 @@ func _run() -> void:
 	# 그대로라, q06/q07을 in-memory QuestDef로 Db에 주입해 계속 잰다(끝나면 제거 — 룬 퀘스트를
 	# 되살리면 실데이터 검증으로 되돌려도 된다). Db.quests는 평범한 Dictionary다.
 	# 🔴🔴 세84: **「빈 자리를 빌려 쓴다」 수법을 걷었다.** 전엔 존재 확인 없이 대입하고 끝에 무조건
-	# `erase`했다 — 세83에 `test_decode_auto`가 똑같은 방식으로 **복원된 진짜 흙 룬을 지운** 사고가
+	# `erase`했다 — 세83에 `test_rune_unlock_auto`가 똑같은 방식으로 **복원된 진짜 흙 룬을 지운** 사고가
 	# 났다(로드 6→5). q06·q07 .tres를 되살리는 세션이 오면 이 테스트가 그 실데이터를 지워
 	# **실데이터 검증이 조용히 사라진다.** → 원본을 보관했다가 **있으면 되돌리고 없을 때만 erase**한다
-	# (`_inject_quest`/`_restore_quest` 헬퍼 = test_decode_auto의 흙 룬 패턴).
-	var q6: QuestDef = _inject_quest(db, &"q06_learn_water", &"rune_water", &"q05_build_decode")
+	# (`_inject_quest`/`_restore_quest` 헬퍼 = test_rune_unlock_auto의 흙 룬 패턴).
+	# 🔴 세85: q06의 `requires`가 `q05_build_decode` → **`q04_build_craft`**로 바뀌었다.
+	#   해독대 은퇴(감사 #32 · 결정 ⑩)로 q05 .tres를 걷었기 때문이다 — 이제 q04가 실데이터 사슬의 끝이고
+	#   주입 사슬(q06→q07)이 거기에 붙는다. 🔴 이 재배선이 아래 ④-b 「연쇄 정산(고정점 루프)」 그물을
+	#   살려 둔다: 옛 q04→q05 자리를 **q04→q06**이 그대로 잇는다(그물을 옮긴 것이지 잃은 게 아니다).
+	var q6: QuestDef = _inject_quest(db, &"q06_learn_water", &"rune_water", &"q04_build_craft")
 	var q7: QuestDef = _inject_quest(db, &"q07_learn_wind", &"rune_wind", &"q06_learn_water")
 
 	var q0: QuestDef = db.get_quest(&"q00_first_draw")
@@ -107,9 +114,11 @@ func _run() -> void:
 	var q2: QuestDef = db.get_quest(&"q02_come_home")
 	var q3: QuestDef = db.get_quest(&"q03_build_refine")
 	var q4: QuestDef = db.get_quest(&"q04_build_craft")
-	var q5: QuestDef = db.get_quest(&"q05_build_decode")
-	_check("퀘스트 6장이 data/quests에서 로드됐다 (세61: q06+는 은퇴 — 위 주입 2장은 기계 검증용)",
-		q0 != null and q1 != null and q2 != null and q3 != null and q4 != null and q5 != null)
+	# 🔴 세85: **5장**이다 (q05_build_decode 은퇴). 위 주입 2장은 기계 검증용이라 이 수에 안 든다.
+	_check("퀘스트 5장이 data/quests에서 로드됐다 (q00~q04 · 세85에 q05 해독대 은퇴)",
+		q0 != null and q1 != null and q2 != null and q3 != null and q4 != null)
+	_check("🔴 q05(해독대 건설)는 은퇴해 Db에 없다 — 「없는 건물을 세우라」는 유령 목표 0",
+		db.get_quest(&"q05_build_decode") == null)
 	if q0 == null or q1 == null or q3 == null:
 		# 여기까지 왔으면 위 _check가 이미 빨개졌다 — 종료코드도 실패로 (세84 #44).
 		print("RESULT pass=%d fail=%d" % [_pass, _fail])
@@ -174,24 +183,42 @@ func _run() -> void:
 		gs.is_quest_done(&"q03_build_refine") and gs.get_count(&"mat_beetle_shell") == shell_before + 2)
 	_check("🔴 q04(공방 건설)가 열렸다", gs.is_quest_active(q4))
 
-	# ── ④-b 연쇄 정산 — 공방·해독대를 다 지어놓고 한 번에 정산하면 고정점 루프가 q04→q05를 잇는다 ──
-	eb.codex_unlocked.emit(&"station_craft")    # q04 달성
-	eb.codex_unlocked.emit(&"station_decode")   # station_decode 해금(단 q05는 q04 미완료라 아직 잠김)
-	_check("🔴 선행(q04) 미완료면 지어놔도 q05는 정산 불가",
-		gs.is_quest_claimable(q4) and not gs.is_quest_claimable(q5) and not gs.is_quest_active(q5))
-	gs.claim_ready_quests()   # q04 정산 → q05 열림 → 이미 지어져 있어 연쇄 정산
-	_check("🔴 연쇄 정산: q04·q05 둘 다 완료 (고정점 루프)",
-		gs.is_quest_done(&"q04_build_craft") and gs.is_quest_done(&"q05_build_decode"))
-	_check("🔴 q06(물의 룬)이 열렸다 — 해독대를 지어야 룬을 배운다", gs.is_quest_active(q6))
-	_check("q07(바람)은 아직 잠김", not gs.is_quest_active(q7))
-
-	# ── ⑤ UNLOCK 룬 — q06 달성(rune_water) → 정산 완료 → q07 개방 ──
-	eb.codex_unlocked.emit(&"rune_water")
-	_check("🔴 물 룬 해금: q06 정산 대기 (아직 완료 아님)",
-		gs.is_quest_claimable(q6) and not gs.is_quest_done(&"q06_learn_water"))
-	gs.claim_ready_quests()
-	_check("🔴 정산: q06 완료 + q07 개방", gs.is_quest_done(&"q06_learn_water") and gs.is_quest_active(q7))
+	# ── ④-b 🔴🔴 **연쇄 정산(고정점 루프)** — 한 번의 정산이 사슬을 **두 칸** 진행시킨다 ──
+	# 공방을 짓고 **물 룬도 이미 해금해 둔** 채 길잡이에게 한 번 말을 걸면:
+	#   q04 정산 → 그 순간 q06이 열림 → q06의 대상이 **이미** 충족돼 있어 같은 정산에서 이어서 완료.
+	# 🔴 `claim_ready_quests`가 「완료 → 개방 → 다시 훑기」를 **고정점까지 반복**하지 않으면
+	#   q06이 열린 채 미정산으로 남는다(플레이어는 말을 두 번 걸어야 한다). 그걸 재는 **유일한 자리**다.
+	# 🔴 세85: 옛 판은 `q04 → q05(해독대)`였다. 해독대가 은퇴해 q05가 사라졌으므로 **같은 모양을
+	#   `q04 → q06`으로 옮겼다** — 검사가 재는 성질(2칸 진행)은 그대로다. 뮤테이션으로 검출력 확인함
+	#   (고정점 루프를 1회로 되돌리면 아래 「연쇄 정산」 단정이 빨개진다).
+	var sap_before: int = gs.get_count(&"mat_moon_sap")
+	var bloom_before: int = gs.get_count(&"mat_night_bloom")
+	eb.codex_unlocked.emit(&"station_craft")   # q04 달성
+	eb.codex_unlocked.emit(&"rune_water")      # q06 대상 선해금 — 단 q06은 q04 미완료라 아직 잠김
+	_check("🔴 선행(q04) 미완료면 대상이 이미 해금돼 있어도 q06은 정산 불가 (requires 게이트)",
+		gs.is_quest_claimable(q4) and not gs.is_quest_claimable(q6) and not gs.is_quest_active(q6))
+	gs.claim_ready_quests()   # q04 정산 → q06 열림 → 이미 해금돼 있어 연쇄 정산
+	# 🔴 세85: q05를 은퇴시키며 그 보상 `mat_night_bloom ×2`를 **q04로 합쳤다**(온보딩 총 보상량 보존,
+	#   사용자 확정). 그물이 없으면 「사슬을 줄이면서 보상이 조용히 사라졌다」를 아무도 못 잡는다 —
+	#   퀘스트 은퇴가 반복될 축이라(base.gd가 q03·q04 삭제까지 예고한다) 여기에 박아 둔다.
+	_check("🔴 q04 정산 보상: 원래 것 + q05에서 넘어온 몫 (mat_moon_sap +1 · mat_night_bloom +2)",
+		gs.get_count(&"mat_moon_sap") == sap_before + 1
+		and gs.get_count(&"mat_night_bloom") == bloom_before + 2)
+	_check("🔴🔴 연쇄 정산: q04·q06 둘 다 완료 (고정점 루프 — 말 한 번에 두 칸)",
+		gs.is_quest_done(&"q04_build_craft") and gs.is_quest_done(&"q06_learn_water"))
+	_check("🔴 연쇄로 q07(바람)이 열렸다", gs.is_quest_active(q7))
 	_check("q07은 rune_water로는 안 끝난다 (target=rune_wind)", not gs.is_quest_done(&"q07_learn_wind"))
+
+	# ── ⑤ UNLOCK 룬 **정상 경로** — 목표가 열려 있는 동안 해금 이벤트가 온다 (⑥ 소급과 대비) ──
+	# 🔴 세85: 옛 판은 q06으로 쟀는데 q06이 ④-b의 연쇄 대상이 됐으므로 **q07로 옮겼다**.
+	#   재는 성질은 그대로다 — advance_quests 경로(이벤트가 열린 목표를 채운다)이고,
+	#   아래 ⑥은 reevaluate 경로(목표가 열릴 때 이미 채워져 있다)라 **둘은 서로를 대신하지 못한다**.
+	_check("바람 룬 해금 전: q07 정산 대기 아님 (검출력 대조)", not gs.is_quest_claimable(q7))
+	eb.codex_unlocked.emit(&"rune_wind")
+	_check("🔴 바람 룬 해금: q07 정산 대기 (아직 완료 아님)",
+		gs.is_quest_claimable(q7) and not gs.is_quest_done(&"q07_learn_wind"))
+	gs.claim_ready_quests()
+	_check("🔴 정산해야 q07 완료", gs.is_quest_done(&"q07_learn_wind"))
 
 	# ── ⑥ 소급 — 이미 해금된 대상을 노리는 퀘스트는 **열리는 순간 정산 대기**. reevaluate는 자동완료 안 함 ──
 	gs.quest_done.erase(&"q07_learn_wind")

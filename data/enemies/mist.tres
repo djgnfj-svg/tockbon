@@ -33,4 +33,3 @@ params = {
 "weakness_mult": 2.0
 }
 drops = Array[ExtResource("1_ed26q")]([SubResource("Resource_coin")])
-night_buff = 1.6

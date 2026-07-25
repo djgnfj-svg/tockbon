@@ -1,6 +1,19 @@
 extends Control
 ## 고리 조립 보드 — forge 왼쪽 페이지에 얹히는 **조립 판**.
 ##
+## 🔴🔴 **per-piece 경로는 세70에 은퇴했다 — 라이브는 COMBINED뿐이다** (세85 ⑨에 실제로 걷어냄).
+## 세70 「조립→탁본」이 흐름을 바꿨다: 진·룬·문양 칸을 **하나씩 골라 하나씩 긋고 [다음]으로 잠그는**
+## 옛 경로 대신, 조립본을 `compose_guide_paths`로 **한 장의 밑그림에 합성해 통째로** 긋는다.
+## 그래서 라이브 진입점은 `enter_combined_trace` **하나**이고 `_trace`는 NONE/COMBINED만 된다.
+## 세85까지 옛 갈래(`advance`/`finish`/`select_slot`/`choose_jin`/`choose_rune`/`_build_guide`의
+## 진·룬·문양 세 갈래·잠근 조각 렌더·시그널 4종)가 **1673줄 안에 라이브와 섞여 남아** 있었고,
+## 그물이 그 죽은 몸을 성실히 통과시켜 「전 스위트 그린」이 라이브의 근거로 과대평가됐다(감사 T2).
+## ⚠ **되살리지 마라.** 이건 세83 「그리기 폐지 스위치」(`balance.skip_drawing`)와 **다른 축**이다 —
+## 스위치를 false로 되돌리면 돌아오는 건 COMBINED 손 긋기(아래 보존 목록)지 per-piece가 아니다.
+## 🔴 **세83 스위치가 되살리는 것 = 절대 지우지 마라**:
+##   `enter_combined_trace` · `begin_stroke`/`trace_stroke`/`clear_stroke` ·
+##   `coverage`/`accuracy`/`piece_score`(→`combined_total`) · 펜 보정(`_pen_correction`) · 잉크 정산.
+##
 ## 🔴 2026-07-17 세션 22 — **3분할됐다** (예전엔 757줄에 조립·채점·기하·렌더·입력·애니가 다 있었다):
 ##   • `ring_assembly.gd` — 조립 상태기계 (무엇이 놓였나 · 어느 칸이 열렸나). 순수 데이터
 ##   • `trace_scorer.gd`  — 손그림 탁본 채점 (완성도·정밀도·분석). 순수 수학
@@ -25,7 +38,6 @@ const STAGE_JIN := RingAssembly.STAGE_JIN
 const STAGE_RUNE := RingAssembly.STAGE_RUNE
 const STAGE_GLYPH := RingAssembly.STAGE_GLYPH
 const RUNE_FIRE := RingAssembly.RUNE_FIRE
-const COMMIT_COVER := TraceScorer.COMMIT_COVER
 
 # ── 어휘 2종 (사용자 확정 2026-07-16) ──
 ## 🔴 값은 **core가 쥔다**(Enums.GlyphCode = 발사 계약). 여기서 다시 정의하면 언젠가 갈라진다.
@@ -42,7 +54,7 @@ const G_SPREAD := Enums.GlyphCode.SPREAD    # 확산 ⋔ — 안쪽 결과를 �
 const G_EXPLODE := Enums.GlyphCode.EXPLODE  # 폭발 ∗ — 안쪽 결과를 한 점에서 터뜨린다 (세79)
 const G_CONDENSE := Enums.GlyphCode.CONDENSE # 응축 ◈ — 안쪽 결과를 한 점으로 눌러 담는다 (세82)
 ## ⚠ **옛 `GLYPH_NAMES` 배열은 세82에 은퇴했다.** 이름의 정본은 `GlyphDef.display_name`이고
-## 보드는 주입된 `_glyph_defs`에서 읽는다(`_glyph_name`). 배열이던 시절엔 **길이가 계약**이라
+## 보드는 주입된 `_glyph_defs`에서 읽는다(`_glyph_color`). 배열이던 시절엔 **길이가 계약**이라
 ## (`ring_summary`가 그 크기로 카운터를 세웠다) 어휘를 늘릴 때 여기를 같이 안 늘리면 **런타임
 ## 에러**였고, `set_active_glyph`의 `clampi`가 어휘 밖 코드를 **조용히 눌렀다**. 되살리지 마라.
 ## ⚠ **`GLYPH_KEYS`는 지웠다** (세션 25). 문양은 오른쪽 셀을 **클릭해서** 고른다 —
@@ -51,12 +63,13 @@ const G_CONDENSE := Enums.GlyphCode.CONDENSE # 응축 ◈ — 안쪽 결과를 �
 
 # ── 색 (먹·양피지 톤) ──
 const RING_LINE := Color(0.42, 0.30, 0.12, 0.55)
-const SLOT_OPEN := Color(0.42, 0.30, 0.12, 0.5)    # 열린 빈 칸 — 여기 채워라
 const FIRE_HI := Color(0.95, 0.55, 0.15)
+## 룬 색 폴백 — RuneDef가 없을 때. 🔴 소비자는 **책의 룬 셀**(`ring_book`)이다(세85 ⑨ 이후
+## 판에는 룬 렌더가 없다) — 책이 `RingBoard.RUNE_COLOR`로 부르므로 여기가 그 단일 소스다.
+const RUNE_COLOR := Color(0.62, 0.22, 0.12)   # 불
 ## ⚠ **옛 `GLYPH_COLORS` 배열은 세82에 은퇴했다.** 색의 정본은 `data/glyphs/*.tres`의
 ## `ui_color` 하나뿐이고, 보드·책이 주입된 defs에서 읽는다(`_glyph_color`).
 ## 사본이던 시절엔 "책이랑 판이랑 색이 다르네"가 어디서 오는지 못 찾는 위험을 안고 있었다.
-const RUNE_COLOR := Color(0.62, 0.22, 0.12)   # 불
 const TRACE_INK := Color(0.20, 0.14, 0.09, 0.95)    # 그린 먹선
 ## 숨은 가이드 (아직 안 드러남). 🔴 세션 25에 0.18 → 0.32: 0.18은 진(큰 원)에서나 보였고
 ## 문양처럼 작은 밑그림은 **사실상 안 보였다** (사용자: "문양을 선택했을때 밑그림이 그려져야지").
@@ -64,7 +77,6 @@ const TRACE_INK := Color(0.20, 0.14, 0.09, 0.95)    # 그린 먹선
 const GUIDE_HIDE := Color(0.42, 0.30, 0.12, 0.32)
 const GUIDE_SHOW := Color(0.80, 0.50, 0.16, 0.55)   # 드러난 가이드 강조
 
-const RING_RADIUS_FRAC := 0.60
 const GUIDE_CIRCLE_N := 72            # 진 가이드 밀도 (도형이 뭐든 이 등분 수에 맞춘다 — 아래 주석)
 
 # ── 🔴 진 밑그림 도형의 기하 상수 (세션48) ────────────────────────────────────────
@@ -77,15 +89,11 @@ const JIN_FLOWER_PETALS := 6
 const JIN_FLOWER_DEPTH := 0.13        # 물결 골의 깊이 = 반지름의 13% (얕게 — 골이 깊으면 룬 자리를 먹는다)
 const JIN_LENS_X := 0.60              # 렌즈 허리의 가로 반지름 비 (최소 거리 0.60R)
 
-# ── 마우스 휠 크기 조절 (진·룬, 세션 14c) ──
+# ── 진 크기 상한 (종이 등급 — 세71d에 축이 은퇴해 지금은 1.0 고정) ──
+## ⚠ 세85 ⑨ 은퇴: 룬·문양 휠 크기 상수(`RUNE_SCALE_*`·`GLYPH_SCALE_*`·`SCALE_STEP`) —
+##   조각을 하나씩 그리며 휠로 키우던 per-piece 조작이 통째로 걷혔다.
 const JIN_SCALE_MIN := 0.72
 const JIN_SCALE_MAX := 1.16
-const RUNE_SCALE_MIN := 0.55
-const RUNE_SCALE_MAX := 1.70
-const SCALE_STEP := 0.06
-# ── 문양 개별 크기 (칸마다, 세션 15 — 사용자: "문양 모양이 주된 과제 · 각각으로") ──
-const GLYPH_SCALE_MIN := 0.55
-const GLYPH_SCALE_MAX := 1.85
 
 # ── 🔴 문양 화살표의 크기·생김새 (세션 25) ────────────────────────────────────────
 # 사용자: *"문양 부분이 좀 별로인게 한 획만 검증하니? 여러획쓸꺼같아서 화살표는"*
@@ -103,16 +111,13 @@ const GLYPH_SCALE_MAX := 1.85
 #   • 깃 ~ 머리 거리 = 20 × √(0.5²+0.62²) ≈ 16px > 9.4px → 머리를 찍어도 안 드러난다
 # ⚠ 셋 중 하나라도 만지면 `REVEAL_RADIUS_FRAC`(붓)과의 비율을 다시 재라. 테스트가
 #   「한 획으로는 문양이 안 끝난다」를 못 박지만, 이유는 여기 적힌 비율이다.
-const GLYPH_SIZE_FRAC := 0.17
+## ⚠ 세85 ⑨ 은퇴: `GLYPH_SIZE_FRAC`(판의 문양 칸 하나를 그릴 때의 크기) — 통째 밑그림에서
+## 낱개 모티프 크기는 `MOTIF_SIZE_FRAC`(밴드 반경 비)가 정한다. 아래 두 비율은 **살아 있다**.
 const ARROW_BACK_FRAC := 0.5
 const ARROW_SIDE_FRAC := 0.62
 
-## 🔴 칸을 고르는 **최대 거리** (세션 22, I3 버그 수정). 이 밖을 클릭하면 칸을 안 바꾼다.
-## 예전엔 컷오프가 없어서 판 아무 데나 클릭해도 최근접 열린 칸이 잡혔고, select_slot이
-## 현재 칸 coverage > COMMIT_COVER면 **자동 확정**해 버렸다 → **칸 0을 그리다 획을 칸 2 쪽에
-## 조금 가깝게 시작하면 칸 0이 멋대로 확정되고 넘어갔다.** *"마음에 들 때까지 다시 그린다"*
-## 설계와 정면 충돌. 값은 아래 칸 표시(ro*0.05)·강조(ro*0.11)와 맞췄다.
-const SLOT_PICK_FRAC := 0.18
+## ⚠ 세85 ⑨ 은퇴: `SLOT_PICK_FRAC`(판에서 문양 칸을 클릭해 고르는 최대 거리) —
+## 통째 밑그림엔 「고를 칸」이 없다(조립 단위가 문양-고리이고 책이 밴드에 끼운다).
 
 ## 지금 손으로 그릴 대상. NONE=그릴 것 없음(열린 빈 칸 없음 / 다 그림)
 ## 🔴 COMBINED (세68 조립→탁본) = 진+룬+밴드 문양-고리를 **한 장의 가이드로 합성**해 통째로
@@ -137,15 +142,11 @@ const BAND_GUIDE_WIDTH := 1.5
 const RUNE_SLOT_COLOR := Color(0.42, 0.30, 0.12, 0.28)    # 룬 미선택 자리 마커(중앙 링)
 const RUNE_SLOT_WIDTH := 1.5
 
-signal assembly_changed
-## 단계가 넘어갔다 — 바깥(패널)이 오른쪽 탭·안내문을 맞춘다. (STAGE_*)
-signal stage_advanced(stage: int)
 ## 지금 그리는 조각의 점수가 갱신됐다 (실시간) — 패널이 현재 점수를 보여준다.
 signal score_changed(score: float)
-## 한 조각을 [다음]으로 잠갔다 — 패널이 손맛 피드백을 준다. (TraceTarget·칸·그 조각 점수)
-signal piece_locked(target: int, slot: int, score: float)
-## 마법진을 다 그렸다 — 패널이 분석 리포트를 띄운다. (get_analysis 결과)
-signal finished(analysis: Dictionary)
+## ⚠ **`assembly_changed`·`stage_advanced`·`piece_locked`·`finished`는 세85 ⑨에 은퇴했다** —
+## 넷 다 per-piece 잠금이 쏘던 신호이고 **src 구독자가 0**이었다(패널 `_ready`가 *"stage machine
+## 시그널은 안 구독한다"*고 명시한다). 통째 흐름에 남은 판→패널 신호는 아래 둘뿐이다.
 ## 🔴 한 획을 뗐다 (마우스 릴리스) — 패널이 **획이 끝난 뒤에** 잉크 팔레트를 다시 그리게 한다.
 ## 특별잉크가 그리는 도중 소모돼 팔레트가 재빌드되면 활성 잉크가 획 중간에 바뀌기 때문이다.
 signal stroke_ended
@@ -158,7 +159,6 @@ var _jin_def: JinDef = null
 var _rune_defs: Dictionary = {}         # {Enums.RuneType: RuneDef} — 색·이름 조회 (세션 34: 룬 여러 종)
 var _glyph_defs: Array[GlyphDef] = []
 
-var _active := G_RADIATE            # 활성 문양 코드 (바깥이 set_active_glyph으로 정한다)
 ## 지금 긋는 획의 색 = 고른 잉크 색 (세션28 — "잉크를 골라 그린다"의 즉각 피드백).
 ## 잠근 조각은 종류색(진/룬/문양)으로 되므로 이 색은 **그리는 중에만** 보인다. 기본 = 먹.
 var _trace_ink := TRACE_INK
@@ -174,45 +174,23 @@ var _jin_scale_max := JIN_SCALE_MAX
 var _cast_t := -1.0
 var _cast_dur := 1.3
 
-var _trace := TraceTarget.NONE          # 지금 그릴 대상
-var _trace_slot := -1                   # GLYPH일 때 채울 칸
-## 🔴 **고른 진·룬** (세션 25). -1 = 아직 안 골랐다 = 밑그림이 안 뜬다 — 문양 칸(`_trace_slot`)과
-## 같은 규약이다. 예전엔 단계에 들어가는 순간 밑그림이 저절로 서 있었다
-## (사용자: "이게 눌러야 뜨게 해줘").
-##
-## ⚠ **bool이 아니라 인덱스인 이유** (사용자: "룬이 나중에는 추가된다는 것을 전제로 작업해야지"):
-## bool은 "골랐나"만 알고 **"어느 룬인가"를 못 담는다**. 룬이 불·물·바람으로 늘면 그때 bool을
-## 인덱스로 바꾸느라 호출부를 전부 다시 건드려야 한다 — 지금은 종류가 하나씩이라 0만 유효하지만
-## API는 이미 인덱스를 받는다. 늘릴 때 `set_defs`가 배열을 받게 하면 여기는 그대로다.
-var _jin_idx := -1
-var _rune_idx := -1
+## 🔴 지금 그릴 대상. 세85 ⑨ 이후 **NONE 아니면 COMBINED뿐**이다(per-piece 은퇴).
+var _trace := TraceTarget.NONE
 var _drawing := false                   # 마우스 버튼 누른 채 긋는 중
 var _stroke_counted := false            # 🔴 이 획을 잉크 정산에 넣었나 (최초 유효점에서 1회만)
-var _jin_scale := 1.0                   # 진 크기 (마우스 휠)
-var _rune_scale := 1.0                  # 룬 크기 (마우스 휠)
-var _glyph_scale: Dictionary = {}       # slot(int) → float, 문양 개별 크기 (마우스 휠, 세션 15)
-
-# ── 착지 펄스 ("탁") — 조각이 놓인 자리에서 퍼지는 고리 ──
-var _pulse_t := -1.0
-var _pulse_at := Vector2.ZERO
-var _pulse_color := FIRE_HI             # ⓒ 잠근 조각의 색으로 펄스를 물들인다 (_start_pulse가 받는다)
-const PULSE_DUR := 0.35
+var _jin_scale := 1.0                   # 진 규모 (종이 축 — 세71d 은퇴 후 1.0 고정)
 
 # ── 그리기 연출 (세션62 ⓐⓑⓒⓓⓕ — 렌더 전용, 채점·조립 무관) ─────────────────────
 # ⚠ 전부 연출값(손맛)이라 스크립트 const다 — 사용자가 F5로 조인다. balance.tres 아님.
 const GLOW_WIDTH := 7.0                 # ⓐ 먹선 밑 글로우 패스 폭 (먹선 2.6~2.8px보다 넓게)
 const GLOW_ALPHA_DRAWING := 0.12        # ⓐ 그리는 중 획 글로우 알파 (잉크색)
-const GLOW_ALPHA_LOCKED := 0.10         # ⓐ 잠긴 조각 글로우 알파 (조각색)
 const SPARK_DUR := 0.25                 # ⓑ 반짝임 수명(초)
 const SPARK_R0 := 1.2                   # ⓑ 광점 시작 반지름
 const SPARK_R1 := 4.5                   # ⓑ 광점 끝 반지름 (커지며 사라진다)
 const SPARK_ALPHA := 0.8                # ⓑ 광점 시작 알파 ((1-t)×이 값)
 const SPARK_COLOR := Color(1.0, 0.88, 0.55)   # ⓑ 광점 색 (따뜻한 금빛)
-const PULSE_BLOOM_FRAC := 0.10          # ⓒ 중심 블룸 반지름 (판 반지름 비례)
-const FINISH_GLOW_DUR := 0.8            # ⓓ 완성 발광 시간(초)
-const FINISH_GLOW_ALPHA := 0.5          # ⓓ 발광 시작 알파 ((1-t)×이 값)
-const FINISH_ARC_SPAN := TAU * 0.22     # ⓓ 바깥 반경을 훑는 밝은 호의 길이(라디안)
-const FINISH_ARC_COLOR := Color(1.0, 0.92, 0.6)   # ⓓ 훑는 호의 색
+## ⚠ 세85 ⑨ 은퇴: ⓒ 착지 펄스·ⓓ 완성 발광의 상수(`PULSE_*`·`FINISH_*`·`GLOW_ALPHA_LOCKED`) —
+## 트리거가 per-piece 잠금이라 통째 흐름에선 한 번도 안 떴다(`_draw` 주석 참조).
 ## ⓕ 붓끝 발광 — 동심원 3장, 바깥(크고 흐림)부터 그려 안쪽(작고 밝음)이 위에 얹힌다.
 ## ⚠ 무타입 Array인 이유: GDScript는 const에 PackedFloat32Array(...) 생성자를 상수식으로 안 받는다
 ## (세62 실측 — 파스 에러). 소비처가 float() 캐스트로 받는다.
@@ -224,7 +202,6 @@ const BRUSH_GLOW_ALPHA := [0.06, 0.14, 0.30]
 ## "언제 드러났나"라는 렌더만의 관심사를 따로 든다. `_reset_reveal_fx`가 가이드와 크기를 맞춘다.
 var _was_revealed := PackedByteArray()
 var _sparks: Array[Dictionary] = []     # ⓑ {pos: Vector2, t: float} — 광점들
-var _finish_glow_t := -1.0              # ⓓ 완성 발광 타이머 (-1 = 꺼짐)
 
 ## 🔴 세71c 조립→탁본 이음선 제거 — COMBINED 서브패스(진·룬·밴드 각각)를 **별도 폴리라인**으로 그린다.
 ## 비었으면 옛 동작(flat 가이드를 한 줄로). `enter_combined_trace`의 선택 인자로 들어온다.
@@ -253,10 +230,13 @@ func _ready() -> void:
 	resized.connect(_on_resized)
 
 
-## 판 크기가 바뀌면 채점기의 길이 기준과 가이드를 다시 세운다 (거리 임계값이 전부 반지름 비례다).
+## 판 크기가 바뀌면 채점기의 길이 기준을 다시 세운다 (거리 임계값이 전부 반지름 비례다).
+## 🔴 세85 ⑨: 예전엔 여기서 `_set_trace`로 가이드를 다시 **만들었는데**, per-piece 가이드 생성기가
+## COMBINED를 모르는 탓에 **리사이즈 한 번에 합성 밑그림이 통째로 지워졌다**(빈 가이드로 교체 —
+## 에러도 경고도 없다). 합성 가이드의 소유자는 패널(`recompose`)이므로 판이 재생성할 수 없다 —
+## 여기서는 길이 기준만 갱신하고, 새 좌표가 필요하면 **패널이 다시 넘긴다**.
 func _on_resized() -> void:
 	_scorer.set_reference_radius(_outer_radius())
-	_set_trace(_trace, _trace_slot)
 	queue_redraw()
 
 
@@ -298,48 +278,10 @@ func get_assembly() -> Dictionary:
 	return a
 
 
-# ─────────────────── 손그림 탁본 — 무엇을 그릴지 정하고 가이드를 세운다 ───────────────────
-
-## 🔴 지금 단계에 맞는 가이드를 세운다 — 무엇을 그릴지 정하고 문지름 상태를 리셋한다.
-func _refresh_trace() -> void:
-	match _asm.stage():
-		STAGE_JIN:
-			# 🔴 진도 **오른쪽에서 골라야** 밑그림이 뜬다 (세션 25) — 문양 칸과 같은 규약이다.
-			# 안 골랐으면 `_jin_idx = -1` → 빈 가이드. (`_build_guide` 참조)
-			if not _asm.has_jin():
-				_set_trace(TraceTarget.JIN, -1)
-				return
-		STAGE_RUNE:
-			if not _asm.has_rune():
-				_set_trace(TraceTarget.RUNE, -1)
-				return
-		STAGE_GLYPH:
-			# 🔴 칸은 **사용자가 클릭해서 고른다** (세션 25). 예전엔 첫 빈 칸을 멋대로 잡아
-			# 아무것도 안 골랐는데 주황 강조가 떠 있었다 (사용자: "8방 했을때 이미 주황색으로
-			# 선택되어있어 그거 지워주고"). 칸 미선택(-1) = 빈 가이드 = 그릴 게 아직 없다.
-			if _asm.next_open_slot() >= 0:
-				_set_trace(TraceTarget.GLYPH, -1)
-				return
-	_set_trace(TraceTarget.NONE, -1)   # 그릴 것 없음 (열린 빈 칸 없음 / 다 그림)
-
-
-## 가이드 대상을 세우고 숨은 선 점을 만든 뒤 문지름 상태를 비운다.
-## 🔴 여기서 **장착한 펜의 보정도**도 물려 준다 (세션 23) — 조각을 새로 잡을 때마다 다시 읽어,
-## 그리는 도중에 펜을 갈아 껴도 다음 조각부터 반영된다. 채점기는 아이템을 모른다(숫자만 받는다).
-func _set_trace(target: int, slot: int) -> void:
-	_trace = target
-	_trace_slot = slot
-	_scorer.set_reference_radius(_outer_radius())
-	_scorer.set_correction(_pen_correction())
-	_scorer.set_guide(_build_guide(target, slot))
-	_reset_reveal_fx()   # ⓑ 가이드가 바뀌었다 — 옛 가이드의 유령 반짝임을 남기지 않는다
-
-
 # ─────────────────── 🔴 세68 조립→탁본: 합성 가이드 통째 트레이스 ───────────────────
-## 합성된 조립본 가이드를 통째로 긋는 모드로 들어간다 (`_set_trace`와 동형이되 `_build_guide`
-## 대신 넘어온 점열을 쓴다). 슬라이스 패널이 조립 상태가 바뀔 때마다 부른다.
-## 🔴 기존 JIN/RUNE/GLYPH 경로 불변 — COMBINED는 per-piece 잠금 분기를 안 타 `_draw`·`_gui_input`이
-## 자동으로 그리기·입력을 처리한다(가이드+먹선 렌더는 `_trace != NONE` 공통 분기가 든다).
+## 합성된 조립본 가이드를 통째로 긋는 모드로 들어간다 — **라이브 유일 진입점**이다(세85 ⑨:
+## per-piece 가이드 생성기 `_set_trace`/`_build_guide`가 은퇴해 이제 대안이 없다).
+## 조립 상태가 바뀔 때마다 패널(`ring_forge_panel.recompose`)이 부른다.
 ## 🔴 세71c 선택 인자 확장 — `flat`은 지금처럼 scorer에(채점 무변경). `subpaths`가 오면 `_draw`가
 ## flat 한 줄 대신 **서브패스별 별도 폴리라인**으로 그린다(이음선 제거). `band_count`는 빈 층 흐린
 ## 동심원 개수. **둘 다 옛 기본값이면(subpaths=[]·band_count=0) 옛 동작 그대로** — 슬라이스 패널·
@@ -352,7 +294,6 @@ func _set_trace(target: int, slot: int) -> void:
 func enter_combined_trace(flat: PackedVector2Array, subpaths := [], band_count := 0,
 		show_band_lines := true, runes := []) -> void:
 	_trace = TraceTarget.COMBINED
-	_trace_slot = -1
 	_scorer.set_reference_radius(_outer_radius())
 	_scorer.set_correction(_pen_correction())
 	_scorer.set_guide(flat)
@@ -375,7 +316,7 @@ func combined_total() -> float:
 
 
 ## ⓑ 드러남 반짝임의 렌더 상태를 지금 가이드에 맞춰 비운다 (렌더 위생 — 채점 무관).
-## 가이드가 바뀌거나(_set_trace) 먹선을 지울 때(clear_stroke·clear_all) 부른다.
+## 가이드가 바뀌거나(enter_combined_trace) 먹선을 지울 때(clear_stroke·clear_all) 부른다.
 func _reset_reveal_fx() -> void:
 	_sparks.clear()
 	_was_revealed = PackedByteArray()
@@ -388,47 +329,14 @@ func _pen_correction() -> float:
 	return float(gs.stroke_correction()) if gs != null else 0.0
 
 
-## 대상별 숨은 정답 선 (조밀, 로컬 좌표). 이 위를 문지르면 드러난다.
-func _build_guide(target: int, slot: int) -> PackedVector2Array:
-	var pts := PackedVector2Array()
-	var ctr := _area_center()
-	var ro := _outer_radius()
-	match target:
-		TraceTarget.JIN:
-			# 🔴 안 골랐으면 밑그림이 없다 (세션 25) — 오른쪽 진 셀을 클릭해야 뜬다.
-			if _jin_idx < 0:
-				return pts
-			# 🔴 진 종류별 **닫힌 도형** (세션48) — 휠 크기 반영. 예전엔 종류와 무관하게 원 하나라
-			# 진을 8종으로 늘려도 **손 궤적이 똑같았다**(색만 다른 8지선다).
-			pts = jin_guide_pts(_jin_shape(), ctr, _jin_radius())
-		TraceTarget.RUNE:
-			# 🔴 룬 종류별 밑그림 (세션 34) — 닫힌 다각형의 꼭짓점을 변마다 촘촘히 잇는다.
-			# 렌더는 먹선 그대로라(_draw_locked) 이 밑그림 모양이 곧 "따라 그리는 룬"이다.
-			# 🔴 세81 M2: 룬 하나(`_rune_idx`)가 아니라 **자리별 목록**(`_asm.get_runes()`)을 그린다 —
-			# 융합진은 룬을 여럿 감싼다. 자리 1개(일반진)면 목록 하나 = 중심 하나 = 옛 그림과 동일.
-			var rlist := _asm.get_runes()
-			if rlist.is_empty():
-				return pts
-			var rpos := rune_slot_positions(rlist.size(), ctr, ro)
-			for ri in rlist.size():
-				var v := rune_guide_verts(int(rlist[ri]), rpos[ri], _rune_size())
-				var seg := v.size() - 1
-				for e in seg:
-					for t in 12:
-						pts.append(v[e].lerp(v[e + 1], float(t) / 12.0))
-				if seg >= 0:
-					pts.append(v[seg])
-		TraceTarget.GLYPH:
-			# 🔴 문양 = **방향을 가진 화살표** (세션 25). 예전엔 방향 없는 짧은 **작대기**였다:
-			# 책의 셀은 화살표(↑↓←→)를 그려 놓고 판의 밑그림은 작대기라, 응집과 발산이
-			# **똑같이 보였다** (GlyphDef.inward를 아무도 안 읽었다). 사용자가 화살표를 그리려다
-			# 막힌 것도, 결과물이 "작대기"인 것도 여기서 나왔다.
-			# ⚠ 칸을 안 골랐으면(-1) 빈 가이드다 — 칸은 사용자가 클릭해서 고른다.
-			if slot >= 0:
-				pts = glyph_guide_pts(_active, _slot_pos(slot),
-					Vector2.from_angle(_slot_angle(slot)),
-					ro * GLYPH_SIZE_FRAC * _glyph_scale_of(slot))
-	return pts
+## ⚠ **`_build_guide`(대상별 per-piece 가이드 생성기)는 세85 ⑨에 은퇴했다.** 진·룬·문양 세 갈래를
+## 각각 따로 긋던 시절의 함수인데, 세70부터 밑그림은 `compose_guide_paths`가 **한 장으로 합성**해
+## 패널이 `enter_combined_trace`로 통째로 넣는다. 세 갈래의 기하는 사라지지 않았다 —
+## 진 = `jin_guide_pts` · 룬 = `rune_subpath` · 문양 = `glyph_guide_pts`(전부 static·public)를
+## **합성 쪽이 그대로 부른다**. 즉 「셀에서 본 모양 = 손으로 그을 모양」 규약은 그대로다.
+## 🔴 룬 갈래는 삭제만 한 게 아니다 — 여기 있던 12등분 루프가 `compose_guide_paths`의 사본이었고
+## **크기 식이 이미 갈라져 있었다**(0.16R 고정 vs 0.18R + 다중 자리 축소, 감사 #26).
+## 산 쪽(합성)을 `rune_subpath`로 뽑아 단일 소스로 만들었다.
 
 
 ## 🔴 **문양 코드별 밑그림** (세션 47 — "새 문양 = 여기 한 갈래"). `rune_guide_verts`와 같은 규약이다.
@@ -472,7 +380,7 @@ static func glyph_guide_pts(code: int, p: Vector2, outward: Vector2, sz: float) 
 			# 몸통을 지나며 중간·머리에서 각각 꺾쇠. 꺾쇠는 q로 되돌아와 다음 구간으로 이어진다.
 			var back := -dir * (sz * ARROW_BACK_FRAC)
 			# ⚠ 0.9배까지만 좁힌다 — 깃 벌어짐 20×0.62×0.9 ≈ 11.2px가 붓의 드러남 반경 9.4px보다
-			# 커야 **몸통을 그어도 꺾쇠가 안 드러난다**(파일 머리 GLYPH_SIZE_FRAC 주석의 그 비율).
+			# 커야 **몸통을 그어도 꺾쇠가 안 드러난다**(파일 머리 ARROW_SIDE_FRAC 주석의 그 비율).
 			# 더 좁히면 세션 25의 "화살촉이 그릴 이유가 없다" 문제가 관통에서 되살아난다.
 			var side := side_u * (sz * ARROW_SIDE_FRAC * 0.9)
 			var v := PackedVector2Array([p - dir * sz])
@@ -619,6 +527,27 @@ static func combined_rune_size(ro: float, slot_count: int) -> float:
 	return s
 
 
+## 🔴 룬 하나의 **밑그림 점열** — 꼭짓점(`rune_guide_verts`)을 변마다 12등분해 이어 붙인 폴리라인.
+## 🔴 세85 ⑨(감사 #26): 이 루프가 **두 벌**이었다 — per-piece `_build_guide`의 RUNE 갈래(401-405)와
+## `compose_guide_paths`(639-643). 624줄 주석이 *"…와 **똑같이**"*라고 사본임을 자백했고,
+## **크기 식은 이미 갈라져 있었다**(per-piece `_outer_radius()*0.16*_rune_scale`, 다중 자리 축소 없음
+## vs 합성 `combined_rune_size`=0.18R + 자리 2개면 ×0.68). 그대로 뒀으면 융합진에서 **「본 것 ≠ 그을
+## 것」**(미리보기 0.1224R · 실제 0.16R)이 됐다 — 세13·25 탁본 정체성이 깨지는 자리다.
+## per-piece 갈래를 걷으며 **산 쪽(합성)을 이 함수로 뽑았다.** 크기 단일 소스는 `combined_rune_size`.
+## ⚠ `if seg >= 0` 가드가 계약이다 — 꼭짓점이 1개 이하인 룬에서 마지막 점을 중복 추가하지 않는다.
+## ⚠ static·인스턴스 상태 금지(관측점) — 헤드리스가 이 점열을 그대로 잰다.
+static func rune_subpath(rune_type: int, at: Vector2, size: float) -> PackedVector2Array:
+	var pts := PackedVector2Array()
+	var v := rune_guide_verts(rune_type, at, size)
+	var seg := v.size() - 1
+	for e in seg:
+		for t in 12:
+			pts.append(v[e].lerp(v[e + 1], float(t) / 12.0))
+	if seg >= 0:
+		pts.append(v[seg])
+	return pts
+
+
 ## 🔴 세84 #22 — **아직 룬을 안 고른 자리**의 마커 좌표·반지름. `runes`는 자리 순서대로의 룬 타입
 ## 목록이고 음수(RUNE_NONE)가 미선택이다. 반환 = `[{at: Vector2, r: float}, …]`(빈 배열 = 다 골랐다).
 ## 🔴 좌표는 `rune_slot_positions`, 크기는 `combined_rune_size` **정본을 그대로 부른다** — 각도·반지름을
@@ -656,15 +585,16 @@ static func compose_guide(jin_shape: int, runes: Array, band_defs: Array,
 ## 🔴 **null 밴드 = 빈 서브패스로 자리만 남긴다**(制약①) — flatten엔 무영향(빈 배열)이면서 보드가
 ## "빈 층 자리"를 셀 수 있게 한다. `compose_guide`(flat)가 이걸 flatten해 채점에 넣는다(둘이 한 소스).
 ## ⚠ static·인스턴스 상태 금지 — 헤드리스 테스트가 관측점으로 쓴다. band_defs[i] = GlyphRingDef(or null).
-## 🔴 재구현 시 갈라지는 세 자리(制約②, verbatim): ⓐ 룬 가드 `if seg >= 0: out.append(v[seg])`+변마다
-## 12등분 · ⓑ 밴드 frac은 **band_defs 원본 인덱스 i**로 BAND_RADII[i](null 건너뛴 압축 카운터 금지) · ⓒ
+## 🔴 재구현 시 갈라지는 세 자리(制約②): ⓐ 룬 점열은 **`rune_subpath` 정본을 부른다**(변마다 12등분
+## + `if seg >= 0` 가드 — 세85 ⑨에 사본을 청산했다. 여기서 다시 인라인하면 사본이 부활한다) ·
+## ⓑ 밴드 frac은 **band_defs 원본 인덱스 i**로 BAND_RADII[i](null 건너뛴 압축 카운터 금지) · ⓒ
 ## flat = flatten(subpaths)(위 compose_guide). 이 세 자리를 바꾸면 골든과 어긋난다.
 static func compose_guide_paths(jin_shape: int, runes: Array, band_defs: Array,
 		ctr: Vector2, ro: float) -> Array[PackedVector2Array]:
 	var paths: Array[PackedVector2Array] = []
 	# ① 진 윤곽 (바깥 닫힌 도형)
 	paths.append(jin_guide_pts(jin_shape, ctr, ro))
-	# ② 룬(들) — `_build_guide`의 RUNE 분기와 **똑같이** 변마다 12등분해 이어붙인다(밀도 규율).
+	# ② 룬(들) — 점열은 `rune_subpath` **단일 소스**가 만든다(세85 ⑨: 12등분 루프 사본 청산, 감사 #26).
 	# 🔴 세81 M2: 자리별 목록. 각 룬은 **자기 서브패스** — count 1이면 서브패스 하나(옛 단일 룬 무회귀),
 	# count ≥ 2면 갈래마다 별도 폴리라인(이음선 없음). 음수(RUNE_NONE) 자리는 서브패스를 건너뛴다
 	# (센티넬 = 그 자리 룬 미선택). 자리 좌표는 `rune_slot_positions`가 준다(위치 단일 소스).
@@ -676,15 +606,7 @@ static func compose_guide_paths(jin_shape: int, runes: Array, band_defs: Array,
 		var rt := int(runes[ri])
 		if rt < 0:
 			continue                  # 미선택 자리 — 서브패스 생략 (옛 센티넬 -1과 같은 뜻)
-		var rune_pts := PackedVector2Array()
-		var v := rune_guide_verts(rt, rpos[ri], rsz)
-		var seg := v.size() - 1
-		for e in seg:
-			for t in 12:
-				rune_pts.append(v[e].lerp(v[e + 1], float(t) / 12.0))
-		if seg >= 0:
-			rune_pts.append(v[seg])
-		paths.append(rune_pts)
+		paths.append(rune_subpath(rt, rpos[ri], rsz))
 	# ③ 밴드별 문양-고리 — 동심원 반경에 count번 깐다. null 밴드 = 빈 서브패스(자리만).
 	for i in band_defs.size():
 		var gr: GlyphRingDef = band_defs[i] as GlyphRingDef
@@ -761,8 +683,11 @@ static func layer_rings(band_defs: Array) -> Array:
 
 
 ## 🔴 밴드별 (motif × count)를 **기존 8칸 링 하나로 플래튼**한다 (세68 발사 계약 — 발사부 무변경).
-## ⚠ **세79에 발사 경로는 `layer_rings`로 갔다** — 층 순서를 버리기 때문이다. 이 함수는 이제
-## F6 대조군(`assembly_slice_panel`) 전용 레거시다. **새 코드에서 부르지 마라**(순서가 조용히 사라진다).
+## ⚠ **세79에 발사 경로는 `layer_rings`로 갔다** — 층 순서를 버리기 때문이다.
+## 🔴 **세85 ⑪: 유일한 라이브 호출자였던 F6 대조군(`assembly_slice_panel`)이 은퇴했다** —
+## 이제 src 호출자가 **0**이고, 남은 소비자는 `test_jin_layers_auto[2]`의 회귀 그물 하나뿐이다:
+## 「밴드가 하나뿐이면 층0 == flatten」이 **저장된 옛 도안의 발사가 안 바뀐다**의 증명이라
+## 그 기준자로 살려 둔다. **새 코드에서 부르지 마라**(순서가 조용히 사라진다).
 ## 밴드 순서대로 빈 칸을 채우고(band0 먼저), 8칸 상한(넘치면 버림). 빈 칸 = GLYPH_NONE(-1).
 ## 예: 발산(1)×3 + 응집(0)×3 → [1,1,1,0,0,0,-1,-1]. 발사부(ring_spell_system)가 이 8칸을
 ## 슬롯별로 전개한다(발산→탄·응집→기둥). defs를 아는 자리(패널·테스트)가 부른다 — 순수 데이터
@@ -783,11 +708,6 @@ static func flatten_bands(band_defs: Array) -> Array:
 			ring[idx] = int(gr.motif)
 			idx += 1
 	return ring
-
-
-## 지금 고른 진의 밑그림 도형 (`Enums.JinShape`). def가 없으면(순수 단위 테스트·폴백) 원.
-func _jin_shape() -> int:
-	return int(_jin_def.guide_shape) if _jin_def != null else Enums.JinShape.CIRCLE
 
 
 ## 🔴 **진 종류별 밑그림** (세션 48 — "새 진 = 여기 한 갈래"). `rune_guide_verts`·`glyph_guide_pts`와
@@ -890,10 +810,10 @@ static func jin_slot_dots(slots: Array, c: Vector2, s: float) -> Array:
 	return out
 
 
-## 🔴 칸 k의 각도 — **"칸 0=위, 시계방향" 규약의 단일 소스** (세션60 리뷰). 판의 칸 위치
-## (`_slot_pos`)와 책 다이어그램(`jin_slot_dots`)이 같이 부른다 — 한쪽에 식을 베끼면
-## 규약이 바뀔 때 책과 판이 조용히 어긋난다. 착탄 전개 각도(ring_spell_system의
-## `TAU*k/8`)와도 같은 회전 방향이다(기준 0이 진행 방향이냐 위냐만 다르다).
+## 🔴 칸 k의 각도 — **"칸 0=위, 시계방향" 규약의 단일 소스** (세션60 리뷰). 책 다이어그램
+## (`jin_slot_dots`)·HUD 슬롯·Tab 마법진 탭·문양-고리 배치(`glyph_ring_subpaths`)가 이 규약을
+## 공유한다 — 한쪽에 식을 베끼면 규약이 바뀔 때 조용히 어긋난다. 착탄 전개 각도
+## (ring_spell_system의 `TAU*k/8`)와도 같은 회전 방향이다(기준 0이 진행 방향이냐 위냐만 다르다).
 static func slot_angle(k: int) -> float:
 	return TAU * float(k) / float(SLOTS) - PI / 2.0
 
@@ -951,9 +871,7 @@ static func rune_guide_verts(rune_type: int, ctr: Vector2, s: float) -> PackedVe
 
 
 ## 지금 그릴 대상·현재 점수 조회 (바깥이 안내문·점수 표시에 쓴다).
-func trace_slot() -> int:
-	return _trace_slot
-
+## ⚠ 세85 ⑨ 은퇴: `trace_slot()`(그리던 문양 칸) — 통째 밑그림엔 칸이 없다.
 func is_tracing() -> bool:
 	return _trace != TraceTarget.NONE
 
@@ -980,10 +898,7 @@ func guide_points() -> PackedVector2Array:
 func trace_strokes() -> Array[PackedVector2Array]:
 	return _scorer.strokes()
 
-## 잠긴 손그림 조각 수 = 화면에 남아 있는 먹선 줄 수. 재편집이 **덮어쓰는지**(중복 추가가
-## 아닌지) 보는 관측점 — 테스트가 쓴다.
-func locked_count() -> int:
-	return _scorer.locked_pieces().size()
+## ⚠ 세85 ⑨ 은퇴: `locked_count()`(잠긴 조각 수) — 채점기의 조각 잠금과 함께 걷혔다.
 
 
 # ─────────────────────────── 문지르기 (채점기에 위임) ───────────────────────────
@@ -1055,131 +970,22 @@ func trace_stroke(local_pos: Vector2) -> void:
 	score_changed.emit(_scorer.piece_score())
 
 
-# ─────────────────────────── [다음] 수동 진행 · 분석 ───────────────────────────
+# ─────────────────────────── 분석 리포트 ───────────────────────────
 
-## 🔴 지금 조각을 잠그고(점수 저장) 다음으로 넘어간다 ([다음]). 반환:
-##   "advanced" = 다음 조각 · "finished" = 마지막이라 다 그림(분석) · "none" = 그릴 게 없음
-func advance() -> String:
-	if _trace == TraceTarget.NONE:
-		return "none"
-	# 🔴 아직 안 골랐다 (세션 25의 미선택 상태) — 잠글 조각이 없다.
-	# 문양: 그냥 넘기면 `_piece_key(GLYPH, -1)`이라는 유령 키에 점수가 저장된다.
-	# 진·룬: 그냥 넘기면 **그린 적 없는 진이 0점으로 잠긴다** (밑그림도 안 떴는데).
-	if _trace == TraceTarget.GLYPH and _trace_slot < 0:
-		return "none"
-	if _trace == TraceTarget.JIN and _jin_idx < 0:
-		return "none"
-	if _trace == TraceTarget.RUNE and _rune_idx < 0:
-		return "none"
-	var done := _trace
-	var slot := _trace_slot
-	var sc := _lock_current()
-	match done:
-		TraceTarget.JIN:
-			_asm.lock_jin()
-			_start_pulse(_area_center(), _jin_color())
-			stage_advanced.emit(_asm.stage())
-		TraceTarget.RUNE:
-			_asm.lock_rune()
-			_start_pulse(_area_center(), _rune_color())
-			stage_advanced.emit(_asm.stage())
-		TraceTarget.GLYPH:
-			if slot >= 0:
-				_asm.place_glyph(slot, _active)
-				_start_pulse(_slot_pos(slot), _glyph_color(_active))
-	_refresh_trace()
-	piece_locked.emit(done, slot, sc)
-	assembly_changed.emit()
-	queue_redraw()
-	if _trace == TraceTarget.NONE:
-		# ⓓ 완성 발광 — 렌더 타이머 시작만 (로직 분기 불변).
-		_finish_glow_t = 0.0
-		set_process(true)
-		finished.emit(get_analysis())
-		return "finished"
-	return "advanced"
+## ⚠ **세85 ⑨ 은퇴 목록** — 여기 있던 per-piece 진행이 통째로 걷혔다(파일 머리 참조):
+##   `advance()`([다음]으로 한 조각 잠그고 다음 단계로) · `finish()`(그리던 칸까지 잠그고 맺기) ·
+##   `select_slot()`/`_commit_glyph_slot()`/`_nearest_open_slot()`(문양 칸 클릭 편집) ·
+##   `_lock_current()`/`_piece_key()`(조각 점수 잠금). 전부 src 호출자 0이었다.
+## 통째 흐름의 대응물 = 패널의 `_on_start_draw` → `_finish` → `_on_inject`이고, 점수는 잠그지 않고
+## `combined_total()`(현재 획의 통째 점수)을 그때그때 읽는다.
 
-
-## 🔴 지금 그리던 문양 칸까지 잠그고 마법진을 **끝낸다** (맺기 — 남은 칸은 비운 채). 분석을 낸다.
-## 진·룬이 잠겨 있어야 한다(can_commit) — 바깥(패널)이 게이트한다.
-func finish() -> Dictionary:
-	if _trace == TraceTarget.GLYPH and _trace_slot >= 0 and _scorer.coverage() > 0.0:
-		_lock_current()
-		_asm.place_glyph(_trace_slot, _active)
-		_start_pulse(_slot_pos(_trace_slot), _glyph_color(_active))
-	_trace = TraceTarget.NONE
-	_trace_slot = -1
-	# ⓓ 완성 발광 — 렌더 타이머 시작만 (로직 분기 불변).
-	_finish_glow_t = 0.0
-	set_process(true)
-	queue_redraw()
-	# 🔴 M6 (세션 22): 여기서 _slots가 바뀌는데 예전엔 assembly_changed를 안 쏴서 advance()와
-	# 불일치였다. 지금은 증상이 없지만 구독자가 늘면 [맺기] 경로만 갱신을 놓친다.
-	assembly_changed.emit()
-	var a := get_analysis()
-	finished.emit(a)
-	return a
-
-
-## 마법진 분석 리포트 — 조각별 점수 + 종합 + 등급 (채점기가 계산, 열린 칸은 조립기가 안다).
+## 마법진 분석 리포트 — 종합 + 등급 (채점기가 계산, 열린 칸은 조립기가 안다).
+## 🔴 **죽은 코드가 아니다** — `get_assembly()`가 `a["score"]`에 쓰고, 그 `get_assembly()`를 라이브
+## `ring_forge_panel.build_assembly()`가 특별잉크 집계 창구로 부른다(감사 「손대지 말 것」 1번).
+## ⚠ per-piece 잠금이 은퇴해 조각별 점수(`_scores`)는 늘 비어 있다 → total 0 = **폐지 전에도 통째
+## 흐름에서 이미 그랬다**(COMBINED는 조각을 안 잠근다). 실제 점수는 패널 `_score_now()`가 쥔다.
 func get_analysis() -> Dictionary:
 	return _scorer.get_analysis(_asm.get_open())
-
-
-# ─────────────────── 문양 칸 자유 편집 (칸 클릭 → 골라 다시 그림, 세션 15) ───────────────────
-## 🔴 문양 단계에서 **아무 칸이나 골라** 편집한다 (사용자 확정: "칸클릭 문양 선택하고 내가 다시그림").
-## 그리던 칸을 충분히 그렸으면 먼저 자동으로 잠그고 넘어간다. 이미 채운 칸도 다시 골라 덮어 그린다.
-## public — 보드 입력(_gui_input)과 헤드리스 테스트가 부른다.
-func select_slot(k: int) -> void:
-	if _asm.stage() != STAGE_GLYPH or not _asm.is_open_slot(k) or k == _trace_slot:
-		return
-	if _trace == TraceTarget.GLYPH and _trace_slot >= 0 and _scorer.coverage() > COMMIT_COVER:
-		_commit_glyph_slot(_trace_slot)         # 그리던 칸을 먼저 확정
-	_set_trace(TraceTarget.GLYPH, k)            # 고른 칸에 화살표 가이드를 세운다(그 칸 크기로)
-	queue_redraw()
-	score_changed.emit(_scorer.piece_score())
-
-
-## 문양 칸 하나를 잠근다 (그린 먹선·문양·점수 저장). advance()의 문양 확정과 같되 단계는 안 넘긴다.
-func _commit_glyph_slot(slot: int) -> void:
-	var sc := _lock_current()
-	_asm.place_glyph(slot, _active)
-	_start_pulse(_slot_pos(slot), _glyph_color(_active))
-	piece_locked.emit(TraceTarget.GLYPH, slot, sc)
-	assembly_changed.emit()
-
-
-## 지금 조각의 점수·먹선을 채점기에 잠근다. 반환 = 그 조각 점수.
-func _lock_current() -> float:
-	return _scorer.lock(_piece_key(_trace, _trace_slot), _trace, _trace_slot,
-		_active if _trace == TraceTarget.GLYPH else -1)
-
-
-func _piece_key(target: int, slot: int) -> String:
-	match target:
-		TraceTarget.JIN:
-			return TraceScorer.KEY_JIN
-		TraceTarget.RUNE:
-			return TraceScorer.KEY_RUNE
-		TraceTarget.GLYPH:
-			return TraceScorer.glyph_key(slot)
-	return "?"
-
-
-## 🔴 클릭 위치에서 가장 가까운 열린 칸 — **너무 멀면 -1** (I3 버그 수정, 세션 22).
-## -1이면 칸을 안 바꾸고 현재 칸을 계속 그린다.
-func _nearest_open_slot(pos: Vector2) -> int:
-	var best := -1
-	var best_d2 := INF
-	for k in _asm.get_open():
-		var d2 := pos.distance_squared_to(_slot_pos(k))
-		if d2 < best_d2:
-			best_d2 = d2
-			best = k
-	var max_d := _outer_radius() * SLOT_PICK_FRAC
-	if best_d2 > max_d * max_d:
-		return -1
-	return best
 
 
 # ─────────────────────────── 데이터 주입 (Db → 보드) ───────────────────────────
@@ -1201,12 +1007,8 @@ func set_defs(jin: JinDef, runes: Array, glyph_defs: Array) -> void:
 	queue_redraw()
 
 
-func _jin_color() -> Color:
-	return _jin_def.ui_color if _jin_def else RING_LINE
-
-func _rune_color() -> Color:
-	var rd := _rune_defs.get(_rune_idx) as RuneDef   # _rune_idx = 고른 룬 타입 (세션 34)
-	return rd.ui_color if rd else RUNE_COLOR
+## ⚠ 세85 ⑨ 은퇴: `_jin_color()`/`_rune_color()` — **잠근 조각 먹선의 종류색**을 내던 자리다.
+## 진·룬 색의 라이브 소비자는 책 셀(`ring_book`)이고 거기는 자기 `set_defs`로 받는다.
 
 func _glyph_def_by_code(code: int) -> GlyphDef:
 	for d in _glyph_defs:
@@ -1223,43 +1025,28 @@ func _glyph_color(code: int) -> Color:
 	return d.ui_color if d else RING_LINE
 
 
-## 🔴 **헤드리스 관측점** (세82) — 지금 고른 문양 코드·그 색. 테스트가 `_active`·`_glyph_defs`
+## 🔴 **헤드리스 관측점** (세82) — 문양 색의 정본이 `.tres`인지 재는 자리. 테스트가 `_glyph_defs`
 ## 같은 private을 더듬으면 리팩터 때 **조용히 죽는다**(세22·23에 실제로 두 번 겪었다).
-func active_glyph() -> int:
-	return _active
-
+## ⚠ 세85 ⑨ 은퇴: `active_glyph()` — 짝인 `set_active_glyph()`가 걷히며 같이 나갔다.
 func glyph_color_of(code: int) -> Color:
 	return _glyph_color(code)
 
 
-## 🔴 세82: 이름의 **정본도 `GlyphDef.display_name`**이다(옛 `GLYPH_NAMES` 배열 은퇴).
-## defs가 없으면 코드를 그대로 보여준다 — "?"로 뭉개면 어느 문양인지조차 못 찾는다.
-func _glyph_name(code: int) -> String:
-	var d := _glyph_def_by_code(code)
-	return String(d.display_name) if d != null and d.display_name != "" else "문양%d" % code
+## ⚠ 세85 ⑨ 은퇴: `_glyph_name()` — 유일 소비자가 `ring_summary()`였다. 이름의 정본은 여전히
+## `GlyphDef.display_name`이고, 라이브 요약은 패널 `_compose_summary()`가 Db에서 직접 읽는다.
 
 
 # ─────────────────────────── 바깥이 주입하는 선택 ───────────────────────────
 
-func set_active_glyph(g: int) -> void:
-	# 🔴 세82: 옛 `clampi(g, 0, GLYPH_NAMES.size()-1)`은 **어휘 밖 코드를 조용히 눌렀다** —
-	# 배열을 안 늘린 채 새 문양(예: 응축 8)을 고르면 7로 눌려 **폭발 밑그림이 뜨는데 에러가 없다**.
-	# 이제 주입된 defs에 실제로 있는 코드만 받고, 없으면 **거부하고 경고한다**(조용히 다른 문양이
-	# 되는 것보다 안 바뀌는 게 낫다 — 사용자가 이상함을 즉시 안다).
-	# ⚠ defs 주입 전(부팅 직후·일부 테스트)엔 검증할 목록이 없으므로 예전처럼 통과시킨다.
-	if not _glyph_defs.is_empty() and _glyph_def_by_code(g) == null:
-		push_warning("문양 code %d는 카탈로그에 없다 — 선택을 무시한다 (data/glyphs 확인)" % g)
-		return
-	_active = g
-	# 🔴 고른 문양이 **밑그림을 정한다** (세션 25) — 응집←과 발산→은 화살표 방향이 반대다.
-	# 예전엔 여기서 가이드를 안 세워, Q·W를 눌러도 판의 밑그림이 그대로였다
-	# (사용자: "문양을 선택했을때 밑그림이 그려져야지"). 어차피 방향 없는 작대기라 티도 안 났다.
-	# ⚠ 그리던 획은 사라진다 (`set_guide` → `reset_stroke`). 밑그림이 통째로 바뀌었으니
-	# 남겨 봐야 **다른 문양을 겨눈 획**이다 — 휠로 크기를 바꿀 때와 같은 이유다.
-	if _trace == TraceTarget.GLYPH and _trace_slot >= 0:
-		_set_trace(_trace, _trace_slot)
-	queue_redraw()
-
+## ⚠ **세85 ⑨ 은퇴 목록** (전부 src 호출자 0 — 파일 머리 참조):
+##   `set_active_glyph()`/`active_glyph()`(지금 그릴 문양 코드) — 통째 흐름에선 문양을 낱개로 고르지
+##     않는다. 조립 단위가 **문양-고리**(`GlyphRingDef` = motif × count)이고 책이 밴드에 끼운다.
+##     ⚠ 옛 `clampi`가 어휘 밖 코드를 조용히 누르던 함정은 배열(`GLYPH_NAMES`)이 세82에 은퇴하며
+##     구조적으로 사라졌고, 지금 그 자리는 `test_glyph_data_auto[1]`(전 9값 Db 로드)이 지킨다.
+##   `choose_jin()`/`choose_rune()`/`jin_idx()`/`rune_idx()` — 진·룬 선택의 정본은 **패널**이다
+##     (`_sel_jin`·`_sel_runes` → `recompose()` → `enter_combined_trace`). 판은 점열만 받는다.
+##   `set_open_slots()` — 「진이 칸을 연다」축이 세85 ⑦에 은퇴했다(`JinDef.glyph_slots`).
+##   `ring_summary()` — `_asm`에 놓인 문양을 세던 요약. 라이브 요약은 패널 `_compose_summary()`다.
 
 ## 지금 긋는 획의 색 = 고른 잉크 색 (세션28). 패널이 잉크를 고를 때마다 부른다.
 func set_trace_ink(c: Color) -> void:
@@ -1274,121 +1061,44 @@ func set_ink(id: StringName) -> void:
 	_ink_id = id
 
 
-## 🔴 진 확대 상한 (세션29, 종이=규모) — 종이 등급이 정한다. 패널이 종이를 고를 때마다 부른다.
-## 현재 크기가 새 상한을 넘으면 끌어내린다(상급→기본 종이로 바꿨을 때 진이 상한 밖에 안 남게).
+## 🔴 진 확대 상한 (세션29, 종이=규모) — 종이 등급이 정한다.
+## ⚠ **종이 축은 세71d에 은퇴했다** — 패널이 진 규모를 1.0으로 굳혀(`_size_mult`) 이 함수의 src
+## 호출자는 0이다. `get_assembly()["size"]`가 아직 이 값을 싣기에 남겨 뒀다(스키마 계약).
+## 🔴 세85 ⑨: 옛 본문의 「밑그림 다시 세우기」 한 줄은 per-piece 가이드 생성기(`_set_trace`)를
+## 부르던 것이라 같이 걷었다 — 통째 밑그림의 크기는 패널이 `recompose()`로 정한다.
 func set_jin_scale_max(v: float) -> void:
 	_jin_scale_max = maxf(v, JIN_SCALE_MIN)
 	_jin_scale = minf(_jin_scale, _jin_scale_max)
-	if _trace == TraceTarget.JIN:
-		_set_trace(_trace, _trace_slot)   # 상한이 줄어 크기가 바뀌었으면 밑그림 다시
 	queue_redraw()
 
 
-## 🔴 **진을 고른다** (오른쪽 진 셀 클릭) → 왼쪽에 밑그림이 선다 (세션 25).
-## idx = 진 종류 (지금은 0만 — Db에 일반진 하나뿐이다. 늘어나면 그대로 인덱스가 는다).
-## ⚠ 진 단계가 아니면 무시한다 — 이미 잠근 진을 다시 고르는 건 [다시 그리기]의 일이다.
-func choose_jin(jin_def: JinDef = null) -> void:
-	if _asm.stage() != STAGE_JIN or _asm.has_jin():
-		return
-	# 🔴 고른 진(세션44, 진=형태) — 색·형태가 이 def에서 온다. 무인자(테스트·폴백)면 기본 진 유지.
-	if jin_def != null:
-		_jin_def = jin_def
-	_jin_idx = 0
-	_asm.set_jin(StringName(_jin_def.id) if _jin_def != null else &"")   # 🔴 발사·저장 계약에 진 담기
-	# 🔴 **진이 칸을 연다** (세션60 — JinDef.glyph_slots). 진 선택에 원자적으로 붙어야
-	# "진은 골랐는데 칸은 옛것"인 순간이 없다. null(무인자 테스트·폴백)이면 현 칸 유지.
-	if jin_def != null:
-		_asm.set_open_slots(jin_def.glyph_slots)
-		# 🔴 세81 M2: 진이 **룬 자리 수**도 정한다(융합진=2). 진 선택에 원자적으로 붙인다 —
-		# glyph_slots와 같은 자리. 자리 1(일반진)이면 옛 흐름과 동일(무회귀).
-		_asm.set_rune_slots(jin_def.rune_slots)
-	_set_trace(TraceTarget.JIN, -1)     # 고른 진으로 밑그림을 세운다
-	queue_redraw()
-	score_changed.emit(_scorer.piece_score())
-
-
-## 🔴 **룬을 고른다** (오른쪽 룬 셀 클릭) → 중심에 룬별 밑그림이 선다 (세션 25·34).
-## rune_type = Enums.RuneType (불0·물2·바람3·번개4·흙5·풀6 — 세션49에 3→6종). `_build_guide`가 type별 모양을 그리고
-## `_asm.set_rune`이 발사·저장 계약에 담는다 — 세션 34 전엔 밑그림만 바뀌고 발사는 늘 불이었다.
-## 🔴 세81 M2: `slot` = 넣을 룬 자리(0부터·-1=다음 빈 자리). 가드가 `has_rune()`→**`runes_ready()`**로
-## 바뀐 게 핵심이다 — 융합진은 자리를 **다 채우기 전까지** 계속 고를 수 있어야 한다(한 번 고르면
-## 막던 옛 규칙이면 두 번째 룬을 못 넣는다). 자리 1개 진은 한 번 고르면 runes_ready라 옛 흐름과 동일.
-func choose_rune(rune_type: int = Enums.RuneType.FIRE, slot: int = -1) -> void:
-	if _asm.stage() != STAGE_RUNE or _asm.runes_ready():
-		return
-	_asm.set_rune(rune_type, slot)       # 🔴 발사·저장에 실제 룬 타입을 담는다 (밑그림뿐이 아니다)
-	_rune_idx = _asm.get_rune()          # 관측점(primary) — 색·아이콘 폴백이 읽는다
-	_set_trace(TraceTarget.RUNE, -1)
-	queue_redraw()
-	score_changed.emit(_scorer.piece_score())
-
-
-## 고른 진·룬 (테스트·UI의 관측점). -1 = 아직 안 골랐다.
-func jin_idx() -> int:
-	return _jin_idx
-
-func rune_idx() -> int:
-	return _rune_idx
-
-
-## 🔴 열린 칸을 지정한다 — 이 칸들만 열린다. 닫힌 칸의 문양은 걷어낸다.
-## 보통은 `choose_jin`이 내부에서 부른다(진이 칸을 연다, 세션60) — 이 공개 래퍼는
-## 테스트·미래 경로(중첩진 등)의 직접 주입구다.
-func set_open_slots(open_slots: Array) -> void:
-	_asm.set_open_slots(open_slots)
-	_refresh_trace()                     # 새로 열린 칸의 첫 빈 칸에 문양 유령을 세운다
-	queue_redraw()
-	assembly_changed.emit()
-
-
+## 🔴 판을 비운다 — 조립 상태·채점·연출 타이머를 처음으로 돌린다.
+## ⚠ 여기서 가이드를 **다시 세우지 않는다**(세85 ⑨): 합성 밑그림의 소유자는 패널이고, 라이브
+## `open()`·`clear_board()`가 이 호출 **직후 `recompose()`**로 COMBINED를 다시 넣는다.
+## 예전엔 `_refresh_trace()`가 per-piece 진 가이드를 세워 그 사이에 잠깐 다른 가이드가 서 있었다.
 func clear_all() -> void:
 	_asm.clear()
 	_scorer.clear()
-	_jin_idx = -1                        # 빈 판 = 아무것도 안 고른 상태 (밑그림 없음)
-	_rune_idx = -1
+	_trace = TraceTarget.NONE            # 빈 판 = 그릴 것 없음 (패널의 recompose가 다시 넣는다)
+	_combined_subpaths = []
+	_combined_band_count = 0
+	_combined_runes = []
 	_jin_scale = 1.0
-	_rune_scale = 1.0
-	_glyph_scale = {}
-	_pulse_t = -1.0
-	_finish_glow_t = -1.0                # ⓓ 새 판에 옛 완성 발광이 남지 않게 (렌더 위생)
-	_reset_reveal_fx()                   # ⓑ 반짝임도 — 아래 _refresh_trace가 다시 세우지만 명시가 계약이다
+	_reset_reveal_fx()                   # ⓑ 반짝임도 — 명시가 계약이다
 	# 🔴 잉크 소모·비율은 새 진마다 리셋 (세션29). ⚠ _ink_id·_jin_scale_max(종이 상한)은 **안** 지운다 —
 	# 잉크·종이 선택은 지속된다(다시 그려도 유지). 여기서 지우는 건 "이번 진에 얼마나 썼나"뿐.
 	_special_ink_used = &""
 	_special_strokes = 0
 	_total_strokes = 0
-	_refresh_trace()                     # 진 가이드부터 다시 세운다
 	queue_redraw()
-	stage_advanced.emit(_asm.stage())
-	assembly_changed.emit()
-
-
-func ring_summary() -> String:
-	# 🔴 세82: **실제로 놓인 코드만** 센다. 예전엔 `GLYPH_NAMES.size()`로 카운터를 미리 세웠는데,
-	# 그 배열이 어휘보다 짧으면 `counts[g] += 1`이 **없는 키**라 런타임 에러였다(세44에 관통이
-	# 늘면서 실제로 터졌고, 그래서 "길이가 계약"이라는 위험한 규약이 생겼다).
-	# 이제 놓인 것만 세므로 **어휘 길이에 의존하지 않는다** — 그 함정이 구조적으로 사라졌다.
-	var counts := {}
-	var codes: Array[int] = []
-	var open := _asm.get_open()
-	for k in open:
-		var g := _asm.glyph_at(k)
-		if g == GLYPH_NONE:
-			continue
-		if not counts.has(g):
-			counts[g] = 0
-			codes.append(g)
-		counts[g] += 1
-	codes.sort()   # 표시 순서는 code 오름차순 (응집0·발산1… — 책 셀 순서와 같다)
-	var parts: Array[String] = []
-	for g in codes:
-		parts.append("%s×%d" % [_glyph_name(g), counts[g]])
-	if parts.is_empty():
-		return "빈 진" if open.is_empty() else "빈 칸 %d" % open.size()
-	return " ".join(parts)
 
 
 # ─────────────────────────── 기하 ───────────────────────────
+## ⚠ 세85 ⑨ 은퇴: `_jin_radius`/`_rune_size`/`_glyph_scale_of`(휠 크기 조절) ·
+##   `_ring_radius`/`_slot_angle`/`_slot_pos`(1차 고리 위 8칸 좌표). 전부 **per-piece 판 기하**였다 —
+##   문양을 칸 하나씩 그리던 시절에 "이 칸이 어디냐"를 답하던 자리다. 통째 밑그림의 좌표는
+##   `compose_guide_paths`(합성·static)가 쥔다. 🔴 static `slot_angle`은 **살아 있다**(HUD·Tab
+##   미니 다이어그램이 「칸 0=위, 시계방향」 규약의 단일 소스로 부른다) — 내리지 마라.
 
 func _area_center() -> Vector2:
 	return size * 0.5
@@ -1396,44 +1106,18 @@ func _area_center() -> Vector2:
 func _outer_radius() -> float:
 	return minf(size.x, size.y) * 0.44
 
-## 진 반지름 — 마우스 휠 크기 반영. 룬·고리·칸은 기준(_outer_radius)에 고정된다.
-func _jin_radius() -> float:
-	return _outer_radius() * _jin_scale
-
-## 룬 삼각 크기 — 마우스 휠 반영.
-func _rune_size() -> float:
-	return _outer_radius() * 0.16 * _rune_scale
-
-## 문양 칸 하나의 개별 크기 배율 (휠, 기본 1.0). 세션 15.
-func _glyph_scale_of(slot: int) -> float:
-	return float(_glyph_scale.get(slot, 1.0))
-
-func _ring_radius() -> float:
-	return _outer_radius() * RING_RADIUS_FRAC
-
-## 각도 식의 정본은 static `slot_angle`(세션60) — 여기는 편의 별칭이다.
-func _slot_angle(k: int) -> float:
-	return slot_angle(k)
-
-func _slot_pos(k: int) -> Vector2:
-	return _area_center() + Vector2.from_angle(_slot_angle(k)) * _ring_radius()
-
 
 # ─────────────────────────── 입력 (손으로 숨은 선 문지르기) ───────────────────────────
-## 🔴 좌클릭 드래그로 가이드를 문지르면 먹선이 남는다. 누를 때마다 = 다시 그리기(덮어씀).
-## 확정은 자동이 아니다 — 패널의 [다음]이 advance()를 부른다.
+## 🔴 좌클릭 드래그로 가이드를 문지르면 먹선이 남는다. 우클릭 = 다시 그리기.
+## ⚠ 확정은 판이 안 한다 — 패널의 [분석 ▶]이 `combined_total()`을 읽어 리포트를 낸다.
+## ⚠ 세85 ⑨ 은퇴: 누른 자리의 **문양 칸 고르기**(`_nearest_open_slot`→`select_slot`)와
+##   **휠 크기 조절**(`_resize_current`). 통째 밑그림은 칸이 없고 크기는 패널이 정한다.
+##   ⚠ 휠은 하단 안내(`HINT_DRAW`)가 광고하지 않는다 — 「없는 조작을 적지 마라」는 이미 지켜져 있었다.
 
 func _gui_input(event: InputEvent) -> void:
 	var mb := event as InputEventMouseButton
 	if mb != null and mb.button_index == MOUSE_BUTTON_LEFT:
 		if mb.pressed:
-			# 🔴 문양 단계 — 누른 자리의 칸을 골라 편집한다 (세션 15). 다른 칸이면 이전 칸 자동 확정.
-			# ⚠ 칸에서 멀면 _nearest_open_slot이 -1을 준다 → 칸을 안 바꾸고 현재 칸을 계속 그린다
-			#   (세션 22 I3: 컷오프가 없어서 획 시작점이 옆 칸에 조금 가까우면 현재 칸이 멋대로 확정됐다).
-			if _asm.stage() == STAGE_GLYPH:
-				var k := _nearest_open_slot(mb.position)
-				if k >= 0 and k != _trace_slot:
-					select_slot(k)
 			_drawing = true
 			begin_stroke()                # 펜을 댔다 = 새 획 (앞 획은 남는다 — 세션 25)
 			trace_stroke(mb.position)
@@ -1448,39 +1132,10 @@ func _gui_input(event: InputEvent) -> void:
 		clear_stroke()
 		accept_event()
 		return
-	# 🔴 마우스 휠 — 지금 그릴 조각(진/룬/문양 칸)의 크기 조절 (세션 14c·15)
-	if mb != null and mb.pressed and mb.button_index == MOUSE_BUTTON_WHEEL_UP:
-		_resize_current(SCALE_STEP)
-		accept_event()
-		return
-	if mb != null and mb.pressed and mb.button_index == MOUSE_BUTTON_WHEEL_DOWN:
-		_resize_current(-SCALE_STEP)
-		accept_event()
-		return
 	var mm := event as InputEventMouseMotion
 	if mm != null and _drawing:
 		trace_stroke(mm.position)
 		accept_event()
-
-
-## 지금 그리는 조각의 크기를 바꾼다 — 가이드를 새 크기로 다시 세운다(현재 획은 지워짐).
-func _resize_current(delta: float) -> void:
-	match _trace:
-		TraceTarget.JIN:
-			# 🔴 상한은 종이 등급이 정한다 (세션29) — const가 아니라 _jin_scale_max (set_jin_scale_max).
-			_jin_scale = clampf(_jin_scale + delta, JIN_SCALE_MIN, _jin_scale_max)
-		TraceTarget.RUNE:
-			_rune_scale = clampf(_rune_scale + delta, RUNE_SCALE_MIN, RUNE_SCALE_MAX)
-		TraceTarget.GLYPH:
-			# 🔴 문양은 **칸마다 개별** 크기 (세션 15). 지금 고른 칸의 화살표만 키운다.
-			if _trace_slot < 0:
-				return
-			_glyph_scale[_trace_slot] = clampf(_glyph_scale_of(_trace_slot) + delta,
-				GLYPH_SCALE_MIN, GLYPH_SCALE_MAX)
-		_:
-			return   # 없음 단계(열린 빈 칸 없음/완성)에선 휠 무시
-	_set_trace(_trace, _trace_slot)   # 새 크기로 가이드 재생성
-	queue_redraw()
 
 
 # ─────────────────────────── 발사 스윕 · 착지 펄스 ───────────────────────────
@@ -1490,27 +1145,12 @@ func play_cast() -> void:
 	set_process(true)
 
 
-## ⓒ 색 인자 (세션62) — 잠근 조각의 색(진/룬/문양색)으로 펄스가 물든다. 내부 함수라
-## (tests 미참조 — 설계에서 그렙 확인) 시그니처 변경이 안전하다. 기본값 = 옛 주홍.
-func _start_pulse(at: Vector2, col: Color = FIRE_HI) -> void:
-	_pulse_at = at
-	_pulse_color = col
-	_pulse_t = 0.0
-	set_process(true)
-
-
 func _process(delta: float) -> void:
 	var busy := false
 	if _cast_t >= 0.0:
 		_cast_t += delta / _cast_dur
 		if _cast_t >= 1.0:
 			_cast_t = -1.0
-		else:
-			busy = true
-	if _pulse_t >= 0.0:
-		_pulse_t += delta / PULSE_DUR
-		if _pulse_t >= 1.0:
-			_pulse_t = -1.0
 		else:
 			busy = true
 	# ⓑ 반짝임 — 수명이 다한 광점을 걷어내고, 남아 있으면 계속 돈다.
@@ -1523,13 +1163,6 @@ func _process(delta: float) -> void:
 				alive.append(sp)
 		_sparks = alive
 		if not _sparks.is_empty():
-			busy = true
-	# ⓓ 완성 발광 타이머
-	if _finish_glow_t >= 0.0:
-		_finish_glow_t += delta / FINISH_GLOW_DUR
-		if _finish_glow_t >= 1.0:
-			_finish_glow_t = -1.0
-		else:
 			busy = true
 	if not busy:
 		set_process(false)
@@ -1546,26 +1179,14 @@ func _draw() -> void:
 		draw_arc(ctr, maxf(_cast_t * (ro * 1.12), 1.0), 0.0, TAU, 64,
 			Color(FIRE_HI, 0.5), 3.0, true)
 
-	# 🔴 잠근 조각들 — **그린 먹선을 그대로** 유지한다 (정답 모양으로 안 바꾼다).
-	# 단, 지금 다시 그리는 칸/조각은 아래 '지금 그리는 조각'이 새 먹선으로 보여주니 건너뛴다.
-	for L in _scorer.locked_pieces():
-		if L.target == _trace and L.slot == _trace_slot:
-			continue
-		_draw_locked(L)
+	# ⚠ 세85 ⑨ 은퇴: **잠근 조각 먹선 렌더**(`_draw_locked`/`_locked_color`)와 **per-piece 구조 힌트**
+	# (1차 고리 + 열린 빈 칸 점 + 편집 중인 칸 강조). 둘 다 「조각을 하나씩 잠근다」가 전제였고,
+	# 통째 흐름엔 잠금이 없어 `_scorer.locked_pieces()`가 늘 비고 `_asm.has_rune()`이 늘 거짓이라
+	# **한 번도 안 그려졌다**(라이브 코드 사이에 끼어 있던 죽은 갈래 — 감사 #25).
 
-	# 구조 힌트 — 룬까지 그렸으면(문양 단계) 1차 고리 + 열린 빈 칸 위치만 연하게 안내
-	if _asm.has_rune():
-		draw_arc(ctr, _ring_radius(), 0.0, TAU, 64, RING_LINE, 1.0, true)
-		for k in _asm.get_open():
-			if _asm.glyph_at(k) == GLYPH_NONE:
-				draw_arc(_slot_pos(k), ro * 0.05, 0.0, TAU, 16, SLOT_OPEN, 1.5, true)
-		# 🔴 지금 고른(편집 중인) 문양 칸을 강조한다 — 어느 칸을 그리는지 보이게 (세션 15)
-		if _trace == TraceTarget.GLYPH and _trace_slot >= 0:
-			draw_arc(_slot_pos(_trace_slot), ro * 0.11, 0.0, TAU, 24, Color(FIRE_HI, 0.7), 1.5, true)
-
-	# 🔴 세71c COMBINED 빈 층/룬 자리 가이드 (制約⑥ — COMBINED에서만, per-piece 경로 무변경).
-	# band_count만큼 흐린 동심원(빈 층도 늘 보여 "여기가 1층" 구조가 읽힌다) + 룬 미선택 시 중앙 마커.
-	# subpaths가 없으면(1인자 옛 호출·슬라이스·test) 건너뛴다 — band_count=0이라 옛 동작 유지.
+	# 🔴 세71c COMBINED 빈 층/룬 자리 가이드. band_count만큼 흐린 동심원(빈 층도 늘 보여
+	# "여기가 1층" 구조가 읽힌다) + 룬 미선택 자리 마커.
+	# subpaths가 없으면(빈 진·1인자 호출) 건너뛴다 — band_count=0이라 아무것도 안 그린다.
 	if _trace == TraceTarget.COMBINED and not _combined_subpaths.is_empty():
 		# 🔴 세81: 층 구분 동심원은 **미리보기(ASSEMBLE)에서만** — 그릴 때(DRAW)는 문양이 선에 걸쳐
 		# 지저분하다는 지적으로 끈다. 룬 미선택 중앙 마커는 조립 안내라 계속 둔다.
@@ -1627,47 +1248,8 @@ func _draw() -> void:
 		draw_circle(spos, lerpf(SPARK_R0, SPARK_R1, st),
 			Color(SPARK_COLOR, (1.0 - st) * SPARK_ALPHA))
 
-	# ⓓ 완성 발광 — 잠긴 획 전체에 추가 글로우 + 바깥 반경을 훑는 밝은 호.
-	# 기존 play_cast 스윕(_cast_t)과 별개다 — 그건 발사 연출, 이건 "다 그렸다" 연출.
-	if _finish_glow_t >= 0.0:
-		var fa := (1.0 - _finish_glow_t) * FINISH_GLOW_ALPHA
-		for L in _scorer.locked_pieces():
-			for s in L.strokes:
-				if s.size() >= 2:
-					draw_polyline(s, Color(_locked_color(L), fa), GLOW_WIDTH * 1.4, true)
-		var a0 := _finish_glow_t * TAU - PI / 2.0
-		draw_arc(ctr, ro, a0, a0 + FINISH_ARC_SPAN, 24, Color(FINISH_ARC_COLOR, fa), 3.0, true)
-
-	# ⓒ 착지 펄스 ("탁") — 조각색 이중 고리(r·0.7r) + 중심 블룸 페이드
-	if _pulse_t >= 0.0:
-		var pa := (1.0 - _pulse_t) * 0.85
-		var pr := maxf(_pulse_t * (ro * 0.34), 1.0)
-		draw_arc(_pulse_at, pr, 0.0, TAU, 28, Color(_pulse_color, pa), 2.5, true)
-		draw_arc(_pulse_at, maxf(pr * 0.7, 1.0), 0.0, TAU, 24,
-			Color(_pulse_color, pa * 0.55), 1.8, true)
-		draw_circle(_pulse_at, ro * PULSE_BLOOM_FRAC * (1.0 - _pulse_t),
-			Color(1.0, 0.95, 0.8, pa * 0.35))
-
-
-## 잠근 조각의 렌더 색 (조각 종류색). ⓓ 완성 발광도 같은 색을 쓴다 — 베끼면 갈라진다.
-func _locked_color(L: TraceScorer.LockedPiece) -> Color:
-	match L.target:
-		TraceTarget.JIN:
-			return _jin_color()
-		TraceTarget.RUNE:
-			return _rune_color()
-		TraceTarget.GLYPH:
-			return _glyph_color(L.glyph)
-	return TRACE_INK
-
-
-## 🔴 잠근 조각 = **그린 먹선 그대로** 렌더 (정답 모양 교체 없음). 색은 조각 종류로 구분.
-## ⓐ 먹선마다 밑에 조각색 저알파 글로우 패스를 먼저 깐다 (정적 — process 부담 0).
-func _draw_locked(L: TraceScorer.LockedPiece) -> void:
-	var col := _locked_color(L)
-	for s in L.strokes:
-		if s.size() >= 2:
-			draw_polyline(s, Color(col, GLOW_ALPHA_LOCKED), GLOW_WIDTH, true)
-	for s in L.strokes:
-		if s.size() >= 2:
-			draw_polyline(s, col, 2.8, true)
+	# ⚠ 세85 ⑨ 은퇴: ⓒ **착지 펄스**("탁" — 조각을 놓은 자리에서 퍼지는 고리)와 ⓓ **완성 발광**
+	# (잠긴 획 전체 글로우 + 바깥을 훑는 호). 둘 다 **per-piece 잠금이 트리거**였고(`advance`/
+	# `finish`/`_commit_glyph_slot`), 세70 통째 흐름엔 잠금이 없어 이미 한 번도 안 떴다.
+	# 🔴 통째 흐름에 「완성했다」 연출을 주고 싶으면 **새로 붙여라** — 패널 `_finish()`가 부를
+	# 공개 훅 한 줄이면 된다. 죽은 트리거를 되살리는 게 아니다(그건 per-piece 부활이다).

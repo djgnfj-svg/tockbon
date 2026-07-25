@@ -62,14 +62,14 @@ func _on_ring_cast(assembly: Dictionary, origin: Vector2, aim_dir: Vector2) -> v
 	var status_mult := Db.status_mult_of(StringName(assembly.get("special_ink", &"")),
 		float(assembly.get("special_ratio", 0.0)))
 
-	# 🔴 지팡이 발사 패턴 부활 (세션 42). 옛 소비자(spell_system.wand_shots)는 세션22에 매장됐고
-	# 그 뒤로 이 새 경로는 무조건 단발이었다 — GameState.wand_pattern()이 정의만 되고 orphan이었다.
-	# 이제 진(캐리어)을 패턴이 정한 각도들로 **여러 개** 쏜다. 착탄 전개는 캐리어당 그대로 돈다.
-	# 🔴 발사 형태 = 마법진이 그려진 **진**이 정한다 (세션44, 진=형태). 그전엔 장착 지팡이
-	# (wand_pattern)가 쥐었다 — 이제 진이 도안에 저장돼 "이 마법은 이 형태로 나간다"가 도안에 묶인다.
-	# 진 없는 옛 도안·매직볼은 폴백(장착 지팡이 또는 단발) — 하위호환.
+	# 🔴 발사 형태 = 마법진이 그려진 **진**이 정한다 (세션44, 진=형태) — 도안에 저장돼 "이 마법은
+	# 이 형태로 나간다"가 도안에 묶인다. 진 없는 옛 도안·매직볼은 단발(SINGLE)로 떨어진다.
+	# 🔴 **세85: 지팡이 폴백(`GameState.wand_pattern()`)을 은퇴시켰다** (감사 #5, 사용자 확정).
+	# 그 폴백은 `jin_def == null`일 때만 걸리는데 도안 생성 두 경로가 전부 진을 채워 **도달 불가**였고,
+	# 형태는 진·문양·층이 이미 답하는 질문이라 지팡이가 또 쥐면 두 축이 같은 자리를 다툰다.
+	# 지팡이는 이제 **세기·속도 스칼라**(`wand_speed_mult`·`wand_mana_mult`)만 준다 — 되살리지 마라.
 	var jin_def := Db.get_jin(StringName(assembly.get("jin", &"")))
-	var pattern := jin_def.pattern if jin_def != null else GameState.wand_pattern()
+	var pattern := jin_def.pattern if jin_def != null else Enums.WandPattern.SINGLE
 	# 🔴 세션48: 진의 **규모**(body_scale)가 그 진의 발사 형태를 키운다 — 발수·진폭·몸집. 진이 없는
 	# 매직볼·옛 도안은 1.0(예전과 동일). 사용자 확정: "크면 진마다 있는 발사 형태가 강해지게."
 	var scale := jin_def.body_scale if jin_def != null else 1.0
@@ -106,8 +106,11 @@ func _spawn_carrier(layers: Array, origin: Vector2, angle: float,
 	var fire := _fire_hit(power, status_mult, runes)
 	# 🔴 세81 M2: 캐리어도 몸으로 직격할 때 **모든 룬 상태**를 얹어야 한다(rune_hits) — 안 그러면
 	# 캐리어가 처음 스친 적만 반응이 안 나고 전개 탄은 나는 갈라짐이 생긴다.
+	# 🔴 세85: **장착 지팡이가 진의 비행 속도를 정한다**(`wand_speed_mult` — 은퇴한 `wand_pattern`을
+	# 대신하는 실효 축). 맨손이면 배수 1.0이라 예전과 픽셀 동일하다. 수명은 안 건드린다 —
+	# 속도만 올리면 사거리도 같이 늘어 "빠른 지팡이"가 한 축으로 읽힌다.
 	carrier.setup(layers, angle,
-		balance.projectile_base_speed, balance.projectile_lifetime_sec,
+		balance.projectile_base_speed * GameState.wand_speed_mult(), balance.projectile_lifetime_sec,
 		fire.damage, fire.rune_type, fire.status, fire.status_power, fire.get("rune_hits", []))
 	# 🔴 경로·규모는 setup **뒤에** 얹는다. 진 없는 도안(매직볼)은 안 부르므로 예전과 픽셀 동일.
 	if jin_def != null:

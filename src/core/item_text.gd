@@ -1,5 +1,5 @@
 extends RefCounted
-## 🔴 장비 **효과 문구·발사 패턴 라벨**의 단일 소스 (세84 감사 #21). class_name 없음 —
+## 🔴 장비 **효과 문구**의 단일 소스 (세84 감사 #21). class_name 없음 —
 ## `const ItemText := preload("res://src/core/item_text.gd")`로 참조한다.
 ##
 ## 왜 생겼나: 같은 문구가 **세 벌**로 흩어져 있었다 —
@@ -19,7 +19,7 @@ extends RefCounted
 ## ⚠ 수치는 전부 아이템 `.tres`의 `params`에서 읽는다 — 여기에 밸런스 상수를 박지 마라.
 
 
-## 장비 효과 한 줄 — 펜=보정, 로브=HP/마나, 지팡이=발사 패턴, 부적=구르기 쿨, 모자=이동 속도.
+## 장비 효과 한 줄 — 펜=보정, 로브=HP/마나, 지팡이=진 속도·발사 마나, 부적=구르기 쿨, 모자=이동 속도.
 ## 효과가 없거나 장비가 아니거나 `it == null`이면 빈 문자열(호출부가 "" 검사로 줄을 건너뛴다).
 static func effect_text(it: ItemDef) -> String:
 	if it == null:
@@ -35,7 +35,7 @@ static func effect_text(it: ItemDef) -> String:
 				parts.append("마나 +%d" % int(it.params["mana_max_add"]))
 			return " · ".join(parts)
 		Enums.ItemKind.WAND:
-			return wand_pattern_text(it)
+			return wand_text(it)
 		Enums.ItemKind.CHARM:
 			return "구르기 쿨 -%d%%" % roundi((1.0 - float(it.params.get("dash_cooldown_mult", 1.0))) * 100.0)
 		Enums.ItemKind.HAT:
@@ -44,23 +44,24 @@ static func effect_text(it: ItemDef) -> String:
 			return ""
 
 
-## 지팡이 아이템의 발사 패턴 문구. 🔴 **말은 `pattern_label`이 판다** — 여긴 `.tres`에서 값을
-## 꺼내는 일만 한다(옛 사본 둘은 match를 각자 갖고 있어 값을 더하면 갈라졌다).
-static func wand_pattern_text(it: ItemDef) -> String:
+## 지팡이 아이템의 효과 문구 — **세기·속도 스칼라** (세85, 감사 #5).
+##
+## 🔴 옛 `wand_pattern_text`/`pattern_label`(발사 패턴 → "산탄 (여러 발)"·"전방위")은 **은퇴했다**:
+## 발사 형태는 이제 **진**만 정한다(`JinDef.pattern`). 지팡이가 형태를 쥐던 축은 실제로 도달 불가였고
+## (`ring_spell_system`의 폴백이 진 없는 도안에서만 걸렸다) 두 축이 같은 자리를 다투고 있었다.
+## 되살리지 마라 — 지팡이가 다시 형태를 말하면 진이 정한 형태와 화면에서 갈라진다.
+##
+## 🔴 여기 적는 축은 **소비자가 있는 것만이다**: `wand_speed_mult`(→ `ring_spell_system._spawn_carrier`)·
+## `wand_mana_mult`(→ `GameState.cast_mana_cost`). 소비자 없는 키를 문구에 적으면 그게 곧
+## `attack_cooldown_mult`(선언만 있고 아무도 안 읽어 1.15가 무효였다)의 재발이다.
+static func wand_text(it: ItemDef) -> String:
 	if it == null:
 		return ""
-	return pattern_label(int(it.params.get("wand_pattern", Enums.WandPattern.SINGLE)))
-
-
-## 발사 패턴(`Enums.WandPattern`) → 사람 말. 지팡이를 안 든 경우도 `GameState.wand_pattern()`이
-## SINGLE을 돌려주므로 늘 뭔가 보여 준다(캐릭터 탭이 그 경로로 부른다).
-## ⚠ BURST·SPRAY·SEEK는 아직 표시 어휘가 없다 — 폴백("단발")이 아니라 값이 오면 여기 한 줄이다
-## (지금 콘텐츠엔 도달 경로가 없다 — 감사 #5).
-static func pattern_label(pattern: int) -> String:
-	match pattern:
-		Enums.WandPattern.MULTI:
-			return "산탄 (여러 발)"
-		Enums.WandPattern.NOVA:
-			return "전방위"
-		_:
-			return "단발"
+	var parts: Array[String] = []
+	var spd := float(it.params.get("wand_speed_mult", 1.0))
+	if not is_equal_approx(spd, 1.0):
+		parts.append("진 속도 %+d%%" % roundi((spd - 1.0) * 100.0))
+	var mana := float(it.params.get("wand_mana_mult", 1.0))
+	if not is_equal_approx(mana, 1.0):
+		parts.append("발사 마나 %+d%%" % roundi((mana - 1.0) * 100.0))
+	return " · ".join(parts)

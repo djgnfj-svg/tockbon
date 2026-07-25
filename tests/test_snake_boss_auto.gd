@@ -60,7 +60,9 @@ func _test_def_loads() -> void:
 	if def != null:
 		_check(is_equal_approx(def.hp, 320.0), "hp = 320 (세58-B 챕터 하향, 실제 %.0f)" % def.hp)
 		_check(str(def.params.get("ai", "")) == "boss_snake", "params.ai == boss_snake")
-		_check(def.is_elite, "is_elite = true")
+		# 🔴 세85: `is_elite` 단정을 걷었다 (감사 #20 · 결정 ⑧) — 그 필드는 **게임 로직 소비자가
+		# 0곳**이었고 이 줄이 유일한 독자였다. 죽은 필드를 재는 단정은 「보스답다」를 재는 게 아니라
+		# 스키마에 그 필드가 남아 있다는 사실만 재는 것이라 검출력이 0이다(hp·ai·drops가 실제 축이다).
 		# drops가 기존 아이템 id인지 (엉뚱한 id가 아니라).
 		var ok := true
 		for d in def.drops:

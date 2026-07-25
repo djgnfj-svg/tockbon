@@ -7,7 +7,6 @@ script = ExtResource("1")
 id = &"jin_fuse"
 display_name = "융합진 2등급"
 slot_count = 8
-glyph_slots = Array[int]([0, 1, 2, 3, 4, 5, 6, 7])
 band_count = 2
 rune_slots = 2
 body_scale = 1.0

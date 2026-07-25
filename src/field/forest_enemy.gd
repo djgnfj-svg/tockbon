@@ -799,7 +799,7 @@ func take_hit(damage: float, rune_type: int, status: int, status_power: float) -
 ##
 ## 🔴 룬 조각(fragment_*)은 **`until_unlock` 관문 드롭으로만** 나온다 (세58, 정본 docs/PROGRESSION.md
 ## — 「뼈대는 확정, 살은 랜덤」). 잡몹 순수 확률 조각은 세58에 은퇴했다 — 조각을 확률 줄로 되살리면
-## test_progression_auto [4]·test_decode_auto ⑥이 붉는다. 새 관문 = 적 .tres의 until_unlock 드롭 한 줄.
+## test_progression_auto [4]·test_rune_unlock_auto ⑥이 붉는다. 새 관문 = 적 .tres의 until_unlock 드롭 한 줄.
 ##
 ## 🔴 `Audio.play(&"pickup")`은 여기서 **뺐다** — 소리는 실제로 주울 때(픽업) 울린다.
 ##

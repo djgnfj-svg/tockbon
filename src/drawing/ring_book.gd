@@ -3,7 +3,8 @@ extends Control
 ##
 ## 옛 forge_book처럼 **탭으로 넘겨 본다**: 진 · 룬 · 문양. 고른 것이 왼쪽 보드에 곧바로 적용된다.
 ##   • 🔴 진 탭 — **보유한 진을 격자로 열거**(세션48에 3→8종). 고른 진이 발사 형태·비행 경로와
-##     **어느 문양 칸이 열리는지**(JinDef.glyph_slots — 옛 문양본 축을 세션60에 진으로 흡수)를 정한다.
+##     **층 수**(JinDef.band_count)와 **룬 자리 수**(rune_slots)를 정한다.
+##     ⚠ 세85 ⑦에 「진이 문양 칸을 연다」(glyph_slots) 축은 은퇴했다.
 ##   • 룬 탭 — 불 하나 (열람용)
 ##   • 문양 탭 — 응집←·발산→ (진이 연 칸을 이걸로 채운다)
 ##
@@ -288,19 +289,11 @@ func _draw() -> void:
 			_draw_band_sockets(font, top)
 
 
-func _draw_single_cell(font: Font, top: float, name_text: String, desc: String,
-		icon: String, kind: String, placed: bool, icon_col: Color) -> void:
-	var cw := 120.0
-	var ch := 120.0
-	var r := Rect2((size.x - cw) * 0.5, top, cw, ch)
-	_cells.append({"rect": r, "kind": kind, "value": 0})
-	draw_rect(r, CELL_SEL_BG if placed else CELL_BG, true)
-	draw_rect(r, SEL_EDGE if placed else CELL_LINE, false, 2.0 if placed else 1.0)
-	_draw_icon(icon, r.get_center() + Vector2(0, -10.0), 30.0, [icon_col])
-	var label := "✓ 그림" if placed else desc
-	_text_center(font, r.position + Vector2(cw * 0.5, ch - 26.0), name_text, NAME_COLOR, 11)
-	_text_center(font, r.position + Vector2(cw * 0.5, ch - 12.0), label,
-		SEL_EDGE if placed else DESC_COLOR, 8)
+## ⚠ **세85 ⑨ 은퇴: `_draw_single_cell` + 그것만 쓰던 `_draw_icon`.** 진·룬이 각각 한 종뿐이던
+## 시절의 「가운데 큰 셀 하나」 폴백 렌더인데, 진·룬·문양이 전부 격자(`_draw_jin_cells` 등)로
+## 바뀌면서 **호출자가 0**이 됐다. 🔴 되살리지 마라 — `_draw_icon`의 `"fire"` 갈래가 룬 삼각형
+## **좌표를 베낀 사본**이라, 세49에 `rune_guide_verts` 하나로 합친 단일 소스가 다시 갈라진다
+## (「셀에서 본 모양 = 손으로 그을 모양」이 깨지는 자리다).
 
 
 ## 진 탭 — **보유 진**을 셀로 열거 (세션44, 진=형태). 클릭 = 그 진 id가 jin_selected로 나간다.
@@ -406,7 +399,7 @@ func _jin_rune_slots_of(jd: JinDef) -> int:
 ##
 ## 🔴 **세83에 뺀 것 둘** (이 셀이 답하는 질문을 좁혔다):
 ##   • **8칸 점 다이어그램**(세60) — 주황 점 8개가 윤곽 원 **위에** 얹혀 원을 8토막으로 갉아먹었고,
-##     지금 진 3종이 전부 `glyph_slots=[0..7]`이라 **정보량이 0인데 노이즈만 컸다**(사용자 지적:
+##     지금 진 3종이 전부 같은 칸 배치라 **정보량이 0인데 노이즈만 컸다**(사용자 지적:
 ##     *"원에 주황색으로 표시되어있음"*). 칸이 채워졌나는 **완성된 도안**을 그리는 HUD
 ##     (`hud._draw_jin_diagram`)·Tab 「마법진」 탭이 답한다 — 거긴 점이 실제 정보를 나른다.
 ##   • **패턴×경로 힌트 획**(세48) — `pattern`·`motion`은 여전히 살아있는 발사 축이지만
@@ -663,22 +656,6 @@ func _ring_icon(c: Vector2, radius: float, gr: GlyphRingDef) -> void:
 ## ⚠ 옛 `_motif_name(code)`은 세82에 지웠다 — 소켓·목록이 `display_name`("발산 고리 ×5")에
 ## 모티프 이름을 **또** 붙여 "발산 고리 ×5 (발산→×5)"로 나오던 걸 걷어내자 **소비자가 0**이 됐다.
 ## 문양 이름이 다시 필요해지면 주입된 `_glyph_defs`에서 `code`로 찾아라(책은 오토로드를 안 본다).
-
-
-## 아이콘. jin·fire = 진·룬 (폴백 단일 셀 전용 — 격자 셀은 각자 전용 렌더를 쓴다)
-func _draw_icon(kind: String, c: Vector2, s: float, data: Array) -> void:
-	match kind:
-		"jin":
-			var jc: Color = data[0] if data.size() > 0 else RingBoard.RING_LINE
-			draw_arc(c, s, 0.0, TAU, 40, jc, 2.5, true)
-			draw_arc(c, s * 0.5, 0.0, TAU, 32, Color(jc, 0.5), 1.5, true)
-		"fire":
-			var col: Color = data[0] if data.size() > 0 else RingBoard.RUNE_COLOR
-			draw_polyline(PackedVector2Array([
-				c + Vector2(0, -s), c + Vector2(s * 0.87, s * 0.5),
-				c + Vector2(-s * 0.87, s * 0.5), c + Vector2(0, -s)]), col, 2.5, true)
-		_:
-			pass
 
 
 func _text(font: Font, at: Vector2, text: String, col: Color, fs: int) -> void:

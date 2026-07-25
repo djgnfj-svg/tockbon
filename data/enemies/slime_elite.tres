@@ -25,6 +25,4 @@ params = {
 "move_speed": 45.0,
 "size": 1.9
 }
-is_elite = true
 drops = Array[ExtResource("1_220r5")]([SubResource("Resource_x3uey")])
-night_buff = 1.3

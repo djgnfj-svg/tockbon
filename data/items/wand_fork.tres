@@ -7,9 +7,8 @@ script = ExtResource("1")
 id = &"wand_fork"
 kind = 2
 grade = 2
-display_name = "세 갈래 붓대"
+display_name = "쾌속 붓대"
 params = {
-"attack_cooldown_mult": 1.0,
-"wand_damage_add": 0.0,
-"wand_pattern": 1.0
+"wand_mana_mult": 1.0,
+"wand_speed_mult": 1.5
 }

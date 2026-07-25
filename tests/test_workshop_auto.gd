@@ -105,7 +105,7 @@ func _run() -> void:
 	_check("창고에 없는 펜은 못 낀다", not gs.equip_gear(&"pen_mid"))
 
 	# ── ⑤ 세션42 새 부위 효과 — 파생 getter가 실제로 바뀐다 (모자·부적·로브·지팡이) ──
-	# 🔴 이 넷은 착용만 되고 효과가 죽어 있었다(지팡이=orphan wand_pattern, 부적=dash_cooldown_mult
+	# 🔴 이 넷은 착용만 되고 효과가 죽어 있었다(지팡이=도달 불가 wand_pattern, 부적=dash_cooldown_mult
 	# 미배선, 모자=신설). 여기가 "껴도 아무 일 없다"의 회귀 가드다.
 	var base_speed: float = gs.move_speed()
 	gs.add_item(&"hat_basic")
@@ -129,11 +129,36 @@ func _run() -> void:
 	_check("🔴 로브가 마나 상한을 올린다 (+10)", is_equal_approx(gs.mana_max(), base_mana + 10.0))
 	gs.unequip_gear(int(Enums.ItemKind.ROBE))
 
+	# 🔴 세85: 지팡이 축이 **발사 패턴 → 세기·속도 스칼라**로 갈렸다 (감사 #5). 옛 검사
+	# (`wand_pattern() == MULTI`)는 게터가 옳은 값을 줘도 **발사가 그 값을 못 받는** 상태를 못 잡았다 —
+	# 실제로 두 지팡이는 게임에서 `wand_basic`과 성능이 완전히 같았다. 여기선 두 축이 **맨손과 다른가**만
+	# 재고(장착 라운드트립), 「발사에 도달하나」는 `test_ring_spell_auto[12]`가 실제 발사로 잰다.
+	# ⚠ 배수 값을 박지 않는다 — 튜닝 한 번에 거짓 빨강이 되지 않게 **대소·원복 관계**로만 잰다.
+	var base_wspeed: float = gs.wand_speed_mult()
+	var base_cost: float = gs.cast_mana_cost()
 	gs.add_item(&"wand_fork")
 	_check("지팡이 장착 성공", gs.equip_gear(&"wand_fork"))
-	_check("🔴 지팡이가 발사 패턴을 정한다 (산탄=MULTI)", gs.wand_pattern() == Enums.WandPattern.MULTI)
+	_check("🔴 지팡이가 진 속도를 올린다 (맨손보다 빠르다)", gs.wand_speed_mult() > base_wspeed)
 	gs.unequip_gear(int(Enums.ItemKind.WAND))
-	_check("지팡이 해제하면 단발(SINGLE)", gs.wand_pattern() == Enums.WandPattern.SINGLE)
+	_check("지팡이 해제하면 진 속도 원복", is_equal_approx(gs.wand_speed_mult(), base_wspeed))
+
+	gs.add_item(&"wand_ring")
+	_check("둘레 지팡이 장착 성공", gs.equip_gear(&"wand_ring"))
+	_check("🔴 지팡이가 발사 마나를 줄인다 (맨손보다 싸다)", gs.cast_mana_cost() < base_cost)
+	gs.unequip_gear(int(Enums.ItemKind.WAND))
+	_check("지팡이 해제하면 발사 마나 원복", is_equal_approx(gs.cast_mana_cost(), base_cost))
+
+	# 🔴 **세 지팡이가 서로 다르다** — 재료를 태운 제작이 순수 손실이 아니라는 계약(감사 #5의 심장).
+	# 하나라도 파라미터가 빠지면(= 옛 `wand_fork`처럼 cooldown·damage가 0) 여기가 빨개진다.
+	var seen := {}
+	for wid: StringName in [&"wand_basic", &"wand_fork", &"wand_ring"]:
+		gs.add_item(wid)
+		gs.equip_gear(wid)
+		seen[wid] = "%.4f/%.4f" % [gs.wand_speed_mult(), gs.cast_mana_cost()]
+		gs.unequip_gear(int(Enums.ItemKind.WAND))
+	_check("🔴 지팡이 3종이 서로 다른 성능이다 (%s)" % [seen],
+		seen[&"wand_basic"] != seen[&"wand_fork"] and seen[&"wand_basic"] != seen[&"wand_ring"] \
+		and seen[&"wand_fork"] != seen[&"wand_ring"])
 
 	print("RESULT pass=%d fail=%d" % [_pass, _fail])
 	if _fail == 0:

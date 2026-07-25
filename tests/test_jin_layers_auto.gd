@@ -15,6 +15,11 @@ extends SceneTree
 ## ⚠ **balance 수치를 하드코딩하지 않는다** — 두 배치의 **관계**(개수 1↔3, 반경 대소)로 잰다.
 ##   수치를 박으면 손맛 튜닝(F5) 한 번에 그물이 거짓 빨강이 된다.
 ##
+## 🔴 세85 ⑪ — F6 조립 슬라이스 벤치(`assembly_slice_panel` + `test_assembly_slice{,_auto}`)가
+##   은퇴하면서 그 파일의 **RingBoard/Db 유닛 그물**이 여기로 이관됐다: [0]에 문양-고리 전 종수·
+##   발산5/응집3 실값·sort 정렬, [2]에 `flatten_bands` 자체 계약(순서·truncate·null).
+##   (합성 밑그림 계약은 `test_ring_trace_auto`로 갔다 — 그쪽이 「밑그림·긋기」 담당이다.)
+##
 ## 주의: -s 모드는 오토로드 전역 등록보다 먼저 컴파일되므로 오토로드 식별자·모듈 preload 금지 —
 ## 첫 프레임 후 load()·/root 접근. 지역 변수는 의도적으로 동적 타입.
 
@@ -70,8 +75,12 @@ func _run() -> void:
 
 
 # ── [0] Db 로드 (🔴 .tres 파싱 침묵사 그물 — 세50 바람 룬) ──
+## 🔴 세85 ⑪ 이관: 옛 `test_assembly_slice_auto[0]`이 재던 **문양-고리 전수 계약**이 여기로 왔다
+## (F6 대조군 벤치가 은퇴하면서 그 파일이 통째로 사라졌다 — 그냥 지우면 「전 종수」·「발산5/응집3
+## 실값」·「sort 정렬」 셋의 그물이 조용히 없어진다). 개수를 안 세면 .tres 한 장이 파싱 실패로
+## 증발해도 전 스위트가 그린이다 — `test_rune_unlock_auto`의 「룬 6종 로드」와 같은 역할이다.
 func _test_db_load() -> void:
-	print("[0] M1 콘텐츠 3종이 Db에 실제로 로드된다")
+	print("[0] M1 콘텐츠 + 문양-고리 전수가 Db에 실제로 로드된다")
 	var sp = _db.get_glyph_ring(&"gr_spread3")
 	var ex = _db.get_glyph_ring(&"gr_explode1")
 	var g2 = _db.get_jin(&"jin_plain_g2")
@@ -82,6 +91,16 @@ func _test_db_load() -> void:
 	# 🔴 M1 전제: 1등급(1층)은 겹이 하나뿐이라 **감쌀 순서 자체가 안 생긴다**.
 	_check(g2 != null and int(g2.band_count) == 2,
 		"jin_plain_g2 = 2등급(band_count 2) — 순서를 만들려면 2겹이 필요하다")
+	# 🔴 전 종수 — 새 문양-고리를 더하면 이 기대치를 같이 올려라(줄었으면 파싱 침묵사 의심).
+	var rings: Array = _db.all_glyph_rings()
+	_check(rings.size() == 5,
+		"문양-고리 5종 로드 (실제 %d — .tres 파싱 실패면 조용히 줄어든다)" % rings.size())
+	var r5 = _db.get_glyph_ring(&"gr_radiate5")
+	var g3 = _db.get_glyph_ring(&"gr_gather3")
+	_check(r5 != null and int(r5.motif) == G_RADIATE and int(r5.count) == 5, "gr_radiate5 = 발산×5")
+	_check(g3 != null and int(g3.motif) == G_GATHER and int(g3.count) == 3, "gr_gather3 = 응집×3")
+	_check(rings.size() >= 2 and rings[0].sort <= rings[1].sort,
+		"all_glyph_rings가 sort 오름차순으로 준다 (책 셀 순서의 근거)")
 
 
 # ── [1] layer_rings = 밴드 → 층 배열 (발사 계약) ──
@@ -126,6 +145,22 @@ func _test_flatten_parity() -> void:
 	var none: Array = _board.layer_rings([])
 	_check(none.size() == 1 and (none[0] as Array).size() == SLOTS,
 		"밴드 0개 → 빈 층 1개 (flatten_bands([])와 동치, 실제 %d층)" % none.size())
+
+	# 🔴 세85 ⑪ 이관 — `flatten_bands` **자체의 계약**(옛 `test_assembly_slice_auto[2]`).
+	# F6 대조군 벤치가 은퇴해 이 함수의 src 호출자는 0이지만, **위 동치 검사의 기준자**로 살아 있다.
+	# 기준자가 조용히 망가지면 위 「층0 == flatten」이 **둘 다 틀린 채로 그린**이 된다 —
+	# 그래서 기준자 쪽도 독립으로 잰다(라운드로빈 순서·8칸 truncate·null 건너뜀).
+	var a := _mk_ring(G_RADIATE, 3)
+	var b := _mk_ring(G_GATHER, 3)
+	_check(_same_ring(_board.flatten_bands([a, b]), [1, 1, 1, 0, 0, 0, -1, -1]),
+		"발산3+응집3 → [1,1,1,0,0,0,-1,-1] (실제 %s)" % str(_board.flatten_bands([a, b])))
+	_check(_same_ring(_board.flatten_bands([b, a]), [0, 0, 0, 1, 1, 1, -1, -1]),
+		"밴드 순서가 배치를 바꾼다 (응집 먼저 → %s)" % str(_board.flatten_bands([b, a])))
+	var big: Array = _board.flatten_bands([_mk_ring(G_RADIATE, 5), _mk_ring(G_GATHER, 5)])
+	_check(big.size() == SLOTS and _same_ring(big, [1, 1, 1, 1, 1, 0, 0, 0]),
+		"8칸 상한 truncate (5+5=10 → 앞 8칸 %s)" % str(big))
+	_check(_same_ring(_board.flatten_bands([a, null]), [1, 1, 1, -1, -1, -1, -1, -1]),
+		"빈 밴드(null)는 **건너뛴다** — layer_rings와 정반대라 둘을 헷갈리면 안 된다")
 
 
 # ── [3] _as_layers 정규화 (옛 8칸 한 겹 흡수) ──
@@ -348,6 +383,14 @@ func _ring(fills: Dictionary) -> Array:
 	for k in SLOTS:
 		r.append(int(fills.get(k, GLYPH_NONE)))
 	return r
+
+
+## motif·count만 있는 in-memory GlyphRingDef (flatten 계약 검증용 — 세85 ⑪ 이관).
+func _mk_ring(motif: int, count: int) -> GlyphRingDef:
+	var gr := GlyphRingDef.new()
+	gr.motif = motif
+	gr.count = count
+	return gr
 
 
 func _all(g: int) -> Array:

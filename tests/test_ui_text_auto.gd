@@ -129,7 +129,7 @@ func _test_rune_slot_positions_single_source() -> void:
 		"자리 1개 = 중심 (룬 1개 무회귀의 보장 경로)")
 
 
-## [5] 🔴 장비 효과 문구·발사 패턴 라벨 = `src/core/item_text.gd` 하나 (감사 #21).
+## [5] 🔴 장비 효과 문구 = `src/core/item_text.gd` 하나 (감사 #21).
 ## 옛 사본 셋(tab_panel ×3 · workshop_panel ×2)이 포맷 문자열까지 같아서, 값을 하나 더하면
 ## 고친 곳만 맞고 나머지는 빈 문자열/"단발"이 됐다.
 ## 🔴 **사본 재발 감지 스캔** — 두 패널에 옛 함수 정의가 다시 생기면 여기서 빨개진다
@@ -139,15 +139,27 @@ func _test_item_text_single_source() -> void:
 	var it = load("res://src/core/item_text.gd")
 	_check(it.effect_text(_db.get_item(&"pen_basic")) == "손그림 보정 +0.15",
 		"펜 = 손그림 보정 (실제 %s)" % it.effect_text(_db.get_item(&"pen_basic")))
-	_check(it.effect_text(_db.get_item(&"wand_fork")) == "산탄 (여러 발)",
-		"지팡이 = 패턴 말 (실제 %s)" % it.effect_text(_db.get_item(&"wand_fork")))
+	# 🔴 세85: 지팡이 문구가 **패턴 말 → 세기·속도 스칼라**로 바뀌었다 (감사 #5 은퇴).
+	# ⚠ 배수 값을 박지 않는다 — .tres를 조이면 문구가 따라오되 그게 거짓 빨강이 되진 않게
+	# **어떤 축을 적는가**만 잰다. 지팡이 3종 전부 최소 한 축은 적어야 한다(전부 1.0이면 빈 줄 = 그 자체가 버그).
+	for wid: StringName in [&"wand_basic", &"wand_fork", &"wand_ring"]:
+		var wt: String = it.effect_text(_db.get_item(wid))
+		_check(wt != "" and (wt.contains("진 속도") or wt.contains("발사 마나")),
+			"%s = 세기·속도 축을 적는다 (실제 %s)" % [wid, wt])
+	_check(not it.effect_text(_db.get_item(&"wand_fork")).contains("산탄"),
+		"🔴 지팡이가 더는 발사 형태를 말하지 않는다 (형태는 진이 정한다)")
 	_check(it.effect_text(_db.get_item(&"robe_basic")).begins_with("HP +"),
 		"로브 = HP/마나 (실제 %s)" % it.effect_text(_db.get_item(&"robe_basic")))
 	_check(it.effect_text(null) == "", "null = 빈 문자열 (호출부가 줄을 건너뛴다)")
 	_check(it.effect_text(_db.get_item(&"ink_basic")) == "", "장비가 아니면 빈 문자열")
-	_check(it.pattern_label(0) == "단발" and it.pattern_label(1) == "산탄 (여러 발)" \
-		and it.pattern_label(2) == "전방위" and it.pattern_label(5) == "단발",
-		"패턴 라벨 4갈래 (미구현 값은 단발 폴백)")
+	# 🔴 세85: `pattern_label`·`wand_pattern_text`는 **은퇴했다** — 지팡이가 발사 형태를 안 정하면서
+	# 라벨의 소비자가 0이 됐다(소비자 0 함수를 남기면 「있는 기능」 행세를 한다 — 감사 T3).
+	# 되살아나면 지팡이가 다시 형태를 말한다는 뜻이라 여기서 잡는다.
+	var itf = FileAccess.open("res://src/core/item_text.gd", FileAccess.READ)
+	var itsrc = itf.get_as_text() if itf != null else ""
+	_check(itsrc != "", "item_text.gd 를 읽었다")
+	_check(not itsrc.contains("func pattern_label") and not itsrc.contains("func wand_pattern_text"),
+		"🔴 은퇴한 패턴 라벨이 안 되살아났다")
 
 	for path in ["res://src/hud/tab_panel.gd", "res://src/base/workshop_panel.gd"]:
 		var f = FileAccess.open(path, FileAccess.READ)

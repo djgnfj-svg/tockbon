@@ -47,6 +47,4 @@ params = {
 "phase2_rush_cd": 1.8,
 "weakness_mult": 1.6
 }
-is_elite = true
 drops = Array[ExtResource("1_drop")]([SubResource("Resource_core"), SubResource("Resource_sap")])
-night_buff = 1.2

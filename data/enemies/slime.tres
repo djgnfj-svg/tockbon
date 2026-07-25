@@ -25,4 +25,3 @@ params = {
 "move_speed": 55.0
 }
 drops = Array[ExtResource("1_f5jfp")]([SubResource("Resource_coin")])
-night_buff = 1.4

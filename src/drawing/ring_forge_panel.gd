@@ -206,8 +206,9 @@ func _ready() -> void:
 	_report.draw.connect(_draw_report)
 	_spread.pivot_offset = BOOK_RECT.get_center()   # 책 펼침 애니의 회전축 = 책 한가운데
 
-	# 🔴 세71 통째 흐름 — stage machine 시그널(stage_advanced·piece_locked·finished)은 **안 구독**한다.
-	# 조립본을 한 번에 긋는 COMBINED 모드라 per-piece 잠금이 없다. score_changed만 통째 점수 라벨에 쓴다.
+	# 🔴 세71 통째 흐름 — 조립본을 한 번에 긋는 COMBINED 모드라 per-piece 잠금이 없다.
+	# ⚠ 그래서 판이 쏘던 stage machine 시그널 넷(stage_advanced·piece_locked·finished·assembly_changed)은
+	# 구독자가 0이었고 **세85 ⑨에 판에서 통째로 은퇴했다**. 남은 판→패널 신호는 아래 둘뿐이다.
 	_board.score_changed.connect(_on_combined_score)
 	_board.stroke_ended.connect(_on_stroke_ended)   # 🔴 미뤄 둔 잉크 팔레트 재빌드를 획 끝에 흘린다
 
