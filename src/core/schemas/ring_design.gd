@@ -127,7 +127,7 @@ static func runes_of(runes_v: Array, fallback_rune: int) -> Array:
 ## 🔴 왜 core에 있나: "내 마법진이 어떻게 생겼나"를 읽는 자리가 UI마다 생길 텐데(Tab 마법진 탭·
 ## 책 리포트·HUD), 각자 `rings`를 직접 뜯으면 **층 판별이 또 갈라진다**(세79에 발사·요약·HUD
 ## 세 곳으로 갈라져 HUD가 조용히 거짓말한 전례). ⚠ **문양 이름·색은 여기 안 넣는다** —
-## 이 스키마는 core라 drawing(`RingBoard.GLYPH_NAMES`)을 참조하면 모듈 경계가 깨진다.
+## 이 스키마는 core라 drawing(`RingBoard`)이나 오토로드(`Db`)를 참조하면 모듈 경계가 깨진다.
 ## 코드→이름 해석은 **표시하는 쪽**이 한다.
 func layer_summary() -> Array:
 	var out: Array = []
@@ -151,11 +151,19 @@ func layer_summary() -> Array:
 ## 🔴 끼어 있으면 `RingPower.power_display`가 내는 숫자는 **갈래 하나의 위력**이다(확산이 위력을
 ## 갈래로 배분하므로 — `ring_power.gd` 머리 주석의 경계). 그냥 "위력 N"이라 적으면 리포트가
 ## 거짓말하는 걸로 읽히므로, 표시하는 쪽은 이 값을 보고 "갈래당 위력 N"이라 적는다.
-## 계열 판별 자체는 `Enums.is_modifier_glyph` 단일 소스가 쥔다(여긴 순회만 한다).
-func has_modifier_glyph() -> bool:
+## 🔴🔴 **계열 목록을 인자로 받는다** (세82). 이 스키마는 `class_name` Resource라 **`Db`를 볼 수
+## 없다** — `-s` 테스트가 오토로드 등록 전에 컴파일하다 터지고(이 파일 머리 주석이 두 번 경고),
+## 에디터 인스펙터·리소스 프리로드 문맥에선 `Db`가 아예 없어 **조용히 `false`**를 돌려준다.
+## 그러면 HUD가 "갈래당 위력"을 "위력"이라 적는다 — **세79가 잡으려고 이 함수를 만든 바로 그 거짓말**이다.
+## 그래서 판정에 필요한 것만 밖에서 받는다: 호출부(HUD·패널)가 `Db.modifier_codes()`를 넘긴다.
+## takbon-rules §3의 관용구 그대로다("책·보드는 오토로드를 안 본다 → 패널이 판정을 넘겨준다").
+## 계열의 진짜 단일 소스는 `GlyphRules.BEHAVIORS`(문양 데이터의 `behavior`)다 — 여긴 순회만 한다.
+func has_modifier_glyph(modifier_codes: Array) -> bool:
+	if modifier_codes.is_empty():
+		return false
 	for layer_v in layers_of(rings):
 		for g in (layer_v as Array):
-			if Enums.is_modifier_glyph(int(g)):
+			if int(g) in modifier_codes:
 				return true
 	return false
 

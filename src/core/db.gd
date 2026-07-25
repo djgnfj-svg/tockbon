@@ -2,6 +2,10 @@ extends Node
 ## data/ 리소스 레지스트리 — 룬·적·아이템 정의 조회 (TECH_SPEC §3).
 ## .tres 인스턴스 작성: 룬=모듈 B / 적=모듈 C / 아이템=모듈 D.
 
+## 문양 계열 판별(변형형인가)의 단일 소스 — `modifier_codes()`가 쓴다. 순수 static 표라
+## `Db`를 되참조하지 않는다(세82 — 순환·`-s` 컴파일 함정 둘 다 없다).
+const GlyphRules := preload("res://src/core/glyph_rules.gd")
+
 ## {Enums.RuneType: RuneDef}
 var runes: Dictionary = {}
 ## {StringName: EnemyDef}
@@ -70,6 +74,7 @@ func reload() -> void:
 		var chapter := res as ChapterDef
 		if chapter:
 			chapters[chapter.id] = chapter
+	reindex_glyphs()
 
 func get_rune(type: Enums.RuneType) -> RuneDef:
 	return runes.get(type) as RuneDef
@@ -189,6 +194,54 @@ func all_jins() -> Array[JinDef]:
 		out.append(j)
 	out.sort_custom(func(a: JinDef, b: JinDef) -> bool: return a.sort < b.sort)
 	return out
+
+## 🔴 **문양 `code` → GlyphDef 역인덱스** (세82 데이터화). `glyphs`는 `id`로 키잉돼 있는데
+## **저장 도안·발사 계약은 정수 `code`**라(`Enums.GlyphCode`) 이 방향 조회가 필요하다.
+## ⚠ **여기(레지스트리 오토로드)에 둔다** — `ink_mult` 주석과 같은 이유다. 스키마(`GlyphDef`·
+## `RingDesign`)나 `GlyphRules`에 두면 그건 class_name/preload라 `-s` 테스트가 오토로드 등록 전에
+## 컴파일하다 `Db` 참조에서 터진다.
+var _glyph_by_code: Dictionary = {}
+
+## 🔴 **공개인 이유** = 테스트가 `db.glyphs[...] = ...`로 in-memory 주입한 뒤 부를 수 있어야 한다
+## (세61 리셋 이후의 관행 — 주입 테스트는 아무도 `reload()`를 안 부른다). `reload()`에서만 채우면
+## 주입한 GlyphDef가 역인덱스에 안 들어가 **그물이 조용히 자명 통과한다**.
+func reindex_glyphs() -> void:
+	_glyph_by_code.clear()
+	for g in glyphs.values():
+		var gd := g as GlyphDef
+		if gd == null:
+			continue
+		var prev := _glyph_by_code.get(gd.code) as GlyphDef
+		if prev != null:
+			# 🔴 **결정적 승자 = id 사전순으로 앞선 쪽**. 로드 순서에 기대면 같은 데이터가
+			# 실행마다 다르게 해석될 수 있다. 조용히 덮으면 어느 쪽이 이겼는지 아무도 못 찾는다.
+			# ⚠ 진 쪽은 둘 다 `glyphs`(id 키)에 그대로 남는다 — 여기서 지우지 않는다.
+			push_warning("문양 code %d가 겹친다: %s vs %s — id 사전순으로 %s를 쓴다"
+				% [gd.code, prev.id, gd.id, prev.id if String(prev.id) < String(gd.id) else gd.id])
+			if String(prev.id) < String(gd.id):
+				continue
+		_glyph_by_code[gd.code] = gd
+
+## 문양 코드 → 정의. 미등록이면 null (호출부가 경고하고 그 칸을 건너뛴다 — 코드에 기본표를
+## 남기지 않는 게 규약이다. 남기면 소스가 둘이 되어 갈라진다).
+func glyph_by_code(code: int) -> GlyphDef:
+	return _glyph_by_code.get(code) as GlyphDef
+
+## ⚠ 옛 `glyph_behavior(code)` 편의 함수는 **내지 않았다** (세82). 설계 초안엔 있었지만 실제
+## 호출부는 `params`도 함께 필요해 전부 `glyph_by_code(g).behavior`로 읽는다 — 소비자 0인
+## 편의 함수를 두면 **뮤테이션이 안 잡히는 죽은 코드**가 된다(세82 뮤테이션이 실제로 그걸 드러냈다).
+
+## 🔴 **변형형 문양 코드 목록** — 옛 `Enums.MODIFIER_GLYPHS`의 자리. **core 스키마
+## (`RingDesign`)는 `Db`를 못 보므로**(위 주석) 이 배열을 **인자로 받아** 판정한다.
+## 계열의 진짜 단일 소스는 `GlyphRules.BEHAVIORS`이고 여기는 그걸 code로 옮겨 담을 뿐이다.
+func modifier_codes() -> Array[int]:
+	var out: Array[int] = []
+	for code in _glyph_by_code.keys():
+		if GlyphRules.is_modifier_def(_glyph_by_code[code] as GlyphDef):
+			out.append(int(code))
+	out.sort()   # 결정적 순서 (변형형 적용 순서가 실행마다 흔들리면 안 된다)
+	return out
+
 
 ## 문양 목록 — **code 오름차순** (응집0·발산1). UI 셀 순서·Q/W 대응이 이 순서다.
 func all_glyphs() -> Array[GlyphDef]:

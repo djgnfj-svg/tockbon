@@ -36,14 +36,15 @@ const G_HOMING := Enums.GlyphCode.HOMING    # 유도 ∿ — 휘어서 쫓아간
 const G_BOUNCE := Enums.GlyphCode.BOUNCE    # 팅김 ⚡ — 벽에 튕긴다 (세션47)
 const G_THRUST := Enums.GlyphCode.THRUST    # 추진 ↑ — 빠르게 날아간다 (세션47)
 ## 🔴 세79 M1 — **변형형** 문양 2종. 위 6종(전개형)과 계열이 다르다: 착탄에서 스스로 전개하는 게
-## 아니라 **안쪽 층의 결과를 받아 바꾸는 연산자**다(`Enums.MODIFIER_GLYPHS`가 계열 판별의 단일 소스).
+## 아니라 **안쪽 층의 결과를 받아 바꾸는 연산자**다(계열 판별의 단일 소스 = `GlyphRules.BEHAVIORS`, 즉 그 문양 `.tres`의 `behavior` — 세82).
 ## 여기(보드)에선 계열을 안 가른다 — 판이 하는 일은 **밑그림 한 갈래**뿐이라 전개형과 똑같이 다룬다.
 const G_SPREAD := Enums.GlyphCode.SPREAD    # 확산 ⋔ — 안쪽 결과를 여러 갈래로 편다 (세79)
 const G_EXPLODE := Enums.GlyphCode.EXPLODE  # 폭발 ∗ — 안쪽 결과를 한 점에서 터뜨린다 (세79)
-## 인덱스 = GlyphCode 값 (세션44: 관통 · 세션47: 유도·팅김·추진 = 어휘 배증 · 세79: 확산·폭발)
-## 🔴 **길이가 계약이다** — `ring_summary`가 이 크기로 카운터를 세운다. 어휘보다 짧으면
-## 그 문양을 칸에 놓는 순간 `counts[g] += 1`이 **없는 키**라 런타임 에러다 (세션47 주석 참조).
-const GLYPH_NAMES := ["응집←", "발산→", "관통↠", "유도∿", "팅김⚡", "추진↑", "확산⋔", "폭발∗"]
+const G_CONDENSE := Enums.GlyphCode.CONDENSE # 응축 ◈ — 안쪽 결과를 한 점으로 눌러 담는다 (세82)
+## ⚠ **옛 `GLYPH_NAMES` 배열은 세82에 은퇴했다.** 이름의 정본은 `GlyphDef.display_name`이고
+## 보드는 주입된 `_glyph_defs`에서 읽는다(`_glyph_name`). 배열이던 시절엔 **길이가 계약**이라
+## (`ring_summary`가 그 크기로 카운터를 세웠다) 어휘를 늘릴 때 여기를 같이 안 늘리면 **런타임
+## 에러**였고, `set_active_glyph`의 `clampi`가 어휘 밖 코드를 **조용히 눌렀다**. 되살리지 마라.
 ## ⚠ **`GLYPH_KEYS`는 지웠다** (세션 25). 문양은 오른쪽 셀을 **클릭해서** 고른다 —
 ## 진·룬 선택이 전부 클릭인데 문양만 키(Q·W)를 광고했다 (사용자: "q w 이런게 아니라
 ## 똑같이 마우스로 선택하는걸로해줘"). 죽은 상수를 남기면 다음 세션이 키를 되살린다.
@@ -52,23 +53,9 @@ const GLYPH_NAMES := ["응집←", "발산→", "관통↠", "유도∿", "팅�
 const RING_LINE := Color(0.42, 0.30, 0.12, 0.55)
 const SLOT_OPEN := Color(0.42, 0.30, 0.12, 0.5)    # 열린 빈 칸 — 여기 채워라
 const FIRE_HI := Color(0.95, 0.55, 0.15)
-## ⚠ **`data/glyphs/*.tres`의 `ui_color`를 그대로 베낀 폴백이다** — 정본은 .tres고
-## `_glyph_color`가 그걸 읽는다. 여기 값은 defs 주입 전(순수 단위 테스트)에만 쓰인다.
-## 🔴 그래도 **길이와 값을 .tres에 맞춰 둔다** (세션47):
-##   • 길이 — `ring_book`은 `_glyph_color`를 안 거치고 `RingBoard.GLYPH_COLORS[g]`를 **직접**
-##     인덱싱한다. 어휘보다 짧으면 책이 터진다. 즉 길이는 폴백이 아니라 계약이다.
-##   • 값 — 갈라져 있으면 "책이랑 판이랑 색이 다르네"가 어디서 오는지 못 찾는다.
-## **새 문양을 늘릴 땐 .tres·GLYPH_NAMES·여기 셋을 같이 늘려라.**
-const GLYPH_COLORS := [
-	Color(0.16, 0.34, 0.55),   # 응집 = 남색
-	Color(0.72, 0.28, 0.12),   # 발산 = 주홍
-	Color(0.30, 0.72, 0.85),   # 관통 = 하늘
-	Color(0.35, 0.78, 0.42),   # 유도 = 초록
-	Color(0.95, 0.82, 0.25),   # 팅김 = 노랑
-	Color(0.68, 0.38, 0.85),   # 추진 = 보라
-	Color(0.93, 0.47, 0.66),   # 확산 = 분홍 (세79)
-	Color(0.82, 0.14, 0.20),   # 폭발 = 진홍 (세79)
-]
+## ⚠ **옛 `GLYPH_COLORS` 배열은 세82에 은퇴했다.** 색의 정본은 `data/glyphs/*.tres`의
+## `ui_color` 하나뿐이고, 보드·책이 주입된 defs에서 읽는다(`_glyph_color`).
+## 사본이던 시절엔 "책이랑 판이랑 색이 다르네"가 어디서 오는지 못 찾는 위험을 안고 있었다.
 const RUNE_COLOR := Color(0.62, 0.22, 0.12)   # 불
 const TRACE_INK := Color(0.20, 0.14, 0.09, 0.95)    # 그린 먹선
 ## 숨은 가이드 (아직 안 드러남). 🔴 세션 25에 0.18 → 0.32: 0.18은 진(큰 원)에서나 보였고
@@ -526,6 +513,23 @@ static func glyph_guide_pts(code: int, p: Vector2, outward: Vector2, sz: float) 
 					v4.append(p)
 				v4.append(p + dir.rotated(TAU * float(i) / float(spokes)) * ray)
 			return _densify(v4, sz * 0.24)
+		G_CONDENSE:
+			# 🔴 **안으로 감기는 나선** (세82). 바깥에서 시작해 반지름이 줄며 중심으로 빨려 든다 —
+			# 의미(안쪽 마법을 한 점으로 눌러 담는다)가 손 궤적 그대로다.
+			# 🔴 **폭발과 손이 갈리는 게 이 모양의 존재 이유다**: 폭발은 중심을 **5번 지나는** 직선
+			# 살이고, 응축은 중심을 **한 번만** 지나며 **꺾임 없이 계속 휜다**. 폭발 살을 방향만
+			# 뒤집는 안은 각하했다 — 손이 지나는 자리가 거의 같아 두 문양이 안 갈린다(세79 기준).
+			# ⚠ 유도(사인 한 주기 S자)와도 갈린다: 저건 축을 따라 **전진**하고 이건 **감긴다**
+			#   (반지름이 단조 감소 = 같은 자리를 두 번 지나지 않으면서 회전한다).
+			# ⚠ extent = 2·sz로 추진(2.2·sz)보다 작아 이웃 칸 간격 안에 든다.
+			var turns := 1.25                     # 감는 바퀴 수 — 1보다 커야 "감긴다"로 읽힌다
+			var v5 := PackedVector2Array()
+			for i in 29:
+				var t := float(i) / 28.0          # 0(바깥) → 1(중심)
+				var ang := t * TAU * turns
+				var rad := sz * (1.0 - t * 0.88)  # 완전히 0으로 보내지 않는다 (끝점이 뭉개진다)
+				v5.append(p + (dir * cos(ang) + side_u * sin(ang)) * rad)
+			return v5
 	# 응집←/발산→ — 🔴 **세션 25 원본 그대로**. 점 생성 순서가 곧 관측점이다:
 	# `test_ring_trace_auto._test_arrowhead_must_be_drawn`이 "앞 9점 = 몸통"으로 읽는다.
 	var pts2 := PackedVector2Array()
@@ -1167,17 +1171,43 @@ func _glyph_def_by_code(code: int) -> GlyphDef:
 			return d
 	return null
 
+## 🔴 세82: 색의 **정본은 `GlyphDef.ui_color`**다(옛 `GLYPH_COLORS` 배열 은퇴).
+## 보드는 오토로드를 안 보므로 패널이 주입한 `_glyph_defs`에서 읽는다(`ring_forge_panel:384`).
+## ⚠ defs 주입 **전**(부팅 직후·일부 테스트)엔 defs가 비어 있다 — 그땐 중립 먹선으로 떨어진다.
+## 옛 배열 폴백을 되살리지 마라: 그게 `clampi`와 만나 **8을 7로 눌러 응축을 폭발색으로** 그리던 자리다.
 func _glyph_color(code: int) -> Color:
 	var d := _glyph_def_by_code(code)
-	if d:
-		return d.ui_color
-	return GLYPH_COLORS[clampi(code, 0, GLYPH_COLORS.size() - 1)]
+	return d.ui_color if d else RING_LINE
+
+
+## 🔴 **헤드리스 관측점** (세82) — 지금 고른 문양 코드·그 색. 테스트가 `_active`·`_glyph_defs`
+## 같은 private을 더듬으면 리팩터 때 **조용히 죽는다**(세22·23에 실제로 두 번 겪었다).
+func active_glyph() -> int:
+	return _active
+
+func glyph_color_of(code: int) -> Color:
+	return _glyph_color(code)
+
+
+## 🔴 세82: 이름의 **정본도 `GlyphDef.display_name`**이다(옛 `GLYPH_NAMES` 배열 은퇴).
+## defs가 없으면 코드를 그대로 보여준다 — "?"로 뭉개면 어느 문양인지조차 못 찾는다.
+func _glyph_name(code: int) -> String:
+	var d := _glyph_def_by_code(code)
+	return String(d.display_name) if d != null and d.display_name != "" else "문양%d" % code
 
 
 # ─────────────────────────── 바깥이 주입하는 선택 ───────────────────────────
 
 func set_active_glyph(g: int) -> void:
-	_active = clampi(g, 0, GLYPH_NAMES.size() - 1)
+	# 🔴 세82: 옛 `clampi(g, 0, GLYPH_NAMES.size()-1)`은 **어휘 밖 코드를 조용히 눌렀다** —
+	# 배열을 안 늘린 채 새 문양(예: 응축 8)을 고르면 7로 눌려 **폭발 밑그림이 뜨는데 에러가 없다**.
+	# 이제 주입된 defs에 실제로 있는 코드만 받고, 없으면 **거부하고 경고한다**(조용히 다른 문양이
+	# 되는 것보다 안 바뀌는 게 낫다 — 사용자가 이상함을 즉시 안다).
+	# ⚠ defs 주입 전(부팅 직후·일부 테스트)엔 검증할 목록이 없으므로 예전처럼 통과시킨다.
+	if not _glyph_defs.is_empty() and _glyph_def_by_code(g) == null:
+		push_warning("문양 code %d는 카탈로그에 없다 — 선택을 무시한다 (data/glyphs 확인)" % g)
+		return
+	_active = g
 	# 🔴 고른 문양이 **밑그림을 정한다** (세션 25) — 응집←과 발산→은 화살표 방향이 반대다.
 	# 예전엔 여기서 가이드를 안 세워, Q·W를 눌러도 판의 밑그림이 그대로였다
 	# (사용자: "문양을 선택했을때 밑그림이 그려져야지"). 어차피 방향 없는 작대기라 티도 안 났다.
@@ -1291,21 +1321,25 @@ func clear_all() -> void:
 
 
 func ring_summary() -> String:
-	# 🔴 **어휘 전체**로 센다 (세션 47). 예전엔 {응집, 발산} 둘만 세워 놨는데 세션 44에 관통이
-	# 늘면서 관통을 놓은 진을 요약하면 `counts[2] += 1`이 **없는 키**라 런타임 에러였다 —
-	# 어휘를 늘릴 때 여기를 같이 안 늘리면 조용히 깨진다. GLYPH_NAMES에서 세운다.
+	# 🔴 세82: **실제로 놓인 코드만** 센다. 예전엔 `GLYPH_NAMES.size()`로 카운터를 미리 세웠는데,
+	# 그 배열이 어휘보다 짧으면 `counts[g] += 1`이 **없는 키**라 런타임 에러였다(세44에 관통이
+	# 늘면서 실제로 터졌고, 그래서 "길이가 계약"이라는 위험한 규약이 생겼다).
+	# 이제 놓인 것만 세므로 **어휘 길이에 의존하지 않는다** — 그 함정이 구조적으로 사라졌다.
 	var counts := {}
-	for g in GLYPH_NAMES.size():
-		counts[g] = 0
+	var codes: Array[int] = []
 	var open := _asm.get_open()
 	for k in open:
 		var g := _asm.glyph_at(k)
-		if g != GLYPH_NONE:
-			counts[g] += 1
+		if g == GLYPH_NONE:
+			continue
+		if not counts.has(g):
+			counts[g] = 0
+			codes.append(g)
+		counts[g] += 1
+	codes.sort()   # 표시 순서는 code 오름차순 (응집0·발산1… — 책 셀 순서와 같다)
 	var parts: Array[String] = []
-	for g in GLYPH_NAMES.size():
-		if counts[g] > 0:
-			parts.append("%s×%d" % [GLYPH_NAMES[g], counts[g]])
+	for g in codes:
+		parts.append("%s×%d" % [_glyph_name(g), counts[g]])
 	if parts.is_empty():
 		return "빈 진" if open.is_empty() else "빈 칸 %d" % open.size()
 	return " ".join(parts)

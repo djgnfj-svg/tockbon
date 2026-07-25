@@ -60,9 +60,10 @@ func _run() -> void:
 func _test_db_load() -> void:
 	# 🔴 세79 M1: 2종 → **4종**. 새 둘 = 변형형 문양-고리(`gr_spread3` 확산×3 · `gr_explode1` 폭발×1) —
 	# 전개형(발산·응집)과 달리 **안쪽 층 결과를 감싸 바꾸는 연산자**라 층 순서가 발사를 통째로 바꾼다.
-	print("[0] Db.all_glyph_rings() 정확히 4종")
+	# 🔴 세82: 4종 → **5종**(`gr_condense2` 응축×2 — 문양 효과 데이터화의 증명 문양).
+	print("[0] Db.all_glyph_rings() 정확히 5종")
 	var rings: Array = _db.all_glyph_rings()
-	_check(rings.size() == 4, "문양-고리 4종 로드 (실제 %d — .tres 파싱 실패면 줄어든다)" % rings.size())
+	_check(rings.size() == 5, "문양-고리 5종 로드 (실제 %d — .tres 파싱 실패면 줄어든다)" % rings.size())
 	var sp = _db.get_glyph_ring(&"gr_spread3")
 	var ex = _db.get_glyph_ring(&"gr_explode1")
 	_check(sp != null and int(sp.motif) == Enums.GlyphCode.SPREAD and int(sp.count) == 3,
@@ -230,14 +231,15 @@ func _test_panel() -> void:
 	root.add_child(panel)
 	await process_frame
 
-	# 🔴 세79 M1: 변형형 2종이 늘어 4종. 새 둘은 `GameState._seed_starting_unlocks`가 **임시로**
-	# 심는다(획득 경로 미설계 — 경로를 붙이는 세션이 그 시드를 걷으면 이 기대치도 같이 내려간다).
+	# 🔴 세79 M1: 변형형 2종이 늘어 4종 · 세82: 응축이 늘어 **5종**. 새것들은
+	# `GameState._seed_starting_unlocks`가 **임시로** 심는다(획득 경로 미설계 — 경로를 붙이는
+	# 세션이 그 시드를 걷으면 이 기대치도 같이 내려간다).
 	var avail: Array = panel.available_rings()
-	_check(avail.size() == 4, "해금된 문양-고리 4종 노출 (실제 %d)" % avail.size())
+	_check(avail.size() == 5, "해금된 문양-고리 5종 노출 (실제 %d)" % avail.size())
 
 	# 미해금 필터 — 하나를 잠그면 목록에서 빠진다
 	gs.codex[&"gr_gather3"] = false
-	_check(panel.available_rings().size() == 3, "미해금은 목록에서 빠진다")
+	_check(panel.available_rings().size() == 4, "미해금은 목록에서 빠진다")
 	gs.codex[&"gr_gather3"] = true
 
 	# 소켓에 끼우고 build_assembly — flatten이 실리고 score 키가 있다

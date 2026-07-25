@@ -682,7 +682,7 @@ func _draw_magic_row(font: Font, at: Vector2, width: float, idx: int, design: Ri
 
 	# 🔴 변형형(확산·폭발)이 끼면 이 숫자는 **갈래당**이다 — `ring_power` 머리 주석의 경계.
 	# 그냥 "위력 N"이라 적으면 리포트가 거짓말하는 걸로 읽힌다(ring_forge_panel과 같은 표기).
-	var unit := "갈래당 위력" if has_modifier(summary) else "위력"
+	var unit := "갈래당 위력" if has_modifier(summary, Db.modifier_codes()) else "위력"
 	draw_string(font, Vector2(tx, at.y + h - 8.0),
 		"%s %d · %d점 · %s" % [unit,
 			RingPower.power_display(design.total_score, Db.ink_mult(design.ink), design.size),
@@ -760,11 +760,12 @@ func _rune_name(design: RingDesign) -> String:
 	return r.display_name if r != null and r.display_name != "" else "룬"
 
 
-## 문양 코드 → 색. 🔴 정본은 `data/glyphs/*.tres`의 ui_color이고 `RingBoard.GLYPH_COLORS`가
-## 그 사본이다 — 책(`ring_book`)도 여길 직접 인덱싱한다(같은 선례를 따른다).
+## 문양 코드 → 색. 🔴 세82: 정본은 `data/glyphs/*.tres`의 `ui_color` **하나뿐**이다
+## (옛 `RingBoard.GLYPH_COLORS` 사본 은퇴 — 사본이 있으면 "책이랑 판이랑 색이 다르네"가
+## 어디서 오는지 못 찾는다). HUD는 오토로드를 보는 계층이라 Db를 직접 읽는다.
 func _glyph_color(code: int) -> Color:
-	var cols: Array = RingBoard.GLYPH_COLORS
-	return cols[clampi(code, 0, cols.size() - 1)]
+	var gd := Db.glyph_by_code(code)
+	return gd.ui_color if gd != null else RingBoard.RING_LINE
 
 
 ## 미장착 보관 도안 — 남는 높이에 들어가는 만큼만. 못 담으면 마지막 줄이 "… 외 N장"이다.
@@ -785,7 +786,7 @@ func _draw_magic_storage(font: Font, left: float, top: float, width: float, bott
 		var s := d.layer_summary()
 		draw_string(font, Vector2(left + 8.0, y + 12.0),
 			"· %s   %s %d · %d점" % [spell_formula(s, _rune_name(d)),
-				"갈래당" if has_modifier(s) else "위력",
+				"갈래당" if has_modifier(s, Db.modifier_codes()) else "위력",
 				RingPower.power_display(d.total_score, Db.ink_mult(d.ink), d.size),
 				RingPower.score_display(d.total_score)],
 			HORIZONTAL_ALIGNMENT_LEFT, width - 16.0, 11, HINT_COLOR)
@@ -815,7 +816,7 @@ func _unequipped_designs() -> Array[RingDesign]:
 ##   • 한 층에 여러 종류면 `+`로 잇는다 (`확산+폭발(불)`). 개수는 수식에 안 싣는다 — 층 목록의 일.
 ##   • **옛 한 겹 도안**은 `layers_of`가 층 1개로 승격하므로 괄호가 한 겹만 생긴다 (`발산(불)`).
 ##   • 문양이 하나도 없으면 룬 이름만 남는다 (`불`).
-## 🔴 이름은 `RingBoard.GLYPH_NAMES`에서 꼬리 기호(⋔·∗ 등)를 떼서 쓴다 — 수식에 기호까지
+## 🔴 이름은 `GlyphDef.display_name`에서 꼬리 기호(⋔·∗ 등)를 떼서 쓴다 (세82) — 수식에 기호까지
 ## 들어가면 `폭발∗(확산⋔(불))`이라 읽는 게 목적인 줄이 못 읽히게 된다.
 static func spell_formula(summary: Array, rune_name: String) -> String:
 	var out := rune_name
@@ -864,22 +865,26 @@ static func _entries_text(entries_v: Variant) -> String:
 
 
 ## 변형형(확산·폭발)이 어느 층에든 있나 — 위력 표기를 "갈래당"으로 가른다.
-## 🔴 계열 판별은 `Enums.is_modifier_glyph` 단일 소스를 쓴다(복사 금지).
-static func has_modifier(summary: Array) -> bool:
+## 🔴 **계열 코드 목록을 인자로 받는다** (세82). static이라 오토로드를 못 보고, 계열의 단일 소스는
+## 이제 문양 데이터(`GlyphDef.behavior`)라 `Db.modifier_codes()`가 그걸 code로 옮겨 담는다.
+## 호출부가 그 배열을 넘긴다 — 판정식을 여기 베끼지 마라(`RingDesign.has_modifier_glyph`와 같은 규약).
+static func has_modifier(summary: Array, modifier_codes: Array) -> bool:
+	if modifier_codes.is_empty():
+		return false
 	for entries_v in summary:
 		var entries: Array = entries_v
 		for e: Dictionary in entries:
-			if Enums.is_modifier_glyph(int(e["code"])):
+			if int(e["code"]) in modifier_codes:
 				return true
 	return false
 
 
 ## 문양 코드 → 수식·목록에 쓰는 **말**(꼬리 기호 뗀 이름). 어휘 밖 코드는 "?".
 static func glyph_word(code: int) -> String:
-	var names: Array = RingBoard.GLYPH_NAMES
-	if code < 0 or code >= names.size():
+	var gd := Db.glyph_by_code(code)
+	if gd == null:
 		return "?"
-	return _strip_symbol(String(names[code]))
+	return _strip_symbol(String(gd.display_name))
 
 
 ## 꼬리의 비-한글 문자를 떼어 낸다("확산⋔"→"확산"). 이름 길이를 2자로 가정하지 않는다 —

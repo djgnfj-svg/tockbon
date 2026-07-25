@@ -893,11 +893,15 @@ func _on_inject() -> void:
 
 
 ## 맺은 도안에 변형형 문양(확산·폭발)이 끼어 있나 — 리포트 위력 표시 단위를 가른다.
-## 계열 판별은 `Enums.is_modifier_glyph` 단일 소스를 쓴다(복사 금지).
+## 🔴 계열 판별의 단일 소스는 문양 데이터(`GlyphDef.behavior`)이고, 코드 목록은 `Db`가 준다
+## (세82 — 옛 `Enums.is_modifier_glyph` 은퇴). 여기서 판정식을 베끼지 마라.
 func _has_modifier_glyph() -> bool:
+	var mods: Array = Db.modifier_codes()
+	if mods.is_empty():
+		return false
 	for layer_v in RingDesign.layers_of(_committed_asm.get("rings", []) as Array):
 		for g in (layer_v as Array):
-			if Enums.is_modifier_glyph(int(g)):
+			if int(g) in mods:
 				return true
 	return false
 

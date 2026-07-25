@@ -56,7 +56,9 @@ func _ready() -> void:
 		# 진 색·형태를 보드에 주입(합성엔 shape만 쓰지만 렌더 색 폴백에 도움)
 		var jin := _jin_def()
 		if jin != null and _board.has_method("set_defs"):
-			_board.set_defs(jin, [], [])
+			# 🔴 세82: 문양 defs를 넘긴다 — 빈 배열로 두면 보드가 이름·색을 못 찾는다
+			# (옛 GLYPH_COLORS 배열 폴백이 그 자리를 메우고 있었고, 그 배열은 은퇴했다).
+			_board.set_defs(jin, [], Db.all_glyphs())
 	recompose()
 
 
@@ -351,6 +353,8 @@ func _text(font: Font, at: Vector2, s: String, col: Color, fs: int) -> void:
 	draw_string(font, at, s, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, col)
 
 
+## 🔴 세82: 이름의 정본은 `GlyphDef.display_name`(옛 `RingBoard.GLYPH_NAMES` 은퇴).
+## 여긴 **패널**이라 Db를 직접 본다(보드·책은 주입받는 계층 — `ring_forge_panel`과 같은 규약).
 func _motif_name(code: int) -> String:
-	var names := RingBoard.GLYPH_NAMES
-	return String(names[code]) if code >= 0 and code < names.size() else "?"
+	var gd := Db.glyph_by_code(code)
+	return String(gd.display_name) if gd != null else ("문양%d" % code if code >= 0 else "?")

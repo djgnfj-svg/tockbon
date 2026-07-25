@@ -330,14 +330,14 @@ func _test_formula_text() -> void:
 			[G_EXPLODE, -1, -1, -1, -1, -1, -1, -1]], "open": [0, 1, 2]}, "실도안", 1.0)
 	var f3: String = tab.spell_formula(d.layer_summary(), "불")
 	_check(f3 == "폭발(확산(불))", "실제 도안 layer_summary → 같은 수식 (실제 %s)" % f3)
-	_check(d.has_modifier_glyph(), "변형형 판정 = 참 (위력이 「갈래당」으로 표기된다)")
+	_check(d.has_modifier_glyph(_db.modifier_codes()), "변형형 판정 = 참 (위력이 「갈래당」으로 표기된다)")
 	# 옛 한 겹 도안 — 괄호가 한 겹만 (저장 무회귀가 표시까지 이어지나)
 	var old_d := RingDesign.from_assembly(
 		{"rune": 0, "rings": [G_RADIATE, G_RADIATE, -1, -1, -1, -1, -1, -1], "open": [0, 1]},
 		"옛 도안", 1.0)
 	_check(tab.spell_formula(old_d.layer_summary(), "불") == "발산(불)",
 		"옛 8칸 한 겹 → 괄호 한 겹 (층 1개로 승격)")
-	_check(not old_d.has_modifier_glyph(), "옛 도안엔 변형형이 없다 = 그냥 「위력」 표기")
+	_check(not old_d.has_modifier_glyph(_db.modifier_codes()), "옛 도안엔 변형형이 없다 = 그냥 「위력」 표기")
 
 
 # ─────────────────────────── 헬퍼 ───────────────────────────

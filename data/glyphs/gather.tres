@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="GlyphDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/core/schemas/glyph_def.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = &"gather"
+display_name = "응집←"
+code = 0
+key_hint = ""
+inward = true
+ui_color = Color(0.16, 0.34, 0.55, 1.0)
+desc = "안(룬)으로 모은다"
+behavior = &"pillar"
+params = {}

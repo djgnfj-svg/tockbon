@@ -4,14 +4,14 @@
 
 [resource]
 script = ExtResource("1")
-id = &"radiate"
-display_name = "발산→"
-code = 1
-key_hint = "W"
+id = &"bounce"
+display_name = "팅김⚡"
+code = 4
+key_hint = ""
 inward = false
-ui_color = Color(0.72, 0.28, 0.12, 1.0)
-desc = "바깥(진)으로"
+ui_color = Color(0.95, 0.82, 0.25, 1.0)
+desc = "벽에 튕겨 나아간다"
 behavior = &"bolt"
 params = {
-"effect": &"",
+"effect": &"bounce",
 }

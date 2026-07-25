@@ -281,10 +281,11 @@ func _test_glyph_shapes_are_distinct() -> void:
 	var b = _make_board()
 	_reach_glyph_stage(b)          # 진·룬 그리고 문양 단계, 칸 0 선택
 	var seen := {}                 # 점집합 문자열 → 먼저 그 모양을 쓴 코드
-	# 🔴 세79 M1: 6 → **8**(확산·폭발 = 변형형 문양). 이 수를 안 늘리면 새 문양은 헤드리스
-	# 커버리지가 **0**이다 — 밑그림이 폴백 화살표로 떨어져도(=손이 안 갈려도) 아무도 안 잡는다.
-	# ⚠ `RingBoard.GLYPH_NAMES`를 늘릴 때 여기와 아래 기대치도 같이 늘려라.
-	for code in range(8):
+	# 🔴 세79 M1: 6 → **8**(확산·폭발) · 세82: 8 → **9**(응축). 이 수를 안 늘리면 새 문양은
+	# 헤드리스 커버리지가 **0**이다 — 밑그림이 폴백 화살표로 떨어져도(=손이 안 갈려도),
+	# 폭발과 궤적이 같아도 아무도 안 잡는다.
+	# ⚠ `Enums.GlyphCode`에 문양을 늘릴 때 여기와 아래 기대치도 같이 늘려라.
+	for code in range(9):
 		b.call(&"set_active_glyph", code)
 		var g: PackedVector2Array = b.call(&"guide_points")
 		_check(g.size() >= 9, "문양 %d 밑그림이 선다 (%d점)" % [code, g.size()])
@@ -302,7 +303,7 @@ func _test_glyph_shapes_are_distinct() -> void:
 			b.call(&"trace_stroke", pt)
 		_check(float(b.call(&"coverage")) > 0.95, "문양 %d — 따라 그으면 완성도≈1" % code)
 		_check(float(b.call(&"accuracy")) > 0.95, "문양 %d — 선 위를 그었으니 정밀도≈1" % code)
-	_check(seen.size() == 8, "8개 문양이 **전부 다른** 모양 (실제 서로 다른 모양 %d개)" % seen.size())
+	_check(seen.size() == 9, "9개 문양이 **전부 다른** 모양 (실제 서로 다른 모양 %d개)" % seen.size())
 
 	# 🔴 세71: 책의 **문양 개별 셀(glyph_icon_pts)은 은퇴**했다 — 문양은 이제 진의 **층(band)**에
 	# 문양-고리로 끼운다. 6종 구분은 위 `glyph_guide_pts`(모티프별 모양)가 이미 지키고, 책의
@@ -581,6 +582,11 @@ func _make_board():
 	var b = _BoardScript.new()
 	b.size = Vector2(268, 268)
 	root.add_child(b)
+	# 🔴 세82: 문양 이름·색의 정본이 `data/glyphs/*.tres`로 옮겨서 **보드는 주입받아야 안다**
+	# (라이브 경로 = `ring_forge_panel:384`가 `Db.all_glyphs()`를 넘긴다). 안 주입하면
+	# `ring_summary`가 "문양5"로, `set_active_glyph`가 카탈로그 검증을 못 해 실게임과 갈라진다.
+	var db = root.get_node("/root/Db")
+	b.call(&"set_defs", null, [], db.all_glyphs())
 	b.call(&"clear_all")
 	b.call(&"choose_jin")
 	return b

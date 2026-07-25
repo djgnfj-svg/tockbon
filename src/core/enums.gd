@@ -39,16 +39,18 @@ const LEGACY_IMPACT: int = 1  # 옛 RuneType.IMPACT — 마이그레이션 판�
 #   EXPLODE(7)=폭발: 안쪽 결과를 **통째로 하나의 광역 폭발로 융합한다**(안쪽이 넓게 퍼져 있을수록 반경↑)
 # 🔴 두 문양의 성격이 갈려야 순서가 눈에 보인다 (사용자 확정 세79): 폭발이 "각 갈래를 각각 터뜨림"이면
 # `폭발(확산(불))`과 `확산(폭발(불))`이 둘 다 "작은 폭발 여러 개"가 돼 순서 실증이 실패한다.
+#   CONDENSE(8)=응축: 안쪽 결과를 **한 점으로 눌러 담는다** — 폭발의 반대(세82). 같은 융합인데
+#   폭발은 갈래가 많을수록 **넓어지고**, 응축은 **좁아지며 세진다**. 🔴 알고리즘은 폭발과 **같다**
+#   (`blast`) — 반경 계수 부호와 융합 배율만 다른 `.tres` 한 장이다. 문양 효과 데이터화의 첫 증명.
 enum GlyphCode { GATHER = 0, RADIATE = 1, PIERCE = 2, HOMING = 3, BOUNCE = 4, THRUST = 5,
-	SPREAD = 6, EXPLODE = 7 }
-## 🔴 **변형형 문양 집합** — 이 값이 계열 판별의 **단일 소스**다. 발사(층 해석기)·조립 UI·책이
-## "이 문양은 전개형인가 변형형인가"를 물을 때 전부 여기를 본다. 복사해 두면 갈라진다
-## (`ring_power`가 리포트·발사에 같은 함수를 주는 것과 같은 이유).
-## **새 변형형 문양 = GlyphCode 값 하나 + 여기 한 줄 + `_apply_modifier` 분기 하나.**
-const MODIFIER_GLYPHS: Array[int] = [GlyphCode.SPREAD, GlyphCode.EXPLODE]
-
-static func is_modifier_glyph(code: int) -> bool:
-	return code in MODIFIER_GLYPHS
+	SPREAD = 6, EXPLODE = 7, CONDENSE = 8 }
+## ⚠ **옛 `MODIFIER_GLYPHS` / `is_modifier_glyph()`는 세82에 은퇴했다.**
+## 계열(전개형/변형형)은 **문양 데이터에 딸린 성질**이지 enum의 성질이 아니었다 — 여기 배열로
+## 두면 문양을 늘릴 때마다 `.tres`·이 줄·`_apply_modifier` 분기가 **따로 놀았다**.
+## 지금 단일 소스는 `GlyphRules.BEHAVIORS`(`GlyphDef.behavior` → 변형형 여부)이고,
+## code 목록이 필요한 쪽은 **`Db.modifier_codes()`**를 부른다.
+## 🔴 `Db`를 못 보는 core 스키마(`RingDesign`)·static UI(`tab_panel`)는 그 배열을 **인자로 받는다**
+## (여기 상수를 되살리면 소스가 둘이 된다 — 되살리지 마라).
 
 enum StrokeRole { CIRCLE, RUNE, ARROW, TAIL, DECOR }
 ## 문양의 **발동 방식** — v1.9 문양 축 (GDD §4.3, TECH_SPEC §4.0-a).

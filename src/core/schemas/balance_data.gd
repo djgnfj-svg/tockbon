@@ -70,24 +70,15 @@ extends Resource
 @export_group("변형형 문양 = 확산·폭발 (세79 M1 진별 해석)")
 # 🔴 **전개형(발산·응집)과 계열이 다르다** — 확산·폭발은 착탄점에서 스스로 전개하는 게 아니라
 # **안쪽 층의 결과를 받아 바꾸는 연산자**다. 해석은 ring_spell_system의 층 루프가 한다.
-# ⚠ 아래 전부 **시작값이다. 손맛은 F5로 조인다** — 헤드리스는 "몇 갈래가 나갔나"만 재고
-# "넓게 퍼진 느낌인가"는 못 잰다.
-## 확산 부채꼴 총각(도) — 안쪽 탄 하나가 이 각 안에서 n갈래로 벌어진다. 크면 넓게 훑고 작으면 집중된다
-@export var spread_fan_deg: float = 46.0
-## 확산 갈래 하나의 세기 배율. 🔴 n갈래 총합(n×이 값)이 1.0을 넘어야 확산을 그릴 이유가 생긴다
-## (3갈래면 1.8배) — 1/n로 정확히 나누면 "퍼지기만 하고 손해"가 돼 문양이 죽는다
-@export var spread_branch_mult: float = 0.6
-## 제자리 명령(기둥·폭발)을 확산할 때 착탄점 둘레로 흩는 반경(px). 겹쳐 서면 한 발과 구분이 안 된다
-@export var spread_offset_px: float = 44.0
-## 폭발 기본 반경(px) — 안쪽이 한 갈래일 때
-@export var blast_base_radius_px: float = 54.0
-## 🔴 안쪽 갈래 하나당 반경 증가 비율. **이 값이 순서를 눈에 보이게 만든다** —
-## `폭발(확산(불))`이 `확산(폭발(불))`보다 확연히 큰 폭발이 되는 이유가 여기다. 0이면 순서가 안 보인다
-@export var blast_radius_per_branch: float = 0.18
-## 폭발 칸 하나당 반경 증가 비율 (많이 그릴수록 크게 터진다)
-@export var blast_radius_per_count: float = 0.25
-## 융합 효율 — 안쪽 세기 **합**에 곱한다. 1.0이면 손실 없음, 낮추면 "뭉치면 조금 샌다"
-@export var blast_merge_mult: float = 0.85
+#
+# 🔴🔴 **세82: 이 그룹의 수치 7개가 문양 `.tres`의 `params`로 이사했다** (문양 효과 데이터화).
+#   spread_fan_deg · spread_branch_mult · spread_offset_px ·
+#   blast_base_radius_px · blast_radius_per_branch · blast_radius_per_count · blast_merge_mult
+# 왜: 전역이면 **문양마다 다른 값을 못 준다.** 「확산 46°」 옆에 「돌풍 120°」를 세우려면 수치가
+# 그 문양에 딸려야 한다. 응축이 폭발과 같은 `blast` 알고리즘을 쓰면서 반경 계수 **부호만** 뒤집는 게
+# 그 첫 사례다 — 새 함수 없이 `.tres` 한 장이 「좁게 모아 세게」가 된다.
+# → **되살리지 마라.** 기본값은 `src/core/glyph_rules.gd`의 `DEFAULTS`, 실제 값은 `data/glyphs/*.tres`.
+# ⚠ 손맛은 여전히 **F5로 조인다** — 조이는 자리가 balance 한 장에서 문양 .tres 여러 장으로 옮겼을 뿐이다.
 ## 🔴 착탄 전개 명령 수 상한 — **확산이 곱셈이라 층이 깊어지면 폭증한다.**
 ## 최악: 층0 발산 8칸(명령 8) × 층1 확산 8칸(×8) = 탄 64발, 거기에 산탄/둘레 진이면 캐리어가
 ## 5~8개라 **수백 발**. 지금 밴드 상한 2·확산 count 3이라 실전에선 안 나지만, 진 등급이 **9까지**

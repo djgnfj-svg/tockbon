@@ -691,9 +691,14 @@ func _ring_icon(c: Vector2, radius: float, gr: GlyphRingDef) -> void:
 			draw_polyline(mk, gr.ui_color, 1.5, true)
 
 
+## 🔴 세82: 이름의 정본은 `GlyphDef.display_name`이다(옛 `RingBoard.GLYPH_NAMES` 배열 은퇴).
+## 책은 오토로드를 안 보므로 패널이 주입한 `_glyph_defs`에서 읽는다(`ring_forge_panel:385`).
 func _motif_name(code: int) -> String:
-	var names := RingBoard.GLYPH_NAMES
-	return String(names[code]) if code >= 0 and code < names.size() else "?"
+	for d in _glyph_defs:
+		var gd := d as GlyphDef
+		if gd != null and gd.code == code:
+			return String(gd.display_name)
+	return "문양%d" % code if code >= 0 else "?"
 
 
 ## 아이콘. jin·fire = 진·룬 (폴백 단일 셀 전용 — 격자 셀은 각자 전용 렌더를 쓴다)

@@ -11,3 +11,12 @@ key_hint = ""
 inward = false
 ui_color = Color(0.82, 0.14, 0.20, 1.0)
 desc = "안쪽 마법을 하나로 모아 터뜨린다"
+behavior = &"blast"
+params = {
+"base_radius_px": 54.0,
+"radius_per_branch": 0.18,
+"radius_per_count": 0.25,
+"min_radius_px": 12.0,
+"merge_mult": 0.85,
+"merge_mult_per_count": 0.0,
+}

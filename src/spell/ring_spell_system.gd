@@ -14,6 +14,7 @@ extends Node2D
 
 const RingPower := preload("res://src/core/ring_power.gd")
 const StatusRules := preload("res://src/core/status_rules.gd")   # 🔴 세81 M2: 융합 룬 반응 순서 정렬
+const GlyphRules := preload("res://src/core/glyph_rules.gd")     # 🔴 세82 M3: 문양 알고리즘·수치 표
 const CarrierScene := preload("res://src/spell/ring_carrier.tscn")
 const CarrierScript := preload("res://src/spell/ring_carrier.gd")
 const BoltScript := preload("res://src/spell/projectile.gd")
@@ -28,16 +29,9 @@ const SLOTS := 8
 ## 응집 1개면 기본 크기, 여럿 모이면 굵어진다 ("많을수록 굵다").
 const PILLAR_SCALE_PER_GATHER := 0.22
 
-## 🔴 발사 코드 → 탄 행동 효과 (세션47). RADIATE는 효과 없는 순수 직진탄이고, 2~5는 **같은 탄에
-## 효과 하나가 얹힌 것**이다 — `projectile._setup_effects`가 이미 소비하는 사전 형식({GlyphType: reach}).
-## 세션44 이전엔 이 사전이 늘 비어 있어 팅김·유도·추진 기계가 통째로 잠들어 있었다(미배선 자산).
-## **새 문양 = 여기 한 줄** (+ `Enums.GlyphCode` 값 하나 + `data/glyphs/*.tres` 한 장).
-const BOLT_EFFECTS := {
-	Enums.GlyphCode.PIERCE: Enums.GlyphType.PIERCE,
-	Enums.GlyphCode.HOMING: Enums.GlyphType.HOMING,
-	Enums.GlyphCode.BOUNCE: Enums.GlyphType.BOUNCE,
-	Enums.GlyphCode.THRUST: Enums.GlyphType.THRUST,
-}
+## ⚠ **옛 `BOLT_EFFECTS` 상수는 세82에 은퇴했다.** code→효과 매핑이 여기 박혀 있어서, 새 문양을
+## 늘릴 때마다 이 파일·`Enums`·`.tres`가 따로 놀았다. 이제 **문양 데이터가 자기 효과를 들고 온다**
+## (`GlyphDef.params.effect` → `GlyphRules.bolt_effects`). 되살리지 마라 — 소스가 둘이 된다.
 
 var balance: BalanceData = preload("res://data/balance.tres")
 
@@ -220,7 +214,8 @@ func _on_carrier_deployed(layers: Array, at: Vector2, travel: float, power: floa
 ##
 ## 층 하나를 처리하는 규칙:
 ##   • **전개형**(발산 계열·응집) = 명령을 **새로 만든다**. 칸 인덱스가 탄 각도를 정한다(세44 계약 그대로).
-##   • **변형형**(확산·폭발, `Enums.MODIFIER_GLYPHS`) = 지금까지 쌓인 명령 목록을 **함수처럼 변환한다**.
+##   • **변형형**(확산·폭발·응축 — `GlyphDef.behavior`가 `spread`/`blast`) = 지금까지 쌓인 명령
+##     목록을 **함수처럼 변환한다**.
 ##     감쌀 게 아직 없으면(=안쪽이 비었으면) **룬 씨앗** 명령 하나를 먼저 깔고 감싼다 — 설계의
 ##     *"문양이 영향 주는 대상 = 그 문양이 감싸는 안쪽(룬 또는 안쪽 문양 뭉치)"* 그대로다.
 ##
@@ -256,24 +251,43 @@ func _apply_layer(plan: Array, layer: Array, travel: float) -> Array:
 	var mod_counts: Dictionary = {}
 	for k in SLOTS:
 		var g := int(layer[k])
-		if g == Enums.GlyphCode.RADIATE or BOLT_EFFECTS.has(g):
-			# 🔴 발산 계열 (세션44 관통 → 세션47 확장): 전부 바깥으로 탄을 쏘고, 다른 건 그 탄이
-			# **어떻게 나는가**뿐이다 — 세기가 아니라 **전투 방식**이 달라진다. RADIATE는 효과 없는
-			# 순수 직진탄. reach는 지금 고정(balance.glyph_reach_max=최대 세기) — 나중에 문양 크기
-			# 축과 이을 자리다.
-			var effects: Dictionary = {}
-			if BOLT_EFFECTS.has(g):
-				effects[BOLT_EFFECTS[g]] = balance.glyph_reach_max
-			out.append(_bolt_cmd(travel + TAU * float(k) / float(SLOTS), effects))
-		elif g == Enums.GlyphCode.GATHER:
-			gather += 1
-		elif Enums.is_modifier_glyph(g):
-			mod_counts[g] = int(mod_counts.get(g, 0)) + 1
+		# 🔴 세82: 문양이 **무엇을 하는가**는 이제 데이터가 답한다(`GlyphDef.behavior`).
+		# 옛 코드는 `g == RADIATE or BOLT_EFFECTS.has(g)` 식으로 정수를 하드코딩해 갈랐다 —
+		# 문양을 늘릴 때마다 여기·`Enums`·`.tres`가 따로 놀던 자리다.
+		# ⚠ 빈 칸(`RingAssembly.GLYPH_NONE` = -1)은 **경고 대상이 아니다**: layer에서 가장 흔한
+		# 값이라 경고를 내면 발사 1회마다 빈칸×층×캐리어만큼 쏟아져 진짜 경고가 묻힌다.
+		# 🔴 **음수로 판정한다** — `RingAssembly`(drawing의 class_name)를 여기서 참조하면
+		#   ⓐ 모듈 경계를 넘고 ⓑ `-s` 테스트가 전역 클래스 캐시 갱신 전에 컴파일해
+		#   **이 파일 전체가 파싱 실패한다**(세82에 실제로 밟았다 — 스위트 7종이 한 번에 빨감).
+		#   문양 code는 `Enums.GlyphCode`라 늘 0 이상이므로 "음수 = 빈 칸"이 안전한 계약이다.
+		if g < 0:
+			continue
+		var def := Db.glyph_by_code(g)
+		var behavior := def.behavior if def != null else &""
+		if not GlyphRules.is_known(behavior):
+			# 데이터 없는 code = 조용히 넘기지 않는다. 코드에 기본표를 남기면 소스가 둘이 되어
+			# 갈라지므로(ring_power 복사 금지와 같은 이유) **경고 + 건너뜀**이 규약이다.
+			push_warning("문양 code %d에 GlyphDef/behavior가 없다 — 그 칸을 건너뛴다 (data/glyphs 확인)" % g)
+			continue
+		match behavior:
+			&"bolt":
+				# 🔴 발산 계열 (세션44 관통 → 세션47 확장 → 세82 데이터화): 전부 바깥으로 탄을 쏘고,
+				# 다른 건 그 탄이 **어떻게 나는가**뿐이다 — 세기가 아니라 **전투 방식**이 달라진다.
+				# reach 기본값은 balance가 쥔다(문양 .tres가 params.reach로 덮을 수 있다).
+				var reach := GlyphRules.param_f(def, &"reach", balance.glyph_reach_max)
+				out.append(_bolt_cmd(travel + TAU * float(k) / float(SLOTS),
+					GlyphRules.bolt_effects(def, reach)))
+			&"pillar":
+				gather += 1
+			_:
+				if GlyphRules.is_modifier_behavior(behavior):
+					mod_counts[g] = int(mod_counts.get(g, 0)) + 1
 	if gather > 0:
 		out.append(_pillar_cmd(gather))
-	# 🔴 변형형 적용 순서 = `Enums.MODIFIER_GLYPHS` 순서 고정(사전 키 순서에 기대지 않는다 —
-	# 그러면 같은 도안이 실행마다 다르게 나갈 수 있다).
-	for code in Enums.MODIFIER_GLYPHS:
+	# 🔴 변형형 적용 순서 = **code 오름차순 고정**(`Db.modifier_codes()`). 목적은
+	# *"같은 층 안에서 확산·폭발을 어느 칸에 놨느냐가 결과를 바꾸지 않는다"*이다 —
+	# 층이 곧 순서라 층 **내부**는 "동시"로 봐야 하고, 그러려면 배치와 무관한 결정적 순서가 필요하다.
+	for code in Db.modifier_codes():
 		if mod_counts.has(code):
 			out = _apply_modifier(int(code), int(mod_counts[code]), out, travel)
 	return _capped(out)
@@ -291,19 +305,22 @@ func _capped(plan: Array) -> Array:
 
 
 ## 변형형 문양 하나가 안쪽 명령 목록을 감싼다. **새 변형형 = 여기 분기 하나**(+ GlyphCode 값 +
-## `Enums.MODIFIER_GLYPHS` 한 줄). `count` = 그 층에서 이 문양이 차지한 칸 수 = **세기**
+## `GlyphRules.BEHAVIORS` 한 줄). `count` = 그 층에서 이 문양이 차지한 칸 수 = **세기**
 ## (응집의 "많을수록 굵다"와 같은 결 — 많이 그릴수록 세다).
 func _apply_modifier(code: int, count: int, plan: Array, travel: float) -> Array:
 	var inner := plan
 	if inner.is_empty():
 		# 감쌀 게 없다 = 이 문양이 **룬 자체**를 감싼다. 씨앗 = 조준 방향 탄 1발(그 원소 그대로).
 		inner = [_bolt_cmd(travel, {})]
-	match code:
-		Enums.GlyphCode.SPREAD:
-			return _spread(inner, count)
-		Enums.GlyphCode.EXPLODE:
-			return _explode(inner, count)
-	# 🔴 `MODIFIER_GLYPHS`에 값만 넣고 여기 분기를 빠뜨린 경우 — `inner`엔 이미 **씨앗 탄 1발이
+	# 🔴 세82: 분기가 **문양 개수가 아니라 알고리즘 개수**만큼만 늘어난다. 이게 데이터화의 실체다 —
+	# 같은 알고리즘에 수치만 다른 문양(응축 = 폭발의 반경 계수 부호를 뒤집은 것)은 `.tres` 한 장이다.
+	var def := Db.glyph_by_code(code)
+	match def.behavior if def != null else &"":
+		&"spread":
+			return _spread(inner, count, def)
+		&"blast":
+			return _explode(inner, count, def)
+	# 🔴 `BEHAVIORS`에 이름만 넣고 여기 분기를 빠뜨린 경우 — `inner`엔 이미 **씨앗 탄 1발이
 	# 주입돼 있을 수 있어**, 그대로 돌려주면 **없던 탄 1발이 조용히 는다**. 씨앗을 되돌린다.
 	push_warning("변형형 문양 %d에 _apply_modifier 분기가 없다 — 아무 일도 안 한다" % code)
 	return plan
@@ -312,22 +329,27 @@ func _apply_modifier(code: int, count: int, plan: Array, travel: float) -> Array
 ## **확산 = 복제 산개** (사용자 확정 세79). 안쪽 각 갈래를 n개로 복제해 부채꼴로 벌린다.
 ## 탄은 **각도**가 벌어지고, 제자리 명령(기둥·폭발)은 착탄점 둘레로 **위치**가 벌어진다.
 ## 갈래마다 세기는 줄지만(balance) 합은 늘어난다 — 안 그러면 그릴 이유가 없다.
-func _spread(inner: Array, count: int) -> Array:
-	var n := maxi(count, 2)     # 1갈래는 확산이 아니다 — 최소 2갈래
-	var spread := deg_to_rad(balance.spread_fan_deg)
+## 🔴 세82: 수치가 `balance` 전역이 아니라 **그 문양의 `params`**에서 온다. 그래서 「확산 46°」 옆에
+## 「돌풍 120°·약함」을 `.tres` 한 장으로 세울 수 있다 — 같은 알고리즘, 다른 문양.
+func _spread(inner: Array, count: int, def: GlyphDef = null) -> Array:
+	var min_branches := int(GlyphRules.param(def, &"min_branches", 2))
+	var n := maxi(count, maxi(min_branches, 2))   # 1갈래는 확산이 아니다 — 최소 2갈래
+	var spread := deg_to_rad(GlyphRules.param_f(def, &"fan_deg", 46.0))
+	var branch_mult := GlyphRules.param_f(def, &"branch_mult", 0.6)
+	var offset_px := GlyphRules.param_f(def, &"offset_px", 44.0)
 	var out: Array = []
 	for cmd: Dictionary in inner:
 		for i in n:
 			var t := float(i) / float(n - 1) - 0.5   # -0.5 … +0.5 (n은 위에서 ≥2라 0나눗셈 없다)
 			var c := cmd.duplicate(true)
-			c["mult"] = float(cmd.get("mult", 1.0)) * balance.spread_branch_mult
+			c["mult"] = float(cmd.get("mult", 1.0)) * branch_mult
 			if c["kind"] == &"bolt":
 				c["angle"] = float(cmd.get("angle", 0.0)) + spread * t
 			else:
 				# 제자리 명령은 각도가 없다 — 착탄점 둘레로 흩는다(같은 자리에 겹치면 한 발과 같다).
 				var a := TAU * float(i) / float(n)
 				c["offset"] = Vector2(cmd.get("offset", Vector2.ZERO)) \
-					+ Vector2.from_angle(a) * balance.spread_offset_px
+					+ Vector2.from_angle(a) * offset_px
 			out.append(c)
 	return out
 
@@ -337,7 +359,16 @@ func _spread(inner: Array, count: int) -> Array:
 ##   `폭발(확산(불))` = 3갈래를 융합 → **큰** 폭발 하나 (넓은 지역 광역 한 방)
 ##   `확산(폭발(불))` = 씨앗 1개를 융합 → 작은 폭발, 그 뒤 확산이 3개로 복제 → 작은 폭발 다발
 ## 폭발이 "각 갈래를 각각 터뜨림"이면 두 순서가 같아져 순서가 안 보인다 — 그래서 **융합**이다.
-func _explode(inner: Array, count: int) -> Array:
+## 🔴 세82: 수치가 문양 `params`에서 온다 — **응축이 이 알고리즘을 그대로 쓴다.** 반경 계수를
+## 음수로, 융합 배율을 1.0 초과로 준 `.tres` 한 장이 「좁게 모아 세게」다(폭발의 반대).
+## 새 함수(`_condense`)를 만들지 않는 게 이 데이터화의 첫 증명이다.
+##
+## 🔴 **각 인자를 먼저 0으로 클램프한다.** 응축은 두 계수가 **둘 다 음수**라, 안 하면 두 인자가
+## 동시에 음수일 때 곱이 **양수로 되살아나** 최종 하한을 통과한다 — 갈래가 많을수록 반경이
+## 거꾸로 커진다. 기본값(양수 계수)에선 무변경이라 회귀 0이고 부호 함정만 구조적으로 막힌다.
+## ⚠ 바닥이 둘인 건 의도다: `blast.gd`의 `maxf(p_radius_px, 1.0)`은 **노드의 안전 바닥**,
+## `min_radius_px`는 **게임 규칙**이다. 역할이 다르니 하나를 지우지 마라.
+func _explode(inner: Array, count: int, def: GlyphDef = null) -> Array:
 	var branches := maxi(inner.size(), 1)
 	var total := 0.0
 	var center := Vector2.ZERO
@@ -345,13 +376,17 @@ func _explode(inner: Array, count: int) -> Array:
 		total += float(cmd.get("mult", 1.0))
 		center += Vector2(cmd.get("offset", Vector2.ZERO))
 	center /= float(branches)
-	var radius := balance.blast_base_radius_px \
-		* (1.0 + balance.blast_radius_per_branch * float(branches - 1)) \
-		* (1.0 + balance.blast_radius_per_count * float(maxi(count, 1) - 1))
+	var n := maxi(count, 1)
+	var radius := GlyphRules.param_f(def, &"base_radius_px", 54.0) \
+		* maxf(1.0 + GlyphRules.param_f(def, &"radius_per_branch", 0.18) * float(branches - 1), 0.0) \
+		* maxf(1.0 + GlyphRules.param_f(def, &"radius_per_count", 0.25) * float(n - 1), 0.0)
+	radius = maxf(radius, GlyphRules.param_f(def, &"min_radius_px", 12.0))
+	var merge := GlyphRules.param_f(def, &"merge_mult", 0.85) \
+		+ GlyphRules.param_f(def, &"merge_mult_per_count", 0.0) * float(n - 1)
 	return [{
 		"kind": &"blast",
 		"offset": center,
-		"mult": total * balance.blast_merge_mult,
+		"mult": total * merge,
 		"radius": radius,
 	}]
 
@@ -378,7 +413,10 @@ func _spawn_cmd(cmd: Dictionary, at: Vector2, fire: Dictionary) -> void:
 		&"pillar":
 			_spawn_pillar(pos, int(cmd.get("gather", 1)), hit)
 		&"blast":
-			_spawn_blast(pos, float(cmd.get("radius", balance.blast_base_radius_px)), hit)
+			# ⚠ 폴백은 실제로 안 쓰인다(`_explode`가 늘 radius를 싣는다). 세82에 balance에서
+			# `blast_base_radius_px`가 문양 params로 이사해, 폴백도 그 기본값 표를 본다.
+			_spawn_blast(pos, float(cmd.get("radius",
+				GlyphRules.DEFAULTS[&"blast"]["base_radius_px"])), hit)
 
 
 ## 발산 = 순수 직진 탄환. effects={}로 쓰면 팅김·유도·관통 없이 곧게 날아가 적에 닿으면 소멸한다.

@@ -22,3 +22,23 @@ extends Resource
 @export var ui_color: Color = Color(0.72, 0.28, 0.12)
 ## 짧은 설명 (책 셀 아래).
 @export var desc: String = "바깥(진)으로"
+
+## 🔴 이 문양이 쓰는 **알고리즘** — `GlyphRules.BEHAVIORS`의 키 중 하나 (세82 데이터화).
+## `bolt`(칸 방향 탄) · `pillar`(착탄점 기둥) · `spread`(복제 산개) · `blast`(융합 광역).
+## **계열(전개형/변형형)도 이 값이 답한다** — 별도 상수를 두지 않는다(옛 `Enums.MODIFIER_GLYPHS` 은퇴).
+##
+## ⚠ 기본값이 **빈 값**인 건 의도다: 갱신을 빠뜨린 `.tres`가 "직진탄으로 잘못 동작"하는 대신
+## 미등록으로 걸려 **시끄럽게** 죽는다 (세50 「파일을 만들었다 ≠ 완료」와 같은 결).
+@export var behavior: StringName = &""
+
+## 알고리즘에 넘길 **수치**. 키는 알고리즘마다 다르고, 없는 키는 알고리즘 기본값을 쓴다.
+##   spread: fan_deg · branch_mult · offset_px · min_branches
+##   blast : base_radius_px · radius_per_branch · radius_per_count · min_radius_px
+##           · merge_mult · merge_mult_per_count
+##   bolt  : effect(&"" / &"pierce" / &"homing" / &"bounce" / &"thrust") · reach
+##   pillar: 없음 (굵기는 연출 상수 PILLAR_SCALE_PER_GATHER — balance가 아니다)
+##
+## 🔴 **같은 알고리즘 + 다른 수치 = 다른 문양**이 이 축의 요점이다. 「확산 46°」 옆에
+## 「돌풍 120°」를 `.tres` 한 장으로 세울 수 있다 — 응축이 폭발과 `blast`를 공유하는 게 그 첫 사례.
+## ⚠ 키는 **String**으로 적는다(`.tres` 사전 리터럴이 받는 표기). `GlyphRules.param`이 정규화한다.
+@export var params: Dictionary = {}

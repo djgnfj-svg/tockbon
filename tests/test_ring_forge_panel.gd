@@ -184,14 +184,18 @@ func _describe(a: Dictionary) -> String:
 	var rune := int(a.get("rune", 0))
 	var rings: Array = a.get("rings", [])
 	var ring: Array = rings[0] if not rings.is_empty() else []
-	var counts := {RingBoard.G_GATHER: 0, RingBoard.G_RADIATE: 0}
+	# 🔴 세82: 이름의 정본은 GlyphDef.display_name (옛 RingBoard.GLYPH_NAMES 배열 은퇴).
+	# 놓인 코드만 세므로 어휘 길이에 의존하지 않는다 — 문양이 늘어도 여길 안 고쳐도 된다.
+	var counts := {}
 	for g in ring:
 		if int(g) != RingBoard.GLYPH_NONE:
-			counts[int(g)] += 1
+			counts[int(g)] = int(counts.get(int(g), 0)) + 1
+	var codes: Array = counts.keys()
+	codes.sort()
 	var parts: Array[String] = []
-	for gi in RingBoard.GLYPH_NAMES.size():
-		if counts[gi] > 0:
-			parts.append("%s×%d" % [RingBoard.GLYPH_NAMES[gi], counts[gi]])
+	for gi in codes:
+		var gd = Db.glyph_by_code(int(gi))
+		parts.append("%s×%d" % [gd.display_name if gd != null else "문양%d" % gi, counts[gi]])
 	var rune_name := "불" if rune == RingBoard.RUNE_FIRE else "?"
 	return "%s · [%s]" % [rune_name, "빈 칸" if parts.is_empty() else " ".join(parts)]
 

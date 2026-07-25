@@ -327,7 +327,7 @@ func _draw_selected_detail(font: Font, at: Vector2) -> void:
 	# 🔴 세79 M1: ① `size`(진 크기)를 실어야 **Tab 마법진 탭·조립 리포트와 같은 숫자**가 나온다 —
 	# 안 실으면 잉크·크기가 붙은 도안에서 HUD만 낮게 나와 어느 쪽이 맞는지 아무도 모른다.
 	# ② 변형형(확산·폭발)이 끼면 그 숫자는 **갈래 하나**의 위력이다(`ring_power.gd` 머리의 경계).
-	var unit := "갈래당 위력" if design.has_modifier_glyph() else "위력"
+	var unit := "갈래당 위력" if design.has_modifier_glyph(Db.modifier_codes()) else "위력"
 	var text := "슬롯 %d · %s   %s %d · %d점" % [_selected + 1, design.display_name, unit,
 		RingPower.power_display(design.total_score, Db.ink_mult(design.ink), design.size),
 		RingPower.score_display(design.total_score)]
