@@ -83,7 +83,11 @@ UI를 만들 땐 제네릭 스킬 `godot-ui`(Control·테마·앵커·컨테이�
 ## 🌈 2D 셰이더 · 애니 배선 — 세92에 `takbon-shader`·`takbon-animator`를 여기로 흡수했다
 
 - **셰이더**: 탁본은 거의 `shader_type canvas_item`(spatial=3D라 안 쓴다). 스킬 `shader-basics`·`2d-essentials`(파티클이면 `particles-vfx`). ⚠ **셰이더 파라미터는 밸런스가 아니라 손맛 연출값**이라 `balance.tres`가 아니라 스크립트/머티리얼 쪽이 맞다. 🔴 헤드리스는 셰이더가 **어떻게 보이는지 못 잡는다** — 리포트에 "리드가 MCP 스샷으로 확인 필요"를 반드시 적어라. 화면 전체 오버레이면 fillrate 비용도 적어라.
-- **애니**: 스킬 `animation-system`·`tween-animation`. 노드 기본값 = **AnimatedSprite2D**(시트 프레임 애니 — `src/actors/player.gd`의 `$Sprite` 구조가 표준) · **AnimationPlayer**(원샷 시퀀스) · **Tween**(코드 프로퍼티 모션) · **AnimationTree는 블렌딩이 정말 필요할 때만**(탁본은 대개 필요 없다. IK·리타깃팅은 3D용이라 안 쓴다).
+- **애니**: 🔴 **`docs/ART_SPEC.md` §8(애니메이션)을 먼저 Read해라** — 박자 기준선·하드 규칙이 거기 있다(세94 신설).
+  ⚠ **fps를 코드에 하드코딩하지 마라 — 데이터(`.tres`)가 쥔다.** 지금 `forest_enemy._setup_frames`의 `6.0` 상수가 그 위반이라
+  **적 9종이 전부 같은 박자로 움직인다**(✅ `src/core/sheet_lib.gd`는 이미 데이터에서 받는 구조다).
+  스킬 `animation-system`·`tween-animation`. 노드 기본값 = **AnimatedSprite2D**(시트 프레임 애니 — `src/actors/player.gd`의 `$Sprite` 구조가 표준) · **AnimationPlayer**(원샷 시퀀스) · **Tween**(코드 프로퍼티 모션) · **AnimationTree는 블렌딩이 정말 필요할 때만**(탁본은 대개 필요 없다. IK·리타깃팅은 3D용이라 안 쓴다).
+  🔴 **박자는 헤드리스도 스샷도 못 잰다 — F5로만 확인된다.** 애니를 건드렸으면 리포트에 그렇게 적어라.
   🔴 **런타임은 좌/우 2방향이다 — 4방향이 아니다**(세76 사용자 정정). `_face_mouse()`가 커서 x로 left/right만 고른다 — **시트에 up/down 로우가 남아 있어도 안 쓴다.** 없는 방향 태그를 배선하지 마라(피격도 `hurt_left`/`hurt_right` 둘뿐).
   🔴 **애니 FSM ≠ 게임플레이 FSM** — 클립→클립 전이만 애니 쪽이고, Idle→Combat→Dead 같은 게임 상태는 `state-machine`으로 짜서 애니를 **구동**한다. 애니 노드 안에 게임 로직을 넣지 마라.
 

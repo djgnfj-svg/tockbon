@@ -10,7 +10,7 @@
   정본 설계 = `docs/takbon-design/visual_language_design.md` §9~§11.
 
 무엇을 재나 (§11-3 자가 검증 5항목):
-  ① Apollo 46 밖의 색 개수      ② 실루엣 크기(프레임이 아니라 그림 자체)
+  ① TAKBON 60 밖의 색 개수      ② 실루엣 크기(프레임이 아니라 그림 자체)
   ③ 색 수(캐릭터 38~46 / 마법 8~14)  ④ 반투명 픽셀 수(하드 엣지 계약)
   ⑤ 디테일 밀도(색/100불투명px) — 이 게임의 캐릭터 기준선은 5 언저리다
 
@@ -26,6 +26,13 @@ import argparse
 import glob
 import os
 import sys
+
+# 🔴 Windows 콘솔은 cp949라 em dash(—)·한글을 찍다 UnicodeEncodeError로 **죽는다**.
+#   위반 줄에만 그 글자가 있어서 **통과할 때만 도는 검사기**였다(세94 실측 — 세91은 7/7 통과라 안 드러났다).
+#   ⚠ 검사기가 실패를 보고하다 죽으면 「위반 없음」과 「검사기 고장」이 구별되지 않는다.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 try:
     from PIL import Image

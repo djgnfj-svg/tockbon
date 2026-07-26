@@ -113,10 +113,12 @@
 - 에이전트는 mcp__godot__* 도구 사용 금지 (에디터는 리드가 관리) · 스키마·시그널 추가 요청은 에이전트가 보고 → 리드가 core에 반영
 - 🔴 **하네스는 자립형이다**(godot-prompter 플러그인 없이 돈다). `.claude/skills/`의 제네릭 스킬은 한국어로 번역된 **탁본 로컬 포크**라 상류를 안 따라간다 — 영어 원본이 필요하면 상류 github. 구성 이력·삭제 사유 = `docs/DECISIONS.md` 「하네스가 어떻게 생겼나」.
 - 🔴 **기획은 리드가 한다** — `takbon-design` 스킬로 **사용자와 대화하며** 확정(질문 하나씩·2~3안+추천·섹션 승인·`docs/takbon-design/` 착지). 서브에이전트는 대화를 못 해 혼자 정한다 — **기획을 위임하지 마라.**
-- 🔴 **위임 대상은 네 축뿐이다**(`.claude/agents/` · 세92에 여덟에서 줄였다 — 사용자 확정): **`takbon-architect`**(확정 설계 리뷰 — 방향은 안 정함) · **`takbon-dev`**(코드로 만드는 것 **전부** — 모듈 구현 + **Control UI·2D 셰이더·애니 배선**) · **`takbon-reviewer`**(커밋 전 리뷰) · **`takbon-art`**(그림으로 만드는 것 전부 — 도트 + **입체화 relight**).
-  🔴 **옛 이름을 만나면 여기서 해소해라**(설계문서·과거 기록엔 그대로 남아 있다): `takbon-ui`·`takbon-shader`·`takbon-animator` **→ `takbon-dev`** · `takbon-relight` **→ `takbon-art`**. 그 넷은 **파일이 없다 — 부르면 실패한다.**
-  넷 다 `takbon-rules`를 읽는다. **`takbon-verify`는 art를 뺀 셋**이 읽는다(art는 PNG까지만 만들고 검증이 리드에게 있다). 제네릭 Godot 지식은 `.claude/skills/`의 제네릭 스킬(`gdscript-patterns`·`animation-system`·`physics-system`·`godot-ui` 등)을 Skill 도구로 부른다. **규칙 충돌 시 탁본이 이긴다.** (개수는 적지 마라 — 늘 낡는다.)
-- 🔴🔴 **기본이 위임이다** — 위임은 손을 던다기보다 **설계·리뷰 단계를 강제해 품질을 올리는 장치**다(세48 사용자 의도). 파이프라인: `architect`(설계) → `dev`(코드)·`art`(그림)(구현) → `reviewer`(커밋 전). **코드부터 얹지 마라.**
+- 🔴 **위임 대상은 다섯 축이다**(`.claude/agents/` · 세92에 여덟→넷, **세94에 `takbon-vfx`를 다시 갈랐다** — 사용자 확정): **`takbon-architect`**(확정 설계 리뷰 — 방향은 안 정함) · **`takbon-dev`**(코드로 **돌아가는** 것 — 모듈 구현 + Control UI·애니 배선) · **`takbon-vfx`**(코드로 **그리는 빛** — 발사·착탄·원소반응·피격 손맛·궤적·연출 셰이더) · **`takbon-art`**(그림으로 만드는 것 — 도트 스프라이트) · **`takbon-reviewer`**(커밋 전 리뷰).
+  🔴 **dev ↔ vfx 경계 = 「돌아가라고 있는 것」 vs 「보이라고 있는 것」.** 셰이더는 대개 vfx(연출)이고 UI·기능 셰이더만 dev다. 스프라이트를 **그리는** 건 art다.
+  🔴🔴 **vfx를 다시 접을 조건이 그 파일에 적혀 있다** — 근거 셋(고유 정본 `docs/VFX_SPEC.md` · 고유 도구 `tools/vfx_shot.gd` · 고유 실패 양식 「에러 0·전 스위트 그린인데 화면이 밋밋하다」) 중 **하나라도 무너지면 dev로 되돌려라.** 세92가 `shader`·`animator`를 접은 이유가 *"경계가 실효 없이 갈려 라우팅만 늘렸다"*였다.
+  🔴 **옛 이름을 만나면 여기서 해소해라**(설계문서·과거 기록엔 그대로 남아 있다 — 부르면 실패한다): `takbon-ui`·`takbon-animator` **→ `takbon-dev`** · `takbon-shader` **→ `takbon-vfx`**(연출 셰이더) · `takbon-relight` **→ `takbon-art`, 단 🔴 relight 기법 자체가 세91에 은퇴했다**(HSV 색조를 밀어 팔레트를 깬다 — 새 에셋에 돌리지 마라).
+  다섯 다 `takbon-rules`를 읽는다. **`takbon-verify`는 art·vfx를 뺀 셋**이 읽는다(그 둘은 자기 검수 도구가 따로 있고 스위트 검증이 리드에게 있다). 제네릭 Godot 지식은 `.claude/skills/`의 제네릭 스킬(`gdscript-patterns`·`animation-system`·`physics-system`·`godot-ui`·`particles-vfx` 등)을 Skill 도구로 부른다. **규칙 충돌 시 탁본이 이긴다.** (개수는 적지 마라 — 늘 낡는다.)
+- 🔴🔴 **기본이 위임이다** — 위임은 손을 던다기보다 **설계·리뷰 단계를 강제해 품질을 올리는 장치**다(세48 사용자 의도). 파이프라인: `architect`(설계) → `dev`(코드)·`vfx`(연출)·`art`(그림)(구현) → `reviewer`(커밋 전). **코드부터 얹지 마라.**
 - 🔴🔴 **에이전트에게 「보고서를 `scratch_<이름>.md`로 써라」고 지시해라** — **채팅 최종 보고는 리드에게 안 온다**(idle 알림만 온다). 특히 architect·reviewer는 산출물이 보고서뿐이라 파일로 안 시키면 작업 전체가 사라진다. 읽고 나면 리드가 지운다.
 - 🔴 **리드가 절대 안 놓는 것 = 검증·`--import`·커밋.** **에이전트의 「그린 나왔습니다」를 근거로 쓰지 마라** — 리드가 직접 돌리고 뮤테이션으로 검출력을 확인한다.
 - ⚠ **뮤테이션을 시킬 땐 원상복구까지가 지시다** — 되돌린 채 두면 기능이 조용히 죽은 채 커밋된다. 리드는 커밋 전 `git diff`로 본다.

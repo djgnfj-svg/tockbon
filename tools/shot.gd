@@ -21,6 +21,8 @@ var _out := ""
 var _wait := DEFAULT_WAIT
 var _frames := 0
 var _shot := false
+var _scene := ""       ## 🔴 씬 전환을 _process 첫 프레임으로 미루려고 들고 있는다(아래 이유)
+var _entered := false
 
 
 func _init() -> void:
@@ -34,15 +36,23 @@ func _init() -> void:
 	if args.size() >= 3:
 		_wait = maxi(int(args[2]), 1)
 
-	# 🔴 오토로드 식별자는 컴파일 타임에 참조하면 안 된다(세: -s는 오토로드 등록 전에 컴파일된다).
-	#   여기서는 씬만 바꾸므로 오토로드를 안 건드린다 — 필요하면 root.get_node("/root/...")로 런타임 조회.
-	var err := change_scene_to_file(scene_path)
-	if err != OK:
-		push_error("[shot] 씬 로드 실패 %s (err %d)" % [scene_path, err])
-		quit(1)
+	# 🔴🔴 여기서 change_scene_to_file을 부르면 안 된다 (세94 실측 — 그전까지 이 버그가 있었다).
+	#   `-s` 스크립트의 `_init`은 **오토로드 등록보다 먼저** 돈다. 그 시점에 씬을 열면 씬 안의
+	#   스크립트가 `GameState`·`Db`·`EventBus`를 컴파일타임 참조하다 죽는다:
+	#     `Compile Error: Identifier not found: GameState` → 씬이 통째로 안 뜨고 PNG도 안 나온다.
+	#   ⚠ 단순한 씬은 우연히 통과해서 **한동안 안 드러났다**(base.tscn처럼 오토로드를 쓰는 씬에서만 터진다).
+	#   → 전환을 `_process` 첫 프레임으로 미룬다. `tools/vfx_shot.gd`도 같은 회피를 쓴다.
+	_scene = scene_path
 
 
 func _process(_delta: float) -> bool:
+	if not _entered:
+		_entered = true
+		var err := change_scene_to_file(_scene)
+		if err != OK:
+			push_error("[shot] 씬 로드 실패 %s (err %d)" % [_scene, err])
+			quit(1)
+		return false
 	if _shot:
 		return true  # quit
 	_frames += 1
