@@ -186,6 +186,8 @@ static func power_mult(vuln_power: float) -> float:
 
 ## 상태 틴트 색 — **보여야 의미가 있다**(화상 중인 적이 평범해 보이면 룬을 바꿀 이유를 못 느낀다).
 ## 연출값이라 balance가 아니라 여기 둔다(선례: juice의 손맛 수치).
+## 🔴🔴 **이건 「곱하는 색」이다** — 스프라이트 `modulate`에 곱하라고 만든 값이라 **1.0을 넘는다**
+## (BLAZE 1.60 · BURN 1.35 · SHOCK 1.25). **직접 그리는 색으로 쓰지 마라** — 아래 `draw_color_of`가 그 문이다.
 static func tint_of(status: int) -> Color:
 	match status:
 		Enums.Status.BURN:       return Color(1.35, 0.75, 0.55)
@@ -200,3 +202,17 @@ static func tint_of(status: int) -> Color:
 		Enums.Status.OVERGROWTH: return Color(0.35, 1.10, 0.80)
 		Enums.Status.VULNERABLE: return Color(1.15, 0.95, 1.15)
 		_:                       return Color.WHITE
+
+
+## 🔴 **그리는 색** — `Line2D.default_color`처럼 **직접 칠하는** 자리는 반드시 이걸 쓴다.
+## `tint_of`는 `modulate` **배수**라 1.0을 넘고, 그대로 칠하면 렌더가 1.0에서 **클램프**해
+## 색조가 흰쪽으로 뭉갠다(BLAZE `1.60/0.60/0.35` → `1.00/0.60/0.35` = 주황이 옅어진다).
+## 최대 성분으로 나눠 **비율(색조)을 보존한 채** 표시 범위로 내린다 — 새 색 테이블이 아니라 **파생**이다
+## (VFX_SPEC §1-1 *"VFX는 자기 색 테이블을 만들지 않는다"*).
+## ⚠ **둘을 바꿔 쓰지 마라**: 스프라이트 틴트 = `tint_of`(곱한다) · 절차 도형 = `draw_color_of`(칠한다).
+static func draw_color_of(status: int) -> Color:
+	var c := tint_of(status)
+	var peak: float = maxf(maxf(c.r, c.g), c.b)
+	if peak <= 1.0:
+		return c
+	return Color(c.r / peak, c.g / peak, c.b / peak, c.a)

@@ -12,8 +12,12 @@ extends Node2D
 ## 각 핸들러는 연출 Node2D를 만들어 **`get_tree().current_scene`에 add_child** + global_position만
 ## 세팅한다 (juice._spawn_number·death_puff와 동일 — Player 트랜스폼에 안 묶이게 월드 씬에 붙인다).
 ##
-## 🔴 색은 `SR.tint_of(status)` **재사용** — 상태 색 단일 소스를 되쓴다(색 테이블 복사 금지).
-##   증기(NONE)는 tint_of가 흰색을 돌려주므로 그대로 맞다.
+## 🔴 색은 **`SR.draw_color_of(status)`** — 상태 색 단일 소스를 되쓴다(색 테이블 복사 금지).
+##   증기(NONE)는 흰색이 돌아오므로 그대로 맞다.
+## 🔴🔴 **`tint_of`를 여기서 부르지 마라**(세97): 그건 `modulate`에 **곱하는** 배수라 1.0을 넘고,
+##   `Line2D.default_color`로 **칠하면** 렌더가 클램프해 색조가 흰쪽으로 뭉갠다 — 감전 노랑이
+##   회색으로 나가던 실제 버그다. `draw_color_of`가 비율을 보존한 채 표시 범위로 내려 준다.
+##   그물 = `test_status_auto [18]`(이 파일을 **문자열로 스캔**한다 — 주석에 옛 안내를 남겨도 빨개진다).
 ##
 ## 🔴 여기 수치는 밸런스가 아니라 **연출값(손맛)이다** (juice.gd·forest_enemy 팝 상수 선례) —
 ##   balance.tres가 아니라 여기 const로 둔다. 사용자가 쏴 보며 조일 값이다.
@@ -34,7 +38,10 @@ const SPARK_COUNT := 6           ## 중심에서 방사되는 짧은 번쩍 개�
 const SPARK_LEN_MIN := 8.0       ## 스파크 길이 최소(px)
 const SPARK_LEN_MAX := 16.0      ## 스파크 길이 최대(px)
 const SPARK_WIDTH := 2.0         ## 스파크 굵기(px)
-const SPARK_BRIGHT := 1.8        ## 스파크 번쩍 밝기 배수
+## 🔴 스파크 심지 = **흰색 소량 혼합**. 세97 이전엔 `col * 1.8`(색 곱)이었는데, 상태색이 이미
+##   1.0을 넘는 배수라 곱하면 **전 상태가 흰색으로 뭉갰다**(감전 노랑이 회색으로 나가던 원인).
+##   지금은 `draw_color_of`가 색조를 세우고 여기서 심지만 얹는다 — ⚠ 값은 F5로 조인다.
+const SPARK_LIGHTEN := 0.30      ## 스파크 심지 흰색 혼합률(0=제 색 그대로)
 const SPARK_TIME := 0.14         ## 스파크 수명(s)
 const SPARK_END_SCALE := 1.5     ## 스파크가 바깥으로 튀는 최종 배율
 
@@ -42,7 +49,7 @@ const SPARK_END_SCALE := 1.5     ## 스파크가 바깥으로 튀는 최종 배�
 const ARC_SEGMENTS := 6          ## 지그재그 세그먼트 수(중점 개수 = SEG-1)
 const ARC_JITTER := 10.0         ## 중점 수직 변위 최대(px)
 const ARC_WIDTH := 2.5           ## 아크 선 굵기(px)
-const ARC_BRIGHT := 1.6          ## 번쩍 밝기 배수
+const ARC_LIGHTEN := 0.25        ## 아크 심지 흰색 혼합률 (SPARK_LIGHTEN과 같은 이유 — 세97)
 const ARC_TIME := 0.15           ## 아크 수명(s)
 
 ## 연출을 death_puff(50) 위로 — 적 스프라이트·퍼프보다 위에서 번쩍인다.
@@ -74,7 +81,12 @@ const FLARE_H := 24.0             ## 플레어 높이(px) — 폭보다 커 세�
 const FLARE_RISE := 10.0          ## 플레어가 위로 올라가는 양(px)
 const FLARE_TIME := 0.16          ## 플레어 수명(s) — 짧게(다중 착탄 도배 방지)
 const FLARE_START_SCALE := 0.5    ## 플레어 시작 배율(작게 시작 → 자라며 상승)
-const FLASH_LIGHTEN := 0.35     ## ui_color는 UI 셀용이라 어둡다 — 플래시용 밝힘(머즐·착탄 공용, 룬색의 lightened 파생)
+## 🔴🔴 **세97: 플래시용 밝힘(`lightened(0.35)`)을 걷었다** — 룬색을 그대로 쓴다.
+##   옛 주석은 *"ui_color는 UI 셀용이라 어둡다"*였는데, **세94에 룬 색 6종이 TAKBON 60으로
+##   재정렬되며 전제가 사라졌다**(실측: 6종 전부 팔레트와 **정확히 일치** · `CF573C`·`F2CB3F` …).
+##   흰색을 35% 섞으면 **채도가 죽어 룬끼리 구분이 흐려지고 팔레트 밖으로도 나간다** — 세94에 색을
+##   정렬했는데 **화면이 안 변한** 원인이 이 한 줄이었다(N11-③).
+##   ⚠ 밝기가 모자라면 색을 밝히지 말고 **굵기·수명·알파**로 벌어라(VFX_SPEC §1-1).
 const IMPACT_Z := 54              ## 🔴 반응 링(VFX_Z=55) 아래 — 머즐·플레어 층 / 데칼은 IMPACT_Z-1(53)
 ## Db에 룬이 없을 때 폴백 (ring_carrier와 같은 규칙)
 const RUNE_FALLBACK := Color(0.95, 0.35, 0.15)
@@ -92,7 +104,7 @@ func _on_reaction_burst(pos: Vector2, radius: float, status: int) -> void:
 	var scene := get_tree().current_scene
 	if scene == null:
 		return
-	var col := SR.tint_of(status)
+	var col := SR.draw_color_of(status)
 	_spawn_ring(scene, pos, radius, col)
 	# 🔴 감전(SHOCK)만 중심 스파크 — 증기(NONE)는 흰 링만(설계 §4).
 	if status == Enums.Status.SHOCK:
@@ -104,7 +116,7 @@ func _on_reaction_chain(from: Vector2, to: Vector2, status: int) -> void:
 	var scene := get_tree().current_scene
 	if scene == null:
 		return
-	_spawn_arc(scene, from, to, SR.tint_of(status))
+	_spawn_arc(scene, from, to, SR.draw_color_of(status))
 
 
 ## 발사 순간 (세션59) — 총구에 작은 진 링 확대+페이드 + 조준 방향 부채 틱 ("작은 진이 번쩍").
@@ -132,11 +144,11 @@ func _on_spell_impact(pos: Vector2, rune_type: int) -> void:
 
 
 ## 룬 → 플래시 색. vfx는 Player 자식(오토로드 컨텍스트 보장)이라 Db 직접 호출 OK —
-## SR.tint_of 재사용과 같은 결. ui_color의 **파생**(lightened)이다 — 새 색 테이블 아님.
+## SR.draw_color_of 재사용과 같은 결. 🔴 **`ui_color`를 그대로 쓴다**(세97 — 위 상수 주석):
+## 「날아가는 것과 터지는 것은 같은 색」(VFX_SPEC §1-1)이 색을 안 건드려야 성립한다.
 func _rune_flash_color(rune_type: int) -> Color:
 	var rune := Db.get_rune(rune_type) as RuneDef
-	var base := rune.ui_color if rune != null else RUNE_FALLBACK
-	return base.lightened(FLASH_LIGHTEN)
+	return rune.ui_color if rune != null else RUNE_FALLBACK
 
 
 ## 🔴 링을 **실제 게임 반경**으로 그린다(작게 시작→반경까지 팽창) — "여기까지 튄다"가 눈에 보이고,
@@ -174,7 +186,7 @@ func _spawn_sparks(scene: Node, pos: Vector2, col: Color,
 	var holder := Node2D.new()
 	holder.global_position = pos
 	holder.z_index = z
-	var bright := col * SPARK_BRIGHT
+	var bright := col.lightened(SPARK_LIGHTEN)
 	bright.a = 1.0
 	for i in count:
 		var ln := Line2D.new()
@@ -251,7 +263,7 @@ func _spawn_muzzle_ticks(scene: Node, pos: Vector2, aim_dir: Vector2, col: Color
 func _spawn_arc(scene: Node, from: Vector2, to: Vector2, col: Color) -> void:
 	var arc := Line2D.new()
 	arc.width = ARC_WIDTH
-	var bright := col * ARC_BRIGHT
+	var bright := col.lightened(ARC_LIGHTEN)
 	bright.a = 1.0
 	arc.default_color = bright
 	arc.z_index = VFX_Z

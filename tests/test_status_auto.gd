@@ -79,6 +79,7 @@ func _run() -> void:
 	await _test_root_plus_fire_is_blaze()
 	await _test_overgrowth_plus_fire_is_blaze()
 	_test_overgrowth_rules_relations()
+	_test_draw_color_contract()
 
 	if failures == 0:
 		print("TEST_STATUS_OK — 전 항목 통과")
@@ -723,6 +724,80 @@ func _test_overgrowth_rules_relations() -> void:
 	_check(nearest >= 0.45,
 		"🔴 무성함 틴트가 가장 가까운 이웃(%s)과도 뚜렷이 다르다 (거리 %.2f ≥ 0.45)"
 			% [nearest_name, nearest])
+
+
+## [18] 🔴 **「곱하는 색」과 「그리는 색」 계약** (세97 · N11-③).
+## `tint_of`는 `modulate` **배수**라 1.0을 넘는다(BLAZE 1.60 …). 그걸 `Line2D.default_color`로
+## **직접 칠하면** 렌더가 클램프해 색조가 흰쪽으로 뭉갠다 — 감전 노랑이 회색으로 나가던 실제 버그다.
+## `draw_color_of`가 **최대 성분으로 나눠 비율을 보존**하는지 재고, VFX가 다시 `tint_of`를
+## 직접 칠하는 회귀를 **소스 스캔**으로 막는다.
+## 🔴 ⓒ가 검출력의 심장이다 — 「그냥 clamp」나 「tint_of 그대로 반환」으로 되돌리면 여기서 빨개진다.
+func _test_draw_color_contract() -> void:
+	print("[18] 그리는 색 — 정규화 계약 · 색조 보존 · VFX 소비 자리 스캔")
+	var SR = load("res://src/core/status_rules.gd")
+	var all := {S_BURN: "화상", S_BLAZE: "산불", S_WET: "젖음", S_MUD: "진흙",
+		S_SHOCK: "감전", S_ROOT: "덩굴", S_OVERGROWTH: "무성함", S_VULNERABLE: "취약"}
+
+	# ── ⓐ 전 상태가 칠할 수 있는 범위 안이다 ──
+	for k in all.keys():
+		var d: Color = SR.draw_color_of(k)
+		_check(d.r <= 1.0 and d.g <= 1.0 and d.b <= 1.0,
+			"%s의 그리는 색이 1.0 이하다 (%.2f/%.2f/%.2f)" % [str(all[k]), d.r, d.g, d.b])
+
+	# ── ⓑ 색조(성분 비율)가 보존된다 = 정규화지 색 갈아치우기가 아니다 ──
+	for k in all.keys():
+		var t: Color = SR.tint_of(k)
+		var d: Color = SR.draw_color_of(k)
+		var peak: float = maxf(maxf(t.r, t.g), t.b)
+		if peak <= 0.0:
+			continue
+		var expect := Color(t.r / maxf(peak, 1.0), t.g / maxf(peak, 1.0), t.b / maxf(peak, 1.0), t.a)
+		_check(absf(d.r - expect.r) + absf(d.g - expect.g) + absf(d.b - expect.b) < 0.001,
+			"%s의 그리는 색이 틴트의 비율을 그대로 보존한다" % str(all[k]))
+
+	# ── ⓒ 🔴 클램프와 **다르다** (1.0을 넘는 상태에서 실제로 하는 일이 있다) ──
+	var boosted := 0
+	for k in all.keys():
+		var t: Color = SR.tint_of(k)
+		if maxf(maxf(t.r, t.g), t.b) <= 1.0:
+			continue
+		boosted += 1
+		var d: Color = SR.draw_color_of(k)
+		var clamped := Color(minf(t.r, 1.0), minf(t.g, 1.0), minf(t.b, 1.0), t.a)
+		var gap: float = absf(d.r - clamped.r) + absf(d.g - clamped.g) + absf(d.b - clamped.b)
+		_check(gap > 0.01,
+			"🔴 %s: 그리는 색이 단순 클램프와 다르다 (차이 %.3f — 같으면 함수가 일을 안 한 것)"
+				% [str(all[k]), gap])
+	_check(boosted >= 3,
+		"1.0을 넘는 틴트가 셋 이상이라 ⓒ가 자명 통과가 아니다 (실제 %d개)" % boosted)
+
+	# ── ⓓ 구분이 정규화 뒤에도 살아 있다 (무성함 ≠ 덩굴) ──
+	# ⚠ 임계가 [17]의 0.45보다 **낮은 이유**: 정규화는 최대 성분을 1.0으로 통일하므로 밝기 차가
+	#   사라지고 **색조 차이만** 거리로 남는다(실측 0.41 · 단순 클램프여도 0.45라 차이는 미미하다).
+	#   0.45를 그대로 쓰면 「덜 구분된다」가 아니라 **정규화 자체를 못 하게** 막는 그물이 된다.
+	# 🔴 임계만으로는 「틴트 팔이 통째로 사라진」 경우를 못 잡는다 — 흰색 폴백은 오히려 거리가
+	#   **커져서**(0.88) 통과한다. 그래서 폴백 여부를 따로 잰다([17]과 같은 이유).
+	var og: Color = SR.draw_color_of(S_OVERGROWTH)
+	var rt: Color = SR.draw_color_of(S_ROOT)
+	_check(og != Color.WHITE and rt != Color.WHITE,
+		"무성함·덩굴에 전용 색이 살아 있다 (흰색 폴백이 아니다)")
+	var dist: float = absf(og.r - rt.r) + absf(og.g - rt.g) + absf(og.b - rt.b)
+	_check(dist >= 0.35,
+		"🔴 무성함·덩굴 구분이 정규화 뒤에도 남는다 (거리 %.2f ≥ 0.35)" % dist)
+
+	# ── ⓔ 🔴 재발 스캔: VFX가 「곱하는 색」을 직접 칠하지 않는다 ──
+	var src := FileAccess.get_file_as_string("res://src/actors/vfx.gd")
+	_check(src != "", "vfx.gd를 읽었다 (스캔이 빈 문자열에서 자명 통과하지 않는다)")
+	_check(not src.contains("SR.tint_of("),
+		"🔴 vfx.gd가 SR.tint_of를 직접 칠하지 않는다 (그리는 자리는 draw_color_of다)")
+	_check(src.contains("SR.draw_color_of("),
+		"vfx.gd가 draw_color_of를 실제로 쓴다")
+
+	# ── ⓕ 🔴 룬 플래시가 색을 밝히지 않는다 (세94 팔레트 정렬이 화면까지 살아 오게) ──
+	var flash_body := src.get_slice("func _rune_flash_color", 1).get_slice("\nfunc ", 0)
+	_check(flash_body != "", "_rune_flash_color 본문을 찾았다")
+	_check(not flash_body.contains("lightened"),
+		"🔴 룬 플래시가 ui_color를 흰색으로 밝히지 않는다 (밝히면 채도가 죽어 룬 구분이 흐려진다)")
 
 
 # ── 헬퍼 ──
