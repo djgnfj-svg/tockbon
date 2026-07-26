@@ -25,6 +25,10 @@ var _range_px: float = 0.0
 var failures: int = 0
 var _bus = null
 var _base = null
+## 🔴 씬이 정한 **스폰 좌표**를 붙자마자 찍어 둔다 — [5]·[8]이 플레이어를 옮겼다 되돌리므로
+## 나중에 `_player().global_position`을 읽으면 「되돌리기가 한 번이라도 어긋나면」 조용히 다른 값이
+## 나온다. 첫 화면 구도([11])는 스폰이 정본이라 그 오염을 허용할 수 없다.
+var _spawn := Vector2.ZERO
 
 
 func _init() -> void:
@@ -45,6 +49,7 @@ func _run() -> void:
 	_base = scene.instantiate()
 	root.add_child(_base)
 	await process_frame
+	_spawn = _player().global_position
 
 	await _test_scene_wired()
 	await _test_targets_in_range()
@@ -58,6 +63,9 @@ func _run() -> void:
 	await _test_real_left_click_actually_fires()
 	await _test_empty_slot_refuses_to_fire()
 	await _test_forest_gate_leads_out()
+	await _test_gate_light_breathes()
+	await _test_station_gate_follows_codex()
+	await _test_first_screen_composition()
 
 	if failures == 0:
 		print("TEST_BASE_OK — 전 항목 통과")
@@ -532,6 +540,260 @@ func _test_forest_gate_leads_out() -> void:
 		"갈 곳(%s)이 실재한다 — 경로가 깨지면 챕터를 골라도 아무 일도 안 난다" % path)
 
 
+## [9] 🔴 문이 스스로 맥동한다 (세89 · `docs/takbon-design/world_and_visual_design.md` §5 「문의 맥동」).
+## 세계관에서 문 = 망한 마을에 마지막까지 살아남은 마법이고, **첫 화면에서 유일하게 빛을 가진 것**이다.
+##
+## 🔴 **「살아 있다」로 읽히는지는 헤드리스가 못 잡는다**(F5·MCP의 몫) — 여기서 재는 건 **배선이 산다**는
+## 것이고, 세 가지가 전부 **에러 없이 조용히** 죽을 수 있는 자리라 하나씩 묶는다:
+##   ⓐ 빛 텍스처가 실제로 로드된다 — `light_soft.tres` 경로가 깨지면 빛이 통째로 사라지는데
+##      **아무도 안 알려준다**(.tres 침묵사, 세50). 노드 존재만 재면 이걸 못 잡는다.
+##   ⓑ `energy`가 **실제로 변한다** — 트윈이 안 걸리면 값만 밝은 정지 등이다(설계가 각하한 그것).
+##   ⓒ 한 호흡이 끝나고도 **계속 돈다** — `set_loops()`가 빠진 원샷 트윈은 한 번 밝아지고 영영
+##      멈추는데, ⓑ만 재면 그것도 그린이다(맥동 도중에 샘플하면 값이 움직인다).
+func _test_gate_light_breathes() -> void:
+	print("[9] 문이 스스로 맥동한다 — 빛 웅덩이가 숨 쉰다 (겉보기는 F5, 여기선 배선)")
+	var gate = _zone(&"forest_gate")
+	if gate == null:
+		_check(false, "숲길(zone_id=forest_gate)을 못 찾았다")
+		return
+	var light = _find_light(gate)
+	if light == null:
+		_check(false, "문에 빛 웅덩이(PointLight2D)가 없다 — 첫 화면에서 문이 안 빛난다")
+		return
+	_check(light.texture != null,
+		"빛 텍스처가 로드됐다 (light_soft.tres — 경로가 깨지면 빛이 조용히 사라진다)")
+	if not light.has_method("breaths"):
+		_check(false, "빛이 맥동 스크립트(light_pool.gd)를 안 물고 있다 — 값만 밝은 정지 등이다")
+		return
+
+	var mid: float = light.base_energy()
+	_check(mid > 0.0, "맥동의 한가운데 밝기가 0보다 크다 (실제 %.2f)" % mid)
+
+	# 🔴 **한 점씩 비교하지 않는다** — 두 샘플이 마루/골을 사이에 두고 대칭으로 걸리면 값이 **같아서**
+	# 도는 맥동을 "멈췄다"로 오독한다. 대신 한 호흡(PULSE_TIME×2 = 3.0초)보다 긴 창을 훑어 진폭을 잰다.
+	var lo: float = light.energy
+	var hi: float = light.energy
+	var before: int = light.breaths()
+	for i in 16:
+		await create_timer(0.25).timeout   # 16 × 0.25 = 4.0초 > 한 호흡 3.0초
+		lo = minf(lo, light.energy)
+		hi = maxf(hi, light.energy)
+	_check(hi - lo > mid * 0.2,
+		"4초 창에서 밝기가 %.3f~%.3f로 출렁였다 (폭 %.3f > %.3f — 평평하면 맥동이 아니라 상수다)"
+			% [lo, hi, hi - lo, mid * 0.2])
+	_check(lo > 0.0, "가장 어두울 때도 꺼지진 않는다 (실제 %.3f — 0이면 깜빡여 끊긴다)" % lo)
+	_check(light.breaths() - before >= 1,
+		"한 호흡을 마치고 다시 시작했다 (4초에 %d회 — 0이면 원샷이라 한 번 밝아지고 멈춘 것)"
+			% (light.breaths() - before))
+
+
+## [10] 🔴🔴 **마을 되살리기 게이트 — 잔해는 [E]가 안 먹는다** (세89 · 설계 §2 「퀘스트를 깨면 선다」).
+## `base.gd`의 `STATION_UNLOCKS`에 오른 건물은 codex 해금 전까지 **잠겨** 있어야 하고, 해금 순간
+## **그 자리에서** 열려야 한다(마을을 나갔다 와야 열리면 = `_ready` 초기화만 있고 시그널 수신이 없는 것).
+##
+## 🔴 잠금 손잡이 = `Area2D.monitoring`이다 — 끄면 `interact_zone`이 플레이어를 아예 못 봐서
+##   안내(Prompt)와 E 입력이 **한 손잡이로** 같이 닫힌다(두 군데를 따로 끄면 한쪽만 되돌려도 안 드러난다).
+##   그 값은 **렌더 없이 읽히므로 헤드리스가 잴 수 있다** — 세84 #14가 `mouse_filter`로 배운 그 논리다
+##   (*"「헤드리스가 못 잡는다」는 런타임에 대한 말이고, 실패 형태가 정적이면 정적으로 잡아라"*).
+## ⚠ **그래도 F5가 남는다**: 잔해가 잔해로 **보이나**(4단계 아트 대기) · [E]를 눌렀을 때 정말 아무
+##   일도 안 일어나나 · 색조(`Dusk`)가 회보라로 읽히나. 여기서 재는 건 「손잡이가 옳은 자리에 있나」다.
+## ⚠ `monitoring`은 `set_deferred`로 넣으므로 한 프레임 넘겨야 반영된다.
+func _test_station_gate_follows_codex() -> void:
+	print("[10] 잔해/온전 게이트 — codex가 [E]를 연다 (세89 마을 되살리기)")
+	var gs = root.get_node("/root/GameState")
+	var gated: Dictionary = _base.STATION_UNLOCKS   # 🔴 표를 베끼지 않는다 — 라이브 스크립트를 읽는다
+	_check(not gated.is_empty(), "게이트 표가 있다 (STATION_UNLOCKS — 비면 마을이 통째로 안 잠긴다)")
+	for node_name in gated:
+		var unlock: StringName = gated[node_name]
+		var zone = _base.get_node_or_null(node_name)
+		if zone == null:
+			_check(false, "게이트 대상 %s 노드가 씬에 없다 (표와 씬이 갈렸다)" % node_name)
+			continue
+		# 🔴🔴 **세89 4단계: 잔해 아트가 도착했다** — 그전엔 `Ruin` 자식이 없어 `_apply_station_state`가
+		#   겉모습을 통째로 건너뛰었고(의도된 no-op), 그래서 **잔해가 보이나**를 재는 그물이 0개였다.
+		#   ⚠ 자식 존재만 재면 안 된다: `.tres`/`.tscn`의 텍스처 경로가 깨지면 스프라이트는 살고
+		#   그림만 사라지는데 **아무도 안 알려준다**(세50 침묵사). 게다가 `Ruin`에 **온전한 PNG**를
+		#   잘못 물리면 「되돌렸는데 처음부터 멀쩡했다」가 되므로 **둘이 다른 그림인지**까지 잰다.
+		var ruin = zone.get_node_or_null("Ruin")
+		var whole = zone.get_node_or_null("Sprite")
+		var pool = zone.get_node_or_null("LightPool")
+		_check(ruin != null and whole != null,
+			"🔴 %s: 잔해(Ruin)와 온전(Sprite) 스프라이트가 둘 다 있다 (표에 올렸으면 잔해 아트가 있어야 한다)" % node_name)
+		if ruin != null and whole != null:
+			_check(ruin.texture != null,
+				"🔴 %s: 잔해 PNG가 실제로 로드됐다 (경로가 깨지면 그림만 조용히 사라진다)" % node_name)
+			_check(ruin.texture != whole.texture,
+				"🔴 %s: 잔해와 온전이 **다른 그림**이다 (같으면 되돌려도 아무것도 안 바뀐다)" % node_name)
+
+		var had: bool = gs.is_unlocked(unlock)
+		gs.codex.erase(unlock)
+		_base.call(&"_refresh_stations")
+		await process_frame
+		_check(not zone.monitoring,
+			"🔴 %s: 미해금이면 잠긴다 — [E] 안내도 입력도 안 온다 (%s)" % [node_name, unlock])
+		if ruin != null and whole != null:
+			_check(ruin.visible and not whole.visible,
+				"🔴 %s: 미해금이면 **잔해로 보인다** (잔해 %s · 온전 %s)"
+					% [node_name, ruin.visible, whole.visible])
+		# 🔴 폐허엔 빛이 없다 (설계 §3 *"빛은 있어야 할 곳(마을)에 없다"*) — 첫 화면에서 빛나는 건
+		#   문 하나뿐이어야 하는데, 빛 웅덩이를 안 끄면 **잔해가 환하게 빛난다**(에러 0).
+		if pool != null:
+			_check(not pool.visible, "🔴 %s: 잔해엔 빛 웅덩이가 안 켜진다 (폐허엔 빛이 없다)" % node_name)
+		# 🔴 **시그널 경로로** 연다 (직접 `_refresh_stations`를 부르지 않는다) — `codex_unlocked`
+		#   수신이 빠지면 「퀘스트를 깼는데 그 방문 내내 잠긴 채」가 되는데 에러가 하나도 안 난다.
+		_bus.codex_unlocked.emit(unlock)
+		await process_frame
+		_check(zone.monitoring,
+			"🔴 %s: 해금 순간 **그 자리에서** 열린다 (%s)" % [node_name, unlock])
+		if ruin != null and whole != null:
+			_check(whole.visible and not ruin.visible,
+				"🔴 %s: 되돌리면 **온전한 건물로 바뀐다** (잔해 %s · 온전 %s)"
+					% [node_name, ruin.visible, whole.visible])
+		if pool != null:
+			_check(pool.visible, "🔴 %s: 되살아나면 발밑에 빛 웅덩이가 켜진다 (설계 §3)" % node_name)
+			_check(pool.texture != null,
+				"%s: 빛 텍스처가 로드됐다 (light_soft.tres — 깨지면 빛이 조용히 사라진다)" % node_name)
+		if not had:
+			gs.codex.erase(unlock)   # 뒷정리 — 원래 없던 해금은 되돌린다
+
+	# 🔴 마을 색조 = 진행도 (설계 §3 *"마법 = 빛. 빛은 있어야 할 곳(마을)에 없다"*).
+	#  `Dusk`(CanvasModulate) 조회가 실패하면 **조용히 no-op**이 되는 자리라 「값이 움직이나」를 잰다.
+	#  ⚠ **색을 안 박는다** — 연출값이라 조율해도 거짓 빨강이 나면 안 된다. 계약은 둘뿐:
+	#    ⓐ 되돌린 수에 따라 **달라진다** ⓑ 폐허여도 **밝다**(사용자 확정 *"어두운 폐허 각하"*, 세73).
+	var dusk = _base.get_node_or_null("Dusk")
+	if dusk == null:
+		_check(false, "Dusk(CanvasModulate)가 없다 — 마을 색조 축이 통째로 죽는다")
+	else:
+		var restore := {}
+		for node_name in gated:
+			restore[gated[node_name]] = gs.is_unlocked(gated[node_name])
+			gs.codex.erase(gated[node_name])
+		_base.call(&"_refresh_stations")
+		var ruined: Color = dusk.color
+		for node_name in gated:
+			gs.codex[gated[node_name]] = true
+		_base.call(&"_refresh_stations")
+		var whole: Color = dusk.color
+		_check(ruined != whole,
+			"🔴 되돌린 건물 수에 따라 마을 색조가 움직인다 (폐허 %s → 완공 %s)" % [ruined, whole])
+		var dim: float = minf(minf(ruined.r, ruined.g), ruined.b)
+		_check(dim >= 0.85,
+			"🔴 폐허여도 밝기는 유지한다 — 어두운 폐허 각하 (최소 성분 %.2f)" % dim)
+		for uid in restore:
+			if bool(restore[uid]):
+				gs.codex[uid] = true
+			else:
+				gs.codex.erase(uid)
+
+	_base.call(&"_refresh_stations")
+	await process_frame
+
+
+## [11] 🔴🔴 **첫 화면 구도** (세89 4단계 · 설계 `world_and_visual_design.md` §4).
+## 설계가 그린 한 장:
+##   *"회보라의 조용한 폐허 / 무너진 건물 잔해 서너 채가 흩어져 있고 / 그 사이에 문 하나만 온전히
+##     서서, 혼자 빛난다 / 플레이어는 문 앞에 서 있다"* — 🔴 *"첫 화면에 색을 가진 것은 문과 플레이어뿐"*.
+##
+## 🔴 **겉보기는 헤드리스가 못 본다. 그런데 「무엇이 화면에 드나」는 순수 기하라 잴 수 있다** —
+## 세84 #14가 `mouse_filter`로 배운 그 논리다(*"「헤드리스가 못 잡는다」는 런타임에 대한 말이고,
+## 실패 형태가 정적이면 정적으로 잡아라"*). 실패 형태가 늘 **「좌표가 창 밖으로 밀린다」**라서
+## 카메라 창을 손으로 계산해 재면 잡힌다. 세89 이전 배치가 정확히 그 상태였다:
+## 스폰 (1150,1040)에서 **문도 건물도 하나도 안 보였다**(문이 x로 950px 밖).
+##
+## ⚠ 창은 **스폰에서 파생**한다 — 뷰포트(project.godot) + `Ground` 크기 + 카메라 limit 클램프.
+##   수치를 하나도 안 박으므로 월드를 키우거나 뷰포트를 바꿔도 거짓 빨강이 안 난다.
+func _test_first_screen_composition() -> void:
+	print("[11] 🔴 첫 화면 — 문과 잔해가 들고, 온전한 건물은 안 든다 (설계 §4)")
+	var ground = _base.get_node_or_null("Ground")
+	if ground == null:
+		_check(false, "Ground(월드 크기 정본)를 못 찾았다")
+		return
+	var world: Vector2 = ground.size
+	var view := Vector2(
+		float(ProjectSettings.get_setting("display/window/size/viewport_width")),
+		float(ProjectSettings.get_setting("display/window/size/viewport_height")))
+	var half := view * 0.5
+	# 카메라는 `_setup_camera`가 월드에 물린다(limit 0..Ground) → 중심이 가장자리에서 클램프된다.
+	var center := Vector2(
+		clampf(_spawn.x, half.x, maxf(half.x, world.x - half.x)),
+		clampf(_spawn.y, half.y, maxf(half.y, world.y - half.y)))
+	var screen := Rect2(center - half, view)
+	print("     스폰 %s → 첫 화면 %s" % [_spawn, screen])
+
+	# ⓐ 🔴 문이 첫 화면의 주인공이다 — 발밑만이 아니라 **머리끝까지** 든다.
+	#    (발밑만 재면 아치 위쪽이 잘려 「반만 보이는 문」이 그린으로 통과한다.)
+	var gate = _zone(&"forest_gate")
+	if gate == null:
+		_check(false, "숲길(zone_id=forest_gate)을 못 찾았다")
+		return
+	_check(screen.has_point(gate.global_position),
+		"🔴 문이 첫 화면 안에 있다 — 문 %s / 창 %s (밖이면 「어디로 가야 하는지」가 안 보인다)"
+			% [gate.global_position, screen])
+	var gate_top := _sprite_top(gate)
+	_check(gate_top < 0.0 or gate_top >= screen.position.y,
+		"🔴 문이 통째로 든다 (머리끝 y=%.0f ≥ 창 위 %.0f — 아니면 첫 화면의 주인공이 반만 보인다)"
+			% [gate_top, screen.position.y])
+	_check(_spawn.distance_to(gate.global_position) <= view.x * 0.5,
+		"플레이어가 **문 앞에** 서 있다 (거리 %.0fpx — 막 소환된 자리다)"
+			% _spawn.distance_to(gate.global_position))
+
+	# ⓑ 🔴 잔해가 서너 채 흩어져 있다. 잔해 목록은 **베끼지 않는다** — 게이트 표(`STATION_UNLOCKS`)
+	#    에서 파생하고, 거기 안 드는 영구 잔해(기념비)만 이름으로 더한다.
+	var ruins: Array[String] = []
+	for node_name in (_base.STATION_UNLOCKS as Dictionary):
+		ruins.append(String(node_name))
+	ruins.append("Monument")   # 영구 잔해 — 여는 열쇠가 없어 표에 못 든다(base.gd RUIN_PART 주석)
+	var on_screen := 0
+	for node_name in ruins:
+		var n = _base.get_node_or_null(node_name)
+		if n == null:
+			_check(false, "잔해 %s 노드가 씬에 없다" % node_name)
+			continue
+		if screen.has_point(n.global_position):
+			on_screen += 1
+		else:
+			print("     (창 밖 잔해: %s %s)" % [node_name, n.global_position])
+	_check(on_screen >= 3,
+		"🔴 첫 화면에 잔해가 3채 이상 흩어져 있다 (실제 %d/%d — 설계 §4 「잔해 서너 채」)"
+			% [on_screen, ruins.size()])
+
+	# ⓒ 🔴🔴 **온전한 건물은 첫 화면 밖이다.** 설계 §4의 *"색을 가진 것은 문과 플레이어뿐"*이
+	#    좌표로 번역되는 자리 — 서고(=책상)와 매점은 처음부터 멀쩡한 둘이라(설계 §1-말·3단계 ④-1)
+	#    첫 화면에 들면 «망한 마을»이 아니라 «멀쩡한 마을»로 읽힌다.
+	#    ⚠ 이름을 박는다: 「온전」은 씬 구조에서 파생되는 성질이 아니라 **설계가 지목한 둘**이다.
+	for node_name in ["Desk", "Shop"]:
+		var n = _base.get_node_or_null(node_name)
+		if n == null:
+			_check(false, "온전한 건물 %s 노드가 씬에 없다" % node_name)
+			continue
+		_check(not screen.has_point(n.global_position),
+			"🔴 %s(온전한 건물)는 첫 화면 밖이다 — 실제 %s / 창 %s (안에 들면 폐허가 아니라 마을이다)"
+				% [node_name, n.global_position, screen])
+
+	# ⓓ 🔴 **기념비는 영구 잔해다** — 되돌리는 퀘스트가 없으므로 게이트 표에 들면 영영 잠긴다.
+	#    그림 자체가 잔해여야 한다(전환 대상이 아니다, base.gd `RUIN_PART` 주석).
+	_check(not (_base.STATION_UNLOCKS as Dictionary).has("Monument"),
+		"🔴 기념비는 게이트 표에 없다 (넣으면 여는 열쇠가 없어 영영 잔해 + 색조 분모만 커진다)")
+	var monu = _base.get_node_or_null("Monument")
+	if monu != null:
+		var spr = monu.get_node_or_null("Sprite")
+		_check(spr != null and spr.texture != null and String(spr.texture.resource_path).contains("ruin"),
+			"🔴 기념비 스프라이트가 **잔해 그림**이다 (실제 %s — 깨진 마법진이 마을이 망한 발단이다)"
+				% (String(spr.texture.resource_path) if spr != null and spr.texture != null else "없음"))
+
+	# ⓔ 🔴 마법진 무늬 자국이 **기념비 발밑**에 찍혔다. 바닥은 `.tscn`이 아니라 `_build_campus()`가
+	#    코드로 깐다(설계 §6 ④) — 즉 **씬과 코드가 갈릴 수 있는 자리**이고, 갈리면 무늬가 잔디 한복판에
+	#    덩그러니 남는데 에러가 0이다(감사 T5 「파생 대신 복제」). 도로 레이어를 직접 읽어 못 박는다.
+	#    ⚠ 셀 좌표를 안 박는다 — 기념비 위치에서 파생하므로 캠퍼스를 또 옮겨도 거짓 빨강이 안 난다.
+	var road = _base.get_node_or_null("TileRoad")
+	if monu != null and road != null:
+		var ts: int = road.tile_set.tile_size.x
+		var cell := Vector2i(floori(monu.position.x / ts), floori(monu.position.y / ts))
+		_check(road.get_cell_atlas_coords(cell) == Vector2i(2, 1),
+			"🔴 마법진 무늬가 기념비 발밑 셀 %s에 찍혔다 (실제 아틀라스 %s — 어긋나면 무늬만 옛 자리에 남는다)"
+				% [cell, road.get_cell_atlas_coords(cell)])
+
+
 # ── 헬퍼 ──
 
 ## 🔴 그리기 폐지 모드인가 — **`RingPower`의 술어를 그대로 부른다**(`balance.skip_drawing`을 직접
@@ -597,6 +859,26 @@ func _zone(id: StringName):
 	for z in get_nodes_in_group("interact_zones"):
 		if z.zone_id == id:
 			return z
+	return null
+
+
+## 어느 프롭의 스프라이트 **머리끝** 월드 y. 잴 수 없으면 -1.0(호출부가 그때만 통과 처리한다).
+## `Sprite2D`는 텍스처를 중심에 그리고 `offset`으로 민다 → 머리끝 = 위치 + offset − 높이/2.
+func _sprite_top(node) -> float:
+	var spr = node.get_node_or_null("Sprite")
+	if spr == null or spr.texture == null:
+		return -1.0
+	return spr.global_position.y + spr.offset.y - spr.texture.get_height() * 0.5
+
+
+## 어느 프롭의 빛 웅덩이 — 노드 **이름이 아니라 타입**으로 찾는다 (이름은 바뀔 수 있다, `_player`와 같은 규율).
+func _find_light(node):
+	if node is PointLight2D:
+		return node
+	for c in node.get_children():
+		var found = _find_light(c)
+		if found != null:
+			return found
 	return null
 
 

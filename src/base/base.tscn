@@ -70,25 +70,25 @@ position = Vector2(1200, 1600)
 shape = SubResource("wall_h")
 
 [node name="Desk" parent="." instance=ExtResource("8_desk")]
-position = Vector2(1200, 520)
+position = Vector2(1400, 640)
 
 [node name="Craft" parent="." instance=ExtResource("11_craft")]
-position = Vector2(600, 560)
+position = Vector2(660, 745)
 
 [node name="Refine" parent="." instance=ExtResource("10_refine")]
-position = Vector2(1800, 560)
+position = Vector2(880, 1060)
 
 [node name="Shop" parent="." instance=ExtResource("12_shop")]
-position = Vector2(1980, 900)
+position = Vector2(1820, 760)
 
 [node name="ForestGate" parent="." instance=ExtResource("9_gate")]
 position = Vector2(200, 820)
 
 [node name="Npc" parent="." instance=ExtResource("13_npc")]
-position = Vector2(1060, 980)
+position = Vector2(1020, 900)
 
 [node name="Monument" parent="." instance=ExtResource("14_monu")]
-position = Vector2(1200, 780)
+position = Vector2(620, 920)
 
 [node name="Tree1" parent="." instance=ExtResource("15_tree")]
 position = Vector2(110, 320)
@@ -103,77 +103,77 @@ position = Vector2(120, 1420)
 position = Vector2(2290, 1400)
 
 [node name="Tree5" parent="." instance=ExtResource("15_tree")]
-position = Vector2(430, 1240)
+position = Vector2(160, 1010)
 
 [node name="Tree6" parent="." instance=ExtResource("15_tree")]
 position = Vector2(1980, 1260)
 
 [node name="Tree7" parent="." instance=ExtResource("15_tree")]
-position = Vector2(340, 400)
+position = Vector2(520, 620)
 
 [node name="Tree8" parent="." instance=ExtResource("15_tree")]
 position = Vector2(2060, 420)
 
 [node name="Lamp1" parent="." instance=ExtResource("17_lamp")]
-position = Vector2(1000, 588)
+position = Vector2(1240, 720)
 
 [node name="Lamp2" parent="." instance=ExtResource("17_lamp")]
-position = Vector2(1400, 588)
+position = Vector2(1560, 720)
 
 [node name="Lamp3" parent="." instance=ExtResource("17_lamp")]
-position = Vector2(760, 700)
+position = Vector2(1240, 1040)
 
 [node name="Lamp4" parent="." instance=ExtResource("17_lamp")]
-position = Vector2(1640, 700)
+position = Vector2(1560, 1040)
 
 [node name="Lamp5" parent="." instance=ExtResource("17_lamp")]
-position = Vector2(1000, 972)
+position = Vector2(1760, 1000)
 
 [node name="Lamp6" parent="." instance=ExtResource("17_lamp")]
-position = Vector2(1400, 972)
+position = Vector2(1080, 1000)
 
 [node name="Bench1" type="Sprite2D" parent="."]
-position = Vector2(1070, 700)
+position = Vector2(1280, 900)
 offset = Vector2(0, -12)
 texture = ExtResource("18_bench")
 
 [node name="Bench2" type="Sprite2D" parent="."]
-position = Vector2(1330, 700)
+position = Vector2(1520, 900)
 offset = Vector2(0, -12)
 texture = ExtResource("18_bench")
 
 [node name="Hedge1" type="Sprite2D" parent="."]
-position = Vector2(840, 1500)
+position = Vector2(1216, 1216)
 offset = Vector2(0, -24)
 texture = ExtResource("19_hedge")
 
 [node name="Hedge2" type="Sprite2D" parent="."]
-position = Vector2(904, 1500)
+position = Vector2(1280, 1216)
 offset = Vector2(0, -24)
 texture = ExtResource("19_hedge")
 
 [node name="Hedge3" type="Sprite2D" parent="."]
-position = Vector2(968, 1500)
+position = Vector2(1344, 1216)
 offset = Vector2(0, -24)
 texture = ExtResource("19_hedge")
 
 [node name="Hedge4" type="Sprite2D" parent="."]
-position = Vector2(1432, 1500)
+position = Vector2(1472, 1216)
 offset = Vector2(0, -24)
 texture = ExtResource("19_hedge")
 
 [node name="Hedge5" type="Sprite2D" parent="."]
-position = Vector2(1496, 1500)
+position = Vector2(1536, 1216)
 offset = Vector2(0, -24)
 texture = ExtResource("19_hedge")
 
 [node name="Hedge6" type="Sprite2D" parent="."]
-position = Vector2(1560, 1500)
+position = Vector2(1600, 1216)
 offset = Vector2(0, -24)
 texture = ExtResource("19_hedge")
 
 [node name="Player" parent="." instance=ExtResource("3_player")]
-position = Vector2(1150, 1040)
+position = Vector2(370, 850)
 
 [node name="Sprite" parent="Player"]
 z_index = 0
@@ -182,19 +182,19 @@ z_index = 0
 z_index = 0
 
 [node name="Dummy1" parent="." instance=ExtResource("5_dummy")]
-position = Vector2(1140, 1160)
+position = Vector2(395, 968)
 
 [node name="Dummy2" parent="." instance=ExtResource("5_dummy")]
-position = Vector2(1212, 1190)
+position = Vector2(468, 998)
 
 [node name="Dummy3" parent="." instance=ExtResource("5_dummy")]
-position = Vector2(1150, 1240)
+position = Vector2(398, 1046)
 
 [node name="Dummy4" parent="." instance=ExtResource("5_dummy")]
-position = Vector2(1215, 1290)
+position = Vector2(470, 1088)
 
 [node name="Dummy5" parent="." instance=ExtResource("5_dummy")]
-position = Vector2(1150, 1335)
+position = Vector2(400, 1132)
 
 [node name="RingSpellSystem" parent="." instance=ExtResource("4_spell")]
 z_index = 10

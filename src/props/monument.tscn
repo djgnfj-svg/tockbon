@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://xyskn7k4sutn"]
 
-[ext_resource type="Texture2D" path="res://assets/sprites/base/monument_circle.png" id="1_tex"]
+[ext_resource type="Texture2D" path="res://assets/sprites/base/monument_circle_ruin.png" id="1_tex"]
 
 [sub_resource type="RectangleShape2D" id="solid"]
 size = Vector2(58, 30)

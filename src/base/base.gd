@@ -25,8 +25,20 @@ extends Node2D
 ##    말한다. 참조가 없으니 갈아 끼울 @export 구멍도 필요 없다(있으면 안 쓰는 필드만 는다).
 ##  • `RingSpellSystem.z_index = 10` — 안 올리면 날아가는 진·탄·기둥이 Ground(ColorRect, z=0) **뒤에
 ##    가려 안 보인다**. 시험대가 같은 함정을 세션 13에 밟았다.
+##  • 🔴🔴 **첫 화면 = 문 앞 폐허** (세89 4단계 · 설계 `world_and_visual_design.md` §4).
+##    스폰이 `(370, 850)` = 숲길 문 바로 앞이다 — *"문이 나를 소환했다"*가 곧 게임의 첫 장면이라
+##    **문을 옮기지 않고 스폰을 문으로 데려왔다**(문 위치는 「서쪽 정문 = 숲으로 나가는 유일한 길」이라는
+##    뜻을 지고 있다). 뷰포트 960×540 + 카메라 limit 클램프 → 첫 화면 = **(0,580)~(960,1120)**.
+##    그 창 안에 드는 것: 문(빛남) · 공방 잔해 · 기념비(영구 잔해) · 실습동 잔해 · 연습장.
+##    **서고·매점은 일부러 창 밖**이다(온전한 = 색을 가진 건물이 첫 화면에 있으면 안 된다).
+##    🔴 스폰을 또 옮기려면 **허수아비 5개와 도로 밴드(`_build_campus`)를 같이** 옮겨라.
 ##  • 허수아비 5개는 전부 플레이어 시작점에서 **사거리 안**(≈390px = 260px/s × 1.5s, balance)에 있다.
 ##    더 멀리 두면 걸어가서 쏘기 전엔 안 닿아 연습장이 장식이 된다 (tests/test_base_auto가 못 박는다).
+##    🔴 **이웃 간격은 90px 미만**으로 붙여 놨다 — 감전 연쇄 반경(`status_shock_chain_px`)이 90이라
+##    더 벌리면 연습장에서 연쇄가 **한 번도 안 터진다**(세50에 102px로 실제로 그랬다).
+##  • 🔴 스폰 **바로 위 390px**에는 layer-1(world) 몸이 하나도 없다 — 진이 총구에서 죽는지 재는
+##    `_test_desk_does_not_eat_the_spell`이 그 자리로 쏜다. 잔해 프롭의 `Body`가 layer 1이라
+##    스폰 북쪽에 두면 정확히 이 자리를 밟는다(그래서 잔해는 북동·남동으로 비껴 놨다).
 ##  • Player = 레이어 2(player) / Desk·ForestGate = 레이어 64(interaction). 🔴 전부 기본 레이어
 ##    1(**world**)에 있었는데, 캐리어 마스크가 5(world+enemy)라 **쏘는 순간 내 몸에 부딪혀 총구에서
 ##    죽었다** (책상 쪽으로 쏘면 책상에서). 레이어 이름표(project.godot)대로 옮겨서 푼 것이다.
@@ -62,6 +74,53 @@ const RingPower := preload("res://src/core/ring_power.gd")
 ## 스크립트=$Panel (chest·dialogue_box 선례). 패널은 base를 안 물어 preload가 안전(순환 아님).
 const ChapterPanelScene := preload("res://src/hud/chapter_panel.tscn")
 const ChapterPanel := preload("res://src/hud/chapter_panel.gd")   # 캐스트 타입 ($Panel은 get_node로 Node라)
+
+# ─────────────────────── 마을 되살리기 (세89 — 망한 마법 마을) ───────────────────────
+#
+# 🔴 세계관(`docs/takbon-design/world_and_visual_design.md` §1~2): 마을은 무너져 **잔해**로 서 있고,
+# 퀘스트를 깨면 **저절로** 온전해진다. 방아쇠는 `QuestDef.reward_unlock` — 정산 순간 codex가 나가고
+# 아래 소비자가 그 건물의 겉모습·상호작용을 뒤집는다.
+#
+# 🔴🔴 **재료를 모아 그 자리에서 [E]로 사는 「결제」 단계는 세66에 사용자가 거부했다 — 되살리지 마라.**
+#   세37 `_station_interact`(+ `balance.station_build_costs`)가 그것이었다. 그때 거부된 이유는
+#   *"플레이어가 하는 일이 노동이 된다"*였고, 지금 모델은 **보상**이다(퀘스트를 깨면 선다).
+
+## 🔴 게이트 표 — {씬 노드 이름: codex 해금 id}. 해금 전 = 잔해(잠김) · 해금 후 = 온전(열림).
+##
+## 🔴🔴 **매점(Shop)·책상(Desk)이 일부러 여기 없다.** 게이트는 「열어 주는 열쇠가 있을 때만」 건다:
+##   • `station_shop`을 **쏘는 곳이 한 곳도 없다**(세89에 인터림 브리지를 걷으면서 생산자가 0이 됐다).
+##     표에 넣으면 매점이 **영영 잠긴다** — 게다가 기존 세이브엔 옛 브리지가 심어 둔 값이 남아 있어
+##     **F5로는 안 드러난다**(새 게임에서만 죽는다) = 이 프로젝트가 제일 비싸게 배운 형태의 침묵.
+##   • 책상(=서고)은 첫 퀘스트 `q00`이 거기서 정산되므로 잠그면 **게임이 시작 즉시 막힌다**
+##     (설계 §1-말 — 「문과 서고 둘만 살아남았다」가 이 기술 제약을 세계관으로 받아들인 것이다).
+## → 건물 목록·순서 설계가 오면 **여기 한 줄 + 그 퀘스트의 `reward_unlock` 한 줄**이면 붙는다.
+##   그물 = `test_quests_auto`의 「잠근 건물엔 여는 열쇠가 있어야 한다」(이 표를 직접 읽는다).
+const STATION_UNLOCKS: Dictionary = {
+	"Refine": &"station_refine",   # q03 정산 → 연금술 실습동
+	"Craft": &"station_craft",     # q04 정산 → 마도구 공방
+}
+
+## 온전할 때만 보이는 자식 — 잔해 위에 상인(`Keeper`)이 서 있으면 안 된다(설계 §5 #4).
+## 🔴 `LightPool` = 되살아난 건물 발밑의 빛 웅덩이(설계 §3 *"건물마다 발밑에 빛 웅덩이 하나"*).
+##   **폐허엔 빛이 없다**는 규칙이 이 한 줄이다 — 첫 화면에서 빛나는 건 문뿐이어야 한다(설계 §4).
+##   밝기·색은 씬이 쥐고 맥동은 `light_pool.gd`가 쥔다(그쪽 머리말) — 여기선 **보이나 마나**만 가른다.
+const WHOLE_ONLY_PARTS: Array[String] = ["Sprite", "Keeper", "LightPool"]
+## 잔해일 때만 보이는 자식. 세89 4단계에 `Refine`·`Craft` 프롭에 도착했다(`bld_*_ruin.png`).
+## 🔴 **표(`STATION_UNLOCKS`)에 건물을 올리면 `Ruin` 자식을 반드시 같이 달아라** — 없으면 잔해
+##   동안 `Sprite`만 꺼져 건물이 통째로 안 보인다. 그물 = `test_base_auto [10]`(잔해 자식 + 텍스처 로드).
+## ⚠ 기념비(`Monument`)는 여기 안 든다 — **영구 잔해**라 전환 자체가 없다(스프라이트가 곧 잔해다.
+##   `monument.tscn`이 `monument_circle_ruin.png`을 직접 문다 — 깨진 마법진이 마을이 망한 발단이라
+##   되돌릴 열쇠가 애초에 없다, 설계 §1).
+const RUIN_PART := "Ruin"
+
+## 🔴 마을 색조 = 진행도 (설계 §3 — *"마법 = 빛. 빛은 있어야 할 곳(마을)에 없다"*).
+## 되돌린 건물이 늘수록 `Dusk`(CanvasModulate)가 회보라 → 중립으로 간다. **셰이더 0 · 노드 0** —
+## 손잡이는 이미 씬에 꽂혀 있었다(`Dusk.color`가 원래 `Color(0.9, 0.88, 0.96)`이었다).
+## 🔴 **밝기는 유지한다**(성분 전부 0.86 이상) — 사용자 확정 *"어두운 폐허 각하"*(세73과 안 싸운다).
+## ⚠ `CanvasModulate`는 곱하기뿐이라 **채도를 못 뺀다** — 「색을 빼는」 일은 잔해 아트가 한다(4단계).
+## 연출값이라 balance가 아니라 const다 (`MARK_NEW`와 같은 결).
+const TINT_RUINED := Color(0.90, 0.86, 1.00)   ## 아무것도 못 되돌린 폐허 — 옅은 회보라
+const TINT_WHOLE := Color(1.0, 1.0, 1.0)       ## 마을이 돌아왔다 — 중립
 
 ## 책상에서 펴는 책 (base.tscn이 ring_forge_panel.tscn을 물려 준다).
 ## 🔴 여긴 PackedScene이어도 된다 — **책은 base를 안 문다**(순환이 아니다). 아래와 대비된다.
@@ -114,8 +173,9 @@ func _ready() -> void:
 	_setup_camera()
 	_desk.interacted.connect(_open_drawing)
 	_gate.interacted.connect(_open_chapter_panel)
-	# 🔴 마을 완비 (세66 도파민 재편, 설계 B) — 스테이션은 처음부터 다 있다. 건설 게이트 없이 바로 패널을 연다.
-	#   세37 「빈 거점 재료 건설」(_station_interact가 station_* codex를 사서 여는 구조)은 은퇴했다.
+	# 🔴 스테이션 존은 **늘 잇는다** — 문을 여닫는 손잡이는 연결이 아니라 `monitoring`이다
+	#   (`_apply_station_state` 주석: 연결을 끊었다 이었다 하면 세50의 「콜백이 영영 죽는」 함정을 심는다).
+	#   세37 「빈 거점 재료 건설」(_station_interact가 station_* codex를 **사서** 여는 구조)은 세66에 은퇴했다.
 	_refine_zone.interacted.connect(_open_refine_panel)
 	_craft_zone.interacted.connect(_open_workshop_panel)
 	_shop_zone.interacted.connect(_open_shop_panel)
@@ -138,20 +198,25 @@ func _ready() -> void:
 	#   (그리기는 베이스에서 일어나므로 "숲에서 돌아가라" 넛지 대신 옆의 길잡이 [?]로 안내한다).
 	EventBus.ring_design_committed.connect(_refresh_npc_mark)
 	_refresh_npc_mark()
-	# 🔴 세66-2 인터림 브리지: 마을 완비 = 스테이션 codex를 미리 심어 옛 건설 퀘스트(q03·q04 UNLOCK station_*)를
-	#   소급 완료시킨다 (세36 소급 경로 재사용). 건설이 사라졌으니 이 시드가 없으면 그 퀘스트가 영영 미완이라 온보딩 사슬이 막힌다.
-	#   ⚠ is_unlocked 가드로 매 방문 재발신·중복 완료·audio 도배를 막는다.
-	#   3단계에서 q03·q04를 삭제하고 qR1(첫 보스→첫 룬)로 교체하면 이 루프는 제거한다.
+	# 🔴🔴 **세89: 마을 되살리기 — codex가 건물의 겉모습·상호작용을 가른다.**
+	#   `_ready`(초기 상태 반영)와 `codex_unlocked`(전환) **둘 다** 필요하다: 수신만 있으면
+	#   「이어하기」가 되살린 건물을 잔해로 띄우고, 초기화만 있으면 퀘스트를 정산해도 **그 방문 내내
+	#   잠긴 채**다(마을을 나갔다 와야 열린다 = 에러 없는 침묵).
+	EventBus.codex_unlocked.connect(_on_station_unlocked)
+	_refresh_stations()
 	#
-	# 🔴 **세85: `station_decode`를 목록에서 뺐다** (세84 감사 #32 · 사용자 결정 ⑩ — 해독대 은퇴).
-	#   `q05_build_decode.tres`를 같이 삭제했기 때문에 이제 심을 이유가 없다. 🔴 **둘은 한 세트다** —
-	#   시드만 빼면 q05가 **영영 정산 불가**가 되어 *"해독대 자리에서 재료를 들고 [E]로 건설하라"*가
-	#   Q 패널에 **영구히 걸린 채** 남는다(그 자리에 존이 없다. `src/props/*.tscn`의 zone_id에
-	#   refine·craft·shop은 실재하는데 decode만 없었던 게 이 문제의 뿌리였다).
-	#   ⚠ q05의 보상 `mat_night_bloom ×2`는 **q04로 합쳤다**(온보딩 총 보상량 보존, 사용자 확정).
-	for sid: StringName in [&"station_refine", &"station_craft", &"station_shop"]:
-		if not GameState.is_unlocked(sid):
-			EventBus.codex_unlocked.emit(sid)
+	# 🔴🔴 **세89: 세66-2 인터림 브리지를 걷었다** (설계 `world_and_visual_design.md` §2·§8).
+	#   그 자리엔 매 방문 `station_refine`·`station_craft`·`station_shop` codex를 **심는 루프**가 있었다 —
+	#   건설이 은퇴(세66)했는데 q03·q04가 그걸 `UNLOCK` 목표로 삼고 있어서, 안 심으면 온보딩 사슬이
+	#   막혔기 때문이다. 즉 **퀘스트가 자기 완료 조건을 스스로 심는 순환**이었다.
+	#   세89에 방향을 뒤집었다: **퀘스트를 깨면 건물이 저절로 선다**(`QuestDef.reward_unlock`).
+	#
+	#   🔴 **셋은 한 덩어리였다** — 브리지 제거 · q03/q04 재작성 · 위 `STATION_UNLOCKS` 소비자 신설.
+	#   따로 하면 그 사이 빌드가 **달성 불가 퀘스트 + 영구 점등 [!]**를 갖는다. 세85가 `station_decode`
+	#   시드와 `q05_build_decode.tres`를 **같은 커밋**에서 걷어 이 사고를 피한 게 선례다.
+	#   ⚠ q05의 보상 `mat_night_bloom ×2`는 그때 **q04로 합쳤다**(온보딩 총 보상량 보존, 사용자 확정) —
+	#     q04를 재작성하면서도 그 보상량은 그대로 옮겼다(`test_quests_auto`가 잰다).
+	#   ⚠ `station_shop`은 이제 **아무도 안 쏜다** → 그래서 매점은 게이트하지 않는다(`STATION_UNLOCKS` 주석).
 	# 🔴 온보딩 (세션41) — 첫 마법을 아직 안 그렸으면 길잡이로 유도한다 (q00 완료되면 안 뜬다).
 	if not GameState.is_quest_done(&"q00_first_draw"):
 		# 🔴 세84 #36: `sticky` — 온보딩 **목표**다(경고가 아니다). 수명이 붙은 뒤엔 안 붙이면
@@ -173,19 +238,30 @@ func _build_campus() -> void:
 	for cy in range(0, ceili(float(h) / ts)):
 		for cx in range(0, ceili(float(w) / ts)):
 			_grass.set_cell(Vector2i(cx, cy), 0, _grass_variant(cx, cy))
-	# 돌포장 길·안뜰 (설계 §3 밴드 rect — 정문↔안뜰↔건물을 잇는다)
+	# 돌포장 길·안뜰 (세89 4단계 캠퍼스 재구축 — 설계 §4 「첫 화면」)
+	#
+	# 🔴🔴 **여기와 `base.tscn` 배치는 한 몸이다.** 밴드만 옮기면 길이 건물과 어긋나고, 씬만 옮기면
+	#   건물이 잔디 위에 뜬다 — 설계 §6이 「바뀌는 것 여섯」에 ②(씬)와 ④(이 배열)를 따로 센 이유다.
+	# 🔴 캠퍼스는 **서쪽 = 폐허 / 동쪽 = 살아남은 것**으로 갈라 놨다. 스폰이 문 앞(서쪽)이라
+	#   첫 화면에는 문 + 잔해 셋만 들고, 온전한 서고·매점은 동쪽으로 밀려 화면 밖이다
+	#   (설계 §4 *"첫 화면에 색을 가진 것은 문과 플레이어뿐"*). 그물 = `test_base_auto [11]`.
 	var bands: Array[Rect2] = [
-		Rect2(240, 716, 1740, 128),    # 수평 척추: 정문↔안뜰↔매점
-		Rect2(1136, 560, 128, 800),    # 수직 척추: 서고↔안뜰↔수련장
-		Rect2(536, 585, 128, 259),     # 공방 분기
-		Rect2(1736, 585, 128, 259),    # 실습동 분기
-		Rect2(1916, 716, 128, 194),    # 매점 분기
-		Rect2(1000, 580, 400, 400),    # 중앙 안뜰(plaza)
+		Rect2(240, 792, 560, 296),     # 정문 마당: 문 앞 폐허 광장 (기념비가 한복판, 연습장이 남쪽)
+		Rect2(596, 700, 128, 128),     # 공방 잔해 진입로 (마당 → 북쪽)
+		Rect2(700, 1000, 240, 100),    # 실습동 잔해 진입로 (마당 → 남동)
+		Rect2(760, 864, 1180, 128),    # 수평 척추: 정문 마당 ↔ 안뜰 ↔ 매점
+		Rect2(1200, 700, 400, 400),    # 중앙 안뜰(plaza) — 살아남은 서고 앞
+		Rect2(1336, 596, 128, 168),    # 서고 분기
+		Rect2(1756, 796, 128, 128),    # 매점 분기
 	]
 	for band in bands:
 		_fill_road(band, Vector2i(0, 1))
-	# 안뜰 중심 = 마법진 무늬 자국 (기념비 발밑)
-	_road.set_cell(Vector2i(int(1200.0 / ts), int(780.0 / ts)), 0, Vector2i(2, 1))
+	# 마법진 무늬 자국 = 기념비(깨진 마법진) 발밑 — 마을이 망한 발단이 여기 남아 있다(설계 §1).
+	# 🔴 좌표를 **베끼지 않고 기념비 노드에서 파생**한다. 옛 코드는 `(1200, 780)`을 손으로 적어 뒀는데,
+	#   캠퍼스를 옮기면 무늬만 옛 자리에 남아 **잔디 한복판에 뜬다**(에러 0 = 감사 T5 「파생 대신 복제」).
+	var monu := get_node_or_null(^"Monument") as Node2D
+	if monu != null:
+		_road.set_cell(Vector2i(floori(monu.position.x / ts), floori(monu.position.y / ts)), 0, Vector2i(2, 1))
 
 
 func _grass_variant(cx: int, cy: int) -> Vector2i:
@@ -218,6 +294,71 @@ func _setup_camera() -> void:
 	cam.limit_bottom = int(_ground.size.y)
 	cam.position_smoothing_enabled = true
 	cam.position_smoothing_speed = 6.0
+
+
+# ─────────────────── 마을 되살리기 소비자 (세89 — 위 STATION_UNLOCKS 참조) ───────────────────
+
+## 해금이 하나 들어왔다 — 마을 건물 id일 때만 되돌린다(룬·진·고리·챕터 클리어는 조용히 지나간다).
+func _on_station_unlocked(unlock_id: StringName) -> void:
+	if not STATION_UNLOCKS.values().has(unlock_id):
+		return
+	_refresh_stations()
+
+
+## 🔴 표의 건물마다 codex 상태를 겉모습·상호작용에 반영한다.
+## `_ready`(초기 상태)와 `_on_station_unlocked`(전환)가 **같은 함수**를 부른다 — 두 경로가 갈라지면
+## 「새로 들어오면 잔해인데 그 자리서 깨면 온전」 같은 모순이 조용히 생긴다(core에 `ring_power`를
+## 한 벌만 둔 것과 같은 이유).
+##
+## ✅ **세89 4단계: 겉보기 전환이 실제로 돈다** — `Refine`·`Craft` 프롭에 `Ruin` 자식이 도착했다.
+##   (그전엔 `Ruin`이 없어 `_apply_station_state`가 겉모습을 건너뛰고 게이트·색조만 돌았다.)
+func _refresh_stations() -> void:
+	for node_name: String in STATION_UNLOCKS:
+		var zone := get_node_or_null(node_name) as InteractZone
+		if zone == null:
+			continue   # 4단계가 노드를 옮기거나 이름을 바꿔도 여기서 죽지 않는다
+		_apply_station_state(zone, GameState.is_unlocked(STATION_UNLOCKS[node_name]))
+	_refresh_village_tint()
+
+
+## 건물 하나의 상태 — `built=false`면 잔해다: [E] 안내가 안 뜨고 눌러도 아무 일이 없다.
+##
+## 🔴 게이트를 **`monitoring`으로** 건다(시그널 연결을 끊었다 잇는 게 아니라). 이유 둘:
+##   ① `interact_zone`이 플레이어를 아예 못 보게 되므로 **안내(Prompt)와 E 입력이 한 손잡이로**
+##      같이 닫힌다 — 두 군데를 따로 끄면 한쪽만 되돌려도 안 드러난다.
+##   ② 연결을 끊었다 잇는 수법은 세50이 심었다 뽑은 함정 그대로다(*"리페어런팅 시 콜백이 영구히 죽는다"*).
+## ⚠ **몸(`Body` StaticBody2D)은 안 건드린다** — 잔해도 단단하다(지나갈 수 없다). 그리고 그 몸이
+##   `collision_layer = 1`(world)이라 건드리면 `test_base_auto`의 「진이 총구에서 안 죽는다」에 닿는다.
+## ⚠ `set_deferred` — Area2D의 `monitoring`은 물리 질의 flush 중에 바꾸면 엔진이 막고 **조용히 무시**한다.
+func _apply_station_state(zone: InteractZone, built: bool) -> void:
+	zone.set_deferred(&"monitoring", built)
+	var prompt := zone.get_node_or_null(^"Prompt") as CanvasItem
+	if prompt != null and not built:
+		# 잠그는 순간 안내가 떠 있었으면 내린다 — monitoring을 끄면 body_exited가 안 온다.
+		prompt.visible = false
+	# 🔴 잔해/온전을 **따로** 가른다 — 짝으로 묶어 `Ruin`이 없으면 통째로 return하던 옛 형태는
+	#   4단계에 잔해가 도착해 쓸모가 없어졌고, 그 return이 남아 있으면 `LightPool`(빛 웅덩이)이
+	#   `Ruin` 없는 프롭에서 **조용히 안 꺼진다**(폐허가 빛나는데 에러가 0이다).
+	var ruin := zone.get_node_or_null(RUIN_PART) as CanvasItem
+	if ruin != null:
+		ruin.visible = not built
+	for part_name: String in WHOLE_ONLY_PARTS:
+		var part := zone.get_node_or_null(part_name) as CanvasItem
+		if part != null:
+			part.visible = built
+
+
+## 🔴 마을 색조 = 되돌린 건물 비율 (설계 §3). 표(`STATION_UNLOCKS`)에서 **파생**한다 —
+## 분모를 손으로 적으면 건물을 하나 늘릴 때 색조만 조용히 옛 비율로 남는다.
+func _refresh_village_tint() -> void:
+	var dusk := get_node_or_null(^"Dusk") as CanvasModulate
+	if dusk == null or STATION_UNLOCKS.is_empty():
+		return
+	var built := 0
+	for node_name: String in STATION_UNLOCKS:
+		if GameState.is_unlocked(STATION_UNLOCKS[node_name]):
+			built += 1
+	dusk.color = TINT_RUINED.lerp(TINT_WHOLE, float(built) / float(STATION_UNLOCKS.size()))
 
 
 # ─────────────────────────── 원정 (챕터 보스방, 세58-B) ───────────────────────────

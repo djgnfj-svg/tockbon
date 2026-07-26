@@ -15,7 +15,16 @@ extends SceneTree
 ## 🔴 세션37 스파인: 첫사냥 → (살아 귀환) → 정제대 → 공방 → 물 룬 → 바람 룬.
 ##  ⚠ **세85에 「해독대」 칸이 빠졌다** (감사 #32 · 결정 ⑩ — `q05_build_decode` 은퇴).
 ##  실데이터 사슬은 이제 **q00~q04**로 끝나고, 룬 사슬(q06·q07)은 주입 대역이 q04에 붙어 잰다.
-## 🔴 **건설도 UNLOCK 목표다** — 스테이션은 codex(station_*)로 관리하므로 codex_unlocked(station_*)로 달성된다.
+##
+## 🔴🔴 **세89: 「건설 UNLOCK」 모델이 뒤집혔다** (설계 `docs/takbon-design/world_and_visual_design.md` §2).
+##  세88까지 q03·q04는 `goal = UNLOCK · target = station_*`였고, 건설이 은퇴(세66)한 뒤라
+##  그 codex를 채워 주는 게 **`base.gd`의 인터림 브리지**(매 방문 심는 루프)였다 —
+##  즉 **퀘스트가 자기 완료 조건을 스스로 심는 순환**이었다.
+##  세89에 방향이 반대가 됐다: **퀘스트를 깨면(사냥·귀환) 정산이 건물을 되돌린다**
+##  (`QuestDef.reward_unlock` → `codex_unlocked(station_*)` → `base.gd`의 잔해/온전 전환).
+##  → q03 = KILL(짐승 n마리) · q04 = EXTRACT(n번 살아 귀환) · 둘 다 `reward_unlock`을 든다.
+##  🔴 이 파일에서 **codex를 쏴서 q03·q04를 채우던 자리가 전부 반대로 뒤집혔다** — 이제 그 codex는
+##   테스트가 쏘는 게 아니라 **정산이 내놓는 결과**이고, 그걸 세는 것이 새 그물이다.
 
 var _pass := 0
 var _fail := 0
@@ -68,6 +77,9 @@ func _clean(gs: Node) -> void:
 	gs.quest_seen.clear()     # 🔴 [!] 접수 초기화 (세션43) — 미접수 상태로 되돌린다
 	gs.ring_designs.clear()   # q00(DRAW=상태 기반)이 시작부터 미충족이도록 그린 도안을 비운다 (세션41)
 	# 🔴 세85: `station_decode`를 뺐다 — 해독대 은퇴로 q05와 시드가 같이 걷혔다(감사 #32 · 결정 ⑩).
+	# 🔴 세89: station_*은 이제 **퀘스트 정산이 내놓는 결과**다(더는 아무도 미리 심지 않는다).
+	#   그래도 여기서 지운다 — 실게임 세이브가 같은 프로세스에 로드됐을 수 있고, 남아 있으면
+	#   「정산이 건물을 되돌린다」 그물이 **이미 해금** 가드에 걸려 자명 통과가 된다.
 	for k: StringName in [&"rune_water", &"rune_wind",
 			&"station_refine", &"station_craft"]:
 		gs.codex.erase(k)
@@ -119,12 +131,44 @@ func _run() -> void:
 		q0 != null and q1 != null and q2 != null and q3 != null and q4 != null)
 	_check("🔴 q05(해독대 건설)는 은퇴해 Db에 없다 — 「없는 건물을 세우라」는 유령 목표 0",
 		db.get_quest(&"q05_build_decode") == null)
-	if q0 == null or q1 == null or q3 == null:
+	if q0 == null or q1 == null or q3 == null or q4 == null:
 		# 여기까지 왔으면 위 _check가 이미 빨개졌다 — 종료코드도 실패로 (세84 #44).
 		print("RESULT pass=%d fail=%d" % [_pass, _fail])
 		_restore_quests(db)
 		quit(1)
 		return
+
+	# ── ⓐ 🔴🔴 **세89 마을 되살리기 데이터 계약** — 「퀘스트를 깨면 건물이 저절로 선다」 ──
+	#  ① 되돌리는 통로가 `reward_unlock`에 실려 있다(없으면 건물이 영영 잔해다 — 에러 0).
+	#  ② 🔴 **목표가 자기 자신의 해금이 아니다.** 이게 핵심이다: 세88까지 q03·q04는
+	#     `UNLOCK station_*`이었고 그걸 채워 주던 게 `base.gd` 인터림 브리지였다 =
+	#     **자기 완료 조건을 스스로 심는 순환**. 그 형태로 되돌아오면 여기가 빨개진다.
+	_check("🔴 q03 정산이 정제대를 되돌린다 (reward_unlock == station_refine)",
+		q3.reward_unlock == &"station_refine")
+	_check("🔴 q04 정산이 공방을 되돌린다 (reward_unlock == station_craft)",
+		q4.reward_unlock == &"station_craft")
+	_check("🔴🔴 건설 UNLOCK 순환 재발 감지 — q03·q04의 **목표**가 station_* 해금이 아니다",
+		q3.goal != Enums.QuestGoal.UNLOCK and q4.goal != Enums.QuestGoal.UNLOCK)
+
+	# ── ⓑ 🔴🔴 **잠근 건물엔 여는 열쇠가 있어야 한다** (세89) ──
+	#  `base.gd`의 `STATION_UNLOCKS`에 올린 건물은 codex 해금 전까지 [E]가 안 먹는다(잔해).
+	#  그 id를 **아무도 안 쏘면 그 건물은 영영 잠긴다** — 그런데 기존 세이브엔 옛 인터림 브리지가
+	#  심어 둔 값이 남아 있어 **F5로는 안 드러난다**(새 게임에서만 죽는다) = 이 프로젝트가 제일
+	#  비싸게 배운 형태의 침묵(세88 시드 회수 교훈과 같은 결).
+	#  ⚠ 지금 매점(Shop)이 표에서 빠진 이유가 정확히 이것이다 — `station_shop` 생산자가 0곳이다.
+	#  🔴 표를 **직접 읽는다**(id를 베끼지 않는다) — 베끼면 표가 늘 때 그물만 옛 목록에 남는다.
+	var base_script = load("res://src/base/base.gd")
+	var gated: Dictionary = base_script.STATION_UNLOCKS
+	var granters: Dictionary = {}
+	for gq: QuestDef in db.all_quests():
+		if gq.reward_unlock != &"":
+			granters[gq.reward_unlock] = true
+	_check("🔴 base.gd가 잔해/온전 게이트 표를 들고 있다 (STATION_UNLOCKS 비어 있지 않다)",
+		not gated.is_empty())
+	for node_name in gated:
+		_check("🔴 잠근 건물 %s(%s)를 열어 주는 퀘스트가 있다 — 없으면 영영 잔해다"
+				% [node_name, gated[node_name]],
+			granters.has(gated[node_name]))
 
 	# ── ① 온보딩 시작(세션41): q00(첫 마법진)만 열리고, q01·q02는 q00을 물어 잠긴다 ──
 	_check("시작: q00(첫 마법진) 열림", gs.is_quest_active(q0))
@@ -173,15 +217,31 @@ func _run() -> void:
 	_check("🔴 q02 완료로 q03(정제대 건설)가 열렸다", gs.is_quest_active(q3))
 	_check("정산 뒤 정산할 게 없다", not gs.has_claimable_quest())
 
-	# ── ④ BUILD — codex_unlocked(station_*)로 달성. 여전히 정산해야 완료 ──
+	# ── ④ 🔴🔴 **마을 되살리기 (세89)** — q03은 **사냥**이고, 정산이 건물을 되돌린다 ──
+	#  옛 판은 여기서 `codex_unlocked(station_refine)`을 쏴서 q03을 채웠다(브리지가 하던 일의 대역).
+	#  세89에 방향이 뒤집혀 **codex는 입력이 아니라 출력**이다 — 사냥으로 채우고, 정산이 codex를 쏜다.
+	#  🔴 발신 **횟수**를 센다(값만 보면 「같은 길로 왔나」를 못 잰다 — 세86 교훈).
 	var shell_before: int = gs.get_count(&"mat_beetle_shell")
-	eb.codex_unlocked.emit(&"station_refine")
-	_check("🔴 정제대 건설: q03 정산 대기 (아직 완료 아님)",
+	var refine_emits := [0]
+	var on_refine := func(id: StringName) -> void:
+		if id == &"station_refine": refine_emits[0] += 1
+	eb.codex_unlocked.connect(on_refine)
+	for i in q3.need() - 1:
+		eb.enemy_died.emit(&"slime")
+	_check("🔴 목표 수(%d)에 한 마리 모자라면 아직 정산 대기 아님 (검출력 대조)" % q3.need(),
+		not gs.is_quest_claimable(q3))
+	eb.enemy_died.emit(&"slime")
+	_check("🔴 짐승 %d마리: q03 정산 대기 (아직 완료 아님)" % q3.need(),
 		gs.is_quest_claimable(q3) and not gs.is_quest_done(&"q03_build_refine"))
+	_check("🔴 정산 전엔 실습동이 아직 잔해다 (station_refine 미해금 · 발신 0회)",
+		not gs.is_unlocked(&"station_refine") and refine_emits[0] == 0)
 	gs.claim_ready_quests()
 	_check("🔴 정산: q03 완료 + 보상 (mat_beetle_shell +2)",
 		gs.is_quest_done(&"q03_build_refine") and gs.get_count(&"mat_beetle_shell") == shell_before + 2)
-	_check("🔴 q04(공방 건설)가 열렸다", gs.is_quest_active(q4))
+	_check("🔴🔴 정산이 실습동을 되돌린다 — reward_unlock이 codex_unlocked를 **정확히 1발** 쐈다",
+		refine_emits[0] == 1 and gs.is_unlocked(&"station_refine"))
+	eb.codex_unlocked.disconnect(on_refine)
+	_check("🔴 q04(공방)가 열렸다", gs.is_quest_active(q4))
 
 	# ── ④-b 🔴🔴 **연쇄 정산(고정점 루프)** — 한 번의 정산이 사슬을 **두 칸** 진행시킨다 ──
 	# 공방을 짓고 **물 룬도 이미 해금해 둔** 채 길잡이에게 한 번 말을 걸면:
@@ -193,10 +253,14 @@ func _run() -> void:
 	#   (고정점 루프를 1회로 되돌리면 아래 「연쇄 정산」 단정이 빨개진다).
 	var sap_before: int = gs.get_count(&"mat_moon_sap")
 	var bloom_before: int = gs.get_count(&"mat_night_bloom")
-	eb.codex_unlocked.emit(&"station_craft")   # q04 달성
+	# 🔴 세89: q04도 codex 목표 → **귀환(EXTRACT)**으로 바뀌었다. 필요 횟수만큼 살아 돌아온다.
+	#   (q02는 이미 완료라 다시 안 세진다 — `advance_quests`가 active만 센다.)
+	for i in q4.need():
+		eb.extraction_success.emit()
 	eb.codex_unlocked.emit(&"rune_water")      # q06 대상 선해금 — 단 q06은 q04 미완료라 아직 잠김
 	_check("🔴 선행(q04) 미완료면 대상이 이미 해금돼 있어도 q06은 정산 불가 (requires 게이트)",
 		gs.is_quest_claimable(q4) and not gs.is_quest_claimable(q6) and not gs.is_quest_active(q6))
+	_check("🔴 정산 전엔 공방이 아직 잔해다 (station_craft 미해금)", not gs.is_unlocked(&"station_craft"))
 	gs.claim_ready_quests()   # q04 정산 → q06 열림 → 이미 해금돼 있어 연쇄 정산
 	# 🔴 세85: q05를 은퇴시키며 그 보상 `mat_night_bloom ×2`를 **q04로 합쳤다**(온보딩 총 보상량 보존,
 	#   사용자 확정). 그물이 없으면 「사슬을 줄이면서 보상이 조용히 사라졌다」를 아무도 못 잡는다 —
@@ -206,6 +270,8 @@ func _run() -> void:
 		and gs.get_count(&"mat_night_bloom") == bloom_before + 2)
 	_check("🔴🔴 연쇄 정산: q04·q06 둘 다 완료 (고정점 루프 — 말 한 번에 두 칸)",
 		gs.is_quest_done(&"q04_build_craft") and gs.is_quest_done(&"q06_learn_water"))
+	_check("🔴 정산이 공방을 되돌린다 (station_craft 해금 — 세89 마을 되살리기)",
+		gs.is_unlocked(&"station_craft"))
 	_check("🔴 연쇄로 q07(바람)이 열렸다", gs.is_quest_active(q7))
 	_check("q07은 rune_water로는 안 끝난다 (target=rune_wind)", not gs.is_quest_done(&"q07_learn_wind"))
 
@@ -234,8 +300,15 @@ func _run() -> void:
 	_clean(gs)
 	gs.quest_done[&"q00_first_draw"] = true   # 온보딩 q00 완료 선세팅 — 이래야 q01이 열려 진행된다 (세션41)
 	eb.enemy_died.emit(&"slime")           # q01 진행 1/1 (세58-B count 1)
-	eb.codex_unlocked.emit(&"station_refine")   # station_refine 해금, 그러나 q03은 q02 미완료라 잠김
-	_check("🔴 선행(q02) 미완료면 건설해도 q03은 정산 불가 (requires 게이트)", not gs.is_quest_claimable(q3))
+	# 🔴 세89: q03이 KILL이 됐으므로 게이트를 **사냥으로** 잰다(옛 판은 codex를 쐈다).
+	#   목표 수보다 넉넉히 잡아도 잠긴 퀘스트는 열리지 않는다.
+	for i in q3.need() + 2:
+		eb.enemy_died.emit(&"slime")
+	_check("🔴 선행(q02) 미완료면 아무리 잡아도 q03은 정산 불가 (requires 게이트)",
+		not gs.is_quest_claimable(q3))
+	_check("🔴 잠긴 동안의 사냥은 **쌓이지도 않는다** (진행 %d — advance_quests가 active만 센다)"
+			% gs.quest_count(&"q03_build_refine"),
+		gs.quest_count(&"q03_build_refine") == 0)
 	gs.quest_done[&"q01_first_hunt"] = true
 	sm.save_game()
 	gs.quest_progress.clear()

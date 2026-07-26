@@ -5,12 +5,13 @@
 [resource]
 script = ExtResource("1")
 id = &"q03_build_refine"
-title = "정제대를 세워라"
-desc = "정제대 자리에서 재료를 들고 [E]로 건설하라. 재료를 특별잉크·종이로 바꾸는 곳이다."
-goal = 2
-target = &"station_refine"
-count = 1
+title = "연금술 실습동을 되돌려라"
+desc = "짐승들이 마을의 마법을 삼켰다. 문 너머에서 다섯을 잡아 되찾아 오면 실습동이 제자리로 선다."
+goal = 0
+target = &""
+count = 5
 reward_items = {
 &"mat_beetle_shell": 2
 }
+reward_unlock = &"station_refine"
 requires = &"q02_come_home"

@@ -5,13 +5,14 @@
 [resource]
 script = ExtResource("1")
 id = &"q04_build_craft"
-title = "공방을 세워라"
-desc = "공방 자리에서 재료를 들고 [E]로 건설하라. 펜·장비를 만드는 곳이다."
-goal = 2
-target = &"station_craft"
-count = 1
+title = "마도구 공방을 되돌려라"
+desc = "거둔 것을 흘리지 마라. 문 너머에서 두 번 살아 돌아오면 공방이 제자리로 선다."
+goal = 1
+target = &""
+count = 2
 reward_items = {
 &"mat_moon_sap": 1,
 &"mat_night_bloom": 2
 }
+reward_unlock = &"station_craft"
 requires = &"q03_build_refine"

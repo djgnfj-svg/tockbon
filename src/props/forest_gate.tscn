@@ -1,13 +1,15 @@
-[gd_scene load_steps=5 format=3 uid="uid://c0prop02gate00"]
+[gd_scene load_steps=7 format=3 uid="uid://c0prop02gate00"]
 
 [ext_resource type="Script" path="res://src/actors/interact_zone.gd" id="1_zone"]
 [ext_resource type="Texture2D" path="res://assets/sprites/base/gate_arch.png" id="2_tex"]
+[ext_resource type="Texture2D" path="res://assets/light_soft.tres" id="3_light"]
+[ext_resource type="Script" path="res://src/props/light_pool.gd" id="4_pool"]
 
 [sub_resource type="RectangleShape2D" id="trigger"]
 size = Vector2(130, 120)
 
 [sub_resource type="RectangleShape2D" id="pillar"]
-size = Vector2(24, 132)
+size = Vector2(34, 131)
 
 [node name="ForestGate" type="Area2D"]
 collision_layer = 64
@@ -19,16 +21,24 @@ zone_id = &"forest_gate"
 offset = Vector2(0, -80)
 texture = ExtResource("2_tex")
 
+[node name="Glow" type="PointLight2D" parent="."]
+position = Vector2(0, -70)
+color = Color(0.62, 0.84, 1, 1)
+energy = 1.25
+texture = ExtResource("3_light")
+texture_scale = 2.2
+script = ExtResource("4_pool")
+
 [node name="Pillars" type="StaticBody2D" parent="."]
 collision_layer = 1
 collision_mask = 0
 
 [node name="ShapeL" type="CollisionShape2D" parent="Pillars"]
-position = Vector2(-62, -74)
+position = Vector2(-40, -76)
 shape = SubResource("pillar")
 
 [node name="ShapeR" type="CollisionShape2D" parent="Pillars"]
-position = Vector2(62, -74)
+position = Vector2(40, -76)
 shape = SubResource("pillar")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]

@@ -97,9 +97,20 @@ local FULL={
  "field/rock.png","field/flowers.png","field/chest.png","ui/items.png"}
 local MILD={  -- 건물: 이미 입체적이라 약하게
  "base/bld_library.png","base/bld_workshop.png","base/bld_alchemy.png","base/bld_market.png","base/gate_arch.png",
- "base/monument_circle.png","base/lamp_post.png","base/bench.png","base/fence_hedge.png"}
+ "base/monument_circle.png","base/lamp_post.png","base/bench.png","base/fence_hedge.png",
+ -- 세89 폐허 잔해 (world_and_visual_design §5) — 온전 버전과 같은 MILD 대역이라야 한 세대로 보인다
+ "base/bld_alchemy_ruin.png","base/bld_workshop_ruin.png","base/bld_market_ruin.png","base/monument_circle_ruin.png"}
 
--- 실행하려면 아래 주석 해제:
+-- 🔴🔴 **이미 적용된 파일을 다시 돌리지 마라 — 음영이 두 번 먹어 뭉개진다.**
+-- relight는 익스포트 후처리라 결과가 PNG에 굳는다(멱등이 아니다). 위 두 목록은 「분류표」지
+-- 「실행 목록」이 아니다 — 전체 재적용은 aseprite에서 **전량 재익스포트한 직후**에만 맞다.
+-- 새로 그린 것만 돌릴 때는 아래처럼 그 파일만 담아라 (세89 실제 사용례):
+-- local NEW={"base/gate_arch.png","base/bld_alchemy_ruin.png","base/bld_workshop_ruin.png",
+--            "base/bld_market_ruin.png","base/monument_circle_ruin.png"}
+-- for _,f in ipairs(NEW) do doPng(B..f,0.5) end        -- 🔴 건물·잔해는 0.5(MILD)다. 1.0을 쓰면 그것만 다른 세대로 보인다
+-- print("done new="..#NEW)
+--
+-- 전량 재적용(재익스포트 직후에만):
 -- for _,f in ipairs(FULL) do doPng(B..f,1.0) end
 -- for _,f in ipairs(MILD) do doPng(B..f,0.5) end
 -- print("done full="..#FULL.." mild="..#MILD)
