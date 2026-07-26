@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="RecipeDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/core/schemas/recipe_def.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = &"craft_gr_spread3"
+display_name = "확산 고리 제작"
+inputs = {
+&"mat_slime_core": 5,
+&"mat_beetle_shell": 3,
+&"coin": 30
+}
+output_id = &""
+output_count = 0
+station = &"craft"
+reward_unlock = &"gr_spread3"

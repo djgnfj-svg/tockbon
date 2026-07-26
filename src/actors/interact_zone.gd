@@ -15,6 +15,9 @@ signal interacted  ## 플레이어가 이 지점에서 E를 눌렀다
 ## 어느 지점인가 — 씬이 잇는 대상을 헷갈리지 않게, 테스트가 노드 이름 대신 이걸로 찾게.
 ## (실측 — `src/props/*.tscn`가 쥔 값 7개: &"desk" 책상 · &"forest_gate" 챕터 선택 · &"npc" 길잡이 ·
 ##  &"refine" 정제대 · &"craft" 공방 · &"shop" 상점 · &"portal" 귀환 포탈. 새 프롭 = 여기 한 줄이 아니라 씬의 zone_id다)
+## ⚠ 하나 더 있고 **그것만 프롭 씬이 아니다**: &"exit" = 보스방 남쪽 상시 귀환 출구(세88) — `boss_room.tscn`의
+##  인라인 Area2D가 쥔다. 🔴 &"portal"과 갈라 둔 게 계약이다 — 포탈은 보스 처치 후에만 뜨고(그 그물이
+##  `test_chapter_auto`에 산다) 출구는 처음부터 있다. 출구에 &"portal"을 주면 그 그물이 빨개진다.
 @export var zone_id: StringName = &""
 
 @onready var _prompt: Label = $Prompt

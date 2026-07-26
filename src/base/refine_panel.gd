@@ -14,6 +14,10 @@ extends Control
 
 signal closed
 
+## 🔴 재료 진행 한 칸(`이름 보유/필요`) = core 단일 소스 (세88). `workshop_panel`도 같은 파일을
+## 부른다 — 사본을 만들면 인자 순서가 다시 갈라진다(아래 `_inputs_text` 주석에 그 사고 기록이 있다).
+const ItemText := preload("res://src/core/item_text.gd")
+
 const PANEL_SIZE := Vector2(520.0, 440.0)
 
 const BACKDROP := Color(0.03, 0.025, 0.02, 0.82)
@@ -153,12 +157,15 @@ func _craft(recipe_id: StringName) -> void:
 		Audio.play(&"craft")
 
 
-## "재생 덩굴 줄기 2/5, …" — 재료마다 필요/보유. 소비자(GameState.spend)가 먹는 형식과 같은 dict.
+## "재생 덩굴 줄기 2/5, …" — 재료마다 **보유/필요**. 소비자(GameState.spend)가 먹는 형식과 같은 dict.
+## 🔴 한 칸의 형식은 `ItemText.count_text`(core) 단일 소스다 — 세88 전까지 여기와 `workshop_panel`이
+## **글자까지 같은 사본**을 각자 들고 있었고 **둘 다 인자가 거꾸로**였다(주석은 "보유/필요"라 선언하는데
+## 코드가 `[name, need, have]`라 3개 갖고 5개 필요면 "5/3"으로 찍혔다 — 진행 막대 관례와 반대).
+## 공방만 고치면 여기가 계속 거꾸로 남는다 = 감사 T5. **여기서 다시 조립하지 마라.**
 func _inputs_text(r: RecipeDef) -> String:
 	var parts: Array[String] = []
 	for id: StringName in r.inputs:
-		var need := int(r.inputs[id])
-		parts.append("%s %d/%d" % [_item_name(id), need, GameState.get_count(id)])
+		parts.append(ItemText.count_text(_item_name(id), GameState.get_count(id), int(r.inputs[id])))
 	return ", ".join(parts)
 
 

@@ -18,6 +18,13 @@ extends Area2D
 ##     새 CollisionShape도 없다. 레이어 필드를 하나 더 만드는 순간 그게 언젠가 잘못 채워진다
 ##     (세24·세46이 전부 그 종류의 사고였다).
 ##
+## 🔴 **두 가지 페이로드** (세87 사냥 흐름 §3-B-2 — 「문양-고리 두루마리」 보너스 드롭):
+##   • `item_id` — 가방행(기존 계약 그대로: 귀환하면 창고, 죽으면 bag_lost로 증발)
+##   • `unlock_id` — **codex 해금행**. 아이템이 아니라 배움이라 `add_to_bag`에 **안 넣는다**.
+##   🔴 **둘은 배타다**(`DropEntry`의 같은 계약) — `setup`이 넷째 인자로 받고, 실린 쪽 하나만 산다.
+##   ⚠ 해금물도 **땅에 떨어져 걸어가 줍는다**(세46 계약) — 보너스는 눈에 보여야 보너스이고,
+##     죽으면 못 주운 채 잃으므로 익스트랙션의 긴장이 유지된다.
+##
 ## 🔴 class_name 선언 금지(서브에이전트 규칙). forest_enemy가 preload로 무는데, 픽업은 forest를
 ##   안 물어 순환이 없다(base⇄forest 순환 preload 함정과 무관).
 ##
@@ -29,6 +36,23 @@ extends Area2D
 ## 등급색 **마름모 폴백**. 마름모일 때는 창고·획득 토스트와 **같은 아이템이 같은 색**이어야 등급이
 ## 정보로 읽힌다 — 등급 색 규약은 폴백 경로에서 여기서 온다.
 const GradeColors := preload("res://src/core/grade_colors.gd")
+
+## 🔴 **화면 문구는 이 파일의 일이 아니다** (세88). 픽업은 `unlock_id`만 나르고, 사람이 읽는
+## 이름·안내는 **HUD가** `codex_unlocked`를 받아 `CodexText.acquired_line()`으로 낸다 —
+## 문구의 주인이 한 곳이라 사본이 생길 자리가 없다(감사 T5).
+## ⚠ 여기에 라벨 필드를 다시 만들지 마라: 세88에 `unlock_label()`을 뒀다가 **소비자 0**이 되어
+##   걷었다(T3 = 거짓 손잡이). 「고리 id 오타」는 `test_progression_auto`의 `MOB_SCROLLS` 전수
+##   대조가 **적을 죽이지 않고 데이터만으로** 잡는다 — 픽업 라벨보다 검출이 훨씬 이르다.
+
+## 🔴 **두루마리 스프라이트** (세87 §3-B-2 · 아트 명세 §13-6 — 24×24, 고리 3종 공용 한 장).
+## 해금물엔 `ItemDef`가 없어 `params.sprite`를 못 읽으므로 경로가 여기 있다.
+## ⚠ **마름모 폴백으로 절대 안 떨어진다** — 세54 도형 금지(`_apply_color` 주석 참조).
+const SCROLL_SPRITE := "res://assets/sprites/props/scroll_glyph_ring.png"
+
+## 해금물의 **후광 등급** — 아이템이 아니라 등급 필드가 없다. 2~3%로 나오는 보너스라
+## "멀리서도 챙겨라로 읽혀야" 한다(§3-B-2 *"보너스는 눈에 보여야 보너스다"*).
+## 🔴 밸런스가 아니라 **연출값**이라 const다 — 후광 상수들(HALO_*)과 같은 결.
+const UNLOCK_GRADE := 4
 
 ## 🔴 줍기 지연 — 생성 직후 짧게 못 줍게 한다. 적을 **붙어서** 잡으면 픽업이 뜨는 프레임에
 ## 플레이어가 이미 겹쳐 있어 그대로 사라진다(튀어나오는 연출이 안 보인다). 지연이 끝날 때
@@ -87,6 +111,8 @@ enum State { IDLE, READY, HOMING, COLLECTED }
 
 var item_id: StringName = &""
 var count: int = 0
+## 🔴 해금물 페이로드 — 채워지면 `item_id`는 비어 있고, 줍는 순간 `codex_unlocked`가 나간다.
+var unlock_id: StringName = &""
 
 var _state: State = State.IDLE
 var _collected: bool = false
@@ -115,9 +141,14 @@ func _ready() -> void:
 ## `p_scatter_angle` — 🔴 **기본값 −1이면 지금처럼 랜덤**이라 기존 2인자 호출·테스트가 그대로 돈다.
 ## forest_enemy가 드롭 인덱스로 **균등 각도**를 넘긴다: 랜덤이면 3개가 겹쳐 하나로 보여
 ## "여러 개 나왔다"가 눈에 안 읽힌다 — 그게 보상 체감의 절반이다.
-func setup(p_item_id: StringName, p_count: int, p_scatter_angle: float = -1.0) -> void:
+##
+## `p_unlock_id` — 🔴 **해금물 경로**(세87 두루마리). 채우면 `p_item_id`는 비어 있어야 한다
+## (`DropEntry`의 배타 계약). 기본값이 빈 값이라 **기존 2·3인자 호출이 전부 그대로 돈다.**
+func setup(p_item_id: StringName, p_count: int, p_scatter_angle: float = -1.0,
+		p_unlock_id: StringName = &"") -> void:
 	item_id = p_item_id
 	count = p_count
+	unlock_id = p_unlock_id
 	_apply_color()
 	_apply_halo()
 	_start_scatter(p_scatter_angle)
@@ -131,6 +162,14 @@ func setup(p_item_id: StringName, p_count: int, p_scatter_angle: float = -1.0) -
 ##   • 마름모 숨김 = `color.a=0`(폴리곤 필드만 투명, 자식 스프라이트는 자기 텍스처로 보인다).
 ##   • 스프라이트는 **등급 틴트 없이 그대로**(엽전은 금색 자체가 정보 — art 판단). 폴백 마름모만 등급색.
 ##   • ResourceLoader.exists 가드 = import 전이거나 경로 오타면 조용히 마름모 폴백(크래시 금지).
+##
+## 🔴🔴 **해금물(두루마리)은 마름모로 절대 안 떨어진다** (세87 §3-B-2 — 세54 도형 금지 정면 위반
+## 자리였다. CLAUDE.md가 *"drop_pickup 마름모 선례는 각하됐다"*고 그 이름으로 못 박았다).
+## `Db.get_item(&"gr_spread3")`은 당연히 null이라 옛 코드 흐름은 **곧바로 등급색 마름모**였다.
+## → 해금물은 `SCROLL_SPRITE`를 쓰고, PNG가 아직 없으면(아트 병렬 작업 중) **마름모가 아니라
+##   `push_warning` + 마름모 숨김**으로 선다. 그때 화면에 남는 건 등급 후광(절차적 VFX =
+##   도형 금지 예외)이라 "뭔가 떨어졌다"는 읽히면서 **도형 스탠드인은 만들지 않는다.**
+## ⚠ `push_warning`은 `SCRIPT ERROR` grep에 안 걸린다(세84 T6) — PNG 도착 확인은 리드의 F5 몫이다.
 func _apply_color() -> void:
 	if _visual == null:
 		return
@@ -140,21 +179,32 @@ func _apply_color() -> void:
 		sprite.texture = load(spr)
 		sprite.visible = true
 		_visual.color = Color(0.0, 0.0, 0.0, 0.0)  # 마름모 숨김 — 스프라이트로 대체
-	else:
-		if sprite != null:
-			sprite.visible = false
-		_visual.color = GradeColors.of(_grade())
+		return
+	if sprite != null:
+		sprite.visible = false
+	if unlock_id != &"":
+		# 🔴 해금물인데 스프라이트가 없다 — 마름모로 때우지 않는다(세54).
+		push_warning("drop_pickup: 두루마리 스프라이트가 없다 — %s (해금물 %s는 후광만으로 선다)"
+			% [SCROLL_SPRITE, unlock_id])
+		_visual.color = Color(0.0, 0.0, 0.0, 0.0)
+		return
+	_visual.color = GradeColors.of(_grade())
 
 
-## 아이템 params의 sprite 경로(없으면 빈 문자열).
+## 그릴 스프라이트 경로 — 해금물은 두루마리 한 장, 아이템은 `params.sprite`(없으면 빈 문자열).
 func _sprite_path() -> String:
+	if unlock_id != &"":
+		return SCROLL_SPRITE
 	var it := Db.get_item(item_id)
 	if it != null and it.params.has("sprite"):
 		return str(it.params["sprite"])
 	return ""
 
 
+## 후광·마름모가 보는 등급 — 해금물은 `ItemDef`가 없으니 연출 등급을 준다(위 UNLOCK_GRADE 주석).
 func _grade() -> int:
+	if unlock_id != &"":
+		return UNLOCK_GRADE
 	var it := Db.get_item(item_id)
 	return it.grade if it != null else 1
 
@@ -319,7 +369,7 @@ func _on_body_entered(body: Node2D) -> void:
 
 ## body_entered 경로 — 🔴 **자석이 추가돼도 이 경로는 유지된다**(안전망이자 기존 계약).
 func _try_collect(body: Node) -> bool:
-	if _collected or item_id == &"":
+	if _collected or not _has_payload():
 		return false
 	# mask=2가 이미 플레이어만 걸러 주지만, 방어적으로 몸 타입을 확인한다.
 	if not (body is CharacterBody2D):
@@ -334,21 +384,57 @@ func _try_collect(body: Node) -> bool:
 ##
 ## 🔴 `_collected`를 **먼저** 세운다: `body_entered`(안전망)와 거리 도착(자석)이 둘 다 있어
 ## 이중 수집 위험이 실재하고, 도착 팝 0.12s 동안 노드가 아직 살아 있다.
-## 🔴 빈 `item_id`도 여기서 막는다 (세51 리뷰). `_try_collect`(body_entered 경로)만 이 검사를
+## 🔴 빈 페이로드도 여기서 막는다 (세51 리뷰). `_try_collect`(body_entered 경로)만 이 검사를
 ## 갖고 자석 도착 경로엔 없어서 **두 경로가 비대칭**이었다 — `setup()`이 안 불린 픽업이 씬에 있으면
 ## `add_to_bag(&"", 0)`이 불려 **유령 항목이 가방에 들어가고 귀환하면 창고로, 세이브로 영구화된다**
-## (add_to_bag은 검사 없이 append한다). 지금은 유일 생성자 `forest_enemy._die`가 항상 setup을
-## 부르지만, 손으로 씬에 놓거나 새 생성자가 생기는 날 열리는 잠복 함정이라 여기서 닫는다.
+## (add_to_bag은 검사 없이 append한다).
+##
+## 🔴🔴 **그 거부가 `_collected`를 안 세워서 무한 재호출이었다** (세87 §13-7이 지목한 실존 버그):
+## 자석 도착 경로(`_physics_process`)는 거리 판정으로 `_collect_at`을 부르는데, 아무 일도 안
+## 일어나고 상태도 안 바뀌면 **다음 물리 프레임에 또 부른다** → 픽업이 플레이어에 **붙은 채
+## 영원히 안 사라진다**(에러도 경고도 없다). 지금까진 유일 생성자가 항상 `item_id`를 채워 무해했지만
+## **해금물 경로가 이 함정을 연다**(해금물은 `item_id`가 빈 게 정상이다).
+## → 페이로드가 없으면 **먼저 불활성으로 못 박고 스스로 치운다**: 가방엔 아무것도 안 넣으므로
+##   유령 항목 방어는 그대로고, 재호출 고리는 끊긴다.
 func _collect_at(at: Vector2) -> void:
-	if _collected or item_id == &"":
+	if _collected:
+		return
+	if not _has_payload():
+		_collected = true
+		_state = State.COLLECTED
+		queue_free()   # 주울 게 없는 픽업은 세상에 남을 이유가 없다 (좀비 방지)
 		return
 	_collected = true
 	_state = State.COLLECTED
 	global_position = at
-	GameState.add_to_bag(item_id, count)
-	_play_pickup_sfx()
-	EventBus.item_collected.emit(item_id, count)
+	if unlock_id != &"":
+		_grant_unlock()
+	else:
+		GameState.add_to_bag(item_id, count)
+		_play_pickup_sfx()
+		EventBus.item_collected.emit(item_id, count)
 	_pop_and_free()
+
+
+## 페이로드가 실렸나 — 🔴 **아이템이든 해금물이든 하나**면 된다(둘은 배타, setup 주석 참조).
+func _has_payload() -> bool:
+	return item_id != &"" or unlock_id != &""
+
+
+## 🔴 해금물 줍기 = `codex_unlocked` **한 발**. codex 심기 + 해금음(`audio._on_unlock`) +
+## UNLOCK 퀘스트 진행 + 자동 저장(`save_manager`가 이 시그널에 큐를 건다)이 전부 따라온다
+## (세37 station_* 선례 · boss_room 클리어 보상과 같은 패턴).
+## 🔴 **가방에 안 넣는다** — 아이템이 아니라 배움이다. 그래서 `item_collected`도 안 쏜다:
+##   HUD 토스트가 `Db.get_item(id)`으로 이름을 찾는데 해금물엔 `ItemDef`가 없어 **원시 id가
+##   화면에 노출된다**(`test_ui_text_auto`가 재는 바로 그 실패).
+##   화면 문구는 **HUD가** 이 `codex_unlocked`를 받아 `CodexText.acquired_line()`으로 낸다.
+## 🔴 **이미 해금이면 다시 안 쏜다** — 두 마리가 같은 두루마리를 떨궈 둘 다 줍거나, 떨어진 사이
+##   공방에서 같은 고리를 만들면 해금음·UNLOCK 퀘스트가 중복 반응한다(boss_room의 첫 처치 가드와
+##   같은 결). 그래도 픽업 자체는 정상적으로 사라진다 — 안 사라지면 바닥에 유령이 남는다.
+## 🔴 픽업 소리를 안 낸다 — `codex_unlocked`가 이미 unlock음을 울려 두 겹이 된다.
+func _grant_unlock() -> void:
+	if not GameState.is_unlocked(unlock_id):
+		EventBus.codex_unlocked.emit(unlock_id)
 
 
 ## 연속 획득 피치 사다리 + 같은-프레임 게이트.

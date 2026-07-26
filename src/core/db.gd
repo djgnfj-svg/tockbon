@@ -130,11 +130,16 @@ func ink_mult(id: StringName) -> float:
 func get_recipe(id: StringName) -> RecipeDef:
 	return recipes.get(id) as RecipeDef
 
-## 정제대가 나열할 레시피 — id 오름차순.
+## 정제대·공방이 나열할 레시피 — **id 사전순**.
+## 🔴🔴 `keys.sort()`를 쓰면 안 된다 (세88 실측): 키가 `StringName`이라 그 정렬은 **사전순이 아니라
+## 인터닝 순**이고, **같은 데이터로 두 번 돌려도 순서가 달랐다**(1회차 첫 줄 `craft_rune_earth` →
+## 2회차 `craft_gr_spread3`). 레시피가 3장일 때는 안 드러났지만 공방이 17줄이 되며 목록이 튀었다.
+## ⚠ 세87까지 이 주석은 *"id 오름차순"*이라고 **선언만** 하고 있었다 — 거짓 주석이었다(감사 T4).
+## → `String()`으로 감싸 **명시적 사전순**으로 잰다. `test_workshop_auto`가 이 순서를 잰다.
 func all_recipes() -> Array[RecipeDef]:
 	var out: Array[RecipeDef] = []
 	var keys := recipes.keys()
-	keys.sort()
+	keys.sort_custom(func(a: StringName, b: StringName) -> bool: return String(a) < String(b))
 	for k: StringName in keys:
 		out.append(recipes[k])
 	return out
@@ -181,11 +186,14 @@ func paper_zoom_max(id: StringName, fallback: float) -> float:
 func get_quest(id: StringName) -> QuestDef:
 	return quests.get(id) as QuestDef
 
-## 퀘스트 목록 — id 오름차순 (사슬 순서 = id 순. q01·q02… 로 이름 지어 스파인 순서를 낸다).
+## 퀘스트 목록 — **id 사전순** (사슬 순서 = id 순. q01·q02… 로 이름 지어 스파인 순서를 낸다).
+## 🔴 `all_recipes`와 **같은 이유로** `sort_custom`이다(세88): `StringName.sort()`는 인터닝 순이라
+## 실행마다 흔들린다 — 여기선 그게 **퀘스트 스파인이 뒤섞여 보이는** 형태로 나온다.
+## 주석이 「사슬 순서」를 계약으로 선언하고 있었으니 정렬이 그 선언을 실제로 지켜야 한다.
 func all_quests() -> Array[QuestDef]:
 	var out: Array[QuestDef] = []
 	var keys := quests.keys()
-	keys.sort()
+	keys.sort_custom(func(a: StringName, b: StringName) -> bool: return String(a) < String(b))
 	for k: StringName in keys:
 		out.append(quests[k])
 	return out

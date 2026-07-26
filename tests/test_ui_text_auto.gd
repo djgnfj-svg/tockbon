@@ -53,6 +53,8 @@ func _run() -> void:
 	_test_display_goes_through_runes_of()
 	_test_rune_slot_positions_single_source()
 	_test_item_text_single_source()
+	_test_codex_text_resolver()
+	_test_material_progress_single_source()
 	_test_quest_row_cap()
 	_test_grid_row_cap()
 	await _test_say_expires()
@@ -171,6 +173,71 @@ func _test_item_text_single_source() -> void:
 		_check(not src.contains("func _effect_text") and not src.contains("func _wand_pattern_text") \
 			and not src.contains("func _pattern_label"),
 			"🔴 %s 에 문구 사본이 다시 안 생겼다" % path.get_file())
+
+
+## [5b] 🔴🔴 codex 해금물 문구 단일 소스 (`CodexText` — 세88 사냥 흐름 S4).
+##
+## 왜 생겼나: `boss_room`이 **`Db.get_glyph_ring()` 하나만** 불렀다. 챕터 보상이 고리뿐일 때는
+## 맞았지만 세88에 보상이 **룬**으로 바뀌자 두 겹으로 틀린 문구가 됐다 —
+##   ① `glyph_rings.get()`이 null이라 폴백이 걸려 **원시 id가 화면에 노출**("보상: rune_water")
+##   ② 안내가 *"책상에서 밴드에 끼워라"* 고정 → **밴드는 고리 자리인데 룬을 거기 끼우라**는 거짓 지시
+## 발신처가 셋(보스 클리어·공방 제작·두루마리 픽업)이라 각자 조회를 복제하면 감사 T5 재발이다.
+##
+## 🔴 **종류마다 안내가 실제로 갈리는지**가 이 그물의 핵심이다 — 셋이 같은 문구면 리졸버가
+## 있으나 마나다(룬=중심 · 진=바탕 · 고리=밴드).
+func _test_codex_text_resolver() -> void:
+	print("[5b] codex 해금물 이름·안내 단일 소스 (CodexText)")
+	var CT = load("res://src/core/codex_text.gd")
+	# 세 종류가 각자 자기 카탈로그에서 나온다. ⚠ 룬은 `Db.get_rune(type)`이 **타입 키**라
+	# 조회 방향이 다르다 — `Enums.RUNE_TYPES` 순회로 찾는다(값이 연속이 아니라 range 금지).
+	var cases := [[&"rune_fire", CT.KIND_RUNE], [&"jin_single", CT.KIND_JIN], [&"gr_radiate5", CT.KIND_RING]]
+	for c: Array in cases:
+		var uid: StringName = c[0]
+		_check(CT.kind_of(uid) == c[1], "%s 종류 == %s (실제 %s)" % [uid, c[1], CT.kind_of(uid)])
+		var nm: String = CT.name_of(uid)
+		_check(nm != "" and nm != String(uid), "%s 이름이 원시 id 폴백이 아니다 (실제 %s)" % [uid, nm])
+		var lbl: String = CT.label_of(uid)
+		_check(lbl.contains(nm) and lbl.contains(CT.hint_of(uid)), "%s label = 이름(안내) (실제 %s)" % [uid, lbl])
+	# 🔴 안내가 종류마다 **다르다** — 여기가 「거짓 지시」를 막는 자리다.
+	var hints := {}
+	for k: StringName in [CT.KIND_RUNE, CT.KIND_JIN, CT.KIND_RING]:
+		var h: String = CT.hint_for_kind(k)
+		_check(h != "", "%s 안내가 있다" % k)
+		hints[h] = true
+	_check(hints.size() == 3, "종류 셋의 안내가 서로 다르다 (서로 다른 문구 %d개)" % hints.size())
+	_check(CT.hint_for_kind(CT.KIND_RUNE).contains("중심"), "룬은 **중심** 자리를 가르친다 (밴드가 아니다)")
+	_check(CT.hint_for_kind(CT.KIND_RING).contains("밴드"), "고리는 **밴드** 자리를 가르친다")
+	# 🔴 세88 챕터 보상 3종이 전부 리졸버에 걸리나 — 하나라도 새면 그 챕터 클리어 문구가 거짓이 된다.
+	for rid: StringName in [&"rune_water", &"rune_wind", &"rune_grass"]:
+		_check(CT.kind_of(rid) == CT.KIND_RUNE, "보상 %s를 리졸버가 룬으로 찾는다" % rid)
+	# 🔴 **획득물이 아닌 codex 키**도 `codex_unlocked`로 온다 — 문장을 만들면 화면에
+	# "chapter_clear_ch1 획득!"이 뜬다. 빈 문자열이 정답이고 호출부가 "" 검사로 넘긴다.
+	_check(CT.kind_of(&"chapter_clear_ch1") == &"", "챕터 클리어 키는 획득물이 아니다")
+	_check(CT.acquired_line(&"chapter_clear_ch1") == "",
+		"획득물 아닌 키엔 획득 문장을 안 만든다 (실제 '%s')" % CT.acquired_line(&"chapter_clear_ch1"))
+	_check(CT.acquired_line(&"gr_radiate5") != "", "획득물엔 문장을 만든다")
+
+
+## [5c] 🔴 재료 진행 표시 `보유/필요` 단일 소스 (`ItemText.count_text` — 세88 §7-F-b).
+##
+## 공방·정제대가 **글자까지 같은 사본**을 각자 들고 있었고 **둘 다 인자가 거꾸로**였다:
+## 주석은 *"재료(보유/필요)"*라고 선언하는데 코드는 `[name, need, have]`라, 5개 필요한데 3개
+## 가졌으면 **「슬라임 핵 5/3」**으로 찍혔다(진행 막대 관례와 반대). 공방만 고치면 정제대가
+## 계속 거꾸로 남는다 = 감사 T5의 정확한 재현이라 core로 뽑았다.
+## 🔴 **스캔형**이라 네 번째 사본이 생기면 그때 빨개진다.
+func _test_material_progress_single_source() -> void:
+	print("[5c] 재료 진행 `보유/필요` 단일 소스 (ItemText.count_text)")
+	var it = load("res://src/core/item_text.gd")
+	_check(it.count_text("핵", 3, 5) == "핵 3/5",
+		"보유가 먼저다 (실제 %s — '핵 5/3'이면 인자가 거꾸로다)" % it.count_text("핵", 3, 5))
+	for path in ["res://src/base/workshop_panel.gd", "res://src/base/refine_panel.gd"]:
+		var f = FileAccess.open(path, FileAccess.READ)
+		var src = f.get_as_text() if f != null else ""
+		_check(src != "", "%s 를 읽었다" % path)
+		_check(src.contains("count_text"),
+			"🔴 %s 가 ItemText.count_text를 부른다 (자기 포맷을 다시 쓰지 않는다)" % path.get_file())
+		_check(not src.contains("%s %d/%d"),
+			"🔴 %s 에 진행 표시 사본이 다시 안 생겼다" % path.get_file())
 
 
 ## [6] 🔴 퀘스트 탭 행 캡 (감사 #35) — q00~q05 여섯이 길잡이 대화 한 번에 연쇄 완료되면 6행이

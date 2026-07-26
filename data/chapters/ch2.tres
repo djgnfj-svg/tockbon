@@ -1,6 +1,62 @@
-[gd_resource type="Resource" script_class="ChapterDef" format=3]
+[gd_resource type="Resource" script_class="ChapterDef" load_steps=14 format=3]
 
 [ext_resource type="Script" path="res://src/core/schemas/chapter_def.gd" id="1"]
+[ext_resource type="Script" path="res://src/core/schemas/mob_spawn.gd" id="2"]
+
+[sub_resource type="Resource" id="mob1"]
+script = ExtResource("2")
+enemy_id = &"mist"
+position = Vector2(-420, 480)
+
+[sub_resource type="Resource" id="mob2"]
+script = ExtResource("2")
+enemy_id = &"mist"
+position = Vector2(380, 350)
+
+[sub_resource type="Resource" id="mob3"]
+script = ExtResource("2")
+enemy_id = &"mist"
+position = Vector2(0, 400)
+
+[sub_resource type="Resource" id="mob4"]
+script = ExtResource("2")
+enemy_id = &"slime"
+position = Vector2(-650, 250)
+
+[sub_resource type="Resource" id="mob5"]
+script = ExtResource("2")
+enemy_id = &"slime"
+position = Vector2(600, 200)
+
+[sub_resource type="Resource" id="mob6"]
+script = ExtResource("2")
+enemy_id = &"mist"
+position = Vector2(-300, -300)
+
+[sub_resource type="Resource" id="mob7"]
+script = ExtResource("2")
+enemy_id = &"mist"
+position = Vector2(350, -450)
+
+[sub_resource type="Resource" id="mob8"]
+script = ExtResource("2")
+enemy_id = &"vine"
+position = Vector2(-620, -180)
+
+[sub_resource type="Resource" id="mob9"]
+script = ExtResource("2")
+enemy_id = &"vine"
+position = Vector2(640, -250)
+
+[sub_resource type="Resource" id="mob10"]
+script = ExtResource("2")
+enemy_id = &"hound"
+position = Vector2(-280, -1000)
+
+[sub_resource type="Resource" id="mob11"]
+script = ExtResource("2")
+enemy_id = &"hound"
+position = Vector2(300, -1100)
 
 [resource]
 script = ExtResource("1")
@@ -9,5 +65,7 @@ order = 2
 title = "바람 드는 곳"
 boss_enemy_id = &"gale"
 boss_scene_path = ""
-boss_spawn = Vector2(0, -260)
+boss_spawn = Vector2(0, -1350)
 room_ground_color = Color(0.11, 0.18, 0.17, 1.0)
+mob_spawns = Array[ExtResource("2")]([SubResource("mob1"), SubResource("mob2"), SubResource("mob3"), SubResource("mob4"), SubResource("mob5"), SubResource("mob6"), SubResource("mob7"), SubResource("mob8"), SubResource("mob9"), SubResource("mob10"), SubResource("mob11")])
+reward_unlock = &"rune_wind"

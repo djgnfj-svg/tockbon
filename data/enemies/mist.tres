@@ -10,6 +10,20 @@ chance = 1.0
 min_count = 2
 max_count = 3
 
+[sub_resource type="Resource" id="Resource_mat"]
+script = ExtResource("1_ed26q")
+item_id = &"mat_mist_essence"
+chance = 0.3
+min_count = 1
+max_count = 1
+
+[sub_resource type="Resource" id="Resource_scroll"]
+script = ExtResource("1_ed26q")
+chance = 0.02
+min_count = 1
+max_count = 1
+unlock_id = &"gr_spread3"
+
 [resource]
 script = ExtResource("2_6m5mh")
 id = &"mist"
@@ -32,4 +46,4 @@ params = {
 "size": 1.0,
 "weakness_mult": 2.0
 }
-drops = Array[ExtResource("1_ed26q")]([SubResource("Resource_coin")])
+drops = Array[ExtResource("1_ed26q")]([SubResource("Resource_coin"), SubResource("Resource_mat"), SubResource("Resource_scroll")])

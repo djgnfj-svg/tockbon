@@ -35,6 +35,26 @@ const GATES := {}
 ## 관문 조각을 잃은(랜덤 은퇴) 잡몹 3종 — fragment 줄이 아예 없어야 한다.
 const RETIRED := [&"vine", &"beetle", &"mist"]
 
+## 🔴🔴 잡몹 재료 드롭표 (세88 사냥 흐름 §3-B-1) — `적: [재료 id, …]`를 **명시로 박는다.**
+## 세87까지 잡몹 5종은 **전부 `coin`만** 떨궜다(재료 `ItemDef` 7종은 이미 있었는데 아무도 안 떨궜다 —
+## 전형적인 「부품은 배선됐는데 빈 칸」). 그게 *"잡아도 얻는 게 없다"*의 데이터상 실체였다.
+## ⚠ 확률·수량은 F5 튜닝값이라 **안 잰다** — 「그 재료가 그 적에게 붙어 있나」만 잰다.
+const MOB_MATERIALS := {
+	&"slime": [&"mat_slime_core"],
+	&"mist": [&"mat_mist_essence"],
+	&"beetle": [&"mat_beetle_shell"],
+	&"vine": [&"mat_vine", &"mat_night_bloom"],
+	&"hound": [&"mat_hound_fang"],
+}
+
+## 🔴 두루마리 보너스 드롭 (§3-B-2) — **대역마다 다른 고리**를 떨군다(어귀·중간·깊은).
+## 이게 「깊이 들어갈 이유」의 살(뼈대는 재료→제작). 셋이 같은 고리면 대역 설계가 무의미해진다.
+const MOB_SCROLLS := {
+	&"slime": &"gr_spread3", &"mist": &"gr_spread3",
+	&"beetle": &"gr_gather3", &"vine": &"gr_gather3",
+	&"hound": &"gr_explode1",
+}
+
 ## 🔴 적 .tres 전수 스캔 (세84) — 파일명 == `id`가 규약이라 스캔한 파일명으로 Db를 조회한다.
 ## 기대치를 **명시 숫자로도** 박는다: 스캔만 하면 「폴더가 통째로 비어도 0/0 통과」가 되기 때문.
 ## 적을 더하면(또는 hound를 접으면) 이 숫자를 같이 고친다 = 그게 그물의 값이다.
@@ -73,6 +93,7 @@ func _run() -> void:
 	current_scene = _container
 
 	_test_db_loads()
+	_test_mob_drop_tables()
 	await _test_locked_guaranteed_drop()
 	await _test_unlocked_stops_drop()
 	_test_gate_invariants()
@@ -134,6 +155,68 @@ func _test_db_loads() -> void:
 ## [2] 단독으로 붉는다 (chance 1.0인 채로는 확률 폴백도 항상 떨어져 검출력 0 — 세58 리뷰).
 ## ⚠ Db의 DropEntry는 공유 리소스다 — 끝에 chance 원상복구 필수.
 ## 🔴 세61: 실데이터 관문 줄이 0이라 **in-memory DropEntry를 slime_elite에 주입**해서 기계를 잰다
+## 🔴🔴 잡몹 재료·두루마리 드롭표가 `.tres`에 실제로 붙어 있나 (세88 사냥 흐름 §3-B-1·§3-B-2).
+##
+## 세87까지 잡몹 5종은 전부 `coin`만 떨궜고 **그걸 재는 그물이 0개**였다. 재료 7종·고리 3종은
+## 이미 있었으니 「스캔이 돌았다」류 검사로는 아무것도 안 잡힌다 — 그래서 **어느 적이 무엇을**
+## 떨구는지를 표로 박는다(MOB_MATERIALS·MOB_SCROLLS).
+##
+## 🔴 여기서 잡는 조용한 고장 넷:
+##   ① 재료 줄이 아예 빠졌다(= 세87 상태로 회귀)
+##   ② `item_id` 오타 → `Db`에 없는 아이템 → 픽업이 마름모 폴백(세54 위반)으로 떨어진다
+##   ③ 두루마리 `unlock_id` 오타 → 주워도 **아무것도 안 열리는데 에러가 없다**
+##   ④ `unlock_id`와 `until_unlock`을 **같은 줄에 병용** → `_roll_drops`가 `chance`를 통째로 무시해
+##      0.02 보너스가 **모든 잡몹 확정 드롭**이 된다(축이 반대라 병용 금지 — DropEntry 주석)
+## ⚠ 확률·수량은 F5 튜닝값이라 **일부러 안 잰다** — 조이면 거짓 빨강이 될 뿐이다(세79 교훈).
+func _test_mob_drop_tables() -> void:
+	print("[1b] 잡몹 재료·두루마리 드롭표 (세88 — 그전엔 전부 coin만 떨궜다)")
+	var CT: GDScript = load("res://src/core/codex_text.gd")
+	for mob: StringName in MOB_MATERIALS:
+		var def = _db.get_enemy(mob)
+		if def == null:
+			_check(false, "%s가 Db에 있다" % mob)
+			continue
+		var items := {}
+		var unlocks := {}
+		for drop in def.drops:
+			if drop.unlock_id != &"":
+				unlocks[drop.unlock_id] = true
+				# ④ 병용 금지 — 이 조합은 확률을 죽인다.
+				_check(drop.until_unlock == &"",
+					"%s: 두루마리 줄에 until_unlock을 병용하지 않았다 (병용하면 확정 드롭이 된다)" % mob)
+			if drop.item_id != &"":
+				items[drop.item_id] = true
+		# ① 재료가 붙어 있나 · ② 그 아이템이 Db에 실재하나
+		for mat: StringName in MOB_MATERIALS[mob]:
+			_check(items.has(mat), "%s가 %s를 떨군다" % [mob, mat])
+			_check(_db.get_item(mat) != null,
+				"%s는 Db에 실재하는 아이템이다 (없으면 픽업이 마름모 폴백 = 세54 위반)" % mat)
+		# ③ 두루마리 고리가 붙어 있고, 실재하는 **고리**인가
+		var want_scroll: StringName = MOB_SCROLLS[mob]
+		_check(unlocks.has(want_scroll), "%s가 두루마리 %s를 떨군다" % [mob, want_scroll])
+		_check(CT.kind_of(want_scroll) == CT.KIND_RING,
+			"%s는 실재하는 문양-고리다 (리졸버 판정 '%s' — 오타면 주워도 아무것도 안 열린다)"
+			% [want_scroll, CT.kind_of(want_scroll)])
+	# 🔴 `mat_night_bloom`은 세87까지 **떨구는 적이 0곳**인 유령이었다(소비자 없는 데이터).
+	# 융합진 레시피가 이걸 3개 요구하므로 생산자가 사라지면 그 레시피가 조용히 도달 불가가 된다.
+	var bloom_sources := 0
+	for mob2: StringName in MOB_MATERIALS:
+		var d2 = _db.get_enemy(mob2)
+		if d2 == null:
+			continue
+		for drop2 in d2.drops:
+			if drop2.item_id == &"mat_night_bloom":
+				bloom_sources += 1
+	_check(bloom_sources >= 1,
+		"mat_night_bloom 생산자가 ≥1곳 (실제 %d — 0이면 융합진 레시피가 도달 불가)" % bloom_sources)
+	# 🔴 대역이 실제로 갈렸나 — 셋이 같은 고리면 「깊이 들어갈 이유」가 사라진다.
+	var distinct := {}
+	for mob3: StringName in MOB_SCROLLS:
+		distinct[MOB_SCROLLS[mob3]] = true
+	_check(distinct.size() == 3,
+		"두루마리가 대역마다 다른 고리다 (서로 다른 고리 %d종)" % distinct.size())
+
+
 ## (Db 딕셔너리·EnemyDef.drops는 평범한 컨테이너다 — 끝나면 제거). 조각 ItemDef도 같이 주입한다
 ## (루팅 패널이 Db.get_item으로 이름을 찾는다). 관문을 되살리면 실데이터 검증으로 되돌려도 된다.
 func _test_locked_guaranteed_drop() -> void:

@@ -1,4 +1,4 @@
-[gd_scene load_steps=9 format=3 uid="uid://c0field03bossroom"]
+[gd_scene load_steps=11 format=3 uid="uid://c0field03bossroom"]
 
 [ext_resource type="Script" path="res://src/field/boss_room.gd" id="1_room"]
 [ext_resource type="PackedScene" uid="uid://s4r8t5nlu1i8" path="res://src/actors/player.tscn" id="2_player"]
@@ -8,15 +8,19 @@
 [ext_resource type="PackedScene" uid="uid://xyskn5r7jetn" path="res://src/props/tree.tscn" id="6_tree"]
 [ext_resource type="TileSet" path="res://assets/sprites/field/tileset_forest.tres" id="7_tileset"]
 [ext_resource type="Texture2D" uid="uid://tpkchxq4kttn" path="res://assets/light_soft.tres" id="8_light"]
+[ext_resource type="Script" path="res://src/actors/interact_zone.gd" id="9_zone"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_exit"]
+size = Vector2(120, 110)
 
 [node name="BossRoom" type="Node2D"]
 script = ExtResource("1_room")
 
 [node name="Ground" type="ColorRect" parent="."]
-offset_left = -600.0
-offset_top = -700.0
-offset_right = 600.0
-offset_bottom = 340.0
+offset_left = -1200.0
+offset_top = -1500.0
+offset_right = 1200.0
+offset_bottom = 700.0
 mouse_filter = 2
 color = Color(0.13, 0.19, 0.14, 1)
 
@@ -24,7 +28,7 @@ color = Color(0.13, 0.19, 0.14, 1)
 tile_set = ExtResource("7_tileset")
 
 ; 밝게 유지 + 조명만 (세73): 앰비언트를 살짝만 눌러(여전히 밝음) 빛 웅덩이가 대비로 읽히게 한다.
-; 플레이어 아우라(player.tscn)가 중앙을, 아래 횃불 4개가 가장자리를, 강조광이 보스 쪽을 밝힌다.
+; 플레이어 아우라(player.tscn)가 중앙을, 아래 횃불 8개가 남북 네 대역을, 강조광이 보스 쪽을 밝힌다.
 ; ⚠ 씬 .tscn 주석은 에디터 저장 시 날아간다 — 이 설명의 정본은 boss_room.gd 상단 주석 블록.
 [node name="Dusk" type="CanvasModulate" parent="."]
 color = Color(0.85, 0.84, 0.93, 1)
@@ -32,35 +36,63 @@ color = Color(0.85, 0.84, 0.93, 1)
 [node name="Lights" type="Node2D" parent="."]
 
 [node name="Torch1" type="PointLight2D" parent="Lights"]
-position = Vector2(-430, -430)
+position = Vector2(-500, 450)
 color = Color(1, 0.68, 0.38, 1)
 energy = 0.9
 texture = ExtResource("8_light")
 texture_scale = 1.7
 
 [node name="Torch2" type="PointLight2D" parent="Lights"]
-position = Vector2(430, -430)
+position = Vector2(500, 450)
 color = Color(1, 0.68, 0.38, 1)
 energy = 0.9
 texture = ExtResource("8_light")
 texture_scale = 1.7
 
 [node name="Torch3" type="PointLight2D" parent="Lights"]
-position = Vector2(-450, 120)
+position = Vector2(-500, -150)
 color = Color(1, 0.68, 0.38, 1)
 energy = 0.9
 texture = ExtResource("8_light")
 texture_scale = 1.7
 
 [node name="Torch4" type="PointLight2D" parent="Lights"]
-position = Vector2(450, 120)
+position = Vector2(500, -150)
+color = Color(1, 0.68, 0.38, 1)
+energy = 0.9
+texture = ExtResource("8_light")
+texture_scale = 1.7
+
+[node name="Torch5" type="PointLight2D" parent="Lights"]
+position = Vector2(-500, -750)
+color = Color(1, 0.68, 0.38, 1)
+energy = 0.9
+texture = ExtResource("8_light")
+texture_scale = 1.7
+
+[node name="Torch6" type="PointLight2D" parent="Lights"]
+position = Vector2(500, -750)
+color = Color(1, 0.68, 0.38, 1)
+energy = 0.9
+texture = ExtResource("8_light")
+texture_scale = 1.7
+
+[node name="Torch7" type="PointLight2D" parent="Lights"]
+position = Vector2(-500, -1300)
+color = Color(1, 0.68, 0.38, 1)
+energy = 0.9
+texture = ExtResource("8_light")
+texture_scale = 1.7
+
+[node name="Torch8" type="PointLight2D" parent="Lights"]
+position = Vector2(500, -1300)
 color = Color(1, 0.68, 0.38, 1)
 energy = 0.9
 texture = ExtResource("8_light")
 texture_scale = 1.7
 
 [node name="BossGlow" type="PointLight2D" parent="Lights"]
-position = Vector2(0, -520)
+position = Vector2(0, -1350)
 color = Color(0.6, 0.72, 1, 1)
 energy = 0.7
 texture = ExtResource("8_light")
@@ -69,31 +101,90 @@ texture_scale = 2.3
 [node name="Trees" type="Node2D" parent="."]
 
 [node name="Tree1" parent="Trees" instance=ExtResource("6_tree")]
-position = Vector2(-500, -580)
+position = Vector2(-1080, 560)
 
 [node name="Tree2" parent="Trees" instance=ExtResource("6_tree")]
-position = Vector2(500, -540)
+position = Vector2(-920, 210)
 
 [node name="Tree3" parent="Trees" instance=ExtResource("6_tree")]
-position = Vector2(-540, -120)
+position = Vector2(-1120, -170)
 
 [node name="Tree4" parent="Trees" instance=ExtResource("6_tree")]
-position = Vector2(540, -180)
+position = Vector2(-950, -560)
 
 [node name="Tree5" parent="Trees" instance=ExtResource("6_tree")]
-position = Vector2(-480, 220)
+position = Vector2(-1100, -930)
 
 [node name="Tree6" parent="Trees" instance=ExtResource("6_tree")]
-position = Vector2(490, 250)
+position = Vector2(-930, -1300)
 
 [node name="Tree7" parent="Trees" instance=ExtResource("6_tree")]
-position = Vector2(-220, -640)
+position = Vector2(1060, 600)
 
 [node name="Tree8" parent="Trees" instance=ExtResource("6_tree")]
-position = Vector2(260, -650)
+position = Vector2(940, 230)
+
+[node name="Tree9" parent="Trees" instance=ExtResource("6_tree")]
+position = Vector2(1130, -150)
+
+[node name="Tree10" parent="Trees" instance=ExtResource("6_tree")]
+position = Vector2(960, -540)
+
+[node name="Tree11" parent="Trees" instance=ExtResource("6_tree")]
+position = Vector2(1090, -920)
+
+[node name="Tree12" parent="Trees" instance=ExtResource("6_tree")]
+position = Vector2(950, -1310)
+
+[node name="Tree13" parent="Trees" instance=ExtResource("6_tree")]
+position = Vector2(-150, 120)
+
+[node name="Tree14" parent="Trees" instance=ExtResource("6_tree")]
+position = Vector2(170, 60)
+
+[node name="Tree15" parent="Trees" instance=ExtResource("6_tree")]
+position = Vector2(-140, -700)
+
+[node name="Tree16" parent="Trees" instance=ExtResource("6_tree")]
+position = Vector2(200, -700)
+
+[node name="Tree17" parent="Trees" instance=ExtResource("6_tree")]
+position = Vector2(-480, -780)
+
+[node name="Tree18" parent="Trees" instance=ExtResource("6_tree")]
+position = Vector2(500, -740)
+
+[node name="Tree19" parent="Trees" instance=ExtResource("6_tree")]
+position = Vector2(-230, 620)
+
+[node name="Tree20" parent="Trees" instance=ExtResource("6_tree")]
+position = Vector2(250, 640)
+
+; 남쪽 상시 귀환 출구 (세88) — 🔴 zone_id는 &"exit"다. &"portal"을 주면 「처치 전엔 포탈이 없다」
+; 계약(test_chapter_auto)이 빨개진다 — 포탈은 여전히 보스 처치 후에만 뜬다.
+; 물리는 portal.tscn과 같게(layer 64 interaction / mask 2 player) — 1(world)에 두면 캐리어가 터진다.
+; 겉모습은 배경이 담당한다(보라색 차원문 Polygon2D를 베끼지 않는다) — boss_room.gd의 `_fill_tiles`가
+; 여기서 파생한 풀길을 깔아 "마을로 걸어 나가는 길"로 읽히게 한다.
+[node name="Exit" type="Area2D" parent="."]
+position = Vector2(0, 660)
+collision_layer = 64
+collision_mask = 2
+script = ExtResource("9_zone")
+zone_id = &"exit"
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Exit"]
+shape = SubResource("RectangleShape2D_exit")
+
+[node name="Prompt" type="Label" parent="Exit"]
+offset_left = -80.0
+offset_top = -78.0
+offset_right = 80.0
+offset_bottom = -56.0
+text = "[E] 마을로 돌아간다"
+horizontal_alignment = 1
 
 [node name="Player" parent="." instance=ExtResource("2_player")]
-position = Vector2(0, 240)
+position = Vector2(0, 600)
 
 [node name="RingSpellSystem" parent="." instance=ExtResource("3_spell")]
 z_index = 10

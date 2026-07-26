@@ -3,10 +3,15 @@ extends Node2D
 ## ⚠ 아래에서 「forest.gd·forest.tscn 이관」으로 부르는 두 파일은 **세58-B에 삭제됐다**
 ## (찾지 마라 — 필요하면 git 이력). **원정 계약의 라이브 정본은 이 파일이다.**
 ##
-## 루프: 베이스 숲길 [E] → 챕터 선택 → 이 방(보스 + 잡몹) → 처치 → 낱개 드롭 줍기 → 포탈 [E] → 베이스.
+## 루프: 베이스 숲길 [E] → 챕터 선택 → 이 방(보스 + 잡몹) → 처치 → 낱개 드롭 줍기 → 귀환 [E] → 베이스.
 ## ⚠ 「상자 루팅」 단계는 없다 — 상자는 세66에 은퇴했고 모든 적이 낱개로 떨군다(`forest_enemy._spawn_loose`).
 ## 죽으면 즉시 베이스 + 가방 손실(bag_lost). 어느 챕터인가는 `GameState.pending_chapter`가 나른다
 ## (change_scene_to_file이 인자를 못 실어 오토로드가 나른다 — in_expedition과 같은 결).
+##
+## 🔴 **나가는 길은 둘이고 둘 다 `_extract`로 간다** (세88 반복 사냥터):
+##  • **남쪽 출구**(`zone_id = &"exit"`, 씬에 상시 존재) — **언제든** 나갈 수 있다.
+##  • **보스 자리 포탈**(`zone_id = &"portal"`, 처치 후 스폰) — 보스를 잡은 자리에서 남쪽까지
+##    먼 길을 되돌아가지 않게 하는 지름길이다. 「처치 후에만」은 아직 살아있는 계약이다.
 ##
 ## 🔴 **한 씬 + ChapterDef 파라미터다** — 챕터별 씬 3장을 만들지 않는다(설계 확정). 방 구성이
 ## 동일(바닥·보스 하나·입구)하고 다른 건 데이터(보스·색)뿐이라, 씬을 늘리면 mouse_filter·z_index·
@@ -22,8 +27,16 @@ extends Node2D
 ##    절대 못 잡는다** (세25 베이스·세26 숲이 정확히 이걸로 밟았다 — 새 씬마다 되살아나는 함정).
 ##  • `RingSpellSystem.z_index = 10` — 안 올리면 날아가는 진·탄·기둥이 Ground(z=0) 뒤에 가려 안 보인다.
 ##  • 나무는 **물리 없는 장식**(tree.tscn) — StaticBody2D로 만들면 world 레이어라 캐리어(마스크 5)가
-##    나무마다 터진다.
-##  • 방 크기 ≈1200×1040 단칸 — gale hover_max 170·snake rush 240이 돌아갈 최소 폭. 씬에서 튜닝.
+##    나무마다 터진다. ⚠ 그래서 충돌은 안 나지만 **적을 가린다** — 나무 20그루는 세 규칙으로 놓았다:
+##    ⓐ 잡몹·보스 스폰(`ChapterDef.mob_spawns` + `boss_spawn`)에서 **100px 이상**
+##    ⓑ 플레이어 스폰·남쪽 출구에서 **150px 이상**(시작 시야·[E] 찾기)
+##    ⓒ 어귀·중간·깊은 대역에 고르게. 🔴 **정본은 `data/chapters/*.tres`의 `position`이다**(설계
+##    문서 §13-2 표와 이미 갈라져 있다) — 옮길 땐 `scratch_dev_room.md` §5-ⓓ 스크립트로 재검산해라.
+##  • 방 크기 **2400×2200**(x −1200~1200 · y −1500~700, 세88에 1200×1040에서 키웠다) — 세로로 긴
+##    이유는 남쪽 입구(플레이어 스폰 y=+600)에서 북쪽 보스(y=−1350)까지 「깊이 들어간다」가 이동으로
+##    읽히게. 구역(어귀·중간·깊은)은 **코드 개념이 아니라 `mob_spawns` y좌표 관례**다 — 새 스키마 0.
+##  • 횃불 8개(x=∓500 · y ∈ {+450,−150,−750,−1300}) + BossGlow(0,−1350). 4개로는 4.4배 방의
+##    3/4이 어둡다.
 ##
 ## 🔴 바닥 타일은 `_ready`가 코드로 깐다 — .tscn에 tile_map_data 베이스64를 손으로 굳히면
 ## 방 크기를 바꿀 때마다 에디터로 다시 칠해야 한다. Ground rect에서 셀 범위를 파생시켜 늘 맞는다.
@@ -34,9 +47,19 @@ const Hud := preload("res://src/hud/hud.gd")
 ## 범용 보스 스폰 몸 — ChapterDef.boss_scene_path가 비면 이 씬 + enemy_id로 스폰한다.
 ## preload가 안전한 이유: forest_enemy는 boss_room을 안 문다 (base⇄forest 순환 함정 무관).
 const EnemyScene := preload("res://src/field/forest_enemy.tscn")
-## 귀환 포탈 — 기존 portal.tscn 재사용(신규 프롭 0). 보스를 잡아야 스폰되므로 씬에 미리 안 놓는다
-## (미리 놓으면 "안 잡고 나가기"가 공짜가 된다). Prompt 문구는 세44 프롭 계약대로 부모가 덮는다.
+## 귀환 포탈 — 기존 portal.tscn 재사용(신규 프롭 0). Prompt 문구는 세44 프롭 계약대로 부모가 덮는다.
+##
+## 🔴 **왜 처치 후에만 스폰하나 — 근거가 세88에 바뀌었다.** 예전 주석은 *"미리 있으면 안 잡고
+## 나가기가 공짜가 된다"*였는데, 지금은 **남쪽 출구(`&"exit"`)로 언제든 나갈 수 있다** — 반복
+## 사냥터가 되려면 그래야 하고, 잡몹만 잡고 나가는 건 **재료만 얻고 확정 보상(`reward_unlock`)은
+## 못 얻는** 것이라 공짜가 아니다. 이 포탈이 남은 이유는 **보스 자리에서 남쪽까지 되돌아가는 먼
+## 길을 덜어 주는 지름길**이다. ⚠ 그래도 씬에 미리 놓지 마라 — `test_chapter_auto`가 「처치 전엔
+## `portal`이 없다」를 재고 있고, 그건 아직 살아있는 계약이다(재방문 때도 매번 다시 뜬다).
 const PortalScene := preload("res://src/props/portal.tscn")
+## 🔴 codex 해금 id → 「이름(어디에 쓰는지)」 단일 소스 (세87 S4). 여기서 `Db.get_glyph_ring` 하나만
+## 부르면 **룬 보상이 원시 id + 거짓 안내**("rune_water(책상에서 밴드에 끼워라)")로 나간다 —
+## 밴드는 고리 자리고 룬은 중심 자리다. 발신처가 셋(클리어·제작·두루마리)이라 core에 뽑혀 있다.
+const CodexText := preload("res://src/core/codex_text.gd")
 
 ## 돌아갈 곳 — 🔴 **PackedScene이 아니라 경로다. 바꾸지 마라.** base가 boss_room을 경로로 물고
 ## boss_room이 base를 PackedScene으로 물면 **순환 preload**로 한쪽이 노드 0개 껍데기가 돼
@@ -48,8 +71,21 @@ const DEATH_BEAT_SEC := 0.9
 ## 귀환 포탈이 보스가 죽은 자리에서 비켜 서는 거리 — 보스 자리에 흩어지는 낱개 드롭과 안 겹치게 (연출값).
 const PORTAL_OFFSET := Vector2(88.0, 0.0)
 
+## 타일 소스 (assets/sprites/field/tileset_forest.tres): 0 = 풀(마을 쪽), 1 = 보스방 어두운 바닥.
+const TILE_SRC_GRASS := 0
+const TILE_SRC_FLOOR := 1
+## 남쪽 출구로 이어지는 풀길 (칸 수 — 연출값). 어두운 숲 바닥에 마을 쪽 풀 타일을 깔아 **걸어가 보기
+## 전에도** "저기가 나가는 길"로 읽히게 한다(출구 자체는 겉모습이 없는 InteractZone이다 — 보라색
+## 차원문 Polygon2D를 베끼지 않기로 한 결정). 🔴 **길의 중심 x는 `Exit` 노드에서 파생한다** — 좌표를
+## 두 번 적으면 출구를 옮길 때 길만 제자리에 남는다. 끄려면 `EXIT_PATH_ROWS = 0`.
+const EXIT_PATH_WIDTH_CELLS := 3
+const EXIT_PATH_ROWS := 3
+
 @onready var _ground: ColorRect = $Ground
 @onready var _tiles: TileMapLayer = $TileGround
+## 🔴 남쪽 상시 귀환 출구 (세88) — 씬에 미리 있다. `zone_id = &"exit"`이고 `&"portal"`이 아닌 이유는
+## PortalScene 위 주석에 있다.
+@onready var _exit: InteractZone = $Exit
 @onready var _player: Player = $Player
 @onready var _hud: Hud = $Hud/Hud
 
@@ -72,6 +108,9 @@ func _ready() -> void:
 	_player.caster.notice.connect(_hud.say)
 	_player.caster.slot_changed.connect(_hud.select)
 	_hud.select(_player.caster.slot())
+	# 🔴 남쪽 출구도 **포탈과 같은 `_extract`로** 간다 — 여기 안 이으면 E가 먹히는데 아무 일도 안
+	# 일어나고(안내만 뜬다), 가방이 창고로 안 가고 자동 저장도 안 돈다(에러 없이).
+	_exit.interacted.connect(_extract)
 	EventBus.player_hp_changed.connect(_on_hp_changed)
 	EventBus.enemy_died.connect(_on_enemy_died)
 	# 목표 달성 넛지 (세40 턴인 — forest 선례): 완료가 아니라 정산 대기라 quest_ready를 듣는다.
@@ -103,15 +142,21 @@ func _ready() -> void:
 
 
 ## 바닥 타일을 Ground rect에 맞춰 깐다 — 챕터 분위기 틴트(room_ground_color)는 Ground(ColorRect)가
-## 가장자리로 내보이고, 타일은 보스방 전용 어두운 바닥(source 1 = tile_boss_floor)로 통일한다.
+## 가장자리로 내보이고, 타일은 보스방 전용 어두운 바닥(tile_boss_floor)으로 통일한다.
+## 예외 = **남쪽 출구 앞 풀길**(EXIT_PATH_* 참조) — 마을 쪽 풀 타일로 나가는 길을 표시한다.
 func _fill_tiles() -> void:
 	var ts: Vector2i = _tiles.tile_set.tile_size
 	var rect := Rect2(_ground.position, _ground.size).grow(-float(ts.x))   # 가장자리 한 칸은 틴트가 보이게
 	var from := Vector2i(floori(rect.position.x / ts.x), floori(rect.position.y / ts.y))
 	var to := Vector2i(ceili(rect.end.x / ts.x), ceili(rect.end.y / ts.y))
+	# 출구 좌표는 여기서 베끼지 않는다 — 씬의 Exit 노드에서 칸으로 환산한다.
+	var path_cx: int = floori(_exit.position.x / float(ts.x))
+	var path_half: int = (EXIT_PATH_WIDTH_CELLS - 1) / 2
 	for y in range(from.y, to.y):
 		for x in range(from.x, to.x):
-			_tiles.set_cell(Vector2i(x, y), 1, Vector2i.ZERO)
+			var on_path: bool = y >= to.y - EXIT_PATH_ROWS and absi(x - path_cx) <= path_half
+			_tiles.set_cell(Vector2i(x, y),
+				TILE_SRC_GRASS if on_path else TILE_SRC_FLOOR, Vector2i.ZERO)
 
 
 ## 보스 동적 스폰 — 두 경로 (ChapterDef 계약):
@@ -178,9 +223,12 @@ func _on_enemy_died(enemy_id: StringName) -> void:
 	var reward_line := ""
 	if _chapter.reward_unlock != &"" and not GameState.is_unlocked(_chapter.reward_unlock):
 		EventBus.codex_unlocked.emit(_chapter.reward_unlock)
-		var rew := Db.get_glyph_ring(_chapter.reward_unlock)
-		var rew_name := rew.display_name if rew != null else String(_chapter.reward_unlock)
-		reward_line = " 보상: %s(책상에서 밴드에 끼워라)" % rew_name
+		# 🔴 문구는 `CodexText`가 낸다 — 룬·진·고리마다 「어디에 쓰는지」가 다르고(중심·바탕·밴드)
+		# 발신처가 셋이라, 여기서 조회를 조립하면 그게 곧 사본이다(감사 T5). 세88에 보상이 고리에서
+		# **룬**으로 바뀌며 옛 `Db.get_glyph_ring` 한 줄이 원시 id + 거짓 안내를 찍고 있었다.
+		var reward_label := CodexText.label_of(_chapter.reward_unlock)
+		if reward_label != "":
+			reward_line = " 보상: %s" % reward_label
 	_spawn_return_portal()
 	# 🔴 세84 #36: `sticky` — 「포탈에서 E로 귀환하라」는 **아직 유효한 지시**다(귀환까지 남아야 한다).
 	_hud.say("%s 클리어!%s 포탈에서 E로 귀환하라" % [_chapter.title, reward_line], false, true)
@@ -205,6 +253,8 @@ func _spawn_return_portal() -> void:
 ## 🔴 귀환 성공 — `extraction_success`가 **가방(루팅분 포함)을 창고로 옮기고 자동 저장**한다
 ## (GameState·SaveManager가 이미 이 시그널에 연결돼 있다). 안 쏘면 루팅한 게 다음 사망 때 증발하고
 ## q02(EXTRACT)가 영영 안 찬다 — forest._extract 계약 그대로.
+## ⚠ **부르는 곳이 둘이다** (세88): 남쪽 출구(`_ready`에서 연결) · 처치 후 포탈(`_spawn_return_portal`).
+## `_leaving` 가드가 두 길을 한 번으로 묶는다 — 새 출구를 또 뚫으면 여기로 이어라(정산·저장이 여기 있다).
 func _extract() -> void:
 	if _leaving:
 		return

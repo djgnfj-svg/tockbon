@@ -162,11 +162,21 @@ func _test_segments_follow_head() -> void:
 
 
 ## [6] 🔴 boss_snake AI — 플레이어 쪽으로 전진한다(그룹 "player"가 유일 조준 경로).
-## 플레이어를 rush_range(240) 밖·aggro보다 멀리 둬 WEAVE로 다가오게 한다(러시 윈드업에 안 갇힌다).
+## 플레이어를 **rush_range(240) 밖 · aggro_range(320) 안**에 둬 WEAVE로 다가오게 한다
+## (러시 윈드업에 안 갇히고, leash에도 안 걸리는 좁은 띠다).
+##
+## 🔴🔴 **세88에 이 자리가 바뀌었다**: 옛 코드는 플레이어를 400px에 뒀고 주석도 *"aggro보다 멀리"*라
+## 적혀 있었다 — 그때는 WEAVE에 **거리 게이트가 없어서** 아무리 멀어도 다가왔기 때문이다.
+## 세88 leash(§2-A-2-b)가 그 성질을 없앴다: 이제 aggro 밖이면 **자기 자리를 지킨다**(안 그러면
+## 2400×2200 숲에서 보스가 남쪽 입구까지 내려와 「깊이 들어간다」가 사라진다).
+## → 400px은 **이제 「안 온다」가 정답인 거리**다. 이 검사는 「올 수 있는 거리에서 온다」를 재야 한다.
+## ⚠ 「멀면 안 온다」 쪽은 `test_enemy_ai_auto` [4]가 3갈래 전부 잰다 — 여기서 중복하지 않는다.
+## ⚠ 거리를 **`.tres`에서 파생**한다 — 사용자가 aggro를 조여도 거짓 빨강이 안 나게.
 func _test_boss_chases_player() -> void:
-	print("[6] boss_snake가 플레이어 쪽으로 다가온다")
+	print("[6] boss_snake가 플레이어 쪽으로 다가온다 (aggro 안)")
 	var boss = _make_boss(Vector2.ZERO)
-	var player = _make_player(Vector2(400, 0))  # rush_range 240 밖 → WEAVE 유지
+	var aggro: float = float(_db.get_enemy(&"snake_boss").params.get("aggro_range", 320.0))
+	var player = _make_player(Vector2(aggro - 20.0, 0))  # rush_range 240 밖 · leash 안
 	await physics_frame
 	var before: float = boss.global_position.distance_to(player.global_position)
 	for i in 40:

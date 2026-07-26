@@ -90,8 +90,13 @@ func _run() -> void:
 	_check("🔴 룬 목록 순회가 정본 %d종을 다 훑었다 (손 사본이 아니라 Enums.RUNE_TYPES)"
 		% Enums.RUNE_TYPES.size(), _visited == Enums.RUNE_TYPES.size() and _visited > 0)
 	_check("불(0)은 시작부터 해금", 0 in unlocked_types)
-	_check("🔴 물(2)이 시작부터 해금돼 그릴 수 있다 (세78 시드)", 2 in unlocked_types)
-	_check("🔴 바람(3)이 시작부터 해금돼 그릴 수 있다 (세78 시드)", 3 in unlocked_types)
+	# 🔴🔴 **세88에 뒤집혔다** — 물·바람은 **챕터 보스 첫 처치 보상**이라 시작엔 잠겨 있다
+	# (사냥 흐름 §5·§6-E: 시작 = 룬1·진1·고리1). 세78~87의 「시작부터 해금」 시드를 걷었다.
+	# 🔴 이 반전이 곧 **재발 감지기**다: 시드가 돌아오면 여기가 빨개진다 — 그리고 시드가 돌아오면
+	#   ch1·ch2 보상이 **소급 완료로 덮여 조용히 죽는다**(세58에 실제로 그랬다).
+	# ⚠ 「해금되면 책에 뜬다」 계약 자체는 아래 흙(5) 줄이 잰다(주입 → 목록 편입).
+	_check("🔴🔴 물(2)은 시작엔 잠겨 있다 (ch1 보스 첫 처치 보상)", not (2 in unlocked_types))
+	_check("🔴🔴 바람(3)은 시작엔 잠겨 있다 (ch2 보스 첫 처치 보상)", not (3 in unlocked_types))
 	_check("🔴 흙(5)이 해금되자 책 목록에 들어왔다 (codex → 그릴 수 있는 룬)", 5 in unlocked_types)
 
 	# ── 원상복구 — 이후 검증은 **실데이터만** 본다 ──

@@ -329,7 +329,15 @@ func _ai_charge(delta: float, player: Node2D, to_player: Vector2, dist: float) -
 func _ai_hover(delta: float, player: Node2D, to_player: Vector2, dist: float) -> void:
 	var spd := _param("move_speed", 70.0)
 	var dir := to_player / dist if dist > 0.01 else Vector2.ZERO
-	if dist < _param("hover_min", 55.0):
+	# 🔴🔴 leash (세88 사냥 흐름) — `aggro_range` 밖이면 자기 자리를 지킨다. 이게 없으면 hover는
+	# 거리와 무관하게 늘 다가와 **절대 안 놓친다**(리드가 우려한 "영영 못 만난다"의 정반대였다).
+	# 방이 1200×1040일 때는 안 드러났지만 2400×2200 숲에서는 mist 5마리가 **전부 남쪽 입구로 모여**
+	# 구역 배치가 무의미해지고 「깊이 들어간다」가 통째로 사라진다.
+	# ⚠ **이동 대입만 감싼다** — `return`으로 끊으면 아래 `_contact`와 분산 타이머가 멀리서 멈춘다
+	# (분산 주기가 조용히 고장 나는 자리 — 게이트를 넣는 세 갈래 전부 같은 이유로 이 모양이다).
+	if dist > _param("aggro_range", 200.0):
+		velocity = Vector2.ZERO
+	elif dist < _param("hover_min", 55.0):
 		velocity = -dir * spd            # 너무 가깝다 → 물러난다
 	elif dist > _param("hover_max", 95.0):
 		velocity = dir * spd             # 너무 멀다 → 다가온다
@@ -372,7 +380,9 @@ func _ai_boss_snake(delta: float, player: Node2D, to_player: Vector2, dist: floa
 
 	match _snake_state:
 		SnakeState.WEAVE:
-			if dist > 1.0:
+			# 🔴🔴 leash (세88) — gale과 같은 이유다(72px/s로 어귀까지 내려왔다). 위브 계산만 감싼다:
+			# 아래 `_contact`·러시 쿨다운·페이즈2는 위(match 밖)에서 이미 돌고 있어 안 건드린다.
+			if dist > 1.0 and dist <= _param("aggro_range", 320.0):
 				var fwd := to_player / dist
 				var perp := Vector2(-fwd.y, fwd.x)
 				var base_speed := _param("move_speed", 72.0) * speed_mult
@@ -438,7 +448,13 @@ func _ai_boss_gale(delta: float, player: Node2D, to_player: Vector2, dist: float
 			# 거리 유지 (hover형 재작성 — 로직 ~8줄이라 분기 내가 깨끗하다).
 			var spd := _param("move_speed", 55.0) * speed_mult
 			var dir := to_player / dist if dist > 0.01 else Vector2.ZERO
-			if dist < _param("hover_min", 110.0):
+			# 🔴🔴 leash (세88) — 없으면 gale이 **자기 자리를 버리고 남쪽 입구까지 내려온다**
+			# (55px/s × 2200px ≈ 40초) → 보스를 어귀에서 잡몹과 함께 만난다. ⚠ 이동 대입만 감싼다:
+			# 아래 쿨다운 감소·돌풍/연사 발동·페이즈2 전이는 **멀리 있어도 계속 돌아야 한다**
+			# (`return`으로 끊으면 페이즈2가 안 열리는 조용한 고장이 된다).
+			if dist > _param("aggro_range", 260.0):
+				velocity = Vector2.ZERO
+			elif dist < _param("hover_min", 110.0):
 				velocity = -dir * spd            # 너무 가깝다 → 물러난다
 			elif dist > _param("hover_max", 170.0):
 				velocity = dir * spd             # 너무 멀다 → 다가온다
@@ -839,6 +855,12 @@ func _roll_drops() -> Array[Dictionary]:
 	var rolled: Array[Dictionary] = []
 	var gs := get_node_or_null("/root/GameState")
 	for drop: DropEntry in _def.drops:
+		# 🔴🔴 해금 드롭 가드 (세88 문양-고리 두루마리) — 이미 해금된 고리는 안 떨군다.
+		# **확률 굴림보다 앞**이고 **별도 줄**인 것이 계약이다: 아래 until_unlock 분기에 섞으면
+		# `elif`가 `chance`를 통째로 건너뛰어 **0.02 보너스가 모든 잡몹 확정 드롭**이 된다
+		# (두 필드는 병용 금지 — 축이 반대다, `DropEntry.unlock_id` 주석).
+		if drop.unlock_id != &"" and gs != null and gs.is_unlocked(drop.unlock_id):
+			continue
 		# 🔴 관문 드롭 (세58, 정본 docs/PROGRESSION.md): until_unlock가 있으면 확률이 아니라
 		# 해금 상태가 정한다 — 미해금 = 확정, 해금됨 = 스킵. GameState가 없으면(고립 테스트)
 		# 관문을 못 재므로 순수 확률로 폴백한다.
@@ -851,7 +873,10 @@ func _roll_drops() -> Array[Dictionary]:
 		if drop.max_count > drop.min_count:
 			n += randi() % (drop.max_count - drop.min_count + 1)
 		if n > 0:
-			rolled.append({"id": drop.item_id, "count": n})
+			# 🔴 "unlock" 키 = 해금 드롭(세88). `id`가 비고 이쪽이 찬 항목이 두루마리다 —
+			# `DropPickup.setup`의 4번째 옵션 인자로 넘어간다(`_spawn_loose`). 키 이름을 바꾸면
+			# `_spawn_loose`와 **조용히 갈라진다**(반환 계약이 여기 한 곳에만 적혀 있다).
+			rolled.append({"id": drop.item_id, "count": n, "unlock": drop.unlock_id})
 	return rolled
 
 
@@ -866,7 +891,9 @@ func _spawn_loose(scene: Node, rolled: Array[Dictionary]) -> void:
 		# 여러 드롭이 겹치지 않게 살짝 흩뿌린 지점에서 심는다(픽업이 여기서 또 scatter).
 		pickup.global_position = global_position + Vector2(randf_range(-6.0, 6.0), randf_range(-6.0, 6.0))
 		# i번째 드롭 = base_angle + i·TAU/n → 2개면 정반대, 3개면 삼각형으로 흩어진다.
-		pickup.setup(rolled[i]["id"], int(rolled[i]["count"]), base_angle + float(i) * TAU / float(rolled.size()))
+		# 4번째 인자 = 해금 드롭(세88 두루마리). 옵션 인자라 기존 아이템 드롭 경로는 무변경이다.
+		pickup.setup(rolled[i]["id"], int(rolled[i]["count"]), base_angle + float(i) * TAU / float(rolled.size()),
+			rolled[i].get("unlock", &""))
 
 
 ## 팝 — 셰이더 플래시 + 스쿼시 (피격 손맛, 세63 개편). modulate를 **아예 안 만진다** — 흰 섬광은

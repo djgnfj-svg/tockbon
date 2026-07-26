@@ -219,18 +219,30 @@ func _run() -> void:
 	_check("🔴 새로하기: 창고 비었다", gs.inventory.is_empty())
 	_check("🔴 새로하기: 장비 벗겨졌다 (맨손 시작)", gs.equipment.is_empty())
 	_check("🔴 새로하기: 퀘스트 진행 초기화", gs.quest_done.is_empty() and gs.quest_progress.is_empty())
-	# 🔴 세78: 새로하기가 시작 퀵슬롯을 미리 장착한다 (1=불·2=물·3=바람). 빈 시작이 아니라 3볼 시작.
-	_check("🔴 새로하기: 시작 고리 도안 3장 (불·물·바람)", gs.ring_designs.size() == 3)
+	# 🔴🔴 **세88 사냥 흐름 §6-E — 시작 도안은 한 장이다**(슬롯 1 = 불볼).
+	# 세78~87은 불·물·바람 **완성 도안 3장**을 슬롯 0·1·2에 꽂았다. codex 시드만 걷으면
+	# *"책에서 물 룬을 못 고른다"*일 뿐이고 **1·2·3 키로 물볼·윈드볼이 그대로 나간다**
+	# (발사는 `to_assembly()`가 도안을 읽고 **codex를 안 본다**) → ch1·ch2 보상이 **첫 판부터
+	# 쏘던 것**이 되어 보상 지도가 통째로 무너진다. 그래서 여기가 시드 회수의 진짜 급소였다.
+	# 🔴 **슬롯 2·3이 비었다는 것 자체가 재발 감지기다** — 도안 시드가 돌아오면 여기가 빨개진다.
+	_check("🔴 새로하기: 시작 고리 도안 1장 (불뿐)", gs.ring_designs.size() == 1)
 	_check("🔴 새로하기: 슬롯1=불볼", gs.ring_equipped[0] != null and gs.ring_equipped[0].rune == Enums.RuneType.FIRE)
-	_check("🔴 새로하기: 슬롯2=물볼", gs.ring_equipped[1] != null and gs.ring_equipped[1].rune == Enums.RuneType.WATER)
-	_check("🔴 새로하기: 슬롯3=바람볼", gs.ring_equipped[2] != null and gs.ring_equipped[2].rune == Enums.RuneType.WIND)
-	_check("🔴 새로하기: 시작 해금 재시드 (불·물·바람 룬·단발진) — 안 심으면 아무것도 못 그린다",
-		gs.is_unlocked(&"rune_fire") and gs.is_unlocked(&"rune_water")
-		and gs.is_unlocked(&"rune_wind") and gs.is_unlocked(&"jin_single"))
-	# 🔴 세71 맨몸 파이어볼 계약 — 문양 링(gr_*)은 더는 시드가 아니다(스테이지 클리어 보상으로만).
-	#   시드를 되돌리면 이 검사가 빨개진다(시작이 맨몸이어야 조립→탁본 보상 루프가 산다).
-	_check("🔴 새로하기: 문양 링(gr_radiate5)은 시드가 아니다 — 스테이지 보상으로만 (맨몸 시작)",
-		not gs.is_unlocked(&"gr_radiate5"))
+	_check("🔴🔴 새로하기: 슬롯2가 비어 있다 (물 룬은 ch1 클리어 보상이다)", gs.ring_equipped[1] == null)
+	_check("🔴🔴 새로하기: 슬롯3이 비어 있다 (바람 룬은 ch2 클리어 보상이다)", gs.ring_equipped[2] == null)
+	_check("🔴 새로하기: 시작 해금 재시드 (불 룬·단발진·발산 고리) — 안 심으면 아무것도 못 그린다",
+		gs.is_unlocked(&"rune_fire") and gs.is_unlocked(&"jin_single") and gs.is_unlocked(&"gr_radiate5"))
+	# 🔴🔴 세88: 보상·제작으로 얻는 10키가 **시작엔 없다.** 하나라도 시드로 남으면 그 획득 경로가
+	# **소급 완료로 덮여 조용히 죽는다**(세58에 실제로 그랬다 — 관문을 붙였는데 아무 일도 안 났다).
+	# ⚠ 옛 검사는 *"문양 링 gr_radiate5는 시드가 아니다"*였는데 **세88에 뒤집혔다**: ch1 보상이
+	#   물 룬으로 바뀌면서 그 고리가 시작 지급으로 이관됐다(위 줄이 그걸 잰다).
+	_check("🔴🔴 새로하기: 챕터 보상 룬(물·바람·풀)이 시작엔 없다",
+		not gs.is_unlocked(&"rune_water") and not gs.is_unlocked(&"rune_wind")
+		and not gs.is_unlocked(&"rune_grass"))
+	_check("🔴🔴 새로하기: 제작·드롭 대상(번개·흙 룬·진 2종·고리 3종)이 시작엔 없다",
+		not gs.is_unlocked(&"rune_bolt") and not gs.is_unlocked(&"rune_earth")
+		and not gs.is_unlocked(&"jin_plain_g2") and not gs.is_unlocked(&"jin_fuse")
+		and not gs.is_unlocked(&"gr_spread3") and not gs.is_unlocked(&"gr_explode1")
+		and not gs.is_unlocked(&"gr_condense2"))
 	# 🔴🔴 **시드 집합 == 기대 집합** (세84 감사 #19 · 구조적 테마 T7). 전엔 넷(불·물·바람·단발진)만
 	# 세서 **세83이 심은 번개·흙·풀 룬과 세79~82의 임시 시드(jin_plain_g2·jin_fuse·gr_*)가 무측정**
 	# 이었다 → 임시 시드를 걷는 세션이 관문·보상 배선을 깜빡하면 **새 게임에서 그 콘텐츠가 책에
@@ -239,13 +251,15 @@ func _run() -> void:
 	#   CLAUDE.md의 *"관문을 붙이는 세션은 해당 시드 줄을 같이 지워야 한다"*를 기계로 만든 장치다.
 	#   ⚠ 그러니 이 목록이 빨개지면 **먼저 `_seed_starting_unlocks`가 의도대로인지 보고**,
 	#   의도한 변경이면 여기서 같은 줄을 지워라(기대치를 실측에 맞춰 늘리기만 하면 장치가 죽는다).
+	# 🔴🔴 **세88에 12 → 3으로 줄었다.** 이 장치가 정확히 그 일을 하려고 있었다: 세79~83의
+	# 임시 시드 9키에 *"경로를 붙이는 세션이 이 줄을 지운다"*가 적혀 있었고, 세88이 그 경로를
+	# 붙이면서(챕터 보상·공방 제작·두루마리 드롭) 여기 열거도 같이 줄였다.
+	# ⚠ **개수 검사로 바꾸지 마라**(「정확히 3키」류) — 개수는 같고 **내용이 갈려도 통과**해 장치가
+	#   죽는다. 열거 그대로 두는 것이 이 그물의 값이다.
 	var expect_seed: Array = [
-		# 룬 6종 — 불·물·바람(세78 시작 지급) + 번개·흙·풀(세83 복원, **임시 시드**)
-		"rune_fire", "rune_water", "rune_wind", "rune_bolt", "rune_earth", "rune_grass",
-		# 진 — 단발(세71) + 2등급 일반진(세79 M1) + 융합진(세81 M2, 둘 다 **임시 시드**)
-		"jin_single", "jin_plain_g2", "jin_fuse",
-		# 문양-고리 — M1 실증 2종(세79) + 응축(세82). **전부 임시 시드**(획득 경로 미설계)
-		"gr_spread3", "gr_explode1", "gr_condense2",
+		"rune_fire",     # 시작 룬 = 불 하나
+		"jin_single",    # 시작 진 = 단발진
+		"gr_radiate5",   # 시작 고리 = 발산×5 (세88에 ch1 보상 → 시작 지급으로 이관)
 	]
 	var got_seed: Array = []
 	for key: StringName in gs.codex:
@@ -311,7 +325,7 @@ func _run() -> void:
 		var craw_d: Dictionary = craw
 		var saved_codex: Array = craw_d.get("codex", [])
 		# 「그 시드가 없던 옛 세이브」를 만든다 — 번개 룬 키를 세이브에서 뗀다.
-		saved_codex.erase("rune_bolt")
+		saved_codex.erase("gr_radiate5")   # 🔴 살아 있는 시드 키여야 한다 (세88: rune_bolt는 제작 대상이 됐다)
 		craw_d["codex"] = saved_codex
 		var cwf := FileAccess.open(cpath, FileAccess.WRITE)
 		if cwf != null:
@@ -323,7 +337,7 @@ func _run() -> void:
 		_check("🔴 로드가 codex를 clear한다 — 세이브에 없는 옛 해금이 남지 않는다 (사전 6개와 대칭)",
 			not gs.is_unlocked(&"__ghost_unlock"))
 		_check("🔴🔴 세이브에 없는 **시드** 해금은 로드 뒤에도 살아 있다 (빌드가 주는 것이라 늘 있다)",
-			gs.is_unlocked(&"rune_bolt"))
+			gs.is_unlocked(&"gr_radiate5"))
 		_check("세이브에 있던 해금도 그대로 복원된다 (시드 재적용이 세이브를 덮지 않는다)",
 			gs.is_unlocked(&"rune_fire") and gs.is_unlocked(&"jin_single"))
 

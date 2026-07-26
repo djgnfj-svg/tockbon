@@ -10,6 +10,5 @@ grade = 2
 display_name = "밤꽃 봉오리"
 params = {
 "sprite": "res://assets/sprites/props/mat_night_bloom.png",
-"cat": "ink_mat",
-"night_only": true
+"cat": "ink_mat"
 }

@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="RecipeDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/core/schemas/recipe_def.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = &"craft_jin_fuse"
+display_name = "융합진 제작"
+inputs = {
+&"mat_night_bloom": 3,
+&"mat_moon_sap": 3,
+&"coin": 150
+}
+output_id = &""
+output_count = 0
+station = &"craft"
+reward_unlock = &"jin_fuse"

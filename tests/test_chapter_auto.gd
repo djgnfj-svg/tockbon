@@ -26,6 +26,22 @@ extends SceneTree
 
 const GLYPH_NONE := -1
 
+## 🔴🔴 챕터별 잡몹 수를 **명시 상수로 박는다** (세88 사냥 흐름 §10).
+## 옛 기대치는 `1 + ch1.mob_spawns.size()`로 **데이터에서 파생**했다 — 그래서 **표를 비워도 통과했고**,
+## ch2·ch3가 `mob_spawns` 0마리(= 잡몹 없는 빈 방)인 채로 전 스위트가 그린이었다. 기대치를 손으로
+## 박아야 「배치를 채웠다」가 실제로 측정된다(세84 T7 「임시 시드가 그물을 안 세우는 면허」의 사촌).
+## ⚠ 사용자가 F5로 수량을 조이면 이 표도 같이 고쳐라 — **그게 이 상수의 목적이다**(조용히 비지 않게).
+const MOB_COUNT: Dictionary = {&"ch1": 9, &"ch2": 11, &"ch3": 13}
+
+## 🔴 챕터 확정 보상 실값 표 (세88) — **보스를 잡으면 그 보스의 속성 룬을 얻는다**(읽히기 쉬운 매핑).
+## 룬 = 게임에서 가장 큰 사건(새 속성 = 새 반응 = 전투가 종류로 달라진다). 세87까지 ch1만
+## `gr_radiate5`였고 ch2·ch3는 **빈 문자열**이라 클리어해도 아무것도 안 줬다.
+const REWARD: Dictionary = {&"ch1": &"rune_water", &"ch2": &"rune_wind", &"ch3": &"rune_grass"}
+
+## 남쪽 입구의 **상시 귀환** 출구 zone_id (세88 §2-A-3). 🔴 포탈과 **반드시 다른 값**이어야 한다 —
+## 같으면 [4]의 「처치 전엔 포탈이 없다」가 빨개지고, 그 계약은 아직 살아 있다(포탈은 처치 후에만).
+const EXIT_ZONE := &"exit"
+
 var failures: int = 0
 var _bus = null
 var _gs = null
@@ -50,10 +66,13 @@ func _run() -> void:
 	_scene = load("res://src/field/boss_room.tscn") as PackedScene
 
 	await _test_chapters_load()
+	await _test_chapter_tables()
 	await _test_boss_spawn_both_paths()
 	await _test_contact_damage()
 	await _test_my_spell_can_hit_boss()
 	await _test_kill_plants_clear_and_portal()
+	await _test_exit_extracts_without_boss()
+	await _test_reward_label_on_screen()
 	await _test_portal_banks_the_run()
 	await _test_death_loses_the_bag()
 	await _test_lock_judgment()
@@ -96,6 +115,45 @@ func _test_chapters_load() -> void:
 			"클리어 키 파생 == chapter_clear_ch1 (실제 %s)" % _db.chapter_clear_id(ch1))
 
 
+## [1b] 🔴🔴 챕터 3장의 **배치·보상 실값 표** (세88 사냥 흐름) — 기대치를 손으로 박아 잰다.
+##
+## 왜 별도 항목인가: 배치 수를 데이터에서 파생하면 표를 비워도 통과한다(MOB_COUNT 주석 참조).
+## 보상도 같은 결이다 — ch2·ch3의 `reward_unlock`이 **빈 문자열**이던 걸 아무 그물도 안 잡았다.
+## 🔴 보상 id가 **실제로 존재하는 룬**인지도 잰다: 오타(`rune_watre`)면 클리어해도 아무것도
+## 안 열리는데 `codex_unlocked`는 그대로 발신돼 **에러 없이 조용히 사라진다**.
+func _test_chapter_tables() -> void:
+	print("[1b] 챕터 3장 배치·보상 실값 표 (명시 상수 대조)")
+	var CT: GDScript = load("res://src/core/codex_text.gd")
+	for cid: StringName in MOB_COUNT:
+		var ch = _db.get_chapter(cid)
+		if ch == null:
+			_check(false, "%s가 로드됐다" % cid)
+			continue
+		_check(ch.mob_spawns.size() == int(MOB_COUNT[cid]),
+			"%s: 잡몹 %d마리 (실제 %d — 0이면 빈 방이다)" % [cid, int(MOB_COUNT[cid]), ch.mob_spawns.size()])
+		_check(ch.reward_unlock == REWARD[cid],
+			"%s: 보상 == %s (실제 %s)" % [cid, REWARD[cid], ch.reward_unlock])
+		# 🔴 보상 id가 실재하는 룬인가 — 리졸버가 종류를 못 찾으면 오타이거나 데이터가 죽은 것이다.
+		_check(CT.kind_of(ch.reward_unlock) == CT.KIND_RUNE,
+			"%s: 보상 %s가 실재하는 룬이다 (리졸버 판정 '%s')" % [cid, ch.reward_unlock, CT.kind_of(ch.reward_unlock)])
+		# 배치 항목이 전부 살아 있나 — SubResource 하나가 죽으면 null이 섞여 스폰이 조용히 준다.
+		var dead := 0
+		for ms in ch.mob_spawns:
+			if ms == null or ms.enemy_id == &"" or _db.get_enemy(ms.enemy_id) == null:
+				dead += 1
+		_check(dead == 0, "%s: 배치 항목이 전부 실재하는 적이다 (죽은 항목 %d)" % [cid, dead])
+	# 🔴 세88에 처음 무대에 오르는 셋 — 그전엔 스폰되는 곳이 **0곳**이었다(유령 콘텐츠).
+	var seen := {}
+	for cid2: StringName in MOB_COUNT:
+		var c2 = _db.get_chapter(cid2)
+		if c2 != null:
+			for ms2 in c2.mob_spawns:
+				if ms2 != null:
+					seen[ms2.enemy_id] = true
+	for id: StringName in [&"hound", &"mist", &"vine"]:
+		_check(seen.has(id), "%s가 어느 챕터엔가 실제로 배치됐다 (세87까지 스폰 0곳)" % id)
+
+
 ## [2] 🔴 보스 스폰 **두 경로 각각** + 출격 만HP (forest [2] 이식).
 ## ch1 = forest_enemy 범용(add_child 전 enemy_id 대입 — 순서가 계약) · ch3 = snake_boss 전용 씬.
 ## 🔴 스폰 위치 허용 반경 — **등가가 아니라 반경으로 재는 이유**(세84에 flake를 실측해 고쳤다):
@@ -124,9 +182,10 @@ func _test_boss_spawn_both_paths() -> void:
 		"출격하면 HP가 찬다 %.0f/%.0f (안 그러면 죽는 게 이득)" % [_gs.hp, _gs.hp_max()])
 	# 🔴 세71: ch1은 이제 잡몹 길(mob_spawns)이 깔린다 — "enemies"에 보스 1 + 잡몹 N. 보스는 enemy_id로 특정.
 	var ch1 = _db.get_chapter(&"ch1")
-	var want_count = 1 + ch1.mob_spawns.size()
+	# 🔴 기대치는 **명시 상수**에서 온다 — `1 + ch1.mob_spawns.size()`로 파생하면 표를 비워도 통과한다.
+	var want_count = 1 + int(MOB_COUNT[&"ch1"])
 	_check(_enemies().size() == want_count,
-		"ch1: 보스 1 + 잡몹 %d = %d (실제 %d)" % [ch1.mob_spawns.size(), want_count, _enemies().size()])
+		"ch1: 보스 1 + 잡몹 %d = %d 마리가 실제로 섰다 (실제 %d)" % [int(MOB_COUNT[&"ch1"]), want_count, _enemies().size()])
 	var boss = _boss(&"ch1")
 	_check(boss != null, "ch1 보스(slime_elite)가 잡몹 사이에 스폰됐다")
 	if boss != null:
@@ -136,8 +195,8 @@ func _test_boss_spawn_both_paths() -> void:
 
 	await _fresh(&"ch3")
 	var ch3 = _db.get_chapter(&"ch3")
-	_check(_enemies().size() == 1 + ch3.mob_spawns.size(),
-		"ch3: 보스 1 + 잡몹 %d (실제 %d)" % [ch3.mob_spawns.size(), _enemies().size()])
+	_check(_enemies().size() == 1 + int(MOB_COUNT[&"ch3"]),
+		"ch3: 보스 1 + 잡몹 %d 마리가 실제로 섰다 (실제 %d)" % [int(MOB_COUNT[&"ch3"]), _enemies().size()])
 	var boss3 = _boss(&"ch3")
 	_check(boss3 != null, "ch3 보스(snake_boss)가 스폰됐다")
 	if boss3 != null:
@@ -201,13 +260,19 @@ func _test_my_spell_can_hit_boss() -> void:
 ## [4] 🔴 처치 → chapter_clear codex + 귀환 포탈 스폰. 클리어 판정 = 처치 순간(루팅·귀환 무관).
 ## 포탈은 처치 전엔 **없어야** 한다 — 미리 있으면 "안 잡고 나가기"가 공짜가 된다.
 func _test_kill_plants_clear_and_portal() -> void:
-	print("[4] 처치 → 클리어 codex + 보상 문양 링 해금 + 포탈 스폰")
+	print("[4] 처치 → 클리어 codex + 보상 룬 해금 + 포탈 스폰 (+ 상시 출구는 처음부터)")
+	var reward: StringName = REWARD[&"ch1"]
 	_gs.codex.erase(&"chapter_clear_ch1")   # 앞 테스트·저장 잔재 제거 — 첫 클리어 경로를 잰다
-	_gs.codex.erase(&"gr_radiate5")         # 🔴 세71 보상 첫 획득 경로를 잰다 (맨몸 시작 = 시드 아님)
+	_gs.codex.erase(reward)                 # 🔴 보상 첫 획득 경로를 잰다 (맨몸 시작 = 시드 아님)
 	await _fresh(&"ch1")
 	_check(_zone(&"portal") == null, "처치 전엔 포탈이 없다 (미리 있으면 안 잡고 나가기가 공짜)")
+	# 🔴🔴 세88 상시 귀환 — 남쪽 출구는 **처음부터 있다.** 포탈과 zone_id를 갈라 둔 이유가 이것이다:
+	# 「포탈은 처치 후에만」은 아직 살아 있는 계약이고(위 줄), 반복 사냥터가 되려면 언제든 나갈 수
+	# 있어야 한다. 잡몹만 잡고 나가는 건 **재료만 얻고 확정 보상은 못 얻는** 것이라 공짜가 아니다.
+	_check(_zone(EXIT_ZONE) != null,
+		"처치 전에도 남쪽 출구(zone_id=%s)는 있다 = 언제든 나갈 수 있다" % EXIT_ZONE)
 	_check(not _gs.is_unlocked(&"chapter_clear_ch1"), "처치 전엔 클리어 codex가 없다")
-	_check(not _gs.is_unlocked(&"gr_radiate5"), "처치 전엔 보상 문양 링(gr_radiate5)이 없다 (맨몸 시작)")
+	_check(not _gs.is_unlocked(reward), "처치 전엔 보상 룬(%s)이 없다 (맨몸 시작)" % reward)
 
 	# 🔴 보스를 특정해 잡는다 — 잡몹을 잡으면 클리어가 안 된다 (mob_spawns 섞임)
 	_boss(&"ch1").take_hit(99999.0, 0, 0, 0.0)
@@ -215,13 +280,83 @@ func _test_kill_plants_clear_and_portal() -> void:
 	await physics_frame
 	_check(_gs.is_unlocked(&"chapter_clear_ch1"),
 		"보스를 잡으면 chapter_clear_ch1이 심긴다 (codex_unlocked 경유)")
-	# 🔴 보상 해금 (세71) — ChapterDef.reward_unlock가 처치 순간 codex에 심긴다. chapter_clear와 **별도 축**.
+	# 🔴 보상 해금 — ChapterDef.reward_unlock가 처치 순간 codex에 심긴다. chapter_clear와 **별도 축**.
 	# 뮤테이션: boss_room._on_enemy_died의 reward_unlock 발신 줄을 지우면 이 검사가 빨개진다(검출력).
-	# 이게 조립→탁본 루프의 이음매다 — ch1 클리어 → gr_radiate5 → 조립대에서 파이어볼 5갈래 진화.
-	_check(_gs.is_unlocked(&"gr_radiate5"),
-		"보스를 잡으면 보상 문양 링 gr_radiate5가 해금된다 (ChapterDef.reward_unlock)")
+	# 🔴 세88에 보상이 **룬**으로 바뀌었다 — 새 속성 = 새 원소 반응 = 전투가 종류로 달라진다.
+	# ch1의 물 룬이 곧 **첫 반응(불+물=증기)이 열리는 자리**다.
+	_check(_gs.is_unlocked(reward),
+		"보스를 잡으면 보상 룬 %s가 해금된다 (ChapterDef.reward_unlock)" % reward)
 	var portal = _zone(&"portal")
 	_check(portal != null, "보스를 잡으면 귀환 포탈이 뜬다 (zone_id=portal)")
+
+
+## [4b] 🔴🔴 **보스를 안 잡고** 남쪽 출구로 나간다 — 상시 귀환 (세88 §2-A-3).
+##
+## 이게 「반복 사냥터」의 실체다: 잡몹만 잡고 재료를 챙겨 나갈 수 있어야 한다. 세87까지 나가는 길은
+## **보스 처치 후 포탈 하나뿐**이라, 재료를 모으려면 매번 보스를 잡아야 했다.
+## ⚠ 「공짜가 되지 않나」의 답: 잡몹만 잡고 나가면 **재료만 얻고 확정 보상(룬)은 못 얻는다.**
+## 🔴 정산 경로가 포탈과 **같은 `_extract`**인지 잰다 — 새 길을 뚫고 연결을 잊으면 가방이 조용히
+##   증발한다(에러 없이). 연타 1회는 `_leaving` 가드가 두 길을 함께 묶는다는 증거다.
+func _test_exit_extracts_without_boss() -> void:
+	print("[4b] 보스를 안 잡고 출구 E → extraction 1회 + 가방→창고")
+	await _fresh(&"ch1")
+	var ex = _zone(EXIT_ZONE)
+	if ex == null:
+		_check(false, "출구(zone_id=%s)가 없어 검사 불가" % EXIT_ZONE)
+		return
+	_check(_zone(&"portal") == null, "이 시점에 포탈은 없다 = 보스를 안 잡았다")
+	_gs.bag.clear()
+	var before: int = _gs.get_count(&"mat_slime_core")
+	_gs.add_to_bag(&"mat_slime_core", 3)
+	var got := []
+	var cb := func() -> void: got.append(1)
+	_bus.extraction_success.connect(cb)
+	# 🔴 두 emit을 await 전에 — 씬 전환은 프레임 끝이라 이 시점엔 방이 살아 있고 가드만 재게 된다.
+	ex.interacted.emit()
+	ex.interacted.emit()
+	await process_frame
+	_bus.extraction_success.disconnect(cb)
+	_check(got.size() == 1, "출구 연타에도 extraction_success 1회 (실제 %d)" % got.size())
+	_check(_gs.get_count(&"mat_slime_core") == before + 3,
+		"보스를 안 잡아도 가방이 창고로 회수된다 (%d → %d)" % [before, _gs.get_count(&"mat_slime_core")])
+	_check(_gs.bag.is_empty(), "회수 후 가방이 빈다")
+
+
+## [4c] 🔴🔴 클리어 보상 문구 — **실제로 화면에 나가는 줄**을 읽는다 (세88 §5-D-b).
+##
+## 🔴 **리졸버를 직접 부르지 마라.** `CodexText`를 테스트가 직접 호출하면 `boss_room`이 옛
+## `Db.get_glyph_ring` 두 줄을 그대로 쓰고 있어도 **그린이다**(구현 갈래가 뮤테이션으로 실측:
+## 검출 0). 세86 교훈 그대로 — **「결과 값이 같다」는 「같은 길로 왔다」가 아니다.**
+## 그래서 보스를 잡고 `hud.say_line()`을 읽는다.
+##
+## 잡는 것 둘: ① 원시 id 노출("보상: rune_water") ② **거짓 지시** — 옛 코드는 안내가
+## *"책상에서 밴드에 끼워라"* 고정이라 **밴드는 고리 자리인데 룬을 거기 끼우라**고 가르쳤다.
+## ⚠ 「표시명이 나온다」는 ch2에서 **검출력이 없다** — 챕터 제목 "바람 드는 곳"에 이미 "바람"이
+##   들어 있어 뮤테이션에도 통과한다. 진짜 검출자는 **원시 id 부재**와 **「진 중심」**이다.
+func _test_reward_label_on_screen() -> void:
+	print("[4c] 클리어 보상 문구 — 보스를 잡고 HUD 줄을 읽는다 (원시 id·거짓 안내 금지)")
+	var CT: GDScript = load("res://src/core/codex_text.gd")
+	for cid: StringName in [&"ch1", &"ch2", &"ch3"]:
+		var ch = _db.get_chapter(cid)
+		if ch == null:
+			continue
+		var rid: StringName = ch.reward_unlock
+		_gs.codex.erase(rid)                        # 보상 줄은 **첫 처치에만** 붙는다
+		_gs.codex.erase(_db.chapter_clear_id(ch))
+		await _fresh(cid)
+		var boss = _boss(cid)
+		if boss == null:
+			_check(false, "%s 보스를 못 찾았다" % cid)
+			continue
+		boss.take_hit(99999.0, 0, 0, 0.0)
+		await process_frame
+		await physics_frame
+		var hud = _room.get_node("Hud/Hud")
+		var line: String = hud.say_line()
+		_check(not line.contains(String(rid)), "%s: HUD에 원시 id '%s'가 안 나온다" % [cid, rid])
+		_check(line.contains(CT.name_of(rid)), "%s: HUD에 표시명 '%s'가 나온다" % [cid, CT.name_of(rid)])
+		_check(line.contains("진 중심"),
+			"%s: 룬 보상 안내가 「진 중심」이다 (「밴드에 끼워라」면 거짓 지시다)" % cid)
 
 
 ## [5] 🔴 포탈 [E] = extraction_success — 가방(루팅분)→창고 + 자동 저장. 연타해도 1회(_leaving 가드).

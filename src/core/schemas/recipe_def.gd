@@ -17,3 +17,14 @@ extends Resource
 ## 안 적은 옛 레시피는 전부 refine이다(기본값). 두 패널이 이 값으로 자기 레시피만 걸러 낸다 —
 ## 안 걸러 내면 공방 레시피가 정제대에도 뜬다(둘 다 Db.all_recipes를 읽으므로).
 @export var station: StringName = &"refine"
+## 🔴 제작이 **아이템이 아니라 codex 해금**을 주는 경로 (세87 사냥 흐름 S1).
+## 채우면 제작 성공 시 이 unlock_id가 해금된다(`codex_unlocked` 한 발 = codex 심기 + 해금음 +
+## UNLOCK 퀘스트 진행이 전부 따라온다 — 세37 station_* 선례).
+##
+## 🔴 **`output_id`와 배타로 쓴다**: 고리·룬·진은 `ItemDef`가 아니라 codex 키라 `output_id`에 넣으면
+## 창고에 **유령 아이템이 쌓이고 세이브에 영구화된다**(`workshop_panel._craft`가 조건 없이 add_item).
+## 해금 레시피는 `output_id = &""` · `output_count = 0`으로 두고 이 필드만 채운다.
+## ⚠ 그러면 행 제목이 빈 문자열이 되므로 **`display_name`을 반드시 적어라** — 패널은 이 값을
+## 우선 읽고 없을 때만 `output_id` 아이템 이름으로 폴백한다(세87 전까지 `display_name`을 읽는
+## 코드가 프로젝트에 한 곳도 없었다).
+@export var reward_unlock: StringName = &""

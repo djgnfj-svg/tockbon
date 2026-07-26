@@ -19,6 +19,16 @@ extends RefCounted
 ## ⚠ 수치는 전부 아이템 `.tres`의 `params`에서 읽는다 — 여기에 밸런스 상수를 박지 마라.
 
 
+## 🔴 재료 진행 한 칸 — **`이름 보유/필요`** (세87 사냥 흐름 §7). 진행 막대 관례대로 **보유가 먼저다.**
+##
+## 왜 core로 올렸나: 공방·정제대가 **글자까지 같은 사본**을 각자 들고 있었고 **둘 다 인자가 거꾸로**였다
+## (`[name, need, have]` — 주석은 *"재료(보유/필요)"*라고 선언하는데 코드가 반대라, 5개 필요한데 3개
+## 가졌으면 "슬라임 핵 5/3"으로 찍혔다). 한쪽만 고치면 다른 쪽이 계속 거꾸로 남는다 = 감사 T5.
+## ⚠ **이름 조회는 호출부가 한다**(`Db.get_item(id).display_name`) — 이 파일은 `Db`를 안 본다.
+static func count_text(item_name: String, have: int, need: int) -> String:
+	return "%s %d/%d" % [item_name, have, need]
+
+
 ## 장비 효과 한 줄 — 펜=보정, 로브=HP/마나, 지팡이=진 속도·발사 마나, 부적=구르기 쿨, 모자=이동 속도.
 ## 효과가 없거나 장비가 아니거나 `it == null`이면 빈 문자열(호출부가 "" 검사로 줄을 건너뛴다).
 static func effect_text(it: ItemDef) -> String:

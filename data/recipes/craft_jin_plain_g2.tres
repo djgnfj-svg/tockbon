@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="RecipeDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/core/schemas/recipe_def.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = &"craft_jin_plain_g2"
+display_name = "2겹 진 제작"
+inputs = {
+&"mat_mist_essence": 5,
+&"mat_moon_sap": 2,
+&"coin": 100
+}
+output_id = &""
+output_count = 0
+station = &"craft"
+reward_unlock = &"jin_plain_g2"

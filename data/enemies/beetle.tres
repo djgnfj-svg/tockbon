@@ -10,6 +10,20 @@ chance = 1.0
 min_count = 3
 max_count = 6
 
+[sub_resource type="Resource" id="Resource_mat"]
+script = ExtResource("1_rfba6")
+item_id = &"mat_beetle_shell"
+chance = 0.4
+min_count = 1
+max_count = 1
+
+[sub_resource type="Resource" id="Resource_scroll"]
+script = ExtResource("1_rfba6")
+chance = 0.02
+min_count = 1
+max_count = 1
+unlock_id = &"gr_gather3"
+
 [resource]
 script = ExtResource("2_35dfq")
 id = &"beetle"
@@ -28,4 +42,4 @@ params = {
 "size": 1.5,
 "weakness_mult": 1.75
 }
-drops = Array[ExtResource("1_rfba6")]([SubResource("Resource_coin")])
+drops = Array[ExtResource("1_rfba6")]([SubResource("Resource_coin"), SubResource("Resource_mat"), SubResource("Resource_scroll")])

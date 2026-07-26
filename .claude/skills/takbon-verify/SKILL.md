@@ -16,25 +16,25 @@ description: 탁본(TAKBON) 프로젝트의 검증 규율. Godot 헤드리스 �
 PowerShell은 자식 프로세스 stdout을 안 보여준다 — **테스트는 Bash 툴로 돌려라.**
 
 ```bash
-./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_save_auto.gd            # 저장/로드 (고리 라운드트립) · 부팅만으로 자동저장 준비되나(load_game 호출 전 확인)
+./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_save_auto.gd            # 저장/로드 (고리 라운드트립) · 부팅만으로 자동저장 준비되나(load_game 호출 전 확인) · 세88: **시드 집합 명시 열거 3키**(개수 검사로 바꾸면 장치가 죽는다) + 시작 도안 1장·**슬롯 2·3이 비었다**
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_ring_assembly_auto.gd   # 고리 조립 계약 (세85: per-piece·칸 규칙 은퇴 — 진 Db 로드·glyph_slots 부재·은퇴 API 재발 감지)
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_ring_trace_auto.gd      # 손그림 탁본 (🔴폐지 스위치를 되돌리면 살아나는 축의 유일한 상시 그물 — 합성 밑그림 계약 포함)
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_ring_spell_auto.gd      # 고리 발사 (진→투사체·착탄·적 take_hit)
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_ring_design_auto.gd     # 고리 도안 통합 (등급⇔펑 경계·퍼펙트)
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_base_auto.gd            # 베이스캠프 발사 배선 (물리 레이어 계약·좌클릭)
-./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_chapter_auto.gd         # 챕터 보스방 루프 (세58-B, 옛 test_forest_auto 계승 — 스폰 두 경로·클리어 codex·포탈 extraction·사망 bag_lost·잠금 판정)
-./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_workshop_auto.gd        # 공방 장비 제작 (station 분리·제작·장착 라운드트립)
+./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_chapter_auto.gd         # 챕터 숲 루프 (스폰 두 경로·클리어 codex·extraction·bag_lost·잠금 · 세88: 배치/보상 **명시 상수 표**·상시 출구 exit+처치후 portal 둘 다·**클리어 문구를 hud.say_line으로**)
+./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_workshop_auto.gd        # 공방 제작 (station 분리·제작·장착 라운드트립 · 세88: **해금 레시피 8장**·라이브 패널 경로·빈 id 키 없음(키 존재로 재라)·목록 사전순)
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_audio_auto.gd           # 사운드 배선 (17 SFX 로드·EventBus 9종 연결)
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_rune_unlock_auto.gd     # 🔴 룬 해금 (세85에 `test_decode_auto`에서 개명 — 해독대가 은퇴해 이름이 거짓이었다): **룬 6종 로드 + 6종 개별 확인**이 세50 Color 침묵사의 유일한 감지기다
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_quests_auto.gd          # 진행 목표(퀘스트) (KILL/EXTRACT/UNLOCK·requires 사슬·소급 완료)
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_dialogue_box_auto.gd    # 온보딩 대사 상자 (줄 넘김·ESC 건너뛰기·ui_modal_open)
-./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_drop_pickup_auto.gd     # 바닥 드롭 픽업 + 자석 흡수 (layer0/mask2 계약·줍기 지연·자석 반경/취소불가·1회 뱅킹)
-./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_enemy_ai_auto.gd        # 몬스터 AI (방어·재생·분산 경감)
+./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_drop_pickup_auto.gd     # 바닥 드롭 픽업 + 자석 흡수 (layer0/mask2 계약·줍기 지연·자석 반경/취소불가·1회 뱅킹 · 세88 **두루마리**: codex_unlocked 1회·가방 무변경·item_collected 안 쏨·빈 페이로드가 재호출 고리 없이 사라진다·마름모 금지 + **PNG 로드**)
+./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_enemy_ai_auto.gd        # 몬스터 AI (방어·재생·분산 경감 · 세88 **AI leash**: 밖이면 안 오고 안이면 온다 **둘 다** + leash 뒤에도 gale 쿨다운이 돈다)
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_status_auto.gd          # 룬 상태이상·원소 반응 (반응표·바람 확산·중첩 갱신)
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_hud_toast_auto.gd       # HUD 획득 토스트 (같은 id 합치기+맨뒤 이동·최대3줄 FIFO·수명)
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_snake_boss_auto.gd      # 뱀 보스 (Db로드·약점배율·페이즈2 전이·세그먼트 추종·위브 전진)
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_gale_boss_auto.gd       # gale 보스 (Db로드+17키·페이즈2·돌풍 피해/밀림·볼리 발수·적탄 히트/수명·반응 룬=BOLT/WATER)
-./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_progression_auto.gd     # 진행 관문 (until_unlock 확정드롭/해금중단 — 세61부터 in-memory 관문 주입으로 기계를 잼·불변식 스캔은 관문 0줄 동안 자명 통과 — 정본 docs/PROGRESSION.md)
+./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_progression_auto.gd     # 진행 관문 (until_unlock 확정드롭/해금중단 — 세61부터 in-memory 관문 주입으로 기계를 잼·불변식 스캔은 관문 0줄 동안 자명 통과 — 정본 docs/PROGRESSION.md) · 세88 **드롭표 전수**(잡몹 5종이 어느 재료·어느 두루마리를 떨구나 · unlock_id ↔ until_unlock **병용 금지** · 대역마다 다른 고리 · 확률·수량은 F5 튜닝값이라 안 잰다)
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_spell_vfx_auto.gd       # 마법 연출 배선 (세션59: vfx 연결 2종·트레일 형제 스폰+그룹 무가입·spell_impact emit 캐리어/탄 각각 — 🔴 렌더(색·펄스·자전·트레일)는 못 잡음 · [3] null 가드의 검출자는 SCRIPT ERROR grep)
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_ring_book_jin_auto.gd   # 책 진 셀 격자·아이콘 (세61 목록 편입: Db 진 ≥1·격자/아이콘 계약은 합성 8조합으로 잼)
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_feel_auto.gd            # 손맛 개편 (세63: player_hurt 단일 발신+사망 가드·플래시 material per-instance·modulate 불가침·hurt 굽기·그림자·dust·카메라 킥·허수아비 파리티 — 🔴 "보인다"는 못 잡음: 세63에 그림자 가림·먼지 뭉개짐을 실게임만 잡았다)
@@ -43,7 +43,7 @@ PowerShell은 자식 프로세스 stdout을 안 보여준다 — **테스트는 
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_jin_fusion_auto.gd       # 🔴 진별 해석 M2 — 룬 2개 + 융합진 (세81: 심장 = 한 발이 두 상태 → 반응(SHOCK)·자리 순서 무의존·합산 0.7×두 룬 단독합·도배 방지 enemy_hit 발신 == 1·룬 1개 회귀 완전 동일 — 🔴 룬 소켓 클릭·반응 가시성은 실게임만)
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_glyph_data_auto.gd       # 🔴 문양 효과·표현 데이터화 + 응축 (세82: GlyphCode 전 9값 Db 로드·behavior/params 파싱·심장 = 응축은 폭발의 반대를 **단조성**으로(대소 비교만으론 부호 뒤집기를 못 잡는다)·계열 분기가 실제로 _apply_layer를 지나나·code 중복 결정적 승자 — 🔴 응축이 "집중 한 방"으로 보이나는 실게임만)
 ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_scene_contract_auto.gd   # 🔴🔴 씬 계약 — mouse_filter 정적 그물 (세84 #14: 게임플레이 씬을 **스캔**해 「보이는 채로 화면 덮는 Control이면 mouse_filter==IGNORE」. **두 번 밟은 최다 재발 버그**(세25·26 — 바닥이 좌클릭 먹어 발사가 조용히 죽는데 전 스위트 그린)가 처음으로 헤드리스에 걸린다 — 실패 형태가 늘 「씬에서 그 줄이 빠진다」라서 .tscn 프로퍼티로 잴 수 있다. 씬 목록 하드코딩 안 함 = 새 씬 자동 포함. 🔴 F5의 대체가 아니라 1차 방어선)
-./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_ui_text_auto.gd          # 🔴 표시부 계약 (세84 감사 #12·#21·#35·#36 — 그전엔 그물 0건이었다): 융합 씨앗 문자열·`runes_of` 경유(표시부가 design.rune만 읽어 **두 번째 룬이 사라지던** 자리)·rune_slot_positions 정본 호출·ItemText 단일 소스 + **사본 재발 감지 스캔**·행 캡 관계식·say 수명 — 🔴 겉보기는 실게임만
+./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_ui_text_auto.gd          # 🔴 표시부 계약 (세84 감사 #12·#21·#35·#36 — 그전엔 그물 0건이었다): 융합 씨앗 문자열·`runes_of` 경유(표시부가 design.rune만 읽어 **두 번째 룬이 사라지던** 자리)·rune_slot_positions 정본 호출·ItemText 단일 소스 + **사본 재발 감지 스캔**·행 캡 관계식·say 수명 · 세88 **CodexText**(종류마다 안내가 다르다: 룬=진 중심·진=바탕·고리=밴드 · 획득물 아닌 키엔 문장을 안 만든다) + **count_text 사본 스캔** — 🔴 겉보기는 실게임만
 ```
 
 ⚠ **이 목록이 세션51에 5개 뒤처져 있었고, 세84에 또 4개 뒤처진 걸 발견했다**

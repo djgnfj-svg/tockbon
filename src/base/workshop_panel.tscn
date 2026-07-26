@@ -59,7 +59,7 @@ theme_override_font_sizes/font_size = 20
 
 [node name="Hint" type="Label" parent="Center/Panel/Margin/VBox"]
 layout_mode = 2
-text = "재료로 장비를 만들고 몸에 맞춘다     ·     [E] / ESC  닫기"
+text = "재료로 조립 부품·장비를 만들고 몸에 맞춘다     ·     [E] / ESC  닫기"
 theme_override_colors/font_color = Color(0.66, 0.62, 0.54, 1)
 theme_override_font_sizes/font_size = 11
 

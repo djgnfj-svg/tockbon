@@ -57,12 +57,34 @@ func _run() -> void:
 
 	# 🔴 세션42: 공방이 펜뿐 아니라 지팡이·로브·부적·모자도 만든다 — 계약은 "펜"이 아니라
 	# "장비(equip 카테고리)"다. kind==pen 고정 단정이 새 장비 레시피에서 낡았다.
+	# 🔴🔴 **세88에 이 계약이 또 낡았다**: 공방이 이제 **조립 부품(고리·룬·진)도 만든다.** 그건
+	# 아이템이 아니라 **codex 해금**이라 `output_id`가 비어 있고 `get_item`이 null이다 —
+	# 옛 형태 그대로면 신규 8장이 전부 빨개진다. **아이템 레시피에만** 장비 계약을 적용한다.
+	# ⚠ 그렇다고 검사를 지우지 마라 — 「공방에 잉크·종이가 새어들지 않는다」를 아직 이게 잰다.
 	var all_craft_are_equip := true
+	var unlock_recipes := 0
 	for r in craft:
+		if r.reward_unlock != &"":
+			unlock_recipes += 1
+			# 🔴 해금 레시피는 output_id가 **비어 있어야** 한다. 채우면 창고에 유령 아이템이
+			# 쌓이고 세이브에 영구화된다(`_craft`가 조건 없이 add_item을 부르던 자리).
+			_check("해금 레시피 %s는 output_id가 비어 있다" % r.id, r.output_id == &"" and r.output_count == 0)
+			continue
 		var out_item: ItemDef = db.get_item(r.output_id)
 		if out_item == null or out_item.category() != &"equip":
 			all_craft_are_equip = false
-	_check("공방 레시피 결과물은 전부 장비(equip)다", all_craft_are_equip)
+	_check("공방의 **아이템** 레시피 결과물은 전부 장비(equip)다", all_craft_are_equip)
+	# 🔴 명시 숫자 — 스캔만 하면 「레시피가 통째로 사라져도 0/0 통과」가 된다(세88 신규 8장).
+	_check("공방에 해금 레시피 8장이 있다 (실제 %d)" % unlock_recipes, unlock_recipes == 8)
+
+	# 🔴🔴 목록 순서가 **결정적**인가 (세88 실측 버그): `Db.all_recipes`가 `keys.sort()`를 쓰면
+	# 키가 `StringName`이라 **사전순이 아니라 인터닝 순**이고 **실행마다 순서가 바뀐다**.
+	# 레시피 3장일 땐 안 드러났지만 공방이 17줄이 되며 목록이 튀었다. 주석은 「id 오름차순」이라고
+	# 선언만 하고 있었다(감사 T4). 뮤테이션: `sort_custom` → `sort`로 되돌리면 여기가 빨개진다.
+	var sorted_ids: Array = craft_ids.duplicate()
+	sorted_ids.sort_custom(func(a: StringName, b: StringName) -> bool: return String(a) < String(b))
+	_check("🔴 공방 레시피가 id 사전순으로 온다 (StringName sort()는 인터닝 순이라 실행마다 흔들린다)",
+		craft_ids == sorted_ids)
 
 	var no_pen_in_refine := true
 	for r in refine:
@@ -159,6 +181,57 @@ func _run() -> void:
 	_check("🔴 지팡이 3종이 서로 다른 성능이다 (%s)" % [seen],
 		seen[&"wand_basic"] != seen[&"wand_fork"] and seen[&"wand_basic"] != seen[&"wand_ring"] \
 		and seen[&"wand_fork"] != seen[&"wand_ring"])
+
+	# ── ⑤ 🔴🔴 세88 해금 레시피 — 재료를 태워 **아이템이 아니라 codex**를 받는다 ──
+	#
+	# 이게 이번 설계의 본줄이다: 사냥의 종착지가 돈·장비가 아니라 **「새로 조립할 것」**이다.
+	# 🔴 **라이브 패널 경로로 잰다**(`_recipe_title`·`_inputs_text`·`_craft`). 순수 함수만 직접 부르면
+	#   「패널이 실제로 그 함수를 쓰는지」는 무측정이다 — ui 갈래가 정렬 그물에서 정확히 그걸 밟았다
+	#   (검사가 정렬 함수를 직접 불러서, 패널이 정렬을 안 해도 그린이었다).
+	var ru: RecipeDef = db.get_recipe(&"craft_gr_spread3")
+	_check("해금 레시피가 Db에 로드된다 (.tres 값 문법이 틀리면 여기서 통째로 사라진다)",
+		ru != null and ru.reward_unlock == &"gr_spread3")
+	var panel: Control = (load("res://src/base/workshop_panel.tscn") as PackedScene).instantiate() as Control
+	root.add_child(panel)
+	await process_frame
+	# 🔴 행 제목이 `RecipeDef.display_name`에서 나온다 — 세87까지 이 필드를 읽는 코드가 프로젝트에
+	# **한 곳도 없었다**(세 패널 전부 `output_id` 아이템 이름만 썼다). 해금 레시피는 output_id가
+	# 비어서, 폴백에 걸리면 제목이 정확히 **" ×0"**이 된다.
+	_check("🔴 행 제목이 display_name에서 나온다 (실제 '%s')" % panel._recipe_title(ru),
+		panel._recipe_title(ru) == "확산 고리 제작")
+	# 🔴 기대치를 **레시피에서 파생**하고 창고를 먼저 비운다 — 상수 "3/5"를 박으면 ⓐ 레시피 수량을
+	# 조일 때 거짓 빨강이고 ⓑ **앞선 실행이 남긴 재료가 누적돼** "6/5"가 된다(리드가 실제로 밟았다:
+	# 테스트 세이브가 실행 사이에 살아 있어 `add_item`이 쌓인다).
+	var need_core: int = int(ru.inputs[&"mat_slime_core"])
+	gs.inventory.erase(&"mat_slime_core")
+	gs.add_item(&"mat_slime_core", need_core - 2)
+	_check("🔴 재료 진행이 `보유/필요` 순이다 (실제 '%s')" % panel._inputs_text(ru),
+		panel._inputs_text(ru).contains("%d/%d" % [need_core - 2, need_core]))
+
+	# 🔴 시드가 gr_spread3를 미리 해금해 두면 제작 경로가 닫혀 있다 — 걷어서 첫 획득을 잰다.
+	gs.codex.erase(&"gr_spread3")
+	var bus = root.get_node("/root/EventBus")   # -s 컴파일 시점엔 오토로드가 없다 — 런타임 조회
+	var unlocked: Array = []      # 🔴 참조 타입 — 람다는 로컬을 **값으로** 캡처한다(리드가 밟은 함정)
+	var ucb := func(uid: StringName) -> void: unlocked.append(uid)
+	bus.codex_unlocked.connect(ucb)
+	for mid: StringName in ru.inputs:
+		gs.add_item(mid, int(ru.inputs[mid]))
+	panel._craft(&"craft_gr_spread3")
+	_check("🔴 제작이 codex_unlocked를 정확히 1발 쏜다 (실제 %s)" % [unlocked],
+		unlocked.size() == 1 and unlocked[0] == &"gr_spread3")
+	_check("codex에 심겼다 (해금음·UNLOCK 퀘스트·자동 저장이 이 한 발에 딸려 온다)",
+		gs.is_unlocked(&"gr_spread3"))
+	# 🔴🔴 **키 존재로 재라.** `output_count = 0`이라 옛 코드는 `add_item(&"", 0)` →
+	# `inventory[&""] = 0`이 된다: **수량은 0인데 키가 생겨 세이브에 영구화된다.**
+	# `get_count(&"") == 0`으로 재면 뮤테이션에도 그린이다(ui 갈래가 실측으로 경고했다).
+	_check("🔴 창고에 빈 id 키가 안 생긴다 (유령 아이템)",
+		not gs.get_inventory_snapshot().has(&""))
+	var coin_before: int = gs.get_count(&"coin")
+	panel._craft(&"craft_gr_spread3")
+	_check("🔴 이미 배운 것은 재료를 안 태운다 (버튼이 조용히 살아나도)",
+		gs.get_count(&"coin") == coin_before and unlocked.size() == 1)
+	bus.codex_unlocked.disconnect(ucb)
+	panel.free()
 
 	print("RESULT pass=%d fail=%d" % [_pass, _fail])
 	if _fail == 0:

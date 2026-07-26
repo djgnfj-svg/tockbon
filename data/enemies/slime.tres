@@ -10,6 +10,20 @@ chance = 1.0
 min_count = 1
 max_count = 2
 
+[sub_resource type="Resource" id="Resource_mat"]
+script = ExtResource("1_f5jfp")
+item_id = &"mat_slime_core"
+chance = 0.35
+min_count = 1
+max_count = 1
+
+[sub_resource type="Resource" id="Resource_scroll"]
+script = ExtResource("1_f5jfp")
+chance = 0.02
+min_count = 1
+max_count = 1
+unlock_id = &"gr_spread3"
+
 [resource]
 script = ExtResource("2_s20qs")
 id = &"slime"
@@ -24,4 +38,4 @@ params = {
 "contact_damage": 4.0,
 "move_speed": 55.0
 }
-drops = Array[ExtResource("1_f5jfp")]([SubResource("Resource_coin")])
+drops = Array[ExtResource("1_f5jfp")]([SubResource("Resource_coin"), SubResource("Resource_mat"), SubResource("Resource_scroll")])

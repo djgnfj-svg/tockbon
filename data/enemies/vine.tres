@@ -10,6 +10,27 @@ chance = 1.0
 min_count = 3
 max_count = 5
 
+[sub_resource type="Resource" id="Resource_mat"]
+script = ExtResource("1_l0tf1")
+item_id = &"mat_vine"
+chance = 0.45
+min_count = 1
+max_count = 2
+
+[sub_resource type="Resource" id="Resource_bloom"]
+script = ExtResource("1_l0tf1")
+item_id = &"mat_night_bloom"
+chance = 0.08
+min_count = 1
+max_count = 1
+
+[sub_resource type="Resource" id="Resource_scroll"]
+script = ExtResource("1_l0tf1")
+chance = 0.02
+min_count = 1
+max_count = 1
+unlock_id = &"gr_gather3"
+
 [resource]
 script = ExtResource("2_j8lpj")
 id = &"vine"
@@ -28,4 +49,4 @@ params = {
 "size": 1.35,
 "weakness_mult": 1.75
 }
-drops = Array[ExtResource("1_l0tf1")]([SubResource("Resource_coin")])
+drops = Array[ExtResource("1_l0tf1")]([SubResource("Resource_coin"), SubResource("Resource_mat"), SubResource("Resource_bloom"), SubResource("Resource_scroll")])

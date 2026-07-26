@@ -132,6 +132,7 @@ const SAY_FADE := 0.6   ## 마지막 이만큼 동안 흐려진다 (토스트 TO
 
 ## 등급 색 — 🔴 단일 소스는 `src/core/grade_colors.gd`다 (세션51에 사본 셋을 여기로 합쳤다).
 const GradeColors := preload("res://src/core/grade_colors.gd")
+const CodexText := preload("res://src/core/codex_text.gd")
 
 var _selected: int = 0
 var _say: String = ""
@@ -164,6 +165,7 @@ func _ready() -> void:
 	# 슬롯 미니 다이어그램이 **바꾸기 전 진을 계속 보여 준다**(= 감사 T8 「쏘는 것 ≠ 보이는 것」).
 	# 장비 착·탈용도 파생 스탯을 바꾸므로 같은 신호로 덮인다.
 	EventBus.equipment_changed.connect(_on_equipment_changed)
+	EventBus.codex_unlocked.connect(_on_codex_unlocked)
 	_coin = _coin_total()   # 첫 표시값 — 시그널을 기다리지 않고 부팅 세이브의 잔액을 곧장 보여 준다
 
 
@@ -188,6 +190,25 @@ func say(text: String, warn: bool = false, sticky: bool = false) -> void:
 ## 새 마법진이 맺혔다 — GameState가 같은 시그널로 빈 슬롯에 장착한다.
 func _on_design_committed(_design: RingDesign) -> void:
 	say("새 마법진이 맺혔다 — 책을 덮고(ESC) 좌클릭으로 쏴 보세요")
+
+
+## 🔴 새 조립 부품(룬·진·문양-고리)을 얻었다 — 이름과 **어디에 쓰는지**를 한 줄로 알린다 (세88).
+##
+## 왜 HUD가 받나: 발신처가 셋이다(보스 클리어 · 공방 제작 · 두루마리 픽업). 특히 **픽업은
+## 지금까지 화면에 아무것도 안 띄웠다** — `item_collected`는 문자열을 못 싣고 HUD가
+## `Db.get_item`으로 이름을 스스로 찾으므로, 해금물에 그 시그널을 쏘면 토스트에 **원시 id가 뜬다**
+## (그래서 픽업은 안 쏜다 = 옳은 선택). 해금음·codex·퀘스트는 도는데 *"뭘 배웠는지"*만 안 보이던
+## 구멍을 여기서 막는다. 셋을 한 곳에서 받으니 문구도 갈라지지 않는다.
+##
+## ⚠ `chapter_clear_*`처럼 **획득물이 아닌 codex 키도 이 시그널로 온다** — 리졸버가 빈 문자열을
+##   주면 조용히 넘긴다(안 그러면 "chapter_clear_ch1 획득!"이 뜬다).
+## ⚠ 보스방에선 `boss_room`이 이 발신 **뒤에** 자기 클리어 안내를 `sticky`로 덮는다(보상 이름이
+##   그 안에 들어 있다) — 그래서 두 줄이 다투지 않는다. 발신 순서를 바꾸면 그 균형이 깨진다.
+func _on_codex_unlocked(unlock_id: StringName) -> void:
+	var line := CodexText.acquired_line(unlock_id)
+	if line == "":
+		return
+	say(line)
 
 
 ## 장착이 바뀌었다(슬롯 교체·장비 착탈) — 슬롯 다이어그램·선택 슬롯 상세를 다시 그린다.

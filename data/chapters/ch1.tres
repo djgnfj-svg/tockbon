@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="ChapterDef" load_steps=7 format=3]
+[gd_resource type="Resource" script_class="ChapterDef" load_steps=12 format=3]
 
 [ext_resource type="Script" path="res://src/core/schemas/chapter_def.gd" id="1"]
 [ext_resource type="Script" path="res://src/core/schemas/mob_spawn.gd" id="2"]
@@ -6,22 +6,47 @@
 [sub_resource type="Resource" id="mob1"]
 script = ExtResource("2")
 enemy_id = &"slime"
-position = Vector2(-160, 150)
+position = Vector2(-380, 420)
 
 [sub_resource type="Resource" id="mob2"]
 script = ExtResource("2")
 enemy_id = &"slime"
-position = Vector2(150, 90)
+position = Vector2(350, 300)
 
 [sub_resource type="Resource" id="mob3"]
 script = ExtResource("2")
-enemy_id = &"beetle"
-position = Vector2(0, -30)
+enemy_id = &"slime"
+position = Vector2(-120, 430)
 
 [sub_resource type="Resource" id="mob4"]
 script = ExtResource("2")
 enemy_id = &"slime"
-position = Vector2(-70, -170)
+position = Vector2(560, 520)
+
+[sub_resource type="Resource" id="mob5"]
+script = ExtResource("2")
+enemy_id = &"slime"
+position = Vector2(-500, -180)
+
+[sub_resource type="Resource" id="mob6"]
+script = ExtResource("2")
+enemy_id = &"slime"
+position = Vector2(420, -350)
+
+[sub_resource type="Resource" id="mob7"]
+script = ExtResource("2")
+enemy_id = &"mist"
+position = Vector2(150, -520)
+
+[sub_resource type="Resource" id="mob8"]
+script = ExtResource("2")
+enemy_id = &"mist"
+position = Vector2(-250, -420)
+
+[sub_resource type="Resource" id="mob9"]
+script = ExtResource("2")
+enemy_id = &"beetle"
+position = Vector2(0, -1050)
 
 [resource]
 script = ExtResource("1")
@@ -30,7 +55,7 @@ order = 1
 title = "숲 어귀"
 boss_enemy_id = &"slime_elite"
 boss_scene_path = ""
-boss_spawn = Vector2(0, -260)
+boss_spawn = Vector2(0, -1350)
 room_ground_color = Color(0.13, 0.19, 0.14, 1.0)
-mob_spawns = Array[ExtResource("2")]([SubResource("mob1"), SubResource("mob2"), SubResource("mob3"), SubResource("mob4")])
-reward_unlock = &"gr_radiate5"
+mob_spawns = Array[ExtResource("2")]([SubResource("mob1"), SubResource("mob2"), SubResource("mob3"), SubResource("mob4"), SubResource("mob5"), SubResource("mob6"), SubResource("mob7"), SubResource("mob8"), SubResource("mob9")])
+reward_unlock = &"rune_water"

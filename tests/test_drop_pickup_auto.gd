@@ -47,6 +47,11 @@ func _run() -> void:
 	await _test_magnet_cannot_be_cancelled()
 	await _test_arrival_banks_once()
 	await _test_item_collected_signal()
+	await _test_unlock_label()
+	await _test_unlock_collect()
+	await _test_unlock_already_owned()
+	await _test_empty_payload_no_reentry()
+	await _test_unlock_is_not_a_diamond()
 
 	for b in _bodies:
 		if is_instance_valid(b):
@@ -269,7 +274,148 @@ func _test_item_collected_signal() -> void:
 	_drop_player(player)
 
 
+## [13] 🔴 해금물(문양-고리 두루마리) 페이로드 + **그 문구가 원시 id가 아니다** (세88 §3-B-2).
+##
+## 🔴 **화면 문구는 픽업의 일이 아니다** — HUD가 `codex_unlocked`를 받아 `CodexText`로 낸다.
+## 픽업이 라벨 필드를 들고 있던 초안은 걷었다(소비자가 HUD로 옮겨가 **소비자 0 = 거짓 손잡이**가
+## 됐다 — 감사 T3). 그래서 여기서는 **페이로드 계약**은 픽업에, **문구 계약**은 core에 각각 묻는다.
+## ⚠ 안내 문구를 글자로 박지 않는다 — `hint_for_kind`와 대조해 관계식으로 잰다(문구를 다듬어도
+##   거짓 빨강이 안 나게. 세79 교훈).
+func _test_unlock_label() -> void:
+	print("[13] 해금물 페이로드 + 문구가 원시 id가 아니다")
+	var CT: GDScript = load("res://src/core/codex_text.gd")
+	var p = _spawn_unlock(&"gr_spread3")
+	await process_frame
+	_check(p.item_id == &"" and p.unlock_id == &"gr_spread3",
+		"페이로드가 해금물 쪽에만 실렸다 (item_id와 배타 — DropEntry 계약)")
+	var line: String = CT.acquired_line(p.unlock_id)
+	_check(line != "", "획득 문장이 나온다 (실제 %s)" % line)
+	_check(not line.contains("gr_"), "원시 id가 아니다 (실제 %s)" % line)
+	_check(line.contains(CT.hint_for_kind(CT.KIND_RING)),
+		"고리는 「밴드」 자리를 가르친다 = 룬·진과 안내가 갈린다 (실제 %s)" % line)
+	p.free()
+
+
+## [14] 🔴 해금물 줍기 = `codex_unlocked` **1회** · 가방 무변경 · 픽업 사라짐 · `item_collected` 안 옴.
+## 🔴 `item_collected`를 **안 쏘는 것이 계약이다**: 그 시그널은 문자열을 못 싣고 HUD가
+## `Db.get_item`으로 이름을 스스로 찾으므로, 해금물에 쏘면 토스트에 **원시 id가 뜬다**.
+func _test_unlock_collect() -> void:
+	print("[14] 해금물 줍기 = codex_unlocked 1회 · 가방은 안 는다")
+	_gs.bag.clear()
+	_gs.codex.erase(&"gr_spread3")
+	var bus = root.get_node("/root/EventBus")
+	var unlocks: Array = []
+	var items: Array = []
+	var cb1 := func(id) -> void: unlocks.append(id)
+	var cb2 := func(id, n) -> void: items.append([id, n])
+	bus.codex_unlocked.connect(cb1)
+	bus.item_collected.connect(cb2)
+	var p = _spawn_unlock(&"gr_spread3")
+	var player = _magnet_player(Vector2(9000, 9000))
+	await create_timer(0.5).timeout   # 줍기 지연이 풀리게
+	player.global_position = p.global_position + Vector2(24.0, 0.0)
+	await _await_gone(p)
+	bus.codex_unlocked.disconnect(cb1)
+	bus.item_collected.disconnect(cb2)
+	_check(unlocks.size() == 1 and unlocks[0] == &"gr_spread3",
+		"codex_unlocked가 정확히 1회 (실제 %s)" % [unlocks])
+	_check(_gs.is_unlocked(&"gr_spread3"), "codex에 심겼다 (해금음·UNLOCK 퀘스트가 여기 딸려 온다)")
+	_check(_bag_total() == 0, "가방은 안 는다 — 아이템이 아니다 (실제 %d)" % _bag_total())
+	_check(items.is_empty(), "item_collected는 안 온다 = 원시 id 토스트 방지 (실제 %s)" % [items])
+	_check(_gone(p), "픽업이 사라진다")
+	_drop_player(player)
+
+
+## [15] 이미 해금된 고리를 또 주워도 **재발신 0** — 그래도 픽업은 사라진다(바닥 유령 방지).
+## ⚠ 재발신하면 해금음·UNLOCK 퀘스트가 중복 반응한다(boss_room의 is_unlocked 가드와 같은 결).
+func _test_unlock_already_owned() -> void:
+	print("[15] 이미 해금이면 재발신 없이 조용히 사라진다")
+	_gs.bag.clear()
+	_gs.codex[&"gr_spread3"] = true
+	var bus = root.get_node("/root/EventBus")
+	var unlocks: Array = []
+	var cb := func(id) -> void: unlocks.append(id)
+	bus.codex_unlocked.connect(cb)
+	var p = _spawn_unlock(&"gr_spread3")
+	var player = _magnet_player(Vector2(9000, 9000))
+	await create_timer(0.5).timeout
+	player.global_position = p.global_position + Vector2(24.0, 0.0)
+	await _await_gone(p)
+	bus.codex_unlocked.disconnect(cb)
+	_check(unlocks.is_empty(), "재발신 0회 (실제 %s)" % [unlocks])
+	_check(_gone(p), "그래도 픽업은 사라진다")
+	_drop_player(player)
+
+
+## [16] 🔴🔴 빈 페이로드 픽업이 **재호출 고리 없이** 치워진다 (세88에 고친 실존 버그).
+##
+## 옛 코드: `_collect_at`이 `if _collected or item_id == &"": return`으로 **`_collected`를 세우기
+## 전에** 빠져나갔다. 자석이 도착하면 `_physics_process`가 **매 프레임 다시 부르고**, 픽업은
+## 플레이어에 **붙은 채 영원히 안 사라진다** — 에러도 경고도 없다. 두루마리(item_id가 빈 픽업)가
+## 바로 그 함정을 열었다. 뮤테이션(`_collected = true`를 조기 return 뒤로 옮김) → 여기가 빨개진다.
+func _test_empty_payload_no_reentry() -> void:
+	print("[16] 빈 페이로드는 재호출 고리 없이 치워진다")
+	_gs.bag.clear()
+	var p = _scene.instantiate()
+	root.add_child(p)
+	p.global_position = Vector2(300, 300)
+	p.setup(&"", 0)                                  # 페이로드 없음
+	var player = _magnet_player(Vector2(300, 300))   # 반경 안 = 자석이 곧바로 도착
+	for i in 40:
+		await physics_frame
+	_check(_gone(p), "빈 픽업이 사라진다 (안 사라지면 플레이어에 붙어 영구 잔존)")
+	_check(_bag_total() == 0, "가방엔 유령 항목이 안 들어간다 (실제 %d)" % _bag_total())
+	_drop_player(player)
+	if is_instance_valid(p) and not p.is_queued_for_deletion():
+		p.free()
+
+
+## [17] 🔴 해금물은 **등급색 마름모로 안 선다** — 세54 도형 플레이스홀더 금지.
+## `_apply_color`가 `Db.get_item` null이면 마름모 `Polygon2D` 폴백으로 떨어지던 자리다
+## (CLAUDE.md가 *"drop_pickup 마름모 선례는 각하됐다"*고 그 이름으로 못 박았다).
+## ⚠ 두루마리 PNG가 있든 없든 성립한다: 있으면 스프라이트가 켜지고 없으면 후광만 남는다 —
+## 어느 쪽이든 **마름모 알파는 0**이어야 한다.
+func _test_unlock_is_not_a_diamond() -> void:
+	print("[17] 해금물은 등급색 마름모로 안 선다 (세54 도형 금지)")
+	var p = _spawn_unlock(&"gr_explode1")
+	await process_frame
+	var vis: Polygon2D = p.get_node("Visual")
+	_check(is_zero_approx(vis.color.a),
+		"마름모 알파 0 (실제 %.2f — 0이 아니면 도형 스탠드인이 화면에 선다)" % vis.color.a)
+	# 🔴🔴 **두루마리 PNG가 실제로 로드되나** — 「파일을 만들었다」는 완료가 아니다(세50).
+	# 마름모 알파만 재면 **PNG가 없어도 통과한다**(그때는 후광만 남아 바닥에 아무것도 안 보인다).
+	# ⚠ `.import` 사이드카가 없으면 `ResourceLoader.exists`가 false라 여기서 걸린다 — 아트를
+	#   받은 세션이 `--import`를 잊는 것이 정확히 이 그물이 잡는 실패다.
+	var sprite: Sprite2D = vis.get_node_or_null("Sprite") as Sprite2D
+	_check(sprite != null and sprite.visible and sprite.texture != null,
+		"두루마리 스프라이트가 켜지고 텍스처가 실렸다 (안 실리면 바닥에 후광만 남는다)")
+	p.free()
+
+
 # ── 헬퍼 ──
+
+## 해금물(두루마리) 픽업 — `item_id`는 비우고 `unlock_id`만 싣는다(둘은 배타다).
+func _spawn_unlock(uid: StringName):
+	var p = _scene.instantiate()
+	root.add_child(p)
+	p.global_position = Vector2(300, 300)
+	p.setup(&"", 1, -1.0, uid)
+	return p
+
+
+## 픽업이 사라질 때까지 돌린다 — 🔴 해금물은 **가방이 안 늘어서** `_await_collected`를 못 쓴다
+## (그걸로 기다리면 1초 헛돌고 판정이 타이밍에 흔들린다).
+func _await_gone(p) -> void:
+	for i in 60:
+		if _gone(p):
+			return
+		await physics_frame
+	await create_timer(0.2).timeout   # 도착 팝 뒤 queue_free까지의 여유
+
+
+func _gone(p) -> bool:
+	return (not is_instance_valid(p)) or p.is_queued_for_deletion()
+
 
 ## 그룹 "player"에 든 가짜 플레이어 — 자석이 그룹 조회로 찾는 바로 그 수단.
 ## 🔴 테스트가 끝나면 반드시 `_drop_player`로 그룹에서 빼라: 남아 있으면 **다음 테스트의 픽업이

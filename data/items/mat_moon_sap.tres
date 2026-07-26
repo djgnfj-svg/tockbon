@@ -10,6 +10,5 @@ grade = 2
 display_name = "달빛 수액"
 params = {
 "sprite": "res://assets/sprites/props/mat_moon_sap.png",
-"cat": "ink_mat",
-"night_only": true
+"cat": "ink_mat"
 }
