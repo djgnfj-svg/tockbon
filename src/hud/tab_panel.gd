@@ -133,6 +133,12 @@ const EQUIP_KINDS: Array = [
 var _open: bool = false
 var current_tab: int = 0
 
+## 🔴 마법진 탭에서 **고른 보관 도안**(세86 ① 슬롯 교체 UI). null = 아무것도 안 골랐다.
+## 인스턴스 참조로 쥔다 — 보관 목록은 장착/해제할 때마다 순서가 바뀌므로 인덱스로 쥐면 어긋난다.
+## 패널을 닫거나 다른 탭으로 가면 지운다(고른 채로 잊히면 다음에 연 사람이 슬롯을 눌렀다가
+## 모르는 도안을 장착하게 된다).
+var _picked: RingDesign = null
+
 
 func _ready() -> void:
 	# 닫힌 동안엔 클릭을 먹지 않는다(visible=false면 GUI 히트테스트에서 빠진다).
@@ -150,10 +156,18 @@ func _ready() -> void:
 ## 🔴 토글·지름길 키는 _unhandled_input에서 잡는다 — 발사(좌클릭)·슬롯(1~3)과 안 겹친다.
 ## 닫힌 Control도 _unhandled_input은 받는다(mouse_filter는 마우스만 가른다).
 ## Tab=열기/닫기(기본 탭=소지품) · I=소지품 탭 · Q=퀘스트 탭 · C=캐릭터 탭 · ESC=닫기.
+## 🔴 1·2·3 = 마법진 탭에서 **고른 보관 도안을 그 슬롯에 올린다**(세86 ①). 발사 슬롯 키와 같은
+## 키인데 안 겹친다 — `player_caster._unhandled_input`이 `GameState.ui_modal_open`이면 즉시
+## 되돌아가므로, 이 패널이 열려 있는 동안 1·2·3은 주인이 없다. **고른 게 없으면 소비도 안 한다.**
 func _unhandled_input(event: InputEvent) -> void:
 	if not (event is InputEventKey and event.pressed and not event.echo):
 		return
 	var key := event as InputEventKey
+	if _open and current_tab == 2 and _picked != null \
+			and key.keycode >= KEY_1 and key.keycode < KEY_1 + GameState.EQUIP_SLOTS:
+		magic_assign(key.keycode - KEY_1)
+		get_viewport().set_input_as_handled()
+		return
 	match key.keycode:
 		KEY_TAB:
 			# Godot 기본 포커스 이동도 Tab을 쓴다 — 여기서 잡고 소비한다.
@@ -192,6 +206,7 @@ func _open_at(tab: int) -> void:
 	if _open:
 		if current_tab != tab:
 			current_tab = tab
+			_picked = null
 			queue_redraw()
 	elif not GameState.ui_modal_open:
 		current_tab = tab
@@ -210,6 +225,7 @@ func _set_open(open: bool) -> void:
 	_open = open
 	visible = open
 	GameState.ui_modal_open = open
+	_picked = null   # 고른 도안은 패널을 닫으면 잊는다 (다음에 연 사람이 모르는 채 장착하지 않게)
 	queue_redraw()
 
 
@@ -235,10 +251,17 @@ func _gui_input(event: InputEvent) -> void:
 		if rects[i].has_point(mb.position):
 			if current_tab != i:
 				current_tab = i
+				_picked = null
 				queue_redraw()
 				_mark_seen_if_quest_tab()   # 🔴 마우스로 퀘스트 탭 전환도 접수 (세션43)
 			accept_event()
 			return
+
+	# 마법진 탭 = 슬롯 교체(세86 ①). 판정·적용은 magic_click 하나가 쥔다(헤드리스가 부르는 그 함수다).
+	if current_tab == 2:
+		if magic_click(mb.position):
+			accept_event()
+		return
 
 	# 소지품 탭에서만 착용/해제를 잡는다(탭 헤더 다음).
 	if current_tab != 0:
@@ -703,42 +726,167 @@ const MAGIC_OPEN_DOT := Color(0.62, 0.55, 0.44, 0.80)   # 열렸지만 빈 칸
 const MAGIC_SHUT_DOT := Color(0.34, 0.30, 0.24, 0.55)   # 진이 닫은 칸
 const MAGIC_POWER_COLOR := Color(0.90, 0.60, 0.25)
 const MAGIC_INDEX_COLOR := Color(0.72, 0.64, 0.50)
+## 슬롯 교체(세86 ①) — 고른 보관 행·「놓을 자리」 슬롯을 밝힌다. 탭 액센트(TAB_ACCENT)와 같은 금색 계열.
+const MAGIC_PICK_COLOR := Color(0.98, 0.84, 0.40)
+const MAGIC_PICK_BG := Color(0.26, 0.22, 0.13, 0.95)
+const MAGIC_TARGET_EDGE := Color(0.92, 0.78, 0.42, 0.85)
+const MAGIC_HINT_W := 108.0          ## 슬롯 행 오른쪽 끝 조작 꼬리표 폭(위력 줄과 안 겹치게 빼 둔다)
 
 
-func _draw_magic_tab(font: Font, origin: Vector2, content_top: float) -> void:
+func _draw_magic_tab(font: Font, _unused_origin: Vector2, content_top: float) -> void:
+	var layout := magic_row_layout()
+	var left: float = layout["left"]
+	var width: float = layout["width"]
+	var store_count: int = (layout["store_designs"] as Array).size()
+
+	# 🔴 머리글이 **지금 상태에 맞는 다음 한 수**를 말한다 (hud 규율: 안내문에 없는 조작을 적지
+	# 마라 — 뒤집으면 **있는 조작은 적어야 한다**). 고른 게 있으면 "어디에 놓을지"만 남는다.
+	if _picked != null:
+		draw_string(font, Vector2(left, content_top - 8.0),
+			"「%s」 올릴 슬롯을 눌러라 — 슬롯 행 클릭 또는 1·2·3 (한 번 더 누르면 고르기 취소)"
+				% spell_formula(_picked.layer_summary(), rune_seed(_design_runes(_picked))),
+			HORIZONTAL_ALIGNMENT_LEFT, width, 12, MAGIC_PICK_COLOR)
+	else:
+		draw_string(font, Vector2(left, content_top - 8.0),
+			"장착 마법진 — 안쪽 고리(층0)부터 바깥으로 걸린다 = 시전 순서",
+			HORIZONTAL_ALIGNMENT_LEFT, width, 12, SECTION_COLOR)
+
+	var slots: Array = layout["slots"]
+	for i in slots.size():
+		_draw_magic_row(font, slots[i], i, GameState.ring_equipped[i] as RingDesign, store_count)
+
+	_draw_magic_storage(font, layout)
+
+
+## 🔴🔴 **마법진 탭의 행 좌표 단일 소스** (세86 ①) — `_draw_magic_tab`(그리기)과
+## `magic_hit_test`(클릭)가 **같은 함수**를 본다. 소지품 탭의 `_equip_slot_rects`/`_grid_sections`와
+## 같은 규율이다: 그린 곳과 누른 곳을 두 벌로 계산하면 조용히 어긋나 유령 판정이 생긴다.
+##
+## 반환:
+##   `slots` = 장착 슬롯 행 Rect2(개수 = `GameState.EQUIP_SLOTS`) — 행 높이는 도안마다 다르다.
+##   `store` = **실제로 그리는** 보관 행 Rect2(넘쳐 접힌 것은 rect가 없다 = 클릭도 안 된다).
+##   `store_designs` = 보관 도안 전체(앞에서부터 `store`와 1:1 대응).
+## 🔴 접힌 행에 rect를 만들지 않는 게 중요하다 — 안 그린 행을 목록에 남기면 **화면 밖 도안이
+##   클릭으로 장착되는** 유령 판정이 된다(소지품 격자의 세84 #35와 같은 병).
+func magic_row_layout() -> Dictionary:
+	var origin := _origin()
 	var left := origin.x + PAD
 	var width := PANEL_SIZE.x - PAD * 2.0
 	var bottom := origin.y + PANEL_SIZE.y - PAD
+	var y := origin.y + CONTENT_TOP
 
-	draw_string(font, Vector2(left, content_top - 8.0),
-		"장착 마법진 — 안쪽 고리(층0)부터 바깥으로 걸린다 = 시전 순서",
-		HORIZONTAL_ALIGNMENT_LEFT, -1, 12, SECTION_COLOR)
-
-	var y := content_top
+	var slots: Array[Rect2] = []
 	for i in GameState.ring_equipped.size():
-		y = _draw_magic_row(font, Vector2(left, y), width, i,
-			GameState.ring_equipped[i] as RingDesign) + MAGIC_ROW_GAP
+		var h := _magic_slot_row_height(GameState.ring_equipped[i] as RingDesign)
+		slots.append(Rect2(Vector2(left, y), Vector2(width, h)))
+		y += h + MAGIC_ROW_GAP
 
-	_draw_magic_storage(font, left, y, width, bottom)
+	var rest := _unequipped_designs()
+	var store: Array[Rect2] = []
+	var store_top := y
+	if not rest.is_empty():
+		var cap := int(floor((bottom - store_top - MAGIC_STORE_HEAD_H) / MAGIC_STORE_ROW_H))
+		if cap > 0:
+			var shown := rest.size() if rest.size() <= cap else maxi(cap - 1, 0)
+			var sy := store_top + MAGIC_STORE_HEAD_H
+			for i in shown:
+				store.append(Rect2(Vector2(left + 8.0, sy), Vector2(width - 16.0, MAGIC_STORE_ROW_H)))
+				sy += MAGIC_STORE_ROW_H
+	return {"left": left, "width": width, "bottom": bottom, "store_top": store_top,
+		"slots": slots, "store": store, "store_designs": rest}
 
 
-## 슬롯 한 행 — 왼쪽 동심원 + 오른쪽(수식·진·층 목록·위력). 다음 행의 y(=이 행 아랫변)를 돌려준다.
-func _draw_magic_row(font: Font, at: Vector2, width: float, idx: int, design: RingDesign) -> float:
+## 슬롯 행 한 칸의 높이 — 빈 슬롯은 고정, 찬 슬롯은 층 줄 수만큼 자란다.
+## 레이아웃과 그리기가 같은 값을 쓰도록 여기 한 곳에서만 센다.
+func _magic_slot_row_height(design: RingDesign) -> float:
 	if design == null:
-		var er := Rect2(at, Vector2(width, MAGIC_EMPTY_ROW_H))
-		draw_rect(er, MAGIC_ROW_BG, true)
-		draw_rect(er, MAGIC_ROW_EDGE, false, 1.0)
-		draw_string(font, Vector2(at.x + 14.0, at.y + 28.0),
-			"슬롯 %d — 비어 있음 (책상 [E]에서 그려 장착)" % (idx + 1),
+		return MAGIC_EMPTY_ROW_H
+	return _magic_row_height(layer_lines(design.layer_summary(), MAGIC_MAX_LAYER_LINES).size())
+
+
+## 🔴 **좌표 → 어느 행인가** (순수 판정 — 헤드리스가 잰다).
+## 렌더도 「클릭이 여기까지 닿는가」도 헤드리스는 못 재지만, **어느 좌표가 어느 행인지**는 잰다.
+## 반환 `{"kind": &"slot"/&"store"/&"none", "index": int}` — `none`이면 index=-1.
+func magic_hit_test(point: Vector2) -> Dictionary:
+	return _magic_hit_in(magic_row_layout(), point)
+
+
+## 히트 판정 본체 — 이미 뽑아 둔 레이아웃을 재사용한다(클릭 한 번에 레이아웃을 두 번 안 센다).
+func _magic_hit_in(layout: Dictionary, point: Vector2) -> Dictionary:
+	var slots: Array = layout["slots"]
+	for i in slots.size():
+		if (slots[i] as Rect2).has_point(point):
+			return {"kind": &"slot", "index": i}
+	var store: Array = layout["store"]
+	for i in store.size():
+		if (store[i] as Rect2).has_point(point):
+			return {"kind": &"store", "index": i}
+	return {"kind": &"none", "index": -1}
+
+
+## 🔴 마법진 탭 좌클릭 한 번 — **고르기 → 지정** 2단계. 처리했으면 true(호출부가 accept_event).
+##  · 보관 행 = 고른다(같은 행을 다시 누르면 고르기 취소). 소지품 탭의 「카드 클릭」과 같은 손짓.
+##  · 슬롯 행 = 고른 게 있으면 **거기에 올리고**, 없으면 **그 슬롯을 해제**한다
+##    (소지품 탭의 「착용 슬롯 클릭 = 해제」와 같은 규약 — 새 관행을 만들지 않는다).
+func magic_click(point: Vector2) -> bool:
+	var layout := magic_row_layout()
+	var hit := _magic_hit_in(layout, point)
+	var kind := StringName(hit["kind"])
+	var idx := int(hit["index"])
+	if kind == &"store":
+		var rest: Array = layout["store_designs"]
+		if idx < rest.size():
+			var d: RingDesign = rest[idx]
+			_picked = null if _picked == d else d
+			queue_redraw()
+		return true
+	if kind == &"slot":
+		magic_assign(idx)
+		return true
+	return false
+
+
+## 🔴 슬롯 하나에 지정 — 클릭과 1·2·3 키가 **같은 여기로 들어온다**.
+## 🔴🔴 `GameState.ring_equipped`에 **직접 대입하지 않는다** — 반드시 `equip_design()`을 거친다.
+## 그 함수가 중복 장착 정리(같은 도안이 두 슬롯을 차지하지 않게)와 `equipment_changed`(=자동 저장
+## 트리거)를 쥔다. 여기서 배열을 직접 만지면 **바꾼 슬롯이 저장 없이 사라진다**(에러 없이).
+func magic_assign(slot: int) -> void:
+	if slot < 0 or slot >= GameState.ring_equipped.size():
+		return
+	if _picked != null:
+		GameState.equip_design(slot, _picked)   # equipment_changed → _on_changed → queue_redraw
+		_picked = null
+	elif GameState.ring_equipped[slot] != null:
+		GameState.equip_design(slot, null)      # 고른 게 없는 슬롯 클릭 = 해제(보관으로 돌아간다)
+	queue_redraw()
+
+
+## 슬롯 한 행 — 왼쪽 동심원 + 오른쪽(수식·진·층 목록·위력). rect는 `magic_row_layout`이 준다.
+## `store_count` = 지금 보관에 있는 미장착 도안 수. **빈 슬롯 안내문을 참으로 유지하려고** 받는다
+## (보관이 0장이면 「아래 보관에서 골라라」가 거짓말이 된다 — 가리킬 목록이 화면에 없다).
+func _draw_magic_row(font: Font, rect: Rect2, idx: int, design: RingDesign, store_count: int) -> void:
+	var at := rect.position
+	var width := rect.size.x
+	var h := rect.size.y
+	# 고른 도안이 있으면 모든 슬롯이 「놓을 자리」다 — 테두리를 밝혀 어디를 눌러도 되는지 보인다.
+	var aiming := _picked != null
+	draw_rect(rect, MAGIC_ROW_BG, true)
+	draw_rect(rect, MAGIC_TARGET_EDGE if aiming else MAGIC_ROW_EDGE, false, 2.0 if aiming else 1.0)
+
+	if design == null:
+		# ⚠ 이 문구는 **참이어야 한다**(세84 #6 — hud 규율). 세86 ①부터 보관에서 골라 올릴 수
+		# 있으므로 그 길을 적는다. 보관이 비면 그 길이 **지금은 없으므로** 책상 쪽만 적는다
+		# (맺으면 빈 슬롯에 자동 장착 — 이쪽은 세84부터 계속 참이다).
+		var empty_text := "슬롯 %d — 비어 있음 (책상 [E]에서 그리면 여기 들어온다)" % (idx + 1)
+		if store_count > 0:
+			empty_text = "슬롯 %d — 비어 있음 (아래 보관에서 고른 뒤 이 줄 클릭 또는 [%d] · 책상 [E]로 새로 그려도 들어온다)" \
+				% [idx + 1, idx + 1]
+		draw_string(font, Vector2(at.x + 14.0, at.y + 28.0), empty_text,
 			HORIZONTAL_ALIGNMENT_LEFT, width - 28.0, 12, EMPTY_COLOR)
-		return at.y + MAGIC_EMPTY_ROW_H
+		return
 
 	var summary := design.layer_summary()
 	var lines := layer_lines(summary, MAGIC_MAX_LAYER_LINES)
-	var h := _magic_row_height(lines.size())
-	var rect := Rect2(at, Vector2(width, h))
-	draw_rect(rect, MAGIC_ROW_BG, true)
-	draw_rect(rect, MAGIC_ROW_EDGE, false, 1.0)
 	_draw_rune_band(at, h, design)   # 룬 색 띠 (융합진이면 룬마다 한 토막)
 
 	draw_string(font, Vector2(at.x + 14.0, at.y + 15.0), "슬롯 %d" % (idx + 1),
@@ -767,8 +915,12 @@ func _draw_magic_row(font: Font, at: Vector2, width: float, idx: int, design: Ri
 			RingPower.power_display(design.total_score, Db.ink_mult(design.ink), design.size),
 			RingPower.score_display(design.total_score),
 			RingPower.grade_of(design.total_score)],
-		HORIZONTAL_ALIGNMENT_LEFT, tw, 12, MAGIC_POWER_COLOR)
-	return at.y + h
+		HORIZONTAL_ALIGNMENT_LEFT, tw - MAGIC_HINT_W, 12, MAGIC_POWER_COLOR)
+	# 오른쪽 끝의 조작 꼬리표 — **지금 이 행을 누르면 무슨 일이 나는지**를 그 자리에 적는다.
+	draw_string(font, Vector2(at.x + width - 16.0 - MAGIC_HINT_W, at.y + h - 8.0),
+		"[%d] 여기 장착" % (idx + 1) if aiming else "클릭 = 해제",
+		HORIZONTAL_ALIGNMENT_RIGHT, MAGIC_HINT_W, 11,
+		MAGIC_PICK_COLOR if aiming else HINT_COLOR)
 
 
 ## 층 겹 다이어그램 — 고리 하나 = 층 하나, **안쪽이 층0**. 칸 점은 그 층에 놓인 문양 색으로,
@@ -875,40 +1027,46 @@ func _glyph_color(code: int) -> Color:
 
 
 ## 미장착 보관 도안 — 남는 높이에 들어가는 만큼만. 못 담으면 마지막 줄이 "… 외 N장"이다.
-## 🔴 잘려서 반쯤 그려지는 게 제일 나쁘다 — 그래서 **먼저 수용량을 세고** 그 안에서만 그린다.
+## 🔴 잘려서 반쯤 그려지는 게 제일 나쁘다 — 그래서 `magic_row_layout`이 **먼저 수용량을 세고**
+## 들어가는 행에만 rect를 만든다. 여긴 그 rect에 그리기만 한다.
 ##
-## 🔴 **머리글에 없는 조작을 적지 마라** (세84 감사 #6 — 옛 문구는 "책상 [E]에서 장착"이었다).
-## 보관 도안을 슬롯에 **올리는 API가 리포에 없다**(`equip_design` 0건). `ring_equipped`에 쓰는
-## 자리는 시드·새로하기·로드·`_on_ring_design_committed`의 **빈 슬롯 자동 장착**뿐이다.
-## 즉 옛 문구는 존재하지 않는 조작을 지시했다 = hud 규율(*"안내문에 없는 조작을 적지 마라"*) 위반.
-## ⚠ 슬롯 교체를 넣기로 하면 리드가 `GameState.equip_design(slot, design)`을 core에 세운 뒤
-## 이 목록에서 슬롯을 고르게 하고 문구를 되살려라 — **사용자 결정 대기 중이라 여기선 문구만 고쳤다.**
-## (⚠ 대조: 빈 슬롯 행·HUD의 "책상 [E]에서 그려 장착"은 **사실이다** — 맺으면 빈 슬롯에 자동 장착된다.)
-func _draw_magic_storage(font: Font, left: float, top: float, width: float, bottom: float) -> void:
-	var rest := _unequipped_designs()
+## 🔴 **머리글은 지금 있는 조작을 적는다** (hud 규율 — 세84 #6의 반대편).
+## 세84엔 보관 도안을 슬롯에 올리는 API가 **리포에 아예 없어서**(`equip_design` 0건) 문구를
+## "…자동 장착된다"로 낮춰 적고 *"리드가 `equip_design`을 세우면 되살려라"*를 대기로 남겼었다.
+## 🔴 세86 ①에 그 조건이 충족됐다 — core에 `GameState.equip_design(slot, design)`이 섰고
+## 이 목록이 그것을 부르는 UI다. **그래서 문구가 다시 참인 조작을 지시한다.**
+func _draw_magic_storage(font: Font, layout: Dictionary) -> void:
+	var rest: Array = layout["store_designs"]
 	if rest.is_empty():
 		return
-	var cap := int(floor((bottom - top - MAGIC_STORE_HEAD_H) / MAGIC_STORE_ROW_H))
-	if cap <= 0:
-		return
-	draw_string(font, Vector2(left, top + 12.0),
-		"보관 (미장착 — 슬롯이 비면 다음에 맺은 진이 자동 장착된다)",
+	var rects: Array = layout["store"]
+	var left: float = layout["left"]
+	var width: float = layout["width"]
+	draw_string(font, Vector2(left, float(layout["store_top"]) + 12.0),
+		"보관 (미장착 — 행을 눌러 고른 뒤 위 슬롯을 누르거나 1·2·3)",
 		HORIZONTAL_ALIGNMENT_LEFT, width, 12, SECTION_COLOR)
-	var y := top + MAGIC_STORE_HEAD_H
-	var shown := rest.size() if rest.size() <= cap else maxi(cap - 1, 0)
-	for i in shown:
+	var y := float(layout["store_top"]) + MAGIC_STORE_HEAD_H
+	for i in rects.size():
 		var d: RingDesign = rest[i]
 		var s := d.layer_summary()
+		var row: Rect2 = rects[i]
+		# 고른 행은 배경·테두리·머리 기호까지 바꾼다 — **무엇이 골라졌는지 안 보이면 조작이 아니다.**
+		var chosen := _picked == d
+		if chosen:
+			draw_rect(row, MAGIC_PICK_BG, true)
+			draw_rect(row, MAGIC_TARGET_EDGE, false, 1.0)
 		draw_string(font, Vector2(left + 8.0, y + 12.0),
-			"· %s   %s %d · %d점" % [spell_formula(s, rune_seed(_design_runes(d))),
+			"%s %s   %s %d · %d점" % ["▶" if chosen else "·",
+				spell_formula(s, rune_seed(_design_runes(d))),
 				"갈래당" if has_modifier(s, Db.modifier_codes()) else "위력",
 				RingPower.power_display(d.total_score, Db.ink_mult(d.ink), d.size),
 				RingPower.score_display(d.total_score)],
-			HORIZONTAL_ALIGNMENT_LEFT, width - 16.0, 11, HINT_COLOR)
+			HORIZONTAL_ALIGNMENT_LEFT, width - 16.0, 11,
+			MAGIC_PICK_COLOR if chosen else HINT_COLOR)
 		y += MAGIC_STORE_ROW_H
-	if shown < rest.size():
+	if rects.size() < rest.size():
 		draw_string(font, Vector2(left + 8.0, y + 12.0),
-			"… 외 %d장" % (rest.size() - shown),
+			"… 외 %d장" % (rest.size() - rects.size()),
 			HORIZONTAL_ALIGNMENT_LEFT, width - 16.0, 11, EMPTY_COLOR)
 
 

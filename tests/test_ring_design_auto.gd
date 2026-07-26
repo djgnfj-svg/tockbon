@@ -5,7 +5,11 @@ extends SceneTree
 ##
 ## 검증: (1) RingDesign.from_assembly↔to_assembly 라운드트립·filled_count,
 ##   (2) EventBus.ring_design_committed → GameState.ring_equipped 자동 장착(첫 진=슬롯 1),
-##   (3) 빈 슬롯 소진(4장까지 장착, 5장째는 보관만).
+##   (3) 빈 슬롯 소진(4장까지 장착, 5장째는 보관만),
+##   (4) 🔴 **슬롯 교체**(세86 ① — `GameState.equip_design` + `tab_panel` 마법진 탭 판정):
+##       보관 도안을 슬롯에 올리기·중복 장착 없음·보관 밖 거부·null 해제·저장 라운드트립,
+##       그리고 좌표→행 판정과 「클릭 한 번」이 core로 이어지는가.
+##       ⚠ **클릭이 실제로 닿는지·강조가 보이는지는 여기서 못 잰다** — 실게임 push_input·MCP 몫.
 ##
 ## 주의: -s 스크립트는 오토로드 전역 등록 전에 컴파일 — 오토로드는 root.get_node(), RingDesign은 load().
 
@@ -49,6 +53,10 @@ func _run() -> void:
 	_test_assembled_score_axis()
 	_test_grade_bands()
 	_test_grade_follows_threshold()
+	_test_slot_swap()
+	_test_slot_swap_ui()
+	_test_hud_follows_equipment()
+	_test_slot_swap_persists()
 
 	if _fails == 0:
 		print("TEST_RING_DESIGN_OK")
@@ -381,6 +389,228 @@ func _test_auto_equip() -> void:
 	_check(gs.ring_designs.size() == 1, "보관고에 들어간다")
 	_check(gs.ring_equipped[0] == d, "빈 슬롯 없으면 슬롯 1(index 0)에 자동 장착")
 	_check(gs.ring_equipped[1] == null, "나머지 슬롯은 빈 채")
+
+
+## 🔴🔴 **슬롯 교체** (세86 ① — `GameState.equip_design`).
+## 세85까지 `ring_equipped`에 쓰는 자리는 시드·새로하기·로드·**빈 슬롯 자동 장착** 넷뿐이었다 =
+## **슬롯이 한 번 차면 그 뒤에 맺은 도안은 영원히 못 쓴다**(세85 F5에서 보관 6장으로 실증 —
+## "맺었는데 못 쓴다"). `_test_slot_fill`이 그 마지막 상태(꽉 참 → 보관만)를 이미 재고 있으므로
+## 여기선 **그 다음 한 수**(꽂힌 걸 뽑고 보관 걸 올린다)를 잰다.
+##
+## ⚠ 도안 4장의 `total_score`를 서로 다르게 만든다 — 전부 `_sample_assembly()` 사본이라
+## **내용이 같으면 「슬롯이 실제로 바뀌었나」를 구분할 수단이 없다**(둘 다 통과하는 자명 검사가 된다).
+func _test_slot_swap() -> void:
+	_reset_ring_state()
+	var n: int = gs.EQUIP_SLOTS
+	var made: Array = []
+	for i in n + 1:
+		var d = RD.from_assembly(_sample_assembly(), "교체진%d" % i, 0.70 + float(i) * 0.05)
+		made.append(d)
+		eb.ring_design_committed.emit(d)
+	_check(not (made[n] in gs.ring_equipped),
+		"사전: 슬롯이 꽉 차 %d장째는 보관만 (= 세85 F5가 실증한 그 상태)" % (n + 1))
+
+	# ① 🔴 보관 도안을 슬롯에 올린다 — **발사가 실제로 바뀐다**가 계약이다.
+	#    caster는 `GameState.ring_equipped[slot].to_assembly()`로 쏘므로, 그 결과가 새 도안이어야
+	#    "바꿨는데 옛날 게 나간다"가 안 된다(score로 구분 — 네 도안의 점수가 서로 다르다).
+	_check(gs.equip_design(0, made[n]), "보관 도안을 슬롯 1에 올린다 (true)")
+	_check(gs.ring_equipped[0] == made[n], "슬롯 1 = 올린 그 도안")
+	_check(is_equal_approx(float(gs.ring_equipped[0].to_assembly().get("score", -1.0)),
+			float(made[n].total_score)),
+		"🔴 to_assembly가 **바꾼 도안**을 내놓는다 (발사가 실제로 바뀐다)")
+	_check(not (made[0] in gs.ring_equipped), "밀려난 옛 도안은 장착에서 빠진다")
+	_check(gs.ring_designs.has(made[0]), "밀려난 도안은 보관에는 남는다 (잃지 않는다)")
+
+	# ② 🔴 한 도안이 두 슬롯을 차지하지 않는다 — 앞 자리가 자동으로 빈다.
+	#    안 그러면 `_unequipped_designs`(has 판정)와 저장(경로 참조)이 조용히 어긋난다.
+	_check(gs.equip_design(n - 1, made[n]), "같은 도안을 슬롯 %d로 옮긴다" % n)
+	_check(gs.ring_equipped[n - 1] == made[n], "슬롯 %d = 그 도안" % n)
+	_check(gs.ring_equipped[0] == null, "🔴 앞 자리(슬롯 1)가 빈다 — 중복 장착 없음")
+	var dupes := 0
+	for d2 in gs.ring_equipped:
+		if d2 == made[n]:
+			dupes += 1
+	_check(dupes == 1, "장착 배열에 그 도안이 정확히 하나 (%d개)" % dupes)
+
+	# ③ 🔴 보관 밖 인스턴스는 거부 — 저장이 도안을 **파일 경로**로 참조하므로 꽂아도 다음 로드에
+	#    빈 슬롯이 된다(에러 없이). 거부는 배열을 건드리지 않는다.
+	var outsider = RD.from_assembly(_sample_assembly(), "보관 밖 진", 0.99)
+	var before: Array = gs.ring_equipped.duplicate()
+	_check(not gs.equip_design(1, outsider), "🔴 보관(ring_designs)에 없는 도안은 거부 (false)")
+	_check(gs.ring_equipped.duplicate() == before, "거부 시 장착 배열 무변경")
+	_check(not gs.equip_design(-1, made[1]), "슬롯 범위 밖(-1) 거부")
+	_check(not gs.equip_design(n, made[1]), "슬롯 범위 밖(%d) 거부" % n)
+	_check(gs.ring_equipped.duplicate() == before, "범위 밖 거부도 배열 무변경")
+
+	# ④ null = 해제. 해제한 도안은 **보관 목록으로 돌아온다**(tab_panel `_unequipped_designs` 관점 =
+	#    `ring_designs`에 있고 `ring_equipped`에 없다).
+	_check(gs.equip_design(n - 1, null), "null로 해제 (true)")
+	_check(gs.ring_equipped[n - 1] == null, "슬롯 %d가 빈다" % n)
+	_check(gs.ring_designs.has(made[n]) and not gs.ring_equipped.has(made[n]),
+		"🔴 해제한 도안이 보관 목록으로 돌아온다")
+
+
+## 🔴 슬롯 교체 **UI 판정**(`tab_panel` 마법진 탭) — 좌표 → 어느 행인가 + 클릭 한 번의 결과.
+## ⚠⚠ **헤드리스는 「클릭이 저기까지 닿는가」도 「그게 보이는가」도 못 잡는다**(세25 `mouse_filter`).
+##   여기서 재는 것은 **판정 로직뿐**이다: rect를 어디에 두었고, 그 좌표를 누르면 core의 어느
+##   함수가 불리는가. 실제 마우스가 그 rect까지 도달하는지·강조가 눈에 보이는지는 **리드가 실게임
+##   `push_input`과 MCP 스샷으로** 따로 확인한다. (그래서 판정을 `magic_hit_test`/`magic_click`
+##   공개 함수로 뽑았다 — 안 뽑으면 이 절이 통째로 못 재는 자리가 된다.)
+func _test_slot_swap_ui() -> void:
+	_reset_ring_state()
+	var n: int = gs.EQUIP_SLOTS
+	var made: Array = []
+	for i in n + 2:
+		var d = RD.from_assembly(_sample_assembly(), "UI진%d" % i, 0.70 + float(i) * 0.04)
+		made.append(d)
+		eb.ring_design_committed.emit(d)
+
+	var TP: GDScript = load("res://src/hud/tab_panel.gd")
+	var panel: Control = Control.new()
+	panel.set_script(TP)
+	panel.size = Vector2(960.0, 540.0)   # 뷰포트 = 패널이 스스로 가운데를 잡는 기준
+	panel.current_tab = 2
+
+	var layout: Dictionary = panel.magic_row_layout()
+	var slots: Array = layout["slots"]
+	var store: Array = layout["store"]
+	var rest: Array = layout["store_designs"]
+	_check(slots.size() == n, "레이아웃: 슬롯 행이 EQUIP_SLOTS개 (%d)" % slots.size())
+	_check(rest.size() == 2, "레이아웃: 보관 도안 2장 (%d)" % rest.size())
+	_check(store.size() == rest.size(), "보관 2장은 다 들어간다 (접힘 없음)")
+
+	# 🔴 좌표 → 행 (그린 곳 = 누른 곳). 패널 밖 좌표는 아무 행도 아니다.
+	var h0: Dictionary = panel.magic_hit_test((slots[0] as Rect2).get_center())
+	_check(StringName(h0["kind"]) == &"slot" and int(h0["index"]) == 0, "슬롯 1 행 중앙 → slot 0")
+	var h1: Dictionary = panel.magic_hit_test((store[1] as Rect2).get_center())
+	_check(StringName(h1["kind"]) == &"store" and int(h1["index"]) == 1, "보관 둘째 행 중앙 → store 1")
+	var hn: Dictionary = panel.magic_hit_test(Vector2(4.0, 4.0))
+	_check(StringName(hn["kind"]) == &"none", "패널 밖 좌표 → none (유령 판정 없음)")
+	# 🔴 행끼리 안 겹친다 — 겹치면 위 행을 누른 게 아래 행으로 새어 「엉뚱한 슬롯에 장착」이 된다
+	var overlap := false
+	for i in slots.size():
+		for j in store.size():
+			if (slots[i] as Rect2).intersects(store[j] as Rect2):
+				overlap = true
+	_check(not overlap, "🔴 슬롯 행과 보관 행이 안 겹친다")
+
+	# ── 조작 한 바퀴: 보관 행 고르기 → 슬롯 행에 지정 ──
+	# 🔴🔴 **UI가 `equip_design`을 거치는지까지 잰다.** 슬롯 값만 보면 `ring_equipped[slot]`에
+	# **직접 대입**해도 똑같아 보여 계약 위반이 안 잡힌다(실측: 직접 대입 뮤테이션이 전 항목을
+	# 통과했다). 갈라지는 자리는 **`equipment_changed` 발신**이다 — 저장 트리거(save_manager
+	# `_queue_save`)와 중복 장착 정리가 거기 매달려 있어, 안 쏘면 **바꾼 슬롯이 저장 없이 사라진다.**
+	var beats: Array = [0]
+	var counter := func() -> void: beats[0] += 1
+	eb.equipment_changed.connect(counter)
+	var target = rest[0]
+	_check(panel.magic_click((store[0] as Rect2).get_center()), "보관 행 클릭이 처리된다")
+	_check(panel._picked == target, "보관 행 클릭 = 그 도안을 고른다 (선택 상태)")
+	_check(beats[0] == 0, "고르기만 해서는 아무것도 안 바뀐다 (equipment_changed 무발신)")
+	_check(panel.magic_click((slots[1] as Rect2).get_center()), "슬롯 행 클릭이 처리된다")
+	_check(gs.ring_equipped[1] == target,
+		"🔴 고른 도안이 슬롯 2에 올라간다 (UI 클릭 → GameState.equip_design 경로가 이어져 있다)")
+	_check(beats[0] == 1,
+		"🔴 UI 클릭이 equipment_changed를 정확히 1회 쏜다 (= 자동 저장 트리거 · 배열 직접 대입이면 0회)")
+	_check(panel._picked == null, "지정하면 고르기가 풀린다")
+
+	# 고른 게 없을 때 찬 슬롯 클릭 = 해제 (소지품 탭 「착용 슬롯 클릭 = 해제」와 같은 규약)
+	var l2: Dictionary = panel.magic_row_layout()
+	panel.magic_click(((l2["slots"] as Array)[1] as Rect2).get_center())
+	_check(gs.ring_equipped[1] == null, "고른 게 없을 때 슬롯 클릭 = 해제")
+	_check(beats[0] == 2, "해제도 equipment_changed를 쏜다 (%d회) — 해제만 저장에서 새면 다음 부팅에 되살아난다" % beats[0])
+	eb.equipment_changed.disconnect(counter)
+
+	# 같은 보관 행을 두 번 누르면 고르기 취소 (잘못 골랐을 때 빠져나갈 길)
+	var l3: Dictionary = panel.magic_row_layout()
+	var s3: Array = l3["store"]
+	panel.magic_click((s3[0] as Rect2).get_center())
+	_check(panel._picked != null, "보관 행 클릭 = 고름")
+	panel.magic_click((s3[0] as Rect2).get_center())
+	_check(panel._picked == null, "같은 행을 다시 누르면 고르기 취소")
+
+	# 1·2·3 키가 클릭과 **같은 함수**로 들어간다(키 경로가 따로 굴러 갈라지지 않게)
+	panel.magic_click((s3[0] as Rect2).get_center())
+	panel.magic_assign(0)
+	_check(gs.ring_equipped[0] == (l3["store_designs"] as Array)[0],
+		"🔴 [1] 키 경로(magic_assign)도 같은 결과를 낸다")
+
+	# 🔴🔴 **넘치면 rect를 아예 안 만든다** — 접힌 행에 판정을 남기면 **화면 밖 도안이 클릭으로
+	# 장착되는** 유령 판정이 된다(소지품 격자의 세84 #35와 같은 병). 보관을 일부러 넘치게 만들어 잰다.
+	_reset_ring_state()
+	for i in 40:
+		eb.ring_design_committed.emit(RD.from_assembly(_sample_assembly(), "넘침진%d" % i, 0.80))
+	var big: Dictionary = panel.magic_row_layout()
+	var brects: Array = big["store"]
+	var bdesigns: Array = big["store_designs"]
+	_check(brects.size() > 0 and brects.size() < bdesigns.size(),
+		"보관이 넘치면 들어가는 만큼만 rect를 만든다 (%d/%d)" % [brects.size(), bdesigns.size()])
+	var inside := true
+	for r in brects:
+		if (r as Rect2).end.y > float(big["bottom"]) + 0.01:
+			inside = false
+	_check(inside, "🔴 판정이 있는 보관 행은 전부 패널 아랫변 안이다 (화면 밖 유령 클릭 없음)")
+	panel.free()
+
+
+## 🔴 **슬롯을 갈아 끼우면 HUD가 따라오는가** — 세86 ①이 만든 새 필요.
+## 세85까지 `ring_equipped`는 **맺을 때만** 바뀌었고 HUD는 `ring_design_committed`로 그걸 잡았다.
+## 이제 Tab에서 언제든 갈아 끼우는데, `hud._process`의 redraw 조건은 마나 변화·토스트·안내문·돈뿐
+## → **마나가 만땅이면 아무도 redraw를 안 걸어** 슬롯 미니 다이어그램이 바꾸기 전 진을 계속
+## 보여 준다(= 세84 감사 T8 「쏘는 것 ≠ 보이는 것」). 실제로 그렇게 될 뻔했고, 이 그물이 그 자리다.
+## ⚠ **「보인다」는 여기서 못 잰다** — 재는 것은 **다시 그릴 계기가 연결돼 있는가** 하나다
+##   (`test_spell_vfx_auto`의 「배선 침묵사 그물」과 같은 규약). 눈 확인은 리드의 MCP 몫.
+func _test_hud_follows_equipment() -> void:
+	var hud: Control = Control.new()
+	hud.set_script(load("res://src/hud/hud.gd"))
+	root.add_child(hud)   # _ready가 EventBus에 붙는다
+	var wired := false
+	for c in eb.equipment_changed.get_connections():
+		if (c["callable"] as Callable).get_object() == hud:
+			wired = true
+	_check(wired,
+		"🔴 HUD가 equipment_changed에 연결돼 있다 (슬롯 교체가 화면에 반영될 계기 — 끊기면 T8 재발)")
+	root.remove_child(hud)
+	hud.free()
+
+
+## 🔴 **저장 라운드트립** — 바꾼 슬롯 배치가 재부팅을 건넌다.
+## 이게 없으면 "게임 안에선 바뀌는데 다시 켜면 원래대로"가 조용히 지나간다. `equip_design`이
+## `equipment_changed`를 쏴 자동 저장이 걸리지만, 여기선 흐름을 확정하려고 직접 저장·로드한다.
+## ⚠ 헤드리스는 세이브 뿌리가 `save_test`로 격리돼 있다(세59) — 실세이브를 안 건드린다. 끝에 뒷정리.
+## ⚠ 로드는 도안을 **파일에서 새 인스턴스로** 되살린다 — 참조가 아니라 **이름으로** 대조해야 한다.
+func _test_slot_swap_persists() -> void:
+	var sm: Node = root.get_node(^"SaveManager")
+	_reset_ring_state()
+	var n: int = gs.EQUIP_SLOTS
+	var made: Array = []
+	for i in n + 1:
+		var d = RD.from_assembly(_sample_assembly(), "저장진%d" % i, 0.70 + float(i) * 0.05)
+		made.append(d)
+		eb.ring_design_committed.emit(d)
+	_check(gs.equip_design(0, made[n]), "교체: 보관 도안을 슬롯 1로")
+	_check(gs.equip_design(1, null), "교체: 슬롯 2를 비운다")
+	var want := _equipped_names()
+
+	sm.save_game()
+	_check(sm.has_save(), "저장 파일 생성")
+	_reset_ring_state()
+	_check(sm.load_game(), "로드 true")
+	var got := _equipped_names()
+	_check(got == want, "🔴 교체·해제한 슬롯 배치가 저장·로드를 건넌다 (%s → %s)" % [want, got])
+	# 보관은 통째로 살아 있다 — 슬롯만 저장되고 나머지 도안이 증발하면 다음 교체가 불가능해진다
+	_check(gs.ring_designs.size() == n + 1, "보관 %d장 전부 복원 (%d)" % [n + 1, gs.ring_designs.size()])
+	sm.wipe_save()
+	# 뒷정리 — 안 비우면 종료 시 "ObjectDB 누수" 줄이 늘어난다(도안이 오토로드에 매달린 채 끝난다).
+	# 실패가 아니라 잡음이지만, 잡음이 늘면 진짜 누수를 눈으로 못 가른다.
+	_reset_ring_state()
+
+
+## 장착 슬롯의 도안 이름 배열 — 로드 후엔 인스턴스가 새로 만들어지므로 참조 대신 이름으로 본다.
+func _equipped_names() -> Array:
+	var out: Array = []
+	for d in gs.ring_equipped:
+		out.append(String(d.display_name) if d != null else "")
+	return out
 
 
 func _test_slot_fill() -> void:

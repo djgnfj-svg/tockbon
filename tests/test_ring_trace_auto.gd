@@ -63,6 +63,7 @@ func _run() -> void:
 	_test_special_ink_consumed_while_drawing()
 	_test_accuracy_tol_tightened()
 	_test_low_precision_piece_score_penalized()
+	_test_band_lane_wraps_motifs()
 
 	if failures == 0:
 		print("TEST_RING_TRACE_OK — 전 항목 통과")
@@ -70,6 +71,68 @@ func _run() -> void:
 	else:
 		print("TEST_RING_TRACE_FAIL — %d개 실패" % failures)
 		quit(1)
+
+
+# ── 🔴🔴 세86 층 「띠」 — 선이 문양을 가로지르지 않는다 (사용자 확정) ──
+# 전엔 층 선이 **하나**라 문양 중심 반경을 지나 모티프를 갈랐다(세81에도 같은 지적이 있었고 그땐
+# 「그릴 때 선을 끄는 것」으로 피했다). 이제 선이 둘이고 문양이 그 사이 띠에 들어앉는다.
+#
+# 🔴 **값을 하나도 안 박는다 — 전부 관계식이다.** 여백(`BAND_LANE_PAD`)이나 문양 크기를
+# 튜닝하면 숫자는 다 바뀌지만 「안 겹친다」는 불변이라, 손맛을 조여도 거짓 빨강이 안 난다(세79 교훈).
+func _test_band_lane_wraps_motifs() -> void:
+	var ro := 120.0
+	var radii: Array = _BoardScript.BAND_RADII
+	var motif_frac := float(_BoardScript.MOTIF_SIZE_FRAC)
+	var prev_outer := 0.0
+	for i in radii.size():
+		var band_r := ro * float(radii[i])
+		var motif_r := band_r * motif_frac      # `glyph_ring_subpaths`가 문양 한 장에 쓰는 크기
+		var lane: Vector2 = _BoardScript.band_lane(i, ro)
+		# ⓐ 핵심 = 문양이 두 선 **사이**에 온전히 들어간다 (선이 모티프를 가로지르면 빨개진다).
+		_check(lane.x < band_r - motif_r,
+			"층%d 안쪽선이 문양 안쪽 끝보다 안에 있다 (선 %.1f < 문양끝 %.1f)"
+				% [i, lane.x, band_r - motif_r])
+		_check(lane.y > band_r + motif_r,
+			"층%d 바깥선이 문양 바깥 끝보다 밖에 있다 (선 %.1f > 문양끝 %.1f)"
+				% [i, lane.y, band_r + motif_r])
+		# ⓑ 문양 중심 반경은 띠 **안**에 있다 = 발사 층 계약(BAND_RADII)을 안 옮겼다는 증명.
+		_check(lane.x < band_r and band_r < lane.y,
+			"층%d 문양 중심 반경이 띠 안에 그대로 있다 (발사 계약 무변경)" % i)
+		# ⓒ 띠끼리 안 겹친다 — 겹치면 어느 선이 어느 층인지 못 읽는다.
+		if i > 0:
+			_check(prev_outer < lane.x,
+				"층%d 띠가 층%d 띠와 안 겹친다 (앞 바깥 %.1f < 이 안쪽 %.1f)"
+					% [i, i - 1, prev_outer, lane.x])
+		prev_outer = lane.y
+	# ⓓ 가장 바깥 띠가 **진 윤곽 안**에 있다 (밖으로 새면 그릇 밖에 층이 그려진다).
+	var last: Vector2 = _BoardScript.band_lane(radii.size() - 1, ro)
+	_check(last.y < ro, "바깥 층 띠가 진 윤곽 안에 있다 (%.1f < %.1f)" % [last.y, ro])
+	# ⓔ 중심 룬이 가장 안쪽 띠를 **안 침범한다** — 룬은 모든 층 안쪽에 앉는 씨앗이다.
+	var rune_r: float = _BoardScript.combined_rune_size(ro, 1)
+	var inner: Vector2 = _BoardScript.band_lane(0, ro)
+	_check(rune_r < inner.x,
+		"중심 룬이 안쪽 띠 안으로 안 파고든다 (룬 %.1f < 띠 안쪽선 %.1f)" % [rune_r, inner.x])
+
+	# ── 🔴🔴 **실제로 그리는 선 = 층 경계 하나씩** (사용자 확정: *"선이 너무 많음"*) ──
+	# 띠 경계 둘을 다 그렸더니 2층 진에서 원이 5개였다. 이제 층 수 + 진 윤곽뿐이다.
+	# ⚠ **선의 개수는 헤드리스가 못 센다**(렌더) — 대신 「경계가 어디 놓이나」를 잰다.
+	#   경계가 문양 범위 안으로 들어오면 다시 선이 문양을 밟는다 = 이 고침의 원상복귀다.
+	var prev_lane := Vector2(0.0, rune_r)   # 층0의 안쪽 이웃 = 중심 룬
+	for i in radii.size():
+		var lane: Vector2 = _BoardScript.band_lane(i, ro)
+		var edge: float = _BoardScript.band_edge(i, ro)
+		_check(edge > prev_lane.y,
+			"층%d 경계선이 안쪽 이웃(룬·앞 층)의 바깥 끝보다 밖이다 (선 %.1f > %.1f)"
+				% [i, edge, prev_lane.y])
+		_check(edge < lane.x,
+			"층%d 경계선이 그 층 문양의 안쪽 끝보다 안이다 = 문양을 안 밟는다 (선 %.1f < %.1f)"
+				% [i, edge, lane.x])
+		prev_lane = lane
+	# 경계는 안에서 밖으로 **단조 증가**한다 — 뒤집히면 층 순서가 그림에서 꼬인다.
+	if radii.size() >= 2:
+		_check(float(_BoardScript.band_edge(0, ro)) < float(_BoardScript.band_edge(1, ro)),
+			"층 경계가 안→밖 순서다 (층0 %.1f < 층1 %.1f)"
+				% [_BoardScript.band_edge(0, ro), _BoardScript.band_edge(1, ro)])
 
 
 # ── 🔴 ⑨ 정밀도에 이빨이 있다 (세션 23, 사용자 확정: "벗어난 만큼 벌한다") ──

@@ -86,7 +86,17 @@ signal quests_seen
 ##   **`add_to_bag`(원정 중 드롭 획득)도 같이 쏘는데** 가방은 애초에 저장 대상이 아니다(사망 시
 ##   소실이 설계). 창고 변화를 저장 계기로 쓰려면 **신호를 갈라야 한다**(`inventory_changed` 신설
 ##   또는 `add_to_bag`을 이 신호에서 떼기) — 그때까지 제작·상점은 종료 훅이 덮는다.
+## ✅ 세86 ⑫: **신호를 갈랐다** — 아래 `inventory_changed`가 저장 트리거다.
+##   이 신호는 **UI 갱신 전용**으로 남는다(수신 6곳 무변경 — 가방 구역도 같이 다시 그려야 하므로).
 signal resources_changed
+## 🔴🔴 **창고(영구)가 증감했다** (세86 ⑫ 신설) — `add_item`·`remove_item` **두 곳만** 발신한다.
+## 즉 제작·상점·퀘스트 보상·귀환 정산이 여기 실리고, **`add_to_bag`(가방)은 안 실린다.**
+##   수신: `save_manager._ready`(자동 저장 트리거) — UI는 여전히 `resources_changed`를 본다.
+## 🔴 **UI 갱신에 이 신호를 쓰지 마라**: 가방만 바뀌는 순간(원정 중 드롭)엔 안 울려 화면이 멎는다.
+##   반대로 저장에 `resources_changed`를 쓰면 드롭마다 세이브 + 도안 .tres 전량을 다시 쓴다.
+##   **두 신호의 차이는 「무엇을 다시 그리나」가 아니라 「무엇이 영구인가」다.**
+## ⚠ `save_manager.load_game`·`new_game`은 이 신호를 **일부러 안 쏜다** — 복원은 변경이 아니다.
+signal inventory_changed
 signal equipment_changed
 ## 🔴 바닥 픽업이 플레이어에게 흡수돼 가방에 들어갔다 (세션51). drop_pickup이 **도착 순간 1회** 발신.
 ## HUD가 획득 토스트를 띄운다. `resources_changed`(가방/창고 내용이 변했다)와 **다르다** — 이건

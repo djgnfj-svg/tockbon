@@ -56,6 +56,9 @@ func _run() -> void:
 	_test_quest_row_cap()
 	_test_grid_row_cap()
 	await _test_say_expires()
+	await _test_forge_button_names_from_mode()
+	_test_report_summary_fits()
+	_test_jin_cell_spec_from_data()
 
 	_hud.free()
 	_tab.free()
@@ -244,6 +247,122 @@ func _test_say_expires() -> void:
 	_hud.say("")
 	_check(_hud.say_line() == "", "빈 문자열은 즉시 지운다")
 	await process_frame
+
+
+## [9] 🔴 세86 B① — **제작대 버튼 이름은 씬이 아니라 모드가 판다.**
+## 세85 F5가 화면에서 잡았다: 리포트 [다시] 버튼이 폐지 모드인데 **"다시 그리기"**라고 적혀 있었다
+## (씬 `ring_forge_panel.tscn`에 박힌 문구. 코드의 `_redraw_btn`("◀ 다시 조립")과는 **다른 버튼**이라
+## 아무도 못 알아챘다). 있지도 않은 조작을 적는 건 그 자체가 버그다(CLAUDE.md).
+## 🔴 **두 겹으로 잰다**: ⓐ 라이브 버튼이 지금 모드에 맞는 이름을 달고 있나 ⓑ **씬에 문구 사본이
+## 다시 생기지 않았나**(스캔 — [5]의 사본 재발 감지와 같은 수법. 문구는 갈라져도 에러가 안 난다).
+func _test_forge_button_names_from_mode() -> void:
+	print("[9] 제작대 버튼 이름이 모드에서 파생된다 (씬에 박힌 사본 없음)")
+	var RP = load("res://src/core/ring_power.gd")
+	var panel = (load("res://src/drawing/ring_forge_panel.tscn") as PackedScene).instantiate()
+	root.add_child(panel)
+	await process_frame   # _ready → 버튼 이름 주입
+
+	var redo = panel.get_node("Stage/Spread/Report/RedoBtn")
+	var shoot = panel.get_node("Stage/Spread/Report/ShootBtn")
+	var nxt = panel.get_node("Stage/Spread/NextBtn")
+	_check(String(redo.text) != "", "리포트 [다시] 버튼에 이름이 있다 (씬에서 문구를 걷었으니 코드가 채워야 한다)")
+	_check(String(shoot.text) != "" and String(nxt.text) != "",
+		"[마력 주입]·시작 버튼도 코드가 채운다 (실제 '%s' / '%s')" % [shoot.text, nxt.text])
+	# 🔴 심장 — **모드에 없는 조작을 광고하지 않는다.** 이름 문자열을 여기 베끼지 않는다(그러면
+	# 테스트가 세 번째 사본이 된다) — 「그리기」라는 말이 있냐 없냐로 잰다.
+	if RP.skip_drawing():
+		_check(not String(redo.text).contains("그리기"),
+			"🔴 폐지 모드 = [다시] 버튼이 '그리기'를 말하지 않는다 (실제 '%s')" % redo.text)
+		_check(not String(nxt.text).contains("그리기 시작"),
+			"🔴 폐지 모드 = 시작 버튼도 '그리기 시작'이 아니다 (실제 '%s')" % nxt.text)
+	else:
+		_check(String(redo.text).contains("그리기"),
+			"그리기 모드 = [다시 그리기]다 (실제 '%s')" % redo.text)
+
+	var f = FileAccess.open("res://src/drawing/ring_forge_panel.tscn", FileAccess.READ)
+	var src = f.get_as_text() if f != null else ""
+	_check(src != "", "ring_forge_panel.tscn 을 읽었다")
+	for stale in ["다시 그리기", "쏘기 ▶", "맺기 (분석)", "여러 획"]:
+		_check(not src.contains(stale),
+			"🔴 씬에 문구 사본 '%s'가 다시 안 생겼다 (모드·단계가 파는 문구다)" % stale)
+	panel.free()
+
+
+## [10] 🔴 세86 B② — 리포트 「조립:」 줄이 **카드 폭 안에 든다**(세85 F5: `층 [확산 고리 ×3×3, 폭발 고…`로
+## 잘려 뒷부분이 통째로 안 보였다). 층·문양이 늘수록 길어지는 줄이라 조이면 또 넘친다.
+## 🔴 값이 아니라 **관계**로 잰다: 나눈 줄이 전부 폭 안이고, 줄 수가 상한 이하고, 넘친 줄은 …로 끝난다.
+## 그리고 **2줄 자리가 막대와 안 겹친다**(레이아웃 상수 관계) — 상수를 조이면 여기가 따라온다.
+func _test_report_summary_fits() -> void:
+	print("[10] 리포트 「조립:」 줄이 카드 폭 안에 든다 (잘림 금지)")
+	var fp = load("res://src/drawing/ring_forge_panel.gd")
+	var font := ThemeDB.fallback_font
+	var w := 292.0 - 28.0     # 리포트 카드 폭 − 좌우 여백 (씬 Report 292px)
+	var fs := 10
+	var long_text := "조립: 고리 마법진 · 룬 불+번개 · 층 [확산 고리 ×3, 폭발 고리 ×3, 응축 고리 ×5]"
+	var lines: PackedStringArray = fp.fit_lines(long_text, font, fs, w, fp.REPORT_SUM_LINES)
+	_check(lines.size() >= 2, "긴 줄은 나뉜다 (실제 %d줄)" % lines.size())
+	_check(lines.size() <= int(fp.REPORT_SUM_LINES),
+		"상한 %d줄을 안 넘는다 (실제 %d줄)" % [int(fp.REPORT_SUM_LINES), lines.size()])
+	for ln in lines:
+		var lw: float = font.get_string_size(ln, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+		_check(lw <= w, "줄이 폭 안이다 (%.0f <= %.0f) — '%s'" % [lw, w, ln])
+	_check(String(lines[0]).begins_with("조립: "), "첫 줄은 머리말로 시작한다 (실제 '%s')" % lines[0])
+	# 🔴 검출력: 폭을 아주 좁히면 반드시 …로 끝난다(안 그러면 「말없이 잘림」이 그대로 산다).
+	var tight: PackedStringArray = fp.fit_lines(long_text, font, fs, 60.0, fp.REPORT_SUM_LINES)
+	_check(String(tight[tight.size() - 1]).ends_with("…"),
+		"🔴 다 못 담으면 …로 잘렸음을 알린다 (실제 '%s')" % tight[tight.size() - 1])
+	# 짧은 줄은 손대지 않는다 = 무회귀
+	var short_lines: PackedStringArray = fp.fit_lines("조립: 고리 마법진", font, fs, w, fp.REPORT_SUM_LINES)
+	_check(short_lines.size() == 1 and String(short_lines[0]) == "조립: 고리 마법진",
+		"짧은 줄은 한 줄 그대로 (무회귀)")
+	# 레이아웃 관계 — 2줄 자리가 종합 막대를 침범하지 않는다.
+	_check(float(fp.REPORT_SUM_Y) + float(fp.REPORT_SUM_LINES) * float(fp.REPORT_SUM_LINE_H)
+			<= float(fp.REPORT_BAR_Y),
+		"🔴 요약 %d줄 자리가 막대(y%.0f) 위에서 끝난다" % [int(fp.REPORT_SUM_LINES), float(fp.REPORT_BAR_Y)])
+	_check(float(fp.REPORT_BOX_Y) < float(fp.REPORT_BOX_BOTTOM)
+			and float(fp.REPORT_BOX_BOTTOM) <= 292.0,
+		"🔴 아래 상자가 리포트 버튼 줄(y292) 위에서 끝난다")
+
+
+## [11] 🔴 세86 B③ — 책 진 셀 설명이 **JinDef에서 파생**된다(`band_count`·`rune_slots`).
+## 세85 ⑦에 `glyph_slots`(진이 문양 칸을 연다) 축이 은퇴하면서 그 축을 말하던 옛 문구가
+## **거짓말**이 됐다(세85 F5가 진 탭에서 눈으로 잡았다 — 감사 T4 「주석·문구가 코드와 같이 안 늙는다」).
+## ⚠ 아래 스캔 문자열을 이 주석에 그대로 적지 마라 — **이 파일이 자기 스캔에 걸린다**(실제로 밟았다).
+## 새 문장을 또 베껴 적으면 다음 축 변경 때 같은 일이 난다 → **숫자를 데이터에서 뽑는지**를 잰다.
+func _test_jin_cell_spec_from_data() -> void:
+	print("[11] 진 셀 설명이 데이터에서 파생된다 (은퇴한 「열리는 칸」 재발 감지)")
+	var book = load("res://src/drawing/ring_book.gd")
+	_check(String(book.jin_spec_text(1, 1)) == "층 1겹",
+		"자리 1개면 층 수만 (실제 '%s')" % book.jin_spec_text(1, 1))
+	_check(String(book.jin_spec_text(2, 1)) == "층 2겹",
+		"층 수가 그대로 따라온다 (실제 '%s')" % book.jin_spec_text(2, 1))
+	var fuse: String = book.jin_spec_text(2, 2)
+	_check(fuse.contains("2겹") and fuse.contains("룬 자리 2"),
+		"🔴 융합진은 룬 자리도 적는다 (실제 '%s')" % fuse)
+	_check(not String(book.jin_spec_text(1, 1)).contains("룬 자리"),
+		"자리 1개엔 룬 자리를 안 적는다 (정보량 0인 노이즈 제거)")
+	# 🔴 셀 아래 한 줄이 **스펙 + 설명**으로 조립되나 — 스펙이 빠지면 셀은 다시 "발사 형태가 있다"만
+	# 말하고 진의 개성(층·룬 자리)은 화면 어디에도 안 남는다.
+	var line1: String = book.jin_desc_line(&"jin_single", 1, 1)
+	_check(line1.begins_with(String(book.jin_spec_text(1, 1))),
+		"🔴 셀 설명이 파생 스펙으로 시작한다 (실제 '%s')" % line1)
+	_check(line1.contains("—") and line1.length() > String(book.jin_spec_text(1, 1)).length() + 2,
+		"스펙 뒤에 설명이 붙는다 (실제 '%s')" % line1)
+	_check(book.jin_desc_line(&"jin_no_such_id", 3, 2).contains("층 3겹"),
+		"모르는 진도 스펙은 나온다 (폴백이 크래시가 아니다)")
+	# 🔴 실제 진 데이터로도 맞나 — Db의 진 하나를 그대로 넣어 본다(수치를 박지 않는다).
+	var jins: Array = _db.all_jins()
+	_check(not jins.is_empty(), "Db에 진이 있다 (%d종)" % jins.size())
+	if not jins.is_empty():
+		var jd = jins[0]
+		var spec: String = book.jin_spec_text(int(jd.band_count), maxi(int(jd.rune_slots), 1))
+		_check(spec.contains("%d겹" % int(jd.band_count)),
+			"🔴 %s의 층 수(%d)가 그대로 나온다 (실제 '%s')" % [jd.id, int(jd.band_count), spec])
+	var f = FileAccess.open("res://src/drawing/ring_book.gd", FileAccess.READ)
+	var src = f.get_as_text() if f != null else ""
+	_check(src != "", "ring_book.gd 를 읽었다")
+	_check(not src.contains("열리는 칸이 진마다"),
+		"🔴 은퇴한 「열리는 칸」 문구가 안 되살아났다 (glyph_slots 축은 세85 ⑦에 은퇴)")
 
 
 func _check(cond: bool, label: String) -> void:

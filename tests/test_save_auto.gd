@@ -267,6 +267,66 @@ func _run() -> void:
 	_check("🔴 새로하기: 해독으로 얻은 해금은 사라졌다", not gs.is_unlocked(&"__decoded_probe"))
 	_check("🔴 새로하기: 지은 스테이션(정제대)은 사라졌다 — 거점 빈 시작", not gs.is_unlocked(&"station_refine"))
 
+	# ── 🔴🔴 세86 ⑫ **`inventory_changed` = 자동 저장 트리거** (신호를 갈랐다) ──
+	# 세84엔 `resources_changed`뿐이라 저장 트리거로 못 걸었다: 그 신호는 `add_to_bag`(가방)도
+	# 쏘는데 **가방은 애초에 저장 대상이 아니라**(사망 시 소실이 설계) 드롭 하나마다 세이브 +
+	# 도안 .tres 전량을 다시 쓰는 순수 낭비였다. 그래서 창고 증감만 쏘는 신호를 갈라 냈다.
+	# 🔴 **이 그물이 없으면 「제작·상점 뒤 창을 닫으면 롤백」이 조용히 되살아난다** — 신규 기능은
+	#   그물이 없으면 초록불이 소실을 덮는다(세85 실측: 미커밋 소실 뒤에도 전 스위트가 그린이었다).
+	await process_frame          # 앞 절(new_game)의 저장 예약을 먼저 소진 — 안 하면 우리 wipe 뒤에 깨어난다
+	sm.wipe_save()
+	# ⚠ GDScript 람다는 로컬을 **값으로** 캡처한다 — `var n := 0`을 늘리면 바깥은 0인 채라
+	#   신호가 안 와도 그린이 된다(리드가 이 그물을 짜다 실제로 밟았다). 참조 타입으로 센다.
+	var inv_signals := [0]
+	var inv_probe := func() -> void: inv_signals[0] += 1
+	bus.inventory_changed.connect(inv_probe)
+	gs.add_to_bag(&"__bag_probe", 1)
+	_check("🔴 가방 획득은 inventory_changed를 **안** 쏜다 (원정 중 드롭은 영구부가 아니다)", inv_signals[0] == 0)
+	await process_frame          # 저장 예약(_queue_save)은 deferred라 한 프레임 뒤에 쓴다
+	_check("🔴🔴 가방 획득만으로는 저장이 돌지 않는다 (드롭마다 전량 재작성 = 세84가 각하한 낭비)",
+		not sm.has_save())
+	gs.add_item(&"__inv_probe", 1)
+	_check("🔴 창고 입고는 inventory_changed를 쏜다", inv_signals[0] == 1)
+	await process_frame
+	_check("🔴🔴 창고 증감만으로 자동 저장이 실제로 돈다 (제작·상점·보상이 창을 닫아도 안 롤백)",
+		sm.has_save())
+	gs.remove_item(&"__inv_probe", 1)
+	_check("🔴 창고 소모도 쏜다 (제작 비용 지불이 저장돼야 한다)", inv_signals[0] == 2)
+	bus.inventory_changed.disconnect(inv_probe)
+	gs.bag.clear()
+
+	# ── 🔴 세86 ⑥ **로드는 codex를 clear하고, 시드는 다시 심는다** ──
+	# 전엔 `load_game`이 codex만 clear를 안 해(나머지 사전 6개는 한다) 「로드해도 옛 해금이 남는」
+	# 조용한 예외였다. 🔴 그런데 **clear만 넣으면 더 나쁜 게 생긴다**: 빌드가 시작 해금을 늘려도
+	# 옛 세이브엔 그 키가 없어 **그 세이브에서만 콘텐츠가 조용히 사라진다**(룬 하나가 책에서 없어지는 식).
+	# 그래서 clear → `seed_codex_unlocks()` → 세이브 얹기 순서다. 아래가 그 순서의 그물이다.
+	await process_frame
+	sm.save_game()
+	var cpath: String = sm.save_root() + "/save.json"
+	var cf := FileAccess.open(cpath, FileAccess.READ)
+	var craw: Variant = JSON.parse_string(cf.get_as_text()) if cf != null else null
+	if cf != null:
+		cf.close()
+	if typeof(craw) == TYPE_DICTIONARY:
+		var craw_d: Dictionary = craw
+		var saved_codex: Array = craw_d.get("codex", [])
+		# 「그 시드가 없던 옛 세이브」를 만든다 — 번개 룬 키를 세이브에서 뗀다.
+		saved_codex.erase("rune_bolt")
+		craw_d["codex"] = saved_codex
+		var cwf := FileAccess.open(cpath, FileAccess.WRITE)
+		if cwf != null:
+			cwf.store_string(JSON.stringify(craw_d, "\t"))
+			cwf.close()
+		gs.codex[&"__ghost_unlock"] = true      # 로드가 지워야 할 메모리 잔재
+		_check("로드 전 프로브: 유령 해금이 메모리에 있다", gs.is_unlocked(&"__ghost_unlock"))
+		_check("codex 프로브: 로드 true", sm.load_game())
+		_check("🔴 로드가 codex를 clear한다 — 세이브에 없는 옛 해금이 남지 않는다 (사전 6개와 대칭)",
+			not gs.is_unlocked(&"__ghost_unlock"))
+		_check("🔴🔴 세이브에 없는 **시드** 해금은 로드 뒤에도 살아 있다 (빌드가 주는 것이라 늘 있다)",
+			gs.is_unlocked(&"rune_bolt"))
+		_check("세이브에 있던 해금도 그대로 복원된다 (시드 재적용이 세이브를 덮지 않는다)",
+			gs.is_unlocked(&"rune_fire") and gs.is_unlocked(&"jin_single"))
+
 	# 뒷정리 — 실제 플레이 세이브 오염 방지
 	sm.wipe_save()
 	_check("뒷정리: 세이브 삭제", not sm.has_save())

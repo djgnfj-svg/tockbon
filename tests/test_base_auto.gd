@@ -316,6 +316,23 @@ func _test_assemble_only_commits() -> void:
 	await process_frame
 	_check(forge.get_node("Stage/Spread/Report").visible,
 		"🔴 [마법진 완성 ✦]을 누르면 리포트가 뜬다 (안 뜨면 버튼이 조용히 죽어 있다)")
+	# 🔴🔴 세86 ⑭ **완성 연출 훅이 실제로 불린다.** 연출 자체(빛·타이밍)는 헤드리스가 못 보지만,
+	# 세70 이후 15세션 동안 실제로 벌어진 일은 「훅이 조용히 안 불린다」였다(트리거가 은퇴한
+	# per-piece 잠금에 달려 있었고, 전 스위트는 그동안 계속 그린이었다). 그러니 재는 건
+	# **불렸나**다 — `finish_progress()`가 -1이면 완성 순간에 판이 아무 말도 안 한 것이다.
+	# ⚠ 수명(FINISH_DUR)을 안 박는다 — 0 이상이면 돌고 있다(연출값을 조여도 거짓 빨강이 안 난다).
+	_check(float(board.call(&"finish_progress")) >= 0.0,
+		"🔴 완성 순간에 판 연출이 돈다 (실제 %.3f · -1 = 훅이 안 불렸다)"
+			% float(board.call(&"finish_progress")))
+	# 🔴 ⑭ 연출의 **뜻**은 「안(룬) → 밖(진 윤곽)으로 훑는다」 = 층 순서 = 연산 순서(M1)를 완성
+	# 순간에 한 번 더 보여 주는 것이다. 그림은 헤드리스가 못 보지만 **순서 관계는 순수 함수**라 잰다
+	# (부호를 뒤집어 바깥부터 훑게 만들면 여기가 빨개진다). ⚠ 수명·색은 안 박는다(연출값 튜닝 자유).
+	var bd = load("res://src/drawing/ring_board.gd")
+	var t_mid := float(bd.finish_t_at_radius(0.5))
+	_check(bd.finish_glow_at(0.0, t_mid) > 0.0 and bd.finish_glow_at(1.0, t_mid) <= 0.0,
+		"🔴 파도 중간엔 룬(안쪽)이 이미 빛나고 진 윤곽(바깥)은 아직이다 (안→밖 순서)")
+	_check(bd.finish_glow_at(1.0, float(bd.FINISH_SWEEP_T)) > 0.0,
+		"파도가 끝에는 바깥 테두리까지 닿는다 (안 닿으면 진이 영영 안 빛난다)")
 
 	var rejected := []
 	forge.commit_rejected.connect(func(s: float) -> void: rejected.append(s))

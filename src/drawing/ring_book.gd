@@ -61,8 +61,13 @@ const CARD_TEX := "res://assets/sprites/ui/panel_paper_s.png"
 const CARD_TEX_MARGIN := 6.0
 const CARD_OFF_MOD := Color(0.85, 0.85, 0.85, 1.0)
 
+## 🔴 세86 B③: 진 설명에서 **「열리는 칸」을 걷어냈다** — 세85 ⑦에 `JinDef.glyph_slots`(진이 문양 칸을
+## 연다) 축이 은퇴하면서 이 문장이 **거짓말**이 됐다(세85 F5가 눈으로 잡았다 — 탭 설명은 칸이 진마다
+## 다르다고 하는데 실제로는 진마다 칸이 똑같다). 진의 개성은 이제 **층 수(`band_count`)와
+## 룬 자리(`rune_slots`)**다 — 그 숫자는 아래 `jin_spec_text`가 **JinDef에서 파생**해 셀 설명에 적는다.
+## ⚠ 여기(탭 머리글)엔 축의 **이름**만 적는다. 값을 문장에 베끼면 축이 또 바뀔 때 같은 거짓말이 난다(T5).
 const TAB_DESC := [
-	"진 — 바깥 그릇(형태). 발사 형태와 열리는 칸이 진마다 다르다.",
+	"진 — 바깥 그릇(형태). 층 수와 룬 자리가 진마다 다르다.",
 	"룬 — 중심 속성. 탁본으로 해독한 룬을 고른다.",
 	"층 — 진의 층에 문양-고리를 끼운다.",
 ]
@@ -379,10 +384,30 @@ const JIN_DESC := {
 	&"jin_single": "한 발을 곧게 쏜다. 기본이자 가장 안정적이다.",
 }
 
+## 🔴 세86 B③ — 진의 개성을 **데이터에서 파생**해 적는다(`band_count`·`rune_slots`). 문장으로 베껴
+## 두면 축이 바뀔 때 조용히 거짓이 된다(방금 「열리는 칸」이 그랬다 — 감사 T5). 숫자를 뽑아 쓰면
+## 진을 늘리거나 층 수를 고쳐도 셀 설명이 저절로 따라온다.
+## ⚠ 룬 자리는 **2 이상일 때만** 적는다 — 지금 진 대부분이 자리 1개라 늘 적으면 정보량이 0인
+## 노이즈가 된다(세83에 8칸 점 다이어그램을 뺀 것과 같은 판단).
+## static·순수 = 헤드리스 관측점(`jin_cell_rects`와 같은 규율).
+static func jin_spec_text(band_count: int, rune_slots: int) -> String:
+	var s := "층 %d겹" % maxi(band_count, 0)
+	if rune_slots >= 2:
+		s += " · 룬 자리 %d개" % rune_slots   # ⚠ 짧게 — 셀 아래 한 줄(fs 8·폭 280px)에 들어가야 한다
+	return s
+
+
+## 셀 아래 한 줄 = **파생 스펙 + 설명**. 🔴 static·public인 이유 = 헤드리스 관측점(문자열 조립이
+## `_draw_*` 안에 있으면 「스펙이 실제로 실리나」를 아무도 못 잰다 — `jin_cell_rects`와 같은 규율).
+static func jin_desc_line(jin_id: StringName, band_count: int, rune_slots: int) -> String:
+	return "%s — %s" % [jin_spec_text(band_count, rune_slots),
+		String(JIN_DESC.get(jin_id, "이 진만의 발사 형태가 있다."))]
+
+
 func _jin_desc_of(jd: JinDef) -> String:
 	if jd == null:
 		return ""
-	return String(JIN_DESC.get(StringName(jd.id), "이 진만의 발사 형태가 있다."))
+	return jin_desc_line(StringName(jd.id), int(jd.band_count), _jin_rune_slots_of(jd))
 
 
 func _jin_shape_of(jd: JinDef) -> int:
@@ -549,11 +574,24 @@ func _rune_def_of(rune_type: int) -> RuneDef:
 ## 밴드·고리 상태는 패널이 `set_bands`로 주입한다(책은 오토로드를 안 본다 = 기존 규율).
 ## 🔴 소켓/목록 rect는 **순수 static**(`band_socket_rects`·`ring_list_rects`) — `_draw_*` 안에
 ## 계산을 두면 헤드리스가 레이아웃을 못 잰다(`jin_cell_rects`·`rune_cell_rects`와 같은 규율).
-const BAND_SOCKET_H := 40.0
+## 🔴 세86: 소켓·목록 카드를 **키웠다**(40→44 · 30→44) — 사용자 지적 *"아이콘이 조잡하다"*의
+## 절반은 크기였다. 미리보기가 판과 같은 비율을 쓰면(아래 `ring_icon_geom`) 모티프는 띠 반지름의
+## 14%라 **작다** — 옛 아이콘은 그걸 0.42로 부풀려 큼직했지만 그게 곧 「판과 모양이 다르다」였다.
+## 비율을 바로잡은 대신 **카드를 키워** 겉보기 크기를 되찾는다(아이콘 반지름 10.2→18.5px).
+## ⚠ 대가 = 스크롤 없이 보이는 고리가 층 1겹 진에서 4장→3장. 머리글·간격을 줄여 되산 뒤의 값이다.
+##
+## 🔴 **`RING_COLS`는 지금 1이다 — 2로 올리면 아이콘을 더 키우고도 4장이 보이지만, `tests/
+## test_ring_trace_auto.gd`의 「고리 목록 rect가 세로로 쌓인다」가 **인덱스 기준**이라 빨개진다**
+## (계약의 뜻 = "어휘가 늘면 폭이 아니라 줄 수가 는다"는 2열에서도 지켜지지만 검사식이 0·1번
+## 카드의 y를 비교한다). 그 그물은 내 파일이 아니라 손대지 않았다 — 리드 판단 대기(보고서 참조).
+const BAND_SOCKET_H := 44.0
 const BAND_SOCKET_GAP := 6.0
-const RING_ROW_H := 30.0
+const RING_ROW_H := 44.0
 const RING_ROW_GAP := 4.0
-const RING_LIST_HEADER := 20.0        # 소켓 아래 "보유 문양-고리" 머리글 높이
+const RING_COLS := 1
+const RING_LIST_HEADER := 18.0        # 소켓 아래 "보유 문양-고리" 머리글 높이
+## 카드 높이 대비 아이콘 반지름 — 아이콘의 **바깥 띠선**이 정확히 이 반지름에 앉는다.
+const ICON_R_FRAC := 0.42
 
 static func band_socket_rects(n: int, book_size: Vector2, top: float) -> Array:
 	var out: Array = []
@@ -566,12 +604,22 @@ static func band_socket_rects(n: int, book_size: Vector2, top: float) -> Array:
 static func band_list_top(band_n: int, top: float) -> float:
 	return top + float(band_n) * (BAND_SOCKET_H + BAND_SOCKET_GAP) + RING_LIST_HEADER
 
+## 🔴 세86: 배치를 `RING_COLS` **한 곳에서** 파생하게 바꿨다(진 셀·룬 셀이 이미 쓰는
+## `i % cols` / `i / cols` 규약과 같은 식). 지금 값은 1이라 **옛 1열 전폭 바와 픽셀 동일**이고,
+## 열을 늘리고 싶으면 상수 하나만 바꾸면 된다(⚠ 위 주석의 test_ring_trace 그물을 같이 갱신).
 static func ring_list_rects(n: int, book_size: Vector2, list_top: float) -> Array:
 	var out: Array = []
+	var cw := (book_size.x - 16.0 - RING_ROW_GAP * float(RING_COLS - 1)) / float(RING_COLS)
 	for i in n:
-		out.append(Rect2(8.0, list_top + float(i) * (RING_ROW_H + RING_ROW_GAP),
-			book_size.x - 16.0, RING_ROW_H))
+		out.append(Rect2(8.0 + float(i % RING_COLS) * (cw + RING_ROW_GAP),
+			list_top + float(i / RING_COLS) * (RING_ROW_H + RING_ROW_GAP), cw, RING_ROW_H))
 	return out
+
+
+## 목록 콘텐츠 전체 높이 (스크롤 클램프용) — **줄 수**로 센다(`_draw`가 항목 수로 세면 열이
+## 늘어날 때 스크롤이 콘텐츠의 두 배까지 굴러간다). 1열인 지금은 옛 식과 같은 값이다.
+static func ring_list_height(n: int) -> float:
+	return float(ceili(float(n) / float(RING_COLS))) * (RING_ROW_H + RING_ROW_GAP)
 
 
 func _draw_band_sockets(font: Font, top: float) -> void:
@@ -589,23 +637,26 @@ func _draw_band_sockets(font: Font, top: float) -> void:
 		# 밴드 번호는 **늘** 왼쪽 위에 — 끼웠든 비었든 "몇 층인가"가 이 칸의 정체다.
 		_text(font, r.position + Vector2(4.0, 2.0), "%d" % (i + 1),
 			SEL_EDGE if sel else DESC_COLOR, 8)
+		# 🔴 세86: 비었을 때도 아이콘을 그린다 — `gr == null`이면 **띠만** 흐리게 나와
+		# "여기가 한 층이고 문양은 이 선 사이에 앉는다"가 끼우기 전에도 읽힌다.
+		_ring_icon(r.position + Vector2(r.size.y * 0.5, r.size.y * 0.5),
+			r.size.y * ICON_R_FRAC, gr, i)
 		if gr != null:
-			_ring_icon(r.position + Vector2(r.size.y * 0.5, r.size.y * 0.5), r.size.y * 0.34, gr)
 			# ⚠ 이름을 두 번 적지 마라 — `display_name`이 이미 "발산 고리 ×5"라
 			# 뒤에 `모티프×개수`를 붙이면 **"발산 고리 ×5 (발산→×5)"**가 된다(세82 사용자 지적).
 			_text(font, r.position + Vector2(r.size.y + 6.0, r.size.y * 0.5 - 6.0),
 				gr.display_name, NAME_COLOR, 9)
 		else:
-			_text(font, r.position + Vector2(10.0, r.size.y * 0.5 - 6.0),
-				"밴드 %d — 비었다 (아래 고리 클릭)" % (i + 1), DESC_COLOR, 9)
+			_text(font, r.position + Vector2(r.size.y + 6.0, r.size.y * 0.5 - 6.0),
+				"비었다 — 아래 고리를 클릭", DESC_COLOR, 9)
 
 	# 보유 문양-고리 목록 (선택 밴드에 끼운다) — 머리글은 고정, 행만 휠 스크롤(세81).
 	var list_top := band_list_top(n, top)
 	_text(font, Vector2(8.0, list_top - RING_LIST_HEADER + 2.0),
 		"보유 문양-고리 (클릭 → 밴드 %d)" % (_sel_band + 1), DESC_COLOR, 9)
 	# 🔴 세81: 스크롤 클램프 — 콘텐츠 높이가 가시영역(list_top→책 바닥)을 넘칠 때만 굴러간다.
-	var row_pitch := RING_ROW_H + RING_ROW_GAP
-	var content_h := float(_available_rings.size()) * row_pitch
+	# 🔴 세86: 콘텐츠 높이는 **항목 수가 아니라 줄 수**다(`ring_list_height` 단일 소스 — 열 수를 바꿔도 안 어긋난다).
+	var content_h := ring_list_height(_available_rings.size())
 	var visible_h := size.y - list_top
 	var max_scroll := maxf(0.0, content_h - visible_h)
 	_ring_scroll = clampf(_ring_scroll, 0.0, max_scroll)
@@ -622,11 +673,16 @@ func _draw_band_sockets(font: Font, top: float) -> void:
 		if rr.position.y < list_top or rr.position.y + rr.size.y > size.y:
 			continue
 		_cells.append({"rect": rr, "kind": "ring", "value": gr2.id})
-		draw_rect(rr, Color(gr2.ui_color, 0.10), true)
-		draw_rect(rr, Color(gr2.ui_color, 0.7), false, 1.5)
-		_ring_icon(rr.position + Vector2(rr.size.y * 0.5, rr.size.y * 0.5), rr.size.y * 0.34, gr2)
-		_text(font, rr.position + Vector2(rr.size.y + 8.0, rr.size.y * 0.5 - 5.0),
-			gr2.display_name, NAME_COLOR, 9)
+		# ⚠ 카드 톤은 **알파로만** 조인다(한지·먹 책에 원색 카드가 튀지 않게) — `ui_color` 자체는
+		# 정본이라 로컬에서 안 바꾼다. 테두리를 0.7→0.45로 낮춰 아이콘이 카드보다 진하게 남는다.
+		draw_rect(rr, Color(gr2.ui_color, 0.08), true)
+		draw_rect(rr, Color(gr2.ui_color, 0.45), false, 1.0)
+		# 🔴 목록 아이콘의 층 = **지금 고른 밴드**("클릭 → 밴드 N"과 그림이 같은 층을 가리킨다).
+		_ring_icon(rr.position + Vector2(rr.size.y * 0.5, rr.size.y * 0.5),
+			rr.size.y * ICON_R_FRAC, gr2, _sel_band)
+		var name_x := rr.size.y + 4.0
+		_text(font, rr.position + Vector2(name_x, rr.size.y * 0.5 - 5.0),
+			_fit_text(font, gr2.display_name, rr.size.x - name_x - 4.0, 9), NAME_COLOR, 9)
 	# 🔴 세81: 넘칠 때만 오른쪽에 얇은 스크롤 썸(있다는 신호 — 없으면 휠 되는지 모른다).
 	if max_scroll > 0.0:
 		var track_x := size.x - 5.0
@@ -637,20 +693,116 @@ func _draw_band_sockets(font: Font, top: float) -> void:
 		draw_rect(Rect2(track_x, thumb_y, 3.0, thumb_h), Color(0.42, 0.30, 0.12, 0.5), true)
 
 
-## 문양-고리 아이콘 — 밴드 원 + count번 낱개 모티프(절차 가이드선 = 규칙 §0 도형금지 예외).
-## `RingBoard.glyph_guide_pts`를 그대로 부른다(셀=밑그림 규율) — 슬라이스 패널 `_ring_icon` 이식.
-func _ring_icon(c: Vector2, radius: float, gr: GlyphRingDef) -> void:
+## 🔴🔴 세86 — 문양-고리 미리보기 아이콘의 **기하**. 사용자 지적 셋을 여기서 한 번에 갚는다:
+## *"아이콘이 조잡하다 · 판과 모양이 다르다 · 미리보기에선 **선 위에 문양이 있다**"*.
+##
+## 🔴 **왜 갈라졌나**: 옛 `_ring_icon`은 판을 **베끼고 있었다** — 각도 루프(`TAU·i/n − PI/2`)를 다시
+## 쓰고, 모티프 크기를 `radius * 0.42`로 **직접** 잡고, 고리 선을 **모티프 중심 반경에 그대로**
+## 그었다. 그래서 ⓐ 선이 모티프를 관통했고 ⓑ 판의 모티프 비율(`MOTIF_SIZE_FRAC` = 띠 반지름의
+## 14%)보다 **3배** 큰 낙서가 됐다. 세86에 판이 층 선을 문양 **바깥**으로 밀어 「띠」로 바꾸자
+## 미리보기만 옛 그림에 남아 **「본 것 ≠ 끼운 것」**이 됐다(감사 T5 「좌표는 사본이 아니라는 무의식 예외」).
+##
+## 🔴 **이제 전부 판 정본에서 파생한다** — 이 함수에 각도도 반지름도 상수도 없다:
+##   • 모티프 점열·배치 = `RingBoard.glyph_ring_subpaths`(판이 밴드를 그릴 때 부르는 그 함수)
+##   • 띠 경계 두 반지름 = `RingBoard.band_lane`(세86에 판이 선을 밀어낸 그 규약)
+##   • 가상 판 반지름 `ro` = **탐침 역산** — `band_lane`을 임의 크기로 한 번 불러 「띠 바깥선 ÷ ro」
+##     비율만 얻고, 그 비율로 「띠 바깥선이 아이콘 반지름 `s`에 정확히 앉는」 ro를 되민다.
+##     🔴 이래야 판이 여백(`BAND_LANE_PAD`)·모티프 크기를 바꿔도 아이콘이 **저절로** 따라온다.
+##
+## 반환 = `{"lane": Vector2(안쪽선, 바깥선), "motifs": Array[PackedVector2Array]}`.
+## `gr == null`이면 motifs가 비고 lane만 온다 — **빈 소켓도 띠를 흐리게 보여** "여기가 한 층"이 읽힌다.
+## ⚠ 아이콘은 판 전체의 축소판이 **아니라 그 층의 띠를 확대한 것**이다(판 비율 그대로 줄이면
+## 모티프가 아이콘 반지름의 6%가 되어 점 하나로 사라진다). 확대해도 **띠와 모티프의 관계**는
+## 판과 같으므로 "선 사이에 문양이 앉는다"가 그대로 읽힌다.
+## 🔴 static·순수 = 헤드리스 관측점(`jin_icon_paths`와 같은 규율) — 「선이 모티프를 침범하지
+## 않는다」를 값이 아니라 **관계식**으로 잴 수 있다. "보인다"는 여전히 리드의 스샷이 최종 판정.
+const ICON_PROBE_RO := 100.0
+## 🔴🔴 아이콘 전용 **가독성 확대** (세86 F5 — 리드가 실게임에서 보고 넣었다). 판 비율을 그대로
+## 쓰면 모티프 지름이 아이콘 반지름의 24%(카드 44px에서 **약 4px**)라 「폭발 고리 ×1」이 **점 하나**로
+## 읽힌다 — 사용자가 지적한 *"조잡하다"*가 크기를 바로잡은 뒤에도 다른 얼굴로 남는다.
+## 아이콘은 판의 **정확한 축소판일 필요가 없고**, 무엇을 끼우는지 읽히는 게 목적이다.
+## 🔴 확대할 땐 **띠도 같은 배로 벌린다** — 그래야 「문양이 선 사이에 앉는다」가 유지된다
+##   (모티프만 키우면 선을 다시 밟는다 = 이 작업 전체가 원상복귀). 선례 = `JIN_ICON_RUNE_SCALE`.
+const ICON_MOTIF_ZOOM := 2.2
+
+static func ring_icon_geom(gr: GlyphRingDef, c: Vector2, s: float,
+		band_index: int = 0) -> Dictionary:
+	# 탐침으로 「밴드 반지름」과 「띠 반폭」의 **비율**만 얻는다(상수를 베끼지 않는 자리).
+	var probe: Vector2 = RingBoard.band_lane(band_index, ICON_PROBE_RO)
+	var mid_frac := (probe.x + probe.y) * 0.5 / ICON_PROBE_RO
+	var half_frac := (probe.y - probe.x) * 0.5 / ICON_PROBE_RO
+	var ro := s / maxf(mid_frac + half_frac * ICON_MOTIF_ZOOM, 0.0001)
+	var band_r := ro * mid_frac
+	# 모티프는 판 정본이 만들고(각도·모양은 손대지 않는다), **배치 반경 위에서** 같은 배로 키운다.
+	var motifs: Array = []
+	for sub_v in RingBoard.glyph_ring_subpaths(gr, c, band_r):
+		motifs.append(_scaled_motif(sub_v as PackedVector2Array, c, band_r, ICON_MOTIF_ZOOM))
+	# 🔴 띠는 **키운 문양의 실제 점 범위**에서 파생한다 — 폭을 식으로 잡으면 문양마다 뻗는 정도가
+	# 달라(화살표는 바깥으로 길다) 어떤 문양은 선을 넘는다(실측: 발산 고리가 0.23px 넘었다).
+	# 실측 범위에서 뽑으면 **어떤 문양이 와도** 「선 사이」가 성립한다 = 자기교정.
+	var lo := band_r
+	var hi := band_r
+	for sub_v in motifs:
+		for p: Vector2 in sub_v as PackedVector2Array:
+			var d := p.distance_to(c)
+			lo = minf(lo, d)
+			hi = maxf(hi, d)
+	var pad := ro * (half_frac - mid_frac * RingBoard.MOTIF_SIZE_FRAC) * ICON_MOTIF_ZOOM
+	var lane := Vector2(maxf(lo - pad, 0.0), hi + pad)
+	# 바깥 띠선이 정확히 `s`에 앉도록 전체를 c 기준으로 맞춘다 — 아이콘이 카드 밖으로 안 샌다.
+	var fit := s / maxf(lane.y, 0.0001)
+	if not is_equal_approx(fit, 1.0):
+		lane *= fit
+		var fitted: Array = []
+		for sub_v in motifs:
+			var out := PackedVector2Array()
+			for p: Vector2 in sub_v as PackedVector2Array:
+				out.append(c + (p - c) * fit)
+			fitted.append(out)
+		motifs = fitted
+	return {"lane": lane, "motifs": motifs}
+
+
+## 모티프 한 장을 **자기 배치점 기준**으로 확대한다 — 어느 각도에 앉나는 그대로, 크기만 키운다.
+## ⚠ 배치 각도를 다시 계산하지 않는다(그게 사본이다). 모티프는 반지름 축 위에 놓이므로
+## **점열 평균의 방향**이 곧 배치 방향이고, 배치점은 그 방향으로 `band_r`만큼 간 자리다.
+## 평균을 그대로 중심으로 쓰면 확대가 문양을 바깥으로 밀어 띠를 넘는다(실측).
+static func _scaled_motif(sub: PackedVector2Array, c: Vector2, band_r: float,
+		k: float) -> PackedVector2Array:
+	if sub.size() == 0 or is_equal_approx(k, 1.0):
+		return sub
+	var mid := Vector2.ZERO
+	for p in sub:
+		mid += p
+	mid /= float(sub.size())
+	var dir := (mid - c).normalized()
+	var anchor := c + dir * band_r if dir != Vector2.ZERO else mid
+	var out := PackedVector2Array()
+	for p in sub:
+		out.append(anchor + (p - anchor) * k)
+	return out
+
+
+## 문양-고리 아이콘 렌더 — 기하는 위 `ring_icon_geom`(관측점), 여기는 **색·굵기만** 쥔다
+## (절차 가이드선 = 규칙 §0 도형금지 예외). `band_index`는 이 고리가 앉을 층 — 소켓은 자기 층,
+## 목록은 지금 고른 층을 넘긴다("클릭하면 여기 들어간다"와 그림이 일치한다).
+## ⚠ 색은 `GlyphDef`/`GlyphRingDef.ui_color` 정본 그대로다 — 책 톤에 맞추는 건 카드 배경·테두리의
+## 알파로 한다(색을 로컬에서 바꾸면 판과 또 갈라진다).
+const ICON_LANE_ALPHA := 0.32
+const ICON_LANE_W := 1.0
+const ICON_MOTIF_W := 1.6
+
+func _ring_icon(c: Vector2, radius: float, gr: GlyphRingDef, band_index: int = 0) -> void:
+	var geom := ring_icon_geom(gr, c, radius, band_index)
+	var lane: Vector2 = geom["lane"]
+	var line_col: Color = Color(gr.ui_color, ICON_LANE_ALPHA) if gr != null else SOCKET_EMPTY
+	draw_arc(c, lane.x, 0.0, TAU, 32, line_col, ICON_LANE_W, true)
+	draw_arc(c, lane.y, 0.0, TAU, 32, line_col, ICON_LANE_W, true)
 	if gr == null:
 		return
-	draw_arc(c, radius, 0.0, TAU, 24, Color(gr.ui_color, 0.35), 1.0, true)
-	var n := maxi(gr.count, 1)
-	for i in n:
-		var a := TAU * float(i) / float(n) - PI / 2.0
-		var p := c + Vector2.from_angle(a) * radius
-		var outward := Vector2.from_angle(a)
-		var mk := RingBoard.glyph_guide_pts(gr.motif, p, outward, radius * 0.42)
-		if mk.size() >= 2:
-			draw_polyline(mk, gr.ui_color, 1.5, true)
+	for sub: PackedVector2Array in geom["motifs"]:
+		if sub.size() >= 2:
+			draw_polyline(sub, gr.ui_color, ICON_MOTIF_W, true)
 
 
 ## ⚠ 옛 `_motif_name(code)`은 세82에 지웠다 — 소켓·목록이 `display_name`("발산 고리 ×5")에
@@ -660,6 +812,18 @@ func _ring_icon(c: Vector2, radius: float, gr: GlyphRingDef) -> void:
 
 func _text(font: Font, at: Vector2, text: String, col: Color, fs: int) -> void:
 	draw_string(font, at + Vector2(0, fs), text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, col)
+
+
+## 🔴 세86: 2열 격자라 카드 폭이 절반(≈129px)이 됐다 — 긴 이름이 옆 카드로 흘러넘치지 않게
+## 폭에 맞춰 자른다(넘치면 「…」). ⚠ **자르는 건 표시뿐**이고 값은 `display_name` 정본 그대로다.
+func _fit_text(font: Font, text: String, max_w: float, fs: int) -> String:
+	if font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x <= max_w:
+		return text
+	var cut := text
+	while cut.length() > 1 and font.get_string_size(cut + "…", HORIZONTAL_ALIGNMENT_LEFT,
+			-1, fs).x > max_w:
+		cut = cut.substr(0, cut.length() - 1)
+	return cut + "…"
 
 
 func _text_center(font: Font, at: Vector2, text: String, col: Color, fs: int) -> void:

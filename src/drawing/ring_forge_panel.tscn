@@ -92,7 +92,6 @@ offset_bottom = 326.0
 focus_mode = 0
 theme_override_font_sizes/font_size = 10
 disabled = true
-text = "그리기 시작 ✎"
 
 [node name="RedrawBtn" type="Button" parent="Stage/Spread"]
 visible = false
@@ -103,7 +102,6 @@ offset_right = 464.0
 offset_bottom = 326.0
 focus_mode = 0
 theme_override_font_sizes/font_size = 10
-text = "◀ 다시 조립"
 
 [node name="CommitBtn" type="Button" parent="Stage/Spread"]
 layout_mode = 0
@@ -114,7 +112,6 @@ offset_bottom = 326.0
 focus_mode = 0
 theme_override_font_sizes/font_size = 9
 disabled = true
-text = "✓ 맺기 (분석)"
 
 [node name="TitleLabel" type="Label" parent="Stage/Spread"]
 layout_mode = 0
@@ -136,7 +133,6 @@ offset_bottom = 342.0
 mouse_filter = 2
 theme_override_colors/font_color = Color(0.3, 0.24, 0.18, 1)
 theme_override_font_sizes/font_size = 8
-text = "오른쪽에서 진 → 룬 → 층 순서로 조립하고 [그리기 시작]"
 autowrap_mode = 3
 
 [node name="HintLabel" type="Label" parent="Stage/Spread"]
@@ -148,7 +144,6 @@ offset_bottom = 344.0
 mouse_filter = 2
 theme_override_colors/font_color = Color(0.5, 0.45, 0.38, 1)
 theme_override_font_sizes/font_size = 8
-text = "여러 획 OK · 우클릭=다시 · ESC=덮기"
 
 [node name="DrawTools" type="Control" parent="Stage/Spread"]
 visible = false
@@ -231,7 +226,6 @@ offset_right = 132.0
 offset_bottom = 316.0
 focus_mode = 0
 theme_override_font_sizes/font_size = 11
-text = "쏘기 ▶"
 
 [node name="RedoBtn" type="Button" parent="Stage/Spread/Report"]
 layout_mode = 0
@@ -241,4 +235,3 @@ offset_right = 280.0
 offset_bottom = 316.0
 focus_mode = 0
 theme_override_font_sizes/font_size = 11
-text = "다시 그리기"

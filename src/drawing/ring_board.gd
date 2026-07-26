@@ -139,6 +139,13 @@ const MOTIF_SIZE_FRAC := 0.14        # 밴드 반경 대비 문양-고리 낱개
 # COMBINED 모드에서만 그린다(per-piece 경로 무변경). band_count만큼 흐린 동심원 + 룬 미선택 시 중앙 마커.
 const BAND_GUIDE_COLOR := Color(0.42, 0.30, 0.12, 0.22)   # 빈 층 흐린 동심원 톤 (따라 그을 만큼만, 답 아님)
 const BAND_GUIDE_WIDTH := 1.5
+## 🔴🔴 세86: 층 선을 **문양 바깥으로 밀어 「띠」를 만든다** (사용자 확정: *"그 선에 문양이 있는 게
+## 아니라 선 사이에 있었으면"*). 전엔 선 **하나**가 문양 중심 반경을 지나 **모티프를 가로질렀다** —
+## 세81에도 같은 지적이 있었고(*"문양이 선에 걸쳐 지저분하다"*) 그땐 **그릴 때 선을 끄는 것**으로
+## 피했다. 이건 그 근본 해결이라 선을 켜 둔 채로 안 겹친다.
+## 🔴 여백만 상수다 — 띠 경계는 `band_lane`이 **모티프 크기에서 파생**한다(값을 베끼면 문양 크기를
+## 바꿀 때 선이 따라오지 않아 다시 겹친다 = 감사 T5 「좌표 사본」). 판 반지름 비.
+const BAND_LANE_PAD := 0.02
 const RUNE_SLOT_COLOR := Color(0.42, 0.30, 0.12, 0.28)    # 룬 미선택 자리 마커(중앙 링)
 const RUNE_SLOT_WIDTH := 1.5
 
@@ -197,11 +204,37 @@ const SPARK_COLOR := Color(1.0, 0.88, 0.55)   # ⓑ 광점 색 (따뜻한 금빛
 const BRUSH_GLOW_RADII := [10.0, 6.0, 3.0]
 const BRUSH_GLOW_ALPHA := [0.06, 0.14, 0.30]
 
+# ── 🔴 세86 ⑭ 「마법진 완성」 연출 (연출값 = 스크립트 const, 밸런스 아님 — 규칙 §0 예외) ──
+## 🔴 **되살린 게 아니라 새로 붙인 훅이다.** 옛 ⓒ 착지 펄스·ⓓ 완성 발광은 트리거가 **per-piece
+## 잠금**이라 세70 통째 흐름에선 한 번도 안 떴고 세85 ⑨에 상수째 걷혔다 — 그래서 세70 이후
+## **15세션째 「완성」 순간에 판이 아무 말도 안 했다**. 진입점은 공개 `play_finish()` 하나이고
+## 패널 `_finish()`가 부른다(파일 끝 주석이 지정한 그 한 줄. per-piece 부활 아님).
+## 🔴 **안(룬)에서 바깥(진 윤곽)으로 훑는 게 이 연출의 뜻이다** — 층 순서 = 연산 순서(M1 정본
+## `docs/takbon-design/jin_interpretation_design.md`)라, 맺히는 순간에 그 순서를 한 번 더 보여 준다.
+## ⚠ **순수 오버레이**다: 입력을 막지 않고(패널이 이미 RESULT로 잠근다) 리포트 표시를 늦추지 않는다.
+const FINISH_DUR := 0.85              # 전체 수명(초)
+const FINISH_SWEEP_T := 0.60          # 파도가 바깥 테두리에 닿는 정규 시점(0~1)
+const FINISH_BAND_W := 0.22           # 파도 뒤 「방금 지나갔다」 꼬리의 두께 (반지름 비)
+const FINISH_TAIL := 0.35             # 지나간 조각이 끝까지 남기는 은은한 빛
+const FINISH_GOLD := Color(1.0, 0.86, 0.45)
+const FINISH_SWEEP_ALPHA := 0.5
+const FINISH_GLOW_W := 6.0            # 훑고 지나간 조각의 발광 패스 폭 (먹선 2.6px보다 넓게)
+const FINISH_LINE_W := 2.0
+const FINISH_POP_T := 0.22            # 룬 자리 팝 고리 한 장의 수명(정규 시간)
+const FINISH_POP_SCALE := 2.4         # 팝 고리가 룬 크기의 몇 배까지 퍼지나
+const FINISH_FLASH_T := 0.66          # 바깥 테두리 플래시가 시작되는 정규 시점
+
 ## ⓑ 렌더 전용 — 가이드 점의 드러남을 지난 프레임과 비교해 false→true 순간을 잡는다.
 ## 🔴 채점기(`_scorer`)는 `is_revealed(i)` 공개 조회만 쓴다 — 채점 상태를 복사하는 게 아니라
 ## "언제 드러났나"라는 렌더만의 관심사를 따로 든다. `_reset_reveal_fx`가 가이드와 크기를 맞춘다.
 var _was_revealed := PackedByteArray()
 var _sparks: Array[Dictionary] = []     # ⓑ {pos: Vector2, t: float} — 광점들
+
+## 🔴 세86 ⑭ 완성 연출 진행도 — **-1 = 안 돎**, 0~1 = 도는 중. `_process`가 민다.
+var _finish_t := -1.0
+## ⑭ 서브패스별 **정규 반지름**(0=중심 · 1=바깥 테두리) — `play_finish`에서 한 번만 잰다.
+## 매 프레임 수백 점을 다시 훑지 않으려는 캐시고, **렌더 전용**이라 채점·발사와 무관하다.
+var _finish_radii: PackedFloat32Array = PackedFloat32Array()
 
 ## 🔴 세71c 조립→탁본 이음선 제거 — COMBINED 서브패스(진·룬·밴드 각각)를 **별도 폴리라인**으로 그린다.
 ## 비었으면 옛 동작(flat 가이드를 한 줄로). `enter_combined_trace`의 선택 인자로 들어온다.
@@ -637,6 +670,37 @@ static func glyph_ring_subpaths(gr: GlyphRingDef, ctr: Vector2, band_r: float) -
 		var outward := Vector2.from_angle(a)
 		out.append(glyph_guide_pts(gr.motif, p, outward, band_r * MOTIF_SIZE_FRAC))
 	return out
+
+
+## 🔴 층 i의 **띠 경계 두 반지름** = `Vector2(안쪽선, 바깥선)` (세86). 문양은 그 사이에 들어앉는다.
+##
+## 🔴 **모티프 크기에서 파생한다** — 반지름을 상수로 박지 않는 이유: `MOTIF_SIZE_FRAC`을 키우면
+## 문양이 커지는데 선이 제자리면 **다시 선을 가로지른다**(전에 지저분했던 그 상태로 돌아간다).
+## 파생이면 문양이 커질 때 띠도 같이 벌어진다.
+## ⚠ **문양 중심 반경(`BAND_RADII`)은 안 건드린다** — 그건 발사 층 계약이고 저장된 도안·채점 골든이
+## 그 값에 걸려 있다(세79 M1). 이 함수는 **렌더 전용**이라 계약을 스치지 않는다.
+## static·순수 = 헤드리스 관측점(겹침 여부를 관계식으로 잴 수 있다 — 렌더는 못 봐도 이건 잰다).
+static func band_lane(band_index: int, ro: float) -> Vector2:
+	var i := clampi(band_index, 0, BAND_RADII.size() - 1)
+	var band_r := ro * float(BAND_RADII[i])
+	# 모티프 반경 = `glyph_ring_subpaths`가 문양 한 장을 그릴 때 쓰는 크기 그대로(사본 아님).
+	var half := band_r * MOTIF_SIZE_FRAC + ro * BAND_LANE_PAD
+	return Vector2(maxf(band_r - half, 0.0), band_r + half)
+
+
+## 🔴🔴 층 i의 **안쪽 경계선** 반지름 — 판에 실제로 그리는 선은 이것뿐이다 (세86, 사용자 확정:
+## *"선이 너무 많음"*). 층마다 띠 경계 둘을 다 그렸더니 2층 진에서 원이 **5개**가 됐다.
+##
+## 🔴 경계는 **띠와 띠 사이의 빈 곳**에 놓는다 — 선이 「층을 가르는 칸막이」가 되고, 문양은 어느
+## 선도 안 밟는다. 층 n개 = 선 n개(+진 윤곽) = 2층이면 **3개**.
+##   i == 0 → 중심 룬과 층0 띠 사이 · i > 0 → 층 i-1 띠 바깥과 층 i 띠 안쪽 사이.
+## ⚠ **가장 바깥 경계는 안 그린다** — 진 윤곽이 이미 그 자리의 칸막이다(그리면 선이 도로 는다).
+## static·순수 = 헤드리스 관측점(「선이 문양을 안 밟는다」를 관계식으로 잰다).
+static func band_edge(band_index: int, ro: float) -> float:
+	var i := clampi(band_index, 0, BAND_RADII.size() - 1)
+	var lane := band_lane(i, ro)
+	var inner_side := combined_rune_size(ro, 1) if i == 0 else band_lane(i - 1, ro).y
+	return (inner_side + lane.x) * 0.5
 
 
 ## 밴드 문양-고리를 **이어붙인 한 점열** (flatten이 필요한 호출자용 — flat 채점은 compose_guide가
@@ -1085,6 +1149,9 @@ func clear_all() -> void:
 	_combined_runes = []
 	_jin_scale = 1.0
 	_reset_reveal_fx()                   # ⓑ 반짝임도 — 명시가 계약이다
+	# ⑭ 완성 연출도 멈춘다 — 판을 비웠는데(펑·[다시]) 옛 마법진의 금빛이 계속 도는 건 거짓말이다.
+	_finish_t = -1.0
+	_finish_radii = PackedFloat32Array()
 	# 🔴 잉크 소모·비율은 새 진마다 리셋 (세션29). ⚠ _ink_id·_jin_scale_max(종이 상한)은 **안** 지운다 —
 	# 잉크·종이 선택은 지속된다(다시 그려도 유지). 여기서 지우는 건 "이번 진에 얼마나 썼나"뿐.
 	_special_ink_used = &""
@@ -1145,8 +1212,73 @@ func play_cast() -> void:
 	set_process(true)
 
 
+## 🔴 세86 ⑭ **「마법진 완성」 훅** — 패널 `_finish()`가 부르는 공개 진입점.
+## ⚠ 부르는 자리를 늘리지 마라: 「완성」의 정의는 패널의 `_finish()` **하나**다(그리기 모드는
+## [분석 ▶], 폐지 모드는 [마법진 완성 ✦]이 같은 함수로 모인다). 여기서 상태를 안 건드리므로
+## 도중에 다시 불려도 연출만 처음부터 다시 돈다.
+func play_finish() -> void:
+	_finish_t = 0.0
+	_finish_radii = _subpath_radii(_area_center(), _outer_radius())
+	set_process(true)
+	queue_redraw()
+
+
+## 🔴 ⑭ 완성 연출 진행도 — **헤드리스 관측점**(-1 = 안 돎, 0~1 = 도는 중).
+## 연출 자체(빛·색·타이밍)는 헤드리스가 못 보지만 **훅이 실제로 불렸나**는 이 값으로 잰다 —
+## 15세션 동안 벌어진 일이 정확히 「훅이 조용히 안 불린다」였다.
+func finish_progress() -> float:
+	return _finish_t
+
+
+## ⑭ 각 서브패스의 정규 반지름 — 중심에서의 평균 거리 ÷ 바깥 반지름. 룬(≈0) → 층(0.42·0.68) →
+## 진 윤곽(≈1) 순서가 그대로 나온다 = 파도가 훑는 순서가 곧 연산 순서다.
+func _subpath_radii(ctr: Vector2, ro: float) -> PackedFloat32Array:
+	var out := PackedFloat32Array()
+	var inv := 1.0 / maxf(ro, 1.0)
+	for sub_v in _combined_subpaths:
+		var sub := sub_v as PackedVector2Array
+		var acc := 0.0
+		for p: Vector2 in sub:
+			acc += p.distance_to(ctr)
+		out.append(acc / float(maxi(sub.size(), 1)) * inv)
+	return out
+
+
+## ⑭ 파도의 정규 반지름 (0=중심 → 1=바깥). `FINISH_SWEEP_T`에 바깥에 닿고 그 뒤엔 1에 머문다.
+## ease-out이라 안쪽(룬·1층)이 빠르게 지나가고 바깥(진 윤곽)에서 느려진다 — 마지막이 클라이맥스.
+## static·순수 = 헤드리스 관측점(아래 `finish_t_at_radius`가 이 식의 역함수다 — 둘이 갈라지면
+## 룬 팝이 파도와 어긋난 시점에 튄다).
+static func finish_wave_frac(t: float) -> float:
+	var u := clampf(t / FINISH_SWEEP_T, 0.0, 1.0)
+	return 1.0 - (1.0 - u) * (1.0 - u)
+
+
+## ⑭ 파도가 정규 반지름 r에 닿는 시점 — `finish_wave_frac`의 역함수(u = 1 − √(1−r)).
+static func finish_t_at_radius(r_frac: float) -> float:
+	return (1.0 - sqrt(1.0 - clampf(r_frac, 0.0, 1.0))) * FINISH_SWEEP_T
+
+
+## ⑭ 정규 반지름 r인 조각이 지금 얼마나 밝나 (0~1). 파도가 **지나가기 전엔 0**(아직 제 차례가
+## 아니다 = 순서가 눈에 보이는 자리), 지난 직후가 가장 밝고, 그 뒤엔 은은한 꼬리로 남는다.
+static func finish_glow_at(r_frac: float, t: float) -> float:
+	if t < 0.0:
+		return 0.0
+	var wave := finish_wave_frac(t)
+	if wave < r_frac:
+		return 0.0
+	var head := 1.0 - clampf((wave - r_frac) / FINISH_BAND_W, 0.0, 1.0)
+	return maxf(head, FINISH_TAIL * (1.0 - clampf(t, 0.0, 1.0)))
+
+
 func _process(delta: float) -> void:
 	var busy := false
+	# ⑭ 완성 연출 — 수명이 다하면 스스로 꺼진다(순수 오버레이라 끝나도 남는 상태가 없다).
+	if _finish_t >= 0.0:
+		_finish_t += delta / FINISH_DUR
+		if _finish_t >= 1.0:
+			_finish_t = -1.0
+		else:
+			busy = true
 	if _cast_t >= 0.0:
 		_cast_t += delta / _cast_dur
 		if _cast_t >= 1.0:
@@ -1191,10 +1323,12 @@ func _draw() -> void:
 		# 🔴 세81: 층 구분 동심원은 **미리보기(ASSEMBLE)에서만** — 그릴 때(DRAW)는 문양이 선에 걸쳐
 		# 지저분하다는 지적으로 끈다. 룬 미선택 중앙 마커는 조립 안내라 계속 둔다.
 		if _combined_show_bands:
+			# 🔴 세86: 선은 **층을 가르는 칸막이 하나씩**뿐이다(사용자 확정 *"선이 너무 많음"*).
+			# 층마다 띠 경계 둘을 다 그렸더니 2층 진에서 원이 5개가 됐다 — 지금은 층 수 + 진 윤곽.
+			# 좌표는 `band_edge` 정본이 준다(여기서 반지름을 계산하면 그게 곧 사본이다).
 			for bi in _combined_band_count:
-				var br := ro * (float(BAND_RADII[bi]) if bi < BAND_RADII.size() \
-					else float(BAND_RADII[BAND_RADII.size() - 1]))
-				draw_arc(ctr, br, 0.0, TAU, 48, BAND_GUIDE_COLOR, BAND_GUIDE_WIDTH, true)
+				draw_arc(ctr, band_edge(bi, ro), 0.0, TAU, 48,
+					BAND_GUIDE_COLOR, BAND_GUIDE_WIDTH, true)
 		# 🔴 세84 #22 룬 미선택 자리 마커 — **상태(`_combined_runes`)로** 자리마다 그린다.
 		# 좌표·크기는 `empty_rune_slot_marks`가 정본(`rune_slot_positions`·`combined_rune_size`)에서 뽑는다.
 		if not _combined_runes.is_empty():
@@ -1251,5 +1385,49 @@ func _draw() -> void:
 	# ⚠ 세85 ⑨ 은퇴: ⓒ **착지 펄스**("탁" — 조각을 놓은 자리에서 퍼지는 고리)와 ⓓ **완성 발광**
 	# (잠긴 획 전체 글로우 + 바깥을 훑는 호). 둘 다 **per-piece 잠금이 트리거**였고(`advance`/
 	# `finish`/`_commit_glyph_slot`), 세70 통째 흐름엔 잠금이 없어 이미 한 번도 안 떴다.
-	# 🔴 통째 흐름에 「완성했다」 연출을 주고 싶으면 **새로 붙여라** — 패널 `_finish()`가 부를
-	# 공개 훅 한 줄이면 된다. 죽은 트리거를 되살리는 게 아니다(그건 per-piece 부활이다).
+	# ✅ **세86 ⑭에 그 자리를 새로 채웠다** — 죽은 트리거를 되살린 게 아니라 공개 훅
+	# `play_finish()`(패널 `_finish()`가 부른다)로 새로 붙였다. 아래가 그 렌더다.
+	if _finish_t >= 0.0:
+		_draw_finish(ctr, ro)
+
+
+## 🔴 세86 ⑭ 「마법진 완성」 렌더 — **순수 오버레이**(가이드·먹선 위에 얹기만 한다. 지우거나
+## 가리지 않아 리포트로 넘어간 뒤에도 판이 그대로 읽힌다).
+## 순서: ① 조각이 안→밖으로 차례로 빛나고 ② 파도 고리가 그 경계를 보여 주고 ③ 룬 자리가 팝 하고
+## ④ 마지막에 바깥 테두리가 한 번 번쩍한다(= 다 맺혔다).
+func _draw_finish(ctr: Vector2, ro: float) -> void:
+	var t := _finish_t
+	var wave := finish_wave_frac(t)
+	# ① 조각(룬 → 층 → 진 윤곽)이 파도에 닿는 순간 밝아진다 = **안에서 밖 = 연산 순서**(M1).
+	# ⚠ `_combined_subpaths`가 없으면(빈 진) 아무것도 안 그린다 — 완성 자체가 불가한 상태다.
+	for i in _combined_subpaths.size():
+		if i >= _finish_radii.size():
+			break
+		var sub := _combined_subpaths[i] as PackedVector2Array
+		if sub.size() < 2:
+			continue
+		var a := finish_glow_at(float(_finish_radii[i]), t)
+		if a <= 0.01:
+			continue
+		draw_polyline(sub, Color(FINISH_GOLD, a * 0.35), FINISH_GLOW_W, true)
+		draw_polyline(sub, Color(FINISH_GOLD, a), FINISH_LINE_W, true)
+	# ② 파도 자체 — 얇은 금빛 고리가 바깥으로 퍼지며 옅어진다.
+	if wave < 1.0 and wave * ro > 1.0:
+		draw_arc(ctr, wave * ro, 0.0, TAU, 64,
+			Color(FINISH_GOLD, FINISH_SWEEP_ALPHA * (1.0 - wave)), 2.0, true)
+	# ③ 룬 자리 팝 — 파도가 그 자리를 지나는 순간 고리 하나가 튄다(융합진이면 자리마다).
+	# 🔴 좌표·크기는 `rune_slot_positions`·`combined_rune_size` **정본**을 그대로 부른다 —
+	# 각도를 베끼면 팝이 실제 룬에서 어긋난 자리에 뜬다(세48·세83이 밟은 그 함정).
+	var rn := maxi(_combined_runes.size(), 1)
+	var rsz := combined_rune_size(ro, rn)
+	for p: Vector2 in rune_slot_positions(rn, ctr, ro):
+		var u := (t - finish_t_at_radius(p.distance_to(ctr) / maxf(ro, 1.0))) / FINISH_POP_T
+		if u < 0.0 or u > 1.0:
+			continue
+		draw_arc(p, rsz * lerpf(0.5, FINISH_POP_SCALE, u), 0.0, TAU, 24,
+			Color(FINISH_GOLD, (1.0 - u) * 0.8), 2.0, true)
+	# ④ 마지막 플래시 — 바깥 테두리가 굵어졌다 잦아든다 + 판 전체에 아주 옅은 금빛 한 겹.
+	if t >= FINISH_FLASH_T:
+		var f := 1.0 - (t - FINISH_FLASH_T) / maxf(1.0 - FINISH_FLASH_T, 0.001)
+		draw_circle(ctr, ro, Color(FINISH_GOLD, f * 0.06))
+		draw_arc(ctr, ro, 0.0, TAU, 72, Color(FINISH_GOLD, f * 0.55), 1.0 + 3.0 * f, true)

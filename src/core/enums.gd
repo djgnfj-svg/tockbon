@@ -107,7 +107,8 @@ enum JinShape { CIRCLE, TRIANGLE, OCTAGON, ELLIPSE, PENTAGON, DIAMOND, FLOWER, L
 ## ⚠ **끝에만 붙여라** — 중간에 끼우면 저장된 RuneDef.status·옛 세이브가 통째로 밀린다.
 ##   SHOCK=감전(약한 경직) · VULNERABLE=취약(다음 상태가 더 세게 걸림, 흙) · ROOT=덩굴(약한 묶임, 풀)
 ##   MUD=진흙(**반응 산물** — 젖음+흙, 강한 속박) · BLAZE=산불(**반응 산물** — 화상+풀)
-enum Status { NONE, BURN, KNOCKBACK, WET, FLOW, SHOCK, VULNERABLE, ROOT, MUD, BLAZE }
+##   OVERGROWTH=무성함(**반응 산물** — 젖음+풀, 진흙보다 오래 묶는다. 세86 ⑤a)
+enum Status { NONE, BURN, KNOCKBACK, WET, FLOW, SHOCK, VULNERABLE, ROOT, MUD, BLAZE, OVERGROWTH }
 enum Phase { MORNING, DAY, EVENING, NIGHT }
 ## 🔴 PEN = 탁본 펜 (세션 23 신설). 등급이 오를수록 **보정도**가 올라 손을 잡아 준다
 ## (GameState.stroke_correction → trace_scorer). WAND(지팡이)와 역할이 달라 별도 부위다.

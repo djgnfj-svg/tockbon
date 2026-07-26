@@ -75,6 +75,18 @@ const PARTS_EDGE := Color(0.42, 0.35, 0.27, 0.55)
 const PARTS_PAD := 10.0
 const PARTS_ROW_H := 13.0
 
+## 🔴 세86 B② 리포트 세로 배치 — 「조립:」 줄이 **카드 폭을 넘어 잘리던** 자리를 고치며 상수로 뽑았다
+## (세85 F5 실측: `층 [확산 고리 ×3×3, 폭발 고…`). 두 줄까지 나누고 아래를 그만큼 내린다.
+## ⚠ 자리는 **줄 수와 무관하게 고정**이다 — 한 줄일 때 아래가 위로 올라오면 카드가 매번 들썩인다.
+## ⚠ `REPORT_BOX_BOTTOM`은 리포트 버튼 줄(씬 ShootBtn y=292) 위 여백이다 — 버튼을 옮기면 같이 옮겨라.
+const REPORT_SUM_Y := 106.0
+const REPORT_SUM_LINE_H := 12.0
+const REPORT_SUM_LINES := 2
+const REPORT_BAR_Y := 130.0        # 종합 막대 (= REPORT_SUM_Y + 2줄 자리)
+const REPORT_BODY_Y := 154.0       # 「점수 근거」 / 「완성도·정밀도」 머리줄
+const REPORT_BOX_Y := 160.0        # 그 아래 상자(부품 근거)
+const REPORT_BOX_BOTTOM := 284.0
+
 const OPEN_SEC := 0.20
 const OPEN_FROM_X := 0.04
 const CLOSE_SEC := 0.12
@@ -231,7 +243,11 @@ func _ready() -> void:
 	var inject_btn := $Stage/Spread/Report/ShootBtn as Button
 	inject_btn.text = "마력 주입"
 	inject_btn.pressed.connect(_on_inject)
-	($Stage/Spread/Report/RedoBtn as Button).pressed.connect(_on_report_redo)
+	# 🔴 세86 B①: 리포트 [다시]의 이름도 **모드에서 판다**(`_start_btn_name` 선례). 씬에 박혀 있던
+	# "다시 그리기"가 폐지 모드에서 **없는 조작**을 광고했다(세85 F5가 눈으로 잡았다).
+	var redo_btn := $Stage/Spread/Report/RedoBtn as Button
+	redo_btn.text = _redo_btn_name()
+	redo_btn.pressed.connect(_on_report_redo)
 
 	# ── 책 겉모습 텍스처 (세62) — 전부 exists 가드. 없으면 옛 코드 렌더/기본 버튼으로 폴백.
 	if ResourceLoader.exists(BOOK_ART_TEX):
@@ -762,6 +778,15 @@ func _start_btn_name() -> String:
 	return "마법진 완성 ✦" if RingPower.skip_drawing() else "그리기 시작 ✎"
 
 
+## 🔴 세86 B①: 리포트 [다시] 버튼의 이름 — `_start_btn_name()`과 **같은 규율로 모드에서 파생**한다.
+## 이 버튼이 하는 일은 `_on_report_redo` → `clear_board()`, 즉 **처음부터 다시**다. 폐지 모드엔
+## 「그리기」라는 단계 자체가 없으므로 "다시 그리기"는 **있지도 않은 조작을 적는 것**이고,
+## CLAUDE.md가 그걸 *"그 자체가 버그"*라고 못 박았다(세85 F5가 실제로 화면에서 잡았다).
+## ⚠ 씬(.tscn)에 문구를 도로 박지 마라 — 그러면 스위치를 되돌릴 때 한쪽만 따라온다(감사 T5).
+func _redo_btn_name() -> String:
+	return "다시 조립" if RingPower.skip_drawing() else "다시 그리기"
+
+
 ## 🔴 세84: 시작 안내문도 **한 곳**에서 낸다(`_start_btn_name` 선례). 예전엔 `open()`만 모드를
 ## 갈랐고 `clear_board()`는 무조건 손 긋기 문구를 적어, 실경로인 리포트 **[다시]** →
 ## `_on_report_redo` → `clear_board()`를 타면 폐지 모드인데 "손으로 한 번에 따라 그으면"이
@@ -959,6 +984,12 @@ func _finish() -> void:
 		else "마법진 완성 — 탁본 종이를 보고 [마력 주입]으로 맺으세요", false)
 	_set_phase(Phase.RESULT)   # 🔴 세71b: 결과=탁본 종이 오버레이 (리포트 렌더는 _set_phase가 켠다)
 	_report.queue_redraw()
+	# 🔴🔴 세86 ⑭ **완성 연출** — 판이 「맺혔다」를 말하는 유일한 자리다. 세70 통째 흐름으로 바뀐 뒤
+	# 옛 연출(착지 펄스·완성 발광)은 트리거가 per-piece 잠금이라 **15세션째 한 번도 안 떴다**.
+	# ⚠ **리포트 다음에 부른다** — 순수 오버레이라 표시를 늦추지 않는다는 걸 순서로도 못박는다.
+	# 🔴 소리는 **기존 wav 재사용**(`craft` = 만들어졌다). 새 소리를 만들지 않는 게 이번 갈래의 규율.
+	_board.play_finish()
+	Audio.play(&"craft")
 
 
 ## 🔴 리포트에서 [마력 주입] — 마법진이 맺히거나 **펑** 한다 (사용자 확정 2026-07-17 세션 23).
@@ -1209,10 +1240,17 @@ func _draw_report() -> void:
 			HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color(0.50, 0.32, 0.14))
 
 	# 🔴 세71: per-piece 행이 없다 — 통째로 그은 종합 하나다. 대신 **무엇을 조립했나** 한 줄.
-	_report.draw_string(font, Vector2(14, 106), "조립: " + _compose_summary(),
-		HORIZONTAL_ALIGNMENT_LEFT, -1, 10, REPORT_NAME)
+	# 🔴 세86 B②: 카드 폭을 재서 **최대 2줄로 나눈다**(넘치면 …). 층·문양이 늘수록 이 줄이 길어지고,
+	# 지금까지는 그냥 잘려 나가 「무엇을 조립했나」의 뒷부분이 안 보였다(세85 F5).
+	# ⚠ 폭은 아래 막대와 **같은 식**(size.x − 28)을 쓴다 — 좌표를 따로 베끼면 둘이 갈라진다.
+	var sum_w := _report.size.x - 28.0
+	var sum_y := REPORT_SUM_Y
+	for ln: String in fit_lines("조립: " + _compose_summary(), font, 10, sum_w, REPORT_SUM_LINES):
+		_report.draw_string(font, Vector2(14, sum_y), ln,
+			HORIZONTAL_ALIGNMENT_LEFT, -1, 10, REPORT_NAME)
+		sum_y += REPORT_SUM_LINE_H
 	# 종합 막대 — 그리기 모드=완성도×정밀도, 폐지 모드=부품 점수(둘 다 같은 0~1 척도라 막대는 하나다).
-	var bar := Rect2(14, 118, _report.size.x - 28, 7)
+	var bar := Rect2(14, REPORT_BAR_Y, sum_w, 7)
 	_report.draw_rect(bar, Color(0.80, 0.74, 0.62, 0.7), true)
 	_report.draw_rect(Rect2(bar.position, Vector2(bar.size.x * clampf(total, 0.0, 1.0), bar.size.y)),
 		Color(0.72, 0.45, 0.15), true)
@@ -1223,17 +1261,19 @@ func _draw_report() -> void:
 	# 폐지 모드엔 「그은 양」이라는 축 자체가 없으니 그 자리에 **점수 근거**를 적는다 —
 	# 사용자 세83 F5 숙제(*"탁본 종이를 보여주던 자리인데 그릴 게 없다"*)를 채우는 자리다.
 	if RingPower.skip_drawing():
-		_report.draw_string(font, Vector2(14, 142), "점수 근거",
+		_report.draw_string(font, Vector2(14, REPORT_BODY_Y), "점수 근거",
 			HORIZONTAL_ALIGNMENT_LEFT, -1, 9, REPORT_NAME)
-		_draw_parts(Rect2(14.0, 148.0, w - 28.0, 136.0))
+		_draw_parts(Rect2(14.0, REPORT_BOX_Y, w - 28.0, REPORT_BOX_BOTTOM - REPORT_BOX_Y))
 	else:
-		_report.draw_string(font, Vector2(14, 142),
+		_report.draw_string(font, Vector2(14, REPORT_BODY_Y),
 			"완성도 %d%% · 정밀도 %d%%" % [
 				int(round(_board.coverage() * 100.0)), int(round(_board.accuracy() * 100.0))],
 			HORIZONTAL_ALIGNMENT_LEFT, -1, 8, REPORT_DESC)
 		# 🔴 세71b '탁본 종이' — 내가 그은 획을 종이 위에 눌러 찍은 프리뷰(연출 개편). 버튼(y292) 위 공간.
-		_report.draw_string(font, Vector2(14, 160), "탁본", HORIZONTAL_ALIGNMENT_LEFT, -1, 9, REPORT_NAME)
-		_draw_rubbing(Rect2(14.0, 166.0, w - 28.0, 118.0))
+		_report.draw_string(font, Vector2(14, REPORT_BODY_Y + 18.0), "탁본",
+			HORIZONTAL_ALIGNMENT_LEFT, -1, 9, REPORT_NAME)
+		_draw_rubbing(Rect2(14.0, REPORT_BOX_Y + 24.0, w - 28.0,
+			REPORT_BOX_BOTTOM - REPORT_BOX_Y - 24.0))
 
 
 ## 내가 그은 먹선을 종이 톤 상자 안에 **자동 맞춤**해 그린다(탁본을 뜬 종이처럼). 좌표는 board-local이라
@@ -1341,6 +1381,51 @@ func score_reason() -> String:
 	var full := _pct(RingPower.assembled_score(parts.x, parts.y))
 	return "바탕 %d + 문양 %d + 층 %d = 종합 %d점" % [
 		base, with_glyphs - base, full - with_glyphs, full]
+
+
+## 🔴 세86 B② — 한 줄을 **폭 안에서 최대 `max_lines`줄로 나눈다**(넘치면 마지막 줄을 …로 줄인다).
+## 🔴 **static·순수인 이유 = 헤드리스 관측점**: 렌더(`draw_string`)는 헤드리스가 못 보지만 「몇 줄로
+## 나뉘었나·폭 안에 드나」는 잰다. `_draw_report` 안에 계산을 두면 잘림 회귀를 아무도 못 잡는다
+## (`RingBoard.compose_guide_paths`·`RingBook.jin_cell_rects`와 같은 규율).
+## ⚠ 공백으로만 자른다 — 이 게임의 요약은 `진 · 룬 불 · 층 [발산 고리 ×5, …]`처럼 공백이 넉넉하다.
+## 공백 없는 긴 낱말 하나는 자를 데가 없으므로 그 줄에서 …로 줄인다(폭을 넘기지 않는 게 계약).
+static func fit_lines(text: String, font: Font, fs: int, max_w: float,
+		max_lines: int) -> PackedStringArray:
+	var out := PackedStringArray()
+	if font == null or max_lines <= 0 or text.is_empty():
+		out.append(text)
+		return out
+	var words := text.split(" ", false)
+	var line := ""
+	for i in words.size():
+		var probe: String = words[i] if line.is_empty() else line + " " + words[i]
+		if line.is_empty() or _text_w(font, probe, fs) <= max_w:
+			line = probe
+			continue
+		if out.size() + 1 >= max_lines:
+			# 마지막 줄 — 남은 말을 전부 이어 붙여 …로 줄인다("뒤에 더 있다"가 보이게).
+			var rest := line
+			for j in range(i, words.size()):
+				rest += " " + words[j]
+			out.append(_ellipsize(font, rest, fs, max_w))
+			return out
+		out.append(line)
+		line = words[i]
+	out.append(_ellipsize(font, line, fs, max_w))
+	return out
+
+
+static func _text_w(font: Font, s: String, fs: int) -> float:
+	return font.get_string_size(s, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+
+
+static func _ellipsize(font: Font, s: String, fs: int, max_w: float) -> String:
+	if _text_w(font, s, fs) <= max_w:
+		return s
+	var cut := s
+	while cut.length() > 1 and _text_w(font, cut + "…", fs) > max_w:
+		cut = cut.substr(0, cut.length() - 1)
+	return cut + "…"
 
 
 ## 리포트의 "무엇을 조립했나" 한 줄 — 진 · 룬 · 층(밴드별 문양-고리). per-piece 점수는 없다.

@@ -40,6 +40,9 @@ const R_EARTH := 5
 const S_ROOT := 7
 const S_BLAZE := 9
 const R_GRASS := 6
+# 🔴 세86 ⑤a — 무성함(젖음+풀)의 **전용 산물** 상태. `Enums.Status` 끝에 붙였다(=10).
+# 그전엔 이 쌍만 덩굴(ROOT)을 재사용해 반응의 관측 가능한 효과가 「젖음 소진」뿐이었다.
+const S_OVERGROWTH := 10
 
 var failures: int = 0
 var _bus = null
@@ -71,9 +74,11 @@ func _run() -> void:
 	await _test_slow_cap()
 	await _test_dummy_reacts()
 	await _test_reaction_vfx_signals()
-	await _test_wet_plus_grass_is_root()
+	await _test_wet_plus_grass_is_overgrowth()
 	await _test_burn_plus_grass_is_blaze()
 	await _test_root_plus_fire_is_blaze()
+	await _test_overgrowth_plus_fire_is_blaze()
+	_test_overgrowth_rules_relations()
 
 	if failures == 0:
 		print("TEST_STATUS_OK — 전 항목 통과")
@@ -513,20 +518,22 @@ func _check_reaction_vfx(kind: String) -> void:
 	_bus.reaction_chain.disconnect(on_chain)
 
 
-## [13] 🔴 **젖음 + 풀 = 무성함(ROOT)** — 세83 룬 복원으로 살아난 반응(세84 감사 #16).
-## 바탕(젖음)은 소진되고 덩굴만 남으며, 덩굴이 젖음보다 **더 센 속박**이라 이동이 더 줄어야 한다
-## ([3] 진흙과 같은 규율 — `status_root_slow` 0.55 > `status_wet_slow` 0.35).
+## [13] 🔴🔴 **젖음 + 풀 = 무성함(OVERGROWTH)** — 세86 ⑤a에 **전용 산물**을 받았다.
+## 바탕(젖음)은 소진되고 무성함만 남으며, 젖음보다 **훨씬 센 속박**이라 이동이 크게 줄어야 한다
+## ([3] 진흙과 같은 규율).
 ## 🔴 감속은 **실제로 움직인 거리**로 잰다(파일 머리 규율) — `move_mult`를 직접 부르면 `_apply_move`
-## 통로를 건너뛰어 "곱하는 걸 잊었다"를 못 잡는다.
-## 🔴🔴 **검출력의 한계를 알고 써라** (세84에 뮤테이션으로 실측): `REACTIONS`의 `WET→GRASS` 줄을
-##   지워도 **빨개지는 건 「젖음 소진」 한 줄뿐**이다 — `rune_grass.tres`의 `status`가 이미 ROOT라
-##   반응이 없어도 덩굴은 **기본 덮어쓰기로** 걸린다. 즉 이 반응의 **현재 유일한 관측 가능한 효과가
-##   「젖음을 소진한다」**이고, 그건 감사 #33이 *"보상 없는 손해"*라 부른 밸런스 미결(사용자 F5 결정
-##   대기)과 같은 사실이다. 무성함이 전용 상태를 받으면(MUD·BLAZE 선례) **여기에 산물 검사를 더해라.**
-## 뮤테이션: `WET→GRASS` 줄 삭제 → 1건(젖음 소진) · `move_mult`의 ROOT 팔 삭제 → 1건(거리 비교) ·
-##   `duration_of`의 ROOT 팔 삭제 → `add()`가 일찍 빠져 덩굴 자체가 안 걸린다.
-func _test_wet_plus_grass_is_root() -> void:
-	print("[13] 젖음 + 풀 = 무성함 (젖음보다 더 센 속박)")
+## 통로를 건너뛰어 "곱하는 걸 잊었다"를 못 잡는다. 순수 규칙 쪽 관계식은 [17]이 따로 쥔다.
+## 🔴🔴 **세84가 적어 둔 검출력 구멍이 여기서 메워졌다**: 그전엔 산물이 ROOT라 `WET→GRASS` 줄을
+##   지워도 **`rune_grass.tres`의 status(=ROOT)가 기본 덮어쓰기로 같은 결과를 내** 빨개지는 게
+##   「젖음 소진」 한 줄뿐이었다(= 감사 #33 *"보상 없는 손해"*). 이제 산물이 룬의 바탕 상태와
+##   **다른 값**이라 반응 줄을 지우면 곧바로 「무성함이 생겼다」가 빨개진다.
+## 🔴 **두 몸을 다 돈다**(세56 「두 몸 복제 계약은 그물도 두 개」) — 반응 해결은 공용 holder지만
+##   상태를 holder로 **넘기는 배선**은 몸마다 따로다.
+## 뮤테이션: `WET→GRASS`를 ROOT로 되돌림 → 「무성함이 생겼다」 2건(두 몸) 빨감 ·
+##   `move_mult`의 OVERGROWTH 팔 삭제 → 거리 비교 빨감 ·
+##   `duration_of`의 OVERGROWTH 팔 삭제 → `add()`가 일찍 빠져 상태 자체가 안 걸린다.
+func _test_wet_plus_grass_is_overgrowth() -> void:
+	print("[13] 젖음 + 풀 = 무성함 (전용 산물 · 젖음보다 훨씬 센 속박)")
 	var stub := Node2D.new()
 	stub.add_to_group("player")
 	# [3]과 같은 120px — 넉백에 밀린 뒤에도 aggro_range(160) 안이어야 어그로가 살아 있다.
@@ -534,29 +541,41 @@ func _test_wet_plus_grass_is_root() -> void:
 	root.add_child(stub)
 
 	var wet = await _spawn(&"slime")
-	var rooted = await _spawn(&"slime")
+	var lush = await _spawn(&"slime")
 	# 🔴 둘 다 take_hit으로 세운다 — 넉백(손맛)이 한쪽에만 붙으면 이동 거리 비교가 오염된다([3] 교훈).
 	wet.take_hit(0.0, R_WATER, S_WET, 1.0)
-	rooted.apply_status(S_WET, 1.0)
-	rooted.take_hit(0.0, R_GRASS, S_ROOT, 1.0)  # 풀 룬(.tres status=7)이 젖음 위에 온다
-	_check(rooted.has_status(S_ROOT), "무성함(덩굴)이 생겼다")
-	_check(not rooted.has_status(S_WET), "바탕(젖음)은 반응에 소진돼 사라졌다")
+	lush.apply_status(S_WET, 1.0)
+	lush.take_hit(0.0, R_GRASS, S_ROOT, 1.0)  # 풀 룬(.tres status=7 = 덩굴)이 젖음 위에 온다
+	_check(lush.has_status(S_OVERGROWTH), "[enemy] 무성함이 생겼다")
+	_check(not lush.has_status(S_ROOT),
+		"[enemy] 반응이 기본 덮어쓰기를 이긴다 = 풀의 바탕(덩굴)이 아니라 전용 산물이다")
+	_check(not lush.has_status(S_WET), "[enemy] 바탕(젖음)은 반응에 소진돼 사라졌다")
 
 	for i in 20:  # 넉백이 사그라들 때까지
 		await physics_frame
 	var w0: Vector2 = wet.global_position
-	var r0: Vector2 = rooted.global_position
+	var r0: Vector2 = lush.global_position
 	for i in 30:
 		await physics_frame
 	var wet_dist: float = wet.global_position.distance_to(w0)
-	var root_dist: float = rooted.global_position.distance_to(r0)
+	var lush_dist: float = lush.global_position.distance_to(r0)
 	# 🔴 "0px" 가드 — 0이면 감속이 아니라 **어그로가 풀린** 것일 수 있다([3]에서 실제로 밟았다).
-	_check(root_dist > 0.5, "덩굴 적도 (느리게나마) 움직였다 = 어그로는 살아 있다 (%.2fpx)" % root_dist)
-	_check(root_dist < wet_dist * 0.85,
-		"덩굴이 젖음보다 뚜렷하게 더 묶는다 (젖음 %.2f → 덩굴 %.2f)" % [wet_dist, root_dist])
+	_check(lush_dist > 0.5, "[enemy] 무성함 적도 (느리게나마) 움직였다 = 어그로는 살아 있다 (%.2fpx)" % lush_dist)
+	_check(lush_dist < wet_dist * 0.5,
+		"[enemy] 무성함이 젖음보다 뚜렷하게 더 묶는다 (젖음 %.2f → 무성함 %.2f)" % [wet_dist, lush_dist])
 	wet.free()
-	rooted.free()
+	lush.free()
 	stub.free()
+
+	# 🔴 두 몸째 — 허수아비(연습장)에서도 같은 산물이 나온다. 몸의 배선이 빠지면 여기가 빨개진다.
+	var d = await _make_body("dummy")
+	d.global_position = Vector2(9000, 0)  # 위 적들과 반경으로 안 섞이게
+	await physics_frame
+	d.apply_status(S_WET, 1.0)
+	d.take_hit(0.0, R_GRASS, S_ROOT, 1.0)
+	_check(d.has_status(S_OVERGROWTH), "[dummy] 허수아비에도 무성함이 생겼다")
+	_check(not d.has_status(S_WET), "[dummy] 바탕(젖음)은 반응에 소진됐다")
+	d.free()
 
 
 ## [14] 🔴 **화상 + 풀 = 산불(BLAZE)** — 그리고 산불 DoT가 화상보다 **세다**(세84 감사 #16).
@@ -612,6 +631,98 @@ func _test_root_plus_fire_is_blaze() -> void:
 		await physics_frame
 	_check(e.hp() < h0 - 1.0, "산불이 hp를 깎았다 (%.2f → %.2f)" % [h0, e.hp()])
 	e.free()
+
+
+## [16] 🔴 **무성함 + 불 = 산불** (세86 ⑤a 결정). 반응표에서 base 키가 `OVERGROWTH`인 유일한 줄.
+## 🔴 **이 줄이 없으면 조용히 나쁜 일이 난다**: 안 적힌 조합은 기본 덮어쓰기라 불이 무성함을
+##   말없이 지우고 그냥 화상이 된다 = 게임 최고의 속박이 **아무 신호 없이 사라지는** 함정
+##   상호작용. 그래서 "덮어쓰기가 아니라 산불"을 명시적으로 잰다([15]와 같은 규율).
+## ⚠ [15](덩굴+불)과 산물은 같지만 **다른 표 줄**이다 — 한쪽만 지워도 다른 쪽은 그린이다.
+func _test_overgrowth_plus_fire_is_blaze() -> void:
+	print("[16] 무성함 + 불 = 산불 (젖었어도 연료 덩어리라 크게 탄다)")
+	var e = await _spawn(&"slime")
+	e.apply_status(S_OVERGROWTH, 1.0)
+	_check(e.has_status(S_OVERGROWTH), "무성함이 걸렸다 (duration_of에 팔이 있다)")
+	e.take_hit(0.0, R_FIRE, S_BURN, 1.0)
+	_check(e.has_status(S_BLAZE), "산불이 생겼다")
+	_check(not e.has_status(S_OVERGROWTH), "바탕(무성함)은 반응에 소진돼 사라졌다")
+	_check(not e.has_status(S_BURN), "반응이 덮어쓰기를 이긴다 = 그냥 화상이 아니다")
+	var h0: float = e.hp()
+	for i in 70:
+		await physics_frame
+	_check(e.hp() < h0 - 1.0, "산불이 hp를 깎았다 (%.2f → %.2f)" % [h0, e.hp()])
+	e.free()
+
+
+## [17] 🔴 **무성함의 규칙 관계식** (세86 ⑤a) — 순수 `StatusRules`만 본다(몸 없음).
+## 🔴🔴 **값을 박지 마라 — 관계식으로 잰다**(세79 교훈): 5.0·0.88을 그대로 적으면 손맛 튜닝
+##   한 번에 **거짓 빨강**이 나 그물이 튜닝을 방해한다. 설계는 값이 아니라 부등호다.
+##     지속: 무성함 > 진흙 > 덩굴  ·  감속: 무성함 ≥ 진흙 (= move_mult이 더 작다)
+## 🔴 **balance 배선 그물**: `duration_of(OVERGROWTH)`가 balance의 `status_overgrowth_sec`을
+##   **실제로 되돌리는지** 잰다. ⚠ 이 프로젝트의 balance 값은 전부 `BalanceData`의 `@export`
+##   기본값이다(`data/balance.tres`엔 오버라이드 행이 하나도 없다 — 실측) — 그래서 여기서 잡는
+##   실패는 "이름 오타로 .tres 행이 무시됨"이 아니라 **"규칙이 balance를 안 보고 상수를 박음"**이다
+##   (뮤테이션: `duration_of`의 OVERGROWTH 팔을 `return 5.0`으로 → 값은 같지만 balance를 흔들면
+##   갈라지므로, 아래 `bal` 대조 줄이 진짜 배선을 붙잡는 자리다).
+## 🔴 **틴트 구분**: 무성함이 덩굴과 같은 색이면 전용 상태를 만든 값어치가 **화면에서 사라진다**.
+##   가장 가까운 이웃과의 거리만 재고 색 자체는 안 박는다(연출값은 흔들려도 되지만 "구분"은 계약).
+func _test_overgrowth_rules_relations() -> void:
+	print("[17] 무성함 규칙 — 지속·감속 관계식 · balance 배선 · 틴트 구분")
+	var SR = load("res://src/core/status_rules.gd")
+	var bal = load("res://data/balance.tres")
+
+	# ── ⓐ balance 배선 (규칙이 상수를 박지 않고 balance를 본다) ──
+	_check(is_equal_approx(SR.duration_of(S_OVERGROWTH), bal.status_overgrowth_sec),
+		"지속이 balance.status_overgrowth_sec을 그대로 쓴다 (규칙 %.2f / balance %.2f)"
+			% [SR.duration_of(S_OVERGROWTH), bal.status_overgrowth_sec])
+	_check(bal.status_overgrowth_sec > 0.0 and bal.status_overgrowth_slow > 0.0,
+		"balance의 무성함 두 필드가 실제 값으로 로드된다 (%.2fs / %.2f)"
+			% [bal.status_overgrowth_sec, bal.status_overgrowth_slow])
+
+	# ── ⓑ 지속 관계식: 무성함 > 진흙 > 덩굴 ──
+	var d_over: float = SR.duration_of(S_OVERGROWTH)
+	var d_mud: float = SR.duration_of(S_MUD)
+	var d_root: float = SR.duration_of(S_ROOT)
+	_check(d_over > d_mud,
+		"🔴 무성함이 진흙보다 오래 묶는다 (무성함 %.2fs > 진흙 %.2fs)" % [d_over, d_mud])
+	_check(d_mud > d_root,
+		"진흙이 덩굴보다 오래 간다 = 기존 서열 유지 (진흙 %.2fs > 덩굴 %.2fs)" % [d_mud, d_root])
+
+	# ── ⓒ 감속 관계식: 무성함 ≥ 진흙 (move_mult이 더 작거나 같다) ──
+	# ⚠ 세기 배율 1.0에서만 잰다 — 배율이 붙으면 `status_slow_cap`이 둘 다 상한으로 눌러
+	#   부등호가 등호가 된다(그건 상한의 의도지 회귀가 아니다).
+	var m_over: float = SR.move_mult(S_OVERGROWTH, 1.0)
+	var m_mud: float = SR.move_mult(S_MUD, 1.0)
+	var m_root: float = SR.move_mult(S_ROOT, 1.0)
+	_check(m_over <= m_mud,
+		"🔴 무성함 감속이 진흙 이상이다 (무성함 배율 %.3f ≤ 진흙 %.3f)" % [m_over, m_mud])
+	_check(m_over < m_root,
+		"무성함이 덩굴보다 확실히 더 묶는다 (무성함 %.3f < 덩굴 %.3f)" % [m_over, m_root])
+	_check(m_over > 0.0,
+		"완전정지는 아니다 = status_slow_cap이 살아 있다 (%.3f)" % m_over)
+
+	# ── ⓓ DoT 축은 안 건드린다 (속박 상태라 화상 계열이 아니다) ──
+	_check(is_equal_approx(SR.dot_per_sec(S_OVERGROWTH, 1.0), 0.0),
+		"무성함은 지속 피해를 안 낸다 = 속박 축 (실제 %.2f)" % SR.dot_per_sec(S_OVERGROWTH, 1.0))
+
+	# ── ⓔ 틴트가 다른 상태 전부와 구분된다 ──
+	var others := {S_BURN: "화상", S_WET: "젖음", S_SHOCK: "감전", S_VULNERABLE: "취약",
+		S_ROOT: "덩굴", S_MUD: "진흙", S_BLAZE: "산불"}
+	var mine: Color = SR.tint_of(S_OVERGROWTH)
+	_check(mine != Color.WHITE, "무성함에 전용 틴트가 있다 (흰색 폴백이 아니다)")
+	var nearest := 999.0
+	var nearest_name := ""
+	for k in others.keys():
+		var c: Color = SR.tint_of(k)
+		var dist: float = absf(mine.r - c.r) + absf(mine.g - c.g) + absf(mine.b - c.b)
+		if dist < nearest:
+			nearest = dist
+			nearest_name = str(others[k])
+	# ⚠ 임계 0.45 — 흰색 폴백(틴트 팔이 사라진 경우)이 취약과 정확히 0.35라, 0.35로 두면
+	#   부동소수 우연에 기대게 된다(뮤테이션에서 실측). 실제 최근접(덩굴)은 0.60이라 여유가 있다.
+	_check(nearest >= 0.45,
+		"🔴 무성함 틴트가 가장 가까운 이웃(%s)과도 뚜렷이 다르다 (거리 %.2f ≥ 0.45)"
+			% [nearest_name, nearest])
 
 
 # ── 헬퍼 ──

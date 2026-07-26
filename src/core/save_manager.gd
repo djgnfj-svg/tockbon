@@ -81,12 +81,15 @@ func _ready() -> void:
 	#   equipment_changed = 착·탈용
 	# ⚠ `equipment_changed`는 `load_game`·`new_game`도 쏘는데, 그때는 `_ready_to_save`가 아직
 	#   false거나(로드) 직후 `save_game()`이 예약을 걷는다(새로하기) — 방금 읽은 것을 되쓰지 않는다.
-	# 🔴🔴 **`resources_changed`는 일부러 안 건다** (세84에 실측하고 각하): 창고 증감(제작·상점·
-	#   퀘스트 보상)만 쏘는 게 아니라 **`GameState.add_to_bag`도 같이 쏜다** — 그러면 원정 중
-	#   드롭을 주울 때마다 세이브 파일 + 도안 .tres 전량을 다시 쓴다. 그런데 **가방은 애초에 저장
-	#   대상이 아니라**(사망 시 소실이 설계다) 순수 낭비다. 창고 변화를 트리거로 삼으려면
-	#   신호를 갈라야 한다(`inventory_changed` 신설 or `add_to_bag`을 분리) = 리드의 core 작업.
-	#   그때까지 **제작·상점은 종료 훅(방어선 ①)이 덮는다.**
+	# ✅ 세86 ⑫: **`inventory_changed`를 건다** — 세84엔 `resources_changed`밖에 없어 각하했었다
+	#   (그 신호는 `GameState.add_to_bag`도 쏘는데 **가방은 애초에 저장 대상이 아니라**(사망 시
+	#   소실이 설계) 드롭 하나마다 세이브 + 도안 .tres 전량을 다시 쓰는 순수 낭비였다).
+	#   이제 신호를 갈랐다: `inventory_changed`는 **창고(영구) 증감만** 쏜다 = 제작·상점·퀘스트
+	#   보상·귀환 정산이 저장으로 이어지고, 원정 중 드롭은 조용하다.
+	# ⚠ 정산(`_on_extraction_success`)은 `add_item`을 아이템 수만큼 부르지만 `_queue_save`가
+	#   같은 프레임을 하나로 합친다(디바운스). `extraction_success` 자체도 직접 저장한다 — 이중이
+	#   아니라 순서상 예약이 걷힌다(`save_game` 첫 줄).
+	EventBus.inventory_changed.connect(_queue_save)
 	EventBus.ring_design_committed.connect(func(_design: RingDesign) -> void: _queue_save())
 	EventBus.codex_unlocked.connect(func(_unlock_id: StringName) -> void: _queue_save())
 	EventBus.equipment_changed.connect(_queue_save)
@@ -278,6 +281,12 @@ func load_game() -> bool:
 		GameState.equipment[int(key)] = StringName(equipment[key])
 	# 마나는 장비(로브 상한) 복원 후에 — 상한 getter 기준으로 클램프
 	GameState.mana = minf(float(data.get("mana", GameState.mana_max())), GameState.mana_max())
+	# 🔴 세86 ⑥: **codex도 clear한다** — 위 6개 사전과 대칭이다(전엔 여기만 얹기만 해서
+	# "로드하면 옛 해금이 남는다"는 조용한 예외였다). 🔴 **그다음 시드를 다시 심는다**:
+	# 시드는 「빌드가 주는 것」이라 세이브에 없어도 있어야 한다(안 그러면 빌드가 시작 해금을
+	# 늘렸을 때 기존 세이브에서만 그게 사라진다 — 에러 없이). 세이브 해금은 그 위에 얹힌다.
+	GameState.codex.clear()
+	GameState.seed_codex_unlocks()
 	for key: String in data.get("codex", []):
 		GameState.codex[StringName(key)] = true
 	# 퀘스트 진행·완료 복원 (세션36). 옛 세이브엔 없어 get 기본값으로 빈 진행(첫 퀘스트가 열린다).

@@ -37,8 +37,12 @@ const REACTIONS := {
 		Enums.RuneType.EARTH: {"status": Enums.Status.MUD, "kind": "convert"},
 		# 젖음 + 불 = 증기 (젖음이 날아간다 — 물로 불을 막는 게 아니라 서로 상쇄) — 끓는 물 사건
 		Enums.RuneType.FIRE: {"status": Enums.Status.NONE, "kind": "burst", "rune": Enums.RuneType.WATER},
-		# 젖음 + 풀 = 무성함 (덩굴이 크게 자라 오래 묶는다)
-		Enums.RuneType.GRASS: {"status": Enums.Status.ROOT, "kind": "convert"},
+		# 젖음 + 풀 = 무성함 (덩굴이 물을 먹고 크게 자라 **진흙보다도 오래** 묶는다)
+		# 🔴 세86 ⑤a: 여기가 세83~85 내내 **덩굴(ROOT)을 재사용**했다 — 진흙·산불은 전용 산물을
+		#   갖는데 이 쌍만 예외였고, 그래서 반응의 **유일한 관측 가능한 효과가 「젖음을 소진한다」**
+		#   뿐이었다(풀 룬의 `.tres` status가 이미 ROOT라 반응이 없어도 덩굴은 덮어쓰기로 걸렸다).
+		#   = 감사 #33이 *"보상 없는 손해"*라 부른 자리. 전용 상태를 주어 보상 쪽으로 넘겼다.
+		Enums.RuneType.GRASS: {"status": Enums.Status.OVERGROWTH, "kind": "convert"},
 	},
 	Enums.Status.BURN: {
 		# 화상 + 풀 = 산불 (더 세고 오래 타며 번진다)
@@ -48,6 +52,14 @@ const REACTIONS := {
 	},
 	Enums.Status.ROOT: {
 		# 덩굴 + 불 = 산불 (마른 덩굴이 잘 탄다)
+		Enums.RuneType.FIRE: {"status": Enums.Status.BLAZE, "kind": "convert"},
+	},
+	Enums.Status.OVERGROWTH: {
+		# 무성함 + 불 = 산불 (젖었어도 **연료 덩어리**라 한번 붙으면 크게 탄다)
+		# 🔴 세86 ⑤a 결정 — 이 줄을 **비워 두면 안 된다**: 안 적힌 조합은 기본 덮어쓰기라
+		#   불이 무성함을 조용히 지우고 그냥 화상이 된다 = 게임 최고의 속박이 **아무 신호 없이
+		#   사라지는** 함정 상호작용이 된다(플레이어가 배울 방법이 없다). 산물을 ROOT+FIRE와
+		#   같은 산불로 맞춰 어휘도 일관된다("풀 계열 + 불 = 산불"). 새 상태를 또 만들지 않는다.
 		Enums.RuneType.FIRE: {"status": Enums.Status.BLAZE, "kind": "convert"},
 	},
 }
@@ -76,10 +88,17 @@ static func duration_of(status: int) -> float:
 		Enums.Status.ROOT:       return BAL.status_root_sec
 		Enums.Status.MUD:        return BAL.status_mud_sec
 		Enums.Status.BLAZE:      return BAL.status_blaze_sec
+		# 🔴 무성함 > 진흙 > 덩굴 (관계식이 설계다 — 값은 balance가 쥔다).
+		Enums.Status.OVERGROWTH: return BAL.status_overgrowth_sec
 		_:                       return 0.0
 
 
-## 이동 배율 — 1.0이면 안 느려진다. 젖음<진흙 순으로 세다. 묶임(덩굴·진흙)은 거의 정지.
+## 이동 배율 — 1.0이면 안 느려진다. 젖음<덩굴<진흙<무성함 순으로 세다. 묶임은 거의 정지.
+##
+## 🔴 세86 ⑤a **한계를 알고 써라**: 무성함 감속은 진흙보다 세지만 `status_slow_cap`(0.90)이
+## 위를 자른다 — 세기 배율(특별잉크·취약)이 조금만 붙어도 **둘 다 상한에 눌려 체감이 같아진다**.
+## 그래서 무성함의 진짜 차별점은 감속이 아니라 **지속시간**이다(진흙 대비 훨씬 오래 묶는다).
+## 감속을 더 벌리려면 상한부터 손봐야 하는데, 상한은 "완전정지 금지"라는 별개 이유로 있는 값이다.
 ## 🔴 **`_apply_move` 한 곳에만 곱해라** — AI 3종(추격·돌진·부유)이 전부 그 통로를 지난다.
 ##
 ## 🔴 세션50: `power`(세기 배율)를 **먹는다.** 그전엔 감속이 balance 고정이라
@@ -89,15 +108,18 @@ static func duration_of(status: int) -> float:
 static func move_mult(status: int, power: float = 1.0) -> float:
 	var slow := 0.0
 	match status:
-		Enums.Status.WET:   slow = BAL.status_wet_slow
-		Enums.Status.MUD:   slow = BAL.status_mud_slow
-		Enums.Status.ROOT:  slow = BAL.status_root_slow
-		Enums.Status.SHOCK: slow = BAL.status_shock_slow
-		_:                  return 1.0
+		Enums.Status.WET:        slow = BAL.status_wet_slow
+		Enums.Status.MUD:        slow = BAL.status_mud_slow
+		Enums.Status.ROOT:       slow = BAL.status_root_slow
+		Enums.Status.SHOCK:      slow = BAL.status_shock_slow
+		Enums.Status.OVERGROWTH: slow = BAL.status_overgrowth_slow
+		_:                       return 1.0
 	return 1.0 - clampf(slow * power, 0.0, BAL.status_slow_cap)
 
 
-## 초당 지속 피해 — 화상 계열만. `power` = **세기 배율**(특별잉크 증폭이 이미 곱해져 있다).
+## 초당 지속 피해 — 화상 계열만(BURN·BLAZE). `power` = **세기 배율**(특별잉크 증폭이 이미 곱해져 있다).
+## ⚠ 무성함(세86 ⑤a)은 **속박 축**이라 여기 팔이 없다 — DoT를 주면 진흙과 축이 겹치고,
+##   불을 얹었을 때 산불로 바뀌는 보상(위 REACTIONS)이 "이미 타고 있었다"로 흐려진다.
 ## 🔴 산불은 화상보다 세다 — 반응의 보상이 **눈에 띄게** 커야 조합할 이유가 생긴다.
 ## ⚠ 세션50 전엔 `power`가 곧 초당피해(불의 3.0)였다 — 기준값이 balance로 나갔다.
 static func dot_per_sec(status: int, power: float) -> float:
@@ -172,5 +194,9 @@ static func tint_of(status: int) -> Color:
 		Enums.Status.MUD:        return Color(0.75, 0.62, 0.45)
 		Enums.Status.SHOCK:      return Color(1.25, 1.20, 0.55)
 		Enums.Status.ROOT:       return Color(0.70, 1.25, 0.70)
+		# 🔴 무성함 = 물 먹은 짙은 녹색. **덩굴(ROOT)과 뚜렷이 갈려야 한다** — 같은 초록이면
+		#   전용 상태를 만든 값어치가 화면에서 통째로 사라진다(빨강을 크게 눌러 어둡게, 파랑을
+		#   올려 "젖었다"를 남긴다). 구분 여부는 `test_status_auto`가 거리로 잰다.
+		Enums.Status.OVERGROWTH: return Color(0.35, 1.10, 0.80)
 		Enums.Status.VULNERABLE: return Color(1.15, 0.95, 1.15)
 		_:                       return Color.WHITE

@@ -155,6 +155,13 @@ func _ready() -> void:
 	EventBus.audio_muted_changed.connect(_on_muted_changed)
 	EventBus.item_collected.connect(_on_item_collected)
 	EventBus.resources_changed.connect(_on_resources_changed)
+	# 🔴🔴 **슬롯 내용이 바뀌면 다시 그린다** (세86 ① 슬롯 교체 UI가 만든 새 필요).
+	# 세85까지 `ring_equipped`는 **맺을 때만** 바뀌었고 그건 `ring_design_committed`가 이미 잡았다.
+	# 이제 Tab「마법진」탭에서 언제든 슬롯을 갈아 끼우는데, `_process`의 redraw 조건은
+	# 마나 변화·토스트·안내문·돈 톡톡뿐이라 **마나가 만땅이면 아무도 redraw를 안 건다** —
+	# 슬롯 미니 다이어그램이 **바꾸기 전 진을 계속 보여 준다**(= 감사 T8 「쏘는 것 ≠ 보이는 것」).
+	# 장비 착·탈용도 파생 스탯을 바꾸므로 같은 신호로 덮인다.
+	EventBus.equipment_changed.connect(_on_equipment_changed)
 	_coin = _coin_total()   # 첫 표시값 — 시그널을 기다리지 않고 부팅 세이브의 잔액을 곧장 보여 준다
 
 
@@ -179,6 +186,11 @@ func say(text: String, warn: bool = false, sticky: bool = false) -> void:
 ## 새 마법진이 맺혔다 — GameState가 같은 시그널로 빈 슬롯에 장착한다.
 func _on_design_committed(_design: RingDesign) -> void:
 	say("새 마법진이 맺혔다 — 책을 덮고(ESC) 좌클릭으로 쏴 보세요")
+
+
+## 장착이 바뀌었다(슬롯 교체·장비 착탈) — 슬롯 다이어그램·선택 슬롯 상세를 다시 그린다.
+func _on_equipment_changed() -> void:
+	queue_redraw()
 
 
 func _on_hp_changed(_hp: float, _hp_max: float) -> void:

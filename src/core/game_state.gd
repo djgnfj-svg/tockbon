@@ -87,6 +87,16 @@ func _ready() -> void:
 ## 🔴 시작엔 룬·문양만 심는다. **장비도 스테이션(station_*)도 없다** — 빈 시작(세션37, 사용자
 ## 확정: "시작했을 때 아무것도 없는 상태가 중요"). 거점은 재료로 직접 지어 채운다.
 func _seed_starting_unlocks() -> void:
+	seed_codex_unlocks()
+	_seed_starting_rings()
+
+
+## 🔴 **시작 해금(codex)만** — 도안 시드와 갈라 뒀다 (세86 ⑥). `save_manager.load_game`이
+## codex를 `clear()`한 뒤 이걸 **다시 부른다**: 시드는 「빌드가 주는 것」이라 세이브에 실려
+## 있든 없든 늘 있어야 한다. 안 부르면 **빌드가 새 시작 해금을 추가해도 기존 세이브에선
+## 조용히 사라진다**(에러 없이 — 룬 하나가 책에서 없어지는 식). 세이브의 해금은 이 위에 얹힌다.
+## ⚠ 도안 시드(`_seed_starting_rings`)는 여기 없다 — 그건 로드가 덮어야 하는 「진행」이다.
+func seed_codex_unlocks() -> void:
 	# 🔴 세션61 콘텐츠 리셋 — 카탈로그를 진 1(jin_single)·룬 1(rune_fire)·문양 1(radiate)로 비웠다.
 	# 앞으로 사용자가 큐레이션하며 하나씩 되살린다(진의 개성 = band_count·rune_slots·guide_shape —
 	# 🔴 세85 ⑦에 칸 축 glyph_slots는 은퇴했다).
@@ -128,12 +138,12 @@ func _seed_starting_unlocks() -> void:
 	#   jin_fuse(융합진 2등급 = 룬 자리 2 · 층 2겹) — 룬 둘을 한 발에 실어 명중 시 두 상태를 걸어
 	#   원소 반응(젖음+번개=감전…)을 낸다. ⚠ **경로 붙이는 세션이 이 한 줄도 M1 3줄과 함께 걷는다.**
 	codex[&"jin_fuse"] = true
+	# ⚠ 아래 문양 링 주석은 「시드가 아닌 것」의 설명이다 — 여기서 끝나는 게 codex 시드 전부다.
 	# 🔴 세71 첫 스테이지 슬라이스 — 진은 일반진 1종으로 출발(진·문양은 여전히 하나).
 	# 문양 링(gr_*)은 더는 시드가 아니다 — 스테이지 클리어 보상으로만 얻는다(ChapterDef.reward_unlock):
 	#   ch1(숲 어귀) 클리어 → gr_radiate5(발산×5) 해금 → 조립대에서 밴드에 끼워 파이어볼을 5갈래로.
 	# ⚠ gr_gather3는 당분간 획득 경로가 없다(후속 챕터 reward_unlock 대기) — .tres는 남겨 둔다.
 	#   세68 시드 2줄(gr_radiate5·gr_gather3)은 이 결정으로 삭제됐다.
-	_seed_starting_rings()
 
 
 ## 🔴 세78 시작 퀵슬롯 미리 장착 (사용자 확정: "1 파이어볼·2 워터볼·3 윈드볼로 넣은 걸로 시작").
@@ -321,15 +331,20 @@ func reset_player_hp() -> void:
 
 # ── 창고 (영구)
 
+## 🔴 세86 ⑫: **창고 증감은 `inventory_changed`도 쏜다** — 이게 자동 저장 트리거다
+## (`resources_changed`는 가방 획득도 실어 와 트리거로 못 쓴다, event_bus 주석 참조).
+## 두 신호를 **여기 두 함수에서 나란히** 쏜다 — 창고를 바꾸는 통로가 이 둘뿐이라 여기가 유일한 자리다.
 func add_item(item_id: StringName, count: int = 1) -> void:
 	inventory[item_id] = int(inventory.get(item_id, 0)) + count
 	EventBus.resources_changed.emit()
+	EventBus.inventory_changed.emit()
 
 func remove_item(item_id: StringName, count: int = 1) -> bool:
 	if get_count(item_id) < count:
 		return false
 	inventory[item_id] = int(inventory[item_id]) - count
 	EventBus.resources_changed.emit()
+	EventBus.inventory_changed.emit()
 	return true
 
 func get_count(item_id: StringName) -> int:
@@ -380,6 +395,30 @@ func _on_ring_design_committed(design: RingDesign) -> void:
 		if ring_equipped[slot] == null:
 			ring_equipped[slot] = design
 			return
+
+## 🔴🔴 **보관 도안을 슬롯에 올린다** (세86 ① — 사용자 결정, 감사 #6).
+## 세85까지 `ring_equipped`에 쓰는 자리는 시드·새로하기·로드·위 **빈 슬롯 자동 장착**뿐이었다 =
+## **세 슬롯이 한 번 차면 그 뒤에 맺은 도안은 영원히 못 쓴다.** 세85 F5에서 보관 6장으로 실증됐다
+## ("맺었는데 못 쓴다"). 슬롯 교체 UI(`tab_panel` 마법진 탭)가 부르는 **유일한 진입점**이다.
+##
+## design = null이면 그 슬롯을 **비운다**(해제).
+## 🔴 같은 도안이 다른 슬롯에 있으면 **그 자리를 비운다** — 한 도안이 두 슬롯을 차지하면
+##   `tab_panel._unequipped_designs`(`has` 판정)와 저장(경로 참조)이 조용히 어긋난다.
+## 🔴 보관(`ring_designs`)에 없는 도안은 거부한다 — 저장은 도안을 **파일 경로**로 참조하므로
+##   보관 밖 인스턴스를 꽂으면 다음 로드에 빈 슬롯이 된다(에러 없이).
+## 저장은 `equipment_changed`가 끈다 — save_manager가 이미 자동 저장 트리거로 걸어 뒀다(세84 #1).
+func equip_design(slot: int, design: RingDesign) -> bool:
+	if slot < 0 or slot >= EQUIP_SLOTS:
+		return false
+	if design != null and not ring_designs.has(design):
+		return false
+	if design != null:
+		var prev := ring_equipped.find(design)
+		if prev != -1 and prev != slot:
+			ring_equipped[prev] = null
+	ring_equipped[slot] = design
+	EventBus.equipment_changed.emit()
+	return true
 
 func is_unlocked(unlock_id: StringName) -> bool:
 	return bool(codex.get(unlock_id, false))
