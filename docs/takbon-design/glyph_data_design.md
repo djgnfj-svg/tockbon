@@ -429,7 +429,7 @@ M2의 *"룬 1개면 share 1.0"*과 **같은 자리의 증명**이다.
    그물 [4][5][6][11] + 뮤테이션 전량.
 
 🔴 **위임 경계**: core 스키마(`glyph_def`·`enums`·`db`·`glyph_rules`·`ring_design`·`balance_data`)는
-**리드가 직접** 반영한다(takbon-rules §0). UI 이행(5)·밑그림 갈래(6)는 `takbon-dev`/`takbon-ui` 위임 가능.
+**리드가 직접** 반영한다(takbon-rules §0). UI 이행(5)·밑그림 갈래(6)는 `takbon-dev` 위임 가능.
 
 ## ⑭ 안 하는 것 (YAGNI · 이월)
 

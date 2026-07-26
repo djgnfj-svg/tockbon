@@ -323,7 +323,7 @@ at.region = Rect2(i * side, 0, side, side)
 |---|---|---|
 | 1 | **T1 `AttackShape` + `contains()`** (core) | 리드 |
 | 2 | **마나 폭발 VFX** — `_spawn_death_puff` 교체 (z 50 유지) | `takbon-dev` |
-| 3 | 🎨 **48px 재작 6종 idle + attack**(+hurt 선택) | `takbon-art` → `takbon-relight` |
+| 3 | 🎨 **48px 재작 6종 idle + attack**(+hurt 선택) | `takbon-art` (그리기 → relight 입체화까지 한 에이전트) |
 | 4 | **`_setup_frames` attack 갈래** + **애니 소유자 정리**(§4-C-3) + `.tres` 시트 경로·size·**hitbox_radius** | `takbon-dev` |
 | 5 | **공격 상태기계** — `_contact` 즉시 피해 → 4단계 | `takbon-dev` |
 | 6 | **범위 표시** — 적 자식 + `top_level` + 🔴 **`_show_gust_ring`의 `top_level` 누락도 같이 수정** | `takbon-dev` |

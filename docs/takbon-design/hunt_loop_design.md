@@ -446,7 +446,7 @@ parts.append("%s %d/%d" % [_item_name(id), need, GameState.get_count(id)])
 | 6 | **방 확대** — Ground rect · **Player 스폰 y** · **나무 재배치·증설** · **횃불 증설** · BossGlow · **남쪽 출구 `zone_id=&"exit"` 신설**(`portal.tscn` 복제 + `Prompt.text` + `_extract` 연결) | `takbon-dev` |
 | 7 | **챕터 3장** — `mob_spawns`·`reward_unlock`·`boss_spawn` | `takbon-dev` |
 | 8 | 🔴 **시드 회수** — `seed_codex_unlocks` 10줄 + **`_seed_starting_rings` 3→1장** + **기존 검사 3건 같이 수정**(§6-E-4) + `night_only` 죽은 플래그 제거 | 리드 |
-| 9 | **공방/정제대 진행 표시** — 인자 순서 + 사본 둘 + `ItemText` 단일 소스화 | `takbon-ui` |
+| 9 | **공방/정제대 진행 표시** — 인자 순서 + 사본 둘 + `ItemText` 단일 소스화 | `takbon-dev` |
 
 🔴 **8은 반드시 마지막.** 먼저 지우면 그 사이 단계들을 **부품 없는 상태로** 테스트하게 된다.
 🔴 **2는 6보다 앞이다.** 방을 먼저 키우면 보스가 내려오는 상태로 나머지를 테스트하게 된다.

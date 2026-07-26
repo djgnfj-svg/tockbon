@@ -136,7 +136,7 @@ q00 claimable → 정산하니 q01 개방.
 **패널 열기 전의 개념**(마법진=진·룬·문양을 손으로 그린다)이었다.
 
 **만든 것:**
-- **재사용 대사 상자** `src/hud/dialogue_box.gd`+`.tscn` (takbon-ui 제작): `open(lines, speaker)` → 한 줄씩,
+- **재사용 대사 상자** `src/hud/dialogue_box.gd`+`.tscn` (takbon-dev 담당): `open(lines, speaker)` → 한 줄씩,
   [E]/좌클릭/▶로 넘김, 마지막에 `finished`. ESC 건너뛰기. 🔴 모달 규약(`ui_modal_open` 토글=플레이어 멈춤) +
   mouse_filter(root STOP·밴드 IGNORE·닫히면 invisible). CanvasLayer(layer 8).
 - **base.gd 배선**: NPC 대화 시 — **첫 마법 전**(q00 미완료 & ring_designs 빔 & 이번 방문 첫 대화)이면
@@ -156,7 +156,7 @@ q00 claimable → 정산하니 q01 개방.
 > 아래는 세41 기록이다. 🔴 단 마지막 「함정 기록」(`push_input` 좌표가 윈도우 픽셀 = 캔버스의 2배)은 **지금도 유효한 검증 함정**이다.
 
 **만든 것:**
-- **재사용 지도 패널** `src/hud/map_panel.gd`+`.tscn` (takbon-ui 제작): `open(data)` — data={bounds,player,
+- **재사용 지도 패널** `src/hud/map_panel.gd`+`.tscn` (takbon-dev 담당): `open(data)` — data={bounds,player,
   enemies,extract,marker}. 숲 도식(경계·나·적·귀환점) `_draw` 렌더 · **클릭→월드 좌표 역변환→`marker_placed`**
   (place-and-stay, 지도 밖 무시) · M(`map`)/ESC=`closed`. 🔴 좌표 왕복(`world_to_map`/`map_to_world`)이 단일
   소스라 안 어긋남(test 17/17 뮤테이션 검증). 모달·mouse_filter 규약 = dialogue_box와 동일.

@@ -30,6 +30,7 @@ model: inherit
    ⚠ **세39에 삭제된 건 옛 자유드로잉 세대 문서(TRUTH·TECH_SPEC·CHANGELOG 등)다** — 지금 `docs/`에 있는 것들은 살아 있는 정본이다. 「docs/는 아카이브」라고 배우지 마라.
 3. **관련 코드를 Read해라** — 탁본은 부품이 이미 배선돼 있고 "빈 칸"만 있는 경우가 많다(세션 27·29의 경제가 그랬다). 새로 짓기 전에 이미 있는지 확인해라.
 4. **제네릭 설계 패턴은 아래 로컬 스킬로**(Skill 도구): `godot-brainstorming`(구조적 설계 절차) · `scene-organization` · `event-bus` · `state-machine` · `resource-pattern` · `component-system` · `dependency-injection`. 탁본 규칙과 충돌하면 takbon-rules가 이긴다.
+5. **산출물의 「검증 포인트」를 쓰기 전에 `takbon-verify` 스킬을 Read해라** — 「헤드리스로 잡히는 것 vs 실게임이 필요한 것」의 경계는 **거기가 정본이다**. 여기 베껴 두면 두 벌이 되어 갈라진다(세91에 CLAUDE.md와 스킬이 같은 목록을 두 벌로 들어 세 번 어긋났다).
 
 ## 설계 원칙 (탁본 고유)
 

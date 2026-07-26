@@ -347,7 +347,7 @@ if s<0.06 then h=250 s=0.14 end
 | 1 | **문 스프라이트 160×160** (§5 #1) — 첫 화면의 전부 | `takbon-art` |
 | 2 | **잔해 4장** (§5 #2~5) — 🔴 회보라 램프(s≈0.10~0.18) + relight **0.5** | `takbon-art` |
 | 3 | 🔴 **[원자] codex→겉모습 소비자 신설 + 브리지 제거 + q03/q04 재작성** | `takbon-dev` |
-| 4 | **캠퍼스 재구축** — 🔴 **`base.tscn` + `base.gd` `_build_campus()` 둘 다.** 제약 ⓐⓑ(§4)를 **작업 지시에 명시** | `takbon-dev` (⚠ `takbon-ui` 아님 — 도로가 코드다) |
+| 4 | **캠퍼스 재구축** — 🔴 **`base.tscn` + `base.gd` `_build_campus()` 둘 다.** 제약 ⓐⓑ(§4)를 **작업 지시에 명시** | `takbon-dev` (⚠ `takbon-art` 아님 — 도로는 그림이 아니라 코드로 깔린다) |
 | 5 | `forest_gate.tscn`에 `PointLight2D` + 맥동 트윈 | `takbon-dev` |
 | 6 | 건물 목록·순서·대사 — **별도 설계 후** | — |
 

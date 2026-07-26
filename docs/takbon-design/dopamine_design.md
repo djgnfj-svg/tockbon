@@ -19,7 +19,7 @@
 > 🔴 **그래서 아직 살아있는 계획 = §9 · §5(예식) · §온보딩 재구성**이고, 이 문서가 그 정본이다.
 > ⚠ **§2·§3·§4는 구현 완료 아카이브**라 읽을 필요 없다(왜 그렇게 지었나만 남겼다).
 >
-> 작성 = takbon-architect (dopamine-arch). 구현 위임 = takbon-dev / takbon-ui / takbon-art.
+> 작성 = takbon-architect (dopamine-arch). 구현 위임 = takbon-dev / takbon-art.
 > 정합 기준 = CLAUDE.md 최상단 · docs/PROGRESSION.md · memory(ink-economy·chapter-loop·chest-loot·
 > drop-absorb-magnet·empty-base-build·onboarding-flow·quest-system·stage-format-decision).
 > 읽은 실제 코드 = game_state · save_manager · db · event_bus · forest_enemy · chest · loot_panel ·
@@ -188,7 +188,7 @@ ShopPanel.tscn (루트 Control, 스크립트 shop_panel.gd)
 
 ### 연출 훅 자리 (실제 셰이더·아트는 후속)
 - 시간 슬로우: `Engine.time_scale` 딥→복귀. ⚠ 예식 타이머 `ignore_time_scale=true`(juice 선례 — 자동저장·복귀 왜곡 방지).
-- 두루마리 배너: "새로운 룬: X" 중앙 Label/스프라이트 + 페이드/스케일. 🔴 아트=takbon-art, 글로우=takbon-shader(후속).
+- 두루마리 배너: "새로운 룬: X" 중앙 Label/스프라이트 + 페이드/스케일. 🔴 아트=takbon-art, 글로우=takbon-dev(후속).
 - 사운드: 기존 `Audio` unlock음 재사용(`codex_unlocked` 이미 연결).
 
 ---
@@ -328,11 +328,11 @@ q00 첫 도안(DRAW)  →  q01 첫 사냥(KILL, 챕터1 잡몹 아무나)  →  
 1. `takbon-art`: `coin.png`(엽전) · `shopkeeper.png`.
 2. `data/items/coin.tres`(cat=money·sprite). Db 로드 확인.
 3. 잡몹 `data/enemies/*.tres`에 coin DropEntry 추가 + **기존 mat 드롭 제거**(C).
-4. `takbon-ui/dev`: `hud.gd` 돈 카운터 + `_coin_punch`. 🔴 실게임 MCP.
+4. `takbon-dev`: `hud.gd` 돈 카운터 + `_coin_punch`. 🔴 실게임 MCP.
 
 **병렬 B (상점 + 마을 상시화):**
 5. `data/recipes/shop_ink_*.tres`(station=shop, coin 입력).
-6. `takbon-ui`: `shop_panel.gd`+`.tscn`(refine 복제 + 잔액 줄).
+6. `takbon-dev`: `shop_panel.gd`+`.tscn`(refine 복제 + 잔액 줄).
 7. `takbon-dev`: `base.gd` — `$Shop` 상시 배선 + **건설 게이트(`_station_interact`·`_refresh_station`) 제거**,
    정제대·공방 상시화. `base.tscn`에 Shop 노드·해독대 노드 제거(§9).
 
