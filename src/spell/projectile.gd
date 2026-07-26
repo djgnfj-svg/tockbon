@@ -5,16 +5,17 @@ extends Area2D
 ##
 ## 🔴 **세션 47: 효과 기계가 깨어났다.** 세션 44까지 이 파일의 팅김⚡/관통‖/유도∿/추진 기계는
 ## 유일 호출자(`ring_spell_system._spawn_bolt`)가 늘 `effects={}`로만 불러 **한 번도 실행되지 않는
-## 미배선 설계 자산**이었다. 이제 `ring_spell_system.BOLT_EFFECTS`가 발사 코드(GlyphCode 2~5)를
-## GlyphType 효과로 번역해 실어 보낸다 — **그린 문양이 탄의 행동을 가른다.**
+## 미배선 설계 자산**이었다. 이제 문양 데이터가 자기 효과를 들고 온다 —
+## `GlyphDef.params.effect` → `GlyphRules.bolt_effects()` → `Enums.GlyphType`(세82에 옛
+## `ring_spell_system.BOLT_EFFECTS` 상수를 은퇴시켰다). **그린 문양이 탄의 행동을 가른다.**
 ##   `_setup_effects`·`_step_bounce`·`_step_homing`·`_nearest_enemy`·`reach_t` = 전부 산 코드다.
 ##
-## ⚠ **아직 잠든 것 = `rune_hits`(복합 룬)**. 한 탄이 여러 룬의 상태이상을 얹는 기계는 여기 다
-## 구현돼 있는데(`_deal_damage`의 순회) 아무도 안 채워 넘긴다 — 조립(`ring_assembly`)이 룬을
-## 하나만 쥐기 때문이다. 되살리려면 호출자가 `rune_hits`를 채우면 된다.
-## ⚠ `range_mult`도 아직 호출자가 없다 (문양 크기 → 사거리 배율 축).
+## ✅ **`rune_hits`(복합 룬)도 깨어났다 — 세81 M2 융합진.** `ring_spell_system._fire_hit`이 채워
+## `_spawn_bolt`이 넘긴다(`_deal_damage`의 순회가 라이브다). primary 외 룬은 **피해 0**으로 상태만 얹고,
+## 도배는 **적 계약의 0-피해 가드**가 막는다.
+## ⚠ `range_mult`는 **아직 호출자가 0곳**이다(실측 — 정의뿐. 문양 크기 → 사거리 배율 축).
 ##
-## **v2.0 (TECH_SPEC §4.0-a)**
+## **v2.0**
 ## - 🔴 **몸이 진이다.** 그린 진(+룬) 먹선이 그대로 날아가고 **히트박스가 진 반지름**을 따른다.
 ##   v1.9까지는 문양 획이 날아가고 히트박스는 **반지름 5의 원 고정**이었다 — 그린 획은 그 위에
 ##   얹힌 **그림일 뿐**이었다 (세션 11이 "아무도 안 정하는 것"으로 남긴 빈칸을 진이 채운다)
@@ -40,8 +41,9 @@ const RUNE_FALLBACK := Color(0.95, 0.35, 0.15)
 ## 룬 투사체 시트 (ART_SPEC P5) — 우향 혜성형 2프레임. **먹선 진이 없을 때만 쓰는 폴백이다**
 ## (샘플 도안·구세이브처럼 strokes가 비어 있는 경우)
 const PROJ_SHEET_PATH := "res://assets/sprites/effects/projectiles.png"
-## 세션59: earth/bolt/grass 행은 takbon-art가 병렬 제작 중 — 시트에 아직 없으면
-## `_ensure_shared_frames`의 폭 가드가 그 애니만 걸러 해당 룬은 폴백(Polygon2D)으로 남는다(정상).
+## ✅ 시트는 **룬 6종이 다 찼다**(실측 224×16 = grass 행 끝 (12+2)×16까지 정확히 들어간다).
+## 세59의 폭 가드(`_ensure_shared_frames`)는 그대로 둔다 — 룬을 **더 늘릴 때** 시트가 뒤처지면
+## 그 애니만 걸러 폴백(Polygon2D)으로 남긴다. 가드가 없으면 빈 AtlasTexture라 탄이 **에러 없이 투명**해진다.
 const PROJ_ANIMS := {
 	"fire": [0, 2, 10.0],
 	"water": [4, 2, 10.0], "wind": [6, 2, 10.0],
@@ -82,7 +84,7 @@ var damage: float = 0.0
 var rune_type: int = Enums.RuneType.FIRE
 var status: int = Enums.Status.NONE
 var status_power: float = 0.0
-## 🔴 복합 룬 (N개, TRUTH §4) — 이 탄이 싣고 가는 모든 룬의 히트 정보 [{rune_type, status, status_power}].
+## 🔴 복합 룬 (N개, 세81 M2 융합진) — 이 탄이 싣고 가는 모든 룬의 히트 정보 [{rune_type, status, status_power}].
 ## 착탄 시 primary(=rune_type)가 피해+상태, 나머지는 피해 0으로 상태만 얹는다 (적 계약 무변경).
 ## 비어 있으면 단일 룬(primary 하나)으로 본다 — 하위호환.
 var rune_hits: Array = []
@@ -120,11 +122,11 @@ func _ready() -> void:
 # ── 문양 세기 축 — reach → 정규화 t → 각 효과의 세기 ──────────────────────
 # spell_system(사거리 배율)과 투사체(반사·관통·추적)가 **같은 t**를 쓴다. 공식은 여기 하나뿐이다.
 
-## t = inverse_lerp(glyph_reach_min, glyph_reach_max, reach) — 아래 전부의 입력 (TECH_SPEC §4.0-a)
+## t = inverse_lerp(glyph_reach_min, glyph_reach_max, reach) — 아래 전부의 입력
 static func reach_t(balance: BalanceData, p_reach: float) -> float:
 	return clampf(inverse_lerp(balance.glyph_reach_min, balance.glyph_reach_max, p_reach), 0.0, 1.0)
 
-## 사거리 **배율** — 진이 준 기준 사거리에 곱해진다. 축을 뺏지 않고 배율만 준다 (GDD §4.3)
+## 사거리 **배율** — 진이 준 기준 사거리에 곱해진다. 축을 뺏지 않고 배율만 준다 (GDD §4 「세 축」)
 static func range_mult(balance: BalanceData, p_reach: float) -> float:
 	return lerpf(balance.glyph_range_min, balance.glyph_range_max, reach_t(balance, p_reach))
 
@@ -150,7 +152,7 @@ func setup(p_damage: float, p_rune_type: int, p_status: int, p_status_power: flo
 	_setup_body(p_rune_type)
 
 
-## 효과 세기 배분 — 각 효과는 **자기 reach 합**으로 세기가 정해진다 (GDD §4.3).
+## 효과 세기 배분 — 각 효과는 **자기 reach 합**으로 세기가 정해진다 (GDD §4 「세 축」).
 ## 같은 글자를 여럿 그으면 합산돼 더 세다 (팅김 둘 = 더 많이 튕긴다).
 func _setup_effects() -> void:
 	if effects.has(Enums.GlyphType.BOUNCE):
@@ -219,9 +221,10 @@ static func _ensure_shared_frames() -> bool:
 		if ResourceLoader.exists(PROJ_SHEET_PATH):
 			var tex := load(PROJ_SHEET_PATH) as Texture2D
 			if tex != null:
-				# 🔴 시트 폭 가드 (세션59): 시트에 아직 없는 행(earth 등)을 그대로 빌드하면 빈
-				# AtlasTexture 애니가 등록돼 탄이 **에러 없이 투명**해진다. 폭 안에 다 들어가는
-				# 애니만 빌드한다 — 걸러진 룬은 _setup_body의 has_animation 검사로 폴백에 남는다.
+				# 🔴 시트 폭 가드 (세션59): 시트에 없는 행을 그대로 빌드하면 빈 AtlasTexture 애니가
+				# 등록돼 탄이 **에러 없이 투명**해진다. 폭 안에 다 들어가는 애니만 빌드한다 —
+				# 걸러진 룬은 _setup_body의 has_animation 검사로 폴백에 남는다.
+				# ⚠ 지금은 6종이 전부 들어간다(224px) — 이 가드는 **룬을 더 늘릴 때** 발동한다.
 				var fits := {}
 				for anim_name: String in PROJ_ANIMS:
 					var d: Array = PROJ_ANIMS[anim_name]

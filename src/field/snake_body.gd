@@ -49,7 +49,8 @@ const ShadowScript := preload("res://src/actors/shadow.gd")
 const SHADOW_RADIUS_FRAC: float = 0.30  ## 그림자 반경 = 마디 겉보기 크기 × 이 값 (연출)
 const SHADOW_OFFSET_Y: float = 10.0     ## 마디 중심에서 발밑까지 (연출 — 사용자 튜닝)
 
-## 🔴 마디 z (세54 실게임 함정): **양수여야 한다.** 음수로 두면 숲 `Ground`(ColorRect, z0)
+## 🔴 마디 z (세54 실게임 함정): **양수여야 한다.** 음수로 두면 무대의 `Ground`(ColorRect, z0 —
+## 지금은 `boss_room.tscn`)
 ## **뒤로 숨어 몸통이 통째로 안 보인다**("대가리밖에 없다"). 헤드리스엔 바닥이 없어 위치 테스트는
 ## 통과하고 실게임에서만 드러난다(렌더는 헤드리스가 못 잡는다 — takbon-verify). 앞 마디(seg0)가
 ## 가장 위(=`SEGMENT_COUNT - i`)로 겹침이 자연스럽게. 머리는 이 위(snake_boss.tscn Visual z_index=30).

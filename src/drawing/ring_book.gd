@@ -5,16 +5,20 @@ extends Control
 ##   • 🔴 진 탭 — **보유한 진을 격자로 열거**(세션48에 3→8종). 고른 진이 발사 형태·비행 경로와
 ##     **층 수**(JinDef.band_count)와 **룬 자리 수**(rune_slots)를 정한다.
 ##     ⚠ 세85 ⑦에 「진이 문양 칸을 연다」(glyph_slots) 축은 은퇴했다.
-##   • 룬 탭 — 불 하나 (열람용)
-##   • 문양 탭 — 응집←·발산→ (진이 연 칸을 이걸로 채운다)
+##   • 🔴 룬 탭 — **해금된 룬을 격자로** 열거(현 데이터 6종: 불·물·바람·번개·흙·풀).
+##     융합진(`rune_slots` ≥ 2)이면 격자 위에 **룬 소켓 줄**이 뜬다(세81 M2).
+##   • 🔴 층 탭 — 진의 **층(band) 소켓** N칸 + 보유 문양-고리 목록(세71. 라벨이 「층」이고
+##     문양을 **낱개로 고르지 않는다** — 조립 단위는 문양-고리다. 현 문양 어휘 9종).
 ##
 ## 오토로드 의존 없음. 사용: const RingBook := preload("res://src/drawing/ring_book.gd")
 
 const RingBoard := preload("res://src/drawing/ring_board.gd")
 
-## 진을 골랐다 — 보드에 진(그릇)을 놓는다 (세션 13 순차 조립)
+## 진을 골랐다 — 🔴 받는 건 **패널**이다(`_on_jin_selected` → `_sel_jin` → `recompose()`).
+## 판은 그 결과 점열만 받는다(보드에 직접 놓는 API는 세85 ⑨에 은퇴).
 signal jin_selected(jin_id: StringName)
-## 룬을 골랐다 — 보드 중심에 그 룬을 놓는다 (rune_type = Enums.RuneType, 세션 34)
+## 룬을 골랐다 (rune_type = Enums.RuneType, 세션 34) — 위와 같은 길: 패널 `_on_rune_selected`가
+## `_sel_runes[활성 자리]`에 넣고 `recompose()`로 왼쪽 밑그림을 다시 세운다.
 signal rune_selected(rune_type: int)
 ## 🔴 세81 M2 융합진 — 룬 소켓(자리)을 골랐다(강조 대상). 다음에 고르는 룬이 이 자리에 들어간다.
 ## 자리 1개 진에선 소켓이 안 그려져 이 시그널이 안 난다(무회귀).
@@ -55,7 +59,8 @@ const TAB_H := 18.0
 const TAB_GAP := 2.0
 
 ## 세62 — 탭·셀 카드 배경 한지 나인패치(panel_paper_s 24×24 m6, 세션21 대청소로 고아가 된 걸 되살림).
-## 🔴 exists 가드로 첫 `_draw`에서 한 번 만들어 캐시 — PNG가 없으면 현 draw_rect 플랫 폴백(계약).
+## 🔴 exists 가드로 첫 `_draw`에서 한 번 만들어 캐시(`_card_sb_tried`가 매 프레임 조회를 막는다) —
+## PNG가 없으면 현 draw_rect 플랫 폴백(계약).
 ## off 탭/비선택 셀 = 같은 StyleBox 복제 + modulate_color 0.85 어둡게 — 상태별 텍스처를 늘리지 않는다.
 const CARD_TEX := "res://assets/sprites/ui/panel_paper_s.png"
 const CARD_TEX_MARGIN := 6.0
@@ -96,7 +101,7 @@ var _available_rings: Array = []      # 보유(해금) 문양-고리 GlyphRingDe
 
 # ── 주입 데이터 (세션 13 구조화) — 패널이 Db에서 읽어 넣는다. 없으면 RingBoard const 폴백. ──
 var _jin_defs: Array = []
-## 카드 StyleBox 캐시 (세62) — null이면 플랫 폴백. `_tried`로 매 프레임 exists 조회를 막는다.
+## 카드 StyleBox 캐시 (세62) — null이면 플랫 폴백.
 var _card_sb_on: StyleBoxTexture = null
 var _card_sb_off: StyleBoxTexture = null
 var _card_sb_tried := false
@@ -150,6 +155,8 @@ func _tab_is_open(stage: int) -> bool:
 	return stage >= 0 and stage < _open_tabs.size() and bool(_open_tabs[stage])
 
 
+## ⚠ 세86 실측: 아래 둘은 **호출자가 0곳**이다(진이 한 종뿐이던 시절의 「대표 진」 조회 —
+## 지금 셀은 `_draw_jin_cells`가 `_jin_defs[i]`를 하나씩 읽는다). 남길지 걷을지 결정 대기.
 func _jin_name() -> String:
 	return String(_jin_defs[0].display_name) if not _jin_defs.is_empty() else "일반진"
 
@@ -814,8 +821,10 @@ func _text(font: Font, at: Vector2, text: String, col: Color, fs: int) -> void:
 	draw_string(font, at + Vector2(0, fs), text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, col)
 
 
-## 🔴 세86: 2열 격자라 카드 폭이 절반(≈129px)이 됐다 — 긴 이름이 옆 카드로 흘러넘치지 않게
-## 폭에 맞춰 자른다(넘치면 「…」). ⚠ **자르는 건 표시뿐**이고 값은 `display_name` 정본 그대로다.
+## 🔴 세86: 카드 폭에서 아이콘 자리를 뺀 나머지에 이름을 넣는다 — 긴 이름이 카드 밖으로
+## 흘러넘치지 않게 잘라 준다(넘치면 「…」). ⚠ 폭은 `RING_COLS`에서 파생하므로 **열을 늘리면
+## 자동으로 더 좁아진다**(지금 `RING_COLS = 1`이라 전폭 한 줄이다 — 여기 픽셀을 베끼지 마라).
+## ⚠ **자르는 건 표시뿐**이고 값은 `display_name` 정본 그대로다.
 func _fit_text(font: Font, text: String, max_w: float, fs: int) -> String:
 	if font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x <= max_w:
 		return text

@@ -1,8 +1,8 @@
 extends Area2D
 ## 상호작용 지점 — 플레이어가 가까이 오면 안내를 띄우고, E에 `interacted`를 쏜다.
 ##
-## 🔴 **탁본 책상 · 숲 출구 · 귀환 지점은 같은 물건이다** (세션 26). 세션 25까지 이건 `desk.gd`라는
-## 이름으로 베이스에만 있었는데, 숲을 붙이는 순간 출구와 귀환 지점이 같은 코드를 두 번 더 필요로
+## 🔴 **책상 · 출입구 · 귀환 포탈 · NPC · 각 스테이션은 같은 물건이다** (세션 26). 세션 25까지 이건
+## `desk.gd`라는 이름으로 베이스에만 있었는데, 무대가 늘자 출구·귀환 지점이 같은 코드를 또 필요로
 ## 했다 — 문구만 다르고 하는 일은 하나다. 문구는 씬의 `Prompt.text`가 정한다.
 ##
 ## 🔴 **레이어 계약: layer 64(interaction) / mask 2(player)** — 씬에서 설정한다.
@@ -13,7 +13,8 @@ extends Area2D
 signal interacted  ## 플레이어가 이 지점에서 E를 눌렀다
 
 ## 어느 지점인가 — 씬이 잇는 대상을 헷갈리지 않게, 테스트가 노드 이름 대신 이걸로 찾게.
-## (지금: &"desk" 베이스 책상 · &"forest_gate" 베이스→숲 · &"extract" 숲→베이스)
+## (실측 — `src/props/*.tscn`가 쥔 값 7개: &"desk" 책상 · &"forest_gate" 챕터 선택 · &"npc" 길잡이 ·
+##  &"refine" 정제대 · &"craft" 공방 · &"shop" 상점 · &"portal" 귀환 포탈. 새 프롭 = 여기 한 줄이 아니라 씬의 zone_id다)
 @export var zone_id: StringName = &""
 
 @onready var _prompt: Label = $Prompt

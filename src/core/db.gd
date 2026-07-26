@@ -1,5 +1,5 @@
 extends Node
-## data/ 리소스 레지스트리 — 룬·적·아이템 정의 조회 (TECH_SPEC §3).
+## data/ 리소스 레지스트리 — 룬·적·아이템 정의 조회.
 ## .tres 인스턴스 작성: 룬=모듈 B / 적=모듈 C / 아이템=모듈 D.
 
 ## 문양 계열 판별(변형형인가)의 단일 소스 — `modifier_codes()`가 쓴다. 순수 static 표라
@@ -272,7 +272,8 @@ func modifier_codes() -> Array[int]:
 	return out
 
 
-## 문양 목록 — **code 오름차순** (응집0·발산1). UI 셀 순서·Q/W 대응이 이 순서다.
+## 문양 목록 — **code 오름차순** (응집0·발산1·…·응축8). 책·조립 패널의 셀 순서가 이 순서다.
+## ⚠ 옛 Q/W 고르기 키는 세25에 폐지됐다(마우스 클릭만) — 키 대응으로 읽지 마라.
 func all_glyphs() -> Array[GlyphDef]:
 	var out: Array[GlyphDef] = []
 	for g in glyphs.values():

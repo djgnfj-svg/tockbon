@@ -2,22 +2,20 @@ class_name JinDef
 extends Resource
 ## 진 정의 — 마법진의 **바깥 그릇**(투사체 몸). data/jin/*.tres. (세션 13 구조화)
 ##
-## 🔴 축 분담(TRUTH): 진이 **모양**을 정한다 — 몸(비행·히트박스·규모) + 고리 칸 구조.
-## 지금은 일반진 하나뿐이지만, 옛 int const `_has_jin`(bool)에서 데이터로 빼 **"진 모양 추가 = .tres 한 장"**
-## 이 되게 한다. 층·칸·규모가 늘어날 자리를 연다.
+## 🔴 축 분담: 진이 **연산 구조**를 정한다 — 층 수·룬 자리·발사 형태·몸(비행·규모) (GDD §4 「세 축」).
+## **"새 진 = .tres 한 장"**이 이 스키마의 목표다.
 
 @export var id: StringName = &"plain"
 @export var display_name: String = "일반진"
 ## 1차 고리가 주는 칸 수 (지금 8). ⚠ 고리 기하 계약(8점 원주)이라 8 고정.
+## ⚠ src 소비자 0 (세86 실측) — 라이브 8은 `RingBoard.SLOTS`가 쥔다. 여긴 스키마 표기용이다.
 @export var slot_count: int = 8
-## ⚠ **`glyph_slots`(진이 여는 문양 칸)는 세85 ⑦에 은퇴했다** (사용자 결정 · 감사 #8).
-## 세60에 옛 문양본(TEMPLATES) 축을 진으로 흡수하며 들어왔지만, 세79 층 모델이 그 자리를 대체했다:
-## 라이브에서 열린 칸은 `ring_forge_panel.build_assembly()`가 **층에 실제로 놓인 칸의 합집합**으로
-## 만들고, 이 필드를 읽던 유일한 자리(`RingBoard.choose_jin`)는 src 호출자가 0이었다 —
-## 즉 진 3종이 전부 `[0..7]`이라 실측 오작동은 없었고, 대신 **죽은 필드가 살아있는 그물을 갖고
-## 있었다**(감사 T2). 진의 개성은 이제 `band_count`(층 수)·`rune_slots`(룬 자리)가 쥔다.
-## 🔴 되살릴 거면 필드만 되돌리지 마라 — **소비자(`build_assembly`의 `open` 마스킹)를 같은 커밋에**
-## 넣어라(감사 T3: 소비자 없는 필드는 거짓 손잡이다). 값은 git 이력(세85 이전)에 있다.
+## ⚠ **`glyph_slots`(진이 여는 문양 칸)는 세85 ⑦에 은퇴했다** (사용자 결정 · 감사 #8) — 세79 층
+## 모델이 그 자리를 대체했다. 열린 칸은 `ring_forge_panel.build_assembly()`가 **층에 실제로 놓인
+## 칸의 합집합**으로 만들고, 진의 개성은 `band_count`·`rune_slots`가 쥔다.
+## 🔴 **필드만 되돌리지 마라 — 소비자(`build_assembly`의 `open` 마스킹)를 같은 커밋에** 넣어라
+## (소비자 없는 필드 = 거짓 손잡이, 감사 T3). 값·경위 = git 이력(세85 이전).
+## ✅ 부재 자체는 `test_ring_assembly_auto`가 잰다(되살리면 빨개진다).
 ## 🔴 진의 **층 수** (세71c — 조립→탁본 층 시각화). 문양-고리를 끼우는 동심원 고리가 몇 겹인가.
 ## 일반진 = 1층. 나중 진은 2·3층으로 확장(밴드 반경은 RingBoard.BAND_RADII 앞 band_count개).
 ## ⚠ .tres에 이 필드가 없으면(옛 파일·jin_single) 기본값 1 — 조용히 안 깨진다(glyph_slots 선례, 세60).
@@ -41,15 +39,17 @@ extends Resource
 ## ring_carrier가 이 값으로 `_physics_process` 경로를 고른다.
 @export var motion: int = 0
 ## 🔴 밑그림 도형 (세션48 신설). Enums.JinShape: 0=원 1=삼각 2=팔각 3=타원 4=오각 5=마름모
-## 6=물결원 7=렌즈. **손으로 긋는 궤적이 곧 이 도형**이라 진마다 손이 다르게 움직인다.
+## 6=물결원 7=렌즈. 소비자 = `ring_forge_panel`(판 밑그림)·`ring_book`(진 셀 아이콘).
+## ⚠ 세83 그리기 폐지 뒤엔 「손으로 긋는 궤적」이 아니라 **보이는 진 모양**이다(스위치를 되돌리면
+## 다시 궤적이 된다 — `balance.skip_drawing`).
 ## ⚠ 반드시 **닫힌** 도형이어야 한다 — 진은 룬을 담는 그릇이고, 안에 룬이 들어갈 공간이 남아야 한다.
 ## 채점(`trace_scorer`)은 이 가이드 점열을 그대로 받는다 — 공식은 안 바뀌고 모양만 바뀐다.
 @export var guide_shape: int = 0
 ## 조립 보드에서 그릇 원을 그리는 색.
 @export var ui_color: Color = Color(0.42, 0.30, 0.12, 0.55)
-## 🔴 발사 형태 (진=형태, 세션44). ring_spell_system이 이 값으로 진(캐리어)을 쏜다.
-## Enums.WandPattern 값: 0=단발(SINGLE) · 1=산탄(MULTI) · 2=둘레(NOVA·전방위). 그전엔 지팡이 장비
-## (wand_pattern)가 쥐던 축을 진으로 옮겼다 — 이제 "진 = 발사 형태"이고 마법진이 이 진을 저장·발사한다.
+## 🔴 발사 형태 (진=형태, 세션44). `ring_spell_system._shot_plan`이 이 값으로 진(캐리어)을 쏜다.
+## Enums.WandPattern **6값**: 0=단발 1=산탄 2=둘레(전방위) 3=연발 4=분사 5=타겟팅(세48에 셋 추가).
+## 🔴 지팡이가 형태를 쥐던 축은 **세85에 은퇴했다** — 이 필드가 형태의 유일한 소스다(되돌리지 마라).
 @export var pattern: int = 0
 ## 🔴 해금 id (codex). 빈 값 = 항상 보유. RuneDef.unlock_id와 같은 규약 — 패널이 해금된 진만 보여준다.
 ## 시작 시드는 jin_single 하나다(GameState._seed_starting_unlocks, 세션61 콘텐츠 리셋). 나머진 큐레이션으로 는다.

@@ -361,7 +361,9 @@ M2의 *"룬 1개면 share 1.0"*과 **같은 자리의 증명**이다.
 - `test_jin_layers_auto:333,340` — `has_modifier_glyph` 시그니처 변경(치명①A).
 
 **그대로 그린이어야 할 것**: 나머지 전 스위트, 특히 `test_jin_fusion_auto`(융합·반응·도배) ·
-`test_assembly_slice_auto`(flatten·밑그림 기하) · `test_ring_design_auto`(등급⇔펑).
+`test_ring_design_auto`(등급⇔펑) · `test_ring_trace_auto`(**flatten·밑그림 기하**).
+⚠ **세87 정정**: 원래 여기 적혀 있던 `test_assembly_slice_auto`는 **더 이상 없다** —
+밑그림 기하 그물은 세85에 F6 벤치에서 `test_ring_trace_auto`로 **이관**됐다(없는 파일을 찾지 마라).
 
 **신설 그물** — `tests/test_glyph_data_auto.gd`
 1. 🔴 **`Enums.GlyphCode` 전 값이 `Db`에 로드된다**(응집0·발산1·관통2·유도3·팅김4·추진5·확산6·폭발7·응축8

@@ -10,7 +10,8 @@ extends Control
 ## 이 패널이 유일한 입구). 판정식은 `is_chapter_open()` 공개 메서드 한 곳 — 헤드리스 테스트
 ## (test_chapter_auto ⓖ)가 이걸 직접 잰다(loot_panel의 loot_card/advance 선례).
 ##
-## 🔴 **loot_panel / tab_panel과 완전히 같은 모달 규약이다**(loot_panel이 참고 원본):
+## 🔴 **tab_panel과 완전히 같은 모달 규약이다**. ⚠ 아래에서 「loot_panel 선례」로 부르는 파일은
+## **세66 상자 은퇴 때 삭제됐다**(찾지 마라 — 필요하면 git 이력). 살아 있는 참고 원본은 `tab_panel`이다:
 ##  · 열리면 mouse_filter=STOP → 화면을 덮어 좌클릭을 통째로 먹는다(패널을 보며 실수로 안 쏜다).
 ##  · 닫히면 visible=false → GUI 히트테스트에서 빠져 클릭이 다시 바닥(발사·이동)으로 샌다.
 ##  · 열림/닫힘에 GameState.ui_modal_open을 토글 → player(이동)·caster(조준·발사)가 폴링해 멎는다.

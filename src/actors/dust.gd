@@ -1,6 +1,6 @@
 extends Node2D
 ## 걷기·구르기 먼지 (세63 설계 §E) — Player 자식 형제 노드 (juice·vfx 선례). Player가 공용
-## 배우라 **베이스·숲 자동 적용**.
+## 배우라 **마을·보스방 자동 적용**.
 ##
 ## 🔴 **부모(Player)의 공개 API만 폴링한다** (`velocity`·`is_rolling()`) — player.gd 무수정 = 회귀 0
 ## (juice가 get_parent()로 카메라를 잡는 선례 그대로). EventBus를 안 쓴다 — 발걸음마다 시그널을

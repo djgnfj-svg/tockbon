@@ -15,7 +15,7 @@ extends StaticBody2D
 const SH := preload("res://src/core/status_holder.gd")
 ## 확산 반경 등 수치는 balance가 쥔다 (연출값이 아니라 밸런스다 — forest_enemy와 같은 소스).
 const BAL := preload("res://data/balance.tres")
-## 🔴 히트 플래시 셰이더 (세63) — 적과 **같은 파일**이라 연습장⇔숲 손맛이 같은 소스에서 나온다.
+## 🔴 히트 플래시 셰이더 (세63) — 적과 **같은 파일**이라 연습장⇔보스방 손맛이 같은 소스에서 나온다.
 ## 두 몸 파리티(세56 교훈): 여기만 옛 modulate 곱셈으로 남으면 연습장에서 시험한 손맛이 거짓말이 된다.
 const FLASH_SHADER := preload("res://src/actors/hit_flash.gdshader")
 ## 팝 연출값 — forest_enemy와 같은 수치(파리티). 밸런스 아님.
@@ -129,7 +129,7 @@ func take_reaction_damage(amount: float, rune: int = Enums.RuneType.FIRE) -> voi
 ## 씬을 뒤지는 건 **몸의 일**이라 여기 있다(holder는 씬을 모른다).
 ## rune = 이 버스트의 정체 룬(세56) — 자신·연쇄 대상 모두 take_reaction_damage에 그대로 넘긴다.
 func _burst_damage(radius: float, amount: float, include_self: bool, result_status: int, rune: int) -> void:
-	# 🔴 VFX 방송 (세52) — forest_enemy와 **동일**해야 연습장↔숲 연출이 안 갈라진다. 링이 반경을
+	# 🔴 VFX 방송 (세52) — forest_enemy와 **동일**해야 연습장↔보스방 연출이 안 갈라진다. 링이 반경을
 	# 폭로하므로 amount 가드 **앞에** 둔다(반응은 일어났으니 링은 늘 뜬다). 피해 계산은 안 바뀐다.
 	EventBus.reaction_burst.emit(global_position, radius, result_status)
 	if amount <= 0.0:

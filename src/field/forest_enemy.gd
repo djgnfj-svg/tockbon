@@ -1,5 +1,7 @@
 extends CharacterBody2D
-## 숲의 적 — 쫓아와서 접촉 피해. 사용자 확정 세션 26: *"한 종류만 — 쫓아와서 접촉 피해"*.
+## 적 배우(공용) — 추격·접촉 피해가 바탕이고 `params.ai`로 갈린다(charge·hover·stationary·boss_snake·boss_gale).
+## ⚠ 파일 이름의 「forest」는 세26의 흔적이고(그땐 *"한 종류만 — 쫓아와서 접촉 피해"*가 맞았다),
+## **라이브 무대는 챕터 보스방**이다 — `boss_room`이 보스·잡몹을 둘 다 이 씬으로 스폰한다(숲 원정은 세58-B 은퇴).
 ##
 ## 🔴 **적 노드 계약**을 지킨다 (허수아비 `src/spell/dummy_target.gd`가 그 참고 구현이다):
 ##   그룹 `"enemies"` · 레이어 4(enemy) · `take_hit(damage, rune_type, status, status_power)` ·
@@ -15,8 +17,8 @@ extends CharacterBody2D
 ##  • layer 4가 곧 **맞는 몸**이다 — 캐리어·탄 마스크가 5(world+enemy)라 여길 본다.
 ##    기본 레이어 1로 되돌리면 world로 읽혀 마법이 **부딪히기만 하고 take_hit이 안 불린다**.
 
-## 적이 죽었다. ⚠ **지금은 수신자가 없다** — 승리 조건 없는 익스트랙션이라 킬카운트를 아무도 안 센다.
-## 킬카운트·웨이브가 붙는 날을 위한 자리표(placeholder)다.
+## 적이 죽었다(로컬). ⚠ **로컬 구독자는 아직 0**이다 — 킬카운트·퀘스트·챕터 클리어는 전부
+## `EventBus.enemy_died`가 나른다(수신 = `juice`·`game_state`·`boss_room`). 처치 경로를 만질 땐 그쪽을 봐라.
 signal died
 
 ## 🔴 바닥 픽업 프롭 (세션46) — 드롭을 가방에 순간이동시키지 않고 이 씬을 죽은 자리에 떨군다.
@@ -813,7 +815,7 @@ func _die() -> void:
 	var scene := get_tree().current_scene
 	if _def != null and scene != null:
 		# 🔴 먼저 **굴리기만** 하고, 실제로 나온 걸 안 뒤에 심는다 — 개수를 알아야 낱개 픽업이
-		# **균등 각도**를 나눌 수 있고(세51), 상자는 한 번에 담아야 하기 때문이다(세55).
+		# **균등 각도**를 나눌 수 있기 때문이다(세51 — `_spawn_loose`가 rolled.size()로 각을 나눈다).
 		var rolled := _roll_drops()
 		if not rolled.is_empty():
 			# 🔴 세66: 상자 은퇴 (사용자 확정 "상자 시스템 기각, 그냥 다 떨구는 걸로"). 모든 적이
@@ -829,7 +831,8 @@ func _die() -> void:
 
 
 ## 🔴 드롭 테이블을 굴린다 (세51에 _die 안에 있던 로직 — 세55에 상자/낱개가 공유하려고 추출).
-## 반환 = `[{"id": StringName, "count": int}]` — drop_pickup·loot_panel 계약이 "count"라 세 곳이 같은 이름을 본다.
+## 반환 = `[{"id": StringName, "count": int}]` — `drop_pickup.setup`이 같은 키를 본다(옛 loot_panel도 봤지만
+## 세66 상자 은퇴와 함께 삭제됐다). 키 이름을 바꾸면 `_spawn_loose`와 조용히 갈라진다.
 ## 세58: until_unlock(관문 드롭)만 확률 대신 해금 상태로 갈린다 — 나머지 확률·수량 로직은 그대로.
 ## 랜덤: Godot 전역 `randf()`/`randi()` — 부팅 시 자동 시드. 세이브에 안 들어간다(굴린 결과만 남는다).
 func _roll_drops() -> Array[Dictionary]:

@@ -2,15 +2,16 @@ class_name GlyphDef
 extends Resource
 ## 문양 정의 — 룬과 진 **사이** 고리 칸을 채우는 조각. data/glyphs/*.tres. (세션 13 구조화)
 ##
-## 옛 int const(RingBoard.G_GATHER/G_RADIATE)를 데이터로 뺀다 — 문양 어휘가 늘 때 코드가 아니라
-## .tres를 늘린다. 낮 탁본으로 얻는 어휘가 이 목록으로 들어온다.
+## 문양 어휘가 늘 때 코드가 아니라 .tres를 늘린다.
+## ⚠ 문양엔 **해금 게이트가 없다**(unlock_id 필드가 없고 책이 `Db.all_glyphs()`를 무필터로 띄운다) —
+## 파밍 단위는 문양이 아니라 **문양-고리**(`GlyphRingDef`)다.
 ##
 ## 🔴 code = **발사 계약의 정수 코드** — ring_spell_system이 이 값으로 전개를 가른다.
-##   0 = 응집(gather, 착탄점에 기둥) · 1 = 발산(radiate, 그 방향 탄환). **값을 바꾸면 발사가 깨진다.**
+## 정본 목록은 `Enums.GlyphCode` **9값**이다(0 응집 … 8 응축). **값을 바꾸면 저장된 도안이 깨진다.**
 
 @export var id: StringName = &"radiate"
 @export var display_name: String = "발산→"
-## 발사 계약 코드 (RingBoard.G_* 와 같은 값). 0=응집, 1=발산.
+## 발사 계약 코드 — 정본은 `Enums.GlyphCode`(9값). `RingBoard.G_GATHER`/`G_RADIATE`는 그 별칭이다.
 @export var code: int = 1
 ## ⚠ **폐기 — 미사용** (세션 25). 문양은 오른쪽 셀을 **클릭해서** 고른다: 고르기 키가 없으니
 ## 힌트도 없다 (사용자: "q w 이런게 아니라 똑같이 마우스로 선택하는걸로해줘").

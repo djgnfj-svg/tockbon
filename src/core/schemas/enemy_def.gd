@@ -5,7 +5,8 @@ extends Resource
 @export var id: StringName
 @export var display_name: String = ""
 @export var hp: float = 30.0
-## 약점 룬 — 게시판·도감 표기용
+## 🔴 약점 룬 — **전투에 실재한다**(표기용이 아니다): `forest_enemy.take_hit`이 이 룬으로 맞으면
+## `params.weakness_mult`를 곱한다(세86 실측). 그래서 값을 바꾸면 보스 피해량이 조용히 달라진다.
 @export var counter_rune: Enums.RuneType = Enums.RuneType.FIRE
 ## false = 약점 없음 (counter_rune 무시, 예: 수액 슬라임 — 다발 도안이 답)
 @export var has_counter: bool = true

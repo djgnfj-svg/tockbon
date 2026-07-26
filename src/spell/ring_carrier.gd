@@ -99,8 +99,9 @@ func _ready() -> void:
 	_apply_sprite_scale()
 
 
-## 룬에 맞는 볼 애니를 재생한다. SpriteFrames에 그 애니가 아직 없으면(아트 미착) fireball 폴백 —
-## 이 가드로 워터볼·윈드볼 시트를 붙이기 전에도 발사·테스트가 조용히 파이어볼로 돈다.
+## 룬에 맞는 볼 애니를 재생한다. SpriteFrames에 그 애니가 없으면 fireball 폴백.
+## ⚠ 지금은 `ring_carrier.tscn`에 **6종이 다 있다**(실측) — 이 가드는 **룬을 더 늘릴 때** 발동한다.
+## 없는 애니를 play하면 볼이 에러 없이 투명해지므로 가드를 지우지 마라.
 func _apply_ball_anim() -> void:
 	if _fireball == null or _fireball.sprite_frames == null:
 		return

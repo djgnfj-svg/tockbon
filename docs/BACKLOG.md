@@ -42,7 +42,7 @@
 | # | 항목 | 상태 |
 |---|---|---|
 | **E1** | ✅ **드롭** (=위 F6) | 세션 27 |
-| **E2** | ✅ **창고 보기 UI** — 세션 28에 만들었다 | `src/hud/inventory_panel.gd`(+`.tscn`). **`I` 키 토글 모달**, 베이스·숲 공용(덕코프 스타일). 창고(영구)+가방(있을 때) 두 구역·등급색·종류·★·수량. `get_inventory_snapshot()`을 이제 쓴다. 🔴 **`ui_modal_open`을 처음 배선** — player·caster가 폴링해 열린 동안 멎고, 책(base.gd)도 이 플래그를 켜 겹침 방지. 닫히면 `visible=false`라 클릭이 안 먹힌다(`test_base_auto` 좌클릭 PASS = 회귀 가드) |
+| **E2** | ✅ **창고 보기 UI** — 세션 28에 만들었다 (⚠ **세40에 `tab_panel`이 흡수하며 `inventory_panel.gd`는 삭제됐다** — 지금은 **Tab 「소지품」 탭**이다. 아래는 세28 기록이고 `ui_modal_open` 규약만 그대로 산다) | `src/hud/inventory_panel.gd`(+`.tscn`). **`I` 키 토글 모달**, 베이스·숲 공용(덕코프 스타일). 창고(영구)+가방(있을 때) 두 구역·등급색·종류·★·수량. `get_inventory_snapshot()`을 이제 쓴다. 🔴 **`ui_modal_open`을 처음 배선** — player·caster가 폴링해 열린 동안 멎고, 책(base.gd)도 이 플래그를 켜 겹침 방지. 닫히면 `visible=false`라 클릭이 안 먹힌다(`test_base_auto` 좌클릭 PASS = 회귀 가드) |
 | **E3** | ✅ **재료의 쓸 데 — 세션29에 배선 완료**(가공 고리가 닫혔다) | **배선 끝 · 튜닝/희소성 남음.** 슬라이스: 재료태깅✅ → 잉크선택(색)✅ → 잉크등급=위력✅ → **정제대(레시피 데이터+GameState.spend/add)✅** → **특별잉크 그리는 중 실시간 소모+화상 증폭 효과✅** → **종이=규모(확대 상한↑→큰 진=데미지↑)✅**. 🔴 **확정 계약**: 잉크등급=피해 축 · 특별잉크=상태(화상) 축 · 종이=크기 축(피해에도 기여). 데미지 조합=`ring_power.power_of` 한 곳, id→배수 리졸버=Db. 정제대=`src/base/refine_panel`, 레시피=`data/recipes/*.tres`(새 레시피=.tres 한 장). ⚠**남은 것**: (1) 🔴 사용자 플레이 확인(헤드리스는 클릭·레이아웃 못 봄) (2) 밸런스(잉크간격·종이 세기·정제비용·소모속도·화상×1.5 — 직접 쏴 봐야) (3) 잉크·종이 무한/持有라 **아직 상급이 최적** → 소모·희소성으로 조이면 진짜 선택. 중첩 마법진 담을 공간·장비제작·밥·물은 미구현 |
 | **E4** | ✅ **룬 해금 — 세션 34에 완료** (보스→조각→탁본 해독→새 룬을 그린다) | 🔴 부품은 다 있었는데 **룬 사슬이 전 구간 불로 고정**돼 있었다: `ring_assembly`가 `RUNE_FIRE`, 발사가 `Db.get_rune(FIRE)`를 하드코딩해 물을 그려도 불로 맞았다. 뚫었다(assembly `_rune`·`ring_board.choose_rune(type)`+룬별 밑그림·`ring_book` 룬탭 다중셀·발사가 `assembly.rune`). `slime_elite`를 숲에 넣고 `fragment_water` 확정 드롭, 베이스 새 **탁본 해독대**(`decode_panel`)에서 조각 소비→`codex_unlocked`→룬 해금. 🔴 **시작=불만, 물·바람은 해독으로만**(사용자 확정). `RuneDef.unlock_id` 신설. 신규 `test_decode_auto`. **남음**: gale 풀 보스 AI · 바람 조각을 줄 보스 · 손맛(밑그림·강도·드롭). 정본 = STATUS 「세션 34」 · 🔴 **세85 정정: 조각→해독대 경로는 은퇴했다**(세66 도파민 설계가 확정, 세85에 `decode_panel`·FRAGMENT·q05를 걷었다). **룬 해금은 이제 관문(보스 첫 처치)이 준다** — `RuneDef.unlock_id`·`codex_unlocked` 기계는 그대로 살아 있고 공급원만 바뀌었다. |
 | **E5** | ✅ **적 5종 다양화 + 확률 드롭 — 세션 30에 완료** | 숲에 **비엘리트 5종 8마리**(슬라임·안개·사냥개·덩굴·갑충, `forest.tscn`에 `enemy_id` 오버라이드). 드롭이 E3 재료 전 갈래로 흐른다(잉크재료=슬라임/안개 · 종이재료=덩굴 · 장비재료=사냥개/갑충 + 낮은 확률 장비 charm/wand/robe). 🔴 **외형도 .tres가 쥔다** — `forest_enemy._apply_look()`이 `params.color`·`params.size`를 Visual/scale에 반영(새 적=.tres 한 장이 생김새까지). ⚠ **표시일 뿐 AI는 하나**(추격+접촉) — 사냥개=빠름·덩굴=제자리·갑충=느린 탱커(스탯 손맛). 🔴 **엘리트(gale·slime_elite)는 안 넣음** — fragment_*는 일반 드롭이 아니라 E4 보스 보상. `test_forest_auto` [8]을 로스터 합집합 검사로 재작성(뮤테이션 검출력 확인). ⚠ **남은 것**: 드롭률·적 강도·로스터는 직접 싸워 봐야 · 크기 조정된 적 마법 피격 테스트 미검증(표준 동작이라 수용) |
@@ -385,7 +385,9 @@
 
 ## 3.5 제작대(책 펼침) — 남은 조각 (세션 8 신설)
 
-`src/drawing/forge_panel.gd`는 만들었고 시험대(`tests/test_forge.tscn`)에서 돈다. **본편 배선은 아직이다.**
+> ⚠ **은퇴한 계획이다 (세87 실측)** — `src/drawing/forge_panel.gd`·`tests/test_forge.tscn` 둘 다 **없다**(git 이력).
+> 후계 = **`src/drawing/ring_forge_panel.gd`**(마을 책상 **E**로 펴는 고리 조립 책)이고 배선은 이미 끝났다.
+> 아래는 세8 시점의 기록이다 — 「본편 배선은 아직」을 현재 상태로 읽지 마라.
 
 - **거점 이젤 배선** — 지금 `base.gd`의 이젤은 `scene_change_requested(&"drawing")`으로 **씬을 갈아탄다**
   (옛 `drawing_room`). 이걸 forge 오버레이로 바꾸면 거점에서도 ESC 왕복이 된다.

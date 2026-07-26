@@ -1,5 +1,5 @@
 extends Node
-## 저장/로드 (TECH_SPEC §9) — 영구부(창고·도감·고리 도안)와 시간·마나.
+## 저장/로드 — 영구부(창고·도감·고리 도안)와 시간·마나.
 ## 자동 저장: 귀환·사망 확정(세이브스컴 방지)·하루 시작(취침 포함) · 🔴 **창닫기(종료 훅)** ·
 ## 🔴 **영구부를 바꾼 순간**(도안 맺기·해금·장비 — 같은 프레임은 한 번으로 합침).
 ## 로드: 부팅 시 1회.
@@ -8,8 +8,8 @@ extends Node
 ## `day_length_sec` 실시간 12분 경계 전에 창을 닫으면 **마을에서 한 일이 통째로 롤백됐다** —
 ## 에러도 경고도 없이. 트리거를 늘릴 땐 「영구 상태를 바꾸는 자리」와 짝이 맞는지 같이 훑어라.
 ##
-## 🔴 세션 22: 옛 SpellDesign 도안(user://save/designs)·연구 저장을 매장했다. 세이브 호환은 안전하다 —
-## 로드가 전부 `data.get(키, 기본값)`이라 옛 세이브의 남은 키는 그냥 무시된다.
+## 🔴 **옛 세이브 호환은 `data.get(키, 기본값)`이 맡는다** — 로드가 전부 그 형태라 이제 안 쓰는 키는
+## 그냥 무시된다(세22에 옛 SpellDesign 도안·연구 저장을 이 성질에 기대 매장했다).
 
 ## 🔴 테스트 격리 (세션59): `-s`(헤드리스 테스트 스크립트) 부팅이면 세이브 뿌리가 user://save_test로
 ## 갈라진다. 전엔 스위트가 실제 플레이 세이브를 자동 저장으로 덮고 wipe_save()로 지워 —
@@ -56,16 +56,13 @@ var _loading := false
 
 ## 🔴 **부팅 시 1회 로드** (세션 26 — 사용자 확정: *"켜면 이어서 한다"*).
 ##
-## 세션 21 대청소가 **부팅 흐름을 지우면서 `load_game()`을 부르는 사람이 아무도 안 남았다.**
-## 그래서 `_ready_to_save`가 영원히 false였고 → `save_game()`이 **전부 조용히 return**했다:
-## 귀환·사망·하루시작 자동 저장이 셋 다 no-op이었고, **게임을 껐다 켜면 그린 마법진이
-## 통째로 사라졌다.** 에러도 경고도 없다 — 세이브가 아예 안 만들어지니 로드가 실패할 일도 없다.
-## 세션 26에 숲 귀환을 붙이면서 드러났다 (`extraction_success`를 쏴도 아무 일도 안 났다).
+## 🔴 **`load_game()` 호출자가 사라지면 전 저장이 조용히 죽는다** — `_ready_to_save`가 false로 남아
+## `save_game()`이 전부 return하고, 껐다 켜면 진행이 통째로 사라지는데 **에러도 경고도 없다**
+## (세21에 실제로 그랬고 세26에 드러났다).
 ##
 ## 🔴 **여기가 부를 자리인 이유**: SaveManager는 오토로드 **마지막**이라(project.godot) GameState·
 ## Clock·Db가 이미 서 있고, 오토로드는 **부팅에 딱 한 번** _ready한다. 씬에서 부르면 안 된다 —
-## `base.tscn`은 숲에서 돌아올 때마다 다시 _ready하므로 **귀환할 때마다 세이브를 덮어 로드해**
-## 그 판의 진행을 날린다.
+## 씬은 돌아올 때마다 다시 _ready하므로 **귀환할 때마다 세이브를 덮어 로드해** 그 판을 날린다.
 ##
 ## 세이브가 없으면 `load_game()`이 false를 돌려주고 `_ready_to_save`만 켠다 = 새 게임.
 func _ready() -> void:
@@ -343,8 +340,9 @@ func load_game() -> bool:
 	EventBus.player_hp_changed.emit(GameState.hp, GameState.hp_max())
 	EventBus.equipment_changed.emit()
 	EventBus.resources_changed.emit()
-	# 🔴 복원된 완료 상태 기준으로 소급 완료를 한 번 — 이미 해금된 룬을 노리는 UNLOCK 퀘스트가
-	# 열린 채 막히지 않게 (game_state._auto_complete_satisfied 주석). Db는 오토로드라 이 시점 준비됨.
+	# 🔴 로드 후 퀘스트 재평가 훅. ⚠ 세40 턴인 이후 `GameState.reevaluate_quests`는 **의도적 no-op**이다
+	# (소급 완료가 파생 상태라 재계산이 필요 없다 — 그 함수 주석이 정본). 호출부 안정을 위해 남긴 줄이라
+	# **여기서 소급 완료가 일어난다고 읽지 마라.**
 	GameState.reevaluate_quests()
 	_loading = false
 	_ready_to_save = true
@@ -360,7 +358,7 @@ func load_game() -> bool:
 ## 그대로 다시 쓴다. 새로하기를 눌렀는데 조용히 안 된 것처럼 보인다.
 ##
 ## 진짜 새로하기가 지워야 할 것 = **`save_game()`이 쓰는 것 전부** + `bag`·`hp` +
-## 🔴 **시작 해금 재시드**(`GameState._ready`의 `rune_fire`·`jin_single` — 새로하기는 `_ready`를
+## 🔴 **시작 해금 재시드**(`GameState._seed_starting_unlocks` — 새로하기는 `_ready`를
 ## 다시 안 탄다. 안 심으면 **아무것도 못 그리는 새 게임**이 된다).
 ## → 설계·미결은 `docs/BACKLOG.md` 「F8 — 새로하기」가 정본. **`GameState.new_game()`을 core에
 ## 하나 두는 쪽**이 맞다 (씬마다 손으로 비우면 필드가 늘 때 조용히 갈라진다).

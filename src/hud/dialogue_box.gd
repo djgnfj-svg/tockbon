@@ -2,7 +2,8 @@ extends Control
 ## 재사용 대사 상자 — 여러 줄 대사를 한 줄씩 넘긴다. **대사 내용을 모른다**(줄 배열을 받는 범용).
 ## 온보딩(길잡이 NPC)이 마법진 그리기 개념을 한 줄씩 가르칠 때 리드가 open()으로 배선한다.
 ##
-## 🔴 **모달 규약은 tab_panel / inventory_panel과 같다**(그 둘이 참고 원본):
+## 🔴 **모달 규약은 `tab_panel`과 같다**(그게 살아 있는 참고 원본 — 옛 inventory_panel은
+## 세40에 tab_panel이 흡수하며 삭제됐다. 찾지 마라, 필요하면 git 이력):
 ##  · 열리면 GameState.ui_modal_open=true → player(이동)·caster(조준·발사)가 폴링해 멎는다.
 ##  · finished 직전 false → 다시 움직이고 쏠 수 있다.
 ##  · 닫히면 visible=false → GUI 히트테스트에서 빠져 아무 입력도 안 먹는다(클릭이 바닥으로 샌다).

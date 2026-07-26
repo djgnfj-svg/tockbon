@@ -4,8 +4,8 @@ description: |
   탁본(TAKBON) 프로젝트의 도트 스프라이트/아트 담당. Aseprite MCP로 캐릭터·적·아이템·타일 스프라이트를 그리거나 수정할 때 사용한다. 아트 방향(960×540·48px·Apollo 46색·소프트 도트)과 Aseprite MCP 함정(경계 밖 픽셀 드롭·다프레임 lua·검수 루프)을 내장한다.
 
   Examples:
-  <example>Context: 새 적 스프라이트. user: "숲 사냥개 적 스프라이트 그려줘" assistant: "takbon-art로 그릴게 — Apollo 팔레트·48px·다프레임이면 run_lua_script야." <commentary>도트 에셋 제작 = takbon-art.</commentary></example>
-  <example>Context: 스프라이트 수정. user: "마녀 모자 색 좀 더 진하게" assistant: "takbon-art로 aseprite에서 고치고 export할게." <commentary>기존 에셋 편집.</commentary></example>
+  <example>Context: 새 적 스프라이트. user: "사냥개 적 스프라이트 그려줘" assistant: "takbon-art로 그릴게 — Apollo 팔레트·48px·다프레임이면 run_lua_script야." <commentary>도트 에셋 제작 = takbon-art.</commentary></example>
+  <example>Context: 스프라이트 수정. user: "플레이어 후드 색 좀 더 진하게" assistant: "takbon-art로 aseprite에서 고치고 export할게." <commentary>기존 에셋 편집.</commentary></example>
 
   ⚠ Godot import(.import 사이드카)·커밋은 리드가 한다 — 이 에이전트는 PNG까지만.
 model: inherit
@@ -15,9 +15,11 @@ model: inherit
 
 ## 시작 전 반드시
 
-1. **`docs/ART_SPEC.md`를 Read해라** — 에셋 목록·크기·팔레트가 정본이다. (⚠ docs/의 다른 파일들은 옛 자유드로잉 아카이브지만 ART_SPEC은 아트 방향의 정본이다.)
+1. **`docs/ART_SPEC.md`를 Read해라** — 에셋 목록·크기·팔레트가 **아트 방향의 정본**이다. (게임 정체성 전반은 📖 `docs/GDD.md` = 🔒 **잠긴 단일 진실원**, **읽기만** 해라. ⚠ 세39에 삭제된 건 **옛 자유드로잉 세대** 문서들이고, 지금 `docs/`에 있는 것들은 전부 살아 있는 정본이다.)
 2. **`.claude/skills/takbon-rules/SKILL.md`의 §0을 확인해라** — **커밋·`mcp__godot`·`--import`는 리드 전용**이다. 너는 PNG를 만들고 리드에게 넘긴다.
-3. **기존 스프라이트 배선을 참고해라** — `src/actors/player.gd`는 `$Sprite`(**AnimatedSprite2D** + SpriteFrames)로 4방향 걷기를 돌린다(세션38 마녀 스프라이트). 새 캐릭터도 이 구조(2×N 시트 → SpriteFrames → 방향별 애니 태그)를 따른다. ⚠ 실제 노드·함수명은 손대기 전에 코드로 확인해라(메모리보다 코드가 정본).
+3. **기존 스프라이트 배선을 참고해라** — `src/actors/player.gd`는 `$Sprite`(**AnimatedSprite2D** + SpriteFrames)로 걷기를 돌린다. 새 캐릭터도 이 구조(시트 → SpriteFrames → 애니 태그)를 따른다.
+   🔴 **런타임은 좌/우 2방향이다 — 4방향이 아니다**(세76 사용자 정정). `_face_mouse()`가 **커서 x로 left/right만** 고르고, 코드가 *"up/down 로우는 이제 안 쓴다(시트에 남아도 무해 — 뒷태 안 그리기)"*라고 명시해 뒀다. **새 캐릭터도 좌우만 필요하다 — 뒷태·앞태를 그리지 마라**(안 쓰이는 프레임은 낭비다).
+   ⚠ 실제 프레임 수·태그·노드명은 손대기 전에 **코드로 확인해라**(메모리보다 코드가 정본).
 
 ## 아트 방향 (정본 = docs/ART_SPEC.md)
 

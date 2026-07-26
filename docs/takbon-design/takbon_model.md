@@ -9,10 +9,20 @@
 > **그리기는 그대로**(세68 화해 유지), **결과(발사)만 「날아가는 진」→「해석된 원소 마법」으로 교체.**
 > 지금은 파이어볼 하나부터. 정본 = GDD §3·§5.
 >
-> 이 문서는 **확정된 모델의 정본**이다(아직 구현 안 됨). 동기 = 사용자 *"문양쪽이 너무 별로인데,
+> ⚠🔴 **세83 이후 이 문서의 「그리기」 서술은 현재 상태가 아니다** (세87 실측) — 사용자가
+> **그리기(탁본) 폐지**를 확정해 `balance.skip_drawing`(기본 **true**)이 손 긋기 단계를 통째로
+> 건너뛴다(`src/core/schemas/balance_data.gd:318`). 지금 위력은 조립만으로 나온다(`RingPower.assembled_score`).
+> 🔴 **코드를 한 줄도 안 지운 「스위치」라** `false`로 되돌리면 이 문서의 흐름이 그대로 살아난다
+> (`balance_data.gd:314` 주석이 그렇게 못 박았다) — **그래서 본문을 안 고쳤다.**
+> 나머지 서술(마법진=수식 · 룬·문양·진 세 축 · 파밍 단위 = 문양-고리)은 **유효하다.**
+> ⚠ GDD도 같은 이유로 아직 개정 전이다(🔒 사용자 허락 필요).
+>
+> 이 문서는 **확정된 모델의 정본**이다. 동기 = 사용자 *"문양쪽이 너무 별로인데,
 > 그릴 때 재미가 덜해."* 여러 방향을 대화로 좁혀 **조립→탁본** 모델에 도달했다.
-> 정합 대조: `docs/WAND_CIRCLE.md` · `scratch_nested_design.md`(중첩진) · `scratch_dopamine_design.md`(파밍/루팅) ·
+> 정합 대조: `nested_design.md`(중첩진 — ⚠프레임 은퇴, `jin_interpretation_design.md`가 대체) ·
+> `dopamine_design.md`(파밍/루팅) · 마법 조립 내부구조의 현행 정본 = `jin_interpretation_design.md` ·
 > memory `takbon-hand-trace-commit`·`takbon-ring-assembly-pivot`·`takbon-core-fun-drawing`·`takbon-glyph-design-principle`.
+> ⚠ `docs/WAND_CIRCLE.md`는 **더 이상 없다**(세71 은퇴 스텁 → 이후 삭제. 진실원 = `docs/GDD.md`).
 
 ---
 
@@ -119,8 +129,12 @@
 
 ## 다른 설계 문서와의 관계 (리드가 나중에 정합)
 
-- `scratch_dopamine_design.md`: 파밍/루팅 루프가 여기 **문양-고리 = 새 주요 루팅 종류**로 이어진다.
+⚠ 세87: 아래 파일명은 `scratch_` 접두어 시절 이름이라 **두 번 죽어 있었다** — 현행 경로로 고쳤다.
+
+- `dopamine_design.md`: 파밍/루팅 루프가 여기 **문양-고리 = 새 주요 루팅 종류**로 이어진다.
   (거긴 룬/진 = 퀘스트 턴인, 잡몹=돈. 문양-고리 획득 경로를 그 경제에 끼워야 함.)
-- `scratch_nested_design.md`: 복합 룬(진 모양=룬 슬롯 다수)·재귀(착탄 문양=자식 진 배달)·rune_fill이
+- `nested_design.md`: 복합 룬(진 모양=룬 슬롯 다수)·재귀(착탄 문양=자식 진 배달)·rune_fill이
   이 모델의 "진 자리"·"착탄 성질"과 만난다. 순서=연산 순서 원칙 공유.
-- `docs/WAND_CIRCLE.md`: 진=지팡이에 박힌 그릇 방향과 정합(진 = 파밍/장비).
+  ⚠ **프레임은 은퇴**했다(세72·78) — 복합 룬은 세81 M2가 `rune_slots`로 실현했다.
+  살아있는 건 rune_fill 진단뿐(정본 = CLAUDE.md 「남은 빚」).
+- ~~`docs/WAND_CIRCLE.md`~~: **파일 없음**(세71 은퇴 후 삭제). 진=지팡이에 박힌 그릇 방향은 `docs/GDD.md`가 잇는다.

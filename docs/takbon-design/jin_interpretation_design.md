@@ -7,10 +7,12 @@
 > `nested_design.md`(세?? 복합 룬×재귀 — **프레임이 다름**, 아래 「기존 설계와의 관계」에서 재조정) ·
 > GDD §3·§4·§5 · memory `takbon-ring-assembly-pivot`·`takbon-glyph-design-principle`·`takbon-hand-trace-commit`.
 >
-> 🔴 상태 = **개념 모델 확정 · M1 구현 완료(세79) · M2~M3 미착수.**
+> 🔴 상태(세87 실측 갱신) = **개념 모델 확정 · M1 구현 완료(세79) · M2 구현 완료(세81) ·
+> M3① 문양 효과·표현 데이터화 구현 완료(세82).**
 > 세79에 **층 순서 = 연산 순서**가 발사까지 실제로 도달했다(확산·폭발 2종 + 2등급 진).
 > 스키마 변경은 **0**이었다 — `RingDesign.rings`가 이미 배열의 배열이었고 세70 밴드가 층을 갖고 있었다.
-> 남은 것 = 진 규칙 ②(여러 룬 합치기, M2) · 문양 2층 점유 · 어휘 확장(M3).
+> 세81 M2 = `data/jin/jin_fuse.tres` `rune_slots = 2` + `_fire_hit` 합산. 세82 M3① = `GlyphDef.behavior`+`params`.
+> **남은 M3 = 문양 어휘 확장 · 문양 2층 점유(ⓒ) · 진 규칙 데이터화(ⓓ).**
 
 ---
 
@@ -144,8 +146,10 @@
    ①의 감쌈 의미까지 진마다 뒤집으면 **손으로 짤 양이 폭발**하고 플레이어도 문양을 못 외운다.
 4. ✅ **확산·폭발 = M1 첫 변형 문양으로 확정** (위 「첫 변형 문양」 절). 이후 어휘(응축·관통·가속…)는 후속.
 5. **조립 UI 표현** — 추천 = **기존 책 조립 UI(밴드 소켓)를 그대로 쓰고 단계적으로 넓힌다**.
-   감사가 확인: 조립 UI 체인(`book_redesign`→`progressive_assemble_gate`→`guide_visual_layers`→`draw_tools_panel`)은
+   감사가 확인: 조립 UI 체인(책 재설계→Phase 게이트→밑그림 시각 층→`draw_tools_panel`)은
    **내부 정합·라이브와 일치**하고, 이 설계의 감쌈-층은 그 밴드를 토대로 채택한다.
+   ⚠ 세87: 그 체인 문서 중 `draw_tools_panel_design.md`만 남고 앞의 셋은 **구현 완료 아카이브라 삭제**했다
+   (라이브 코드 = `ring_forge_panel.gd:174` `enum Phase` · `ring_board.gd:625` `compose_guide_paths`).
    - **M1 (룬 1개)** = 각도 구분 불필요 → **깊이(밴드 순서)만** 쓴다. 기존 밴드 소켓 UI 거의 그대로. UI 신규 공사 최소.
    - **M2 (룬 2개+)** = 그때 **각도(어느 룬 자리)** 축을 추가 → 「각도 × 깊이」 격자 완성.
    - 🔴 실제 손맛(밴드 간격이 정밀도 tolerance의 몇 배인지 등)은 **F5로만** 정해진다(세50 좌표 실측 교훈).
@@ -177,8 +181,8 @@
   - `BAND_RADII`(동심원 2겹)·`_bands` 소켓 — **"층"이 이미 데이터·기하·UI로 실재한다.**
   - 🔴 그래서 이 설계의 "감쌈 층"은 **새로 발명이 아니라, 이미 있는 밴드에 「연산 순서」 의미를 주는 일**이다.
     지금 `flatten_bands`가 밴드들을 8칸으로 뭉개 **순서를 버린다**(라운드로빈). 이행 =
-    **"flatten을 걷고 밴드를 순서 있는 층으로 발사까지 들고 간다."** `assemble_trace_slice_design.md` Q5가
-    예고한 승격 경로 그대로다.
+    **"flatten을 걷고 밴드를 순서 있는 층으로 발사까지 들고 간다."** 세70 슬라이스 설계의 Q5가
+    예고한 승격 경로 그대로다(그 문서는 승격이 M1으로 집행돼 세87에 삭제 — 후계가 이 문서다).
 
 - 🔴 **`nested_design.md` = 프레임 대체 (공존 아님, architect 확정)**:
   - nested의 프레임(평평한 `runes[]` 자동 반응 · 8칸=착탄 전개 · **재귀 자식 진 배달**)은
@@ -594,16 +598,30 @@ rune_hits=[primary] 하나라 옛 도안 계산 완전 동일**(M1의 "밴드 1�
 3. **진 규칙 데이터화면 어떤 새 규칙** — 순환진(번갈아 배정)·증폭진(안쪽이 바깥 강화) 등. 지금 융합진
    **하나뿐**이라 데이터화할 공통 패턴이 안 보인다 — **규칙이 2~3개는 생겨야** 데이터 추출이 의미.
 
-### ⓑ 문양 어휘 확장 — "새 변형형 문양 = 3곳" (M1 레시피, 실측)
-`Enums`(`src/core/enums.gd:42`)에 이미 박혀 있는 규약:
-- `Enums.GlyphCode`에 값 하나 **끝에만 덧붙임**(`:42` — 중간 삽입 금지, 저장 도안이 깨진다) ·
-  변형형이면 `MODIFIER_GLYPHS`(`:48`)에 한 줄 · 전개형이면 `_apply_layer`(`ring_spell_system.gd:243`)의
-  발산/응집 분기에 낀다.
-- 변형형 = `ring_spell_system._apply_modifier`(`:296`)의 `match code`에 분기 하나 + `_spread`/`_explode`
-  (`:315`/`:340`) 같은 변환 함수 하나. balance 수치는 `balance_data.gd`에 시작값.
-- 밑그림: 문양 낱개 `.tres`(`data/glyphs/spread.tres` 형식 — `code`·`display_name`·`ui_color`·`desc`) +
+### ⓑ 문양 어휘 확장 — 🔴 **세82 이후 "2곳 + .tres"다** (세87 실측 정정)
+⚠ **아래 옛 레시피의 「`MODIFIER_GLYPHS`에 한 줄」은 죽었다** — 그 상수는 세82에 **은퇴**했다
+(`src/core/enums.gd:47` 주석이 은퇴를 명시. 계열은 이제 `GlyphRules.BEHAVIORS`의 `modifier` 플래그가 답하고,
+code 목록이 필요한 쪽은 `Db.modifier_codes()`를 부른다). 현행 레시피는 **이미 있는 알고리즘을 쓰느냐**로 갈린다:
+
+**ⓐ 기존 알고리즘 재사용(응축이 그랬다) = 코드 0곳, `.tres`뿐**
+- `Enums.GlyphCode`에 값 하나 **끝에만 덧붙임**(`src/core/enums.gd:45` — 중간 삽입 금지, 저장 도안이 깨진다).
+- 문양 낱개 `.tres`(`data/glyphs/*.tres` — `code`·`display_name`·`ui_color`·`desc`·**`behavior`**·**`params`**) +
   밴드에 끼울 `GlyphRingDef` `.tres`(`data/glyph_rings/gr_*.tres`, `motif`×`count`).
-- 🔴 검증 그물 = `test_jin_layers_auto`(층 순서·변형형)에 새 문양 케이스 추가 + 뮤테이션.
+- 밑그림 궤적만 코드 1곳: `RingBoard.glyph_guide_pts`(`src/drawing/ring_board.gd:408`)에 갈래 하나.
+  🔴 이 함수가 **판·미리보기 아이콘·책 셀 셋의 단일 소스**다(세86 — 여기만 고치면 셋이 같이 바뀐다).
+
+**ⓑ 새 알고리즘이 필요할 때만 = + 2곳**
+- `GlyphRules.BEHAVIORS`(`src/core/glyph_rules.gd:30`)에 줄 하나(`{"modifier": true/false}`) +
+  `DEFAULTS`에 params 기본값.
+- `ring_spell_system`에 변환 함수 하나 + 분기: 변형형이면 `_apply_modifier`(`:313`)의
+  **`match def.behavior`**(❗옛 `match code`가 아니다), 전개형이면 `_apply_layer`(`:246`).
+- 🔴 `BEHAVIORS`에 이름만 넣고 분기를 빠뜨리면 **씨앗 탄 1발이 조용히 는다** — `:328` `push_warning`이 그 가드다.
+- 상세 정본 = `glyph_data_design.md` 「결과 — 새 문양 추가 비용」절(**5곳 → 2곳**).
+- 🔴 검증 그물 = `test_glyph_data_auto`(`Enums.GlyphCode` 전 9값이 Db 로드 + behavior가 BEHAVIORS 키) +
+  `test_jin_layers_auto`(층 순서·변형형)에 새 문양 케이스 추가 + 뮤테이션.
+- ⚠ **잠든 문양 4종** — `data/glyphs/`는 9장인데 `data/glyph_rings/`는 5장이라
+  **bounce·homing·pierce·thrust는 고리가 없어 게임에 안 나온다**. 어휘 확장은 새로 그리기 전에
+  이 넷에 `gr_*.tres`를 주는 것부터가 싸다.
 
 ### ⓒ 문양 2층 점유 — 🔴 스키마 필요 (M1·M2와 다름)
 - 지금 **밴드 하나 = 층 하나 = 문양-고리 하나**(`ring_board.layer_rings` `:671` · `BAND_RADII` `:143`
@@ -620,12 +638,17 @@ rune_hits=[primary] 하나라 옛 도안 계산 완전 동일**(M1의 "밴드 1�
   오면 그때 **"jin id → 배정 함수" 코드 분기**를 만들고, 규칙이 여럿 쌓이면 데이터로 추출한다.
 - 🔴 위력에 개입하면 반드시 `ring_power` 단일 소스(세81 M2에 못박은 계약 — `ring_power.gd` 머리 주석).
 
-### ⓔ M3가 깨뜨리면 안 되는 것 (M2 그물)
-전 스위트 26종 · 특히 `test_jin_fusion_auto`(융합·반응·도배·회귀) · `test_jin_layers_auto`(층 순서) ·
-`test_assembly_slice_auto`(밑그림 기하·flatten) · `test_ring_trace_auto`(탁본 채점 기하).
-🔴 **어휘·2층을 건드리면 밑그림 기하 그물(trace·slice)이 먼저 빨개진다** — 정상이나 뮤테이션으로 재증명.
+### ⓔ M3가 깨뜨리면 안 되는 것 (그물 — 세87 실측 갱신)
+전 스위트 **28종**(`ls tests/*_auto.gd`) · 특히 `test_jin_fusion_auto`(융합·반응·도배·회귀) ·
+`test_jin_layers_auto`(층 순서) · `test_glyph_data_auto`(문양 데이터화 계약 — 세82) ·
+`test_ring_trace_auto`(**밑그림 기하 + 탁본 채점**. ⚠ 옛 `test_assembly_slice_auto`는 **없다** —
+밑그림 기하 그물은 세85에 F6 벤치에서 이 파일로 **이관**됐다) ·
+`test_ring_book_jin_auto`(세86 「층 = 띠」·미리보기 아이콘 — 문양 크기를 바꾸면 여기가 먼저 반응한다).
+🔴 **어휘·2층을 건드리면 밑그림 기하 그물이 먼저 빨개진다** — 정상이나 뮤테이션으로 재증명.
 
 ### ⓕ 딸린 미결 (M3와 같이 정할 수도)
-- **번개·흙·풀 룬 복원** — 융합 반응을 게임에서 제대로 보려면 필요(지금 물+불=증기뿐). 룬 데이터
-  `.tres` + 획득 경로. M2 임시 시드(jin_fuse·M1 3종)의 **획득 경로 설계**도 같은 자리.
+- ~~번개·흙·풀 룬 복원~~ → ✅ **세83에 완료**(`ls data/runes/` = bolt·earth·fire·grass·water·wind **6종**).
+  🔴 **남은 건 획득 경로다** — 룬은 지금 **임시 시드**에 얹혀 있고(정본 = `docs/PROGRESSION.md`),
+  M2 임시 시드(jin_fuse·M1 3종)도 같은 자리다. ⚠ 관문을 붙이는 세션은 **해당 시드 줄을 같이 지워야**
+  관문이 조용히 죽지 않는다(세58 교훈).
 - **취약 이중 증폭** — 융합진이 흙을 포함하면 한 발에 닿는다(CLAUDE.md 「남은 빚」·M2 설계 ②). 살릴지/자를지.

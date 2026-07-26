@@ -3,40 +3,48 @@
 `takbon-design` 스킬로 리드가 사용자와 대화하며 확정한 **기획·설계 문서의 영구 보관소**다.
 새 설계는 여기 `<주제>_design.md`로 착지한다. (구현 보고·architect 리뷰는 일회성이라 리포 루트 `scratch_*.md`에 쓰고 반영 뒤 지운다 — 여기 두지 않는다.)
 
-## 문서 (세78 교차 감사로 전량 재인덱싱)
+> 🔴 **세87 재인덱싱 — 이 표는 실제 `ls` 결과와 1:1이다.** 구현이 끝나 읽을 이유가 사라진 설계 **7개를 삭제**했다:
+> `book_redesign` · `progressive_assemble_gate` · `guide_visual_layers` · `assemble_trace_slice`(조립·탁본 UI 체인 4종) ·
+> `first_stage`(핵심이 반려돼 실행 대상 0) · `movement_feel` · `player_hooded`(아트·필 2종).
+> 전부 **리포 안 살아있는 링크가 0**이었고 라이브 코드가 대신 진실을 들고 있다
+> (`ring_forge_panel.gd`의 `enum Phase` · `ring_board.gd`의 `compose_guide_paths` · `player.gd`의 가속 램프 ·
+> `player.tscn`의 `player_hood_sheet.png`). 필요하면 git 이력.
+> ⚠ **줄 번호로 적지 마라** — 여기 있던 인용 4건이 **같은 세션 안에** 주석 정비로 전부 밀렸다(세87 실측: 625→631·789→800·174→173).
+> ⚠ **삭제 안 한 것**: `draw_tools_panel`(테스트가 아직 종이 잔재를 잰다) · `nested_design`(rune_fill 미결의 유일한 기록) ·
+> `oblique_impact`(STATUS·memory가 정본으로 참조).
+
+## 문서 (전 9개 + 이 README)
 
 **마법 모델 (읽는 순서)**
 | 문서 | 내용 | 상태 |
 |------|------|------|
-| `takbon_model.md` | 세68 조립→탁본 마법 모델 (조립 vs 그리기 화해) | 🟢 정본 (문양 손대기 전 읽어라) |
-| `jin_interpretation_design.md` | 세78 진별 해석 구조 (룬 감쌈=순서 · 진 규칙 합침 · 확산·폭발=M1) | 🔵 **기준점** (마법 조립 내부구조의 현행 정본. **M1 세79·M2 세81 구현 완료** · M3 착수 킷 내장) |
-| `glyph_data_design.md` | 세82 문양 효과·표현 데이터화 + 응축 (M3 첫 조각) | 🔵 **확정·리뷰 반영 완료·구현 미착수** (`behavior`+`params` · `GLYPH_NAMES` 은퇴 · 응축=blast 역파라미터) |
-| `nested_design.md` | 중첩 마법진 (복합 룬 × 재귀 진 × rune_fill) | ⚠🟡 **프레임 은퇴** — jin_interpretation이 대체. 살아있는 것=코드 인벤토리·rune_fill 진단(참고 자산) |
+| `takbon_model.md` | 세68 조립→탁본 마법 모델 (마법진=수식 · 세 축 · 파밍 단위=문양-고리) | 🟢구현완료 ⚠낡음 — 🔒**`GDD.md` §3(마법 모델)이 「정본 상세」로 가리킨다** — 지우면 잠긴 진실원의 링크가 끊긴다. ⚠세83 **그리기 폐지**로 「손 긋기」 서술만 현재 상태 아님(스위치라 되돌리면 부활 → 본문 보존) |
+| `jin_interpretation_design.md` | 세78 진별 해석 (룬 감쌈=연산 순서 · 층 · 진 규칙) | 🟢구현완료 — 🔵**현행 마법 모델 기준점**. M1(세79)·M2(세81)·M3①(세82) 완료 · **남은 M3 착수 킷 내장**(어휘 확장ⓑ·2층 점유ⓒ·규칙 데이터화ⓓ) |
+| `glyph_data_design.md` | 세82 문양 효과·표현 데이터화 + 응축 | 🟢구현완료 — `GlyphDef.behavior`+`params` · 「새 문양 = **5곳→2곳**」 레시피 정본 · ⚠F5 미확인 |
+| `nested_design.md` | 중첩 마법진 (복합 룬 × 재귀 진 × rune_fill) | ⚠낡음 — **프레임 은퇴**(세72·78, `jin_interpretation`이 대체). 살아있는 건 **#5 `rune_fill` 입력 수단·#7**뿐(그 안이 여기에만 있어 존치). ①코드 인벤토리는 낡음 |
 
-**조립·탁본 UI 체인 (내부 정합 양호 — 순차 전제)**
+**조립·탁본 UI**
 | 문서 | 내용 | 상태 |
 |------|------|------|
-| `book_redesign_design.md` | 세70/71 고리 조립 책 재설계 (라이브 흐름) | ✅ 구현 (아카이브) |
-| `progressive_assemble_gate_design.md` | 조립 Phase 게이트 (ASSEMBLE→DRAW→RESULT) | ✅ 구현 (아카이브) |
-| `guide_visual_layers_design.md` | 밑그림 시각 층 (band_count·subpath) | ✅ 구현 (아카이브) |
-| `draw_tools_panel_design.md` | 그리기 도구 패널 (DrawTools·종이 축 은퇴) | ✅ 구현 (아카이브 — ⚠종이 완전 purge는 후속) |
-| `assemble_trace_slice_design.md` | 세68/70 조립→탁본 최소 슬라이스 | ✅ 구현. ⚠라이브=책, 슬라이스 패널은 F6 대조군(은퇴 대기) |
+| `draw_tools_panel_design.md` | 세71 DRAW 도구 패널(잉크·실시간 점수) + 종이 축 은퇴 | 🟢구현완료 — ⚠종이 purge는 **절반**: 정제대 dead affordance는 `refine_panel._refresh`의 PAPER 필터로 닫혔고, 🔴**남은 잔재는 지우지 마라**(`test_ring_design_auto._test_paper_size`가 `Db.paper_zoom_max`·`paper_*.tres`를 잰다) |
+| `guide_editor_design.md` | 세57 밑그림 직접 제작 도구 (커스텀 가이드) | ⏸보류 — `git stash@{0}`에 **완성본이 살아 있다**(이 문서 = 복원 레시피). 단순 `pop` 불가: 카탈로그(진3·룬6·문양9)·`compose_guide` 이행·**그리기 폐지 스위치** 재정합 필요 |
+| `jin_shape_image_design.md` | 세83 진 모양을 PNG로 등록 (밑그림 데이터화) | 📄대기 — **구현 미착수**(진 윤곽은 아직 `ring_board.jin_guide_pts`의 `match` 절차 생성). 그리기 폐지가 굳으면 점열 추출이 불필요해져 **더 단순해진다** |
 
-**진행·경제·스테이지**
+**진행·경제**
 | 문서 | 내용 | 상태 |
 |------|------|------|
-| `dopamine_design.md` | 세66 도파민 보상 루프 + 경제 재편 | ⚠ **부분 구현** (coin·shop O · **D 전량(해독 은퇴·qR 룬퀘·예식) 미구현**) |
-| `first_stage_design.md` | 세70 첫 스테이지 수직 슬라이스 | ⚠ **부분** (ChapterDef 해금·시드 제거만 O · **base 편입은 book_redesign이 반려**) |
-| `guide_editor_design.md` | 밑그림 직접 제작 도구 (커스텀 가이드) | 🟡 보류 (git stash · ⚠되살리면 세70/71 조립흐름과 재정합 필요 — 단순 복원 불가) |
+| `hunt_loop_design.md` | 세87 사냥 흐름 (숲에서 얻어 마을에서 만든다) | 📄대기 — **구현 미착수 · architect 리뷰 반영 완료(지적 16건)**. 발단 = 사용자 *"잡아도 얻는 게 없다"*. 🔴`dopamine_design.md` D절(룬 획득 통로)의 **현행 후계** — 임시 시드를 실제 사슬로 바꾸는 자리. 🔴**§13 착수 킷 내장**(좌표 33·레시피 8·S4 API·AI leash 코드·아트 명세 = 전부 세87 실측) — 다음 세션이 조사 없이 집행 가능 |
+| `dopamine_design.md` | 세66 도파민 보상 루프 + 경제 재편 | ⚠낡음(부분 구현) — 🔒**`GDD.md:72`가 「경제·보상 상세」의 유일한 포인터**라 삭제 불가. A·B·C 구현 · D 절반(해독대·q05는 세85에 **은퇴 완료**) · 🔴**남은 계획 = 룬 획득 통로**(`qR_*` 0개·예식 없음 — 지금은 임시 시드 → `hunt_loop_design.md`가 잇는다) |
 
-**아트·필 (독립 — 충돌 없음)**
+**아트·필**
 | 문서 | 내용 | 상태 |
 |------|------|------|
-| `movement_feel_design.md` | 세74 이동 필 (가속·관성) | ✅ 구현 (아카이브) |
-| `player_hooded_redesign.md` | 세75/76 후드 챠비 플레이어 | ✅ 구현 (아카이브) |
-| `oblique_impact_design.md` | 세77 오블리크 파이어볼 착탄 | ✅ 구현 (아카이브) |
+| `oblique_impact_design.md` | 세77 오블리크 파이어볼 (바닥 그림자 + 두 겹 착탄) | 🟢구현완료 — `ring_carrier.tscn`의 `Shadow` 노드 · `vfx._spawn_flare`. ⚠**아카이브지만 존치**: `docs/STATUS.md` 세77 절·memory가 **정본으로 참조**하고, 살아있는 잔여(**원소 확장 시 두 겹 구조는 색·모양만 교체**)를 든다 |
 
-🔵 기준점 = 현행 마법 모델 정본(개념 확정, 구현은 진행) · 🟢 정본 = 지금도 방향을 규정 ·
-🟡 = 대기/보류 · ⚠ = 부분 구현/은퇴 예고(헤더 스텁 참조) · ✅ = 구현돼 코드에 반영된 아카이브.
+🟢구현완료 = 코드에 반영됨(설계는 「왜 그렇게 지었나」 기록) · ⏸보류 = 방향은 살아있고 착수 안 함 ·
+📄대기 = 설계 착지·구현 대기 · ⚠낡음 = 서술 일부가 현재 코드와 다름(각 헤더 ⚠ 스텁 참조).
+🔒 = 잠긴 `docs/GDD.md`가 가리키는 문서라 **삭제하면 GDD에 죽은 링크가 생긴다**(허락 없이 못 고친다).
 
-> 🔴 세78 교차 감사(`takbon-architect`) 결과 이 인덱스를 전량 재작성했다. 상세 = 그 세션 대화·memory `takbon-jin-interpretation-model`. 낡음이 잡힌 5개(nested·dopamine·first_stage·guide_editor·assemble_trace_slice)는 각 헤더에 스텁을 달았다.
+> 🔴 **인덱스 규율** — 이 표가 `ls docs/takbon-design/*.md`와 갈라지면 그 자체가 버그다.
+> 세78 인덱스는 `jin_shape_image_design.md`를 **통째로 빠뜨렸고**, `glyph_data`를 「구현 미착수」로
+> 적어 그 문서 자신의 헤더(「🟢 구현 완료」)와 **모순**했다. 문서를 더하거나 지우면 여기부터 고쳐라.

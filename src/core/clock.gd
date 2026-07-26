@@ -1,10 +1,11 @@
 extends Node
-## 게임 내 시간 — 상시 진행, 낮밤 페이즈 (GDD §7, TECH_SPEC §3).
-## 페이즈 전환·하루 시작은 EventBus로 방송된다.
+## 게임 내 시간 — 상시 진행, 낮밤 페이즈. 전환·하루 시작은 EventBus로 방송된다.
 ##
 ## 🔴 **실질 역할 = 자동저장 틱** (세션 22 확인). `_process`가 하루를 넘기며 `day_started`를 쏘고
-## `save_manager`가 그걸 받아 저장한다 — 지금 게임에서 **자동저장을 유발하는 유일한 경로**다.
-## 낮밤을 실제로 소비하는 쪽(원정·상점·수면)은 필드 구현 후에 붙는다. 죽은 코드가 아니다.
+## `save_manager`가 그걸 받아 저장한다. 죽은 코드가 아니다.
+## ⚠ 세86 실측 — 낮밤을 **게임플레이로 소비하는 쪽은 아직 0곳**이다: `phase_changed` 수신은
+## `audio`(전환음)뿐이고 `sleep_until_morning`·`is_night`·`day_progress`·`paused`는 호출자가 없다.
+## 세84에 `EnemyDef.night_buff`를 걷은 이유가 이것이다(밤 강화를 붙일 땐 소비자를 같은 커밋에).
 
 var balance: BalanceData = preload("res://data/balance.tres")
 
@@ -30,7 +31,7 @@ func _process(delta: float) -> void:
 		phase = new_phase
 		EventBus.phase_changed.emit(phase)
 
-## 취침 — 아침 스킵 + 마나 완전 회복 (GDD §7)
+## 취침 — 아침 스킵 + 마나 완전 회복. ⚠ 호출자 0(세86 실측 — 침대·여관이 아직 없다).
 func sleep_until_morning() -> void:
 	GameState.restore_mana_full()
 	_next_day()

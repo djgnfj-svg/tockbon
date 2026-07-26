@@ -1,10 +1,23 @@
 # 설계: 도파민 보상 루프 + 경제 재편  (개정 2 — 결정 A~D 확정 반영)
 
-> ⚠ **부분 구현 (세78 교차 감사 — 방향은 사용자 확정이라 유지, "아직 안 된 것"만 표시).** 실측 체크리스트:
-> - **A(돈=가방)·B(마을 완비)** = coin.tres·shop_panel 착지 (부분 O).
-> - **C(잡몹=coin·보스=상자)** = 부분 O.
-> - 🔴 **D(룬/진=퀘스트 턴인) = 전량 미구현**: `decode_panel.gd`·`test_decode_auto`·`test_progression_auto` **여전히 존재**(해독/until_unlock 은퇴 미실행) · 퀘스트 `q03~q05` 건설퀘 **그대로**·`qR_*` 룬 퀘스트 **0개** · `unlock_ceremony.gd` **없음** · base에 `station_build` 배선 잔존.
-> - ⚠ **D의 은퇴는 회귀 위험**(test 2종 폐기·base 배선 제거) → **별도 세션 + 뮤테이션 그물.** 한 번에 몰지 마라.
+> ⚠ **부분 구현 (세87 기준 실측으로 갱신 — 방향은 사용자 확정이라 유지, "아직 안 된 것"만 표시).**
+> 🔴 **이 문서를 지우면 안 된다**: 잠긴 `docs/GDD.md:72`가 「경제·보상 상세」의 **유일한 포인터**로 여기를 가리킨다.
+>
+> 실측 체크리스트:
+> - ✅ **A(돈=가방)·B(마을 상시·건설 은퇴)** = 구현. `data/items/coin.tres` · `src/base/shop_panel.gd`+`.tscn` ·
+>   `src/base/base.gd:49` preload·:121 배선 · `src/hud/hud.gd:84 const COIN_ID := &"coin"`.
+> - ✅ **C(잡몹=coin·보스=상자)** = 구현. `chapter_def.gd:24` · `boss_room.gd:144`(잡몹 `_die`→coin) · `EnemyDef.drops_chest`.
+> - ⚠ **D(룬/진=퀘스트 턴인) = 절반 집행**(옛 체크리스트가 여기서 낡았다):
+>   - ✅ **해독대 은퇴는 이미 끝났다**(세85) — `decode_panel.gd` **없다**(`find src -iname '*decode*'` = 0건) ·
+>     `test_decode_auto`는 `test_rune_unlock_auto`로 **개명** · `base.gd:146`이 `station_decode`를 목록에서 뺐다.
+>     ⚠ 옛 체크리스트의 *"여전히 존재"*는 **사실이 아니다**.
+>   - ✅ 건설 퀘 q03·q04는 codex 선심기 브리지로 무력화(`base.gd:141-152`가 station 셋을 미리 심는다).
+>   - 🔴 **아직 없는 것 = 룬 획득 통로 그 자체**: `qR_*` 룬 퀘스트 **0개**(`ls data/quests/` =
+>     q00·q01·q02·q03·q04 — q05도 세85에 은퇴) · `unlock_ceremony` **없음**(`find src` 0건) ·
+>     룬 해금은 **임시 시드**에 얹혀 있다(정본 = `docs/PROGRESSION.md`).
+>
+> 🔴 **그래서 아직 살아있는 계획 = §9 · §5(예식) · §온보딩 재구성**이고, 이 문서가 그 정본이다.
+> ⚠ **§2·§3·§4는 구현 완료 아카이브**라 읽을 필요 없다(왜 그렇게 지었나만 남겼다).
 >
 > 작성 = takbon-architect (dopamine-arch). 구현 위임 = takbon-dev / takbon-ui / takbon-art.
 > 정합 기준 = CLAUDE.md 최상단 · docs/PROGRESSION.md · memory(ink-economy·chapter-loop·chest-loot·
@@ -68,6 +81,9 @@
 
 ## 2. 돈 통화 (coin) — 상세  [초안 유지]
 
+> ✅ **구현 — 아카이브 (세87 실측).** `data/items/coin.tres` · `hud.gd:84 COIN_ID` · 잡몹 드롭 `boss_room.gd:144`.
+> 아래는 **왜 그렇게 지었나**의 기록이다. 새로 할 일 없음 — 건너뛰어도 된다.
+
 ### 데이터
 - **`data/items/coin.tres`**: `id=&"coin"`, `kind=MATERIAL`, `grade=1`, `display_name="닢"`,
   `params={"cat":"money", "sprite":"res://assets/sprites/props/coin.png"}`.
@@ -95,6 +111,10 @@
 ---
 
 ## 3. 상점 패널 (신규) — `src/base/shop_panel.gd` + `.tscn`  [B 반영: 상시·건설 없음]
+
+> ✅ **구현 — 아카이브 (세87 실측).** `src/base/shop_panel.gd`+`.tscn` 실재 · `base.gd:49` preload · :121 zone 배선 ·
+> 건설 게이트 없이 상시(§122의 「B 파급」도 집행 — `base.gd:141-152`가 station을 선심는다).
+> 아래는 **왜 그렇게 지었나**의 기록이다. 건너뛰어도 된다.
 
 ### 핵심 판단: RecipeDef 재사용 (새 스키마 0)
 - 재고 = `station=&"shop"` RecipeDef. 입력 `{coin:N}`, 출력 잉크. `Db.recipes_for_station(&"shop")`로 나열,
@@ -130,6 +150,10 @@ ShopPanel.tscn (루트 Control, 스크립트 shop_panel.gd)
 ---
 
 ## 4. 챕터 확장 (잡몹 길 + 보스)  [C 반영: 보스 상자 = 재료만]
+
+> ✅ **구현 — 아카이브 (세87 실측).** `chapter_def.gd:24` 잡몹 배치 · `boss_room.gd` 루프 · `EnemyDef.drops_chest`.
+> ⚠ **다만 「잡몹 공급원 무대 0곳」은 아직 미결이다**(CLAUDE.md 「미결 결정」) — 배치 자리는 보스방뿐이다.
+> 아래는 **왜 그렇게 지었나**의 기록이다.
 
 ### 설계 (웨이브 FSM 없이 배치만 — buildable)
 - **`ChapterDef.mob_spawns` 신설**(core — §계약 영향 2). 방 앞쪽(입구=남쪽)에 잡몹, 보스는 뒤(북쪽 `boss_spawn`).

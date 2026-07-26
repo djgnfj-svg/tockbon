@@ -10,7 +10,10 @@ extends Node2D
 ##        • 발산→ 칸: 그 방향으로 불 탄환 (projectile.tscn 순수 직진탄 재사용)
 ##        • 응집← 칸: 하나로 모여 불기둥 (pillar.tscn 재사용, 많을수록 굵다)
 ##
-## 마나·내구 판정 없음 (고리 모델의 경제는 #17에서 정한다 — 지금은 순수 발사 검증).
+## 🔴 마나 판정은 **여기가 아니라 `player_caster.fire()`**가 한다 — `GameState.cast_mana_cost()`를
+## 소모하고 부족하면 emit 자체를 안 한다(`debug_free_cast`면 무소모로 통과). 라이브 발신원은
+## `player_caster` **한 곳뿐**이고 나머지는 tests/다(실측). 여기에 판정을 또 넣지 마라 —
+## 이중 과금이 되고, 마나 없이 직접 emit하는 테스트가 통째로 막힌다. 내구 판정은 아직 없다.
 
 const RingPower := preload("res://src/core/ring_power.gd")
 const StatusRules := preload("res://src/core/status_rules.gd")   # 🔴 세81 M2: 융합 룬 반응 순서 정렬
@@ -449,7 +452,7 @@ func _spawn_cmd(cmd: Dictionary, at: Vector2, fire: Dictionary) -> void:
 ##
 ## 🔴 세션 22 (M2): 탄 씬을 **룬 데이터가 정한다** — 예전엔 `preload(projectile.tscn)`로 박아 놔서
 ## `RuneDef.projectile_scene`을 읽는 코드가 죽은 spell_system뿐이었다. 결합 비용만 내고 이득이 0이었고,
-## *"새 룬 = .tres 한 장"*(jin_def.gd:6)이라는 이 프로젝트의 약속이 새 경로에서 깨져 있었다.
+## *"새 룬 = .tres 한 장"*(`RuneDef` — data/runes/*.tres)이라는 이 프로젝트의 약속이 새 경로에서 깨져 있었다.
 ## 이제 물·바람 룬 추가가 진짜로 .tres 한 장이다.
 ## 🔴 effects (세션44) = 탄 행동 효과 사전 {GlyphType: reach} — 관통·팅김·유도 등. 기본 {}면 순수
 ## 직진탄(발산). projectile._setup_effects가 이 사전을 읽어 이미 있는 기계를 켠다(그전엔 늘 {}라 DARK).

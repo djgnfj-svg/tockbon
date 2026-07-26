@@ -1,8 +1,9 @@
 extends Control
 ## 플레이어 HUD — 장착한 고리 마법진 슬롯(진 미니 다이어그램) + HP·마나 막대 + 획득 토스트.
 ##
-## 🔴 **베이스캠프와 숲이 같은 HUD를 쓴다** (세션 26 — 세션 25까지 `src/base/base_hud.gd`였다).
-## 세64부터 씬별 차이가 **하나도 없다**(HP도 늘 그린다) — base·숲이 완전히 같은 HUD다.
+## 🔴 **마을(base)과 보스방이 같은 HUD를 쓴다** (세션 26에 공용화 — 세션 25까지 `src/base/base_hud.gd`였다).
+## 세64부터 씬별 차이가 **하나도 없다**(HP도 늘 그린다). ⚠ 옛 숲 씬은 세58-B에 은퇴했다 —
+## 이 HUD를 인스턴스하는 씬은 `base.tscn`·`boss_room.tscn` **둘뿐**이다.
 ##
 ## 🔴 **세션64 정리** (사용자: "HP 바랑 스킬 등을 좀 더 깔끔하게, 화면에 글자가 너무 많음"):
 ##   ① 좌상단 조작 안내문(hint_text) **통째로 제거** — 온보딩 대사가 조작을 가르치니 HUD에선 뺀다.
@@ -31,9 +32,10 @@ extends Control
 ## `queue_redraw()` 하나로 끝나고, 같은 시그널을 받는 GameState와의 **연결 순서를 따질 필요가 없다**.
 
 const RingPower := preload("res://src/core/ring_power.gd")
-## 🔴 진 미니 다이어그램 기하만 쓴다 (`jin_slot_dots`·`rune_slot_positions`·`SLOTS` = static 순수
-## 함수, 세션60·세81 단일 소스). 코드를 베끼면 규약이 바뀔 때 판·Tab 다이어그램과 어긋나므로
-## preload로 그 함수를 그대로 부른다. ⚠ `class_name`이 없어 이 preload가 유일한 진입로다.
+## 🔴 진 미니 다이어그램 기하만 쓴다 (`jin_slot_dots`·`rune_slot_positions` = static 순수 함수,
+## 세션60·세81 단일 소스 — `SLOTS`는 여기서 안 쓴다). 코드를 베끼면 규약이 바뀔 때 판·Tab
+## 다이어그램과 어긋나므로 preload로 그 함수를 그대로 부른다.
+## ⚠ `class_name`이 없어 이 preload가 유일한 진입로다.
 const RingBoard := preload("res://src/drawing/ring_board.gd")
 
 ## 🔴 HP 막대는 **늘 그린다** (세64, 사용자: "hp바가 안 보이고"). 예전엔 show_hp 익스포트로 숲만
@@ -486,7 +488,7 @@ func _draw_jin_diagram(center: Vector2, design: RingDesign) -> void:
 	# ── 중심 룬 색 — 어느 속성 진인지 색으로. 융합진(룬 2개)이면 점이 둘이다. ──
 	# 🔴 세84 #12: 옛 코드는 `design.rune`(첫 룬)만 읽어 **융합진의 두 번째 룬이 HUD에서 사라졌다**
 	# — 두 슬롯의 중심 점 색이 똑같아 1·2 키로 뭘 쏘는지 구분이 안 됐다(쏘는 것 ≠ 보이는 것).
-	# 목록 정본은 `RingDesign.runes_of`다(`ring_design.gd:18`: *"읽을 땐 runes_of()를 거쳐라"*).
+	# 목록 정본은 `RingDesign.runes_of`다(`RingDesign.rune` 필드 주석: *"읽을 땐 runes_of()를 거쳐라"*).
 	# 🔴 자리 좌표는 `RingBoard.rune_slot_positions`를 **그대로 부른다** — 각도를 베끼면 판·책 셀·
 	# HUD 셋이 조용히 어긋난다(`jin_slot_dots`를 부르는 것과 같은 이유, 세60).
 	var runes := RingDesign.runes_of(design.runes, design.rune)

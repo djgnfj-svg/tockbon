@@ -8,11 +8,14 @@ extends RefCounted
 ##   • 진 = 바깥 그릇(경계). ⚠ **세85 ⑦: 「진이 칸을 연다」(`glyph_slots`) 축은 은퇴했다** —
 ##     라이브에서 열린 칸은 `ring_forge_panel.build_assembly()`가 층에 놓인 칸의 합집합으로 만든다.
 ##     여기 `_open`은 이제 **아무도 안 바꾸는 폴백 [0, 2]**다(진의 개성은 band_count·rune_slots가 쥔다).
-##   • 룬 = 중심 속성 — 지금은 불만
-##   • 문양 = 열린 칸을 채우는 조각 (응집←/발산→)
+##   • 룬 = 중심 속성 (현 데이터 6종 · 융합진은 자리별 = `_runes`, 세81 M2)
+##   • 문양 = 칸을 채우는 조각 (현 어휘 9종 — 조립 단위는 낱개가 아니라 **문양-고리**다)
 ##
-## 🔴 **순차 조립** (세션 13): 빈 판 → 진 → 룬 → 문양 한 칸씩. 일괄 자동채움은 "툭 완성"돼
-## 조립하는 맛을 죽여서 걷어냈다.
+## 🔴🔴 **⚠ 이 상태기계는 라이브에서 안 돈다** (세86 실측): `lock_jin`·`lock_rune`·`place_glyph`·
+## `set_jin`·`set_rune`를 부르는 src 코드가 **0곳**이고(호출자는 `tests/test_jin_fusion_auto`뿐),
+## `RingBoard._asm`은 초기 상태 그대로 남아 `get_assembly()`의 ink/size 키만 실려 나간다.
+## 조립 상태의 **실소유자는 `ring_forge_panel`**(`_sel_jin`·`_sel_runes`·`_bands` →
+## `build_assembly()`)이다. 여기를 고치기 전에 **정말 라이브에 닿는지 먼저 확인해라.**
 ##
 ## 사용: const RingAssembly := preload("res://src/drawing/ring_assembly.gd")
 

@@ -1,10 +1,11 @@
 class_name RingDesign
 extends Resource
-## 고리 조립 도안 — 새 마법진 모델의 저장·장착 단위 (#17 1단계, 세션 16).
-## `ring_board.get_assembly()`가 내는 순수 Dictionary(assembly)를 감싸 리소스로 만든다.
-## 🔴 세션 22: 옛 SpellDesign 도안 경로를 매장해 **이제 이게 유일한 마법진 모델**이다. 스키마 변경은 리드만.
+## 고리 조립 도안 — 마법진의 **유일한** 저장·장착 단위 (#17 1단계, 세션 16). 스키마 변경은 리드만.
+## 순수 Dictionary(assembly)를 감싸 리소스로 만든다 — 라이브 생산자는 `ring_forge_panel.build_assembly()`
+## (맺을 때)이고, 되돌리는 쪽(`to_assembly()`)이 **발사가 먹는 계약**이다(세86 실측).
 ##
-## assembly 형태: {ring_count:1, rune:int, rings:[[8칸], …], open:[열린칸]}.
+## assembly 키 = `to_assembly()`가 정본이다: ring_count · rune(primary) · runes(목록) · jin
+## · rings(**층 배열**) · open · score · ink · special_ink · special_ratio · size.
 ## 각 칸 값 = 문양 코드(Enums.GlyphCode) 또는 빈칸(-1).
 ## 🔴 세79 M1: `rings`는 **층(밴드) 배열**이다 — 인덱스가 곧 감쌈 깊이(안→밖 = 연산 순서).
 ## 세78까지의 8칸 **한 겹**도 그대로 로드된다(`layers_of`가 층 1개로 승격 — 저장 무회귀).
@@ -12,6 +13,9 @@ extends Resource
 ## ⚠ 경제(마나·내구)는 아직 없다 — #17 3단계에서 정한다.
 
 @export var id: StringName
+## ⚠ **맺은 도안은 전부 "고리 마법진"이다** — `base.gd`가 이름을 상수로 넘긴다(세84 #12 남은 절반).
+## 그래서 1·2·3 슬롯이 무엇을 쏘는지 **이름으로는 구분이 안 된다**(시드 3장만 "불/물/바람 마법진").
+## 미해결 — 고칠 자리는 `from_assembly`의 `name` 인자를 채우는 **호출부**다.
 @export var display_name: String = "고리 마법진"
 ## 🔴 룬 종류 — **첫 룬**(primary). 세81 M2 전엔 룬이 하나뿐이라 이게 전부였다. 지금은 아래
 ## `runes`가 다중 룬의 정본이고, 이 필드는 **옛 소비자 무회귀**를 위해 첫 룬으로 계속 채운다
@@ -22,7 +26,8 @@ extends Resource
 ## 승격한다(저장 무회귀 = `layers_of` 선례). ⚠ 값은 `Enums.RuneType` 정수 배열.
 @export var runes: Array = []
 ## 🔴 진 id (세션44, 진=형태). 이 마법진을 **어느 진에 그렸나** — 발사 형태(단발/산탄/둘레)를 정한다.
-## 빈 값(&"") = 옛 도안/매직볼 = 발사가 폴백(지팡이 장비 또는 단발). id→패턴은 `Db.get_jin(jin).pattern`.
+## 빈 값(&"") = 옛 도안 = **단발(SINGLE)로 떨어진다**(옛 지팡이 폴백은 세85에 은퇴 — 되살리지 마라).
+## id→패턴은 `Db.get_jin(jin).pattern`.
 ## ⚠ ink처럼 여기에 Db를 두지 마라(class_name → -s 컴파일 함정). 패턴 해석은 발사부(ring_spell_system)가 한다.
 @export var jin: StringName = &""
 ## 진의 고리들 = **층 배열**. `rings[i][k]` = 층 i·칸 k의 문양 코드 or -1 (세79 M1).
@@ -32,9 +37,10 @@ extends Resource
 ## 진이 연 칸 인덱스 (렌더·요약용 — 🔴 세85 정정: 출처는 `build_assembly()`의 **층 합집합**이다.
 ## `JinDef.glyph_slots`는 은퇴했다 — 그 필드를 되살려 여기에 실어도 발사·저장은 안 읽는다)
 @export var open: Array = []
-## 🔴 분석 종합 점수(0~1) = **손으로 얼마나 잘 그렸나**. 세션 23부터 **위력을 정한다**
-## (`src/core/ring_power.gd`). 세션 22까지는 계산·저장만 되고 아무도 안 읽어서
-## 잘 그리든 막 그리든 마법이 똑같았다 — 손으로 그리게 한 이유가 없던 셈이다.
+## 🔴 종합 점수(0~1) — 세션 23부터 **위력을 정한다**(`src/core/ring_power.gd`).
+## ⚠ 출처는 모드로 갈린다(세83 스위치 `balance.skip_drawing`): 폐지 모드 = **부품**
+## (`RingPower.assembled_score(문양수, 층수)`) · 되돌리면 = **손으로 얼마나 잘 그렸나**.
+## 어느 쪽이든 척도는 같은 0~1이라 아래 위력·등급 함수가 그대로 돈다.
 @export var total_score: float = 0.0
 ## 🔴 이 진을 그린 잉크 id (세션29, 사용자: "등급=데미지"). 등급 배수가 발사 위력에 곱해진다.
 ## 빈 값(&"") = 맨손/옛 도안 = 배수 1.0. id→배수 해석은 `Db.ink_mult(ink)`가 한다.
@@ -70,7 +76,8 @@ func to_assembly() -> Dictionary:
 
 
 ## assembly(get_assembly 결과)를 감싸 RingDesign을 만든다.
-## 🔴 점수는 **assembly가 이미 실어 온다**(board.get_assembly가 넣는다) — 기본값이 그걸 쓴다.
+## 🔴 점수는 **assembly가 이미 실어 온다**(라이브에선 `ring_forge_panel.build_assembly`가 `score`를
+## 직접 계산해 싣는다 — 보드의 `get_assembly()`가 아니다) — 기본값이 그걸 쓴다.
 ## `score`를 명시로 주면 그게 이긴다 (테스트·특수 경로용). 음수 = "안 줬음" 표식.
 static func from_assembly(a: Dictionary, name: String = "", score: float = -1.0) -> RingDesign:
 	var d := RingDesign.new()

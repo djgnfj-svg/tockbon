@@ -27,7 +27,12 @@ model: inherit
 - 밸런스 수치를 코드에 박았나 → `balance.tres`여야 한다 (단, 손맛 연출값은 const가 맞다)
 - 발사 경로가 `to_assembly()`를 우회해 Dictionary를 직접 만들었나 → score가 조용히 빠진다
 - 등급/펑/위력을 `ring_power` 밖에서 다시 계산했나, 65 같은 기준선을 상수로 베꼈나 → 갈라진다
-- 룬 타입을 하드코딩(`RUNE_FIRE`)했나 → `assembly.rune`이어야 한다
+- 룬 타입을 하드코딩(`RUNE_FIRE`)했나 → 조립본이 쥐어야 한다
+- 🔴 **룬을 단수로 읽었나** → **룬은 복수다**(세81 M2 융합진 = `rune_slots` 2). 읽을 땐 **`RingDesign.runes_of(runes, fallback_rune)`를 거쳐야** 한다 — `design.rune` 단수만 읽으면 **두 번째 룬이 조용히 사라진다**(세84 #12: 발사부는 계약을 지키는데 표시부만 뒤처져 「쏘는 것 ≠ 보이는 것」이 됐다. 그물 = `test_ui_text_auto`)
+- 🔴 **문양 계열을 배열로 다시 박았나** → 옛 `Enums.MODIFIER_GLYPHS`는 세82에 은퇴했다. 단일 소스는 `GlyphDef.behavior`(`GlyphRules.BEHAVIORS`), code 목록은 **`Db.modifier_codes()`**
+- 🔴 **좌표·문구를 베꼈나** → 룬 점 = `RingBoard.rune_slot_positions` · 칸 각도 = `RingBoard.slot_angle`/`jin_slot_dots` · 아이템 문구 = `src/core/item_text.gd`. **베끼면 판·책 셀·HUD가 조용히 어긋난다**(세84 T5: 「문구·좌표는 사본이 아니다」는 무의식 예외였다)
+- 🔴 **`.tres` 값 문법이 맞나** → **값 파싱이 실패하면 리소스가 통째로 죽고 `Db`가 말없이 건너뛴다**(세50: 3인자 `Color`로 바람 룬이 두 세션 죽어 있었는데 전 스위트 그린). "파일을 만들었다"를 완료로 치지 마라
+- ⚠ **은퇴한 것을 되살렸나** → `glyph_slots`(세85)·per-piece API 13종(세85)·`station_build_costs`(세85)·`decode_panel`(세85)·`inventory_panel`/`quest_panel`(세40 흡수). 되살아나면 **거짓 손잡이**가 된다
 - 화면 덮는 Control에 `mouse_filter=2`를 빠뜨렸나 → 클릭이 다 먹힌다(헤드리스 못 잡음)
 - 물리 레이어(Player=2·Desk=64·enemy=4)가 맞나 → 틀리면 총구에서 죽거나 take_hit이 안 불린다
 - 씬을 PackedScene preload로 물었나 → 순환이면 껍데기가 된다. `@export_file`+`change_scene_to_file`이어야
@@ -35,6 +40,8 @@ model: inherit
 - 테스트가 내부 필드(`_슬롯`)를 더듬나 → 공개 API로만 (리팩터 때 조용히 깨진다)
 
 **4단계 — 리포트**
+
+🔴🔴 **리포트를 반드시 파일로 써라 — `scratch_<주제>_review.md`(리포 루트).** **채팅으로 낸 최종 보고는 리드에게 안 온다**(세48~49에 4건이 idle 알림만 남기고 증발했고, 파일로 시킨 2건만 도착했다). 너는 **산출물이 보고서뿐**이라 파일로 안 쓰면 리뷰 전체가 사라진다. ⚠ 이 파일은 **일회성**이다 — 리드가 읽고 반영한 뒤 지운다.
 
 ```
 ## 리뷰 요약

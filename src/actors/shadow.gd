@@ -1,5 +1,6 @@
 extends Sprite2D
-## 발밑 그림자 — 공용 배우 컴포넌트 (세63 설계 §D). 부착자(forest_enemy·player.tscn·snake_body)가
+## 발밑 그림자 — 공용 배우 컴포넌트 (세63 설계 §D). 부착자(실측 4곳 = `forest_enemy`·`snake_body`가
+## 코드로, `player.tscn`·`ring_carrier.tscn`이 씬으로)가
 ## `radius_px`를 덩치에 맞춰 정하고 add_child하면 끝이다 — 이 노드는 아무것도 폴링하지 않는다.
 ##
 ## 🔴 **절차적이 맞다** (도형 금지 규칙의 예외 판별, takbon-rules §0): 그림자는 생명체의 "겉모습"이

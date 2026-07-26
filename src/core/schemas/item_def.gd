@@ -6,7 +6,9 @@ extends Resource
 @export var kind: Enums.ItemKind = Enums.ItemKind.MATERIAL
 @export var grade: int = 1
 @export var display_name: String = ""
-## kind별 자유 파라미터 — 스키마 확장 대신 이 Dictionary를 쓴다 (TEAM_PLAN 규칙 3)
+## kind별 자유 파라미터 — 스키마 확장 대신 이 Dictionary를 쓴다.
+## ⚠ 여기 키를 늘릴 땐 **소비자를 같은 커밋에** — 읽는 데 없는 키는 무효인데 인스펙터엔 보인다
+## (선례: 지팡이 `attack_cooldown_mult`가 선언만 있어 1.15가 아무 일도 안 했다, `item_text.gd` 주석).
 @export var params: Dictionary = {}
 
 ## 🔴 소지품 카테고리 — 창고 탭·제작 입력 분류 (세션28 경제 정비).

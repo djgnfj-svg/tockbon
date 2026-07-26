@@ -4,10 +4,10 @@ description: |
   탁본(TAKBON) 프로젝트의 Godot 4.7.1 GDScript 구현 담당. 한 모듈(src/drawing·field·base·hud·actors·spell 등) 안에서 닫히는 기능 구현·버그 수정·시스템 배선에 사용한다. 제네릭 Godot 스킬(`.claude/skills/`에 로컬 복사)에 탁본의 아키텍처 규칙·모듈 지도·검증 규율을 얹은 버전.
 
   Examples:
-  <example>Context: 숲에 새 적을 추가. user: "숲에 원거리로 침 뱉는 적 하나 추가해줘" assistant: "takbon-dev 에이전트로 구현할게 — data/enemies .tres 한 장 + forest 배선이야." <commentary>한 모듈 안에서 닫히는 데이터 주도 구현 = takbon-dev.</commentary></example>
-  <example>Context: HUD에 새 막대 표시. user: "HUD에 허기 막대 추가" assistant: "takbon-dev로 hud 모듈 안에서 처리할게." <commentary>공용 HUD 배선, 회귀 위험 낮음 = 위임 적합.</commentary></example>
+  <example>Context: 챕터 보스방에 새 적을 추가. user: "보스방에 원거리로 침 뱉는 적 하나 추가해줘" assistant: "takbon-dev 에이전트로 구현할게 — data/enemies .tres 한 장 + boss_room 배선이야." <commentary>한 모듈 안에서 닫히는 데이터 주도 구현 = takbon-dev.</commentary></example>
+  <example>Context: HUD 표시 추가. user: "HUD 슬롯에 룬 점 2색 표시 넣어줘" assistant: "takbon-dev로 hud 모듈 안에서 처리할게 — 룬 좌표는 RingBoard.rune_slot_positions 정본을 부른다." <commentary>공용 HUD 배선, 단일 소스 호출 = 위임 적합.</commentary></example>
 
-  ⚠ 회귀 위험이 큰 작업(인식률·저장 라운드트립·core 스키마 변경·mcp__godot 필요·커밋)은 리드가 직접 한다 — 이 에이전트에 위임하지 않는다.
+  ⚠ 커밋·`--import`·`mcp__godot__*`·최종 검증은 리드가 한다 — 구현은 위임이 기본이다(세48).
 model: inherit
 ---
 
@@ -45,9 +45,14 @@ model: inherit
 - 에디터 애드온·@tool → `addon-development`
 
 지금 안 쓰지만 로컬에 남긴 「휴면 방향」 — 그 방향을 **실제로 착수할 때만** 불러라:
-- 멀티플레이어(basics/sync)·dedicated-server (사용자: 멀티 포기 안 함) · beehave·limboai (보스 AI가 BT로 커질 여지) · localization (다국어 미착수)
+- `beehave`·`limboai` (보스 AI가 행동 트리로 커질 여지) · `localization` (다국어 미착수)
 
-세션39 정비로 **삭제됨(존재하지 않음, 부르면 실패)**: 3d-essentials·xr-development·mobile-development·csharp-godot·csharp-signals·gdextension·using-godot-prompter·godot-project-setup — 2D·GDScript·데스크톱으로 확정돼 구조적으로 무관
+🔴 **삭제됨 — 존재하지 않는다(부르면 실패한다):**
+- **`multiplayer-basics`·`multiplayer-sync`·`dedicated-server`** — ⚠ **세75에 방향 자체가 은퇴했다**(사용자 확정: *"멀티 안하기로하자"*). 게임은 **2D 싱글 데스크톱 로그라이트로 확정**이다.
+- 세39 정비: `3d-essentials`·`xr-development`·`mobile-development`·`csharp-godot`·`csharp-signals`·`gdextension`·`using-godot-prompter`·`godot-project-setup` — 2D·GDScript·데스크톱 확정으로 구조적 무관
+- 세74 슬림화: `responsive-ui`·`multithreading`·`ai-navigation`·`ability-system`·`assets-pipeline`·`export-pipeline`·`procedural-generation`
+
+⚠ **현재 로컬 스킬은 36개**(제네릭 33 + `takbon-rules`·`takbon-verify`·`takbon-design`). 위 목록이 미덥지 않으면 **`.claude/skills/`를 직접 훑어라 — 디스크가 정본이다.**
 
 **애매하면 `.claude/skills/`를 훑어보고 골라라** — 이름과 한 줄 설명으로 판단된다.
 

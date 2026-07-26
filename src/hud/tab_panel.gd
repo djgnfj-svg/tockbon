@@ -1,12 +1,16 @@
 extends Control
-## 통합 개인 시트 모달 — 창고+가방(소지품)·퀘스트·마법진을 한 패널 3탭으로 묶는다.
-## **베이스캠프와 숲이 같이 쓴다.** 기존 inventory_panel(I)·quest_panel(Q)을 흡수한 형제다.
+## 통합 개인 시트 모달 — 소지품(창고+가방)·퀘스트·마법진·캐릭터를 한 패널에 묶는다.
+## 🔴 **탭 목록의 정본은 `TAB_NAMES` 하나다**(지금 4탭 — 세64에 「캐릭터」가 붙었다). 개수를
+## 주석·코드에 따로 박지 마라. **마을(base)과 보스방이 같이 쓴다**(옛 숲 씬은 세58-B 은퇴).
+## 기존 inventory_panel(I)·quest_panel(Q)을 흡수한 형제다.
 ##
 ## 🔴 왜 한 패널인가: 소지품/퀘스트/마법진이 따로 열리면 모달 슬롯(ui_modal_open)을 서로
 ## 밀치고, 근육 기억(I·Q)도 흩어진다. Tab 하나로 열고 탭으로 오가되, I/Q는 그 탭으로 바로
 ## 여는 지름길로 남긴다.
 ##
-## 🔴 **inventory_panel / quest_panel과 완전히 같은 모달 규약이다** (그 둘이 참고 원본):
+## 🔴 모달 규약 — ⚠ 아래에서 「inventory_panel·quest_panel 선례」로 부르는 두 파일은 **이 패널이
+## 흡수하면서 삭제됐다**(세40. 찾지 마라 — 필요하면 git 이력). 지금은 **이 파일이 원본**이고,
+## `chapter_panel`·`dialogue_box`가 여기를 베낀다:
 ##  · 열리면 mouse_filter=STOP → 좌클릭을 통째로 먹어 시트를 보며 실수로 안 쏜다.
 ##  · 닫히면 visible=false → GUI 히트테스트에서 빠져 클릭이 다시 바닥으로 샌다.
 ##  · 열림/닫힘에 GameState.ui_modal_open을 토글 → player(이동)·caster(조준·발사)가 폴링해 멎는다.
@@ -102,7 +106,7 @@ const RingPower := preload("res://src/core/ring_power.gd")
 const ItemText := preload("res://src/core/item_text.gd")
 
 ## 마법진 탭이 쓰는 표시 어휘 — 문양 이름·색·칸 각도(`slot_angle`→`jin_slot_dots`).
-## ⚠ `ring_board.gd`엔 `class_name`이 없다 — 이 preload가 유일한 진입로다(hud.gd:29 선례).
+## ⚠ `ring_board.gd`엔 `class_name`이 없다 — 이 preload가 유일한 진입로다(`hud.gd`의 RingBoard preload 선례).
 ## 🔴 core(`RingDesign.layer_summary`)는 문양 이름·색을 **일부러 안 갖는다**(drawing 참조 금지) —
 ## 코드→말/색 해석은 표시하는 쪽인 여기 몫이다.
 const RingBoard := preload("res://src/drawing/ring_board.gd")
@@ -990,8 +994,8 @@ func _jin_text(design: RingDesign, layer_count: int) -> String:
 	return "진: %s · %d층" % [nm, maxi(layer_count, 1)]
 
 
-## 🔴 도안의 룬 목록 — **반드시 `RingDesign.runes_of`를 거친다**(`ring_design.gd:18`이 *"읽을 땐
-## `runes_of()`를 거쳐라"*라고 못 박았다). 세84 감사 #12: 표시부 셋이 `design.rune`(첫 룬)만 읽어
+## 🔴 도안의 룬 목록 — **반드시 `RingDesign.runes_of`를 거친다**(`RingDesign.rune`·`runes` 필드
+## 주석이 *"읽을 땐 `runes_of()`를 거쳐라"*라고 못 박았다). 세84 감사 #12: 표시부 셋이 `design.rune`(첫 룬)만 읽어
 ## **융합진의 두 번째 룬이 화면에서 통째로 사라졌다** — 발사부는 두 룬을 쏘는데 수식·색 띠·
 ## 다이어그램은 하나만 보여 줘 「쏘는 것 ≠ 보이는 것」이 됐다(1·2 키로 뭘 쏘는지 손끝에서 구분 불가).
 func _design_runes(design: RingDesign) -> Array:

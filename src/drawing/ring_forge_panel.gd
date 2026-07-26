@@ -4,18 +4,17 @@ extends Control
 ##
 ## 왼쪽 페이지 = **조립 보드**(RingBoard) · 오른쪽 페이지 = **조각 선택기**(RingBook — 진·룬·문양 탭).
 ##
-## 🔴 세션 14b — 탁본: 왼쪽 판의 **숨은 선을 손으로 문질러**(자동추적·보정) 드러내고, 조각마다
-## 점수를 매긴다. **[다음]**으로 조각을 잠그고 진행(마음에 안 들면 다시 문질러 덮어씀). 진→룬→문양(칸마다).
-## 다 그리면 **분석 리포트**(조각별 점수+종합+등급)를 띄우고, 거기서 쏘거나 다시 그린다.
-##
-## 🔴 세션 21 대청소: 옛 forge_panel(자유 드로잉)은 **삭제됐다** — 이제 이게 유일한 제작대다.
-## (한때 둘이 평행으로 살아 있었다. 되돌리려면 git 이력.)
+## 🔴 흐름 = **3단계 게이트**(`Phase`, 세71b): ASSEMBLE(오른쪽에서 진·룬·문양-고리를 조립) →
+## DRAW(왼쪽 판의 **숨은 선을 손으로 통째로 문질러** 드러낸다 — 세68 조립→탁본) → RESULT(분석
+## 리포트에서 [마력 주입]으로 맺거나 [◀ 다시 조립]).
+## ⚠ **세83 그리기 폐지 모드**(`balance.skip_drawing` 기본 true)에선 DRAW가 **도달 불가**다 —
+## `_on_start_draw`가 바로 `_finish()`로 간다. 그래서 그 모드의 시작 버튼은 [마법진 완성 ✦]이다.
+## ⚠ 조각을 하나씩 잠그던 **per-piece 흐름([다음]으로 진→룬→문양 칸마다)은 세70에 죽었다** —
+## 지금 [다음] 버튼(`NextBtn`)은 「그리기 시작」 게이트로 갈아 끼운 것이다.
 ##
 ## 계약: open() → 열림 / closed 시그널 → 닫힘 / design_committed(assembly) → 맺힘.
 ##
-## 🔴 2026-07-17 세션 22 (I5): 껍데기가 **씬(ring_forge_panel.tscn)으로 나갔다** — 예전엔 _build()가
-## 종이·라벨·버튼·리포트 카드를 전부 `.new()`하고 좌표 상수 14개를 코드에 박아 뒀다. 종이의 "느낌"이
-## 그리는 재미를 좌우해서 계속 만질 곳인데, 한 픽셀 옮기려면 코드를 고쳐야 했다.
+## 🔴 세22 (I5): 껍데기는 **씬(ring_forge_panel.tscn)**이 쥔다 — 좌표를 코드에 박지 마라.
 ## ⚠ 전부 씬으로 옮기지는 **않았다** — RingBoard·RingBook은 `_draw()` 커스텀 렌더라 에디터에서
 ## 드래그할 게 없다. 그 둘은 씬의 노드로 배치하되 스크립트가 계속 그린다. `_draw_pages`(책등 그라데이션)·
 ## `_draw_report`(점수 막대)도 코드에 남는다.
@@ -521,12 +520,14 @@ func recompose() -> void:
 	var flat := PackedVector2Array()
 	for sub in paths:
 		flat.append_array(sub)
-	# 🔴 세81: 층 구분 동심원은 **조립 미리보기(ASSEMBLE)에서만** 보인다 — 실제로 그릴 때(DRAW)는
-	# 문양이 그 선에 걸쳐 지저분하다는 사용자 지적으로 끈다. 그래서 _on_start_draw가 phase를 DRAW로
-	# 바꾼 **뒤에** recompose를 부른다(아래).
-	# 🔴 세84 #22: `_sel_runes`를 **한 번 더** 넘긴다(503의 compose와 같은 값) — 판이 미선택 룬 자리
-	# 마커를 **상태**로 그리게 하는 유일한 입력이다. 4인자로 남기면 보드가 하위 호환 폴백(개수 유추)을
-	# 타서 융합진(자리 2개)의 빈 자리 표식이 중심에 하나만 뜨거나 통째로 사라진다 — 에러는 안 난다.
+	# 🔴 세81 우회 — 4번째 인자 `show_band_lines`가 **DRAW에서만 false**라, 손으로 그을 땐 층
+	# 칸막이 선이 안 보인다(그래서 `_on_start_draw`가 phase를 DRAW로 바꾼 **뒤에** recompose를
+	# 부른다). ⚠ 세86의 「띠」가 이 우회를 대체하는지는 **미결이다** — 사연은 `RingBoard.BAND_LANE_PAD`
+	# 주석 한 곳에 있다. 이 인자만 바꾸면 그 주석과 갈라진다.
+	# 🔴 세84 #22: `_sel_runes`를 **한 번 더** 넘긴다(바로 위 `compose_guide_paths`에 넘긴 것과 같은
+	# 값) — 판이 미선택 룬 자리 마커를 **상태**로 그리게 하는 유일한 입력이다. 4인자로 남기면 보드가
+	# 하위 호환 폴백(개수 유추)을 타서 융합진(자리 2개)의 빈 자리 표식이 중심에 하나만 뜨거나
+	# 통째로 사라진다 — 에러는 안 난다.
 	_board.enter_combined_trace(flat, paths, band_defs.size(), _phase != Phase.DRAW, _sel_runes)
 	_update_score()
 	_refresh_buttons()
@@ -1050,7 +1051,8 @@ func build_assembly() -> Dictionary:
 	var band_defs := _band_defs()
 	# 🔴 세79 M1: 밴드를 **층 배열**로 싣는다(`layer_rings`). 옛 `flatten_bands`는 밴드를 8칸 하나로
 	# 뭉개 **감쌈 순서를 버렸다** — 순서가 곧 연산인 지금은 그게 곧 기능 손실이다.
-	# ⚠ 밴드가 하나뿐인 진(지금 살아있는 전부)은 층 1개라 발사 결과가 예전과 점 단위로 같다.
+	# ⚠ 밴드가 하나뿐인 진은 층 1개라 발사 결과가 예전과 점 단위로 같다 — 🔴 다만 세86 실측으로
+	# 그런 진은 `jin_single` **하나뿐**이다(`jin_plain_g2`·`jin_fuse`는 band_count = 2).
 	var rings := RingBoard.layer_rings(band_defs)
 	var open: Array = []
 	for ring_v in rings:
@@ -1109,7 +1111,7 @@ func _update_score() -> void:
 		_score_num.text = ""
 		_score_sub.text = ""
 		return
-	# 🔴🔴 세84: 점수 출처는 `_score_now()` **하나**다(위 505 규율). 예전엔 여기서
+	# 🔴🔴 세84: 점수 출처는 `_score_now()` **하나**다(그 함수 주석의 규율). 예전엔 여기서
 	# `combined_total()`을 직접 읽어 **다섯 번째 자리**가 됐고, 폐지 모드 RESULT에서 가드를
 	# 통과해 실제로 돌면서 "0" + 미달색을 세팅했다(안 보이던 이유는 `_draw_tools.visible`
 	# 가시성 가드 하나뿐 — 그 가드를 건드리는 순간 「조립했는데 0점」이 뜬다).

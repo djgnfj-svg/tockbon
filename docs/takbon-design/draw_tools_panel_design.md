@@ -1,7 +1,18 @@
 # 설계: DRAW 도구 패널(잉크+실시간 점수) + 종이 축 은퇴
 
 > 산출물 = takbon-ui/dev가 받는 구조 설계. 범위 = 책 포지 패널 UI + 종이(규모) 축 제거.
-> **발사·저장·core 무변경 목표.** 전제 = progressive_assemble_gate + guide_visual_layers 구현 완료.
+> **발사·저장·core 무변경 목표.** 전제(Phase 게이트·밴드 서브패스)는 구현 완료 —
+> 전제 문서 `progressive_assemble_gate`·`guide_visual_layers`는 **세87에 삭제했다**(구현 완료 아카이브).
+
+> ⚠🔴 **세87 실측 — 이 문서는 구현 완료 아카이브이고, 「후속」이라 적은 종이 purge는 절반 집행됐다.**
+> ⓐ **정제대 dead affordance는 이미 닫혔다** — `src/base/refine_panel.gd:86`이 종이 결과 레시피를
+> 목록에서 필터로 숨긴다(아래 §리뷰 4의 지시가 집행된 것). `.tres`는 삭제하지 않은 **휴면**이다.
+> ⓑ 🔴 **남은 종이 잔재를 「청소」로 걷지 마라 — 테스트가 직접 부른다**:
+> `tests/test_ring_design_auto.gd:136-139`가 `Db.paper_zoom_max`(`src/core/db.gd:173`)와
+> `data/items/paper_basic.tres`·`paper_high.tres`를 쓴다. 아이템 2장을 지우면 :136의 대소 비교가
+> 폴백 동률이 돼 **즉시 빨감**한다.
+> ⓒ `RingDesign.size`·`build_assembly["size"]`는 `ring_spell_system`이 소비하므로 그대로 둔다(§리뷰 2).
+> ⓓ 남은 종이 표시 잔재 = `src/hud/tab_panel.gd:114` `[&"paper", "종이"]` 카테고리 · :117 `paper_mat`.
 
 ## 목적 / 왜
 사용자: ① [그리기 시작] 누르면 **옆에 잉크가 뜨는 UI** ② **실시간 점수** ③ **종이 개념 은퇴 → 관련 UI 제거**.

@@ -120,7 +120,9 @@ player.aseprite 32프레임(idle·걷기 4방향, 대시 4방향, 탁본 4f) →
   배선은 InkStyle.make_panel() 단일 지점 — pad_v로 티어 자동 선택, bg색은 modulate(bg/PAPER)로 살림,
   PNG 없으면 기존 StyleBoxFlat 폴백. 텍스처 반복은 StyleBoxTexture AXIS_STRETCH TILE
   (반점 해시는 sin 기반 — 선형 해시는 대각 줄무늬 아티팩트 발생, 재발 주의)
-- ✅ 아이템 아이콘 18종 (sprites/ui/items.png — id→인덱스 계약은 src/core/item_icons.gd, 창고 패널 배선)
+- ⚠ 아이템 아이콘 18종 — **시트는 있는데 배선이 없다 (세87 실측)**: `assets/sprites/ui/items.png`는 실재하지만
+  id→인덱스 계약을 쥐던 `src/core/item_icons.gd`가 **삭제돼** 지금 이 시트를 읽는 코드가 **0곳**이다
+  (창고 패널도 세40에 `tab_panel`로 흡수됐다). 살리려면 id→인덱스 계약부터 다시 세운다.
 - 잔여: tutorial.gd는 자체 복제 스타일이라 아직 단색 (ink_style 공용 승격 시 함께 치환)
 
 ## P5 — 이펙트 ✅ 완료 (보류 항목 제외)

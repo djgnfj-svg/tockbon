@@ -1,5 +1,5 @@
 extends Node
-## 전역 상태 원장 — 자원·장착 3장·가방·도감 (TECH_SPEC §3).
+## 전역 상태 원장 — 자원·장착 3장·가방·도감.
 ## 모듈은 이 API로만 자원을 만진다. inventory에 직접 접근하지 말 것.
 
 ## 세션64에 4→3 (사용자 확정 — HUD 정리). 옛 저장의 4번째 장착은 로드에서 조용히 해제되고
@@ -14,9 +14,9 @@ var balance: BalanceData = preload("res://data/balance.tres")
 var mana: float
 ## 플레이어 HP — 출격 시 reset, 표시·판정의 단일 원장 (v1.1: C 로컬에서 이관)
 var hp: float
-## 숲에 있나 — forest/base/intro `_ready`가 설정 (오토로드라 씬 전환에도 남음).
-## ⚠ 세58 허기 은퇴(docs/PROGRESSION.md D1)로 읽는 곳이 0이다 — "원정 중" 상태 자체는 의미가
-## 살아 있어 플래그만 남긴다 (원정 전용 기능이 다시 붙으면 이걸 읽는다).
+## 원정 중인가 — 쓰는 곳은 `boss_room._ready`(true)·`base._ready`(false)·`new_game`(false)뿐이다.
+## ⚠ 세58 허기 은퇴(docs/PROGRESSION.md D1)로 **읽는 곳이 0이다**(세86 실측 — 쓰기 전용).
+## "원정 중" 상태 자체는 의미가 살아 있어 플래그만 남긴다 (원정 전용 기능이 붙으면 이걸 읽는다).
 var in_expedition: bool = false
 ## 🔴 어느 챕터로 들어가나 (세58-B) — `change_scene_to_file`이 인자를 못 실어 오토로드가 나른다
 ## (in_expedition과 같은 결). 챕터 패널이 쓰고 boss_room `_ready`가 읽는다. **저장 안 함**(일시 상태).
@@ -26,7 +26,8 @@ var pending_chapter: StringName = &""
 var inventory: Dictionary = {}
 ## 출격 중 획득 [{ "id": StringName, "count": int }] — 사망 시 손실
 var bag: Array[Dictionary] = []
-## 착용 장비 {Enums.ItemKind.WAND/ROBE/CHARM: item_id} — 가방 아님, 사망에도 보존 (GDD §5)
+## 착용 장비 {Enums.ItemKind: item_id} — 가방 아님, 사망에도 보존.
+## 🔴 부위는 **5개**다(WAND·ROBE·CHARM·PEN·HAT — `equip_gear`의 허용 목록이 정본, 세42).
 var equipment: Dictionary = {}
 ## 🔴 고리 도안 — **유일한 마법진 모델** (세션 22에 옛 designs/equipped를 매장했다).
 ##   ring_designs = 보관 전체 · ring_equipped = 장착 EQUIP_SLOTS장.
@@ -48,7 +49,7 @@ var quest_done: Dictionary = {}
 ##  active 퀘스트가 있으면 NPC 머리 위 [!]가 떠 "Tab으로 확인"을 당긴다(정산용 [?]와 별개 축). 영구
 ##  저장 — 껐다 켜도 이미 읽은 퀘스트에 [!]가 다시 뜨지 않게. 시트를 열면 mark_quests_seen()이 채운다.
 var quest_seen: Dictionary = {}
-## UI 모달(게시판·장착·도감) 열림 — ui_root가 설정, 플레이어 이동 계열이 폴링 (TECH_SPEC §4.2)
+## UI 모달(조립 책·Tab 시트·상자 등) 열림 — 패널이 설정, 플레이어 이동·발사 계열이 폴링한다.
 var ui_modal_open: bool = false
 ## 🔴 테스트 편의: 발사 마나 무소모 (사용자 요청 2026-07-23 — "테스트할 때 귀찮음").
 ## 에디터 실행(F5·MCP run·헤드리스)에서만 켜진다 — 익스포트 빌드엔 "editor" 피처가 없어 꺼진다.
@@ -80,7 +81,8 @@ func _ready() -> void:
 	EventBus.enemy_died.connect(_on_enemy_died)
 	EventBus.ring_design_committed.connect(_on_ring_design_committed)
 
-## 🔴 시작 해금 재시드 — 튜토가 가르치는 불 룬 + 추진 문양 (v2.2, TRUTH §4 세션 14: 충격 룬 폐지).
+## 🔴 시작 해금 재시드 — codex 시드(룬·진·문양-고리) + 시작 도안 3장.
+## ⚠ **문양(GlyphDef)은 시드가 아니다** — 아래 `seed_codex_unlocks` 주석대로 해금 게이트 자체가 없다.
 ## _ready(첫 부팅)와 new_game(새로하기)이 **둘 다** 이걸 부른다. 여기 한 곳에만 두는 이유:
 ## save_manager 노트가 경고한 "새로하기는 _ready를 다시 안 타므로 여기 시드를 안 심으면
 ## **아무것도 못 그리는 새 게임**이 된다" — 두 경로가 갈라지면 조용히 그 버그가 난다.
@@ -100,7 +102,7 @@ func seed_codex_unlocks() -> void:
 	# 🔴 세션61 콘텐츠 리셋 — 카탈로그를 진 1(jin_single)·룬 1(rune_fire)·문양 1(radiate)로 비웠다.
 	# 앞으로 사용자가 큐레이션하며 하나씩 되살린다(진의 개성 = band_count·rune_slots·guide_shape —
 	# 🔴 세85 ⑦에 칸 축 glyph_slots는 은퇴했다).
-	# 시드 = 시작 지급뿐: 세49~58의 룬 6종·진 8종 전부 시드는 은퇴했다(그 시드가 관문·해독을
+	# 시드 = 시작 지급뿐: 세49~58의 룬 6종·진 8종 전부 시드는 은퇴했다(그 시드가 관문을
 	# 소급 완료로 덮어 재우던 것도 같이 끝 — 룬을 되살리면 관문 드롭(until_unlock)이 바로 산다).
 	# ⚠ 문양(발산)은 시드가 없다 — **문양엔 해금 게이트 자체가 없다**: GlyphDef에 unlock_id 필드가
 	# 없고 책도 `Db.all_glyphs()`를 무필터로 띄운다(ring_forge_panel._inject_defs). 옛 `glyph_thrust`
@@ -215,7 +217,7 @@ func spend_mana(amount: float) -> bool:
 func restore_mana_full() -> void:
 	mana = mana_max()
 
-# ── 파생 스탯 — balance 기본값 + 장비 보정 (TECH_SPEC §4.2). balance 직접 참조 금지, 전부 이 getter
+# ── 파생 스탯 — balance 기본값 + 장비 보정. balance 직접 참조 금지, 전부 이 getter를 거친다
 
 func mana_max() -> float:
 	return balance.mana_max + gear_param(Enums.ItemKind.ROBE, "mana_max_add", 0.0)
@@ -268,7 +270,7 @@ func cast_mana_cost() -> float:
 func stroke_correction() -> float:
 	return clampf(gear_param(Enums.ItemKind.PEN, "correction", 0.0), 0.0, 1.0)
 
-# ── 장비 착용 (TECH_SPEC §4.2) — 창고에 있는 장비만, 착용품은 사망에도 보존
+# ── 장비 착용 — 창고에 있는 장비만, 착용품은 사망에도 보존
 
 ## 착용 장비의 params 값 조회 — 해당 부위 미착용이면 default
 func gear_param(kind: int, key: String, default: float) -> float:
@@ -301,7 +303,7 @@ func unequip_gear(kind: int) -> void:
 	_after_equipment_changed()
 
 func _after_equipment_changed() -> void:
-	# 로브 교체로 상한이 줄면 현재값 클램프 (TECH_SPEC §4.2)
+	# 로브 교체로 상한이 줄면 현재값 클램프
 	hp = minf(hp, hp_max())
 	mana = minf(mana, mana_max())
 	EventBus.player_hp_changed.emit(hp, hp_max())
@@ -386,7 +388,8 @@ func _on_extraction_success() -> void:
 
 ## 🔴 고리 도안이 맺혔다 — 보관고에 넣고 빈 슬롯이 있으면 즉시 장착한다.
 ## 맺은 직후 바로 쏴볼 수 있어야 흐름이 안 끊긴다 (첫 진 = 슬롯 1).
-## 슬롯이 꽉 찼으면 보관만 한다 (GDD §4.4 — 필드 교체 불가는 유지).
+## 슬롯이 꽉 찼으면 보관만 한다 — 원정 중 교체는 여전히 없고, 마을에서 Tab 마법진 탭이
+## `equip_design()`(아래)으로 바꾼다(세86 ①).
 func _on_ring_design_committed(design: RingDesign) -> void:
 	if design == null:
 		return

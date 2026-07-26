@@ -7,9 +7,12 @@ extends RefCounted
 ## 그래서 두 모듈이 **같은 함수**를 부른다. (모듈 간 직접 참조 금지 규칙의 정당한 통로 = core.)
 ##
 ## 규칙 (사용자 확정 2026-07-17):
-##   • 종합 점수가 `ring_stability_min`(0.65) **이하면 펑** — 마법진이 안 맺히고 도안이 날아간다
-##   • 넘겼으면 기준선~만점을 `ring_power_min`~`ring_power_max`로 **선형 보간** —
-##     "점수가 높을수록 성능이 좋아". 계단이 아니라 연속이라 1점 차이가 의미를 갖는다
+##   • 종합 점수가 `ring_stability_min` **이하면 펑** — 마법진이 안 맺히고 도안이 날아간다
+##   • 위력은 **지수 곡선** = `ring_power_max × 점수^ring_power_curve` (`power_of` 참조).
+##     0점→0·만점→max로 이어져 평평한 구간이 없다 — 1점 차이가 의미를 갖는다.
+## ⚠ 세86 정정: 옛 주석의 *"기준선~만점을 `ring_power_min`~`ring_power_max`로 선형 보간"*은
+##   **거짓이었다** — `ring_power_min`은 balance에 없는 이름이고(src·tests 참조 0), 선형+clamp는
+##   미달 구간이 평평해 「주입 전 안내」가 돼서 곡선으로 바뀌었다(balance `ring_power_curve` 주석).
 ##
 ## 수치는 전부 data/balance.tres (코드에 수치 금지).
 ##

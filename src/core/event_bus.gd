@@ -1,16 +1,18 @@
 extends Node
-## 모듈 간 시그널 허브 — 유일한 교차 모듈 통신 경로 (TECH_SPEC §5).
+## 모듈 간 시그널 허브 — 유일한 교차 모듈 통신 경로.
 ## 시그널 추가·변경은 리드만.
 ##
-## 🔴 2026-07-17 세션 22: 옛 SpellDesign(자유 드로잉) 경로의 시그널 17종을 **매장했다.**
-## 세션 21 대청소로 발신자·수신자가 모두 사라졌는데 시그널만 남아, 시그니처가 SpellDesign·EnemyDef를
-## **타입으로** 붙들어 그 스키마를 못 지우고 있었다. 되돌리려면 git 이력.
+## ⚠ **죽은 시그널을 남겨 두지 마라** — 시그니처의 타입이 그 스키마를 붙들어 못 지우게 만든다
+## (세22에 옛 SpellDesign 시그널 17종을 매장한 이유. 경위 = docs/STATUS.md 「세션 22」·git 이력).
 
 @warning_ignore_start("unused_signal")
 
 # ── 고리 조립 캐스팅 (세션 12~) — 지금의 유일한 발사 경로
-# 🔴 고리 모델(진=날아가는 몸, 문양=착탄 전개)은 assembly 사전을 싣는다.
-# assembly = ring_board.get_assembly() = {ring_count, rune, rings:[[8칸]], open:[...]}.
+# 🔴 assembly 사전을 싣는다. **생산자는 `RingDesign.to_assembly()` 하나**이고, 쏘는 자리도
+# `player_caster.fire()` 한 곳이다(세86 실측) — 직접 Dictionary를 만들어 emit하면 `score`가
+# 빠져 **조용히 기준 위력**으로 나간다(세26 계약).
+# 키(세81 M2·세79 M1 기준): ring_count · rune(primary) · runes(목록) · jin · rings(**층 배열**)
+#   · open · score · ink · special_ink · special_ratio · size.
 # ring_spell_system(모듈 B)이 수신 → 진(캐리어)을 조준 방향으로 쏜다.
 signal ring_cast_requested(assembly: Dictionary, origin: Vector2, aim_dir: Vector2)
 # 🔴 #17 1단계 — 고리 도안이 맺혔다 (베이스캠프 조립 책 → GameState).
@@ -49,7 +51,9 @@ signal extraction_success
 signal bag_lost
 
 # ── 시간 (Clock → 전체)
-## ⚠ 발신자는 있고 수신자가 없다(HUD 삭제 탓). day_started는 SaveManager 자동 저장이 받는다.
+## ⚠ 목록은 **함수 이름**으로 (줄 번호는 코드와 함께 늙는다, 감사 T4). 세86 실측:
+##   `phase_changed` 수신 1곳 = `audio._on_phase`(아침·밤 전환음만).
+##   `day_started` 수신 1곳 = `save_manager._ready`의 람다 = **자동 저장 틱**(clock.gd 머리 주석).
 signal phase_changed(phase: int)
 signal day_started(day: int)
 
@@ -71,7 +75,7 @@ signal quests_seen
 # ── 자원·장비 (GameState → 전체)
 ## 🔴🔴 **둘 다 수신자가 많다 — 걷으면 UI가 한 번에 죽는다**(세84 감사 #28에 실측 갱신).
 ## 옛 주석은 *"둘 다 발신만 있고 수신자 0"*이라 적어 놨는데(세21 HUD 삭제 시절의 유물),
-## 그걸 믿고 지우면 **잉크 팔레트·정제대·공방·상점·해독대·HUD·Tab 갱신이 통째로 멎는다.**
+## 그걸 믿고 지우면 **잉크 팔레트·정제대·공방·상점·HUD·Tab 갱신이 통째로 멎는다.**
 ## ⚠ 목록은 **함수 이름**으로 적는다 — 줄 번호는 코드와 함께 늙어 다시 거짓이 된다(감사 T4).
 ##   `resources_changed` 발신 5곳: `game_state`의 `new_game`·`add_item`·`remove_item`·**`add_to_bag`**
 ##                                 · `save_manager.load_game`
@@ -79,15 +83,13 @@ signal quests_seen
 ##               · `workshop_panel` · `shop_panel`
 ##   `equipment_changed` 발신 3곳: `game_state.new_game`·`game_state._after_equipment_changed`
 ##                                 · `save_manager.load_game`
-##     수신 4곳: `tab_panel` · `workshop_panel` · `audio` · 🔴 `save_manager._queue_save`(자동 저장)
+##     수신 5곳: `hud` · `tab_panel` · `workshop_panel` · `audio` · 🔴 `save_manager._queue_save`(자동 저장)
 ## 🔴 세84 #1: **`equipment_changed`는 이제 자동 저장 트리거다** — 장비 변경에서 이 신호를 빼먹으면
 ##   화면만 안 갱신되는 게 아니라 **진행이 저장되지 않는다.**
-## 🔴🔴 반대로 `resources_changed`는 **저장 트리거로 쓸 수 없다**: 창고 증감만 쏘는 게 아니라
-##   **`add_to_bag`(원정 중 드롭 획득)도 같이 쏘는데** 가방은 애초에 저장 대상이 아니다(사망 시
-##   소실이 설계). 창고 변화를 저장 계기로 쓰려면 **신호를 갈라야 한다**(`inventory_changed` 신설
-##   또는 `add_to_bag`을 이 신호에서 떼기) — 그때까지 제작·상점은 종료 훅이 덮는다.
-## ✅ 세86 ⑫: **신호를 갈랐다** — 아래 `inventory_changed`가 저장 트리거다.
-##   이 신호는 **UI 갱신 전용**으로 남는다(수신 6곳 무변경 — 가방 구역도 같이 다시 그려야 하므로).
+## 🔴🔴 `resources_changed`는 **저장 트리거로 쓰지 마라** — `add_to_bag`(원정 중 드롭)도 같이 쏘는데
+##   가방은 애초에 저장 대상이 아니다(사망 시 소실이 설계). 세86 ⑫에 신호를 갈랐다:
+##   저장 트리거는 아래 `inventory_changed`이고, 이 신호는 **UI 갱신 전용**이다(가방 구역도
+##   같이 다시 그려야 하므로 수신 6곳 무변경).
 signal resources_changed
 ## 🔴🔴 **창고(영구)가 증감했다** (세86 ⑫ 신설) — `add_item`·`remove_item` **두 곳만** 발신한다.
 ## 즉 제작·상점·퀘스트 보상·귀환 정산이 여기 실리고, **`add_to_bag`(가방)은 안 실린다.**

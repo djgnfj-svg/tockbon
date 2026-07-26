@@ -135,7 +135,9 @@ func _on_cast(_assembly: Dictionary, _origin: Vector2, _aim: Vector2) -> void:
 
 
 func _on_enemy_hit(_enemy: Node2D, _damage: float, rune_type: int) -> void:
-	# 룬 속성별 피격음 변주 (FIRE=0·WATER=2·WIND=3, 없으면 기본). 약간의 피치 흔들림으로 반복감 완화.
+	# 룬 속성별 피격음 변주. 약간의 피치 흔들림으로 반복감 완화.
+	# ⚠ **룬은 6종인데 전용 음은 셋뿐이다** — BOLT·EARTH·GRASS는 기본음(`hit`)으로 떨어진다
+	#   (세83에 룬 6종이 복원되며 생긴 빚. 새 소리 = `assets/audio/sfx/hit_*.wav` 한 장 + 여기 한 줄).
 	match rune_type:
 		Enums.RuneType.FIRE:  play(&"hit_fire", randf_range(0.95, 1.05))
 		Enums.RuneType.WATER: play(&"hit_water", randf_range(0.95, 1.05))

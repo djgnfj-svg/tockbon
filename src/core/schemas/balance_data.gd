@@ -1,7 +1,11 @@
 class_name BalanceData
 extends Resource
-## 밸런스 수치 원장 — 코드에 수치를 박지 않는다 (TECH_SPEC §10).
+## 밸런스 수치 원장 — 코드에 수치를 박지 않는다.
 ## 인스턴스: res://data/balance.tres · 프로토 손맛 튜닝은 전부 여기서.
+##
+## ⚠ **소비자 0인 필드가 여럿 남아 있다**(그리기 폐지·종이 축 은퇴·경제 미구현의 잔재). 이 파일의
+## 규약은 「지우지 않고 **표시**한다」이다(아래 `station_build_costs` 자리와 같은 결) — 값을
+## 흔들어 보고 아무 일도 안 나면 주석의 「⚠ 소비자 0」을 먼저 봐라. 되살릴 땐 **소비자를 같은 커밋에**.
 
 @export_group("시간")
 ## 하루 전체 길이 (초, 게임 시간)
@@ -20,33 +24,34 @@ extends Resource
 @export var cast_mana_cost: float = 16.0
 
 @export_group("드로잉·잉크")
-## 룬별 기본 마나 (인덱스 = Enums.RuneType: 불=0 / (1=옛 충격, 빈 슬롯) / 물=2 / 바람=3).
-## v2.2: 충격 제거로 인덱스 1은 안 쓰인다 — 배열 값을 유지해 물·바람 인덱스가 안 밀리게 둔다.
+## ⚠ **소비자 0** (세86 실측 — 위 `cast_mana_cost` 주석대로 부품 비용을 합산하는 곳이 없다).
+## 🔴 되살릴 땐 **인덱스로 룬을 짚지 마라**: `Enums.RuneType`은 `[0,2,3,4,5,6]`으로 값이 연속이
+## 아니고(1=옛 충격 구멍) 지금 룬은 6종인데 이 배열은 4칸이다 — 「없는 룬」이 만들어진다.
 @export var rune_mana_base: PackedFloat32Array = PackedFloat32Array([8.0, 6.0, 7.0, 9.0])
-## 화살표 1발당 마나
+## 화살표 1발당 마나. ⚠ 소비자 0 (세86 실측).
 @export var mana_per_arrow: float = 3.0
-## 진 규모 → 마나 가산 (v1.6, TECH_SPEC §4.0). 진이 위력·크기·사거리를 전부 주므로
-## 시전 비용에도 진 축이 붙는다 — 잉크만 물리면 큰 진이 일방적으로 우월해진다
+## 진 규모 → 마나 가산 (v1.6). 진이 위력·크기·사거리를 전부 주므로 시전 비용에도 진 축을
+## 붙이려던 값 — 잉크만 물리면 큰 진이 일방적으로 우월해진다. ⚠ 소비자 0 (세86 실측).
 @export var circle_mana_mult: float = 6.0
 ## magnitude 1.0이 되는 화살표 획 길이 (캔버스 정규).
-## v1.6: magnitude는 **전투 스탯에서 분리됐다** — 기록만 남는다 (문양 종류 도입 시 재사용)
+## v1.6: magnitude는 **전투 스탯에서 분리됐다**. ⚠ 소비자 0 (세86 실측).
 @export var arrow_full_length: float = 0.45
-## 획 길이(정규)당 잉크 소모
-## 먹의 양(길이 × 굵기) → 잉크 단위. **잉크는 통에서 나온 양이다** (v1.8, GDD §4.4).
-## 이 계수 하나가 종이 상한 판정과 제작 비용 **양쪽에 같은 값**으로 쓰인다 — 할증은 없다
+## 획 길이(정규)당 잉크 소모 — 먹의 양(길이 × 굵기) → 잉크 단위. **잉크는 통에서 나온 양이다**(v1.8).
+## 종이 상한 판정과 제작 비용에 **같은 값**으로 쓰라고 둔 계수(할증 없음). ⚠ 소비자 0 (세86 실측 —
+## 세83 그리기 폐지로 획이 안 생긴다. `balance.skip_drawing`을 되돌리면 다시 필요해진다).
 @export var ink_per_stroke_length: float = 10.0
-## 인식 정확도 보정 하한 (GDD §4.4). v1.7: 위력이 아니라 **속성 순도**의 하한이다
+## 인식 정확도 보정 하한. v1.7: 위력이 아니라 **속성 순도**의 하한이다. ⚠ 소비자 0 (세86 실측).
 @export var accuracy_floor: float = 0.6
 ## ⚠ **폐기 — 미사용** (세션 23). 보정은 **바닥값이 없다**: 펜을 안 끼면 0(그린 대로)이고
 ## 보정도는 전적으로 펜 아이템이 준다(`data/items/pen_*.tres`의 params.correction).
 ## 여기 상수를 깔면 맨손에도 보정이 붙어 "자기만의 마법진" 정체성과 어긋난다.
 ## 읽는 곳은 `GameState.stroke_correction()` 하나뿐이고, 이제 그 함수가 이 값을 안 본다.
 @export var stroke_correct_strength: float = 0.55
-## 룬 농도 → 마나 가산 (v1.7, TECH_SPEC §4.0). 진과 같은 이유로 시전 비용에 붙는다 —
-## 안 물리면 "룬은 언제나 최대한 크게"가 유일한 정답이 된다
+## 룬 농도 → 마나 가산 (v1.7). 진과 같은 이유로 시전 비용에 붙이려던 값 —
+## 안 물리면 "룬은 언제나 최대한 크게"가 유일한 정답이 된다. ⚠ 소비자 0 (세86 실측).
 @export var rune_density_mana_mult: float = 4.0
 # ── ⚠ 아래 둘은 **폐기됐다** (v1.8). 스키마에만 남아 있고 **아무도 읽지 않는다** ──
-# 잉크는 통에서 나온 양이므로 **할증을 붙이지 않는다** (GDD §4.4·§5).
+# 잉크는 통에서 나온 양이므로 **할증을 붙이지 않는다**.
 # 큰 진은 둘레가 길어서 **이미** 잉크를 더 먹는다 — 할증은 **이중 과금**이었다.
 # 새 코드에서 이 값을 읽지 말 것. (구세이브 .tres 호환을 위해 필드만 남긴다)
 ## ⚠ 폐기 — 미사용 (v1.5 조준진 폐지로 가산할 대상이 없어짐)
@@ -96,8 +101,11 @@ extends Resource
 @export var multi_rune_share: float = 0.7
 
 @export_group("지팡이 = 발사 패턴 축 (v2.0)")
-# 🔴 **방향·발수·기점은 지팡이의 것이다** (TECH_SPEC §4.0-a). 도안은 "무엇이 나가는가"만 정하고
-# "어디로 몇 발"은 손에 든 지팡이가 정한다. 같은 도안도 지팡이를 바꾸면 다르게 나간다.
+# 🔴🔴 **그룹 이름이 낡았다 — 이 값들의 주인은 이제 「진」이다**(세85, 감사 #5. `@export_group`
+# 문자열은 저장·인스펙터에 걸려 있어 안 건드렸다). 지팡이가 발사 **형태**를 쥐던 축은 은퇴했고
+# (도달 불가였다 — `enums.gd`의 `WandPattern` 주석), 지금 아래 값을 읽는 자리는
+# `ring_spell_system._shot_plan(jin_def.pattern)` **하나**다. 지팡이가 주는 건 스칼라
+# (`wand_speed_mult`·`wand_mana_mult`)뿐이다. ⚠ 형태를 지팡이로 되돌리지 마라 — 소스가 둘이 된다.
 ## 산탄(MULTI) 발수 — 에임을 중심으로 좌우 균등
 @export var wand_multi_count: int = 3
 ## 산탄 총 퍼짐 각도(도) — 발과 발 사이가 아니라 **양 끝 사이**의 각
@@ -129,15 +137,10 @@ extends Resource
 # 🔴 규칙은 `src/core/status_rules.gd`가 쥔다 — 여기는 **수치만**.
 # 🔴 원칙: **단독은 약한 바탕, 조합(반응 산물)이 세다.** 아래 지속시간·배율이 그 차이를 만든다.
 #
-# 🔴🔴 **세션50: `status_power`의 의미가 「세기 배율」로 통일됐다** (전 룬 1.0). 그전엔 룬마다
-# 뜻이 달랐다 — 불 3.0=초당피해 · 물 0.35=감속비율 · 바람 60.0=죽은 값 · 번개/흙/풀은 **아예
-# 안 읽혔다**. 그래서 **특별잉크 증폭(`Db.status_mult_of`)이 룬 절반에만 통했다**(세28~29 경제의
-# 절반이 죽어 있었다). 이제 각 상태의 **기본 수치는 여기 있고**, 룬이 실어 온 배율이 그 위에
-# 곱해진다 — 특별잉크가 6룬 전부에 균일하게 통한다.
-# ⚠ 의미 정리가 목적이지 리밸런스가 아니지만, **감전 연쇄만 실제로 세졌다** (0.6 → 1.8, 3배).
-#   세49엔 `maxf(번개 1.0, 젖음 0.35) × chain 0.6 = 0.6`이었다 — 번개의 1.0은 **아무 데서도
-#   안 읽히던 값**이라 사실상 사고값이었고, 기준으로 삼을 게 못 된다. 증기는 2.4로 보존됐다.
-#   🔴 1.8이 맞는 세기인지는 **사용자가 쏴 봐야** 정해진다.
+# 🔴🔴 **세션50 계약: `RuneDef.status_power`는 「세기 배율」이다**(전 룬 1.0) — 상태의 **기본 수치는
+# 여기** 있고 룬 배율이 그 위에 곱해진다. 룬마다 뜻이 다르면(불 3.0=초당피해·물 0.35=감속비율…)
+# **특별잉크 증폭(`Db.status_mult_of`)이 룬 절반에만 통한다** — 실제로 그랬다. 되돌리지 마라.
+# ⚠ 감전 연쇄 세기(0.6→1.8)만 그 정리로 실제 변했다 — **맞는 값인지는 쏴 봐야 정해진다.**
 ## 🔴 화상 초당 피해의 **기준값** — 실제 DoT = 이 값 × 룬의 status_power(배율).
 ## (세션49까진 `rune_fire.status_power = 3.0`이 곧 초당피해였다 — 그 값을 그대로 옮겼다.)
 @export var status_burn_dot_base: float = 3.0
@@ -198,7 +201,7 @@ extends Resource
 
 @export_group("전투")
 @export var projectile_base_speed: float = 260.0
-## v1.7: 10.0 → 9.0. 위력에서 rune_accuracy(0.6~1.0) 곱을 떼면서(TECH_SPEC §4.0 축 분리)
+## v1.7: 10.0 → 9.0. 위력에서 rune_accuracy(0.6~1.0) 곱을 떼면서(축 분리)
 ## 곱하던 값이 사라져 위력이 통째로 올라갔다 — 잘 그린 도안 +11%, 막 그린 도안 **+67%**.
 ## 축 분리는 의도했지만 **위력 인플레는 의도한 적 없다.** 기준을 0.9배 낮춰
 ## **잘 그린 도안(accuracy≈0.9)의 위력을 v1.6과 같게** 되돌린다.
@@ -219,16 +222,18 @@ extends Resource
 @export var dash_duration_sec: float = 0.2
 @export var dash_cooldown_sec: float = 0.6
 @export var player_hp_max: float = 100.0
-## 탁본 모션 무방비 시간 (GDD §6)
+## 탁본 모션 무방비 시간. ⚠ 소비자 0 (세86 실측 — 필드에서 탁본을 뜨는 모션이 아직 없다).
 @export var rubbing_duration_sec: float = 1.5
 ## 기준 사거리(초). 실제 수명 = 이 값 × 진 사거리 배율
 @export var projectile_lifetime_sec: float = 1.5
 
-# ── 진 = 규모 + **투사체의 모양** 축 (v2.0, TECH_SPEC §4.0) ──
+# ── 진 = 규모 + **투사체의 모양** 축 (v2.0) ──
 # 위력·크기·기준 사거리를 진이 정한다. 셋 다 circle_radius(0..1)를 입력으로 받고,
 # circle_radius 0.5(캔버스 절반)가 기준점 ≈ 1.0배.
-# 🔴 **v2.0: 진이 곧 투사체다** (사용자: "투사체의 모양이 진이라고 끝인데?").
-# 그린 진(+룬) 먹선이 그대로 날아가고 **히트박스가 진 반지름을 따른다**.
+# 🔴🔴 ⚠ **이 그룹은 통째로 소비자 0이다**(세86 실측 — `circle_damage_base`·`circle_size_*`·
+# `circle_range_*`·`circle_radius_px`·`projectile_circle_scale`·`projectile_min_radius_px` 전부).
+# 「그린 진 먹선이 그대로 날아간다」는 v2.0 모델은 **세72에 은퇴했다** — 지금은 마법진이 수식이고
+# (안 날아간다) 해석된 원소 볼이 나간다. 위력은 `ring_power.power_of`가, 몸은 `JinDef.body_scale`이 쥔다.
 ## 위력 배율 = circle_damage_base + circle_radius
 @export var circle_damage_base: float = 0.5
 ## ⚠ **v2.0에서 소비 중단** — 진이 곧 탄이므로 **탄 크기는 진 반지름이 직접 정한다.**
@@ -239,7 +244,8 @@ extends Resource
 ## 사거리 배율 = lerp(min, max, circle_radius) → projectile_lifetime_sec에 곱해진다
 @export var circle_range_min: float = 0.6
 @export var circle_range_max: float = 1.4
-## circle_radius(정규) → 월드 px 스케일. InkRender.unit_px = 이 값 × 2 (§4.4 — 깨지 말 것)
+## circle_radius(정규) → 월드 px 스케일. ⚠ 짝이던 `InkRender`(먹선 몸)는 **세22에 매장됐다** —
+## "InkRender.unit_px = 이 값 × 2" 계약은 지킬 상대가 없다(`projectile.gd` 머리 주석 참조).
 @export var circle_radius_px: float = 48.0
 ## 🔴 **v2.0: 종이 위의 진 → 날아가는 탄**으로 줄이는 배율. 종이에 그린 크기 그대로 날리면
 ## 진 하나가 화면 폭의 상당 부분을 먹는다 (캔버스 절반짜리 진 = 반지름 24px, 적이 32px인 세계에서).
@@ -249,10 +255,11 @@ extends Resource
 ## 없으면 작은 진이 "그렸는데 아무것도 안 맞는" 탄이 된다
 @export var projectile_min_radius_px: float = 4.0
 
-# ── 문양 = 발동 방식 + 세기 축 (v1.9, TECH_SPEC §4.0) — GDD §4.3 ──
-# ArrowData.reach = 문양 획 길이 ÷ 진 반지름. **룬의 rune_fill과 대칭**이다.
-# 정규화 t = inverse_lerp(glyph_reach_min, glyph_reach_max, reach) → 0..1 이 아래 전부의 입력.
-# 사거리는 **진이 기준을 주고 문양이 배율을 정한다** — 축을 도로 뺏지 않는다 (GDD §4.1).
+# ── 문양 = 발동 방식 + 세기 축 (v1.9) — GDD §4 「세 축」 ──
+# reach = 문양 획 길이 ÷ 진 반지름. 정규화 t = inverse_lerp(glyph_reach_min, glyph_reach_max, reach)
+# → 0..1 이 아래 전부의 입력이고, 소비자는 `projectile.reach_t`/`range_mult`다(세86 실측).
+# ⚠ 옛 `ArrowData` 스키마는 없다 — reach는 발사부가 넘기는 인자다.
+# 사거리는 **진이 기준을 주고 문양이 배율을 정한다** — 축을 도로 뺏지 않는다.
 ## reach 하한 — 진을 겨우 뚫고 나간 짧은 문양
 @export var glyph_reach_min: float = 0.6
 ## reach 상한 — 종이 끝까지 길게 뺀 문양 (이 위는 잘린다)
@@ -261,7 +268,7 @@ extends Resource
 @export var glyph_range_min: float = 0.7
 @export var glyph_range_max: float = 1.6
 ## 문양 세기 → 발당 마나 가산 (t에 비례). 진·룬과 같은 이유 —
-## 공짜면 "문양은 언제나 최대한 길게"가 유일한 정답이 된다 (GDD §5)
+## 공짜면 "문양은 언제나 최대한 길게"가 유일한 정답이 된다. ⚠ 소비자 0 (세86 실측).
 @export var glyph_reach_mana_mult: float = 2.5
 ## 팅김⚡ 벽 반사 횟수 = round(lerp(1, max, t)). 길게 그은 팅김이 더 많이 튕긴다
 @export var glyph_bounce_max: int = 4
@@ -278,10 +285,12 @@ extends Resource
 @export var glyph_thrust_speed_min: float = 1.3
 @export var glyph_thrust_speed_max: float = 2.4
 
-# ── 룬 = 속성 농도 축 (v1.7, TECH_SPEC §4.0) — 상태이상 세기를 룬 크기가 정한다 ──
-# 상태이상 세기 = RuneDef.status_power × lerp(density_min, density_max, rune_fill) × rune_accuracy.
-# rune_fill = 룬 bbox 반경 ÷ 진 반지름. 인식기가 "룬은 진 안"으로 가르므로 자연히 0..1이다.
+# ── 룬 = 속성 농도 축 (v1.7) — 상태이상 세기를 룬 크기가 정하려던 축 ──
+# 설계: 상태이상 세기 = RuneDef.status_power × lerp(density_min, density_max, rune_fill).
 # **위력에는 절대 물리지 않는다** — 그건 진의 축이다 (축 위반 방지).
+# 🔴 ⚠ **아래 둘도, 입력인 `rune_fill`도 소비자가 0곳이다**(세86 실측 · `ring_spell_system`이
+# 같은 자리에 적어 뒀다). CLAUDE.md 「남은 빚」의 *"rune_fill의 소비자가 0곳"*이 바로 이것 —
+# 살릴지 접을지 **미결정**이다. 되살릴 땐 곱하는 자리를 하나로 두고 소비자를 같은 커밋에.
 ## 진 구석에 작게 그린 룬 = 옅게 스친다
 @export var rune_density_min: float = 0.5
 ## 진을 꽉 채운 룬 = 깊이 물든다
@@ -346,7 +355,8 @@ extends Resource
 ## ⚠ 잉크 배수와 **겹쳐서** 곱해진다 — 둘 다 데미지라 폭주 주의(사용자와 확인한 지점).
 @export var paper_size_power_exp: float = 1.0
 ## 종이 없이 그릴 때의 기본 진 확대 상한 (= paper_basic의 zoom_max와 맞춘다).
-## 종이를 안 골라도 여기까지는 키울 수 있다 — 종이는 이 상한을 **더** 올리는 것.
+## ⚠ 소비자 0 (세86 실측 — 세71d에 종이 축이 은퇴해 진 규모가 1.0 고정이다,
+## `ring_forge_panel`의 `_size_mult` 주석).
 @export var paper_zoom_max_default: float = 1.16
 ## 특별잉크 획당 소모량 — 그리는 동안 실시간으로 닳는다 (사용자: "그릴 때 실시간으로 소비").
 ## 다 떨어지면 소모·효과 적립 없이 계속 그린다(기본잉크처럼) — 그만큼 비율(효과)이 낮아진다.
@@ -361,11 +371,15 @@ extends Resource
 # 되돌림 = git 이력.
 
 @export_group("경제")
+# 🔴 ⚠ **이 그룹은 통째로 소비자 0이다** (세86 실측 — 넷 다 정의 한 줄씩뿐). 뜻은 아래에 남긴다:
+#   내구·수리 시스템은 아직 없고(도안은 안 닳는다), **해독대는 세85 ⑩에 은퇴했다**.
+#   위 `station_build_costs` 자리와 같은 규약으로 지우지 않고 표시만 한다 — 되살리려면
+#   소비자(수리 UI·해독 진행)를 같은 커밋에 붙여라.
 ## 수리비 = 원본 ink_cost 대비 비율
 @export var repair_cost_frac: float = 0.2
 ## 응급 수리: 비용 배율 (일반 수리비 대비)
 @export var emergency_repair_cost_mult: float = 0.5
 ## 응급 수리: 회복 상한 (durability_max 대비 비율)
 @export var emergency_durability_frac: float = 0.3
-## 해독 소요 (플레이 시간, GDD §6 — 약 10분)
+## 해독 소요 (플레이 시간 — 약 10분). ⚠ 해독대 자체가 은퇴했다(세85 ⑩).
 @export var research_time_sec: float = 600.0

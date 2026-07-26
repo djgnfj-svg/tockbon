@@ -1,5 +1,5 @@
 extends Area2D
-## 기둥 — v2.1 (TECH_SPEC §4.0-b). 모듈 B. class_name 없음 — preload로 참조할 것.
+## 기둥 — v2.1. 모듈 B. class_name 없음 — preload로 참조할 것.
 ##
 ## 🔴 **기둥은 규칙이 아니라 결과다.** 아무도 "기둥을 만들어라"라고 하지 않는다 —
 ## **응집(←) 칸이 모인 착탄점**에 선다 (ring_spell_system._spawn_pillar, 옛 충격파 수렴 모델은 은퇴).

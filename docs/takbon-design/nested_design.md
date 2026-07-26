@@ -6,9 +6,21 @@
 > **살아있는 것 = 참고 자산뿐**: ①의 코드 인벤토리(`projectile.rune_hits`·`ring_carrier.deployed` 실사) + rune_fill 소비자
 > 0곳 진단 + "원소 반응(status_holder) = jin_interpretation ②「진 규칙」의 한 인스턴스(융합진)"라는 흡수. 삭제는 안 함(이 자산 때문).
 >
+> ⚠🔴 **세87 실측 — 남은 8개 결정점 중 살아있는 건 둘뿐이다.** 삭제 후보로 올랐다가 **존치**로 결론났다
+> (`CLAUDE.md`·`docs/PROGRESSION.md:115`·memory `takbon-stage-format-decision`이 아직 이 문서를 가리킨다).
+> - ❌ **#4 복합 룬 = 해소됨** — 세81 M2가 `JinDef.rune_slots`로 실현했다(`src/core/schemas/jin_def.gd:31` ·
+>   `data/jin/jin_fuse.tres:11 rune_slots = 2` · 합산은 `ring_spell_system._fire_hit`의 share).
+>   ⚠ 그래서 `docs/PROGRESSION.md:115`의 「rune_slots 축 신설(미구현)」은 **사실이 틀렸다** — 이미 구현됐다.
+> - ❌ **아래 ① 코드 인벤토리는 낡았다** — "평평하다: `rune:int` 하나"라 적었지만 지금
+>   `RingDesign`은 `runes: Array`와 `runes_of()`를 든다(세81). 인벤토리를 근거로 쓰지 마라.
+> - ✅ **#5 `rune_fill` 입력 수단** = 살아있는 미결. CLAUDE.md 「남은 빚」이 *"살릴지 접을지 결정 필요"*라고만
+>   적고 **입력 수단 안은 이 문서에만 있다**(그래서 안 지웠다).
+> - ✅ **#7** = 살아있는 미결.
+>
 > takbon-architect(nested-design) 산출물. 코드 없음 — 설계안만.
-> 정본 대조: memory `takbon-nested-circle-model` · `docs/WAND_CIRCLE.md` · takbon-rules 스킬 읽음.
-> 아래 "검증한 것"은 전부 현재 코드를 직접 Read/Grep으로 확인한 사실이다.
+> 정본 대조: memory `takbon-nested-circle-model` · takbon-rules 스킬 읽음.
+> (⚠ 옛 대조처 `docs/WAND_CIRCLE.md`는 **삭제돼 없다** — 진실원 = `docs/GDD.md`.)
+> 아래 "검증한 것"은 **세?? 당시** 코드를 Read/Grep으로 확인한 사실이다 — 위 ⚠대로 지금은 일부 낡았다.
 
 ---
 

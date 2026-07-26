@@ -1,7 +1,10 @@
 extends Node2D
-## 챕터 보스방 (세58-B 세피리아식 메인 루프) — forest.gd의 원정 계약을 물려받은 축소판.
+## 챕터 보스방 (세58-B 세피리아식 메인 루프) — 옛 `forest.gd`의 원정 계약을 물려받은 축소판.
+## ⚠ 아래에서 「forest.gd·forest.tscn 이관」으로 부르는 두 파일은 **세58-B에 삭제됐다**
+## (찾지 마라 — 필요하면 git 이력). **원정 계약의 라이브 정본은 이 파일이다.**
 ##
-## 루프: 베이스 숲길 [E] → 챕터 선택 → 이 방(보스 하나) → 처치 → 상자 루팅 → 포탈 [E] → 베이스.
+## 루프: 베이스 숲길 [E] → 챕터 선택 → 이 방(보스 + 잡몹) → 처치 → 낱개 드롭 줍기 → 포탈 [E] → 베이스.
+## ⚠ 「상자 루팅」 단계는 없다 — 상자는 세66에 은퇴했고 모든 적이 낱개로 떨군다(`forest_enemy._spawn_loose`).
 ## 죽으면 즉시 베이스 + 가방 손실(bag_lost). 어느 챕터인가는 `GameState.pending_chapter`가 나른다
 ## (change_scene_to_file이 인자를 못 실어 오토로드가 나른다 — in_expedition과 같은 결).
 ##
@@ -42,7 +45,7 @@ const PortalScene := preload("res://src/props/portal.tscn")
 
 ## 쓰러진 뒤 베이스로 돌아가기까지 (초) — 연출값. 0이면 뭘 맞고 죽었는지 못 보고 화면이 바뀐다.
 const DEATH_BEAT_SEC := 0.9
-## 귀환 포탈이 보스가 죽은 자리에서 비켜 서는 거리 — 상자(보스 자리에 떨어진다)와 안 겹치게 (연출값).
+## 귀환 포탈이 보스가 죽은 자리에서 비켜 서는 거리 — 보스 자리에 흩어지는 낱개 드롭과 안 겹치게 (연출값).
 const PORTAL_OFFSET := Vector2(88.0, 0.0)
 
 @onready var _ground: ColorRect = $Ground
@@ -183,7 +186,7 @@ func _on_enemy_died(enemy_id: StringName) -> void:
 	_hud.say("%s 클리어!%s 포탈에서 E로 귀환하라" % [_chapter.title, reward_line], false, true)
 
 
-## 귀환 포탈 — 보스가 죽은 자리 옆에 스폰 (상자가 보스 자리에 떨어지므로 PORTAL_OFFSET만큼 비킨다).
+## 귀환 포탈 — 보스가 죽은 자리 옆에 스폰 (드롭이 그 자리에 흩어지므로 PORTAL_OFFSET만큼 비킨다).
 ## enemy_died 발신 시점엔 보스 노드가 아직 살아 있다(queue_free 전) — 위치를 여기서 읽을 수 있다.
 func _spawn_return_portal() -> void:
 	var portal := PortalScene.instantiate() as InteractZone
@@ -221,8 +224,8 @@ func _on_hp_changed(hp: float, _hp_max: float) -> void:
 ## 🔴 **사망 후 HP 복구를 쥐는 건 이 함수다** (세84 감사 #37). HP는 오토로드(GameState)가 쥐고
 ## 세이브에 없어서, 예전엔 되돌리는 경로가 **어디에도 없었다** — 베이스로 걸어 나가는 몸이 HP 0이었다
 ## (마을에 피해원이 0곳이라 표시 문제로만 보였지, 피해원이 하나 생기는 날 즉사 버그가 된다).
-## ⚠ **「출격 = 만HP」의 단일 소스는 `_ready`**(base.gd:217이 *"출격이 HP를 되돌리지 않는다 — 그건
-## 보스방이 한다"*고 선언한다). 그래서 복구도 베이스가 아니라 **여기**가 쥔다 — 베이스에 두면
+## ⚠ **「출격 = 만HP」의 단일 소스는 `_ready`**(`base._open_chapter_panel` 위 주석이 *"출격이 HP를
+## 되돌리지 않는다 — 그건 보스방이 한다"*고 선언한다). 그래서 복구도 베이스가 아니라 **여기**가 쥔다 — 베이스에 두면
 ## 「베이스를 거쳐 들어올 때만」 맞고 다른 진입 경로에선 조용히 달라진다(그 주석이 경고한 그 함정).
 ## 🔴 복구는 **연출(DEATH_BEAT_SEC) 뒤**다: 먼저 되돌리면 「쓰러졌다」를 띄운 채 HP 막대가 꽉 차
 ## "안 죽었다"로 읽힌다. 되돌리는 emit이 `_on_hp_changed`를 다시 태우지만 `_leaving` 가드가 막는다.

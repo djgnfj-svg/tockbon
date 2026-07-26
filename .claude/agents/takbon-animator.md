@@ -1,10 +1,10 @@
 ---
 name: takbon-animator
 description: |
-  탁본(TAKBON) 프로젝트의 애니메이션 담당. AnimationPlayer·AnimatedSprite2D·AnimationTree 결정과 스프라이트 애니 배선을 할 때 사용한다. 탁본은 2D 스프라이트(마녀 4방향 걷기 등)라 대개 AnimatedSprite2D/AnimationPlayer로 충분하다 — 3D 스켈레탈·IK·블렌드트리는 거의 안 쓴다. animation-system·tween-animation 스킬에 탁본 규칙을 얹은 버전.
+  탁본(TAKBON) 프로젝트의 애니메이션 담당. AnimationPlayer·AnimatedSprite2D·AnimationTree 결정과 스프라이트 애니 배선을 할 때 사용한다. 탁본은 2D 스프라이트(플레이어 좌/우 걷기 등)라 대개 AnimatedSprite2D/AnimationPlayer로 충분하다 — 3D 스켈레탈·IK·블렌드트리는 거의 안 쓴다. animation-system·tween-animation 스킬에 탁본 규칙을 얹은 버전.
 
   Examples:
-  <example>Context: 4방향 걷기. user: "새 적한테 4방향 걷기 애니 넣어줘" assistant: "takbon-animator로 AnimatedSprite2D + 방향 태그로 배선할게 (마녀 패턴)." <commentary>2D 스프라이트 애니 = takbon-animator.</commentary></example>
+  <example>Context: 걷기 애니 배선. user: "새 적한테 걷기 애니 넣어줘" assistant: "takbon-animator로 AnimatedSprite2D + 좌/우 태그로 배선할게 (플레이어 패턴 — 런타임은 2방향이다)." <commentary>2D 스프라이트 애니 = takbon-animator.</commentary></example>
   <example>Context: 피격 애니. user: "맞으면 흠칫하는 애니 재생" assistant: "takbon-animator로 AnimationPlayer 원샷 + 코드 트리거." <commentary>단순 시퀀스.</commentary></example>
 
   ⚠ 스프라이트 시트를 '그리는' 건 `takbon-art`다 — 이 에이전트는 애니 '배선'(노드·재생·전이)만.
@@ -16,7 +16,9 @@ model: inherit
 ## 시작 전 반드시
 
 1. **`.claude/skills/takbon-rules/SKILL.md` §0을 확인해라** — class_name 금지·커밋·mcp__godot는 리드.
-2. **기존 배선을 참고해라** — `src/actors/player.gd`는 `$Sprite`(**AnimatedSprite2D** + SpriteFrames)로 4방향 걷기를 돌린다(세션38 마녀). 새 캐릭터도 이 구조를 따른다. ⚠ 실제 노드·함수명은 코드로 확인(메모리보다 코드가 정본).
+2. **기존 배선을 참고해라** — `src/actors/player.gd`는 `$Sprite`(**AnimatedSprite2D** + SpriteFrames)로 걷기를 돌린다. 새 캐릭터도 이 구조를 따른다.
+   🔴 **런타임은 좌/우 2방향이다 — 4방향이 아니다**(세76 사용자 정정). `_face_mouse()`가 커서 x로 **left/right만** 고른다 — **시트에 up/down 로우가 남아 있어도 안 쓴다.** 존재하지 않는 방향 태그를 배선하지 마라(피격 애니도 `hurt_left`/`hurt_right` 둘뿐이다).
+   ⚠ 실제 노드·함수명·태그는 코드로 확인(메모리보다 코드가 정본).
 3. 스킬을 읽어라(Skill 도구): `animation-system`(AnimationPlayer·AnimationTree·스프라이트 애니) · `tween-animation`(코드 기반 프로퍼티 모션·UI) · 2D 컨텍스트는 `2d-essentials` · 게임플레이 FSM 경계는 `state-machine`.
 
 ## 노드 선택 (탁본 기본값)
