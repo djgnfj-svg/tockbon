@@ -43,8 +43,10 @@ var _move_vel := Vector2.ZERO  ## 입력 구동 속도(밀림 제외) — 램프
 
 ## 🔴 피격 애니 (세63) — `EventBus.player_hurt`(발신 = `GameState.damage_player` 한 곳)를 받아
 ## HURT_ANIM_SEC 동안 hurt 프레임을 유지한다. 이동은 안 막는다(경직 아님 — apply_push additive 철학).
-## 복구 코드는 없다: `_face_mouse`가 매 프레임 animation을 덮는 성질을 역이용해, 타이머가 소진되면
-## 다음 프레임에 자연 복귀한다. HURT_ANIM_SEC는 연출값(손맛) const다 (PUSH_DECAY 선례 — 밸런스 아님).
+## 복구 코드는 없다: `_apply_anim`이 매 프레임 우선순위를 다시 계산하므로 타이머가 소진되면 자연 복귀한다
+## (⚠ 세90까지 이 주석은 *"`_face_mouse`가 덮는 성질을 역이용"*이라고 적혀 있었다 — 그 함수는 이제 없다.
+##  복구가 **우선순위 한 곳**에서 나온다는 게 지금의 계약이다).
+## HURT_ANIM_SEC는 연출값(손맛) const다 (PUSH_DECAY 선례 — 밸런스 아님).
 const HURT_ANIM_SEC := 0.25    ## 피격 프레임 유지 시간(s)
 var _hurt_time := 0.0          ## 남은 피격 표시 시간(>0이면 hurt 애니 유지)
 
@@ -64,30 +66,28 @@ func _on_hurt(_amount: float, _source_pos: Vector2) -> void:
 func is_rolling() -> bool:
 	return _roll_time > 0.0
 
-## 🔴 좌우 향함은 **마우스가 정한다** (세션43 — 조준하는 게임이라 몸이 커서를 본다).
-## 이동·구르기와 무관하게 매 프레임: 커서가 오른쪽이면 right·왼쪽이면 left. 가만히 서서
-## 커서만 옮겨도 홱 돈다. up/down 로우는 이제 안 쓴다(시트에 남아도 무해 — 뒷태 안 그리기).
-func _face_mouse() -> void:
-	var a: StringName = &"right" if get_global_mouse_position().x >= global_position.x else &"left"
-	if sprite.animation != a:
-		sprite.animation = a
-
-
-## 피격 중 향한 쪽의 hurt 프레임 유지 — left 계열이면 hurt_left, 아니면 hurt_right
-## (down/up 잔재도 오른쪽으로 — 좌우는 마우스가 정하는 게임이라 첫 프레임부터 좌우만 남는다).
-func _hold_hurt_anim() -> void:
-	var left := sprite.animation == &"left" or sprite.animation == &"hurt_left"
-	var a: StringName = &"hurt_left" if left else &"hurt_right"
-	if sprite.animation != a:
-		sprite.animation = a
-
-## 걷기 재생/정지 — 걸을 때만 2프레임 까딱, 멈추면 첫 프레임(정지 포즈)으로.
-func _set_walking(moving: bool) -> void:
-	if moving:
-		sprite.play()
-	else:
-		sprite.pause()
+## 🔴🔴 **세90: 애니 = `idle` · `run` · `hurt` 셋이고 방향 분기가 없다.**
+##
+## 옛 `left`/`right`는 **완전히 같은 그림이었다** — 세90 실측으로 두 셀의 픽셀 차이가 **0**이었다.
+## penzilla 원본 시트(`assets/_source/penzilla_hooded/`)가 **정면뿐**이라 세76의 「런타임 2방향」이
+## 그림에는 처음부터 없었다(코드만 방향을 갈랐다 = 감사 T8의 거울: 표시부가 아니라 **데이터가** 뒤처졌다).
+## 좌우 방향감은 떠있는 지팡이(`floating_wand`)의 조준 회전이 준다.
+## ⚠ 측면 스프라이트를 그리게 되면 여기서 방향을 되살린다(옛 `_face_mouse` = git 이력 세89 이전).
+##
+## 🔴 **애니를 정하는 자리를 한 곳으로 모았다.** 그전엔 `_face_mouse`(방향) · `_set_walking`(play/pause) ·
+## `_hold_hurt_anim`(피격) **셋이 매 프레임 같은 속성을 덮어썼고**, hurt 복구를 *"`_face_mouse`가 매
+## 프레임 animation을 덮는 성질을 역이용"*한다고 주석에 적어 뒀다 — 셋 중 하나의 호출 순서만 바뀌어도
+## 조용히 어긋나는 구조였다. 우선순위(hurt > run > idle)는 이제 이 함수 안에만 있다.
+func _apply_anim(moving: bool) -> void:
+	var want: StringName = &"hurt" if _hurt_time > 0.0 else (&"run" if moving else &"idle")
+	if sprite.animation != want:
+		sprite.animation = want
 		sprite.frame = 0
+	# 🔴 **늘 재생 상태로 둔다 — `idle`도 숨쉬는 애니다.** 옛 코드는 멈춰 서면 `pause()` + `frame = 0`으로
+	#   굳혀서 「정지 = 완전 정지」였고, 그게 뻣뻣함의 절반이었다. 나머지 절반은 **걷기 칸에 원본 idle
+	#   두 장이 들어 있던 것**이다(세90 실측) — 즉 걸을 때도 서 있을 때도 같은 그림이 나왔다.
+	if not sprite.is_playing():
+		sprite.play()
 
 ## 🔴 속도는 balance가 쥔다 (수치를 코드에 박지 않는다 — data/balance.tres가 정본).
 ## 🔴 UI 모달(창고 등)이 열리면 멎는다 — 안 그러면 창고를 보는 동안 뒤에서 계속 걸어간다.
@@ -99,13 +99,8 @@ func _physics_process(delta: float) -> void:
 	if GameState.ui_modal_open:
 		velocity = Vector2.ZERO
 		_move_vel = Vector2.ZERO   # 램프도 리셋 — 모달 닫을 때 잔여 속도로 미끄러지지 않게
-		_set_walking(false)
+		_apply_anim(false)
 		return
-
-	if _hurt_time > 0.0:
-		_hold_hurt_anim()   # 피격 중엔 _face_mouse·_set_walking을 건너뛰어 hurt 프레임을 지킨다
-	else:
-		_face_mouse()   # 🔴 마우스 쪽 좌우 향함 — 이동·구르기와 무관하게 매 프레임
 
 	if _roll_cd > 0.0:
 		_roll_cd -= delta
@@ -139,7 +134,8 @@ func _physics_process(delta: float) -> void:
 	# 밀림(_push)은 이동 위에 얹는다(additive) — 구르기 중엔 위 early-return이라 밀림 무시(흘린 게 맞다).
 	velocity = _move_vel + _push
 	_push = _push.move_toward(Vector2.ZERO, PUSH_DECAY * delta)
-	# 걷기 애니는 실제 이동(_move_vel)에 맞춘다 — 입력을 떼도 감속하며 미끄러지는 동안 발이 움직인다.
-	if _hurt_time <= 0.0:
-		_set_walking(_move_vel.length() > 8.0)
+	# 애니는 실제 이동(_move_vel)에 맞춘다 — 입력을 떼도 감속하며 미끄러지는 동안 발이 움직인다.
+	# 🔴 `_hurt_time` 가드를 **여기 두지 않는다** — 우선순위는 `_apply_anim` 안 한 곳으로 모았다.
+	#   옛 코드는 가드가 이 자리에 있고 hurt 전환은 위쪽에 따로 있어서 **두 자리가 같은 규칙을 나눠 갖고** 있었다.
+	_apply_anim(_move_vel.length() > 8.0)
 	move_and_slide()

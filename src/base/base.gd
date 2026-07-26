@@ -52,13 +52,11 @@ extends Node2D
 ##    (같은 이유로 HUD도 IGNORE다 — hud.gd `_ready` 참조.)
 
 const RingForgePanelScript := preload("res://src/drawing/ring_forge_panel.gd")
-## 정제대 패널 (세션29) — 재료→특별잉크·종이. 책과 달리 base를 안 물어 preload가 안전(순환 아님).
-const RefinePanelScene := preload("res://src/base/refine_panel.tscn")
-## 공방 패널 (세션32) — 재료→장비 + 착용/해제. 정제대와 같은 이유로 preload가 안전.
-const WorkshopPanelScene := preload("res://src/base/workshop_panel.tscn")
-## 상점 패널 (세66 도파민 재편) — 돈(coin)→잉크. 정제대·공방과 같은 이유로 preload가 안전.
-## 🔴 세66-2: 해독대(decode)는 은퇴했다 — 룬 획득 통로가 「조각→해독」에서 「퀘스트 턴인」으로 옮겨간다(설계 D).
-const ShopPanelScene := preload("res://src/base/shop_panel.tscn")
+## 🔴🔴 **세90: 정제대·공방·매점 패널 preload 셋을 걷었다** — 마을에서 그 건물 셋을 뺐으므로
+##   여는 [E]가 없다(아래 `STATION_UNLOCKS` 머리말 = 되살리는 절차의 정본).
+##   ⚠ **패널 스크립트·씬(`refine_panel`·`workshop_panel`·`shop_panel`)과 레시피 데이터는 살아 있다** —
+##   지운 건 「마을에서 그걸 여는 길」뿐이다. 그래서 `test_workshop_auto`는 그대로 그린이다
+##   (그 그물은 패널을 직접 열어 재고, 마을을 안 지난다).
 const InteractZone := preload("res://src/actors/interact_zone.gd")
 const Player := preload("res://src/actors/player.gd")
 const Hud := preload("res://src/hud/hud.gd")
@@ -87,18 +85,28 @@ const ChapterPanel := preload("res://src/hud/chapter_panel.gd")   # 캐스트 �
 
 ## 🔴 게이트 표 — {씬 노드 이름: codex 해금 id}. 해금 전 = 잔해(잠김) · 해금 후 = 온전(열림).
 ##
-## 🔴🔴 **매점(Shop)·책상(Desk)이 일부러 여기 없다.** 게이트는 「열어 주는 열쇠가 있을 때만」 건다:
-##   • `station_shop`을 **쏘는 곳이 한 곳도 없다**(세89에 인터림 브리지를 걷으면서 생산자가 0이 됐다).
-##     표에 넣으면 매점이 **영영 잠긴다** — 게다가 기존 세이브엔 옛 브리지가 심어 둔 값이 남아 있어
-##     **F5로는 안 드러난다**(새 게임에서만 죽는다) = 이 프로젝트가 제일 비싸게 배운 형태의 침묵.
-##   • 책상(=서고)은 첫 퀘스트 `q00`이 거기서 정산되므로 잠그면 **게임이 시작 즉시 막힌다**
-##     (설계 §1-말 — 「문과 서고 둘만 살아남았다」가 이 기술 제약을 세계관으로 받아들인 것이다).
-## → 건물 목록·순서 설계가 오면 **여기 한 줄 + 그 퀘스트의 `reward_unlock` 한 줄**이면 붙는다.
-##   그물 = `test_quests_auto`의 「잠근 건물엔 여는 열쇠가 있어야 한다」(이 표를 직접 읽는다).
-const STATION_UNLOCKS: Dictionary = {
-	"Refine": &"station_refine",   # q03 정산 → 연금술 실습동
-	"Craft": &"station_craft",     # q04 정산 → 마도구 공방
-}
+## 🔴🔴 **세90: 표가 비었다 — 「마을 되살리기」는 데이터가 없어 잠들어 있다(은퇴가 아니다).**
+##   사용자 확정으로 마을을 **「캐릭 + 마법문 + 마법 제작대(책상)」 셋**으로 줄이면서 게이트 대상이던
+##   정제대(`Refine`)·공방(`Craft`)을 `base.tscn`에서 뺐다. 표는 **노드 이름으로 찾으므로 노드가
+##   없으면 조용히 no-op**이라, 옛 두 줄을 남겨 두면 T3(소비자 없는 거짓 손잡이)가 된다 → 비웠다.
+##
+##   ✅ **기계는 전부 살아 있다** — `_on_station_unlocked` · `_refresh_stations` ·
+##   `_apply_station_state`(monitoring 잠금 + 잔해/온전 전환) · `_refresh_village_tint`.
+##   프롭 씬(`refine_station.tscn`·`craft_station.tscn`·`shop_station.tscn`)도 `Ruin` 자식과
+##   잔해 PNG를 그대로 들고 있고, 패널·레시피 데이터도 안 지웠다.
+##
+## 🔴 **되살리는 절차 (정본 — 세 곳이 한 덩어리다)**:
+##   ① `base.tscn`에 그 프롭 노드를 다시 꽂는다(ExtResource + node 한 블록).
+##   ② 여기 표에 `{"노드이름": &"station_*"}` 한 줄.
+##   ③ 그걸 여는 퀘스트의 `reward_unlock`에 같은 id 한 줄.
+##   ④ `_ready`에 `interacted.connect(...)` 한 줄 + 그 패널을 여는 함수(git 이력에 있다: 세89 커밋).
+##   🔴🔴 **②만 하고 ③을 빠뜨리면 그 건물은 영영 잔해**인데 **기존 세이브엔 옛 값이 남아 F5로는
+##   안 드러난다**(새 게임에서만 죽는다) = 이 프로젝트가 제일 비싸게 배운 형태의 침묵.
+##   그물 = `test_quests_auto`의 「열쇠와 문이 짝이 맞는다」가 **양방향으로** 잰다.
+##
+## ⚠ **`Dusk`(마을 색조)는 이제 씬 값에서 안 움직인다** — `_refresh_village_tint`가 빈 표에서
+##   return하므로 `TINT_RUINED`(옅은 회보라)로 고정이다. 되돌릴 건물이 0채라 그게 맞는 상태다.
+const STATION_UNLOCKS: Dictionary = {}
 
 ## 온전할 때만 보이는 자식 — 잔해 위에 상인(`Keeper`)이 서 있으면 안 된다(설계 §5 #4).
 ## 🔴 `LightPool` = 되살아난 건물 발밑의 빛 웅덩이(설계 §3 *"건물마다 발밑에 빛 웅덩이 하나"*).
@@ -133,9 +141,6 @@ const TINT_WHOLE := Color(1.0, 1.0, 1.0)       ## 마을이 돌아왔다 — 중
 
 @onready var _desk: InteractZone = $Desk
 @onready var _gate: InteractZone = $ForestGate
-@onready var _refine_zone: InteractZone = $Refine
-@onready var _craft_zone: InteractZone = $Craft
-@onready var _shop_zone: InteractZone = $Shop
 @onready var _npc: InteractZone = $Npc
 @onready var _player: Player = $Player
 @onready var _hud: Hud = $Hud/Hud
@@ -148,12 +153,11 @@ const TINT_WHOLE := Color(1.0, 1.0, 1.0)       ## 마을이 돌아왔다 — 중
 # 🔴 길잡이 머리 위 물음표 (세션40) — 정산할 퀘스트가 있을 때만 보인다. 근접(Prompt)과 별개로 늘 뜬다.
 @onready var _npc_mark: Label = $Npc/Mark
 
-## 🔴 한 번에 하나의 모달만 — 책·정제대·공방이 같은 `_overlay` 슬롯을 쓴다. 하나 열려 있으면 다른 건 안 열린다.
+## 🔴 한 번에 하나의 모달만 — `_overlay` 슬롯이 비어 있어야 새 패널이 열린다.
+## ⚠ 세90에 마을 상호작용이 책상 하나로 줄어 지금 이 슬롯을 쓰는 건 책(`_forge`)뿐이다 —
+##   **슬롯 규약은 그대로 둔다**(정제대·공방을 되살리면 그날 다시 셋이 다툰다).
 var _overlay: CanvasLayer = null
 var _forge: RingForgePanelScript = null
-var _refine: Control = null
-var _workshop: Control = null
-var _shop: Control = null
 ## 🔴 온보딩 그리기 튜토 대사 (세션41) — 첫 마법 전 NPC가 개념을 가르친다. 이 베이스 방문에 한 번만.
 var _dialogue: CanvasLayer = null
 var _draw_tut_shown := false
@@ -173,12 +177,9 @@ func _ready() -> void:
 	_setup_camera()
 	_desk.interacted.connect(_open_drawing)
 	_gate.interacted.connect(_open_chapter_panel)
-	# 🔴 스테이션 존은 **늘 잇는다** — 문을 여닫는 손잡이는 연결이 아니라 `monitoring`이다
-	#   (`_apply_station_state` 주석: 연결을 끊었다 이었다 하면 세50의 「콜백이 영영 죽는」 함정을 심는다).
-	#   세37 「빈 거점 재료 건설」(_station_interact가 station_* codex를 **사서** 여는 구조)은 세66에 은퇴했다.
-	_refine_zone.interacted.connect(_open_refine_panel)
-	_craft_zone.interacted.connect(_open_workshop_panel)
-	_shop_zone.interacted.connect(_open_shop_panel)
+	# 🔴 세90: 정제대·공방·매점 연결 셋을 걷었다 (그 노드가 씬에 없다 — `STATION_UNLOCKS` 머리말).
+	#   ⚠ 되살릴 땐 **연결은 늘 잇고** 여닫는 손잡이는 `monitoring`으로 해라 — 연결을 끊었다 이었다
+	#   하면 세50의 「리페어런팅 시 콜백이 영구히 죽는」 함정을 심는다(`_apply_station_state` 주석).
 	# 길잡이 NPC (세션37→40) — E로 그 자리서 정산하고(claim) 목표 패널을 연다.
 	_npc.interacted.connect(_on_npc_talk)
 	_player.caster.notice.connect(_hud.say)
@@ -202,6 +203,9 @@ func _ready() -> void:
 	#   `_ready`(초기 상태 반영)와 `codex_unlocked`(전환) **둘 다** 필요하다: 수신만 있으면
 	#   「이어하기」가 되살린 건물을 잔해로 띄우고, 초기화만 있으면 퀘스트를 정산해도 **그 방문 내내
 	#   잠긴 채**다(마을을 나갔다 와야 열린다 = 에러 없는 침묵).
+	# ⚠ **세90: 지금 `STATION_UNLOCKS`가 비어 둘 다 no-op이다** — 배선은 **일부러 남긴다.**
+	#   표에 한 줄이 돌아오는 순간 되살리기가 그대로 살아나야 하고, 이 두 줄이 그 조건이다
+	#   (걷어 두면 「표만 채웠는데 아무 일도 안 일어난다」를 다음 세션이 다시 디버깅한다).
 	EventBus.codex_unlocked.connect(_on_station_unlocked)
 	_refresh_stations()
 	#
@@ -210,13 +214,12 @@ func _ready() -> void:
 	#   건설이 은퇴(세66)했는데 q03·q04가 그걸 `UNLOCK` 목표로 삼고 있어서, 안 심으면 온보딩 사슬이
 	#   막혔기 때문이다. 즉 **퀘스트가 자기 완료 조건을 스스로 심는 순환**이었다.
 	#   세89에 방향을 뒤집었다: **퀘스트를 깨면 건물이 저절로 선다**(`QuestDef.reward_unlock`).
+	#   🔴 **되살리지 마라** — 브리지가 있으면 표에 건물을 올려도 codex가 이미 심겨 있어 **잔해 단계가
+	#   조용히 통째로 건너뛰어진다**(그런데 새 게임에서만 드러난다).
 	#
-	#   🔴 **셋은 한 덩어리였다** — 브리지 제거 · q03/q04 재작성 · 위 `STATION_UNLOCKS` 소비자 신설.
-	#   따로 하면 그 사이 빌드가 **달성 불가 퀘스트 + 영구 점등 [!]**를 갖는다. 세85가 `station_decode`
-	#   시드와 `q05_build_decode.tres`를 **같은 커밋**에서 걷어 이 사고를 피한 게 선례다.
-	#   ⚠ q05의 보상 `mat_night_bloom ×2`는 그때 **q04로 합쳤다**(온보딩 총 보상량 보존, 사용자 확정) —
-	#     q04를 재작성하면서도 그 보상량은 그대로 옮겼다(`test_quests_auto`가 잰다).
-	#   ⚠ `station_shop`은 이제 **아무도 안 쏜다** → 그래서 매점은 게이트하지 않는다(`STATION_UNLOCKS` 주석).
+	# ⚠ **세90: q03·q04는 이제 건물을 되돌리지 않는다** — 정제대·공방이 마을에서 빠져
+	#   `reward_unlock`을 비웠다(보상은 재료만). 사슬(KILL 5 → EXTRACT 2)과 재료 보상량은 무변경이고,
+	#   q05→q04로 옮긴 `mat_night_bloom ×2`도 그대로다(`test_quests_auto`가 잰다).
 	# 🔴 온보딩 (세션41) — 첫 마법을 아직 안 그렸으면 길잡이로 유도한다 (q00 완료되면 안 뜬다).
 	if not GameState.is_quest_done(&"q00_first_draw"):
 		# 🔴 세84 #36: `sticky` — 온보딩 **목표**다(경고가 아니다). 수명이 붙은 뒤엔 안 붙이면
@@ -242,17 +245,18 @@ func _build_campus() -> void:
 	#
 	# 🔴🔴 **여기와 `base.tscn` 배치는 한 몸이다.** 밴드만 옮기면 길이 건물과 어긋나고, 씬만 옮기면
 	#   건물이 잔디 위에 뜬다 — 설계 §6이 「바뀌는 것 여섯」에 ②(씬)와 ④(이 배열)를 따로 센 이유다.
-	# 🔴 캠퍼스는 **서쪽 = 폐허 / 동쪽 = 살아남은 것**으로 갈라 놨다. 스폰이 문 앞(서쪽)이라
-	#   첫 화면에는 문 + 잔해 셋만 들고, 온전한 서고·매점은 동쪽으로 밀려 화면 밖이다
-	#   (설계 §4 *"첫 화면에 색을 가진 것은 문과 플레이어뿐"*). 그물 = `test_base_auto [11]`.
+	#
+	# 🔴🔴 **세90: 마을을 셋으로 줄여 길도 두 줄로 줄였다.** 옛 배열은 7줄로 캠퍼스를 가로질러
+	#   **동쪽 안뜰·매점 분기·서고 분기**까지 깔았는데, 그 건물들이 씬에서 빠지자 **길만 잔디 위로
+	#   1.7km 뻗어 아무 데도 안 닿는** 상태가 됐다(에러 0 = 감사 T5의 그 자리, 세89에 무늬 자국이
+	#   같은 병으로 잔디 한복판에 떴다). 남은 둘은 실제로 **가는 곳이 있는** 길이다.
+	# 🔴 **한 장으로 깐다.** 두 사각형으로 마당+진입로를 만들어 봤더니 겹치는 자리에서 **직각 계단이
+	#   크게 튀었다**(실측 스샷) — 밴드가 7개였던 세89엔 각 조각이 작아 「길」로 읽혔지만, 마을이 셋으로
+	#   줄어 조각도 커지자 그 모양이 「길」이 아니라 「잘못 깐 바닥」이 됐다. 지금 마을 = **문 앞 광장 하나**다.
+	# ⚠ 범위는 **남은 다섯을 다 덮도록** 잡았다: 문(200,820)·길잡이(560,700)·기념비(620,920)·
+	#   책상(860,840)·허수아비(395~470, 968~1132). 하나를 옮기면 여기도 같이 본다(위 「한 몸」 주석).
 	var bands: Array[Rect2] = [
-		Rect2(240, 792, 560, 296),     # 정문 마당: 문 앞 폐허 광장 (기념비가 한복판, 연습장이 남쪽)
-		Rect2(596, 700, 128, 128),     # 공방 잔해 진입로 (마당 → 북쪽)
-		Rect2(700, 1000, 240, 100),    # 실습동 잔해 진입로 (마당 → 남동)
-		Rect2(760, 864, 1180, 128),    # 수평 척추: 정문 마당 ↔ 안뜰 ↔ 매점
-		Rect2(1200, 700, 400, 400),    # 중앙 안뜰(plaza) — 살아남은 서고 앞
-		Rect2(1336, 596, 128, 168),    # 서고 분기
-		Rect2(1756, 796, 128, 128),    # 매점 분기
+		Rect2(200, 660, 760, 440),     # 문 앞 폐허 광장 — 이게 지금 마을의 전부다
 	]
 	for band in bands:
 		_fill_road(band, Vector2i(0, 1))
@@ -553,87 +557,10 @@ func _close_drawing() -> void:
 	_player.caster.enabled = true
 	GameState.ui_modal_open = false
 
-# ─────────────────────────── 정제대 (세션29) ───────────────────────────
-
-## 정제대에서 E — 재료를 특별잉크·종이로 바꾸는 패널을 연다 (책과 같은 오버레이 슬롯·모달 규약).
-## 🔴 책이 열려 있으면(_overlay != null) 안 연다 — 모달은 하나뿐이다.
-## 🔴 세66: 마을 완비 — 건설 게이트 없이 존이 바로 이걸 부른다 (세37 건설 은퇴).
-func _open_refine_panel() -> void:
-	if _overlay != null:
-		return
-	_player.set_physics_process(false)   # 정제하는 동안 이동 정지
-	_player.caster.enabled = false        # 조준·발사 정지
-	_overlay = CanvasLayer.new()
-	_overlay.layer = 10
-	add_child(_overlay)
-	_refine = RefinePanelScene.instantiate() as Control
-	if _refine == null:
-		push_error("refine_panel 인스턴스가 Control이 아니다")
-		return
-	_overlay.add_child(_refine)
-	_refine.closed.connect(_close_refine)   # ESC → 패널이 closed 발신 (ui_modal_open도 패널이 끈다)
-	_refine.open()
-
-func _close_refine() -> void:
-	if _overlay != null:
-		_overlay.queue_free()
-		_overlay = null
-		_refine = null
-	_player.set_physics_process(true)
-	_player.caster.enabled = true
-
-# ─────────────────────────── 공방 (세션32) ───────────────────────────
-
-## 공방에서 E — 재료를 장비로 만들고 착용하는 패널을 연다 (책·정제대와 같은 오버레이 슬롯·모달 규약).
-## 🔴 다른 모달이 열려 있으면(_overlay != null) 안 연다 — 모달은 하나뿐이다.
-func _open_workshop_panel() -> void:
-	if _overlay != null:
-		return
-	_player.set_physics_process(false)   # 공방을 쓰는 동안 이동 정지
-	_player.caster.enabled = false        # 조준·발사 정지
-	_overlay = CanvasLayer.new()
-	_overlay.layer = 10
-	add_child(_overlay)
-	_workshop = WorkshopPanelScene.instantiate() as Control
-	if _workshop == null:
-		push_error("workshop_panel 인스턴스가 Control이 아니다")
-		return
-	_overlay.add_child(_workshop)
-	_workshop.closed.connect(_close_workshop)   # ESC → 패널이 closed 발신 (ui_modal_open도 패널이 끈다)
-	_workshop.open()
-
-func _close_workshop() -> void:
-	if _overlay != null:
-		_overlay.queue_free()
-		_overlay = null
-		_workshop = null
-	_player.set_physics_process(true)
-	_player.caster.enabled = true
-
-# ─────────────────────────── 상점 (세66 도파민 재편) ───────────────────────────
-
-## 상점에서 E — 돈(coin)을 잉크로 바꾸는 패널을 연다 (책·정제대·공방과 같은 오버레이 슬롯·모달 규약).
-## 🔴 다른 모달이 열려 있으면(_overlay != null) 안 연다 — 모달은 하나뿐이다.
-func _open_shop_panel() -> void:
-	if _overlay != null:
-		return
-	_player.set_physics_process(false)   # 상점을 쓰는 동안 이동 정지
-	_player.caster.enabled = false        # 조준·발사 정지
-	_overlay = CanvasLayer.new()
-	_overlay.layer = 10
-	add_child(_overlay)
-	_shop = ShopPanelScene.instantiate() as Control
-	if _shop == null:
-		push_error("shop_panel 인스턴스가 Control이 아니다")
-		return
-	_overlay.add_child(_shop)
-	_shop.closed.connect(_close_shop)   # ESC → 패널이 closed 발신 (ui_modal_open도 패널이 끈다)
-	_shop.open()
-
-func _close_shop() -> void:
-	if _overlay != null:
-		_overlay.queue_free()
-		_overlay = null
-		_shop = null
-	_player.set_physics_process(true)
-	_player.caster.enabled = true
+# ──────── 정제대·공방·상점 패널 열기 (세29·32·66 → 🔴 세90에 걷었다) ────────
+#
+# 🔴 여섯 함수(`_open_refine_panel`/`_close_refine`·`_open_workshop_panel`/`_close_workshop`·
+#   `_open_shop_panel`/`_close_shop`)를 지웠다 — 세 건물이 `base.tscn`에서 빠져 **부르는 곳이 0**이 됐다.
+#   셋은 형태가 완전히 같았다(오버레이 슬롯 확보 → 플레이어 정지 → 패널 instantiate → `closed` 연결).
+#   ✅ **패널 자체는 살아 있다** — 되살릴 땐 `_open_drawing`/`_close_drawing`을 본으로 삼으면 되고,
+#   git 이력(세89 커밋)에 원형이 그대로 있다. 절차 정본 = `STATION_UNLOCKS` 머리말 ①~④.

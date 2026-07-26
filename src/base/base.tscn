@@ -1,4 +1,4 @@
-[gd_scene load_steps=22 format=3 uid="uid://c0base01hub00"]
+[gd_scene load_steps=15 format=3 uid="uid://c0base01hub00"]
 
 [ext_resource type="Script" path="res://src/base/base.gd" id="1_base"]
 [ext_resource type="PackedScene" path="res://src/actors/player.tscn" id="3_player"]
@@ -8,16 +8,9 @@
 [ext_resource type="PackedScene" path="res://src/hud/tab_panel.tscn" id="7_inv"]
 [ext_resource type="PackedScene" path="res://src/props/desk.tscn" id="8_desk"]
 [ext_resource type="PackedScene" path="res://src/props/forest_gate.tscn" id="9_gate"]
-[ext_resource type="PackedScene" path="res://src/props/refine_station.tscn" id="10_refine"]
-[ext_resource type="PackedScene" path="res://src/props/craft_station.tscn" id="11_craft"]
-[ext_resource type="PackedScene" path="res://src/props/shop_station.tscn" id="12_shop"]
 [ext_resource type="PackedScene" path="res://src/props/npc_guide.tscn" id="13_npc"]
 [ext_resource type="PackedScene" path="res://src/props/monument.tscn" id="14_monu"]
-[ext_resource type="PackedScene" path="res://src/props/tree.tscn" id="15_tree"]
 [ext_resource type="TileSet" path="res://assets/sprites/field/tileset_campus.tres" id="16_tiles"]
-[ext_resource type="PackedScene" path="res://src/props/lamp.tscn" id="17_lamp"]
-[ext_resource type="Texture2D" path="res://assets/sprites/base/bench.png" id="18_bench"]
-[ext_resource type="Texture2D" path="res://assets/sprites/base/fence_hedge.png" id="19_hedge"]
 
 [sub_resource type="RectangleShape2D" id="wall_v"]
 size = Vector2(24, 1600)
@@ -69,108 +62,23 @@ position = Vector2(1200, 1600)
 [node name="Shape" type="CollisionShape2D" parent="Border/WallS"]
 shape = SubResource("wall_h")
 
+; 🔴🔴 세90 정리 — 마을을 「캐릭 + 마법문 + 마법 제작대(책상)」로 줄였다 (사용자 확정).
+;   빠진 것: 공방(Craft)·정제대(Refine)·매점(Shop) 상호작용 셋 + 장식 22개(나무 8·램프 6·벤치 2·울타리 6).
+;   🔴 **프롭 씬·패널·레시피 데이터는 하나도 안 지웠다** — 되살리기 = 여기 노드 한 줄 + base.gd 배선 한 줄.
+;   되살리는 절차는 `base.gd`의 STATION_UNLOCKS 머리말에 적어 뒀다.
+; 🔴 y는 **머리끝이 첫 화면에 들도록** 정했다 — 서고 스프라이트는 발밑에서 위로 224px이라
+;   y=760이면 지붕이 44px 잘렸다(실측). 계약은 `test_base_auto [11]`ⓒ가 잰다.
 [node name="Desk" parent="." instance=ExtResource("8_desk")]
-position = Vector2(1400, 640)
-
-[node name="Craft" parent="." instance=ExtResource("11_craft")]
-position = Vector2(660, 745)
-
-[node name="Refine" parent="." instance=ExtResource("10_refine")]
-position = Vector2(880, 1060)
-
-[node name="Shop" parent="." instance=ExtResource("12_shop")]
-position = Vector2(1820, 760)
+position = Vector2(860, 840)
 
 [node name="ForestGate" parent="." instance=ExtResource("9_gate")]
 position = Vector2(200, 820)
 
 [node name="Npc" parent="." instance=ExtResource("13_npc")]
-position = Vector2(1020, 900)
+position = Vector2(560, 700)
 
 [node name="Monument" parent="." instance=ExtResource("14_monu")]
 position = Vector2(620, 920)
-
-[node name="Tree1" parent="." instance=ExtResource("15_tree")]
-position = Vector2(110, 320)
-
-[node name="Tree2" parent="." instance=ExtResource("15_tree")]
-position = Vector2(2300, 340)
-
-[node name="Tree3" parent="." instance=ExtResource("15_tree")]
-position = Vector2(120, 1420)
-
-[node name="Tree4" parent="." instance=ExtResource("15_tree")]
-position = Vector2(2290, 1400)
-
-[node name="Tree5" parent="." instance=ExtResource("15_tree")]
-position = Vector2(160, 1010)
-
-[node name="Tree6" parent="." instance=ExtResource("15_tree")]
-position = Vector2(1980, 1260)
-
-[node name="Tree7" parent="." instance=ExtResource("15_tree")]
-position = Vector2(520, 620)
-
-[node name="Tree8" parent="." instance=ExtResource("15_tree")]
-position = Vector2(2060, 420)
-
-[node name="Lamp1" parent="." instance=ExtResource("17_lamp")]
-position = Vector2(1240, 720)
-
-[node name="Lamp2" parent="." instance=ExtResource("17_lamp")]
-position = Vector2(1560, 720)
-
-[node name="Lamp3" parent="." instance=ExtResource("17_lamp")]
-position = Vector2(1240, 1040)
-
-[node name="Lamp4" parent="." instance=ExtResource("17_lamp")]
-position = Vector2(1560, 1040)
-
-[node name="Lamp5" parent="." instance=ExtResource("17_lamp")]
-position = Vector2(1760, 1000)
-
-[node name="Lamp6" parent="." instance=ExtResource("17_lamp")]
-position = Vector2(1080, 1000)
-
-[node name="Bench1" type="Sprite2D" parent="."]
-position = Vector2(1280, 900)
-offset = Vector2(0, -12)
-texture = ExtResource("18_bench")
-
-[node name="Bench2" type="Sprite2D" parent="."]
-position = Vector2(1520, 900)
-offset = Vector2(0, -12)
-texture = ExtResource("18_bench")
-
-[node name="Hedge1" type="Sprite2D" parent="."]
-position = Vector2(1216, 1216)
-offset = Vector2(0, -24)
-texture = ExtResource("19_hedge")
-
-[node name="Hedge2" type="Sprite2D" parent="."]
-position = Vector2(1280, 1216)
-offset = Vector2(0, -24)
-texture = ExtResource("19_hedge")
-
-[node name="Hedge3" type="Sprite2D" parent="."]
-position = Vector2(1344, 1216)
-offset = Vector2(0, -24)
-texture = ExtResource("19_hedge")
-
-[node name="Hedge4" type="Sprite2D" parent="."]
-position = Vector2(1472, 1216)
-offset = Vector2(0, -24)
-texture = ExtResource("19_hedge")
-
-[node name="Hedge5" type="Sprite2D" parent="."]
-position = Vector2(1536, 1216)
-offset = Vector2(0, -24)
-texture = ExtResource("19_hedge")
-
-[node name="Hedge6" type="Sprite2D" parent="."]
-position = Vector2(1600, 1216)
-offset = Vector2(0, -24)
-texture = ExtResource("19_hedge")
 
 [node name="Player" parent="." instance=ExtResource("3_player")]
 position = Vector2(370, 850)

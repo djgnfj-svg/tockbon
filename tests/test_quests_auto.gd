@@ -143,10 +143,21 @@ func _run() -> void:
 	#  ② 🔴 **목표가 자기 자신의 해금이 아니다.** 이게 핵심이다: 세88까지 q03·q04는
 	#     `UNLOCK station_*`이었고 그걸 채워 주던 게 `base.gd` 인터림 브리지였다 =
 	#     **자기 완료 조건을 스스로 심는 순환**. 그 형태로 되돌아오면 여기가 빨개진다.
-	_check("🔴 q03 정산이 정제대를 되돌린다 (reward_unlock == station_refine)",
-		q3.reward_unlock == &"station_refine")
-	_check("🔴 q04 정산이 공방을 되돌린다 (reward_unlock == station_craft)",
-		q4.reward_unlock == &"station_craft")
+	# 🔴🔴 **세90: 되돌릴 건물이 없어져 `reward_unlock`을 비웠다.** 마을을 「캐릭 + 마법문 +
+	#   마법 제작대」로 줄이며 정제대·공방이 씬에서 빠졌다 → 그 codex를 쏴도 받는 노드가 0곳이다
+	#   (`base.gd`의 `STATION_UNLOCKS == {}`). 그대로 두면 **조용히 죽은 보상**이 된다.
+	#   ⚠ 지운 건 그 한 줄뿐이다 — 사슬(KILL 5 → EXTRACT 2)·재료 보상·`requires`는 무변경이고,
+	#     아래 ⓑ의 **양방향 검사**가 「열쇠와 문」이 다시 갈라지는 순간을 잡는다.
+	_check("🔴 세90: q03·q04가 station_* 해금을 안 준다 (되돌릴 건물이 마을에 없다)",
+		q3.reward_unlock == &"" and q4.reward_unlock == &"")
+	# 🔴 보상이 **통째로 사라지지는 않았다** — 재료는 남는다. 이걸 안 재면 「보상 없는 퀘스트」로
+	#   조용히 퇴화한 것을 못 잡는다(세85가 q05의 `mat_night_bloom ×2`를 q04로 옮겨 총량을 보존한
+	#   그 규율 — 사용자 확정이었다).
+	_check("🔴 q03·q04의 재료 보상은 살아 있다 (q03 %d종 · q04 %d종)"
+			% [q3.reward_items.size(), q4.reward_items.size()],
+		not q3.reward_items.is_empty() and not q4.reward_items.is_empty())
+	_check("🔴 q04가 q05에서 이관받은 mat_night_bloom ×2를 그대로 든다 (세85 총량 보존)",
+		int(q4.reward_items.get(&"mat_night_bloom", 0)) == 2)
 	_check("🔴🔴 건설 UNLOCK 순환 재발 감지 — q03·q04의 **목표**가 station_* 해금이 아니다",
 		q3.goal != Enums.QuestGoal.UNLOCK and q4.goal != Enums.QuestGoal.UNLOCK)
 
@@ -157,18 +168,33 @@ func _run() -> void:
 	#  비싸게 배운 형태의 침묵(세88 시드 회수 교훈과 같은 결).
 	#  ⚠ 지금 매점(Shop)이 표에서 빠진 이유가 정확히 이것이다 — `station_shop` 생산자가 0곳이다.
 	#  🔴 표를 **직접 읽는다**(id를 베끼지 않는다) — 베끼면 표가 늘 때 그물만 옛 목록에 남는다.
+	#  🔴🔴 **세90: 이 검사가 양방향이 됐다.** 세89엔 「문 → 열쇠」 한 방향뿐이었고 *"표가 비어 있지
+	#   않다"*를 같이 요구했다. 세90에 마을을 줄여 **표를 의도적으로 비우자** 그 요구가 거짓 빨강이
+	#   됐는데, 그렇다고 지우면 검출력이 통째로 0이 된다(표가 비면 루프가 0회니까).
+	#   → **반대 방향을 세웠다: 「열쇠 → 문」.** `station_*`을 주는 퀘스트가 있으면 그 건물이 표에
+	#   있어야 한다. 두 방향이 있어야 **어느 쪽을 혼자 되살려도** 빨개진다:
+	#     ⓐ 표에만 올리고 퀘스트를 안 주면 → **영영 잔해**(세89가 잡은 형태)
+	#     ⓑ 퀘스트만 주고 표에 안 올리면 → **죽은 보상**(세90이 만들 뻔한 형태)
+	#   🔴 어느 쪽도 **에러가 0이고 기존 세이브엔 옛 값이 남아 F5로 안 드러난다**(새 게임에서만 죽는다).
 	var base_script = load("res://src/base/base.gd")
 	var gated: Dictionary = base_script.STATION_UNLOCKS
 	var granters: Dictionary = {}
 	for gq: QuestDef in db.all_quests():
 		if gq.reward_unlock != &"":
-			granters[gq.reward_unlock] = true
-	_check("🔴 base.gd가 잔해/온전 게이트 표를 들고 있다 (STATION_UNLOCKS 비어 있지 않다)",
-		not gated.is_empty())
+			granters[gq.reward_unlock] = String(gq.id)
+	print("     게이트 표 %d줄 %s" % [gated.size(), gated])
+	# ⓐ 문 → 열쇠 (세89 원본 — 표가 비면 0회, 채우면 자동 가동)
 	for node_name in gated:
 		_check("🔴 잠근 건물 %s(%s)를 열어 주는 퀘스트가 있다 — 없으면 영영 잔해다"
 				% [node_name, gated[node_name]],
 			granters.has(gated[node_name]))
+	# ⓑ 🔴 열쇠 → 문 (세90 신설 — 표가 비어도 **산다**)
+	for unlock: StringName in granters:
+		if not String(unlock).begins_with("station_"):
+			continue   # 룬·진·고리 해금은 건물과 무관하다
+		_check("🔴 %s를 주는 퀘스트(%s)가 있으면 그 건물이 게이트 표에 있다 — 없으면 죽은 보상이다"
+				% [unlock, granters[unlock]],
+			gated.values().has(unlock))
 
 	# ── ① 온보딩 시작(세션41): q00(첫 마법진)만 열리고, q01·q02는 q00을 물어 잠긴다 ──
 	_check("시작: q00(첫 마법진) 열림", gs.is_quest_active(q0))
@@ -221,6 +247,16 @@ func _run() -> void:
 	#  옛 판은 여기서 `codex_unlocked(station_refine)`을 쏴서 q03을 채웠다(브리지가 하던 일의 대역).
 	#  세89에 방향이 뒤집혀 **codex는 입력이 아니라 출력**이다 — 사냥으로 채우고, 정산이 codex를 쏜다.
 	#  🔴 발신 **횟수**를 센다(값만 보면 「같은 길로 왔나」를 못 잰다 — 세86 교훈).
+	# 🔴🔴 **세90: `reward_unlock` → `codex_unlocked` 기계를 in-memory 주입으로 잰다.**
+	#  마을을 「캐릭 + 마법문 + 마법 제작대」로 줄이며 q03·q04가 station_*을 안 주게 됐고,
+	#  그래서 지금 **`reward_unlock`을 채운 퀘스트가 0곳**이다 = 이 기계의 데이터 소비자가 없다.
+	#  🔴 그냥 「안 쏜다」로 뒤집으면 **「정산이 보상 해금을 쏘는 기계」를 아무도 안 재게 된다** —
+	#    그 기계는 건물을 되살릴 때도, 룬을 퀘스트 보상으로 줄 때도 첫 번째로 필요한 것이다.
+	#    세61(콘텐츠 리셋)·세83(룬 복원) 때 확립된 관행 그대로: **데이터가 비면 주입으로 기계를 잰다.**
+	#  ⚠ **원본을 보관했다 되돌린다** — 세83 사고(「빈 자리라 빌려 쓴다」가 진짜 데이터를 지웠다)의 규율.
+	#    `.tres`는 안 건드린다(같은 프로세스에 캐시된 Resource의 필드만 잠시 바꾼다).
+	var q3_unlock_orig: StringName = q3.reward_unlock
+	q3.reward_unlock = &"station_refine"
 	var shell_before: int = gs.get_count(&"mat_beetle_shell")
 	var refine_emits := [0]
 	var on_refine := func(id: StringName) -> void:
@@ -238,9 +274,13 @@ func _run() -> void:
 	gs.claim_ready_quests()
 	_check("🔴 정산: q03 완료 + 보상 (mat_beetle_shell +2)",
 		gs.is_quest_done(&"q03_build_refine") and gs.get_count(&"mat_beetle_shell") == shell_before + 2)
-	_check("🔴🔴 정산이 실습동을 되돌린다 — reward_unlock이 codex_unlocked를 **정확히 1발** 쐈다",
+	_check("🔴🔴 정산이 reward_unlock을 codex_unlocked로 **정확히 1발** 쏜다 (기계 그물 — 주입)",
 		refine_emits[0] == 1 and gs.is_unlocked(&"station_refine"))
 	eb.codex_unlocked.disconnect(on_refine)
+	# 🔴 주입 뒷정리 — 원본 복원 + 심어진 codex 회수. 안 되돌리면 뒤 항목이 「이미 해금」 가드에 걸려
+	#   자명 통과가 되고, 다음 실행의 세이브에도 유령 해금이 남는다.
+	q3.reward_unlock = q3_unlock_orig
+	gs.codex.erase(&"station_refine")
 	_check("🔴 q04(공방)가 열렸다", gs.is_quest_active(q4))
 
 	# ── ④-b 🔴🔴 **연쇄 정산(고정점 루프)** — 한 번의 정산이 사슬을 **두 칸** 진행시킨다 ──
@@ -260,7 +300,7 @@ func _run() -> void:
 	eb.codex_unlocked.emit(&"rune_water")      # q06 대상 선해금 — 단 q06은 q04 미완료라 아직 잠김
 	_check("🔴 선행(q04) 미완료면 대상이 이미 해금돼 있어도 q06은 정산 불가 (requires 게이트)",
 		gs.is_quest_claimable(q4) and not gs.is_quest_claimable(q6) and not gs.is_quest_active(q6))
-	_check("🔴 정산 전엔 공방이 아직 잔해다 (station_craft 미해금)", not gs.is_unlocked(&"station_craft"))
+	_check("정산 전엔 station_craft가 미해금이다 (대조 기준선)", not gs.is_unlocked(&"station_craft"))
 	gs.claim_ready_quests()   # q04 정산 → q06 열림 → 이미 해금돼 있어 연쇄 정산
 	# 🔴 세85: q05를 은퇴시키며 그 보상 `mat_night_bloom ×2`를 **q04로 합쳤다**(온보딩 총 보상량 보존,
 	#   사용자 확정). 그물이 없으면 「사슬을 줄이면서 보상이 조용히 사라졌다」를 아무도 못 잡는다 —
@@ -270,8 +310,11 @@ func _run() -> void:
 		and gs.get_count(&"mat_night_bloom") == bloom_before + 2)
 	_check("🔴🔴 연쇄 정산: q04·q06 둘 다 완료 (고정점 루프 — 말 한 번에 두 칸)",
 		gs.is_quest_done(&"q04_build_craft") and gs.is_quest_done(&"q06_learn_water"))
-	_check("🔴 정산이 공방을 되돌린다 (station_craft 해금 — 세89 마을 되살리기)",
-		gs.is_unlocked(&"station_craft"))
+	# 🔴 **세90: q04는 이제 건물을 되돌리지 않는다** — 정산해도 station_craft가 안 열린다.
+	#   위 q03에서 기계 자체는 주입으로 쟀으므로, 여기서 재는 건 **실데이터의 현재 계약**이다:
+	#   `reward_unlock`을 비운 퀘스트가 codex를 쏘면 「죽은 보상」이 조용히 되살아난 것이다.
+	_check("🔴 세90: q04 정산이 station_craft를 열지 않는다 (마을에 공방이 없다 — 죽은 보상 방지)",
+		not gs.is_unlocked(&"station_craft"))
 	_check("🔴 연쇄로 q07(바람)이 열렸다", gs.is_quest_active(q7))
 	_check("q07은 rune_water로는 안 끝난다 (target=rune_wind)", not gs.is_quest_done(&"q07_learn_wind"))
 

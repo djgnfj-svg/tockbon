@@ -278,24 +278,36 @@ func _test_camera_kick() -> void:
 	await process_frame
 
 
+## 🔴🔴 **세90: 애니 이름이 방향별에서 `idle`·`run`·`hurt` 셋으로 바뀌었다.**
+##  옛 `left`/`right`는 **픽셀이 동일한 그림**이었다(실측) — penzilla 원본이 정면뿐이라 방향 분기가
+##  그림엔 처음부터 없었다. 그래서 이 그물의 `hurt_*` prefix·복귀 후보 목록도 같이 갈렸다.
+##  🔴 **세 가지를 잰다**: ⓐ피격 → hurt 유지 ⓑ소진 → 자연 복귀 ⓒ**복귀한 게 실제로 존재하는 애니**인가.
+##  ⓒ가 없으면 SpriteFrames에서 애니를 지워도(또는 이름을 오타 내도) `animation` 문자열은 그대로
+##  들어가 있어 **전부 그린이 된다** — 씬을 통째로 인스턴스하는 이유가 이것이다.
 func _test_player_hurt_anim() -> void:
-	print("[9] player 피격 애니 — hurt_* 유지 · HURT_ANIM_SEC 소진 뒤 자연 복귀")
-	# 실제 player.tscn을 통째로 — SpriteFrames의 hurt_left/right 애니와 가드가 한 몸이라 씬으로 잰다.
+	print("[9] player 피격 애니 — hurt 유지 · HURT_ANIM_SEC 소진 뒤 idle/run 복귀 (세90 이름 개편)")
 	var player = (load("res://src/actors/player.tscn") as PackedScene).instantiate()
 	root.add_child(player)
 	player.global_position = Vector2(200, 0)
-	await physics_frame  # _face_mouse 한 프레임 — 초기 down이 left/right로 덮인다
+	await physics_frame
+	var frames = player.get_node("Sprite").sprite_frames
+	# 🔴 세90: 세 애니가 실제로 시트에 있나 (bake 스크립트 배율을 바꿔 region이 어긋나면 여기가 잡는다)
+	for a in ["idle", "run", "hurt"]:
+		_check(frames.has_animation(a), "🔴 SpriteFrames에 %s 애니가 있다" % a)
+	_check(frames.get_frame_count(&"run") == 8,
+		"🔴 run이 8프레임이다 (원본 row3 전량 — 실제 %d. 2프레임이면 옛 「idle을 걷기로」 회귀다)"
+			% frames.get_frame_count(&"run"))
 	_bus.player_hurt.emit(5.0, Vector2(300, 0))
 	await physics_frame
 	var anim := String(player.get_node("Sprite").animation)
-	_check(anim.begins_with("hurt_"), "🔴 피격 직후 hurt 애니 유지 — _face_mouse 가드 (실제 %s)" % anim)
+	_check(anim == "hurt", "🔴 피격 직후 hurt 애니 유지 — _apply_anim 우선순위 (실제 %s)" % anim)
 	# HURT_ANIM_SEC(연출 const) 소진 대기 — 물리 60tps 기준 프레임 수 + 여유.
 	var frames_needed: int = int(ceil(player.HURT_ANIM_SEC * 60.0)) + 5
 	for i in frames_needed:
 		await physics_frame
 	anim = String(player.get_node("Sprite").animation)
-	_check(not anim.begins_with("hurt_"), "타이머 소진 → _face_mouse 자연 복귀 (실제 %s)" % anim)
-	_check(anim in ["left", "right", "down", "up"], "복귀 애니가 걷기/idle 계열 (실제 %s)" % anim)
+	_check(anim != "hurt", "타이머 소진 → 자연 복귀 (실제 %s)" % anim)
+	_check(anim in ["idle", "run"], "🔴 복귀 애니가 존재하는 것이다 (실제 %s)" % anim)
 	player.queue_free()
 	await process_frame
 

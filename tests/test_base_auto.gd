@@ -598,11 +598,40 @@ func _test_gate_light_breathes() -> void:
 ## ⚠ **그래도 F5가 남는다**: 잔해가 잔해로 **보이나**(4단계 아트 대기) · [E]를 눌렀을 때 정말 아무
 ##   일도 안 일어나나 · 색조(`Dusk`)가 회보라로 읽히나. 여기서 재는 건 「손잡이가 옳은 자리에 있나」다.
 ## ⚠ `monitoring`은 `set_deferred`로 넣으므로 한 프레임 넘겨야 반영된다.
+## 🔴🔴 **세90: 표가 비었다 — 그래서 이 항목이 두 갈래로 갈린다.**
+##  사용자 확정으로 마을을 「캐릭 + 마법문 + 마법 제작대」로 줄이며 게이트 대상이던 정제대·공방을
+##  씬에서 뺐다 → `STATION_UNLOCKS == {}`. **은퇴가 아니라 데이터가 없는 것**이고, 기계는 전부 산다.
+##  ⓐ **표가 비어 있는 동안** = 「표를 채우면 진짜로 살아나나」를 잰다(배선·기계·역방향 불변식).
+##  ⓑ **표에 한 줄이라도 오면** = 세89의 전수 검사가 **저절로 다시 돈다**(아래 루프·색조 블록 그대로).
+##  🔴 이 형태가 중요하다 — 「지금 비었으니 검사를 지운다」로 갔으면 되살리는 세션이 그물 없이
+##  출발했을 것이다(감사 T2 *"은퇴를 선언 없이 두어 죽은 몸이 살아있는 그물을 갖는다"*의 반대편).
 func _test_station_gate_follows_codex() -> void:
-	print("[10] 잔해/온전 게이트 — codex가 [E]를 연다 (세89 마을 되살리기)")
+	print("[10] 잔해/온전 게이트 — codex가 [E]를 연다 (세89 마을 되살리기 · 세90 표 비움)")
 	var gs = root.get_node("/root/GameState")
 	var gated: Dictionary = _base.STATION_UNLOCKS   # 🔴 표를 베끼지 않는다 — 라이브 스크립트를 읽는다
-	_check(not gated.is_empty(), "게이트 표가 있다 (STATION_UNLOCKS — 비면 마을이 통째로 안 잠긴다)")
+	print("     게이트 표 %d줄 %s" % [gated.size(), gated])
+
+	# ── ⓐ 🔴 표가 비어도 **되살리는 길**은 살아 있어야 한다 ──
+	#  🔴🔴 **배선이 이 그물의 심장이다.** 표를 다시 채우는 세션이 가장 밟기 쉬운 함정 =
+	#    「표에 한 줄 넣었는데 아무 일도 안 일어난다」이고, 원인은 늘 `codex_unlocked` 수신이
+	#    없거나 `_ready` 초기화가 없는 것이다(base.gd `_ready` 주석). 표가 비었을 때 그 배선을
+	#    **안 재면** 누가 배선을 걷어도 전 스위트가 그린이다 — 표가 비어 루프가 0회니까.
+	_check(_bus.codex_unlocked.is_connected(Callable(_base, "_on_station_unlocked")),
+		"🔴🔴 codex_unlocked → _on_station_unlocked 배선이 산다 (없으면 표를 채워도 그 방문 내내 잔해다)")
+	_check(_base.has_method("_refresh_stations") and _base.has_method("_apply_station_state"),
+		"🔴 되살리기 기계(_refresh_stations · _apply_station_state)가 산다")
+	#  🔴 **역방향 불변식 — 잔해로 서 있는데 여는 길이 없는 건물이 없나.**
+	#    프롭에 `Ruin` 자식이 있으면 그건 「잔해 단계를 갖는 건물」이라는 뜻이다. 그게 씬에 서 있는데
+	#    표에 없으면 `_apply_station_state`가 한 번도 안 불려 **잔해가 안 켜진 채 온전하게** 서 있거나,
+	#    반대로 씬 기본값이 잔해면 **영영 잔해**다 — 어느 쪽이든 에러가 0이다.
+	for child in _base.get_children():
+		if child.get_node_or_null("Ruin") == null:
+			continue
+		_check(gated.has(String(child.name)),
+			"🔴 %s에 Ruin(잔해)이 있으면 게이트 표에 올라야 한다 — 없으면 잔해/온전 전환이 아무도 안 돌린다"
+				% child.name)
+
+	# ── ⓑ 표에 오른 건물 전수 검사 (세89 원본 — 표가 비면 0회, 채우면 자동 가동) ──
 	for node_name in gated:
 		var unlock: StringName = gated[node_name]
 		var zone = _base.get_node_or_null(node_name)
@@ -663,6 +692,13 @@ func _test_station_gate_follows_codex() -> void:
 	var dusk = _base.get_node_or_null("Dusk")
 	if dusk == null:
 		_check(false, "Dusk(CanvasModulate)가 없다 — 마을 색조 축이 통째로 죽는다")
+	elif gated.is_empty():
+		# 🔴 세90: 되돌릴 건물이 0채다 — `_refresh_village_tint`가 빈 표에서 return하므로 색조는
+		#   씬 값(`TINT_RUINED` 옅은 회보라)에 고정이다. ⓐ「움직인다」는 분모가 0이라 잴 수 없고,
+		#   ⓑ「폐허여도 밝다」(사용자 확정 *"어두운 폐허 각하"*, 세73)는 **여전히 잴 수 있다.**
+		var dim0: float = minf(minf(dusk.color.r, dusk.color.g), dusk.color.b)
+		_check(dim0 >= 0.85,
+			"🔴 폐허여도 밝기는 유지한다 — 어두운 폐허 각하 (최소 성분 %.2f · 표가 비어 고정값)" % dim0)
 	else:
 		var restore := {}
 		for node_name in gated:
@@ -703,7 +739,7 @@ func _test_station_gate_follows_codex() -> void:
 ## ⚠ 창은 **스폰에서 파생**한다 — 뷰포트(project.godot) + `Ground` 크기 + 카메라 limit 클램프.
 ##   수치를 하나도 안 박으므로 월드를 키우거나 뷰포트를 바꿔도 거짓 빨강이 안 난다.
 func _test_first_screen_composition() -> void:
-	print("[11] 🔴 첫 화면 — 문과 잔해가 들고, 온전한 건물은 안 든다 (설계 §4)")
+	print("[11] 🔴 첫 화면 — 문·잔해·마을의 셋이 통째로 든다 (설계 §4 + 세90 마을 정리)")
 	var ground = _base.get_node_or_null("Ground")
 	if ground == null:
 		_check(false, "Ground(월드 크기 정본)를 못 찾았다")
@@ -737,8 +773,12 @@ func _test_first_screen_composition() -> void:
 		"플레이어가 **문 앞에** 서 있다 (거리 %.0fpx — 막 소환된 자리다)"
 			% _spawn.distance_to(gate.global_position))
 
-	# ⓑ 🔴 잔해가 서너 채 흩어져 있다. 잔해 목록은 **베끼지 않는다** — 게이트 표(`STATION_UNLOCKS`)
+	# ⓑ 🔴 잔해가 첫 화면에 든다. 잔해 목록은 **베끼지 않는다** — 게이트 표(`STATION_UNLOCKS`)
 	#    에서 파생하고, 거기 안 드는 영구 잔해(기념비)만 이름으로 더한다.
+	#    ⚠ **세90: 기대치가 「3채 이상」에서 「전부」로 바뀌었다.** 마을을 셋으로 줄이며 정제대·공방
+	#      잔해가 씬에서 빠져 남은 잔해는 기념비 하나다 — 「3채」를 그대로 두면 **데이터가 줄어서**
+	#      빨개진다(거짓 빨강). 대신 **개수를 안 박고 「목록 전부가 화면에 든다」**로 바꿨다:
+	#      잔해가 하나든 넷이든 계약이 성립하고, 표가 다시 늘어도 자동으로 그 수를 요구한다.
 	var ruins: Array[String] = []
 	for node_name in (_base.STATION_UNLOCKS as Dictionary):
 		ruins.append(String(node_name))
@@ -753,22 +793,38 @@ func _test_first_screen_composition() -> void:
 			on_screen += 1
 		else:
 			print("     (창 밖 잔해: %s %s)" % [node_name, n.global_position])
-	_check(on_screen >= 3,
-		"🔴 첫 화면에 잔해가 3채 이상 흩어져 있다 (실제 %d/%d — 설계 §4 「잔해 서너 채」)"
+	_check(on_screen == ruins.size() and on_screen >= 1,
+		"🔴 잔해가 **전부** 첫 화면에 든다 (실제 %d/%d — 폐허가 화면에 안 보이면 「망한 마을」이 안 읽힌다)"
 			% [on_screen, ruins.size()])
 
-	# ⓒ 🔴🔴 **온전한 건물은 첫 화면 밖이다.** 설계 §4의 *"색을 가진 것은 문과 플레이어뿐"*이
-	#    좌표로 번역되는 자리 — 서고(=책상)와 매점은 처음부터 멀쩡한 둘이라(설계 §1-말·3단계 ④-1)
-	#    첫 화면에 들면 «망한 마을»이 아니라 «멀쩡한 마을»로 읽힌다.
-	#    ⚠ 이름을 박는다: 「온전」은 씬 구조에서 파생되는 성질이 아니라 **설계가 지목한 둘**이다.
-	for node_name in ["Desk", "Shop"]:
+	# ⓒ 🔴🔴 **세90: 마을의 셋이 한 화면에 든다 — 「캐릭 + 마법문 + 마법 제작대」** (사용자 확정).
+	#
+	#    ⚠⚠ **이 검사는 세89의 정반대다.** 그전엔 *"온전한 건물(`Desk`·`Shop`)은 첫 화면 **밖**"*을
+	#      쟀다 — 설계 §4의 *"색을 가진 것은 문과 플레이어뿐"*을 좌표로 번역한 것이었고, 책상은
+	#      x 1400에 있었다. 세90에 사용자가 마을을 셋으로 줄이자 그 계약이 **화면을 빈 공터로** 만들었다:
+	#      남는 게 문·기념비뿐인데 유일한 제작대가 1200px 밖이면 「정리」가 아니라 「아무것도 없는 마을」이다.
+	#      → 사용자 결정으로 **모으는 쪽**을 택했고, 그래서 계약이 「밖」에서 **「접근 거리 안」**으로 뒤집혔다.
+	#    🔴 뒤집었다고 그물이 약해지지 않았다 — 방향만 반대고 **여전히 좌표를 못 박는다**:
+	#      누가 책상을 다시 동쪽으로 밀면(또는 길잡이를 화면 밖으로 보내면) 여기가 빨개진다.
+	#    ✅ 길잡이가 여기 든 것이 **세89 이월 2번의 절반**이다 — *"길잡이에게 [E]로 말을 걸어라"*라는
+	#      첫 안내가 세89까지 **화면 밖의 NPC**를 가리켜 거짓말이었다(x 1020 > 창 오른끝 960).
+	#    🔴🔴 **머리끝까지 잰다 — 실측이 이 그물의 구멍을 잡았다.** 세90 첫 스샷에서 서고(책상)
+	#      **지붕이 화면 위로 44px 잘려 있었는데** 이 검사가 그린이었다: `global_position`은 발밑이라
+	#      스프라이트가 위로 224px 솟는 걸 안 봤다. 세89가 **문에 대해** 정확히 이걸 배웠는데
+	#      (*"발밑만 재면 아치 위쪽이 잘려 「반만 보이는 문」이 그린으로 통과한다"* — 위 ⓐ)
+	#      새 항목을 쓰며 그 교훈을 안 옮긴 것이다(감사 T5 「파생 대신 복제」의 그물판).
+	for node_name in ["Desk", "Npc"]:
 		var n = _base.get_node_or_null(node_name)
 		if n == null:
-			_check(false, "온전한 건물 %s 노드가 씬에 없다" % node_name)
+			_check(false, "🔴 %s 노드가 씬에 없다 (세90 정리 후 마을에 남는 셋 중 하나다)" % node_name)
 			continue
-		_check(not screen.has_point(n.global_position),
-			"🔴 %s(온전한 건물)는 첫 화면 밖이다 — 실제 %s / 창 %s (안에 들면 폐허가 아니라 마을이다)"
+		_check(screen.has_point(n.global_position),
+			"🔴 %s가 첫 화면 안에 있다 — 실제 %s / 창 %s (밖이면 마을에 그것뿐인데 안 보인다)"
 				% [node_name, n.global_position, screen])
+		var top := _sprite_top(n)
+		_check(top < 0.0 or top >= screen.position.y,
+			"🔴 %s가 **통째로** 든다 (머리끝 y=%.0f ≥ 창 위 %.0f — 아니면 지붕이 잘린다)"
+				% [node_name, top, screen.position.y])
 
 	# ⓓ 🔴 **기념비는 영구 잔해다** — 되돌리는 퀘스트가 없으므로 게이트 표에 들면 영영 잠긴다.
 	#    그림 자체가 잔해여야 한다(전환 대상이 아니다, base.gd `RUIN_PART` 주석).

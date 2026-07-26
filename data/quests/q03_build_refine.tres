@@ -5,13 +5,13 @@
 [resource]
 script = ExtResource("1")
 id = &"q03_build_refine"
-title = "연금술 실습동을 되돌려라"
-desc = "짐승들이 마을의 마법을 삼켰다. 문 너머에서 다섯을 잡아 되찾아 오면 실습동이 제자리로 선다."
+title = "빛을 삼킨 것들"
+desc = "짐승들이 마을의 마법을 삼켰다. 문 너머에서 다섯을 잡아 되찾아 와라."
 goal = 0
 target = &""
 count = 5
 reward_items = {
 &"mat_beetle_shell": 2
 }
-reward_unlock = &"station_refine"
+reward_unlock = &""
 requires = &"q02_come_home"
