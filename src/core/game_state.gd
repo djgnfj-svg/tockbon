@@ -81,13 +81,19 @@ func _ready() -> void:
 	EventBus.enemy_died.connect(_on_enemy_died)
 	EventBus.ring_design_committed.connect(_on_ring_design_committed)
 
-## 🔴 시작 해금 재시드 — codex 시드(룬·진·문양-고리) + 시작 도안 3장.
+## 🔴 시작 해금 재시드 — codex 시드(룬·진·문양-고리) + 시작 도안 **한 장**.
+## ⚠ 세92 정정: 여기 「3장」이라 적혀 있었다 — 세88에 3→1로 줄인 게 시드 회수의 급소인데
+## 이 머리말만 옛 값으로 남아 아래 `_seed_starting_rings` 머리말과 **같은 파일 안에서 모순**이었다.
+## 장수를 여기 베끼지 말고 그 함수를 읽어라.
 ## ⚠ **문양(GlyphDef)은 시드가 아니다** — 아래 `seed_codex_unlocks` 주석대로 해금 게이트 자체가 없다.
 ## _ready(첫 부팅)와 new_game(새로하기)이 **둘 다** 이걸 부른다. 여기 한 곳에만 두는 이유:
 ## save_manager 노트가 경고한 "새로하기는 _ready를 다시 안 타므로 여기 시드를 안 심으면
 ## **아무것도 못 그리는 새 게임**이 된다" — 두 경로가 갈라지면 조용히 그 버그가 난다.
 ## 🔴 시작엔 룬·문양만 심는다. **장비도 스테이션(station_*)도 없다** — 빈 시작(세션37, 사용자
-## 확정: "시작했을 때 아무것도 없는 상태가 중요"). 거점은 재료로 직접 지어 채운다.
+## 확정: "시작했을 때 아무것도 없는 상태가 중요").
+## ⚠ 세92 정정: 여기 *"거점은 재료로 직접 지어 채운다"*고 적혀 있었다 — **건설은 세66에 은퇴했다**
+## (`balance.station_build_costs`도 소비자 0이 돼 세85에 걷혔다). 지금 스테이션은 **짓는 게 아니라
+## 퀘스트로 되돌린다**(`base.gd`의 `STATION_UNLOCKS` 머리말이 그 절차의 정본).
 func _seed_starting_unlocks() -> void:
 	seed_codex_unlocks()
 	_seed_starting_rings()

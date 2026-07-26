@@ -14,7 +14,9 @@ description: 탁본(TAKBON) 프로젝트의 아키텍처 규칙·모듈 지도·
 |---|---|
 | 📖 `docs/GDD.md` | **「게임이 무엇인가」 단일 진실원**(세71 신설). 🔒 **읽기만 — 수정엔 사용자 허락이 필요하다**(settings.json `ask`) |
 | 이 스킬 | 아키텍처·모듈 지도·하드 계약 |
-| `CLAUDE.md` 최상단 + `docs/STATUS.md` | 직전 세션·살아있는 함정 |
+| `CLAUDE.md` 최상단 | 살아있는 함정·계약 |
+| `docs/DECISIONS.md` | **무엇을 왜 정했나** + 하네스 이력 (세92 신설). 📕 `STATUS.md`·`STATUS_ARCHIVE.md`·`HARNESS_LOG.md`는 **없는 파일**이다 — 옛 서술이 가리키면 경위는 `git log`에서 캔다 |
+| `docs/BACKLOG.md` | 아직 안 한 것 (세88~90 이월 = `N0~N10`) |
 | `docs/PROGRESSION.md` | 진행 관문표 |
 | `docs/takbon-design/` | 확정·대기 설계 문서 |
 
@@ -42,19 +44,22 @@ description: 탁본(TAKBON) 프로젝트의 아키텍처 규칙·모듈 지도·
 | `Clock` | 낮밤 시간 → 실질 역할 = 자동저장 틱(`day_started` → SaveManager) |
 | `Db` | data/ 레지스트리 + **id→배수 리졸버**(`ink_mult`·`get_rune` 등) |
 | `SaveManager` | user://save, 자동 저장. `_ready`→`load_game()`로 부팅 시 이어받음 |
-| `Audio` | EventBus 9종 구독 → SFX 재생 |
+| `Audio` | EventBus 시그널 구독 → SFX 재생 (어느 시그널인지는 `audio.gd`의 `.connect` 줄이 정본 — 개수를 베끼지 마라) |
 
 ⚠ EventBus의 일부 시그널은 수신자만 있고 발신자가 상황에 따라 붙는다 — 필드를 붙이는 쪽이 emit해야 하며 안 그러면 조용히 안 돈다.
 
 ## 2. 모듈 지도
 
-- **`src/base`** — 마법사 학교 마을(진입점, `run/main_scene`). 탁본 책상·연습장·**정제대**(`refine_panel`)·**공방**(`workshop_panel`)·**상점**(`shop_panel`)·길잡이 NPC·챕터 패널.
-  ⚠ **해독대는 세85에 은퇴했다**(q05와 한 세트로 삭제 — `decode_panel`은 없다).
-  ⚠ **건설도 세66에 은퇴했다 — 스테이션은 짓는 게 아니라 마을에 이미 있다**(§4 끝의 정정 참조).
-- **`src/field`** — **챕터 보스방**. `boss_room.gd`/`.tscn`(단칸방 — 클리어 시 codex·상자·포탈) · `forest_enemy`(범용 적 몸 — 쫓아와 접촉 피해) · `enemy_projectile` · `snake_body`/`snake_boss.tscn`.
+- **`src/base`** — 마법사 학교 마을(진입점, `run/main_scene`).
+  🔴🔴 **세90: 마을에 실제로 서 있는 건 셋이다 — 캐릭 + 마법문 + 마법 제작대(책상)**(사용자 확정). 씬에 남은 노드 = `Player`·`ForestGate`·`Desk`·`Npc`(길잡이)·`Monument`(영구 잔해)·`Dummy1~5`(연습장). ⚠ **공방(`Craft`)·정제대(`Refine`)·매점(`Shop`) 노드는 씬에 없다** — 「마을에 공방이 있다」고 전제하고 배선하지 마라.
+  🔴 **지운 건 「마을에서 여는 길」뿐이다** — 프롭 씬·패널(`workshop_panel`·`refine_panel`·`shop_panel`)·레시피는 **전부 살아 있다**(그래서 `test_workshop_auto`가 그대로 그린이다 — 그 그물은 패널을 직접 열어 마을을 안 지난다). **되살리는 절차 정본 = `base.gd`의 `STATION_UNLOCKS` 머리말 ①~④**(씬 노드 + 표 + 퀘스트 `reward_unlock` + connect가 한 덩어리다).
+  ⚠ **해독대는 세85에 은퇴했다**(q05와 한 세트로 삭제 — `decode_panel`은 없다). **건설은 세66에 은퇴했다**(§4 끝의 정정 참조).
+- **`src/field`** — **챕터 보스방**. `boss_room.gd`/`.tscn`(**챕터 = 2400×2200 열린 숲**, 세88에 단칸방에서 넓혔다 — **씬은 여전히 한 장**이다) · `forest_enemy`(범용 적 몸 — 쫓아와 접촉 피해) · `enemy_projectile` · `snake_body`/`snake_boss.tscn`.
   ⚠ **`forest.tscn`·`forest.gd`는 세58-B에 삭제됐다**(되살리려면 git 이력). 이름만 남은 `forest_enemy`는 **범용 적 몸**이라 살아 있다.
   🔴 **적 수치는 전부 `data/enemies/*.tres`(EnemyDef) — 새 적 = .tres 한 장**(외형 color·size까지 `_apply_look`이 반영).
   🔴 **출격 = 만HP/만마나는 `boss_room.gd _ready`가 한다**(마을이 아니다 — forest.gd 계약을 이관받았다. 다른 진입 경로를 만들면 조용히 달라진다).
+  🔴 **나가는 길이 둘이고 `zone_id`가 갈려 있다**: `&"exit"`(남쪽 입구·**항상**) · `&"portal"`(보스 자리·**처치 후에만**). 둘 다 `_extract` 하나로 이어진다 — **새 길을 뚫으면 거기로 이어라**(안 이으면 가방이 조용히 증발한다).
+  🔴 **방 크기·프롭은 `ChapterDef`가 안 나른다** — `Ground` rect·`Player` 스폰·나무·횃불이 **씬 하드코딩**이다(`ChapterDef`는 `mob_spawns`·`boss_spawn`·색·보상만). ⚠ **나무는 적을 가린다**(y-sort가 없다) — 잡몹 스폰과 100px, 플레이어 스폰·출구와 150px 이상 떨어뜨려라.
 - **`src/actors`** — **공용 배우**(마을·보스방 공용): `player.tscn`(WASD·그룹 `"player"`) · `player_caster.gd`(조준·발사·슬롯) · `floating_wand.gd`(떠있는 지팡이 — 🔴 발사 총구 단일 소스 `muzzle_position()`) · `interact_zone.gd`(책상·포탈·귀환이 같은 물건, `zone_id`로 구분) · `juice.gd`(피격 손맛 통제소) · `vfx.gd`·`shadow.gd`·`dust.gd`.
 - **`src/hud`** — **공용 HUD**(`hud.gd`, 마을·보스방 공용). 🔴 **세64부터 씬별 차이가 하나도 없다** — `hint_text`(조작 안내문)는 **통째로 제거**됐고(온보딩 대사가 조작을 가르친다) `show_hp`도 폐지돼 **HP를 늘 그린다**. 즉 `hud.gd`에 @export가 **0개**다.
   🔴 **모달은 `tab_panel`(Tab) 하나로 합쳐졌다.** 🔴 **탭 목록의 정본은 `TAB_NAMES` 하나다**(지금 **4탭** = 소지품·퀘스트·마법진·**캐릭터**(세64) — ⚠ 이 문서가 세86까지 「3탭」이라 적고 있었다. **개수를 여기 베끼지 말고 그 상수를 읽어라**). 옛 `inventory_panel`(I)·`quest_panel`(Q)은 세40에 **흡수돼 파일이 없다**(`tab_panel.gd` 머리말이 그렇게 적어 뒀다). 그 밖 = `chapter_panel`·`dialogue_box`·`damage_number`.
@@ -98,8 +103,10 @@ description: 탁본(TAKBON) 프로젝트의 아키텍처 규칙·모듈 지도·
 - **새 문양 = 2곳**(세82 데이터화 뒤) — `data/glyphs/*.tres`(`behavior` + `params`) + `Enums.GlyphCode`에 값 하나. 그전엔 5곳이었다.
 - 새 소리 = `assets/audio/sfx/<id>.wav` (파일명=id)
 - 새 스테이션 = `src/props/` 씬 하나(`zone_id`) + `base.gd`가 그 `zone_id`에서 여는 패널
+  🔴🔴 **세89 이후 「열쇠와 문」은 짝이다 — 어느 쪽을 혼자 만들어도 조용히 깨진다**: 게이트 표(`base.gd`의 `STATION_UNLOCKS` = `{씬 노드 이름: codex id}`)**에만** 올리고 여는 퀘스트(`QuestDef.reward_unlock`)가 없으면 → **영영 잔해** · 퀘스트만 주고 표에 없으면 → **죽은 보상**(정산해도 아무 일이 안 난다). 🔴 **둘 다 에러가 0이고 기존 세이브엔 옛 값이 남아 F5로는 안 드러난다**(새 게임에서만 죽는다). 그물 = `test_quests_auto`의 양방향 대조.
+  ⚠ 표는 **노드 이름으로** 찾는다 — 씬에서 `Refine`·`Craft`를 개명하면 게이트가 **조용히 no-op**이 된다. 잠금 손잡이는 `Area2D.monitoring`(연결 토글이 아니다).
   ⚠ **세85 정정: `balance.station_build_costs`는 은퇴했다**(세66에 건설이 은퇴한 뒤 소비자 0곳이었다).
-  스테이션은 이제 **짓는 게 아니라 마을에 이미 있다** — 「건설 비용 한 줄」은 더는 존재하지 않는 단계다.
+  스테이션은 **짓는 게 아니라 퀘스트로 되돌린다** — 「건설 비용 한 줄」은 더는 존재하지 않는 단계다.
 
 ## 5. 조용히 깨지는 함정 (에러 없이)
 
@@ -114,10 +121,14 @@ description: 탁본(TAKBON) 프로젝트의 아키텍처 규칙·모듈 지도·
 - 🔴 **엔진 ERROR·`push_warning`은 `SCRIPT ERROR` grep에 안 걸린다** (세84 T6) — 실패를 로그 없이 삼키는 자리가 이 프로젝트의 단골 침묵사다.
 - ⚠ 씬(`.tscn`)의 `;` 주석은 **에디터가 저장하면 날아간다** — load-bearing한 설명은 코드에 둬라.
 - 🔴 **`wipe_save()`는 새로하기가 아니다**: 파일만 지우고 GameState·Clock은 오토로드라 메모리에 남아 귀환 한 번에 옛 진행이 도로 써진다. 진짜 새로하기 = `GameState.new_game()`(+ `_seed_starting_unlocks()`).
+- 🔴 **`StringName` 배열의 `sort()`는 사전순이 아니다 — 인터닝 순이고 실행마다 바뀐다**(세88 실측: 같은 데이터로 두 번 돌려 첫 줄이 달랐다). id 정렬은 **`sort_custom`으로 `String()`을 감싸라.**
+- 🔴 **배타·병용 금지 필드 짝이 셋 있다**(전부 세88 · 어기면 **조용히** 깨진다): `DropEntry.item_id` ↔ `unlock_id` · `DropEntry.unlock_id` ↔ **`until_unlock`**(🔴 병용하면 `if…elif` 때문에 **`chance`를 통째로 안 봐서** 보너스가 **모든 잡몹 확정 드롭**이 된다) · `RecipeDef.output_id` ↔ `reward_unlock`(🔴 해금 레시피에 `output_id`를 채우면 **창고에 유령 아이템 키가 생겨 세이브에 영구화된다** — `output_count=0`이라 수량은 0인데 키가 남는다).
+- 🔴 **AI 거리 게이트(leash)는 「이동 대입만」 감싼다 — `return` 금지**(세88): `_ai_boss_gale`의 쿨다운 감소가 DRIFT 분기 **안**에 있어서 `return`으로 끊으면 멀리 있는 동안 쿨이 얼어 **연사가 4.5초 늦게** 시작한다(에러 0). ⚠ 페이즈2 전이는 `match` **밖**이라 `return`에도 살아남는다 — 「멀리서도 페이즈2가 열린다」는 **자명 통과라 검출자로 쓰지 마라.**
 
 ## 6. 위임 라우팅 (리드용)
 
-- 구현 위임 = `takbon-dev` · 기술 설계·설계 리뷰 = `takbon-architect` · 코드 리뷰 = `takbon-reviewer` · 패널/HUD = `takbon-ui` · 도트 = `takbon-art` · 입체화 = `takbon-relight` · 셰이더 = `takbon-shader` · 애니 배선 = `takbon-animator`.
+- 🔴 **에이전트는 네 축뿐이다**(세92에 여덟에서 줄였다 — 사용자 확정): 설계 리뷰 = **`takbon-architect`** · 구현 = **`takbon-dev`**(모듈 코드 + **패널/HUD·셰이더·애니 배선**까지 전부) · 코드 리뷰 = **`takbon-reviewer`** · 그림 = **`takbon-art`**(도트 + **입체화**).
+  🔴 **옛 이름 해소표**(설계문서·과거 기록에 그대로 남아 있다 — 부르면 실패한다): `takbon-ui`·`takbon-shader`·`takbon-animator` → **`takbon-dev`** · `takbon-relight` → **`takbon-art`**.
 - 🔴 **기획(무엇을·왜·어떻게 재밌게)은 위임하지 마라** — 리드가 `takbon-design` 스킬로 **사용자와 대화하며** 확정한다(세71: 서브에이전트는 대화를 못 해 혼자 정한다).
 - 🔴🔴 **기본이 위임이다** (세48 사용자 확정 — **옛 예외 목록은 걷어냈다**). 그전엔 *"회귀 위험이 크고 tight한 검증 루프가 필요한 작업·core 스키마 변경·mcp__godot·커밋은 리드가 직접"*이라 적혀 있었는데, **이 프로젝트의 재밌는 작업은 죄다 발사·저장·core에 닿아서 거의 매번 예외에 걸렸다** — 위임 대상이 주변부뿐이라 하네스가 안 굴러갔다. 위임은 손을 던다기보다 **설계·리뷰 단계를 강제해 품질을 올리는 장치**다.
 - 🔴 **리드가 안 놓는 것 = 검증·`--import`·커밋**(→ `takbon-verify`). **에이전트의 "그린 나왔습니다"를 근거로 쓰지 마라** — 리드가 직접 돌리고 뮤테이션으로 검출력을 확인한다.

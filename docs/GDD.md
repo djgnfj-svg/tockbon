@@ -2,7 +2,7 @@
 
 > 🔴🔴 **이 문서는 게임의 진실원(source of truth)이다. 사용자의 명시적 허락 없이 수정 금지.**
 > 여기 담는 것 = **자주 변하지 않는 안정된 진실**(비전·코어 재미·마법 모델·축·루프·아트 방향·설계 원칙).
-> 여기 담지 않는 것 = 세션 로그(`docs/STATUS.md`) · 할 일(`docs/BACKLOG.md`) · 진행 관문 수치(`docs/PROGRESSION.md`) ·
+> 여기 담지 않는 것 = 결정 로그(`docs/DECISIONS.md` — 세92에 `STATUS.md`를 대체했다) · 할 일(`docs/BACKLOG.md`) · 진행 관문 수치(`docs/PROGRESSION.md`) ·
 > 진행 중 설계(`docs/takbon-design/`) · 함정·검증·아키텍처(`CLAUDE.md`) · 세부 이력(memory).
 > **"게임이 무엇인가"는 여기, "지금 어디까지 왔나·어떻게 짜나"는 저기.**
 
@@ -93,7 +93,7 @@
 
 | 궁금한 것 | 어디 |
 |---|---|
-| 지금 어디까지 왔나 (세션 로그) | `docs/STATUS.md` |
+| 무엇을 **왜** 정했나 (결정 로그) | `docs/DECISIONS.md` — 세92에 세션 로그·아카이브·하네스 이력 셋을 대신한다(그 파일들은 없앴다 · 경위는 `git log`) |
 | 아직 안 한 것·다듬을 것 | `docs/BACKLOG.md` |
 | 진행 관문 수치표 | `docs/PROGRESSION.md` |
 | 진행 중·대기 중 설계 | `docs/takbon-design/` (README 인덱스) |

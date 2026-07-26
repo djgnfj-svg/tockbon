@@ -1,7 +1,7 @@
 # 사냥 흐름 설계 — 숲에서 얻어 마을에서 만든다
 
 > 세87 기획 · 사용자와 대화로 확정 · **takbon-architect 리뷰 반영 완료(조건부 승인 → 지적 16건 전량 반영)**
-> 🟢 **세88에 9단계 전량 구현 완료** — 서사·검증 기록 정본 = `docs/STATUS.md` 세88 절.
+> 🟢 **세88에 9단계 전량 구현 완료** — 결정 요약은 `docs/DECISIONS.md`, 상세 경위는 `git log`(세92에 세션 기록 문서를 없앴다).
 > 관련: `docs/PROGRESSION.md` · memory `takbon-stage-format-decision`·`takbon-dopamine-loop`
 
 ---
