@@ -11,7 +11,11 @@
 [ext_resource type="Script" path="res://src/actors/interact_zone.gd" id="9_zone"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_exit"]
-size = Vector2(120, 110)
+; 🔴 세88: 높이를 110 → 70으로 줄였다. 110이면 트리거(y 605~715)가 플레이어 스폰(y 600, 반경 10)과
+; 겹쳐 **입장 첫 프레임부터 「[E] 마을로 돌아간다」가 떠 있었다**(리드 MCP 스샷으로 확인) — 방의
+; 목표 안내와 다퉜다. 70이면 y 625~695라 스폰과 15px 떨어져, 걸어가야 뜬다(다른 InteractZone과 같은 결).
+; ⚠ 출구 자체는 (0,660)에 그대로 둔다 — 더 남쪽으로 밀면 카메라 클램프 때문에 화면 맨 끝에 걸린다.
+size = Vector2(120, 70)
 
 [node name="BossRoom" type="Node2D"]
 script = ExtResource("1_room")

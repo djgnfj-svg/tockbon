@@ -186,6 +186,23 @@ func _test_boss_spawn_both_paths() -> void:
 	var want_count = 1 + int(MOB_COUNT[&"ch1"])
 	_check(_enemies().size() == want_count,
 		"ch1: 보스 1 + 잡몹 %d = %d 마리가 실제로 섰다 (실제 %d)" % [int(MOB_COUNT[&"ch1"]), want_count, _enemies().size()])
+	# 🔴🔴 카메라가 **방 안에 묶였나** (세88 — 리드가 MCP 스샷으로 잡았다).
+	# 방을 2400×2200으로 키우자 **입장 순간 화면 아래 절반이 방 밖(회색)으로 비었다**: 스폰(0,600)이
+	# 남쪽 경계(700)에서 100px인데 뷰포트 반높이가 270px이다. `player.tscn`의 Camera2D엔 `limit_*`이
+	# 없어서(마을에선 경계까지 잘 안 가 안 드러났다) 보스방이 `_ready`에서 Ground rect로 채운다.
+	# ⚠ **값을 박지 않고 Ground rect와 대조**한다 — 방 크기를 또 바꿔도 거짓 빨강이 안 나고,
+	#   「좌표를 베끼지 않고 파생한다」는 계약 자체를 잰다. 뮤테이션(호출 제거) → 여기가 빨개진다.
+	var ground: ColorRect = _room.get_node_or_null("Ground")
+	var cam: Camera2D = _room.get_node_or_null("Player/Camera2D")
+	if ground != null and cam != null:
+		var tl: Vector2 = ground.global_position
+		_check(cam.limit_left == int(tl.x) and cam.limit_top == int(tl.y)
+			and cam.limit_right == int(tl.x + ground.size.x) and cam.limit_bottom == int(tl.y + ground.size.y),
+			"카메라 limit == Ground rect (실제 L%d T%d R%d B%d / 방 %s~%s)"
+			% [cam.limit_left, cam.limit_top, cam.limit_right, cam.limit_bottom, tl, tl + ground.size])
+	else:
+		_check(false, "Ground·Camera2D를 찾았다 (구조가 바뀌면 이 그물이 죽는다)")
+
 	var boss = _boss(&"ch1")
 	_check(boss != null, "ch1 보스(slime_elite)가 잡몹 사이에 스폰됐다")
 	if boss != null:

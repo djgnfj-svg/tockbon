@@ -128,6 +128,7 @@ func _ready() -> void:
 
 	_ground.color = _chapter.room_ground_color
 	_fill_tiles()
+	_clamp_camera_to_room()
 	# 🔴 스폰이 실패하면 **여기서 멈춘다** — `_spawn_boss` 안의 `return`은 자기 함수만 벗어나므로,
 	# 예전엔 이미 떠나기로 한 방(`_leaving = true`)이 잡몹을 깔고 「…를 쓰러뜨려라」를 한 프레임
 	# 띄웠다(세84 감사 #38). 챕터-null 분기(위)는 return이 `_ready` 자신이라 원래부터 제대로 멈춘다.
@@ -139,6 +140,27 @@ func _ready() -> void:
 	# 🔴 세84 #36: `sticky` — **방의 목표 줄이다**. say()에 수명이 붙었으므로(경고가 목표를 덮고
 	# 영구 상주하던 걸 고쳤다) 여기 안 붙이면 목표가 4.5초 뒤 조용히 사라진다.
 	_hud.say("%s — %s를 쓰러뜨려라. 잡으면 귀환 포탈이 열린다" % [_chapter.title, boss_name], false, true)
+
+
+## 🔴🔴 카메라를 방 안으로 묶는다 (세88 — 리드가 MCP 스샷으로 잡았다).
+##
+## 방을 2400×2200으로 키우자 **입장 순간 화면 아래 절반이 방 밖(엔진 배경색 회색)으로 비었다**:
+## 플레이어 스폰(0, 600)이 남쪽 경계(y 700)에서 100px인데 뷰포트 반높이가 270px이라 y 700~870이
+## 그대로 화면에 들어왔다. `player.tscn`의 `Camera2D`엔 `limit_*`이 없다 — 마을(2400×1600)에서는
+## 플레이어가 경계까지 잘 안 가서 **드러나지 않았을 뿐이다**(설계 부록도 "클램프가 어긋날 자리가
+## 없다"고 적었는데, 어긋날 자리가 없던 게 아니라 **클램프 자체가 없었다**).
+##
+## ⚠ **Ground rect에서 파생한다** — 방 크기를 또 바꾸면 따라온다(좌표를 베끼면 그 순간 갈라진다).
+## ⚠ 마을에는 영향이 없다: `player.tscn`은 씬마다 새 인스턴스라 limit도 이 방에서만 산다.
+func _clamp_camera_to_room() -> void:
+	var cam := _player.get_node_or_null("Camera2D") as Camera2D
+	if cam == null:
+		return
+	var top_left := _ground.global_position
+	cam.limit_left = int(top_left.x)
+	cam.limit_top = int(top_left.y)
+	cam.limit_right = int(top_left.x + _ground.size.x)
+	cam.limit_bottom = int(top_left.y + _ground.size.y)
 
 
 ## 바닥 타일을 Ground rect에 맞춰 깐다 — 챕터 분위기 틴트(room_ground_color)는 Ground(ColorRect)가
