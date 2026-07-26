@@ -67,6 +67,7 @@ func _run() -> void:
 	await _test_station_gate_follows_codex()
 	await _test_first_screen_composition()
 	await _test_gate_claims_then_opens_chapters()
+	await _test_desk_opens_the_workshop()
 
 	if failures == 0:
 		print("TEST_BASE_OK — 전 항목 통과")
@@ -1083,6 +1084,63 @@ func _clear() -> void:
 		n.queue_free()
 	for n in get_nodes_in_group("pillars"):
 		n.queue_free()
+
+
+## [16] 🔴🔴 **책상 하나가 조립과 제작을 다 연다** (세97 N15).
+## 세90에 마을이 셋으로 줄며 공방 [E]가 사라졌고, **공방 제작이 유일 경로인 해금 다섯**
+## (`rune_bolt`·`rune_earth`·`jin_plain_g2`·`jin_fuse`·`gr_condense2`)이 **도달 불가**가 됐다.
+## 🔴 그때 `test_workshop_auto`는 **그린이었다** — 그 그물은 패널을 **직접 열어** 재고 마을을 안 지난다.
+##   즉 「패널이 돈다」와 「플레이어가 거기 갈 수 있다」는 다른 계약이고, 이 검사가 **뒤쪽**을 맡는다.
+## ⚠ 그래서 여기선 `_open_workshop_panel`을 직접 부르지 않는다 — **책의 버튼에서 출발**해야
+##   경로가 끊긴 걸 잡는다(직접 부르면 연결이 통째로 빠져도 그린이다).
+func _test_desk_opens_the_workshop() -> void:
+	print("[16] 책상 → 책 → [⚒ 부품 제작] → 공방 (재료→부품 사슬의 유일한 문)")
+	var gs = root.get_node("/root/GameState")
+	if _base.get("_forge") == null:
+		_base.call(&"_open_drawing")
+		await process_frame
+	var forge = _base.get("_forge")
+	if forge == null:
+		_check(false, "책이 열렸다")
+		return
+
+	# ── ⓐ 버튼이 실재하고, 조립 단계에서 보인다 ──
+	var btn := forge.get_node_or_null(^"Stage/Spread/CraftBtn") as Button
+	_check(btn != null, "🔴 책에 [⚒ 부품 제작] 버튼이 있다")
+	if btn == null:
+		return
+	_check(btn.visible, "조립 단계에서 버튼이 보인다 (숨어 있으면 문이 없는 것과 같다)")
+
+	# ── ⓑ 🔴 버튼을 **실제로 눌러** 공방이 열린다 (시그널→무대 연결이 살아 있나) ──
+	btn.emit_signal(&"pressed")
+	await process_frame
+	var shop = _base.get("_workshop")
+	_check(shop != null, "🔴 버튼 한 번에 공방이 열린다 (연결이 빠지면 아무 일도 안 난다 — 에러 0)")
+	if shop == null:
+		return
+	_check(bool(shop.call(&"is_open")), "공방 패널이 실제로 보이는 상태다")
+
+	# ── ⓒ 공방이 레시피를 들고 있다 = 다섯이 실제로 배울 수 있다 ──
+	var db = root.get_node("/root/Db")
+	var learnable := {}
+	for r in db.call(&"all_recipes"):
+		if r.reward_unlock != &"":
+			learnable[r.reward_unlock] = true
+	for want in [&"rune_bolt", &"rune_earth", &"jin_plain_g2", &"jin_fuse", &"gr_condense2"]:
+		_check(learnable.has(want),
+			"🔴 %s가 공방에서 배울 수 있다 (세97 이전엔 경로가 이것뿐인데 문이 닫혀 있었다)" % want)
+
+	# ── ⓓ 🔴 닫아도 책이 살아 있고 모달이 풀리지 않는다 ──
+	# 공방의 close()가 `ui_modal_open`을 내리는데, 책이 아직 열려 있으므로 무대가 되세워야 한다.
+	# 안 되세우면 [I]·[Tab]이 **책 위로 겹쳐** 열린다(세28의 사촌 — 에러 없이 화면만 깨진다).
+	shop.call(&"close")
+	await process_frame
+	_check(_base.get("_workshop") == null, "공방을 닫으면 정리된다")
+	_check(_base.get("_forge") != null, "🔴 공방을 닫아도 책은 그대로 열려 있다 (조립하던 자리로 복귀)")
+	_check(bool(gs.ui_modal_open),
+		"🔴 공방을 닫아도 모달 플래그가 살아 있다 (풀리면 [I]·[Tab]이 책 위로 겹친다)")
+	_base.call(&"_close_drawing")
+	await process_frame
 
 
 func _check(cond: bool, label: String) -> void:

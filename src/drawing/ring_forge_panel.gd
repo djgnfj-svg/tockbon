@@ -36,6 +36,12 @@ signal design_committed(assembly: Dictionary)
 ## 안 그러면 슬롯이 조용히 빈 채로 남아 "맺었는데 안 나간다"가 된다 (사용자가 실제로 겪었다).
 signal commit_rejected(score: float)
 
+## 🔴 **[⚒ 부품 제작]을 눌렀다** (세97 N15) — 공방을 **여기서 직접 열지 않는다.**
+## `src/drawing`이 `src/base`의 패널을 물면 모듈 경계 위반이라(takbon-rules §0), 책은 **요청만**
+## 하고 무대(`base.gd`)가 연다. ⚠ 마을이 아닌 무대에서 책을 펴면 수신자가 없어 **아무 일도 안 난다**
+## — 지금은 책을 펴는 곳이 마을 책상뿐이라 성립한다(다른 곳에서 펴게 되면 그쪽도 이어라).
+signal craft_requested
+
 # ── 레이아웃 (**논리 크기** 640×360 — 씬의 좌표도 전부 이 좌표계다) ──
 ## 🔴 세션 21: 뷰포트는 960×540(세션 18에 올림)이고 `stretch/aspect=expand`라 전체화면에선
 ## 그보다 더 넓어지기도 한다. 이 책은 640×360 좌표로 짜여 있어 그대로 두면 **왼쪽 위에 몰려 깨진다.**
@@ -166,6 +172,8 @@ const INK_EDGE_ON := Color(0.95, 0.82, 0.35)
 @onready var _hint: Label = $Stage/Spread/HintLabel
 @onready var _report: Control = $Stage/Spread/Report   # 분석 리포트 오버레이 (완성 시 표시)
 @onready var _redraw_btn: Button = $Stage/Spread/RedrawBtn   # 세71b [다시 조립] — 게이트 풀고 ASSEMBLE 복귀
+## 세97 [⚒ 부품 제작] — 재료로 진·고리·룬을 배우는 공방을 무대에 요청한다(위 `craft_requested`).
+@onready var _craft_btn: Button = $Stage/Spread/CraftBtn
 
 ## 🔴 세71b 점진 조립 게이트 — 조립(ASSEMBLE) → 그리기(DRAW) → 탁본 종이(RESULT) 3단계.
 ## 단일 소스 = 이 변수 하나. `_set_phase()`가 보드/책 mouse_filter·버튼·탭 잠금을 여기서 파생한다
@@ -238,6 +246,8 @@ func _ready() -> void:
 	_redraw_btn.visible = false
 	_redraw_btn.pressed.connect(_on_redraw_assemble)
 	_commit_btn.pressed.connect(_finish)
+	# 세97 N15: [⚒ 부품 제작] — 요청만 쏜다(무대가 연다. 위 `craft_requested` 머리말).
+	_craft_btn.pressed.connect(func() -> void: craft_requested.emit())
 	# 🔴 [쏘기] → **[마력 주입]** (세션 23). 조용히 성공하던 자리에 성공/실패가 갈리는 의식이 들어갔다.
 	var inject_btn := $Stage/Spread/Report/ShootBtn as Button
 	inject_btn.text = "마력 주입"
@@ -1142,6 +1152,13 @@ func _refresh_buttons() -> void:
 	_commit_btn.text = "✓ 맺힘" if _committed else "분석 ▶"
 	_commit_btn.disabled = not _has_attempt()
 	_redraw_btn.visible = not assemble
+	# 🔴 [⚒ 부품 제작]은 **조립 단계에서만** — 그리는 중·리포트 위에 띄우면 진행 중인 도안을 두고
+	#   화면이 갈아엎힌다. 「부품을 고르다 모자라면 만들러 간다」가 이 버튼이 서는 자리다.
+	# 🔴🔴 **CommitBtn과 같은 칸(472~612)을 시분할한다** — 이쪽은 ASSEMBLE, 저쪽은 DRAW라
+	#   둘이 동시에 뜨는 상태가 없다. **한쪽의 visible 조건을 바꾸려면 다른 쪽을 같이 봐라.**
+	#   ⚠ 왼쪽 칸(30~298)에 두면 `SayLabel`(단계 안내, y302~342)과 **글자가 겹친다** —
+	#     세97에 실제로 그렇게 뒀다가 스샷으로 잡았다(헤드리스는 이 겹침을 못 본다).
+	_craft_btn.visible = assemble
 
 
 ## 🔴 반올림은 core가 판다 — 「퍼펙트」가 "이 함수가 100을 돌려주는 순간"으로 정의돼 있어서,

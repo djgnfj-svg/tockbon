@@ -53,6 +53,9 @@ extends Node2D
 ##    (같은 이유로 HUD도 IGNORE다 — hud.gd `_ready` 참조.)
 
 const RingForgePanelScript := preload("res://src/drawing/ring_forge_panel.gd")
+## 세97 N15: 공방(재료 → 부품). 책상 [E] → 책 → [⚒ 부품 제작]으로 연다(건물이 아니다).
+const WorkshopPanelScript := preload("res://src/base/workshop_panel.gd")
+const WorkshopPanelScene := preload("res://src/base/workshop_panel.tscn")
 ## 🔴🔴 **세90: 정제대·공방·매점 패널 preload 셋을 걷었다** — 마을에서 그 건물 셋을 뺐으므로
 ##   여는 [E]가 없다(아래 `STATION_UNLOCKS` 머리말 = 되살리는 절차의 정본).
 ##   ⚠ **패널 스크립트·씬(`refine_panel`·`workshop_panel`·`shop_panel`)과 레시피 데이터는 살아 있다** —
@@ -165,6 +168,8 @@ const TINT_WHOLE := Color(1.0, 1.0, 1.0)       ## 마을이 돌아왔다 — 중
 ##   **슬롯 규약은 그대로 둔다**(정제대·공방을 되살리면 그날 다시 셋이 다툰다).
 var _overlay: CanvasLayer = null
 var _forge: RingForgePanelScript = null
+## 세97 N15: 책 위에 겹쳐 뜨는 공방(재료 → 부품). null이면 안 열려 있다.
+var _workshop: WorkshopPanelScript = null
 ## 🔴 온보딩 오프닝 대사 (세션41 → 세95: 화자가 길잡이에서 **문**으로 옮겨졌다). 이 마을 방문에 한 번만.
 var _dialogue: CanvasLayer = null
 var _gate_intro_shown := false
@@ -598,6 +603,12 @@ func _open_drawing() -> void:
 	_forge.design_committed.connect(_on_ring_committed)
 	_forge.commit_rejected.connect(_on_ring_rejected)
 	_forge.closed.connect(_close_drawing)   # ESC(ui_cancel) → 패널이 closed 발신
+	# 🔴 세97 N15: 책의 [⚒ 부품 제작] → 공방. **책상 하나가 조립과 제작을 다 연다**(사용자 확정).
+	#   세90에 마을이 셋으로 줄며 공방 [E]가 사라져 **재료→부품 사슬이 통째로 도달 불가**였다
+	#   (`rune_bolt`·`rune_earth`·`jin_plain_g2`·`jin_fuse`·`gr_condense2` 다섯이 못 열렸다).
+	#   건물을 다시 세우지 않은 이유 = 세90 「마을은 셋」과 세95 세계관(*"문과 서고만 남았다"*)을
+	#   안 건드리려는 것이다 — 책상은 이미 「마법 제작대」라 이름도 맞는다.
+	_forge.craft_requested.connect(_open_workshop_panel)
 	_forge.open()
 
 ## 고리 마법진이 맺혔다 — RingDesign으로 감싸 GameState에 넘긴다(빈 슬롯에 자동 장착).
@@ -623,10 +634,34 @@ func _close_drawing() -> void:
 	_player.caster.enabled = true
 	GameState.ui_modal_open = false
 
-# ──────── 정제대·공방·상점 패널 열기 (세29·32·66 → 🔴 세90에 걷었다) ────────
+# ──────── 정제대·공방·상점 패널 열기 (세29·32·66 → 세90에 걷었고 → 🔴 세97에 공방만 되살렸다) ────────
 #
-# 🔴 여섯 함수(`_open_refine_panel`/`_close_refine`·`_open_workshop_panel`/`_close_workshop`·
-#   `_open_shop_panel`/`_close_shop`)를 지웠다 — 세 건물이 `base.tscn`에서 빠져 **부르는 곳이 0**이 됐다.
-#   셋은 형태가 완전히 같았다(오버레이 슬롯 확보 → 플레이어 정지 → 패널 instantiate → `closed` 연결).
-#   ✅ **패널 자체는 살아 있다** — 되살릴 땐 `_open_drawing`/`_close_drawing`을 본으로 삼으면 되고,
-#   git 이력(세89 커밋)에 원형이 그대로 있다. 절차 정본 = `STATION_UNLOCKS` 머리말 ①~④.
+# 🔴 세90에 여섯 함수를 지웠다 — 세 건물이 `base.tscn`에서 빠져 **부르는 곳이 0**이 됐다.
+#   ✅ **세97: 공방만 돌아왔다.** 단 **건물이 아니라 책(`ring_forge_panel`)의 버튼**이 연다
+#   (`_open_drawing`의 `craft_requested` 연결 — 세90 「마을은 셋」을 안 건드리는 길이었다).
+#   ⏳ **정제대·상점은 아직 문이 없다** — 되살릴 땐 아래 둘을 본으로 삼아라(형태가 같다).
+#   git 이력(세89 커밋)에 원형이 그대로 있고, 건물로 세울 거면 절차 정본은 `STATION_UNLOCKS` 머리말 ①~④.
+
+## 🔴 공방 = 재료 → 부품(진·고리·룬). 책 위에 **겹쳐** 띄운다 — 닫으면 조립하던 자리로 그대로 돌아온다.
+## ⚠ **`ui_modal_open`을 여기서 false로 만들지 마라** — 책이 아직 열려 있는데 풀면 [I]·[Tab]이
+##   책 위로 겹쳐 열린다(세28 「닫힌 invisible Control도 입력을 받는다」의 사촌).
+##   그래서 `_close_workshop`은 플래그를 **다시 세운다**(공방 패널의 `close()`가 내려 버리므로).
+func _open_workshop_panel() -> void:
+	if _overlay == null or _workshop != null:
+		return
+	_workshop = WorkshopPanelScene.instantiate() as WorkshopPanelScript
+	if _workshop == null:
+		push_error("workshop_panel이 WorkshopPanel이 아니다")
+		return
+	_overlay.add_child(_workshop)   # 책과 같은 오버레이 = 책 위에 덮인다
+	_workshop.closed.connect(_close_workshop)
+	_workshop.open()
+
+
+func _close_workshop() -> void:
+	if _workshop != null:
+		_workshop.queue_free()
+		_workshop = null
+	# 🔴 책이 아직 열려 있다 — 공방의 close()가 내린 모달 플래그를 되세운다(위 머리말).
+	if _overlay != null:
+		GameState.ui_modal_open = true
