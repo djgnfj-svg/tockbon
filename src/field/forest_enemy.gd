@@ -51,6 +51,9 @@ const ShadowScript := preload("res://src/actors/shadow.gd")
 
 ## 🔴 피격 손맛 (세션 38 · 세63 개편) — 넉백/플래시/스쿼시 **연출값**. 밸런스가 아니라 느낌값이라
 ## 여기 const (projectile 물리 여유 const 선례). 사용자가 직접 때려 보며 조인다.
+## idle 애니 기본 박자 — `params.anim_fps`가 없을 때. 🔴 **옛 하드코딩 값 그대로**라
+## 키를 안 준 .tres는 동작이 안 바뀐다(하위호환 계약 · `_idle_fps` 머리말).
+const ANIM_FPS_DEFAULT := 6.0
 const KNOCKBACK_IMPULSE := 140.0  ## 맞는 순간 플레이어 반대쪽으로 밀려나는 속도
 const KNOCKBACK_DECAY := 600.0    ## 넉백 감쇠(속도/s) — 빨리 원래 추격으로 복귀
 const POP_SQUASH := Vector2(1.25, 0.78)  ## 피격 스쿼시 — 가로로 눌리며 "맞았다"가 읽힌다
@@ -175,7 +178,11 @@ func _apply_look() -> void:
 func _setup_frames(tex: Texture2D) -> void:
 	var frames := SpriteFrames.new()
 	frames.remove_animation(&"default")
-	if not _bake_strip(frames, &"idle", tex, true):
+	# 🔴 세97: idle 박자를 **데이터가 판다**(`params.anim_fps`) — 그전엔 9종 전부 6.0 하드코딩이라
+	#   안개 정령과 사냥개가 **같은 속도로 움직였다**(성격이 없었다). 기준선 = ART_SPEC §8-2.
+	#   ⚠ hurt는 데이터를 안 본다 — 피격은 **짧은 반응**이라 성격 축이 아니고, 종마다 다르면
+	#     "맞았다"가 일관되게 안 읽힌다(느린 적은 피격 반응도 느려져 손맛이 갈린다).
+	if not _bake_strip(frames, &"idle", tex, true, _idle_fps()):
 		return
 	var hurt_path := str(_def.params.get("hurt_sprite", "")) if _def != null else ""
 	if hurt_path != "":
@@ -190,15 +197,26 @@ func _setup_frames(tex: Texture2D) -> void:
 	_visual.play(&"idle")
 
 
+## 🔴 idle 박자(fps) — **「새 적 = .tres 한 장」이 애니까지 덮는다**(세97).
+## 기준선 = `ART_SPEC` §8-2: 떠도는 것 2~4 · 묵직 4~6 · 보통 6~8 · 빠른 짐승 10~14 · 식물 3~5.
+## ⚠ **값은 F5로 조인다** — 박자는 헤드리스도 스샷도 못 잰다(그 문서가 그렇게 못박았다).
+## 기본값은 옛 하드코딩과 같은 6.0이라, 키가 없는 .tres는 **정확히 옛 동작**이다(하위호환).
+func _idle_fps() -> float:
+	if _def == null:
+		return ANIM_FPS_DEFAULT
+	return maxf(0.1, float(_def.params.get("anim_fps", ANIM_FPS_DEFAULT)))
+
+
 ## 가로 스트립 한 장 → 애니 하나 (idle·hurt 공용 굽기). 성공하면 true.
-func _bake_strip(frames: SpriteFrames, anim: StringName, tex: Texture2D, loop: bool) -> bool:
+func _bake_strip(frames: SpriteFrames, anim: StringName, tex: Texture2D, loop: bool,
+		fps: float = ANIM_FPS_DEFAULT) -> bool:
 	var side := tex.get_height()
 	if side <= 0:
 		return false
 	var count := maxi(1, tex.get_width() / side)
 	frames.add_animation(anim)
 	frames.set_animation_loop(anim, loop)
-	frames.set_animation_speed(anim, 6.0)
+	frames.set_animation_speed(anim, fps)
 	for i in count:
 		var at := AtlasTexture.new()
 		at.atlas = tex

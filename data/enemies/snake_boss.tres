@@ -25,6 +25,7 @@ hp = 320.0
 counter_rune = 6
 has_counter = true
 params = {
+"anim_fps": 5.0,
 "ai": "boss_snake",
 "sprite": "res://assets/sprites/enemies/snake_head.png",
 "hurt_sprite": "res://assets/sprites/enemies/snake_head_hurt.png",

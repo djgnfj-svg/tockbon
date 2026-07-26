@@ -16,6 +16,7 @@ display_name = "수액 슬라임 우두머리"
 hp = 60.0
 has_counter = false
 params = {
+"anim_fps": 6.0,
 "aggro_range": 200.0,
 "sprite": "res://assets/sprites/enemies/slime_elite.png",
 "attack_cooldown": 0.9,

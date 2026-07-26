@@ -31,6 +31,7 @@ display_name = "수액 슬라임"
 hp = 14.0
 has_counter = false
 params = {
+"anim_fps": 7.0,
 "aggro_range": 160.0,
 "sprite": "res://assets/sprites/enemies/slime.png",
 "attack_cooldown": 0.9,

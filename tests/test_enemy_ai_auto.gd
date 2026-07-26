@@ -50,6 +50,7 @@ func _run() -> void:
 	await _test_dispersed_reduces_damage()
 	await _test_leash_stops_far_pursuit()
 	await _test_leash_keeps_boss_machinery()
+	await _test_anim_fps_from_data()
 
 	if failures == 0:
 		print("TEST_ENEMY_AI_OK — 전 항목 통과")
@@ -237,6 +238,50 @@ func _projectile_count() -> int:
 func _free_projectiles() -> void:
 	for p in root.get_tree().get_nodes_in_group("enemy_projectiles"):
 		p.free()
+
+
+## [6] 🔴 **애니 박자가 데이터에서 온다** (세97 · N12). 그전엔 `_bake_strip`이 fps를 **6.0으로
+## 하드코딩**해 9종이 전부 같은 속도로 움직였다 — 안개 정령과 사냥개가 구분이 안 됐다.
+## 🔴 **ⓐ가 심장이다: 「.tres에 값이 있다」가 아니라 「그 값이 SpriteFrames까지 도달한다」를 잰다.**
+##   데이터만 넣고 코드가 안 읽으면 **죽은 손잡이**가 된다(감사 T3 — 그게 이 그물의 존재 이유다).
+## ⚠ 값 자체(3.0이 맞나)는 **안 박는다** — 박자는 F5가 정한다(ART_SPEC §8-2 *"규격이 아니라 출발점"*).
+##   여기서 재는 건 **배선**과 **성격이 갈렸다**는 사실뿐이다.
+func _test_anim_fps_from_data() -> void:
+	print("[6] 애니 박자 — .tres → SpriteFrames 배선 · 종별 차이")
+	var seen := {}
+	for f: String in DirAccess.get_files_at("res://data/enemies"):
+		if not f.ends_with(".tres"):
+			continue
+		var id := StringName(f.get_basename())
+		var def = _db.get_enemy(id)
+		if def == null or not def.params.has("sprite"):
+			continue
+		var e = await _spawn(id)
+		var vis := e.get_node_or_null(^"Visual") as AnimatedSprite2D
+		var frames: SpriteFrames = vis.sprite_frames if vis != null else null
+		if frames == null or not frames.has_animation(&"idle"):
+			_check(false, "%s의 idle 애니가 구워졌다" % id)
+			e.queue_free()
+			continue
+		var want: float = float(def.params.get("anim_fps", 6.0))
+		var got: float = frames.get_animation_speed(&"idle")
+		_check(is_equal_approx(got, want),
+			"🔴 %s의 idle 박자가 .tres 값 그대로다 (데이터 %.1f / 화면 %.1f)" % [id, want, got])
+		seen[id] = got
+		e.queue_free()
+
+	# ── 성격이 갈렸다 = 축이 살아 있다 (전부 같으면 데이터를 넣은 값어치가 0) ──
+	_check(seen.size() >= 5, "박자를 잰 적이 다섯 종 이상이다 (실제 %d — 적으면 아래가 자명 통과)" % seen.size())
+	var vals: Array = seen.values()
+	var lo: float = vals.min()
+	var hi: float = vals.max()
+	_check(hi - lo >= 4.0,
+		"🔴 가장 느린 적과 빠른 적의 박자가 뚜렷이 갈린다 (%.1f ~ %.1f — 폭 %.1f ≥ 4.0)" % [lo, hi, hi - lo])
+	var distinct := {}
+	for v in vals:
+		distinct[v] = true
+	_check(distinct.size() >= 4,
+		"🔴 서로 다른 박자가 넷 이상이다 = 종마다 성격이 있다 (실제 %d가지)" % distinct.size())
 
 
 ## 적 하나를 스폰한다 — enemy_id는 **_ready 전에** 세워야 _def가 그 적으로 잡힌다(트리 진입 시 _ready).

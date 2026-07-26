@@ -16,6 +16,7 @@ display_name = "바람을 품은 존재"
 hp = 150.0
 counter_rune = 0
 params = {
+"anim_fps": 5.0,
 "aggro_range": 260.0,
 "sprite": "res://assets/sprites/enemies/gale.png",
 "hurt_sprite": "res://assets/sprites/enemies/gale_hurt.png",

@@ -31,6 +31,7 @@ display_name = "갑주 갑충"
 hp = 55.0
 counter_rune = 2
 params = {
+"anim_fps": 4.0,
 "aggro_range": 170.0,
 "sprite": "res://assets/sprites/enemies/beetle.png",
 "armor_reduction": 0.7,

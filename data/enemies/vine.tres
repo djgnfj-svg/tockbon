@@ -37,6 +37,7 @@ id = &"vine"
 display_name = "재생 덩굴"
 hp = 40.0
 params = {
+"anim_fps": 4.0,
 "ai": "stationary",
 "aggro_range": 80.0,
 "sprite": "res://assets/sprites/enemies/vine.png",
