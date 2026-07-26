@@ -318,8 +318,13 @@ func _to_base() -> void:
 	get_tree().change_scene_to_file(base_scene_path)
 
 
-## 목표 하나를 달성했다 — 아직 완료 아님. 길잡이에게 돌아가 정산하라고 HUD로 민다 (forest 선례).
+## 목표 하나를 달성했다 — 아직 완료 아님. 마을 **문**으로 돌아가 정산하라고 HUD로 민다 (forest 선례).
+## 🔴🔴 세95: 옛 문구는 *"길잡이에게 돌아가 정산하라 [?]"*였는데 **길잡이가 은퇴해 없는 사람을 가리켰다**
+##   (끝의 `[?]`도 그 머리 위 마크였다 — 지금은 문 위에 뜬다, `base.gd _refresh_gate_mark`).
+## ⚠ 이 줄은 **원정 중에 실제로 화면에 뜨는 안내**다. `base.gd _on_quest_ready`와 **일부러 문구가 다르다**:
+##   여긴 원정 중이라 「마을로 돌아가」가 붙고, 마을에선 이미 문 앞이라 안 붙는다.
+##   (세95 전엔 두 줄이 **한 글자도 안 달라** 감사 T5 「파생 대신 복제」의 표본이었다 — 지금은 뜻이 갈렸다.)
 func _on_quest_ready(quest_id: StringName) -> void:
 	var q := Db.get_quest(quest_id)
 	if q != null:
-		_hud.say("목표 달성: %s — 길잡이에게 돌아가 정산하라 [?]" % q.title)
+		_hud.say("목표 달성: %s — 마을로 돌아가 문에서 [E]로 정산하라 [?]" % q.title)

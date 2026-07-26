@@ -66,6 +66,7 @@ func _run() -> void:
 	await _test_gate_light_breathes()
 	await _test_station_gate_follows_codex()
 	await _test_first_screen_composition()
+	await _test_gate_claims_then_opens_chapters()
 
 	if failures == 0:
 		print("TEST_BASE_OK — 전 항목 통과")
@@ -805,15 +806,20 @@ func _test_first_screen_composition() -> void:
 	#      남는 게 문·기념비뿐인데 유일한 제작대가 1200px 밖이면 「정리」가 아니라 「아무것도 없는 마을」이다.
 	#      → 사용자 결정으로 **모으는 쪽**을 택했고, 그래서 계약이 「밖」에서 **「접근 거리 안」**으로 뒤집혔다.
 	#    🔴 뒤집었다고 그물이 약해지지 않았다 — 방향만 반대고 **여전히 좌표를 못 박는다**:
-	#      누가 책상을 다시 동쪽으로 밀면(또는 길잡이를 화면 밖으로 보내면) 여기가 빨개진다.
-	#    ✅ 길잡이가 여기 든 것이 **세89 이월 2번의 절반**이다 — *"길잡이에게 [E]로 말을 걸어라"*라는
-	#      첫 안내가 세89까지 **화면 밖의 NPC**를 가리켜 거짓말이었다(x 1020 > 창 오른끝 960).
+	#      누가 책상을 다시 동쪽으로 밀면 여기가 빨개진다.
+	#    ✅ **세89 이월 2번은 세95에 다른 방식으로 닫혔다** — *"길잡이에게 [E]로 말을 걸어라"*라는 첫
+	#      안내가 세89까지 화면 밖 NPC를 가리켜 거짓말이었는데(x 1020 > 창 오른끝 960), 세90이 그를
+	#      화면 안으로 들였고 **세95엔 그를 아예 은퇴시켜** 안내가 문(첫 화면의 주인공)을 가리킨다.
 	#    🔴🔴 **머리끝까지 잰다 — 실측이 이 그물의 구멍을 잡았다.** 세90 첫 스샷에서 서고(책상)
 	#      **지붕이 화면 위로 44px 잘려 있었는데** 이 검사가 그린이었다: `global_position`은 발밑이라
 	#      스프라이트가 위로 224px 솟는 걸 안 봤다. 세89가 **문에 대해** 정확히 이걸 배웠는데
 	#      (*"발밑만 재면 아치 위쪽이 잘려 「반만 보이는 문」이 그린으로 통과한다"* — 위 ⓐ)
 	#      새 항목을 쓰며 그 교훈을 안 옮긴 것이다(감사 T5 「파생 대신 복제」의 그물판).
-	for node_name in ["Desk", "Npc"]:
+	#    🔴🔴 **세95: 목록에서 `Npc`가 빠졌다** — 길잡이가 은퇴하고 문이 화자·정산을 겸한다(설계 §2).
+	#      남은 하나(`Desk`)만 여기서 재는 이유 = 문은 위 ⓐ가 이미 **머리끝까지** 재고, 플레이어는
+	#      스폰이 곧 창의 중심이라 자명하다. 이 루프는 「문·플레이어 말고 또 무엇이 첫 화면에 들어야
+	#      하나」의 목록이고, 지금 그건 제작대(책상) 하나다.
+	for node_name in ["Desk"]:
 		var n = _base.get_node_or_null(node_name)
 		if n == null:
 			_check(false, "🔴 %s 노드가 씬에 없다 (세90 정리 후 마을에 남는 셋 중 하나다)" % node_name)
@@ -850,7 +856,141 @@ func _test_first_screen_composition() -> void:
 				% [cell, road.get_cell_atlas_coords(cell)])
 
 
+## [12] 🔴🔴 **문 [E] 하나가 「정산」과 「원정」을 겸한다** (세95 길잡이 은퇴 · 설계
+## `docs/takbon-design/world_and_visual_design.md` §2 — 사용자 확정).
+##
+## 🔴🔴 **이 그물이 없으면 이 배선 전체가 무그물이다** (설계 §6 실측):
+##   • `test_quests_auto`는 `base.tscn`을 **인스턴스화조차 안 하고** `claim_ready_quests()`를 직접 부른다.
+##   • 위 [8]의 게이트 검사는 `get_connections().size() >= 1`이라 **연결이 하나만 있으면 통과**한다 —
+##     즉 문이 챕터 패널만 열고 **정산을 통째로 잃어도** 전 스위트가 그린이다.
+##   • F5로도 안 드러난다: 기존 세이브엔 옛 퀘스트 상태가 남아 정산할 게 애초에 없다.
+##   → 그래서 여기서 **씬을 통과하는 진짜 경로**로 잰다: `zone.interacted.emit()`
+##     (선례 = `test_chapter_auto`가 `ex.interacted.emit()`으로 출구를 재는 방식).
+##
+## 재는 것 셋 — 전부 「에러 0으로 조용히 깨지는」 자리다:
+##   ⓐ 정산 대기가 있을 때 문 [E]가 **실제로 정산한다**(`is_quest_done`이 참이 된다)
+##   ⓑ 🔴 정산 대사가 **끝나면 챕터 선택이 저절로 뜬다** — 설계 §2 ⓐ의 체이닝. 이게 없으면
+##      `ui_modal_open` 게이트 때문에 플레이어가 **E를 두 번** 눌러야 나간다(에러 0).
+##   ⓒ 정산할 게 없으면 **대사 없이 바로** 챕터 선택이다(*"나가려는데 자꾸 대사가 뜬다"* 금지).
+## ⚠ **못 재는 것**: 대사 마지막 줄을 E로 넘길 때 그 E가 새로 뜬 패널을 **즉시 닫는지**(설계 §2 ⓓ).
+##   여기선 ESC로 넘기고, 같은 프레임 E 이중 소비는 리드가 실게임 `push_input`으로 확인한다.
+func _test_gate_claims_then_opens_chapters() -> void:
+	print("[12] 🔴 문 [E] = 정산 + 챕터 선택 (세95 길잡이 은퇴 — 설계 §2)")
+	var gs = root.get_node("/root/GameState")
+	var db = root.get_node("/root/Db")
+	var gate = _zone(&"forest_gate")
+	if gate == null:
+		_check(false, "숲길(zone_id=forest_gate)을 못 찾았다")
+		return
+	# 앞 항목들이 남긴 모달을 확실히 걷고 시작한다 (책은 [6b]에서 닫혔지만 플래그는 오토로드다).
+	gs.ui_modal_open = false
+
+	# ── ⓐ 정산 대기 상태를 만든다 ──
+	#  q00은 DRAW 1장이라 **도안이 하나라도 있으면** 충족된다([6]·[6b]가 이미 맺어 놨다).
+	#  🔴 완료 표시만 되돌린다 — 진행 카운터를 건드리지 않는 이유는 DRAW가 **상태 판정**이라서다
+	#  (`GameState.is_quest_satisfied` — 이벤트를 놓쳐도 옳게 나오는 그 설계).
+	var qid := &"q00_first_draw"
+	var had_done: bool = gs.is_quest_done(qid)
+	gs.quest_done.erase(qid)
+	if (gs.ring_designs as Array).is_empty():
+		gs.ring_designs.append(RingDesign.from_assembly(_assembly(1.0), "정산 테스트"))
+	var q0 = db.get_quest(qid)
+	if q0 == null or not gs.is_quest_claimable(q0):
+		_check(false, "전제 실패: %s를 정산 대기로 못 만들었다 (도안 %d장)"
+			% [qid, (gs.ring_designs as Array).size()])
+		return
+	_check(_base.get("_chapter_sel") == null and _base.get("_dialogue") == null,
+		"전제: 모달이 안 떠 있다")
+
+	# ── 🔴 머리 위 마크가 **문으로** 옮겨왔다 (세95 — 옛 자리는 길잡이 머리 위였다) ──
+	#  🔴 **시그널 경로로** 흔든다(직접 `_refresh_gate_mark`를 부르지 않는다) — `quest_ready` 수신이
+	#   빠지면 「달성했는데 [?]가 안 켜진다」가 되는데 에러가 0이다. 노드 경로(`$ForestGate/Mark`)가
+	#   씬과 갈려도 여기서 죽는다.
+	#  ⚠ 마크가 **보이나**(렌더·가림)는 헤드리스가 못 본다 — 리드의 MCP 스샷 몫이다.
+	var mark = gate.get_node_or_null("Mark")
+	_check(mark != null, "🔴 문 위에 마크(Mark) 라벨이 있다 — 길잡이가 은퇴했으니 [?]는 문이 진다")
+	_bus.quest_ready.emit(qid)
+	await process_frame
+	if mark != null:
+		_check(mark.visible and String(mark.text) == "?",
+			"🔴 정산 대기면 문 위에 [?]가 켜진다 (보임 %s · 글자 %s)" % [mark.visible, mark.text])
+
+	# 🔴 **씬 경로로** 누른다 — `_on_gate_talk`를 직접 부르면 「게이트에 그 함수가 이어져 있나」를
+	#   안 재게 된다(연결을 `_open_chapter_panel`로 되돌려도 그린이 나온다 = 검출력 0).
+	gate.interacted.emit()
+	await process_frame
+	_check(gs.is_quest_done(qid),
+		"🔴🔴 문 [E]가 **정산한다** (%s 완료 %s — 거짓이면 문이 챕터만 열고 정산을 잃은 것이다)"
+			% [qid, gs.is_quest_done(qid)])
+	_check(_base.get("_dialogue") != null,
+		"🔴 정산하면 문이 말을 건다 (대사 상자 없음 = 조용히 보상만 주는 옛 병)")
+	if mark != null:
+		# 정산했으면 [?]는 내려간다 — 새 목표가 열렸으면 [!]로 바뀌고(세43), 아니면 숨는다.
+		_check(not mark.visible or String(mark.text) != "?",
+			"🔴 정산하면 [?]가 내려간다 (실제 보임 %s · 글자 %s — 안 내려가면 영영 「가서 받아라」다)"
+				% [mark.visible, mark.text])
+
+	# ── ⓑ 대사가 끝나면 **저절로** 챕터 선택이 열린다 (E를 두 번 누르게 하지 않는다) ──
+	_push_action("ui_cancel")   # 건너뛰기 → finished
+	await process_frame
+	await process_frame
+	_check(_base.get("_dialogue") == null, "대사가 끝나면 상자가 치워진다")
+	_check(_base.get("_chapter_sel") != null,
+		"🔴🔴 대사가 끝나면 챕터 선택이 **저절로** 뜬다 (설계 §2 ⓐ — 안 뜨면 E를 두 번 눌러야 나간다)")
+
+	# 뒷정리 — 패널을 닫고 모달을 푼다 (다음 항목·다른 테스트가 잠긴 채로 시작하지 않게).
+	_push_action("ui_cancel")
+	await process_frame
+	_check(_base.get("_chapter_sel") == null and not gs.ui_modal_open,
+		"ESC로 챕터 선택이 닫히고 모달이 풀린다 (실제 모달 %s)" % gs.ui_modal_open)
+
+	# ── ⓒ 정산할 게 없으면 **대사 없이 바로** 챕터 선택 ──
+	#  🔴 이 갈래가 죽으면 「나가려는데 자꾸 대사가 뜬다」거나(대사) 「E를 눌러도 아무 일이 없다」(무반응)가
+	#   되는데, 둘 다 에러가 0이다.
+	_check(not gs.has_claimable_quest(), "전제: 이제 정산할 게 없다")
+	gate.interacted.emit()
+	await process_frame
+	_check(_base.get("_dialogue") == null,
+		"🔴 정산할 게 없으면 대사를 안 띄운다 (설계 §2 — 나가려는데 대사가 뜨면 안 된다)")
+	_check(_base.get("_chapter_sel") != null,
+		"🔴 정산할 게 없으면 **바로** 챕터 선택이 뜬다")
+	_push_action("ui_cancel")
+	await process_frame
+
+	# ── ⓓ 🔴🔴 **소프트락 방지 계약**(설계 §2 ⓑ) — 대사가 **한 줄도 안 나올 수 있다** ──
+	#  트리거 = `Db.get_quest`가 전부 null(`.tres` 침묵사, 세50 ⓑ — 이 프로젝트가 **두 번 밟은** 조건).
+	#  그때 `finished`가 영영 안 오므로 챕터 패널을 `finished`에**만** 걸면 마을 밖으로 못 나간다.
+	#  🔴 그래서 `_start_turnin_dialogue`의 **반환값이 계약**이다: 못 띄웠으면 false → 호출부가 즉시 연다.
+	#  ⚠ **여기서 재는 건 그 계약 자체다** — 실제 침묵사를 헤드리스에서 만들 길이 없어(claim은 늘
+	#   `Db.all_quests()`에서 오므로 id가 반드시 풀린다) 해소 불가능한 id로 **직접** 부른다.
+	#   가장 있음직한 회귀 = 누가 반환형을 `-> void`로 되돌리는 것이고, 그러면 `typeof`가 NIL이라 빨개진다.
+	var shown = _base.call(&"_start_turnin_dialogue", [&"__ghost_quest__"])
+	_check(typeof(shown) == TYPE_BOOL and not bool(shown),
+		"🔴🔴 대사 줄이 비면 `_start_turnin_dialogue`가 **false**를 돌려준다 (실제 %s) — void로 되돌리면 소프트락이다"
+			% str(shown))
+	_check(_base.get("_dialogue") == null, "줄이 비면 상자를 안 띄운다 (빈 상자가 모달만 잡으면 안 된다)")
+
+	if had_done:
+		gs.quest_done[qid] = true   # 뒷정리 — 원래 완료였으면 되돌린다
+	# 🔴 뒷정리를 **끝까지** 기다린다. 이 항목은 실제로 퀘스트를 정산하므로 `quest_completed` →
+	#   `Audio`가 SFX(unlock.wav)를 물고, 그게 **재생 중인 채로 quit()** 하면 엔진이 종료 시
+	#   *"ObjectDB instances were leaked"* / *"resources still in use"*를 찍는다(실측 — 새는 건
+	#   `AudioStreamPlaybackWAV`지 씬 노드가 아니다). `queue_free` 플러시도 같이 끝난다.
+	#   ⚠ 그 두 줄은 **`SCRIPT ERROR` grep에 안 걸린다**(감사 T6) — 스위트는 그린인 채로 노이즈만
+	#   쌓이고, 노이즈가 쌓이면 다음 세션이 **진짜 엔진 ERROR를 흘려보낸다**. 그래서 여기서 치운다.
+	await create_timer(1.5).timeout
+
+
 # ── 헬퍼 ──
+
+## 액션 이벤트를 뷰포트에 주입 → _unhandled_input의 is_action_pressed가 받는다.
+## ⚠ 액션 주입은 **마우스 히트 테스트를 건너뛴다** — `mouse_filter` 함정은 이걸로 못 잡는다(세25, 위 [7]).
+func _push_action(action: String) -> void:
+	var ev := InputEventAction.new()
+	ev.action = action
+	ev.pressed = true
+	root.push_input(ev)
+
 
 ## 🔴 그리기 폐지 모드인가 — **`RingPower`의 술어를 그대로 부른다**(`balance.skip_drawing`을 직접
 ## 읽으면 스위치를 되돌릴 때 이 그물만 조용히 남는다, ring_power.gd 주석의 그 규율).

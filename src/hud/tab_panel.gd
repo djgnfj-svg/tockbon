@@ -192,8 +192,15 @@ func _unhandled_input(event: InputEvent) -> void:
 				get_viewport().set_input_as_handled()
 
 
-## 🔴 NPC(길잡이)가 E로 여는 공개 진입점 (세션37→40) — 퀘스트 탭으로 연다. quest_panel.open()을 대체.
+## 퀘스트 탭을 여는 공개 진입점 (세션37→40) — quest_panel.open()을 대체.
 ## _open_at이 ui_modal_open 게이트(책 등 타 모달과 안 겹침)와 이미 열림일 때 탭 전환까지 처리한다.
+## 🔴🔴 **세95: 부르는 곳이 0이 됐다.** 옛 호출자는 길잡이 NPC [E](→ `base.gd`)였는데, 길잡이가
+##   은퇴하고 문이 그 자리를 받으면서 **문 [E]는 시트를 안 연다**(나가려고 누른 키가 시트를 열면
+##   손에 안 맞는다 — `base.gd _on_gate_talk` 주석). 지금 시트는 위 `_unhandled_input`의
+##   [Tab]·[I]·[Q]·[C]로만 열린다.
+## ⚠ 그래서 이건 지금 **거짓 손잡이 후보**(감사 T3)다 — 남길지 지울지는 리드 판단이다.
+##   ⓐ 남긴다면 근거 = 「퀘스트 탭을 코드에서 여는 유일한 공개 문」(다음 호출자가 문자열 인덱스를
+##      베끼지 않게 한다) · ⓑ 지운다면 `_open_at(1)`을 직접 부르는 쪽이 늘어난다.
 func open_quest() -> void:
 	_open_at(1)
 

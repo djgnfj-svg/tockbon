@@ -9,6 +9,7 @@ extends SceneTree
 ##   • open([...]) → 보임·ui_modal_open=true·첫 줄 표시
 ##   • interact 액션으로 한 줄씩 넘어가고, 마지막에서 한 번 더 → finished 한 번·모달 해제·숨김
 ##   • ui_cancel(ESC) → 즉시 건너뛰기 finished·모달 해제
+##   • 🔴 **씬에 박힌 화자 사본 == 코드 `SPEAKER_DEFAULT`** (열기 **전에** 잰다 — 세86 형태)
 ##   • speaker 인자 반영
 ## ⚠ **못 잡는 것**(리드가 실게임 push_input·MCP 스샷으로): 좌클릭이 밴드/화면에 닿아 진행되는가,
 ## 밴드가 실제로 하단에 렌더되는가, 열린 동안 mouse_filter STOP이 발사를 안 먹는가. 여기선
@@ -46,6 +47,15 @@ func _run() -> void:
 	var text_lbl = box.get_node("Band/Margin/VBox/Text")
 	var speaker_lbl = box.get_node("Nameplate/Speaker")
 
+	# ── 🔴🔴 씬에 박힌 화자 사본 (세86 형태 · 세95 길잡이 → 문) ──
+	#  🔴 **`open()`을 부르기 전에 재야 한다.** `open()`이 라벨을 `SPEAKER_DEFAULT`로 덮으므로,
+	#   열고 나서 재면 **씬 값이 무엇이든 통과한다** — 옛 검사가 정확히 그 자리에 있었고
+	#   *"기본 화자 = 길잡이"*라는 이름을 달고도 **씬 사본은 한 번도 안 재고 있었다**(검출력 0).
+	#  🔴 문자열을 베끼지 않고 상수를 라이브로 읽는다 — 재는 관계는 「코드 상수 == 씬 라벨」이다.
+	_check(speaker_lbl.text == box.SPEAKER_DEFAULT,
+		"🔴 씬 기본 화자가 코드 상수와 같다 (씬 %s / 상수 %s — 갈리면 열기 전 한 프레임에 옛 이름이 나간다)"
+			% [speaker_lbl.text, box.SPEAKER_DEFAULT])
+
 	# ── 빈 배열: 즉시 finished, 안 보임, 모달 안 켜짐 ──
 	_gs.ui_modal_open = false
 	box.open([])
@@ -60,7 +70,9 @@ func _run() -> void:
 	_check(box.visible == true, "open → 보임")
 	_check(_gs.ui_modal_open == true, "open → ui_modal_open=true")
 	_check(text_lbl.text == "첫 줄", "open → 첫 줄 표시")
-	_check(speaker_lbl.text == "길잡이", "기본 화자 = 길잡이")
+	# open()이 화자 인자를 안 받았을 때 상수로 채우나 (위 씬 사본 검사와 **다른 것**을 잰다).
+	_check(speaker_lbl.text == box.SPEAKER_DEFAULT,
+		"open(lines) → 화자 = SPEAKER_DEFAULT(%s)" % box.SPEAKER_DEFAULT)
 
 	# ── interact 로 다음 줄 ──
 	_push_action("interact")

@@ -29,6 +29,7 @@ description: 탁본(TAKBON) 프로젝트의 아키텍처 규칙·모듈 지도·
 - **typed GDScript 강제.** 모든 변수·인자·반환에 타입.
 - **서브에이전트 새 스크립트에 `class_name` 선언 금지** → `const X := preload(...)`. 전역 클래스 캐시는 리드의 `--import` 때만 갱신된다. (리드는 core에서 class_name을 쓸 수 있다.)
 - **모듈 간 통신은 EventBus 시그널 + core 스키마만.** 타 모듈 직접 preload/get_node 금지. (정당한 예외: `base.gd`가 책 씬을 무는 것 = 진입 씬이 조합 루트라서.)
+  - 🔴 **명시 예외 ② — 기하 단일 소스**: `ring_board.gd`의 **static·순수 기하 함수**(`compose_guide_paths`·`rune_slot_positions`·`glyph_guide_pts`·`jin_guide_pts`…)는 타 모듈이 **`const RingBoard := preload("res://src/drawing/ring_board.gd")`로 그대로 부른다.** 판례 = `src/hud/hud.gd`·`src/hud/tab_panel.gd`. 좌표·모양을 **베끼면** 판·책·HUD가 갈라지고, `test_ui_text_auto`가 그 재사용을 강제한다. 🔴 **core로 올리자고 제안하지 마라 — 의존 방향이 뒤집힌다**(`SLOTS`·`GLYPH_NONE`이 `src/drawing/ring_assembly.gd` 소유). ⚠ 쓸 땐 **그 줄 위에 왜 예외인지 적어라.**
 - **수치는 전부 `data/balance.tres`(BalanceData).** 코드에 밸런스 상수 금지. ⚠ 예외 = **연출값(손맛: 넉백·히트스톱·팝 등)은 스크립트 const**다 — 사용자가 직접 때려 조이는 값이라 밸런스가 아니다.
 - 🔴🔴 **생명체·프롭 시각 = 도형 플레이스홀더 금지** (사용자 확정, 세54). 새 적·캐릭터·아이템·프롭의 겉모습을 `Polygon2D`·`ColorRect` 같은 기하 도형으로 임시로 때우지 마라 — **`takbon-art`로 진짜 도트 스프라이트를 만들어 배선한다**(적/머리 = `params.sprite`+`_setup_frames` 스트립, 그 외 = Sprite2D). "아트는 병렬이니 도형으로 먼저 돌린다"(drop_pickup 마름모 선례)는 **각하됐다** — 사용자가 도형 스탠드인을 싫어한다(세54 뱀 보스가 팔각형 마디로 나가 밟았다). 설계·구현은 **도형으로 시작하지 말고 art부터 태운다**. ⚠ **예외 = 절차적 VFX·이펙트**(`death_puff`·`vfx.gd` Line2D·진/문양 가이드선)는 애초에 스프라이트가 아니라 그림이라 도형이 맞다. 판별 = "이건 도트로 그려야 할 물건인가?"
 - **git 커밋은 리드(메인 세션)만.** 서브에이전트는 자기 모듈 폴더 + `tests/` 자기 접두사 파일만 수정.
@@ -51,7 +52,8 @@ description: 탁본(TAKBON) 프로젝트의 아키텍처 규칙·모듈 지도·
 ## 2. 모듈 지도
 
 - **`src/base`** — 마법사 학교 마을(진입점, `run/main_scene`).
-  🔴🔴 **세90: 마을에 실제로 서 있는 건 셋이다 — 캐릭 + 마법문 + 마법 제작대(책상)**(사용자 확정). 씬에 남은 노드 = `Player`·`ForestGate`·`Desk`·`Npc`(길잡이)·`Monument`(영구 잔해)·`Dummy1~5`(연습장). ⚠ **공방(`Craft`)·정제대(`Refine`)·매점(`Shop`) 노드는 씬에 없다** — 「마을에 공방이 있다」고 전제하고 배선하지 마라.
+  🔴🔴 **세90: 마을에 실제로 서 있는 건 셋이다 — 캐릭 + 마법문 + 마법 제작대(책상)**(사용자 확정). 씬에 남은 노드 = `Player`·`ForestGate`·`Desk`·`Monument`(영구 잔해 = **깨진 큰 마법진**)·`Dummy1~5`(연습장). ⚠ **공방(`Craft`)·정제대(`Refine`)·매점(`Shop`) 노드는 씬에 없다** — 「마을에 공방이 있다」고 전제하고 배선하지 마라.
+  🔴🔴 **세95: `Npc`(길잡이)도 씬에 없다 — 문(`ForestGate`)이 화자·정산을 겸한다.** 퀘스트 정산·오프닝 대사·머리 위 [?] 마크가 전부 문에 붙어 있다(`_on_gate_talk`·`ForestGate/Mark`). ⚠ `src/props/npc_guide.tscn`·PNG는 **남겨 뒀다**(씬에서만 뺐다). 🔴 **문 [E]에 세 번째 일을 얹지 마라** — 이미 대사→정산→챕터선택 체인이고, 모달 규약 때문에 조용히 깨지는 자리가 넷이다(정본 = `docs/takbon-design/world_and_visual_design.md` §2).
   🔴 **지운 건 「마을에서 여는 길」뿐이다** — 프롭 씬·패널(`workshop_panel`·`refine_panel`·`shop_panel`)·레시피는 **전부 살아 있다**(그래서 `test_workshop_auto`가 그대로 그린이다 — 그 그물은 패널을 직접 열어 마을을 안 지난다). **되살리는 절차 정본 = `base.gd`의 `STATION_UNLOCKS` 머리말 ①~④**(씬 노드 + 표 + 퀘스트 `reward_unlock` + connect가 한 덩어리다).
   ⚠ **해독대는 세85에 은퇴했다**(q05와 한 세트로 삭제 — `decode_panel`은 없다). **건설은 세66에 은퇴했다**(§4 끝의 정정 참조).
 - **`src/field`** — **챕터 보스방**. `boss_room.gd`/`.tscn`(**챕터 = 2400×2200 열린 숲**, 세88에 단칸방에서 넓혔다 — **씬은 여전히 한 장**이다) · `forest_enemy`(범용 적 몸 — 쫓아와 접촉 피해) · `enemy_projectile` · `snake_body`/`snake_boss.tscn`.

@@ -90,7 +90,7 @@ func fire() -> void:
 	# 안내가 없으면 "장착했는데 안 나간다"가 된다. 마나 판정보다 먼저 — 거부에 마나를 태우지 않는다.
 	var design: RingDesign = GameState.ring_equipped[_slot]
 	if design == null:
-		notice.emit("장착된 진이 없다 — 책상(E)에서 그려 장착해라", true)
+		notice.emit("장착된 진이 없다 — 책상(E)에서 맺어 장착해라", true)
 		return
 	# 🔴 마나 소모 — 이게 없으면 좌클릭 연사다 (세션 35). 수치를 여기 박지 마라.
 	# 🔴 세85: **`GameState.cast_mana_cost()`를 부른다** — 장착 지팡이의 `wand_mana_mult`가 얹힌 값이다

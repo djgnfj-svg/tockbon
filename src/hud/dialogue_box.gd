@@ -1,6 +1,7 @@
 extends Control
 ## 재사용 대사 상자 — 여러 줄 대사를 한 줄씩 넘긴다. **대사 내용을 모른다**(줄 배열을 받는 범용).
-## 온보딩(길잡이 NPC)이 마법진 그리기 개념을 한 줄씩 가르칠 때 리드가 open()으로 배선한다.
+## 온보딩·정산에서 **문**(`base.gd`의 `ForestGate`)이 한 줄씩 말할 때 리드가 open()으로 배선한다.
+## ⚠ 세95에 화자가 길잡이 NPC → 문으로 바뀌었다(길잡이 은퇴 — 설계 `world_and_visual_design.md` §2).
 ##
 ## 🔴 **모달 규약은 `tab_panel`과 같다**(그게 살아 있는 참고 원본 — 옛 inventory_panel은
 ## 세40에 tab_panel이 흡수하며 삭제됐다. 찾지 마라, 필요하면 git 이력):
@@ -24,7 +25,11 @@ extends Control
 ## 대사가 끝났거나(마지막 줄에서 한 번 더) 건너뛰었을(ESC) 때 정확히 한 번 emit.
 signal finished
 
-const SPEAKER_DEFAULT := "길잡이"
+## 🔴🔴 **사본이 하나 더 있다 — `dialogue_box.tscn`의 `Nameplate/Speaker` 라벨 `text`.**
+##   씬 기본값은 상자를 열기 전(또는 `open()`이 안 불린 프레임)에 화면에 나가므로 **둘 다 고쳐야 한다** —
+##   코드만 고치면 눈에 잘 안 띄는 채로 옛 이름이 남는다(세86에 실제로 밟은 형태).
+##   그물 = `test_dialogue_box_auto`의 「기본 화자」 문자열 검사.
+const SPEAKER_DEFAULT := "문"
 const FADE_TIME := 0.12   # 연출값(밸런스 아님) — 등장 페이드
 
 @onready var _text: Label = $Band/Margin/VBox/Text
@@ -50,7 +55,7 @@ func _ready() -> void:
 
 ## 대사 줄들(String 배열)을 받아 첫 줄을 띄우고 상자를 보인다.
 ## 🔴 빈 배열이면 아무것도 안 하고 즉시 finished — 호출부가 "대사 없음"을 특수 처리하지 않아도 된다.
-## speaker_name은 선택(기본 "길잡이"). open(lines)만 불러도 된다.
+## speaker_name은 선택(기본 = `SPEAKER_DEFAULT`). open(lines)만 불러도 된다.
 func open(lines: Array, speaker_name: String = SPEAKER_DEFAULT) -> void:
 	if lines.is_empty():
 		finished.emit()

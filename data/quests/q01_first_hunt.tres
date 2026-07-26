@@ -6,7 +6,7 @@
 script = ExtResource("1")
 id = &"q01_first_hunt"
 title = "첫 사냥"
-desc = "숲길에서 챕터를 골라 들어가, 보스를 처치하라."
+desc = "문 [E]로 나가 챕터를 고르고, 문양을 삼킨 짐승을 잡아라."
 goal = 0
 target = &""
 count = 1

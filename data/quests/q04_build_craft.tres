@@ -6,7 +6,7 @@
 script = ExtResource("1")
 id = &"q04_build_craft"
 title = "거둔 것을 흘리지 마라"
-desc = "문 너머에서 두 번 살아 돌아와라. 쓰러지면 가방째 잃는다."
+desc = "되찾은 문양은 쓰러지면 도로 흩어진다. 문 너머에서 두 번 살아 돌아와라."
 goal = 1
 target = &""
 count = 2

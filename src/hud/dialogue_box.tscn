@@ -128,8 +128,10 @@ grow_vertical = 0
 mouse_filter = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_name")
 
+; 🔴 세95: 화자가 길잡이 → **문**으로 바뀌었다. 이 `text`는 `dialogue_box.gd`의 `SPEAKER_DEFAULT`
+;   **사본**이라 둘 다 고쳐야 한다(코드만 고치면 씬 기본값에 옛 이름이 조용히 남는다 — 세86 형태).
 [node name="Speaker" type="Label" parent="Box/Nameplate"]
 mouse_filter = 2
 theme_override_colors/font_color = Color(0.96, 0.86, 0.52, 1)
 theme_override_font_sizes/font_size = 13
-text = "길잡이"
+text = "문"

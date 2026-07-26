@@ -1,4 +1,4 @@
-[gd_scene load_steps=15 format=3 uid="uid://c0base01hub00"]
+[gd_scene load_steps=14 format=3 uid="uid://c0base01hub00"]
 
 [ext_resource type="Script" path="res://src/base/base.gd" id="1_base"]
 [ext_resource type="PackedScene" path="res://src/actors/player.tscn" id="3_player"]
@@ -8,7 +8,6 @@
 [ext_resource type="PackedScene" path="res://src/hud/tab_panel.tscn" id="7_inv"]
 [ext_resource type="PackedScene" path="res://src/props/desk.tscn" id="8_desk"]
 [ext_resource type="PackedScene" path="res://src/props/forest_gate.tscn" id="9_gate"]
-[ext_resource type="PackedScene" path="res://src/props/npc_guide.tscn" id="13_npc"]
 [ext_resource type="PackedScene" path="res://src/props/monument.tscn" id="14_monu"]
 [ext_resource type="TileSet" path="res://assets/sprites/field/tileset_campus.tres" id="16_tiles"]
 
@@ -64,6 +63,8 @@ shape = SubResource("wall_h")
 
 ; 🔴🔴 세90 정리 — 마을을 「캐릭 + 마법문 + 마법 제작대(책상)」로 줄였다 (사용자 확정).
 ;   빠진 것: 공방(Craft)·정제대(Refine)·매점(Shop) 상호작용 셋 + 장식 22개(나무 8·램프 6·벤치 2·울타리 6).
+; 🔴 세95에 **길잡이(Npc)도 빠졌다** — 문(ForestGate)이 화자·정산을 겸한다(설계 world_and_visual_design §2).
+;   ⚠ `src/props/npc_guide.tscn`·`assets/sprites/base/npc_guide.png`는 **안 지웠다**(주민 복귀용 · 로드만 안 되면 비용 0).
 ;   🔴 **프롭 씬·패널·레시피 데이터는 하나도 안 지웠다** — 되살리기 = 여기 노드 한 줄 + base.gd 배선 한 줄.
 ;   되살리는 절차는 `base.gd`의 STATION_UNLOCKS 머리말에 적어 뒀다.
 ; 🔴 y는 **머리끝이 첫 화면에 들도록** 정했다 — 서고 스프라이트는 발밑에서 위로 224px이라
@@ -74,8 +75,21 @@ position = Vector2(860, 840)
 [node name="ForestGate" parent="." instance=ExtResource("9_gate")]
 position = Vector2(200, 820)
 
-[node name="Npc" parent="." instance=ExtResource("13_npc")]
-position = Vector2(560, 700)
+; 🔴 세95: 길잡이 NPC가 은퇴하고 **문이 화자·정산을 겸한다** — 그래서 머리 위 마크가 문으로 왔다.
+;   여기(base.tscn)에 다는 이유: `forest_gate.tscn`은 보스방·다른 무대가 쓸 수 있는 공용 프롭인데
+;   [?]/[!]는 **마을에서만** 뜻이 있다(정산은 마을에서만 일어난다). 배선은 `base.gd`의 `_gate_mark`.
+;   y = -198 → 아치 머리끝(-160, gate_arch 160px + Sprite offset -80) 위. 색은 base.gd가 덮어쓴다.
+[node name="Mark" type="Label" parent="ForestGate"]
+visible = false
+offset_left = -20.0
+offset_top = -198.0
+offset_right = 20.0
+offset_bottom = -166.0
+mouse_filter = 2
+text = "?"
+horizontal_alignment = 1
+theme_override_colors/font_color = Color(0.98, 0.82, 0.32, 1)
+theme_override_font_sizes/font_size = 28
 
 [node name="Monument" parent="." instance=ExtResource("14_monu")]
 position = Vector2(620, 920)

@@ -3,6 +3,7 @@ extends Node2D
 ## 책상에서 E를 누르면 **고리 조립 책**(진·룬·문양)이 베이스 위에 뜬다.
 ## 씬 전환 없음 — ESC로 닫으면 베이스가 그대로 뒤에 남는다.
 ## 왼쪽 숲길에서 E를 누르면 **챕터 선택**이 뜨고, 골라서 보스방 원정을 나간다 (세58-B — 옛 숲 즉시 전환 대체).
+## 🔴🔴 세95: 그 문이 **화자·정산까지 겸한다** — 길잡이 NPC가 은퇴했다(`_on_gate_talk` 머리말이 계약 정본).
 ##
 ## 🔴 여기가 **게임의 진입점**이다 (project.godot run/main_scene, 사용자 확정 세션 21).
 ## 세션 22에 폴더가 `src/playground` → `src/base`로 바뀌었다 — "버려도 되는 실험"이라는
@@ -60,9 +61,10 @@ const RingForgePanelScript := preload("res://src/drawing/ring_forge_panel.gd")
 const InteractZone := preload("res://src/actors/interact_zone.gd")
 const Player := preload("res://src/actors/player.gd")
 const Hud := preload("res://src/hud/hud.gd")
-## 길잡이 NPC가 여는 통합 시트 패널 (세션40, 옛 quest_panel 흡수) — 퀘스트 탭으로 연다(class_name 없음).
-const TabPanel := preload("res://src/hud/tab_panel.gd")
-## 온보딩 그리기 튜토 대사 상자 (세션41) — 첫 마법 전 NPC가 개념을 가르친다. 루트=CanvasLayer, 스크립트=$Box.
+## 🔴 세95: `TabPanel` preload를 걷었다 — 문 [E]가 **더 이상 목표 시트를 안 연다**(`_on_gate_talk` 주석).
+##   시트는 `tab_panel.gd`가 스스로 [Tab]·[I]·[Q]·[C]로 여닫으므로 `base.tscn`의 `Sheet` 인스턴스만으로 돈다.
+##   ⚠ 그래서 `tab_panel.open_quest()`는 **부르는 곳이 0**이 됐다(공개 API로 남아 있다 — 리드 판단 몫).
+## 온보딩 대사 상자 (세션41 → 세95에 화자가 문으로 옮겨졌다). 루트=CanvasLayer, 스크립트=$Box.
 const DialogueBoxScene := preload("res://src/hud/dialogue_box.tscn")
 ## 🔴 스크립트 preload = 캐스트 타입 ($Box는 get_node로 Node라, open()/finished를 정적으로 부르려면 이걸로 캐스트).
 const DialogueBox := preload("res://src/hud/dialogue_box.gd")
@@ -140,27 +142,32 @@ const TINT_WHOLE := Color(1.0, 1.0, 1.0)       ## 마을이 돌아왔다 — 중
 @export_file("*.tscn") var boss_room_scene_path: String = "res://src/field/boss_room.tscn"
 
 @onready var _desk: InteractZone = $Desk
+## 🔴🔴 **세95: 문 하나가 「나가는 길」과 「화자·정산」을 겸한다** (설계 `world_and_visual_design.md` §2 ·
+##   사용자 확정). 길잡이 NPC(`Npc`)는 은퇴했다 — *「아무도 안 모았다 · 나는 뒤늦게 온 자」*인데 사람이
+##   서 있으면 「왜 그동안 안 주웠나」가 생긴다. ⚠ **씬 파일·PNG는 안 지웠다**(`src/props/npc_guide.tscn`·
+##   `assets/sprites/base/npc_guide.png`) — 「주민 복귀」를 쓸 날의 재료고, 로드만 안 되면 비용이 0이다.
+##   🔴 옛 이름을 만나면 여기서 해소해라: `_npc`·`_on_npc_talk`·`_refresh_npc_mark` → **`_gate`·
+##   `_on_gate_talk`·`_refresh_gate_mark`**(같은 코드가 문으로 옮겨온 것이다. 되살릴 게 아니다).
 @onready var _gate: InteractZone = $ForestGate
-@onready var _npc: InteractZone = $Npc
 @onready var _player: Player = $Player
 @onready var _hud: Hud = $Hud/Hud
 # 🔴 캠퍼스 바닥 (세66-4 마법학교 마을) — 잔디·돌포장 길을 코드로 깐다 (boss_room `_fill_tiles` 선례).
 @onready var _ground: ColorRect = $Ground
 @onready var _grass: TileMapLayer = $TileGrass
 @onready var _road: TileMapLayer = $TileRoad
-# 🔴 tab_panel.tscn 루트는 CanvasLayer(layer 5)고, 스크립트(Control)는 그 자식 Panel이다.
-@onready var _sheet: TabPanel = $Sheet/Panel
-# 🔴 길잡이 머리 위 물음표 (세션40) — 정산할 퀘스트가 있을 때만 보인다. 근접(Prompt)과 별개로 늘 뜬다.
-@onready var _npc_mark: Label = $Npc/Mark
+# 🔴 문 위 물음표 (세션40 길잡이 → 세95 문). 정산할 퀘스트가 있을 때만 보인다. 근접(Prompt)과 별개로 늘 뜬다.
+#   ⚠ 노드는 `base.tscn`이 `ForestGate`의 자식으로 단다 — `forest_gate.tscn`(공용 프롭)에 넣으면
+#   보스방·다른 무대에 정산도 없는 [?]가 따라간다.
+@onready var _gate_mark: Label = $ForestGate/Mark
 
 ## 🔴 한 번에 하나의 모달만 — `_overlay` 슬롯이 비어 있어야 새 패널이 열린다.
 ## ⚠ 세90에 마을 상호작용이 책상 하나로 줄어 지금 이 슬롯을 쓰는 건 책(`_forge`)뿐이다 —
 ##   **슬롯 규약은 그대로 둔다**(정제대·공방을 되살리면 그날 다시 셋이 다툰다).
 var _overlay: CanvasLayer = null
 var _forge: RingForgePanelScript = null
-## 🔴 온보딩 그리기 튜토 대사 (세션41) — 첫 마법 전 NPC가 개념을 가르친다. 이 베이스 방문에 한 번만.
+## 🔴 온보딩 오프닝 대사 (세션41 → 세95: 화자가 길잡이에서 **문**으로 옮겨졌다). 이 마을 방문에 한 번만.
 var _dialogue: CanvasLayer = null
-var _draw_tut_shown := false
+var _gate_intro_shown := false
 ## 챕터 선택 패널 인스턴스 (세58-B) — 온디맨드 인스턴스·닫히면 치운다 (dialogue와 같은 결.
 ## _overlay 슬롯을 안 쓰는 이유: 이 패널은 ui_modal_open을 스스로 토글하고 플레이어 정지도
 ## 폴링으로 해결돼, 책·정제대처럼 base가 물리·caster를 껐다 켤 필요가 없다).
@@ -176,12 +183,13 @@ func _ready() -> void:
 	_build_campus()
 	_setup_camera()
 	_desk.interacted.connect(_open_drawing)
-	_gate.interacted.connect(_open_chapter_panel)
+	# 🔴🔴 **세95: 문 [E] 하나에 두 일이 실린다** — 정산 대사(옛 길잡이) → 챕터 선택.
+	#   `_open_chapter_panel`을 직접 잇지 마라(그러면 정산이 통째로 빠진다. 그 형태를
+	#   `test_base_auto [12]`가 잡는다 — 연결 개수만 세는 [8]은 못 잡는다).
+	_gate.interacted.connect(_on_gate_talk)
 	# 🔴 세90: 정제대·공방·매점 연결 셋을 걷었다 (그 노드가 씬에 없다 — `STATION_UNLOCKS` 머리말).
 	#   ⚠ 되살릴 땐 **연결은 늘 잇고** 여닫는 손잡이는 `monitoring`으로 해라 — 연결을 끊었다 이었다
 	#   하면 세50의 「리페어런팅 시 콜백이 영구히 죽는」 함정을 심는다(`_apply_station_state` 주석).
-	# 길잡이 NPC (세션37→40) — E로 그 자리서 정산하고(claim) 목표 패널을 연다.
-	_npc.interacted.connect(_on_npc_talk)
 	_player.caster.notice.connect(_hud.say)
 	_player.caster.slot_changed.connect(_hud.select)
 	_hud.select(_player.caster.slot())
@@ -189,16 +197,16 @@ func _ready() -> void:
 	EventBus.quest_completed.connect(_on_quest_completed)
 	# 🔴 목표 달성 넛지 (세션40 턴인) — 숲에서 목표를 채우면 "돌아가 정산하라"를 HUD로 알린다.
 	EventBus.quest_ready.connect(_on_quest_ready)
-	# 🔴 NPC 머리 위 물음표 (세션40) — 정산할 퀘스트가 생기거나(달성·건설·해금) 없어질 때(정산) 갱신.
-	EventBus.quest_ready.connect(_refresh_npc_mark)
-	EventBus.quest_completed.connect(_refresh_npc_mark)
-	EventBus.codex_unlocked.connect(_refresh_npc_mark)
+	# 🔴 문 위 물음표 (세션40 → 세95) — 정산할 퀘스트가 생기거나(달성·해금) 없어질 때(정산) 갱신.
+	EventBus.quest_ready.connect(_refresh_gate_mark)
+	EventBus.quest_completed.connect(_refresh_gate_mark)
+	EventBus.codex_unlocked.connect(_refresh_gate_mark)
 	# 🔴 시트로 새 목표를 읽으면(mark_quests_seen → quests_seen) [!]를 끈다 (세션43).
-	EventBus.quests_seen.connect(_refresh_npc_mark)
-	# 🔴 첫 마법진(q00, 세션41) — 그리면 [?]가 켜지도록 그리기 완료도 물음표를 갱신한다
-	#   (그리기는 베이스에서 일어나므로 "숲에서 돌아가라" 넛지 대신 옆의 길잡이 [?]로 안내한다).
-	EventBus.ring_design_committed.connect(_refresh_npc_mark)
-	_refresh_npc_mark()
+	EventBus.quests_seen.connect(_refresh_gate_mark)
+	# 🔴 첫 마법진(q00, 세션41) — 맺으면 [?]가 켜지도록 조립 완료도 물음표를 갱신한다
+	#   (조립은 마을에서 일어나므로 "돌아가 정산하라" 넛지 대신 문 위 [?]로 안내한다).
+	EventBus.ring_design_committed.connect(_refresh_gate_mark)
+	_refresh_gate_mark()
 	# 🔴🔴 **세89: 마을 되살리기 — codex가 건물의 겉모습·상호작용을 가른다.**
 	#   `_ready`(초기 상태 반영)와 `codex_unlocked`(전환) **둘 다** 필요하다: 수신만 있으면
 	#   「이어하기」가 되살린 건물을 잔해로 띄우고, 초기화만 있으면 퀘스트를 정산해도 **그 방문 내내
@@ -220,11 +228,13 @@ func _ready() -> void:
 	# ⚠ **세90: q03·q04는 이제 건물을 되돌리지 않는다** — 정제대·공방이 마을에서 빠져
 	#   `reward_unlock`을 비웠다(보상은 재료만). 사슬(KILL 5 → EXTRACT 2)과 재료 보상량은 무변경이고,
 	#   q05→q04로 옮긴 `mat_night_bloom ×2`도 그대로다(`test_quests_auto`가 잰다).
-	# 🔴 온보딩 (세션41) — 첫 마법을 아직 안 그렸으면 길잡이로 유도한다 (q00 완료되면 안 뜬다).
+	# 🔴 온보딩 (세션41 → 세95) — 첫 마법진을 아직 안 맺었으면 **문**으로 유도한다 (q00 완료되면 안 뜬다).
+	#   🔴 세95: 옛 문구는 *"길잡이에게 [E]로 말을 걸어라 — … 마법진을 **그리는** 것"*이었다. 두 곳이
+	#   거짓이었다: ⓐ 가리키는 사람이 은퇴했고 ⓑ 「그린다」는 세83 폐지어다(지금은 조립해서 **맺는다**).
 	if not GameState.is_quest_done(&"q00_first_draw"):
 		# 🔴 세84 #36: `sticky` — 온보딩 **목표**다(경고가 아니다). 수명이 붙은 뒤엔 안 붙이면
 		# 첫 안내가 4.5초 뒤 사라져 새 플레이어가 어디로 갈지 모른다.
-		_hud.say("길잡이에게 [E]로 말을 걸어라 — 첫 목표는 책상에서 마법진을 그리는 것이다", false, true)
+		_hud.say("문이 너를 불렀다 — 문 앞에서 [E]", false, true)
 
 # ─────────────────────────── 캠퍼스 바닥 (세66-4 마법학교 마을) ───────────────────────────
 
@@ -253,8 +263,11 @@ func _build_campus() -> void:
 	# 🔴 **한 장으로 깐다.** 두 사각형으로 마당+진입로를 만들어 봤더니 겹치는 자리에서 **직각 계단이
 	#   크게 튀었다**(실측 스샷) — 밴드가 7개였던 세89엔 각 조각이 작아 「길」로 읽혔지만, 마을이 셋으로
 	#   줄어 조각도 커지자 그 모양이 「길」이 아니라 「잘못 깐 바닥」이 됐다. 지금 마을 = **문 앞 광장 하나**다.
-	# ⚠ 범위는 **남은 다섯을 다 덮도록** 잡았다: 문(200,820)·길잡이(560,700)·기념비(620,920)·
-	#   책상(860,840)·허수아비(395~470, 968~1132). 하나를 옮기면 여기도 같이 본다(위 「한 몸」 주석).
+	# ⚠ 범위는 **남은 넷을 다 덮도록** 잡았다: 문(200,820)·기념비(620,920)·책상(860,840)·
+	#   허수아비(395~470, 968~1132). 하나를 옮기면 여기도 같이 본다(위 「한 몸」 주석).
+	# 🔴 세95에 길잡이(560,700)가 은퇴했지만 **범위는 안 줄였다** — 그 자리는 문과 기념비 사이라
+	#   깎으면 광장 한복판에 잔디 구멍이 뚫린다(위 「한 장으로 깐다」 = 조각을 나누면 계단이 튄다).
+	#   즉 광장의 모양은 「누가 서 있나」가 아니라 **바닥이 한 덩어리인가**가 정한다.
 	var bands: Array[Rect2] = [
 		Rect2(200, 660, 760, 440),     # 문 앞 폐허 광장 — 이게 지금 마을의 전부다
 	]
@@ -371,6 +384,14 @@ func _refresh_village_tint() -> void:
 ## 여기서 하면 "베이스에서 나갈 때만" 만HP고, 다른 진입 경로로 들어가면 조용히 다르다.
 ## 숲길 [E] = 챕터 선택 모달 — 순서 잠금 3챕터를 보여주고, 고르면 pending_chapter에 실어
 ## 보스방으로 전환한다. 잠금 판정은 패널이 한다 (해금 판정은 패널이 — 룬 셀 선례).
+##
+## 🔴 세95: 부르는 곳이 셋이다 — `_on_gate_talk`의 ⓑ 순수 원정 갈래 · ⓑ 대사 실패 갈래 ·
+##   정산 대사의 `finished` 체이닝(`_start_turnin_dialogue`의 `on_finished`). 게이트 시그널에
+##   **직접 잇지 마라**(그러면 정산이 통째로 빠진다).
+## ⚠ 설계 §2 ⓒ — 아래 가드는 **로그 없이 return**한다. 도달 조건과 그때의 행선지:
+##   `_overlay`(책이 열림) → 애초에 `ui_modal_open`이라 문 [E]가 안 온다 · `_dialogue`(대사 중) →
+##   같은 이유 + 끝나면 체이닝이 다시 부른다 · `_chapter_sel`(이미 열림) → 그 패널이 곧 화면이다.
+##   즉 **어느 갈래도 「눌렀는데 아무 일도 안 난다」로 끝나지 않는다**(그게 이 return이 조용해도 되는 근거다).
 func _open_chapter_panel() -> void:
 	if _overlay != null or _dialogue != null or _chapter_sel != null:   # 모달은 하나뿐
 		return
@@ -393,83 +414,126 @@ func _on_chapter_panel_closed() -> void:
 		_chapter_sel.queue_free()
 		_chapter_sel = null
 
-## 🔴 길잡이 정산 (세션40) — 말 걸면 달성(claimable)한 퀘스트를 그 자리서 정산하고 목표 패널을 연다.
-##  quest_completed가 아래 _on_quest_completed로 HUD 완료 팝을 쏘므로 여기선 정산·개방만 한다.
-##  "살아 돌아와라"는 실제 귀환(extraction_success)이 이미 채워 놨을 때만 여기서 함께 정산된다(공짜 완료 없음).
-func _on_npc_talk() -> void:
-	# 🔴 온보딩 (세션41): 아직 첫 마법진을 안 그렸으면(ring_designs 빔) NPC가 그리기 개념부터 가르친다.
-	#   대사가 끝나면 목표를 시트로 보여준다. 한 번 그리고 나면(또는 이미 봤으면) 정상 흐름(정산+시트).
-	if _dialogue == null and _overlay == null and not _draw_tut_shown \
+## 🔴🔴 **문 [E] = 정산 + 원정** (세95 · 설계 `world_and_visual_design.md` §2. 옛 이름 `_on_npc_talk`).
+##  ⓐ 정산할 목표가 있으면 문이 먼저 말을 걸고(대사) → **끝나면 그대로** 챕터 선택으로 이어진다.
+##  ⓑ 정산할 게 없으면 **대사 없이 바로** 챕터 선택이다 — 안 그러면 *"나가려는데 자꾸 대사가 뜬다"*가 된다.
+##
+## 🔴🔴 **[E] 하나에 두 일을 태울 때 조용히 깨지는 자리 넷** (설계 §2 표 ⓐ~ⓓ — 전부 실측된 것이다):
+##  ⓐ `interact_zone`은 `GameState.ui_modal_open`이면 E를 **통째로 안 받고**, `dialogue_box.open()`이
+##     그 플래그를 켠다 → 대사 중엔 문의 E가 죽는다. 그래서 챕터 패널을 **`finished`에 명시로 체이닝**한다
+##     (`_start_turnin_dialogue`의 `on_finished`). 안 하면 플레이어가 **E를 두 번** 눌러야 나간다.
+##  ⓑ 🔴🔴 대사가 **한 줄도 안 나올 수 있다** — `Db.get_quest`가 전부 null이면(`.tres` 침묵사, 세50 ⓑ)
+##     `_start_turnin_dialogue`가 `false`를 돌려주고 `finished`는 **영영 안 온다**. 그래서 패널 열기를
+##     `finished`에만 걸지 않고 **여기서 `false`를 받아 즉시 연다** — 안 그러면 마을 밖으로 못 나가는 소프트락이다.
+##  ⓒ `_show_dialogue`·`_open_chapter_panel`의 가드는 **로그 없이 return**한다. 한 [E]에 묶이면 그 return이
+##     곧 「눌렀는데 아무 일도 안 난다」다 → 아래에서 각 갈래의 **행선지를 하나도 안 비워 둔다**.
+##  ⓓ `chapter_panel`은 **E로도 닫힌다**. 대사 마지막 줄을 E로 넘기며 패널을 열면 같은 프레임의 E가
+##     패널을 즉시 닫을 소지가 있다. ✅ 엔진은 `_unhandled_input` 대상 목록을 **디스패치 전에 복사**하므로
+##     그 프레임에 새로 붙은 패널엔 안 간다(같은 형태의 「게이트 E → 패널 즉시 열기」가 세58-B부터 실게임에서
+##     멀쩡히 돌아온 것이 그 증거다). ⚠ 그래도 **헤드리스가 못 재는 종류**라 리드의 실게임 확인 목록에 남는다.
+func _on_gate_talk() -> void:
+	# 🔴 온보딩 (세션41 → 세95): 아직 첫 마법진을 안 맺었으면(ring_designs 빔) 문이 먼저 이야기하고
+	#   **책상으로 보낸다** — 여기선 챕터 선택을 열지 않는다(설계 §5: 문 → "책상으로 가라" → q00).
+	#   ⚠ 문을 잠그는 게 아니다: `_gate_intro_shown`으로 이 방문에 한 번만 뜨고, 다음 [E]부턴 정상 흐름이다.
+	if _dialogue == null and _overlay == null and not _gate_intro_shown \
 			and not GameState.is_quest_done(&"q00_first_draw") and GameState.ring_designs.is_empty():
-		_start_draw_tutorial()
-		GameState.mark_quests_seen()   # 🔴 첫 목표 접수 (세션43) — [!]를 끈다. 튜토 대사가 곧 설명한다
-		_refresh_npc_mark()
+		_start_gate_intro()
+		GameState.mark_quests_seen()   # 🔴 첫 목표 접수 (세션43) — [!]를 끈다. 오프닝 대사가 곧 설명한다
+		_refresh_gate_mark()
 		return
-	# 🔴 정산(턴인) + [!] 유도 (세션40→43). 달성한 목표를 정산하고 보상을 준다(_on_quest_completed가
-	#  HUD 완료 팝). 🔴 정산으로 새 목표가 열리면 시트를 **강제로 열지 않는다** — [!]로 남겨 "[Tab]으로
-	#  확인"을 당긴다(그래야 [!]가 중간 게임에서도 산다, 세션43). 정산할 게 없는 순수 방문일 때만 시트를
-	#  열어 목표를 훑게 한다(=열람이 접수 처리 → [!] 꺼짐).
+	# 🔴 정산(턴인). 달성한 목표를 정산하고 보상을 준다(_on_quest_completed가 HUD 완료 팝).
+	#  🔴 정산으로 새 목표가 열려도 시트를 **강제로 열지 않는다** — [!]로 남겨 "[Tab]으로 확인"을 당긴다
+	#  (그래야 [!]가 중간 게임에서도 산다, 세션43). ⚠ 세95에 「정산할 게 없으면 시트를 연다」를 **걷었다**:
+	#  문은 나가는 자리라, 나가려고 누른 [E]가 목표 시트를 여는 건 손에 안 맞는다(시트는 [Tab]·[Q]가 연다).
 	var claimed := GameState.claim_ready_quests()
-	if not claimed.is_empty():
-		# 🔴 정산 대사 (세션44) — 조용히 보상만 주지 않고 길잡이가 치하하고 다음을 가리킨다.
-		_start_turnin_dialogue(claimed)
-	else:
-		_sheet.open_quest()   # 열람 → tab_panel이 mark_quests_seen → quests_seen → _refresh_npc_mark
-	_refresh_npc_mark()
+	_refresh_gate_mark()
+	if claimed.is_empty():
+		_open_chapter_panel()   # ⓑ 순수 원정 — 대사 없이 바로
+		return
+	# 🔴 정산 대사 (세션44) — 조용히 보상만 주지 않고 문이 한마디 하고 다음을 가리킨다.
+	#   ⓑ 대사를 못 띄웠으면(줄이 비었거나 다른 모달) **여기서 바로** 챕터 선택으로 간다.
+	if not _start_turnin_dialogue(claimed):
+		_open_chapter_panel()
 
-## 🔴 그리기 개념 튜토 대사 (세션41) — 그리기 패널은 단계마다 스스로 안내하므로(ring_forge_panel `_say`),
-##  여기선 **패널을 열기 전의 개념**(마법진=진·룬·문양을 손으로 그린다)만 심고 책상으로 보낸다.
-const DRAW_TUTORIAL_LINES := [
-	"마법은 외우는 게 아니라 그리는 것이라네. 저 책상에서 마법진을 손으로 그려 힘을 담지.",
-	"마법진은 세 겹일세. 진(陣) — 바깥 그릇이자 날아갈 몸통. 룬 — 가운데에 담는 속성(자네는 아직 불뿐이지). 문양 — 진과 룬 사이 칸을 채우는 무늬.",
-	"책을 펴면 오른쪽에서 진·룬·문양을 고르고, 왼쪽 판에 뜬 밑그림을 손으로 따라 긋게. 정성껏 따라 그을수록 마법이 세지네.",
-	"다 그렸으면 [분석]으로 점수를 보고 [마력 주입]으로 맺네. 너무 엉성하면 펑 하고 날아가니 조심.",
-	"자, 저 책상으로 가서 [E]로 첫 마법진을 그려 보게. 목표는 언제든 [Tab] 시트에서 볼 수 있네.",
+## 🔴 문의 오프닝 대사 (세션41 그리기 튜토 → 세95 전면 재작성 · 설계 §1·§5).
+##  옛 판은 *"마법은 외우는 게 아니라 **그리는** 것이라네"* + *"밑그림을 손으로 따라 긋게"*였는데
+##  🔴 **손 긋기는 세83에 폐지돼 지금 게임에 없는 조작**이다(스위치는 남아 있지만 기본이 꺼짐).
+##  지금 가르치는 것 = ⓐ 왜 여기 있나(세계관) ⓑ 마법은 **조립해서 맺는다** ⓒ 책상 [E] ⓓ [Tab].
+##  ⚠ 책 안의 단계별 안내는 `ring_forge_panel._say`가 하므로 여기선 **책을 펴기 전의 것만** 심는다.
+##  ⚠ 화자는 문이다 — 설계 §7 *"짧고 건조하게"*.
+const GATE_INTRO_LINES := [
+	"…왔군. 늦었다.",
+	"오래전 이 땅의 큰 마법진이 깨졌다. 문양이 전부 저 너머로 흩어졌다.",
+	"나는 그때 남은 마지막 마법이고, 조각들이 빠져나간 길이다. 그래서 너를 불렀다.",
+	"너는 이 세계의 마법을 배운 적이 없다. 외울 것도 없다 — 주워 온 조각을 이어 붙이면 된다.",
+	"저 책상으로 가라. [E]로 책을 펴고 진·룬·문양을 골라 마법진 하나를 맺어라.",
+	"할 일은 [Tab]으로 볼 수 있다. 가라.",
 ]
 
-## 대사 상자를 띄워 그리기 개념을 가르친다. 끝나면(또는 ESC 건너뛰면) 목표를 시트로 보여준다.
-func _start_draw_tutorial() -> void:
-	_draw_tut_shown = true
-	# 🔴 대사 끝나면 닫고 책상으로 보낸다 — 시트를 자동으로 또 열지 않는다(마지막 줄이 [Tab]로 안내하므로).
-	_show_dialogue(DRAW_TUTORIAL_LINES)
+## 🔴 정산 대사의 **머리말** — 그 퀘스트를 처음 정산하는 순간에만 한 줄 앞에 붙는다 (설계 §5).
+##  q00은 온보딩의 매듭이라 *"「첫 마법진」— 됐다"* 같은 일반 문구로는 세계관이 안 닫힌다.
+##  ⚠ 여기 없는 퀘스트는 일반 문구만 나간다 — **표를 안 채워도 안 깨진다**(거짓 손잡이가 아니다).
+##  ⚠ 퀘스트별 전용 대사를 `QuestDef`에 넣지 않은 이유 = 스키마 불변(세44 정산 대사와 같은 규율).
+const TURNIN_PROLOGUE := {
+	&"q00_first_draw": "네가 방금 맺은 그것이, 깨진 마법진의 조각 하나다. 나머지는 전부 저 너머로 흩어졌다.",
+}
 
-## 🔴 공용 대사 헬퍼 (세션41 튜토·세션44 정산이 함께 쓴다) — dialogue_box를 띄우고 끝나면 정리한다.
+## 대사 상자를 띄워 세계관·첫 목표를 심는다. 끝나면(또는 ESC 건너뛰면) 상자만 치운다 —
+##  🔴 여기선 챕터 선택으로 **안 이어진다**(아직 나갈 때가 아니다. 설계 §5: 먼저 책상).
+func _start_gate_intro() -> void:
+	_gate_intro_shown = true
+	_show_dialogue(GATE_INTRO_LINES)
+
+## 🔴 공용 대사 헬퍼 (세션41 오프닝·세션44 정산이 함께 쓴다) — dialogue_box를 띄우고 끝나면 정리한다.
 ##  dialogue_box가 스스로 모달·일시정지를 잡으므로(ui_modal_open) 여기선 인스턴스·해제만 한다.
-##  🔴 이미 대사·다른 모달이 떠 있으면 안 띄운다(모달 하나만 — 책·정제대와 같은 규약).
-func _show_dialogue(lines: Array) -> void:
+##  🔴 이미 대사·다른 모달이 떠 있으면 안 띄운다(모달 하나만 — 책과 같은 규약) → **false를 돌려준다.**
+##  🔴🔴 `on_finished`는 **상자를 치운 뒤** 같은 람다 안에서 부른다(별도 `finished` 연결이 아니다) —
+##   연결 순서에 기대면 `_dialogue`가 아직 non-null인 채로 후속이 돌아 `_open_chapter_panel`의 가드에
+##   조용히 걸린다(= "대사가 끝났는데 문이 안 열린다", 에러 0).
+##  ⚠ `lines`가 비면 `open()`이 **그 자리에서** finished를 쏜다 → `on_finished`도 즉시 돈다(계약 유지).
+func _show_dialogue(lines: Array, on_finished: Callable = Callable()) -> bool:
 	if _dialogue != null or _overlay != null:
-		return
+		return false
 	_dialogue = DialogueBoxScene.instantiate() as CanvasLayer
 	add_child(_dialogue)
 	var box := _dialogue.get_node("Box") as DialogueBox
 	box.finished.connect(func() -> void:
 		if _dialogue != null:
 			_dialogue.queue_free()
-			_dialogue = null)
+			_dialogue = null
+		if on_finished.is_valid():
+			on_finished.call())
 	box.open(lines)
+	return true
 
-## 🔴 정산(턴인) 대사 (세션44, 사용자: "퀘스트 완료할 때도 대화가 있어야") — 달성한 목표를
-##  치하하고 보상을 밝히고 다음을 가리킨다. 대사는 QuestDef.title·reward_items에서 조립한다
+## 🔴 정산(턴인) 대사 (세션44, 사용자: "퀘스트 완료할 때도 대화가 있어야") — 정산한 목표를 짚고
+##  보상을 밝히고 다음을 가리킨다. 대사는 QuestDef.title·reward_items에서 조립한다
 ##  (퀘스트별 전용 대사 필드 없이 = 스키마 불변). 여러 목표를 한 번에 정산하면 각각 한 줄.
-func _start_turnin_dialogue(claimed: Array) -> void:
+##
+## 🔴🔴 **반환값이 계약이다** (설계 §2 ⓑ): 대사를 실제로 띄웠으면 true. false면 `finished`가
+##  **영영 안 오므로** 호출부가 그 자리에서 챕터 선택을 열어야 한다(안 그러면 마을 밖으로 못 나간다).
+func _start_turnin_dialogue(claimed: Array) -> bool:
 	var lines: Array[String] = []
 	for qid: StringName in claimed:
 		var q := Db.get_quest(qid)
 		if q == null:
 			continue
+		if TURNIN_PROLOGUE.has(qid):
+			lines.append(String(TURNIN_PROLOGUE[qid]))
 		var reward := _reward_text(q)
 		if reward != "":
-			lines.append("「%s」— 해냈군! 약속한 삯일세, %s. 잘 챙겨 두게." % [q.title, reward])
+			lines.append("「%s」— 됐다. 약속한 것을 놓아 두었다: %s" % [q.title, reward])
 		else:
-			lines.append("「%s」— 해냈군! 자네 솜씨가 여물어 가는군." % q.title)
+			lines.append("「%s」— 됐다." % q.title)
 	if lines.is_empty():
-		return
+		return false
 	# 🔴 정산으로 새 목표가 열렸으면 [Tab]으로 유도(시트를 강제로 열지 않는다 = [!] 유지, 세션43).
 	if GameState.has_new_quest():
-		lines.append("새 할 일이 생겼네 — [Tab] 시트에서 다음 목표를 확인하게.")
+		lines.append("다음이 열렸다 — [Tab]으로 확인해라. 문을 연다.")
 	else:
-		lines.append("당분간은 이걸로 됐네. 몸 성히 다녀오게.")
-	_show_dialogue(lines)
+		lines.append("문을 연다.")
+	# 🔴 마지막 줄("문을 연다")과 **같은 손잡이**로 챕터 선택이 뜬다 — 설계 §2 ⓐ의 체이닝이다.
+	return _show_dialogue(lines, _open_chapter_panel)
 
 ## 퀘스트 완료 보상을 "이름 n개, 이름 n개"로 (정산 대사용). QuestDef.reward_items가 정본.
 func _reward_text(q: QuestDef) -> String:
@@ -486,28 +550,30 @@ func _on_quest_completed(quest_id: StringName) -> void:
 	if q != null:
 		_hud.say("목표 완료: %s (+보상) — [Q]로 확인" % q.title)
 
-## 🔴 목표 달성 넛지 (세션40) — 아직 완료 아님. 길잡이에게 돌아가 정산하라고 HUD로 민다.
+## 🔴 목표 달성 넛지 (세션40 → 세95) — 아직 완료 아님. 문에서 정산하라고 HUD로 민다.
+##  ⚠ 여긴 마을이라 "돌아가"가 아니다 — 그 문구는 원정 중에 뜨는 `boss_room._on_quest_ready`가 쥔다.
 func _on_quest_ready(quest_id: StringName) -> void:
 	var q := Db.get_quest(quest_id)
 	if q != null:
-		_hud.say("목표 달성: %s — 길잡이에게 돌아가 정산하라 [?]" % q.title)
+		_hud.say("목표 달성: %s — 문에서 [E]로 정산하라 [?]" % q.title)
 
-## 🔴 길잡이 머리 위 마크 갱신 (세션40 [?] + 세션43 [!]). 시그널·초기화 양쪽에서 부른다.
-##  우선순위: 정산 대기(claimable)면 [?](보상 받으러) · 아니면 안 읽은 새 목표면 [!]([Tab]으로 확인) ·
-##  둘 다 없으면 숨김. 색으로도 구분 — [!] 노랑(새 목표 있음) · [?] 초록(가서 정산=보상). 연출값이라 const.
+## 🔴 문 위 마크 갱신 (세션40 [?] + 세션43 [!] · 세95에 길잡이 머리에서 문 위로 옮겼다).
+##  시그널·초기화 양쪽에서 부른다. 우선순위: 정산 대기(claimable)면 [?](보상 받으러) ·
+##  아니면 안 읽은 새 목표면 [!]([Tab]으로 확인) · 둘 다 없으면 숨김.
+##  색으로도 구분 — [!] 노랑(새 목표 있음) · [?] 초록(가서 정산=보상). 연출값이라 const.
 const MARK_NEW := Color(1.0, 0.9, 0.3)      ## [!] 안 읽은 새 목표 — [Tab] 시트로 확인하라
-const MARK_CLAIM := Color(0.5, 0.92, 0.45)  ## [?] 달성 — 길잡이에게 가서 정산(보상)하라
-func _refresh_npc_mark(_a: Variant = null) -> void:
+const MARK_CLAIM := Color(0.5, 0.92, 0.45)  ## [?] 달성 — 문에서 [E]로 정산(보상)하라
+func _refresh_gate_mark(_a: Variant = null) -> void:
 	if GameState.has_claimable_quest():
-		_npc_mark.text = "?"
-		_npc_mark.add_theme_color_override(&"font_color", MARK_CLAIM)
-		_npc_mark.visible = true
+		_gate_mark.text = "?"
+		_gate_mark.add_theme_color_override(&"font_color", MARK_CLAIM)
+		_gate_mark.visible = true
 	elif GameState.has_new_quest():
-		_npc_mark.text = "!"
-		_npc_mark.add_theme_color_override(&"font_color", MARK_NEW)
-		_npc_mark.visible = true
+		_gate_mark.text = "!"
+		_gate_mark.add_theme_color_override(&"font_color", MARK_NEW)
+		_gate_mark.visible = true
 	else:
-		_npc_mark.visible = false
+		_gate_mark.visible = false
 
 # ─────────────────────────── 고리 조립 책 ───────────────────────────
 
@@ -545,7 +611,7 @@ func _on_ring_committed(assembly: Dictionary) -> void:
 ## "맺었는데 안 나간다"가 된다 — 사용자가 실제로 겪었고, 화면 어디에도 이유가 없었다.
 func _on_ring_rejected(score: float) -> void:
 	Audio.play(&"pop")
-	_hud.say("마법진이 안 맺혔다 — 종합 %d점 (%d점을 넘겨야 견딘다). 책상에서 E로 다시 그려라"
+	_hud.say("마법진이 안 맺혔다 — 종합 %d점 (%d점을 넘겨야 견딘다). 책상에서 E로 다시 맺어라"
 		% [RingPower.score_display(score), RingPower.score_display(RingPower.threshold())], true)
 
 func _close_drawing() -> void:

@@ -6,7 +6,7 @@
 script = ExtResource("1")
 id = &"q02_come_home"
 title = "살아 돌아와라"
-desc = "보스를 잡으면 열리는 귀환 포탈에서 [E]로 살아서 귀환하라."
+desc = "되찾은 것을 들고 살아서 나와라. 남쪽 입구 [E]는 늘 열려 있고, 보스를 잡으면 그 자리에도 포탈이 열린다."
 goal = 1
 target = &""
 count = 1
