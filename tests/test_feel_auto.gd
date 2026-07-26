@@ -62,6 +62,7 @@ func _run() -> void:
 	await _test_camera_kick()
 	await _test_player_hurt_anim()
 	await _test_dummy_parity()
+	await _test_roll_and_run()
 
 	if failures == 0:
 		print("TEST_FEEL_OK — 전 항목 통과")
@@ -363,6 +364,95 @@ func _param_of(mat, key: StringName) -> float:
 
 func _flash_of(mat) -> float:
 	return _param_of(mat, &"flash_amount")
+
+
+## [11] 🔴 **스페이스 = 구르기(탭) + 달리기(홀드)** (세97 · 사용자 확정 「즉발 구르기 → 홀드면 달리기」).
+## 🔴 **`Input.action_press`로 실제 액션 채널을 탄다** — `_physics_process`를 직접 부르거나 내부
+##   플래그를 세우면 **입력 맵이 통째로 어긋나도 그린**이다(세97에 `dash`가 주석과 달리 Ctrl에
+##   잡혀 있던 걸 실측으로 발견했다 — 코드는 멀쩡한데 사용자가 누르는 키가 달랐다).
+## ⚠ 여기서 재는 건 **관계**(달리기 > 걷기 · 구르기가 즉발 · 무적)지 **값**이 아니다 — 손맛은 F5가 정한다.
+func _test_roll_and_run() -> void:
+	print("[11] 스페이스 — 탭=구르기(즉발·무적) · 홀드=달리기 · 커서 쪽으로 반전")
+	var gs = root.get_node("/root/GameState")
+
+	# ── ⓐ 달리기 속도가 걷기의 **파생**이다 (모자 배수가 달리기에도 실린다) ──
+	# 🔴 `run_speed`가 balance를 직접 읽으면 달리는 동안만 장비 효과가 사라진다(세42 선례).
+	var walk: float = gs.move_speed()
+	var run: float = gs.run_speed()
+	_check(run > walk, "🔴 달리기가 걷기보다 빠르다 (걷기 %.0f < 달리기 %.0f)" % [walk, run])
+	gs.equipment[Enums.ItemKind.HAT] = &"hat_basic"
+	var walk_hat: float = gs.move_speed()
+	var run_hat: float = gs.run_speed()
+	gs.equipment.erase(Enums.ItemKind.HAT)
+	if walk_hat > walk:   # 모자가 속도를 올리는 종류일 때만 의미가 있다
+		_check(is_equal_approx(run_hat / walk_hat, run / walk),
+			"🔴 모자 배수가 달리기에도 그대로 실린다 (걷기·달리기 비율이 같다)")
+
+	# ── ⓑ 🔴 **사용자가 누르는 키가 실제로 스페이스인가** ──
+	# 세97 실측: 코드 주석은 내내 *"Shift"*라고 했는데 `dash`는 **Ctrl**에 잡혀 있었다.
+	# 로직 그물은 액션 이름만 보므로 **키가 뭐든 전부 그린**이다 — 맵을 직접 재는 자리가 여기다.
+	var on_space := false
+	for ev in InputMap.action_get_events(&"dash"):
+		if ev is InputEventKey and (ev.physical_keycode == KEY_SPACE or ev.keycode == KEY_SPACE):
+			on_space = true
+	_check(on_space, "🔴 dash(구르기·달리기)가 스페이스에 걸려 있다 (사용자 지정 키)")
+
+	var player = (load("res://src/actors/player.tscn") as PackedScene).instantiate()
+	root.add_child(player)
+	player.global_position = Vector2(600, 600)
+	await physics_frame
+
+	# ── ⓒ 🔴 구르기가 **누른 그 프레임에** 나간다 (홀드 판정 지연이 없다) ──
+	_check(player.ROLL_ENABLED, "🔴 구르기가 켜져 있다 (세71f에 꺼 뒀던 것을 세97에 되살렸다)")
+	# ⚠ **틱을 2개까지만 준다.** `Input.action_press`는 아이들 컨텍스트에서 주입되므로 플레이어의
+	#   `_physics_process`가 그 입력을 보는 건 다음 물리 틱이다(실측). 그래서 1틱은 너무 빡빡하고,
+	#   넉넉히 주면 **홀드 판정(0.15초 ≈ 9틱)을 넣어도 통과해 「즉발」 검출력이 죽는다.**
+	Input.action_press("dash")
+	var rolled := false
+	for i in 2:
+		await physics_frame
+		if bool(player.is_rolling()):
+			rolled = true
+			break
+	_check(rolled,
+		"🔴 스페이스를 누른 즉시 구른다 = 무적 (지연되면 피하려는 순간에 몸이 안 움직인다)")
+
+	# ── ⓒ 구르기가 끝나도 **손을 안 떼면** 그대로 달리기로 이어진다 ──
+	var waited := 0
+	while bool(player.is_rolling()) and waited < 120:
+		await physics_frame
+		waited += 1
+	_check(waited < 120, "구르기가 스스로 끝난다 (무한 무적이 아니다)")
+	Input.action_press("move_right")
+	for i in 30:                      # 램프가 목표 속도에 붙을 시간
+		await physics_frame
+	var run_vel: float = player.velocity.length()
+	Input.action_release("dash")
+	for i in 30:
+		await physics_frame
+	var walk_vel: float = player.velocity.length()
+	Input.action_release("move_right")
+	_check(run_vel > walk_vel + 10.0,
+		"🔴 누르고 있는 동안 실제로 더 빨리 움직인다 (홀드 %.0f > 뗌 %.0f)" % [run_vel, walk_vel])
+
+	# ── ⓓ 커서 쪽으로 좌우 반전 — 방향의 단일 소스는 `caster.aim()`이다 ──
+	var sprite = player.get_node("Sprite")
+	player.caster._aim = Vector2.LEFT
+	await physics_frame
+	_check(bool(sprite.flip_h), "🔴 커서가 왼쪽이면 스프라이트가 뒤집힌다")
+	player.caster._aim = Vector2.RIGHT
+	await physics_frame
+	_check(not bool(sprite.flip_h), "커서가 오른쪽이면 원래대로")
+	# ⚠ 커서가 바로 위/아래면 x가 0 근처라 떨린다 — 데드존이 그걸 막는다(반전을 유지한다).
+	player.caster._aim = Vector2.LEFT
+	await physics_frame
+	player.caster._aim = Vector2.UP
+	await physics_frame
+	_check(bool(sprite.flip_h),
+		"🔴 커서가 바로 위면 반전을 **유지**한다 (데드존 — 없으면 스프라이트가 파르르 떨린다)")
+
+	player.queue_free()
+	await process_frame
 
 
 func _check(cond: bool, label: String) -> void:

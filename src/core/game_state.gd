@@ -218,6 +218,12 @@ func mana_max() -> float:
 func move_speed() -> float:
 	return balance.player_move_speed * (1.0 + gear_param(Enums.ItemKind.HAT, "move_speed_mult", 0.0))
 
+## 🔴 달리기 속도 (세97 · 스페이스 홀드) — **`move_speed()`의 파생**이라 모자(HAT) 배수가
+## 자동으로 실린다. 🔴 **여기서 `balance.player_move_speed`를 직접 읽지 마라** — 그러면 달리는
+## 동안만 모자 효과가 사라지는, 에러 없는 갈라짐이 생긴다(세42 선례).
+func run_speed() -> float:
+	return move_speed() * balance.player_run_mult
+
 ## 🔴 구르기 쿨다운 = balance 기본 × 부적(CHARM) 배수 (세션 42). 부적의 원래 설계 축을 되살렸다 —
 ## `charm_basic.tres`에 `dash_cooldown_mult`(0.85 = 쿨 15%↓)가 있었는데 player가 balance를 직접
 ## 읽어 **아무도 안 봤다**. 이제 player._physics_process가 이 getter를 쓴다. 미착용이면 배수 1.0.
