@@ -7,6 +7,11 @@ Godot_v*.exe
 # 임시
 *.tmp
 
+# 🔴 에이전트 일회성 보고서 (리드가 읽고 지운다 — 리포에 안 남긴다).
+# 루트 `scratch_*.md`에서 세96에 옮겼다: 루트가 지저분해지고 `git status`가 시끄러운 데다,
+# 무엇보다 **gitignore가 없어서 `git add -A` 한 번이면 영구 커밋될 뻔했다.**
+docs/_reports/
+
 # 임시 스크린샷 등 루트 이미지
 /image.png
 /image.png.import

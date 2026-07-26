@@ -1,7 +1,7 @@
 # 탁본 기획 문서 (takbon-design)
 
 `takbon-design` 스킬로 리드가 사용자와 대화하며 확정한 **기획·설계 문서의 영구 보관소**다.
-새 설계는 여기 `<주제>_design.md`로 착지한다. (구현 보고·architect 리뷰는 일회성이라 리포 루트 `scratch_*.md`에 쓰고 반영 뒤 지운다 — 여기 두지 않는다.)
+새 설계는 여기 `<주제>_design.md`로 착지한다. (구현 보고·architect 리뷰는 **일회성**이라 **`docs/_reports/`**(gitignore)에 쓰고 반영 뒤 지운다 — 여기 두지 않는다. ⚠ 세96에 리포 루트 `scratch_*.md`에서 옮겼다.)
 
 > 🔴 **세87 재인덱싱 — 이 표는 실제 `ls` 결과와 1:1이다.** 구현이 끝나 읽을 이유가 사라진 설계 **7개를 삭제**했다:
 > `book_redesign` · `progressive_assemble_gate` · `guide_visual_layers` · `assemble_trace_slice`(조립·탁본 UI 체인 4종) ·
