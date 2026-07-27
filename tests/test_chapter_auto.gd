@@ -3,21 +3,31 @@ extends SceneTree
 ##   ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_chapter_auto.gd
 ## 전 항목 통과 시 "TEST_CHAPTER_OK" 출력 후 종료 코드 0.
 ##
-## 검증 대상 = **챕터 루프**: 골라 들어가 · 보스를 잡고 · 포탈로 돌아온다. test_forest_auto(은퇴)의
+## 검증 대상 = **챕터 루프**: 골라 들어가 · 보스를 잡고 · **살아서 출구로 나온다**. test_forest_auto(은퇴)의
 ## extraction/bag_lost/물리 레이어/출격 만HP 그물을 여기로 **이식**했다 — 삭제 전 이식이 순서다.
+##
+## 🔴🔴 **세99: 귀환 포탈이 은퇴했다**(사용자 확정 *"보스죽으면 포탈 x"*). 옛 `[4]`·`[5]`가 **원정 정산
+##  채널을 포탈로 재고 있었으므로** 그 그물을 지우지 않고 **출구로 이식**했다 — 세58-B에 접촉 피해를
+##  빠뜨려 「적→플레이어 피해 채널이 전 스위트 어디에도 없던」 그 함정의 재발 자리다. 이식 대응표:
+##   • 「처치 전엔 포탈이 없다」        → **은퇴**. 계승자 = 「처치가 나가는 길을 새로 만들지 않는다」([4])
+##   • 「재클리어여도 포탈이 뜬다」      → **은퇴**. 계승자 = 「출구는 조건이 없어 재방문 소프트락이 불가능」([5])
+##   • 「포탈 자리가 보스 옆이다」(지름길) → 계승자 = 「보스에서 가장 가까운 출구가 남쪽보다 가깝다」([5])
+##   • 「포탈 [E] → extraction 1회 + 가방→창고」 → **보스 근처 출구로 그대로 이식**([5])
 ##
 ## 🔴 여기서 헤드리스가 **실제로 잡는** 것:
 ##   • data/chapters/*.tres 3장이 Db를 거쳐 실제 로드된다 (세50 침묵 데이터 죽음 그물)
 ##   • 보스 스폰 **두 경로 각각** — ch1=forest_enemy 범용(enemy_id 대입)·ch3=전용 씬(snake_boss)
 ##     (세56 교훈: 두 몸 계약은 그물도 두 개 — 한쪽만 재면 다른 쪽이 조용히 갈라진다)
-##   • 처치 → chapter_clear codex 심김(파생 키) · 귀환 포탈 스폰
+##   • 처치 → chapter_clear codex 심김(파생 키) · **나가는 길은 처치 전후로 안 변한다**
 ##   • 🔴 세71 보상 해금 — ch1 클리어 시 ChapterDef.reward_unlock(gr_radiate5)이 codex에 심긴다
 ##     (chapter_clear와 별도 축 — 조립→탁본 루프의 이음매. 발신 줄 뮤테이션으로 검출력 확인)
 ##   • 🔴 세71 잡몹 길 — ch1은 이제 보스 1 + mob_spawns N. "enemies"에 섞이므로 보스는 enemy_id로 특정
-##   • 포탈 [E] → extraction_success 1회(가방→창고 정산) · 사망 → bag_lost
+##   • 출구 [E] → extraction_success 1회(가방→창고 정산) — **보스 전([4b])·보스 후([5]) 둘 다** · 사망 → bag_lost
 ##   • 잠금 판정식 — chapter_panel의 공개 is_chapter_open()이 단일 소스 (ch2는 ch1 클리어 전 잠김)
 ##   • 🔴 물리 레이어 계약 — 적 4=enemy가 아니면 부딪히기만 하고 take_hit이 안 불린다 (forest [1][5] 이식)
-## ⚠ 못 잡는 것: Ground.mouse_filter(클릭 도달)·패널 카드 클릭·포탈/상자 렌더 — 실게임 MCP.
+## ⚠ 못 잡는 것: Ground.mouse_filter(클릭 도달)·패널 카드 클릭·상자 렌더 — 실게임 MCP.
+## ⚠ **[E] 홀드(D7)는 여기가 안 잰다** — 이 파일은 `interacted`를 직접 emit해 **정산 채널**만 잰다.
+##  실제 눌림·홀드·취소·걸어가 나가기는 `tests/test_extract_hold_auto.gd`가 진다(설계 §6 S11).
 ## ⚠ [8]은 pending_chapter 오염 가드를 재느라 push_error 한 줄(USER ERROR)을 **의도적으로** 낸다.
 ##
 ## 공개 계약으로만 검증한다: EventBus 시그널 · 그룹 · zone_id · take_hit · 패널 공개 API.
@@ -38,9 +48,18 @@ const MOB_COUNT: Dictionary = {&"ch1": 9, &"ch2": 11, &"ch3": 13}
 ## `gr_radiate5`였고 ch2·ch3는 **빈 문자열**이라 클리어해도 아무것도 안 줬다.
 const REWARD: Dictionary = {&"ch1": &"rune_water", &"ch2": &"rune_wind", &"ch3": &"rune_grass"}
 
-## 남쪽 입구의 **상시 귀환** 출구 zone_id (세88 §2-A-3). 🔴 포탈과 **반드시 다른 값**이어야 한다 —
-## 같으면 [4]의 「처치 전엔 포탈이 없다」가 빨개지고, 그 계약은 아직 살아 있다(포탈은 처치 후에만).
+## 🔴 **나가는 길의 zone_id — 종류가 이것 하나다**(세99에 `&"portal"`이 은퇴했다).
+## 씬 인라인 남쪽 `$Exit`와 `ChapterDef.extract_points`가 세우는 `exit_zone.tscn`이 **같은 값**을 쥔다.
 const EXIT_ZONE := &"exit"
+
+## 🔴 포탈이 지던 **「지름길」 계약의 계승자**(세99). 포탈은 없앴지만 **보스 자리(y=−1350)에서 남쪽
+## 입구(y=+600)까지 편도 1950px을 되돌아가는 노동**은 그대로 남는다 — `extract_points`에 보스 근처
+## 좌표를 안 적으면 한 판이 왕복 노동이 되는데 **에러가 0이고 전 스위트가 그린이다.**
+## 🔴 **좌표가 아니라 관계로 잰다** — 「보스에서 가장 가까운 출구」가 「남쪽 출구」보다 이 비율만큼은
+##  가까워야 한다. F5로 자리를 옮겨도 안 낡고, 자리를 **비우면** 빨개진다.
+## ⚠ 사용자가 *"되돌아가는 게 맞다"*로 정하면 `extract_points`를 비우고 **이 검사도 같이 지워라** —
+##  그게 이 상수의 목적이다(MOB_COUNT와 같은 결: 조용히 비지 않게).
+const BOSS_EXIT_MAX_RATIO := 0.5
 
 var failures: int = 0
 var _bus = null
@@ -70,10 +89,10 @@ func _run() -> void:
 	await _test_boss_spawn_both_paths()
 	await _test_contact_damage()
 	await _test_my_spell_can_hit_boss()
-	await _test_kill_plants_clear_and_portal()
+	await _test_kill_plants_clear_and_exits_unchanged()
 	await _test_exit_extracts_without_boss()
 	await _test_reward_label_on_screen()
-	await _test_portal_banks_the_run()
+	await _test_exit_banks_the_run_after_clear()
 	await _test_death_loses_the_bag()
 	await _test_lock_judgment()
 	await _test_missing_chapter_falls_back()
@@ -274,20 +293,26 @@ func _test_my_spell_can_hit_boss() -> void:
 	_clear()
 
 
-## [4] 🔴 처치 → chapter_clear codex + 귀환 포탈 스폰. 클리어 판정 = 처치 순간(루팅·귀환 무관).
-## 포탈은 처치 전엔 **없어야** 한다 — 미리 있으면 "안 잡고 나가기"가 공짜가 된다.
-func _test_kill_plants_clear_and_portal() -> void:
-	print("[4] 처치 → 클리어 codex + 보상 룬 해금 + 포탈 스폰 (+ 상시 출구는 처음부터)")
+## [4] 🔴 처치 → chapter_clear codex + 보상 룬. 클리어 판정 = 처치 순간(루팅·귀환 무관).
+##
+## 🔴🔴 **세99: 「처치 전엔 포탈이 없다」가 은퇴하고 정반대 계약이 그 자리를 받았다** —
+##  **처치는 나가는 길을 하나도 안 바꾼다.** 옛 계약은 「처치가 새 길을 연다」였고 지금은 「길은
+##  처음부터 전부 서 있다」다(D2: 탈출이 목표 · 보스는 선택). 🔴 **개수를 처치 전후로 대조**하는
+##  이유: 포탈 스폰이 어떤 이름으로든 되살아나면 **여기가 빨개진다**(zone_id를 바꿔 되살려도 잡힌다).
+## 🔴 클리어 안내가 **없는 물건을 가리키지 않는지**도 같이 잰다 — 옛 줄이 *"포탈에서 E로 귀환하라"*라
+##  씬의 **유일한 sticky 지시**가 그대로 거짓 지시가 될 자리다(감사 T4 · sticky = 「유효한 지시만」).
+func _test_kill_plants_clear_and_exits_unchanged() -> void:
+	print("[4] 처치 → 클리어 codex + 보상 룬 해금 (+ 나가는 길은 처치 전후로 안 변한다)")
 	var reward: StringName = REWARD[&"ch1"]
 	_gs.codex.erase(&"chapter_clear_ch1")   # 앞 테스트·저장 잔재 제거 — 첫 클리어 경로를 잰다
 	_gs.codex.erase(reward)                 # 🔴 보상 첫 획득 경로를 잰다 (맨몸 시작 = 시드 아님)
 	await _fresh(&"ch1")
-	_check(_zone(&"portal") == null, "처치 전엔 포탈이 없다 (미리 있으면 안 잡고 나가기가 공짜)")
-	# 🔴🔴 세88 상시 귀환 — 남쪽 출구는 **처음부터 있다.** 포탈과 zone_id를 갈라 둔 이유가 이것이다:
-	# 「포탈은 처치 후에만」은 아직 살아 있는 계약이고(위 줄), 반복 사냥터가 되려면 언제든 나갈 수
-	# 있어야 한다. 잡몹만 잡고 나가는 건 **재료만 얻고 확정 보상은 못 얻는** 것이라 공짜가 아니다.
+	# 🔴🔴 세88 상시 귀환 — 출구는 **처음부터 있다.** 반복 사냥터가 되려면 언제든 나갈 수 있어야 한다.
+	# 잡몹만 잡고 나가는 건 **재료만 얻고 확정 보상은 못 얻는** 것이라 공짜가 아니다.
 	_check(_zone(EXIT_ZONE) != null,
-		"처치 전에도 남쪽 출구(zone_id=%s)는 있다 = 언제든 나갈 수 있다" % EXIT_ZONE)
+		"처치 전에도 출구(zone_id=%s)가 있다 = 언제든 나갈 수 있다" % EXIT_ZONE)
+	var exits_before: int = _exits().size()
+	_check(exits_before >= 1, "처치 전 나가는 길이 %d개 (0이면 방이 통째로 소프트락이다)" % exits_before)
 	_check(not _gs.is_unlocked(&"chapter_clear_ch1"), "처치 전엔 클리어 codex가 없다")
 	_check(not _gs.is_unlocked(reward), "처치 전엔 보상 룬(%s)이 없다 (맨몸 시작)" % reward)
 
@@ -303,8 +328,23 @@ func _test_kill_plants_clear_and_portal() -> void:
 	# ch1의 물 룬이 곧 **첫 반응(불+물=증기)이 열리는 자리**다.
 	_check(_gs.is_unlocked(reward),
 		"보스를 잡으면 보상 룬 %s가 해금된다 (ChapterDef.reward_unlock)" % reward)
-	var portal = _zone(&"portal")
-	_check(portal != null, "보스를 잡으면 귀환 포탈이 뜬다 (zone_id=portal)")
+	# 🔴🔴 계승 계약 — 처치가 **새 길을 열지 않는다**(포탈 은퇴, 사용자 확정 "보스죽으면 포탈 x").
+	_check(_exits().size() == exits_before,
+		"🔴 처치해도 나가는 길 수가 그대로다 %d (실제 %d — 늘면 포탈이 되살아난 것)"
+			% [exits_before, _exits().size()])
+	# 🔴🔴 **zone_id를 안 보고 「_extract에 이어진 지점 수」로 잰다** — 위 줄은 `&"exit"`으로만 세므로
+	#  **다른 zone_id로 되살린 포탈을 못 잡는다**(세99 뮤테이션 실측: `&"warpgate"`로 부활시키니
+	#  위 줄은 그린이고 이 줄만 빨개졌다). ⚠ **「지점 수 == 출구 수」로 재지 마라** — 단계 3의 지점
+	#  (폐허·둥지·제단)이 자기 InteractZone을 들고 오면 **거짓 빨강**이 된다. 재려는 건 지점 수가
+	#  아니라 **「나가는 길이 늘었나」**다.
+	_check(_extract_wired_count() == exits_before,
+		"🔴 `_extract`에 이어진 지점이 출구 %d개뿐이다 (실제 %d — 이름만 바꾼 포탈도 여기 걸린다)"
+			% [exits_before, _extract_wired_count()])
+	var clear_line: String = _room.get_node("Hud/Hud").say_line()
+	_check(not clear_line.contains("포탈"),
+		"🔴 클리어 안내가 없는 물건(포탈)을 가리키지 않는다: '%s'" % clear_line)
+	_check(clear_line.contains("출구"),
+		"클리어 안내가 **출구**로 나가라고 말한다 (sticky = 유효한 지시만): '%s'" % clear_line)
 
 
 ## [4b] 🔴🔴 **보스를 안 잡고** 남쪽 출구로 나간다 — 상시 귀환 (세88 §2-A-3).
@@ -312,8 +352,8 @@ func _test_kill_plants_clear_and_portal() -> void:
 ## 이게 「반복 사냥터」의 실체다: 잡몹만 잡고 재료를 챙겨 나갈 수 있어야 한다. 세87까지 나가는 길은
 ## **보스 처치 후 포탈 하나뿐**이라, 재료를 모으려면 매번 보스를 잡아야 했다.
 ## ⚠ 「공짜가 되지 않나」의 답: 잡몹만 잡고 나가면 **재료만 얻고 확정 보상(룬)은 못 얻는다.**
-## 🔴 정산 경로가 포탈과 **같은 `_extract`**인지 잰다 — 새 길을 뚫고 연결을 잊으면 가방이 조용히
-##   증발한다(에러 없이). 연타 1회는 `_leaving` 가드가 두 길을 함께 묶는다는 증거다.
+## 🔴 정산 경로가 `_extract`에 실제로 이어졌는지 잰다 — 새 길을 뚫고 연결을 잊으면 가방이 조용히
+##   증발한다(에러 없이). 연타 1회는 `_leaving` 가드가 길이 몇 개든 하나로 묶는다는 증거다.
 func _test_exit_extracts_without_boss() -> void:
 	print("[4b] 보스를 안 잡고 출구 E → extraction 1회 + 가방→창고")
 	await _fresh(&"ch1")
@@ -321,7 +361,9 @@ func _test_exit_extracts_without_boss() -> void:
 	if ex == null:
 		_check(false, "출구(zone_id=%s)가 없어 검사 불가" % EXIT_ZONE)
 		return
-	_check(_zone(&"portal") == null, "이 시점에 포탈은 없다 = 보스를 안 잡았다")
+	# 🔴 전제 — 보스가 아직 살아 있다. (세98까지 이 자리는 「포탈이 없다」로 잤는데, 포탈이 은퇴해
+	#  그 표현이 못 쓰게 됐다. 재려는 것은 그때나 지금이나 **「안 잡았는데도 나갈 수 있나」**다.)
+	_check(_boss(&"ch1") != null, "보스가 아직 살아 있다 = 안 잡고 나가는 경로를 잰다 (전제)")
 	_gs.bag.clear()
 	var before: int = _gs.get_count(&"mat_slime_core")
 	_gs.add_to_bag(&"mat_slime_core", 3)
@@ -376,18 +418,35 @@ func _test_reward_label_on_screen() -> void:
 			"%s: 룬 보상 안내가 「진 중심」이다 (「밴드에 끼워라」면 거짓 지시다)" % cid)
 
 
-## [5] 🔴 포탈 [E] = extraction_success — 가방(루팅분)→창고 + 자동 저장. 연타해도 1회(_leaving 가드).
-## 재클리어(codex 이미 있음)여도 포탈은 떠야 한다 — 안 뜨면 파밍 재방문이 소프트락이 된다.
-func _test_portal_banks_the_run() -> void:
-	print("[5] 포탈 E → extraction_success 1회 · 가방이 창고로 간다 (재클리어 포함)")
+## [5] 🔴🔴 **보스를 잡은 뒤의 정산 채널** — 옛 「포탈 [E] → extraction_success」를 **출구로 이식**했다.
+##
+## 🔴 **왜 [4b]와 따로 두나 — 재는 게 다르다.** [4b]는 *보스를 안 잡고* 남쪽으로 나가는 길이고,
+##  여기는 ⓐ **재클리어**(codex가 이미 있는 파밍 재방문) ⓑ **보스 근처 출구**로 나가는 길이다.
+##  옛 포탈 그물이 지던 게 정확히 그 둘이라, 합치면 **원정 정산의 절반이 그물 밖으로 빠진다**
+##  (세58-B에 접촉 피해를 빠뜨려 밟은 그 함정 — 「이식은 채널 커버리지로 검산한다」).
+## 🔴 「재방문 소프트락」 걱정은 **구조적으로 사라졌다** — 출구엔 조건이 없어 codex 상태와 무관하다.
+##  그래도 재클리어 경로로 **한 바퀴 돌려** 확인한다(가드가 codex를 보게 되는 회귀를 잡는다).
+func _test_exit_banks_the_run_after_clear() -> void:
+	print("[5] 보스 처치 후 **보스 근처 출구** E → extraction_success 1회 · 가방이 창고로 (재클리어)")
 	await _fresh(&"ch1")   # [4]에서 chapter_clear_ch1이 이미 있다 = 재클리어 경로
+	var ch1 = _db.get_chapter(&"ch1")
 	_boss(&"ch1").take_hit(99999.0, 0, 0, 0.0)   # 🔴 보스를 특정 (잡몹 섞임)
 	await process_frame
 	await physics_frame
-	var portal = _zone(&"portal")
-	_check(portal != null, "재클리어여도 포탈이 뜬다 (안 뜨면 재방문 소프트락)")
-	if portal == null:
+	_check(not _exits().is_empty(), "재클리어여도 나가는 길이 있다 (출구엔 조건이 없다)")
+
+	# 🔴 「지름길」 계약의 계승자 — 보스에서 가장 가까운 출구 vs 남쪽 출구. 관계로만 잰다.
+	var near = _exit_nearest_to(ch1.boss_spawn)
+	var south = _zone(EXIT_ZONE)
+	if near == null or south == null:
+		_check(false, "출구를 못 찾았다 (검사 불가)")
 		return
+	var d_near: float = near.global_position.distance_to(ch1.boss_spawn)
+	var d_south: float = 1950.0   # 씬의 남쪽 $Exit(0,660) ↔ ch1 boss_spawn(0,−1350) 실측 편도
+	_check(d_near <= d_south * BOSS_EXIT_MAX_RATIO,
+		"🔴🔴 보스에서 가장 가까운 출구가 %.0fpx (남쪽까지 %.0fpx의 %.0f%% 이하여야 한다 — 포탈이 지던 지름길)"
+			% [d_near, d_south, BOSS_EXIT_MAX_RATIO * 100.0])
+
 	_gs.bag.clear()
 	var before: int = _gs.get_count(&"mat_slime_core")
 	_gs.add_to_bag(&"mat_slime_core", 3)
@@ -395,13 +454,15 @@ func _test_portal_banks_the_run() -> void:
 	var cb := func() -> void: got.append(1)
 	_bus.extraction_success.connect(cb)
 	# 🔴 두 emit을 await 전에 — 씬 전환은 프레임 끝이라 두 emit 시점엔 방이 살아 있고 가드만 재게 된다
-	# (test_forest [6] 선례).
-	portal.interacted.emit()
-	portal.interacted.emit()
+	# (test_forest [6] 선례). ⚠ 홀드를 건너뛰고 시그널을 직접 쏜다 — 여기서 재는 건 **정산 채널**이고
+	#  실제 [E] 홀드는 `test_extract_hold_auto [7]`이 진다(설계 §6 S11).
+	near.interacted.emit()
+	near.interacted.emit()
 	await process_frame
 	_check(got.size() == 1, "귀환은 연타해도 extraction_success가 한 번뿐 (실제 %d)" % got.size())
 	_check(_gs.get_count(&"mat_slime_core") == before + 3,
-		"귀환하면 가방이 창고로 회수된다 (%d → %d)" % [before, _gs.get_count(&"mat_slime_core")])
+		"보스 근처 출구로 나가도 가방이 창고로 회수된다 (%d → %d)"
+			% [before, _gs.get_count(&"mat_slime_core")])
 	_check(_gs.bag.is_empty(), "회수 후 가방은 빈다")
 	_bus.extraction_success.disconnect(cb)
 
@@ -539,6 +600,47 @@ func _zone(id: StringName):
 		if z.zone_id == id:
 			return z
 	return null
+
+
+func _interact_zones() -> Array:
+	var out := []
+	for z in get_nodes_in_group("interact_zones"):
+		if not z.is_queued_for_deletion():
+			out.append(z)
+	return out
+
+
+## 나가는 길 전량 (`zone_id == &"exit"`) — 세99에 이게 방의 탈출구 전부다.
+func _exits() -> Array:
+	var out := []
+	for z in _interact_zones():
+		if z.zone_id == EXIT_ZONE:
+			out.append(z)
+	return out
+
+
+## 🔴 방 안에서 **`_extract`에 이어진** 지점 수 — 「나가는 길이 몇 개인가」의 **zone_id 무관** 정의다.
+## `_zone(&"portal")`처럼 값을 박아 재면 **그 값만 피해 되살려도 통과한다**(세99 뮤테이션 실측).
+func _extract_wired_count() -> int:
+	var n := 0
+	for z in _interact_zones():
+		for c in z.interacted.get_connections():
+			var cal: Callable = c["callable"]
+			if cal.get_object() == _room and cal.get_method() == "_extract":
+				n += 1
+				break
+	return n
+
+
+func _exit_nearest_to(point: Vector2):
+	var best = null
+	var best_d := INF
+	for z in _exits():
+		var d: float = z.global_position.distance_to(point)
+		if d < best_d:
+			best_d = d
+			best = z
+	return best
 
 
 func _clear() -> void:

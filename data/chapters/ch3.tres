@@ -79,3 +79,4 @@ boss_spawn = Vector2(0, -1350)
 room_ground_color = Color(0.09, 0.14, 0.10, 1.0)
 mob_spawns = Array[ExtResource("2")]([SubResource("mob1"), SubResource("mob2"), SubResource("mob3"), SubResource("mob4"), SubResource("mob5"), SubResource("mob6"), SubResource("mob7"), SubResource("mob8"), SubResource("mob9"), SubResource("mob10"), SubResource("mob11"), SubResource("mob12"), SubResource("mob13")])
 reward_unlock = &"rune_grass"
+extract_points = Array[Vector2]([Vector2(-1150, -360), Vector2(300, -1400)])

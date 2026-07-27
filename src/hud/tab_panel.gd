@@ -427,7 +427,7 @@ func _draw_grid(font: Font) -> void:
 	var layout := _grid_sections()
 	if bool(layout["empty_msg"]):
 		draw_string(font, Vector2(left, grid_top + 12.0),
-			"창고가 비었다 — 챕터의 보스를 잡고 포탈로 귀환하면 여기 쌓인다",
+			"창고가 비었다 — 챕터에서 주운 것을 들고 출구로 살아 나오면 여기 쌓인다",
 			HORIZONTAL_ALIGNMENT_LEFT, region_width, 12, EMPTY_COLOR)
 	for sec: Dictionary in layout["sections"]:
 		_draw_section_layout(font, sec, region_width)

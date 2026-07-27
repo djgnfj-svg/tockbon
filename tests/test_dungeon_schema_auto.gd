@@ -163,11 +163,21 @@ func _test_new_schema_defaults() -> void:
 	_check(cd.extract_points.is_empty(), "ChapterDef.extract_points 기본 = 빈 배열 (남쪽 출구 하나)")
 
 
-## [5] 🔴🔴 **회귀 0의 실증 — 기존 챕터 3장이 새 필드를 전부 빈 값으로 들고 있다.**
+## [5] 🔴🔴 **회귀 0의 실증 — 기존 챕터 3장이 「아직 안 켠」 필드를 전부 빈 값으로 들고 있다.**
 ## [4]가 「새로 만든 인스턴스」를 재는 것과 달리 여기는 **실제 `.tres`가 파싱된 결과**를 잰다.
 ## ⚠ `.tres`에 새 필드를 쓰지도 않았는데 값이 들어 있으면 스키마 기본값이 잘못 박힌 것이다.
+##
+## 🔴🔴 **`extract_points`는 세99 단계 1b에 켜졌다 — 여기서 뺐다.**
+##  이 항목은 「소비자가 아직 없는 필드가 조용히 켜져 있지 않나」를 재는 자리고, `extract_points`는
+##  **소비자(`boss_room._build_exits`)가 생겨 실제로 채워졌다**. 여기 「비어 있다」를 남겨 두면
+##  단계가 진행될 때마다 **거짓 빨강**이 나서 그물 신뢰가 죽는다(설계 §7 단계 1.5의 경고).
+##  🔴 **살아 있는 그물이 어디로 갔는지 적어 둔다** — `tests/test_extract_hold_auto [6]ⓐ`가
+##  **같은 `.tres` 파싱 결과**를 「비어 있지 않다 + 출구가 실제로 서고 풀길이 가장자리까지 닿는다」로
+##  더 세게 잰다. **여기 사본을 만들지 마라**(T5) — 켜진 축은 그쪽 한 곳이 정본이다.
+##  ⚠ 남은 넷(`room_scene_path`·`mob_pool`·`named_pool`·`landmarks`)은 **아직 소비자가 없다** —
+##  단계 2·4에서 켜질 때 같은 절차로 하나씩 여기서 빼고 그쪽에 그물을 세워라.
 func _test_existing_chapters_unchanged() -> void:
-	print("[5] 기존 챕터 3장 = 새 필드 전부 빈 값 (회귀 0 실증)")
+	print("[5] 기존 챕터 3장 = 아직 안 켠 필드 전부 빈 값 (회귀 0 실증)")
 	var chapters = _db.chapters_sorted()
 	_check(chapters.size() == 3, "챕터 3장이 로드된다 (파싱 침묵사 그물, 세50)")
 	for c in chapters:
@@ -176,7 +186,6 @@ func _test_existing_chapters_unchanged() -> void:
 		_check(c.mob_pool.is_empty(), "%s: mob_pool 비어 있다" % who)
 		_check(c.named_pool.is_empty(), "%s: named_pool 비어 있다" % who)
 		_check(c.landmarks.is_empty(), "%s: landmarks 비어 있다" % who)
-		_check(c.extract_points.is_empty(), "%s: extract_points 비어 있다" % who)
 		# 🔴 기존 배치가 살아 있나 — 새 필드를 더하며 옛 필드를 밀지 않았다는 증명.
 		_check(not c.mob_spawns.is_empty(), "%s: mob_spawns가 여전히 차 있다" % who)
 		for m in c.mob_spawns:

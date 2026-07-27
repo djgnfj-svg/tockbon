@@ -164,10 +164,10 @@ position = Vector2(-230, 620)
 [node name="Tree20" parent="Trees" instance=ExtResource("6_tree")]
 position = Vector2(250, 640)
 
-; 남쪽 상시 귀환 출구 (세88) — 🔴 zone_id는 &"exit"다. &"portal"을 주면 「처치 전엔 포탈이 없다」
-; 계약(test_chapter_auto)이 빨개진다 — 포탈은 여전히 보스 처치 후에만 뜬다.
-; 물리는 portal.tscn과 같게(layer 64 interaction / mask 2 player) — 1(world)에 두면 캐리어가 터진다.
-; 겉모습은 배경이 담당한다(보라색 차원문 Polygon2D를 베끼지 않는다) — boss_room.gd의 `_fill_tiles`가
+; 남쪽 상시 귀환 출구 (세88) — 🔴 zone_id는 &"exit"다. 세99에 포탈이 은퇴해 **나가는 길은 이 한
+; 종류뿐**이다(늘린 출구는 src/props/exit_zone.tscn이 같은 값을 쥔다).
+; 물리 = layer 64(interaction) / mask 2(player) — 1(world)에 두면 캐리어가 여기 부딪혀 마법이 죽는다.
+; 겉모습은 배경이 담당한다(차원문 같은 Polygon2D를 세우지 않는다) — boss_room.gd의 `_fill_tiles`가
 ; 여기서 파생한 풀길을 깔아 "마을로 걸어 나가는 길"로 읽히게 한다.
 [node name="Exit" type="Area2D" parent="."]
 position = Vector2(0, 660)
