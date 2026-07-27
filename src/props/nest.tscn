@@ -1,6 +1,9 @@
 [gd_scene format=3]
 
 [ext_resource type="Script" path="res://src/props/nest.gd" id="1_nest"]
+; 🔴 공용 배우 — 책상·문·탈출구가 쓰는 **그 물건**이다(설계 §10-4 S21: 자체 상호작용을 짜면 그게 함정이다).
+;  props → actors 방향은 `exit_zone.tscn`이 이미 쓰는 기존 방향이다(field → props와 다른 축).
+[ext_resource type="Script" path="res://src/actors/interact_zone.gd" id="2_zone"]
 
 ; 🔴 세99 「둥지 뒤로 가면 비친다」의 감지 상자 — **흙더미 위쪽**만 덮는다(원점 = 바닥 접점).
 ; 🔴🔴 **치수 근거 ⓐⓑⓒ는 `nest.gd` 머리말이 든다** — 세100에 옮겼다. 여기 다시 적지 마라:
@@ -8,6 +11,10 @@
 ;  그물 = `test_landmark_road_auto` [5](아래 변이 접지선 위인가) + [9]ⓑ(접지선 바로 아래 프로브).
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_behind"]
 size = Vector2(176, 96)
+
+; 🪦 세101 N26 — **여는 상자**(D10 [E] 한 번에 즉시). 근거는 `nest.gd`의 §「열기」 머리말이 든다.
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_open"]
+size = Vector2(200, 140)
 
 ; 🔴🔴 **원점 = 굴 입구의 x 중심이자 흙더미가 바닥에 닿는 줄**(텍스처 (95,140) — art 리포트 §「dev에게」).
 ; `centered = false` + `offset = (-95,-140)`이 그 값이다. 🔴 **이 둘을 따로 만지지 마라** —
@@ -33,3 +40,42 @@ monitorable = false
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="BehindSense"]
 shape = SubResource("RectangleShape2D_behind")
+
+; 🪦 **여는 지점** (세101 N26 3단계 · D10) — [E] 한 번에 즉시 열린다.
+; 🔴 **layer 64(interaction) / mask 2(player)** = `interact_zone.gd`의 선언된 계약.
+;  ⚠ **mask에 4(enemy)를 더하지 마라** — 둘레에 늑대가 다섯이라 몸이 스칠 때마다 진입·이탈이 돌아
+;   프롬프트가 제멋대로 뜨고 사라진다(설계 §10-4 S26). 화면은 「그냥 좀 이상한」 정도라 버그로 안 보인다.
+; 🔴 **`zone_id`가 `&"exit"`이 절대 아니다** — `test_chapter_auto`가 그 값으로 출구를 세어
+;  「_extract에 이어진 지점 수」와 대조한다(설계 §10-4 S22 옆 S5의 결).
+; ⚠ **홀드 스위치를 여기 적지 마라** — 기본 0이 곧 D10(즉시)이다. 0이 아닌 값을 적으면 그 숫자가
+;  아니라 balance의 **탈출 시간**으로 돈다(`interact_zone.gd`의 그 `@export` 주석이 정본).
+; 🔴🔴 **그 스위치의 이름을 이 파일에 쓰지도 마라** — `test_extract_hold_auto [1]`ⓑ가
+;  `src/**/*.tscn`을 **문자열로** 스캔해서, 값을 안 굽고 **주석에 이름만 적어도 빨개진다**
+;  (세101에 실제로 밟았다 — 게다가 balance 쪽 키 이름이 그 이름을 **부분 문자열로 품는다**).
+; 🔴 상자가 **접지선 아래로 30px 내려온다** — 남쪽(앞)에서 걸어오는 게 기본 동선이라 위쪽만 덮으면
+;  「둥지 앞에 섰는데 [E]가 안 뜬다」가 된다. ⚠ 이건 `BehindSense`의 「아래로 안 내린다」 계약과
+;  **일부러 다르다**: 저건 원근(위/아래가 곧 앞뒤)이고 이건 손 닿는 거리다.
+[node name="OpenZone" type="Area2D" parent="."]
+position = Vector2(0, -40)
+collision_layer = 64
+collision_mask = 2
+script = ExtResource("2_zone")
+zone_id = &"landmark"
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="OpenZone"]
+shape = SubResource("RectangleShape2D_open")
+
+; 🔴 이름이 `Prompt`인 것이 계약이다 — `interact_zone.gd`가 `$Prompt`로 문다(없으면 안내가 통째로 죽는다).
+; ⚠ 문구는 **씬이 쥔다**(그 스크립트의 선언된 계약) — 코드에 적지 마라.
+; 🔴🔴 **높이를 더 올리지 마라 — 세101에 리드 스샷이 잡은 자리다.** 처음엔 원점 위 168px이었는데
+;  (다른 프롭 관례는 60~110px) 둥지가 큰 물건이라 「그림 위로 띄운다」로 짠 값이었다. 그런데
+;  보스방의 **sticky 목표 줄은 화면 상단 고정**이라, 플레이어가 둥지 앞(남쪽)에 서는 **기본 동선**에서
+;  프롬프트가 정확히 그 줄에 올라타 **글자가 뭉갰다**. 세97에 버튼이 `SayLabel`과 겹친 그 형태이고
+;  **헤드리스는 둘 다 못 본다**(둘 다 「존재」하고 좌표도 각자 맞다 — 겹침만 스샷에 보인다).
+[node name="Prompt" type="Label" parent="OpenZone"]
+offset_left = -110.0
+offset_top = -68.0
+offset_right = 110.0
+offset_bottom = -46.0
+text = "[E] 둥지를 뒤진다"
+horizontal_alignment = 1

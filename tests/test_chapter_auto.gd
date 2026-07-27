@@ -23,6 +23,12 @@ extends SceneTree
 ##     (chapter_clear와 별도 축 — 조립→탁본 루프의 이음매. 발신 줄 뮤테이션으로 검출력 확인)
 ##   • 🔴 세71 잡몹 길 — ch1은 이제 보스 1 + mob_spawns N. "enemies"에 섞이므로 보스는 enemy_id로 특정
 ##   • 🔴 세99 D5·D6 **데이터 쪽** — 풀·네임드가 실재하는 적을 가리키고 **보스 id를 안 문다**([1c])
+##   • 🔴🔴 세101 N26 **지점 산출 데이터 쪽**([1d]) — 지점이 **선** 챕터만 조건부로 잰다:
+##     `drops`가 비지 않았나 · **바닥 층**(반드시 뭔가 나오는 줄)이 있나 · `unlock_id`/`until_unlock` 0줄
+##     (설계 §10-4 S24·S18·S28). ⚠ **ch1은 지금 의도적으로 빨갛다** — `lm_nest.tres`의 `drops`가
+##     빈 채라 「밟을 값어치가 없는 이정표」이고, 그게 N26이 고치려는 구멍 자체다(데이터는 단계 5).
+##   • 🔴🔴 세101 **`at_landmark`가 조건부가 됐다**([1c] 안) — 옛 「비어 있어야 한다」는 데이터를
+##     채우는 순간 전 스위트를 빨갛게 만든다(S22). 지금 계약 = 「비었거나, 이 챕터의 지점이다」
 ##
 ## 🔴🔴 **세99 단계 1.5 — 「방 안의 적 수」만 범위가 됐다**(`_check_enemy_count`). 네임드가 매 판
 ##  굴러 개수가 흔들리기 때문이다. **하한이 옛 정확 기대치 그대로**라 세88이 상수를 박은 이유는
@@ -110,6 +116,7 @@ func _run() -> void:
 
 	await _test_chapters_load()
 	await _test_chapter_tables()
+	await _test_landmark_drops()
 	await _test_boss_spawn_both_paths()
 	await _test_contact_damage()
 	await _test_my_spell_can_hit_boss()
@@ -232,6 +239,13 @@ func _test_chapter_tables() -> void:
 ##  데이터의 의도가 안 보이고, 데이터 검사만 있으면 가드를 지워도 그린이다).
 func _check_pools(ch) -> void:
 	var cid: StringName = ch.id
+	# 🔴 이 챕터가 **실제로 세우는** 지점 id 집합 — 아래 `at_landmark` 대조의 정본이다.
+	#  ⚠ `Db`에 그 지점이 있느냐가 아니라 **이 챕터의 `landmarks`에 있느냐**를 본다: 다른 챕터의
+	#   지점을 가리키면 그 판엔 그 자리가 없어 해석기가 세울 데를 못 찾는다.
+	var lm_ids := {}
+	for slot in ch.landmarks:
+		if slot != null and slot.landmark_id != &"":
+			lm_ids[slot.landmark_id] = true
 	for mw in ch.mob_pool:
 		if mw == null:
 			_check(false, "%s: mob_pool에 null 항목이 있다" % cid)
@@ -255,10 +269,105 @@ func _check_pools(ch) -> void:
 		_check(ns.chance > 0.0 and ns.chance < 1.0,
 			"🔴 %s: 네임드 %s의 확률이 양끝이 아니다 (실제 %.2f — 0이면 영영 안 뜨고 1이면 늘 뜬다)"
 				% [cid, ns.enemy_id, ns.chance])
-		# ⚠ 지점(`at_landmark`) 해석은 **단계 3 몫**이다 — 지금 채우면 좌표가 무시된 채 원점에 선다.
-		_check(ns.at_landmark == &"",
-			"%s: 네임드 %s의 at_landmark가 비어 있다 (지점 해석은 단계 3 — 지금 채우면 원점에 선다)"
-				% [cid, ns.enemy_id])
+		# 🔴🔴 **세101 N26 1단계 — 옛 단언(「at_landmark가 비어 있다」)을 조건부로 바꿨다**(설계 §10-4 S22).
+		#  그대로 뒀으면 **데이터를 채우는 순간 전 스위트가 빨개져** 「내가 방금 깬 건가 그물이 낡았나」로
+		#  한 세션이 샌다(세84에 그 신뢰 붕괴를 실제로 겪었다). 🔴 **바꾼 이 형태가 곧 「미등록 id를
+		#  잡는 그물」이다 — 검사를 두 개 만들지 마라**(설계가 못 박았다).
+		#  ⚠ 미등록 id가 왜 조용한가: 해석기가 세울 자리를 못 찾으면 **원점에 서거나 통째로 안 서는데**
+		#   둘 다 화면에서 「오늘은 네임드가 안 떴네」로 읽힌다(설계 S22 끝줄 — 해석 코드 쪽에서는
+		#   미등록 id를 **에러로 승격**하라고 못 박아 뒀다. 이 줄은 데이터가 애초에 그렇게 안 들어오게 하는 짝이다).
+		_check(ns.at_landmark == &"" or lm_ids.has(ns.at_landmark),
+			"%s: 네임드 %s의 at_landmark가 비었거나 이 챕터의 지점이다 (실제 '%s' / 챕터 지점 %s)"
+				% [cid, ns.enemy_id, ns.at_landmark, str(lm_ids.keys())])
+
+
+## [1d] 🔴🔴 지점 산출(`LandmarkDef.drops`)의 **조건부 대조** (세101 N26 1단계 · 설계 §10-4 S24·S18·S28).
+##
+## 🔴 **왜 조건부인가 — 「지점 0이면 빨강」으로 짜면 ch2·ch3이 첫날부터 빨개진다.** 두 챕터는
+##  `landmarks` 필드 자체가 비어 있는 게 **정상**이다(D14 — 자리는 사람이 놓는다). 재려는 건
+##  「지점을 안 세웠다」가 아니라 **「세워 놓고 아무것도 안 주는 지점」**이다(S24 · §7 단계 1.5가
+##  못 박은 자리를 다시 밟지 않는다).
+## 🔴 왜 `[1b]`·`[1c]`의 이웃인가 = **같은 종류의 검사**다 — Db가 실제로 로드한 `.tres`가 성립하나.
+##  씬·굴림이 실제로 도는지는 `test_landmark_road_auto`(지점이 서나·길이 이어지나)와 단계 3 몫이다.
+##
+## 재는 것 셋:
+##  ⓐ **지점이 선 챕터는 그 `LandmarkDef.drops`가 비어 있지 않다.** ⚠ 지금 `lm_nest`가 정확히
+##    그 상태(**밟을 방법도 주는 것도 없는 예쁜 이정표**)라 **여기가 빨간 건 의도된 것**이고
+##    5단계(데이터)에서 닫힌다. 🔴 **빨강을 없애려고 이 줄을 무르게 만들지 마라.**
+##  ⓑ 🔴🔴 **「반드시 뭔가 나오는 줄」이 최소 하나** = 바닥 층(D12 「허탕 없음」 · S18).
+##    줄마다 **독립 굴림**이라 확정 줄이 없으면 **빈손인 판이 확률적으로 반드시 나오는데 에러가 0**이고,
+##    재현이 확률이라 버그로 안 보인다.
+##    🔴🔴 **`chance == 1.0`만 재면 부족하다 — 세101 실측**: `_roll_drops`가 `n := min_count` 뒤
+##    **`if n > 0`으로 거른다.** 즉 `chance 1.0 · min_count 0`인 줄은 **확정 줄처럼 보이는데 0을 굴려
+##    아무것도 안 준다**(`min_count 0 · max_count 3`이면 굴림마다 0이 섞인다). `item_id`가 빈 줄도
+##    같다 — 굴림은 통과하고 픽업만 빈다. → **바닥 층 = `chance ≥ 1.0` + `item_id` 있음 + `min_count ≥ 1`**.
+##  ⓒ 🔴 **`unlock_id`·`until_unlock`이 있는 줄이 0**(S28 · §10-2). 굴림이 두 필드를 **그대로 처리**해서
+##    「지점이 문양-고리를 준다」(§3이 각하 · D6이 막으려던 상태)와 「모든 줄이 확정 드롭이 된다」
+##    (`if…elif`가 `chance`를 통째로 건너뛴다)가 **데이터 한 줄로 조용히 성립한다.**
+##    스키마 주석이 금지어로 적어 둔 것을 여기서 **기계가 진다**(주석은 코드와 함께 안 늙는다 — T4).
+func _test_landmark_drops() -> void:
+	print("[1d] 지점 산출 drops 조건부 대조 (지점이 선 챕터만 · 바닥 층 · unlock 금지)")
+	var slots_total := 0
+	for cid: StringName in MOB_COUNT:
+		var ch = _db.get_chapter(cid)
+		if ch == null:
+			continue
+		# ✅ 지점을 안 세운 챕터는 **정상이다**(D14) — 조건부의 심장이 이 줄이다.
+		if ch.landmarks.is_empty():
+			continue
+		var seen := 0
+		for slot in ch.landmarks:
+			if slot == null:
+				continue
+			var lm = _db.get_landmark(slot.landmark_id)
+			if lm == null:
+				continue
+			seen += 1
+			_check_landmark_drops(cid, lm)
+		# ⚠ 루프가 **실제로 돌았나** — 슬롯 id가 안 풀리면 위 검사가 통째로 자명 통과가 된다.
+		#  (사슬 자체 = `ChapterDef.landmarks` → `Db` → `scene_path`는 `test_landmark_road_auto`가 진다.
+		#   여기 줄은 그 사슬의 재검사가 아니라 **이 항목이 비어 돌지 않았다는 자기 증명**이다.)
+		_check(seen == ch.landmarks.size(),
+			"%s: 지점 슬롯 %d개가 전부 LandmarkDef로 풀린다 (실제 %d — 밑돌면 아래 검사가 자명 통과다)"
+				% [cid, ch.landmarks.size(), seen])
+		slots_total += seen
+	_check(slots_total > 0,
+		"지점이 선 챕터가 하나라도 있다 (실제 %d채 — 0이면 이 항목 전체가 자명 통과다)" % slots_total)
+
+
+## 지점 한 채의 산출 규칙 — 위 [1d] 머리말의 ⓐⓑⓒ를 한 자리에서 잰다.
+func _check_landmark_drops(cid: StringName, lm) -> void:
+	var lid: StringName = lm.id
+	# ⓐ 세워 놓고 아무것도 안 주는 지점 (지금 lm_nest — 의도된 빨강)
+	_check(not lm.drops.is_empty(),
+		"🔴 %s: 지점 %s가 산출을 준다 (drops %d줄 — 0이면 밟을 값어치가 없는 이정표다)"
+			% [cid, lid, lm.drops.size()])
+	if lm.drops.is_empty():
+		return
+	var floor_rows := 0
+	var unlock_rows := 0
+	var gate_rows := 0
+	for d in lm.drops:
+		if d == null:
+			_check(false, "%s: 지점 %s의 drops에 null 줄이 있다" % [cid, lid])
+			continue
+		# ⓑ 바닥 층의 정의 — 「확정처럼 보이는」이 아니라 **「반드시 뭔가 나오는」**이다(머리말 참조).
+		if d.chance >= 1.0 and d.item_id != &"" and d.min_count >= 1:
+			floor_rows += 1
+		if d.unlock_id != &"":
+			unlock_rows += 1
+		if d.until_unlock != &"":
+			gate_rows += 1
+	_check(floor_rows >= 1,
+		"🔴🔴 %s: 지점 %s에 바닥 층이 있다 (chance≥1.0 + item_id + min_count≥1 인 줄 %d개 — 0이면 빈손인 판이 나온다)"
+			% [cid, lid, floor_rows])
+	# ⓒ 배타 짝 — 스키마 주석이 금지한 둘을 기계가 진다
+	_check(unlock_rows == 0,
+		"🔴 %s: 지점 %s의 drops에 unlock_id가 없다 (실제 %d줄 — 있으면 지점이 문양-고리를 준다)"
+			% [cid, lid, unlock_rows])
+	_check(gate_rows == 0,
+		"🔴 %s: 지점 %s의 drops에 until_unlock이 없다 (실제 %d줄 — 있으면 chance가 통째로 죽어 전부 확정 드롭이 된다)"
+			% [cid, lid, gate_rows])
 
 
 ## [2] 🔴 보스 스폰 **두 경로 각각** + 출격 만HP (forest [2] 이식).

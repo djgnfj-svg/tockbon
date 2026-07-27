@@ -12,6 +12,12 @@ extends SceneTree
 ##   • [2] 미해금 = **확정** 드롭 — 관문 줄의 chance를 메모리 0으로 내리고 3연속 처치로 "항상"을 잰다
 ##     (chance **무시** 계약을 [2]가 직접 잰다 — 안 내리면 chance 1.0이라 확률 폴백 회귀를 못 잡는다)
 ##   • [3] 해금 = 드롭 **중단** (나머지 드롭은 그대로 나온다 — 관문이 남을 안 건드리는 것까지)
+##   • 🔴🔴 [3b] **해금 드롭 가드**(`DropEntry.unlock_id` 축 — 세101 신설): 이미 해금이면 안 떨구고,
+##     미해금이어도 **확정이 아니다**(= `chance`가 살아 있다). 세101에 굴림을 `src/field/drop_roll.gd`로
+##     추출하며 뮤테이션 둘(가드 삭제 · 가드를 `if…elif` 사슬에 섞기)을 걸었는데 **전 스위트가 그린**이라
+##     신설했다 — 옛 관측점이 `item_id`뿐이라 **두루마리 줄이 통째로 안 보였다**
+##   • 🔴 [3c] **낱개가 죽은 자리에 떨어진다**(세101 신설): `spawn_loose`의 좌표가 인자가 됐는데
+##     그걸 `Vector2.ZERO`로 바꿔도 전 스위트가 그린이었다(드롭이 방 밖 원점에 떨어져도 아무도 몰랐다)
 ##   ⚠ 세66: 상자 은퇴 — 모든 적이 낱개로 떨군다(slime_elite 포함). 수확은 drop_pickups 그룹의
 ##   공개 `item_id`만 걷으면 된다(옛 상자 루팅 흐름은 제거됐다).
 ##   • [4] 불변식: fragment_*가 until_unlock 없이(순수 확률로) 등장하는 곳 0 · until_unlock 중복 0 ·
@@ -70,6 +76,19 @@ const ENEMY_DIR := "res://data/enemies"
 ##  「0/0 통과」가 되기 때문이다. 새 몹 `.tres`를 더하면 이 숫자를 같이 올려라.
 const ENEMY_COUNT_EXPECTED := 5
 
+## 🔴 세101 [3b]·[3c] — 적을 세우는 자리. **`_make_enemy`와 [3c]가 같은 값을 본다**(베끼면 갈라진다).
+## 플레이어가 없는 무풍지대라 자석·추격이 안 끼어든다.
+const SPAWN_AT := Vector2(9000, 9000)
+## 🔴 [3b]가 주입할 두루마리 — **실재하는 고리**를 쓴다(`hound`가 실제로 떨구는 그것).
+## 가짜 id를 쓰면 픽업이 `push_warning`만 남기고 지나가서 「해금물처럼 생긴 무엇」을 재게 된다.
+const SCROLL_UNLOCK := &"gr_explode1"
+## [3b] ③ 굴림 횟수 — 확정으로 굳는 고장은 **매번** 나오므로 10회면 충분하다
+## (거짓 빨강 확률 = 0.02^10 ≈ 1e-17. 늘려도 검출력은 안 오르고 테스트만 느려진다).
+const SCROLL_ROLLS := 10
+## [3c] 「시체 옆」의 넉넉한 상한(px) — 흩뿌림(22) + BACK 오버슛 + 지터(±6)를 다 삼키고도
+## **원점 낙하(≈12728px)**를 못 삼키는 값. 🔴 연출 상수를 베끼지 않는다(조일 때 거짓 빨강이 난다).
+const DROP_NEAR_PX := 80.0
+
 var failures: int = 0
 ## 🔴 세84 #41: 0행 스캔은 PASS가 아니라 **SKIP**으로 찍는다. 그린만 보고 「불변식이 지켜졌다」로
 ## 읽던 자리 — 지금은 잴 데이터가 없다는 사실이 로그에 남고, 복원 세션이 여기서 자동 가동된다.
@@ -105,6 +124,8 @@ func _run() -> void:
 	_test_mob_drop_tables()
 	await _test_locked_guaranteed_drop()
 	await _test_unlocked_stops_drop()
+	await _test_unlock_drop_guard()
+	await _test_drop_lands_at_corpse()
 	_test_gate_invariants()
 	_test_hunger_retired()
 
@@ -264,6 +285,74 @@ func _test_unlocked_stops_drop() -> void:
 	_gs.codex.erase(&"rune_water")   # 세78: rune_water는 이제 시드지만, 이 관문 테스트는 잠긴 상태를 봐야 해 되돌린다
 
 
+## [3b] 🔴🔴 **해금 드롭 가드**(세88 두루마리 — `DropEntry.unlock_id`) — **세101 신설**.
+##
+## 🔴 왜 지금 생겼나: 세101에 굴림·낱개 스폰을 `src/field/drop_roll.gd`로 올리며 뮤테이션 둘을 걸었는데
+##  **전 스위트가 그린이었다.**
+##    ⓐ 해금 가드 줄을 **통째로 지워도** 아무도 안 붉었다
+##    ⓑ 그 가드를 `until_unlock`의 `if…elif` 사슬에 **섞어도** 안 붉었다
+##       (= `chance`를 통째로 안 봐서 **두루마리가 모든 처치 확정 드롭**이 된다 — `DropEntry` 머리말이
+##        「조용히 깨진다」로 못 박은 바로 그 자리인데, **재는 그물이 0개**였다)
+##  옛 `_kill_and_collect`가 `item_id`만 걷었기 때문이다 — **두루마리 줄은 `item_id`가 비어 있어서**
+##  나오든 말든 결과가 똑같았다(감사 T8의 작은 판: 축이 늘었는데 관측점이 안 늘었다).
+##
+## 🔴 **세 다리로 잰다 — 둘로는 못 잡는다**: 「이미 해금이면 안 나온다」만 재면 **아무것도 안 떨구는
+##  고장**이 통과하고, 「확정이 아니다」만 재도 같은 고장이 통과한다(`test_enemy_ai_auto [4]` leash와 같은 이유).
+##    ① chance 1.0 + **미해금** → 나온다        (아래 둘이 자명 통과가 아님을 세운다)
+##    ② chance 1.0 + **해금됨** → 안 나온다      (ⓐ 검출자)
+##    ③ chance 0.02 + 미해금 → **확정이 아니다**  (ⓑ 검출자 — 거짓 빨강 확률 0.02^10 ≈ 1e-17)
+## ⚠ Db의 EnemyDef.drops는 공유 리소스다 — 끝에 주입 줄과 codex를 **반드시** 되돌린다.
+func _test_unlock_drop_guard() -> void:
+	print("[3b] 🔴 해금 드롭 가드: 이미 해금된 두루마리는 안 떨군다 · 미해금이어도 확정이 아니다")
+	var had: bool = _gs.is_unlocked(SCROLL_UNLOCK)
+	# ① 미해금 + 확정 확률 → 나온다 (아래 둘의 자명 통과 방지)
+	_gs.codex.erase(SCROLL_UNLOCK)
+	_inject_scroll(1.0)
+	var rows: Array = await _kill_and_snapshot(&"slime_elite")
+	_check(_has_unlock(rows, SCROLL_UNLOCK),
+		"① 미해금 + chance 1.0 → 두루마리 %s가 나온다 (실제 %s)" % [SCROLL_UNLOCK, str(_unlocks_of(rows))])
+	# ② 해금됨 → 안 나온다 (가드 줄을 지우면 여기가 붉는다)
+	_gs.codex[SCROLL_UNLOCK] = true
+	rows = await _kill_and_snapshot(&"slime_elite")
+	_check(not _has_unlock(rows, SCROLL_UNLOCK),
+		"🔴 ② 이미 해금이면 chance 1.0이어도 안 나온다 (실제 %s)" % str(_unlocks_of(rows)))
+	# ③ 미해금 + 낮은 확률 → **확정이 아니다** (가드를 if/elif 사슬에 섞으면 chance가 죽어 10/10이 된다)
+	_gs.codex.erase(SCROLL_UNLOCK)
+	_set_scroll_chance(0.02)
+	var hits := 0
+	for i in SCROLL_ROLLS:
+		rows = await _kill_and_snapshot(&"slime_elite")
+		if _has_unlock(rows, SCROLL_UNLOCK):
+			hits += 1
+	_check(hits < SCROLL_ROLLS,
+		"🔴 ③ chance 0.02는 확정이 아니다 (%d회 처치 중 %d회 — %d/%d면 chance가 죽었다)"
+			% [SCROLL_ROLLS, hits, SCROLL_ROLLS, SCROLL_ROLLS])
+	_remove_scroll()
+	if had:
+		_gs.codex[SCROLL_UNLOCK] = true
+	else:
+		_gs.codex.erase(SCROLL_UNLOCK)
+
+
+## [3c] 🔴 낱개가 **죽은 자리에** 떨어진다 — **세101 신설**.
+## 세101에 `_spawn_loose`가 `drop_roll.spawn_loose(scene, origin, rolled)`로 올라가며 **죽은 자리가
+## 인자**가 됐다(지점은 자기 자리를 넘긴다). 뮤테이션 실측: 그 인자를 `Vector2.ZERO`로 바꿔
+## **드롭이 방 밖 원점에 떨어지게 해도 전 스위트가 그린**이었다 — 좌표를 재는 그물이 0개였다.
+## 🔴 **범위형으로 잰다**(세84 flake 교훈): 흩뿌림·오버슛·지터 상수를 여기 베끼면 연출을 조일 때마다
+##  거짓 빨강이 난다. 재려는 건 「몇 px인가」가 아니라 **「시체 옆인가, 딴 세상인가」**다.
+func _test_drop_lands_at_corpse() -> void:
+	print("[3c] 🔴 낱개가 죽은 자리에 떨어진다 (스폰 좌표 — 세101에 인자가 됐다)")
+	var rows: Array = await _kill_and_snapshot(&"slime_elite")
+	_check(not rows.is_empty(),
+		"드롭이 하나라도 나왔다 (0이면 아래 거리 검사가 자명 통과다)")
+	var worst := 0.0
+	for row in rows:
+		worst = maxf(worst, (row["pos"] as Vector2).distance_to(SPAWN_AT))
+	_check(not rows.is_empty() and worst <= DROP_NEAR_PX,
+		"🔴 모든 낱개가 시체에서 %.0fpx 안이다 (최원 %.1fpx — 원점에 떨어지면 여기서 붉는다)"
+			% [DROP_NEAR_PX, worst])
+
+
 ## [4] 🔴 랜덤 조각 은퇴 불변식 — Db의 **모든** 적 드롭 전수 (PROGRESSION.md 표의 감시자).
 ## 🔴 세84 #41: 이 스캔은 관문 0줄인 동안 **자명 통과**였다. 두 가지를 더했다 —
 ##   ① `scanned_drops > 0` = 스캔이 실제로 돌았다(드롭 필드 개명·루프 파손이면 여기가 빨개진다.
@@ -359,8 +448,50 @@ func _make_enemy(id: StringName):
 	var e = _enemy_scene.instantiate()
 	e.enemy_id = id          # _ready가 이걸로 Db.get_enemy → def 로드
 	root.add_child(e)
-	e.global_position = Vector2(9000, 9000)   # 플레이어 없음 — 자석·추격 무풍지대
+	e.global_position = SPAWN_AT   # 플레이어 없음 — 자석·추격 무풍지대
 	return e
+
+
+## 🔴 세101 [3b] — 두루마리(해금 드롭) 한 줄을 slime_elite에 주입. `_inject_gate`와 **같은 규약**이고
+## (공유 리소스라 반드시 되돌린다) 다른 점은 축뿐이다: 이쪽은 `unlock_id`(= 드롭이 곧 해금),
+## 저쪽은 `until_unlock`(= 그 codex가 잠긴 동안 아이템을 확정 드롭). 🔴 **둘을 한 줄에 병용하지 않는다**
+## — 그게 [1b] ④가 데이터에 대해 금지하는 조합이고, 여기서 어기면 재려는 대상 자체가 없어진다.
+var _injected_scroll = null
+
+func _inject_scroll(chance: float) -> void:
+	if _injected_scroll != null:
+		_set_scroll_chance(chance)
+		return
+	var entry = DropEntry.new()
+	entry.item_id = &""          # 두루마리 줄은 아이템이 아니다 (배타 — DropEntry 머리말)
+	entry.unlock_id = SCROLL_UNLOCK
+	entry.chance = chance
+	entry.min_count = 1
+	entry.max_count = 1
+	_injected_scroll = entry
+	_db.get_enemy(&"slime_elite").drops.append(entry)
+
+func _set_scroll_chance(chance: float) -> void:
+	if _injected_scroll != null:
+		_injected_scroll.chance = chance
+
+func _remove_scroll() -> void:
+	if _injected_scroll != null:
+		_db.get_enemy(&"slime_elite").drops.erase(_injected_scroll)
+		_injected_scroll = null
+
+
+## 스냅샷에서 두루마리 id만 걷는다 (표시·비교용).
+func _unlocks_of(rows: Array) -> Array:
+	var out := []
+	for row in rows:
+		if row["unlock"] != &"":
+			out.append(row["unlock"])
+	return out
+
+
+func _has_unlock(rows: Array, unlock_id: StringName) -> bool:
+	return _unlocks_of(rows).has(unlock_id)
 
 
 ## 그 적의 until_unlock 드롭 — 정확히 1줄일 때만 그 줄을 준다 (0줄·2줄이면 null = [1]에서 붉는다).
@@ -381,6 +512,17 @@ func _gate_entry_of(enemy_id: StringName):
 ## 🔴 세66: 상자 은퇴로 보스도 낱개로 떨군다 — 옛 상자 루팅 흐름(interacted→loot_card/advance)은
 ## 사라졌다. 이제 slime_elite도 drop_pickups 그룹에 그대로 뜬다(형태 분기 없음).
 func _kill_and_collect(id: StringName) -> Array:
+	var ids := []
+	for row in await _kill_and_snapshot(id):
+		ids.append(row["item"])
+	return ids
+
+
+## 🔴 세101 — 처치 1회의 **픽업 스냅샷**: `{"item": StringName, "unlock": StringName, "pos": Vector2}`.
+## `_kill_and_collect`의 몸통을 여기로 내리고 **두루마리와 좌표를 같이 걷게** 했다.
+## 그전엔 `item_id`만 걷어서, 두루마리 줄(= `item_id`가 빈 줄)과 스폰 좌표가 **관측 밖**이었다 —
+## 세101 뮤테이션 넷이 전부 안 잡힌 이유가 그것이다([3b]·[3c] 머리말).
+func _kill_and_snapshot(id: StringName) -> Array:
 	_clear_drops()
 	_gs.ui_modal_open = false
 	var enemy = _make_enemy(id)
@@ -388,12 +530,12 @@ func _kill_and_collect(id: StringName) -> Array:
 	enemy.take_hit(9999.0, 0, 0, 0.0)
 	await physics_frame
 
-	var ids := []
+	var rows := []
 	for p in get_nodes_in_group("drop_pickups"):
-		ids.append(p.item_id)
+		rows.append({"item": p.item_id, "unlock": p.unlock_id, "pos": p.global_position})
 
 	_clear_drops()
-	return ids
+	return rows
 
 
 func _clear_drops() -> void:

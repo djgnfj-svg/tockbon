@@ -21,7 +21,8 @@ extends SceneTree
 ##   • [3] 가중치가 **비례로** 먹는다 (한쪽만 남기면 그 하나만 나온다 · 둘 다 살리면 둘 다 나온다)
 ##   • [4] 🔴🔴 **보스 id 제외 가드** — 풀·네임드에 `boss_enemy_id`를 넣어도 잡몹으로 안 선다
 ##         (가드가 없으면 잡몹 한 마리로 `chapter_clear_*` + 보상 룬이 조용히 나간다 — 설계 §6 S9)
-##   • [5] 네임드 확률 양끝 + 자유 위치(`position`) 해석 + `at_landmark`는 아직 안 선다(단계 3)
+##   • [5] 네임드 확률 양끝 + 자유 위치(`position`) 해석 + 🔴 **`at_landmark` = 지점 좌표에 선다**
+##         (세101 N26 4단계 D13 — 세100까지는 「아직 안 선다」를 단언하던 자리다)
 ##   • [6] 네임드 굴림이 **항목마다 독립**이다 (하나는 확정·하나는 절대 = 정확히 하나만 선다)
 ##   • [7] 기본 확률로 여러 판 돌려 **0도 N도 아니다** = 「가끔 뜬다」가 살아 있다(설계 §6 S3)
 ## ⚠ 못 잡는 것: 네임드가 **화면에서 커 보이나**(덩치는 scale이라 렌더다 — F5/MCP) · 굴림 비율의 손맛.
@@ -269,9 +270,10 @@ func _test_boss_id_excluded() -> void:
 
 ## [6] 🔴 네임드 확률 **양끝** (설계 §6 S3) — 0.0이면 절대 안 뜨고 1.0이면 반드시 뜬다.
 ## 확률이 어느 쪽으로든 굳어도 **에러가 없다**. 자유 위치(`position`) 해석도 여기서 같이 잰다.
-## ⚠ `at_landmark`는 **단계 3 몫**이라 지금은 안 선다 — 그것도 계약이라 잰다(조용히 원점에 서면 안 된다).
+## 🔴🔴 ⓒ = **`at_landmark` 해석**(세101 N26 4단계 · D13). 자리가 여럿일 때의 계약(S27)과 미등록 id는
+##  `tests/test_nest_open_auto.gd`가 잰다 — 여기는 **「해석이 켜져 있나」** 하나만 본다.
 func _test_named_chance_extremes() -> void:
-	print("[6] 네임드 확률 양끝 (0.0 = 절대 · 1.0 = 반드시) + 자유 위치 · at_landmark는 아직 안 선다")
+	print("[6] 네임드 확률 양끝 (0.0 = 절대 · 1.0 = 반드시) + 자유 위치 + at_landmark = 지점 좌표")
 	var ch = _db.get_chapter(&"ch1")
 	_save(ch)
 	ch.mob_pool = _typed_pool([])
@@ -303,13 +305,30 @@ func _test_named_chance_extremes() -> void:
 		"🔴 네임드가 NamedSpawn.position(%s)에 선다 (%d/%d판 — 어긋나면 원점에 서는 것)"
 			% [at, placed, rounds])
 
-	# ⓒ at_landmark — 지점 해석은 단계 3이라 **아직 안 선다**(조용히 원점에 서면 안 된다)
+	# ── ⓒ 🔴🔴 **at_landmark = 그 지점 자리에 선다** (세101 N26 4단계 · D13)
+	# 🔴 **세100까지 이 줄은 정반대였다**: *"at_landmark가 채워진 네임드는 **아직 안 선다**"*.
+	#  해석이 단계 3 몫이라 `boss_room._spawn_named`가 `push_warning` 후 건너뛰었고, 그 **동작**을
+	#  단언해 둔 것이다(1단계 담당이 「동작 단언이라 해석 구현과 한 몸」이라 판단해 일부러 남겼다).
+	#  해석을 켜는 순간 그 줄이 **거짓**이 되므로 같은 원자에서 뒤집었다.
+	# 🔴 **`NamedSpawn.position`이 아니라 지점 좌표에 선다** — 둘을 **일부러 다르게** 준다.
+	#  같은 값을 주면 해석이 통째로 죽어도(옛 자유 위치 경로로 새도) 그린이라 검출력이 0이 된다.
+	var lm_at := Vector2.ZERO
+	for slot in ch.landmarks:
+		if slot != null and slot.landmark_id == &"lm_nest":
+			lm_at = slot.position
+	_check(lm_at != Vector2.ZERO and lm_at != at,
+		"ch1이 lm_nest를 %s에 세우고 그게 자유 위치 %s와 다르다 (같으면 아래가 자명 통과다)" % [lm_at, at])
 	var ns = _named(&"hound_alpha", 1.0, at)
 	ns.at_landmark = &"lm_nest"
 	ch.named_pool = _typed_named([ns])
 	await _fresh(&"ch1")
-	_check(_mobs().is_empty(),
-		"🔴 at_landmark가 채워진 네임드는 아직 안 선다 = 원점에 조용히 서지 않는다 (실제 %d)" % _mobs().size())
+	var at_lm := _mobs()
+	_check(at_lm.size() == 1,
+		"🔴 at_landmark 네임드가 정확히 하나 선다 (실제 %d — 0이면 해석이 안 켜진 것이다)" % at_lm.size())
+	if at_lm.size() == 1:
+		_check(at_lm[0].position == lm_at,
+			"🔴🔴 네임드가 **지점 좌표** %s에 선다 (실제 %s — 자유 위치 %s면 해석이 안 걸린 것이고 원점이면 자리를 못 찾은 것이다)"
+				% [lm_at, at_lm[0].position, at])
 	_restore_all()
 
 

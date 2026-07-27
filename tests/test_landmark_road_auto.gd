@@ -19,7 +19,9 @@ extends SceneTree
 ##      **연결만 재던 동안 `_road_between`의 인자를 뒤집어도 전 항목 그린이었다**(리드 md5 실측)
 ##  [4] **바닥에 안 뜬다의 값 축** — 프롭의 원점이 **접지점**이다(`centered=false` + `offset`).
 ##      🔴 이 둘 중 하나만 바뀌어도 그림이 95/140px 튀는데 **에러가 0**이다
-##  [5] 프롭 계약 — **물리 몸이 없다** · 감지 Area는 `collision_layer = 0`(world면 캐리어가 터진다)
+##  [5] 프롭 계약 — **물리 몸이 없다** · Area **둘**의 레이어 계약(세101에 여는 지점이 붙어 갈렸다):
+##      공통 = world·enemy 비트 0(캐리어가 터진다) · 겹침 감지 = layer 0 + 아래 변이 접지선 위 ·
+##      여는 지점 = zone_id ≠ `&"exit"` + `hold_sec == 0`(D10 즉시)
 ##  [6] 🐺 늑대 무리가 **둥지를 둘러싸고** 있고, **들어가는 줄기에서는 aggro 밖**이다
 ##      (= 설계 §3의 *"✅ 지나가도 된다"*가 좌표로 성립하나)
 ##  [7] 🔴 회귀 — `landmarks`를 비우면 지점도 **그 길도** 사라진다(길이 지점에서 파생한다는 증명)
@@ -264,10 +266,23 @@ func _test_ground_anchor_contract() -> void:
 
 
 ## [5] 🔴 프롭 계약 — **물리 몸이 없다.** StaticBody2D로 만들면 world 레이어라 마법 캐리어(마스크 5)가
-## 지점마다 터진다(나무가 장식인 이유와 같다 — `boss_room.gd` 머리말). 감지 Area도 layer 0이어야 한다.
+## 지점마다 터진다(나무가 장식인 이유와 같다 — `boss_room.gd` 머리말).
 ## ⚠ **재귀로 훑는다** — 자식 하나에 몰래 붙어도 잡힌다.
+##
+## 🔴🔴 **세101 N26: Area가 둘이 됐다 — 「전부 layer 0」을 「전부 world·enemy 아님」으로 넓혔다.**
+##  ⓐ `BehindSense`(스크립트 없음) = 겹침 감지. **세99 계약 그대로** layer 0 · monitorable false ·
+##     아래 변이 접지선 위. 🔴 여기 넷은 한 톨도 안 무르게 뒀다.
+##  ⓑ `OpenZone`(`interact_zone.gd`) = 여는 지점(D10). **layer 64(interaction)**가 그 스크립트의
+##     선언된 계약이라 「전부 0」을 그대로 두면 **거짓 빨강**이 된다.
+##  🔴 **진짜 불변식은 「캐리어가 안 터진다」이고 그건 `layer & 5 == 0`이다**(마스크 5 = world 1 +
+##   enemy 4). 64는 그 밖이라 안전하다 — 그래서 넓히면서 검출력이 안 준다: layer 1이나 4를 켜는
+##   순간 **여전히** 빨개진다.
+##  🔴 mask는 **둘 다 2(player)**다 — `OpenZone`에 4(enemy)를 더하면 둘레 늑대가 스칠 때마다
+##   프롬프트가 제멋대로 뜨고 사라진다(설계 §10-4 **S26**). 화면은 「그냥 좀 이상한」 정도다.
+##  ⚠ **아래 변 검사는 `BehindSense`에만 건다** — 그 계약의 근거가 「위/아래가 곧 원근」이라
+##   상호작용 거리와는 축이 다르다(`OpenZone`은 남쪽에서 걸어오는 몸을 잡아야 해서 접지선 아래로 내려온다).
 func _test_prop_has_no_physics_body() -> void:
-	print("[5] 둥지에 물리 몸이 없다 (world 레이어면 캐리어가 터진다)")
+	print("[5] 둥지에 물리 몸이 없다 · 겹침 Area와 여는 Area의 계약이 각각 산다")
 	var packed := load(NEST_SCENE) as PackedScene
 	if packed == null:
 		return
@@ -276,23 +291,55 @@ func _test_prop_has_no_physics_body() -> void:
 	var areas: Array = []
 	_collect(node, bodies, areas)
 	_check(bodies.is_empty(), "🔴 PhysicsBody2D가 0개다 (실제 %s)" % str(bodies))
-	_check(not areas.is_empty(), "감지 Area2D가 있다 (0이면 앞뒤 겹침 처리가 통째로 죽는다)")
+	_check(areas.size() >= 2,
+		"Area2D가 둘이다 — 겹침 감지 + 여는 지점 (실제 %d — 밑돌면 아래가 자명 통과다)" % areas.size())
+
+	var sense = null
+	var open_zone = null
 	for a in areas:
-		_check(a.collision_layer == 0,
-			"🔴🔴 감지 Area의 collision_layer == 0 (실제 %d — 채우면 캐리어가 둥지마다 터진다)"
-				% a.collision_layer)
-		_check(not a.monitorable,
-			"monitorable = false (다른 Area가 이걸 주우면 드롭·피격 판정에 섞인다)")
+		# 🔴 스크립트가 갈라 준다 — 노드 **이름**으로 가르면 이름을 바꾸는 순간 그물이 눈을 감는다.
+		if a.has_method("player_in_range"):
+			open_zone = a
+		else:
+			sense = a
+		# 🔴🔴 **공통 불변식** — world(1)·enemy(4) 비트가 하나도 안 켜져 있다(캐리어 마스크 = 5).
+		_check(a.collision_layer & 5 == 0,
+			"🔴🔴 %s의 collision_layer에 world·enemy 비트가 없다 (실제 %d — 켜면 캐리어가 둥지마다 터진다)"
+				% [a.name, a.collision_layer])
+		# 🔴 S26 — 둘 다 **플레이어만** 본다. 적까지 넓히면 늑대가 스칠 때마다 판정이 돈다.
 		_check(a.collision_mask == 2,
-			"mask = 2(player) (실제 %d — 적까지 넓히려면 4를 더한다)" % a.collision_mask)
+			"%s: mask = 2(player) (실제 %d — 4(enemy)를 더하면 늑대가 스칠 때마다 반응한다)"
+				% [a.name, a.collision_mask])
+
+	# ── ⓐ 겹침 감지 — 세99 계약 그대로
+	_check(sense != null, "🔴 겹침 감지 Area가 있다 (없으면 앞뒤 겹침 처리가 통째로 죽는다)")
+	if sense != null:
+		_check(sense.collision_layer == 0,
+			"🔴🔴 겹침 감지 Area의 collision_layer == 0 (실제 %d)" % sense.collision_layer)
+		_check(not sense.monitorable,
+			"monitorable = false (다른 Area가 이걸 주우면 드롭·피격 판정에 섞인다)")
 		# 🔴🔴 세100 N25ⓑ의 **정적 짝** — 감지 상자가 접지선(원점) 아래로 안 내려간다.
 		#  이게 「위/아래가 곧 원근」의 값 축이다: 아래로 새면 둥지 **앞**에 선 플레이어까지 뒤로 잡혀
 		#  「앞에 섰는데 둥지가 앞으로 튀어나온다」가 된다(에러 0). [9]ⓑ가 같은 계약을 실제로 걸어 본다.
-		var bottom := _sense_bottom(a)
-		_check(bottom > -INF, "감지 Area(%s)에 형상이 실제로 물려 있다" % a.name)
+		var bottom := _sense_bottom(sense)
+		_check(bottom > -INF, "겹침 감지 Area(%s)에 형상이 실제로 물려 있다" % sense.name)
 		_check(bottom <= 0.5,
 			"🔴🔴 감지 상자 아래 변이 접지선 위다 (원점 기준 y %.1f — 0을 넘으면 둥지 앞이 뒤로 잡힌다)"
 				% bottom)
+
+	# ── ⓑ 여는 지점 (세101 N26 · D10) — 자세한 동작은 `test_nest_open_auto`가 잰다.
+	_check(open_zone != null,
+		"🔴 여는 지점(InteractZone)이 있다 (없으면 둥지가 **밟을 방법 없는 이정표**로 돌아간다)")
+	if open_zone != null:
+		# 🔴 `&"exit"`이면 `test_chapter_auto`가 출구로 세어 「_extract에 이어진 수」와 어긋난다.
+		_check(open_zone.zone_id != &"exit",
+			"🔴🔴 여는 지점의 zone_id가 &\"exit\"이 아니다 (실제 '%s')" % open_zone.zone_id)
+		# 🔴 D10 즉시 열기 — 0이 아니면 그 숫자가 아니라 **탈출 시간**(`balance.extract_hold_sec`)으로 돈다.
+		_check(is_equal_approx(open_zone.hold_sec, 0.0),
+			"🔴🔴 hold_sec == 0 = [E] 한 번에 즉시 (실제 %.2f — 0이 아니면 탈출 시간으로 돈다)"
+				% open_zone.hold_sec)
+		_check(open_zone.get_node_or_null(^"Prompt") != null,
+			"🔴 `Prompt` Label이 있다 (이름이 계약이다 — 없으면 안내가 통째로 죽는다)")
 	node.free()
 
 

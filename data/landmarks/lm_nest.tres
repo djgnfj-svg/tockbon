@@ -1,6 +1,49 @@
-[gd_resource type="Resource" script_class="LandmarkDef" load_steps=2 format=3]
+[gd_resource type="Resource" script_class="LandmarkDef" load_steps=9 format=3]
 
 [ext_resource type="Script" path="res://src/core/schemas/landmark_def.gd" id="1"]
+[ext_resource type="Script" path="res://src/core/schemas/drop_entry.gd" id="2"]
+
+[sub_resource type="Resource" id="Resource_floor_fang"]
+script = ExtResource("2")
+item_id = &"mat_hound_fang"
+chance = 1.0
+min_count = 1
+max_count = 2
+
+[sub_resource type="Resource" id="Resource_floor_coin"]
+script = ExtResource("2")
+item_id = &"coin"
+chance = 1.0
+min_count = 10
+max_count = 20
+
+[sub_resource type="Resource" id="Resource_body_shell"]
+script = ExtResource("2")
+item_id = &"mat_beetle_shell"
+chance = 0.5
+min_count = 1
+max_count = 2
+
+[sub_resource type="Resource" id="Resource_body_core"]
+script = ExtResource("2")
+item_id = &"mat_slime_core"
+chance = 0.45
+min_count = 1
+max_count = 2
+
+[sub_resource type="Resource" id="Resource_tail_shell"]
+script = ExtResource("2")
+item_id = &"mat_beetle_shell"
+chance = 0.08
+min_count = 3
+max_count = 5
+
+[sub_resource type="Resource" id="Resource_tail_coin"]
+script = ExtResource("2")
+item_id = &"coin"
+chance = 0.07
+min_count = 60
+max_count = 100
 
 [resource]
 script = ExtResource("1")
@@ -9,3 +52,4 @@ kind = 1
 scene_path = "res://src/props/nest.tscn"
 title = "짐승 둥지"
 params = {}
+drops = Array[ExtResource("2")]([SubResource("Resource_floor_fang"), SubResource("Resource_floor_coin"), SubResource("Resource_body_shell"), SubResource("Resource_body_core"), SubResource("Resource_tail_shell"), SubResource("Resource_tail_coin")])

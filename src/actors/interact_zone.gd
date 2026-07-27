@@ -16,9 +16,12 @@ extends Area2D
 signal interacted  ## 플레이어가 이 지점에서 E를 눌렀다
 
 ## 어느 지점인가 — 씬이 잇는 대상을 헷갈리지 않게, 테스트가 노드 이름 대신 이걸로 찾게.
-## (실측 — `src/props/*.tscn`가 쥔 값 7개: &"desk" 책상 · &"forest_gate" **문**(정산 대사 + 챕터 선택) ·
-##  &"npc" 길잡이 · &"refine" 정제대 · &"craft" 공방 · &"shop" 상점 · &"exit" **탈출구**(`exit_zone.tscn`).
+## (실측 — `src/props/*.tscn`가 쥔 값 8개: &"desk" 책상 · &"forest_gate" **문**(정산 대사 + 챕터 선택) ·
+##  &"npc" 길잡이 · &"refine" 정제대 · &"craft" 공방 · &"shop" 상점 · &"exit" **탈출구**(`exit_zone.tscn`) ·
+##  &"landmark" **지점 열기**(`nest.tscn`의 `OpenZone` — 세101 N26).
 ##  새 프롭 = 여기 한 줄이 아니라 씬의 zone_id다)
+## 🔴 **&"landmark"가 &"exit"이 아닌 것이 계약이다** — `test_chapter_auto`가 `&"exit"`을 세어 배선 수와
+##  대조하므로, 지점에 그 값을 주면 **출구가 하나 더 있는 것으로 집계돼** 그물이 빨개진다(설계 §10-1.5).
 ## ⚠ **`&"npc"`는 씬 파일에만 남아 있다 — `base.tscn`이 세95에 길잡이를 뺐다**(문이 화자·정산을 겸한다).
 ##  `npc_guide.tscn`은 「주민 복귀」용으로 일부러 안 지웠다 — 그러니 여기 한 줄도 남긴다(값 목록은 실측이다).
 ## 🔴 **한 zone_id에 두 일을 태울 땐 `base.gd _on_gate_talk`의 머리말 ⓐ~ⓓ를 먼저 읽어라** —

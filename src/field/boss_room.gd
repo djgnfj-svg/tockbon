@@ -4,7 +4,7 @@ extends Node2D
 ## (찾지 마라 — 필요하면 git 이력). **원정 계약의 라이브 정본은 이 파일이다.**
 ##
 ## 루프: 베이스 숲길 [E] → 챕터 선택 → 이 방(보스 + 잡몹) → 처치 → 낱개 드롭 줍기 → 귀환 [E] → 베이스.
-## ⚠ 「상자 루팅」 단계는 없다 — 상자는 세66에 은퇴했고 모든 적이 낱개로 떨군다(`forest_enemy._spawn_loose`).
+## ⚠ 「상자 루팅」 단계는 없다 — 상자는 세66에 은퇴했고 모든 적이 낱개로 떨군다(`drop_roll.spawn_loose`).
 ## 죽으면 즉시 베이스 + 가방 손실(bag_lost). 어느 챕터인가는 `GameState.pending_chapter`가 나른다
 ## (change_scene_to_file이 인자를 못 실어 오토로드가 나른다 — in_expedition과 같은 결).
 ##
@@ -44,14 +44,18 @@ extends Node2D
 ##  • **네임드**(D6): `ChapterDef.named_pool`을 **항목마다 독립으로** 굴린다.
 ##    🔴 **「하나도 안 뜸」이 정상 결과다** — 그게 「오늘 뭔가 있다」를 만든다.
 ##    🔴 **표시는 생김새다(덩치·몸 색조) — 빛나게 하지 마라**(*"몸에서 빛이나는거 까진 별로임"*).
-##    오라·HUD 알림·입장 문구는 **각하됐다.** `at_landmark` 해석은 단계 3 몫이라 지금은 안 선다.
+##    오라·HUD 알림·입장 문구는 **각하됐다.**
+##    ✅ **세101: `at_landmark`가 해석된다**(D13) — 채우면 **그 지점 자리마다** 확률로 선다.
+##    🔴 우두머리는 **잠금이 아니다**(D10-b) — 잡든 말든 [E]로 열린다.
 ##  • **지점**(D3·D4 — 세99 단계 3): `ChapterDef.landmarks` → `Db.landmarks` → 프롭 씬(`_spawn_landmarks`).
 ##    🔴 **자리는 절대 안 굴린다**(`MobSpawn`과 같은 이유 — 지형이 정하는 것이다).
 ##    🔴🔴 **지점을 세우면 입구에서 거기까지 흙길이 깔린다**(`_landmark_road_cells`) — 방이 열린 숲이라
 ##     길이 없으면 「저쪽에 뭔가 있다」를 알 방법이 아예 없다. 세우기만 하고 길을 안 깔면 **에러 0으로
 ##     아무도 안 가는 물건**이 된다(출구가 겉모습 없이 서는 것과 같은 병 — 설계 §6 S12).
-##    ⚠ **이번 범위는 「서 있는 것」까지다** — 무한 스폰·핵 깨기·상호작용은 안 얹었다(사용자 확정
-##     *"그냥 간단한데"*). 얹을 땐 **스폰을 지점이 아니라 여기가 진다**(설계 §3 소유권 ⓐ).
+##    ✅ **세101(N26): 밟을 수 있게 됐다** — 지점이 [E] 한 번에 열리고(D10) **한 판에 한 번뿐**이며(D11)
+##     열리면 `opened`가 온다. **산출을 굴려 뿌리는 건 여기다**(`_on_landmark_opened` · 설계 §3 소유권 ⓑ) —
+##     지점 씬은 자기가 무엇을 주는지 **모른다**. 🔴 재열기 가드는 **지점이 진다**(S25 — 가드를 두 벌로
+##     두면 한쪽을 지워도 그린이다). ⚠ 무한 스폰·핵 깨기는 **각하됐다**(D10·D11) — 만들지 마라.
 ##  🔴🔴 **잡몹·네임드는 `_spawn_enemy_at` 한 문을 지난다 — 거기 보스 id 제외 가드가 있다**(설계 §6 S9).
 ##   새 스폰 경로를 만들거든 **그 문을 지나게 해라.** 안 지나면 풀에 보스 id가 섞이는 날
 ##   **잡몹 한 마리로 `chapter_clear_*` + 보상 룬이 조용히 나간다(에러 0).**
@@ -120,6 +124,11 @@ const ExitZoneScene := preload("res://src/props/exit_zone.tscn")
 ## 부르면 **룬 보상이 원시 id + 거짓 안내**("rune_water(책상에서 밴드에 끼워라)")로 나간다 —
 ## 밴드는 고리 자리고 룬은 중심 자리다. 발신처가 셋(클리어·제작·두루마리)이라 core에 뽑혀 있다.
 const CodexText := preload("res://src/core/codex_text.gd")
+## 🔴🔴 드롭 굴림·낱개 스폰의 **단일 소스** (세101 · 설계 §10-4 **S17**). 적(`forest_enemy`)과 지점이
+##  **같은 함수**를 부른다 — 지점이 자기 굴림을 새로 쓰면 `DropEntry`의 배타 짝 규칙 셋이 두 벌이
+##  되고 그게 조용히 갈라진다(takbon-rules §5-1).
+## ⚠ **여기 굴림 로직을 적지 마라** — 이 파일이 지는 건 「언제·어디에」뿐이고 「무엇이 몇 개」는 저기다.
+const DropRoll := preload("res://src/field/drop_roll.gd")
 
 ## 돌아갈 곳 — 🔴 **PackedScene이 아니라 경로다. 바꾸지 마라.** base가 boss_room을 경로로 물고
 ## boss_room이 base를 PackedScene으로 물면 **순환 preload**로 한쪽이 노드 0개 껍데기가 돼
@@ -244,6 +253,18 @@ const EXIT_PATH_ROWS := 7
 ## 「0이냐 아니냐」 스위치라(실제 초 = `balance.extract_hold_sec`) 맨숫자 `1.0`을 씬·코드에 흩뿌리면
 ## 다음 사람이 **1초로 읽는다.** 이름을 붙여 그 오독을 막는다.
 const HOLD_ON := 1.0
+
+## 🔴🔴 **지점 노드 ↔ `landmark_id` 짝** (세101 N26 · 설계 §10-4 **S27**의 「덤」).
+##
+## 🔴 **왜 필요한가**: `_landmarks`는 **노드만** 들고 id를 안 든다. 그런데 두 소비자가 id를 묻는다 —
+##  ⓐ 열렸을 때 「어느 지점의 `drops`인가」 ⓑ `NamedSpawn.at_landmark`가 「어느 자리인가」.
+## 🔴 **왜 meta인가 — 슬롯 배열을 다시 훑는 쪽을 안 골랐다.** 다시 훑으면 「몇 번째 노드가 몇 번째
+##  슬롯인가」를 **순서로** 맞춰야 하는데, `_spawn_landmarks`는 실패한 슬롯을 `continue`로 건너뛴다
+##  → **슬롯 하나가 죽는 순간 그 뒤가 통째로 한 칸씩 밀리고 에러가 0이다.** meta는 노드를 만든
+##  **그 줄에서** 붙으므로 어긋날 자리가 구조적으로 없다.
+## ✅ **S27이 여기서 풀린다** — 같은 `landmark_id` 슬롯이 둘이면 노드도 둘이고 **둘 다 같은 meta**를
+##  들어서, `_landmark_sites`가 「첫 번째」가 아니라 **전부**를 돌려준다.
+const LANDMARK_ID_META := &"landmark_id"
 
 ## 🔴🔴 **프롭 표 — 「새 프롭 = 씬 한 장 + 여기 한 줄」** (세101).
 ##
@@ -480,9 +501,13 @@ func _wire_extract_zone(zone: InteractZone) -> void:
 ## 빈 배열을 돌려줘 「지점 0개인데 에러 0」이 된다).
 ##
 ## 🔴 **「새 지점 = `.tres` 한 장 + 프롭 씬 한 장」이 여기서 성립한다** — 이 함수엔 지점 종류가
-##  한 글자도 안 적혀 있다(둥지·폐허·제단을 분기하지 않는다). 분기가 필요해지는 건 **장치**(스폰·핵)를
-##  얹을 때이고, 그건 설계 §3 소유권 ⓐ대로 **여기(방)가** 자식 시그널을 받아 지는 몫이다.
-## ⚠ 이번 범위는 **겉모습·자리·길**뿐이다 — 상호작용·전투 장치는 안 얹었다(사용자 확정 *"그냥 간단한데"*).
+##  한 글자도 안 적혀 있다(둥지·폐허·제단을 분기하지 않는다). **세101에 열기가 붙어도 그대로다**:
+##  「열렸다」는 `opened` 시그널 하나로 오고, 무엇이 나오는지는 그 지점의 `.tres`가 정한다.
+##
+## 🔴🔴 **세101 N26 — 여기서 두 가지를 더 한다**(설계 §3 소유권 ⓐⓑ · §10-4 S27):
+##  ⓐ **노드에 `landmark_id`를 새긴다**(meta) — 열림·우두머리 해석이 그걸 묻는다.
+##  ⓑ **`opened`를 잇는다** — 산출을 굴려 뿌리는 건 **방**이다. 지점이 `src/field/`를 물면
+##     preload 방향(field → props 단방향)이 처음으로 뒤집힌다(`LandmarkDef` 머리말).
 ##
 ## 🔴 `preload`가 아니라 `load`인 이유 = `boss_scene_path`와 같다(씬끼리 PackedScene을 물면 순환).
 ## 🔴 그룹 `"landmarks"`는 **방이 붙인다** — 지점 씬마다 붙이면 새 지점 하나가 빠뜨리는 순간
@@ -521,8 +546,72 @@ func _spawn_landmarks() -> void:
 		#  자리로 무언가를 파생시키면 뒤에 옮길 때 한 프레임 어긋난다.
 		node.position = slot.position
 		node.add_to_group(&"landmarks")
+		# 🔴 **노드를 만든 그 줄에서** 새긴다 — 뒤에서 배열 순서로 맞추면 실패한 슬롯 하나에
+		#  전부 밀린다(`LANDMARK_ID_META` 머리말).
+		node.set_meta(LANDMARK_ID_META, def.id)
 		add_child(node)
 		_landmarks.append(node)
+		# 🔴🔴 열림 배선 — **자식 시그널을 부모가 잇는 조합 루트**라 EventBus 신설이 0이다(설계 §10-7).
+		#  ⚠ `has_signal` 가드: 「새 지점 = 프롭 씬 한 장」이라 남이 시그널 없는 씬을 꽂는다.
+		#   가드가 없으면 그 한 장이 **판을 통째로 못 세운다**(위 Node2D 가드와 같은 결).
+		if node.has_signal(&"opened"):
+			node.connect(&"opened", _on_landmark_opened.bind(node))
+		elif not def.drops.is_empty():
+			# 🔴 침묵 금지 — 산출을 실어 놓고 **밟을 방법이 없는** 지점이다. 화면에선 그냥
+			#  「예쁜 이정표」로 보이고 에러가 0이다(설계 §7 진행표가 세99에 실제로 밟은 상태).
+			push_warning("boss_room: 지점 '%s'가 산출(drops %d줄)을 들었는데 씬에 `opened` 시그널이 없다 — 밟을 방법이 없다"
+				% [String(def.id), def.drops.size()])
+
+
+## 🔴🔴 **지점을 열었다 — 산출을 굴려 낱개로 뿌린다** (세101 N26 · 설계 §10-2 · D10·D12).
+##
+## 🔴 **여기가 「무엇이 나오나」의 유일한 소유자다** — 지점 씬은 자기가 무엇을 주는지 **모른다**
+##  (`nest.gd`에 `DropEntry`가 한 글자도 없다). 그래야 「새 지점 = `.tres` 한 장」이 성립한다.
+## 🔴 **굴림·스폰은 `DropRoll`을 그대로 부른다**(S17) — 적의 `_die`가 부르는 **그 함수**다.
+##  자기 굴림을 새로 쓰면 `DropEntry`의 배타 짝 규칙이 두 벌이 되고 **에러가 0이다.**
+## 🔴 자리는 **지점의 global_position**(= 접지선) — 낱개가 둥지 발밑에 쏟아지고 걸어가 줍는다.
+##  「즉시 열기(D10)로 사라진 무방비는 **낱개를 줍는 동안**으로 옮겨간다」가 그 자리다(D10 ⓒ).
+##
+## ⚠ **재열기 가드는 여기 없다 — 지점이 진다**(S25 · `nest.gd._on_open_interacted`). 여기에도 두면
+##  가드가 두 벌이 되어 한쪽을 지워도 뮤테이션이 안 걸린다(`_spawn_enemy_at`의 보스 가드와 같은 판단).
+## ⚠ **연 상태를 `GameState`에 넣지 마라**(S19) — 방은 매 판 새로 서므로 노드가 들면 저절로 다시 찬다.
+func _on_landmark_opened(node: Node2D) -> void:
+	var id: StringName = node.get_meta(LANDMARK_ID_META, &"")
+	var def := Db.get_landmark(id)
+	if def == null:
+		# 🔴 침묵 금지 — meta가 비었거나 Db에서 사라지면 **열었는데 아무것도 안 나오고 에러가 0**이다.
+		push_error("boss_room: 열린 지점의 landmark_id('%s')를 Db에서 못 찾았다 — 산출이 통째로 사라진다"
+			% String(id))
+		return
+	if def.drops.is_empty():
+		# 🔴 설계 §10 D12가 「허탕 없음」을 확정했는데 데이터가 비면 **열어도 아무 일이 안 난다.**
+		#  데이터는 5단계(사용자 몫)라 여기서 못 채운다 — 대신 **짖는다**(그물 = `test_chapter_auto [1d]`).
+		push_warning("boss_room: 지점 '%s'의 drops가 비었다 — 열어도 아무것도 안 나온다 (설계 §10-2 세 층 미기입)"
+			% String(def.id))
+		return
+	var rolled := DropRoll.roll(def.drops, GameState)
+	if rolled.is_empty():
+		return
+	DropRoll.spawn_loose(self, node.global_position, rolled)
+
+
+## 🔴 이 판에 실제로 **선** 지점 중 이 id인 것들의 자리 — `NamedSpawn.at_landmark`가 쓴다.
+##
+## 🔴🔴 **「첫 번째」가 아니라 전부를 돌려주는 게 계약이다**(설계 §10-4 **S27**). `LandmarkSlot`이
+##  id + 좌표라 **같은 지점 2채가 문법상 가능**한데, 첫 번째만 고르면 **둘째 둥지엔 영영 우두머리가
+##  안 뜨고 에러가 0이다.**
+## ⚠ `_landmarks`는 **실제로 선 것만** 든다 — 씬 로드가 실패한 슬롯은 여기 없다. 그래서 「자리를
+##  못 찾았다」가 곧 「그 지점이 이 판에 안 섰다」이고, 호출부가 그걸 **에러로 승격**한다(S22).
+func _landmark_sites(id: StringName) -> Array[Vector2]:
+	var out: Array[Vector2] = []
+	if id == &"":
+		return out
+	for node: Node2D in _landmarks:
+		if node == null or not is_instance_valid(node):
+			continue
+		if node.get_meta(LANDMARK_ID_META, &"") == id:
+			out.append(node.position)
+	return out
 
 
 ## 바닥 타일을 Ground rect에 맞춰 깐다 — 🔴 **세99: 벌판은 풀, 나가는 길은 흙길**이다
@@ -983,7 +1072,7 @@ func _spawn_mobs() -> void:
 ## 🔴 **`weight <= 0`은 안 뽑는다** — `MobWeight.weight` 주석이 *"임시로 빼려면 지우지 말고 0으로"*라고
 ##  약속한 손잡이다. 안 지키면 **거짓 손잡이**(감사 T3)가 되고, 0으로 빼 둔 적이 그대로 나온다.
 ## ⚠ **시드를 고정하지 않는다** — 이 리포의 랜덤은 전역 `randf()`/`randi_range()` 하나뿐이라
-##  테스트가 전역 `seed()`를 잡으면 `forest_enemy._spawn_loose`의 각도 굴림 등이 **같은 스트림을 소비**해
+##  테스트가 전역 `seed()`를 잡으면 `drop_roll.spawn_loose`의 각도 굴림 등이 **같은 스트림을 소비**해
 ##  순서가 조금만 바뀌어도 어긋난다(= flake). 그래서 그물은 **확률·가중치의 양끝을 주입해** 잰다.
 func _roll_pool_id(tag: StringName) -> StringName:
 	var ids: Array[StringName] = []
@@ -1013,19 +1102,40 @@ func _roll_pool_id(tag: StringName) -> StringName:
 ## 🔴🔴 **표시는 생김새다 — 빛나게 하지 않는다**(세99 사용자 확정: *"몸에서 빛이나는거 까진 별로임"*).
 ##  덩치(`EnemyDef.params.size` = 루트 scale이라 히트박스·그림자가 공짜로 따라온다)와 전용 스프라이트로
 ##  구별한다. **오라·HUD 알림·입장 문구는 각하됐다 — 만들지 마라.**
-## ⚠ `at_landmark`는 **단계 3 몫**이라 지금은 해석하지 않는다. 채워 두면 조용히 안 뜨므로 짖는다.
+## 🔴🔴 **세101 N26 4단계 — `at_landmark` 해석**(D13). 채워져 있으면 **그 지점 자리에** 선다
+##  (세100까지는 `push_warning` 후 건너뛰었다 — 데이터를 채워도 조용히 안 서던 자리).
+##
+## 🔴 **우두머리는 잠금이 아니다**(D10-b) — 잡든 말든 [E]로 열린다. 「잡아야 열린다」를 만들지 마라.
+##  그런데도 *"먼저 치우고 여는 편이 낫다"*가 **저절로** 생긴다 — 낱개를 걸어가 줍는 시간 때문이다.
+## 🔴 **확률은 그대로다**(D13 = D6) — 자리만 지점에서 온다. 「지점엔 항상 우두머리」는 각하됐다
+##  (사용자 확정 *"랜드마크는 랜덤임 챕터보스 랜드마크에는 항시있고"* — **보스의 「항상」은
+##  `boss_spawn`이 진다**. `named_pool`에 `boss_enemy_id`를 넣으면 `_spawn_enemy_at`이 막는다).
+##
+## 🔴🔴 **자리마다 따로 굴린다 — 「하나 굴려 전부에 세우기」가 아니다**(설계 §10-4 **S27**).
+##  같은 `landmark_id` 슬롯이 둘일 때 한 번만 굴리면 **두 둥지의 우두머리 유무가 늘 붙어 다닌다**
+##  (둘 다 있거나 둘 다 없다). D6가 만들려는 건 *"이 둥지엔 뭔가 있나"*라는 **자리별** 긴장이라
+##  자리마다 독립이 맞다. ⚠ 지점이 하나면 두 해석이 **같은 결과**다 — 지금 ch1이 그 상태다.
+## 🔴 **미등록 id는 에러로 승격**한다(S22) — 세울 자리를 못 찾으면 **원점에 서거나 통째로 안 서는데**
+##  둘 다 화면에서 *"오늘은 네임드가 안 떴네"*로 읽힌다. 데이터 쪽 짝은 `test_chapter_auto [1c]`다.
 func _spawn_named() -> void:
 	for named: NamedSpawn in _chapter.named_pool:
 		if named == null or named.enemy_id == &"":
 			continue
-		if named.at_landmark != &"":
-			push_warning("boss_room: 네임드 '%s'의 at_landmark('%s') 해석은 단계 3 몫이다 — 이번 판엔 안 선다"
+		if named.at_landmark == &"":
+			# 🔴 `randf()`는 [0,1) — chance 0.0이면 절대 안 뜨고 1.0이면 반드시 뜬다(양끝이 그물의 손잡이).
+			if randf() >= named.chance:
+				continue
+			_spawn_enemy_at(named.enemy_id, named.position)
+			continue
+		var sites := _landmark_sites(named.at_landmark)
+		if sites.is_empty():
+			push_error("boss_room: 네임드 '%s'의 at_landmark('%s')가 이 판에 선 지점에 없다 — 아무 데도 안 선다 (설계 §10-4 S22)"
 				% [String(named.enemy_id), String(named.at_landmark)])
 			continue
-		# 🔴 `randf()`는 [0,1) — chance 0.0이면 절대 안 뜨고 1.0이면 반드시 뜬다(양끝이 그물의 손잡이).
-		if randf() >= named.chance:
-			continue
-		_spawn_enemy_at(named.enemy_id, named.position)
+		for at: Vector2 in sites:
+			if randf() >= named.chance:
+				continue
+			_spawn_enemy_at(named.enemy_id, at)
 
 
 ## 🔴🔴 적 하나를 세운다 — **잡몹·네임드가 지나는 유일한 문**이고 **보스 id 제외 가드가 여기 한 줄**이다.

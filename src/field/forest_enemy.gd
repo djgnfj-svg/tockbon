@@ -21,9 +21,12 @@ extends CharacterBody2D
 ## `EventBus.enemy_died`가 나른다(수신 = `juice`·`game_state`·`boss_room`). 처치 경로를 만질 땐 그쪽을 봐라.
 signal died
 
-## 🔴 바닥 픽업 프롭 (세션46) — 드롭을 가방에 순간이동시키지 않고 이 씬을 죽은 자리에 떨군다.
-## preload가 안전한 이유: 픽업은 forest/actors를 안 물어 **순환 preload가 없다**(base⇄forest 함정 무관).
-const DropPickup := preload("res://src/props/drop_pickup.tscn")
+## 🔴🔴 드롭 굴림·낱개 스폰의 **단일 소스** (세101 추출 · 설계 §10-4 S17) — 아래 `_roll_drops`·
+## `_spawn_loose`는 이제 이걸 부르는 **얇은 껍데기**다. 곧 붙는 **지점(랜드마크)**이 같은 함수를
+## 부르므로 `DropEntry`의 배타 짝 규칙이 두 벌로 갈리지 않는다.
+## ⚠ **여기 로직을 되돌려 적지 마라** — 그 순간 두 벌이 되고 에러가 0이다.
+## ⚠ 바닥 픽업 씬(`drop_pickup.tscn`)의 preload도 **같이 옮겨 갔다**(세46 계약 그대로).
+const DropRoll := preload("res://src/field/drop_roll.gd")
 
 
 ## 🔴 적 투사체 (세56 gale 연사) — 픽업·상자와 같은 이유로 preload 안전(탄은 field/actors를 안 문다).
@@ -1172,7 +1175,7 @@ func take_hit(damage: float, rune_type: int, status: int, status_power: float) -
 
 
 ## 🔴 죽으면 **드롭을 굴려 바닥에 떨군다** (세션46 — 사용자: *"게임답게 걸어가 줍게"*).
-## 그전엔 여기서 곧장 `add_to_bag`으로 **가방에 순간이동**했다 — 이제 드롭마다 `DropPickup`을
+## 그전엔 여기서 곧장 `add_to_bag`으로 **가방에 순간이동**했다 — 이제 드롭마다 `drop_pickup` 씬을
 ## 죽은 자리에 심고, 가방에 넣는 건 픽업이 플레이어에 닿을 때 한다(픽업이 `add_to_bag`을 부른다).
 ## 인벤 흐름은 그대로다: `add_to_bag` → 귀환(extraction_success) 시 창고로 회수 · 죽으면(bag_lost)
 ## 통째로 사라진다. 바뀐 건 **가방에 언제 들어가느냐**뿐이다("주웠다"가 진짜 줍는 행위가 됐다).
@@ -1193,7 +1196,7 @@ func _die() -> void:
 	var scene := get_tree().current_scene
 	if _def != null and scene != null:
 		# 🔴 먼저 **굴리기만** 하고, 실제로 나온 걸 안 뒤에 심는다 — 개수를 알아야 낱개 픽업이
-		# **균등 각도**를 나눌 수 있기 때문이다(세51 — `_spawn_loose`가 rolled.size()로 각을 나눈다).
+		# **균등 각도**를 나눌 수 있기 때문이다(세51 — `DropRoll.spawn_loose`가 rolled.size()로 각을 나눈다).
 		var rolled := _roll_drops()
 		if not rolled.is_empty():
 			# 🔴 세66: 상자 은퇴 (사용자 확정 "상자 시스템 기각, 그냥 다 떨구는 걸로"). 모든 적이
@@ -1212,54 +1215,18 @@ func _die() -> void:
 	queue_free()
 
 
-## 🔴 드롭 테이블을 굴린다 (세51에 _die 안에 있던 로직 — 세55에 상자/낱개가 공유하려고 추출).
-## 반환 = `[{"id": StringName, "count": int}]` — `drop_pickup.setup`이 같은 키를 본다(옛 loot_panel도 봤지만
-## 세66 상자 은퇴와 함께 삭제됐다). 키 이름을 바꾸면 `_spawn_loose`와 조용히 갈라진다.
-## 세58: until_unlock(관문 드롭)만 확률 대신 해금 상태로 갈린다 — 나머지 확률·수량 로직은 그대로.
-## 랜덤: Godot 전역 `randf()`/`randi()` — 부팅 시 자동 시드. 세이브에 안 들어간다(굴린 결과만 남는다).
+## 🔴 드롭 테이블을 굴린다 — **로직은 `drop_roll.gd`가 쥔다**(세101 추출 · 설계 §10-4 S17).
+## 여기 남은 일은 **`GameState`를 찾아 넘기는 것**뿐이다: static 안에서 오토로드 식별자를 쓰면
+## `-s` 테스트 컴파일이 죽어서(오토로드는 컴파일 뒤에 등록된다) 조회를 호출자가 진다.
+## ⚠ **굴림 규칙(해금 가드·관문·수량·반환 키)을 여기 다시 적지 마라** — 그게 두 벌이 되는 순간이다.
 func _roll_drops() -> Array[Dictionary]:
-	var rolled: Array[Dictionary] = []
-	var gs := get_node_or_null("/root/GameState")
-	for drop: DropEntry in _def.drops:
-		# 🔴🔴 해금 드롭 가드 (세88 문양-고리 두루마리) — 이미 해금된 고리는 안 떨군다.
-		# **확률 굴림보다 앞**이고 **별도 줄**인 것이 계약이다: 아래 until_unlock 분기에 섞으면
-		# `elif`가 `chance`를 통째로 건너뛰어 **0.02 보너스가 모든 잡몹 확정 드롭**이 된다
-		# (두 필드는 병용 금지 — 축이 반대다, `DropEntry.unlock_id` 주석).
-		if drop.unlock_id != &"" and gs != null and gs.is_unlocked(drop.unlock_id):
-			continue
-		# 🔴 관문 드롭 (세58, 정본 docs/PROGRESSION.md): until_unlock가 있으면 확률이 아니라
-		# 해금 상태가 정한다 — 미해금 = 확정, 해금됨 = 스킵. GameState가 없으면(고립 테스트)
-		# 관문을 못 재므로 순수 확률로 폴백한다.
-		if drop.until_unlock != &"" and gs != null:
-			if gs.is_unlocked(drop.until_unlock):
-				continue
-		elif randf() > drop.chance:
-			continue
-		var n := drop.min_count
-		if drop.max_count > drop.min_count:
-			n += randi() % (drop.max_count - drop.min_count + 1)
-		if n > 0:
-			# 🔴 "unlock" 키 = 해금 드롭(세88). `id`가 비고 이쪽이 찬 항목이 두루마리다 —
-			# `DropPickup.setup`의 4번째 옵션 인자로 넘어간다(`_spawn_loose`). 키 이름을 바꾸면
-			# `_spawn_loose`와 **조용히 갈라진다**(반환 계약이 여기 한 곳에만 적혀 있다).
-			rolled.append({"id": drop.item_id, "count": n, "unlock": drop.unlock_id})
-	return rolled
+	return DropRoll.roll(_def.drops, get_node_or_null("/root/GameState"))
 
 
-## 낱개 바닥 픽업 (잡몹, 세46·51) — 죽은 자리에 드롭마다 하나씩 심고 균등 각도로 흩뿌린다.
-## 🔴 로직은 추출 전과 동일하다(키 "n"→"count"만 반영). global_position은 add_child 뒤에 잡고
-## setup은 그 뒤에 불러야 scatter가 올바른 자리에서 시작한다.
+## 낱개 바닥 픽업 (잡몹, 세46·51) — **로직은 `drop_roll.gd`가 쥔다**(세101 추출).
+## 여기 남은 일은 **죽은 자리를 넘기는 것**뿐이다(지점은 자기 자리를 넘긴다 — 그래서 인자다).
 func _spawn_loose(scene: Node, rolled: Array[Dictionary]) -> void:
-	var base_angle := randf() * TAU
-	for i in rolled.size():
-		var pickup := DropPickup.instantiate()
-		scene.add_child(pickup)
-		# 여러 드롭이 겹치지 않게 살짝 흩뿌린 지점에서 심는다(픽업이 여기서 또 scatter).
-		pickup.global_position = global_position + Vector2(randf_range(-6.0, 6.0), randf_range(-6.0, 6.0))
-		# i번째 드롭 = base_angle + i·TAU/n → 2개면 정반대, 3개면 삼각형으로 흩어진다.
-		# 4번째 인자 = 해금 드롭(세88 두루마리). 옵션 인자라 기존 아이템 드롭 경로는 무변경이다.
-		pickup.setup(rolled[i]["id"], int(rolled[i]["count"]), base_angle + float(i) * TAU / float(rolled.size()),
-			rolled[i].get("unlock", &""))
+	DropRoll.spawn_loose(scene, global_position, rolled)
 
 
 ## 팝 — 셰이더 플래시 + 스쿼시 (피격 손맛, 세63 개편). modulate를 **아예 안 만진다** — 흰 섬광은
