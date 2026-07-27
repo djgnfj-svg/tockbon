@@ -4,8 +4,7 @@
   },
   "permissions": {
     "ask": [
-      "Edit(docs/GDD.md)",
-      "Write(docs/GDD.md)"
+      "Edit(docs/GDD.md)"
     ]
   }
 }

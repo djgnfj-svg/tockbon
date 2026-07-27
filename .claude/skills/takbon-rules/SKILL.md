@@ -13,8 +13,8 @@ description: 탁본(TAKBON) 프로젝트의 아키텍처 규칙·모듈 지도·
 | 문서 | 역할 |
 |---|---|
 | 📖 `docs/GDD.md` | **「게임이 무엇인가」 단일 진실원**(세71 신설). 🔒 **읽기만 — 수정엔 사용자 허락이 필요하다**(settings.json `ask`) |
-| 이 스킬 | 아키텍처·모듈 지도·하드 계약 |
-| `CLAUDE.md` 최상단 | 살아있는 함정·계약 |
+| 이 스킬 | 아키텍처·모듈 상세·하드 계약 · 🔴 **조용히 깨지는 함정 전량**(§5 — 세98에 CLAUDE.md에서 이관받았다) |
+| `CLAUDE.md` | **지도만** — 게임 개요·정본 위치·모듈 한 줄·위임. 🔴 세98에 39.5KB→13KB로 줄이며 함정을 여기로 내렸다(그전엔 **두 벌**이라 세51·84·87에 갈라졌다) |
 | `docs/DECISIONS.md` | **무엇을 왜 정했나** + 하네스 이력 (세92 신설). 📕 `STATUS.md`·`STATUS_ARCHIVE.md`·`HARNESS_LOG.md`는 **없는 파일**이다 — 옛 서술이 가리키면 경위는 `git log`에서 캔다 |
 | `docs/BACKLOG.md` | 아직 안 한 것 (세88~90 이월 = `N0~N10`) |
 | `docs/PROGRESSION.md` | 진행 관문표 |
@@ -31,6 +31,7 @@ description: 탁본(TAKBON) 프로젝트의 아키텍처 규칙·모듈 지도·
 - **모듈 간 통신은 EventBus 시그널 + core 스키마만.** 타 모듈 직접 preload/get_node 금지. (정당한 예외: `base.gd`가 책 씬을 무는 것 = 진입 씬이 조합 루트라서.)
   - 🔴 **명시 예외 ② — 기하 단일 소스**: `ring_board.gd`의 **static·순수 기하 함수**(`compose_guide_paths`·`rune_slot_positions`·`glyph_guide_pts`·`jin_guide_pts`…)는 타 모듈이 **`const RingBoard := preload("res://src/drawing/ring_board.gd")`로 그대로 부른다.** 판례 = `src/hud/hud.gd`·`src/hud/tab_panel.gd`. 좌표·모양을 **베끼면** 판·책·HUD가 갈라지고, `test_ui_text_auto`가 그 재사용을 강제한다. 🔴 **core로 올리자고 제안하지 마라 — 의존 방향이 뒤집힌다**(`SLOTS`·`GLYPH_NONE`이 `src/drawing/ring_assembly.gd` 소유). ⚠ 쓸 땐 **그 줄 위에 왜 예외인지 적어라.**
 - **수치는 전부 `data/balance.tres`(BalanceData).** 코드에 밸런스 상수 금지. ⚠ 예외 = **연출값(손맛: 넉백·히트스톱·팝 등)은 스크립트 const**다 — 사용자가 직접 때려 조이는 값이라 밸런스가 아니다.
+  🔴 **실측(세98): `balance.tres`는 6줄짜리 껍데기이고 값이 하나도 안 적혀 있다** — 전부 `balance_data.gd`의 **`@export` 기본값**으로 돈다(Resource가 빈 프로퍼티를 스키마 기본값으로 채운다). 즉 **「balance에 넣는다」의 실제 작업은 `.tres`가 아니라 스키마에 `@export` 한 줄을 다는 것**이다. ⚠ **`.tres`에 일부만 적어 두지 마라** — 그때부터 「어떤 값은 여기, 어떤 값은 저기」가 돼서 조일 때 어느 쪽이 이기는지 매번 확인해야 한다.
 - 🔴🔴 **생명체·프롭 시각 = 도형 플레이스홀더 금지** (사용자 확정, 세54). 새 적·캐릭터·아이템·프롭의 겉모습을 `Polygon2D`·`ColorRect` 같은 기하 도형으로 임시로 때우지 마라 — **`takbon-art`로 진짜 도트 스프라이트를 만들어 배선한다**(적/머리 = `params.sprite`+`_setup_frames` 스트립, 그 외 = Sprite2D). "아트는 병렬이니 도형으로 먼저 돌린다"(drop_pickup 마름모 선례)는 **각하됐다** — 사용자가 도형 스탠드인을 싫어한다(세54 뱀 보스가 팔각형 마디로 나가 밟았다). 설계·구현은 **도형으로 시작하지 말고 art부터 태운다**. ⚠ **예외 = 절차적 VFX·이펙트**(`death_puff`·`vfx.gd` Line2D·진/문양 가이드선)는 애초에 스프라이트가 아니라 그림이라 도형이 맞다. 판별 = "이건 도트로 그려야 할 물건인가?"
 - **git 커밋은 리드(메인 세션)만.** 서브에이전트는 자기 모듈 폴더 + `tests/` 자기 접두사 파일만 수정.
 - 서브에이전트는 `mcp__godot__*` 도구 사용 금지 (에디터는 리드가 관리).
@@ -53,22 +54,30 @@ description: 탁본(TAKBON) 프로젝트의 아키텍처 규칙·모듈 지도·
 
 - **`src/base`** — 마법사 학교 마을(진입점, `run/main_scene`).
   🔴🔴 **세90: 마을에 실제로 서 있는 건 셋이다 — 캐릭 + 마법문 + 마법 제작대(책상)**(사용자 확정). 씬에 남은 노드 = `Player`·`ForestGate`·`Desk`·`Monument`(영구 잔해 = **깨진 큰 마법진**)·`Dummy1~5`(연습장). ⚠ **공방(`Craft`)·정제대(`Refine`)·매점(`Shop`) 노드는 씬에 없다** — 「마을에 공방이 있다」고 전제하고 배선하지 마라.
-  🔴🔴 **세95: `Npc`(길잡이)도 씬에 없다 — 문(`ForestGate`)이 화자·정산을 겸한다.** 퀘스트 정산·오프닝 대사·머리 위 [?] 마크가 전부 문에 붙어 있다(`_on_gate_talk`·`ForestGate/Mark`). ⚠ `src/props/npc_guide.tscn`·PNG는 **남겨 뒀다**(씬에서만 뺐다). 🔴 **문 [E]에 세 번째 일을 얹지 마라** — 이미 대사→정산→챕터선택 체인이고, 모달 규약 때문에 조용히 깨지는 자리가 넷이다(정본 = `docs/takbon-design/world_and_visual_design.md` §2).
+  🔴🔴 **세95: `Npc`(길잡이)도 씬에 없다 — 문(`ForestGate`)이 화자·정산을 겸한다.** 퀘스트 정산·오프닝 대사·머리 위 [?] 마크가 전부 문에 붙어 있다(`_on_gate_talk`·`ForestGate/Mark`). ⚠ `src/props/npc_guide.tscn`·PNG는 **남겨 뒀다**(씬에서만 뺐다). 🔴 **문 [E]에 세 번째 일을 얹지 마라** — 이미 대사→정산→챕터선택 체인이고, 모달 규약 때문에 조용히 깨지는 자리가 넷이다(정본 = `docs/takbon-design/world_and_visual_design.md` §2 표 ⓐ~ⓓ).
+  🔴🔴 **그중 최악 = 패널 열기를 `box.finished`에만 걸면 대사가 빈 경로에서 마을 밖으로 못 나가는 소프트락**이다(`_start_turnin_dialogue`가 **`bool`을 돌려주는 이유**가 그것이다 — 「대사를 실제로 띄웠나」를 호출부가 알아야 한다).
   🔴 **지운 건 「마을에서 여는 길」뿐이다** — 프롭 씬·패널(`workshop_panel`·`refine_panel`·`shop_panel`)·레시피는 **전부 살아 있다**(그래서 `test_workshop_auto`가 그대로 그린이다 — 그 그물은 패널을 직접 열어 마을을 안 지난다). **되살리는 절차 정본 = `base.gd`의 `STATION_UNLOCKS` 머리말 ①~④**(씬 노드 + 표 + 퀘스트 `reward_unlock` + connect가 한 덩어리다).
+  ✅ **세97: 공방만 문이 생겼다 — 건물이 아니라 「책상 [E] → 책 → [⚒ 부품 제작]」이다**(사용자 확정 · 마을은 여전히 셋). 그전엔 **공방 제작이 유일 경로인 해금 5종이 도달 불가**였다(→ §5-1 첫 줄). ⏳ 정제대·상점은 아직 문이 없다.
+  🔴 **바닥은 `bands` 한 장이다** — 조각을 둘로 나눴더니 겹치는 자리에서 **직각 계단이 크게 튀었다**(실측). 밴드가 7개였던 세89엔 조각이 작아 「길」로 읽혔지만, 마을이 줄면 같은 수법이 **「잘못 깐 바닥」**이 된다.
+  🔴 **빛 웅덩이 = `PointLight2D` + `src/props/light_pool.gd` 하나**(문의 맥동과 「되살아난 건물의 빛」이 **같은 물건**이다). 겉모습(색·`energy`·`texture_scale`)은 **씬**이, 움직임(맥동)은 **스크립트**가 쥔다 — ⚠ **`energy`에 직접 대입하지 마라**(도는 트윈과 싸워 값이 튄다). 밝기를 바꾸는 문은 `set_base_energy()` 하나다.
+  ⚠ **`Dusk`는 이제 안 움직인다** — 되돌릴 건물이 0채라 `_refresh_village_tint`가 빈 표에서 return하고 색조가 `TINT_RUINED`에 고정된다.
   ⚠ **해독대는 세85에 은퇴했다**(q05와 한 세트로 삭제 — `decode_panel`은 없다). **건설은 세66에 은퇴했다**(§4 끝의 정정 참조).
 - **`src/field`** — **챕터 보스방**. `boss_room.gd`/`.tscn`(**챕터 = 2400×2200 열린 숲**, 세88에 단칸방에서 넓혔다 — **씬은 여전히 한 장**이다) · `forest_enemy`(범용 적 몸 — 쫓아와 접촉 피해) · `enemy_projectile` · `snake_body`/`snake_boss.tscn`.
   ⚠ **`forest.tscn`·`forest.gd`는 세58-B에 삭제됐다**(되살리려면 git 이력). 이름만 남은 `forest_enemy`는 **범용 적 몸**이라 살아 있다.
   🔴 **적 수치는 전부 `data/enemies/*.tres`(EnemyDef) — 새 적 = .tres 한 장**(외형 color·size까지 `_apply_look`이 반영).
   🔴 **출격 = 만HP/만마나는 `boss_room.gd _ready`가 한다**(마을이 아니다 — forest.gd 계약을 이관받았다. 다른 진입 경로를 만들면 조용히 달라진다).
-  🔴 **나가는 길이 둘이고 `zone_id`가 갈려 있다**: `&"exit"`(남쪽 입구·**항상**) · `&"portal"`(보스 자리·**처치 후에만**). 둘 다 `_extract` 하나로 이어진다 — **새 길을 뚫으면 거기로 이어라**(안 이으면 가방이 조용히 증발한다).
-  🔴 **방 크기·프롭은 `ChapterDef`가 안 나른다** — `Ground` rect·`Player` 스폰·나무·횃불이 **씬 하드코딩**이다(`ChapterDef`는 `mob_spawns`·`boss_spawn`·색·보상만). ⚠ **나무는 적을 가린다**(y-sort가 없다) — 잡몹 스폰과 100px, 플레이어 스폰·출구와 150px 이상 떨어뜨려라.
-- **`src/actors`** — **공용 배우**(마을·보스방 공용): `player.tscn`(WASD·그룹 `"player"`) · `player_caster.gd`(조준·발사·슬롯) · `floating_wand.gd`(떠있는 지팡이 — 🔴 발사 총구 단일 소스 `muzzle_position()`) · `interact_zone.gd`(책상·포탈·귀환이 같은 물건, `zone_id`로 구분) · `juice.gd`(피격 손맛 통제소) · `vfx.gd`·`shadow.gd`·`dust.gd`.
+  🔴 **나가는 길이 둘이고 `zone_id`가 갈려 있다**: `&"exit"`(남쪽 입구·**항상**) · `&"portal"`(보스 자리·**처치 후에만**). 둘 다 `_extract` 하나로 이어진다 — **새 길을 뚫으면 거기로 이어라**(안 이으면 가방이 조용히 증발한다). ⚠ 「처치 전엔 `portal`이 없다」는 **아직 살아있는 계약**이다(`test_chapter_auto`가 둘 다 잰다) — 출구에 `&"portal"`을 주면 빨개진다.
+  🔴 **`extraction_success`·`bag_lost`를 emit하는 곳도 여기뿐이다**(`_extract`·`_die`) — **새 무대를 붙이는 쪽이 쏴야** 정산·자동 저장이 돈다(수신자는 이미 살아 있다).
+  🔴 **드롭은 `forest_enemy._die`가 굴린다**(적 몸 한 곳 — 새 적을 붙여도 여기를 지난다).
+  ⚠ **챕터 선택은 `GameState.pending_chapter`가 나른다** — `change_scene_to_file`이 인자를 못 실어서 **오토로드가 대신 나르는 것**이다(빈 채로 `boss_room`을 띄우면 설계대로 마을로 되돌아간다).
+  🔴 **방 크기·프롭은 `ChapterDef`가 안 나른다** — `Ground` rect·`Player` 스폰·나무·횃불·**`BossGlow`**가 **씬 하드코딩**이다(`ChapterDef`는 `mob_spawns`·`boss_spawn`·색·보상만). **방을 또 키우면 그 다섯을 같이 옮겨야 한다.** ⚠ **나무는 적을 가린다**(y-sort가 없다) — 잡몹 스폰과 100px, 플레이어 스폰·출구와 150px 이상 떨어뜨려라.
+- **`src/actors`** — **공용 배우**(마을·보스방 공용): `player.tscn`(WASD·그룹 `"player"`) · `player_caster.gd`(조준·발사·슬롯) · `floating_wand.gd`(떠있는 지팡이 — 🔴 발사 총구 단일 소스 `muzzle_position()`) · `interact_zone.gd`(책상·포탈·귀환이 **같은 물건**이다 — 문구는 씬의 **`Prompt.text`**, 찾기는 `zone_id`) · `juice.gd`(피격 손맛 통제소) · `vfx.gd`·`shadow.gd`·`dust.gd`.
 - **`src/hud`** — **공용 HUD**(`hud.gd`, 마을·보스방 공용). 🔴 **세64부터 씬별 차이가 하나도 없다** — `hint_text`(조작 안내문)는 **통째로 제거**됐고(온보딩 대사가 조작을 가르친다) `show_hp`도 폐지돼 **HP를 늘 그린다**. 즉 `hud.gd`에 @export가 **0개**다.
   🔴 **모달은 `tab_panel`(Tab) 하나로 합쳐졌다.** 🔴 **탭 목록의 정본은 `TAB_NAMES` 하나다**(지금 **4탭** = 소지품·퀘스트·마법진·**캐릭터**(세64) — ⚠ 이 문서가 세86까지 「3탭」이라 적고 있었다. **개수를 여기 베끼지 말고 그 상수를 읽어라**). 옛 `inventory_panel`(I)·`quest_panel`(Q)은 세40에 **흡수돼 파일이 없다**(`tab_panel.gd` 머리말이 그렇게 적어 뒀다). 그 밖 = `chapter_panel`·`dialogue_box`·`damage_number`.
   ⚠ 안내 문구는 `hud.say(text, warn, sticky)`다 — **없는 조작을 적지 마라**(보스방엔 책상이 없다). 🔴 `sticky := true`는 **목표·유효한 지시만**(안 그러면 경고 한 줄이 목표를 덮고 씬 끝까지 상주한다 — 세84 #36, 그물 = `test_ui_text_auto`).
 - **`src/drawing`** — 고리 조립. `ring_forge_panel`(🔴 **조립 상태의 실소유자**) · `ring_board`(기하·렌더·입력 — 문양/진/룬 밑그림의 단일 소스) · `ring_book`(책 셀·아이콘) · `trace_scorer`(탁본 채점·순수 수학 — 휴면) · `ring_assembly`(상수·순수 데이터).
   ⚠ **`ring_assembly`는 「조립 상태기계」가 아니다** — per-piece 흐름이 세70·85에 은퇴해 지금 남은 역할은 상수 표(`SLOTS`·`GLYPH_NONE`·`STAGE_*`·`RUNE_FIRE`)다. **`ring_board.gd`가 아직 `RingAssembly.new()`로 인스턴스를 들고 그 상수 6개를 재노출한다** — 「쓰는 데가 0곳」이 아니니 지우려면 그 의존부터 걷어라.
-- **`src/spell`** — 발사. `ring_spell_system`(유일한 발사 경로) · `ring_carrier`(+`carrier_trail`) · `projectile` · `pillar` · `blast` · `dummy_target`.
+- **`src/spell`** — 발사. `ring_spell_system`(유일한 발사 경로) · `ring_carrier`(+`carrier_trail`) · `projectile` · `pillar`(⚠ 씬 배치가 아니라 **`ring_spell_system._spawn_pillar`가 직접 생성**한다) · `blast`(폭발·응축) · `dummy_target`.
 - **`src/core`** — **리드 전용.** 스키마·`ring_power.gd`(펑/위력/등급).
 - **`src/menu`** — `title.tscn`(새 main_scene, 이어하기/새로하기).
 
@@ -91,7 +100,11 @@ description: 탁본(TAKBON) 프로젝트의 아키텍처 규칙·모듈 지도·
 - 🔴 **cast 마나 비용 = `RingPower.cast_mana_cost()` 단일 소스.**
 - 🔴 **룬 타입은 조립본이 쥔다 — 하드코딩(`RUNE_FIRE`) 금지**(세34에 물을 그려도 불로 맞던 버그의 원인). 해금 판정은 **패널이 한다**(책·보드는 오토로드를 안 본다).
   🔴🔴 **룬은 복수다** — 세81 M2 융합진이 `rune_slots = 2`를 연다. **읽을 땐 `RingDesign.runes_of(runes, fallback_rune)`를 거쳐라.** `design.rune` **단수만 읽으면 두 번째 룬이 조용히 사라진다** — 발사부는 계약을 지키는데 표시부만 뒤처져 **「쏘는 것 ≠ 보이는 것」**이 됐던 자리다(세84 #12, 그물 = `test_ui_text_auto`).
-- 🔴 **보정은 펜이 판다**: `ItemKind.PEN` → `pen_*.tres`의 `params.correction` → `GameState.stroke_correction()`. 맨손 = 보정 0 = 그린 대로(정체성은 기본 상태가 지킨다).
+- 🔴 **보정은 펜이 판다** (체인 전체 — **새 펜 = `.tres` 한 장**): `ItemKind.PEN` → `data/items/pen_*.tres`의 `params.correction` → `GameState.stroke_correction()` → `ring_board.enter_combined_trace` → **`trace_scorer.set_correction`**. 맨손 = 보정 0 = 그린 대로(정체성은 기본 상태가 지킨다).
+- 🔴 **화면 문구의 단일 소스가 둘 있다**(`src/core`, 서로 형제 — 세98에 CLAUDE.md에서 이관):
+  **`codex_text.gd`** = codex 해금물의 이름·안내. 🔴 **종류마다 자리가 갈린다**(룬은 「진 중심」·진은 「바탕」·고리는 「밴드」)고, 발신처가 **셋**이다(보스 클리어·공방 제작·두루마리 픽업). 세87까지 `boss_room`이 `Db.get_glyph_ring` **하나만** 불러 룬 보상에 **원시 id + 거짓 지시**가 나갔다.
+  **`item_text.gd`** = 장비 효과 + 재료 진행 **`보유/필요`**(`count_text` — 공방·정제대가 **인자가 거꾸로인 사본**을 각자 들고 있었다).
+  ⚠ 둘 다 `test_ui_text_auto`가 **사본 재발을 스캔**한다. 🔴 **문구를 재는 그물은 리졸버를 직접 부르지 마라** — `hud.say_line()`처럼 **실제로 화면에 나가는 줄**을 읽어라(세88: 리졸버 단독 호출 그물은 `boss_room`이 옛 경로를 그대로 써도 **그린이었다**). = **T5**
 
 ## 4. "새 X = 파일 한 장" (데이터 주도)
 
@@ -112,6 +125,28 @@ description: 탁본(TAKBON) 프로젝트의 아키텍처 규칙·모듈 지도·
 
 ## 5. 조용히 깨지는 함정 (에러 없이)
 
+### 🔴🔴 5-0. 먼저 구조적 테마 여덟 (세84 전면 감사 · 세98에 CLAUDE.md에서 이관)
+
+**개별 버그가 아니라 「왜 이 종류가 자꾸 생기나」다.** 아래 함정들은 대개 이 여덟 갈래 중 하나에서 나온다 —
+새 함정을 만났을 때 **어느 갈래인지 물어라. 답이 나오면 같은 갈래의 다른 자리도 이미 깨져 있다.**
+
+| | 테마 |
+|---|---|
+| **T1** | 모드 분기를 일부 자리에만 넣고 **소비 지점 목록을 안 만든다** |
+| **T2** | **은퇴를 선언 없이 두어 죽은 몸이 살아있는 그물을 갖는다** → 「전 스위트 그린」이 라이브 경로의 근거로 **과대평가**된다 |
+| **T3** | 소비자가 사라진 데이터 필드가 **거짓 손잡이**로 남는다 |
+| **T4** | **주석이 계약인데 코드와 함께 안 늙는다**(세87에 `src/` 주석을 전량 정비했지만 **또 늙는다**) |
+| **T5** | 파생 대신 복제 — **문구·좌표는 사본이 아니라는 무의식 예외** |
+| **T6** | 실패를 로그 없이 삼킨다. 🔴 **엔진 ERROR·`push_warning`은 `SCRIPT ERROR` grep에 안 걸린다**(세50 바람 룬이 두 세션 죽어 있던 이유) |
+| **T7** | **「임시 시드」 딱지가 그물을 안 세우는 면허로 쓰인다** |
+| **T8** | 축이 1→N으로 늘 때 **표시부가 뒤처져 「쏘는 것 ≠ 보이는 것」**이 된다 |
+
+### 5-1. 개별 함정
+
+- 🔴🔴 **「기능이 돈다」 ≠ 「플레이어가 거기 갈 수 있다」** (세97에 실제로 밟았다): 공방 제작이 **유일 경로인 해금 5종**이 세90 마을 축소로 **도달 불가**가 됐는데, **`test_workshop_auto`가 문이 닫힌 내내 그린이었다** — 그 그물은 패널을 **직접 열어** 재고 마을을 안 지난다. 🔴 **새 UI를 붙이면 「진입점에서 출발하는」 도달 경로 그물을 따로 세워라**(선례 = `test_base_auto [16]`이 버튼을 실제로 누른다). ⚠ 겹치는 병: 버튼 첫 자리가 다른 라벨과 **글자가 겹쳤는데 헤드리스는 못 봤다**(스샷이 잡았다).
+- 🔴🔴 **임시 시드를 되살리지 마라** (세88에 청산 · 세58에 실제로 당했다): 시드가 있으면 그 **획득 경로가 소급 완료로 덮여 조용히 죽는다.** 지금 시작 지급은 **3키**(`rune_fire`·`jin_single`·`gr_radiate5`) + **완성 도안 1장**뿐이다.
+  🔴 **시드를 만질 땐 두 곳이다** — codex만 걷는 것으로는 부족하다. `_seed_starting_rings()`가 **완성 도안**을 슬롯에 직접 꽂는데 발사는 `to_assembly()`가 **도안을 읽고 codex를 안 본다**(세88 전엔 물·바람 codex를 걷어도 **1·2·3 키로 그대로 나갔다**). 그물 = `test_save_auto`의 **시드 집합 명시 열거**(개수 검사로 바꾸면 장치가 죽는다) + 「슬롯 2·3이 비었다」. = **T7**
+- 🔴 **없는 문제를 막다가 진짜 함정을 심지 마라** (세50): `_exit_tree`로 콜백을 끊어 "참조 순환"을 막으려 했는데 **그 순환이 애초에 없었고**(Callable은 Node를 강참조 안 함), 대신 **리페어런팅 시 콜백이 영구히 죽는** 침묵을 새로 만들었다.
 - 🔴 **물리 레이어**: Player=2·Desk=64. 틀리면 진이 총구에서 죽는다(에러 없이). 적 레이어 4=enemy가 아니면 부딪히기만 하고 `take_hit`이 안 불린다.
 - 🔴 **화면 덮는 Control의 `mouse_filter`**: 기본값 STOP이 클릭을 다 먹는다 → `mouse_filter=2`(IGNORE). **헤드리스가 절대 못 잡는다** → `takbon-verify` 참조.
 - 🔴 **씬끼리 PackedScene으로 물지 마라**: 씬 간 순환 preload가 껍데기 노드를 만들어 귀환 불가(세26에 base⇄forest로 밟았다). `@export_file` 경로 + `change_scene_to_file`을 써라. 헤드리스는 못 잡고 실게임 부팅에서만 드러난다.
@@ -124,6 +159,7 @@ description: 탁본(TAKBON) 프로젝트의 아키텍처 규칙·모듈 지도·
 - ⚠ 씬(`.tscn`)의 `;` 주석은 **에디터가 저장하면 날아간다** — load-bearing한 설명은 코드에 둬라.
 - 🔴 **`wipe_save()`는 새로하기가 아니다**: 파일만 지우고 GameState·Clock은 오토로드라 메모리에 남아 귀환 한 번에 옛 진행이 도로 써진다. 진짜 새로하기 = `GameState.new_game()`(+ `_seed_starting_unlocks()`).
 - 🔴 **`StringName` 배열의 `sort()`는 사전순이 아니다 — 인터닝 순이고 실행마다 바뀐다**(세88 실측: 같은 데이터로 두 번 돌려 첫 줄이 달랐다). id 정렬은 **`sort_custom`으로 `String()`을 감싸라.**
+  ⚠ **실제로 밟은 자리 = `Db.all_recipes()`·`all_quests()`** — 주석엔 *"id 오름차순"*이라 **선언만** 해 뒀다. 레시피 3장일 땐 안 드러났고 **공방이 17줄이 되자 목록이 튀었다.**
 - 🔴 **배타·병용 금지 필드 짝이 셋 있다**(전부 세88 · 어기면 **조용히** 깨진다): `DropEntry.item_id` ↔ `unlock_id` · `DropEntry.unlock_id` ↔ **`until_unlock`**(🔴 병용하면 `if…elif` 때문에 **`chance`를 통째로 안 봐서** 보너스가 **모든 잡몹 확정 드롭**이 된다) · `RecipeDef.output_id` ↔ `reward_unlock`(🔴 해금 레시피에 `output_id`를 채우면 **창고에 유령 아이템 키가 생겨 세이브에 영구화된다** — `output_count=0`이라 수량은 0인데 키가 남는다).
 - 🔴 **AI 거리 게이트(leash)는 「이동 대입만」 감싼다 — `return` 금지**(세88): `_ai_boss_gale`의 쿨다운 감소가 DRIFT 분기 **안**에 있어서 `return`으로 끊으면 멀리 있는 동안 쿨이 얼어 **연사가 4.5초 늦게** 시작한다(에러 0). ⚠ 페이즈2 전이는 `match` **밖**이라 `return`에도 살아남는다 — 「멀리서도 페이즈2가 열린다」는 **자명 통과라 검출자로 쓰지 마라.**
 
