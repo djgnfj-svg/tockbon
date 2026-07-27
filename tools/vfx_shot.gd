@@ -15,7 +15,10 @@
 ##    **베끼지 않고** 정본을 그대로 참조한다 = 감사 T5 회피.)
 ##
 ## 사용:
-##   ./Godot_v4.7.1-stable_win64.exe --path . -s res://tools/vfx_shot.gd -- <프리셋> <출력png> [배율] [프레임수] [열수]
+##   ./Godot_v4.7.1-stable_win64.exe --path . -s res://tools/vfx_shot.gd -- <프리셋> <출력png> [배율] [프레임수] [열수] [크롭]
+## 🔴 `[크롭]`(월드 px)은 **변종이 크기를 바꾸는 프리셋** 때문에 있다 — `charge:hound_alpha`는
+##   `charge_speed`·`attack_range`·덩치가 다 커서 표의 crop으로는 **잘린 채** 찍힌다.
+##   ⚠ 잘린 줄 모르고 판단하는 게 이 도구의 최악 실패다(세98 `impact` 플레어가 그랬다).
 ## 예:
 ##   ... -s res://tools/vfx_shot.gd -- impact:water vfx_impact_water.png
 ##   ... -s res://tools/vfx_shot.gd -- burst:shock  vfx_burst_shock.png
@@ -23,7 +26,9 @@
 ##
 ## 프리셋 이름 = `<이름>` 또는 `<이름>:<변종>`(`_`도 같은 구분자로 받는다 — `impact_fire` OK).
 ##   변종 = 룬 이름(fire·water·wind·bolt·earth·grass) · 상태 이름(shock·steam·wet·burn…) ·
-##          🔴 **구성 이름**(plain·mid·full — 세98 `floor` 전용. 「무엇을 조립했나」를 고른다).
+##          🔴 **구성 이름**(plain·mid·full — 세98 `floor` 전용. 「무엇을 조립했나」를 고른다) ·
+##          🔴 **적 id**(세99 `charge` 전용 — `data/enemies/<id>.tres`를 그대로 받는다. 표를
+##             안 만든 게 의도다: 이름표를 두면 새 적이 올 때마다 도구가 낡는다).
 ##   🔴 **새 이펙트 = 아래 `PRESETS`에 줄 하나** — 룬 6종을 6줄로 늘리지 말고 `:변종`으로 접는다.
 ##
 ## 🔴 크기 제약이 사양의 심장이다: 최종 시트는 **가로 ~1200px 이내**여야 Read 한 번에 판단이 된다.
@@ -98,9 +103,11 @@ const BUILD_BY_NAME := {
 ## 🔴🔴 **프리셋 표 — 새 이펙트 = 여기 줄 하나.**
 ##   sig      : EventBus 시그널 이름. 비면 `scene`을 인스턴스하는 노드형 프리셋이다.
 ##   scene    : 노드형일 때 띄울 씬 (setup 인자는 `_spawn_node`의 match가 안다)
-##   variant  : &"rune"(룬) / &"status"(상태) / &"build"(조립 구성) — `:변종` 접미사가 무엇을 가리키나
+##   variant  : &"rune"(룬) / &"status"(상태) / &"build"(조립 구성) / &"enemy"(적 id) — `:변종`이 가리키는 축
 ##   crop     : 중앙 크롭 한 변(**월드 px**). 이펙트 최대 반경 + 여유로 잡는다
 ##   cols·frames·dur : 격자 열 수 · 찍을 장수 · 덮을 시간(초, 이펙트 수명보다 살짝 길게)
+##   bg       : (선택) 이 프리셋만의 배경색. 🔴 **바닥에 깔리는 연출은 어두운 중립 배경에서 판정하면
+##              거짓말이 된다** — 실무대가 밝은 낮 풀밭이면 여기서도 그 위에 얹어 봐야 한다
 ## ⚠ `dur`은 `src/actors/vfx.gd`·`blast.gd`의 연출 상수(RING_TIME·DECAL_TIME·FLASH_SEC…)에서
 ##    나온 값이다 — 그 상수를 늘리면 여기도 늘려야 마지막 칸이 「이미 끝난 뒤」로 남는다.
 const PRESETS := {
@@ -169,6 +176,26 @@ const PRESETS := {
 		"crop": 144, "cols": 4, "frames": 20, "dur": 0.50,
 		"desc": "진(볼)이 날아가며 남기는 트레일 — 움직이는 프리셋(크롭 고정)",
 	},
+	# 🔴🔴 늑대 돌진 **예고 범위** (세99) — 이 프리셋이 재는 건 한 문장이다:
+	#   *"윈드업 동안 바닥에 닿을 범위가 뜨고, 돌진이 시작되면 꺼지고, 몸이 그 범위 안을 쓸고 간다."*
+	# 🔴 **적 프리셋이라 시그널이 없다** — `forest_enemy`를 세우고 「플레이어」 스텁을 사거리 안에
+	#   두면 `_ai_charge`가 **스스로** APPROACH→WINDUP→CHARGE를 밟는다. 상태를 손으로 세우지 않는
+	#   게 요점이다(손으로 세우면 도구가 상태기계를 우회해 **거짓말할 수 있다**).
+	# ⚠ 기하는 `hound.tres`와 한 덩어리다: `from`(-70)에서 `target`(+40)까지 110px = `charge_trigger_range`
+	#   120 **안**이라 첫 틱에 윈드업이 걸린다. 그 값을 조이면 여기 둘도 같이 봐라(멀면 접근만 하다 끝난다).
+	# ⚠ crop 208 = ±104: 뒤 캡(-70-20=-90)부터 돌진 끝의 몸(−70+132+32=+94)까지 든다.
+	#   `charge_speed`·`dash_sec`·`attack_range`를 키우면 **잘린다** — 키운 만큼 crop도 키워라.
+	# 🔴 dur = windup(0.5) + dash(0.4) + 여유. 회복(0.8s)까지 담지 않는다 — 회복은 「안 보이는 것」이
+	#   내용이라 격자로 볼 게 없다(빈틈이 충분한가는 F5가 판정한다).
+	# 🔴 변종 = **적 id**: `charge:hound_alpha`가 `size 1.35` 몸이라 **범위가 같이 커지는지**가
+	#   한 장에서 드러난다(그려진 범위 ≠ 판정 범위 = 「예고가 거짓말한다」의 자리).
+	&"charge": {
+		"scene": "res://src/field/forest_enemy.tscn", "variant": &"enemy", "enemy": &"hound",
+		"from": Vector2(-70.0, 0.0), "target": Vector2(40.0, 0.0),
+		"bg": Color(0.29, 0.62, 0.22),
+		"crop": 208, "cols": 4, "frames": 12, "dur": 1.05,
+		"desc": "늑대 돌진 예고 — 윈드업 동안 바닥에 뜨는 「닿을 범위」 (변종: 적 id)",
+	},
 }
 
 var _out := ""
@@ -180,6 +207,9 @@ var _rune: int = Enums.RuneType.FIRE
 var _rune_given := false
 var _status: int = Enums.Status.SHOCK
 var _build := &"full"     ## 조립 구성 변종 (BUILD_BY_NAME 키) — `floor` 프리셋 전용
+## 적 변종 — `charge` 프리셋 전용. 🔴 **이름표를 안 만든다**: `data/enemies/<id>.tres`를 그대로
+## 받아 `Db`가 판정하게 둔다(모르는 id면 `forest_enemy._ready`가 push_warning으로 운다).
+var _enemy_id := &"hound"
 var _crop := 96           ## 중앙 크롭 한 변(월드 px)
 var _cols := 6
 var _frames := 18
@@ -209,7 +239,7 @@ func _init() -> void:
 		quit(0)
 		return
 	if args.size() < 2:
-		push_error("[vfx_shot] 인자: <프리셋> <출력png> [배율] [프레임수] [열수]")
+		push_error("[vfx_shot] 인자: <프리셋> <출력png> [배율] [프레임수] [열수] [크롭]")
 		_print_table()
 		quit(1)
 		return
@@ -230,6 +260,8 @@ func _init() -> void:
 		_frames = maxi(int(args[3]), 1)
 	if args.size() >= 5:
 		_cols = maxi(int(args[4]), 1)
+	if args.size() >= 6:
+		_crop = maxi(int(args[5]), 8)
 	_resolve_geometry()
 	# 🔴 무대는 여기서 못 짓는다 — `-s`의 `_init`은 **오토로드 등록보다 먼저** 돈다
 	#   (`/root/EventBus`가 아직 없고 `get_node`는 "active scene tree 밖"으로 에러난다).
@@ -257,9 +289,15 @@ func _select_preset(raw: String) -> bool:
 	_frames = int(_p.get("frames", 18))
 	_dur = float(_p.get("dur", 0.26))
 	_build = StringName(_p.get("build", &"full"))
+	_enemy_id = StringName(_p.get("enemy", &"hound"))
 	if variant.is_empty():
 		return true
 	var vn := StringName(variant)
+	# 🔴 적 변종은 **표를 안 거친다** — 룬 이름표보다 먼저 가로챈다(적 id가 우연히 룬 이름과
+	#   겹쳐도 프리셋이 쥔 축이 이긴다). 유효성은 `Db`가 판정한다.
+	if StringName(_p.get("variant", &"")) == &"enemy":
+		_enemy_id = vn
+		return true
 	if RUNE_BY_NAME.has(vn):
 		_rune = int(RUNE_BY_NAME[vn])
 		_rune_given = true
@@ -313,7 +351,11 @@ func _build_stage() -> void:
 
 	var rect := root.get_visible_rect()
 	var bg := ColorRect.new()
-	bg.color = BG
+	# 🔴 프리셋이 배경을 덮을 수 있다 — **바닥에 깔리는 연출**은 어두운 중립 위에서 보면 늘
+	#   잘 보여서 도구가 거짓말한다(세99 방은 **밝은 낮 풀밭**이다).
+	# ⚠ `charge`의 값은 `boss_room.GRASS_TILE_BASE`에 챕터 틴트가 곱해진 **화면색의 근사**다
+	#   (실측 스샷에서 골랐다) — 풀색을 다시 조이면 여기도 눈으로 맞춰라. 최종 판정은 F5다.
+	bg.color = _p.get("bg", BG)
 	bg.position = rect.position
 	bg.size = rect.size
 	bg.z_index = -100
@@ -440,6 +482,11 @@ func _spawn_node(c: Vector2) -> void:
 		quit(1)
 		return
 	var n := ps.instantiate() as Node2D
+	# 🔴 적은 `enemy_id`를 **add_child 전에** 세워야 한다 — `_ready`가 그 id로 `_def`를 잡는다
+	#   (`tests/test_enemy_ai_auto._spawn`과 같은 규약. 뒤에 세우면 조용히 기본 몸으로 선다).
+	if _name == &"charge":
+		n.enemy_id = _enemy_id
+		_spawn_player_stub(c + Vector2(_p.get("target", Vector2.ZERO)))
 	_stage.add_child(n)
 	var off: Vector2 = _p.get("from", Vector2.ZERO)
 	n.global_position = c + off
@@ -454,8 +501,42 @@ func _spawn_node(c: Vector2) -> void:
 				ring.append(GLYPH_NONE)
 			n.setup(ring, 0.0, float(_p.get("speed", 220.0)), float(_p.get("life", 0.6)),
 				0.0, _rune, Enums.Status.NONE, 0.0)
+		# 🔴 적은 `setup`이 없다 — 수치·행동을 전부 `.tres`가 쥐고(「새 적 = .tres 한 장」),
+		#   상태기계는 스텁을 보고 **스스로** 돈다. 여기서 손댈 게 없는 것이 정상이다.
+		&"charge":
+			pass
 		_:
 			push_error("[vfx_shot] 노드형 프리셋 %s의 setup 배선이 없다" % _name)
+
+
+## 「플레이어」 스텁 — 그룹 `"player"`가 적의 **유일한 조준 경로**다(`forest_enemy._player`).
+## 🔴 Node2D 맨몸이라 `is_rolling`이 없다 = 늘 안 구른다 → 접촉 피해가 그대로 든다.
+##   무대엔 HUD도 juice도 없어 무해하다(무대는 연출만 본다).
+##
+## 🔴🔴 **몸을 그린다 — 안 그리면 이 프리셋이 판정 못 하는 게 하나 생긴다**: 바닥 예고가 플레이어
+##  **위로** 덮이는지다. 실무대에서 적은 런타임에 `add_child`되므로 씬 자식인 `Player`보다 **나중에**
+##  그려진다 = 적에 붙은 연출은 플레이어 위에 얹힌다. 눈에 보이는 몸이 없으면 그 사고가
+##  **시트에 안 찍히고**, 도구가 「괜찮아 보인다」고 거짓말한다.
+## ⚠ `player.tscn`을 통째로 띄우지 않는다 — 카메라·HUD·오토로드 배선이 딸려 와 무대가 게임이 된다.
+##  여기 필요한 건 **같은 크기·같은 실루엣의 몸 하나**뿐이라 시트 첫 프레임만 잘라 쓴다.
+const PLAYER_SHEET := "res://assets/sprites/player/player_hood_sheet.png"
+const PLAYER_FRAME := Rect2(0.0, 0.0, 64.0, 64.0)   ## idle 0번 (player.tscn의 at_idle0과 같은 자리)
+
+func _spawn_player_stub(pos: Vector2) -> void:
+	var stub := Node2D.new()
+	stub.name = "PlayerStub"
+	stub.add_to_group("player")
+	_stage.add_child(stub)
+	stub.global_position = pos
+	var tex := load(PLAYER_SHEET) as Texture2D
+	if tex == null:
+		return
+	var at := AtlasTexture.new()
+	at.atlas = tex
+	at.region = PLAYER_FRAME
+	var spr := Sprite2D.new()
+	spr.texture = at
+	stub.add_child(spr)
 
 
 ## 🔴 그린 직후에 읽어야 한다 — 이 시그널 없이 읽으면 **한 프레임 전(또는 빈) 화면**이 나온다.
@@ -533,6 +614,8 @@ func _variant_label() -> String:
 			return ":status=%d" % _status
 		&"build":
 			return ":build=%s%s" % [_build, (":rune=%d" % _rune) if _rune_given else ""]
+		&"enemy":
+			return ":enemy=%s" % _enemy_id
 	return ":rune=%d" % _rune
 
 
@@ -547,3 +630,4 @@ func _print_table() -> void:
 	print("  변종 — 룬: %s" % ", ".join(PackedStringArray(RUNE_BY_NAME.keys())))
 	print("  변종 — 상태: %s" % ", ".join(PackedStringArray(STATUS_BY_NAME.keys())))
 	print("  변종 — 구성(floor): %s" % ", ".join(PackedStringArray(BUILD_BY_NAME.keys())))
+	print("  변종 — 적(charge): data/enemies/*.tres의 id를 그대로 (예: charge:hound_alpha)")

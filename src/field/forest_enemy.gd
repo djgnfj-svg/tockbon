@@ -84,6 +84,42 @@ enum ChargeState { APPROACH, WINDUP, CHARGE, RECOVER }
 var _charge_state: int = ChargeState.APPROACH
 var _charge_timer: float = 0.0
 var _charge_dir: Vector2 = Vector2.ZERO
+## 이번 윈드업의 **전체 길이**(초) — 바닥 예고가 「얼마나 찼나」를 내려면 남은 시간만으론 모자란다.
+## 🔴 `_param("windup_sec")`을 그리는 쪽에서 다시 읽지 않는다: 윈드업 도중에 데이터가 바뀌면
+##  진행도가 튀고, 무엇보다 **읽는 자리가 둘이 되는 순간 갈라질 자리**가 하나 더 생긴다.
+var _charge_windup: float = 0.0
+## 🔴 돌진 예고 범위 — 윈드업 동안만 바닥에 뜬다. **지연 생성**이라 charge가 아닌 적은 노드가 없다
+##  (`_gale_ring` 선례). 적의 자식이라 **적이 죽으면 같이 죽는다** = 취소·소유·수명을 새로 안 만든다.
+var _charge_band: Node2D = null
+var _band_base: Polygon2D = null   ## 닿을 범위 전체 (옅은 채움)
+var _band_fill: Polygon2D = null   ## 예고가 찬 만큼 (짙은 채움 — 앞으로 뻗는다)
+var _band_edge: Line2D = null      ## 범위 테두리 (어두운 와인빛 — 밝은 풀밭에서 이게 제일 잘 읽힌다)
+var _band_front: Line2D = null     ## 차오름 앞머리 (밝은 주홍 — 「여기까지 왔다」)
+
+## 🔴 돌진 예고 범위 **연출값** (밸런스 아님 — `GUST_RING_*`·`vfx.gd` 링 상수 선례).
+##  ⚠ **크기는 여기 없다** — 길이·폭은 `.tres`의 돌진 수치에서 파생한다(`_charge_reach_*`).
+##  여기 있는 건 색·굵기·분할처럼 **사용자가 눈으로 조이는 것**뿐이다.
+##
+## 🔴 색 = TAKBON 60의 붉은 램프 3단을 그대로 쓴다(`assets/aseprite/takbon.gpl`):
+##  `752438`(테두리) → `A53030`(채움) → `CF573C`(앞머리). 사용자 지시가 **「빨간색」**이고,
+##  룬·상태 색이 아니라 **적의 공격 예고**라 파생원이 없다(`GUST_RING_COLOR`가 같은 자리다).
+##
+## 🔴🔴 **알파가 색을 정한다 — 실측으로 고쳤다**(세99 `vfx_shot -- charge` + 픽셀 샘플링).
+##  밝은 낮 풀밭(`#4A9E38`) 위에 **붉은색을 옅게 깔면 초록과 상쇄돼 갈색·올리브가 된다**:
+##   α0.22 → `#5E8636`(풀과 구분이 거의 안 간다) · α0.55 → `#845632`(**갈색**이지 빨강이 아니다).
+##  같은 A53030이라도 α0.92면 `#9E3931`로 **빨갛게 읽힌다** — 사용자 지시가 「빨간색」이라
+##  차오르는 쪽은 **거의 불투명해야 한다.** 취향이 아니라 배경과의 산수다.
+##  ⚠ 어두운 배경에서 고르면 뭘 깔아도 잘 보여 **도구가 거짓말한다**(프리셋에 `bg`를 둔 이유).
+##  ⚠ 반대로 **아직 안 찬 쪽을 짙게 깔지 마라** — 「닿을 범위」와 「찬 만큼」이 같아 보이면
+##   남은 시간이 사라진다. 그쪽 읽힘은 채움이 아니라 **불투명한 어두운 테두리**가 진다.
+const CHARGE_BAND_EDGE := Color(0.459, 0.141, 0.220, 1.00)    ## 752438 — 짙은 와인 테두리(범위의 실선)
+const CHARGE_BAND_BASE := Color(0.647, 0.188, 0.188, 0.45)    ## A53030 — 닿을 범위 전체(아직 안 찬 쪽)
+const CHARGE_BAND_FILL := Color(0.647, 0.188, 0.188, 0.92)    ## A53030 — 찬 만큼(거의 불투명 = 빨갛다)
+const CHARGE_BAND_FRONT := Color(0.812, 0.341, 0.235, 1.00)   ## CF573C — 앞머리
+const CHARGE_BAND_EDGE_W := 3.0     ## 범위 테두리 굵기(px)
+const CHARGE_BAND_FRONT_W := 2.5    ## 앞머리 굵기(px)
+const CHARGE_BAND_CAP_SEGS := 10    ## 캡슐 반원 캡 분할 수 (`GUST_RING_SEGMENTS`와 같은 결)
+const CHARGE_BAND_MIN_FILL := 0.06  ## 채움의 최소 길이 비율 — 0이면 첫 프레임이 「원 하나」라 방향이 안 읽힌다
 
 ## 부유(hover) 분산 상태 — mist. 분산 중엔 받는 피해가 준다(take_hit) + 반투명(때리기 나쁨이 보인다).
 var _disperse_timer: float = 0.0
@@ -357,9 +393,13 @@ func _ai_chase(player: Node2D, to_player: Vector2, dist: float) -> void:
 	_contact(player, dist)
 
 
-## "charge" (사냥개) — 접근 → 윈드업(멈춰 텔레그래프·방향 락) → 돌진(락 방향으로 빠르게) →
-## 회복(느림) → 접근. 🔴 락을 **윈드업 시작에** 걸어 두므로, 그 사이 옆으로 피하면 돌진을 흘린다
-## (피할 수 있는 공격이 되게 하는 핵심). 접촉 피해는 접근·돌진에서만 — 윈드업·회복은 무해(빈틈).
+## "charge" (사냥개) — 접근 → 윈드업(멈춰 텔레그래프·방향 락 · **바닥에 닿을 범위**) →
+## 돌진(락 방향으로 빠르게) → 회복(느림) → 접근. 🔴 락을 **윈드업 시작에** 걸어 두므로, 그 사이
+## 옆으로 피하면 돌진을 흘린다(피할 수 있는 공격이 되게 하는 핵심).
+## 접촉 피해는 접근·돌진에서만 — 윈드업·회복은 무해(빈틈 = 「피한 보상」).
+## 🔴 세99: 윈드업 동안 **바닥 예고 범위**가 뜬다(`_show_charge_band`) — 붉은 달아오름은
+##  *"온다"*만 말하고 *"어디까지"*를 안 말했다. 켜고 끄는 자리는 `_set_telegraph`와 **같은 두 줄**이다
+##  (한쪽만 옮기면 몸은 식었는데 바닥이 남는다 — 그 짝을 갈라 놓지 마라).
 func _ai_charge(delta: float, player: Node2D, to_player: Vector2, dist: float) -> void:
 	match _charge_state:
 		ChargeState.APPROACH:
@@ -370,18 +410,24 @@ func _ai_charge(delta: float, player: Node2D, to_player: Vector2, dist: float) -
 			_contact(player, dist)
 			if dist <= _param("charge_trigger_range", 120.0) and dist > 1.0:
 				_charge_state = ChargeState.WINDUP
-				_charge_timer = _param("windup_sec", 0.5)
+				_charge_windup = maxf(_param("windup_sec", 0.5), 0.001)
+				_charge_timer = _charge_windup
 				_charge_dir = to_player / dist  # 방향 락 (지금 이 순간의 플레이어 쪽)
 				_set_telegraph(true)
+				_show_charge_band(true)
 		ChargeState.WINDUP:
 			velocity = Vector2.ZERO
 			_charge_timer -= delta
+			# 🔴 매 틱 갱신하는 이유는 둘이다: ⓐ 남은 시간이 채움 길이로 보여야 하고
+			#  ⓑ 윈드업 중에 맞으면 넉백으로 **몸이 밀린다** — 안 따라가면 예고가 몸을 떠난다.
+			_update_charge_band(1.0 - clampf(_charge_timer / _charge_windup, 0.0, 1.0))
 			if _charge_timer <= 0.0:
 				_charge_state = ChargeState.CHARGE
-				_charge_timer = _param("dash_sec", 0.4)
+				_charge_timer = _param("dash_sec", DASH_SEC_FALLBACK)
 				_set_telegraph(false)
+				_show_charge_band(false)
 		ChargeState.CHARGE:
-			velocity = _charge_dir * _param("charge_speed", 330.0)
+			velocity = _charge_dir * _param("charge_speed", CHARGE_SPEED_FALLBACK)
 			_contact(player, dist)
 			_charge_timer -= delta
 			if _charge_timer <= 0.0:
@@ -618,6 +664,181 @@ func _show_gust_ring(on: bool) -> void:
 		_gale_ring.visible = on
 
 
+## 🔴🔴 돌진 예고 **바닥 범위** (세99 · 설계 §5-D) — 윈드업 동안만 뜬다. **절차적 VFX라 도형이 맞다**
+## (takbon-rules §0 예외 — 예고는 생명체·프롭이 아니라 「빛·가이드선」이다. `_show_gust_ring` 선례).
+## 지연 생성이라 charge가 아닌 적은 노드 자체가 없다.
+##
+## 🔴🔴 **어디에 붙이나 — 설계 §5-D-2의 확정안을 실측으로 두 번 뒤집었다**(`vfx_shot -- charge`).
+##  그 절은 *"적 자식 + `move_child(…, 0)` + `top_level`"*을 확정으로 못 박았는데, 그대로 짜고
+##  격자 PNG를 뽑아 보니 **「바닥에」가 두 번 깨졌다**:
+##   ⓐ `top_level`은 트랜스폼만이 아니라 **같은 CanvasLayer 안에서 맨 위로 그리도록 그리기 순서까지
+##      바꾼다** → 예고가 **늑대 몸 위**를 덮었다(트리 순서 손질이 통째로 무효가 된다).
+##   ⓑ top_level을 빼면 늑대 아래로는 오지만, **적은 런타임 `add_child`라 씬 자식인 `Player`보다
+##      나중에 그려진다** → 예고가 **플레이어 위**를 덮었다. 플레이어가 붉은 후드라 붉은 띠와 겹쳐
+##      몸통이 통째로 묻혔다 — **자기가 어디 서 있는지 안 보이면 예고의 목적 자체가 무너진다.**
+##  ⇒ 「Ground 위 · 적과 플레이어 아래」는 **z에 없는 자리**다(셋 다 z 0). 있는 건 **트리 순서**뿐이라
+##    씬에 붙이고 **플레이어(가 속한 최상위 조각) 바로 앞**으로 옮긴다(`_place_on_floor_layer`).
+##    🔴 인덱스를 숫자로 박지 않는다 — 방 씬 구조가 바뀌어도 따라가야 한다.
+##    ⚠ 음수 z는 답이 아니다: Ground(ColorRect z0) 뒤로 숨는다(세54 마디 실증 · `shadow.gd` 머리말).
+##
+## 🔴 **대가 = 수명을 직접 쥐어야 한다**(적 자식이었으면 공짜였던 것). `_die`·`_exit_tree`가 지운다 —
+##  안 지우면 **죽은 늑대의 붉은 띠가 바닥에 영영 남는다.** 그건 안 덮는 것보다 나쁘다.
+func _show_charge_band(on: bool) -> void:
+	if not on:
+		if _charge_band != null:
+			_charge_band.visible = false
+		return
+	if _charge_band == null:
+		var scene := get_tree().current_scene
+		if scene == null:
+			return   # 무대가 없으면 그릴 자리도 없다 (`vfx.gd` 스포너들과 같은 가드)
+		_charge_band = Node2D.new()
+		_charge_band.name = "ChargeBand"
+		_band_base = Polygon2D.new()
+		_band_base.color = CHARGE_BAND_BASE
+		_band_fill = Polygon2D.new()
+		_band_fill.color = CHARGE_BAND_FILL
+		_band_edge = Line2D.new()
+		_band_edge.width = CHARGE_BAND_EDGE_W
+		_band_edge.default_color = CHARGE_BAND_EDGE
+		_band_front = Line2D.new()
+		_band_front.width = CHARGE_BAND_FRONT_W
+		_band_front.default_color = CHARGE_BAND_FRONT
+		# 순서 = 아래부터: 옅은 전체 → 찬 만큼 → 전체 테두리 → 앞머리.
+		_charge_band.add_child(_band_base)
+		_charge_band.add_child(_band_fill)
+		_charge_band.add_child(_band_edge)
+		_charge_band.add_child(_band_front)
+		scene.add_child(_charge_band)
+		_place_on_floor_layer(scene)
+	# ⚠ `visible`을 **먼저** 세운다 — `_update_charge_band`가 안 보이면 즉시 돌아가므로, 뒤에 세우면
+	#  두 번째 윈드업의 첫 프레임이 **지난 판의 다 찬 채움**으로 보인다(에러 0 · 한 프레임 거짓말).
+	_charge_band.visible = true
+	# 🔴 **켤 때마다 범위를 다시 판다** — 수치는 `.tres`가 쥐고 조여지는 물건이라, 만들 때 한 번만
+	#  재면 조인 값이 다음 판까지 안 온다(그리고 그 어긋남은 에러가 안 난다).
+	var pts := _capsule_points(_charge_reach_length(), _contact_radius())
+	_band_base.polygon = pts
+	_band_edge.points = _closed(pts)
+	_update_charge_band(0.0)
+
+
+## 🔴 예고를 「바닥층」으로 옮긴다 = **플레이어 바로 앞 트리 순서**(위 머리말 ⓑ).
+## 플레이어가 씬 바로 밑에 없을 수도 있으므로(`Actors` 같은 묶음 노드) **씬의 직계 조상까지 거슬러
+## 올라가 그 조각의 인덱스**를 쓴다 — 그러면 방 씬을 재편해도 따라간다.
+## ⚠ 플레이어를 못 찾으면 **맨 뒤(=위)에 그대로 둔다** — 예고가 안 보이는 것보다는 낫다.
+##  (플레이어가 없는 무대 = 연출 도구·테스트뿐이고, 거기선 가릴 몸도 없다.)
+func _place_on_floor_layer(scene: Node) -> void:
+	var p := _player()
+	if p == null:
+		return
+	var top: Node = p
+	while top != null and top.get_parent() != scene:
+		top = top.get_parent()
+	if top == null or top == _charge_band:
+		return
+	scene.move_child(_charge_band, top.get_index())
+
+
+## 🔴 예고를 지운다 — **씬 소유라 적이 죽어도 저절로 안 죽는다**(위 머리말의 「대가」).
+## ⚠ 참조를 **전부 null로** 되돌린다: 다음 윈드업이 `_charge_band == null`을 보고 다시 만든다.
+##  안 비우면 free된 노드를 만져 에러가 나고, 그 에러는 죽는 순간에만 나서 늦게 발견된다.
+func _free_charge_band() -> void:
+	if _charge_band != null and is_instance_valid(_charge_band):
+		_charge_band.queue_free()
+	_charge_band = null
+	_band_base = null
+	_band_fill = null
+	_band_edge = null
+	_band_front = null
+
+
+## ⚠ **여기서 `_exit_tree`를 쓰는 건 세50 금기와 다른 종류다.** 그 금기는 **영구 배선(콜백)을
+##  끊지 마라**는 것이었다(`_wire_status`가 `_ready`에만 있어 리페어런팅 시 영영 죽는다).
+##  이쪽은 **한 판짜리 연출 노드**이고 다음 윈드업에 `_show_charge_band`가 다시 만든다 —
+##  끊기는 계약이 없다. 안 지우면 반대로 **주인 없는 붉은 띠**가 화면에 남는다.
+func _exit_tree() -> void:
+	_free_charge_band()
+
+
+## 예고가 「찬 만큼」을 갱신한다 — `progress` 0(방금 멈췄다) ~ 1(지금 튀어나온다).
+## 🔴 채움이 **앞으로 뻗는 모양**인 것이 요점이다: 남은 시간이 보이면서 동시에 **어느 쪽으로 오는지**가
+##  같은 그림 하나로 읽힌다(원형 게이지로는 방향이 안 나온다 — 늑대는 직선 돌진이다).
+func _update_charge_band(progress: float) -> void:
+	if _charge_band == null or not _charge_band.visible:
+		return
+	# 🔴 위치·방향을 매 틱 다시 세운다 — 씬 소유라 부모(=적)를 안 따라간다. 매 틱인 이유는 둘:
+	#  ⓐ 윈드업 중에 맞으면 **넉백으로 몸이 밀린다**(안 따라가면 예고가 몸을 떠난다)
+	#  ⓑ 방향 락은 윈드업 시작 한 번이지만, 값을 여기서 한곳으로 모아 두면 락을 옮길 때 갈라질 자리가 없다
+	# 🔴 **scale은 절대 안 물려받는다** — 돌진 거리·`attack_range`는 월드 px라 덩치(`params.size`)와
+	#  무관하다. 적 자식으로 되돌리면 `hound_alpha`(size 1.35)에서 **범위만 1.35배**로 그려져 예고가
+	#  거짓말한다. 그물 = `test_charge_telegraph_auto [5]`.
+	_charge_band.global_position = global_position
+	if _charge_dir.length_squared() > 0.0001:
+		_charge_band.rotation = _charge_dir.angle()
+	var r := _contact_radius()
+	var grown := _charge_reach_length() * lerpf(CHARGE_BAND_MIN_FILL, 1.0, clampf(progress, 0.0, 1.0))
+	var pts := _capsule_points(grown, r)
+	_band_fill.polygon = pts
+	_band_front.points = _closed(pts)
+
+
+## +X를 향한 캡슐(스타디움) 외곽점 — `(0,0)`부터 `(length,0)`까지의 선분을 반경 `radius`로 부풀린 것.
+## 🔴 뒤쪽 캡을 빼지 않는다 — 돌진이 **시작되는 순간** 몸 뒤 `radius` 안에 있어도 `_contact`가 든다.
+##  「보기 좋게」 잘라내면 그 자리가 곧 *"안 보이는 데서 맞았다"*가 된다.
+func _capsule_points(length: float, radius: float) -> PackedVector2Array:
+	var pts := PackedVector2Array()
+	var n := CHARGE_BAND_CAP_SEGS
+	var tip := Vector2(maxf(length, 0.0), 0.0)
+	for i in n + 1:   # 앞 캡: -90° → +90°
+		pts.append(tip + Vector2.RIGHT.rotated(-PI * 0.5 + PI * float(i) / float(n)) * radius)
+	for i in n + 1:   # 뒤 캡: +90° → +270°
+		pts.append(Vector2.RIGHT.rotated(PI * 0.5 + PI * float(i) / float(n)) * radius)
+	return pts
+
+
+## Polygon2D는 알아서 닫히지만 Line2D는 안 닫힌다 — 테두리용으로 첫 점을 덧붙인다
+## (`_show_gust_ring`이 링에 하는 것과 같은 손질).
+func _closed(pts: PackedVector2Array) -> PackedVector2Array:
+	var out := PackedVector2Array(pts)
+	if out.size() > 0:
+		out.append(out[0])
+	return out
+
+
+## 🔴 공개 관측점 — 지금 예고 범위가 떠 있나 (`hp()`·`phase()`·`hitbox_radius()` 선례).
+## 헤드리스는 「보인다」를 못 재지만 **「윈드업 동안 있고 돌진에 없다」**는 잴 수 있다.
+func charge_band_visible() -> bool:
+	return _charge_band != null and is_instance_valid(_charge_band) and _charge_band.visible
+
+
+## 🔴 공개 관측점 — 예고의 **그리기 순서 자리**(부모 안의 자식 인덱스). 없으면 -1.
+## 「바닥에 깔린다」를 z가 아니라 **트리 순서**로 만들었으므로(`_show_charge_band` 머리말)
+## **이 숫자가 그 계약의 유일한 측정 가능한 형태**다 — 헤드리스는 픽셀을 못 본다.
+func charge_band_order() -> int:
+	if _charge_band == null or not is_instance_valid(_charge_band):
+		return -1
+	return _charge_band.get_index()
+
+
+## 🔴🔴 공개 관측점 — **화면에 실제로 그려진** 범위의 (도달거리, 반경), 월드 px.
+## ⚠ **params에서 되계산하지 않고 폴리곤을 실측한다** — 되계산하면 `top_level`이 빠져 범위가
+##  `size`배로 그려져도 이 리더가 옳은 값을 돌려줘 그물이 **거짓 그린**이 된다
+##  (`hitbox_radius()`가 형상에서 읽는 것과 같은 이유 — 세85 「검증 도구가 거짓말한다」).
+func charge_band_reach() -> Vector2:
+	if _band_base == null or _band_base.polygon.size() == 0:
+		return Vector2.ZERO
+	var xf := _band_base.global_transform
+	var fwd := xf.basis_xform(Vector2.RIGHT).normalized()
+	var side := xf.basis_xform(Vector2.DOWN).normalized()
+	var far := 0.0
+	var rad := 0.0
+	for p: Vector2 in _band_base.polygon:
+		var w := xf.basis_xform(p)
+		far = maxf(far, w.dot(fwd))
+		rad = maxf(rad, absf(w.dot(side)))
+	return Vector2(far - rad, rad)   # 앞 끝 = 길이 + 반경이므로 반경을 뺀다
+
+
 ## 🔴 머리만 회전 — `_visual.rotation`(설계 A-6). boss_snake 분기에서만 부른다(다른 AI 무영향).
 ## 스프라이트/플레이스홀더는 진행 방향 +x 기준이라 각도를 그대로 준다.
 func _face(dir: Vector2) -> void:
@@ -626,11 +847,35 @@ func _face(dir: Vector2) -> void:
 	_visual.rotation = dir.angle()
 
 
+## 🔴🔴 **돌진이 닿는 자리 — 판정과 그림이 여기 한 곳에서 나온다** (세99).
+##
+## 왜 함수인가: 예고 범위를 **그리는 쪽이 값을 베끼면** 한쪽만 조였을 때 *"보이는 곳 밖에서 맞는다"*가
+## 된다 — 그건 예고가 **없는 것보다 나쁘다**(설계 §5-D-3 · 감사 T5, 세23 *"리포트는 140 적고 130으로
+## 때린다"*와 같은 결). 그래서 **때리는 쪽(`_contact`)과 그리는 쪽(`_update_charge_band`)이 같은
+## 함수를 부른다.** 폴백까지 const로 뽑은 것도 같은 이유다 — 리터럴을 두 자리에 적으면 데이터가
+## 빠졌을 때 **그림과 판정이 서로 다른 기본값**으로 갈라진다(에러 0).
+##
+## 기하: 돌진 중 판정은 `_contact`가 **중심 거리 ≤ attack_range** 하나로 재고, 몸은 락 방향으로
+## `charge_speed × dash_sec`만큼 미끄러진다 ⇒ **닿는 자리 = 그 선분을 반경 attack_range로 부풀린 캡슐.**
+## ⚠ 이 캡슐은 「쓸고 갈 자리」의 상계다 — `attack_cooldown`(1.0s)이 남아 있으면 그중 한 번만 든다.
+##  **좁게 그리는 쪽으로는 틀리지 않는다**(예고가 거짓말하는 방향은 그 반대다).
+const ATTACK_RANGE_FALLBACK := 18.0    ## 데이터에 attack_range가 없을 때 (판정·그림 공용)
+const CHARGE_SPEED_FALLBACK := 330.0   ## 〃 charge_speed
+const DASH_SEC_FALLBACK := 0.4         ## 〃 dash_sec
+
+func _contact_radius() -> float:
+	return _param("attack_range", ATTACK_RANGE_FALLBACK)
+
+
+func _charge_reach_length() -> float:
+	return _param("charge_speed", CHARGE_SPEED_FALLBACK) * _param("dash_sec", DASH_SEC_FALLBACK)
+
+
 ## 접촉 피해 — attack_range 안이면 attack_cooldown 간격으로 GameState를 깎는다.
 ## 🔴 구르는 중이면 흘린다 (무적 프레임 — 세션41 구르기). player.is_rolling()가 유일 판정.
 ## .call로 부른다: player는 Node2D 타입이라 is_rolling()을 정적으로 못 찾는다(공용 배우 계약 무변경).
 func _contact(player: Node2D, dist: float) -> void:
-	if dist > _param("attack_range", 18.0) or _cool > 0.0:
+	if dist > _contact_radius() or _cool > 0.0:
 		return
 	_cool = _param("attack_cooldown", 0.9)
 	var dodging: bool = player.has_method(&"is_rolling") and bool(player.call(&"is_rolling"))
@@ -678,6 +923,11 @@ func _wire_status() -> void:
 ## 멤버 holder도 같이 죽는다. 반대로 끊어 두면 **`_wire_status`가 `_ready`에만 있어서**
 ## 노드를 뺐다 다시 넣는 순간(리페어런팅·풀링) 콜백이 영구히 죽고 **적이 상태를 하나도 안 받는데
 ## 에러가 안 난다** — 이 프로젝트가 제일 무서워하는 침묵을 없는 문제를 막으려다 새로 심는 셈이다.
+##
+## ⚠ **세99에 이 파일에 `_exit_tree`가 생겼는데 모순이 아니다** — 가르는 기준은
+##  **「나갔다 들어오면 스스로 되살아나나」**다. 그쪽이 지우는 건 **한 판짜리 연출 노드**(돌진 예고)라
+##  다음 윈드업에 다시 만들어지고, 안 지우면 **주인 없는 채로 씬에 남는다.** 여기 콜백은 반대로
+##  `_ready`에만 배선돼 되살아날 길이 없다. **「연출은 지운다 · 배선은 안 끊는다」**로 읽어라.
 
 
 ## 반경 안의 다른 적들(그룹 "enemies")에게 즉발 피해. `include_self`면 자신도 맞는다(증기).
@@ -930,6 +1180,10 @@ func _die() -> void:
 	EventBus.enemy_died.emit(enemy_id)
 	died.emit()
 	_spawn_death_puff()
+	# 🔴 예고는 **씬 소유**라 몸과 같이 안 죽는다 — 윈드업 중에 죽으면 붉은 띠가 바닥에 남는다.
+	#  (`_exit_tree`도 같은 일을 하지만 여기서 먼저 지운다: 아래 queue_free는 프레임 끝에야 반영돼
+	#   그 사이 한 프레임 동안 주인 없는 띠가 보인다.)
+	_free_charge_band()
 	queue_free()
 
 
