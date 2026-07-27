@@ -1,0 +1,37 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://src/props/nest.gd" id="1_nest"]
+
+; 🔴 세99 「둥지 뒤로 가면 비친다」의 감지 상자 — **흙더미 위쪽**만 덮는다(원점 = 바닥 접점).
+; 아래로 안 내리는 게 계약이다: 접지선보다 **아래**(남쪽)에 선 플레이어는 둥지 **앞**이라 가릴 이유가
+; 없다(그때 둥지는 z 0으로 남아 원래대로 플레이어 뒤에 그려진다).
+; 크기 176×96 = 흙더미 폭(텍스처 x 12..186 = 174) + 몸통 높이 44 + 마른 가지 아랫도리 ~52.
+; 🔴 **가지 끝(원점 위 140px)까지 안 덮는다** — 거기까지 덮으면 둥지 북쪽을 지날 때마다 화면의
+; 큰 물건이 흐려져 「랜드마크가 깜빡인다」가 된다. 실제로 몸이 가려지는 자리는 여기까지다.
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_behind"]
+size = Vector2(176, 96)
+
+; 🔴🔴 **원점 = 굴 입구의 x 중심이자 흙더미가 바닥에 닿는 줄**(텍스처 (95,140) — art 리포트 §「dev에게」).
+; `centered = false` + `offset = (-95,-140)`이 그 값이다. 🔴 **이 둘을 따로 만지지 마라** —
+; 원점이 접지점이라서 `LandmarkSlot.position`이 곧 「둥지가 서 있는 땅」이고, 흙길·겹침 판정이
+; 전부 거기서 파생한다. 어느 하나만 바꾸면 둥지가 **바닥에서 뜨거나 파묻힌다**(에러 0).
+; ✅ 두 컷(온전함·비워짐)의 접지선이 y=140으로 같아 텍스처를 갈아 끼워도 안 튄다.
+; ⚠ 텍스처는 씬이 아니라 **스크립트가 건다** — `.import` 전에는 ext_resource가 씬 로드를 통째로
+; 깨뜨리기 때문이다(nest.gd 머리말).
+[node name="Nest" type="Sprite2D"]
+centered = false
+offset = Vector2(-95, -140)
+script = ExtResource("1_nest")
+
+; 🔴🔴 **`collision_layer = 0`이 계약이다** — 둥지는 감지만 하고 **아무에게도 안 잡힌다.**
+; 레이어를 채우면 `boss_room.gd` 머리말이 경고한 함정(캐리어가 프롭마다 터진다)이 되살아난다.
+; `monitorable = false`도 같은 이유(다른 Area2D가 이걸 주우면 드롭·피격 판정에 섞인다).
+; mask 2 = 플레이어. ⚠ 적까지 넓히려면 여기에 4(enemy)를 더해라 — nest.gd는 이미 여럿을 센다.
+[node name="BehindSense" type="Area2D" parent="."]
+position = Vector2(4, -48)
+collision_layer = 0
+collision_mask = 2
+monitorable = false
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="BehindSense"]
+shape = SubResource("RectangleShape2D_behind")

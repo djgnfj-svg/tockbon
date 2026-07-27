@@ -6,6 +6,6 @@
 script = ExtResource("1")
 id = &"lm_nest"
 kind = 1
-scene_path = ""
+scene_path = "res://src/props/nest.tscn"
 title = "짐승 둥지"
 params = {}

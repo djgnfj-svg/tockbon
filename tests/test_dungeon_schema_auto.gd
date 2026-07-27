@@ -185,8 +185,15 @@ func _test_new_schema_defaults() -> void:
 ##   ⓑ `tests/test_chapter_auto [1c]` — **실데이터 `.tres`**가 실재하는 적을 가리키고 보스 id를
 ##      안 물고 확률이 양끝이 아닌지 잰다. ⓐ와 짝이다(기계만 재면 데이터가 비어도 그린이다).
 ##  ⚠ **`MobSpawn.enemy_id`가 빈 항목이 이제 정상이다** — 그 자리는 `pool_tag`로 굴린다.
-##  ⚠ 남은 둘(`room_scene_path`·`landmarks`)은 **아직 소비자가 없다** — 단계 3·4에서 켜질 때
-##  같은 절차로 하나씩 여기서 빼고 그쪽에 그물을 세워라.
+##
+## 🔴🔴 **`landmarks`는 세99 단계 3에 켜졌다 — 같은 절차로 뺐다**(`extract_points` 선례 그대로).
+##  소비자가 생겼다: `boss_room._spawn_landmarks`(지점 세우기) · `boss_room._landmark_road_cells`
+##  (입구→지점 흙길). ch1이 `lm_nest` 한 자리를 싣는다.
+##  🔴 **살아 있는 그물이 간 곳** — `tests/test_landmark_road_auto.gd`가 **같은 `.tres` 파싱 결과**를
+##   「비어 있지 않다 + 지점이 데이터 좌표에 실제로 선다 + 입구에서 거기까지 흙길이 끊김 없이
+##   이어진다」로 훨씬 세게 잰다. **여기 사본을 만들지 마라**(T5) — 켜진 축은 그쪽 한 곳이 정본이다.
+##  ⚠ 남은 하나(`room_scene_path`)는 **아직 소비자가 없다** — 단계 4에서 켜질 때 같은 절차로
+##  여기서 빼고 그쪽에 그물을 세워라.
 func _test_existing_chapters_unchanged() -> void:
 	print("[5] 기존 챕터 3장 = 아직 안 켠 필드 전부 빈 값 (회귀 0 실증)")
 	var chapters = _db.chapters_sorted()
@@ -194,7 +201,6 @@ func _test_existing_chapters_unchanged() -> void:
 	for c in chapters:
 		var who := String(c.id)
 		_check(c.room_scene_path == "", "%s: room_scene_path 비어 있다 (공용 씬 그대로)" % who)
-		_check(c.landmarks.is_empty(), "%s: landmarks 비어 있다" % who)
 		# 🔴 기존 배치가 살아 있나 — 새 필드를 더하며 옛 필드를 밀지 않았다는 증명.
 		_check(not c.mob_spawns.is_empty(), "%s: mob_spawns가 여전히 차 있다" % who)
 		# 🔴 자리 자체는 **여전히 사람이 놓는다**(D5: *"지형은 동일하고 나오는 몬스터들이 랜덤"*).

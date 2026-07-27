@@ -4,6 +4,7 @@
 [ext_resource type="Script" path="res://src/core/schemas/mob_spawn.gd" id="2"]
 [ext_resource type="Script" path="res://src/core/schemas/mob_weight.gd" id="3"]
 [ext_resource type="Script" path="res://src/core/schemas/named_spawn.gd" id="4"]
+[ext_resource type="Script" path="res://src/core/schemas/landmark_slot.gd" id="5"]
 
 [sub_resource type="Resource" id="mob1"]
 script = ExtResource("2")
@@ -50,6 +51,39 @@ script = ExtResource("2")
 enemy_id = &"beetle"
 position = Vector2(0, -1050)
 
+; 🐺 늑대 무리 — 둥지(620,-300)를 **둘러싸고** 선다 (세99 사용자 원문 *"많은 늑대들이 있을듯"*).
+; 🔴 자리는 사람이 놓는다(D5) — 굴리는 건 「거기 뭐가 서 있나」뿐이라 `pool_tag`를 안 쓴다.
+; 🔴 **다섯 다 「입구에서 곧게 뻗는 줄기」에서 350px 넘게 떨어져 있다**(실측 최솟값 355 =
+;  (450,-190) 늑대). `hound.params.aggro_range`가 **220**이라 **길을 걸어 들어가는 것만으론 안 깨운다** —
+;  둥지 쪽으로 꺾어야 깨어난다. 설계 §3의 *"✅ 지나가도 된다"*가 좌표로 성립하는 자리이고,
+;  가까이 붙이면 지점이 「고르는 것」이 아니라 **통행세**가 된다.
+;  ⚠ 그물(`tests/test_landmark_road_auto [6]`)이 이 성질을 **줄기에서 파생해** 잰다 — 늑대를 옮기면
+;   거기서 빨개진다. `aggro_range`도 데이터에서 읽으므로 그 값을 키워도 같이 걸린다.
+[sub_resource type="Resource" id="mob_wolf1"]
+script = ExtResource("2")
+enemy_id = &"hound"
+position = Vector2(770, -380)
+
+[sub_resource type="Resource" id="mob_wolf2"]
+script = ExtResource("2")
+enemy_id = &"hound"
+position = Vector2(800, -180)
+
+[sub_resource type="Resource" id="mob_wolf3"]
+script = ExtResource("2")
+enemy_id = &"hound"
+position = Vector2(610, -120)
+
+[sub_resource type="Resource" id="mob_wolf4"]
+script = ExtResource("2")
+enemy_id = &"hound"
+position = Vector2(450, -190)
+
+[sub_resource type="Resource" id="mob_wolf5"]
+script = ExtResource("2")
+enemy_id = &"hound"
+position = Vector2(520, -450)
+
 [sub_resource type="Resource" id="w_fore_slime"]
 script = ExtResource("3")
 enemy_id = &"slime"
@@ -86,6 +120,19 @@ enemy_id = &"beetle_ancient"
 chance = 0.3
 position = Vector2(-600, -700)
 
+; 🪦 지점 하나 — 늑대 둥지 (세99 D3·D4 단계 3).
+; 🔴 **자리를 이렇게 고른 이유**(옮길 땐 넷을 같이 봐야 한다):
+;  ⓐ 입구(0,+600)에서 걸어갈 만하다 — 흙길 길이 900px(북) + 620px(동) ≈ 8초. 보스(0,-1350)보다
+;    확실히 가깝고, 「가는 길에 지나치는 것」이 아니라 **일부러 들르는 것**이 되게 옆으로 뺐다.
+;  ⓑ 나무·다른 잡몹·보스 스폰과 안 겹친다(가장 가까운 나무 (500,-740)까지 450px).
+;  ⓒ 서쪽 탈출구(-1150,-360)의 흙길과 **안 닿는다** — 붙이면 두 길이 한 칸 띄고 나란히 달려
+;    「잘못 깐 바닥」으로 읽힌다(마을 바닥을 둘로 나눴다 튄 자리와 같은 병 — takbon-rules §2).
+;  ⓓ 둥지 스프라이트는 원점 위로 140px 솟는다(178×121) — 위쪽에 여유가 있어야 잘리지 않는다.
+[sub_resource type="Resource" id="lm_nest_slot"]
+script = ExtResource("5")
+landmark_id = &"lm_nest"
+position = Vector2(620, -300)
+
 [resource]
 script = ExtResource("1")
 id = &"ch1"
@@ -95,8 +142,9 @@ boss_enemy_id = &"slime_elite"
 boss_scene_path = ""
 boss_spawn = Vector2(0, -1350)
 room_ground_color = Color(0.33, 0.41, 0.27, 1.0)
-mob_spawns = Array[ExtResource("2")]([SubResource("mob1"), SubResource("mob2"), SubResource("mob3"), SubResource("mob4"), SubResource("mob5"), SubResource("mob6"), SubResource("mob7"), SubResource("mob8"), SubResource("mob9")])
+mob_spawns = Array[ExtResource("2")]([SubResource("mob1"), SubResource("mob2"), SubResource("mob3"), SubResource("mob4"), SubResource("mob5"), SubResource("mob6"), SubResource("mob7"), SubResource("mob8"), SubResource("mob9"), SubResource("mob_wolf1"), SubResource("mob_wolf2"), SubResource("mob_wolf3"), SubResource("mob_wolf4"), SubResource("mob_wolf5")])
 reward_unlock = &"rune_water"
 mob_pool = Array[ExtResource("3")]([SubResource("w_fore_slime"), SubResource("w_fore_mist"), SubResource("w_deep_mist"), SubResource("w_deep_beetle"), SubResource("w_deep_slime")])
 named_pool = Array[ExtResource("4")]([SubResource("named_beetle")])
 extract_points = Array[Vector2]([Vector2(-1150, -360), Vector2(300, -1400)])
+landmarks = Array[ExtResource("5")]([SubResource("lm_nest_slot")])

@@ -402,6 +402,14 @@ func _test_room_has_many_exits() -> void:
 					% [cid, z.position, out_d, _edge_slack(zc, rg) + 1])
 
 	# ── ⓑ 비면 지금 동작 (회귀 0)
+	# 🔴🔴 **지점도 같이 비운다**(세99 단계 3): ch1이 `landmarks`를 싣게 되면서 **입구→지점 흙길**이
+	#  같은 타일맵에 깔린다 — 안 비우면 아래 「칸 하나까지 같다」가 그 길 때문에 빨개진다.
+	#  🔴 그물을 무디게 하는 게 아니라 **축을 가르는 것**이다: 여기서 재는 건 「나가는 길의 모양이
+	#  세88과 같은가」 하나고, 들어가는 길은 `tests/test_landmark_road_auto.gd`가 따로 잰다.
+	#  ⚠ 둘을 한 항목에서 재면 어느 쪽이 깨졌는지 못 가른다(설계 §6 S12의 「겹치는 발신원은 그물을
+	#  갈라 세워라」와 같은 결).
+	var lms_before: Array = ch.landmarks.duplicate()
+	ch.landmarks.clear()
 	ch.extract_points = [] as Array[Vector2]
 	await _fresh(&"ch1")
 	var exits := _exits()
@@ -502,7 +510,9 @@ func _test_room_has_many_exits() -> void:
 	_check(line.contains("다음 챕터"),
 		"목표 줄이 「보스는 선택이지만 진행하려면 필요」도 같이 말한다: '%s'" % line)
 
-	ch.extract_points = before   # 🔴 주입 원상복구 — 안 되돌리면 뒤 테스트가 오염된다
+	# 🔴 주입 원상복구 — 안 되돌리면 뒤 테스트가 오염된다 (지점도 같이 되돌린다)
+	ch.extract_points = before
+	ch.landmarks.assign(lms_before)
 
 
 ## [7] 🔴🔴 **입장부터 출발하는 실경로** — 「기능이 돈다 ≠ 거기 갈 수 있다」(세97).

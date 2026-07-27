@@ -45,6 +45,13 @@ extends Node2D
 ##    🔴 **「하나도 안 뜸」이 정상 결과다** — 그게 「오늘 뭔가 있다」를 만든다.
 ##    🔴 **표시는 생김새다(덩치·몸 색조) — 빛나게 하지 마라**(*"몸에서 빛이나는거 까진 별로임"*).
 ##    오라·HUD 알림·입장 문구는 **각하됐다.** `at_landmark` 해석은 단계 3 몫이라 지금은 안 선다.
+##  • **지점**(D3·D4 — 세99 단계 3): `ChapterDef.landmarks` → `Db.landmarks` → 프롭 씬(`_spawn_landmarks`).
+##    🔴 **자리는 절대 안 굴린다**(`MobSpawn`과 같은 이유 — 지형이 정하는 것이다).
+##    🔴🔴 **지점을 세우면 입구에서 거기까지 흙길이 깔린다**(`_landmark_road_cells`) — 방이 열린 숲이라
+##     길이 없으면 「저쪽에 뭔가 있다」를 알 방법이 아예 없다. 세우기만 하고 길을 안 깔면 **에러 0으로
+##     아무도 안 가는 물건**이 된다(출구가 겉모습 없이 서는 것과 같은 병 — 설계 §6 S12).
+##    ⚠ **이번 범위는 「서 있는 것」까지다** — 무한 스폰·핵 깨기·상호작용은 안 얹었다(사용자 확정
+##     *"그냥 간단한데"*). 얹을 땐 **스폰을 지점이 아니라 여기가 진다**(설계 §3 소유권 ⓐ).
 ##  🔴🔴 **잡몹·네임드는 `_spawn_enemy_at` 한 문을 지난다 — 거기 보스 id 제외 가드가 있다**(설계 §6 S9).
 ##   새 스폰 경로를 만들거든 **그 문을 지나게 해라.** 안 지나면 풀에 보스 id가 섞이는 날
 ##   **잡몹 한 마리로 `chapter_clear_*` + 보상 룬이 조용히 나간다(에러 0).**
@@ -235,6 +242,10 @@ var _chapter: ChapterDef = null
 ## **`_extract` 연결과 `_fill_tiles` 흙길이 둘 다 이 배열을 순회한다** — 단수 참조로 되돌리지 마라.
 ## ✅ 세99에 포탈이 은퇴해 **이 배열이 방의 탈출구 전량**이다(예외로 빠지는 길이 하나도 없다).
 var _exits: Array[InteractZone] = []
+## 🔴 이 판에 실제로 선 지점들 (세99 D3·D4 — `ChapterDef.landmarks`가 세운다).
+## **`_road_cells`의 입구→지점 흙길이 이 배열에서 파생한다** — 좌표를 두 번 적으면 지점을 옮길 때
+## 길만 제자리에 남는다(`_exits`가 흙길의 출처인 것과 같은 결).
+var _landmarks: Array[Node2D] = []
 ## 클리어 처리는 한 번뿐 — enemy_died는 EventBus 전역이라 가드 없이는 무엇이든 두 번 처리될 수 있다.
 var _cleared: bool = false
 ## 씬 전환은 한 번뿐 — 귀환 도중 죽거나, 죽는 중에 E를 누르면 두 번 갈아탄다 (forest 계약 이관).
@@ -272,6 +283,10 @@ func _ready() -> void:
 	# 🔴 **`_fill_tiles`보다 먼저다** — 흙길이 `_exits`에서 파생하므로, 순서가 뒤바뀌면 늘린 출구가
 	# 화면에 **아무 표시 없이** 서고 D1이 통째로 무효가 된다(설계 §6 S12). 에러는 0이다.
 	_build_exits()
+	# 🔴 **지점도 `_fill_tiles`보다 먼저다 — 같은 이유이자 더 센 이유다.** 입구→지점 흙길이
+	# `_landmarks`에서 파생한다. 순서가 뒤바뀌면 지점은 서 있는데 **길이 안 깔려** 방 한가운데
+	# 아무도 안 가는 물건이 되고, 여기 에러도 0이다(세99 목표가 통째로 무효).
+	_spawn_landmarks()
 	_fill_tiles()
 	_clamp_camera_to_room()
 	# 🔴 스폰이 실패하면 **여기서 멈춘다** — `_spawn_boss` 안의 `return`은 자기 함수만 벗어나므로,
@@ -387,6 +402,47 @@ func _wire_extract_zone(zone: InteractZone) -> void:
 		zone.interacted.connect(_extract)
 
 
+## 🔴🔴 지점(랜드마크)을 세운다 (세99 D3·D4 단계 3) — **`ChapterDef.landmarks` → `Db.landmarks` →
+## `LandmarkDef.scene_path`** 세 걸음이고, **어느 걸음이 끊겨도 화면엔 아무 일도 안 난다.** 그래서
+## 걸음마다 짖는다(설계 §7 F1이 지목한 침묵 자리 — 폴더가 없으면 `Db._load_dir`이 경고만 하고
+## 빈 배열을 돌려줘 「지점 0개인데 에러 0」이 된다).
+##
+## 🔴 **「새 지점 = `.tres` 한 장 + 프롭 씬 한 장」이 여기서 성립한다** — 이 함수엔 지점 종류가
+##  한 글자도 안 적혀 있다(둥지·폐허·제단을 분기하지 않는다). 분기가 필요해지는 건 **장치**(스폰·핵)를
+##  얹을 때이고, 그건 설계 §3 소유권 ⓐ대로 **여기(방)가** 자식 시그널을 받아 지는 몫이다.
+## ⚠ 이번 범위는 **겉모습·자리·길**뿐이다 — 상호작용·전투 장치는 안 얹었다(사용자 확정 *"그냥 간단한데"*).
+##
+## 🔴 `preload`가 아니라 `load`인 이유 = `boss_scene_path`와 같다(씬끼리 PackedScene을 물면 순환).
+## 🔴 그룹 `"landmarks"`는 **방이 붙인다** — 지점 씬마다 붙이면 새 지점 하나가 빠뜨리는 순간
+##  「서 있는데 아무도 못 찾는」 물건이 된다(단일 소유자). 그물도 이 그룹으로 센다.
+func _spawn_landmarks() -> void:
+	_landmarks.clear()
+	for slot: LandmarkSlot in _chapter.landmarks:
+		if slot == null:
+			continue
+		var def := Db.get_landmark(slot.landmark_id)
+		if def == null:
+			push_error("boss_room: landmark_id '%s'가 Db.landmarks에 없다 — 그 자리가 빈 채로 선다"
+				% String(slot.landmark_id))
+			continue
+		if def.scene_path == "":
+			push_error("boss_room: 지점 '%s'의 scene_path가 비었다 — 겉모습 없이 자리만 잡는다"
+				% String(def.id))
+			continue
+		var packed := load(def.scene_path) as PackedScene
+		if packed == null:
+			push_error("boss_room: 지점 '%s'의 scene_path '%s'를 못 읽었다"
+				% [String(def.id), def.scene_path])
+			continue
+		var node := packed.instantiate() as Node2D
+		# 🔴 위치는 `add_child` **앞**이다(보스·잡몹과 같은 계약) — 지점 씬이 `_ready`에서 자기
+		#  자리로 무언가를 파생시키면 뒤에 옮길 때 한 프레임 어긋난다.
+		node.position = slot.position
+		node.add_to_group(&"landmarks")
+		add_child(node)
+		_landmarks.append(node)
+
+
 ## 바닥 타일을 Ground rect에 맞춰 깐다 — 🔴 **세99: 벌판은 풀, 나가는 길은 흙길**이다
 ## (그전엔 벌판이 거의 검은 슬레이트고 길이 밝은 풀이었는데, 방이 낮이 되며 바탕도 초록이 되자
 ## 풀길이 **「밝은 초록 네모」로만 읽히고 길로 안 읽혔다** — 리드 스샷 확인).
@@ -418,28 +474,60 @@ func _fill_tiles() -> void:
 		_tiles.set_cell(cell, TILE_SRC_GROUND, _road_atlas(cell, road))
 
 
-## 흙길 칸 전부 — 출구마다 「자기 자리 → 가장 가까운 방 가장자리」 한 줄기.
-## 🔴 **좌표는 출구 노드에서 파생한다**(여기 베끼면 출구를 옮길 때 길만 제자리에 남는다).
+## 흙길 칸 전부 — **줄기가 두 종류다**:
+##  ⓐ **나가는 길** — 출구마다 「자기 자리 → 가장 가까운 방 가장자리」(세99 D1).
+##  ⓑ **들어가는 길** — 입구에서 지점까지(세99 D3·D4 단계 3).
+## 🔴 **좌표는 노드에서 파생한다**(여기 베끼면 출구·지점을 옮길 때 길만 제자리에 남는다).
+## ⚠ 둘이 만나도 손댈 게 없다 — 9분할 오토타일이 이웃을 보고 이음매를 고른다(폭이 같아야 한다는
+##  전제만 지키면 된다. 그래서 ⓑ도 `EXIT_PATH_WIDTH_CELLS`를 그대로 쓴다 — §`_road_between` 참조).
 ## `from`은 포함·`to`는 배타 = `_fill_tiles`의 루프 범위 그대로.
 func _road_cells(from: Vector2i, to: Vector2i, ts: Vector2i) -> Dictionary:
 	var out: Dictionary = {}
-	if EXIT_PATH_ROWS <= 0:   # 끄는 손잡이 (연출값)
-		return out
 	var half: int = (EXIT_PATH_WIDTH_CELLS - 1) / 2
-	for zone: InteractZone in _exits:
-		if zone == null or not is_instance_valid(zone):
-			continue
-		var cell := Vector2i(floori(zone.position.x / float(ts.x)), floori(zone.position.y / float(ts.y)))
-		var ends := _exit_road_ends(cell, from, to)
-		_road_between(ends[0], ends[1], half, out)
+	if EXIT_PATH_ROWS > 0:   # 끄는 손잡이 (연출값) — ⓐ만 끈다
+		for zone: InteractZone in _exits:
+			if zone == null or not is_instance_valid(zone):
+				continue
+			var cell := Vector2i(floori(zone.position.x / float(ts.x)), floori(zone.position.y / float(ts.y)))
+			var ends := _exit_road_ends(cell, from, to)
+			_road_between(ends[0], ends[1], half, out)
+	_landmark_road_cells(half, ts, out)
 	return out
+
+
+## 🔴🔴 **들어가는 길 — 입구에서 지점까지** (세99 목표: *"랜드마크 1개에 입구부터 거기로 이어져있는거임"*).
+##
+## 🔴 **길이 없으면 지점은 없는 것과 같다.** 방이 2400×2200 열린 숲이라 「저쪽에 뭔가 있다」를
+##  알려 주는 건 **바닥 그림뿐**이다(출구가 흙길로만 읽히는 것과 정확히 같은 문제 — 설계 §6 S12).
+##  세99 전반의 길은 가장자리에서 안쪽으로 튀어나온 **토막**이었다 — **목적지가 생겨야 동선이 된다.**
+##
+## 🔴🔴 **인자 순서가 길의 모양을 정한다 — `(지점, 입구)`다.** `_road_between`이 `(b.x, a.y)`에서
+##  꺾으므로 이 순서라야 「입구에서 **북쪽으로 곧게 들어가다가** 지점 쪽으로 꺾인다」가 된다.
+##  뒤집으면(`(입구, 지점)`) 먼저 **남쪽 가장자리를 따라 가로로** 달리다 꺾여서, 나가는 길과 겹쳐
+##  방 아래쪽이 통째로 흙 밭이 된다(에러 0 · 화면만 망가진다).
+##
+## 🔴 시작점은 **플레이어 스폰 노드**다 — 「입구」의 정의가 거기고, 좌표를 여기 적으면 스폰을 옮길 때
+##  길만 제자리에 남는다. ✅ 남쪽 출구의 길과 자연히 한 줄기로 이어진다(스폰이 그 길 위에 서 있다).
+## ⚠ 경로탐색이 아니다 — 나무·몹을 안 피한다(방이 열린 숲이라 필요가 없다. 자리를 겹치지 않게 놓는
+##  건 데이터의 몫이고 `data/chapters/*.tres`에 그 판단이 적혀 있다).
+func _landmark_road_cells(half: int, ts: Vector2i, out: Dictionary) -> void:
+	if _landmarks.is_empty():
+		return
+	var entrance := Vector2i(floori(_player.position.x / float(ts.x)),
+		floori(_player.position.y / float(ts.y)))
+	for node: Node2D in _landmarks:
+		if node == null or not is_instance_valid(node):
+			continue
+		var cell := Vector2i(floori(node.position.x / float(ts.x)), floori(node.position.y / float(ts.y)))
+		_road_between(cell, entrance, half, out)
 
 
 ## 🔴🔴 **임의의 두 칸을 흙길로 잇는다** — 가로 다리 → 세로 다리(ㄱ자), 폭 `half * 2 + 1`.
 ##
-## 🔴 지금 부르는 곳은 출구 길 하나뿐이고 거기선 두 끝이 한 축에 있어 **직선**이 된다. 그래도 이 모양
-##  으로 짠 이유: 다음이 **「입구에서 랜드마크로 이어진 길」**이라, 출구 전용으로 짜면 그때 같은 기계를
-##  두 벌 갖게 된다(감사 T5 — 파생 대신 복제). 랜드마크가 오면 **좌표 두 개만** 주면 된다.
+## 🔴 부르는 곳이 **둘**이다(세99): 출구 길(`_road_cells`)과 **입구→지점 길**(`_landmark_road_cells`).
+##  출구 길은 두 끝이 한 축에 있어 직선이 되고, 지점 길은 실제로 **ㄱ자로 꺾인다**(꺾인 자리의
+##  안쪽 모서리 nub·바깥 모서리는 오토타일이 알아서 고른다 — 세99 단계 1b에 표만 세워 뒀던 칸들이
+##  여기서 처음 화면에 나온다). 출구 전용으로 짰다면 지금 같은 기계를 두 벌 갖게 됐다(감사 T5).
 ## ⚠ 경로탐색은 아니다 — 장애물을 안 본다(방이 열린 숲이라 필요가 없다). 필요해지면 그때 얹어라.
 ## ⚠ 폭은 **한 줄기 안에서 일정해야 한다** — 시트의 9분할 칸과 오솔길 칸은 변의 풀 두께가 달라
 ##  (실측 12px ↔ 24px) 한 줄기에 섞으면 이음매가 어긋난다.
