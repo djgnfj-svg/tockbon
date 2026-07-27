@@ -430,6 +430,12 @@ func _carrier_travel(system) -> float:
 ## ⚠ 도안의 `rings`가 비어 있어 `_on_ring_cast`는 즉시 돌아간다 — 마나만 깎이고 캐리어는 안 난다
 ##   (fire()는 emit **전에** 마나를 판다). 부작용 없는 측정 자리다.
 ## ⚠ `debug_free_cast`는 헤드리스에서도 true다("editor" 피처 — 세62 함정) → 꺼야 마나가 닳는다.
+##
+## 🔴🔴 **세98: 이 검사는 살아남았지만 이유가 바뀌었다.** 발사는 이제 지연 emit인데(좌클릭 → 시전
+## `duration` → 탄) **마나는 시전 *시작*에 깎이므로** 동기 측정이 그대로 성립한다. 대신 아래 루프가
+## 두 번 도는 게 새 문제였다 — 시전이 걸린 채 남으면 두 번째 `fire()`가 **연사 차단**에 걸려
+## 「깎인 마나 0」을 재고 **거짓 빨강**이 난다. 그래서 잰 직후 `cancel_cast()`로 끊는다
+## (취소해도 마나는 안 돌아온다 = 설계 ⓓ라 측정값은 그대로다).
 func _test_wand_mana_reaches_fire(system) -> void:
 	var gs = root.get_node("/root/GameState")
 	var saved_eq: Dictionary = gs.equipment.duplicate()
@@ -449,9 +455,14 @@ func _test_wand_mana_reaches_fire(system) -> void:
 		gs.mana = gs.mana_max()
 		var before: float = gs.mana
 		# ⚠ 프레임을 흘리지 않고 **즉시** 잰다 — `GameState._process`의 마나 재생이 끼어들면
-		#   측정값이 재생분만큼 어긋나 등식 검사가 거짓 빨강이 된다(fire·emit은 동기라 대기 불필요).
+		#   측정값이 재생분만큼 어긋나 등식 검사가 거짓 빨강이 된다.
+		# 🔴 세98 정정: *"fire·emit은 동기라 대기 불필요"*는 **거짓이 됐다** — 지금 동기인 건
+		#   **마나 차감과 `ring_cast_started`**이고 `ring_cast_requested`는 `duration` 뒤다.
+		#   즉시 재는 이유는 여전히 유효하지만(오히려 필수다), 근거는 「emit이 동기」가 아니라
+		#   **「마나가 시전 시작에 나간다」**로 바뀌었다.
 		caster.fire()
 		spent[wid] = before - gs.mana
+		caster.cancel_cast()   # 🔴 다음 반복의 fire()가 연사 차단에 걸리지 않게 (마나는 안 돌아온다)
 		await process_frame
 		_check(is_equal_approx(float(spent[wid]), gs.cast_mana_cost()),
 			"fire()가 깎은 마나 == GameState.cast_mana_cost() (%s: %.2f vs %.2f)"

@@ -63,6 +63,41 @@ static func assembled_score(glyph_count: int, layer_count: int) -> float:
 		+ BAL.assemble_score_per_layer * float(maxi(layer_count - 1, 0)), 0.0, 1.0)
 
 
+## 🔴 **품질 0~1 정규화** (세98 시전 연출) — 점수를 **연출·시전 축의 보간 계수**로 바꾼다.
+##
+## 🔴🔴 **`score`를 그대로 `lerp`에 넣지 마라 — 하위 70%가 통째로 죽는다.**
+## 조립 점수의 실사용 범위는 **`assemble_score_base`(0.70) ~ 1.0**이라(맨 진이 이미 0.70),
+## 0~1로 보간하면 **무난한 진이 이미 중간값**이 돼 "잘 조립했는데 화면이 별로 안 다르다"가 남는다.
+## 그건 이 설계가 고치려던 병 그 자체다(설계 §0).
+##
+## 🔴 **하한을 0.70으로 베끼지 마라 — `assembled_score(0, 1)`에서 파생시킨다**(맨 진 = 문양 0·1층).
+## balance를 조이면 같이 움직인다. 세24 「65를 상수로 베끼면 갈라진다」와 같은 계열의 함정이다.
+##
+## ⚠ **그리기 폐지 스위치를 되돌리면(`skip_drawing()` false) 하한이 달라진다** — 그땐 점수를
+## `trace_scorer`가 주고 실질 하한은 `ring_stability_min`(0.65)이다. 지금은 조립이 유일한
+## 라이브 경로라 조립 하한을 쓴다. 되살릴 땐 **여기부터 봐라**(안 보면 손그림 마법이 전부 느려진다).
+static func quality_t(score: float) -> float:
+	var lo := assembled_score(0, 1)
+	if score <= lo:
+		return 0.0
+	return clampf((score - lo) / maxf(1.0 - lo, 0.0001), 0.0, 1.0)
+
+
+## 🔴 점수 → **시전 시간(초)**. 좌클릭에서 탄이 나가기까지 발밑 마법진이 열려 있는 길이다.
+## 잘 조립할수록 **길다** — 강한 마법진은 DPS가 아니라 「한 방」이라는 계약(balance 머리말)의 실행부다.
+## 🔴 **여기가 단일 소스다** — 발사(`player_caster`)·연출(`vfx` 바닥 전개)·HUD가 **같은 값**을 봐야
+## 원이 닫히는 순간과 탄이 나가는 순간이 안 갈린다(세23 「리포트 140인데 130으로 때린다」의 시간판).
+static func cast_time_of(score: float) -> float:
+	return lerpf(BAL.cast_time_plain_sec, BAL.cast_time_perfect_sec, quality_t(score))
+
+
+## 🔴 점수 → **시전 중 이동 배수**(1.0 = 평소 속도). 잘 조립할수록 **무겁다 = 그게 위험이다**.
+## ⚠ 곱하는 자리는 `move_speed()`의 **결과**여야 한다 — 모자(HAT)·달리기 배수가 이미 실린 값에
+## 얹혀야 장비 효과가 시전 중에만 조용히 사라지지 않는다(`player_run_mult` 주석과 같은 이유).
+static func cast_move_mult_of(score: float) -> float:
+	return lerpf(BAL.cast_move_mult_plain, BAL.cast_move_mult_perfect, quality_t(score))
+
+
 ## 종합 점수 → 위력 배율 = `ring_power_max × 점수^curve × ink_mult × size_mult(size)`.
 ## 발사 피해에 곱해지고, 리포트가 **같은 값**을 표시한다.
 ##

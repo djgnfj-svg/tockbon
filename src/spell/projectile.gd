@@ -88,6 +88,9 @@ var status_power: float = 0.0
 ## 착탄 시 primary(=rune_type)가 피해+상태, 나머지는 피해 0으로 상태만 얹는다 (적 계약 무변경).
 ## 비어 있으면 단일 룬(primary 하나)으로 본다 — 하위호환.
 var rune_hits: Array = []
+## 🔴 이 탄을 낳은 진의 조립 점수(0~1) — **착탄 연출 전용**이다 (세98, `ring_carrier.score` 짝).
+## 피해는 이미 `damage`에 반영돼 있다 — 여기서 다시 곱하지 마라(이중 적용). 옛 경로 = 0.0(무난).
+var score: float = 0.0
 ## 발사 시점의 각도. **진행 방향이 아니다** — 유도·반사는 _velocity가 바뀐다
 var direction_angle: float = 0.0
 ## **v2.0 문양 축** — {GlyphType: Σreach}. 여러 효과가 **동시에** 얹힌다 (spell_system.compile_effects)
@@ -137,12 +140,14 @@ func setup(p_damage: float, p_rune_type: int, p_status: int, p_status_power: flo
 		p_speed: float, p_angle: float,
 		p_effects: Dictionary = {},
 		p_lifetime: float = 0.0,
-		p_rune_hits: Array = []) -> void:
+		p_rune_hits: Array = [],
+		p_score: float = 0.0) -> void:
 	damage = p_damage
 	rune_type = p_rune_type
 	status = p_status
 	status_power = p_status_power
 	rune_hits = p_rune_hits
+	score = p_score
 	direction_angle = p_angle
 	_velocity = Vector2.RIGHT.rotated(p_angle) * p_speed
 	if p_lifetime > 0.0:
@@ -361,7 +366,8 @@ func _deal_damage(node: Node2D) -> void:
 		return
 	# "탄이 박혔다" 연출 신호 (세션59 설계 §3) — 관통이면 뚫는 적마다 1회 = 의도.
 	# 벽(_hit_wall)·수명 소멸(_consume 직행)에는 안 쏜다. 위치는 carrier와 통일(take_hit 계약 통과 뒤).
-	EventBus.spell_impact.emit(global_position, rune_type)
+	# 🔴 세98: `score`(도안 등급)를 같이 싣는다 — 캐리어와 **같은 값**이어야 한 발의 착탄이 갈라져 보이지 않는다.
+	EventBus.spell_impact.emit(global_position, rune_type, score)
 	# 🔴 복합 (세81 M2 융합진) — primary(=rune_type)가 피해+자기 상태를 얹고, 나머지 룬은 **피해 0**
 	# 으로 상태만 얹는다. 🔴 도배(피해숫자 "0"·히트스톱·팝 중복)는 **적 계약의 0-피해 가드**가 막는다
 	# (`forest_enemy`·`dummy_target`의 take_hit이 damage<=0이면 발신·손맛을 스킵) — 세81에 적 계약을

@@ -22,7 +22,8 @@
 ##   ... -s res://tools/vfx_shot.gd -- list          -        (프리셋 표만 찍고 끝)
 ##
 ## 프리셋 이름 = `<이름>` 또는 `<이름>:<변종>`(`_`도 같은 구분자로 받는다 — `impact_fire` OK).
-##   변종 = 룬 이름(fire·water·wind·bolt·earth·grass) 또는 상태 이름(shock·steam·wet·burn…).
+##   변종 = 룬 이름(fire·water·wind·bolt·earth·grass) · 상태 이름(shock·steam·wet·burn…) ·
+##          🔴 **구성 이름**(plain·mid·full — 세98 `floor` 전용. 「무엇을 조립했나」를 고른다).
 ##   🔴 **새 이펙트 = 아래 `PRESETS`에 줄 하나** — 룬 6종을 6줄로 늘리지 말고 `:변종`으로 접는다.
 ##
 ## 🔴 크기 제약이 사양의 심장이다: 최종 시트는 **가로 ~1200px 이내**여야 Read 한 번에 판단이 된다.
@@ -41,6 +42,9 @@ const GRID := Color(0.02, 0.02, 0.04)        ## 격자 구분선
 const TICK := Color(0.45, 0.80, 0.55, 1.0)   ## 각 칸 하단 진행 막대 = 수명 어디쯤인가
 const EDGE := Color(0.40, 0.40, 0.50, 1.0)   ## 칸 네 변 중점의 3px 표식 = 월드 중심 기준선
 
+## 🔴 `floor` 전용 — 시전이 끝난 뒤 **퍼지며 꺼지는** 마무리까지 볼 여유(초).
+##   `floor_circle.RELEASE_TIME`(0.16)에서 나온 값이다 — 그걸 늘리면 여기도 늘려라.
+const FLOOR_TAIL := 0.22
 const WARMUP := 4            ## 무대·vfx가 자리잡을 여유 프레임 (여기까진 안 찍는다)
 const TIMEOUT_SEC := 30.0
 
@@ -59,10 +63,42 @@ const STATUS_BY_NAME := {
 
 const GLYPH_NONE := -1   ## 빈 문양 칸 (RingAssembly.GLYPH_NONE — 캐리어에 「전개 없음」을 물린다)
 
+## 🔴🔴 **조립 「구성」 변종** (세98) — `floor` 프리셋이 **무엇을 조립했나**를 고른다.
+## 왜 세 번째 변종 축이 필요한가: 발밑 마법진의 합격 기준이 *"조립 구성이 눈으로 읽히나"*라
+## **문양 3개짜리와 8개·2층짜리를 나란히 뽑아 비교**해야 판정이 된다 — 룬 변종으로는 그게 안 된다.
+## 값 = 저장된 도안이 실제로 싣는 모양 그대로(`rings` = **층 배열** · 칸 8개 · 빈칸 -1 ·
+## `runes` = 자리별 룬). 🔴 손으로 쓴 리터럴인 게 의도다 — 세이브에서 오는 형태를 그대로 흉내낸다.
+## 🔴 **점수는 여기 안 적는다** — `RingPower.assembled_score(문양수, 층수)`가 런타임에 낸다.
+##   베끼면 balance를 조일 때 시트가 조용히 거짓말한다(세24 「경계를 상수로 베끼면 갈라진다」).
+const BUILD_BY_NAME := {
+	# 맨 진 — 문양 0 · 1층 · 룬 하나. 설계 §0 표의 「위력 78」 자리다.
+	&"plain": {
+		"jin": &"jin_single", "runes": [Enums.RuneType.FIRE],
+		"rings": [[-1, -1, -1, -1, -1, -1, -1, -1]],
+	},
+	# 문양 3 · 1층 — 흔한 중간 조립.
+	&"mid": {
+		"jin": &"jin_single", "runes": [Enums.RuneType.WATER],
+		"rings": [[Enums.GlyphCode.RADIATE, Enums.GlyphCode.RADIATE, Enums.GlyphCode.RADIATE,
+			-1, -1, -1, -1, -1]],
+	},
+	# 🔴 문양 8 · 2층 · **융합진(룬 둘)** — 설계 §0 표의 「위력 157」 자리. 층 1 = 발산 5,
+	# 층 2 = 응집 3이라 **모티프가 층마다 다른 것**까지 한 장에서 보인다.
+	&"full": {
+		"jin": &"jin_fuse", "runes": [Enums.RuneType.FIRE, Enums.RuneType.WATER],
+		"rings": [
+			[Enums.GlyphCode.RADIATE, Enums.GlyphCode.RADIATE, Enums.GlyphCode.RADIATE,
+				Enums.GlyphCode.RADIATE, Enums.GlyphCode.RADIATE, -1, -1, -1],
+			[Enums.GlyphCode.GATHER, Enums.GlyphCode.GATHER, Enums.GlyphCode.GATHER,
+				-1, -1, -1, -1, -1],
+		],
+	},
+}
+
 ## 🔴🔴 **프리셋 표 — 새 이펙트 = 여기 줄 하나.**
 ##   sig      : EventBus 시그널 이름. 비면 `scene`을 인스턴스하는 노드형 프리셋이다.
 ##   scene    : 노드형일 때 띄울 씬 (setup 인자는 `_spawn_node`의 match가 안다)
-##   variant  : &"rune"(룬 변종을 받는다) / &"status"(상태 변종) — `:변종` 접미사가 무엇을 가리키나
+##   variant  : &"rune"(룬) / &"status"(상태) / &"build"(조립 구성) — `:변종` 접미사가 무엇을 가리키나
 ##   crop     : 중앙 크롭 한 변(**월드 px**). 이펙트 최대 반경 + 여유로 잡는다
 ##   cols·frames·dur : 격자 열 수 · 찍을 장수 · 덮을 시간(초, 이펙트 수명보다 살짝 길게)
 ## ⚠ `dur`은 `src/actors/vfx.gd`·`blast.gd`의 연출 상수(RING_TIME·DECAL_TIME·FLASH_SEC…)에서
@@ -75,12 +111,29 @@ const PRESETS := {
 		"crop": 64, "cols": 6, "frames": 12, "dur": 0.14,
 		"desc": "발사 순간 총구 — 작은 진 링 + 조준(→) 부채 틱",
 	},
-	# 착탄 두 겹 — 바닥 데칼(DECAL_TIME 0.22 · r20 · 세로 0.4 눌림) + 솟는 플레어
-	# (FLARE_H 24 + FLARE_RISE 10 = 위로 34px). 세로가 최대치라 crop 76 = ±38(여유 4px)으로 잡았다.
+	# 착탄 두 겹 — 바닥 데칼(DECAL_TIME 0.22 · 세로 0.4 눌림) + 솟는 플레어(세로가 최대치).
+	# 🔴 세98: `score`(0~1 조립 점수)가 시그널에 실려 **크기를 판다** — 1.0(퍼펙트) = 연출 최대치다.
+	# 🔴 **crop을 76에서 104(±52)로 키웠다**(세98) — 퍼펙트 세로 최대가 FLARE_H(24)×1.45 +
+	#   FLARE_RISE(10)×1.45 ≈ 49px이라 76이면 플레어 머리가 시트에서 **잘린 채** 찍혀
+	#   "충분히 커졌나" 판단이 거짓이 된다(세50 「반경 밖」 함정의 도구판). 가로는 데칼 r30.
+	#   무난한 쪽(작게 나오는 게 정상)을 보려면 아래 `score`만 0.70으로 내려라.
+	# ⚠ dur도 0.26 → 0.24: 데칼이 0.22에 끝나 마지막 두 칸이 **빈 화면**이었다(VFX_SPEC §1-3 ⓐ).
 	&"impact": {
-		"sig": &"spell_impact", "variant": &"rune",
-		"crop": 76, "cols": 5, "frames": 20, "dur": 0.26,
-		"desc": "탄이 박혔다 — 바닥 데칼 + 솟는 플레어(오블리크 두 겹)",
+		"sig": &"spell_impact", "variant": &"rune", "score": 1.0,
+		"crop": 104, "cols": 5, "frames": 20, "dur": 0.24,
+		"desc": "탄이 박혔다 — 바닥 데칼 + 솟는 플레어(등급이 크기를 판다)",
+	},
+	# 🔴🔴 발밑 바닥 마법진 (세98 확정 ③) — **「내가 조립한 그 마법진」이 시전 동안 열린다.**
+	#   변종 = **구성**(`plain`·`mid`·`full` — 위 BUILD_BY_NAME) 또는 룬. 🔴 판정은 **나란히 뽑아** 한다:
+	#     ... -- floor:plain a.png  /  ... -- floor:full b.png → 둘이 한눈에 달라야 이 작업이 성공이다.
+	# ⚠ 크기 계약: 퍼펙트 ro = `vfx.FLOOR_RADIUS_PERFECT`(50) × `floor_circle.RELEASE_SCALE`(1.35)
+	#   ≈ 68 → crop 148 = ±74. 그 두 상수를 키우면 **여기도 키워라**(안 키우면 퍼지는 순간이 잘린다).
+	# ⚠ dur = 퍼펙트 시전(balance `cast_time_perfect_sec` 0.75) + 릴리스(0.16) + 여유.
+	#   🔴 시전 시간은 **balance가 쥔다** — 그걸 조이면 여기 dur도 같이 봐라.
+	&"floor": {
+		"sig": &"ring_cast_started", "variant": &"build", "build": &"full",
+		"crop": 148, "cols": 4, "frames": 12, "dur": 0.90,
+		"desc": "시전 중 발밑에 열리는 조립본 그대로의 마법진 (변종: plain·mid·full)",
 	},
 	# 반응 버스트 — 팽창 링(RING_TIME 0.28). SHOCK이면 중심 스파크가 얹히고 NONE(증기)은 흰 링만.
 	# ⚠ `radius`는 **시트 판독용 값**이지 게임 반경이 아니다(실게임 감전 연쇄는 balance가 쥔다) —
@@ -122,7 +175,11 @@ var _out := ""
 var _name := &""          ## 프리셋 기본 이름
 var _p: Dictionary = {}   ## 고른 프리셋
 var _rune: int = Enums.RuneType.FIRE
+## 🔴 룬 변종을 **명시로 줬나** — `floor`는 구성(build)이 룬 목록을 쥐므로, 이게 없으면
+## `floor:water`가 **조용히 무시**된다(도구가 거짓말하는 자리다). 참이면 구성은 두고 색만 바꾼다.
+var _rune_given := false
 var _status: int = Enums.Status.SHOCK
+var _build := &"full"     ## 조립 구성 변종 (BUILD_BY_NAME 키) — `floor` 프리셋 전용
 var _crop := 96           ## 중앙 크롭 한 변(월드 px)
 var _cols := 6
 var _frames := 18
@@ -199,17 +256,23 @@ func _select_preset(raw: String) -> bool:
 	_cols = int(_p.get("cols", 6))
 	_frames = int(_p.get("frames", 18))
 	_dur = float(_p.get("dur", 0.26))
+	_build = StringName(_p.get("build", &"full"))
 	if variant.is_empty():
 		return true
 	var vn := StringName(variant)
 	if RUNE_BY_NAME.has(vn):
 		_rune = int(RUNE_BY_NAME[vn])
+		_rune_given = true
 		return true
 	if STATUS_BY_NAME.has(vn):
 		_status = int(STATUS_BY_NAME[vn])
 		return true
-	push_error("[vfx_shot] 모르는 변종: %s (룬 %s · 상태 %s)"
-		% [variant, str(RUNE_BY_NAME.keys()), str(STATUS_BY_NAME.keys())])
+	if BUILD_BY_NAME.has(vn):
+		_build = vn
+		return true
+	push_error("[vfx_shot] 모르는 변종: %s (룬 %s · 상태 %s · 구성 %s)"
+		% [variant, str(RUNE_BY_NAME.keys()), str(STATUS_BY_NAME.keys()),
+			str(BUILD_BY_NAME.keys())])
 	return false
 
 
@@ -315,7 +378,12 @@ func _fire_preset() -> void:
 			#   ring_spell_system이 없어 아무것도 안 쏜다(to_assembly 계약과 무관).
 			_bus.ring_cast_requested.emit({"rune": _rune}, c, Vector2.RIGHT)
 		&"spell_impact":
-			_bus.spell_impact.emit(c, _rune)
+			# 🔴 세98: 3번째 인자 = 그 마법진의 조립 점수(0~1). 프리셋의 `score`가 정본이다 —
+			#   기본 1.0(퍼펙트) = **연출이 가장 커지는 값**이라 `crop`이 잘리는지도 여기서 드러난다.
+			#   무난한 진 쪽을 보고 싶으면 프리셋의 그 줄만 내려라(0.70 언저리가 하한이다).
+			_bus.spell_impact.emit(c, _rune, float(_p.get("score", 1.0)))
+		&"ring_cast_started":
+			_fire_floor_circle(c)
 		&"reaction_burst":
 			_bus.reaction_burst.emit(c, float(_p.get("radius", 40.0)), _status)
 		&"reaction_chain":
@@ -324,6 +392,44 @@ func _fire_preset() -> void:
 			_bus.reaction_chain.emit(c + f, c + t, _status)
 		_:
 			_spawn_node(c)
+
+
+## 🔴 발밑 마법진 한 판 (세98) — **시전 시작 → duration → 발사**까지 한 장에 담는다.
+## 조립 사전을 손으로 만들지만 **발사가 아니라 연출 재생**이다(무대에 `ring_spell_system`이 없어
+## 아무것도 안 쏜다 — `to_assembly` 계약과 무관하다. `muzzle` 프리셋과 같은 규율).
+## 🔴 **점수·시전 시간은 `RingPower` 정본이 낸다** — 여기 숫자를 적으면 balance를 조일 때
+## 시트가 조용히 거짓말한다(세24 「경계를 상수로 베끼면 갈라진다」).
+## 🔴 `-s` 오토로드 함정 회피 — `RingPower`는 `class_name`이 없어 여기서 **런타임 load()**로 문다.
+func _fire_floor_circle(c: Vector2) -> void:
+	var b: Dictionary = BUILD_BY_NAME.get(_build, BUILD_BY_NAME[&"full"])
+	var rings: Array = b.get("rings", [])
+	var runes: Array = b.get("runes", [Enums.RuneType.FIRE])
+	if _rune_given:
+		runes = [_rune]   # 룬 변종을 주면 **구성은 그대로 두고 색만** 바꾼다(무시하면 도구가 거짓말한다)
+	var rp := load("res://src/core/ring_power.gd")
+	var layers: Array = RingDesign.layers_of(rings)
+	var glyphs := 0
+	for layer_v in layers:
+		for g in (layer_v as Array):
+			if int(g) != GLYPH_NONE:
+				glyphs += 1
+	var score: float = rp.assembled_score(glyphs, layers.size())
+	var dur: float = rp.cast_time_of(score)
+	var asm := {
+		"rune": int(runes[0]), "runes": runes, "jin": b.get("jin", &"jin_single"),
+		"rings": rings, "score": score,
+	}
+	# 🔴🔴 **수명이 등급마다 다른 유일한 프리셋이라 `dur`을 실측으로 덮는다.**
+	#   고정값이면 무난한 진(시전 0.15s)에서 시트의 3/4이 빈 칸이 되고, balance로 시전 시간을
+	#   조일 때마다 프리셋이 낡는다(T4). 표의 `dur`은 이제 「가장 긴 경우」의 참고값이다.
+	_dur = dur + FLOOR_TAIL
+	_bus.ring_cast_started.emit(asm, c, dur)
+	# 🔴 시전이 끝나면 실제로 탄이 나간다 — **퍼지며 꺼지는 마무리**까지 한 장에 담기게 예약한다.
+	#   (안 쏘면 마지막 칸들이 「열린 채 멈춘 원」이라 릴리스 연출을 영영 못 본다.)
+	create_timer(dur).timeout.connect(func() -> void:
+		_bus.ring_cast_requested.emit(asm, c, Vector2.RIGHT))
+	print("[vfx_shot] build=%s  문양 %d · %d층 → score %.3f · 시전 %.2fs"
+		% [_build, glyphs, layers.size(), score, dur])
 
 
 func _spawn_node(c: Vector2) -> void:
@@ -422,8 +528,11 @@ func _draw_center_marks(sheet: Image, x: int, y: int) -> void:
 
 
 func _variant_label() -> String:
-	if StringName(_p.get("variant", &"")) == &"status":
-		return ":status=%d" % _status
+	match StringName(_p.get("variant", &"")):
+		&"status":
+			return ":status=%d" % _status
+		&"build":
+			return ":build=%s%s" % [_build, (":rune=%d" % _rune) if _rune_given else ""]
 	return ":rune=%d" % _rune
 
 
@@ -437,3 +546,4 @@ func _print_table() -> void:
 				str(p.get("desc", ""))])
 	print("  변종 — 룬: %s" % ", ".join(PackedStringArray(RUNE_BY_NAME.keys())))
 	print("  변종 — 상태: %s" % ", ".join(PackedStringArray(STATUS_BY_NAME.keys())))
+	print("  변종 — 구성(floor): %s" % ", ".join(PackedStringArray(BUILD_BY_NAME.keys())))

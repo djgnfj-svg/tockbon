@@ -64,6 +64,12 @@ func _on_ring_cast(assembly: Dictionary, origin: Vector2, aim_dir: Vector2) -> v
 	# 그때 assembly가 없으므로, power처럼 캐리어에 실어 착탄까지 들고 간다.
 	var status_mult := Db.status_mult_of(StringName(assembly.get("special_ink", &"")),
 		float(assembly.get("special_ratio", 0.0)))
+	# 🔴 세98: **점수를 착탄까지 나른다** — `spell_impact`가 "얼마나 센 마법진이었나"를 실어야
+	# 착탄 연출이 등급을 반영한다(그 전엔 78 위력과 157 위력의 착탄이 픽셀 동일했다).
+	# 나르는 길은 `power`·`status_mult`의 **선례 그대로**다(전개는 나중이라 그때 assembly가 없다).
+	# ⚠ 점수 없는 옛 도안 = 0.0 → `RingPower.quality_t`가 0으로 클램프해 **무난한 진과 같은 연출**이
+	#   된다(`_power_of`의 「기준 위력 폴백」과 같은 결). 여기에 임의의 기본 점수를 지어내지 마라.
+	var score := float(assembly.get("score", 0.0))
 
 	# 🔴 발사 형태 = 마법진이 그려진 **진**이 정한다 (세션44, 진=형태) — 도안에 저장돼 "이 마법은
 	# 이 형태로 나간다"가 도안에 묶인다. 진 없는 옛 도안·매직볼은 단발(SINGLE)로 떨어진다.
@@ -80,12 +86,12 @@ func _on_ring_cast(assembly: Dictionary, origin: Vector2, aim_dir: Vector2) -> v
 	for shot: Dictionary in _shot_plan(angle, pattern, scale, origin):
 		var delay := float(shot["delay"])
 		if delay <= 0.0:
-			_spawn_carrier(layers, origin, float(shot["angle"]), power, status_mult, runes, jin_def)
+			_spawn_carrier(layers, origin, float(shot["angle"]), power, status_mult, score, runes, jin_def)
 		else:
 			# 연발·분사 = 시간차. 타이머가 죽어도 게임이 안 멈추게 캐리어 스폰만 지연한다.
 			get_tree().create_timer(delay).timeout.connect(
 				_spawn_carrier.bind(layers, origin, float(shot["angle"]),
-					power, status_mult, runes, jin_def), CONNECT_ONE_SHOT)
+					power, status_mult, score, runes, jin_def), CONNECT_ONE_SHOT)
 
 
 ## 🔴 `rings`를 **층 배열**로 정규화한다 (세79 M1) — 저장 도안·옛 호출자 흡수.
@@ -98,7 +104,7 @@ static func _as_layers(rings: Array) -> Array:
 ## 진(캐리어) 하나를 origin에서 angle 방향으로 쏜다. 패턴이 여러 각도면 이걸 여러 번 부른다.
 ## `layers` = 층 배열 — 캐리어는 이걸 **해석하지 않고 착탄까지 나르기만** 한다(payload).
 func _spawn_carrier(layers: Array, origin: Vector2, angle: float,
-		power: float, status_mult: float, runes: Array, jin_def: JinDef = null) -> void:
+		power: float, status_mult: float, score: float, runes: Array, jin_def: JinDef = null) -> void:
 	if not is_inside_tree():
 		return   # 지연 발사 도중 씬이 바뀌었다 (귀환·사망) — 조용히 접는다
 	var carrier := CarrierScene.instantiate() as CarrierScript
@@ -114,13 +120,13 @@ func _spawn_carrier(layers: Array, origin: Vector2, angle: float,
 	# 속도만 올리면 사거리도 같이 늘어 "빠른 지팡이"가 한 축으로 읽힌다.
 	carrier.setup(layers, angle,
 		balance.projectile_base_speed * GameState.wand_speed_mult(), balance.projectile_lifetime_sec,
-		fire.damage, fire.rune_type, fire.status, fire.status_power, fire.get("rune_hits", []))
+		fire.damage, fire.rune_type, fire.status, fire.status_power, fire.get("rune_hits", []), score)
 	# 🔴 경로·규모는 setup **뒤에** 얹는다. 진 없는 도안(매직볼)은 안 부르므로 예전과 픽셀 동일.
 	if jin_def != null:
 		carrier.set_motion(jin_def.motion, jin_def.body_scale,
 			balance.jin_spiral_amplitude_px, balance.jin_spiral_period_sec,
 			balance.jin_boomerang_turn_ratio)
-	carrier.deployed.connect(_on_carrier_deployed.bind(power, status_mult, runes))
+	carrier.deployed.connect(_on_carrier_deployed.bind(power, status_mult, score, runes))
 
 
 ## 발사 계획 — 진의 패턴이 "어디로(angle) 언제(delay)"를 정한다. 수치는 balance.
@@ -210,8 +216,8 @@ func _power_of(assembly: Dictionary) -> float:
 
 ## 착탄 = 안의 고리를 편다. 물리 콜백 중일 수 있으니 지연 실행 (Area2D를 콜백 안에서 즉시
 ## add_child하면 "flushing queries" 에러로 조용히 안 생긴다 — projectile와 같은 함정).
-func _on_carrier_deployed(layers: Array, at: Vector2, travel: float, power: float, status_mult: float, runes: Array) -> void:
-	call_deferred(&"_deploy_now", layers, at, travel, power, status_mult, runes)
+func _on_carrier_deployed(layers: Array, at: Vector2, travel: float, power: float, status_mult: float, score: float, runes: Array) -> void:
+	call_deferred(&"_deploy_now", layers, at, travel, power, status_mult, runes, score)
 
 
 # ─────────────── 🔴 세79 M1: 층 해석기 (안→밖 = 연산 순서) ───────────────
@@ -231,8 +237,17 @@ func _on_carrier_deployed(layers: Array, at: Vector2, travel: float, power: floa
 ## payload를 그대로 받는 자리라 **옛 8칸 한 겹**으로 부르는 호출자(저장 도안·기존 테스트)가 실재한다 —
 ## 정규화를 진입점 한쪽에만 두면 그쪽이 `Invalid cast` 로 조용히 죽는다(세23 「테스트가 옛 인자로
 ## 내부 API를 부른다」 함정을 이번에 그대로 밟았다).
-func _deploy_now(rings: Array, at: Vector2, travel: float, power: float, status_mult: float, runes: Array) -> void:
+## 🔴🔴 세98: `score`가 **맨 끝의 기본 인자**인 건 의도다 — 이 내부 API를 **헤드리스 테스트 17곳이
+## 직접 부른다**(전개 메커니즘을 충돌 타이밍과 분리해 재는 자리들). 인자를 가운데 끼우면 그 17곳이
+## 한꺼번에 `Invalid call`로 죽는데, 그게 바로 이 함수 머리말이 경고하는 세23 함정("테스트가 옛
+## 인자로 내부 API를 부른다")이다. 폴백 0.0의 뜻도 `_on_ring_cast`와 **같다** = 「점수 모름 = 무난」.
+func _deploy_now(rings: Array, at: Vector2, travel: float, power: float, status_mult: float,
+		runes: Array, score: float = 0.0) -> void:
 	var fire := _fire_hit(power, status_mult, runes)
+	# 🔴 세98: 전개 탄도 착탄에서 `spell_impact(score)`를 쏘므로 점수가 여기까지 따라와야 한다.
+	# `_fire_hit`(룬 히트 정보)이 아니라 **여기서** 얹는다 — 점수는 룬의 성질이 아니라 도안의 성질이다.
+	# `_spawn_cmd`가 `fire.duplicate()`로 갈래마다 복사하므로 `scene`·`rune_hits`처럼 그대로 실려 간다.
+	fire["score"] = score
 	var plan: Array = []
 	for layer_v in _as_layers(rings):
 		if not (layer_v is Array):
@@ -468,7 +483,7 @@ func _spawn_bolt(at: Vector2, angle: float, fire: Dictionary, effects: Dictionar
 	bolt.global_position = at
 	bolt.setup(fire.damage, fire.rune_type, fire.status, fire.status_power,
 		balance.projectile_base_speed, angle, effects, balance.projectile_lifetime_sec,
-		fire.get("rune_hits", []))
+		fire.get("rune_hits", []), float(fire.get("score", 0.0)))
 
 
 ## 응집 = 착탄점에 불기둥 하나. 응집 칸이 많을수록 굵다 (node scale).

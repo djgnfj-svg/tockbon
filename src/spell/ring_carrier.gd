@@ -55,6 +55,11 @@ var status_power: float = 0.0
 ## [{rune_type, status, status_power}]. primary(=rune_type)는 위 필드로 얹고, 나머지는 **피해 0**으로
 ## 상태만 얹는다(적 계약 0-피해 가드가 도배를 막는다). 룬 1개면 [primary] 하나라 부작용 0(무회귀).
 var rune_hits: Array = []
+## 🔴 이 진의 조립 점수(0~1, `assembly.score`) — **착탄 연출 전용**이다 (세98).
+## 피해는 이미 `damage`에 반영돼 있고(`power_of`), 이건 `spell_impact`에 실어 "얼마나 센
+## 마법진이었나"를 연출에 알리는 축이다. ⚠ 여기서 피해·상태에 다시 곱하지 마라 — 이중 적용이 된다.
+## 점수를 안 실어 온 옛 도안·테스트 = 0.0 → `RingPower.quality_t`가 0(=무난)으로 본다.
+var score: float = 0.0
 
 var _ring: Array = []
 var _velocity := Vector2.ZERO
@@ -115,7 +120,7 @@ func _apply_ball_anim() -> void:
 ## 캐리어는 내용을 안 본다. p_angle: 조준각.
 func setup(p_ring: Array, p_angle: float, p_speed: float, p_lifetime: float,
 		p_damage: float, p_rune_type: int, p_status: int, p_status_power: float,
-		p_rune_hits: Array = []) -> void:
+		p_rune_hits: Array = [], p_score: float = 0.0) -> void:
 	_ring = p_ring.duplicate()
 	_velocity = Vector2.RIGHT.rotated(p_angle) * p_speed
 	_life_left = maxf(p_lifetime, 0.05)
@@ -126,6 +131,7 @@ func setup(p_ring: Array, p_angle: float, p_speed: float, p_lifetime: float,
 	status = p_status
 	status_power = p_status_power
 	rune_hits = p_rune_hits
+	score = p_score
 	_apply_ball_anim()   # 룬 확정 → 그 룬의 볼로 갈아 끼운다 (BALL_ANIM에 없으면 fireball 폴백)
 	_apply_body_radius()
 	_apply_sprite_scale()
@@ -244,7 +250,8 @@ func _hit_enemy(node: Node2D) -> void:
 				continue   # primary는 위에서 이미 얹었다
 			node.take_hit(0.0, int(rh.rune_type), int(rh.status), float(rh.status_power))
 	# "탄이 박혔다" 연출 신호 (세션59 설계 §3) — 적 착탄 1회만. 벽·수명 소멸(_die_without_deploy)엔 없다.
-	EventBus.spell_impact.emit(global_position, rune_type)
+	# 🔴 세98: `score`를 같이 싣는다 — 착탄 연출이 등급을 반영하는 유일한 통로다.
+	EventBus.spell_impact.emit(global_position, rune_type, score)
 	var travel := _velocity.angle() if not _velocity.is_zero_approx() else 0.0
 	deployed.emit(_ring, global_position, travel)
 	queue_free()

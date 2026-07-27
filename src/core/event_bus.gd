@@ -15,6 +15,24 @@ extends Node
 #   · open · score · ink · special_ink · special_ratio · size.
 # ring_spell_system(모듈 B)이 수신 → 진(캐리어)을 조준 방향으로 쏜다.
 signal ring_cast_requested(assembly: Dictionary, origin: Vector2, aim_dir: Vector2)
+
+## 🔴 시전이 **시작됐다** (세98 — 정본 = docs/takbon-design/spell_cast_visual_design.md).
+## `ring_cast_requested`가 "탄이 나간다"라면 이건 "발밑이 열린다"다 — 사이에 `duration`초가 흐른다.
+##   좌클릭 → 가드(빈 슬롯·마나) → 마나 차감 → **이 신호** → duration 대기 → ring_cast_requested
+## 🔴 **왜 갈랐나**: `ring_cast_requested` 수신자가 넷(발사·머즐VFX·반동·발사음)이라, 시전 시작에
+## 그걸 쏘면 `ring_spell_system`이 **즉시 탄을 쏴** 시전 시간이 무의미해진다. 그렇다고 완료 후에만
+## 쏘면 그 전엔 아무도 몰라 **바닥 마법진을 열 주체가 없다**.
+## 🔴 `origin`은 `player_caster._muzzle()`과 **같은 값이어야 한다** — 총구 단일 소스(세65)가
+## 시전 시작에서만 갈라지면 그게 세65가 막으려던 병이다.
+## ⚠ `assembly`는 **시작 시점의 스냅샷**이다 — 시전 중 슬롯을 바꿔도 이 사전과 나가는 탄이 같아야
+## 한다(그린 것 ≠ 나가는 것 방지). 생산자는 여기서도 `to_assembly()` 하나다.
+## ⚠ **취소되면 `ring_cast_requested`가 안 온다**(구르기·모달·씬 전환) — 수신자는 "열었으면 반드시
+## 닫힌다"를 가정하지 마라. 마나는 취소돼도 태운다.
+signal ring_cast_started(assembly: Dictionary, origin: Vector2, duration: float)
+
+## 🔴 시전이 **끊겼다** — 위 신호로 연 것을 되돌린다(바닥 마법진 제거·차징음 정지).
+## 발신은 `player_caster` 한 곳. ⚠ 이게 없으면 시전은 끊겼는데 발밑 원만 남아 "쐈는데 안 나갔다"가 된다.
+signal ring_cast_canceled()
 # 🔴 #17 1단계 — 고리 도안이 맺혔다 (베이스캠프 조립 책 → GameState).
 # GameState가 수신 → ring_designs에 넣고 빈 ring_equipped 슬롯에 즉시 장착.
 signal ring_design_committed(design: RingDesign)
@@ -124,7 +142,13 @@ signal reaction_chain(from: Vector2, to: Vector2, status: int)
 ## 피해도 쏴서 버스트 도배가 된다(DoT 도배 함정의 사촌). 발신은 적 착탄 순간 1회
 ## (ring_carrier._hit_enemy · projectile._deal_damage — 관통 탄은 뚫는 적마다 1회 = 의도).
 ## ⚠ 벽·수명 소멸·기둥 틱·DoT 틱에는 쏘지 않는다. pos = 월드 전역 좌표.
-signal spell_impact(pos: Vector2, rune_type: int)
+## 🔴 세98: **`score`를 싣는다**(0.70~1.0 = `assembly.score`) — 그 전엔 착탄이 "얼마나 센 마법진이었나"를
+## 몰라 데칼·플레어가 **모든 등급에서 똑같이** 났다(조립의 결과가 화면에 0이던 병의 착탄 쪽 절반).
+## 나르는 길 = `ring_spell_system`이 `status_mult`를 캐리어에 실어 착탄까지 들고 가는 **그 선례**.
+## ⚠ **GDScript 시그널 파라미터엔 기본값이 없다** — emit·수신을 전부 같이 고쳐야 한다.
+## 🔴 emit 3곳(`ring_carrier`·`projectile`·**`tools/vfx_shot.gd`**) · 수신 3곳(`vfx._on_spell_impact`·
+## `test_spell_vfx_auto`의 람다 둘). **`tools/vfx_shot.gd`를 빠뜨리면 이 작업의 검증 도구가 죽는다.**
+signal spell_impact(pos: Vector2, rune_type: int, score: float)
 
 # ── 설정 (Audio → UI)
 ## 🔴 음소거 상태가 바뀌었다 (설정). Audio가 소유·저장하고 발신 → HUD 표시·타이틀 버튼이 갱신.

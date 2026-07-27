@@ -454,8 +454,12 @@ func _test_real_left_click_actually_fires() -> void:
 	gs.ring_equipped[0] = RingDesign.from_assembly(_assembly(1.0), "클릭 테스트")
 	_player().caster.select_slot(0)
 
+	# 🔴🔴 **세98: `ring_cast_started`를 센다 — `ring_cast_requested`가 아니다.** 좌클릭이 이제
+	# **시전**을 걸고 탄은 `duration`초 뒤에 나가므로, 완료 신호를 세면 프레임 대기를 늘려야 하고
+	# 그건 **시전 시간을 조일 때마다 다시 낡는다**(감사 T4). 시작 신호는 클릭과 **동기**라,
+	# 원래 재려던 것(클릭이 Control을 뚫고 caster에 닿았나)을 시전 시간과 **무관하게** 계속 잰다.
 	var casts := []
-	_bus.ring_cast_requested.connect(func(_a, _p, _d) -> void: casts.append(1))
+	_bus.ring_cast_started.connect(func(_a, _p, _d) -> void: casts.append(1))
 
 	# 🔴 실제 마우스 이벤트를 **뷰포트에** 민다 — 게임 창에 클릭한 것과 같은 경로다
 	var press := InputEventMouseButton.new()
@@ -468,6 +472,9 @@ func _test_real_left_click_actually_fires() -> void:
 
 	_check(casts.size() == 1,
 		"🔴 좌클릭이 발사에 닿는다 (실제 발사 %d회 — 0이면 Control이 클릭을 먹고 있다)" % casts.size())
+	# 🔴 걸린 시전을 끊고 나간다 — 안 끊으면 퍼펙트 도안(0.75초)이 다음 검사까지 살아서
+	#   [7-b]의 `select_slot`·`fire()`가 **시전 중 차단**에 걸려 거짓 빨강이 난다(세98).
+	_player().caster.cancel_cast()
 
 
 ## [7-b] 🔴 빈 슬롯은 발사를 거부한다 (세션59 — 세44 「매직볼 바닥」 은퇴, 사용자 확정).

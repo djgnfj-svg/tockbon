@@ -756,6 +756,63 @@ static func layer_rings(band_defs: Array) -> Array:
 	return out
 
 
+## 🔴🔴 **바로 위 `layer_rings`의 역함수** (세98 시전 연출) — 저장된 `rings`(정수 층 배열)에서
+## `band_defs`(GlyphRingDef 배열)를 **재구성**한다. `RingDesign`은 `.tres`에 정수 배열만 저장하고
+## GlyphRingDef 참조를 저장하지 않으므로, 맺어 둔 도안을 **다시 그리려면**(= `compose_guide_paths`에
+## 넘기려면) 재구성 말고 길이 없다. 소비자 = 발밑 바닥 마법진(`src/actors/vfx.gd`) — 「조립한 그림
+## 그대로」를 매핑표 없이 그린다.
+##
+## 🔴 **위 함수와 짝이라 나란히 둔다 — 한쪽만 고치면 조용히 갈라진다**(`finish_wave_frac` ↔
+## `finish_t_at_radius`와 같은 규율). 정방향 규칙(*"모티프를 칸 0..count−1에 채운다"*)은 **위 함수가
+## 쥔다** — 여기서 그 규칙을 베끼지 말고 **왕복으로 재라**:
+## 그물 = `tests/test_band_inverse_auto.gd` — `layer_rings(band_defs_of(rings)) == RingDesign.layers_of(rings)`.
+##
+## 🔴 **복원되는 건 `motif`·`count` 둘뿐이다.** `ui_color`·`unlock_id`·`sort`는 정수 배열에 없다 —
+## **합성본의 그 필드를 읽지 마라**(색은 룬이 판다 = `vfx`의 룬 색 경로). ✅ 렌더엔 충분하다:
+## `glyph_ring_subpaths`가 읽는 건 `gr.motif`·`gr.count` 둘뿐이다.
+## ⚠ `id`·`display_name`은 스키마 기본값이 **실존하는 `gr_radiate5`/"발산 고리 ×5"**라, 그냥 두면
+## 합성본이 **진짜 고리인 척한다**(`Db.get_glyph_ring(gr.id)`가 엉뚱한 고리를 준다) → 빈 값으로
+## 지워 「복원 안 됨」이 눈에 보이게 한다. (`ui_color` 기본값도 불색 주황이라 **그럴듯하게** 틀린다.)
+##
+## 🔴 **빈 층(전부 -1) = `null` 밴드**로 돌려준다 — 자리를 **건너뛰지 않는다**. 압축하면 뒤 층의
+## 밴드 인덱스가 밀려 `compose_guide_paths`의 `BAND_RADII[i]`가 어긋난다(바깥 층이 안쪽 반경에 그려진다).
+## ⚠ `rings`가 통째로 비면 `[]`를 준다(진 윤곽·룬만 그린다). 🔴 **그 입력에서만 왕복이 성립 안 한다** —
+## `layer_rings([])`가 발사 계약 때문에 **빈 층 하나를 심기** 때문이다(위 함수 주석). 정방향이 거기서
+## 단사(injective)가 아닌 것이지 역함수가 틀린 게 아니다.
+##
+## ⚠ **알려진 한계(설계 ⓙ) — 세79 이전 도안의 혼합 모티프**: 옛 `flatten_bands` 도안은 **한 겹에
+## 여러 모티프**가 섞여 있는데(예: 발산3+응집3) `GlyphRingDef` 하나는 모티프를 하나만 담는다 →
+## **첫 모티프 + 채워진 칸 수**로 뭉갠다(그 예는 **발산 6개**로 그려진다). 🔴 **발사는 멀쩡하다**
+## (`ring_spell_system`이 `rings`를 직접 읽는다) — **그림만 거짓말한다.** 심각도 낮음(옛 세이브 한정)
+## 이라 그대로 두되, 해소하려면 `GlyphRingDef` 한 장 = 밴드 한 겹이라는 전제부터 깨야 한다.
+## ⚠ static·순수·인스턴스 상태 금지(관측점) — 헤드리스 테스트가 이 함수를 그물로 쓴다.
+static func band_defs_of(rings: Array) -> Array:
+	var out: Array = []
+	# 🔴 층 판별은 **core 단일 소스를 그대로 부른다**(`RingDesign.layers_of`) — 옛 8칸 한 겹도 여기서
+	# 층 1개로 승격된다. 판별식을 여기 복사하면 그 함수 주석이 금지한 갈라짐이 그대로 생긴다.
+	for layer_v in RingDesign.layers_of(rings):
+		var layer: Array = layer_v
+		var motif := GLYPH_NONE
+		var count := 0
+		for k in layer.size():
+			var g := int(layer[k])
+			if g == GLYPH_NONE:
+				continue
+			if motif == GLYPH_NONE:
+				motif = g       # 한계 ⓙ — 섞여 있으면 **첫** 모티프가 층 전체를 대표한다
+			count += 1
+		if count == 0:
+			out.append(null)    # 빈 층 = 빈 밴드. 🔴 건너뛰면 BAND_RADII 정렬이 밀린다
+			continue
+		var gr := GlyphRingDef.new()
+		gr.motif = motif
+		gr.count = mini(count, SLOTS)   # 8칸 상한(정방향 `layer_rings`가 같은 자리에서 클램프한다)
+		gr.id = &""                     # 🔴 기본값이 실존 id라 그대로 두면 합성본이 진짜인 척한다
+		gr.display_name = ""
+		out.append(gr)
+	return out
+
+
 ## 🔴 밴드별 (motif × count)를 **기존 8칸 링 하나로 플래튼**한다 (세68 발사 계약 — 발사부 무변경).
 ## ⚠ **세79에 발사 경로는 `layer_rings`로 갔다** — 층 순서를 버리기 때문이다.
 ## 🔴 **세85 ⑪: 유일한 라이브 호출자였던 F6 대조군(`assembly_slice_panel`)이 은퇴했다** —

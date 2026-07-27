@@ -143,6 +143,14 @@ func _physics_process(delta: float) -> void:
 	# 구르기 시작(Shift) — 방향은 지금 누른 쪽, 없으면 마지막으로 향한 쪽.
 	# 🔴 세71f: ROLL_ENABLED=false면 Shift 무시(구르기 제거) — 나중에 장비 게이트로 켠다.
 	if ROLL_ENABLED and Input.is_action_just_pressed("dash") and _roll_cd <= 0.0:
+		# 🔴🔴 **구르기가 시전을 끊는다** (세98 확정 ⑥ — 마나는 태운다). 안 막으면 *"무적으로
+		#   굴러다니며 퍼펙트 시전"*이 최적해가 돼 확정 ⑤(시전 중 감속 = 위험)가 통째로 무효가 된다.
+		# 🔴 **폴링이 아니라 여기서 알린다**: 캐스터가 매 프레임 `is_rolling()`을 보면 한 프레임 늦고
+		#   짧은 구르기를 통째로 놓친다. 판정 시점은 `_roll_time`이 0에서 올라가는 **이 순간**이다
+		#   (구르기 뒤 손을 안 떼면 달리기로 이어지지만 그건 이미 끊긴 뒤라 무관하다).
+		# ⚠ 둘 다 `player.tscn` 안이라 형제 참조로 닫힌다 — EventBus 신설 불필요.
+		if caster != null:
+			caster.cancel_cast()
 		_roll_dir = (dir if dir != Vector2.ZERO else _face).normalized()
 		_roll_time = GameState.balance.dash_duration_sec
 		_roll_cd = GameState.roll_cooldown()   # 🔴 부적(CHARM) 배수 반영 (세션42)
@@ -160,7 +168,15 @@ func _physics_process(delta: float) -> void:
 	# 🔴 이동 램프 — 목표 속도(입력 방향 × move_speed)로 move_toward. 즉시 대입이 아니라 가속/감속이라
 	# 스냅·무게감이 생긴다 (세74). 🔴 속도 = GameState.move_speed()/run_speed()(balance × 모자 배수)
 	# — balance를 직접 참조하지 마라(세42: 그러면 장비 배수가 조용히 빠진다).
-	var target := dir * (GameState.run_speed() if running else GameState.move_speed())
+	# 🔴 시전 중 감속 (세98 확정 ⑤) — **등급이 무게를 판다**: 공들인 마법진일수록 오래·무겁게 서 있다
+	#   = 그게 위험이고, 강한 마법진이 「난사용」이 아니라 「한 방」인 이유다.
+	# 🔴 곱하는 자리는 `move_speed()`/`run_speed()`의 **결과**다 — 모자(HAT)·달리기 배수가 이미 실린
+	#   값 위에 얹어야 장비 효과가 **시전 중에만 조용히 사라지지** 않는다(세42 선례). 배수의 단일
+	#   소스는 `RingPower.cast_move_mult_of`이고 캐스터가 시전 시작에 한 번 정해 들고 있다.
+	var speed := GameState.run_speed() if running else GameState.move_speed()
+	if caster != null:
+		speed *= caster.cast_move_mult()
+	var target := dir * speed
 	var rate := GameState.balance.player_accel if dir != Vector2.ZERO else GameState.balance.player_friction
 	_move_vel = _move_vel.move_toward(target, rate * delta)
 	# 밀림(_push)은 이동 위에 얹는다(additive) — 구르기 중엔 위 early-return이라 밀림 무시(흘린 게 맞다).
