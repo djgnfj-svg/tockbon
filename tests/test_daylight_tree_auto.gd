@@ -44,6 +44,12 @@ const CHAPTER_COLOR_MIN_GAP := 0.04
 ## ⚠ 값을 박는 게 아니라 **구간**이다 — 사용자가 F5로 조일 여지를 남기되 탈 수는 없게.
 const TINT_MIN := 0.70
 const TINT_MAX := 1.20
+
+## 🔴 나무 「앞」 프로브를 접지선에서 얼마나 아래에 두나 (세100 · N25ⓑ를 나무로 옮긴 값).
+## 멀리 두면 감지 상자를 아래로 늘려도 안 걸려 **"나무 앞에 섰는데 나무가 튀어나온다"가 무증상**이 된다.
+## ⚠ `test_landmark_road_auto`가 둥지에 대해 같은 이름·같은 값을 든다 — 두 프롭의 계약이 같아서지
+##  한쪽을 고치면 다른 쪽이 따라와야 한다는 뜻이 **아니다**(각자 자기 프롭에서 빨개진다).
+const FRONT_PROBE_PAD := 20.0
 ## 챕터 셋의 **틴트**가 이만큼은 갈려야 한다 — 옅게 옮기며 셋을 하나로 뭉개면 D8이 죽는다.
 const TINT_MIN_GAP := 0.05
 ## 바닥 시트 그림 — 바탕색을 **여기서 직접 읽어** boss_room의 상수와 대조한다(사본 감시).
@@ -271,8 +277,25 @@ func _test_tree_is_seen_through_from_behind() -> void:
 	var body_z: int = maxi(sprite_z, wand_z)
 	var base_z: int = tree.z_index
 
-	# ⓐ 뒤(밑동 위쪽)로 옮긴다
-	player.global_position = tree.global_position + Vector2(0, -24)
+	# 🔴🔴 세100 — 프로브를 **감지 상자 형상에서 파생**시킨다(N25ⓑ를 나무로 옮긴 것).
+	#  옛 그물은 뒤 −24 · 앞 +40 **고정**이라, 나무를 64→128px로 다시 그려 상자가 −58..+2에서
+	#  −116..0으로 두 배가 돼도 **두 좌표 다 같은 판정**이 나왔다 = **씬 값을 안 고쳐도 전 스위트
+	#  그린**이고 나무만 60px 뜬 채 커밋된다(art 보고서가 이 구멍을 스스로 짚었다).
+	var sense := tree.get_node_or_null(^"BehindSense") as Area2D
+	if sense == null:
+		_check(false, "BehindSense를 못 찾았다 — [6]을 잴 수 없다")
+		return
+	var s_bottom := _sense_bottom(sense)
+	var s_top := _sense_top(sense)
+	# 🔴 **아래 변이 접지선(원점) 위**여야 한다 — 정적인 짝. 아래로 내려가면 나무 **앞**에 선
+	#  플레이어까지 비침이 걸려 "나무가 앞으로 튀어나온다"가 된다. 치수를 안 박아 그림이 커져도 안 낡는다.
+	_check(s_bottom <= 0.5,
+		"🔴 감지 상자 아래 변이 접지선 위다 (아래끝 y=%.1f — 0보다 크면 나무 앞도 비친다)" % s_bottom)
+	_check(s_top < -60.0,
+		"🔴 상자가 128px 그림을 덮는다 (위끝 y=%.1f — 옛 64px 상자면 −58쯤이라 여기서 빨개진다)" % s_top)
+
+	# ⓐ 뒤(밑동 위쪽)로 옮긴다 — 🔴 **상자 위쪽 8할 지점**에서 잰다(옛 −24는 작은 상자에도 들었다)
+	player.global_position = tree.global_position + Vector2(0, s_top * 0.8)
 	await _settle()
 	_check(tree.modulate.a < 0.95,
 		"🔴 나무가 비친다 — alpha %.2f < 0.95" % tree.modulate.a)
@@ -288,15 +311,41 @@ func _test_tree_is_seen_through_from_behind() -> void:
 	_check(tree.z_index == base_z, "벗어나면 z가 평상시(%d)로 돌아온다 (실제 %d)" % [base_z, tree.z_index])
 
 	# ⓒ 🔴 밑동 **아래** = 나무 「앞」 — 겹쳐 보여도 안 비친다(위/아래가 원근이라는 계약).
-	player.global_position = tree.global_position + Vector2(0, 40)
+	# 🔴 세100: 옛 +40은 접지선에서 너무 멀어 **상자를 아래로 늘려도 그린**이었다(N25ⓑ와 같은 눈감음).
+	#  접지선 **바로 아래**로 당긴다 — 여기서 비치면 "나무 앞에 섰는데 나무가 튀어나온다"가 실제로 보인다.
+	player.global_position = tree.global_position + Vector2(0, FRONT_PROBE_PAD)
 	await _settle()
 	_check(is_equal_approx(tree.modulate.a, 1.0),
-		"🔴 밑동 아래(나무 앞)에서는 안 비친다 (실제 %.2f)" % tree.modulate.a)
+		"🔴 밑동 아래(나무 앞 %.0fpx)에서는 안 비친다 (실제 %.2f)" % [FRONT_PROBE_PAD, tree.modulate.a])
 	_check(tree.z_index == base_z,
 		"🔴 밑동 아래에서는 나무가 뒤에 남는다 (평상시 %d / 실제 z %d)" % [base_z, tree.z_index])
 
 
 ## ── 도구 ───────────────────────────────────────────────────────────────────
+
+
+## 🔴 감지 상자의 **아래 변 · 위 변**(로컬 y) — 치수를 안 박고 형상에서 읽는다(세100).
+## ⚠ `test_landmark_road_auto`가 둥지에 대해 같은 헬퍼를 든다 — **사본이다.** 합치지 않은 이유는
+##  테스트 헬퍼가 파일마다 독립인 게 이 리포의 관행이고(공유 모듈이 없다), 무엇보다 **한쪽이 낡으면
+##  다른 쪽이 같이 눈감는 것보다 낫기** 때문이다. 계약이 갈리면 각자 자기 프롭에서 빨개진다.
+func _sense_bottom(area: Area2D) -> float:
+	var bottom := -INF
+	for c in area.get_children():
+		var cs := c as CollisionShape2D
+		if cs == null or cs.shape == null or not (cs.shape is RectangleShape2D):
+			continue
+		bottom = maxf(bottom, area.position.y + cs.position.y + (cs.shape as RectangleShape2D).size.y * 0.5)
+	return bottom
+
+
+func _sense_top(area: Area2D) -> float:
+	var top := INF
+	for c in area.get_children():
+		var cs := c as CollisionShape2D
+		if cs == null or cs.shape == null or not (cs.shape is RectangleShape2D):
+			continue
+		top = minf(top, area.position.y + cs.position.y - (cs.shape as RectangleShape2D).size.y * 0.5)
+	return top
 
 
 ## 🔴 자식 노드의 살아 있는 `z_index` — **리터럴 기대치를 안 든다**(세100 N25ⓒ).
