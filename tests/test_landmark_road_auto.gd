@@ -15,6 +15,8 @@ extends SceneTree
 ##  [2] 지점이 **데이터 좌표에 실제로 선다** — 그룹 `landmarks` · 슬롯 수 일치 · 좌표 일치 · 쓴 씬 일치
 ##  [3] 🔴🔴 **입구에서 지점까지 흙길이 끊김 없이 이어진다** — 플레이어 스폰 칸에서 **흙길만 밟고**
 ##      번져 지점 칸에 닿는다. 세99 전반의 길은 가장자리에서 튀어나온 **토막**이었다(목적지가 없었다)
+##      + 🔴🔴 **길의 「모양」**(세100 N25ⓐ) — 꺾이는 자리가 (입구 x, 지점 y)인가.
+##      **연결만 재던 동안 `_road_between`의 인자를 뒤집어도 전 항목 그린이었다**(리드 md5 실측)
 ##  [4] **바닥에 안 뜬다의 값 축** — 프롭의 원점이 **접지점**이다(`centered=false` + `offset`).
 ##      🔴 이 둘 중 하나만 바뀌어도 그림이 95/140px 튀는데 **에러가 0**이다
 ##  [5] 프롭 계약 — **물리 몸이 없다** · 감지 Area는 `collision_layer = 0`(world면 캐리어가 터진다)
@@ -24,6 +26,8 @@ extends SceneTree
 ##  [8] 스프라이트 2컷이 실재하고 **실제로 물린다** · 갈아 끼우면 다른 컷이 온다
 ##  [9] 🔴🔴 **앞뒤 겹침** — 뒤에 서면 z가 올라오고 비친다 · 앞으로 나오면 되돌아온다
 ##      (보스방엔 y-sort가 없어 **둘을 같이** 해야 하는데 한쪽만 해도 **에러가 0**이다)
+##      🔴 z 기대치·앞 프로브를 **살아 있는 노드·접지선에서 파생**시킨다(세100 N25ⓑⓒ)
+## [10] 🔴 **루트가 Node2D가 아닌 지점 씬** — 방이 안 죽고 그 자리만 빈다(세100 N25 잔가지)
 ##
 ## ⚠ 못 잡는 것: **겉보기 판단 전부** — 둥지가 떠 보이나 · 길이 「길」로 읽히나 · 늑대가 무리로
 ##  보이나 · 비침 알파 0.5가 적당한가. 전부 스샷·F5 몫이다(§보고서 참조).
@@ -47,6 +51,13 @@ const NEST_ANCHOR_OFFSET := Vector2(-95, -140)
 const NEST_TEX_INTACT := "res://assets/sprites/props/nest_wolf.png"
 const NEST_TEX_BROKEN := "res://assets/sprites/props/nest_wolf_broken.png"
 const NEST_FRAME := Vector2i(192, 152)
+
+## 🔴🔴 「둥지 **앞**에 선다」의 프로브 거리 (세100 N25ⓑ) — **접지선(프롭 원점)에서 이만큼 아래**.
+## 🔴 **작아야 그물이다.** 세99엔 260px이라 감지 상자를 아래로 250px 늘려도 프로브가 여전히 밖이라
+##  전 항목 그린이었다 — *"둥지 앞에 섰는데 둥지가 앞으로 튀어나온다"*가 **무증상**으로 지나갔다.
+## ⚠ **그림 크기와 무관한 값이다** — 기준이 스프라이트 치수가 아니라 **원점(=접지선)**이라
+##  둥지를 두 배로 다시 그려도 안 낡는다. 플레이어 몸 반경(10px)만큼은 띄워야 겹치지 않는다.
+const FRONT_PROBE_PAD := 20.0
 
 ## 🐺 무리의 기대치 — **손으로 든다**(데이터에서 파생하면 무리를 지워도 통과한다).
 ## ⚠ 사용자가 F5로 수를 조이면 이 값도 같이 고쳐라 — 그게 이 상수의 목적이다(조용히 비지 않게).
@@ -87,6 +98,7 @@ func _run() -> void:
 	await _test_regression_when_empty()
 	_test_textures()
 	await _test_seen_through_when_behind()
+	await _test_non_node2d_landmark_is_skipped()
 
 	await _cleanup()
 
@@ -166,10 +178,13 @@ func _test_stands_where_data_says() -> void:
 ##
 ## 🔴 **연결을 값으로 잰다**: 플레이어 스폰 칸에서 시작해 **흙길 칸만 밟고** 4방향으로 번져
 ##  지점 칸에 닿는가. 「길 칸이 몇 개 있다」로 재면 방 어딘가에 흙 얼룩이 있기만 해도 통과한다.
-## ⚠ **길의 「모양」(어디서 꺾이나)은 안 잰다** — 그건 연출 판단이라 스샷·F5가 정한다.
-##  여기서 못 박는 건 **「입구와 지점이 흙으로 이어져 있다」** 하나다.
+## 🔴🔴 **세100(N25ⓐ): 연결만으로는 모자랐다** — `_road_between(지점, 입구)`의 **인자를 뒤집어도
+##  이 항목이 전부 그린이었다**(리드가 md5 대조로 확증). 뒤집힌 길도 「이어져는 있기」 때문이다.
+##  그 함수 머리말이 *"뒤집으면 방 아래쪽이 통째로 흙 밭"*이라고 스스로 적어 둔 계약이 **무증상**이었다.
+##  → `_check_road_shape`가 그 자리를 잰다(아래 머리말 참조).
+## ⚠ **「길이 예뻐 보이나」는 여전히 안 잰다** — 그건 스샷·F5 몫이다. 여기서 재는 건 **꺾이는 자리**뿐이다.
 func _test_road_reaches_landmark() -> void:
-	print("[3] 입구 → 지점 흙길이 끊김 없이 이어진다")
+	print("[3] 입구 → 지점 흙길이 끊김 없이 이어진다 + 꺾이는 자리(모양)")
 	await _fresh(&"ch1")
 	var g := _grid()
 	var entrance := _entrance_cell(g)
@@ -182,6 +197,40 @@ func _test_road_reaches_landmark() -> void:
 		_check(_road_connected(entrance, cell),
 			"🔴🔴 입구 %s → 지점 %s 가 **흙길만 밟고** 이어진다 (끊기면 「저쪽에 뭔가 있다」를 알 방법이 없다)"
 				% [entrance, cell])
+		_check_road_shape(entrance, cell, g)
+
+
+## 🔴🔴 **길의 모양 = 「어느 열로 들어가나」** (세100 N25ⓐ — 이 파일의 새 심장).
+##
+## 계약(`boss_room._landmark_road_cells` 머리말): 길은 **입구 열로 곧게 들어가다가** 지점 행에서 꺾인다.
+## 즉 ㄱ자의 꺾이는 자리가 **(입구 x, 지점 y)**다. 인자를 뒤집으면 꺾이는 자리가 **(지점 x, 입구 y)**가 돼
+## 방 아래쪽을 가로로 훑고 나가는 길과 겹친다(= *"방 아래쪽이 통째로 흙 밭"*).
+##
+## 🔴 **좌표를 한 톨도 안 박는다 — 두 노드에서 파생한 관계식 둘**이다(지점을 옮겨도 안 낡는다):
+##  ⓐ **입구 열의 줄기가 지점 행까지 끊김 없이 닿는다** (= 세로 다리가 입구 쪽에 있다)
+##  ⓑ **지점 열에는 그런 줄기가 없다** — 지점에서 입구 쪽으로 내려가는 흙길 run이 ⓐ보다 **짧다**
+## 🔴 ⓑ가 **대소 비교**인 이유: 「몇 칸 이하」로 박으면 방·길 폭을 조일 때 거짓 빨강이 난다
+##  (`test_jin_layers_auto [4]`가 수치 대신 대소로만 재는 것과 같은 판단).
+## ⚠ 지점이 입구와 **같은 열**에 서면 두 순서가 같은 그림을 낸다 — 그땐 ⓑ가 자명 통과라 SKIP으로 뺀다
+##  (자명한 줄을 PASS로 찍으면 「재고 있다」는 착각이 남는다).
+func _check_road_shape(entrance: Vector2i, cell: Vector2i, g: Dictionary) -> void:
+	var span: int = absi(entrance.y - cell.y)
+	var toward: int = signi(cell.y - entrance.y)
+	if toward == 0:
+		toward = -1   # 같은 행 — 세로 다리가 없다. 아래 기대치가 1칸이라 자명 통과가 된다.
+	var stem := _run_length(entrance, Vector2i(0, toward), g)
+	_check(stem >= span + 1,
+		"🔴🔴 입구 열(x=%d)의 줄기가 지점 행(y=%d)까지 닿는다 (실제 %d칸 / 필요 %d칸 — 모자라면 길이 입구가 아니라 **지점 열**로 들어간 것이다)"
+			% [entrance.x, cell.y, stem, span + 1])
+	if cell.x == entrance.x:
+		skips += 1
+		print("  SKIP: 지점이 입구와 같은 열(x=%d)이라 두 인자 순서가 같은 그림을 낸다 — 모양 대조 자명 통과"
+			% cell.x)
+		return
+	var side := _run_length(cell, Vector2i(0, -toward), g)
+	_check(side < stem,
+		"🔴🔴 지점 열(x=%d)에는 입구까지 내려가는 줄기가 **없다** (지점 열 %d칸 < 입구 열 %d칸 — 뒤집히면 여기가 통째로 흙 밭이다)"
+			% [cell.x, side, stem])
 
 
 ## [4] 🔴 **「바닥에 안 뜬다」의 값 축** — 프롭의 원점이 접지점이라는 계약.
@@ -236,6 +285,14 @@ func _test_prop_has_no_physics_body() -> void:
 			"monitorable = false (다른 Area가 이걸 주우면 드롭·피격 판정에 섞인다)")
 		_check(a.collision_mask == 2,
 			"mask = 2(player) (실제 %d — 적까지 넓히려면 4를 더한다)" % a.collision_mask)
+		# 🔴🔴 세100 N25ⓑ의 **정적 짝** — 감지 상자가 접지선(원점) 아래로 안 내려간다.
+		#  이게 「위/아래가 곧 원근」의 값 축이다: 아래로 새면 둥지 **앞**에 선 플레이어까지 뒤로 잡혀
+		#  「앞에 섰는데 둥지가 앞으로 튀어나온다」가 된다(에러 0). [9]ⓑ가 같은 계약을 실제로 걸어 본다.
+		var bottom := _sense_bottom(a)
+		_check(bottom > -INF, "감지 Area(%s)에 형상이 실제로 물려 있다" % a.name)
+		_check(bottom <= 0.5,
+			"🔴🔴 감지 상자 아래 변이 접지선 위다 (원점 기준 y %.1f — 0을 넘으면 둥지 앞이 뒤로 잡힌다)"
+				% bottom)
 	node.free()
 
 
@@ -360,6 +417,14 @@ func _test_textures() -> void:
 ##  에러는 0이다.** 그래서 **둘을 같이** 잰다 — 한쪽만 재는 그물은 반쪽 고장을 그대로 통과시킨다.
 ## 🔴 **접지선 아래(남쪽)는 안 건드린다**도 같이 잰다: 그게 「위/아래가 곧 원근」이라는 계약이고,
 ##  이게 없으면 감지 상자를 아래로 늘려도 그물이 안 짖는다(플레이어가 둥지 앞인데 둥지가 앞에 온다).
+## 🔴🔴 **세100(N25ⓑ): 그 ⓑ 프로브가 접지선에서 260px이나 떨어져 있었다** — 감지 상자를 아래로
+##  **250px 늘려도 전 항목 그린**이었다(= *"둥지 앞에 섰는데 둥지가 앞으로 튀어나온다"*가 무증상).
+##  → 프로브를 **접지선 바로 아래**(`FRONT_PROBE_PAD`)로 당겼다. 정적인 짝은 [5]가 형상에서 잰다.
+## 🔴🔴 **세100(N25ⓒ): z 기대치를 리터럴로 안 든다** — 플레이어 스프라이트(2)·떠있는 지팡이(3)를
+##  **살아 있는 노드에서 읽는다**. 리터럴이면 플레이어 z를 올리는 날 프롭이 조용히 몸 뒤로 숨는데
+##  **그물도 같이 눈을 감는다**(감사 T5 — 그 숫자가 네 곳에 흩어져 있다).
+##  ⚠ 고치는 건 **그물**이지 구조가 아니다 — `tree.gd`/`nest.gd`의 공용 부모를 만들지 마라
+##   (`nest.gd` 머리말이 *"소비자 둘짜리 추상"*이라 거절한 판단이 옳다).
 ## ⚠ **「보기 좋은가」(알파 0.5가 적당한가)는 못 잰다** — F5 몫이다. 여기서 재는 건 방향뿐이다.
 func _test_seen_through_when_behind() -> void:
 	print("[9] 뒤에 서면 앞으로 끌려 나오고 비친다 (y-sort 없는 방의 겹침 계약)")
@@ -371,30 +436,91 @@ func _test_seen_through_when_behind() -> void:
 	if nest == null:
 		return
 	var player: Node2D = _room.get_node("Player")
+	# 🔴 기대치를 **살아 있는 플레이어에서 읽는다** — 씬 값이든 스크립트 대입이든 같은 답이 나온다.
+	var sprite_z := _live_z(player, ^"Sprite")
+	var wand_z := _live_z(player, ^"FloatingWand")
+	_check(sprite_z > 0 and wand_z > 0,
+		"플레이어 몸 z를 실제 노드에서 읽었다 (스프라이트 %d · 지팡이 %d — 0이면 이 검사가 자명 통과다)"
+			% [sprite_z, wand_z])
+	var body_z: int = maxi(sprite_z, wand_z)
 	var base_z: int = nest.z_index
-	_check(base_z < 2,
-		"평상시 z(%d)가 플레이어(2)보다 아래다 = 앞을 지나면 몸이 위에 그려진다" % base_z)
+	_check(base_z < sprite_z,
+		"평상시 z(%d)가 플레이어 스프라이트(%d)보다 아래다 = 앞을 지나면 몸이 위에 그려진다"
+			% [base_z, sprite_z])
 
 	# ── ⓐ 뒤(북쪽 = 접지선 위)에 선다
 	player.global_position = nest.global_position + Vector2(0, -40)
 	for i in 6:
 		await physics_frame
-	_check(nest.z_index > 3,
-		"🔴🔴 뒤에 서면 z가 플레이어·지팡이(3) 위로 올라온다 (실제 %d — 안 올리면 흐려지기만 하고 화면이 그대로다)"
-			% nest.z_index)
+	_check(nest.z_index > body_z,
+		"🔴🔴 뒤에 서면 z가 플레이어 몸(스프라이트·지팡이 중 위 = %d)보다 올라온다 (실제 %d — 안 올리면 흐려지기만 하고 화면이 그대로다)"
+			% [body_z, nest.z_index])
 	await _wait(0.25)   # 페이드 트윈이 다 돌 때까지
 	_check(nest.modulate.a < 0.95,
 		"🔴🔴 뒤에 서면 비친다 (알파 %.2f — 안 내리면 둥지가 몸을 통째로 먹는다)" % nest.modulate.a)
 
-	# ── ⓑ 앞(남쪽 = 접지선 아래)으로 나온다 → 원래대로
-	player.global_position = nest.global_position + Vector2(0, 260)
+	# ── ⓑ 앞(남쪽 = 접지선 **바로** 아래)으로 나온다 → 원래대로
+	# 🔴 여기가 이 항목의 급소다: 「접지선 아래는 앞」이 계약이라 **접지선에 붙여** 서야
+	#  감지 상자가 조금이라도 아래로 새는 순간 빨개진다. 멀리 세우면 상자를 늘려도 안 짖는다(N25ⓑ).
+	player.global_position = nest.global_position + Vector2(0, FRONT_PROBE_PAD)
 	for i in 6:
 		await physics_frame
 	await _wait(0.25)
 	_check(nest.z_index == base_z,
-		"🔴 앞으로 나오면 z가 되돌아온다 (실제 %d — 안 내리면 둥지 앞인데 둥지가 앞에 남는다)" % nest.z_index)
+		"🔴🔴 접지선 아래 %.0fpx에 서면 z가 되돌아온다 (실제 %d — 안 내리면 둥지 앞인데 둥지가 앞에 남는다)"
+			% [FRONT_PROBE_PAD, nest.z_index])
 	_check(is_equal_approx(nest.modulate.a, 1.0),
 		"🔴 앞으로 나오면 다시 불투명하다 (실제 %.2f)" % nest.modulate.a)
+
+
+## [10] 🔴 **루트가 Node2D가 아닌 지점 씬 — 방은 계속 서고 그 자리만 빈다** (세100 N25 잔가지).
+##
+## 🔴🔴 왜 재나: `_spawn_landmarks`의 가드 넷(**def 없음·scene_path 빔·로드 실패**) 뒤에
+##  `node.position` 한 줄이 **무방비**였다. `packed.instantiate() as Node2D`는 루트가 Control이면
+##  **null을 내고**, 바로 다음 줄이 그 null에 쓴다 → **SCRIPT ERROR로 판이 통째로 안 선다**
+##  (보스도 잡몹도 길도 없다). 「새 지점 = 프롭 씬 한 장」이 그 함수의 **선언된 계약**이라 남이 밟는다.
+##
+## 🔴 **이 항목의 진짜 검출자는 `SCRIPT ERROR` grep이다**(세59 `test_spell_vfx_auto`의 null 가드와
+##  같은 결) — 그래서 **나쁜 슬롯을 앞에 꽂는다**: 가드가 없으면 거기서 루프가 죽어 **뒤의 진짜 둥지가
+##  안 서고 길도 안 깔린다**. 그 결과를 값으로도 잡는다.
+## ⚠ Control 루트 씬은 **살아 있는 것을 빌린다**(`damage_number.tscn` = Label) — 이 테스트용으로
+##  씬을 새로 만들면 그 파일이 「누가 쓰나」 없이 리포에 남는다.
+const BAD_ROOT_SCENE := "res://src/hud/damage_number.tscn"
+const BAD_LANDMARK := &"lm_bad_root_probe"
+
+func _test_non_node2d_landmark_is_skipped() -> void:
+	print("[10] 루트가 Node2D가 아닌 지점 씬 — 방이 안 죽고 그 자리만 빈다")
+	var ch = _db.get_chapter(&"ch1")
+	var before: Array = ch.landmarks.duplicate()
+	var def = (load("res://src/core/schemas/landmark_def.gd") as GDScript).new()
+	def.id = BAD_LANDMARK
+	def.scene_path = BAD_ROOT_SCENE
+	_db.landmarks[BAD_LANDMARK] = def
+	var slot = (load("res://src/core/schemas/landmark_slot.gd") as GDScript).new()
+	slot.landmark_id = BAD_LANDMARK
+	slot.position = Vector2(-400, -700)
+	# 🔴 **앞에** 꽂는다 — 가드가 없으면 뒤의 진짜 둥지가 아예 안 선다(= 값으로 잡힌다).
+	var mixed: Array = [slot]
+	mixed.append_array(before)
+	ch.landmarks.assign(mixed)
+
+	await _fresh(&"ch1")
+	print("  (위에 USER ERROR 한 줄이 나오는 게 정상이다 — 침묵 금지 계약. SCRIPT ERROR와 다르다)")
+	var nodes := get_nodes_in_group("landmarks")
+	_check(nodes.size() == before.size(),
+		"🔴 나쁜 슬롯은 건너뛰고 나머지 %d개는 그대로 선다 (실제 %d — 적으면 거기서 루프가 죽은 것이다)"
+			% [before.size(), nodes.size()])
+	_check(_room.get_node_or_null("Player") != null,
+		"🔴🔴 방이 계속 서 있다 (플레이어가 살아 있다 — 죽으면 판이 통째로 안 선 것이다)")
+	# 길까지 확인 — 지점이 안 서면 그 길도 안 깔린다([7]의 파생 증명과 짝이다).
+	var g := _grid()
+	var entrance := _entrance_cell(g)
+	for n in nodes:
+		_check(_road_connected(entrance, _cell_of(n.position, g)),
+			"🔴 살아남은 지점 %s로 가는 흙길도 그대로 깔렸다" % n.position)
+
+	ch.landmarks.assign(before)
+	_db.landmarks.erase(BAD_LANDMARK)   # 🔴 주입 제거 — 남기면 뒤 테스트의 지점 수가 는다
 
 
 # ── 도구 ──────────────────────────────────────────────────────────────────────
@@ -486,6 +612,21 @@ func _road_connected(a: Vector2i, b: Vector2i) -> bool:
 	return false
 
 
+## 🔴 한 칸에서 한 방향으로 **끊김 없이 이어지는 흙길이 몇 칸인가** (세100 N25ⓐ — 모양의 측정자).
+## ⚠ 상한은 격자에서 파생한다 — 무한 루프 방지용이지 계약이 아니다(길이 방 밖 한 칸까지 그려져
+##  `_grid()` 범위를 살짝 넘는 게 정상이라, 범위로 자르지 않고 **타일이 있나**로만 걷는다).
+func _run_length(start: Vector2i, step: Vector2i, g: Dictionary) -> int:
+	var from: Vector2i = g["from"]
+	var to: Vector2i = g["to"]
+	var limit: int = (to.x - from.x) + (to.y - from.y) + 4
+	var n := 0
+	var c := start
+	while n < limit and _is_road(c):
+		n += 1
+		c += step
+	return n
+
+
 ## 🔴 **입구에서 곧게 뻗는 줄기**의 칸 중심점들 — 「길을 걷기만 해도 깨어나나」의 기준선.
 ## 정의를 **파생시킨다**: 입구 칸과 x가 통로 반폭 안인 길 칸(= 꺾이기 전의 줄기). 길을 옮겨도 안 낡는다.
 func _spine_points(entrance: Vector2i, g: Dictionary) -> Array[Vector2]:
@@ -501,6 +642,34 @@ func _spine_points(entrance: Vector2i, g: Dictionary) -> Array[Vector2]:
 			if _is_road(cell):
 				out.append(Vector2((float(x) + 0.5) * ts.x, (float(y) + 0.5) * ts.y))
 	return out
+
+
+## 🔴 자식 노드의 살아 있는 `z_index` — **리터럴 기대치를 안 든다**(세100 N25ⓒ).
+## 없으면 -1을 돌려줘 호출부의 「0이면 자명 통과」 가드에 걸린다(조용히 0으로 비교하지 않게).
+func _live_z(parent: Node, path: NodePath) -> int:
+	var n := parent.get_node_or_null(path) as CanvasItem
+	return n.z_index if n != null else -1
+
+
+## 🔴🔴 감지 상자의 **가장 아래 변**(프롭 원점 기준 y). 원점이 접지선이라 이 값이 0을 넘으면
+## 「둥지 **앞**(남쪽)에 선 플레이어」까지 뒤로 잡혀 앞뒤가 뒤집힌다.
+## ⚠ **씬의 형상에서 잰다 — 치수를 리터럴로 안 든다.** 둥지를 크게 다시 그려 상자를 위로 키워도
+##  이 계약은 그대로 성립한다(움직이지 않는 건 「원점 = 접지선」 하나뿐이다).
+func _sense_bottom(area: Area2D) -> float:
+	var bottom := -INF
+	for c in area.get_children():
+		var cs := c as CollisionShape2D
+		if cs == null or cs.shape == null:
+			continue
+		var half := 0.0
+		if cs.shape is RectangleShape2D:
+			half = (cs.shape as RectangleShape2D).size.y * 0.5
+		elif cs.shape is CircleShape2D:
+			half = (cs.shape as CircleShape2D).radius
+		else:
+			continue
+		bottom = maxf(bottom, area.position.y + cs.position.y + half)
+	return bottom
 
 
 func _collect(node: Node, bodies: Array, areas: Array) -> void:

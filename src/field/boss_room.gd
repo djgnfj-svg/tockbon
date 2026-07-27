@@ -219,7 +219,12 @@ const CHAPTER_TINT_MAX := 1.12
 ## 출구에서 방 밖으로 이어지는 **흙길** (칸 수 — 연출값). 출구 자체는 겉모습이 없는 InteractZone이라
 ## (보라색 차원문 Polygon2D를 베끼지 않기로 한 결정) **이 길이 「저기가 나가는 길」의 유일한 표시**다.
 ## 🔴 **길의 중심은 출구 노드에서 파생한다** — 좌표를 두 번 적으면 출구를 옮길 때 길만 제자리에 남는다.
-## 끄려면 `EXIT_PATH_ROWS = 0`. ⚠ 폭을 1로 줄이면 시트의 **오솔길 칸**(`ROAD_NARROW`)으로 갈린다.
+## 🔴🔴 **`EXIT_PATH_ROWS = 0`은 「나가는 길」만 끈다**(세100에 현행화 — 세99 단계 3에 갈렸다).
+##  `_road_cells`에서 이 손잡이가 감싸는 건 **출구 줄기 ⓐ뿐**이고, **들어가는 길**(입구→지점)은
+##  `_landmark_road_cells`가 그 밖에서 깐다 — 그 손잡이는 **`ChapterDef.landmarks`**다(비우면 사라진다,
+##  `test_landmark_road_auto [7]`이 그 파생을 잰다). 0으로 두고 「길이 다 꺼졌다」고 읽지 마라.
+## ⚠ 폭을 1로 줄이면 시트의 **오솔길 칸**(`ROAD_NARROW`)으로 갈린다 — 두 줄기가 **같은 폭**을 쓰므로
+##  `EXIT_PATH_WIDTH_CELLS`는 들어가는 길에도 그대로 걸린다(`_road_cells`가 `half`를 둘에 같이 넘긴다).
 ## 🔴 **길이를 3 → 7로 늘렸다**(세99): 3칸이면 폭(3칸)과 같아 **정사각형 얼룩**으로 읽힌다 —
 ##  타일만 흙으로 갈고 길이를 그대로 뒀더니 「색만 바꾼 네모」가 됐다(실측 스샷). 길은 **폭보다
 ##  뚜렷하게 길어야** 「어디로 이어지는 것」으로 읽힌다. ⚠ 그물(`test_extract_hold_auto`)이 이 값을
@@ -434,7 +439,17 @@ func _spawn_landmarks() -> void:
 			push_error("boss_room: 지점 '%s'의 scene_path '%s'를 못 읽었다"
 				% [String(def.id), def.scene_path])
 			continue
-		var node := packed.instantiate() as Node2D
+		# 🔴 **가드 넷 뒤에 무방비 한 줄이 있었다**(세100 N25 잔가지): 루트가 Node2D가 아니면
+		#  `as Node2D`가 null을 내는데 바로 아래에서 `.position`을 만져 **SCRIPT ERROR로 방이 죽는다.**
+		#  「새 지점 = 프롭 씬 한 장」이 이 함수의 **선언된 계약**이라 남이 반드시 밟는다 —
+		#  Control이나 Node를 루트로 만든 씬 하나면 그 판이 통째로 안 선다.
+		var inst := packed.instantiate()
+		var node := inst as Node2D
+		if node == null:
+			push_error("boss_room: 지점 '%s'의 씬 루트가 Node2D가 아니다(%s) — 자리를 못 잡아 안 세운다"
+				% [String(def.id), inst.get_class()])
+			inst.free()
+			continue
 		# 🔴 위치는 `add_child` **앞**이다(보스·잡몹과 같은 계약) — 지점 씬이 `_ready`에서 자기
 		#  자리로 무언가를 파생시키면 뒤에 옮길 때 한 프레임 어긋난다.
 		node.position = slot.position

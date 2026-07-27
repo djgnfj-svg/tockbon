@@ -245,6 +245,10 @@ func _test_tree_has_no_body() -> void:
 ## alpha만 재면 「흐려지는데 여전히 몸 뒤라 화면이 그대로」인 회귀를 못 잡고,
 ## z만 재면 「몸을 통째로 먹는」 회귀를 못 잡는다.
 ## 🔴 밑동 **아래**(= 나무 앞)에서는 둘 다 원래대로여야 한다 — 그게 「위/아래가 원근」이라는 계약이다.
+## 🔴🔴 **세100(N25ⓒ): z 기대치를 리터럴로 안 든다** — 플레이어 스프라이트·지팡이 z를 **살아 있는
+##  노드에서 읽는다**. 실측: 플레이어 스프라이트를 z 2 → 6으로 올리는 뮤테이션에 **이 파일이 통째로
+##  그린이었다**(나무 z 4 > 리터럴 2라서). 즉 플레이어 z를 올리는 날 나무가 조용히 몸 뒤로 숨는데
+##  **그물도 같이 눈을 감는다**(감사 T5 — 그 숫자가 네 곳에 흩어져 있다).
 func _test_tree_is_seen_through_from_behind() -> void:
 	print("[6] 🔴🔴 플레이어가 나무 뒤 → 비친다(alpha↓) + 앞으로 나온다(z↑)")
 	await _fresh(&"ch1")
@@ -258,31 +262,48 @@ func _test_tree_is_seen_through_from_behind() -> void:
 		_check(false, "Player를 못 찾았다")
 		return
 	var away: Vector2 = player.global_position
+	# 🔴 기대치를 **살아 있는 플레이어에서 읽는다**(N25ⓒ) — 씬 값이든 스크립트 대입이든 같은 답이 나온다.
+	var sprite_z := _live_z(player, ^"Sprite")
+	var wand_z := _live_z(player, ^"FloatingWand")
+	_check(sprite_z > 0 and wand_z > 0,
+		"플레이어 몸 z를 실제 노드에서 읽었다 (스프라이트 %d · 지팡이 %d — 0이면 이 검사가 자명 통과다)"
+			% [sprite_z, wand_z])
+	var body_z: int = maxi(sprite_z, wand_z)
+	var base_z: int = tree.z_index
 
 	# ⓐ 뒤(밑동 위쪽)로 옮긴다
 	player.global_position = tree.global_position + Vector2(0, -24)
 	await _settle()
 	_check(tree.modulate.a < 0.95,
 		"🔴 나무가 비친다 — alpha %.2f < 0.95" % tree.modulate.a)
-	_check(tree.z_index > 2,
-		"🔴 나무가 플레이어 스프라이트(z 2)보다 앞으로 나왔다 — z %d" % tree.z_index)
+	_check(tree.z_index > body_z,
+		"🔴 나무가 플레이어 몸(스프라이트·지팡이 중 위 = %d)보다 앞으로 나왔다 — z %d"
+			% [body_z, tree.z_index])
 
 	# ⓑ 멀리 (원래 스폰 자리) — 둘 다 돌아온다
 	player.global_position = away
 	await _settle()
 	_check(is_equal_approx(tree.modulate.a, 1.0),
 		"벗어나면 alpha가 1로 돌아온다 (실제 %.2f)" % tree.modulate.a)
-	_check(tree.z_index == 0, "벗어나면 z가 0으로 돌아온다 (실제 %d)" % tree.z_index)
+	_check(tree.z_index == base_z, "벗어나면 z가 평상시(%d)로 돌아온다 (실제 %d)" % [base_z, tree.z_index])
 
 	# ⓒ 🔴 밑동 **아래** = 나무 「앞」 — 겹쳐 보여도 안 비친다(위/아래가 원근이라는 계약).
 	player.global_position = tree.global_position + Vector2(0, 40)
 	await _settle()
 	_check(is_equal_approx(tree.modulate.a, 1.0),
 		"🔴 밑동 아래(나무 앞)에서는 안 비친다 (실제 %.2f)" % tree.modulate.a)
-	_check(tree.z_index == 0, "🔴 밑동 아래에서는 나무가 뒤에 남는다 (실제 z %d)" % tree.z_index)
+	_check(tree.z_index == base_z,
+		"🔴 밑동 아래에서는 나무가 뒤에 남는다 (평상시 %d / 실제 z %d)" % [base_z, tree.z_index])
 
 
 ## ── 도구 ───────────────────────────────────────────────────────────────────
+
+
+## 🔴 자식 노드의 살아 있는 `z_index` — **리터럴 기대치를 안 든다**(세100 N25ⓒ).
+## 없으면 -1을 돌려줘 호출부의 「0이면 자명 통과」 가드에 걸린다(조용히 0으로 비교하지 않게).
+func _live_z(parent: Node, path: NodePath) -> int:
+	var n := parent.get_node_or_null(path) as CanvasItem
+	return n.z_index if n != null else -1
 
 ## 페이드(트윈)가 끝날 때까지 — 물리 프레임 두 번(Area 신호) + 넉넉한 여유.
 ## ⚠ `tree.gd`의 FADE_SEC를 늘리면 여기도 같이 늘려라(값을 파생시키면 상수가 밀려도 통과한다).
