@@ -1,7 +1,28 @@
-[gd_scene load_steps=2 format=3 uid="uid://c0prop07tree00"]
+[gd_scene load_steps=3 format=3 uid="uid://c0prop07tree00"]
 
 [ext_resource type="Script" path="res://src/props/tree.gd" id="1_tree"]
+
+; 🔴 세99 「나무 뒤로 가면 비친다」의 감지 상자 — **나무 밑동(노드 원점) 위쪽 그늘**만 덮는다.
+; 아래로 안 내리는 게 계약이다: 밑동보다 **아래**에 선 플레이어는 나무 **앞**이라 가릴 이유가 없다
+; (그때 나무는 z 0으로 남아 원래대로 플레이어 뒤에 그려진다).
+; 폭 44 = 가장 넓은 그림(tree_round 56)보다 좁고 가장 좁은 것(tree_dead 30)보다 넓다 — 세 변형이
+; 랜덤으로 붙으므로 하나에 딱 맞추면 나머지 둘이 어긋난다.
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_behind"]
+size = Vector2(44, 60)
 
 [node name="Tree" type="Sprite2D"]
 offset = Vector2(0, -29)
 script = ExtResource("1_tree")
+
+; 🔴🔴 **`collision_layer = 0`이 계약이다** — 나무는 감지만 하고 **아무에게도 안 잡힌다.**
+; 레이어를 채우면 boss_room.gd 머리말이 경고한 그 함정(캐리어가 나무마다 터진다)이 되살아난다.
+; `monitorable = false`도 같은 이유(다른 Area2D가 이 나무를 주우면 드롭·피격 판정에 섞인다).
+; mask 2 = 플레이어. 🔴 적까지 넓히려면 여기에 4(enemy)를 더해라 — tree.gd는 이미 여럿을 센다.
+[node name="BehindSense" type="Area2D" parent="."]
+position = Vector2(0, -28)
+collision_layer = 0
+collision_mask = 2
+monitorable = false
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="BehindSense"]
+shape = SubResource("RectangleShape2D_behind")

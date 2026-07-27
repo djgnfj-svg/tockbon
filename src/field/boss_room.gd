@@ -12,7 +12,7 @@ extends Node2D
 ##  • 전부 `zone_id = &"exit"`이고 전부 `_extract` **하나**로 간다. **처음부터 서 있고 조건이 없다.**
 ##  • 여럿 — `ChapterDef.extract_points`에 좌표를 적으면 그 자리에 `exit_zone.tscn`이 선다.
 ##    비면 씬의 남쪽 `$Exit` 하나 = **세98까지와 동일**(회귀 0).
-##    🔴 **단수 참조를 되살리지 마라** — `_exits` 배열이 ⓐ `_extract` 연결 ⓑ `_fill_tiles` 풀길의
+##    🔴 **단수 참조를 되살리지 마라** — `_exits` 배열이 ⓐ `_extract` 연결 ⓑ `_fill_tiles` 흙길의
 ##    **공통 출처**다. 하나라도 빠지면 「E는 먹히는데 아무 일도 안 나고 가방이 조용히 증발」하거나
 ##    「나갈 데가 있는 줄 모른다」가 된다(설계 §6 S12).
 ##  • 홀드 — `InteractZone.hold_sec`은 **길이가 아니라 스위치**다(실제 초 = `balance.extract_hold_sec`).
@@ -60,8 +60,11 @@ extends Node2D
 ##    → `_unhandled_input`에 안 와서 발사가 아예 안 불린다. **에러도 경고도 없고, 헤드리스로는
 ##    절대 못 잡는다** (세25 베이스·세26 숲이 정확히 이걸로 밟았다 — 새 씬마다 되살아나는 함정).
 ##  • `RingSpellSystem.z_index = 10` — 안 올리면 날아가는 진·탄·기둥이 Ground(z=0) 뒤에 가려 안 보인다.
-##  • 나무는 **물리 없는 장식**(tree.tscn) — StaticBody2D로 만들면 world 레이어라 캐리어(마스크 5)가
-##    나무마다 터진다. ⚠ 그래서 충돌은 안 나지만 **적을 가린다** — 나무 20그루는 세 규칙으로 놓았다:
+##  • 나무는 **물리 몸이 없는 장식**(tree.tscn) — StaticBody2D로 만들면 world 레이어라 캐리어(마스크 5)가
+##    나무마다 터진다. 🔴 **세99에 감지용 `Area2D`가 하나 붙었다**(플레이어가 뒤로 가면 비치게 —
+##    tree.gd 머리말) — 그 Area는 `collision_layer = 0`이라 **아무도 나무를 감지하지 못한다.**
+##    레이어를 채우는 순간 위 함정이 그대로 되살아난다.
+##    ⚠ 겹치면 **가린다** — 나무 20그루는 세 규칙으로 놓았다:
 ##    ⓐ 잡몹·보스 스폰(`ChapterDef.mob_spawns` + `boss_spawn`)에서 **100px 이상**
 ##    ⓑ 플레이어 스폰·남쪽 출구에서 **150px 이상**(시작 시야·[E] 찾기)
 ##    ⓒ 어귀·중간·깊은 대역에 고르게. 🔴 **정본은 `data/chapters/*.tres`의 `position`이다**(설계
@@ -69,8 +72,20 @@ extends Node2D
 ##  • 방 크기 **2400×2200**(x −1200~1200 · y −1500~700, 세88에 1200×1040에서 키웠다) — 세로로 긴
 ##    이유는 남쪽 입구(플레이어 스폰 y=+600)에서 북쪽 보스(y=−1350)까지 「깊이 들어간다」가 이동으로
 ##    읽히게. 구역(어귀·중간·깊은)은 **코드 개념이 아니라 `mob_spawns` y좌표 관례**다 — 새 스키마 0.
-##  • 횃불 8개(x=∓500 · y ∈ {+450,−150,−750,−1300}) + BossGlow(0,−1350). 4개로는 4.4배 방의
-##    3/4이 어둡다.
+##  • 🔴🔴 **세99: 방은 낮이다** (사용자 확정 *"조명이 좀 어색하네? 그냥 낮으로 바꾸자"*).
+##    바뀐 축 셋 — ⓐ `Dusk`(CanvasModulate 0.85,0.84,0.93) → **`Daylight`(1,0.99,0.96)**: 앰비언트로
+##    화면을 누르지 않는다. ⓑ **횃불 8개 삭제**(아래 참조) → 볕뉘 `Sun1~4`+`SunGlade`. ⓒ 바닥 =
+##    **낮 밝기로 그려진 새 시트**(`tileset_ground.png` = 타일셋 source 2)로 갈았고,
+##    `ChapterDef.room_ground_color`는 **옅은 틴트**로만 얹힌다(`_apply_chapter_tint`).
+##    🔴 그 사이에 잠깐 있던 `_apply_floor_daylight`(검은 타일을 2~3배로 밝히던 우회로)는 **지웠다** —
+##    이미 밝은 시트에 그 곱을 물리면 **에러 0으로 화면만 형광색이 된다**(그 함수 자리의 주석 참조).
+##    🔴 **세73(「밝게 유지 + 빛 웅덩이만」)로 되돌아간 것이지 그 결정을 뒤집은 게 아니다** — 어두운
+##    던전·노멀맵은 그때 각하됐는데 이 방이 그새 어두워져 있었다.
+##  • 🔴 **횃불(따뜻 · energy 0.9 · x=∓500 · y ∈ {+450,−150,−750,−1300})을 왜 지웠나**: 낮엔 「누가
+##    켰나」가 설명되지 않고, 무엇보다 **밝은 바닥 위의 additive 웅덩이는 빛이 아니라 희뿌연 얼룩**으로만
+##    읽힌다(세99 전 스샷이 정확히 그 그림이었다 — 사용자가 *"어색하다"*고 한 자리). 「빛 웅덩이」축은
+##    죽이지 않고 **볕뉘**(energy 0.22 · 따뜻 · 넓게 · 비대칭)로 옮겼다. 되살리고 싶거든 **밤 챕터를
+##    만들 때** 되살려라 — 낮 방에 다시 걸면 같은 얼룩이 돌아온다.
 ##
 ## 🔴 바닥 타일은 `_ready`가 코드로 깐다 — .tscn에 tile_map_data 베이스64를 손으로 굳히면
 ## 방 크기를 바꿀 때마다 에디터로 다시 칠해야 한다. Ground rect에서 셀 범위를 파생시켜 늘 맞는다.
@@ -82,8 +97,9 @@ const Hud := preload("res://src/hud/hud.gd")
 ## preload가 안전한 이유: forest_enemy는 boss_room을 안 문다 (base⇄forest 순환 함정 무관).
 const EnemyScene := preload("res://src/field/forest_enemy.tscn")
 ## 🔴 늘린 탈출구 (세99 D1) — **`zone_id = &"exit"`을 파일에 굳힌 전용 프롭**이다.
-## ⚠ 겉모습은 없다(씬의 `$Exit`와 같은 결) — **보이는 표시는 `_fill_tiles`의 풀길이 전부**다.
-##  좌표만 늘리고 풀길을 안 깔면 플레이어는 「거기 나갈 데가 있다」를 알 방법이 없다(설계 §6 S12).
+## ⚠ 겉모습은 없다(씬의 `$Exit`와 같은 결) — **보이는 표시는 `_fill_tiles`의 흙길이 전부**다.
+##  좌표만 늘리고 길을 안 깔면 플레이어는 「거기 나갈 데가 있다」를 알 방법이 없다(설계 §6 S12).
+##  ⚠ 설계 문서(§6 S12)·이 파일의 옛 서술이 그 표시를 **「풀길」**이라 부른다 — 세99에 **흙길**로 갈았다.
 const ExitZoneScene := preload("res://src/props/exit_zone.tscn")
 ## 🔴 codex 해금 id → 「이름(어디에 쓰는지)」 단일 소스 (세87 S4). 여기서 `Db.get_glyph_ring` 하나만
 ## 부르면 **룬 보상이 원시 id + 거짓 안내**("rune_water(책상에서 밴드에 끼워라)")로 나간다 —
@@ -98,15 +114,111 @@ const CodexText := preload("res://src/core/codex_text.gd")
 ## 쓰러진 뒤 베이스로 돌아가기까지 (초) — 연출값. 0이면 뭘 맞고 죽었는지 못 보고 화면이 바뀐다.
 const DEATH_BEAT_SEC := 0.9
 
-## 타일 소스 (assets/sprites/field/tileset_forest.tres): 0 = 풀(마을 쪽), 1 = 보스방 어두운 바닥.
-const TILE_SRC_GRASS := 0
-const TILE_SRC_FLOOR := 1
-## 남쪽 출구로 이어지는 풀길 (칸 수 — 연출값). 어두운 숲 바닥에 마을 쪽 풀 타일을 깔아 **걸어가 보기
-## 전에도** "저기가 나가는 길"로 읽히게 한다(출구 자체는 겉모습이 없는 InteractZone이다 — 보라색
-## 차원문 Polygon2D를 베끼지 않기로 한 결정). 🔴 **길의 중심 x는 `Exit` 노드에서 파생한다** — 좌표를
-## 두 번 적으면 출구를 옮길 때 길만 제자리에 남는다. 끄려면 `EXIT_PATH_ROWS = 0`.
+## 🔴🔴 **바닥은 source 2 한 장이 전부다** (세99 — `assets/sprites/field/tileset_ground.png`).
+## 옛 `TILE_SRC_GRASS = 0`(마을 풀 · 나가는 길)·`TILE_SRC_FLOOR = 1`(거의 검은 슬레이트 · 방 바닥)은
+## **이 씬에서 소비자가 사라졌다.** 두 source는 타일셋에 그대로 살아 있지만 방은 안 쓴다
+## (지우려면 타일셋을 손대야 하고, 그건 source id를 밀어 이 상수를 조용히 어긋나게 한다 — 그냥 둔다).
+## ⚠ **길의 종류가 바뀌었다**: 나가는 길은 「밝은 풀 네모」가 아니라 **흙길**이다. 낮이 되며 바탕도
+##  초록이 되자 풀길이 길로 안 읽혔다(리드 스샷 확인). 그물(`test_extract_hold_auto`)도 같이 옮겼다 —
+##  「풀 칸이 이어지나」 → 「**흙길 칸**이 이어지나」.
+const TILE_SRC_GROUND := 2
+
+## 🔴 이웃 비트마스크 — 「어느 변이 흙이 아닌가」(cons)·「어느 쪽으로 이어지나」(conn)에 같이 쓴다.
+const DIR_T := 1
+const DIR_B := 2
+const DIR_L := 4
+const DIR_R := 8
+
+## 🔴🔴 흙길 아틀라스 표 — **이웃이 좌표를 고른다**(9분할 오토타일). 키 = 흙이 **아닌** 변의 비트마스크.
+## 정본 = `docs/_reports/tile_dirt.md` §3 + 실측(칸마다 변의 풀 픽셀을 세어 대조했다).
+## 🔴 **좌표를 짐작하지 마라** — 시트 40칸은 「넓은 길(9분할)」과 「폭 1칸 오솔길」이 섞여 있고
+##  둘은 변의 풀 두께가 다르다(실측 12px ↔ 24px). **한 줄기 안에서 섞으면 이음매가 어긋난다.**
+const ROAD_EDGE := {
+	0: Vector2i(5, 0),            # 사방이 흙 = 중앙 (변형은 `_road_center_atlas`가 고른다)
+	DIR_T: Vector2i(1, 0),        # 위가 풀 = 상변 A (B는 `_road_edge_atlas`가 번갈아 깐다)
+	DIR_B: Vector2i(1, 1),        # 아래가 풀 = 하변 A
+	DIR_L: Vector2i(4, 0),        # 왼쪽이 풀 = 좌변
+	DIR_R: Vector2i(6, 0),        # 오른쪽이 풀 = 우변
+	DIR_T | DIR_L: Vector2i(0, 0),
+	DIR_T | DIR_R: Vector2i(3, 0),
+	DIR_B | DIR_L: Vector2i(0, 1),
+	DIR_B | DIR_R: Vector2i(3, 1),
+}
+## 상·하변의 B판 — 🔴 **같은 것만 이으면 굴곡이 주기로 반복돼 격자가 보인다**(art 손질 1·3회차의 결함).
+const ROAD_TOP_B := Vector2i(2, 0)
+const ROAD_BOTTOM_B := Vector2i(2, 1)
+## 안쪽 모서리(흙 한복판에 풀이 모서리로 파고든 칸) — 키 = 파고든 모서리의 비트마스크.
+const ROAD_NUB := {
+	DIR_T | DIR_L: Vector2i(4, 1),
+	DIR_T | DIR_R: Vector2i(5, 1),
+	DIR_B | DIR_L: Vector2i(6, 1),
+	DIR_B | DIR_R: Vector2i(7, 1),
+}
+## 폭 1칸 오솔길 — 키 = 흙으로 **이어지는** 변의 비트마스크(9분할과 키의 뜻이 반대다).
+## ⚠ 지금 방의 길은 전부 3칸 폭이라 여기로 안 온다. 랜드마크 길을 1칸으로 깔 때 산다.
+const ROAD_NARROW := {
+	0: Vector2i(4, 4),                     # 외딴 한 칸 — 시트에 없는 형태라 맨흙으로 떨어뜨린다
+	DIR_T: Vector2i(0, 3),
+	DIR_B: Vector2i(1, 3),
+	DIR_L: Vector2i(2, 3),
+	DIR_R: Vector2i(3, 3),
+	DIR_T | DIR_B: Vector2i(0, 2),
+	DIR_L | DIR_R: Vector2i(2, 2),
+	DIR_B | DIR_R: Vector2i(4, 2),
+	DIR_B | DIR_L: Vector2i(5, 2),
+	DIR_T | DIR_R: Vector2i(6, 2),
+	DIR_T | DIR_L: Vector2i(7, 2),
+	DIR_B | DIR_L | DIR_R: Vector2i(5, 3),
+	DIR_T | DIR_L | DIR_R: Vector2i(6, 3),
+	DIR_T | DIR_B | DIR_R: Vector2i(7, 3),
+	DIR_T | DIR_B | DIR_L: Vector2i(0, 4),
+	DIR_T | DIR_B | DIR_L | DIR_R: Vector2i(4, 3),
+}
+const ROAD_NARROW_VERT_B := Vector2i(1, 2)
+const ROAD_NARROW_HORZ_B := Vector2i(3, 2)
+
+## 🔴 벌판·길 한복판의 **변형** — 「무늬 없는 한 칸을 반복해 깔면 벌판이 단조롭다」의 답이다.
+## ⚠ **얼룩 칸 (7,4)는 일부러 뺐다** — 변에 걸친 풀 얼룩이 16%라 **자기 자신 옆에서만** 이어진다
+##  (실측: 변 픽셀 256칸 중 42칸이 흙이 아니다). 섞어 깔면 반쪽 얼룩이 잘려 이음매가 튄다.
+const GRASS_PLAIN := Vector2i(1, 4)
+const GRASS_SUN := Vector2i(2, 4)     # 볕에 마른 풀
+const GRASS_SPROUT := Vector2i(3, 4)  # 새순·잔꽃 (밝은 점 — 조금만)
+const ROAD_CENTER_B := Vector2i(7, 0)
+const ROAD_WEEDY := Vector2i(6, 4)    # 잔풀 난 흙 — 🔴 긴 길의 단조로움을 깨는 칸
+const ROAD_GRAVEL := Vector2i(5, 4)
+
+## 🔴 풀 타일(시트 (1,4))의 **바탕색** — 64×64 중 95%가 이 한 색이다.
+## 🔴 **PNG에서 베낀 사본이다**(옛 `FLOOR_TILE_BASE`가 같은 자리였다) — 그림을 다시 그리면 낡는다.
+##  그물(`tests/test_daylight_tree_auto.gd`)이 PNG를 직접 읽어 이 상수와 대조하므로 어긋나면 빨개진다.
+const GRASS_TILE_BASE := Color(0.2745, 0.5098, 0.1961)
+
+## 🔴🔴 챕터 색을 **옅은 틴트**로 읽는 세기 (세99 — 옛 `_apply_floor_daylight`의 자리).
+## 0이면 세 챕터가 한 색이 되고(D8이 죽는다), 1에 가까우면 채도·명암이 세져 흙이 형광으로 탄다.
+## ⚠ 상·하한은 **안전선**이다 — 새 챕터가 아주 진하거나 아주 어두운 색을 실어도 곱이 여기를 못 넘는다
+##  (하한이 없으면 「어두운 챕터」 하나가 방을 다시 밤으로 되돌린다 — 세99에 뒤집은 그 상태다).
+##
+## 🔴 **밝기를 정규화하지 않는다 — 그게 D8의 몸이다.** 챕터마다 색의 **평균을 1로** 맞춰 색조만
+##  남겨 봤더니(첫 시도) 세 챕터의 화면색 차이가 채널당 **3~4/255**로 줄어 사실상 한 무대가 됐다
+##  (세98까진 바닥이 `room_ground_color` **그 자체**여서 「깊은 숲」이 눈에 띄게 어두웠다).
+##  그래서 기준을 **고정 참조 밝기**로 잡는다 — 챕터가 그보다 어두우면 방도 그만큼 어두워진다.
+## ⚠ `CHAPTER_TINT_REF_LUM`은 데이터의 사본이 아니라 **「곱이 1이 되는 챕터 밝기」라는 기준점**이다
+##  (지금 세 챕터의 평균 밝기가 0.25~0.34라 그 한복판을 잡았다). 챕터를 더 밝게/어둡게 만들고 싶으면
+##  **`data/chapters/*.tres`의 `room_ground_color`를 움직여라** — 그게 F5로 조이는 손잡이다.
+const CHAPTER_TINT_STRENGTH := 0.42
+const CHAPTER_TINT_REF_LUM := 0.32
+const CHAPTER_TINT_MIN := 0.80
+const CHAPTER_TINT_MAX := 1.12
+
+## 출구에서 방 밖으로 이어지는 **흙길** (칸 수 — 연출값). 출구 자체는 겉모습이 없는 InteractZone이라
+## (보라색 차원문 Polygon2D를 베끼지 않기로 한 결정) **이 길이 「저기가 나가는 길」의 유일한 표시**다.
+## 🔴 **길의 중심은 출구 노드에서 파생한다** — 좌표를 두 번 적으면 출구를 옮길 때 길만 제자리에 남는다.
+## 끄려면 `EXIT_PATH_ROWS = 0`. ⚠ 폭을 1로 줄이면 시트의 **오솔길 칸**(`ROAD_NARROW`)으로 갈린다.
+## 🔴 **길이를 3 → 7로 늘렸다**(세99): 3칸이면 폭(3칸)과 같아 **정사각형 얼룩**으로 읽힌다 —
+##  타일만 흙으로 갈고 길이를 그대로 뒀더니 「색만 바꾼 네모」가 됐다(실측 스샷). 길은 **폭보다
+##  뚜렷하게 길어야** 「어디로 이어지는 것」으로 읽힌다. ⚠ 그물(`test_extract_hold_auto`)이 이 값을
+##  **손으로 들고** 대조한다 — 여기만 바꾸면 빨개진다(그게 「연출값이 조용히 흐르는 것」을 막는다).
 const EXIT_PATH_WIDTH_CELLS := 3
-const EXIT_PATH_ROWS := 3
+const EXIT_PATH_ROWS := 7
 
 ## 🔴 D7 — 탈출 지점의 홀드를 **켜는** 값. `InteractZone.hold_sec`은 「몇 초」가 아니라
 ## 「0이냐 아니냐」 스위치라(실제 초 = `balance.extract_hold_sec`) 맨숫자 `1.0`을 씬·코드에 흩뿌리면
@@ -120,7 +232,7 @@ const HOLD_ON := 1.0
 
 var _chapter: ChapterDef = null
 ## 🔴 **나가는 길 전부**(세88 하나 → 세99 여럿). 씬의 남쪽 `$Exit` + `ChapterDef.extract_points`.
-## **`_extract` 연결과 `_fill_tiles` 풀길이 둘 다 이 배열을 순회한다** — 단수 참조로 되돌리지 마라.
+## **`_extract` 연결과 `_fill_tiles` 흙길이 둘 다 이 배열을 순회한다** — 단수 참조로 되돌리지 마라.
 ## ✅ 세99에 포탈이 은퇴해 **이 배열이 방의 탈출구 전량**이다(예외로 빠지는 길이 하나도 없다).
 var _exits: Array[InteractZone] = []
 ## 클리어 처리는 한 번뿐 — enemy_died는 EventBus 전역이라 가드 없이는 무엇이든 두 번 처리될 수 있다.
@@ -156,8 +268,8 @@ func _ready() -> void:
 		_to_base.call_deferred()
 		return
 
-	_ground.color = _chapter.room_ground_color
-	# 🔴 **`_fill_tiles`보다 먼저다** — 풀길이 `_exits`에서 파생하므로, 순서가 뒤바뀌면 늘린 출구가
+	_apply_chapter_tint()
+	# 🔴 **`_fill_tiles`보다 먼저다** — 흙길이 `_exits`에서 파생하므로, 순서가 뒤바뀌면 늘린 출구가
 	# 화면에 **아무 표시 없이** 서고 D1이 통째로 무효가 된다(설계 §6 S12). 에러는 0이다.
 	_build_exits()
 	_fill_tiles()
@@ -182,6 +294,42 @@ func _ready() -> void:
 	#   「보스는 선택」만 적으면 *"그럼 왜 잡나"*가 되고, 「잡아라」만 적으면 D2가 죽는다.
 	_hud.say("%s — 살아서 나가면 이긴다. 출구에서 [E] 꾹. %s는 선택이지만 잡아야 다음 챕터가 열린다"
 		% [_chapter.title, boss_name], false, true)
+
+
+## 🔴🔴 챕터 분위기 = **옅은 틴트** (세99 — 옛 `_apply_floor_daylight`가 있던 자리).
+##
+## 🔴 **왜 옛 함수를 지웠나**: 그건 `room_ground_color / FLOOR_TILE_BASE`로 **2~3배**를 곱했다 —
+##  거의 검은 `tile_boss_floor.png`(바탕 32,46,55)를 낮으로 끌어올리는 **우회로**였다. 새 시트는
+##  이미 낮 밝기로 그려져 있어서, 그 곱을 그대로 두면 **곱을 두 번 먹고 탄다**(흙 `#ad7757` →
+##  `#ffff6d` 형광 노랑 · 에러는 0이고 화면만 탄다 — `docs/_reports/tile_dirt.md` §0의 표).
+##  **소비자가 사라진 손잡이를 남기면 거짓 손잡이가 된다**(감사 T3)라서 함수·상수를 같이 걷었다.
+##
+## 🔴 대신 무엇을 하나 — `ChapterDef.room_ground_color`의 **뜻은 그대로 「이 챕터의 바닥색」**이고
+##  **해석만 바뀌었다**: 「타일이 정확히 이 색이 되게 곱한다」 → 「이 색의 **색조만** 뽑아 1.0 언저리로
+##  옅게 덮는다」. 밝기(평균)를 1로 정규화해 **어느 챕터도 화면을 어둡게도 타게도 못 한다.**
+##  ⚠ 필드는 core 소유라 이름·타입을 안 건드렸다 — 새 스키마 0.
+##
+## ⚠ 테두리(`Ground` ColorRect)도 **같은 틴트를 먹은 풀색**으로 맞춘다 — 타일이 못 덮는 가장자리
+##  한 칸이 다른 색이면 방에 액자가 둘린다(세98까지가 그 그림이었다).
+## ⚠ 이 곱은 `Daylight`(CanvasModulate) **앞**이다 — 화면 실색 = 타일색 × 틴트 × Daylight.
+func _apply_chapter_tint() -> void:
+	var tint := _chapter_tint()
+	_tiles.modulate = tint
+	_ground.color = Color(
+		GRASS_TILE_BASE.r * tint.r, GRASS_TILE_BASE.g * tint.g, GRASS_TILE_BASE.b * tint.b, 1.0)
+
+
+## 챕터 색 → 옅은 틴트. **고정 참조 밝기**로 나눠 색조와 명암을 같이 남기고, 흰색에서 그만큼만
+## 끌어온다(그래서 세기를 0으로 두면 곱이 통째로 1 = 그림 그대로가 된다).
+func _chapter_tint() -> Color:
+	var c := _chapter.room_ground_color
+	return Color(
+		_tint_channel(c.r), _tint_channel(c.g), _tint_channel(c.b), 1.0)
+
+
+func _tint_channel(v: float) -> float:
+	return clampf(lerpf(1.0, v / CHAPTER_TINT_REF_LUM, CHAPTER_TINT_STRENGTH),
+		CHAPTER_TINT_MIN, CHAPTER_TINT_MAX)
 
 
 ## 🔴🔴 카메라를 방 안으로 묶는다 (세88 — 리드가 MCP 스샷으로 잡았다).
@@ -239,32 +387,42 @@ func _wire_extract_zone(zone: InteractZone) -> void:
 		zone.interacted.connect(_extract)
 
 
-## 바닥 타일을 Ground rect에 맞춰 깐다 — 챕터 분위기 틴트(room_ground_color)는 Ground(ColorRect)가
-## 가장자리로 내보이고, 타일은 보스방 전용 어두운 바닥(tile_boss_floor)으로 통일한다.
-## 예외 = **출구 앞 풀길**(EXIT_PATH_* 참조) — 마을 쪽 풀 타일로 나가는 길을 표시한다.
-## 🔴 세99: 출구가 여럿이라 **풀길도 여럿**이다. 안 깔면 2번째 출구부터 플레이어가 거기 나갈 데가
+## 바닥 타일을 Ground rect에 맞춰 깐다 — 🔴 **세99: 벌판은 풀, 나가는 길은 흙길**이다
+## (그전엔 벌판이 거의 검은 슬레이트고 길이 밝은 풀이었는데, 방이 낮이 되며 바탕도 초록이 되자
+## 풀길이 **「밝은 초록 네모」로만 읽히고 길로 안 읽혔다** — 리드 스샷 확인).
+## 🔴 세99: 출구가 여럿이라 **길도 여럿**이다. 안 깔면 2번째 출구부터 플레이어가 거기 나갈 데가
 ##  있는 줄 모르고 D1이 통째로 무효가 된다(설계 §6 S12).
+## ⚠ 벌판은 **변형 셋을 섞는다** — 한 칸만 반복해 깔면 넓은 바닥이 단조롭다(리드 스샷 확인).
 func _fill_tiles() -> void:
 	var ts: Vector2i = _tiles.tile_set.tile_size
 	var rect := Rect2(_ground.position, _ground.size).grow(-float(ts.x))   # 가장자리 한 칸은 틴트가 보이게
 	var from := Vector2i(floori(rect.position.x / ts.x), floori(rect.position.y / ts.y))
 	var to := Vector2i(ceili(rect.end.x / ts.x), ceili(rect.end.y / ts.y))
-	var paths := _exit_paths(from, to, ts)
+	var road := _road_cells(from, to, ts)
 	for y in range(from.y, to.y):
 		for x in range(from.x, to.x):
 			var cell := Vector2i(x, y)
-			var on_path := false
-			for p: Rect2i in paths:
-				if p.has_point(cell):
-					on_path = true
-					break
-			_tiles.set_cell(cell, TILE_SRC_GRASS if on_path else TILE_SRC_FLOOR, Vector2i.ZERO)
+			_tiles.set_cell(cell, TILE_SRC_GROUND,
+				_road_atlas(cell, road) if road.has(cell) else _grass_atlas(cell))
+	# 🔴 **길만 테두리 한 칸 위에도 그린다** — 칠하는 마지막 칸에서 끊으면 그 칸이 「풀로 막힌 끝」
+	#  타일이 돼 길이 방 안에서 **막다른 골목**으로 보인다. 「밖으로 이어진다」가 안 읽히면 출구가
+	#  겉모습이 없다는 사실과 겹쳐 **나갈 데를 못 찾는다**(설계 §6 S12).
+	var outer_from := Vector2i(floori(_ground.position.x / ts.x), floori(_ground.position.y / ts.y))
+	var outer_to := Vector2i(ceili((_ground.position.x + _ground.size.x) / ts.x),
+		ceili((_ground.position.y + _ground.size.y) / ts.y))
+	for cell: Vector2i in road:
+		if cell.x >= from.x and cell.x < to.x and cell.y >= from.y and cell.y < to.y:
+			continue   # 위 루프가 이미 그렸다
+		if cell.x < outer_from.x or cell.x >= outer_to.x or cell.y < outer_from.y or cell.y >= outer_to.y:
+			continue   # 방 밖 — 길 계산에만 쓰이고 그려지진 않는다
+		_tiles.set_cell(cell, TILE_SRC_GROUND, _road_atlas(cell, road))
 
 
-## 출구마다 풀길 칸 범위를 낸다 — 🔴 **좌표는 출구 노드에서 파생한다**(여기 베끼면 출구를 옮길 때
-## 길만 제자리에 남는다). `from`은 포함·`to`는 배타 = `_fill_tiles`의 루프 범위 그대로.
-func _exit_paths(from: Vector2i, to: Vector2i, ts: Vector2i) -> Array[Rect2i]:
-	var out: Array[Rect2i] = []
+## 흙길 칸 전부 — 출구마다 「자기 자리 → 가장 가까운 방 가장자리」 한 줄기.
+## 🔴 **좌표는 출구 노드에서 파생한다**(여기 베끼면 출구를 옮길 때 길만 제자리에 남는다).
+## `from`은 포함·`to`는 배타 = `_fill_tiles`의 루프 범위 그대로.
+func _road_cells(from: Vector2i, to: Vector2i, ts: Vector2i) -> Dictionary:
+	var out: Dictionary = {}
 	if EXIT_PATH_ROWS <= 0:   # 끄는 손잡이 (연출값)
 		return out
 	var half: int = (EXIT_PATH_WIDTH_CELLS - 1) / 2
@@ -272,20 +430,65 @@ func _exit_paths(from: Vector2i, to: Vector2i, ts: Vector2i) -> Array[Rect2i]:
 		if zone == null or not is_instance_valid(zone):
 			continue
 		var cell := Vector2i(floori(zone.position.x / float(ts.x)), floori(zone.position.y / float(ts.y)))
-		out.append(_path_rect(cell, from, to, half))
+		var ends := _exit_road_ends(cell, from, to)
+		_road_between(ends[0], ends[1], half, out)
 	return out
 
 
-## 출구 한 칸 → 「가장 가까운 방 가장자리로 이어지는 통로」.
+## 🔴🔴 **임의의 두 칸을 흙길로 잇는다** — 가로 다리 → 세로 다리(ㄱ자), 폭 `half * 2 + 1`.
 ##
-## 🔴 **세88의 남쪽 출구에 대해 결과가 칸 하나까지 같다**(회귀 0): 출구 셀 y=10 · 채우는 마지막
-## 줄 y=9 · `EXIT_PATH_ROWS=3` → y 7~10인데 루프가 10을 안 도니 실제로 깔리는 건 {7,8,9},
-## 즉 옛 `y >= to.y - EXIT_PATH_ROWS`와 **같은 세 줄**이다. x도 `cell.x ± half`로 동일하다.
+## 🔴 지금 부르는 곳은 출구 길 하나뿐이고 거기선 두 끝이 한 축에 있어 **직선**이 된다. 그래도 이 모양
+##  으로 짠 이유: 다음이 **「입구에서 랜드마크로 이어진 길」**이라, 출구 전용으로 짜면 그때 같은 기계를
+##  두 벌 갖게 된다(감사 T5 — 파생 대신 복제). 랜드마크가 오면 **좌표 두 개만** 주면 된다.
+## ⚠ 경로탐색은 아니다 — 장애물을 안 본다(방이 열린 숲이라 필요가 없다). 필요해지면 그때 얹어라.
+## ⚠ 폭은 **한 줄기 안에서 일정해야 한다** — 시트의 9분할 칸과 오솔길 칸은 변의 풀 두께가 달라
+##  (실측 12px ↔ 24px) 한 줄기에 섞으면 이음매가 어긋난다.
+func _road_between(a: Vector2i, b: Vector2i, half: int, out: Dictionary) -> void:
+	var corner := Vector2i(b.x, a.y)
+	var drew := false
+	if corner != a:
+		_road_segment(a, corner, half, out)
+		drew = true
+	if corner != b:
+		_road_segment(corner, b, half, out)
+		drew = true
+	if not drew:
+		# 두 끝이 같은 칸 — 다리가 없으니 폭만 한 덩어리로 남긴다.
+		for y in range(b.y - half, b.y + half + 1):
+			for x in range(b.x - half, b.x + half + 1):
+				out[Vector2i(x, y)] = true
+
+
+## 다리 한 토막 — 🔴 **진행 방향과 직각으로만** `half`만큼 넓힌다. 양쪽으로 넓히면 꺾이지 않는
+## 길에도 시작·끝에 혹이 붙어 세88 남쪽 길과 칸 수가 어긋난다(회귀).
+func _road_segment(a: Vector2i, b: Vector2i, half: int, out: Dictionary) -> void:
+	var x0 := mini(a.x, b.x)
+	var x1 := maxi(a.x, b.x)
+	var y0 := mini(a.y, b.y)
+	var y1 := maxi(a.y, b.y)
+	if a.y == b.y:
+		y0 -= half
+		y1 += half
+	else:
+		x0 -= half
+		x1 += half
+	for y in range(y0, y1 + 1):
+		for x in range(x0, x1 + 1):
+			out[Vector2i(x, y)] = true
+
+
+## 출구 한 칸 → 「가장 가까운 방 가장자리로 나가는 한 줄기」의 **두 끝**.
+##
+## 🔴 **세88의 남쪽 출구에 대해 그려지는 칸이 하나까지 같다**(회귀 0): 출구 셀 y=10 · 채우는 마지막
+## 줄 y=9 · `EXIT_PATH_ROWS=3` → 두 끝이 y 7과 y 10인데 루프가 10을 안 도니 실제로 깔리는 건
+## {7,8,9}, 즉 옛 `y >= to.y - EXIT_PATH_ROWS`와 **같은 세 줄**이다. x도 `cell.x ± half`로 동일하다.
 ## 🔴 일반화가 필요한 이유: 늘린 출구는 남쪽이 아닐 수 있다. 「마지막 세 줄」로 두면 **동·서·북
 ## 출구엔 길이 자기 자리가 아닌 남쪽 끝에 깔린다**(에러 0 · 화면만 거짓말).
+## 🔴 바깥 끝은 **가장자리에서 한 칸 더 나간다** — 마지막 칸에서 멈추면 그 칸이 「풀로 막힌 끝」이 돼
+##  길이 방 안에서 끊겨 보인다. 그 한 칸은 테두리 위에 그려진다(`_fill_tiles` 둘째 루프).
 ## ⚠ 방 한복판에 출구를 두면 통로가 **출구에서 가장자리까지 통째로** 깔린다 — 의도한 동작이다
 ##  (짧은 표시보다 「걸어 나가는 길」이 D1의 판단을 만든다).
-func _path_rect(cell: Vector2i, from: Vector2i, to: Vector2i, half: int) -> Rect2i:
+func _exit_road_ends(cell: Vector2i, from: Vector2i, to: Vector2i) -> Array[Vector2i]:
 	var last := Vector2i(to.x - 1, to.y - 1)   # 실제로 칠하는 마지막 칸(포함)
 	var d_left := cell.x - from.x
 	var d_right := last.x - cell.x
@@ -293,16 +496,109 @@ func _path_rect(cell: Vector2i, from: Vector2i, to: Vector2i, half: int) -> Rect
 	var d_bottom := last.y - cell.y
 	var best := mini(mini(d_left, d_right), mini(d_top, d_bottom))
 	if best == d_bottom or best == d_top:
-		var edge := last.y if best == d_bottom else from.y
-		var inner := edge - (EXIT_PATH_ROWS - 1) if best == d_bottom else edge + (EXIT_PATH_ROWS - 1)
-		var y0 := mini(cell.y, mini(edge, inner))
-		var y1 := maxi(cell.y, maxi(edge, inner))
-		return Rect2i(cell.x - half, y0, EXIT_PATH_WIDTH_CELLS, y1 - y0 + 1)
-	var edge_x := last.x if best == d_right else from.x
-	var inner_x := edge_x - (EXIT_PATH_ROWS - 1) if best == d_right else edge_x + (EXIT_PATH_ROWS - 1)
-	var x0 := mini(cell.x, mini(edge_x, inner_x))
-	var x1 := maxi(cell.x, maxi(edge_x, inner_x))
-	return Rect2i(x0, cell.y - half, x1 - x0 + 1, EXIT_PATH_WIDTH_CELLS)
+		var out_y := to.y if best == d_bottom else from.y - 1
+		var in_y := last.y - (EXIT_PATH_ROWS - 1) if best == d_bottom else from.y + (EXIT_PATH_ROWS - 1)
+		return [Vector2i(cell.x, mini(cell.y, mini(out_y, in_y))),
+			Vector2i(cell.x, maxi(cell.y, maxi(out_y, in_y)))]
+	var out_x := to.x if best == d_right else from.x - 1
+	var in_x := last.x - (EXIT_PATH_ROWS - 1) if best == d_right else from.x + (EXIT_PATH_ROWS - 1)
+	return [Vector2i(mini(cell.x, mini(out_x, in_x)), cell.y),
+		Vector2i(maxi(cell.x, maxi(out_x, in_x)), cell.y)]
+
+
+## 🔴🔴 흙길 한 칸의 아틀라스 좌표 — **이웃이 고른다**(9분할 오토타일).
+## `cons` = 흙이 **아닌** 변 · `nub` = 두 변은 흙인데 그 사이 대각이 풀인 모서리(= 길이 ㄱ자로 꺾일 때 안쪽).
+## ⚠ cons와 nub가 같이 있으면 **cons가 이긴다** — 시트가 그 조합을 안 들어서(40칸 중 29종) 안쪽
+##  모서리가 살짝 각져 보일 뿐 **깨지지 않는다**(`docs/_reports/tile_dirt.md` §3 마지막 문단).
+func _road_atlas(cell: Vector2i, road: Dictionary) -> Vector2i:
+	var cons := 0
+	if not road.has(cell + Vector2i(0, -1)):
+		cons |= DIR_T
+	if not road.has(cell + Vector2i(0, 1)):
+		cons |= DIR_B
+	if not road.has(cell + Vector2i(-1, 0)):
+		cons |= DIR_L
+	if not road.has(cell + Vector2i(1, 0)):
+		cons |= DIR_R
+	if not _road_is_thick(cell, road):
+		# 폭 1칸 오솔길 — 「어느 쪽으로 이어지나」로 고른다(9분할과 키의 뜻이 반대다).
+		return _road_narrow_atlas((~cons) & 15, cell)
+	if cons != 0:
+		return _road_edge_atlas(cons, cell)
+	var nub := _road_nub(cell, road)
+	if nub != 0:
+		return ROAD_NUB[nub]
+	return _road_center_atlas(cell)
+
+
+## 이 칸이 **폭 2칸 이상**인가 — 자기를 품는 2×2 흙 덩어리가 하나라도 있으면 그렇다.
+## 🔴 넓은 길(9분할)과 오솔길은 변의 풀 두께가 달라 **한 칸이라도 잘못 고르면 이음매가 튄다.**
+func _road_is_thick(cell: Vector2i, road: Dictionary) -> bool:
+	for oy in [-1, 0]:
+		for ox in [-1, 0]:
+			if road.has(cell + Vector2i(ox, oy)) and road.has(cell + Vector2i(ox + 1, oy)) \
+				and road.has(cell + Vector2i(ox, oy + 1)) and road.has(cell + Vector2i(ox + 1, oy + 1)):
+				return true
+	return false
+
+
+## 안쪽 모서리 비트 — 없으면 0. 🔴 **`cons == 0`일 때만 불러라** — 「두 변이 다 흙」이 nub의 전제인데
+## 그 검사를 여기서 다시 안 한다(호출부가 이미 네 변이 다 흙임을 확인한 뒤다).
+## ⚠ 둘 이상이면 **먼저 찾은 것**을 쓴다(3칸 폭 길에선 한 번에 하나만 생긴다).
+func _road_nub(cell: Vector2i, road: Dictionary) -> int:
+	for pair: Array in [[DIR_T | DIR_L, Vector2i(-1, -1)], [DIR_T | DIR_R, Vector2i(1, -1)],
+		[DIR_B | DIR_L, Vector2i(-1, 1)], [DIR_B | DIR_R, Vector2i(1, 1)]]:
+		if not road.has(cell + (pair[1] as Vector2i)):
+			return pair[0]
+	return 0
+
+
+## 변 칸 — 상·하변만 A/B를 번갈아 깐다(좌·우변은 시트에 한 판뿐이다).
+func _road_edge_atlas(cons: int, cell: Vector2i) -> Vector2i:
+	if cons == DIR_T and _cell_hash(cell, 11) < 50:
+		return ROAD_TOP_B
+	if cons == DIR_B and _cell_hash(cell, 11) < 50:
+		return ROAD_BOTTOM_B
+	return ROAD_EDGE.get(cons, ROAD_EDGE[0])
+
+
+## 길 한복판 — 🔴 **잔풀 난 흙을 섞는 게 이 칸의 핵심**이다(가장 많이 반복되는 면이라 여기가
+## 단조로우면 길 전체가 벽지가 된다 — art 손질 6회차의 결론).
+func _road_center_atlas(cell: Vector2i) -> Vector2i:
+	var h := _cell_hash(cell, 3)
+	if h < 8:
+		return ROAD_GRAVEL
+	if h < 38:
+		return ROAD_WEEDY
+	if h < 65:
+		return ROAD_CENTER_B
+	return ROAD_EDGE[0]
+
+
+func _road_narrow_atlas(conn: int, cell: Vector2i) -> Vector2i:
+	if conn == (DIR_T | DIR_B) and _cell_hash(cell, 11) < 50:
+		return ROAD_NARROW_VERT_B
+	if conn == (DIR_L | DIR_R) and _cell_hash(cell, 11) < 50:
+		return ROAD_NARROW_HORZ_B
+	return ROAD_NARROW.get(conn, ROAD_NARROW[0])
+
+
+## 벌판 한 칸 — 풀 변형 셋(비율은 `docs/_reports/tile_dirt.md` §3 행4: 볕에 마른 ~25% · 새순 ~8%).
+func _grass_atlas(cell: Vector2i) -> Vector2i:
+	var h := _cell_hash(cell, 0)
+	if h < 8:
+		return GRASS_SPROUT
+	if h < 33:
+		return GRASS_SUN
+	return GRASS_PLAIN
+
+
+## 칸 좌표 → 0~99. 🔴 **규칙적이면 안 된다** — 모듈로로 고르면 무늬가 주기로 반복돼 벌판이 벽지가
+## 된다(art 손질 3회차가 정확히 그걸로 걸렸다). 해시 상수는 `base.gd _grass_variant`의 선례를 따랐다
+## (표는 시트마다 다르니 파생이 아니라 같은 관용구다). `salt`로 굴림을 갈라 둔다 — 같은 값을 쓰면
+## 풀 변형과 길 변형이 **같은 자리에서 같이 튀어** 무늬가 눈에 띈다.
+func _cell_hash(cell: Vector2i, salt: int) -> int:
+	return absi((cell.x * 73856093) ^ (cell.y * 19349663) ^ (salt * 83492791)) % 100
 
 
 ## 보스 동적 스폰 — 두 경로 (ChapterDef 계약):

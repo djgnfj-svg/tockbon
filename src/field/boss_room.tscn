@@ -26,81 +26,61 @@ offset_top = -1500.0
 offset_right = 1200.0
 offset_bottom = 700.0
 mouse_filter = 2
-color = Color(0.13, 0.19, 0.14, 1)
+color = Color(0.33, 0.41, 0.27, 1)
 
 [node name="TileGround" type="TileMapLayer" parent="."]
 tile_set = ExtResource("7_tileset")
 
-; 밝게 유지 + 조명만 (세73): 앰비언트를 살짝만 눌러(여전히 밝음) 빛 웅덩이가 대비로 읽히게 한다.
-; 플레이어 아우라(player.tscn)가 중앙을, 아래 횃불 8개가 남북 네 대역을, 강조광이 보스 쪽을 밝힌다.
+; 🔴 세99: 방이 **낮**이 됐다 (사용자 확정 *"그냥 낮으로 바꾸자"*). 옛 이름은 `Dusk`(황혼)였다.
+; 낮이라 앰비언트를 안 누른다 — 정오의 미미한 온기만 남겨 「시간대 손잡이」로 산다(저녁을 넣고
+; 싶으면 여기 하나만 내리면 된다). 밝기의 본체는 **바닥 그림**이고(세99에 낮 밝기로 그려진 시트로
+; 갈았다), `boss_room.gd _apply_chapter_tint`가 챕터 색을 1.0 언저리의 옅은 틴트로만 얹는다.
 ; ⚠ 씬 .tscn 주석은 에디터 저장 시 날아간다 — 이 설명의 정본은 boss_room.gd 상단 주석 블록.
-[node name="Dusk" type="CanvasModulate" parent="."]
-color = Color(0.85, 0.84, 0.93, 1)
+[node name="Daylight" type="CanvasModulate" parent="."]
+color = Color(1, 0.99, 0.96, 1)
 
+; 🔴 세99: 횃불 8개(따뜻 · energy 0.9)를 **지웠다** — 낮엔 근거가 없고, 밝은 바닥 위 additive
+; 웅덩이는 「빛」이 아니라 희뿌연 얼룩으로만 읽힌다(세73의 「빛 웅덩이」는 어두운 화면에서만 성립).
+; 대신 같은 축을 **볕뉘**로 옮겼다: 나뭇잎 사이로 드는 햇살 = 약하고(0.22) 따뜻하고 넓은 웅덩이.
+; 자리는 좌우 대칭을 일부러 깼다(횃불은 대칭이었다 — 사람이 건 물건이라서).
 [node name="Lights" type="Node2D" parent="."]
 
-[node name="Torch1" type="PointLight2D" parent="Lights"]
-position = Vector2(-500, 450)
-color = Color(1, 0.68, 0.38, 1)
-energy = 0.9
+[node name="Sun1" type="PointLight2D" parent="Lights"]
+position = Vector2(-430, 470)
+color = Color(1, 0.96, 0.78, 1)
+energy = 0.22
 texture = ExtResource("8_light")
-texture_scale = 1.7
+texture_scale = 2.4
 
-[node name="Torch2" type="PointLight2D" parent="Lights"]
-position = Vector2(500, 450)
-color = Color(1, 0.68, 0.38, 1)
-energy = 0.9
+[node name="Sun2" type="PointLight2D" parent="Lights"]
+position = Vector2(520, 120)
+color = Color(1, 0.96, 0.78, 1)
+energy = 0.22
 texture = ExtResource("8_light")
-texture_scale = 1.7
+texture_scale = 2.0
 
-[node name="Torch3" type="PointLight2D" parent="Lights"]
-position = Vector2(-500, -150)
-color = Color(1, 0.68, 0.38, 1)
-energy = 0.9
+[node name="Sun3" type="PointLight2D" parent="Lights"]
+position = Vector2(-560, -420)
+color = Color(1, 0.96, 0.78, 1)
+energy = 0.22
 texture = ExtResource("8_light")
-texture_scale = 1.7
+texture_scale = 2.2
 
-[node name="Torch4" type="PointLight2D" parent="Lights"]
-position = Vector2(500, -150)
-color = Color(1, 0.68, 0.38, 1)
-energy = 0.9
+[node name="Sun4" type="PointLight2D" parent="Lights"]
+position = Vector2(330, -880)
+color = Color(1, 0.96, 0.78, 1)
+energy = 0.22
 texture = ExtResource("8_light")
-texture_scale = 1.7
+texture_scale = 2.6
 
-[node name="Torch5" type="PointLight2D" parent="Lights"]
-position = Vector2(-500, -750)
-color = Color(1, 0.68, 0.38, 1)
-energy = 0.9
+; 보스 자리 = **볕이 드는 빈터**. 옛 `BossGlow`(차가운 파란 강조광)의 자리를 물려받았다 — 역할은
+; 그대로 「저기가 무대다」이고, 색만 낮에 맞췄다.
+[node name="SunGlade" type="PointLight2D" parent="Lights"]
+position = Vector2(0, -1330)
+color = Color(1, 0.97, 0.82, 1)
+energy = 0.3
 texture = ExtResource("8_light")
-texture_scale = 1.7
-
-[node name="Torch6" type="PointLight2D" parent="Lights"]
-position = Vector2(500, -750)
-color = Color(1, 0.68, 0.38, 1)
-energy = 0.9
-texture = ExtResource("8_light")
-texture_scale = 1.7
-
-[node name="Torch7" type="PointLight2D" parent="Lights"]
-position = Vector2(-500, -1300)
-color = Color(1, 0.68, 0.38, 1)
-energy = 0.9
-texture = ExtResource("8_light")
-texture_scale = 1.7
-
-[node name="Torch8" type="PointLight2D" parent="Lights"]
-position = Vector2(500, -1300)
-color = Color(1, 0.68, 0.38, 1)
-energy = 0.9
-texture = ExtResource("8_light")
-texture_scale = 1.7
-
-[node name="BossGlow" type="PointLight2D" parent="Lights"]
-position = Vector2(0, -1350)
-color = Color(0.6, 0.72, 1, 1)
-energy = 0.7
-texture = ExtResource("8_light")
-texture_scale = 2.3
+texture_scale = 3.2
 
 [node name="Trees" type="Node2D" parent="."]
 
@@ -168,7 +148,8 @@ position = Vector2(250, 640)
 ; 종류뿐**이다(늘린 출구는 src/props/exit_zone.tscn이 같은 값을 쥔다).
 ; 물리 = layer 64(interaction) / mask 2(player) — 1(world)에 두면 캐리어가 여기 부딪혀 마법이 죽는다.
 ; 겉모습은 배경이 담당한다(차원문 같은 Polygon2D를 세우지 않는다) — boss_room.gd의 `_fill_tiles`가
-; 여기서 파생한 풀길을 깔아 "마을로 걸어 나가는 길"로 읽히게 한다.
+; 여기서 파생한 **흙길**을 깔아 "마을로 걸어 나가는 길"로 읽히게 한다(세99에 풀길에서 갈았다 —
+; 낮이 되며 바탕도 초록이 되자 풀길이 "밝은 초록 네모"로만 읽혔다).
 [node name="Exit" type="Area2D" parent="."]
 position = Vector2(0, 660)
 collision_layer = 64

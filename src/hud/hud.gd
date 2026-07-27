@@ -397,7 +397,9 @@ func _draw_status_icon(font: Font) -> void:
 func _draw_selected_detail(font: Font, at: Vector2) -> void:
 	var design: RingDesign = GameState.ring_equipped[_selected]
 	if design == null:
-		draw_string(font, at, "슬롯 %d — 비어 있음 (책상 E에서 그려 장착)" % (_selected + 1),
+		# ⚠ 세99: "그려 장착"은 **세83에 폐지된 그리기**를 가리키던 폐지어였다(세95 청산에서 빠진 자리 —
+		#  MCP 스샷이 잡았다. 헤드리스는 문구가 화면에 뜨는 걸 못 본다).
+		draw_string(font, at, "슬롯 %d — 비어 있음 (책상 E에서 조립해 장착)" % (_selected + 1),
 			HORIZONTAL_ALIGNMENT_LEFT, -1, 12, EMPTY_COLOR)
 		return
 	# 🔴 점수 반올림도 core가 판다 — 「퍼펙트」가 그 반올림으로 정의돼 있다 (score_display 주석).

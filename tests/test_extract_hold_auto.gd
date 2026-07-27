@@ -18,10 +18,10 @@ extends SceneTree
 ##  [3] 다 차야 나간다 · **덜 차고 떼면 안 나간다** · 진행률이 오른다
 ##  [4] **취소 넷** — 피격 · 범위 이탈 · 모달 · 트리 이탈(= 씬 전환)
 ##  [5] **진행이 화면에 있다** — `Prompt`에 막대가 붙고 끝나면 원문이 돌아온다
-##  [6] `boss_room` — 출구가 **여럿**이고 **전부** `_extract`에 이어지고 **전부 풀길이 깔린다**.
+##  [6] `boss_room` — 출구가 **여럿**이고 **전부** `_extract`에 이어지고 **전부 흙길이 깔린다**.
 ##      🔴 `extract_points`가 비면 타일이 세98과 **칸 하나까지 같다**(회귀 0)
 ##      🔴🔴 **ⓐ는 실데이터로 잰다**(세99 포탈 은퇴분): 챕터 3장이 **실제로 싣고 있는** 좌표에
-##      출구가 서고 풀길이 가장자리까지 닿나. 주입값으로만 재면 **배송되는 데이터가 비어도 그린**이고,
+##      출구가 서고 흙길이 가장자리까지 닿나. 주입값으로만 재면 **배송되는 데이터가 비어도 그린**이고,
 ##      그건 「보스에서 남쪽까지 1950px 되돌아가는 판」이 조용히 굳는다는 뜻이다
 ##  [7] 🔴🔴 **입장부터 출발하는 실경로** — 방에 들어가 늘린 출구까지 걸어가 E를 꾹 눌러
 ##      `extraction_success`가 온다. 「기능이 돈다 ≠ 거기 갈 수 있다」(세97)의 그물이다
@@ -32,12 +32,35 @@ extends SceneTree
 ## 주의: -s 모드는 오토로드 전역 등록보다 먼저 컴파일된다 — 오토로드 식별자·모듈 preload 금지.
 ## 첫 프레임 후 load()·/root 접근. 지역 변수는 의도적으로 동적 타입.
 
-## 🔴 타일 소스 id는 **명시 상수로 박는다** — `boss_room`의 const에서 파생하면 둘 다 밀려도 통과한다.
-const TILE_GRASS := 0
-const TILE_FLOOR := 1
-## 세88 풀길의 실측 규격(칸) — [6]의 회귀 대조가 이 둘을 손으로 든다.
+## 🔴 타일 소스 id·아틀라스 좌표는 **명시 상수로 박는다** — `boss_room`의 const에서 파생하면
+##  둘 다 밀려도 통과한다.
+## 🔴🔴 **세99에 나가는 길이 「풀」에서 「흙길」로 갈렸다** — 방이 낮이 되며 바탕도 초록이 되자
+##  풀길이 「밝은 초록 네모」로만 읽혔다. **그물을 지우지 않고 채널을 옮겼다**: 옛 판정
+##  「source 0(풀)인가」 → 새 판정 **「흙길 칸인가」**(`_is_road`). 재는 것(발밑에 있나 · 가장자리까지
+##  이어지나 · 그 출구 자리에서 나가나)은 **한 항목도 안 줄었다.**
+const TILE_SRC_GROUND := 2
+## 벌판(길이 **아닌** 바닥)이 쓰는 아틀라스 좌표 전량 — 시트 행4의 풀 변형 셋.
+## 🔴 여기 없는 좌표 = 길이다. 목록을 늘리면 그만큼 그물이 눈을 감으니 **함부로 넣지 마라.**
+const GRASS_ATLAS: Array[Vector2i] = [Vector2i(1, 4), Vector2i(2, 4), Vector2i(3, 4)]
+## 흙길이 쓰는 아틀라스 좌표 전량(9분할 + 안쪽 모서리 + 오솔길 + 흙 변형).
+## 🔴 **둘을 합치면 시트에서 실제로 쓰는 칸의 전부**여야 한다 — `[6]`이 「모든 칸이 둘 중 하나인가」로
+##  **오타 좌표**(빈 칸을 가리켜 화면에 구멍이 나는 것)까지 잡는다.
+const ROAD_ATLAS: Array[Vector2i] = [
+	Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0), Vector2i(3, 0),
+	Vector2i(4, 0), Vector2i(5, 0), Vector2i(6, 0), Vector2i(7, 0),
+	Vector2i(0, 1), Vector2i(1, 1), Vector2i(2, 1), Vector2i(3, 1),
+	Vector2i(4, 1), Vector2i(5, 1), Vector2i(6, 1), Vector2i(7, 1),
+	Vector2i(0, 2), Vector2i(1, 2), Vector2i(2, 2), Vector2i(3, 2),
+	Vector2i(4, 2), Vector2i(5, 2), Vector2i(6, 2), Vector2i(7, 2),
+	Vector2i(0, 3), Vector2i(1, 3), Vector2i(2, 3), Vector2i(3, 3),
+	Vector2i(4, 3), Vector2i(5, 3), Vector2i(6, 3), Vector2i(7, 3),
+	Vector2i(0, 4), Vector2i(4, 4), Vector2i(5, 4), Vector2i(6, 4),
+]
+## 나가는 길의 실측 규격(칸) — [6]의 회귀 대조가 이 둘을 **손으로 든다**(구현에서 파생하면 같이 밀린다).
+## 🔴 `PATH_ROWS`는 세99에 **3 → 7**로 늘었다: 폭(3)과 길이(3)가 같아 길이 **정사각형 얼룩**으로
+##  읽혔다(실측 스샷). **모양의 계약**(어느 가장자리로 · 폭 몇 칸)은 세88 그대로다.
 const PATH_WIDTH_CELLS := 3
-const PATH_ROWS := 3
+const PATH_ROWS := 7
 
 ## 🔴 그물용 홀드 길이 — 기본 3.0초로 재면 항목마다 3초씩 잡아먹는다. **balance를 흔드는 것 자체가
 ## [2]의 검출자**이기도 하다(길이가 balance에서 온다는 증명). 끝나면 원복한다.
@@ -325,13 +348,13 @@ func _test_progress_is_on_screen() -> void:
 	await process_frame
 
 
-## [6] 🔴🔴 `boss_room` — 출구가 여럿이고 **전부** 배선되고 **전부** 풀길이 깔린다(설계 §6 S12).
+## [6] 🔴🔴 `boss_room` — 출구가 여럿이고 **전부** 배선되고 **전부** 흙길이 깔린다(설계 §6 S12).
 ##
 ## 🔴 **회귀 대조부터 한다**: `extract_points`가 비면 타일이 세88과 **칸 하나까지 같아야** 한다.
 ##  기대치를 옛 공식(`y >= to.y - PATH_ROWS` · `|x - exit_cx| <= 1`)으로 **손으로 든다** —
 ##  구현에서 파생하면 둘 다 밀려도 통과한다.
 func _test_room_has_many_exits() -> void:
-	print("[6] 출구 여럿 — 전부 _extract에 이어지고 전부 풀길이 깔린다")
+	print("[6] 출구 여럿 — 전부 _extract에 이어지고 전부 흙길이 깔린다")
 	var ch = _db.get_chapter(&"ch1")
 	var before: Array[Vector2] = ch.extract_points.duplicate()
 
@@ -357,16 +380,26 @@ func _test_room_has_many_exits() -> void:
 			# 🔴 서·동·북 방향은 세99가 처음이다 — `_path_rect`의 방향 선택이 그쪽에서도 도는지
 			#  **실좌표로** 확인한다(남쪽만 맞는 구현은 옛 「마지막 세 줄」 공식으로도 통과한다).
 			var zc := _cell_of(z, rg)
-			var seeds := _grass_seeds_at(z, rg)
+			var seeds := _road_seeds_at(z, rg)
 			_check(not seeds.is_empty(),
-				"%s: 출구 %s 발밑에 풀길이 깔렸다 (실좌표 — 0이면 나갈 데가 있는 줄 모른다)"
+				"%s: 출구 %s 발밑에 흙길이 깔렸다 (실좌표 — 0이면 나갈 데가 있는 줄 모른다)"
 					% [cid, z.position])
-			var reach := _grass_edge_reach(seeds, zc, rg)
+			var reach := _road_edge_reach(seeds, zc, rg)
 			_check(reach >= 0,
-				"%s: 출구 %s의 풀이 방 가장자리까지 이어진다 (실좌표)" % [cid, z.position])
+				"%s: 출구 %s의 흙길이 방 가장자리까지 이어진다 (실좌표)" % [cid, z.position])
 			_check(reach >= 0 and reach <= _edge_slack(zc, rg),
 				"🔴🔴 %s: 출구 %s의 길이 **그 자리에서** 밖으로 나간다 (가장자리까지 %d칸 · 허용 %d — 크면 엉뚱한 가장자리로 샌 것)"
 					% [cid, z.position, reach, _edge_slack(zc, rg)])
+			# 🔴🔴 **그 출구의 길이 테두리 한 칸 위까지 나갔나** — 칠하는 마지막 칸에서 멈추면
+			#  그 칸이 「풀로 막힌 끝」 타일이 돼 길이 **막다른 골목**으로 보인다(§6 S12).
+			#  🔴 위 「가장자리까지 이어진다」로는 **못 잡는다**(세99 뮤테이션 실측: 한 칸을 덜 그어도
+			#  가장자리 칸엔 여전히 길이 있어 전 항목 그린이었다). 🔴 **출구마다** 봐야 한다 —
+			#  방 전체에서 한 칸이라도 있으면 통과로 두면 **남쪽 출구가 나머지를 가려 준다**
+			#  (그 출구는 노드 자체가 테두리 칸 위에 서 있어 넘침이 공짜로 생긴다 — 실측 2회차).
+			var out_d := _road_outside_dist(zc, rg)
+			_check(out_d >= 0 and out_d <= _edge_slack(zc, rg) + 1,
+				"🔴🔴 %s: 출구 %s의 길이 **테두리 한 칸 위까지** 나간다 (밖 칸까지 %d · 허용 %d)"
+					% [cid, z.position, out_d, _edge_slack(zc, rg) + 1])
 
 	# ── ⓑ 비면 지금 동작 (회귀 0)
 	ch.extract_points = [] as Array[Vector2]
@@ -379,11 +412,38 @@ func _test_room_has_many_exits() -> void:
 	var wrong := 0
 	for y in range(g.from.y, g.to.y):
 		for x in range(g.from.x, g.to.x):
-			var want_grass: bool = y >= g.to.y - PATH_ROWS and absi(x - cx) <= half
-			var got_grass: bool = _tiles().get_cell_source_id(Vector2i(x, y)) == TILE_GRASS
-			if want_grass != got_grass:
+			var want_road: bool = y >= g.to.y - PATH_ROWS and absi(x - cx) <= half
+			if want_road != _is_road(Vector2i(x, y)):
 				wrong += 1
-	_check(wrong == 0, "🔴 남쪽 풀길이 세88과 칸 하나까지 같다 (어긋난 칸 %d)" % wrong)
+	_check(wrong == 0, "🔴 남쪽 흙길이 손으로 든 공식과 칸 하나까지 같다 (어긋난 칸 %d)" % wrong)
+
+	# ── ⓑ' 🔴🔴 **바닥이 실제로 새 시트로 깔렸나 + 벌판이 단조롭지 않나** (세99 타일 교체분).
+	#  ⓘ 모든 칸이 source 2고 아틀라스가 **아는 좌표**다 — 오타 좌표는 시트의 빈 칸을 가리켜
+	#    화면에 구멍이 나는데 `set_cell`은 **에러를 안 낸다**(조용히 깨지는 자리다).
+	#  ⓘⓘ 벌판이 **변형을 섞는다** — 한 칸만 반복해 깔면 넓은 바닥이 벽지가 된다(리드 스샷 지적).
+	#    🔴 「섞는다」를 개수로만 재면 1종이어도 통과하므로 **종류 수**로 잰다.
+	var unknown := 0
+	var seen_grass: Dictionary = {}
+	var road_cells := 0
+	for y in range(g.from.y, g.to.y):
+		for x in range(g.from.x, g.to.x):
+			var cell := Vector2i(x, y)
+			if _tiles().get_cell_source_id(cell) != TILE_SRC_GROUND:
+				unknown += 1
+				continue
+			var at: Vector2i = _tiles().get_cell_atlas_coords(cell)
+			if GRASS_ATLAS.has(at):
+				seen_grass[at] = true
+			elif ROAD_ATLAS.has(at):
+				road_cells += 1
+			else:
+				unknown += 1
+	_check(unknown == 0,
+		"🔴 바닥 칸이 전부 source %d의 **아는 좌표**다 (모르는 칸 %d — 시트 빈 칸을 가리켜도 에러가 0이다)"
+			% [TILE_SRC_GROUND, unknown])
+	_check(road_cells > 0, "흙길 칸이 실제로 깔렸다 (%d칸 — 0이면 위 회귀 대조가 자명 통과다)" % road_cells)
+	_check(seen_grass.size() >= 2,
+		"🔴 벌판이 풀 변형을 섞는다 (종류 %d ≥ 2 — 1종이면 넓은 바닥이 단조롭다)" % seen_grass.size())
 
 	# ── ⓒ 늘린다 — 서쪽 가장자리 하나 + 남서 하나
 	ch.extract_points = [Vector2(-1150.0, 0.0), Vector2(-700.0, 660.0)] as Array[Vector2]
@@ -413,22 +473,22 @@ func _test_room_has_many_exits() -> void:
 	_check(held == exits.size(),
 		"🔴 출구 %d개가 **전부** 홀드다 (실제 %d — 하나만 즉시여도 D7이 거기로 샌다)" % [exits.size(), held])
 
-	# 🔴 풀길 — 늘린 출구마다 **자기 자리에** 깔린다(남쪽 끝에만 깔리면 D1이 통째로 무효다).
+	# 🔴 흙길 — 늘린 출구마다 **자기 자리에** 깔린다(남쪽 끝에만 깔리면 D1이 통째로 무효다).
 	# 🔴🔴 **셋을 같이 잰다 — 앞의 둘만으로는 검출력이 얕다**(세99 뮤테이션 실측 2회):
 	#  ⓐ「발밑에 있다」만 → 방향 선택을 되돌려도 **0건**. ⓑ「+ 가장자리에 닿는다」(bool)만 →
 	#  **여전히 0건**이었다: 강제로 남쪽으로 그은 통로가 발밑에서 시작해 남쪽 끝까지 이어지니
 	#  「닿긴 닿는다」가 참이 된다. 화면에선 방을 세로로 가로지르는 얼룩인데 에러가 0이다.
-	#  → ⓒ **닿는 자리가 그 출구 근처인가**(거리)를 재고서야 빨개진다(`_grass_edge_reach`).
+	#  → ⓒ **닿는 자리가 그 출구 근처인가**(거리)를 재고서야 빨개진다(`_road_edge_reach`).
 	g = _grid()
 	for z in exits:
 		var zc := _cell_of(z, g)
-		var seeds := _grass_seeds_at(z, g)
+		var seeds := _road_seeds_at(z, g)
 		_check(not seeds.is_empty(),
-			"🔴🔴 출구 %s 발밑에 풀길이 깔렸다 (풀 칸 %d — 0이면 나갈 데가 있는 줄 모른다)"
+			"🔴🔴 출구 %s 발밑에 흙길이 깔렸다 (길 칸 %d — 0이면 나갈 데가 있는 줄 모른다)"
 				% [z.position, seeds.size()])
-		var reach := _grass_edge_reach(seeds, zc, g)
+		var reach := _road_edge_reach(seeds, zc, g)
 		_check(reach >= 0,
-			"🔴🔴 출구 %s의 풀이 **방 가장자리까지 이어진다** (안 이어지면 나가는 길이 아니라 얼룩이다)"
+			"🔴🔴 출구 %s의 흙길이 **방 가장자리까지 이어진다** (안 이어지면 나가는 길이 아니라 얼룩이다)"
 				% z.position)
 		_check(reach >= 0 and reach <= _edge_slack(zc, g),
 			"🔴🔴 출구 %s의 길이 **그 자리에서** 밖으로 나간다 (가장자리까지 %d칸 · 허용 %d)"
@@ -589,6 +649,16 @@ func _tiles() -> TileMapLayer:
 	return _room.get_node("TileGround") as TileMapLayer
 
 
+## 🔴🔴 「이 칸이 **나가는 길**인가」 — 세99에 길이 풀→흙으로 갈리며 옮긴 판정 채널.
+## 🔴 **아틀라스 좌표로 가른다**(source id로는 못 가른다 — 벌판과 길이 **같은 시트**를 쓴다).
+##  벌판 좌표 목록(`GRASS_ATLAS`)을 손으로 들고 **그 밖이면 길**로 본다: 길의 좌표가 이웃에 따라
+##  29종으로 갈려서, 길 쪽을 열거하면 오토타일이 한 종을 새로 쓰는 날 그물이 **조용히 눈을 감는다.**
+func _is_road(cell: Vector2i) -> bool:
+	if _tiles().get_cell_source_id(cell) != TILE_SRC_GROUND:
+		return false
+	return not GRASS_ATLAS.has(_tiles().get_cell_atlas_coords(cell))
+
+
 ## `boss_room._fill_tiles`와 **같은 방식으로** 셀 범위를 파생한다 — 좌표를 베끼면 방을 키울 때
 ## 이 그물만 낡아 거짓 빨강이 난다(세88 카메라 검사가 Ground rect를 대조하는 것과 같은 결).
 func _grid() -> Dictionary:
@@ -602,10 +672,44 @@ func _grid() -> Dictionary:
 	}
 
 
-## 출구 발밑 3×3에서 풀 칸을 모은다 — 번짐(`_grass_reaches_edge`)의 씨앗.
+## 🔴 **테두리 한 칸을 포함한** 방 전체의 셀 범위 — `_grid()`는 그 한 칸을 **뺀** 안쪽이다
+## (`boss_room._fill_tiles`가 「벌판은 안쪽까지, 길만 테두리 위에도」로 나눠 그린다).
+## ⚠ 여기도 좌표를 안 베끼고 `Ground` rect에서 파생한다 — 방을 키워도 안 낡는다.
+func _outer_grid() -> Dictionary:
+	var ground: ColorRect = _room.get_node("Ground")
+	var ts: Vector2i = _tiles().tile_set.tile_size
+	return {
+		"from": Vector2i(floori(ground.position.x / ts.x), floori(ground.position.y / ts.y)),
+		"to": Vector2i(ceili((ground.position.x + ground.size.x) / ts.x),
+			ceili((ground.position.y + ground.size.y) / ts.y)),
+	}
+
+
+## 그 출구에서 **가장 가까운 「테두리 위 길 칸」까지의 거리**(체비셰프). 없으면 −1.
+## 🔴 안쪽 격자 밖 · 방 rect 안 = 타일이 못 덮는 테두리 한 칸 = 「길이 밖으로 이어지는」 자리다.
+## 🔴 **출구마다 재는 게 핵심이다** — 방 전체에서 한 칸만 세면 **남쪽 출구가 나머지를 가려 준다**
+##  (그 출구는 노드 자체가 테두리 칸 위에 서 있어 넘침이 공짜로 생긴다 — 세99 뮤테이션 실측).
+func _road_outside_dist(cell: Vector2i, g: Dictionary) -> int:
+	var og := _outer_grid()
+	var from: Vector2i = g["from"]
+	var to: Vector2i = g["to"]
+	var best := -1
+	for y in range(og.from.y, og.to.y):
+		for x in range(og.from.x, og.to.x):
+			if x >= from.x and x < to.x and y >= from.y and y < to.y:
+				continue
+			if not _is_road(Vector2i(x, y)):
+				continue
+			var d: int = maxi(absi(x - cell.x), absi(y - cell.y))
+			if best < 0 or d < best:
+				best = d
+	return best
+
+
+## 출구 발밑 3×3에서 흙길 칸을 모은다 — 번짐(`_road_edge_reach`)의 씨앗.
 ## ⚠ 「발밑에 있다」만으로는 검출력이 얕다(세99 실측: 방향 선택 뮤테이션을 **0건** 잡았다) —
-##  반드시 `_grass_reaches_edge`와 **짝으로** 써라.
-func _grass_seeds_at(zone, g: Dictionary) -> Array[Vector2i]:
+##  반드시 `_road_edge_reach`와 **짝으로** 써라.
+func _road_seeds_at(zone, g: Dictionary) -> Array[Vector2i]:
 	var ts: Vector2i = g["ts"]
 	var from: Vector2i = g["from"]
 	var to: Vector2i = g["to"]
@@ -614,12 +718,12 @@ func _grass_seeds_at(zone, g: Dictionary) -> Array[Vector2i]:
 	for dy in range(-1, 2):
 		for dx in range(-1, 2):
 			var cell := Vector2i(clampi(c.x + dx, from.x, to.x - 1), clampi(c.y + dy, from.y, to.y - 1))
-			if _tiles().get_cell_source_id(cell) == TILE_GRASS:
+			if _is_road(cell):
 				seeds.append(cell)
 	return seeds
 
 
-## 씨앗 칸에서 **풀만 밟고** 번져 닿은 방 가장자리 칸 중 **출구에서 가장 가까운 것의 거리**(체비셰프).
+## 씨앗 칸에서 **흙길만 밟고** 번져 닿은 방 가장자리 칸 중 **출구에서 가장 가까운 것의 거리**(체비셰프).
 ## 못 닿으면 −1. 🔴 「나가는 길」의 구현 무관 정의다 — 어느 가장자리인지·통로를 어떤 모양으로 그리는지는
 ## 구현 선택이라 안 따지고, 재는 것은 **「그 출구 자리에서 밖으로 이어지나」** 하나다.
 ##
@@ -628,7 +732,7 @@ func _grass_seeds_at(zone, g: Dictionary) -> Array[Vector2i]:
 ##  출구 발밑에서 시작해 남쪽 끝까지 이어지니 「닿긴 닿는다」가 참이 된다. 화면에서는 **방을 세로로
 ##  가로지르는 얼룩**이고 서·북 출구는 여전히 「나갈 데가 없는」 자리인데 에러가 0이다.
 ##  → 거리로 재면 북쪽 출구가 **31칸** 떨어진 남쪽 끝으로만 나가는 게 드러난다(→ `_edge_slack`).
-func _grass_edge_reach(seeds: Array[Vector2i], cell: Vector2i, g: Dictionary) -> int:
+func _road_edge_reach(seeds: Array[Vector2i], cell: Vector2i, g: Dictionary) -> int:
 	var from: Vector2i = g["from"]
 	var to: Vector2i = g["to"]
 	var best := -1
@@ -647,7 +751,7 @@ func _grass_edge_reach(seeds: Array[Vector2i], cell: Vector2i, g: Dictionary) ->
 			var n: Vector2i = c + step
 			if n.x < from.x or n.x >= to.x or n.y < from.y or n.y >= to.y or seen.has(n):
 				continue
-			if _tiles().get_cell_source_id(n) != TILE_GRASS:
+			if not _is_road(n):
 				continue
 			seen[n] = true
 			queue.append(n)
