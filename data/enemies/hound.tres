@@ -39,7 +39,6 @@ params = {
 "attack_range": 20.0,
 "charge_speed": 330.0,
 "charge_trigger_range": 120.0,
-"color": Color(0.72, 0.42, 0.28, 1),
 "contact_damage": 8.0,
 "dash_sec": 0.4,
 "hitbox_radius": 20.0,

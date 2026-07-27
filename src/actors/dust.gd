@@ -7,10 +7,10 @@ extends Node2D
 ## 쏘는 건 "매 프레임성" 트래픽이라 vfx.gd 규약(순수 오버레이)에도 과하다.
 ##
 ## 🔴 퍼프 = **절차적이 맞다** (도형 금지 규칙의 예외, takbon-rules §0): 형태 없는 흙먼지 이펙트 —
-## death_puff Polygon2D 링과 정확히 같은 부류의 "그림"이다. 도트 퍼프로 승격하고 싶으면
+## 죽음 마나 폭발(`mana_burst.gd`)과 정확히 같은 부류의 "그림"이다. 도트 퍼프로 승격하고 싶으면
 ## `_spawn_puff` 한 곳만 바꾸면 된다.
 ##
-## 🔴 퍼프는 `get_tree().current_scene`에 add_child (juice._spawn_number·death_puff 규약) —
+## 🔴 퍼프는 `get_tree().current_scene`에 add_child (juice._spawn_number·`mana_burst` 규약) —
 ## 플레이어를 따라오면 안 되고 **그 자리에 남아야** 이동감이 생긴다. 그룹 무가입(shadow와 같은 결).
 ##
 ## 🔴 여기 수치는 밸런스가 아니라 **연출값(손맛)이다** — balance.tres가 아니라 const. 사용자 튜닝.
@@ -66,7 +66,7 @@ func _roll_burst(parent: CharacterBody2D) -> void:
 		_spawn_puff(parent.global_position + FOOT_OFFSET, dir * PUFF_DRIFT)
 
 
-## 작은 반투명 흙색 원(6각 근사) 하나 — 살짝 떠오르며 축소·페이드 (death_puff 결).
+## 작은 반투명 흙색 원(6각 근사) 하나 — 살짝 떠오르며 축소·페이드 (마나 폭발 코어와 같은 결).
 func _spawn_puff(pos: Vector2, drift: Vector2) -> void:
 	# 🔴 카운터는 스폰 시도에 센다 — `-s` 헤드리스는 current_scene이 없어 노드는 못 심지만
 	# "몇 발 나가야 하는가"는 계약이라 잰다 (takbon-verify §3 공개 API 관측점).

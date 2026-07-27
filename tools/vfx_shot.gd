@@ -196,6 +196,43 @@ const PRESETS := {
 		"crop": 208, "cols": 4, "frames": 12, "dur": 1.05,
 		"desc": "늑대 돌진 예고 — 윈드업 동안 바닥에 뜨는 「닿을 범위」 (변종: 적 id)",
 	},
+	# 🔴🔴 죽음 = **몸이 마나로 터진다** (세100 · 설계 `enemy_feel_design.md` §3-B). 재는 문장:
+	#   *"몸이 그 자리에서 푸르게 터지고, 파편이 사방으로·위로 흩어져 사라진다."*
+	#   ⚠ 설계의 ③ 「잠깐 멈췄다가 플레이어 쪽으로 빨려온다」는 **사용자가 각하했다**(세100) —
+	#     *"잠깐 빨려오는건 없음 … 마나가 들어오는건 없음"*. 정본 문장은 `src/actors/mana_burst.gd` 머리말이다.
+	# 🔴 **적 프리셋이라 시그널이 없다** — `forest_enemy`를 세우고 `take_hit`으로 **실제로 죽인다**.
+	#   죽음 경로(`_die`)를 통째로 지나므로 드롭 굴리기·`enemy_died`까지 실무대와 같은 순서다
+	#   (손으로 `_spawn_death_burst`만 부르면 도구가 죽음 경로를 우회해 **거짓말할 수 있다**).
+	#
+	# 🔴🔴 **드롭이 같은 시트에 찍히는 게 의도다** — 다만 ③ 각하 뒤로 **뜻이 바뀌었다**.
+	#   적이 죽는 순간은 전리품이 떨어지는 순간이기도 해서 둘이 한 프레임에 겹치는데, 이제
+	#   **마나는 퍼지고 드롭은 모인다** — 궤적이 정반대라 저절로 갈린다(세51 자석 반경 72px).
+	#   `target`을 **딱 그 72px**에 둔 이유: 자석이 실제로 걸리는 거리라 **그 대비가 시트에 찍힌다.**
+	#   ⚠ 스텁을 멀리 옮기면 드롭이 안 움직여 이 대비가 사라진다.
+	#
+	# 🔴🔴 **crop 288 = ±144는 「이 도구가 만들 수 있는 가장 큰 몸」에서 나온 산수다.**
+	#   파편 최대 반경 = 몸 한 변 × (`SHARD_DIST_FRAC` + `SHARD_DRIFT_FRAC`) × 보스 배수
+	#                   × (1 + `SHARD_SPREAD`) + 파편 끝(길이×0.62).
+	#   • `hound_alpha`(시트 64 × params.size 1.35 = 86px 몸): 86×0.96×1.35 + 14 ≈ **125** ✅
+	#   • `death:gale`(64px 몸 · 보스):                      64×0.96×1.35×1.35 + 14 ≈ **126** ✅
+	#   🔴 **그 넷(두 FRAC · 보스 배수 · SPREAD) 중 아무거나 키우면 여기도 키워라** — 안 키우면
+	#   파편이 **잘린 채** 찍히고, **잘린 줄 모르고 「덜 흩어진다」고 오판**하게 된다(도구의 최악 실패).
+	# ⚠ **실게임 뱀 보스는 이 프리셋으로 재현이 안 된다** — 여기선 `forest_enemy.tscn`을 띄우므로
+	#   `snake_boss.tscn`의 **씬 scale 1.5**가 안 실린다(도구 96px 몸 → 실게임 144px 몸).
+	#   그 크기는 F5로만 본다. `death:snake_boss`는 「보스 배수가 걸리나」까지만 말해 준다.
+	# ⚠ 플레이어 스텁은 중심 +72(64px 몸)이라 crop 안에 넉넉히 든다.
+	# 🔴 dur = 터짐(0.24) + 흩어져 사라짐(0.16+0.30) + **여유**. 뒤쪽 빈 칸은 낭비가 아니라 **대비다**:
+	#   마나가 사라진 뒤에도 **드롭은 남아 플레이어에게 빨려간다** — 그 반대 방향이 이 시트의 요점이다.
+	#   상수 정본은 `src/actors/mana_burst.gd`의 `CORE_SEC`·`RING_SEC`·`OUT_SEC`·`FADE_SEC`다.
+	# ⚠ **히트스톱이 여기엔 없다** — 무대에 `juice.gd`가 없어 `Engine.time_scale`이 1.0이다.
+	#   실게임 처치는 `HITSTOP_KILL` 동안 이 연출도 같이 느려진다 → 그 체감은 F5가 판정한다.
+	&"death": {
+		"scene": "res://src/field/forest_enemy.tscn", "variant": &"enemy", "enemy": &"hound",
+		"from": Vector2(0.0, 0.0), "target": Vector2(72.0, 0.0),
+		"bg": Color(0.29, 0.62, 0.22),
+		"crop": 288, "cols": 4, "frames": 16, "dur": 0.62,
+		"desc": "적이 죽었다 — 몸이 마나로 터져 사방으로 흩어진다 (변종: 적 id)",
+	},
 }
 
 var _out := ""
@@ -484,7 +521,10 @@ func _spawn_node(c: Vector2) -> void:
 	var n := ps.instantiate() as Node2D
 	# 🔴 적은 `enemy_id`를 **add_child 전에** 세워야 한다 — `_ready`가 그 id로 `_def`를 잡는다
 	#   (`tests/test_enemy_ai_auto._spawn`과 같은 규약. 뒤에 세우면 조용히 기본 몸으로 선다).
-	if _name == &"charge":
+	# 🔴 조건이 **프리셋 이름이 아니라 변종 축**인 것이 의도다 — 적 프리셋이 하나 더 생길 때마다
+	#   여기에 이름을 덧대면 **한 줄 빠뜨린 프리셋이 기본 몸으로 조용히 선다**(세99 `charge` 하나뿐일
+	#   땐 안 드러났다). `variant == &"enemy"`가 곧 「적을 세우는 프리셋」이다.
+	if StringName(_p.get("variant", &"")) == &"enemy":
 		n.enemy_id = _enemy_id
 		_spawn_player_stub(c + Vector2(_p.get("target", Vector2.ZERO)))
 	_stage.add_child(n)
@@ -505,6 +545,13 @@ func _spawn_node(c: Vector2) -> void:
 		#   상태기계는 스텁을 보고 **스스로** 돈다. 여기서 손댈 게 없는 것이 정상이다.
 		&"charge":
 			pass
+		# 🔴 죽음은 **공개 계약으로** 죽인다 — `take_hit`이 적 노드 계약의 진입로다
+		#   (`forest_enemy` 머리말). `_die`·`_spawn_death_burst`를 직접 부르면 도구가 죽음 경로를
+		#   **우회**해 「드롭이 같이 떨어지나」·「죽음 1회 보장」을 못 보게 된다.
+		# ⚠ 위치를 잡은 **뒤에** 죽인다(바로 위 `global_position` 대입) — 먼저 죽이면 연출이
+		#   원점에서 터져 시트 한가운데가 빈다.
+		&"death":
+			n.take_hit(1.0e9, _rune, Enums.Status.NONE, 0.0)
 		_:
 			push_error("[vfx_shot] 노드형 프리셋 %s의 setup 배선이 없다" % _name)
 

@@ -1,6 +1,6 @@
 extends Node2D
 ## 원소 반응 VFX 스포너 (세션52) — Juice의 형제 공용 노드. 반응이 터진 자리·연쇄가 튄 선을
-## **Node2D 절차 연출**로 그린다(파티클 안 씀 — death_puff 결).
+## **Node2D 절차 연출**로 그린다(파티클 안 씀 — `mana_burst.gd` 결).
 ##
 ## 🔴 왜 Player 아래 공용 노드인가: juice.gd와 똑같은 이유다. Player가 공용 배우라 **마을(연습장)·
 ## 보스방 양쪽에 자동으로 산다** — 사용자가 마법을 만들고 바로 쏴 보는 연습장에서 반응이 보여야 한다.
@@ -16,7 +16,7 @@ extends Node2D
 ##   시전 한 번의 세 시점이 전부 EventBus다: `ring_cast_started`(연다) →
 ##   `ring_cast_requested`(탄이 나간다 = 퍼지며 꺼진다) / `ring_cast_canceled`(끊겼다 = 접히며 꺼진다).
 ## 각 핸들러는 연출 Node2D를 만들어 **`get_tree().current_scene`에 add_child** + global_position만
-## 세팅한다 (juice._spawn_number·death_puff와 동일 — Player 트랜스폼에 안 묶이게 월드 씬에 붙인다).
+## 세팅한다 (juice._spawn_number·`mana_burst`와 동일 — Player 트랜스폼에 안 묶이게 월드 씬에 붙인다).
 ##
 ## 🔴 색은 **`SR.draw_color_of(status)`** — 상태 색 단일 소스를 되쓴다(색 테이블 복사 금지).
 ##   증기(NONE)는 흰색이 돌아오므로 그대로 맞다.
@@ -69,7 +69,8 @@ const ARC_WIDTH := 2.5           ## 아크 선 굵기(px)
 const ARC_LIGHTEN := 0.25        ## 아크 심지 흰색 혼합률 (SPARK_LIGHTEN과 같은 이유 — 세97)
 const ARC_TIME := 0.15           ## 아크 수명(s)
 
-## 연출을 death_puff(50) 위로 — 적 스프라이트·퍼프보다 위에서 번쩍인다.
+## 연출을 **죽음 마나 폭발(`mana_burst.BURST_Z` = 50) 위로** — 적 스프라이트·폭발보다 위에서 번쩍인다.
+## ⚠ 세100에 `death_puff`가 그 이름으로 은퇴했다(같은 z를 이어받았다) — 인용을 되돌리지 마라.
 const VFX_Z := 55
 
 # ── 머즐 플래시 (세션59 설계 §2-D) — 기존 `ring_cast_requested` 재사용, 신규 시그널 0.

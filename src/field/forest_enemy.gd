@@ -44,6 +44,10 @@ const FLASH_SHADER := preload("res://src/actors/hit_flash.gdshader")
 ## 발밑 그림자 (세63 설계 §D) — 공용 배우 컴포넌트. 여기서 자동 부착하므로 **미래의 모든 적이
 ## 공짜**다("새 적 = .tres 한 장" 계약 — 씬마다 노드를 요구하면 새 적마다 침묵 누락이 생긴다).
 const ShadowScript := preload("res://src/actors/shadow.gd")
+## 🔴 죽음 연출(세100) — **몸이 마나로 터져 파편이 플레이어에게 돌아간다**(설계 §3-B).
+## 그림자와 **완전히 같은 자리**의 공용 배우 컴포넌트라 preload 관용구도 같다: 죽는 몸은 전부
+## 이 파일 하나를 지나므로 **잡몹·보스가 공짜로 따라온다**(`_spawn_death_burst`).
+const ManaBurst := preload("res://src/actors/mana_burst.gd")
 
 ## ⚠ 세99: 기본값이 **지워진 `&"slime"`**을 가리키고 있었다(잡몹을 늑대 하나로 줄이며 삭제).
 ##  라이브 경로는 전부 `add_child` **전에** 대입해서 안 깨졌지만, 「기본값으로 스폰되는 길」이
@@ -67,6 +71,9 @@ const TELEGRAPH_AMOUNT := 0.6     ## 윈드업 붉은 달아오름 세기 (셰�
 const HURT_HOLD_SEC := 0.15       ## 1프레임 hurt 스트립의 홀드 시간 (설계 §C 함정 — 아래 _play_hurt)
 const SHADOW_RADIUS_FRAC := 0.30  ## 그림자 반경 = 프레임 한 변 × 이 값
 const SHADOW_OFFSET_FRAC := 0.35  ## 발밑 오프셋 = 프레임 한 변 × 이 값 (프레임 바닥 근사)
+## 시트를 못 읽었을 때의 프레임 한 변(px) — `_frame_side`. 🔴 **옛 하드코딩 값 그대로**라
+## 시트 없는 몸(테스트 스텁)의 그림자 크기가 안 바뀐다(하위호환 계약 · `ANIM_FPS_DEFAULT` 선례).
+const FRAME_SIDE_FALLBACK := 32.0
 
 var _def: EnemyDef = null
 var _hp: float = 0.0
@@ -197,8 +204,14 @@ func _ready() -> void:
 
 ## 🔴 외형도 .tres가 쥔다 (`params.sprite`·`params.size`·`params.tint`) — "새 적 = .tres 한 장"이
 ## 생김새까지 포함하게 하려는 것. 없으면 시트 그대로·1배·색조 없음.
-## ⚠ **`params.color`는 여기 없다** — 세45에 스프라이트로 갈아타며 `_visual.color`가 사라져
-##  지금은 **죽음 퍼프 색**으로만 산다(`_spawn_death_puff`). 몸을 물들이는 건 `params.tint`다.
+## ⚠ **`params.color`는 여기 없다** — 세45에 스프라이트로 갈아타며 `_visual.color`가 사라졌다.
+## 🔴🔴 **세100: 그 키의 마지막 소비자가 사라졌다 — 지금은 아무 일도 안 한다**(감사 T3 「거짓 손잡이」).
+##  죽음 연출이 **마나 푸른색 통일**로 바뀌면서(설계 §3-B: *"룬 속성별로 가르지 않는다"*) 옛
+##  `_spawn_death_puff`가 이 키를 읽던 유일한 자리였다.
+##  ✅ **리드가 세 `.tres`(`hound`·`hound_alpha`·`slime_elite`)에서 줄을 걷었다** — 남는 `params` 키는
+##   스키마를 안 깨므로 삭제가 안전하다(takbon-rules §5 ⓐ). 🔴 **되살리지 마라**: 죽음 색이 다시
+##   적마다 갈리면 *"무슨 마나인가"*라는 **없는 축**이 생긴다(설계 §3-B가 각하한 그것).
+##  몸을 물들이는 건 `params.tint`다(다른 키 — 섞지 마라).
 ## ⚠ 이건 **표시일 뿐 AI가 아니다** — 세션 30 "데이터만(리스킨)" 방침 그대로다. 행동(추격+접촉)은
 ## 한 가지뿐이고, 색·덩치만 .tres로 달라진다. 스키마를 안 늘리고 `params`에 얹은 이유 = enemy_def.gd
 ## 주석("스키마 확장 대신 params를 쓴다"). size는 루트 scale이라 **덩치가 곧 히트박스**가 된다
@@ -220,10 +233,12 @@ func _apply_look() -> void:
 		scale = Vector2(s, s)
 	# 🔴 세99 D6 — **몸 색조**(`params.tint`). 네임드를 「덩치 + 색」으로 알아보게 하는 축이다
 	#  (사용자 확정: *"몸에서 빛이나는거 까진 별로임"* — 오라가 아니라 생김새로 구별한다).
-	# 🔴🔴 **`params.color`와 다른 키다 — 섞지 마라.** `color`는 세45에 스프라이트로 갈아타며
-	#  `_visual.color`가 사라져 **죽음 퍼프 색으로만** 남았다(`_spawn_death_puff` 주석). 그 키에
-	#  몸 틴트를 얹으면 이미 `color`를 쥔 적 다섯(beetle·hound·mist·vine·slime_elite)의 겉모습이
-	#  **한꺼번에 달라진다** — 그래서 새 키다. 없으면 흰색(=곱셈 항등) = 기존 적 회귀 0.
+	# 🔴🔴 **옛 `params.color`와 다른 키다 — 되살려 섞지 마라.** `color`는 세45에 `_visual.color`가
+	#  사라지고 세100에 죽음 연출이 마나 푸른색으로 통일되며 소비자가 0이 돼 **`.tres`에서 걷혔다**
+	#  (위 `_apply_look` 머리말). 그 자리에 몸 틴트를 얹지 않고 **새 키로 간 이유**는, 얹었다면
+	#  `color`를 쥐고 있던 적 셋의 겉모습이 **한꺼번에 달라졌을** 것이기 때문이다(지금은 그 셋이
+	#  걷혔지만 판단의 근거는 남는다 — 죽음 색과 몸 색은 **다른 축**이다).
+	#  없으면 흰색(=곱셈 항등) = 기존 적 회귀 0.
 	# ⚠ 실제 적용은 `_refresh_tint`가 한다 — modulate 소유권 계약(거기 머리말)을 안 깨려고
 	#  여기선 **값만 들고** 상태 틴트와 곱해 쓴다.
 	if _def.params.get("tint") is Color:
@@ -313,17 +328,27 @@ func _bake_strip(frames: SpriteFrames, anim: StringName, tex: Texture2D, loop: b
 	return true
 
 
-## 🔴 발밑 그림자 자동 부착 (세63 설계 §D) — 루트 scale의 자식이라 `params.size`(=덩치)를 공짜로
-## 추종한다. 크기·오프셋은 idle 첫 프레임의 한 변에서 근사(연출 시작값 — 사용자 튜닝).
-## z는 **0 유지 + move_child(…, 0)** — 음수 z는 Ground(z0) 뒤로 숨는다(세54 마디 실증).
-func _attach_shadow() -> void:
-	var side := 32.0
+## 🔴 idle 첫 프레임의 **한 변**(px) — 이 몸의 크기를 재는 단일 소스.
+## 시트가 「정사각 프레임을 가로로 이어붙인 스트립」이라(`_bake_strip`) 높이가 곧 한 변이다.
+## 🔴 소비자가 둘이다 — **그림자**(`_attach_shadow`)와 **죽음 폭발**(`_body_px`). 각자 재면
+##  같은 몸을 두 크기로 보게 된다(세85 「복사하면 갈라진다」의 작은 판).
+## ⚠ 반환은 **루트 배율 이전의 로컬 값**이다 — 그림자는 자식이라 배율을 저절로 먹고,
+##  씬에 따로 붙는 폭발은 `_body_px`가 직접 곱한다. 여기서 미리 곱하면 그림자가 두 번 먹는다.
+func _frame_side() -> float:
 	if _visual != null and _visual.sprite_frames != null \
 			and _visual.sprite_frames.has_animation(&"idle") \
 			and _visual.sprite_frames.get_frame_count(&"idle") > 0:
 		var t := _visual.sprite_frames.get_frame_texture(&"idle", 0)
 		if t != null:
-			side = float(t.get_height())
+			return float(t.get_height())
+	return FRAME_SIDE_FALLBACK
+
+
+## 🔴 발밑 그림자 자동 부착 (세63 설계 §D) — 루트 scale의 자식이라 `params.size`(=덩치)를 공짜로
+## 추종한다. 크기·오프셋은 idle 첫 프레임의 한 변에서 근사(연출 시작값 — 사용자 튜닝).
+## z는 **0 유지 + move_child(…, 0)** — 음수 z는 Ground(z0) 뒤로 숨는다(세54 마디 실증).
+func _attach_shadow() -> void:
+	var side := _frame_side()
 	var shadow: Sprite2D = ShadowScript.new()
 	shadow.radius_px = side * SHADOW_RADIUS_FRAC
 	shadow.position = Vector2(0.0, side * SHADOW_OFFSET_FRAC)
@@ -628,7 +653,7 @@ func _resolve_gust(player: Node2D, dist: float) -> void:
 
 
 ## 연사 1발 — **발사 순간의 플레이어 위치**로 재조준(락 조준은 3발이 같은 자리에 몰려 밋밋).
-## 탄은 현재 씬에 붙는다(death_puff·drop_pickup 규약 — 적이 죽어도 탄은 남는다: 유언 탄).
+## 탄은 현재 씬에 붙는다(`_spawn_death_burst`·drop_pickup 규약 — 적이 죽어도 탄은 남는다: 유언 탄).
 func _fire_gale_shot(player: Node2D) -> void:
 	var scene := get_tree().current_scene
 	if scene == null or player == null:
@@ -644,7 +669,7 @@ func _fire_gale_shot(player: Node2D) -> void:
 
 
 ## 돌풍 반경 텔레그래프 링 — 윈드업 동안만 보인다. **절차적 VFX라 도형이 맞다**(takbon-rules §0
-## 예외 — 돌풍은 형태 없는 공기 흐름, death_puff·vfx.gd 링과 같은 "그림"이다). 지연 생성이라
+## 예외 — 돌풍은 형태 없는 공기 흐름, 마나 폭발·vfx.gd 링과 같은 "그림"이다). 지연 생성이라
 ## gale이 아닌 적은 노드 자체가 없다. 🔴 z_index 양수 명시 — 세54에 음수 z 마디가 Ground(z0)
 ## 뒤로 숨은 함정의 재발 자리다.
 func _show_gust_ring(on: bool) -> void:
@@ -1179,7 +1204,7 @@ func _die() -> void:
 	# "킬카운트가 붙는 날의 자리표"가 마침내 수신자를 얻었다. enemy_id를 실어 특정 적 목표도 가능.
 	EventBus.enemy_died.emit(enemy_id)
 	died.emit()
-	_spawn_death_puff()
+	_spawn_death_burst()
 	# 🔴 예고는 **씬 소유**라 몸과 같이 안 죽는다 — 윈드업 중에 죽으면 붉은 띠가 바닥에 남는다.
 	#  (`_exit_tree`도 같은 일을 하지만 여기서 먼저 지운다: 아래 queue_free는 프레임 끝에야 반영돼
 	#   그 사이 한 프레임 동안 주인 없는 띠가 보인다.)
@@ -1292,29 +1317,39 @@ func _back_to_idle() -> void:
 		_visual.play(&"idle")
 
 
-## 처치 퍼프 — 적 색으로 확 커지며 사라지는 링. 적은 이 프레임에 queue_free되지만
-## 퍼프는 현재 씬에 따로 붙어 살아남는다.
-func _spawn_death_puff() -> void:
+## 🔴🔴 **죽음 = 몸이 마나로 터진다** (세100 · 설계 `enemy_feel_design.md` §3-B 사용자 확정).
+## 그전엔 **적 색(`params.color`)으로 커지며 사라지는 Polygon2D 링 하나**였다 — 밝은 낮 풀밭 위에서
+## 갈색 얼룩으로 읽혀 *"뭔가 사라졌다"* 이상을 못 말했다(`vfx_shot -- death` 전/후 시트).
+##
+## 🔴 **연출 자체는 `ManaBurst`가 진다** — 여기 남은 일은 **몸에서 규격을 뽑아 넘기는 것**뿐이다
+##  (`_attach_shadow`가 그림자 컴포넌트에 하는 일과 같은 결). 색·시간·모양을 여기 적으면
+##  「무엇을 그리나」가 두 파일로 갈린다.
+##
+## 🔴 **파생원은 「보이는 몸」 하나다** — 프레임 한 변 × 덩치. 왜 곱하는지는 `ManaBurst` 머리말.
+## 🔴 **보스 판별 = `params.ai`가 `boss_`로 시작하나** — 이미 데이터에 있는 축이라 새 키가 없다
+##  (`boss_snake`·`boss_gale`). 덩치만으로는 못 가른다: gale은 64px로 늑대와 **같은 한 변**이다.
+##
+## 🔴 적은 이 프레임에 `queue_free`되지만 폭발은 **현재 씬에 따로 붙어 살아남는다**
+##  (`_spawn_loose`·유언 탄과 같은 관용구. 그물 = `test_mana_burst_auto [1]`).
+##
+## 🔴🔴 **플레이어를 안 넘긴다 — 파편은 플레이어에게 안 온다**(세100 사용자 각하:
+##  *"잠깐 빨려오는건 없음 … 마나가 들어오는건 없음"*). 여기서 `_player()`를 다시 넘기려는 순간이
+##  각하된 궤적을 되살리는 순간이다. 🔴 **마나 수치도 여기서 절대 안 건드린다** —
+##  `GameState.mana`를 한 줄이라도 올리면 *"몬스터 잡아서 마나회복하는것도 없어"*를 어긴다.
+##  그물 = `test_mana_burst_auto [4]`(수렴 금지)·`[8]`(마나 불변).
+func _spawn_death_burst() -> void:
 	var scene := get_tree().current_scene
 	if scene == null:
 		return
-	var puff := Polygon2D.new()
-	var pts := PackedVector2Array()
-	for i in 8:
-		pts.append(Vector2.RIGHT.rotated(TAU * float(i) / 8.0) * 10.0)
-	puff.polygon = pts
-	# 🔴 퍼프 색 = params.color (스프라이트로 바꾸며 _visual.color가 사라졌다 — AnimatedSprite2D엔 없다).
-	# .tres의 color는 이제 퍼프/틴트 힌트로만 남는다(생김새는 스프라이트가 쥔다). 없으면 부드러운 흰빛.
-	var pcol := Color(0.82, 0.86, 0.8)
-	if _def != null and _def.params.get("color") is Color:
-		pcol = _def.params.get("color")
-	puff.color = pcol
-	puff.global_position = global_position
-	puff.z_index = 50
-	scene.add_child(puff)
-	var tween := puff.create_tween()
-	tween.set_parallel(true)
-	tween.tween_property(puff, "scale", Vector2(2.4, 2.4), 0.25).set_ease(Tween.EASE_OUT)
-	tween.tween_property(puff, "modulate:a", 0.0, 0.25)
-	tween.set_parallel(false)
-	tween.tween_callback(puff.queue_free)
+	var burst: Node2D = ManaBurst.new()
+	scene.add_child(burst)
+	burst.global_position = global_position
+	burst.setup(_body_px(), _ai.begins_with("boss_"))
+
+
+## 🔴 **화면에 실제로 보이는 몸 한 변**(px) — 프레임 한 변 × 루트 배율.
+## 프레임 한 변만 보면 `hound_alpha`(64px 시트 × size 1.35 = 86px 몸)에서 **시체보다 작은 폭발**이
+## 터진다. 곱한 값은 `_attach_shadow`가 자식이라 저절로 얻는 그 크기와 같다(그림자와 폭발이
+## 같은 몸을 가리키게 된다). ⚠ 설계 §3의 「프레임 한 변 하나」와 갈리는 이유는 `ManaBurst` 머리말.
+func _body_px() -> float:
+	return _frame_side() * absf(global_scale.x)
