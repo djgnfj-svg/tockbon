@@ -24,6 +24,12 @@ var recipes: Dictionary = {}
 var quests: Dictionary = {}
 ## {StringName: ChapterDef} — 챕터(보스방 스테이지) (세58-B 세피리아식 루프)
 var chapters: Dictionary = {}
+## {StringName: LandmarkDef} — 지점(랜드마크) (세99 던전 구조 D3·D4)
+## 🔴 `reload()`가 폴더를 **손으로 나열**하므로 여기 축을 늘릴 땐 아래 루프도 같이 늘려야 한다 —
+##  빠뜨리면 **`_load_dir`이 아예 안 불려** 경고 한 줄 없이 dict가 빈 채 남는다.
+##  ⚠ **폴더 부재(그건 `_load_dir`이 짖는다)보다 더 조용하다** — 로그에서 경고를 찾다
+##  「경고가 없으니 배선은 됐다」로 결론 내지 마라. 이 자리를 재는 건 `test_dungeon_schema_auto [1]`이다.
+var landmarks: Dictionary = {}
 
 func _ready() -> void:
 	reload()
@@ -38,6 +44,7 @@ func reload() -> void:
 	recipes.clear()
 	quests.clear()
 	chapters.clear()
+	landmarks.clear()
 	for res in _load_dir("res://data/runes"):
 		var rune := res as RuneDef
 		if rune == null:
@@ -92,6 +99,12 @@ func reload() -> void:
 			_warn_wrong_type("data/chapters", res, "ChapterDef")
 			continue
 		chapters[chapter.id] = chapter
+	for res in _load_dir("res://data/landmarks"):
+		var landmark := res as LandmarkDef
+		if landmark == null:
+			_warn_wrong_type("data/landmarks", res, "LandmarkDef")
+			continue
+		landmarks[landmark.id] = landmark
 	reindex_glyphs()
 
 
@@ -301,6 +314,25 @@ func all_glyph_rings() -> Array[GlyphRingDef]:
 	for gr in glyph_rings.values():
 		out.append(gr)
 	out.sort_custom(func(a: GlyphRingDef, b: GlyphRingDef) -> bool: return a.sort < b.sort)
+	return out
+
+
+# ── 지점(랜드마크) (세99 던전 구조 D3·D4) ──
+# ⚠ 축을 늘릴 땐 **파일 끝의 이 자리에 모아라** — 기존 축 블록(챕터·진·문양…) 사이에 끼우면
+#   다음 사람이 「어디에 넣나」를 못 읽는다.
+
+func get_landmark(id: StringName) -> LandmarkDef:
+	return landmarks.get(id) as LandmarkDef
+
+## 지점 목록 — **id 사전순**.
+## 🔴 `keys.sort()`를 쓰면 안 된다 — 키가 `StringName`이라 그 정렬은 사전순이 아니라 **인터닝 순**이고
+## **같은 데이터로 두 번 돌려도 순서가 달랐다**(세88 실측). `all_recipes`·`all_quests`와 같은 규약이다.
+func all_landmarks() -> Array[LandmarkDef]:
+	var out: Array[LandmarkDef] = []
+	var keys := landmarks.keys()
+	keys.sort_custom(func(a: StringName, b: StringName) -> bool: return String(a) < String(b))
+	for k: StringName in keys:
+		out.append(landmarks[k])
 	return out
 
 

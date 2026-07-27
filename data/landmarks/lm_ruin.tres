@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="LandmarkDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/core/schemas/landmark_def.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = &"lm_ruin"
+kind = 0
+scene_path = ""
+title = "무너진 자리"
+params = {}

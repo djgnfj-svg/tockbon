@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="LandmarkDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/core/schemas/landmark_def.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = &"lm_nest"
+kind = 1
+scene_path = ""
+title = "짐승 둥지"
+params = {}

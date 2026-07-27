@@ -124,3 +124,12 @@ enum CastFailReason { NO_MANA, BROKEN, INVALID }
 ## KILL=적 처치 · EXTRACT=살아서 귀환 · UNLOCK=도감 해금(룬) · DRAW=마법진 그리기(온보딩, 세션41 — count장).
 ## ⚠ .tres가 정수로 저장하니 재정렬 금지. DRAW는 **끝에 추가**했다(=3).
 enum QuestGoal { KILL, EXTRACT, UNLOCK, DRAW }
+## 🔴 지점(랜드마크) 종류 — 세99 던전 구조 D4 「지점마다 성격이 다르다」.
+## 정본 = `docs/takbon-design/dungeon_structure_design.md` §3.
+##   RUIN=폐허(전투 없음 · **열면 소리가 나 몹이 몰려온다**) · NEST=둥지(**핵을 깨야 멈춘다**) ·
+##   ALTAR=제단(마법을 **바치면** 보상 · 안 바치면 지나간다)
+## 🔴🔴 **셋의 차이는 「보상 크기」가 아니라 「무슨 일이 일어나나」다** — 크기만 다르면 D4를 고른 의미가 없다.
+## 🔴 **진행에 걸린 보상(문양-고리)은 어느 종류도 주지 않는다**(세99 사용자 확정 — 초안을 각하했다).
+##  그건 보스·공방·퀘스트 같은 **확정 경로** 몫이다. 여기 걸면 세57의 *"언제 얻을지 설계를 못 해 불안하다"*가 돌아온다.
+## ⚠ **끝에만 덧붙여라** — `.tres`가 정수로 저장한다.
+enum LandmarkKind { RUIN, NEST, ALTAR }
