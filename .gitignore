@@ -15,3 +15,8 @@ docs/_reports/
 # 임시 스크린샷 등 루트 이미지
 /image.png
 /image.png.import
+
+# 🔴 도구가 뽑는 임시 격자·비교 스샷 (세99에 만들어졌다 사라졌는데 그동안 무방비였다).
+# `tools/vfx_shot.gd`·`shot_room.gd`가 여기로 뱉는다 — PNG마다 .import 사이드카가 딸려
+# `git add -A` 한 번이면 통째로 커밋된다.
+scratch_shots/
