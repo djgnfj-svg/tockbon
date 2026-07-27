@@ -32,26 +32,28 @@ extends SceneTree
 ## 판정, forest_enemy._roll_drops)는 남아 있으므로 [2][3]이 in-memory DropEntry 주입으로 계속
 ## 잰다. 사용자가 관문을 되살리면 여기 한 줄 + 적 .tres 한 줄이 짝으로 는다.
 const GATES := {}
-## 관문 조각을 잃은(랜덤 은퇴) 잡몹 3종 — fragment 줄이 아예 없어야 한다.
-const RETIRED := [&"vine", &"beetle", &"mist"]
+## ⚠ 세99에 `RETIRED`(랜덤 조각을 잃은 잡몹 3종)를 **지웠다** — 그 세 몹(`vine`·`beetle`·`mist`)이
+## 데이터에서 통째로 사라졌기 때문이다. 재던 계약(「그 적에 until_unlock 드롭이 없다」)은
+## **[4]의 전수 스캔이 이미 더 세게 잰다**: `seen_gates.size() == GATES.size()`가 GATES 0줄인 지금
+## **어느 적에도 관문 드롭이 없음**을 요구한다(이름 목록이 필요 없다). 이식이지 삭제가 아니다.
 
 ## 🔴🔴 잡몹 재료 드롭표 (세88 사냥 흐름 §3-B-1) — `적: [재료 id, …]`를 **명시로 박는다.**
 ## 세87까지 잡몹 5종은 **전부 `coin`만** 떨궜다(재료 `ItemDef` 7종은 이미 있었는데 아무도 안 떨궜다 —
 ## 전형적인 「부품은 배선됐는데 빈 칸」). 그게 *"잡아도 얻는 게 없다"*의 데이터상 실체였다.
 ## ⚠ 확률·수량은 F5 튜닝값이라 **안 잰다** — 「그 재료가 그 적에게 붙어 있나」만 잰다.
+##
+## 🔴🔴 **세99: 잡몹이 늑대 하나로 줄어 이 표가 한 줄이 됐다** — `slime`·`mist`·`beetle`·`vine`은
+##  임의로 만든 플레이스홀더라 지웠다(`data/enemies/README.md`). **표를 「그래서 안 잰다」로 바꾸지
+##  마라** — 한 줄이어도 ①재료 붙음 ②아이템 실재 ③두루마리 실재 ④병용 금지를 그대로 잰다.
+##  새 몹이 오면 여기 한 줄이 는다(그게 이 표의 목적이다: 「잡아도 얻는 게 없다」로 안 돌아가게).
 const MOB_MATERIALS := {
-	&"slime": [&"mat_slime_core"],
-	&"mist": [&"mat_mist_essence"],
-	&"beetle": [&"mat_beetle_shell"],
-	&"vine": [&"mat_vine", &"mat_night_bloom"],
 	&"hound": [&"mat_hound_fang"],
 }
 
 ## 🔴 두루마리 보너스 드롭 (§3-B-2) — **대역마다 다른 고리**를 떨군다(어귀·중간·깊은).
-## 이게 「깊이 들어갈 이유」의 살(뼈대는 재료→제작). 셋이 같은 고리면 대역 설계가 무의미해진다.
+## 이게 「깊이 들어갈 이유」의 살(뼈대는 재료→제작). 여럿이 같은 고리면 대역 설계가 무의미해진다.
+## ⚠ 세99: 잡몹이 하나라 「대역이 갈렸나」는 잴 데이터가 없다 — **SKIP으로 명시**한다(PASS 위장 금지).
 const MOB_SCROLLS := {
-	&"slime": &"gr_spread3", &"mist": &"gr_spread3",
-	&"beetle": &"gr_gather3", &"vine": &"gr_gather3",
 	&"hound": &"gr_explode1",
 }
 
@@ -59,10 +61,14 @@ const MOB_SCROLLS := {
 ## 기대치를 **명시 숫자로도** 박는다: 스캔만 하면 「폴더가 통째로 비어도 0/0 통과」가 되기 때문.
 ## 적을 더하면(또는 hound를 접으면) 이 숫자를 같이 고친다 = 그게 그물의 값이다.
 const ENEMY_DIR := "res://data/enemies"
-## ⚠ 세99 단계 2에 **네임드 3종**이 붙어 8 → 11이 됐다(`beetle_ancient`·`mist_elder`·`hound_alpha`).
+## ⚠ **세99: 11 → 5.** 임의로 만든 플레이스홀더 잡몹 4종(`slime`·`mist`·`beetle`·`vine`)과 그
+##  네임드 2종(`mist_elder`·`beetle_ancient`)을 지웠다 — 사용자 확정, 경위는 `data/enemies/README.md`.
+##  남은 다섯 = 잡몹 `hound` · 네임드 `hound_alpha` · 보스 `slime_elite`·`gale`·`snake_boss`.
 ##  네임드는 기존 적의 강화판이라 드롭표(MOB_MATERIALS·MOB_SCROLLS)엔 안 든다 — 그 표는
 ##  「잡몹이 재료를 떨구나」를 재고, 네임드 보상은 `test_chapter_auto [1c]`가 데이터로 잰다.
-const ENEMY_COUNT_EXPECTED := 11
+## 🔴 스캔은 폴더를 훑지만 **기대 수를 손으로 박는 이유는 그대로다** — 폴더가 통째로 비어도
+##  「0/0 통과」가 되기 때문이다. 새 몹 `.tres`를 더하면 이 숫자를 같이 올려라.
+const ENEMY_COUNT_EXPECTED := 5
 
 var failures: int = 0
 ## 🔴 세84 #41: 0행 스캔은 PASS가 아니라 **SKIP**으로 찍는다. 그린만 보고 「불변식이 지켜졌다」로
@@ -202,9 +208,12 @@ func _test_mob_drop_tables() -> void:
 			% [want_scroll, CT.kind_of(want_scroll)])
 	# 🔴 `mat_night_bloom`은 세87까지 **떨구는 적이 0곳**인 유령이었다(소비자 없는 데이터).
 	# 융합진 레시피가 이걸 3개 요구하므로 생산자가 사라지면 그 레시피가 조용히 도달 불가가 된다.
+	# 🔴🔴 세99: **Db의 적 전수**를 훑는다(옛 판은 MOB_MATERIALS만 훑었다). 공급원이 `vine`에서
+	#  네임드 `hound_alpha`로 옮겨 갔는데, 표만 훑으면 **생산자가 살아 있는데도 0으로 보인다** —
+	#  재려는 건 「그 표에 있나」가 아니라 **「이 게임 어딘가에서 나오나」**다.
 	var bloom_sources := 0
-	for mob2: StringName in MOB_MATERIALS:
-		var d2 = _db.get_enemy(mob2)
+	for mob2: StringName in _db.enemies:
+		var d2 = _db.enemies[mob2]
 		if d2 == null:
 			continue
 		for drop2 in d2.drops:
@@ -212,12 +221,18 @@ func _test_mob_drop_tables() -> void:
 				bloom_sources += 1
 	_check(bloom_sources >= 1,
 		"mat_night_bloom 생산자가 ≥1곳 (실제 %d — 0이면 융합진 레시피가 도달 불가)" % bloom_sources)
-	# 🔴 대역이 실제로 갈렸나 — 셋이 같은 고리면 「깊이 들어갈 이유」가 사라진다.
-	var distinct := {}
-	for mob3: StringName in MOB_SCROLLS:
-		distinct[MOB_SCROLLS[mob3]] = true
-	_check(distinct.size() == 3,
-		"두루마리가 대역마다 다른 고리다 (서로 다른 고리 %d종)" % distinct.size())
+	# 🔴 대역이 실제로 갈렸나 — 여럿이 같은 고리면 「깊이 들어갈 이유」가 사라진다.
+	# ⚠ 세99: 잡몹이 하나라 잴 데이터가 없다 → **SKIP**(세84 #41 — 0행은 PASS로 위장하지 않는다).
+	#  잡몹이 둘이 되는 순간 이 줄이 저절로 측정으로 바뀐다(딱지가 아니라 스위치다).
+	if MOB_SCROLLS.size() < 2:
+		_skip("잡몹 %d종 → 「두루마리가 대역마다 갈렸나」" % MOB_SCROLLS.size())
+	else:
+		var distinct := {}
+		for mob3: StringName in MOB_SCROLLS:
+			distinct[MOB_SCROLLS[mob3]] = true
+		_check(distinct.size() == MOB_SCROLLS.size(),
+			"두루마리가 잡몹마다 다른 고리다 (잡몹 %d종 / 서로 다른 고리 %d종)"
+				% [MOB_SCROLLS.size(), distinct.size()])
 
 
 ## (Db 딕셔너리·EnemyDef.drops는 평범한 컨테이너다 — 끝나면 제거). 조각 ItemDef도 같이 주입한다
@@ -283,10 +298,9 @@ func _test_gate_invariants() -> void:
 			% scanned_drops)
 	_check(loose_fragments.is_empty(),
 		"🔴 until_unlock 없는 fragment 드롭 0곳 (잔재: %s)" % str(loose_fragments))
-	# 은퇴 3종엔 관문·조각 줄이 아예 없다 (RETIRED 상수의 실제 사용처 — 세84까지 선언만 있었다).
-	for retired_id in RETIRED:
-		_check(_gate_entry_of(retired_id) == null,
-			"랜덤 조각 은퇴: %s엔 until_unlock 드롭이 없다" % retired_id)
+	# ⚠ 세99: 옛 `RETIRED` 루프(은퇴 3종에 관문 줄이 없다)를 여기서 **이식·흡수**했다 —
+	# 그 세 몹이 데이터에서 사라졌고, 아래 `seen_gates.size() == GATES.size()`가 GATES 0줄인 지금
+	# **어느 적에도 관문 드롭이 없음**을 이름 목록 없이 요구한다(더 세다).
 	if seen_gates.is_empty():
 		_skip("실데이터 관문 0줄 → 「중복 0 · 조각 unlock_id 짝 · 관문표 매핑」 검사")
 	for unlock_id in GATES:

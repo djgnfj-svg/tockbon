@@ -56,7 +56,16 @@ const GLYPH_NONE := -1
 ## ⚠ **세99 단계 3: ch1이 9 → 14로 늘었다** — 늑대 둥지(`lm_nest`) 둘레에 `hound` 다섯을 놓았다
 ##  (사용자 원문 *"확산된 늑대하면서 많은 늑대들이 있을듯"*). 지점 옆의 무리는 **지점의 위험도**라
 ##  자리 수가 늘어난 것이지 굴림이 아니다 — 그래서 이 표는 여전히 정확 일치다.
-const MOB_COUNT: Dictionary = {&"ch1": 14, &"ch2": 11, &"ch3": 13}
+##
+## 🔴🔴 **세99 몹 정리: 잡몹이 늑대 하나가 되면서 자리 수를 줄였다** (14·11·13 → 9·7·9).
+##  임의로 만든 플레이스홀더 4종을 지웠고(`data/enemies/README.md`), **자리를 그대로 두면 늑대가
+##  13마리 몰린다**: 늑대는 지금까지 여기 서던 것들보다 세다(HP 26 vs 슬라임 14 · 접촉 8 vs 4 ·
+##  돌진 330 · aggro 220). 🔴 **좌표는 한 톨도 안 옮겼다** — 자리는 지형이 정한 것이고(D5),
+##  자리를 **접었을** 뿐이다.
+##  ⚠ ch1의 9 중 **다섯은 둥지 둘레 무리**라 길 위는 넷이다 — 그래서 ch1(9) > ch2(7)이어도
+##   난도가 뒤집힌 게 아니다(둥지는 **일부러 들르는** 곳이다).
+##  ⚠ 값은 잠정이고 **F5가 정한다** — 사용자가 조이면 이 표도 같이 고쳐라(그게 이 상수의 목적이다).
+const MOB_COUNT: Dictionary = {&"ch1": 9, &"ch2": 7, &"ch3": 9}
 
 ## 🔴 챕터 확정 보상 실값 표 (세88) — **보스를 잡으면 그 보스의 속성 룬을 얻는다**(읽히기 쉬운 매핑).
 ## 룬 = 게임에서 가장 큰 사건(새 속성 = 새 반응 = 전투가 종류로 달라진다). 세87까지 ch1만
@@ -191,6 +200,9 @@ func _test_chapter_tables() -> void:
 		_check_pools(ch)
 	# 🔴 세88에 처음 무대에 오르는 셋 — 그전엔 스폰되는 곳이 **0곳**이었다(유령 콘텐츠).
 	# ⚠ 세99: 풀로 옮긴 적은 `mob_spawns`에 이름이 없다 — **풀도 같이 훑어야** 이 그물이 안 죽는다.
+	# 🔴🔴 세99 몹 정리: 목록이 `hound`·`hound_alpha`가 됐다(플레이스홀더 4종 삭제). 재는 계약은
+	#  그대로 **「만든 적이 무대에 오르나」**다 — 네임드는 `named_pool`에만 있으므로 **그것도 훑는다**
+	#  (안 훑으면 `hound_alpha`가 유령 콘텐츠로 되돌아가도 그린이다).
 	var seen := {}
 	for cid2: StringName in MOB_COUNT:
 		var c2 = _db.get_chapter(cid2)
@@ -202,7 +214,10 @@ func _test_chapter_tables() -> void:
 		for mw in c2.mob_pool:
 			if mw != null and mw.enemy_id != &"" and mw.weight > 0:
 				seen[mw.enemy_id] = true
-	for id: StringName in [&"hound", &"mist", &"vine"]:
+		for ns2 in c2.named_pool:
+			if ns2 != null and ns2.enemy_id != &"" and ns2.chance > 0.0:
+				seen[ns2.enemy_id] = true
+	for id: StringName in [&"hound", &"hound_alpha"]:
 		_check(seen.has(id), "%s가 어느 챕터엔가 실제로 배치됐다 (세87까지 스폰 0곳)" % id)
 
 

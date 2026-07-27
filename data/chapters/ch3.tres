@@ -1,10 +1,15 @@
-[gd_resource type="Resource" script_class="ChapterDef" load_steps=24 format=3]
+[gd_resource type="Resource" script_class="ChapterDef" load_steps=17 format=3]
 
 [ext_resource type="Script" path="res://src/core/schemas/chapter_def.gd" id="1"]
 [ext_resource type="Script" path="res://src/core/schemas/mob_spawn.gd" id="2"]
 [ext_resource type="Script" path="res://src/core/schemas/mob_weight.gd" id="3"]
 [ext_resource type="Script" path="res://src/core/schemas/named_spawn.gd" id="4"]
 
+; 🐺 세99: 잡몹이 **늑대 하나**로 줄었다 (`data/enemies/README.md`).
+; 🔴 **좌표는 세98 배치 그대로다.** 13자리 중 **아홉만** 남겼다 — 깊은 숲이라 ch2(일곱)보다 촘촘하고,
+;  ch1(넷 + 둥지 무리 다섯)보다 **길 위가** 빽빽하다. 늑대는 HP 26 · 접촉 8 · 돌진 330이라
+;  열셋을 그대로 채우면 보스에 닿기 전에 마나·HP가 마른다.
+;  ⚠ 지운 넷 (-250,300)·(280,250)·(-650,-500)·(650,-150)은 자리를 접은 것이지 좌표가 틀린 게 아니다.
 [sub_resource type="Resource" id="mob1"]
 script = ExtResource("2")
 position = Vector2(-550, 500)
@@ -17,18 +22,8 @@ pool_tag = &"fore"
 
 [sub_resource type="Resource" id="mob3"]
 script = ExtResource("2")
-enemy_id = &"vine"
+enemy_id = &"hound"
 position = Vector2(0, 350)
-
-[sub_resource type="Resource" id="mob4"]
-script = ExtResource("2")
-enemy_id = &"beetle"
-position = Vector2(-250, 300)
-
-[sub_resource type="Resource" id="mob5"]
-script = ExtResource("2")
-enemy_id = &"beetle"
-position = Vector2(280, 250)
 
 [sub_resource type="Resource" id="mob6"]
 script = ExtResource("2")
@@ -39,16 +34,6 @@ pool_tag = &"deep"
 script = ExtResource("2")
 position = Vector2(420, -400)
 pool_tag = &"deep"
-
-[sub_resource type="Resource" id="mob8"]
-script = ExtResource("2")
-enemy_id = &"beetle"
-position = Vector2(-650, -500)
-
-[sub_resource type="Resource" id="mob9"]
-script = ExtResource("2")
-enemy_id = &"beetle"
-position = Vector2(650, -150)
 
 [sub_resource type="Resource" id="mob10"]
 script = ExtResource("2")
@@ -67,37 +52,20 @@ pool_tag = &"deep"
 
 [sub_resource type="Resource" id="mob13"]
 script = ExtResource("2")
-enemy_id = &"beetle"
+enemy_id = &"hound"
 position = Vector2(620, -900)
 
-[sub_resource type="Resource" id="w_fore_vine"]
+; 🔴 대역은 후보가 하나여도 남겨 둔다 — 새 몹이 대역을 골라 한 줄로 들어오는 자리다(ch1과 같은 결).
+[sub_resource type="Resource" id="w_fore_hound"]
 script = ExtResource("3")
-enemy_id = &"vine"
-weight = 4
-pool_tag = &"fore"
-
-[sub_resource type="Resource" id="w_fore_beetle"]
-script = ExtResource("3")
-enemy_id = &"beetle"
-weight = 3
+enemy_id = &"hound"
+weight = 1
 pool_tag = &"fore"
 
 [sub_resource type="Resource" id="w_deep_hound"]
 script = ExtResource("3")
 enemy_id = &"hound"
-weight = 4
-pool_tag = &"deep"
-
-[sub_resource type="Resource" id="w_deep_beetle"]
-script = ExtResource("3")
-enemy_id = &"beetle"
-weight = 3
-pool_tag = &"deep"
-
-[sub_resource type="Resource" id="w_deep_vine"]
-script = ExtResource("3")
-enemy_id = &"vine"
-weight = 2
+weight = 1
 pool_tag = &"deep"
 
 [sub_resource type="Resource" id="named_hound"]
@@ -115,8 +83,8 @@ boss_enemy_id = &"snake_boss"
 boss_scene_path = "res://src/field/snake_boss.tscn"
 boss_spawn = Vector2(0, -1350)
 room_ground_color = Color(0.22, 0.31, 0.23, 1.0)
-mob_spawns = Array[ExtResource("2")]([SubResource("mob1"), SubResource("mob2"), SubResource("mob3"), SubResource("mob4"), SubResource("mob5"), SubResource("mob6"), SubResource("mob7"), SubResource("mob8"), SubResource("mob9"), SubResource("mob10"), SubResource("mob11"), SubResource("mob12"), SubResource("mob13")])
+mob_spawns = Array[ExtResource("2")]([SubResource("mob1"), SubResource("mob2"), SubResource("mob3"), SubResource("mob6"), SubResource("mob7"), SubResource("mob10"), SubResource("mob11"), SubResource("mob12"), SubResource("mob13")])
 reward_unlock = &"rune_grass"
-mob_pool = Array[ExtResource("3")]([SubResource("w_fore_vine"), SubResource("w_fore_beetle"), SubResource("w_deep_hound"), SubResource("w_deep_beetle"), SubResource("w_deep_vine")])
+mob_pool = Array[ExtResource("3")]([SubResource("w_fore_hound"), SubResource("w_deep_hound")])
 named_pool = Array[ExtResource("4")]([SubResource("named_hound")])
 extract_points = Array[Vector2]([Vector2(-1150, -360), Vector2(300, -1400)])

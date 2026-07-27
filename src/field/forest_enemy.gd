@@ -45,9 +45,14 @@ const FLASH_SHADER := preload("res://src/actors/hit_flash.gdshader")
 ## 공짜**다("새 적 = .tres 한 장" 계약 — 씬마다 노드를 요구하면 새 적마다 침묵 누락이 생긴다).
 const ShadowScript := preload("res://src/actors/shadow.gd")
 
-@export var enemy_id: StringName = &"slime"
+## ⚠ 세99: 기본값이 **지워진 `&"slime"`**을 가리키고 있었다(잡몹을 늑대 하나로 줄이며 삭제).
+##  라이브 경로는 전부 `add_child` **전에** 대입해서 안 깨졌지만, 「기본값으로 스폰되는 길」이
+##  하나라도 생기는 순간 `Db.get_enemy`가 null을 돌려주고 **hp 0짜리 유령이 선다**(에러 0).
+@export var enemy_id: StringName = &"hound"
 
 @onready var _visual: AnimatedSprite2D = $Visual
+## 🔴 세99 — 맞는 몸(히트박스). 씬 기본 반경은 9.0이고 `params.hitbox_radius`가 덮는다(`_apply_hitbox`).
+@onready var _shape: CollisionShape2D = $Collision
 
 ## 🔴 피격 손맛 (세션 38 · 세63 개편) — 넉백/플래시/스쿼시 **연출값**. 밸런스가 아니라 느낌값이라
 ## 여기 const (projectile 물리 여유 const 선례). 사용자가 직접 때려 보며 조인다.
@@ -150,6 +155,7 @@ func _ready() -> void:
 		mat.set_shader_parameter(&"telegraph_amount", 0.0)
 		_visual.material = mat
 	_apply_look()
+	_apply_hitbox()
 	_attach_shadow()
 
 
@@ -159,7 +165,9 @@ func _ready() -> void:
 ##  지금은 **죽음 퍼프 색**으로만 산다(`_spawn_death_puff`). 몸을 물들이는 건 `params.tint`다.
 ## ⚠ 이건 **표시일 뿐 AI가 아니다** — 세션 30 "데이터만(리스킨)" 방침 그대로다. 행동(추격+접촉)은
 ## 한 가지뿐이고, 색·덩치만 .tres로 달라진다. 스키마를 안 늘리고 `params`에 얹은 이유 = enemy_def.gd
-## 주석("스키마 확장 대신 params를 쓴다"). size는 루트 scale이라 **덩치가 곧 히트박스**가 된다.
+## 주석("스키마 확장 대신 params를 쓴다"). size는 루트 scale이라 **덩치가 곧 히트박스**가 된다
+## — 단 **바탕 반경은 `params.hitbox_radius`가 쥔다**(세99, `_apply_hitbox`). size만으로는 그림과
+## 판정이 갈린다: 시트를 다시 그리면(32→64px) 덩치는 그대로인데 몸만 커져 **쏴도 통과한다**.
 func _apply_look() -> void:
 	if _def == null or _visual == null:
 		return
@@ -185,6 +193,34 @@ func _apply_look() -> void:
 	if _def.params.get("tint") is Color:
 		_base_tint = _def.params.get("tint")
 		_refresh_tint()
+
+
+## 🔴🔴 세99 — **맞는 몸도 .tres가 쥔다** (`params.hitbox_radius`). 잡몹 5종이 32px → 64px 프레임으로
+## 다시 그려지자 씬 고정 반경 9.0이 **몸의 6분의 1**이 됐다(비율 0.56 → 0.16) — 보이는 몸통에 쏴도
+## 탄이 그냥 지나갔다. 스키마를 안 늘리고 `params`에 얹은 이유는 `sprite`·`size`·`anim_fps`와 같다.
+##
+## 🔴 **값은 「루트 scale 이전」의 로컬 반경이다** — `Collision`이 루트의 자식이라 `params.size`가
+##  자동으로 곱해진다(최종 화면 반경 = `hitbox_radius × size`). 그래서 **네임드는 바탕 종과 같은
+##  숫자를 그대로 물려받으면 되고**(hound_alpha 20 × 1.35 = 27), 덩치를 조일 때 히트박스가 저절로
+##  따라온다. 화면 px로 해석하면 `size`를 만질 때마다 두 숫자를 같이 고쳐야 하고, 한쪽을 잊으면
+##  **에러 없이** 몸과 판정이 갈린다. 「덩치가 곧 히트박스」(`_apply_look` 머리말)를 깨지 않는 쪽이 이것이다.
+##
+## 🔴🔴 **`shape`를 duplicate 없이 쓰지 마라.** `.tscn`의 SubResource는 **씬 인스턴스끼리 공유**돼서
+##  radius에 직접 대입하면 **마지막에 스폰된 적의 반경이 전원에게 번진다**(에러 0 — 슬라임 옆의
+##  안개가 슬라임 히트박스를 쓴다). `ring_carrier._apply_body_radius`가 *"형상 리소스는 씬들이
+##  공유하는 물건이라 건드리면 안 된다"*고 적은 그 함정이다. 그물 = `test_enemy_hitbox_auto [3]`.
+##
+## ⚠ 키가 없으면 **씬 기본값 9.0 그대로** = 기존 무변경(하위호환). 아직 옛 32px 시트인 `slime_elite`와
+##  키를 안 준 보스(`gale`·`snake_boss`)가 그 경로로 산다.
+func _apply_hitbox() -> void:
+	if _def == null or _shape == null or not (_shape.shape is CircleShape2D):
+		return
+	var r := float(_def.params.get("hitbox_radius", 0.0))
+	if r <= 0.0:
+		return
+	var circle := (_shape.shape as CircleShape2D).duplicate() as CircleShape2D
+	circle.radius = r
+	_shape.shape = circle
 
 
 ## 가로 스트립 시트(프레임 = 정사각, 한 변 = 시트 높이)를 루프 "idle" 애니로 굽는다.
@@ -807,6 +843,16 @@ func hp() -> float:
 ## 공개 API로 확인한다(`hp()` 선례). 1 = 기본, 2 = hp 절반 이후. 보스가 아닌 적은 항상 1.
 func phase() -> int:
 	return 2 if _phase2 else 1
+
+
+## 🔴 공개 관측점 — **최종(화면) 히트박스 반경**(`hp()`·`phase()` 선례). 루트 scale(=`params.size`)까지
+## 곱한 값이라 「보이는 몸에 쏘면 맞나」를 재는 그물이 이걸 그대로 쓴다.
+## ⚠ **params에서 되계산하지 않고 실제 형상에서 읽는다** — 되계산하면 `_apply_hitbox`가 통째로
+##  죽어도 이 리더가 옳은 값을 돌려줘 그물이 **거짓 그린**이 된다(세85 「검증 도구가 거짓말한다」).
+func hitbox_radius() -> float:
+	if _shape == null or not (_shape.shape is CircleShape2D):
+		return 0.0
+	return (_shape.shape as CircleShape2D).radius * absf(scale.x)
 
 
 ## 🔴 계약: `enemy_hit`는 **약점 배율을 반영한 최종 피해**로 발신한다 (dummy_target 주석).

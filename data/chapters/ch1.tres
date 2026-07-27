@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="ChapterDef" load_steps=20 format=3]
+[gd_resource type="Resource" script_class="ChapterDef" load_steps=19 format=3]
 
 [ext_resource type="Script" path="res://src/core/schemas/chapter_def.gd" id="1"]
 [ext_resource type="Script" path="res://src/core/schemas/mob_spawn.gd" id="2"]
@@ -6,14 +6,17 @@
 [ext_resource type="Script" path="res://src/core/schemas/named_spawn.gd" id="4"]
 [ext_resource type="Script" path="res://src/core/schemas/landmark_slot.gd" id="5"]
 
+; 🐺 세99: 잡몹이 **늑대 하나**로 줄었다 (사용자 확정 — `data/enemies/README.md` 참조).
+; 🔴 **길에 서는 자리는 전부 `pool_tag`로 굴린다** — 새 몹이 오면 `mob_pool`에 `MobWeight` 한 줄만
+;  더하면 이 자리들이 저절로 돌아간다(자리를 다시 안 만진다). 지금은 후보가 늑대뿐이라 늑대가 선다.
+; 🔴 **좌표는 세99 배치 그대로다** — 자리는 지형이 정한 것이라 몹이 바뀌어도 안 옮긴다.
+;  세98의 9자리 중 넷만 남겼다: 늑대는 슬라임보다 세다(HP 26 vs 14 · 접촉 8 vs 4 · 돌진 330).
+;  ⚠ 여기 안 남긴 다섯(560,520)·(-500,-180)·(420,-350)·(-250,-420) 등은 **자리를 지운 것**이지
+;   좌표가 틀려서가 아니다 — 몹이 늘면 되살릴 후보다. 특히 (420,-350)은 둥지에서 200px라
+;   늑대가 서면 **무리와 구분이 안 간다**(그물이 재는 「둘러싼 다섯」이 흐려진다).
 [sub_resource type="Resource" id="mob1"]
 script = ExtResource("2")
 position = Vector2(-380, 420)
-pool_tag = &"fore"
-
-[sub_resource type="Resource" id="mob2"]
-script = ExtResource("2")
-position = Vector2(350, 300)
 pool_tag = &"fore"
 
 [sub_resource type="Resource" id="mob3"]
@@ -21,44 +24,27 @@ script = ExtResource("2")
 position = Vector2(-120, 430)
 pool_tag = &"fore"
 
-[sub_resource type="Resource" id="mob4"]
-script = ExtResource("2")
-enemy_id = &"slime"
-position = Vector2(560, 520)
-
-[sub_resource type="Resource" id="mob5"]
-script = ExtResource("2")
-enemy_id = &"slime"
-position = Vector2(-500, -180)
-
-[sub_resource type="Resource" id="mob6"]
-script = ExtResource("2")
-enemy_id = &"slime"
-position = Vector2(420, -350)
-
 [sub_resource type="Resource" id="mob7"]
 script = ExtResource("2")
 position = Vector2(150, -520)
 pool_tag = &"deep"
 
-[sub_resource type="Resource" id="mob8"]
-script = ExtResource("2")
-enemy_id = &"mist"
-position = Vector2(-250, -420)
-
 [sub_resource type="Resource" id="mob9"]
 script = ExtResource("2")
-enemy_id = &"beetle"
 position = Vector2(0, -1050)
+pool_tag = &"deep"
 
 ; 🐺 늑대 무리 — 둥지(620,-300)를 **둘러싸고** 선다 (세99 사용자 원문 *"많은 늑대들이 있을듯"*).
 ; 🔴 자리는 사람이 놓는다(D5) — 굴리는 건 「거기 뭐가 서 있나」뿐이라 `pool_tag`를 안 쓴다.
+; 🔴🔴 **이 다섯만 `enemy_id = &"hound"`를 직접 쥐는 이유**: 그물(`test_landmark_road_auto [6]`)이
+;  ch1의 **명시 `hound` 자리 전부**를 「둥지 둘레 140~400px · 사방으로 퍼짐」으로 잰다.
+;  길에 서는 늑대를 명시로 박으면 그 그물이 **거짓 빨강**이 된다 — 그래서 길 자리는 풀로 굴린다.
 ; 🔴 **다섯 다 「입구에서 곧게 뻗는 줄기」에서 350px 넘게 떨어져 있다**(실측 최솟값 355 =
 ;  (450,-190) 늑대). `hound.params.aggro_range`가 **220**이라 **길을 걸어 들어가는 것만으론 안 깨운다** —
 ;  둥지 쪽으로 꺾어야 깨어난다. 설계 §3의 *"✅ 지나가도 된다"*가 좌표로 성립하는 자리이고,
 ;  가까이 붙이면 지점이 「고르는 것」이 아니라 **통행세**가 된다.
-;  ⚠ 그물(`tests/test_landmark_road_auto [6]`)이 이 성질을 **줄기에서 파생해** 잰다 — 늑대를 옮기면
-;   거기서 빨개진다. `aggro_range`도 데이터에서 읽으므로 그 값을 키워도 같이 걸린다.
+;  ⚠ 그물이 이 성질을 **줄기에서 파생해** 잰다 — 늑대를 옮기면 거기서 빨개진다.
+;   `aggro_range`도 데이터에서 읽으므로 그 값을 키워도 같이 걸린다.
 [sub_resource type="Resource" id="mob_wolf1"]
 script = ExtResource("2")
 enemy_id = &"hound"
@@ -84,39 +70,26 @@ script = ExtResource("2")
 enemy_id = &"hound"
 position = Vector2(520, -450)
 
-[sub_resource type="Resource" id="w_fore_slime"]
+; 🔴 대역(`fore`/`deep`)은 **후보가 하나여도 남겨 둔다** — 「어귀에 서는 것」과 「깊은 데 서는 것」이
+;  갈린다는 설계가 여기 살아 있고, 새 몹은 대역을 골라 한 줄로 들어온다.
+;  ⚠ `weight`는 0 이하면 안 뽑힌다(`test_mob_roll_auto [3]`) — 임시로 빼려면 지우지 말고 0으로.
+[sub_resource type="Resource" id="w_fore_hound"]
 script = ExtResource("3")
-enemy_id = &"slime"
-weight = 6
+enemy_id = &"hound"
+weight = 1
 pool_tag = &"fore"
 
-[sub_resource type="Resource" id="w_fore_mist"]
+[sub_resource type="Resource" id="w_deep_hound"]
 script = ExtResource("3")
-enemy_id = &"mist"
-weight = 3
-pool_tag = &"fore"
-
-[sub_resource type="Resource" id="w_deep_mist"]
-script = ExtResource("3")
-enemy_id = &"mist"
-weight = 4
+enemy_id = &"hound"
+weight = 1
 pool_tag = &"deep"
 
-[sub_resource type="Resource" id="w_deep_beetle"]
-script = ExtResource("3")
-enemy_id = &"beetle"
-weight = 2
-pool_tag = &"deep"
-
-[sub_resource type="Resource" id="w_deep_slime"]
-script = ExtResource("3")
-enemy_id = &"slime"
-weight = 2
-pool_tag = &"deep"
-
-[sub_resource type="Resource" id="named_beetle"]
+; 🔴 네임드 자리는 그대로 두고 **id만 늑대 쪽으로** 바꿨다(`beetle_ancient` → `hound_alpha`).
+;  좌표 (-600,-700)은 세99 판단이고 몹이 바뀌어도 안 옮긴다.
+[sub_resource type="Resource" id="named_hound"]
 script = ExtResource("4")
-enemy_id = &"beetle_ancient"
+enemy_id = &"hound_alpha"
 chance = 0.3
 position = Vector2(-600, -700)
 
@@ -142,9 +115,9 @@ boss_enemy_id = &"slime_elite"
 boss_scene_path = ""
 boss_spawn = Vector2(0, -1350)
 room_ground_color = Color(0.33, 0.41, 0.27, 1.0)
-mob_spawns = Array[ExtResource("2")]([SubResource("mob1"), SubResource("mob2"), SubResource("mob3"), SubResource("mob4"), SubResource("mob5"), SubResource("mob6"), SubResource("mob7"), SubResource("mob8"), SubResource("mob9"), SubResource("mob_wolf1"), SubResource("mob_wolf2"), SubResource("mob_wolf3"), SubResource("mob_wolf4"), SubResource("mob_wolf5")])
+mob_spawns = Array[ExtResource("2")]([SubResource("mob1"), SubResource("mob3"), SubResource("mob7"), SubResource("mob9"), SubResource("mob_wolf1"), SubResource("mob_wolf2"), SubResource("mob_wolf3"), SubResource("mob_wolf4"), SubResource("mob_wolf5")])
 reward_unlock = &"rune_water"
-mob_pool = Array[ExtResource("3")]([SubResource("w_fore_slime"), SubResource("w_fore_mist"), SubResource("w_deep_mist"), SubResource("w_deep_beetle"), SubResource("w_deep_slime")])
-named_pool = Array[ExtResource("4")]([SubResource("named_beetle")])
+mob_pool = Array[ExtResource("3")]([SubResource("w_fore_hound"), SubResource("w_deep_hound")])
+named_pool = Array[ExtResource("4")]([SubResource("named_hound")])
 extract_points = Array[Vector2]([Vector2(-1150, -360), Vector2(300, -1400)])
 landmarks = Array[ExtResource("5")]([SubResource("lm_nest_slot")])

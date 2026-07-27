@@ -44,8 +44,22 @@ const R_GRASS := 6
 # 그전엔 이 쌍만 덩굴(ROOT)을 재사용해 반응의 관측 가능한 효과가 「젖음 소진」뿐이었다.
 const S_OVERGROWTH := 10
 
+## 🔴🔴 **세99 몹 정리 — 이 파일이 쓰는 「몸」은 `Db`에 주입한다** (세61 콘텐츠 리셋과 같은 수법).
+##
+## 그전엔 `slime`을 22번 세웠다. 그런데 `slime`은 **임의로 만든 플레이스홀더**라 세99에 지워졌고
+## (`data/enemies/README.md`), 남은 잡몹 `hound`는 **돌진(charge) 상태기계**를 쥔다 —
+## 🔴 그걸 그대로 쓰면 [2]·[3]·[9]·[10]의 **이동 거리 비교가 윈드업/돌진에 흔들려** 그물이 flake가 된다
+## (세84에 `test_chapter_auto`가 flake로 데인 자리 — 「빨간 게 정상」이 되면 그물이 죽는다).
+##
+## 🔴 그래서 **옛 `slime`의 수치를 그대로 옮긴 중립 몸**을 세운다: 재는 것은 그때나 지금이나
+##  `forest_enemy`의 **상태이상 기계**이지 「슬라임이 있나」가 아니다. 수치가 같으니 판정 문턱
+##  (버스트 2.4·화상 총 9 등)이 한 톨도 안 움직인다 = **뮤테이션 검출력이 옛 판과 동일하다.**
+## ⚠ **반드시 되돌린다** — `Db.enemies`는 공유 레지스트리다(`test_feel_auto [4]` 선례).
+const BODY := &"status_probe_body"
+
 var failures: int = 0
 var _bus = null
+var _db = null
 var _enemy_scene = null
 
 
@@ -60,7 +74,9 @@ func _run() -> void:
 	await process_frame  # 오토로드 준비 대기
 
 	_bus = root.get_node("/root/EventBus")
+	_db = root.get_node("/root/Db")
 	_enemy_scene = load("res://src/field/forest_enemy.tscn") as PackedScene
+	_inject_body()
 
 	await _test_burn_ticks_hp()
 	await _test_wet_slows_movement()
@@ -81,6 +97,8 @@ func _run() -> void:
 	_test_overgrowth_rules_relations()
 	_test_draw_color_contract()
 
+	_db.enemies.erase(BODY)   # 🔴 주입 제거 — 공유 레지스트리라 남기면 뒤 테스트의 적 수가 는다
+
 	if failures == 0:
 		print("TEST_STATUS_OK — 전 항목 통과")
 		quit(0)
@@ -98,7 +116,7 @@ func _run() -> void:
 ## hits[0]==1이 돼 빨개진다). dummy 쪽 그물은 test_jin_fusion_auto[6]이 쥔다(세56 두 몸 계약).
 func _test_burn_ticks_hp() -> void:
 	print("[1] 화상 — 시간이 지나면 hp가 깎이고, DoT·0-피해 히트는 enemy_hit을 안 쏜다")
-	var e = await _spawn(&"slime")
+	var e = await _spawn(BODY)
 	var hits := [0]
 	var cb := func(who, _d, _r) -> void:
 		if who == e:
@@ -115,7 +133,7 @@ func _test_burn_ticks_hp() -> void:
 	_check(e.hp() < h0 - 1.0, "화상이 hp를 깎았다 (%.2f → %.2f)" % [h0, e.hp()])
 	_check(hits[0] == 0, "DoT도 enemy_hit을 안 쐈다 (누적 %d, 0이어야 한다)" % hits[0])
 
-	# 화상 지속(3.0s) 동안 3.0/s → 총 9. slime hp 14라 안 죽는다 → 만료 후 상태가 사라져야 한다.
+	# 화상 지속(3.0s) 동안 3.0/s → 총 9. 몸의 hp가 14라 안 죽는다 → 만료 후 상태가 사라져야 한다.
 	for i in 140:
 		await physics_frame
 	_check(not e.has_status(S_BURN), "화상이 지속시간 뒤에 만료돼 사라졌다")
@@ -138,8 +156,8 @@ func _test_wet_slows_movement() -> void:
 	stub.global_position = Vector2(150, 0)  # aggro_range(160) 안 · attack_range(18) 밖
 	root.add_child(stub)
 
-	var dry = await _spawn(&"slime")
-	var wet = await _spawn(&"slime")
+	var dry = await _spawn(BODY)
+	var wet = await _spawn(BODY)
 	wet.apply_status(S_WET, 1.0)
 	_check(wet.has_status(S_WET), "젖음이 걸렸다")
 	var d0: Vector2 = dry.global_position
@@ -169,8 +187,8 @@ func _test_wet_plus_earth_is_mud() -> void:
 	stub.global_position = Vector2(120, 0)
 	root.add_child(stub)
 
-	var wet = await _spawn(&"slime")
-	var mud = await _spawn(&"slime")
+	var wet = await _spawn(BODY)
+	var mud = await _spawn(BODY)
 	# 🔴 둘 다 take_hit으로 세운다 — 넉백(손맛)이 한쪽에만 붙으면 이동 거리 비교가 오염된다.
 	wet.take_hit(0.0, R_WATER, S_WET, 1.0)
 	mud.apply_status(S_WET, 1.0)
@@ -203,7 +221,7 @@ func _test_wet_plus_earth_is_mud() -> void:
 ## 뮤테이션(react 무시) → 젖음이 그냥 덮여 두 번째 줄이 빨개진다.
 func _test_burn_plus_water_extinguishes() -> void:
 	print("[4] 화상 + 물 = 꺼짐 (반응이 덮어쓰기를 이긴다)")
-	var e = await _spawn(&"slime")
+	var e = await _spawn(BODY)
 	e.apply_status(S_BURN, 1.0)
 	e.take_hit(0.0, R_WATER, S_WET, 1.0)
 	_check(not e.has_status(S_BURN), "화상이 꺼졌다")
@@ -221,9 +239,9 @@ func _test_burn_plus_water_extinguishes() -> void:
 ## 뮤테이션(`spreads()` 분기 제거) → 옆 적이 안 타 첫 줄이 빨개진다.
 func _test_wind_spreads_status() -> void:
 	print("[5] 바람 — 붙은 상태를 옆 적에게 옮긴다 (자기 상태는 안 남긴다)")
-	var a = await _spawn(&"slime")
-	var near = await _spawn(&"slime")
-	var far = await _spawn(&"slime")
+	var a = await _spawn(BODY)
+	var near = await _spawn(BODY)
+	var far = await _spawn(BODY)
 	near.global_position = Vector2(60, 0)     # 반경 110 안
 	far.global_position = Vector2(400, 0)     # 반경 밖
 	await physics_frame
@@ -242,7 +260,7 @@ func _test_wind_spreads_status() -> void:
 ## 뮤테이션(power를 `+=`로) → 두 번째 줄이 빨개진다.
 func _test_reapply_refreshes_not_stacks() -> void:
 	print("[6] 재적용 — 누적이 아니라 갱신 (더 센 power 채택)")
-	var e = await _spawn(&"slime")
+	var e = await _spawn(BODY)
 	# 🔴 세션50: 값이 **세기 배율**이라 1.0 언저리로 잡는다 (옛 3.0/5.0은 "초당피해"였다).
 	e.apply_status(S_BURN, 1.0)
 	_check(is_equal_approx(e.status_power_of(S_BURN), 1.0),
@@ -263,8 +281,8 @@ func _test_reapply_refreshes_not_stacks() -> void:
 ## 뮤테이션(`power_mult` 곱 제거) → 두 번째 줄이 빨개진다.
 func _test_vulnerable_amplifies_next() -> void:
 	print("[7] 취약 — 다음에 거는 상태가 더 세게 걸린다")
-	var plain = await _spawn(&"slime")
-	var vuln = await _spawn(&"slime")
+	var plain = await _spawn(BODY)
+	var vuln = await _spawn(BODY)
 	# 🔴 흙 룬의 **실제 데이터 값**을 보낸다 — `rune_earth.tres`의 `status = 6`(VULNERABLE).
 	# ⚠ 전엔 `0`(NONE)을 손으로 넣고 *"흙 룬은 status를 데이터로 아직 안 들고 온다"*는
 	# **세83 이후 낡은 전제**로 `status_holder`의 폴백(NONE + amplifies → VULNERABLE)을 재고 있었다.
@@ -295,8 +313,8 @@ func _test_vulnerable_amplifies_next() -> void:
 ## 뮤테이션(`SR.burst_damage(power, mult)` → `power * mult`) → 0.8이 되어 빨개진다.
 func _test_burst_uses_balance_base() -> void:
 	print("[8] 버스트 피해 = status_burst_base × 배율 (power만 쓰면 1/3 토막)")
-	var a = await _spawn(&"slime")
-	var near = await _spawn(&"slime")
+	var a = await _spawn(BODY)
+	var near = await _spawn(BODY)
 	a.global_position = Vector2.ZERO
 	near.global_position = Vector2(50, 0)  # 증기 반경(status_steam_px 70) 안
 	await physics_frame
@@ -322,8 +340,8 @@ func _test_power_scales_shock_slow() -> void:
 	stub.global_position = Vector2(120, 0)
 	root.add_child(stub)
 
-	var weak = await _spawn(&"slime")
-	var strong = await _spawn(&"slime")
+	var weak = await _spawn(BODY)
+	var strong = await _spawn(BODY)
 	weak.apply_status(S_SHOCK, 1.0)
 	strong.apply_status(S_SHOCK, 1.8)  # 특별잉크로 증폭된 셈
 	var w0: Vector2 = weak.global_position
@@ -352,7 +370,7 @@ func _test_slow_cap() -> void:
 	stub.global_position = Vector2(120, 0)
 	root.add_child(stub)
 
-	var e = await _spawn(&"slime")
+	var e = await _spawn(BODY)
 	e.apply_status(S_MUD, 5.0)  # 0.85 × 5.0 = 4.25 → cap 0.90으로 잘린다
 	var p0: Vector2 = e.global_position
 	var far0: float = e.global_position.distance_to(stub.global_position)
@@ -541,8 +559,8 @@ func _test_wet_plus_grass_is_overgrowth() -> void:
 	stub.global_position = Vector2(120, 0)
 	root.add_child(stub)
 
-	var wet = await _spawn(&"slime")
-	var lush = await _spawn(&"slime")
+	var wet = await _spawn(BODY)
+	var lush = await _spawn(BODY)
 	# 🔴 둘 다 take_hit으로 세운다 — 넉백(손맛)이 한쪽에만 붙으면 이동 거리 비교가 오염된다([3] 교훈).
 	wet.take_hit(0.0, R_WATER, S_WET, 1.0)
 	lush.apply_status(S_WET, 1.0)
@@ -621,7 +639,7 @@ func _test_burn_plus_grass_is_blaze() -> void:
 ## 마른 덩굴이 잘 탄다 = 속박이 사라지고 지속 피해로 바뀐다.
 func _test_root_plus_fire_is_blaze() -> void:
 	print("[15] 덩굴 + 불 = 산불 (마른 덩굴이 잘 탄다)")
-	var e = await _spawn(&"slime")
+	var e = await _spawn(BODY)
 	e.apply_status(S_ROOT, 1.0)
 	e.take_hit(0.0, R_FIRE, S_BURN, 1.0)
 	_check(e.has_status(S_BLAZE), "산불이 생겼다")
@@ -641,7 +659,7 @@ func _test_root_plus_fire_is_blaze() -> void:
 ## ⚠ [15](덩굴+불)과 산물은 같지만 **다른 표 줄**이다 — 한쪽만 지워도 다른 쪽은 그린이다.
 func _test_overgrowth_plus_fire_is_blaze() -> void:
 	print("[16] 무성함 + 불 = 산불 (젖었어도 연료 덩어리라 크게 탄다)")
-	var e = await _spawn(&"slime")
+	var e = await _spawn(BODY)
 	e.apply_status(S_OVERGROWTH, 1.0)
 	_check(e.has_status(S_OVERGROWTH), "무성함이 걸렸다 (duration_of에 팔이 있다)")
 	e.take_hit(0.0, R_FIRE, S_BURN, 1.0)
@@ -812,7 +830,28 @@ func _make_body(kind: String):
 		await process_frame
 		await physics_frame
 		return n
-	return await _spawn(&"slime")
+	return await _spawn(BODY)
+
+
+## 🔴 상태이상 검사용 **중립 몸** — 옛 `slime.tres`의 수치를 그대로 옮겼다(머리말 참조).
+## 여기 값이 바뀌면 판정 문턱이 같이 움직인다: hp 14(화상 총 9로 안 죽는다) ·
+## `aggro_range` 160·`attack_range` 18([2][3][9][10]이 스텁을 120~150에 두는 근거) ·
+## `has_counter = false`(약점 배율이 안 섞여 [8]의 정확값 2.4가 성립한다) · 기본 AI = chase.
+func _inject_body() -> void:
+	var def = (load("res://src/core/schemas/enemy_def.gd") as GDScript).new()
+	def.id = BODY
+	def.hp = 14.0
+	def.has_counter = false
+	def.params = {
+		"sprite": "res://assets/sprites/enemies/hound.png",
+		"aggro_range": 160.0,
+		"attack_cooldown": 0.9,
+		"attack_range": 18.0,
+		"contact_damage": 4.0,
+		"hitbox_radius": 22.0,
+		"move_speed": 55.0,
+	}
+	_db.enemies[BODY] = def
 
 
 ## 적 하나를 스폰한다 — enemy_id는 **_ready 전에** 세워야 _def가 그 적으로 잡힌다.

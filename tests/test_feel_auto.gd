@@ -10,7 +10,7 @@ extends SceneTree
 ## [3] 텔레그래프(snake_boss 러시 윈드업) → telegraph_amount > 0 **그리고** modulate 불가침
 ##     (세63 소유권 계약: modulate = rgb 상태 틴트 · a 분산 2축만)
 ## [4] params.hurt_sprite 있는 적(in-memory EnemyDef 주입 — 세61 Db 주입 선례) → "hurt" 애니·
-##     loop=false / 없는 적(slime) → "hurt" 없음(기존 무변경 하위호환 계약)
+##     loop=false / 없는 적(hound) → "hurt" 없음(기존 무변경 하위호환 계약)
 ## [5] snake_boss·gale params에 hurt_sprite 키 존재 + 경로 load 성공 (🔴 세50 .tres 침묵사 그물)
 ##     ⚠ 아트(takbon-art) 도착 + 리드 --import 전엔 load 항목이 빨갛다 — 예상된 빨강.
 ## [6] 적 _ready 후 그림자 1개·z_index ≥ 0·그룹 무가입·첫 자식(트리 순서 = 몸 아래) /
@@ -99,8 +99,8 @@ func _test_player_hurt_signal() -> void:
 
 func _test_per_instance_material() -> void:
 	print("[2] 히트 플래시 material — per-instance (한 마리 플래시 ≠ 전원 플래시)")
-	var a = _spawn_enemy(&"slime", Vector2(0, 0))
-	var b = _spawn_enemy(&"slime", Vector2(500, 0))
+	var a = _spawn_enemy(&"hound", Vector2(0, 0))
+	var b = _spawn_enemy(&"hound", Vector2(500, 0))
 	await process_frame
 	var mat_a = a.get_node("Visual").material
 	var mat_b = b.get_node("Visual").material
@@ -162,11 +162,11 @@ func _test_hurt_anim_baking() -> void:
 	enemy.queue_free()
 	_db.enemies.erase(&"feel_hurt_test")  # 🔴 주입 제거 — 잔류하면 다른 테스트의 적 수가 는다
 	# 없는 적 = 기존 무변경 하위호환 계약.
-	var slime = _spawn_enemy(&"slime", Vector2.ZERO)
+	var plain = _spawn_enemy(&"hound", Vector2.ZERO)
 	await process_frame
-	var sframes = slime.get_node("Visual").sprite_frames
+	var sframes = plain.get_node("Visual").sprite_frames
 	_check(not sframes.has_animation(&"hurt"), "hurt_sprite 없는 적 → hurt 애니 없음 (기존 무변경)")
-	slime.queue_free()
+	plain.queue_free()
 	await process_frame
 
 
@@ -186,7 +186,7 @@ func _test_boss_hurt_sprite_params() -> void:
 
 func _test_shadows() -> void:
 	print("[6] 그림자 — 적 자동 부착·z≥0·그룹 무가입·첫 자식 / 뱀 마디 수 일치")
-	var enemy = _spawn_enemy(&"slime", Vector2.ZERO)
+	var enemy = _spawn_enemy(&"hound", Vector2.ZERO)
 	await process_frame
 	var shadows := _shadows_of(enemy)
 	_check(shadows.size() == 1, "적 그림자 정확히 1개 (실제 %d)" % shadows.size())

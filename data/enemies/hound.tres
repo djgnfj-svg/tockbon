@@ -42,9 +42,9 @@ params = {
 "color": Color(0.72, 0.42, 0.28, 1),
 "contact_damage": 8.0,
 "dash_sec": 0.4,
+"hitbox_radius": 20.0,
 "move_speed": 95.0,
 "recover_sec": 0.8,
-"size": 1.15,
 "weakness_mult": 1.75,
 "windup_sec": 0.5
 }

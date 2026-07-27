@@ -217,13 +217,13 @@ func _run() -> void:
 	var core_before: int = gs.get_count(&"mat_slime_core")
 	_check("처치 전: q01 진행 0, 정산 대기 아님",
 		gs.quest_count(&"q01_first_hunt") == 0 and not gs.is_quest_claimable(q1))
-	eb.enemy_died.emit(&"slime")   # 1마리 = count(1) 충족
+	eb.enemy_died.emit(&"hound")   # 1마리 = count(1) 충족
 	_check("🔴 처치: q01 정산 대기(claimable)", gs.is_quest_claimable(q1))
 	_check("🔴 처치: 아직 완료 아님 (턴인 전)", not gs.is_quest_done(&"q01_first_hunt"))
 	_check("🔴 처치: 보상도 아직 없음 (완료 전)", gs.get_count(&"mat_slime_core") == core_before)
 	_check("🔴 달성 순간 quest_ready가 발신됐다 (넛지 배선)", _ready_fires >= 1)
 	_check("🔴 아직 귀환 안 함 → q02(살아 돌아와라)는 정산 대기 아님", not gs.is_quest_claimable(q2))
-	eb.enemy_died.emit(&"slime")   # 한 마리 더
+	eb.enemy_died.emit(&"hound")   # 한 마리 더
 	_check("달성 뒤엔 더 세지 않는다 (진행 막대가 need에서 멈춘다)", gs.quest_count(&"q01_first_hunt") == 1)
 
 	# ── ③ 귀환 없이 말 걸기 — q01만 정산된다. 🔴 **원정 없이 q02가 공짜로 완료되지 않는다** ──
@@ -263,10 +263,10 @@ func _run() -> void:
 		if id == &"station_refine": refine_emits[0] += 1
 	eb.codex_unlocked.connect(on_refine)
 	for i in q3.need() - 1:
-		eb.enemy_died.emit(&"slime")
+		eb.enemy_died.emit(&"hound")
 	_check("🔴 목표 수(%d)에 한 마리 모자라면 아직 정산 대기 아님 (검출력 대조)" % q3.need(),
 		not gs.is_quest_claimable(q3))
-	eb.enemy_died.emit(&"slime")
+	eb.enemy_died.emit(&"hound")
 	_check("🔴 짐승 %d마리: q03 정산 대기 (아직 완료 아님)" % q3.need(),
 		gs.is_quest_claimable(q3) and not gs.is_quest_done(&"q03_build_refine"))
 	_check("🔴 정산 전엔 실습동이 아직 잔해다 (station_refine 미해금 · 발신 0회)",
@@ -342,11 +342,11 @@ func _run() -> void:
 	# ── ⑦ requires 게이트 + 저장/로드 라운드트립 ──
 	_clean(gs)
 	gs.quest_done[&"q00_first_draw"] = true   # 온보딩 q00 완료 선세팅 — 이래야 q01이 열려 진행된다 (세션41)
-	eb.enemy_died.emit(&"slime")           # q01 진행 1/1 (세58-B count 1)
+	eb.enemy_died.emit(&"hound")           # q01 진행 1/1 (세58-B count 1)
 	# 🔴 세89: q03이 KILL이 됐으므로 게이트를 **사냥으로** 잰다(옛 판은 codex를 쐈다).
 	#   목표 수보다 넉넉히 잡아도 잠긴 퀘스트는 열리지 않는다.
 	for i in q3.need() + 2:
-		eb.enemy_died.emit(&"slime")
+		eb.enemy_died.emit(&"hound")
 	_check("🔴 선행(q02) 미완료면 아무리 잡아도 q03은 정산 불가 (requires 게이트)",
 		not gs.is_quest_claimable(q3))
 	_check("🔴 잠긴 동안의 사냥은 **쌓이지도 않는다** (진행 %d — advance_quests가 active만 센다)"
@@ -399,7 +399,7 @@ func _run() -> void:
 	var qr := QuestDef.new()
 	qr.id = &"qr_test66"
 	qr.goal = Enums.QuestGoal.KILL
-	qr.target = &"slime"
+	qr.target = &"hound"
 	qr.count = 1
 	qr.reward_unlock = &"rune_test66"   # 🔴 완료 시 이 codex(룬)를 해금
 	_backup_quest(db, qr.id)           # 세84: 합성 id라도 같은 규약으로 (뒷정리를 한 곳에 모은다)
@@ -409,7 +409,7 @@ func _run() -> void:
 		if id == &"rune_test66": unlock_emits[0] += 1
 	eb.codex_unlocked.connect(on_unlock)
 	_check("qr: 처치 전 룬 미해금", not gs.is_unlocked(&"rune_test66"))
-	eb.enemy_died.emit(&"slime")
+	eb.enemy_died.emit(&"hound")
 	_check("qr: 처치 = 정산 대기 (아직 해금 아님 — 턴인 전)",
 		gs.is_quest_claimable(qr) and not gs.is_unlocked(&"rune_test66"))
 	gs.claim_ready_quests()

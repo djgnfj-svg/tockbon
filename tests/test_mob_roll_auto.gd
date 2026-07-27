@@ -90,15 +90,20 @@ func _test_no_tag_is_unchanged() -> void:
 	# 자리 셋을 전부 손으로 박고 풀은 비운다 = 세98 상태.
 	ch.mob_pool = _typed_pool([])
 	ch.named_pool = _typed_named([])
+	# ⚠ 세99 몹 정리: 잡몹이 늑대 하나가 돼 **서로 다른 id가 둘뿐**이다(`hound`·`hound_alpha`).
+	#  자리는 셋을 유지한다 — 재는 건 「몇 종인가」가 아니라 **「박은 자리가 박은 대로 서나」**다.
 	ch.mob_spawns = _typed_spawns([
-		_spawn(&"slime", Vector2(-200, 300), &""),
-		_spawn(&"mist", Vector2(200, 300), &""),
-		_spawn(&"beetle", Vector2(0, -400), &""),
+		_spawn(&"hound", Vector2(-200, 300), &""),
+		_spawn(&"hound_alpha", Vector2(200, 300), &""),
+		_spawn(&"hound", Vector2(0, -400), &""),
 	])
 	await _fresh(&"ch1")
+	# 🔴 `_mob_ids()`가 이미 **`String()`으로 감싼 `sort_custom`**으로 정렬해 준다.
+	#  ⚠ 여기 있던 `got.sort()`를 **지웠다** — `StringName` 배열의 `sort()`는 사전순이 아니라
+	#   **인터닝 순**이라 실행마다 결과가 달라진다(세88 실측). 세99에 실제로 밟았다:
+	#   같은 데이터로 `[&"hound_alpha", &"hound", &"hound"]`가 나와 그물이 거짓 빨강이 됐다.
 	var got := _mob_ids()
-	got.sort()
-	_check(got == [&"beetle", &"mist", &"slime"],
+	_check(got == [&"hound", &"hound", &"hound_alpha"],
 		"손으로 박은 셋이 그대로 섰다 (실제 %s)" % str(got))
 	_restore_all()
 
@@ -111,7 +116,7 @@ func _test_tag_rolls_within_pool() -> void:
 	ch.named_pool = _typed_named([])
 	ch.mob_pool = _typed_pool([
 		_weight(&"hound", 1, &"t"),
-		_weight(&"vine", 1, &"t"),
+		_weight(&"hound_alpha", 1, &"t"),
 	])
 	var at := Vector2(-333, 222)
 	ch.mob_spawns = _typed_spawns([_spawn(&"", at, &"t")])
@@ -132,8 +137,8 @@ func _test_tag_rolls_within_pool() -> void:
 	ids.sort_custom(func(a, b) -> bool: return String(a) < String(b))
 	_check(ids.size() > 0, "풀 자리가 실제로 뭔가를 세웠다 (0이면 설계 §6 S1 — 에러 0의 빈 방)")
 	for id in ids:
-		_check(id == &"hound" or id == &"vine",
-			"🔴 풀 밖의 적(%s)이 안 섰다 (풀 = hound·vine)" % id)
+		_check(id == &"hound" or id == &"hound_alpha",
+			"🔴 풀 밖의 적(%s)이 안 섰다 (풀 = hound·hound_alpha)" % id)
 	_check(ids.size() == 2,
 		"%d판 안에 풀의 둘이 다 나왔다 = 굴림이 굳지 않았다 (실제 %s)" % [ROLL_ROUNDS, str(ids)])
 	_restore_all()
@@ -155,10 +160,12 @@ func _test_weight_zero_never_appears() -> void:
 	_save(ch)
 	ch.named_pool = _typed_named([])
 	# ⓐ 0·음수는 안 나온다 (⚠ 위 머리말 — 지금 구현에선 자명 통과다)
+	# ⚠ 세99: `gale`은 **ch2의 보스**지만 ch1에선 그냥 「다른 적 id」다 — 여기서 재는 건 가중치이지
+	#  보스 제외가 아니다(그건 [5]가 ch1의 `boss_enemy_id`로 잰다).
 	ch.mob_pool = _typed_pool([
-		_weight(&"slime", 5, &"t"),
-		_weight(&"hound", 0, &"t"),    # 빼 둔 것
-		_weight(&"vine", -3, &"t"),    # 음수도 같다
+		_weight(&"hound", 5, &"t"),
+		_weight(&"hound_alpha", 0, &"t"),   # 빼 둔 것
+		_weight(&"gale", -3, &"t"),         # 음수도 같다
 	])
 	ch.mob_spawns = _typed_spawns([
 		_spawn(&"", Vector2(-200, 300), &"t"),
@@ -171,22 +178,22 @@ func _test_weight_zero_never_appears() -> void:
 		await _fresh(&"ch1")
 		for m in _mobs():
 			total += 1
-			if m.enemy_id == &"hound" or m.enemy_id == &"vine":
+			if m.enemy_id == &"hound_alpha" or m.enemy_id == &"gale":
 				bad += 1
 	_check(total >= ROLL_ROUNDS, "굴림이 실제로 돌았다 (%d마리 표본 — 0이면 아래가 자명 통과다)" % total)
 	_check(bad == 0, "🔴 weight 0·음수인 적이 %d/%d번 나왔다 (0이어야 한다)" % [bad, total])
 
 	# ⓑ 🔴🔴 음수가 **합계를 깎아** 풀을 죽이지 않는다 — 필터를 지우면 여기가 빨개진다.
 	ch.mob_pool = _typed_pool([
-		_weight(&"slime", 2, &"t"),
-		_weight(&"vine", -3, &"t"),   # 필터가 없으면 total = −1 → 자리가 통째로 빈다
+		_weight(&"hound", 2, &"t"),
+		_weight(&"gale", -3, &"t"),   # 필터가 없으면 total = −1 → 자리가 통째로 빈다
 	])
 	ch.mob_spawns = _typed_spawns([_spawn(&"", Vector2(0, 300), &"t")])
 	var stood := 0
 	for i in 6:
 		await _fresh(&"ch1")
 		var mobs := _mobs()
-		if mobs.size() == 1 and mobs[0].enemy_id == &"slime":
+		if mobs.size() == 1 and mobs[0].enemy_id == &"hound":
 			stood += 1
 	_check(stood == 6,
 		"🔴🔴 음수 항목이 섞여도 살아 있는 항목이 매 판 선다 (6판 중 %d — 밑돌면 음수가 합계를 깎아 자리가 빈 것)"
@@ -205,7 +212,7 @@ func _test_weight_proportional() -> void:
 	_save(ch)
 	ch.named_pool = _typed_named([])
 	ch.mob_pool = _typed_pool([
-		_weight(&"mist", 1, &"t"),
+		_weight(&"hound_alpha", 1, &"t"),
 		_weight(&"hound", 49, &"t"),
 	])
 	ch.mob_spawns = _typed_spawns([
@@ -218,7 +225,7 @@ func _test_weight_proportional() -> void:
 	for i in ROLL_ROUNDS:
 		await _fresh(&"ch1")
 		for m in _mobs():
-			if m.enemy_id == &"mist":
+			if m.enemy_id == &"hound_alpha":
 				few += 1
 			elif m.enemy_id == &"hound":
 				many += 1
@@ -314,13 +321,15 @@ func _test_named_items_independent() -> void:
 	_save(ch)
 	ch.mob_pool = _typed_pool([])
 	ch.mob_spawns = _typed_spawns([])
+	# ⚠ 세99: 네임드 실적이 `hound_alpha` 하나뿐이라 확정 쪽은 `hound`로 세운다 —
+	#  `NamedSpawn`은 **아무 적 id나** 세울 수 있고, 여기서 재는 건 「굴림이 항목마다 따로인가」다.
 	ch.named_pool = _typed_named([
-		_named(&"mist_elder", 1.0, Vector2(-300, 100)),
+		_named(&"hound", 1.0, Vector2(-300, 100)),
 		_named(&"hound_alpha", 0.0, Vector2(300, 100)),
 	])
 	await _fresh(&"ch1")
 	var ids := _mob_ids()
-	_check(ids == [&"mist_elder"],
+	_check(ids == [&"hound"],
 		"확정 항목만 서고 0.0 항목은 안 선다 = 굴림이 항목마다 따로다 (실제 %s)" % str(ids))
 	_restore_all()
 
@@ -334,7 +343,7 @@ func _test_named_sometimes() -> void:
 	_save(ch)
 	ch.mob_pool = _typed_pool([])
 	ch.mob_spawns = _typed_spawns([])
-	ch.named_pool = _typed_named([_named(&"mist_elder", 0.5, Vector2(-300, 100))])
+	ch.named_pool = _typed_named([_named(&"hound_alpha", 0.5, Vector2(-300, 100))])
 	var hits := 0
 	for i in ROLL_ROUNDS:
 		await _fresh(&"ch1")

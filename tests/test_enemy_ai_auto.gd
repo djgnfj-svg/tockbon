@@ -19,6 +19,22 @@ extends SceneTree
 ## 주의: -s 모드는 오토로드 전역 등록보다 먼저 컴파일된다 — 오토로드 식별자·모듈 preload 금지.
 ## 첫 프레임 후 load()·/root 접근. 지역 변수는 의도적으로 동적 타입.
 
+## 🔴🔴 **세99 몹 정리 — AI 갈래는 `Db`에 몸을 주입해 잰다** (세61 콘텐츠 리셋과 같은 수법).
+##
+## 왜: 방어(`armor_reduction`)·재생(`regen_per_sec`)·분산(`hover`+`dispersed_resist`)을 쥔 잡몹
+## `beetle`·`vine`·`mist`가 세99에 **데이터에서 사라졌다** — 임의로 만든 플레이스홀더였기 때문이다
+## (경위 = `data/enemies/README.md`). 그런데 **기계는 `forest_enemy`에 전부 살아 있다.**
+## 🔴 그 갈래를 쓰는 `.tres`가 0장이라고 그물을 지우면, 다음에 그 키를 쓰는 몹이 왔을 때
+##  **말없이 죽어 있다** — 세58-B에 접촉 피해 채널이 전 스위트에서 사라진 그 함정의 재발 자리다.
+##  그래서 **몸만 주입하고 계약(=코드)은 그대로 잰다.** 뮤테이션 검출력은 옛 판과 같다:
+##  armor 곱을 지우면 [1], regen을 지우면 [2], `dispersed_resist` 경감을 지우면 [3]이 빨개진다.
+##
+## ⚠ **반드시 되돌린다** — `Db.enemies`는 공유 레지스트리라 남기면 뒤 항목의 적 수가 는다
+##  (`test_feel_auto [4]`가 같은 이유로 erase한다). ⚠ [6]은 `Db`가 아니라 **폴더를 스캔**하므로
+##  주입한 몸이 안 섞인다(= 실데이터의 박자만 잰다).
+## ⚠ 시트는 살아 있는 PNG를 빌려 쓴다 — 여기서 재는 건 **행동**이지 그림이 아니다.
+const PROBE_SPRITE := "res://assets/sprites/enemies/hound.png"
+
 var failures: int = 0
 var _bus = null
 var _db = null
@@ -60,24 +76,29 @@ func _run() -> void:
 		quit(1)
 
 
-## [1] 🔴 방어 — 갑충(armor_reduction 0.7)은 받는 피해가 30%로 준다. counter_rune(2)이 아닌
-## 룬으로 때려 약점 배율을 배제한다 → dealt = 100 * (1-0.7) = 30. 계약: enemy_hit이 이 경감까지
+## [1] 🔴 방어 — `armor_reduction 0.7`이면 받는 피해가 30%로 준다. `has_counter = false`라
+## 약점 배율이 안 섞인다 → dealt = 100 * (1-0.7) = 30. 계약: enemy_hit이 이 경감까지
 ## 반영한 최종 피해로 온다. 뮤테이션(armor 곱 제거) → dealt=100 → 이 줄이 빨개진다.
+## ⚠ 세99까지 `beetle`(갑충)로 쟀다 — 그 몹이 지워져 **같은 수치의 몸을 주입**한다(머리말 참조).
 func _test_armor_reduces_damage() -> void:
-	print("[1] 갑충 방어 — take_hit 최종 피해가 armor_reduction만큼 준다")
-	var e = await _spawn(&"beetle")
-	var dealt := _hit_and_capture(e, 100.0, 0)  # 룬 0 = FIRE, 갑충 약점은 2라 배율 없음
+	print("[1] 방어 — take_hit 최종 피해가 armor_reduction만큼 준다 (주입한 몸)")
+	_inject(&"ai_probe_armor", 55.0, {"armor_reduction": 0.7, "aggro_range": 170.0, "move_speed": 40.0})
+	var e = await _spawn(&"ai_probe_armor")
+	var dealt := _hit_and_capture(e, 100.0, 0)  # 룬 0 = FIRE, has_counter=false라 배율 없음
 	_check(dealt < 100.0, "방어가 피해를 줄인다 (실제 %.1f < 100)" % dealt)
 	_check(is_equal_approx(dealt, 30.0), "정확히 100*(1-0.7)=30이 든다 (실제 %.1f)" % dealt)
 	e.free()
+	_drop(&"ai_probe_armor")
 
 
-## [2] 🔴 재생 — 덩굴(regen_per_sec 2.5, hp 40)은 깎여도 시간이 지나면 HP가 늘고, 상한(40)을
+## [2] 🔴 재생 — `regen_per_sec 2.5`·hp 40이면 깎여도 시간이 지나면 HP가 늘고, 상한(40)을
 ## 안 넘는다. 공개 리더 hp()로만 본다. 뮤테이션(regen 제거) → hp가 안 늘어 첫 줄이 빨개진다.
+## ⚠ 세99까지 `vine`(덩굴)로 쟀다 — 그 몹이 지워져 **같은 수치의 몸을 주입**한다(머리말 참조).
 func _test_regen_heals_and_caps() -> void:
-	print("[2] 덩굴 재생 — HP가 시간이 지나면 늘고 상한을 안 넘는다")
-	var e = await _spawn(&"vine")
-	var maxhp: float = _db.get_enemy(&"vine").hp
+	print("[2] 재생 — HP가 시간이 지나면 늘고 상한을 안 넘는다 (주입한 몸)")
+	_inject(&"ai_probe_regen", 40.0, {"ai": "stationary", "regen_per_sec": 2.5, "move_speed": 0.0})
+	var e = await _spawn(&"ai_probe_regen")
+	var maxhp: float = _db.get_enemy(&"ai_probe_regen").hp
 	# 룬 5 = 덩굴 counter(기본 0)가 아니라 약점 배율 없음 → 8 그대로 깎인다(상한 근처에서 출발해
 	# 짧은 대기로 상한 도달을 볼 수 있게 — 10으로 깎으면 720프레임을 기다려야 40에 닿는다).
 	e.take_hit(8.0, 5, 0, 0.0)
@@ -94,22 +115,26 @@ func _test_regen_heals_and_caps() -> void:
 	_check(e.hp() <= maxhp + 0.01, "상한을 넘지 않는다 (실제 %.2f ≤ %.0f)" % [e.hp(), maxhp])
 	_check(is_equal_approx(e.hp(), maxhp), "충분히 두면 만HP까지 찬다 (실제 %.2f)" % e.hp())
 	e.free()
+	_drop(&"ai_probe_regen")
 
 
-## [3] 🔴 분산 경감 — 안개(disperse_period 2.5, dispersed_resist 0.35)는 분산 상태일 때 받는
+## [3] 🔴 분산 경감 — `disperse_period 2.5`·`dispersed_resist 0.35`인 hover는 분산 상태일 때 받는
 ## 피해가 준다. 상태는 시간 토글이라 **분산 전/후 같은 피해로 두 번 때려** 뒤가 더 적음을 본다
 ## (정확 값이 아니라 "토글이 피해를 바꿨나"를 봐서 타이밍 흔들림에 강하게). 작은 피해로 때려 안 죽인다.
 ## 🔴 hover는 _physics_process의 player-null 반환 뒤에 돌아 disperse 타이머를 깎는다 — 그룹
 ## "player"에 스텁을 멀리 둬 타이머가 흐르게 한다(접촉 사거리 밖이라 피해 안 줌).
+## ⚠ 세99까지 `mist`(안개)로 쟀다 — 그 몹이 지워져 **같은 수치의 몸을 주입**한다(머리말 참조).
+##  🔴 `HOVER_PROBE`는 [4]도 같이 쓴다 — hover 갈래를 쥔 실적이 0종이라 여기서만 산다.
 func _test_dispersed_reduces_damage() -> void:
-	print("[3] 안개 분산 — 분산 중엔 받는 피해가 준다 (시간 토글)")
+	print("[3] 분산 — 분산 중엔 받는 피해가 준다 (시간 토글, 주입한 hover 몸)")
 	var stub := Node2D.new()
 	stub.add_to_group("player")
 	stub.global_position = Vector2(5000, 0)  # 멀리 — 접촉 피해 없이 hover만 돌게
 	root.add_child(stub)
 
-	var e = await _spawn(&"mist")
-	# 스폰 직후 = 아직 분산 전 (disperse_period 2.5s가 안 지났다). 룬 0은 안개 counter(3)가 아님.
+	_inject_hover()
+	var e = await _spawn(HOVER_PROBE)
+	# 스폰 직후 = 아직 분산 전 (disperse_period 2.5s가 안 지났다). has_counter=false라 약점 배율 없음.
 	var normal := _hit_and_capture(e, 2.0, 0)
 	# 분산 주기(2.5s ≈ 150 물리 프레임)를 넉넉히 넘겨 분산 상태로 만든다.
 	for i in 175:
@@ -120,6 +145,7 @@ func _test_dispersed_reduces_damage() -> void:
 	_check(is_equal_approx(normal, 2.0), "평시엔 경감 없이 그대로 든다 (실제 %.2f)" % normal)
 	e.free()
 	stub.free()
+	# ⚠ [4]가 같은 몸을 이어 쓴다 — 여기선 안 걷고 [4] 끝에서 걷는다.
 
 
 ## [4] 🔴🔴 leash — `aggro_range` 밖이면 자기 자리를 지킨다 (세88 사냥 흐름 §2-A-2-b).
@@ -132,10 +158,13 @@ func _test_dispersed_reduces_damage() -> void:
 ## 🔴 **ⓐ와 ⓑ를 둘 다 잰다.** ⓐ(멀면 안 온다)만 재면 **적이 아예 안 움직이는 버그도 통과한다** —
 ## 게이트를 `dist > 0`처럼 망가뜨려도 그린이 된다. ⓑ(가까우면 온다)가 그 구멍을 막는다.
 ## ⚠ 이동 **거리**로만 잰다(내부 상태·velocity를 안 더듬는다 — 리팩터 때 옮겨 다녀 계약이 아니다).
+## ⚠ 세99: 갈래 셋 중 hover의 실적(`mist`)이 지워져 **주입한 몸으로 잰다**(머리말) — 재는 것은
+##  「hover에 거리 게이트가 있나」이지 「안개가 있나」가 아니다. gale·snake는 실데이터 그대로다.
 func _test_leash_stops_far_pursuit() -> void:
-	print("[4] leash — aggro_range 밖에선 안 오고, 안에선 온다 (mist·gale·snake 3갈래)")
-	# aggro 값은 각 .tres의 params에서 온다 — 여기 상수로 베끼면 .tres를 조일 때 갈라진다.
-	for id: StringName in [&"mist", &"gale", &"snake_boss"]:
+	print("[4] leash — aggro_range 밖에선 안 오고, 안에선 온다 (hover·gale·snake 3갈래)")
+	_inject_hover()
+	# aggro 값은 각 EnemyDef의 params에서 온다 — 여기 상수로 베끼면 데이터를 조일 때 갈라진다.
+	for id: StringName in [HOVER_PROBE, &"gale", &"snake_boss"]:
 		var aggro: float = float(_db.get_enemy(id).params.get("aggro_range", 0.0))
 		_check(aggro > 0.0, "%s: .tres에 aggro_range가 있다 (실제 %.0f)" % [id, aggro])
 		var stub := Node2D.new()
@@ -168,6 +197,7 @@ func _test_leash_stops_far_pursuit() -> void:
 			"%s: aggro 안(%.0fpx)에선 다가온다 (실제 %.1fpx 이동)" % [id, aggro - 50.0, moved_near])
 		near_e.free()
 		stub.free()
+	_drop(HOVER_PROBE)
 
 
 ## [5] 🔴🔴 leash 뒤에도 **gale의 쿨다운이 돈다** — 「이동 대입만 감싼다」 계약의 실제 검출자 (세88).
@@ -229,6 +259,46 @@ func _test_leash_keeps_boss_machinery() -> void:
 
 # ── 헬퍼 ──
 
+## 🔴 hover 갈래 검사용 몸 — [3]과 [4]가 **같은 것**을 쓴다(지워진 `mist`의 수치 그대로).
+## `aggro_range`·`hover_min`·`hover_max`가 셋 다 있어야 [4]ⓑ가 「다가온다」 분기에 든다
+## (스텁을 `aggro - 50`에 두므로 그 값이 `hover_max`보다 커야 한다 — 150 > 95).
+const HOVER_PROBE := &"ai_probe_hover"
+
+func _inject_hover() -> void:
+	_inject(HOVER_PROBE, 20.0, {
+		"ai": "hover",
+		"aggro_range": 200.0,
+		"attack_cooldown": 1.1,
+		"attack_range": 30.0,
+		"contact_damage": 5.0,
+		"disperse_period": 2.5,
+		"dispersed_resist": 0.35,
+		"hover_max": 95.0,
+		"hover_min": 55.0,
+		"move_speed": 70.0,
+	})
+
+
+## 🔴 in-memory EnemyDef 주입 (세61 Db 주입 선례 — 레지스트리가 평범한 Dictionary다).
+## `has_counter = false`로 세운다 — 약점 배율이 섞이면 [1][3]의 **정확 값 판정**이 흐려진다
+## (느슨한 판정으로 물러나면 뮤테이션 검출력이 0이 된다 — 머리말 §"정확한 값을 짚는다").
+## ⚠ 같은 id로 두 번 부르면 덮어쓴다(멱등) — [3]과 [4]가 hover 몸을 이어 쓰는 자리.
+func _inject(id: StringName, hp: float, params: Dictionary) -> void:
+	var def = (load("res://src/core/schemas/enemy_def.gd") as GDScript).new()
+	def.id = id
+	def.hp = hp
+	def.has_counter = false
+	var p := {"sprite": PROBE_SPRITE}
+	p.merge(params, true)
+	def.params = p
+	_db.enemies[id] = def
+
+
+## 🔴 주입 제거 — 안 걷으면 뒤 항목·뒤 테스트의 적 수가 는다(공유 레지스트리).
+func _drop(id: StringName) -> void:
+	_db.enemies.erase(id)
+
+
 ## 살아있는 적 투사체 수 — 그룹 이름은 `enemy_projectile`이 가입하는 그것과 같아야 한다.
 func _projectile_count() -> int:
 	return root.get_tree().get_nodes_in_group("enemy_projectiles").size()
@@ -271,6 +341,8 @@ func _test_anim_fps_from_data() -> void:
 		e.queue_free()
 
 	# ── 성격이 갈렸다 = 축이 살아 있다 (전부 같으면 데이터를 넣은 값어치가 0) ──
+	# ⚠ 세99 몹 정리 뒤 실적이 **정확히 다섯 종**이다(hound 12 · hound_alpha 10 · slime_elite 6 ·
+	#  gale 5 · snake_boss 5) — 하한에 딱 걸쳐 있으니 몹을 더 지우려면 이 줄을 같이 봐라.
 	_check(seen.size() >= 5, "박자를 잰 적이 다섯 종 이상이다 (실제 %d — 적으면 아래가 자명 통과)" % seen.size())
 	var vals: Array = seen.values()
 	var lo: float = vals.min()
