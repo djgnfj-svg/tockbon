@@ -71,11 +71,19 @@ extends Node2D
 ##    나무마다 터진다. 🔴 **세99에 감지용 `Area2D`가 하나 붙었다**(플레이어가 뒤로 가면 비치게 —
 ##    tree.gd 머리말) — 그 Area는 `collision_layer = 0`이라 **아무도 나무를 감지하지 못한다.**
 ##    레이어를 채우는 순간 위 함정이 그대로 되살아난다.
-##    ⚠ 겹치면 **가린다** — 나무 20그루는 세 규칙으로 놓았다:
-##    ⓐ 잡몹·보스 스폰(`ChapterDef.mob_spawns` + `boss_spawn`)에서 **100px 이상**
-##    ⓑ 플레이어 스폰·남쪽 출구에서 **150px 이상**(시작 시야·[E] 찾기)
-##    ⓒ 어귀·중간·깊은 대역에 고르게. 🔴 **정본은 `data/chapters/*.tres`의 `position`이다**(설계
-##    문서 §13-2 표와 이미 갈라져 있다) — 옮길 땐 `scratch_dev_room.md` §5-ⓓ 스크립트로 재검산해라.
+##    ⚠ 겹치면 **가린다** — 프롭은 다섯 규칙으로 놓는다(ⓐ~ⓔ · `_spawn_props` 참조):
+##    ⓐ 잡몹·네임드·보스 스폰(`ChapterDef.mob_spawns`·`named_pool`·`boss_spawn`)에서 **100px 이상**
+##    ⓑ 플레이어 스폰·**모든 탈출구**에서 **150px 이상**(시작 시야·[E] 찾기)
+##    ⓒ 어귀·중간·깊은 대역에 고르게
+##    ⓓ 🔴 **흙길 위 금지** — 출구는 겉모습이 없어서 **보이는 안내가 그 길뿐**이다(설계 §6 S12).
+##       길 위에 나무가 서면 「나가는 길이 막혔다」로 읽힌다.
+##    ⓔ 🔴 **지점(둥지) 둘레를 비운다** — 랜드마크가 프롭에 파묻히면 「저건 다르다」가 죽는다.
+##    🔴🔴 **세101: 이 다섯이 사람의 손버릇에서 코드로 내려왔다** — 그전엔 씬에 나무 20그루를 손으로
+##     찍고 위 규칙을 **주석으로만** 들고 있었다(= 어겨도 아무도 모른다). 지금은 `_spawn_props`가
+##     규칙을 실행하고 `tests/test_prop_layout_auto.gd`가 **손으로 놓은 20그루까지 같은 목록으로**
+##     잰다 — 규칙은 「누가 놓았나」를 안 본다.
+##    🔴 스폰 좌표의 **정본은 `data/chapters/*.tres`의 `position`이다**(설계 문서 §13-2 표와 이미
+##     갈라져 있다) — 그래서 `_spawn_props`는 그 데이터를 직접 읽는다(좌표를 코드에 안 베낀다).
 ##  • 방 크기 **2400×2200**(x −1200~1200 · y −1500~700, 세88에 1200×1040에서 키웠다) — 세로로 긴
 ##    이유는 남쪽 입구(플레이어 스폰 y=+600)에서 북쪽 보스(y=−1350)까지 「깊이 들어간다」가 이동으로
 ##    읽히게. 구역(어귀·중간·깊은)은 **코드 개념이 아니라 `mob_spawns` y좌표 관례**다 — 새 스키마 0.
@@ -237,8 +245,58 @@ const EXIT_PATH_ROWS := 7
 ## 다음 사람이 **1초로 읽는다.** 이름을 붙여 그 오독을 막는다.
 const HOLD_ON := 1.0
 
+## 🔴🔴 **프롭 표 — 「새 프롭 = 씬 한 장 + 여기 한 줄」** (세101).
+##
+## ⚠ **큰 것부터 놓는다**(위에서 아래로) — 큰 것이 자리를 먼저 잡고 작은 것이 사이를 채운다.
+##  🔴 **다만 이건 손버릇이지 계약이 아니다** — 세101에 순서를 뒤집어 실측했더니 ch1 나무가 **35 → 33**,
+##   나머지 층은 ±2였다(격자 칸마다 종류가 하나로 정해져서 서로 자리를 다투는 일이 애초에 적다).
+##   그물도 이 순서를 **안 지킨다**(뒤집어도 그린이다). 「순서를 뒤집으면 나무가 사라진다」고 적어 두면
+##   그게 곧 T4(주석이 계약인 척하는데 아무도 안 재는 것)라서 여기 실측을 남긴다.
+## 🔴 크기 계단이 **128 → 64 → 42 → 18**(그 사이에 플레이어 56)이라 아트가 일부러 층을 만들어 뒀다 —
+##  큰 것만 늘리면 「기둥 밭」이 그대로고, 작은 것으로 사이를 채워야 깊이가 생긴다.
+##
+##  • `share` = 격자 한 칸이 이 종류가 될 확률(백분위 · 누적으로 잘린다). 넷의 합 63 = 나머지 37%는 빈칸.
+##    ⚠ **후보 수 ≠ 선 수다** — 나무는 회피·겹침에 가장 많이 걸려 후보의 절반쯤만 선다. `share`를
+##     조일 땐 그물이 찍는 실제 개수(`test_prop_layout_auto [1]`)를 보고 맞춰라.
+##  • `sep`   = 이웃과의 최소 간격에 쓰는 반지름 — 문턱은 **둘의 합**이다(나무끼리 120px · 잔돌끼리 24px).
+##  • `road`  = 🔴 **밑동 반폭**. 흙길 칸에서 이만큼 떨어진다(ⓓ).
+##    ⚠ **그림 반폭이 아니라 밑동 반폭이다** — 나무는 그림이 128px인데 「길을 막는다」로 읽히는 건
+##     기둥이지 가지가 아니다. 가지가 길가에 걸치는 건 오히려 숲답다(바위·덤불은 통짜라 그림 폭 그대로).
+##    🔴 그물(`test_prop_layout_auto [5]`)이 **같은 값을 따로 들고** 대조한다 — 사본이 아니라
+##     「손으로 든 기대치」다(`test_landmark_road_auto`의 타일 상수와 같은 관행). 여기를 줄이면 빨개진다.
+const PROP_TABLE: Array[Dictionary] = [
+	{"scene": "res://src/props/tree.tscn", "share": 14, "sep": 60.0, "road": 40.0},
+	{"scene": "res://src/props/rock_big.tscn", "share": 7, "sep": 34.0, "road": 40.0},
+	{"scene": "res://src/props/bush.tscn", "share": 18, "sep": 22.0, "road": 28.0},
+	{"scene": "res://src/props/rock.tscn", "share": 24, "sep": 12.0, "road": 16.0},
+]
+## 🔴 나무만 씬의 `Trees` 아래로 간다 — 손으로 놓은 20그루와 **같은 물건**이라 홀더를 안 가른다
+##  (`test_daylight_tree_auto`가 그 홀더로 나무 계약을 재므로 새 나무도 저절로 그 그물에 든다).
+##  나머지 셋은 새 `Props` 홀더로 가고, 그 홀더는 **타일 바로 뒤**에 꽂혀 몸·적·마법 아래에 깔린다.
+const PROP_TREE_KIND := 0
+const PROP_HOLDER := "Props"
+
+## 배치 격자 (연출값 — 손맛). 지터를 안 주면 프롭이 **격자로 줄을 서** 벽지가 된다(`_grass_atlas`와 같은 병).
+## ⚠ `PROP_JITTER`가 `PROP_GRID`의 절반에 가까워질수록 이웃이 붙어 겹침 검사가 많이 쳐낸다.
+const PROP_GRID := 148.0
+const PROP_JITTER := 56.0
+## 방 가장자리 여백 — 프롭이 벽선 밖으로 반쯤 걸치지 않게.
+const PROP_EDGE_MARGIN := 60.0
+## ⓓ 흙길 회피의 **세로 두께** — 밑동이 길 칸에 걸치는지만 보면 되므로 얇다(가로는 `road` 반폭).
+const PROP_ROAD_BAND := 16.0
+## ⓐ 잡몹·네임드 자리 — 적이 프롭에 파묻히면 「보이는 몸에 쏜다」가 깨진다.
+const PROP_CLEAR_SPAWN := 100.0
+## 🔴 보스 자리만 더 넓다 — 여긴 **무대**다(볕이 드는 빈터 `SunGlade`). 뱀 보스는 마디 12개라
+##  100px로는 몸이 프롭에 걸린다. ⓐ의 하한(100)을 지키면서 여기만 더 준다.
+const PROP_CLEAR_BOSS := 260.0
+## ⓑ 입구·탈출구 — 시작 시야와 [E] 찾기.
+const PROP_CLEAR_GATE := 150.0
+## ⓔ 지점(둥지) — 둥지 그림이 192×152라 반폭 96 + 여유. 파묻히면 「저건 다르다」가 죽는다.
+const PROP_CLEAR_LANDMARK := 220.0
+
 @onready var _ground: ColorRect = $Ground
 @onready var _tiles: TileMapLayer = $TileGround
+@onready var _tree_holder: Node2D = $Trees
 @onready var _player: Player = $Player
 @onready var _hud: Hud = $Hud/Hud
 
@@ -251,6 +309,10 @@ var _exits: Array[InteractZone] = []
 ## **`_road_cells`의 입구→지점 흙길이 이 배열에서 파생한다** — 좌표를 두 번 적으면 지점을 옮길 때
 ## 길만 제자리에 남는다(`_exits`가 흙길의 출처인 것과 같은 결).
 var _landmarks: Array[Node2D] = []
+## 🔴🔴 이 판에 실제로 깔린 **흙길 칸**(`_fill_tiles`가 채운다 — 키 = 타일 셀).
+##  프롭 회피(ⓓ)가 **바로 이 표를 읽는다** — 「길이 어디 있나」를 두 번 계산하면 길 규칙을 고칠 때
+##  타일과 프롭이 조용히 갈라진다(감사 T5). 그래서 `_spawn_props`는 `_fill_tiles` **뒤**다.
+var _road: Dictionary = {}
 ## 클리어 처리는 한 번뿐 — enemy_died는 EventBus 전역이라 가드 없이는 무엇이든 두 번 처리될 수 있다.
 var _cleared: bool = false
 ## 씬 전환은 한 번뿐 — 귀환 도중 죽거나, 죽는 중에 E를 누르면 두 번 갈아탄다 (forest 계약 이관).
@@ -293,6 +355,11 @@ func _ready() -> void:
 	# 아무도 안 가는 물건이 되고, 여기 에러도 0이다(세99 목표가 통째로 무효).
 	_spawn_landmarks()
 	_fill_tiles()
+	# 🔴 **`_fill_tiles` 뒤다** — 프롭이 흙길을 피하려면(ⓓ) 길이 이미 깔려 있어야 한다(`_road`).
+	#  순서가 뒤바뀌면 표가 비어서 **회피가 통째로 무효**가 되는데 에러는 0이다(길 위에 나무가 선다).
+	# 🔴 그리고 **잡몹·보스보다 앞이다** — `add_child` 순서가 곧 그리는 순서라, 뒤로 밀면 프롭이
+	#  적·플레이어 위에 덮인다(둘 다 z 0이다 — `test_charge_telegraph_auto [7]`이 같은 자리를 잰다).
+	_spawn_props()
 	_clamp_camera_to_room()
 	# 🔴 스폰이 실패하면 **여기서 멈춘다** — `_spawn_boss` 안의 `return`은 자기 함수만 벗어나므로,
 	# 예전엔 이미 떠나기로 한 방(`_leaving = true`)이 잡몹을 깔고 「…를 쓰러뜨려라」를 한 프레임
@@ -469,7 +536,10 @@ func _fill_tiles() -> void:
 	var rect := Rect2(_ground.position, _ground.size).grow(-float(ts.x))   # 가장자리 한 칸은 틴트가 보이게
 	var from := Vector2i(floori(rect.position.x / ts.x), floori(rect.position.y / ts.y))
 	var to := Vector2i(ceili(rect.end.x / ts.x), ceili(rect.end.y / ts.y))
-	var road := _road_cells(from, to, ts)
+	# 🔴 **필드에 남긴다** — 프롭 회피(ⓓ)가 이 표를 그대로 읽는다(`_spawn_props`). 지역 변수로 두면
+	#  「길이 어디 있나」를 두 번 계산하게 되고, 길 규칙을 고치는 날 타일과 프롭이 조용히 갈라진다.
+	_road = _road_cells(from, to, ts)
+	var road := _road
 	for y in range(from.y, to.y):
 		for x in range(from.x, to.x):
 			var cell := Vector2i(x, y)
@@ -487,6 +557,152 @@ func _fill_tiles() -> void:
 		if cell.x < outer_from.x or cell.x >= outer_to.x or cell.y < outer_from.y or cell.y >= outer_to.y:
 			continue   # 방 밖 — 길 계산에만 쓰이고 그려지진 않는다
 		_tiles.set_cell(cell, TILE_SRC_GROUND, _road_atlas(cell, road))
+
+
+## 🔴🔴 **프롭(나무·바위·덤불)을 규칙으로 놓는다** (세101 — 「기둥 밭」을 「숲」으로).
+##
+## 🔴 **왜 손으로 안 찍나**: 좌표 100개를 씬에 박으면 ⓐ~ⓔ를 사람이 매번 지켜야 하고 **어겨도
+##  아무도 모른다**(세100까지가 그 상태였다 — 규칙은 주석으로만 있었고 재는 그물이 0개였다).
+##  규칙이 코드에 있으면 **그물이 잴 수 있고**, 방 크기·출구·지점을 옮겨도 배치가 따라온다.
+##
+## 🔴🔴 **결정적이다 — 판마다 안 바뀐다**(`randf` 대신 `_cell_hash`). 세99 D5가 사용자 확정으로
+##  *"지형은 동일하고 나오는 몬스터들이 랜덤"*이라고 못 박았고 **프롭은 지형이다.** 같은 챕터를 다시
+##  들어가면 같은 숲이라야 「저 바위 뒤」가 기억이 된다. 챕터마다 다른 건 굴림이 아니라 **회피 조건**이
+##  다르기 때문이다(몹 자리·지점·길이 챕터마다 달라 통과하는 칸이 갈린다).
+##  ⚠ 그물 = `test_prop_layout_auto [8]`(같은 챕터를 두 번 띄워 좌표 집합을 대조한다).
+##
+## 🔴 **손으로 놓은 나무 20그루도 같은 목록(`props` 그룹)에 넣는다** — 규칙은 「누가 놓았나」를 안 본다.
+##  손으로 놓은 것만 규칙 밖이면 그게 곧 구멍이고, 겹침 검사도 그것들을 봐야 나무가 나무에 겹친다.
+##  🔴 그룹은 **방이 붙인다**(지점의 `landmarks`와 같은 결) — 프롭 씬마다 붙이면 새 프롭 한 장이
+##   빠뜨리는 순간 「서 있는데 아무도 못 세는」 물건이 된다.
+##
+## ⚠ **좌우 반전(`flip_h`)으로 변화를 주지 않는다** — ART_SPEC의 광원이 **왼쪽 위 고정**이라
+##  뒤집으면 하이라이트가 오른쪽 위로 가서 그 프롭만 다른 해를 받는다(공짜로 보이지만 아트를 깬다).
+##  변화는 나무처럼 **컷을 여러 장 두는 것**으로 준다(`tree.gd`가 이미 그렇게 한다).
+func _spawn_props() -> void:
+	var holder := Node2D.new()
+	holder.name = PROP_HOLDER
+	add_child(holder)
+	# 🔴 **타일 바로 뒤**로 옮긴다 — `add_child`는 맨 뒤에 붙는데, 그러면 잔돌·덤불이 적·플레이어
+	#  **위에** 그려진다(둘 다 z 0이라 순서가 곧 앞뒤다). 나무가 씬에서 Player보다 앞에 있는 것과 같은 이유.
+	move_child(holder, _tiles.get_index() + 1)
+
+	var placed: Array[Vector2] = []
+	var radii: Array[float] = []
+	for child: Node in _tree_holder.get_children():
+		var tree := child as Node2D
+		if tree == null:
+			continue
+		tree.add_to_group(&"props")
+		placed.append(tree.position)
+		radii.append(float(PROP_TABLE[PROP_TREE_KIND]["sep"]))
+
+	var area := Rect2(_ground.position, _ground.size).grow(-PROP_EDGE_MARGIN)
+	for kind in PROP_TABLE.size():
+		var packed := load(String(PROP_TABLE[kind]["scene"])) as PackedScene
+		if packed == null:
+			# 침묵 금지 — 씬 하나를 못 읽으면 그 층이 통째로 사라지는데 화면은 「그냥 휑한 숲」이다.
+			push_error("boss_room: 프롭 씬 '%s'를 못 읽었다 — 그 층이 통째로 안 선다"
+				% String(PROP_TABLE[kind]["scene"]))
+			continue
+		for at: Vector2 in _prop_spots(area, kind):
+			if not _prop_spot_ok(at, kind, placed, radii):
+				continue
+			var node := packed.instantiate() as Node2D
+			if node == null:
+				continue
+			node.position = at
+			node.add_to_group(&"props")
+			# 🔴 나무는 씬의 `Trees`로 — 손으로 놓은 20그루와 같은 물건이라 홀더를 안 가른다.
+			(_tree_holder if kind == PROP_TREE_KIND else holder).add_child(node)
+			placed.append(at)
+			radii.append(float(PROP_TABLE[kind]["sep"]))
+
+
+## 이 종류가 노려 볼 **자리 후보**들 — 지터를 준 격자에서 뽑는다.
+## 🔴 격자 칸마다 종류가 **하나로 정해진다**(`_prop_kind_at`) — 그래서 종류를 바꿔 가며 네 번 훑어도
+##  같은 칸이 두 번 쓰이지 않는다. 순서(큰 것 → 작은 것)만으로 「작은 것이 사이를 채운다」가 나온다.
+func _prop_spots(area: Rect2, kind: int) -> Array[Vector2]:
+	var out: Array[Vector2] = []
+	var cols := int(area.size.x / PROP_GRID)
+	var rows := int(area.size.y / PROP_GRID)
+	for j in rows + 1:
+		for i in cols + 1:
+			var cell := Vector2i(i, j)
+			if _prop_kind_at(cell) != kind:
+				continue
+			var jx := (float(_cell_hash(cell, 41)) / 50.0 - 1.0) * PROP_JITTER
+			var jy := (float(_cell_hash(cell, 47)) / 50.0 - 1.0) * PROP_JITTER
+			var at := area.position + Vector2(float(i), float(j)) * PROP_GRID + Vector2(jx, jy)
+			if not area.has_point(at):
+				continue
+			out.append(at)
+	return out
+
+
+## 격자 칸 하나가 무슨 종류인가 — `share`를 누적해 자른다. 합이 100에 못 미치면 나머지는 **빈칸**이다
+## (그게 「듬성듬성」을 만든다 — 전부 채우면 벽지가 된다).
+func _prop_kind_at(cell: Vector2i) -> int:
+	var h := _cell_hash(cell, 53)
+	var acc := 0
+	for kind in PROP_TABLE.size():
+		acc += int(PROP_TABLE[kind]["share"])
+		if h < acc:
+			return kind
+	return -1
+
+
+## 🔴🔴 **규칙 ⓐ~ⓔ가 전부 여기 있다** — 한 자리에 모아 둬야 새 규칙을 더할 때 빠뜨릴 문이 없다.
+## 🔴 좌표를 하나도 안 박는다: 스폰은 `ChapterDef`에서 · 입구는 `Player` 노드에서 · 출구는 `_exits`에서 ·
+##  지점은 `_landmarks`에서 · 길은 `_road`에서 파생한다. **방을 바꾸면 배치가 따라온다.**
+func _prop_spot_ok(at: Vector2, kind: int, placed: Array[Vector2], radii: Array[float]) -> bool:
+	# ⓓ 흙길 위 금지 — 출구는 겉모습이 없어서 **보이는 안내가 그 길뿐**이다(설계 §6 S12).
+	if _prop_touches_road(at, float(PROP_TABLE[kind]["road"])):
+		return false
+	# ⓐ 잡몹·네임드·보스 자리 — 적이 프롭에 파묻히면 「보이는 몸에 쏜다」가 깨진다.
+	if at.distance_to(_chapter.boss_spawn) < PROP_CLEAR_BOSS:
+		return false
+	for spawn: MobSpawn in _chapter.mob_spawns:
+		if spawn != null and at.distance_to(spawn.position) < PROP_CLEAR_SPAWN:
+			return false
+	# ⚠ 네임드는 **뜰 수도 안 뜰 수도** 있지만 자리는 데이터에 있다 — 뜬 판에서만 파묻히면
+	#  「어떤 판은 네임드가 안 보인다」가 돼서 오히려 더 나쁘다. 그래서 굴림과 무관하게 비운다.
+	for named: NamedSpawn in _chapter.named_pool:
+		if named != null and at.distance_to(named.position) < PROP_CLEAR_SPAWN:
+			return false
+	# ⓑ 입구(플레이어 스폰)·**모든 탈출구**
+	if at.distance_to(_player.position) < PROP_CLEAR_GATE:
+		return false
+	for zone: InteractZone in _exits:
+		if zone != null and is_instance_valid(zone) and at.distance_to(zone.position) < PROP_CLEAR_GATE:
+			return false
+	# ⓔ 지점(둥지) 둘레
+	for landmark: Node2D in _landmarks:
+		if landmark != null and is_instance_valid(landmark) \
+			and at.distance_to(landmark.position) < PROP_CLEAR_LANDMARK:
+			return false
+	# 이웃과 겹치지 않는다 — 문턱은 **두 반지름의 합**이라 나무끼리는 멀고 잔돌끼리는 붙어도 된다.
+	var sep := float(PROP_TABLE[kind]["sep"])
+	for i in placed.size():
+		if at.distance_to(placed[i]) < sep + radii[i]:
+			return false
+	return true
+
+
+## ⓓ 이 자리의 **밑동이 흙길 칸을 밟는가** — 가로는 밑동 반폭(`road`), 세로는 얇은 띠다.
+## 🔴 원점이 접지선이라(프롭 씬 계약) 이 검사가 곧 「길 위에 서 있나」다. 그림 전체가 아니라 밑동을
+##  보는 이유는 `PROP_TABLE` 머리말에 있다(가지가 길가에 걸치는 건 숲답다).
+func _prop_touches_road(at: Vector2, pad: float) -> bool:
+	var ts: Vector2i = _tiles.tile_set.tile_size
+	var x0 := floori((at.x - pad) / float(ts.x))
+	var x1 := floori((at.x + pad) / float(ts.x))
+	var y0 := floori((at.y - PROP_ROAD_BAND) / float(ts.y))
+	var y1 := floori((at.y + PROP_ROAD_BAND) / float(ts.y))
+	for y in range(y0, y1 + 1):
+		for x in range(x0, x1 + 1):
+			if _road.has(Vector2i(x, y)):
+				return true
+	return false
 
 
 ## 흙길 칸 전부 — **줄기가 두 종류다**:

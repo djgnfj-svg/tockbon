@@ -1,0 +1,13 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Texture2D" path="res://assets/sprites/field/rock.png" id="1_tex"]
+
+; 🔴🔴 **장식이다 — 물리 몸도 감지 Area도 없다** (근거는 `rock_big.tscn` 머리말과 같다).
+;  화면 키 18px = 크기 계단(128 → 64 → 42 → 18)의 맨 아래. **사이를 채우는 칸**이라 수가 제일 많다.
+;
+; 🔴 **원점 = 접지선** — `offset.y = -(접지선 19 − 프레임높이/2 11) = -8`.
+;  그물 = `test_prop_layout_auto [7]`.
+; ⚠ 이 `;` 주석은 에디터 저장 시 증발한다(takbon-rules §5).
+[node name="Rock" type="Sprite2D"]
+texture = ExtResource("1_tex")
+offset = Vector2(0, -8)

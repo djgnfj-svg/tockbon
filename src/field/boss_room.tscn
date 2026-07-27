@@ -123,8 +123,12 @@ position = Vector2(950, -1310)
 [node name="Tree13" parent="Trees" instance=ExtResource("6_tree")]
 position = Vector2(-150, 120)
 
+; 🔴 세101: x 170 → 230. 세99에 깔린 **입구→지점 흙길의 세로 줄기**(x −64~128)에서 밑동이
+; **2px** 떨어져 있었다(가지는 22px 겹쳤다) — 규칙 ⓓ를 아슬아슬하게 통과할 뿐이라, 길 폭·출구를
+; 조금만 손대면 나무가 길 위에 서고 그물이 빨개진다. 60px 밀어 여유를 줬다.
+; ⚠ 그물(`test_prop_layout_auto [5]`)이 손으로 놓은 나무도 절차 프롭과 **같은 목록**으로 잰다.
 [node name="Tree14" parent="Trees" instance=ExtResource("6_tree")]
-position = Vector2(170, 60)
+position = Vector2(230, 60)
 
 [node name="Tree15" parent="Trees" instance=ExtResource("6_tree")]
 position = Vector2(-140, -700)
