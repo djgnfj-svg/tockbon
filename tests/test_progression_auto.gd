@@ -59,7 +59,10 @@ const MOB_SCROLLS := {
 ## 기대치를 **명시 숫자로도** 박는다: 스캔만 하면 「폴더가 통째로 비어도 0/0 통과」가 되기 때문.
 ## 적을 더하면(또는 hound를 접으면) 이 숫자를 같이 고친다 = 그게 그물의 값이다.
 const ENEMY_DIR := "res://data/enemies"
-const ENEMY_COUNT_EXPECTED := 8
+## ⚠ 세99 단계 2에 **네임드 3종**이 붙어 8 → 11이 됐다(`beetle_ancient`·`mist_elder`·`hound_alpha`).
+##  네임드는 기존 적의 강화판이라 드롭표(MOB_MATERIALS·MOB_SCROLLS)엔 안 든다 — 그 표는
+##  「잡몹이 재료를 떨구나」를 재고, 네임드 보상은 `test_chapter_auto [1c]`가 데이터로 잰다.
+const ENEMY_COUNT_EXPECTED := 11
 
 var failures: int = 0
 ## 🔴 세84 #41: 0행 스캔은 PASS가 아니라 **SKIP**으로 찍는다. 그린만 보고 「불변식이 지켜졌다」로

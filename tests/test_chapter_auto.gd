@@ -22,6 +22,12 @@ extends SceneTree
 ##   • 🔴 세71 보상 해금 — ch1 클리어 시 ChapterDef.reward_unlock(gr_radiate5)이 codex에 심긴다
 ##     (chapter_clear와 별도 축 — 조립→탁본 루프의 이음매. 발신 줄 뮤테이션으로 검출력 확인)
 ##   • 🔴 세71 잡몹 길 — ch1은 이제 보스 1 + mob_spawns N. "enemies"에 섞이므로 보스는 enemy_id로 특정
+##   • 🔴 세99 D5·D6 **데이터 쪽** — 풀·네임드가 실재하는 적을 가리키고 **보스 id를 안 문다**([1c])
+##
+## 🔴🔴 **세99 단계 1.5 — 「방 안의 적 수」만 범위가 됐다**(`_check_enemy_count`). 네임드가 매 판
+##  굴러 개수가 흔들리기 때문이다. **하한이 옛 정확 기대치 그대로**라 세88이 상수를 박은 이유는
+##  하나도 안 풀렸다(자세한 근거 = 그 함수 머리말). ⚠ 굴림·네임드가 **실제로 도는가**는 여기가
+##  안 잰다 — `tests/test_mob_roll_auto.gd`가 확률 0.0/1.0 주입으로 양끝을 잰다(설계 §6 S3).
 ##   • 출구 [E] → extraction_success 1회(가방→창고 정산) — **보스 전([4b])·보스 후([5]) 둘 다** · 사망 → bag_lost
 ##   • 잠금 판정식 — chapter_panel의 공개 is_chapter_open()이 단일 소스 (ch2는 ch1 클리어 전 잠김)
 ##   • 🔴 물리 레이어 계약 — 적 4=enemy가 아니면 부딪히기만 하고 take_hit이 안 불린다 (forest [1][5] 이식)
@@ -36,11 +42,16 @@ extends SceneTree
 
 const GLYPH_NONE := -1
 
-## 🔴🔴 챕터별 잡몹 수를 **명시 상수로 박는다** (세88 사냥 흐름 §10).
+## 🔴🔴 챕터별 잡몹 **자리 수**를 명시 상수로 박는다 (세88 사냥 흐름 §10).
 ## 옛 기대치는 `1 + ch1.mob_spawns.size()`로 **데이터에서 파생**했다 — 그래서 **표를 비워도 통과했고**,
 ## ch2·ch3가 `mob_spawns` 0마리(= 잡몹 없는 빈 방)인 채로 전 스위트가 그린이었다. 기대치를 손으로
 ## 박아야 「배치를 채웠다」가 실제로 측정된다(세84 T7 「임시 시드가 그물을 안 세우는 면허」의 사촌).
 ## ⚠ 사용자가 F5로 수량을 조이면 이 표도 같이 고쳐라 — **그게 이 상수의 목적이다**(조용히 비지 않게).
+##
+## 🔴🔴 **세99 단계 1.5: 이 표는 여전히 정확 일치다 — 굴리는 건 「몇 자리인가」가 아니라 「거기 뭐가
+##  서 있나」이기 때문이다**(사용자 확정 *"지형은 동일하고 나오는 몬스터들이 랜덤"*). `MobSpawn`의
+##  자리 수·좌표는 사람이 놓으므로 D5를 켜도 **한 톨도 안 흔들린다.**
+##  범위가 된 것은 **방 안에 실제로 선 적의 수**뿐이다(네임드가 0~N 얹힌다 — 아래 `_want_enemy_range`).
 const MOB_COUNT: Dictionary = {&"ch1": 9, &"ch2": 11, &"ch3": 13}
 
 ## 🔴 챕터 확정 보상 실값 표 (세88) — **보스를 잡으면 그 보스의 속성 룬을 얻는다**(읽히기 쉬운 매핑).
@@ -156,21 +167,79 @@ func _test_chapter_tables() -> void:
 		_check(CT.kind_of(ch.reward_unlock) == CT.KIND_RUNE,
 			"%s: 보상 %s가 실재하는 룬이다 (리졸버 판정 '%s')" % [cid, ch.reward_unlock, CT.kind_of(ch.reward_unlock)])
 		# 배치 항목이 전부 살아 있나 — SubResource 하나가 죽으면 null이 섞여 스폰이 조용히 준다.
+		# 🔴🔴 세99 단계 1.5: 「죽은 항목」의 정의가 넓어졌다. `pool_tag`로 굴리는 자리는 **`enemy_id`가
+		#  비어 있는 게 정상**이라(설계 §2-1) 옛 정의(`enemy_id == &""` = 죽음)를 그대로 두면 D5를
+		#  켜는 순간 전부 빨개진다. 대신 **「이 자리가 실제로 뭔가를 세우나」**를 잰다:
+		#  ⓐ `enemy_id`가 실재하거나 ⓑ `pool_tag`가 그 챕터 `mob_pool`에 **살아 있는 후보를 갖거나**.
+		#  🔴 검출력은 안 떨어진다 — 둘 다 아니면(빈 항목·오타 태그·후보 전멸) 여전히 죽은 항목이고,
+		#  그게 설계 §6 S1(「아무 적도 안 서는데 에러 0」)이 잡으라는 바로 그 상태다.
 		var dead := 0
 		for ms in ch.mob_spawns:
-			if ms == null or ms.enemy_id == &"" or _db.get_enemy(ms.enemy_id) == null:
+			if ms == null:
 				dead += 1
-		_check(dead == 0, "%s: 배치 항목이 전부 실재하는 적이다 (죽은 항목 %d)" % [cid, dead])
+			elif ms.pool_tag != &"":
+				if _live_pool_ids(ch, ms.pool_tag).is_empty():
+					dead += 1
+			elif ms.enemy_id == &"" or _db.get_enemy(ms.enemy_id) == null:
+				dead += 1
+		_check(dead == 0, "%s: 배치 항목이 전부 뭔가를 세운다 (죽은 항목 %d — id도 태그도 없는 자리)"
+			% [cid, dead])
+		_check_pools(ch)
 	# 🔴 세88에 처음 무대에 오르는 셋 — 그전엔 스폰되는 곳이 **0곳**이었다(유령 콘텐츠).
+	# ⚠ 세99: 풀로 옮긴 적은 `mob_spawns`에 이름이 없다 — **풀도 같이 훑어야** 이 그물이 안 죽는다.
 	var seen := {}
 	for cid2: StringName in MOB_COUNT:
 		var c2 = _db.get_chapter(cid2)
-		if c2 != null:
-			for ms2 in c2.mob_spawns:
-				if ms2 != null:
-					seen[ms2.enemy_id] = true
+		if c2 == null:
+			continue
+		for ms2 in c2.mob_spawns:
+			if ms2 != null and ms2.enemy_id != &"":
+				seen[ms2.enemy_id] = true
+		for mw in c2.mob_pool:
+			if mw != null and mw.enemy_id != &"" and mw.weight > 0:
+				seen[mw.enemy_id] = true
 	for id: StringName in [&"hound", &"mist", &"vine"]:
 		_check(seen.has(id), "%s가 어느 챕터엔가 실제로 배치됐다 (세87까지 스폰 0곳)" % id)
+
+
+## [1c] 🔴🔴 풀·네임드 **데이터 쪽** 검사 (세99 D5·D6). 굴림 자체는 `test_mob_roll_auto`가 잰다 —
+## 여기는 **「.tres가 켜 놓은 값이 성립하나」**만 본다(그 파일은 in-memory 주입으로 기계를 재므로
+## 실데이터가 조용히 비거나 어긋난 걸 못 잡는다 — 두 축이 짝이다).
+##
+## 🔴🔴 **가장 중요한 줄 = 보스 id 제외**(설계 §6 S9). 풀·네임드에 `boss_enemy_id`가 섞이면
+##  잡몹 한 마리를 잡았을 뿐인데 `chapter_clear_*` + 보상 룬이 **전부 조용히 나간다(에러 0)**.
+##  🔴 코드 쪽 가드는 `boss_room._is_boss_id`가 지고 `test_mob_roll_auto`가 잰다 — 여기 줄은
+##  **데이터가 애초에 그 상태로 들어오지 않게** 하는 짝이다(둘 다 있어야 한다: 코드 가드만 있으면
+##  데이터의 의도가 안 보이고, 데이터 검사만 있으면 가드를 지워도 그린이다).
+func _check_pools(ch) -> void:
+	var cid: StringName = ch.id
+	for mw in ch.mob_pool:
+		if mw == null:
+			_check(false, "%s: mob_pool에 null 항목이 있다" % cid)
+			continue
+		_check(_db.get_enemy(mw.enemy_id) != null,
+			"%s: 풀 항목 %s가 실재하는 적이다 (오타면 그 자리가 조용히 빈다)" % [cid, mw.enemy_id])
+		_check(mw.enemy_id != ch.boss_enemy_id,
+			"🔴🔴 %s: 풀에 보스 id(%s)가 없다 — 있으면 잡몹 한 마리가 챕터를 클리어한다" % [cid, ch.boss_enemy_id])
+		_check(mw.weight > 0,
+			"%s: 풀 항목 %s의 weight > 0 (0 이하는 안 뽑히니 데이터에 남길 이유가 없다)" % [cid, mw.enemy_id])
+	for ns in ch.named_pool:
+		if ns == null:
+			_check(false, "%s: named_pool에 null 항목이 있다" % cid)
+			continue
+		_check(_db.get_enemy(ns.enemy_id) != null,
+			"%s: 네임드 %s가 실재하는 적이다" % [cid, ns.enemy_id])
+		_check(ns.enemy_id != ch.boss_enemy_id,
+			"🔴🔴 %s: 네임드에 보스 id(%s)가 없다 (풀과 같은 이유)" % [cid, ch.boss_enemy_id])
+		# 🔴 설계 §6 S3 — 확률이 0이나 1로 굳어도 **에러가 없다**. 데이터가 양끝이면 「가끔 뜬다」가
+		#  통째로 죽은 것이다(0 = 영영 안 뜸 = 만든 값어치 0 · 1 = 매 판 뜸 = 「오늘 뭔가 있다」가 아님).
+		_check(ns.chance > 0.0 and ns.chance < 1.0,
+			"🔴 %s: 네임드 %s의 확률이 양끝이 아니다 (실제 %.2f — 0이면 영영 안 뜨고 1이면 늘 뜬다)"
+				% [cid, ns.enemy_id, ns.chance])
+		# ⚠ 지점(`at_landmark`) 해석은 **단계 3 몫**이다 — 지금 채우면 좌표가 무시된 채 원점에 선다.
+		_check(ns.at_landmark == &"",
+			"%s: 네임드 %s의 at_landmark가 비어 있다 (지점 해석은 단계 3 — 지금 채우면 원점에 선다)"
+				% [cid, ns.enemy_id])
 
 
 ## [2] 🔴 보스 스폰 **두 경로 각각** + 출격 만HP (forest [2] 이식).
@@ -201,10 +270,7 @@ func _test_boss_spawn_both_paths() -> void:
 		"출격하면 HP가 찬다 %.0f/%.0f (안 그러면 죽는 게 이득)" % [_gs.hp, _gs.hp_max()])
 	# 🔴 세71: ch1은 이제 잡몹 길(mob_spawns)이 깔린다 — "enemies"에 보스 1 + 잡몹 N. 보스는 enemy_id로 특정.
 	var ch1 = _db.get_chapter(&"ch1")
-	# 🔴 기대치는 **명시 상수**에서 온다 — `1 + ch1.mob_spawns.size()`로 파생하면 표를 비워도 통과한다.
-	var want_count = 1 + int(MOB_COUNT[&"ch1"])
-	_check(_enemies().size() == want_count,
-		"ch1: 보스 1 + 잡몹 %d = %d 마리가 실제로 섰다 (실제 %d)" % [int(MOB_COUNT[&"ch1"]), want_count, _enemies().size()])
+	_check_enemy_count(&"ch1")
 	# 🔴🔴 카메라가 **방 안에 묶였나** (세88 — 리드가 MCP 스샷으로 잡았다).
 	# 방을 2400×2200으로 키우자 **입장 순간 화면 아래 절반이 방 밖(회색)으로 비었다**: 스폰(0,600)이
 	# 남쪽 경계(700)에서 100px인데 뷰포트 반높이가 270px이다. `player.tscn`의 Camera2D엔 `limit_*`이
@@ -231,8 +297,7 @@ func _test_boss_spawn_both_paths() -> void:
 
 	await _fresh(&"ch3")
 	var ch3 = _db.get_chapter(&"ch3")
-	_check(_enemies().size() == 1 + int(MOB_COUNT[&"ch3"]),
-		"ch3: 보스 1 + 잡몹 %d 마리가 실제로 섰다 (실제 %d)" % [int(MOB_COUNT[&"ch3"]), _enemies().size()])
+	_check_enemy_count(&"ch3")
 	var boss3 = _boss(&"ch3")
 	_check(boss3 != null, "ch3 보스(snake_boss)가 스폰됐다")
 	if boss3 != null:
@@ -585,6 +650,45 @@ func _boss(chapter_id: StringName):
 		if n.enemy_id == ch.boss_enemy_id:
 			return n
 	return null
+
+
+## 🔴🔴 방 안에 실제로 선 적의 수 — **세99 단계 1.5에 정확 일치에서 범위로 바꾼 유일한 자리**.
+##
+## 왜 범위인가: 네임드(D6)는 **매 판 독립으로 굴린다**. 「하나도 안 뜸」이 정상 결과라 개수가
+## 판마다 0~N만큼 달라진다 — 정확 일치로 두면 **네임드가 뜬 판마다 빨개진다**. 이 파일은
+## **세84에 이미 flake로 데인 자리**라(SPAWN_TOL 주석) 재발하면 「빨간 게 정상」이 되어 그물이 죽는다.
+##
+## 🔴 **검출력을 어떻게 지키나 — 하한이 옛 상수 그대로다.**
+##  하한 = `1(보스) + MOB_COUNT[cid]` = 세98까지의 **정확 기대치**다. 그래서 세88이 이 상수를
+##  박은 이유(*"표를 비워도 통과했고 ch2·ch3가 0마리인 채 그린이었다"*)가 한 톨도 안 풀린다:
+##  표를 비우면·풀 굴림이 조용히 실패하면(설계 §6 S1) **여전히 하한에서 빨개진다.**
+## 🔴 상한도 논다 — `named_pool.size()`가 천장이라 「한 항목이 두 마리를 세운다」·「굴림이 자리를
+##  늘린다」가 잡힌다. **상한을 데이터에서 파생**시켜 F5로 네임드를 늘려도 안 낡는다.
+func _check_enemy_count(cid: StringName) -> void:
+	var ch = _db.get_chapter(cid)
+	var floor_n: int = 1 + int(MOB_COUNT[cid])
+	var named_max: int = ch.named_pool.size() if ch != null else 0
+	var got: int = _enemies().size()
+	_check(got >= floor_n,
+		"%s: 보스 1 + 잡몹 %d = 최소 %d마리가 섰다 (실제 %d — 밑돌면 자리가 조용히 비었다)"
+			% [cid, int(MOB_COUNT[cid]), floor_n, got])
+	_check(got <= floor_n + named_max,
+		"%s: 최대 %d마리 (보스1+잡몹%d+네임드%d, 실제 %d — 넘으면 굴림이 자리를 늘린 것)"
+			% [cid, floor_n + named_max, int(MOB_COUNT[cid]), named_max, got])
+
+
+## 어떤 `pool_tag`가 **실제로 세울 수 있는** 적 id들 — 「살아 있는 후보」의 정의를 한 곳에 둔다.
+## ⚠ 이건 `boss_room`의 굴림 구현이 아니라 **데이터 유효성**이다(굴림 자체는 `test_mob_roll_auto`).
+##  후보가 0이면 그 자리는 아무것도 안 세우고 **에러가 0**이다(설계 §6 S1) — 그래서 [1b]가 죽은 항목으로 센다.
+func _live_pool_ids(ch, tag: StringName) -> Array:
+	var out := []
+	for mw in ch.mob_pool:
+		if mw == null or mw.pool_tag != tag or mw.weight <= 0:
+			continue
+		if mw.enemy_id == &"" or mw.enemy_id == ch.boss_enemy_id or _db.get_enemy(mw.enemy_id) == null:
+			continue
+		out.append(mw.enemy_id)
+	return out
 
 
 func _carriers() -> Array:

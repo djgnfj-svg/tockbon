@@ -116,6 +116,9 @@ const GUST_RING_COLOR := Color(0.75, 0.95, 1.0, 0.85)  ## 옅은 바람색
 ## 보유·틱·반응 해결은 전부 holder가 한다 — 여기 남은 건 **몸의 일**(피해·확산·색)뿐이다.
 ## 추출한 이유: 허수아비가 같은 코드를 못 써서 **연습장에서 반응을 시험할 수 없었다**.
 var _status: SH = SH.new()
+## 🔴 세99 D6 — 몸 색조(`EnemyDef.params.tint`). 흰색 = 곱셈 항등 = 「색조 없음」(기존 적 전부).
+## 대입처는 `_apply_look`(읽기)·`_refresh_tint`(곱하기) 둘뿐이다 — modulate 소유권 계약 참조.
+var _base_tint: Color = Color.WHITE
 ## 🔴 죽음 1회 보장 — DoT·연쇄·즉발이 같은 프레임에 겹쳐도 `_die()`가 두 번 돌면
 ## 드롭이 두 번 떨어지고 퀘스트가 두 번 센다(queue_free는 프레임 끝에야 반영된다).
 var _dead: bool = false
@@ -150,8 +153,10 @@ func _ready() -> void:
 	_attach_shadow()
 
 
-## 🔴 외형도 .tres가 쥔다 (`params.color`·`params.size`) — "새 적 = .tres 한 장"이 생김새까지
-## 포함하게 하려는 것. 없으면 기본 초록·1배(슬라임 그대로).
+## 🔴 외형도 .tres가 쥔다 (`params.sprite`·`params.size`·`params.tint`) — "새 적 = .tres 한 장"이
+## 생김새까지 포함하게 하려는 것. 없으면 시트 그대로·1배·색조 없음.
+## ⚠ **`params.color`는 여기 없다** — 세45에 스프라이트로 갈아타며 `_visual.color`가 사라져
+##  지금은 **죽음 퍼프 색**으로만 산다(`_spawn_death_puff`). 몸을 물들이는 건 `params.tint`다.
 ## ⚠ 이건 **표시일 뿐 AI가 아니다** — 세션 30 "데이터만(리스킨)" 방침 그대로다. 행동(추격+접촉)은
 ## 한 가지뿐이고, 색·덩치만 .tres로 달라진다. 스키마를 안 늘리고 `params`에 얹은 이유 = enemy_def.gd
 ## 주석("스키마 확장 대신 params를 쓴다"). size는 루트 scale이라 **덩치가 곧 히트박스**가 된다.
@@ -169,6 +174,17 @@ func _apply_look() -> void:
 	var s := float(_def.params.get("size", 1.0))
 	if not is_equal_approx(s, 1.0):
 		scale = Vector2(s, s)
+	# 🔴 세99 D6 — **몸 색조**(`params.tint`). 네임드를 「덩치 + 색」으로 알아보게 하는 축이다
+	#  (사용자 확정: *"몸에서 빛이나는거 까진 별로임"* — 오라가 아니라 생김새로 구별한다).
+	# 🔴🔴 **`params.color`와 다른 키다 — 섞지 마라.** `color`는 세45에 스프라이트로 갈아타며
+	#  `_visual.color`가 사라져 **죽음 퍼프 색으로만** 남았다(`_spawn_death_puff` 주석). 그 키에
+	#  몸 틴트를 얹으면 이미 `color`를 쥔 적 다섯(beetle·hound·mist·vine·slime_elite)의 겉모습이
+	#  **한꺼번에 달라진다** — 그래서 새 키다. 없으면 흰색(=곱셈 항등) = 기존 적 회귀 0.
+	# ⚠ 실제 적용은 `_refresh_tint`가 한다 — modulate 소유권 계약(거기 머리말)을 안 깨려고
+	#  여기선 **값만 들고** 상태 틴트와 곱해 쓴다.
+	if _def.params.get("tint") is Color:
+		_base_tint = _def.params.get("tint")
+		_refresh_tint()
 
 
 ## 가로 스트립 시트(프레임 = 정사각, 한 변 = 시트 높이)를 루프 "idle" 애니로 굽는다.
@@ -715,10 +731,17 @@ func _status_tint() -> Color:
 ## 🔴 modulate 소유권 계약 (세63 개편): modulate는 **rgb=상태 틴트 · a=분산** 두 축만 남았다.
 ## 팝(흰 섬광)·텔레그래프(붉음)는 셰이더 uniform(flash_amount·telegraph_amount)이 쥔다 —
 ## modulate를 만지는 코드는 이 함수와 `_set_dispersed`뿐이어야 한다(3파전으로 되돌리지 마라).
+##
+## 🔴🔴 **세99: rgb 축이 「몸 색조 × 상태 틴트」의 곱이 됐다 — 소유자는 여전히 이 함수 하나다.**
+##  `_apply_look`이 `params.tint`를 **값으로만** 들고(대입은 여기서만) 계약이 안 깨진다.
+##  🔴 곱셈이라 **순서가 없고 되돌릴 필요도 없다**: 몸 색조가 없으면 흰색(항등)이라 기존 적은
+##  한 톨도 안 달라지고, 상태가 풀리면 `tint_of`가 흰색이라 몸 색조가 저절로 되돌아온다.
+##  ⚠ 대입(`_base_tint`를 여기서 안 곱하고 `_apply_look`에서 modulate에 직접 쓰는 것)으로 바꾸면
+##  **첫 상태이상 한 번에 몸 색조가 영영 지워진다**(에러 0) — 그게 이 곱셈의 존재 이유다.
 func _refresh_tint() -> void:
 	if _visual == null:
 		return
-	var c := _status_tint()
+	var c := _status_tint() * _base_tint
 	c.a = _visual.modulate.a
 	_visual.modulate = c
 

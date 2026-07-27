@@ -36,6 +36,21 @@ extends Node2D
 ##  🔴 위 문단이 경고한 함정(mouse_filter·z_index·레이어)은 **여전히 유효하다** — 그래서 새 맵은
 ##  **상속 씬**으로 만들어 이 씬의 노드 계약을 물려받는 것을 권한다(설계 §7 단계 4).
 ##
+## 🔴🔴 **세99 D5·D6 — 무대는 고정, 서 있는 것은 매 판 굴러간다.**
+##  • **몹 풀**(D5): `MobSpawn.pool_tag` → `ChapterDef.mob_pool`에서 **weight 비례**로 뽑는다.
+##    🔴 **좌표는 절대 안 굴린다**(사용자 확정 *"지형은 동일하고 나오는 몬스터들이 랜덤"*) —
+##    자리는 지형이 정하는 것이라 사람이 놓고, 바뀌는 건 「거기 뭐가 서 있나」뿐이다.
+##    `pool_tag`가 비면 `enemy_id` 그대로 = **세98까지와 동일**(회귀 0).
+##  • **네임드**(D6): `ChapterDef.named_pool`을 **항목마다 독립으로** 굴린다.
+##    🔴 **「하나도 안 뜸」이 정상 결과다** — 그게 「오늘 뭔가 있다」를 만든다.
+##    🔴 **표시는 생김새다(덩치·몸 색조) — 빛나게 하지 마라**(*"몸에서 빛이나는거 까진 별로임"*).
+##    오라·HUD 알림·입장 문구는 **각하됐다.** `at_landmark` 해석은 단계 3 몫이라 지금은 안 선다.
+##  🔴🔴 **잡몹·네임드는 `_spawn_enemy_at` 한 문을 지난다 — 거기 보스 id 제외 가드가 있다**(설계 §6 S9).
+##   새 스폰 경로를 만들거든 **그 문을 지나게 해라.** 안 지나면 풀에 보스 id가 섞이는 날
+##   **잡몹 한 마리로 `chapter_clear_*` + 보상 룬이 조용히 나간다(에러 0).**
+##  🔴 **시드를 고정하지 마라** — 랜덤이 전역 스트림 하나뿐이라 테스트가 `seed()`를 잡으면 드롭 굴림 등과
+##   스트림을 나눠 써 flake가 된다. 그물(`tests/test_mob_roll_auto.gd`)은 **확률·가중치 양끝을 주입**해 잰다.
+##
 ## 🔴 **HP는 GameState가 쥔다** — 오토로드라 씬을 갈아타도 남는다 (forest.gd와 같은 이유).
 ## 출격 = 만HP/만마나는 **이 씬이 한다** (베이스가 아니다 — 다른 진입 경로로 들어가면 조용히 달라진다).
 ##
@@ -153,6 +168,9 @@ func _ready() -> void:
 	if not _spawn_boss():
 		return
 	_spawn_mobs()
+	# 🔴 네임드는 **잡몹 뒤**다 — 보스·잡몹이 다 선 뒤라야 「이 판에 얹힌 것」이라는 순서가 읽히고,
+	#  그물도 「보스1 + 잡몹N + 네임드0~M」이라는 같은 순서로 개수를 잰다(test_chapter_auto).
+	_spawn_named()
 	var boss_def := Db.get_enemy(_chapter.boss_enemy_id)
 	var boss_name := boss_def.display_name if boss_def != null else String(_chapter.boss_enemy_id)
 	# 🔴 세84 #36: `sticky` — **방의 목표 줄이다**. say()에 수명이 붙었으므로(경고가 목표를 덮고
@@ -322,17 +340,104 @@ func _spawn_boss() -> bool:
 
 ## 잡몹 길 (세66 도파민 — 즉시 보상 무대) — 방 앞쪽에 잡몹을 깐다. 플레이어가 뚫고 보스에 닿는다.
 ## 🔴 잡몹은 forest_enemy 범용 계약(그룹 enemies·layer4·take_hit·_die→coin 드롭). 신규 씬 0.
-##  🔴 enemy_id·위치 대입은 add_child **앞** (보스와 같은 계약 — _ready가 그 id로 .tres를 문다).
 ##  클리어 판정은 안 건드린다 — 잡몹 죽음은 _on_enemy_died에서 boss_enemy_id가 아니라 무시된다
 ##  (잡몹=돈·손맛 1층, 보스=clear 2·3층). 웨이브 게이팅 없이 배치만(v1).
+##
+## 🔴🔴 **세99 D5 — 자리는 고정, 정체만 굴린다**(사용자 확정 *"지형은 동일하고 나오는 몬스터들이 랜덤"*).
+##  좌표는 **언제나** `MobSpawn.position` 그대로다 — 굴리는 건 「거기 뭐가 서 있나」뿐이다.
+##  `pool_tag`가 비면 `enemy_id` 그대로 = **세98까지와 한 톨도 안 다르다**(회귀 0).
+## 🔴 후보가 0이면 그 자리가 **빈 채로 선다** — 에러가 0이라(설계 §6 S1) `push_warning`으로 짖는다.
+##  ⚠ 태그당 한 번만 짖는다: 자리 9곳이 같은 태그를 가리키면 같은 경고가 9줄 나와 로그가 죽는다.
 func _spawn_mobs() -> void:
+	var warned := {}
 	for spawn: MobSpawn in _chapter.mob_spawns:
-		if spawn == null or spawn.enemy_id == &"":
+		if spawn == null:
 			continue
-		var mob := EnemyScene.instantiate() as Node2D
-		mob.set(&"enemy_id", spawn.enemy_id)
-		mob.position = spawn.position
-		add_child(mob)
+		var id := spawn.enemy_id
+		if spawn.pool_tag != &"":
+			id = _roll_pool_id(spawn.pool_tag)
+			if id == &"" and not warned.has(spawn.pool_tag):
+				warned[spawn.pool_tag] = true
+				push_warning("boss_room: %s의 mob_pool에 태그 '%s' 후보가 없다 — 그 자리들이 빈 채로 선다"
+					% [String(_chapter.id), String(spawn.pool_tag)])
+		_spawn_enemy_at(id, spawn.position)
+
+
+## 🔴 D5 굴림 — `pool_tag`가 같은 `MobWeight`를 **weight 비례**로 하나 뽑는다. 후보가 없으면 `&""`.
+##
+## 🔴 **`weight <= 0`은 안 뽑는다** — `MobWeight.weight` 주석이 *"임시로 빼려면 지우지 말고 0으로"*라고
+##  약속한 손잡이다. 안 지키면 **거짓 손잡이**(감사 T3)가 되고, 0으로 빼 둔 적이 그대로 나온다.
+## ⚠ **시드를 고정하지 않는다** — 이 리포의 랜덤은 전역 `randf()`/`randi_range()` 하나뿐이라
+##  테스트가 전역 `seed()`를 잡으면 `forest_enemy._spawn_loose`의 각도 굴림 등이 **같은 스트림을 소비**해
+##  순서가 조금만 바뀌어도 어긋난다(= flake). 그래서 그물은 **확률·가중치의 양끝을 주입해** 잰다.
+func _roll_pool_id(tag: StringName) -> StringName:
+	var ids: Array[StringName] = []
+	var weights: Array[int] = []
+	var total := 0
+	for mw: MobWeight in _chapter.mob_pool:
+		if mw == null or mw.pool_tag != tag or mw.enemy_id == &"":
+			continue
+		if mw.weight <= 0:   # 🔴 0 이하 = 「지금은 빼 둔다」 (지우지 않고 끄는 손잡이)
+			continue
+		ids.append(mw.enemy_id)
+		weights.append(mw.weight)
+		total += mw.weight
+	if total <= 0:
+		return &""
+	var pick := randi_range(1, total)
+	for i in ids.size():
+		pick -= weights[i]
+		if pick <= 0:
+			return ids[i]
+	return ids[ids.size() - 1]   # 부동소수 없는 정수 누적이라 도달할 일이 없다 — 방어선
+
+
+## 🔴 D6 네임드 — `named_pool`의 **각 항목을 독립으로** 굴린다. **「하나도 안 뜸」이 정상 결과다**
+##  (사용자 원문 *"네임드가 있을 수도 없을 수도 있음"* — 그게 「오늘 뭔가 있다」를 만든다).
+##
+## 🔴🔴 **표시는 생김새다 — 빛나게 하지 않는다**(세99 사용자 확정: *"몸에서 빛이나는거 까진 별로임"*).
+##  덩치(`EnemyDef.params.size` = 루트 scale이라 히트박스·그림자가 공짜로 따라온다)와 전용 스프라이트로
+##  구별한다. **오라·HUD 알림·입장 문구는 각하됐다 — 만들지 마라.**
+## ⚠ `at_landmark`는 **단계 3 몫**이라 지금은 해석하지 않는다. 채워 두면 조용히 안 뜨므로 짖는다.
+func _spawn_named() -> void:
+	for named: NamedSpawn in _chapter.named_pool:
+		if named == null or named.enemy_id == &"":
+			continue
+		if named.at_landmark != &"":
+			push_warning("boss_room: 네임드 '%s'의 at_landmark('%s') 해석은 단계 3 몫이다 — 이번 판엔 안 선다"
+				% [String(named.enemy_id), String(named.at_landmark)])
+			continue
+		# 🔴 `randf()`는 [0,1) — chance 0.0이면 절대 안 뜨고 1.0이면 반드시 뜬다(양끝이 그물의 손잡이).
+		if randf() >= named.chance:
+			continue
+		_spawn_enemy_at(named.enemy_id, named.position)
+
+
+## 🔴🔴 적 하나를 세운다 — **잡몹·네임드가 지나는 유일한 문**이고 **보스 id 제외 가드가 여기 한 줄**이다.
+##
+## 왜 한 곳인가 (설계 §6 S9): `_on_enemy_died`의 클리어 판정이 **`enemy_id` 일치 한 줄**이라
+## 풀·네임드에 `boss_enemy_id`가 섞이면 **잡몹 한 마리를 잡았을 뿐인데 `chapter_clear_*` + 보상 룬이
+## 전부 조용히 나간다(에러 0)**. 세98까지 안 겹친 건 `mob_spawns`를 손으로 박아 **우연히 보장**되던 것뿐이다.
+## 🔴 가드를 굴림 함수에 두지 않은 이유 = 문이 둘(잡몹·네임드)이면 **가드도 둘**이 되고 한쪽만 지워도
+##  다른 쪽이 그린이라 뮤테이션이 안 걸린다. 여기 한 줄을 지우면 **두 경로가 같이 빨개진다.**
+## 🔴 `enemy_id`·위치 대입은 `add_child` **앞**이 계약이다 (보스와 같은 이유 — `_ready`가 그 id로 .tres를 문다).
+func _spawn_enemy_at(id: StringName, at: Vector2) -> bool:
+	if id == &"":
+		return false
+	if _is_boss_id(id):
+		push_warning("boss_room: 잡몹/네임드 자리에 보스 id('%s')가 들어왔다 — 세우지 않는다 (설계 §6 S9)"
+			% String(id))
+		return false
+	var mob := EnemyScene.instantiate() as Node2D
+	mob.set(&"enemy_id", id)
+	mob.position = at
+	add_child(mob)
+	return true
+
+
+## 🔴 클리어를 여는 id인가 — `_on_enemy_died`의 판정식과 **같은 비교**를 쓴다(사본이 아니라 파생).
+func _is_boss_id(id: StringName) -> bool:
+	return _chapter != null and id == _chapter.boss_enemy_id
 
 
 ## 🔴 클리어 판정 = **보스 처치 순간** (루팅·귀환과 무관 — 죽어서 가방을 잃어도 클리어는 남는다.

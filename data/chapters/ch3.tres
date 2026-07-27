@@ -1,17 +1,19 @@
-[gd_resource type="Resource" script_class="ChapterDef" load_steps=16 format=3]
+[gd_resource type="Resource" script_class="ChapterDef" load_steps=24 format=3]
 
 [ext_resource type="Script" path="res://src/core/schemas/chapter_def.gd" id="1"]
 [ext_resource type="Script" path="res://src/core/schemas/mob_spawn.gd" id="2"]
+[ext_resource type="Script" path="res://src/core/schemas/mob_weight.gd" id="3"]
+[ext_resource type="Script" path="res://src/core/schemas/named_spawn.gd" id="4"]
 
 [sub_resource type="Resource" id="mob1"]
 script = ExtResource("2")
-enemy_id = &"vine"
 position = Vector2(-550, 500)
+pool_tag = &"fore"
 
 [sub_resource type="Resource" id="mob2"]
 script = ExtResource("2")
-enemy_id = &"vine"
 position = Vector2(550, 450)
+pool_tag = &"fore"
 
 [sub_resource type="Resource" id="mob3"]
 script = ExtResource("2")
@@ -30,13 +32,13 @@ position = Vector2(280, 250)
 
 [sub_resource type="Resource" id="mob6"]
 script = ExtResource("2")
-enemy_id = &"hound"
 position = Vector2(-400, -250)
+pool_tag = &"deep"
 
 [sub_resource type="Resource" id="mob7"]
 script = ExtResource("2")
-enemy_id = &"hound"
 position = Vector2(420, -400)
+pool_tag = &"deep"
 
 [sub_resource type="Resource" id="mob8"]
 script = ExtResource("2")
@@ -60,13 +62,49 @@ position = Vector2(380, -1050)
 
 [sub_resource type="Resource" id="mob12"]
 script = ExtResource("2")
-enemy_id = &"beetle"
 position = Vector2(-650, -1150)
+pool_tag = &"deep"
 
 [sub_resource type="Resource" id="mob13"]
 script = ExtResource("2")
 enemy_id = &"beetle"
 position = Vector2(620, -900)
+
+[sub_resource type="Resource" id="w_fore_vine"]
+script = ExtResource("3")
+enemy_id = &"vine"
+weight = 4
+pool_tag = &"fore"
+
+[sub_resource type="Resource" id="w_fore_beetle"]
+script = ExtResource("3")
+enemy_id = &"beetle"
+weight = 3
+pool_tag = &"fore"
+
+[sub_resource type="Resource" id="w_deep_hound"]
+script = ExtResource("3")
+enemy_id = &"hound"
+weight = 4
+pool_tag = &"deep"
+
+[sub_resource type="Resource" id="w_deep_beetle"]
+script = ExtResource("3")
+enemy_id = &"beetle"
+weight = 3
+pool_tag = &"deep"
+
+[sub_resource type="Resource" id="w_deep_vine"]
+script = ExtResource("3")
+enemy_id = &"vine"
+weight = 2
+pool_tag = &"deep"
+
+[sub_resource type="Resource" id="named_hound"]
+script = ExtResource("4")
+enemy_id = &"hound_alpha"
+chance = 0.3
+position = Vector2(-700, -600)
 
 [resource]
 script = ExtResource("1")
@@ -79,4 +117,6 @@ boss_spawn = Vector2(0, -1350)
 room_ground_color = Color(0.09, 0.14, 0.10, 1.0)
 mob_spawns = Array[ExtResource("2")]([SubResource("mob1"), SubResource("mob2"), SubResource("mob3"), SubResource("mob4"), SubResource("mob5"), SubResource("mob6"), SubResource("mob7"), SubResource("mob8"), SubResource("mob9"), SubResource("mob10"), SubResource("mob11"), SubResource("mob12"), SubResource("mob13")])
 reward_unlock = &"rune_grass"
+mob_pool = Array[ExtResource("3")]([SubResource("w_fore_vine"), SubResource("w_fore_beetle"), SubResource("w_deep_hound"), SubResource("w_deep_beetle"), SubResource("w_deep_vine")])
+named_pool = Array[ExtResource("4")]([SubResource("named_hound")])
 extract_points = Array[Vector2]([Vector2(-1150, -360), Vector2(300, -1400)])

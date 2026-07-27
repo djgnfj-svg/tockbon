@@ -20,7 +20,9 @@ extends SceneTree
 ##   • `all_landmarks()`가 **id 사전순** — `StringName.sort()`는 인터닝 순이라 실행마다 흔들린다(세88)
 ##   • 신설 4장이 인스턴스되고 **기본값이 「지금 동작」**이다 (특히 `NamedSpawn.chance == 0.0`)
 ##   • 🔴 **기존 챕터 3장이 새 필드를 전부 빈 값으로 들고 있다** = 회귀 0의 실증
-## ⚠ 못 잡는 것: 굴림·스폰·홀드가 **실제로 도는가**(아직 소비자가 없다 — 단계 1~2에서 그물이 붙는다).
+## ⚠ 못 잡는 것: 지점(`landmarks`)이 **실제로 도는가**(아직 소비자가 없다 — 단계 3에서 그물이 붙는다).
+##  🔴 **굴림·네임드는 세99 단계 2에 켜졌다** — 여기는 기본값만 재고 실제 굴림은
+##  `tests/test_mob_roll_auto.gd`(기계) + `tests/test_chapter_auto [1c]`(실데이터)가 진다([5] 머리말 참조).
 ##
 ## 공개 계약으로만 검증한다. 주의: -s 모드는 오토로드 전역 등록보다 먼저 컴파일된다 —
 ## 오토로드 식별자·모듈 preload 금지. 첫 프레임 후 /root 접근.
@@ -174,8 +176,17 @@ func _test_new_schema_defaults() -> void:
 ##  🔴 **살아 있는 그물이 어디로 갔는지 적어 둔다** — `tests/test_extract_hold_auto [6]ⓐ`가
 ##  **같은 `.tres` 파싱 결과**를 「비어 있지 않다 + 출구가 실제로 서고 풀길이 가장자리까지 닿는다」로
 ##  더 세게 잰다. **여기 사본을 만들지 마라**(T5) — 켜진 축은 그쪽 한 곳이 정본이다.
-##  ⚠ 남은 넷(`room_scene_path`·`mob_pool`·`named_pool`·`landmarks`)은 **아직 소비자가 없다** —
-##  단계 2·4에서 켜질 때 같은 절차로 하나씩 여기서 빼고 그쪽에 그물을 세워라.
+##
+## 🔴🔴 **`mob_pool`·`named_pool`·`MobSpawn.pool_tag`는 세99 단계 2에 켜졌다 — 같은 절차로 뺐다.**
+##  소비자가 생겼다: `boss_room._roll_pool_id`(풀 굴림) · `boss_room._spawn_named`(네임드 굴림).
+##  🔴 **살아 있는 그물이 간 곳 둘**(여기 사본을 만들지 마라 — T5):
+##   ⓐ `tests/test_mob_roll_auto.gd` — 굴림 **기계**를 잰다(가중치 비례 · `weight<=0` 제외 ·
+##      확률 0.0/1.0 양끝 · 🔴 보스 id 제외 가드). in-memory 주입이라 실데이터를 안 본다.
+##   ⓑ `tests/test_chapter_auto [1c]` — **실데이터 `.tres`**가 실재하는 적을 가리키고 보스 id를
+##      안 물고 확률이 양끝이 아닌지 잰다. ⓐ와 짝이다(기계만 재면 데이터가 비어도 그린이다).
+##  ⚠ **`MobSpawn.enemy_id`가 빈 항목이 이제 정상이다** — 그 자리는 `pool_tag`로 굴린다.
+##  ⚠ 남은 둘(`room_scene_path`·`landmarks`)은 **아직 소비자가 없다** — 단계 3·4에서 켜질 때
+##  같은 절차로 하나씩 여기서 빼고 그쪽에 그물을 세워라.
 func _test_existing_chapters_unchanged() -> void:
 	print("[5] 기존 챕터 3장 = 아직 안 켠 필드 전부 빈 값 (회귀 0 실증)")
 	var chapters = _db.chapters_sorted()
@@ -183,14 +194,18 @@ func _test_existing_chapters_unchanged() -> void:
 	for c in chapters:
 		var who := String(c.id)
 		_check(c.room_scene_path == "", "%s: room_scene_path 비어 있다 (공용 씬 그대로)" % who)
-		_check(c.mob_pool.is_empty(), "%s: mob_pool 비어 있다" % who)
-		_check(c.named_pool.is_empty(), "%s: named_pool 비어 있다" % who)
 		_check(c.landmarks.is_empty(), "%s: landmarks 비어 있다" % who)
 		# 🔴 기존 배치가 살아 있나 — 새 필드를 더하며 옛 필드를 밀지 않았다는 증명.
 		_check(not c.mob_spawns.is_empty(), "%s: mob_spawns가 여전히 차 있다" % who)
+		# 🔴 자리 자체는 **여전히 사람이 놓는다**(D5: *"지형은 동일하고 나오는 몬스터들이 랜덤"*).
+		#  굴리는 자리든 아니든 좌표는 데이터가 쥐어야 한다 — 전부 원점이면 배치가 죽은 것이다.
+		var at_origin := 0
 		for m in c.mob_spawns:
-			_check(m.pool_tag == &"", "%s: 기존 MobSpawn의 pool_tag가 비어 있다" % who)
-			_check(m.enemy_id != &"", "%s: 기존 MobSpawn의 enemy_id가 살아 있다" % who)
+			if m.position == Vector2.ZERO:
+				at_origin += 1
+		_check(at_origin < c.mob_spawns.size(),
+			"%s: MobSpawn 좌표가 전부 원점은 아니다 (자리는 굴리지 않는다 — 실제 원점 %d/%d)"
+				% [who, at_origin, c.mob_spawns.size()])
 
 
 ## [6] balance 신설 값 + enum.
