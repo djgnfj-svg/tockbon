@@ -40,6 +40,13 @@ const SH := preload("res://src/core/status_holder.gd")
 ## 지속·반경·틱 간격 수치는 전부 balance가 쥔다 (연출값이 아니라 밸런스다).
 const BAL := preload("res://data/balance.tres")
 
+## 🔴🔴 시야 판정의 **단일 소스** (세104 N27 · core 순수 규칙 파일 — `SR`·`ring_power` 형제).
+##  같은 부채꼴을 두 축이 쓴다: 지금은 적이 *"내가 보이나"*를, 다음(N30 몬스터 인지)엔
+##  적이 *"플레이어가 나에게 보이나"*를 같은 함수로 묻는다. 각자 짜면 한쪽만 고쳐도 아무도 모른다.
+## ⚠ **수치는 반드시 인자로 넘겨라** — 그 파일 머리말이 「인자를 줄이지 마라」의 이유를 적어 뒀다
+##  (static 함수 안의 `const BAL.프로퍼티`는 컴파일 타임에 굳어 뮤테이션이 무효가 된다).
+const Vision := preload("res://src/core/vision.gd")
+
 ## 🔴 히트 플래시 셰이더 (세63 설계 §A) — modulate 곱셈(어두운 픽셀이 안 하얘짐) 대신 mix-to-white.
 ## Shader **리소스** 공유는 안전 — 인스턴스마다 갈라야 하는 건 uniform을 쥔 ShaderMaterial 쪽이다
 ## (`_ready`가 per-instance 생성. 공유하면 한 마리의 플래시가 전원 플래시다).
@@ -60,6 +67,13 @@ const ManaBurst := preload("res://src/actors/mana_burst.gd")
 @onready var _visual: AnimatedSprite2D = $Visual
 ## 🔴 세99 — 맞는 몸(히트박스). 씬 기본 반경은 9.0이고 `params.hitbox_radius`가 덮는다(`_apply_hitbox`).
 @onready var _shape: CollisionShape2D = $Collision
+
+## 🔴🔴 발밑 그림자 **손잡이** (세104 · `vision_design.md` §5-2 ⑨). `_attach_shadow`가 담는다.
+##  그전엔 지역 변수로 만들고 참조를 안 남겨서, 그림자를 끄고 싶어도 **잡을 방법이 없었다**
+##  (`shadow.gd` 머리말이 *"어떤 그룹에도 가입하지 않는다"*고 못 박아 그룹으로도 못 찾는다).
+## 🔴 **`get_node`나 자식 인덱스 0으로 찾지 마라** — `move_child(shadow, 0)`이 지금은 0번이지만
+##  트리 순서는 연출이 만지는 자리다(그러면 어느 날 조용히 엉뚱한 노드를 흐린다).
+var _shadow: Sprite2D = null
 
 ## 🔴 피격 손맛 (세션 38 · 세63 개편) — 넉백/플래시/스쿼시 **연출값**. 밸런스가 아니라 느낌값이라
 ## 여기 const (projectile 물리 여유 const 선례). 사용자가 직접 때려 보며 조인다.
@@ -134,6 +148,26 @@ const CHARGE_BAND_MIN_FILL := 0.06  ## 채움의 최소 길이 비율 — 0이�
 ## 부유(hover) 분산 상태 — mist. 분산 중엔 받는 피해가 준다(take_hit) + 반투명(때리기 나쁨이 보인다).
 var _disperse_timer: float = 0.0
 var _dispersed: bool = false
+## 분산 중 알파 **연출값**(밸런스 아님 — `POP_SEC`·`GUST_RING_*` 선례). 그물 = `test_enemy_ai_auto [3b]`.
+const DISPERSED_ALPHA := 0.4
+
+## 🔴 시야 알파 축 (세104 N27) — 1.0 = 보인다 · 0.0 = 기척만 남는다. `_alpha_now()`가 분산과 **곱한다**.
+##  ⚠ **여기에 대입하는 곳은 `_update_vision` 하나다** — 다른 데서 만지면 페이드가 튄다.
+var _vision_alpha: float = 1.0
+## 🔴 이번 프레임의 **판정 결과**(캐시). 공개 리더 = `is_seen()`.
+##  ⚠ **알파와 각자 계산하지 마라** — `_vision_alpha`는 이 값의 **페이드**여야 한다.
+##   둘이 따로 판정하면 그물이 보는 것과 화면이 보이는 것이 갈려 세85 *"검증 도구가 거짓말한다"*가 된다.
+var _seen: bool = true
+## 🔴 **무대에 오른 적은 숨지 않는다** (`params.always_visible` · 설계 §4-3) — 지금 켠 건 **보스 셋**이다.
+##  ⚠ **네임드에는 켜지 마라 — 반대다.** 네임드는 「잡몹 중 무서운 것」이라 **숨는 게 정체성**이고,
+##   주변시(220)보다 큰 aggro(280)로 **등 뒤 60px를 일부러 받는다**(§4-1-b 사용자 확정).
+##   켜는 순간 네임드가 바탕 종보다 **순해진다**(설계 V6).
+var _always_visible: bool = false
+
+## 🔴 시야 페이드·숨김 알파 = **연출값**이라 balance가 아니라 여기 const다(설계 §4가 그렇게 갈랐다 —
+##  balance엔 **난이도를 직접 바꾸는 셋**(각도·사거리·주변시)만 있다).
+const VISION_FADE_SEC := 0.18     ## 딱 끊으면 경계에서 깜빡인다. 나무 비침(0.45s)보다 빠르게 — 적은 움직인다
+const VISION_HIDDEN_ALPHA := 0.0  ## 🔴 반투명이면 「가려졌다」가 아니라 **「흐린 적」**이 된다(사용자 확정 ⓓ *"안 보이게"*)
 
 ## 🔴 뱀 보스(boss_snake) 전용 상태 (세션 A). charge 변수를 재사용하지 않는다 — 두 AI가 섞이면
 ## 조용히 깨진다(설계 A-5). 위브 추격 → 텔레그래프 러시 → 회복 → 다시 위브.
@@ -186,6 +220,9 @@ func _ready() -> void:
 		push_warning("EnemyDef '%s'를 못 찾았다 (data/enemies/ 확인) — 기본값으로 선다" % enemy_id)
 	_hp = _def.hp if _def != null else 10.0
 	_ai = str(_def.params.get("ai", "chase")) if _def != null else "chase"
+	# 🔴 기본 false — 키가 없는 적은 **숨는다**(잡몹·네임드). 켜는 건 `.tres` 한 줄이고
+	#  지금 켜져 있는 곳은 `data/chapters/*.tres`의 `boss_enemy_id` 셋뿐이다(그물이 데이터로 대조한다).
+	_always_visible = bool(_def.params.get("always_visible", false)) if _def != null else false
 	# 분산 주기를 처음 채워 둔다 — 곧장 분산으로 튀지 않게(첫 토글은 한 주기 뒤).
 	_disperse_timer = _param("disperse_period", 2.5)
 	# gale 쿨도 한 주기 채워 시작한다 — 조우 즉시 돌풍/연사가 터지지 않게 (disperse_timer 선례).
@@ -350,6 +387,8 @@ func _frame_side() -> float:
 ## 🔴 발밑 그림자 자동 부착 (세63 설계 §D) — 루트 scale의 자식이라 `params.size`(=덩치)를 공짜로
 ## 추종한다. 크기·오프셋은 idle 첫 프레임의 한 변에서 근사(연출 시작값 — 사용자 튜닝).
 ## z는 **0 유지 + move_child(…, 0)** — 음수 z는 Ground(z0) 뒤로 숨는다(세54 마디 실증).
+## 🔴 세104: **참조를 `_shadow`에 남긴다** — 시야가 몸을 지울 때 그림자도 같이 꺼야 하기 때문이다.
+##  몸이 없는데 발밑 타원만 떠 있으면 **위치가 그대로 새 나간다**(설계 V3).
 func _attach_shadow() -> void:
 	var side := _frame_side()
 	var shadow: Sprite2D = ShadowScript.new()
@@ -357,6 +396,8 @@ func _attach_shadow() -> void:
 	shadow.position = Vector2(0.0, side * SHADOW_OFFSET_FRAC)
 	add_child(shadow)
 	move_child(shadow, 0)
+	_shadow = shadow
+	_refresh_alpha()   # 이미 흐린 상태로 태어난 적(시야 밖 스폰)의 그림자를 첫 프레임부터 맞춘다
 
 
 ## 🔴 행동을 `params.ai`로 가른다 (기본 "chase" = 현행). 각 갈래가 `velocity`(추격 의지)를 세우면
@@ -371,6 +412,15 @@ func _physics_process(delta: float) -> void:
 		return  # DoT로 죽었다 — 이 프레임엔 더 움직이지 않는다(queue_free는 프레임 끝에 반영된다)
 	_regen(delta)
 	var player := _player()
+	# 🔴🔴 **시야 갱신은 여기다 — 아래 조기 return 「앞」이다**(설계 V12).
+	#  `_physics_process` 끝에 두면 `player == null` 분기에 먹혀 **적이 마지막 알파에 굳는다**
+	#  (씬 전환 사이 · 플레이어 사망 후 · 테스트 리그가 전부 그 경로다 — 에러는 0이다).
+	#  그 경로의 값은 **「보인다」**로 흐른다(fail-open — `_judge_seen` 머리말).
+	_update_vision(player, delta)
+	# 🔴🔴 **발견 판정도 조기 return 「앞」이다 — 시야와 정확히 같은 이유다**(설계 V12).
+	#  뒤에 두면 `player == null` 경로에서 안 돌아 **추격 플래그가 참인 채로 굳는다** ⇒ 씬 전환·
+	#  플레이어 사망 뒤 다시 만났을 때 그게 **「새 발견」으로 안 읽혀 느낌표가 영영 안 뜬다**(에러 0).
+	_update_alert(player)
 	if player == null:
 		velocity = Vector2.ZERO
 		_apply_move(delta)
@@ -399,7 +449,14 @@ func _physics_process(delta: float) -> void:
 ## 🔴 **감속은 여기 한 곳에만** 곱한다 (세션49) — AI 3종(추격·돌진·부유)이 전부 이 통로를 지나므로
 ## 한 줄이 전부를 먹는다. 갈래마다 곱하면 새 AI를 넣을 때 조용히 빠진다.
 ## ⚠ 넉백에는 안 곱한다 — 넉백은 손맛(연출)이지 이동 의지가 아니다.
+##
+## 🔴🔴 **세104: 「보는 쪽」도 여기서 나온다 — 감속을 여기서만 곱하는 것과 정확히 같은 이유다.**
+##  갈래마다 부르면 새 AI를 넣을 때 **조용히 빠진다**(늑대만 뒤집히고 새 적은 안 뒤집힌다).
 func _apply_move(delta: float) -> void:
+	# 🔴 **감속·넉백을 얹기 「전」 값이다** — 이건 「이동 의지」이지 실제 변위가 아니다:
+	#  ⓐ 진흙에 묶여 느려진 늑대도 **가려던 쪽**을 봐야 하고(감속을 곱한 뒤면 데드존에 먹혀 굳는다)
+	#  ⓑ 맞아서 밀린다고 **뒤로 돌아보면 안 된다**(넉백을 더한 뒤면 맞을 때마다 고개가 홱 돈다).
+	_update_facing(velocity)
 	velocity *= _status.move_mult()
 	velocity += _knockback
 	move_and_slide()
@@ -692,6 +749,166 @@ func _show_gust_ring(on: bool) -> void:
 		_gale_ring.visible = on
 
 
+## 🔴🔴 **느낌표(!) — 「나를 못 보는 동안 나를 발견한 적」의 유일한 기척** (세104 · 사용자 요청
+##  *"지금 내 시야에 없을 때 나를 발견하면 느낌표가 뜨게"*).
+##
+## 🔴🔴 **왜 이게 필요한가 — 실측이 설계의 전제를 뒤집었다.** `vision_design`은
+##  *"「기척」 = 이미 화면에 있는 것들이다. 새 표현을 만들지 않는다 — 돌진의 **바닥 예고**와
+##  **돌풍 링**이 그 자리를 이미 채운다"*라고 적어 뒀는데, **그 장면이 구조적으로 안 나온다**:
+##
+##  | | 예고가 켜지는 거리(`charge_trigger_range`) | 주변시(`vision_near_radius`) |
+##  |---|---|---|
+##  | `hound` | **120** | 220 |
+##  | `hound_alpha` | **160** | 220 |
+##
+##  예고는 **주변시보다 한참 안쪽**에서 켜진다 ⇒ **예고가 뜰 땐 적이 이미 보인다.**
+##  「몸은 없고 빨간 띠만」은 한 번도 안 일어난다(보스는 `always_visible`이라 애초에 무관).
+##  ⇒ **시야 밖 적은 지금 완전히 투명하고, 이 느낌표가 유일한 통보다.** 은은하게 만들지 마라.
+##
+## 🔴🔴 **뜨는 창은 「aggro − 주변시」다** — 지금 실질적으로 뜨는 건 **네임드뿐**이다:
+##  바탕 늑대는 `aggro 220 = 주변시 220`이라 **발견하는 순간 이미 보여** 창이 0이고,
+##  `hound_alpha`만 `aggro 280`이라 **220~280 구간**에서 뜬다(설계 §4-1-b가 *"등 뒤 60px"*로
+##  일부러 만든 그 차이다). ⚠ **그러니 누가 주변시나 aggro를 조이면 이 기능이 조용히 사라지거나
+##  남발된다** — 그때 이 주석을 보고 의도를 알아채라.
+## 🔴 **「우두머리냐」로 분기하지 않는다 — `_seen`만 본다.** 그래야 수치를 조이는 날
+##  바탕 늑대에게도 **저절로** 켜진다(종을 하드코딩하면 그날 아무 일도 안 일어난다).
+##
+## 🔴 **도형이 맞다** (takbon-rules §0 도형 금지의 예외): 느낌표는 생명체·프롭의 **겉모습**이 아니라
+##  **신호**다 — 돌풍 링·돌진 예고와 같은 「그림」이고 도트로 그릴 물건이 아니다.
+##  ⚠ 실게임에서 어색하면 답은 코드가 아니라 **`takbon-art`의 스프라이트**다(리포트에 적었다).
+##
+## 🔴🔴 **`_visual`의 「형제」여야 한다 — 자식으로 달지 마라.** 자식으로 달면 시야 알파
+##  (`_refresh_alpha`가 `_visual.modulate.a`에 0을 찍는다)에 물려 **몸이 안 보일 때 느낌표도 같이
+##  사라진다** = 이 기능이 통째로 무의미해진다(에러 0 · 다른 그물은 전부 그린).
+##  `_gale_ring`이 정확히 같은 자리에 있고 `test_vision_auto [6]`이 그 계약의 유일한 검출자다.
+##  ✅ 형제라서 **좌우 반전(`_update_facing`)에도 안 딸려 간다** — 반전은 `_visual`에만 건다.
+## ✅ 대신 **적의 자식이라 수명이 공짜다** — 적이 죽으면 같이 죽는다(`_charge_band`가 씬 소유로
+##  옮기며 치른 그 대가가 여기엔 없다).
+const AlertMarkName := &"AlertMark"
+
+## 느낌표 **연출값** (밸런스 아님 — `GUST_RING_*`·`CHARGE_BAND_*` 선례).
+## 🔴 색은 파생원이 없다 — 룬 색도 상태 색도 아닌 **적의 신호**라 TAKBON 60에서 직접 고른다
+##  (`GUST_RING_COLOR`·`CHARGE_BAND_*`가 같은 자리다. `VFX_SPEC` §1의 「자기 색 테이블 금지」는
+##  **원소·상태** VFX에 대한 규칙이다).
+## 🔴 **`F2CB3F` 쨍한 노랑 + `2E1F18` 따뜻한 최암부 윤곽** — 밝은 낮 풀밭(`#4A9E38`) 위에서
+##  가장 멀리 읽히는 짝이다. ⚠ **알파를 낮추지 마라**: 세99 실측이 *"붉은색을 옅게 깔면 초록과
+##  상쇄돼 갈색이 된다"*를 픽셀로 증명했다 — 신호는 **불투명해야** 신호다.
+## ⚠ 돌진 예고의 붉은 램프와 **일부러 다른 색**이다: 붉은 띠는 *"여기 맞는다"*, 느낌표는
+##  *"저기서 나를 봤다"* — 같은 색이면 두 신호가 섞인다.
+const ALERT_FILL := Color(0.949, 0.796, 0.247, 1.0)     ## F2CB3F
+const ALERT_EDGE := Color(0.180, 0.122, 0.094, 1.0)     ## 2E1F18
+const ALERT_EDGE_GROW := 1.3        ## 윤곽이 채움 밖으로 나오는 두께(px)
+const ALERT_ABOVE_FRAC := 0.95      ## 머리 위 높이 = 프레임 한 변 × 이 값 (`_frame_side` 파생)
+const ALERT_POP_FROM := 0.35        ## 튀어나오는 시작 배율
+const ALERT_POP_SEC := 0.10         ## 튀어나오는 시간
+const ALERT_HOLD_SEC := 0.55        ## 만빛으로 머무는 시간
+const ALERT_FADE_SEC := 0.25        ## 사라지는 시간 (총 0.90s)
+const ALERT_RISE_PX := 5.0          ## 사라지며 떠오르는 거리
+
+## 지금 이 몸이 플레이어를 **쫓고 있나**(직전 틱). 느낌표는 이 값의 **false→true 전이**에서만 뜬다 —
+## 매 프레임 조건으로 띄우면 추격 내내 계속 떠 있어 통보가 아니라 장식이 된다.
+var _pursuing: bool = false
+var _alert_mark: Node2D = null
+var _alert_tween: Tween = null
+
+
+## 🔴 발견 전이를 판정한다. **이 함수가 「발견」의 유일한 정의다** — 인지(N30)가 들어오면
+##  아래 `now` 한 줄을 **인지 상태(PATROL→ALERT/CHASE 전이)**로 갈아끼우면 되고 나머지는 무변경이다.
+##
+## 🔴🔴 **`aggro_range`를 읽는 일곱째 자리다.** 설계 `enemy_perception_design.md` §8-1-c가 여섯을
+##  열거해 뒀다(`_ai_chase`·`_ai_charge` APPROACH·`_ai_hover`·`_ai_boss_snake`·`_ai_boss_gale` ×2).
+##  인지가 그 키를 **`sight_range`로 이름 승계**할 때 **여기도 같이** 바꿔라 — 안 그러면 느낌표만
+##  옛 키를 읽어 조용히 안 뜬다.
+## 🔴 **폴백은 0.0 — 「없으면 중립」이다.** 여기에 220 같은 값을 적으면 그게 특정 `.tres`의
+##  **일곱 번째 사본**이 되어, 데이터가 죽어도 느낌표만 멀쩡히 떠서 죽음을 가려 준다(세84 `_param_req`의 교훈).
+##  키가 없는 몸은 추격 개념이 없으니 안 뜨는 게 맞다.
+## ⚠ 제곱으로 비교해 매 틱 sqrt를 안 쓴다(적 수 × 60Hz라 공짜가 아니다).
+func _update_alert(player: Node2D) -> void:
+	var range_px := _param("aggro_range", 0.0)
+	var now := player != null and range_px > 0.0 \
+		and global_position.distance_squared_to(player.global_position) <= range_px * range_px
+	# 🔴 **전이 + 안 보일 때만.** 보이는 적까지 띄우면 화면이 시끄러워지고, 무엇보다
+	#  「안 보이는 것을 알린다」는 이 기능의 뜻 자체가 사라진다.
+	if now and not _pursuing and not _seen:
+		_show_alert_mark()
+	_pursuing = now
+
+
+## 느낌표를 띄운다 — 지연 생성(`_gale_ring` 선례: 한 번도 안 뜬 적은 노드가 아예 없다) 뒤 재사용.
+## 🔴 **트윈을 갈아치울 때 이전 것을 죽인다** — 어그로 경계에서 들락날락하면 두 트윈이 같은
+##  `scale`·`modulate`를 서로 다른 목표로 끌어 값이 튄다(`_pop`의 「마지막 승리」와 같은 규약을
+##  명시적으로 건 것이다 — 여기선 `visible = false` 콜백이 있어 늦게 끝난 옛 트윈이 **새로 뜬
+##  느낌표를 꺼 버린다**).
+func _show_alert_mark() -> void:
+	if _alert_mark == null:
+		_alert_mark = _build_alert_mark()
+		add_child(_alert_mark)     # 🔴 `self`의 자식 = `_visual`의 **형제** (머리말)
+	if _alert_tween != null and _alert_tween.is_valid():
+		_alert_tween.kill()
+	var top := -_frame_side() * ALERT_ABOVE_FRAC
+	_alert_mark.position = Vector2(0.0, top)
+	_alert_mark.scale = Vector2(ALERT_POP_FROM, ALERT_POP_FROM)
+	_alert_mark.modulate.a = 1.0
+	_alert_mark.visible = true
+	var tw := create_tween()
+	tw.tween_property(_alert_mark, "scale", Vector2.ONE, ALERT_POP_SEC) \
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_interval(ALERT_HOLD_SEC)
+	tw.tween_property(_alert_mark, "modulate:a", 0.0, ALERT_FADE_SEC)
+	tw.parallel().tween_property(_alert_mark, "position:y", top - ALERT_RISE_PX, ALERT_FADE_SEC)
+	tw.tween_callback(func() -> void:
+		if _alert_mark != null and is_instance_valid(_alert_mark):
+			_alert_mark.visible = false)
+	_alert_tween = tw
+
+
+## 느낌표 도형 — 채움(노랑) 아래에 **부풀린 윤곽**(최암부)을 깐다. 순서 = 윤곽 먼저, 채움 나중.
+## ⚠ 크기는 **루트 배율(`params.size`)을 그대로 탄다 — 일부러다.** `_charge_band`가 역스케일을
+##  거는 이유는 그쪽이 **월드 px 판정과 짝**이라 부풀면 그림이 거짓말을 하기 때문인데, 느낌표엔
+##  그런 짝이 없다. 큰 짐승이 크게 외치는 쪽이 오히려 읽힌다.
+func _build_alert_mark() -> Node2D:
+	var mark := Node2D.new()
+	mark.name = AlertMarkName
+	mark.z_index = 45   # 🔴 양수 명시 — 세54에 음수 z 마디가 Ground(z0) 뒤로 숨었다(`_show_gust_ring` 선례)
+	var stem := PackedVector2Array([
+		Vector2(-2.3, -7.0), Vector2(2.3, -7.0), Vector2(1.5, 1.5), Vector2(-1.5, 1.5)])
+	var dot := PackedVector2Array([
+		Vector2(-1.8, 3.2), Vector2(1.8, 3.2), Vector2(1.8, 6.8), Vector2(-1.8, 6.8)])
+	for pts: PackedVector2Array in [stem, dot]:
+		mark.add_child(_alert_poly(_grown(pts, ALERT_EDGE_GROW), ALERT_EDGE))
+	for pts: PackedVector2Array in [stem, dot]:
+		mark.add_child(_alert_poly(pts, ALERT_FILL))
+	return mark
+
+
+func _alert_poly(pts: PackedVector2Array, color: Color) -> Polygon2D:
+	var p := Polygon2D.new()
+	p.polygon = pts
+	p.color = color
+	return p
+
+
+## 볼록 다각형을 무게중심에서 바깥으로 `grow`px 밀어 윤곽을 만든다 — 도형이 넷뿐이라
+## 진짜 오프셋 폴리곤 대신 이 근사로 충분하다(윤곽은 읽히기만 하면 된다).
+func _grown(pts: PackedVector2Array, grow: float) -> PackedVector2Array:
+	var c := Vector2.ZERO
+	for p: Vector2 in pts:
+		c += p
+	c /= float(maxi(pts.size(), 1))
+	var out := PackedVector2Array()
+	for p: Vector2 in pts:
+		var d := p - c
+		out.append(p + (d.normalized() * grow if d.length() > 0.001 else Vector2.ZERO))
+	return out
+
+
+## 🔴 공개 관측점 — 지금 느낌표가 떠 있나 (`charge_band_visible()`·`is_seen()` 선례).
+## ⚠ **노드의 `visible`을 그대로 읽는다** — 내부 타이머를 돌려주면 트윈이 통째로 죽어도
+##  그물이 옳은 값을 본다(세85 「검증 도구가 거짓말한다」).
+func alert_mark_visible() -> bool:
+	return _alert_mark != null and is_instance_valid(_alert_mark) and _alert_mark.visible
+
+
 ## 🔴🔴 돌진 예고 **바닥 범위** (세99 · 설계 §5-D) — 윈드업 동안만 뜬다. **절차적 VFX라 도형이 맞다**
 ## (takbon-rules §0 예외 — 예고는 생명체·프롭이 아니라 「빛·가이드선」이다. `_show_gust_ring` 선례).
 ## 지연 생성이라 charge가 아닌 적은 노드 자체가 없다.
@@ -869,10 +1086,100 @@ func charge_band_reach() -> Vector2:
 
 ## 🔴 머리만 회전 — `_visual.rotation`(설계 A-6). boss_snake 분기에서만 부른다(다른 AI 무영향).
 ## 스프라이트/플레이스홀더는 진행 방향 +x 기준이라 각도를 그대로 준다.
+## ⚠ **좌우 반전(`_update_facing`)과 한 몸에서 같이 못 산다** — 아래 `_uses_rotation_facing` 참조.
 func _face(dir: Vector2) -> void:
 	if _visual == null or dir.length_squared() < 0.0001:
 		return
 	_visual.rotation = dir.angle()
+
+
+## 🔴🔴 **좌우 반전 — 「보는 쪽」의 시각 갈래** (세104 · 설계 `enemy_perception_design.md` §4).
+##  늑대가 왼쪽으로 가면 왼쪽을, 오른쪽으로 가면 오른쪽을 본다.
+##
+## 🔴 **방향을 정하는 자리는 이 함수 하나다.** 지금 입력은 「이동 의지」(`_apply_move`가 넘긴다)지만,
+##  인지(N30)가 들어오면 **인자만** 상태가 정한 「보는 쪽」으로 갈아끼우면 된다(순찰/경계/추격이
+##  `turn_rate`로 감속해 만든 방향). **부르는 자리를 늘리지 마라** — 그 순간 갈아끼울 자리가 둘이 된다.
+##
+## 🔴🔴 **`_visual`에만 건다 — 루트에 `scale.x = -1`을 걸지 마라.** 루트를 뒤집으면
+##  그림자(`_shadow`)·돌풍 링(`_gale_ring`)이 **자식이라 같이 뒤집히고**, `Collision`까지 좌우가
+##  바뀌어 **판정이 에러 0으로 어긋난다**(셋 다 `_visual`의 형제다). 그물 = `test_enemy_facing_auto [4]`.
+##  ⚠ 돌진 예고(`_charge_band`)는 **씬 소유**라 어느 쪽이든 안 따라오지만, 그건 우연이 아니라
+##   `_show_charge_band` 머리말의 계약이다 — 반전을 이유로 그 소유를 되돌리지 마라.
+##
+## 🔴🔴 **부호는 원본 시트가 어느 쪽을 보나가 정한다.** `hound.png`·`hound_alpha.png` 첫 프레임을
+##  8배로 확대해 확인했다 — **둘 다 머리가 오른쪽**이다(늑대는 빨간 눈·귀가 오른쪽, 우두머리는
+##  벌린 주둥이·이빨이 오른쪽 · 꼬리는 둘 다 왼쪽). ⇒ `flip_h = false`가 **오른쪽**이고,
+##  플레이어(`player.gd _apply_anim`)와 **부호가 같다.**
+##
+## 🔴🔴 **세104에 이 상수가 한 번 반대로 들어갔다 — 그 경위를 남긴다(같은 실수가 쉽다).**
+##  초안은 *"둘 다 머리가 왼쪽"*이라 적고 `true`를 넣었다. 그 결과 **늑대가 늘 뒷걸음질로 달렸는데
+##  전 스위트가 45/45 그린이었다** — 그물의 기대치를 **같은 오독 위에** 세웠기 때문이다
+##  (memory `takbon-verify-tools-can-lie` — 「그물이 틀린 것을 굳힌다」의 교과서적 사례).
+##  🔴 **잡은 것은 헤드리스가 아니라 실게임 스샷이다.** 플레이어 좌우에 늑대를 놓고 쫓게 해
+##  찍은 뒤 파이썬으로 확대해 보니 둘 다 가는 쪽의 **반대**를 보고 있었다.
+##
+## 🔴🔴 **그래서 이 상수는 이제 그물이 PNG를 열어 픽셀로 검산한다** — `test_enemy_facing_auto [7]`.
+##  ⇒ **아트가 시트를 좌우 반대로 다시 그리는 날 그 줄이 빨개진다.** 사람의 눈이 유일한 근거인
+##   상태로 두지 않는다(그게 이번 사고의 뿌리였다).
+##
+## ⚠ **지표를 셋 시도해 셋째만 섰다 — 앞의 둘로 되돌리지 마라**(둘 다 실측으로 실패했다):
+##   ⓐ 불투명 픽셀 **무게중심**: `hound`가 **−1.8**(왼쪽)로 나온다. 달리는 자세라 뒷다리·꼬리
+##     면적이 커서 머리와 **반대로** 끌린다. **부호가 틀린 지표다.**
+##   ⓑ **상단 25% 띠 중심**(「머리는 위에 있다」): `hound`는 +17.6으로 잘 서는데 `hound_alpha`가
+##     **−0.6**이다. 등이 넓고 고개를 숙인 자세라 상단이 등으로 채워진다. **종마다 안 선다.**
+##   ⓒ ⭕ **가장 붉은 화소의 x**(= 얼굴): 몸은 갈색·검정 저채도인데 **얼굴만 붉다**. `hound` **+22.0** ·
+##     `hound_alpha` **+20.0**(둘 다 최붉은 화소가 정확히 `CF573C` — 눈·벌린 주둥이) · 16프레임 부호 일치.
+##   ⇒ 자세는 종마다 다르지만 **「얼굴만 붉다」는 자세와 무관**하다. 그게 ⓐⓑ와 갈린 이유다.
+##
+## 🔴🔴 **단, ⓒ도 「전 종에 서는 지표」는 아니다 — 그래서 그물이 목록을 안 박고 「서는지」를 재서
+##  파생시킨다**: `slime_elite` +0.0 · `gale` +0.5(부호도 갈린다)라 **스스로 빠진다.**
+##  ✅ **그게 맞다 — 지표가 서는 몸과 반전이 뜻을 갖는 몸이 정확히 일치한다**: 구슬·블롭은 얼굴이
+##  없어 반전이 화면상 무변화고, 뱀은 회전 몸이라 애초에 반전 대상이 아니다(`_uses_rotation_facing`).
+##  ⇒ **지표가 못 서는 몸은 지킬 방향 계약도 없다.** 지표가 통째로 무너지면 그물의 `judged >= 2`가
+##  빨개져 **「지표를 다시 골라라」를 사람에게 알린다**(자명 통과로 조용히 죽지 않는다).
+## ⚠ 그래도 **최종 판단은 사람이다** — 그물이 빨개지면 시트를 확대해 보고, 방향이 실제로 바뀌었으면
+##  이 상수를, 몸통에 붉은 것이 생겨 지표가 흔들린 것이면 **그물의 지표를** 고쳐라.
+## ⚠ 앞으로 올 시트가 왼쪽을 보면 이 상수를 몸마다 가르지 말고 **시트를 뒤집어 그려라** —
+##   부호가 몸마다 갈리면 읽는 자리가 둘이 되고, 그게 이 리포가 반복해 밟은 T5다.
+const SPRITE_FACES_LEFT := false
+
+## 🔴 반전 데드존(px/s) — 거의 수직으로만 움직일 때 `vx`가 0 근처에서 떨려 스프라이트가 **파르르
+##  뒤집히는** 것을 막는다(플레이어 `AIM_FLIP_DEADZONE`과 같은 수법). **연출값이라 balance가 아니다.**
+## ⚠ **px/s이지 비율이 아니다** — 플레이어의 0.15는 **정규화된 조준 벡터**라 곧 각도였지만 여기 입력은
+##  속도다. 비율로 바꾸면 거의 멈춘 몸의 미세 속도가 정규화되며 **최대 크기 방향**이 되어 멈춘 적이
+##  뒤집힌다. px/s는 「느리면 안 뒤집는다」쪽으로 안전하게 무너진다(가장 느린 실적 = 45px/s).
+## 🔴 **돌진 윈드업은 이 값에 안 얹혀 있다** — 윈드업은 `velocity = ZERO`라 애초에 문턱을 못 넘어
+##  마지막 방향에 **고정된다**. 설계 §4의 *"윈드업 동안 보는 쪽을 고정"*이 공짜로 성립하는 자리다.
+const FACING_FLIP_DEADZONE := 12.0
+
+func _update_facing(dir: Vector2) -> void:
+	if _visual == null or _uses_rotation_facing():
+		return
+	if absf(dir.x) <= FACING_FLIP_DEADZONE:
+		return   # 🔴 데드존 = 「안 바꾼다」 — 마지막 방향을 그대로 둔다(멈추면 보던 쪽에 굳는다)
+	_visual.flip_h = (dir.x < 0.0) != SPRITE_FACES_LEFT
+
+
+## 🔴 **회전으로 방향을 내는 몸** — 지금은 뱀 보스뿐이다(`_face`가 `_visual.rotation`을 돌린다).
+##  거기에 `flip_h`를 겹치면 **회전된 스프라이트를 로컬 x축으로 거울질**해서 머리가 진행 방향의
+##  **정반대**(θ → θ+180°)를 가리킨다. 설계 §4-b의 *"`_face`를 재사용하지 마라 — 늑대가 눕는다"*와
+##  **같은 사실의 뒷면**이다: 회전과 반전은 한 몸에서 같이 못 산다.
+## ⚠ **판별이 「보스면 제외」가 아니다** — `gale`·`slime_elite`는 회전을 안 쓰므로 **반전한다**
+##  (둘 다 좌우 대칭 스프라이트라 지금 화면상 변화는 없다. 실측 확인함). 기준을 「보스」로 적으면
+##  앞으로 올 **비대칭 보스가 조용히 굳는다.**
+func _uses_rotation_facing() -> bool:
+	return _ai == "boss_snake"
+
+
+## 🔴 공개 관측점 — 지금 몸이 향한 쪽(-1 왼쪽 · +1 오른쪽 · 0 = 몸이 없다). `hp()`·`is_seen()` 선례.
+## ⚠ **`flip_h`에서 되읽는다 — 내부 변수를 돌려주지 마라.** 되돌려 주면 대입이 통째로 죽어도 그물이
+##  옳은 값을 봐서 **거짓 그린**이 된다(`hitbox_radius()`가 형상에서 읽는 이유와 같다 —
+##  세85 「검증 도구가 거짓말한다」).
+## ⚠ 회전으로 방향을 내는 몸(뱀)에겐 **뜻이 없다** — 그쪽은 `_visual.rotation`이 방향이다.
+func facing_x() -> float:
+	if _visual == null:
+		return 0.0
+	return -1.0 if (_visual.flip_h != SPRITE_FACES_LEFT) else 1.0
 
 
 ## 🔴🔴 **돌진이 닿는 자리 — 판정과 그림이 여기 한 곳에서 나온다** (세99).
@@ -1052,12 +1359,96 @@ func _status_tint() -> Color:
 ##  한 톨도 안 달라지고, 상태가 풀리면 `tint_of`가 흰색이라 몸 색조가 저절로 되돌아온다.
 ##  ⚠ 대입(`_base_tint`를 여기서 안 곱하고 `_apply_look`에서 modulate에 직접 쓰는 것)으로 바꾸면
 ##  **첫 상태이상 한 번에 몸 색조가 영영 지워진다**(에러 0) — 그게 이 곱셈의 존재 이유다.
+##
+## 🔴🔴 **세104: `a`도 파생이 됐다 — 두 함수가 같은 진실원(`_alpha_now`)을 본다.**
+##  그전엔 이 줄이 `c.a = _visual.modulate.a`로 **화면에서 되읽고** 있었다. 그러면 알파 대입자와
+##  이 함수가 **서로의 결과를 주고받는 왕복**이 되어 순서 의존·부동소수 드리프트가 들어온다.
+##  이제 rgb·a **양쪽이 다 파생**이라 세63 계약이 *"두 함수가 같은 진실원을 본다"*로 강화됐다.
 func _refresh_tint() -> void:
 	if _visual == null:
 		return
 	var c := _status_tint() * _base_tint
-	c.a = _visual.modulate.a
+	c.a = _alpha_now()
 	_visual.modulate = c
+
+
+## 🔴🔴 **알파의 유일한 진실원 — 「곱하는 자리를 하나로」** (세104 · `vision_design.md` §5-2).
+##
+## 알파 축에 주인이 둘이 됐다: **분산**(안개가 흩어지면 반투명)과 **시야**(안 보이는 적은 사라진다).
+## 각자 `modulate.a`에 대입하면 세63 소유권 계약이 **3파전**이 되고 — 안개가 분산했다 풀리는 순간
+## `a = 1.0`을 찍어 **시야 밖인데 다시 보인다**(에러 0 · 전 스위트 그린). 세63이 rgb에 쓴 수법
+## (`_status_tint() * _base_tint`)을 알파에 그대로 옮겨 **곱셈 한 줄**로 합쳤다.
+## ⇒ 축을 하나 더 얹고 싶으면 **여기 곱을 늘려라. `modulate.a`에 직접 대입하지 마라.**
+func _alpha_now() -> float:
+	return (DISPERSED_ALPHA if _dispersed else 1.0) * _vision_alpha
+
+
+## 🔴 **`modulate.a`에 대입하는 유일한 함수** (위 `_alpha_now` 머리말). 축을 바꾼 쪽이 이걸 부른다.
+##
+## 🔴🔴 **알파를 거는 노드는 `_visual`과 그림자 둘이다 — 루트에 걸지 마라**(설계 V2).
+##  *"루트에 걸면 그림자도 자식이니 공짜"*가 가장 자연스러운 손인데, 그 한 줄이
+##  **돌풍 링(`_gale_ring`)을 같이 죽인다** — 링은 `_visual`의 **형제**(적의 자식)라서다.
+##  설계 §3 표가 *"공격 예고는 시야 밖에서도 보인다"*를 계약으로 선언해 뒀으므로
+##  **아무도 의심하지 않는다.** 그물 = `test_vision_auto`의 돌풍 링 항목(그 사고의 유일한 검출자).
+## ⚠ 그림자 자신의 반투명은 **텍스처 그라디언트 안**에 있지 modulate에 없다(`shadow.gd`) — 충돌 없음.
+##
+## ⚠ **허수아비(`dummy_target.gd`)는 이 구조를 일부러 안 따라간다**: 분산도 시야도 없어 알파 축이
+##  상수 1.0이다. 파리티 계약(세56 「두 몸」)은 **셰이더 플래시·틴트 rgb**에 대한 것이고
+##  알파 축은 두 몸이 원래 다르다 — 파리티를 이유로 허수아비에 이 함수를 옮겨 심지 마라.
+func _refresh_alpha() -> void:
+	var a := _alpha_now()
+	if _visual != null:
+		_visual.modulate.a = a
+	if _shadow != null and is_instance_valid(_shadow):
+		_shadow.modulate.a = a
+
+
+## 🔴🔴 **시야 — 「보이는 적」과 「기척만 남은 적」** (세104 N27 · 정본 `vision_design.md`).
+##
+## 플레이어가 보는 쪽(부채꼴)과 몸 둘레(주변시) **밖**에 있으면 몸과 그림자가 사라지고
+## **공격 예고만 남는다** — 그게 「기척」이다(사용자 확정 ⓓ *"몬스터는 공격범위나 이런 기척만"*).
+##
+## 🔴🔴 **보이는 것만 바꾼다 — 전투는 한 톨도 안 바꾼다**(설계 V5, **의도다**):
+##  알파 0인 적도 **맞고·때리고·밀린다.** 이걸 「버그」로 보고 충돌·접촉 피해를 끄는 순간
+##  전투가 통째로 갈린다. 여기서 손대는 건 `modulate.a` 하나뿐인 이유가 그것이다.
+##
+## ⚠ **「그룹 `enemies`를 훑어 판정」하는 구현으로 되돌리지 마라**(설계 V11) — 마을 허수아비도
+##  그 그룹이라 **연습장 표적 5개가 시야 밖에서 사라진다.** 지금 마을이 무사한 이유는
+##  「이 코드가 `forest_enemy`에 살고 마을엔 그 인스턴스가 없다」는 것 하나다.
+func _update_vision(player: Node2D, delta: float) -> void:
+	_seen = _judge_seen(player)
+	var target := 1.0 if _seen else VISION_HIDDEN_ALPHA
+	if VISION_FADE_SEC <= 0.0:
+		_vision_alpha = target
+	else:
+		_vision_alpha = move_toward(_vision_alpha, target, delta / VISION_FADE_SEC)
+	_refresh_alpha()
+
+
+## 🔴 **판정 불가면 「보인다」** (fail-open · 설계 §5-1 A4 — 취향이 아니라 계약이다).
+##  *"알 수 없으니 숨긴다"*는 **안 보여야 할 이유가 없는 적을 지우는** 최악의 실패 형태고,
+##  기존 그물 둘(`test_feel_auto` [3]·[10])이 `modulate == Color(1,1,1,1)` 완전 일치를 단언한다
+##  — 그 리그의 플레이어는 `vision_dir()`이 없는 **맨몸 스텁**이라 이 경로로 산다.
+## ⚠ **`player.get_node("Caster").aim()`으로 타고 들어가지 마라** — 그건 진짜 노드 경로 결합이고
+##  takbon-rules §0 위반이다. 덕타이핑(`has_method` + `call`)만이 이 계약이다.
+func _judge_seen(player: Node2D) -> bool:
+	if _always_visible or player == null:
+		return true
+	if not player.has_method(&"vision_dir"):
+		return true
+	var aim: Vector2 = player.call(&"vision_dir")
+	# 🔴 수치는 **밖에서 주입**한다 — `Vision`은 static이라 안에서 balance를 읽으면 컴파일 타임에
+	#  굳어 그물의 뮤테이션이 무효가 된다(그 파일 머리말 · memory `godot-const-resource-folding`).
+	return Vision.is_seen(player.global_position, aim, global_position,
+		BAL.vision_fan_deg, BAL.vision_fan_range, BAL.vision_near_radius)
+
+
+## 🔴 공개 관측점 — 지금 이 적이 플레이어 눈에 보이나 (`hp()`·`phase()`·`charge_band_visible()` 선례).
+## 🔴🔴 **라이브도 이 문을 지난다**: `juice.gd`가 피해 숫자를 띄우기 전에 덕타이핑으로 이걸 묻는다
+##  (안 보이는 적의 숫자가 뜨면 **위치와 체력이 통째로 샌다** — 그림자를 끄는 이유와 같은 사고).
+##  ⇒ 그물과 화면이 **같은 함수**를 본다.
+func is_seen() -> bool:
+	return _seen
 
 
 ## 돌진 텔레그래프 — 윈드업 동안 붉게 달아오른다(모으는 중이 보인다 → 피할 수 있다).
@@ -1075,10 +1466,10 @@ func _set_telegraph(on: bool) -> void:
 
 
 ## 분산 표시 — 분산 중엔 반투명(지금은 때리기 나쁨이 보인다). 경감 자체는 take_hit이 적용한다.
+## 🔴 세104: **자기 축만 갱신하고 대입은 `_refresh_alpha`에 맡긴다**(3파전 방지 — 위 머리말).
 func _set_dispersed(on: bool) -> void:
 	_dispersed = on
-	if _visual != null:
-		_visual.modulate.a = 0.4 if on else 1.0
+	_refresh_alpha()
 
 
 ## 🔴 그룹 `"player"`가 유일한 조준 경로다 (player.gd가 `_ready`에서 넣는다).

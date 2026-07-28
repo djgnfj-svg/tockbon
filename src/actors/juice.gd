@@ -73,11 +73,23 @@ func _add_trauma(amount: float) -> void:
 	_trauma = clampf(_trauma + amount, 0.0, 1.0)
 
 
+## 🔴🔴 **안 보이는 적의 피해 숫자는 안 띄운다** (세104 N27 · 설계 V9).
+##  안 막으면 시야 밖 적의 **위치와 체력이 통째로 샌다** — 그림자를 끄는 이유와 **한 글자도 다르지
+##  않은 사고**인데 **모듈이 달라(여기) 눈에 안 띈다.**
+## 🔴 **트라우마·히트스톱은 그대로 간다 — 건너뛰지 마라.** 그건 「내가 때렸다」의 손맛이라
+##  적이 보이든 말든 **내 행동의 반응**이다. 같이 막으면 *"맞은 건가?"*가 되어 더 나쁘다.
 func _on_enemy_hit(enemy: Node2D, damage: float, _rune: int) -> void:
-	if is_instance_valid(enemy):
+	if is_instance_valid(enemy) and _is_seen(enemy):
 		_spawn_number(enemy.global_position, damage, damage >= BIG_HIT)
 	_add_trauma(TRAUMA_HIT)
 	_hitstop(HITSTOP_HIT)
+
+
+## 🔴 덕타이핑이라 **`is_seen()`이 없는 몸은 늘 보인다**(fail-open) — 연습장 허수아비가 그 경로다
+## (`dummy_target`엔 시야가 없다). 머리말의 *"EventBus만 본다"* 계약을 안 깬다:
+## preload도 get_node도 없고, 시그널에 이미 실려 온 노드에 **묻기만** 한다.
+func _is_seen(enemy: Node2D) -> bool:
+	return not enemy.has_method(&"is_seen") or bool(enemy.call(&"is_seen"))
 
 
 func _on_enemy_died(_id: StringName) -> void:

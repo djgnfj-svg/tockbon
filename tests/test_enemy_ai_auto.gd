@@ -64,6 +64,7 @@ func _run() -> void:
 	await _test_armor_reduces_damage()
 	await _test_regen_heals_and_caps()
 	await _test_dispersed_reduces_damage()
+	await _test_dispersed_alpha_round_trip()
 	await _test_leash_stops_far_pursuit()
 	await _test_leash_keeps_boss_machinery()
 	await _test_anim_fps_from_data()
@@ -146,6 +147,88 @@ func _test_dispersed_reduces_damage() -> void:
 	e.free()
 	stub.free()
 	# ⚠ [4]가 같은 몸을 이어 쓴다 — 여기선 안 걷고 [4] 끝에서 걷는다.
+
+
+## [3b] 🔴🔴 **분산 = 반투명 — 알파가 왕복한다** (세104 · `vision_design.md` §8 단계 1a).
+##
+## 왜 [3] 옆에 새로 생겼나: 세103까지 이 리포에 **`modulate.a`를 재는 그물이 0건**이었다.
+##  분산을 재는 유일한 그물이 [3]인데 그건 **피해 경감**으로 재서, 반투명 표시가 통째로 죽어도
+##  전 스위트가 그린이다. 시야(N27)가 알파를 **곱해 쓰기 시작하면** 그 자리는
+##  `_visual.modulate`의 **3파전**이 되고(세63 소유권 계약: rgb=틴트 · a=분산),
+##  안개의 분산과 시야가 서로를 덮어써도 **에러가 0**이다.
+##
+## 🔴 **이 항목은 시야를 얹기 「전에」 초록이어야 한다** — 그래야 알파 대입을 한 함수로 모으는
+##  리팩터가 「동작 무변경」임을 증명한다(증명 없는 리팩터를 막는 유일한 자리).
+##
+## 🔴 **여기(시야 그물이 아니라 AI 그물)에 둔 이유**: 재는 대상이 **분산**이지 시야가 아니다.
+##  시야가 언젠가 은퇴해도 「분산하면 반투명해진다」는 계약은 남아야 하고, 분산 기계
+##  (`_inject_hover` 선례·hover 갈래)가 이미 이 파일에 산다. 시야 쪽 그물
+##  (`test_vision_auto`의 **분산 × 시야 네 조합**)은 **곱셈**을 재는 별개 항목이다.
+##
+## 🔴 왕복(1.0 → 0.4 → 1.0)까지 재는 이유: 한 방향만 재면 **분산이 켜진 뒤 영영 안 풀려도** 그린이다.
+## ⚠ 되돌아온 값은 **정확히 1.0**이어야 한다 — `< 1.0`으로 물러나면 「거의 다 돌아왔다」가 통과해
+##  곱셈이 잘못 엮여 알파가 조금씩 새는 고장을 놓친다.
+## ⚠ 0.4는 **연출값**이라 손으로 든 기대치다(`test_landmark_road_auto`가 타일 상수를 손으로 드는 관행).
+##  사용자가 이 값을 조이면 이 줄을 같이 고쳐라 — 느슨하게 바꾸지는 마라(검출력이 0이 된다).
+const ALPHA_PROBE := &"ai_probe_alpha"
+const DISPERSED_ALPHA_EXPECT := 0.4
+## 주기를 짧게 준다 — [3]의 2.5초(150프레임)로 왕복까지 보려면 300프레임을 기다려야 한다.
+const ALPHA_PROBE_PERIOD := 1.0
+
+func _test_dispersed_alpha_round_trip() -> void:
+	print("[3b] 🔴 분산 알파 왕복 — 1.0 → %.1f → 1.0 (modulate.a를 재는 유일한 그물)" % DISPERSED_ALPHA_EXPECT)
+	# 🔴 **맨몸 Node2D 스텁**이다 — `vision_dir()`이 없어 시야가 fail-open으로 흐른다.
+	#  즉 여기서 보는 알파는 **분산 축 하나**뿐이다(시야를 얹은 뒤에도 이 항목의 의미가 안 변한다).
+	var stub := Node2D.new()
+	stub.add_to_group("player")
+	stub.global_position = Vector2(5000, 0)   # 멀리 — 접촉 피해 없이 hover 타이머만 돌게
+	root.add_child(stub)
+
+	_inject(ALPHA_PROBE, 20.0, {
+		"ai": "hover",
+		"aggro_range": 200.0,
+		"attack_range": 30.0,
+		"disperse_period": ALPHA_PROBE_PERIOD,
+		"dispersed_resist": 0.35,
+		"hover_max": 95.0,
+		"hover_min": 55.0,
+		"move_speed": 70.0,
+	})
+	var e = await _spawn(ALPHA_PROBE)
+	var vis := e.get_node_or_null(^"Visual") as CanvasItem
+	if vis == null:
+		_check(false, "Visual 노드를 찾았다 (구조가 바뀌면 이 그물이 죽는다)")
+		e.free()
+		stub.free()
+		_drop(ALPHA_PROBE)
+		return
+
+	# ① 스폰 직후 = 아직 분산 전 (`_disperse_timer`가 한 주기 채워져 있다 — `_ready`).
+	_check(is_equal_approx(vis.modulate.a, 1.0),
+		"① 평시 알파 = 1.0 (실제 %.3f)" % vis.modulate.a)
+
+	# ② 한 주기(60프레임)를 넘긴다 → 분산. 15프레임 여유를 둬 경계에 안 걸린다.
+	for i in 75:
+		await physics_frame
+	_check(is_equal_approx(vis.modulate.a, DISPERSED_ALPHA_EXPECT),
+		"② 분산 중 알파 = %.1f (실제 %.3f — 1.0이면 반투명 표시가 통째로 죽은 것)"
+			% [DISPERSED_ALPHA_EXPECT, vis.modulate.a])
+
+	# ③ 또 한 주기 → 분산이 풀린다. **정확히 1.0으로** 돌아와야 한다.
+	for i in 60:
+		await physics_frame
+	_check(is_equal_approx(vis.modulate.a, 1.0),
+		"③ 분산이 풀리면 알파가 정확히 1.0으로 돌아온다 (실제 %.3f — 새면 곱셈이 어긋난 것)"
+			% vis.modulate.a)
+
+	# 🔴 rgb 축은 **한 톨도 안 달라진다** — 알파를 만지는 코드가 틴트를 덮으면 여기가 빨개진다
+	#  (세63 소유권 계약의 나머지 절반. `_refresh_alpha`가 `modulate` 통째로 대입하면 그 사고다).
+	_check(Color(vis.modulate.r, vis.modulate.g, vis.modulate.b).is_equal_approx(Color.WHITE),
+		"🔴 알파 축을 만져도 rgb(상태 틴트)는 흰색 그대로다 (실제 %s)" % vis.modulate)
+
+	e.free()
+	stub.free()
+	_drop(ALPHA_PROBE)
 
 
 ## [4] 🔴🔴 leash — `aggro_range` 밖이면 자기 자리를 지킨다 (세88 사냥 흐름 §2-A-2-b).

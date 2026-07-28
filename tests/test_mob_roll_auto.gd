@@ -431,9 +431,9 @@ func _test_named_looks_different() -> void:
 		_restore_all()
 		return
 	# 🔴 바탕은 **한 톨도 안 달라져야 한다** — `params.tint`가 없는 적 여덟의 회귀 0 실증.
-	_check(base_vis.modulate.is_equal_approx(Color.WHITE),
+	_check(_rgb(base_vis.modulate).is_equal_approx(Color.WHITE),
 		"🔴 `tint`가 없는 잡몹의 몸 색조는 흰색 그대로다 = 기존 적 회귀 0 (실제 %s)" % base_vis.modulate)
-	_check(not named_vis.modulate.is_equal_approx(Color.WHITE),
+	_check(not _rgb(named_vis.modulate).is_equal_approx(Color.WHITE),
 		"🔴 주입한 `tint`가 화면까지 닿는다 = 손잡이가 살아 있다 (실제 %s)" % named_vis.modulate)
 
 	# 🔴🔴 세103 신설 — **계약은 「네임드가 바탕과 다르게 보인다」**이지 「tint가 걸렸다」가 아니다.
@@ -455,7 +455,7 @@ func _test_named_looks_different() -> void:
 	named_node.take_hit(1.0, 0, Enums.Status.BURN, 3.0)
 	await process_frame
 	var after: Color = named_vis.modulate
-	_check(not after.is_equal_approx(Color.WHITE),
+	_check(not _rgb(after).is_equal_approx(Color.WHITE),
 		"🔴🔴 상태이상 틴트가 들어와도 몸 색조가 안 지워진다 (%s → %s — 흰색이면 대입으로 덮인 것)"
 			% [before, after])
 	# 🔴 주입 원상복구 — 안 되돌리면 뒤 항목·뒤 테스트가 오염된다(`_save`/`_restore_all`과 같은 이유).
@@ -468,6 +468,25 @@ func _test_named_looks_different() -> void:
 
 
 # ── 헬퍼 ──
+
+## 🔴🔴 **알파를 뺀 rgb만 본다** (세104 N27 · `vision_design.md` §5-1 정정).
+##
+## 세103까지 위 셋은 `modulate`를 **통째로** `Color.WHITE`와 비교했다. 시야가 들어오면서
+## **알파가 두 번째 주인을 얻자** 그 비교가 깨졌다 — 이 리그는 **진짜 `boss_room.tscn` + 진짜
+## `player.tscn`**을 쓰므로 플레이어가 `vision_dir()`을 **가지고**, 늑대는 남쪽 입구에서
+## 부채꼴 밖이라 알파가 0으로 **페이드한다**(실측: 첫 단언에서 0.81 — 페이드 도중 값이라
+## 실행마다 다르다). ⇒ **알파를 포함한 비교는 이 그물의 관심사가 아닌 축에 물려 있었다.**
+##
+## 🔴 **셋을 다 좁혀야 한다 — 첫 줄만 고치면 나머지 둘이 자명 통과가 된다.**
+##  `not ...is_equal_approx(WHITE)` 형태 둘은 **알파가 1이 아니기만 해도 참**이 되어,
+##  `tint`가 화면에 안 닿아도(= 손잡이가 죽어도) 초록이다. 그게 이 그물의 실제 검출력이
+##  **시야 때문에 조용히 0이 되는** 자리였다(세85 *"검증 도구가 거짓말한다"*의 새 판).
+##
+## ⚠ 알파 축을 재는 그물은 따로 있다 — 분산은 `test_enemy_ai_auto [3b]` · 시야는 `test_vision_auto`.
+##  **여기서 알파를 다시 재려 하지 마라**(이 파일의 관심사는 굴림과 생김새다).
+func _rgb(c: Color) -> Color:
+	return Color(c.r, c.g, c.b)
+
 
 ## 🔴 주입 전 원본을 통째로 저장한다 — `Db.get_chapter`는 **공유 리소스**를 돌려주므로
 ##  안 되돌리면 뒤 항목·뒤 테스트가 오염된다(test_dungeon_schema [2] 선례).

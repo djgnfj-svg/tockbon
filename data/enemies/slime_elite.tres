@@ -18,6 +18,7 @@ has_counter = false
 params = {
 "anim_fps": 6.0,
 "aggro_range": 200.0,
+"always_visible": true,
 "sprite": "res://assets/sprites/enemies/slime_elite.png",
 "attack_cooldown": 0.9,
 "attack_range": 26.0,
