@@ -8,9 +8,7 @@ extends SceneTree
 ##
 ## 🔴 여기서 헤드리스가 **실제로 잡는** 것:
 ##   • [1] 판정(`src/core/vision.gd`)은 **순수 static이라 직접 호출해 표로** 잰다
-##         — 🔴 세105에 **차폐**(나무·큰 바위가 시선을 끊는다)가 이 표에 붙었다.
-##           **가장 중요한 줄 = [차폐3]**(*"주변시 안이면 엄폐물이 정면에 있어도 보인다"*) —
-##           그 순서가 뒤집히면 **나무 뒤에서 달려오는 늑대가 코앞까지 안 보인다**(설계 O1).
+##         — ⚠ 세105에 붙었던 **차폐 표**는 세107에 은퇴했다(그 자리 주석 참조).
 ##   • [2] 🔴 **데이터 불변식** — 바탕 종은 「쫓으면 보인다」가 보장되고 네임드만 등 뒤를 받는다.
 ##         **리터럴 220을 박지 않는다**(balance에서 읽는다) — 잡몹을 늘리는 날 여기가 빨개진다
 ##   • [3] 🔴 **보스 전원이 `always_visible`인가** — 챕터의 `boss_enemy_id`를 **데이터에서 모아** 잰다
@@ -23,6 +21,8 @@ extends SceneTree
 ##         그런데 피해 숫자는 안 뜬다. **양성 대조**(보이면 뜬다)를 같이 둬야 자명 통과가 아니다
 ##   • [10] 폴백(V10) — `vision_dir()`이 없는 몸이면 **보인다**(fail-open)
 ##   • [11] 🔴 **갱신 자리**(V12) — 플레이어가 사라져도 적이 **마지막 알파에 굳지 않는다**
+##   • [12] 🔴🔴 **차폐 은퇴(세107)의 재발 감지** — 엄폐물이 시선 한가운데 있어도 **보인다**.
+##         은퇴를 선언 없이 두면 죽은 몸이 살아있는 그물을 갖는다(T2). 짝 = `test_perception_auto [15]`.
 ##
 ## ⚠ **못 잡는 것 = 「긴장되나」 그 자체**(이 작업의 성공 기준인데 헤드리스도 스샷도 못 잰다):
 ##  120°/560/220이 답답한가 · 경계에서 깜빡이나(0.18s) · **예고만 뜨는 게 「저기 뭔가 있다」로
@@ -105,6 +105,7 @@ func _run() -> void:
 	await _test_physics_intact_numbers_blocked()
 	await _test_fail_open()
 	await _test_no_player_does_not_freeze()
+	await _test_occluder_does_not_block()
 
 	if failures == 0:
 		print("TEST_VISION_OK — 전 항목 통과")
@@ -175,80 +176,9 @@ func _test_judgement_table() -> void:
 	_check(not _vision.is_seen(o, aim, Vector2.LEFT * (rng + 200.0), 360.0, rng, near),
 		"🔴 360°여도 **사거리 밖은 안 보인다** (전방위 가드가 거리 판정을 안 삼킨다)")
 
-	# ══ 🔴🔴 차폐 — 나무·큰 바위가 시선을 끊는다 (세105 · 정본 `vision_occlusion_design.md` §7) ══
-	#
-	# 🔴 `occluders`는 **`(x, y, r)`의 배열이고 `z`가 반경**이다 — **3D 좌표가 아니다**(그 파일 서명).
-	# 🔴 **반경도 balance에서 파생시킨다.** 리터럴 34를 박으면 사용자가 주변시·사거리를 조이는 날
-	#  엄폐물이 시선보다 커져(끝점을 삼켜) 이 표가 **통째로 자명 통과**로 무너진다. 실제 반경(34/26)은
-	#  `boss_room.PROP_TABLE`이 쥐고 **여기서 재는 것은 수학과 순서**다(그 짝은 `test_perception_auto [15]`).
-	# ⚠ **이 표는 ⓪(`forest_enemy._detects`의 360° 우회)을 못 잡는다** — 그건 호출자 쪽 코드라
-	#  순수 함수를 아무리 흔들어도 안 걸린다. 그 검출자는 라이브([15]ⓑ)다.
-	var far_t := Vector2(mid, 0.0)                 # 정면 · 주변시 밖 · 사거리 안
-	var br := mid * 0.2                            # 엄폐물 반경 — 시선 길이에서 파생한다
-	var on_line := PackedVector3Array([Vector3(mid * 0.5, 0.0, br)])
-	_check(not _vision.is_seen(o, aim, far_t, deg, rng, near, on_line),
-		"🔴 [차폐1] 시선 한가운데 엄폐물 → **안 보인다**")
-	_check(_vision.is_seen(o, aim, far_t, deg, rng, near),
-		"🔴 [차폐1'] 같은 자리인데 목록이 비면 보인다 = 위 빨강의 원인이 **차폐**다 (양성 대조)")
-
-	# [2] 비켜 있으면 보인다 — **반경 바로 밖**이다(여유(epsilon)를 넣으면 여기가 빨개진다).
-	var off_line := PackedVector3Array([Vector3(mid * 0.5, br + 4.0, br)])
-	_check(_vision.is_seen(o, aim, far_t, deg, rng, near, off_line),
-		"🔴 [차폐2] 엄폐물이 반경 **바로 밖**으로 비켜 있으면 보인다")
-
-	# [3] 🔴🔴 **이 설계에서 가장 중요한 한 줄** — 주변시가 차폐보다 **위**다(설계 §2-3 ① · O1).
-	#  내리면 **나무 뒤에서 달려오는 늑대가 코앞까지 안 보이고**, `vision_design` §4-1이 막으려던
-	#  *"안 보이는 데서 맞았다"*가 에러 0으로 돌아온다.
-	var near_t := Vector2(near * 0.6, 0.0)
-	var near_blk := PackedVector3Array([Vector3(near * 0.3, 0.0, near * 0.1)])
-	_check(_vision.is_seen(o, aim, near_t, deg, rng, near, near_blk),
-		"🔴🔴 [차폐3] **주변시 안이면 엄폐물이 정면에 있어도 보인다** = 주변시가 차폐보다 먼저다 (O1)")
-	# 🔴 짝 — **같은 모양인데 주변시 밖**이면 막혀야 한다. 없으면 [3]이 「차폐가 아예 안 돈다」와 안 갈린다.
-	var just_out := Vector2(near * 1.4, 0.0)
-	var out_blk := PackedVector3Array([Vector3(near * 0.7, 0.0, near * 0.1)])
-	_check(not _vision.is_seen(o, aim, just_out, deg, rng, near, out_blk),
-		"🔴 [차폐3'] 같은 모양이라도 주변시 **밖**이면 막힌다 ([3]이 자명 통과가 아니다)")
-
-	# [4] 선분이지 직선이 아니다 — 대상보다 **멀거나** 내 **뒤**에 있는 원은 안 막는다(t를 [0,1]로 clamp).
-	_check(_vision.is_seen(o, aim, far_t, deg, rng, near,
-			PackedVector3Array([Vector3(mid + br * 2.0, 0.0, br)])),
-		"🔴 [차폐4] 엄폐물이 **대상보다 멀리** 있으면 안 막는다 (직선으로 재면 빨개진다)")
-	_check(_vision.is_seen(o, aim, far_t, deg, rng, near,
-			PackedVector3Array([Vector3(-br * 2.0, 0.0, br)])),
-		"🔴 [차폐4'] 엄폐물이 **내 뒤**에 있어도 안 막는다 (clamp의 반대쪽 끝)")
-
-	# [5] 🔴 끝점이 원 안이면 통과(O6) — **양쪽 다** 봐야 한다. 한쪽만 걸러내면 나머지가 빨개진다.
-	_check(_vision.is_seen(o, aim, far_t, deg, rng, near,
-			PackedVector3Array([Vector3(br * 0.5, 0.0, br)])),
-		"🔴 [차폐5] 내가 나무를 **껴안고** 있으면 그 나무는 안 막는다 (origin이 원 안)")
-	_check(_vision.is_seen(o, aim, far_t, deg, rng, near,
-			PackedVector3Array([Vector3(mid - br * 0.5, 0.0, br)])),
-		"🔴 [차폐5'] 적이 나무 **밑동에 서 있어도** 보인다 (target이 원 안 — 안 보면 「나무 옆 적은 영영 안 보인다」)")
-
-	# [6] 회귀 0 — 빈 배열은 **인자를 안 넘긴 것과 완전히 같다**. 여러 자리에서 한꺼번에 대조한다.
-	var regress: Array[Vector2] = [
-		far_t,
-		Vector2(0.0, near - 20.0),
-		Vector2(-(near + 200.0), 0.0),
-		Vector2.RIGHT.rotated(deg_to_rad(half + 4.0)) * mid,
-		Vector2.RIGHT.rotated(deg_to_rad(half - 4.0)) * mid,
-	]
-	var same := true
-	for t: Vector2 in regress:
-		if _vision.is_seen(o, aim, t, deg, rng, near) \
-				!= _vision.is_seen(o, aim, t, deg, rng, near, PackedVector3Array()):
-			same = false
-	_check(same, "🔴 [차폐6] 빈 배열 = 인자를 안 넘긴 것과 **완전히 같다** (회귀 0 · %d자리 대조)" % regress.size())
-	_check(_vision.is_seen(o, aim, far_t, deg, rng, near,
-			PackedVector3Array([Vector3(mid * 0.5, 0.0, 0.0)])),
-		"🔴 [차폐6'] **반경 0인 엄폐물은 안 막는다** = `PROP_TABLE`의 `occlude: 0`(수풀·잔돌)이 뜻대로 돈다")
-
-	# [7] 🔴 전방위여도 차폐는 받는다 — `fan_deg >= 360` 가드가 차폐를 **삼키면** 빨개진다(설계 §2-3 ④).
-	_check(not _vision.is_seen(o, aim, far_t, 360.0, rng, near, on_line),
-		"🔴 [차폐7] **전방위(360°)여도 차폐는 받는다** (전방위 가드가 `_blocked`를 삼키면 빨개진다)")
-	_check(not _vision.is_seen(o, aim, far_back, 360.0, rng, near,
-			PackedVector3Array([Vector3(far_back.x * 0.5, 0.0, br)])),
-		"🔴 [차폐7'] 360°면 보이던 **정확히 등 뒤**도 엄폐물이 끼면 안 보인다")
+	# ⚠ **세107: 여기 있던 차폐 표(7묶음)가 은퇴했다** — `is_seen`이 일곱째 인자로 엄폐물을 받던
+	#  시절의 표다. 지금 서명은 **6인자**라 이 순수 함수로는 차폐 재발을 못 잰다 ⇒ 재발 감지는
+	#  **라이브**로 옮겼다: [12](내가 적을 보나) + `test_perception_auto [15]`(적이 나를 보나).
 
 
 ## [2] 🔴🔴 **데이터 불변식 — 세105에 기준이 옮겨갔다** (§4-1 → 아래).
@@ -258,6 +188,8 @@ func _test_judgement_table() -> void:
 ##  (*"주변시 줄여줘 내가 볼때 나무가 걸리면 그 뒤방향이 안보여야하는데"*).
 ##  **차폐와 주변시가 서로를 갉기 때문이다**: 주변시는 **차폐 면제**라 크면 나무 뒤도 보여서
 ##  차폐가 통째로 무의미해진다(`balance_data.gd`의 그 값 주석 · `vision_occlusion_design` §2-3 ①).
+## ⚠ **세107: 그 전제(차폐)가 은퇴했는데 주변시 110은 그대로 두기로 사용자가 확정했다** ⇒
+##  옛 보장은 **여전히 죽어 있고** 그 자리를 표시(`?`/`!`)가 **혼자** 맡는다(`src/core/vision.gd` 머리말).
 ##
 ## ⇒ **이제 「안 보이는 채로 쫓기는 구간」이 정상이다.** `hound`의 220 > 주변시 110.
 ## 🔴 **그 자리를 「몸이 보인다」가 아니라 「표시가 뜬다」가 맡는다** — 정보 채널이 옮겨간 것이지
@@ -730,6 +662,58 @@ func _test_no_player_does_not_freeze() -> void:
 			% (vis.modulate.a if vis != null else -1.0))
 
 	e.free()
+	_drop(&"vis_probe_still")
+
+
+## [12] 🔴🔴 **차폐 은퇴(세107)의 재발 감지 — 엄폐물이 시선 한가운데 있어도 보인다.**
+##
+## 사용자 확정(*"구지 나무나 돌맹이에 시야가 가려지지 않도록"*)으로 세105의 차폐를 통째로 걷었다.
+## 🔴 **은퇴를 그냥 지우고 끝내면 안 된다**(takbon-rules T2 — *"죽은 몸이 살아있는 그물을 갖는다"*):
+##  누가 판정·셰이더를 되살려도 **전 스위트가 초록**이다. 이 항목이 그때 빨개진다.
+##
+## 🔴 **순수 함수로는 못 잰다** — `is_seen`이 이제 **6인자**라 엄폐물을 넘길 자리 자체가 없다.
+##  그래서 **라이브**로 잰다: 세105의 프롭이 달고 있던 **`occluders` 그룹 + `occlude_r` meta**를
+##  그대로 단 노드를 시선 한가운데 세우고, 적이 여전히 보이나를 본다.
+##  ⚠ **한계**: 되살리는 사람이 *다른* 키를 쓰면 못 잡는다(그때는 화면으로 드러난다).
+## 🔴 **음성 대조를 같이 둔다** — 같은 판에서 **각도만** 틀면 안 보여야 한다.
+##  없으면 *"판정이 아예 안 돌아 늘 보인다"*와 구분이 안 돼 자명 통과가 된다.
+## ⚠ 이 그물의 엄폐물은 **맨몸 `Node2D`**다 — 재는 건 판정이지 그림이 아니다.
+func _test_occluder_does_not_block() -> void:
+	print("[12] 🔴🔴 차폐 은퇴(세107) — 엄폐물이 시선 한가운데 있어도 적이 보인다 (재발 감지)")
+	var near: float = _gs.balance.vision_near_radius
+	var rng: float = _gs.balance.vision_fan_range
+	var mid := (near + rng) * 0.5      # 주변시 **밖** · 부채꼴 사거리 **안** = 각도가 답을 낸다
+
+	var stub := VisionStub.new()
+	stub.aim_dir = Vector2.RIGHT
+	stub.global_position = Vector2.ZERO
+	stub.add_to_group("player")
+	root.add_child(stub)
+
+	# ⚠ 은퇴한 키다 — `boss_room`에 더는 없어서 그 파일에서 못 읽는다(그래서 여기 손으로 든다).
+	var occ := Node2D.new()
+	root.add_child(occ)
+	occ.global_position = Vector2(mid * 0.5, 0.0)   # 시선 딱 한가운데
+	occ.add_to_group(&"occluders")
+	occ.set_meta(&"occlude_r", mid * 0.2)
+
+	var e = await _spawn(&"vis_probe_still", Vector2(mid, 0.0))
+	await _frames(SETTLE_FRAMES)
+	var vis := e.get_node_or_null(^"Visual") as CanvasItem
+	_check(e.is_seen(),
+		"🔴🔴 엄폐물이 정면 한가운데 있어도 **보인다** (안 보이면 차폐가 되살아난 것 — 판정·셰이더·그물을 같이 봐라)")
+	_check(vis != null and is_equal_approx(vis.modulate.a, 1.0),
+		"🔴 몸 알파도 1.0 그대로다 (실제 %.3f)" % (vis.modulate.a if vis != null else -1.0))
+
+	# 🔴 **음성 대조** — 같은 판에서 조준만 틀면 안 보인다 = 시야가 실제로 돌고 있다.
+	stub.aim_dir = Vector2.LEFT
+	await _frames(SETTLE_FRAMES)
+	_check(not e.is_seen(),
+		"🔴 **음성 대조** — 조준을 반대로 틀면 안 보인다 (여기가 초록이어야 위가 자명 통과가 아니다)")
+
+	e.free()
+	occ.free()
+	stub.free()
 	_drop(&"vis_probe_still")
 
 

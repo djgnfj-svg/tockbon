@@ -9,8 +9,9 @@ extends SceneTree
 ## **«규칙을 어겨도 아무도 모른다»**가 된다 — 규칙식을 코드에 옮긴 순간 그물이 없으면 더 나빠진다.
 ##
 ## 🔴 여기서 헤드리스가 **실제로 잡는** 것 (규칙 이름은 `boss_room.gd` 머리말과 같다):
-##  [1] 프롭이 실제로 서고 **네 층이 다 있다** + 밀도(화면당 나무 수)
-##      🔴 「바닥 층위(덤불·잔돌)가 통째로 비어 기둥 밭」이 이 작업의 진단이었다 — 그 재발이 여기서 잡힌다
+##  [1] 프롭이 실제로 서고 **두 층이 다 있다**(나무·덤불) + 밀도(화면당 나무 수)
+##      🔴 「바닥 층위(덤불)가 통째로 비어 기둥 밭」이 세101의 진단이었다 — 그 재발이 여기서 잡힌다
+##      🔴 **세107: 바위 둘이 빠졌다** — 그 자리에 「바위가 0개다」를 넣어 재발을 잡는다(사용자 확정)
 ##  [2] ⓐ 잡몹·네임드·보스 스폰에서 떨어져 있다
 ##  [3] ⓑ 플레이어 스폰·**모든 탈출구**에서 떨어져 있다
 ##  [4] ⓒ 어귀·중간·깊은 대역에 고르다
@@ -31,6 +32,9 @@ extends SceneTree
 ## 첫 프레임 후 load()·/root 접근. 지역 변수는 의도적으로 동적 타입.
 
 ## 🔴 프롭 씬 경로 = **분류 축**이다(`scene_file_path`로 종류를 가른다 — 손으로 놓은 나무도 같이 걸린다).
+## ⚠ **세107: 바위 둘이 `boss_room.PROP_TABLE`에서 빠졌다**(사용자 *"맵에 바위도 없애줘볼래?"*).
+##  🔴 **씬·PNG는 남겨 뒀다** — 그래서 아래 상수·`ROAD_CLEAR`·`ANCHOR_TABLE`의 바위 줄도 남긴다
+##  (되살릴 때 씬 계약이 그대로 지켜져 있어야 한다). **놓이는지**는 [1]이 「0개」로 잰다.
 const TREE_SCENE := "res://src/props/tree.tscn"
 const ROCK_BIG_SCENE := "res://src/props/rock_big.tscn"
 const BUSH_SCENE := "res://src/props/bush.tscn"
@@ -64,9 +68,9 @@ const TREES_PER_SCREEN_MIN := 3.0
 const TREES_PER_SCREEN_MAX := 6.0
 ## 🔴🔴 **바닥 층위가 비면 이 작업이 통째로 무효다** — 세100까지 소비자가 **0곳**이던 층이다.
 ##  개수를 정확히 박지 않고 **하한만** 둔다(배치 격자를 조여도 거짓 빨강이 안 나게).
-const ROCK_BIG_MIN := 6
+## ⚠ **세107에 `ROCK_BIG_MIN`(6)·`ROCK_MIN`(24)이 은퇴했다** — 바위가 표에서 빠졌다.
+##  되살리면 그 둘도 같이 되살려라(안 그러면 「층이 비어도 아무도 모른다」로 돌아간다).
 const BUSH_MIN := 18
-const ROCK_MIN := 24
 
 ## 🔴 타일 소스 id·벌판 좌표는 **명시 상수로 박는다** — `boss_room`의 const에서 파생하면 둘 다 밀려도
 ##  통과한다. ⚠ `test_landmark_road_auto`·`test_extract_hold_auto`가 같은 값을 든다 —
@@ -138,22 +142,23 @@ func _cleanup() -> void:
 	root.get_node("/root/SaveManager").wipe_save()
 
 
-## [1] 🔴🔴 **네 층이 다 서 있고 밀도가 맞다** — 이 작업의 진단이 *"바닥 층위가 통째로 비어 기둥 밭"*이었다.
+## [1] 🔴🔴 **두 층이 다 서 있고 밀도가 맞다** (세107에 바위 둘이 빠져 나무·덤불만 남았다) —
+## 세101의 진단이 *"바닥 층위가 통째로 비어 기둥 밭"*이었다.
 ##
 ## 🔴 **개수를 먼저 찍는다**(`test_daylight_tree_auto`의 관행) — 프롭이 0개면 아래 [2]~[6]이
 ##  루프 0회로 **전부 자명 통과**하고, 「규칙을 지킨다」가 아니라 「잴 게 없다」가 초록으로 나온다.
 ## 🔴 밀도는 **방·뷰포트에서 파생**한다 — 화면 장수를 손으로 박으면 방을 또 키울 때 조용히 낡는다.
 func _test_layers_and_density(id: StringName) -> void:
-	print("[1] 🔴🔴 네 층이 다 서 있다 + 화면당 나무 수")
+	print("[1] 🔴🔴 두 층(나무·덤불)이 다 서 있다 + 화면당 나무 수 + 🔴 바위 0개(세107)")
 	var by_scene := _count_by_scene()
 	var total := 0
 	for k in by_scene:
 		total += int(by_scene[k])
 	_check(total > 0,
 		"%s: 🔴 방에 프롭이 %d개 있다 (0이면 아래 규칙 검사가 **전부 자명 통과**다)" % [id, total])
-	print("      나무 %d · 큰바위 %d · 덤불 %d · 잔돌 %d (합 %d)" % [
-		int(by_scene.get(TREE_SCENE, 0)), int(by_scene.get(ROCK_BIG_SCENE, 0)),
-		int(by_scene.get(BUSH_SCENE, 0)), int(by_scene.get(ROCK_SCENE, 0)), total])
+	print("      나무 %d · 덤불 %d · (바위 %d/%d) 합 %d" % [
+		int(by_scene.get(TREE_SCENE, 0)), int(by_scene.get(BUSH_SCENE, 0)),
+		int(by_scene.get(ROCK_BIG_SCENE, 0)), int(by_scene.get(ROCK_SCENE, 0)), total])
 
 	var screens := _screens()
 	_check(screens > 0.1, "%s: 방이 화면 %.1f장 크기다 (전제)" % [id, screens])
@@ -163,17 +168,19 @@ func _test_layers_and_density(id: StringName) -> void:
 		"%s: 🔴 화면당 나무 %.2f그루 (%.1f~%.1f — 세100은 중앙 8그루로 0.8이었다 = 「들판」)"
 			% [id, per, TREES_PER_SCREEN_MIN, TREES_PER_SCREEN_MAX])
 
-	# 🔴🔴 바닥 층위 — **여기가 이 세션의 심장이다.** `bush.png`·`rock.png`는 그려만 두고
-	#  게임 코드 소비자가 **0곳**이었고 `rock_big.png`는 놓을 씬조차 없었다.
-	_check(int(by_scene.get(ROCK_BIG_SCENE, 0)) >= ROCK_BIG_MIN,
-		"%s: 🔴 큰 바위가 %d개 이상 섰다 (실제 %d — 0이면 64px 층이 통째로 빈 것이다)"
-			% [id, ROCK_BIG_MIN, int(by_scene.get(ROCK_BIG_SCENE, 0))])
+	# 🔴 바닥 층위 — 세101의 진단(*"기둥 밭"*)이 여기서 잡힌다. `bush.png`는 그려만 두고
+	#  게임 코드 소비자가 **0곳**이던 층이다.
 	_check(int(by_scene.get(BUSH_SCENE, 0)) >= BUSH_MIN,
 		"%s: 🔴 덤불이 %d개 이상 섰다 (실제 %d — 42px 층)"
 			% [id, BUSH_MIN, int(by_scene.get(BUSH_SCENE, 0))])
-	_check(int(by_scene.get(ROCK_SCENE, 0)) >= ROCK_MIN,
-		"%s: 🔴 잔돌이 %d개 이상 섰다 (실제 %d — 18px 층 = 나무 사이를 메우는 칸)"
-			% [id, ROCK_MIN, int(by_scene.get(ROCK_SCENE, 0))])
+
+	# 🔴🔴 **세107 재발 감지 — 바위가 한 개도 안 선다**(사용자 *"맵에 바위도 없애줘볼래?"*).
+	#  씬·PNG를 남겨 뒀으므로 `PROP_TABLE`에 줄을 도로 넣기가 쉽다 ⇒ 그때 여기가 빨개진다
+	#  (takbon-rules T2 — 은퇴를 선언 없이 두면 아무도 못 알아챈다).
+	for gone: String in [ROCK_BIG_SCENE, ROCK_SCENE]:
+		_check(int(by_scene.get(gone, 0)) == 0,
+			"%s: 🔴 %s가 0개다 (실제 %d — 서 있으면 세107 결정이 되돌아온 것이다)"
+				% [id, gone.get_file(), int(by_scene.get(gone, 0))])
 
 	# 🔴 손으로 놓은 20그루가 **같은 목록에 들었나** — 안 들면 [2]~[6]이 그것들을 안 재고,
 	#  「손으로 놓은 것만 규칙 밖」이라는 구멍이 그대로 남는다.
@@ -344,6 +351,8 @@ func _test_landmark_is_clear(id: StringName) -> void:
 ## 🔴🔴 **감지 Area(「뒤로 가면 비친다」)도 0이다** — 바위는 화면 키 64px이라 플레이어(56px)를 거의
 ##  안 가려서 **아무 일도 안 하는 손잡이**가 된다(감사 T3 「거짓 손잡이」). 그 기능은 **나무만** 가진다.
 ##  ⚠ 그래서 나무는 이 항목에서 뺀다 — 나무의 Area 계약은 `test_daylight_tree_auto [5]`가 잰다.
+## ⚠ **세107: 바위 둘은 이제 방에 안 선다**(표에서 빠졌다) — 그런데 **씬은 남겨 뒀으므로** 여기서
+##  계약을 계속 잰다. 되살리는 날 접지·프레임이 이미 맞아 있어야 한다(안 재면 조용히 낡는다).
 func _test_prop_scene_contract() -> void:
 	print("[7] 프롭 씬 계약 — 물리 몸 0 · 감지 Area 0 · 원점 = 접지선")
 	for path in ANCHOR_TABLE:
@@ -443,7 +452,9 @@ func _test_rules_actually_run() -> void:
 	ch.landmarks.clear()
 	await _fresh_with_entrance(&"ch1", victim)
 	var near_gate := _nearest_prop_to(victim)
-	var road_free := not _footprint_hits_road(victim, float(ROAD_CLEAR[ROCK_SCENE]), _grid())
+	# ⚠ 세107에 바위가 빠져 `Props` 홀더에 남은 건 **덤불뿐**이다(나무는 `Trees`로 간다) —
+	#  `_victim_prop`이 그 홀더에서 고르므로 밑동 반폭도 덤불 것을 쓴다(옛 `ROCK_SCENE` 16.0 → 28.0).
+	var road_free := not _footprint_hits_road(victim, float(ROAD_CLEAR[BUSH_SCENE]), _grid())
 	ch.landmarks.assign(lm_before)   # 🔴 되돌리기가 먼저다 — 아래 _check이 무엇을 하든 새 나가지 않는다
 
 	_check(road_free,

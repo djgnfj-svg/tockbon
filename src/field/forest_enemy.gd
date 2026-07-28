@@ -176,29 +176,12 @@ const VISION_FADE_SEC := 0.18     ## 딱 끊으면 경계에서 깜빡인다. �
 const VISION_HIDDEN_ALPHA := 0.0  ## 🔴 반투명이면 「가려졌다」가 아니라 **「흐린 적」**이 된다(사용자 확정 ⓓ *"안 보이게"*)
 
 
-# ══ 시야 차폐 (세105 · 정본 `docs/takbon-design/vision_occlusion_design.md`) ══════
+# ══ 시야 차폐 — 🔴 **세107에 은퇴했다**(사용자 확정 *"구지 나무나 돌맹이에 시야가 가려지지 않도록"*) ══
 #
-# **나무와 큰 바위가 시선을 끊는다 — 나에게도, 짐승에게도. 다만 몸 둘레(주변시)는 안 끊는다.**
-
-## 🔴🔴 **방이 새기는 그 키다** — 정본은 `boss_room.OCCLUDER_GROUP`·`OCCLUDE_R_META`이고 여기 둘은
-##  **읽는 쪽의 사본**이다(방을 preload하면 `boss_room`이 이 씬을 preload하는 것과 맞물려 순환한다 —
-##  그 파일 `EnemyScene` 머리말의 *"forest_enemy는 boss_room을 안 문다"*가 그 계약이다).
-## 🔴 **이름이 갈리면 차폐가 통째로 no-op이 되고 에러가 0이다** — 그래서 그물
-##  (`test_perception_auto [15]`)이 **방의 상수를 읽어** 노드를 만든다. 어느 쪽을 바꿔도 빨개진다.
-const OCCLUDER_GROUP := &"occluders"
-const OCCLUDE_R_META := &"occlude_r"
-
-## 🔴🔴 이 몸이 아는 엄폐물 — **`(x, y, r)`의 배열이고 `z`가 반경이다**(3D 좌표가 아니다 · `vision.gd` 서명).
-##
-## 🔴 **`_ready`에서 한 번만 굽는다**(설계 §3-2 · O4). 매 프레임 `get_nodes_in_group()`을 부르면
-##  적 10마리가 각자 48개를 다시 모은다 — N30 §12가 짖음 전파에 대해 경고한 것과 같은 결이다.
-##  ✅ **적은 이 시점이 안전하다**: `boss_room._ready`가 `_spawn_props()`를 `_spawn_mobs()`보다
-##   **먼저** 부른다(둥지 열림 스폰도 그 뒤다). ⚠ **씬 자식은 이 수법을 못 쓴다** — 그쪽 `_ready`는
-##   방보다 먼저 돌아 **절차 프롭이 통째로 빠진 반쯤 맞는 목록**이 된다(그래서 안개는 이 목록을 안 받는다).
-## ⚠ **프롭을 런타임에 더하거나 지우는 기능이 생기면 이 배열이 낡는다**(설계 O5) — 지금은 배치가
-##  결정적이라(D5) 안 생긴다는 전제 위의 캐시다. 그런 기능을 만들거든 다시 구울 문을 같이 만들어라.
-## ⚠ 마을·그물 리그처럼 프롭이 없는 판에선 **비어 있고, 비면 옛 동작 그대로**다(회귀 0).
-var _occluders: PackedVector3Array = PackedVector3Array()
+# 세105엔 여기 `OCCLUDER_GROUP`·`OCCLUDE_R_META`·`_occluders`·`_bake_occluders()`가 있었고
+# `Vision.is_seen`의 **일곱 번째 인자**로 나무·큰 바위를 넘겨 시선을 끊었다. 판정·화면(셰이더 그늘)·
+# 그물을 **셋 같이** 걷었다 — 🔴 **되살리려면 셋을 같이 열어라**(하나만 열면 「밝은데 적이 안 보인다」가
+# 돌아온다). 경위·수학 = `src/core/vision.gd` 머리말 + `git show`(세105~107).
 
 
 # ══ 인지 (세105 N30 · 정본 `docs/takbon-design/enemy_perception_design.md`) ══════
@@ -376,8 +359,6 @@ func _ready() -> void:
 	_apply_look()
 	_apply_hitbox()
 	_attach_shadow()
-	# 🔴 엄폐물 목록은 **여기서 한 번**(위 `_occluders` 머리말 — 방이 프롭을 다 세운 뒤다).
-	_bake_occluders()
 
 
 ## 🔴 외형도 .tres가 쥔다 (`params.sprite`·`params.size`·`params.tint`) — "새 적 = .tres 한 장"이
@@ -1384,31 +1365,6 @@ func _percept_allows_attack() -> bool:
 	return not _percept_active() or _percept == Percept.CHASE
 
 
-## 🔴🔴 **엄폐물을 한 번 굽는다** — 그룹을 훑어 `(x, y, r)`로 만든다(설계 §3-2).
-##
-## 🔴 **노드를 `vision.gd`에 넘기지 않는 이유** = 그 파일 계약이 *"노드도 씬도 시간도 모른다"*다.
-##  값으로 굽는 자리가 여기이고, 그래야 그물이 노드 없이 순수 함수 표를 짤 수 있다.
-## 🔴 **반경이 없거나 0이면 건너뛴다 — 방어가 두 겹인 게 맞다.** 방이 이미 0인 종을 그룹에서
-##  빼지만(`_mark_occluder`), 남이 그룹만 손으로 붙이는 날 여기서 **반경 0 no-op**이 아니라
-##  **목록에서 빠진다**. 「그룹은 있는데 meta가 없다」는 곧 그 짝이 갈렸다는 뜻이라 짖는다.
-## ⚠ `global_position`으로 굽는다 — 프롭은 방의 자식이라 로컬과 같지만, 홀더가 옮겨가도 따라온다.
-func _bake_occluders() -> void:
-	_occluders = PackedVector3Array()
-	for node: Node in get_tree().get_nodes_in_group(OCCLUDER_GROUP):
-		var n := node as Node2D
-		if n == null:
-			continue
-		if not n.has_meta(OCCLUDE_R_META):
-			# 🔴 침묵 금지 — 그룹과 meta가 갈리면 **그 프롭만 조용히 안 가린다**(설계 §3-1 「열쇠와 문」).
-			push_warning("forest_enemy: '%s'가 %s 그룹인데 %s meta가 없다 — 그 프롭은 시선을 안 끊는다"
-				% [n.name, String(OCCLUDER_GROUP), String(OCCLUDE_R_META)])
-			continue
-		var r := float(n.get_meta(OCCLUDE_R_META, 0.0))
-		if r <= 0.0:
-			continue
-		_occluders.append(Vector3(n.global_position.x, n.global_position.y, r))
-
-
 ## 🔴🔴 **감지 셋을 한 함수로** (설계 §3): 부채꼴(멀리 본다) ∪ 근접 원(등 뒤도 코앞이면 들킨다).
 ##  소리는 시간축이 달라 `_on_cast_heard`가 따로 진다.
 ##
@@ -1419,18 +1375,15 @@ func _bake_occluders() -> void:
 ## ⚠ `sight_angle` 폴백 360°는 「부채꼴이 무의미 = 늘 본다」 = 옛 동작이다 — 그 처리는 이제
 ##  `vision.gd`의 전방위 가드가 진다(아래).
 ##
-## 🔴🔴 **세105 차폐: 「360° = 주변시로 승격」 우회를 여기서 걷었다** (설계 §2-4 F3 — 착수 0단계).
+## ⚠ **「360° = 주변시로 승격」 우회는 세105에 걷었고 세107에도 그대로 걷혀 있다** — 되살리지 마라.
 ##  그전 두 줄은 `angle >= 360.0`일 때 `sense = maxf(sense, r)`로 **감지 거리 전체를 주변시로 올려**
-##  float32 경계(정확히 등 뒤에서 `angle_to`가 π보다 크게 나오는 것)를 피했다. 지금은 걷은 게 맞다:
-##   ⓐ **`vision.gd`에 `if fan_deg >= 360.0` 가드가 들어와 이미 중복이다**(세105 `1cb4b8b`).
-##   ⓑ 🔴🔴 **주변시는 「차폐 면제」라는 새 뜻을 얻었다**(설계 §2-3 ①) ⇒ 우회가 남아 있으면
-##     **`sight_angle` 키가 없는 몸이 나무를 통째로 무시한다**(에러 0 · 「좀 잘 보네」로만 읽힌다).
-##     그물 6파일이 인지 키 0개인 몸을 주입하므로 그게 곧 **적 쪽 차폐 전량**이다.
-##  ⚠ **되살리지 마라** — 되살리면 라이브 차폐 그물(`test_perception_auto [15]`ⓑ)이 빨개진다.
-##   ⓑ는 일부러 `sight_angle: 360`으로 재서 이 자리가 검출자가 되게 해 뒀다.
+##  float32 경계(정확히 등 뒤에서 `angle_to`가 π보다 크게 나오는 것)를 피했는데,
+##  **`vision.gd`에 `if fan_deg >= 360.0` 가드가 들어와 통째로 중복이다**(세105 `1cb4b8b`).
+##  ⚠ 걷은 둘째 이유(*"주변시가 차폐 면제라 우회가 남으면 나무를 무시한다"*)는 **세107 차폐 은퇴로
+##   사라졌다** — 지금 이 자리를 떠받치는 건 「중복이다」 하나뿐이다.
 ##
 ## 🔴 **호출 자리가 이 파일에 둘이다** — 여기(적이 나를 보나)와 `_judge_seen`(내가 적을 보나).
-##  **한쪽만 `_occluders`를 넘기면 반쪽만 돈다**(설계 F2).
+##  같은 수학을 두 벌로 만들지 마라(T5) — 한쪽만 고치면 「내가 보는 것 ≠ 짐승이 보는 것」이 된다.
 func _detects(player: Node2D) -> bool:
 	if player == null:
 		return false
@@ -1440,7 +1393,7 @@ func _detects(player: Node2D) -> bool:
 	var angle := _param("sight_angle", SIGHT_ANGLE_DEFAULT)
 	var sense := _param("sense_radius", SENSE_RADIUS_DEFAULT)
 	return Vision.is_seen(global_position, _look_dir, player.global_position,
-		angle, r, sense, _occluders)
+		angle, r, sense)
 
 
 ## 🔴🔴 인지 상태기계 — 설계 §2의 흐름도를 그대로 옮긴 자리.
@@ -1952,13 +1905,10 @@ func _judge_seen(player: Node2D) -> bool:
 	var aim: Vector2 = player.call(&"vision_dir")
 	# 🔴 수치는 **밖에서 주입**한다 — `Vision`은 static이라 안에서 balance를 읽으면 컴파일 타임에
 	#  굳어 그물의 뮤테이션이 무효가 된다(그 파일 머리말 · memory `godot-const-resource-folding`).
-	# 🔴🔴 **차폐는 여기에도 걸린다 — 나무는 양쪽 시선을 끊는다**(세105 설계 ⓑ · **호출 자리 둘 중 둘째**).
-	#  ⚠ 여기만 빼면 「내가 못 보는데 적은 나를 본다」가 아니라 그 **반대**가 된다 — 짐승은 나무 뒤에서
-	#   멀쩡히 사라지는데 나는 나무를 뚫고 본다. 어느 쪽이든 **에러 0**이라 반쪽만 고치면 안 드러난다.
-	#  ⚠ 주변시(`vision_near_radius`)가 차폐보다 **먼저**라 「몸 둘레」는 나무가 안 끊는다 — 그 순서는
-	#   `vision.gd`가 쥔다(설계 §2-3 ① · 여기서 흉내 내지 마라).
+	# ⚠ **세107: 여기 있던 일곱째 인자(엄폐물)가 은퇴했다** — 나무·바위는 더는 시선을 안 끊는다.
+	#  되살릴 땐 **`_detects`(호출 자리 둘 중 첫째)와 같이** 열어라(한쪽만 열면 반쪽만 돈다).
 	return Vision.is_seen(player.global_position, aim, global_position,
-		BAL.vision_fan_deg, BAL.vision_fan_range, BAL.vision_near_radius, _occluders)
+		BAL.vision_fan_deg, BAL.vision_fan_range, BAL.vision_near_radius)
 
 
 ## 🔴 공개 관측점 — 지금 이 적이 플레이어 눈에 보이나 (`hp()`·`phase()`·`charge_band_visible()` 선례).

@@ -276,45 +276,32 @@ const LANDMARK_ID_META := &"landmark_id"
 ##   나머지 층은 ±2였다(격자 칸마다 종류가 하나로 정해져서 서로 자리를 다투는 일이 애초에 적다).
 ##   그물도 이 순서를 **안 지킨다**(뒤집어도 그린이다). 「순서를 뒤집으면 나무가 사라진다」고 적어 두면
 ##   그게 곧 T4(주석이 계약인 척하는데 아무도 안 재는 것)라서 여기 실측을 남긴다.
-## 🔴 크기 계단이 **128 → 64 → 42 → 18**(그 사이에 플레이어 56)이라 아트가 일부러 층을 만들어 뒀다 —
+## 🔴 크기 계단이 **128(나무) → 42(수풀)**(그 사이에 플레이어 56)이라 아트가 일부러 층을 만들어 뒀다 —
 ##  큰 것만 늘리면 「기둥 밭」이 그대로고, 작은 것으로 사이를 채워야 깊이가 생긴다.
+##  ⚠ 세107에 중간 계단(큰 바위 64·잔돌 18)이 빠져 **층이 둘뿐이다**(아래 은퇴 문단).
 ##
-##  • `share` = 격자 한 칸이 이 종류가 될 확률(백분위 · 누적으로 잘린다). 넷의 합 63 = 나머지 37%는 빈칸.
+##  • `share` = 격자 한 칸이 이 종류가 될 확률(백분위 · 누적으로 잘린다). 둘의 합 32 = 나머지 68%는 빈칸.
 ##    ⚠ **후보 수 ≠ 선 수다** — 나무는 회피·겹침에 가장 많이 걸려 후보의 절반쯤만 선다. `share`를
 ##     조일 땐 그물이 찍는 실제 개수(`test_prop_layout_auto [1]`)를 보고 맞춰라.
-##  • `sep`   = 이웃과의 최소 간격에 쓰는 반지름 — 문턱은 **둘의 합**이다(나무끼리 120px · 잔돌끼리 24px).
+##  • `sep`   = 이웃과의 최소 간격에 쓰는 반지름 — 문턱은 **둘의 합**이다(나무끼리 120px · 수풀끼리 44px).
 ##  • `road`  = 🔴 **밑동 반폭**. 흙길 칸에서 이만큼 떨어진다(ⓓ).
 ##    ⚠ **그림 반폭이 아니라 밑동 반폭이다** — 나무는 그림이 128px인데 「길을 막는다」로 읽히는 건
-##     기둥이지 가지가 아니다. 가지가 길가에 걸치는 건 오히려 숲답다(바위·덤불은 통짜라 그림 폭 그대로).
+##     기둥이지 가지가 아니다. 가지가 길가에 걸치는 건 오히려 숲답다(덤불은 통짜라 그림 폭 그대로).
 ##    🔴 그물(`test_prop_layout_auto [5]`)이 **같은 값을 따로 들고** 대조한다 — 사본이 아니라
 ##     「손으로 든 기대치」다(`test_landmark_road_auto`의 타일 상수와 같은 관행). 여기를 줄이면 빨개진다.
-##  • `occlude` = 🔴🔴 **시선을 끊는 반경**(세105 차폐 · 정본 `docs/takbon-design/vision_occlusion_design.md` §3-1).
-##    **0이면 안 가린다** — 수풀(42px)·잔돌(18px)은 그 뒤에 숨는 게 보기에 이상해서 일부러 0이다(설계 ⓐ).
-##    ⇒ **「새 엄폐물 = 이 표에 숫자 하나」**이고, 이 표가 **반경의 단일 소유자**다.
-##    🔴 반경은 **`sep`·`road`와 다른 축이다** — 저 둘은 「어디에 세울까」(배치)이고 이건 「무엇을 가리나」
-##     (판정)다. 밑동 반폭(`road`)과 값이 비슷하다고 파생시키지 마라: 길 회피는 **기둥이 길을 막나**이고
-##     차폐는 **탑다운에서 몸을 숨길 만한가**라, 바위를 다시 그리면 한쪽만 움직인다(설계 §3-3).
-const PROP_TABLE: Array[Dictionary] = [
-	{"scene": "res://src/props/tree.tscn", "share": 14, "sep": 60.0, "road": 40.0, "occlude": 34.0},
-	{"scene": "res://src/props/rock_big.tscn", "share": 7, "sep": 34.0, "road": 40.0, "occlude": 26.0},
-	{"scene": "res://src/props/bush.tscn", "share": 18, "sep": 22.0, "road": 28.0, "occlude": 0.0},
-	{"scene": "res://src/props/rock.tscn", "share": 24, "sep": 12.0, "road": 16.0, "occlude": 0.0},
-]
-
-## 🔴🔴 **엄폐물 그룹 · 반경 meta — 「열쇠와 문」을 한 줄에 묶는다** (세105 · 설계 §3-1 F6).
 ##
-## 🔴 **왜 상수인가**: 이 짝을 **쓰는 쪽(방)과 읽는 쪽(`forest_enemy`)이 다른 파일**이다. 그룹만 붙이고
-##  meta를 안 새기면 **반경 0 no-op** · meta만 새기고 그룹에 안 넣으면 **거짓 손잡이** · **둘 다 에러 0**이다
-##  (`takbon-rules` §4의 그 함정). 그래서 **노드를 만든 그 줄에서 둘을 같이** 붙이고
-##  (`LANDMARK_ID_META` 머리말의 선례 — *"어긋날 자리가 구조적으로 없다"*),
-##  이름 자체는 그물(`test_perception_auto [15]`)이 **이 상수로 노드를 만들어** 대조한다
-##  ⇒ 어느 쪽 이름을 바꿔도 라이브 그물이 빨개진다.
-## ⚠ **읽는 쪽이 `src/core/vision.gd`가 아니다** — 그 파일은 값만 받는다(노드도 그룹도 모른다).
-const OCCLUDER_GROUP := &"occluders"
-const OCCLUDE_R_META := &"occlude_r"
+## ⚠ **세107에 줄 둘(`rock_big`·`rock`)과 `occlude` 키가 통째로 빠졌다** — 사용자 확정
+##  (*"맵에 바위도 없애줘볼래?"* · *"구지 나무나 돌맹이에 시야가 가려지지 않도록"*).
+##  🔴 **씬·PNG는 살아 있다**(`src/props/rock.tscn`·`rock_big.tscn`) — 되살리려면 **여기 줄만** 되돌려라.
+##  ⚠ 그때 `share` 합이 32에서 63으로 돌아가 **빈칸이 68% → 37%로 줄어든다**(밀도가 두 배가 된다).
+##  차폐(`occlude` 반경)의 경위는 `src/core/vision.gd` 머리말 · `git show`(세105~107).
+const PROP_TABLE: Array[Dictionary] = [
+	{"scene": "res://src/props/tree.tscn", "share": 14, "sep": 60.0, "road": 40.0},
+	{"scene": "res://src/props/bush.tscn", "share": 18, "sep": 22.0, "road": 28.0},
+]
 ## 🔴 나무만 씬의 `Trees` 아래로 간다 — 손으로 놓은 20그루와 **같은 물건**이라 홀더를 안 가른다
 ##  (`test_daylight_tree_auto`가 그 홀더로 나무 계약을 재므로 새 나무도 저절로 그 그물에 든다).
-##  나머지 셋은 새 `Props` 홀더로 가고, 그 홀더는 **타일 바로 뒤**에 꽂혀 몸·적·마법 아래에 깔린다.
+##  나머지(지금은 수풀 하나)는 새 `Props` 홀더로 가고, 그 홀더는 **타일 바로 뒤**에 꽂혀 몸·적·마법 아래에 깔린다.
 const PROP_TREE_KIND := 0
 const PROP_HOLDER := "Props"
 
@@ -710,9 +697,6 @@ func _spawn_props() -> void:
 		if tree == null:
 			continue
 		tree.add_to_group(&"props")
-		# 🔴🔴 **손으로 놓은 20그루도 시선을 끊는다** — 규칙은 「누가 놓았나」를 안 본다(위 머리말).
-		#  빠뜨리면 **절반만 가리는 숲**이 되는데 에러가 0이다.
-		_mark_occluder(tree, PROP_TREE_KIND)
 		placed.append(tree.position)
 		radii.append(float(PROP_TABLE[PROP_TREE_KIND]["sep"]))
 
@@ -732,28 +716,15 @@ func _spawn_props() -> void:
 				continue
 			node.position = at
 			node.add_to_group(&"props")
-			# 🔴 **그룹과 반경을 같은 줄에서** — 위 `_mark_occluder` 머리말(둘이 갈리면 에러 0으로 죽는다).
-			_mark_occluder(node, kind)
 			# 🔴 나무는 씬의 `Trees`로 — 손으로 놓은 20그루와 같은 물건이라 홀더를 안 가른다.
 			(_tree_holder if kind == PROP_TREE_KIND else holder).add_child(node)
 			placed.append(at)
 			radii.append(float(PROP_TABLE[kind]["sep"]))
 
 
-## 🔴🔴 **시선을 끊는 물건으로 등록한다 — 그룹과 반경을 한 줄에서** (세105 · 설계 §3-1 F6).
-##
-## 🔴 **부르는 자리는 `_spawn_props` 안의 둘뿐이고, 둘 다 `props` 그룹을 붙이는 그 줄 옆이다**
-##  (손으로 놓은 20그루 · 절차 배치). **한쪽만 부르면 절반만 가리는 숲**이 되는데 에러가 0이다.
-## 🔴 **`occlude`가 0인 종은 그룹에 아예 안 넣는다** — 수풀·잔돌이 목록에 들면 적마다 순회 비용만
-##  늘고 판정은 그대로다(`vision.gd`가 `r <= 0`을 건너뛴다 = 두 겹 방어).
-## ⚠ 반경은 **로컬이 아니라 화면 px**로 쓴다 — 프롭은 scale을 안 건드리므로 지금은 같은 값이다.
-##  프롭에 `scale`을 주는 날 여기서 곱해라(적은 `global_position`으로 굽는다).
-func _mark_occluder(node: Node2D, kind: int) -> void:
-	var r := float(PROP_TABLE[kind].get("occlude", 0.0))
-	if r <= 0.0:
-		return
-	node.add_to_group(OCCLUDER_GROUP)
-	node.set_meta(OCCLUDE_R_META, r)
+## ⚠ **세107: 여기 있던 `_mark_occluder()`가 은퇴했다** — 프롭에 `occluders` 그룹과 `occlude_r` meta를
+##  새겨 시선을 끊던 물건이다(세105). 판정·화면(셰이더 그늘)·그물을 **셋 같이** 걷었으니
+##  🔴 되살릴 땐 셋을 같이 열어라. 경위 = `src/core/vision.gd` 머리말 · `git show`(세105~107).
 
 
 ## 이 종류가 노려 볼 **자리 후보**들 — 지터를 준 격자에서 뽑는다.

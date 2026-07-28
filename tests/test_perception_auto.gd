@@ -15,8 +15,9 @@ extends SceneTree
 ##       주입**되므로, 폴백을 빠뜨리면 그것들이 **전부 굳거나 전부 걸어다닌다.**
 ##   [8] **`_contact`는 PATROL에서도 켠다**(§2-b C2) — 인지 상태가 **AI 갈래 호출을 안 끊는다**.
 ##       끊으면 잡몹 접촉 피해가 **무증상으로** 사라진다(그 채널을 재는 그물이 보스뿐이었다).
-##   [15] 🔴 **차폐**(세105) — 나무 뒤에 서면 못 쫓는다. **호출자가 목록을 안 넘겨도 순수 함수 표는
-##       초록**이라 여기가 유일한 검출자이고, ⓑ는 `_detects`의 **360° 우회 재발**까지 잡는다.
+##   [15] 🔴 **차폐 은퇴(세107)의 재발 감지** — 엄폐물이 시선 한가운데 있어도 쫓는다.
+##       세105엔 정반대(*"나무 뒤에 서면 못 쫓는다"*)를 쟀는데 사용자가 뒤집었다. **`_detects`를
+##       재는 그물이 이 파일뿐**이라 지우면 차폐가 되살아나도 전 스위트가 초록이다(T2).
 ##
 ## 🔴 **공개 API로만** 검증한다 (takbon-verify §3): `percept_state()`·`look_dir()`·`patrol_home()`·
 ##   `hp()`·`GameState.hp`·`global_position`. 내부 필드(`_percept`·`_look_dir`)는 안 더듬는다.
@@ -484,6 +485,10 @@ func _test_bosses_have_no_percept_keys() -> void:
 ##
 ##  ⚠ 옛 보장(*"쫓기 시작한 적은 반드시 보인다"*)이 **죽은 것 자체는 의도**다 — 그 자리는 이제
 ##  표시(`?`/`!`)가 맡는다(`balance_data.gd`의 `vision_near_radius` 주석이 정본).
+##
+## ⚠ **세107: 위 문단의 「차폐가 주변시를 갉는다」는 전제가 사라졌다**(차폐 은퇴) — 그런데
+##  **주변시 110은 그대로 두기로 사용자가 확정했다.** ⇒ 「안 보이는 채 쫓기는 구간」이 여전히
+##  정상이고 그 자리를 **표시가 혼자** 맡는다(`src/core/vision.gd` 머리말). 이 검사는 안 흔들린다.
 func _test_stalker_invariant() -> void:
 	print("[10] 🔴 네임드는 바탕 종보다 멀리 본다 (세105: 기준이 주변시→바탕으로 옮겨갔다)")
 	var near: float = _gs.balance.vision_near_radius
@@ -644,53 +649,33 @@ func _test_alert_sfx_wiring() -> void:
 	_drop(&"pc_mute")
 
 
-## [15] 🔴🔴 **시야 차폐 — 나무 뒤에 서면 짐승이 나를 못 쫓는다** (세105 · 정본
-##  `docs/takbon-design/vision_occlusion_design.md` §7 [8] · 짝 = `test_vision_auto [1]`의 차폐 표).
+## [15] 🔴🔴 **엄폐물이 있어도 짐승은 나를 본다 — 차폐 은퇴(세107)의 재발 감지.**
 ##
-## 🔴🔴 **자리가 왜 여기인가**: 차폐가 바꾸는 건 `_detects`이고 **그걸 재는 그물이 이 파일뿐**이다
-##  ([2] 부채꼴 · [3] 근접 원이 바로 그 대상). 순수 함수 표는 `vision.gd`만 재므로
-##  **호출자(`forest_enemy`)가 목록을 안 넘겨도 초록**이다 — 이 항목이 그 유일한 검출자다.
+## 🔴 **여기가 `_detects`(적이 나를 보나)의 유일한 검출자다.** 세105엔 이 항목이 정반대를 쟀다
+##  (*"나무 뒤에 서면 못 쫓는다"*). 사용자가 세107에 뒤집었으므로(*"구지 나무나 돌맹이에 시야가
+##  가려지지 않도록"*) **뒤집힌 계약을 그대로 잰다** — 지우면 차폐가 조용히 되살아나도 전 스위트가
+##  초록이다(takbon-rules T2: *"은퇴를 선언 없이 두면 죽은 몸이 살아있는 그물을 갖는다"*).
+##  ⚠ 짝 = `test_vision_auto [12]`(내가 적을 보나 — `_judge_seen` 쪽). **호출 자리가 둘이라 그물도 둘이다.**
 ##
-## 🔴 **둘 다 잰다 — 「숨으면 안 쫓는다」와 「나오면 쫓는다」.** 한쪽만 재면
-##  *"차폐가 통째로 안 돈다"*(또는 *"몸이 아예 아무도 못 본다"*)가 그대로 통과한다.
-##
-## 🔴🔴 **ⓑ가 착수 0단계(§2-4)의 유일한 검출자다.** `forest_enemy._detects`에 있던
-##  `if angle >= 360.0: sense = maxf(sense, r)` 두 줄은 **감지 거리 전체를 주변시로 승격**시키는데,
-##  주변시는 **차폐 면제**(설계 §2-3 ①)라 ⇒ **`sight_angle` 키가 없는 몸이 나무를 통째로 무시한다.**
-##  그 우회를 되살리면 ⓑ가 빨개진다. ⚠ **순수 함수 표는 이걸 못 잡는다**(호출자 코드다).
-##
-## 🔴 **엄폐물 반경·그룹·meta 키를 손으로 안 박는다 — `boss_room`에서 읽는다**([7]ⓔ와 같은 관행).
-##  ⇒ ⓐ `PROP_TABLE`의 `occlude`를 0으로 되돌리면 여기가 빨개진다(설계 §3-1 「열쇠와 문」 검출자) ·
-##    ⓑ 그룹·meta 이름이 방과 적 사이에서 갈리는 날도 빨개진다(그 짝은 **에러가 0이다**).
-## 🔴 **기하를 전부 반경에서 파생시킨다** — 거리 8r · 옆걸음 4r이라 비율이 반경과 무관하다
-##  (막힘 0 · 비켜서면 **1.79r**). 반경을 조여도 거짓 빨강이 안 난다.
-## ⚠ 이 그물의 엄폐물은 **맨몸 `Node2D`**다 — 재는 건 판정이지 그림이 아니다(`PROBE_SPRITE`와 같은 관행).
+## 🔴 **되살아날 자리를 그대로 흉내 낸다** — 세105의 프롭은 `occluders` 그룹 + `occlude_r` meta를
+##  달고 있었다. 그 짝을 단 노드를 시선 한가운데 세우고도 **CHASE에 들면** 차폐가 없는 것이다.
+##  ⚠ **한계**: 되살리는 사람이 *다른* 키를 쓰면 이 검사는 못 잡는다(그때는 화면으로 드러난다).
+## 🔴 **둘 다 잰다 — 「가운데 세워도 쫓는다」와 「비켜 있어도 쫓는다」.** 뒤엣것이 양성 대조라
+##  *"이 몸이 애초에 아무도 못 본다"*와 갈린다.
+## 🔴 기하를 반경에서 파생시킨다(거리 8r · 옆걸음 4r) — 반경을 조여도 거짓 빨강이 안 난다.
 func _test_occlusion_blocks_detection() -> void:
-	print("[15] 🔴🔴 차폐 — 나무 뒤에 서면 못 쫓고 나오면 쫓는다 (⓪ 360° 우회 검출자 포함)")
-	var room: Dictionary = (load(ROOM_SCRIPT) as GDScript).get_script_constant_map()
-	var group: StringName = room.get("OCCLUDER_GROUP", &"")
-	var meta_key: StringName = room.get("OCCLUDE_R_META", &"")
-	var table: Array = room.get("PROP_TABLE", [])
-	var tree_kind: int = int(room.get("PROP_TREE_KIND", 0))
-	_check(group != &"" and meta_key != &"",
-		"boss_room에서 그룹·meta 키를 읽었다 (실제 '%s'/'%s' — 비면 아래가 통째로 자명 통과다)"
-			% [String(group), String(meta_key)])
-	var r := 0.0
-	if tree_kind < table.size():
-		r = float((table[tree_kind] as Dictionary).get("occlude", 0.0))
-	_check(r > 0.0,
-		"🔴 PROP_TABLE의 나무 `occlude`가 0보다 크다 (실제 %.1f — 0이면 「거짓 손잡이」이고 아래가 통째로 죽는다)" % r)
-	if r <= 0.0 or group == &"" or meta_key == &"":
-		return
+	print("[15] 🔴🔴 차폐 은퇴(세107) — 엄폐물이 시선 한가운데 있어도 짐승은 나를 쫓는다")
+	# ⚠ 은퇴한 키다 — `boss_room`에 더는 없어서 그 파일에서 못 읽는다(그래서 여기 손으로 든다).
+	var group := &"occluders"
+	var meta_key := &"occlude_r"
+	var r := 34.0              # 세105 나무의 `occlude` 반경 — 되살리면 이 크기로 돌아온다
+	var d := r * 8.0           # 플레이어까지 거리 — 엄폐물은 딱 중간(4r)에 선다
+	var step := r * 4.0        # 옆걸음 — 시선↔엄폐물 거리가 1.79r(반경과 무관한 비율)
 
-	var d := r * 8.0            # 플레이어까지 거리 — 엄폐물은 딱 중간(4r)에 선다
-	var step := r * 4.0         # 옆걸음 — 이때 시선↔엄폐물 거리가 **1.79r**(반경과 무관한 비율)
-
-	# 🔴 **엄폐물을 먼저 세운다** — 적은 `_ready`에서 한 번 굽는다(설계 §3-2). 뒤에 세우면 못 본다.
 	var tree := _occluder(Vector2(d * 0.5, 0.0), r, group, meta_key)
 
-	# ⓐ 부채꼴 몸 — 정상 경로. `sense_radius 0`이라 근접 원이 답을 대신 내지 않는다.
-	#  `sight_range`를 넉넉히 줘 **거리 게이트가 아니라 차폐가** 답을 내게 한다.
+	# ⓐ 부채꼴 몸. `sense_radius 0`이라 근접 원이 답을 대신 내지 않는다 —
+	#  `sight_range`를 넉넉히 줘 **거리 게이트가 아니라 차폐 유무가** 답을 내게 한다.
 	_inject(&"pc_occl", {
 		"sight_range": 900.0, "sight_angle": 120.0, "sense_radius": 0.0,
 		"move_speed": 0.0, "attack_range": 0.0,
@@ -698,20 +683,21 @@ func _test_occlusion_blocks_detection() -> void:
 	var stub := _stub(Vector2(d, 0.0))
 	var e = await _spawn(&"pc_occl")
 	await _frames(4)
-	_check(e.percept_state() == _P["PATROL"],
-		"ⓐ 🔴🔴 나무 뒤(정면 %.0fpx)에 서면 **못 쫓는다** (실제 %d — CHASE면 적이 나무를 뚫고 본다)"
-			% [d, e.percept_state()])
+	_check(e.percept_state() == _P["CHASE"],
+		"ⓐ 🔴🔴 엄폐물이 정면 한가운데 있어도 **쫓는다** (실제 %d — PATROL이면 차폐가 되살아난 것이다)"
+			% e.percept_state())
 	stub.global_position = Vector2(d, step)
 	await _frames(4)
 	_check(e.percept_state() == _P["CHASE"],
-		"ⓐ' 🔴 나무 옆으로 나오면 **쫓는다** (실제 %d — PATROL이면 차폐가 아니라 몸이 아무도 못 보는 것)"
+		"ⓐ' 🔴 비켜서도 쫓는다 = **양성 대조** (실제 %d — 여기까지 PATROL이면 몸이 애초에 아무도 못 보는 것)"
 			% e.percept_state())
 	e.free()
 	stub.free()
 	_drop(&"pc_occl")
 
-	# ⓑ 🔴🔴 **전방위 몸 — 착수 0단계(§2-4)의 검출자.** `sight_angle 360`은 §7-b의 **폴백값**이라
-	#  (키가 없는 몸이 전부 이 경로다) 여기가 뚫리면 **적 쪽 차폐가 통째로 안 돈다.**
+	# ⓑ 🔴 전방위 몸(`sight_angle 360`) — §7-b의 **폴백값**이라 인지 키가 없는 몸이 전부 이 경로다.
+	#  ⚠ `_detects`의 「360° = 주변시로 승격」 우회가 세105에 걷혔다 — 여기서 그 재발도 같이 덮는다
+	#   (`sense_radius 0`인데도 쫓으면 부채꼴 경로가 산 것이다).
 	_inject(&"pc_occl_360", {
 		"sight_range": 900.0, "sight_angle": 360.0, "sense_radius": 0.0,
 		"move_speed": 0.0, "attack_range": 0.0,
@@ -719,22 +705,18 @@ func _test_occlusion_blocks_detection() -> void:
 	var stub2 := _stub(Vector2(d, 0.0))
 	var f = await _spawn(&"pc_occl_360")
 	await _frames(4)
-	_check(f.percept_state() == _P["PATROL"],
-		"ⓑ 🔴🔴 **전방위(360°) 몸도 나무에 막힌다** (실제 %d — CHASE면 `_detects`의 360° 우회가 살아 있어 감지거리 전체가 「주변시」로 승격된 것이다)"
-			% f.percept_state())
-	stub2.global_position = Vector2(d, step)
-	await _frames(4)
 	_check(f.percept_state() == _P["CHASE"],
-		"ⓑ' 전방위 몸도 나무를 벗어나면 쫓는다 (실제 %d — 전제: 이 몸이 애초에 볼 줄 안다)"
-			% f.percept_state())
+		"ⓑ 🔴 **전방위(360°) 몸도** 엄폐물을 뚫고 쫓는다 (실제 %d)" % f.percept_state())
 	f.free()
 	stub2.free()
 	_drop(&"pc_occl_360")
 	tree.free()
 
 
-## 🔴 시선을 끊는 물건 하나 — **그룹과 반경 meta가 짝이다**(`boss_room._mark_occluder`가 라이브에서
-##  같은 짝을 새긴다). ⚠ 그룹 가입은 **트리에 든 뒤**다 — `get_nodes_in_group`은 트리 밖 노드를 안 센다.
+## 🔴 **세105에 시선을 끊던 물건의 모양 그대로** — 그룹 + 반경 meta 짝이다(`boss_room._mark_occluder`가
+##  라이브에서 새기던 것). 세107에 그 차폐가 은퇴해 **지금은 아무 일도 안 하는 게 정답**이고,
+##  [15]가 그 「아무 일도 안 함」을 잰다.
+## ⚠ 그룹 가입은 **트리에 든 뒤**다 — `get_nodes_in_group`은 트리 밖 노드를 안 센다.
 func _occluder(at: Vector2, r: float, group: StringName, meta_key: StringName) -> Node2D:
 	var n := Node2D.new()
 	root.add_child(n)
