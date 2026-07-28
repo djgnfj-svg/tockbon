@@ -548,7 +548,10 @@ func _test_jin_shape_reaches_the_board() -> void:
 func _test_rune_shapes_are_closed_and_distinct() -> void:
 	var ctr := Vector2(134.0, 134.0)
 	var s := 40.0
-	var fire: PackedVector2Array = _BoardScript.rune_guide_verts(0, ctr, s)
+	# 🔴 세103: 기준이 **실제 폴백(모르는 룬)**이다. 그전엔 불(0)을 기준으로 삼았는데, 불이 △를
+	# 벗어나 불꽃 심볼이 되자 「삼각형으로 새는 룬」을 아무도 못 잡게 됐다(조용한 검출력 손실).
+	# 폴백을 기준으로 두면 **불까지 포함해 6종 전부** ④를 지난다 — 오히려 그물이 넓어진다.
+	var fb: PackedVector2Array = _BoardScript.rune_guide_verts(99, ctr, s)
 	var seen := {}
 	var visited := 0
 	for rt: int in Enums.RUNE_TYPES:
@@ -562,8 +565,14 @@ func _test_rune_shapes_are_closed_and_distinct() -> void:
 			"🔴 룬 %d 밑그림이 안 닫혔다 (%s → %s)" % [rt, v[0], v[v.size() - 1]])
 		# ② 🔴 채점 밀도 — 호출부가 변마다 12등분하므로 꼭짓점이 많으면 그 룬만 가이드가 촘촘해져
 		#    완성도가 룬마다 유불리를 갖는다 (진 ⑳의 밀도 규율과 같은 이유).
-		_check(v.size() - 1 >= 3 and v.size() - 1 <= 7,
-			"룬 %d 변 수가 3~7을 벗어났다 (%d변)" % [rt, v.size() - 1])
+		# 🔴 세103: **곡선 룬(불)은 명시 예외다.** 사용자가 불꽃 심볼 레퍼런스를 직접 골랐고,
+		#    곡선을 직선 12등분으로 내리려면 꼭짓점을 촘촘히 찍는 수밖에 없다. 유불리를 만드는
+		#    **완성도 채점 자체가 세83 `skip_drawing`으로 휴면**이라 지금은 물지 않는다.
+		#    ⚠ 그래도 상한은 남긴다 — 없애면 「좌표 루프가 폭주해 수천 변」을 아무도 못 잡는다.
+		#    ⚠ 채점을 되살리면(`skip_drawing = false`) **이 예외부터 다시 재라** — 불만 촘촘하다.
+		var hi := 120 if rt == Enums.RuneType.FIRE else 7
+		_check(v.size() - 1 >= 3 and v.size() - 1 <= hi,
+			"룬 %d 변 수가 3~%d을 벗어났다 (%d변)" % [rt, hi, v.size() - 1])
 		# ③ 🔴 서로 다르다 — 안 다르면 6종으로 가른 의미가 없다.
 		var key := ""
 		for pt in v:
@@ -571,16 +580,15 @@ func _test_rune_shapes_are_closed_and_distinct() -> void:
 		_check(not seen.has(key),
 			"🔴 룬 %d의 밑그림이 룬 %s와 똑같다 — 손 궤적이 안 갈렸다" % [rt, seen.get(key, "?")])
 		seen[key] = rt
-		# ④ 🔴 새 룬이 **불(△) 폴백으로 새지 않는다** — ③만으론 못 잡는다(둘이 같이 새면
+		# ④ 🔴 룬이 **△ 폴백으로 새지 않는다** — ③만으론 못 잡는다(둘이 같이 새면
 		#    서로 다르다는 검사도 같이 무너지지만, 여기가 원인을 정확히 짚는다).
-		if rt != 0:
-			var same := v.size() == fire.size()
-			if same:
-				for i in v.size():
-					if not v[i].is_equal_approx(fire[i]):
-						same = false
-						break
-			_check(not same, "🔴 룬 %d이 불 삼각형 폴백으로 샌다 — 모양을 안 가졌다" % rt)
+		var same := v.size() == fb.size()
+		if same:
+			for i in v.size():
+				if not v[i].is_equal_approx(fb[i]):
+					same = false
+					break
+		_check(not same, "🔴 룬 %d이 삼각형 폴백으로 샌다 — 모양을 안 가졌다" % rt)
 	# 🔴 순회가 실제로 정본 전량을 돌았다 (세84 #43의 검출자). ⚠ 처음엔 `RUNE_TYPES.size() >= 6`만
 	#   세웠는데 **루프를 `[]`로 돌려도 전 항목 그린이었다** — 위 단정들은 "없음"이 아니라 "각 룬"을
 	#   재므로 루프가 죽으면 통째로 사라지고 failures는 0이다(자명 통과의 교과서적 형태).
@@ -589,8 +597,7 @@ func _test_rune_shapes_are_closed_and_distinct() -> void:
 		"🔴 룬 정본 %d종을 실제로 다 훑었다 (실제 %d — 0이면 위 단정이 통째로 자명 통과다)"
 			% [Enums.RUNE_TYPES.size(), visited])
 	# 모르는 룬은 크래시가 아니라 △ 폴백 (룬이 늘어도 안 죽는다 — GLYPH_DESC가 밟은 그 함정).
-	var fallback: PackedVector2Array = _BoardScript.rune_guide_verts(99, ctr, s)
-	_check(fallback.size() >= 4, "모르는 룬도 밑그림이 나온다 (폴백=△)")
+	_check(fb.size() >= 4, "모르는 룬도 밑그림이 나온다 (폴백=△)")
 
 
 # ── 🔴 ㉓ 그 모양이 **판까지 온다** + **책 셀 아이콘도 같은 함수** (세션 49) ──

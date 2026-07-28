@@ -955,8 +955,9 @@ static func slot_angle(k: int) -> float:
 
 ## 🔴 룬 종류별 밑그림 꼭짓점 (닫힌 다각형, 마지막=처음). 세션 34 — "새 룬 = 여기 한 갈래".
 ## 모양은 손으로 구분해 그릴 수 있게 서로 다른 방향/꼭짓점 수를 준다:
-##   불 △ 위 꼭짓점 · 물 ▽ 아래 꼭짓점(고이는 방향) · 바람 ◇ 마름모(사방으로 돈다)
-##   번개 ⚡ 닫힌 지그재그(꺾임이 많다) · 흙 □ 축에 나란한 사각(무겁게 앉는다) · 풀 🍃 잎사귀(뾰족한 위 끝 + 넓은 밑동)
+##   불 🔥 소용돌이를 감싼 불꽃(혀 3갈래 + 갈고리 꼬리) · 물 ▽ 아래 꼭짓점(고이는 방향)
+##   바람 ◇ 마름모(사방으로 돈다) · 번개 ⚡ 닫힌 지그재그(꺾임이 많다)
+##   흙 □ 축에 나란한 사각(무겁게 앉는다) · 풀 🍃 잎사귀(뾰족한 위 끝 + 넓은 밑동)
 ##
 ## 🔴 공통 규율 (세션 49에 3→6종으로 늘리며 명문화 — 진 `jin_guide_pts`와 같은 이유):
 ##   • **반드시 닫힌다** — 마지막 점 = 첫 점. 룬은 진 안에 앉는 **하나의 인장**이라 터진 획은 룬이 아니다.
@@ -964,11 +965,84 @@ static func slot_angle(k: int) -> float:
 ##     그래서 흙(축 나란한 사각)과 바람(45° 돌린 마름모)처럼 **같은 변 수라도 꺾이는 자리가 다르게** 둔다.
 ##   • **꼭짓점 수를 3~7에 둔다** — 호출부(`rune_subpath`)가 변마다 12등분하므로 꼭짓점이 많으면
 ##     그 룬만 가이드 점이 촘촘해져 **완성도 채점이 룬마다 유불리**를 갖는다.
+##     🔴 **불(FIRE)은 이 상한의 명시 예외다**(세103, 사용자가 레퍼런스를 직접 골랐다). 곡선을
+##     직선 12등분으로 내리려면 꼭짓점을 촘촘히 찍는 수밖에 없어 그 갈래만 수십 개다. 근거 =
+##     유불리를 만드는 **완성도 채점 자체가 세83 `skip_drawing`으로 휴면**이라 지금은 물지 않는다.
+##     ⚠ 채점을 되살리면(`skip_drawing = false`) 이 예외부터 다시 재라 — 불만 가이드가 촘촘하다.
 ## 🔴 **static · public인 이유**: 책의 룬 셀 아이콘(`ring_book._draw_rune_icon`)이 이 함수를 그대로
 ## 부른다 — 진(`jin_guide_pts`)·문양(`glyph_guide_pts`)과 같은 규약이다. 세션 48까지 책이 같은 모양을
 ## **따로 베껴** 갖고 있어, 여기만 고치면 "셀에서 본 모양"과 "손으로 그을 모양"이 갈라질 수 있었다.
 static func rune_guide_verts(rune_type: int, ctr: Vector2, s: float) -> PackedVector2Array:
 	match rune_type:
+		Enums.RuneType.FIRE:
+			# 🔴 세103: 불은 더 이상 △가 아니다 — **소용돌이를 감싼 불꽃**이다(사용자가 레퍼런스를
+			# 직접 골랐다: `docs/_refs/rune_fire/ref_fire_symbol.webp`). 혀 3갈래(가운데가 가장 높다)
+			# + 왼쪽 아래로 휜 갈고리 꼬리 + 중심의 소용돌이.
+			#
+			# 🔴 **닫힌 한붓이라 소용돌이는 「홈의 두 벽」으로 낸다.** 나선은 위상상 중심이 막다른
+			#   끝이라 되돌아 나오지 않으면 못 닫힌다 — 그래서 안쪽 벽 A가 중심에서 풀려 나와
+			#   꼬리·혀를 한 바퀴 돌고, 바깥 벽 B가 다시 감겨 들어가 중심에서 A와 만난다.
+			# 🔴🔴 **두 벽은 반경이 아니라 `DELTA`(각도)로 어긋난다** — 반경 오프셋으로 두면
+			#   안쪽 입술이 소용돌이 가장자리보다 **안**에 놓여, 거기서 꼬리로 나가는 선이 바깥
+			#   윤곽을 **가로지른다**(1차 시안이 실제로 그렇게 뚫렸다). 각도로 어긋내면 두 입술이
+			#   **둘 다 반경 `RIM`** 위에 앉아 하나는 꼬리로, 하나는 윤곽으로 깔끔히 갈린다.
+			#   홈 폭 = `(RIM - R_END) * DELTA / T`로 **각도와 무관하게 일정**하다.
+			# ⚠ 소용돌이는 **0.85바퀴**고 아래 40%에만 앉는다. 레퍼런스의 2.5바퀴를 그대로 옮기면
+			#   실제 배치 크기(s≈36px)에서 홈·살이 2px 아래로 눌려 **검은 뭉치**가 된다(1차 실측).
+			# ⚠ 꼭짓점이 수십 개인 유일한 룬이다 — 머리말 「3~7」의 명시 예외(근거는 거기 적었다).
+			var pts := PackedVector2Array()
+			# 이차 베지어 한 구간. 시작점 `a`는 이미 들어가 있다고 보고 t>0만 낸다(중복 방지).
+			var qc := func(a: Vector2, c: Vector2, b: Vector2, n: int) -> PackedVector2Array:
+				var o := PackedVector2Array()
+				for i in range(1, n + 1):
+					var t := float(i) / float(n)
+					var u := 1.0 - t
+					o.append(a * (u * u) + c * (2.0 * u * t) + b * (t * t))
+				return o
+			var bc := ctr + Vector2(0.0, s * 0.45)   # 소용돌이 중심 — 불꽃 아래쪽에만 앉는다
+			var rim := s * 0.52                      # 소용돌이 바깥 반경(두 입술이 여기 앉는다)
+			var r_end := s * 0.12                    # 안쪽 끝(막다른 곳)
+			var t_span := 0.90 * TAU                 # 감는 각도 — 더 감을수록 작은 크기에서 뭉친다
+			var th_a := 2.75                         # 벽A 입술 = 꼬리가 나가는 자리(왼쪽 아래)
+			var th_b := th_a - 2.60                  # 벽B 입술 = 오른쪽 혀에서 내려앉는 자리
+			var narc := 12
+			# ① 벽A — 홈의 안쪽 벽. 중심에서 각도가 **늘며** 밖으로 풀린다(시작점 = 닫힘점).
+			# ⚠ 감는 향은 레퍼런스와 같게 뒀다(밖 = 각도 증가). 뒤집으면 벽B 입술이 소용돌이
+			#   **오른쪽 위**로 올라붙어 불꽃 아래-오른쪽이 텅 빈다(3차 실측).
+			for i in narc + 1:
+				var t := float(i) / float(narc)
+				pts.append(bc + Vector2.from_angle(th_a - (1.0 - t) * t_span)
+					* lerpf(r_end, rim, t))
+			# ② 입술에서 그대로 이어지는 갈고리 꼬리 — 왼쪽 아래로 휘어 뾰족하게 끝난다.
+			var tail := ctr + Vector2(-s * 0.70, s * 1.22)
+			pts.append_array(qc.call(pts[pts.size() - 1],
+				ctr + Vector2(-s * 0.34, s * 1.00), tail, 5))
+			# ③ 꼬리 바깥선을 타고 올라가 왼쪽 혀 끝으로 (가장 바깥 혀).
+			# ⚠ 이 선과 소용돌이 왼쪽 가장자리 사이가 초승달의 두께다 — 벌리면 「잎사귀」가 된다(2차 실측).
+			var mid := ctr + Vector2(-s * 0.80, s * 0.44)
+			var lt := ctr + Vector2(-s * 0.64, -s * 0.76)
+			pts.append_array(qc.call(tail, ctr + Vector2(-s * 0.84, s * 0.94), mid, 5))
+			pts.append_array(qc.call(mid, ctr + Vector2(-s * 0.82, -s * 0.26), lt, 5))
+			# ④ 혀 3갈래 — 왼쪽 → 골 → 가운데(가장 높다) → 골 → 오른쪽(작다).
+			var v1 := ctr + Vector2(-s * 0.24, -s * 0.20)
+			pts.append_array(qc.call(lt, ctr + Vector2(-s * 0.40, -s * 0.60), v1, 4))
+			var top := ctr + Vector2(s * 0.02, -s * 1.20)
+			pts.append_array(qc.call(v1, ctr + Vector2(-s * 0.18, -s * 0.72), top, 6))
+			var v2 := ctr + Vector2(s * 0.32, -s * 0.34)
+			pts.append_array(qc.call(top, ctr + Vector2(s * 0.26, -s * 0.80), v2, 5))
+			var rt := ctr + Vector2(s * 0.62, -s * 0.56)
+			pts.append_array(qc.call(v2, ctr + Vector2(s * 0.46, -s * 0.52), rt, 4))
+			# ⑤ 오른쪽 혀 → 소용돌이 바깥 입술로 내려앉는다(이 구간이 오른쪽 윤곽이다).
+			pts.append_array(qc.call(rt, ctr + Vector2(s * 0.70, -s * 0.12),
+				bc + Vector2.from_angle(th_b) * rim, 5))
+			# ⑥ 벽B — 홈의 바깥 벽. 각도가 줄며 안으로 감겨 중심에서 벽A와 만난다.
+			for i in range(1, narc + 1):
+				var t := float(i) / float(narc)
+				pts.append(bc + Vector2.from_angle(th_b - t * t_span)
+					* lerpf(rim, r_end, t))
+			# ⑦ 🔴 닫는다 — 마지막 = 첫 점(홈의 막다른 끝을 잇는 캡). 룬은 하나의 인장이다.
+			pts.append(pts[0])
+			return pts
 		Enums.RuneType.WATER:
 			return PackedVector2Array([
 				ctr + Vector2(-s * 0.87, -s * 0.5), ctr + Vector2(s * 0.87, -s * 0.5),
