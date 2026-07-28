@@ -23,10 +23,15 @@ const SFX_DIR := "res://assets/audio/sfx/"
 ## ⚠ 그리고 **여기만 늘리면 「파일이 있다」까지만 잰다** — `match`에 줄이 빠져도 초록이다.
 ##   새 소리는 **반드시 ④(`_test_events_reach_correct_sound`)에도 한 줄**을 더해라. 세104에 실제로
 ##   그 갈림이 지적돼서 BOLT·EARTH·GRASS는 양쪽에 다 넣었다.
+## 🔴 **세105 `growl`·`howl`은 위 규약의 예외가 아니라 다른 갈래다** — 이 둘은 EventBus로 안 난다
+##   (적 몸이 `AudioStreamPlayer2D`로 직접 재생한다 · 인지 설계 §8-6 거리 감쇠). 그래서 ④에 넣을
+##   자리가 없고, 대신 **⑤(`_test_stream_of_public_accessor`)가 그 경로의 계약을 잰다.**
+##   ⚠ 「④에 못 넣으니 파일 존재만 재고 넘어간다」로 흘렀으면 위 경고를 그대로 반복하는 것이었다.
 const IDS := [
 	"cast", "hit", "hit_fire", "hit_water", "hit_wind", "hit_bolt", "hit_earth", "hit_grass",
 	"hurt", "commit", "pop",
 	"extract", "death", "pickup", "unlock", "ui_click", "day", "night", "craft", "equip",
+	"growl", "howl",
 ]
 # EventBus 글로벌 순간 — Audio가 이 전부에 붙어 있어야 한다.
 const SIGNALS := [
@@ -64,6 +69,7 @@ func _run() -> void:
 	_test_all_sfx_load()
 	_test_connected_to_signals()
 	_test_events_reach_correct_sound()
+	_test_stream_of_public_accessor()
 
 	if failures == 0:
 		print("TEST_AUDIO_OK — 전 항목 통과")
@@ -159,6 +165,64 @@ func _test_events_reach_correct_sound() -> void:
 	# 장착 (equipment_changed — 자동저장 안 함)
 	_clear(); _bus.equipment_changed.emit()
 	_check(_played("equip"), "equipment_changed → equip")
+
+
+# ── ⑤ 위치 있는 소리의 스트림 대출구 (세105 몬스터 인지) ──────────────
+## 🔴 **왜 ④가 아니라 별도 갈래인가**: `growl`·`howl`은 EventBus로 안 난다 — 방 반대편 늑대가
+## 코앞처럼 들리면 통보가 아니라 잡음이라(설계 §8-6 M8), **적 몸이 `AudioStreamPlayer2D`로
+## 직접 재생**하고 스트림만 `Audio`에서 빌린다. ④는 「시그널 → 풀」을 재므로 이 경로를 못 본다.
+##
+## 🔴🔴 **가장 중요한 계약은 「캐시가 한 벌인가」다.** `stream_of`가 `_stream`을 안 지나고 제 손으로
+## `load()`를 부르도록 「정리」되면 — 없는 id 경고 1회 규약이 죽고 캐시 관리가 두 벌이 된다.
+##
+## 🔴🔴 **그런데 그건 런타임 값으로 못 잰다 — 세105에 뮤테이션으로 실증했다.**
+## `stream_of`를 `return load(path)`로 바꿔 놓고 돌렸더니 **전 항목 그린이었다**(검출 0).
+## 이유: **Godot의 `load()` 자체가 리소스 캐시를 지나** 어느 길로 가든 **같은 인스턴스**를 준다.
+## ⇒ 「인스턴스가 같다」는 우회해도 참이라 **자명 통과**다. 세86 *"「결과 값이 같다」는
+## 「같은 길로 왔다」가 아니다"*가 그대로 재현된 자리다.
+## ⚠ **그 검사를 「있으니 됐다」고 남겨 두면 그물이 있다는 착각만 준다** — 그래서 걷어냈다.
+##
+## 🔴 **실패 형태가 늘 「소스에서 그 호출이 빠진다」라서 소스로 잰다**(선례 = `test_scene_contract_auto`가
+## `mouse_filter`를 `.tscn` 프로퍼티로 잡는 것 · `test_ui_text_auto`의 사본 재발 스캔).
+func _test_stream_of_public_accessor() -> void:
+	_check(_audio.has_method("stream_of"), "Audio.stream_of() 공개 접근자가 있다")
+	if not _audio.has_method("stream_of"):
+		return
+
+	for id in ["growl", "howl"]:
+		var s = _audio.stream_of(StringName(id))
+		var ok: bool = s != null and s is AudioStream and s.get_length() > 0.0
+		_check(ok, "stream_of(%s) → 유효한 스트림" % id)
+
+	# 없는 id는 null이어야 한다 — 부르는 쪽이 null을 확인하도록 계약이 잡혀 있다
+	# (소리가 아직 없다고 게임이 멎으면 안 된다는 audio.gd의 규율).
+	_check(_audio.stream_of(&"__no_such_sfx__") == null, "stream_of(없는 id) → null")
+
+	# 🔴 캐시 단일 소스 — 소스 스캔 (위 머리말 참조: 런타임 값으로는 검출력이 0이다)
+	var src := ""
+	var f := FileAccess.open("res://src/core/audio.gd", FileAccess.READ)
+	if f != null:
+		src = f.get_as_text()
+		f.close()
+	_check(src != "", "audio.gd 소스를 읽었다 (빈 문자열이면 아래가 전부 자명 통과)")
+	if src == "":
+		return
+
+	# `func stream_of` 본문만 잘라낸다 — 다음 `func ` 선언 전까지.
+	var start := src.find("func stream_of(")
+	_check(start >= 0, "소스에 func stream_of( 선언이 있다")
+	if start < 0:
+		return
+	var rest := src.substr(start + 15)
+	var stop := rest.find("\nfunc ")
+	var body := rest if stop < 0 else rest.substr(0, stop)
+
+	_check(body.contains("_stream("),
+		"stream_of 본문이 _stream()을 부른다 (캐시·경고1회 단일 소스)")
+	# 🔴 짝 검사 — 우회 형태를 직접 금지한다. 위 검사만 있으면 `_stream()`을 부르면서
+	#   `load()`도 같이 부르는 「반만 고친」 형태가 통과한다.
+	_check(not body.contains("load("),
+		"stream_of 본문이 load()를 직접 부르지 않는다 (캐시가 두 벌이 되는 형태)")
 
 
 # ── AudioStreamPlayer 풀 관찰 헬퍼 (공개 프로퍼티만) ──────────────

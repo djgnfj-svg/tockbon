@@ -114,6 +114,28 @@ func play(id: StringName, pitch: float = 1.0, volume_db: float = 0.0) -> void:
 	p.play()
 
 
+## 🔊 **위치 있는 소리용 스트림 대출구** (세105 몬스터 인지 · `AudioStreamPlayer2D`가 부른다).
+##
+## 🔴 **왜 이 구멍을 냈나**: `Audio`의 풀은 `AudioStreamPlayer`(**비위치**) 8개라 방 반대편 늑대가
+##   코앞처럼 들린다. 인지 설계가 성공해 여러 마리가 동시에 짖으면 **통보가 아니라 잡음**이 된다
+##   (설계 §8-6 · 리드 판단 M8). 거리 감쇠는 `AudioStreamPlayer2D`만 준다.
+##
+## 🔴 **그래도 「새 소리 = wav 한 장」은 안 깨진다** — 파일명=id 규약도, 지연 로드도, 캐시도,
+##   없는 id 경고 1회도 전부 여기(`_stream`)를 그대로 지난다. 갈라지는 건 딱 하나,
+##   **「어느 노드가 재생하나」**뿐이다. 그러니 이 함수로 **로드를 흉내 내지 마라** —
+##   `load("res://assets/audio/sfx/…")`를 직접 부르면 캐시가 두 벌이 되고 경고가 매 프레임 뜬다.
+##
+## 🔴🔴 **부르는 쪽 의무 — `bus = &"SFX"`를 반드시 설정해라.**
+##   `AudioStreamPlayer2D`의 기본 버스는 `Master`가 아니라 **`Master`로 바로 물리는 기본값**이라
+##   음소거(`O` 키)는 어차피 먹지만, **볼륨을 버스별로 가르는 날 늑대 소리만 안 따라온다.**
+##   풀(`_ready`)이 `p.bus = &"SFX"`를 거는 것과 **같은 이유**다 — 규약을 한쪽만 지키면 갈라진다.
+##
+## @return 없는 id면 `null`(경고 1회) — 부르는 쪽은 **null을 반드시 확인해라.**
+##   소리가 아직 없다고 게임이 멎으면 안 된다는 이 파일의 규율이 그대로 적용된다.
+func stream_of(id: StringName) -> AudioStream:
+	return _stream(id)
+
+
 func _stream(id: StringName) -> AudioStream:
 	if _cache.has(id):
 		return _cache[id]
