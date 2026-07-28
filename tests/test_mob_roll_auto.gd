@@ -380,6 +380,11 @@ func _test_named_sometimes() -> void:
 ##  「크다」가 아니라 **「바탕보다 크다」**가 계약이기 때문이다(바탕이 커지면 네임드도 커져야 한다).
 ##
 ## 🔴 **`params.tint`는 세99에 새로 낸 손잡이다 — 재지 않으면 곧장 거짓 손잡이(T3)가 된다.**
+##  🔴🔴 **세103: 실데이터 소비자가 0곳이 됐다.** `hound_alpha`가 **전용 스프라이트**를 얻으며 tint를
+##   걷었고(곱셈이라 팔레트 밖 색이 나오던 자리 = N21ⓓ), 세100에 네임드 둘이 은퇴해 남은 소비자가 없다.
+##   → 이 항목은 이제 **tint를 주입해서** 기계를 잰다(소비자 0이어도 손잡이 생존을 증명한다).
+##   ⚠ **수단과 계약이 갈렸다** — 「네임드가 바탕과 다르게 보인다」(계약)를 재는 검사를 **실데이터로 따로** 뒀다.
+##   수단(tint)으로만 재던 동안 **더 나은 수단으로 고쳤는데 이 항목만 빨개졌다**(세103 실측).
 ##  ⚠ `params.color`와 헷갈리지 마라: `color`는 세45에 **죽음 퍼프 색**으로만 남아 몸을 안 물들인다.
 ##   설계 §4가 *"`color`가 `_apply_look`을 지난다"*고 적은 건 **실측과 다르다**(세99 dev 확인).
 ## 🔴 상태이상 틴트와의 **곱셈 합성**도 여기가 유일한 측정자다 — 대입으로 되돌리면 몸 색조가
@@ -392,6 +397,15 @@ func _test_named_looks_different() -> void:
 	ch.mob_pool = _typed_pool([])
 	ch.named_pool = _typed_named([_named(&"hound_alpha", 1.0, Vector2(-300, 100))])
 	ch.mob_spawns = _typed_spawns([_spawn(&"hound", Vector2(300, 100), &"")])
+	# 🔴🔴 세103: **실데이터의 `tint`가 0곳이 됐다** — `hound_alpha`가 전용 스프라이트를 얻으며
+	#  걷었다(곱셈이라 팔레트 밖 색이 나오던 자리 = BACKLOG N21ⓓ · 세69 relight 은퇴와 같은 병).
+	#  그래서 tint 기계는 **주입으로 잰다** — 소비자가 0곳이어도 손잡이가 살아 있음을 증명한다
+	#  (위 머리말이 경고한 T3 거짓 손잡이가 실현되는 걸 막는 유일한 자리다).
+	#  ⚠ `_fresh` **전에** 넣어야 스폰이 읽는다 · 끝에서 원본대로 되돌린다.
+	var alpha_def = _db.get_enemy(&"hound_alpha")
+	var tint_had: bool = alpha_def.params.has("tint")
+	var tint_old = alpha_def.params.get("tint", null)
+	alpha_def.params["tint"] = Color(0.85, 0.7, 0.95, 1.0)
 	await _fresh(&"ch1")
 
 	var base_node = null
@@ -420,7 +434,20 @@ func _test_named_looks_different() -> void:
 	_check(base_vis.modulate.is_equal_approx(Color.WHITE),
 		"🔴 `tint`가 없는 잡몹의 몸 색조는 흰색 그대로다 = 기존 적 회귀 0 (실제 %s)" % base_vis.modulate)
 	_check(not named_vis.modulate.is_equal_approx(Color.WHITE),
-		"🔴 네임드의 몸 색조가 흰색이 아니다 = params.tint가 화면까지 닿는다 (실제 %s)" % named_vis.modulate)
+		"🔴 주입한 `tint`가 화면까지 닿는다 = 손잡이가 살아 있다 (실제 %s)" % named_vis.modulate)
+
+	# 🔴🔴 세103 신설 — **계약은 「네임드가 바탕과 다르게 보인다」**이지 「tint가 걸렸다」가 아니다.
+	#  세99엔 수단이 tint뿐이라(같은 PNG를 색만 바꿔 썼다) 둘이 같은 문장이었는데, 전용 스프라이트가
+	#  생기며 갈렸다. ⚠ **수단으로만 재면 더 나은 수단으로 고쳤는데 빨개진다**(세103에 실제로 그랬다:
+	#  tint를 걷고 전용 그림을 줬더니 이 항목만 빨갰다).
+	#  🔴 **실데이터로 잰다** — 위 주입값을 쓰면 자명 통과가 된다(그래서 `tint_had`가 원본 기준이다).
+	var base_par: Dictionary = _db.get_enemy(&"hound").params
+	var sprite_differs: bool = alpha_def.params.get("sprite", "") != base_par.get("sprite", "")
+	var size_differs: bool = alpha_def.params.get("size", 1.0) != base_par.get("size", 1.0)
+	_check(sprite_differs or size_differs or tint_had,
+		"🔴 네임드가 바탕과 **데이터에서** 갈린다 (그림 %s · 크기 %.2f vs %.2f · 원본 tint %s — 셋 다 같으면 「같은 적」이다)"
+			% ["다름" if sprite_differs else "같음",
+				alpha_def.params.get("size", 1.0), base_par.get("size", 1.0), tint_had])
 
 	# 🔴🔴 상태이상이 들어와도 **몸 색조가 안 지워진다**(곱셈 합성). 대입으로 되돌리면 여기가 빨개진다.
 	#  ⚠ 상태를 실제로 얹어 `_refresh_tint`를 태운다 — 값을 직접 읽으면 합성 경로를 안 지난다(세86의 결).
@@ -431,6 +458,12 @@ func _test_named_looks_different() -> void:
 	_check(not after.is_equal_approx(Color.WHITE),
 		"🔴🔴 상태이상 틴트가 들어와도 몸 색조가 안 지워진다 (%s → %s — 흰색이면 대입으로 덮인 것)"
 			% [before, after])
+	# 🔴 주입 원상복구 — 안 되돌리면 뒤 항목·뒤 테스트가 오염된다(`_save`/`_restore_all`과 같은 이유).
+	#  ⚠ **키를 지우는 쪽까지 해야 한다** — 대입만 되돌리면 원래 없던 `tint` 키가 남는다.
+	if tint_had:
+		alpha_def.params["tint"] = tint_old
+	else:
+		alpha_def.params.erase("tint")
 	_restore_all()
 
 
