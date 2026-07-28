@@ -29,24 +29,39 @@ extends RefCounted
 ##   🔴 *"알 수 없으니 숨긴다"*는 **안 보여야 할 이유가 없는 적을 지우는** 최악의 실패 형태다
 ##   (설계 §5-1 A4 — 기존 그물 둘이 `modulate == Color(1,1,1,1)` 완전 일치를 단언해서 계약이기도 하다).
 ##
+## 🔴🔴 **인자를 「늘리는」 것은 위 방어선의 반대편이 아니다** (세105 차폐).
+## 위 문단이 막는 건 **수치를 이 파일 안으로 끌어들이는 것**이지 인자 수 자체가 아니다.
+## `occluders`도 **밖에서 주입하는 값**이라 그 정신을 그대로 따른다 — 오히려 노드·씬·그룹을
+## 여기서 조회하는 순간(그게 「인자를 줄이는」 형태다) 이 파일이 `SceneTree`를 알게 되어
+## *"여긴 노드도 씬도 시간도 모른다"*는 계약이 깨진다.
+##
 ## @param origin      보는 쪽의 위치 (플레이어)
 ## @param aim         보는 방향 (정규화 불필요 · 영벡터면 fail-open)
 ## @param target      보이는지 물어보는 대상의 위치 (적)
 ## @param fan_deg     부채꼴 **전체** 각도 (반각이 아니다 — 120이면 좌우 60씩)
 ## @param fan_range   부채꼴 사거리
 ## @param near_radius 주변시 반경 (방향 무관)
+## @param occluders   🔴 **`(x, y, r)`의 배열 — `z`가 반경이다. 3D 좌표가 아니다.**
+##                    시선을 끊는 것들(나무·큰 바위). 비면 차폐 없음 = 옛 동작 그대로.
 static func is_seen(
 	origin: Vector2,
 	aim: Vector2,
 	target: Vector2,
 	fan_deg: float,
 	fan_range: float,
-	near_radius: float
+	near_radius: float,
+	occluders: PackedVector3Array = PackedVector3Array()
 ) -> bool:
 	var to_target := target - origin
 	var dist := to_target.length()
 
-	# 주변시 — 방향을 안 본다. 같은 자리(dist 0)도 여기서 잡힌다.
+	# 🔴🔴 주변시 — 방향을 안 본다. 같은 자리(dist 0)도 여기서 잡힌다.
+	#
+	# **이 검사가 차폐(아래)보다 위에 있는 것이 계약이다**(세105 · `vision_occlusion_design` §2-3 ①).
+	# 주변시는 「눈」이 아니라 **「몸으로 느끼는 범위」**라 나무가 막을 이유가 없고, 더 중요하게는
+	# 이 순서가 `vision_design` §4-1의 보장(*"쫓기 시작한 적은 반드시 보인다"*)을 지탱한다 —
+	# 🔴 **아래로 내리면 나무 뒤에서 달려오는 늑대가 코앞까지 안 보이고**, 그 설계가 막으려던
+	#   *"안 보이는 데서 맞았다"*가 에러 0으로 돌아온다(그물 = `test_vision_auto [1]`의 차폐 표).
 	if dist <= near_radius:
 		return true
 
@@ -73,7 +88,48 @@ static func is_seen(
 	## ⚠ **부르는 쪽에서 우회하지 마라** — 이 파일이 부채꼴 판정의 **단일 소스**인 이유가
 	## 「같은 수학을 두 벌로 두지 않는다」인데, 호출자마다 360° 예외를 따로 적으면 그게 곧 T5다.
 	if fan_deg >= 360.0:
-		return true
+		return not _blocked(origin, target, occluders)
 
 	# 부채꼴 — `fan_deg`는 전체 각도라 반으로 갈라 비교한다.
-	return absf(aim.angle_to(to_target)) <= deg_to_rad(fan_deg * 0.5)
+	if absf(aim.angle_to(to_target)) > deg_to_rad(fan_deg * 0.5):
+		return false
+
+	return not _blocked(origin, target, occluders)
+
+
+## 🔴 시선(선분)이 엄폐물(원) 하나라도 지나면 막힌 것이다 — 순수 기하.
+##
+## ⚠ **여유(epsilon)를 넣지 마라.** 이 파일이 세105에 float32 경계로 밟은 자리가 위에 있는데,
+##   여기는 **거리 제곱끼리 비교**라 그 함정이 없다(`sqrt`도 안 쓴다 — 느리기만 하다).
+##
+## 🔴 **양 끝점이 원 안이면 「막힌 것」이 아니다.** 안 걸러내면 나무에 몸을 붙이고 선 쪽이
+##   자기 나무에 가려져 **「나무를 껴안으면 아무것도 안 보인다」**가 된다.
+##   ⚠ 보는 쪽(`origin`)만이 아니라 **대상(`target`)도** 봐야 한다 — 나무 밑동에 선 적을
+##   못 보면 「나무 옆에 붙은 적이 영영 안 보인다」가 된다.
+static func _blocked(origin: Vector2, target: Vector2, occluders: PackedVector3Array) -> bool:
+	if occluders.is_empty():
+		return false
+
+	var seg := target - origin
+	var seg_len_sq := seg.length_squared()
+
+	for o: Vector3 in occluders:
+		var c := Vector2(o.x, o.y)
+		var r := o.z
+		if r <= 0.0:
+			continue
+		var r_sq := r * r
+
+		# 끝점이 원 안이면 이 엄폐물은 건너뛴다 (위 주석)
+		if origin.distance_squared_to(c) <= r_sq or target.distance_squared_to(c) <= r_sq:
+			continue
+
+		# 선분 위에서 원 중심에 가장 가까운 점 — t를 [0,1]로 clamp한다.
+		# ⚠ seg_len_sq가 0이면(같은 자리) 위 끝점 검사에서 이미 걸러졌거나 원 밖이라 안전하다.
+		var t := 0.0
+		if seg_len_sq > 0.0:
+			t = clampf((c - origin).dot(seg) / seg_len_sq, 0.0, 1.0)
+		if (origin + seg * t).distance_squared_to(c) <= r_sq:
+			return true
+
+	return false

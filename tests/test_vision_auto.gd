@@ -8,6 +8,9 @@ extends SceneTree
 ##
 ## 🔴 여기서 헤드리스가 **실제로 잡는** 것:
 ##   • [1] 판정(`src/core/vision.gd`)은 **순수 static이라 직접 호출해 표로** 잰다
+##         — 🔴 세105에 **차폐**(나무·큰 바위가 시선을 끊는다)가 이 표에 붙었다.
+##           **가장 중요한 줄 = [차폐3]**(*"주변시 안이면 엄폐물이 정면에 있어도 보인다"*) —
+##           그 순서가 뒤집히면 **나무 뒤에서 달려오는 늑대가 코앞까지 안 보인다**(설계 O1).
 ##   • [2] 🔴 **데이터 불변식** — 바탕 종은 「쫓으면 보인다」가 보장되고 네임드만 등 뒤를 받는다.
 ##         **리터럴 220을 박지 않는다**(balance에서 읽는다) — 잡몹을 늘리는 날 여기가 빨개진다
 ##   • [3] 🔴 **보스 전원이 `always_visible`인가** — 챕터의 `boss_enemy_id`를 **데이터에서 모아** 잰다
@@ -172,19 +175,103 @@ func _test_judgement_table() -> void:
 	_check(not _vision.is_seen(o, aim, Vector2.LEFT * (rng + 200.0), 360.0, rng, near),
 		"🔴 360°여도 **사거리 밖은 안 보인다** (전방위 가드가 거리 판정을 안 삼킨다)")
 
+	# ══ 🔴🔴 차폐 — 나무·큰 바위가 시선을 끊는다 (세105 · 정본 `vision_occlusion_design.md` §7) ══
+	#
+	# 🔴 `occluders`는 **`(x, y, r)`의 배열이고 `z`가 반경**이다 — **3D 좌표가 아니다**(그 파일 서명).
+	# 🔴 **반경도 balance에서 파생시킨다.** 리터럴 34를 박으면 사용자가 주변시·사거리를 조이는 날
+	#  엄폐물이 시선보다 커져(끝점을 삼켜) 이 표가 **통째로 자명 통과**로 무너진다. 실제 반경(34/26)은
+	#  `boss_room.PROP_TABLE`이 쥐고 **여기서 재는 것은 수학과 순서**다(그 짝은 `test_perception_auto [15]`).
+	# ⚠ **이 표는 ⓪(`forest_enemy._detects`의 360° 우회)을 못 잡는다** — 그건 호출자 쪽 코드라
+	#  순수 함수를 아무리 흔들어도 안 걸린다. 그 검출자는 라이브([15]ⓑ)다.
+	var far_t := Vector2(mid, 0.0)                 # 정면 · 주변시 밖 · 사거리 안
+	var br := mid * 0.2                            # 엄폐물 반경 — 시선 길이에서 파생한다
+	var on_line := PackedVector3Array([Vector3(mid * 0.5, 0.0, br)])
+	_check(not _vision.is_seen(o, aim, far_t, deg, rng, near, on_line),
+		"🔴 [차폐1] 시선 한가운데 엄폐물 → **안 보인다**")
+	_check(_vision.is_seen(o, aim, far_t, deg, rng, near),
+		"🔴 [차폐1'] 같은 자리인데 목록이 비면 보인다 = 위 빨강의 원인이 **차폐**다 (양성 대조)")
 
-## [2] 🔴🔴 **데이터 불변식 — 이 설계의 심장**(§4-1).
+	# [2] 비켜 있으면 보인다 — **반경 바로 밖**이다(여유(epsilon)를 넣으면 여기가 빨개진다).
+	var off_line := PackedVector3Array([Vector3(mid * 0.5, br + 4.0, br)])
+	_check(_vision.is_seen(o, aim, far_t, deg, rng, near, off_line),
+		"🔴 [차폐2] 엄폐물이 반경 **바로 밖**으로 비켜 있으면 보인다")
+
+	# [3] 🔴🔴 **이 설계에서 가장 중요한 한 줄** — 주변시가 차폐보다 **위**다(설계 §2-3 ① · O1).
+	#  내리면 **나무 뒤에서 달려오는 늑대가 코앞까지 안 보이고**, `vision_design` §4-1이 막으려던
+	#  *"안 보이는 데서 맞았다"*가 에러 0으로 돌아온다.
+	var near_t := Vector2(near * 0.6, 0.0)
+	var near_blk := PackedVector3Array([Vector3(near * 0.3, 0.0, near * 0.1)])
+	_check(_vision.is_seen(o, aim, near_t, deg, rng, near, near_blk),
+		"🔴🔴 [차폐3] **주변시 안이면 엄폐물이 정면에 있어도 보인다** = 주변시가 차폐보다 먼저다 (O1)")
+	# 🔴 짝 — **같은 모양인데 주변시 밖**이면 막혀야 한다. 없으면 [3]이 「차폐가 아예 안 돈다」와 안 갈린다.
+	var just_out := Vector2(near * 1.4, 0.0)
+	var out_blk := PackedVector3Array([Vector3(near * 0.7, 0.0, near * 0.1)])
+	_check(not _vision.is_seen(o, aim, just_out, deg, rng, near, out_blk),
+		"🔴 [차폐3'] 같은 모양이라도 주변시 **밖**이면 막힌다 ([3]이 자명 통과가 아니다)")
+
+	# [4] 선분이지 직선이 아니다 — 대상보다 **멀거나** 내 **뒤**에 있는 원은 안 막는다(t를 [0,1]로 clamp).
+	_check(_vision.is_seen(o, aim, far_t, deg, rng, near,
+			PackedVector3Array([Vector3(mid + br * 2.0, 0.0, br)])),
+		"🔴 [차폐4] 엄폐물이 **대상보다 멀리** 있으면 안 막는다 (직선으로 재면 빨개진다)")
+	_check(_vision.is_seen(o, aim, far_t, deg, rng, near,
+			PackedVector3Array([Vector3(-br * 2.0, 0.0, br)])),
+		"🔴 [차폐4'] 엄폐물이 **내 뒤**에 있어도 안 막는다 (clamp의 반대쪽 끝)")
+
+	# [5] 🔴 끝점이 원 안이면 통과(O6) — **양쪽 다** 봐야 한다. 한쪽만 걸러내면 나머지가 빨개진다.
+	_check(_vision.is_seen(o, aim, far_t, deg, rng, near,
+			PackedVector3Array([Vector3(br * 0.5, 0.0, br)])),
+		"🔴 [차폐5] 내가 나무를 **껴안고** 있으면 그 나무는 안 막는다 (origin이 원 안)")
+	_check(_vision.is_seen(o, aim, far_t, deg, rng, near,
+			PackedVector3Array([Vector3(mid - br * 0.5, 0.0, br)])),
+		"🔴 [차폐5'] 적이 나무 **밑동에 서 있어도** 보인다 (target이 원 안 — 안 보면 「나무 옆 적은 영영 안 보인다」)")
+
+	# [6] 회귀 0 — 빈 배열은 **인자를 안 넘긴 것과 완전히 같다**. 여러 자리에서 한꺼번에 대조한다.
+	var regress: Array[Vector2] = [
+		far_t,
+		Vector2(0.0, near - 20.0),
+		Vector2(-(near + 200.0), 0.0),
+		Vector2.RIGHT.rotated(deg_to_rad(half + 4.0)) * mid,
+		Vector2.RIGHT.rotated(deg_to_rad(half - 4.0)) * mid,
+	]
+	var same := true
+	for t: Vector2 in regress:
+		if _vision.is_seen(o, aim, t, deg, rng, near) \
+				!= _vision.is_seen(o, aim, t, deg, rng, near, PackedVector3Array()):
+			same = false
+	_check(same, "🔴 [차폐6] 빈 배열 = 인자를 안 넘긴 것과 **완전히 같다** (회귀 0 · %d자리 대조)" % regress.size())
+	_check(_vision.is_seen(o, aim, far_t, deg, rng, near,
+			PackedVector3Array([Vector3(mid * 0.5, 0.0, 0.0)])),
+		"🔴 [차폐6'] **반경 0인 엄폐물은 안 막는다** = `PROP_TABLE`의 `occlude: 0`(수풀·잔돌)이 뜻대로 돈다")
+
+	# [7] 🔴 전방위여도 차폐는 받는다 — `fan_deg >= 360` 가드가 차폐를 **삼키면** 빨개진다(설계 §2-3 ④).
+	_check(not _vision.is_seen(o, aim, far_t, 360.0, rng, near, on_line),
+		"🔴 [차폐7] **전방위(360°)여도 차폐는 받는다** (전방위 가드가 `_blocked`를 삼키면 빨개진다)")
+	_check(not _vision.is_seen(o, aim, far_back, 360.0, rng, near,
+			PackedVector3Array([Vector3(far_back.x * 0.5, 0.0, br)])),
+		"🔴 [차폐7'] 360°면 보이던 **정확히 등 뒤**도 엄폐물이 끼면 안 보인다")
+
+
+## [2] 🔴🔴 **데이터 불변식 — 세105에 기준이 옮겨갔다** (§4-1 → 아래).
 ##
-##   주변시 ≥ aggro 이면 → **나를 쫓기 시작한 적은 반드시 보인다.**
-##   안 보이는 적 = 아직 나를 모르는 적. 긴장은 「저 너머에 뭐가 있나」에서 오고,
-##   짜증(「안 보이는 데서 맞았다」)이 그 자리를 안 뺏는다.
+## **옛 불변식**(세104): *"주변시 ≥ aggro ⇒ 나를 쫓기 시작한 적은 반드시 보인다."*
+## 🔴🔴 **그 보장은 세105에 죽었다** — 사용자가 **주변시를 220 → 110으로 내렸다**
+##  (*"주변시 줄여줘 내가 볼때 나무가 걸리면 그 뒤방향이 안보여야하는데"*).
+##  **차폐와 주변시가 서로를 갉기 때문이다**: 주변시는 **차폐 면제**라 크면 나무 뒤도 보여서
+##  차폐가 통째로 무의미해진다(`balance_data.gd`의 그 값 주석 · `vision_occlusion_design` §2-3 ①).
 ##
-## 🔴 **단, 이 보장은 「바탕 종」에만 적용된다** — 네임드는 **일부러** 보장 밖이다(§4-1-b 사용자
-##  확정 *"네임드에 등 뒤 주기"*). 그래서 세 갈래다: 보스는 건너뛰고 · 스토커는 `>` · 나머지는 `≤`.
-## 🔴 **리터럴 220을 박지 마라** — balance에서 읽는다. 잡몹을 늘리는 날 aggro가 주변시를 넘으면
-##  ⓐ가 빨개지고, 네임드를 순하게 조이다 주변시 밑으로 내리면 ⓑ가 빨개진다.
+## ⇒ **이제 「안 보이는 채로 쫓기는 구간」이 정상이다.** `hound`의 220 > 주변시 110.
+## 🔴 **그 자리를 「몸이 보인다」가 아니라 「표시가 뜬다」가 맡는다** — 정보 채널이 옮겨간 것이지
+##  사라진 게 아니다. **그 축의 그물은 `test_alert_mark_auto`이고 여기서 중복하지 않는다**(T5).
+##  ⚠ 그래서 **표시를 약하게 만들거나 조건을 좁히면 이 값과 함께 무너진다.**
+##
+## **새 불변식 = 「네임드는 바탕보다 멀리 본다」** — 기준을 **주변시**에서 **바탕 종 최댓값**으로 옮겼다.
+##  🔴 **왜 폐기가 아니라 이전인가**: `hound_alpha`의 「등 뒤」는 **세101에 사용자가 직접 확정한
+##  그 종의 유일한 정체성**이고, 그걸 지키는 그물이 여기 하나뿐이다. 주변시를 조일 때마다
+##  이 검사가 빨개지면 사람이 「그물이 낡았다」며 지우게 되고, 그날 정체성이 값 하나로 증발한다.
+##  기준을 종끼리로 옮기면 **주변시를 어떻게 조여도 이 검사는 안 흔들린다.**
+## 🔴 **리터럴을 박지 마라** — 바탕 최댓값도 데이터에서 구한다(잡몹이 늘면 저절로 따라간다).
 func _test_data_invariant() -> void:
-	print("[2] 🔴🔴 데이터 불변식 — 바탕 종은 「쫓으면 보인다」 · 네임드만 등 뒤를 받는다")
+	print("[2] 🔴🔴 데이터 불변식 — 네임드는 바탕 종보다 멀리 본다 (세105: 기준이 주변시→바탕으로 옮겨갔다)")
 	var near: float = _gs.balance.vision_near_radius
 	# 🔴 스토커 목록이 **실재하는 적**을 가리키나 — 오타면 아래 ⓑ가 통째로 자명 통과가 된다.
 	for id: StringName in STALKERS:
@@ -193,6 +280,19 @@ func _test_data_invariant() -> void:
 
 	var ids: Array = _db.enemies.keys()
 	ids.sort_custom(func(a, b) -> bool: return String(a) < String(b))
+
+	# 🔴 **바탕 종 최댓값을 데이터에서 먼저 구한다** — 이게 새 기준선이다(리터럴 220을 안 박는다).
+	#  잡몹을 늘려 바탕이 더 멀리 보게 되면 네임드도 그만큼 밀려야 한다는 뜻이고,
+	#  그게 「네임드가 특별하다」의 실제 내용이다.
+	var base_max := 0.0
+	for id: StringName in ids:
+		var d = _db.enemies[id]
+		if d == null or bool(d.params.get("always_visible", false)) or STALKERS.has(id):
+			continue
+		base_max = maxf(base_max, float(d.params.get("sight_range", d.params.get("aggro_range", 0.0))))
+	_check(base_max > 0.0,
+		"바탕 종의 sight_range 최댓값을 구했다 (%.0f — 0이면 아래 ⓑ가 자명 통과다)" % base_max)
+
 	var judged := 0
 	for id: StringName in ids:
 		var def = _db.enemies[id]
@@ -209,15 +309,27 @@ func _test_data_invariant() -> void:
 			continue   # aggro를 안 쓰는 몸(고정 표적 등)은 이 불변식의 대상이 아니다
 		judged += 1
 		if STALKERS.has(id):
-			# ⓑ 🔴 네임드 = 주변시보다 크게 = 그 차이가 「등 뒤 몇 px」다
-			_check(aggro > near,
-				"ⓑ 🔴 네임드 %s의 aggro %.0f > 주변시 %.0f = 등 뒤 %.0fpx를 받는다 (밑돌면 정체성이 값 하나로 증발한다)"
-					% [id, aggro, near, aggro - near])
+			# ⓑ 🔴 네임드 = **바탕 최댓값보다 크게** = 그 차이가 그 종의 정체성이다
+			_check(aggro > base_max,
+				"ⓑ 🔴 네임드 %s의 sight %.0f > 바탕 최댓값 %.0f = %.0fpx 더 멀리 본다 (밑돌면 정체성이 값 하나로 증발한다)"
+					% [id, aggro, base_max, aggro - base_max])
 		else:
-			# ⓐ 🔴 바탕 종 = 주변시 이하 = 쫓기 시작한 적은 반드시 보인다
-			_check(aggro <= near,
-				"ⓐ 🔴 바탕 종 %s의 aggro %.0f ≤ 주변시 %.0f = 「쫓으면 보인다」 보장 (넘으면 뒤에서 물린다)"
-					% [id, aggro, near])
+			# ⓐ 🔴 바탕 종은 네임드를 **넘지 않는다** — 넘으면 「네임드가 특별하다」가 뒤집힌다.
+			#  ⚠ 옛 조건(`aggro <= 주변시`)은 세105에 폐기됐다(머리말) — 주변시를 조일 때마다
+			#   빨개져서 그물째 지워질 위험이 있었고, 그 자리는 이제 표시(`?`/`!`)가 맡는다.
+			var over := 0.0
+			for s: StringName in STALKERS:
+				var sd = _db.get_enemy(s)
+				if sd != null:
+					over = maxf(over, float(sd.params.get("sight_range", sd.params.get("aggro_range", 0.0))))
+			_check(over <= 0.0 or aggro <= over,
+				"ⓐ 🔴 바탕 종 %s의 sight %.0f ≤ 네임드 최댓값 %.0f (넘으면 네임드가 평범해진다)"
+					% [id, aggro, over])
+			# 📋 참고 출력 — 「안 보이는 채 쫓기는 구간」이 몇 px인가. **판정이 아니라 눈으로 보라고 찍는다**
+			#  (손맛 축이라 값을 못 박지 않는다 — `takbon-verify` §6).
+			if aggro > near:
+				print("       ↳ 참고: %s는 주변시(%.0f) 밖 %.0fpx에서 나를 발견한다 — 그 구간은 표시(?/!)가 맡는다"
+					% [id, near, aggro - near])
 	_check(judged >= 2,
 		"불변식을 실제로 잰 적이 둘 이상이다 (실제 %d — 0이면 위가 통째로 자명 통과다)" % judged)
 

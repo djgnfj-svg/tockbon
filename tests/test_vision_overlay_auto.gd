@@ -25,30 +25,34 @@ extends SceneTree
 const ROOM := "res://src/field/boss_room.tscn"
 const BASE := "res://src/base/base.tscn"
 const OVERLAY := "res://src/actors/vision_overlay.tscn"
+const OVERLAY_SRC := "res://src/actors/vision_overlay.gd"
 const SHADER_SRC := "res://src/actors/vision_overlay.gdshader"
+const VISION_SRC := "res://src/core/vision.gd"
 const FOG_NODE := "VisionFog"
 
 ## 🔴 셰이더가 반드시 받아야 하는 uniform — 하나라도 없으면 모양이 셰이더 안에 굳어 있다는 뜻이다.
+## ⚠ 세105에 셋이 늘었다(차폐 그늘) — **그늘도 모양이라 밖에서 받아야 한다.**
 const REQUIRED_UNIFORMS: Array[String] = [
 	"origin", "aim", "fan_deg", "fan_range", "near_radius",
 	"rect_pos", "rect_size", "darkness",
+	"occluders", "occluder_count", "shadow_feather",
 ]
 
-## 🔴🔴 **어둡기의 「상한」을 잰다 — 정확한 값이 아니다**(세104에 바꿨다).
+## 🔴🔴 **세105: 어둡기 상한(0.35)이 은퇴했다 — 사용자가 직접 뒤집었다.**
 ##
-## 처음엔 정확한 값(0.20)을 박았는데, 사용자가 F5로 **0.30으로 올리자마자 빨개졌다.** 그때 드러난 것:
-##  ⓐ 정확한 값을 박으면 **조일 때마다 두 곳을 고쳐야 한다** — 손맛 값은 원래 자주 움직인다.
-##  ⓑ 그렇다고 `FOG_DARKNESS`에서 **파생시키면 아무것도 안 잡는다**(자기 자신과 비교하는 꼴).
+## 이력이 이 상수의 전부다. 세104엔 **0.35**였고 그 근거가 **세73**(*"밝게할꺼고 조명만"* — 어두운
+## 던전 각하)·**세99**(*"그냥 낮으로"* — 횃불 8개 삭제)였는데, 세105에 사용자가
+## *"**빛이 아예없어야하는데** 어렵나?"*로 **1.00**을 지시했다.
 ##
-## ⇒ 재는 것을 바꿨다: **「사용자가 조일 자유」는 열어 두고 「어두운 던전으로 가는 것」만 막는다.**
-##  이 상한이 곧 **세73**(*"밝게할꺼고 조명만"* — 어두운 던전 각하)·**세99**(*"그냥 낮으로"* —
-##  횃불 8개 삭제)의 방어선이다. 넘기려는 사람은 여기서 한 번 멈춰 서고, **왜 두 번 각하된 방향으로
-##  가는지**를 이 주석에서 읽게 된다.
+## 🔴 **그 지시는 세73·세99와 충돌하지 않는다 — 축이 다르다.** 그 둘이 각하한 건 「**방**이 어둡다」고
+##  이건 「**시야 밖**이 없다」다. 방은 여전히 낮이고 **부채꼴·주변시 안은 원래 밝기 그대로**다.
+##  ⇒ 상한으로는 그 구분을 못 잰다(0.35든 1.00이든 「밖」만 누르는 건 같다) — **상한은 죽은 방어선이다.**
 ##
-## 🔴 **올리려면 근거를 같이 가져와라** — 「실제 게임 줌 스샷에서 지형·드롭이 여전히 또렷하다」를
-##  보이지 못하면 그 변경은 각하 대상이다(`vision_overlay.FOG_DARKNESS` 머리말과 짝이다).
-## ⚠ 하한도 잰다 — 0이면 오버레이가 **살아는 있는데 아무 일도 안 한다**(에러 0 · 그물만 초록).
-const DARKNESS_CEILING := 0.35
+## 🔴🔴 **그럼 세73은 이제 무엇이 지키나 = [7]이다.** *"부채꼴 안은 안 어둡다"*가 살아 있는 계약이고,
+##  `lit_at()`이 그걸 좌표로 단언한다. 어두운 던전으로 가려면 **[7]을 깨야** 한다 —
+##  ⚠ 상한을 되살리자는 제안이 오면 **[7]이 이미 그 일을 한다**고 답해라(같은 말 두 벌 = T5).
+## ⚠ 하한은 그대로 잰다 — 0이면 오버레이가 **살아는 있는데 아무 일도 안 한다**(에러 0 · 그물만 초록).
+const DARKNESS_MAX := 1.0
 ## 월드 연출의 최상단(감전 스파크 z 56 · VFX_SPEC §3)보다 위여야 안개가 그 위를 덮는다.
 const MIN_Z_ABOVE_VFX := 60
 
@@ -86,6 +90,9 @@ func _run() -> void:
 	await _test_not_over_hud()
 	await _test_fail_open()
 	await _test_lit_matches_vision()
+	await _test_occluder_shadow()
+	await _test_overflow_is_observable()
+	await _test_bake_after_props()
 
 	if failures == 0:
 		print("TEST_VISION_OVERLAY_OK — 전 항목 통과")
@@ -143,9 +150,16 @@ func _test_uniforms_match_balance() -> void:
 	var dv := float(dark) if dark != null else -1.0
 	_check(dark != null and dv > 0.0,
 		"어둡기가 0보다 크다 (실제 %s) — 0이면 오버레이가 살아는 있는데 아무 일도 안 한다" % str(dark))
-	_check(dark != null and dv <= DARKNESS_CEILING,
-		"🔴 어둡기가 상한 %.2f 이하다 (실제 %s) — 넘으면 세73(어두운 던전)으로 되돌아간다. 위 상수 주석을 읽어라"
-			% [DARKNESS_CEILING, str(dark)])
+	_check(dark != null and dv <= DARKNESS_MAX,
+		"어둡기가 알파 상한 %.2f 이하다 (실제 %s) — 넘으면 그냥 클램프되어 손잡이가 죽는다"
+			% [DARKNESS_MAX, str(dark)])
+	# 🔴 세105 신설 — 그늘 uniform이 실제로 **밖에서 실린다**. 셋 중 하나만 빠져도
+	#  그 축이 셰이더 안에 굳는데 화면은 그럴듯하다(위 [2] 머리말과 같은 병).
+	var feather = mat.get_shader_parameter("shadow_feather")
+	_check(feather != null and float(feather) > 0.0,
+		"🔴 그늘 반그림자 폭이 실렸다 (%s) — 0이면 그늘이 오려 붙인 것처럼 보인다" % str(feather))
+	_check(mat.get_shader_parameter("occluder_count") != null,
+		"🔴 엄폐물 개수가 실렸다 (안 실리면 셰이더가 루프를 안 돌아 **그늘이 통째로 없다**)")
 	_free_room()
 
 
@@ -175,6 +189,27 @@ func _test_shader_has_no_hardcoded_shape() -> void:
 	for u in REQUIRED_UNIFORMS:
 		_check(code.contains("uniform") and code.contains(u),
 			"uniform '%s'를 밖에서 받는다" % u)
+	# 🔴🔴 **셰이더 배열 길이 = `vision_overlay.MAX_OCCLUDERS`.** 이 하나는 **두 벌로 둘 수밖에 없다**
+	#  (GLSL 배열 길이는 컴파일 타임 상수여야 한다) — 그래서 여기서 대조한다.
+	#  갈리면 어떻게 죽나: .gd가 더 크면 **넘친 엄폐물이 조용히 안 그려지고**(그늘이 없는 나무가 생긴다),
+	#  셰이더가 더 크면 **안 채운 자리를 읽어** 원점 근처에 반경 0짜리 유령이 선다. 둘 다 에러 0이다.
+	var want: int = load(OVERLAY_SRC).MAX_OCCLUDERS
+	_check(code.contains("MAX_OCCLUDERS = %d;" % want),
+		"🔴 셰이더 배열 길이가 vision_overlay.MAX_OCCLUDERS(%d)와 같다" % want)
+
+	# 🔴🔴 **반그림자의 「방향」 계약** (세105 후반 · 사용자 *"자연스럽게 서서히 어두워 지도록"*).
+	#  그늘이 **100%가 되는 선 = 판정(`_blocked`)이 「막힘」이라 답하기 시작하는 선(`r`)**이어야 한다.
+	#  ⇒ 화면은 판정보다 **넓게** 어두워도 되지만 **좁아선 안 된다**:
+	#     「어두운데 보였다」는 참을 수 있고, 「밝은데 안 보였다」는 **사용자가 이미 지적한 그 증상**이다.
+	#
+	# ⚠ **왜 문자열로 재나** — 이 방향은 값으로 못 잰다. 헤드리스는 렌더를 못 읽고,
+	#  `lit_at()`은 `Vision.is_seen`을 **그대로 부르므로** 둘이 경계에서 어긋나는 일이 **구조적으로 없다**
+	#  (그래서 *"경계에서 lit_at과 is_seen이 갈리는지 봐라"*는 검사는 **만들 수 없다**).
+	#  ⇒ 최종 판정은 `tools/vfx_shot.gd` PNG와 F5다. 여기는 **뒤집기를 막는 빗장**일 뿐이다.
+	_check(code.contains("smoothstep(r_sq,"),
+		"🔴 원뿔 옆선 — 그늘 100%의 선이 `r_sq`다 (반그림자는 그 **바깥으로**만 번진다)")
+	_check(code.contains(", max(r_sq,"),
+		"🔴 밑동 테두리 — 그늘 100%의 선도 `r_sq`다 (그라디언트는 원 **안쪽으로**만 번진다)")
 
 
 ## [4] 🔴 **모양이 파생이다** — 사각형은 방의 `Ground`에서, 원점은 플레이어에서 온다.
@@ -295,7 +330,197 @@ func _test_lit_matches_vision() -> void:
 	fog.free()
 
 
+## [8] 🔴🔴 **이 그물의 새 심장 — 그늘을 그리는 화면과 판정이 같은 답을 낸다** (세105 차폐).
+##
+## 왜 여기가 심장인가: `vision_occlusion_design` ⓓ는 원래 *"차폐를 화면에 안 그린다"*였고 §2-5가
+## 그래서 *"안개에 목록을 넘기지 마라"*고 못 박았다 — **넘기면 화면과 관측점이 갈리기 때문**이다.
+## 세105에 사용자가 ⓓ를 뒤집었으므로(*"빛이 안가야하거든"*) 이제는 **안 넘기는 쪽이 갈라짐**이다.
+## 🔴 그 문서가 조건을 미리 적어 뒀다: *"셰이더와 `lit_at`을 **같이** 열어라."* [8]이 그 「같이」를 잰다.
+##
+## 🔴🔴 **격자로 쓸어서 재는 게 핵심이다.** 점 몇 개만 찍으면 「필터가 너무 많이 걷어냈다」를 못 잡는다 —
+##  `lit_at`은 **거른 목록**(`_live`)으로 답하고 여기 기대값은 **전량**으로 내므로, 거르기가 답을
+##  한 점이라도 바꾸면 빨개진다. ⚠ 기대값을 손으로 적지 않는 것도 의도다(balance를 조여도 안 낡는다).
+func _test_occluder_shadow() -> void:
+	print("[8] 🔴 차폐 그늘 — lit_at() = Vision.is_seen(엄폐물 전량)")
+	var vision = load(VISION_SRC)
+	var fog = await _lone_fog()
+	_check(fog.live_occluders().is_empty(),
+		"ⓐ 엄폐물이 없으면 목록이 비어 있다 (= 세104 이전과 완전히 같은 동작)")
+
+	var stub := AimStub.new()
+	stub.aim = Vector2.RIGHT
+	stub.add_to_group("player")
+	root.add_child(stub)
+	stub.global_position = Vector2.ZERO
+	var near: float = _bal.vision_near_radius
+	var rng: float = _bal.vision_fan_range
+	# 🔴 자리는 **balance에서 파생**시킨다 — 리터럴로 박으면 사용자가 시야를 조일 때 거짓 빨강이 난다.
+	#   ⓑ 앞쪽 중거리(부채꼴 한가운데) · ⓒ 주변시 **안**(①의 검출자) · ⓓ 아래쪽 비스듬히
+	var mid := rng * 0.36
+	# 🔴🔴 ⓖ **부채꼴 옆선에 걸친 놈이 하나 있어야 한다.** `_refresh_live`는 쐐기 밖 엄폐물을
+	#  걷어내는데, 원은 **중심이 밖이어도 몸이 안으로 걸친다**(각 반폭 `asin(r/d)`). 그 항을 빼는
+	#  뮤테이션이 **처음엔 안 잡혔다** — 판의 셋이 전부 쐐기 한가운데 있어서였다. 이 줄이 그 검출자다.
+	var edge_deg: float = _bal.vision_fan_deg * 0.5 * 1.02   # 중심은 밖 · 몸은 안
+	var occ := [
+		_occluder(Vector2(mid, 0.0), 34.0),
+		_occluder(Vector2(near * 0.5, 0.0), 34.0),
+		_occluder(Vector2(mid * 1.2, mid * 0.7), 26.0),
+		_occluder(Vector2.RIGHT.rotated(deg_to_rad(edge_deg)) * mid, 34.0),
+	]
+	fog.rebake_occluders()
+	await process_frame
+	await process_frame
+
+	var live: PackedVector3Array = fog.live_occluders()
+	_check(live.size() == occ.size(),
+		"ⓑ 엄폐물 %d개가 실제로 실렸다 (%d) — 0이면 아래가 전부 **자명 통과**가 된다"
+			% [occ.size(), live.size()])
+	_check(fog.occluder_overflow() == 0, "ⓒ 상한에 안 걸렸다 (잘림 %d)" % fog.occluder_overflow())
+
+	# 🔴 전량 목록 — 기대값은 **거르기를 안 거친** 이것으로 낸다(거르기 자체가 피검사체다).
+	var all := PackedVector3Array()
+	for n in occ:
+		all.append(Vector3(n.global_position.x, n.global_position.y, float(n.get_meta("occlude_r"))))
+
+	var bad := 0
+	var first := ""
+	var step := rng * 0.06
+	for ix in range(-6, 17):
+		for iy in range(-8, 9):
+			var p := Vector2(float(ix) * step, float(iy) * step)
+			var want: bool = vision.is_seen(stub.global_position, stub.aim, p,
+				_bal.vision_fan_deg, rng, near, all)
+			if fog.lit_at(p) != want:
+				bad += 1
+				if first.is_empty():
+					first = "%s (화면 %s / 판정 %s)" % [str(p), str(fog.lit_at(p)), str(want)]
+	_check(bad == 0,
+		"🔴🔴 ⓓ 격자 391점이 **한 점도 안 갈린다** (불일치 %d%s)"
+			% [bad, "" if first.is_empty() else " · 첫 어긋남 " + first])
+
+	# 🔴🔴 ⓔ 판정 순서 ① — **주변시 안은 차폐 면제다.** 같은 나무가 「주변시 안 대상」은 안 가리고
+	#  「주변시 밖 대상」은 가려야 한다. **둘 다** 재는 게 요점이다(한쪽만 재면 차폐가 통째로
+	#  안 도는 것도 통과한다 · 설계 O1).
+	var inside := Vector2(near * 0.9, 0.0)
+	var beyond := Vector2(rng * 0.8, 0.0)
+	_check(fog.lit_at(inside),
+		"🔴 ⓔ-1 주변시 안(%s)은 정면에 나무가 있어도 밝다 — 이 줄이 O1의 유일한 검출자다" % str(inside))
+	_check(not fog.lit_at(beyond),
+		"ⓔ-2 같은 나무가 주변시 **밖**(%s)은 가린다 (차폐가 실제로 돈다)" % str(beyond))
+	# 🔴 ⓕ 나무를 껴안은 자리 — 원 안이면 그 나무는 안 가린다(설계 O6).
+	#  ⚠ **엄폐물 하나만 남기고 잰다.** 여럿을 둔 채로 재면 「그 나무 원 안」이 **옆 나무 그늘**에
+	#   들어 빨개진다 — 첫 판에서 실제로 그랬고, 그건 O6이 깨진 게 아니라 판이 잘못 짜인 것이다.
+	for n in occ:
+		n.free()
+	var lone := _occluder(Vector2(mid, 0.0), 34.0)
+	fog.rebake_occluders()
+	await process_frame
+	await process_frame
+	_check(fog.live_occluders().size() == 1, "ⓕ-0 판을 갈아 엄폐물 하나만 남겼다")
+	_check(fog.lit_at(Vector2(mid, 0.0)),
+		"🔴 ⓕ 엄폐물 원 **안**(%s)은 밝다 (「나무를 껴안으면 아무것도 안 보인다」 방지)"
+			% str(Vector2(mid, 0.0)))
+	_check(not fog.lit_at(Vector2(mid + 60.0, 0.0)),
+		"ⓕ-2 그 나무 **바로 뒤**는 어둡다 (ⓕ가 「차폐가 아예 안 돈다」로 통과하지 않게)")
+
+	# 🔴🔴 ⓖ **반그림자는 화면에만 있다 — 판정 경계를 한 픽셀도 못 움직인다** (세105 후반).
+	#  그늘이 연속값이 되면서 생기는 새 위험이 *"반쯤 어두운 곳의 적은 보이나?"*이고, 그 답은
+	#  **「보인다」**여야 한다(반그림자는 판정 밖 영역이다). 누가 그 어긋남을 「고치려고」
+	#  `shadow_feather`를 판정에 끌어들이면 **부채꼴이 조용히 넓어진다** — 여기가 그 검출자다.
+	#  ⚠ uniform을 극단으로 흔들어도 `lit_at`의 답이 **한 점도 안 변해야** 한다.
+	var probes: Array[Vector2] = []
+	for k in 24:
+		probes.append(Vector2(mid + 60.0, (float(k) - 12.0) * 8.0))
+	var before: Array[bool] = []
+	for p in probes:
+		before.append(fog.lit_at(p))
+	fog.material.set_shader_parameter(&"shadow_feather", 500.0)
+	await process_frame
+	var moved := 0
+	for i in probes.size():
+		if fog.lit_at(probes[i]) != before[i]:
+			moved += 1
+	_check(moved == 0,
+		"🔴 ⓖ `shadow_feather`를 500으로 흔들어도 판정이 안 움직인다 (움직인 점 %d)" % moved)
+	# ⚠ 되돌려 놓는다 — 뒤 항목이 흔들린 uniform을 물려받지 않게(무대는 아래에서 free되지만 규율이다).
+	fog.material.set_shader_parameter(&"shadow_feather", load(OVERLAY_SRC).SHADOW_FEATHER_PX)
+
+	lone.free()
+	stub.free()
+	fog.free()
+
+
+## [9] 🔴 **상한에 걸려 잘리면 그 사실이 밖에서 보인다** — 「조용히 잘림」이 이 설계의 유일한
+##  근사(近似)라, 안 보이게 두면 **먼 나무 그늘이 사라진 채 아무도 모른다**.
+## ⚠ 실무대에선 안 걸린다(사거리·쐐기 필터 뒤 기대값이 서넛) — 그래서 **일부러** 넘겨서 잰다.
+func _test_overflow_is_observable() -> void:
+	print("[9] 🔴 상한을 넘기면 잘린 수가 밖으로 나온다")
+	var cap: int = load(OVERLAY_SRC).MAX_OCCLUDERS
+	var fog = await _lone_fog()
+	var stub := AimStub.new()
+	stub.aim = Vector2.RIGHT
+	stub.add_to_group("player")
+	root.add_child(stub)
+	stub.global_position = Vector2.ZERO
+	var extra := 5
+	var made: Array[Node2D] = []
+	var rng: float = _bal.vision_fan_range
+	for i in (cap + extra):
+		# 정면 가까이 일렬로 — 전부 쐐기 안·사거리 안이라 필터가 하나도 못 걷어낸다.
+		made.append(_occluder(Vector2(rng * 0.2 + float(i) * 12.0, 0.0), 8.0))
+	fog.rebake_occluders()
+	await process_frame
+	await process_frame
+	_check(fog.live_occluders().size() == cap,
+		"실은 건 상한 %d개다 (%d)" % [cap, fog.live_occluders().size()])
+	_check(fog.occluder_overflow() == extra,
+		"🔴 잘린 %d개가 `occluder_overflow()`로 보인다 (%d)" % [extra, fog.occluder_overflow()])
+	for n in made:
+		n.free()
+	stub.free()
+	fog.free()
+
+
+## [10] 🔴🔴 **언제 굽나 — 실무대에서만 드러나는 사고다** (설계 §3-2 · F5).
+##
+## `$VisionFog`는 **씬 자식**이라 그 `_ready`가 `boss_room._ready`보다 **먼저** 돈다.
+## 거기서 구우면 `_spawn_props()`가 아직 안 돌아 **목록이 통째로 빈다** — 화면은 그냥
+## 「그늘이 없는 숲」이고 **에러도 경고도 0이다.** 위 [8]·[9]는 스텁 무대라 이걸 **못 잡는다**
+## (거기선 그물이 `rebake_occluders()`를 손으로 부른다) ⇒ 🔴 **이 항목이 유일한 검출자다.**
+## ⚠ 선례가 같은 병이다: `forest_enemy._home`이 *"`_ready`가 아니라 첫 물리 틱"*인 이유.
+func _test_bake_after_props() -> void:
+	print("[10] 🔴 엄폐물을 **방이 프롭을 세운 뒤**에 굽는다")
+	await _fresh_room(&"ch1")
+	var fog = _room.get_node(FOG_NODE)
+	var group: int = get_nodes_in_group(load(OVERLAY_SRC).OCCLUDER_GROUP).size()
+	_check(group > 0,
+		"방이 엄폐물을 실제로 세운다 (%d개) — 0이면 아래가 자명 통과가 된다" % group)
+	_check(fog.baked_occluder_count() == group,
+		"🔴🔴 구운 목록(%d)이 `occluders` 그룹 전량(%d)과 같다 — `_ready`에서 구우면 여기가 0이 된다"
+			% [fog.baked_occluder_count(), group])
+	# ⚠ **단언이 아니라 관측이다** — 실무대에서 필터가 실제로 몇 개까지 줄이나(= 상한 16이 넉넉한가).
+	#  플레이어의 조준은 마우스에서 나와 리그마다 흔들리므로 값을 못 박지 않는다.
+	print("  INFO: 구운 %d개 → 이번 프레임에 실은 %d개 (상한 %d · 잘림 %d)"
+		% [fog.baked_occluder_count(), fog.live_occluders().size(),
+			load(OVERLAY_SRC).MAX_OCCLUDERS, fog.occluder_overflow()])
+	_free_room()
+
+
 # ── 헬퍼 ──
+
+## 엄폐물 스텁 — 방이 `_mark_occluder`에서 새기는 **그 두 줄**(그룹 + meta)을 그대로 흉내낸다.
+## 🔴 키를 여기 안 적는다 — `vision_overlay`의 const를 읽는다(세 번째 사본을 만들면 그게 곧 T5다).
+## ⚠ 프롭 씬을 안 띄우는 게 의도다: 재는 건 **선분↔원**이지 그림이 아니고, 씬을 띄우면 반경이
+##  `boss_room.PROP_TABLE`에 묶여 배치를 조일 때마다 이 그물이 흔들린다.
+func _occluder(at: Vector2, r: float) -> Node2D:
+	var overlay = load(OVERLAY_SRC)
+	var n := Node2D.new()
+	n.add_to_group(overlay.OCCLUDER_GROUP)
+	n.set_meta(overlay.OCCLUDE_R_META, r)
+	root.add_child(n)
+	n.global_position = at
+	return n
+
 
 ## 방 없이 안개만 세운다 — 실플레이어의 조준은 마우스에서 나와 리그마다 흔들리므로,
 ## 조준을 재는 항목은 **스텁만 있는 무대**에서 잰다.

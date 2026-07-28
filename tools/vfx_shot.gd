@@ -233,6 +233,40 @@ const PRESETS := {
 		"crop": 288, "cols": 4, "frames": 16, "dur": 0.62,
 		"desc": "적이 죽었다 — 몸이 마나로 터져 사방으로 흩어진다 (변종: 적 id)",
 	},
+	# 🔴🔴 **시야 안개 + 차폐 그림자** (세105) — 이 프리셋이 재는 문장:
+	#   *"나무 뒤로 원뿔 그늘이 뻗고, **주변시 원 안은 안 뚫린다**."*
+	#
+	# 🔴 **유일하게 「수명이 없는」 프리셋이다** — 안개는 이펙트가 아니라 **상태**다. 그래서 격자의
+	#   축이 시간이 아니라 **조준 각도**다(`sweep_deg`를 `dur` 동안 훑는다). 기본은 **1칸 = 전체 해상도
+	#   한 장**인데, 이 연출의 합격 기준이 *"경계가 오려 붙인 것 같지 않나"*라 **확대해야 보이기**
+	#   때문이다(격자로 줄이면 그 판정이 통째로 죽는다). 여러 각도를 보고 싶으면 인자로 늘려라:
+	#       ... -- fog out.png 0 4 2        (frames 4 · cols 2)
+	#
+	# 🔴 무대는 `_fire_preset`이 아니라 **`_build_stage`가 세운다** — 안개는 첫 `_process` 틱에
+	#   엄폐물을 굽고 원점을 잡으므로, 다른 프리셋처럼 발사 순간에 세우면 **t=0 칸이 빈 화면**이 된다.
+	# ⚠ 무대엔 카메라가 없어 **월드 = 화면**이다. crop 540 = 뷰포트 세로 전체.
+	# 🔴 반경·그룹 키를 여기 안 적는다 — `boss_room.PROP_TABLE`을 런타임에 읽는다(T5 회피).
+	#   ⇒ 표의 `occlude`를 0으로 만드는 뮤테이션이 **이 시트에서도 그대로 드러난다.**
+	&"fog": {
+		"bg": Color(0.29, 0.62, 0.22),
+		"crop": 540, "cols": 1, "frames": 1, "dur": 0.60,
+		"aim_deg": 0.0, "sweep_deg": 70.0,
+		# 자리는 손으로 고른 「보기 좋은 판」이다(실무대 배치가 아니다):
+		#  ⓐ 주변시 안 · ⓑ 중거리 위 · ⓒ 멀리 · ⓓ 큰 바위(반경이 작다) · ⓔ 등 뒤(필터에 빠져야 한다)
+		# ⚠ 자리는 **그늘이 서로 안 겹치게** 골랐다 — 첫 판에서 가까운 나무 하나가 부채꼴의 3분의 2를
+		#   먹어 큰 바위 그늘을 통째로 삼켰고, **그걸 판정할 수 없다는 걸 스샷이 알려 줬다.**
+		# 🔴🔴 첫 줄(가까운 바위)은 **이 시트가 O1을 볼 수 있게 하는 자리**다 — 주변시 원(110) **안**에
+		#   있고 그 뒤로 원 가장자리까지 50px쯤 남아, 차폐가 주변시를 뚫으면 **밝은 원이 베인다.**
+		#   ⚠ 없으면 그 사고가 **시트에 안 찍힌다**: 실제로 뮤테이션을 넣어 봤더니 원래 판에선
+		#    베인 자리가 전부 나무 스프라이트 **밑에** 숨어 화면이 한 픽셀도 안 변했다.
+		"props": [
+			{"scene": "res://src/props/rock_big.tscn", "at": Vector2(59.0, 46.0)},
+			{"scene": "res://src/props/tree.tscn", "at": Vector2(205.0, -40.0)},
+			{"scene": "res://src/props/tree.tscn", "at": Vector2(185.0, -140.0)},
+			{"scene": "res://src/props/tree.tscn", "at": Vector2(-150.0, -80.0)},
+		],
+		"desc": "시야 안개 + 나무 차폐 그늘 (격자 축 = 시간이 아니라 **조준 각도**)",
+	},
 }
 
 var _out := ""
@@ -254,7 +288,18 @@ var _dur := 0.26
 var _zoom := 0            ## 월드 px → 출력 px 배율 (0 = 자동)
 var _cell := 0            ## 칸 한 변(출력 px) = _crop * _zoom
 
+## 조준만 고정해서 돌려주는 「플레이어」 — `fog` 프리셋이 부채꼴 방향을 쥐는 유일한 방법이다
+## (`vision_overlay._process`가 그룹 `"player"`의 `vision_dir()`을 부른다).
+## ⚠ `tests/test_vision_overlay_auto.AimStub`과 같은 리그다 — 계약이 같아야 도구와 그물이 안 갈린다.
+class AimStub extends Node2D:
+	var aim: Vector2 = Vector2.RIGHT
+	func vision_dir() -> Vector2:
+		return aim
+
+
 var _stage: Node2D = null
+var _fog: Node = null          ## `fog` 프리셋의 안개 노드
+var _fog_stub: AimStub = null  ## 그 프리셋의 조준 스텁
 ## ⚠ 오토로드·모듈 인스턴스는 **의도적으로 동적 타입**이다 — 타입을 적으면 컴파일 타임에
 ##   그 스크립트를 참조하게 되어 `-s` 오토로드 함정을 밟는다(tests/*_auto.gd와 같은 관행).
 var _bus = null
@@ -411,6 +456,11 @@ func _build_stage() -> void:
 	vfx.name = "Vfx"
 	_stage.add_child(vfx)
 
+	# 🔴 안개는 **여기서** 세운다(위 프리셋 주석) — 첫 `_process` 틱에 엄폐물을 굽기 때문에
+	#   발사 순간에 세우면 t=0 칸이 「아직 아무것도 모르는」 화면으로 찍힌다.
+	if _name == &"fog":
+		_setup_fog()
+
 
 func _process(delta: float) -> bool:
 	if _done:
@@ -429,6 +479,10 @@ func _process(delta: float) -> bool:
 		return false
 
 	_elapsed += delta
+	# 🔴 `fog`의 격자 축은 시간이 아니라 **조준 각도**다 — 샘플을 요청하기 **전에** 돌려 놔야
+	#   그 칸이 「방금 요청한 각도」로 찍힌다.
+	if _name == &"fog":
+		_aim_fog(_elapsed)
 	var have := _shots.size()
 	if not _pending and have < _frames and _elapsed >= _sample_t(have):
 		_want_shot()
@@ -450,6 +504,9 @@ func _sample_t(i: int) -> float:
 ## 프리셋을 화면 중앙에 터뜨린다. 시그널형이면 EventBus emit, 노드형이면 씬 인스턴스.
 func _fire_preset() -> void:
 	var c := root.get_visible_rect().get_center()
+	# 🔴 안개는 **터뜨리는 물건이 아니다**(수명 없는 상태) — 무대가 `_build_stage`에서 이미 섰다.
+	if _name == &"fog":
+		return
 	var sig := StringName(_p.get("sig", &""))
 	match sig:
 		&"ring_cast_requested":
@@ -568,22 +625,85 @@ func _spawn_node(c: Vector2) -> void:
 ##  여기 필요한 건 **같은 크기·같은 실루엣의 몸 하나**뿐이라 시트 첫 프레임만 잘라 쓴다.
 const PLAYER_SHEET := "res://assets/sprites/player/player_hood_sheet.png"
 const PLAYER_FRAME := Rect2(0.0, 0.0, 64.0, 64.0)   ## idle 0번 (player.tscn의 at_idle0과 같은 자리)
+const FOG_SCENE := "res://src/actors/vision_overlay.tscn"
+## 🔴 엄폐물 반경·그룹 키의 **정본**(`PROP_TABLE`·`OCCLUDER_GROUP`·`OCCLUDE_R_META`)이 여기 있다.
+const ROOM_SCRIPT := "res://src/field/boss_room.gd"
 
-func _spawn_player_stub(pos: Vector2) -> void:
-	var stub := Node2D.new()
+## ⚠ `stub`을 주면 그 몸에 배선한다 — `fog`는 `vision_dir()`이 있는 몸(`AimStub`)이 필요한데
+##  그 밖의 배선(그룹·스프라이트·자리)은 똑같아야 한다(두 벌로 두면 갈라진다).
+func _spawn_player_stub(pos: Vector2, stub: Node2D = null) -> Node2D:
+	if stub == null:
+		stub = Node2D.new()
 	stub.name = "PlayerStub"
 	stub.add_to_group("player")
 	_stage.add_child(stub)
 	stub.global_position = pos
 	var tex := load(PLAYER_SHEET) as Texture2D
 	if tex == null:
-		return
+		return stub
 	var at := AtlasTexture.new()
 	at.atlas = tex
 	at.region = PLAYER_FRAME
 	var spr := Sprite2D.new()
 	spr.texture = at
 	stub.add_child(spr)
+	return stub
+
+
+## 🔴 `fog` 무대 — 프롭을 세우고 · **방과 똑같이** 엄폐물로 새기고 · 안개를 덮는다.
+## 🔴🔴 **반경·그룹·meta 키를 여기 안 적는다** — `boss_room.gd`를 런타임에 읽어 그대로 쓴다.
+##  베끼면 표의 `occlude`를 0으로 만드는 뮤테이션이 이 시트에서만 안 드러나 **도구가 거짓말한다**.
+##  (`-s`는 오토로드 등록보다 먼저 컴파일되므로 컴파일 타임 참조가 아니라 `load()`여야 한다.)
+func _setup_fog() -> void:
+	var c := root.get_visible_rect().get_center()
+	var room := load(ROOM_SCRIPT)
+	if room == null:
+		push_error("[vfx_shot] boss_room.gd 로드 실패 — 엄폐물 반경의 정본을 못 읽는다")
+		quit(1)
+		return
+	for entry in _p.get("props", []) as Array:
+		var d: Dictionary = entry
+		var path := String(d.get("scene", ""))
+		var ps := load(path) as PackedScene
+		if ps == null:
+			push_error("[vfx_shot] 프롭 씬 로드 실패: %s" % path)
+			continue
+		var n := ps.instantiate() as Node2D
+		_stage.add_child(n)
+		n.global_position = c + (d.get("at", Vector2.ZERO) as Vector2)
+		var r := _occlude_radius(room, path)
+		if r > 0.0:
+			# 🔴 방이 `_mark_occluder`에서 하는 **그 두 줄**이다(그룹과 반경을 같은 자리에서).
+			n.add_to_group(room.OCCLUDER_GROUP)
+			n.set_meta(room.OCCLUDE_R_META, r)
+		print("[vfx_shot] 프롭 %-34s at %s  occlude_r=%.1f" % [path.get_file(), str(d.get("at")), r])
+	_fog_stub = _spawn_player_stub(c, AimStub.new()) as AimStub
+	_fog = (load(FOG_SCENE) as PackedScene).instantiate()
+	_stage.add_child(_fog)
+	_fog.fit_to(root.get_visible_rect())
+	_aim_fog(0.0)
+
+
+func _occlude_radius(room, scene_path: String) -> float:
+	for row in room.PROP_TABLE as Array:
+		var d: Dictionary = row
+		if String(d.get("scene", "")) == scene_path:
+			return float(d.get("occlude", 0.0))
+	return 0.0
+
+
+## 격자 축 = 조준 각도. `aim_deg`를 중심으로 `sweep_deg`를 훑는다.
+## ⚠ **한 장짜리(기본)면 f = 0.5 = 정확히 `aim_deg`다** — 그냥 t/dur로 두면 기본 시트가 조용히
+##  `-sweep/2`로 기울어 찍힌다(첫 판에서 실제로 밟았다: 앞을 보라 했는데 위를 보고 있었다).
+##  🔴 그래서 판정 기준이 **시간이 아니라 장수**다 — `dur`은 인자로 못 덮지만 `frames`는 덮을 수 있어서,
+##   시간으로 갈래를 타면 `-- fog x.png 0 4 2`가 **네 칸 다 같은 각도**로 나온다(실제로 그랬다).
+func _aim_fog(t: float) -> void:
+	if _fog_stub == null:
+		return
+	var span := float(_p.get("sweep_deg", 0.0))
+	var f := 0.5 if (_frames <= 1 or _dur <= 0.0) else clampf(t / _dur, 0.0, 1.0)
+	var deg := float(_p.get("aim_deg", 0.0)) - span * 0.5 + span * f
+	_fog_stub.aim = Vector2.RIGHT.rotated(deg_to_rad(deg))
 
 
 ## 🔴 그린 직후에 읽어야 한다 — 이 시그널 없이 읽으면 **한 프레임 전(또는 빈) 화면**이 나온다.
