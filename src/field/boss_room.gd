@@ -129,6 +129,9 @@ const CodexText := preload("res://src/core/codex_text.gd")
 ##  되고 그게 조용히 갈라진다(takbon-rules §5-1).
 ## ⚠ **여기 굴림 로직을 적지 마라** — 이 파일이 지는 건 「언제·어디에」뿐이고 「무엇이 몇 개」는 저기다.
 const DropRoll := preload("res://src/field/drop_roll.gd")
+## 🔴 시야 안개 (세104) — 부채꼴 밖을 **20%만** 누르는 화면 덮개. 이 방에만 선다(마을엔 시야가 없다).
+##  ⚠ 이 파일이 지는 건 「어디에 얼마나 크게」뿐이다 — 모양·수치는 그 노드가 balance에서 직접 읽는다.
+const VisionOverlay := preload("res://src/actors/vision_overlay.gd")
 
 ## 돌아갈 곳 — 🔴 **PackedScene이 아니라 경로다. 바꾸지 마라.** base가 boss_room을 경로로 물고
 ## boss_room이 base를 PackedScene으로 물면 **순환 preload**로 한쪽이 노드 0개 껍데기가 돼
@@ -320,6 +323,7 @@ const PROP_CLEAR_LANDMARK := 220.0
 @onready var _tree_holder: Node2D = $Trees
 @onready var _player: Player = $Player
 @onready var _hud: Hud = $Hud/Hud
+@onready var _fog: VisionOverlay = $VisionFog
 
 var _chapter: ChapterDef = null
 ## 🔴 **나가는 길 전부**(세88 하나 → 세99 여럿). 씬의 남쪽 `$Exit` + `ChapterDef.extract_points`.
@@ -357,6 +361,11 @@ func _ready() -> void:
 	# 목표 달성 넛지 (세40 턴인 — forest 선례): 완료가 아니라 정산 대기라 quest_ready를 듣는다.
 	EventBus.quest_ready.connect(_on_quest_ready)
 
+	# 🔴 시야 안개를 방 바닥에 맞춘다 — 사각형은 **Ground에서 파생한다**(`_clamp_camera_to_room`과
+	#  같은 이유: 방을 또 키우면 따라온다. 좌표를 베끼면 그 순간 갈라진다).
+	# 🔴 **챕터 확인보다 앞이다** — 아래 `_chapter == null` 분기가 `_ready`를 통째로 끊는데,
+	#  뒤에 두면 그 경로에서 크기가 0인 채 남아 노드가 「안 붙었는지 못 붙였는지」가 흐려진다.
+	_fog.fit_to(Rect2(_ground.global_position, _ground.size))
 	# 🔴 어느 챕터인가 — 비었거나 미등록이면 **조용히 빈 방을 띄우지 않는다** (침묵 금지).
 	# F6으로 이 씬을 직접 실행하면 pending_chapter가 비어 여기로 온다 — 베이스로 되돌린다.
 	_chapter = Db.get_chapter(GameState.pending_chapter)

@@ -1,0 +1,17 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://src/actors/vision_overlay.gd" id="1_fog"]
+[ext_resource type="Shader" path="res://src/actors/vision_overlay.gdshader" id="2_fogshader"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_fog"]
+shader = ExtResource("2_fogshader")
+
+; 🔴 크기·위치는 씬에 없다 — 방이 `fit_to(Ground 사각형)`으로 넘긴다(좌표를 두 벌로 들지 않는다).
+; 🔴 mouse_filter = 2(IGNORE) — 지우면 화면을 덮는 Control이 좌클릭을 전부 먹어 발사가 죽는다.
+;   (에러도 경고도 없고 헤드리스로는 못 잡는다 — 씬 주석은 에디터 저장에 날아가니 정본은 .gd 머리말.)
+[node name="VisionFog" type="ColorRect"]
+z_index = 90
+material = SubResource("ShaderMaterial_fog")
+mouse_filter = 2
+color = Color(0, 0, 0, 1)
+script = ExtResource("1_fog")

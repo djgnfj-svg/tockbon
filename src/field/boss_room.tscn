@@ -1,4 +1,4 @@
-[gd_scene load_steps=11 format=3 uid="uid://c0field03bossroom"]
+[gd_scene load_steps=12 format=3 uid="uid://c0field03bossroom"]
 
 [ext_resource type="Script" path="res://src/field/boss_room.gd" id="1_room"]
 [ext_resource type="PackedScene" uid="uid://s4r8t5nlu1i8" path="res://src/actors/player.tscn" id="2_player"]
@@ -9,6 +9,7 @@
 [ext_resource type="TileSet" path="res://assets/sprites/field/tileset_forest.tres" id="7_tileset"]
 [ext_resource type="Texture2D" uid="uid://tpkchxq4kttn" path="res://assets/light_soft.tres" id="8_light"]
 [ext_resource type="Script" path="res://src/actors/interact_zone.gd" id="9_zone"]
+[ext_resource type="PackedScene" path="res://src/actors/vision_overlay.tscn" id="10_fog"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_exit"]
 ; 🔴 세88: 높이를 110 → 70으로 줄였다. 110이면 트리거(y 605~715)가 플레이어 스폰(y 600, 반경 10)과
@@ -177,6 +178,12 @@ position = Vector2(0, 600)
 
 [node name="RingSpellSystem" parent="." instance=ExtResource("3_spell")]
 z_index = 10
+
+; 🔴 시야 안개 (세104) — 부채꼴·주변시 **밖**을 20%만 누른다. 크기·모양은 코드가 넣는다
+; (`boss_room.gd _ready`의 `fit_to` · 수치는 balance의 `vision_*` 셋을 그대로 주입).
+; ⚠ **마을엔 없다** — 마을엔 시야 자체가 없다(허수아비는 늘 보인다).
+; z 90이라 월드 연출(VFX_SPEC §3의 50~56) 위지만, HUD·시트는 **다른 캔버스**(layer 1·5)라 안 덮는다.
+[node name="VisionFog" parent="." instance=ExtResource("10_fog")]
 
 [node name="Hud" type="CanvasLayer" parent="."]
 
