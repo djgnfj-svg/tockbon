@@ -18,7 +18,7 @@
 | 그 밖 코드 연출 | `src/spell/carrier_trail.gd` · `src/spell/blast.gd` · `death_puff` |
 | 셰이더 | **1장** — `src/actors/hit_flash.gdshader` |
 | 이펙트 스프라이트 | `sprites/effects/projectiles.png` **1장뿐** (⚠ `pop.png`는 세94에 지웠다 — 게임이 안 읽고 `death_puff`가 절차적으로 대체했다. 🔴 **원본 `assets/aseprite/pop.aseprite`는 살아 있으니** 손그림 폭발이 필요해지면 다시 익스포트하면 된다) |
-| **파티클** | 🔴 **0건.** `GPUParticles2D`/`CPUParticles2D`가 `src/` 전체에 없다(`particles-vfx` 스킬은 로컬에 있는데 한 번도 안 썼다) |
+| **파티클** | 🔴 **0건.** `GPUParticles2D`/`CPUParticles2D`가 `src/` 전체에 없다 (⚠ `particles-vfx` 스킬은 **한 번도 안 써서 세107에 지웠다** — 파티클을 착수하면 `git checkout -- .claude/skills/particles-vfx`로 되살려라) |
 
 **발신 계약**(이건 잘 서 있다 — 무너뜨리지 마라): `vfx.gd`는 **EventBus만 본다.**
 `reaction_burst` · `reaction_chain` · `ring_cast_requested` · `spell_impact` 넷을 구독하고,
