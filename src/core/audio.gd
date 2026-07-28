@@ -136,12 +136,17 @@ func _on_cast(_assembly: Dictionary, _origin: Vector2, _aim: Vector2) -> void:
 
 func _on_enemy_hit(_enemy: Node2D, _damage: float, rune_type: int) -> void:
 	# 룬 속성별 피격음 변주. 약간의 피치 흔들림으로 반복감 완화.
-	# ⚠ **룬은 6종인데 전용 음은 셋뿐이다** — BOLT·EARTH·GRASS는 기본음(`hit`)으로 떨어진다
-	#   (세83에 룬 6종이 복원되며 생긴 빚. 새 소리 = `assets/audio/sfx/hit_*.wav` 한 장 + 여기 한 줄).
+	# ✅ 세104: **룬 6종이 전부 전용 음을 갖는다**(BOLT·EARTH·GRASS 추가 — 세83 룬 복원의 빚 `C2` 청산).
+	#   생성기 = `tools/gen_hit_sfx.py`(결정적 — 재생성해도 바이트가 같다).
+	# ⚠ **`_` 폴백을 지우지 마라** — 룬이 또 늘면 소리가 없는 게 아니라 기본음으로 떨어져야 한다.
+	#   `Enums.LEGACY_IMPACT`(옛 값 1) 같은 유령 값이 오는 경로도 여기로 흡수된다.
 	match rune_type:
 		Enums.RuneType.FIRE:  play(&"hit_fire", randf_range(0.95, 1.05))
 		Enums.RuneType.WATER: play(&"hit_water", randf_range(0.95, 1.05))
 		Enums.RuneType.WIND:  play(&"hit_wind", randf_range(0.95, 1.05))
+		Enums.RuneType.BOLT:  play(&"hit_bolt", randf_range(0.95, 1.05))
+		Enums.RuneType.EARTH: play(&"hit_earth", randf_range(0.95, 1.05))
+		Enums.RuneType.GRASS: play(&"hit_grass", randf_range(0.95, 1.05))
 		_:                    play(&"hit", randf_range(0.95, 1.05))
 
 

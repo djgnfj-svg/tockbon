@@ -4,7 +4,7 @@ extends SceneTree
 ## 전 항목 통과 시 "TEST_AUDIO_OK" 출력 후 종료 코드 0.
 ##
 ## 검증 대상 = **Audio 오토로드**(src/core/audio.gd)의 계약 세 가지:
-##   ① 17개 SFX가 실제 로드된다 (파일명=id, 길이>0).
+##   ① `IDS`의 SFX가 전부 실제 로드된다 (파일명=id, 길이>0). ⚠ **개수를 여기 박지 마라** — 늘 때마다 어긋난다.
 ##   ② Audio가 EventBus 글로벌 순간 9종에 연결돼 있다.
 ##   ③ 시그널을 쏘면 **올바른 소리가 실제로 물린다** (id→스트림 리졸버가 산다).
 ##
@@ -19,8 +19,13 @@ extends SceneTree
 ## 첫 프레임 후 /root 접근. 지역 변수는 의도적으로 동적 타입, enum은 리터럴 정수로 박는다.
 
 const SFX_DIR := "res://assets/audio/sfx/"
+## 🔴 **이 배열은 자동으로 안 는다 — 새 wav를 넣으면 여기 손으로 더해라**(그게 이 그물의 계약이다).
+## ⚠ 그리고 **여기만 늘리면 「파일이 있다」까지만 잰다** — `match`에 줄이 빠져도 초록이다.
+##   새 소리는 **반드시 ④(`_test_events_reach_correct_sound`)에도 한 줄**을 더해라. 세104에 실제로
+##   그 갈림이 지적돼서 BOLT·EARTH·GRASS는 양쪽에 다 넣었다.
 const IDS := [
-	"cast", "hit", "hit_fire", "hit_water", "hit_wind", "hurt", "commit", "pop",
+	"cast", "hit", "hit_fire", "hit_water", "hit_wind", "hit_bolt", "hit_earth", "hit_grass",
+	"hurt", "commit", "pop",
 	"extract", "death", "pickup", "unlock", "ui_click", "day", "night", "craft", "equip",
 ]
 # EventBus 글로벌 순간 — Audio가 이 전부에 붙어 있어야 한다.
@@ -28,10 +33,14 @@ const SIGNALS := [
 	"ring_cast_requested", "enemy_hit", "player_hurt", "extraction_success",
 	"bag_lost", "codex_unlocked", "ring_design_committed", "equipment_changed", "phase_changed",
 ]
-# 룬 타입 리터럴 (Enums.RuneType — FIRE=0·WATER=2·WIND=3).
+# 룬 타입 리터럴 (Enums.RuneType — FIRE=0·WATER=2·WIND=3·BOLT=4·EARTH=5·GRASS=6).
+# ⚠ **값이 연속이 아니다**(1 = 옛 IMPACT 구멍) — range로 훑지 말고 낱개로 박는다.
 const R_FIRE := 0
 const R_WATER := 2
 const R_WIND := 3
+const R_BOLT := 4
+const R_EARTH := 5
+const R_GRASS := 6
 
 var failures: int = 0
 var _bus = null
@@ -116,6 +125,15 @@ func _test_events_reach_correct_sound() -> void:
 	_check(_played("hit_water"), "enemy_hit(물) → hit_water")
 	_clear(); _bus.enemy_hit.emit(null, 10.0, R_WIND)
 	_check(_played("hit_wind"), "enemy_hit(바람) → hit_wind")
+	# 세104 `C2` — 룬 6종이 전부 전용 음을 갖는다. 🔴 **이 셋이 「match에 줄이 실제로 있나」의
+	# 유일한 검출자다** — IDS(②)는 파일 존재만 재서 배선이 빠져도 초록이다.
+	_clear(); _bus.enemy_hit.emit(null, 10.0, R_BOLT)
+	_check(_played("hit_bolt"), "enemy_hit(번개) → hit_bolt")
+	_clear(); _bus.enemy_hit.emit(null, 10.0, R_EARTH)
+	_check(_played("hit_earth"), "enemy_hit(흙) → hit_earth")
+	_clear(); _bus.enemy_hit.emit(null, 10.0, R_GRASS)
+	_check(_played("hit_grass"), "enemy_hit(풀) → hit_grass")
+	# 🔴 폴백이 살아 있나 — 룬이 또 늘 때 「소리가 없다」가 아니라 기본음으로 떨어져야 한다.
 	_clear(); _bus.enemy_hit.emit(null, 10.0, 99)  # 알 수 없는 룬 → 기본
 	_check(_played("hit"), "enemy_hit(그 외) → hit")
 
