@@ -81,13 +81,19 @@ enemy_id = &"hound"
 weight = 1
 pool_tag = &"deep"
 
-; 🔴 네임드 자리는 그대로 두고 **id만 늑대 쪽으로** 바꿨다(`beetle_ancient` → `hound_alpha`).
-;  좌표 (-600,-700)은 세99 판단이고 몹이 바뀌어도 안 옮긴다.
+; 🔴🔴 세104: **우두머리를 둥지에 앉혔다**(사용자 요청 — *"우두머리가 둥지에 있게"*).
+;  그전엔 `at_landmark`가 비어서 우두머리가 **둥지(620,-300)의 반대편**인 (-600,-700)에 혼자 섰다 —
+;  「둥지 = 우두머리가 지키는 곳」이라는 연결이 **데이터에 한 번도 없었다**(끊긴 게 아니라 이어진 적이 없다).
+;  기계·그물은 세101(D13)에 이미 들어와 있었다: `boss_room._spawn_named` → `_landmark_sites` · `test_nest_open_auto [4]`.
+;  ⚠ `at_landmark`가 차 있으면 `position`은 **아예 안 읽힌다**(`_spawn_named`가 조기 분기한다) —
+;    그래서 옛 좌표는 지우고 여기 기록으로만 남긴다: 세99 판단값 `Vector2(-600, -700)`.
+;  ⚠ **`chance`는 그대로 0.3이다** — 「있을 수도 없을 수도」가 D6의 의도라 사용자 요청 범위를 넘지 않았다.
+;    올리려면 `mat_night_bloom` 수급이 3배가 되는 것을 같이 봐라(D15 · `jin_fuse` 28.6판 → 8.6판).
 [sub_resource type="Resource" id="named_hound"]
 script = ExtResource("4")
 enemy_id = &"hound_alpha"
 chance = 0.3
-position = Vector2(-600, -700)
+at_landmark = &"lm_nest"
 
 ; 🪦 지점 하나 — 늑대 둥지 (세99 D3·D4 단계 3).
 ; 🔴🔴 **자리 근거 ⓐ~ⓓ(거리·겹침·다른 길·머리 여유)는 설계 문서가 든다** —
