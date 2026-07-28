@@ -163,8 +163,11 @@ func _test_db_loads() -> void:
 			continue
 		_check(def.params.has("sprite"), "%s의 params.sprite가 살아 있다 (도트 유실 그물)" % id)
 		if str(def.params.get("ai", "chase")) == "chase":
-			_check(def.params.has("aggro_range") and def.params.has("move_speed"),
-				"🔴 %s(chase)가 aggro_range·move_speed를 .tres로 쥔다 (코드 폴백은 세84에 걷었다)" % id)
+			# 🔴 세105 **이름 승계**: 정본 키는 `sight_range`이고 `aggro_range`는 폴백이다
+			#  (`forest_enemy.SIGHT_KEY` 머리말 · 설계 §8-1). 둘 중 **하나는 반드시** 있어야 한다.
+			_check((def.params.has("sight_range") or def.params.has("aggro_range"))
+					and def.params.has("move_speed"),
+				"🔴 %s(chase)가 sight_range(옛 aggro_range)·move_speed를 .tres로 쥔다 (코드 폴백은 세84에 걷었다)" % id)
 	_check(_db.enemies.size() == ENEMY_COUNT_EXPECTED,
 		"🔴 Db.enemies == %d종 (실제 %d — 파싱사면 여기서 줄어든다)"
 			% [ENEMY_COUNT_EXPECTED, _db.enemies.size()])

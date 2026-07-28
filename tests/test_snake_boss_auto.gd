@@ -175,7 +175,11 @@ func _test_segments_follow_head() -> void:
 func _test_boss_chases_player() -> void:
 	print("[6] boss_snake가 플레이어 쪽으로 다가온다 (aggro 안)")
 	var boss = _make_boss(Vector2.ZERO)
-	var aggro: float = float(_db.get_enemy(&"snake_boss").params.get("aggro_range", 320.0))
+	# 🔴 세105 이름 승계 — 폴백을 320으로 두면 데이터가 새 이름으로 갔을 때 **우연히 같은 값**을
+	#  받아 그물이 빨개지지도 않는다(실측). 승계 순서대로 읽고 0이면 아래가 자명 통과다.
+	var aggro: float = float(_db.get_enemy(&"snake_boss").params.get(
+		"sight_range", _db.get_enemy(&"snake_boss").params.get("aggro_range", 0.0)))
+	_check(aggro > 0.0, "snake_boss가 sight_range를 들고 있다 (실제 %.0f — 0이면 아래가 뜻을 잃는다)" % aggro)
 	var player = _make_player(Vector2(aggro - 20.0, 0))  # rush_range 240 밖 · leash 안
 	await physics_frame
 	var before: float = boss.global_position.distance_to(player.global_position)

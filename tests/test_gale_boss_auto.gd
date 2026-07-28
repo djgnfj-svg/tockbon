@@ -88,7 +88,7 @@ func _test_def_loads() -> void:
 		"volley_count", "volley_interval", "volley_period",
 		"proj_damage", "proj_speed", "proj_lifetime",
 		"phase2_rate_mult", "phase2_speed_mult",
-		"hover_min", "hover_max", "move_speed", "aggro_range"]
+		"hover_min", "hover_max", "move_speed", "sight_range"]
 	for k in keys:
 		_check(def.params.has(k), "params에 %s가 있다" % k)
 	var ok := true

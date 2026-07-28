@@ -7,6 +7,14 @@ extends SceneTree
 ##   못 잰다 = 「빨간가 · 눈에 띄나 · 피할 만한가」 → `tools/vfx_shot.gd -- charge`(격자 PNG)와 F5 몫.
 ##   잰다   = 「**언제** 뜨고 꺼지나」 · 「**얼마나** 크게 그려지나」 · 🔴 **「그린 것 = 맞는 것인가」**.
 ##
+## 🔴🔴 **세105 인지 — 이 파일의 탐침은 인지 키를 「하나도」 안 준다. 그게 계약이다.**
+##   §7-b(*"키가 없으면 정확히 옛 동작"*)를 실제로 재는 자리라, 여기가 초록이면 「부채꼴 360° ·
+##   한 박자 0 · 배회 0」 폴백이 **한 프레임도 안 늦게** 옛 동작과 같다는 뜻이다.
+##   ⚠ 탐침에 인지 키를 넣지 마라 — 넣는 순간 이 파일이 **하위호환을 재는 유일한 자리**를 잃는다.
+##   ⚠ 반대로 **[5]만은 실데이터(`hound_alpha`)**라 인지를 통째로 지난다 → 프레임 예산을
+##    `alert_sec`에서 **파생**시킨다(그 항목 참조). 상수로 박으면 사용자가 F5로 그 값을 늘리는 날
+##    **거짓 빨강**이 난다.
+##
 ## 🔴 마지막 하나가 이 그물의 심장이다: 예고가 **실제보다 크게** 그려지면 *"빨간 데 안에 있었는데
 ##   안 맞았다"*, **작게** 그려지면 *"빨간 데 밖인데 맞았다"* — 둘 다 **예고가 없는 것보다 나쁘다**
 ##   (설계 `enemy_feel_design.md` §5-D-3). 그래서 [6]은 수치를 비교하지 않고 **그려진 범위에서
@@ -182,7 +190,14 @@ func _test_band_ignores_body_size() -> void:
 	var trig := float(def.params.get("charge_trigger_range", 160.0))
 	var stub := _stub(Vector2(trig - 20.0, 0.0))
 	var e = await _spawn(&"hound_alpha")
-	_check(await _await_band(e, 40), "hound_alpha도 예고가 뜬다")
+	# 🔴🔴 세105 — **실데이터 몸이라 인지를 통째로 지난다**: 예고 전에 PATROL→ALERT(`alert_sec`)→
+	#  CHASE를 밟는다. 그래서 프레임 예산을 **데이터에서 파생**시킨다 — 40으로 박아 두면
+	#  사용자가 F5로 `alert_sec`을 0.7s(=42프레임) 위로 올리는 순간 **거짓 빨강**이 난다.
+	# ⚠ 스텁이 +X에 있는 것이 전제다: 몸이 태어날 때 보는 쪽이 오른쪽(`SPRITE_FACES_LEFT == false`)이라
+	#  `turn_rate`를 기다릴 필요가 없다. 스텁을 옮기거든 회전 시간도 예산에 더해라.
+	var budget := 40 + int(ceil(float(def.params.get("alert_sec", 0.0))
+		* float(Engine.physics_ticks_per_second)))
+	_check(await _await_band(e, budget), "hound_alpha도 예고가 뜬다 (예산 %d프레임)" % budget)
 	var reach: Vector2 = e.charge_band_reach()
 	var want_len: float = float(def.params.get("charge_speed", 0.0)) * float(def.params.get("dash_sec", 0.0))
 	var want_rad: float = float(def.params.get("attack_range", 0.0))

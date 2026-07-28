@@ -315,7 +315,7 @@ func _test_named_stands_at_landmark() -> void:
 	var named := _mobs()
 	_check(named.size() == 1, "🔴 확정 우두머리가 하나 선다 (실제 %d — 0이면 해석이 안 켜진 것이다)" % named.size())
 	if named.size() == 1:
-		_check(named[0].position == lm_at,
+		_check(_at_spot(named[0], lm_at),
 			"🔴🔴 ⓔ 우두머리가 **지점 좌표** %s에 선다 (실제 %s — 자유 위치면 해석이 안 걸렸고 원점이면 자리를 못 찾았다)"
 				% [lm_at, named[0].position])
 
@@ -351,12 +351,15 @@ func _test_named_at_every_slot_with_same_id() -> void:
 
 	var nests := get_nodes_in_group("landmarks")
 	_check(nests.size() == 2, "둥지가 두 채 섰다 (실제 %d — 전제)" % nests.size())
-	var stood := {}
+	# ⚠ 좌표를 사전 키로 쓰면 배회 한 틱에 어긋난다(`_at_spot` 머리말) — 자리마다 훑는다.
+	var stood := {first_at: false, second_at: false}
 	for m in _mobs():
-		stood[m.position] = true
-	_check(stood.has(first_at) and stood.has(second_at),
+		for want: Vector2 in [first_at, second_at]:
+			if _at_spot(m, want):
+				stood[want] = true
+	_check(bool(stood[first_at]) and bool(stood[second_at]),
 		"🔴🔴 ⓕ 우두머리가 **두 자리 전부**에 섰다 (첫째 %s=%s · 둘째 %s=%s — 하나면 「첫 번째」로 굳은 것이다)"
-			% [first_at, stood.has(first_at), second_at, stood.has(second_at)])
+			% [first_at, stood[first_at], second_at, stood[second_at]])
 
 	# 🔴 둘째 둥지를 연다 — 노드↔id 짝이 첫 번째로 굳으면 여기서 아무것도 안 나온다.
 	var second = null
@@ -624,6 +627,21 @@ func _free_room() -> void:
 		current_scene.free()
 	_room = null
 	current_scene = null
+
+
+## 🔴🔴 **세105 인지 — 적이 배회한다**(설계 ⓑ). 그래서 「데이터가 말한 자리에 섰나」를 **좌표
+##  완전 일치**로는 더 이상 못 잰다: 스폰 다음 물리 틱부터 `patrol_speed`만큼 흘러간다
+##  (세105 실측 **0.47px** — 이 그물이 그날 빨개진 이유가 그것이다).
+## 🔴 **여유를 상수로 박지 마라 — 그 몸의 `patrol_radius`에서 파생시킨다.** 그러면
+##  ⓐ 사용자가 배회를 조여도 **거짓 빨강**이 안 나고 ⓑ **검출력은 그대로**다: 이 그물이 잡으려는
+##  오답(원점 · 자유 위치 · 다른 슬롯)은 전부 **수백 px** 떨어져 있다.
+## ⚠ 배회를 안 하는 몸(`patrol_radius` 없음)은 여유가 `SPOT_EPS`뿐이라 **사실상 완전 일치**다.
+const SPOT_EPS := 1.0
+
+func _at_spot(mob, want: Vector2) -> bool:
+	var def = _db.get_enemy(mob.enemy_id)
+	var r: float = float(def.params.get("patrol_radius", 0.0)) if def != null else 0.0
+	return mob.position.distance_to(want) <= r + SPOT_EPS
 
 
 func _check(cond: bool, label: String) -> void:

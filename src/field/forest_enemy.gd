@@ -47,6 +47,12 @@ const BAL := preload("res://data/balance.tres")
 ##  (static 함수 안의 `const BAL.프로퍼티`는 컴파일 타임에 굳어 뮤테이션이 무효가 된다).
 const Vision := preload("res://src/core/vision.gd")
 
+## 🔴 조립 점수 → **품질 t**의 단일 소스 (세105 인지 §5). 마법 소리 반경이 이걸 지난다.
+## ⚠ **raw `score`를 쓰지 마라** — 그 함수 머리말이 *"하위 70%가 통째로 죽는다"*고 못 박았다
+##  (실사용 범위가 `assemble_score_base`(0.70)~1.0이라 맨 진↔퍼펙트가 1.43배뿐이다).
+##  리포트·시전 시간·이동 배수가 전부 이 함수를 지나므로, 소리만 안 지나면 **혼자 다른 축**이 된다.
+const RingPower := preload("res://src/core/ring_power.gd")
+
 ## 🔴 히트 플래시 셰이더 (세63 설계 §A) — modulate 곱셈(어두운 픽셀이 안 하얘짐) 대신 mix-to-white.
 ## Shader **리소스** 공유는 안전 — 인스턴스마다 갈라야 하는 건 uniform을 쥔 ShaderMaterial 쪽이다
 ## (`_ready`가 per-instance 생성. 공유하면 한 마리의 플래시가 전원 플래시다).
@@ -169,6 +175,107 @@ var _always_visible: bool = false
 const VISION_FADE_SEC := 0.18     ## 딱 끊으면 경계에서 깜빡인다. 나무 비침(0.45s)보다 빠르게 — 적은 움직인다
 const VISION_HIDDEN_ALPHA := 0.0  ## 🔴 반투명이면 「가려졌다」가 아니라 **「흐린 적」**이 된다(사용자 확정 ⓓ *"안 보이게"*)
 
+
+# ══ 인지 (세105 N30 · 정본 `docs/takbon-design/enemy_perception_design.md`) ══════
+#
+# 🔴🔴 **이 축은 「내 시야」(N27)의 거울이다** — 저쪽이 *"내가 적을 못 본다"*면 이건 *"적이 나를
+#  못 본다"*이고, **부채꼴 수학은 `Vision.is_seen` 하나를 같이 쓴다**(설계 §3 · 각자 짜면 T5).
+#
+# 🔴 **판정은 서로 무관하다**(설계 §8-7). 한쪽을 다른 쪽에서 파생시키지 마라 — 다만 **화면 결과는
+#  겹친다**(시야 밖 적의 경계는 몸이 안 보여 통째로 투명하다 ⇒ 소리·느낌표가 그래서 필수다).
+
+## 🔴 인지 상태 — 설계 §2의 흐름도 그대로다.
+##  PATROL → (감지) ALERT → (버티면) CHASE → (lose_sec 놓침) SEARCH → (search_sec) PATROL.
+## ⚠ 설계 헤더의 *"상태 다섯"*은 오기다 — 흐름도·표·검증 계획이 전부 **넷**을 말한다(리포트에 적었다).
+enum Percept { PATROL, ALERT, CHASE, SEARCH }
+
+var _percept: int = Percept.PATROL
+var _percept_timer: float = 0.0   ## ALERT 잔여 · SEARCH 잔여 (상태가 배타적이라 한 칸을 나눠 쓴다)
+var _lose_timer: float = 0.0      ## CHASE 중 **연속** 감지 실패 시간 — `lose_sec`을 넘기면 놓친다
+## 마지막으로 「저기 있었다」고 아는 자리. 눈으로 봤으면 그 좌표, 소리면 **발사 지점**이다.
+## 🔴 플레이어의 **지금 위치가 아니다** — 쏘고 옮기면 흘리는 것이 설계 §5의 요점이다.
+var _last_seen: Vector2 = Vector2.ZERO
+## 이번 ALERT가 **소리**로 시작했나. 눈으로 시작한 경계는 「벗어나면 없던 일」이지만(설계 §2 ⓒ),
+## 소리는 애초에 안 보이는 채로 들어오므로 그 규칙을 그대로 쓰면 **한 프레임에 취소된다.**
+var _alert_from_sound: bool = false
+
+## 🔴🔴 **「보는 쪽」 — 이 설계를 지탱하는 한 값**(설계 §4). 좌우 반전(`_update_facing`)도, 부채꼴
+##  판정(`_detects`)도 **이 하나**를 본다. 각자 방향을 만들면 「보는 것 ≠ 판정하는 것」이 된다.
+## ⚠ 기본이 `RIGHT`인 근거 = `SPRITE_FACES_LEFT == false`(시트가 오른쪽을 본다) — 첫 프레임의
+##  그림과 판정이 같은 쪽을 가리킨다. 여기 `ZERO`를 넣으면 `Vision.is_seen`이 **fail-open**으로
+##  빠져 부채꼴이 통째로 무의미해진다(그 파일 머리말).
+var _look_dir: Vector2 = Vector2.RIGHT
+
+## 🔴🔴 배회의 중심 = **스폰 자리**. `_ready`가 아니라 **첫 `_physics_process` 틱**에 잡는다(설계 §9-b).
+##  라이브(`boss_room._spawn_enemy_at`)는 `add_child` **앞**에 좌표를 주지만 **그물 넷은 정반대로
+##  뒤에 준다**(`test_enemy_ai_auto`·`test_status_auto`·`test_feel_auto`·`test_mana_burst_auto`) —
+##  `_ready`에서 잡으면 `_home`이 (0,0)이 되어 **적이 원점으로 끌려간다**(에러 0).
+var _home: Vector2 = Vector2.ZERO
+var _home_set: bool = false
+## 배회 위상 — **자리마다 다르다**(설계 §8-5). 같은 위상이면 둥지 둘레 늑대 다섯이 **한 몸처럼 겹친다.**
+## 🔴 스폰 **순서**가 아니라 **좌표**에서 뽑는다: 순서는 방 씬을 재편하면 바뀌지만 자리는 안 바뀐다.
+var _patrol_phase: float = 0.0
+var _patrol_t: float = 0.0
+
+## 경계·발견 소리 재생기 — 지연 생성(`_gale_ring` 선례: 소리 키가 없는 몸은 노드가 아예 없다).
+## 🔴🔴 **`AudioStreamPlayer2D`인 이유 = 거리 감쇠**(설계 §8-6 · 리드 판단 M8). `Audio` 오토로드의
+##  풀은 **비위치** `AudioStreamPlayer` 8개라 방 반대편 늑대가 코앞처럼 들린다 — 여러 마리가
+##  동시에 짖으면 **통보가 아니라 잡음**이 된다. 스트림은 `Audio.stream_of()`에서 빌려
+##  「새 소리 = wav 한 장」과 「Audio가 유일한 로드 경로」를 **둘 다 안 깬다.**
+var _percept_sfx: AudioStreamPlayer2D = null
+
+## 🔴🔴 **인지 키의 이름 승계 — `aggro_range` → `sight_range`** (설계 §8-1 · 리드 확정 「전 종 승계」).
+##
+## 🔴 **은퇴가 아니라 승계다.** 그 키는 `vision_design`(N27)의 **심장**이다 — 주변시 220이
+##  *"바탕 종 aggro의 최댓값"*에서 **파생**하고, `hound_alpha`의 **등 뒤 60px**(280−220)가
+##  세101에 사용자가 직접 확정한 그 종의 **유일한 정체성**이다. 지우면 `params.get(...)`이 0을
+##  돌려줘 **바탕 조건은 자명 통과 · 스토커 조건은 빨강**이 되고, 그 사이 정체성이 증발한다.
+##
+## 🔴🔴 **보스 셋(`snake_boss`·`gale`·`slime_elite`)에게 이 값은 「시야」가 아니라 `leash` 거리다.**
+##  보스는 인지 설계 **밖**이고(§8-2) 인지 키를 **안 준다** — 그러면 §7-b 폴백이 옛 동작을 그대로
+##  준다(부채꼴 360° = 늘 본다 · 한 박자 0 = 즉시 · 배회 0). ⚠ **보스에게 부채꼴을 붙이지 마라**:
+##  무대에 오른 적이 「등 뒤로 돌면 안 쫓는다」가 되면 보스전이 통째로 갈린다.
+##
+## 🔴 **없으면 `aggro_range`로 폴백한다** — 하위호환이 이름 승계의 안전망이다(§7-b).
+##  그물 6파일이 **인지 키 0개인 몸**을 주입하는데, 그 몸들이 여전히 옛 키를 쓴다.
+const SIGHT_KEY := "sight_range"
+const SIGHT_KEY_LEGACY := "aggro_range"
+
+## 🔴 §7-b 하위호환 표 — **「키가 없으면 정확히 옛 동작」**. 이 표 하나가 그물 표의 절반을 없앤다.
+##  이 파일은 같은 계약을 이미 세 번 명문화했다(`_setup_frames`·`_idle_fps`·`_apply_hitbox`).
+const SIGHT_ANGLE_DEFAULT := 360.0   ## 부채꼴이 무의미 = 늘 본다(옛 동작)
+const SENSE_RADIUS_DEFAULT := 0.0    ## 360° 부채꼴이 이미 덮는다
+const TURN_RATE_DEFAULT := 0.0       ## 🔴 0 = **무제한**(즉시 회전) = 방향 개념 없음(옛 동작)
+const ALERT_SEC_DEFAULT := 0.0       ## 한 박자 없음 = 즉시 CHASE(옛 동작)
+const LOSE_SEC_DEFAULT := 0.0        ## 놓치면 즉시
+const SEARCH_SEC_DEFAULT := 0.0      ## 수색 없음
+const AMBUSH_MULT_DEFAULT := 1.0     ## 곱셈 항등
+const PATROL_RADIUS_DEFAULT := 0.0   ## 🔴 배회 안 함 — `disperse_period`·`regen_per_sec` 관용구 그대로
+const PATROL_SPEED_DEFAULT := 0.0
+
+## ⚠⚠ **지금 `.tres`에 들어간 인지 수치는 전부 「잠정」이다 — F5가 정한다**(설계 §11).
+##  손맛은 헤드리스도 스샷도 못 재고 **사용자가 직접 걸어봐야** 정해진다. 여기 표를 남기는 이유는
+##  `.tres`의 `;` 주석이 **에디터가 저장하면 통째로 증발하기** 때문이다(takbon-rules §5).
+##
+##  | 키 | hound | hound_alpha | 왜 이 언저리에서 출발하나 |
+##  |---|---|---|---|
+##  | `sight_range` | 220 | 280 | 🔴 **승계값이라 잠정이 아니다** — 220은 주변시의 파생원, 280−220=60px가 네임드의 정체성 |
+##  | `sight_angle` | 150° | 200° | 네임드가 더 넓다(설계 §11 후보). 좁힐수록 「돌아가기」가 쉬워진다 |
+##  | `sense_radius` | 90 | 110 | 등 뒤도 코앞이면 들킨다 — 없으면 「등 뒤에 붙어 따라다니기」가 최적 전략이 된다 |
+##  | `turn_rate` | 160°/s | 200°/s | 🔴 **가장 먼저 조일 값**(설계 §11) — 이게 빠르면 안 ⓐ가 통째로 무너진다 |
+##  | `patrol_radius` | 84 | 70 | 🔴 **≤ 100 이 계약이다**(`_patrol_velocity` ⓐ — 프롭이 스폰 둘레 100px을 비운다) |
+##  | `patrol_speed` | 34 | 28 | move_speed(95·110)의 3분의 1 — 「어슬렁거린다」로 읽혀야 한다 |
+##  | `alert_sec` | 0.45 | 0.28 | 🔴 **둘째로 조일 값** — 피할 틈이 있나. 네임드가 더 짧다(설계 §11 후보) |
+##  | `lose_sec` | 1.2 | 1.8 | 놓쳤다고 인정하기까지. 짧으면 도망이 너무 쉽다 |
+##  | `search_sec` | 2.5 | 3.2 | 「따돌렸다」를 만드는 값 |
+##  | `ambush_mult` | 1.8 | 1.8 | 뒤로 도는 것이 **전술**이 될 만큼은 세게 |
+##  ⚠ 소리 반경(`percept_sound_radius_*` 240/700)도 잠정이다 — **셋째로 조일 값**(쏘면 늘 들키나).
+
+## 배회 도착 판정(px) — 궤도 목표에 이만큼 붙으면 이번 틱은 멈춘다(제자리 떨림 방지). 연출값.
+const PATROL_ARRIVE_PX := 1.0
+## 수색 도착 판정(px) — 마지막 본 자리에 이만큼 오면 「와 봤다」. 연출값.
+const SEARCH_ARRIVE_PX := 8.0
+
 ## 🔴 뱀 보스(boss_snake) 전용 상태 (세션 A). charge 변수를 재사용하지 않는다 — 두 AI가 섞이면
 ## 조용히 깨진다(설계 A-5). 위브 추격 → 텔레그래프 러시 → 회복 → 다시 위브.
 enum SnakeState { WEAVE, RUSH_WINDUP, RUSH, RECOVER }
@@ -237,6 +344,10 @@ func _ready() -> void:
 		mat.set_shader_parameter(&"flash_amount", 0.0)
 		mat.set_shader_parameter(&"telegraph_amount", 0.0)
 		_visual.material = mat
+	# 🔴🔴 마법 소리 (설계 §5) — **EventBus 신설 0**이다. `ring_cast_requested`가 조립본(`score` 포함)과
+	#  **발사 위치**를 이미 함께 나른다. ⚠ 착탄(`spell_impact`)이 아니라 **발사**다 — 소리는 총구에서 난다.
+	# ⚠ `_exit_tree`로 끊지 마라(세50 금기) — 노드가 free되면 연결은 엔진이 알아서 지운다.
+	EventBus.ring_cast_requested.connect(_on_cast_heard)
 	_apply_look()
 	_apply_hitbox()
 	_attach_shadow()
@@ -411,6 +522,8 @@ func _physics_process(delta: float) -> void:
 	if _dead:
 		return  # DoT로 죽었다 — 이 프레임엔 더 움직이지 않는다(queue_free는 프레임 끝에 반영된다)
 	_regen(delta)
+	# 🔴🔴 배회 중심은 **여기서** 잡는다 — `_ready`가 아니다(설계 §9-b · `_home` 머리말).
+	_capture_home()
 	var player := _player()
 	# 🔴🔴 **시야 갱신은 여기다 — 아래 조기 return 「앞」이다**(설계 V12).
 	#  `_physics_process` 끝에 두면 `player == null` 분기에 먹혀 **적이 마지막 알파에 굳는다**
@@ -420,9 +533,17 @@ func _physics_process(delta: float) -> void:
 	# 🔴🔴 **발견 판정도 조기 return 「앞」이다 — 시야와 정확히 같은 이유다**(설계 V12).
 	#  뒤에 두면 `player == null` 경로에서 안 돌아 **추격 플래그가 참인 채로 굳는다** ⇒ 씬 전환·
 	#  플레이어 사망 뒤 다시 만났을 때 그게 **「새 발견」으로 안 읽혀 느낌표가 영영 안 뜬다**(에러 0).
+	# 🔴🔴 **인지 갱신도 조기 return 「앞」이다 — 시야·느낌표와 정확히 같은 이유다**(설계 V12).
+	#  뒤에 두면 `player == null` 경로에서 안 돌아 **추격 상태가 참인 채로 굳는다** ⇒ 씬 전환·
+	#  플레이어 사망 뒤 다시 만나도 「새 발견」이 안 되고, 배회도 그 무대(연출 도구·그물 다수)에서
+	#  아예 안 돌아 **헤드리스가 못 잰다**(설계 §9-c).
+	_update_percept(player, delta)
 	_update_alert(player)
 	if player == null:
 		velocity = Vector2.ZERO
+		# 🔴 배회는 「플레이어를 모르는 상태」의 행동이라 개념상 여기가 맞다(설계 §9-c).
+		#  데이터가 없으면 배회 0이므로 주입 몸은 그대로 굳는다(§7-b).
+		_apply_percept_velocity(delta)
 		_apply_move(delta)
 		return
 	var to_player: Vector2 = player.global_position - global_position
@@ -442,6 +563,11 @@ func _physics_process(delta: float) -> void:
 		_:
 			_ai_chase(player, to_player, dist)
 
+	# 🔴🔴 **인지는 갈래의 「속도 목표」만 덮는다 — 갈래 호출 자체는 안 끊는다**(설계 §2-b · C2).
+	#  `takbon-rules` §5의 세88 계약(*"거리 게이트는 이동 대입만 감싼다 — `return` 금지"*)과 같은
+	#  형태다: 갈래 안에서 `return`으로 끊으면 `_contact`(접촉 피해)와 분산·쿨다운 타이머가
+	#  **멀리서 멈춘다.** 그래서 갈래를 다 돌린 **뒤** 속도만 갈아 끼운다.
+	_apply_percept_velocity(delta)
 	_apply_move(delta)
 
 
@@ -456,22 +582,28 @@ func _apply_move(delta: float) -> void:
 	# 🔴 **감속·넉백을 얹기 「전」 값이다** — 이건 「이동 의지」이지 실제 변위가 아니다:
 	#  ⓐ 진흙에 묶여 느려진 늑대도 **가려던 쪽**을 봐야 하고(감속을 곱한 뒤면 데드존에 먹혀 굳는다)
 	#  ⓑ 맞아서 밀린다고 **뒤로 돌아보면 안 된다**(넉백을 더한 뒤면 맞을 때마다 고개가 홱 돈다).
-	_update_facing(velocity)
+	# 🔴🔴 **세105: 「보는 쪽」이 velocity에서 `_look_dir`로 갈렸다** — 그 사이에 `turn_rate`가 들어갔다.
+	#  `_update_look`이 이번 틱의 **목표 방향**을 정하고 회전 속도로 감속해 `_look_dir`을 굴리며,
+	#  `_update_facing`은 그 결과를 그림에 옮길 뿐이다. **부르는 자리는 여전히 여기 하나다.**
+	_update_look(delta)
+	_update_facing(_look_dir)
 	velocity *= _status.move_mult()
 	velocity += _knockback
 	move_and_slide()
 	_knockback = _knockback.move_toward(Vector2.ZERO, KNOCKBACK_DECAY * delta)
 
 
-## "chase" (기본, 슬라임·갑충·엘리트) — aggro_range 안이면 다가오고 attack_range 안이면 때린다.
+## "chase" (기본, 슬라임·갑충·엘리트) — sight_range 안이면 다가오고 attack_range 안이면 때린다.
 ## 🔴🔴 세84: 여기 폴백이 **`slime.tres`의 실값을 그대로 베낀 사본**(160.0·55.0)이었다 —
 ## slime.tres가 파싱에 실패해 `_def == null`이 돼도 **슬라임과 똑같이 움직여서** 데이터 죽음이
 ## 행동에 안 드러났다(`test_status_auto`가 slime을 16회 스폰하는데 전부 통과했다. 세50 바람 룬과
 ## 같은 침묵). 이 두 값은 「없으면 중립」이 아니라 **필수 수치**라 `_param_req`로 바꿨다 —
 ## 결손이면 적이 굳고 `push_warning`이 뜬다(= 조용하지 않다). 데이터 쪽 짝그물은
-## `test_progression_auto [1]`("chase는 aggro_range·move_speed를 .tres로 쥔다").
+## `test_progression_auto [1]`("chase는 sight_range·move_speed를 .tres로 쥔다").
+## ⚠ 세105에 그 키가 `aggro_range` → `sight_range`로 **이름 승계**됐다(`SIGHT_KEY` 머리말) —
+##  옛 이름도 폴백으로 계속 읽으므로 인지 키 0개인 주입 몸은 한 톨도 안 바뀐다.
 func _ai_chase(player: Node2D, to_player: Vector2, dist: float) -> void:
-	if dist <= _param_req("aggro_range") and dist > 1.0:
+	if dist <= _sight_range_req() and dist > 1.0:
 		velocity = to_player / dist * _param_req("move_speed")
 	else:
 		velocity = Vector2.ZERO
@@ -488,12 +620,15 @@ func _ai_chase(player: Node2D, to_player: Vector2, dist: float) -> void:
 func _ai_charge(delta: float, player: Node2D, to_player: Vector2, dist: float) -> void:
 	match _charge_state:
 		ChargeState.APPROACH:
-			if dist <= _param("aggro_range", 220.0) and dist > 1.0:
+			if dist <= _sight_range(220.0) and dist > 1.0:
 				velocity = to_player / dist * _param("move_speed", 95.0)
 			else:
 				velocity = Vector2.ZERO
 			_contact(player, dist)
-			if dist <= _param("charge_trigger_range", 120.0) and dist > 1.0:
+			# 🔴🔴 **인지가 바꾸는 둘째가 여기다 — 「돌진 사이클의 진입 허용 여부」**(설계 §2-b 표).
+			#  아직 나를 못 본 늑대가 등 뒤에 붙은 나를 향해 윈드업을 시작하면 **기습(ⓕ)이 성립하지
+			#  않는다.** ⚠ 인지 데이터가 없는 몸은 `_percept_allows_attack()`이 늘 참이라 옛 동작이다.
+			if _percept_allows_attack() and dist <= _param("charge_trigger_range", 120.0) and dist > 1.0:
 				_charge_state = ChargeState.WINDUP
 				_charge_windup = maxf(_param("windup_sec", 0.5), 0.001)
 				_charge_timer = _charge_windup
@@ -530,13 +665,13 @@ func _ai_charge(delta: float, player: Node2D, to_player: Vector2, dist: float) -
 func _ai_hover(delta: float, player: Node2D, to_player: Vector2, dist: float) -> void:
 	var spd := _param("move_speed", 70.0)
 	var dir := to_player / dist if dist > 0.01 else Vector2.ZERO
-	# 🔴🔴 leash (세88 사냥 흐름) — `aggro_range` 밖이면 자기 자리를 지킨다. 이게 없으면 hover는
+	# 🔴🔴 leash (세88 사냥 흐름) — `sight_range`(옛 `aggro_range`) 밖이면 자기 자리를 지킨다. 이게 없으면 hover는
 	# 거리와 무관하게 늘 다가와 **절대 안 놓친다**(리드가 우려한 "영영 못 만난다"의 정반대였다).
 	# 방이 1200×1040일 때는 안 드러났지만 2400×2200 숲에서는 mist 5마리가 **전부 남쪽 입구로 모여**
 	# 구역 배치가 무의미해지고 「깊이 들어간다」가 통째로 사라진다.
 	# ⚠ **이동 대입만 감싼다** — `return`으로 끊으면 아래 `_contact`와 분산 타이머가 멀리서 멈춘다
 	# (분산 주기가 조용히 고장 나는 자리 — 게이트를 넣는 세 갈래 전부 같은 이유로 이 모양이다).
-	if dist > _param("aggro_range", 200.0):
+	if dist > _sight_range(200.0):
 		velocity = Vector2.ZERO
 	elif dist < _param("hover_min", 55.0):
 		velocity = -dir * spd            # 너무 가깝다 → 물러난다
@@ -583,7 +718,7 @@ func _ai_boss_snake(delta: float, player: Node2D, to_player: Vector2, dist: floa
 		SnakeState.WEAVE:
 			# 🔴🔴 leash (세88) — gale과 같은 이유다(72px/s로 어귀까지 내려왔다). 위브 계산만 감싼다:
 			# 아래 `_contact`·러시 쿨다운·페이즈2는 위(match 밖)에서 이미 돌고 있어 안 건드린다.
-			if dist > 1.0 and dist <= _param("aggro_range", 320.0):
+			if dist > 1.0 and dist <= _sight_range(320.0):
 				var fwd := to_player / dist
 				var perp := Vector2(-fwd.y, fwd.x)
 				var base_speed := _param("move_speed", 72.0) * speed_mult
@@ -653,7 +788,7 @@ func _ai_boss_gale(delta: float, player: Node2D, to_player: Vector2, dist: float
 			# (55px/s × 2200px ≈ 40초) → 보스를 어귀에서 잡몹과 함께 만난다. ⚠ 이동 대입만 감싼다:
 			# 아래 쿨다운 감소·돌풍/연사 발동·페이즈2 전이는 **멀리 있어도 계속 돌아야 한다**
 			# (`return`으로 끊으면 페이즈2가 안 열리는 조용한 고장이 된다).
-			if dist > _param("aggro_range", 260.0):
+			if dist > _sight_range(260.0):
 				velocity = Vector2.ZERO
 			elif dist < _param("hover_min", 110.0):
 				velocity = -dir * spd            # 너무 가깝다 → 물러난다
@@ -671,7 +806,7 @@ func _ai_boss_gale(delta: float, player: Node2D, to_player: Vector2, dist: float
 				_set_telegraph(true)             # 기존 붉은 달아오름 재사용 (charge·snake와 같은 규약)
 				_show_gust_ring(true)
 			# 연사 — 진행 중이 아닐 때만 새로 발동. 쿨 리셋 시점에 페이즈 배율을 곱는다.
-			elif _gale_volley_cd <= 0.0 and _gale_volley_left <= 0 and dist <= _param("aggro_range", 260.0):
+			elif _gale_volley_cd <= 0.0 and _gale_volley_left <= 0 and dist <= _sight_range(260.0):
 				_gale_volley_left = int(_param("volley_count", 3.0))
 				_gale_shot_timer = 0.0           # 첫 발은 다음 틱 즉시
 				_gale_volley_cd = _param("volley_period", 4.5) * rate_mult
@@ -812,21 +947,19 @@ var _alert_mark: Node2D = null
 var _alert_tween: Tween = null
 
 
-## 🔴 발견 전이를 판정한다. **이 함수가 「발견」의 유일한 정의다** — 인지(N30)가 들어오면
-##  아래 `now` 한 줄을 **인지 상태(PATROL→ALERT/CHASE 전이)**로 갈아끼우면 되고 나머지는 무변경이다.
+## 🔴 발견 전이를 판정한다. **이 함수가 「발견」의 유일한 정의다.**
 ##
-## 🔴🔴 **`aggro_range`를 읽는 일곱째 자리다.** 설계 `enemy_perception_design.md` §8-1-c가 여섯을
-##  열거해 뒀다(`_ai_chase`·`_ai_charge` APPROACH·`_ai_hover`·`_ai_boss_snake`·`_ai_boss_gale` ×2).
-##  인지가 그 키를 **`sight_range`로 이름 승계**할 때 **여기도 같이** 바꿔라 — 안 그러면 느낌표만
-##  옛 키를 읽어 조용히 안 뜬다.
-## 🔴 **폴백은 0.0 — 「없으면 중립」이다.** 여기에 220 같은 값을 적으면 그게 특정 `.tres`의
-##  **일곱 번째 사본**이 되어, 데이터가 죽어도 느낌표만 멀쩡히 떠서 죽음을 가려 준다(세84 `_param_req`의 교훈).
-##  키가 없는 몸은 추격 개념이 없으니 안 뜨는 게 맞다.
-## ⚠ 제곱으로 비교해 매 틱 sqrt를 안 쓴다(적 수 × 60Hz라 공짜가 아니다).
+## ✅ **세105에 예고대로 갈아 끼웠다** — 세104 판이 여기에 거리 비교를 **직접** 들고 있었고
+##  (`aggro_range`를 읽는 **일곱째** 자리였다) *"인지가 들어오면 이 한 줄을 인지 상태로
+##  바꿔라"*라고 스스로 적어 뒀다. 이제 「발견」의 정의는 **`_percept == CHASE` 하나**이고
+##  거리·각도·소리 판정은 전부 `_update_percept`가 진다 ⇒ **읽는 자리가 하나 줄었다.**
+##
+## 🔴 **「우두머리냐」로 분기하지 않는다 — `_seen`만 본다.** 그래야 수치를 조이는 날
+##  바탕 늑대에게도 저절로 켜진다(종을 하드코딩하면 그날 아무 일도 안 일어난다).
+## ⚠ 인지 데이터가 0인 몸(그물 주입)에서도 뜻이 안 바뀐다: 폴백이 「부채꼴 360° · 한 박자 0」이라
+##  `_percept == CHASE`가 **정확히 옛 거리 비교**와 같다(§7-b).
 func _update_alert(player: Node2D) -> void:
-	var range_px := _param("aggro_range", 0.0)
-	var now := player != null and range_px > 0.0 \
-		and global_position.distance_squared_to(player.global_position) <= range_px * range_px
+	var now := player != null and _percept == Percept.CHASE
 	# 🔴 **전이 + 안 보일 때만.** 보이는 적까지 띄우면 화면이 시끄러워지고, 무엇보다
 	#  「안 보이는 것을 알린다」는 이 기능의 뜻 자체가 사라진다.
 	if now and not _pursuing and not _seen:
@@ -1143,14 +1276,20 @@ func _face(dir: Vector2) -> void:
 ##   부호가 몸마다 갈리면 읽는 자리가 둘이 되고, 그게 이 리포가 반복해 밟은 T5다.
 const SPRITE_FACES_LEFT := false
 
-## 🔴 반전 데드존(px/s) — 거의 수직으로만 움직일 때 `vx`가 0 근처에서 떨려 스프라이트가 **파르르
-##  뒤집히는** 것을 막는다(플레이어 `AIM_FLIP_DEADZONE`과 같은 수법). **연출값이라 balance가 아니다.**
-## ⚠ **px/s이지 비율이 아니다** — 플레이어의 0.15는 **정규화된 조준 벡터**라 곧 각도였지만 여기 입력은
-##  속도다. 비율로 바꾸면 거의 멈춘 몸의 미세 속도가 정규화되며 **최대 크기 방향**이 되어 멈춘 적이
-##  뒤집힌다. px/s는 「느리면 안 뒤집는다」쪽으로 안전하게 무너진다(가장 느린 실적 = 45px/s).
-## 🔴 **돌진 윈드업은 이 값에 안 얹혀 있다** — 윈드업은 `velocity = ZERO`라 애초에 문턱을 못 넘어
-##  마지막 방향에 **고정된다**. 설계 §4의 *"윈드업 동안 보는 쪽을 고정"*이 공짜로 성립하는 자리다.
-const FACING_FLIP_DEADZONE := 12.0
+## 🔴 반전 데드존 — 거의 수직으로만 볼 때 `x`가 0 근처에서 떨려 스프라이트가 **파르르 뒤집히는**
+##  것을 막는다(플레이어 `AIM_FLIP_DEADZONE`과 **같은 수법이자 이제 같은 단위**다).
+##  **연출값이라 balance가 아니다.**
+##
+## 🔴🔴 **세105에 단위가 px/s → 「정규화 벡터의 x 성분」으로 바뀌었다 — 짝을 갈라 두면 조용히 죽는다.**
+##  세104 판의 입력은 `velocity`(px/s)였고 문턱이 12.0이었다. 세105에 입력이 **`_look_dir`(단위
+##  벡터)**로 바뀌었으므로 12.0을 그대로 두면 `absf(x) <= 12`가 **항상 참**이 되어
+##  **반전이 통째로 죽는데 에러가 0이다**(늑대가 영원히 오른쪽만 본다).
+##  ⇒ 입력을 다시 바꾸는 사람은 **이 상수도 같이** 바꿔야 한다. 지금 값 0.15는 ±8.6°다.
+## ⚠ 반대로 되돌리는 것도 같은 함정이다 — 정규화 벡터에 px/s 문턱을 쓰면 위처럼 죽고,
+##  속도에 비율 문턱을 쓰면 **거의 멈춘 몸의 미세 속도**가 문턱을 넘어 멈춘 적이 뒤집힌다.
+## 🔴 **돌진 윈드업은 이 값에 안 얹혀 있다** — 윈드업 동안 `_desired_look()`이 `_charge_dir`을
+##  **고정으로** 돌려주므로 고개가 안 돈다. 설계 §4의 *"윈드업 동안 보는 쪽을 고정"*이 그 자리다.
+const FACING_FLIP_DEADZONE := 0.15
 
 func _update_facing(dir: Vector2) -> void:
 	if _visual == null or _uses_rotation_facing():
@@ -1180,6 +1319,325 @@ func facing_x() -> float:
 	if _visual == null:
 		return 0.0
 	return -1.0 if (_visual.flip_h != SPRITE_FACES_LEFT) else 1.0
+
+
+# ══ 인지 엔진 (세105 N30) ══════════════════════════════════════════════════════
+
+
+## 🔴 「보는 거리」의 **단일 소스** — `sight_range`이고, 없으면 `aggro_range`를 승계한다(§7-b·§8-1).
+## ⚠ 갈래별 폴백(`fallback`)은 **옛 코드 그대로**다. 여기서 한 값으로 합치면 그게 특정 `.tres`의
+##  사본이 되어 데이터 죽음을 가려 준다(세84 `_param_req`의 교훈).
+func _sight_range(fallback: float) -> float:
+	if _def != null and _def.params.has(SIGHT_KEY):
+		return float(_def.params[SIGHT_KEY])
+	return _param(SIGHT_KEY_LEGACY, fallback)
+
+
+## 🔴 **필수 수치판** (`_ai_chase` 전용 — 세84 계약). 둘 다 없으면 0을 돌려주고 **한 번 경고한다**
+##  = 적이 굳는다(눈에 보인다). 경고 문구는 **새 이름**으로 낸다 — 지금의 정본 키가 그것이다.
+func _sight_range_req() -> float:
+	if _def != null:
+		if _def.params.has(SIGHT_KEY):
+			return float(_def.params[SIGHT_KEY])
+		if _def.params.has(SIGHT_KEY_LEGACY):
+			return float(_def.params[SIGHT_KEY_LEGACY])
+	return _param_req(SIGHT_KEY)
+
+
+## 🔴🔴 **이 몸에 인지 개념이 있나.** 「보는 거리」가 0이면(키가 아예 없는 그물 주입 몸) 인지가
+##  갈래를 **한 톨도 안 건드린다** — §7-b의 *"키가 없으면 정확히 옛 동작"*이 여기서 실현된다.
+## ⚠ 이 가드가 없으면 그런 몸이 영영 PATROL이라 `_apply_percept_velocity`가 속도를 0으로 덮어
+##  **모든 주입 몸이 통째로 굳는다**(설계 C3가 경고한 그 사고).
+func _percept_active() -> bool:
+	return _sight_range(0.0) > 0.0
+
+
+## 🔴 지금 이 몸이 공격 사이클에 **들어가도 되나** — 인지가 바꾸는 둘째 축(설계 §2-b 표).
+func _percept_allows_attack() -> bool:
+	return not _percept_active() or _percept == Percept.CHASE
+
+
+## 🔴🔴 **감지 셋을 한 함수로** (설계 §3): 부채꼴(멀리 본다) ∪ 근접 원(등 뒤도 코앞이면 들킨다).
+##  소리는 시간축이 달라 `_on_cast_heard`가 따로 진다.
+##
+## 🔴 **부채꼴 수학은 `src/core/vision.gd`를 그대로 부른다** — 「내 부채꼴」과 「적 부채꼴」은
+##  **완전히 같은 수학**이라 각자 짜면 T5(파생 대신 복제)를 새로 심는다.
+## ⚠ **수치는 반드시 인자로 넘겨라**(그 파일 머리말) — static 함수 안에서 데이터를 읽게 「정리」하면
+##  컴파일 타임에 굳어 그물의 뮤테이션이 **아무 효과도 못 내면서 초록**이 된다.
+## ⚠ `sight_angle` 폴백 360°는 「부채꼴이 무의미 = 늘 본다」 = 옛 동작이다 — `is_seen`이 반각 180°와
+##  비교하므로 정확히 전방위가 된다.
+func _detects(player: Node2D) -> bool:
+	if player == null:
+		return false
+	var r := _sight_range(0.0)
+	if r <= 0.0:
+		return false
+	var angle := _param("sight_angle", SIGHT_ANGLE_DEFAULT)
+	var sense := _param("sense_radius", SENSE_RADIUS_DEFAULT)
+	# 🔴🔴 **360°는 「방향 무관」이라는 뜻이지 「반각 180°와 비교하라」가 아니다 — 실측으로 밟았다.**
+	#  `Vector2.angle_to`는 **float32**로 계산돼 정확히 등 뒤에서 `3.14159274…`를 돌려주는데,
+	#  `deg_to_rad(180.0)`은 **double** `3.14159265…`다 ⇒ `<=`가 **거짓**이 되어 **정확히 180°에
+	#  선 플레이어만 안 보인다.** 폴백(360°)에선 그게 곧 「그물 스텁을 등 뒤에 둔 판 전부」라
+	#  적이 **영영 굳었다**(세105 실측: `test_enemy_facing_auto` 12건 · `test_enemy_ai_auto` 4건).
+	#  ⇒ 전방위는 각도 비교에 맡기지 않고 **주변시 반경을 사거리까지 넓혀** 표현한다
+	#   (`is_seen`의 첫 갈래 `dist <= near_radius`가 방향을 아예 안 본다).
+	# ⚠ **`vision.gd`를 고치는 것이 답이 아니다** — 그 파일은 core(리드 몫)이고, 무엇보다
+	#  「360 = 전방위」는 **이 파일의 폴백 규약**이지 부채꼴 수학의 성질이 아니다.
+	if angle >= 360.0:
+		sense = maxf(sense, r)
+	return Vision.is_seen(global_position, _look_dir, player.global_position, angle, r, sense)
+
+
+## 🔴🔴 인지 상태기계 — 설계 §2의 흐름도를 그대로 옮긴 자리.
+##
+## 🔴 **한 박자(`alert_sec`)가 0이면 같은 틱 안에 CHASE까지 간다** — 그래야 인지 키가 없는 몸이
+##  **한 프레임도 안 늦게** 옛 동작과 같아진다(그물 여럿이 `_await_band(e, 30)`처럼 프레임 예산으로
+##  잰다). 상태를 「다음 틱에 넘긴다」로 짜면 그 예산이 조금씩 밀린다.
+## 🔴 **`_last_seen`은 플레이어의 지금 자리가 아니라 「마지막으로 안 자리」다** — 쏘고 옮기면 흘린다.
+func _update_percept(player: Node2D, delta: float) -> void:
+	if not _percept_active():
+		return
+	var seen_now := _detects(player)
+	if seen_now:
+		_last_seen = player.global_position
+	match _percept:
+		Percept.PATROL:
+			if seen_now:
+				_enter_alert(player.global_position, false)
+		Percept.ALERT:
+			# 🔴 **눈으로 시작한 경계는 「벗어나면 없던 일」이다**(설계 ⓒ — 「아슬아슬하게 피했다」).
+			#  ⚠ 소리로 시작한 경계엔 그 규칙을 쓰면 안 된다: 애초에 안 보이는 채로 들어와서
+			#   **한 프레임에 취소된다**(소리가 통째로 무의미해진다).
+			if not seen_now and not _alert_from_sound:
+				_percept = Percept.PATROL
+				return
+			_percept_timer -= delta
+			if _percept_timer <= 0.0:
+				if seen_now:
+					_enter_chase()
+				else:
+					_enter_search()   # 소리를 들었다 = 「그 자리에 가 본다」
+		Percept.CHASE:
+			if seen_now:
+				_lose_timer = 0.0
+			else:
+				_lose_timer += delta
+				if _lose_timer >= _param("lose_sec", LOSE_SEC_DEFAULT):
+					_enter_search()
+		Percept.SEARCH:
+			if seen_now:
+				_enter_chase()
+				return
+			_percept_timer -= delta
+			if _percept_timer <= 0.0:
+				_percept = Percept.PATROL
+
+
+## 경계에 든다 — 🔴 **한 박자가 0이면 여기서 곧장 다음 상태로 흘린다**(위 머리말).
+##  눈이면 CHASE(옛 동작) · 소리면 SEARCH(가 본다)로 갈린다.
+func _enter_alert(focus: Vector2, from_sound: bool) -> void:
+	_last_seen = focus
+	_alert_from_sound = from_sound
+	if _param("alert_sec", ALERT_SEC_DEFAULT) <= 0.0:
+		if from_sound:
+			_enter_search()
+		else:
+			_enter_chase()
+		return
+	_percept = Percept.ALERT
+	_percept_timer = _param("alert_sec", ALERT_SEC_DEFAULT)
+	# 🔴 **ⓓ 경계에도 작은 소리** — 시야 밖 적은 몸이 안 보여 **소리가 유일한 통보**다(설계 ⓓ).
+	_play_percept_sfx("alert_sfx")
+
+
+## 추격에 든다 — 🔴 **짖는다**(설계 ⓒ). 이 발신이 곧 다음 조각(무리)의 **전파 통로**가 된다.
+func _enter_chase() -> void:
+	if _percept == Percept.CHASE:
+		return
+	_percept = Percept.CHASE
+	_lose_timer = 0.0
+	_alert_from_sound = false
+	_play_percept_sfx("chase_sfx")
+
+
+## 수색에 든다 — 마지막으로 안 자리로 가 본다. 🔴 **`search_sec`이 0이면 아예 안 든다**(옛 동작).
+##  SEARCH가 「따돌렸다」를 만든다: 즉시 복귀면 도망이 너무 쉽고, 안 놓치면 세88의 그 고장
+##  (*"전부 남쪽 입구로 모인다"*)이 돌아온다.
+func _enter_search() -> void:
+	_alert_from_sound = false
+	var sec := _param("search_sec", SEARCH_SEC_DEFAULT)
+	if sec <= 0.0:
+		_percept = Percept.PATROL
+		return
+	_percept = Percept.SEARCH
+	_percept_timer = sec
+
+
+## 🔴🔴 **마법 소리 = 위력**(설계 §5 · 사용자 확정 ⓔ). 조립이 **전투 밖(잠입)까지** 의미를 갖는다:
+##  *「한 방에 잡고 조용히」* 대 *「다 불러내고 광역으로」*가 **조립 단계의 선택**이 된다.
+##
+## 🔴🔴 **반경은 `RingPower.quality_t()`를 지난다 — raw `score`를 쓰지 마라**(설계 C4).
+##  조립 점수의 실사용 범위가 `assemble_score_base`(0.70)~1.0이라 raw면 맨 진↔퍼펙트가 **1.43배**뿐이고
+##  「조용히 한 방」 대 「숲을 깨운다」가 성립하지 않는다. 지금 반경비는 240→700 = **2.92배**다.
+## 🔴 **`get("score", 기준선)` 가드가 필수다** — `test_audio_auto`가 `ring_cast_requested.emit({}, …)`로
+##  **빈 사전**을 쏜다. 가드가 없으면 SCRIPT ERROR가 나는데 **`-s` 테스트는 그래도 「OK」를 찍는다.**
+##  기준선은 `quality_t`가 0을 돌려주는 **맨 진 점수**다(= 가장 조용한 쪽으로 안전하게 무너진다).
+## ⚠ 이미 알아챈 적은 무시한다 — 쫓는 중에 소리를 또 들었다고 상태를 되감으면 추격이 리셋된다.
+func _on_cast_heard(assembly: Dictionary, origin: Vector2, _aim_dir: Vector2) -> void:
+	if _dead or not _percept_active():
+		return
+	if _percept == Percept.CHASE or _percept == Percept.ALERT:
+		return
+	var score := float(assembly.get("score", RingPower.assembled_score(0, 1)))
+	var radius: float = lerpf(BAL.percept_sound_radius_min_px, BAL.percept_sound_radius_max_px,
+		RingPower.quality_t(score))
+	if global_position.distance_to(origin) > radius:
+		return
+	# 🔴 **발사 지점**을 향해 든다 — 플레이어의 지금 위치가 아니다(쏘고 옮기면 흘린다).
+	_enter_alert(origin, true)
+
+
+## 🔴🔴 **인지가 「속도 목표」를 덮는다 — 갈래 호출은 안 끊는다**(설계 §2-b · `_physics_process` 참조).
+##
+## 🔴 **돌진 사이클이 이미 출발했으면 안 덮는다.** 윈드업/돌진/회복 중에 시야를 잃었다고 속도를
+##  갈아 끼우면 **이미 시작한 돌진이 소리 없이 증발한다**(바닥엔 붉은 띠가 떠 있는데 몸이 안 온다
+##  = 예고가 거짓말한다 — `_charge_reach_length` 머리말이 막으려는 바로 그 사고).
+func _apply_percept_velocity(delta: float) -> void:
+	if not _percept_active() or _percept == Percept.CHASE:
+		return
+	if _ai == "charge" and _charge_state != ChargeState.APPROACH:
+		return
+	match _percept:
+		Percept.ALERT:
+			velocity = Vector2.ZERO   # 멈춰 이쪽을 본다 (설계 §2)
+		Percept.SEARCH:
+			velocity = _search_velocity()
+		_:
+			velocity = _patrol_velocity(delta)
+
+
+## 🔴 배회 = **자기 자리 둘레를 도는 궤도**. 「보는 쪽 = 이동 방향」이라 궤도가 곧 **고개가 천천히
+##  도는 것**이 된다(설계 ⓑ — 틈이 열릴 때까지 기다렸다 지나간다).
+##
+## 🔴🔴 **물리로 풀지 마라 — 값으로 푼다**(설계 §8-5 · M10). 배회를 켜는 순간 늑대가 **나무를
+##  관통하고 서로를 통과하는 것**이 처음으로 상시 화면에 나온다(적 mask는 1(world)인데 방 안에
+##  layer 1 물체가 **하나도 없다** — 프롭 `collision_layer = 0` 계약).
+##   ⓐ **`patrol_radius ≤ PROP_CLEAR_SPAWN`(=100px)** — 프롭이 스폰 둘레 100px을 비우므로 그 안이면
+##     나무를 안 만난다. ⚠ 이 상한을 넘기면 늑대가 나무를 뚫는다(`data/enemies` 쪽 계약이다).
+##   ⓑ **자리마다 위상이 다르다**(`_patrol_phase`) — 같으면 둥지 둘레 다섯이 **한 몸처럼 겹친다.**
+## ⚠ 각속도를 `speed / radius`로 낸다 — 반경을 조여도 **걷는 빠르기**가 안 변한다(둘을 따로 적으면
+##  반경을 만질 때마다 체감 속도가 같이 흔들린다).
+func _patrol_velocity(delta: float) -> Vector2:
+	var radius := _param("patrol_radius", PATROL_RADIUS_DEFAULT)
+	var speed := _param("patrol_speed", PATROL_SPEED_DEFAULT)
+	if radius <= 0.0 or speed <= 0.0:
+		return Vector2.ZERO
+	_patrol_t += delta * speed / radius
+	var target := _home + Vector2.RIGHT.rotated(_patrol_phase + _patrol_t) * radius
+	var to := target - global_position
+	if to.length() <= PATROL_ARRIVE_PX:
+		return Vector2.ZERO
+	return to.normalized() * speed
+
+
+## 마지막으로 안 자리로 걸어가 본다 — 닿으면 그 자리에서 두리번거린다(속도 0 · 고개는 계속 돈다).
+func _search_velocity() -> Vector2:
+	var to := _last_seen - global_position
+	if to.length() <= SEARCH_ARRIVE_PX:
+		return Vector2.ZERO
+	return to.normalized() * _param("move_speed", 0.0)
+
+
+## 🔴🔴 배회 중심을 **첫 물리 틱에** 잡는다 (설계 §9-b · M6 — `_home` 머리말이 근거를 든다).
+## 🔴 위상을 **좌표에서** 뽑는다: 스폰 순서는 방 씬을 재편하면 바뀌지만 자리는 안 바뀐다.
+##  계수 둘은 서로소에 가까운 무리한 값이면 무엇이든 된다 — 재는 것은 「위상이 서로 다른가」뿐이다.
+func _capture_home() -> void:
+	if _home_set:
+		return
+	_home_set = true
+	_home = global_position
+	_patrol_phase = fposmod(_home.x * 0.0173 + _home.y * 0.0119, TAU)
+
+
+## 🔴🔴 **「보는 쪽」을 이번 틱만큼 굴린다** (설계 §4).
+##
+## 🔴 **`turn_rate`가 없으면 이 설계가 통째로 성립하지 않는다** — 적이 즉시 뒤를 돌아보면
+##  「돌아가기」가 아무 뜻도 없어진다. 그래서 폴백 0(=무제한)은 **옛 동작을 위한 것**이지
+##  기본 설계가 아니다.
+## ⚠ 회전으로 방향을 내는 몸(뱀)은 `_face`가 `_visual.rotation`을 쥔다 — 여기서 손대면 두 축이 싸운다.
+func _update_look(delta: float) -> void:
+	if _uses_rotation_facing():
+		return
+	var want := _desired_look()
+	if want.length_squared() < 0.0001:
+		return   # 목표가 없다 = 마지막 방향을 그대로 둔다(멈추면 보던 쪽에 굳는다)
+	want = want.normalized()
+	var rate := _param("turn_rate", TURN_RATE_DEFAULT)
+	if rate <= 0.0:
+		_look_dir = want
+		return
+	var step := deg_to_rad(rate) * delta
+	_look_dir = _look_dir.rotated(clampf(_look_dir.angle_to(want), -step, step)).normalized()
+
+
+## 이번 틱에 **보고 싶은** 쪽. 실제로 그만큼 도는지는 `turn_rate`가 정한다.
+## 🔴 **윈드업·돌진 동안은 락 방향에 고정한다**(설계 §4) — 고개가 계속 돌면 방향 락이 거짓말이 된다.
+##  ⚠ 이건 `turn_rate`를 **건너뛴다**: 락은 「이미 정해진 것」이라 회전 속도의 대상이 아니다.
+## 🔴 경계·수색은 **마지막으로 안 자리**를 본다(멈춰서도 고개는 그쪽이다 — 설계 §2 *"멈춰 이쪽을 본다"*).
+func _desired_look() -> Vector2:
+	if _ai == "charge" and _charge_dir.length_squared() > 0.0001 \
+			and (_charge_state == ChargeState.WINDUP or _charge_state == ChargeState.CHARGE):
+		return _charge_dir
+	if _percept == Percept.ALERT or _percept == Percept.SEARCH:
+		var to := _last_seen - global_position
+		if to.length_squared() > 1.0:
+			return to
+		return Vector2.ZERO
+	return velocity
+
+
+## 🔴 경계·발견 소리 — **id도 `.tres`가 쥔다**(`params.alert_sfx`·`params.chase_sfx`).
+##  ⚠ 키가 없으면 **아무 소리도 안 난다**: 보스 셋은 인지 키를 안 받으므로(§8-2) 늑대 짖는 소리를
+##   내면 안 되고, 그물 주입 몸도 조용해야 한다. 「새 적 = .tres 한 장」이 소리까지 덮는다.
+## 🔴 **`bus = &"SFX"`는 부르는 쪽 의무다**(`Audio.stream_of` 머리말) — 안 걸면 볼륨을 버스로
+##  가르는 날 늑대 소리만 안 따라온다.
+## ⚠ `stream_of`는 없는 id에 **null**을 준다 — 확인이 계약이다(소리가 없다고 게임이 멎으면 안 된다).
+func _play_percept_sfx(key: String) -> void:
+	var id := str(_def.params.get(key, "")) if _def != null else ""
+	if id == "":
+		return
+	var audio := get_node_or_null(^"/root/Audio")
+	if audio == null or not audio.has_method(&"stream_of"):
+		return
+	var stream: AudioStream = audio.call(&"stream_of", StringName(id))
+	if stream == null:
+		return
+	if _percept_sfx == null:
+		_percept_sfx = AudioStreamPlayer2D.new()
+		_percept_sfx.bus = &"SFX"
+		add_child(_percept_sfx)
+	_percept_sfx.stream = stream
+	_percept_sfx.play()
+
+
+## 🔴 공개 관측점 — 지금 인지 상태(`Percept` 값). `hp()`·`is_seen()`·`facing_x()` 선례.
+## ⚠ **내부 필드를 그대로 돌려주는 게 맞다** — 이 값 자체가 상태기계의 진실원이고, 되계산하면
+##  그물이 상태기계를 안 지나는 사본을 보게 된다(세85 「검증 도구가 거짓말한다」).
+func percept_state() -> int:
+	return _percept
+
+
+## 🔴 공개 관측점 — 지금 이 몸이 보고 있는 쪽(단위 벡터). 부채꼴 판정이 쓰는 **그 값**이다.
+## ⚠ `facing_x()`는 **그림**(`flip_h`)을 되읽고 이건 **판정**을 돌려준다 — 둘은 일부러 다른 문이다
+##  (좌우 반전은 데드존 때문에 판정보다 굵게 움직인다).
+func look_dir() -> Vector2:
+	return _look_dir
+
+
+## 🔴 공개 관측점 — 배회 중심(스폰 자리). 「`_ready`가 아니라 첫 물리 틱」 계약(§9-b)의 유일한
+##  측정 가능한 형태다. 아직 안 잡혔으면 지금 자리를 돌려준다.
+func patrol_home() -> Vector2:
+	return _home if _home_set else global_position
 
 
 ## 🔴🔴 **돌진이 닿는 자리 — 판정과 그림이 여기 한 곳에서 나온다** (세99).
@@ -1547,6 +2005,19 @@ func take_hit(damage: float, rune_type: int, status: int, status_power: float) -
 	dealt *= (1.0 - clampf(_param("armor_reduction", 0.0), 0.0, 0.95))
 	if _dispersed:
 		dealt *= (1.0 - clampf(_param("dispersed_resist", 0.0), 0.0, 0.95))
+	# 🔴🔴 **기습 — 나를 아직 못 본 적을 치면 더 아프다** (세105 인지 §6 · 사용자 확정 ⓕ).
+	#  「뒤로 돌기」가 회피가 아니라 **전술**이 된다. ✅ **호출자를 한 곳도 안 건드린다** —
+	#  적이 자기 인지 상태를 보고 스스로 곱하므로 회귀 위험이 구조적으로 0이다.
+	#
+	# 🔴 **직격만 받는다 — 반응·DoT는 일부러 제외한다**(설계 M9 정정). hp를 깎는 자리는 **셋**이다:
+	#  여기(직격) · `take_reaction_damage`(반응 버스트·연쇄) · `_wire_status`의 `on_dot`(DoT 틱).
+	#  ⚠ *"유일한 진입점"*이라고 읽으면 다음 사람이 반응 피해까지 여기로 옮긴다 — **셋이다.**
+	# 🔴 자리가 여기인 이유 둘: ⓐ `enemy_hit` emit **앞**이라 계약(*"최종 피해"*)이 지켜진다 ·
+	#  ⓑ `damage <= 0.0` 조기 반환 **뒤**라 「기습이 도는 자리」가 하나로 읽힌다.
+	#  곱셈 순서는 무해하다(약점·방어·분산이 전부 곱이라 교환법칙이 선다).
+	# ⚠ **허수아비(`dummy_target.gd`)엔 안 넣는다** — 인지가 없다(세56 두 몸 파리티의 예외).
+	if _percept != Percept.CHASE:
+		dealt *= _param("ambush_mult", AMBUSH_MULT_DEFAULT)
 	_hp -= dealt
 	EventBus.enemy_hit.emit(self, dealt, rune_type)
 	# 🔴 상태·반응은 피해 **뒤에** 판정한다 — 증기·연쇄가 이 한 대의 피해까지 얹은 뒤 터져야
@@ -1616,8 +2087,30 @@ func _roll_drops() -> Array[Dictionary]:
 
 ## 낱개 바닥 픽업 (잡몹, 세46·51) — **로직은 `drop_roll.gd`가 쥔다**(세101 추출).
 ## 여기 남은 일은 **죽은 자리를 넘기는 것**뿐이다(지점은 자기 자리를 넘긴다 — 그래서 인자다).
+##
+## 🔴🔴 **세105 N5 — 지연 실행이 계약이다**(사용자 실플레이 엔진 에러):
+## ```
+## ERROR: Can't change this state while flushing queries.
+##        Use call_deferred() or set_deferred() to change monitoring state instead.
+## ```
+## 🔴 **그 문구의 「monitoring」은 거짓 단서다** — 엔진 바이너리를 뒤져 보면 이 문자열은
+##  `area_set_shape_disabled`/`body_set_shape_disabled`가 **같이 쓰는 사본**이다(실측).
+##  진짜 원인은 **`CollisionShape2D`를 가진 씬을 물리 질의 flush 중에 `add_child`하는 것**이다:
+##  `CollisionShape2D`가 `NOTIFICATION_ENTER_TREE`에서 `shape_owner_set_disabled`를 다시 걸어서다.
+##
+## 🔴 **여기가 그 자리다**: `projectile._on_body_entered`(= flush 중) → `_hit_enemy` → `take_hit`
+##  → `_die` → 여기 → `drop_pickup.tscn`(Area2D + CollisionShape2D) `add_child` ⇒ **드롭 하나당 에러 하나**.
+##  `ring_spell_system._on_carrier_deployed`가 *"물리 콜백 중일 수 있으니 지연 실행"*이라 적어 둔
+##  **정확히 같은 함정**이고, 드롭 경로만 그 규율에서 빠져 있었다.
+##
+## 🔴🔴 **헤드리스가 구조적으로 못 잡는다**: ⓐ 접두가 `SCRIPT ERROR`가 아니라 `ERROR`라 그물의
+##  grep을 통과하고 ⓑ **그물은 `take_hit`을 직접 불러 죽여서** 물리 콜백을 아예 안 지난다
+##  (세105 실측: 전 스위트 48/48 그린 · `flushing queries` **0건**). 재현은 `body_entered` 안에서
+##  픽업을 `add_child`하는 최소 리그로만 됐다.
+## ⚠ `global_position`은 **지금** 값이 `bind`로 굳는다 — 이 프레임 끝에 `queue_free`되는 몸이라
+##  나중에 읽으면 늦다. 그래서 인자로 넘기는 지금 모양이 그대로 정답이다.
 func _spawn_loose(scene: Node, rolled: Array[Dictionary]) -> void:
-	DropRoll.spawn_loose(scene, global_position, rolled)
+	DropRoll.spawn_loose.bind(scene, global_position, rolled).call_deferred()
 
 
 ## 팝 — 셰이더 플래시 + 스쿼시 (피격 손맛, 세63 개편). modulate를 **아예 안 만진다** — 흰 섬광은

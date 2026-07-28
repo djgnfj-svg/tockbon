@@ -387,8 +387,9 @@ func _test_wolf_pack() -> void:
 	_check(hound != null, "%s가 Db.enemies에 실재한다 (전제)" % WOLF_ID)
 	if hound == null:
 		return
-	var aggro: float = float(hound.params.get("aggro_range", 0.0))
-	_check(aggro > 0.0, "%s가 aggro_range를 들고 있다 (실제 %.0f)" % [WOLF_ID, aggro])
+	# 🔴 세105 **이름 승계** — 정본 키는 `sight_range`, 옛 이름은 폴백이다(설계 §8-1).
+	var aggro: float = float(hound.params.get("sight_range", hound.params.get("aggro_range", 0.0)))
+	_check(aggro > 0.0, "%s가 sight_range(옛 aggro_range)를 들고 있다 (실제 %.0f)" % [WOLF_ID, aggro])
 	var g := _grid()
 	var entrance := _entrance_cell(g)
 	var spine := _spine_points(entrance, g)

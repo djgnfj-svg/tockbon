@@ -29,7 +29,7 @@ params = {
 "ai": "boss_snake",
 "sprite": "res://assets/sprites/enemies/snake_head.png",
 "hurt_sprite": "res://assets/sprites/enemies/snake_head_hurt.png",
-"aggro_range": 320.0,
+"sight_range": 320.0,
 "always_visible": true,
 "attack_cooldown": 1.0,
 "attack_range": 34.0,

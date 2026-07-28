@@ -131,8 +131,8 @@ func _test_tag_rolls_within_pool() -> void:
 			break
 		seen[mobs[0].enemy_id] = true
 		# 🔴 좌표는 **굴리지 않는다** — 사용자 확정 *"지형은 동일하고 나오는 몬스터들이 랜덤"*.
-		if mobs[0].position != at:
-			_check(false, "🔴 좌표가 MobSpawn.position 그대로다 (기대 %s / 실제 %s)" % [at, mobs[0].position])
+		if not _at_spot(mobs[0], at):
+			_check(false, "🔴 좌표가 MobSpawn.position 그대로다 (기대 %s / 실제 %s · 배회 여유 밖)" % [at, mobs[0].position])
 			break
 	var ids: Array = seen.keys()
 	ids.sort_custom(func(a, b) -> bool: return String(a) < String(b))
@@ -298,7 +298,7 @@ func _test_named_chance_extremes() -> void:
 		var mobs := _mobs()
 		if mobs.size() == 1 and mobs[0].enemy_id == &"hound_alpha":
 			stood += 1
-			if mobs[0].position == at:
+			if _at_spot(mobs[0], at):
 				placed += 1
 	_check(stood == rounds, "🔴 chance 1.0은 %d판 전부 뜬다 (실제 %d판)" % [rounds, stood])
 	_check(placed == rounds,
@@ -326,7 +326,7 @@ func _test_named_chance_extremes() -> void:
 	_check(at_lm.size() == 1,
 		"🔴 at_landmark 네임드가 정확히 하나 선다 (실제 %d — 0이면 해석이 안 켜진 것이다)" % at_lm.size())
 	if at_lm.size() == 1:
-		_check(at_lm[0].position == lm_at,
+		_check(_at_spot(at_lm[0], lm_at),
 			"🔴🔴 네임드가 **지점 좌표** %s에 선다 (실제 %s — 자유 위치 %s면 해석이 안 걸린 것이고 원점이면 자리를 못 찾은 것이다)"
 				% [lm_at, at_lm[0].position, at])
 	_restore_all()
@@ -599,6 +599,21 @@ func _mob_ids() -> Array:
 		out.append(n.enemy_id)
 	out.sort_custom(func(a, b) -> bool: return String(a) < String(b))
 	return out
+
+
+## 🔴🔴 **세105 인지 — 적이 배회한다**(설계 ⓑ). 그래서 「데이터가 말한 자리에 섰나」를 **좌표
+##  완전 일치**로는 더 이상 못 잰다: 스폰 다음 물리 틱부터 `patrol_speed`만큼 흘러간다
+##  (세105 실측 **0.47px** — 이 그물이 그날 빨개진 이유가 그것이다).
+## 🔴 **여유를 상수로 박지 마라 — 그 몸의 `patrol_radius`에서 파생시킨다.** 그러면
+##  ⓐ 사용자가 배회를 조여도 **거짓 빨강**이 안 나고 ⓑ **검출력은 그대로**다: 이 그물이 잡으려는
+##  오답(원점 · 자유 위치 · 다른 슬롯)은 전부 **수백 px** 떨어져 있다.
+## ⚠ 배회를 안 하는 몸(`patrol_radius` 없음)은 여유가 `SPOT_EPS`뿐이라 **사실상 완전 일치**다.
+const SPOT_EPS := 1.0
+
+func _at_spot(mob, want: Vector2) -> bool:
+	var def = _db.get_enemy(mob.enemy_id)
+	var r: float = float(def.params.get("patrol_radius", 0.0)) if def != null else 0.0
+	return mob.position.distance_to(want) <= r + SPOT_EPS
 
 
 func _check(cond: bool, label: String) -> void:

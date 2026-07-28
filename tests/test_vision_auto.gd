@@ -180,7 +180,10 @@ func _test_data_invariant() -> void:
 		# 보스는 건너뛴다 — 무대에 오른 적은 애초에 안 숨는다(§4-3).
 		if bool(def.params.get("always_visible", false)):
 			continue
-		var aggro := float(def.params.get("aggro_range", 0.0))
+		# 🔴 세105 **이름 승계** — `aggro_range` → `sight_range`(설계 §8-1 · C1).
+		#  🔴🔴 **은퇴가 아니라 승계인 이유가 바로 이 불변식이다**: 키를 지웠으면 여기가 0을 받아
+		#   바탕 조건은 **자명 통과** · 스토커 조건은 **빨강**이 됐다(그 사이 네임드의 정체성이 증발한다).
+		var aggro := float(def.params.get("sight_range", def.params.get("aggro_range", 0.0)))
 		if aggro <= 0.0:
 			continue   # aggro를 안 쓰는 몸(고정 표적 등)은 이 불변식의 대상이 아니다
 		judged += 1

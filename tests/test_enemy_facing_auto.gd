@@ -275,7 +275,9 @@ func _test_rotation_body_is_excluded() -> void:
 		_check(false, "snake_boss를 Db가 로드했다")
 		return
 	# 🔴 rush_range(240) 밖에 둔다 — 안쪽이면 곧장 러시 윈드업(velocity 0)으로 들어가 위브가 안 돈다.
-	var near: float = float(def.params.get("aggro_range", 320.0)) - 50.0
+	# 🔴 세105 이름 승계(`sight_range`) — 폴백 320을 두면 데이터가 옮겨가도 **우연히 같은 값**이라
+	#  그물이 안 빨개진다. 승계 순서대로 읽는다.
+	var near: float = float(def.params.get("sight_range", def.params.get("aggro_range", 0.0))) - 50.0
 
 	# ⓐ **왼쪽 판** = 제외가 풀렸는지 드러나는 유일한 방향(시트가 오른쪽을 보므로 왼쪽이 뒤집히는 쪽).
 	var stub_r := _stub(Vector2(-near, 0.0))

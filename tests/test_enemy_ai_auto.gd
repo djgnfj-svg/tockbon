@@ -248,8 +248,8 @@ func _test_leash_stops_far_pursuit() -> void:
 	_inject_hover()
 	# aggro 값은 각 EnemyDef의 params에서 온다 — 여기 상수로 베끼면 데이터를 조일 때 갈라진다.
 	for id: StringName in [HOVER_PROBE, &"gale", &"snake_boss"]:
-		var aggro: float = float(_db.get_enemy(id).params.get("aggro_range", 0.0))
-		_check(aggro > 0.0, "%s: .tres에 aggro_range가 있다 (실제 %.0f)" % [id, aggro])
+		var aggro: float = _sight_of(_db.get_enemy(id))
+		_check(aggro > 0.0, "%s: .tres에 sight_range(옛 aggro_range)가 있다 (실제 %.0f)" % [id, aggro])
 		var stub := Node2D.new()
 		stub.add_to_group("player")
 		root.add_child(stub)
@@ -297,7 +297,7 @@ func _test_leash_stops_far_pursuit() -> void:
 ##   러시 쿨다운은 `match` 밖에서 감소한다). 위험이 gale에 집중돼 있어 여기만 잰다.
 func _test_leash_keeps_boss_machinery() -> void:
 	print("[5] leash 뒤에도 gale 쿨다운이 돈다 — 멀리서 기다렸다 붙으면 즉시 연사")
-	var aggro: float = float(_db.get_enemy(&"gale").params.get("aggro_range", 260.0))
+	var aggro: float = _sight_of(_db.get_enemy(&"gale"))
 	var near_pos := Vector2(aggro - 50.0, 0.0)
 	var far_pos := Vector2(aggro + 400.0, 0.0)
 	var stub := Node2D.new()
@@ -459,6 +459,17 @@ func _hit_and_capture(e, damage: float, rune: int) -> float:
 	e.take_hit(damage, rune, 0, 0.0)
 	_bus.enemy_hit.disconnect(cb)
 	return box[0]
+
+
+## 🔴🔴 세105 **이름 승계** — 「보는 거리」의 정본 키는 `sight_range`이고, 없으면 `aggro_range`를
+##  승계한다(`forest_enemy.SIGHT_KEY` 머리말 · 설계 `enemy_perception_design.md` §8-1).
+##  🔴 **읽는 자리를 여기 하나로 모은다** — 그물 안에 `params.get("aggro_range")`가 흩어져 있으면
+##   데이터가 새 이름으로 옮겨간 날 **어떤 줄은 0을 받고 어떤 줄은 폴백값으로 조용히 통과**한다
+##   (세105에 실제로 그랬다: 두 파일이 폴백 320·220을 우연히 받아 **빨개지지도 않았다**).
+func _sight_of(def) -> float:
+	if def == null:
+		return 0.0
+	return float(def.params.get("sight_range", def.params.get("aggro_range", 0.0)))
 
 
 func _check(cond: bool, label: String) -> void:
