@@ -20,3 +20,8 @@ docs/_reports/
 # `tools/vfx_shot.gd`·`shot_room.gd`가 여기로 뱉는다 — PNG마다 .import 사이드카가 딸려
 # `git add -A` 한 번이면 통째로 커밋된다.
 scratch_shots/
+
+# 🔴 아트 레퍼런스 (`takbon-artref` 스킬이 여기 저장한다).
+# 남의 그림이라 **라이선스가 불명**이다 — 리포에 커밋하면 안 된다.
+# ⚠ 이미지는 사라져도 되게 **검색 URL을 보고서·설계문서에 텍스트로 남겨라**(그러면 다시 뽑는다).
+docs/_refs/
