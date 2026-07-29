@@ -2,7 +2,7 @@
 
 > 세87 기획 · 사용자와 대화로 확정 · **takbon-architect 리뷰 반영 완료(조건부 승인 → 지적 16건 전량 반영)**
 > 🟢 **세88에 9단계 전량 구현 완료** — 결정 요약은 `docs/DECISIONS.md`, 상세 경위는 `git log`(세92에 세션 기록 문서를 없앴다).
-> 관련: `docs/PROGRESSION.md`(세57 「뼈대는 확정, 살은 랜덤」) · `docs/takbon-design/dopamine_design.md`(세66 도파민 루프).
+> 관련: `docs/PROGRESSION.md`(세57 「뼈대는 확정, 살은 랜덤」) · `docs/takbon-design/2_building/dopamine_design.md`(세66 도파민 루프).
 > ⚠ 세87 원문은 이 자리에 memory 두 장(스테이지 형식·도파민 루프)을 댔는데 **세107에 지워졌다** — 위 둘이 그 자리를 잇는다.
 
 ---

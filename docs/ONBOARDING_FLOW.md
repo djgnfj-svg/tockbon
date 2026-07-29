@@ -3,7 +3,7 @@
 > 🔴🔴 **세95 정정 — 「NPC」라고 적힌 곳은 전부 「문(`ForestGate`)」이다.**
 > 길잡이 NPC가 **은퇴**했다(`base.tscn`에서 노드 제거 · 씬 파일과 PNG는 남아 있다).
 > **왜**: 새 세계관이 *"깨진 지 오래 · 그 뒤로 **아무도 안 모았다**"*인데 사람이 서 있으면 「왜 그동안 안 주웠나」가 생긴다.
-> 정본 = `docs/takbon-design/world_and_visual_design.md` §2. 결정 = `docs/DECISIONS.md`.
+> 정본 = `docs/takbon-design/2_building/world_and_visual_design.md` §2. 결정 = `docs/DECISIONS.md`.
 > → **아래 구간 B-1·B-2·C-1과 ②·③ 구현 기록의 「NPC」를 문으로 읽어라.** 화자 이름도 `"길잡이"` → **`"문"`**이다.
 > ⚠ 문 [E] **하나가 정산 + 챕터 선택을 겸한다** — 조용히 깨지는 자리 넷(체이닝·소프트락·무로그 return·E 이중소비)이
 > 설계 §2의 표에 있다. **이 흐름을 다시 만질 땐 거기부터 읽어라.**

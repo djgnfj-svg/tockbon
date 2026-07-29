@@ -16,9 +16,9 @@ description: 탁본(TAKBON) 프로젝트의 아키텍처 규칙·모듈 지도·
 | 이 스킬 | 아키텍처·모듈 상세·하드 계약 · 🔴 **조용히 깨지는 함정 전량**(§5 — 세98에 CLAUDE.md에서 이관받았다) |
 | `CLAUDE.md` | **지도만** — 게임 개요·정본 위치·모듈 한 줄·위임. 🔴 세98에 39.5KB→13KB로 줄이며 함정을 여기로 내렸다(그전엔 **두 벌**이라 세51·84·87에 갈라졌다) |
 | `docs/DECISIONS.md` | **무엇을 왜 정했나** + 하네스 이력 (세92 신설). 📕 `STATUS.md`·`STATUS_ARCHIVE.md`·`HARNESS_LOG.md`는 **없는 파일**이다 — 옛 서술이 가리키면 경위는 `git log`에서 캔다 |
-| `docs/BACKLOG.md` | 아직 안 한 것 (세88~90 이월 = `N0~N10`) |
+| `docs/TODO.md` | 아직 안 한 것 (⚠ 2026-07-29에 `BACKLOG.md`에서 갈라졌다 — **`BACKLOG.md`는 「어느 세션이 무엇을 했나」**) |
 | `docs/PROGRESSION.md` | 진행 관문표 |
-| `docs/takbon-design/` | 확정·대기 설계 문서 |
+| `docs/takbon-design/` | 설계 문서 **3단계 보관** — `1_planned/`(미착수) · `2_building/`(구현 중) · `3_done/`(완료) |
 
 ⚠ **세39에 삭제된 건 옛 자유드로잉 세대의 TRUTH·TECH_SPEC·CHANGELOG 등이다** — 지금의 `docs/GDD.md`는 **그 뒤(세71)에 새로 만든 다른 문서**이고 살아 있다. 「docs/는 전부 아카이브」는 거짓이니 그렇게 배우지 마라.
 ✅ **GDD는 세96·97에 현행화됐다** — 그리기 폐지가 §2(심장 = 조립)·§3(손 긋기 = **휴면 각주**)에 반영돼 있다. **「개정 허락 대기 중」이라 적은 옛 서술은 낡은 것이다**(세107 실측 — 이 스킬·`takbon-design`이 둘 다 그러고 있었다).
@@ -70,7 +70,7 @@ description: 탁본(TAKBON) 프로젝트의 아키텍처 규칙·모듈 지도·
 
 - **`src/base`** — 마법사 학교 마을(진입점, `run/main_scene`).
   🔴🔴 **세90: 마을에 실제로 서 있는 건 셋이다 — 캐릭 + 마법문 + 마법 제작대(책상)**(사용자 확정). 씬에 남은 노드 = `Player`·`ForestGate`·`Desk`·`Monument`(영구 잔해 = **깨진 큰 마법진**)·`Dummy1~5`(연습장). ⚠ **공방(`Craft`)·정제대(`Refine`)·매점(`Shop`) 노드는 씬에 없다** — 「마을에 공방이 있다」고 전제하고 배선하지 마라.
-  🔴🔴 **세95: `Npc`(길잡이)도 씬에 없다 — 문(`ForestGate`)이 화자·정산을 겸한다.** 퀘스트 정산·오프닝 대사·머리 위 [?] 마크가 전부 문에 붙어 있다(`_on_gate_talk`·`ForestGate/Mark`). ⚠ `src/props/npc_guide.tscn`·PNG는 **남겨 뒀다**(씬에서만 뺐다). 🔴 **문 [E]에 세 번째 일을 얹지 마라** — 이미 대사→정산→챕터선택 체인이고, 모달 규약 때문에 조용히 깨지는 자리가 넷이다(정본 = `docs/takbon-design/world_and_visual_design.md` §2 표 ⓐ~ⓓ).
+  🔴🔴 **세95: `Npc`(길잡이)도 씬에 없다 — 문(`ForestGate`)이 화자·정산을 겸한다.** 퀘스트 정산·오프닝 대사·머리 위 [?] 마크가 전부 문에 붙어 있다(`_on_gate_talk`·`ForestGate/Mark`). ⚠ `src/props/npc_guide.tscn`·PNG는 **남겨 뒀다**(씬에서만 뺐다). 🔴 **문 [E]에 세 번째 일을 얹지 마라** — 이미 대사→정산→챕터선택 체인이고, 모달 규약 때문에 조용히 깨지는 자리가 넷이다(정본 = `docs/takbon-design/2_building/world_and_visual_design.md` §2 표 ⓐ~ⓓ).
   🔴🔴 **그중 최악 = 패널 열기를 `box.finished`에만 걸면 대사가 빈 경로에서 마을 밖으로 못 나가는 소프트락**이다(`_start_turnin_dialogue`가 **`bool`을 돌려주는 이유**가 그것이다 — 「대사를 실제로 띄웠나」를 호출부가 알아야 한다).
   🔴 **지운 건 「마을에서 여는 길」뿐이다** — 프롭 씬·패널(`workshop_panel`·`refine_panel`·`shop_panel`)·레시피는 **전부 살아 있다**(그래서 `test_workshop_auto`가 그대로 그린이다 — 그 그물은 패널을 직접 열어 마을을 안 지난다). **되살리는 절차 정본 = `base.gd`의 `STATION_UNLOCKS` 머리말 ①~④**(씬 노드 + 표 + 퀘스트 `reward_unlock` + connect가 한 덩어리다).
   ✅ **세97: 공방만 문이 생겼다 — 건물이 아니라 「책상 [E] → 책 → [⚒ 부품 제작]」이다**(사용자 확정 · 마을은 여전히 셋). 그전엔 **공방 제작이 유일 경로인 해금 5종이 도달 불가**였다(→ §5-1 첫 줄). ⏳ 정제대·상점은 아직 문이 없다.

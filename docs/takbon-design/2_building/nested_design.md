@@ -10,7 +10,7 @@
 > 🔴 **세108 정정 — 그때 적은 존치 근거 셋(`CLAUDE.md`·`PROGRESSION.md`·memory 한 장이 이 문서를 가리킨다)이
 > 전부 죽었다**: `CLAUDE.md`는 세98 축소로 이 문서를 안 가리키고, `PROGRESSION.md`는 세97 전면 재작성으로
 > 안 가리키며, 그 memory(스테이지 형식 결정)는 세107에 지워졌다.
-> **살아있는 존치 근거는 둘이다** — `docs/takbon-design/README.md` 현역 표 · `docs/BACKLOG.md` **C1**
+> **살아있는 존치 근거는 둘이다** — `docs/takbon-design/README.md`의 `2_building` 표 · `docs/TODO.md` **「rune_fill 거취」**
 > (`rune_fill` 소비자 0곳 · 살릴지 접을지 미정). 즉 **이 문서가 유일하게 드는 자산은 `rune_fill` 입력 수단 안(#5)과 #7**이다.
 > - ❌ **#4 복합 룬 = 해소됨** — 세81 M2가 `JinDef.rune_slots`로 실현했다(`JinDef`의 `rune_slots` ·
 >   `data/jin/jin_fuse.tres` · 합산은 `ring_spell_system._fire_hit`의 share).
