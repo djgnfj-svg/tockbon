@@ -3,7 +3,7 @@
 > 🔴🔴 **이 문서는 게임의 진실원(source of truth)이다. 사용자의 명시적 허락 없이 수정 금지.**
 > 여기 담는 것 = **자주 변하지 않는 안정된 진실**(비전·세계관·코어 재미·마법 모델·축·루프·아트 방향·설계 원칙).
 > 여기 담지 않는 것 = 결정 로그(`docs/DECISIONS.md`) · 할 일(`docs/BACKLOG.md`) · 진행 관문 수치(`docs/PROGRESSION.md`) ·
-> 진행 중 설계(`docs/takbon-design/`) · 함정·검증·아키텍처(`CLAUDE.md`) · 세부 이력(memory).
+> 진행 중 설계(`docs/takbon-design/`) · 함정·검증·아키텍처(**`takbon-rules`·`takbon-verify` 스킬** — 세98에 `CLAUDE.md`에서 이관됐다).
 > **"게임이 무엇인가"는 여기, "지금 어디까지 왔나·어떻게 짜나"는 저기.**
 >
 > 🔴 **세96 개정 (사용자 허락 받음 · BACKLOG N14)**: §1·§2·§3·§4가 **세83에 폐지된 「손으로 그린다」**를
@@ -135,5 +135,5 @@
 | 아직 안 한 것·다듬을 것 | `docs/BACKLOG.md` |
 | 무엇이 언제 열리나 (진행·해금) | `docs/PROGRESSION.md` |
 | 진행 중·대기 중 설계 | `docs/takbon-design/` (README 인덱스) |
-| 함정·검증 규율·아키텍처·모듈 지도 | `CLAUDE.md` + `.claude/skills/takbon-rules`·`takbon-verify` |
-| 세부 결정 이력 | memory (`MEMORY.md` 인덱스) |
+| 함정·검증 규율·아키텍처·모듈 지도 | **`.claude/skills/takbon-rules`·`takbon-verify`가 정본** · `CLAUDE.md`는 「무엇이 어디 있나」 지도 |
+| 세부 결정 이력 | `docs/DECISIONS.md` + `git log` — ⚠ **memory에서 찾지 마라**(세107에 96→4개로 줄였고 남은 넷은 리포에 못 쓰는 것뿐이다) |

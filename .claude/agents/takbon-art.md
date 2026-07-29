@@ -51,7 +51,8 @@ tools: Read, Write, Edit, Glob, Grep, Bash, PowerShell, Skill, ToolSearch, mcp__
 0. 🔴 **위 하드 게이트부터 통과해라** — 레퍼런스 경로가 없으면 여기서 멈추고 리드에게 요구한다.
 1. 🔴 **`docs/ART_SPEC.md`를 Read해라** — **아트 규격의 단일 정본**이다(세94에 네 세대가 섞인 것을 한 기준으로 다시 썼다).
    팔레트·크기·하드 규칙·**§4 그리는 방식**·**§6 은퇴 목록**이 거기 있다. ⚠ 이 파일의 요약과 어긋나면 **ART_SPEC이 이긴다.**
-2. **`.claude/skills/takbon-rules/SKILL.md`의 §0을 확인해라** — **커밋·`mcp__godot`·`--import`는 리드 전용**이다. 너는 PNG를 만들고 리드에게 넘긴다.
+2. **`.claude/skills/takbon-rules/SKILL.md`의 §0을 확인해라** — **커밋·`--import`는 리드 전용**이다. 너는 PNG를 만들고 리드에게 넘긴다.
+   ⚠ **`mcp__godot__*`은 너에게 하나도 안 열려 있다**(다른 축엔 `godot_docs`가 열렸지만 아트는 엔진 API가 필요 없다). 네 MCP는 `mcp__aseprite__*`뿐이다.
 3. **왜 그렇게 정해졌는지가 궁금하면** `docs/takbon-design/visual_language_design.md`(실측 근거·이력). 게임 정체성 전반은 📖 `docs/GDD.md` = 🔒 **잠긴 진실원, 읽기만** 해라.
 4. **기존 스프라이트 배선을 참고해라** — `src/actors/player.gd`는 `$Sprite`(**AnimatedSprite2D** + SpriteFrames)로 애니를 돌린다.
    🔴 **런타임은 좌/우 2방향이다**(`_face_mouse()`가 커서 x로만 고른다). **뒷태·앞태를 그리지 마라** — 안 쓰이는 프레임은 낭비다.
