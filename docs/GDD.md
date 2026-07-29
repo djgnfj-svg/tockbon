@@ -40,7 +40,7 @@
 🔴 **비주얼의 잣대 = 「마법 = 빛. 빛은 있어야 할 곳(마을)에 없고, 없어야 할 곳(숲·짐승)에 있다」.**
 
 ⚠ **세계관은 곁다리다**(사용자 확정 — *"이런 게임에서 세계관은 대충만 넣으면 된다"*).
-여기 적힌 것 이상은 **묻기 전엔 안 채운다.** 상세 = `docs/takbon-design/2_building/world_and_visual_design.md`.
+여기 적힌 것 이상은 **묻기 전엔 안 채운다.** 상세 = `docs/takbon-design/building/world_and_visual_design.md`.
 
 ## 2. 코어 재미 — 조립하고, 그 차이를 본다
 
@@ -69,7 +69,7 @@
 > ⚠ **세83 휴면**: 3과 4 사이에 **「조립본을 밑그림 삼아 손으로 한 번에 따라 긋기」**가 있었고
 > 그 완성도×정밀도가 위력이었다. `balance.skip_drawing`을 false로 되돌리면 **그대로 살아난다**
 > (채점기·펜 보정 전부 생존). 지금 위력은 **조립 자체**가 판다(`RingPower.assembled_score` — 문양 수 × 층 수).
-> 🔴 묻는 건 `RingPower.skip_drawing()` 하나로. 모델 상세 = `docs/takbon-design/3_done/takbon_model.md`
+> 🔴 묻는 건 `RingPower.skip_drawing()` 하나로. 모델 상세 = `docs/takbon-design/done/takbon_model.md`
 > (⚠ 그 문서의 「손 긋기」 서술은 이 휴면 상태를 안 반영한다).
 
 ## 4. 세 축 — 진 · 룬 · 문양
@@ -99,7 +99,7 @@
 - **장르 = 원정(익스트랙션).** 나가는 이유 = **되찾을 문양이 저 너머에 있어서**(= 새로 조립할 것 = 코어 재미 확장).
 - **긴장 = 가방**(원정 중 획득은 전부 가방에 · 죽으면 증발)**·귀환.** 🔴 세계관에선 *"모은 조각이 도로 흩어진다"*.
 - **루프 = 마을 허브 → 원정(챕터 보스방) → 보상 → 마을.** 즉시 보상 축(돈·상점)과 코어 보상(룬·진·문양)이 함께.
-  (경제·보상 상세 = `docs/takbon-design/2_building/dopamine_design.md`)
+  (경제·보상 상세 = `docs/takbon-design/building/dopamine_design.md`)
 
 ## 7. 설계 원칙
 

@@ -25,9 +25,9 @@
 
 | 검사 | 식 |
 |---|---|
-| **1_planned** | 아래 「1_planned」 표 줄 수 == `ls docs/takbon-design/1_planned/*.md` |
-| **2_building** | 아래 「2_building」 표 줄 수 == `ls docs/takbon-design/2_building/*.md` |
-| **3_done** | 아래 「3_done」 표 줄 수 == `ls docs/takbon-design/3_done/*.md` |
+| **planned** | 아래 「planned」 표 줄 수 == `ls docs/takbon-design/planned/*.md` |
+| **building** | 아래 「building」 표 줄 수 == `ls docs/takbon-design/building/*.md` |
+| **done** | 아래 「done」 표 줄 수 == `ls docs/takbon-design/done/*.md` |
 
 🔴🔴 **검사기가 이걸 자동으로 잰다 — `python tools/docs_audit.py`.** 표 셋 + **단계 폴더 밖에 굴러다니는 `.md`** + 죽은 경로 참조까지 본다.
 ⚠ **헤딩에서 폴더명을 빼지 마라** — 검사기가 `1_planned`·`2_building`·`3_done`이라는 **글자로 표를 찾는다.** 빼면 그 표가 통째로 「없는 것」이 돼 전량 빨강이 난다.

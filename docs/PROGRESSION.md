@@ -119,9 +119,9 @@
 
 ## 4. 끝 — 엔딩 조건 (세95 사용자 확정 · 🕳 미구현)
 
-> 정본 = `docs/takbon-design/2_building/world_and_visual_design.md` §1. **진행의 종점이라 이 표가 같이 든다.**
+> 정본 = `docs/takbon-design/building/world_and_visual_design.md` §1. **진행의 종점이라 이 표가 같이 든다.**
 
-🔴🔴 **세101 정정 — 「문양 전종 회수」는 잴 대상이 없었다. 정본은 `docs/takbon-design/1_planned/gate_restoration_design.md`다.**
+🔴🔴 **세101 정정 — 「문양 전종 회수」는 잴 대상이 없었다. 정본은 `docs/takbon-design/planned/gate_restoration_design.md`다.**
 실측: `GlyphDef`엔 **해금 게이트 자체가 없고**(위 §1이 이미 적고 있다) 문양은 **낱개로 고를 수도 없다**(세71에 문양 탭 은퇴).
 즉 이 조건은 **에러 0·전 스위트 그린인 채로 데이터가 0**이었다. → **보스 재료를 부서진 마법문에 바쳐 칸을 채우는 것**으로 갈렸고,
 분모는 **최종 전 챕터 수**(지금 3 · 목표 7 = 보스 8 − 최종 1)다. 아래 서술은 **세95판 기록으로만 읽어라.**

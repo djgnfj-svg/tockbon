@@ -38,7 +38,7 @@
 | 세부·함정 기억 | memory(`MEMORY.md`가 인덱스) |
 | 일회성 보고서 | `docs/_reports/`(**gitignore** — 읽고 나면 리드가 지운다) |
 
-🔴 **세계관 = `GDD.md` §1** · 상세 = `docs/takbon-design/2_building/world_and_visual_design.md`.
+🔴 **세계관 = `GDD.md` §1** · 상세 = `docs/takbon-design/building/world_and_visual_design.md`.
 「마법 = 빛. 빛은 있어야 할 곳(마을)에 없고, 없어야 할 곳(숲·짐승)에 있다」가 **모든 비주얼 판단의 잣대**다.
 
 📕 **`docs/STATUS.md`·`STATUS_ARCHIVE.md`·`HARNESS_LOG.md`는 「없는 파일」이다**(세92에 날짜순 기록을 전부 없앴다 — 사용자 확정 *"중요한 결정내용만"*). 옛 문서·memory가 그걸 가리키면 **「그 시절 기록을 보라」는 뜻**이고, 실제 경위는 `git log`·`git show`에서 캔다. **정본 = `docs/DECISIONS.md` 머리말**(셋을 없애고 그 자리를 대신한 파일이라 「왜 없앴나」가 거기 있다).
