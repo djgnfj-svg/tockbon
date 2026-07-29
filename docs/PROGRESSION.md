@@ -149,7 +149,14 @@
 - **새 진** = ① `data/jin/jin_X.tres` 한 장 ② 획득 경로 ③ `ring_book.gd` JIN_DESC 한 줄.
   🔴 **진의 개성은 `band_count`(층 수)·`rune_slots`(룬 자리)·`guide_shape`가 쥔다** — 셋 다 발사에 실재한다.
   ⚠ **칸 축(`glyph_slots`)은 세85에 은퇴했다**(소비자 0이라 선언해도 발사·저장·HUD 어디에도 안 갔다).
-- **새 문양** = `data/glyphs/X.tres` 한 장 — 현행 게이트 없음(무필터로 즉시 뜬다). 잠그려면 D3 먼저.
+- **새 문양** = 🔴 **`.tres` 두 장이다 — 낱개(`data/glyphs/X.tres`) + 밴드에 끼울 고리(`data/glyph_rings/gr_X.tres`).**
+  🔴🔴 **고리가 없으면 그 문양은 게임에 안 나온다** — 실측(세106): 낱개는 **9장**인데 고리는 **5장**이라
+  `bounce`·`homing`·`pierce`·`thrust` **4종이 잠들어 있다**(에러 0 · 책에도 안 뜬다). → `BACKLOG M3`.
+  · 코드는 **기존 알고리즘을 재사용하면 2곳**(`Enums.GlyphCode`에 값 하나 — ⚠ **끝에만 덧붙여라**, 중간
+  삽입하면 저장된 도안이 밀린다 · `RingBoard.glyph_guide_pts`에 밑그림 갈래 하나 = 판·아이콘·책 셀의 단일 소스).
+  · **새 알고리즘이 필요할 때만 +2곳**(`GlyphRules.BEHAVIORS` 한 줄 + `ring_spell_system`의 `match def.behavior` 분기).
+  🔴 `BEHAVIORS`에 이름만 넣고 분기를 빠뜨리면 **씨앗 탄 1발이 조용히 는다**(`push_warning`이 그 가드).
+  · 현행 게이트 없음(무필터로 즉시 뜬다). 잠그려면 D3 먼저. 상세 = `_archive/glyph_data_design.md`.
 - **새 챕터** = `data/chapters/chN.tres` 한 장(`order`·`mob_spawns`·`boss_spawn`·색·`reward_unlock`).
   ⚠ **방 크기·프롭·플레이어 스폰은 `ChapterDef`가 안 나른다** — `boss_room.tscn` 하드코딩이다.
 - **새 관문** = 공급원 적 .tres에 `until_unlock` DropEntry 한 줄 (+ 필요하면 `fragment_X` 아이템).

@@ -69,7 +69,7 @@
 > ⚠ **세83 휴면**: 3과 4 사이에 **「조립본을 밑그림 삼아 손으로 한 번에 따라 긋기」**가 있었고
 > 그 완성도×정밀도가 위력이었다. `balance.skip_drawing`을 false로 되돌리면 **그대로 살아난다**
 > (채점기·펜 보정 전부 생존). 지금 위력은 **조립 자체**가 판다(`RingPower.assembled_score` — 문양 수 × 층 수).
-> 🔴 묻는 건 `RingPower.skip_drawing()` 하나로. 모델 상세 = `docs/takbon-design/takbon_model.md`
+> 🔴 묻는 건 `RingPower.skip_drawing()` 하나로. 모델 상세 = `docs/takbon-design/_archive/takbon_model.md`
 > (⚠ 그 문서의 「손 긋기」 서술은 이 휴면 상태를 안 반영한다).
 
 ## 4. 세 축 — 진 · 룬 · 문양
