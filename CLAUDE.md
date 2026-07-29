@@ -110,9 +110,10 @@ Claude Code가 세션마다 *"Do not call the AgentTool unless the user requeste
 🔴 **옛 이름 해소표**(과거 기록에 그대로 남아 있다 — 부르면 실패한다): `takbon-ui`·`takbon-animator` → **`takbon-dev`** · `takbon-shader` → **`takbon-vfx`** · `takbon-relight` → **`takbon-art`**(⚠ relight 기법 자체는 세91에 은퇴).
 제네릭 Godot 지식은 `.claude/skills/`의 스킬을 Skill 도구로 부른다(하네스는 **자립형**이라 상류를 안 따라간다).
 
-🔴 **리드가 절대 안 놓는 것 = 기획 · 검증 · `--import` · 커밋** — **이 넷의 목록은 이 파일이 정본이고, 각 항목의 규율 상세는 딴 데가 정본이다**: 기획 = **`takbon-design`**(하드-게이트) · 검증·뮤테이션·커밋 범위 = **`takbon-verify`** · `mcp__godot__*` 제한의 출처·이유 = **`docs/DECISIONS.md`「일하는 방식」**.
+🔴 **리드가 절대 안 놓는 것 = 기획 · 검증 · `--import` · 커밋** — **이 넷의 목록은 이 파일이 정본이고, 각 항목의 규율 상세는 딴 데가 정본이다**: 기획 = **`takbon-design`**(하드-게이트) · 검증·뮤테이션·커밋 범위 = **`takbon-verify`** · `mcp__godot__*` **개방·제한의 출처·이유** = **`docs/DECISIONS.md`「일하는 방식」**.
 - **에이전트의 「그린 나왔습니다」를 근거로 쓰지 마라** — 리드가 직접 돌리고 뮤테이션으로 검출력을 확인한다. 정본 **`takbon-verify` §4**.
-- **git 커밋은 리드만.** 에이전트는 자기 모듈 폴더 + `tests/` 자기 파일만 수정하고, `class_name` 대신 `const X := preload(...)`를 쓰며(정본 **`takbon-rules` §0**), **`mcp__godot__godot_docs`만 쓸 수 있다**(4축 = architect·dev·reviewer·vfx. 나머지 `mcp__godot__*`은 **도구 층에서 이미 막혀 있다** — 세108 실측, 글로 금지할 필요가 없다. ⚠ 이 관행은 사용자가 정한 게 아니라 하네스 첫 커밋에서 왔다 — 출처 정본 **`DECISIONS.md`**).
+- **git 커밋은 리드만.** 에이전트는 자기 모듈 폴더 + `tests/` 자기 파일만 수정하고, `class_name` 대신 `const X := preload(...)`를 쓰며(정본 **`takbon-rules` §0**), **`mcp__godot__*`은 축별로 열려 있다**(세108 사용자 확정 — dev·vfx는 **실행·조작까지** · architect·reviewer는 **읽기만** · art·docs는 **없다**. **표 = `takbon-rules` §0** · 출처 = **`DECISIONS.md`**. ⚠ 허용목록 밖은 **도구 층이 막아** 글로 금지할 필요가 없다).
+  - 🔴 **에디터는 하나뿐이다 — 실행·조작을 쓰는 에이전트는 한 번에 하나, 부를 때 「너에게」라고 명시해라**(병렬은 읽기 전용만. 강제 장치가 없어 규율로만 선다). ⚠ **에이전트 `tools:`를 고쳐도 세션을 다시 켜기 전엔 안 먹는다**(세108 실측 — `No such tool available`. **스킬은 즉시 반영된다**).
 - 🔴🔴 **그런데 리드 세션도 여럿이다 — 내가 한 작업과 무관한 변경은 커밋하지 마라**(세103 사용자 확정). 기획 세션과 구현 세션이 **같은 워킹트리**를 동시에 만져서 `git status`엔 늘 **남의 미완성**이 섞여 있다(세103 실측: **한 대화 동안 5건 → 12건**으로 늘었다). **`git add -A` 금지 · 경로 명시 add · 같이 쓰는 문서(`CLAUDE.md`·`BACKLOG.md`·`DECISIONS.md`)는 `git diff`로 내 줄만인지 확인**(섞였으면 `add -p`). 절차 정본 = **`takbon-verify` §9 — 커밋 직전에 켜라.**
 - 🔴🔴 **에이전트에게 「보고서를 `docs/_reports/<이름>.md`로 써라」고 지시해라** — **채팅 최종 보고는 리드에게 안 온다**(idle 알림만 온다). 특히 architect·reviewer는 산출물이 보고서뿐이라 파일로 안 시키면 작업 전체가 사라진다.
   **정본 = 이 절.** 🔴 **같은 문장이 스킬·에이전트 파일에 여러 벌 있는 건 지우면 안 되는 중복이다** — 각 에이전트가 **자기 파일에서** 안 읽으면 작업이 통째로 증발한다(세48~49 실측 4건).
