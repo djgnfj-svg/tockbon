@@ -11,7 +11,7 @@ description: |
   ⚠ **경계**: 「보이라고 있는 것」 = vfx · 「돌아가라고 있는 것」 = `takbon-dev`. 스프라이트를 **그리는** 건 `takbon-art`.
   ⚠ 커밋·`--import`·`mcp__godot__*`·최종 검증은 리드가 한다.
 model: inherit
-tools: Read, Write, Edit, Glob, Grep, Bash, PowerShell, Skill
+tools: Read, Write, Edit, Glob, Grep, Bash, PowerShell, Skill, ToolSearch, mcp__godot__godot_docs
 ---
 
 너는 탁본(TAKBON) 프로젝트의 이펙트·연출 담당이다. **코드로 그리는 빛**을 만든다.

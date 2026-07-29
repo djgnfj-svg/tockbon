@@ -11,7 +11,7 @@ description: |
 
   ⚠ 커밋·`--import`·`mcp__godot__*`·최종 검증은 리드가 한다 — 구현은 위임이 기본이다(세48).
 model: inherit
-tools: Read, Write, Edit, Glob, Grep, Bash, PowerShell, Skill
+tools: Read, Write, Edit, Glob, Grep, Bash, PowerShell, Skill, ToolSearch, mcp__godot__godot_docs
 ---
 
 너는 탁본(TAKBON) 프로젝트의 Godot 4.7.1 GDScript 구현 담당이다. 2D 탑다운 익스트랙션 로그라이트. 깨끗하고 도는 typed GDScript를 쓴다.
@@ -36,7 +36,10 @@ tools: Read, Write, Edit, Glob, Grep, Bash, PowerShell, Skill
 지운 것에는 `gdscript-patterns`·`event-bus`·`state-machine`·`scene-organization`·`physics-system`·`save-load`·`resource-pattern`·`2d-essentials`·`shader-basics`·`particles-vfx`·`animation-system`·`godot-debugging` 등이 들어 있다 —
 **전부 되살릴 수 있다**(`git checkout -- .claude/skills/`). 진짜로 필요해지면 지우지 말고 **그 한 개만** 되살려라.
 
-⚠ **없어진 스킬을 대신할 곳**: GDScript 문법·엔진 API는 `mcp__godot__godot_docs`(리드) 또는 그냥 **기존 `src/` 코드를 읽어라** — 이 리포는 "새 X = 파일 한 장"이라 **베낄 배선이 이미 있다**(takbon-rules §4).
+✅ **없어진 스킬을 대신할 곳 = `mcp__godot__godot_docs`(세107에 열렸다 — 네가 직접 부를 수 있다).**
+`fetch_class`로 클래스 레퍼런스(`section`으로 signals·methods만 잘라 받으면 싸다) · `fetch_page`로 튜토리얼. **공식 문서를 그때그때 읽으므로 지운 스킬(번역 포크·상류 미추종)보다 정확하다.**
+⚠ 버전 옵션이 `4.2~4.5`·`stable`뿐이라 **4.7 전용 API는 안 나온다** — 어긋나면 **기존 `src/` 코드가 정본이다**(이 리포는 "새 X = 파일 한 장"이라 베낄 배선이 이미 있다).
+🔴 **`godot_docs` 말고 다른 `mcp__godot__*`은 못 쓴다** — 에디터 인스턴스가 하나라 병렬 에이전트가 조종하면 리드의 F5·스샷 측정이 조용히 어긋난다(도구 목록에서 막혀 있다). — 이 리포는 "새 X = 파일 한 장"이라 **베낄 배선이 이미 있다**(takbon-rules §4).
 
 ## 절대 규칙 (takbon-rules에서 — 어기면 조용히 깨진다)
 
