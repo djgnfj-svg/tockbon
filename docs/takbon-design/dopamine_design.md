@@ -20,8 +20,10 @@
 > ⚠ **§2·§3·§4는 구현 완료 아카이브**라 읽을 필요 없다(왜 그렇게 지었나만 남겼다).
 >
 > 작성 = takbon-architect (dopamine-arch). 구현 위임 = takbon-dev / takbon-art.
-> 정합 기준 = CLAUDE.md 최상단 · docs/PROGRESSION.md · memory(ink-economy·chapter-loop·chest-loot·
-> drop-absorb-magnet·empty-base-build·onboarding-flow·quest-system·stage-format-decision).
+> 정합 기준 = CLAUDE.md 최상단 · docs/PROGRESSION.md · memory 8장(잉크 경제·챕터 루프·상자 전리품·
+> 드롭 흡수·빈 마을 건설·온보딩 흐름·퀘스트 시스템·스테이지 형식).
+> ⚠ **세107에 그 memory 8장이 전부 지워졌다** — 대조처를 다시 대려면 `docs/PROGRESSION.md` ·
+> `docs/DECISIONS.md`(「루프 · 진행」) · `docs/BACKLOG.md`이고, 그때의 원문은 `git log`로 캔다.
 > 읽은 실제 코드 = game_state · save_manager · db · event_bus · forest_enemy · chest · loot_panel ·
 > refine_panel · base · boss_room · chapter_panel · quest_def · 스키마(enemy/item/drop/chapter) ·
 > balance_data · enums · 샘플 tres(slime·ink_mid·ch1·refine_red_ink·q02·q05).
@@ -47,7 +49,7 @@
 ## 목표 / 왜 (한두 줄)
 
 킬·픽업(1층)이 **눈에 보이게 쌓이는 돈**으로 흘러 → 상점/제작으로 소비(3층) → 새 그림(최심 보상).
-룬/진은 **마을 퀘스트를 클리어해서 얻는다**("주지 말고 얻게" — memory magic-needs-purpose) — 조각을
+룬/진은 **마을 퀘스트를 클리어해서 얻는다**("주지 말고 얻게" — 정본 = `docs/GDD.md` §7 설계 원칙) — 조각을
 줍고 집에서 해독하던 우회로를 걷어내고, "보스 잡아와 → 룬 받는다"로 직선화한다.
 
 ---
@@ -143,7 +145,7 @@ ShopPanel.tscn (루트 Control, 스크립트 shop_panel.gd)
 - 세37 "빈 거점 재료 건설"(`_station_interact`가 `station_*` codex를 사서 여는 구조)을 **폐기**한다.
   마을은 시작부터 상점·정제대·공방·퀘스트 NPC가 다 있다. **해독대는 D로 통째 은퇴**(§9).
 - `base.gd`: `_station_interact`·`_refresh_station(s)`·`NOT_BUILT_MOD`·건설 분기 제거 → 각 존은 바로 패널을 연다.
-  `balance.station_build_costs`는 사장(스키마만 남김, 무해). 세37 memory(empty-base-build) 방향은 **뒤집힌다**(문서화).
+  `balance.station_build_costs`는 사장(스키마만 남김, 무해). 세37의 「빈 거점을 지어 올린다」 방향은 **뒤집힌다**(`DECISIONS.md` 「은퇴 목록」의 **건설** 행).
 - ⚠ 건설 상태를 codex(`station_*`)로 쓰던 저장 호환: 옛 세이브의 `station_*` codex 키는 그냥 무시된다
   (base가 더는 안 읽는다) — 조용한 갈라짐 없음. test_workshop_auto의 "레시피 station 분리"는 그대로 유효.
 
@@ -224,9 +226,12 @@ ShopPanel.tscn (루트 Control, 스크립트 shop_panel.gd)
   예식은 rune_*만 필터하므로 chapter_clear엔 안 뜬다(§5).
 
 ### 🔴 세57 "퀘스트=거울이라 은퇴" 방향의 반전 (근거 기록)
-- 세57 결정 = 관문(조각→해독)이 해금의 주체고 퀘스트는 그 거울이라 은퇴 방향이었다(memory stage-format-decision).
+- 세57 결정 = 관문(조각→해독)이 해금의 주체고 퀘스트는 그 거울이라 은퇴 방향이었다
+  (세57 원칙 「뼈대는 확정, 살은 랜덤」의 정본 = `docs/PROGRESSION.md` 머리말).
 - **지금은 뒤집혔다**: 관문 기전을 은퇴시키고 **퀘스트가 해금의 실제 주체**가 된다 → 거울이 아니라 통로다(중복 아님).
   사용자 확정 *"퀘스트 클리어로 룬을 주고 보스는 재료를 주자."* 이 문장이 세57 반전의 근거다.
+- ⚠ **이 갈래는 세57↔58에 이미 한 번 뒤집혔다가 여기서 또 뒤집힌 것이다** — 그래서 **혼자 정하면 안 되는 자리**다.
+  살아있는 미결 = `docs/BACKLOG.md` **N8**(온보딩 퀘스트가 은퇴한 「건설」을 아직 가르친다 · 사용자 결정 대기).
 
 ---
 

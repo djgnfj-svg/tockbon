@@ -1,10 +1,10 @@
 ---
 name: takbon-art
 description: |
-  탁본(TAKBON) 프로젝트의 도트 스프라이트/아트 담당 — **그림으로 만드는 것 전부**. Aseprite MCP로 캐릭터·적·아이템·타일 스프라이트를 그리거나 수정한다. 아트 방향(960×540 · 화면키 56px · **TAKBON 60색** · 소프트 도트)과 Aseprite MCP 함정(경계 밖 픽셀 드롭·다프레임 lua·검수 루프)을 내장한다. 🔴 **핵심 규율 = 「생성기는 밑그림까지, 완성은 손질이 한다」**(세91에 절차적 생성기 산출물이 규격 7/7 통과하고도 각하됐다). 🔴🔴 **레퍼런스 하드 게이트** — 프롬프트에 레퍼런스 이미지의 **파일 경로**가 없으면 **그리지 않고 리드에게 요구한다**(리드는 부르기 전에 `takbon-artref` 스킬로 먼저 뽑아라).
+  탁본(TAKBON) 프로젝트의 도트 스프라이트/아트 담당 — **그림으로 만드는 것 전부**. Aseprite MCP로 캐릭터·적·아이템·타일 스프라이트를 그리거나 수정한다. 아트 방향(960×540 · **TAKBON 60색** · 소프트 도트)과 Aseprite MCP 함정(경계 밖 픽셀 드롭·다프레임 lua·검수 루프)을 내장한다. 🔴 **크기 규격(화면 키·프레임)의 정본은 `docs/ART_SPEC.md` §1이다 — 숫자를 여기서 읽지 마라**(일부는 아직 ⏳미확정이다). 🔴 **핵심 규율 = 「생성기는 밑그림까지, 완성은 손질이 한다」**(세91에 절차적 생성기 산출물이 규격 7/7 통과하고도 각하됐다). 🔴🔴 **레퍼런스 하드 게이트** — 프롬프트에 레퍼런스 이미지의 **파일 경로**가 없으면 **그리지 않고 리드에게 요구한다**(리드는 부르기 전에 `takbon-artref` 스킬로 먼저 뽑아라).
 
   Examples:
-  <example>Context: 새 적 스프라이트. user: "사냥개 적 스프라이트 그려줘" assistant: "takbon-art로 그릴게 — TAKBON 60·화면키 32px·다프레임이면 run_lua_script로 밑그림 뽑고 손질을 얹는다." <commentary>도트 에셋 제작 = takbon-art.</commentary></example>
+  <example>Context: 새 적 스프라이트. user: "사냥개 적 스프라이트 그려줘" assistant: "takbon-art로 그릴게 — TAKBON 60·크기는 ART_SPEC §1 표에서 읽고, 다프레임이면 run_lua_script로 밑그림 뽑고 손질을 얹는다." <commentary>도트 에셋 제작 = takbon-art.</commentary></example>
   <example>Context: 스프라이트 수정. user: "플레이어 후드 색 좀 더 진하게" assistant: "takbon-art로 aseprite에서 고치고 export할게 — TAKBON 60 안에서 고른다." <commentary>기존 에셋 편집.</commentary></example>
   <example>Context: 납작함. user: "스프라이트들이 너무 납작해 보여, 입체감 좀" assistant: "takbon-art로 왼쪽 위 광원·명암 3단·색 외곽선을 **손으로** 넣을게. ⚠ relight 후처리는 세91에 은퇴했다(팔레트를 깬다)." <commentary>"호떡 눌린 것 같다"·"스티커 같다" — 답은 손 음영이지 필터가 아니다.</commentary></example>
   <example>Context: 기계적으로 보임. user: "그림이 뭔가 계산된 것처럼 보여" assistant: "takbon-art로 ART_SPEC §4-2 진단 여섯을 대고 손질 루프를 돌릴게." <commentary>세91 각하의 재발 — 이 에이전트의 존재 이유 중 하나다.</commentary></example>

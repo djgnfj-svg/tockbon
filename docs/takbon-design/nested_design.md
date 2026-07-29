@@ -6,11 +6,15 @@
 > **살아있는 것 = 참고 자산뿐**: ①의 코드 인벤토리(`projectile.rune_hits`·`ring_carrier.deployed` 실사) + rune_fill 소비자
 > 0곳 진단 + "원소 반응(status_holder) = jin_interpretation ②「진 규칙」의 한 인스턴스(융합진)"라는 흡수. 삭제는 안 함(이 자산 때문).
 >
-> ⚠🔴 **세87 실측 — 남은 8개 결정점 중 살아있는 건 둘뿐이다.** 삭제 후보로 올랐다가 **존치**로 결론났다
-> (`CLAUDE.md`·`docs/PROGRESSION.md:115`·memory `takbon-stage-format-decision`이 아직 이 문서를 가리킨다).
-> - ❌ **#4 복합 룬 = 해소됨** — 세81 M2가 `JinDef.rune_slots`로 실현했다(`src/core/schemas/jin_def.gd:31` ·
->   `data/jin/jin_fuse.tres:11 rune_slots = 2` · 합산은 `ring_spell_system._fire_hit`의 share).
->   ⚠ 그래서 `docs/PROGRESSION.md:115`의 「rune_slots 축 신설(미구현)」은 **사실이 틀렸다** — 이미 구현됐다.
+> ⚠🔴 **세87 실측 — 남은 8개 결정점 중 살아있는 건 둘뿐이다.** 삭제 후보로 올랐다가 **존치**로 결론났다.
+> 🔴 **세108 정정 — 그때 적은 존치 근거 셋(`CLAUDE.md`·`PROGRESSION.md`·memory 한 장이 이 문서를 가리킨다)이
+> 전부 죽었다**: `CLAUDE.md`는 세98 축소로 이 문서를 안 가리키고, `PROGRESSION.md`는 세97 전면 재작성으로
+> 안 가리키며, 그 memory(스테이지 형식 결정)는 세107에 지워졌다.
+> **살아있는 존치 근거는 둘이다** — `docs/takbon-design/README.md` 현역 표 · `docs/BACKLOG.md` **C1**
+> (`rune_fill` 소비자 0곳 · 살릴지 접을지 미정). 즉 **이 문서가 유일하게 드는 자산은 `rune_fill` 입력 수단 안(#5)과 #7**이다.
+> - ❌ **#4 복합 룬 = 해소됨** — 세81 M2가 `JinDef.rune_slots`로 실현했다(`JinDef`의 `rune_slots` ·
+>   `data/jin/jin_fuse.tres` · 합산은 `ring_spell_system._fire_hit`의 share).
+>   ⚠ 세87엔 `PROGRESSION.md`가 이걸 「미구현」으로 적고 있었으나 **세97 재작성 때 고쳐졌다**(지금은 *"발사에 실재한다"*).
 > - ❌ **아래 ① 코드 인벤토리는 낡았다** — "평평하다: `rune:int` 하나"라 적었지만 지금
 >   `RingDesign`은 `runes: Array`와 `runes_of()`를 든다(세81). 인벤토리를 근거로 쓰지 마라.
 > - ✅ **#5 `rune_fill` 입력 수단** = 살아있는 미결. CLAUDE.md 「남은 빚」이 *"살릴지 접을지 결정 필요"*라고만
@@ -18,7 +22,7 @@
 > - ✅ **#7** = 살아있는 미결.
 >
 > takbon-architect(nested-design) 산출물. 코드 없음 — 설계안만.
-> 정본 대조: memory `takbon-nested-circle-model` · takbon-rules 스킬 읽음.
+> 정본 대조: **`docs/GDD.md` §5**(마법진=수식 · *"배치만 바뀌어도 결과가 통째로 달라진다"*) · `takbon-rules` 스킬 읽음.
 > (⚠ 옛 대조처 `docs/WAND_CIRCLE.md`는 **삭제돼 없다** — 진실원 = `docs/GDD.md`.)
 > 아래 "검증한 것"은 **세?? 당시** 코드를 Read/Grep으로 확인한 사실이다 — 위 ⚠대로 지금은 일부 낡았다.
 
@@ -54,7 +58,7 @@ RingDesign (뿌리 = 지금과 동일)
 ```
 
 - **rune_fill의 소비자 = 상태이상 세기 배율**: `status_power ×= lerp(rune_density_min, rune_density_max, fill)`. balance 필드가 이미 있고(0.5~1.8), **단독 룬에도 즉시 의미가 생긴다**(크게 그린 불 = 더 아픈 화상). 복합에서는 fill이 곧 **비중 분배**다 — 두 룬을 그리면 판 중심 공간을 나눠 써 각자 fill이 줄고, 반응(셋업+기폭)의 세기가 자연히 깎인다. **fill이 복합의 밸런스 브레이크를 겸한다** — 이게 세 축을 따로 하지 않고 통합하는 이유다.
-- **재귀의 방향 = 배치**: 자식이 박힌 칸(0=위, 시계방향)이 착탄 후 자식 캐리어가 날아가는 방향이다. "배치가 결과를 바꾸는가? 안 바꾸면 스위치다"(memory `takbon-nested-circle-model`)와 정합.
+- **재귀의 방향 = 배치**: 자식이 박힌 칸(0=위, 시계방향)이 착탄 후 자식 캐리어가 날아가는 방향이다. "배치가 결과를 바꾸는가? 안 바꾸면 스위치다"(정본 = `docs/GDD.md` **§5** *"배치만 바뀌어도 결과가 통째로 달라진다"* + **§7** *"스칼라(세기)만 바꾸는 축은 자유도가 아니다"*)와 정합.
 - **원칙 유지**: 「단독은 약한 바탕, 조합에서 폭발한다」(세49) — 복합은 그 조합을 한 탄에 압축하는 대신 fill 나눔으로 값을 치르고, 재귀는 공간(칸)과 위력 감쇠로 값을 치른다.
 
 ---

@@ -101,6 +101,10 @@ def main() -> int:
     # [4] 죽은 경로 참조
     out("\n── 죽은 경로 참조 ───────────────────────────────")
     pat = re.compile(r"docs/takbon-design/(?:_archive/)?[A-Za-z0-9_]+\.md")
+    # 🔴 세108 — 표기가 둘인데 하나만 재고 있었다. 리포 루트부터 쓴 경로는 잡았지만
+    #    bare 상대 경로(`_archive/…`)는 통과했고, 하필 README 휴지통 표와 BACKLOG가 그 형태를 쓴다.
+    #    `_archive`는 리포에 하나뿐이라(docs/takbon-design/_archive) bare를 그리로 해석해도 안전하다.
+    pat_bare = re.compile(r"(?<![\w/])_archive/[A-Za-z0-9_]+\.md")
     scanned = 0
     for md in sorted(ROOT.glob("docs/**/*.md")) + [CLAUDE_MD] + sorted(
         ROOT.glob(".claude/**/*.md")
@@ -109,7 +113,10 @@ def main() -> int:
         if any(rel.startswith(d) for d in SKIP_REF_DIRS) or not md.exists():
             continue
         scanned += 1
-        for ref in set(pat.findall(read(md))):
+        body = read(md)
+        refs = set(pat.findall(body))
+        refs |= {f"docs/takbon-design/{b}" for b in pat_bare.findall(body)}
+        for ref in refs:
             if not (ROOT / ref).exists():
                 problems.append(f"[죽은 링크] {rel} → {ref}")
     out(f"  {scanned}개 문서를 훑었다")

@@ -5,7 +5,7 @@
 > 진마다 해석하는 방법이 다르게."*
 > 정본 대조: `takbon_model.md`(세68 조립→탁본 — 이 문서가 그 **내부 구조**를 확정) ·
 > `nested_design.md`(세?? 복합 룬×재귀 — **프레임이 다름**, 아래 「기존 설계와의 관계」에서 재조정) ·
-> GDD §3·§4·§5 · memory `takbon-ring-assembly-pivot`·`takbon-glyph-design-principle`·`takbon-hand-trace-commit`.
+> GDD §2·§3·§4·§5 · `DECISIONS.md` 「마법 모델」.
 >
 > 🔴 상태(세87 실측 갱신) = **개념 모델 확정 · M1 구현 완료(세79) · M2 구현 완료(세81) ·
 > M3① 문양 효과·표현 데이터화 구현 완료(세82).**

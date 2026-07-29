@@ -7,7 +7,8 @@ description: 트윈을 구현할 때 사용한다 — 프로퍼티 애니메이�
 
 모든 예제는 Godot 4.3+를 대상으로 하며 폐기된 API를 쓰지 않는다. GDScript를 먼저, 그다음 C#을 보여준다.
 
-> **관련 스킬:** AnimationPlayer/AnimationTree(키프레임 기반)는 **animation-system**, UI 전이는 **godot-ui**, 셰이더 파라미터 트위닝은 **shader-basics**, 카메라 흔들림과 전이는 **camera-system**, 이징 곡선과 보간 수학은 **math-essentials**, 코드 구동 VFX 타이밍과 시퀀싱은 **particles-vfx**를 참고하라.
+> **관련 스킬:** 여기 있던 참조 6개(`animation-system`·`godot-ui`·`shader-basics`·`camera-system`·`math-essentials`·`particles-vfx`)는 **세107에 은퇴한 스킬**이라 걷어냈다 — 부르면 실패한다.
+> 🔴 **남은 스킬 목록을 여기 베끼지 마라**(베끼는 순간 두 벌이 되어 갈라진다). 다른 스킬이 필요하면 **`.claude/skills/`를 직접 훑어라 — 디스크가 정본이다.**
 
 ---
 

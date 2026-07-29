@@ -21,7 +21,7 @@
 > 그릴 때 재미가 덜해."* 여러 방향을 대화로 좁혀 **조립→탁본** 모델에 도달했다.
 > 정합 대조: `nested_design.md`(중첩진 — ⚠프레임 은퇴, `jin_interpretation_design.md`가 대체) ·
 > `dopamine_design.md`(파밍/루팅) · 마법 조립 내부구조의 현행 정본 = `jin_interpretation_design.md` ·
-> memory `takbon-hand-trace-commit`·`takbon-ring-assembly-pivot`·`takbon-core-fun-drawing`·`takbon-glyph-design-principle`.
+> `DECISIONS.md` 「마법 모델」(그리기 폐지 = 세83·**스위치** · 고리 조립으로의 전환 이유) · GDD §2.
 > ⚠ `docs/WAND_CIRCLE.md`는 **더 이상 없다**(세71 은퇴 스텁 → 이후 삭제. 진실원 = `docs/GDD.md`).
 
 ---
@@ -78,7 +78,7 @@
 ## 자유도 = 「조합 자유」이지 「제스처 자유」가 아니다
 
 - ❌ **제스처 자유**(아무렇게나 그리면 게임이 알아맞힘 = 모양 인식 채점) — **이미 폐기된 길**
-  (memory `takbon-hand-trace-commit`: *"모양 인식 채점 되살리지 마라"*). 불안정·손맛 나쁨.
+  (**`GDD.md` §2**: *"모양 인식 채점(제스처 자유)은 되살리지 마라"*). 불안정·손맛 나쁨.
 - ✅ **조합 자유**(정해진 문양-고리를, 어느 층에·몇 개·무슨 순서로) — 만들 수 있고 깊다.
   개별 문양은 여전히 **아는 모양을 따라 긋는 것**(해석이 확실). **어느 층·순서**가 곧 수식.
   숫자 10개·연산자 몇 개로 **식은 무한** — 자유는 조합에서 온다.

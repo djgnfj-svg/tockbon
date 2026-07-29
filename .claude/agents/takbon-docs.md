@@ -80,11 +80,18 @@ Godot 헤드리스 스위트는 문서를 **한 글자도 안 읽으므로** 이
 
 ### 4단계 — 내린다
 ```bash
-git mv docs/takbon-design/<X>.md docs/takbon-design/_archive/<X>.md
+mv docs/takbon-design/<X>.md docs/takbon-design/_archive/<X>.md      # PowerShell이면 Move-Item
 ```
-🔴 **`git mv`를 써라**(이력 보존). 그 다음 **경로 참조를 전량 갱신**한다 — `docs/**/*.md` · `CLAUDE.md` · `.claude/skills/**` · `.claude/agents/**` · **memory**(`~/.claude/projects/<프로젝트>/memory/*.md`).
+🔴 **`git mv`를 쓰지 마라 — 평범한 파일 이동이 맞다.**
+ⓐ **이력은 어차피 보존된다** — git은 rename을 저장하지 않고 **diff 시점에 내용 유사도로 탐지**한다. 그냥 `mv`해도 `git log --follow`가 똑같이 따라간다.
+ⓑ 🔴 **`git mv`는 인덱스에 스테이징까지 한다** — 이 리포는 세션이 여럿 도는데, **다른 리드 세션의 `git status`에 자기가 안 만든 staged rename이 뜬다**(세103 사용자 확정 「남의 작업을 커밋하지 마라」가 겨냥한 바로 그 상황이다).
+🔴 **인덱스를 건드리지 마라** — `git add`·`git rm`·`git mv` 전부 네 몫이 아니다. 스테이징은 리드가 한다.
+
+그 다음 **경로 참조를 전량 갱신**한다 — `docs/**/*.md` · `CLAUDE.md` · `.claude/skills/**` · `.claude/agents/**`.
 ⚠ `docs/_reports/`는 **gitignore 휘발물이라 건드리지 않는다.**
 ⚠ `docs/GDD.md`가 가리키는 문서를 옮기면 **GDD도 고쳐야 한다 → 리드에게 보고**(🔒).
+🔴 **memory(`~/.claude/projects/<프로젝트>/memory/*.md`)는 고치지 마라 — 발견하면 보고서에 적어 리드에게 올려라.**
+memory는 **매 세션 자동 로딩되는데 git 밖이라**, 네가 고치면 `git diff`에 안 잡히고 되돌릴 이력도 없다 — **사용자가 볼 방법이 없는 변경**이 된다. 낡은 참조를 찾는 것까지가 네 몫이고, 반영은 리드가 한다.
 
 ### 5단계 — 인덱스를 고친다
 `docs/takbon-design/README.md`의 **현역 표**와 **휴지통 표**. 휴지통 항목엔 **「살아있는 진실은 어디에」**를 한 줄로 남겨라 — 그게 없으면 「열어도 되는 문서인지」를 다음 사람이 못 가린다.
@@ -97,7 +104,7 @@ python tools/docs_audit.py
 
 ### 7단계 — 보고서를 파일로 쓴다
 🔴 **`docs/_reports/<이름>.md`에 써라 — 채팅 최종 보고는 리드에게 안 온다**(idle 알림만 간다).
-담을 것: **무엇을 실측했나(근거 포함)** · 무엇을 고쳤나 · **무엇을 승격했나** · 🔴 **리드 결정이 필요한 것**(GDD 수정·기획 미결).
+담을 것: **무엇을 실측했나(근거 포함)** · 무엇을 고쳤나 · **무엇을 승격했나** · 🔴 **리드가 손대야 하는 것**(GDD 수정 🔒 · 기획 미결 · **memory의 낡은 참조** — 파일명과 고칠 줄까지 적어라).
 
 ## CLAUDE.md 비대화 방지
 
