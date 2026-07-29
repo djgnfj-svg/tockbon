@@ -14,7 +14,7 @@ model: inherit
 tools: Read, Write, Edit, Glob, Grep, Bash, PowerShell, Skill, mcp__godot__godot_docs, mcp__godot__godot_editor_read, mcp__godot__godot_node_read, mcp__godot__godot_runtime_state, mcp__godot__godot_animation_read, mcp__godot__godot_tilemap_read, mcp__godot__godot_profiler, mcp__godot__godot_project, mcp__godot__godot_editor_edit, mcp__godot__godot_exec, mcp__godot__godot_input, mcp__godot__godot_game_time
 ---
 
-너는 탁본(TAKBON) 프로젝트의 Godot 4.7.1 GDScript 구현 담당이다. 2D 탑다운 익스트랙션 로그라이트. 깨끗하고 도는 typed GDScript를 쓴다.
+너는 탁본(TAKBON) 프로젝트의 Godot 4.7.1 GDScript 구현 담당이다. 2D 탑다운 **마법 액션 로그라이크**(세110에 익스트랙션에서 갈아엎혔다 — 정본 `docs/takbon-design/planned/genre_pivot_design.md`). 깨끗하고 도는 typed GDScript를 쓴다.
 
 ## 시작 전 반드시 (순서대로)
 

@@ -5,16 +5,19 @@
 Godot 헤드리스 스위트는 문서를 한 글자도 안 읽으므로 구조적으로 못 잡는다.
 
 재는 것 (전부 정적 사실이라 정적으로 잴 수 있다 — 세84 교훈):
-  [1] 세 단계 표 줄 수 == 각 폴더의 ls  (1_planned / 2_building / 3_done)
+  [1] 세 단계 표 줄 수 == 각 폴더의 ls  (planned / building / done)
   [2] 최상위에 굴러다니는 .md — 어느 단계인지 미정인 문서는 그 자체가 버그다
   [3] 표에 등재되지 않은 문서 (세96·101·105에 세 번 재발했다)
   [4] 죽은 경로 참조 — docs/takbon-design/…md 를 가리키는데 파일이 없다
-  [5] 3_done 문서를 「정본」이라 부르는 현역 서술 (완료 문서는 정본이 아니다)
+  [5] done 문서를 「정본」이라 부르는 현역 서술 (완료 문서는 정본이 아니다)
   [6] CLAUDE.md 비대화 — 세98에 39.5KB→13KB로 줄인 뒤의 상한
 
 🔴 2026-07-29(세109)에 2단계(현역/_archive) → 3단계로 바뀌었다. 사용자 확정:
    *"기획만 한것과 현재 개발중인 기획과 개발 완료된 기획이 나눠져서 보관"*.
    ⚠ 폴더명이 곧 README 헤딩 키워드다 — 헤딩에서 폴더명을 빼면 그 표를 못 찾아 전량 빨강이 된다.
+🔴 세110 — 폴더 접두사(`1_`·`2_`·`3_`)를 걷었다(`37679e9`). **그 커밋이 이 파일을 안 고쳐서
+   단계 폴더 셋 중 둘이 「없는 폴더」가 돼 있었다**(실측 DOCS_AUDIT_FAIL:32).
+   ⚠ 옛 접두 이름은 **읽기 쪽으로만** 계속 받는다 — 과거 문서·기록이 그 표기를 그대로 쓴다.
 
     python tools/docs_audit.py          # 사람이 읽는 리포트
     python tools/docs_audit.py --quiet  # 마커만 (그물용)
@@ -40,8 +43,11 @@ README = DESIGN / "README.md"
 CLAUDE_MD = ROOT / "CLAUDE.md"
 
 # 🔴 단계 폴더 = README 표의 키워드. 순서가 곧 흐름이다(기획 → 개발 중 → 완료).
-STAGES = ("1_planned", "2_building", "3_done")
+STAGES = ("planned", "building", "done")
 DONE = STAGES[-1]  # 「정본이 아니다」를 재는 대상
+# 옛 접두 표기(`1_planned` 등). 폴더는 사라졌지만 **참조는 여전히 잡아야** 한다 —
+# 안 잡으면 낡은 경로가 죽은 링크인 채 침묵으로 통과한다.
+STAGE_ALT = "|".join(f"(?:[123]_)?{s}" for s in STAGES)
 
 # 세98에 39.5KB → 13KB로 줄였다. 이 축의 존재 이유 중 하나가 「다시 붇는 것」을 막는 것이다.
 # 🔴 넘겼다고 바로 빨강이 아니다 — 넘으면 「무엇을 스킬로 내릴지」를 묻는 신호다.
@@ -118,11 +124,12 @@ def main() -> int:
 
     # [4] 죽은 경로 참조
     out("\n── 죽은 경로 참조 ───────────────────────────────")
-    pat = re.compile(r"docs/takbon-design/(?:[123]_[a-z]+/)?[A-Za-z0-9_]+\.md")
+    pat = re.compile(rf"docs/takbon-design/(?:(?:{STAGE_ALT})/)?[A-Za-z0-9_]+\.md")
     # 🔴 세108 — 표기가 둘인데 하나만 재고 있었다. 리포 루트부터 쓴 경로는 잡았지만
-    #    bare 상대 경로(`3_done/…`)는 통과했고, 하필 README 표와 설계문서가 그 형태를 쓴다.
-    #    `<숫자>_<영문>/` 꼴은 리포에서 이 세 폴더뿐이라 bare를 그리로 해석해도 안전하다.
-    pat_bare = re.compile(r"(?<![\w/])[123]_[a-z]+/[A-Za-z0-9_]+\.md")
+    #    bare 상대 경로(`done/…`)는 통과했고, 하필 README 표와 설계문서가 그 형태를 쓴다.
+    # 🔴 세110 — 접두사가 걷히며 이 그물에 구멍이 났었다: 패턴이 `[123]_`를 **필수**로 봐서
+    #    새 표기(`done/foo.md`)를 통째로 못 봤다. 단계 이름을 열거로 바꿔 옛·새 표기를 같이 잡는다.
+    pat_bare = re.compile(rf"(?<![\w/])(?:{STAGE_ALT})/[A-Za-z0-9_]+\.md")
     scanned = 0
     for md in sorted(ROOT.glob("docs/**/*.md")) + [CLAUDE_MD] + sorted(
         ROOT.glob(".claude/**/*.md")
@@ -137,12 +144,12 @@ def main() -> int:
         for ref in refs:
             if not (ROOT / ref).exists():
                 problems.append(f"[죽은 링크] {rel} → {ref}")
-        # 🔴 옛 2단계 잔재. `_archive`는 세109에 `3_done`이 됐고 폴더 자체가 없다.
+        # 🔴 옛 2단계 잔재. `_archive`는 세109에 `done`이 됐고 폴더 자체가 없다.
         #    위 정규식은 `_archive/…`를 **매치하지 않으므로** 이 검사가 없으면 통째로 침묵한다
         #    — 새 문법이 옛 문법을 못 보는 건 그물이 아니라 구멍이다.
         if "_archive" in body:
             problems.append(
-                f"[옛 구조] {rel} 이 `_archive`를 가리킨다 → `3_done`으로 고쳐라"
+                f"[옛 구조] {rel} 이 `_archive`를 가리킨다 → `done`으로 고쳐라"
                 " (역사를 서술하는 자리면 「휴지통」처럼 경로가 아닌 말로 바꿔라)"
             )
     out(f"  {scanned}개 문서를 훑었다")

@@ -53,7 +53,7 @@ tools: Read, Write, Edit, Glob, Grep, Bash, PowerShell, Skill, ToolSearch, mcp__
    팔레트·크기·하드 규칙·**§4 그리는 방식**·**§6 은퇴 목록**이 거기 있다. ⚠ 이 파일의 요약과 어긋나면 **ART_SPEC이 이긴다.**
 2. **`.claude/skills/takbon-rules/SKILL.md`의 §0을 확인해라** — **커밋·`--import`는 리드 전용**이다. 너는 PNG를 만들고 리드에게 넘긴다.
    ⚠ **`mcp__godot__*`은 너에게 하나도 안 열려 있다** — 네 MCP는 `mcp__aseprite__*`뿐이다. (세108에 다른 축은 읽기·실행까지 열렸지만 아트는 엔진을 안 만진다. 축별 개방 표 = `takbon-rules` §0.)
-3. **왜 그렇게 정해졌는지가 궁금하면** `docs/takbon-design/2_building/visual_language_design.md`(실측 근거·이력). 게임 정체성 전반은 📖 `docs/GDD.md` = 🔒 **잠긴 진실원, 읽기만** 해라.
+3. **왜 그렇게 정해졌는지가 궁금하면** `docs/takbon-design/building/visual_language_design.md`(실측 근거·이력). 게임 정체성 전반은 📖 `docs/GDD.md` = 🔒 **잠긴 진실원, 읽기만** 해라.
 4. **기존 스프라이트 배선을 참고해라** — `src/actors/player.gd`는 `$Sprite`(**AnimatedSprite2D** + SpriteFrames)로 애니를 돌린다.
    🔴 **런타임은 좌/우 2방향이다**(`_face_mouse()`가 커서 x로만 고른다). **뒷태·앞태를 그리지 마라** — 안 쓰이는 프레임은 낭비다.
    ⚠ 실제 프레임 수·태그·노드명은 손대기 전에 **코드로 확인해라**(문서보다 코드가 정본).
