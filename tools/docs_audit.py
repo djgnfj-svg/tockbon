@@ -59,6 +59,12 @@ DONE = STAGES[-1]  # 「정본이 아니다」를 재는 대상
 # 안 잡으면 낡은 경로가 죽은 링크인 채 침묵으로 통과한다.
 STAGE_ALT = "|".join(f"(?:[123]_)?{s}" for s in STAGES)
 
+# 🔴 `docs/` 루트의 정본 문서도 그래프 노드다(세111). 단계 폴더 밖이라 자리로 상태를 못 재서
+#    `stage: canon`을 쓴다. ⚠ `DECISIONS`·`TODO`·`BACKLOG`는 **기록**이지 자원을 정하는 문서가
+#    아니라 일부러 뺐다 — 넣으면 「무엇을 왜 정했나」가 owns 충돌로 잘못 운다.
+CANON = "canon"
+CANON_DOCS = ("GDD.md", "PROGRESSION.md", "ONBOARDING_FLOW.md", "ART_SPEC.md", "VFX_SPEC.md")
+
 # 세98에 39.5KB → 13KB로 줄였다. 이 축의 존재 이유 중 하나가 「다시 붇는 것」을 막는 것이다.
 # 🔴 넘겼다고 바로 빨강이 아니다 — 넘으면 「무엇을 스킬로 내릴지」를 묻는 신호다.
 CLAUDE_MD_LIMIT_KB = 18
@@ -133,33 +139,39 @@ def front_matter(md: str) -> dict | None:
 
 
 def load_graph(problems: list[str]) -> dict[str, dict]:
-    """단계 폴더의 모든 문서에서 노드를 읽는다. 자리(stage)와 프론트매터의 불일치도 잡는다."""
+    """단계 폴더 + `docs/` 루트 정본에서 노드를 읽는다. 자리(stage)와 프론트매터의 불일치도 잡는다.
+
+    🔴 루트 정본을 넣은 이유(세111): 그래프가 `takbon-design/` 안만 보면 사각이 생긴다 —
+       `dopamine` §온보딩과 `ONBOARDING_FLOW.md`가 온보딩을 둘 다 정하는데 검사기가 침묵했다.
+    """
     nodes: dict[str, dict] = {}
-    for s in STAGES:
-        for p in sorted((DESIGN / s).glob("*.md")):
-            rel = p.relative_to(ROOT).as_posix()
-            fm = front_matter(read(p))
-            if fm is None:
-                problems.append(f"[그래프] 프론트매터가 없다: {rel}  ← node·stage·owns·needs를 맨 앞에 붙여라")
-                continue
-            node = fm.get("node")
-            if not node:
-                problems.append(f"[그래프] `node`가 없다: {rel}")
-                continue
-            if fm.get("stage") != s:
-                problems.append(f"[그래프] stage가 자리와 다르다: {rel} — 폴더는 {s}, 적힌 건 {fm.get('stage')!r}")
-            if node in nodes:
-                problems.append(f"[그래프] node 이름이 겹친다: {node} ({rel} · {nodes[node]['path']})")
-                continue
-            owns = fm.get("owns") or []
-            needs = fm.get("needs") or []
-            for r in owns:
-                if r not in VOCAB:
-                    problems.append(f"[그래프] 어휘 밖 owns: {node} → {r!r}  ← VOCAB에 넣거나 오타를 고쳐라")
-            nodes[node] = {
-                "path": rel, "stage": s, "owns": owns, "needs": needs,
-                "dead": bool(fm.get("dead")), "blocked": fm.get("blocked"),
-            }
+    targets = [(DESIGN / s / p.name, s) for s in STAGES for p in sorted((DESIGN / s).glob("*.md"))]
+    targets += [(ROOT / "docs" / f, CANON) for f in CANON_DOCS if (ROOT / "docs" / f).exists()]
+    for path, s in targets:
+        rel = path.relative_to(ROOT).as_posix()
+        fm = front_matter(read(path))
+        if fm is None:
+            problems.append(f"[그래프] 프론트매터가 없다: {rel}  ← node·stage·owns·needs를 맨 앞에 붙여라")
+            continue
+        node = fm.get("node")
+        if not node:
+            problems.append(f"[그래프] `node`가 없다: {rel}")
+            continue
+        if fm.get("stage") != s:
+            problems.append(f"[그래프] stage가 자리와 다르다: {rel} — 자리는 {s}, 적힌 건 {fm.get('stage')!r}")
+        if node in nodes:
+            problems.append(f"[그래프] node 이름이 겹친다: {node} ({rel} · {nodes[node]['path']})")
+            continue
+        owns = fm.get("owns") or []
+        needs = fm.get("needs") or []
+        for r in owns:
+            if r not in VOCAB:
+                problems.append(f"[그래프] 어휘 밖 owns: {node} → {r!r}  ← VOCAB에 넣거나 오타를 고쳐라")
+        nodes[node] = {
+            "path": rel, "stage": s, "owns": owns, "needs": needs,
+            "dead": bool(fm.get("dead")), "blocked": fm.get("blocked"),
+            "anchor": bool(fm.get("anchor")),
+        }
     return nodes
 
 
@@ -178,11 +190,23 @@ def check_graph(nodes: dict[str, dict], problems: list[str], conflicts: list[str
         for r in d["owns"]:
             by_res.setdefault(r, []).append(n)
     for r, owners in sorted(by_res.items()):
-        if len(owners) > 1:
-            conflicts.append(
-                f"`{r}` 를 {len(owners)}곳이 정한다: {' · '.join(sorted(owners))}"
-                "  ← 하나로 정하기 전엔 코드를 얹지 마라"
-            )
+        if len(owners) < 2:
+            continue
+        # 🔴 겹침에는 **종류가 있다.** 하나로 뭉뚱그리면 오탐이 섞여 사람이 빨강을 무시한다.
+        anchored = [n for n in owners if live[n]["anchor"]]
+        kinds = {live[n]["stage"] for n in owners}
+        if anchored:
+            # ⚠ 「앵커가 이긴다」로 단정하면 **인과가 거꾸로 갈 수 있다** — GDD의 그 줄이 애초에
+            #    그 설계문서에서 쓰인 것이면 둘은 싸우는 게 아니라 같은 말이다(세111 실측: 6건 중 5건).
+            tail = f"  ← 🔒 앵커 {anchored[0]} 가 낀다. **GDD가 그 설계에서 쓰인 것인지 먼저 봐라** — 아니면 GDD가 이긴다"
+        elif kinds <= {CANON, DONE}:
+            tail = "  ← 정본↔완료다. 규격을 정본이 흡수한 자리면 정상이다"
+        else:
+            tail = "  ← 하나로 정하기 전엔 코드를 얹지 마라"
+        # ⚠ 노드 이름과 자원 이름이 같은 게 넷이다(`glyph_data`·`progression`·`vfx_spec`…).
+        #    자리를 붙여야 「자원 X를 노드 X가 정한다」가 안 헷갈린다.
+        who = " · ".join(f"{n}[{live[n]['stage']}]" for n in sorted(owners))
+        conflicts.append(f"`{r}` 를 {len(owners)}곳이 정한다: {who}{tail}")
 
     # [9] 엣지 무결성
     for n, d in nodes.items():
@@ -224,13 +248,15 @@ def print_ready(nodes: dict[str, dict]) -> None:
     print("── 지금 동시에 착수 가능 ────────────────────────")
     ready, held = [], []
     for n, d in sorted(live.items()):
-        if d["stage"] == DONE:
+        # 완료·정본은 「착수 대상」이 아니다 — 전자는 끝났고 후자는 늘 거기 있다.
+        if d["stage"] in (DONE, CANON):
             continue
         why = []
         if d["blocked"]:
             why.append(f"막힘: {d['blocked']}")
         for dep in d["needs"]:
-            if dep in live and live[dep]["stage"] != DONE:
+            # 정본(canon)·완료(done)는 이미 굳은 전제라 막는 게 아니다.
+            if dep in live and live[dep]["stage"] not in (DONE, CANON):
                 why.append(f"{dep} 미확정")
         for r in d["owns"]:
             if r in contested:

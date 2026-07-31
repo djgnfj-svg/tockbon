@@ -1,3 +1,10 @@
+---
+node: art_spec
+stage: canon
+owns: [visual_spec]
+needs: [visual_language, vfx_spec]
+---
+
 # ART_SPEC — 아트 규격 정본
 
 > 🔴🔴 **세94 전면 개정**(2026-07-26). 그전까지 이 문서엔 **네 세대가 층으로 쌓여** 있었다

@@ -1,3 +1,10 @@
+---
+node: onboarding_flow
+stage: canon
+owns: [onboarding]
+needs: [genre_pivot, world_and_visual]
+---
+
 # 온보딩 흐름 설계 (스탠다드 튜토리얼)
 
 > 🔴🔴 **세110 — 이 흐름의 마지막 비트가 폐기됐다.** 장르 전환(`docs/takbon-design/planned/genre_pivot_design.md`)으로

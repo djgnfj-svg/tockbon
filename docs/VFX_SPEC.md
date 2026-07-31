@@ -1,3 +1,10 @@
+---
+node: vfx_spec
+stage: canon
+owns: [vfx_spec]
+needs: [world_and_visual]
+---
+
 # VFX_SPEC — 이펙트 규격 정본
 
 > 🔴 **세94 신설.** 그전까지 **VFX 기준 문서가 한 장도 없었다** — 규격이 `vfx.gd` 주석에만 흩어져 있어서
