@@ -1,3 +1,11 @@
+---
+node: guide_editor
+stage: planned
+owns: [guide_shape, drawing_tools]
+needs: []
+blocked: 보류다 — git stash 복원본이 세70·71 이후와 재정합돼야 하고, 그리기 폐지 스위치(balance.skip_drawing) 거취가 먼저다(머리말)
+---
+
 # 설계: 밑그림 직접 제작 도구 (진·룬·문양 커스텀 가이드)
 
 > ⚠ **세87 실측 — 보류는 유효하다.** `git stash list`에 `stash@{0}: On main: 세57 밑그림 커스텀 (보류…)`가

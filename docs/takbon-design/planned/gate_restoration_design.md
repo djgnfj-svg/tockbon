@@ -1,3 +1,11 @@
+---
+node: gate_restoration
+stage: planned
+owns: [monument, progression]
+needs: [genre_pivot]
+blocked: 진행도 분모가 세 후보로 갈렸다(§8 · 머리말) · 보스 재료 3종의 이름·성격이 아직 사람 쪽에 미정이다(§2 ⓖ · §5)
+---
+
 # 문 복원 설계 — 「부서진 마법문이 차오른다」
 
 > ## ⚠🔴🔴 **세110 — 이 문서의 심장(진행도 분모)이 다시 충돌한다. 정하기 전에 착수하지 마라.**

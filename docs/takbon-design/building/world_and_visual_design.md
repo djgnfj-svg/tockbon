@@ -1,3 +1,11 @@
+---
+node: world_and_visual
+stage: building
+owns: [world, monument]
+needs: []
+blocked: §2 기념비 분모가 세 갈래로 갈렸다(ⓐ 이 문서 「문양-고리 전체」 · ⓑ gate_restoration 「최종 전 챕터 수」 · ⓒ genre_pivot D7 「개방된 문양 종류」) — 정하기 전에 진행도 코드를 얹지 마라(TODO.md 「기념비 분모」)
+---
+
 # 세계관 + 화면 비주얼 — 「깨진 마법진, 흩어진 문양」
 
 > ## ✅🔴 **세110 장르 전환 — 이 문서의 세계관은 한 글자도 안 바뀐다.**

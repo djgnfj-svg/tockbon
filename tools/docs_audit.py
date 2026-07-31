@@ -11,6 +11,16 @@ Godot 헤드리스 스위트는 문서를 한 글자도 안 읽으므로 구조�
   [4] 죽은 경로 참조 — docs/takbon-design/…md 를 가리키는데 파일이 없다
   [5] done 문서를 「정본」이라 부르는 현역 서술 (완료 문서는 정본이 아니다)
   [6] CLAUDE.md 비대화 — 세98에 39.5KB→13KB로 줄인 뒤의 상한
+  [7] 그래프 — 프론트매터 누락·자리 불일치·어휘 밖 owns
+  [8] 그래프 — **owns 충돌**: 산 노드 둘이 같은 자원을 정한다 (세111 도입 사유)
+  [9] 그래프 — 죽은 엣지(없는 노드를 needs) · 죽은 노드를 전제로 삼음 · 순환
+
+🔴 세111에 **그래프 층**을 얹었다. 사유: 설계문서가 같은 자원을 두고 **몰래 충돌**했다 —
+   기념비 분모를 `gate_restoration`은 「최종 전 챕터 수」, `genre_pivot`은 「개방된 문양 종류」로
+   정하는데 **둘 다 에러 0**이었고, 그 사실은 README 표 셀 안 산문에 파묻혀 있었다.
+   엣지를 산문이 아니라 **프론트매터 데이터**로 옮겨 기계가 잡게 한다.
+
+    python tools/docs_audit.py --ready   # 지금 동시에 착수 가능한 문서
 
 🔴 2026-07-29(세109)에 2단계(현역/_archive) → 3단계로 바뀌었다. 사용자 확정:
    *"기획만 한것과 현재 개발중인 기획과 개발 완료된 기획이 나눠져서 보관"*.
@@ -78,6 +88,164 @@ def table_entries(md: str, heading_kw: str) -> list[str]:
         if m:
             names.append(m.group(1))
     return names
+
+
+# ── 그래프 층 ────────────────────────────────────────
+# 자원 어휘. 🔴 오타가 곧 검출 실패다 — `monument`와 `monuments`는 안 겹친다.
+VOCAB = {
+    "genre", "run_flow", "progression", "monument", "spell_assembly",
+    "jin_semantics", "glyph_data", "rune_data", "forge_ui", "enemy_feel",
+    "enemy_ai", "economy", "equipment", "vfx_spec", "visual_spec",
+    "world", "onboarding", "drawing_tools", "save_schema",
+    # 세111 주입 때 에이전트가 신설. 앞의 둘은 **두 에이전트가 서로 모른 채 같은 이름을 냈다**.
+    "guide_shape",    # 진·룬 밑그림 모양 (guide_editor · jin_shape_image)
+    "cast_control",   # 시전 중 조작 (spell_cast_visual)
+    "player_vision",  # 플레이어 시야 — 세110 D8에 폐기됐지만 죽은 노드가 계속 붙들고 있다
+    # 🔴 아래 둘은 **죽은 문서에서 살아남은 자원**이라 갈랐다. `dungeon_structure`는 죽었지만
+    #    몹 굴림(D6)·네임드 확률(D7)은 살아남았다 — `run_flow`로 묶으면 딸려 사라진다.
+    "mob_spawning",   # 무엇이 어디에 서나 (dungeon_structure)
+    "rune_fill",      # 룬을 그린 크기 → 상태이상 세기 (nested)
+}
+FM_LIST = re.compile(r"^\[(.*)\]$")
+
+
+def front_matter(md: str) -> dict | None:
+    """맨 앞 `---` 블록을 뜯는다. PyYAML을 안 쓴다(의존성 0 유지)."""
+    if not md.startswith("---"):
+        return None
+    end = md.find("\n---", 3)
+    if end < 0:
+        return None
+    fm: dict = {}
+    for ln in md[3:end].splitlines():
+        if ":" not in ln or ln.lstrip().startswith("#"):
+            continue
+        k, _, v = ln.partition(":")
+        k, v = k.strip(), v.strip()
+        m = FM_LIST.match(v)
+        if m:
+            fm[k] = [x.strip().strip("`'\"") for x in m.group(1).split(",") if x.strip()]
+        elif v in ("true", "false"):
+            fm[k] = v == "true"
+        else:
+            fm[k] = v
+    return fm
+
+
+def load_graph(problems: list[str]) -> dict[str, dict]:
+    """단계 폴더의 모든 문서에서 노드를 읽는다. 자리(stage)와 프론트매터의 불일치도 잡는다."""
+    nodes: dict[str, dict] = {}
+    for s in STAGES:
+        for p in sorted((DESIGN / s).glob("*.md")):
+            rel = p.relative_to(ROOT).as_posix()
+            fm = front_matter(read(p))
+            if fm is None:
+                problems.append(f"[그래프] 프론트매터가 없다: {rel}  ← node·stage·owns·needs를 맨 앞에 붙여라")
+                continue
+            node = fm.get("node")
+            if not node:
+                problems.append(f"[그래프] `node`가 없다: {rel}")
+                continue
+            if fm.get("stage") != s:
+                problems.append(f"[그래프] stage가 자리와 다르다: {rel} — 폴더는 {s}, 적힌 건 {fm.get('stage')!r}")
+            if node in nodes:
+                problems.append(f"[그래프] node 이름이 겹친다: {node} ({rel} · {nodes[node]['path']})")
+                continue
+            owns = fm.get("owns") or []
+            needs = fm.get("needs") or []
+            for r in owns:
+                if r not in VOCAB:
+                    problems.append(f"[그래프] 어휘 밖 owns: {node} → {r!r}  ← VOCAB에 넣거나 오타를 고쳐라")
+            nodes[node] = {
+                "path": rel, "stage": s, "owns": owns, "needs": needs,
+                "dead": bool(fm.get("dead")), "blocked": fm.get("blocked"),
+            }
+    return nodes
+
+
+def check_graph(nodes: dict[str, dict], problems: list[str], conflicts: list[str]) -> None:
+    """🔴 충돌과 구조 오류를 **다른 통에 담는다.**
+
+    충돌은 「버그」가 아니라 **「아직 안 정했다」는 사실**이다. 늘 빨간 채로 두면 사람이 빨강을
+    무시하게 되고, 그때 프론트매터 누락 같은 진짜 버그가 같이 묻힌다(세104가 종료코드 판정을
+    걷은 그 이유). ⇒ 판정(FAIL)은 구조 오류만. 충돌은 **항상 눈에 보이되 초록을 안 깬다.**
+    """
+    live = {n: d for n, d in nodes.items() if not d["dead"]}
+
+    # [8] owns 충돌 — 이 층의 존재 이유다. 산 노드 둘이 같은 자원을 정하면 둘 다 에러 0인 채 갈라진다.
+    by_res: dict[str, list[str]] = {}
+    for n, d in live.items():
+        for r in d["owns"]:
+            by_res.setdefault(r, []).append(n)
+    for r, owners in sorted(by_res.items()):
+        if len(owners) > 1:
+            conflicts.append(
+                f"`{r}` 를 {len(owners)}곳이 정한다: {' · '.join(sorted(owners))}"
+                "  ← 하나로 정하기 전엔 코드를 얹지 마라"
+            )
+
+    # [9] 엣지 무결성
+    for n, d in nodes.items():
+        for dep in d["needs"]:
+            if dep not in nodes:
+                problems.append(f"[그래프] 없는 노드를 needs: {n} → {dep!r}")
+            elif nodes[dep]["dead"] and not d["dead"]:
+                problems.append(f"[그래프] 죽은 노드를 전제로 삼는다: {n} → {dep}")
+
+    # 순환 — DFS 3색
+    state: dict[str, int] = {}
+
+    def walk(n: str, trail: list[str]) -> None:
+        if state.get(n) == 2:
+            return
+        if state.get(n) == 1:
+            cyc = trail[trail.index(n):] + [n]
+            problems.append(f"[그래프] needs 순환: {' → '.join(cyc)}")
+            return
+        state[n] = 1
+        for dep in nodes.get(n, {}).get("needs", []):
+            if dep in nodes:
+                walk(dep, trail + [n])
+        state[n] = 2
+
+    for n in nodes:
+        walk(n, [])
+
+
+def print_ready(nodes: dict[str, dict]) -> None:
+    """지금 **동시에** 착수 가능한 문서 — 그래프를 만든 실제 목적."""
+    live = {n: d for n, d in nodes.items() if not d["dead"]}
+    counts: dict[str, int] = {}
+    for d in live.values():
+        for r in d["owns"]:
+            counts[r] = counts.get(r, 0) + 1
+    contested = {r for r, c in counts.items() if c > 1}
+
+    print("── 지금 동시에 착수 가능 ────────────────────────")
+    ready, held = [], []
+    for n, d in sorted(live.items()):
+        if d["stage"] == DONE:
+            continue
+        why = []
+        if d["blocked"]:
+            why.append(f"막힘: {d['blocked']}")
+        for dep in d["needs"]:
+            if dep in live and live[dep]["stage"] != DONE:
+                why.append(f"{dep} 미확정")
+        for r in d["owns"]:
+            if r in contested:
+                why.append(f"`{r}` 소유 경합")
+        (held if why else ready).append((n, d, why))
+    for n, d, _why in ready:
+        print(f"  ✅ {n:<22} [{d['stage']}] owns: {', '.join(d['owns']) or '—'}")
+    if not ready:
+        print("  (없다)")
+    print("\n── 막혀 있다 ───────────────────────────────────")
+    for n, _d, why in held:
+        print(f"  ⏸ {n:<22} {' · '.join(why)}")
+    dead = sorted(n for n, d in nodes.items() if d["dead"])
+    if dead:
+        print(f"\n── 죽은 문서 {len(dead)} ─────────────────────────────\n  {' · '.join(dead)}")
 
 
 def main() -> int:
@@ -189,14 +357,34 @@ def main() -> int:
                 "— 무엇을 스킬·설계문서로 내릴지 정해라(세98에 39.5→13KB로 줄였다)"
             )
 
+    # [7][8][9] 그래프
+    out("\n── 그래프 ───────────────────────────────────────")
+    nodes = load_graph(problems)
+    conflicts: list[str] = []
+    check_graph(nodes, problems, conflicts)
+    live = sum(1 for d in nodes.values() if not d["dead"])
+    out(f"  노드 {len(nodes)} (산 것 {live}) · 엣지 {sum(len(d['needs']) for d in nodes.values())}")
+    if "--ready" in sys.argv:
+        print()
+        print_ready(nodes)
+        print()
+
+    # 🔴 충돌은 판정을 안 깬다 — 「아직 안 정했다」는 사실이지 버그가 아니다.
+    #    다만 **조용히 두면 그게 세111 이전 상태다.** 항상 찍는다.
+    if conflicts:
+        print(f"\n── ⚠ 소유 경합 {len(conflicts)} (미결이다 · 판정엔 안 센다) ──────")
+        for c in conflicts:
+            print(f"  ⚠ {c}")
+
     out("\n" + "─" * 50)
+    tail = f" · CONFLICTS:{len(conflicts)}" if conflicts else ""
     if problems:
         for p in problems:
             print(f"  🔴 {p}")
-        print(f"\nDOCS_AUDIT_FAIL:{len(problems)}")
+        print(f"\nDOCS_AUDIT_FAIL:{len(problems)}{tail}")
         return 1
-    out("  문제 없음")
-    print("DOCS_AUDIT_OK")
+    out("  구조 문제 없음")
+    print(f"DOCS_AUDIT_OK{tail}")
     return 0
 
 

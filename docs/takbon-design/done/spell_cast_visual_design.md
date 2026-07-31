@@ -1,3 +1,10 @@
+---
+node: spell_cast_visual
+stage: done
+owns: [vfx_spec, cast_control]
+needs: [world_and_visual]
+---
+
 # 시전 연출 — 「내가 조립한 마법진이 발밑에 열린다」
 
 > 🔴 **세96 신설 (사용자 확정) · takbon-architect 리뷰 반영 완료(조건부 승인 → 지적 12건 전량 반영).**

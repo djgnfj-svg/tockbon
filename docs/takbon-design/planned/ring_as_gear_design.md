@@ -1,3 +1,10 @@
+---
+node: ring_as_gear
+stage: planned
+owns: [equipment]
+needs: []
+---
+
 # 마법진을 장비처럼 착용 — 「한 화면에서 같이 관리」
 
 > **세100 사용자 확정 · architect 리뷰 반영 완료.** 발단 = 세98 사용자 원문:

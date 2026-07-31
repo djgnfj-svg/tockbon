@@ -1,3 +1,11 @@
+---
+node: vision_occlusion
+stage: done
+owns: [player_vision]
+needs: [vision, enemy_perception, dungeon_structure]
+dead: true
+---
+
 # 시야 차폐 설계 — 「나무 뒤에 숨는다」
 
 > ## ⚠🔴🔴 **세110 D8 — 시야 자체가 폐기됐다. 이 문서는 두 번 죽었다.**

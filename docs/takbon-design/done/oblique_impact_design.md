@@ -1,3 +1,10 @@
+---
+node: oblique_impact
+stage: done
+owns: [vfx_spec]
+needs: []
+---
+
 # 오블리크 탑뷰에서 마법 임팩트 표현 — 발사체 그림자 + 두 겹 착탄
 
 > 세77 (2026-07-24) 설계. takbon-design 대화로 확정.

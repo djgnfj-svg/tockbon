@@ -1,3 +1,12 @@
+---
+node: nested
+stage: building
+owns: [rune_fill]
+needs: [jin_interpretation]
+blocked: 개념 프레임이 세72·78에 은퇴했다 — 문서대로 구현하면 은퇴한 발사 모델을 되살린다. 살아있는 것은 #5 rune_fill 입력 수단과 #7뿐이고 거취가 미정이다(TODO.md 「rune_fill 거취」)
+dead: true
+---
+
 # 설계: 중첩 마법진 통합 (복합 룬 × 재귀 진 × rune_fill)
 
 > ⚠🔴 **프레임 은퇴 (세78 교차 감사).** 이 문서의 개념 프레임(진이 날아가 **자식 진을 착탄점서 재발사=재귀 배달** ·

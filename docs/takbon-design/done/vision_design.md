@@ -1,3 +1,11 @@
+---
+node: vision
+stage: done
+owns: [player_vision]
+needs: [world_and_visual]
+dead: true
+---
+
 # 시야 설계 — 「보이는 적」과 「기척만 남은 적」
 
 > ## ⚠🔴🔴 **세110 D8에 전량 무효 — 시야를 통째로 걷는다. 이 문서를 근거로 새 작업을 시작하지 마라.**

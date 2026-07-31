@@ -1,3 +1,12 @@
+---
+node: dungeon_structure
+stage: building
+owns: [run_flow, mob_spawning]
+needs: [genre_pivot]
+blocked: 세110 장르 전환에 전제가 통째로 폐기됐다 — 첫 조각이 안 정해져 폐기 범위와 자리 이동이 리드·사용자 몫이다(맨 앞 스텁)
+dead: true
+---
+
 # 던전 구조 설계 — 「열린 맵 · 지점을 밟고 · 살아 나온다」
 
 > ## ⚠🔴🔴 **세110에 전제가 통째로 폐기됐다 — 이 문서를 근거로 새 작업을 시작하지 마라.**

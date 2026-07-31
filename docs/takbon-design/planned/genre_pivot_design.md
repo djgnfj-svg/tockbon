@@ -1,3 +1,11 @@
+---
+node: genre_pivot
+stage: planned
+owns: [genre, run_flow, progression, monument]
+needs: []
+blocked: 첫 조각을 사용자가 아직 안 골랐다(§7) · §B가 얕아 착수 전 architect 리뷰가 필수다(§B 머리말)
+---
+
 # 장르 전환 — 익스트랙션 폐기 → 방을 잇는 마법 액션 로그라이크
 
 > 🔴🔴 **이 문서는 세35 이래 게임의 장르를 처음으로 갈아엎는다.**

@@ -1,3 +1,10 @@
+---
+node: draw_tools_panel
+stage: done
+owns: [drawing_tools]
+needs: []
+---
+
 # 설계: DRAW 도구 패널(잉크+실시간 점수) + 종이 축 은퇴
 
 > 산출물 = takbon-dev가 받는 구조 설계. 범위 = 책 포지 패널 UI + 종이(규모) 축 제거.

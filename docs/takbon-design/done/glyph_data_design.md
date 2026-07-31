@@ -1,3 +1,10 @@
+---
+node: glyph_data
+stage: done
+owns: [glyph_data]
+needs: [jin_interpretation]
+---
+
 # 문양 효과·표현 데이터화 + 응축 — 설계 (세82)
 
 > 상태 = 🟢 **구현 완료 (세82).** 대화 확정 → architect 리뷰 전량 반영 → 6단계 구현 → 뮤테이션 9/9.

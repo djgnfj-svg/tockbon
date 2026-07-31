@@ -1,3 +1,10 @@
+---
+node: jin_interpretation
+stage: done
+owns: [jin_semantics]
+needs: [takbon_model]
+---
+
 # 설계: 진별 해석 구조 (룬 감쌈 × 층 순서 × 진 규칙) — 세78 대화
 
 > `takbon-design` 스킬로 리드가 사용자와 대화하며 확정. (2026-07-24)

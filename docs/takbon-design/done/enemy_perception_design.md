@@ -1,3 +1,11 @@
+---
+node: enemy_perception
+stage: done
+owns: [enemy_ai]
+needs: [vision, dungeon_structure, hunt_loop]
+dead: true
+---
+
 # 몬스터 인지 설계 — 「나를 아직 못 본 짐승」
 
 > ## ⚠🔴🔴 **세110 D8에 전량 무효 — 인지를 통째로 걷는다. 이 문서를 근거로 새 작업을 시작하지 마라.**
