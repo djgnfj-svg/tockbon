@@ -407,12 +407,10 @@ func _collect_at(at: Vector2) -> void:
 	_collected = true
 	_state = State.COLLECTED
 	global_position = at
-	if unlock_id != &"":
-		_grant_unlock()
-	else:
-		GameState.add_to_bag(item_id, count)
+	# 🔴🔴 지급 자체는 **`grant_one` 한 곳**이다(↓ 그 함수 머리말). 여기 남은 건 **노드에만 있는 일**
+	#  (소리 사다리·팝·자기 정리)뿐이다 — 그래야 상자(R11)가 같은 지급을 두 벌로 안 갖는다.
+	if grant_one(item_id, count, unlock_id, GameState, EventBus):
 		_play_pickup_sfx()
-		EventBus.item_collected.emit(item_id, count)
 	_pop_and_free()
 
 
@@ -421,20 +419,43 @@ func _has_payload() -> bool:
 	return item_id != &"" or unlock_id != &""
 
 
-## 🔴 해금물 줍기 = `codex_unlocked` **한 발**. codex 심기 + 해금음(`audio._on_unlock`) +
-## UNLOCK 퀘스트 진행 + 자동 저장(`save_manager`가 이 시그널에 큐를 건다)이 전부 따라온다
-## (세37 station_* 선례 · boss_room 클리어 보상과 같은 패턴).
+## 🔴🔴 **드롭 한 줄을 실제로 지급한다 — 이 리포의 유일한 지급 지점이다** (세112 단계 4에 static으로 승격).
+##
+## 🔴 **왜 static으로 뽑았나 (R11)**: 상자는 「바로 가방」이라 **픽업 노드를 아예 안 지난다.**
+##  그러면 「해금물이면 codex, 아이템이면 가방」이라는 이 분기가 **두 벌**이 되고, 그게 갈리는 날
+##  *"상자에서 나온 두루마리만 해금이 안 걸린다"*가 된다 — **에러 0**이다(설계 §6이 지목한 자리).
+##  ⇒ 상자(`boss_room`)와 픽업이 **같은 함수**를 부른다(`DropRoll.roll`이 굴림의 단일 소스인 것과 같은 결).
+## 🔴 **호출은 드롭 한 줄에 정확히 한 번이다.** 상자는 픽업을 안 뿌리고 픽업은 상자를 안 지나므로
+##  경로가 겹치지 않는다 — **둘 다 하면 이중 해금이고 에러가 0이다.**
+##
+## 🔴 `gs`·`bus`를 **인자로 받는다** — static에서 오토로드 식별자를 컴파일타임 참조하면 `-s` 테스트가
+##  컴파일 단계에서 죽는다(`drop_roll.gd`가 같은 이유로 `gs`를 받는다 · takbon-verify §8).
+##
+## **반환 = 「아이템을 가방에 넣었나」** — 픽업이 그걸로 소리를 낼지 정한다.
+##  🔴 해금물은 소리를 **안 낸다**: `codex_unlocked`가 이미 unlock음을 울려 두 겹이 된다.
+##
+## 해금물 쪽 계약(세87·88):
+## 🔴 `codex_unlocked` **한 발**로 codex 심기 + 해금음(`audio._on_unlock`) + UNLOCK 퀘스트 진행 +
+##   자동 저장(`save_manager`가 이 시그널에 큐를 건다)이 전부 따라온다 (세37 station_* 선례).
 ## 🔴 **가방에 안 넣는다** — 아이템이 아니라 배움이다. 그래서 `item_collected`도 안 쏜다:
 ##   HUD 토스트가 `Db.get_item(id)`으로 이름을 찾는데 해금물엔 `ItemDef`가 없어 **원시 id가
 ##   화면에 노출된다**(`test_ui_text_auto`가 재는 바로 그 실패).
 ##   화면 문구는 **HUD가** 이 `codex_unlocked`를 받아 `CodexText.acquired_line()`으로 낸다.
 ## 🔴 **이미 해금이면 다시 안 쏜다** — 두 마리가 같은 두루마리를 떨궈 둘 다 줍거나, 떨어진 사이
-##   공방에서 같은 고리를 만들면 해금음·UNLOCK 퀘스트가 중복 반응한다(boss_room의 첫 처치 가드와
-##   같은 결). 그래도 픽업 자체는 정상적으로 사라진다 — 안 사라지면 바닥에 유령이 남는다.
-## 🔴 픽업 소리를 안 낸다 — `codex_unlocked`가 이미 unlock음을 울려 두 겹이 된다.
-func _grant_unlock() -> void:
-	if not GameState.is_unlocked(unlock_id):
-		EventBus.codex_unlocked.emit(unlock_id)
+##   공방에서 같은 고리를 만들면 해금음·UNLOCK 퀘스트가 중복 반응한다(boss_room의 첫 처치 가드와 같은 결).
+static func grant_one(p_item_id: StringName, p_count: int, p_unlock_id: StringName,
+		gs: Node, bus: Node) -> bool:
+	if gs == null or bus == null:
+		return false
+	if p_unlock_id != &"":
+		if not gs.is_unlocked(p_unlock_id):
+			bus.codex_unlocked.emit(p_unlock_id)
+		return false
+	if p_item_id == &"" or p_count <= 0:
+		return false
+	gs.add_to_bag(p_item_id, p_count)
+	bus.item_collected.emit(p_item_id, p_count)
+	return true
 
 
 ## 연속 획득 피치 사다리 + 같은-프레임 게이트.

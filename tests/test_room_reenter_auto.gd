@@ -68,6 +68,9 @@ func _run() -> void:
 	await _test_leaving_survives_reenter()
 	await _test_no_stale_road()
 	await _test_room_index_varies_layout()
+	await _test_reward_chest_stands_and_works()
+	await _test_reward_is_granted_straight_to_bag()
+	await _test_unlock_fires_exactly_once()
 
 	await _cleanup()
 
@@ -247,7 +250,154 @@ func _test_room_index_varies_layout() -> void:
 			% [same, room0.size()])
 
 
+## [9] 🔴🔴 **방을 깨면 보상 상자가 방 가운데에 서고, 그 상자가 실제로 작동한다** (세112 단계 4 · R5).
+##
+## 🔴 **「섰다」로 끝내면 안 된다** — 상자는 `Area2D`를 품은 씬이고, 붙이는 **문맥**에 따라 엔진이
+##  *"Can't change this state while flushing queries"*를 찍는다. 그래서 **[E] 안내가 실제로 뜨는지**까지
+##  잰다 = 「상자가 서 있는데 아무 일도 안 나는」 상태를 잡는 유일한 관측점이다.
+##  ⚠ **단계 4 실측**: 물리 콜백에서 붙여도 노드는 붙고 Area도 감지한다(엔진 ERROR 한 줄만 난다)
+##   — 즉 이 항목이 **지연/직접을 가르지는 못한다.** 한계는 `docs/_reports/room_step4.md`에 적었다.
+## 🔴 자리는 **`Ground` rect의 한복판**과 대조한다(좌표를 안 박는다 — 방을 옮겨도 안 낡는다).
+func _test_reward_chest_stands_and_works() -> void:
+	print("[9] 🔴🔴 방을 깨면 보상 상자가 방 가운데에 서고 [E]가 실제로 뜬다")
+	await _fresh(&"ch1")
+	_check(_count(&"room_rewards") == 0, "깨기 전엔 보상 상자가 0개다 (실제 %d)" % _count(&"room_rewards"))
+	await _clear_room()
+	var chest = _reward_chest()
+	_check(chest != null, "🔴 방을 깨자 보상 상자가 섰다 (없으면 R5가 통째로 죽은 것이다)")
+	if chest == null:
+		return
+	var ground: ColorRect = _room.get_node("Ground")
+	var center := ground.position + ground.size * 0.5
+	_check(chest.position.is_equal_approx(center),
+		"🔴 상자가 방 한복판 %s에 섰다 (실제 %s — 좌표를 박으면 방을 옮길 때 여기만 남는다)"
+			% [center, chest.position])
+
+	await _stand_in_front(chest)
+	_check(chest.open_prompt_visible(),
+		"🔴🔴 다가가니 [E] 안내가 실제로 뜬다 (안 뜨면 상자는 섰는데 열 방법이 없다)")
+
+	await _reenter(1)
+	_check(_count(&"room_rewards") == 0,
+		"🔴 재입장하면 상자가 사라진다 (실제 %d개 — 남으면 방마다 쌓인다)" % _count(&"room_rewards"))
+
+
+## [10] 🔴🔴 **R11 — 열면 낱개를 안 뿌리고 바로 가방에 들어온다** (설계 §4 R11).
+##
+## 🔴 **두 축을 같이 잰다**: ⓐ 가방이 실제로 늘었나 ⓑ **낱개 픽업이 0개인가.**
+##  ⓑ가 없으면 「바로 가방 + 낱개도 뿌림」이라는 **이중 지급**을 못 잡는다(에러 0 · 두루마리는 이중 해금).
+## 🔴 **실제 입력으로 연다**(`interacted`를 직접 emit하지 않는다 — `test_chest_open_auto`의 규율).
+func _test_reward_is_granted_straight_to_bag() -> void:
+	print("[10] 🔴🔴 R11 — 상자를 열면 낱개 없이 바로 가방에 들어온다")
+	await _fresh(&"ch1")
+	await _clear_room()
+	var chest = _reward_chest()
+	if chest == null:
+		_check(false, "보상 상자가 없다 — [10]을 잴 수 없다")
+		return
+	_gs.bag.clear()
+	var loose_before := _count(&"drop_pickups")
+	await _stand_in_front(chest)
+	await _press_open()
+	_check(chest.is_broken(), "상자가 열렸다(부서짐 컷) — 전제")
+	_check(_gs.bag.size() > 0,
+		"🔴🔴 열자 가방에 %d줄이 들어왔다 (0이면 지급 경로가 통째로 죽은 것이다)" % _gs.bag.size())
+	_check(_count(&"drop_pickups") == loose_before,
+		"🔴🔴 낱개 픽업이 안 늘었다 (%d → %d — 늘면 「바로 가방」과 낱개가 **둘 다** 돌아 이중 지급이다)"
+			% [loose_before, _count(&"drop_pickups")])
+	_gs.bag.clear()
+
+
+## [11] 🔴🔴 **해금 호출이 정확히 한 번** (설계 §6이 착수 전 실측을 시킨 그 자리).
+##
+## 🔴 **실측 결과**: 두루마리의 `unlock_id` 해금행을 지금까지 **`drop_pickup._grant_unlock`이
+##  혼자** 지고 있었는데, R11은 그 노드를 **아예 안 지난다** ⇒ 그대로 두면 상자에서 나온 두루마리만
+##  **조용히 해금이 안 걸린다.** 그래서 지급을 `drop_pickup.grant_one` static 하나로 올렸다.
+## 🔴 **횟수를 센다 — 「해금됐나」가 아니다.** 값만 보면 두 벌 경로가 **둘 다 돌아도** 통과한다
+##  (`takbon-verify` §4-4 「결과 값이 같다 ≠ 같은 길로 왔다」). 이중 해금은 해금음·UNLOCK 퀘스트가
+##  두 번 반응하는 것으로만 드러나고 **에러가 0이다.**
+## ⚠ `lm_nest`엔 해금행이 없어서(실측) **임시 `DropEntry`를 주입했다 되돌린다** — 그게 이 리포의 관행이다.
+func _test_unlock_fires_exactly_once() -> void:
+	print("[11] 🔴🔴 상자에서 나온 두루마리의 해금이 **정확히 한 번** 걸린다")
+	var def = _db.get_landmark(&"lm_nest")
+	if def == null:
+		_check(false, "lm_nest를 Db에서 못 찾았다 (전제)")
+		return
+	var entry_script = load("res://src/core/schemas/drop_entry.gd")
+	var probe = entry_script.new()
+	probe.unlock_id = &"__probe_unlock_step4"
+	probe.chance = 1.0
+	probe.min_count = 1
+	probe.max_count = 1
+	var saved: Array = def.drops.duplicate()
+	def.drops.append(probe)
+	_gs.codex.erase(&"__probe_unlock_step4")
+
+	var seen := {"n": 0}
+	var on_unlock := func(id: StringName) -> void:
+		if id == &"__probe_unlock_step4":
+			seen["n"] = int(seen["n"]) + 1
+	_bus.codex_unlocked.connect(on_unlock)
+
+	await _fresh(&"ch1")
+	await _clear_room()
+	var chest = _reward_chest()
+	if chest != null:
+		await _stand_in_front(chest)
+		await _press_open()
+
+	_bus.codex_unlocked.disconnect(on_unlock)
+	def.drops.assign(saved)              # 🔴 되돌리기가 먼저다 — 아래 _check이 무엇을 하든 새 나가지 않는다
+	_gs.codex.erase(&"__probe_unlock_step4")
+
+	_check(chest != null, "보상 상자가 섰다 (전제)")
+	_check(int(seen["n"]) == 1,
+		"🔴🔴 `codex_unlocked`가 **정확히 1번** 나갔다 (실제 %d — 0이면 R11이 해금 경로를 건너뛴 것이고, 2 이상이면 지급이 두 벌이다)"
+			% int(seen["n"]))
+
+
 # ── 도구 ──────────────────────────────────────────────────────────────────────
+
+
+## 방의 적을 **실제 경로로** 전부 죽이고 클리어가 돌 때까지 프레임을 흘린다.
+## ⚠ 클리어 판정이 `call_deferred`라 프레임을 넉넉히 흘려야 상자가 선다.
+func _clear_room() -> void:
+	for node in get_nodes_in_group("enemies"):
+		if is_instance_valid(node) and node.has_method("take_hit"):
+			node.take_hit(99999.0, 0, 0, 0.0)
+	for i in 4:
+		await process_frame
+	await physics_frame
+
+
+func _reward_chest():
+	for n in get_nodes_in_group("room_rewards"):
+		if is_instance_valid(n) and not n.is_queued_for_deletion():
+			return n
+	return null
+
+
+## 상자 **앞(남쪽)**에 선다 — `test_chest_open_auto._stand_in_front` 계약 그대로
+## (접지선 아래 · `body_entered`가 실제로 오려면 물리 프레임을 여러 번 흘려야 한다).
+func _stand_in_front(chest) -> void:
+	var player: Node2D = _room.get_node("Player")
+	player.global_position = chest.global_position + Vector2(0, 30.0)
+	for i in 6:
+		await physics_frame
+	await process_frame
+
+
+## 🔴 **`interacted`를 직접 emit하지 않는다**(설계 §6 S11) — 실제 입력을 민다.
+##  선례 = `test_chest_open_auto._press_interact`.
+func _press_open() -> void:
+	Input.action_press(&"interact")
+	var ev := InputEventAction.new()
+	ev.action = &"interact"
+	ev.pressed = true
+	root.push_input(ev)
+	await process_frame
+	Input.action_release(&"interact")
+	await process_frame
 
 
 ## 🔴 `_enter_room`을 **이름으로** 부른다 — 설계 §5-2가 이름째 못 박은 계약이다(머리말 참조).

@@ -135,6 +135,12 @@ const CodexText := preload("res://src/core/codex_text.gd")
 ##  되고 그게 조용히 갈라진다(takbon-rules §5-1).
 ## ⚠ **여기 굴림 로직을 적지 마라** — 이 파일이 지는 건 「언제·어디에」뿐이고 「무엇이 몇 개」는 저기다.
 const DropRoll := preload("res://src/field/drop_roll.gd")
+## 🔴🔴 **지급의 단일 소스** (세112 단계 4 · R11 「바로 가방」). 상자는 낱개 픽업을 **안 뿌리므로**
+##  픽업 노드를 아예 안 지난다 — 그런데 「해금물이면 codex, 아이템이면 가방」 분기가 거기 있었다.
+##  ⇒ 그 분기를 `drop_pickup.gd`의 **static**으로 올리고 상자가 **같은 함수**를 부른다.
+##  두 벌로 두면 *"상자에서 나온 두루마리만 해금이 안 걸린다"*가 되고 **에러가 0이다**(설계 §6).
+## ⚠ 방향은 **field → props 단방향**이라 순환이 없다(`DropRoll`이 픽업 씬을 preload하는 것과 같다).
+const DropPickup := preload("res://src/props/drop_pickup.gd")
 
 ## 돌아갈 곳 — 🔴 **PackedScene이 아니라 경로다. 바꾸지 마라.** base가 boss_room을 경로로 물고
 ## boss_room이 base를 PackedScene으로 물면 **순환 preload**로 한쪽이 노드 0개 껍데기가 돼
@@ -395,8 +401,24 @@ var _prop_holder: Node2D = null
 const ROOM_GROUPS: Array[StringName] = [
 	&"enemies", &"props", &"landmarks", &"drop_pickups",
 	&"enemy_projectiles", &"player_projectiles", &"blasts", &"pillars",
-	&"interact_zones",
+	&"interact_zones", &"room_rewards",
 ]
+
+## 🔴🔴 **방 보상 상자의 그룹** (세112 단계 4). 🔴 **`landmarks`를 재사용하지 않는다** — 그 그룹은
+##  「데이터가 세운 지점」이라는 뜻이고 `test_landmark_road_auto [2]`가 **그룹 수 == `ChapterDef.landmarks`
+##  슬롯 수**를 단언한다. 보상 상자가 거기 끼면 방을 깬 뒤에 그 그물이 빨개진다(에러 0 · 원인 불명).
+const ROOM_REWARD_GROUP := &"room_rewards"
+
+## 🔴🔴 **방 보상 상자의 종류** — 잠정값이고 **스크립트 const로 시작하는 것이 설계 지시다**(§6-2:
+##  *"방 사양은 `.tres`가 아니라 스크립트 const 표로 시작해라 — 확정 전에 스키마를 만들면 F5 뒤 낡는다"*).
+##
+## 🔴 **상자 안을 무엇으로 채울지는 이번에 안 정했다**(리드 지시 — 「재료 경제 정리」는 사용자 결정이다).
+##  지금은 `LandmarkDef.drops`가 든 것을 **그대로** 쓴다. ⚠ 실측: `data/landmarks/` 셋 중 **`drops`가
+##  실린 것은 `lm_nest` 하나**다(`lm_altar`·`lm_ruin`은 `scene_path`도 비었다) — 그래서 이 값이다.
+## 🔴 **뜻이 바뀐 필드다**: `LandmarkDef`는 세99에 「지점(둥지·폐허·제단)」이었는데 설계 §6-2가
+##  **「상자 종류」로 뜻만 옮겨 살린다**고 정했다. 그 사슬(`LandmarkDef.drops`)이 죽으면
+##  **지점이 유일 공급원인 재료가 끊겨** `test_recipe_reach_auto`가 빨개진다 — 그래서 재사용이 처방이다.
+const ROOM_CHEST_ID := &"lm_nest"
 
 
 func _ready() -> void:
@@ -1393,11 +1415,80 @@ func _check_room_cleared() -> void:
 	_on_room_cleared()
 
 
-## 🔴 **방이 깨졌다 — 단계 4·5가 여기에 상자와 문을 단다**(설계 §7 단계 4·5).
-## ⚠ 단계 3은 **자리만 만든다** — 여기서 씬을 갈아타거나 방을 다시 세우지 않는다.
+## 🔴 **방이 깨졌다 — 단계 4가 상자를, 단계 5가 문을 여기에 단다**(설계 §7).
 ##  🔴 방 전환을 붙일 땐 `_enter_room(_room_index + 1)`을 **여기서** 불러라(이미 지연 문맥이다).
 func _on_room_cleared() -> void:
-	pass
+	_spawn_reward_chest()
+
+
+## 🔴🔴 **방 가운데에 보상 상자를 세운다** (세112 단계 4 · R5).
+##
+## 🔴 **자리는 `Ground` rect의 한복판이다 — 좌표를 안 박는다.** 씬의 `SunGlade`(볕뉘)가 단계 2에
+##  같은 자리로 옮겨져 있어서 **「저기가 무대다」가 공짜로 붙는다**(설계 §5-1이 그걸 노리고 시킨 배치다).
+##  방을 또 옮기면 빛과 상자가 **같이** 따라온다.
+##
+## 🔴 **새 씬을 안 만든다** — `chest.tscn`(세112 1c에 `nest`에서 개명)이 이미 그 기계다:
+##  [E] 즉시 열기 · 재열기 가드 · 2컷(온전/부서짐) 접지선 공유 · `opened` 발신이 전부 있다.
+##  ⚠ 경로도 **데이터에서** 온다(`LandmarkDef.scene_path`) — 「새 상자 종류 = `.tres` 한 장」이 산다.
+##
+## 🔴🔴 **여기는 이미 지연 문맥이다** — `_on_enemy_died`가 `_check_room_cleared`를 `call_deferred`로
+##  부르기 때문이다(단계 3). 그래서 `add_child`를 **여기서 바로** 해도 물리 flush 밖이다.
+##  ⚠ **세112 단계 4 실측 — 설계의 전제와 다르다**: 물리 콜백 한복판에서 `add_child`를 해도
+##   노드는 **정상으로 붙고 Area도 실제로 감지한다**(직접 재 봤다). 달라지는 건 엔진이
+##   `ERROR: Can't change this state while flushing queries`를 **한 줄 찍는 것뿐**이고,
+##   그 줄은 `SCRIPT ERROR:`가 아니라 `run_tests.gd`를 통과한다.
+##   ⇒ 🔴 **지연은 여전히 옳지만(엔진이 그렇게 하라고 한다) 「노드가 안 붙는다」로는 못 잡는다.**
+##    재발 그물의 한계는 `docs/_reports/room_step4.md`에 적었다.
+func _spawn_reward_chest() -> void:
+	var def := Db.get_landmark(ROOM_CHEST_ID)
+	if def == null or def.scene_path == "":
+		# 침묵 금지 — 상자가 안 서면 방을 깨도 **보상이 통째로 없고 화면은 멀쩡하다.**
+		push_error("boss_room: 보상 상자 '%s'를 Db.landmarks에서 못 찾았거나 scene_path가 비었다 — 방을 깨도 상자가 안 선다"
+			% String(ROOM_CHEST_ID))
+		return
+	var packed := load(def.scene_path) as PackedScene
+	if packed == null:
+		push_error("boss_room: 보상 상자 씬 '%s'를 못 읽었다" % def.scene_path)
+		return
+	var chest := packed.instantiate() as Node2D
+	if chest == null:
+		push_error("boss_room: 보상 상자 씬 루트가 Node2D가 아니다 — 자리를 못 잡아 안 세운다")
+		return
+	# 🔴 위치는 `add_child` **앞**이다(지점·적과 같은 계약 — 씬이 `_ready`에서 자기 자리를 쓴다).
+	chest.position = _ground.position + _ground.size * 0.5
+	chest.add_to_group(ROOM_REWARD_GROUP)
+	add_child(chest)
+	# 🔴 `has_signal` 가드 — 「새 상자 종류 = `.tres` 한 장」이라 남이 시그널 없는 씬을 꽂는다.
+	#  가드가 없으면 그 한 장이 방을 통째로 못 세운다(`_spawn_landmarks`와 같은 판단).
+	if chest.has_signal(&"opened"):
+		chest.connect(&"opened", _on_reward_chest_opened)
+	else:
+		push_warning("boss_room: 보상 상자 씬에 `opened` 시그널이 없다 — 열어도 아무것도 안 나온다")
+
+
+## 🔴🔴 **상자를 열었다 — R11: 낱개를 안 뿌리고 바로 가방에 넣는다** (세112 단계 4).
+##
+## 🔴 **세46의 「순간이동 드롭」 각하를 뒤집은 것이다** — 그때 각하 사유는 *"익스트랙션의 스테이크스"*였고
+##  **그 장르가 세110에 폐기됐다**(설계 §4 R11). ⇒ 되돌리려면 그 장르가 돌아와야 한다.
+##
+## 🔴 **굴림은 `DropRoll.roll` 그대로**(S17 단일 소스) — 상자가 자기 굴림을 새로 쓰면 `DropEntry`의
+##  배타 짝 규칙 셋이 두 벌이 되고 그게 조용히 갈라진다.
+## 🔴 **지급도 `DropPickup.grant_one` 하나**(그 함수 머리말) — 「해금물이면 codex, 아이템이면 가방」을
+##  여기 다시 적으면 그 순간 사본이고, 두루마리 해금이 상자 경로에서만 조용히 죽는다.
+## ⚠ **낱개 스폰(`DropRoll.spawn_loose`)을 같이 부르지 마라** — 그러면 같은 드롭이 **두 번** 지급되고
+##  두루마리는 **이중 해금**이 된다(에러 0).
+func _on_reward_chest_opened() -> void:
+	var def := Db.get_landmark(ROOM_CHEST_ID)
+	if def == null:
+		return
+	if def.drops.is_empty():
+		# 데이터가 비면 열어도 아무 일이 안 난다 — 화면은 멀쩡하다(설계 §10 D12 「허탕 없음」).
+		push_warning("boss_room: 보상 상자 '%s'의 drops가 비었다 — 열어도 아무것도 안 나온다"
+			% String(ROOM_CHEST_ID))
+		return
+	for entry: Dictionary in DropRoll.roll(def.drops, GameState):
+		DropPickup.grant_one(entry["id"], int(entry["count"]),
+			entry.get("unlock", &""), GameState, EventBus)
 
 
 ## 🔴 귀환 성공 — `extraction_success`가 **가방(루팅분 포함)을 창고로 옮기고 자동 저장**한다
