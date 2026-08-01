@@ -9,32 +9,40 @@
 ; 🐺 세99: 잡몹이 **늑대 하나**로 줄었다 (사용자 확정 — `data/enemies/README.md` 참조).
 ; 🔴 **길에 서는 자리는 전부 `pool_tag`로 굴린다** — 새 몹이 오면 `mob_pool`에 `MobWeight` 한 줄만
 ;  더하면 이 자리들이 저절로 돌아간다(자리를 다시 안 만진다). 지금은 후보가 늑대뿐이라 늑대가 선다.
-; 🔴 **좌표는 세99 배치 그대로다** — 자리는 지형이 정한 것이라 몹이 바뀌어도 안 옮긴다.
+; 🔴🔴 **세112 R2: 좌표를 전부 옮겼다 — 방이 2400×2200 → 1600×1000으로 줄었다.**
+;  ⚠ **씬(`boss_room.tscn`)의 `Ground` rect만 줄이면 여기 좌표는 안 따라온다** — 실제로 옛 값이면
+;   `boss_spawn (0,-1350)`이 새 북쪽 벽에서 **850px 밖**이라 카메라 클램프 때문에 영영 못 간다.
+;   **에러는 0이고 전 스위트도 그린이었다**(그물 = `test_prop_layout_auto [10]`을 그래서 세웠다).
+;  🔴 **대역(`fore` 남쪽 · `deep` 북쪽)의 뜻은 그대로 옮겼다** — 구역은 코드 개념이 아니라 y좌표 관례다.
+;  🔴 **입구(플레이어 스폰 `(0,400)`)를 피해 놓았다** — 옛 방은 입구가 `(0,600)`이라 지금 자리에
+;   그냥 두면 몹이 **첫 프레임부터 플레이어 위에** 선다(ch2·ch3의 `mob3`가 정확히 그랬다).
 ;  세98의 9자리 중 넷만 남겼다: 늑대는 슬라임보다 세다(HP 26 vs 14 · 접촉 8 vs 4 · 돌진 330).
-;  ⚠ 여기 안 남긴 다섯(560,520)·(-500,-180)·(420,-350)·(-250,-420) 등은 **자리를 지운 것**이지
-;   좌표가 틀려서가 아니다 — 몹이 늘면 되살릴 후보다. 특히 (420,-350)은 둥지에서 200px라
-;   늑대가 서면 **무리와 구분이 안 간다**(그물이 재는 「둘러싼 다섯」이 흐려진다).
 [sub_resource type="Resource" id="mob1"]
 script = ExtResource("2")
-position = Vector2(-380, 420)
+position = Vector2(-380, 380)
 pool_tag = &"fore"
 
 [sub_resource type="Resource" id="mob3"]
 script = ExtResource("2")
-position = Vector2(-120, 430)
+position = Vector2(-560, 180)
 pool_tag = &"fore"
 
 [sub_resource type="Resource" id="mob7"]
 script = ExtResource("2")
-position = Vector2(150, -520)
+position = Vector2(-300, -180)
 pool_tag = &"deep"
 
 [sub_resource type="Resource" id="mob9"]
 script = ExtResource("2")
-position = Vector2(0, -1050)
+position = Vector2(-620, -300)
 pool_tag = &"deep"
 
-; 🐺 늑대 무리 — 둥지(620,-300)를 **둘러싸고** 선다 (세99 사용자 원문 *"많은 늑대들이 있을듯"*).
+; 🐺 늑대 무리 — 둥지(450,-200)를 **둘러싸고** 선다 (세99 사용자 원문 *"많은 늑대들이 있을듯"*).
+; 🔴🔴 **세112 R2에 다섯을 다시 놓았다 — 셋을 동시에 만족시켜야 한다**(`test_landmark_road_auto [6]`):
+;  ⓐ 둥지에서 **140~400px** · ⓑ **동서남북 네 방향에 다 있다**(한 줄로 세우면 「둘러싼」 게 아니다) ·
+;  ⓒ 🔴 **들어가는 줄기에서 `hound.sight_range`(220) 밖** — 줄기는 입구 칸의 **3칸 폭**이라 월드
+;   x가 최대 96이다 ⇒ 서쪽 늑대도 **x ≥ 320**이어야 한다(그게 이 다섯의 x가 전부 350 이상인 이유다).
+;   ⓒ가 깨지면 「지나가도 된다」(설계 §3)가 죽어 둥지가 **고르는 것이 아니라 통행세**가 된다.
 ; 🔴 자리는 사람이 놓는다(D5) — 굴리는 건 「거기 뭐가 서 있나」뿐이라 `pool_tag`를 안 쓴다.
 ; 🔴🔴 **이 다섯만 `enemy_id`를 직접 쥐는 근거·좌표를 옮길 때 볼 것은 설계 문서가 든다** —
 ;  `docs/takbon-design/dungeon_structure_design.md` §3 「ch1의 자리 근거」. 세100에 옮겼다.
@@ -44,27 +52,27 @@ pool_tag = &"deep"
 [sub_resource type="Resource" id="mob_wolf1"]
 script = ExtResource("2")
 enemy_id = &"hound"
-position = Vector2(770, -380)
+position = Vector2(740, -230)
 
 [sub_resource type="Resource" id="mob_wolf2"]
 script = ExtResource("2")
 enemy_id = &"hound"
-position = Vector2(800, -180)
+position = Vector2(560, -380)
 
 [sub_resource type="Resource" id="mob_wolf3"]
 script = ExtResource("2")
 enemy_id = &"hound"
-position = Vector2(610, -120)
+position = Vector2(380, -380)
 
 [sub_resource type="Resource" id="mob_wolf4"]
 script = ExtResource("2")
 enemy_id = &"hound"
-position = Vector2(450, -190)
+position = Vector2(600, 20)
 
 [sub_resource type="Resource" id="mob_wolf5"]
 script = ExtResource("2")
 enemy_id = &"hound"
-position = Vector2(520, -450)
+position = Vector2(390, 60)
 
 ; 🔴 대역(`fore`/`deep`)은 **후보가 하나여도 남겨 둔다** — 「어귀에 서는 것」과 「깊은 데 서는 것」이
 ;  갈린다는 설계가 여기 살아 있고, 새 몹은 대역을 골라 한 줄로 들어온다.
@@ -99,7 +107,7 @@ pool_tag = &"deep"
 [sub_resource type="Resource" id="lm_nest_slot"]
 script = ExtResource("5")
 landmark_id = &"lm_nest"
-position = Vector2(620, -300)
+position = Vector2(450, -200)
 
 [resource]
 script = ExtResource("1")
@@ -108,7 +116,7 @@ order = 1
 title = "숲 어귀"
 boss_enemy_id = &"slime_elite"
 boss_scene_path = ""
-boss_spawn = Vector2(0, -1350)
+boss_spawn = Vector2(0, -300)
 room_ground_color = Color(0.33, 0.41, 0.27, 1.0)
 mob_spawns = Array[ExtResource("2")]([SubResource("mob1"), SubResource("mob3"), SubResource("mob7"), SubResource("mob9"), SubResource("mob_wolf1"), SubResource("mob_wolf2"), SubResource("mob_wolf3"), SubResource("mob_wolf4"), SubResource("mob_wolf5")])
 reward_unlock = &"rune_water"

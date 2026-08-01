@@ -19,6 +19,7 @@ extends SceneTree
 ##  [6] ⓔ 지점(둥지) 둘레가 비었다
 ##  [7] 프롭 씬 계약 — 물리 몸 0 · 감지 Area 0(나무만 예외) · 원점 = 접지선
 ##  [8] 🔴 **결정적이다** — 같은 챕터를 두 번 띄우면 같은 자리다(프롭은 지형이다 · D5)
+## [10] 🔴🔴 **씬이 손으로 든 좌표가 방 안에 있다**(세112 R2 신설 — 입구·출구·볕뉘)
 ##
 ## 🔴 **[2]~[6]은 챕터 3장 모두에서 잰다** — 회피 조건(몹 자리·지점·길)이 챕터마다 달라서
 ##  ch1만 재면 ch2·ch3에서만 깨지는 배치를 못 잡는다.
@@ -61,6 +62,12 @@ const CLEAR_GATE := 150.0
 ##  조여도 거짓 빨강이 안 나면서, 0으로 꺼 버리는 뮤테이션은 그대로 잡힌다.
 const CLEAR_BOSS_MIN := 200.0
 const CLEAR_LANDMARK_MIN := 200.0
+## 🔴🔴 보스 무대의 **상한** — 「가장 가까운 프롭까지의 거리 ≤ 방 짧은변 × 이 값」 (세112 R2 신설).
+##  `CLEAR_BOSS_MIN`이 「무대가 비었나」의 하한이면 이건 **「무대가 방 안이긴 한가」**다.
+##  🔴 값이 아니라 **비율**인 이유: 방 크기가 바뀌는 사이클이라 px를 박으면 거짓 빨강이 난다.
+##  0.6 = 짧은변의 6할. 실측(R2 착지): ch1 0.29 · ch2 0.29 · ch3 0.30 → 두 배 여유가 있고,
+##  옛 방 밖 보스(1063px = 1.06)는 그대로 잡힌다.
+const BOSS_STAGE_REACH := 0.6
 
 ## 🔴 밀도 — 사용자 확정 *"화면당 3~4그루"*. **나무로 잰다**(그 수치가 나무에서 나왔다:
 ##  세100의 중앙 나무 8그루 / 화면 10.2장 = 0.8). 상한은 「기둥 밭을 두 배로 만든 것」의 방어선이다.
@@ -68,9 +75,15 @@ const TREES_PER_SCREEN_MIN := 3.0
 const TREES_PER_SCREEN_MAX := 6.0
 ## 🔴🔴 **바닥 층위가 비면 이 작업이 통째로 무효다** — 세100까지 소비자가 **0곳**이던 층이다.
 ##  개수를 정확히 박지 않고 **하한만** 둔다(배치 격자를 조여도 거짓 빨강이 안 나게).
+## 🔴🔴 **세112 R2: 절대 개수(`BUSH_MIN = 18`)를 「화면당」으로 바꿨다.**
+##  방이 2400×2200(화면 10.2장) → 1600×1000(3.1장)으로 줄자 **같은 밀도인데도 18을 못 채웠다** —
+##  절대 개수는 「층이 비었나」가 아니라 **「방이 크나」**를 재고 있었다(방 크기가 바뀌는 사이클에서
+##  그건 곧 거짓 빨강이다). 옛 계약을 그대로 옮긴 값 = 18/10.19 ≈ **1.77/화면**이고, 여기서 조금
+##  내려 잡는다(원래도 실측보다 낮은 하한이었다 — 재는 것은 **「층이 통째로 비었나」**뿐이다).
 ## ⚠ **세107에 `ROCK_BIG_MIN`(6)·`ROCK_MIN`(24)이 은퇴했다** — 바위가 표에서 빠졌다.
 ##  되살리면 그 둘도 같이 되살려라(안 그러면 「층이 비어도 아무도 모른다」로 돌아간다).
-const BUSH_MIN := 18
+##  🔴 되살릴 땐 **개수가 아니라 화면당**으로 적어라 — 이번에 밟은 것이 정확히 그 함정이다.
+const BUSHES_PER_SCREEN_MIN := 1.5
 
 ## 🔴 타일 소스 id·벌판 좌표는 **명시 상수로 박는다** — `boss_room`의 const에서 파생하면 둘 다 밀려도
 ##  통과한다. ⚠ `test_landmark_road_auto`·`test_extract_hold_auto`가 같은 값을 든다 —
@@ -122,6 +135,7 @@ func _run() -> void:
 	_test_prop_scene_contract()
 	await _test_deterministic()
 	await _test_rules_actually_run()
+	await _test_scene_coords_are_inside_room()
 
 	await _cleanup()
 
@@ -170,9 +184,12 @@ func _test_layers_and_density(id: StringName) -> void:
 
 	# 🔴 바닥 층위 — 세101의 진단(*"기둥 밭"*)이 여기서 잡힌다. `bush.png`는 그려만 두고
 	#  게임 코드 소비자가 **0곳**이던 층이다.
-	_check(int(by_scene.get(BUSH_SCENE, 0)) >= BUSH_MIN,
-		"%s: 🔴 덤불이 %d개 이상 섰다 (실제 %d — 42px 층)"
-			% [id, BUSH_MIN, int(by_scene.get(BUSH_SCENE, 0))])
+	# 🔴 나무와 **같은 축(화면당)으로** 잰다 — 방 크기가 바뀌어도 「층이 비었나」만 남는다(세112 R2).
+	var bushes: float = float(int(by_scene.get(BUSH_SCENE, 0)))
+	var bush_per: float = bushes / maxf(screens, 0.001)
+	_check(bush_per >= BUSHES_PER_SCREEN_MIN,
+		"%s: 🔴 화면당 덤불 %.2f개 ≥ %.1f (실제 %d개 / 화면 %.1f장 — 42px 바닥 층)"
+			% [id, bush_per, BUSHES_PER_SCREEN_MIN, int(bushes), screens])
 
 	# 🔴🔴 **세107 재발 감지 — 바위가 한 개도 안 선다**(사용자 *"맵에 바위도 없애줘볼래?"*).
 	#  씬·PNG를 남겨 뒀으므로 `PROP_TABLE`에 줄을 도로 넣기가 쉽다 ⇒ 그때 여기가 빨개진다
@@ -244,6 +261,18 @@ func _test_away_from_spawns(id: StringName) -> void:
 	_check(boss_worst >= CLEAR_BOSS_MIN,
 		"%s: 🔴 보스 자리 %s 둘레가 %.0fpx 비었다 (가장 가까운 프롭 %.0fpx)"
 			% [id, ch.boss_spawn, CLEAR_BOSS_MIN, boss_worst])
+	# 🔴🔴 **위 줄의 자명 통과 방지 — 세112 R2에 실제로 밟았다.**
+	#  방을 2400×2200 → 1600×1000으로 줄이자 `boss_spawn (0,-1350)`이 **방 밖 850px**이 됐고,
+	#  그러자 위 검사가 «가장 가까운 프롭 1063px»로 **늘 참**이 됐다 — 「무대가 비었다」를 재는 게
+	#  아니라 「보스가 멀리 있다」를 재고 있었다. 🔴 **회피 규칙은 그때 이미 죽어 있었는데 그린이다.**
+	#  ⇒ 무대가 **프롭 밭 안에** 있는지를 같이 잰다: 안에 있으면 어느 프롭이든 이만큼 안에는 있다.
+	# 🔴 상한을 **방에서 파생**한다(px를 박으면 방을 또 바꿀 때 거짓 빨강이 난다). `CLEAR_BOSS_MIN`이
+	#  하한이고 이게 상한이라, 둘 사이를 벗어나면 **어느 쪽이든** 빨개진다.
+	var ground: ColorRect = _room.get_node("Ground")
+	var stage_max: float = minf(ground.size.x, ground.size.y) * BOSS_STAGE_REACH
+	_check(boss_worst <= stage_max,
+		"%s: 🔴🔴 보스 무대가 프롭 밭 **안**이다 — 가장 가까운 프롭 %.0fpx ≤ %.0fpx (방 짧은변 %.0f × %.2f). 넘으면 무대가 방 밖이라 위 줄이 자명 통과다"
+			% [id, boss_worst, stage_max, minf(ground.size.x, ground.size.y), BOSS_STAGE_REACH])
 
 
 ## [3] ⓑ 플레이어 스폰·**나가는 길**에서 떨어져 있다 — 시작 시야와 [E] 찾기.
@@ -488,6 +517,63 @@ func _test_rules_actually_run() -> void:
 	_check(get_nodes_in_group("landmarks").size() == lm_before.size(),
 		"주입을 되돌렸다 — 지점이 %d개로 돌아왔다 (실제 %d)"
 			% [lm_before.size(), get_nodes_in_group("landmarks").size()])
+
+
+## [10] 🔴🔴 **손으로 든 좌표가 전부 방 안에 있다 — 씬 + 챕터 데이터** (세112 R2 신설).
+##
+## 🔴 **왜 필요한가 (R2 뮤테이션 실측)**: 방 크기의 소유자는 씬의 `Ground` rect **하나**이고
+##  `_fill_tiles`·`_clamp_camera_to_room`·`_spawn_props`가 거기서 파생한다 — 그런데 **방 안에 서는
+##  것들의 좌표는 파생이 아니라 사람이 적은 값**이다. 두 군데에 흩어져 있다:
+##   ⓐ **씬** — 입구 `Player` · 출구 `Exit` · 볕뉘 `Lights/*`
+##   ⓑ **데이터** — `ChapterDef.boss_spawn`·`mob_spawns`·`named_pool`·`landmarks`
+##  하나라도 안 옮기면 **카메라 클램프 밖에 서서 플레이어가 영영 못 가는데 에러가 0이다.**
+##
+## 🔴🔴 **둘 다 실측으로 확인한 침묵이다**:
+##  ⓐ `Exit`를 옛 자리 `(0,660)`(= 새 남쪽 벽 160px 밖)로 되돌려도 **이 파일과 `test_chapter_auto`가
+##    둘 다 그린이었다** — 재는 자리가 아예 없었다.
+##  ⓑ `ch1.boss_spawn`이 옛 값 `(0,-1350)`(북쪽 벽 850px 밖)일 때 **`[2]`가 「가장 가까운 프롭
+##    1063px」로 자명 통과**로 바뀌었다 — 지켜진 게 아니라 **검출력이 0이 된 것**이다(세86의
+##    「결과 값이 같다 ≠ 같은 길로 왔다」와 같은 결).
+##
+## 🔴 **기대치를 박지 않는다 — `Ground` rect와 대조만 한다.** 방을 또 바꿔도 안 낡는다.
+## 🔴 **챕터 3장 모두** 잰다 — 한 장만 재면 나머지 둘이 밖에 있어도 그린이다.
+func _test_scene_coords_are_inside_room() -> void:
+	print("[10] 🔴🔴 손으로 든 좌표(씬 + 챕터 데이터)가 전부 방 안에 있다")
+	for id in [&"ch1", &"ch2", &"ch3"]:
+		await _fresh(id)
+		var ground: ColorRect = _room.get_node("Ground")
+		var room := Rect2(ground.position, ground.size)
+		var spots: Array = [["입구(Player)", (_room.get_node("Player") as Node2D).position]]
+		for z in _exit_zones():
+			spots.append(["출구(%s)" % (z as Node).name, (z as Node2D).position])
+		var lights = _room.get_node_or_null("Lights")
+		if lights != null:
+			for l in lights.get_children():
+				var pl := l as Node2D
+				if pl != null:
+					spots.append(["볕뉘(%s)" % pl.name, pl.position])
+		var ch = _db.get_chapter(id)
+		if ch != null:
+			spots.append(["보스 자리", ch.boss_spawn])
+			for ms in ch.mob_spawns:
+				if ms != null:
+					spots.append(["잡몹 자리", ms.position])
+			for ns in ch.named_pool:
+				if ns != null:
+					spots.append(["네임드 자리", ns.position])
+			for slot in ch.landmarks:
+				if slot != null:
+					spots.append(["지점(%s)" % slot.landmark_id, slot.position])
+		# 자명 통과 방지 — 씬 셋 + 보스 + 잡몹이 다 잡혀야 이 항목이 무언가를 잰다.
+		_check(spots.size() >= 8,
+			"%s: 좌표를 %d곳 쟀다 (8 미만이면 노드·데이터를 못 읽은 것 = 자명 통과다)" % [id, spots.size()])
+		var bad: Array = []
+		for s: Array in spots:
+			if not room.has_point(s[1] as Vector2):
+				bad.append("%s %s" % [s[0], s[1]])
+		_check(bad.is_empty(),
+			"%s: 🔴🔴 방 %s~%s 밖에 선 좌표가 0개다 (실제 %d개: %s — 밖이면 카메라 클램프 때문에 영영 못 간다)"
+				% [id, room.position, room.end, bad.size(), ", ".join(PackedStringArray(bad))])
 
 
 ## 문·지점을 심어 볼 **희생 프롭**의 좌표 — 두 조건이 있다:
