@@ -356,20 +356,60 @@ var _landmarks: Array[Node2D] = []
 ##  프롭 회피(ⓓ)가 **바로 이 표를 읽는다** — 「길이 어디 있나」를 두 번 계산하면 길 규칙을 고칠 때
 ##  타일과 프롭이 조용히 갈라진다(감사 T5). 그래서 `_spawn_props`는 `_fill_tiles` **뒤**다.
 var _road: Dictionary = {}
-## 클리어 처리는 한 번뿐 — enemy_died는 EventBus 전역이라 가드 없이는 무엇이든 두 번 처리될 수 있다.
+## 🔴🔴 **방 클리어 — 「방마다」다**(세112 단계 3). 이 판정이 단계 4·5의 상자·문을 여는 방아쇠이고,
+##  `_enter_room`이 매번 false로 되돌린다.
+## ⚠ **챕터 클리어(codex·보상)와 다른 물건이다** — 그건 `_chapter_cleared`가 진다(↓).
 var _cleared: bool = false
+## 🔴 **챕터 클리어 처리는 판에 한 번뿐** — `enemy_died`는 EventBus 전역이라 가드 없이는 두 번 돈다.
+## 🔴🔴 **단계 3에 `_cleared`에서 갈라 나왔다.** 그전엔 한 변수가 둘을 겸했는데 **`_cleared`가 방마다
+##  리셋되기 시작하는 순간** 챕터 보상이 방마다 다시 열릴 수 있게 된다(codex `is_unlocked` 가드가
+##  막아 주긴 하지만, 그건 **다른 이유로 서 있는 가드**라 기대면 안 된다).
+var _chapter_cleared: bool = false
 ## 씬 전환은 한 번뿐 — 귀환 도중 죽거나, 죽는 중에 E를 누르면 두 번 갈아탄다 (forest 계약 이관).
+## 🔴🔴 **판 전체 수명이다 — `_enter_room`이 건드리면 안 된다**(설계 §5-2 주의 3).
 var _leaving: bool = false
+## 🔴 지금 몇 번째 방인가 (0부터). **배치 굴림의 salt**로 들어가 방마다 다른 숲이 된다(설계 §5 「공짜다」).
+## ⚠ 0이면 salt가 0이라 **단계 2까지의 배치와 한 톨도 안 다르다**(회귀 0 — 그래서 기존 그물이 그대로 산다).
+var _room_index: int = 0
+## 🔴🔴 **입구 = 씬이 쥔 `Player`의 처음 자리**(세112 단계 3). 방마다 여기로 되돌린다.
+##
+## 🔴 **왜 상수가 아니라 「처음 자리를 기억」인가**: `test_prop_layout_auto [9]`가 `add_child` **전에**
+##  Player를 프롭 자리로 옮겨 규칙 ⓑ가 실제로 도는지 잰다. 코드가 좌표를 **박아서** 덮어쓰면
+##  그 검사가 통째로 죽는다(주입이 무효가 되니 늘 그린이다). `_ready`에서 **읽어** 두면 주입이 산다.
+var _entrance: Vector2 = Vector2.ZERO
+## 🔴🔴 `_spawn_props`가 만드는 홀더 — **필드로 든다.** 매번 `add_child`로 새로 만들면 방마다 쌓여
+##  `Props`가 둘·셋이 되고, `get_node_or_null("Props")`는 **첫 번째만** 돌려줘서 그물이 옛 홀더를 본다
+##  (설계 §5-2 주의 2 · 에러 0). 자식만 비우고 홀더는 재사용한다.
+var _prop_holder: Node2D = null
+
+
+## 🔴🔴 **방을 헐 때 비우는 그룹** (설계 §5-2 — 「재배치의 유일한 비용은 이미 그룹으로 다 잡혀 있다」).
+##
+## 🔴🔴 **`interact_zones`가 여기 든 것이 함정이자 계약이다 — 세112 단계 3 실측.**
+##  `interact_zone.gd _ready`가 **자기를 그 그룹에 넣으므로 씬의 남쪽 `$Exit`가 거기 든다.**
+##  아무 가드 없이 헐면 **나가는 길이 방 하나 지나고 사라지는데 에러가 0이다**(`_wire_exit`은 `_ready`에서
+##  이미 돌았으니 `_exits`엔 죽은 참조만 남고, 화면은 멀쩡하다).
+##  ⇒ 🔴 **그룹을 빼서 피하지 않고 `_teardown_room`의 `owner` 가드로 막는다.** 그래야 단계 5가 문을
+##   **방의 직속 자식**으로 만들 때 그룹을 늘리지 않아도 저절로 헐린다(코드가 만든 것만 헐린다).
+##  ⚠ 상자의 `OpenZone`은 지점 노드의 **자식**이라 `landmarks`만으로도 같이 간다 — 여기 있어도 무해하다.
+const ROOM_GROUPS: Array[StringName] = [
+	&"enemies", &"props", &"landmarks", &"drop_pickups",
+	&"enemy_projectiles", &"player_projectiles", &"blasts", &"pillars",
+	&"interact_zones",
+]
 
 
 func _ready() -> void:
-	# 🔴 출격 = 만HP/만마나 (forest.gd 계약 이관). 이게 없으면 죽는 게 이득이 된다 —
-	# 다친 몸으로 출구까지 버티느니 그 자리에서 죽는 편이 싸진다.
+	# ── 판에 한 번 ────────────────────────────────────────────────────────────
+	# 🔴🔴 **여기 있는 것을 `_enter_room`으로 흘리지 마라**(설계 §5-2). 특히 아래 셋을 옮기면
+	#  **방마다 만HP/만마나**가 되어 「방을 이어서 깬다」의 소모가 통째로 사라지는데 **에러가 0이다.**
+	#  `takbon-rules` §2가 이 셋을 「출격 = 만HP/만마나」의 단일 소스로 못 박았다.
 	GameState.reset_player_hp()
 	GameState.restore_mana_full()
 	GameState.in_expedition = true
 	# 🔴 모달 플래그를 내린다 — 오토로드라 씬 전환에도 남는다 (base.gd _ready와 같은 안전망).
 	GameState.ui_modal_open = false
+	# ⚠ **연결도 판 1회다** — 방마다 다시 이으면 같은 시그널이 방 수만큼 겹쳐 발사·안내가 중복된다.
 	_player.caster.notice.connect(_hud.say)
 	_player.caster.slot_changed.connect(_hud.select)
 	_hud.select(_player.caster.slot())
@@ -377,6 +417,8 @@ func _ready() -> void:
 	EventBus.enemy_died.connect(_on_enemy_died)
 	# 목표 달성 넛지 (세40 턴인 — forest 선례): 완료가 아니라 정산 대기라 quest_ready를 듣는다.
 	EventBus.quest_ready.connect(_on_quest_ready)
+	# 🔴 입구를 **읽어서** 기억한다 (`_entrance` 머리말 — 박으면 `[9]`가 죽는다).
+	_entrance = _player.position
 
 	# ⚠ 세112: 여기서 `VisionFog`(시야 안개)를 방 바닥에 맞췄다 — 시야와 함께 씬 노드째 사라졌다.
 	# 🔴 어느 챕터인가 — 비었거나 미등록이면 **조용히 빈 방을 띄우지 않는다** (침묵 금지).
@@ -393,10 +435,45 @@ func _ready() -> void:
 	# ⚠ 세112 R1: 옛 순서 계약(「흙길이 `_exits`에서 파생하니 `_fill_tiles`보다 먼저」)은 **나가는 길
 	# 줄기가 죽으며 무효가 됐다** — 지금 흙길은 지점에서만 파생한다. 🔴 그래도 여기 둔다:
 	# `_prop_spot_ok` ⓑ가 `_exits`를 읽으므로 `_spawn_props`보다는 **여전히 먼저여야 한다.**
+	# 🔴🔴 **판 1회로 갈랐다** — 출구는 **씬 노드**라 방을 헐어도 살아 있다(`ROOM_GROUPS` 머리말).
+	#  방마다 다시 이으면 `is_connected` 가드가 막아 무해하지만, 그러면 **「이 배선이 씬 수명이다」가
+	#  주석에서만 참**이 된다. 단계 5의 문은 코드가 만드니 그때 방마다 배선이 새로 생긴다.
 	_wire_exit()
-	# 🔴 **지점도 `_fill_tiles`보다 먼저다 — 같은 이유이자 더 센 이유다.** 입구→지점 흙길이
-	# `_landmarks`에서 파생한다. 순서가 뒤바뀌면 지점은 서 있는데 **길이 안 깔려** 방 한가운데
-	# 아무도 안 가는 물건이 되고, 여기 에러도 0이다(세99 목표가 통째로 무효).
+	# ⚠ **카메라 경계도 판 1회다** — `Ground` rect에서 파생하는데 그 rect가 방마다 안 바뀐다.
+	_clamp_camera_to_room()
+	_enter_room(0)
+
+
+## 🔴🔴 **방 하나를 세운다 — 「방마다」의 전부다** (세112 단계 3 · 설계 §5-2 표의 오른쪽 열).
+##
+## 🔴 **두 번 불러도 안 깨지는 것이 이 함수의 계약이다.** 그물 = `tests/test_room_reenter_auto.gd`.
+##  깨지는 자리 셋이 실측으로 나왔고 전부 여기서 막는다:
+##   ⓐ `Props` 홀더가 쌓인다 → `_prop_holder`를 재사용한다(필드 머리말)
+##   ⓑ 헌 노드가 **`queue_free`만으로는 그룹 질의에서 안 빠진다**(프레임 끝에야 지워진다) →
+##      `_teardown_room`이 **트리에서 먼저 뽑는다**. 안 뽑으면 새 프롭이 **헌 프롭을 피해** 놓여
+##      방 2의 배치가 조용히 달라지고, 그물이 세는 개수도 두 배가 된다.
+##   ⓒ 타일이 **덮어써지지 않는 칸**이 남는다(테두리 위 길) → `_fill_tiles`가 먼저 `clear()`한다.
+##
+## 🔴🔴 **호출은 `call_deferred`로 해라.** 방아쇠가 「마지막 적 사망」 = `forest_enemy._die` →
+##  `EventBus.enemy_died` = **물리 flush 한복판**이고, 거기서 `add_child`/`remove_child`를 하면
+##  엔진이 짖는다. ⚠ **그 에러는 `ERROR:`지 `SCRIPT ERROR:`가 아니라 `run_tests.gd`를 그대로
+##  통과한다** — 그래서 `_on_enemy_died`가 이 함수를 **`call_deferred`로만** 부른다.
+##  (`_ready`에서 부르는 첫 호출은 물리 밖이라 직접 불러도 된다.)
+##
+## ⚠ `index`는 **배치 굴림의 salt**로만 쓰인다(0이면 단계 2와 동일 — 회귀 0).
+##  🔴 설계가 적은 `tag`(보상 종류) 인자는 **일부러 안 받았다** — 지금 소비자가 0곳이라 그대로
+##   거짓 손잡이(T3)가 된다. 단계 5가 문에서 보상을 고를 때 그 자리에서 받아라.
+func _enter_room(index: int) -> void:
+	_room_index = index
+	# 🔴 **`_cleared`만 되돌린다 — `_leaving`은 판 수명이다**(설계 §5-2 주의 3).
+	#  `_leaving`을 여기서 내리면 귀환·사망 도중에 방이 하나 더 서서 **두 번 씬을 갈아탄다.**
+	_cleared = false
+	_teardown_room()
+	# 🔴 입구로 되돌린다 — `_spawn_props` ⓑ와 `_landmark_road_cells`가 **플레이어 자리에서 파생**하므로
+	#  둘보다 반드시 먼저다. (좌표를 박지 않는 이유는 `_entrance` 머리말.)
+	_player.position = _entrance
+	# 🔴 **지점이 `_fill_tiles`보다 먼저다** — 입구→지점 흙길이 `_landmarks`에서 파생한다.
+	#  순서가 뒤바뀌면 지점은 서 있는데 **길이 안 깔려** 아무도 안 가는 물건이 되고 에러가 0이다.
 	_spawn_landmarks()
 	_fill_tiles()
 	# 🔴 **`_fill_tiles` 뒤다** — 프롭이 흙길을 피하려면(ⓓ) 길이 이미 깔려 있어야 한다(`_road`).
@@ -404,30 +481,84 @@ func _ready() -> void:
 	# 🔴 그리고 **잡몹·보스보다 앞이다** — `add_child` 순서가 곧 그리는 순서라, 뒤로 밀면 프롭이
 	#  적·플레이어 위에 덮인다(둘 다 z 0이다 — `test_charge_telegraph_auto [7]`이 같은 자리를 잰다).
 	_spawn_props()
-	_clamp_camera_to_room()
 	# 🔴 스폰이 실패하면 **여기서 멈춘다** — `_spawn_boss` 안의 `return`은 자기 함수만 벗어나므로,
 	# 예전엔 이미 떠나기로 한 방(`_leaving = true`)이 잡몹을 깔고 「…를 쓰러뜨려라」를 한 프레임
-	# 띄웠다(세84 감사 #38). 챕터-null 분기(위)는 return이 `_ready` 자신이라 원래부터 제대로 멈춘다.
+	# 띄웠다(세84 감사 #38).
 	if not _spawn_boss():
 		return
 	_spawn_mobs()
 	# 🔴 네임드는 **잡몹 뒤**다 — 보스·잡몹이 다 선 뒤라야 「이 판에 얹힌 것」이라는 순서가 읽히고,
 	#  그물도 「보스1 + 잡몹N + 네임드0~M」이라는 같은 순서로 개수를 잰다(test_chapter_auto).
 	_spawn_named()
+	_say_room_goal()
+
+
+## 🔴🔴 **방을 헌다 — 코드가 만든 것만.**
+##
+## 🔴 **`owner` 가드가 이 함수의 심장이다.** 씬(`boss_room.tscn`)이 쥔 노드는 인스턴스될 때
+##  `owner`가 방 루트로 채워지고, `add_child`로 붙인 노드는 `owner`가 **null**이다.
+##  ⇒ 그 한 줄이 **「씬이 쥔 것은 살리고 코드가 만든 것만 헌다」**를 그룹 이름과 무관하게 보장한다.
+##  ⚠ 없으면 씬의 `$Exit`(그룹 `interact_zones`)·씬이 놓은 프롭이 방 하나 지나고 사라진다 — 에러 0.
+##
+## 🔴🔴 **`queue_free`만으로는 모자란다 — 트리에서 먼저 뽑는다.** `queue_free`는 **프레임 끝에야**
+##  반영되므로, 그 사이에 `_spawn_props`가 돌면 헌 프롭이 **아직 그룹에 들어 있어** 새 프롭의 겹침
+##  검사에 걸린다(방 2의 배치가 조용히 달라진다). `remove_child`는 즉시라 그룹 질의에서 바로 빠진다.
+## ⚠ **홀더 자체는 안 헌다** — `Trees`는 씬 노드고(`owner` 가드가 지킨다) `Props`는 재사용한다.
+func _teardown_room() -> void:
+	for group: StringName in ROOM_GROUPS:
+		for node: Node in get_tree().get_nodes_in_group(group):
+			if not is_instance_valid(node) or node.is_queued_for_deletion():
+				continue
+			if node.owner != null:
+				continue   # 씬이 쥔 노드 — 판 수명이다
+			var parent := node.get_parent()
+			if parent != null:
+				parent.remove_child(node)
+			node.queue_free()
+	_landmarks.clear()
+	_road.clear()
+
+
+## 방의 목표 줄 — 🔴 **방마다 다시 띄운다**(sticky라 수명이 없어서, 안 띄우면 옛 방의 줄이 남는다).
+##
+## 🔴 세84 #36: `sticky` — **방의 목표 줄이다**. say()에 수명이 붙었으므로(경고가 목표를 덮고
+## 영구 상주하던 걸 고쳤다) 여기 안 붙이면 목표가 4.5초 뒤 조용히 사라진다.
+## 🔴🔴 세99(D2): 옛 줄은 *"«보스»를 쓰러뜨려라"*였는데 **확정은 「탈출이 목표 · 보스는 선택」**이다
+##   — 방의 **유일한 안내**가 거짓 지시로 남아 있었고 재는 그물이 없었다(설계 §6 S13).
+##   sticky는 **「유효한 지시만」**이 계약이라 이 줄이 곧 계약 위반이었다.
+## ⚠ **두 문장이 같이 읽혀야 한다** — 챕터 잠금은 여전히 `chapter_clear_*`를 요구하므로
+##   「보스는 선택」만 적으면 *"그럼 왜 잡나"*가 되고, 「잡아라」만 적으면 D2가 죽는다.
+## 🔴🔴 **세112 R1: *"[E] 꾹"*이 거짓 지시가 됐다** — 홀드(D7)가 폐기돼 지금은 [E] 한 번이다.
+##   ⚠ **이걸 잡은 건 그물이 아니라 스샷이다**(헤드리스는 문구를 안 읽는다) — `test_ui_text_auto`도
+##   이 줄을 안 문다. sticky = 「유효한 지시만」이라 **틀린 조작을 가르치는 순간 계약 위반**이다.
+func _say_room_goal() -> void:
 	var boss_def := Db.get_enemy(_chapter.boss_enemy_id)
 	var boss_name := boss_def.display_name if boss_def != null else String(_chapter.boss_enemy_id)
-	# 🔴 세84 #36: `sticky` — **방의 목표 줄이다**. say()에 수명이 붙었으므로(경고가 목표를 덮고
-	# 영구 상주하던 걸 고쳤다) 여기 안 붙이면 목표가 4.5초 뒤 조용히 사라진다.
-	# 🔴🔴 세99(D2): 옛 줄은 *"«보스»를 쓰러뜨려라"*였는데 **확정은 「탈출이 목표 · 보스는 선택」**이다
-	#   — 방의 **유일한 안내**가 거짓 지시로 남아 있었고 재는 그물이 없었다(설계 §6 S13).
-	#   sticky는 **「유효한 지시만」**이 계약이라 이 줄이 곧 계약 위반이었다.
-	# ⚠ **두 문장이 같이 읽혀야 한다** — 챕터 잠금은 여전히 `chapter_clear_*`를 요구하므로
-	#   「보스는 선택」만 적으면 *"그럼 왜 잡나"*가 되고, 「잡아라」만 적으면 D2가 죽는다.
-	# 🔴🔴 **세112 R1: *"[E] 꾹"*이 거짓 지시가 됐다** — 홀드(D7)가 폐기돼 지금은 [E] 한 번이다.
-	#   ⚠ **이걸 잡은 건 그물이 아니라 스샷이다**(헤드리스는 문구를 안 읽는다) — `test_ui_text_auto`도
-	#   이 줄을 안 문다. sticky = 「유효한 지시만」이라 **틀린 조작을 가르치는 순간 계약 위반**이다.
 	_hud.say("%s — 살아서 나가면 이긴다. 출구에서 [E]. %s는 선택이지만 잡아야 다음 챕터가 열린다"
 		% [_chapter.title, boss_name], false, true)
+
+
+## 🔴 이 방이 깨졌나 — 단계 4·5의 상자·문이 이 값에서 열린다. 그물이 읽는 **공개 문**이다
+##  (내부 필드를 더듬으면 리팩터마다 그물이 죽는다 — `takbon-verify` §3).
+func room_cleared() -> bool:
+	return _cleared
+
+
+## 🔴🔴 **살아 있는 적 수** — `queue_free`된 시체를 뺀다.
+##
+## 🔴 **이 필터가 없으면 방 클리어가 영영 안 온다.** `forest_enemy._die`가 `EventBus.enemy_died`를
+##  **`queue_free()` 앞에서** 쏘므로(그 함수 실측), 수신 시점에 죽은 그 몸이 **아직 그룹에 있다.**
+##  즉 「그룹이 비었나」를 그대로 세면 마지막 한 마리를 잡아도 **늘 1**이다 — 에러 0으로 판정이 죽는다.
+##  ⚠ **필터만으로는 모자랐다**(세112 단계 3 실측 — 그물이 빨갛게 잡았다): 죽는 **자기 자신**은 emit
+##   시점에 아직 `queue_free` 전이라 필터에도 안 걸린다. ⇒ 호출을 **한 박자 미루는 것**이 짝이다
+##   (`_on_enemy_died`의 `call_deferred`). **둘 중 하나만 있으면 여전히 안 열린다.**
+## ⚠ `dummy_target`(허수아비)도 그룹 `"enemies"`다 — 방엔 없지만, 방에 놓는 날 클리어가 영영 안 온다.
+func _live_enemies() -> int:
+	var n := 0
+	for node: Node in get_tree().get_nodes_in_group(&"enemies"):
+		if is_instance_valid(node) and not node.is_queued_for_deletion():
+			n += 1
+	return n
 
 
 ## 🔴🔴 챕터 분위기 = **옅은 틴트** (세99 — 옛 `_apply_floor_daylight`가 있던 자리).
@@ -636,6 +767,13 @@ func _landmark_sites(id: StringName) -> Array[Vector2]:
 ##  있는 줄 모르고 D1이 통째로 무효가 된다(설계 §6 S12).
 ## ⚠ 벌판은 **변형 셋을 섞는다** — 한 칸만 반복해 깔면 넓은 바닥이 단조롭다(리드 스샷 확인).
 func _fill_tiles() -> void:
+	# 🔴 **먼저 지운다** (세112 단계 3). 아래 첫 루프는 방 rect **안**을 전부 덮어쓰지만, 둘째 루프가
+	#  그리는 **테두리 위 길 칸**은 「길일 때만」 써진다 — 방 1엔 길이 있고 방 2엔 없는 칸이 생기면
+	#  **헌 흙길 토막이 테두리에 남는다**(에러 0 · 화면만 거짓말).
+	# ⚠ **지금은 이 줄을 재는 것이 없다 — 알고 남긴다**(세112 단계 3 뮤테이션 실측: 지워도 전부 그린).
+	#  지금 방에선 길이 테두리까지 안 뻗어서(입구 칸이 안쪽 rect 안에 든다) 둘째 루프가 아무것도 안 그린다.
+	#  🔴 단계 5의 문이 자기 길을 **방 밖으로** 뻗는 순간 살아난다 — 그때 그물도 같이 세워라.
+	_tiles.clear()
 	var ts: Vector2i = _tiles.tile_set.tile_size
 	var rect := Rect2(_ground.position, _ground.size).grow(-float(ts.x))   # 가장자리 한 칸은 틴트가 보이게
 	var from := Vector2i(floori(rect.position.x / ts.x), floori(rect.position.y / ts.y))
@@ -684,12 +822,7 @@ func _fill_tiles() -> void:
 ##  뒤집으면 하이라이트가 오른쪽 위로 가서 그 프롭만 다른 해를 받는다(공짜로 보이지만 아트를 깬다).
 ##  변화는 나무처럼 **컷을 여러 장 두는 것**으로 준다(`tree.gd`가 이미 그렇게 한다).
 func _spawn_props() -> void:
-	var holder := Node2D.new()
-	holder.name = PROP_HOLDER
-	add_child(holder)
-	# 🔴 **타일 바로 뒤**로 옮긴다 — `add_child`는 맨 뒤에 붙는데, 그러면 잔돌·덤불이 적·플레이어
-	#  **위에** 그려진다(둘 다 z 0이라 순서가 곧 앞뒤다). 나무가 씬에서 Player보다 앞에 있는 것과 같은 이유.
-	move_child(holder, _tiles.get_index() + 1)
+	var holder := _props_holder()
 
 	var placed: Array[Vector2] = []
 	var radii: Array[float] = []
@@ -721,6 +854,25 @@ func _spawn_props() -> void:
 			(_tree_holder if kind == PROP_TREE_KIND else holder).add_child(node)
 			placed.append(at)
 			radii.append(float(PROP_TABLE[kind]["sep"]))
+
+
+## 🔴🔴 프롭 홀더 — **한 번 만들고 계속 쓴다** (세112 단계 3).
+##
+## 🔴 **왜 재사용인가**: `_spawn_props`는 방마다 돈다. 매번 `add_child`로 새로 만들면 `Props`가
+##  방 수만큼 쌓이고, `get_node_or_null("Props")`는 **첫 번째만** 돌려주므로 그물·다음 코드가
+##  **아무도 안 쓰는 헌 홀더**를 보게 된다(설계 §5-2 주의 2 · 에러 0). 자식은 `_teardown_room`이
+##  `props` 그룹으로 이미 헌다 — 홀더만 남으면 된다.
+## 🔴 **타일 바로 뒤**에 꽂는다 — `add_child`는 맨 뒤에 붙는데, 그러면 잔돌·덤불이 적·플레이어
+##  **위에** 그려진다(둘 다 z 0이라 순서가 곧 앞뒤다). 나무가 씬에서 Player보다 앞인 것과 같은 이유.
+func _props_holder() -> Node2D:
+	if _prop_holder != null and is_instance_valid(_prop_holder):
+		return _prop_holder
+	var holder := Node2D.new()
+	holder.name = PROP_HOLDER
+	add_child(holder)
+	move_child(holder, _tiles.get_index() + 1)
+	_prop_holder = holder
+	return holder
 
 
 ## ⚠ **세107: 여기 있던 `_mark_occluder()`가 은퇴했다** — 프롭에 `occluders` 그룹과 `occlude_r` meta를
@@ -1007,8 +1159,14 @@ func _grass_atlas(cell: Vector2i) -> Vector2i:
 ## 된다(art 손질 3회차가 정확히 그걸로 걸렸다). 해시 상수는 `base.gd _grass_variant`의 선례를 따랐다
 ## (표는 시트마다 다르니 파생이 아니라 같은 관용구다). `salt`로 굴림을 갈라 둔다 — 같은 값을 쓰면
 ## 풀 변형과 길 변형이 **같은 자리에서 같이 튀어** 무늬가 눈에 띈다.
+## 🔴🔴 **세112 단계 3: `_room_index`가 salt에 들어간다** — 설계 §5의 *"방마다 다른 배치는 공짜다"*가
+##  여기서 성립한다. 방 번호를 섞으면 방마다 숲이 갈리면서 **결정성(D5)도 그대로 산다**(같은 방 번호는
+##  늘 같은 배치다 — `randf`가 아니라 여전히 해시다).
+## ⚠ **방 0은 한 톨도 안 달라진다**(`0 * 61` = 0을 xor해도 그대로) — 그래서 단계 2까지의 배치가 그대로고
+##  `test_prop_layout_auto [8]`(같은 챕터 두 번 = 같은 자리)이 회귀 없이 산다.
 func _cell_hash(cell: Vector2i, salt: int) -> int:
-	return absi((cell.x * 73856093) ^ (cell.y * 19349663) ^ (salt * 83492791)) % 100
+	return absi((cell.x * 73856093) ^ (cell.y * 19349663)
+		^ ((salt + _room_index * 61) * 83492791)) % 100
 
 
 ## 보스 동적 스폰 — 두 경로 (ChapterDef 계약):
@@ -1167,14 +1325,30 @@ func _is_boss_id(id: StringName) -> bool:
 	return _chapter != null and id == _chapter.boss_enemy_id
 
 
-## 🔴 클리어 판정 = **보스 처치 순간** (루팅·귀환과 무관 — 죽어서 가방을 잃어도 클리어는 남는다.
-## "이기면 열림"이 순수해서 억울함이 없다). 키는 `Db.chapter_clear_id` 파생 한 곳 — 여기서 문자열을
-## 조립하지 않는다(세50 계열 오타 함정). codex_unlocked 한 발로 codex 심기 + UNLOCK 퀘스트 진행 +
-## Audio unlock음이 전부 따라온다 (세37 station_* 패턴).
+## 🔴🔴 **적이 죽었다 — 여기서 판정이 둘로 갈린다** (세112 단계 3).
+##
+## | 판정 | 조건 | 가드 | 무엇을 연다 |
+## |---|---|---|---|
+## | **챕터 클리어** | `enemy_id == boss_enemy_id` | `_chapter_cleared`(판 1회) | codex·보상 룬·클리어 안내 |
+## | **방 클리어** | **살아 있는 적이 0** | `_cleared`(방마다) | 단계 4·5의 상자·문 |
+##
+## 🔴 **둘을 한 조건으로 합치지 마라.** R9가 보스를 안 세우므로 방 클리어는 보스로 못 잰다.
+##  반대로 방 클리어로 챕터 보상을 주면 **잡몹만 있는 방을 치워도 룬이 나간다**(에러 0).
+##  ⚠ `test_chapter_auto [4]`가 **보스만 잡고** codex를 기대하므로, 챕터 축을 「적이 0」으로 옮기면
+##   그 그물이 즉시 빨개진다 — 그게 두 축이 정말 다르다는 증거다.
 func _on_enemy_died(enemy_id: StringName) -> void:
-	if _cleared or _chapter == null or enemy_id != _chapter.boss_enemy_id:
+	if _chapter == null:
 		return
-	_cleared = true
+	# 🔴🔴 **지연이 계약이다 — 두 이유가 겹친다**(둘 다 에러 0):
+	#  ⓐ **죽는 그 몸은 아직 안 지워졌다.** `forest_enemy._die`가 `enemy_died`를 **`queue_free()` 앞에서**
+	#     쏘므로, 여기서 바로 세면 마지막 한 마리가 **자기 자신 때문에** 늘 1로 잡혀 클리어가 영영 안
+	#     열린다(세112 단계 3에 그물이 실제로 빨갛게 잡았다). 지연하면 `_die`가 끝난 뒤라 플래그가 서 있다.
+	#  ⓑ 여기까지 오는 길이 **물리 flush 한복판**이라 단계 4·5가 붙일 `add_child`가 엔진을 짖게 한다 —
+	#     그 에러는 `ERROR:`지 `SCRIPT ERROR:`가 아니라 `run_tests.gd`를 그대로 통과한다.
+	_check_room_cleared.call_deferred()
+	if _chapter_cleared or enemy_id != _chapter.boss_enemy_id:
+		return
+	_chapter_cleared = true
 	var clear_id := Db.chapter_clear_id(_chapter)
 	# ⚠ 재입장(파밍 재방문)이면 codex가 이미 있다 — 다시 쏘면 UNLOCK 퀘스트·해금음이 중복으로
 	# 반응하므로 첫 클리어에만 쏜다. ✅ **나가는 길은 이 함수와 무관하다** — 출구는 처음부터 서 있어서
@@ -1200,6 +1374,30 @@ func _on_enemy_died(enemy_id: StringName) -> void:
 	#  🔴 세112 R1에 *"[E] 꾹"*도 같은 이유로 걷었다 — 홀드가 없는데 꾹 누르라고 가르치던 자리다.
 	_hud.say("%s 클리어!%s 이제 살아서 나가라 — 출구에서 [E]" % [_chapter.title, reward_line],
 		false, true)
+
+
+## 🔴🔴 **방 클리어 판정 = 살아 있는 적이 0** (세112 단계 3 — 설계 §5-2).
+##
+## 🔴 **보스방 것을 못 쓴다**: 옛 판정은 `enemy_id == boss_enemy_id` 한 줄인데 **R9가 보스를 안 세운다.**
+## 🔴 **`_live_enemies()`를 거치는 것이 계약이다** — 죽은 그 몸이 아직 그룹에 있어서 그냥 세면
+##  **영영 0이 안 된다**(그 함수 머리말이 실측을 적어 뒀다).
+##
+## 🔴🔴 **이 함수는 `call_deferred`로만 불러라** — 호출부(`_on_enemy_died`)가 그 이유 둘을 적어 뒀다.
+##  ⚠ 그래서 여기선 `_on_room_cleared`를 **직접** 부른다(이미 지연 문맥이라 한 번 더 미룰 이유가 없다).
+func _check_room_cleared() -> void:
+	if _cleared or _leaving:
+		return
+	if _live_enemies() > 0:
+		return
+	_cleared = true
+	_on_room_cleared()
+
+
+## 🔴 **방이 깨졌다 — 단계 4·5가 여기에 상자와 문을 단다**(설계 §7 단계 4·5).
+## ⚠ 단계 3은 **자리만 만든다** — 여기서 씬을 갈아타거나 방을 다시 세우지 않는다.
+##  🔴 방 전환을 붙일 땐 `_enter_room(_room_index + 1)`을 **여기서** 불러라(이미 지연 문맥이다).
+func _on_room_cleared() -> void:
+	pass
 
 
 ## 🔴 귀환 성공 — `extraction_success`가 **가방(루팅분 포함)을 창고로 옮기고 자동 저장**한다
