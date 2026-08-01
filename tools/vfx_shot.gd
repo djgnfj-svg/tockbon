@@ -497,6 +497,16 @@ func _fire_floor_circle(c: Vector2) -> void:
 				glyphs += 1
 	var score: float = rp.assembled_score(glyphs, layers.size())
 	var dur: float = rp.cast_time_of(score)
+	# 🔴🔴 **세112: 차징을 걷어 이 프리셋이 잠들었다.** `cast_time_*`이 0이라 `dur`도 0이고,
+	#   `vfx._on_ring_cast_started`의 `duration <= 0` 가드가 발밑 원을 아예 안 연다
+	#   ⇒ **시트가 통째로 빈 화면인데 에러가 0이다**(도구가 조용히 거짓말하는 자리 = T3).
+	# 🔴 **프리셋을 지우지 않는 이유** = 스위치 대칭이다. balance의 `cast_time_plain_sec`·
+	#   `cast_time_perfect_sec`을 0.15/0.75로 되돌리면 차징·발밑 원과 함께 이 프리셋도 그대로 산다.
+	#   ⇒ 걷으면 되살릴 때 도구만 빠진다. **표시로 막는다.**
+	if dur <= 0.0:
+		push_warning("[vfx_shot] floor 프리셋이 잠들었다 — 차징이 0이라 발밑 원이 안 열린다(세112). "
+			+ "보려면 balance의 cast_time_plain_sec/cast_time_perfect_sec를 0.15/0.75로 되돌려라.")
+		printerr("[vfx_shot] floor: 차징 0 → 빈 시트가 나온다. 위 경고를 봐라.")
 	var asm := {
 		"rune": int(runes[0]), "runes": runes, "jin": b.get("jin", &"jin_single"),
 		"rings": rings, "score": score,
