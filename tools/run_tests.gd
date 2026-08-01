@@ -46,6 +46,28 @@ extends SceneTree
 const TESTS_DIR := "res://tests"
 const REALTIME_MARKERS: Array[String] = ["Time.get_ticks_", "Time.get_unix_"]
 
+## 🔴🔴 엔진 `ERROR:`는 `SCRIPT ERROR:`가 **아니다** — 그래서 이 러너를 그냥 통과했다(세112 실측).
+## 세112 단계 2·3·4가 **연달아** 이 사각에 걸렸다: 물리 flush 중 `add_child`, 씬 노드가 사라진 뒤의
+## `push_error`, 방 밖 스폰. 전부 **엔진이 짖는데 전 스위트가 그린**이었다.
+##
+## 🔴 그런데 판정에는 안 넣는다 — **세되 보고만 한다.** 종료 잡음이 거의 모든 테스트에 뜨는 자리라
+##    바로 판정에 넣으면 매번 무더기가 빨개지고, 그러면 사람이 빨강을 무시하기 시작한다
+##    (그게 그물 전체를 죽이는 병 — `_score`의 종료 코드 주석이 같은 이유로 코드를 버렸다).
+##    실제로 몇 개가 나오는지 보고 나서 판정에 넣을지 정한다.
+## ⚠ **`push_error`도 여기 걸린다**(실측 — `USER ERROR:`가 아니라 `ERROR:`로 찍힌다).
+##    그래서 **테스트가 일부러 태우는 것까지 잡힌다.**
+##
+## 🔴 **기준선 = 3건이고 셋 다 의도된 것이다**(세112 실측 — `test_chapter_auto`의 없는 챕터 ·
+##    `test_chest_open_auto`의 없는 지점 · `test_landmark_road_auto`의 Node2D 아닌 루트).
+##    ⚠ **그 셋을 잡음 목록에 넣지 마라** — 문구가 바뀌면 필터가 낡고, 그 필터가 **진짜 에러를 가린다.**
+##    **4건이 되면 그게 새로 생긴 것**이라는 게 이 기준선의 쓸모다.
+##
+## ✅ 같은 실측이 하나를 증명했다: **물리 콜백 `add_child` 에러가 0건**이다
+##    (단계 4의 상자 스폰이 `call_deferred`를 지난다는 독립 증거 — 그물이 못 가르던 것을 여기서 본다).
+const ENGINE_ERROR_NOISE: Array[String] = [
+	"resources still in use at exit",  # 거의 모든 테스트에 뜬다 — boss_room을 안 여는 것에도 뜬다
+]
+
 var _rows: Array[Dictionary] = []
 
 
@@ -148,6 +170,7 @@ func _score(name: String, realtime: bool, ms: int, code: int, text: String) -> D
 	var marker := ""
 	var detail := ""
 	var errs: Array[String] = []
+	var engine_errs: Array[String] = []
 
 	for line: String in text.split("\n"):
 		var t := line.strip_edges()
@@ -156,6 +179,8 @@ func _score(name: String, realtime: bool, ms: int, code: int, text: String) -> D
 		#    잡아 **매번 거짓 양성**이 난다(세104 실측).
 		if t.begins_with("SCRIPT ERROR:"):
 			errs.append(t)
+		elif t.begins_with("ERROR:") and not _is_engine_noise(t):
+			engine_errs.append(t)
 		elif t.begins_with("TEST_") and t.contains("_OK"):
 			ok = true
 			marker = _marker_token(t)
@@ -198,8 +223,16 @@ func _score(name: String, realtime: bool, ms: int, code: int, text: String) -> D
 
 	return {
 		"name": name, "ms": ms, "verdict": verdict, "realtime": realtime,
-		"detail": detail, "errs": errs, "code": code,
+		"detail": detail, "errs": errs, "code": code, "engine_errs": engine_errs,
 	}
+
+
+## 알려진 종료 잡음인가 — 판정에도 집계에도 안 넣는다.
+func _is_engine_noise(line: String) -> bool:
+	for n: String in ENGINE_ERROR_NOISE:
+		if line.contains(n):
+			return true
+	return false
 
 
 func _report(total_ms: int) -> void:
@@ -217,6 +250,22 @@ func _report(total_ms: int) -> void:
 	print("")
 	print("=== 요약 ===")
 	print("총 %d개 · 통과 %d · 문제 %d · %.1fs" % [_rows.size(), okc, bad.size(), total_ms / 1000.0])
+
+	# 🔴 엔진 `ERROR:` — 판정에 안 넣고 보고만 한다(위 `ENGINE_ERROR_NOISE` 주석의 이유).
+	#    ⚠ 여기 뜨는 줄은 「그린인데 엔진이 짖고 있다」는 뜻이다. 무시하지 말고 원인을 캐라.
+	var eng_total := 0
+	var eng_rows: Array[String] = []
+	for r: Dictionary in _rows:
+		var ee: Array = r["engine_errs"]
+		if ee.is_empty():
+			continue
+		eng_total += ee.size()
+		eng_rows.append("  ⚠ %s — %d건: %s" % [r["name"], ee.size(), ee[0]])
+	if eng_total > 0:
+		print("")
+		print("엔진 ERROR: %d건 (판정과 무관 — SCRIPT ERROR가 아니라 이 러너가 원래 못 보던 것)" % eng_total)
+		for line: String in eng_rows:
+			print(line)
 	if bad.is_empty():
 		print("SUITE_OK — 전 항목 통과")
 		quit(0)
