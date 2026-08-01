@@ -67,6 +67,15 @@ const KNOWN_GAPS := {
 	#  ⇒ **답은 지점 산출로 때우는 게 아니라 ch2·ch3에 덩굴 몹을 세우는 것**이다(「새 몹 = .tres 한 장」).
 	#  ⇒ 그 몹이 서면 [4]가 **이 줄을 지우라고** 빨개진다. 손으로 챙길 일이 없다.
 	&"mat_vine": "세99 840a7d1이 vine.tres 삭제 · D15로 의도적 유지 · ch2·ch3 몹이 채울 자리",
+	# 🔴🔴 세112 R8이 만든 구멍 — **버그가 아니라 「뺀 것」이다**(`mat_vine`과 같은 결).
+	#  `room_loop_design.md` §4 R8이 `ChapterDef.named_pool` 세 줄을 비웠고, `mat_night_bloom`의
+	#  **유일한 공급원이 네임드 `hound_alpha`**였다(`data/enemies/hound_alpha.tres` chance 0.35).
+	#  ⚠ `data/enemies/hound_alpha.tres`는 **안 지웠다** — 무대에 안 설 뿐이라 여기서만 막힌다
+	#   (`test_progression_auto`는 적 **레지스트리 전수**를 훑어 여전히 생산자 1곳을 본다. 두 그물이
+	#    보는 게 다른 것이고, 그 차이가 이 파일 머리말이 *"폴더 스캔으로 바꾸지 마라"*고 한 그것이다).
+	#  💡 **이 줄을 지울 날** = 네임드 위상을 다시 정해 `named_pool`이 다시 차는 날이다. 그때 [4]가
+	#   *"공급원이 생겼다"*로 먼저 빨개져 지우라고 말한다 — 손으로 챙길 일이 없다.
+	&"mat_night_bloom": "세112 R8이 named_pool을 비웠다 · 유일 공급원이 네임드 hound_alpha · 위상 재정의 때 되살아난다",
 }
 
 var failures: int = 0

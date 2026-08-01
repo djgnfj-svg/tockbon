@@ -4,9 +4,9 @@ extends SceneTree
 ## 전 항목 통과 시 "TEST_ENEMY_FACING_OK" 출력 후 종료 코드 0.
 ##
 ## 🔴🔴 **왜 새 파일인가** (`test_enemy_ai_auto`에 얹지 않은 이유):
-##  ⓐ 이건 **설계 `enemy_perception_design.md` §9 단계 1**의 그물이다 — 그 설계가 들어오면 여기에
-##    `turn_rate`(*"보는 쪽이 그만큼만 돌았나"*)·순찰 중 방향 회전이 **형제 항목으로** 얹힌다.
-##    AI 그물(방어·재생·분산·leash·박자)에 섞으면 인지 작업이 그 파일을 통째로 부풀린다.
+##  ⓐ 재는 계약이 **「어느 쪽을 보나」 하나**다 — AI 그물(방어·재생·분산·leash·박자)에 섞으면
+##    파일이 통째로 부푼다(계약 하나에 파일 하나 · `test_charge_telegraph_auto` 선례).
+##    ⚠ 세112: 여기 얹힐 예정이던 `turn_rate`·순찰 방향 회전은 **인지와 함께 은퇴했다**.
 ##  ⓑ 리그 중복(`_inject`·`_spawn`·`_stub`)은 이 리포의 **확립된 관행**이다 —
 ##    `test_charge_telegraph_auto`가 정확히 같은 넷을 자기 사본으로 들고 있다(계약 하나에 파일 하나).
 ##  ⓒ 러너가 `tests/test_*_auto.gd`를 **스캔**해서 돌리므로 등록할 목록이 없다(`tools/run_tests.gd`).
@@ -275,8 +275,8 @@ func _test_rotation_body_is_excluded() -> void:
 		_check(false, "snake_boss를 Db가 로드했다")
 		return
 	# 🔴 rush_range(240) 밖에 둔다 — 안쪽이면 곧장 러시 윈드업(velocity 0)으로 들어가 위브가 안 돈다.
-	# 🔴 세105 이름 승계(`sight_range`) — 폴백 320을 두면 데이터가 옮겨가도 **우연히 같은 값**이라
-	#  그물이 안 빨개진다. 승계 순서대로 읽는다.
+	# 🔴 리쉬 거리(`sight_range` · 없으면 옛 `aggro_range`) — 폴백 320을 두면 데이터가 옮겨가도
+	#  **우연히 같은 값**이라 그물이 안 빨개진다. 승계 순서대로 읽는다.
 	var near: float = float(def.params.get("sight_range", def.params.get("aggro_range", 0.0))) - 50.0
 
 	# ⓐ **왼쪽 판** = 제외가 풀렸는지 드러나는 유일한 방향(시트가 오른쪽을 보므로 왼쪽이 뒤집히는 쪽).
@@ -392,7 +392,7 @@ func _test_knockback_does_not_turn_head() -> void:
 ##      `hound_alpha`엔 **−0.6**이라 안 선다(상단이 등으로 채워진다).
 ##   ⇒ 자세에 안 흔들리는 건 **색**이었다. 「얼굴만 붉다」는 자세와 무관한 성질이다.
 ##
-## 🔴🔴 **`judged >= 2`가 이 항목의 안전핀이다**(`test_vision_auto [2]`의 같은 관용구):
+## 🔴🔴 **`judged >= 2`가 이 항목의 안전핀이다**:
 ##  지표가 언젠가 통째로 무너지면 판정 대상이 0이 되어 **아무것도 안 재면서 그린**이 된다.
 ##  그때 이 줄이 빨개져서 **「지표를 다시 골라라」를 사람에게 알린다.**
 ##
@@ -595,7 +595,8 @@ func _drop(id: StringName) -> void:
 
 ## 「플레이어」 스텁 — 그룹 `"player"`가 적의 유일한 조준 경로다(`forest_enemy._player`).
 ## 🔴 **한 번에 하나만 살려 둔다** — `get_first_node_in_group`은 여럿이면 아무거나 고른다.
-## 🔴 맨몸 Node2D라 `vision_dir()`이 없다 = 시야가 fail-open으로 흘러 알파 축과 안 얽힌다.
+## ⚠ 맨몸 Node2D면 충분하다 — 적이 스텁에게 묻는 것은 `is_rolling()`(덕타이핑 · 없으면 안 구른 것)뿐이다.
+##  (세112 전엔 여기에 `vision_dir()` 유무가 걸려 있었다 — 시야가 죽어 전제 자체가 사라졌다.)
 func _stub(pos: Vector2) -> Node2D:
 	var s := Node2D.new()
 	s.add_to_group("player")

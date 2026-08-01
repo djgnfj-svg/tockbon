@@ -128,7 +128,9 @@ needs: [genre_pivot]
 | 무엇 | 실측된 자리 |
 |---|---|
 | 시야·인지(R3) | `src/core/vision.gd` · `vision_overlay` · `forest_enemy`의 인지 상태기계(`_show_alert_mark`·`ALERT_*`·`Percept`) · 짖음 전파 |
-| ⚠ 적 params **열하나** | `sight_angle`·`sense_radius`·`turn_rate`·`patrol_radius`·`patrol_speed`·`alert_sec`·`lose_sec`·`search_sec`·`ambush_mult`·`alert_sfx`·`chase_sfx` |
+| ⚠ 적 params **열둘** | `sight_angle`·`sense_radius`·`turn_rate`·`patrol_radius`·`patrol_speed`·`alert_sec`·`lose_sec`·`search_sec`·`ambush_mult`·`alert_sfx`·`chase_sfx` + 🔴 **`always_visible`**(gale·slime_elite·snake_boss — 세112 구현 중 발견. `_judge_seen`이 죽으면 읽는 데가 0인 **T3 거짓 손잡이**가 된다) |
+| **`vision_overlay`의 소비자** | `boss_room.gd`(`preload`·`@onready _fog`·`_fog.fit_to`) · `boss_room.tscn`(`ext_resource`·`VisionFog` 노드) · `tools/vfx_shot.gd`(fog 프리셋·`AimStub.vision_dir()`).<br>🔴 **1a가 여기까지 지워야 `vision.gd`가 참조 0이 된다** — 안 지우면 리드의 core 삭제가 막히고, 화면을 덮는 Control이 **그물 없이 남는다**(§5-1의 `mouse_filter` 자리) |
+| **죽은 시야 소비자 둘** | `player.gd`의 `vision_dir()` · `juice.gd`의 `_is_seen()` — 덕타이핑·`has_method` 가드라 **안 지워도 무해하지만 죽은 코드다.** ⚠ `test_enemy_facing_auto`의 주석이 *"맨몸 Node2D엔 `vision_dir()`이 없다"*를 전제로 적는다 |
 | **마법 소리 = 위력**(R10) | `_on_cast_heard` · `balance`의 `percept_sound_radius_min_px`/`max_px` |
 | 탈출 홀드 · 출구 여럿 | `src/props/exit_zone.tscn` · `boss_room._build_exits`/`_wire_extract_zone` · 흙길 ⓐ줄기 · `balance.extract_hold_sec` · `ChapterDef.extract_points` |
 | 챕터 선택 | `src/hud/chapter_panel` · `base.gd`의 `_open_chapter_panel` 체인 · `_on_gate_talk` 갈래 셋 |
@@ -229,7 +231,7 @@ needs: [genre_pivot]
 | `test_vision_auto` · `test_vision_overlay_auto` · `test_alert_mark_auto` | R3 |
 | `test_perception_auto` | ⚠ `[15]`(*"엄폐물이 있어도 짐승은 나를 본다"* — **세107 차폐 재발 감지기**)가 **잴 대상을 잃는다** |
 | 🔴🔴 `test_extract_hold_auto` | **파일 전체가 탈출 홀드 그물이다**(참조 35건) — 초고 표의 최대 누락 |
-| 🔴 `test_landmark_road_auto` | 지점 길(63건) |
+| 🔴🔴 `test_landmark_road_auto` | 지점 길(63건).<br>🔴🔴 **지우기 전에 반드시 옮길 것이 있다 — 이 파일이 `sight_range`를 재는 리포의 유일한 그물이다**(세112 실측: 1a가 `hound.tres`의 `sight_range`를 0으로 흔들었을 때 **빨개진 게 여기 하나뿐**이었다 — *"hound가 sight_range를 들고 있다 (실제 0)"*).<br>⚠ **`sight_range`는 이번 사이클이 「지우면 모든 추격 적이 굳는데 에러가 0」이라 일부러 살려 둔 값**이다. **재는 것 없이 살아 있는 값이 되면 다음 세션이 또 지우려 든다** ⇒ 🔴 **그 항목을 `test_enemy_ai_auto`로 옮긴 뒤에 이 파일을 지워라.** |
 
 **고친다**:
 
@@ -242,7 +244,7 @@ needs: [genre_pivot]
 | `test_daylight_tree_auto` | `Trees` 홀더 20그루 + 볕뉘 + 방 크기 파생 좌표 |
 | `test_mob_roll_auto` | **진짜 `boss_room.tscn` + 진짜 `player.tscn`** 리그 |
 | `test_base_auto` | 문 [E] → `_open_chapter_panel` 연결 |
-| `test_chapter_auto` | `named_pool`(R8) · `extract_points` |
+| `test_chapter_auto` | `named_pool`(R8) · `extract_points` · 🔴 **`[7]` 잠금 판정 삭제**(세112 구현 중 발견 — 초고 표에 없었다). `chapter_panel.tscn`을 직접 `load`해 `is_chapter_open()`을 재던 자리라 **패널을 지우면 `SCRIPT ERROR`인 채 `_OK`가 찍히는 거짓 초록**이 된다.<br>🔴 **같은 파일 안에서 처분이 갈린다** — `hound_alpha` 항목은 **뒤집고**(`.tres` 정의가 살아 있다) `[7]`은 **지운다**(소비자가 패널 하나뿐이라 잴 대상이 0이 된다). **「지우지 말고 뒤집어라」는 잴 대상이 남을 때만 참이다** |
 | `test_drop_pickup_auto` | R11 지급 경로 + 🔴 **여기에 add_child 재발 그물을 얹는다** |
 | `test_enemy_ai_auto` | **`Percept`만** 걷는다 — 🔴 `[3b]`·`_sight_of()`는 `sight_range`를 **이동 축의 값으로** 읽으니 **남긴다** |
 | `test_enemy_facing_auto` | 주석 전제(*"시야가 fail-open"*) 정리 |

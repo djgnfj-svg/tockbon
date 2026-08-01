@@ -8,24 +8,28 @@ extends Node2D
 ## 죽으면 즉시 베이스 + 가방 손실(bag_lost). 어느 챕터인가는 `GameState.pending_chapter`가 나른다
 ## (change_scene_to_file이 인자를 못 실어 오토로드가 나른다 — in_expedition과 같은 결).
 ##
-## 🔴🔴 **나가는 길은 「상시 출구」 한 종류뿐이다** (세99 D1·D7 — **포탈은 세99에 은퇴했다**).
-##  • 전부 `zone_id = &"exit"`이고 전부 `_extract` **하나**로 간다. **처음부터 서 있고 조건이 없다.**
-##  • 여럿 — `ChapterDef.extract_points`에 좌표를 적으면 그 자리에 `exit_zone.tscn`이 선다.
-##    비면 씬의 남쪽 `$Exit` 하나 = **세98까지와 동일**(회귀 0).
-##    🔴 **단수 참조를 되살리지 마라** — `_exits` 배열이 ⓐ `_extract` 연결 ⓑ `_fill_tiles` 흙길의
-##    **공통 출처**다. 하나라도 빠지면 「E는 먹히는데 아무 일도 안 나고 가방이 조용히 증발」하거나
-##    「나갈 데가 있는 줄 모른다」가 된다(설계 §6 S12).
-##  • 홀드 — `InteractZone.hold_sec`은 **길이가 아니라 스위치**다(실제 초 = `balance.extract_hold_sec`).
-##    켜는 자리는 `_wire_extract_zone` **한 곳**이다 — 연결과 홀드를 같이 걸어야 새 길을 뚫을 때
-##    한쪽만 빠지지 않는다.
+## 🔴🔴 **나가는 길은 씬의 남쪽 `$Exit` 하나뿐이다** (세112 R1).
+##  • `zone_id = &"exit"`이고 `_extract` 하나로 간다. **처음부터 서 있고 조건이 없다.**
+##  • 배선하는 자리는 **`_wire_exit()` 한 곳**이다 — 🔴 방 안에 나가는 길을 새로 세우거든
+##    (R6의 문 · R9의 판 종료) **반드시 거기를 지나게 해라.** 연결을 빠뜨리면 「E는 먹히고 안내도
+##    뜨는데 아무 일도 안 나고 가방이 조용히 증발」한다(에러 0).
+##
+## 🪦 **세112 R1에 죽은 것 셋**(`room_loop_design.md` §5 — D1·D7 폐기):
+##  ⓐ **탈출구 여럿** — `ChapterDef.extract_points`마다 `exit_zone.tscn`을 세우던 `_build_exits`.
+##  ⓑ **3초 꾹 홀드** — `_wire_extract_zone`의 `hold_sec = HOLD_ON` + `interact_zone`의 홀드 기계.
+##  ⓒ **나가는 길 흙길 줄기** — `_road_cells`의 ⓐ 루프 + `_exit_road_ends`.
+##  🔴🔴 **ⓒ가 남긴 구멍: 출구는 겉모습이 0이고 그 흙길이 유일한 안내였다**(설계 §6 S12).
+##   ⇒ **지금 남쪽 출구는 화면에 아무 표시가 없다.** R6의 문 그림이 그 자리를 대신할 때까지
+##   「어디로 나가나」가 안 보이고, **헤드리스는 이걸 못 잡는다.**
 ##
 ## 🔴 **은퇴한 것 = 보스 자리 「귀환 포탈」**(`zone_id = &"portal"` · `src/props/portal.tscn` 삭제).
 ##  사용자 확정(세99): *"보스죽으면 포탈 x"*. **왜 없앴나** — D1이 탈출구를 여럿으로 만들고 D7이
 ##  전부 꾹 눌러 나가게 했는데 **포탈만 「보스를 잡아야 열리는 특별한 물건」**으로 남아 규칙이 둘이
 ##  됐다. 지금은 **보스를 잡아도 살아서 출구까지 돌아가야 한다**(익스트랙션의 결).
 ##  🔴 **`&"portal"`을 되살리지 마라** — 그 값을 쥔 씬도·스폰하는 코드도·재는 그물도 전부 없앴다.
-##  보스 자리에서 남쪽까지 되돌아가는 먼 길은 **`extract_points`에 보스 근처 좌표를 한 줄** 적어
-##  덜어 준다(= 지름길도 그냥 「상시 출구」다. **데이터라 F5로 옮길 수 있다** — 코드가 아니다).
+##  ⚠ **세112 R1: 그 먼 길을 덜어 주던 「지름길」(`extract_points`에 보스 근처 좌표 한 줄)도 같이
+##   죽었다** — 지금은 보스에서 남쪽까지 통째로 걸어야 한다. **R9(마지막 방을 깨면 마을로)가 그
+##   왕복을 없앤다** — 그전까지 「이게 기냐」는 F5의 사용자 눈이 잰다(그물로 되살리지 마라).
 ##
 ## 🔴 **한 씬 + ChapterDef 파라미터다** — 챕터별 씬 3장을 만들지 않는다(설계 확정). 방 구성이
 ## 동일(바닥·보스 하나·입구)하고 다른 건 데이터(보스·색)뿐이라, 씬을 늘리면 mouse_filter·z_index·
@@ -115,11 +119,6 @@ const Hud := preload("res://src/hud/hud.gd")
 ## 범용 보스 스폰 몸 — ChapterDef.boss_scene_path가 비면 이 씬 + enemy_id로 스폰한다.
 ## preload가 안전한 이유: forest_enemy는 boss_room을 안 문다 (base⇄forest 순환 함정 무관).
 const EnemyScene := preload("res://src/field/forest_enemy.tscn")
-## 🔴 늘린 탈출구 (세99 D1) — **`zone_id = &"exit"`을 파일에 굳힌 전용 프롭**이다.
-## ⚠ 겉모습은 없다(씬의 `$Exit`와 같은 결) — **보이는 표시는 `_fill_tiles`의 흙길이 전부**다.
-##  좌표만 늘리고 길을 안 깔면 플레이어는 「거기 나갈 데가 있다」를 알 방법이 없다(설계 §6 S12).
-##  ⚠ 설계 문서(§6 S12)·이 파일의 옛 서술이 그 표시를 **「풀길」**이라 부른다 — 세99에 **흙길**로 갈았다.
-const ExitZoneScene := preload("res://src/props/exit_zone.tscn")
 ## 🔴 codex 해금 id → 「이름(어디에 쓰는지)」 단일 소스 (세87 S4). 여기서 `Db.get_glyph_ring` 하나만
 ## 부르면 **룬 보상이 원시 id + 거짓 안내**("rune_water(책상에서 밴드에 끼워라)")로 나간다 —
 ## 밴드는 고리 자리고 룬은 중심 자리다. 발신처가 셋(클리어·제작·두루마리)이라 core에 뽑혀 있다.
@@ -129,9 +128,6 @@ const CodexText := preload("res://src/core/codex_text.gd")
 ##  되고 그게 조용히 갈라진다(takbon-rules §5-1).
 ## ⚠ **여기 굴림 로직을 적지 마라** — 이 파일이 지는 건 「언제·어디에」뿐이고 「무엇이 몇 개」는 저기다.
 const DropRoll := preload("res://src/field/drop_roll.gd")
-## 🔴 시야 안개 (세104) — 부채꼴 밖을 **20%만** 누르는 화면 덮개. 이 방에만 선다(마을엔 시야가 없다).
-##  ⚠ 이 파일이 지는 건 「어디에 얼마나 크게」뿐이다 — 모양·수치는 그 노드가 balance에서 직접 읽는다.
-const VisionOverlay := preload("res://src/actors/vision_overlay.gd")
 
 ## 돌아갈 곳 — 🔴 **PackedScene이 아니라 경로다. 바꾸지 마라.** base가 boss_room을 경로로 물고
 ## boss_room이 base를 PackedScene으로 물면 **순환 preload**로 한쪽이 노드 0개 껍데기가 돼
@@ -236,26 +232,14 @@ const CHAPTER_TINT_REF_LUM := 0.32
 const CHAPTER_TINT_MIN := 0.80
 const CHAPTER_TINT_MAX := 1.12
 
-## 출구에서 방 밖으로 이어지는 **흙길** (칸 수 — 연출값). 출구 자체는 겉모습이 없는 InteractZone이라
-## (보라색 차원문 Polygon2D를 베끼지 않기로 한 결정) **이 길이 「저기가 나가는 길」의 유일한 표시**다.
-## 🔴 **길의 중심은 출구 노드에서 파생한다** — 좌표를 두 번 적으면 출구를 옮길 때 길만 제자리에 남는다.
-## 🔴🔴 **`EXIT_PATH_ROWS = 0`은 「나가는 길」만 끈다**(세100에 현행화 — 세99 단계 3에 갈렸다).
-##  `_road_cells`에서 이 손잡이가 감싸는 건 **출구 줄기 ⓐ뿐**이고, **들어가는 길**(입구→지점)은
-##  `_landmark_road_cells`가 그 밖에서 깐다 — 그 손잡이는 **`ChapterDef.landmarks`**다(비우면 사라진다,
-##  `test_landmark_road_auto [7]`이 그 파생을 잰다). 0으로 두고 「길이 다 꺼졌다」고 읽지 마라.
-## ⚠ 폭을 1로 줄이면 시트의 **오솔길 칸**(`ROAD_NARROW`)으로 갈린다 — 두 줄기가 **같은 폭**을 쓰므로
-##  `EXIT_PATH_WIDTH_CELLS`는 들어가는 길에도 그대로 걸린다(`_road_cells`가 `half`를 둘에 같이 넘긴다).
-## 🔴 **길이를 3 → 7로 늘렸다**(세99): 3칸이면 폭(3칸)과 같아 **정사각형 얼룩**으로 읽힌다 —
-##  타일만 흙으로 갈고 길이를 그대로 뒀더니 「색만 바꾼 네모」가 됐다(실측 스샷). 길은 **폭보다
-##  뚜렷하게 길어야** 「어디로 이어지는 것」으로 읽힌다. ⚠ 그물(`test_extract_hold_auto`)이 이 값을
-##  **손으로 들고** 대조한다 — 여기만 바꾸면 빨개진다(그게 「연출값이 조용히 흐르는 것」을 막는다).
+## 흙길의 **폭**(칸 수 — 연출값).
+## 🪦 **짝이던 `EXIT_PATH_ROWS`(나가는 길 ⓐ의 길이)는 세112 R1에 지웠다** — 출구가 하나만 남고
+##  「출구에서 방 밖으로 뻗는 줄기」 자체가 걷혔다. ⇒ 🔴 **지금 흙길은 「들어가는 길」 ⓑ 하나뿐**이고
+##  손잡이는 **`ChapterDef.landmarks`**다(비우면 길이 통째로 사라진다 — `test_landmark_road_auto [7]`).
+## ⚠ 폭을 1로 줄이면 시트의 **오솔길 칸**(`ROAD_NARROW`)으로 갈린다.
+## ⚠ 이름에 `EXIT_`가 남은 것은 **ⓑ가 이 값을 그대로 쓰기 때문**이다(`_road_cells`가 `half`를 넘긴다) —
+##  R6의 문이 자기 길을 갖게 되는 날 이름을 옮겨라. **지금 개명하면 `_road_between` 쪽만 낡는다.**
 const EXIT_PATH_WIDTH_CELLS := 3
-const EXIT_PATH_ROWS := 7
-
-## 🔴 D7 — 탈출 지점의 홀드를 **켜는** 값. `InteractZone.hold_sec`은 「몇 초」가 아니라
-## 「0이냐 아니냐」 스위치라(실제 초 = `balance.extract_hold_sec`) 맨숫자 `1.0`을 씬·코드에 흩뿌리면
-## 다음 사람이 **1초로 읽는다.** 이름을 붙여 그 오독을 막는다.
-const HOLD_ON := 1.0
 
 ## 🔴🔴 **지점 노드 ↔ `landmark_id` 짝** (세101 N26 · 설계 §10-4 **S27**의 「덤」).
 ##
@@ -294,7 +278,8 @@ const LANDMARK_ID_META := &"landmark_id"
 ##  (*"맵에 바위도 없애줘볼래?"* · *"구지 나무나 돌맹이에 시야가 가려지지 않도록"*).
 ##  🔴 **씬·PNG는 살아 있다**(`src/props/rock.tscn`·`rock_big.tscn`) — 되살리려면 **여기 줄만** 되돌려라.
 ##  ⚠ 그때 `share` 합이 32에서 63으로 돌아가 **빈칸이 68% → 37%로 줄어든다**(밀도가 두 배가 된다).
-##  차폐(`occlude` 반경)의 경위는 `src/core/vision.gd` 머리말 · `git show`(세105~107).
+##  차폐(`occlude` 반경)의 경위는 **`git show`(세105~107)로만 캘 수 있다** —
+##  ⚠ 옛 이 줄이 가리키던 `src/core/vision.gd`는 **세112 R3에 시야와 함께 삭제됐다.**
 const PROP_TABLE: Array[Dictionary] = [
 	{"scene": "res://src/props/tree.tscn", "share": 14, "sep": 60.0, "road": 40.0},
 	{"scene": "res://src/props/bush.tscn", "share": 18, "sep": 22.0, "road": 28.0},
@@ -328,12 +313,11 @@ const PROP_CLEAR_LANDMARK := 220.0
 @onready var _tree_holder: Node2D = $Trees
 @onready var _player: Player = $Player
 @onready var _hud: Hud = $Hud/Hud
-@onready var _fog: VisionOverlay = $VisionFog
 
 var _chapter: ChapterDef = null
-## 🔴 **나가는 길 전부**(세88 하나 → 세99 여럿). 씬의 남쪽 `$Exit` + `ChapterDef.extract_points`.
-## **`_extract` 연결과 `_fill_tiles` 흙길이 둘 다 이 배열을 순회한다** — 단수 참조로 되돌리지 마라.
-## ✅ 세99에 포탈이 은퇴해 **이 배열이 방의 탈출구 전량**이다(예외로 빠지는 길이 하나도 없다).
+## 🔴 **나가는 길 전부** — 세112 R1 뒤 씬의 남쪽 `$Exit` **하나**다(여럿이 죽었다).
+## ⚠ **배열로 남긴다** — `_prop_spot_ok` ⓑ가 순회하고, R6의 문이 늘면 그대로 받는다.
+##  🔴 단수 참조로 되돌리지 마라(그때 프롭 회피가 문을 못 보게 된다 — 에러 0).
 var _exits: Array[InteractZone] = []
 ## 🔴 이 판에 실제로 선 지점들 (세99 D3·D4 — `ChapterDef.landmarks`가 세운다).
 ## **`_road_cells`의 입구→지점 흙길이 이 배열에서 파생한다** — 좌표를 두 번 적으면 지점을 옮길 때
@@ -360,17 +344,12 @@ func _ready() -> void:
 	_player.caster.notice.connect(_hud.say)
 	_player.caster.slot_changed.connect(_hud.select)
 	_hud.select(_player.caster.slot())
-	# ⚠ 출구 세우기·연결은 **챕터를 안 뒤**다(`extract_points`를 읽어야 한다) — 아래 `_build_exits`.
 	EventBus.player_hp_changed.connect(_on_hp_changed)
 	EventBus.enemy_died.connect(_on_enemy_died)
 	# 목표 달성 넛지 (세40 턴인 — forest 선례): 완료가 아니라 정산 대기라 quest_ready를 듣는다.
 	EventBus.quest_ready.connect(_on_quest_ready)
 
-	# 🔴 시야 안개를 방 바닥에 맞춘다 — 사각형은 **Ground에서 파생한다**(`_clamp_camera_to_room`과
-	#  같은 이유: 방을 또 키우면 따라온다. 좌표를 베끼면 그 순간 갈라진다).
-	# 🔴 **챕터 확인보다 앞이다** — 아래 `_chapter == null` 분기가 `_ready`를 통째로 끊는데,
-	#  뒤에 두면 그 경로에서 크기가 0인 채 남아 노드가 「안 붙었는지 못 붙였는지」가 흐려진다.
-	_fog.fit_to(Rect2(_ground.global_position, _ground.size))
+	# ⚠ 세112: 여기서 `VisionFog`(시야 안개)를 방 바닥에 맞췄다 — 시야와 함께 씬 노드째 사라졌다.
 	# 🔴 어느 챕터인가 — 비었거나 미등록이면 **조용히 빈 방을 띄우지 않는다** (침묵 금지).
 	# F6으로 이 씬을 직접 실행하면 pending_chapter가 비어 여기로 온다 — 베이스로 되돌린다.
 	_chapter = Db.get_chapter(GameState.pending_chapter)
@@ -382,9 +361,10 @@ func _ready() -> void:
 		return
 
 	_apply_chapter_tint()
-	# 🔴 **`_fill_tiles`보다 먼저다** — 흙길이 `_exits`에서 파생하므로, 순서가 뒤바뀌면 늘린 출구가
-	# 화면에 **아무 표시 없이** 서고 D1이 통째로 무효가 된다(설계 §6 S12). 에러는 0이다.
-	_build_exits()
+	# ⚠ 세112 R1: 옛 순서 계약(「흙길이 `_exits`에서 파생하니 `_fill_tiles`보다 먼저」)은 **나가는 길
+	# 줄기가 죽으며 무효가 됐다** — 지금 흙길은 지점에서만 파생한다. 🔴 그래도 여기 둔다:
+	# `_prop_spot_ok` ⓑ가 `_exits`를 읽으므로 `_spawn_props`보다는 **여전히 먼저여야 한다.**
+	_wire_exit()
 	# 🔴 **지점도 `_fill_tiles`보다 먼저다 — 같은 이유이자 더 센 이유다.** 입구→지점 흙길이
 	# `_landmarks`에서 파생한다. 순서가 뒤바뀌면 지점은 서 있는데 **길이 안 깔려** 방 한가운데
 	# 아무도 안 가는 물건이 되고, 여기 에러도 0이다(세99 목표가 통째로 무효).
@@ -414,7 +394,10 @@ func _ready() -> void:
 	#   sticky는 **「유효한 지시만」**이 계약이라 이 줄이 곧 계약 위반이었다.
 	# ⚠ **두 문장이 같이 읽혀야 한다** — 챕터 잠금은 여전히 `chapter_clear_*`를 요구하므로
 	#   「보스는 선택」만 적으면 *"그럼 왜 잡나"*가 되고, 「잡아라」만 적으면 D2가 죽는다.
-	_hud.say("%s — 살아서 나가면 이긴다. 출구에서 [E] 꾹. %s는 선택이지만 잡아야 다음 챕터가 열린다"
+	# 🔴🔴 **세112 R1: *"[E] 꾹"*이 거짓 지시가 됐다** — 홀드(D7)가 폐기돼 지금은 [E] 한 번이다.
+	#   ⚠ **이걸 잡은 건 그물이 아니라 스샷이다**(헤드리스는 문구를 안 읽는다) — `test_ui_text_auto`도
+	#   이 줄을 안 문다. sticky = 「유효한 지시만」이라 **틀린 조작을 가르치는 순간 계약 위반**이다.
+	_hud.say("%s — 살아서 나가면 이긴다. 출구에서 [E]. %s는 선택이지만 잡아야 다음 챕터가 열린다"
 		% [_chapter.title, boss_name], false, true)
 
 
@@ -475,38 +458,27 @@ func _clamp_camera_to_room() -> void:
 	cam.limit_bottom = int(top_left.y + _ground.size.y)
 
 
-## 🔴 탈출구를 전부 세우고 **한 자리에서** 배선한다 (세99 D1).
-##  ⓐ 씬의 남쪽 `$Exit`(세88부터 늘 있던 것) ⓑ `ChapterDef.extract_points`가 적은 자리들.
-## 🔴 `extract_points`가 **비면 ⓐ 하나뿐** = 세98까지와 한 톨도 안 다르다(회귀 0).
-## ⚠ 출구는 전부 `zone_id = &"exit"`이다 — 씬 파일이 그 값을 쥔다(`exit_zone.tscn`).
-##  세99에 포탈이 은퇴하며 **zone_id가 갈릴 이유 자체가 없어졌다** — 다른 값을 새로 만들지 마라.
-func _build_exits() -> void:
+## 🔴 나가는 길을 **살린다** — 씬의 남쪽 `$Exit` 하나를 `_extract`에 잇는다.
+##
+## 🪦 **세112 R1에 둘이 하나로 합쳐졌다.** 옛 `_build_exits`(`ChapterDef.extract_points`마다
+##  `exit_zone.tscn`을 세우던 것) + `_wire_extract_zone`(연결 + **홀드 스위치**)이 여기 남았다.
+##  🔴 사라진 것: 탈출구 여럿(D1) · 3초 꾹 홀드(D7) · `exit_zone.tscn` · `HOLD_ON`.
+##
+## 🔴🔴 **연결을 빠뜨리면 에러가 0이고 화면도 멀쩡한데 가방이 조용히 증발한다** — E가 먹히고 안내도
+##  뜨는데 창고로 안 가고 자동 저장도 안 돈다(`_extract` 머리말이 경고한 그 자리).
+##  ⇒ **방 안에 나가는 길을 새로 세우거든(R6의 문·R9의 판 종료) 반드시 여기를 지나게 해라.**
+## ⚠ 출구는 `zone_id = &"exit"`이다 — **씬 파일이 그 값을 쥔다.** 다른 값을 새로 만들지 마라.
+## ⚠ `_exits`가 배열로 남은 것은 `_prop_spot_ok` ⓑ가 순회하기 때문이다(문이 늘면 그대로 받는다).
+func _wire_exit() -> void:
 	_exits.clear()
 	var south := get_node_or_null(^"Exit") as InteractZone
-	if south != null:
-		_exits.append(south)
-	else:
-		# 침묵 금지 — 출구가 하나도 없으면 상시 귀환이 통째로 사라지는데 화면은 멀쩡하다.
-		push_error("boss_room: 씬에 남쪽 출구($Exit)가 없다 — 상시 귀환이 사라진다")
-	for point: Vector2 in _chapter.extract_points:
-		var zone := ExitZoneScene.instantiate() as InteractZone
-		zone.position = point
-		add_child(zone)
-		_exits.append(zone)
-	for zone: InteractZone in _exits:
-		_wire_extract_zone(zone)
-
-
-## 🔴🔴 나가는 길 하나를 **살린다** — 연결과 홀드 스위치가 **같은 함수 안**이어야 한다.
-##  • 연결을 빠뜨리면: E가 먹히고 안내도 뜨는데 **아무 일도 안 일어나고 가방이 조용히 증발한다**
-##    (창고로 안 가고 자동 저장도 안 돈다 — 에러 0. `_extract` 머리말이 경고한 그 자리다).
-##  • 홀드를 빠뜨리면: 그 출구만 즉시 탈출이 돼 **D7의 긴장이 출구 하나로 새 나간다**(역시 에러 0).
-## 🔴 부르는 곳은 `_build_exits` **하나뿐**이다 — 세99에 포탈이 은퇴하며 둘째 호출부가 사라졌다.
-##  방 안에 나가는 길을 새로 세우는 코드를 또 쓰게 되거든 **여기를 지나게** 해라.
-func _wire_extract_zone(zone: InteractZone) -> void:
-	zone.hold_sec = HOLD_ON
-	if not zone.interacted.is_connected(_extract):
-		zone.interacted.connect(_extract)
+	if south == null:
+		# 침묵 금지 — 출구가 없으면 나가는 길이 통째로 사라지는데 화면은 멀쩡하다.
+		push_error("boss_room: 씬에 남쪽 출구($Exit)가 없다 — 나가는 길이 사라진다")
+		return
+	_exits.append(south)
+	if not south.interacted.is_connected(_extract):
+		south.interacted.connect(_extract)
 
 
 ## 🔴🔴 지점(랜드마크)을 세운다 (세99 D3·D4 단계 3) — **`ChapterDef.landmarks` → `Db.landmarks` →
@@ -641,7 +613,7 @@ func _fill_tiles() -> void:
 	var to := Vector2i(ceili(rect.end.x / ts.x), ceili(rect.end.y / ts.y))
 	# 🔴 **필드에 남긴다** — 프롭 회피(ⓓ)가 이 표를 그대로 읽는다(`_spawn_props`). 지역 변수로 두면
 	#  「길이 어디 있나」를 두 번 계산하게 되고, 길 규칙을 고치는 날 타일과 프롭이 조용히 갈라진다.
-	_road = _road_cells(from, to, ts)
+	_road = _road_cells(ts)
 	var road := _road
 	for y in range(from.y, to.y):
 		for x in range(from.x, to.x):
@@ -724,7 +696,9 @@ func _spawn_props() -> void:
 
 ## ⚠ **세107: 여기 있던 `_mark_occluder()`가 은퇴했다** — 프롭에 `occluders` 그룹과 `occlude_r` meta를
 ##  새겨 시선을 끊던 물건이다(세105). 판정·화면(셰이더 그늘)·그물을 **셋 같이** 걷었으니
-##  🔴 되살릴 땐 셋을 같이 열어라. 경위 = `src/core/vision.gd` 머리말 · `git show`(세105~107).
+##  🔴 되살릴 땐 셋을 같이 열어라. 경위 = **`git show`(세105~107)로만 캘 수 있다** —
+##  ⚠ 옛 이 줄이 가리키던 `src/core/vision.gd`는 **세112 R3에 시야와 함께 삭제됐다.**
+##  🔴🔴 되살린다면 **시야 자체가 먼저 돌아와야 한다** — 차폐는 시야의 부속이지 혼자 서는 기능이 아니다.
 
 
 ## 이 종류가 노려 볼 **자리 후보**들 — 지터를 준 격자에서 뽑는다.
@@ -814,22 +788,22 @@ func _prop_touches_road(at: Vector2, pad: float) -> bool:
 
 
 ## 흙길 칸 전부 — **줄기가 두 종류다**:
-##  ⓐ **나가는 길** — 출구마다 「자기 자리 → 가장 가까운 방 가장자리」(세99 D1).
-##  ⓑ **들어가는 길** — 입구에서 지점까지(세99 D3·D4 단계 3).
-## 🔴 **좌표는 노드에서 파생한다**(여기 베끼면 출구·지점을 옮길 때 길만 제자리에 남는다).
-## ⚠ 둘이 만나도 손댈 게 없다 — 9분할 오토타일이 이웃을 보고 이음매를 고른다(폭이 같아야 한다는
-##  전제만 지키면 된다. 그래서 ⓑ도 `EXIT_PATH_WIDTH_CELLS`를 그대로 쓴다 — §`_road_between` 참조).
-## `from`은 포함·`to`는 배타 = `_fill_tiles`의 루프 범위 그대로.
-func _road_cells(from: Vector2i, to: Vector2i, ts: Vector2i) -> Dictionary:
+##  🪦 ⓐ **나가는 길**(출구마다 「자기 자리 → 가장 가까운 방 가장자리」, 세99 D1) — **세112 R1에 지웠다.**
+##  ⓑ **들어가는 길** — 입구에서 지점까지(세99 D3·D4 단계 3). **지금은 이것뿐이다.**
+##
+## 🔴🔴 **ⓐ를 지우며 잃은 것을 적어 둔다 — 출구는 겉모습이 0이고 그 길이 유일한 안내였다**(설계 §6 S12).
+##  ⇒ **지금 남쪽 `$Exit`는 화면에서 아무 표시가 없다.** R6의 문 그림(단계 7 아트)이 그 자리를 대신할
+##  때까지 **「어디로 나가나」가 화면에 안 보인다** — 설계 §8이 문 스프라이트를 요구하는 이유가 이것이다.
+##  ⚠ 헤드리스는 이걸 못 잡는다(타일이 안 깔린 것도 「정상」으로 읽힌다).
+##
+## 🔴 **좌표는 노드에서 파생한다**(여기 베끼면 지점을 옮길 때 길만 제자리에 남는다).
+## ⚠ ⓑ가 `EXIT_PATH_WIDTH_CELLS`를 그대로 쓴다 — §`_road_between` 참조.
+## ⚠ 인자가 `(from, to, ts)`에서 **`(ts)` 하나로 줄었다** — 방 범위(`from`·`to`)는 ⓐ가 「가장 가까운
+##  가장자리」를 고를 때만 쓰던 것이라 ⓐ와 같이 죽었다. 🔴 **안 쓰는 인자를 남겨 두지 마라**(T3 거짓
+##  손잡이 + 미사용 경고). R6의 문이 자기 길을 갖게 되면 그때 필요한 만큼 다시 받아라.
+func _road_cells(ts: Vector2i) -> Dictionary:
 	var out: Dictionary = {}
 	var half: int = (EXIT_PATH_WIDTH_CELLS - 1) / 2
-	if EXIT_PATH_ROWS > 0:   # 끄는 손잡이 (연출값) — ⓐ만 끈다
-		for zone: InteractZone in _exits:
-			if zone == null or not is_instance_valid(zone):
-				continue
-			var cell := Vector2i(floori(zone.position.x / float(ts.x)), floori(zone.position.y / float(ts.y)))
-			var ends := _exit_road_ends(cell, from, to)
-			_road_between(ends[0], ends[1], half, out)
 	_landmark_road_cells(half, ts, out)
 	return out
 
@@ -904,33 +878,13 @@ func _road_segment(a: Vector2i, b: Vector2i, half: int, out: Dictionary) -> void
 			out[Vector2i(x, y)] = true
 
 
-## 출구 한 칸 → 「가장 가까운 방 가장자리로 나가는 한 줄기」의 **두 끝**.
-##
-## 🔴 **세88의 남쪽 출구에 대해 그려지는 칸이 하나까지 같다**(회귀 0): 출구 셀 y=10 · 채우는 마지막
-## 줄 y=9 · `EXIT_PATH_ROWS=3` → 두 끝이 y 7과 y 10인데 루프가 10을 안 도니 실제로 깔리는 건
-## {7,8,9}, 즉 옛 `y >= to.y - EXIT_PATH_ROWS`와 **같은 세 줄**이다. x도 `cell.x ± half`로 동일하다.
-## 🔴 일반화가 필요한 이유: 늘린 출구는 남쪽이 아닐 수 있다. 「마지막 세 줄」로 두면 **동·서·북
-## 출구엔 길이 자기 자리가 아닌 남쪽 끝에 깔린다**(에러 0 · 화면만 거짓말).
-## 🔴 바깥 끝은 **가장자리에서 한 칸 더 나간다** — 마지막 칸에서 멈추면 그 칸이 「풀로 막힌 끝」이 돼
-##  길이 방 안에서 끊겨 보인다. 그 한 칸은 테두리 위에 그려진다(`_fill_tiles` 둘째 루프).
-## ⚠ 방 한복판에 출구를 두면 통로가 **출구에서 가장자리까지 통째로** 깔린다 — 의도한 동작이다
-##  (짧은 표시보다 「걸어 나가는 길」이 D1의 판단을 만든다).
-func _exit_road_ends(cell: Vector2i, from: Vector2i, to: Vector2i) -> Array[Vector2i]:
-	var last := Vector2i(to.x - 1, to.y - 1)   # 실제로 칠하는 마지막 칸(포함)
-	var d_left := cell.x - from.x
-	var d_right := last.x - cell.x
-	var d_top := cell.y - from.y
-	var d_bottom := last.y - cell.y
-	var best := mini(mini(d_left, d_right), mini(d_top, d_bottom))
-	if best == d_bottom or best == d_top:
-		var out_y := to.y if best == d_bottom else from.y - 1
-		var in_y := last.y - (EXIT_PATH_ROWS - 1) if best == d_bottom else from.y + (EXIT_PATH_ROWS - 1)
-		return [Vector2i(cell.x, mini(cell.y, mini(out_y, in_y))),
-			Vector2i(cell.x, maxi(cell.y, maxi(out_y, in_y)))]
-	var out_x := to.x if best == d_right else from.x - 1
-	var in_x := last.x - (EXIT_PATH_ROWS - 1) if best == d_right else from.x + (EXIT_PATH_ROWS - 1)
-	return [Vector2i(mini(cell.x, mini(out_x, in_x)), cell.y),
-		Vector2i(maxi(cell.x, maxi(out_x, in_x)), cell.y)]
+## 🪦 `_exit_road_ends()`는 세112 R1에 지웠다 — 「출구 한 칸 → 가장 가까운 방 가장자리」의 두 끝을
+## 골라 주던 함수이고, 소비자가 `_road_cells`의 ⓐ 줄기 **하나뿐**이었다.
+## 🔴 되살릴 날은 **문(R6)이 자기 길을 갖게 될 때**다. 그때 다시 필요해지는 판단 둘을 남긴다:
+##  ⓐ **어느 가장자리로 뺄지는 「가장 가까운 변」으로 고른다** — 「마지막 세 줄」로 박으면 동·서·북
+##    문에서 길이 자기 자리가 아닌 남쪽 끝에 깔린다(**에러 0 · 화면만 거짓말**).
+##  ⓑ **바깥 끝은 가장자리에서 한 칸 더 나간다** — 마지막 칸에서 멈추면 그 칸이 「풀로 막힌 끝」이 돼
+##    길이 방 안에서 끊겨 보인다(그 한 칸은 테두리 위에 그려진다 — `_fill_tiles` 둘째 루프).
 
 
 ## 🔴🔴 흙길 한 칸의 아틀라스 좌표 — **이웃이 고른다**(9분할 오토타일).
@@ -1214,17 +1168,22 @@ func _on_enemy_died(enemy_id: StringName) -> void:
 	# 🔴 세84 #36: `sticky` — 클리어 뒤에도 **아직 할 일이 남아 있다**(살아서 나가야 한다). 그게
 	# 이 줄이 sticky인 이유이자, 세99에 포탈을 없앤 이유이기도 하다 — 처치가 곧 끝이 아니다.
 	# ⚠ **「포탈」을 다시 적지 마라**(T4: 없는 물건을 가리키는 안내는 그대로 거짓 지시가 된다).
-	_hud.say("%s 클리어!%s 이제 살아서 나가라 — 출구에서 [E] 꾹" % [_chapter.title, reward_line],
+	#  🔴 세112 R1에 *"[E] 꾹"*도 같은 이유로 걷었다 — 홀드가 없는데 꾹 누르라고 가르치던 자리다.
+	_hud.say("%s 클리어!%s 이제 살아서 나가라 — 출구에서 [E]" % [_chapter.title, reward_line],
 		false, true)
 
 
 ## 🔴 귀환 성공 — `extraction_success`가 **가방(루팅분 포함)을 창고로 옮기고 자동 저장**한다
 ## (GameState·SaveManager가 이미 이 시그널에 연결돼 있다). 안 쏘면 루팅한 게 다음 사망 때 증발하고
 ## q02(EXTRACT)가 영영 안 찬다 — forest._extract 계약 그대로.
-## ⚠ **부르는 곳이 여럿이다** — 출구 전부(`_build_exits`)가 `_wire_extract_zone` 한 문을 지난다.
-## 새 길을 뚫으면 거기로 이어라 (세99에 포탈이 은퇴해 지금 발신원은 출구뿐이다).
+## 🔴🔴 **부르는 곳은 `_wire_exit()` 한 문이다 — 새 길을 뚫으면 거기로 이어라.**
+##  세112 R1에 출구가 하나가 됐고, **R9(판 종료)·R6(문)이 이 함수를 그대로 쓸 예정**이다.
+##  🔴 **이 함수를 지우지 마라** — `extraction_success`를 쏘는 **유일한 자리**다. 안 쏘면 가방→창고
+##  이관·자동 저장·`q02_come_home`(EXTRACT)·`q04`가 **전부 조용히 멎는다.**
+##  ⚠ 그물이 그걸 잡는지 세112에 실측했다: emit을 막으면 `test_chapter_auto [4b]·[5]`가 **6건 빨강**이고
+##   **`test_quests_auto`는 그린이다**(그 파일은 시그널을 **직접 emit해서** 재므로 이 경로를 안 지난다).
 ## ✅ **이중 전환 방어는 이미 서 있다** — `_leaving` 가드가 길이 몇 개든 한 번으로 묶는다
-##  (출구를 늘리며 새로 짜지 마라 — 세47 「이미 있는 배선」의 결).
+##  (문을 늘리며 새로 짜지 마라 — 세47 「이미 있는 배선」의 결).
 func _extract() -> void:
 	if _leaving:
 		return

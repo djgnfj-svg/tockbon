@@ -23,6 +23,8 @@ extends SceneTree
 ##     (chapter_clear와 별도 축 — 조립→탁본 루프의 이음매. 발신 줄 뮤테이션으로 검출력 확인)
 ##   • 🔴 세71 잡몹 길 — ch1은 이제 보스 1 + mob_spawns N. "enemies"에 섞이므로 보스는 enemy_id로 특정
 ##   • 🔴 세99 D5·D6 **데이터 쪽** — 풀·네임드가 실재하는 적을 가리키고 **보스 id를 안 문다**([1c])
+##   • 🔴🔴 세112 R8 — `hound_alpha`가 **일부러** 무대에 없고 **정의는 살아 있다**([1b]의 `BENCHED`).
+##     ⚠ 그래서 [1c]의 네임드 검사는 지금 0바퀴 돈다(자명 통과 — 그 루프 머리말 참조)
 ##   • 🔴🔴 세101 N26 **지점 산출 데이터 쪽**([1d]) — 지점이 **선** 챕터만 조건부로 잰다:
 ##     `drops`가 비지 않았나 · **바닥 층**(반드시 뭔가 나오는 줄)이 있나 · `unlock_id`/`until_unlock` 0줄
 ##     (설계 §10-4 S24·S18·S28). ⚠ **ch1은 지금 의도적으로 빨갛다** — `lm_nest.tres`의 `drops`가
@@ -35,11 +37,14 @@ extends SceneTree
 ##  하나도 안 풀렸다(자세한 근거 = 그 함수 머리말). ⚠ 굴림·네임드가 **실제로 도는가**는 여기가
 ##  안 잰다 — `tests/test_mob_roll_auto.gd`가 확률 0.0/1.0 주입으로 양끝을 잰다(설계 §6 S3).
 ##   • 출구 [E] → extraction_success 1회(가방→창고 정산) — **보스 전([4b])·보스 후([5]) 둘 다** · 사망 → bag_lost
-##   • 잠금 판정식 — chapter_panel의 공개 is_chapter_open()이 단일 소스 (ch2는 ch1 클리어 전 잠김)
+##   • 💀 ~~잠금 판정식~~ — **세112에 지웠다**(D9가 챕터 선택을 없앴다 · 사유는 [7] 자리의 묘비)
 ##   • 🔴 물리 레이어 계약 — 적 4=enemy가 아니면 부딪히기만 하고 take_hit이 안 불린다 (forest [1][5] 이식)
 ## ⚠ 못 잡는 것: Ground.mouse_filter(클릭 도달)·패널 카드 클릭·상자 렌더 — 실게임 MCP.
-## ⚠ **[E] 홀드(D7)는 여기가 안 잰다** — 이 파일은 `interacted`를 직접 emit해 **정산 채널**만 잰다.
-##  실제 눌림·홀드·취소·걸어가 나가기는 `tests/test_extract_hold_auto.gd`가 진다(설계 §6 S11).
+## ⚠ **이 파일은 `interacted`를 직접 emit해 「정산 채널」만 잰다 — 실제 [E] 눌림은 안 잰다.**
+##  🔴🔴 **세112 R1에 그 짝(`test_extract_hold_auto`)이 통째로 지워졌다**(홀드가 폐기됐다).
+##  ⇒ **지금 「출구에 걸어가 E를 실제로 눌러 나간다」를 재는 그물이 하나도 없다.** 걸어가 나가는
+##  경로가 R9(판 종료)로 다시 서면 **그때 실눌림 그물을 새로 세워라**(선례 = `test_spell_cast_auto`의
+##  `Input.action_press` + 이벤트 주입). 여기 `interacted.emit()`으로 때우면 세25의 그 자리다.
 ## ⚠ [8]은 pending_chapter 오염 가드를 재느라 push_error 한 줄(USER ERROR)을 **의도적으로** 낸다.
 ##
 ## 공개 계약으로만 검증한다: EventBus 시그널 · 그룹 · zone_id · take_hit · 패널 공개 API.
@@ -78,18 +83,38 @@ const MOB_COUNT: Dictionary = {&"ch1": 9, &"ch2": 7, &"ch3": 9}
 ## `gr_radiate5`였고 ch2·ch3는 **빈 문자열**이라 클리어해도 아무것도 안 줬다.
 const REWARD: Dictionary = {&"ch1": &"rune_water", &"ch2": &"rune_wind", &"ch3": &"rune_grass"}
 
+## 🔴🔴 **「만든 적이 무대에 오르나」가 세112 R8에 두 갈래로 갈렸다** — 옛 검사는 목록 하나였다
+## (`[&"hound", &"hound_alpha"]`가 전부 배치돼 있어야 통과). R8이 `hound_alpha` **스폰만** 빼면서
+## 그 목록을 그냥 지우면 **유령 콘텐츠 재발 감지기가 통째로 사라진다** — 그래서 지우지 않고 뒤집었다.
+##
+## `STAGED` = 옛 계약 그대로. **무대에 서야 한다**(안 서면 유령 콘텐츠다).
+## `BENCHED` = {적 id: 왜 뺐나}. 🔴 **일부러** 안 선다 — 그런데 **정의는 살아 있어야 한다.**
+##  🔴🔴 이 두 조건이 짝이라 둘 다 필요하다: 「안 선다」만 재면 `data/enemies/hound_alpha.tres`를
+##   통째로 지워도 그린인데 그건 R8(스폰만 뺀다)이 아니라 **삭제**이고, 「살아 있다」만 재면 스폰이
+##   되살아나도 그린이다.
+## 💡 **줄을 옮기는 법**: 네임드 위상을 다시 정해 `named_pool`을 채우면 이 표가 빨개진다 —
+##  그때 `BENCHED`에서 `STAGED`로 옮겨라. 그 이동이 곧 「위상을 다시 정했다」의 기록이다.
+##  (근거 = `docs/takbon-design/planned/room_loop_design.md` §4 R8과 그 아래 실측 표.)
+const STAGED: Array[StringName] = [&"hound"]
+const BENCHED: Dictionary = {
+	&"hound_alpha": "세112 R8 — hound와 ai가 똑같이 charge라 구별점이 HP·크기·tint·드롭(전부 스칼라)뿐",
+}
+
 ## 🔴 **나가는 길의 zone_id — 종류가 이것 하나다**(세99에 `&"portal"`이 은퇴했다).
-## 씬 인라인 남쪽 `$Exit`와 `ChapterDef.extract_points`가 세우는 `exit_zone.tscn`이 **같은 값**을 쥔다.
+## ⚠ 세112 R1 뒤 이 값을 쥔 것은 **씬 인라인 남쪽 `$Exit` 하나**다(`extract_points`가 세우던
+##  `exit_zone.tscn`은 같이 죽었다). 🔴 **그래도 zone_id로 찾는 것을 유지해라** — 노드 이름·좌표로
+##  바꾸면 R9가 판 종료를 다른 노드에 붙이는 날 그물만 제자리에 남는다.
 const EXIT_ZONE := &"exit"
 
-## 🔴 포탈이 지던 **「지름길」 계약의 계승자**(세99). 포탈은 없앴지만 **보스 자리(y=−1350)에서 남쪽
-## 입구(y=+600)까지 편도 1950px을 되돌아가는 노동**은 그대로 남는다 — `extract_points`에 보스 근처
-## 좌표를 안 적으면 한 판이 왕복 노동이 되는데 **에러가 0이고 전 스위트가 그린이다.**
-## 🔴 **좌표가 아니라 관계로 잰다** — 「보스에서 가장 가까운 출구」가 「남쪽 출구」보다 이 비율만큼은
-##  가까워야 한다. F5로 자리를 옮겨도 안 낡고, 자리를 **비우면** 빨개진다.
-## ⚠ 사용자가 *"되돌아가는 게 맞다"*로 정하면 `extract_points`를 비우고 **이 검사도 같이 지워라** —
-##  그게 이 상수의 목적이다(MOB_COUNT와 같은 결: 조용히 비지 않게).
-const BOSS_EXIT_MAX_RATIO := 0.5
+## 🪦 **`BOSS_EXIT_MAX_RATIO`(「지름길」 계약)는 세112 R1에 지웠다.**
+## 재던 것 = 「보스에서 가장 가까운 출구」가 「남쪽 출구까지 1950px」의 절반 이하 — 즉 **한 판이
+##  왕복 노동이 되지 않나**를 좌표가 아니라 **관계**로 재던 검사다(포탈이 지던 계약의 계승자, 세99).
+## 🔴 **지운 이유 = 그 상수 자신이 적어 둔 은퇴 조건이 정확히 지금이다.** 원문: *"`extract_points`를
+##  비우고 이 검사도 같이 지워라 — 그게 이 상수의 목적이다."* R1이 탈출구 여럿을 걷어 **출구가 하나만
+##  남았으므로** 「가장 가까운 출구 vs 남쪽 출구」는 **늘 같은 자리**가 되어 재는 것이 0이 된다.
+## ⚠ **왕복 노동 자체는 안 사라졌다 — 잴 사람이 바뀐 것이다.** R9가 「마지막 방을 깨면 마을로」를
+##  세우면 되돌아가는 거리가 아예 없어진다. 🔴 **그전까지 F5에서 「보스 잡고 남쪽까지 걷는 게 기냐」는
+##  사용자 눈이 잰다** — 헤드리스로 되살리지 마라(출구가 하나면 자명 통과다).
 
 var failures: int = 0
 var _bus = null
@@ -125,7 +150,6 @@ func _run() -> void:
 	await _test_reward_label_on_screen()
 	await _test_exit_banks_the_run_after_clear()
 	await _test_death_loses_the_bag()
-	await _test_lock_judgment()
 	await _test_missing_chapter_falls_back()
 
 	# 🔴 뒷정리 — extraction_success·bag_lost에 SaveManager가 물려 있어 **진짜 세이브를 쓴다**
@@ -207,9 +231,9 @@ func _test_chapter_tables() -> void:
 		_check_pools(ch)
 	# 🔴 세88에 처음 무대에 오르는 셋 — 그전엔 스폰되는 곳이 **0곳**이었다(유령 콘텐츠).
 	# ⚠ 세99: 풀로 옮긴 적은 `mob_spawns`에 이름이 없다 — **풀도 같이 훑어야** 이 그물이 안 죽는다.
-	# 🔴🔴 세99 몹 정리: 목록이 `hound`·`hound_alpha`가 됐다(플레이스홀더 4종 삭제). 재는 계약은
-	#  그대로 **「만든 적이 무대에 오르나」**다 — 네임드는 `named_pool`에만 있으므로 **그것도 훑는다**
-	#  (안 훑으면 `hound_alpha`가 유령 콘텐츠로 되돌아가도 그린이다).
+	# 🔴🔴 세112 R8: 목록이 `STAGED`/`BENCHED` 두 갈래가 됐다(그 상수 머리말이 정본).
+	#  🔴 **훑는 범위는 한 톨도 안 줄였다** — 배치·풀·네임드 셋을 그대로 훑는다. `named_pool`을
+	#   훑기를 그만두면 「일부러 뺐다」를 재는 쪽(`BENCHED`)이 자명 통과가 된다.
 	var seen := {}
 	for cid2: StringName in MOB_COUNT:
 		var c2 = _db.get_chapter(cid2)
@@ -224,8 +248,16 @@ func _test_chapter_tables() -> void:
 		for ns2 in c2.named_pool:
 			if ns2 != null and ns2.enemy_id != &"" and ns2.chance > 0.0:
 				seen[ns2.enemy_id] = true
-	for id: StringName in [&"hound", &"hound_alpha"]:
+	for id: StringName in STAGED:
 		_check(seen.has(id), "%s가 어느 챕터엔가 실제로 배치됐다 (세87까지 스폰 0곳)" % id)
+	for id: StringName in BENCHED:
+		_check(not seen.has(id),
+			"🔴 %s는 지금 **일부러** 무대에 없다 (%s) — 배치가 돌아왔으면 위상을 다시 정한 것이니 STAGED로 옮겨라"
+				% [id, BENCHED[id]])
+		# 🔴 짝이 되는 줄 — R8은 **스폰만** 뺀다. 정의를 지우면 여기가 빨개지고,
+		#  `test_charge_telegraph_auto [5]`(`Db.get_enemy(&"hound_alpha")`로 정의를 직접 문다)도 죽는다.
+		_check(_db.get_enemy(id) != null,
+			"🔴 %s의 정의는 Db에 살아 있다 (R8은 스폰만 뺀 것이지 삭제가 아니다)" % id)
 
 
 ## [1c] 🔴🔴 풀·네임드 **데이터 쪽** 검사 (세99 D5·D6). 굴림 자체는 `test_mob_roll_auto`가 잰다 —
@@ -256,6 +288,11 @@ func _check_pools(ch) -> void:
 			"🔴🔴 %s: 풀에 보스 id(%s)가 없다 — 있으면 잡몹 한 마리가 챕터를 클리어한다" % [cid, ch.boss_enemy_id])
 		_check(mw.weight > 0,
 			"%s: 풀 항목 %s의 weight > 0 (0 이하는 안 뽑히니 데이터에 남길 이유가 없다)" % [cid, mw.enemy_id])
+	# ⚠🔴 **세112 R8 뒤 이 루프는 실데이터에서 0바퀴 돈다**(세 챕터 다 `named_pool`이 비었다) —
+	#  즉 아래 네임드 검사 다섯은 지금 **자명 통과**다. 🔴 **딱지가 아니라 스위트가 되게 남겨 둔다**:
+	#  네임드를 되살리는 순간 한 줄도 안 고치고 저절로 측정으로 바뀐다(세84 #41 관행).
+	#  🔴 「지금 안 선다」를 실제로 재는 곳은 여기가 아니라 **[1b]의 `BENCHED`**다 — 그 표가 없으면
+	#   이 루프가 0바퀴 도는 것이 「검사가 통과했다」로 위장한다(감사 T2).
 	for ns in ch.named_pool:
 		if ns == null:
 			_check(false, "%s: named_pool에 null 항목이 있다" % cid)
@@ -632,32 +669,25 @@ func _test_reward_label_on_screen() -> void:
 
 ## [5] 🔴🔴 **보스를 잡은 뒤의 정산 채널** — 옛 「포탈 [E] → extraction_success」를 **출구로 이식**했다.
 ##
-## 🔴 **왜 [4b]와 따로 두나 — 재는 게 다르다.** [4b]는 *보스를 안 잡고* 남쪽으로 나가는 길이고,
-##  여기는 ⓐ **재클리어**(codex가 이미 있는 파밍 재방문) ⓑ **보스 근처 출구**로 나가는 길이다.
-##  옛 포탈 그물이 지던 게 정확히 그 둘이라, 합치면 **원정 정산의 절반이 그물 밖으로 빠진다**
-##  (세58-B에 접촉 피해를 빠뜨려 밟은 그 함정 — 「이식은 채널 커버리지로 검산한다」).
+## 🔴 **왜 [4b]와 따로 두나 — 재는 게 다르다.** [4b]는 *보스를 안 잡고* 나가는 길이고,
+##  여기는 **재클리어**(codex가 이미 있는 파밍 재방문) 경로다. 합치면 **원정 정산의 절반이 그물
+##  밖으로 빠진다**(세58-B에 접촉 피해를 빠뜨려 밟은 그 함정 — 「이식은 채널 커버리지로 검산한다」).
+## ⚠ **세112 R1에 축 하나가 죽었다** — 옛 머리말은 여기를 *"ⓐ 재클리어 ⓑ **보스 근처 출구**"* 둘로
+##  적었는데, 탈출구 여럿이 걷히며 **ⓑ가 사라졌다**(출구가 남쪽 하나다). ⓐ는 그대로 살아 있다.
 ## 🔴 「재방문 소프트락」 걱정은 **구조적으로 사라졌다** — 출구엔 조건이 없어 codex 상태와 무관하다.
 ##  그래도 재클리어 경로로 **한 바퀴 돌려** 확인한다(가드가 codex를 보게 되는 회귀를 잡는다).
 func _test_exit_banks_the_run_after_clear() -> void:
-	print("[5] 보스 처치 후 **보스 근처 출구** E → extraction_success 1회 · 가방이 창고로 (재클리어)")
+	print("[5] 보스 처치 후 출구 E → extraction_success 1회 · 가방이 창고로 (재클리어)")
 	await _fresh(&"ch1")   # [4]에서 chapter_clear_ch1이 이미 있다 = 재클리어 경로
-	var ch1 = _db.get_chapter(&"ch1")
 	_boss(&"ch1").take_hit(99999.0, 0, 0, 0.0)   # 🔴 보스를 특정 (잡몹 섞임)
 	await process_frame
 	await physics_frame
 	_check(not _exits().is_empty(), "재클리어여도 나가는 길이 있다 (출구엔 조건이 없다)")
 
-	# 🔴 「지름길」 계약의 계승자 — 보스에서 가장 가까운 출구 vs 남쪽 출구. 관계로만 잰다.
-	var near = _exit_nearest_to(ch1.boss_spawn)
-	var south = _zone(EXIT_ZONE)
-	if near == null or south == null:
+	var near = _zone(EXIT_ZONE)
+	if near == null:
 		_check(false, "출구를 못 찾았다 (검사 불가)")
 		return
-	var d_near: float = near.global_position.distance_to(ch1.boss_spawn)
-	var d_south: float = 1950.0   # 씬의 남쪽 $Exit(0,660) ↔ ch1 boss_spawn(0,−1350) 실측 편도
-	_check(d_near <= d_south * BOSS_EXIT_MAX_RATIO,
-		"🔴🔴 보스에서 가장 가까운 출구가 %.0fpx (남쪽까지 %.0fpx의 %.0f%% 이하여야 한다 — 포탈이 지던 지름길)"
-			% [d_near, d_south, BOSS_EXIT_MAX_RATIO * 100.0])
 
 	_gs.bag.clear()
 	var before: int = _gs.get_count(&"mat_slime_core")
@@ -666,8 +696,8 @@ func _test_exit_banks_the_run_after_clear() -> void:
 	var cb := func() -> void: got.append(1)
 	_bus.extraction_success.connect(cb)
 	# 🔴 두 emit을 await 전에 — 씬 전환은 프레임 끝이라 두 emit 시점엔 방이 살아 있고 가드만 재게 된다
-	# (test_forest [6] 선례). ⚠ 홀드를 건너뛰고 시그널을 직접 쏜다 — 여기서 재는 건 **정산 채널**이고
-	#  실제 [E] 홀드는 `test_extract_hold_auto [7]`이 진다(설계 §6 S11).
+	# (test_forest [6] 선례). ⚠ 시그널을 직접 쏜다 — 여기서 재는 건 **정산 채널**뿐이다.
+	#  🔴 실눌림을 재던 짝은 세112 R1에 지워졌다(머리말 참조) — 지금 그 축은 그물이 0이다.
 	near.interacted.emit()
 	near.interacted.emit()
 	await process_frame
@@ -698,32 +728,20 @@ func _test_death_loses_the_bag() -> void:
 	_bus.bag_lost.disconnect(cb)
 
 
-## [7] 🔴 잠금 판정식 — 단일 소스는 chapter_panel의 공개 is_chapter_open() (해금 판정은 패널이).
-## ch2는 ch1 클리어 codex가 없으면 잠기고, 심기면 열린다. ch1(order 1)은 늘 열려 있다.
-func _test_lock_judgment() -> void:
-	print("[7] 잠금 판정 — ch2는 ch1 클리어 전 잠김 / 후 열림")
-	var panel_scene = load("res://src/hud/chapter_panel.tscn") as PackedScene
-	var layer = panel_scene.instantiate()
-	root.add_child(layer)
-	var panel = layer.get_node("Panel")
-	var ch1 = _db.get_chapter(&"ch1")
-	var ch2 = _db.get_chapter(&"ch2")
-	var ch3 = _db.get_chapter(&"ch3")
-
-	_gs.codex.erase(&"chapter_clear_ch1")
-	_gs.codex.erase(&"chapter_clear_ch2")
-	_check(panel.is_chapter_open(ch1), "ch1(order 1)은 클리어 없이도 열려 있다")
-	_check(not panel.is_chapter_open(ch2), "ch1 클리어 전 — ch2는 잠김")
-	_check(not panel.is_chapter_open(ch3), "ch2 클리어 전 — ch3도 잠김")
-
-	_bus.codex_unlocked.emit(&"chapter_clear_ch1")
-	await process_frame
-	_check(panel.is_chapter_open(ch2), "ch1 클리어 후 — ch2가 열린다")
-	_check(not panel.is_chapter_open(ch3), "ch2는 아직 미클리어 — ch3은 여전히 잠김 (사슬)")
-	_check(panel.is_chapter_cleared(ch1), "ch1은 클리어 표시(✓) 판정도 참이다")
-
-	layer.free()
-	await process_frame
+## 💀 [7] 잠금 판정식 — **세112에 지웠다**(`room_loop_design.md` R1 · D9가 챕터 선택을 없앴다).
+## 재던 것 = ch2는 ch1 클리어 codex가 없으면 잠기고 심으면 열린다(단일 소스 = `chapter_panel.is_chapter_open()`).
+##
+## 🔴🔴 **뒤집지 않고 지운 이유 — 잴 대상 자체가 사라졌다.**
+##  이 리포의 모범은 「그물을 지우지 말고 뒤집어라」(세107 차폐)지만 **그건 잴 대상이 남을 때만 참이다.**
+##  `is_chapter_open()`은 소비자가 그 패널 하나뿐이었고 패널이 통째로 사라졌다 ⇒ 뒤집으면 **재는 것이 0인 그물**이 된다.
+##  ⚠ 같은 파일의 `hound_alpha` 항목이 정반대 처분(뒤집기)을 받은 게 그 차이다 — 그쪽은 `.tres` 정의가 살아 있다.
+##
+## ⚠ **이걸 지우면서 함께 사라진 것 = 「챕터 사슬 잠금」의 유일한 검증**이다.
+##  챕터 연쇄(genre_pivot D9)가 돌아와 잠금이 다시 생기면 **이 함수를 되살릴 게 아니라 그때의 단일 소스를 재라.**
+##
+## 🔴 세112 실측 — 이 자리가 **거짓 초록**이었다: 패널을 지운 뒤에도 함수가 `load`를 계속해
+##  `SCRIPT ERROR`로 죽는데 `TEST_CHAPTER_OK`가 찍혔다(`takbon-verify` §3의 그 형태).
+##  `tools/run_tests.gd`는 `OK(에러있음)`으로 잡지만 **낱개 실행의 `_OK` grep은 못 잡는다.**
 
 
 ## [8] 🔴 pending_chapter가 비거나 미등록이면 **조용히 빈 방을 띄우지 않는다** — push_error +
@@ -811,6 +829,11 @@ func _boss(chapter_id: StringName):
 ##  표를 비우면·풀 굴림이 조용히 실패하면(설계 §6 S1) **여전히 하한에서 빨개진다.**
 ## 🔴 상한도 논다 — `named_pool.size()`가 천장이라 「한 항목이 두 마리를 세운다」·「굴림이 자리를
 ##  늘린다」가 잡힌다. **상한을 데이터에서 파생**시켜 F5로 네임드를 늘려도 안 낡는다.
+##
+## ⚠ **세112 R8 뒤 `named_pool`이 세 챕터 다 비어서 상한 == 하한 = 정확 일치로 돌아왔다.**
+##  🔴 이건 그물이 무뎌진 게 아니라 **데이터가 그렇게 말한 것**이다 — 지금 계약이 「네임드는 안 선다」라
+##  정확 일치가 옳고, 되살리는 날 `named_pool.size()`가 자동으로 상한을 다시 열어 준다.
+##  **파생을 상수로 바꿔 굳히지 마라**(그러면 되살릴 때 여기가 거짓 빨강이 된다).
 func _check_enemy_count(cid: StringName) -> void:
 	var ch = _db.get_chapter(cid)
 	var floor_n: int = 1 + int(MOB_COUNT[cid])
@@ -883,15 +906,8 @@ func _extract_wired_count() -> int:
 	return n
 
 
-func _exit_nearest_to(point: Vector2):
-	var best = null
-	var best_d := INF
-	for z in _exits():
-		var d: float = z.global_position.distance_to(point)
-		if d < best_d:
-			best_d = d
-			best = z
-	return best
+## 🪦 `_exit_nearest_to()`는 세112 R1에 지웠다 — 「지름길」 검사(위 묘비)의 유일한 소비자였고,
+## 출구가 하나만 남아 **늘 그 하나를 돌려주는** 함수가 됐다. 되살릴 일은 출구가 다시 여럿이 될 때다.
 
 
 func _clear() -> void:

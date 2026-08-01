@@ -18,7 +18,6 @@ counter_rune = 0
 params = {
 "anim_fps": 5.0,
 "sight_range": 260.0,
-"always_visible": true,
 "sprite": "res://assets/sprites/enemies/gale.png",
 "hurt_sprite": "res://assets/sprites/enemies/gale_hurt.png",
 "ai": "boss_gale",

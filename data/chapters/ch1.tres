@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="ChapterDef" load_steps=19 format=3]
+[gd_resource type="Resource" script_class="ChapterDef" load_steps=18 format=3]
 
 [ext_resource type="Script" path="res://src/core/schemas/chapter_def.gd" id="1"]
 [ext_resource type="Script" path="res://src/core/schemas/mob_spawn.gd" id="2"]
@@ -81,20 +81,16 @@ enemy_id = &"hound"
 weight = 1
 pool_tag = &"deep"
 
-; 🔴🔴 세104: **우두머리를 둥지에 앉혔다**(사용자 요청 — *"우두머리가 둥지에 있게"*).
-;  그전엔 `at_landmark`가 비어서 우두머리가 **둥지(620,-300)의 반대편**인 (-600,-700)에 혼자 섰다 —
-;  「둥지 = 우두머리가 지키는 곳」이라는 연결이 **데이터에 한 번도 없었다**(끊긴 게 아니라 이어진 적이 없다).
-;  기계·그물은 세101(D13)에 이미 들어와 있었다: `boss_room._spawn_named` → `_landmark_sites` · `test_nest_open_auto [4]`.
-;  ⚠ `at_landmark`가 차 있으면 `position`은 **아예 안 읽힌다**(`_spawn_named`가 조기 분기한다) —
-;    그래서 옛 좌표는 지우고 여기 기록으로만 남긴다: 세99 판단값 `Vector2(-600, -700)`.
-;  ⚠ **`chance`는 그대로 0.3이다** — 「있을 수도 없을 수도」가 D6의 의도라 사용자 요청 범위를 넘지 않았다.
-;    올리려면 `mat_night_bloom` 수급이 3배가 되는 것을 같이 봐라(D15 · `jin_fuse` 28.6판 → 8.6판).
-[sub_resource type="Resource" id="named_hound"]
-script = ExtResource("4")
-enemy_id = &"hound_alpha"
-chance = 0.3
-at_landmark = &"lm_nest"
-
+; 🔴🔴 세112 R8: **네임드 자리를 비웠다** — `named_pool`이 빈 배열이다.
+;  `room_loop_design.md` §4 R8(사용자 선택 「이번엔 뺀다」) + 그 아래 실측 표: `hound_alpha`는
+;  `hound`와 **`ai`가 똑같이 `charge`**라 구별되는 게 HP·크기·tint·드롭 넷뿐이고 **전부 스칼라**다.
+;  ⇒ 위상을 **몬스터 카탈로그 사이클에서 다시 정한다.** 스폰만 뺐고 `data/enemies/hound_alpha.tres`와
+;   `NamedSpawn` 스키마는 **살아 있다**(`test_charge_telegraph_auto [5]`가 그 정의를 직접 문다).
+;  🔴 되살릴 때 쓸 세104 값: `enemy_id=&"hound_alpha"` · `chance=0.3` · `at_landmark=&"lm_nest"`
+;   (세104에 우두머리를 둥지에 앉혔다 — 사용자 요청 *"우두머리가 둥지에 있게"*. `at_landmark`가
+;    차 있으면 `position`은 아예 안 읽힌다. 그전 자유 좌표는 세99 판단값 `Vector2(-600, -700)`).
+;  ⚠ 되살리면 `test_chapter_auto`의 `BENCHED` 표와 `test_recipe_reach_auto`의 `KNOWN_GAPS`
+;   (`mat_night_bloom` — 공급원이 `hound_alpha` 하나뿐이다)가 **둘 다 빨개진다.** 그게 신호다.
 ; 🪦 지점 하나 — 늑대 둥지 (세99 D3·D4 단계 3).
 ; 🔴🔴 **자리 근거 ⓐ~ⓓ(거리·겹침·다른 길·머리 여유)는 설계 문서가 든다** —
 ;  `docs/takbon-design/dungeon_structure_design.md` §3 「ch1의 자리 근거」. 세100에 옮겼다.
@@ -117,6 +113,11 @@ room_ground_color = Color(0.33, 0.41, 0.27, 1.0)
 mob_spawns = Array[ExtResource("2")]([SubResource("mob1"), SubResource("mob3"), SubResource("mob7"), SubResource("mob9"), SubResource("mob_wolf1"), SubResource("mob_wolf2"), SubResource("mob_wolf3"), SubResource("mob_wolf4"), SubResource("mob_wolf5")])
 reward_unlock = &"rune_water"
 mob_pool = Array[ExtResource("3")]([SubResource("w_fore_hound"), SubResource("w_deep_hound")])
-named_pool = Array[ExtResource("4")]([SubResource("named_hound")])
-extract_points = Array[Vector2]([Vector2(-1150, -360), Vector2(300, -1400)])
+named_pool = Array[ExtResource("4")]([])
+; 🔴🔴 세112 R1: **탈출구 여럿을 걷었다** — `extract_points`를 비웠다(`room_loop_design.md` §5).
+;  D1이 「살아 나가는 것 = 목표」를 폐기해 **여러 탈출구와 3초 꾹 홀드가 통째로 죽는다**(R1: *"걷는다"*).
+;  ⚠ **되살릴 값을 안 적는다** — 이건 「잠시 뺀 것」이 아니라 **자리 자체가 없어지는 것**이다
+;   (R9의 판 종료는 마지막 방을 깨면 도는 것이라 방마다 탈출구를 놓지 않는다).
+;  🔴 **`ChapterDef.extract_points` 필드 자체는 core라 리드가 지운다** — 여기는 값만 비웠다.
+extract_points = Array[Vector2]([])
 landmarks = Array[ExtResource("5")]([SubResource("lm_nest_slot")])

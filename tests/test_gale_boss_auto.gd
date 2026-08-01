@@ -61,6 +61,7 @@ func _run() -> void:
 	await _test_volley()
 	await _test_projectile_hit_and_lifetime()
 	await _test_reaction_rune()
+	await _test_gust_ring_not_dimmed()
 
 	# 뒷정리 — 오토로드에 남긴 hp 흠집을 되돌린다(파일 저장은 안 건드렸으니 wipe_save 불필요).
 	_gs.reset_player_hp()
@@ -277,7 +278,131 @@ func _test_reaction_rune() -> void:
 	await physics_frame
 
 
+## [7] 🔴🔴 **돌풍 예고 링이 알파 축에 안 물린다** — 세112에 `test_vision_auto [6]`에서 **이전**해 왔다.
+##
+## 🔴 **왜 시야가 죽었는데도 살아남는 그물인가**: 재는 대상이 시야가 아니라 **`_refresh_alpha`의
+##  소유권 계약**이다 — *"알파를 거는 노드는 `_visual`과 그림자 둘이다. 루트에 걸지 마라."*
+##  그 계약은 **코드에 그대로 살아 있고**, 어기는 손도 그대로다: *"루트에 걸면 그림자도 자식이니 공짜"*.
+##  그 한 줄이 들어가면 **돌풍 링이 같이 죽는데(에러 0)** 링은 `_visual`의 **형제**(적의 자식)라
+##  다른 그물이 아무도 안 본다. 🔴 `_charge_band`로는 못 잰다 — 그건 **씬 자식**이라 루트에 걸어도 안 죽는다.
+##
+## 🔴🔴 **옛 판을 그대로 못 옮긴 이유 — 관측 조건이 사라졌다.** 세111까지는 *"시야 밖이라 몸은
+##  알파 0인데 링은 1.0"*으로 **런타임에 갈랐다.** 세112에 시야가 죽어 알파 축이 **분산 하나**로
+##  줄었는데 `boss_gale`은 분산을 안 한다(`_ai_hover` 전용) ⇒ **공개 API로 둘을 가르는 판을 못 만든다.**
+##  ⇒ 실패 형태 **둘을 직접** 잰다:
+##    ⓑ **구조** — 링이 적의 **직계 자식**이고 `Visual`의 자식이 아니다(`_visual.add_child`로 옮기면 빨강)
+##    ⓒ **소스** — `_refresh_alpha`가 **루트 `modulate`에 대입하지 않는다**(`modulate.a = a`로 바꾸면 빨강)
+##  ⓒ가 소스 스캔인 이유는 `test_audio_auto` ⑤와 같다: **실패 형태가 늘 「그 줄이 바뀐다」**인데
+##  지금은 알파 축이 상수 1.0이라 런타임 값으로는 **자명 통과**가 된다(세86 *"결과가 같다 ≠ 같은 길"*).
+## ✅ ⓐ(누적 알파 1.0)는 지금 자명 통과지만 남긴다 — **알파 축이 다시 생기는 날 저절로 검출자가 된다.**
+##
+## 🔴 **누적 알파로 잰다** — Godot의 `modulate`는 렌더 때 부모 것과 곱해지지 자식의 프로퍼티를
+##  바꾸지 않는다. 링 자신의 값만 읽으면 루트에 걸어도 1.0이라 **그린이다.**
+##
+## ⚠ 보스를 매 프레임 핀한다 — `hover_min`(110) > `gust_radius`(90)라 자유 이동이면 물러나 돌풍을 안 쓴다([3] 선례).
+func _test_gust_ring_not_dimmed() -> void:
+	print("[7] 🔴🔴 돌풍 링이 알파 축에 안 물린다 (test_vision_auto [6] 이전 — 계약은 `_refresh_alpha`)")
+	var boss = _make_gale(Vector2(50, 0))
+	var dummy = _make_dummy_player(Vector2.ZERO)
+	await physics_frame
+	# 윈드업이 열릴 때까지 핀한 채로 돈다 — gust_period(3.0s) ≈ 180프레임 + 여유.
+	var ring: Line2D = null
+	for i in 300:
+		boss.global_position = dummy.global_position + Vector2(50, 0)
+		await physics_frame
+		var found := _find_line2d(boss)
+		if found != null and found.visible:
+			ring = found
+			break
+	# 🔴 **재귀로 찾는다** — 직계 자식만 보면 링을 `Visual` 밑으로 옮기는 뮤테이션이
+	#  「링이 안 떴다」로 빨개져서 **어디가 깨졌는지 그물이 거짓말한다**(ⓑ가 아예 안 돈다).
+	_check(ring != null, "🔴 돌풍 예고 링이 떴다 (없으면 아래가 전부 자명 통과다 — 윈드업 조건을 다시 봐라)")
+	if ring != null:
+		# ⓑ 구조 — 링은 `_visual`의 **형제**여야 한다.
+		_check(ring.get_parent() == boss,
+			"🔴🔴 ⓑ 링이 적의 **직계 자식**이다 (실제 부모 %s — `Visual` 밑으로 옮기면 몸 알파에 물린다)"
+				% (ring.get_parent().name if ring.get_parent() != null else "(없음)"))
+		var vis: Node = boss.get_node_or_null(^"Visual")
+		var under_visual: bool = vis != null and _line2d_child_of(vis) != null
+		_check(not under_visual, "🔴 `Visual` 밑엔 Line2D가 없다 (있으면 예고가 몸과 함께 흐려진다)")
+		# ⓐ 누적 알파 — 지금은 상수 1.0이라 자명 통과지만, 알파 축이 다시 생기면 여기가 검출자가 된다.
+		_check(is_equal_approx(_effective_alpha(ring, boss), 1.0),
+			"⓪ 링의 **누적** 알파가 1.0이다 (실제 %.3f — 1보다 작으면 예고가 몸과 함께 눌린 것)"
+				% _effective_alpha(ring, boss))
+	# ⓒ 소스 — `_refresh_alpha`가 루트 `modulate`를 만지지 않는다.
+	_check_refresh_alpha_source()
+	_free(dummy)
+	_free(boss)
+	await physics_frame
+
+
+## ⓒ 소스 스캔 — `_refresh_alpha` **본문**에 루트 `modulate` 대입이 있나.
+## 🔴 **본문만 훑는다** — 머리말 주석엔 *"루트에 걸지 마라"*가 그대로 적혀 있어서 파일 전체를
+##  훑으면 **그 경고문 자체에 걸려 늘 빨갛다**(검사가 자기 발을 밟는 자리다).
+## ⚠ 허용 = `_visual.modulate...` · `_shadow.modulate...` / 금지 = 줄 첫 토큰이 `modulate`인 대입.
+func _check_refresh_alpha_source() -> void:
+	var f := FileAccess.open("res://src/field/forest_enemy.gd", FileAccess.READ)
+	if f == null:
+		_check(false, "forest_enemy.gd를 읽었다 (소스 스캔의 전제)")
+		return
+	var lines := f.get_as_text().split("\n")
+	f.close()
+	var inside := false
+	var body := 0
+	var bad := ""
+	for line: String in lines:
+		if line.begins_with("func _refresh_alpha("):
+			inside = true
+			continue
+		if inside:
+			if line.begins_with("func ") or line.begins_with("## "):
+				break
+			var t := line.strip_edges()
+			if t == "" or t.begins_with("#"):
+				continue
+			body += 1
+			if t.begins_with("modulate"):
+				bad = t
+	_check(body > 0, "ⓒ `_refresh_alpha` 본문을 찾았다 (0줄이면 스캔이 아무것도 안 잰다)")
+	_check(bad == "",
+		"🔴🔴 ⓒ `_refresh_alpha`가 **루트 `modulate`에 대입하지 않는다** (위반 줄: %s — 걸면 돌풍 링·그 밖 형제 노드가 같이 죽는데 에러가 0이다)"
+			% ("없음" if bad == "" else bad))
+
+
 # ── 헬퍼 ──
+
+## 돌풍 링을 **트리 아래 어디서든** 찾는다(`_show_gust_ring`이 만드는 유일한 Line2D).
+## 🔴 직계만 보면 안 된다 — 링이 `Visual` 밑으로 옮겨진 판에서 ⓑ가 **안 돌고** 「안 떴다」로만 빨개진다.
+func _find_line2d(node: Node) -> Line2D:
+	for c in node.get_children():
+		if c is Line2D:
+			return c as Line2D
+		var deep := _find_line2d(c)
+		if deep != null:
+			return deep
+	return null
+
+
+## 직계 자식 중 Line2D — ⓑ의 「`Visual` 밑엔 없다」 전용.
+func _line2d_child_of(node: Node) -> Line2D:
+	for c in node.get_children():
+		if c is Line2D:
+			return c as Line2D
+	return null
+
+
+## 🔴 **누적** 알파 — `stop`까지 부모 체인의 `modulate.a`를 곱한다.
+## Godot은 렌더 때 곱하지 자식 프로퍼티를 안 바꾼다 ⇒ 노드 자신의 값만 읽으면 검출력이 0이다.
+func _effective_alpha(node: CanvasItem, stop: Node) -> float:
+	var a := 1.0
+	var n: Node = node
+	while n != null and n is CanvasItem:
+		a *= (n as CanvasItem).modulate.a
+		if n == stop:
+			break
+		n = n.get_parent()
+	return a
+
 
 func _make_gale(pos: Vector2):
 	var boss = _enemy_scene.instantiate()

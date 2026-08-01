@@ -162,12 +162,23 @@ func _test_db_loads() -> void:
 		if def == null:
 			continue
 		_check(def.params.has("sprite"), "%s의 params.sprite가 살아 있다 (도트 유실 그물)" % id)
-		if str(def.params.get("ai", "chase")) == "chase":
-			# 🔴 세105 **이름 승계**: 정본 키는 `sight_range`이고 `aggro_range`는 폴백이다
-			#  (`forest_enemy.SIGHT_KEY` 머리말 · 설계 §8-1). 둘 중 **하나는 반드시** 있어야 한다.
-			_check((def.params.has("sight_range") or def.params.has("aggro_range"))
-					and def.params.has("move_speed"),
-				"🔴 %s(chase)가 sight_range(옛 aggro_range)·move_speed를 .tres로 쥔다 (코드 폴백은 세84에 걷었다)" % id)
+		# 🔴🔴 **세112 1c: `chase`만 보던 것을 `charge`까지 넓혔다 — 그리고 「값이 0이 아니다」까지 잰다.**
+		#  왜 지금 넓히나: `sight_range`를 재는 그물 여섯을 전수 확인했더니 **`charge` 계열(`hound`·
+		#  `hound_alpha`)을 덮는 곳이 `test_landmark_road_auto` 하나뿐**이었는데, 그 파일이 곧 지워진다
+		#  (지점 길 폐기 · `room_loop_design.md` §5). 지우고 나면 **재는 것 없이 살아 있는 값**이 되고,
+		#  🔴 `sight_range`는 **지우면 모든 추격 적이 그 자리에 굳는데 에러가 0**이라 살려 둔 값이다
+		#  (설계 §5 「지우면 안 되는 것 셋」) — 무방비로 두면 다음 세션이 또 지우려 든다.
+		#  ⚠ **먼저 옮기고 나서 지운다**(순서가 뒤집히면 그 사이 커밋이 무방비다).
+		# 🔴 **`> 0.0`까지 재는 이유**: 옮겨 온 그물이 `aggro > 0.0`을 쟀다. 존재만 재면 **값을 0으로
+		#  바꾸는 뮤테이션이 통과한다**(실측 — 넓히기 전 0.0 흔들기에 이 파일은 그린이었다).
+		# 🔴 세105 **이름 승계**: 정본 키는 `sight_range`이고 `aggro_range`는 폴백이다
+		#  (`forest_enemy.SIGHT_KEY` 머리말 · 설계 §8-1). 둘 중 **하나는 반드시** 있어야 한다.
+		var ai_kind := str(def.params.get("ai", "chase"))
+		if ai_kind == "chase" or ai_kind == "charge":
+			var sight := float(def.params.get("sight_range", def.params.get("aggro_range", 0.0)))
+			_check(sight > 0.0 and def.params.has("move_speed"),
+				"🔴 %s(%s)가 sight_range(옛 aggro_range)·move_speed를 .tres로 쥔다 (실제 시야 %.0f — 코드 폴백은 세84에 걷었다)"
+					% [id, ai_kind, sight])
 	_check(_db.enemies.size() == ENEMY_COUNT_EXPECTED,
 		"🔴 Db.enemies == %d종 (실제 %d — 파싱사면 여기서 줄어든다)"
 			% [ENEMY_COUNT_EXPECTED, _db.enemies.size()])

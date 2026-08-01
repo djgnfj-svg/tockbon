@@ -77,23 +77,12 @@ func is_rolling() -> bool:
 	return _roll_time > 0.0
 
 
-## 🔴🔴 **시야 방향 파사드** (세104 N27 · 정본 `docs/takbon-design/vision_design.md` §5-1).
-## 적이 매 프레임 *"내가 저 사람 눈에 보이나"*를 물을 때 쓰는 **유일한 경로**다 —
-## `is_rolling()`과 **완전히 같은 결의 덕타이핑 계약**이라(그룹 조회 + `has_method` 가드 + `.call()`)
-## 모듈 간 결합이 컴파일타임에 0이고, EventBus 시그널을 새로 낼 이유가 없다.
-##
-## 🔴 **한 줄 파사드여야 한다 — `caster.aim()`을 그대로 돌려준다.** 방향의 단일 소스는
-##  `player_caster._aim` 하나이고, 여기서 `get_global_mouse_position()`을 다시 읽는 순간
-##  지팡이(`floating_wand`)·스프라이트 반전과 **세 곳이 같은 것을 각자 계산**하게 된다(감사 T5 —
-##  바로 아래 `_apply_anim`이 이미 그 이유로 caster를 거친다).
-## ⚠ **몸이 향한 방향(`_face`)이 아니다.** `_face`는 마지막 **이동** 방향(구르기가 쓴다)이고,
-##  화면에서 「보고 있다」로 읽히는 건 지팡이가 겨눈 쪽이다.
-##
-## 🔴 caster가 없으면(테스트 리그·조립 중) `Vector2.ZERO` = **「판정 불가」**다.
-##  `Vision.is_seen`이 영벡터를 **fail-open(보인다)**으로 흘린다 — ZERO를 「위쪽」 같은 실제 방향으로
-##  대체하면 각도가 정의된 척하며 **조용히 한쪽으로 쏠린다.**
-func vision_dir() -> Vector2:
-	return caster.aim() if caster != null else Vector2.ZERO
+## ⚠ 세112: 여기 있던 **`vision_dir()` 파사드**(적이 *"내가 저 사람 눈에 보이나"*를 묻던 유일한 경로 ·
+##  세104 N27)가 시야와 함께 죽었다. 소비자는 `forest_enemy._judge_seen`·`vision_overlay` 둘이었고
+##  **둘 다 사라졌다.** 🔴 되살릴 땐 **한 줄 파사드로만** — 방향의 단일 소스는 `player_caster._aim`
+##  하나이고, 여기서 `get_global_mouse_position()`을 다시 읽으면 지팡이·스프라이트 반전과
+##  **세 곳이 같은 것을 각자 계산**하게 된다(T5). ✅ `is_rolling()`이 그 덕타이핑 관용구의 산 예다.
+
 
 ## 🔴🔴 **세90: 애니 = `idle` · `run` · `hurt` 셋이고 방향 분기가 없다.**
 ##

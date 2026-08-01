@@ -48,7 +48,9 @@ const GRASS_ATLAS: Array[Vector2i] = [Vector2i(1, 4), Vector2i(2, 4), Vector2i(3
 
 ## 🔴 둥지 스프라이트의 **접지 계약** (art 리포트 `docs/_reports/nest_art.md` §「dev에게」).
 ##  텍스처 (95,140) = 굴 입구의 x 중심이자 흙더미가 바닥에 닿는 줄. `centered=false`면 offset이 그 음수.
-const NEST_SCENE := "res://src/props/nest.tscn"
+## 🔴 세112 1c: 씬이 `nest.tscn` → **`chest.tscn`**으로 개명됐다(`chest.gd` 머리말이 해소표).
+##  ⚠ 텍스처 상수 둘은 **안 바뀌었다** — PNG 개명은 `--import`가 필요해 리드 몫으로 남았다.
+const NEST_SCENE := "res://src/props/chest.tscn"
 const NEST_ANCHOR_OFFSET := Vector2(-95, -140)
 const NEST_TEX_INTACT := "res://assets/sprites/props/nest_wolf.png"
 const NEST_TEX_BROKEN := "res://assets/sprites/props/nest_wolf_broken.png"
@@ -334,10 +336,9 @@ func _test_prop_has_no_physics_body() -> void:
 		# 🔴 `&"exit"`이면 `test_chapter_auto`가 출구로 세어 「_extract에 이어진 수」와 어긋난다.
 		_check(open_zone.zone_id != &"exit",
 			"🔴🔴 여는 지점의 zone_id가 &\"exit\"이 아니다 (실제 '%s')" % open_zone.zone_id)
-		# 🔴 D10 즉시 열기 — 0이 아니면 그 숫자가 아니라 **탈출 시간**(`balance.extract_hold_sec`)으로 돈다.
-		_check(is_equal_approx(open_zone.hold_sec, 0.0),
-			"🔴🔴 hold_sec == 0 = [E] 한 번에 즉시 (실제 %.2f — 0이 아니면 탈출 시간으로 돈다)"
-				% open_zone.hold_sec)
+		# 🪦 `hold_sec == 0` 검사는 세112 R1에 지웠다 — 홀드(D7)가 폐기돼 그 프로퍼티가 **없다**
+		#  (읽으면 런타임 에러다). 재던 계약(**[E] 한 번에 즉시**)은 이제 **모든 지점의 유일한 동작**이라
+		#  잴 대상 자체가 사라졌고, 「그 프레임에 열리나」는 `test_chest_open_auto` ⓐ가 행동으로 잰다.
 		_check(open_zone.get_node_or_null(^"Prompt") != null,
 			"🔴 `Prompt` Label이 있다 (이름이 계약이다 — 없으면 안내가 통째로 죽는다)")
 	node.free()

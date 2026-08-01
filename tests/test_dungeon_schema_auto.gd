@@ -5,7 +5,8 @@ extends SceneTree
 ##
 ## 검증 대상 = **던전 구조 core 신설분이 실제로 도나**(설계 `docs/takbon-design/dungeon_structure_design.md` §2).
 ## 신설 = `MobWeight`·`NamedSpawn`·`LandmarkSlot`·`LandmarkDef` 4장 + `ChapterDef` 5필드 +
-##        `MobSpawn.pool_tag` + `Db.landmarks` 레지스트리 + `balance.extract_hold_sec`.
+##        `MobSpawn.pool_tag` + `Db.landmarks` 레지스트리.
+## ⚠ **`balance.extract_hold_sec`는 세112 R1에 이 목록에서 빠졌다**(D7 폐기 — [6] 머리말의 묘비).
 ##
 ## 🔴🔴 **이 그물의 심장 = [4] 「비면 지금 동작」이 실제로 참인가.**
 ##  설계가 회귀 0을 그 전제 하나에 걸었다 — 전제가 깨지면 **기존 챕터 3장이 조용히 다르게 돈다**.
@@ -162,20 +163,22 @@ func _test_new_schema_defaults() -> void:
 	_check(cd.mob_pool.is_empty(), "ChapterDef.mob_pool 기본 = 빈 배열 (굴림 없음)")
 	_check(cd.named_pool.is_empty(), "ChapterDef.named_pool 기본 = 빈 배열 (네임드 없음)")
 	_check(cd.landmarks.is_empty(), "ChapterDef.landmarks 기본 = 빈 배열 (지점 없음)")
-	_check(cd.extract_points.is_empty(), "ChapterDef.extract_points 기본 = 빈 배열 (남쪽 출구 하나)")
+	# 💀 `extract_points` 기본값 검사를 세112 R1에 지웠다 — 필드 자체가 core에서 사라졌다.
+	# 🔴 이 줄은 **[5]가 「다시 넣지 마라」고 경고해 둔 바로 그 줄인데 [4]에 남아 있었다.**
+	#    필드 삭제 뒤 `SCRIPT ERROR: Invalid access to property 'extract_points'`가 나는데도
+	#    **`TEST_DUNGEON_SCHEMA_OK`가 찍혔다**(`takbon-verify` §3 침묵 통과) —
+	#    잡은 것은 러너의 `OK(에러있음)`이고, **낱개 `_OK` grep이었으면 초록으로 지나갔다.**
 
 
 ## [5] 🔴🔴 **회귀 0의 실증 — 기존 챕터 3장이 「아직 안 켠」 필드를 전부 빈 값으로 들고 있다.**
 ## [4]가 「새로 만든 인스턴스」를 재는 것과 달리 여기는 **실제 `.tres`가 파싱된 결과**를 잰다.
 ## ⚠ `.tres`에 새 필드를 쓰지도 않았는데 값이 들어 있으면 스키마 기본값이 잘못 박힌 것이다.
 ##
-## 🔴🔴 **`extract_points`는 세99 단계 1b에 켜졌다 — 여기서 뺐다.**
-##  이 항목은 「소비자가 아직 없는 필드가 조용히 켜져 있지 않나」를 재는 자리고, `extract_points`는
-##  **소비자(`boss_room._build_exits`)가 생겨 실제로 채워졌다**. 여기 「비어 있다」를 남겨 두면
-##  단계가 진행될 때마다 **거짓 빨강**이 나서 그물 신뢰가 죽는다(설계 §7 단계 1.5의 경고).
-##  🔴 **살아 있는 그물이 어디로 갔는지 적어 둔다** — `tests/test_extract_hold_auto [6]ⓐ`가
-##  **같은 `.tres` 파싱 결과**를 「비어 있지 않다 + 출구가 실제로 서고 풀길이 가장자리까지 닿는다」로
-##  더 세게 잰다. **여기 사본을 만들지 마라**(T5) — 켜진 축은 그쪽 한 곳이 정본이다.
+## ⚠ **`extract_points`는 세99 단계 1b에 켜졌다가 세112 R1에 죽었다** — 여기 검사는 계속 없다.
+##  🔴 **다시 넣지 마라.** 「비어 있다」로 되돌리고 싶어지겠지만(지금 실제로 비었으니 통과한다)
+##  그건 **소비자가 0인 필드를 그물이 지키는 것**이라 T3 거짓 손잡이를 굳힌다 — `ChapterDef`에서
+##  **필드 자체가 곧 지워진다**(core라 리드 몫). 그때 이 줄이 있으면 리드의 삭제가 빨간불에 막힌다.
+##  ⚠ 짝이던 `tests/test_extract_hold_auto`는 **파일째 지워졌다**(R1 — 홀드가 폐기됐다).
 ##
 ## 🔴🔴 **`mob_pool`·`named_pool`·`MobSpawn.pool_tag`는 세99 단계 2에 켜졌다 — 같은 절차로 뺐다.**
 ##  소비자가 생겼다: `boss_room._roll_pool_id`(풀 굴림) · `boss_room._spawn_named`(네임드 굴림).
@@ -215,14 +218,16 @@ func _test_existing_chapters_unchanged() -> void:
 
 
 ## [6] balance 신설 값 + enum.
+##
+## 🪦 **`extract_hold_sec` 검사 둘은 세112 R1에 지웠다**(「필드가 있다」 + 「> 0이면 D7이 켜져 있다」).
+##  D7(3초 꾹 탈출)이 폐기돼 **「홀드가 켜져 있나」가 잴 값어치를 잃었다** — 오히려 이 검사를 남기면
+##  🔴 **소비자가 0인 필드를 「살아 있어야 한다」고 강제해 T3 거짓 손잡이를 그물이 지킨다.**
+##  ⚠ `balance_data.gd`는 **core라 리드가 지운다** — 여기서 검사를 걷는 것이 그 선행 작업이다
+##  (그물이 먼저 놓아 줘야 리드의 삭제가 빨간불 없이 지나간다).
 func _test_balance_and_enum() -> void:
-	print("[6] balance.extract_hold_sec + Enums.LandmarkKind")
+	print("[6] Enums.LandmarkKind")
 	var bal = load("res://data/balance.tres")
 	_check(bal != null, "balance.tres가 로드된다")
-	_check(bal != null and "extract_hold_sec" in bal, "BalanceData.extract_hold_sec가 있다")
-	# 🔴 값 자체는 F5 튜닝값이라 **안 박는다** — 「0보다 크다」만 잰다(0이면 홀드가 통째로 꺼진다).
-	_check(bal != null and bal.extract_hold_sec > 0.0,
-		"extract_hold_sec > 0 (0이면 D7이 꺼진다 — 값 자체는 F5가 정한다)")
 
 	# 🔴 값을 **셋 다 명시**한다 — `.tres`가 정수로 저장하므로 재배열하면 데이터가 조용히 다른 종류가 된다.
 	#   ⚠ NEST·ALTAR를 안 적으면 `lm_nest.tres`(kind=1)를 통해 **우연히** 걸릴 뿐이라 의도가 코드에 안 남는다.

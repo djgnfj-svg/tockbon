@@ -30,7 +30,6 @@ params = {
 "sprite": "res://assets/sprites/enemies/snake_head.png",
 "hurt_sprite": "res://assets/sprites/enemies/snake_head_hurt.png",
 "sight_range": 320.0,
-"always_visible": true,
 "attack_cooldown": 1.0,
 "attack_range": 34.0,
 "contact_damage": 12.0,
