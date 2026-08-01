@@ -3,7 +3,9 @@ node: genre_pivot
 stage: planned
 owns: [genre, run_flow, progression]
 needs: []
-blocked: 첫 조각을 사용자가 아직 안 골랐다(§7) · §B가 얕아 착수 전 architect 리뷰가 필수다(§B 머리말)
+# blocked 없음 — 세112에 걷었다. 이 문서는 「장르 결정」이고 그 결정(D1~D11)은 확정이다.
+# 🔴 실행은 후속 노드가 진다: 첫 조각 = room_loop(세112 착수) · 남은 것(챕터 연쇄 · 던전 안 조립)은 방 루프 F5 뒤.
+# ⚠ 옛 blocked 둘은 해소됐다 — 첫 조각은 사용자가 골랐고(§7), 얕던 §B는 그 범위 안에서 room_loop이 architect 리뷰까지 받아 대체했다.
 ---
 
 # 장르 전환 — 익스트랙션 폐기 → 방을 잇는 마법 액션 로그라이크

@@ -111,6 +111,11 @@ VOCAB = {
     #    몹 굴림(D6)·네임드 확률(D7)은 살아남았다 — `run_flow`로 묶으면 딸려 사라진다.
     "mob_spawning",   # 무엇이 어디에 서나 (dungeon_structure)
     "rune_fill",      # 룬을 그린 크기 → 상태이상 세기 (nested)
+    # 세112 — 장르 전환의 첫 조각(room_loop). 🔴 `run_flow`(genre_pivot 소유)와 일부러 갈랐다:
+    #  그쪽은 「런이 어떻게 흐르나」(방→문→보스→다음 챕터)고, 아래 셋은 **방 한 칸의 내부**다.
+    "room_layout",    # 방 크기·경계·카메라·방 전환
+    "door_choice",    # 문 개수 · 문 위 보상 미리보기
+    "room_reward",    # 방을 깨면 무엇이 어떻게 손에 들어오나 (상자)
 }
 FM_LIST = re.compile(r"^\[(.*)\]$")
 
