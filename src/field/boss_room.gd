@@ -377,6 +377,8 @@ var _leaving: bool = false
 ## 🔴 지금 몇 번째 방인가 (0부터). **배치 굴림의 salt**로 들어가 방마다 다른 숲이 된다(설계 §5 「공짜다」).
 ## ⚠ 0이면 salt가 0이라 **단계 2까지의 배치와 한 톨도 안 다르다**(회귀 0 — 그래서 기존 그물이 그대로 산다).
 var _room_index: int = 0
+## 🔴 이 방의 상자 종류 — **문이 고른 값**이 `_enter_room`으로 들어온다(단계 5). 첫 방은 `ROOM_CHEST_ID`.
+var _room_chest_id: StringName = ROOM_CHEST_ID
 ## 🔴🔴 **입구 = 씬이 쥔 `Player`의 처음 자리**(세112 단계 3). 방마다 여기로 되돌린다.
 ##
 ## 🔴 **왜 상수가 아니라 「처음 자리를 기억」인가**: `test_prop_layout_auto [9]`가 `add_child` **전에**
@@ -419,6 +421,35 @@ const ROOM_REWARD_GROUP := &"room_rewards"
 ##  **「상자 종류」로 뜻만 옮겨 살린다**고 정했다. 그 사슬(`LandmarkDef.drops`)이 죽으면
 ##  **지점이 유일 공급원인 재료가 끊겨** `test_recipe_reach_auto`가 빨개진다 — 그래서 재사용이 처방이다.
 const ROOM_CHEST_ID := &"lm_nest"
+
+## 🔴🔴 **문 개수** (세112 단계 5 · R6 「문 2~3개」). 설계 §6-2가 *"방 사양은 `.tres`가 아니라
+##  스크립트 const로 시작해라 — 확정 전에 스키마를 만들면 F5 뒤 그 스키마가 낡는다"*고 못 박았다.
+const DOOR_COUNT := 3
+## 문이 서는 자리 — **북쪽 벽 안쪽으로 이만큼**(연출값). 벽에 딱 붙이면 트리거가 화면 밖에 걸린다.
+const DOOR_INSET := 90.0
+## 🔴 문 사이 x는 방 너비를 `DOOR_COUNT + 1`로 나눠 **고르게** 둔다 — 좌표를 안 박는다(방을 바꾸면 따라온다).
+##  ⚠ 방마다 조금씩 흔든다(`_cell_hash`의 방 salt) — 그래야 방이 「같은 방」으로 안 읽힌다.
+const DOOR_JITTER := 70.0
+## 🔴 씬 경로는 **상수 하나**다 — `preload`가 아니라 `load`인 이유는 `boss_scene_path`와 같다(씬 순환).
+const DOOR_SCENE := "res://src/props/door.tscn"
+
+
+## 🔴🔴 **문이 고를 수 있는 보상 = 「쓸 수 있는 상자 종류」 전부** (세112 단계 5).
+##
+## 🔴 **목록을 손으로 안 든다 — `Db`에서 거른다.** 「새 상자 종류 = `.tres` 한 장」이 그래야 성립하고,
+##  손 목록을 두면 새 `.tres`를 넣어도 문에 안 뜨는데 **에러가 0이다.**
+## 🔴 거르는 조건 = **실제로 쓸 수 있나**(씬이 있고 산출이 있다). ⚠ 실측(단계 5 시점):
+##  `data/landmarks/` 셋 중 **`lm_nest` 하나만 통과한다** — `lm_altar`·`lm_ruin`은 `scene_path`가 비었다.
+##  ⇒ 지금은 **문 셋이 같은 보상을 가리킨다.** 그게 설계 §8이 원한 *"서로 구별되기보다 「같은 문 3개」로
+##   읽혀야"*와 우연히 맞고, **데이터가 늘면 저절로 갈린다**(코드를 안 고친다).
+## 🔴 **미리보기 문구도 여기서 파생한다**(`LandmarkDef.title`) — 문에 글자를 박으면 그 순간 거짓말이 된다.
+func _reward_pool() -> Array[StringName]:
+	var out: Array[StringName] = []
+	for def: LandmarkDef in Db.all_landmarks():
+		if def == null or def.scene_path == "" or def.drops.is_empty():
+			continue
+		out.append(def.id)
+	return out
 
 
 func _ready() -> void:
@@ -483,10 +514,13 @@ func _ready() -> void:
 ##  (`_ready`에서 부르는 첫 호출은 물리 밖이라 직접 불러도 된다.)
 ##
 ## ⚠ `index`는 **배치 굴림의 salt**로만 쓰인다(0이면 단계 2와 동일 — 회귀 0).
-##  🔴 설계가 적은 `tag`(보상 종류) 인자는 **일부러 안 받았다** — 지금 소비자가 0곳이라 그대로
-##   거짓 손잡이(T3)가 된다. 단계 5가 문에서 보상을 고를 때 그 자리에서 받아라.
-func _enter_room(index: int) -> void:
+## 🔴🔴 **`chest_id` = 설계가 `tag`라 부른 그 인자다** (세112 단계 5에 받았다). 단계 3엔 **일부러 안
+##  받았다** — 소비자가 0곳이라 그대로 거짓 손잡이(T3)였기 때문이다. 이제 **문이 고른 보상**이
+##  들어오므로 소비자가 생겼다: 이 방의 상자 종류를 정한다.
+##  ⚠ 빈 값이면 `ROOM_CHEST_ID`로 떨어진다(첫 방 · F6 직접 실행 경로).
+func _enter_room(index: int, chest_id: StringName = &"") -> void:
 	_room_index = index
+	_room_chest_id = chest_id if chest_id != &"" else ROOM_CHEST_ID
 	# 🔴 **`_cleared`만 되돌린다 — `_leaving`은 판 수명이다**(설계 §5-2 주의 3).
 	#  `_leaving`을 여기서 내리면 귀환·사망 도중에 방이 하나 더 서서 **두 번 씬을 갈아탄다.**
 	_cleared = false
@@ -1008,7 +1042,48 @@ func _road_cells(ts: Vector2i) -> Dictionary:
 	var out: Dictionary = {}
 	var half: int = (EXIT_PATH_WIDTH_CELLS - 1) / 2
 	_landmark_road_cells(half, ts, out)
+	_door_road_cells(half, ts, out)
 	return out
+
+
+## 🔴🔴 **나가는 길 ⓐ가 돌아왔다 — 이번엔 문의 길이다** (세112 단계 5 · R1이 지운 `_exit_road_ends`의 자리).
+##
+## 🔴 그 묘비가 남긴 판단 둘을 그대로 지킨다:
+##  ⓐ **어느 가장자리로 뺄지는 「가장 가까운 변」으로 고른다** — 「마지막 세 줄」로 박으면 동·서·북 문에서
+##    길이 자기 자리가 아닌 남쪽 끝에 깔린다(**에러 0 · 화면만 거짓말**). 지금 문은 전부 북쪽이지만
+##    **자리를 옮기는 순간 그 함정이 되살아나므로** 변을 계산해서 고른다.
+##  ⓑ **바깥 끝은 가장자리에서 한 칸 더 나간다** — 마지막 칸에서 멈추면 그 칸이 「풀로 막힌 끝」이 돼
+##    길이 방 안에서 끊겨 보인다(그 한 칸은 `_fill_tiles` 둘째 루프가 테두리 위에 그린다).
+##
+## 🔴🔴 **길은 입장 때 깔리고 문은 클리어 때 선다 — 자리는 `_door_spots()` 하나에서 파생한다.**
+##  좌표를 두 번 계산하면 길만 엉뚱한 데 남고 에러가 0이다.
+## ⇒ 🔴 **여기서 단계 3의 미측정 방어선(`_fill_tiles`의 `clear()`)이 살아난다** — 문 x가 방마다
+##  흔들려 **테두리 위 길 칸이 방마다 갈리므로**, 안 지우면 헌 토막이 남는다. 그물 = `[12]`.
+func _door_road_cells(half: int, ts: Vector2i, out: Dictionary) -> void:
+	var rect := Rect2(_ground.position, _ground.size)
+	for at: Vector2 in _door_spots():
+		var cell := Vector2i(floori(at.x / float(ts.x)), floori(at.y / float(ts.y)))
+		_road_between(_edge_cell_beyond(at, rect, ts), cell, half, out)
+
+
+## ⓐ+ⓑ — 이 자리에서 **가장 가까운 변**을 골라 그 **한 칸 밖**의 셀을 돌려준다.
+## 🔴 변을 거리로 고른다(좌표를 안 박는다) — 문을 동·서·남으로 옮겨도 길이 따라간다.
+func _edge_cell_beyond(at: Vector2, rect: Rect2, ts: Vector2i) -> Vector2i:
+	var d_left := at.x - rect.position.x
+	var d_right := rect.end.x - at.x
+	var d_top := at.y - rect.position.y
+	var d_bottom := rect.end.y - at.y
+	var best := minf(minf(d_left, d_right), minf(d_top, d_bottom))
+	var outside := at
+	if is_equal_approx(best, d_top):
+		outside.y = rect.position.y - float(ts.y)
+	elif is_equal_approx(best, d_bottom):
+		outside.y = rect.end.y + float(ts.y)
+	elif is_equal_approx(best, d_left):
+		outside.x = rect.position.x - float(ts.x)
+	else:
+		outside.x = rect.end.x + float(ts.x)
+	return Vector2i(floori(outside.x / float(ts.x)), floori(outside.y / float(ts.y)))
 
 
 ## 🔴🔴 **들어가는 길 — 입구에서 지점까지** (세99 목표: *"랜드마크 1개에 입구부터 거기로 이어져있는거임"*).
@@ -1419,6 +1494,89 @@ func _check_room_cleared() -> void:
 ##  🔴 방 전환을 붙일 땐 `_enter_room(_room_index + 1)`을 **여기서** 불러라(이미 지연 문맥이다).
 func _on_room_cleared() -> void:
 	_spawn_reward_chest()
+	_spawn_doors()
+	# 🔴🔴 **안내를 갈아 끼운다 — 안 하면 sticky가 거짓 지시로 남는다**(세112 단계 5에 스샷이 잡았다).
+	#  방 목표 줄과 챕터 클리어 줄이 둘 다 *"살아서 나가라 — 출구에서 [E]"*라고 sticky로 떠 있는데,
+	#  방을 깬 지금 플레이어가 할 일은 **문을 고르는 것**이다. sticky는 「유효한 지시만」이 계약이라
+	#  (세84 #36) 틀린 조작을 가르치는 순간 위반이고, **그물이 아니라 눈이 잡는 자리**다.
+	#  ⚠ `_on_enemy_died`의 챕터 클리어 줄보다 **뒤에** 온다(그쪽은 동기, 이쪽은 지연) — 그래서 이긴다.
+	# ⏳ 단계 6이 마지막 방을 정하면 그때 「마지막 방이면 나가라」가 여기서 갈린다.
+	_hud.say("방을 비웠다 — 상자를 열고 문을 골라 들어가라", false, true)
+
+
+## 🔴🔴 **문이 설 자리** — 북쪽 벽 안쪽에 `DOOR_COUNT`개를 고르게 (세112 단계 5 · R6).
+##
+## 🔴 **좌표를 하나도 안 박는다** — `Ground` rect에서 파생하므로 방을 또 줄이면 문이 따라온다.
+##  나누는 법: 너비를 `DOOR_COUNT + 1`로 나눠 **사이**에 세운다(가장자리에 안 붙는다).
+## 🔴 **북쪽인 이유**: 입구가 남쪽이라 「들어왔던 쪽이 아닌 데로 나간다」가 이동으로 읽힌다.
+##  ⚠ 문 셋을 **서로 다르게 생기게 하지 마라** — 설계 §8이 *"같은 문 3개로 읽혀야 아이콘이 정보를 진다"*.
+## 🔴 **방마다 x를 흔든다**(방 salt) — 안 흔들면 방을 넘어도 **똑같은 그림**이라 「새 방」이 안 읽힌다.
+##  ✅ 덤: 그래야 문 길이 방마다 갈려 `_fill_tiles`의 `clear()`가 **실제로 재어진다**(단계 3의 미측정 방어선).
+## 🔴 **스폰과 길이 이 함수 하나에서 파생한다** — 길은 입장 때(`_fill_tiles`), 문은 클리어 때 서는데
+##  자리를 두 번 계산하면 **길만 엉뚱한 데 깔리고 에러가 0이다**(`_landmarks`↔흙길과 같은 결).
+func _door_spots() -> Array[Vector2]:
+	var out: Array[Vector2] = []
+	var rect := Rect2(_ground.position, _ground.size)
+	var y := rect.position.y + DOOR_INSET
+	for i in DOOR_COUNT:
+		var t := float(i + 1) / float(DOOR_COUNT + 1)
+		# `_cell_hash`는 0~99를 준다 — −1..+1로 옮겨 흔든다(방 번호가 salt에 이미 들어 있다).
+		var jitter := (float(_cell_hash(Vector2i(i, 0), 29)) / 50.0 - 1.0) * DOOR_JITTER
+		out.append(Vector2(rect.position.x + rect.size.x * t + jitter, y))
+	return out
+
+
+## 🔴🔴 **문을 세운다 — 방이 깨진 뒤에만** (세112 단계 5 · R6).
+##
+## 🔴 **새 스크립트가 0이다** — `door.tscn`은 `interact_zone.gd`를 그대로 쓴다. 문을 가르는 것은
+##  씬이 아니라 **여기서 무는 보상**이다(`_reward_pool`에서 골라 `interacted`에 실어 준다).
+## 🔴 **미리보기 문구는 데이터에서 온다**(`LandmarkDef.title`) — 문 씬에 박으면 데이터가 바뀔 때 거짓말이 된다.
+##  ⚠ 그 글자가 **늘 보여야** 고르는 근거가 된다(`Prompt`는 다가가야 뜬다 — 씬 주석 참조).
+## ⚠ **그림은 아직 없다**(단계 7 아트) — 글자 둘로 선다. 🔴 도형으로 때우지 않았다.
+##
+## 🔴 그룹을 안 붙여도 `_teardown_room`이 헌다 — **`owner` 가드**가 「코드가 만든 것」을 잡고
+##  문의 `interact_zone.gd`가 자기를 `interact_zones`에 넣기 때문이다(단계 3에 세운 그 구조).
+func _spawn_doors() -> void:
+	var pool := _reward_pool()
+	if pool.is_empty():
+		# 침묵 금지 — 문이 안 서면 **방을 깨도 다음 방으로 갈 길이 없고 화면은 멀쩡하다.**
+		push_error("boss_room: 쓸 수 있는 상자 종류가 하나도 없다 — 문이 안 서서 다음 방으로 못 간다")
+		return
+	var packed := load(DOOR_SCENE) as PackedScene
+	if packed == null:
+		push_error("boss_room: 문 씬 '%s'를 못 읽었다 — 다음 방으로 못 간다" % DOOR_SCENE)
+		return
+	var spots := _door_spots()
+	for i in spots.size():
+		var door := packed.instantiate() as Node2D
+		if door == null:
+			continue
+		# 🔴 위치는 `add_child` 앞이다(지점·적·상자와 같은 계약).
+		door.position = spots[i]
+		var reward: StringName = pool[i % pool.size()]
+		var label := door.get_node_or_null(^"Reward") as Label
+		if label != null:
+			var def := Db.get_landmark(reward)
+			label.text = def.title if def != null and def.title != "" else String(reward)
+		add_child(door)
+		if door.has_signal(&"interacted"):
+			door.connect(&"interacted", _on_door_taken.bind(reward))
+		else:
+			push_warning("boss_room: 문 씬에 `interacted`가 없다 — 눌러도 아무 일이 안 난다")
+
+
+## 🔴🔴 **문으로 들어갔다 — 다음 방을 같은 씬 안에 다시 세운다** (세112 단계 5 · 설계 §5-2).
+##
+## 🔴🔴 **씬을 갈아타지 마라.** `change_scene_to_file`을 쓰면 새 `_ready`가 돌아 **방마다 만HP·만마나**가
+##  되고(「방을 이어서 깬다」의 소모가 통째로 사라진다) 인자를 못 실어 GameState 신설이 붙는다.
+##  그리고 방마다 씬 로드 = **판당 5~6번 히치** — 폐기 사유가 템포였는데 측정 대상 위에 잡음을 심는다.
+## 🔴 **`call_deferred`다** — 방아쇠가 `_unhandled_input`이라 물리 flush는 아니지만, 여기서 방을 헐면
+##  **지금 이 시그널을 쏜 문 자신을 free한다.** 발신 중인 노드를 그 자리에서 지우는 것은 피한다.
+## ⚠ `_leaving`은 **안 건드린다** — 판 수명이다(귀환·사망 이중 전환 가드).
+func _on_door_taken(reward: StringName) -> void:
+	if _leaving:
+		return
+	_enter_room.call_deferred(_room_index + 1, reward)
 
 
 ## 🔴🔴 **방 가운데에 보상 상자를 세운다** (세112 단계 4 · R5).
@@ -1440,11 +1598,11 @@ func _on_room_cleared() -> void:
 ##   ⇒ 🔴 **지연은 여전히 옳지만(엔진이 그렇게 하라고 한다) 「노드가 안 붙는다」로는 못 잡는다.**
 ##    재발 그물의 한계는 `docs/_reports/room_step4.md`에 적었다.
 func _spawn_reward_chest() -> void:
-	var def := Db.get_landmark(ROOM_CHEST_ID)
+	var def := Db.get_landmark(_room_chest_id)
 	if def == null or def.scene_path == "":
 		# 침묵 금지 — 상자가 안 서면 방을 깨도 **보상이 통째로 없고 화면은 멀쩡하다.**
 		push_error("boss_room: 보상 상자 '%s'를 Db.landmarks에서 못 찾았거나 scene_path가 비었다 — 방을 깨도 상자가 안 선다"
-			% String(ROOM_CHEST_ID))
+			% String(_room_chest_id))
 		return
 	var packed := load(def.scene_path) as PackedScene
 	if packed == null:
@@ -1478,13 +1636,13 @@ func _spawn_reward_chest() -> void:
 ## ⚠ **낱개 스폰(`DropRoll.spawn_loose`)을 같이 부르지 마라** — 그러면 같은 드롭이 **두 번** 지급되고
 ##  두루마리는 **이중 해금**이 된다(에러 0).
 func _on_reward_chest_opened() -> void:
-	var def := Db.get_landmark(ROOM_CHEST_ID)
+	var def := Db.get_landmark(_room_chest_id)
 	if def == null:
 		return
 	if def.drops.is_empty():
 		# 데이터가 비면 열어도 아무 일이 안 난다 — 화면은 멀쩡하다(설계 §10 D12 「허탕 없음」).
 		push_warning("boss_room: 보상 상자 '%s'의 drops가 비었다 — 열어도 아무것도 안 나온다"
-			% String(ROOM_CHEST_ID))
+			% String(_room_chest_id))
 		return
 	for entry: Dictionary in DropRoll.roll(def.drops, GameState):
 		DropPickup.grant_one(entry["id"], int(entry["count"]),

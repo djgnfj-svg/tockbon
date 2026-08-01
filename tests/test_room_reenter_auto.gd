@@ -17,11 +17,18 @@ extends SceneTree
 ##  [5] 🔴🔴 **방 클리어 판정** — 적을 다 잡으면 열리고, 재입장하면 **닫힌다**(`_cleared`는 방마다)
 ##      🔴 죽은 몸이 `queue_free` 뒤에도 한 프레임 그룹에 남으므로 **그냥 세면 영영 안 열린다**
 ##  [6] 🔴 `_leaving`은 **판 수명**이다 — 재입장이 건드리면 귀환·사망 중에 방이 하나 더 선다
-##  [7] 헌 흙길이 **타일에 안 남는다** — 지점을 비우고 재입장하면 흙길이 0칸
+##  [7] **지점 길**이 지점에서 파생한다 — 지점을 비우면 입구 발밑이 더는 흙길이 아니다(문 길은 남는다)
 ##  [8] 방 번호가 배치를 **가른다**(`_cell_hash` salt · 설계 §5 「공짜다」)
+##  [9] 🔴 **보상 상자**가 방 한복판에 서고 **[E]가 실제로 뜬다** · 재입장하면 사라진다 (단계 4 · R5)
+## [10] 🔴🔴 **R11** — 열면 가방이 늘고 **낱개 픽업은 안 는다**(둘을 같이 재야 이중 지급을 잡는다)
+## [11] 🔴🔴 두루마리 해금이 **정확히 한 번**(값이 아니라 **횟수**를 센다)
+## [12] 🔴🔴 방을 넘어도 **테두리 흙길이 안 쌓인다** — `_fill_tiles`의 `clear()`를 재는 유일한 자리 (단계 5)
+## [13] 🔴🔴 **문이 판을 나른다** — [E]로 다음 방이 서고 **HP·마나가 안 찬다** · `_leaving` 무변 (단계 5)
+## [14] 🔴🔴 **고른 문이 다음 방 상자 종류를 정한다** — `chest_id`가 거짓 손잡이가 아니라는 증명
 ##
-## ⚠ 못 잡는 것: **엔진 `ERROR:`** — 물리 콜백에서 트리를 만졌을 때 나는 그 줄은 스크립트가 못 읽는다.
-##  🔴 **실행 출력을 `ERROR:`로 grep해라 — `SCRIPT ERROR:`가 아니다**(`tools/run_tests.gd`는 후자만 본다).
+## ⚠ 못 잡는 것: **엔진 `ERROR:`** — 스크립트가 못 읽는다. 러너(`tools/run_tests.gd`)가 자식 출력에서
+##  세어 요약에 찍는다(세112 단계 4 뒤 신설 · **기준선 3건이고 셋 다 일부러 태우는 것**이다).
+## ⚠ 지연/직접 스폰은 **못 가른다** — 물리 콜백에서 붙여도 노드는 붙고 Area도 감지한다(단계 4 실측).
 ## ⚠ 겉보기(방 2가 방 1과 달라 보이나 · 헌 프롭이 한 프레임 깜빡이나)는 전부 F5·스샷 몫이다.
 ##
 ## 🔴 `_enter_room`·`_leaving`을 **이름으로** 부른다 — 보통은 공개 API만 쓰는 게 규율이지만
@@ -71,6 +78,9 @@ func _run() -> void:
 	await _test_reward_chest_stands_and_works()
 	await _test_reward_is_granted_straight_to_bag()
 	await _test_unlock_fires_exactly_once()
+	await _test_border_road_does_not_accumulate()
+	await _test_doors_carry_the_run()
+	await _test_door_choice_actually_routes()
 
 	await _cleanup()
 
@@ -211,23 +221,60 @@ func _test_leaving_survives_reenter() -> void:
 	_room.set("_leaving", false)
 
 
-## [7] 🔴 헌 흙길이 타일에 안 남는다.
-## 흙길은 **지점에서 파생**하므로 지점을 비우면 0칸이어야 한다. `_fill_tiles`가 먼저 `clear()`를
-## 안 하면 **테두리 위에 그린 길 칸**이 덮어써지지 않아 헌 토막이 남는다(에러 0 · 화면만 거짓말).
+## [7] 🔴 **지점 길은 지점에서 파생한다** — 지점을 비우면 그 길이 사라진다.
+##
+## 🔴🔴 **세112 단계 5에 이 항목의 전제가 낡아 실제로 빨개졌다 — 그게 옳은 실패였다.**
+##  그전엔 흙길의 출처가 **지점 하나**여서 「비우면 0칸」이 맞았는데, 단계 5가 **문에 자기 길**을 줬다
+##  ⇒ 지점을 비워도 **문 길이 남는다**(실측 18칸). 「0칸」으로 두면 그때부터 **거짓 빨강**이다.
+## ⇒ 재는 것을 **「전부 사라졌나」에서 「지점 길이 사라졌나」로** 옮긴다: 입구(플레이어 스폰) 발밑이
+##  더는 흙길이 아니다. 🔴 **문 길은 북쪽이라 입구 칸을 안 지난다** — 그래서 이 축이 둘을 가른다.
 func _test_no_stale_road() -> void:
-	print("[7] 🔴 지점을 비우고 재입장하면 헌 흙길이 안 남는다")
+	print("[7] 🔴 지점을 비우면 **입구→지점 길**이 사라진다 (문 길은 남는다)")
 	await _fresh(&"ch1")
 	var road_before := _road_cells()
 	_check(road_before > 0, "지점이 있는 방엔 흙길이 %d칸 있다 (0이면 자명 통과)" % road_before)
+	_check(_entrance_is_road(), "입구 발밑이 흙길이다 (지점 길의 시작점 — 전제)")
 	var ch = _db.get_chapter(&"ch1")
 	var saved: Array = ch.landmarks.duplicate()
 	ch.landmarks.clear()
 	await _reenter(1)
 	var road_after := _road_cells()
+	var entrance_road := _entrance_is_road()
 	ch.landmarks.assign(saved)   # 🔴 되돌리기가 먼저다 — 아래 _check이 무엇을 하든 새 나가지 않는다
-	_check(road_after == 0,
-		"🔴 지점이 없으면 흙길이 0칸이다 (실제 %d칸 — 남으면 `_fill_tiles`가 헌 타일을 안 지운 것이다)"
-			% road_after)
+	_check(not entrance_road,
+		"🔴 지점이 없으면 입구 발밑이 흙길이 아니다 (남으면 `_fill_tiles`가 헌 타일을 안 지운 것이다)")
+	_check(road_after < road_before,
+		"🔴 흙길이 줄었다 %d → %d (문 길은 남으므로 0이 아니다)" % [road_before, road_after])
+
+
+## [12] 🔴🔴 **`_fill_tiles`의 `clear()`가 드디어 재어진다** (세112 단계 5).
+##
+## 🔴 **단계 3엔 이 방어선을 재는 것이 0이었다**(뮤테이션으로 지워도 전부 그린 — 그때 보고서에
+##  *"문 길이 방 밖으로 뻗으면 살아난다"*고 적어 뒀다). 단계 5가 문에 길을 주면서 그날이 왔다:
+##  문 x가 **방마다 흔들리므로** 테두리 위에 그려지는 길 칸이 방마다 갈리고, `clear()`가 없으면
+##  **헌 토막이 테두리에 눌어붙는다**(에러 0 · 화면만 거짓말).
+##
+## 🔴 **개수로 잰다** — 방마다 문이 `DOOR_COUNT`개로 같으니 테두리 길 칸 수도 같아야 한다.
+##  쌓이면(합집합) 늘어난다. 🔴 **자명 통과 방지**로 「두 방의 테두리 길 자리가 실제로 다르다」를 먼저 잰다
+##  — 안 다르면 쌓여도 개수가 같아서 이 검사가 아무것도 안 잰다.
+func _test_border_road_does_not_accumulate() -> void:
+	print("[12] 🔴🔴 방을 넘어도 테두리 흙길이 안 쌓인다 (`_fill_tiles`의 clear())")
+	await _fresh(&"ch1")
+	var b0 := _border_road_set()
+	_check(b0.size() > 0,
+		"방 0의 테두리에 문 길이 %d칸 그려졌다 (0이면 이 항목이 자명 통과다)" % b0.size())
+	await _reenter(1)
+	var b1 := _border_road_set()
+	var same := 0
+	for k in b0:
+		if b1.has(k):
+			same += 1
+	_check(same < b0.size(),
+		"🔴 방 0과 방 1의 테두리 길 자리가 다르다 (%d/%d 겹침 — 같으면 쌓여도 개수가 안 늘어 자명 통과다)"
+			% [same, b0.size()])
+	_check(b1.size() == b0.size(),
+		"🔴🔴 테두리 길 칸이 %d개 그대로다 (실제 %d — 늘면 헌 방의 길이 안 지워지고 눌어붙은 것이다)"
+			% [b0.size(), b1.size()])
 
 
 ## [8] 🔴 방 번호가 배치를 가른다 — 설계 §5의 *"방마다 다른 배치는 공짜다"*.
@@ -356,7 +403,160 @@ func _test_unlock_fires_exactly_once() -> void:
 			% int(seen["n"]))
 
 
+## [13] 🔴🔴 **문이 판을 실제로 나른다** (세112 단계 5 · R4·R6) — 이 파일에서 제일 무거운 항목이다.
+##
+## 🔴 **네 축을 한 흐름으로 잰다** — 나누면 「문은 서는데 눌러도 안 간다」가 사이로 샌다:
+##  ⓐ 방을 깨면 문이 `DOOR_COUNT`개 선다 · 미리보기 글자가 **데이터에서** 찬다
+##  ⓑ [E]를 실제로 밀면 **다음 방이 선다**(적이 다시 차고 상자·문은 사라진다)
+##  ⓒ 🔴🔴 **HP·마나가 안 회복된다** — 「방을 이어서 깬다」의 소모가 여기서 지켜지는지.
+##     ⚠ 단계 3의 `[2]`는 `_enter_room`을 **직접** 불러 쟀다. 여기선 **문을 눌러** 같은 것을 다시 잰다
+##     — 전환이 실제로 도는 경로에서 안 지켜지면 `[2]`가 그린이어도 게임은 깨진 것이다.
+##  ⓓ `_leaving`은 **판 수명**이라 방을 넘어도 안 내려간다
+## 🔴 **`interacted`를 직접 emit하지 않는다** — 실제 입력을 민다(`test_chest_open_auto`의 규율).
+func _test_doors_carry_the_run() -> void:
+	print("[13] 🔴🔴 문이 판을 나른다 — 눌러서 다음 방으로 · HP/마나는 안 찬다")
+	await _fresh(&"ch1")
+	await _clear_room()
+	var doors := _doors()
+	_check(doors.size() == 3,
+		"🔴 방을 깨자 문이 3개 섰다 (실제 %d — `DOOR_COUNT`와 같아야 한다)" % doors.size())
+	if doors.is_empty():
+		return
+	var label := (doors[0] as Node).get_node_or_null(^"Reward") as Label
+	_check(label != null and label.text != "",
+		"🔴🔴 문에 보상 미리보기 글자가 **찼다** (비면 문 고르기가 통째로 무의미해진다 — D4의 심장)")
+	_check(label != null and label.visible,
+		"🔴 그 글자는 **늘 보인다** (다가가야 보이면 고르는 근거가 안 된다)")
+
+	# ⓒ 소모를 만들어 둔다 — 문을 지나도 안 돌아와야 한다.
+	var hurt: float = _gs.hp_max() * 0.35
+	_gs.hp = hurt
+	_gs.mana = _gs.mana_max() * 0.25
+	_room.set("_leaving", false)
+
+	var before_enemies := _count(&"enemies")
+	_check(before_enemies == 0, "문 앞에선 적이 0이다 (방을 깼으니 — 전제 · 실제 %d)" % before_enemies)
+	await _walk_into(doors[0])
+	await _press_open()
+	for i in 4:
+		await process_frame
+	await physics_frame
+
+	_check(_count(&"enemies") > 0,
+		"🔴🔴 문으로 들어가자 **다음 방이 섰다** — 적이 %d마리 다시 찼다" % _count(&"enemies"))
+	_check(_count(&"room_rewards") == 0 and _doors().size() == 0,
+		"🔴 헌 방의 상자·문이 사라졌다 (상자 %d · 문 %d — 남으면 방마다 쌓인다)"
+			% [_count(&"room_rewards"), _doors().size()])
+	_check(is_equal_approx(_gs.hp, hurt),
+		"🔴🔴 문을 지나도 HP가 %.0f 그대로다 (실제 %.0f — 차면 방마다 완전 회복이라 소모가 사라진다)"
+			% [hurt, _gs.hp])
+	_check(_gs.mana < _gs.mana_max() * 0.5,
+		"🔴🔴 문을 지나도 마나가 안 찼다 %.2f / 만 %.0f (마나는 저절로 조금 차므로 정확 비교를 안 쓴다)"
+			% [_gs.mana, _gs.mana_max()])
+	_check(not bool(_room.get("_leaving")), "`_leaving`은 여전히 false다 (방 전환이 판 수명을 안 건드린다)")
+	_gs.reset_player_hp()
+	_gs.restore_mana_full()
+
+
+## [14] 🔴🔴 **고른 문이 실제로 다음 방의 보상을 정한다** (세112 단계 5 — `tag` 인자의 존재 이유).
+##
+## 🔴🔴 **이 항목이 없으면 `chest_id`가 거짓 손잡이다.** 단계 3에 내가 `tag`를 **안 받은** 이유가
+##  「소비자가 0곳」이었고, 단계 5는 문이 소비자가 됐다는 전제로 받았다 — 그 전제를 여기서 증명한다.
+## 🔴 **지금 데이터로는 못 잰다**: 쓸 수 있는 상자 종류가 **`lm_nest` 하나뿐**이라(실측) 문 셋이 같은
+##  보상을 가리키고, `chest_id`를 통째로 무시해도 결과가 같다. ⇒ **두 번째 종류를 주입했다 되돌린다**
+##  (`test_landmark_road_auto`·`[11]`과 같은 관행).
+## 🔴 **관측점 = 다음 방 상자를 열었을 때 가방에 들어온 물건**이다. 「내부 필드가 바뀌었나」를 보면
+##  라우팅은 됐는데 상자가 그걸 안 읽는 경우를 놓친다(§4-4 「같은 길로 왔나」).
+func _test_door_choice_actually_routes() -> void:
+	print("[14] 🔴🔴 고른 문이 다음 방의 상자 종류를 실제로 정한다")
+	var probe_id := &"__probe_chest_b"
+	var probe_item := &"__probe_item_b"
+	var def_script = load("res://src/core/schemas/landmark_def.gd")
+	var entry_script = load("res://src/core/schemas/drop_entry.gd")
+	var probe_def = def_script.new()
+	probe_def.id = probe_id
+	probe_def.title = "시험 상자"
+	probe_def.scene_path = "res://src/props/chest.tscn"
+	var e = entry_script.new()
+	e.item_id = probe_item
+	e.chance = 1.0
+	e.min_count = 1
+	e.max_count = 1
+	# 🔴 `drops`는 `Array[DropEntry]`라 **일반 Array를 대입하면 런타임에 죽는다** — 붙여 넣는다.
+	#  ⚠ 세112 단계 5 실측: 그 대입 하나로 이 함수가 중간에 끊겼는데 **`TEST_..._OK`가 그대로 찍혔다**
+	#   (`failures`가 0인 채로 함수만 죽는다 = `takbon-verify` §3의 침묵 통과). 그래서 아래 `_check`들이
+	#   **함수 끝에 모여 있는 것**이 이 항목의 방어 형태다 — 중간에 죽으면 하나도 안 찍혀 눈에 띈다.
+	probe_def.drops.append(e)
+	_db.landmarks[probe_id] = probe_def
+
+	var titles := {}
+	var routed := false
+	await _fresh(&"ch1")
+	await _clear_room()
+	var doors := _doors()
+	for d in doors:
+		var l := (d as Node).get_node_or_null(^"Reward") as Label
+		if l != null:
+			titles[l.text] = true
+	# 🔴 주입한 종류를 가리키는 문으로 들어간다 — 미리보기 글자로 고른다(사람이 고르는 것과 같은 근거).
+	var target = null
+	for d in doors:
+		var l := (d as Node).get_node_or_null(^"Reward") as Label
+		if l != null and l.text == "시험 상자":
+			target = d
+			break
+	# 🔴🔴 **판정을 여기서 굳힌다 — 아래에서 그 문이 헐린다.** Godot 4는 free된 Object 참조를
+	#  `== null`로 **참**으로 본다 ⇒ 방을 넘긴 뒤에 `target != null`을 읽으면 **찾았는데도 거짓 빨강**이다
+	#  (세112 단계 5에 실제로 그렇게 났다 — 「찾았다」는 FAIL인데 「그 문으로 들어갔더니 나왔다」는 PASS).
+	var found: bool = target != null
+	if target != null:
+		_gs.bag.clear()
+		_room.set("_leaving", false)
+		await _walk_into(target)
+		await _press_open()
+		for i in 4:
+			await process_frame
+		await _clear_room()
+		var chest = _reward_chest()
+		if chest != null:
+			await _stand_in_front(chest)
+			await _press_open()
+			for row: Dictionary in _gs.bag:
+				if StringName(row.get("id", &"")) == probe_item:
+					routed = true
+
+	var bag_snapshot: int = _gs.bag.size()
+	_gs.bag.clear()
+	_db.landmarks.erase(probe_id)   # 🔴 되돌리기가 먼저다 — 아래 _check이 무엇을 하든 새 나가지 않는다
+
+	_check(titles.size() >= 2,
+		"🔴 문들이 **서로 다른 보상**을 가리킨다 (서로 다른 글자 %d종 — 1이면 종류가 하나뿐이라 이 항목을 못 잰다)"
+			% titles.size())
+	_check(found, "주입한 종류를 가리키는 문을 찾았다 (미리보기 글자로 골랐다)")
+	_check(routed,
+		"🔴🔴 그 문으로 들어간 방의 상자에서 **주입한 물건**이 나왔다 (가방 %d줄 — 안 나오면 `chest_id`가 안 실린 것이고 문 고르기가 무의미해진다)"
+			% bag_snapshot)
+
+
 # ── 도구 ──────────────────────────────────────────────────────────────────────
+
+
+## 지금 선 문들 — 🔴 **`zone_id`로 찾는다**(노드 이름으로 찾으면 개명하는 순간 눈을 감는다).
+func _doors() -> Array:
+	var out: Array = []
+	for z in get_nodes_in_group("interact_zones"):
+		if is_instance_valid(z) and not z.is_queued_for_deletion() and z.get("zone_id") == &"door":
+			out.append(z)
+	return out
+
+
+## 문 **안**으로 들어간다 — 트리거 상자 한복판. ⚠ `body_entered`가 실제로 오려면 물리 프레임이 여러 번 필요하다.
+func _walk_into(zone) -> void:
+	var player: Node2D = _room.get_node("Player")
+	player.global_position = (zone as Node2D).global_position
+	for i in 6:
+		await physics_frame
+	await process_frame
 
 
 ## 방의 적을 **실제 경로로** 전부 죽이고 클리어가 돌 때까지 프레임을 흘린다.
@@ -462,15 +662,48 @@ func _prop_key() -> Dictionary:
 ## 🔴 흙길 칸 수 — **아틀라스 좌표로 가른다**(source id로는 못 가른다: 벌판과 길이 같은 시트다).
 ## 벌판 좌표 셋을 손으로 들고 그 밖이면 길로 본다(`test_prop_layout_auto._is_road`와 같은 판단).
 func _road_cells() -> int:
-	var tiles: TileMapLayer = _room.get_node("TileGround")
-	var grass: Array[Vector2i] = [Vector2i(1, 4), Vector2i(2, 4), Vector2i(3, 4)]
 	var n := 0
-	for cell: Vector2i in tiles.get_used_cells():
-		if tiles.get_cell_source_id(cell) != 2:
-			continue
-		if not grass.has(tiles.get_cell_atlas_coords(cell)):
+	for cell: Vector2i in _tiles().get_used_cells():
+		if _is_road(cell):
 			n += 1
 	return n
+
+
+func _tiles() -> TileMapLayer:
+	return _room.get_node("TileGround") as TileMapLayer
+
+
+func _is_road(cell: Vector2i) -> bool:
+	var grass: Array[Vector2i] = [Vector2i(1, 4), Vector2i(2, 4), Vector2i(3, 4)]
+	if _tiles().get_cell_source_id(cell) != 2:
+		return false
+	return not grass.has(_tiles().get_cell_atlas_coords(cell))
+
+
+## 입구(플레이어 스폰) 발밑이 흙길인가 — 🔴 **지점 길의 시작점**이다(문 길은 북쪽이라 여길 안 지난다).
+func _entrance_is_road() -> bool:
+	var player: Node2D = _room.get_node("Player")
+	var ts: Vector2i = _tiles().tile_set.tile_size
+	return _is_road(Vector2i(floori(player.position.x / float(ts.x)),
+		floori(player.position.y / float(ts.y))))
+
+
+## 🔴🔴 **테두리 한 칸 링의 흙길 자리** — `_fill_tiles`의 **둘째 루프**가 그리는 자리다.
+##  첫 루프는 안쪽 rect를 **전부** 덮어쓰므로 헌 타일이 못 남는다. 남을 수 있는 곳은 여기뿐이다.
+## ⚠ 범위를 `boss_room._fill_tiles`와 **같은 방식으로** 파생한다(좌표를 베끼면 방을 바꿀 때만 낡는다).
+func _border_road_set() -> Dictionary:
+	var ground: ColorRect = _room.get_node("Ground")
+	var ts: Vector2i = _tiles().tile_set.tile_size
+	var inner := Rect2(ground.position, ground.size).grow(-float(ts.x))
+	var i_from := Vector2i(floori(inner.position.x / ts.x), floori(inner.position.y / ts.y))
+	var i_to := Vector2i(ceili(inner.end.x / ts.x), ceili(inner.end.y / ts.y))
+	var out: Dictionary = {}
+	for cell: Vector2i in _tiles().get_used_cells():
+		if cell.x >= i_from.x and cell.x < i_to.x and cell.y >= i_from.y and cell.y < i_to.y:
+			continue   # 안쪽 — 첫 루프가 매번 덮어쓴다
+		if _is_road(cell):
+			out["%d,%d" % [cell.x, cell.y]] = true
+	return out
 
 
 ## 방 하나를 새로 띄운다 — 🔴 **`current_scene`을 실게임처럼 세운다**(적 `_die`가 드롭의 부모로 쓴다.
