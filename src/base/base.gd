@@ -2,7 +2,7 @@ extends Node2D
 ## 베이스(허브) — 익스트랙션 루프의 귀환 지점.
 ## 책상에서 E를 누르면 **고리 조립 책**(진·룬·문양)이 베이스 위에 뜬다.
 ## 씬 전환 없음 — ESC로 닫으면 베이스가 그대로 뒤에 남는다.
-## 왼쪽 숲길에서 E를 누르면 **챕터 선택**이 뜨고, 골라서 보스방 원정을 나간다 (세58-B — 옛 숲 즉시 전환 대체).
+## 왼쪽 숲길에서 E를 누르면 **바로** 원정을 나간다 (세112 1d — 챕터 선택 화면이 폐기됐다. `_depart_to_chapter`).
 ## 🔴🔴 세95: 그 문이 **화자·정산까지 겸한다** — 길잡이 NPC가 은퇴했다(`_on_gate_talk` 머리말이 계약 정본).
 ##
 ## 🔴 여기가 **게임의 진입점**이다 (project.godot run/main_scene, 사용자 확정 세션 21).
@@ -73,10 +73,8 @@ const DialogueBoxScene := preload("res://src/hud/dialogue_box.tscn")
 const DialogueBox := preload("res://src/hud/dialogue_box.gd")
 ## 🔴 위력 표시는 여기서 계산하지 않는다 — 리포트·발사·HUD가 **같은 함수**를 본다 (core에 있는 이유).
 const RingPower := preload("res://src/core/ring_power.gd")
-## 챕터 선택 패널 (세58-B) — 숲길 게이트 [E]가 씬 전환 대신 이 모달을 연다. 루트=CanvasLayer,
-## 스크립트=$Panel (chest·dialogue_box 선례). 패널은 base를 안 물어 preload가 안전(순환 아님).
-const ChapterPanelScene := preload("res://src/hud/chapter_panel.tscn")
-const ChapterPanel := preload("res://src/hud/chapter_panel.gd")   # 캐스트 타입 ($Panel은 get_node로 Node라)
+## 🔴 세112 1d: 챕터 선택 패널 preload 둘을 걷었다 — `src/hud/chapter_panel`이 **삭제됐다**
+##   (`room_loop_design.md` §5 걷어내기 표 · `genre_pivot` D9). 문 [E]는 고르게 하지 않고 바로 나간다.
 
 # ─────────────────────── 마을 되살리기 (세89 — 망한 마법 마을) ───────────────────────
 #
@@ -173,10 +171,6 @@ var _workshop: WorkshopPanelScript = null
 ## 🔴 온보딩 오프닝 대사 (세션41 → 세95: 화자가 길잡이에서 **문**으로 옮겨졌다). 이 마을 방문에 한 번만.
 var _dialogue: CanvasLayer = null
 var _gate_intro_shown := false
-## 챕터 선택 패널 인스턴스 (세58-B) — 온디맨드 인스턴스·닫히면 치운다 (dialogue와 같은 결.
-## _overlay 슬롯을 안 쓰는 이유: 이 패널은 ui_modal_open을 스스로 토글하고 플레이어 정지도
-## 폴링으로 해결돼, 책·정제대처럼 base가 물리·caster를 껐다 켤 필요가 없다).
-var _chapter_sel: CanvasLayer = null
 
 func _ready() -> void:
 	# 🔴 씬 진입 시 모달 플래그를 내린다 — ui_modal_open은 오토로드라 씬 전환에도 살아남는다.
@@ -188,8 +182,8 @@ func _ready() -> void:
 	_build_campus()
 	_setup_camera()
 	_desk.interacted.connect(_open_drawing)
-	# 🔴🔴 **세95: 문 [E] 하나에 두 일이 실린다** — 정산 대사(옛 길잡이) → 챕터 선택.
-	#   `_open_chapter_panel`을 직접 잇지 마라(그러면 정산이 통째로 빠진다. 그 형태를
+	# 🔴🔴 **세95: 문 [E] 하나에 두 일이 실린다** — 정산 대사(옛 길잡이) → 출발.
+	#   `_depart_to_chapter`를 직접 잇지 마라(그러면 정산이 통째로 빠진다. 그 형태를
 	#   `test_base_auto [12]`가 잡는다 — 연결 개수만 세는 [8]은 못 잡는다).
 	_gate.interacted.connect(_on_gate_talk)
 	# 🔴 세90: 정제대·공방·매점 연결 셋을 걷었다 (그 노드가 씬에 없다 — `STATION_UNLOCKS` 머리말).
@@ -387,55 +381,48 @@ func _refresh_village_tint() -> void:
 
 ## 🔴 출격이 **HP를 되돌리지 않는다** — 그건 보스방이 한다 (boss_room.gd `_ready`).
 ## 여기서 하면 "베이스에서 나갈 때만" 만HP고, 다른 진입 경로로 들어가면 조용히 다르다.
-## 숲길 [E] = 챕터 선택 모달 — 순서 잠금 3챕터를 보여주고, 고르면 pending_chapter에 실어
-## 보스방으로 전환한다. 잠금 판정은 패널이 한다 (해금 판정은 패널이 — 룬 셀 선례).
+## 🔴🔴 숲길 [E] = **바로 출발** (세112 1d · `room_loop_design.md` §5 · `genre_pivot` D9).
+##   챕터 선택 모달이 폐기돼 「고르는 화면」이 없다 — 문은 첫 챕터로 곧장 내보낸다.
+##
+## 🔴 챕터 id를 하드코딩하지 않는다 — `Db.chapters_sorted()`의 맨 앞(order 최솟값)이 정본이다.
+##   상수로 베끼면 「새 챕터 = .tres 한 장」(takbon-rules §4)이 깨지고, 1장을 개명하면 조용히 빈
+##   `pending_chapter`로 나간다.
+## 🔴🔴 `pending_chapter`를 **반드시 채운다** — `change_scene_to_file`은 인자를 못 실어 이 오토로드가
+##   나르고, 비면 `boss_room._ready`가 설계대로 마을로 되돌린다(= 「나갔는데 도로 마을」, 에러 0).
+##   그래서 챕터가 0장이면 **전환 자체를 안 한다** — 그 왕복은 플레이어에게 무반응으로만 보인다.
 ##
 ## 🔴 세95: 부르는 곳이 셋이다 — `_on_gate_talk`의 ⓑ 순수 원정 갈래 · ⓑ 대사 실패 갈래 ·
 ##   정산 대사의 `finished` 체이닝(`_start_turnin_dialogue`의 `on_finished`). 게이트 시그널에
 ##   **직접 잇지 마라**(그러면 정산이 통째로 빠진다).
-## ⚠ 설계 §2 ⓒ — 아래 가드는 **로그 없이 return**한다. 도달 조건과 그때의 행선지:
-##   `_overlay`(책이 열림) → 애초에 `ui_modal_open`이라 문 [E]가 안 온다 · `_dialogue`(대사 중) →
-##   같은 이유 + 끝나면 체이닝이 다시 부른다 · `_chapter_sel`(이미 열림) → 그 패널이 곧 화면이다.
-##   즉 **어느 갈래도 「눌렀는데 아무 일도 안 난다」로 끝나지 않는다**(그게 이 return이 조용해도 되는 근거다).
-func _open_chapter_panel() -> void:
-	if _overlay != null or _dialogue != null or _chapter_sel != null:   # 모달은 하나뿐
+## ⚠ 설계 §2 ⓒ — 아래 모달 가드는 **로그 없이 return**한다. 도달 조건과 그때의 행선지:
+##   `_overlay`(책이 열림)·`_dialogue`(대사 중) → 애초에 `ui_modal_open`이라 문 [E]가 안 오고,
+##   대사는 끝나면 체이닝이 다시 부른다. 즉 **어느 갈래도 「눌렀는데 아무 일도 안 난다」로 끝나지
+##   않는다**(그게 이 return이 조용해도 되는 근거다). 챕터 0장 갈래만 안내가 필요해 HUD로 말한다.
+func _depart_to_chapter() -> void:
+	if _overlay != null or _dialogue != null:   # 모달 중엔 안 나간다 (플래그를 켠 채 씬이 바뀐다)
 		return
-	_chapter_sel = ChapterPanelScene.instantiate() as CanvasLayer
-	add_child(_chapter_sel)
-	var panel := _chapter_sel.get_node("Panel") as ChapterPanel
-	panel.chapter_selected.connect(_on_chapter_selected)
-	panel.closed.connect(_on_chapter_panel_closed)
-	panel.open()
-
-## 챕터를 골랐다 — 오토로드에 실어 보스방으로. change_scene_to_file은 인자를 못 실으므로
-## `GameState.pending_chapter`가 나른다 (boss_room._ready가 읽어 보스·바닥색을 세운다).
-func _on_chapter_selected(id: StringName) -> void:
-	GameState.pending_chapter = id
+	var chapters := Db.chapters_sorted()
+	if chapters.is_empty():
+		_hud.say("나갈 곳이 없다 — 챕터를 못 읽었다 (data/chapters/*.tres)", true)
+		return
+	GameState.pending_chapter = chapters[0].id
 	get_tree().change_scene_to_file(boss_room_scene_path)
 
-## 패널이 닫혔다 (선택 완료·ESC 취소 둘 다 온다) — 인스턴스만 치운다 (ui_modal_open은 패널이 끈다).
-func _on_chapter_panel_closed() -> void:
-	if _chapter_sel != null:
-		_chapter_sel.queue_free()
-		_chapter_sel = null
-
 ## 🔴🔴 **문 [E] = 정산 + 원정** (세95 · 설계 `world_and_visual_design.md` §2. 옛 이름 `_on_npc_talk`).
-##  ⓐ 정산할 목표가 있으면 문이 먼저 말을 걸고(대사) → **끝나면 그대로** 챕터 선택으로 이어진다.
-##  ⓑ 정산할 게 없으면 **대사 없이 바로** 챕터 선택이다 — 안 그러면 *"나가려는데 자꾸 대사가 뜬다"*가 된다.
+##  ⓐ 정산할 목표가 있으면 문이 먼저 말을 걸고(대사) → **끝나면 그대로** 출발로 이어진다.
+##  ⓑ 정산할 게 없으면 **대사 없이 바로** 출발이다 — 안 그러면 *"나가려는데 자꾸 대사가 뜬다"*가 된다.
 ##
-## 🔴🔴 **[E] 하나에 두 일을 태울 때 조용히 깨지는 자리 넷** (설계 §2 표 ⓐ~ⓓ — 전부 실측된 것이다):
+## 🔴🔴 **[E] 하나에 두 일을 태울 때 조용히 깨지는 자리 셋** (설계 §2 표 — 전부 실측된 것이다):
 ##  ⓐ `interact_zone`은 `GameState.ui_modal_open`이면 E를 **통째로 안 받고**, `dialogue_box.open()`이
-##     그 플래그를 켠다 → 대사 중엔 문의 E가 죽는다. 그래서 챕터 패널을 **`finished`에 명시로 체이닝**한다
+##     그 플래그를 켠다 → 대사 중엔 문의 E가 죽는다. 그래서 출발을 **`finished`에 명시로 체이닝**한다
 ##     (`_start_turnin_dialogue`의 `on_finished`). 안 하면 플레이어가 **E를 두 번** 눌러야 나간다.
 ##  ⓑ 🔴🔴 대사가 **한 줄도 안 나올 수 있다** — `Db.get_quest`가 전부 null이면(`.tres` 침묵사, 세50 ⓑ)
-##     `_start_turnin_dialogue`가 `false`를 돌려주고 `finished`는 **영영 안 온다**. 그래서 패널 열기를
-##     `finished`에만 걸지 않고 **여기서 `false`를 받아 즉시 연다** — 안 그러면 마을 밖으로 못 나가는 소프트락이다.
-##  ⓒ `_show_dialogue`·`_open_chapter_panel`의 가드는 **로그 없이 return**한다. 한 [E]에 묶이면 그 return이
+##     `_start_turnin_dialogue`가 `false`를 돌려주고 `finished`는 **영영 안 온다**. 그래서 출발을
+##     `finished`에만 걸지 않고 **여기서 `false`를 받아 즉시 나간다** — 안 그러면 마을 밖으로 못 나가는 소프트락이다.
+##  ⓒ `_show_dialogue`·`_depart_to_chapter`의 가드는 **로그 없이 return**한다. 한 [E]에 묶이면 그 return이
 ##     곧 「눌렀는데 아무 일도 안 난다」다 → 아래에서 각 갈래의 **행선지를 하나도 안 비워 둔다**.
-##  ⓓ `chapter_panel`은 **E로도 닫힌다**. 대사 마지막 줄을 E로 넘기며 패널을 열면 같은 프레임의 E가
-##     패널을 즉시 닫을 소지가 있다. ✅ 엔진은 `_unhandled_input` 대상 목록을 **디스패치 전에 복사**하므로
-##     그 프레임에 새로 붙은 패널엔 안 간다(같은 형태의 「게이트 E → 패널 즉시 열기」가 세58-B부터 실게임에서
-##     멀쩡히 돌아온 것이 그 증거다). ⚠ 그래도 **헤드리스가 못 재는 종류**라 리드의 실게임 확인 목록에 남는다.
+##  ⚠ **옛 ⓓ(E 이중 소비)는 대상이 사라졌다** — 세112 1d에 챕터 선택 패널이 삭제돼, 대사 마지막 줄의
+##     E가 「방금 뜬 패널을 즉시 닫는」 자리가 없다. 그 E는 이제 곧바로 씬 전환으로 이어진다.
 func _on_gate_talk() -> void:
 	# 🔴 온보딩 (세션41 → 세95): 아직 첫 마법진을 안 맺었으면(ring_designs 빔) 문이 먼저 이야기하고
 	#   **책상으로 보낸다** — 여기선 챕터 선택을 열지 않는다(설계 §5: 문 → "책상으로 가라" → q00).
@@ -453,12 +440,12 @@ func _on_gate_talk() -> void:
 	var claimed := GameState.claim_ready_quests()
 	_refresh_gate_mark()
 	if claimed.is_empty():
-		_open_chapter_panel()   # ⓑ 순수 원정 — 대사 없이 바로
+		_depart_to_chapter()   # ⓑ 순수 원정 — 대사 없이 바로
 		return
 	# 🔴 정산 대사 (세션44) — 조용히 보상만 주지 않고 문이 한마디 하고 다음을 가리킨다.
-	#   ⓑ 대사를 못 띄웠으면(줄이 비었거나 다른 모달) **여기서 바로** 챕터 선택으로 간다.
+	#   ⓑ 대사를 못 띄웠으면(줄이 비었거나 다른 모달) **여기서 바로** 출발한다.
 	if not _start_turnin_dialogue(claimed):
-		_open_chapter_panel()
+		_depart_to_chapter()
 
 ## 🔴 문의 오프닝 대사 (세션41 그리기 튜토 → 세95 전면 재작성 · 설계 §1·§5).
 ##  옛 판은 *"마법은 외우는 게 아니라 **그리는** 것이라네"* + *"밑그림을 손으로 따라 긋게"*였는데
@@ -493,8 +480,8 @@ func _start_gate_intro() -> void:
 ##  dialogue_box가 스스로 모달·일시정지를 잡으므로(ui_modal_open) 여기선 인스턴스·해제만 한다.
 ##  🔴 이미 대사·다른 모달이 떠 있으면 안 띄운다(모달 하나만 — 책과 같은 규약) → **false를 돌려준다.**
 ##  🔴🔴 `on_finished`는 **상자를 치운 뒤** 같은 람다 안에서 부른다(별도 `finished` 연결이 아니다) —
-##   연결 순서에 기대면 `_dialogue`가 아직 non-null인 채로 후속이 돌아 `_open_chapter_panel`의 가드에
-##   조용히 걸린다(= "대사가 끝났는데 문이 안 열린다", 에러 0).
+##   연결 순서에 기대면 `_dialogue`가 아직 non-null인 채로 후속이 돌아 `_depart_to_chapter`의 가드에
+##   조용히 걸린다(= "대사가 끝났는데 안 나간다", 에러 0).
 ##  ⚠ `lines`가 비면 `open()`이 **그 자리에서** finished를 쏜다 → `on_finished`도 즉시 돈다(계약 유지).
 func _show_dialogue(lines: Array, on_finished: Callable = Callable()) -> bool:
 	if _dialogue != null or _overlay != null:
@@ -516,7 +503,7 @@ func _show_dialogue(lines: Array, on_finished: Callable = Callable()) -> bool:
 ##  (퀘스트별 전용 대사 필드 없이 = 스키마 불변). 여러 목표를 한 번에 정산하면 각각 한 줄.
 ##
 ## 🔴🔴 **반환값이 계약이다** (설계 §2 ⓑ): 대사를 실제로 띄웠으면 true. false면 `finished`가
-##  **영영 안 오므로** 호출부가 그 자리에서 챕터 선택을 열어야 한다(안 그러면 마을 밖으로 못 나간다).
+##  **영영 안 오므로** 호출부가 그 자리에서 출발시켜야 한다(안 그러면 마을 밖으로 못 나간다).
 func _start_turnin_dialogue(claimed: Array) -> bool:
 	var lines: Array[String] = []
 	for qid: StringName in claimed:
@@ -537,8 +524,8 @@ func _start_turnin_dialogue(claimed: Array) -> bool:
 		lines.append("다음이 열렸다 — [Tab]으로 확인해라. 문을 연다.")
 	else:
 		lines.append("문을 연다.")
-	# 🔴 마지막 줄("문을 연다")과 **같은 손잡이**로 챕터 선택이 뜬다 — 설계 §2 ⓐ의 체이닝이다.
-	return _show_dialogue(lines, _open_chapter_panel)
+	# 🔴 마지막 줄("문을 연다")과 **같은 손잡이**로 출발한다 — 설계 §2 ⓐ의 체이닝이다.
+	return _show_dialogue(lines, _depart_to_chapter)
 
 ## 퀘스트 완료 보상을 "이름 n개, 이름 n개"로 (정산 대사용). QuestDef.reward_items가 정본.
 func _reward_text(q: QuestDef) -> String:

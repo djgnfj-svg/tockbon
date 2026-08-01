@@ -68,6 +68,7 @@ func _run() -> void:
 	await _test_first_screen_composition()
 	await _test_gate_claims_then_opens_chapters()
 	await _test_desk_opens_the_workshop()
+	await _test_gate_departs_without_choosing()
 
 	if failures == 0:
 		print("TEST_BASE_OK — 전 항목 통과")
@@ -526,7 +527,8 @@ func _test_forest_gate_leads_out() -> void:
 	if gate == null:
 		_check(false, "숲길(zone_id=forest_gate)을 못 찾았다")
 		return
-	# 세58-B: 게이트 E = 씬 전환이 아니라 챕터 선택 패널을 연다 — 연결만 있으면 계약은 같다.
+	# 세112 1d: 게이트 E = **바로 씬 전환**이다(챕터 선택 패널이 폐기됐다) — 여기선 연결만 잰다.
+	#   실제로 나가는지는 [14]가 스텁 경로로 잰다(여기서 전환시키면 이 테스트가 딛고 선 마을이 날아간다).
 	_check(gate.interacted.get_connections().size() >= 1,
 		"숲길의 interacted를 베이스가 받고 있다 (안 이으면 E가 조용히 아무것도 안 한다)")
 
@@ -870,20 +872,24 @@ func _test_first_screen_composition() -> void:
 ## 🔴🔴 **이 그물이 없으면 이 배선 전체가 무그물이다** (설계 §6 실측):
 ##   • `test_quests_auto`는 `base.tscn`을 **인스턴스화조차 안 하고** `claim_ready_quests()`를 직접 부른다.
 ##   • 위 [8]의 게이트 검사는 `get_connections().size() >= 1`이라 **연결이 하나만 있으면 통과**한다 —
-##     즉 문이 챕터 패널만 열고 **정산을 통째로 잃어도** 전 스위트가 그린이다.
+##     즉 문이 나가기만 하고 **정산을 통째로 잃어도** 전 스위트가 그린이다.
 ##   • F5로도 안 드러난다: 기존 세이브엔 옛 퀘스트 상태가 남아 정산할 게 애초에 없다.
 ##   → 그래서 여기서 **씬을 통과하는 진짜 경로**로 잰다: `zone.interacted.emit()`
 ##     (선례 = `test_chapter_auto`가 `ex.interacted.emit()`으로 출구를 재는 방식).
 ##
 ## 재는 것 셋 — 전부 「에러 0으로 조용히 깨지는」 자리다:
 ##   ⓐ 정산 대기가 있을 때 문 [E]가 **실제로 정산한다**(`is_quest_done`이 참이 된다)
-##   ⓑ 🔴 정산 대사가 **끝나면 챕터 선택이 저절로 뜬다** — 설계 §2 ⓐ의 체이닝. 이게 없으면
+##   ⓑ 🔴 정산 대사가 **끝나면 저절로 출발한다** — 설계 §2 ⓐ의 체이닝. 이게 없으면
 ##      `ui_modal_open` 게이트 때문에 플레이어가 **E를 두 번** 눌러야 나간다(에러 0).
-##   ⓒ 정산할 게 없으면 **대사 없이 바로** 챕터 선택이다(*"나가려는데 자꾸 대사가 뜬다"* 금지).
-## ⚠ **못 재는 것**: 대사 마지막 줄을 E로 넘길 때 그 E가 새로 뜬 패널을 **즉시 닫는지**(설계 §2 ⓓ).
-##   여기선 ESC로 넘기고, 같은 프레임 E 이중 소비는 리드가 실게임 `push_input`으로 확인한다.
+##   ⓒ 정산할 게 없으면 **대사 없이 바로** 출발이다(*"나가려는데 자꾸 대사가 뜬다"* 금지).
+##
+## 🔴 세112 1d: ⓑ·ⓒ의 도착지가 **챕터 선택 패널에서 씬 전환으로 바뀌었다**(패널이 삭제됐다).
+##   그래서 「출발했나」는 `_departed()`(= 스텁이 current_scene이 됐나)로 잰다 — 스텁 배선의 이유는
+##   `_arm_departure_stub()` 머리말에 있다. ⚠ 옛 「ESC로 패널을 닫는다」 갈래는 **닫을 패널이 없어졌다**.
+## ⚠ **못 재는 것**: 옛 설계 §2 ⓓ(대사 마지막 줄의 E가 새 패널을 즉시 닫는가)는 **대상이 사라졌다** —
+##   지금 그 E는 곧장 씬 전환으로 이어진다. 리드의 실게임 확인 목록에서 빼도 된다.
 func _test_gate_claims_then_opens_chapters() -> void:
-	print("[12] 🔴 문 [E] = 정산 + 챕터 선택 (세95 길잡이 은퇴 — 설계 §2)")
+	print("[12] 🔴 문 [E] = 정산 + 출발 (세95 길잡이 은퇴 — 설계 §2)")
 	var gs = root.get_node("/root/GameState")
 	var db = root.get_node("/root/Db")
 	var gate = _zone(&"forest_gate")
@@ -907,8 +913,10 @@ func _test_gate_claims_then_opens_chapters() -> void:
 		_check(false, "전제 실패: %s를 정산 대기로 못 만들었다 (도안 %d장)"
 			% [qid, (gs.ring_designs as Array).size()])
 		return
-	_check(_base.get("_chapter_sel") == null and _base.get("_dialogue") == null,
-		"전제: 모달이 안 떠 있다")
+	_check(_base.get("_dialogue") == null, "전제: 모달이 안 떠 있다")
+	# 🔴 여기부터 문 [E]가 **진짜로 씬을 바꾼다** — 갈 곳을 스텁으로 돌려 놓고 잰다(머리말 참조).
+	#   ⚠ 위 전제 실패 `return`들보다 **뒤에** 무장한다(먼저 걸면 해제를 안 거치고 빠져나간다).
+	var real_room: String = _arm_departure_stub()
 
 	# ── 🔴 머리 위 마크가 **문으로** 옮겨왔다 (세95 — 옛 자리는 길잡이 머리 위였다) ──
 	#  🔴 **시그널 경로로** 흔든다(직접 `_refresh_gate_mark`를 부르지 않는다) — `quest_ready` 수신이
@@ -924,11 +932,11 @@ func _test_gate_claims_then_opens_chapters() -> void:
 			"🔴 정산 대기면 문 위에 [?]가 켜진다 (보임 %s · 글자 %s)" % [mark.visible, mark.text])
 
 	# 🔴 **씬 경로로** 누른다 — `_on_gate_talk`를 직접 부르면 「게이트에 그 함수가 이어져 있나」를
-	#   안 재게 된다(연결을 `_open_chapter_panel`로 되돌려도 그린이 나온다 = 검출력 0).
+	#   안 재게 된다(연결을 `_depart_to_chapter`로 되돌려도 그린이 나온다 = 검출력 0).
 	gate.interacted.emit()
 	await process_frame
 	_check(gs.is_quest_done(qid),
-		"🔴🔴 문 [E]가 **정산한다** (%s 완료 %s — 거짓이면 문이 챕터만 열고 정산을 잃은 것이다)"
+		"🔴🔴 문 [E]가 **정산한다** (%s 완료 %s — 거짓이면 문이 내보내기만 하고 정산을 잃은 것이다)"
 			% [qid, gs.is_quest_done(qid)])
 	_check(_base.get("_dialogue") != null,
 		"🔴 정산하면 문이 말을 건다 (대사 상자 없음 = 조용히 보상만 주는 옛 병)")
@@ -938,21 +946,19 @@ func _test_gate_claims_then_opens_chapters() -> void:
 			"🔴 정산하면 [?]가 내려간다 (실제 보임 %s · 글자 %s — 안 내려가면 영영 「가서 받아라」다)"
 				% [mark.visible, mark.text])
 
-	# ── ⓑ 대사가 끝나면 **저절로** 챕터 선택이 열린다 (E를 두 번 누르게 하지 않는다) ──
+	# ── ⓑ 대사가 끝나면 **저절로** 출발한다 (E를 두 번 누르게 하지 않는다) ──
 	_push_action("ui_cancel")   # 건너뛰기 → finished
 	await process_frame
 	await process_frame
 	_check(_base.get("_dialogue") == null, "대사가 끝나면 상자가 치워진다")
-	_check(_base.get("_chapter_sel") != null,
-		"🔴🔴 대사가 끝나면 챕터 선택이 **저절로** 뜬다 (설계 §2 ⓐ — 안 뜨면 E를 두 번 눌러야 나간다)")
+	_check(await _departed(),
+		"🔴🔴 대사가 끝나면 **저절로** 나간다 (설계 §2 ⓐ — 안 나가면 E를 두 번 눌러야 한다)")
 
-	# 뒷정리 — 패널을 닫고 모달을 푼다 (다음 항목·다른 테스트가 잠긴 채로 시작하지 않게).
-	_push_action("ui_cancel")
-	await process_frame
-	_check(_base.get("_chapter_sel") == null and not gs.ui_modal_open,
-		"ESC로 챕터 선택이 닫히고 모달이 풀린다 (실제 모달 %s)" % gs.ui_modal_open)
+	# 뒷정리 — 스텁 씬을 치우고 모달을 푼다 (다음 갈래가 오염된 채로 시작하지 않게).
+	_clear_departure()
+	_check(not gs.ui_modal_open, "출발 뒤 모달이 안 잠겨 있다 (실제 모달 %s)" % gs.ui_modal_open)
 
-	# ── ⓒ 정산할 게 없으면 **대사 없이 바로** 챕터 선택 ──
+	# ── ⓒ 정산할 게 없으면 **대사 없이 바로** 출발 ──
 	#  🔴 이 갈래가 죽으면 「나가려는데 자꾸 대사가 뜬다」거나(대사) 「E를 눌러도 아무 일이 없다」(무반응)가
 	#   되는데, 둘 다 에러가 0이다.
 	_check(not gs.has_claimable_quest(), "전제: 이제 정산할 게 없다")
@@ -960,24 +966,46 @@ func _test_gate_claims_then_opens_chapters() -> void:
 	await process_frame
 	_check(_base.get("_dialogue") == null,
 		"🔴 정산할 게 없으면 대사를 안 띄운다 (설계 §2 — 나가려는데 대사가 뜨면 안 된다)")
-	_check(_base.get("_chapter_sel") != null,
-		"🔴 정산할 게 없으면 **바로** 챕터 선택이 뜬다")
-	_push_action("ui_cancel")
-	await process_frame
+	_check(await _departed(), "🔴 정산할 게 없으면 **바로** 나간다")
+	_clear_departure()
 
 	# ── ⓓ 🔴🔴 **소프트락 방지 계약**(설계 §2 ⓑ) — 대사가 **한 줄도 안 나올 수 있다** ──
 	#  트리거 = `Db.get_quest`가 전부 null(`.tres` 침묵사, 세50 ⓑ — 이 프로젝트가 **두 번 밟은** 조건).
-	#  그때 `finished`가 영영 안 오므로 챕터 패널을 `finished`에**만** 걸면 마을 밖으로 못 나간다.
-	#  🔴 그래서 `_start_turnin_dialogue`의 **반환값이 계약**이다: 못 띄웠으면 false → 호출부가 즉시 연다.
-	#  ⚠ **여기서 재는 건 그 계약 자체다** — 실제 침묵사를 헤드리스에서 만들 길이 없어(claim은 늘
-	#   `Db.all_quests()`에서 오므로 id가 반드시 풀린다) 해소 불가능한 id로 **직접** 부른다.
-	#   가장 있음직한 회귀 = 누가 반환형을 `-> void`로 되돌리는 것이고, 그러면 `typeof`가 NIL이라 빨개진다.
+	#  그때 `finished`가 영영 안 오므로 출발을 `finished`에**만** 걸면 마을 밖으로 못 나간다.
+	#  🔴 그래서 `_start_turnin_dialogue`의 **반환값이 계약**이다: 못 띄웠으면 false → 호출부가 즉시 내보낸다.
+	#  ⚠ 여기(ⓓ)서 재는 건 **반환형 계약**이다 — 가장 있음직한 회귀가 누가 `-> void`로 되돌리는 것이고,
+	#   그러면 `typeof`가 NIL이라 빨개진다. **호출부가 그 false를 실제로 쓰는지는 아래 ⓔ가 잰다.**
 	var shown = _base.call(&"_start_turnin_dialogue", [&"__ghost_quest__"])
 	_check(typeof(shown) == TYPE_BOOL and not bool(shown),
 		"🔴🔴 대사 줄이 비면 `_start_turnin_dialogue`가 **false**를 돌려준다 (실제 %s) — void로 되돌리면 소프트락이다"
 			% str(shown))
 	_check(_base.get("_dialogue") == null, "줄이 비면 상자를 안 띄운다 (빈 상자가 모달만 잡으면 안 된다)")
 
+	# ── ⓔ 🔴🔴 **소프트락 리그** — 「대사 줄이 비는 경로」를 씬을 통과해 진짜로 재현한다 (세112 1d) ──
+	#  옛 주석은 *"실제 침묵사를 헤드리스에서 만들 길이 없다"*(claim은 늘 `Db.all_quests()`에서 오므로
+	#  id가 반드시 풀린다)고 적었는데, **길이 있다**: `quest_completed`는 `claim_ready_quests` **안에서
+	#  동기로** 오므로, 그 수신자에서 `Db.quests`를 지우면 정산 직후 `Db.get_quest`가 null이 된다
+	#  = `.tres` 침묵사(세50 ⓑ)와 **모양이 같다.**
+	#  🔴 그래서 여기서 재는 건 계약이 아니라 **결과**다: 「대사가 한 줄도 안 나와도 마을 밖으로 나가나」.
+	#   빨개지면 그게 곧 **마을에 갇히는 소프트락**이다(호출부가 false 갈래를 잃은 것).
+	#  ⚠ `Db.quests`는 프로세스 전역이라 **같은 함수 안에서 즉시 되돌린다** — 안 되돌리면 뒤 항목이
+	#   퀘스트 없는 세계에서 돈다.
+	#  ⚠ 스텁은 이 함수 **맨 위에서 이미 무장**돼 있다 — 여기서 또 갈아 끼우면 「원래 경로」가 스텁이 된다.
+	var qdef = db.get_quest(qid)
+	gs.quest_done.erase(qid)
+	var killer := func(done_id: StringName) -> void:
+		if done_id == qid:
+			(db.quests as Dictionary).erase(qid)
+	_bus.quest_completed.connect(killer)
+	gate.interacted.emit()
+	_bus.quest_completed.disconnect(killer)
+	(db.quests as Dictionary)[qid] = qdef   # 🔴 즉시 원상복구
+	_check(_base.get("_dialogue") == null,
+		"전제: 대사가 한 줄도 안 나왔다 (침묵사 재현 — 상자가 떴으면 리그가 안 먹은 것이다)")
+	_check(await _departed(),
+		"🔴🔴 대사가 **한 줄도 안 나와도** 마을 밖으로 나간다 (설계 §2 ⓑ — 여기가 빨개지면 소프트락이다)")
+
+	_disarm_departure_stub(real_room)
 	if had_done:
 		gs.quest_done[qid] = true   # 뒷정리 — 원래 완료였으면 되돌린다
 	# 🔴 뒷정리를 **끝까지** 기다린다. 이 항목은 실제로 퀘스트를 정산하므로 `quest_completed` →
@@ -990,6 +1018,48 @@ func _test_gate_claims_then_opens_chapters() -> void:
 
 
 # ── 헬퍼 ──
+
+## 🔴🔴 **출발 스텁** — 세112 1d부터 문 [E]가 **진짜로 `change_scene_to_file`을 부른다.**
+##  진짜 `boss_room`이 뜨면 이 테스트가 딛고 선 마을 위에 **두 번째 플레이어·적 무리**가 얹혀
+##  `_player()`·`_targets()`가 조용히 다른 것을 집는다(에러 0). 그래서 갈 곳만 빈 씬으로 돌려 놓는다.
+##  ✅ 이건 우회가 아니다: 경로가 `@export_file`인 것 자체가 **갈아 끼우라고 있는 손잡이**고
+##  (base.gd `boss_room_scene_path`), **진짜 경로의 실재는 [8]이 따로 잰다.**
+##  🔴 스텁이 `current_scene`이 되는 것 = 「전환이 실제로 걸렸다」의 증거다. `pending_chapter`만
+##  재면 대입만 하고 전환을 잃어도 그린이라, 둘을 같이 본다.
+##  ⚠ `.tscn`엔 주석이 안 남는다(에디터가 지운다) — 스텁의 존재 이유는 이 머리말이 정본이다.
+const DEPARTURE_STUB := "res://tests/test_base_departure_stub.tscn"
+
+
+## 갈 곳을 스텁으로 바꾸고 **원래 경로를 돌려준다**(해제할 때 그대로 되돌린다).
+func _arm_departure_stub() -> String:
+	var real: String = str(_base.get("boss_room_scene_path"))
+	_base.set("boss_room_scene_path", DEPARTURE_STUB)
+	return real
+
+
+## 실제로 나갔나 — `change_scene_to_file`은 **프레임 끝으로 미뤄지므로** 몇 프레임 기다린다.
+func _departed() -> bool:
+	for i in 6:
+		if current_scene != null and is_instance_valid(current_scene) \
+				and String(current_scene.name) == "DepartureStub":
+			return true
+		await process_frame
+	return false
+
+
+## 전환된 스텁 씬을 치운다 — 안 치우면 다음 전환이 그걸 free하며 `current_scene`이 유령이 된다.
+func _clear_departure() -> void:
+	if current_scene != null and is_instance_valid(current_scene):
+		current_scene.free()
+	current_scene = null
+
+
+## 스텁 해제 — 씬을 치우고 **진짜 경로를 되돌린다**(안 되돌리면 뒤 항목이 스텁을 보고 그린이 된다).
+func _disarm_departure_stub(real_room: String) -> void:
+	_clear_departure()
+	_base.set("boss_room_scene_path", real_room)
+	root.get_node("/root/GameState").pending_chapter = &""
+
 
 ## 액션 이벤트를 뷰포트에 주입 → _unhandled_input의 is_action_pressed가 받는다.
 ## ⚠ 액션 주입은 **마우스 히트 테스트를 건너뛴다** — `mouse_filter` 함정은 이걸로 못 잡는다(세25, 위 [7]).
@@ -1147,6 +1217,85 @@ func _test_desk_opens_the_workshop() -> void:
 	_check(bool(gs.ui_modal_open),
 		"🔴 공방을 닫아도 모달 플래그가 살아 있다 (풀리면 [I]·[Tab]이 책 위로 겹친다)")
 	_base.call(&"_close_drawing")
+	await process_frame
+
+
+## [17] 🔴🔴 **문 [E]가 「고르는 화면」 없이 바로 첫 챕터로 보낸다** (세112 1d ·
+## `room_loop_design.md` §5 걷어내기 표 · `genre_pivot` D9 — 챕터 선택 폐기).
+##
+## 🔴 재는 것 셋. **셋 다 에러 0으로 조용히 깨진다**:
+##   ⓐ `pending_chapter`가 **첫 챕터(order 최솟값)로 채워진다.** 🔴 비면 `boss_room._ready`가
+##      설계대로 마을로 되돌려 **「나갔는데 도로 마을」**이 되는데, 그 왕복은 화면상 무반응과 같다.
+##      🔴 값을 여기 하드코딩하지 않는다 — `Db.chapters_sorted()[0]`에서 파생시킨다(감사 T5).
+##   ⓑ **전환이 실제로 걸린다.** 대입만 하고 `change_scene_to_file`을 잃으면 ⓐ만 재는 그물은 그린이다.
+##      🔴 **여기가 심장이다** — *"패널이 없다"*를 재는 항목은 **출발이 죽어도 그린**이라 아무것도 안 지킨다.
+##   ⓒ **모달이 안 뜬다** — 챕터 선택이 되살아나면 여기서 잡힌다(그 패널이 `ui_modal_open`을 켰다).
+##   ⓓ 🔴🔴 **챕터가 0장이면 나가지 않고 「말한다」** — 빈 `pending_chapter`로 나가면 `boss_room`이
+##      마을로 되돌려 **「무반응」과 화면상 구별이 안 되고**, 침묵하면 「[E]가 죽었다」와도 구별이 안 된다.
+## ⚠ [12]와 겹치지 않는다: [12]는 **정산과의 순서**(대사→출발)를, 여기는 **목적지**를 잰다.
+func _test_gate_departs_without_choosing() -> void:
+	print("[17] 🔴 문 [E] = 챕터 선택 없이 바로 첫 챕터 (세112 1d)")
+	var gs = root.get_node("/root/GameState")
+	var db = root.get_node("/root/Db")
+	var gate = _zone(&"forest_gate")
+	if gate == null:
+		_check(false, "숲길(zone_id=forest_gate)을 못 찾았다")
+		return
+	var chapters: Array = db.call(&"chapters_sorted")
+	if chapters.is_empty():
+		_check(false, "전제 실패: 챕터가 0장이다 (data/chapters/*.tres 침묵사?)")
+		return
+	var first: StringName = chapters[0].id
+
+	gs.ui_modal_open = false
+	gs.pending_chapter = &""
+	var real_room: String = _arm_departure_stub()
+
+	# 🔴 정산이 끼면 대사 갈래로 새므로([12]가 그쪽을 잰다) **정산 대기가 없는 상태**에서 누른다.
+	_check(not gs.has_claimable_quest(), "전제: 정산 대기가 없다 (있으면 대사 갈래다 = [12] 소관)")
+	gate.interacted.emit()
+
+	# ⓐ 대입은 **같은 프레임에** 끝난다 (전환만 프레임 끝으로 미뤄진다).
+	_check(StringName(gs.pending_chapter) == first,
+		"🔴🔴 pending_chapter가 첫 챕터(%s)로 채워진다 (실제 %s — 비면 boss_room이 도로 마을로 보낸다)"
+			% [first, gs.pending_chapter])
+	# ⓒ 고르는 화면이 안 뜬다 — 되살아나면 모달 플래그가 켜진다.
+	_check(not gs.ui_modal_open,
+		"🔴 고르는 화면이 안 뜬다 (모달 %s — 켜졌으면 챕터 선택이 되살아난 것이다)" % gs.ui_modal_open)
+	_check(_base.get("_dialogue") == null, "대사도 안 뜬다 (정산 대기가 없으므로)")
+	# ⓑ 🔴🔴 **전환이 실제로 걸린다.** 여기가 이 항목의 심장이다 — *"패널이 없다"*를 재면
+	#    **출발이 죽어도 그린**이고, 그건 「[E]를 눌러도 마을에 갇힌다」와 같은 말이다.
+	_check(await _departed(),
+		"🔴🔴 문 [E]가 **실제로 씬을 바꾼다** (대입만 하고 전환을 잃으면 마을에 갇힌다)")
+	_clear_departure()
+
+	# ── ⓓ 🔴🔴 **챕터가 0장이면 나가지 않고 「말한다」** ──
+	#  `pending_chapter`를 비운 채 전환하면 `boss_room._ready`가 설계대로 마을로 되돌린다 →
+	#  화면에는 **아무 일도 안 난 것과 똑같이** 보인다(세95가 막아 둔 소프트락과 같은 계열의 침묵).
+	#  🔴 그래서 셋을 **같이** 잰다: 안 채운다 · 안 나간다 · **이유를 말한다.**
+	#   말하지 않으면 「[E]가 죽었다」와 구별이 안 되고, 그 침묵이 곧 감사 T6다.
+	#  ⚠ 트리거는 `.tres` 침묵사(세50 ⓑ)다 — `Db.chapters`를 비워 그 모양을 만들고 **즉시 되돌린다**
+	#   (프로세스 전역이라 안 되돌리면 뒤 테스트가 챕터 없는 세계에서 돈다).
+	var saved: Dictionary = (db.chapters as Dictionary).duplicate()
+	var hud = _base.get("_hud")
+	if hud != null:
+		hud.call(&"say", "")   # 앞 안내를 지우고 시작한다 (남은 줄을 새 경고로 오독하지 않게)
+	gs.pending_chapter = &""
+	(db.chapters as Dictionary).clear()
+	gate.interacted.emit()
+	var line: String = str(hud.call(&"say_line")) if hud != null else ""
+	for k in saved:
+		(db.chapters as Dictionary)[k] = saved[k]   # 🔴 즉시 원상복구
+	var went_nowhere: bool = not await _departed()
+	_check(String(gs.pending_chapter) == "",
+		"🔴 챕터가 0장이면 `pending_chapter`를 안 채운다 (실제 %s)" % gs.pending_chapter)
+	_check(went_nowhere,
+		"🔴🔴 챕터가 0장이면 **안 나간다** (빈 채 나가면 boss_room이 도로 마을로 보내 「무반응」과 구별이 안 된다)")
+	_check(line != "",
+		"🔴🔴 그리고 **이유를 말한다** — 침묵하면 「[E]가 죽었다」와 구별이 안 된다 (실제 안내 %s)"
+			% ("(없음)" if line == "" else "「%s」" % line))
+
+	_disarm_departure_stub(real_room)
 	await process_frame
 
 
