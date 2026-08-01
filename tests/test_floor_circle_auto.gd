@@ -25,6 +25,11 @@ extends SceneTree
 ## [10] 🔴🔴 **홀드 동안 원이 안 사라진다**(세98 확정 ⑦) — `duration`은 「채우는 시간」이지 **수명이
 ##      아니다**. 안전망(`_SAFETY_MULT`)이 홀드를 수명으로 세면 오래 들고 있을 때 원이 **조용히
 ##      사라지고**, 그 자멸은 `push_warning`이라 `SCRIPT ERROR` grep에도 **안 걸린다**(감사 T6)
+## [11] 🔴🔴 **즉발(`duration <= 0`)이면 원을 아예 안 연다**(세112 — 사용자 지시 *"바닥에 마법진
+##      생기는것도 제거"*). 🔴 **이 그물이 없는 동안 그 가드는 무방비였다**: `vfx.gd`의 가드를
+##      무력화해도 **전 스위트 43/43이 그린이었다**(세112 뮤테이션 실측) — [1]~[10]이 전부
+##      `duration`을 **양수로** 직접 emit해서 새 계약을 지나는 경로가 하나도 없었기 때문이다.
+##      ⚠ 실패 형태가 **에러 0 · 한 프레임 깜빡임**이라 F5로도 놓치기 쉽다
 ##
 ## 주의: -s 모드는 오토로드 전역 등록보다 먼저 컴파일되므로 오토로드 식별자·모듈 preload 금지 —
 ## 첫 프레임 후 load()·/root 접근. 지역 변수는 의도적으로 동적 타입.
@@ -103,6 +108,7 @@ func _run() -> void:
 	await _test_impact_score()
 	await _test_anchor_and_follow()
 	await _test_survives_hold()
+	await _test_instant_opens_nothing()
 
 	if failures == 0:
 		print("TEST_FLOOR_CIRCLE_OK — 전 항목 통과")
@@ -238,6 +244,37 @@ func _test_survives_hold() -> void:
 	await _wait(0.35)
 	_check(_all_circles().is_empty(),
 		"홀드 뒤 발사해도 정상적으로 닫힌다 — 실제 %d개 남음" % _all_circles().size())
+
+
+## 🔴🔴 [11] 즉발이면 발밑 원을 **안 연다** (세112 · `vfx._on_ring_cast_started`의 `duration <= 0` 가드).
+##
+## 🔴 **대조군이 계약이다** — 「0발」만 재면 *"이 조립본으론 애초에 원이 안 그려진다"*와 구분이 안 돼
+##   자명 통과한다. 그래서 **같은 조립본**을 duration만 바꿔 두 번 민다(양수 → 1개 / 0 → 0개).
+## 🔴 ⓒ가 이 항목의 두 번째 몸이다: 가드가 `_clear_floor()`보다 **앞으로** 올라가면 —
+##   즉 `if duration <= 0.0: return`을 함수 맨 위로 옮기면 — **이미 열려 있던 원이 안 닫혀
+##   화면에 영영 남는다.** 그건 ⓑ만으로는 안 잡힌다(새 원을 안 여는 건 똑같으니까).
+func _test_instant_opens_nothing() -> void:
+	print("[11] 🔴 즉발(duration 0)이면 발밑 원을 아예 안 연다 (세112)")
+	# ⓐ 대조군 — 같은 조립본을 **양수 duration**으로 밀면 원이 선다.
+	var fc = await _open(A_FULL, Vector2.ZERO, 0.5)
+	_check(fc != null and _all_circles().size() == 1,
+		"대조군: duration > 0이면 원이 1개 — 실제 %d개 (0이면 아래가 자명 통과다)"
+			% _all_circles().size())
+	_clear(fc)
+
+	# ⓑ 본체 — duration 0이면 한 개도 안 생긴다.
+	fc = await _open(A_FULL, Vector2.ZERO, 0.0)
+	_check(_all_circles().is_empty(),
+		"🔴 duration == 0 → 원이 0개 — 실제 %d개 (1이면 가드가 죽었다)" % _all_circles().size())
+
+	# ⓒ 열려 있던 원은 **즉발 시전이 들어와도 닫힌다** — `_clear_floor()`가 가드보다 먼저다.
+	fc = await _open(A_FULL, Vector2.ZERO, 0.5)
+	_check(fc != null, "옛 원을 하나 열어 둔다 (전제)")
+	_bus.ring_cast_started.emit(A_FULL, Vector2.ZERO, 0.0)
+	await _wait(0.1)   # `_clear_floor`는 `queue_free`라 회수까지 프레임이 필요하다
+	_check(_all_circles().is_empty(),
+		"🔴 즉발 시전이 들어오면 **열려 있던 원도 닫힌다** — 실제 %d개 남음 (가드를 `_clear_floor` 위로 올리면 여기가 빨개진다)"
+			% _all_circles().size())
 
 
 # ── 헬퍼 ──────────────────────────────────────────────────────────────────────────

@@ -183,6 +183,12 @@ func _on_ring_cast_started(assembly: Dictionary, origin: Vector2, duration: floa
 	if scene == null:
 		return
 	_clear_floor()
+	# 🔴 세112: 차징이 0이면 발밑 원을 열지 않는다(사용자 지시 — 차징·바닥 마법진을 같이 걷었다).
+	#   이 원은 **「채워지는 것」을 보여주는 물건**이라 duration이 0이면 보여줄 대상이 없고,
+	#   열어 봐야 같은 프레임에 `_release_cast`가 도는 한 프레임짜리 깜빡임으로만 남는다.
+	# ⚠ 스위치는 여기가 아니라 **balance의 `cast_time_*` 둘**이다 — 그걸 되돌리면 이 원도 같이 산다.
+	if duration <= 0.0:
+		return
 	var runes := RingDesign.runes_of(
 		assembly.get("runes", []), int(assembly.get("rune", FLOOR_RUNE_FALLBACK)))
 	var jd := Db.get_jin(StringName(assembly.get("jin", &"")))

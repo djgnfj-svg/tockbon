@@ -1,14 +1,19 @@
 extends Node2D
-## 조준선 · **시전** · 슬롯 선택 — **마을(base)과 보스방이 공유한다** (백로그 R4. 옛 숲 씬은 세58-B 은퇴).
+## 조준선 · **발사** · 슬롯 선택 — **마을(base)과 보스방이 공유한다** (백로그 R4. 옛 숲 씬은 세58-B 은퇴).
 ##
-## 🔴 **세98: 좌클릭이 곧 발사가 아니다.** 마나를 물고 `ring_cast_started`를 쏜 뒤 등급이 정한
-## `duration`초 동안 발밑에 마법진이 열린다(그건 vfx 몫). 🔴🔴 **다 차도 자동으로 안 나간다 —
-## 좌클릭을 「떼면」 나간다**(확정 ⑦, F5가 만든 자리: *"타이머가 쥔 게 아니라 내가 쥔다"*).
-## 구간이 둘이다: **채우기**(`_cast_left > 0`) → **홀드**(다 찼는데 아직 쥐고 있다) → 발사.
-## 🔴🔴 **홀드 시간은 위력에 1도 안 실린다** — 오래 들면 세지는 순간 *"대충 조립하고 오래 누르기"*가
-##   최적해가 돼 이 설계 전체(**조립이 화면과 위력을 판다**)가 무너진다. 각하된 대안이 정확히 그것이다.
-## ⚠ 일찍 떼면 **다 차는 즉시** 나간다(최소 시전 시간은 보장 — 확정 ④가 사는 자리).
-## 상태기계는 아래 `_cast_*` 필드 + `fire`/`_tick_cast`/`_release_cast`/`cancel_cast`가 전부다.
+## 🔴🔴 **세112: 좌클릭 = 즉시 발사다**(사용자 지시 *"차징도 없애줘 바로발싸되도록"*).
+## `fire()`가 가드 → 마나 → `ring_cast_started` → **그 자리에서** `_release_cast()`까지 간다.
+##
+## 🔴🔴 **스위치는 코드가 아니라 `balance.cast_time_plain_sec`·`cast_time_perfect_sec` 둘이다.**
+## 지금 둘 다 0이라 **시전 구간의 길이가 0**이고, 그래서 아래 세98 기계가 통째로 **⏸ 잠들어 있다**
+## (죽은 게 아니다 — `_tick_cast`·`is_holding`은 한 번도 안 불릴 뿐 코드는 온전하다).
+## 0.15/0.75로 되돌리면 **표시가 붙은 것이 전부 그대로 되살아난다**: 시전 구간(`_cast_left`) ·
+## 홀드(다 차도 떼야 나간다) · 불발(덜 차고 떼면 흩어진다) · 시전 중 재발사·슬롯 전환 차단 ·
+## 이동 감속 · 구르기/모달 취소 · 발밑 마법진(`vfx._on_ring_cast_started`도 같은 값을 본다).
+## 🔴 **⏸ 주석을 지우지 마라 — 실측으로 산 규칙이라 되살릴 때 그대로 필요하다**
+##   (특히 `_tick_cast` 머리말의 「영원히 홀드에 갇히는 길 셋」).
+## 🔴 그물 = `test_spell_cast_auto` **[0]**이 `cast_time_of == 0`을 감시한다 — 차징이 돌아오면
+##   빨개져 **그 파일 머리말의 묘비 ⓐ~ⓕ를 되살릴 때**라고 알린다.
 ##
 ## 🔴 왜 뽑았나: 세션 25까지 이 로직은 `base.gd` 안에 있었다. 다른 무대가 생기면 그대로 복사됐을 텐데,
 ## 복사본에는 **`to_assembly()`를 빼먹는 함정이 같이 복사된다** — 직접 Dictionary를 만들면
@@ -54,7 +59,10 @@ var _slot: int = 0
 ## 순서 무관). 장착한 지팡이가 없어 지팡이가 숨으면 총구는 몸 중심으로 폴백한다(맨손 캐스팅).
 var _wand: Node2D = null
 
-# ── 시전 (세98 · 정본 = docs/takbon-design/spell_cast_visual_design.md) ────────────────
+# ── 시전 (세98 · 정본 = docs/takbon-design/done/spell_cast_visual_design.md) ────────────
+## ⏸ **여기부터 `_release_cast`까지가 세112에 잠들었다** — `cast_time_*`이 0이라 `_cast_left`가
+##   늘 0이고 `_casting`이 `fire()` 밖으로 안 나간다. **아래 서술은 그 값을 되돌린 뒤의 동작이다.**
+##
 ## 🔴 **좌클릭 = 발사가 아니다.** 가드 → 마나 차감 → `ring_cast_started`(발밑이 열린다) →
 ## **duration초 대기** → `ring_cast_requested`(탄이 나간다). 등급이 그 길이를 판다(확정 ④).
 ##
@@ -76,6 +84,7 @@ var _cast_left: float = 0.0
 ## 떼는 순간 발사가 확정된다. 아직 채우는 중에 떼면 여기만 서고 발사는 **다 차는 순간**이다.
 ## ⚠ 프로그램에서 `fire()`를 직접 부르면(테스트) 버튼이 안 눌려 있으므로 첫 프레임에 참이 된다
 ##   = 옛 「duration 뒤 자동 발사」와 같은 타이밍이라 기존 그물이 그대로 산다.
+## ⏸ 세112엔 `_tick_cast`가 안 돌아 이 값이 false에서 안 움직인다.
 var _cast_released: bool = false
 ## 🔴 시작 시점 **스냅샷** — `to_assembly()`는 시전 한 번에 **한 번만** 부른다(설계 ⓖ).
 ## emit 시점에 `GameState.ring_equipped[_slot]`을 다시 읽으면 시전 중 슬롯을 바꿨을 때
@@ -111,6 +120,8 @@ func is_casting() -> bool:
 ## 다 차 놓고 손을 안 뗀 「홀드」 구간인가 — 🔴 **헤드리스 관측점이다**(`floor_circle.bounds_radius`
 ## 선례). "다 찬 뒤에도 안 뗐으면 안 나간다"를 재는 그물이 이걸로 **홀드에 들어간 것 자체**를
 ## 확인한다 — 안 그러면 「발사 0회」가 *"시전이 애초에 안 걸렸다"*와 구분이 안 된다(자명 통과).
+## ⏸ **세112엔 항상 false다** — `_casting`이 `fire()` 밖으로 안 나가서 홀드 구간이 없다.
+##   🔴 부르는 쪽에서 이걸 「지금 뭔가 도는 중」의 신호로 쓰지 마라(늘 false라 조용히 죽는다).
 func is_holding() -> bool:
 	return _casting and _cast_left <= 0.0
 
@@ -118,6 +129,8 @@ func is_holding() -> bool:
 ## 🔴 시전 중 이동 배수(1.0 = 평소). `player._physics_process`가 `GameState.move_speed()`/
 ## `run_speed()`의 **결과에** 곱한다 — 모자(HAT)·달리기 배수가 이미 실린 값 위에 얹혀야
 ## 장비 효과가 시전 중에만 조용히 사라지지 않는다(세42 선례).
+## ⏸ **세112엔 항상 1.0이다**(`is_casting()`이 늘 false) — `balance.cast_move_mult_*`은 일부러
+##   0.85/0.45로 남겨 뒀다. 차징을 되살리면 감속도 같이 산다.
 func cast_move_mult() -> float:
 	return _cast_move_mult if is_casting() else 1.0
 
@@ -126,6 +139,7 @@ func cast_move_mult() -> float:
 ## 생기고 자연 회복과 싸운다). 부르는 곳 = 구르기 시작(`player`) · 모달/책 열림(아래 `_process`).
 ## 🔴 `ring_cast_canceled`를 반드시 쏜다 — 안 쏘면 시전은 끊겼는데 **발밑 원만 남아** "쐈는데
 ## 안 나갔다"로 읽힌다. 반환 = 실제로 끊었나(시전 중이 아니었으면 false).
+## ⏸ **세112엔 늘 false를 돌려준다**(끊을 시전이 없다) — 부르는 곳은 그대로 살려 뒀다.
 func cancel_cast() -> bool:
 	if not is_casting():
 		return false
@@ -138,6 +152,8 @@ func _process(delta: float) -> void:
 	# 🔴 시전 진행은 **아래 early-return보다 먼저** 본다 — 모달·책이 열리면 「멎는」 게 아니라
 	# **취소**다(설계 ⓕ). `enabled=false`·`ui_modal_open`은 조준·입력만 막지 지연 emit은 안 막아서,
 	# 마을에서 시전하고 책상 [E]를 누르면 펼쳐진 책 위로 마법이 날아간다.
+	# ⏸ 세112엔 이 분기가 한 번도 안 돈다(`is_casting()`이 늘 false) — 즉 **모달 가드는 지금
+	#    `_unhandled_input` 한 곳뿐이다**. 그 함정은 거기 머리말에 적었다.
 	if is_casting():
 		if not enabled or GameState.ui_modal_open:
 			cancel_cast()
@@ -152,6 +168,10 @@ func _process(delta: float) -> void:
 
 
 ## 🔴 시전 진행 — **채우기 → 홀드 → 발사** (확정 ⑦). 여기가 「떼면 나간다」의 전부다.
+##
+## ⏸🔴 **세112엔 이 함수가 한 번도 안 불린다**(`_process`의 `is_casting()`이 늘 false).
+##   🔴🔴 **그래도 아래 셋을 지우지 마라 — 이벤트로 받으면 「영원히 홀드에 갇히는」 실측 목록이고,
+##   차징을 되살리는 날 그대로 필요하다.** 지금 안 돈다는 이유로 걷으면 그 대가를 다시 치른다.
 ##
 ## 🔴🔴 **뗐는지는 폴링으로 본다 — `_unhandled_input`의 released 이벤트가 아니다.**
 ## 이벤트로만 받으면 **영원히 홀드에 갇히는 길이 셋**이고 전부 에러가 0이다(= 마법이 영영 안 나가고
@@ -201,6 +221,13 @@ func _tick_cast(delta: float) -> void:
 
 ## 🔴 발사는 **좌클릭만**이다 (사용자 확정). Space는 발사가 아니다 — 시험대가 Space도 받는 건
 ## 시험대 사정이다. Space를 다른 용도로 임의 배정하지도 마라: 그건 사용자가 정할 몫이다.
+##
+## 🔴🔴 **세112: 아래 early-return이 모달·책 가드의 「유일한」 자리다.** 차징 시절엔 `_process`가
+## 매 프레임 다시 보고 **진행 중인 시전을 취소**해서 가드가 둘이었는데, 즉발이라 그 구간이 없다.
+## ⚠ **그래서 `fire()`를 직접 부르는 그물은 이 가드를 통째로 우회한다** — 세112에 실제로 그 형태로
+##   *"모달인데 탄이 나갔다"* 빨강이 났고, 실경로로 재 보니 **게임은 멀쩡했다**(그물이 거짓말했다).
+## 🔴 모달·`enabled` 계약을 재려면 `root.push_input(InputEventMouseButton)`으로 **진짜 좌클릭**을
+##   밀어라 — 선례 = `test_spell_cast_auto [6]`(가드 없는 **대조군**을 같이 재는 것까지가 계약이다).
 func _unhandled_input(event: InputEvent) -> void:
 	if not enabled or GameState.ui_modal_open:
 		return
@@ -218,6 +245,7 @@ func select_slot(slot: int) -> void:
 	# 🔴 시전 중 슬롯 전환 차단 (설계 ⓖ). 나가는 건 시작할 때의 **스냅샷**이므로, 강조 칸만 옮기면
 	# HUD가 가리키는 진과 실제로 나가는 마법이 **에러 없이 갈라진다**. 확정 ⑤와 결이 같다 —
 	# 시전은 되돌릴 수 없고, 무르려면 구르기(스페이스)로 끊는다.
+	# ⏸ 세112엔 늘 통과한다(막을 구간이 없다).
 	if is_casting():
 		return
 	_slot = slot
@@ -231,10 +259,12 @@ func select_slot(slot: int) -> void:
 ## 🔴 `to_assembly()`로 쏜다 — 그래야 `assembly.score`(손그림 점수)가 실려 **그때 그린 위력이
 ## 그대로 난다**. 직접 Dictionary를 만들면 score가 빠져 조용히 기준 위력이 된다.
 ##
-## 🔴 세98: 여기서 **탄이 나가지 않는다** — 시전이 걸린다. 순서가 곧 계약이다(설계 ⓚ):
-##   ① 빈 슬롯 거부 → ② 마나 차감 → ③ 스냅샷 + `ring_cast_started` → duration 채우기 →
-##   **좌클릭을 뗄 때까지 홀드**(`_tick_cast`) → ④ `ring_cast_requested`
-## 가드가 ③보다 **먼저**여야 빈 슬롯·마나 부족에 발밑이 열리고 차징음이 나는 일이 없다.
+## 🔴 순서가 곧 계약이다(설계 ⓚ) — **가드가 ③보다 먼저**여야 빈 슬롯·마나 부족에 발밑이 열리고
+## 차징음이 나는 일이 없다:
+##   ① 빈 슬롯 거부 → ② 마나 차감 → ③ 스냅샷 + `ring_cast_started`
+##   → ⏸ duration 채우기 → ⏸ 좌클릭을 뗄 때까지 홀드(`_tick_cast`) → ④ `ring_cast_requested`
+## 🔴 **세112: ⏸ 두 단계가 길이 0이라 ③과 ④가 이 함수 안에서 연달아 난다**(맨 아래 분기).
+##   ⇒ **`fire()`가 돌아왔을 때 탄은 이미 나가 있다.** 「나중에 나간다」를 전제로 짜지 마라.
 func fire() -> void:
 	# 🔴 연사 차단 (설계 ⓒ) — 없으면 바닥 마법진이 겹겹이 쌓이고 마나가 연타로 녹는다.
 	# 🔴 세98(홀드): **차단이 홀드 구간까지 이어진다** — `is_casting()`이 `_cast_left`가 아니라
@@ -277,14 +307,16 @@ func fire() -> void:
 	_cast_by_input = Input.is_action_pressed(&"attack_basic")
 	_casting = true
 	EventBus.ring_cast_started.emit(_cast_assembly, _cast_origin, duration)
-	# 시전 시간을 0으로 조이면(balance) 예전처럼 **즉발**로 돈다 — 그 되돌림이 살아 있게 분기를 남긴다.
-	# ⚠ **즉발엔 홀드가 없다**(뗄 때까지 기다리지 않는다) — 「채우는 시간이 0」이면 그 되돌림이
-	#   되살리려는 건 세97까지의 *누르면 나간다*이기 때문이다. duration > 0일 때만 확정 ⑦이 돈다.
+	# 🔴🔴 **세112: 이 분기가 지금 도는 길이다**(`cast_time_*`이 0 → duration 0 → 그 자리에서 발사).
+	#   세98엔 「되돌림이 살아 있게 남긴 분기」였는데 **사용자 지시로 그쪽이 본선이 됐다.**
+	# ⚠ **즉발엔 홀드가 없다**(뗄 때까지 기다리지 않는다) — 「채우는 시간이 0」이 되살리는 건
+	#   세97까지의 *누르면 나간다*이기 때문이다. duration > 0일 때만 확정 ⑦이 돈다.
+	# ⚠ `vfx._on_ring_cast_started`도 **같은 값을 본다** — duration 0이면 발밑 원을 안 연다.
 	if duration <= 0.0:
 		_release_cast()
 
 
-## ④ 손을 뗐고 다 찼다 — 쏜다.
+## ④ 쏜다. ⏸ 차징이 살아 있으면 「손을 뗐고 다 찼다」가 그 조건이고, 세112엔 `fire()`가 곧바로 부른다.
 ##
 ## 🔴🔴 **무엇을 얼리고 무엇을 다시 보는지가 갈린다** (F5가 정한 자리다):
 ##   • **`assembly`는 스냅샷이다**(설계 ⓖ) — 시작할 때 `to_assembly()`를 한 번만 부른다.
@@ -295,8 +327,9 @@ func fire() -> void:
 ##     ⚠ 되돌리지 마라: 「조준을 클릭 순간에 건다」는 긴장은 **실물로 확인해 각하됐다.**
 ## ⚠ 발신 전에 상태를 먼저 지운다 — 수신자가 그 안에서 다시 `fire()`를 불러도 얽히지 않게.
 ## ⚠ `ring_cast_started`의 origin은 여전히 **시작 시점**이다(그건 발밑 원을 여는 자리라 맞다) —
-##   그래서 「started.origin == requested.origin」은 **이제 계약이 아니다.** 총구 단일 소스
-##   (세65 `muzzle_position()`)는 양쪽 다 `_muzzle()`을 거치는 것으로 지켜진다.
+##   그래서 「started.origin == requested.origin」은 **차징이 살아 있는 동안은 계약이 아니다.**
+##   총구 단일 소스(세65 `muzzle_position()`)는 양쪽 다 `_muzzle()`을 거치는 것으로 지켜진다.
+##   ⏸ 세112엔 걸어갈 시간이 없어 **둘이 같은 자리다** — `test_spell_cast_auto [1]`이 그걸 잰다.
 func _release_cast() -> void:
 	var assembly := _cast_assembly
 	var origin := _muzzle()
