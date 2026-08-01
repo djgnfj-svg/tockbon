@@ -81,6 +81,7 @@ func _run() -> void:
 	await _test_border_road_does_not_accumulate()
 	await _test_doors_carry_the_run()
 	await _test_door_choice_actually_routes()
+	await _test_last_room_ends_the_run()
 
 	await _cleanup()
 
@@ -536,6 +537,64 @@ func _test_door_choice_actually_routes() -> void:
 	_check(routed,
 		"🔴🔴 그 문으로 들어간 방의 상자에서 **주입한 물건**이 나왔다 (가방 %d줄 — 안 나오면 `chest_id`가 안 실린 것이고 문 고르기가 무의미해진다)"
 			% bag_snapshot)
+
+
+## [15] 🔴🔴 **마지막 방을 깨면 판이 끝난다 — 그리고 반드시 `_extract()`를 지난다** (세112 단계 6 · R9).
+##
+## 🔴🔴 **`extraction_success`가 이 그물의 심장이다.** 안 쏘면 **가방→창고 이관 · 자동 저장 ·
+##  `q02_come_home`(EXTRACT) · `q04`가 전부 조용히 멎는다**(설계 §6). 🔴 그런데 `test_quests_auto`는
+##  그 시그널을 **직접 emit해서** 재므로 이 경로가 통째로 죽어도 **그린인 채로다** — 여기가 유일한 실경로다.
+##
+## 🔴🔴 **「실눌림」 그물이다 — `docs/TODO.md`의 빚을 여기서 닫는다.**
+##  세112 단계 1에 `test_extract_hold_auto`가 죽으면서 **[E]를 진짜 눌러 나가는 그물이 리포에서 0이 됐다**
+##  (남은 것들은 `interacted`를 **직접 emit**해 정산 채널만 잰다). 여기선 **플레이어를 문 안에 세우고
+##  `Input.action_press` + `push_input`으로 진짜 [E]를 민다** ⇒ `interact_zone._unhandled_input`을
+##  실제로 지난다(모달 게이트·범위 판정 포함).
+##
+## ⚠ **그래도 못 잡는 것 둘 — 알고 남긴다**(`takbon-verify` §2-1):
+##  ① **화면을 덮는 Control이 입력을 먹는지** — 헤드리스는 렌더가 없어 히트 테스트가 실제와 다르다.
+##  ② **[E] 안내가 실제로 화면에 보이는지** — 「존재」는 재지만 「보인다」는 스샷 몫이다.
+##  🔴 그래서 이 항목이 그린이어도 **실게임 확인이 대체되지 않는다.**
+func _test_last_room_ends_the_run() -> void:
+	print("[15] 🔴🔴 마지막 방을 깨면 문 하나로 판이 끝난다 (`extraction_success` 실경로)")
+	await _fresh(&"ch1")
+	# 🔴 마지막 방으로 바로 간다 — `ROOM_COUNT`를 베끼지 않고 **코드에서 읽는다**(값을 바꿔도 안 낡는다).
+	var last: int = int(_room.get("ROOM_COUNT")) - 1
+	_check(last > 0, "`ROOM_COUNT`를 코드에서 읽었다 (%d — 0 이하면 이 항목을 못 잰다)" % (last + 1))
+	await _reenter(last)
+	await _clear_room()
+
+	var doors := _doors()
+	_check(doors.size() == 1,
+		"🔴 마지막 방엔 문이 **하나**다 (실제 %d — 여럿이면 판이 안 끝나고 계속 이어진다)" % doors.size())
+	if doors.is_empty():
+		return
+	var label := (doors[0] as Node).get_node_or_null(^"Reward") as Label
+	_check(label != null and label.text.contains("마을"),
+		"🔴 그 문이 **마을로 돌아간다**고 말한다 (실제 '%s')" % (label.text if label != null else "<없음>"))
+
+	# 🔴🔴 **발신 시점에 다 잡는다 — 그 뒤엔 방이 없다.** `_extract()`가 `_to_base()`로 씬을 갈아타므로
+	#  이 방은 곧 free되고, 나중에 `_room.get("_leaving")`을 읽으면 **null이라 검사 자체가 죽는다**
+	#  (세112 단계 6에 실제로 그랬고 `SCRIPT ERROR`인 채 `TEST_..._OK`가 찍혔다 = §3 침묵 통과).
+	#  ⚠ 단계 5의 「free된 Object는 `== null`이 참」과 **같은 뿌리**다: 방을 헐고 나서 읽지 마라.
+	var fired := {"n": 0, "leaving": false}
+	var room_ref = _room
+	var on_extract := func() -> void:
+		fired["n"] = int(fired["n"]) + 1
+		fired["leaving"] = is_instance_valid(room_ref) and room_ref.get("_leaving") == true
+	_bus.extraction_success.connect(on_extract)
+	_room.set("_leaving", false)
+	await _walk_into(doors[0])
+	await _press_open()          # 🔴 진짜 [E] — `interacted`를 직접 emit하지 않는다
+	for i in 3:
+		await process_frame
+	_bus.extraction_success.disconnect(on_extract)
+
+	_check(int(fired["n"]) == 1,
+		"🔴🔴 진짜 [E]로 `extraction_success`가 **정확히 1번** 나갔다 (실제 %d — 0이면 `_extract()`를 안 지나 가방→창고·자동저장·q02가 전부 멎는다)"
+			% int(fired["n"]))
+	_check(bool(fired["leaving"]),
+		"🔴 발신 시점에 `_leaving`이 이미 서 있었다 = `_extract()`의 이중 전환 가드를 지났다는 증거다")
 
 
 # ── 도구 ──────────────────────────────────────────────────────────────────────

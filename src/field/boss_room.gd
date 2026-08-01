@@ -425,6 +425,12 @@ const ROOM_CHEST_ID := &"lm_nest"
 ## 🔴🔴 **문 개수** (세112 단계 5 · R6 「문 2~3개」). 설계 §6-2가 *"방 사양은 `.tres`가 아니라
 ##  스크립트 const로 시작해라 — 확정 전에 스키마를 만들면 F5 뒤 그 스키마가 낡는다"*고 못 박았다.
 const DOOR_COUNT := 3
+## 🔴🔴 **한 판 = 방 몇 개인가** (세112 단계 6 · R4 「방 5~6개」).
+##
+## 🔴 **재보려고 넣은 값이지 확정이 아니다** — 설계 §9가 *"방 개수·한 판 길이는 이번 F5가 답을 준다"*로
+##  미결에 올려 뒀다. 그래서 `.tres` 스키마가 아니라 **스크립트 const**로 시작한다(§6-2의 지시).
+##  ⚠ 사용자가 F5로 「기냐 짧냐」를 재고 나면 그때 옮길지 정한다 — **지금 스키마를 만들면 그게 낡는다.**
+const ROOM_COUNT := 5
 ## 문이 서는 자리 — **북쪽 벽 안쪽으로 이만큼**(연출값). 벽에 딱 붙이면 트리거가 화면 밖에 걸린다.
 const DOOR_INSET := 90.0
 ## 🔴 문 사이 x는 방 너비를 `DOOR_COUNT + 1`로 나눠 **고르게** 둔다 — 좌표를 안 박는다(방을 바꾸면 따라온다).
@@ -432,6 +438,8 @@ const DOOR_INSET := 90.0
 const DOOR_JITTER := 70.0
 ## 🔴 씬 경로는 **상수 하나**다 — `preload`가 아니라 `load`인 이유는 `boss_scene_path`와 같다(씬 순환).
 const DOOR_SCENE := "res://src/props/door.tscn"
+## 마지막 방의 귀환 문 글자 — 🔴 **이 문만 `_extract()`로 간다**(R9 · 아래 `_spawn_doors` 참조).
+const RETURN_DOOR_LABEL := "마을로 돌아간다"
 
 
 ## 🔴🔴 **문이 고를 수 있는 보상 = 「쓸 수 있는 상자 종류」 전부** (세112 단계 5).
@@ -579,19 +587,23 @@ func _teardown_room() -> void:
 ##
 ## 🔴 세84 #36: `sticky` — **방의 목표 줄이다**. say()에 수명이 붙었으므로(경고가 목표를 덮고
 ## 영구 상주하던 걸 고쳤다) 여기 안 붙이면 목표가 4.5초 뒤 조용히 사라진다.
-## 🔴🔴 세99(D2): 옛 줄은 *"«보스»를 쓰러뜨려라"*였는데 **확정은 「탈출이 목표 · 보스는 선택」**이다
-##   — 방의 **유일한 안내**가 거짓 지시로 남아 있었고 재는 그물이 없었다(설계 §6 S13).
-##   sticky는 **「유효한 지시만」**이 계약이라 이 줄이 곧 계약 위반이었다.
-## ⚠ **두 문장이 같이 읽혀야 한다** — 챕터 잠금은 여전히 `chapter_clear_*`를 요구하므로
-##   「보스는 선택」만 적으면 *"그럼 왜 잡나"*가 되고, 「잡아라」만 적으면 D2가 죽는다.
-## 🔴🔴 **세112 R1: *"[E] 꾹"*이 거짓 지시가 됐다** — 홀드(D7)가 폐기돼 지금은 [E] 한 번이다.
-##   ⚠ **이걸 잡은 건 그물이 아니라 스샷이다**(헤드리스는 문구를 안 읽는다) — `test_ui_text_auto`도
-##   이 줄을 안 문다. sticky = 「유효한 지시만」이라 **틀린 조작을 가르치는 순간 계약 위반**이다.
+## 🔴🔴 **이 줄은 세 번 거짓말을 했다 — 그때마다 그물이 아니라 눈이 잡았다.**
+##  ① 세99(D2): *"«보스»를 쓰러뜨려라"* — 확정은 「탈출이 목표」였다
+##  ② 세112 R1: *"[E] 꾹"* — 홀드(D7)가 폐기됐는데 그대로 가르쳤다
+##  ③ 🔴 **세112 단계 6(지금)**: *"살아서 나가면 이긴다"*(익스트랙션 — D1로 죽었다) ·
+##     *"출구에서 [E]"*(탈출이 목표라는 전제) · *"잡아야 다음 챕터가 열린다"*(챕터 선택 — D9로 죽었다)
+##     — **한 줄에 폐기된 규칙이 셋** 있었다(`docs/TODO.md` 「퀘스트 거짓 안내」).
+## ⇒ 🔴 **패턴이 분명하다: 장르가 바뀔 때마다 여기가 마지막까지 옛 규칙을 가르친다.**
+##  sticky = 「유효한 지시만」(세84 #36)이라 **틀린 조작을 가르치는 순간 계약 위반**인데,
+##  `test_ui_text_auto`는 이 줄을 **안 문다**(문구 사본만 스캔한다) ⇒ **재는 것은 F5·스샷뿐이다.**
+##  ⚠ 규칙을 또 바꾸거든 **여기부터 열어라.**
+## 🔴 지금 줄이 가리키는 것: **방 N/M**(진행) + **적을 다 쓰러뜨린다**(이 방의 조건) — 둘 다 살아 있는 규칙이다.
+##  보스는 「여기 있다」로만 적는다 — 챕터 codex는 여전히 처치가 열지만 **방 진행의 조건은 아니다**.
 func _say_room_goal() -> void:
 	var boss_def := Db.get_enemy(_chapter.boss_enemy_id)
 	var boss_name := boss_def.display_name if boss_def != null else String(_chapter.boss_enemy_id)
-	_hud.say("%s — 살아서 나가면 이긴다. 출구에서 [E]. %s는 선택이지만 잡아야 다음 챕터가 열린다"
-		% [_chapter.title, boss_name], false, true)
+	_hud.say("%s — 방 %d/%d. 적을 모두 쓰러뜨리면 상자와 문이 열린다 (%s도 여기 있다)"
+		% [_chapter.title, _room_index + 1, ROOM_COUNT, boss_name], false, true)
 
 
 ## 🔴 이 방이 깨졌나 — 단계 4·5의 상자·문이 이 값에서 열린다. 그물이 읽는 **공개 문**이다
@@ -1469,8 +1481,10 @@ func _on_enemy_died(enemy_id: StringName) -> void:
 	# 이 줄이 sticky인 이유이자, 세99에 포탈을 없앤 이유이기도 하다 — 처치가 곧 끝이 아니다.
 	# ⚠ **「포탈」을 다시 적지 마라**(T4: 없는 물건을 가리키는 안내는 그대로 거짓 지시가 된다).
 	#  🔴 세112 R1에 *"[E] 꾹"*도 같은 이유로 걷었다 — 홀드가 없는데 꾹 누르라고 가르치던 자리다.
-	_hud.say("%s 클리어!%s 이제 살아서 나가라 — 출구에서 [E]" % [_chapter.title, reward_line],
-		false, true)
+	# 🔴 세112 단계 6: *"이제 살아서 나가라 — 출구에서 [E]"*를 걷었다 — 「살아서 나가는 것이 목표」는
+	#  익스트랙션의 문장이고 D1에 폐기됐다. 지금 보스 처치가 여는 것은 **챕터 codex와 보상**뿐이고,
+	#  다음에 할 일은 **방을 마저 비우는 것**이다(그 안내는 `_on_room_cleared`가 낸다).
+	_hud.say("%s 클리어!%s" % [_chapter.title, reward_line], false, true)
 
 
 ## 🔴🔴 **방 클리어 판정 = 살아 있는 적이 0** (세112 단계 3 — 설계 §5-2).
@@ -1500,8 +1514,11 @@ func _on_room_cleared() -> void:
 	#  방을 깬 지금 플레이어가 할 일은 **문을 고르는 것**이다. sticky는 「유효한 지시만」이 계약이라
 	#  (세84 #36) 틀린 조작을 가르치는 순간 위반이고, **그물이 아니라 눈이 잡는 자리**다.
 	#  ⚠ `_on_enemy_died`의 챕터 클리어 줄보다 **뒤에** 온다(그쪽은 동기, 이쪽은 지연) — 그래서 이긴다.
-	# ⏳ 단계 6이 마지막 방을 정하면 그때 「마지막 방이면 나가라」가 여기서 갈린다.
-	_hud.say("방을 비웠다 — 상자를 열고 문을 골라 들어가라", false, true)
+	# 🔴 세112 단계 6: 마지막 방이면 문이 **하나**고 그 문이 판을 끝낸다(R9) — 안내도 갈린다.
+	if _is_last_room():
+		_hud.say("마지막 방을 비웠다 — 상자를 열고 문으로 마을에 돌아가라", false, true)
+	else:
+		_hud.say("방을 비웠다 — 상자를 열고 문을 골라 들어가라", false, true)
 
 
 ## 🔴🔴 **문이 설 자리** — 북쪽 벽 안쪽에 `DOOR_COUNT`개를 고르게 (세112 단계 5 · R6).
@@ -1537,32 +1554,52 @@ func _door_spots() -> Array[Vector2]:
 ## 🔴 그룹을 안 붙여도 `_teardown_room`이 헌다 — **`owner` 가드**가 「코드가 만든 것」을 잡고
 ##  문의 `interact_zone.gd`가 자기를 `interact_zones`에 넣기 때문이다(단계 3에 세운 그 구조).
 func _spawn_doors() -> void:
-	var pool := _reward_pool()
-	if pool.is_empty():
-		# 침묵 금지 — 문이 안 서면 **방을 깨도 다음 방으로 갈 길이 없고 화면은 멀쩡하다.**
-		push_error("boss_room: 쓸 수 있는 상자 종류가 하나도 없다 — 문이 안 서서 다음 방으로 못 간다")
-		return
 	var packed := load(DOOR_SCENE) as PackedScene
 	if packed == null:
 		push_error("boss_room: 문 씬 '%s'를 못 읽었다 — 다음 방으로 못 간다" % DOOR_SCENE)
 		return
 	var spots := _door_spots()
+	# 🔴🔴 **마지막 방이면 문이 하나다 — 그리고 그 문은 판을 끝낸다**(세112 단계 6 · R9).
+	#  자리는 **가운데 문 자리**를 그대로 쓴다(따로 좌표를 만들지 않는다 — 길도 이미 거기 깔려 있다).
+	if _is_last_room():
+		var back := _make_door(packed, spots[spots.size() / 2], RETURN_DOOR_LABEL, _extract)
+		if back == null:
+			push_error("boss_room: 마지막 방인데 귀환 문을 못 세웠다 — 판이 안 끝난다")
+		return
+	var pool := _reward_pool()
+	if pool.is_empty():
+		# 침묵 금지 — 문이 안 서면 **방을 깨도 다음 방으로 갈 길이 없고 화면은 멀쩡하다.**
+		push_error("boss_room: 쓸 수 있는 상자 종류가 하나도 없다 — 문이 안 서서 다음 방으로 못 간다")
+		return
 	for i in spots.size():
-		var door := packed.instantiate() as Node2D
-		if door == null:
-			continue
-		# 🔴 위치는 `add_child` 앞이다(지점·적·상자와 같은 계약).
-		door.position = spots[i]
 		var reward: StringName = pool[i % pool.size()]
-		var label := door.get_node_or_null(^"Reward") as Label
-		if label != null:
-			var def := Db.get_landmark(reward)
-			label.text = def.title if def != null and def.title != "" else String(reward)
-		add_child(door)
-		if door.has_signal(&"interacted"):
-			door.connect(&"interacted", _on_door_taken.bind(reward))
-		else:
-			push_warning("boss_room: 문 씬에 `interacted`가 없다 — 눌러도 아무 일이 안 난다")
+		var def := Db.get_landmark(reward)
+		var title := def.title if def != null and def.title != "" else String(reward)
+		_make_door(packed, spots[i], title, _on_door_taken.bind(reward))
+
+
+## 문 하나를 세운다 — 🔴 **자리·글자·배선만 다르고 나머지는 같다**(마지막 방의 귀환 문도 이걸 쓴다).
+##  나누면 「보통 문은 되는데 귀환 문만 안 헐린다」 같은 자리가 생긴다.
+func _make_door(packed: PackedScene, at: Vector2, label_text: String, on_taken: Callable) -> Node2D:
+	var door := packed.instantiate() as Node2D
+	if door == null:
+		return null
+	# 🔴 위치는 `add_child` 앞이다(지점·적·상자와 같은 계약).
+	door.position = at
+	var label := door.get_node_or_null(^"Reward") as Label
+	if label != null:
+		label.text = label_text
+	add_child(door)
+	if door.has_signal(&"interacted"):
+		door.connect(&"interacted", on_taken)
+	else:
+		push_warning("boss_room: 문 씬에 `interacted`가 없다 — 눌러도 아무 일이 안 난다")
+	return door
+
+
+## 🔴 이 방이 판의 마지막인가 — `ROOM_COUNT` 하나에서 파생한다(개수를 두 곳에 적지 않는다).
+func _is_last_room() -> bool:
+	return _room_index + 1 >= ROOM_COUNT
 
 
 ## 🔴🔴 **문으로 들어갔다 — 다음 방을 같은 씬 안에 다시 세운다** (세112 단계 5 · 설계 §5-2).

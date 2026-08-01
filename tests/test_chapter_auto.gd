@@ -589,11 +589,22 @@ func _test_kill_plants_clear_and_exits_unchanged() -> void:
 	_check(_extract_wired_count() == exits_before,
 		"🔴 `_extract`에 이어진 지점이 출구 %d개뿐이다 (실제 %d — 이름만 바꾼 포탈도 여기 걸린다)"
 			% [exits_before, _extract_wired_count()])
+	# 🔴🔴 **세112 단계 6: 이 검사가 「죽은 규칙」을 굳히고 있었다 — 뒤집었다.**
+	#  옛 줄은 *"클리어 안내가 **출구**로 나가라고 말한다"*였는데, 그건 「살아서 나가는 것이 목표」라는
+	#  **익스트랙션의 문장**이고 D1에 폐기됐다. 방 루프에선 보스 처치가 여는 것이 **챕터 codex와 보상**뿐이고
+	#  다음 할 일은 **방을 마저 비우는 것**이다(그 안내는 `_on_room_cleared`가 낸다).
+	#  ⇒ 그물이 옛 문구를 **요구**하고 있어서, 코드를 고치자 여기가 빨개졌다 — 세104 늑대 건과 같은 형태다
+	#    (그물이 오독을 굳히면 고칠 때마다 빨개져 **고치지 말라고 압력을 준다**).
+	# 🔴 **지우지 않고 방향을 뒤집는다** — 잴 대상(「죽은 규칙을 가르치나」)이 그대로 남아 있다.
+	#  ⚠ 목록에 새 항목을 더할 땐 **폐기가 확정된 낱말만** 넣어라(살아 있는 낱말을 넣으면 거짓 빨강이다).
 	var clear_line: String = _room.get_node("Hud/Hud").say_line()
-	_check(not clear_line.contains("포탈"),
-		"🔴 클리어 안내가 없는 물건(포탈)을 가리키지 않는다: '%s'" % clear_line)
-	_check(clear_line.contains("출구"),
-		"클리어 안내가 **출구**로 나가라고 말한다 (sticky = 유효한 지시만): '%s'" % clear_line)
+	for dead: String in ["포탈", "출구", "꾹"]:
+		_check(not clear_line.contains(dead),
+			"🔴 클리어 안내가 **폐기된 규칙('%s')**을 안 가르친다 (sticky = 유효한 지시만): '%s'"
+				% [dead, clear_line])
+	_check(clear_line.contains(_db.get_chapter(&"ch1").title),
+		"🔴 클리어 안내가 **무엇을 깼는지**는 말한다 (자명 통과 방지 — 빈 줄이면 위 셋이 전부 통과다): '%s'"
+			% clear_line)
 
 
 ## [4b] 🔴🔴 **보스를 안 잡고** 남쪽 출구로 나간다 — 상시 귀환 (세88 §2-A-3).
