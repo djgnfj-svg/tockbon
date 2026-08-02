@@ -11,6 +11,8 @@ const CellGrid := preload("res://src/world/cells/cell_grid.gd")
 const CellRenderer := preload("res://src/world/cells/cell_renderer.gd")
 const SandboxInput := preload("res://src/sandbox/sandbox_input.gd")
 const Mat := preload("res://src/world/cells/cell_materials.gd")
+const SpellSim := preload("res://src/world/spell/spell_sim.gd")
+const Tuning := preload("res://src/world/spell/spell_tuning.gd")
 
 ## 1자 = 16px 지형 타일 = 4×4 셀. 🔴 16px 정렬이 그림에서 공짜로 나온다(GDD 「해상도」).
 const TILE_CELLS := 4
@@ -76,6 +78,7 @@ const MAP_CHARS: Dictionary = {"#": Mat.STONE, "~": Mat.WATER}
 @onready var _hud: Label = $HUD/Stats
 
 var _grid := CellGrid.new()
+var _spell := SpellSim.new()
 
 ## 🔴 커맨드는 **「어느 틱에 적용되나」를 달고** 큐에 앉는다(설계 §8 ③).
 ##  없으면 나중에 재조정(reconciliation)이 불가능하다. 싱글에서는 로컬 입력이 채우고,
@@ -96,6 +99,15 @@ var _last_processed := 0
 var _strike_count := 0
 var _last_strike := Vector2i(-1, -1)
 var _last_strike_conducted := false
+
+## 발사 피드백. 🔴 번개 피드백과 **같은 이유로 있다** — 화면에 흔적이 0이면
+##  「좌클릭이 안 닿는다」(`mouse_filter`)와 「닿았는데 화면 밖에서 터졌다」를 가릴 수가 없다.
+##  ⚠ 격자 256×144인데 보이는 건 240×135이라, 벽을 뚫은 뒤부터 투사체가 여백으로 나간다.
+##   그때 사용자에게는 **「안 터졌다」로 보인다** — 이 줄이 유일한 구분자다.
+var _fire_count := 0
+var _blast_count := 0
+var _last_blast := Vector2i(-1, -1)
+var _last_blast_label := ""
 
 # ⚠ 셀 세기는 36,864칸 GDScript 루프라 한 번에 ~520μs다. 둘을 같은 프레임에 돌리면
 #  **재는 도구가 재는 대상을 오염시킨다**(최악 튐을 볼 때 1ms를 시뮬 스파이크로 오독한다).
@@ -126,9 +138,19 @@ func _physics_process(_delta: float) -> void:
 
 	_drain_queue()
 
+	# 🔴🔴 **틱 순서는 계약이다** — 바꾸면 결과가 달라지고, 멀티에서는 그게 곧 desync다.
+	#   1. `_drain_queue()`  외부 커맨드(FIRE·PAINT·STRIKE·RESET)
+	#   2. `_grid.step()`    셀이 움직인다
+	#   3. `_spell.step()`   투사체가 **움직인 뒤의 격자**를 상대로 난다. 폭발도 여기서 적용된다
+	#  ⚠ 3이 2 뒤라서 **구멍은 이번 틱에 보이고, 쏟아지는 물은 다음 틱에 흐르기 시작한다.**
+	#   50ms 차이라 눈에 안 보이지만, 순서를 뒤집으면 폭발이 「한 틱 낡은 격자」를 보게 된다.
+	# ⚠ 계측은 **둘을 합쳐** 잰다 — 프레임을 무너뜨리는 건 `_physics_process` 한 번의 총합이다.
 	var t0 := Time.get_ticks_usec()
 	_last_processed = _grid.step()
+	var blasts := _spell.step(_grid)
 	_tick_usec = Time.get_ticks_usec() - t0
+	if not blasts.is_empty():
+		_note_blasts(blasts)
 
 	_tick_usec_max = maxi(_tick_usec_max, _tick_usec)
 	_usec_window.append(_tick_usec)
@@ -152,12 +174,20 @@ func _drain_queue() -> void:
 	var target := _grid.get_tick() + 1
 	var keep: Array[Dictionary] = []
 	for e: Dictionary in _queue:
-		if int(e["tick"]) <= target:
-			_note_strike(e["cmd"])
-			_grid.apply(e["cmd"])
-			_render_dirty = true
-		else:
+		if int(e["tick"]) > target:
 			keep.append(e)
+			continue
+		var cmd: Dictionary = e["cmd"]
+		# 🔴 커맨드가 두 시뮬로 갈린다. **`kind` 키를 공유하지 않는 게 이 분기의 안전장치다** —
+		#  같은 키를 쓰면 두 enum의 숫자가 겹쳐 `CellGrid.apply`가 엉뚱한 커맨드를 실행하고,
+		#  값이 우연히 유효 범위면 **에러 하나 없이** 발사가 페인트가 된다.
+		if cmd.has("spell_kind"):
+			if _spell.fire(cmd):
+				_fire_count += 1
+			continue
+		_note_strike(cmd)
+		_grid.apply(cmd)
+		_render_dirty = true
 	_queue = keep
 
 
@@ -173,8 +203,21 @@ func _note_strike(cmd: Dictionary) -> void:
 	_last_strike_conducted = _grid.conducts_at(_last_strike.x, _last_strike.y)
 
 
+## 🔴 이번 틱에 실제로 터진 것만 온다 — 상한(틱당 4회)에 걸려 밀린 폭발은 다음 틱에 온다.
+## ⚠ **`_render_dirty`를 여기서 켜야 한다.** 폭발이 격자를 바꿨는데 `_grid.step()`이 0청크를
+##  돌려주면(잠든 격자에 쏜 경우) 렌더 업로드를 통째로 건너뛰어 **구멍이 화면에 안 뜬다.**
+##  에러는 안 나고 「발사가 안 먹는다」로만 보인다.
+func _note_blasts(blasts: Array[Dictionary]) -> void:
+	_render_dirty = true
+	_blast_count += blasts.size()
+	var b: Dictionary = blasts[blasts.size() - 1]
+	_last_blast = Vector2i(int(b["x"]), int(b["y"]))
+	_last_blast_label = "P%d %s" % [int(b["tier"]) + 1, Tuning.ELEM_NAMES[int(b["element"])]]
+
+
 func _reset() -> void:
 	_grid.apply(CellGrid.cmd_reset())
+	_spell.reset()
 	_queue.clear()
 	_tick_usec_max = 0
 	_usec_window.clear()
@@ -251,6 +294,11 @@ func _update_hud() -> void:
 			_strike_count, _last_strike.x, _last_strike.y,
 			"예" if _last_strike_conducted else "아니오(마른 곳)",
 		]
+	# 🔴 발사 수와 폭발 수를 **따로** 찍는다 — 둘이 갈라지는 게 곧 진단이다.
+	#  발사 0 = 좌클릭이 안 닿는다(`mouse_filter`) · 발사 > 폭발 = 화면 밖으로 나가 소멸했다.
+	var blast := "없음"
+	if _blast_count > 0:
+		blast = "%s (%d,%d)" % [_last_blast_label, _last_blast.x, _last_blast.y]
 	_hud.text = "\n".join([
 		"틱 %d · %d Hz (분주기 %d)" % [_grid.get_tick(), 60 / _divider, _divider],
 		"활성 청크 %d / %d (다음 %d)" % [_last_processed, CellGrid.CHUNK_COUNT, _grid.awake_count()],
@@ -259,6 +307,14 @@ func _update_hud() -> void:
 		],
 		"틱 %d μs (평균 %d · 최대 %d · 60fps 예산 16,700)" % [_tick_usec, avg, _tick_usec_max],
 		"FPS %d · 마지막 번개 %s" % [Engine.get_frames_per_second(), strike],
-		"좌클릭 칠하기 · 우클릭 번개 · 1물 2돌 3지우개 · [ ] 브러시 · - = 틱 · R 초기화 · ` HUD",
-		"재료: %s · 브러시 %d" % [Mat.material_name(_input.selected_mat), _input.brush_radius],
+		"발사 %d · 폭발 %d · 비행중 %d · 마지막 폭발 %s" % [
+			_fire_count, _blast_count, _spell.active_count(), blast,
+		],
+		"좌클릭 발사 · 우클릭 칠하기 · 중클릭 발사원점 · 1/2/3 위력 · Q물 E번개 · L 직접번개",
+		"4물 5돌 6지우개 · [ ] 브러시 · - = 틱 · R 초기화 · ` HUD",
+		"위력 P%d · 원소 %s · 원점 (%d,%d) · 브러시: %s r%d" % [
+			_input.power_tier + 1, Tuning.ELEM_NAMES[_input.element],
+			_input.fire_origin.x, _input.fire_origin.y,
+			Mat.material_name(_input.selected_mat), _input.brush_radius,
+		],
 	])

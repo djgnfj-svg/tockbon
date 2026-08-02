@@ -464,7 +464,7 @@ func _net9_order_matters() -> void:
 ##  `reset`이 정확히 그렇게 들어와 있었다 — 더하기 전에 `apply()`의 커맨드로 갈 수 있는지 먼저 봐라.
 const PUBLIC_API: Array[String] = [
 	"step", "apply",
-	"cmd_paint", "cmd_fill", "cmd_strike", "cmd_reset",
+	"cmd_paint", "cmd_fill", "cmd_strike", "cmd_reset", "cmd_blast",
 	"get_mat", "get_flag", "get_aux", "get_tick", "awake_count",
 	"mat_at", "flag_at", "aux_at", "conducts_at", "count_material", "count_flag",
 ]

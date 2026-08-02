@@ -45,7 +45,14 @@ const SALT_DIAG := 0x9E3779B9
 # ─── 커맨드 (설계 §8 ②) ───────────────────────────────────────────
 ## ⚠ 설계의 `CLEAR(rect)`는 별도 커맨드가 아니라 `CMD_FILL`에 `mat = EMPTY`다.
 ##  같은 일을 하는 문을 둘 두면 갈라진다(SKILL.md 「단일 소스를 늘리지 마라」).
-enum { CMD_PAINT = 0, CMD_FILL = 1, CMD_STRIKE = 2, CMD_RESET = 3 }
+enum { CMD_PAINT = 0, CMD_FILL = 1, CMD_STRIKE = 2, CMD_RESET = 3, CMD_BLAST = 4 }
+
+## 폭발 반경 상한. 🔴 검증이 없으면 범위 밖 값 하나가 바운딩 박스를 격자 밖까지 늘리고,
+##  그건 `SCRIPT ERROR` grep에 안 걸리는 엔진 「Index out of bounds」로만 짖는다.
+const BLAST_R_MAX := 48
+
+## 🔴 **명시 리스트다 — 비트값이라 연속이 아니다**(0 · 1 · 4). 인덱스로 순회하면 조용히 어긋난다.
+const RESIDUE_ALL: Array[int] = [0, Mat.FLAG_WET, Mat.FLAG_CHARGED]
 
 # ─── 상태 ─────────────────────────────────────────────────────────
 var _mat := PackedByteArray()   # 재료 id
@@ -403,6 +410,29 @@ static func cmd_reset() -> Dictionary:
 	return {"kind": CMD_RESET}
 
 
+## 폭발 — **파괴 · 채우기 · 잔여가 한 커맨드 안**이다.
+##
+## 🔴🔴 **기존 PAINT/FILL 조합으로는 못 만든다. 원자성보다 이 이유가 앞선다:**
+##  `_write_cell`이 `_flag`·`_aux`를 무조건 0으로 지운다 ⇒ PAINT로는 잔여를 남길 방법이 아예 없고,
+##  「파괴한 뒤 페인트」로 쪼개면 **겹치는 영역의 잔여가 조용히 지워진다.** 순서 의존 침묵사다.
+##  원자성도 같이 산다 — 폭발은 세상에서 **한 사건**이라 쪼개면 리플레이·롤백이 절반만 적용한다.
+##
+## 🔴 **위력 표(`power → 반경`)를 여기 넣지 않는다.** 그건 게임 규칙이고 `CellGrid`는 격자 도구다.
+##  표를 격자에 넣으면 시뮬 코어가 밸런스를 알게 되고, 원소가 늘 때마다 이 파일을 열게 된다.
+##  ⇒ 표는 `spell_tuning.gd`에 두고 커맨드는 **자기설명적**으로 만든다.
+##
+##   rd       파괴 반경          rr  잔여 반경 (🔴 rr > rd가 아니면 잔여가 전부 EMPTY 위에 떨어진다)
+##   residue  `Mat.FLAG_WET` · `Mat.FLAG_CHARGED` · 0
+##   fill_mat 구멍을 채울 재료 (EMPTY면 채우기 패스를 건너뛴다)      rf  채우는 반경
+static func cmd_blast(
+	x: int, y: int, rd: int, rr: int, residue: int, fill_mat: int, rf: int
+) -> Dictionary:
+	return {
+		"kind": CMD_BLAST, "x": x, "y": y, "rd": rd, "rr": rr,
+		"residue": residue, "fill_mat": fill_mat, "rf": rf,
+	}
+
+
 func apply(cmd: Dictionary) -> void:
 	match int(cmd.get("kind", -1)):
 		CMD_PAINT:
@@ -413,6 +443,10 @@ func apply(cmd: Dictionary) -> void:
 			_strike(int(cmd["x"]), int(cmd["y"]))
 		CMD_RESET:
 			_reset()
+		CMD_BLAST:
+			_blast(
+				int(cmd["x"]), int(cmd["y"]), int(cmd["rd"]), int(cmd["rr"]),
+				int(cmd["residue"]), int(cmd["fill_mat"]), int(cmd["rf"]))
 		_:
 			push_error("CellGrid.apply: 모르는 커맨드 %s" % cmd)
 
@@ -484,6 +518,104 @@ func _strike(x: int, y: int) -> void:
 	_aux[i] = CHARGE_TTL
 	_wake(x, y)
 	_charge_front.append(i)
+
+
+## 🔴🔴🔴 **세 패스의 순서는 계약이다 — 「읽기 쉽게」 묶거나 뒤집지 마라.**
+##
+##   1. 파괴   반경 rd 안의 **고체만** EMPTY로. ⚠ 물은 안 지운다 — 그래야 호수 밑을 터뜨리면
+##             호수가 구멍으로 **쏟아진다.** 공짜로 얻는 최고의 「세상이 바뀌었다」다.
+##   2. 채우기 반경 rf 안의 **지금 EMPTY인 칸**에 fill_mat.
+##             🔴 1보다 먼저 돌면 채울 EMPTY가 하나도 없다 — 에러 없이 **물이 0칸** 나온다(N5).
+##   3. 잔여   반경 rr 안에 `_wet_one` / `_strike`.
+##             🔴🔴 **1·2 뒤여야 한다.** 앞이면 `_write_cell`이 방금 붙인 플래그를 지운다.
+##
+## 🔴🔴 **새 규칙을 하나도 안 만든다.** 잔여는 기존 `_wet_one`·`_strike`를 **셀마다 부르는 것**이다.
+##  ⇒ 규칙이 두 벌이 될 수 없고(SKILL.md T5), 그물 8·8e·9의 전기 규칙이 **공짜로 폭발에도** 적용된다.
+##  ⚠ 그래서 **마른 돌에 번개 폭발을 쏘면 잔여가 정확히 0칸이다**(`_strike`가 전도체만 본다).
+##   그게 버그가 아니라 이 게임의 테제고, N4가 그걸 잰다.
+##
+## ⚠ 검증은 **커맨드 경계에서 한 번만** 한다(`_paint_brush` 선례) — 내부 루프가 수천 번 돈다.
+func _blast(cx: int, cy: int, rd: int, rr: int, residue: int, fill_mat: int, rf: int) -> void:
+	if not _valid_mat(fill_mat):
+		return
+	if not (_valid_radius(rd) and _valid_radius(rr) and _valid_radius(rf)):
+		return
+	if not RESIDUE_ALL.has(residue):
+		push_error("CellGrid: 모르는 잔여 비트 %d — 커맨드를 버린다" % residue)
+		return
+
+	_blast_destroy(cx, cy, rd)
+	if fill_mat != Mat.EMPTY:
+		_blast_fill(cx, cy, rf, fill_mat)
+	if residue != 0:
+		_blast_residue(cx, cy, rr, residue)
+
+
+func _valid_radius(r: int) -> bool:
+	if r >= 0 and r <= BLAST_R_MAX:
+		return true
+	push_error("CellGrid: 폭발 반경 %d가 범위(0~%d) 밖이다 — 커맨드를 버린다" % [r, BLAST_R_MAX])
+	return false
+
+
+## 🔴 `BEHAVIOR_STATIC`인 칸만 지운다 — 물을 지우면 위 주석의 「쏟아진다」가 사라진다.
+func _blast_destroy(cx: int, cy: int, r: int) -> void:
+	var r2 := r * r
+	for y in range(cy - r, cy + r + 1):
+		if y < 0 or y >= H:
+			continue
+		var row := y << X_SHIFT
+		var dy := y - cy
+		var dy2 := dy * dy
+		for x in range(cx - r, cx + r + 1):
+			if x < 0 or x >= W:
+				continue
+			var dx := x - cx
+			if dx * dx + dy2 > r2:
+				continue
+			if _behavior[_mat[row | x]] != Mat.BEHAVIOR_STATIC:
+				continue
+			_write_cell(x, y, Mat.EMPTY)
+
+
+func _blast_fill(cx: int, cy: int, r: int, mat: int) -> void:
+	var r2 := r * r
+	for y in range(cy - r, cy + r + 1):
+		if y < 0 or y >= H:
+			continue
+		var row := y << X_SHIFT
+		var dy := y - cy
+		var dy2 := dy * dy
+		for x in range(cx - r, cx + r + 1):
+			if x < 0 or x >= W:
+				continue
+			var dx := x - cx
+			if dx * dx + dy2 > r2:
+				continue
+			if _mat[row | x] != Mat.EMPTY:
+				continue
+			_write_cell(x, y, mat)
+
+
+## ⚠ `_wet_one`·`_strike`가 각자 EMPTY·비전도를 걸러낸다 — 여기서 다시 판정하면 규칙이 두 벌이 된다.
+func _blast_residue(cx: int, cy: int, r: int, residue: int) -> void:
+	var r2 := r * r
+	var wet := residue == Mat.FLAG_WET
+	for y in range(cy - r, cy + r + 1):
+		if y < 0 or y >= H:
+			continue
+		var dy := y - cy
+		var dy2 := dy * dy
+		for x in range(cx - r, cx + r + 1):
+			if x < 0 or x >= W:
+				continue
+			var dx := x - cx
+			if dx * dx + dy2 > r2:
+				continue
+			if wet:
+				_wet_one(x, y)
+			else:
+				_strike(x, y)
 
 
 ## 🔴 **공개가 아니다.** 예전엔 공개 `reset()`이라 `apply()` 밖의 **두 번째 쓰기 문**이었고,
