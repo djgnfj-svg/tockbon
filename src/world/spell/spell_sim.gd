@@ -37,7 +37,12 @@ const FP_HALF := FP_ONE >> 1
 
 ## 조준 정규화의 중간 정밀도. 🔴 이게 없으면 짧은 조준 벡터에서 `_isqrt`의 절삭이
 ##  속도를 40%까지 부풀린다(예: 조준 (1,1)에서 isqrt(2)=1이라 속도가 √2배가 된다).
+##  ⚠ **축 방향만 재는 그물로는 이 값을 0으로 죽여도 안 보인다** — N7e가 대각을 재는 이유다.
 const AIM_SHIFT := 8
+
+## 조준 성분의 절대 상한. 🔴 설계가 `CMD_FIRE`의 조준을 **i16 두 개**로 못 박았으니 그게 계약이다.
+##  넘으면 `len2 << 16`이 오버플로해서 조용히 버려지거나(우연히 안전) 더 나쁘게 틀어진다.
+const AIM_MAX := 32767
 
 const SPEED_FP := Tuning.SPEED_CELLS << FP_SHIFT
 
@@ -71,8 +76,10 @@ var _next_id := 0
 var _count := 0
 var _behavior := PackedByteArray()
 
-## 상한을 넘긴 폭발이 앉는 자리. 🔴 **버리지 않고 다음 틱으로 민다** — 버리면 「가끔 안 터진다」가
-##  되고, 그건 사용자에게 고장으로 읽힌다. 순서를 지키므로 결정론적이다.
+## 상한을 넘긴 폭발이 앉는 자리. 🔴 **버리지 않고 다음 틱으로 민다** — 버리면 「몰아 쏘면 몇 발이
+##  안 터진다」가 되고, 그건 사용자에게 고장으로 읽힌다. N7g가 그 자리다.
+## ⚠ 밀릴 때의 순서는 **발사 순이 아니라 슬롯 순이다**(소멸이 swap-remove라 순서가 섞인다).
+##  결정론적이되 **임의**다 — 발사 순서에 의미를 두는 규칙을 나중에 얹지 마라.
 var _pending: Array[Dictionary] = []
 
 
@@ -124,6 +131,11 @@ static func blast_cmd(x: int, y: int, tier: int, element: int) -> Dictionary:
 ## ⚠ **false가 곧 에러는 아니다** — 상한에 걸렸거나 조준이 0이면 조용히 버리는 게 맞다
 ##  (원점을 그대로 클릭하는 건 정상 입력이다). 모르는 단·원소만 짖는다.
 func fire(cmd: Dictionary) -> bool:
+	# 🔴 값이 소비자가 없는 채로 있으면 거짓 손잡이가 된다(SKILL.md T3). `_drain_queue`는
+	#  키 존재로 라우팅하니, 값을 **여기서 실제로 읽어** 손잡이를 살려 둔다.
+	if int(cmd.get("spell_kind", -1)) != CMD_FIRE:
+		push_error("SpellSim: 모르는 주문 커맨드 %s — 발사를 버린다" % cmd)
+		return false
 	var tier := int(cmd.get("tier", -1))
 	if tier < 0 or tier >= Tuning.SIM_TIERS.size():
 		push_error("SpellSim: 모르는 위력 단 %d — 발사를 버린다" % tier)
@@ -132,11 +144,26 @@ func fire(cmd: Dictionary) -> bool:
 	if not Tuning.ELEM_ALL.has(element):
 		push_error("SpellSim: 모르는 원소 %d — 발사를 버린다" % element)
 		return false
-	if _count >= Tuning.MAX_PROJECTILES:
-		return false
 
+	# 🔴🔴 **`CMD_FIRE`는 설계상 선을 넘는 유일한 커맨드다 — 검증을 여기서 안 하면 할 데가 없다.**
+	#  `_px`가 `PackedInt32Array`라 범위 밖 원점은 **에러 없이 32비트로 잘린다**(실측:
+	#  ox = 10,000,000 → 저장값 -1,734,967,168 ⇒ 투사체가 격자 반대편에서 시작한다).
+	#  ⚠ 그리고 그 잘림은 **결정론적**이라(int64→int32 wrap은 플랫폼 무관) desync조차 안 나고
+	#   **아무도 안 짖는다.** 로컬 마우스로는 도달 불가지만 네트워크는 그 문을 연다.
+	#  ⇒ `_valid_mat`·`_valid_radius`와 같은 자리(커맨드 경계)에서 한 번만 본다.
+	var ox := int(cmd.get("ox", 0))
+	var oy := int(cmd.get("oy", 0))
+	if ox < 0 or ox >= CellGrid.W or oy < 0 or oy >= CellGrid.H:
+		push_error("SpellSim: 격자 밖 원점 (%d,%d) — 발사를 버린다" % [ox, oy])
+		return false
 	var adx := int(cmd.get("adx", 0))
 	var ady := int(cmd.get("ady", 0))
+	if absi(adx) > AIM_MAX or absi(ady) > AIM_MAX:
+		push_error("SpellSim: 조준 (%d,%d)이 i16 범위 밖이다 — 발사를 버린다" % [adx, ady])
+		return false
+
+	if _count >= Tuning.MAX_PROJECTILES:
+		return false
 	var len2 := adx * adx + ady * ady
 	if len2 <= 0:
 		return false
@@ -146,8 +173,8 @@ func fire(cmd: Dictionary) -> bool:
 		return false
 
 	var i := _count
-	_px[i] = (int(cmd.get("ox", 0)) << FP_SHIFT) + FP_HALF
-	_py[i] = (int(cmd.get("oy", 0)) << FP_SHIFT) + FP_HALF
+	_px[i] = (ox << FP_SHIFT) + FP_HALF
+	_py[i] = (oy << FP_SHIFT) + FP_HALF
 	_prev_px[i] = _px[i]
 	_prev_py[i] = _py[i]
 	_vx[i] = (adx << AIM_SHIFT) * SPEED_FP / norm
@@ -162,9 +189,11 @@ func fire(cmd: Dictionary) -> bool:
 	return true
 
 
+## 🔴 **`_next_id`는 일부러 안 되돌린다 — 리셋을 넘어 단조 증가한다.**
+##  되돌리면 리셋 뒤 첫 투사체가 id 0을 다시 쓰고, 렌더의 자취 링버퍼가 id로 짝을 맞추니
+##  **옛 자취가 새 투사체에 달라붙는다.** 에러는 안 나고 화면만 이상해진다.
 func reset() -> void:
 	_count = 0
-	_next_id = 0
 	_pending.clear()
 
 
@@ -218,7 +247,10 @@ func _advance(grid: CellGrid, i: int) -> bool:
 ## ⚠ **시작 칸은 검사하지 않는다.** 지난 틱에 이미 봤고(통과했으니 살아 있다), 다시 세면
 ##  두꺼운 벽에서 관통 예산이 한 칸씩 덜 남는다. 첫 틱의 시작 칸 = 사용자가 고른 발사 원점이다.
 ## ⚠ Bresenham은 **대각 모서리를 스쳐 지나간다**(연속 선분이 닿는 칸을 다 밟지는 않는다).
-##  지형 최소 두께가 4셀(1타일)이라 지금은 안 걸린다. 걸리면 답은 supercover DDA고, 그때 고쳐라.
+##  🔴 **「지형 최소 두께가 4셀이라 안 걸린다」는 초기 맵에서만 참이고, 폭발 자신이 그 전제를 깬다** —
+##   정수 원반이 지형을 깎으면 **1셀짜리 대각 조각**이 생긴다. 즉 첫 발 이후로는 근거가 없다.
+##  ⇒ 실게임에서 **「가끔 안 터진다」가 보고되면 여기가 첫 용의자다.** 답은 supercover DDA인데
+##   비용이 늘고 지금 재는 것(「강한 마법이 세게 보이나」)과 무관해서 **일부러 안 바꿨다.**
 func _walk(grid: CellGrid, i: int, x0: int, y0: int, x1: int, y1: int) -> bool:
 	var dx := absi(x1 - x0)
 	var dy := -absi(y1 - y0)

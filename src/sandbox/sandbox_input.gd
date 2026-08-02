@@ -117,9 +117,20 @@ func _paint_at(pos: Vector2) -> void:
 	command_requested.emit(CellGrid.cmd_paint(c.x, c.y, brush_radius, selected_mat))
 
 
-## ⚠ 카메라가 없어서 캔버스 변환이 항등이다 — 뷰포트 좌표가 곧 월드 좌표다.
-##  카메라를 붙이는 순간 여기가 **에러 없이** 틀어진다(클릭이 엉뚱한 셀에 간다).
-## 🔴 **B2가 화면 흔들림용 `Camera2D`를 붙인다 = 이 함수가 그때 틀어진다.**
-##  답은 `get_global_mouse_position()`(캔버스 변환이 반영된다) 기반으로 바꾸는 것이다.
+## 🔴🔴 **뷰포트 좌표 ≠ 월드 좌표다 — B2가 화면 흔들림용 `Camera2D`를 붙인 순간부터.**
+##  예전에는 카메라가 없어 캔버스 변환이 항등이라 그냥 나눠도 맞았다. 지금은 캔버스 변환을
+##  **반드시** 되돌려야 하고, 안 하면 **에러 하나 없이 클릭이 엉뚱한 셀로 간다.**
+##  ⚠ 흔들리지 않을 때 카메라 위치가 뷰포트 한가운데라 변환이 다시 항등이 된다 —
+##   그래서 **가만히 있을 때 테스트하면 버그가 안 보인다.** 흔드는 동안에만 드러난다.
+##
+## ⚠ 흔드는 동안 조준이 화면과 같이 떨린다. **그게 맞다** — 사용자는 「화면에 보이는 그 자리」를
+##  겨냥하지 「흔들리기 전의 월드 좌표」를 겨냥하지 않는다. 최대 0.35초 · 11px(≈3셀)다.
+##
+## 🔴 `CanvasItem.get_global_mouse_position()`을 못 쓴다 — 이 노드는 `Node`라 `CanvasItem`이
+##  아니다. `Viewport.get_canvas_transform()`이 같은 값을 주고, **이벤트가 준 좌표에도** 쓸 수 있다
+##  (`get_global_mouse_position()`은 늘 「지금」의 마우스라 이벤트 좌표를 못 변환한다).
 func _to_cell(pos: Vector2) -> Vector2i:
-	return Vector2i(floori(pos.x / CellRenderer.CELL_PX), floori(pos.y / CellRenderer.CELL_PX))
+	var world := get_viewport().get_canvas_transform().affine_inverse() * pos
+	return Vector2i(
+		floori(world.x / CellRenderer.CELL_PX),
+		floori(world.y / CellRenderer.CELL_PX))

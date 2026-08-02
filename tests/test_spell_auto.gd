@@ -105,6 +105,12 @@ func _ratio(a: int, b: int) -> float:
 ## 기대치는 **이론에서 나온다**: 단마다 반경 ×2 ⇒ 면적 ×4.
 ##  정수 원반 실제 칸수(113 / 437 / 1789)로 계산한 비는 3.87·4.09라 창 [3.5, 4.5] 안이다.
 ## ⚠ 원소는 **번개**를 쓴다 — 물이면 채우기 패스가 구멍에 물을 부어 「무엇이 사라졌나」와 섞인다.
+##
+## 🔴🔴 **N1과 N3을 커버리지 두 개로 세지 마라.** `SIM_TIERS`의 네 값 중 셋이 `rd` 하나의 파생이다:
+##  `rr = 1.5×rd` · `fill_r = 0.5×rd`가 **세 단 모두 정확히** 성립한다 ⇒ **N1이 그린이면 N3의 비도
+##  자동으로 그린이다.** 독립 손잡이는 **`rd`와 `pierce` 둘뿐**이고, 위력이 아닌 축은 **원소 하나**다.
+##  ⇒ 위력 관련 실질 그물은 **N1(반경) · N2(관통) · C2의 원소 배선** 셋이지 여덟이 아니다.
+## ⚠ 규칙이 틀린 게 아니다 — 위력=세기, 종류=원소라는 분업은 그대로 유효하다. **세는 법만 틀렸었다.**
 const AREA_RATIO_MIN := 3.5
 const AREA_RATIO_MAX := 4.5
 
@@ -166,6 +172,26 @@ func _net2_power_to_pierce() -> void:
 		_check("2-P%d 2타일 벽 %s" % [tier + 1, "뚫는다" if pierce > 0 else "못 뚫는다"],
 			through == (pierce > 0), "뒷면(x=%d) %s" % [WALL_X1, "EMPTY" if through else "남음"])
 
+		# 🔴🔴 **쏜 원소가 터지는 원소와 같나** — 리뷰 전까지 이걸 재는 그물이 **0개**였다.
+		#  실증: 폭발 이벤트의 `element`를 `ELEM_BOLT` 상수로 고정하는 뮤테이션이 48항목을 전부 통과했다
+		#  (**물로 쏴도 번개가 터지는데 아무도 안 짖었다**).
+		#  ⚠ 구조적인 사각이었다: N1·N3·N4·N5·N9는 `blast_cmd()`를 직접 불러 투사체를 건너뛰고,
+		#   실제로 쏘는 N2·N6·N7·N10은 **전부 번개만** 썼다 ⇒ 「발사 원소 → 폭발 원소」 구간에
+		#   그물이 하나도 안 걸쳐 있었다.
+		#  🔴 원소는 `rd`의 파생이 아닌 **유일한 축**이라(N1 주석), 「종류가 다르다」의 무게가 여기 다 얹혀 있다.
+		var gw := CellGrid.new()
+		gw.apply(CellGrid.cmd_fill(WALL_X0, 0, WALL_X1, CellGrid.H - 1, Mat.STONE))
+		var sw := SpellSim.new()
+		sw.fire(SpellSim.cmd_fire(50, CY, 1, 0, tier, Tuning.ELEM_WATER))
+		for _i in 30:
+			gw.step()
+			sw.step(gw)
+		# 번개는 `fill`이 EMPTY라 물을 **0칸** 남긴다 ⇒ 물이 남았다는 게 「물로 터졌다」의 서명이다.
+		# ⚠ 틱을 돌리므로 물이 흐른다 — **개수를 재지 마라**(흐름 규칙과 섞인다). `> 0`만 잰다.
+		var filled := gw.count_material(Mat.WATER)
+		_check("2-P%d 물로 쏘면 물이 남는다" % (tier + 1), filled > 0,
+			"채운 물 %d칸 — 0이면 원소가 발사→폭발 사이에서 증발했다" % filled)
+
 
 # ─── N3. 위력 → 잔여 ──────────────────────────────────────────────
 ## 🔴 **`r_res > r_dest`가 아니면 잔여가 전부 EMPTY 위에 떨어져 조용히 0이 된다.**
@@ -173,6 +199,8 @@ func _net2_power_to_pierce() -> void:
 ## ⇒ 「테두리에 실제로 상태가 남았나」를 먼저 재고, 그 다음 단마다 ×4인지 잰다.
 ##
 ## ⚠ **폭발 직후에 잰다 — 틱을 돌리면 채운 물이 흘러 젖음을 더 만든다**(재는 축이 섞인다).
+## 🔴 **아래 비율 검사는 N1의 사본이지 독립 축이 아니다**(`rr = 1.5×rd`). N1 주석을 봐라.
+##  여기서 실질적으로 혼자 사는 건 **`rr > rd` 검사** 하나다 — 그게 「잔여가 조용히 0이 되는 것」을 막는다.
 func _net3_power_to_residue() -> void:
 	var wets: Array[int] = []
 	for tier in Tuning.SIM_TIERS.size():
@@ -245,8 +273,12 @@ func _net5_pass_order() -> void:
 	var filled := g.count_material(Mat.WATER)
 	_check("5 채우기가 파괴 뒤에 온다", filled > 0, "채운 물 %d칸" % filled)
 
-	# 잔여는 **구멍 안이 아니라 테두리**에 있다. 안쪽에 젖음이 남아 있으면
-	# `_write_cell`이 플래그를 지운다는 전제가 깨진 것이다.
+	# 잔여는 **구멍 안이 아니라 테두리**에 있다.
+	# ⚠ **5b가 무엇을 재고 무엇을 못 재는지 정확히 적는다**(실측으로 확인했다):
+	#  · **못 잰다** — 「파괴 ↔ 잔여」 패스 순서 뒤집기. 구멍 안은 EMPTY 아니면 WATER이고
+	#    `_wet_one`이 둘 다 건너뛰므로 두 순서의 최종 상태가 같다.
+	#  · **잰다** — 잔여 패스가 `_wet_one`을 안 거치고 `_flag`에 직접 쓰는 것. 그러면 EMPTY 걸러내기가
+	#    통째로 사라져 구멍 안이 1,793칸 젖는다(뮤테이션 MR에서 실제로 빨개졌다).
 	var rd := int(Tuning.SIM_TIERS[2]["rd"])
 	var inside := 0
 	var ring := 0
@@ -315,12 +347,98 @@ func _net7_limits() -> void:
 	_check("7c 방향 0은 발사가 아니다",
 		not s.fire(SpellSim.cmd_fire(CX, CY, 0, 0, 0, Tuning.ELEM_BOLT)))
 
-	# 🔴 수명은 지금 격자(256셀 폭)에서 **도달 불가한 가드다** — 횡단이 26틱인데 수명이 40틱이다.
+	# 🔴 수명은 지금 격자에서 **도달 불가한 가드다** — 횡단(아래에서 파생한다)이 수명보다 짧다.
 	#  그래도 뺄 수 없다: 규칙이 하나만 바뀌어도(튕김·유도·더 큰 격자) 바로 살아난다.
 	#  ⚠ **도달 불가라는 걸 알고 봐라**(SKILL.md T3) — 이 줄은 「가드가 가드로서 성립하나」만 잰다.
 	var cross := CellGrid.W / Tuning.SPEED_CELLS + 2
 	_check("7d 수명이 격자 횡단보다 길다", Tuning.LIFETIME_TICKS > cross,
 		"수명 %d틱 · 횡단 %d틱" % [Tuning.LIFETIME_TICKS, cross])
+
+	_net7e_aim_magnitude()
+	_net7f_slot_reuse()
+	_net7g_blast_cap()
+
+
+## 🔴🔴 **속도 크기가 조준 방향에 안 의존한다** — `AIM_SHIFT`가 지키는 유일한 것이다.
+##  실증: `AIM_SHIFT`를 8 → 0으로 죽이는 뮤테이션이 **48항목을 전부 통과했다.**
+##  없으면 조준 (1,1)에서 `isqrt(2) = 1`이라 속도가 **√2배(41% 초과)**가 된다 —
+##  대각으로만 투사체가 빨라지고, 그만큼 얇아진 지형을 더 잘 통과한다.
+##
+## ⚠ **축 방향만 재는 픽스처로는 원리적으로 안 보인다**(정규화가 나눗셈 1로 끝나서 오차가 0이다).
+##  옛 그물이 전부 `(1,0)`이나 `(-1,-1)`이었던 게 그 사각이었다. **그래서 여기 대각이 있다.**
+## 🔴 **셀이 아니라 고정소수점으로 잰다.** 셀로 재면 축당 최대 1칸이 잘려서 (3,1) 같은 조준이
+##  정상인데도 10% 벗어난 것처럼 나온다 — 검출력이 아니라 **잡음**이 된다.
+const AIM_TOLERANCE_PCT := 1
+
+
+func _net7e_aim_magnitude() -> void:
+	var want := SpellSim.SPEED_FP * SpellSim.SPEED_FP
+	for aim: Array in [[1, 0], [0, 1], [1, 1], [3, 1], [1, 3], [-5, 2], [100, 99]]:
+		var g := CellGrid.new()
+		var s := SpellSim.new()
+		s.fire(SpellSim.cmd_fire(CX, CY, int(aim[0]), int(aim[1]), 0, Tuning.ELEM_BOLT))
+		var x0 := s.get_px()[0]
+		var y0 := s.get_py()[0]
+		s.step(g)
+		var dx := s.get_px()[0] - x0
+		var dy := s.get_py()[0] - y0
+		var d2 := dx * dx + dy * dy
+		_check("7e 조준(%d,%d) 속도 크기 불변" % [aim[0], aim[1]],
+			absi(d2 - want) * 100 <= want * AIM_TOLERANCE_PCT,
+			"속도² %d / 기대 %d (허용 %d%%)" % [d2, want, AIM_TOLERANCE_PCT])
+
+
+## 🔴🔴 **슬롯 재사용.** 소멸이 swap-remove라 슬롯이 돌려 쓰인다 — `fire()`가 슬롯을 안 씻으면
+##  두 번째 발사가 앞 투사체의 `_chewed`를 물려받아 **P3(관통 6)가 벽 표면에서 즉시 터진다.**
+##  위력 단이 화면에서 P1처럼 보이는 것이고, **재는 것 그 자체가 왜곡된다.**
+##  실증: `fire()`의 `_chewed[i] = 0`을 지우는 뮤테이션이 48항목을 전부 통과했다.
+##
+## ⚠ **`new()` 직후 한 발만 쏘는 픽스처로는 원리적으로 못 본다** — `resize()`가 이미 0을 줘서
+##  리셋을 지워도 티가 안 난다. **반드시 죽이고 다시 쏴야** 한다. 옛 그물이 전부 그 모양이었다.
+## ⚠ 격자를 발사마다 새로 세운다 — 첫 폭발이 벽을 뚫으면 두 번째 진입 칸이 달라져서
+##  「슬롯이 더러운 것」과 「지형이 바뀐 것」이 섞인다.
+func _net7f_slot_reuse() -> void:
+	var seen: Array[int] = []
+	var s := SpellSim.new()
+	for _shot in 2:
+		var g := CellGrid.new()
+		g.apply(CellGrid.cmd_fill(WALL_X0, 0, WALL_X1, CellGrid.H - 1, Mat.STONE))
+		s.fire(SpellSim.cmd_fire(50, CY, 1, 0, 2, Tuning.ELEM_BOLT))  # P3 · 관통 6
+		for _i in 30:
+			g.step()
+			for b: Dictionary in s.step(g):
+				seen.append(int(b["x"]))
+	_check("7f 슬롯을 다시 써도 관통이 같다", seen.size() == 2 and seen[0] == seen[1],
+		"폭발 x %s — 두 값이 다르면 `fire()`가 슬롯을 안 씻는다" % str(seen))
+
+
+## 🔴 **틱당 폭발 상한을 넘긴 것은 버려지지 않고 다음 틱으로 밀린다.**
+##  「버린다」로 바꿔도 옛 그물은 전부 그린이었다. 게임에서는 **「몰아 쏘면 몇 발이 안 터진다」**로 보인다.
+## ⚠ 같은 원점·같은 조준이라 8발이 **같은 틱에** 벽에 닿는다 — 그래서 상한이 실제로 걸린다.
+func _net7g_blast_cap() -> void:
+	var shots := Tuning.MAX_BLASTS_PER_TICK * 2
+	var g := CellGrid.new()
+	g.apply(CellGrid.cmd_fill(WALL_X0, 0, WALL_X1, CellGrid.H - 1, Mat.STONE))
+	var s := SpellSim.new()
+	for _k in shots:
+		s.fire(SpellSim.cmd_fire(50, CY, 1, 0, 0, Tuning.ELEM_BOLT))
+
+	var per_tick: Array[int] = []
+	var total := 0
+	for _i in 30:
+		g.step()
+		var n := s.step(g).size()
+		total += n
+		if n > 0:
+			per_tick.append(n)
+	var over := 0
+	for n: int in per_tick:
+		if n > Tuning.MAX_BLASTS_PER_TICK:
+			over += 1
+	_check("7g 밀린 폭발이 버려지지 않는다", total == shots,
+		"%d발 쏘고 %d번 터졌다 (틱별 %s)" % [shots, total, str(per_tick)])
+	_check("7g-b 틱당 상한을 안 넘는다", over == 0,
+		"상한 %d · 틱별 %s" % [Tuning.MAX_BLASTS_PER_TICK, str(per_tick)])
 
 
 # ─── N8. 위력 표 단조성 ───────────────────────────────────────────
@@ -417,6 +535,38 @@ func _net9_sleeps_after_blast() -> void:
 	var poured := _count_water_below(d, 124)
 	_check("9f-b 밑을 뚫으면 쏟아진다", poured > 0, "슬래브 아래로 내려간 물 %d칸" % poured)
 
+	_net9_wake_per_pass()
+
+
+## 🔴🔴 **패스가 셋이면 격리자도 셋이어야 한다.** 9e-b는 **파괴 패스 하나**만 격리한다.
+##  실증: `_blast_fill`이 `_write_cell`을 우회해 `_mat`에 직접 쓰게 바꾸면 **전 스위트가 그린이었고**,
+##  게임에서는 **채운 물 441칸이 공중에 얼어붙었다**(60틱 뒤에도 한 칸도 안 내려갔다).
+##
+## 🔴 **9e-b가 이걸 못 잡는 이유**: 9e-b는 번개를 쓰는데 **번개는 `fill`이 EMPTY라 채우기 패스를
+##  아예 안 지난다.** 그리고 지금 실게임이 안 깨지는 건 **우연이다** — `rf ≤ rd`라서 파괴 패스의
+##  `_wake`가 채우기 원반을 덮어준다. **표의 우연이지 계약이 아니다.**
+func _net9_wake_per_pass() -> void:
+	# ⑤ 채우기 패스 — 🔴 **빈 격자가 유일한 격리자다.** 파괴는 STATIC이 없어 아무것도 안 쓰고,
+	#  잔여는 EMPTY/WATER라 `_wet_one`이 전부 건너뛴다 ⇒ 깨어난 청크는 **채우기가 깨운 것뿐**이다.
+	var e := CellGrid.new()
+	_tick(e, 5)
+	_check("9e-c 폭발 전 빈 격자는 잠들어 있다", e.awake_count() == 0, "활성청크 %d" % e.awake_count())
+	e.apply(SpellSim.blast_cmd(CX, CY, 2, Tuning.ELEM_WATER))
+	_check("9e-c 채우기가 청크를 깨운다", e.awake_count() > 0,
+		"활성청크 %d · 채운 물 %d칸 — 0이면 물이 공중에 얼어붙는다"
+		% [e.awake_count(), e.count_material(Mat.WATER)])
+
+	# ⑥ 잔여 패스 — 🔴 **전 격자 물이 유일한 격리자다.** STATIC이 없어 파괴가 안 쓰고,
+	#  번개라 채우기를 건너뛰고, EMPTY가 없어 채울 데도 없다 ⇒ 남는 건 `_strike`뿐이다.
+	#  ⚠ 꽉 찬 물은 갈 데가 없어 한 틱 만에 잠든다 — 그래서 격리가 성립한다.
+	var w := CellGrid.new()
+	w.apply(CellGrid.cmd_fill(0, 0, CellGrid.W - 1, CellGrid.H - 1, Mat.WATER))
+	_tick(w, 10)
+	_check("9e-d 폭발 전 꽉 찬 물은 잠들어 있다", w.awake_count() == 0, "활성청크 %d" % w.awake_count())
+	w.apply(SpellSim.blast_cmd(CX, CY, 2, Tuning.ELEM_BOLT))
+	_check("9e-d 잔여가 청크를 깨운다", w.awake_count() > 0 and w.count_flag(Mat.FLAG_CHARGED) > 0,
+		"활성청크 %d · 전하 %d칸" % [w.awake_count(), w.count_flag(Mat.FLAG_CHARGED)])
+
 
 # ─── N10. 공개 표면 ───────────────────────────────────────────────
 ## `SpellSim`이 격자를 직접 만지거나, 시뮬 밖으로 새는 문을 열면 빨개진다.
@@ -441,15 +591,20 @@ func _net10_public_surface() -> void:
 			extra.append(n)
 	_check("10 SpellSim 공개 표면", extra.is_empty(), "표 밖의 공개 메서드 %s" % str(extra))
 
-	# 격자 밖으로 쏴도 아무 일이 안 나야 한다.
+	# 격자 **밖으로** 쏴도 아무 일이 안 나야 한다.
+	# ⚠ **원점은 격자 안이어야 한다** — `fire()`가 격자 밖 원점을 이제 거부하므로(리뷰 I2),
+	#  예전 픽스처 `(-40,-40)`은 「날아가다 죽는다」가 아니라 「발사가 거부된다」를 재게 된다.
+	#  🔴 그러면 그물이 그린인 채로 **재는 것이 바뀐다**(T4). 원점을 모서리에 두고 밖을 겨눈다.
 	var g := CellGrid.new()
 	g.apply(CellGrid.cmd_fill(0, 0, CellGrid.W - 1, CellGrid.H - 1, Mat.STONE))
 	var before := g.get_mat().duplicate()
 	var s2 := SpellSim.new()
-	s2.fire(SpellSim.cmd_fire(-40, -40, -1, -1, 0, Tuning.ELEM_BOLT))
+	_check("10b 모서리에서 밖을 겨눈 발사는 받아들여진다",
+		s2.fire(SpellSim.cmd_fire(0, 0, -1, -1, 0, Tuning.ELEM_BOLT)))
 	for _i in 5:
 		s2.step(g)
-	_check("10b 격자 밖 발사 무해", g.get_mat() == before)
+	_check("10b-b 격자 밖으로 나가면 폭발 없이 사라진다",
+		g.get_mat() == before and s2.active_count() == 0, "활성 %d발" % s2.active_count())
 
 
 # ─── N12. 🔴🔴 소스 텍스트 그물 ───────────────────────────────────
@@ -462,7 +617,20 @@ func _net10_public_surface() -> void:
 ##
 ## 🔴 **주석은 걷어내고 본다** — 주석에는 "float을 쓰지 마라" 같은 말이 당연히 나온다.
 ##  ⚠ 그래서 **금지 토큰을 주석에 적어 두는 것으로는 이 그물을 못 속인다**(코드만 본다).
-const SIM_SOURCES: Array[String] = ["res://src/world/spell/spell_sim.gd"]
+## 🔴🔴 **폭발이 「어느 셀이 사라지고 어디에 잔여가 붙나」를 정하는 건 `cell_grid.gd`다.**
+##  처음엔 `spell_sim.gd` 하나만 봤는데, `_blast_destroy`의 반경 판정을
+##  `sqrt(float(dx*dx+dy2)) > float(r)`로 바꾸는 뮤테이션이 **전 스위트를 통과했다.**
+##  ⚠ **위험이 이론이 아니다** — 원 판정을 `sqrt`로 쓰는 건 **가장 자연스러운 리팩터**이고,
+##   다음에 이 파일을 여는 사람(원소 추가·타원 폭발·거리 감쇠)이 정확히 그 줄을 만진다.
+##
+## ⚠ **`cell_materials.gd`는 일부러 뺐다** — 팔레트의 `Color(0.055, ...)` 때문에 걸린다.
+##  시뮬이 거기서 소비하는 건 `bake_behavior()`(정수)와 `FLAG_*` 상수뿐이라 스캔 대상이 아니다.
+##  🔴 **이 예외를 근거로 규칙을 느슨하게 만들지 마라.** 뺀 건 파일 하나이지 규칙이 아니다.
+const SIM_SOURCES: Array[String] = [
+	"res://src/world/spell/spell_sim.gd",
+	"res://src/world/cells/cell_grid.gd",
+	"res://src/world/cells/cell_hash.gd",
+]
 const TUNING_PATH := "res://src/world/spell/spell_tuning.gd"
 
 ## 🔴 `spell_tuning.gd`는 **반만** 계약이다(SIM 블록). FX 블록은 화면 전용이라 float이 허용된다.

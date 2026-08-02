@@ -543,6 +543,12 @@ func _blast(cx: int, cy: int, rd: int, rr: int, residue: int, fill_mat: int, rf:
 	if not RESIDUE_ALL.has(residue):
 		push_error("CellGrid: 모르는 잔여 비트 %d — 커맨드를 버린다" % residue)
 		return
+	# 🔴 `rr <= rd`면 잔여가 **전부 파괴로 비워진 칸 위에** 떨어져 `_wet_one`·`_strike`가 통째로
+	#  건너뛴다 ⇒ **에러 없이 잔여 0칸.** 주석으로만 적어 두면 다음 사람이 반경을 조이다 밟는다.
+	#  ⚠ `residue == 0`(잔여 없는 폭발)은 정당하니 게이트한다 — 안 그러면 그 호출이 매번 짖는다.
+	if residue != 0 and rr <= rd:
+		push_error("CellGrid: 잔여 반경(%d)이 파괴 반경(%d) 이하다 — 잔여가 조용히 0이 된다" % [rr, rd])
+		return
 
 	_blast_destroy(cx, cy, rd)
 	if fill_mat != Mat.EMPTY:

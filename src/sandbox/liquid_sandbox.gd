@@ -12,6 +12,8 @@ const CellRenderer := preload("res://src/world/cells/cell_renderer.gd")
 const SandboxInput := preload("res://src/sandbox/sandbox_input.gd")
 const Mat := preload("res://src/world/cells/cell_materials.gd")
 const SpellSim := preload("res://src/world/spell/spell_sim.gd")
+const SpellView := preload("res://src/world/spell/spell_view.gd")
+const BlastFx := preload("res://src/world/spell/blast_fx.gd")
 const Tuning := preload("res://src/world/spell/spell_tuning.gd")
 
 ## 1자 = 16px 지형 타일 = 4×4 셀. 🔴 16px 정렬이 그림에서 공짜로 나온다(GDD 「해상도」).
@@ -76,6 +78,13 @@ const MAP_CHARS: Dictionary = {"#": Mat.STONE, "~": Mat.WATER}
 @onready var _renderer: CellRenderer = $CellRenderer
 @onready var _input: SandboxInput = $SandboxInput
 @onready var _hud: Label = $HUD/Stats
+@onready var _view: SpellView = $SpellView
+@onready var _fx: BlastFx = $BlastFx
+## 🔴🔴 **카메라는 화면 흔들림 전용이다** — 줌도 추적도 없다. 위치가 뷰포트 한가운데(480,270)라
+##  흔들리지 않을 때 캔버스 변환이 항등이고, 그래서 붙이기 전과 화면이 한 픽셀도 안 다르다.
+##  ⚠ **그래도 `sandbox_input._to_cell()`은 바뀌어야 했다** — 카메라가 있는 한 뷰포트 좌표가
+##   더는 월드 좌표가 아니다. 안 바꾸면 흔드는 동안 클릭이 조용히 엉뚱한 셀로 간다.
+@onready var _camera: Camera2D = $Camera2D
 
 var _grid := CellGrid.new()
 var _spell := SpellSim.new()
@@ -108,6 +117,15 @@ var _fire_count := 0
 var _blast_count := 0
 var _last_blast := Vector2i(-1, -1)
 var _last_blast_label := ""
+## 🔴🔴 **「숫자는 두 배인데 화면은 그대로」를 사용자가 직접 대조하는 자리다.**
+##  v1은 위력 78 → 157인데 화면에서 바뀐 게 0개였고, 그걸 아무도 숫자로 못 봤다.
+## ⚠ `count_material`은 네이티브라 ~5μs다 — `count_flag`(GDScript 루프 ~520μs)를 여기 넣지 마라.
+var _last_blast_cells := 0
+## 위 줄과 대조할 기준값. 🔴 **문자열에 박지 않는다 — `SIM_TIERS`에서 파생한다.**
+##  이 줄의 유일한 존재 이유가 「사용자가 화면과 숫자를 대조하는 것」인데, `rd`를 조이는 순간
+##  (그게 이 프로토타입에서 가장 자주 할 일이다) 박아 둔 기준은 **옛 숫자로 조용히 거짓말**하고,
+##  사용자는 그걸 「시뮬이 4배를 안 낸다」로 읽는다. 재는 도구가 낡는 게 제일 나쁘다(T5).
+var _tier_reference := ""
 
 # ⚠ 셀 세기는 36,864칸 GDScript 루프라 한 번에 ~520μs다. 둘을 같은 프레임에 돌리면
 #  **재는 도구가 재는 대상을 오염시킨다**(최악 튐을 볼 때 1ms를 시뮬 스파이크로 오독한다).
@@ -118,6 +136,13 @@ var _charged_cached := 0
 
 func _ready() -> void:
 	_renderer.setup(_grid)
+	_view.setup(_spell)
+	# 총구는 이 프로토타입에만 있다(캐릭터가 없어서 고정점이다). 본편에서는 손이 총구다.
+	_fx.muzzle_visible = true
+	# 🔴 `_process`를 **`BlastFx`보다 뒤에** 돌린다 — 안 그러면 이번 프레임에 계산된 흔들림을
+	#  카메라가 다음 프레임에 받아서 첫 프레임 하나를 놓친다(실측: 20프레임 중 19프레임만 움직였다).
+	process_priority = 1
+	_tier_reference = _build_tier_reference()
 	_input.command_requested.connect(enqueue)
 	_input.reset_requested.connect(_reset)
 	_input.divider_nudged.connect(_nudge_divider)
@@ -145,12 +170,22 @@ func _physics_process(_delta: float) -> void:
 	#  ⚠ 3이 2 뒤라서 **구멍은 이번 틱에 보이고, 쏟아지는 물은 다음 틱에 흐르기 시작한다.**
 	#   50ms 차이라 눈에 안 보이지만, 순서를 뒤집으면 폭발이 「한 틱 낡은 격자」를 보게 된다.
 	# ⚠ 계측은 **둘을 합쳐** 잰다 — 프레임을 무너뜨리는 건 `_physics_process` 한 번의 총합이다.
+	# 🔴 돌 개수를 **계측 창 밖에서** 먼저 재 둔다. `step()`은 돌을 만들지도 지우지도 않으므로
+	#  이 값이 곧 「폭발 직전의 돌」이고, 차이가 이번 틱에 부순 칸 수다.
+	#  ⚠ 창 안에 넣으면 재는 도구가 재는 대상을 오염시킨다(`_wet_cached` 주석과 같은 이유).
+	var stone_before := _grid.count_material(Mat.STONE)
 	var t0 := Time.get_ticks_usec()
 	_last_processed = _grid.step()
 	var blasts := _spell.step(_grid)
 	_tick_usec = Time.get_ticks_usec() - t0
+	# 🔴🔴 **폭발 통지가 `_view.on_tick()`보다 **앞이어야** 한다 — 이것도 계약이다.**
+	#  터진 투사체는 이미 시뮬에서 사라졌고, 그 「마지막으로 보이던 자리」를 들고 있는 건
+	#  `_view`의 자취뿐인데 `on_tick()`이 죽은 id의 자취를 지운다.
+	#  ⇒ 순서를 뒤집으면 착탄 줄기가 **에러 없이 통째로 사라진다**(`Tuning.STREAK_FRAC` 주석).
 	if not blasts.is_empty():
-		_note_blasts(blasts)
+		_note_blasts(blasts, stone_before - _grid.count_material(Mat.STONE))
+	# 🔴 자취는 시뮬이 **한 틱 돈 뒤에** 기록한다 — 앞에 두면 자취가 통째로 한 틱 낡는다.
+	_view.on_tick()
 
 	_tick_usec_max = maxi(_tick_usec_max, _tick_usec)
 	_usec_window.append(_tick_usec)
@@ -163,6 +198,46 @@ func _physics_process(_delta: float) -> void:
 		_render_dirty = false
 
 	_update_hud()
+
+
+## 🔴🔴 **렌더 시계는 여기 하나다.** 시뮬은 20Hz인데 화면은 60fps라, 보간 없이는 투사체가
+##  틱당 40px씩 순간이동한다 — 「세게 보이나」를 재는 프로토타입에서 그건 치명적이다.
+##  ⚠ **시뮬에 시계를 하나 더 만들지 않는 게 요점이다.** `_phase`는 이미 있는 정수 분주기고,
+##   여기서는 그걸 **읽기만** 한다. 뷰가 자기 `delta`를 누산하면 그 순간 시계가 둘이 된다.
+## ⚠ 대가 = **렌더가 정확히 한 틱(50ms) 뒤에 있다.** 투사체에서는 안 보인다.
+func _process(_dt: float) -> void:
+	_view.set_render_alpha(float(_phase) / float(_divider))
+	# 🔴 흔들림은 **카메라 offset**에만 얹는다. HUD는 `CanvasLayer`라 안 흔들린다(그게 맞다).
+	#  ⚠ `_fx`도 자기 `_process`에서 흔들림을 갱신하므로 노드 순서에 따라 한 프레임 늦을 수 있다 —
+	#   16ms짜리라 관측 불가다.
+	_camera.offset = Vector2(_fx.shake_offset())
+	# 총구가 **쏘기 전에** 고른 위력만큼 밝다 — v1이 죽은 항목(「총구가 위력을 안 따라간다」)의 자리.
+	_fx.muzzle_px = _cell_center_px(_input.fire_origin.x, _input.fire_origin.y)
+	_fx.muzzle_tier = _input.power_tier
+	_fx.muzzle_element = _input.element
+
+
+## 위력 단마다 「마른 돌이면 몇 칸이 사라지나」. 🔴 `SIM_TIERS`의 `rd`에서 **정수 원반 칸수를
+##  세어** 만든다 — 부팅 1회고, P3(r=24)도 2,401회 루프라 공짜다.
+## ⚠ 실제 파괴 칸수는 이 값보다 **약간 작다**(격자 가장자리 · 물 · 이미 빈 칸). 그래서 「기준」이다.
+func _build_tier_reference() -> String:
+	var out: Array[String] = []
+	for t in Tuning.SIM_TIERS.size():
+		var r := int(Tuning.SIM_TIERS[t]["rd"])
+		var n := 0
+		for dy in range(-r, r + 1):
+			for dx in range(-r, r + 1):
+				if dx * dx + dy * dy <= r * r:
+					n += 1
+		out.append("P%d %d" % [t + 1, n])
+	return "  ↳ 마른 돌 기준 %s칸 (단마다 ×4)" % " · ".join(out)
+
+
+## 셀 좌표 → 그 셀의 **한가운데** 화면 px. 🔴 모서리를 쓰면 섬광이 반 칸씩 왼쪽 위로 쏠린다.
+func _cell_center_px(x: int, y: int) -> Vector2:
+	return Vector2(
+		(float(x) + 0.5) * CellRenderer.CELL_PX,
+		(float(y) + 0.5) * CellRenderer.CELL_PX)
 
 
 ## ⚠ **`keep` 갈래는 지금 소비자가 없다** — `enqueue`가 늘 `tick + 1`을 달고 `target`도 같아서
@@ -184,6 +259,11 @@ func _drain_queue() -> void:
 		if cmd.has("spell_kind"):
 			if _spell.fire(cmd):
 				_fire_count += 1
+				# 🔴 총구 섬광은 **커맨드가 아니다** — 발사가 받아들여진 그 자리에서 즉시
+				#  로컬로 친다(설계 §9). 멀티에서도 이 줄은 선을 안 넘는다.
+				_fx.add_muzzle(
+					_cell_center_px(int(cmd["ox"]), int(cmd["oy"])),
+					int(cmd["tier"]), int(cmd["element"]))
 			continue
 		_note_strike(cmd)
 		_grid.apply(cmd)
@@ -207,17 +287,32 @@ func _note_strike(cmd: Dictionary) -> void:
 ## ⚠ **`_render_dirty`를 여기서 켜야 한다.** 폭발이 격자를 바꿨는데 `_grid.step()`이 0청크를
 ##  돌려주면(잠든 격자에 쏜 경우) 렌더 업로드를 통째로 건너뛰어 **구멍이 화면에 안 뜬다.**
 ##  에러는 안 나고 「발사가 안 먹는다」로만 보인다.
-func _note_blasts(blasts: Array[Dictionary]) -> void:
+## ⚠ `destroyed`는 **이번 틱 전체의 합**이다 — 한 틱에 4발까지 터질 수 있어서 라벨(마지막 하나)과
+##  숫자의 주인이 다를 수 있다. 한 발씩 쏘면 일치한다.
+func _note_blasts(blasts: Array[Dictionary], destroyed: int) -> void:
 	_render_dirty = true
 	_blast_count += blasts.size()
 	var b: Dictionary = blasts[blasts.size() - 1]
 	_last_blast = Vector2i(int(b["x"]), int(b["y"]))
 	_last_blast_label = "P%d %s" % [int(b["tier"]) + 1, Tuning.ELEM_NAMES[int(b["element"])]]
+	_last_blast_cells = destroyed
+	# 🔴 연출은 **터진 것 전부**에 건다. 마지막 하나만 걸면 한 틱에 여러 발일 때
+	#  「쏘는 것 ≠ 보이는 것」이 된다(T8) — 그리고 눈으로는 절대 못 가른다.
+	for e: Dictionary in blasts:
+		# 🔴 「마지막으로 보이던 자리」를 같이 넘겨 착탄 줄기를 잇는다. ⚠ `_view.on_tick()`이
+		#  죽은 id의 자취를 지우기 전에 꺼내야 한다 — 위 `_physics_process`의 순서 주석이 그것이다.
+		_fx.add_blast(
+			_cell_center_px(int(e["x"]), int(e["y"])), int(e["tier"]), int(e["element"]),
+			_view.last_trail_px(int(e["id"])))
 
 
 func _reset() -> void:
 	_grid.apply(CellGrid.cmd_reset())
 	_spell.reset()
+	# 🔴 뷰도 같이 비운다. 안 비우면 죽은 투사체의 자취 딕셔너리가 R을 누를 때마다 쌓인다 —
+	#  id가 0부터 다시 시작하는데 옛 id가 남아 있으면 **없는 투사체의 자취가 그려진다.**
+	_view.clear()
+	_fx.clear()
 	_queue.clear()
 	_tick_usec_max = 0
 	_usec_window.clear()
@@ -296,9 +391,14 @@ func _update_hud() -> void:
 		]
 	# 🔴 발사 수와 폭발 수를 **따로** 찍는다 — 둘이 갈라지는 게 곧 진단이다.
 	#  발사 0 = 좌클릭이 안 닿는다(`mouse_filter`) · 발사 > 폭발 = 화면 밖으로 나가 소멸했다.
+	# 🔴🔴 **파괴 칸 수가 「강한 마법이 세게 보이나」의 대조군이다.** 기준값 113 / 441 / 1,793을
+	#  같이 찍어서, 숫자가 4배로 뛰는데 화면이 그대로인지를 사용자가 **직접** 볼 수 있게 한다.
+	#  v1은 위력이 두 배가 되는데 화면에서 바뀐 게 0개였고, 그걸 숫자로 본 사람이 없었다.
 	var blast := "없음"
 	if _blast_count > 0:
-		blast = "%s (%d,%d)" % [_last_blast_label, _last_blast.x, _last_blast.y]
+		blast = "%s (%d,%d) 파괴 %d칸" % [
+			_last_blast_label, _last_blast.x, _last_blast.y, _last_blast_cells,
+		]
 	_hud.text = "\n".join([
 		"틱 %d · %d Hz (분주기 %d)" % [_grid.get_tick(), 60 / _divider, _divider],
 		"활성 청크 %d / %d (다음 %d)" % [_last_processed, CellGrid.CHUNK_COUNT, _grid.awake_count()],
@@ -310,6 +410,7 @@ func _update_hud() -> void:
 		"발사 %d · 폭발 %d · 비행중 %d · 마지막 폭발 %s" % [
 			_fire_count, _blast_count, _spell.active_count(), blast,
 		],
+		_tier_reference,
 		"좌클릭 발사 · 우클릭 칠하기 · 중클릭 발사원점 · 1/2/3 위력 · Q물 E번개 · L 직접번개",
 		"4물 5돌 6지우개 · [ ] 브러시 · - = 틱 · R 초기화 · ` HUD",
 		"위력 P%d · 원소 %s · 원점 (%d,%d) · 브러시: %s r%d" % [
