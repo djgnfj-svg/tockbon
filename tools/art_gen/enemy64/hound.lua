@@ -139,7 +139,7 @@ for f = 1, N do
   L.blit(img, EAR_F, ox + 45 + st, 3 + by, EAR)
   L.blit(img, EAR_N, ox + 49 + st, 2 + by, EAR)
 
-  -- ── 눈 · 코 · 입 (디테일은 얼굴에 몰아준다 — 진단 ⑤) ─────────────
+  -- ── 눈 · 코 · 입 (디테일은 얼굴에 몰아준다) ─────────────────────
   local ey, ex = 11 + by, 52 + st
   putIn(ox, ex,   ey,   "341c27"); putIn(ox, ex+1, ey,   "341c27")
   putIn(ox, ex,   ey+1, "a53030"); putIn(ox, ex+1, ey+1, "cf573c")

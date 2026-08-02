@@ -1,7 +1,6 @@
 extends SceneTree
-## 🔴 **문양 효과·표현 데이터화 + 응축** 자동 검증 (세82 M3) — 헤드리스 실행:
+## 🔴 **문양 효과·표현 데이터화 + 응축** 자동 검증 — 헤드리스 실행:
 ##   ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_glyph_data_auto.gd
-## 정본 = `docs/takbon-design/glyph_data_design.md`.
 ##
 ## 무엇을 재나: 문양의 **효과 로직**(behavior+params)과 **표시 어휘**(이름·색)가 코드가 아니라
 ## `data/glyphs/*.tres`에서 온다는 계약. 그리고 그 위에 선 첫 문양 **응축**(폭발의 반대)이
@@ -54,7 +53,7 @@ func _run() -> void:
 		quit(1)
 
 
-# ── [1] 🔴 카탈로그 전량 로드 (세50 파싱 침묵사 그물) ──
+# ── [1] 🔴 카탈로그 전량 로드 (.tres 파싱 침묵사 그물) ──
 # `.tres` 문법이 한 글자만 틀려도 리소스 **전체가 조용히 사라지고** Db가 말없이 건너뛴다.
 # 특히 `params` 사전 리터럴이 그 자리다 — 여기가 이 데이터화의 생명선이다.
 func _t1_catalog_loads() -> void:
@@ -66,8 +65,7 @@ func _t1_catalog_loads() -> void:
 		Enums.GlyphCode.SPREAD: &"spread", Enums.GlyphCode.EXPLODE: &"blast",
 		Enums.GlyphCode.CONDENSE: &"blast",
 	}
-	# 🔴 **예외 목록이 없다.** 세82 전엔 code 2~5에 .tres가 없어 "잠든 4종은 예외"를 적어야 했는데,
-	# 그 예외가 곧 세61식 **자명 통과의 씨앗**이었다. 이제 살아있는 코드는 전부 데이터가 있다.
+	# 🔴 **예외 목록이 없다** — 예외는 곧 자명 통과의 씨앗이다. 살아있는 코드는 전부 데이터가 있다.
 	for code: int in expect.keys():
 		var gd = _db.glyph_by_code(code)
 		_check(gd != null, "code %d의 GlyphDef가 로드됐다 (없으면 그 칸이 발사에서 통째로 빠진다)" % code)
@@ -88,8 +86,7 @@ func _t1_catalog_loads() -> void:
 
 
 # ── [2] 계열 판별 = 데이터가 답한다 ──
-# 🔴 기대 집합을 **명시로** 박는다. 옛 `Enums.is_modifier_glyph`와 대조하는 건 불가능하다 —
-# 이 세션이 그 함수를 은퇴시켰기 때문이다(대조하려던 초안은 자기모순이었다).
+# 🔴 기대 집합을 **명시로** 박는다 (옛 `Enums.is_modifier_glyph`는 은퇴해 대조할 대상이 없다).
 func _t2_modifier_codes() -> void:
 	print("[2] 변형형 = 확산·폭발·응축 / 전개형 = 응집·발산·관통·유도·팅김·추진")
 	var mods: Array = _db.modifier_codes()
@@ -101,8 +98,7 @@ func _t2_modifier_codes() -> void:
 
 
 # ── [3] 🔴 회귀 — 수치가 balance에서 .tres로 이사했는데 **계산이 같다** ──
-# M1의 "밴드 1개면 층0 == flatten_bands", M2의 "룬 1개면 share 1.0"과 같은 자리의 증명.
-# ⚠ balance 수치를 박지 말고 **관계식으로** 잰다 (세79 교훈 — 손맛 튜닝 한 번에 거짓 빨강이 되면 안 된다).
+# ⚠ balance 수치를 박지 말고 **관계식으로** 잰다 — 손맛 튜닝 한 번에 거짓 빨강이 되면 안 된다.
 func _t3_regression_params_moved() -> void:
 	print("[3] 파라미터 이사 무회귀 — 관계식으로 잰다")
 	var sys = _Sys.new()
@@ -133,11 +129,9 @@ func _t3_regression_params_moved() -> void:
 # 커서, 응축 부호를 뒤집어도(54×1.24=66.96) 폭발(73.44)보다 여전히 작아 그린이 된다.
 # 그래서 **값이 아니라 방향**을 잰다 — 튜닝에도 안 부서지고 부호가 뒤집히면 즉시 빨개진다.
 #
-# 🔴🔴 **세84 감사 #40·#2: 이 항목이 `_spread`/`_explode`를 직접 부르며 def를 손으로 넘기고 있었다.**
-# 그래서 라이브 경로(`_apply_layer` → `_apply_modifier` → **`Db.glyph_by_code(code)`로 def 조회**)가
-# def를 잃어버려도 **전부 그린**이었다(1차 갈래가 뮤테이션으로 실측 — 빨개지는 건 다른 파일 하나뿐).
-# 지금은 **층(8칸)만 넘긴다** — def를 넘기지 않으므로 조회가 죽으면 params가 통째로 0이 되어
-# 반경·세기 방향이 무너지고 여기가 빨개진다. (`_apply_layer`는 세82 [7]도 쓰는 그 통로다.)
+# 🔴🔴 **층(8칸)만 넘긴다 — def를 손으로 넘기지 않는다.** 직접 넘기면 라이브 경로
+# (`_apply_layer` → `_apply_modifier` → `Db.glyph_by_code(code)` 조회)가 def를 잃어도 전부 그린이다.
+# 지금은 조회가 죽으면 params가 통째로 0이 되어 반경·세기 방향이 무너지고 여기가 빨개진다.
 func _t4_condense_is_the_opposite_of_explode() -> void:
 	print("[4] 🔴 응축 = 좁게 모아 세게 (폭발의 반대) — 단조성 · **라이브 경로**")
 	var sys = _Sys.new()
@@ -223,7 +217,7 @@ func _t6_condense_needs_no_new_algorithm() -> void:
 
 
 # ── [7] 미등록 code = 경고+건너뜀 · 🔴 빈 칸(-1)은 **경고 대상이 아니다** ──
-# ⚠ 경고 자체는 `-s`가 못 잰다(세33 사운드 선례) — 그래서 **관측 가능한 성질**(명령 목록)로 잰다.
+# ⚠ 경고 자체는 `-s`가 못 잰다 — 그래서 **관측 가능한 성질**(명령 목록)로 잰다.
 func _t7_unknown_code_skipped_empty_is_silent() -> void:
 	print("[7] 미등록 code는 건너뛴다 · 빈 칸은 조용하다")
 	var sys = _Sys.new()
@@ -240,8 +234,7 @@ func _t7_unknown_code_skipped_empty_is_silent() -> void:
 		"빈 층은 명령 0 (빈 칸을 경고 대상으로 만들면 발사마다 경고가 폭탄이 된다)")
 
 	# 🔴🔴 **계열 분기가 실제로 `_apply_layer`를 지난다** — 이 항목이 없으면 `glyph_behavior`를
-	# 통째로 `bolt`로 되돌려도 **그물이 전부 그린이다**(세82 뮤테이션①이 실제로 그랬다:
-	# 다른 항목들이 `_spread`/`_explode`를 **직접** 불러 분기를 건너뛰고 있었다).
+	# 통째로 `bolt`로 되돌려도 **그물이 전부 그린이다**(뮤테이션 실측).
 	# 폭발 칸만 있는 층 → 씨앗을 감싼 **blast 하나**. 계열이 무너지면 **bolt 3발**이 된다.
 	var e: int = Enums.GlyphCode.EXPLODE
 	var blast_plan: Array = sys._apply_layer([], [e, e, e, -1, -1, -1, -1, -1], 0.0)
@@ -278,7 +271,7 @@ func _t8_duplicate_code_deterministic_winner() -> void:
 
 
 # ── [9] 주입 후 `reindex_glyphs()`가 역인덱스를 갱신한다 ──
-# 🔴 세61 이후의 테스트 관행이 in-memory 주입(`db.glyphs[...] = ...`)인데 **아무도 reload()를
+# 🔴 테스트 관행이 in-memory 주입(`db.glyphs[...] = ...`)인데 **아무도 reload()를 안 부른다.**
 # 안 부른다.** 역인덱스를 reload()에서만 채우면 주입한 def가 안 보여 **그물이 자명 통과한다.**
 func _t9_reindex_after_injection() -> void:
 	print("[9] in-memory 주입 → reindex로 보인다")
@@ -296,8 +289,6 @@ func _t9_reindex_after_injection() -> void:
 # ── [10] 🔴 같은 층 안에서 **배치 순서는 결과를 안 바꾼다** ──
 # 층이 곧 순서라 층 **내부**는 "동시"로 봐야 한다. 변형형 적용 순서가 배치(칸 위치)에 좌우되면
 # 같은 도안이 어디에 놓았느냐로 다르게 나간다.
-# ⚠ 초안의 "Dictionary 키 순서 = 비결정적"이라는 전제는 **틀렸다**(GDScript는 삽입 순서 유지) —
-# 진짜 위험은 배치 순서 의존이고, 그게 유일하게 잴 수 있는 형태다.
 func _t10_placement_order_does_not_matter() -> void:
 	print("[10] 같은 층 내 배치 순서 무관")
 	var sys = _Sys.new()
@@ -346,14 +337,8 @@ func _t11_radius_never_inverts() -> void:
 # ── [12] 🔴 UI 표현도 데이터에서 온다 ──
 # 옛 `RingBoard.GLYPH_NAMES`/`GLYPH_COLORS` 배열은 **길이가 계약**이라, 어휘를 늘리며 배열을 안
 # 늘리면 요약이 런타임 에러를 내고 `clampi`가 **응축을 골랐는데 폭발 밑그림을 띄웠다**(에러 없음).
-#
-# 🔴 세85 ⑨ 개정: 옛 판본은 `choose_jin`·`set_active_glyph`·`active_glyph`(전부 **per-piece
-# 선택** API — src 호출자 0)로 「어휘 밖 코드가 조용히 눌리지 않는다」를 쟀는데, 그 셋이 은퇴하며
-# 같이 걷혔다. **그 함정 자체는 이미 구조적으로 사라졌다** — 눌렀던 주체가 `clampi(g, 0,
-# GLYPH_NAMES.size()-1)`이고 그 배열이 세82에 은퇴했다. 지금 그 자리를 지키는 건 [1](전 9값 Db
-# 로드 + behavior/params 파싱)이다.
-# 여기 남는 건 **색의 정본이 `.tres`인가** 하나이고, 이번에 **전 9값 전수**로 조였다(옛 판본은
-# 응축 한 값만 봐서, 배열 폴백이 되살아나 8개가 어긋나도 그린이었다).
+# 재는 건 **색의 정본이 `.tres`인가** 하나 — **전 9값 전수**로 잰다(한 값만 보면 배열 폴백이
+# 되살아나 8개가 어긋나도 그린이다).
 func _t12_ui_reads_names_from_data() -> void:
 	print("[12] 🔴 문양 색의 정본 = GlyphDef.ui_color (전 9값 전수)")
 	var b = _Board.new()

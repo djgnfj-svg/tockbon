@@ -1,25 +1,15 @@
 extends Area2D
-## 적 투사체 (세56 신설 — 이 게임 **첫 적 탄**, gale 연사가 쓴다). class_name 없음 — preload로.
-##
-## 🔴 플레이어 탄(`src/spell/projectile.gd`)을 재사용하지 않는다 — 그쪽은 발사 계약(assembly·
-## effects·rune_hits·먹선 몸)에 물려 있다. 이 탄은 **최소**다: 직진 · 수명 · 플레이어 히트만.
-##
-## 🔴 **물리: collision_layer = 0 / collision_mask = 3 (world 1 + player 2)** (enemy_projectile.tscn).
-##  • layer 0 — 아무도 이 탄을 "볼" 필요가 없다(플레이어 탄 마스크 5 = world+enemy와 서로 안
-##    부딪힌다 — 탄끼리 교전 없음, 의도).
-##  • mask에 2가 빠지면 **맞았는데 안 아픈데 에러가 안 난다** — 세션 24 레이어 침묵과 같은 종류.
-##
-## 겉모습 = `assets/sprites/effects/projectiles.png`의 wind 혜성 2프레임 재사용(projectile.gd
-## `PROJ_ANIMS["wind"]` 레시피) — 도트 아트 실재라 도형 금지 규칙(세54) 충족, 신규 아트 0장.
-##
-## 수치(피해·속도·수명)는 전부 `setup` 주입 — 호출자(forest_enemy)가 .tres에서 읽는다. 코드에 수치 0.
+## 적 투사체 — 플레이어 탄(`src/spell/projectile.gd`)과 별개인 **최소** 탄(직진·수명·플레이어 히트만).
+## 그쪽은 발사 계약(assembly·effects·rune_hits)에 물려 있어 재사용하면 같이 끌려온다.
+## 🔴 물리 = layer 0 / mask 3(world+player, enemy_projectile.tscn) — **mask에 2가 빠지면 맞았는데 안 아프고 에러도 안 난다.**
+## 수치(피해·속도·수명)는 전부 `setup` 주입 — 코드에 수치 0.
 
 const SheetLib := preload("res://src/core/sheet_lib.gd")
 
-## wind 혜성 2프레임 (projectile.gd PROJ_ANIMS["wind"] = [6, 2, 10.0]과 같은 시트·같은 굽기).
+## wind 혜성 2프레임 — projectile.gd `PROJ_ANIMS["wind"]`와 같은 시트·같은 굽기.
 const PROJ_SHEET_PATH := "res://assets/sprites/effects/projectiles.png"
 const WIND_ANIM := {"wind": [6, 2, 10.0]}
-## 시트는 전 탄 공유 — 1회만 빌드 (projectile.gd _shared_frames 선례).
+## 시트는 전 탄 공유 — 1회만 빌드.
 static var _shared_frames: SpriteFrames = null
 static var _sheet_checked: bool = false
 
@@ -30,12 +20,12 @@ var _consumed := false
 
 
 func _ready() -> void:
-	# 그룹 = 헤드리스 관측점(연사 발수 카운트) — "enemies"가 아니다(플레이어 탄이 때리면 안 된다).
+	# "enemies"가 아니다 — 플레이어 탄이 때리면 안 된다.
 	add_to_group("enemy_projectiles")
 	body_entered.connect(_on_body_entered)
 
 
-## dir 방향으로 직진. 혜성형이라 진행 방향으로 회전한다(projectile.gd 폴백 스프라이트와 같은 규약).
+## 혜성형이라 진행 방향으로 회전한다(projectile.gd 폴백 스프라이트와 같은 규약).
 func setup(dir: Vector2, damage: float, speed: float, lifetime: float) -> void:
 	_damage = damage
 	_velocity = dir.normalized() * speed
@@ -76,10 +66,10 @@ func _on_body_entered(body: Node2D) -> void:
 	if _consumed:
 		return
 	if body.is_in_group("player"):
-		# 🔴 구르는 중이면 관통·무해 (구르기 = 무적 계약, forest_enemy._contact와 동일 규약).
+		# 구르는 중이면 관통·무해 (구르기 = 무적 계약, forest_enemy._contact와 동일 규약).
 		if body.has_method(&"is_rolling") and bool(body.call(&"is_rolling")):
 			return
-		# 🔴 source_pos(세63) = 탄의 위치 — player_hurt에 실려 방향성 카메라 킥이 쓴다.
+		# source_pos = 탄의 위치 — player_hurt에 실려 방향성 카메라 킥이 쓴다.
 		GameState.damage_player(_damage, global_position)
 		_consume()
 		return

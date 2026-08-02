@@ -1,18 +1,12 @@
 extends Control
-## 상점 — 돈(닢)으로 기본 잉크(등급/색)를 산다 (세66 도파민 재편 §3).
-## 베이스 [E]로 연다. 정제대(refine_panel)와 **동일 구조**의 소비처 — 다른 점은 잔액 줄뿐이다.
-##
-## 🔴 왜 상점인가: 잡몹 킬 → coin → 귀환 창고(지갑)로 흘러온 돈의 **소비처(3층 sink)**다.
-## 여기서 돈을 잉크로 바꿔 「그리는 재미」(색·데미지 선택지)를 넓힌다. 특별잉크(효과)는 정제대 소관 —
-## 상점은 등급 잉크만(소비처가 안 겹친다).
+## 상점 — 돈(닢)으로 기본 잉크(등급/색)를 산다. 정제대(refine_panel)와 **동일 구조**의 소비처 —
+## 다른 점은 잔액 줄뿐이다. 특별잉크(효과)는 정제대 소관이라 소비처가 안 겹친다.
 ##
 ## 🔴 **재고는 데이터**(station=&"shop" RecipeDef) · **소비·지급은 GameState**(spend·add_item).
 ## 새 상품 = data/recipes/shop_*.tres 한 장이면 여기에 저절로 뜬다. ShopDef 같은 새 스키마 없음.
 ##
-## 🔴 **모달** — 열리면 GameState.ui_modal_open을 켠다(창고 I·발사와 겹침 방지, refine_panel과 같은
-## 패턴). ESC로 닫는다.
-##
-## 계약: open() / closed 시그널. base.gd가 InteractZone(zone_id=shop)에서 연다.
+## 🔴 **모달** — 열리면 GameState.ui_modal_open을 켠다(창고 I·발사와 겹침 방지). ESC로 닫는다.
+## 계약: open() / closed 시그널. ⏳ 지금은 마을에서 이걸 여는 [E]가 없다(패널·레시피는 살아 있다).
 
 signal closed
 
@@ -131,8 +125,8 @@ func _make_row(r: RecipeDef) -> Control:
 	return row
 
 
-## 🔴 구매 — 공개 훅(헤드리스 검증용, loot_panel.advance 선례). 돈을 지갑에서 빼고 잉크를 넣는다.
-## spend가 can_afford를 확인하므로 이중 클릭도 안전. resources_changed가 이 패널·창고를 다시 그린다.
+## 🔴 구매 — 공개 훅(헤드리스 검증용). spend가 can_afford를 확인하므로 이중 클릭도 안전이고,
+## resources_changed가 이 패널·창고를 다시 그린다.
 func _buy(recipe_id: StringName) -> void:
 	var r := Db.get_recipe(recipe_id)
 	if r == null:

@@ -1,18 +1,11 @@
 extends Area2D
-## 기둥 — v2.1. 모듈 B. class_name 없음 — preload로 참조할 것.
+## 기둥 — 지속형 장판. class_name 없음 — preload로 참조할 것.
 ##
-## 🔴 **기둥은 규칙이 아니라 결과다.** 아무도 "기둥을 만들어라"라고 하지 않는다 —
-## **응집(←) 칸이 모인 착탄점**에 선다 (ring_spell_system._spawn_pillar, 옛 충격파 수렴 모델은 은퇴).
-## 사용자: *"그 충격파끼리 맞으면 기둥이 되는 거임."*
-##
-## 룬을 겨눈 화살표 8개는 **중심에서 저절로 만난다.** 밖을 겨눈 8개는 영영 안 만난다.
-## **"몇 개부터 기둥인가"를 정한 곳이 어디에도 없다** — 만나면 만나는 거고 어긋나면 안 만난다.
-##
-## 지속형이다 — 서 있는 동안 안에 든 적을 tick마다 때린다.
+## 🔴 기둥은 규칙이 아니라 결과다 — 씬에 배치하지 않고 ring_spell_system._spawn_pillar가
+## 응집 칸이 모인 착탄점에 직접 세운다. "몇 개부터 기둥인가"를 정한 곳은 아무 데도 없다.
 ## 적 노드 계약: 그룹 "enemies" + take_hit(damage, rune_type, status, status_power).
 
-## 룬 색은 Db에서 읽는다 (`_rune_color`) — "새 룬 = .tres 한 장"이 색까지 지켜지게.
-## 이건 Db에 룬이 없을 때만 쓰는 폴백 (오토로드 없는 컨텍스트도 견딘다 — ring_carrier와 같은 규칙).
+## Db에 룬이 없을 때만 쓰는 폴백 — 오토로드 없는 컨텍스트도 견디게.
 const RUNE_FALLBACK := Color(0.95, 0.35, 0.15)
 
 ## 씬의 CollisionShape2D가 쥔 CircleShape2D 반지름 — **공유 리소스라 불변**. scale로만 키운다
@@ -22,7 +15,7 @@ var damage: float = 0.0
 var rune_type: int = Enums.RuneType.FIRE
 var status: int = Enums.Status.NONE
 var status_power: float = 0.0
-## 🔴 복합 룬 (세81 M2 융합진) — primary 외 룬을 피해 0으로 상태만 얹는다(적 0-피해 가드가 도배 차단).
+## 복합 룬 — primary 외 룬을 피해 0으로 상태만 얹는다(적 0-피해 가드가 도배를 막는다).
 var rune_hits: Array = []
 
 var _balance: BalanceData = preload("res://data/balance.tres")
@@ -44,12 +37,10 @@ func setup(p_damage: float, p_rune_type: int, p_status: int, p_status_power: flo
 	status_power = p_status_power
 	rune_hits = p_rune_hits
 	_life_left = _balance.pillar_duration_sec
-	# 🔴 warmup 프레임(_warmed) 직후에 첫 타격이 나가도록 0으로 둔다 — _physics_process 참조.
-	# 서자마자 한 번 때린다 (안 그러면 짧은 기둥이 아무것도 못 한다).
+	# 서자마자 한 번 때린다 — 안 그러면 짧은 기둥이 아무것도 못 한다.
 	_tick_left = 0.0
 
-	# 🔴 형상 리소스는 **씬 인스턴스들이 공유하는 물건**이다 — radius를 직접 쓰면 모든 기둥이
-	# 함께 바뀐다. **scale로만 만진다** (projectile.gd와 같은 규칙)
+	# 🔴 형상 리소스는 인스턴스끼리 공유한다 — radius를 직접 쓰면 모든 기둥이 같이 바뀐다. scale로만 만져라.
 	var shape := get_node_or_null("Shape") as CollisionShape2D
 	if shape != null:
 		shape.scale = Vector2.ONE * (_balance.pillar_radius_px / BASE_RADIUS)
@@ -69,9 +60,8 @@ func _physics_process(delta: float) -> void:
 	if _visual != null:
 		_visual.modulate.a = clampf(_life_left / maxf(_balance.pillar_duration_sec, 0.001), 0.0, 1.0)
 
-	# 🔴 스폰된 그 프레임엔 get_overlapping_*가 아직 비어 있다 (Area2D 겹침은 물리 스텝 한 번 뒤에
-	# 갱신된다). 한 프레임을 흘려보낸 뒤에 첫 타격을 낸다 — 안 그러면 "서자마자 1타"가 빈 overlap을
-	# 때리고 타이머만 리셋돼 실제 첫 피해가 pillar_tick_sec만큼 밀린다 (짧은 기둥이면 통째로 유실).
+	# 🔴 스폰 프레임엔 get_overlapping_*가 아직 비어 있다 — 여기서 때리면 빈 overlap에 타이머만
+	# 리셋돼 첫 피해가 한 tick 밀린다(짧은 기둥이면 통째로 유실).
 	if not _warmed:
 		_warmed = true
 		return
@@ -91,15 +81,13 @@ func _hit(node: Node2D) -> void:
 		return
 	if node.has_method("take_hit"):
 		node.take_hit(damage, rune_type, status, status_power)
-		# 🔴 세81 M2: 보조 룬 상태 (피해 0 — 적 0-피해 가드가 도배 차단). 기둥은 틱마다 갱신이라
-		# 반응도 틱마다 다시 날 수 있다(강함) — 밸런스 영역이라 F5로 조인다.
+		# 보조 룬은 피해 0으로 상태만 얹는다. 기둥은 틱마다 갱신이라 반응도 틱마다 다시 날 수 있다.
 		for rh: Dictionary in rune_hits:
 			if int(rh.get("rune_type", -1)) == rune_type:
 				continue
 			node.take_hit(0.0, int(rh.rune_type), int(rh.status), float(rh.status_power))
 
 
-## 룬 색 — Db에서 읽고, 없으면 폴백 (ring_carrier._rune_color와 같은 규칙).
 func _rune_color(p_rune_type: int) -> Color:
 	var db := get_node_or_null(^"/root/Db")
 	if db != null:

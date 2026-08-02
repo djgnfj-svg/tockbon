@@ -1,24 +1,20 @@
 extends RefCounted
-## 🔴 상태이상·원소 반응의 **규칙 단일 소스** (세션49 신설). class_name 없음 — `const SR := preload(...)`.
+## 🔴 상태이상·원소 반응의 **규칙 단일 소스**. class_name 없음 — `const SR := preload(...)`.
 ##
-## 왜 core에 있나: `ring_power.gd`와 같은 이유다 — **적·플레이어·허수아비·UI가 같은 함수를 부른다.**
-## 복사해 두면 한쪽만 고쳐도 아무도 못 알아채고 갈라진다("진흙인데 안 묶인다" 식).
-## 여기는 **순수 규칙**만 둔다(시간·노드·씬을 모른다). 상태를 **보유하고 틱을 도는 건 각 배우**다.
+## 왜 core냐: 적·플레이어·허수아비·UI가 **같은 함수**를 불러야 한다 — 복사해 두면 한쪽만 고쳐도
+## 아무도 못 알아채고 갈라진다("진흙인데 안 묶인다" 식).
+## 여기는 **순수 규칙**만 둔다(시간·노드·씬을 모른다). 상태를 보유하고 틱을 도는 건 각 배우다.
 ##
-## 🔴 설계 원칙 (사용자 확정 세션49):
-##   **단독은 약한 바탕, 조합에서 폭발한다.**
-##   단독 효과가 다 없으면 한 발이 밋밋하고, 단독이 다 세면 조합할 이유가 없다.
-##   그래서 룬마다 약한 상태를 남기고, 그 위에 다른 룬이 오면 여기서 **반응**시킨다.
-##   선례 = 원신 Swirl(바람=확산)/Crystallize(흙=굳힘) — **바람·흙은 자체 효과를 억지로 만들지 않는다.**
-##
-## 🔴 이 파일이 곧 기획서다. 반응을 늘리는 건 `REACTIONS`에 **줄 하나**다.
+## 🔴 설계 원칙: **단독은 약한 바탕, 조합에서 폭발한다.** 단독 효과가 다 없으면 한 발이 밋밋하고
+## 단독이 다 세면 조합할 이유가 없다 — 그래서 바람·흙은 자체 효과를 억지로 만들지 않는다.
+## 반응을 늘리는 건 `REACTIONS`에 줄 하나다.
 
 const BAL := preload("res://data/balance.tres")
 
 
-## 룬이 남기는 **바탕 상태** — 단독으로는 약하다. RuneDef.status가 이미 데이터로 들고 있으므로
-## 그 값을 그대로 쓴다(여기서 룬→상태를 다시 정의하지 않는다 — 두 소스가 되면 갈라진다).
-## ⚠ 바람(WIND)은 **상태를 안 남긴다**(FLOW = 즉발 밀림). 대신 아래 `spreads()`가 참이다.
+## 룬이 남기는 바탕 상태는 `RuneDef.status`가 데이터로 들고 있다 — 여기서 룬→상태를 다시
+## 정의하지 않는다(두 소스가 되면 갈라진다).
+## ⚠ 바람(WIND)은 상태를 안 남긴다(FLOW = 즉발 밀림). 대신 아래 `spreads()`가 참이다.
 
 
 ## 🔴 **반응 표** — {바탕 상태: {들어온 룬: 결과}}.
@@ -28,20 +24,17 @@ const BAL := preload("res://data/balance.tres")
 ##   "rune"이 없으면 **들어온 룬**이 폴백이다 — FIRE 고정(세49~55의 하드코딩)보다 늘 진실에 가깝다.
 ##
 ## ⚠ **의미 있는 쌍만 적는다.** 안 적힌 조합은 그냥 새 상태가 덮어쓴다(기본 동작).
-## 6룬이라 15쌍이지만 전부 채울 필요가 없다 — 사용자: *"쏴 보고 정한다."*
 const REACTIONS := {
 	Enums.Status.WET: {
-		# 젖음 + 번개 = 강한 감전 + 주변 연쇄 (사용자가 제일 먼저 떠올린 조합) — 연쇄는 번개 사건
+		# 젖음 + 번개 = 강한 감전 + 주변 연쇄 — 연쇄는 번개 사건
 		Enums.RuneType.BOLT: {"status": Enums.Status.SHOCK, "kind": "burst", "rune": Enums.RuneType.BOLT},
-		# 젖음 + 흙 = 진흙 (강한 속박) — 사용자 아이디어
+		# 젖음 + 흙 = 진흙 (강한 속박)
 		Enums.RuneType.EARTH: {"status": Enums.Status.MUD, "kind": "convert"},
-		# 젖음 + 불 = 증기 (젖음이 날아간다 — 물로 불을 막는 게 아니라 서로 상쇄) — 끓는 물 사건
+		# 젖음 + 불 = 증기 (젖음이 날아간다 — 막는 게 아니라 서로 상쇄) — 끓는 물 사건
 		Enums.RuneType.FIRE: {"status": Enums.Status.NONE, "kind": "burst", "rune": Enums.RuneType.WATER},
-		# 젖음 + 풀 = 무성함 (덩굴이 물을 먹고 크게 자라 **진흙보다도 오래** 묶는다)
-		# 🔴 세86 ⑤a: 여기가 세83~85 내내 **덩굴(ROOT)을 재사용**했다 — 진흙·산불은 전용 산물을
-		#   갖는데 이 쌍만 예외였고, 그래서 반응의 **유일한 관측 가능한 효과가 「젖음을 소진한다」**
-		#   뿐이었다(풀 룬의 `.tres` status가 이미 ROOT라 반응이 없어도 덩굴은 덮어쓰기로 걸렸다).
-		#   = 감사 #33이 *"보상 없는 손해"*라 부른 자리. 전용 상태를 주어 보상 쪽으로 넘겼다.
+		# 젖음 + 풀 = 무성함 (덩굴이 물을 먹고 자라 진흙보다도 오래 묶는다).
+		# 🔴 전용 산물이 필요하다 — ROOT를 재사용하면 풀 룬이 어차피 ROOT를 덮어써서
+		#   반응의 유일한 관측 효과가 「젖음이 사라진다」뿐인 **보상 없는 손해**가 된다.
 		Enums.RuneType.GRASS: {"status": Enums.Status.OVERGROWTH, "kind": "convert"},
 	},
 	Enums.Status.BURN: {
@@ -55,25 +48,22 @@ const REACTIONS := {
 		Enums.RuneType.FIRE: {"status": Enums.Status.BLAZE, "kind": "convert"},
 	},
 	Enums.Status.OVERGROWTH: {
-		# 무성함 + 불 = 산불 (젖었어도 **연료 덩어리**라 한번 붙으면 크게 탄다)
-		# 🔴 세86 ⑤a 결정 — 이 줄을 **비워 두면 안 된다**: 안 적힌 조합은 기본 덮어쓰기라
-		#   불이 무성함을 조용히 지우고 그냥 화상이 된다 = 게임 최고의 속박이 **아무 신호 없이
-		#   사라지는** 함정 상호작용이 된다(플레이어가 배울 방법이 없다). 산물을 ROOT+FIRE와
-		#   같은 산불로 맞춰 어휘도 일관된다("풀 계열 + 불 = 산불"). 새 상태를 또 만들지 않는다.
+		# 무성함 + 불 = 산불 (젖었어도 연료 덩어리라 한번 붙으면 크게 탄다).
+		# 🔴 이 줄을 비워 두면 안 된다 — 안 적힌 조합은 기본 덮어쓰기라 불이 무성함을 조용히
+		#   지우고 그냥 화상이 된다 = 최고의 속박이 **아무 신호 없이** 사라지는 함정이 된다.
 		Enums.RuneType.FIRE: {"status": Enums.Status.BLAZE, "kind": "convert"},
 	},
 }
 
 
-## 🔴 **바람 = 확산자** (원신 Swirl 모델). 자기 상태를 남기지 않고, 적에게 **이미 붙은 상태를
-## 주변 적들에게 퍼뜨린다.** 혼자선 아무것도 아닌데 조합에선 최고가 되는 자리 —
-## 둘레진·나선진처럼 여러 적을 스치는 진과 궁합이 폭발한다.
+## **바람 = 확산자.** 자기 상태를 남기지 않고, 적에게 이미 붙은 상태를 주변 적들에게 퍼뜨린다 —
+## 혼자선 아무것도 아닌데 여러 적을 스치는 진과 만나면 최고가 되는 자리다.
 static func spreads(rune_type: int) -> bool:
 	return rune_type == Enums.RuneType.WIND
 
 
-## 🔴 **흙 = 취약(밑작업)** — 다음에 걸리는 상태를 더 세게 만든다. 물(감속)과 축이 안 겹치게
-## "둔화"가 아니라 "취약"으로 뒀다(검색 선례: Earth = Vulnerability).
+## **흙 = 취약(밑작업)** — 다음에 걸리는 상태를 더 세게 만든다.
+## 물(감속)과 축이 안 겹치게 "둔화"가 아니라 "취약"으로 뒀다.
 static func amplifies(rune_type: int) -> bool:
 	return rune_type == Enums.RuneType.EARTH
 
@@ -88,23 +78,18 @@ static func duration_of(status: int) -> float:
 		Enums.Status.ROOT:       return BAL.status_root_sec
 		Enums.Status.MUD:        return BAL.status_mud_sec
 		Enums.Status.BLAZE:      return BAL.status_blaze_sec
-		# 🔴 무성함 > 진흙 > 덩굴 (관계식이 설계다 — 값은 balance가 쥔다).
+		# 🔴 무성함 > 진흙 > 덩굴 — 관계식이 설계다(값은 balance가 쥔다).
 		Enums.Status.OVERGROWTH: return BAL.status_overgrowth_sec
 		_:                       return 0.0
 
 
-## 이동 배율 — 1.0이면 안 느려진다. 젖음<덩굴<진흙<무성함 순으로 세다. 묶임은 거의 정지.
+## 이동 배율 — 1.0이면 안 느려진다. 젖음<덩굴<진흙<무성함 순으로 세다.
 ##
-## 🔴 세86 ⑤a **한계를 알고 써라**: 무성함 감속은 진흙보다 세지만 `status_slow_cap`(0.90)이
-## 위를 자른다 — 세기 배율(특별잉크·취약)이 조금만 붙어도 **둘 다 상한에 눌려 체감이 같아진다**.
-## 그래서 무성함의 진짜 차별점은 감속이 아니라 **지속시간**이다(진흙 대비 훨씬 오래 묶는다).
-## 감속을 더 벌리려면 상한부터 손봐야 하는데, 상한은 "완전정지 금지"라는 별개 이유로 있는 값이다.
 ## 🔴 **`_apply_move` 한 곳에만 곱해라** — AI 3종(추격·돌진·부유)이 전부 그 통로를 지난다.
-##
-## 🔴 세션50: `power`(세기 배율)를 **먹는다.** 그전엔 감속이 balance 고정이라
-## **감전·덩굴·진흙엔 특별잉크가 아예 안 통했다** — 빚①의 절반이 여기 있었다.
-## ⚠ 상한(`status_slow_cap`)으로 자른다: 완전정지를 허용하면 "느려졌다"와 "죽었다/어그로 풀림"이
-## 구분되지 않아, 감속을 재는 검증이 엉뚱한 이유로 통과한다.
+## ⚠ `status_slow_cap`이 위를 자른다 — 세기 배율이 조금만 붙어도 진흙과 무성함이 **둘 다 상한에
+##  눌려 체감이 같아진다.** 그래서 무성함의 진짜 차별점은 감속이 아니라 지속시간이다.
+##  상한 자체는 "완전정지 금지"라는 별개 이유로 있는 값이다 — 완전정지를 허용하면 "느려졌다"와
+##  "죽었다/어그로 풀림"이 구분되지 않아 감속을 재는 검증이 엉뚱한 이유로 통과한다.
 static func move_mult(status: int, power: float = 1.0) -> float:
 	var slow := 0.0
 	match status:
@@ -117,11 +102,10 @@ static func move_mult(status: int, power: float = 1.0) -> float:
 	return 1.0 - clampf(slow * power, 0.0, BAL.status_slow_cap)
 
 
-## 초당 지속 피해 — 화상 계열만(BURN·BLAZE). `power` = **세기 배율**(특별잉크 증폭이 이미 곱해져 있다).
-## ⚠ 무성함(세86 ⑤a)은 **속박 축**이라 여기 팔이 없다 — DoT를 주면 진흙과 축이 겹치고,
-##   불을 얹었을 때 산불로 바뀌는 보상(위 REACTIONS)이 "이미 타고 있었다"로 흐려진다.
-## 🔴 산불은 화상보다 세다 — 반응의 보상이 **눈에 띄게** 커야 조합할 이유가 생긴다.
-## ⚠ 세션50 전엔 `power`가 곧 초당피해(불의 3.0)였다 — 기준값이 balance로 나갔다.
+## 초당 지속 피해 — 화상 계열만(BURN·BLAZE). `power` = 세기 배율(특별잉크 증폭이 이미 곱해져 있다).
+## ⚠ 무성함은 **속박 축**이라 여기 팔이 없다 — DoT를 주면 진흙과 축이 겹치고, 불을 얹었을 때
+##   산불로 바뀌는 보상이 "이미 타고 있었다"로 흐려진다.
+## 🔴 산불은 화상보다 세다 — 반응의 보상이 눈에 띄게 커야 조합할 이유가 생긴다.
 static func dot_per_sec(status: int, power: float) -> float:
 	match status:
 		Enums.Status.BURN:  return BAL.status_burn_dot_base * power
@@ -129,34 +113,33 @@ static func dot_per_sec(status: int, power: float) -> float:
 		_:                  return 0.0
 
 
-## 🔴 반응 버스트(증기·감전연쇄)의 기준 피해 — 실제 피해 = 이 값 × 각 반응의 mult.
-## ⚠ **버스트 피해를 `power`만으로 계산하지 마라** — 세션49엔 그랬고, 배율 통일 때 그대로 두면
-## 피해가 조용히 1/3로 토막 난다(에러도 테스트 실패도 없다). 계산을 여기 한 곳에 모은 이유다.
+## 반응 버스트(증기·감전연쇄)의 기준 피해 — 실제 피해 = 이 값 × 각 반응의 mult.
+## ⚠ **버스트 피해를 `power`만으로 계산하지 마라** — 그러면 배율을 조일 때 피해가 조용히
+## 토막 난다(에러도 테스트 실패도 없다). 계산을 여기 한 곳에 모은 이유다.
 static func burst_damage(power: float, mult: float) -> float:
 	return BAL.status_burst_base * power * mult
 
 
-## 🔴 반응 판정 — 바탕 상태에 새 룬이 들어왔을 때 무엇이 일어나는가.
+## 반응 판정 — 바탕 상태에 새 룬이 들어왔을 때 무엇이 일어나는가.
 ## 반환 {"status": 결과 상태, "kind": 갈래} · 반응이 없으면 빈 사전(호출부가 기본 덮어쓰기).
 static func react(base_status: int, incoming_rune: int) -> Dictionary:
 	var by_rune: Dictionary = REACTIONS.get(base_status, {})
 	return by_rune.get(incoming_rune, {})
 
 
-## 🔴 바탕 상태에 이 룬이 들어오면 반응하나 (세81 M2 융합진 정렬용) — `react`의 bool 래퍼.
+## 바탕 상태에 이 룬이 들어오면 반응하나 — `react`의 bool 래퍼.
 static func reacts(base_status: int, incoming_rune: int) -> bool:
 	return not react(base_status, incoming_rune).is_empty()
 
 
-## 🔴 **룬 뭉치를 반응이 나는 순서로 정렬한다** (세81 M2 융합진).
-## `apply_incoming`은 **순차**라 얹는 순서가 반응 유무를 정하는데(REACTIONS 표가 비대칭 —
-## base 키가 WET·BURN·ROOT뿐), 이 정렬이 없으면 **같은 두 룬이 자리 순서에 따라 반응하기도
-## 안 하기도** 한다(물→번개=감전 / 번개→물=무반응). 이걸 두면 자리 순서와 무관하게 같은 반응이 난다.
+## 🔴 **룬 뭉치를 반응이 나는 순서로 정렬한다.**
+## `apply_incoming`이 순차라 얹는 순서가 반응 유무를 정하는데 REACTIONS 표가 비대칭이다 —
+## 이 정렬이 없으면 **같은 두 룬이 자리 순서에 따라 반응하기도 안 하기도** 한다
+## (물→번개=감전 / 번개→물=무반응).
 ##
 ## entries = `[{status:int, rune:int, …}, …]` (다른 키는 보존 — 호출부가 피해·세기를 함께 싣는다).
 ## 규칙: 앞의 상태에 뒤의 룬이 반응하는 순서가 되게 인접 스왑(안정 — 반응 안 나면 원래 순서).
-## 🔴 2룬(M2) 기준으로 정확하다. 3룬+는 한 번 훑는 휴리스틱이라 모든 반응을 최적 배치하진 않는다
-## (M2는 2룬이라 안 닿는다 — 필요해지면 그때 넓힌다, YAGNI). ⚠ 순수 int 판별뿐이라 `-s` 안전.
+## ⚠ 2룬 기준으로 정확하다 — 3룬+는 한 번 훑는 휴리스틱이라 최적 배치가 아니다.
 static func order_for_reaction(entries: Array) -> Array:
 	var out := entries.duplicate()
 	for i in range(out.size() - 1):
@@ -172,22 +155,18 @@ static func order_for_reaction(entries: Array) -> Array:
 
 
 ## 취약(흙)이 걸려 있을 때 다음 상태에 곱해지는 세기 배율.
-##
-## 🔴 세션50(사용자 확정): 취약의 세기축 = **증폭 배수**다(지속시간이 아니라). 취약은 이동도
-## DoT도 없고 유일한 효과가 "다음 상태를 증폭"이라, 지속을 흔들면 조합의 보상이 세기가 아니라
-## **타이밍 여유**로 미끄러진다.
-## ⚠ **선형**이다 — `vuln_power`(취약이 걸릴 때의 세기, 0.0이면 안 걸림)만큼 배수가 자란다.
-## 곱(`mult ** power`)으로 하면 취약 2배가 배수 2.25배로 튀어 특별잉크가 폭주한다.
+## 취약의 세기축은 지속시간이 아니라 **증폭 배수**다 — 지속을 흔들면 조합의 보상이 세기가 아니라
+## 타이밍 여유로 미끄러진다.
+## ⚠ **선형**이다 — 곱(`mult ** power`)으로 하면 취약 2배가 배수 2.25배로 튀어 특별잉크가 폭주한다.
 static func power_mult(vuln_power: float) -> float:
 	if vuln_power <= 0.0:
 		return 1.0
 	return 1.0 + (BAL.status_vulnerable_mult - 1.0) * vuln_power
 
 
-## 상태 틴트 색 — **보여야 의미가 있다**(화상 중인 적이 평범해 보이면 룬을 바꿀 이유를 못 느낀다).
-## 연출값이라 balance가 아니라 여기 둔다(선례: juice의 손맛 수치).
-## 🔴🔴 **이건 「곱하는 색」이다** — 스프라이트 `modulate`에 곱하라고 만든 값이라 **1.0을 넘는다**
-## (BLAZE 1.60 · BURN 1.35 · SHOCK 1.25). **직접 그리는 색으로 쓰지 마라** — 아래 `draw_color_of`가 그 문이다.
+## 상태 틴트 색 — 보여야 의미가 있다(화상 중인 적이 평범해 보이면 룬을 바꿀 이유를 못 느낀다).
+## 연출값이라 balance가 아니라 여기 둔다.
+## 🔴 이건 **곱하는 색**이라 1.0을 넘는다 — 직접 그리는 색으로 쓰지 마라(아래 `draw_color_of`가 그 문이다).
 static func tint_of(status: int) -> Color:
 	match status:
 		Enums.Status.BURN:       return Color(1.35, 0.75, 0.55)
@@ -196,20 +175,17 @@ static func tint_of(status: int) -> Color:
 		Enums.Status.MUD:        return Color(0.75, 0.62, 0.45)
 		Enums.Status.SHOCK:      return Color(1.25, 1.20, 0.55)
 		Enums.Status.ROOT:       return Color(0.70, 1.25, 0.70)
-		# 🔴 무성함 = 물 먹은 짙은 녹색. **덩굴(ROOT)과 뚜렷이 갈려야 한다** — 같은 초록이면
-		#   전용 상태를 만든 값어치가 화면에서 통째로 사라진다(빨강을 크게 눌러 어둡게, 파랑을
-		#   올려 "젖었다"를 남긴다). 구분 여부는 `test_status_auto`가 거리로 잰다.
+		# 🔴 무성함 = 물 먹은 짙은 녹색. 덩굴(ROOT)과 뚜렷이 갈려야 한다 — 같은 초록이면
+		#   전용 상태를 만든 값어치가 화면에서 통째로 사라진다.
 		Enums.Status.OVERGROWTH: return Color(0.35, 1.10, 0.80)
 		Enums.Status.VULNERABLE: return Color(1.15, 0.95, 1.15)
 		_:                       return Color.WHITE
 
 
-## 🔴 **그리는 색** — `Line2D.default_color`처럼 **직접 칠하는** 자리는 반드시 이걸 쓴다.
-## `tint_of`는 `modulate` **배수**라 1.0을 넘고, 그대로 칠하면 렌더가 1.0에서 **클램프**해
-## 색조가 흰쪽으로 뭉갠다(BLAZE `1.60/0.60/0.35` → `1.00/0.60/0.35` = 주황이 옅어진다).
-## 최대 성분으로 나눠 **비율(색조)을 보존한 채** 표시 범위로 내린다 — 새 색 테이블이 아니라 **파생**이다
-## (VFX_SPEC §1-1 *"VFX는 자기 색 테이블을 만들지 않는다"*).
-## ⚠ **둘을 바꿔 쓰지 마라**: 스프라이트 틴트 = `tint_of`(곱한다) · 절차 도형 = `draw_color_of`(칠한다).
+## 🔴 **그리는 색** — `Line2D.default_color`처럼 직접 칠하는 자리는 반드시 이걸 쓴다.
+## `tint_of`를 그대로 칠하면 렌더가 1.0에서 클램프해 색조가 흰쪽으로 뭉갠다.
+## 최대 성분으로 나눠 비율(색조)을 보존한 채 표시 범위로 내린다 — 새 색 테이블이 아니라 파생이다.
+## ⚠ 둘을 바꿔 쓰지 마라: 스프라이트 틴트 = `tint_of`(곱한다) · 절차 도형 = `draw_color_of`(칠한다).
 static func draw_color_of(status: int) -> Color:
 	var c := tint_of(status)
 	var peak: float = maxf(maxf(c.r, c.g), c.b)

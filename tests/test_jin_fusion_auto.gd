@@ -1,13 +1,7 @@
 extends SceneTree
-## 🔴 진별 해석 M2 — 룬 2개 + 융합진 자동 검증 (세81) — 헤드리스:
+## 🔴 룬 2개 + 융합진 자동 검증 — 헤드리스:
 ##   ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_jin_fusion_auto.gd
 ## 전 항목 통과 시 "TEST_JIN_FUSION_OK" 출력 후 종료.
-## 정본 = docs/takbon-design/jin_interpretation_design.md 「🔴 M2 확정 설계」.
-##
-## 검증: ① jin_fuse Db 로드+rune_slots==2 (파싱 침묵사 그물, 세50) ② runes_of 승격·멱등 + 저장
-##   라운드트립 ③ RingAssembly 다중 룬 계약 ④ _fire_hit 합산(합 1.4 = 0.7씩)+rune_hits+정렬
-##   ⑤ 심장: 융합 발사 → 한 발이 두 상태 → 반응(SHOCK) + 🔴자리 순서 무의존 ⑥ 🔴도배: 보조
-##   0-피해 히트가 enemy_hit을 안 쏜다(발신 수==1) ⑦ 기둥·폭발도 반응 ⑧ 회귀: 룬 1개 = 옛 계산 동일.
 ##
 ## 주의: -s는 오토로드 등록 전 컴파일 — 오토로드는 root.get_node(), 모듈 스크립트는 load()로 지연.
 
@@ -71,7 +65,7 @@ func _run() -> void:
 		quit(1)
 
 
-# ── [1] jin_fuse Db 로드 + rune_slots (파싱 침묵사 그물, 세50) ──
+# ── [1] jin_fuse Db 로드 + rune_slots (파싱 침묵사 그물) ──
 func _test_jin_load() -> void:
 	print("[1] jin_fuse Db 로드 + rune_slots")
 	var jf = _db.get_jin(&"jin_fuse")

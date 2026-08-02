@@ -1,56 +1,34 @@
 extends SceneTree
-## 낮 보스방 + 나무 투명화 자동 검증 (세99) — 헤드리스 실행:
+## 낮 보스방 + 나무 투명화 자동 검증 — 헤드리스 실행:
 ##   ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_daylight_tree_auto.gd
-## 전 항목 통과 시 "TEST_DAYLIGHT_TREE_OK" 출력 후 종료 코드 0.
-##
-## 🔴🔴 **이 그물은 「예쁜가」를 재지 않는다 — 재는 건 「밤으로 되돌아갔나」다.** 낮/투명화는 겉보기
-##  작업이고 판정은 F5·스샷 몫이다. 여기 있는 건 **조용한 회귀**를 막는 값들이다: 앰비언트를 다시
-##  누르거나 · 횃불을 되살리거나 · 바닥 곱을 빠뜨리거나 · 나무 Area에 레이어를 채우는 것.
-##
-## 🔴 여기서 헤드리스가 **실제로 잡는** 것:
-##  [1] 앰비언트(CanvasModulate)가 화면을 안 누른다 — 옛 `Dusk`(0.85,0.84,0.93)로 되돌리면 빨강
-##  [2] 방 조명이 **볕뉘**지 등불이 아니다 — 횃불(energy 0.9)을 되살리면 빨강
-##  [3] 🔴🔴 **바닥이 안 탄다** — 챕터 색이 1.0 언저리의 **옅은 틴트**인가(포화 0 · 액자 0 · D8 유지).
-##      옛 `_apply_floor_daylight`의 2~3배 곱을 되살리면 빨강. PNG를 **직접 읽어** 바탕색을 구하므로
-##      `boss_room.GRASS_TILE_BASE` 사본이 낡아도(그림을 다시 그려도) 여기서 드러난다
-##  [4] 챕터 3장이 **다 밝고 서로 다르다** — 낮으로 옮기며 셋을 같은 색으로 뭉개면 D8이 죽는다
-##  [5] 🔴 나무엔 **물리 몸이 없고** 감지 Area는 `collision_layer = 0`이다
-##      (레이어를 채우면 캐리어가 나무마다 터진다 — boss_room.gd 머리말의 그 함정)
-##  [6] 🔴🔴 나무 뒤로 가면 **비치고**(alpha↓) **앞으로 나온다**(z↑) · 벗어나면 **둘 다 돌아온다**
-##
-## ⚠ 못 잡는 것: 낮이 **낮처럼 보이나** · 볕뉘가 **얼룩으로 읽히나** · 반투명 나무 너머로 몸이
-##  **실제로 보이나** — 전부 F5·스샷 몫이다(헤드리스는 렌더를 안 한다).
-##
-## ⚠ **[3]은 엔진 WARNING을 한 줄 낸다 — 정상이다**: `Image.load_from_file`이
-##  *"Loaded resource as image file, this will not work on export"*라고 짖는다. 그물이 **import된
-##  텍스처가 아니라 원본 PNG**를 봐야 사본 감시가 성립해서 일부러 그 경로를 쓴다(게임 코드가 아니라
-##  테스트라 export 경고는 해당이 없다). 이 줄을 보고 회귀를 쫓지 마라.
-##
-## 주의: -s 모드는 오토로드 전역 등록보다 먼저 컴파일된다 — 오토로드 식별자·모듈 preload 금지.
-## 첫 프레임 후 load()·/root 접근. 지역 변수는 의도적으로 동적 타입.
+## 🔴 재는 건 「예쁜가」가 아니라 「밤으로 되돌아갔나」다 — 앰비언트를 다시 누르거나·횃불을 되살리거나·
+##  바닥 곱을 빠뜨리거나·나무 Area에 레이어를 채우는 조용한 회귀를 값으로 잡는다.
+## ⚠ 못 잡는 것: 낮이 낮처럼 보이나 · 볕뉘가 얼룩으로 읽히나 · 반투명 나무 너머로 몸이 실제로 보이나 —
+##  헤드리스는 렌더가 없어 못 잡는다. 실게임 확인이 대체되지 않는다.
+## ⚠ [3]은 엔진 WARNING(Loaded resource as image file…)을 한 줄 낸다 — 정상이다. 그물이 import된
+##  텍스처가 아니라 원본 PNG를 봐야 사본 감시가 성립해서 일부러 그 경로를 쓴다. 회귀로 쫓지 마라.
+## 주의: -s 모드는 오토로드보다 먼저 컴파일된다 — 오토로드 식별자·모듈 preload 금지. 첫 프레임 후 load()·/root 접근.
 
 ## 🔴 「낮」의 하한 — 앰비언트가 화면을 이보다 더 누르면 낮이 아니다. 옛 Dusk는 최소 채널 0.84였다.
 const DAY_AMBIENT_MIN := 0.90
 ## 🔴 방 조명 한 개의 상한 — **볕뉘**(0.22~0.30)는 통과하고 **횃불**(0.9)은 못 넘는다.
-## 밝은 바닥 위의 센 additive 광원이 세99에 사용자가 *"어색하다"*고 한 바로 그 얼룩이다.
 const ROOM_LIGHT_MAX_ENERGY := 0.35
-## 🔴 낮 바닥의 밝기 하한(HSV의 V) — 세98 바닥은 셋 다 0.19 이하였다(거의 검정).
+## 🔴 낮 바닥의 밝기 하한(HSV의 V) — 옛 바닥은 셋 다 0.19 이하였다(거의 검정).
 const DAY_FLOOR_V_MIN := 0.26
-## 챕터끼리 이만큼은 달라야 한다 — 「챕터마다 다른 무대」(D8)가 색으로도 남는지.
+## 챕터끼리 이만큼은 달라야 한다 — 「챕터마다 다른 무대」가 색으로도 남는지.
 const CHAPTER_COLOR_MIN_GAP := 0.04
-## 🔴🔴 바닥 곱의 허용 구간 — **「형광색」의 방어선**이다(세99 타일 교체분).
-##  옛 `_apply_floor_daylight`는 거의 검은 타일을 밝히려고 **2~3배**를 곱했다. 이미 낮 밝기로 그려진
-##  새 시트에 그 곱을 물리면 흙 `#ad7757` → `#ffff6d`(형광 노랑)가 되는데 **에러가 0이다.**
-## ⚠ 값을 박는 게 아니라 **구간**이다 — 사용자가 F5로 조일 여지를 남기되 탈 수는 없게.
+## 🔴 바닥 곱의 허용 구간 — 「형광색」의 방어선이다. 옛 _apply_floor_daylight는 거의 검은 타일을
+##  밝히려고 2~3배를 곱했다 — 이미 낮 밝기인 새 시트에 그 곱을 물리면 흙이 형광 노랑이 되는데 에러가 0이다.
+## ⚠ 값을 박는 게 아니라 구간이다 — F5로 조일 여지를 남기되 탈 수는 없게.
 const TINT_MIN := 0.70
 const TINT_MAX := 1.20
 
-## 🔴 나무 「앞」 프로브를 접지선에서 얼마나 아래에 두나 (세100 · N25ⓑ를 나무로 옮긴 값).
-## 멀리 두면 감지 상자를 아래로 늘려도 안 걸려 **"나무 앞에 섰는데 나무가 튀어나온다"가 무증상**이 된다.
-## ⚠ `test_landmark_road_auto`가 둥지에 대해 같은 이름·같은 값을 든다 — 두 프롭의 계약이 같아서지
-##  한쪽을 고치면 다른 쪽이 따라와야 한다는 뜻이 **아니다**(각자 자기 프롭에서 빨개진다).
+## 🔴 나무 「앞」 프로브를 접지선에서 얼마나 아래에 두나. 멀리 두면 감지 상자를 아래로 늘려도 안 걸려
+##  "나무 앞에 섰는데 나무가 튀어나온다"가 무증상이 된다.
+## ⚠ test_landmark_road_auto가 둥지에 대해 같은 이름·값을 든다 — 계약이 같아서지 한쪽을 고치면
+##  다른 쪽이 따라와야 한다는 뜻이 아니다(각자 자기 프롭에서 빨개진다).
 const FRONT_PROBE_PAD := 20.0
-## 챕터 셋의 **틴트**가 이만큼은 갈려야 한다 — 옅게 옮기며 셋을 하나로 뭉개면 D8이 죽는다.
+## 챕터 셋의 틴트가 이만큼은 갈려야 한다 — 옅게 옮기며 셋을 하나로 뭉개면 「챕터마다 다른 무대」가 죽는다.
 const TINT_MIN_GAP := 0.05
 ## 바닥 시트 그림 — 바탕색을 **여기서 직접 읽어** boss_room의 상수와 대조한다(사본 감시).
 const GROUND_SHEET_PNG := "res://assets/sprites/field/tileset_ground.png"
@@ -96,8 +74,7 @@ func _run() -> void:
 		quit(1)
 
 
-## [1] 앰비언트가 낮이다 — 🔴 **이름으로 안 찾는다**(세99에 `Dusk`→`Daylight`로 개명했다).
-## 타입으로 집으면 다음에 또 개명해도 이 그물이 안 낡는다.
+## [1] 앰비언트가 낮이다 — 🔴 이름으로 안 찾는다(개명 이력이 있다). 타입으로 집으면 개명해도 이 그물이 안 낡는다.
 func _test_ambient_is_day() -> void:
 	print("[1] 🔴 앰비언트(CanvasModulate)가 화면을 안 누른다 = 낮")
 	await _fresh(&"ch1")
@@ -131,17 +108,10 @@ func _test_room_lights_are_sun_patches() -> void:
 			% [worst, ROOM_LIGHT_MAX_ENERGY])
 
 
-## [3] 🔴🔴 **바닥이 안 탄다** — 챕터 색은 1.0 언저리의 **옅은 틴트**여야 한다 (세99 타일 교체분).
-##
-## 🔴 **채널을 옮긴 항목이다.** 세99 전반엔 여기가 「`modulate × 타일 바탕색 == room_ground_color`」
-##  였다 — 거의 검은 `tile_boss_floor.png`를 **2~3배로 밝히는 우회로**(`_apply_floor_daylight`)가
-##  실제로 걸렸나를 재는 그물이었다. 그 뒤 바닥이 **이미 낮 밝기로 그려진 시트**로 갈렸고, 같은 곱을
-##  물리면 **곱을 두 번 먹어 흙이 `#ffff6d` 형광 노랑이 된다**(`docs/_reports/tile_dirt.md` §0).
-##  → 재는 것을 **「곱이 정확한가」에서 「곱이 안 타는가」로** 옮겼다. 옛 곱을 되살리면 여기가 빨개진다.
-##
-## 🔴 타일 바탕색을 **PNG에서 직접 읽는다** — `boss_room.GRASS_TILE_BASE`는 그림에서 베낀 사본이라
-##  그림을 다시 그리면 조용히 낡는다. 두 출처를 대조하는 게 이 항목의 핵심이다
-##  (대조는 `Ground.color == 바탕색 × modulate`로 한다 — 코드가 그 상수로 테두리를 칠하기 때문이다).
+## [3] 🔴 바닥이 안 탄다 — 챕터 색은 1.0 언저리의 옅은 틴트여야 한다. 재는 것을 「곱이 정확한가」에서
+##  「곱이 안 타는가」로 옮겼다(밝은 시트에 옛 2~3배 곱을 물리면 흙이 형광 노랑이 된다).
+## 🔴 타일 바탕색을 PNG에서 직접 읽는다 — boss_room.GRASS_TILE_BASE는 그림에서 베낀 사본이라 그림을
+##  다시 그리면 조용히 낡는다. 두 출처를 대조하는 게 이 항목의 핵심이다(Ground.color == 바탕색 × modulate).
 func _test_floor_becomes_chapter_color() -> void:
 	print("[3] 🔴🔴 바닥 틴트가 1.0 언저리다 — 안 탄다 · 액자가 없다 · 챕터마다 다르다")
 	var grass = _tile_base(GRASS_TILE_CELL)
@@ -165,7 +135,7 @@ func _test_floor_becomes_chapter_color() -> void:
 		tints.append(m)
 		var lo: float = minf(minf(m.r, m.g), m.b)
 		var hi: float = maxf(maxf(m.r, m.g), m.b)
-		# 🔴🔴 **이 줄이 「형광색」의 방어선이다** — 옛 `_apply_floor_daylight`의 곱은 ch1에서 2.63배였다.
+		# 🔴 이 줄이 「형광색」의 방어선이다 — 옛 _apply_floor_daylight의 곱은 ch1에서 2.63배였다.
 		_check(lo >= TINT_MIN and hi <= TINT_MAX,
 			"🔴🔴 %s: 바닥 곱이 옅은 틴트다 %s (%.2f~%.2f — 밝은 시트에 2~3배를 물리면 화면이 탄다)"
 				% [id, m, TINT_MIN, TINT_MAX])
@@ -188,7 +158,7 @@ func _test_floor_becomes_chapter_color() -> void:
 		_check(gap <= 0.02,
 			"🔴 %s: 테두리(Ground)가 바닥과 같은 색이다 = 액자가 없다 (오차 %.3f · 실제 %s / 기대 %s)"
 				% [id, gap, rim, want])
-	# 🔴 D8 — 틴트가 세 챕터를 **실제로 가른다**(색을 옅게 옮기며 셋을 하나로 뭉개면 여기가 빨강).
+	# 🔴 틴트가 세 챕터를 실제로 가른다(색을 옅게 옮기며 셋을 하나로 뭉개면 여기가 빨강).
 	for i in tints.size():
 		for j in range(i + 1, tints.size()):
 			var a: Color = tints[i]
@@ -198,7 +168,7 @@ func _test_floor_becomes_chapter_color() -> void:
 				"챕터 %d↔%d 바닥 틴트가 다르다 (합차 %.3f ≥ %.2f)" % [i + 1, j + 1, d, TINT_MIN_GAP])
 
 
-## [4] 세 챕터가 다 밝고 서로 다르다 — 「낮」과 「챕터마다 다른 무대」(D8)를 같이 잰다.
+## [4] 세 챕터가 다 밝고 서로 다르다 — 「낮」과 「챕터마다 다른 무대」를 같이 잰다.
 ## ⚠ 값을 박지 않는다(사용자가 F5로 조인다) — **하한과 간격**만 본다.
 func _test_chapters_are_bright_and_distinct() -> void:
 	print("[4] 챕터 3장의 바닥이 다 밝고(낮) 서로 다르다(D8)")
@@ -221,9 +191,8 @@ func _test_chapters_are_bright_and_distinct() -> void:
 				"챕터 %d↔%d 바닥색이 다르다 (합차 %.3f ≥ %.2f)" % [i + 1, j + 1, gap, CHAPTER_COLOR_MIN_GAP])
 
 
-## [5] 🔴 나무엔 물리 몸이 없다 + 감지 Area가 **아무에게도 안 잡힌다**.
-## StaticBody2D(world 레이어)로 만들면 캐리어(마스크 5)가 나무마다 터진다 — boss_room.gd 머리말.
-## 세99에 Area2D가 붙었으므로 **그 Area가 그 함정을 다시 열지 않았나**를 값으로 잰다.
+## [5] 🔴 나무엔 물리 몸이 없다 + 감지 Area가 아무에게도 안 잡힌다.
+## StaticBody2D(world 레이어)로 만들면 캐리어(마스크 5)가 나무마다 터진다 — Area가 그 함정을 다시 열지 않았나를 잰다.
 func _test_tree_has_no_body() -> void:
 	print("[5] 🔴 나무 = 물리 몸 0 · 감지 Area는 collision_layer 0")
 	await _fresh(&"ch1")
@@ -247,14 +216,11 @@ func _test_tree_has_no_body() -> void:
 	_check(monitorable == 0, "감지 Area가 전부 monitorable = false다 (실제 %d개가 켜져 있다)" % monitorable)
 
 
-## [6] 🔴🔴 나무 뒤로 가면 비치고 앞으로 나온다 — **두 축을 같이 잰다**(tree.gd 머리말 ⓐⓑ).
-## alpha만 재면 「흐려지는데 여전히 몸 뒤라 화면이 그대로」인 회귀를 못 잡고,
-## z만 재면 「몸을 통째로 먹는」 회귀를 못 잡는다.
-## 🔴 밑동 **아래**(= 나무 앞)에서는 둘 다 원래대로여야 한다 — 그게 「위/아래가 원근」이라는 계약이다.
-## 🔴🔴 **세100(N25ⓒ): z 기대치를 리터럴로 안 든다** — 플레이어 스프라이트·지팡이 z를 **살아 있는
-##  노드에서 읽는다**. 실측: 플레이어 스프라이트를 z 2 → 6으로 올리는 뮤테이션에 **이 파일이 통째로
-##  그린이었다**(나무 z 4 > 리터럴 2라서). 즉 플레이어 z를 올리는 날 나무가 조용히 몸 뒤로 숨는데
-##  **그물도 같이 눈을 감는다**(감사 T5 — 그 숫자가 네 곳에 흩어져 있다).
+## [6] 🔴 나무 뒤로 가면 비치고(alpha↓) 앞으로 나온다(z↑) — 두 축을 같이 잰다. alpha만 재면 「흐려지는데
+##  여전히 몸 뒤라 화면이 그대로」인 회귀를, z만 재면 「몸을 통째로 먹는」 회귀를 못 잡는다.
+## 🔴 밑동 아래(= 나무 앞)에서는 둘 다 원래대로여야 한다 — 그게 「위/아래가 원근」이라는 계약이다.
+## 🔴 z 기대치를 리터럴로 안 든다 — 플레이어 스프라이트·지팡이 z를 살아 있는 노드에서 읽는다.
+##  뮤테이션 실측: 스프라이트 z를 2→6으로 올려도 리터럴 판에선 이 파일이 통째로 그린이었다(나무가 조용히 몸 뒤로 숨는데 그물도 눈을 감는다).
 func _test_tree_is_seen_through_from_behind() -> void:
 	print("[6] 🔴🔴 플레이어가 나무 뒤 → 비친다(alpha↓) + 앞으로 나온다(z↑)")
 	await _fresh(&"ch1")
@@ -268,7 +234,7 @@ func _test_tree_is_seen_through_from_behind() -> void:
 		_check(false, "Player를 못 찾았다")
 		return
 	var away: Vector2 = player.global_position
-	# 🔴 기대치를 **살아 있는 플레이어에서 읽는다**(N25ⓒ) — 씬 값이든 스크립트 대입이든 같은 답이 나온다.
+	# 🔴 기대치를 살아 있는 플레이어에서 읽는다 — 씬 값이든 스크립트 대입이든 같은 답이 나온다.
 	var sprite_z := _live_z(player, ^"Sprite")
 	var wand_z := _live_z(player, ^"FloatingWand")
 	_check(sprite_z > 0 and wand_z > 0,
@@ -277,10 +243,8 @@ func _test_tree_is_seen_through_from_behind() -> void:
 	var body_z: int = maxi(sprite_z, wand_z)
 	var base_z: int = tree.z_index
 
-	# 🔴🔴 세100 — 프로브를 **감지 상자 형상에서 파생**시킨다(N25ⓑ를 나무로 옮긴 것).
-	#  옛 그물은 뒤 −24 · 앞 +40 **고정**이라, 나무를 64→128px로 다시 그려 상자가 −58..+2에서
-	#  −116..0으로 두 배가 돼도 **두 좌표 다 같은 판정**이 나왔다 = **씬 값을 안 고쳐도 전 스위트
-	#  그린**이고 나무만 60px 뜬 채 커밋된다(art 보고서가 이 구멍을 스스로 짚었다).
+	# 🔴 프로브를 감지 상자 형상에서 파생시킨다. 옛 그물은 뒤 −24 · 앞 +40 고정이라, 나무를 64→128px로
+	#  다시 그려 상자가 두 배가 돼도 두 좌표 다 같은 판정이 나왔다 = 씬 값을 안 고쳐도 전 스위트 그린이었다.
 	var sense := tree.get_node_or_null(^"BehindSense") as Area2D
 	if sense == null:
 		_check(false, "BehindSense를 못 찾았다 — [6]을 잴 수 없다")
@@ -310,9 +274,8 @@ func _test_tree_is_seen_through_from_behind() -> void:
 		"벗어나면 alpha가 1로 돌아온다 (실제 %.2f)" % tree.modulate.a)
 	_check(tree.z_index == base_z, "벗어나면 z가 평상시(%d)로 돌아온다 (실제 %d)" % [base_z, tree.z_index])
 
-	# ⓒ 🔴 밑동 **아래** = 나무 「앞」 — 겹쳐 보여도 안 비친다(위/아래가 원근이라는 계약).
-	# 🔴 세100: 옛 +40은 접지선에서 너무 멀어 **상자를 아래로 늘려도 그린**이었다(N25ⓑ와 같은 눈감음).
-	#  접지선 **바로 아래**로 당긴다 — 여기서 비치면 "나무 앞에 섰는데 나무가 튀어나온다"가 실제로 보인다.
+	# ⓒ 🔴 밑동 아래 = 나무 「앞」 — 겹쳐 보여도 안 비친다(위/아래가 원근이라는 계약).
+	# 🔴 옛 +40은 접지선에서 너무 멀어 상자를 아래로 늘려도 그린이었다 — 접지선 바로 아래로 당긴다.
 	player.global_position = tree.global_position + Vector2(0, FRONT_PROBE_PAD)
 	await _settle()
 	_check(is_equal_approx(tree.modulate.a, 1.0),
@@ -324,10 +287,9 @@ func _test_tree_is_seen_through_from_behind() -> void:
 ## ── 도구 ───────────────────────────────────────────────────────────────────
 
 
-## 🔴 감지 상자의 **아래 변 · 위 변**(로컬 y) — 치수를 안 박고 형상에서 읽는다(세100).
-## ⚠ `test_landmark_road_auto`가 둥지에 대해 같은 헬퍼를 든다 — **사본이다.** 합치지 않은 이유는
-##  테스트 헬퍼가 파일마다 독립인 게 이 리포의 관행이고(공유 모듈이 없다), 무엇보다 **한쪽이 낡으면
-##  다른 쪽이 같이 눈감는 것보다 낫기** 때문이다. 계약이 갈리면 각자 자기 프롭에서 빨개진다.
+## 🔴 감지 상자의 아래 변 · 위 변(로컬 y) — 치수를 안 박고 형상에서 읽는다.
+## ⚠ test_landmark_road_auto가 둥지에 대해 같은 헬퍼를 든다 — 사본이다. 한쪽이 낡으면 다른 쪽이
+##  같이 눈감는 것보다 낫기에 안 합쳤다(계약이 갈리면 각자 자기 프롭에서 빨개진다).
 func _sense_bottom(area: Area2D) -> float:
 	var bottom := -INF
 	for c in area.get_children():
@@ -348,8 +310,7 @@ func _sense_top(area: Area2D) -> float:
 	return top
 
 
-## 🔴 자식 노드의 살아 있는 `z_index` — **리터럴 기대치를 안 든다**(세100 N25ⓒ).
-## 없으면 -1을 돌려줘 호출부의 「0이면 자명 통과」 가드에 걸린다(조용히 0으로 비교하지 않게).
+## 🔴 자식 노드의 살아 있는 z_index — 리터럴 기대치를 안 든다.
 func _live_z(parent: Node, path: NodePath) -> int:
 	var n := parent.get_node_or_null(path) as CanvasItem
 	return n.z_index if n != null else -1
@@ -369,12 +330,8 @@ func _trees() -> Array:
 	return holder.get_children()
 
 
-## 바닥 타일 PNG의 바탕색(가장 많이 쓰인 색 대신 **한복판 한 점**) — 이 그림은 4096칸 중 3976칸이
-## 한 색이라 가운데를 찍으면 바탕이다. 🔴 `Image.load_from_file`은 GPU를 안 타서 헤드리스에서 돈다
-## (`Texture2D.get_image()`는 렌더 서버 왕복이라 헤드리스에서 빈 값이 나온다).
-## 시트의 한 칸에서 **바탕색**을 뽑는다 — 칸 한복판이 아니라 **최빈색**이다.
-## 🔴 한복판을 찍으면 얼룩 하나에 값이 통째로 흔들린다(옛 그림은 97%가 단색이라 안 드러났는데,
-##  새 시트는 풀 A도 95%라 여전히 되지만 **길 중앙 칸은 잔풀·자갈이 섞여** 찍는 자리로 갈린다).
+## 시트 한 칸에서 바탕색을 뽑는다 — 칸 한복판 한 점이 아니라 최빈색이다(한복판은 얼룩 하나에 값이 통째로 흔들린다).
+## 🔴 Image.load_from_file은 GPU를 안 타서 헤드리스에서 돈다(Texture2D.get_image()는 렌더 서버 왕복이라 빈 값이 나온다).
 func _tile_base(cell: Vector2i):
 	var img := Image.load_from_file(GROUND_SHEET_PNG)
 	if img == null:

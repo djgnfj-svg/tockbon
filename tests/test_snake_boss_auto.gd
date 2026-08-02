@@ -1,17 +1,17 @@
 extends SceneTree
-## 뱀 보스 자동 검증 (세션 A) — 헤드리스 실행:
+## 뱀 보스 자동 검증 — 헤드리스 실행:
 ##   ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_snake_boss_auto.gd
 ## 전 항목 통과 시 "TEST_SNAKE_BOSS_OK" 출력 후 종료 코드 0.
 ##
 ## 🔴 여기서 헤드리스가 **실제로 잡는** 것:
-##   • snake_boss.tres가 Db를 거쳐 실제 로드된다 (세50 침묵 데이터 죽음 그물)
+##   • snake_boss.tres가 Db를 거쳐 실제 로드된다 (.tres 침묵 데이터 죽음 그물)
 ##   • 머리(forest_enemy) take_hit → hp 감소 · enemy_hit 발신 · 약점 배율
 ##   • hp 절반 페이즈 전이(공개 `phase()` 리더)
 ##   • SnakeBody 마디 수 == SEGMENT_COUNT · 머리를 옮기면 마디가 따라온다
 ##   • boss_snake AI: 플레이어 쪽으로 전진한다
 ## ⚠ 못 잡는 것: 세그먼트 **물결·러시 채찍의 "느낌"**·머리 회전이 눈에 보이는지 — 실게임 스샷.
 ##
-## 공개 API로만 검증한다 (takbon-verify §3): hp()·phase()·has_status()·segment_count()·
+## 공개 API로만 검증한다: hp()·phase()·has_status()·segment_count()·
 ## segment_global_position(). 내부 필드는 리팩터 때 옮겨 다니는 물건이라 계약이 아니다.
 ##
 ## 주의: -s 모드는 오토로드 전역 등록보다 먼저 컴파일된다 — 오토로드 식별자·모듈 preload 금지.
@@ -52,7 +52,7 @@ func _run() -> void:
 		quit(1)
 
 
-## [1] 🔴 snake_boss.tres가 Db를 거쳐 로드된다 (세50 그물 — "파일 만들었다"≠완료).
+## [1] 🔴 snake_boss.tres가 Db를 거쳐 로드된다 ("파일 만들었다"≠완료).
 func _test_def_loads() -> void:
 	print("[1] snake_boss.tres 로드 (Db 경유)")
 	var def = _db.get_enemy(&"snake_boss")
@@ -60,9 +60,8 @@ func _test_def_loads() -> void:
 	if def != null:
 		_check(is_equal_approx(def.hp, 320.0), "hp = 320 (세58-B 챕터 하향, 실제 %.0f)" % def.hp)
 		_check(str(def.params.get("ai", "")) == "boss_snake", "params.ai == boss_snake")
-		# 🔴 세85: `is_elite` 단정을 걷었다 (감사 #20 · 결정 ⑧) — 그 필드는 **게임 로직 소비자가
-		# 0곳**이었고 이 줄이 유일한 독자였다. 죽은 필드를 재는 단정은 「보스답다」를 재는 게 아니라
-		# 스키마에 그 필드가 남아 있다는 사실만 재는 것이라 검출력이 0이다(hp·ai·drops가 실제 축이다).
+		# 🔴 `is_elite` 단정은 걷었다 — 소비자가 0곳이라 「스키마에 필드가 남아 있다」만 재는
+		# 검출력 0짜리였다(hp·ai·drops가 실제 축이다).
 		# drops가 기존 아이템 id인지 (엉뚱한 id가 아니라).
 		var ok := true
 		for d in def.drops:
@@ -126,7 +125,7 @@ func _test_phase_transition() -> void:
 	var player = _make_player(Vector2(120, 0))  # aggro 안 → boss가 틱한다
 	await physics_frame
 	_check(boss.phase() == 1, "전이 전 페이즈 == 1")
-	# 비약점 170 → hp 320→150 (< 임계 160, 하지만 살아 있음. 세58-B hp 하향에 맞춘 수치).
+	# 비약점 170 → hp 320→150 (< 임계 160, 하지만 살아 있음).
 	boss.take_hit(170.0, 0, 0, 0.0)
 	for i in 5:
 		await physics_frame
@@ -146,7 +145,7 @@ func _test_segments_follow_head() -> void:
 	var last: int = body.SEGMENT_COUNT - 1
 	var tail_start: Vector2 = body.segment_global_position(last)
 	# 🔴 머리 이동거리를 **몸통 길이에 맞춰 동적으로** 잡는다 (마디 수·간격 튜닝에 견고하게 —
-	# 고정 320px로 두면 몸통이 길어질 때 꼬리가 이동창 밖이라 조용히 예민해진다, 세54).
+	# 고정 320px로 두면 몸통이 길어질 때 꼬리가 이동창 밖이라 조용히 예민해진다).
 	var body_len: float = float(body.SEGMENT_COUNT) * body.SEGMENT_SPACING
 	var steps: int = int(ceil((body_len * 1.5 + 80.0) / 8.0))
 	for i in steps:
@@ -165,17 +164,14 @@ func _test_segments_follow_head() -> void:
 ## 플레이어를 **rush_range(240) 밖 · aggro_range(320) 안**에 둬 WEAVE로 다가오게 한다
 ## (러시 윈드업에 안 갇히고, leash에도 안 걸리는 좁은 띠다).
 ##
-## 🔴🔴 **세88에 이 자리가 바뀌었다**: 옛 코드는 플레이어를 400px에 뒀고 주석도 *"aggro보다 멀리"*라
-## 적혀 있었다 — 그때는 WEAVE에 **거리 게이트가 없어서** 아무리 멀어도 다가왔기 때문이다.
-## 세88 leash(§2-A-2-b)가 그 성질을 없앴다: 이제 aggro 밖이면 **자기 자리를 지킨다**(안 그러면
-## 2400×2200 숲에서 보스가 남쪽 입구까지 내려와 「깊이 들어간다」가 사라진다).
-## → 400px은 **이제 「안 온다」가 정답인 거리**다. 이 검사는 「올 수 있는 거리에서 온다」를 재야 한다.
+## 🔴 aggro 밖이면 보스는 **자기 자리를 지킨다**(leash) — 그래서 이 검사는 「올 수 있는 거리에서
+## 온다」를 재야 한다. aggro 밖 거리를 주면 「안 온다」가 정답이라 그물이 뒤집힌다.
 ## ⚠ 「멀면 안 온다」 쪽은 `test_enemy_ai_auto` [4]가 3갈래 전부 잰다 — 여기서 중복하지 않는다.
 ## ⚠ 거리를 **`.tres`에서 파생**한다 — 사용자가 aggro를 조여도 거짓 빨강이 안 나게.
 func _test_boss_chases_player() -> void:
 	print("[6] boss_snake가 플레이어 쪽으로 다가온다 (aggro 안)")
 	var boss = _make_boss(Vector2.ZERO)
-	# 🔴 세105 이름 승계 — 폴백을 320으로 두면 데이터가 새 이름으로 갔을 때 **우연히 같은 값**을
+	# 🔴 이름 승계 — 폴백을 320으로 두면 데이터가 새 이름으로 갔을 때 **우연히 같은 값**을
 	#  받아 그물이 빨개지지도 않는다(실측). 승계 순서대로 읽고 0이면 아래가 자명 통과다.
 	var aggro: float = float(_db.get_enemy(&"snake_boss").params.get(
 		"sight_range", _db.get_enemy(&"snake_boss").params.get("aggro_range", 0.0)))

@@ -1,27 +1,12 @@
 extends SceneTree
-## 상태이상·원소 반응 자동 검증 (세션 49) — 헤드리스 실행:
-##   ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_status_auto.gd
-## 전 항목 통과 시 "TEST_STATUS_OK" 출력 후 종료 코드 0.
-##
-## 🔴 여기서 지키는 계약: `forest_enemy.take_hit`이 **status를 실제로 쓴다**. 세34~48까지
-## 밑줄로 버려서 불·물·바람의 실질 차이가 색 + 데미지 ±15%뿐이었다 — 이 파일이 그 회귀를 막는다.
-## 규칙 자체는 `src/core/status_rules.gd`가 쥔다. 여기선 **적이 그 규칙대로 도는지**만 본다.
-##
-## 🔴 **공개 API로만** 검증한다 (takbon-verify §3): `hp()`·`take_hit`·`apply_status`·
-## `has_status`·`status_power_of`·EventBus.enemy_hit. 내부 필드(_statuses)는 계약이 아니다.
-##
+## 상태이상·원소 반응 자동 검증 — `forest_enemy.take_hit`이 **status를 실제로 쓴다**를 지킨다.
+##  규칙 자체는 `src/core/status_rules.gd`가 쥔다. 여기선 **몸이 그 규칙대로 도는지**만 본다.
+## 🔴 **공개 API로만** 검증한다: `hp()`·`take_hit`·`apply_status`·`has_status`·`status_power_of`·
+##  EventBus.enemy_hit. 내부 필드(`_statuses`)는 계약이 아니다.
 ## 🔴 감속은 **실제로 움직인 거리**로 잰다 — `_move_mult()`를 직접 부르면 `_apply_move` 통로를
-## 건너뛰어 "곱하는 걸 잊었다"를 못 잡는다 (세션25 Control 우회와 같은 종류의 착각).
-##
-## 🔴 세84: **풀 계열 반응 3종(무성함·산불×2)과 반응 VFX의 두 몸 파리티**를 추가했다(감사 #16·#15).
-## 그전엔 ROOT·BLAZE가 tests/ 전체에 0건이라 세83이 되살린 반응표 세 줄을 지워도 전 스위트 그린이었고,
-## VFX 신호는 `dummy_target`만 재서 **실제로 싸우는 `forest_enemy`의 emit 세 줄이 무측정**이었다.
-##
-## ⚠ 못 잡는 것: 틴트가 **보이는지**(헤드리스는 렌더가 없다) · 연쇄/증기가 실제 전투에서
-## 시원한지(손맛). 리드가 실게임 스샷·플레이로 확인해야 한다.
-##
-## 주의: -s 모드는 오토로드 전역 등록보다 먼저 컴파일된다 — 오토로드 식별자·모듈 preload 금지.
-## 첫 프레임 후 load()·/root 접근. 지역 변수는 의도적으로 동적 타입.
+##  건너뛰어 「곱하는 걸 잊었다」를 못 잡는다.
+## ⚠ 못 잡는 것: 틴트가 **보이는지**(렌더 없음) · 연쇄/증기가 전투에서 시원한지(손맛). 실게임 몫이다.
+## 주의: -s 모드는 오토로드 등록보다 먼저 컴파일된다 — 오토로드 식별자·모듈 preload 금지.
 
 # 상태·룬 값은 **정수 리터럴**로 쓴다 (Enums 전역을 컴파일 타임에 참조하지 않게 — 기존 테스트 관례).
 const S_BURN := 1
@@ -34,27 +19,18 @@ const R_WIND := 3
 const S_SHOCK := 5
 const R_BOLT := 4
 const R_EARTH := 5
-# 🔴 세84 감사 #16 — 세83이 룬 6종을 복원해 **풀 계열 반응 전체**(무성함·산불·속박)가 살아났는데
-# 이 목록에 ROOT·BLAZE·GRASS가 없어 **이 파일이 그 조합을 부를 방법 자체가 없었다** = 세 반응 줄과
-# `duration_of`/`move_mult`의 ROOT·BLAZE 팔, `status_blaze_dot_mult`를 지워도 전 스위트 그린이었다.
+# 🔴 이 목록에 없는 상태·룬은 **이 파일이 부를 방법이 없다** — 반응 줄을 지워도 전 스위트가 그린이 된다.
 const S_ROOT := 7
 const S_BLAZE := 9
 const R_GRASS := 6
-# 🔴 세86 ⑤a — 무성함(젖음+풀)의 **전용 산물** 상태. `Enums.Status` 끝에 붙였다(=10).
-# 그전엔 이 쌍만 덩굴(ROOT)을 재사용해 반응의 관측 가능한 효과가 「젖음 소진」뿐이었다.
+# 무성함 = 젖음+풀의 **전용 산물**. 없던 시절엔 이 쌍만 덩굴을 재사용해 관측 효과가 「젖음 소진」뿐이었다.
 const S_OVERGROWTH := 10
 
-## 🔴🔴 **세99 몹 정리 — 이 파일이 쓰는 「몸」은 `Db`에 주입한다** (세61 콘텐츠 리셋과 같은 수법).
-##
-## 그전엔 `slime`을 22번 세웠다. 그런데 `slime`은 **임의로 만든 플레이스홀더**라 세99에 지워졌고
-## (`data/enemies/README.md`), 남은 잡몹 `hound`는 **돌진(charge) 상태기계**를 쥔다 —
-## 🔴 그걸 그대로 쓰면 [2]·[3]·[9]·[10]의 **이동 거리 비교가 윈드업/돌진에 흔들려** 그물이 flake가 된다
-## (세84에 `test_chapter_auto`가 flake로 데인 자리 — 「빨간 게 정상」이 되면 그물이 죽는다).
-##
-## 🔴 그래서 **옛 `slime`의 수치를 그대로 옮긴 중립 몸**을 세운다: 재는 것은 그때나 지금이나
-##  `forest_enemy`의 **상태이상 기계**이지 「슬라임이 있나」가 아니다. 수치가 같으니 판정 문턱
-##  (버스트 2.4·화상 총 9 등)이 한 톨도 안 움직인다 = **뮤테이션 검출력이 옛 판과 동일하다.**
-## ⚠ **반드시 되돌린다** — `Db.enemies`는 공유 레지스트리다(`test_feel_auto [4]` 선례).
+## 🔴 이 파일이 쓰는 「몸」은 `Db`에 **주입한다.**
+##  살아 있는 잡몹은 돌진 상태기계를 쥐어, 그대로 쓰면 [2]·[3]·[9]·[10]의 **이동 거리 비교가
+##  윈드업/돌진에 흔들려** 그물이 flake가 된다(「빨간 게 정상」이 되면 그물이 죽는다).
+##  🔴 수치는 옛 중립 몸 그대로다 — 판정 문턱(버스트 2.4·화상 총 9)이 안 움직여 검출력이 같다.
+## ⚠ **반드시 되돌린다** — `Db.enemies`는 공유 레지스트리다.
 const BODY := &"status_probe_body"
 
 var failures: int = 0
@@ -107,13 +83,11 @@ func _run() -> void:
 		quit(1)
 
 
-## [1] 🔴 화상이 **시간에 따라** hp를 깎고, 그 피해로 죽는 경로도 정상이다.
-## 그리고 DoT는 `enemy_hit`을 **쏘지 않는다** — 그 시그널은 "최종 피해" 계약이라 피해 숫자·
-## 히트스톱이 물려 있어서(세38·46), 0.5초마다 쏘면 화면이 도배되고 히트스톱에 갇힌다.
-## 뮤테이션(`_tick_statuses`의 dot 적용 제거) → hp 안 깎임 줄이 빨개진다.
-## 🔴 세81 M2: **0-피해(상태 전용) 히트도 `enemy_hit`을 안 쏜다** — 융합진 보조 룬 도배 방지의
-## `forest_enemy.take_hit` 0-피해 가드 그물이다(뮤테이션: 그 가드 제거 → 이 히트가 enemy_hit을 쏴
-## hits[0]==1이 돼 빨개진다). dummy 쪽 그물은 test_jin_fusion_auto[6]이 쥔다(세56 두 몸 계약).
+## [1] 화상이 **시간에 따라** hp를 깎고, 그 피해로 죽는 경로도 정상이다.
+## 그리고 DoT는 `enemy_hit`을 **쏘지 않는다** — 그 시그널은 「최종 피해」 계약이라 피해 숫자·
+## 히트스톱이 물려 있어, 0.5초마다 쏘면 화면이 도배되고 히트스톱에 갇힌다.
+## 🔴 **0-피해(상태 전용) 히트도 안 쏜다** — 융합진 보조 룬 도배 방지 가드의 그물이다.
+##  (뮤테이션: 그 가드를 지우면 hits[0]==1이 돼 빨개진다. dummy 쪽은 `test_jin_fusion_auto [6]`.)
 func _test_burn_ticks_hp() -> void:
 	print("[1] 화상 — 시간이 지나면 hp가 깎이고, DoT·0-피해 히트는 enemy_hit을 안 쏜다")
 	var e = await _spawn(BODY)
@@ -261,7 +235,7 @@ func _test_wind_spreads_status() -> void:
 func _test_reapply_refreshes_not_stacks() -> void:
 	print("[6] 재적용 — 누적이 아니라 갱신 (더 센 power 채택)")
 	var e = await _spawn(BODY)
-	# 🔴 세션50: 값이 **세기 배율**이라 1.0 언저리로 잡는다 (옛 3.0/5.0은 "초당피해"였다).
+	# 🔴 값이 **세기 배율**이라 1.0 언저리로 잡는다(옛 값은 「초당피해」였다).
 	e.apply_status(S_BURN, 1.0)
 	_check(is_equal_approx(e.status_power_of(S_BURN), 1.0),
 		"첫 화상 배율 1.0 (실제 %.2f)" % e.status_power_of(S_BURN))
@@ -284,10 +258,7 @@ func _test_vulnerable_amplifies_next() -> void:
 	var plain = await _spawn(BODY)
 	var vuln = await _spawn(BODY)
 	# 🔴 흙 룬의 **실제 데이터 값**을 보낸다 — `rune_earth.tres`의 `status = 6`(VULNERABLE).
-	# ⚠ 전엔 `0`(NONE)을 손으로 넣고 *"흙 룬은 status를 데이터로 아직 안 들고 온다"*는
-	# **세83 이후 낡은 전제**로 `status_holder`의 폴백(NONE + amplifies → VULNERABLE)을 재고 있었다.
-	# 그 폴백은 라이브에서 도달 불가라 세84에 지웠고(감사 #30), 이 인자가 그 청소의 나머지 반쪽이다 —
-	# 재는 계약은 그대로다(「취약이 다음에 거는 상태를 1.5배로」).
+	# 재는 계약은 「취약이 다음에 거는 상태를 1.5배로」다.
 	vuln.take_hit(0.0, R_EARTH, S_VULNERABLE, 1.0)
 	_check(vuln.has_status(S_VULNERABLE), "흙이 취약을 남겼다")
 	_check(is_equal_approx(vuln.status_power_of(S_VULNERABLE), 1.0),
@@ -306,9 +277,8 @@ func _test_vulnerable_amplifies_next() -> void:
 	vuln.free()
 
 
-## [8] 🔴 버스트 피해가 **balance 기준값**을 쓴다 (세션50). 세션49엔 `power × mult`였는데,
-## power가 "초당피해 3.0"에서 "배율 1.0"으로 통일되면 피해가 **조용히 1/3로 토막** 난다 —
-## 에러도 없고 기존 테스트도 하나도 안 잡았다. 이 테스트가 그 구멍이다.
+## [8] 🔴 버스트 피해가 **balance 기준값**을 쓴다. `power × mult`로 짜면 power의 뜻이 바뀔 때
+##  피해가 **조용히 1/3로 토막** 나는데 에러도 없고 다른 그물도 안 잡았다. 이 항목이 그 구멍이다.
 ## 계산 = `status_burst_base(3.0) × power(1.0) × steam_mult(0.8)` = 2.4.
 ## 뮤테이션(`SR.burst_damage(power, mult)` → `power * mult`) → 0.8이 되어 빨개진다.
 func _test_burst_uses_balance_base() -> void:
@@ -330,8 +300,8 @@ func _test_burst_uses_balance_base() -> void:
 	near.free()
 
 
-## [9] 🔴 **이 작업의 존재 이유를 지키는 테스트.** 세기 배율(특별잉크 증폭)이 감전에도 통한다.
-## 세션49엔 감속이 balance 고정이라 **번개·흙·풀엔 특별잉크가 아예 안 통했다**(세28~29 경제의 절반).
+## [9] 🔴 세기 배율(특별잉크 증폭)이 **감전에도** 통한다.
+##  감속이 balance 고정이면 번개·흙·풀엔 특별잉크가 **아예 안 통한다**(경제의 절반이 죽는다).
 ## 뮤테이션(`SR.move_mult`에서 `* power` 제거) → 두 거리가 같아져 빨개진다.
 func _test_power_scales_shock_slow() -> void:
 	print("[9] 세기 배율이 감전 감속에도 통한다 (특별잉크가 6룬 전부에 통하는가)")
@@ -385,9 +355,8 @@ func _test_slow_cap() -> void:
 	stub.free()
 
 
-## [11] 🔴 **허수아비도 반응한다** (세션50 빚②). 그전엔 `take_hit`이 상태를 버려서
-## **연습장에서 반응을 시험할 수 없었다** — 마법을 만들고 바로 쏴 보는 자리인데.
-## 연쇄 피해는 HP가 없어 `status_damage_total()`이 유일한 관측점이다.
+## [11] 🔴 **허수아비도 반응한다** — `take_hit`이 상태를 버리면 **연습장에서 반응을 시험할 수 없다**
+##  (마법을 만들고 바로 쏴 보는 자리인데). 연쇄 피해는 HP가 없어 `status_damage_total()`이 유일한 관측점이다.
 ## 뮤테이션(dummy의 `_wire_status`/`apply_incoming` 배선 제거) → 전부 빨개진다.
 func _test_dummy_reacts() -> void:
 	print("[11] 허수아비 — 상태를 받고 반응하고 연쇄가 옆 허수아비에 닿는다")
@@ -410,10 +379,9 @@ func _test_dummy_reacts() -> void:
 	# ⓑ 감전 연쇄가 옆 허수아비까지 간다 = 연습장에서 조합이 **눈에 보인다**
 	near.apply_status(S_WET, 1.0)
 	var before: float = a.status_damage_total()
-	# 🔴 세56: 연쇄 대상(a)이 받는 enemy_hit의 rune == BOLT — **연습장 몸의 하드코딩 청산 그물**.
-	# forest_enemy 쪽은 test_gale_boss_auto [6]이 재지만, 두 몸은 따로 갈라질 수 있다(세56 리뷰에서
-	# dummy 쪽만 FIRE로 되돌려도 전 스위트가 그린이었다 — 검출력 0이던 자리). a는 직격을 안 맞고
-	# 연쇄 반응 피해만 받으므로, 여기 잡히는 rune은 take_reaction_damage가 실은 값 그 자체다.
+	# 🔴 연쇄 대상(a)이 받는 `enemy_hit`의 rune == BOLT — 연습장 몸의 하드코딩 청산 그물.
+	#  forest_enemy 쪽은 `test_gale_boss_auto [6]`이 재지만 **두 몸은 따로 갈라진다**(dummy만 FIRE로
+	#  되돌려도 전 스위트가 그린이던 자리다).
 	var chain_runes: Array = []
 	var rune_cb := func(who, _d, r) -> void:
 		if who == a:
@@ -443,18 +411,13 @@ func _test_dummy_reacts() -> void:
 	burnt.free()
 
 
-## [12] 🔴 **반응 VFX 신호 계약** (세션52). 반응이 해결되면 몸이 `reaction_burst`·`reaction_chain`을
-## 올바른 페이로드로 쏴야 vfx.gd가 그린다. 헤드리스는 "보이는지"는 못 잡지만 **신호 발신은 잡는다** —
-## 겉모습(아크·링 렌더)은 리드가 실게임 스샷으로 본다.
-##  • 감전(젖음+번개) = 버스트 1회(status=SHOCK, radius=shock_chain_px) + 반경 안 대상마다 아크 1가닥.
-##  • 증기(젖음+불) = 버스트 1회(status=NONE) · **아크 0**(증기는 링만).
-##  • 바람 확산 = 반경 안 대상마다 아크 1가닥(대표 상태색).
-## 🔴 뮤테이션: 몸의 `EventBus.reaction_burst.emit`/`reaction_chain.emit` 줄을 지우면 해당 줄이 빨개진다.
-## 🔴🔴 **두 몸을 각각 돈다** (세84 감사 #15 — 세56 「두 몸 복제 계약은 그물도 두 개」의 반대 방향).
-##   전엔 세 갈래가 전부 `dummy_target`만 인스턴스했고 `forest_enemy`의 emit 세 줄은 피해·상태 적용과
-##   **독립**이라(첫 줄은 `amount <= 0` 가드보다 앞) 지워도 게임 로직은 그대로 돌았다 →
-##   **챕터 보스방의 실제로 싸우는 모든 적에서 감전 아크·증기 링이 사라지는데 전 스위트 그린**이었다.
-##   페이로드 계약이 동일하므로 검사 본문을 재사용하고 **몸만 팩토리로 갈아 끼운다**.
+## [12] 🔴 **반응 VFX 신호 계약** — 반응이 해결되면 몸이 `reaction_burst`·`reaction_chain`을 올바른
+##  페이로드로 쏴야 vfx가 그린다. 헤드리스는 「보이는지」는 못 잡지만 **신호 발신은 잡는다.**
+##  • 감전(젖음+번개) = 버스트 1회(SHOCK, radius=shock_chain_px) + 반경 안 대상마다 아크 1가닥
+##  • 증기(젖음+불) = 버스트 1회(NONE) · **아크 0** · 바람 확산 = 대상마다 아크 1가닥(대표 상태색)
+## 🔴 **두 몸을 각각 돈다.** 전엔 셋 다 `dummy_target`만 세웠고 `forest_enemy`의 emit 세 줄은 피해·상태
+##  적용과 **독립**이라 지워도 게임 로직은 그대로 돌았다 → **실제로 싸우는 모든 적에서 아크·링이**
+##  **사라지는데 전 스위트 그린**이었다. 페이로드가 같으므로 본문을 재사용하고 **몸만 갈아 끼운다.**
 func _test_reaction_vfx_signals() -> void:
 	print("[12] 반응 VFX 신호 — 감전=버스트+아크 · 증기=버스트만 · 바람=대상마다 아크 (두 몸 각각)")
 	for kind in ["dummy", "enemy"]:
@@ -537,20 +500,13 @@ func _check_reaction_vfx(kind: String) -> void:
 	_bus.reaction_chain.disconnect(on_chain)
 
 
-## [13] 🔴🔴 **젖음 + 풀 = 무성함(OVERGROWTH)** — 세86 ⑤a에 **전용 산물**을 받았다.
-## 바탕(젖음)은 소진되고 무성함만 남으며, 젖음보다 **훨씬 센 속박**이라 이동이 크게 줄어야 한다
-## ([3] 진흙과 같은 규율).
-## 🔴 감속은 **실제로 움직인 거리**로 잰다(파일 머리 규율) — `move_mult`를 직접 부르면 `_apply_move`
-## 통로를 건너뛰어 "곱하는 걸 잊었다"를 못 잡는다. 순수 규칙 쪽 관계식은 [17]이 따로 쥔다.
-## 🔴🔴 **세84가 적어 둔 검출력 구멍이 여기서 메워졌다**: 그전엔 산물이 ROOT라 `WET→GRASS` 줄을
-##   지워도 **`rune_grass.tres`의 status(=ROOT)가 기본 덮어쓰기로 같은 결과를 내** 빨개지는 게
-##   「젖음 소진」 한 줄뿐이었다(= 감사 #33 *"보상 없는 손해"*). 이제 산물이 룬의 바탕 상태와
-##   **다른 값**이라 반응 줄을 지우면 곧바로 「무성함이 생겼다」가 빨개진다.
-## 🔴 **두 몸을 다 돈다**(세56 「두 몸 복제 계약은 그물도 두 개」) — 반응 해결은 공용 holder지만
-##   상태를 holder로 **넘기는 배선**은 몸마다 따로다.
-## 뮤테이션: `WET→GRASS`를 ROOT로 되돌림 → 「무성함이 생겼다」 2건(두 몸) 빨감 ·
-##   `move_mult`의 OVERGROWTH 팔 삭제 → 거리 비교 빨감 ·
-##   `duration_of`의 OVERGROWTH 팔 삭제 → `add()`가 일찍 빠져 상태 자체가 안 걸린다.
+## [13] 🔴 **젖음 + 풀 = 무성함(OVERGROWTH)** — 전용 산물이다. 바탕(젖음)은 소진되고 무성함만
+##  남으며, 젖음보다 **훨씬 센 속박**이라 이동이 크게 줄어야 한다([3] 진흙과 같은 규율).
+## 🔴 감속은 **실제로 움직인 거리**로 잰다(파일 머리 규율) — 순수 규칙 쪽 관계식은 [17]이 쥔다.
+## 🔴 산물이 룬의 바탕 상태와 **다른 값**이라 반응 줄을 지우면 곧바로 빨개진다. 산물이 ROOT였을 땐
+##  룬의 status(=ROOT)가 기본 덮어쓰기로 같은 결과를 내 「젖음 소진」 한 줄만 빨개졌다.
+## 🔴 **두 몸을 다 돈다** — 반응 해결은 공용 holder지만 상태를 holder로 **넘기는 배선**은 몸마다 따로다.
+## 뮤테이션: 반응 줄 되돌림 → 「무성함이 생겼다」 2건 · `move_mult` 팔 삭제 → 거리 비교 · `duration_of` 팔 삭제 → 상태 자체가 안 걸린다.
 func _test_wet_plus_grass_is_overgrowth() -> void:
 	print("[13] 젖음 + 풀 = 무성함 (전용 산물 · 젖음보다 훨씬 센 속박)")
 	var stub := Node2D.new()
@@ -673,18 +629,14 @@ func _test_overgrowth_plus_fire_is_blaze() -> void:
 	e.free()
 
 
-## [17] 🔴 **무성함의 규칙 관계식** (세86 ⑤a) — 순수 `StatusRules`만 본다(몸 없음).
-## 🔴🔴 **값을 박지 마라 — 관계식으로 잰다**(세79 교훈): 5.0·0.88을 그대로 적으면 손맛 튜닝
-##   한 번에 **거짓 빨강**이 나 그물이 튜닝을 방해한다. 설계는 값이 아니라 부등호다.
+## [17] 🔴 **무성함의 규칙 관계식** — 순수 `StatusRules`만 본다(몸 없음).
+## 🔴 **값을 박지 마라 — 관계식으로 잰다**: 수치를 그대로 적으면 손맛 튜닝 한 번에 **거짓 빨강**이 나
+##   그물이 튜닝을 방해한다. 설계는 값이 아니라 부등호다.
 ##     지속: 무성함 > 진흙 > 덩굴  ·  감속: 무성함 ≥ 진흙 (= move_mult이 더 작다)
-## 🔴 **balance 배선 그물**: `duration_of(OVERGROWTH)`가 balance의 `status_overgrowth_sec`을
-##   **실제로 되돌리는지** 잰다. ⚠ 이 프로젝트의 balance 값은 전부 `BalanceData`의 `@export`
-##   기본값이다(`data/balance.tres`엔 오버라이드 행이 하나도 없다 — 실측) — 그래서 여기서 잡는
-##   실패는 "이름 오타로 .tres 행이 무시됨"이 아니라 **"규칙이 balance를 안 보고 상수를 박음"**이다
-##   (뮤테이션: `duration_of`의 OVERGROWTH 팔을 `return 5.0`으로 → 값은 같지만 balance를 흔들면
-##   갈라지므로, 아래 `bal` 대조 줄이 진짜 배선을 붙잡는 자리다).
-## 🔴 **틴트 구분**: 무성함이 덩굴과 같은 색이면 전용 상태를 만든 값어치가 **화면에서 사라진다**.
-##   가장 가까운 이웃과의 거리만 재고 색 자체는 안 박는다(연출값은 흔들려도 되지만 "구분"은 계약).
+## 🔴 **balance 배선 그물**: `duration_of(OVERGROWTH)`가 balance 값을 **실제로 되돌리는지** 잰다.
+##   여기서 잡는 실패는 「.tres 행이 무시됨」이 아니라 **「규칙이 balance를 안 보고 상수를 박음」**이다.
+## 🔴 **틴트 구분**: 무성함이 덩굴과 같은 색이면 전용 상태를 만든 값어치가 **화면에서 사라진다.**
+##   가장 가까운 이웃과의 거리만 재고 색 자체는 안 박는다(연출값은 흔들려도 되지만 「구분」은 계약).
 func _test_overgrowth_rules_relations() -> void:
 	print("[17] 무성함 규칙 — 지속·감속 관계식 · balance 배선 · 틴트 구분")
 	var SR = load("res://src/core/status_rules.gd")
@@ -820,9 +772,9 @@ func _test_draw_color_contract() -> void:
 
 # ── 헬퍼 ──
 
-## 🔴 **상태·반응을 쥔 두 몸**의 팩토리 (세84 감사 #15). 계약이 같아야 하는 자리를 파라미터화한다:
+## 🔴 **상태·반응을 쥔 두 몸**의 팩토리 — 계약이 같아야 하는 자리를 파라미터화한다:
 ##   "dummy" = 연습장 허수아비(HP 없음·`status_damage_total`) · "enemy" = 실제로 싸우는 forest_enemy.
-## 세56 교훈 그대로 — 두 몸은 **따로 갈라진다**(한쪽만 되돌려도 다른 쪽 그물은 그린이다).
+## 두 몸은 **따로 갈라진다** — 한쪽만 되돌려도 다른 쪽 그물은 그린이다.
 func _make_body(kind: String):
 	if kind == "dummy":
 		var n = load("res://src/spell/dummy_target.tscn").instantiate()
@@ -833,7 +785,7 @@ func _make_body(kind: String):
 	return await _spawn(BODY)
 
 
-## 🔴 상태이상 검사용 **중립 몸** — 옛 `slime.tres`의 수치를 그대로 옮겼다(머리말 참조).
+## 🔴 상태이상 검사용 **중립 몸** — 옛 잡몹의 수치를 그대로 옮겼다(머리말 참조).
 ## 여기 값이 바뀌면 판정 문턱이 같이 움직인다: hp 14(화상 총 9로 안 죽는다) ·
 ## `aggro_range` 160·`attack_range` 18([2][3][9][10]이 스텁을 120~150에 두는 근거) ·
 ## `has_counter = false`(약점 배율이 안 섞여 [8]의 정확값 2.4가 성립한다) · 기본 AI = chase.

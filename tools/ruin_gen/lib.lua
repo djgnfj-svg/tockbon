@@ -1,4 +1,4 @@
--- shared drawing helpers for TAKBON s89 art (ruins + gate)
+-- shared drawing helpers for the ruin + gate sprites
 SP="C:/Users/djgnf/AppData/Local/Temp/claude/C--Users-djgnf-Desktop-godot-games-tockbon/939edd37-7064-46c1-bf48-323835a64c94/scratchpad/"
 OUT="C:/Users/djgnf/Desktop/godot_games/tockbon/assets/sprites/base/"
 PC=app.pixelColor
@@ -97,10 +97,8 @@ function groundshadow(cx,cy,rx,ry)
 end
 
 -- ── saturation guard ──────────────────────────────────────────────────────
--- relight's shade() rewrites any pixel with s<0.06 to hue 250, and only on the
--- shaded bands — which is what turns a grey sprite two-faced.  Blending two
--- opposed hues (violet stone x green moss) cancels to near-grey and drifts into
--- that zone, so every finished sprite gets swept before it is written out.
+-- relight's shade() rewrites s<0.06 to hue 250 on the shaded bands only — that is what
+-- makes a grey sprite two-faced.  Opposed hues cancel to near-grey, so sweep before saving.
 function rgb2hsv(r,g,b)
   r,g,b=r/255,g/255,b/255
   local mx,mn=math.max(r,g,b),math.min(r,g,b) local d=mx-mn local h=0

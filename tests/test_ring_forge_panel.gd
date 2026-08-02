@@ -4,7 +4,7 @@ extends Node2D
 ## 옛 test_forge와 같은 결: 세계(아레나)가 늘 살아 있고, E로 책을 펼쳐 **조립**하고, ESC로
 ## 덮으면 그 자리에서 **쏜다**.
 ##
-## 🔴 발사 = **실제 시스템**이다 (세션 12, #16). 자체 시뮬이 아니라 `EventBus.ring_cast_requested`
+## 🔴 발사 = **실제 시스템**이다. 자체 시뮬이 아니라 `EventBus.ring_cast_requested`
 ## → `ring_spell_system` → **진(캐리어)이 날아가 실제 허수아비(take_hit)에 닿으면 전개**:
 ##   • 발산→ 칸: 그 방향으로 불 탄환 (projectile.tscn)
 ##   • 응집← 칸: 착탄점에 불기둥 하나 (pillar.tscn, 많을수록 굵다)
@@ -50,7 +50,7 @@ var _hint_label: Label
 func _ready() -> void:
 	# 실제 발사 시스템 — 진·탄·기둥이 이 노드의 자식으로 스폰된다 (월드 좌표)
 	# 🔴 z_index를 올려 아레나 배경(World, z=0) **위에** 그린다 — 안 그러면 발사체가 배경 뒤에
-	# 가려 안 보인다 (세션 13에 발견: _system이 _world보다 먼저 add_child돼 덮였다).
+	# 가려 안 보인다 (_system이 _world보다 먼저 add_child되기 때문이다).
 	_system = RingSpellScene.instantiate()
 	_system.z_index = 10
 	add_child(_system)
@@ -184,7 +184,7 @@ func _describe(a: Dictionary) -> String:
 	var rune := int(a.get("rune", 0))
 	var rings: Array = a.get("rings", [])
 	var ring: Array = rings[0] if not rings.is_empty() else []
-	# 🔴 세82: 이름의 정본은 GlyphDef.display_name (옛 RingBoard.GLYPH_NAMES 배열 은퇴).
+	# 🔴 이름의 정본은 GlyphDef.display_name (옛 RingBoard.GLYPH_NAMES 배열은 은퇴했다).
 	# 놓인 코드만 세므로 어휘 길이에 의존하지 않는다 — 문양이 늘어도 여길 안 고쳐도 된다.
 	var counts := {}
 	for g in ring:

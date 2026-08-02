@@ -1,40 +1,26 @@
 extends Control
 ## 고리 조립 보드 — forge 왼쪽 페이지에 얹히는 **조립 판**.
+## 기하(어디에 그리나) + `_draw` + `_gui_input` + 애니만 든다. 조립 상태는 `ring_assembly`,
+## 채점은 `trace_scorer`가 쥔다 — 🔴 **채점 규칙을 바꿀 땐 `trace_scorer.gd`만 연다.**
 ##
-## 🔴🔴 **라이브는 COMBINED 하나다** — per-piece(진·룬·문양을 하나씩 긋고 [다음]으로 잠그던 경로)는
-## 세70에 죽고 세85 ⑨에 걷혔다. 밑그림은 `compose_guide_paths`가 한 장으로 합성하고, 진입점은
-## `enter_combined_trace` 하나이며 `_trace`는 NONE/COMBINED뿐이다.
-## ⚠ **되살리지 마라 — 라이브와 두 몸이 된다**(경위 = git 세85 · 재발 감지 = `test_ring_assembly_auto`
-## 의 은퇴 API 목록). 세83 「그리기 폐지 스위치」(`balance.skip_drawing`)와는 **다른 축**이다.
-## 🔴 **세83 스위치가 되살리는 것 = 절대 지우지 마라**:
+## 🔴🔴 **라이브 모드는 COMBINED 하나다** — 밑그림은 `compose_guide_paths`가 한 장으로 합성하고
+## 진입점은 `enter_combined_trace` 하나다. per-piece(조각을 하나씩 긋고 잠그던 경로)를
+## **되살리지 마라 — 라이브와 두 몸이 된다.**
+## 🔴 **그리기 폐지 스위치(`balance.skip_drawing`)가 되살리는 것 = 절대 지우지 마라**:
 ##   `enter_combined_trace` · `begin_stroke`/`trace_stroke`/`clear_stroke` ·
-##   `coverage`/`accuracy`/`piece_score`(→`combined_total`) · 펜 보정(`_pen_correction`) · 잉크 정산.
+##   `coverage`/`accuracy`/`combined_total` · 펜 보정 · 잉크 정산.
 ##
-## 🔴 2026-07-17 세션 22 — **3분할됐다** (예전엔 757줄에 조립·채점·기하·렌더·입력·애니가 다 있었다):
-##   • `ring_assembly.gd` — 조립 상태기계 (무엇이 놓였나 · 어느 칸이 열렸나). 순수 데이터
-##   • `trace_scorer.gd`  — 손그림 탁본 채점 (완성도·정밀도·분석). 순수 수학
-##   • **이 파일**         — 기하(어디에 그리나) + `_draw` + `_gui_input` + 애니. 위 둘에 위임한다
-## 🔴 **채점 규칙을 바꿀 땐 `trace_scorer.gd`만 연다** — 렌더·입력을 열 필요가 없어야 한다.
-## ⚠ 그 분할의 원래 명분(*"그리는 게 이 게임의 심장이라 규칙이 매 세션 바뀐다"* —
-##   memory `takbon-core-fun-drawing`)은 **세83 그리기 폐지로 뒤집혔다**. 규칙은 이제 거의 안
-##   바뀌지만 분할 자체는 유효하다(스위치를 되돌리면 그 자리가 그대로 다시 뜨겁다).
-##
-## 모델·규칙의 정본은 각 파일 머리말에 있다. 여기 남은 건 **화면 위의 일**뿐이다.
-##
-## 🔴 이 보드는 **선택을 스스로 쥐지 않는다.** 선택의 정본은 패널(`ring_forge_panel`)이고, 판은
-## `set_defs`(색·이름)와 `enter_combined_trace`(점열)만 받는다. 오토로드·모듈 의존 없음.
-## ⚠ 옛 `choose_*` 주입 API는 세85 ⑨에 은퇴했다.
+## 🔴 이 보드는 **선택을 스스로 쥐지 않는다.** 선택의 정본은 패널이고, 판은 `set_defs`(색·이름)와
+## `enter_combined_trace`(점열)만 받는다. 오토로드·모듈 의존 없음.
 ##
 ## 사용: const RingBoard := preload("res://src/drawing/ring_board.gd")
 
 const RingAssembly := preload("res://src/drawing/ring_assembly.gd")
 const TraceScorer := preload("res://src/drawing/trace_scorer.gd")
 
-# ── 조립 계약 재노출 (세86 실측 — 어느 게 살아 있나) ──
-#   • `SLOTS` = 이 파일이 7곳에서 쓴다(`layer_rings`·`jin_slot_dots`·`slot_angle`…). 🔴 내리면 컴파일 실패.
-#   • `GLYPH_NONE` = 패널이 2곳(그중 `build_assembly()`의 open 합집합 = **발사 계약 한복판**) + 테스트 1곳.
-#   • `RUNE_FIRE` = 책·패널의 폴백 룬.
-#   ⚠ `STAGE_JIN`/`STAGE_RUNE`/`STAGE_GLYPH`는 **참조가 0곳**이다(per-piece 단계기의 잔재) — 새로 쓰지 마라.
+# ── 조립 계약 재노출 ──
+#   `SLOTS`·`GLYPH_NONE`·`RUNE_FIRE`는 이 파일·패널·책이 쓴다. 🔴 내리면 컴파일 실패.
+#   ⚠ `STAGE_*` 셋은 참조가 0곳이다(per-piece 단계기의 잔재) — 새로 쓰지 마라.
 const SLOTS := RingAssembly.SLOTS
 const GLYPH_NONE := RingAssembly.GLYPH_NONE
 const STAGE_JIN := RingAssembly.STAGE_JIN
@@ -42,185 +28,134 @@ const STAGE_RUNE := RingAssembly.STAGE_RUNE
 const STAGE_GLYPH := RingAssembly.STAGE_GLYPH
 const RUNE_FIRE := RingAssembly.RUNE_FIRE
 
-# ── 어휘 2종 (사용자 확정 2026-07-16) ──
-## 🔴 값은 **core가 쥔다**(Enums.GlyphCode = 발사 계약). 여기서 다시 정의하면 언젠가 갈라진다.
+# ── 문양 어휘 ──
+## 🔴 값은 **core가 쥔다**(`Enums.GlyphCode` = 발사 계약). 여기서 다시 정의하면 언젠가 갈라진다.
 const G_GATHER := Enums.GlyphCode.GATHER    # 응집 ← — 안쪽(룬) 방향 화살표
 const G_RADIATE := Enums.GlyphCode.RADIATE  # 발산 → — 바깥(진) 방향 화살표
-const G_PIERCE := Enums.GlyphCode.PIERCE    # 관통 ↠ — 바깥 방향(발산 계열) + 뚫음 효과 (세션44 B)
-const G_HOMING := Enums.GlyphCode.HOMING    # 유도 ∿ — 휘어서 쫓아간다 (세션47)
-const G_BOUNCE := Enums.GlyphCode.BOUNCE    # 팅김 ⚡ — 벽에 튕긴다 (세션47)
-const G_THRUST := Enums.GlyphCode.THRUST    # 추진 ↑ — 빠르게 날아간다 (세션47)
-## 🔴 세79 M1 — **변형형** 문양 2종. 위 6종(전개형)과 계열이 다르다: 착탄에서 스스로 전개하는 게
-## 아니라 **안쪽 층의 결과를 받아 바꾸는 연산자**다(계열 판별의 단일 소스 = `GlyphRules.BEHAVIORS`, 즉 그 문양 `.tres`의 `behavior` — 세82).
-## 여기(보드)에선 계열을 안 가른다 — 판이 하는 일은 **밑그림 한 갈래**뿐이라 전개형과 똑같이 다룬다.
-const G_SPREAD := Enums.GlyphCode.SPREAD    # 확산 ⋔ — 안쪽 결과를 여러 갈래로 편다 (세79)
-const G_EXPLODE := Enums.GlyphCode.EXPLODE  # 폭발 ∗ — 안쪽 결과를 한 점에서 터뜨린다 (세79)
-const G_CONDENSE := Enums.GlyphCode.CONDENSE # 응축 ◈ — 안쪽 결과를 한 점으로 눌러 담는다 (세82)
-## ⚠ **옛 `GLYPH_NAMES` 배열은 세82에 은퇴했다.** 이름의 정본은 `GlyphDef.display_name`이고
-## 보드는 주입된 `_glyph_defs`에서 읽는다(`_glyph_color`). 배열이던 시절엔 **길이가 계약**이라
-## (`ring_summary`가 그 크기로 카운터를 세웠다) 어휘를 늘릴 때 여기를 같이 안 늘리면 **런타임
-## 에러**였고, `set_active_glyph`의 `clampi`가 어휘 밖 코드를 **조용히 눌렀다**. 되살리지 마라.
-## ⚠ **`GLYPH_KEYS`는 지웠다** (세션 25). 문양은 오른쪽 셀을 **클릭해서** 고른다 —
-## 진·룬 선택이 전부 클릭인데 문양만 키(Q·W)를 광고했다 (사용자: "q w 이런게 아니라
-## 똑같이 마우스로 선택하는걸로해줘"). 죽은 상수를 남기면 다음 세션이 키를 되살린다.
+const G_PIERCE := Enums.GlyphCode.PIERCE    # 관통 ↠
+const G_HOMING := Enums.GlyphCode.HOMING    # 유도 ∿
+const G_BOUNCE := Enums.GlyphCode.BOUNCE    # 팅김 ⚡
+const G_THRUST := Enums.GlyphCode.THRUST    # 추진 ↑
+## 변형형 문양 — 스스로 전개하지 않고 안쪽 층의 결과를 바꾸는 연산자다.
+## ⚠ 계열 판별의 단일 소스는 그 문양 `.tres`의 `behavior`다. 판은 계열을 안 가른다(밑그림 한 갈래뿐).
+const G_SPREAD := Enums.GlyphCode.SPREAD    # 확산 ⋔
+const G_EXPLODE := Enums.GlyphCode.EXPLODE  # 폭발 ∗
+const G_CONDENSE := Enums.GlyphCode.CONDENSE # 응축 ◈
+## 🔴 문양 이름·색 배열을 여기 되살리지 마라 — 정본은 `GlyphDef.display_name`·`ui_color`다.
+## 배열이던 시절엔 **길이가 계약**이라 어휘를 늘릴 때 런타임 에러가 났고, clampi가 어휘 밖
+## 코드를 조용히 눌렀다. 문양 선택은 키가 아니라 오른쪽 셀 **클릭**이다(진·룬과 같은 조작).
 
 # ── 색 (먹·양피지 톤) ──
 const RING_LINE := Color(0.42, 0.30, 0.12, 0.55)
 const FIRE_HI := Color(0.95, 0.55, 0.15)
-## 룬 색 폴백 — RuneDef가 없을 때. 🔴 소비자는 **책의 룬 셀**(`ring_book`)이다(세85 ⑨ 이후
-## 판에는 룬 렌더가 없다) — 책이 `RingBoard.RUNE_COLOR`로 부르므로 여기가 그 단일 소스다.
+## 룬 색 폴백 — 🔴 소비자는 **책의 룬 셀**이다(판엔 룬 렌더가 없다). 여기가 그 단일 소스다.
 const RUNE_COLOR := Color(0.62, 0.22, 0.12)   # 불
-## ⚠ **옛 `GLYPH_COLORS` 배열은 세82에 은퇴했다.** 색의 정본은 `data/glyphs/*.tres`의
-## `ui_color` 하나뿐이고, 보드·책이 주입된 defs에서 읽는다(`_glyph_color`).
-## 사본이던 시절엔 "책이랑 판이랑 색이 다르네"가 어디서 오는지 못 찾는 위험을 안고 있었다.
 const TRACE_INK := Color(0.20, 0.14, 0.09, 0.95)    # 그린 먹선
-## 숨은 가이드 (아직 안 드러남). 🔴 세션 25에 0.18 → 0.32: 0.18은 진(큰 원)에서나 보였고
-## 문양처럼 작은 밑그림은 **사실상 안 보였다** (사용자: "문양을 선택했을때 밑그림이 그려져야지").
+## 숨은 가이드 (아직 안 드러남).
 ## ⚠ 더 진하게 하면 "숨은 선"이 아니라 그냥 답이 된다 — 따라 그을 만큼만 보여야 한다.
 const GUIDE_HIDE := Color(0.42, 0.30, 0.12, 0.32)
 const GUIDE_SHOW := Color(0.80, 0.50, 0.16, 0.55)   # 드러난 가이드 강조
 
 const GUIDE_CIRCLE_N := 72            # 진 가이드 밀도 (도형이 뭐든 이 등분 수에 맞춘다 — 아래 주석)
 
-# ── 🔴 진 밑그림 도형의 기하 상수 (세션48) ────────────────────────────────────────
-# ⚠ 셋 다 **룬 자리를 남기는 하한**에 걸려 있다. 진은 룬을 담는 **그릇**이라, 도형이 중심을
-# 향해 파고들면 안쪽에 그릴 룬(크기 정본 = `combined_rune_size(ro, 자리수)` — 자리 1개면 0.18R,
-# 2개 이상이면 ×`RUNE_MULTI_SIZE_FRAC`. ⚠ 수치를 여기 베끼지 말고 그 함수를 불러 재라)과 겹친다.
-# 가장 깊이 파고드는 도형은 정삼각(내접원 = 반지름의 0.5)이고, 그 아래로 내려가는 값을 주면
-# **밑그림끼리 겹쳐도 에러가 안 난다** — 그려 보고서야 안다.
-const JIN_ELLIPSE_X := 0.68           # 세로 긴 타원의 가로 반지름 비 (최소 거리 0.68R)
+# ── 진 밑그림 도형의 기하 상수 ────────────────────────────────────────
+# 🔴 셋 다 **룬 자리를 남기는 하한**에 걸려 있다 — 진은 룬을 담는 그릇이라, 도형이 중심을 향해
+# 더 파고들면 안쪽 룬과 겹친다. 그런데 **겹쳐도 에러가 안 난다** — 그려 보고서야 안다.
+# ⚠ 룬 크기를 여기 베끼지 말고 `combined_rune_size(ro, 자리수)`를 불러 재라.
+const JIN_ELLIPSE_X := 0.68           # 세로 긴 타원의 가로 반지름 비
 const JIN_FLOWER_PETALS := 6
-const JIN_FLOWER_DEPTH := 0.13        # 물결 골의 깊이 = 반지름의 13% (얕게 — 골이 깊으면 룬 자리를 먹는다)
-const JIN_LENS_X := 0.60              # 렌즈 허리의 가로 반지름 비 (최소 거리 0.60R)
+const JIN_FLOWER_DEPTH := 0.13        # 물결 골 깊이 — 얕게. 깊으면 룬 자리를 먹는다
+const JIN_LENS_X := 0.60              # 렌즈 허리의 가로 반지름 비
 
-# ── 진 크기 상한 (종이 등급 — 세71d에 축이 은퇴해 지금은 1.0 고정) ──
-## ⚠ 세85 ⑨ 은퇴: 룬·문양 휠 크기 상수(`RUNE_SCALE_*`·`GLYPH_SCALE_*`·`SCALE_STEP` = per-piece 휠 조작).
+# ── 진 크기 상한 (종이 축이 은퇴해 지금은 1.0 고정) ──
 const JIN_SCALE_MIN := 0.72
 const JIN_SCALE_MAX := 1.16
 
-# ── 🔴 문양 화살표의 크기·생김새 (세션 25) ────────────────────────────────────────
-# 사용자: *"문양 부분이 좀 별로인게 한 획만 검증하니? 여러획쓸꺼같아서 화살표는"*
-#
-# **화살촉이 그릴 값어치를 가지려면 붓보다 커야 한다.** 세션 25 초에 실측한 옛 수치
-# (0.12 / 0.5 / 0.34)는 이랬다: 판 반지름 118px → 문양 반길이 14px인데 **붓의 드러남
-# 반경이 9.4px**(REVEAL_RADIUS_FRAC 0.08)라, 화살촉 점 전체가 몸통 끝에서 **최대 8.6px** —
-# 즉 몸통을 긋는 순간 화살촉이 통째로 드러났다. 화살표가 **붓 한 자국 크기**였던 것이다.
-# 화살촉은 못 그리는 게 아니라 **그릴 이유가 없었다**.
-#
-# 새 수치의 근거 (반지름 118px 기준):
-#   • 반길이 = 118 × 0.17 ≈ 20px → 전체 40px. 8칸 고리의 이웃 간격은 54px이라 안 겹친다
-#   • 깃 벌어짐 = 20 × 0.62 ≈ 12.4px > 9.4px → **몸통을 그어도 깃은 안 드러난다**
-#     (깃이 몸통에서 옆으로 이만큼 떨어져 있다 — 이 값이 드러남 반경보다 작으면 옛 문제가 그대로다)
-#   • 깃 ~ 머리 거리 = 20 × √(0.5²+0.62²) ≈ 16px > 9.4px → 머리를 찍어도 안 드러난다
-# ⚠ 셋 중 하나라도 만지면 `REVEAL_RADIUS_FRAC`(붓)과의 비율을 다시 재라. 테스트가
-#   「한 획으로는 문양이 안 끝난다」를 못 박지만, 이유는 여기 적힌 비율이다.
-## ⚠ 세85 ⑨ 은퇴: `GLYPH_SIZE_FRAC`(판의 문양 칸 하나를 그릴 때의 크기) — 통째 밑그림에서
-## 낱개 모티프 크기는 `MOTIF_SIZE_FRAC`(밴드 반경 비)가 정한다. 아래 두 비율은 **살아 있다**.
+# ── 문양 화살표의 생김새 ────────────────────────────────────────
+# 🔴 **화살촉은 붓의 드러남 반경(`REVEAL_RADIUS_FRAC`)보다 멀리 있어야 한다.** 안쪽이면 몸통을
+# 긋는 순간 화살촉이 통째로 드러나 화살표가 「붓 한 자국」이 되고, 그릴 이유 자체가 사라진다.
+# ⚠ 이 둘을 만지면 그 비율을 다시 재라 — 테스트는 결과만 못 박고 이유는 여기 있다.
 const ARROW_BACK_FRAC := 0.5
 const ARROW_SIDE_FRAC := 0.62
 
-## ⚠ 세85 ⑨ 은퇴: `SLOT_PICK_FRAC`(판에서 문양 칸 클릭) — 통째 밑그림엔 「고를 칸」이 없다.
-
-## 지금 손으로 그릴 대상. NONE = 그릴 것 없음 · COMBINED (세68 조립→탁본) = 진+룬+밴드 문양-고리를
-## **한 장의 가이드로 합성**해 통째로 긋는다(`enter_combined_trace`가 그 점열을 직접 넣는다).
-## ⚠ **JIN/RUNE/GLYPH 값은 per-piece 시절의 잔재로 읽는 코드가 0곳이다**(세86 실측) — 새로 쓰지 마라.
+## 지금 손으로 그릴 대상. ⚠ **라이브 값은 NONE / COMBINED뿐이다** — JIN/RUNE/GLYPH는
+## per-piece 시절의 잔재로 읽는 코드가 0곳이다. 새로 쓰지 마라.
 enum TraceTarget { NONE, JIN, RUNE, GLYPH, COMBINED }
 
-# ── 🔴 세68 조립→탁본 합성 상수 (연출/레이아웃 → 스크립트 const, 밸런스 아님) ──
+# ── 합성 상수 (연출/레이아웃 → 스크립트 const, 밸런스 아님) ──
 const RUNE_GUIDE_FRAC := 0.18        # 합성 가이드에서 룬(중심)의 크기 (판 반지름 비)
-## 🔴 세81 M2 융합진 — 룬 자리가 여럿일 때의 배치(손맛/레이아웃 const, 밸런스 아님·시작값·F5 튜닝).
-## 자리 1개(일반진·M1까지 전부)는 이 상수를 **안 탄다** → 룬은 중심 하나로 픽셀 무회귀.
+## ⚠ 자리 1개면 아래 둘을 **안 탄다** — 룬은 중심 하나로 남는다.
 const RUNE_SPLIT_FRAC := 0.28        # 융합진 룬 자리를 중심에서 벌리는 거리 (판 반지름 비)
 const RUNE_MULTI_SIZE_FRAC := 0.68   # 자리 2개 이상일 때 룬 하나를 이만큼 줄인다 (겹침 방지)
 const BAND_RADII := [0.42, 0.68]     # 동심원 밴드 반경 비 목록 (안쪽부터). 진은 앞 band_count개만 쓴다
 const MOTIF_SIZE_FRAC := 0.14        # 밴드 반경 대비 문양-고리 낱개 모티프 크기
 
-# ── 🔴 세71c 조립→탁본 빈 층/룬 자리 가이드 (연출값 — 절차 렌더라 도형금지 예외, 손맛 F5) ──
-# COMBINED 모드에서만 그린다(per-piece 경로 무변경). band_count만큼 흐린 동심원 + 룬 미선택 시 중앙 마커.
-const BAND_GUIDE_COLOR := Color(0.42, 0.30, 0.12, 0.22)   # 빈 층 흐린 동심원 톤 (따라 그을 만큼만, 답 아님)
+# ── 빈 층/룬 자리 가이드 (연출값 — 절차 렌더라 도형 금지의 예외) ──
+const BAND_GUIDE_COLOR := Color(0.42, 0.30, 0.12, 0.22)   # 따라 그을 만큼만, 답은 아니게
 const BAND_GUIDE_WIDTH := 1.5
-## 🔴🔴 세86: 층 선을 **문양 바깥으로 밀어 「띠」를 만든다** (사용자 확정: *"그 선에 문양이 있는 게
-## 아니라 선 사이에 있었으면"*). 전엔 선 **하나**가 문양 중심 반경을 지나 **모티프를 가로질렀다** —
-## 세81에도 같은 지적이 있었고(*"문양이 선에 걸쳐 지저분하다"*) 그땐 **그릴 때 선을 끄는 것**으로
-## 피했다. 띠는 「선을 켜 둔 채로 안 겹치게」 만든 근본 해결이다.
-## 🔴 ⚠ **그런데 세81의 우회는 아직 켜져 있다**(세86 실측): 패널이 `enter_combined_trace`의
-## `show_band_lines`를 `_phase != Phase.DRAW`로 넘겨 **DRAW에선 선을 끈다**. 즉 지금 손으로 그을 땐
-## 칸막이 선이 안 보인다. 「띠가 우회를 대체한다」로 갈지 「미리보기에서만 보인다」로 굳힐지는
-## **미결이다** — 어느 쪽인지 정하기 전에 이 주석·패널 인자 중 한쪽만 고치지 마라(둘이 갈라진다).
-## 🔴 여백만 상수다 — 띠 경계는 `band_lane`이 **모티프 크기에서 파생**한다(값을 베끼면 문양 크기를
-## 바꿀 때 선이 따라오지 않아 다시 겹친다 = 감사 T5 「좌표 사본」). 판 반지름 비.
+## 층 선은 문양 **바깥으로 밀어 「띠」로** 그린다 — 선 하나가 문양 중심 반경을 지나면 모티프를 가로지른다.
+## ⚠ **그런데 패널이 DRAW에서 선을 아예 끄는 우회도 아직 켜져 있다**(`show_band_lines`).
+##   「띠가 우회를 대체한다」인지 「미리보기에서만 보인다」인지는 미결이다 —
+##   정하기 전에 이 주석과 패널 인자 중 **한쪽만** 고치지 마라.
+## 🔴 여백만 상수다 — 띠 경계는 `band_lane`이 **모티프 크기에서 파생**한다. 값을 베끼면
+##   문양 크기를 바꿀 때 선이 안 따라와 다시 겹친다.
 const BAND_LANE_PAD := 0.02
 const RUNE_SLOT_COLOR := Color(0.42, 0.30, 0.12, 0.28)    # 룬 미선택 자리 마커(중앙 링)
 const RUNE_SLOT_WIDTH := 1.5
 
 ## 지금 그리는 조각의 점수가 갱신됐다 (실시간) — 패널이 현재 점수를 보여준다.
 signal score_changed(score: float)
-## ⚠ **`assembly_changed`·`stage_advanced`·`piece_locked`·`finished`는 세85 ⑨에 은퇴했다** —
-## 넷 다 per-piece 잠금이 쏘던 신호이고 **src 구독자가 0**이었다(패널 `_ready`가 *"stage machine
-## 시그널은 안 구독한다"*고 명시한다). 통째 흐름에 남은 판→패널 신호는 아래 둘뿐이다.
-## 🔴 한 획을 뗐다 (마우스 릴리스) — 패널이 **획이 끝난 뒤에** 잉크 팔레트를 다시 그리게 한다.
-## 특별잉크가 그리는 도중 소모돼 팔레트가 재빌드되면 활성 잉크가 획 중간에 바뀌기 때문이다.
+## 🔴 한 획을 뗐다 — 패널이 **획이 끝난 뒤에** 잉크 팔레트를 다시 그리게 하는 신호다.
+## (그리는 도중 특별잉크가 소모돼 팔레트가 재빌드되면 활성 잉크가 획 중간에 바뀐다.)
 signal stroke_ended
 
 var _asm := RingAssembly.new()
 var _scorer := TraceScorer.new()
 
-# ── 데이터 정의 (세션 13 구조화) — 바깥(패널 `_inject_defs`)이 Db에서 읽어 주입한다. ──
-# ⚠ 세86 실측: 판이 **실제로 읽는 건 `_glyph_defs`뿐**이다(`_glyph_def_by_code`). `_jin_def`·
-# `_rune_defs`는 `set_defs`가 채우기만 하고 읽는 자리가 0곳이다 — 진·룬 색의 라이브 소비자는
-# 책(`ring_book`)이고 거기는 자기 `set_defs`로 따로 받는다. 아래 두 필드의 인라인 설명
-# (「색·이름 조회」)은 그래서 낡았다. 되살릴 게 아니면 걷는 게 맞다(감사 T3 「거짓 손잡이」).
+# ── 데이터 정의 — 패널이 Db에서 읽어 주입한다. ──
+# ⚠ 판이 실제로 읽는 건 `_glyph_defs`뿐이다 — 아래 둘은 채워지기만 하고 읽는 자리가 0곳이다
+#   (진·룬 색의 라이브 소비자는 책이고 거기는 자기 `set_defs`로 따로 받는다).
 var _jin_def: JinDef = null
-var _rune_defs: Dictionary = {}         # {Enums.RuneType: RuneDef} — 색·이름 조회 (세션 34: 룬 여러 종)
+var _rune_defs: Dictionary = {}         # {Enums.RuneType: RuneDef}
 var _glyph_defs: Array[GlyphDef] = []
 
-## 지금 긋는 획의 색 = 고른 잉크 색 (세션28 — "잉크를 골라 그린다"의 즉각 피드백).
-## 잠근 조각은 종류색(진/룬/문양)으로 되므로 이 색은 **그리는 중에만** 보인다. 기본 = 먹.
+## 지금 긋는 획의 색 = 고른 잉크 색. 기본 = 먹.
 var _trace_ink := TRACE_INK
-## 🔴 고른 잉크 id (세션29) — 색과 달리 **assembly에 실려** 발사·저장까지 간다(등급=데미지).
+## 🔴 고른 잉크 id — 색과 달리 **assembly에 실려** 발사·저장까지 간다(등급=데미지).
 var _ink_id: StringName = &""
-## 🔴 특별잉크 소모·비율 (세션29). 특별잉크로 그으면 획당 소모하고 _special_strokes를 센다.
-## 완성 시 비율(_special_strokes / _total_strokes)이 화상 증폭 세기를 정한다.
+## 특별잉크 소모·비율. 완성 시 비율(_special_strokes / _total_strokes)이 화상 증폭 세기를 정한다.
 var _special_ink_used: StringName = &""
 var _special_strokes := 0
 var _total_strokes := 0
-## 🔴 진 확대 상한 (세션29, 종이=규모). 종이 등급이 이 상한을 올린다(set_jin_scale_max). 기본 = 종이 없음.
 var _jin_scale_max := JIN_SCALE_MAX
 var _cast_t := -1.0
 var _cast_dur := 1.3
 
-## 🔴 지금 그릴 대상. 세85 ⑨ 이후 **NONE 아니면 COMBINED뿐**이다(per-piece 은퇴).
+## 🔴 지금 그릴 대상 — 라이브에선 **NONE 아니면 COMBINED뿐**이다.
 var _trace := TraceTarget.NONE
 var _drawing := false                   # 마우스 버튼 누른 채 긋는 중
 var _stroke_counted := false            # 🔴 이 획을 잉크 정산에 넣었나 (최초 유효점에서 1회만)
-var _jin_scale := 1.0                   # 진 규모 (종이 축 — 세71d 은퇴 후 1.0 고정)
+var _jin_scale := 1.0                   # 진 규모 (종이 축 은퇴 후 1.0 고정)
 
-# ── 그리기 연출 (세션62 ⓐⓑⓒⓓⓕ — 렌더 전용, 채점·조립 무관) ─────────────────────
-# ⚠ 전부 연출값(손맛)이라 스크립트 const다 — 사용자가 F5로 조인다. balance.tres 아님.
-const GLOW_WIDTH := 7.0                 # ⓐ 먹선 밑 글로우 패스 폭 (먹선 2.6~2.8px보다 넓게)
+# ── 그리기 연출 — 렌더 전용이라 채점·조립과 무관하다.
+# ⚠ 전부 연출값(손맛)이라 스크립트 const다 — balance.tres 아님.
+const GLOW_WIDTH := 7.0                 # ⓐ 먹선 밑 글로우 패스 폭 (먹선보다 넓게)
 const GLOW_ALPHA_DRAWING := 0.12        # ⓐ 그리는 중 획 글로우 알파 (잉크색)
 const SPARK_DUR := 0.25                 # ⓑ 반짝임 수명(초)
 const SPARK_R0 := 1.2                   # ⓑ 광점 시작 반지름
 const SPARK_R1 := 4.5                   # ⓑ 광점 끝 반지름 (커지며 사라진다)
 const SPARK_ALPHA := 0.8                # ⓑ 광점 시작 알파 ((1-t)×이 값)
 const SPARK_COLOR := Color(1.0, 0.88, 0.55)   # ⓑ 광점 색 (따뜻한 금빛)
-## ⚠ 세85 ⑨ 은퇴: ⓒ 착지 펄스·ⓓ 완성 발광의 상수(`PULSE_*`·`GLOW_ALPHA_LOCKED`) — 트리거가
-## per-piece 잠금이라 통째 흐름에선 한 번도 안 떴다. 🔴 **`FINISH_*`는 은퇴 목록이 아니다** —
-## 세86 ⑭에 새 훅(`play_finish`)으로 되살아나 아래 블록에 살아 있다.
 ## ⓕ 붓끝 발광 — 동심원 3장, 바깥(크고 흐림)부터 그려 안쪽(작고 밝음)이 위에 얹힌다.
-## ⚠ 무타입 Array인 이유: GDScript는 const에 PackedFloat32Array(...) 생성자를 상수식으로 안 받는다
-## (세62 실측 — 파스 에러). 소비처가 float() 캐스트로 받는다.
+## ⚠ 무타입 Array인 이유: GDScript는 const에 PackedFloat32Array 생성자를 상수식으로 안 받는다.
 const BRUSH_GLOW_RADII := [10.0, 6.0, 3.0]
 const BRUSH_GLOW_ALPHA := [0.06, 0.14, 0.30]
 
-# ── 🔴 세86 ⑭ 「마법진 완성」 연출 (연출값 = 스크립트 const, 밸런스 아님 — 규칙 §0 예외) ──
-## 🔴 **되살린 게 아니라 새로 붙인 훅이다.** 옛 ⓒ 착지 펄스·ⓓ 완성 발광은 트리거가 **per-piece
-## 잠금**이라 세70 통째 흐름에선 한 번도 안 떴고 세85 ⑨에 상수째 걷혔다 — 그래서 세70 이후
-## **15세션째 「완성」 순간에 판이 아무 말도 안 했다**. 진입점은 공개 `play_finish()` 하나이고
-## 패널 `_finish()`가 부른다(파일 끝 주석이 지정한 그 한 줄. per-piece 부활 아님).
-## 🔴 **안(룬)에서 바깥(진 윤곽)으로 훑는 게 이 연출의 뜻이다** — 층 순서 = 연산 순서(M1 정본
-## `docs/takbon-design/jin_interpretation_design.md`)라, 맺히는 순간에 그 순서를 한 번 더 보여 준다.
-## ⚠ **순수 오버레이**다: 입력을 막지 않고(패널이 이미 RESULT로 잠근다) 리포트 표시를 늦추지 않는다.
+# ── 「마법진 완성」 연출 (연출값 = 스크립트 const, 밸런스 아님) ──
+## 진입점은 공개 `play_finish()` 하나이고 패널이 맺는 순간에 부른다.
+## 🔴 **안(룬)에서 바깥(진 윤곽)으로 훑는 게 이 연출의 뜻이다** — 층 순서 = 연산 순서라,
+## 맺히는 순간에 그 순서를 한 번 더 보여 준다.
+## ⚠ **순수 오버레이**다 — 입력을 막지 않고 리포트 표시를 늦추지 않는다.
 const FINISH_DUR := 0.85              # 전체 수명(초)
 const FINISH_SWEEP_T := 0.60          # 파도가 바깥 테두리에 닿는 정규 시점(0~1)
 const FINISH_BAND_W := 0.22           # 파도 뒤 「방금 지나갔다」 꼬리의 두께 (반지름 비)
@@ -234,32 +169,26 @@ const FINISH_POP_SCALE := 2.4         # 팝 고리가 룬 크기의 몇 배까�
 const FINISH_FLASH_T := 0.66          # 바깥 테두리 플래시가 시작되는 정규 시점
 
 ## ⓑ 렌더 전용 — 가이드 점의 드러남을 지난 프레임과 비교해 false→true 순간을 잡는다.
-## 🔴 채점기(`_scorer`)는 `is_revealed(i)` 공개 조회만 쓴다 — 채점 상태를 복사하는 게 아니라
-## "언제 드러났나"라는 렌더만의 관심사를 따로 든다. `_reset_reveal_fx`가 가이드와 크기를 맞춘다.
+## 🔴 채점 상태를 복사하는 게 아니라 "언제 드러났나"라는 렌더만의 관심사를 따로 든다.
 var _was_revealed := PackedByteArray()
 var _sparks: Array[Dictionary] = []     # ⓑ {pos: Vector2, t: float} — 광점들
 
-## 🔴 세86 ⑭ 완성 연출 진행도 — **-1 = 안 돎**, 0~1 = 도는 중. `_process`가 민다.
+## 완성 연출 진행도 — **-1 = 안 돎**, 0~1 = 도는 중.
 var _finish_t := -1.0
-## ⑭ 서브패스별 **정규 반지름**(0=중심 · 1=바깥 테두리) — `play_finish`에서 한 번만 잰다.
-## 매 프레임 수백 점을 다시 훑지 않으려는 캐시고, **렌더 전용**이라 채점·발사와 무관하다.
+## 서브패스별 정규 반지름(0=중심 · 1=바깥 테두리) — `play_finish`에서 한 번만 재는 렌더 전용 캐시.
 var _finish_radii: PackedFloat32Array = PackedFloat32Array()
 
-## 🔴 세71c 조립→탁본 이음선 제거 — COMBINED 서브패스(진·룬·밴드 각각)를 **별도 폴리라인**으로 그린다.
-## 비었으면 옛 동작(flat 가이드를 한 줄로). `enter_combined_trace`의 선택 인자로 들어온다.
-## 🔴 채점기(`_scorer`)는 flat만 본다 — 이 멤버는 **렌더 전용**이라 채점·발사와 무관(이음선은 draw 아티팩트).
+## COMBINED 서브패스(진·룬·밴드 각각) — **별도 폴리라인**으로 그려 이음선을 없앤다.
+## 🔴 채점기는 flat만 본다 — 이 멤버는 **렌더 전용**이라 채점·발사와 무관하다.
 var _combined_subpaths: Array = []
-## 🔴 세81: COMBINED에서 층 구분 동심원을 그릴까 (ASSEMBLE 미리보기=true·DRAW=false). 기본 true=무회귀.
+## COMBINED에서 층 구분 동심원을 그릴까 (미리보기=true·DRAW=false).
 var _combined_show_bands := true
-## COMBINED에서 그릴 흐린 동심원(빈 층 자리) 개수 = 진 band_count. 0 = 안 그림(옛 동작).
+## 그릴 흐린 동심원(빈 층 자리) 개수 = 진 band_count. 0 = 안 그림.
 var _combined_band_count := 0
-## 🔴 세84 #22: COMBINED의 **룬 자리 상태** — 자리 순서대로 룬 타입, 음수(RUNE_NONE)=미선택.
-## 미선택 자리 마커를 이걸로 그린다. 예전엔 서브패스 **개수를 유추**해서(`size() <= band_count + 1`)
-## 「룬이 하나도 없다」를 판정하고 마커를 **중심 하나**만 찍었는데, 세81에 밴드가 모티프마다 append로
-## 바뀌면서 그 유추가 깨졌다: 융합진(자리 2·밴드 2)은 고른 직후 3 ≤ 3이라 **엉뚱한 중심**에 마커가
-## 뜨고(실제 자리는 좌우 ±`RUNE_SPLIT_FRAC`), 한 자리를 채우면 판별식이 거짓이 되어 **아직 빈 나머지
-## 자리의 표식이 통째로 사라졌다**. 개수 유추는 밴드 모티프 수에 오염되므로 **상태를 받는다**.
-## 비었으면 = 호출자가 안 넘겼다(1~4인자 옛 호출) → 아래 `_draw`가 옛 유추 폴백을 쓴다(무회귀).
+## 🔴 **룬 자리 상태**(자리 순서대로 룬 타입, 음수=미선택) — 미선택 마커를 이걸로 그린다.
+## 서브패스 **개수로 유추하지 마라**: 밴드가 모티프마다 append하므로 그 수에 오염돼,
+## 융합진에선 마커가 엉뚱한 중심에 뜨거나 빈 자리 표식이 **에러 없이 통째로 사라진다**.
+## 비었으면 호출자가 안 넘긴 것 → `_draw`가 옛 유추 폴백을 쓴다.
 var _combined_runes: Array = []
 
 
@@ -273,19 +202,16 @@ func _ready() -> void:
 
 
 ## 판 크기가 바뀌면 채점기의 길이 기준을 다시 세운다 (거리 임계값이 전부 반지름 비례다).
-## 🔴 세85 ⑨: 예전엔 여기서 `_set_trace`로 가이드를 다시 **만들었는데**, per-piece 가이드 생성기가
-## COMBINED를 모르는 탓에 **리사이즈 한 번에 합성 밑그림이 통째로 지워졌다**(빈 가이드로 교체 —
-## 에러도 경고도 없다). 합성 가이드의 소유자는 패널(`recompose`)이므로 판이 재생성할 수 없다 —
-## 여기서는 길이 기준만 갱신하고, 새 좌표가 필요하면 **패널이 다시 넘긴다**.
+## 🔴 여기서 가이드를 다시 **만들지 마라** — 합성 가이드의 소유자는 패널이라, 판이 재생성하면
+## 리사이즈 한 번에 밑그림이 **에러도 경고도 없이** 빈 가이드로 갈린다.
 func _on_resized() -> void:
 	_scorer.set_reference_radius(_outer_radius())
 	queue_redraw()
 
 
 # ─────────────────────────── 단계 조회 (조립 상태기계에 위임) ───────────────────────────
-## ⚠ 세86 실측: 아래 위임 조회 6종의 **src 호출자는 0곳**이다(`test_ring_assembly_auto`가
-## 관측점으로 쓴다). 패널은 자기 `can_commit()`을 쓰고, `_asm`은 라이브에서 아무도 안 바꾼다
-## (`ring_assembly.gd` 머리말 참조) — 즉 여기 값들은 늘 초기 상태다. **판정에 쓰지 마라.**
+## 🔴🔴 아래 위임 조회들의 src 호출자는 **0곳**이고, `_asm`은 라이브에서 아무도 안 바꾼다
+## (`ring_assembly.gd` 머리말 참조) — 즉 늘 초기 상태를 돌려준다. **판정에 쓰지 마라.**
 
 func stage() -> int:
 	return _asm.stage()
@@ -308,34 +234,27 @@ func filled_count() -> int:
 func can_commit() -> bool:
 	return _asm.can_commit()
 
-## 🔴 발사 계약 + **손그림 점수**. 조립기(무엇이 놓였나)와 채점기(얼마나 잘 그렸나)를 합치는
-## 유일한 자리 — 둘 다 쥔 게 보드뿐이다 (조립기는 채점을 모르고, 채점기는 칸을 모른다).
-## `score`가 여기서 안 실리면 발사도 저장도 점수를 알 길이 없다 (세션 22까지가 그랬다).
+## 조립기(무엇이 놓였나)와 채점기(얼마나 잘 그렸나)를 합치는 유일한 자리 — 둘 다 쥔 게 보드뿐이다.
+## 🔴 `score`가 여기서 안 실리면 발사도 저장도 점수를 알 길이 없다.
 ## ⚠ 그리는 도중에 불리면 그때까지의 부분 점수다 — 소비자는 맺을 때만 읽는다.
 func get_assembly() -> Dictionary:
 	var a := _asm.get_assembly()
 	a["score"] = float(get_analysis().get("total", 0.0))
-	a["ink"] = _ink_id      # 🔴 고른 잉크(세션29) — 등급 배수가 발사·저장에 실린다
-	# 🔴 특별잉크(화상 증폭)·크기(종이=규모)도 여기서 싣는다 (세션29) — score를 싣는 그 자리.
+	a["ink"] = _ink_id      # 잉크 등급 배수가 발사·저장에 실린다
 	a["special_ink"] = _special_ink_used
 	a["special_ratio"] = float(_special_strokes) / float(maxi(_total_strokes, 1))
 	a["size"] = _jin_scale
 	return a
 
 
-# ─────────────────── 🔴 세68 조립→탁본: 합성 가이드 통째 트레이스 ───────────────────
-## 합성된 조립본 가이드를 통째로 긋는 모드로 들어간다 — **라이브 유일 진입점**이다(세85 ⑨:
-## per-piece 가이드 생성기 `_set_trace`/`_build_guide`가 은퇴해 이제 대안이 없다).
-## 조립 상태가 바뀔 때마다 패널(`ring_forge_panel.recompose`)이 부른다.
-## 🔴 세71c 선택 인자 확장 — `flat`은 지금처럼 scorer에(채점 무변경). `subpaths`가 오면 `_draw`가
-## flat 한 줄 대신 **서브패스별 별도 폴리라인**으로 그린다(이음선 제거). `band_count`는 빈 층 흐린
-## 동심원 개수. **둘 다 옛 기본값이면(subpaths=[]·band_count=0) 옛 동작 그대로** — 슬라이스 패널·
-## test의 1인자 호출이 무변경으로 산다(회귀 그물). subpaths flatten = flat이라는 계약은 **호출자(패널)가**
-## 한 소스(compose_guide_paths)에서 만들어 지킨다(制약 flat=flatten(subpaths)).
-## 🔴 세84 #22 `runes` — `compose_guide_paths`에 넘긴 **그 자리별 룬 목록을 그대로** 한 번 더 넘긴다
-## (자리 순서 유지·음수=미선택). 미선택 자리 마커를 개수 유추가 아니라 **상태**로 그리기 위한 것이고,
-## 채점·발사와는 무관한 **렌더 전용**이다(`_combined_runes` 주석 참조). ⚠ 안 넘기면(옛 4인자 호출)
-## 마커가 세81에 깨진 옛 유추 폴백으로 떨어진다 — 융합진을 쓰는 호출자는 **반드시 넘겨라**.
+# ─────────────────── 합성 가이드 통째 트레이스 ───────────────────
+## 합성 가이드를 통째로 긋는 모드로 들어간다 — **라이브 유일 진입점**이다.
+## 조립 상태가 바뀔 때마다 패널이 부른다.
+## `flat`은 채점기로 · `subpaths`는 렌더로(서브패스별 폴리라인 = 이음선 제거) · `band_count`는
+## 빈 층 동심원 개수. 🔴 **`flat = flatten(subpaths)` 계약은 호출자가** 한 소스에서 만들어 지킨다.
+## 🔴 `runes` = `compose_guide_paths`에 넘긴 **그 목록을 그대로** 한 번 더. 미선택 마커를 개수
+## 유추가 아니라 상태로 그리기 위한 렌더 전용 인자다 —
+## ⚠ 안 넘기면 깨진 유추 폴백으로 떨어진다(융합진 호출자는 **반드시 넘겨라**).
 func enter_combined_trace(flat: PackedVector2Array, subpaths := [], band_count := 0,
 		show_band_lines := true, runes := []) -> void:
 	_trace = TraceTarget.COMBINED
@@ -344,17 +263,17 @@ func enter_combined_trace(flat: PackedVector2Array, subpaths := [], band_count :
 	_scorer.set_guide(flat)
 	_combined_subpaths = subpaths
 	_combined_band_count = band_count
-	# 🔴 스냅샷(duplicate)이다 — 호출자의 배열을 물면 룬을 골라도 recompose를 안 부른 경우에 마커만
-	# 몰래 갱신돼 「가이드는 옛것, 마커는 새것」이 된다. 마커는 가이드와 같은 시점을 봐야 한다.
+	# 🔴 `duplicate()`가 계약이다 — 호출자의 배열을 물면 recompose 없이 마커만 몰래 갱신돼
+	# 「가이드는 옛것, 마커는 새것」이 된다.
 	_combined_runes = runes.duplicate()
-	# 🔴 세81 우회 스위치 — 사연·미결은 `BAND_LANE_PAD` 주석 한 곳에 있다(여기 베끼지 마라).
+	# ⚠ 이 스위치의 사연·미결은 `BAND_LANE_PAD` 주석 한 곳에 있다(여기 베끼지 마라).
 	_combined_show_bands = show_band_lines
-	_reset_reveal_fx()   # ⓑ 옛 가이드의 유령 반짝임을 남기지 않는다
+	_reset_reveal_fx()   # 옛 가이드의 유령 반짝임을 남기지 않는다
 	queue_redraw()
 
 
-## 합성 가이드를 통째로 그은 종합 점수 (완성도×정밀도). 슬라이스 리포트·발사가 이 값을 쓴다.
-## per-piece 평균(get_analysis)이 아니라 한 조각 점수 — 조립본을 한 번에 그은 것이라 통째다.
+## 합성 가이드를 통째로 그은 종합 점수 (완성도×정밀도).
+## ⚠ 이걸 직접 부르지 마라 — 소비자는 패널 `_score_now()`를 거쳐야 모드가 안 갈린다.
 func combined_total() -> float:
 	return _scorer.piece_score()
 
@@ -373,46 +292,19 @@ func _pen_correction() -> float:
 	return float(gs.stroke_correction()) if gs != null else 0.0
 
 
-## ⚠ **per-piece 가이드 생성기 `_build_guide`는 세85 ⑨에 은퇴했다** — 밑그림 생산자는
-## `compose_guide_paths` 하나다. 세 갈래의 기하는 그대로 살아 있고 합성 쪽이 그대로 부른다:
-## 진 = `jin_guide_pts` · 룬 = `rune_subpath` · 문양 = `glyph_guide_pts`(전부 static·public).
-## 🔴 그래서 「셀에서 본 모양 = 손으로 그을 모양」 규약이 구조적으로 안 갈라진다.
-
-
-## 🔴 **문양 코드별 밑그림** (세션 47 — "새 문양 = 여기 한 갈래"). `rune_guide_verts`와 같은 규약이다.
+## 🔴 **문양 코드별 밑그림** — 새 문양 = 여기 한 갈래.
 ##
-## 왜 갈랐나: 세션 44까지 이 갈래는 `inward` 하나만 보고 화살표 **방향**만 뒤집었다. 새 문양
-## (유도·팅김·추진)은 전부 `inward = false`라 발산·관통과 **똑같은 화살표**가 떠, 6개 문양이
-## 색·라벨만 다른 4지선다가 될 참이었다 — memory `takbon-glyph-design-principle`이 경고하는 그것.
-## **그리는 궤적이 달라야 손이 문양을 기억한다.**
+## 🔴 **그리는 궤적이 서로 달라야 손이 문양을 기억한다.** 방향만 뒤집으면 여러 문양이
+## 색·라벨만 다른 같은 화살표가 되고, 그리기가 사지선다로 주저앉는다.
 ##
 ## 공통 규율:
-##   • **한붓그리기** — 가이드가 한 줄이어야 채점기가 이탈을 잰다 (손은 여러 획으로 나눠 그어도 된다).
-##   • 꺾쇠·깃은 기준점 q로 **되돌아와서** 다음 구간으로 이어진다 — 끊기면 그 구간이 유령 선이 된다.
-##   • 획수는 화살표(몸통+꺾쇠 2)를 넘지 않는다 — 넘으면 못 그린다.
-##   • ⚠ 총 길이는 이웃 칸 간격(반지름 118px 기준 54px)을 넘지 마라. 추진의 1.1배(≈44px)가 상한선이다.
+##   • **한붓그리기** — 가이드가 한 줄이어야 채점기가 이탈을 잰다(손은 여러 획으로 나눠도 된다).
+##   • 꺾쇠·깃은 기준점 q로 **되돌아와서** 이어진다 — 끊기면 그 구간이 유령 선이 된다.
+##   • ⚠ 총 길이는 이웃 칸 간격을 넘지 마라(추진의 1.1sz가 상한선이다).
 ##
-## 모양과 이유 — **손으로 긋는 궤적**이 서로 달라야 한다(눈으로만 다른 건 라벨과 같다):
-##   응집← / 발산→  화살표. 방향만 반대 (**세션 25 그대로** — 여기만 점 생성이 verbatim이다)
-##   관통↠         꺾쇠 **2개**(중간·머리)가 겹친 이중 화살표 — 뚫고 나간다
-##   유도∿         S자 물결(사인) — 꺾이지 않고 **휘어서** 쫓아간다. 유일하게 꺾쇠가 없다
-##   팅김⚡        지그재그 — 벽에 튕기는 궤적 그대로. 유일하게 **날카롭게 되꺾인다**
-##   추진↑         긴 직선 + 뒤쪽 **가로 깃 2개**(속도선). 깃이 축과 **직각**이라 관통의 꺾쇠와 손이 다르다
-##   확산⋔         줄기 하나가 **뒤쪽 뿌리 한 점**에서 앞으로 3갈래로 갈라지는 부채(삼지창). 세79
-##                 손 = "뿌리를 축으로 앞쪽으로 펴 나간다". 갈래가 **앞으로** 뻗어 화살촉·관통 꺾쇠
-##                 (머리에서 **뒤로** 접히는 깃)와 반대이고, 팅김 지그재그처럼 전진하지 않고
-##                 **한 뿌리로 되돌아온다**. 의미(안쪽 결과를 여러 갈래로 편다)가 궤적 그대로다.
-##   폭발∗         중심에서 사방으로 뻗는 **방사 살 5개**. 세79 — 유일하게 **한 점(중심)을 반복해 지나며**,
-##                 유일하게 **dir 축이 아니라 사방으로** 퍼진다(중심이 곧 p라 앞뒤 대칭). 나머지 7종이
-##                 전부 dir 방향 진행형이라 손이 확실히 갈린다. 확산과도 갈린다: 확산은 앞쪽 부채,
-##                 폭발은 360°(뒤쪽에도 살이 간다) — 🔴 이 둘이 손으로 안 갈리면 층 순서가 안 읽힌다.
-## 🔴 **static · public인 이유** (세션47): 책의 문양-고리 미리보기 아이콘이 **이 함수를 그대로
-## 부른다** — 지금 경로는 `ring_book.ring_icon_geom` → `glyph_ring_subpaths` → 여기다
-## (⚠ 옛 이름 `ring_book._draw_glyph_icon`은 세71 「문양 개별 탭 → 층 소켓」 전환에 사라졌다).
-## 예전엔 책이 자기만의 화살표를 직접 그려서, 판의 밑그림을 6종으로 갈라 놔도 **고를 때 보는
-## 셀은 전부 같은 화살표**였다 — 고르는 순간에 구분이 안 되면 밑그림을 가른 의미가 절반
-## 날아간다. `ring_power`가 리포트와 발사에 같은 함수를 주는 것과 같은 이유다:
-## **복사해 두면 한쪽만 고쳐도 아무도 못 알아채고 갈라진다.**
+## 🔴 **static · public인 이유**: 책의 미리보기 아이콘이 **이 함수를 그대로 부른다**.
+## 책이 자기 화살표를 따로 그리면, 판의 밑그림을 갈라 놔도 **고를 때 보는 셀은 다 똑같아져**
+## 밑그림을 가른 의미가 절반 날아간다.
 ## ⚠ 그래서 인스턴스 상태를 쓰면 안 된다 — 파라미터와 클래스 상수만 본다.
 static func glyph_guide_pts(code: int, p: Vector2, outward: Vector2, sz: float) -> PackedVector2Array:
 	var dir := -outward if code == G_GATHER else outward   # 응집만 안쪽(룬), 나머지는 바깥
@@ -421,9 +313,8 @@ static func glyph_guide_pts(code: int, p: Vector2, outward: Vector2, sz: float) 
 		G_PIERCE:
 			# 몸통을 지나며 중간·머리에서 각각 꺾쇠. 꺾쇠는 q로 되돌아와 다음 구간으로 이어진다.
 			var back := -dir * (sz * ARROW_BACK_FRAC)
-			# ⚠ 0.9배까지만 좁힌다 — 깃 벌어짐 20×0.62×0.9 ≈ 11.2px가 붓의 드러남 반경 9.4px보다
-			# 커야 **몸통을 그어도 꺾쇠가 안 드러난다**(파일 머리 ARROW_SIDE_FRAC 주석의 그 비율).
-			# 더 좁히면 세션 25의 "화살촉이 그릴 이유가 없다" 문제가 관통에서 되살아난다.
+			# ⚠ 0.9배까지만 좁힌다 — 더 좁히면 깃이 붓의 드러남 반경 안으로 들어와
+			# 몸통을 긋는 순간 꺾쇠가 통째로 드러난다.
 			var side := side_u * (sz * ARROW_SIDE_FRAC * 0.9)
 			var v := PackedVector2Array([p - dir * sz])
 			for q in [p, p + dir * sz]:
@@ -453,23 +344,18 @@ static func glyph_guide_pts(code: int, p: Vector2, outward: Vector2, sz: float) 
 				v2.append_array(PackedVector2Array([q, q + bar, q - bar, q]))
 			return _densify(v2, sz * 0.24)
 		G_SPREAD:
-			# 뒤쪽 뿌리로 짧은 줄기가 들어오고, 거기서 앞으로 3갈래(±FAN·정면)가 펴진다.
-			# 갈래마다 뿌리로 **되돌아와** 다음 갈래로 이어진다(꺾쇠 규약과 같은 한붓그리기).
-			# ⚠ 갈래 벌어짐 = 뿌리에서 d만큼 나간 지점에서 이웃 갈래와 2·d·sin(FAN) ≈ 1.16d 떨어진다 —
-			# 붓 드러남 반경(≈9.4px)을 넘으려면 d ≳ 8px. 즉 **뿌리 근처만** 서로 드러나고
-			# 갈래 몸통(26px 중 바깥 18px)은 각각 그어야 드러난다.
-			var fan := 0.62                       # 갈래 벌어짐(rad) ≈ 35.5°
+			# 뒤쪽 뿌리로 짧은 줄기가 들어오고, 거기서 앞으로 3갈래가 펴진다.
+			# 갈래마다 뿌리로 **되돌아와** 다음 갈래로 이어진다(한붓그리기 규약).
+			var fan := 0.62                       # 갈래 벌어짐(rad)
 			var arm := sz * 1.3                   # 뿌리→갈래 끝
 			var root := p - dir * (sz * 0.7)      # 뿌리 = 뒤쪽 한 점 (여기가 손의 축이다)
-			var v3 := PackedVector2Array([p - dir * (sz * 1.1)])   # 줄기 꼬리 (추진과 같은 1.1sz 상한)
+			var v3 := PackedVector2Array([p - dir * (sz * 1.1)])   # 줄기 꼬리 (1.1sz 상한)
 			for a in [-fan, 0.0, fan]:
 				v3.append_array(PackedVector2Array([root, root + dir.rotated(float(a)) * arm]))
 			return _densify(v3, sz * 0.24)
 		G_EXPLODE:
-			# 중심(p)에서 사방 5방향으로 뻗는 살. 살마다 중심으로 되돌아오므로 **한 점을 5번 지난다** —
-			# 이 파일의 어떤 갈래도 안 하는 손이다. 이웃 살과 72°라 2·d·sin36° ≈ 1.18d 떨어진다.
-			# ⚠ 연속 살이 72°(중심에서 108° 꺾임)라 **중심을 곧게 통과하는 구간이 없다** —
-			# 180°짜리(살 짝수 개, 마주보는 순서)로 만들면 두 살이 한 직선이 돼 손이 뭉개진다.
+			# 중심에서 사방으로 뻗는 살 — 한 점을 반복해 지나는 유일한 손이다.
+			# ⚠ **살 개수를 짝수로 바꾸지 마라** — 마주보는 두 살이 한 직선이 돼 손이 뭉개진다.
 			var spokes := 5
 			var ray := sz * 0.95
 			var v4 := PackedVector2Array()
@@ -479,14 +365,10 @@ static func glyph_guide_pts(code: int, p: Vector2, outward: Vector2, sz: float) 
 				v4.append(p + dir.rotated(TAU * float(i) / float(spokes)) * ray)
 			return _densify(v4, sz * 0.24)
 		G_CONDENSE:
-			# 🔴 **안으로 감기는 나선** (세82). 바깥에서 시작해 반지름이 줄며 중심으로 빨려 든다 —
-			# 의미(안쪽 마법을 한 점으로 눌러 담는다)가 손 궤적 그대로다.
-			# 🔴 **폭발과 손이 갈리는 게 이 모양의 존재 이유다**: 폭발은 중심을 **5번 지나는** 직선
-			# 살이고, 응축은 중심을 **한 번만** 지나며 **꺾임 없이 계속 휜다**. 폭발 살을 방향만
-			# 뒤집는 안은 각하했다 — 손이 지나는 자리가 거의 같아 두 문양이 안 갈린다(세79 기준).
-			# ⚠ 유도(사인 한 주기 S자)와도 갈린다: 저건 축을 따라 **전진**하고 이건 **감긴다**
-			#   (반지름이 단조 감소 = 같은 자리를 두 번 지나지 않으면서 회전한다).
-			# ⚠ extent = 2·sz로 추진(2.2·sz)보다 작아 이웃 칸 간격 안에 든다.
+			# 안으로 감기는 나선 — 의미(한 점으로 눌러 담는다)가 손 궤적 그대로다.
+			# 🔴 **폭발과 손이 갈리는 게 이 모양의 존재 이유다** — 폭발은 중심을 여러 번 지나는
+			# 직선 살, 이건 중심을 한 번만 지나며 꺾임 없이 계속 휜다. 방향만 뒤집은 안은
+			# 손이 지나는 자리가 거의 같아 각하했다.
 			var turns := 1.25                     # 감는 바퀴 수 — 1보다 커야 "감긴다"로 읽힌다
 			var v5 := PackedVector2Array()
 			for i in 29:
@@ -495,15 +377,13 @@ static func glyph_guide_pts(code: int, p: Vector2, outward: Vector2, sz: float) 
 				var rad := sz * (1.0 - t * 0.88)  # 완전히 0으로 보내지 않는다 (끝점이 뭉개진다)
 				v5.append(p + (dir * cos(ang) + side_u * sin(ang)) * rad)
 			return v5
-	# 응집←/발산→ — 🔴 **세션 25 원본 그대로**. 점 생성 순서가 곧 관측점이다:
-	# `test_ring_trace_auto._test_arrowhead_must_be_drawn`이 "앞 9점 = 몸통"으로 읽는다.
+	# 응집←/발산→ — 🔴 **점 생성 순서가 곧 관측점이다**(테스트가 "앞 9점 = 몸통"으로 읽는다).
 	var pts2 := PackedVector2Array()
 	var tail := p - dir * sz
 	var head := p + dir * sz
 	for t in 9:                                   # 몸통
 		pts2.append(tail.lerp(head, float(t) / 8.0))
 	# 화살촉 — **한붓그리기**(머리→왼깃→머리→오른깃)라 가이드 한 줄로 화살표가 된다.
-	# 손은 몇 획으로 나눠 그어도 된다 (세션 25에 획 누적을 고쳤다).
 	var back2 := -dir * (sz * ARROW_BACK_FRAC)
 	var side2 := side_u * (sz * ARROW_SIDE_FRAC)
 	for w2 in [head + back2 + side2, head + back2 - side2]:
@@ -515,9 +395,8 @@ static func glyph_guide_pts(code: int, p: Vector2, outward: Vector2, sz: float) 
 
 
 ## 폴리라인 꼭짓점을 `step`px 간격으로 촘촘히 채운다 (마지막 꼭짓점 포함).
-## 🔴 이 간격이 곧 **채점 밀도**다 — 채점기는 점 하나하나의 드러남으로 완성도를 잰다.
-## 화살표 몸통 간격(반길이 20px에 9점 ≈ 5px)에 맞췄다. 성기면 붓 한 자국에 여러 점이 통째로
-## 드러나 "그릴 이유가 없는" 구간이 생긴다 — 세션 25 화살촉 사건이 정확히 그 원리였다.
+## 🔴 이 간격이 곧 **채점 밀도**다 — 성기면 붓 한 자국에 여러 점이 통째로 드러나
+## "그릴 이유가 없는" 구간이 생긴다.
 static func _densify(verts: PackedVector2Array, step: float) -> PackedVector2Array:
 	if verts.size() < 2:
 		return verts
@@ -532,16 +411,11 @@ static func _densify(verts: PackedVector2Array, step: float) -> PackedVector2Arr
 	return out
 
 
-# ─────────────────── 🔴 세68 조립→탁본: 조립본 → 한 장의 합성 가이드 ───────────────────
-## 조립본(진 + 룬 + 밴드별 문양-고리)을 **한 장의 따라긋기 가이드**로 합성한다.
-## 🔴 기존 static 팩토리만 불러 이어 붙인다 — **새 기하 규칙 0**. 그래서 "셀에서 본 모양 =
-## 손으로 그을 모양" 규율이 자동 유지된다(문양·진 셀이 같은 함수를 쓰는 것과 같은 이유).
-## band_defs[i] = 그 밴드의 GlyphRingDef(or null). ro = 판 바깥 반지름(_outer_radius()).
-## ⚠ static·인스턴스 상태 금지 — 헤드리스 테스트가 이 함수를 관측점으로 쓴다.
-## 🔴 세81 M2 융합진 룬 자리 좌표 (static·순수 = 헤드리스 관측점). 룬을 어디에 그리(고 감싸)나.
-## count ≤ 1 = **[중심]** — M1까지 룬은 늘 중심 하나였다. 🔴 이 경로가 곧 룬 1개 무회귀의 보장이다
-##   (아래 compose는 size도 자리 1개면 안 줄여 픽셀 동일).
-## count 2 = 중심 좌우로 `RUNE_SPLIT_FRAC` 벌린 두 점. count ≥ 3 = 위(−90°)부터 균등 원배치.
+# ─────────────────── 조립본 → 한 장의 합성 가이드 ───────────────────
+
+## 🔴 룬 자리 좌표의 **단일 소스**. 판·책·마커가 전부 이걸 불러야 자리가 안 갈린다.
+## count ≤ 1 = [중심] · 2 = 좌우로 `RUNE_SPLIT_FRAC` 벌림 · ≥3 = 위(−90°)부터 균등 원배치.
+## ⚠ static·인스턴스 상태 금지 — 헤드리스 관측점이다.
 static func rune_slot_positions(count: int, ctr: Vector2, ro: float) -> Array[Vector2]:
 	var out: Array[Vector2] = []
 	if count <= 1:
@@ -559,9 +433,8 @@ static func rune_slot_positions(count: int, ctr: Vector2, ro: float) -> Array[Ve
 	return out
 
 
-## 🔴 합성 가이드에서 **룬 하나의 크기**. `compose_guide_paths`(그을 것)와 미선택 자리 마커(볼 것)가
-## 반드시 같은 값을 써야 「본 것 = 그을 것」이 유지된다 — 식을 두 벌로 두면 자리 2개일 때 마커만
-## 0.18R로 커져 실제 룬(0.1224R)과 어긋난다. static·순수 = 헤드리스 관측점.
+## 🔴 룬 하나의 크기 — 그을 것(가이드)과 볼 것(미선택 마커)이 **같은 값**을 써야 한다.
+## 식을 두 벌로 두면 자리가 여럿일 때 마커만 커져 실제 룬과 어긋난다.
 static func combined_rune_size(ro: float, slot_count: int) -> float:
 	var s := ro * RUNE_GUIDE_FRAC
 	if slot_count >= 2:
@@ -569,12 +442,10 @@ static func combined_rune_size(ro: float, slot_count: int) -> float:
 	return s
 
 
-## 🔴 룬 하나의 **밑그림 점열** — 꼭짓점(`rune_guide_verts`)을 변마다 12등분해 이어 붙인 폴리라인.
-## 🔴 세85 ⑨(감사 #26): 이 12등분 루프가 **두 벌**이었다 — per-piece `_build_guide`의 RUNE 갈래와
-## `compose_guide_paths`. **크기 식이 이미 갈라져** 융합진에서 「본 것 ≠ 그을 것」이 될 뻔했다.
-## 산 쪽(합성)을 이 함수로 뽑았으니 **다시 인라인하지 마라.** 크기 단일 소스 = `combined_rune_size`.
+## 룬 하나의 **밑그림 점열** — 꼭짓점을 변마다 12등분해 이어 붙인 폴리라인.
+## 🔴 이 루프를 호출부에 **다시 인라인하지 마라** — 예전에 두 벌이던 시절 크기 식이 갈라져
+## 융합진에서 「본 것 ≠ 그을 것」이 될 뻔했다.
 ## ⚠ `if seg >= 0` 가드가 계약이다 — 꼭짓점이 1개 이하인 룬에서 마지막 점을 중복 추가하지 않는다.
-## ⚠ static·인스턴스 상태 금지(관측점) — 헤드리스가 이 점열을 그대로 잰다.
 static func rune_subpath(rune_type: int, at: Vector2, size: float) -> PackedVector2Array:
 	var pts := PackedVector2Array()
 	var v := rune_guide_verts(rune_type, at, size)
@@ -587,12 +458,10 @@ static func rune_subpath(rune_type: int, at: Vector2, size: float) -> PackedVect
 	return pts
 
 
-## 🔴 세84 #22 — **아직 룬을 안 고른 자리**의 마커 좌표·반지름. `runes`는 자리 순서대로의 룬 타입
-## 목록이고 음수(RUNE_NONE)가 미선택이다. 반환 = `[{at: Vector2, r: float}, …]`(빈 배열 = 다 골랐다).
-## 🔴 좌표는 `rune_slot_positions`, 크기는 `combined_rune_size` **정본을 그대로 부른다** — 각도·반지름을
-## 베끼면 판 마커와 책 셀(`ring_book.jin_icon_paths`도 같은 두 함수를 쓴다)·HUD가 조용히 어긋난다
-## (세48이 진 윤곽에서, 세83 뮤테이션이 셀 룬 자리에서 각각 밟은 자리다).
-## ⚠ static·public인 이유 = 마커는 `draw_arc` 렌더라 헤드리스가 못 보지만 **이 좌표는 잴 수 있다**.
+## **아직 룬을 안 고른 자리**의 마커 좌표·반지름. 반환 = `[{at, r}, …]`(빈 배열 = 다 골랐다).
+## 🔴 좌표·크기는 `rune_slot_positions`·`combined_rune_size` **정본을 그대로 부른다** —
+## 각도·반지름을 베끼면 판 마커와 책 셀·HUD가 조용히 어긋난다.
+## ⚠ public인 이유 = 마커 렌더는 헤드리스가 못 보지만 **이 좌표는 잴 수 있다**.
 static func empty_rune_slot_marks(runes: Array, ctr: Vector2, ro: float) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	if runes.is_empty():
@@ -605,46 +474,40 @@ static func empty_rune_slot_marks(runes: Array, ctr: Vector2, ro: float) -> Arra
 	return out
 
 
-## 🔴 세81 M2: `rune_type: int` → `runes: Array`(int 배열, 자리 순서). 빈 배열 = 룬 미선택(진 윤곽만).
-## 목록의 음수(RUNE_NONE) 자리는 서브패스를 건너뛴다 — 자리 개수는 유지해 **위치가 안 흔들리게**.
-## 자리 1개면 옛 단일 룬과 점 단위 동일(rune_slot_positions·size 무변경).
+## `runes` = 자리 순서 룬 타입 배열. 빈 배열 = 룬 미선택(진 윤곽만).
+## ⚠ 음수 자리는 서브패스를 건너뛰되 **자리 개수는 유지한다** — 안 그러면 나머지 룬 위치가 흔들린다.
 static func compose_guide(jin_shape: int, runes: Array, band_defs: Array,
 		ctr: Vector2, ro: float) -> PackedVector2Array:
-	# 🔴 세71c: **`compose_guide_paths`를 flatten한 단일 소스에서 파생**한다(制약③). flat과 subpaths를
-	# 따로 만들면 언젠가 갈라진다 — 채점(flat)과 렌더(subpaths)가 반드시 같은 점열을 봐야 한다.
-	# 시그니처·반환 점열은 리팩터 전과 **점 단위로 동일**(scratch_golden.txt로 대조).
+	# 🔴 flat은 `compose_guide_paths`를 flatten해 **파생**한다 — 따로 만들면 채점(flat)과
+	# 렌더(subpaths)가 언젠가 다른 점열을 본다.
 	var out := PackedVector2Array()
 	for sub in compose_guide_paths(jin_shape, runes, band_defs, ctr, ro):
 		out.append_array(sub)
 	return out
 
 
-## 🔴 세71c 조립본을 **조각별 서브패스 배열**로 합성한다 — 이음선 제거·빈 층 렌더의 단일 소스.
-## 반환 = `[진 윤곽, (룬), 밴드0, 밴드1…]`. 룬 센티넬(rune_type < 0)이면 룬 서브패스를 **생략**한다.
-## 🔴 **null 밴드 = 빈 서브패스로 자리만 남긴다**(制약①) — flatten엔 무영향(빈 배열)이면서 보드가
-## "빈 층 자리"를 셀 수 있게 한다. `compose_guide`(flat)가 이걸 flatten해 채점에 넣는다(둘이 한 소스).
-## ⚠ static·인스턴스 상태 금지 — 헤드리스 테스트가 관측점으로 쓴다. band_defs[i] = GlyphRingDef(or null).
-## 🔴 재구현 시 갈라지는 세 자리(制約②): ⓐ 룬 점열은 **`rune_subpath` 정본을 부른다**(변마다 12등분
-## + `if seg >= 0` 가드 — 세85 ⑨에 사본을 청산했다. 여기서 다시 인라인하면 사본이 부활한다) ·
-## ⓑ 밴드 frac은 **band_defs 원본 인덱스 i**로 BAND_RADII[i](null 건너뛴 압축 카운터 금지) · ⓒ
-## flat = flatten(subpaths)(위 compose_guide). 이 세 자리를 바꾸면 골든과 어긋난다.
+## 🔴 조립본을 **조각별 서브패스 배열**로 합성한다 — 밑그림의 단일 소스다.
+## 반환 = `[진 윤곽, (룬…), 밴드0, 밴드1…]`. 🔴 **기존 static 팩토리만 불러 이어 붙인다 —
+## 새 기하 규칙 0.** 그래야 「셀에서 본 모양 = 손으로 그을 모양」이 자동으로 유지된다.
+## 🔴 **null 밴드 = 빈 서브패스로 자리만 남긴다** — flatten엔 무영향이면서 보드가 "빈 층 자리"를 센다.
+## ⚠ static·인스턴스 상태 금지 — 헤드리스 테스트가 관측점으로 쓴다.
+## 🔴 재구현할 때 갈라지는 세 자리: ⓐ 룬 점열은 `rune_subpath` 정본을 부른다(인라인 금지) ·
+## ⓑ 밴드 frac은 **원본 인덱스 i**로 BAND_RADII[i](null을 건너뛴 압축 카운터 금지) ·
+## ⓒ flat = flatten(subpaths). 셋 중 하나만 어겨도 골든과 어긋난다.
 static func compose_guide_paths(jin_shape: int, runes: Array, band_defs: Array,
 		ctr: Vector2, ro: float) -> Array[PackedVector2Array]:
 	var paths: Array[PackedVector2Array] = []
 	# ① 진 윤곽 (바깥 닫힌 도형)
 	paths.append(jin_guide_pts(jin_shape, ctr, ro))
-	# ② 룬(들) — 점열은 `rune_subpath` **단일 소스**가 만든다(세85 ⑨: 12등분 루프 사본 청산, 감사 #26).
-	# 🔴 세81 M2: 자리별 목록. 각 룬은 **자기 서브패스** — count 1이면 서브패스 하나(옛 단일 룬 무회귀),
-	# count ≥ 2면 갈래마다 별도 폴리라인(이음선 없음). 음수(RUNE_NONE) 자리는 서브패스를 건너뛴다
-	# (센티넬 = 그 자리 룬 미선택). 자리 좌표는 `rune_slot_positions`가 준다(위치 단일 소스).
+	# ② 룬(들) — 룬마다 **자기 서브패스**(이음선 없음). 음수 자리는 건너뛴다.
+	# 🔴 좌표·크기·점열은 전부 정본 함수를 부른다 — 미선택 마커가 같은 함수를 써야
+	# 「마커 크기 = 실제로 그을 룬 크기」가 유지된다.
 	var rpos := rune_slot_positions(runes.size(), ctr, ro)
-	# 🔴 세84 #22: 크기도 `combined_rune_size` 정본을 부른다 — 미선택 자리 마커가 같은 함수를 써야
-	# 「마커 크기 = 실제로 그을 룬 크기」다(식이 두 벌이던 자리를 합쳤다. 값은 비트 동일).
 	var rsz := combined_rune_size(ro, runes.size())
 	for ri in runes.size():
 		var rt := int(runes[ri])
 		if rt < 0:
-			continue                  # 미선택 자리 — 서브패스 생략 (옛 센티넬 -1과 같은 뜻)
+			continue                  # 미선택 자리 — 서브패스 생략
 		paths.append(rune_subpath(rt, rpos[ri], rsz))
 	# ③ 밴드별 문양-고리 — 동심원 반경에 count번 깐다. null 밴드 = 빈 서브패스(자리만).
 	for i in band_defs.size():
@@ -654,17 +517,15 @@ static func compose_guide_paths(jin_shape: int, runes: Array, band_defs: Array,
 			continue
 		var frac := float(BAND_RADII[i]) if i < BAND_RADII.size() \
 			else float(BAND_RADII[BAND_RADII.size() - 1])
-		# 🔴 세81: 밴드의 **각 모티프를 별도 서브패스**로 append한다(이음선/거미줄 방지 — 한 밴드를
-		# 서브패스 하나로 묶으면 draw_polyline이 모티프 끝→다음 모티프 첫 점을 이어 링을 가로지르는
-		# 선이 생긴다, 사용자 지적). flat은 flatten(subpaths)라 **점열 무변경**(골든 보존).
+		# 🔴 **각 모티프를 별도 서브패스**로 append한다 — 한 밴드를 하나로 묶으면 draw_polyline이
+		# 모티프 끝→다음 첫 점을 이어 링을 가로지르는 거미줄이 생긴다.
 		for sub in glyph_ring_subpaths(gr, ctr, ro * frac):
 			paths.append(sub)
 	return paths
 
 
-## 🔴 문양-고리 한 장을 밴드 둘레에 `gr.count`번 깐다 → **모티프마다 별도 서브패스** (세81 이음선 방지).
-## 각 인스턴스는 기존 `glyph_guide_pts` 재사용. 회전 규약 = `slot_angle`과 같다(TAU·i/n − PI/2,
-## 위=0 시계방향). 바깥방향(outward) = 발산 방향. 렌더가 서브패스마다 폴리라인을 따로 그어 모티프가 안 이어진다.
+## 문양-고리 한 장을 밴드 둘레에 `gr.count`번 깐다 → **모티프마다 별도 서브패스**.
+## 회전 규약은 `slot_angle`과 같다(위=0 시계방향). 🔴 모티프 점열은 `glyph_guide_pts` 정본을 쓴다.
 static func glyph_ring_subpaths(gr: GlyphRingDef, ctr: Vector2, band_r: float) -> Array[PackedVector2Array]:
 	var out: Array[PackedVector2Array] = []
 	if gr == null:
@@ -678,30 +539,22 @@ static func glyph_ring_subpaths(gr: GlyphRingDef, ctr: Vector2, band_r: float) -
 	return out
 
 
-## 🔴 층 i의 **띠 경계 두 반지름** = `Vector2(안쪽선, 바깥선)` (세86). 문양은 그 사이에 들어앉는다.
-##
-## 🔴 **모티프 크기에서 파생한다** — 반지름을 상수로 박지 않는 이유: `MOTIF_SIZE_FRAC`을 키우면
-## 문양이 커지는데 선이 제자리면 **다시 선을 가로지른다**(전에 지저분했던 그 상태로 돌아간다).
-## 파생이면 문양이 커질 때 띠도 같이 벌어진다.
-## ⚠ **문양 중심 반경(`BAND_RADII`)은 안 건드린다** — 그건 발사 층 계약이고 저장된 도안·채점 골든이
-## 그 값에 걸려 있다(세79 M1). 이 함수는 **렌더 전용**이라 계약을 스치지 않는다.
-## static·순수 = 헤드리스 관측점(겹침 여부를 관계식으로 잴 수 있다 — 렌더는 못 봐도 이건 잰다).
+## 층 i의 **띠 경계 두 반지름** = `Vector2(안쪽선, 바깥선)`. 문양은 그 사이에 들어앉는다.
+## 🔴 **모티프 크기에서 파생한다** — 반지름을 상수로 박으면 문양을 키울 때 선이 제자리라
+## 다시 모티프를 가로지른다.
+## ⚠ **문양 중심 반경(`BAND_RADII`)은 안 건드린다** — 그건 발사 층 계약이고 저장 도안·채점 골든이
+## 그 값에 걸려 있다. 이 함수는 렌더 전용이라 계약을 안 스친다.
 static func band_lane(band_index: int, ro: float) -> Vector2:
 	var i := clampi(band_index, 0, BAND_RADII.size() - 1)
 	var band_r := ro * float(BAND_RADII[i])
-	# 모티프 반경 = `glyph_ring_subpaths`가 문양 한 장을 그릴 때 쓰는 크기 그대로(사본 아님).
+	# 🔴 `glyph_ring_subpaths`가 문양을 그릴 때 쓰는 크기 식 그대로여야 한다.
 	var half := band_r * MOTIF_SIZE_FRAC + ro * BAND_LANE_PAD
 	return Vector2(maxf(band_r - half, 0.0), band_r + half)
 
 
-## 🔴🔴 층 i의 **안쪽 경계선** 반지름 — 판에 실제로 그리는 선은 이것뿐이다 (세86, 사용자 확정:
-## *"선이 너무 많음"*). 층마다 띠 경계 둘을 다 그렸더니 2층 진에서 원이 **5개**가 됐다.
-##
-## 🔴 경계는 **띠와 띠 사이의 빈 곳**에 놓는다 — 선이 「층을 가르는 칸막이」가 되고, 문양은 어느
-## 선도 안 밟는다. 층 n개 = 선 n개(+진 윤곽) = 2층이면 **3개**.
-##   i == 0 → 중심 룬과 층0 띠 사이 · i > 0 → 층 i-1 띠 바깥과 층 i 띠 안쪽 사이.
-## ⚠ **가장 바깥 경계는 안 그린다** — 진 윤곽이 이미 그 자리의 칸막이다(그리면 선이 도로 는다).
-## static·순수 = 헤드리스 관측점(「선이 문양을 안 밟는다」를 관계식으로 잰다).
+## 층 i의 **안쪽 경계선** 반지름 — 판에 실제로 그리는 선은 이것뿐이다(둘 다 그리면 선이 너무 많다).
+## 🔴 경계는 **띠와 띠 사이의 빈 곳**에 놓는다 — 그래야 선이 칸막이가 되고 문양이 어느 선도 안 밟는다.
+## ⚠ **가장 바깥 경계는 안 그린다** — 진 윤곽이 이미 그 자리의 칸막이다.
 static func band_edge(band_index: int, ro: float) -> float:
 	var i := clampi(band_index, 0, BAND_RADII.size() - 1)
 	var lane := band_lane(i, ro)
@@ -709,11 +562,9 @@ static func band_edge(band_index: int, ro: float) -> float:
 	return (inner_side + lane.x) * 0.5
 
 
-## 밴드 문양-고리를 **이어붙인 한 점열**.
-## ⚠ **호출자가 0곳이다**(세86 실측 — src·tests 통틀어 정의뿐. flat 채점은 `compose_guide`가
-## `compose_guide_paths`를 flatten하므로 이걸 안 거친다). 남길지 걷을지 결정 대기.
-## 🔴 렌더는 위 `glyph_ring_subpaths`를 써라 — 이 concat을 draw_polyline에 바로 넘기면
-## 모티프 끝→다음 모티프 첫 점이 이어져 거미줄이 된다(세81).
+## 밴드 문양-고리를 이어붙인 한 점열. ⚠ **호출자가 0곳이다** — 남길지 걷을지 결정 대기.
+## 🔴 렌더엔 `glyph_ring_subpaths`를 써라 — 이 concat을 draw_polyline에 바로 넘기면
+## 모티프 끝→다음 첫 점이 이어져 거미줄이 된다.
 static func glyph_ring_pts(gr: GlyphRingDef, ctr: Vector2, band_r: float) -> PackedVector2Array:
 	var out := PackedVector2Array()
 	for sub in glyph_ring_subpaths(gr, ctr, band_r):
@@ -721,17 +572,11 @@ static func glyph_ring_pts(gr: GlyphRingDef, ctr: Vector2, band_r: float) -> Pac
 	return out
 
 
-## 🔴 밴드별 (motif × count)를 **층 배열**로 만든다 — 세79 M1 「진별 해석」의 발사 계약.
-## 반환 = `[[8칸], [8칸], …]` (밴드 순서 = 안→밖 = **연산 순서**). 발사부(`ring_spell_system.
-## _deploy_now`)가 이 순서대로 층을 훑으며 전개형은 명령을 만들고 변형형은 안쪽 결과를 감싼다.
-##
-## 🔴 **이게 `flatten_bands`를 대체한다.** 플래튼은 밴드들을 8칸 하나로 뭉개 **순서를 버렸다** —
-## `폭발(확산(불))`과 `확산(폭발(불))`이 구분이 안 됐다(라운드로빈이라 배치만 달랐다).
-## ⚠ 회귀: 밴드가 **하나뿐이면** 층 1개 = 플래튼 결과와 **점 단위로 같다**(둘 다 칸 0부터 count개).
-## 🔴 ⚠ **그 동치는 `band_count = 1`인 진에서만 성립한다** — 세86 실측으로 `data/jin/` 3장 중
-## `jin_single`만 1이고 `jin_plain_g2`·`jin_fuse`는 **2**다(세79 M1·세81 M2에 늘었다).
-## 즉 「저장된 옛 도안의 발사 무회귀」는 **jin_single 도안에 한정된 보장**이다.
-## ⚠ static·인스턴스 상태 금지(관측점) — 헤드리스 테스트가 이 함수를 그물로 쓴다.
+## 🔴 밴드별 (motif × count)를 **층 배열**로 만든다 — 발사 계약.
+## 반환 = `[[8칸], [8칸], …]` (밴드 순서 = 안→밖 = **연산 순서**). 발사부가 이 순서대로 층을 훑는다.
+## 🔴 `flatten_bands`를 쓰지 마라 — 8칸 하나로 뭉개면 순서가 사라져 `폭발(확산)`과 `확산(폭발)`이
+## 구분되지 않는다.
+## ⚠ static·인스턴스 상태 금지 — 헤드리스 테스트가 이 함수를 그물로 쓴다.
 static func layer_rings(band_defs: Array) -> Array:
 	var out: Array = []
 	for gr_v in band_defs:
@@ -740,14 +585,13 @@ static func layer_rings(band_defs: Array) -> Array:
 			ring.append(GLYPH_NONE)
 		var gr: GlyphRingDef = gr_v as GlyphRingDef
 		if gr != null:
-			# 🔴 칸 0부터 count개 — 발산 계열은 **칸 인덱스가 곧 탄 각도**다(세44 계약).
-			# 빈 밴드도 층 자리를 지킨다(순서가 밴드 인덱스라 건너뛰면 감쌈 깊이가 밀린다).
+			# 🔴 칸 0부터 count개 — 발산 계열은 **칸 인덱스가 곧 탄 각도**다.
+			# 빈 밴드도 층 자리를 지킨다(건너뛰면 감쌈 깊이가 밀린다).
 			for i in mini(maxi(gr.count, 1), SLOTS):
 				ring[i] = int(gr.motif)
 		out.append(ring)
-	# 🔴 밴드 0개(진 미선택)여도 **빈 층 하나는 돌려준다** — 옛 `flatten_bands([])`가 `[-1×8]` 한 줄을
-	# 줬기 때문이다. 빈 배열을 주면 `ring_spell_system._on_ring_cast`의 `rings.is_empty()`에서 발사가
-	# 통째로 접혀 **"빈 진도 날아가 몸으로 때린다"**(ring_carrier.gd 계약)가 조용히 깨진다.
+	# 🔴 밴드 0개여도 **빈 층 하나는 돌려준다** — 빈 배열을 주면 발사부가 `rings.is_empty()`에서
+	# 통째로 접혀 「빈 진도 날아가 몸으로 때린다」 계약이 조용히 깨진다.
 	if out.is_empty():
 		var empty: Array = []
 		for k in SLOTS:
@@ -756,40 +600,21 @@ static func layer_rings(band_defs: Array) -> Array:
 	return out
 
 
-## 🔴🔴 **바로 위 `layer_rings`의 역함수** (세98 시전 연출) — 저장된 `rings`(정수 층 배열)에서
-## `band_defs`(GlyphRingDef 배열)를 **재구성**한다. `RingDesign`은 `.tres`에 정수 배열만 저장하고
-## GlyphRingDef 참조를 저장하지 않으므로, 맺어 둔 도안을 **다시 그리려면**(= `compose_guide_paths`에
-## 넘기려면) 재구성 말고 길이 없다. 소비자 = 발밑 바닥 마법진(`src/actors/vfx.gd`) — 「조립한 그림
-## 그대로」를 매핑표 없이 그린다.
+## 🔴🔴 **바로 위 `layer_rings`의 역함수** — 저장된 정수 층 배열에서 `band_defs`를 재구성한다.
+## 도안은 `.tres`에 정수만 저장하므로, 맺어 둔 마법진을 **다시 그리려면** 이 길뿐이다.
+## 🔴 **위 함수와 짝이라 나란히 둔다 — 한쪽만 고치면 조용히 갈라진다.** 정방향 규칙을 여기 베끼지
+## 말고 **왕복으로 재라**(그물 = `tests/test_band_inverse_auto.gd`).
 ##
-## 🔴 **위 함수와 짝이라 나란히 둔다 — 한쪽만 고치면 조용히 갈라진다**(`finish_wave_frac` ↔
-## `finish_t_at_radius`와 같은 규율). 정방향 규칙(*"모티프를 칸 0..count−1에 채운다"*)은 **위 함수가
-## 쥔다** — 여기서 그 규칙을 베끼지 말고 **왕복으로 재라**:
-## 그물 = `tests/test_band_inverse_auto.gd` — `layer_rings(band_defs_of(rings)) == RingDesign.layers_of(rings)`.
-##
-## 🔴 **복원되는 건 `motif`·`count` 둘뿐이다.** `ui_color`·`unlock_id`·`sort`는 정수 배열에 없다 —
-## **합성본의 그 필드를 읽지 마라**(색은 룬이 판다 = `vfx`의 룬 색 경로). ✅ 렌더엔 충분하다:
-## `glyph_ring_subpaths`가 읽는 건 `gr.motif`·`gr.count` 둘뿐이다.
-## ⚠ `id`·`display_name`은 스키마 기본값이 **실존하는 `gr_radiate5`/"발산 고리 ×5"**라, 그냥 두면
-## 합성본이 **진짜 고리인 척한다**(`Db.get_glyph_ring(gr.id)`가 엉뚱한 고리를 준다) → 빈 값으로
-## 지워 「복원 안 됨」이 눈에 보이게 한다. (`ui_color` 기본값도 불색 주황이라 **그럴듯하게** 틀린다.)
-##
-## 🔴 **빈 층(전부 -1) = `null` 밴드**로 돌려준다 — 자리를 **건너뛰지 않는다**. 압축하면 뒤 층의
-## 밴드 인덱스가 밀려 `compose_guide_paths`의 `BAND_RADII[i]`가 어긋난다(바깥 층이 안쪽 반경에 그려진다).
-## ⚠ `rings`가 통째로 비면 `[]`를 준다(진 윤곽·룬만 그린다). 🔴 **그 입력에서만 왕복이 성립 안 한다** —
-## `layer_rings([])`가 발사 계약 때문에 **빈 층 하나를 심기** 때문이다(위 함수 주석). 정방향이 거기서
-## 단사(injective)가 아닌 것이지 역함수가 틀린 게 아니다.
-##
-## ⚠ **알려진 한계(설계 ⓙ) — 세79 이전 도안의 혼합 모티프**: 옛 `flatten_bands` 도안은 **한 겹에
-## 여러 모티프**가 섞여 있는데(예: 발산3+응집3) `GlyphRingDef` 하나는 모티프를 하나만 담는다 →
-## **첫 모티프 + 채워진 칸 수**로 뭉갠다(그 예는 **발산 6개**로 그려진다). 🔴 **발사는 멀쩡하다**
-## (`ring_spell_system`이 `rings`를 직접 읽는다) — **그림만 거짓말한다.** 심각도 낮음(옛 세이브 한정)
-## 이라 그대로 두되, 해소하려면 `GlyphRingDef` 한 장 = 밴드 한 겹이라는 전제부터 깨야 한다.
-## ⚠ static·순수·인스턴스 상태 금지(관측점) — 헤드리스 테스트가 이 함수를 그물로 쓴다.
+## 🔴 **복원되는 건 `motif`·`count` 둘뿐이다** — 나머지 필드를 읽지 마라.
+## ⚠ `id`·`display_name`을 빈 값으로 **지우는 게 계약**이다: 스키마 기본값이 실존하는 고리라
+## 그냥 두면 합성본이 **진짜 고리인 척하고** `Db.get_glyph_ring`이 엉뚱한 걸 돌려준다.
+## 🔴 **빈 층 = `null` 밴드**로 자리를 남긴다 — 압축하면 뒤 층의 `BAND_RADII[i]`가 밀려
+## 바깥 층이 안쪽 반경에 그려진다.
+## ⚠ 알려진 한계: 한 겹에 여러 모티프가 섞인 옛 도안은 **첫 모티프 + 칸 수**로 뭉갠다.
+##   발사는 멀쩡하고(`rings`를 직접 읽는다) **그림만 거짓말한다.**
 static func band_defs_of(rings: Array) -> Array:
 	var out: Array = []
-	# 🔴 층 판별은 **core 단일 소스를 그대로 부른다**(`RingDesign.layers_of`) — 옛 8칸 한 겹도 여기서
-	# 층 1개로 승격된다. 판별식을 여기 복사하면 그 함수 주석이 금지한 갈라짐이 그대로 생긴다.
+	# 🔴 층 판별은 **core 단일 소스를 그대로 부른다** — 판별식을 여기 복사하면 갈라진다.
 	for layer_v in RingDesign.layers_of(rings):
 		var layer: Array = layer_v
 		var motif := GLYPH_NONE
@@ -799,30 +624,23 @@ static func band_defs_of(rings: Array) -> Array:
 			if g == GLYPH_NONE:
 				continue
 			if motif == GLYPH_NONE:
-				motif = g       # 한계 ⓙ — 섞여 있으면 **첫** 모티프가 층 전체를 대표한다
+				motif = g       # 섞여 있으면 **첫** 모티프가 층 전체를 대표한다(위 한계)
 			count += 1
 		if count == 0:
 			out.append(null)    # 빈 층 = 빈 밴드. 🔴 건너뛰면 BAND_RADII 정렬이 밀린다
 			continue
 		var gr := GlyphRingDef.new()
 		gr.motif = motif
-		gr.count = mini(count, SLOTS)   # 8칸 상한(정방향 `layer_rings`가 같은 자리에서 클램프한다)
-		gr.id = &""                     # 🔴 기본값이 실존 id라 그대로 두면 합성본이 진짜인 척한다
+		gr.count = mini(count, SLOTS)   # 정방향이 같은 자리에서 클램프한다
+		gr.id = &""                     # 🔴 지우지 마라 — 기본값이 실존 id다
 		gr.display_name = ""
 		out.append(gr)
 	return out
 
 
-## 🔴 밴드별 (motif × count)를 **기존 8칸 링 하나로 플래튼**한다 (세68 발사 계약 — 발사부 무변경).
-## ⚠ **세79에 발사 경로는 `layer_rings`로 갔다** — 층 순서를 버리기 때문이다.
-## 🔴 **세85 ⑪: 유일한 라이브 호출자였던 F6 대조군(`assembly_slice_panel`)이 은퇴했다** —
-## 이제 src 호출자가 **0**이고, 남은 소비자는 `test_jin_layers_auto[2]`의 회귀 그물 하나뿐이다:
-## 「밴드가 하나뿐이면 층0 == flatten」이 **저장된 옛 도안의 발사가 안 바뀐다**의 증명이라
-## 그 기준자로 살려 둔다. **새 코드에서 부르지 마라**(순서가 조용히 사라진다).
-## 밴드 순서대로 빈 칸을 채우고(band0 먼저), 8칸 상한(넘치면 버림). 빈 칸 = GLYPH_NONE(-1).
-## 예: 발산(1)×3 + 응집(0)×3 → [1,1,1,0,0,0,-1,-1]. 발사부(ring_spell_system)가 이 8칸을
-## 슬롯별로 전개한다(발산→탄·응집→기둥). defs를 아는 자리(패널·테스트)가 부른다 — 순수 데이터
-## RingAssembly는 Db를 몰라 여기 못 둔다. ⚠ static·인스턴스 상태 금지(관측점).
+## 밴드들을 8칸 링 하나로 플래튼한다. 예: 발산×3 + 응집×3 → [1,1,1,0,0,0,-1,-1].
+## 🔴 **새 코드에서 부르지 마라 — 층 순서가 조용히 사라진다.** src 호출자는 0이고, 남은 소비자는
+## 「밴드가 하나뿐이면 층0 == flatten」을 재는 회귀 그물 하나뿐이라 그 기준자로만 살려 둔다.
 static func flatten_bands(band_defs: Array) -> Array:
 	var ring: Array = []
 	for k in SLOTS:
@@ -841,19 +659,15 @@ static func flatten_bands(band_defs: Array) -> Array:
 	return ring
 
 
-## 🔴 **진 종류별 밑그림** (세션 48 — "새 진 = 여기 한 갈래"). `rune_guide_verts`·`glyph_guide_pts`와
-## 같은 규약이다. 세션 44~47엔 진만 이 처리를 못 받아 8종이 **전부 같은 원**이었다.
-##
-## 공통 규율 (사용자 확정: *"진의 궤적은 원처럼 닫힌 도형이어야 함. 그 안에 룬이 들어가야 해서"*):
-##   • 🔴 **반드시 닫힌다** — 마지막 점이 첫 점으로 돌아온다(`_closed`가 그 한 점을 책임진다).
-##     진은 룬을 담는 **그릇**이라 터진 도형은 그릇이 아니다.
-##   • 🔴 **중심을 비워 둔다** — 안에 룬이 들어갈 자리가 남아야 한다. 가장 깊이 파고드는 게
-##     정삼각(내접원 0.5R)이고 룬은 최대 `combined_rune_size(ro, 1)`(= 0.18R)이라 지금은 여유가
-##     있다. 🔴 새 도형은 수치를 베끼지 말고 **그 함수를 불러 실측하고** 넣어라.
-##   • 🔴 **점 밀도를 맞춘다** — 완성도는 "가이드 점 중 몇 %를 드러냈나"라 점 수가 도형마다 크게
-##     다르면 **채점이 도형마다 유불리**를 갖는다. 전부 `GUIDE_CIRCLE_N` 등분(≈73점)에 맞춘다.
-## 🔴 **static · public인 이유**: 책의 진 셀 아이콘(`ring_book.jin_icon_paths`)이 이 함수를 그대로
-## 부른다 — 세션 47 문양과 같은 이유다. **셀에서 본 모양 = 손으로 그을 모양**이 구조적으로 못 갈라진다.
+## 🔴 **진 종류별 밑그림** — 새 진 = 여기 한 갈래.
+## 공통 규율:
+##   • 🔴 **반드시 닫힌다**(`_closed`가 그 한 점을 책임진다) — 진은 룬을 담는 그릇이라 터진 도형은 그릇이 아니다.
+##   • 🔴 **중심을 비워 둔다** — 안에 룬이 앉을 자리가 남아야 한다. 새 도형은 수치를 베끼지 말고
+##     `combined_rune_size`를 불러 실측하고 넣어라.
+##   • 🔴 **점 밀도를 맞춘다**(`GUIDE_CIRCLE_N` 등분) — 완성도가 "점 중 몇 %"라 점 수가 도형마다
+##     다르면 **채점이 도형마다 유불리**를 갖는다.
+## 🔴 **static · public인 이유**: 책의 진 셀 아이콘이 이 함수를 그대로 부른다 —
+## 「셀에서 본 모양 = 손으로 그을 모양」이 구조적으로 못 갈라지게.
 static func jin_guide_pts(shape: int, ctr: Vector2, r: float) -> PackedVector2Array:
 	match shape:
 		Enums.JinShape.TRIANGLE:
@@ -925,16 +739,10 @@ static func _closed(pts: PackedVector2Array) -> PackedVector2Array:
 	return pts
 
 
-## 🔴 진 셀의 8점 칸 다이어그램 (세션60 — 진이 칸을 연다). 칸 k(0=위, 시계방향)마다
-## `{pos: Vector2, open: bool}`을 담아 SLOTS개를 돌려준다 — 책의 진 셀이 그대로 그린다.
-## slots = 이 **도안이 실제로 채운 칸들** = `RingDesign.open`(층들의 합집합 — 생산자는
-## `ring_forge_panel.build_assembly()`. 라이브 호출자 = `hud.gd`·`tab_panel.gd`가 `design.open`을 넘긴다).
-## ⚠ 「진이 칸을 연다」(`JinDef.glyph_slots`) 축은 세85 ⑦에 은퇴했다 — 되살리지 마라.
-## c = 중심 · s = 점을 얹을 원주 반지름.
-## ⚠ 점은 **원주 고정**이다 — 진 윤곽이 삼각·타원이어도 판의 칸은 원 위에 있으니
-## 다이어그램도 원 기준이 맞다(판과 읽는 방식 일치).
-## 🔴 **static · public인 이유**: `jin_guide_pts`·`glyph_guide_pts`와 같은 규약 —
-## `_draw_*` 안에 계산을 두면 헤드리스가 못 잰다(관측점). 인스턴스 상태 금지.
+## 8점 칸 다이어그램 — 칸 k마다 `{pos, open}`을 담아 SLOTS개를 돌려준다.
+## `slots` = 이 도안이 **실제로 채운 칸들**(층들의 합집합). HUD·Tab이 넘긴다.
+## ⚠ 점은 **원주 고정**이다 — 진 윤곽이 삼각·타원이어도 판의 칸은 원 위에 있다.
+## 🔴 static·public = 헤드리스 관측점. 인스턴스 상태 금지.
 static func jin_slot_dots(slots: Array, c: Vector2, s: float) -> Array:
 	var out: Array = []
 	for k in SLOTS:
@@ -945,51 +753,36 @@ static func jin_slot_dots(slots: Array, c: Vector2, s: float) -> Array:
 	return out
 
 
-## 🔴 칸 k의 각도 — **"칸 0=위, 시계방향" 규약의 단일 소스** (세션60 리뷰). 책 다이어그램
-## (`jin_slot_dots`)·HUD 슬롯·Tab 마법진 탭·문양-고리 배치(`glyph_ring_subpaths`)가 이 규약을
-## 공유한다 — 한쪽에 식을 베끼면 규약이 바뀔 때 조용히 어긋난다. 착탄 전개 각도
-## (ring_spell_system의 `TAU*k/8`)와도 같은 회전 방향이다(기준 0이 진행 방향이냐 위냐만 다르다).
+## 🔴 칸 k의 각도 — **"칸 0=위, 시계방향" 규약의 단일 소스.** 책 다이어그램·HUD 슬롯·
+## 문양-고리 배치가 전부 이걸 부른다. 한쪽에 식을 베끼면 규약이 바뀔 때 조용히 어긋난다.
 static func slot_angle(k: int) -> float:
 	return TAU * float(k) / float(SLOTS) - PI / 2.0
 
 
-## 🔴 룬 종류별 밑그림 꼭짓점 (닫힌 다각형, 마지막=처음). 세션 34 — "새 룬 = 여기 한 갈래".
-## 모양은 손으로 구분해 그릴 수 있게 서로 다른 방향/꼭짓점 수를 준다:
-##   불 🔥 소용돌이를 감싼 불꽃(혀 3갈래 + 갈고리 꼬리) · 물 ▽ 아래 꼭짓점(고이는 방향)
-##   바람 ◇ 마름모(사방으로 돈다) · 번개 ⚡ 닫힌 지그재그(꺾임이 많다)
-##   흙 □ 축에 나란한 사각(무겁게 앉는다) · 풀 🍃 잎사귀(뾰족한 위 끝 + 넓은 밑동)
-##
-## 🔴 공통 규율 (세션 49에 3→6종으로 늘리며 명문화 — 진 `jin_guide_pts`와 같은 이유):
-##   • **반드시 닫힌다** — 마지막 점 = 첫 점. 룬은 진 안에 앉는 **하나의 인장**이라 터진 획은 룬이 아니다.
-##   • **서로 다른 손 궤적을 준다** — 색만 다르면 "6지선다"가 된다(memory `takbon-glyph-design-principle`).
-##     그래서 흙(축 나란한 사각)과 바람(45° 돌린 마름모)처럼 **같은 변 수라도 꺾이는 자리가 다르게** 둔다.
-##   • **꼭짓점 수를 3~7에 둔다** — 호출부(`rune_subpath`)가 변마다 12등분하므로 꼭짓점이 많으면
-##     그 룬만 가이드 점이 촘촘해져 **완성도 채점이 룬마다 유불리**를 갖는다.
-##     🔴 **불(FIRE)은 이 상한의 명시 예외다**(세103, 사용자가 레퍼런스를 직접 골랐다). 곡선을
-##     직선 12등분으로 내리려면 꼭짓점을 촘촘히 찍는 수밖에 없어 그 갈래만 수십 개다. 근거 =
-##     유불리를 만드는 **완성도 채점 자체가 세83 `skip_drawing`으로 휴면**이라 지금은 물지 않는다.
-##     ⚠ 채점을 되살리면(`skip_drawing = false`) 이 예외부터 다시 재라 — 불만 가이드가 촘촘하다.
-## 🔴 **static · public인 이유**: 책의 룬 셀 아이콘(`ring_book._draw_rune_icon`)이 이 함수를 그대로
-## 부른다 — 진(`jin_guide_pts`)·문양(`glyph_guide_pts`)과 같은 규약이다. 세션 48까지 책이 같은 모양을
-## **따로 베껴** 갖고 있어, 여기만 고치면 "셀에서 본 모양"과 "손으로 그을 모양"이 갈라질 수 있었다.
+## 🔴 룬 종류별 밑그림 꼭짓점 (닫힌 다각형, 마지막=처음) — 새 룬 = 여기 한 갈래.
+## 공통 규율:
+##   • **반드시 닫힌다** — 룬은 진 안에 앉는 하나의 인장이라 터진 획은 룬이 아니다.
+##   • **서로 다른 손 궤적을 준다** — 색만 다르면 그리기가 N지선다가 된다. 같은 변 수라도
+##     꺾이는 자리를 다르게 둔다(흙=축 나란한 사각 vs 바람=45° 돌린 마름모).
+##   • **꼭짓점 수를 3~7에 둔다** — 호출부가 변마다 12등분하므로 꼭짓점이 많으면 그 룬만
+##     가이드가 촘촘해져 **완성도 채점이 룬마다 유불리**를 갖는다.
+##     🔴 **불은 이 상한의 명시 예외다**(곡선이라 점이 수십 개) — 근거는 그 유불리를 만드는
+##     완성도 채점 자체가 `skip_drawing`으로 휴면이라는 것이다.
+##     ⚠ 채점을 되살리면 이 예외부터 다시 재라.
+## 🔴 **static · public인 이유**: 책의 룬 셀 아이콘이 이 함수를 그대로 부른다 —
+## 모양을 베껴 두면 「셀에서 본 모양」과 「손으로 그을 모양」이 갈라진다.
 static func rune_guide_verts(rune_type: int, ctr: Vector2, s: float) -> PackedVector2Array:
 	match rune_type:
 		Enums.RuneType.FIRE:
-			# 🔴 세103: 불은 더 이상 △가 아니다 — **소용돌이를 감싼 불꽃**이다(사용자가 레퍼런스를
-			# 직접 골랐다: `docs/_refs/rune_fire/ref_fire_symbol.webp`). 혀 3갈래(가운데가 가장 높다)
-			# + 왼쪽 아래로 휜 갈고리 꼬리 + 중심의 소용돌이.
+			# 소용돌이를 감싼 불꽃 — 혀 3갈래 + 왼쪽 아래로 휜 갈고리 꼬리 + 중심의 소용돌이.
 			#
-			# 🔴 **닫힌 한붓이라 소용돌이는 「홈의 두 벽」으로 낸다.** 나선은 위상상 중심이 막다른
-			#   끝이라 되돌아 나오지 않으면 못 닫힌다 — 그래서 안쪽 벽 A가 중심에서 풀려 나와
-			#   꼬리·혀를 한 바퀴 돌고, 바깥 벽 B가 다시 감겨 들어가 중심에서 A와 만난다.
-			# 🔴🔴 **두 벽은 반경이 아니라 `DELTA`(각도)로 어긋난다** — 반경 오프셋으로 두면
-			#   안쪽 입술이 소용돌이 가장자리보다 **안**에 놓여, 거기서 꼬리로 나가는 선이 바깥
-			#   윤곽을 **가로지른다**(1차 시안이 실제로 그렇게 뚫렸다). 각도로 어긋내면 두 입술이
-			#   **둘 다 반경 `RIM`** 위에 앉아 하나는 꼬리로, 하나는 윤곽으로 깔끔히 갈린다.
-			#   홈 폭 = `(RIM - R_END) * DELTA / T`로 **각도와 무관하게 일정**하다.
-			# ⚠ 소용돌이는 **0.85바퀴**고 아래 40%에만 앉는다. 레퍼런스의 2.5바퀴를 그대로 옮기면
-			#   실제 배치 크기(s≈36px)에서 홈·살이 2px 아래로 눌려 **검은 뭉치**가 된다(1차 실측).
-			# ⚠ 꼭짓점이 수십 개인 유일한 룬이다 — 머리말 「3~7」의 명시 예외(근거는 거기 적었다).
+			# 🔴 **닫힌 한붓이라 소용돌이는 「홈의 두 벽」으로 낸다** — 나선은 중심이 막다른 끝이라
+			#   되돌아 나오지 않으면 못 닫힌다. 안쪽 벽 A가 풀려 나와 꼬리·혀를 돌고, 바깥 벽 B가
+			#   다시 감겨 들어가 중심에서 A와 만난다.
+			# 🔴🔴 **두 벽은 반경이 아니라 각도로 어긋난다** — 반경 오프셋으로 두면 안쪽 입술이
+			#   소용돌이 가장자리보다 **안**에 놓여 꼬리로 나가는 선이 바깥 윤곽을 가로지른다.
+			# ⚠ 감는 바퀴 수를 늘리지 마라 — 실제 배치 크기에서 홈·살이 눌려 검은 뭉치가 된다.
+			# ⚠ 꼭짓점이 수십 개인 유일한 룬이다(머리말 「3~7」의 명시 예외).
 			var pts := PackedVector2Array()
 			# 이차 베지어 한 구간. 시작점 `a`는 이미 들어가 있다고 보고 t>0만 낸다(중복 방지).
 			var qc := func(a: Vector2, c: Vector2, b: Vector2, n: int) -> PackedVector2Array:
@@ -1007,8 +800,7 @@ static func rune_guide_verts(rune_type: int, ctr: Vector2, s: float) -> PackedVe
 			var th_b := th_a - 2.60                  # 벽B 입술 = 오른쪽 혀에서 내려앉는 자리
 			var narc := 12
 			# ① 벽A — 홈의 안쪽 벽. 중심에서 각도가 **늘며** 밖으로 풀린다(시작점 = 닫힘점).
-			# ⚠ 감는 향은 레퍼런스와 같게 뒀다(밖 = 각도 증가). 뒤집으면 벽B 입술이 소용돌이
-			#   **오른쪽 위**로 올라붙어 불꽃 아래-오른쪽이 텅 빈다(3차 실측).
+			# ⚠ 감는 향을 뒤집지 마라 — 벽B 입술이 오른쪽 위로 올라붙어 불꽃 아래-오른쪽이 텅 빈다.
 			for i in narc + 1:
 				var t := float(i) / float(narc)
 				pts.append(bc + Vector2.from_angle(th_a - (1.0 - t) * t_span)
@@ -1017,8 +809,8 @@ static func rune_guide_verts(rune_type: int, ctr: Vector2, s: float) -> PackedVe
 			var tail := ctr + Vector2(-s * 0.70, s * 1.22)
 			pts.append_array(qc.call(pts[pts.size() - 1],
 				ctr + Vector2(-s * 0.34, s * 1.00), tail, 5))
-			# ③ 꼬리 바깥선을 타고 올라가 왼쪽 혀 끝으로 (가장 바깥 혀).
-			# ⚠ 이 선과 소용돌이 왼쪽 가장자리 사이가 초승달의 두께다 — 벌리면 「잎사귀」가 된다(2차 실측).
+			# ③ 꼬리 바깥선을 타고 올라가 왼쪽 혀 끝으로.
+			# ⚠ 이 선과 소용돌이 왼쪽 가장자리 사이가 초승달의 두께다 — 벌리면 「잎사귀」가 된다.
 			var mid := ctr + Vector2(-s * 0.80, s * 0.44)
 			var lt := ctr + Vector2(-s * 0.64, -s * 0.76)
 			pts.append_array(qc.call(tail, ctr + Vector2(-s * 0.84, s * 0.94), mid, 5))
@@ -1067,13 +859,13 @@ static func rune_guide_verts(rune_type: int, ctr: Vector2, s: float) -> PackedVe
 				ctr + Vector2(s * 0.8, s * 0.8), ctr + Vector2(-s * 0.8, s * 0.8),
 				ctr + Vector2(-s * 0.8, -s * 0.8)])
 		Enums.RuneType.GRASS:
-			# 잎사귀 — 위로 길게 뽑은 오각. 뾰족한 끝(불 △와 달리 어깨가 벌어져 있다) + 넓은 밑동.
+			# 잎사귀 — 위로 길게 뽑은 오각. 뾰족한 끝 + 넓은 밑동.
 			return PackedVector2Array([
 				ctr + Vector2(0, -s * 1.15), ctr + Vector2(s * 0.72, -s * 0.15),
 				ctr + Vector2(s * 0.45, s * 0.85), ctr + Vector2(-s * 0.45, s * 0.85),
 				ctr + Vector2(-s * 0.72, -s * 0.15), ctr + Vector2(0, -s * 1.15)])
 		_:
-			# 불(FIRE=0) · 모르는 룬 = △. ⚠ 폴백이 크래시가 아니라 삼각형인 게 계약이다.
+			# 모르는 룬 = △. ⚠ 폴백이 크래시가 아니라 삼각형인 게 계약이다(룬이 늘어도 안 죽는다).
 			return PackedVector2Array([
 				ctr + Vector2(0, -s), ctr + Vector2(s * 0.87, s * 0.5),
 				ctr + Vector2(-s * 0.87, s * 0.5), ctr + Vector2(0, -s)])
@@ -1101,8 +893,7 @@ func guide_points() -> PackedVector2Array:
 	return _scorer.guide_points()
 
 
-## 지금 조각의 먹선 **획들**. 획이 따로 보관되는지가 계약이다 (세션 25) — 이어 붙이면
-## 펜을 뗀 구간이 선이 돼 화살표가 삼각형이 된다. 테스트의 관측점.
+## 🔴 획이 **따로** 보관되는 게 계약이다 — 이어 붙이면 펜을 뗀 구간이 선이 돼 화살표가 삼각형이 된다.
 func trace_strokes() -> Array[PackedVector2Array]:
 	return _scorer.strokes()
 
@@ -1110,21 +901,16 @@ func trace_strokes() -> Array[PackedVector2Array]:
 
 # ─────────────────────────── 문지르기 (채점기에 위임) ───────────────────────────
 
-## 🔴 새 획을 시작한다 (마우스 누름) — **앞서 그은 획은 남는다** (세션 25).
-## 세션 24까지 여기서 전부 지웠다. "마음에 들 때까지 다시 그린다"는 의도였지만, 그 의도가
-## **한 조각 = 한 획**을 강제해 화살표(선+화살촉)처럼 획이 여러 개인 모양을 못 그리게 했다
-## (사용자: "획단위로 초기화되서 화살표를 그리가가 어렵네?"). 다시 그리기는 이제 `clear_stroke`다.
+## 🔴 새 획을 시작한다 — **앞서 그은 획은 남는다.** 여기서 지우면 한 조각 = 한 획이 강제돼
+## 화살표처럼 획이 여러 개인 모양을 못 그린다. 다시 그리기는 `clear_stroke`다.
 func begin_stroke() -> void:
 	_scorer.begin_stroke()
 	_stroke_counted = false   # 잉크 정산은 이 획의 최초 유효점에서 한다 (trace_stroke)
 
 
-## 🔴 이 획을 잉크 정산에 넣는다 — **최초 유효점이 찍혔을 때만** 부른다 (세션31 수정, trace_stroke).
-## 예전엔 begin_stroke가 무조건 불러, 가이드에서 먼 **빈 클릭(먹선이 안 남는 클릭)도** 특별잉크를
-## 태우고 분모(_total_strokes)를 키웠다 — 붉은잉크가 눈에 안 보이게 샜다.
-## 특별잉크면 획당 소모하고 비율에 적립한다. 다 떨어졌으면 소모·적립 없이 계속 그린다
-## (기본잉크처럼 — 그만큼 비율=효과가 낮아진다). 기본잉크는 무한이라 소모가 없다.
-## ⚠ **총 획수(_total_strokes)는 유효 획마다 센다** — 비율의 분모다. _trace가 NONE이면 안 센다.
+## 🔴 이 획을 잉크 정산에 넣는다 — **최초 유효점이 찍혔을 때만** 부른다.
+## `begin_stroke`에서 부르면 먹선이 안 남는 **빈 클릭도** 특별잉크를 태워 눈에 안 보이게 샌다.
+## 특별잉크가 바닥이면 소모·적립 없이 계속 그린다(그만큼 비율=효과가 낮아진다).
 func _note_stroke_ink() -> void:
 	if _trace == TraceTarget.NONE:
 		return
@@ -1137,7 +923,7 @@ func _note_stroke_ink() -> void:
 		return   # 기본잉크 = 무한, 소모·적립 없음
 	var per := int(gs.balance.special_ink_per_stroke)
 	if gs.get_count(_ink_id) < per:
-		return   # 특별잉크 바닥 = 소모·적립 없이 진행 (비율만 낮아진다)
+		return   # 바닥 = 소모·적립 없이 진행
 	gs.remove_item(_ink_id, per)
 	_special_strokes += 1
 	_special_ink_used = _ink_id
@@ -1161,8 +947,7 @@ func trace_stroke(local_pos: Vector2) -> void:
 	if not _stroke_counted:
 		_stroke_counted = true
 		_note_stroke_ink()
-	# ⓑ 이 문지름으로 **새로 드러난** 가이드 점 → 반짝임 적립. 채점기는 is_revealed 조회만 —
-	# 가이드 ≤150점이라 유효점마다 훑어도 싸다. 크기가 어긋나면(이론상 없음) 조용히 건너뛴다.
+	# ⓑ 새로 드러난 가이드 점 → 반짝임 적립. 가이드가 작아 유효점마다 훑어도 싸다.
 	var guide := _scorer.guide_points()
 	if _was_revealed.size() == guide.size():
 		var sparked := false
@@ -1179,24 +964,17 @@ func trace_stroke(local_pos: Vector2) -> void:
 
 # ─────────────────────────── 분석 리포트 ───────────────────────────
 
-## ⚠ 세85 ⑨ 은퇴: per-piece 진행의 private 조력자(`_commit_glyph_slot`·`_nearest_open_slot`·
-##   `_lock_current`·`_piece_key`). 공개 짝(`advance`/`finish`/`select_slot`)의 재발은 기계가 지킨다.
-## 🔴 통째 흐름의 대응물 = 패널의 `_on_start_draw` → `_finish` → `_on_inject`이고, 점수는 잠그지
-## 않고 `combined_total()`(현재 획의 통째 점수)을 그때그때 읽는다.
-
-## 마법진 분석 리포트 — 종합 + 등급 (채점기가 계산, 열린 칸은 조립기가 안다).
-## 🔴 **죽은 코드가 아니다** — `get_assembly()`가 `a["score"]`에 쓰고, 그 `get_assembly()`를 라이브
-## `ring_forge_panel.build_assembly()`가 특별잉크 집계 창구로 부른다(감사 「손대지 말 것」 1번).
-## ⚠ per-piece 잠금이 은퇴해 조각별 점수(`_scores`)는 늘 비어 있다 → total 0 = **폐지 전에도 통째
-## 흐름에서 이미 그랬다**(COMBINED는 조각을 안 잠근다). 실제 점수는 패널 `_score_now()`가 쥔다.
+## 마법진 분석 리포트 — 🔴 **죽은 코드가 아니다**: `get_assembly()`가 여기 결과를 `score`에 싣고,
+## 그 `get_assembly()`를 패널이 특별잉크 집계 창구로 부른다.
+## ⚠ 조각 잠금이 은퇴해 조각별 점수는 늘 비어 total 0이다 — 실제 점수는 패널 `_score_now()`가 쥔다.
 func get_analysis() -> Dictionary:
 	return _scorer.get_analysis(_asm.get_open())
 
 
 # ─────────────────────────── 데이터 주입 (Db → 보드) ───────────────────────────
 
-## 진·룬·문양 정의를 주입한다 (색·이름을 여기서 읽는다). 슬롯은 여전히 int code로 저장 —
-## 발사 계약(assembly의 정수)은 그대로다. defs 없으면 아래 색 헬퍼가 const로 폴백한다.
+## 진·룬·문양 정의를 주입한다. 슬롯은 여전히 int code로 저장한다 — 발사 계약은 정수 그대로다.
+## defs 없으면 아래 색 헬퍼가 const로 폴백한다.
 func set_defs(jin: JinDef, runes: Array, glyph_defs: Array) -> void:
 	_jin_def = jin
 	_rune_defs.clear()
@@ -1212,27 +990,21 @@ func set_defs(jin: JinDef, runes: Array, glyph_defs: Array) -> void:
 	queue_redraw()
 
 
-## ⚠ 세85 ⑨ 은퇴: `_jin_color()`/`_rune_color()` — **잠근 조각 먹선의 종류색**을 내던 자리다.
-## 진·룬 색의 라이브 소비자는 책 셀(`ring_book`)이고 거기는 자기 `set_defs`로 받는다.
-
 func _glyph_def_by_code(code: int) -> GlyphDef:
 	for d in _glyph_defs:
 		if d.code == code:
 			return d
 	return null
 
-## 🔴 세82: 색의 **정본은 `GlyphDef.ui_color`**다(옛 `GLYPH_COLORS` 배열 은퇴).
-## 보드는 오토로드를 안 보므로 패널이 주입한 `_glyph_defs`에서 읽는다
-## (패널의 `_inject_defs`가 `_board.set_defs`로 넣는다).
-## ⚠ defs 주입 **전**(부팅 직후·일부 테스트)엔 defs가 비어 있다 — 그땐 중립 먹선으로 떨어진다.
-## 옛 배열 폴백을 되살리지 마라: 그게 `clampi`와 만나 **8을 7로 눌러 응축을 폭발색으로** 그리던 자리다.
+## 🔴 색의 정본은 `GlyphDef.ui_color`다 — 보드는 오토로드를 안 보므로 주입된 defs에서 읽는다.
+## ⚠ defs 주입 전엔 중립 먹선으로 떨어진다. 🔴 색 배열 폴백을 되살리지 마라 —
+## 그게 `clampi`와 만나 어휘 밖 코드를 눌러 **엉뚱한 문양 색**으로 그리던 자리다.
 func _glyph_color(code: int) -> Color:
 	var d := _glyph_def_by_code(code)
 	return d.ui_color if d else RING_LINE
 
 
-## 🔴 **헤드리스 관측점** (세82) — 문양 색의 정본이 `.tres`인지 재는 자리. 테스트가 `_glyph_defs`
-## 같은 private을 더듬으면 리팩터 때 **조용히 죽는다**(세22·23에 실제로 두 번 겪었다).
+## 🔴 **헤드리스 관측점** — 테스트가 `_glyph_defs` 같은 private을 더듬으면 리팩터 때 조용히 죽는다.
 func glyph_color_of(code: int) -> Color:
 	return _glyph_color(code)
 
@@ -1241,44 +1013,34 @@ func glyph_color_of(code: int) -> Color:
 
 # ─────────────────────────── 바깥이 주입하는 선택 ───────────────────────────
 
-## 🔴 **여기 남은 건 주입뿐이다 — 선택을 판이 쥐지 않는다** (세85 ⑨에 옛 선택 API 8종이 은퇴했고,
-## 이름이 돌아오면 `test_ring_assembly_auto`의 은퇴 목록이 빨개진다):
-##   • 진·룬 선택의 정본은 **패널**이다 — `_sel_jin`·`_sel_runes` → `recompose()` →
-##     `enter_combined_trace`. **판은 점열만 받는다.**
-##   • 문양은 낱개로 안 고른다 — 조립 단위가 **문양-고리**(`GlyphRingDef` = motif × count)이고
-##     책이 밴드에 끼운다. 요약은 패널 `_compose_summary()`가 Db에서 직접 읽는다.
-##   • 「진이 칸을 연다」축(`JinDef.glyph_slots`)은 세85 ⑦에 은퇴했다.
-## ⚠ 옛 `_glyph_name()`도 같이 나갔다(유일 소비자가 `ring_summary()`였다) — 이름의 정본은
-##   `GlyphDef.display_name`이다.
+## 🔴 **여기 남은 건 주입뿐이다 — 선택을 판이 쥐지 않는다.**
+##   • 진·룬 선택의 정본은 **패널**이고 판은 점열만 받는다.
+##   • 문양은 낱개로 안 고른다 — 조립 단위가 **문양-고리**(motif × count)이고 책이 밴드에 끼운다.
+## 선택 API를 판에 되살리면 `test_ring_assembly_auto`의 은퇴 목록이 빨개진다.
 
-## 지금 긋는 획의 색 = 고른 잉크 색 (세션28). 패널이 잉크를 고를 때마다 부른다.
+## 지금 긋는 획의 색 = 고른 잉크 색. 패널이 잉크를 고를 때마다 부른다.
 func set_trace_ink(c: Color) -> void:
 	_trace_ink = c
 	queue_redraw()
 
 
-## 🔴 고른 잉크 id (세션29) — get_assembly가 실어 발사·저장에 등급 배수를 태운다.
-## ⚠ clear_all은 이걸 안 지운다 — 잉크는 판 기하가 아니라 **지속되는 선택**이다
-## (색도 그대로 남는다). 새로 그려도 골라 둔 잉크가 유지된다.
+## 고른 잉크 id — `get_assembly`가 실어 발사·저장에 등급 배수를 태운다.
+## ⚠ `clear_all`은 이걸 안 지운다 — 잉크는 판 기하가 아니라 **지속되는 선택**이다.
 func set_ink(id: StringName) -> void:
 	_ink_id = id
 
 
-## 🔴 진 확대 상한 (세션29, 종이=규모) — 종이 등급이 정한다.
-## ⚠ **종이 축은 세71d에 은퇴했다** — 패널이 진 규모를 1.0으로 굳혀(`_size_mult`) 이 함수의 src
-## 호출자는 0이다. `get_assembly()["size"]`가 아직 이 값을 싣기에 남겨 뒀다(스키마 계약).
-## 🔴 세85 ⑨: 옛 본문의 「밑그림 다시 세우기」 한 줄은 per-piece 가이드 생성기(`_set_trace`)를
-## 부르던 것이라 같이 걷었다 — 통째 밑그림의 크기는 패널이 `recompose()`로 정한다.
+## 진 확대 상한. ⚠ 종이 축이 은퇴해 src 호출자는 0이다 —
+## `get_assembly()["size"]`가 아직 이 값을 싣기에 스키마 계약으로만 남겼다.
 func set_jin_scale_max(v: float) -> void:
 	_jin_scale_max = maxf(v, JIN_SCALE_MIN)
 	_jin_scale = minf(_jin_scale, _jin_scale_max)
 	queue_redraw()
 
 
-## 🔴 판을 비운다 — 조립 상태·채점·연출 타이머를 처음으로 돌린다.
-## ⚠ 여기서 가이드를 **다시 세우지 않는다**(세85 ⑨): 합성 밑그림의 소유자는 패널이고, 라이브
-## `open()`·`clear_board()`가 이 호출 **직후 `recompose()`**로 COMBINED를 다시 넣는다.
-## 예전엔 `_refresh_trace()`가 per-piece 진 가이드를 세워 그 사이에 잠깐 다른 가이드가 서 있었다.
+## 판을 비운다 — 조립 상태·채점·연출 타이머를 처음으로 돌린다.
+## ⚠ 여기서 가이드를 **다시 세우지 않는다** — 합성 밑그림의 소유자는 패널이고,
+## 호출자가 이 직후 `recompose()`로 다시 넣는다.
 func clear_all() -> void:
 	_asm.clear()
 	_scorer.clear()
@@ -1287,12 +1049,11 @@ func clear_all() -> void:
 	_combined_band_count = 0
 	_combined_runes = []
 	_jin_scale = 1.0
-	_reset_reveal_fx()                   # ⓑ 반짝임도 — 명시가 계약이다
-	# ⑭ 완성 연출도 멈춘다 — 판을 비웠는데(펑·[다시]) 옛 마법진의 금빛이 계속 도는 건 거짓말이다.
+	_reset_reveal_fx()
+	# 판을 비웠는데 옛 마법진의 금빛이 계속 도는 건 거짓말이다.
 	_finish_t = -1.0
 	_finish_radii = PackedFloat32Array()
-	# 🔴 잉크 소모·비율은 새 진마다 리셋 (세션29). ⚠ _ink_id·_jin_scale_max(종이 상한)은 **안** 지운다 —
-	# 잉크·종이 선택은 지속된다(다시 그려도 유지). 여기서 지우는 건 "이번 진에 얼마나 썼나"뿐.
+	# 🔴 여기서 지우는 건 "이번 진에 얼마나 썼나"뿐이다 — `_ink_id`·상한은 지속되는 선택이라 안 지운다.
 	_special_ink_used = &""
 	_special_strokes = 0
 	_total_strokes = 0
@@ -1300,10 +1061,7 @@ func clear_all() -> void:
 
 
 # ─────────────────────────── 기하 ───────────────────────────
-## ⚠ 세85 ⑨ 은퇴: per-piece 판 기하(`_jin_radius`·`_rune_size`·`_glyph_scale_of`·`_ring_radius`·
-##   `_slot_angle`·`_slot_pos`). 통째 밑그림의 좌표는 `compose_guide_paths`(static)가 쥔다.
-## 🔴 static `slot_angle`은 **살아 있다** — HUD·Tab 미니 다이어그램이 「칸 0=위, 시계방향」 규약의
-##   단일 소스로 부른다. 내리지 마라.
+## 통째 밑그림의 좌표는 static `compose_guide_paths`가 쥔다.
 
 func _area_center() -> Vector2:
 	return size * 0.5
@@ -1313,26 +1071,22 @@ func _outer_radius() -> float:
 
 
 # ─────────────────────────── 입력 (손으로 숨은 선 문지르기) ───────────────────────────
-## 🔴 좌클릭 드래그로 가이드를 문지르면 먹선이 남는다. 우클릭 = 다시 그리기.
-## ⚠ 확정은 판이 안 한다 — 패널의 `_finish()`가 리포트를 낸다. 🔴 점수는 `combined_total()`을
-##   직접 읽는 게 아니라 **패널 `_score_now()` 한 곳**을 거친다(폐지 모드에선 부품 점수가 나온다).
-## ⚠ 세85 ⑨ 은퇴: 문양 칸 고르기·휠 크기 조절(`_resize_current`) — 통째 밑그림은 칸이 없고
-##   크기는 패널이 정한다. 그래서 하단 안내(`HINT_DRAW`)에도 휠이 없다(없는 조작을 적지 마라).
+## 좌클릭 드래그 = 문지르기 · 우클릭 = 다시 그리기.
+## ⚠ 확정은 판이 안 한다 — 패널이 리포트를 낸다. 🔴 점수도 패널 `_score_now()` 한 곳을 거친다.
 
 func _gui_input(event: InputEvent) -> void:
 	var mb := event as InputEventMouseButton
 	if mb != null and mb.button_index == MOUSE_BUTTON_LEFT:
 		if mb.pressed:
 			_drawing = true
-			begin_stroke()                # 펜을 댔다 = 새 획 (앞 획은 남는다 — 세션 25)
+			begin_stroke()                # 펜을 댔다 = 새 획 (앞 획은 남는다)
 			trace_stroke(mb.position)
 		else:
 			_drawing = false
-			stroke_ended.emit()           # 🔴 획 끝 — 패널이 미뤄 둔 잉크 팔레트 재빌드를 여기서 흘린다
+			stroke_ended.emit()           # 🔴 패널이 미뤄 둔 잉크 팔레트 재빌드를 여기서 흘린다
 		accept_event()
 		return
-	# 🔴 우클릭 = **다시 그리기** (세션 25). 획 누적으로 바뀌면서 "지우고 처음부터"가 갈 곳이
-	# 없어졌다 — 예전엔 좌클릭이 그 역할을 겸했다(그래서 여러 획을 못 그렸다).
+	# 우클릭 = **다시 그리기** — 획이 누적되므로 "지우고 처음부터"는 따로 있어야 한다.
 	if mb != null and mb.pressed and mb.button_index == MOUSE_BUTTON_RIGHT:
 		clear_stroke()
 		accept_event()
@@ -1350,10 +1104,8 @@ func play_cast() -> void:
 	set_process(true)
 
 
-## 🔴 세86 ⑭ **「마법진 완성」 훅** — 패널 `_finish()`가 부르는 공개 진입점.
-## ⚠ 부르는 자리를 늘리지 마라: 「완성」의 정의는 패널의 `_finish()` **하나**다(그리기 모드는
-## [분석 ▶], 폐지 모드는 [마법진 완성 ✦]이 같은 함수로 모인다). 여기서 상태를 안 건드리므로
-## 도중에 다시 불려도 연출만 처음부터 다시 돈다.
+## 「마법진 완성」 훅 — 패널이 부르는 공개 진입점.
+## ⚠ 부르는 자리를 늘리지 마라 — 「완성」의 정의는 패널의 `_finish()` 하나다.
 func play_finish() -> void:
 	_finish_t = 0.0
 	_finish_radii = _subpath_radii(_area_center(), _outer_radius())
@@ -1361,15 +1113,14 @@ func play_finish() -> void:
 	queue_redraw()
 
 
-## 🔴 ⑭ 완성 연출 진행도 — **헤드리스 관측점**(-1 = 안 돎, 0~1 = 도는 중).
-## 연출 자체(빛·색·타이밍)는 헤드리스가 못 보지만 **훅이 실제로 불렸나**는 이 값으로 잰다 —
-## 15세션 동안 벌어진 일이 정확히 「훅이 조용히 안 불린다」였다.
+## 🔴 완성 연출 진행도 — **헤드리스 관측점**. 빛·색은 못 봐도 「훅이 실제로 불렸나」는 이걸로 잰다
+## (조용히 안 불리는 게 이 연출의 실패 방식이다).
 func finish_progress() -> float:
 	return _finish_t
 
 
-## ⑭ 각 서브패스의 정규 반지름 — 중심에서의 평균 거리 ÷ 바깥 반지름. 룬(≈0) → 층(0.42·0.68) →
-## 진 윤곽(≈1) 순서가 그대로 나온다 = 파도가 훑는 순서가 곧 연산 순서다.
+## 각 서브패스의 정규 반지름 — 룬(≈0) → 층 → 진 윤곽(≈1) 순서가 그대로 나온다
+## = 파도가 훑는 순서가 곧 연산 순서다.
 func _subpath_radii(ctr: Vector2, ro: float) -> PackedFloat32Array:
 	var out := PackedFloat32Array()
 	var inv := 1.0 / maxf(ro, 1.0)
@@ -1382,22 +1133,20 @@ func _subpath_radii(ctr: Vector2, ro: float) -> PackedFloat32Array:
 	return out
 
 
-## ⑭ 파도의 정규 반지름 (0=중심 → 1=바깥). `FINISH_SWEEP_T`에 바깥에 닿고 그 뒤엔 1에 머문다.
-## ease-out이라 안쪽(룬·1층)이 빠르게 지나가고 바깥(진 윤곽)에서 느려진다 — 마지막이 클라이맥스.
-## static·순수 = 헤드리스 관측점(아래 `finish_t_at_radius`가 이 식의 역함수다 — 둘이 갈라지면
-## 룬 팝이 파도와 어긋난 시점에 튄다).
+## 파도의 정규 반지름 (0=중심 → 1=바깥). ease-out이라 안쪽이 빠르고 바깥에서 느려진다.
+## 🔴 아래 `finish_t_at_radius`가 이 식의 **역함수**다 — 한쪽만 고치면 룬 팝이 파도와 어긋난다.
 static func finish_wave_frac(t: float) -> float:
 	var u := clampf(t / FINISH_SWEEP_T, 0.0, 1.0)
 	return 1.0 - (1.0 - u) * (1.0 - u)
 
 
-## ⑭ 파도가 정규 반지름 r에 닿는 시점 — `finish_wave_frac`의 역함수(u = 1 − √(1−r)).
+## 파도가 정규 반지름 r에 닿는 시점 — 🔴 위 `finish_wave_frac`의 역함수다(짝으로 고쳐라).
 static func finish_t_at_radius(r_frac: float) -> float:
 	return (1.0 - sqrt(1.0 - clampf(r_frac, 0.0, 1.0))) * FINISH_SWEEP_T
 
 
-## ⑭ 정규 반지름 r인 조각이 지금 얼마나 밝나 (0~1). 파도가 **지나가기 전엔 0**(아직 제 차례가
-## 아니다 = 순서가 눈에 보이는 자리), 지난 직후가 가장 밝고, 그 뒤엔 은은한 꼬리로 남는다.
+## 정규 반지름 r인 조각이 지금 얼마나 밝나 (0~1).
+## 🔴 파도가 **지나가기 전엔 0**이다 — "아직 제 차례가 아니다"가 순서를 눈에 보이게 하는 자리다.
 static func finish_glow_at(r_frac: float, t: float) -> float:
 	if t < 0.0:
 		return 0.0
@@ -1410,7 +1159,7 @@ static func finish_glow_at(r_frac: float, t: float) -> float:
 
 func _process(delta: float) -> void:
 	var busy := false
-	# ⑭ 완성 연출 — 수명이 다하면 스스로 꺼진다(순수 오버레이라 끝나도 남는 상태가 없다).
+	# 완성 연출 — 수명이 다하면 스스로 꺼진다(순수 오버레이라 끝나도 남는 상태가 없다).
 	if _finish_t >= 0.0:
 		_finish_t += delta / FINISH_DUR
 		if _finish_t >= 1.0:
@@ -1449,38 +1198,29 @@ func _draw() -> void:
 		draw_arc(ctr, maxf(_cast_t * (ro * 1.12), 1.0), 0.0, TAU, 64,
 			Color(FIRE_HI, 0.5), 3.0, true)
 
-	# ⚠ 세85 ⑨ 은퇴: 잠근 조각 먹선 렌더(`_draw_locked`)와 per-piece 구조 힌트 — 전제가 「조각을
-	# 하나씩 잠근다」라 통째 흐름에선 **한 번도 안 그려졌다**(라이브에 낀 죽은 갈래, 감사 #25).
-
-	# 🔴 세71c COMBINED 빈 층/룬 자리 가이드. band_count만큼 흐린 동심원(빈 층도 늘 보여
-	# "여기가 1층" 구조가 읽힌다) + 룬 미선택 자리 마커.
-	# subpaths가 없으면(빈 진·1인자 호출) 건너뛴다 — band_count=0이라 아무것도 안 그린다.
+	# 빈 층 동심원(빈 층도 늘 보여 "여기가 1층" 구조가 읽힌다) + 룬 미선택 자리 마커.
 	if _trace == TraceTarget.COMBINED and not _combined_subpaths.is_empty():
-		# 🔴 세81 우회로 DRAW에선 꺼진다(사연·미결 = `BAND_LANE_PAD` 주석 한 곳).
-		# 룬 미선택 마커는 조립 안내라 그 스위치와 무관하게 계속 둔다.
+		# ⚠ DRAW에선 꺼진다(사연·미결 = `BAND_LANE_PAD` 주석). 룬 마커는 조립 안내라 늘 둔다.
 		if _combined_show_bands:
-			# 🔴 세86: 선은 **층을 가르는 칸막이 하나씩**뿐이다(사용자 확정 *"선이 너무 많음"*).
-			# 좌표는 `band_edge` 정본이 준다(여기서 반지름을 계산하면 그게 곧 사본이다).
+			# 🔴 선은 **층을 가르는 칸막이 하나씩**뿐이다. 좌표는 `band_edge` 정본이 준다 —
+			# 여기서 반지름을 계산하면 그게 곧 사본이다.
 			for bi in _combined_band_count:
 				draw_arc(ctr, band_edge(bi, ro), 0.0, TAU, 48,
 					BAND_GUIDE_COLOR, BAND_GUIDE_WIDTH, true)
-		# 🔴 세84 #22 룬 미선택 자리 마커 — **상태(`_combined_runes`)로** 자리마다 그린다.
-		# 좌표·크기는 `empty_rune_slot_marks`가 정본(`rune_slot_positions`·`combined_rune_size`)에서 뽑는다.
+		# 🔴 미선택 마커는 **상태로** 그린다 — 좌표·크기는 `empty_rune_slot_marks`가 정본에서 뽑는다.
 		if not _combined_runes.is_empty():
 			for m: Dictionary in empty_rune_slot_marks(_combined_runes, ctr, ro):
 				draw_arc(m["at"], float(m["r"]), 0.0, TAU, 24, RUNE_SLOT_COLOR, RUNE_SLOT_WIDTH, true)
-		# ⚠ 하위 호환 폴백 = 룬 목록을 **안 넘긴** 호출자용. 서브패스 개수 유추라 세81 이후 밴드 모티프
-		# 수에 오염된다(위 상태 경로가 정본) — 이 갈래에 남는 건 「자리가 하나」인 진에서만 옳다.
-		# 🔴 융합진을 띄우는 호출자(`ring_forge_panel.recompose`)가 `runes`를 넘기면 이 갈래를 안 탄다.
-		# 넘기기 전까지는 융합진 마커가 옛 버그 그대로다 — 걷어야 하는 폴백이지 목표 상태가 아니다.
+		# ⚠ 룬 목록을 안 넘긴 호출자용 폴백 — 서브패스 **개수 유추**라 밴드 모티프 수에 오염된다.
+		# 자리가 하나인 진에서만 옳다. 걷어야 할 폴백이지 목표 상태가 아니다.
 		elif _combined_subpaths.size() <= _combined_band_count + 1:
 			draw_arc(ctr, combined_rune_size(ro, 1), 0.0, TAU, 24, RUNE_SLOT_COLOR, RUNE_SLOT_WIDTH, true)
 
 	# 🔴 지금 그리는 조각 — 숨은 정답 선(연하게) + 드러난 점(주황) + **그린 먹선 그대로**
 	var guide := _scorer.guide_points()
 	if _trace != TraceTarget.NONE and guide.size() >= 2:
-		# 🔴 세71c 이음선 제거 — COMBINED에서 서브패스가 있으면 조각마다 별도 폴리라인(진 끝→룬 첫 점을
-		# 잇는 연결선이 안 생긴다). 없으면(옛 1인자 호출·per-piece) flat 한 줄 그대로. 드러난 점·먹선은 불변.
+		# 🔴 서브패스가 있으면 조각마다 별도 폴리라인으로 긋는다 — 한 줄로 이으면
+		# 진 끝→룬 첫 점을 잇는 이음선이 생긴다.
 		if _trace == TraceTarget.COMBINED and not _combined_subpaths.is_empty():
 			for sub_v in _combined_subpaths:
 				var sub := sub_v as PackedVector2Array
@@ -1517,21 +1257,17 @@ func _draw() -> void:
 		draw_circle(spos, lerpf(SPARK_R0, SPARK_R1, st),
 			Color(SPARK_COLOR, (1.0 - st) * SPARK_ALPHA))
 
-	# ⚠ 세85 ⑨ 은퇴: ⓒ 착지 펄스·ⓓ 완성 발광 — 트리거가 per-piece 잠금이라 안 떴다.
-	# ✅ **세86 ⑭에 그 자리를 공개 훅 `play_finish()`(패널 `_finish()`가 부른다)로 새로 채웠다.**
 	if _finish_t >= 0.0:
 		_draw_finish(ctr, ro)
 
 
-## 🔴 세86 ⑭ 「마법진 완성」 렌더 — **순수 오버레이**(가이드·먹선 위에 얹기만 한다. 지우거나
-## 가리지 않아 리포트로 넘어간 뒤에도 판이 그대로 읽힌다).
-## 순서: ① 조각이 안→밖으로 차례로 빛나고 ② 파도 고리가 그 경계를 보여 주고 ③ 룬 자리가 팝 하고
-## ④ 마지막에 바깥 테두리가 한 번 번쩍한다(= 다 맺혔다).
+## 「마법진 완성」 렌더 — **순수 오버레이**(가이드·먹선 위에 얹기만 하고 가리지 않는다).
+## 순서: ① 조각이 안→밖으로 차례로 빛나고 ② 파도 고리가 경계를 보여 주고 ③ 룬 자리가 팝 하고
+## ④ 마지막에 바깥 테두리가 한 번 번쩍한다.
 func _draw_finish(ctr: Vector2, ro: float) -> void:
 	var t := _finish_t
 	var wave := finish_wave_frac(t)
-	# ① 조각(룬 → 층 → 진 윤곽)이 파도에 닿는 순간 밝아진다 = **안에서 밖 = 연산 순서**(M1).
-	# ⚠ `_combined_subpaths`가 없으면(빈 진) 아무것도 안 그린다 — 완성 자체가 불가한 상태다.
+	# ① 조각이 파도에 닿는 순간 밝아진다 = **안에서 밖 = 연산 순서**.
 	for i in _combined_subpaths.size():
 		if i >= _finish_radii.size():
 			break
@@ -1547,9 +1283,8 @@ func _draw_finish(ctr: Vector2, ro: float) -> void:
 	if wave < 1.0 and wave * ro > 1.0:
 		draw_arc(ctr, wave * ro, 0.0, TAU, 64,
 			Color(FINISH_GOLD, FINISH_SWEEP_ALPHA * (1.0 - wave)), 2.0, true)
-	# ③ 룬 자리 팝 — 파도가 그 자리를 지나는 순간 고리 하나가 튄다(융합진이면 자리마다).
-	# 🔴 좌표·크기는 `rune_slot_positions`·`combined_rune_size` **정본**을 그대로 부른다 —
-	# 각도를 베끼면 팝이 실제 룬에서 어긋난 자리에 뜬다(세48·세83이 밟은 그 함정).
+	# ③ 룬 자리 팝 — 파도가 그 자리를 지나는 순간 고리 하나가 튄다.
+	# 🔴 좌표·크기는 정본 함수를 그대로 부른다 — 각도를 베끼면 팝이 실제 룬에서 어긋난 자리에 뜬다.
 	var rn := maxi(_combined_runes.size(), 1)
 	var rsz := combined_rune_size(ro, rn)
 	for p: Vector2 in rune_slot_positions(rn, ctr, ro):

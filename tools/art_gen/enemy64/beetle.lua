@@ -8,7 +8,6 @@ local B = dofile(DIR .. "blob.lua")
 local SIDE, N = 64, 4
 
 -- 갑각 램프: 중간은 청회색, 어두운 쪽은 보라 (곤충 갑각의 무지갯빛)
--- 1회차가 회색이라 「돌」로 읽혔다 — 밝은 대역을 좁히고 어두운 쪽을 보라로 끌어내린다
 local RAMP = {"c7cfcc","a8b5b2","819796","577277","4e5259","402751","1e1d39","10141f","090a14"}
 local THR  = {1.18, 1.03, 0.885, 0.735, 0.575, 0.40, 0.215, 0.04}
 local OLC  = { up = "402751", side = "1e1d39", down = "10141f" }
@@ -30,7 +29,6 @@ local function has(ox,x,y)
 end
 local function putIn(ox,x,y,c) if has(ox,x,y) then put(ox,x,y,c) end end
 
--- 굵은 선 (다리·더듬이)
 local function thick(ox, x0, y0, x1, y1, w, col, edge)
   local dx, dy = x1-x0, y1-y0
   local n = math.max(math.abs(dx), math.abs(dy))
@@ -58,7 +56,7 @@ local LEG_B = {
   { 17, 35,  10,  6,   4,  7 },
   { 14, 45,  12,  2,   1,  9 },
 }
--- 프레임별 좌/우 위상 (A/B). 묵직한 것이라 두 자세만 오간다 — 보간 없음(진단 ⑥)
+-- 프레임별 좌/우 위상 (A/B). 묵직한 것이라 두 자세만 오간다 — 보간 없음.
 local PHASE = { {"A","B"}, {"B","A"}, {"A","B"}, {"B","A"} }
 local BOB   = { 0, 1, 0, 1 }
 local ANT   = { {-3,-2}, {-2,-4}, {-4,-1}, {-2,-3} }
@@ -91,7 +89,6 @@ for f = 1, N do
   put(ox, cx+16-an[1], 6+an[2], "8b5fbf"); put(ox, cx+17-an[1], 6+an[2], "7a367b")
 
   -- ── 머리 + 큰턱 ─────────────────────────────────────────────────
-  -- 🔴 1회차 머리는 「대머리 공」이었다 — 큰턱 둘 + 겹눈 둘을 가진 넓적한 갑충 머리로 다시 그렸다.
   local HEAD = L.legend({ d="1e1d39", m="402751", l="577277", h="819796", k="10141f",
                           e="090a14", R="752438", r="a53030", g="cf573c", p="7a367b" })
   local HEAD_MAP = {
@@ -196,7 +193,6 @@ for f = 1, N do
     putIn(ox, p[1]+1, p[2]+1, "241527"); putIn(ox, p[1]-1, p[2], "241527")
   end
   for _, p in ipairs(pts) do
-    -- 🔴 「빛나는 고리」가 아니라 「갈라진 자리」다 — 대부분 탁한 황토, 몇 픽셀만 밝다
     local col = "c9962e"
     if p[3] > 40 and p[3] < 150 then col = "884b2b" elseif p[3] > 218 and p[3] < 284 then col = "de9e41" end
     putIn(ox, p[1], p[2], col)

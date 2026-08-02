@@ -1,6 +1,5 @@
 -- 안개 정령 — 64x64 x 4프레임.
--- 🔴 1회차는 구체 음영기를 그대로 썼더니 「다리 달린 돌덩이」가 됐다. 안개는 테두리가 있으면 안 된다.
---    행별 좌/우 폭 표(손으로 쓴 값)로 두건 쓴 형체를 잡고, 검은 외곽선 없이 명도로만 가장자리를 만든다.
+-- 🔴 안개는 테두리가 있으면 안 된다 — 행별 좌/우 폭 표(손으로 쓴 값)로 두건 쓴 형체를 잡고, 검은 외곽선 없이 명도로만 가장자리를 만든다.
 local DIR = "C:/Users/djgnf/Desktop/godot_games/tockbon/tools/art_gen/enemy64/"
 local OUT = "C:/Users/djgnf/Desktop/godot_games/tockbon/assets/sprites/enemies/"
 local L = dofile(DIR .. "lib.lua")
@@ -108,8 +107,7 @@ for f = 1, N do
       if i >= 7 and i <= 21 and math.abs(x) < 11 then lam = lam - 0.32 end  -- 두건 속 그늘
       if i > 40 then lam = lam - (i-40)*0.05 end                            -- 밑단이 풀린다
       local px = cx + x + lean
-      -- 🔴 가장자리는 검은 선이 아니라 명도로만. 그늘 쪽을 +2 하면 1px 검은 띠가 생겨
-      --    「그림자 스티커」가 된다(2회차 결함) — +1 하고 중간 회색에서 멈춘다.
+      -- 🔴 가장자리는 검은 선이 아니라 명도로만 — 그늘 쪽을 +2 하면 1px 검은 띠(「그림자 스티커」)가 생긴다.
       local step = math.min(shadeStep(lam), 6)   -- 몸 안쪽은 중간 회색에서 멈춘다
       if x == -lw then step = math.max(1, step - 1)
       elseif x == rw then step = math.min(8, step + 2) end   -- 가장 바깥 한 줄만 더 내려간다
@@ -130,7 +128,7 @@ for f = 1, N do
     end
   end
 
-  -- 밑단 정리: 이웃이 둘 미만인 픽셀은 지운다 (자글자글한 1px 노이즈 금지 — ART_SPEC §3-5)
+  -- 밑단 정리: 이웃이 둘 미만인 픽셀은 지운다 (자글자글한 1px 노이즈 금지)
   local kill = {}
   for y = 0, SIDE-1 do
     for x = 0, SIDE-1 do

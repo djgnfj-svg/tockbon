@@ -1,21 +1,17 @@
 extends Control
-## 정제대 — 재료를 **특별잉크·종이**로 바꾼다 (세션29 경제 E3). 베이스 [E]로 연다.
-##
-## 🔴 왜 필요했나: 세션27~28에 드롭이 쌓이고 창고에서 보이는데 **쓸 데가 없었다**(가공이 빈 칸).
-## 여기가 재료의 소비처다 — 잉크재료→특별잉크·종이재료→종이. 그린 마법이 세지는 첫 고리.
+## 정제대 — 재료를 **특별잉크·종이**로 바꾼다. 재료의 소비처이고, 마법이 세지는 첫 고리다.
 ##
 ## 🔴 **레시피는 데이터**(Db.all_recipes / RecipeDef) · **소비·지급은 GameState**(spend·add_item).
 ## 이 패널은 나열·버튼만 — 새 레시피 = data/recipes/*.tres 한 장이면 여기에 저절로 뜬다.
 ##
-## 🔴 **모달** — 열리면 GameState.ui_modal_open을 켠다(창고 I·발사와 겹침 방지, inventory_panel과 같은
-## 패턴). ESC로 닫는다. CanvasLayer 위에 산다(카메라 추적 무관 — HUD·창고와 같은 이유).
-##
-## 계약: open() / closed 시그널. base.gd가 InteractZone(zone_id=refine)에서 연다.
+## 🔴 **모달** — 열리면 GameState.ui_modal_open을 켠다(창고 I·발사와 겹침 방지). ESC로 닫는다.
+## CanvasLayer 위에 산다(카메라 추적 무관).
+## 계약: open() / closed 시그널. ⏳ 지금은 마을에서 이걸 여는 [E]가 없다(패널·레시피는 살아 있다).
 
 signal closed
 
-## 🔴 재료 진행 한 칸(`이름 보유/필요`) = core 단일 소스 (세88). `workshop_panel`도 같은 파일을
-## 부른다 — 사본을 만들면 인자 순서가 다시 갈라진다(아래 `_inputs_text` 주석에 그 사고 기록이 있다).
+## 🔴 재료 진행 한 칸(`이름 보유/필요`) = core 단일 소스. `workshop_panel`도 같은 파일을 부른다 —
+## 사본을 만들면 인자 순서가 다시 갈라진다(`_inputs_text` 주석 참조).
 const ItemText := preload("res://src/core/item_text.gd")
 
 const PANEL_SIZE := Vector2(520.0, 440.0)
@@ -86,10 +82,9 @@ func _on_draw() -> void:
 func _refresh() -> void:
 	for c in _list.get_children():
 		c.queue_free()
-	# 🔴 정제대 레시피(잉크)만 — 공방(장비) 레시피는 station=&"craft"라 여기 안 뜬다 (세션32).
-	# 🔴 세71d 종이 축 은퇴: 종이(kind==PAPER) 결과 레시피(craft_paper_mid/high)는 목록에서 숨긴다 —
-	# size가 1.0 고정이라 효과 없는 종이를 mat_vine 써서 만드는 dead affordance다. 레시피 .tres·
-	# 아이템은 삭제하지 않고 **필터로만 숨긴다**(휴면 — 종이 축을 되살리면 이 필터만 빼면 된다).
+	# 🔴 정제대 레시피(잉크)만 — 공방(장비) 레시피는 station=&"craft"라 여기 안 뜬다.
+	# 🔴 종이 축은 은퇴했다 — size가 1.0 고정이라 재료를 태워 효과 없는 종이를 만드는 dead affordance다.
+	# .tres·아이템은 안 지우고 **필터로만 숨긴다**(되살리려면 이 필터만 빼면 된다).
 	var recipes: Array = []
 	for r: RecipeDef in Db.recipes_for_station(&"refine"):
 		var out := Db.get_item(r.output_id)
@@ -146,8 +141,8 @@ func _make_row(r: RecipeDef) -> Control:
 	return row
 
 
-## 🔴 제작 — 재료를 창고에서 빼고 결과를 넣는다. spend가 can_afford를 확인하므로 이중 클릭도 안전.
-## resources_changed가 팔레트·창고·이 패널을 전부 다시 그리게 한다 (add/remove가 이미 emit한다).
+## 🔴 제작 — spend가 can_afford를 확인하므로 이중 클릭도 안전이고, resources_changed가 팔레트·창고·
+## 이 패널을 전부 다시 그리게 한다(add/remove가 이미 emit한다).
 func _craft(recipe_id: StringName) -> void:
 	var r := Db.get_recipe(recipe_id)
 	if r == null:
@@ -158,10 +153,9 @@ func _craft(recipe_id: StringName) -> void:
 
 
 ## "재생 덩굴 줄기 2/5, …" — 재료마다 **보유/필요**. 소비자(GameState.spend)가 먹는 형식과 같은 dict.
-## 🔴 한 칸의 형식은 `ItemText.count_text`(core) 단일 소스다 — 세88 전까지 여기와 `workshop_panel`이
-## **글자까지 같은 사본**을 각자 들고 있었고 **둘 다 인자가 거꾸로**였다(주석은 "보유/필요"라 선언하는데
-## 코드가 `[name, need, have]`라 3개 갖고 5개 필요면 "5/3"으로 찍혔다 — 진행 막대 관례와 반대).
-## 공방만 고치면 여기가 계속 거꾸로 남는다 = 감사 T5. **여기서 다시 조립하지 마라.**
+## 🔴 한 칸의 형식은 `ItemText.count_text`(core) 단일 소스다 — 여기와 `workshop_panel`이 글자까지
+## 같은 사본을 들고 있었고 **둘 다 인자가 거꾸로**였다(3개 갖고 5개 필요면 "5/3"). 한쪽만 고치면
+## 다른 쪽이 계속 거꾸로 남는다. **여기서 다시 조립하지 마라.**
 func _inputs_text(r: RecipeDef) -> String:
 	var parts: Array[String] = []
 	for id: StringName in r.inputs:

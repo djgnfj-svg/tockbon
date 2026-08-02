@@ -1,26 +1,20 @@
 extends Control
-## 공방 — 재료를 **조립 부품·장비**로 만들고(제작), 만든 장비를 **착용/해제**한다
-## (세션32 장비 제작 · 세88에 조립 부품 제작이 붙었다).
-## 베이스 공방 지점 [E]로 연다. 정제대(잉크·종이)와 형제지만 다루는 물건이 달라 별도 벤치다.
+## 공방 — 재료를 **조립 부품·장비**로 만들고(제작), 만든 장비를 **착용/해제**한다.
+## 정제대(잉크·종이)와 형제지만 다루는 물건이 달라 별도 벤치다. 레시피는 `station`으로 갈린다
+## (공방 &"craft" · 정제대 &"refine").
 ##
-## 🔴 **레시피가 두 종류다** (세88 사냥 흐름 §4 — 이게 그 설계의 본줄이다):
-##   ⓐ **장비** = `output_id`가 있어 창고에 아이템이 들어온다 (옛 9장)
+## 🔴 **레시피가 두 종류다** — 이게 이 패널의 본줄이다:
+##   ⓐ **장비** = `output_id`가 있어 창고에 아이템이 들어온다
 ##   ⓑ **조립 부품**(고리·진·룬) = `output_id`가 **비었고** `reward_unlock`으로 **codex를 해금**한다.
 ##      고리·룬·진은 `ItemDef`가 아니라 codex 키라 창고에 넣을 물건이 아니다.
 ## 사냥의 종착지가 「새로 조립할 것」이라 부품 구역을 위에 둔다.
 ##
-## 🔴 왜 별도인가: 사용자 확정("별도 공방 스테이션"). 정제대는 소모품(잉크·종이), 공방은 장비.
-## 레시피는 `station`으로 갈린다 — 공방은 &"craft"만, 정제대는 &"refine"만 (Db.recipes_for_station).
-##
 ## 🔴 왜 장착을 여기 두나: 창고(I) 패널은 `_draw` 전용이라 버튼을 못 단다. 장비를 손에 넣는 곳과
-## 몸에 맞추는 곳을 한 벤치로 묶는다(몬헌식). `equip_gear`/`unequip_gear`가 이미 창고 차감·반환·
-## 상한 클램프까지 쥐고 있어(GameState) — 이 패널은 나열·버튼뿐이다.
+## 몸에 맞추는 곳을 한 벤치로 묶는다. 창고 차감·반환·상한 클램프는 이미 GameState가 쥔다.
 ##
-## 🔴 **모달** — refine_panel과 같은 규약: 열리면 GameState.ui_modal_open을 켜 발사·이동·창고와
-## 겹치지 않게 하고, mouse_filter=STOP으로 좌클릭을 통째로 먹는다. ESC로 닫고 closed를 쏜다.
-## CanvasLayer(base.gd가 씌운다) 위에 산다 — 카메라 추적 무관.
-##
-## 계약: open() / closed 시그널. base.gd가 InteractZone(zone_id=craft)에서 연다.
+## 🔴 **모달** — 열리면 GameState.ui_modal_open을 켜 발사·이동·창고와 겹치지 않게 하고,
+## mouse_filter=STOP으로 좌클릭을 통째로 먹는다. ESC로 닫고 closed를 쏜다.
+## 계약: open() / closed 시그널. 책(`ring_forge_panel`)의 [⚒ 부품 제작]이 base.gd를 통해 연다.
 
 signal closed
 
@@ -34,13 +28,12 @@ const EQUIPPED_COLOR := Color(0.98, 0.86, 0.52)
 const ROW_BG := Color(0.17, 0.15, 0.12, 0.95)
 const EQUIPPED_ROW_BG := Color(0.20, 0.18, 0.11, 0.98)
 
-## 🔴 장비 효과 문구·발사 패턴 라벨 = core 단일 소스 (세84 감사 #21 — 옛 사본 셋을 합쳤다).
-## `tab_panel`(src/hud)도 같은 파일을 부른다 — **`src/hud`에 두면 모듈 경계 위반**이라 core다
-## (`grade_colors.gd` 선례). 문구를 고치면 공방·개인 시트가 같이 따라온다.
+## 🔴 장비 효과 문구·발사 패턴 라벨 = core 단일 소스. `tab_panel`(src/hud)도 같은 파일을 부른다 —
+## **`src/hud`에 두면 모듈 경계 위반**이라 core다. 문구를 고치면 공방·개인 시트가 같이 따라온다.
 const ItemText := preload("res://src/core/item_text.gd")
 
-## 🔴 codex 해금 id → 「이름(어디에 쓰는 물건인지)」 = core 단일 소스 (세88). 발신처가 셋이라
-## (보스 클리어 · 여기 · 두루마리 픽업) 각자 조립하면 그게 감사 T5의 재발이다.
+## 🔴 codex 해금 id → 「이름(어디에 쓰는 물건인지)」 = core 단일 소스. 발신처가 셋이라(보스 클리어 ·
+## 여기 · 두루마리 픽업) 각자 조립하면 문구가 갈린다.
 ## 🔴 룬은 진 **중심**, 고리는 **밴드**, 진은 **바탕** — 자리를 틀리게 가르치면 거짓 지시가 된다.
 const CodexText := preload("res://src/core/codex_text.gd")
 
@@ -57,8 +50,8 @@ const EQUIP_KINDS: Array = [
 @onready var _list: VBoxContainer = $Center/Panel/Margin/VBox/Scroll/List
 
 ## 방금 무엇을 만들었나 — 패널 아랫변 한 줄. 🔴 **HUD가 아니라 여기**인 이유: 모달이 화면을 덮고
-## 있어 뒤 HUD 토스트가 안 보이고, `src/base`가 `src/hud`를 직접 무는 건 모듈 경계 위반이다
-## (takbon-rules §0). 해금 사실 자체는 `codex_unlocked`가 나르므로 이 줄은 순수 표시다.
+## 있어 뒤 HUD 토스트가 안 보이고, `src/base`가 `src/hud`를 직접 무는 건 모듈 경계 위반이다.
+## 해금 사실 자체는 `codex_unlocked`가 나르므로 이 줄은 순수 표시다.
 var _notice: Label
 
 
@@ -131,11 +124,8 @@ func _on_draw() -> void:
 
 
 ## 세 구역을 다시 짓는다 — ① 조립 부품 제작 ② 장비 제작 ③ 장착(착용 중 + 보유 장비).
-## 보유·착용·해금이 바뀌면(제작·장착·해제) resources_changed/equipment_changed/codex_unlocked가
-## 여길 다시 부른다.
-##
-## 🔴 **구역을 가르는 축은 `reward_unlock`이다** — 옛 한 구역에 17줄을 쌓으면 새로 뜬 부품 8줄이
-## 펜·지팡이 사이에 묻힌다(부품이 이 설계의 본줄인데 눈에 안 든다).
+## 🔴 **구역을 가르는 축은 `reward_unlock`이다** — 한 구역에 다 쌓으면 부품 줄이 펜·지팡이 사이에
+## 묻힌다(부품이 이 패널의 본줄인데 눈에 안 든다).
 func _refresh() -> void:
 	for c in _list.get_children():
 		c.queue_free()
@@ -170,12 +160,11 @@ func _refresh() -> void:
 
 # ─────────────────────────── 제작 ───────────────────────────
 
-## 🔴 표시 순서는 **패널이 정한다** — `Db.recipes_for_station`이 순서를 못 준다. 주석이 「id 오름차순」
-## 이라 적고 있지만 `StringName` 배열의 `sort()`는 사전순이 아니라 인터닝 순이라 **부팅마다 목록
-## 순서가 바뀐다**(세88 실측: 같은 데이터로 두 번 돌려 첫 줄이 달랐다). 17줄 목록에서 그건 그냥 버그다.
+## 🔴 표시 순서는 **패널이 정한다** — `StringName` 배열의 `sort()`는 사전순이 아니라 인터닝 순이라
+## **부팅마다 목록 순서가 바뀐다**(같은 데이터로 두 번 돌려 첫 줄이 달랐다).
 ##
-## 부품은 **아직 못 배운 것 → 닢 값 싼 것** 순 — 「다음에 닿을 것」이 맨 위에 온다(설계 §7 F:
-## 재료 진행 숫자가 곧 목표 표시다). 배운 것은 아래로 내려 잠긴 행이 목록 머리를 안 막는다.
+## 부품은 **아직 못 배운 것 → 닢 값 싼 것** 순 — 「다음에 닿을 것」이 맨 위에 온다. 배운 것은 아래로
+## 내려 잠긴 행이 목록 머리를 안 막는다.
 func _part_less(a: RecipeDef, b: RecipeDef) -> bool:
 	var la := _learned(a)
 	var lb := _learned(b)
@@ -199,13 +188,10 @@ func _learned(r: RecipeDef) -> bool:
 
 
 ## 한 레시피 행 = [제목 + 재료(보유/필요)] ……… [제작]. 재료 부족이면 버튼 비활성.
-## refine_panel과 같은 규약 — 소비·지급은 GameState.spend/add_item이 쥔다.
-##
-## 🔴 **제목은 `display_name` 우선**(세88 §4-C-b ②) — 해금 레시피는 `output_id`가 비어 있어
-## 옛 `_item_name(output_id)` 하나로는 **" ×0"**만 찍힌다. 세88 전까지 `RecipeDef.display_name`을
-## 읽는 코드가 프로젝트에 **한 곳도 없었다**(선언만 있는 죽은 필드 = 감사 T3).
-## 🔴 **이미 배운 부품은 잠근다**(③) — 안 그러면 재료·닢을 태우고 아무것도 안 받는다. 그 자리엔
-## 재료 진행 대신 **어디에 쓰는 물건인지**를 적는다(`CodexText`).
+## 🔴 **제목은 `display_name` 우선** — 해금 레시피는 `output_id`가 비어 있어 `_item_name(output_id)`
+## 하나로는 **" ×0"**만 찍힌다.
+## 🔴 **이미 배운 부품은 잠근다** — 안 그러면 재료·닢을 태우고 아무것도 안 받는다. 그 자리엔 재료
+## 진행 대신 **어디에 쓰는 물건인지**를 적는다.
 func _make_recipe_row(r: RecipeDef) -> Control:
 	var learned := _learned(r)
 	var afford := GameState.can_afford(r.inputs)
@@ -249,14 +235,14 @@ func _learned_text(unlock_id: StringName) -> String:
 	return "이미 배웠다 · %s" % hint
 
 
-## 🔴 제작 — 재료를 창고에서 빼고 **결과를 준다**. 결과가 두 종류다(세88 §4-C-b ①):
+## 🔴 제작 — 재료를 창고에서 빼고 **결과를 준다**. 결과가 두 종류다:
 ##   ⓐ `output_id`가 있으면 창고 아이템 · ⓑ `reward_unlock`이 있으면 **codex 해금**.
 ## 🔴 `output_id`가 비었는데 `add_item`을 부르면 **id=""인 유령 아이템이 창고에 쌓이고 세이브에
-## 영구화된다** — 그래서 조건이 붙었다(세88 전까지 조건 없이 불렀다).
+## 영구화된다** — 그래서 조건이 붙었다.
 ## 🔴 해금은 `codex_unlocked` **한 발**로 끝난다 — codex 심기 + 해금음 + UNLOCK 퀘스트 진행 +
-## 자동 저장이 전부 따라온다(세37 station_* 선례). `GameState.codex`를 직접 쓰지 마라.
-## spend가 can_afford를 확인하므로 이중 클릭도 안전 — 단 **이미 배운 해금은 재료만 태우므로**
-## 그 앞에서 먼저 막는다(버튼도 잠겨 있지만 여기가 진짜 관문이다).
+## 자동 저장이 전부 따라온다. `GameState.codex`를 직접 쓰지 마라.
+## spend가 can_afford를 확인하므로 이중 클릭도 안전 — 단 **이미 배운 해금은 재료만 태우므로** 그
+## 앞에서 먼저 막는다(버튼도 잠겨 있지만 여기가 진짜 관문이다).
 func _craft(recipe_id: StringName) -> void:
 	var r := Db.get_recipe(recipe_id)
 	if r == null:
@@ -414,8 +400,7 @@ func _hint_label(text: String) -> Label:
 	return lbl
 
 
-## 🔴 장비 효과 문구·발사 패턴 라벨은 **여기 없다** — `ItemText`(core) 단일 소스다(세84 #21).
-## 옛 `_effect_text`/`_wand_pattern_text` 사본은 은퇴했다(`tab_panel`에 같은 사본이 있었다).
+## 🔴 장비 효과 문구·발사 패턴 라벨은 **여기 없다** — `ItemText`(core) 단일 소스다.
 
 
 ## 제작 성공 한 줄 — 부품이면 `CodexText`가 「이름(어디에 쓰는지)」을, 장비면 **받은 물건**을 적는다.
@@ -428,11 +413,10 @@ func _made_text(r: RecipeDef) -> String:
 
 
 ## "수액 슬라임 핵 3/5, 닢 12/30" — 재료마다 **보유/필요**. 소비자(GameState.spend)가 먹는 형식과 같은 dict.
-## 🔴 한 칸의 형식은 `ItemText.count_text`(core) 단일 소스다 — 세88 전까지 공방·정제대가 **글자까지 같은
-## 사본**을 각자 들고 있었고 **둘 다 인자가 거꾸로**였다(3개 갖고 5개 필요면 "5/3"으로 찍혔다).
-## 한쪽만 고치면 다른 쪽이 계속 거꾸로 남는다 = 감사 T5. **여기서 다시 조립하지 마라.**
-## ⚠ 순서는 `.tres`의 dict 순서를 그대로 따른다 — 새 레시피 8장은 **닢을 맨 끝에** 적어 뒀다
-## (재료를 먼저 읽고 값을 마지막에 보는 게 자연스럽다).
+## 🔴 한 칸의 형식은 `ItemText.count_text`(core) 단일 소스다 — 공방·정제대가 글자까지 같은 사본을
+## 들고 있었고 **둘 다 인자가 거꾸로**였다(3개 갖고 5개 필요면 "5/3"). 한쪽만 고치면 다른 쪽이
+## 계속 거꾸로 남는다. **여기서 다시 조립하지 마라.**
+## ⚠ 순서는 `.tres`의 dict 순서를 그대로 따른다 — 부품 레시피는 **닢을 맨 끝에** 적어 뒀다.
 func _inputs_text(r: RecipeDef) -> String:
 	var parts: Array[String] = []
 	for id: StringName in r.inputs:

@@ -21,11 +21,9 @@ extends SceneTree
 const SFX_DIR := "res://assets/audio/sfx/"
 ## 🔴 **이 배열은 자동으로 안 는다 — 새 wav를 넣으면 여기 손으로 더해라**(그게 이 그물의 계약이다).
 ## ⚠ 그리고 **여기만 늘리면 「파일이 있다」까지만 잰다** — `match`에 줄이 빠져도 초록이다.
-##   새 소리는 **반드시 ④(`_test_events_reach_correct_sound`)에도 한 줄**을 더해라. 세104에 실제로
-##   그 갈림이 지적돼서 BOLT·EARTH·GRASS는 양쪽에 다 넣었다.
-## 🔴🔴 **세112: `growl`·`howl`은 「소비자 0」인 고아 자산이다** — 인지(짖음)가 은퇴하며
-##   재생하던 유일한 자리(`forest_enemy._play_percept_sfx`)가 사라졌다. 🔴 **파일은 일부러 남겼다**
-##   (`room_loop_design` §6-1) — 여기 두 줄과 ⑤가 **`Audio.stream_of` 대출구 계약**을 계속 재는데,
+##   새 소리는 **반드시 ④(`_test_events_reach_correct_sound`)에도 한 줄**을 더해라.
+## 🔴🔴 `growl`·`howl`은 「소비자 0」인 고아 자산이다 — 재생하던 유일한 자리가 은퇴했다.
+##   🔴 **파일은 일부러 남겼다** — 여기 두 줄과 ⑤가 **`Audio.stream_of` 대출구 계약**을 계속 재고,
 ##   그 문(위치 있는 소리를 빌려 가는 길)은 다음에 위치 SFX를 붙일 때 그대로 쓰인다.
 ##   ⚠ 이 둘은 EventBus로 안 나서 ④에 넣을 자리가 없다 — 그래서 ⑤가 따로 있다.
 const IDS := [
@@ -92,7 +90,7 @@ func _test_autoload_present() -> void:
 	_check(_audio != null, "Audio 오토로드가 /root/Audio에 있다")
 
 
-# ── ② 17개 SFX 로드 ──────────────────────────────────────────
+# ── ② SFX 전량 로드 ──────────────────────────────────────────
 func _test_all_sfx_load() -> void:
 	for id in IDS:
 		var path: String = SFX_DIR + id + ".wav"
@@ -132,7 +130,7 @@ func _test_events_reach_correct_sound() -> void:
 	_check(_played("hit_water"), "enemy_hit(물) → hit_water")
 	_clear(); _bus.enemy_hit.emit(null, 10.0, R_WIND)
 	_check(_played("hit_wind"), "enemy_hit(바람) → hit_wind")
-	# 세104 `C2` — 룬 6종이 전부 전용 음을 갖는다. 🔴 **이 셋이 「match에 줄이 실제로 있나」의
+	# 룬 6종이 전부 전용 음을 갖는다. 🔴 **이 셋이 「match에 줄이 실제로 있나」의
 	# 유일한 검출자다** — IDS(②)는 파일 존재만 재서 배선이 빠져도 초록이다.
 	_clear(); _bus.enemy_hit.emit(null, 10.0, R_BOLT)
 	_check(_played("hit_bolt"), "enemy_hit(번개) → hit_bolt")
@@ -152,14 +150,14 @@ func _test_events_reach_correct_sound() -> void:
 	_clear(); _bus.phase_changed.emit(1)  # DAY = 조용
 	_check(not _any_played(), "phase DAY → 조용 (소리 없음)")
 
-	# 아픔음 (세63 이관): `player_hurt`(damage_player만 발신)가 유일 트리거 — 옛 "hp 직전값
-	# 비교로 감소 추측"은 은퇴했다. 회복·출격 만HP는 player_hurt 자체가 안 실리므로 오발이 없다.
+	# 아픔음: `player_hurt`(damage_player만 발신)가 유일 트리거 — 옛 "hp 직전값 비교로 감소
+	# 추측"은 은퇴했다. 회복·출격 만HP는 player_hurt 자체가 안 실리므로 오발이 없다.
 	_clear(); _bus.player_hurt.emit(10.0, Vector2(INF, INF))
 	_check(_played("hurt"), "player_hurt → hurt")
 	_clear(); _bus.player_hp_changed.emit(100.0, 100.0)  # hp 변화만(회복 계열) → 조용
 	_check(not _any_played(), "hp 변화만 → 조용 (아픔음은 player_hurt만 듣는다)")
 
-	# 해금 (부작용 없음 — id는 임의 프로브 키, 세61에 rune_water .tres 은퇴로 개명)
+	# 해금 (부작용 없음 — id는 임의 프로브 키)
 	_clear(); _bus.codex_unlocked.emit(&"__probe_unlock")
 	_check(_played("unlock"), "codex_unlocked → unlock")
 
@@ -168,25 +166,21 @@ func _test_events_reach_correct_sound() -> void:
 	_check(_played("equip"), "equipment_changed → equip")
 
 
-# ── ⑤ 위치 있는 소리의 스트림 대출구 (세105 몬스터 인지) ──────────────
-## 🔴 **왜 ④가 아니라 별도 갈래인가**: `growl`·`howl`은 EventBus로 안 난다 — 방 반대편 짐승이
-## 코앞처럼 들리면 통보가 아니라 잡음이라, **몸이 `AudioStreamPlayer2D`로 직접 재생**하고 스트림만
-## `Audio`에서 빌리는 길이었다. ④는 「시그널 → 풀」을 재므로 이 경로를 못 본다.
-## ⚠ **세112에 그 재생자가 인지와 함께 죽었다** — 지금 남은 것은 **대출구(`stream_of`) 계약**이고,
-##  다음에 위치 있는 소리를 붙이는 쪽이 그대로 쓴다(위 `IDS` 머리말).
-##
+# ── ⑤ 위치 있는 소리의 스트림 대출구 ──────────────
+## 🔴 **왜 ④가 아니라 별도 갈래인가**: `growl`·`howl`은 EventBus로 안 난다 — 몸이
+## `AudioStreamPlayer2D`로 직접 재생하고 스트림만 `Audio`에서 빌리는 길이라, 「시그널 → 풀」을
+## 재는 ④는 이 경로를 못 본다. 지금 남은 것은 **대출구(`stream_of`) 계약**이다.
 ## 🔴🔴 **가장 중요한 계약은 「캐시가 한 벌인가」다.** `stream_of`가 `_stream`을 안 지나고 제 손으로
 ## `load()`를 부르도록 「정리」되면 — 없는 id 경고 1회 규약이 죽고 캐시 관리가 두 벌이 된다.
 ##
-## 🔴🔴 **그런데 그건 런타임 값으로 못 잰다 — 세105에 뮤테이션으로 실증했다.**
+## 🔴🔴 **그런데 그건 런타임 값으로 못 잰다 — 뮤테이션으로 실증했다.**
 ## `stream_of`를 `return load(path)`로 바꿔 놓고 돌렸더니 **전 항목 그린이었다**(검출 0).
 ## 이유: **Godot의 `load()` 자체가 리소스 캐시를 지나** 어느 길로 가든 **같은 인스턴스**를 준다.
-## ⇒ 「인스턴스가 같다」는 우회해도 참이라 **자명 통과**다. 세86 *"「결과 값이 같다」는
-## 「같은 길로 왔다」가 아니다"*가 그대로 재현된 자리다.
-## ⚠ **그 검사를 「있으니 됐다」고 남겨 두면 그물이 있다는 착각만 준다** — 그래서 걷어냈다.
+## ⇒ 「인스턴스가 같다」는 우회해도 참이라 **자명 통과**다 — 「결과 값이 같다」는 「같은 길로
+## 왔다」가 아니다. ⚠ 그 검사를 「있으니 됐다」고 남겨 두면 그물이 있다는 착각만 준다.
 ##
 ## 🔴 **실패 형태가 늘 「소스에서 그 호출이 빠진다」라서 소스로 잰다**(선례 = `test_scene_contract_auto`가
-## `mouse_filter`를 `.tscn` 프로퍼티로 잡는 것 · `test_ui_text_auto`의 사본 재발 스캔).
+## `mouse_filter`를 `.tscn` 프로퍼티로 잡는 것).
 func _test_stream_of_public_accessor() -> void:
 	_check(_audio.has_method("stream_of"), "Audio.stream_of() 공개 접근자가 있다")
 	if not _audio.has_method("stream_of"):

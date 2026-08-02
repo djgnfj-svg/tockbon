@@ -1,31 +1,10 @@
 extends SceneTree
-## 손맛 개편 자동 검증 (세63 — 히트 플래시 셰이더·피격 프레임·그림자·먼지·카메라) — 헤드리스 실행:
+## 손맛 개편 자동 검증 (히트 플래시 셰이더·피격 프레임·그림자·먼지·카메라) — 헤드리스 실행:
 ##   ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_feel_auto.gd
 ## 전 항목 통과 시 "TEST_FEEL_OK" 출력 후 종료 코드 0.
 ##
-## [1] damage_player → player_hurt 정확히 1회·인자 일치 / heal_player → 0회 (발신 단일 소스 계약)
-##     + 🔴 사망 가드: 죽는 일격까지 발신·hp 0 뒤 무발신·reset 무발신 (사망 연출 스팸 방지, 세63 리뷰)
-## [2] 적 2마리 중 한 마리만 take_hit → material이 **다른 인스턴스** + 안 맞은 쪽 flash_amount 0
-##     (🔴 Material 리소스 공유 = 한 마리 플래시가 전원 플래시 함정)
-## [3] 텔레그래프(snake_boss 러시 윈드업) → telegraph_amount > 0 **그리고** modulate 불가침
-##     (세63 소유권 계약: modulate = rgb 상태 틴트 · a 분산 2축만)
-## [4] params.hurt_sprite 있는 적(in-memory EnemyDef 주입 — 세61 Db 주입 선례) → "hurt" 애니·
-##     loop=false / 없는 적(hound) → "hurt" 없음(기존 무변경 하위호환 계약)
-## [5] snake_boss·gale params에 hurt_sprite 키 존재 + 경로 load 성공 (🔴 세50 .tres 침묵사 그물)
-##     ⚠ 아트(takbon-art) 도착 + 리드 --import 전엔 load 항목이 빨갛다 — 예상된 빨강.
-## [6] 적 _ready 후 그림자 1개·z_index ≥ 0·그룹 무가입·첫 자식(트리 순서 = 몸 아래) /
-##     뱀 마디 그림자 수 == segment_count() (🔴 음수 z = Ground 뒤로 숨는 세54 함정 그물)
-## [7] dust: 구르기 상승 엣지 → 버스트 정확히 ROLL_BURST_COUNT발(1회만) · 퍼프 그룹 무가입 ·
-##     걷기 첫 프레임 즉시 1발
-## [8] juice: ring_cast_requested(aim=+x) → offset.x < 0(조준 반대 반동) · 킥 소진 후 ZERO 복귀 ·
-##     player_hurt(가해자 +x) → offset.x < 0(맞은 방향 반대 킥)
-## [9] player 피격 애니: player_hurt → sprite.animation이 hurt_*로 유지(🔴 _face_mouse가 매 프레임
-##     덮는 걸 가드가 막는다) · HURT_ANIM_SEC 소진 뒤 프레임에서 걷기/idle 계열로 자연 복귀
-## [10] 허수아비 플래시 파리티 — 연습장 dummy도 셰이더 플래시·per-instance·modulate 불가침
-##      (🔴 세56 「두 몸은 그물도 두 개」 — 적 쪽 그물[2]는 이 몸의 회귀를 못 잡는다)
-##
-## 🔴 렌더(플래시가 실제로 하얗게 보이나·그림자/먼지 겉보기·마디 z 동률·hurt 프레임 홀드 길이)는
-## 헤드리스가 못 본다 — 실게임 MCP 스샷 + 사용자 F5가 별도 확인(설계 §G 하단 표).
+## 🔴 렌더(플래시가 실제로 하얗게 보이나·그림자/먼지 겉보기·hurt 프레임 홀드 길이)는
+## 헤드리스가 못 본다 — 실게임 스샷 + 사용자 F5가 별도 확인.
 ##
 ## 주의: -s 모드는 오토로드 전역 등록보다 먼저 컴파일되므로 오토로드 식별자·모듈 preload 금지 —
 ## 첫 프레임 후 load()·/root 접근. 지역 변수는 의도적으로 동적 타입.
@@ -86,7 +65,7 @@ func _test_player_hurt_signal() -> void:
 		_check(got[0]["src"] == Vector2(3.0, 4.0), "source_pos 일치")
 	_gs.heal_player(hp_before - _gs.hp)  # 원상복구 겸 회복 무발신 확인
 	_check(got.size() == 1, "heal_player → player_hurt 0회 (누적 %d)" % got.size())
-	# 🔴 사망 가드 (세63 리뷰) — 죽는 마지막 일격까지는 발신, 그 뒤 시체 때리기는 무발신
+	# 🔴 사망 가드 — 죽는 마지막 일격까지는 발신, 그 뒤 시체 때리기는 무발신
 	# (사망 연출 0.9초 동안 접촉 피해가 아픔음·트라우마를 스팸하지 않게).
 	_gs.damage_player(_gs.hp + 999.0, Vector2.ZERO)
 	_check(got.size() == 2, "죽는 일격까지는 발신 (누적 %d)" % got.size())
@@ -141,7 +120,7 @@ func _test_telegraph_shader() -> void:
 
 func _test_hurt_anim_baking() -> void:
 	print("[4] _setup_frames hurt 확장 — hurt_sprite 있으면 비루프 hurt / 없으면 무변경")
-	# in-memory EnemyDef 주입 (세61 Db 주입 선례 — 레지스트리가 평범한 Dictionary).
+	# in-memory EnemyDef 주입 (레지스트리가 평범한 Dictionary라 된다).
 	# hurt 시트는 기존 snake_head.png를 빌려 쓴다 — 같은 규약(정사각 가로 스트립)이라 굽기 계약을
 	# 아트 도착 전에 잰다 (실아트 경로 자체는 [5]가 잰다).
 	var def = (load("res://src/core/schemas/enemy_def.gd") as GDScript).new()
@@ -179,7 +158,7 @@ func _test_boss_hurt_sprite_params() -> void:
 			continue
 		var p := str(def.params.get("hurt_sprite", ""))
 		_check(p != "", "%s params.hurt_sprite 키 존재" % id)
-		# ⚠ 아트 도착 + 리드 --import 전엔 이 항목이 빨갛다 — 예상된 빨강(scratch 보고 참조).
+		# ⚠ 아트 도착 + `--import` 전엔 이 항목이 빨갛다 — 예상된 빨강.
 		var ok := p != "" and ResourceLoader.exists(p) and (load(p) is Texture2D)
 		_check(ok, "%s hurt_sprite 로드 성공 (%s)" % [id, p])
 
@@ -279,12 +258,9 @@ func _test_camera_kick() -> void:
 	await process_frame
 
 
-## 🔴🔴 **세90: 애니 이름이 방향별에서 `idle`·`run`·`hurt` 셋으로 바뀌었다.**
-##  옛 `left`/`right`는 **픽셀이 동일한 그림**이었다(실측) — penzilla 원본이 정면뿐이라 방향 분기가
-##  그림엔 처음부터 없었다. 그래서 이 그물의 `hurt_*` prefix·복귀 후보 목록도 같이 갈렸다.
-##  🔴 **세 가지를 잰다**: ⓐ피격 → hurt 유지 ⓑ소진 → 자연 복귀 ⓒ**복귀한 게 실제로 존재하는 애니**인가.
-##  ⓒ가 없으면 SpriteFrames에서 애니를 지워도(또는 이름을 오타 내도) `animation` 문자열은 그대로
-##  들어가 있어 **전부 그린이 된다** — 씬을 통째로 인스턴스하는 이유가 이것이다.
+## 🔴 **세 가지를 잰다**: ⓐ피격 → hurt 유지 ⓑ소진 → 자연 복귀 ⓒ**복귀한 게 실제로 존재하는
+##  애니**인가. ⓒ가 없으면 SpriteFrames에서 애니를 지워도(이름 오타를 내도) `animation` 문자열은
+##  그대로 들어가 있어 **전부 그린이 된다** — 씬을 통째로 인스턴스하는 이유가 이것이다.
 func _test_player_hurt_anim() -> void:
 	print("[9] player 피격 애니 — hurt 유지 · HURT_ANIM_SEC 소진 뒤 idle/run 복귀 (세90 이름 개편)")
 	var player = (load("res://src/actors/player.tscn") as PackedScene).instantiate()
@@ -292,7 +268,7 @@ func _test_player_hurt_anim() -> void:
 	player.global_position = Vector2(200, 0)
 	await physics_frame
 	var frames = player.get_node("Sprite").sprite_frames
-	# 🔴 세90: 세 애니가 실제로 시트에 있나 (bake 스크립트 배율을 바꿔 region이 어긋나면 여기가 잡는다)
+	# 🔴 세 애니가 실제로 시트에 있나 (bake 스크립트 배율을 바꿔 region이 어긋나면 여기가 잡는다)
 	for a in ["idle", "run", "hurt"]:
 		_check(frames.has_animation(a), "🔴 SpriteFrames에 %s 애니가 있다" % a)
 	_check(frames.get_frame_count(&"run") == 8,
@@ -316,7 +292,7 @@ func _test_player_hurt_anim() -> void:
 func _test_dummy_parity() -> void:
 	print("[10] 허수아비 플래시 파리티 — 두 몸은 그물도 두 개 (세56 교훈)")
 	# 연습장 허수아비가 옛 modulate 곱셈으로 되돌아가면 연습장⇔숲 손맛이 조용히 갈라진다 —
-	# forest_enemy 쪽 그물([2])만으로는 이 몸의 회귀를 못 잡는다(세56에 실증된 그 자리).
+	# forest_enemy 쪽 그물([2])만으로는 이 몸의 회귀를 못 잡는다.
 	var a = (load("res://src/spell/dummy_target.tscn") as PackedScene).instantiate()
 	var b = (load("res://src/spell/dummy_target.tscn") as PackedScene).instantiate()
 	root.add_child(a)
@@ -366,9 +342,9 @@ func _flash_of(mat) -> float:
 	return _param_of(mat, &"flash_amount")
 
 
-## [11] 🔴 **스페이스 = 구르기(탭) + 달리기(홀드)** (세97 · 사용자 확정 「즉발 구르기 → 홀드면 달리기」).
+## [11] 🔴 **스페이스 = 구르기(탭) + 달리기(홀드)**.
 ## 🔴 **`Input.action_press`로 실제 액션 채널을 탄다** — `_physics_process`를 직접 부르거나 내부
-##   플래그를 세우면 **입력 맵이 통째로 어긋나도 그린**이다(세97에 `dash`가 주석과 달리 Ctrl에
+##   플래그를 세우면 **입력 맵이 통째로 어긋나도 그린**이다(`dash`가 주석과 달리 다른 키에
 ##   잡혀 있던 걸 실측으로 발견했다 — 코드는 멀쩡한데 사용자가 누르는 키가 달랐다).
 ## ⚠ 여기서 재는 건 **관계**(달리기 > 걷기 · 구르기가 즉발 · 무적)지 **값**이 아니다 — 손맛은 F5가 정한다.
 func _test_roll_and_run() -> void:
@@ -376,7 +352,7 @@ func _test_roll_and_run() -> void:
 	var gs = root.get_node("/root/GameState")
 
 	# ── ⓐ 달리기 속도가 걷기의 **파생**이다 (모자 배수가 달리기에도 실린다) ──
-	# 🔴 `run_speed`가 balance를 직접 읽으면 달리는 동안만 장비 효과가 사라진다(세42 선례).
+	# 🔴 `run_speed`가 balance를 직접 읽으면 달리는 동안만 장비 효과가 사라진다.
 	var walk: float = gs.move_speed()
 	var run: float = gs.run_speed()
 	_check(run > walk, "🔴 달리기가 걷기보다 빠르다 (걷기 %.0f < 달리기 %.0f)" % [walk, run])
@@ -389,7 +365,6 @@ func _test_roll_and_run() -> void:
 			"🔴 모자 배수가 달리기에도 그대로 실린다 (걷기·달리기 비율이 같다)")
 
 	# ── ⓑ 🔴 **사용자가 누르는 키가 실제로 스페이스인가** ──
-	# 세97 실측: 코드 주석은 내내 *"Shift"*라고 했는데 `dash`는 **Ctrl**에 잡혀 있었다.
 	# 로직 그물은 액션 이름만 보므로 **키가 뭐든 전부 그린**이다 — 맵을 직접 재는 자리가 여기다.
 	var on_space := false
 	for ev in InputMap.action_get_events(&"dash"):

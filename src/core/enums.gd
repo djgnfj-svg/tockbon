@@ -1,135 +1,79 @@
 class_name Enums
 ## 전역 enum — 매직 넘버 금지, 모든 모듈은 이 정의를 사용한다.
 
-## ⚠ 소비자 0 (세86 실측 — src·tests 통틀어 참조 없음). 옛 조준진(v1.5 폐지)의 잔재다.
+## ⚠ 소비자 0 — 옛 조준진의 잔재다.
 enum CircleType { FIXED, AIMED }
-## 룬 = 순수 원소만 (v2.2 · 세션 14). **충격(옛 =1)은 룬을 떠나 문양(추진)으로 갔다** —
-## 충격만 원소가 아니었고(불·물·바람=원소, 충격=물리력), 넉백은 화살표 충격파와 중복이었다.
-## ⚠ **WATER=2·WIND=3 값을 일부러 유지한다** — 이 값을 밀면 기존 세이브·.tres의 rune_type이
-## 조용히 깨진다. 1은 레거시 IMPACT 구멍으로 비워 둔다 — 세션 22에 마이그레이션 코드
-## (SpellDesign.migrate_legacy_runes)는 도안 모델과 함께 매장했지만, **구멍은 그대로 둔다**:
-## 값을 밀면 남은 세이브·.tres가 조용히 깨진다.
-## 🔴 세션49: BOLT=4·EARTH=5·GRASS=6 추가 (1은 옛 IMPACT 자리라 비워 둔 채 끝에 붙였다).
+## 룬 = 순수 원소만 (충격은 원소가 아니라 문양(추진)으로 갔다).
+## 🔴 값이 **연속이 아니다** — 1은 은퇴한 IMPACT 구멍이다. 값을 밀면 기존 세이브·.tres의
+## rune_type이 조용히 깨지므로 구멍을 그대로 두고 **끝에만 덧붙인다**.
 enum RuneType { FIRE = 0, WATER = 2, WIND = 3, BOLT = 4, EARTH = 5, GRASS = 6 }
-## 룬 이터레이션은 항상 명시적 리스트로 (RuneType.size()/range 금지 — 구멍 때문).
+## 🔴 룬 이터레이션은 항상 이 리스트로 — `RuneType.size()`/`range()`는 구멍 때문에 없는 룬을 만든다.
 const RUNE_TYPES: Array[int] = [RuneType.FIRE, RuneType.WATER, RuneType.WIND,
 	RuneType.BOLT, RuneType.EARTH, RuneType.GRASS]
-const LEGACY_IMPACT: int = 1  # 옛 RuneType.IMPACT. ⚠ 소비자 0 — 마이그레이션 코드는 세22에 매장됐다(세86 실측)
-## 🔴 **발사 계약** — 고리의 문양 칸에 들어가는 정수 코드. 착탄 전개를 이 값이 가른다:
-##   GATHER = 착탄점에 기둥(안쪽으로 모인다) · RADIATE = 그 방향으로 탄환(바깥으로 퍼진다).
-## ⚠ 이 값이 **계약이다** — 조립 UI(ring_board)가 쓰고 발사(ring_spell_system)가 읽고
-## `data/glyphs/*.tres`의 `code`가 이 값이다. **밀면 저장된 고리 도안이 조용히 깨진다.**
-## ⚠ 세22에 core로 올렸다 — 그전엔 발사가 UI(`ring_board`)를 preload해 정수를 꺼내 써서
-## 발사가 UI에 의존하는 방향이었다. **이 값을 UI 쪽 상수에서 되읽지 마라.**
-# 🔴 발사 계약 코드 (GlyphDef.code · ring_spell_system._deploy_now가 이 값으로 전개를 가른다).
-# 값을 바꾸면 저장된 도안이 조용히 깨진다 — **끝에만 덧붙인다**.
-#   GATHER(0)=착탄점에 기둥 · RADIATE(1)=그 방향 탄환 · PIERCE(2)=탄환인데 적을 뚫는다(세션44 B).
-#   HOMING(3)=적을 쫓는 탄 · BOUNCE(4)=벽에 튕기는 탄 · THRUST(5)=빠른 탄 (세션47 — 어휘 배증).
-# ⚠ 이건 "착탄 전개" 축이다. 탄의 행동 효과(GlyphType.BOUNCE/PIERCE/HOMING/THRUST)는 별 enum이며
-# projectile.gd가 소비한다 — PIERCE(발사코드 2)는 발사 때 GlyphType.PIERCE 효과로 번역된다.
-#
-# 🔴 세션 47: 2~5는 전부 **발산 계열**(바깥으로 탄을 쏜다)이고, 다른 건 그 탄이 **어떻게 나는가**뿐이다.
-# 즉 이 축은 "세기"가 아니라 **전투 방식**을 가른다 — 자유도 구멍(memory takbon-magic-no-freedom)에
-# 대한 답이 여기 있다. 기계(projectile._setup_effects)는 세션44 이전부터 완성돼 있었고 어휘가 없어
-# 잠들어 있었을 뿐이다. **새 문양 = data/glyphs/*.tres 한 장 + 여기 값 하나 + deploy 분기 하나.**
-# 🔴 세79 M1 「진별 해석」: SPREAD(6)·EXPLODE(7) = **변형형 문양**. 위 0~5와 **계열이 다르다** —
-# 0~5는 착탄점에서 스스로 전개하는 **전개형**이고, 6~7은 **안쪽 층의 결과를 받아 바꾸는 연산자**다
-# (`폭발(확산(불))`). 그래서 칸 값 하나로 안 끝나고 **층(밴드) 순서**가 의미를 갖는다 —
-# 해석은 `ring_spell_system._deploy_now`의 층 루프가 한다. 끝에만 덧붙였다(저장 도안 무회귀).
-#   SPREAD(6)=확산: 안쪽 결과의 **각 갈래를 여러 개로 복제해 부채꼴로 벌린다**(넓힘, 갈래마다 세기↓)
-#   EXPLODE(7)=폭발: 안쪽 결과를 **통째로 하나의 광역 폭발로 융합한다**(안쪽이 넓게 퍼져 있을수록 반경↑)
-# 🔴 두 문양의 성격이 갈려야 순서가 눈에 보인다 (사용자 확정 세79): 폭발이 "각 갈래를 각각 터뜨림"이면
-# `폭발(확산(불))`과 `확산(폭발(불))`이 둘 다 "작은 폭발 여러 개"가 돼 순서 실증이 실패한다.
-#   CONDENSE(8)=응축: 안쪽 결과를 **한 점으로 눌러 담는다** — 폭발의 반대(세82). 같은 융합인데
-#   폭발은 갈래가 많을수록 **넓어지고**, 응축은 **좁아지며 세진다**. 🔴 알고리즘은 폭발과 **같다**
-#   (`blast`) — 반경 계수 부호와 융합 배율만 다른 `.tres` 한 장이다. 문양 효과 데이터화의 첫 증명.
+const LEGACY_IMPACT: int = 1  # 옛 RuneType.IMPACT — 이 구멍을 메우지 마라.
+## 🔴 **발사 계약** — 고리의 문양 칸에 들어가는 정수 코드. `data/glyphs/*.tres`의 `code`가 이 값이고
+## 조립 UI(`ring_board`)가 쓰고 발사(`ring_spell_system._deploy_now`)가 읽어 착탄 전개를 가른다.
+## 🔴 **값을 밀면 저장된 도안이 조용히 깨진다 — 끝에만 덧붙여라.**
+##   GATHER(0)=착탄점에 기둥 · RADIATE(1)=그 방향 탄환 · PIERCE(2)=관통 · HOMING(3)=유도
+##   BOUNCE(4)=튕김 · THRUST(5)=빠른 탄   ← 여기까지 **전개형**(착탄점에서 스스로 전개한다)
+##   SPREAD(6)=확산 · EXPLODE(7)=폭발 · CONDENSE(8)=응축  ← **변형형**(안쪽 층 결과를 받아 바꾼다)
+## ⚠ 이건 「착탄 전개」 축이다 — 탄의 행동 효과(`GlyphType`)는 별 enum이고 `projectile`이 소비한다.
+## 변형형이 있어서 **층(밴드) 순서가 의미를 갖는다**(`폭발(확산(불))` ≠ `확산(폭발(불))`).
+##  그래서 폭발은 갈래가 많을수록 넓어지고, 응축은 좁아지며 세진다(알고리즘은 같고 계수만 다르다).
+## ⚠ 이 값을 UI 쪽 상수에서 되읽지 마라 — 발사가 UI에 의존하는 방향이 된다.
 enum GlyphCode { GATHER = 0, RADIATE = 1, PIERCE = 2, HOMING = 3, BOUNCE = 4, THRUST = 5,
 	SPREAD = 6, EXPLODE = 7, CONDENSE = 8 }
-## ⚠ **옛 `MODIFIER_GLYPHS` / `is_modifier_glyph()`는 세82에 은퇴했다.**
-## 계열(전개형/변형형)은 **문양 데이터에 딸린 성질**이지 enum의 성질이 아니었다 — 여기 배열로
-## 두면 문양을 늘릴 때마다 `.tres`·이 줄·`_apply_modifier` 분기가 **따로 놀았다**.
-## 지금 단일 소스는 `GlyphRules.BEHAVIORS`(`GlyphDef.behavior` → 변형형 여부)이고,
-## code 목록이 필요한 쪽은 **`Db.modifier_codes()`**를 부른다.
-## 🔴 `Db`를 못 보는 core 스키마(`RingDesign`)·static UI(`tab_panel`)는 그 배열을 **인자로 받는다**
-## (여기 상수를 되살리면 소스가 둘이 된다 — 되살리지 마라).
+## 🔴 계열(전개형/변형형) 판별의 단일 소스는 `GlyphRules.BEHAVIORS`다 — 여기에 code 배열을
+## 되살리지 마라(문양을 늘릴 때마다 `.tres`·상수·분기가 따로 논다).
+## code 목록이 필요한 쪽은 `Db.modifier_codes()`를 부르고, `Db`를 못 보는 쪽은 **인자로 받는다**.
 
-## ⚠ 소비자 0 (세86 실측 — src·tests 통틀어 참조 없음). 옛 자유드로잉 획 분류의 잔재다.
+## ⚠ 소비자 0 — 옛 자유드로잉 획 분류의 잔재다.
 enum StrokeRole { CIRCLE, RUNE, ARROW, TAIL, DECOR }
-## 문양의 **발동 방식** — v1.9 문양 축 (GDD §4 「세 축」).
-## 문양 1개 = 1발이고, 그 탄이 **어떻게 나가는가**를 이 글자가 정한다.
-## BASIC = **어느 글자도 아닌 획** — 인식 실패는 거부가 아니라 **폴백**이다.
-## 튜토리얼 첫 도안(곧은 화살표)이 그대로 유효하고, 구세이브 도안도 전부 BASIC으로 로드된다.
-## BOUNCE·HOMING·PIERCE는 **탁본으로 배우는 어휘**다 (룬·진에 이은 세 번째).
-## 🔴 **THRUST(추진) = v2.2 신설** (세션 14): 옛 충격 룬의 '힘'이 문양으로 왔다 — 탄이 **빠르게**
-## 날아간다(속도 = 그동안 임자 없던 축). 소비자 = `GlyphRules.EFFECTS` → `projectile._setup_effects`.
+## 문양의 **발동 방식** — 문양 1개 = 1발이고, 그 탄이 어떻게 나가는가를 이 값이 정한다.
+## BASIC = 어느 것도 아닌 폴백이다 — 인식 실패는 거부가 아니라 폴백이라 구세이브 도안이 전부 여기로 온다.
+## 소비자 = `GlyphRules.EFFECTS` → `projectile._setup_effects`.
 enum GlyphType { BASIC, BOUNCE, HOMING, PIERCE, THRUST }
-## 도안 작성 단계 — **진 → 룬 → 문양 순서**. CIRCLE=진 / RUNE=룬 / ARROW=문양.
-## ⚠ 세86 실측: 지금 이 값을 쓰는 건 `RingAssembly`의 `STAGE_JIN`/`STAGE_RUNE`/`STAGE_GLYPH`
-## 별칭뿐이다. 옛 서술("인식기가 안/밖으로 가른다"·"캔버스가 단계 밖 획을 거부한다")은
-## **자유드로잉 시절 얘기고 그 인식기·캔버스는 이제 없다**.
+## 도안 작성 단계 — 진 → 룬 → 문양 순서. 지금 쓰는 곳은 `RingAssembly`의 STAGE_* 별칭뿐이다.
 enum DrawStage { CIRCLE, RUNE, ARROW }
-## 🔴 **진의 발사 패턴** — "언제·어디로 몇 발". 이름의 `Wand`는 **출신지일 뿐 지금 주인이 아니다**
-## (v2.0엔 지팡이 축이었다 — 이름을 바꾸면 저장된 `JinDef.pattern`이 아니라 참조가 통째로 흔들려
-## 그대로 뒀다). 소비자는 `ring_spell_system._shot_plan(jin_def.pattern)` 하나다.
-## SINGLE=단발 / MULTI=산탄(에임 좌우로 퍼짐) / NOVA=전방위(내 주변 사방)
-##
-## 🔴 **세85: 지팡이는 이 축에서 완전히 손을 뗐다** (감사 #5, 사용자 확정). `GameState.wand_pattern()`
-## 폴백은 `jin_def == null`일 때만 걸려 **도달 불가**였고, 형태는 진·문양·층이 이미 답하는 질문이라
-## 두 축이 같은 자리를 다퉜다. 지팡이는 이제 세기·속도 스칼라(`wand_speed_mult`·`wand_mana_mult`)다.
-##
-## 🔴 세션48: BURST·SPRAY·SEEK를 **끝에 덧붙였다** (문양 GlyphCode와 같은 규약 — 중간에 끼우면
-## 저장된 JinDef.pattern·옛 도안이 통째로 밀린다).
-##   BURST=연발(같은 각도로 시간차) · SPRAY=분사(좁은 각 연속) · SEEK=타겟팅(가장 가까운 적을 골라 감)
+## 🔴 진의 **발사 패턴** — 「언제·어디로 몇 발」. 이름의 `Wand`는 출신지일 뿐 지금 주인이 아니다:
+## 형태는 진만 정하고, 소비자는 `ring_spell_system._shot_plan(jin_def.pattern)` 하나다.
+##   SINGLE=단발 · MULTI=산탄(에임 좌우로 퍼짐) · NOVA=전방위 · BURST=연발(같은 각도 시간차)
+##   SPRAY=분사(좁은 각 연속) · SEEK=타겟팅(가장 가까운 적)
+## ⚠ 끝에만 덧붙여라 — 중간에 끼우면 저장된 `JinDef.pattern`이 통째로 밀린다.
 enum WandPattern { SINGLE, MULTI, NOVA, BURST, SPRAY, SEEK }
-## 🔴 진의 **비행 경로** (세션48 신설). WandPattern이 "언제·어디로 몇 발"이라면 이건 "어떻게 나는가"다.
-##
-## 두 축을 가른 이유: 세션44에 진 3개가 WandPattern 3개를 1:1로 소진해 **"새 진 = .tres 한 장"이
-## 깨져 있었다**(4번째 진 = 새 발사 기하 = 코드). 경로를 독립 축으로 빼면 둘이 **직교**해 조합이
-## 열린다 — 나선 산탄·부메랑 연발이 전부 데이터 한 장이다. 축을 늘리는 게 진을 늘리는 것보다 싸다.
+## 🔴 진의 **비행 경로** — WandPattern이 「언제·어디로 몇 발」이면 이건 「어떻게 나는가」다.
+## 두 축을 가른 이유: 붙여 두면 진 하나가 패턴 하나를 소진해 「새 진 = .tres 한 장」이 깨진다
+## (4번째 진이 곧 코드가 된다). 직교시키면 나선 산탄·부메랑 연발이 전부 데이터 한 장이다.
 ##   STRAIGHT=직진 · SPIRAL=나선(사인파로 훑으며 전진) · BOOMERANG=부메랑(나갔다 되돌아온다)
 enum JinMotion { STRAIGHT, SPIRAL, BOOMERANG }
-## 🔴 진의 **밑그림 도형** (세션48 신설, 사용자 확정: *"진의 궤적은 원처럼 닫힌 도형이어야 함 —
-## 그 안에 룬이 들어가야 해서"*). 진 = 룬을 담는 **그릇**이라 궤적이 반드시 **닫혀** 있어야 한다.
-##
-## 세션44~48까지 진은 종류와 무관하게 **전부 같은 원**이었다 — 룬이 세션34에 종류별 닫힌 다각형을
-## 받은 것(`_rune_guide_verts`: 불△·물▽·바람◇)과 달리 진만 그 처리를 못 받았다. 그래서 진을
-## 8개로 늘려도 **손 궤적이 똑같아 "색만 다른 8지선다"**가 된다(memory `takbon-glyph-design-principle`).
-## 🔴 **`pattern`에서 유추하지 말고 데이터로 둔다** — pattern×motion 조합이 열리면 유추가 깨진다.
+## 🔴 진의 **밑그림 도형**. 진 = 룬을 담는 그릇이라 궤적이 반드시 **닫혀** 있어야 한다.
+## 🔴 `pattern`에서 유추하지 말고 데이터로 둔다 — pattern×motion 조합이 열리면 유추가 깨진다.
+## 도형이 갈리지 않으면 진을 8개로 늘려도 손 궤적이 똑같아 「색만 다른 8지선다」가 된다.
 ##   CIRCLE=원 · TRIANGLE=정삼각 · OCTAGON=팔각 · ELLIPSE=세로 긴 타원
 ##   PENTAGON=오각 · DIAMOND=마름모 · FLOWER=물결 원(꽃잎) · LENS=렌즈(양쪽 볼록)
 enum JinShape { CIRCLE, TRIANGLE, OCTAGON, ELLIPSE, PENTAGON, DIAMOND, FLOWER, LENS }
-## 🔴 상태이상 (세션49에 비로소 **실제로 적용**된다 — 세34~48까지 `forest_enemy.take_hit`이
-## `_status`를 밑줄로 버려 불·물·바람의 실질 차이가 **색 + 데미지 ±15%**뿐이었다).
-##
-## 🔴 **설계 원칙 (사용자 확정 세션49): 단독은 약한 바탕, 조합에서 폭발한다.**
-## 단독 효과를 다 없애면 한 발 쏠 때 아무 일도 안 나 밋밋하고, 단독이 다 세면 조합할 이유가 없다.
-## 그래서 룬마다 **약한** 상태를 남기고, 그 위에 다른 룬이 오면 `StatusRules`가 **반응**시킨다.
-## (선례 = 원신 Swirl/Crystallize — 바람·흙은 자체 효과를 억지로 만들지 않고 촉매로 둔다.)
-##
-## ⚠ **끝에만 붙여라** — 중간에 끼우면 저장된 RuneDef.status·옛 세이브가 통째로 밀린다.
+## 상태이상.
+## 🔴 설계 원칙 = **단독은 약한 바탕, 조합에서 폭발한다** — 단독 효과를 다 없애면 한 발 쏠 때
+## 아무 일도 안 나 밋밋하고, 단독이 다 세면 조합할 이유가 없다. 반응은 `StatusRules`가 건다.
+## ⚠ **끝에만 붙여라** — 중간에 끼우면 저장된 `RuneDef.status`·옛 세이브가 통째로 밀린다.
 ##   SHOCK=감전(약한 경직) · VULNERABLE=취약(다음 상태가 더 세게 걸림, 흙) · ROOT=덩굴(약한 묶임, 풀)
-##   MUD=진흙(**반응 산물** — 젖음+흙, 강한 속박) · BLAZE=산불(**반응 산물** — 화상+풀)
-##   OVERGROWTH=무성함(**반응 산물** — 젖음+풀, 진흙보다 오래 묶는다. 세86 ⑤a)
+##   MUD=진흙 · BLAZE=산불 · OVERGROWTH=무성함 — 셋 다 **반응 산물**이다.
 enum Status { NONE, BURN, KNOCKBACK, WET, FLOW, SHOCK, VULNERABLE, ROOT, MUD, BLAZE, OVERGROWTH }
 enum Phase { MORNING, DAY, EVENING, NIGHT }
-## 🔴 PEN = 탁본 펜 (세션 23 신설). 등급이 오를수록 **보정도**가 올라 손을 잡아 준다
-## (GameState.stroke_correction → trace_scorer). WAND(지팡이)와 역할이 달라 별도 부위다.
-## 🔴 HAT = 모자 (세션 42 신설, 사용자 확정 "펜 유지 + 모자 추가 = 5부위"). 이동 속도 축
-## (GameState.move_speed → player). 로브(생존)·부적(마나 지속)과 겹치지 않는 별도 축이다.
-## ⚠ **끝에 붙였다** — 중간에 끼우면 저장된 equipment의 부위 키가 통째로 밀린다. HAT도 끝에.
+## 아이템 종류(= 장비 부위). PEN=탁본 펜은 등급이 오를수록 손그림 **보정도**가 오르고,
+## HAT=모자는 **이동 속도** 축이다 — 로브(생존)·부적(마나 지속)과 겹치지 않는 별도 부위다.
+## ⚠ **끝에 붙여라** — 중간에 끼우면 저장된 equipment의 부위 키가 통째로 밀린다.
 enum ItemKind { INK, PAPER, WAND, ROBE, CHARM, MATERIAL, FRAGMENT, PEN, HAT }
-## ⚠ 소비자 0 (세86 실측). 지금 발사 거부는 `player_caster`가 `notice` 문자열로 알린다.
+## ⚠ 소비자 0 — 지금 발사 거부는 `player_caster`가 `notice` 문자열로 알린다.
 enum CastFailReason { NO_MANA, BROKEN, INVALID }
-## 🔴 퀘스트 목표 종류 (세션 36, "진행 목표 = 깊이 스파인"). data/quests/*.tres의 `goal`이 이 값.
-## KILL=적 처치 · EXTRACT=살아서 귀환 · UNLOCK=도감 해금(룬) · DRAW=마법진 그리기(온보딩, 세션41 — count장).
-## ⚠ .tres가 정수로 저장하니 재정렬 금지. DRAW는 **끝에 추가**했다(=3).
+## 퀘스트 목표 종류 — `data/quests/*.tres`의 `goal`이 이 값이다.
+## KILL=적 처치 · EXTRACT=살아서 귀환 · UNLOCK=도감 해금 · DRAW=마법진 그리기.
+## ⚠ `.tres`가 정수로 저장하니 재정렬 금지 — 끝에만 덧붙인다.
 enum QuestGoal { KILL, EXTRACT, UNLOCK, DRAW }
-## 🔴 지점(랜드마크) 종류 — 세99 던전 구조 D4 「지점마다 성격이 다르다」.
-## 정본 = `docs/takbon-design/dungeon_structure_design.md` §3.
-##   RUIN=폐허(전투 없음 · **열면 소리가 나 몹이 몰려온다**) · NEST=둥지(**핵을 깨야 멈춘다**) ·
-##   ALTAR=제단(마법을 **바치면** 보상 · 안 바치면 지나간다)
-## 🔴🔴 **셋의 차이는 「보상 크기」가 아니라 「무슨 일이 일어나나」다** — 크기만 다르면 D4를 고른 의미가 없다.
-## 🔴 **진행에 걸린 보상(문양-고리)은 어느 종류도 주지 않는다**(세99 사용자 확정 — 초안을 각하했다).
-##  그건 보스·공방·퀘스트 같은 **확정 경로** 몫이다. 여기 걸면 세57의 *"언제 얻을지 설계를 못 해 불안하다"*가 돌아온다.
-## ⚠ **끝에만 덧붙여라** — `.tres`가 정수로 저장한다.
+## 지점(랜드마크) 종류.
+##   RUIN=폐허(전투 없음 · 열면 소리가 나 몹이 몰려온다) · NEST=둥지 · ALTAR=제단(바치면 보상)
+## 🔴 셋의 차이는 「보상 크기」가 아니라 「무슨 일이 일어나나」다 — 크기만 다르면 나눈 의미가 없다.
+## 🔴 진행에 걸린 보상(문양-고리)은 어느 종류도 주지 않는다 — 그건 보스·공방·퀘스트 같은
+##  확정 경로 몫이다(「언제 얻을지 모르겠다」가 여기서 돌아온다).
+## ⚠ 끝에만 덧붙여라 — `.tres`가 정수로 저장한다.
 enum LandmarkKind { RUIN, NEST, ALTAR }

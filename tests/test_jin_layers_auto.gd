@@ -1,24 +1,18 @@
 extends SceneTree
-## 🔴 진별 해석 M1 — **층(밴드) 순서 = 연산 순서** 자동 검증 (세79). 헤드리스 실행:
+## 🔴 진별 해석 — **층(밴드) 순서 = 연산 순서** 자동 검증. 헤드리스 실행:
 ##   ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_jin_layers_auto.gd
 ## 전 항목 통과 시 "TEST_JIN_LAYERS_OK" 출력 후 종료 코드 0.
 ##
-## 정본 = docs/takbon-design/jin_interpretation_design.md
-##   룬을 문양이 겹겹이 감싸고 **안→밖 = 연산 순서**다. 전개형(발산·응집)은 명령을 만들고,
-##   변형형(확산·폭발)은 **안쪽 결과를 받아 바꾼다**.
+## 룬을 문양이 겹겹이 감싸고 **안→밖 = 연산 순서**다. 전개형(발산·응집)은 명령을 만들고,
+## 변형형(확산·폭발)은 **안쪽 결과를 받아 바꾼다**.
 ##
 ## 🔴 이 파일의 심장 = [4] **순서가 실제로 결과를 바꾸는가.**
 ##   `폭발(확산(불))` = 3갈래를 융합 → **큰 폭발 하나**
 ##   `확산(폭발(불))` = 폭발 하나를 복제 → **작은 폭발 셋**
-##   순서를 바꿔도 같은 게 나오면 M1이 통째로 실패한 것이다.
+##   순서를 바꿔도 같은 게 나오면 이 설계가 통째로 실패한 것이다.
 ##
 ## ⚠ **balance 수치를 하드코딩하지 않는다** — 두 배치의 **관계**(개수 1↔3, 반경 대소)로 잰다.
 ##   수치를 박으면 손맛 튜닝(F5) 한 번에 그물이 거짓 빨강이 된다.
-##
-## 🔴 세85 ⑪ — F6 조립 슬라이스 벤치(`assembly_slice_panel` + `test_assembly_slice{,_auto}`)가
-##   은퇴하면서 그 파일의 **RingBoard/Db 유닛 그물**이 여기로 이관됐다: [0]에 문양-고리 전 종수·
-##   발산5/응집3 실값·sort 정렬, [2]에 `flatten_bands` 자체 계약(순서·truncate·null).
-##   (합성 밑그림 계약은 `test_ring_trace_auto`로 갔다 — 그쪽이 「밑그림·긋기」 담당이다.)
 ##
 ## 주의: -s 모드는 오토로드 전역 등록보다 먼저 컴파일되므로 오토로드 식별자·모듈 preload 금지 —
 ## 첫 프레임 후 load()·/root 접근. 지역 변수는 의도적으로 동적 타입.
@@ -74,11 +68,9 @@ func _run() -> void:
 		quit(1)
 
 
-# ── [0] Db 로드 (🔴 .tres 파싱 침묵사 그물 — 세50 바람 룬) ──
-## 🔴 세85 ⑪ 이관: 옛 `test_assembly_slice_auto[0]`이 재던 **문양-고리 전수 계약**이 여기로 왔다
-## (F6 대조군 벤치가 은퇴하면서 그 파일이 통째로 사라졌다 — 그냥 지우면 「전 종수」·「발산5/응집3
-## 실값」·「sort 정렬」 셋의 그물이 조용히 없어진다). 개수를 안 세면 .tres 한 장이 파싱 실패로
-## 증발해도 전 스위트가 그린이다 — `test_rune_unlock_auto`의 「룬 6종 로드」와 같은 역할이다.
+# ── [0] Db 로드 (🔴 .tres 파싱 침묵사 그물) ──
+## 🔴 개수를 안 세면 .tres 한 장이 파싱 실패로 증발해도 전 스위트가 그린이다 —
+## `test_rune_unlock_auto`의 「룬 6종 로드」와 같은 역할이다.
 func _test_db_load() -> void:
 	print("[0] M1 콘텐츠 + 문양-고리 전수가 Db에 실제로 로드된다")
 	var sp = _db.get_glyph_ring(&"gr_spread3")
@@ -88,7 +80,7 @@ func _test_db_load() -> void:
 		"gr_spread3 = 확산×3 (null이면 .tres가 조용히 거부됐다 — Color 3인자 등)")
 	_check(ex != null and int(ex.motif) == G_EXPLODE and int(ex.count) == 1,
 		"gr_explode1 = 폭발×1")
-	# 🔴 M1 전제: 1등급(1층)은 겹이 하나뿐이라 **감쌀 순서 자체가 안 생긴다**.
+	# 🔴 전제: 1등급(1층)은 겹이 하나뿐이라 **감쌀 순서 자체가 안 생긴다**.
 	_check(g2 != null and int(g2.band_count) == 2,
 		"jin_plain_g2 = 2등급(band_count 2) — 순서를 만들려면 2겹이 필요하다")
 	# 🔴 전 종수 — 새 문양-고리를 더하면 이 기대치를 같이 올려라(줄었으면 파싱 침묵사 의심).
@@ -137,8 +129,8 @@ func _test_flatten_parity() -> void:
 		var layered: Array = _board.layer_rings([gr])
 		_check(layered.size() == 1, "%s: 밴드 1개 → 층 1개" % id)
 		_check(_same_ring(layered[0], flat), "%s: 층0이 flatten과 칸 단위로 동일" % id)
-	# 🔴 자명 통과 방지 — 대조군이 사라지면 이 그물은 **검사 0건으로 그린**이 된다(세61 리셋 때
-	# progression·decode가 정확히 이렇게 내려앉았다). 이게 「옛 도안 무회귀」의 유일한 그물이다.
+	# 🔴 자명 통과 방지 — 대조군이 사라지면 이 그물은 **검사 0건으로 그린**이 된다.
+	# 이게 「옛 도안 무회귀」의 유일한 그물이다.
 	_check(checked > 0, "대조군 문양-고리가 최소 1종은 있어야 한다 (실제 %d종)" % checked)
 	# 🔴 C2: 밴드 0개여도 **빈 층 하나**를 준다 — 빈 배열을 주면 발사가 통째로 접혀
 	# "빈 진도 날아가 몸으로 때린다"(ring_carrier 계약)가 조용히 깨진다.
@@ -146,8 +138,7 @@ func _test_flatten_parity() -> void:
 	_check(none.size() == 1 and (none[0] as Array).size() == SLOTS,
 		"밴드 0개 → 빈 층 1개 (flatten_bands([])와 동치, 실제 %d층)" % none.size())
 
-	# 🔴 세85 ⑪ 이관 — `flatten_bands` **자체의 계약**(옛 `test_assembly_slice_auto[2]`).
-	# F6 대조군 벤치가 은퇴해 이 함수의 src 호출자는 0이지만, **위 동치 검사의 기준자**로 살아 있다.
+	# 🔴 `flatten_bands` **자체의 계약** — src 호출자는 0이지만 **위 동치 검사의 기준자**다.
 	# 기준자가 조용히 망가지면 위 「층0 == flatten」이 **둘 다 틀린 채로 그린**이 된다 —
 	# 그래서 기준자 쪽도 독립으로 잰다(라운드로빈 순서·8칸 truncate·null 건너뜀).
 	var a := _mk_ring(G_RADIATE, 3)
@@ -201,14 +192,14 @@ func _test_order_changes_result(system) -> void:
 	_check(merged_r > scattered_r,
 		"융합 폭발이 산개 폭발보다 크다 (융합 %.1f > 산개 %.1f)" % [merged_r, scattered_r])
 
-	# 🔴 산개된 셋은 **같은 자리에 겹치지 않는다** (겹치면 한 발과 구분이 안 된다 — 세50 반경 실측 교훈)
+		# 🔴 산개된 셋은 **같은 자리에 겹치지 않는다** (겹치면 한 발과 구분이 안 된다)
 	if scattered.size() == 3:
 		var d01: float = scattered[0].global_position.distance_to(scattered[1].global_position)
 		_check(d01 > 1.0, "산개 폭발끼리 자리가 벌어진다 (실제 %.1fpx)" % d01)
 	_clear(system)
 
 
-# ── [5] 🔴 회귀: 층 1개 + 변형형 없음 = 세78까지와 똑같이 나간다 ──
+# ── [5] 🔴 회귀: 층 1개 + 변형형 없음 = 옛 도안 그대로 나간다 ──
 func _test_legacy_single_layer(system) -> void:
 	print("[5] 🔴 회귀: 옛 도안(층 1개·전개형만)은 예전 그대로")
 	_clear(system)
@@ -262,7 +253,7 @@ func _test_seed_when_nothing_to_wrap(system) -> void:
 func _test_panel_carries_layers() -> void:
 	print("[7] 🔴 조립 UI(book)가 밴드를 rings **다겹**으로 싣는다")
 	# 🔴 패널의 **공개 seam**(`set_assembly_state`)을 쓴다 — private(`_sel_jin`·`_bands`)을 직접
-	# 더듬으면 리팩터 때 **조용히** 죽는다(`-s`는 에러가 나도 failures=0으로 OK를 찍는다, 세22·23).
+	# 더듬으면 리팩터 때 **조용히** 죽는다(`-s`는 에러가 나도 failures=0으로 OK를 찍는다).
 	# 없는 메서드 호출은 `SCRIPT ERROR`로 grep에 잡힌다 — 그 차이가 이 선택의 전부다.
 	var scene := load("res://src/drawing/ring_forge_panel.tscn") as PackedScene
 	if scene == null:
@@ -281,13 +272,12 @@ func _test_panel_carries_layers() -> void:
 	if rings.size() == 2:
 		_check(int(rings[0][0]) == G_SPREAD, "층0(안쪽) = 확산")
 		_check(int(rings[1][0]) == G_EXPLODE, "층1(바깥) = 폭발")
-	# 🔴 세26 계약: score를 안 실으면 손그림 위력이 조용히 사라진다
+	# 🔴 score를 안 실으면 손그림 위력이 조용히 사라진다
 	_check(asm.has("score"), "발사 계약에 score가 실린다 (빠지면 기준 위력으로 나간다)")
 	_check(StringName(asm.get("jin", &"")) == &"jin_plain_g2", "진 id가 실린다")
 
-	# 🔴 C1 그물 — HUD 슬롯 다이어그램이 **바깥 층 문양도 채워진 칸으로 본다**.
+	# 🔴 HUD 슬롯 다이어그램이 **바깥 층 문양도 채워진 칸으로 본다**.
 	# 이 판정이 `rings[0]`만 보면 2등급 진에서 층1 문양이 통째로 안 그려지는데, `open`은 합집합이라
-	# "열렸는데 비었다"로 **조용히 거짓말한다**. HUD `_draw` 안에 인라인이던 걸 core로 올려 잰다.
 	var d := RingDesign.from_assembly(asm, "층 테스트", 0.8)
 	_check(d.is_slot_filled(0), "칸0(층0 확산·층1 폭발) = 채워짐")
 	_check(d.is_slot_filled(2), "🔴 칸2는 **층0에만** 있다 — 층 전체를 봐야 참이 된다")
@@ -341,7 +331,7 @@ func _test_damage_distribution(system) -> void:
 
 
 # ── [9] 🔴 순서를 **사람에게 보여 주는 문자열** (Tab 마법진 탭) ──
-## M1의 심장이 "순서가 결과를 바꾼다"인데, 플레이어가 그 순서를 확인하는 유일한 통로가 이 수식이다.
+## 심장이 "순서가 결과를 바꾼다"인데, 플레이어가 그 순서를 확인하는 유일한 통로가 이 수식이다.
 ## 발사만 맞고 표시가 뒤집혀 있으면 사용자는 **자기 도안을 반대로 이해한 채 조립한다**.
 func _test_formula_text() -> void:
 	print("[9] 🔴 마법진 탭 수식 — 안→밖 감쌈이 글로도 뒤집히지 않는다")
@@ -385,7 +375,7 @@ func _ring(fills: Dictionary) -> Array:
 	return r
 
 
-## motif·count만 있는 in-memory GlyphRingDef (flatten 계약 검증용 — 세85 ⑪ 이관).
+## motif·count만 있는 in-memory GlyphRingDef (flatten 계약 검증용).
 func _mk_ring(motif: int, count: int) -> GlyphRingDef:
 	var gr := GlyphRingDef.new()
 	gr.motif = motif

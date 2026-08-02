@@ -1,64 +1,43 @@
 extends Area2D
-## 고리 조립 캐리어 — 모듈 B (세션 12~). class_name 없음 — preload로 참조할 것.
+## 고리 조립 캐리어 — 날아가는 것은 마법진이 아니라 그것을 **해석한 원소 마법(불덩이)**이다.
+## class_name 없음 — preload로 참조할 것.
 ##
-## 🔴 **해석된 원소 마법이 날아간다** (세72 재정의 — GDD §3·§5). 마법진(공식)은 발사 순간 총구에
-## 잠깐 빛나고(vfx 머즐 링 = "식이 계산되는 순간"), 날아가는 건 그것을 **해석한 원소 마법 = 불덩이
-## (파이어볼)**다. 마법진 자체는 안 날아간다 — 세71까지의 "진이 곧 투사체(날아가는 마법진 볼)"를
-## 은퇴시켰다(사용자: *"진이 날아갈 필요없는데… 마법진은 수학이고 해석된 마법이 나간다"*).
-## 착탄 시 안의 고리(_ring)가 그 자리에서 전개되는 계약은 그대로다 — 껍질=배달. [[takbon-nested-circle-model]]
-## 🔴 세79 M1: `_ring`이 나르는 건 이제 **층(밴드) 배열** `[[8칸], [8칸]…]`이다(옛 8칸 한 겹도
-## 그대로 흐른다 — `RingDesign.layers_of`가 흡수). 🔴 **캐리어는 이걸 해석하지 않는다 —
-## 불투명한 payload로 나르기만 한다.** 그래서 층 모델이 들어와도 캐리어는 한 줄도 안 바뀌었다.
-## ⚠ 그러니 `_ring[0]`을 **칸으로 읽지 마라** — 2등급 진에선 그게 배열이다. 해석은 발사부만 한다.
-##   • 발산→ 칸: 그 화살표 방향으로 불 탄환이 퍼진다 (ring_spell_system이 projectile.tscn 스폰)
-##   • 응집← 칸: 하나로 모여 불기둥 하나 (pillar.tscn, 많을수록 굵다)
-##
-## **빈 진도 날아가 몸으로 때린다** (열린 칸을 안 채워 전개할 게 없어도 — RingBoard.can_commit 항상 참).
-##   → 캐리어 자체가 착탄 시 damage를 얹는다. 전개는 그 위에 덤이다.
-##
-## **전개는 적에 닿을 때만.** 벽·수명으로 죽으면 조용히 사라진다 (안 맞으면 전개 없음 — 데모 규칙).
-## **node.rotation은 영원히 0** — 대신 자식 Fireball **스프라이트만** 진행 방향으로 회전한다(혜성형
-## 꼬리가 뒤로 뻗게, 세72). 히트박스(자식 Shape)는 원형이라 회전 무관하지만, node를 안 돌려 계약을
-## 지킨다(스프라이트 로컬 회전은 Shape에 영향 0).
+## 🔴 `_ring`은 **층 배열** `[[8칸], [8칸]…]`이고 캐리어는 이걸 **해석하지 않는다** — 불투명한
+## payload로 나르기만 한다. ⚠ `_ring[0]`을 칸으로 읽지 마라(2등급 진에선 그게 배열이다).
+## **빈 진도 날아가 몸으로 때린다** — 캐리어 자체가 착탄 damage를 얹고, 전개는 그 위에 덤이다.
+## **전개는 적에 닿을 때만** — 벽·수명으로 죽으면 조용히 사라진다.
+## 🔴 **node.rotation은 영원히 0** — 방향 정렬은 자식 Fireball 스프라이트만 돌린다(히트박스 불변).
 ##
 ## 적 노드 계약: 그룹 "enemies" + take_hit(damage, rune_type, status, status_power).
 
-const RADIUS_PX := 12.0       # 히트박스 반지름 (진 몸) — 세13: 9→18(안 보였다) → 세72: 18→12
-                              # (혜성 스프라이트+꼬리가 커서 축소. 꼬리 달린 스프라이트라 히트박스 작아도 잘 보인다)
-## 부메랑 선회 각속도(rad/s) — 연출값이라 balance 아닌 여기 상수 (선례: juice의 손맛 수치).
-## 8.0 = 180도 유턴에 약 0.4초. 낮추면 크게 휘고 높이면 칼같이 꺾인다 — 사용자가 쏴 보고 조인다.
+const RADIUS_PX := 12.0       # 히트박스 반지름 — 꼬리 달린 스프라이트라 작아도 잘 보인다
+## 부메랑 선회 각속도(rad/s) — 연출값이라 balance 아닌 여기 상수. 8.0 = 180도 유턴에 약 0.4초.
 const BOOMERANG_TURN_RATE := 8.0
-## 트레일·룬 색이 Db에 룬이 없을 때 폴백 (vfx와 같은 규칙).
+## Db에 룬이 없을 때만 쓰는 폴백.
 const RUNE_FALLBACK := Color(0.95, 0.35, 0.15)
 
 const Trail := preload("res://src/spell/carrier_trail.gd")
 
-# ── 트레일 연출 (세션59) — 손맛값(스크립트 const, balance 아님). 사용자가 쏴 보고 조인다.
+# ── 트레일 연출 — 손맛값(스크립트 const, balance 아님).
 const TRAIL_LIFE := 0.25          ## 트레일 포인트 수명(s)
 const TRAIL_WIDTH_FRAC := 0.9     ## 트레일 굵기 = body_radius × 이 값
-## 🔴 불덩이 **코어**의 반지름(px) — 혜성형 92×48 프레임, 코어 중심 (74,24), 반지름 14(나머지는
-## 왼쪽 화염 꼬리 + 투명 패딩). body_radius를 **코어**에 맞춰 스케일해 **보이는 코어 = 히트박스**가
-## 되게 한다(세50 "보이는 크기 ≠ 맞는 크기" — 코어 반지름을 안 쓰면 스침 판정이 거짓말). 코어 뒤로
-## 뻗는 화염 꼬리가 히트박스를 넘는 건 당연(꼬리는 안 맞는 잔염 = 빛). 🔴 값은 F5로 조인다.
+## 🔴 프레임(92×48)이 아니라 불덩이 **코어**의 반지름이다 — 이걸로 스케일해야 보이는 코어 = 히트박스가
+## 된다(프레임 크기를 쓰면 뒤로 뻗는 화염 꼬리까지 세어 스침 판정이 거짓말한다).
 const SPRITE_FRAME_RADIUS := 14.0
 
-## 착탄 = 안의 고리를 편다. ring_spell_system이 받아 층을 안→밖으로 해석해 전개한다.
-## travel = 탄이 가던 방향 (전개 회전 기준).
-## ⚠ 인자 이름은 옛 `ring`을 유지한다(시그널 계약) — 실제로 실려 오는 건 **층 배열**이다.
+## 착탄 = 안의 고리를 편다. travel = 탄이 가던 방향(전개 회전 기준).
+## ⚠ 인자 이름 `ring`은 시그널 계약이라 유지한다 — 실려 오는 건 **층 배열**이다.
 signal deployed(ring: Array, at: Vector2, travel: float)
 
 var damage: float = 0.0
 var rune_type: int = Enums.RuneType.FIRE
 var status: int = Enums.Status.NONE
 var status_power: float = 0.0
-## 🔴 복합 룬 (세81 M2 융합진) — 이 캐리어가 몸으로 직격할 때 얹는 모든 룬 상태
-## [{rune_type, status, status_power}]. primary(=rune_type)는 위 필드로 얹고, 나머지는 **피해 0**으로
-## 상태만 얹는다(적 계약 0-피해 가드가 도배를 막는다). 룬 1개면 [primary] 하나라 부작용 0(무회귀).
+## 복합 룬 [{rune_type, status, status_power}] — primary 외는 **피해 0**으로 상태만 얹는다
+## (적 계약의 0-피해 가드가 도배를 막는다).
 var rune_hits: Array = []
-## 🔴 이 진의 조립 점수(0~1, `assembly.score`) — **착탄 연출 전용**이다 (세98).
-## 피해는 이미 `damage`에 반영돼 있고(`power_of`), 이건 `spell_impact`에 실어 "얼마나 센
-## 마법진이었나"를 연출에 알리는 축이다. ⚠ 여기서 피해·상태에 다시 곱하지 마라 — 이중 적용이 된다.
-## 점수를 안 실어 온 옛 도안·테스트 = 0.0 → `RingPower.quality_t`가 0(=무난)으로 본다.
+## 이 진의 조립 점수(0~1) — **착탄 연출 전용**이다.
+## ⚠ 피해엔 이미 `damage`로 반영돼 있다 — 여기서 다시 곱하면 이중 적용이 된다.
 var score: float = 0.0
 
 var _ring: Array = []
@@ -66,7 +45,7 @@ var _velocity := Vector2.ZERO
 var _life_left: float = 0.0
 var _consumed := false
 
-# 🔴 비행 경로 (세션48). motion=STRAIGHT면 아래 전부 안 쓰이고 예전과 픽셀 동일하게 돈다.
+# 비행 경로. motion=STRAIGHT면 아래 필드는 전부 안 쓰인다.
 var _motion: int = Enums.JinMotion.STRAIGHT
 var _scale: float = 1.0
 var _age: float = 0.0            # 발사 후 경과 — 나선 위상·부메랑 반환 시점의 기준
@@ -76,15 +55,11 @@ var _spiral_amp: float = 0.0
 var _spiral_period: float = 0.45
 var _turn_ratio: float = 0.5
 
-## 원소 볼 스프라이트 (씬 자식 Fireball — 노드명은 유지) — 이글거림·찰랑임 루프는 SpriteFrames가
-## 담당(자전·글로우 코드 제거). 룬에 따라 애니를 갈아 끼운다 — 표는 아래 `BALL_ANIM`(룬 6종 전원).
+## 원소 볼 스프라이트 — 이글거림 루프는 SpriteFrames가 담당한다(코드 자전·글로우 없음).
 var _fireball: AnimatedSprite2D = null
 var _trail_spawned := false
 
-## 🔴 룬→볼 애니 (세78 불·물·바람 + 세84 번개·흙·풀 = **룬 6종 전원**). 전부 같은 92×48 혜성
-## 지오메트리라 오프셋·히트박스·회전은 애니와 무관하게 그대로 돈다 — 색·질감만 다르다
-## (색 근거 = `data/runes/*.tres`의 `ui_color` — 볼·트레일·상태 틴트가 갈리면 같은 마법으로 안 읽힌다).
-## ⚠ 폴백(`_apply_ball_anim`의 fireball)은 **지우지 마라** — 룬이 늘거나 시트가 빠졌을 때의 안전망이다.
+## 룬→볼 애니. 전부 같은 92×48 혜성 지오메트리라 오프셋·히트박스·회전은 애니와 무관하다.
 const BALL_ANIM := {
 	Enums.RuneType.FIRE:  &"fireball",
 	Enums.RuneType.WATER: &"waterball",
@@ -100,13 +75,11 @@ func _ready() -> void:
 	body_entered.connect(_on_body_entered)
 	area_entered.connect(_on_area_entered)
 	_fireball = get_node_or_null(^"Fireball") as AnimatedSprite2D
-	_apply_ball_anim()   # rune_type 기본값(FIRE)이라 최초엔 fireball — setup에서 룬 확정 후 다시 부른다
+	_apply_ball_anim()   # 이 시점엔 rune_type이 기본값 — setup에서 룬 확정 후 다시 부른다
 	_apply_sprite_scale()
 
 
-## 룬에 맞는 볼 애니를 재생한다. SpriteFrames에 그 애니가 없으면 fireball 폴백.
-## ⚠ 지금은 `ring_carrier.tscn`에 **6종이 다 있다**(실측) — 이 가드는 **룬을 더 늘릴 때** 발동한다.
-## 없는 애니를 play하면 볼이 에러 없이 투명해지므로 가드를 지우지 마라.
+## 🔴 fireball 폴백을 지우지 마라 — 없는 애니를 play하면 볼이 **에러 없이 투명해진다**.
 func _apply_ball_anim() -> void:
 	if _fireball == null or _fireball.sprite_frames == null:
 		return
@@ -116,8 +89,7 @@ func _apply_ball_anim() -> void:
 	_fireball.play(want)
 
 
-## p_ring: **층 배열** `[[8칸]…]` (세79 M1) — 옛 8칸 한 겹도 그대로 받는다(발사부가 정규화).
-## 캐리어는 내용을 안 본다. p_angle: 조준각.
+## p_ring: **층 배열** `[[8칸]…]` — 캐리어는 내용을 안 본다.
 func setup(p_ring: Array, p_angle: float, p_speed: float, p_lifetime: float,
 		p_damage: float, p_rune_type: int, p_status: int, p_status_power: float,
 		p_rune_hits: Array = [], p_score: float = 0.0) -> void:
@@ -132,15 +104,14 @@ func setup(p_ring: Array, p_angle: float, p_speed: float, p_lifetime: float,
 	status_power = p_status_power
 	rune_hits = p_rune_hits
 	score = p_score
-	_apply_ball_anim()   # 룬 확정 → 그 룬의 볼로 갈아 끼운다 (BALL_ANIM에 없으면 fireball 폴백)
+	_apply_ball_anim()
 	_apply_body_radius()
 	_apply_sprite_scale()
-	# 트레일은 지연 스폰 — set_motion(규모)이 setup **뒤에** 오므로, 굵기가 최종 body_radius를 보게.
+	# 🔴 트레일은 지연 스폰 — set_motion(규모)이 setup **뒤에** 와야 굵기가 최종 body_radius를 본다.
 	call_deferred(&"_spawn_trail")
 
 
-## 🔴 비행 경로·규모를 얹는다 (세션48). setup **뒤에** 부른다 — 안 부르면 예전 그대로 직진 1.0배라
-## 옛 호출자·테스트가 그대로 돈다. 진(JinDef)이 없는 옛 도안이 정확히 그 경로다.
+## 비행 경로·규모를 얹는다. setup **뒤에** 부른다 — 안 부르면 직진 1.0배로 남는다.
 func set_motion(p_motion: int, p_scale: float, p_spiral_amp: float,
 		p_spiral_period: float, p_turn_ratio: float) -> void:
 	_motion = p_motion
@@ -152,30 +123,26 @@ func set_motion(p_motion: int, p_scale: float, p_spiral_amp: float,
 	_apply_sprite_scale()
 
 
-## 히트박스를 진 몸 반지름에 맞춘다 (형상 리소스는 공유물 — scale로만 건드린다).
+## 🔴 형상 리소스는 인스턴스끼리 공유한다 — radius 대신 scale로만 건드린다.
 func _apply_body_radius() -> void:
 	var cs := get_node_or_null("Shape") as CollisionShape2D
 	if cs != null and cs.shape is CircleShape2D:
 		cs.scale = Vector2.ONE * (body_radius() / (cs.shape as CircleShape2D).radius)
 
 
-## 진 몸 반지름 — 규모가 곱해진다. 스프라이트·히트박스가 **같은 함수**를 봐야 갈라지지 않는다
-## (선례: ring_power의 is_stable — 보이는 크기와 맞는 크기가 다르면 아무도 못 알아챈다).
+## 진 몸 반지름 — 🔴 스프라이트·히트박스가 **같은 함수**를 봐야 보이는 크기와 맞는 크기가 안 갈라진다.
 func body_radius() -> float:
 	return RADIUS_PX * _scale
 
 
-## 불덩이 스프라이트를 body_radius에 맞춘다 — 프레임 반지름(24px)을 body_radius로 스케일.
-## _ready(생성)·setup(룬 확정)·set_motion(규모 확정)이 부른다.
 func _apply_sprite_scale() -> void:
 	if _fireball != null:
 		_fireball.scale = Vector2.ONE * (body_radius() / SPRITE_FRAME_RADIUS)
 
 
-## 트레일 스폰 — **형제**(spell_system의 자식)로 단다. 캐리어가 착탄으로 죽어도 잔상이 페이드하게
-## (설계 §2-C). 🔴 트레일은 player_projectiles 그룹 무가입 — 테스트가 이 그룹으로 탄을 센다.
+## 🔴 트레일은 자식이 아니라 **형제**로 단다 — 캐리어가 착탄으로 죽어도 잔상이 페이드해야 한다.
 func _spawn_trail() -> void:
-	# 🔴 null 가드 — 트리 밖 setup(헤드리스가 setup만 부르는 경우)·부모 없음이면 조용히 생략
+	# 트리 밖 setup(헤드리스)·부모 없음이면 조용히 생략
 	if _trail_spawned or _consumed or not is_inside_tree():
 		return
 	var parent := get_parent()
@@ -193,19 +160,16 @@ func _physics_process(delta: float) -> void:
 	_age += delta
 	match _motion:
 		Enums.JinMotion.SPIRAL:
-			# 진행축에 **수직**으로 사인 흔들림 — 경로가 넓어져 밀집한 적을 훑는다.
-			# 위치를 직접 찍지 않고 속도에 수직 성분을 더한다(충돌이 매 프레임 연속으로 잡히게).
+			# 🔴 위치를 직접 찍지 않고 속도에 수직 성분을 더한다 — 순간이동하면 충돌이 건너뛴다.
 			var perp := _velocity.orthogonal().normalized()
 			var w := TAU / _spiral_period
 			var swing := perp * (_spiral_amp * _scale) * w * cos(w * _age)
 			position += (_velocity + swing) * delta
 		Enums.JinMotion.BOOMERANG:
 			# 반환 시점을 넘기면 발사 지점 쪽으로 속도를 꺾는다 — 유턴이 곡선으로 그려진다.
-			# 놓친 적을 **돌아오는 길에** 한 번 더 만난다(진짜 두 번째 기회).
 			if _age >= _lifetime * _turn_ratio:
-				# 🔴 속도를 **회전**시킨다 — `lerp`로 하면 안 된다. 되돌아올 방향은 지금 방향의
-				# 거의 정반대라 두 벡터가 상쇄돼 **속도가 0으로 죽고 진이 공중에 멈춘다**
-				# (세션48에 실제로 그렇게 났다). 각도만 돌리면 속력이 보존돼 나간 만큼의 기세로 돌아온다.
+				# 🔴 속도를 **회전**시킨다 — `lerp`면 정반대 벡터끼리 상쇄돼 속도가 0으로 죽고
+				# 진이 공중에 멈춘다. 각도만 돌리면 속력이 보존된다.
 				var speed := _velocity.length()
 				var want := (_origin - global_position).angle()
 				var turned := rotate_toward(_velocity.angle(), want, BOOMERANG_TURN_RATE * delta)
@@ -213,8 +177,7 @@ func _physics_process(delta: float) -> void:
 			position += _velocity * delta
 		_:
 			position += _velocity * delta
-	# 🔴 스프라이트를 진행 방향으로 정렬(혜성형 — 꼬리가 뒤로). **스프라이트만** 돌린다: node.rotation·
-	# 자식 히트박스는 0 불변. 이글거림·나부낌은 SpriteFrames 루프가 담당(옛 볼의 _spin·글로우 은퇴).
+	# 🔴 **스프라이트만** 돌린다 — node.rotation·자식 히트박스는 0 불변이 계약이다.
 	if _fireball != null and _velocity.length_squared() > 0.01:
 		_fireball.rotation = _velocity.angle()
 	_life_left -= delta
@@ -244,13 +207,12 @@ func _hit_enemy(node: Node2D) -> void:
 	_consumed = true
 	if node.has_method("take_hit"):
 		node.take_hit(damage, rune_type, status, status_power)
-		# 🔴 세81 M2: 보조 룬 상태 — 피해 0으로 얹는다(적 계약 0-피해 가드가 도배를 막는다).
+		# 보조 룬은 피해 0으로 상태만 얹는다.
 		for rh: Dictionary in rune_hits:
 			if int(rh.get("rune_type", -1)) == rune_type:
 				continue   # primary는 위에서 이미 얹었다
 			node.take_hit(0.0, int(rh.rune_type), int(rh.status), float(rh.status_power))
-	# "탄이 박혔다" 연출 신호 (세션59 설계 §3) — 적 착탄 1회만. 벽·수명 소멸(_die_without_deploy)엔 없다.
-	# 🔴 세98: `score`를 같이 싣는다 — 착탄 연출이 등급을 반영하는 유일한 통로다.
+	# 적 착탄 1회만 — 벽·수명 소멸엔 없다. 🔴 `score`가 착탄 연출이 등급을 아는 유일한 통로다.
 	EventBus.spell_impact.emit(global_position, rune_type, score)
 	var travel := _velocity.angle() if not _velocity.is_zero_approx() else 0.0
 	deployed.emit(_ring, global_position, travel)
@@ -264,7 +226,6 @@ func _die_without_deploy() -> void:
 	queue_free()
 
 
-## 룬 색 — Db에서 읽고, 없으면 폴백. (오토로드 없는 컨텍스트도 견딘다) 트레일 색이 이걸 쓴다.
 func _rune_color() -> Color:
 	var db := get_node_or_null(^"/root/Db")
 	if db != null:

@@ -1,23 +1,15 @@
 extends SceneTree
-## 떠있는 지팡이 + 발사 총구 계약 자동 검증 (세션65 — 세피리아식 떠있는 지팡이) — 헤드리스 실행:
+## 떠있는 지팡이 + 발사 총구 계약 자동 검증 — 헤드리스 실행:
 ##   ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_floating_wand_auto.gd
 ## 전 항목 통과 시 "TEST_FLOATING_WAND_OK" 출력 후 종료 코드 0.
 ##
-## 🔴 왜: 이 세션이 **발사 원점(총구)을 몸 중심 → 떠있는 지팡이 끝**으로 바꿨다. 이건 발사 계약이라,
+## 🔴 왜: **발사 원점(총구)은 몸 중심이 아니라 떠있는 지팡이 끝**이다. 이건 발사 계약이라,
 ## 누가 caster._muzzle()이나 FloatingWand 노드를 되돌리면 **에러 없이 조용히 몸 중심으로 회귀**한다
 ## (이 프로젝트가 제일 무서워하는 침묵사). 그 회귀를 잡는 그물이다. 공개 경로로만 검증한다 —
 ## caster.fire()가 EventBus.**`ring_cast_started`**로 실어 보내는 **origin**을 본다(내부 _muzzle 안 찌름).
-## ⚠ 세98에 발사가 지연 emit이 되면서 관측점이 `ring_cast_requested` → `ring_cast_started`로 옮겼다
-##   (같은 `_muzzle()` 값이 실린다 = 계약 ⓛ). 경위는 `_capture_fire_origin` 주석.
-##
-## [1] 지팡이 미장착 → FloatingWand 숨김 + 발사 origin == 몸 중심(폴백, 맨손 캐스팅 보존)
-## [2] 지팡이 장착 → FloatingWand 표시 + 발사 origin == 지팡이 끝(muzzle_position) + 몸과 뚜렷이 떨어짐
-##     (총구가 몸이 아니라 지팡이 끝이라는 **계약 자체**를 잰다 — 뮤테이션 검출자)
-## [3] 총구 기하 단일 소스 — 알려진 위치·회전에서 muzzle_position()이 MUZZLE_LEN 오프셋과 일치
-##     (총구 지오메트리를 caster에 복제하면 갈라진다 — 단일 소스 가드)
 ##
 ## 🔴 겉보기(둥둥·회전·flip·머즐 연출·지팡이가 실제로 보이나)는 헤드리스가 못 본다 —
-## 실게임 MCP가 별도 확인(세65에 4방향 조준·발사 tip 스폰·bob ±2.5px 실측).
+## 실게임이 별도 확인한다.
 ##
 ## 주의: -s 모드는 오토로드 전역 등록보다 먼저 컴파일 — 오토로드 식별자·모듈 preload·class_name 참조
 ## 금지. 첫 프레임 후 load()·/root 접근으로 우회. 지역 변수는 의도적으로 동적 타입.
@@ -71,11 +63,10 @@ func _run() -> void:
 	_finish()
 
 
-## 🔴🔴 **뒷정리 = 계약이다** (세98에 실측으로 찾은 **선재 버그**). `-s` 테스트는 세이브 뿌리가
-## `user://save_test`로 격리돼 있을 뿐 **테스트끼리는 그 파일을 공유한다** — 그런데 [2]가 지팡이를
-## 낀 채 끝내고, `equipment_changed`는 자동 저장 트리거다(세84 #1). 그래서 이 파일이 남긴 지팡이가
-## 세이브에 박혀 **뒤에 도는 `test_workshop_auto`가 그걸 로드**했고, 거기서 「맨손 기준값」으로 잰
-## `base_wspeed`·`base_cost`가 지팡이 낀 값이 돼 **「해제하면 원복」 2건이 빨개졌다**.
+## 🔴🔴 **뒷정리 = 계약이다.** `-s` 테스트는 세이브 뿌리가 `user://save_test`로 격리돼 있을 뿐
+## **테스트끼리는 그 파일을 공유한다** — [2]가 지팡이를 낀 채 끝내고 `equipment_changed`가
+## 자동 저장을 부르면, 남은 지팡이가 세이브에 박혀 **뒤에 도는 `test_workshop_auto`가 그걸
+## 로드**한다(거기서 「맨손 기준값」으로 잰 값이 지팡이 낀 값이 돼 2건이 빨개졌다).
 ## 🔴 이 빨강은 **전체 스위트로 돌 때만 난다** — 파일 하나만 돌리면 그린이라 오래 안 보였다.
 ## ⚠ 저장은 `call_deferred`라 **프레임을 흘려야** 깨끗한 상태가 실제로 쓰인다.
 func _restore_state() -> void:
@@ -132,12 +123,12 @@ func _test_muzzle_geometry() -> void:
 
 ## caster.fire()가 실어 보내는 origin을 한 번 붙잡는다(공개 계약 경로).
 ##
-## 🔴🔴 **세98: `ring_cast_requested` → `ring_cast_started`로 갈아탔다.** 발사가 지연 emit이 되면서
-## (좌클릭 → 시전 duration → 탄) `ring_cast_requested`는 이 함수가 돌아온 **한참 뒤에** 온다 —
+## 🔴🔴 **관측점은 `ring_cast_requested`가 아니라 `ring_cast_started`다.** 발사가 지연 emit이라
+## `ring_cast_requested`는 이 함수가 돌아온 **한참 뒤에** 온다 —
 ## `connect → fire() → await 없이 disconnect`라 콜백이 영영 안 불려 origin이 `Vector2.INF`로 남고
-## **세65 총구 단일 소스의 유일한 그물이 조용히 죽는다**.
-## `ring_cast_started`에도 **같은 `_muzzle()` 값**이 실리므로(계약 ⓛ) 동기 관측이 그대로 유지된다.
-## ⚠ 여기에 `await`를 넣지 마라 — 시전 시간을 조일 때마다 이 그물이 다시 낡는다(감사 T4).
+## **총구 단일 소스의 유일한 그물이 조용히 죽는다**.
+## `ring_cast_started`에도 **같은 `_muzzle()` 값**이 실리므로 동기 관측이 그대로 유지된다.
+## ⚠ 여기에 `await`를 넣지 마라 — 시전 시간을 조일 때마다 이 그물이 다시 낡는다.
 func _capture_fire_origin():
 	var captured := {"origin": Vector2.INF}
 	var cb := func(_assembly, origin, _duration) -> void:
@@ -147,7 +138,7 @@ func _capture_fire_origin():
 	_caster.fire()
 	_bus.ring_cast_started.disconnect(cb)
 	# 🔴 걸린 시전을 끊는다 — 안 끊으면 **다음 호출의 `fire()`가 연사 차단에 걸려** origin이 INF로
-	#   남는다(마나는 안 돌아온다 = 설계 ⓓ. 여긴 debug_free_cast라 무관).
+	#   남는다(마나는 안 돌아온다. 여긴 debug_free_cast라 무관).
 	_caster.cancel_cast()
 	return captured["origin"]
 

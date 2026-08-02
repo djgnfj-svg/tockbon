@@ -1,25 +1,12 @@
 extends Node2D
-## 피격 손맛 통제소 (세션 38) — 화면 흔들림 · 히트스톱 · 떠오르는 피해 숫자를 한 곳에 모은다.
-## Player 아래 공용 노드라 **마을·보스방 양쪽에서 자동으로 산다** (player가 공용 배우이므로 —
-## 씬마다 배선하지 않는다). 넉백·팝은 적 자신이 한다(forest_enemy._pop) — 여긴 "월드 전체 반응"만.
+## 피격 손맛 통제소 — 화면 흔들림 · 히트스톱 · 떠오르는 피해 숫자. Player 아래 공용 노드라
+## 마을·보스방 양쪽에서 자동으로 산다. 넉백·팝은 적 자신이 하고, 여긴 "월드 전체 반응"만 든다.
 ##
-## 🔴 EventBus만 본다 (타 모듈 직접 참조 금지). 신호 넷 (세63 개편):
-##   enemy_hit → 피해 숫자 + 트라우마 소폭 + 짧은 히트스톱
-##   enemy_died → 트라우마 중폭 + 조금 긴 히트스톱
-##   player_hurt → 트라우마 대폭 + **방향성 킥** (맞은 방향 반대로 밀리는 화면)
-##   ring_cast_requested → **발사 반동** (조준 반대 소폭 킥 — aim_dir이 이미 실려 있어 core 무변경.
-##                         마나 부족이면 caster가 emit 전에 거르므로 헛반동 없음 — 세59 머즐 선례)
-##
-## 🔴 카메라 모델 (세63 설계 §F): offset = 지터(트라우마) + 킥(방향 벡터).
-##   _trauma [0..1] — 사건마다 가산(포화 clamp), 선형 감쇠. 지터 진폭 = MAX·trauma² —
-##   세기 제곱이라 잔진동은 미미하고 큰 사건만 크게 흔든다. _kick은 move_toward로 ZERO 복귀.
-##   🔴 offset 대입은 `_process` **한 곳뿐**이다 — 두 곳이 쓰면 서로 덮는 3파전이 된다
-##   (forest_enemy modulate 3파전과 같은 병). ZERO 복귀 분기는 둘 다 0일 때만.
-##
-## 🔴 여기 수치는 밸런스가 아니라 **연출값(손맛)이다** (projectile 물리 여유 const 선례) —
-## balance.tres가 아니라 여기 const로 둔다. 사용자가 직접 그어/맞아 보며 조일 값이다.
-##
-## class_name 없음 — 모듈 규칙(preload로만 참조).
+## 🔴 EventBus만 본다(타 모듈 직접 참조 금지).
+## 카메라 offset = 지터(트라우마) + 킥(방향 벡터). 지터 진폭이 trauma²이라 잔진동은 미미하고
+## 큰 사건만 크게 흔든다.
+## 🔴 **offset 대입은 `_process` 한 곳뿐이다** — 두 곳이 쓰면 서로 덮는 3파전이 된다.
+## 🔴 수치는 밸런스가 아니라 연출값(손맛)이라 const다.
 
 const DamageNumber := preload("res://src/hud/damage_number.tscn")
 
@@ -49,8 +36,7 @@ func _ready() -> void:
 	_camera = get_parent().get_node_or_null(^"Camera2D") as Camera2D
 	EventBus.enemy_hit.connect(_on_enemy_hit)
 	EventBus.enemy_died.connect(_on_enemy_died)
-	# 세63: 옛 `player_hp_changed` 직전값 비교(감소 추측)를 `player_hurt` 구독으로 대체 —
-	# damage_player만 발신하는 1급 사건이라 회복·출격 만HP에 오발하지 않는다(신호가 막는다).
+	# 🔴 HP 감소 추측이 아니라 `player_hurt`를 구독한다 — 회복·출격 만HP에 오발하지 않는다.
 	EventBus.player_hurt.connect(_on_player_hurt)
 	EventBus.ring_cast_requested.connect(_on_cast)
 
@@ -73,9 +59,6 @@ func _add_trauma(amount: float) -> void:
 	_trauma = clampf(_trauma + amount, 0.0, 1.0)
 
 
-## ⚠ 세112: 여기 있던 **`_is_seen()` 가드**(*"안 보이는 적의 피해 숫자는 안 띄운다"* · 세104 N27)가
-##  시야와 함께 죽었다 — 덕타이핑이라 이미 fail-open으로 흐르고 있었고, 지금은 **묻는 몸이 없다.**
-##  🔴 되살릴 땐 **`forest_enemy.is_seen()`과 같이** 열어라(한쪽만 열면 반쪽만 돈다).
 func _on_enemy_hit(enemy: Node2D, damage: float, _rune: int) -> void:
 	if is_instance_valid(enemy):
 		_spawn_number(enemy.global_position, damage, damage >= BIG_HIT)
@@ -89,8 +72,7 @@ func _on_enemy_died(_id: StringName) -> void:
 	_hitstop(HITSTOP_KILL, true)
 
 
-## 내가 맞았다 — 큰 트라우마 + 방향성 킥. 킥 = (나 − 가해자) 방향 = 맞은 방향 **반대**(밀려나는 쪽).
-## source_pos INF 센티널(방향 모름)은 is_finite() 가드로 거른다 — 킥 없이 트라우마만.
+## 킥 = (나 − 가해자) 방향 = 밀려나는 쪽. ⚠ source_pos INF는 「방향 모름」 센티널이라 킥 없이 넘긴다.
 func _on_player_hurt(_amount: float, source_pos: Vector2) -> void:
 	_add_trauma(TRAUMA_HURT)
 	if not source_pos.is_finite():
@@ -103,7 +85,7 @@ func _on_player_hurt(_amount: float, source_pos: Vector2) -> void:
 		_kick = away.normalized() * HURT_KICK_PX
 
 
-## 발사 반동 — 조준 반대로 소폭 킥. aim_dir이 시그널에 이미 실려 있어 신규 시그널 0 (설계 §F).
+## 발사 반동 — 조준 반대로 소폭 킥. 마나 부족이면 caster가 emit 전에 걸러 헛반동이 없다.
 func _on_cast(_assembly: Dictionary, _origin: Vector2, aim_dir: Vector2) -> void:
 	if aim_dir.length() > 0.01:
 		_kick = -aim_dir.normalized() * RECOIL_PX

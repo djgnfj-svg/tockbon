@@ -1,5 +1,5 @@
 extends SceneTree
-## 고리 조립 발사 시스템 자동 검증 (모듈 B, 세션 12~) — 헤드리스 실행:
+## 고리 조립 발사 시스템 자동 검증 — 헤드리스 실행:
 ##   ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_ring_spell_auto.gd
 ## 전 항목 통과 시 "TEST_RING_SPELL_OK" 출력 후 종료 코드 0.
 ##
@@ -12,7 +12,7 @@ extends SceneTree
 # 고리 칸 어휘 (RingBoard와 같은 값 — 여기 하드코딩해 모듈 preload를 피한다)
 const G_GATHER := 0
 const G_RADIATE := 1
-## 세션47 어휘 배증 — Enums.GlyphCode 2~5 (여기 하드코딩해 모듈 preload를 피한다)
+## Enums.GlyphCode 2~5 (여기 하드코딩해 모듈 preload를 피한다)
 const G_PIERCE := 2
 const G_HOMING := 3
 const G_BOUNCE := 4
@@ -47,10 +47,8 @@ func _run() -> void:
 	root.add_child(system)
 	await process_frame
 
-	# 🔴 세61 콘텐츠 리셋: 진 .tres가 jin_single 하나로 줄었다. 발사 **기계**(pattern·motion 분기,
-	# ring_spell_system._shot_plan / ring_carrier.set_motion)는 전부 남아 있으므로, 옛 진들이 덮던
-	# 축을 **in-memory JinDef를 Db에 임시 등록**해 계속 잰다([19]의 __test_big_fork 선례).
-	# 진을 되살리면 해당 축의 id를 실데이터로 되돌려도 된다. 끝나면 _remove_test_jins가 걷는다.
+	# 🔴 진 .tres가 하나로 줄었지만 발사 **기계**(pattern·motion 분기)는 전부 남아 있다 — 옛 진들이
+	#   덮던 축을 **in-memory JinDef를 Db에 임시 등록**해 계속 잰다. 끝나면 _remove_test_jins가 걷는다.
 	var db_reg = root.get_node("/root/Db")
 	_register_test_jins(db_reg)
 
@@ -84,7 +82,7 @@ func _run() -> void:
 		quit(1)
 
 
-## 세61: 옛 진 7종이 덮던 발사 축을 재는 테스트 전용 JinDef들 — Db.jins는 평범한 Dictionary다.
+## 옛 진 7종이 덮던 발사 축을 재는 테스트 전용 JinDef들 — Db.jins는 평범한 Dictionary다.
 ## body_scale 1.2(옛 jin_spiral 값)는 [19]②의 몸집 비교가 그대로 쓴다.
 const TEST_JINS := {
 	&"__t_fork": {"pattern": Enums.WandPattern.MULTI},
@@ -196,8 +194,8 @@ func _test_carrier_flies_and_hits(system) -> void:
 	dummy.queue_free()
 	_clear(system)
 
-	# 🔴 세션 34: 룬 사슬 — assembly.rune(=물 2)가 발사까지 흐르는지. 세션 34 전엔 발사가
-	# Db.get_rune(FIRE)를 하드코딩해 물을 그려도 불로 맞았다 (이 검증이 회귀 가드).
+	# 🔴 룬 사슬 — assembly.rune(=물 2)가 발사까지 흐르는지. 하드코딩하면 물을 그려도 불로 맞는다
+	#   (이 검증이 회귀 가드).
 	var wet = _dummy_scene.instantiate()
 	root.add_child(wet)
 	wet.global_position = Vector2(140, 0)
@@ -258,8 +256,8 @@ func _test_miss_no_deploy(system) -> void:
 	_clear(system)
 
 
-# ── 🔴 손그림 점수 → 위력 (세션 23) ──
-# 세션 22까지 점수는 계산·저장만 되고 **아무도 안 읽어** 잘 그리든 막 그리든 피해가 같았다.
+# ── 🔴 손그림 점수 → 위력 ──
+# 점수가 계산·저장만 되고 **아무도 안 읽으면** 잘 그리든 막 그리든 피해가 같다.
 # 여기가 그 계약을 못 박는다: assembly.score가 실제 take_hit 피해를 바꾼다.
 
 ## 빈 진을 쏴 **몸으로** 때린 피해를 잰다 (전개 없이 한 방만 들어와 값이 깔끔하다).
@@ -314,7 +312,7 @@ func _hit_with(system, assembly: Dictionary) -> Dictionary:
 	return hit
 
 
-## 🔴 종이 = 규모 (세션29) — assembly.size가 실제 take_hit 피해를 키운다 (spell이 size를 읽어 태운다).
+## 🔴 종이 = 규모 — assembly.size가 실제 take_hit 피해를 키운다 (spell이 size를 읽어 태운다).
 func _test_size_scales_damage(system) -> void:
 	print("[10] 큰 진이 더 세게 때린다 (종이=규모 → size → 피해)")
 	var big := await _hit_with(system, {"rings": [_all(GLYPH_NONE)], "score": 0.9, "size": 2.0})
@@ -326,7 +324,7 @@ func _test_size_scales_damage(system) -> void:
 	_check(bd / sd > 1.5, "차이가 의미 있는 크기 (%.2f배 — size 2.0, 지수 1.0이면 ≈2.0)" % (bd / sd))
 
 
-## 🔴 특별잉크 = 화상 증폭 (세션29) — assembly.special_ink/ratio가 status_power를 키운다.
+## 🔴 특별잉크 = 화상 증폭 — assembly.special_ink/ratio가 status_power를 키운다.
 ## 피해(power)는 안 건드린다: 특별잉크는 **상태 축**이고 등급잉크가 **피해 축**이다.
 func _test_special_ink_amplifies_status(system) -> void:
 	print("[11] 붉은 잉크로 그린 진 = 화상이 세다 (status_power 증폭, 피해는 그대로)")
@@ -342,14 +340,9 @@ func _test_special_ink_amplifies_status(system) -> void:
 		% [float(red.get("damage", 0.0)), float(plain.get("damage", 0.0))])
 
 
-# ── 🔴 지팡이 축 = 세기·속도 스칼라 (세85, 감사 #5 — 옛 `wand_pattern` 은퇴) ──
-#
-# 세42~84의 이 자리는 *"착용 지팡이가 진(캐리어) 발수를 정한다"*를 쟀다. 그 축은 세85에 은퇴했다:
-# 폴백이 `jin_def == null`일 때만 걸리는데 **도안 생성 두 경로가 전부 진을 채워** 산탄·전방위 지팡이가
-# 게임에서 한 번도 도달한 적이 없었고(제작이 순수 손실), 형태는 진·문양·층이 이미 답하는 질문이다.
-#
-# 🔴 **옛 그물의 결함**: 합성 assembly(`{"rings": …}`, 진 없음)로 재서 **진이 있는 실경로를 안 지났다**
-# → 도달 불가를 못 잡고 초록불이었다. 그래서 아래는 전부 **실제 `JinDef`를 태운 도안**으로 잰다.
+# ── 🔴 지팡이 축 = 세기·속도 스칼라 (옛 `wand_pattern`은 은퇴 — 형태는 진이 정한다) ──
+# 🔴 합성 assembly(진 없음)로만 재면 **진이 있는 실경로를 안 지나** 도달 불가를 못 잡고 초록불이 된다.
+#   그래서 아래는 전부 **실제 `JinDef`를 태운 도안**으로 잰다.
 # 카운트는 emit 직후 1프레임 — 캐리어는 빈 진·무표적이라 수명 동안 날아다녀 안 사라진다.
 
 func _test_wand_axis(system) -> void:
@@ -422,20 +415,13 @@ func _carrier_travel(system) -> float:
 	return moved
 
 
-## 🔴 **마나 파라미터가 실제 발사 경로에 도달하나** (세85). `GameState.cast_mana_cost()`가 옳은 값을
-## 돌려줘도 `player_caster.fire()`가 `RingPower.cast_mana_cost()`를 그대로 부르면 **장비 보정이
-## 조용히 빠진다** — 그게 이 은퇴가 고치려는 병(`attack_cooldown_mult`)의 정확한 재발 형태다.
-## 그래서 getter가 아니라 **fire()가 실제로 깎은 양**으로 잰다.
-##
-## ⚠ 도안의 `rings`가 비어 있어 `_on_ring_cast`는 즉시 돌아간다 — 마나만 깎이고 캐리어는 안 난다
-##   (fire()는 emit **전에** 마나를 판다). 부작용 없는 측정 자리다.
-## ⚠ `debug_free_cast`는 헤드리스에서도 true다("editor" 피처 — 세62 함정) → 꺼야 마나가 닳는다.
-##
-## 🔴🔴 **세98: 이 검사는 살아남았지만 이유가 바뀌었다.** 발사는 이제 지연 emit인데(좌클릭 → 시전
-## `duration` → 탄) **마나는 시전 *시작*에 깎이므로** 동기 측정이 그대로 성립한다. 대신 아래 루프가
-## 두 번 도는 게 새 문제였다 — 시전이 걸린 채 남으면 두 번째 `fire()`가 **연사 차단**에 걸려
-## 「깎인 마나 0」을 재고 **거짓 빨강**이 난다. 그래서 잰 직후 `cancel_cast()`로 끊는다
-## (취소해도 마나는 안 돌아온다 = 설계 ⓓ라 측정값은 그대로다).
+## 🔴 **마나 파라미터가 실제 발사 경로에 도달하나** — `GameState.cast_mana_cost()`가 옳아도
+##  `player_caster.fire()`가 `RingPower.cast_mana_cost()`를 그대로 부르면 **장비 보정이 조용히 빠진다.**
+##  그래서 getter가 아니라 **fire()가 실제로 깎은 양**으로 잰다.
+## ⚠ 도안의 `rings`가 비어 있어 마나만 깎이고 캐리어는 안 난다 — 부작용 없는 측정 자리다.
+## ⚠ `debug_free_cast`는 헤드리스에서도 true다("editor" 피처) → 꺼야 마나가 닳는다.
+## ⚠ 잰 직후 `cancel_cast()`로 끊는다 — 시전이 걸린 채 남으면 두 번째 `fire()`가 연사 차단에 걸려
+##  「깎인 마나 0」을 재고 **거짓 빨강**이 난다(취소해도 마나는 안 돌아와 측정값은 그대로다).
 func _test_wand_mana_reaches_fire(system) -> void:
 	var gs = root.get_node("/root/GameState")
 	var saved_eq: Dictionary = gs.equipment.duplicate()
@@ -455,10 +441,7 @@ func _test_wand_mana_reaches_fire(system) -> void:
 		gs.mana = gs.mana_max()
 		var before: float = gs.mana
 		# ⚠ 프레임을 흘리지 않고 **즉시** 잰다 — `GameState._process`의 마나 재생이 끼어들면
-		#   측정값이 재생분만큼 어긋나 등식 검사가 거짓 빨강이 된다.
-		# 🔴 세98 정정: *"fire·emit은 동기라 대기 불필요"*는 **거짓이 됐다** — 지금 동기인 건
-		#   **마나 차감과 `ring_cast_started`**이고 `ring_cast_requested`는 `duration` 뒤다.
-		#   즉시 재는 이유는 여전히 유효하지만(오히려 필수다), 근거는 「emit이 동기」가 아니라
+		#   (동기인 건 **마나 차감**이라 즉시 측정이 성립한다.)
 		#   **「마나가 시전 시작에 나간다」**로 바뀌었다.
 		caster.fire()
 		spent[wid] = before - gs.mana
@@ -480,10 +463,9 @@ func _test_wand_mana_reaches_fire(system) -> void:
 	await _drain(2)
 
 
-# ── 🔴 문양 어휘 → 탄 행동 효과 (세션47) ──
-# 세션44까지 `projectile`의 팅김·유도·추진 기계는 **한 번도 실행되지 않는 미배선 자산**이었다
-# (유일 호출자가 관통 하나만 넘겼다). 여기가 그 배선을 못 박는다: 각 발사 코드가 자기 GlyphType
-# 효과를 **실제로 탄에 싣는지**, 그리고 그 효과가 탄의 행동을 바꾸는지(추진=더 멀리 난다).
+# ── 🔴 문양 어휘 → 탄 행동 효과 ──
+# 팅김·유도·추진 기계는 배선이 끊기면 **한 번도 실행되지 않는 미배선 자산**이 된다. 여기가 그 배선을
+# 못 박는다: 각 발사 코드가 자기 GlyphType 효과를 **탄에 싣는지**, 그 효과가 행동을 바꾸는지.
 
 func _test_glyph_bolt_effects(system) -> void:
 	print("[13] 문양 코드 → 탄 효과 (세션47: 유도∿·팅김⚡·추진↑ 배선)")
@@ -534,12 +516,9 @@ func _travel_of(system, code: int) -> float:
 	return moved
 
 
-# ── 🔴 진 5종 = 발사 형태 (세션48) ──
-# 세션44에 진 3개가 WandPattern 3개를 1:1로 소진해 "새 진 = .tres 한 장"이 깨져 있었다. 세션48이
-# 패턴 3종(연발·분사·타겟팅)과 **직교 축인 경로**(나선·부메랑)를 더해 그걸 열었다.
-# 🔴 여기가 그 축들을 못 박는다. 진 5종을 "발수만" 세면 검출력이 0이다 — 연발과 산탄은 발수가
-# 같을 수도 있고, 갈리는 건 **시간축**이다. 그래서 아래는 전부 **관측 가능한 행동**으로 잰다:
-#   발수는 세되 **언제** 생겼는지 · 각도는 **캐리어가 실제로 간 방향**으로 · 경로는 **위치 궤적**으로.
+# ── 🔴 진 5종 = 발사 형태 ──
+# 🔴 "발수만" 세면 검출력이 0이다 — 연발과 산탄은 발수가 같을 수도 있고 갈리는 건 **시간축**이다.
+#   그래서 전부 **관측 가능한 행동**으로 잰다: 발수는 세되 **언제** 생겼는지 · 각도는 **간 방향**으로.
 # 내부 필드(_velocity·_shot_plan)는 안 더듬는다 — 리팩터 때 조용히 깨지는 물건이라 계약이 아니다.
 
 ## 진 id로 빈 진을 쏜다 (전개 없음 — 캐리어만 본다). aim 기본 = 오른쪽.
@@ -734,10 +713,9 @@ func _test_jin_boomerang(system) -> void:
 	await _drain(4)
 
 
-## 🔴 body_scale이 **실제로 먹는가** (세션48에 DARK에서 깨어난 필드).
-## 두 갈래로 잰다: ① 규모가 발수를 늘린다(산탄) ② 규모가 몸집을 키운다(body_radius).
-## ①은 scale≠1.0인 산탄 진이 data에 없어 **테스트 전용 JinDef를 Db에 임시 등록**해 잰다
-## (data/·src/는 리드 영역이라 손대지 않는다 — 등록은 테스트가 끝나며 되돌린다).
+## 🔴 body_scale이 **실제로 먹는가** — 두 갈래로 잰다: ① 규모가 발수를 늘린다(산탄)
+##  ② 규모가 몸집을 키운다(body_radius).
+## ①은 scale≠1.0인 산탄 진이 data에 없어 **테스트 전용 JinDef를 임시 등록**해 잰다(끝나며 되돌린다).
 func _test_jin_body_scale(system) -> void:
 	print("[19] 진 규모(body_scale) → 발수·몸집 (세션48)")
 	_clear(system)

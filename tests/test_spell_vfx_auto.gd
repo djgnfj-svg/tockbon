@@ -1,17 +1,17 @@
 extends SceneTree
-## 마법 발사 연출 배선 자동 검증 (세션59 — 속성형 볼·트레일·머즐·착탄) — 헤드리스 실행:
+## 마법 발사 연출 배선 자동 검증 (속성형 볼·트레일·머즐·착탄) — 헤드리스 실행:
 ##   ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_spell_vfx_auto.gd
 ## 전 항목 통과 시 "TEST_SPELL_VFX_OK" 출력 후 종료 코드 0.
 ##
 ## [1] vfx가 ring_cast_requested·spell_impact에 연결돼 있다 — 배선 침묵사 그물(핸들러 오타로
-##     조용히 안 붙는 것). test_audio_auto의 [연결만 확인] 패턴.
+##     조용히 안 붙는 것).
 ## [2] 캐리어 setup → 트레일이 **형제** Line2D로 스폰 + 🔴 player_projectiles 그룹 무가입
-##     (테스트 4곳이 이 그룹으로 탄 수를 센다 — 섞이면 탄 수가 거짓으로 는다, 설계 §6)
+##     (테스트 4곳이 이 그룹으로 탄 수를 센다 — 섞이면 탄 수가 거짓으로 는다)
 ## [3] 트리 밖 setup — 트레일 생략, 스크립트 에러 없이 통과 (null 가드 — 리드 grep이 최종 확인)
 ## [4] 빈 진 착탄 → spell_impact **정확히 1** — 캐리어 _hit_enemy emit 전용 그물 (빈 진은 탄이
 ##     안 나가므로 탄 emit이 캐리어 emit 부재를 못 가린다 — 뮤테이션에서 실제로 가렸다)
 ## [5] 발산 진 착탄 → spell_impact ≥ 2 (캐리어 1 + 전개 탄 _deal_damage ≥ 1) — 탄 emit 그물
-##     + 🔴 세98: **`score`(도안 등급)가 착탄까지 따라오나** — 캐리어·전개 탄이 같은 값을 실어야
+##     + 🔴 **`score`(도안 등급)가 착탄까지 따라오나** — 캐리어·전개 탄이 같은 값을 실어야
 ##       한 발의 착탄이 갈라져 보이지 않는다(나르는 길 = `_spawn_carrier`/`_deploy_now` 인자 체인)
 ##
 ## 🔴 렌더(코어 색·펄스·자전·트레일 모양·플래시)는 헤드리스가 못 본다 — 실게임 MCP가 별도 확인.
@@ -21,7 +21,7 @@ extends SceneTree
 
 const G_RADIATE := 1
 const GLYPH_NONE := -1
-## 🔴 세98 — 착탄까지 따라오는지 재는 표식 점수. **기본값(0.0)과 다르고 무난(0.70)과도 다른 값**이라
+## 🔴 착탄까지 따라오는지 재는 표식 점수. **기본값(0.0)과 다르고 무난(0.70)과도 다른 값**이라
 ## 폴백이 끼어들면 바로 드러난다(등급 경계값을 쓰면 「어쩌다 맞은 것」과 구분이 안 된다).
 const _SCORE := 0.91
 
@@ -107,7 +107,7 @@ func _test_impact_carrier_only() -> void:
 	root.add_child(dummy)
 	dummy.global_position = Vector2(140, 0)
 	var hits: Array = []
-	# ⚠ 세98: `spell_impact`가 3인자가 됐다(pos, rune_type, **score**) — GDScript 시그널엔 기본값이
+	# ⚠ `spell_impact`는 3인자다(pos, rune_type, **score**) — GDScript 시그널엔 기본값이
 	#   없어 람다 시그니처를 안 맞추면 **연결 자체가 에러**다.
 	var on_impact := func(_pos: Vector2, _rune_type: int, _score: float) -> void:
 		hits.append(true)
@@ -140,7 +140,7 @@ func _test_impact_signal() -> void:
 		hits.append({"pos": pos, "rune": rune_type, "score": score})
 	_bus.spell_impact.connect(on_impact)
 	# 발산 8칸 — 캐리어가 허수아비에 박히고(1회), 전개 탄이 그 자리서 퍼져 같은 허수아비를 또 때린다
-	# 🔴 세98: `score`를 실어 쏜다 — 착탄까지 **따라오는지**를 아래에서 잰다(캐리어·전개 탄 둘 다).
+	# 🔴 `score`를 실어 쏜다 — 착탄까지 **따라오는지**를 아래에서 잰다(캐리어·전개 탄 둘 다).
 	_bus.ring_cast_requested.emit({"rings": [_all(G_RADIATE)], "score": _SCORE}, Vector2.ZERO, Vector2(1, 0))
 	var frames := 0
 	while hits.size() < 2 and frames < 240:
@@ -150,8 +150,8 @@ func _test_impact_signal() -> void:
 	_check(hits.size() >= 2, "전개 탄 착탄 emit (수신 %d)" % hits.size())
 	if hits.size() > 0:
 		_check(int(hits[0]["rune"]) == 0, "rune_type이 실려 온다 (불=0, 실제 %d)" % int(hits[0]["rune"]))
-		# 🔴🔴 세98: **`score`가 착탄까지 따라온다.** 이게 없으면 착탄 연출이 등급을 못 읽어
-		#   78 위력과 157 위력의 착탄이 픽셀 동일해진다(설계 §0의 병, 착탄 쪽 절반).
+		# 🔴🔴 **`score`가 착탄까지 따라온다.** 이게 없으면 착탄 연출이 등급을 못 읽어
+		#   78 위력과 157 위력의 착탄이 픽셀 동일해진다.
 		#   ⚠ 「0이 아니다」로 재지 마라 — 폴백 상수를 심어도 통과한다. **쏜 값 그대로**를 잰다.
 		var carried := true
 		for h: Dictionary in hits:

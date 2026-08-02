@@ -1,11 +1,8 @@
 extends Node
 ## 게임 내 시간 — 상시 진행, 낮밤 페이즈. 전환·하루 시작은 EventBus로 방송된다.
 ##
-## 🔴 **실질 역할 = 자동저장 틱** (세션 22 확인). `_process`가 하루를 넘기며 `day_started`를 쏘고
-## `save_manager`가 그걸 받아 저장한다. 죽은 코드가 아니다.
-## ⚠ 세86 실측 — 낮밤을 **게임플레이로 소비하는 쪽은 아직 0곳**이다: `phase_changed` 수신은
-## `audio`(전환음)뿐이고 `sleep_until_morning`·`is_night`·`day_progress`·`paused`는 호출자가 없다.
-## 세84에 `EnemyDef.night_buff`를 걷은 이유가 이것이다(밤 강화를 붙일 땐 소비자를 같은 커밋에).
+## 🔴 실질 역할 = **자동저장 틱**이다 — `_process`가 하루를 넘기며 `day_started`를 쏘고
+## `save_manager`가 그걸 받아 저장한다. 낮밤을 게임플레이로 소비하는 쪽은 아직 없다.
 
 var balance: BalanceData = preload("res://data/balance.tres")
 
@@ -31,7 +28,7 @@ func _process(delta: float) -> void:
 		phase = new_phase
 		EventBus.phase_changed.emit(phase)
 
-## 취침 — 아침 스킵 + 마나 완전 회복. ⚠ 호출자 0(세86 실측 — 침대·여관이 아직 없다).
+## 취침 — 아침 스킵 + 마나 완전 회복.
 func sleep_until_morning() -> void:
 	GameState.restore_mana_full()
 	_next_day()
@@ -48,7 +45,7 @@ func _phase_for(frac: float) -> Enums.Phase:
 	for i in range(balance.phase_fracs.size()):
 		acc += balance.phase_fracs[i]
 		if frac < acc:
-			# 🔴 phase_fracs(balance)가 Phase enum보다 길어져도 범위 밖으로 안 나가게 클램프한다 —
+			# 🔴 phase_fracs가 Phase enum보다 길어져도 범위 밖으로 안 나가게 클램프한다 —
 			# 안 그러면 .tres 편집만으로 인덱스→Phase가 조용히 밀린다.
 			return mini(i, Enums.Phase.NIGHT) as Enums.Phase
 	return Enums.Phase.NIGHT

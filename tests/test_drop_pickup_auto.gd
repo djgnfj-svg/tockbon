@@ -1,5 +1,5 @@
 extends SceneTree
-## 바닥 픽업 자동 검증 (세션46) — 헤드리스 실행:
+## 바닥 픽업 자동 검증 — 헤드리스 실행:
 ##   ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_drop_pickup_auto.gd
 ## 전 항목 통과 시 "TEST_DROP_PICKUP_OK" 출력 후 종료 코드 0.
 ##
@@ -114,8 +114,8 @@ func _test_pickup_after_delay_banks_and_frees() -> void:
 	p.body_entered.emit(player)
 	await process_frame
 	_check(_bag_total() == before + 4, "가방이 4개 는다 (%d → %d)" % [before, _bag_total()])
-	# 🔴 세션51: 도착 팝(POP_TIME 0.12s) 동안 픽업은 **아직 살아 있다** — 그래야 플레이어
-	# 자리에서 터지는 게 보인다. queue_free는 팝이 끝나고 온다(계약은 그대로: 결국 사라진다).
+	# 🔴 도착 팝(POP_TIME 0.12s) 동안 픽업은 **아직 살아 있다** — 그래야 플레이어 자리에서
+	# 터지는 게 보인다. queue_free는 팝이 끝나고 온다(계약은 그대로: 결국 사라진다).
 	await create_timer(0.25).timeout
 	_check(p.is_queued_for_deletion(), "주워진 픽업은 (도착 팝 뒤) queue_free 된다")
 
@@ -138,7 +138,7 @@ func _test_non_player_ignored() -> void:
 
 ## [6] 🔴 플레이어가 없는 씬에서 자석이 크래시하지 않는다.
 ## 이게 이 파일에서 제일 조용한 함정이다 — null 가드가 없으면 매 물리 프레임 null 접근으로
-## 죽는데, `-s` 헤드리스는 그래도 "OK"를 찍는다(세22·23 패턴). **grep에 SCRIPT ERROR 필수.**
+## 죽는데, `-s` 헤드리스는 그래도 "OK"를 찍는다. **grep에 SCRIPT ERROR 필수.**
 func _test_magnet_survives_no_player() -> void:
 	print("[6] 플레이어 없는 씬에서 자석이 크래시하지 않는다 (null 가드)")
 	_gs.bag.clear()
@@ -232,7 +232,7 @@ func _test_magnet_cannot_be_cancelled() -> void:
 ## 있으므로 이중 수집 위험이 실재한다.
 ## ⚠ **가드는 셋이라 중복 방어선이다** (`_on_body_entered`의 상태 체크 · `_try_collect._collected` ·
 ## `_collect_at._collected`). 이 테스트는 **묶음 전체가 사라지는 것**을 잡지, 각 줄이 필수임을
-## 증명하지 않는다 — 하나만 지우면 나머지 둘이 막아 초록이다(세51 뮤테이션 실측). 그러니
+## 증명하지 않는다 — 하나만 지우면 나머지 둘이 막아 초록이다(뮤테이션 실측). 그러니
 ## **"[11]이 지켜 주니 이 줄은 지워도 된다"고 읽지 마라.**
 func _test_arrival_banks_once() -> void:
 	print("[11] 자석 도착은 1회만 뱅킹한다 (이중 수집 가드)")
@@ -274,13 +274,12 @@ func _test_item_collected_signal() -> void:
 	_drop_player(player)
 
 
-## [13] 🔴 해금물(문양-고리 두루마리) 페이로드 + **그 문구가 원시 id가 아니다** (세88 §3-B-2).
-##
+## [13] 🔴 해금물(문양-고리 두루마리) 페이로드 + **그 문구가 원시 id가 아니다**.
 ## 🔴 **화면 문구는 픽업의 일이 아니다** — HUD가 `codex_unlocked`를 받아 `CodexText`로 낸다.
-## 픽업이 라벨 필드를 들고 있던 초안은 걷었다(소비자가 HUD로 옮겨가 **소비자 0 = 거짓 손잡이**가
-## 됐다 — 감사 T3). 그래서 여기서는 **페이로드 계약**은 픽업에, **문구 계약**은 core에 각각 묻는다.
+## 픽업이 라벨 필드를 들고 있던 초안은 걷었다(소비자가 HUD로 옮겨가 **소비자 0 = 거짓 손잡이**).
+## 그래서 여기서는 **페이로드 계약**은 픽업에, **문구 계약**은 core에 각각 묻는다.
 ## ⚠ 안내 문구를 글자로 박지 않는다 — `hint_for_kind`와 대조해 관계식으로 잰다(문구를 다듬어도
-##   거짓 빨강이 안 나게. 세79 교훈).
+##   거짓 빨강이 안 나게).
 func _test_unlock_label() -> void:
 	print("[13] 해금물 페이로드 + 문구가 원시 id가 아니다")
 	var CT: GDScript = load("res://src/core/codex_text.gd")
@@ -347,8 +346,7 @@ func _test_unlock_already_owned() -> void:
 	_drop_player(player)
 
 
-## [16] 🔴🔴 빈 페이로드 픽업이 **재호출 고리 없이** 치워진다 (세88에 고친 실존 버그).
-##
+## [16] 🔴🔴 빈 페이로드 픽업이 **재호출 고리 없이** 치워진다 (실존했던 버그).
 ## 옛 코드: `_collect_at`이 `if _collected or item_id == &"": return`으로 **`_collected`를 세우기
 ## 전에** 빠져나갔다. 자석이 도착하면 `_physics_process`가 **매 프레임 다시 부르고**, 픽업은
 ## 플레이어에 **붙은 채 영원히 안 사라진다** — 에러도 경고도 없다. 두루마리(item_id가 빈 픽업)가
@@ -370,9 +368,8 @@ func _test_empty_payload_no_reentry() -> void:
 		p.free()
 
 
-## [17] 🔴 해금물은 **등급색 마름모로 안 선다** — 세54 도형 플레이스홀더 금지.
+## [17] 🔴 해금물은 **등급색 마름모로 안 선다** — 도형 플레이스홀더 금지.
 ## `_apply_color`가 `Db.get_item` null이면 마름모 `Polygon2D` 폴백으로 떨어지던 자리다
-## (CLAUDE.md가 *"drop_pickup 마름모 선례는 각하됐다"*고 그 이름으로 못 박았다).
 ## ⚠ 두루마리 PNG가 있든 없든 성립한다: 있으면 스프라이트가 켜지고 없으면 후광만 남는다 —
 ## 어느 쪽이든 **마름모 알파는 0**이어야 한다.
 func _test_unlock_is_not_a_diamond() -> void:
@@ -382,10 +379,10 @@ func _test_unlock_is_not_a_diamond() -> void:
 	var vis: Polygon2D = p.get_node("Visual")
 	_check(is_zero_approx(vis.color.a),
 		"마름모 알파 0 (실제 %.2f — 0이 아니면 도형 스탠드인이 화면에 선다)" % vis.color.a)
-	# 🔴🔴 **두루마리 PNG가 실제로 로드되나** — 「파일을 만들었다」는 완료가 아니다(세50).
+	# 🔴🔴 **두루마리 PNG가 실제로 로드되나** — 「파일을 만들었다」는 완료가 아니다.
 	# 마름모 알파만 재면 **PNG가 없어도 통과한다**(그때는 후광만 남아 바닥에 아무것도 안 보인다).
 	# ⚠ `.import` 사이드카가 없으면 `ResourceLoader.exists`가 false라 여기서 걸린다 — 아트를
-	#   받은 세션이 `--import`를 잊는 것이 정확히 이 그물이 잡는 실패다.
+	#   `--import`를 잊는 것이 정확히 이 그물이 잡는 실패다.
 	var sprite: Sprite2D = vis.get_node_or_null("Sprite") as Sprite2D
 	_check(sprite != null and sprite.visible and sprite.texture != null,
 		"두루마리 스프라이트가 켜지고 텍스처가 실렸다 (안 실리면 바닥에 후광만 남는다)")

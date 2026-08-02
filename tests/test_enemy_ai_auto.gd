@@ -1,37 +1,20 @@
 extends SceneTree
-## 적 AI 다양화 자동 검증 (세션 47 — params.ai 분기) — 헤드리스 실행:
+## 적 AI 다양화 자동 검증 (params.ai 분기) — 헤드리스 실행:
 ##   ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_enemy_ai_auto.gd
 ## 전 항목 통과 시 "TEST_ENEMY_AI_OK" 출력 후 종료 코드 0.
 ##
-## 🔴 여기서 지키는 건 헤드리스가 **실제로 잡을 수 있는** 것들이다:
-##   • 방어(armor_reduction) — take_hit의 최종 피해가 준다 (enemy_hit이 경감까지 반영)
-##   • 재생(regen_per_sec) — HP가 시간이 지나면 늘고 상한(_def.hp)을 안 넘는다
-##   • 분산 경감(dispersed_resist) — 분산 상태일 때 받는 피해가 준다 (시간 토글)
-## ⚠ 반대로 **못 잡는 것**: 돌진·부유 움직임의 "느낌"(윈드업 텔레그래프가 피할 만한가, 부유 거리가
-## 답답한가). 그건 리드가 실게임 runtime_state·스샷으로 본다 — 헤드리스는 렌더·손맛을 못 잰다.
-##
-## 🔴 **공개 API로만** 검증한다 (takbon-verify §3): `hp()`·`take_hit`·`enemy_id`·EventBus.enemy_hit.
-## 내부 상태 필드(_hp·_dispersed·_charge_state)는 리팩터 때 옮겨 다녀 계약이 아니다 — 안 더듬는다.
-##
-## 🔴 각 수치는 **되돌리면 빨개지게**(뮤테이션 검출력) 정확한 값을 짚는다 — <100 같은 느슨한
-## 판정은 옛 관대한 코드도 통과해 검출력이 0이 된다 (takbon-verify §4, 세션23 실측).
-##
+## 🔴 여기서 재는 건 헤드리스가 **실제로 잡을 수 있는** 것들이다 — 방어·재생·분산 경감.
+## ⚠ **못 잡는 것**: 돌진·부유의 「느낌」. 헤드리스는 렌더·손맛을 못 잰다 — 실게임 확인이 대체되지 않는다.
+## 🔴 **공개 API로만** 검증한다(`hp()`·`take_hit`·`enemy_id`·EventBus.enemy_hit) — 내부 상태 필드는 계약이 아니다.
+## 🔴 수치는 **되돌리면 빨개지게** 정확한 값을 짚는다 — `<100` 같은 느슨한 판정은 검출력이 0이 된다.
 ## 주의: -s 모드는 오토로드 전역 등록보다 먼저 컴파일된다 — 오토로드 식별자·모듈 preload 금지.
 ## 첫 프레임 후 load()·/root 접근. 지역 변수는 의도적으로 동적 타입.
 
-## 🔴🔴 **세99 몹 정리 — AI 갈래는 `Db`에 몸을 주입해 잰다** (세61 콘텐츠 리셋과 같은 수법).
-##
-## 왜: 방어(`armor_reduction`)·재생(`regen_per_sec`)·분산(`hover`+`dispersed_resist`)을 쥔 잡몹
-## `beetle`·`vine`·`mist`가 세99에 **데이터에서 사라졌다** — 임의로 만든 플레이스홀더였기 때문이다
-## (경위 = `data/enemies/README.md`). 그런데 **기계는 `forest_enemy`에 전부 살아 있다.**
-## 🔴 그 갈래를 쓰는 `.tres`가 0장이라고 그물을 지우면, 다음에 그 키를 쓰는 몹이 왔을 때
-##  **말없이 죽어 있다** — 세58-B에 접촉 피해 채널이 전 스위트에서 사라진 그 함정의 재발 자리다.
-##  그래서 **몸만 주입하고 계약(=코드)은 그대로 잰다.** 뮤테이션 검출력은 옛 판과 같다:
-##  armor 곱을 지우면 [1], regen을 지우면 [2], `dispersed_resist` 경감을 지우면 [3]이 빨개진다.
-##
-## ⚠ **반드시 되돌린다** — `Db.enemies`는 공유 레지스트리라 남기면 뒤 항목의 적 수가 는다
-##  (`test_feel_auto [4]`가 같은 이유로 erase한다). ⚠ [6]은 `Db`가 아니라 **폴더를 스캔**하므로
-##  주입한 몸이 안 섞인다(= 실데이터의 박자만 잰다).
+## 🔴 **AI 갈래는 `Db`에 몸을 주입해 잰다** — 방어·재생·분산을 쥔 잡몹이 데이터에서 사라졌지만
+##  기계는 `forest_enemy`에 살아 있다. 그물을 지우면 다음에 그 키를 쓰는 몹이 왔을 때 **말없이 죽어 있다.**
+## 🔴 뮤테이션: armor 곱을 지우면 [1] · regen을 지우면 [2] · `dispersed_resist` 경감을 지우면 [3]이 빨개진다.
+## ⚠ **반드시 되돌린다** — `Db.enemies`는 공유 레지스트리라 남기면 뒤 항목의 적 수가 는다.
+## ⚠ [6]은 `Db`가 아니라 **폴더를 스캔**하므로 주입한 몸이 안 섞인다(= 실데이터의 박자만 잰다).
 ## ⚠ 시트는 살아 있는 PNG를 빌려 쓴다 — 여기서 재는 건 **행동**이지 그림이 아니다.
 const PROBE_SPRITE := "res://assets/sprites/enemies/hound.png"
 
@@ -80,7 +63,6 @@ func _run() -> void:
 ## [1] 🔴 방어 — `armor_reduction 0.7`이면 받는 피해가 30%로 준다. `has_counter = false`라
 ## 약점 배율이 안 섞인다 → dealt = 100 * (1-0.7) = 30. 계약: enemy_hit이 이 경감까지
 ## 반영한 최종 피해로 온다. 뮤테이션(armor 곱 제거) → dealt=100 → 이 줄이 빨개진다.
-## ⚠ 세99까지 `beetle`(갑충)로 쟀다 — 그 몹이 지워져 **같은 수치의 몸을 주입**한다(머리말 참조).
 func _test_armor_reduces_damage() -> void:
 	print("[1] 방어 — take_hit 최종 피해가 armor_reduction만큼 준다 (주입한 몸)")
 	_inject(&"ai_probe_armor", 55.0, {"armor_reduction": 0.7, "aggro_range": 170.0, "move_speed": 40.0})
@@ -94,7 +76,6 @@ func _test_armor_reduces_damage() -> void:
 
 ## [2] 🔴 재생 — `regen_per_sec 2.5`·hp 40이면 깎여도 시간이 지나면 HP가 늘고, 상한(40)을
 ## 안 넘는다. 공개 리더 hp()로만 본다. 뮤테이션(regen 제거) → hp가 안 늘어 첫 줄이 빨개진다.
-## ⚠ 세99까지 `vine`(덩굴)로 쟀다 — 그 몹이 지워져 **같은 수치의 몸을 주입**한다(머리말 참조).
 func _test_regen_heals_and_caps() -> void:
 	print("[2] 재생 — HP가 시간이 지나면 늘고 상한을 안 넘는다 (주입한 몸)")
 	_inject(&"ai_probe_regen", 40.0, {"ai": "stationary", "regen_per_sec": 2.5, "move_speed": 0.0})
@@ -124,7 +105,6 @@ func _test_regen_heals_and_caps() -> void:
 ## (정확 값이 아니라 "토글이 피해를 바꿨나"를 봐서 타이밍 흔들림에 강하게). 작은 피해로 때려 안 죽인다.
 ## 🔴 hover는 _physics_process의 player-null 반환 뒤에 돌아 disperse 타이머를 깎는다 — 그룹
 ## "player"에 스텁을 멀리 둬 타이머가 흐르게 한다(접촉 사거리 밖이라 피해 안 줌).
-## ⚠ 세99까지 `mist`(안개)로 쟀다 — 그 몹이 지워져 **같은 수치의 몸을 주입**한다(머리말 참조).
 ##  🔴 `HOVER_PROBE`는 [4]도 같이 쓴다 — hover 갈래를 쥔 실적이 0종이라 여기서만 산다.
 func _test_dispersed_reduces_damage() -> void:
 	print("[3] 분산 — 분산 중엔 받는 피해가 준다 (시간 토글, 주입한 hover 몸)")
@@ -149,26 +129,11 @@ func _test_dispersed_reduces_damage() -> void:
 	# ⚠ [4]가 같은 몸을 이어 쓴다 — 여기선 안 걷고 [4] 끝에서 걷는다.
 
 
-## [3b] 🔴🔴 **분산 = 반투명 — 알파가 왕복한다** (세104).
-##
-## 왜 [3] 옆에 새로 생겼나: 세103까지 이 리포에 **`modulate.a`를 재는 그물이 0건**이었다.
-##  분산을 재는 유일한 그물이 [3]인데 그건 **피해 경감**으로 재서, 반투명 표시가 통째로 죽어도
-##  전 스위트가 그린이다. 시야(N27)가 알파를 **곱해 쓰기 시작하면** 그 자리는
-##  `_visual.modulate`의 **3파전**이 되고(세63 소유권 계약: rgb=틴트 · a=분산),
-##  안개의 분산과 시야가 서로를 덮어써도 **에러가 0**이다.
-##
-## 🔴 **이 항목은 시야를 얹기 「전에」 초록이어야 한다** — 그래야 알파 대입을 한 함수로 모으는
-##  리팩터가 「동작 무변경」임을 증명한다(증명 없는 리팩터를 막는 유일한 자리).
-##
-## 🔴 **여기(AI 그물)에 둔 이유**: 재는 대상이 **분산**이지 시야가 아니었다.
-##  ✅ 그 판단이 세112에 값을 했다 — **시야가 은퇴했는데 이 항목은 그대로 산다**
-##  (`_alpha_now`의 곱셈에서 시야 항만 빠졌다). 분산 기계(hover 갈래)도 이 파일에 있다.
-##
+## [3b] 🔴 **분산 = 반투명 — 알파가 왕복한다.** [3]은 분산을 **피해 경감**으로 재므로
+##  반투명 표시가 통째로 죽어도 그린이다 — `modulate.a`를 재는 유일한 그물이 여기다.
 ## 🔴 왕복(1.0 → 0.4 → 1.0)까지 재는 이유: 한 방향만 재면 **분산이 켜진 뒤 영영 안 풀려도** 그린이다.
-## ⚠ 되돌아온 값은 **정확히 1.0**이어야 한다 — `< 1.0`으로 물러나면 「거의 다 돌아왔다」가 통과해
-##  곱셈이 잘못 엮여 알파가 조금씩 새는 고장을 놓친다.
-## ⚠ 0.4는 **연출값**이라 손으로 든 기대치다(`test_landmark_road_auto`가 타일 상수를 손으로 드는 관행).
-##  사용자가 이 값을 조이면 이 줄을 같이 고쳐라 — 느슨하게 바꾸지는 마라(검출력이 0이 된다).
+## ⚠ 되돌아온 값은 **정확히 1.0**이어야 한다 — `< 1.0`으로 물러나면 알파가 조금씩 새는 고장을 놓친다.
+## ⚠ 0.4는 **연출값**이라 손으로 든 기대치다 — 값을 조이면 이 줄을 같이 고치되 느슨하게 바꾸지는 마라(검출력이 0이 된다).
 const ALPHA_PROBE := &"ai_probe_alpha"
 const DISPERSED_ALPHA_EXPECT := 0.4
 ## 주기를 짧게 준다 — [3]의 2.5초(150프레임)로 왕복까지 보려면 300프레임을 기다려야 한다.
@@ -176,7 +141,7 @@ const ALPHA_PROBE_PERIOD := 1.0
 
 func _test_dispersed_alpha_round_trip() -> void:
 	print("[3b] 🔴 분산 알파 왕복 — 1.0 → %.1f → 1.0 (modulate.a를 재는 유일한 그물)" % DISPERSED_ALPHA_EXPECT)
-	# ⚠ 맨몸 Node2D 스텁이면 충분하다 — 알파 축은 세112 이후 **분산 하나**뿐이다.
+	# ⚠ 맨몸 Node2D 스텁이면 충분하다 — 알파 축은 **분산 하나**뿐이다.
 	var stub := Node2D.new()
 	stub.add_to_group("player")
 	stub.global_position = Vector2(5000, 0)   # 멀리 — 접촉 피해 없이 hover 타이머만 돌게
@@ -220,7 +185,7 @@ func _test_dispersed_alpha_round_trip() -> void:
 			% vis.modulate.a)
 
 	# 🔴 rgb 축은 **한 톨도 안 달라진다** — 알파를 만지는 코드가 틴트를 덮으면 여기가 빨개진다
-	#  (세63 소유권 계약의 나머지 절반. `_refresh_alpha`가 `modulate` 통째로 대입하면 그 사고다).
+	#  (소유권 계약: rgb=틴트 · a=분산. `_refresh_alpha`가 `modulate` 통째로 대입하면 그 사고다).
 	_check(Color(vis.modulate.r, vis.modulate.g, vis.modulate.b).is_equal_approx(Color.WHITE),
 		"🔴 알파 축을 만져도 rgb(상태 틴트)는 흰색 그대로다 (실제 %s)" % vis.modulate)
 
@@ -229,18 +194,12 @@ func _test_dispersed_alpha_round_trip() -> void:
 	_drop(ALPHA_PROBE)
 
 
-## [4] 🔴🔴 leash — `aggro_range` 밖이면 자기 자리를 지킨다 (세88 사냥 흐름 §2-A-2-b).
-##
-## 왜 생겼나: AI 6갈래 중 **거리 게이트가 있는 건 셋뿐**(chase·charge·stationary)이었다. hover(mist)·
-## boss_gale·boss_snake는 거리와 무관하게 플레이어 쪽으로 왔다 — 방이 1200×1040이라 **안 드러났을
-## 뿐이다**. 2400×2200 숲에선 mist가 전부 남쪽 입구로 모이고 **보스가 자기 자리를 버리고 내려와**
-## 「깊이 들어간다」가 통째로 사라진다. 게이트를 넣기 전 이 계약을 재는 그물은 **0개**였다.
-##
+## [4] 🔴🔴 leash — `aggro_range` 밖이면 자기 자리를 지킨다.
 ## 🔴 **ⓐ와 ⓑ를 둘 다 잰다.** ⓐ(멀면 안 온다)만 재면 **적이 아예 안 움직이는 버그도 통과한다** —
-## 게이트를 `dist > 0`처럼 망가뜨려도 그린이 된다. ⓑ(가까우면 온다)가 그 구멍을 막는다.
-## ⚠ 이동 **거리**로만 잰다(내부 상태·velocity를 안 더듬는다 — 리팩터 때 옮겨 다녀 계약이 아니다).
-## ⚠ 세99: 갈래 셋 중 hover의 실적(`mist`)이 지워져 **주입한 몸으로 잰다**(머리말) — 재는 것은
-##  「hover에 거리 게이트가 있나」이지 「안개가 있나」가 아니다. gale·snake는 실데이터 그대로다.
+##  게이트를 `dist > 0`처럼 망가뜨려도 그린이 된다. ⓑ(가까우면 온다)가 그 구멍을 막는다.
+## ⚠ 이동 **거리**로만 잰다 — 내부 상태·velocity는 리팩터 때 옮겨 다녀 계약이 아니다.
+## ⚠ hover는 실적이 지워져 **주입한 몸으로** 잰다 — 재는 것은 「hover에 거리 게이트가 있나」이지
+##  「안개가 있나」가 아니다. gale·snake는 실데이터 그대로다.
 func _test_leash_stops_far_pursuit() -> void:
 	print("[4] leash — aggro_range 밖에선 안 오고, 안에선 온다 (hover·gale·snake 3갈래)")
 	_inject_hover()
@@ -281,18 +240,12 @@ func _test_leash_stops_far_pursuit() -> void:
 	_drop(HOVER_PROBE)
 
 
-## [5] 🔴🔴 leash 뒤에도 **gale의 쿨다운이 돈다** — 「이동 대입만 감싼다」 계약의 실제 검출자 (세88).
-##
-## 게이트를 `_ai_chase`의 관용구처럼 **`return`으로** 넣으면 조용한 고장이 난다: gale의
-## `_gale_volley_cd`·`_gale_gust_cd` 감소는 **DRIFT 분기 안**에 있어서, 멀리 있는 동안 쿨다운이
-## 얼어붙는다 → 플레이어가 사거리에 들어와도 **연사가 4.5초 늦게** 시작한다(에러·경고 0).
-##
+## [5] 🔴🔴 leash 뒤에도 **gale의 쿨다운이 돈다** — 「이동 대입만 감싼다」 계약의 검출자.
+## 게이트를 **`return`으로** 넣으면 조용한 고장이 난다: 쿨다운 감소가 DRIFT 분기 안에 있어
+##  멀리 있는 동안 얼어붙고, 사거리에 들어와도 **연사가 늦게** 시작한다(에러·경고 0).
 ## 🔴 그래서 **한 번 쏜 뒤 멀어져 기다렸다가 다시 붙으면 즉시 쏴야 한다**는 형태로 잰다.
-## ⚠ **페이즈2 전이는 이 계약의 검출자가 못 된다** — 전이 판정이 `match` **밖 첫 줄**이라
-##   `return`에도 살아남는다. 「멀리서도 페이즈2가 열린다」는 **자명 통과**이므로 쓰지 않는다
-##   (초안이 그렇게 짜여 있었다 — 그린인데 아무것도 안 재는 그물이었다).
-## ⚠ mist·snake는 `return`이어도 실질 차이가 없다(mist는 분산 타이머가 hover 밖에 없고, snake의
-##   러시 쿨다운은 `match` 밖에서 감소한다). 위험이 gale에 집중돼 있어 여기만 잰다.
+## ⚠ **페이즈2 전이는 검출자가 못 된다** — 전이 판정이 `match` 밖이라 `return`에도 살아남아 **자명 통과**다.
+## ⚠ mist·snake는 `return`이어도 실질 차이가 없다 — 위험이 gale에 집중돼 있어 여기만 잰다.
 func _test_leash_keeps_boss_machinery() -> void:
 	print("[5] leash 뒤에도 gale 쿨다운이 돈다 — 멀리서 기다렸다 붙으면 즉시 연사")
 	var aggro: float = _sight_of(_db.get_enemy(&"gale"))
@@ -340,7 +293,7 @@ func _test_leash_keeps_boss_machinery() -> void:
 
 # ── 헬퍼 ──
 
-## 🔴 hover 갈래 검사용 몸 — [3]과 [4]가 **같은 것**을 쓴다(지워진 `mist`의 수치 그대로).
+## 🔴 hover 갈래 검사용 몸 — [3]과 [4]가 **같은 것**을 쓴다.
 ## `aggro_range`·`hover_min`·`hover_max`가 셋 다 있어야 [4]ⓑ가 「다가온다」 분기에 든다
 ## (스텁을 `aggro - 50`에 두므로 그 값이 `hover_max`보다 커야 한다 — 150 > 95).
 const HOVER_PROBE := &"ai_probe_hover"
@@ -360,9 +313,9 @@ func _inject_hover() -> void:
 	})
 
 
-## 🔴 in-memory EnemyDef 주입 (세61 Db 주입 선례 — 레지스트리가 평범한 Dictionary다).
+## 🔴 in-memory EnemyDef 주입 (레지스트리가 평범한 Dictionary다).
 ## `has_counter = false`로 세운다 — 약점 배율이 섞이면 [1][3]의 **정확 값 판정**이 흐려진다
-## (느슨한 판정으로 물러나면 뮤테이션 검출력이 0이 된다 — 머리말 §"정확한 값을 짚는다").
+##  (느슨한 판정으로 물러나면 뮤테이션 검출력이 0이 된다).
 ## ⚠ 같은 id로 두 번 부르면 덮어쓴다(멱등) — [3]과 [4]가 hover 몸을 이어 쓰는 자리.
 func _inject(id: StringName, hp: float, params: Dictionary) -> void:
 	var def = (load("res://src/core/schemas/enemy_def.gd") as GDScript).new()
@@ -391,12 +344,10 @@ func _free_projectiles() -> void:
 		p.free()
 
 
-## [6] 🔴 **애니 박자가 데이터에서 온다** (세97 · N12). 그전엔 `_bake_strip`이 fps를 **6.0으로
-## 하드코딩**해 9종이 전부 같은 속도로 움직였다 — 안개 정령과 사냥개가 구분이 안 됐다.
-## 🔴 **ⓐ가 심장이다: 「.tres에 값이 있다」가 아니라 「그 값이 SpriteFrames까지 도달한다」를 잰다.**
-##   데이터만 넣고 코드가 안 읽으면 **죽은 손잡이**가 된다(감사 T3 — 그게 이 그물의 존재 이유다).
-## ⚠ 값 자체(3.0이 맞나)는 **안 박는다** — 박자는 F5가 정한다(ART_SPEC §8-2 *"규격이 아니라 출발점"*).
-##   여기서 재는 건 **배선**과 **성격이 갈렸다**는 사실뿐이다.
+## [6] 🔴 **애니 박자가 데이터에서 온다** — fps를 하드코딩하면 전 종이 같은 속도로 움직인다.
+## 🔴 **ⓐ가 심장이다: 「.tres에 값이 있다」가 아니라 「그 값이 SpriteFrames까지 도달한다」를 잰다** —
+##   데이터만 넣고 코드가 안 읽으면 **죽은 손잡이**가 된다.
+## ⚠ 값 자체는 **안 박는다** — 박자는 F5가 정한다. 여기서 재는 건 **배선**과 **성격이 갈렸다**는 사실뿐이다.
 func _test_anim_fps_from_data() -> void:
 	print("[6] 애니 박자 — .tres → SpriteFrames 배선 · 종별 차이")
 	var seen := {}
@@ -422,8 +373,7 @@ func _test_anim_fps_from_data() -> void:
 		e.queue_free()
 
 	# ── 성격이 갈렸다 = 축이 살아 있다 (전부 같으면 데이터를 넣은 값어치가 0) ──
-	# ⚠ 세99 몹 정리 뒤 실적이 **정확히 다섯 종**이다(hound 12 · hound_alpha 10 · slime_elite 6 ·
-	#  gale 5 · snake_boss 5) — 하한에 딱 걸쳐 있으니 몹을 더 지우려면 이 줄을 같이 봐라.
+	# ⚠ 실적이 **정확히 다섯 종**이라 하한에 딱 걸쳐 있다 — 몹을 더 지우려면 이 줄을 같이 봐라.
 	_check(seen.size() >= 5, "박자를 잰 적이 다섯 종 이상이다 (실제 %d — 적으면 아래가 자명 통과)" % seen.size())
 	var vals: Array = seen.values()
 	var lo: float = vals.min()
@@ -459,11 +409,9 @@ func _hit_and_capture(e, damage: float, rune: int) -> float:
 	return box[0]
 
 
-## 🔴🔴 세105 **이름 승계** — 「보는 거리」의 정본 키는 `sight_range`이고, 없으면 `aggro_range`를
-##  승계한다(`forest_enemy.SIGHT_KEY` 머리말 · 설계 `enemy_perception_design.md` §8-1).
-##  🔴 **읽는 자리를 여기 하나로 모은다** — 그물 안에 `params.get("aggro_range")`가 흩어져 있으면
-##   데이터가 새 이름으로 옮겨간 날 **어떤 줄은 0을 받고 어떤 줄은 폴백값으로 조용히 통과**한다
-##   (세105에 실제로 그랬다: 두 파일이 폴백 320·220을 우연히 받아 **빨개지지도 않았다**).
+## 🔴 「보는 거리」의 정본 키는 `sight_range`이고, 없으면 `aggro_range`를 승계한다.
+## 🔴 **읽는 자리를 여기 하나로 모은다** — 흩어져 있으면 데이터가 새 이름으로 옮겨간 날
+##  **어떤 줄은 0을 받고 어떤 줄은 폴백값으로 조용히 통과**한다.
 func _sight_of(def) -> float:
 	if def == null:
 		return 0.0

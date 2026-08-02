@@ -1,36 +1,16 @@
 #!/usr/bin/env python3
-"""문서 정합 검사 — takbon-docs 축의 「눈」.
+"""문서 정합 검사 — 「에러 0 · 전 스위트 그린 · 그런데 정본이 거짓말한다」를 잡는 그물.
 
-이 리포의 고유 실패 양식을 잰다: **에러 0 · 전 스위트 그린 · 그런데 정본이 거짓말한다.**
-Godot 헤드리스 스위트는 문서를 한 글자도 안 읽으므로 구조적으로 못 잡는다.
-
-재는 것 (전부 정적 사실이라 정적으로 잴 수 있다 — 세84 교훈):
-  [1] 세 단계 표 줄 수 == 각 폴더의 ls  (planned / building / done)
-  [2] 최상위에 굴러다니는 .md — 어느 단계인지 미정인 문서는 그 자체가 버그다
-  [3] 표에 등재되지 않은 문서 (세96·101·105에 세 번 재발했다)
-  [4] 죽은 경로 참조 — docs/takbon-design/…md 를 가리키는데 파일이 없다
-  [5] done 문서를 「정본」이라 부르는 현역 서술 (완료 문서는 정본이 아니다)
-  [6] CLAUDE.md 비대화 — 세98에 39.5KB→13KB로 줄인 뒤의 상한
-  [7] 그래프 — 프론트매터 누락·자리 불일치·어휘 밖 owns
-  [8] 그래프 — **owns 충돌**: 산 노드 둘이 같은 자원을 정한다 (세111 도입 사유)
-  [9] 그래프 — 죽은 엣지(없는 노드를 needs) · 죽은 노드를 전제로 삼음 · 순환
-
-🔴 세111에 **그래프 층**을 얹었다. 사유: 설계문서가 같은 자원을 두고 **몰래 충돌**했다 —
-   기념비 분모를 `gate_restoration`은 「최종 전 챕터 수」, `genre_pivot`은 「개방된 문양 종류」로
-   정하는데 **둘 다 에러 0**이었고, 그 사실은 README 표 셀 안 산문에 파묻혀 있었다.
-   엣지를 산문이 아니라 **프론트매터 데이터**로 옮겨 기계가 잡게 한다.
-
-    python tools/docs_audit.py --ready   # 지금 동시에 착수 가능한 문서
-
-🔴 2026-07-29(세109)에 2단계(현역/_archive) → 3단계로 바뀌었다. 사용자 확정:
-   *"기획만 한것과 현재 개발중인 기획과 개발 완료된 기획이 나눠져서 보관"*.
-   ⚠ 폴더명이 곧 README 헤딩 키워드다 — 헤딩에서 폴더명을 빼면 그 표를 못 찾아 전량 빨강이 된다.
-🔴 세110 — 폴더 접두사(`1_`·`2_`·`3_`)를 걷었다(`37679e9`). **그 커밋이 이 파일을 안 고쳐서
-   단계 폴더 셋 중 둘이 「없는 폴더」가 돼 있었다**(실측 DOCS_AUDIT_FAIL:32).
-   ⚠ 옛 접두 이름은 **읽기 쪽으로만** 계속 받는다 — 과거 문서·기록이 그 표기를 그대로 쓴다.
+Godot 헤드리스 스위트는 문서를 한 글자도 안 읽으므로 구조적으로 못 잡는다. 여기서 재는 것:
+단계 표↔폴더 일치 · 미등재/떠도는 .md · 죽은 경로 참조 · 완료 문서를 「정본」이라 부르는 자리 ·
+CLAUDE.md 비대 · 그래프(프론트매터 owns 충돌 · 죽은 엣지 · 순환).
 
     python tools/docs_audit.py          # 사람이 읽는 리포트
     python tools/docs_audit.py --quiet  # 마커만 (그물용)
+    python tools/docs_audit.py --ready  # 지금 동시에 착수 가능한 문서
+
+⚠ 폴더명이 곧 README 헤딩 키워드다 — 헤딩에서 폴더명을 빼면 그 표를 못 찾아 전량 빨강이 된다.
+⚠ 옛 접두 이름(`1_planned` 등)은 읽기 쪽으로만 계속 받는다 — 과거 문서가 그 표기를 쓴다.
 
 판정은 마지막 줄 마커로 한다: DOCS_AUDIT_OK / DOCS_AUDIT_FAIL:<건수>
 """
@@ -59,13 +39,11 @@ DONE = STAGES[-1]  # 「정본이 아니다」를 재는 대상
 # 안 잡으면 낡은 경로가 죽은 링크인 채 침묵으로 통과한다.
 STAGE_ALT = "|".join(f"(?:[123]_)?{s}" for s in STAGES)
 
-# 🔴 `docs/` 루트의 정본 문서도 그래프 노드다(세111). 단계 폴더 밖이라 자리로 상태를 못 재서
-#    `stage: canon`을 쓴다. ⚠ `DECISIONS`·`TODO`·`BACKLOG`는 **기록**이지 자원을 정하는 문서가
-#    아니라 일부러 뺐다 — 넣으면 「무엇을 왜 정했나」가 owns 충돌로 잘못 운다.
+# 🔴 `docs/` 루트 정본도 그래프 노드다. 자리로 상태를 못 재서 `stage: canon`을 쓴다.
+# ⚠ DECISIONS·TODO·BACKLOG는 기록이지 자원을 정하는 문서가 아니라 일부러 뺐다(owns 충돌 오탐).
 CANON = "canon"
 CANON_DOCS = ("GDD.md", "PROGRESSION.md", "ONBOARDING_FLOW.md", "ART_SPEC.md", "VFX_SPEC.md")
 
-# 세98에 39.5KB → 13KB로 줄였다. 이 축의 존재 이유 중 하나가 「다시 붇는 것」을 막는 것이다.
 # 🔴 넘겼다고 바로 빨강이 아니다 — 넘으면 「무엇을 스킬로 내릴지」를 묻는 신호다.
 CLAUDE_MD_LIMIT_KB = 18
 
@@ -103,16 +81,14 @@ VOCAB = {
     "jin_semantics", "glyph_data", "rune_data", "forge_ui", "enemy_feel",
     "enemy_ai", "economy", "equipment", "vfx_spec", "visual_spec",
     "world", "onboarding", "drawing_tools", "save_schema",
-    # 세111 주입 때 에이전트가 신설. 앞의 둘은 **두 에이전트가 서로 모른 채 같은 이름을 냈다**.
     "guide_shape",    # 진·룬 밑그림 모양 (guide_editor · jin_shape_image)
     "cast_control",   # 시전 중 조작 (spell_cast_visual)
-    "player_vision",  # 플레이어 시야 — 세110 D8에 폐기됐지만 죽은 노드가 계속 붙들고 있다
-    # 🔴 아래 둘은 **죽은 문서에서 살아남은 자원**이라 갈랐다. `dungeon_structure`는 죽었지만
-    #    몹 굴림(D6)·네임드 확률(D7)은 살아남았다 — `run_flow`로 묶으면 딸려 사라진다.
+    "player_vision",  # 플레이어 시야 — 폐기됐지만 죽은 노드가 계속 붙들고 있다
+    # 🔴 아래 둘은 죽은 문서(`dungeon_structure`)에서 살아남은 자원이라 갈랐다 —
+    #    `run_flow`로 묶으면 딸려 사라진다.
     "mob_spawning",   # 무엇이 어디에 서나 (dungeon_structure)
     "rune_fill",      # 룬을 그린 크기 → 상태이상 세기 (nested)
-    # 세112 — 장르 전환의 첫 조각(room_loop). 🔴 `run_flow`(genre_pivot 소유)와 일부러 갈랐다:
-    #  그쪽은 「런이 어떻게 흐르나」(방→문→보스→다음 챕터)고, 아래 셋은 **방 한 칸의 내부**다.
+    # 🔴 아래 셋은 `run_flow`(런이 어떻게 흐르나)와 일부러 갈랐다 — 이쪽은 **방 한 칸의 내부**다.
     "room_layout",    # 방 크기·경계·카메라·방 전환
     "door_choice",    # 문 개수 · 문 위 보상 미리보기
     "room_reward",    # 방을 깨면 무엇이 어떻게 손에 들어오나 (상자)
@@ -145,9 +121,7 @@ def front_matter(md: str) -> dict | None:
 
 def load_graph(problems: list[str]) -> dict[str, dict]:
     """단계 폴더 + `docs/` 루트 정본에서 노드를 읽는다. 자리(stage)와 프론트매터의 불일치도 잡는다.
-
-    🔴 루트 정본을 넣은 이유(세111): 그래프가 `takbon-design/` 안만 보면 사각이 생긴다 —
-       `dopamine` §온보딩과 `ONBOARDING_FLOW.md`가 온보딩을 둘 다 정하는데 검사기가 침묵했다.
+    🔴 루트 정본까지 보는 이유: `takbon-design/` 안만 보면 정본 문서와의 겹침을 통째로 못 본다.
     """
     nodes: dict[str, dict] = {}
     targets = [(DESIGN / s / p.name, s) for s in STAGES for p in sorted((DESIGN / s).glob("*.md"))]
@@ -182,10 +156,8 @@ def load_graph(problems: list[str]) -> dict[str, dict]:
 
 def check_graph(nodes: dict[str, dict], problems: list[str], conflicts: list[str]) -> None:
     """🔴 충돌과 구조 오류를 **다른 통에 담는다.**
-
-    충돌은 「버그」가 아니라 **「아직 안 정했다」는 사실**이다. 늘 빨간 채로 두면 사람이 빨강을
-    무시하게 되고, 그때 프론트매터 누락 같은 진짜 버그가 같이 묻힌다(세104가 종료코드 판정을
-    걷은 그 이유). ⇒ 판정(FAIL)은 구조 오류만. 충돌은 **항상 눈에 보이되 초록을 안 깬다.**
+    충돌은 「버그」가 아니라 「아직 안 정했다」는 사실이다. 늘 빨간 채로 두면 사람이 빨강을
+    무시하게 되고 진짜 버그가 같이 묻힌다. ⇒ 판정(FAIL)은 구조 오류만 · 충돌은 찍되 초록을 안 깬다.
     """
     live = {n: d for n, d in nodes.items() if not d["dead"]}
 
@@ -202,7 +174,7 @@ def check_graph(nodes: dict[str, dict], problems: list[str], conflicts: list[str
         kinds = {live[n]["stage"] for n in owners}
         if anchored:
             # ⚠ 「앵커가 이긴다」로 단정하면 **인과가 거꾸로 갈 수 있다** — GDD의 그 줄이 애초에
-            #    그 설계문서에서 쓰인 것이면 둘은 싸우는 게 아니라 같은 말이다(세111 실측: 6건 중 5건).
+            #    그 설계문서에서 쓰인 것이면 둘은 싸우는 게 아니라 같은 말이다.
             tail = f"  ← 🔒 앵커 {anchored[0]} 가 낀다. **GDD가 그 설계에서 쓰인 것인지 먼저 봐라** — 아니면 GDD가 이긴다"
         elif kinds <= {CANON, DONE}:
             tail = "  ← 정본↔완료다. 규격을 정본이 흡수한 자리면 정상이다"
@@ -314,7 +286,7 @@ def main() -> int:
                 problems.append(f"[{s}] 표에만 있다(파일 없음): {r}")
 
     # [2] 단계 폴더 밖에 굴러다니는 .md
-    # 🔴 이게 곧 세106이 겪은 병의 물리적 형태다 — 자리가 상태를 뜻하므로 자리가 없으면 상태도 없다.
+    # 🔴 자리가 곧 상태다 — 자리가 없으면 상태도 없다.
     for f in sorted(p.name for p in DESIGN.glob("*.md") if p.name != "README.md"):
         problems.append(
             f"[구조] 단계 폴더 밖에 있다: docs/takbon-design/{f}"
@@ -324,10 +296,8 @@ def main() -> int:
     # [4] 죽은 경로 참조
     out("\n── 죽은 경로 참조 ───────────────────────────────")
     pat = re.compile(rf"docs/takbon-design/(?:(?:{STAGE_ALT})/)?[A-Za-z0-9_]+\.md")
-    # 🔴 세108 — 표기가 둘인데 하나만 재고 있었다. 리포 루트부터 쓴 경로는 잡았지만
-    #    bare 상대 경로(`done/…`)는 통과했고, 하필 README 표와 설계문서가 그 형태를 쓴다.
-    # 🔴 세110 — 접두사가 걷히며 이 그물에 구멍이 났었다: 패턴이 `[123]_`를 **필수**로 봐서
-    #    새 표기(`done/foo.md`)를 통째로 못 봤다. 단계 이름을 열거로 바꿔 옛·새 표기를 같이 잡는다.
+    # 🔴 경로 표기가 둘이다 — 리포 루트부터 쓴 것과 bare 상대 경로(`done/…`). README 표와
+    #    설계문서가 후자를 쓴다. 단계 이름은 열거라 옛 접두(`1_`) 표기도 같이 잡는다.
     pat_bare = re.compile(rf"(?<![\w/])(?:{STAGE_ALT})/[A-Za-z0-9_]+\.md")
     scanned = 0
     for md in sorted(ROOT.glob("docs/**/*.md")) + [CLAUDE_MD] + sorted(
@@ -343,9 +313,8 @@ def main() -> int:
         for ref in refs:
             if not (ROOT / ref).exists():
                 problems.append(f"[죽은 링크] {rel} → {ref}")
-        # 🔴 옛 2단계 잔재. `_archive`는 세109에 `done`이 됐고 폴더 자체가 없다.
-        #    위 정규식은 `_archive/…`를 **매치하지 않으므로** 이 검사가 없으면 통째로 침묵한다
-        #    — 새 문법이 옛 문법을 못 보는 건 그물이 아니라 구멍이다.
+        # 🔴 옛 2단계 잔재. `_archive`는 이제 `done`이고 폴더 자체가 없다.
+        #    위 정규식은 `_archive/…`를 매치하지 않아 이 검사가 없으면 통째로 침묵한다.
         if "_archive" in body:
             problems.append(
                 f"[옛 구조] {rel} 이 `_archive`를 가리킨다 → `done`으로 고쳐라"
@@ -354,10 +323,7 @@ def main() -> int:
     out(f"  {scanned}개 문서를 훑었다")
 
     # [5] 휴지통을 「정본」이라 부르는 자리
-    # 🔴 README는 일부러 뺀다 — 휴지통 표는 「무엇이 어디에 있나」를 설명하는 자리라
-    #    거기서 「정본」을 말하는 건 정상이고, 넣으면 오탐만 3건 난다(세106 실측).
-    #    오탐을 내는 그물은 사람이 빨강을 무시하게 만든다 = 세104가 종료코드 판정을 걷은 그 이유.
-    #    여기서 잡아야 할 진짜 위험은 **현역 문서 본문**이 휴지통을 정본이라 가리키는 것이다.
+    # 🔴 README는 일부러 뺀다 — 인덱스라 거기서 「정본」을 말하는 건 정상이고 오탐만 난다.
     out(f"\n── {DONE}을 정본이라 부르는 곳 ────────────────────")
     hits = 0
     NEGATIONS = ("정본이 아니다", "정본으로 참조", "정본이었다")
@@ -401,7 +367,7 @@ def main() -> int:
         print()
 
     # 🔴 충돌은 판정을 안 깬다 — 「아직 안 정했다」는 사실이지 버그가 아니다.
-    #    다만 **조용히 두면 그게 세111 이전 상태다.** 항상 찍는다.
+    #    다만 조용히 두면 아무도 모른다 — 항상 찍는다.
     if conflicts:
         print(f"\n── ⚠ 소유 경합 {len(conflicts)} (미결이다 · 판정엔 안 센다) ──────")
         for c in conflicts:

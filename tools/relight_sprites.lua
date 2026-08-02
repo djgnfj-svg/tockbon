@@ -1,13 +1,8 @@
--- relight_sprites.lua — 스프라이트 입체화(재조명) 후처리 필터 (2026-07-23 세69)
---
--- 왜: 캐릭터·적·프롭·재료가 "호떡 눌린 것처럼" 납작해 보였다(단색 채움 + 균일 검정 외곽선 =
--- 스티커). 이 필터는 원본 그림을 다시 그리지 않고, 실루엣 기반으로 왼쪽 위(광원) 방향 형태 음영을
--- 얹어 둥근 부피를 만든다. 같은 알고리즘을 전 스프라이트에 적용하므로 톤이 자동으로 일관된다.
---
--- 파이프라인 위치: **PNG 익스포트 이후에 도는 후처리다.** aseprite 원본은 "납작한 밑그림"으로
---   남아 있고, 이 필터가 익스포트된 PNG를 덮어쓴다. 🔴 그래서 aseprite에서 스프라이트를 재익스포트하면
---   음영이 사라진다 — 재익스포트한 뒤에는 그 PNG에 이 필터를 **다시 돌려라**(입력=납작 PNG면 충분).
---
+-- relight_sprites.lua — 스프라이트 입체화(재조명) 후처리 필터
+-- 왜: 단색 채움 + 균일 검정 외곽선은 납작한 스티커가 된다. 원본을 다시 그리지 않고 실루엣 기반으로
+--     왼쪽 위(광원) 방향 형태 음영을 얹어 부피를 만든다 — 전 스프라이트에 같은 알고리즘이라 톤이 일관된다.
+-- 🔴 PNG 익스포트 이후에 도는 후처리다 — aseprite 원본은 납작한 밑그림이고 이 필터가 익스포트된 PNG를 덮어쓴다.
+--   그래서 재익스포트하면 음영이 사라진다. 재익스포트한 뒤엔 그 PNG에 이 필터를 다시 돌려라(입력=납작 PNG면 충분).
 -- 알고리즘:
 --   1. 각 불투명 섬(연결 영역)의 중심·반경을 구한다.
 --   2. 중심에서 광원 방향(-1,-1 정규화)으로의 투영 t로 몸 전체를 밝음(+1/+2)·중간·그늘(-1/-2) 밴드로.
@@ -17,7 +12,6 @@
 --
 -- 사용: Aseprite MCP run_lua_script로 이 파일 내용을 실행하거나, 아래 JOB 리스트를 수정해 재적용.
 --   개별 재적용: doPng("<절대경로.png>", 1.0)
---
 -- 제외 대상(적용 금지, 그 이유):
 --   타일(tile_*/tileset_*) = 외곽선 음영이 이음새를 깬다 · UI 패널(panel/board/book/btn) = 원래 납작
 --   룬/커서 아이콘 = 납작한 심볼 · 이펙트(projectiles/pop/rubbing_spot) = 절차적 VFX
@@ -83,7 +77,7 @@ function doPng(path,str)  -- 전역: 개별 재적용 편의
   spr:saveAs(path) spr:close() print("OK "..path)
 end
 
--- ── 세69 적용 목록 (재적용 시 이 리스트를 다시 돌린다) ─────────────────────────
+-- ── 적용 목록 (분류표다 — 실행 목록이 아니다) ─────────────────────
 local B="C:/Users/djgnf/Desktop/godot_games/tockbon/assets/sprites/"
 local FULL={
  "player/player_witch_sheet.png","player/player.png","player/floating_wand.png",
@@ -98,13 +92,13 @@ local FULL={
 local MILD={  -- 건물: 이미 입체적이라 약하게
  "base/bld_library.png","base/bld_workshop.png","base/bld_alchemy.png","base/bld_market.png","base/gate_arch.png",
  "base/monument_circle.png","base/lamp_post.png","base/bench.png","base/fence_hedge.png",
- -- 세89 폐허 잔해 (world_and_visual_design §5) — 온전 버전과 같은 MILD 대역이라야 한 세대로 보인다
+ -- 폐허 잔해 — 온전 버전과 같은 MILD 대역이라야 한 세대로 보인다
  "base/bld_alchemy_ruin.png","base/bld_workshop_ruin.png","base/bld_market_ruin.png","base/monument_circle_ruin.png"}
 
 -- 🔴🔴 **이미 적용된 파일을 다시 돌리지 마라 — 음영이 두 번 먹어 뭉개진다.**
 -- relight는 익스포트 후처리라 결과가 PNG에 굳는다(멱등이 아니다). 위 두 목록은 「분류표」지
 -- 「실행 목록」이 아니다 — 전체 재적용은 aseprite에서 **전량 재익스포트한 직후**에만 맞다.
--- 새로 그린 것만 돌릴 때는 아래처럼 그 파일만 담아라 (세89 실제 사용례):
+-- 새로 그린 것만 돌릴 때는 아래처럼 그 파일만 담아라:
 -- local NEW={"base/gate_arch.png","base/bld_alchemy_ruin.png","base/bld_workshop_ruin.png",
 --            "base/bld_market_ruin.png","base/monument_circle_ruin.png"}
 -- for _,f in ipairs(NEW) do doPng(B..f,0.5) end        -- 🔴 건물·잔해는 0.5(MILD)다. 1.0을 쓰면 그것만 다른 세대로 보인다

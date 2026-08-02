@@ -1,15 +1,12 @@
 extends SceneTree
-## 고리 도안(RingDesign) + 장착 배선 자동 검증 (#17 1단계, 세션 16) — 헤드리스:
+## 고리 도안(RingDesign) + 장착 배선 자동 검증 — 헤드리스:
 ##   ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_ring_design_auto.gd
 ## 전 항목 통과 시 "TEST_RING_DESIGN_OK".
 ##
-## 검증: (1) RingDesign.from_assembly↔to_assembly 라운드트립·filled_count,
-##   (2) EventBus.ring_design_committed → GameState.ring_equipped 자동 장착(첫 진=슬롯 1),
-##   (3) 빈 슬롯 소진(4장까지 장착, 5장째는 보관만),
-##   (4) 🔴 **슬롯 교체**(세86 ① — `GameState.equip_design` + `tab_panel` 마법진 탭 판정):
-##       보관 도안을 슬롯에 올리기·중복 장착 없음·보관 밖 거부·null 해제·저장 라운드트립,
-##       그리고 좌표→행 판정과 「클릭 한 번」이 core로 이어지는가.
-##       ⚠ **클릭이 실제로 닿는지·강조가 보이는지는 여기서 못 잰다** — 실게임 push_input·MCP 몫.
+## 검증: from_assembly↔to_assembly 라운드트립 · ring_design_committed → 자동 장착 · 빈 슬롯 소진 ·
+##   🔴 **슬롯 교체**(`GameState.equip_design` + `tab_panel` 마법진 탭 판정: 좌표→행 판정과
+##   「클릭 한 번」이 core로 이어지는가).
+## ⚠ **클릭이 실제로 닿는지·강조가 보이는지는 여기서 못 잰다** — 실게임 push_input·MCP 몫.
 ##
 ## 주의: -s 스크립트는 오토로드 전역 등록 전에 컴파일 — 오토로드는 root.get_node(), RingDesign은 load().
 
@@ -32,8 +29,7 @@ func _check(cond: bool, label: String) -> void:
 
 
 func _run() -> void:
-	# 🔴 워치독 (세84 감사 #44) — `_run`이 중간에 죽으면 `-s` 프로세스가 **영구 hang**한다
-	# (다른 22종엔 있었고 이 파일에만 없었다). 여기서 죽는 건 곧 계약 위반이므로 종료 코드 1.
+	# 🔴 워치독 — `_run`이 중간에 죽으면 `-s` 프로세스가 **영구 hang**한다. 종료 코드 1.
 	create_timer(30.0).timeout.connect(func() -> void:
 		print("TEST_RING_DESIGN_TIMEOUT — 30초 초과")
 		quit(1))
@@ -72,7 +68,7 @@ func _reset_ring_state() -> void:
 		gs.ring_equipped[i] = null
 
 
-## 🔴 손그림 점수가 assembly ↔ RingDesign 사이를 **양방향으로** 건넌다 (세션 23).
+## 🔴 손그림 점수가 assembly ↔ RingDesign 사이를 **양방향으로** 건넌다.
 ## 끊기면 조립대에서 잘 그린 진이 장착·재발사 때 조용히 기준 위력이 된다.
 func _test_score_carries() -> void:
 	var a := _sample_assembly()
@@ -91,11 +87,11 @@ func _test_score_carries() -> void:
 	_check(is_equal_approx(float(d3.total_score), 0.0), "score 없는 assembly는 0.0")
 
 
-## 🔴 잉크 등급(세션29, 사용자: "등급=데미지") = 데미지 배수.
-## 도안↔assembly 라운드트립 + **위력에 곱해진다**. 끊기면 골라도 위력이 안 바뀐다(세션28 상태로 회귀).
+## 🔴 잉크 등급 = 데미지 배수.
+## 도안↔assembly 라운드트립 + **위력에 곱해진다**. 끊기면 골라도 위력이 안 바뀐다.
 func _test_ink_carries() -> void:
 	var RP: GDScript = load("res://src/core/ring_power.gd")
-	# 🔴 오토로드는 **런타임 조회**로 잡는다 (컴파일 타임 `Db` 참조 = -s 함정, CLAUDE.md).
+	# 🔴 오토로드는 **런타임 조회**로 잡는다 (컴파일 타임 `Db` 참조 = -s 함정).
 	var db: Node = root.get_node(^"Db")
 
 	# 리졸버는 한 곳뿐(Db.ink_mult) — 발사·리포트·HUD가 전부 이걸 부른다. 잉크 없음/미등록 = 1.0.
@@ -128,7 +124,7 @@ func _test_ink_carries() -> void:
 		"위력 = 손그림 위력 × 잉크 배수 (곱셈)")
 
 
-## 🔴 종이 = 규모 (세션29, 사용자 확정). 종이 등급이 확대 상한을 올리고, 큰 진일수록 위력이 세다.
+## 🔴 종이 = 규모. 종이 등급이 확대 상한을 올리고, 큰 진일수록 위력이 세다.
 func _test_paper_size() -> void:
 	var RP: GDScript = load("res://src/core/ring_power.gd")
 	var db: Node = root.get_node(^"Db")
@@ -150,7 +146,7 @@ func _test_paper_size() -> void:
 	_check(is_equal_approx(float(d.to_assembly().get("size", -1.0)), 1.6), "to_assembly size 라운드트립")
 
 
-## 🔴 특별잉크 = 화상 증폭 (세션29, 사용자 확정). 잉크 등급(=데미지)과 다른 축.
+## 🔴 특별잉크 = 화상 증폭 — 잉크 등급(=데미지)과 다른 축.
 func _test_special_ink() -> void:
 	var db: Node = root.get_node(^"Db")
 	_check(db.ink_is_special(&"ink_fire_red"), "붉은 잉크 = 특별잉크 (소모·효과)")
@@ -172,7 +168,7 @@ func _test_special_ink() -> void:
 		"to_assembly가 special_ink를 다시 싣는다")
 
 
-## 🔴 정제 레시피 = 데이터 (세션29). 정제대가 GameState.spend+add_item으로 재료→결과.
+## 🔴 정제 레시피 = 데이터. 정제대가 GameState.spend+add_item으로 재료→결과.
 func _test_recipes() -> void:
 	var db: Node = root.get_node(^"Db")
 	var r = db.get_recipe(&"refine_red_ink")
@@ -202,14 +198,13 @@ func _test_power_rule() -> void:
 	_check(not RP.is_stable(t - 0.01), "기준선 아래 = 터진다")
 	_check(RP.is_stable(t + 0.01), "기준선 위 = 견딘다")
 	_check(RP.is_stable(1.0), "만점 = 견딘다")
-	# 위력은 점수에 대해 단조 증가 — "높을수록 성능이 좋아"(사용자)
+	# 위력은 점수에 대해 단조 증가한다.
 	_check(RP.power_of(1.0) > RP.power_of(0.8), "만점이 80점보다 세다")
 	_check(RP.power_of(0.8) > RP.power_of(t + 0.01), "80점이 기준선 언저리보다 세다")
 	_check(RP.power_display(1.0) > 100, "만점 표시 위력 > 기준 100")
 
-	# 🔴 **미달 구간에 평평한 곳이 없다** (세션 23 사용자 확정: 주입 전에 안내 금지).
-	# 리포트가 주입 전에 위력을 보여 주므로, 미달 구간이 한 값에 붙어 버리면 그 평평함이
-	# "너 지금 미달"이라는 안내가 된다. 예전 선형+clamp 곡선이 정확히 이랬다(20점·64점 둘 다 "위력 70").
+	# 🔴 **미달 구간에 평평한 곳이 없다** — 미달 구간이 한 값에 붙으면 그 평평함이
+	#   "너 지금 미달"이라는 안내가 된다(선형+clamp 곡선이 정확히 이랬다).
 	_check(RP.power_of(0.20) < RP.power_of(0.40), "20점 < 40점 (미달 구간도 이어진다)")
 	_check(RP.power_of(0.40) < RP.power_of(0.64), "40점 < 64점 (미달 구간도 이어진다)")
 	_check(RP.power_display(0.20) != RP.power_display(0.64),
@@ -221,17 +216,12 @@ func _test_power_rule() -> void:
 	_check(RP.power_of(0.0) >= 0.0 and RP.power_of(-1.0) >= 0.0, "위력은 음수가 되지 않는다")
 
 
-## 🔴🔴 **조립 점수 = 폐지 이후 유일한 성장 축** (세84 감사 #3 — `RingPower.assembled_score`).
-## 그전엔 `grep assembled_score tests/`가 **0건**이었다: `assemble_score_per_glyph`/`per_layer`를
-## 0.0으로 내려도 **전 스위트가 그린**이라, 문양-고리를 몇 개 끼우고 2등급 진을 써도 점수·위력이
-## 0.70에 굳는데 아무도 못 알아챈다 = **원정 보상이 전투에 영향을 안 준다**(그리기를 폐지한 뒤
-## 위력이 오르는 길은 이 함수 하나뿐이다).
-##
-## ⚠ **수치를 박지 않는다** — 손맛 튜닝 한 번에 거짓 빨강이 되면 안 된다(세79 [4]·세82 [3] 관행).
-##   대신 ①두 입력 각각에 대한 **단조성** ②`assemble_score_base > 기준선` 불변식(지금까진
-##   `balance_data.gd` 주석에만 있었다) ③클램프·음수 방어로 잰다.
-## ⚠ **단조성이어야 하는 이유**(세82 응축 교훈): 한 점 대소 비교는 **부호 뒤집기를 못 잡는다** —
-##   계수를 음수로 내려도 다른 항이 커서 비교가 여전히 참이 되는 자리가 생긴다.
+## 🔴🔴 **조립 점수 = 유일한 성장 축**(`RingPower.assembled_score`) — 계수를 0.0으로 내려도
+##  점수·위력이 굳는데 **에러가 0**이다 = 원정 보상이 전투에 영향을 안 준다.
+## ⚠ **수치를 박지 않는다** — 손맛 튜닝 한 번에 거짓 빨강이 되면 안 된다. 대신 ①두 입력 각각에
+##   대한 **단조성** ②`assemble_score_base > 기준선` 불변식 ③클램프·음수 방어로 잰다.
+## ⚠ **단조성이어야 하는 이유**: 한 점 대소 비교는 **부호 뒤집기를 못 잡는다** — 계수를 음수로
+##   내려도 다른 항이 커서 비교가 여전히 참이 되는 자리가 생긴다.
 func _test_assembled_score_axis() -> void:
 	var RP: GDScript = load("res://src/core/ring_power.gd")
 
@@ -265,9 +255,9 @@ func _test_assembled_score_axis() -> void:
 	if layer_mono:
 		_check(true, "층 1~9겹 전 구간에서 점수가 단조 증가한다 (진 등급 = 층 수, 상한 9)")
 
-	# ② 🔴🔴 **불변식: 가장 초라한 조립본도 펑이 안 난다.** `assemble_score_base > ring_stability_min`은
-	#   지금까지 `balance_data.gd` 주석에만 있던 규율이다 — 어기면 멀쩡히 조립하고도 「펑」이 나는데
-	#   폐지 모드엔 그 펑을 만회할 수단(더 잘 긋기)이 **아예 없다**. 술어를 그대로 부른다(65를 안 베낀다).
+	# ② 🔴 **불변식: 가장 초라한 조립본도 펑이 안 난다** (`assemble_score_base > ring_stability_min`).
+	#   어기면 멀쩡히 조립하고도 「펑」이 나는데 그걸 만회할 수단이 **아예 없다**.
+	#   🔴 술어를 그대로 부른다 — 65를 베끼면 경계가 갈라진다.
 	_check(RP.is_stable(RP.assembled_score(0, 1)),
 		"🔴 진만 고른 최소 조립본도 기준선 위다 (%.3f > %.3f) — assemble_score_base > ring_stability_min"
 			% [RP.assembled_score(0, 1), RP.threshold()])
@@ -296,8 +286,7 @@ func _test_assembled_score_axis() -> void:
 		"🔴 좋은 부품이 실제로 **위력**을 올린다 (점수 축이 위력 축까지 이어진다)")
 
 
-## 🔴 등급 구간 (세션 24, 사용자 확정: 65~75 무난 / 75~85 평타 / 85~95 괜찮음 /
-## 95~100 완벽 / 100 퍼펙트 · 65 이하 = 사용 불가).
+## 🔴 등급 구간: 65~75 무난 / 75~85 평타 / 85~95 괜찮음 / 95~100 완벽 / 100 퍼펙트 · 65 이하 = 사용 불가.
 func _test_grade_bands() -> void:
 	var RP: GDScript = load("res://src/core/ring_power.gd")
 	_check(RP.grade_of(0.50) == "사용 불가", "50점 = 사용 불가")
@@ -313,7 +302,7 @@ func _test_grade_bands() -> void:
 	_check(RP.grade_of(0.85) == "괜찮음", "85점은 괜찮음(위 칸)")
 	_check(RP.grade_of(0.95) == "완벽", "95점은 완벽(위 칸)")
 
-	# 🔴 **퍼펙트 = 화면에 100으로 뜨는 순간** (사용자 확정).
+	# 🔴 **퍼펙트 = 화면에 100으로 뜨는 순간.**
 	# ⚠ 반올림을 **여기서 다시 구현하지 않는다** — 그러면 UI가 쓰는 함수가 아니라 테스트가 베낀
 	# 사본을 검증하게 돼, 정작 화면과 갈라지는 순간을 못 잡는다. UI와 같은 score_display를 부른다.
 	for i in 60:
@@ -326,15 +315,10 @@ func _test_grade_bands() -> void:
 	_check(true, "퍼펙트 ⇔ 화면에 100으로 뜬다 (표시 반올림과 묶여 있다)")
 
 
-## 🔴🔴 **「사용 불가」와 「펑」이 정확히 같은 경계다** — 세션 23 어긋남의 회귀 테스트.
-## 그땐 등급이 자기 상수(55/75)를 들고 있어 「무난」(55~75)이 기준선 0.65를 걸쳤다 —
-## **같은 "무난"이 터지기도 견디기도 했다**(61점=무난인데 펑). 등급이 기준선을 베껴 적는 순간
-## 두 경계가 갈라지는데, 0~1 전 구간을 훑어 두 술어가 **한 번도 어긋나지 않음**을 못 박는다.
-##
-## ⚠ **balance를 런타임에 흔드는 방식으론 검증 못 한다** (세션 24에 시도했다가 알아냈다):
-## GDScript는 static func 안의 `const BAL.프로퍼티`를 **컴파일 타임에 굳힌다** — `RP.BAL.x`를
-## 0.8로 바꿔도 `RP.threshold()`는 옛 값을 돌려준다. 게임엔 무해하지만(수치를 런타임에 안 바꾼다)
-## 테스트는 조용히 거짓 통과한다.
+## 🔴🔴 **「사용 불가」와 「펑」이 정확히 같은 경계다** — 등급이 기준선을 베껴 적는 순간 두 경계가
+##  갈라진다(같은 "무난"이 터지기도 견디기도 했다). 0~1 전 구간을 훑어 **한 번도 안 어긋남**을 못 박는다.
+## ⚠ **balance를 런타임에 흔드는 방식으론 검증 못 한다** — GDScript는 static func 안의
+##  `const BAL.프로퍼티`를 **컴파일 타임에 굳혀** 테스트가 조용히 거짓 통과한다.
 func _test_grade_follows_threshold() -> void:
 	var RP: GDScript = load("res://src/core/ring_power.gd")
 	for i in 201:
@@ -358,7 +342,7 @@ func _test_grade_follows_threshold() -> void:
 	_check(last == order.size() - 1, "0→100점을 훑으면 등급이 순서대로 올라 퍼펙트로 끝난다")
 
 
-## 폴백 2방 [0,2]에 발산 하나 채운 assembly (rune=불 — 세션60: 열린 칸의 출처는 진, 이 딕셔너리는 스냅샷).
+## 폴백 2방 [0,2]에 발산 하나 채운 assembly (rune=불 — 열린 칸의 출처는 진, 이 딕셔너리는 스냅샷).
 func _sample_assembly() -> Dictionary:
 	# 8칸: 칸0=발산(1), 칸2=응집(0), 나머지 빈칸(-1). 열린 칸 = [0, 2]
 	var ring := [1, -1, 0, -1, -1, -1, -1, -1]
@@ -391,14 +375,10 @@ func _test_auto_equip() -> void:
 	_check(gs.ring_equipped[1] == null, "나머지 슬롯은 빈 채")
 
 
-## 🔴🔴 **슬롯 교체** (세86 ① — `GameState.equip_design`).
-## 세85까지 `ring_equipped`에 쓰는 자리는 시드·새로하기·로드·**빈 슬롯 자동 장착** 넷뿐이었다 =
-## **슬롯이 한 번 차면 그 뒤에 맺은 도안은 영원히 못 쓴다**(세85 F5에서 보관 6장으로 실증 —
-## "맺었는데 못 쓴다"). `_test_slot_fill`이 그 마지막 상태(꽉 참 → 보관만)를 이미 재고 있으므로
-## 여기선 **그 다음 한 수**(꽂힌 걸 뽑고 보관 걸 올린다)를 잰다.
-##
-## ⚠ 도안 4장의 `total_score`를 서로 다르게 만든다 — 전부 `_sample_assembly()` 사본이라
-## **내용이 같으면 「슬롯이 실제로 바뀌었나」를 구분할 수단이 없다**(둘 다 통과하는 자명 검사가 된다).
+## 🔴🔴 **슬롯 교체**(`GameState.equip_design`) — `_test_slot_fill`이 「꽉 참 → 보관만」을 이미
+##  재므로 여기선 **그 다음 한 수**(꽂힌 걸 뽑고 보관 걸 올린다)를 잰다.
+## ⚠ 도안들의 `total_score`를 서로 다르게 만든다 — **내용이 같으면 「슬롯이 실제로 바뀌었나」를**
+##  **구분할 수단이 없다**(둘 다 통과하는 자명 검사가 된다).
 func _test_slot_swap() -> void:
 	_reset_ring_state()
 	var n: int = gs.EQUIP_SLOTS
@@ -451,11 +431,9 @@ func _test_slot_swap() -> void:
 
 
 ## 🔴 슬롯 교체 **UI 판정**(`tab_panel` 마법진 탭) — 좌표 → 어느 행인가 + 클릭 한 번의 결과.
-## ⚠⚠ **헤드리스는 「클릭이 저기까지 닿는가」도 「그게 보이는가」도 못 잡는다**(세25 `mouse_filter`).
-##   여기서 재는 것은 **판정 로직뿐**이다: rect를 어디에 두었고, 그 좌표를 누르면 core의 어느
-##   함수가 불리는가. 실제 마우스가 그 rect까지 도달하는지·강조가 눈에 보이는지는 **리드가 실게임
-##   `push_input`과 MCP 스샷으로** 따로 확인한다. (그래서 판정을 `magic_hit_test`/`magic_click`
-##   공개 함수로 뽑았다 — 안 뽑으면 이 절이 통째로 못 재는 자리가 된다.)
+## ⚠⚠ **헤드리스는 「클릭이 저기까지 닿는가」도 「그게 보이는가」도 못 잡는다**(`mouse_filter`).
+##   여기서 재는 것은 **판정 로직뿐**이다 — 실제 도달·강조는 실게임 `push_input`·MCP 몫이다.
+##   (그래서 판정을 `magic_hit_test`/`magic_click` 공개 함수로 뽑았다 — 안 뽑으면 통째로 못 재는 자리가 된다.)
 func _test_slot_swap_ui() -> void:
 	_reset_ring_state()
 	var n: int = gs.EQUIP_SLOTS
@@ -535,7 +513,7 @@ func _test_slot_swap_ui() -> void:
 		"🔴 [1] 키 경로(magic_assign)도 같은 결과를 낸다")
 
 	# 🔴🔴 **넘치면 rect를 아예 안 만든다** — 접힌 행에 판정을 남기면 **화면 밖 도안이 클릭으로
-	# 장착되는** 유령 판정이 된다(소지품 격자의 세84 #35와 같은 병). 보관을 일부러 넘치게 만들어 잰다.
+	# 장착되는** 유령 판정이 된다. 보관을 일부러 넘치게 만들어 잰다.
 	_reset_ring_state()
 	for i in 40:
 		eb.ring_design_committed.emit(RD.from_assembly(_sample_assembly(), "넘침진%d" % i, 0.80))
@@ -552,13 +530,9 @@ func _test_slot_swap_ui() -> void:
 	panel.free()
 
 
-## 🔴 **슬롯을 갈아 끼우면 HUD가 따라오는가** — 세86 ①이 만든 새 필요.
-## 세85까지 `ring_equipped`는 **맺을 때만** 바뀌었고 HUD는 `ring_design_committed`로 그걸 잡았다.
-## 이제 Tab에서 언제든 갈아 끼우는데, `hud._process`의 redraw 조건은 마나 변화·토스트·안내문·돈뿐
-## → **마나가 만땅이면 아무도 redraw를 안 걸어** 슬롯 미니 다이어그램이 바꾸기 전 진을 계속
-## 보여 준다(= 세84 감사 T8 「쏘는 것 ≠ 보이는 것」). 실제로 그렇게 될 뻔했고, 이 그물이 그 자리다.
-## ⚠ **「보인다」는 여기서 못 잰다** — 재는 것은 **다시 그릴 계기가 연결돼 있는가** 하나다
-##   (`test_spell_vfx_auto`의 「배선 침묵사 그물」과 같은 규약). 눈 확인은 리드의 MCP 몫.
+## 🔴 **슬롯을 갈아 끼우면 HUD가 따라오는가** — `hud._process`의 redraw 조건은 마나·토스트·안내문·돈뿐이라
+##  **마나가 만땅이면 아무도 redraw를 안 걸어** 슬롯 다이어그램이 바꾸기 전 진을 계속 보여 준다(쏘는 것 ≠ 보이는 것).
+## ⚠ **「보인다」는 여기서 못 잰다** — 재는 것은 **다시 그릴 계기가 연결돼 있는가** 하나다. 눈 확인은 MCP 몫.
 func _test_hud_follows_equipment() -> void:
 	var hud: Control = Control.new()
 	hud.set_script(load("res://src/hud/hud.gd"))
@@ -576,7 +550,7 @@ func _test_hud_follows_equipment() -> void:
 ## 🔴 **저장 라운드트립** — 바꾼 슬롯 배치가 재부팅을 건넌다.
 ## 이게 없으면 "게임 안에선 바뀌는데 다시 켜면 원래대로"가 조용히 지나간다. `equip_design`이
 ## `equipment_changed`를 쏴 자동 저장이 걸리지만, 여기선 흐름을 확정하려고 직접 저장·로드한다.
-## ⚠ 헤드리스는 세이브 뿌리가 `save_test`로 격리돼 있다(세59) — 실세이브를 안 건드린다. 끝에 뒷정리.
+## ⚠ 헤드리스는 세이브 뿌리가 `save_test`로 격리돼 있다 — 실세이브를 안 건드린다. 끝에 뒷정리.
 ## ⚠ 로드는 도안을 **파일에서 새 인스턴스로** 되살린다 — 참조가 아니라 **이름으로** 대조해야 한다.
 func _test_slot_swap_persists() -> void:
 	var sm: Node = root.get_node(^"SaveManager")
@@ -615,7 +589,7 @@ func _equipped_names() -> Array:
 
 func _test_slot_fill() -> void:
 	_reset_ring_state()
-	# 슬롯 수를 하드코딩하지 않는다 — 세션64에 4→3이 됐고, 다시 바뀌어도 이 테스트는 계약만 잰다.
+	# 슬롯 수를 하드코딩하지 않는다 — 바뀌어도 이 테스트는 계약만 잰다.
 	var n: int = gs.EQUIP_SLOTS
 	var made: Array = []
 	for i in n + 1:

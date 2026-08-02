@@ -1,23 +1,15 @@
 extends Area2D
-## 폭발 — 광역 **1회** 타격. 모듈 B. class_name 없음 — preload로 참조할 것.
+## 폭발 — 광역 **1회** 타격. class_name 없음 — preload로 참조할 것.
 ##
-## 🔴 **폭발은 규칙이 아니라 결과다** (pillar와 같은 자리). 아무도 "폭발을 만들어라"라고 하지
-## 않는다 — **변형형 문양 EXPLODE**(`Enums.GlyphCode.EXPLODE`)가 안쪽 층의 결과를 통째로
-## 융합할 때, 그 융합물이 착탄점에서 이 모양으로 선다. 반경은 안쪽 결과가 얼마나 넓게
-## 퍼져 있었나에 따라 달라지므로 **호출자가 계산해 `setup`으로 넘긴다** (기둥은 반경이
-## balance 고정값이라 스스로 읽지만, 폭발은 그럴 수 없다).
-##
-## 기둥과의 차이 = **지속형이 아니라 원샷**이다. 서 있는 동안 tick으로 때리는 게 아니라
-## 한 번 때리고 연출만 남긴다. 그래서 같은 적을 두 번 때리지 않는 장치(`_hit_ids`)가 있다.
-##
+## 🔴 폭발은 규칙이 아니라 결과다 — 변형형 문양 EXPLODE가 안쪽 층 결과를 융합할 때 착탄점에 선다.
+## 반경은 안쪽 결과가 얼마나 퍼져 있었나에 달려서 **호출자가 계산해 `setup`으로 넘긴다**(기둥과 달리
+## balance 고정값이 아니다). 기둥과 달리 원샷이라 `_hit_ids`로 같은 적 이중 타격을 막는다.
 ## 적 노드 계약: 그룹 "enemies" + take_hit(damage, rune_type, status, status_power).
 
-## 룬 색은 Db에서 읽는다 (`_rune_color`) — "새 룬 = .tres 한 장"이 색까지 지켜지게.
-## 이건 Db에 룬이 없을 때만 쓰는 폴백 (오토로드 없는 컨텍스트도 견딘다 — pillar와 같은 규칙).
+## Db에 룬이 없을 때만 쓰는 폴백 — 오토로드 없는 컨텍스트도 견디게.
 const RUNE_FALLBACK := Color(0.95, 0.35, 0.15)
 
-## 씬의 CollisionShape2D가 쥔 CircleShape2D 반지름 — **공유 리소스라 불변**. scale로만 키운다
-## (pillar·projectile과 같은 규칙: radius를 직접 쓰면 모든 폭발이 함께 바뀐다)
+## 씬 CollisionShape2D의 CircleShape2D 반지름 — **인스턴스끼리 공유하는 리소스라 불변**. scale로만 키운다.
 const BASE_RADIUS := 14.0
 
 # ── 연출값 (밸런스 아님 — 손맛이라 스크립트 const. 피해·반경은 setup 인자다) ──────────
@@ -37,17 +29,15 @@ var damage: float = 0.0
 var rune_type: int = Enums.RuneType.FIRE
 var status: int = Enums.Status.NONE
 var status_power: float = 0.0
-## 🔴 복합 룬 (세81 M2 융합진) — primary 외 룬을 피해 0으로 상태만 얹는다(적 0-피해 가드가 도배 차단).
+## 복합 룬 — primary 외 룬을 피해 0으로 상태만 얹는다(적 0-피해 가드가 도배를 막는다).
 var rune_hits: Array = []
 ## 폭발 반경(px) — 안쪽 층의 결과에 따라 달라져 **호출자가 정한다**
 var radius_px: float = BASE_RADIUS
 
 ## 🔴 스폰 직후 첫 물리 프레임은 overlap이 아직 안 잡힌다 — 한 프레임 흘려보낸 뒤에 때린다.
 var _warmed: bool = false
-## 원샷 — 이미 때렸나
 var _struck: bool = false
-## 🔴 같은 적을 두 번 때리지 않는다. 몸(body)과 히트박스(area) 양쪽으로 잡히는 적이 있어
-## 순회 두 번이 곧 이중 타격이 된다 (projectile._pierced_ids와 같은 장치).
+## 🔴 몸(body)과 히트박스(area) 양쪽으로 잡히는 적이 있어, 순회 두 번이 곧 이중 타격이 된다.
 var _hit_ids: Array[int] = []
 var _life_left: float = FLASH_SEC
 var _age: float = 0.0
@@ -69,8 +59,7 @@ func setup(p_damage: float, p_rune_type: int, p_status: int, p_status_power: flo
 	radius_px = maxf(p_radius_px, 1.0)
 	_life_left = FLASH_SEC
 
-	# 🔴 형상 리소스는 **씬 인스턴스들이 공유하는 물건**이다 — radius를 직접 쓰면 모든 폭발이
-	# 함께 바뀐다. **scale로만 만진다** (pillar.gd와 같은 규칙)
+	# 🔴 형상 리소스는 인스턴스끼리 공유한다 — radius를 직접 쓰면 모든 폭발이 같이 바뀐다. scale로만 만져라.
 	var shape := get_node_or_null("Shape") as CollisionShape2D
 	if shape != null:
 		shape.scale = Vector2.ONE * (radius_px / BASE_RADIUS)
@@ -89,11 +78,9 @@ func setup(p_damage: float, p_rune_type: int, p_status: int, p_status_power: flo
 		_ring.scale = Vector2.ONE * RING_START_FRAC
 
 
-## 🔴 이동·타격은 물리에서. 시각은 `_process`에 있다 (프로젝트 규약).
 func _physics_process(delta: float) -> void:
-	# 🔴 스폰된 그 프레임엔 get_overlapping_*가 아직 비어 있다 (Area2D 겹침은 물리 스텝 한 번
-	# 뒤에 갱신된다). 원샷이라 이걸 놓치면 **아무도 못 때리고 조용히 사라진다** — 기둥은
-	# 다음 tick에 만회하지만 폭발은 두 번째 기회가 없다.
+	# 🔴 스폰 프레임엔 get_overlapping_*가 아직 비어 있다. 원샷이라 여기서 때리면
+	# **아무도 못 때리고 조용히 사라진다** — 기둥과 달리 두 번째 기회가 없다.
 	if not _warmed:
 		_warmed = true
 		return
@@ -105,7 +92,7 @@ func _physics_process(delta: float) -> void:
 		queue_free()
 
 
-## 팽창하는 링 + 페이드 — 절차적 VFX(도형 금지 규칙의 명시적 예외: 섬광은 도트로 그릴 물건이 아니다).
+## 팽창하는 링 + 페이드 — 도형 금지 규칙의 명시적 예외(섬광은 도트로 그릴 물건이 아니다).
 func _process(delta: float) -> void:
 	_age += delta
 	var t := clampf(_age / FLASH_SEC, 0.0, 1.0)
@@ -136,14 +123,13 @@ func _hit(node: Node2D) -> void:
 	_hit_ids.append(id)
 	if node.has_method("take_hit"):
 		node.take_hit(damage, rune_type, status, status_power)
-		# 🔴 세81 M2: 보조 룬 상태 (피해 0 — 적 0-피해 가드가 도배 차단). 원샷이라 적당 한 번.
+		# 보조 룬은 피해 0으로 상태만 얹는다 — 원샷이라 적당 한 번.
 		for rh: Dictionary in rune_hits:
 			if int(rh.get("rune_type", -1)) == rune_type:
 				continue
 			node.take_hit(0.0, int(rh.rune_type), int(rh.status), float(rh.status_power))
 
 
-## 룬 색 — Db에서 읽고, 없으면 폴백 (pillar._rune_color와 같은 규칙).
 func _rune_color(p_rune_type: int) -> Color:
 	var db := get_node_or_null(^"/root/Db")
 	if db != null:

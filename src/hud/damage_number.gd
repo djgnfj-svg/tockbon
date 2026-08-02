@@ -1,11 +1,8 @@
 extends Label
-## 떠오르는 피해 숫자 (피격 손맛, 세션 38) — 적을 때린 자리에서 위로 뜨며 사라진다.
-## 🔴 **월드 좌표에 놓이는 Label이다** — CanvasLayer가 아니라 현재 씬(Node2D 루트)에 직접 붙어
-## 카메라 변환을 그대로 타고, 그래서 적 머리 위에 붙어 있는 것처럼 보인다.
-## 🔴 여기 수치는 밸런스가 아니라 **연출값(손맛)이다** (projectile의 물리 여유 const와 같은 부류) —
-## balance.tres가 아니라 여기 const로 둔다. 사용자가 직접 때려 보며 조일 값이다.
-##
-## class_name 없음 — juice.gd가 preload로 무는 규칙(모듈 내 참조).
+## 떠오르는 피해 숫자 — 적을 때린 자리에서 위로 뜨며 사라진다.
+## 🔴 **월드 좌표에 놓이는 Label이다** — CanvasLayer가 아니라 현재 씬에 직접 붙어 카메라 변환을
+## 그대로 타야 적 머리 위에 붙어 있는 것처럼 보인다.
+## 🔴 수치는 밸런스가 아니라 연출값(손맛)이라 const다.
 
 const RISE_PX := 26.0     ## 살아 있는 동안 떠오르는 높이
 const LIFE_SEC := 0.6     ## 생존 시간
@@ -25,7 +22,7 @@ func _ready() -> void:
 	if big:
 		modulate = BIG_COLOR
 	z_index = 100
-	# 숫자 폭을 재서 적 머리 위 **가운데**에 앉힌다 (Label 기준점은 좌상단이라 폭 절반만큼 왼쪽으로).
+	# Label 기준점이 좌상단이라 폭 절반만큼 왼쪽으로 밀어야 머리 위 가운데에 앉는다.
 	reset_size()
 	global_position = world_pos - Vector2(size.x * 0.5, size.y)
 	var tween := create_tween()

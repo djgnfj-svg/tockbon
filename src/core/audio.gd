@@ -10,7 +10,7 @@ extends Node
 ##    (소리가 아직 없다고 게임이 멎으면 안 된다).
 ##
 ## ⚠ **헤드리스(-s·--headless)엔 오디오 드라이버가 없다** — play()는 에러 없이 무음이다.
-##    소리 자체는 **에디터 실제 게임에서만** 검증된다(세션 26 "헤드리스는 클릭도 못 본다"의 오디오판).
+##    소리 자체는 에디터 실제 게임에서만 검증된다.
 
 const _DIR := "res://assets/audio/sfx/"
 const POOL := 8  ## 동시 재생 슬롯 — 겹치는 소리가 서로를 자르지 않게.
@@ -114,24 +114,14 @@ func play(id: StringName, pitch: float = 1.0, volume_db: float = 0.0) -> void:
 	p.play()
 
 
-## 🔊 **위치 있는 소리용 스트림 대출구** (세105 몬스터 인지 · `AudioStreamPlayer2D`가 부른다).
+## 🔊 **위치 있는 소리용 스트림 대출구** — `AudioStreamPlayer2D`가 부른다.
+## 위 풀은 비위치 플레이어라 방 반대편 소리도 코앞처럼 들린다 — 거리 감쇠는 2D 노드만 준다.
 ##
-## 🔴 **왜 이 구멍을 냈나**: `Audio`의 풀은 `AudioStreamPlayer`(**비위치**) 8개라 방 반대편 늑대가
-##   코앞처럼 들린다. 인지 설계가 성공해 여러 마리가 동시에 짖으면 **통보가 아니라 잡음**이 된다
-##   (설계 §8-6 · 리드 판단 M8). 거리 감쇠는 `AudioStreamPlayer2D`만 준다.
-##
-## 🔴 **그래도 「새 소리 = wav 한 장」은 안 깨진다** — 파일명=id 규약도, 지연 로드도, 캐시도,
-##   없는 id 경고 1회도 전부 여기(`_stream`)를 그대로 지난다. 갈라지는 건 딱 하나,
-##   **「어느 노드가 재생하나」**뿐이다. 그러니 이 함수로 **로드를 흉내 내지 마라** —
-##   `load("res://assets/audio/sfx/…")`를 직접 부르면 캐시가 두 벌이 되고 경고가 매 프레임 뜬다.
-##
-## 🔴🔴 **부르는 쪽 의무 — `bus = &"SFX"`를 반드시 설정해라.**
-##   `AudioStreamPlayer2D`의 기본 버스는 `Master`가 아니라 **`Master`로 바로 물리는 기본값**이라
-##   음소거(`O` 키)는 어차피 먹지만, **볼륨을 버스별로 가르는 날 늑대 소리만 안 따라온다.**
-##   풀(`_ready`)이 `p.bus = &"SFX"`를 거는 것과 **같은 이유**다 — 규약을 한쪽만 지키면 갈라진다.
-##
-## @return 없는 id면 `null`(경고 1회) — 부르는 쪽은 **null을 반드시 확인해라.**
-##   소리가 아직 없다고 게임이 멎으면 안 된다는 이 파일의 규율이 그대로 적용된다.
+## 🔴 로드를 흉내 내지 마라 — `load("res://assets/audio/sfx/…")`를 직접 부르면 캐시가 두 벌이 되고
+##   경고가 매 프레임 뜬다. 파일명=id·지연 로드·경고 1회가 전부 `_stream` 한 곳을 지나야 한다.
+## 🔴 부르는 쪽 의무 — **`bus = &"SFX"`를 반드시 설정해라.** 지금은 음소거가 어차피 먹지만
+##   볼륨을 버스별로 가르는 날 이 소리만 안 따라온다.
+## @return 없는 id면 `null`(경고 1회) — 부르는 쪽이 null을 반드시 확인해야 한다.
 func stream_of(id: StringName) -> AudioStream:
 	return _stream(id)
 
@@ -158,9 +148,7 @@ func _on_cast(_assembly: Dictionary, _origin: Vector2, _aim: Vector2) -> void:
 
 func _on_enemy_hit(_enemy: Node2D, _damage: float, rune_type: int) -> void:
 	# 룬 속성별 피격음 변주. 약간의 피치 흔들림으로 반복감 완화.
-	# ✅ 세104: **룬 6종이 전부 전용 음을 갖는다**(BOLT·EARTH·GRASS 추가 — 세83 룬 복원의 빚 `C2` 청산).
-	#   생성기 = `tools/gen_hit_sfx.py`(결정적 — 재생성해도 바이트가 같다).
-	# ⚠ **`_` 폴백을 지우지 마라** — 룬이 또 늘면 소리가 없는 게 아니라 기본음으로 떨어져야 한다.
+	# ⚠ **`_` 폴백을 지우지 마라** — 룬이 늘면 소리가 없는 게 아니라 기본음으로 떨어져야 하고,
 	#   `Enums.LEGACY_IMPACT`(옛 값 1) 같은 유령 값이 오는 경로도 여기로 흡수된다.
 	match rune_type:
 		Enums.RuneType.FIRE:  play(&"hit_fire", randf_range(0.95, 1.05))
@@ -173,8 +161,7 @@ func _on_enemy_hit(_enemy: Node2D, _damage: float, rune_type: int) -> void:
 
 
 func _on_hurt(_amount: float, _source_pos: Vector2) -> void:
-	# 🔴 세션63: `player_hurt`(damage_player만 발신)로 이관 — 옛 "hp 직전값 비교로 감소 추측"이
-	# 필요 없어졌다(회복·출격 만HP는 이 신호를 안 쏜다 — 신호 자체가 오발을 막는다).
+	# `player_hurt`는 damage_player만 발신해서 오발 가드가 필요 없다(회복·출격 만HP는 안 쏜다).
 	play(&"hurt")
 
 
@@ -200,7 +187,7 @@ func _on_equip() -> void:
 
 
 func _on_quest_complete(_quest_id: StringName) -> void:
-	# 목표 달성 (세션36) — 전용 소리가 없으면 해금음을 재사용한다(둘 다 "새로 열렸다"의 순간).
+	# 전용 소리가 없어 해금음을 재사용한다(둘 다 "새로 열렸다"의 순간).
 	play(&"unlock")
 
 

@@ -1,20 +1,12 @@
 extends SceneTree
-## 🔴 고리 **조립 계약** 검증 (세션 22 신설 · 세85 ⑦⑨ 재편) — 헤드리스 실행:
+## 🔴 고리 **조립 계약** 검증 — 헤드리스 실행:
 ##   ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_ring_assembly_auto.gd
 ## 전 항목 통과 시 "TEST_RING_ASSEMBLY_OK" 출력 후 종료 코드 0.
-##
-## 🔴🔴 **세85 ⑦⑨에 이 파일의 절반이 사라졌다 — 재는 몸이 죽어 있었기 때문이다.**
-## 옛 판본은 판(`RingBoard`)의 **per-piece 상태기계**를 쟀다: `choose_jin`→`_rub`→`advance`로
-## 진→룬→문양 단계를 밟고 `select_slot`으로 칸을 고르고 `set_open_slots`로 스텐실을 확인했다.
-## 그런데 그 경로는 **세70에 은퇴**했고(라이브는 조립본을 통째로 긋는 COMBINED 하나) src 호출자가
-## 0이었다 — 즉 **그물이 죽은 몸을 성실히 통과시켜 「전 스위트 그린」이 라이브의 근거로
-## 과대평가되고 있었다**(세84 감사 T2). 세85 ⑨가 그 몸을 걷었고, 여기서 그 그물도 같이 걷는다.
-## 「진이 칸을 연다」(`JinDef.glyph_slots`) 축도 세85 ⑦에 은퇴했다(감사 #8) — ④⑤⑥⑧⑫⑬⑮ 소멸.
 ##
 ## 🔴 **남은 것 = 지금도 살아 있는 계약뿐**:
 ##   • assembly 스냅샷의 **모양**(발사·저장이 읽는 dict — 바뀌면 둘 다 조용히 깨진다)
 ##   • `clear_all`이 판을 처음으로 돌린다
-##   • 🔴 **진 .tres Db 로드**(세50 파싱 침묵사 그물 — 진 하나가 증발해도 다른 데선 안 빨개진다)
+##   • 🔴 **진 .tres Db 로드**(파싱 침묵사 그물 — 진 하나가 증발해도 다른 데선 안 빨개진다)
 ##   • 🔴 **`jin_slot_dots` 기하**(「칸 0=위, 시계방향」 — HUD·Tab 미니 다이어그램의 **라이브** 소비자)
 ##
 ## 여기 있는 건 전부 **public API 계약**이다. 내부 필드(_slots 등)를 더듬지 않는다:
@@ -72,9 +64,9 @@ func _check(cond: bool, msg: String) -> void:
 
 
 # ── ① 빈 판의 초기 계약 ──
-## 🔴 세85 ⑨: `is_tracing()`이 **거짓**인 게 새 계약이다. 예전엔 `clear_all`이 per-piece 진
-## 가이드를 세워 참이었는데, 지금은 합성 밑그림의 소유자가 패널이라 판은 비운 채로 기다린다
-## (라이브는 `clear_all()` 직후 `recompose()`가 COMBINED를 넣는다 — `test_base_auto`가 그 경로를 잰다).
+## 🔴 `is_tracing()`이 **거짓**인 게 계약이다 — 합성 밑그림의 소유자가 패널이라 판은 비운 채
+## 기다린다 (라이브는 `clear_all()` 직후 `recompose()`가 COMBINED를 넣는다 —
+## `test_base_auto`가 그 경로를 잰다).
 func _test_initial_state() -> void:
 	var b = _make_board()
 	_check(not bool(b.call(&"has_jin")), "초기: 진 없음")
@@ -97,7 +89,7 @@ func _test_assembly_shape() -> void:
 	_check(a.has("open"), "assembly에 open(열린 칸)")
 	for k in SLOTS:
 		_check(int(a.rings[0][k]) == GLYPH_NONE, "빈 판의 모든 칸 = 빈칸(-1)")
-	# 🔴 세26 계약 — 판의 assembly에도 score·잉크가 실린다(안 실으면 조용히 기준 위력).
+	# 🔴 판의 assembly에도 score·잉크가 실린다(안 실으면 조용히 기준 위력).
 	# ⚠ 라이브 발사 계약은 `ring_forge_panel.build_assembly()`가 만든다(`test_jin_layers_auto[7]`).
 	#   판의 이 dict는 **특별잉크 집계 창구**로 그쪽이 부른다 — 키가 빠지면 그 경로가 죽는다.
 	_check(a.has("score") and a.has("ink") and a.has("special_ink") and a.has("special_ratio"),
@@ -130,17 +122,15 @@ func _test_clear_all_resets() -> void:
 	b.queue_free()
 
 
-# ── ④ 🔴 Db 로드 그물 — .tres 파싱 침묵사 방지 (세50 함정: 한 글자 오타 = 리소스 전체 증발) ──
+# ── ④ 🔴 Db 로드 그물 — .tres 파싱 침묵사 방지 (한 글자 오타 = 리소스 전체 증발) ──
 # test_rune_unlock_auto의 「룬 6종 로드」와 같은 역할. Db는 못 읽은 리소스를 조용히 건너뛰므로
 # 개수를 세지 않으면 진 하나가 게임에서 통째로 사라져도 전 스위트가 그린이다.
 func _test_jin_db_loaded() -> void:
 	var db: Node = root.get_node("/root/Db")
 	var jins: Array = db.call(&"all_jins")
-	# 세61 콘텐츠 리셋: 진 8종 → 1종(jin_single). 사용자가 진을 하나 되살릴 때마다 이 기대치를 +1.
-	# 🔴 세79 M1: 1종 → 2종(jin_plain_g2 = band_count 2 = 「2등급」, 층 감쌈 순서 실증).
-	# 🔴 세81 M2: 2종 → **3종**. 새 진 = `jin_fuse`(rune_slots=2 = 융합진, 룬 둘을 한 발에 실어 반응).
+	# 🔴 진을 하나 되살릴 때마다 이 기대치를 +1 (지금 3종: jin_single·jin_plain_g2·jin_fuse).
 	_check(jins.size() == 3, "🔴 진 3종(jin_single·jin_plain_g2·jin_fuse)이 Db에 로드된다 (지금 %d종 — 줄었으면 .tres 침묵사 의심, 새 진을 추가했으면 기대치를 갱신)" % jins.size())
-	# 🔴 세85 ⑦: 검사 축이 `glyph_slots`(은퇴) → **진의 개성을 실제로 쥐는 두 값**으로 바뀌었다.
+	# 🔴 **진의 개성을 실제로 쥐는 두 값**을 잰다.
 	# 값이 파싱에 실패하면 필드가 조용히 기본값(1)로 떨어지므로 **실값을 명시로 확인**한다 —
 	# 합계나 "비어 있지 않다"로 재면 한 진이 1층으로 주저앉아도 그린이다.
 	var want := {&"jin_single": [1, 1], &"jin_plain_g2": [2, 1], &"jin_fuse": [2, 2]}
@@ -159,9 +149,8 @@ func _test_jin_db_loaded() -> void:
 
 
 # ── ⑤ JinDef 기본값 계약 — 필드 누락 .tres도 조용히 안 깨진다 ──
-## ⚠ 세85 ⑦: 옛 검사(`glyph_slots` 기본 = [0..7])는 필드와 함께 은퇴했다.
 ## 🔴 **`glyph_slots`가 정말 사라졌는지도 여기서 잰다** — 필드만 남기고 소비자를 지우면 그게
-##   딱 「거짓 손잡이」(감사 T3)다. .tres에 다시 적히면 이 검사가 빨개진다.
+##   딱 「거짓 손잡이」다. .tres에 다시 적히면 이 검사가 빨개진다.
 func _test_jin_schema_defaults() -> void:
 	var jd: Resource = (load("res://src/core/schemas/jin_def.gd") as GDScript).new()
 	_check(int(jd.get(&"band_count")) == 1, "JinDef.new().band_count 기본 = 1 (옛 .tres도 1층으로 산다)")
@@ -174,7 +163,7 @@ func _test_jin_schema_defaults() -> void:
 		"🔴 `glyph_slots` 필드가 스키마에서 사라졌다 (세85 ⑦ — 남아 있으면 소비자 0인 거짓 손잡이)")
 
 
-# ── ⑥ 진 셀 다이어그램 관측점 — 「칸 0=위, 시계방향」 기하 규약 (세션60 리뷰 지적) ──
+# ── ⑥ 진 셀 다이어그램 관측점 — 「칸 0=위, 시계방향」 기하 규약 ──
 # jin_slot_dots는 순수 static 관측점이고 **라이브 소비자가 둘**이다(hud.gd·tab_panel.gd의
 # 슬롯 미니 다이어그램). 각도(-PI/2 탈락)·open 반전 회귀를 렌더로는 못 잡는다 —
 # MCP 스샷은 커밋 시점 1회 스냅샷이다. 여기가 상시 그물.
@@ -191,7 +180,7 @@ func _test_jin_slot_dots() -> void:
 		if bool(dots[k]["open"]):
 			opens.append(k)
 	_check(opens == [1, 5], "열린 표시 = 정확히 [1,5] (지금 %s)" % str(opens))
-	# 🔴 각도의 정본이 static `slot_angle`인지 — 식을 베끼면 판·책·HUD가 조용히 어긋난다(세60).
+		# 🔴 각도의 정본이 static `slot_angle`인지 — 식을 베끼면 판·책·HUD가 조용히 어긋난다.
 	for k in SLOTS:
 		var want: Vector2 = Vector2.from_angle(float(b.call(&"slot_angle", k))) * 10.0
 		_check((dots[k]["pos"] as Vector2).distance_to(want) < 0.001,
@@ -199,11 +188,11 @@ func _test_jin_slot_dots() -> void:
 	b.queue_free()
 
 
-# ── ⑦ 🔴 은퇴한 per-piece API가 **되살아나지 않았나** (세85 ⑨ 재발 감지) ──
-## 이 프로젝트의 실패 방식은 「지웠는데 다음 세션이 되살린다」다(세25의 Q·W 키, 세82의 옛 배열
-## 폴백이 그랬다). 판이 다시 per-piece를 갖는 순간 **라이브(COMBINED)와 두 몸이 되고**, 그물이
-## 다시 죽은 몸을 재기 시작한다. 이름이 돌아오면 여기가 빨개진다.
-## ⚠ `get_analysis`는 목록에 없다 — 라이브 `build_assembly()`가 부르는 산 코드다(감사 「손대지 말 것」1).
+# ── ⑦ 🔴 은퇴한 per-piece API가 **되살아나지 않았나** (재발 감지) ──
+## 이 프로젝트의 실패 방식은 「지웠는데 다음이 되살린다」다. 판이 다시 per-piece를 갖는 순간
+## **라이브(COMBINED)와 두 몸이 되고**, 그물이 다시 죽은 몸을 재기 시작한다.
+## 이름이 돌아오면 여기가 빨개진다.
+## ⚠ `get_analysis`는 목록에 없다 — 라이브 `build_assembly()`가 부르는 산 코드다.
 func _test_retired_api_stays_retired() -> void:
 	var b = _make_board()
 	var retired := ["advance", "finish", "select_slot", "set_active_glyph", "active_glyph",

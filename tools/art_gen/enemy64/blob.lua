@@ -1,6 +1,5 @@
 -- 구체 음영 밑그림기 — 「형태를 이해한 자리」에 명암을 붙이기 위한 착수점.
 -- 손으로 쓴 각도별 반경 흔들림 표(wob)가 실루엣을 정하고, 램버트 항이 명암 띠를 만든다.
--- 🔴 이건 밑그림이다. 여기서 나온 뒤 손질 루프에서 국소 수정을 얹는다.
 local B = {}
 
 local function clamp(v,a,b) if v<a then return a elseif v>b then return b else return v end end
@@ -40,7 +39,7 @@ function B.field(w, h, o)
           local q = 1.0 - sx*sx - sy*sy
           local nz = math.sqrt(math.max(q, 0.0))
           local lam = sx*lx + sy*ly + nz*lz
-          -- 🔴 명암 경계를 손으로 깨뜨린다 — 안 그러면 띠가 실루엣의 오프셋 복사가 된다(진단 ④).
+          -- 🔴 명암 경계를 손으로 깨뜨린다 — 안 그러면 띠가 실루엣의 오프셋 복사가 된다.
           -- lamWob = 각도별 가감 표(내가 고른 값). 반경 방향으로도 약하게 실어 안쪽까지 흔든다.
           if o.lamWob then
             lam = lam + wobAt(o.lamWob, th) * (0.45 + 0.55*d)

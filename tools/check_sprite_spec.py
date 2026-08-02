@@ -1,21 +1,7 @@
 #!/usr/bin/env python3
-"""스프라이트 규격 검사기 (세91) — 「선언만 있고 지켜지는지 아무도 안 쟀다」를 고치는 그물.
+"""스프라이트 규격 검사기 — 팔레트 밖 색 · 실루엣 크기 · 색 수 · 반투명 픽셀 · 디테일 밀도를 잰다.
 
-왜 이게 있나:
-  `docs/ART_SPEC.md`가 *"모든 에셋을 Apollo 46색으로"*라 적어 둔 채 세18부터 살았는데,
-  세91에 실측하니 **실제로 지키는 에셋은 잔디 타일 하나뿐**이었다(주인공·마법은 0%).
-  원인은 세69 relight 후처리가 HSV 색조를 밀어 팔레트 밖 색을 만든 것. 아무도 재지 않아서
-  세 세션 동안 몰랐다. → **규격은 문서가 아니라 이 파일이 정본이다.**
-
-  정본 설계 = `docs/takbon-design/visual_language_design.md` §9~§11.
-
-무엇을 재나 (§11-3 자가 검증 5항목):
-  ① TAKBON 60 밖의 색 개수      ② 실루엣 크기(프레임이 아니라 그림 자체)
-  ③ 색 수(캐릭터 38~46 / 마법 8~14)  ④ 반투명 픽셀 수(하드 엣지 계약)
-  ⑤ 디테일 밀도(색/100불투명px) — 이 게임의 캐릭터 기준선은 5 언저리다
-
-⚠ 이 도구는 **「보인다」를 못 잰다** — 색이 예쁜지·실루엣이 읽히는지는 사람이 봐야 한다.
-   여기 통과는 「규격 위반이 없다」는 뜻이지 「좋다」가 아니다.
+⚠ 이 도구는 「보인다」를 못 잰다 — 통과는 「규격 위반이 없다」는 뜻이지 「좋다」가 아니다.
 
 사용:
   python tools/check_sprite_spec.py --kind char  assets/sprites/player/player_mage_sheet.png --frame 64x64
@@ -27,9 +13,8 @@ import glob
 import os
 import sys
 
-# 🔴 Windows 콘솔은 cp949라 em dash(—)·한글을 찍다 UnicodeEncodeError로 **죽는다**.
-#   위반 줄에만 그 글자가 있어서 **통과할 때만 도는 검사기**였다(세94 실측 — 세91은 7/7 통과라 안 드러났다).
-#   ⚠ 검사기가 실패를 보고하다 죽으면 「위반 없음」과 「검사기 고장」이 구별되지 않는다.
+# 🔴 Windows 콘솔은 cp949라 한글·em dash를 찍다 UnicodeEncodeError로 죽는다 — 위반 줄에만 그
+#   글자가 있어 「통과할 때만 도는 검사기」가 된다(고장과 「위반 없음」이 구별되지 않는다).
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
@@ -39,14 +24,12 @@ try:
 except ImportError:
     sys.exit("Pillow가 필요하다: pip install pillow")
 
-# 🔴 정본 = TAKBON 60 (세91 사용자 확정). Apollo 46은 이 60색의 **부분집합**이라 옛 에셋도 그대로 잰다.
-#   apollo.gpl은 출처 기록으로 남겨 뒀을 뿐 — 새 에셋의 기준이 아니다.
+# 🔴 기준 팔레트 = TAKBON 60. Apollo 46은 그 부분집합이라 옛 에셋도 그대로 잰다.
 PALETTE_PATH = os.path.join("assets", "aseprite", "takbon.gpl")
 
-# 종류별 기대치 — 정본은 visual_language_design.md §9~§10.
-# ⚠ 값을 여기서 고칠 땐 그 문서도 같이 고쳐라(둘로 갈리면 이 도구가 거짓말을 시작한다).
-# silhouette = (폭, 높이). 🔴 폭이 None이면 안 잰다 — 캐릭터 폭은 자세마다 달라야 정상이고,
-# 박아두면 팔을 벌린 run 프레임에서 거짓 빨강이 난다(리드가 실제로 한 번 박았다가 걷었다).
+# 종류별 기대치 — silhouette = (폭, 높이).
+# 🔴 폭이 None이면 안 잰다 — 캐릭터 폭은 자세마다 달라야 정상이고, 박아두면 팔을 벌린 run
+#   프레임에서 거짓 빨강이 난다.
 KINDS = {
     "char":  dict(colors=(38, 46), silhouette=(None, 56), density=(3.5, 7.0), tol=2),
     "spell": dict(colors=(8, 14),  silhouette=(56, 28),   density=(None, None), tol=2),
@@ -94,8 +77,7 @@ def check_one(path, kind, fw, fh, palette):
         return [f"{path}: 불투명 픽셀이 0개다 (빈 이미지)"], []
 
     # 🔴 밀도는 **프레임 하나** 기준이다 — 시트 통째로 재면 불투명 픽셀이 프레임 수만큼 불어나
-    # 밀도가 그만큼 나눠져 **멀쩡한 그림이 FAIL로 찍힌다**(리드가 실제로 밟았다: 44색 시트가
-    # 11프레임이라 4.07 → 0.37로 보였다). 색 수·팔레트는 시트 전체로 재는 게 맞다(그림이 쓰는 총량).
+    # 밀도가 그만큼 나눠져 **멀쩡한 그림이 FAIL로 찍힌다**. 색 수·팔레트는 시트 전체가 맞다.
     dens_list = []
     for box in boxes:
         fr = im.crop(box)
@@ -122,8 +104,7 @@ def check_one(path, kind, fw, fh, palette):
     if dlo is not None and not (dlo <= dens <= dhi):
         problems.append(f"디테일 밀도 {dens:.2f} — 기대 {dlo}~{dhi} (색/100불투명px)")
 
-    # 실루엣: 프레임마다 그림 자체의 바운딩박스를 잰다.
-    # 🔴 프레임 크기가 아니다 — 그 둘을 헷갈린 것이 세90 사고의 원인이다.
+    # 🔴 실루엣 = 프레임 크기가 아니라 프레임마다 잰 **그림 자체의 바운딩박스**다(헷갈리기 쉽다).
     if spec["silhouette"]:
         want_w, want_h = spec["silhouette"]
         tol = spec["tol"]

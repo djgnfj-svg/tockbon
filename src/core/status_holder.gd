@@ -1,30 +1,21 @@
 extends RefCounted
-## 🔴 상태이상 **보유고**(세션50 신설). class_name 없음 — `const SH := preload(...)`.
-##
-## 왜 core에 있나: 세션49엔 이 코드가 `forest_enemy`에만 있어 **허수아비(연습장)가 상태를 못 받았다** —
-## 마법을 만들고 바로 쏴 보는 자리인데 반응을 시험할 수 없었다. 규칙(`status_rules`)을 core에 둔
-## 이유가 "적·허수아비·플레이어가 같은 함수를 부른다"였는데, **보유·틱**만 적에게 남아 절반만 공유됐다.
+## 🔴 상태이상 **보유고**. class_name 없음 — `const SH := preload(...)`.
 ##
 ## 🔴 역할 경계:
 ##   • `status_rules` = **규칙**(무엇이 무엇이 되는가 · 얼마나 세게). 시간도 노드도 모른다.
 ##   • 여기(holder) = **보유와 시간**(무엇이 걸려 있나 · 언제 만료되나 · 반응 순서).
 ##   • 소유자(적·허수아비) = **몸**(피해를 어떻게 받나 · 옆 적을 어떻게 찾나 · 색을 어디 칠하나).
 ##
-## 🔴 **콜백 경계가 핵심이다.** holder는 피해를 주지도, 씬을 뒤지지도, modulate를 만지지도 않는다.
-##   그건 소유자마다 다르기 때문이다 — 적은 hp를 깎고 허수아비는 카운터를 올리며,
-##   틴트는 rgb만 쥐고 **알파는 분산(안개 반투명)이 쥔다**. holder가 modulate를 통째로 쥐면
-##   안개의 반투명이 **조용히 사라진다**. 그래서 색은 **반환만** 한다.
+## 🔴 **콜백 경계가 핵심이다.** holder는 피해를 주지도, 씬을 뒤지지도, modulate를 만지지도 않는다 —
+##   적은 hp를 깎고 허수아비는 카운터를 올린다. 특히 틴트는 rgb만 쥐고 **알파는 분산(안개 반투명)이
+##   쥐어서**, holder가 modulate를 통째로 쥐면 안개의 반투명이 **조용히 사라진다.**
+##   그래서 색은 반환만 한다.
 ##
 ## ⚠ `_dead` 가드는 소유자가 쥔다 — holder는 죽음을 모른다(소유자가 틱 호출 자체를 건너뛴다).
+## 🔴 **소유자 계약: 죽을 때 반드시 `clear()`를 불러라.** 안 부르면 남은 DoT 틱이 **시체를 계속 때린다.**
 ##
-## 🔴 **소유자 계약: 죽을 때 반드시 `clear()`를 불러라.** DoT 틱이 소유자를 죽였을 때 holder는
-##   그 사실을 모르고, `clear()`로 비워진 걸 보고서야 남은 틱을 멈춘다(`tick()` 참조).
-##   안 부르면 **시체를 계속 때린다.** 지금은 `forest_enemy._die`가 지킨다(허수아비는 안 죽는다).
-##
-## ⚠ **알려진 것: 반응 산물에 취약 배수가 두 번 곱한다.** `_resolve_reaction`이 넘기는 power엔
-##   이미 증폭이 반영돼 있는데 `add()`가 취약이 아직 붙어 있으면 또 곱한다(취약 1.0+특별잉크
-##   1.5 → 진흙 2.25배). **세49부터 있던 구조라 회귀는 아니지만**, 세50이 세기를 특별잉크로
-##   흔들 수 있게 만들면서 눈에 띄게 커졌다. 의도인지 사고인지 **아직 안 정했다** — 쏴 보고 정한다.
+## ⚠ 알려진 것: 반응 산물에 취약 배수가 두 번 곱한다 — `_resolve_reaction`이 넘기는 power엔 이미
+##   증폭이 반영돼 있는데 `add()`가 취약이 아직 붙어 있으면 또 곱한다. 의도인지 사고인지 미정이다.
 
 const SR := preload("res://src/core/status_rules.gd")
 const BAL := preload("res://data/balance.tres")
@@ -42,11 +33,10 @@ var _tick_accum: float = 0.0
 var on_dot: Callable = Callable()
 ## 반경 안 즉발 피해.
 ## `func(radius: float, amount: float, include_self: bool, result_status: int, rune: int) -> void`.
-## 🔴 result_status(세52) = 증기면 `Enums.Status.NONE`, 감전이면 `Enums.Status.SHOCK`. 몸이 VFX 링
-## 색과 "연쇄 아크를 그릴지"를 정하는 데 쓴다 — include_self로 유추하지 않는다(암묵 결합 회피).
-## 🔴 rune(세56) = 이 버스트의 **정체 룬**(REACTIONS의 "rune" 키, 없으면 들어온 룬 폴백). 몸이
-## `take_reaction_damage`→`enemy_hit`에 그대로 실어야 소리·(향후)색이 반응과 맞는다 — 그전엔
-## FIRE 하드코딩이라 감전 연쇄가 불 소리를 냈다.
+## result_status = 증기면 `Enums.Status.NONE`, 감전이면 `SHOCK`. 몸이 VFX 링 색과 "연쇄 아크를
+## 그릴지"를 정하는 데 쓴다 — ⚠ include_self로 유추하지 마라(암묵 결합).
+## rune = 이 버스트의 **정체 룬**. 몸이 `enemy_hit`에 그대로 실어야 소리가 반응과 맞는다
+## (하드코딩하면 감전 연쇄가 불 소리를 낸다).
 var on_burst: Callable = Callable()
 ## 붙은 상태를 옆으로 번뜨린다(바람). `func(statuses: Dictionary) -> void`.
 var on_spread: Callable = Callable()
@@ -56,7 +46,7 @@ var on_changed: Callable = Callable()
 
 ## 남은 시간을 깎고, 만료된 걸 지우고, `status_tick_sec`마다 지속 피해를 콜백으로 넘긴다.
 ## 🔴 **지속 피해는 `enemy_hit` 계약이 아니다** — 그 시그널엔 피해 숫자·히트스톱·피격음이 물려
-## 있어서(세38·46) 0.5초마다 쏘면 화면이 도배되고 히트스톱에 갇힌다. 표현은 틴트가 맡는다.
+## 있어서 틱마다 쏘면 화면이 도배되고 히트스톱에 갇힌다. 표현은 틴트가 맡는다.
 ## ⚠ 소유자가 이 틱 중에 죽을 수 있다 — DoT 콜백 뒤 `_statuses`가 비었으면 곧장 빠져나온다.
 func tick(delta: float) -> void:
 	if _statuses.is_empty():
@@ -89,7 +79,7 @@ func tick(delta: float) -> void:
 
 
 ## 걸린 상태들 중 **가장 센 감속 하나**만 쓴다 (곱하면 두세 개만 겹쳐도 즉시 정지가 된다).
-## 🔴 상태마다 **자기 세기**를 넘긴다 — 그래야 특별잉크 증폭이 감전·덩굴·진흙에도 통한다(세션50 빚①).
+## 🔴 상태마다 자기 세기를 넘긴다 — 그래야 특별잉크 증폭이 감전·덩굴·진흙에도 통한다.
 func move_mult() -> float:
 	var m := 1.0
 	for key: int in _statuses.keys():
@@ -100,8 +90,7 @@ func move_mult() -> float:
 ## 🔴 새로 들어온 룬을 상태로 번역한다 — `take_hit`의 유일한 진입점.
 ## 순서가 곧 규칙이다: ① 바람이면 확산만 하고 끝 → ② 반응이 있으면 반응이 이긴다 → ③ 아니면 덮어쓴다.
 func apply_incoming(rune_type: int, status: int, status_power: float) -> void:
-	# ① 🔴 바람 = 확산자 (원신 Swirl 모델) — **자기 상태를 안 남긴다.** 혼자선 아무것도 아닌데
-	#    조합에선 최고가 되는 자리라, 여기서 일찍 빠져나가는 게 바람의 정체성이다.
+	# ① 🔴 바람 = 확산자 — **자기 상태를 안 남긴다.** 여기서 일찍 빠져나가는 게 바람의 정체성이다.
 	if SR.spreads(rune_type):
 		if on_spread.is_valid():
 			on_spread.call(_statuses)
@@ -113,23 +102,17 @@ func apply_incoming(rune_type: int, status: int, status_power: float) -> void:
 			_resolve_reaction(base, r, status_power, rune_type)
 			return
 	# ③ 반응 없음 = 그냥 새 상태.
-	# 🔴 **룬→상태의 정본은 `RuneDef.status`(.tres) 하나다** (세84 감사 #30에 청소). 전엔 여기에
-	#   *"status가 NONE인데 `SR.amplifies(rune)`이면 취약을 남긴다"*는 폴백 두 줄이 있었는데,
-	#   `rune_earth.tres`가 세83부터 `status = 6`(VULNERABLE)을 실제로 들어 **라이브에선 도달
-	#   불가**였고 유일한 도달 경로(`ring_spell_system`의 rune def null)는 같은 자리에서
-	#   `status_power`도 0.0으로 떨궈 `power_mult(0.0)==1.0` = **증폭 0의 무의미한 취약**을 걸었다
-	#   (안전망이라 적혀 있었지만 무력). 그래서 「흙이 취약을 만든다」의 출처가 `.tres`인지
-	#   `SR.amplifies()`인지 헷갈리는 값만 남았다 — 지금 `amplifies()`는 **증폭 여부 판정 전용**이다
-	#   (`add()`가 취약의 세기를 곱할 때 쓴다).
-	# ⚠ 데이터 결손(룬 .tres에 status 누락)은 여기서 조용히 메우지 마라 — 그건 `Db` 로드 경고가
-	#   맡는 자리다(세50 「파일을 만들었다」≠완료). `add(NONE, …)`은 스스로 아무 일도 안 한다.
+	# 🔴 **룬→상태의 정본은 `RuneDef.status`(.tres) 하나다** — 여기에 「흙이면 취약」 같은 폴백을
+	#   두지 마라. 출처가 두 벌이 되고, 그 경로는 status_power도 0이라 증폭 0의 빈 취약만 건다.
+	# ⚠ 데이터 결손(룬 .tres에 status 누락)도 여기서 조용히 메우지 마라 — 그건 `Db` 로드 경고
+	#   몫이다. `add(NONE, …)`은 스스로 아무 일도 안 한다.
 	add(status, status_power)
 
 
 ## 반응 처리 — 바탕은 **소진되고**(반응에 쓰였다), 결과 상태가 있으면 새로 걸린다.
 ## kind: convert=조용히 바뀐다 · burst=즉발 폭발(연쇄/증기) · clear=씻겨 사라진다.
 ## 세기는 들어온 룬과 바탕 중 **센 쪽**을 쓴다 — 약한 룬으로 강한 바탕을 깎아먹지 않게.
-## 🔴 incoming_rune(세56) = "rune" 키가 없을 때의 폴백 — 버스트의 정체 룬을 on_burst 5번째로 싣는다.
+## incoming_rune = 반응 표에 "rune" 키가 없을 때의 폴백(버스트의 정체 룬).
 func _resolve_reaction(base_status: int, r: Dictionary, incoming_power: float, incoming_rune: int) -> void:
 	var power := maxf(incoming_power, power_of(base_status))
 	var result := int(r.get("status", Enums.Status.NONE))
@@ -137,15 +120,15 @@ func _resolve_reaction(base_status: int, r: Dictionary, incoming_power: float, i
 	var burst_rune := int(r.get("rune", incoming_rune))
 	_statuses.erase(base_status)
 	if kind == "burst" and on_burst.is_valid():
-		# 🔴 피해 계산은 `SR.burst_damage` 한 곳 — `power * mult`로 되돌리면 배율 통일 뒤
-		# 피해가 조용히 1/3로 토막 난다(에러도 테스트 실패도 없다).
+		# 🔴 피해 계산은 `SR.burst_damage` 한 곳 — `power * mult`로 되돌리면 배율을 조일 때
+		# 피해가 조용히 토막 난다(에러도 테스트 실패도 없다).
 		if result == Enums.Status.NONE:
-			# 증기(젖음+불) — 바탕이 날아가며 **제자리 반경 즉발 피해**. 남는 상태가 없다.
-			# 🔴 result_status=NONE을 실어 보낸다 — 몸이 흰 링만 그리고 연쇄 아크는 안 그린다(세52).
+			# 증기(젖음+불) — 바탕이 날아가며 제자리 반경 즉발 피해. 남는 상태가 없다.
+			# result_status=NONE이라 몸이 흰 링만 그리고 연쇄 아크는 안 그린다.
 			on_burst.call(BAL.status_steam_px, SR.burst_damage(power, BAL.status_steam_mult), true, result, burst_rune)
 		else:
 			# 감전 연쇄(젖음+번개) — 주변 적들에게 옮겨 붙는 피해. 맞은 본인은 아래에서 상태를 받는다.
-			# 🔴 result_status=SHOCK을 실어 보낸다 — 몸이 노란 링 + 대상마다 번개 아크를 그린다(세52).
+			# result_status=SHOCK이라 몸이 노란 링 + 대상마다 번개 아크를 그린다.
 			on_burst.call(BAL.status_shock_chain_px, SR.burst_damage(power, BAL.status_shock_chain_mult), false, result, burst_rune)
 	if result != Enums.Status.NONE:
 		add(result, power)
@@ -163,7 +146,7 @@ func add(status: int, power: float) -> void:
 	if dur <= 0.0:
 		return
 	# 취약 자신에겐 안 곱한다 — 취약이 취약을 키우면 흙만 겹쳐도 무한히 세진다.
-	# 🔴 취약의 **세기**를 넘긴다(bool 아님) — 세게 건 취약이 더 크게 증폭한다(사용자 확정 세션50).
+	# 🔴 취약의 **세기**를 넘긴다(bool 아님) — 세게 건 취약이 더 크게 증폭한다.
 	var vuln := 0.0
 	if status != Enums.Status.VULNERABLE:
 		vuln = power_of(Enums.Status.VULNERABLE)
@@ -178,7 +161,7 @@ func add(status: int, power: float) -> void:
 	_notify_changed()
 
 
-## 🔴 공개 관측점 — 소유자·테스트가 내부 사전을 더듬지 않게 (takbon-verify §3 "공개 API로만").
+## 공개 관측점 — 소유자·테스트가 내부 사전을 더듬지 않게.
 func has(status: int) -> bool:
 	return _statuses.has(status)
 
@@ -198,12 +181,9 @@ func clear() -> void:
 	_statuses.clear()
 
 
-## 🔴 지금 대표 상태 = **가장 최근에 걸린 상태** 하나 (여럿이면 최신이 이긴다 — 방금 한 짓이
-## 보여야 룬을 바꾼 보람이 있다). 비었으면 `Enums.Status.NONE`(_statuses엔 NONE이 안 들어가므로
-## NONE == "빔"이 명확하다).
-## 🔴 세52: 공개로 뽑았다 — 틴트(색)와 바람 확산 아크(색)가 **같은 "최신이 이긴다" 규칙**을 써야 하는데
-## 그전엔 몸(forest_enemy·dummy_target)이 이 seq-최대 로직을 **각자 복제**하고 holder 내부 dict의
-## `["seq"]`를 더듬었다(공개 API 위반·사본 3개). 이제 한 곳이다 — tint()도 이걸 쓴다.
+## 지금 대표 상태 = **가장 최근에 걸린 상태** 하나 (방금 한 짓이 보여야 룬을 바꾼 보람이 있다).
+## 비었으면 `Enums.Status.NONE`(_statuses엔 NONE이 안 들어가므로 NONE == "빔"이 명확하다).
+## 🔴 이 seq-최대 판별을 몸에 복제하지 마라 — 틴트와 바람 확산 아크가 같은 규칙을 써야 색이 안 갈린다.
 func representative() -> int:
 	var best := int(Enums.Status.NONE)
 	var best_seq := -1
@@ -215,8 +195,8 @@ func representative() -> int:
 	return best
 
 
-## 🔴 지금 보여 줄 색 = 대표 상태의 틴트. 상태가 다 풀리면 흰색(tint_of(NONE) == WHITE).
-## ⚠ **반환만 한다** — 칠하는 건 소유자다(알파 소유권. 파일 상단 주석 참조).
+## 지금 보여 줄 색 = 대표 상태의 틴트. 상태가 다 풀리면 흰색.
+## ⚠ **반환만 한다** — 칠하는 건 소유자다(알파 소유권. 머리말 참조).
 func tint() -> Color:
 	return SR.tint_of(representative())
 

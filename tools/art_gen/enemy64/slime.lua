@@ -8,7 +8,6 @@ local B = dofile(DIR .. "blob.lua")
 local SIDE, N, GROUND = 64, 4, 58
 
 -- 호박색 램프. 어두운 갈색은 외곽선에만 쓰고 몸통은 앰버 대역에 예산을 몰아준다
--- (1차 시도에서 몸의 40%가 갈색이라 「빵」으로 읽혔다).
 local RAMP = {"f7f7f2","e7d5b3","e8c170","de9e41","da863e","be772b","884b2b","7a4841"}
 local THR  = {1.16, 1.00, 0.83, 0.655, 0.475, 0.27, 0.05}
 local OLC  = { up = "884b2b", side = "602c2c", down = "341c27" }
@@ -21,7 +20,7 @@ for _, h in pairs(OLC) do C[h] = L.hex(h) end
 for _, h in ipairs(HEXES) do C[h] = L.hex(h) end
 
 -- 각 프레임: 반경·흔들림·명암 흔들림을 손으로 잡는다.
--- 🔴 착지(f1)는 세게 눌리고 복귀(f3)는 약하게 — 선형 보간이 아니다(진단 ⑥).
+-- 🔴 착지(f1)는 세게 눌리고 복귀(f3)는 약하게 — 선형 보간이 아니다.
 -- wob 슬롯: 1=오른쪽 · 4=아래 · 7=왼쪽 · 10=위 (30°씩)
 -- 🔴 아래를 부풀리고 위를 좁혀 「공」이 아니라 「퍼진 덩어리」로 만든다.
 local FR = {
@@ -50,9 +49,7 @@ local function put(ox, x, y, c)
 end
 
 -- ── 삼킨 문양: 깨진 고리 (오른쪽이 끊겼다) + 떨어져 나온 파편 ────────
--- 🔴 「수액에 잠겨 있다」를 만드는 건 밑그림자다 — 1px 어두운 앰버를 아래오른쪽으로 깔고
---    그 위에 밝은 획을 얹으면 몸 위에 얹힌 스티커가 아니라 속에 든 것으로 읽힌다.
--- 🔴 고리는 행단위 스팬으로 굽는다 — 각도 루프로 찍으면 픽셀이 겹쳐 「엉킨 철사」가 된다(2회차 결함).
+-- 🔴 고리는 행단위 스팬으로 굽는다 — 각도 루프로 찍으면 픽셀이 겹쳐 「엉킨 철사」가 된다.
 local function ringPts(cx, cy, rad, sy, th, gap0, gap1)
   local pts = {}
   local ryo = rad * sy
@@ -66,8 +63,7 @@ local function ringPts(cx, cy, rad, sy, th, gap0, gap1)
       for x = -math.floor(xo), math.floor(xo) do
         if math.abs(x) >= xi - 0.5 then
           local a = math.deg(math.atan(y / sy, x)) % 360
-          -- ⚠ Lua의 a and b or c 삼항은 b가 false면 무너진다 — 여기서 실제로 밟아 문양이 통째로
-          --   안 그려졌다(pts=0인데 에러가 없어 「대비가 낮아 안 보인다」로 오진했다).
+          -- ⚠ Lua의 a and b or c 삼항은 b가 false면 무너진다 — 에러 없이 문양이 통째로 안 그려진다.
           local inGap
           if gap0 < gap1 then inGap = (a >= gap0 and a <= gap1)
           else inGap = (a >= gap0 or a <= gap1) end
@@ -82,7 +78,7 @@ end
 -- 🔴 「수액에 잠겨 있다」를 만드는 건 밑그림자다 — 어두운 앰버를 아래오른쪽으로 1px 깔고
 --    그 위에 밝은 획을 얹으면 몸에 얹힌 스티커가 아니라 속에 든 것으로 읽힌다.
 local function drawGlyph(ox, cx, cy, rad, shift)
-  -- 바깥 고리: 오른쪽 위가 끊겨 있다 (아래를 비우면 「웃는 입」으로 읽힌다 — 4회차 결함)
+  -- 바깥 고리: 오른쪽 위가 끊겨 있다 (아래를 비우면 「웃는 입」으로 읽힌다)
   local pts = ringPts(cx, cy, rad, 0.82, 2, (296 + shift) % 360, (350 + shift) % 360)
   -- 안쪽 고리 조각: 다른 자리가 끊겨 있어 두 겹이 어긋난다 = 「마법진」의 인상
   for _, p in ipairs(ringPts(cx, cy, rad - 5, 0.82, 1, (110 + shift) % 360, (215 + shift) % 360)) do
@@ -98,8 +94,7 @@ local function drawGlyph(ox, cx, cy, rad, shift)
       end
     end
   end
-  -- 🔴 3회차 결함: 금색을 호박색 몸에 올렸더니 명도차가 없어 문양이 통째로 안 보였다.
-  --    「삼킨 빛」은 몸 색이 아니다 — 밝은 코어 + 1px 어두운 밑그림자로 명도로 갈라 놓는다.
+  -- 🔴 「삼킨 빛」은 몸 색이 아니다 — 밝은 코어 + 1px 어두운 밑그림자로 명도로 가른다(금색을 호박 몸에 올리면 명도차가 없어 안 보인다).
   for _, p in ipairs(pts) do put(ox, p[1]+1, p[2]+1, "602c2c") end
   for _, p in ipairs(pts) do
     local a = p[3]
@@ -110,7 +105,7 @@ local function drawGlyph(ox, cx, cy, rad, shift)
   end
 end
 
--- ── 수액 속 기포 (디테일을 시선 가는 곳에 몰아준다 — 진단 ⑤) ────────
+-- ── 수액 속 기포 (디테일을 시선 가는 곳에 몰아준다) ────────────────
 local function bubble(ox, x, y, r)
   for yy = -r, r do
     for xx = -r, r do

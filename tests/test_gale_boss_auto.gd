@@ -1,23 +1,13 @@
 extends SceneTree
-## gale 보스 자동 검증 (세션56) — 헤드리스 실행:
+## gale 보스 자동 검증 — 헤드리스 실행:
 ##   ./Godot_v4.7.1-stable_win64.exe --headless --path . -s res://tests/test_gale_boss_auto.gd
-## 전 항목 통과 시 "TEST_GALE_BOSS_OK" 출력 후 종료 코드 0.
-##
-## 🔴 여기서 헤드리스가 **실제로 잡는** 것:
-##   • gale.tres가 Db를 거쳐 실제 로드된다 + boss_gale이 읽는 params 키 전부 존재 (세50 그물)
-##   • hp 절반 페이즈 전이(공개 `phase()` — 보스 공용 리더)
-##   • 돌풍: 쿨+윈드업 뒤 GameState hp 감소 + 플레이어가 반대쪽으로 밀린다(apply_push 채널)
-##   • 연사: volley_period 뒤 그룹 "enemy_projectiles"가 정확히 volley_count개
-##   • 적 투사체: 플레이어에 닿으면 hp 감소·탄 free · 수명 만료 free (mask 2 침묵 함정 그물)
-##   • 반응 룬 청산: 감전 연쇄 = enemy_hit rune BOLT · 증기 = rune WATER (FIRE 하드코딩 그물)
-## ⚠ 못 잡는 것: 텔레그래프 링·투사체 스프라이트가 **보이는지**(z·렌더)·밀림 손맛·hover "느낌" —
-##   실게임 MCP·사용자 F5.
-##
-## 공개 API로만 검증한다 (takbon-verify §3): hp()·phase()·apply_status()·take_hit()·
-## take_reaction_damage()·apply_push()·그룹·시그널. 내부 필드는 계약이 아니다.
-##
-## 주의: -s 모드는 오토로드 전역 등록보다 먼저 컴파일된다 — 오토로드 식별자·모듈 preload 금지.
-## 첫 프레임 후 load()·/root 접근. 지역 변수는 의도적으로 동적 타입.
+## 🔴 여기서 헤드리스가 실제로 잡는 것: gale.tres가 Db를 거쳐 로드되고 boss_gale이 읽는 params 키가
+##  전부 있나 · hp 절반 페이즈 전이 · 돌풍(hp 감소 + 반대쪽 밀림) · 연사 발수 == volley_count ·
+##  적 투사체 히트/수명(mask 2 침묵 함정) · 반응 룬 청산(감전=BOLT · 증기=WATER).
+## ⚠ 못 잡는 것: 텔레그래프 링·투사체 스프라이트가 보이는지(z·렌더)·밀림 손맛·hover 「느낌」 — 실게임 몫.
+## 🔴 공개 API로만 검증한다: hp()·phase()·apply_status()·take_hit()·take_reaction_damage()·
+##  apply_push()·그룹·시그널. 내부 필드는 계약이 아니다.
+## 주의: -s 모드는 오토로드보다 먼저 컴파일된다 — 오토로드 식별자·모듈 preload 금지. 첫 프레임 후 load()·/root 접근.
 
 var failures: int = 0
 var _bus = null
@@ -74,7 +64,7 @@ func _run() -> void:
 		quit(1)
 
 
-## [1] 🔴 gale.tres가 Db를 거쳐 로드된다 + boss_gale이 읽는 params 키 전부 존재 (세50 그물 —
+## [1] 🔴 gale.tres가 Db를 거쳐 로드된다 + boss_gale이 읽는 params 키 전부 존재 —
 ## "파일 만들었다"≠완료. 한 글자 오타면 리소스 전체가 조용히 사라진다).
 func _test_def_loads() -> void:
 	print("[1] gale.tres 로드 (Db 경유) · params 키 전수")
@@ -107,7 +97,7 @@ func _test_phase_transition() -> void:
 	var dummy = _make_dummy_player(Vector2(140, 0))  # hover 밴드 안 → 틱만 돈다
 	await physics_frame
 	_check(boss.phase() == 1, "전이 전 페이즈 == 1")
-	# 비약점 WATER(2) 80 → hp 150→70 (< 임계 75, 하지만 살아 있음. 세58-B hp 하향에 맞춘 수치).
+	# 비약점 WATER(2) 80 → hp 150→70 (< 임계 75, 하지만 살아 있음).
 	# ⚠ FIRE(0)를 쓰지 마라 — gale은 counter_rune=FIRE·weakness_mult 1.6이라 128이 박혀 의도가 흐려진다.
 	boss.take_hit(80.0, Enums.RuneType.WATER, 0, 0.0)
 	for i in 5:
@@ -278,27 +268,17 @@ func _test_reaction_rune() -> void:
 	await physics_frame
 
 
-## [7] 🔴🔴 **돌풍 예고 링이 알파 축에 안 물린다** — 세112에 `test_vision_auto [6]`에서 **이전**해 왔다.
-##
-## 🔴 **왜 시야가 죽었는데도 살아남는 그물인가**: 재는 대상이 시야가 아니라 **`_refresh_alpha`의
-##  소유권 계약**이다 — *"알파를 거는 노드는 `_visual`과 그림자 둘이다. 루트에 걸지 마라."*
-##  그 계약은 **코드에 그대로 살아 있고**, 어기는 손도 그대로다: *"루트에 걸면 그림자도 자식이니 공짜"*.
-##  그 한 줄이 들어가면 **돌풍 링이 같이 죽는데(에러 0)** 링은 `_visual`의 **형제**(적의 자식)라
-##  다른 그물이 아무도 안 본다. 🔴 `_charge_band`로는 못 잰다 — 그건 **씬 자식**이라 루트에 걸어도 안 죽는다.
-##
-## 🔴🔴 **옛 판을 그대로 못 옮긴 이유 — 관측 조건이 사라졌다.** 세111까지는 *"시야 밖이라 몸은
-##  알파 0인데 링은 1.0"*으로 **런타임에 갈랐다.** 세112에 시야가 죽어 알파 축이 **분산 하나**로
-##  줄었는데 `boss_gale`은 분산을 안 한다(`_ai_hover` 전용) ⇒ **공개 API로 둘을 가르는 판을 못 만든다.**
-##  ⇒ 실패 형태 **둘을 직접** 잰다:
-##    ⓑ **구조** — 링이 적의 **직계 자식**이고 `Visual`의 자식이 아니다(`_visual.add_child`로 옮기면 빨강)
-##    ⓒ **소스** — `_refresh_alpha`가 **루트 `modulate`에 대입하지 않는다**(`modulate.a = a`로 바꾸면 빨강)
-##  ⓒ가 소스 스캔인 이유는 `test_audio_auto` ⑤와 같다: **실패 형태가 늘 「그 줄이 바뀐다」**인데
-##  지금은 알파 축이 상수 1.0이라 런타임 값으로는 **자명 통과**가 된다(세86 *"결과가 같다 ≠ 같은 길"*).
-## ✅ ⓐ(누적 알파 1.0)는 지금 자명 통과지만 남긴다 — **알파 축이 다시 생기는 날 저절로 검출자가 된다.**
-##
-## 🔴 **누적 알파로 잰다** — Godot의 `modulate`는 렌더 때 부모 것과 곱해지지 자식의 프로퍼티를
-##  바꾸지 않는다. 링 자신의 값만 읽으면 루트에 걸어도 1.0이라 **그린이다.**
-##
+## [7] 🔴 돌풍 예고 링이 알파 축에 안 물린다 — 재는 대상은 `_refresh_alpha`의 소유권 계약이다
+##  (알파를 거는 노드는 `_visual`과 그림자 둘이다 · 루트에 걸지 마라). 루트에 걸면 돌풍 링이 같이
+##  죽는데(에러 0) 링은 `_visual`의 형제(적의 자식)라 다른 그물이 아무도 안 본다.
+##  🔴 `_charge_band`로는 못 잰다 — 그건 씬 자식이라 루트에 걸어도 안 죽는다.
+## 🔴 실패 형태 둘을 직접 잰다:
+##   ⓑ 구조 — 링이 적의 직계 자식이고 `Visual`의 자식이 아니다(`_visual.add_child`로 옮기면 빨강)
+##   ⓒ 소스 — `_refresh_alpha`가 루트 `modulate`에 대입하지 않는다(`modulate.a = a`로 바꾸면 빨강)
+##  ⓒ가 소스 스캔인 이유: 지금은 알파 축이 상수 1.0이라 런타임 값으로는 자명 통과가 된다.
+## ✅ ⓐ(누적 알파 1.0)는 지금 자명 통과지만 남긴다 — 알파 축이 다시 생기는 날 저절로 검출자가 된다.
+## 🔴 누적 알파로 잰다 — Godot의 `modulate`는 렌더 때 부모 것과 곱해지지 자식 프로퍼티를 안 바꾼다.
+##  링 자신의 값만 읽으면 루트에 걸어도 1.0이라 그린이다.
 ## ⚠ 보스를 매 프레임 핀한다 — `hover_min`(110) > `gust_radius`(90)라 자유 이동이면 물러나 돌풍을 안 쓴다([3] 선례).
 func _test_gust_ring_not_dimmed() -> void:
 	print("[7] 🔴🔴 돌풍 링이 알파 축에 안 물린다 (test_vision_auto [6] 이전 — 계약은 `_refresh_alpha`)")
