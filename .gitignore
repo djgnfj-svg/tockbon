@@ -1,0 +1,18 @@
+# Godot 캐시
+.godot/
+
+# 엔진 바이너리 (170MB — 커밋 금지)
+Godot_v*.exe
+
+# 임시
+*.tmp
+
+# 도구가 쓰는 락 파일 — 로컬 상태라 리포에 안 남긴다.
+.claude/scheduled_tasks.lock
+
+# MCP 설정 — 엔진·Aseprite 실행 경로가 이 PC 절대경로로 박혀 있다.
+.mcp.json
+
+# 임시 스크린샷 등 루트 이미지
+/image.png
+/image.png.import
