@@ -201,8 +201,12 @@ func _net2_click_reaches_fire(node: Node) -> void:
 	for path: String in authored:
 		if live.has(path) and int(authored[path]) != int(live[path]):
 			masked.append("%s: 적힘 %d → 삶 %d" % [path, int(authored[path]), int(live[path])])
+	# 🔴 예외 목록에 오른 노드도 여기서는 봐준다 — **일부러 그렇다.** 뒤를 막아야 하는 모달을
+	#  등록해 놓고 `_force_ignore` 아래에 두면 **덮개가 그 모달을 조용히 무력화한다.**
+	#  그때 필요한 건 예외 등록이 아니라 **덮개에서도 빼는 것**이고, 이 줄이 그걸 말해준다.
 	_check("2d 덮개가 적힌 실수를 가리고 있지 않다", masked.is_empty(),
-		"%s — 이 차이가 있는 한 .tscn의 mouse_filter는 아무 의미가 없는 거짓 손잡이다" % str(masked))
+		"%s — 적힌 값이 무의미해진다(거짓 손잡이). 그 노드를 HUD 밖으로 옮기든가 "
+		% str(masked) + "`sandbox_hud._force_ignore`에서 빼라")
 
 
 # ─── W3. 🔴 카메라가 `_to_cell()`을 틀어뜨리는 자리 ───────────────
