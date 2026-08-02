@@ -1,0 +1,26 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://src/sandbox/liquid_sandbox.gd" id="1_root"]
+[ext_resource type="Script" path="res://src/world/cells/cell_renderer.gd" id="2_render"]
+[ext_resource type="Script" path="res://src/sandbox/sandbox_input.gd" id="3_input"]
+[ext_resource type="Script" path="res://src/sandbox/sandbox_hud.gd" id="4_hud"]
+
+[node name="LiquidSandbox" type="Node2D"]
+script = ExtResource("1_root")
+
+[node name="CellRenderer" type="Sprite2D" parent="."]
+script = ExtResource("2_render")
+
+[node name="SandboxInput" type="Node" parent="."]
+script = ExtResource("3_input")
+
+[node name="HUD" type="CanvasLayer" parent="."]
+
+[node name="Stats" type="Label" parent="HUD"]
+offset_left = 8.0
+offset_top = 8.0
+offset_right = 760.0
+offset_bottom = 170.0
+mouse_filter = 2
+text = "…"
+script = ExtResource("4_hud")
