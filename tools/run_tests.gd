@@ -144,8 +144,8 @@ func _score(name: String, realtime: bool, ms: int, code: int, text: String) -> D
 	for line: String in text.split("\n"):
 		var t := line.strip_edges()
 		# 🔴 콜론까지 맞춘다 — 엔진 형식은 `SCRIPT ERROR:`다. 콜론을 빼면
-		#    `test_landmark_road_auto`가 자기 주석에 적은 "SCRIPT ERROR와 다르다"를
-		#    잡아 **매번 거짓 양성**이 난다(세104 실측).
+		#    테스트가 자기 주석에 적은 "SCRIPT ERROR" 문자열까지 잡아
+		#    **매번 거짓 양성**이 난다(실측).
 		if t.begins_with("SCRIPT ERROR:"):
 			errs.append(t)
 		elif t.begins_with("ERROR:") and not _is_engine_noise(t):
