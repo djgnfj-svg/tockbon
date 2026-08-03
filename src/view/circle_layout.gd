@@ -26,13 +26,17 @@ const CircleDefs := preload("res://src/sim/circle_defs.gd")
 const Fx := preload("res://src/view/fx_tuning.gd")
 
 
-## 창 안에서 마법진이 앉는 자리. 🔴 제목 띠를 피한다 — 그림이 제목과 겹치면 둘 다 안 읽힌다.
-## ⚠ **그림도 클릭도 이 함수를 지난다**(단계 4). 창 안쪽 좌표계다.
-static func circle_area(window_size: Vector2) -> Rect2:
+## 주어진 상자 안에서 마법진이 앉는 자리. **상자 원점 기준**이다.
+##
+## 🔴🔴 **마법진은 자기가 어디에 앉았는지 모른다.** 창이 좌표계를 옮겨 주고
+##  (`circle_window`의 `draw_set_transform`) 여기는 **크기만** 받는다 —
+##  페이지 사각형을 넘기면 **마법진 축이 창 축에 매달린다.**
+## ⚠ 그래서 인자가 `Rect2`가 아니라 `Vector2`다. 자리를 아는 순간 창 모양이 바뀔 때마다
+##  이 파일이 같이 열린다(§2의 「축이 서로를 안 부른다」와 같은 정신).
+## ⚠ **그림도 클릭도 이 함수를 지난다**(단계 4b).
+static func circle_area(box: Vector2) -> Rect2:
 	var pad := Fx.CIRCLE_AREA_PAD_PX
-	var top := Fx.WINDOW_TITLE_BAND_PX
-	return Rect2(pad, top, maxf(window_size.x - pad * 2.0, 0.0),
-		maxf(window_size.y - top - pad, 0.0))
+	return Rect2(pad, pad, maxf(box.x - pad * 2.0, 0.0), maxf(box.y - pad * 2.0, 0.0))
 
 
 # ─── 진 축 ────────────────────────────────────────────────────────

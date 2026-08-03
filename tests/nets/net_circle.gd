@@ -22,6 +22,7 @@ const Mat := preload("res://src/sim/cell_materials.gd")
 const Stage := preload("res://src/stage/stage.gd")
 ## 🔴 좌표 함수를 **실제로 부르는** 그물이 있어야 텍스트 스캔이 못 보는 거동이 잡힌다.
 const Layout := preload("res://src/view/circle_layout.gd")
+const Book := preload("res://src/view/book_layout.gd")
 const Fx := preload("res://src/view/fx_tuning.gd")
 ## 🔴 주석·문자열 스트리퍼를 **빌려 온다** — 소스 텍스트를 훑는 그물이 둘이라 스트리퍼는 하나여야 한다.
 const NetDeterminism := preload("res://tests/nets/net_determinism.gd")
@@ -29,6 +30,16 @@ const NetDeterminism := preload("res://tests/nets/net_determinism.gd")
 ## 표를 읽어야 하는 접근자들. 🔴 `circle_defs`에 접근자가 늘면 여기 한 줄을 늘려라 —
 ##  안 늘리면 새 접근자만 상수를 돌려줘도 아무도 안 짖는다.
 const ACCESSORS: Array[String] = ["layers", "rune_slots"]
+
+## 🔴 파일 참조를 원문에서 찾을 때 쓰는 경로들. **한 곳에 둔다** — 흩어지면 파일을 옮기는 날
+##  검사 하나만 낡고, 낡은 쪽은 「없다」로 통과해서 조용해진다.
+const LAYOUT_PATH := "res://src/view/circle_layout.gd"
+const WINDOW_PATH := "res://src/view/circle_window.gd"
+const BOOK_PATH := "res://src/view/book_layout.gd"
+
+## 마법진 지름의 **바닥값**. 🔴 연출 상수가 아니라 **검증 계약**이라 그물에 둔다 —
+##  단계 3에서 눈이 통과시킨 크기이고, 여기 아래로 내려가면 그 판정을 다시 받아야 한다.
+const CIRCLE_DIAMETER_FLOOR_PX := 180.0
 
 
 func run(t) -> void:
@@ -38,6 +49,8 @@ func run(t) -> void:
 	_swapping_the_circle_resizes(t)
 	_resize_is_table_driven(t)
 	_accessors_read_the_table(t)
+	_book_pages_are_one_source(t)
+	_circle_layout_does_not_know_pages(t)
 	_layout_geometry_runs(t)
 	_axes_do_not_call_each_other(t)
 	_cannot_fire_without_a_rune(t)
@@ -298,6 +311,89 @@ func _accessors_read_the_table(t) -> void:
 		t.ok(body.contains("DEFS["), "%s()가 표를 읽는다 (상수를 안 돌려준다)" % fname)
 
 
+## 🔴🔴 **페이지 사각형이 한 곳에서 나오나 — 그리고 그게 실제로 책 모양인가.**
+##  ⚠ 접힘은 장식이 아니라 **경계의 그림**이다. 보이는 경계와 (단계 4b의) 클릭 경계가 다르면
+##   「이쪽을 눌렀는데 저쪽이 반응한다」가 되고 **에러가 안 난다**(위험 23).
+##  ⇒ 접힘이 두 페이지를 **정확히** 가르는지를 잰다 — 틈이 있으면 그 틈이 어느 쪽도 아니게 된다.
+func _book_pages_are_one_source(t) -> void:
+	var win := Fx.WINDOW_RECT.size
+	var pages := Book.pages(win)
+	for key: String in ["left", "fold", "right"]:
+		t.ok(pages.has(key), "페이지 표에 `%s` 가 있다" % key)
+	if not (pages.has("left") and pages.has("fold") and pages.has("right")):
+		return
+	var l: Rect2 = pages["left"]
+	var f: Rect2 = pages["fold"]
+	var r: Rect2 = pages["right"]
+
+	t.ok(l.size.x > 0.0 and l.size.y > 0.0, "왼쪽 페이지에 크기가 있다 (%dx%d)" % [
+		int(l.size.x), int(l.size.y)])
+	t.ok(r.size.x > 0.0 and r.size.y > 0.0, "오른쪽 페이지에 크기가 있다 (%dx%d)" % [
+		int(r.size.x), int(r.size.y)])
+	# ⚠ 폭이 다르면 「본문 + 곁다리」로 읽히고 책 펼침이 아니다.
+	t.ok(is_equal_approx(l.size.x, r.size.x), "두 페이지 폭이 같다 (%.1f · %.1f)" % [
+		l.size.x, r.size.x])
+	t.ok(not l.intersects(r), "두 페이지가 안 겹친다")
+
+	# 🔴 접힘이 **딱 붙어** 둘을 가른다. 틈이 생기면 그 띠가 어느 페이지도 아니게 된다.
+	t.ok(is_equal_approx(l.end.x, f.position.x), "접힘이 왼쪽 페이지에 붙어 있다")
+	t.ok(is_equal_approx(f.end.x, r.position.x), "접힘이 오른쪽 페이지에 붙어 있다")
+	t.ok(f.size.x > 0.0, "접힘에 폭이 있다 (경계가 보인다)")
+
+	# 창 안에 들어가나 · 제목 띠를 침범 안 하나.
+	var win_rect := Rect2(Vector2.ZERO, win)
+	for key: String in ["left", "fold", "right"]:
+		var p: Rect2 = pages[key]
+		t.ok(win_rect.encloses(p), "%s 가 창 안에 들어간다" % key)
+		t.ok(p.position.y >= Fx.WINDOW_TITLE_BAND_PX, "%s 가 제목 띠 아래에서 시작한다" % key)
+
+	# 🔴🔴 **계약: 마법진 페이지가 진 지름을 담는다.**
+	#
+	# ⚠ 처음엔 `지름 <= min(페이지)`로 적었는데 **그건 동어반복이었다** — 실측으로 확인했다:
+	#  페이지를 반으로 줄여도 초록이었다. 반지름이 페이지에서 **파생**되므로 언제나 참이다.
+	#  ⇒ 재야 하는 것은 「넘치나」가 아니라 **「쓸 만한 크기로 남나」**다.
+	#
+	# 🔴 바닥값의 근거: 단계 3에서 verify-look이 **지름 ~199px 마법진**으로 판정 3
+	#  (층 번호와 명도차가 읽힌다)을 통과시켰다. 여기서 더 작아지면 **그 판정이 낡는다** —
+	#  고리 둘·룬·문양 심볼이 그 안에 다 들어가야 하고, 작아지면 서로 먹는다.
+	#  ⚠ 창을 줄이고 싶으면 이 줄을 낮추기 전에 **눈으로 다시 봐라.**
+	var area := Layout.circle_area(r.size)
+	var fr: float = Layout.frame(area)["radius"]
+	t.ok(fr > 0.0, "오른쪽 페이지에서 진 반지름이 나온다 (%.1f)" % fr)
+	t.ok(fr * 2.0 >= CIRCLE_DIAMETER_FLOOR_PX,
+		"진 지름(%.1f)이 바닥값 %d 이상이다 (페이지 %dx%d)" % [
+			fr * 2.0, int(CIRCLE_DIAMETER_FLOOR_PX), int(r.size.x), int(r.size.y)])
+
+	# 창이 화면 안에 있나. ⚠ 「몇 %냐」는 안 잰다 — 그 숫자는 낡는다(계획 §3.7).
+	#  「캐릭터가 보이나」는 **눈이 판정한다.**
+	var vw := float(ProjectSettings.get_setting("display/window/size/viewport_width"))
+	var vh := float(ProjectSettings.get_setting("display/window/size/viewport_height"))
+	t.ok(Rect2(0.0, 0.0, vw, vh).encloses(Fx.WINDOW_RECT), "창이 화면 안에 들어간다")
+
+
+## 🔴🔴 **마법진이 페이지를 모르나.** 알게 되는 순간 창 모양이 바뀔 때마다 마법진 코드가 열린다 —
+##  단계 3에서 층 축이 진 축에 매달렸던 것과 **똑같은 병이 한 층 위에서** 반복되는 것이다.
+## 🔴 재는 것은 **참조 두 개**다: 창 축 파일을 부르나 · 창 상수를 읽나.
+func _circle_layout_does_not_know_pages(t) -> void:
+	# ⚠ **파일 참조는 원문으로 본다.** `preload` 경로가 문자열이라 스트리퍼가 지워 버리고,
+	#  스트립한 소스로 재면 **진짜 결합을 못 보고 초록이 된다**(실측으로 그랬다).
+	#  🔴 `net_layers`가 죽은 경로를 찾을 때 쓰는 것과 같은 방식이고 대가도 같다 —
+	#   주석에 그 경로를 적어도 걸린다(거짓 양성이지만 **빨갛게** 틀리므로 조용히 새지 않는다).
+	var raw := _read(LAYOUT_PATH)
+	t.ok(not raw.contains(BOOK_PATH), "마법진 좌표가 창 축 파일을 안 부른다")
+	var src := _stripped(t, LAYOUT_PATH, "circle_layout")
+	t.ok(not src.contains("Fx.WINDOW_"), "마법진 좌표가 창 상수를 안 읽는다")
+
+	# 🔴 반대쪽 — 창은 **둘 다** 알아야 한다. 아니면 위 둘이 「아무도 아무것도 안 쓴다」로 통과한다.
+	var wraw := _read(WINDOW_PATH)
+	t.ok(wraw.contains(BOOK_PATH), "창이 창 축을 조립한다")
+	t.ok(wraw.contains(LAYOUT_PATH), "창이 마법진 축을 조립한다")
+	var win := _stripped(t, WINDOW_PATH, "circle_window")
+	# ⚠ 그리기가 변환을 쓰면 **되돌리는 줄이 반드시 있어야 한다** — 없으면 뒤에 붙는 것이
+	#  전부 페이지만큼 밀리고, 지금은 뒤에 아무것도 없어서 증상조차 없다.
+	t.eq(win.count("draw_set_transform"), 2, "변환을 걸고 **되돌린다** (걸기 1 · 되돌리기 1)")
+
+
 ## 🔴🔴 **좌표 함수를 실제로 부르는 그물이 하나도 없었다.**
 ##  ⚠ 그래서 `_radius()`가 0을 돌려줘도 초록이고, 마법진이 **점 하나로 무너져도** 아무도 안 짖는다.
 ##   텍스트 스캔은 **문법**을 볼 뿐 **거동**을 못 본다 — 여기가 그 반대쪽이다.
@@ -305,14 +401,13 @@ func _accessors_read_the_table(t) -> void:
 ## 🔴 그리고 계획이 「`rune_slots != 1`이면 짖는다」를 **래퍼 stderr에 공짜로 걸리는 장치**라고 적었는데,
 ##  그 함수를 부르는 그물이 없어서 **공짜가 아니었다.** 아래가 그 함수를 실제로 부른다.
 func _layout_geometry_runs(t) -> void:
-	# 창 크기는 연출값이지만, **그 크기에서 실제로 그림이 나오나**를 재는 게 요점이다.
-	var area := Layout.circle_area(Fx.WINDOW_RECT.size)
+	# 🔴 마법진은 **오른쪽 페이지 안**에서 산다. 창 크기가 아니라 페이지 크기를 받는다.
+	var page: Rect2 = Book.pages(Fx.WINDOW_RECT.size)["right"]
+	var area := Layout.circle_area(page.size)
 	t.ok(area.size.x > 0.0 and area.size.y > 0.0,
 		"마법진 자리에 크기가 있다 (%dx%d)" % [int(area.size.x), int(area.size.y)])
-	# 제목 띠를 피한다 — 겹치면 제목도 그림도 안 읽힌다.
-	t.ok(area.position.y >= Fx.WINDOW_TITLE_BAND_PX, "마법진 자리가 제목 아래에서 시작한다")
-	t.ok(area.end.x <= Fx.WINDOW_RECT.size.x and area.end.y <= Fx.WINDOW_RECT.size.y,
-		"마법진 자리가 창 안에 들어간다")
+	t.ok(area.end.x <= page.size.x and area.end.y <= page.size.y,
+		"마법진 자리가 페이지 안에 들어간다")
 
 	var f := Layout.frame(area)
 	var fr: float = f["radius"]

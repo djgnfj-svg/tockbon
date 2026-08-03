@@ -25,6 +25,8 @@ extends Control
 
 const Fx := preload("res://src/view/fx_tuning.gd")
 const Layout := preload("res://src/view/circle_layout.gd")
+## 🔴 창 축은 **따로다.** 창이 둘을 조립하고, `circle_layout`은 `book_layout`을 모른다.
+const Book := preload("res://src/view/book_layout.gd")
 const Glyph := preload("res://src/sim/glyph_defs.gd")
 const SpellCircle := preload("res://src/actor/spell_circle.gd")
 
@@ -77,11 +79,29 @@ func _draw() -> void:
 		Fx.WINDOW_TITLE, HORIZONTAL_ALIGNMENT_LEFT, -1,
 		Fx.WINDOW_TITLE_SIZE, Fx.WINDOW_TITLE_COLOR)
 
+	# ── 책 펼침 ──
+	# 🔴 페이지 사각형은 `book_layout` 하나에서 온다 — 그림과 (단계 4b의) 클릭이 같이 읽는다.
+	#  ⚠ 접힘을 여기서 따로 그리면 **보이는 경계와 클릭 경계가 갈린다**(위험 23).
+	var pages := Book.pages(size)
+	draw_rect(pages["left"], Fx.BOOK_PAGE, true)
+	draw_rect(pages["right"], Fx.BOOK_PAGE, true)
+	draw_rect(pages["fold"], Fx.BOOK_FOLD, true)
+	# ⚠ 왼쪽 페이지는 **일부러 비어 있다** — 팔레트는 단계 4b·5다.
+
 	if _circle == null:
 		return
+
+	# 🔴🔴 **마법진을 오른쪽 페이지로 옮기는 것은 좌표계 변환이다.** 마법진 좌표에 페이지 위치를
+	#  더하지 않는다 — 더하면 `circle_layout`이 자기가 어디 앉았는지 알게 되고, 창 모양이
+	#  바뀌는 날 마법진 코드가 같이 열린다(§3.7).
+	#  ⚠ **그 대가로 단계 4b가 이 변환을 되돌려 클릭을 받아야 한다**(위험 22).
+	#   뺄 값은 `pages()["right"].position` — **여기서 쓰는 것과 같은 값**이다.
+	var page: Rect2 = pages["right"]
+	draw_set_transform(page.position)
+
 	# 🔴 **좌표는 전부 `circle_layout`에서 온다.** 여기서 하나라도 계산하면
-	#  단계 4의 히트테스트가 다른 좌표를 쓰게 되고, 그건 에러 없이 엉뚱한 층으로 간다.
-	var area := Layout.circle_area(size)
+	#  단계 4b의 히트테스트가 다른 좌표를 쓰게 되고, 그건 에러 없이 엉뚱한 층으로 간다.
+	var area := Layout.circle_area(page.size)
 	var id := _circle.circle_id()
 	_draw_frame(area)
 	_draw_rune_slot(area, id)
@@ -93,6 +113,10 @@ func _draw() -> void:
 	#   그림은 그릴 자리를 표에서 받아야 하고, 모델은 그 자리에 무엇이 놓였는지만 안다.
 	for i in _circle.layer_count():
 		_draw_ring(area, id, i, font)
+
+	# ⚠ **반드시 되돌린다.** 안 되돌리면 뒤에 그리는 것이 전부 페이지만큼 밀리고,
+	#  지금은 뒤에 아무것도 없어서 **에러도 증상도 없다** — 팔레트가 붙는 날 조용히 어긋난다.
+	draw_set_transform(Vector2.ZERO)
 
 
 # ══════════════════════════════════════════════════════════════════
