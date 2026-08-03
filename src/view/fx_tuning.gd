@@ -83,10 +83,46 @@ const WINDOW_EDGE := Color(0.45, 0.55, 0.75, 0.9)
 const WINDOW_EDGE_PX := 2.0
 const WINDOW_PAD_PX := 12.0
 
-## ⚠ 이 단계의 창은 **뒷판과 제목뿐이다.** 동심원·층·룬 자리·팔레트는 단계 3~5가 채운다.
+## ⚠ 팔레트는 단계 4~5가 채운다. 지금은 뒷판 · 제목 · 마법진 그림뿐이다.
 const WINDOW_TITLE := "마법진 조립"
 const WINDOW_TITLE_COLOR := Color(0.86, 0.90, 0.98)
 const WINDOW_TITLE_SIZE := 16
+## 제목이 차지하는 띠. 마법진 그림은 이 아래부터다 — 겹치면 둘 다 안 읽힌다.
+const WINDOW_TITLE_BAND_PX := 34.0
+
+# ─── 조립창 — 마법진 그림 ─────────────────────────────────────────
+## 🔴 **전부 비율이다.** 픽셀을 박으면 창 크기를 바꾸는 날 그림이 창 밖으로 나간다.
+##  ⚠ 층 고리 반지름은 **층 수로 나눠서** 나온다(`circle_layout.layer_rings`) — 여기엔 고리가
+##   차지하는 **바깥 끝**만 있다. 고리마다 상수를 두면 3층 진이 오는 날 겹친다.
+const CIRCLE_AREA_PAD_PX := 14.0
+const CIRCLE_DISC_RATIO := 0.94
+const CIRCLE_RING_ZONE := 0.80
+const CIRCLE_RUNE_RATIO := 0.17
+const CIRCLE_GLYPH_RATIO := 0.115
+
+## 진 테두리 — 그릇의 가장자리다. ⚠ 층 고리보다 **어둡고 굵어야** 「틀」로 읽힌다.
+const CIRCLE_FRAME := Color(0.38, 0.45, 0.62, 0.85)
+const CIRCLE_FRAME_PX := 2.0
+
+## 🔴🔴 **「안쪽이 먼저」를 동심원 하나에 맡기지 않는다**(기획 판정 3).
+##  동심원은 순서가 **있다**는 것만 말하고 **어느 쪽이 먼저인지**는 안 말한다.
+##  ⇒ 장치 **둘**을 건다: ① 층 번호(1·2) ② **안쪽이 밝은 명도차**(아래 두 색을 층마다 섞는다).
+## ⚠ 색 하나만 두면 그 장치가 하나로 줄고, 그러면 판정 3이 동심원 하나에 매달린다.
+const CIRCLE_RING_INNER := Color(0.72, 0.86, 1.0, 0.95)
+const CIRCLE_RING_OUTER := Color(0.30, 0.40, 0.58, 0.95)
+const CIRCLE_RING_PX := 2.0
+
+## 층 번호. ⚠ 고리 **왼쪽**에 적는다 — 문양 심볼이 12시에 앉으므로 거기 적으면 겹친다.
+const CIRCLE_LAYER_NUM := Color(0.80, 0.86, 0.96)
+const CIRCLE_LAYER_NUM_SIZE := 12
+
+## 🔴 **문양 심볼의 모양은 `kind`가 정한다**(`glyph_defs.DEFS`) — 문양마다 그리면 그게
+##  「문양 추가 = 고칠 곳 넷째」가 된다. 색은 `GLYPH_TINT`라 **총구와 같은 색**이고,
+##  그래서 창과 총구가 같은 마법으로 읽힌다.
+##  ⚠ SPAWN의 가지 수는 **연출값이다.** 확산의 8방향과 같을 필요가 없다 —
+##   같게 두면 「탄을 만드는 문양은 전부 8개를 만든다」로 잘못 읽힌다.
+const GLYPH_SPAWN_RAYS := 6
+const GLYPH_SYMBOL_PX := 2.0
 
 # ─── 🔴🔴 확산 세대 표 — 화면 쪽 절반 ────────────────────────────
 ## `sim_tuning.SIM_SIZES`와 **길이가 같아야 하고 방향도 같아야 한다**(둘 다 세대마다 감소).

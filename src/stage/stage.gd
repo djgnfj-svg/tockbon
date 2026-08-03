@@ -168,6 +168,9 @@ func _ready() -> void:
 	# 🔴 총구가 조립 상태를 **읽는다.** 사본을 밀어 넣으면 밀어 넣기를 한 번 깜빡하는 순간
 	#  「조합을 바꿨는데 화면이 그대로다」가 되고, 그게 v1이 죽은 방식이다.
 	_char_view.setup(_char, _circle)
+	# 🔴 조립창도 **같은 것**을 읽는다 — 사본을 주면 「키 4↔5로 그림이 뒤집힌다」가 사라지고,
+	#  그게 단일 소스(계획 §1)의 눈에 보이는 유일한 증거다.
+	_circle_window.setup(_circle)
 	_spell_view.setup(_spell)
 	_input.fire_requested.connect(_fire_at)
 	_input.reset_requested.connect(reset_stage)

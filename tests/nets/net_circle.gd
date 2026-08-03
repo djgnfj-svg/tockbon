@@ -242,6 +242,26 @@ func _resize_is_table_driven(t) -> void:
 		var arg := m.get_string(1)
 		t.ok(arg.contains("CircleDefs."),
 			"길이 `%s`가 진 표에서 나온다 (상수 박기가 아니다)" % arg)
+	_layout_reads_the_table(t)
+
+
+## 🔴🔴 **모델만 스캔하면 그림에 박힌 2를 못 잡는다**(계획 §6.1).
+##  그러면 「모델은 3층인데 **셋째 고리가 안 그려진다**」가 되고, 그건 층 수가 안 따라오는 것보다
+##  **더 나쁘다** — 시뮬만 늘고 화면이 안 따라가는 것이 v1이 죽은 방식이다.
+##  ⇒ 층 수·룬 자리 수를 읽는 곳이 **두 파일 통틀어** 전부 진 표를 지나야 한다.
+##
+## 🔴 재는 것 둘: ① 그림이 두 접근자를 **부르나** ② 개수를 **숫자로 박은 순회가 없나**.
+##  ⚠ ②가 없으면 `for i in 2:` 한 줄로 ①을 통과한 채 고리 수가 얼어붙는다.
+func _layout_reads_the_table(t) -> void:
+	var raw := _read("res://src/view/circle_layout.gd")
+	t.ok(not raw.contains("\"\"\""), "circle_layout에 삼중 따옴표가 없다 (스트리퍼가 못 다룬다)")
+	var src := NetDeterminism._strip(raw)
+	for fname: String in ACCESSORS:
+		t.ok(src.contains("CircleDefs.%s(" % fname),
+			"그림이 `CircleDefs.%s()` 를 부른다" % fname)
+	var re := RegEx.new()
+	t.eq(re.compile("for\\s+\\w+\\s+in\\s+\\d"), OK, "숫자 순회 패턴이 컴파일된다")
+	t.ok(re.search(src) == null, "그림이 개수를 숫자로 박은 순회를 안 한다")
 
 
 ## 🔴🔴 **접근자 자신이 표를 읽나.** 위 `_sizes_come_from_the_table`은 이걸 **원리적으로 못 잰다** —
