@@ -146,9 +146,9 @@ var _spell := SpellSim.new()
 ##  **에러가 하나도 안 난다**(계획 §1).
 var _circle := SpellCircle.new()
 
-## 마지막으로 누른 프리셋 번호. 🔴 **장착 내용이 여기 없는 게 요점이다** — 위 `_circle`이 든다.
-##  ⚠ 조립창이 붙으면 이 번호는 거짓말이 된다(계획 §1 · 위험 9). 그때 HUD에서 뺀다.
-var _loadout := 1
+## ⚠ **프리셋 번호를 안 든다.** 조립창이 문양을 손대는 순간 「마지막으로 누른 번호」와 실제
+##  장착이 갈리기 때문이다(계획 §1 · 위험 9) — HUD에서 뺐고, 그러니 들 이유도 없어졌다.
+##  🔴 **번호를 지우는 것이 곧 「상태가 하나다」의 마지막 조각이다.**
 
 ## 🔴 커맨드는 **「어느 틱에 적용되나」를 달고** 큐에 앉는다. 없으면 나중에 재조정이 불가능하다.
 ##  싱글에서는 로컬 입력이 채우고 멀티에서는 서버가 채운다 — 적용부 코드는 그대로다.
@@ -178,7 +178,8 @@ func _ready() -> void:
 	# 🔴🔴 **세상을 안 멈춘다** — 여기서 `get_tree().paused`를 건드리지 마라.
 	#  창을 연 채로 걷고·쏘고·불이 번지는 것이 기획 판정 4의 전부다.
 	_input.assembly_toggled.connect(_toggle_assembly)
-	_set_loadout(_loadout)
+	# ⚠ 시작 장착은 **모델의 기본값**이다(`SpellCircle`의 생성자) — 여기서 프리셋을 한 번
+	#  밀어 넣던 줄을 지웠다. 밀어 넣으면 「시작 상태」가 두 곳이 되고, 그중 하나만 고치는 날이 온다.
 	reset_stage()
 
 
@@ -220,7 +221,6 @@ func _set_loadout(n: int) -> void:
 		return
 	var list: Array[int] = []
 	list.assign(LOADOUTS[n])
-	_loadout = n
 	_circle.set_from_packed(Glyph.pack(list))
 
 
@@ -380,11 +380,14 @@ func _update_hud() -> void:
 		#  조립창이 붙는 날 「그림은 바뀌었는데 HUD는 그대로」가 된다(위험 9).
 		# 🔴🔴 **「못 쏜다」를 말하는 세 곳 중 하나다**(총구 · 조립창 · 여기). 좌클릭했는데
 		#  아무 일도 안 나는 것을 **사용자가 고장으로 읽는 것**을 막는다.
-		"장착 [%d] %s%s   (%s)" % [
-			_loadout, _glyph_names(_circle.glyph_list()),
+		# 🔴 **번호를 뺐다.** 조립창이 문양을 손대는 순간부터 「장착 [4]」가 거짓말이 된다(계획 §1).
+		#  ⇒ 이름을 **지금 상태에서만** 파생시킨다. 아래 도움말은 「어떤 키가 있나」라 번호가 맞다.
+		"장착 %s%s   (%s)" % [
+			_glyph_names(_circle.glyph_list()),
 			"" if _circle.can_fire() else "  ⚠ 룬 없음 — 쏠 수 없다", _loadout_help(),
 		],
-		"A/D 이동 · Space 점프 · 좌클릭 발사 · R 무대 리셋",
+		# 🔴 **Tab을 안 적으면 조립창이 「아무도 못 여는 기능」이 된다** — verify-look이 그렇게 적었다.
+		"A/D 이동 · Space 점프 · 좌클릭 발사 · Tab 조립창 · R 무대 리셋",
 	])
 
 

@@ -23,6 +23,7 @@ const Stage := preload("res://src/stage/stage.gd")
 ## 🔴 좌표 함수를 **실제로 부르는** 그물이 있어야 텍스트 스캔이 못 보는 거동이 잡힌다.
 const Layout := preload("res://src/view/circle_layout.gd")
 const Book := preload("res://src/view/book_layout.gd")
+const Palette := preload("res://src/view/palette_layout.gd")
 const Fx := preload("res://src/view/fx_tuning.gd")
 ## 🔴 주석·문자열 스트리퍼를 **빌려 온다** — 소스 텍스트를 훑는 그물이 둘이라 스트리퍼는 하나여야 한다.
 const NetDeterminism := preload("res://tests/nets/net_determinism.gd")
@@ -67,6 +68,8 @@ func run(t) -> void:
 	_book_pages_are_one_source(t)
 	_circle_layout_does_not_know_pages(t)
 	_spawn_rays_are_not_horizontal(t)
+	_palette_is_kind_by_item(t)
+	_palette_geometry_runs(t)
 	_layout_geometry_runs(t)
 	_axes_do_not_call_each_other(t)
 	_cannot_fire_without_a_rune(t)
@@ -473,8 +476,12 @@ func _circle_layout_does_not_know_pages(t) -> void:
 	# 🔴 **개수만 세면 안 된다**(실측): 되돌리는 줄을 `draw_set_transform(page.position)` 으로
 	#  바꿔도 개수는 2라 초록이고, 그러면 변환이 **영영 안 돌아온다** —
 	#  4b에서 왼쪽 페이지 그림이 통째로 오른쪽으로 밀린다.
-	t.eq(win.count("draw_set_transform"), 2, "변환을 거는 곳이 하나, 되돌리는 곳이 하나다")
-	t.ok(win.contains("draw_set_transform(Vector2.ZERO)"), "되돌리는 줄이 **항등**이다")
+	# ⚠ 페이지가 둘이 되며 변환 쌍도 둘이 됐다(마법진 · 팔레트) — **개수를 박지 말고 짝을 잰다.**
+	var xf_all := win.count("draw_set_transform")
+	var xf_reset := win.count("draw_set_transform(Vector2.ZERO)")
+	t.ok(xf_all > 0, "창이 좌표계를 옮겨 그린다 (%d곳)" % xf_all)
+	t.eq(xf_reset * 2, xf_all, "건 만큼 **항등으로** 되돌린다 (걸기 %d · 되돌리기 %d)" % [
+		xf_all - xf_reset, xf_reset])
 
 	# 🔴 페이지 셋을 **페이지 표에서** 그리나. 따로 계산해 그리면 4b의 히트테스트는 `pages()`를
 	#  읽으므로 **보이는 골과 반응하는 골이 어긋난다**(위험 23).
@@ -484,6 +491,78 @@ func _circle_layout_does_not_know_pages(t) -> void:
 	for key: String in ["left", "fold", "right"]:
 		t.ok(draw_raw.contains("draw_rect(pages[\"%s\"]" % key),
 			"창이 `%s` 를 페이지 표에서 그린다" % key)
+
+
+## 🔴🔴 **팔레트는 「슬롯 종류 × 항목」이다. 「문양 팔레트」가 아니다.**
+##  ⚠ 문양 전용으로 짜면 진·룬을 붙일 때 **통째로 다시 짠다** — 계획이 이 단계에서 제일 비싼
+##   실수라고 🔴🔴로 박아 뒀다. 단계 5는 **칸 둘을 늘리는 일**이어야 한다.
+##
+## 🔴 그리고 **항목이 표에서 나오나** — 손으로 적으면 표를 늘렸는데 팔레트가 안 늘어도 조용하다.
+func _palette_is_kind_by_item(t) -> void:
+	t.eq(Palette.KINDS.size(), Palette.KIND_DEFS.size(), "슬롯 종류의 KINDS와 KIND_DEFS가 같다")
+	# ⚠ 비면 아래가 한 번도 안 돌고 **초록이 된다.**
+	t.ok(Palette.KINDS.size() > 0, "슬롯 종류가 %d개다" % Palette.KINDS.size())
+	# 🔴 종류가 셋이라는 것이 팔레트 **구조**다 — 문양 하나만 있으면 문양 전용 팔레트다.
+	t.ok(Palette.KINDS.has(Palette.KIND_CIRCLE), "진 칸이 있다")
+	t.ok(Palette.KINDS.has(Palette.KIND_RUNE), "룬 칸이 있다")
+	t.ok(Palette.KINDS.has(Palette.KIND_GLYPH), "문양 칸이 있다")
+
+	# 🔴🔴 **항목이 표를 그대로 따라간다.**
+	#  ⚠ 지금은 같은 값이지만 **동어반복이 아니다** — 누가 `[1, 2]` 라고 손으로 적으면
+	#   표가 느는 날 여기가 빨개진다. 그게 이 검사가 사는 시점이다.
+	var want := {
+		Palette.KIND_CIRCLE: CircleDefs.ALL.size(),
+		Palette.KIND_RUNE: Tuning.ELEM_ALL.size(),
+		Palette.KIND_GLYPH: Glyph.ALL.size(),
+	}
+	for kind: int in Palette.KINDS:
+		var nm: StringName = Palette.KIND_DEFS[kind]["name"]
+		var items := Palette.items_of(kind)
+		t.ok(items.size() > 0, "%s 칸에 항목이 있다 (%d개)" % [nm, items.size()])
+		t.eq(items.size(), int(want[kind]), "%s 항목 수가 표와 같다" % nm)
+
+	# 🔴 모르는 종류에 짖는다 — 종류를 늘리고 표를 안 이으면 그 칸이 **조용히 빈다.**
+	t.expect_error("PaletteLayout: 모르는 슬롯 종류")
+	t.eq(Palette.items_of(9999).size(), 0, "모르는 종류는 짖고 항목이 0이다")
+
+
+## 🔴 구획과 항목 칸이 **한 곳에서 나오고 서로 안 겹치나.** 겹치면 「이걸 눌렀는데 저게
+##  골라진다」가 되고 **에러가 안 난다**(위험 6의 팔레트 얼굴).
+func _palette_geometry_runs(t) -> void:
+	var page := Book.palette_page(Fx.WINDOW_RECT.size)
+	t.ok(page.size.x > 0.0 and page.size.y > 0.0, "팔레트 페이지에 크기가 있다 (%dx%d)" % [
+		int(page.size.x), int(page.size.y)])
+
+	var page_box := Rect2(Vector2.ZERO, page.size)
+	var secs: Array[Rect2] = []
+	for ki in Palette.KINDS.size():
+		var sec := Palette.section(page.size, ki)
+		var nm: StringName = Palette.KIND_DEFS[Palette.KINDS[ki]]["name"]
+		t.ok(sec.size.x > 0.0 and sec.size.y > 0.0, "%s 구획에 크기가 있다" % nm)
+		t.ok(page_box.encloses(sec), "%s 구획이 페이지 안에 들어간다" % nm)
+		for other: Rect2 in secs:
+			t.ok(not sec.intersects(other), "%s 구획이 앞 구획과 안 겹친다" % nm)
+		secs.append(sec)
+
+		var items := Palette.items_of(Palette.KINDS[ki])
+		var slots: Array[Rect2] = []
+		for ii in items.size():
+			var slot := Palette.item_slot(sec, ii, items.size())
+			t.ok(sec.encloses(slot), "%s 항목 %d이 구획 안에 들어간다" % [nm, ii])
+			# ⚠ 제목 띠를 침범하면 글자와 심볼이 서로를 먹는다.
+			t.ok(slot.position.y >= sec.position.y + Fx.PALETTE_HEAD_PX,
+				"%s 항목 %d이 제목 띠 아래에 있다" % [nm, ii])
+			t.ok(Palette.item_symbol_radius(slot) > 0.0, "%s 항목 %d에 심볼 크기가 있다" % [nm, ii])
+			for other: Rect2 in slots:
+				t.ok(not slot.intersects(other), "%s 항목 %d이 앞 항목과 안 겹친다" % [nm, ii])
+			slots.append(slot)
+
+	# 🔴 **팔레트가 마법진 페이지를 안 침범한다.** 침범하면 두 페이지가 뜻을 잃는다.
+	#  ⚠ 팔레트는 **자기 페이지 원점 기준**이라 창 좌표로 옮겨서 재야 한다.
+	var circle_page := Book.circle_page(Fx.WINDOW_RECT.size)
+	for sec: Rect2 in secs:
+		t.ok(not Rect2(page.position + sec.position, sec.size).intersects(circle_page),
+			"팔레트 구획이 마법진 페이지를 안 침범한다")
 
 
 ## 🔴🔴 **눈이 찾아낸 것을 지키는 게 없었다.**

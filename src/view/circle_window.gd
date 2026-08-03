@@ -27,6 +27,8 @@ const Fx := preload("res://src/view/fx_tuning.gd")
 const Layout := preload("res://src/view/circle_layout.gd")
 ## 🔴 창 축은 **따로다.** 창이 둘을 조립하고, `circle_layout`은 `book_layout`을 모른다.
 const Book := preload("res://src/view/book_layout.gd")
+## 🔴 팔레트는 **「슬롯 종류 × 항목」**이다 — 문양 전용으로 짜면 단계 5에서 통째로 다시 짠다.
+const Palette := preload("res://src/view/palette_layout.gd")
 const Glyph := preload("res://src/sim/glyph_defs.gd")
 const SpellCircle := preload("res://src/actor/spell_circle.gd")
 
@@ -116,8 +118,14 @@ func _draw() -> void:
 	for i in _circle.layer_count():
 		_draw_ring(area, id, i, font)
 
-	# ⚠ **반드시 되돌린다.** 안 되돌리면 뒤에 그리는 것이 전부 페이지만큼 밀리고,
-	#  지금은 뒤에 아무것도 없어서 **에러도 증상도 없다** — 팔레트가 붙는 날 조용히 어긋난다.
+	# ⚠ **반드시 되돌린다.** 안 되돌리면 뒤에 그리는 것이 전부 페이지만큼 밀린다 —
+	#  아래 팔레트가 정확히 그 「뒤에 그리는 것」이다.
+	draw_set_transform(Vector2.ZERO)
+
+	# 🔴 팔레트도 **자기 페이지 안에서** 원점 기준으로 그린다. 마법진과 같은 규율이다.
+	var pal := Book.palette_page(size)
+	draw_set_transform(pal.position)
+	_draw_palette(pal, font)
 	draw_set_transform(Vector2.ZERO)
 
 
@@ -148,11 +156,11 @@ func _draw_rune_slot(area: Rect2, circle_id: int) -> void:
 	for i in slots.size():
 		var rune_id := _circle.rune_at(i)
 		if rune_id == SpellCircle.RUNE_EMPTY:
+			# ⚠ 룬의 빈 자리는 **「못 쏜다」**(경고)지 「놓을 수 있다」(초대)가 아니다 —
+			#  층의 빈 자리와 **뜻이 달라서** 그림도 다르다(`fx_tuning.SLOT_EMPTY` 주석).
 			draw_circle(slots[i], r, Fx.MUZZLE_DEAD, false, Fx.MUZZLE_DEAD_WIDTH_PX)
 			continue
-		var fx := Fx.elem_fx(rune_id)
-		draw_circle(slots[i], r, fx["glow"], true)
-		draw_circle(slots[i], r * Fx.CIRCLE_RUNE_CORE_RATIO, fx["core"], true)
+		_draw_rune_symbol(slots[i], r, rune_id)
 
 
 ## 층 축 — 고리 하나 + 층 번호 + 놓인 문양.
@@ -185,12 +193,17 @@ func _draw_ring(area: Rect2, circle_id: int, layer: int, font: Font) -> void:
 			str(layer + 1),
 			HORIZONTAL_ALIGNMENT_LEFT, -1, num, Fx.CIRCLE_LAYER_NUM)
 
-	var glyph_id := _circle.glyph_at(layer)
-	if glyph_id == Glyph.GLYPH_NONE:
-		return
 	var slots := Layout.layer_slots(circle_id, area)
-	if layer < slots.size():
-		_draw_glyph(slots[layer], Layout.glyph_radius(area), glyph_id)
+	if layer >= slots.size():
+		return
+	var glyph_id := _circle.glyph_at(layer)
+	# 🔴🔴 **빈 자리도 그린다 — 「여기 놓을 수 있다」가 그림에 있어야 한다.**
+	#  ⚠ 안 그리면 「막힌 자리」와 「빈 자리」가 같아 보이고, 단계 4b-2b에서 어디를 눌러야
+	#   하는지가 화면에 없다(슬롯 상태 셋 중 첫째 — `fx_tuning.SLOT_EMPTY` 주석).
+	if glyph_id == Glyph.GLYPH_NONE:
+		_draw_empty_slot(slots[layer], Layout.glyph_radius(area))
+		return
+	_draw_glyph(slots[layer], Layout.glyph_radius(area), glyph_id)
 
 
 ## 🔴🔴 **모양은 `kind`, 색은 문양 id.** 문양마다 그림을 두면 그게 **넷째 고칠 곳**이 되고,
@@ -219,3 +232,78 @@ func _draw_glyph(at: Vector2, r: float, glyph_id: int) -> void:
 		return
 	# 🔴 모르는 kind에 짖는다 — 표에 종류를 늘리고 그림을 안 늘리면 여기서 걸린다.
 	push_error("CircleWindow: 문양 종류 %d에 그림이 없다" % kind)
+
+
+## 룬 심볼 — 빛나는 구슬. 🔴 **팔레트와 슬롯이 같은 이 함수를 쓴다.**
+##  따로 그리면 「팔레트의 불과 진에 놓인 불이 다르게 보인다」가 되고, 그건 조용하다.
+func _draw_rune_symbol(at: Vector2, r: float, rune_id: int) -> void:
+	var fx := Fx.elem_fx(rune_id)
+	draw_circle(at, r, fx["glow"], true)
+	draw_circle(at, r * Fx.CIRCLE_RUNE_CORE_RATIO, fx["core"], true)
+
+
+## 진 심볼 — 그릇의 테두리. ⚠ 진은 **틀**이라 속이 비어 있는 것이 그 뜻이다.
+func _draw_circle_symbol(at: Vector2, r: float) -> void:
+	draw_circle(at, r, Fx.CIRCLE_FRAME, false, Fx.CIRCLE_FRAME_PX)
+
+
+## 🔴🔴 **빈 자리 — 「여기 놓을 수 있다」.**
+##  옅은 고리 + **더하기**. ⚠ 고리만 그리면 「자리」로만 읽히고 「놓을 수 있다」가 안 읽힌다.
+##  ⚠ 채우면 TERMINAL 원반과 헷갈린다 — 비어 있는 것이 뜻의 일부다.
+func _draw_empty_slot(at: Vector2, r: float) -> void:
+	draw_circle(at, r, Fx.SLOT_EMPTY, false, Fx.SLOT_EMPTY_PX)
+	var a := r * Fx.SLOT_PLUS_RATIO
+	draw_line(at - Vector2(a, 0.0), at + Vector2(a, 0.0), Fx.SLOT_EMPTY, Fx.SLOT_PLUS_PX)
+	draw_line(at - Vector2(0.0, a), at + Vector2(0.0, a), Fx.SLOT_EMPTY, Fx.SLOT_PLUS_PX)
+
+
+# ══════════════════════════════════════════════════════════════════
+#  팔레트 — 🔴 **「슬롯 종류 × 항목」.** 문양 전용이 아니다
+# ══════════════════════════════════════════════════════════════════
+
+## ⚠ **이 단계는 그리기까지다.** 클릭으로 고르고 놓는 것은 4b-2b다.
+## 🔴 좌표는 전부 `palette_layout`에서 온다 — 히트테스트가 **같은 함수**를 부를 수 있어야 한다.
+func _draw_palette(page: Rect2, font: Font) -> void:
+	for ki in Palette.KINDS.size():
+		var kind: int = Palette.KINDS[ki]
+		var sec := Palette.section(page.size, ki)
+		_draw_palette_section(sec, kind, font)
+		# 🔴 항목은 **표를 순회해서** 나온다 — 손으로 적으면 표를 늘렸는데 팔레트가 안 늘어난다.
+		var items := Palette.items_of(kind)
+		for ii in items.size():
+			var slot := Palette.item_slot(sec, ii, items.size())
+			_draw_palette_item(slot, kind, items[ii])
+
+
+## 구획 — 🔴 **빈 자리가 「무엇이 들어올 자리」로 읽히게 한다.** 항목이 넷뿐이라 페이지가 크게
+##  비는데, 테두리와 제목이 없으면 같은 화면이 그냥 **미완성**으로 읽힌다.
+func _draw_palette_section(sec: Rect2, kind: int, font: Font) -> void:
+	draw_rect(sec, Fx.PALETTE_SECTION_BG, true)
+	draw_rect(sec, Fx.PALETTE_SECTION_EDGE, false, Fx.PALETTE_SECTION_EDGE_PX)
+	if font == null:
+		return
+	if not Palette.KIND_DEFS.has(kind):
+		push_error("CircleWindow: 모르는 슬롯 종류 %d — 제목이 없다" % kind)
+		return
+	var nm: StringName = Palette.KIND_DEFS[kind]["name"]
+	draw_string(font, sec.position + Vector2(
+			Fx.PALETTE_PAD_PX, Fx.PALETTE_HEAD_PX * Fx.PALETTE_HEAD_BASELINE_FRAC),
+		String(nm), HORIZONTAL_ALIGNMENT_LEFT, -1,
+		Fx.PALETTE_HEAD_SIZE, Fx.PALETTE_HEAD_COLOR)
+
+
+## 항목 하나. 🔴 **슬롯에 그리는 것과 같은 심볼 함수를 쓴다** — 따로 그리면
+##  「팔레트의 폭발과 진에 놓인 폭발이 다르게 보인다」가 되고, 그건 조용하다.
+func _draw_palette_item(slot: Rect2, kind: int, item_id: int) -> void:
+	var at := slot.get_center()
+	var r := Palette.item_symbol_radius(slot)
+	if kind == Palette.KIND_CIRCLE:
+		_draw_circle_symbol(at, r)
+		return
+	if kind == Palette.KIND_RUNE:
+		_draw_rune_symbol(at, r, item_id)
+		return
+	if kind == Palette.KIND_GLYPH:
+		_draw_glyph(at, r, item_id)
+		return
+	push_error("CircleWindow: 슬롯 종류 %d에 항목 그림이 없다" % kind)
