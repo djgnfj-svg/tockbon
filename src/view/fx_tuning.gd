@@ -99,6 +99,8 @@ const CIRCLE_DISC_RATIO := 0.94
 const CIRCLE_RING_ZONE := 0.80
 const CIRCLE_RUNE_RATIO := 0.17
 const CIRCLE_GLYPH_RATIO := 0.115
+## 룬 자리 속심. ⚠ 「하얗게 타는 심지」라 겉 무리보다 작아야 한다(총구·섬광과 같은 어법).
+const CIRCLE_RUNE_CORE_RATIO := 0.45
 
 ## 진 테두리 — 그릇의 가장자리다. ⚠ 층 고리보다 **어둡고 굵어야** 「틀」로 읽힌다.
 const CIRCLE_FRAME := Color(0.38, 0.45, 0.62, 0.85)
@@ -115,6 +117,10 @@ const CIRCLE_RING_PX := 2.0
 ## 층 번호. ⚠ 고리 **왼쪽**에 적는다 — 문양 심볼이 12시에 앉으므로 거기 적으면 겹친다.
 const CIRCLE_LAYER_NUM := Color(0.80, 0.86, 0.96)
 const CIRCLE_LAYER_NUM_SIZE := 12
+## 고리 왼쪽 끝에서 안쪽으로 들인 만큼 · 글자 기준선을 올린 만큼.
+## ⚠ 번호가 고리 선 위에 정확히 앉으면 선과 글자가 서로를 갉아먹어 **둘 다 안 읽힌다.**
+const CIRCLE_LAYER_NUM_INSET_PX := 3.0
+const CIRCLE_LAYER_NUM_LIFT_PX := 3.0
 
 ## 🔴 **문양 심볼의 모양은 `kind`가 정한다**(`glyph_defs.DEFS`) — 문양마다 그리면 그게
 ##  「문양 추가 = 고칠 곳 넷째」가 된다. 색은 `GLYPH_TINT`라 **총구와 같은 색**이고,
@@ -123,6 +129,11 @@ const CIRCLE_LAYER_NUM_SIZE := 12
 ##   같게 두면 「탄을 만드는 문양은 전부 8개를 만든다」로 잘못 읽힌다.
 const GLYPH_SPAWN_RAYS := 6
 const GLYPH_SYMBOL_PX := 2.0
+## SPAWN 가지가 **시작하는** 자리(반지름 대비). 0이면 한 점에서 뻗어 나와 별이 아니라 뭉치로 보인다.
+const GLYPH_SPAWN_INNER_RATIO := 0.3
+## TERMINAL 원반의 반지름(심볼 반지름 대비). ⚠ 1.0이면 가지 심볼과 크기가 같아 보여
+##  「퍼진다 / 그 자리에서 끝난다」의 대비가 약해진다.
+const GLYPH_TERMINAL_RATIO := 0.8
 
 # ─── 🔴🔴 확산 세대 표 — 화면 쪽 절반 ────────────────────────────
 ## `sim_tuning.SIM_SIZES`와 **길이가 같아야 하고 방향도 같아야 한다**(둘 다 세대마다 감소).

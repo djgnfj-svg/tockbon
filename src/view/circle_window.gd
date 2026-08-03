@@ -85,6 +85,12 @@ func _draw() -> void:
 	var id := _circle.circle_id()
 	_draw_frame(area)
 	_draw_rune_slot(area, id)
+	# ⚠🔴 **여기 층 수는 모델(`layer_count()`)에서 오고, `_draw_ring` 안의 고리 반지름은
+	#  표(`layer_rings()`)에서 온다 — 소스가 둘이다.** 오늘은 둘 다 `circle_defs`에서 파생돼
+	#  같은 수지만, 어긋나는 날 `_draw_ring`의 `layer >= rings.size()` 가드가
+	#  **짖지도 않고 덜 그린다**(모델이 더 많으면) 또는 **덜 돈다**(표가 더 많으면).
+	#  🔴 화면에서는 「층이 하나 안 보인다」로만 읽힌다. 하나로 합칠 거면 **표 쪽**으로 합쳐라 —
+	#   그림은 그릴 자리를 표에서 받아야 하고, 모델은 그 자리에 무엇이 놓였는지만 안다.
 	for i in _circle.layer_count():
 		_draw_ring(area, id, i, font)
 
@@ -104,6 +110,12 @@ func _draw_frame(area: Rect2) -> void:
 ## 룬 축 — 룬 자리. ⚠ 자리 **수**도 자리 **위치**도 진 표에서 나온다.
 ## 🔴 빈 룬은 총구가 꺼질 때와 **같은 회색**이다 — 같은 뜻이라 같은 색이어야 한 눈에 이어진다.
 ##  ⚠ 「왜 못 쏘나」를 글로 적는 것은 단계 5다. 여기는 **상태를 정직하게 그리는 것**까지다.
+##
+## ⚠🔴 **여기서 나는 짖음은 「사건마다 한 번」이 아니라 「매 프레임」이다.**
+##  `Layout.rune_slots()`가 `rune_slots != 1`에 짖는데 이 함수는 창이 열려 있는 동안 **초당 60번**
+##  불린다 ⇒ 룬 2자리 진이 오는 날 로그가 초당 60줄로 덮이고, 래퍼의 stderr 검사도 그만큼 시끄러워진다.
+##  🔴 **지금은 안 걸린다**(룬이 1자리다). 룬을 늘리는 사람이 **그때** 짖음을 프레임 밖으로 옮겨라 —
+##   `spell_sim._run_glyph`의 짖음은 착탄마다 한 번이라 비용이 전혀 다르다. 아래 `_draw_glyph`도 같다.
 func _draw_rune_slot(area: Rect2, circle_id: int) -> void:
 	var r := Layout.rune_radius(area)
 	var slots := Layout.rune_slots(circle_id, area)
@@ -114,7 +126,7 @@ func _draw_rune_slot(area: Rect2, circle_id: int) -> void:
 			continue
 		var fx := Fx.elem_fx(rune_id)
 		draw_circle(slots[i], r, fx["glow"], true)
-		draw_circle(slots[i], r * 0.45, fx["core"], true)
+		draw_circle(slots[i], r * Fx.CIRCLE_RUNE_CORE_RATIO, fx["core"], true)
 
 
 ## 층 축 — 고리 하나 + 층 번호 + 놓인 문양.
@@ -138,7 +150,9 @@ func _draw_ring(area: Rect2, circle_id: int, layer: int, font: Font) -> void:
 
 	if font != null:
 		# 9시 방향. ⚠ 문양 심볼이 12시에 앉으므로 거기 적으면 겹친다.
-		draw_string(font, c + Vector2(-rings[layer] + 3.0, -3.0), str(layer + 1),
+		draw_string(font, c + Vector2(
+				-rings[layer] + Fx.CIRCLE_LAYER_NUM_INSET_PX, -Fx.CIRCLE_LAYER_NUM_LIFT_PX),
+			str(layer + 1),
 			HORIZONTAL_ALIGNMENT_LEFT, -1, Fx.CIRCLE_LAYER_NUM_SIZE, Fx.CIRCLE_LAYER_NUM)
 
 	var glyph_id := _circle.glyph_at(layer)
@@ -164,11 +178,12 @@ func _draw_glyph(at: Vector2, r: float, glyph_id: int) -> void:
 		for k in Fx.GLYPH_SPAWN_RAYS:
 			var a := TAU * float(k) / float(Fx.GLYPH_SPAWN_RAYS)
 			var d := Vector2(cos(a), sin(a))
-			draw_line(at + d * (r * 0.3), at + d * r, tint, Fx.GLYPH_SYMBOL_PX)
+			draw_line(at + d * (r * Fx.GLYPH_SPAWN_INNER_RATIO), at + d * r,
+				tint, Fx.GLYPH_SYMBOL_PX)
 		return
 	if kind == Glyph.KIND_TERMINAL:
 		# 채운 원반 — **그 자리에서 끝난다**가 모양에 있다.
-		draw_circle(at, r * 0.8, tint, true)
+		draw_circle(at, r * Fx.GLYPH_TERMINAL_RATIO, tint, true)
 		return
 	# 🔴 모르는 kind에 짖는다 — 표에 종류를 늘리고 그림을 안 늘리면 여기서 걸린다.
 	push_error("CircleWindow: 문양 종류 %d에 그림이 없다" % kind)

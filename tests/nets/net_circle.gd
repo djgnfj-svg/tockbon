@@ -20,6 +20,9 @@ const SpellSim := preload("res://src/sim/spell_sim.gd")
 const CellGrid := preload("res://src/sim/cell_grid.gd")
 const Mat := preload("res://src/sim/cell_materials.gd")
 const Stage := preload("res://src/stage/stage.gd")
+## 🔴 좌표 함수를 **실제로 부르는** 그물이 있어야 텍스트 스캔이 못 보는 거동이 잡힌다.
+const Layout := preload("res://src/view/circle_layout.gd")
+const Fx := preload("res://src/view/fx_tuning.gd")
 ## 🔴 주석·문자열 스트리퍼를 **빌려 온다** — 소스 텍스트를 훑는 그물이 둘이라 스트리퍼는 하나여야 한다.
 const NetDeterminism := preload("res://tests/nets/net_determinism.gd")
 
@@ -35,6 +38,8 @@ func run(t) -> void:
 	_swapping_the_circle_resizes(t)
 	_resize_is_table_driven(t)
 	_accessors_read_the_table(t)
+	_layout_geometry_runs(t)
+	_axes_do_not_call_each_other(t)
 	_cannot_fire_without_a_rune(t)
 	_empty_layer_is_skipped(t)
 	_round_trip(t)
@@ -250,18 +255,28 @@ func _resize_is_table_driven(t) -> void:
 ##  **더 나쁘다** — 시뮬만 늘고 화면이 안 따라가는 것이 v1이 죽은 방식이다.
 ##  ⇒ 층 수·룬 자리 수를 읽는 곳이 **두 파일 통틀어** 전부 진 표를 지나야 한다.
 ##
-## 🔴 재는 것 둘: ① 그림이 두 접근자를 **부르나** ② 개수를 **숫자로 박은 순회가 없나**.
-##  ⚠ ②가 없으면 `for i in 2:` 한 줄로 ①을 통과한 채 고리 수가 얼어붙는다.
+## 🔴 재는 것 둘, 그리고 **각각이 어느 파일에 걸리는지가 다르다:**
+##   ① 좌표 파일이 두 접근자를 **부르나** — `circle_layout.gd`만. 그림 파일은 모델(`layer_count()`)을
+##      보므로 접근자를 부를 이유가 없다
+##   ② 개수를 **숫자로 박은 순회가 없나** — 🔴 **두 파일 다.** 그림의 `for i in 2`도 고리 수를 얼린다
+##  ⚠ **라벨을 코드보다 넓게 적지 마라.** 「두 파일 통틀어」라고 적고 한 파일만 훑으면
+##   그 문장이 다음 사람에게 거짓 보증이 된다(실측으로 그랬다).
 func _layout_reads_the_table(t) -> void:
-	var raw := _read("res://src/view/circle_layout.gd")
-	t.ok(not raw.contains("\"\"\""), "circle_layout에 삼중 따옴표가 없다 (스트리퍼가 못 다룬다)")
-	var src := NetDeterminism._strip(raw)
+	var layout := _stripped(t, "res://src/view/circle_layout.gd", "circle_layout")
 	for fname: String in ACCESSORS:
-		t.ok(src.contains("CircleDefs.%s(" % fname),
-			"그림이 `CircleDefs.%s()` 를 부른다" % fname)
+		t.ok(layout.contains("CircleDefs.%s(" % fname),
+			"좌표가 `CircleDefs.%s()` 를 부른다" % fname)
+
+	# ⚠ `range(2)`가 우회로다 — `for i in 2`만 보면 한 글자로 빠져나간다.
 	var re := RegEx.new()
-	t.eq(re.compile("for\\s+\\w+\\s+in\\s+\\d"), OK, "숫자 순회 패턴이 컴파일된다")
-	t.ok(re.search(src) == null, "그림이 개수를 숫자로 박은 순회를 안 한다")
+	t.eq(re.compile("for\\s+\\w+\\s+in\\s+(?:range\\s*\\(\\s*)?\\d"), OK,
+		"숫자 순회 패턴이 컴파일된다")
+	var files := {
+		"circle_layout": layout,
+		"circle_window": _stripped(t, "res://src/view/circle_window.gd", "circle_window"),
+	}
+	for nm: String in files.keys():
+		t.ok(re.search(files[nm]) == null, "%s 가 개수를 숫자로 박은 순회를 안 한다" % nm)
 
 
 ## 🔴🔴 **접근자 자신이 표를 읽나.** 위 `_sizes_come_from_the_table`은 이걸 **원리적으로 못 잰다** —
@@ -283,12 +298,132 @@ func _accessors_read_the_table(t) -> void:
 		t.ok(body.contains("DEFS["), "%s()가 표를 읽는다 (상수를 안 돌려준다)" % fname)
 
 
-## `static func <이름>(` 부터 다음 `static func` 전까지. 못 찾으면 빈 문자열이다.
+## 🔴🔴 **좌표 함수를 실제로 부르는 그물이 하나도 없었다.**
+##  ⚠ 그래서 `_radius()`가 0을 돌려줘도 초록이고, 마법진이 **점 하나로 무너져도** 아무도 안 짖는다.
+##   텍스트 스캔은 **문법**을 볼 뿐 **거동**을 못 본다 — 여기가 그 반대쪽이다.
+##
+## 🔴 그리고 계획이 「`rune_slots != 1`이면 짖는다」를 **래퍼 stderr에 공짜로 걸리는 장치**라고 적었는데,
+##  그 함수를 부르는 그물이 없어서 **공짜가 아니었다.** 아래가 그 함수를 실제로 부른다.
+func _layout_geometry_runs(t) -> void:
+	# 창 크기는 연출값이지만, **그 크기에서 실제로 그림이 나오나**를 재는 게 요점이다.
+	var area := Layout.circle_area(Fx.WINDOW_RECT.size)
+	t.ok(area.size.x > 0.0 and area.size.y > 0.0,
+		"마법진 자리에 크기가 있다 (%dx%d)" % [int(area.size.x), int(area.size.y)])
+	# 제목 띠를 피한다 — 겹치면 제목도 그림도 안 읽힌다.
+	t.ok(area.position.y >= Fx.WINDOW_TITLE_BAND_PX, "마법진 자리가 제목 아래에서 시작한다")
+	t.ok(area.end.x <= Fx.WINDOW_RECT.size.x and area.end.y <= Fx.WINDOW_RECT.size.y,
+		"마법진 자리가 창 안에 들어간다")
+
+	var f := Layout.frame(area)
+	var fr: float = f["radius"]
+	# 🔴 0이면 마법진이 **점 하나로 무너진다.** 텍스트 스캔이 원리적으로 못 보는 자리다.
+	t.ok(fr > 0.0, "진 테두리 반지름이 0이 아니다 (%.1f)" % fr)
+	t.ok(area.has_point(f["center"]), "진 중심이 마법진 자리 안에 있다")
+
+	for id: int in CircleDefs.ALL:
+		var nm: StringName = CircleDefs.DEFS[id]["name"]
+		var rings := Layout.layer_rings(id, area)
+		t.eq(rings.size(), CircleDefs.layers(id), "진 %s의 고리 수가 층 수와 같다" % nm)
+
+		# 🔴 **안쪽부터 바깥으로 자란다.** 뒤집히면 「안쪽이 먼저」가 그림에서 거짓이 된다.
+		var grows := rings.size() > 0
+		for i in rings.size():
+			if rings[i] <= 0.0 or (i > 0 and rings[i] <= rings[i - 1]):
+				grows = false
+		t.ok(grows, "진 %s의 고리가 안에서 밖으로 커진다 %s" % [nm, rings])
+		if rings.size() > 0:
+			t.ok(rings[rings.size() - 1] <= fr,
+				"진 %s의 바깥 고리가 테두리를 안 넘는다 (%.1f ≤ %.1f)" % [
+					nm, rings[rings.size() - 1], fr])
+			# ⚠ 룬은 한가운데다 — 첫 고리가 룬보다 안쪽이면 둘이 겹쳐 그려진다.
+			t.ok(rings[0] > Layout.rune_radius(area),
+				"진 %s의 1층 고리가 룬 자리 바깥이다" % nm)
+
+		var slots := Layout.layer_slots(id, area)
+		t.eq(slots.size(), rings.size(), "진 %s의 문양 자리 수가 고리 수와 같다" % nm)
+		var inside := true
+		for p: Vector2 in slots:
+			if p.distance_to(f["center"]) > fr:
+				inside = false
+		t.ok(inside, "진 %s의 문양 자리가 전부 테두리 안이다" % nm)
+
+		t.eq(Layout.rune_slots(id, area).size(), CircleDefs.rune_slots(id),
+			"진 %s의 룬 자리 수가 표와 같다" % nm)
+
+	t.ok(Layout.rune_radius(area) > 0.0, "룬 자리 반지름이 0이 아니다")
+	t.ok(Layout.glyph_radius(area) > 0.0, "문양 심볼 반지름이 0이 아니다")
+
+	# 🔴🔴 **「진이 없다」는 정상이라 조용해야 한다.** 여기서 짖게 만들면 진을 빼는 평범한 조작이
+	#  래퍼를 빨갛게 만든다. ⚠ `expect_error`를 **일부러 안 적었다** — 짖으면 그대로 실패다.
+	t.eq(Layout.rune_slots(CircleDefs.CIRCLE_NONE, area).size(), 0,
+		"진이 없으면 룬 자리가 0개다 (조용히)")
+	t.eq(Layout.layer_rings(CircleDefs.CIRCLE_NONE, area).size(), 0,
+		"진이 없으면 고리가 0개다 (조용히)")
+
+	# 🔴 `rune_slots != 1`의 짖음 자체는 진이 1종이라 **실행으로 못 닿는다.**
+	#  ⇒ 지워지지 않았는지만 텍스트로 지킨다(위 `_accessors_read_the_table`과 같은 이유).
+	t.ok(_func_body(_stripped(t, "res://src/view/circle_layout.gd", "circle_layout"),
+		"rune_slots").contains("push_error"),
+		"룬 자리 배치가 안 정해진 진에 짖는 코드가 살아 있다")
+
+
+## 🔴🔴 **이 단계가 존재한 이유가 이것 하나다** — 기획 「경계」가 요구한 것은 **축을 가르라**였다.
+##  진 넷 중 셋(룬 2 융합 · 룬 3 병렬 · 문양이 룬마다)은 **그림이 통째로 다르고**, 한 덩어리로 짜면
+##  그날 조립창을 다시 만든다.
+##
+## ⚠ **갈렸다는 걸 지키는 것이 주석뿐이면 안 갈린 것과 같다.** 실측이다 —
+##  `_draw_ring`이 `Layout.frame(area)["center"]`를 다시 부르게 되돌려 놨더니 **833개가 전부 초록**이었다.
+##  ⇒ 층 그림이 진 축에 매달린 채로 아무도 안 짖는다.
+##
+## 🔴 재는 것은 **한 방향뿐이다: 층·룬 축이 진 축(`frame`)을 안 부른다.**
+##  ⚠ `layer_slots`가 `layer_rings`를 부르는 것은 **같은 축이라 결합이 아니다** — 잡으면 안 된다.
+##   그래서 「아무 함수도 아무 함수를 안 부른다」로 넓히지 않았다.
+func _axes_do_not_call_each_other(t) -> void:
+	var layout := _stripped(t, "res://src/view/circle_layout.gd", "circle_layout")
+	var window := _stripped(t, "res://src/view/circle_window.gd", "circle_window")
+
+	# [파일, 함수, 있으면 안 되는 호출, 라벨]
+	var cases: Array[Array] = [
+		[layout, "layer_rings", "frame(", "층 좌표"],
+		[layout, "layer_slots", "frame(", "층 좌표(자리)"],
+		[layout, "rune_slots", "frame(", "룬 좌표"],
+		[window, "_draw_ring", "Layout.frame(", "층 그림"],
+		[window, "_draw_rune_slot", "Layout.frame(", "룬 그림"],
+	]
+	t.ok(cases.size() > 0, "축 결합을 재 볼 자리가 %d군데다" % cases.size())
+	for c: Array in cases:
+		var body := _func_body(c[0], c[1])
+		# ⚠ 함수를 못 찾으면 아래가 **빈 문자열을 검사하고 초록이 된다.**
+		t.ok(body != "", "`%s()` 를 찾았다" % c[1])
+		t.ok(not body.contains(c[2]), "%s가 진 축(`%s`)을 안 부른다" % [c[3], c[2]])
+
+	# 🔴 반대쪽 — 같은 축 안의 호출은 **살아 있어야 한다.** 이게 없으면 위 검사가
+	#  「아무도 아무것도 안 부른다」로 통과해도 아무도 모른다.
+	t.ok(_func_body(layout, "layer_slots").contains("layer_rings("),
+		"층 자리는 층 반지름에서 나온다 (같은 축이라 결합이 아니다)")
+
+
+## 주석·문자열을 걷어낸 소스. ⚠ 삼중 따옴표가 있으면 스트리퍼가 거기서 멈춰 **나머지가 통째로
+##  스캔에서 빠지고 조용히 초록**이 되므로 그 가정을 같이 잰다.
+func _stripped(t, path: String, nm: String) -> String:
+	var raw := _read(path)
+	t.ok(not raw.contains("\"\"\""), "%s 에 삼중 따옴표가 없다 (스트리퍼가 못 다룬다)" % nm)
+	return NetDeterminism._strip(raw)
+
+
+## `func <이름>(` 부터 **다음 함수 머리** 전까지. 못 찾으면 빈 문자열이다.
+## ⚠ `static func`도 `func`를 품으므로 한 패턴이 둘 다 잡는다 — 그림 쪽(`circle_window`)은
+##  static이 아니라서 이 성질이 필요하다.
 func _func_body(src: String, fname: String) -> String:
-	var head := src.find("static func %s(" % fname)
+	var head := src.find("func %s(" % fname)
 	if head < 0:
 		return ""
-	var tail := src.find("\nstatic func ", head + 1)
+	# 다음 함수 머리는 **줄 첫머리의 `func`/`static func`**다. 안쪽 들여쓰기에는 안 걸린다.
+	var tail := -1
+	for marker: String in ["\nfunc ", "\nstatic func "]:
+		var at := src.find(marker, head + 1)
+		if at >= 0 and (tail < 0 or at < tail):
+			tail = at
 	return src.substr(head) if tail < 0 else src.substr(head, tail - head)
 
 
