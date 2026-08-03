@@ -39,6 +39,12 @@ const BOOK_PATH := "res://src/view/book_layout.gd"
 
 ## 마법진 지름의 **바닥값**. 🔴 연출 상수가 아니라 **검증 계약**이라 그물에 둔다 —
 ##  단계 3에서 눈이 통과시킨 크기이고, 여기 아래로 내려가면 그 판정을 다시 받아야 한다.
+##
+## ⚠🔴 **여유가 19.3px뿐이다** (지금 지름 199.3 vs 바닥 180, 2026-08-04 실측).
+##  ⇒ 창을 조금만 줄이거나 여백(`CIRCLE_AREA_PAD_PX` · `BOOK_MARGIN_PX` · `BOOK_FOLD_PX`)을
+##   조금만 키워도 **여기가 먼저 빨개진다.** 그때 이 줄을 낮추기 전에 **눈으로 다시 봐라** —
+##   이 값이 지키는 것은 「고리 둘·룬·문양 심볼이 서로 안 먹는 크기」다.
+##  🔴 **원인이 여기가 아니라는 걸 알고 만나야** 「왜 갑자기 빨갛지」로 시간을 안 버린다.
 const CIRCLE_DIAMETER_FLOOR_PX := 180.0
 
 
@@ -385,13 +391,49 @@ func _circle_layout_does_not_know_pages(t) -> void:
 	t.ok(not src.contains("Fx.WINDOW_"), "마법진 좌표가 창 상수를 안 읽는다")
 
 	# 🔴 반대쪽 — 창은 **둘 다** 알아야 한다. 아니면 위 둘이 「아무도 아무것도 안 쓴다」로 통과한다.
+	# ⚠ **원문으로 보는 대가의 반대쪽**: `preload`를 지우고 **주석에 경로만 남겨도 통과한다.**
+	#  지금 그 상황은 아니라 그대로 두지만, 이 두 줄을 「참조가 있다」로 읽지 마라 —
+	#  참값은 「그 글자가 파일 어딘가에 있다」다.
 	var wraw := _read(WINDOW_PATH)
 	t.ok(wraw.contains(BOOK_PATH), "창이 창 축을 조립한다")
 	t.ok(wraw.contains(LAYOUT_PATH), "창이 마법진 축을 조립한다")
 	var win := _stripped(t, WINDOW_PATH, "circle_window")
+
+	# ══ 🔴🔴 여기부터는 전부 **「창이 그 값을 쓰나」**다 ══════════════
+	# ⚠ 위 검사들은 **「값이 맞나」**만 잰다. 값이 맞아도 창이 **다른 값을 쓰면** 화면이 틀리고,
+	#  그 갈라짐은 전부 **에러가 안 난다.** 실측으로 넷이 통과했다(verify-read 뮤테이션).
+
+	# 🔴 **결합의 셋째 길: 그냥 인자로 받으면 된다.**
+	#  `circle_area(box, origin := Vector2.ZERO)` 로 고치고 창이 `page.position`을 넘기면
+	#  `book_layout`도 `Fx.WINDOW_`도 안 건드린 채 **마법진이 자기 자리를 알게 된다.**
+	#  ⚠ **거동으로는 원리적으로 못 잡는다** — 기본값이 ZERO라 그물이 인자 없이 부르면 답이 같다.
+	#  ⇒ 시그니처를 못박는 수밖에 없다.
+	t.ok(src.contains("func circle_area(box: Vector2) -> Rect2"),
+		"마법진 자리 함수가 **크기만** 받는다 (자리를 안 받는다)")
+
+	var draw := _func_body(win, "_draw")
+	t.ok(draw != "", "창의 `_draw()` 를 찾았다")
+	# 🔴 창이 **페이지 크기**를 넘기나. `size`(창 전체)를 넘기면 반지름이 커져
+	#  마법진이 접힘을 넘어 **왼쪽 페이지를 침범한다** — 그림만 틀리고 아무도 안 짖는다.
+	t.ok(draw.contains("Layout.circle_area(page.size)"),
+		"창이 마법진에 **페이지 크기**를 넘긴다 (창 크기가 아니다)")
+
 	# ⚠ 그리기가 변환을 쓰면 **되돌리는 줄이 반드시 있어야 한다** — 없으면 뒤에 붙는 것이
 	#  전부 페이지만큼 밀리고, 지금은 뒤에 아무것도 없어서 증상조차 없다.
-	t.eq(win.count("draw_set_transform"), 2, "변환을 걸고 **되돌린다** (걸기 1 · 되돌리기 1)")
+	# 🔴 **개수만 세면 안 된다**(실측): 되돌리는 줄을 `draw_set_transform(page.position)` 으로
+	#  바꿔도 개수는 2라 초록이고, 그러면 변환이 **영영 안 돌아온다** —
+	#  4b에서 왼쪽 페이지 그림이 통째로 오른쪽으로 밀린다.
+	t.eq(win.count("draw_set_transform"), 2, "변환을 거는 곳이 하나, 되돌리는 곳이 하나다")
+	t.ok(win.contains("draw_set_transform(Vector2.ZERO)"), "되돌리는 줄이 **항등**이다")
+
+	# 🔴 페이지 셋을 **페이지 표에서** 그리나. 따로 계산해 그리면 4b의 히트테스트는 `pages()`를
+	#  읽으므로 **보이는 골과 반응하는 골이 어긋난다**(위험 23).
+	#  ⚠ 문자열 키라 **원문**을 봐야 한다 — 스트리퍼가 따옴표 **안팎을 통째로** 지운다.
+	var draw_raw := _func_body(wraw, "_draw")
+	t.ok(draw_raw != "", "원문에서 창의 `_draw()` 를 찾았다")
+	for key: String in ["left", "fold", "right"]:
+		t.ok(draw_raw.contains("draw_rect(pages[\"%s\"]" % key),
+			"창이 `%s` 를 페이지 표에서 그린다" % key)
 
 
 ## 🔴🔴 **좌표 함수를 실제로 부르는 그물이 하나도 없었다.**
@@ -519,7 +561,12 @@ func _func_body(src: String, fname: String) -> String:
 		var at := src.find(marker, head + 1)
 		if at >= 0 and (tail < 0 or at < tail):
 			tail = at
-	return src.substr(head) if tail < 0 else src.substr(head, tail - head)
+	var body := src.substr(head) if tail < 0 else src.substr(head, tail - head)
+	# ⚠ **다음 함수의 문서 주석까지 딸려 온다.** 거기 적힌 말이 이 함수의 코드로 읽히면
+	#  검사가 조용히 틀린다(있으면 안 될 호출을 옆 함수 주석이 「있다」로 만들 수 있다).
+	#  ⇒ 줄 첫머리 `##` 에서 자른다. 함수 **안**에는 `##` 이 안 나온다.
+	var doc := body.find("\n##")
+	return body if doc < 0 else body.substr(0, doc)
 
 
 # ══════════════════════════════════════════════════════════════════
