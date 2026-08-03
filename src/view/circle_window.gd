@@ -178,21 +178,47 @@ func _clear_pick() -> void:
 	_picked_item = -1
 
 
-## 이 항목을 지금 고를 수 있나.
+## 🔴🔴 **셋이 같은 물음을 지난다: 「이 항목을 받아 줄 슬롯이 하나라도 있나」.**
 ##
-## 🔴 **제약이 있는 것은 문양뿐이다** — 빈 층 중에 받아 줄 곳이 하나라도 있나.
-##  ⚠ 제약은 `glyph_defs.DEFS`에 있고 여기서 **다시 안 적는다**(`can_place_glyph`를 부른다).
-##   적으면 규칙이 두 벌이 되고 `net_circle`의 양방향 일치가 재던 것이 무의미해진다.
-## ⚠ **빈 층만 본다.** 확산이 1층에 있을 때 1층에 덮어쓰는 것은 규칙상 되지만, 그걸 허용하면
-##  「확산이 있는데 확산이 눌린다」로 보인다. ⇒ 옮기려면 먼저 빼는 것이 한 규칙이다.
-## ⚠ 진·룬에는 제약이 없다 — 늘 고를 수 있다(계획 §2의 「놓는 규칙은 종류마다 다르다」).
+## ⚠🔴 **여기서 실제 결함이 났다**(verify-look, 2026-08-04). 이 함수가 **문양에만** 묻고
+##  진·룬에는 늘 `true`를 주고 있었다 ⇒ 진을 빼면 룬 자리가 0개인데 **룬이 밝게 남아 골라지고,
+##  골라 놓고 어디를 눌러도 아무 일이 없었다.** 기획이 경계한 「눌리는데 아무 일도 안 난다」다.
+##
+## 🔴 **규칙이 종류마다 갈린 것 자체가 원인이었다** — `_place_or_clear`를 한 곳에 모은 것과
+##  같은 이유다. 「문양은 막히는데 룬은 안 막힌다」는 「문양은 빼지는데 룬은 안 빠진다」와 같은 병이다.
+##  ⇒ 종류마다 다른 것은 **슬롯을 세는 법**과 **받는 조건** 둘뿐이고, 물음은 하나다.
 func _can_pick(kind: int, item_id: int) -> bool:
-	if kind != Palette.KIND_GLYPH:
-		return true
-	for i in _circle.layer_count():
-		if _circle.glyph_at(i) == Glyph.GLYPH_NONE and _circle.can_place_glyph(i, item_id):
+	for i in _slot_count(kind):
+		if _slot_accepts(kind, i, item_id):
 			return true
 	return false
+
+
+## 그 종류의 슬롯이 몇 개인가. 🔴 **전부 모델에서 나온다** — 진을 빼면 층도 룬 자리도 0이 되고,
+##  그러면 위 물음이 저절로 「놓을 데가 없다」로 떨어진다.
+func _slot_count(kind: int) -> int:
+	if kind == Palette.KIND_CIRCLE:
+		# ⚠ 진 슬롯은 테두리 자리 **하나**고 **진이 없어도 있다**(`circle_layout.frame_has_point`).
+		#  그래야 진을 뺀 사용자가 다시 놓을 수 있다 — 0으로 두면 **갇힌다.**
+		return 1
+	if kind == Palette.KIND_RUNE:
+		return _circle.rune_count()
+	if kind == Palette.KIND_GLYPH:
+		return _circle.layer_count()
+	push_error("CircleWindow: 모르는 슬롯 종류 %d — 슬롯 수를 0으로 본다" % kind)
+	return 0
+
+
+## 그 슬롯이 이 항목을 받나. 🔴 **제약이 있는 것은 문양뿐**이고 그 제약은 `glyph_defs.DEFS`에서 온다.
+##  ⚠ 여기서 **다시 안 적는다**(`can_place_glyph`를 부른다) — 적으면 규칙이 두 벌이 되고
+##   `net_circle`의 양방향 일치가 재던 것이 무의미해진다.
+## ⚠ **빈 층만 본다.** 확산이 1층에 있을 때 1층에 덮어쓰는 것은 규칙상 되지만, 그걸 허용하면
+##  「확산이 있는데 확산이 눌린다」로 보인다. ⇒ 옮기려면 먼저 빼는 것이 한 규칙이다.
+func _slot_accepts(kind: int, index: int, item_id: int) -> bool:
+	if kind != Palette.KIND_GLYPH:
+		return true
+	return _circle.glyph_at(index) == Glyph.GLYPH_NONE \
+		and _circle.can_place_glyph(index, item_id)
 
 
 func _draw() -> void:

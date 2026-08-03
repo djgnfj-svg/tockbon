@@ -601,6 +601,19 @@ func _hit_tests_match_the_drawing(t) -> void:
 	t.ok(i_frame > i_rune,
 		"진을 맨 **나중에** 본다 (진 슬롯이 테두리 안 전체라 먼저 보면 다 먹는다)")
 
+	# 🔴🔴 **「고를 수 있나」가 종류로 갈리면 안 된다.**
+	#  ⚠ 실제 결함이 거기서 났다 — `_can_pick`이 문양에만 묻고 진·룬엔 늘 `true`를 줘서,
+	#   진을 빼면 **룬이 밝게 남고 골라지는데 눌러도 아무 일이 없었다**(verify-look, 2026-08-04).
+	#  🔴 종류마다 다른 것은 **슬롯을 세는 법**과 **받는 조건** 둘뿐이어야 하고, 물음은 하나다.
+	#  ⚠ `Control` 메서드라 **부를 수는 없다** — 갈래가 다시 생기는 것만 텍스트로 막는다.
+	var win_src := _stripped(t, WINDOW_PATH, "circle_window")
+	var pick := _func_body(win_src, "_can_pick")
+	t.ok(pick != "", "`_can_pick()` 를 찾았다")
+	t.ok(not pick.contains("KIND_"),
+		"「고를 수 있나」가 종류로 안 갈린다 (셋이 같은 물음을 지난다)")
+	t.ok(pick.contains("_slot_count(") and pick.contains("_slot_accepts("),
+		"「고를 수 있나」가 슬롯 수와 받는 조건으로만 갈린다")
+
 	# ── 팔레트 ──
 	var pal := Book.palette_page(Fx.WINDOW_RECT.size)
 	var found := 0
