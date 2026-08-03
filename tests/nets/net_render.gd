@@ -17,6 +17,9 @@ const VIEW_DIR := "res://src/view"
 const STAGE_SCENE := "res://src/stage/stage.tscn"
 const STAGE_SCRIPT := "res://src/stage/stage.gd"
 const STAGE_INPUT_SCRIPT := "res://src/stage/stage_input.gd"
+const CIRCLE_WINDOW_SCRIPT := "res://src/view/circle_window.gd"
+## 🔴 주석·문자열 스트리퍼를 **빌려 온다** — 소스 텍스트를 훑는 그물이 셋이라 스트리퍼는 하나여야 한다.
+const NetDeterminism := preload("res://tests/nets/net_determinism.gd")
 const CellRenderer := preload("res://src/view/cell_renderer.gd")
 const Mat := preload("res://src/sim/cell_materials.gd")
 const Fx := preload("res://src/view/fx_tuning.gd")
@@ -40,12 +43,19 @@ func run(t) -> void:
 	_palette_size_matches(t)
 	_onready_paths_resolve(t)
 	_mouse_filter_contract(t)
+	_window_uses_the_tuning_rect(t)
 	_input_actions_exist(t)
 
 
 ## 🔴🔴 **입력 맵에 없는 액션을 부르면 엔진이 짖고, 화면에서는 「그 키만 안 먹는다」로만 보인다.**
-##  Tab이 안 먹는 원인이 **둘**인데(포커스 · 입력 맵) 증상이 똑같아 진단이 오래 걸린다 —
-##  이 검사가 **둘 중 하나를 지워 준다.**
+##
+## ⚠ **`has_action`만으로는 「Tab이 안 먹는다」를 못 지운다** — 실측이다:
+##  액션에서 **키 바인딩만 비워도**(`events: []`) `has_action`은 여전히 참이고 그물이 전부 초록이었다.
+##  ⇒ **이름이 있나**와 **키가 붙어 있나**를 **둘 다** 재야 그 원인 하나가 지워진다.
+##
+## 🔴 나머지 원인(포커스)은 여기가 아니라 `_mouse_filter_contract`가 `focus_mode`로 잰다.
+##  ⚠ **둘을 다 재기 전에는 「이 검사가 원인 하나를 지운다」고 적지 마라** — 거짓 보증은
+##   없느니만 못하다. 다음 세션이 그 문장을 읽고 진단을 반대 방향으로 판다.
 ##
 ## ⚠ 이름을 손으로 적지 않고 **소스에서 뽑는다.** 적으면 액션을 늘릴 때 조용히 낡는다.
 ## ⚠ 주석 안에 `is_action_pressed("...")` 꼴을 적으면 그것도 요구로 잡힌다 —
@@ -68,6 +78,9 @@ func _input_actions_exist(t) -> void:
 	t.ok(wanted.size() > 0, "껍데기가 부르는 입력 액션을 찾았다 (%d개)" % wanted.size())
 	for nm: String in wanted.keys():
 		t.ok(InputMap.has_action(nm), "입력 맵에 액션 `%s` 가 있다" % nm)
+		# 🔴 이름만 있고 키가 안 붙은 액션은 **영원히 안 눌린다.** 위 `has_action`은 참이다.
+		t.ok(InputMap.action_get_events(nm).size() > 0,
+			"액션 `%s` 에 키가 붙어 있다 (이름만 있으면 영영 안 눌린다)" % nm)
 
 
 ## 🔴🔴 **이 껍데기가 죽는 1번 방식이다**(`stage.gd`가 스스로 적어 둔 것).
@@ -81,8 +94,14 @@ func _input_actions_exist(t) -> void:
 ## 🔴 그래서 한 방향만 재면 안 된다 — 아래는 **둘 다** 잰다:
 ##  선언 안 된 `Control`은 `IGNORE`여야 하고, 선언된 것은 `STOP`이어야 한다.
 ##
-## ⚠ **HUD의 직계 자식만 본다.** 창 **안쪽** `Control`은 이미 상호작용 영역 안이라 어느 값이든
-##  발사에 안 닿는다 — 재귀로 훑으면 단계 3~5에서 거짓 경보만 는다.
+## ⚠ **HUD의 직계 자식만 본다. 그 근거를 정확히 적어 둔다:**
+##  · `CircleWindow`의 자식은 **이미 상호작용 영역 안**이라 어느 값이든 발사에 안 닿는다 —
+##    재귀로 훑으면 단계 3~5(층·룬 자리·팔레트)에서 거짓 경보만 는다
+##  · **다른 HUD 자식의 자식은 아직 하나도 없다.** ⇒ 지금은 구멍이 아니다
+##
+## 🔴🔴 **다만 「부모가 IGNORE면 자식도 IGNORE」는 거짓이다.** `mouse_filter`는 안 물려받는다.
+##  `HUD/Stats`(8,8~900,210) 아래에 크기 있는 `STOP` 자식이 생기면 **왼쪽 위 클릭이 통째로 죽고**
+##  이 검사는 그걸 **못 본다.** ⇒ 그런 자식을 만드는 날 이 함수를 재귀로 열어라.
 func _mouse_filter_contract(t) -> void:
 	var scene: PackedScene = load(STAGE_SCENE)
 	if scene == null or not scene.can_instantiate():
@@ -119,6 +138,15 @@ func _mouse_filter_contract(t) -> void:
 	var win := root.get_node_or_null("HUD/CircleWindow") as Control
 	t.ok(win != null and not win.visible, "조립창이 닫힌 채로 시작한다")
 
+	# 🔴🔴 **Tab이 안 먹는 두 번째 원인이 여기다.** 창 안 `Control`이 포커스를 잡으면
+	#  Tab이 `ui_focus_next`로 **GUI에서 소비되어** `_unhandled_input`에 아예 안 온다.
+	#  ⚠ 증상이 「입력 맵을 안 고쳤다」와 **똑같아서** 원인을 반대로 파기 쉽다 —
+	#   그래서 입력 맵 쪽(`_input_actions_exist`)과 **둘 다** 재야 진단이 갈린다.
+	#  ⚠ 실측: `focus_mode`를 ALL로 바꿔도 그물 50개가 전부 초록이었다.
+	if win != null:
+		t.eq(win.focus_mode, Control.FOCUS_NONE,
+			"조립창이 포커스를 못 잡는다 (Tab이 GUI에 안 먹힌다)")
+
 	_window_leaves_the_stage_visible(t, root)
 	root.free()
 
@@ -148,6 +176,26 @@ func _window_leaves_the_stage_visible(t, root: Node) -> void:
 		Vector2(stats.offset_right - stats.offset_left,
 			stats.offset_bottom - stats.offset_top))
 	t.ok(not sr.intersects(r), "조립창이 HUD/Stats(%s)와 안 겹친다" % sr)
+
+
+## 🔴🔴 **위 검사는 `Fx.WINDOW_RECT` 라는 상수만 잰다 — 창이 그걸 쓰는지는 안 본다.**
+##  ⚠ 실측: 창이 `Rect2(0, 0, 10, 10)`을 쓰게 바꿔도 **전부 초록이었다.**
+##   그러면 창이 10픽셀짜리 점이 되고 **클릭 영역도 거기로 간다** — 위 자리·넓이 검사가
+##   재던 것이 통째로 거짓이 된다.
+##
+## ⇒ 실행으로는 못 잰다(창을 트리에 세워야 `_ready`가 돈다). **텍스트로 잰다** —
+##  `net_circle._resize_is_table_driven`과 같은 이유·같은 장치다.
+## 🔴 스트리퍼는 `net_determinism`의 것을 **빌려 쓴다.** 베끼면 두 벌이 되고 반드시 갈라진다.
+func _window_uses_the_tuning_rect(t) -> void:
+	var raw := _read(CIRCLE_WINDOW_SCRIPT)
+	t.ok(not raw.contains("\"\"\""), "circle_window에 삼중 따옴표가 없다 (스트리퍼가 못 다룬다)")
+	var src := NetDeterminism._strip(raw)
+	t.ok(src.contains("WINDOW_RECT"), "창이 `Fx.WINDOW_RECT` 를 읽는다 (치수가 두 곳이 아니다)")
+	# 🔴 반대쪽 — 숫자로 만든 `Rect2`가 있으면 그게 곧 두 번째 치수다.
+	#  ⚠ `Rect2(Vector2.ZERO, size)` 처럼 **숫자로 시작 안 하는** 것은 안 문다.
+	var re := RegEx.new()
+	t.eq(re.compile("Rect2\\s*\\(\\s*[-.\\d]"), OK, "Rect2 숫자 패턴이 컴파일된다")
+	t.ok(re.search(src) == null, "창이 숫자를 박은 Rect2를 안 만든다")
 
 
 ## 🔴🔴 **셰이더의 `palette[N]` 과 `Mat.SLOT_COUNT` 는 짝이다.**
