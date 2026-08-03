@@ -177,13 +177,25 @@ func _ready() -> void:
 	_input.loadout_requested.connect(_set_loadout)
 	# 🔴🔴 **세상을 안 멈춘다** — 여기서 `get_tree().paused`를 건드리지 마라.
 	#  창을 연 채로 걷고·쏘고·불이 번지는 것이 기획 판정 4의 전부다.
-	_input.assembly_toggled.connect(_circle_window.toggle)
+	_input.assembly_toggled.connect(_toggle_assembly)
 	_set_loadout(_loadout)
 	reset_stage()
 
 
 ## 🔴🔴 **float이 시뮬로 들어가는 유일한 문이고, `Aim.fire_cmd`가 그걸 딱 한 번 닫는다.**
 ##  지팡이 끝도 마우스도 여기서는 아직 float px다.
+## Tab. 🔴 **창을 열면 HUD를 숨긴다**(사용자 판정, 2026-08-03).
+##  창이 화면 90%라 `HUD/Stats`를 덮는데, 왼쪽 48px 띠에 **글자 앞부분만 잘려 남아** 창에 붙어 보였다.
+##  ⚠ **대가를 알고 고른 것이다** — 조립 중에는 틱·발사 수를 못 본다. 이 HUD는 껍데기의 디버그
+##   표시라 본편에 안 남는다(이 파일 첫 줄).
+##
+## 🔴 **창이 단일 소스다.** HUD 걸쇠를 따로 들면 둘이 갈라져 「닫았는데 HUD가 안 돌아온다」가 되고,
+##  그건 껍데기가 죽는 조용한 방식이다. ⇒ 창의 상태를 **읽어서** 정한다.
+func _toggle_assembly() -> void:
+	_circle_window.toggle()
+	_hud.visible = not _circle_window.visible
+
+
 ## 🔴 룬도 문양도 **조립 상태에서 나온다.** 껍데기가 `ELEM_FIRE`를 따로 박으면 룬 자리가
 ##  거짓 손잡이가 되고, 룬을 바꿀 수 있게 되는 날 발사만 조용히 안 따라온다.
 func _fire_at(world_px: Vector2) -> void:

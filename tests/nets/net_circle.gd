@@ -66,6 +66,7 @@ func run(t) -> void:
 	_accessors_read_the_table(t)
 	_book_pages_are_one_source(t)
 	_circle_layout_does_not_know_pages(t)
+	_spawn_rays_are_not_horizontal(t)
 	_layout_geometry_runs(t)
 	_axes_do_not_call_each_other(t)
 	_cannot_fire_without_a_rune(t)
@@ -367,8 +368,13 @@ func _book_pages_are_one_source(t) -> void:
 	var circle_page := Book.circle_page(win)
 	var palette_page := Book.palette_page(win)
 	t.ok(not circle_page.intersects(palette_page), "마법진 페이지와 팔레트 페이지가 안 겹친다")
-	t.ok(circle_page == l or circle_page == r, "마법진 페이지가 두 페이지 중 하나다")
-	t.ok(palette_page == l or palette_page == r, "팔레트 페이지가 두 페이지 중 하나다")
+	# 🔴🔴 **사용자 판정을 핀으로 박는다** (2026-08-03: 「왼쪽에 마법진, 오른쪽에는 진·룬·문양」).
+	#  ⚠ **동어반복이 아니다** — 상수와 맞대는 게 아니라 **판정을 고정한다.** 다시 뒤집는 날
+	#   이 두 줄을 같이 고치는 것이 곧 「판정이 바뀌었다」의 기록이 된다.
+	#   그게 없으면 좌우가 조용히 왔다 갔다 하고, 나중에 왜 이쪽인지 아무도 모른다.
+	#  ⚠ spec의 처음 안은 **반대**였다(왼쪽 팔레트). 그래서 더 박아 둘 값어치가 있다.
+	t.ok(circle_page == l, "마법진이 **왼쪽** 페이지다 (사용자 판정)")
+	t.ok(palette_page == r, "팔레트가 **오른쪽** 페이지다 (사용자 판정)")
 	# ⚠🔴 **「마법진이 바깥쪽이다」(§3.7 ③)는 여기서 못 잰다 — 재려다 동어반복을 만들었다.**
 	#  `circle.position.x <= palette.position.x or circle.end.x >= palette.end.x` 로 적었더니
 	#  **좌우를 완전히 반전해도 초록이었다**(실측). 페이지가 둘뿐이면 **둘 다 한쪽에서 바깥**이라
@@ -443,6 +449,15 @@ func _circle_layout_does_not_know_pages(t) -> void:
 		"창이 마법진에 **페이지 크기**를 넘긴다 (창 크기가 아니다)")
 	# 🔴 창이 페이지 키를 **직접 박지 않는다.** 박으면 좌우를 뒤집을 때 창만 뒤집히고
 	#  그물은 옛 페이지를 재면서 **둘 다 초록**이다.
+	#
+	# ⚠🔴 **`contains` 우회로가 열려 있다** — `Book.circle_page(` 를 **부르기만 하고**
+	#  실제로는 `pages["right"]` 를 쓰면 이 줄이 통과한다. 이 리포에서 **세 번째 같은 형태**다:
+	#   ① 단계 1 — 표를 **언급만** 해도 통과 (`resize` 스캔)
+	#   ② 단계 4a — `preload` 를 지우고 **주석에 경로만** 남겨도 통과
+	#   ③ 여기
+	#  🔴 **일부러 안 좁혔다.** 좁히면 정상 리팩터링(중간 변수로 빼기 등)에 무는 거짓 양성이 생기고,
+	#   못 믿는 그물은 다음 사람이 지운다. ⇒ **참값은 「그 호출이 파일 어딘가에 있다」**이지
+	#   「그 값을 실제로 쓴다」가 아니다. 그렇게 읽어라.
 	t.ok(draw.contains("Book.circle_page("),
 		"창이 마법진 페이지를 `book_layout`에게 묻는다 (키를 안 박는다)")
 
@@ -462,6 +477,30 @@ func _circle_layout_does_not_know_pages(t) -> void:
 	for key: String in ["left", "fold", "right"]:
 		t.ok(draw_raw.contains("draw_rect(pages[\"%s\"]" % key),
 			"창이 `%s` 를 페이지 표에서 그린다" % key)
+
+
+## 🔴🔴 **눈이 찾아낸 것을 지키는 게 없었다.**
+##  단계 4a에서 확산 6갈래가 화면에 **4갈래 X자**로 보였다 — 심볼이 고리 위 12시에 앉아
+##  그 점의 접선이 수평이고, **0°·180° 갈래가 고리 선에 포개져 사라진다.**
+##  4b-1에서 반 칸 돌려 고쳤는데, ⚠ **`GLYPH_SPAWN_ANGLE_STEP_FRAC`을 0으로 되돌려도
+##  908개가 전부 초록이었다**(verify-read 실측). 눈이 한 번 찾아낸 것이 무방비였다.
+##
+## 🔴 **순수 기하라 그물이 잴 수 있다.** 화면을 안 봐도 「수평 갈래가 있나」는 계산된다.
+func _spawn_rays_are_not_horizontal(t) -> void:
+	var n := Fx.GLYPH_SPAWN_RAYS
+	# ⚠ 0이면 아래 루프가 안 돌고 **초록이 된다.**
+	t.ok(n > 0, "확산 갈래가 %d개다" % n)
+
+	# 🔴 **홀수면 반 칸을 돌려도 하나가 반드시 180°에 선다:**
+	#  `360(k+0.5)/N = 180` ⟺ `k = (N-1)/2` 이고, 그게 정수인 것이 **N이 홀수**와 동치다.
+	#  ⇒ 「설 수 있다」가 아니라 「반드시 선다」라서 짝수를 계약으로 못박는다.
+	t.eq(n % 2, 0, "갈래 수(%d)가 짝수다 (홀수면 하나가 반드시 수평이다)" % n)
+
+	for k in n:
+		var a := TAU * (float(k) + Fx.GLYPH_SPAWN_ANGLE_STEP_FRAC) / float(n)
+		# ⚠ `sin`이 0에 가까우면 그 갈래가 수평이고, 고리 접선과 겹쳐 **화면에서 사라진다.**
+		#  0.1은 「눈에 띄게 기울었나」의 하한이다 — 5.7°쯤이면 아직 고리에 먹힌다.
+		t.ok(absf(sin(a)) > 0.1, "갈래 %d가 수평이 아니다 (%.0f°)" % [k, rad_to_deg(a)])
 
 
 ## 🔴🔴 **좌표 함수를 실제로 부르는 그물이 하나도 없었다.**
@@ -518,6 +557,16 @@ func _layout_geometry_runs(t) -> void:
 
 	t.ok(Layout.rune_radius(area) > 0.0, "룬 자리 반지름이 0이 아니다")
 	t.ok(Layout.glyph_radius(area) > 0.0, "문양 심볼 반지름이 0이 아니다")
+
+	# 🔴 **층 번호가 반지름을 따라가나.** 상수로 박으면 진이 커질 때 번호만 얼어붙고,
+	#  그건 「안쪽이 먼저」를 말하는 장치 **둘 중 하나가 약해지는** 방향이다(기획 판정 3).
+	#  ⚠ 실측으로 그랬다 — 창이 28.4%→90%가 되며 지름이 199→364인데 번호는 12로 얼어 있었다.
+	var small := Layout.circle_area(page.size * 0.5)
+	t.ok(Layout.layer_num_size(area) > Layout.layer_num_size(small),
+		"층 번호가 진이 커지면 같이 커진다 (%d > %d)" % [
+			Layout.layer_num_size(area), Layout.layer_num_size(small)])
+	# ⚠ 아무리 작아져도 안 읽히는 크기로는 안 내려간다.
+	t.ok(Layout.layer_num_size(small) >= Fx.CIRCLE_LAYER_NUM_MIN, "층 번호에 하한이 있다")
 
 	# 🔴🔴 **「진이 없다」는 정상이라 조용해야 한다.** 여기서 짖게 만들면 진을 빼는 평범한 조작이
 	#  래퍼를 빨갛게 만든다. ⚠ `expect_error`를 **일부러 안 적었다** — 짖으면 그대로 실패다.

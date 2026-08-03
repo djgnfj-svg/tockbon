@@ -106,6 +106,12 @@ static func glyph_radius(area: Rect2) -> float:
 	return _radius(area) * Fx.CIRCLE_GLYPH_RATIO
 
 
+## 층 번호의 글자 크기. 🔴 **반지름에서 파생한다** — 박으면 진이 커질 때 번호만 얼어붙고,
+##  그건 「안쪽이 먼저」를 말하는 장치 둘 중 하나가 **약해지는** 방향이다(기획 판정 3).
+static func layer_num_size(area: Rect2) -> int:
+	return maxi(int(_radius(area) * Fx.CIRCLE_LAYER_NUM_RATIO), Fx.CIRCLE_LAYER_NUM_MIN)
+
+
 # ─── 셋이 같이 쓰는 원반 ──────────────────────────────────────────
 # ⚠ 위 주석 참고 — 이걸 공유하는 것이 축을 섞는 게 아니라 **중심이 세 곳이 되는 것을 막는다.**
 

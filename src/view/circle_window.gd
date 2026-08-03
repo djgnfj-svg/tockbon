@@ -176,10 +176,14 @@ func _draw_ring(area: Rect2, circle_id: int, layer: int, font: Font) -> void:
 
 	if font != null:
 		# 9시 방향. ⚠ 문양 심볼이 12시에 앉으므로 거기 적으면 겹친다.
+		# ⚠ 글자 크기도 미는 거리도 **반지름에서 파생한다** — 크기만 키우고 밀기를 px로 두면
+		#  글자가 커질수록 고리에 파묻힌다.
+		var num := Layout.layer_num_size(area)
 		draw_string(font, c + Vector2(
-				-rings[layer] + Fx.CIRCLE_LAYER_NUM_INSET_PX, -Fx.CIRCLE_LAYER_NUM_LIFT_PX),
+				-rings[layer] + float(num) * Fx.CIRCLE_LAYER_NUM_INSET_FRAC,
+				-float(num) * Fx.CIRCLE_LAYER_NUM_LIFT_FRAC),
 			str(layer + 1),
-			HORIZONTAL_ALIGNMENT_LEFT, -1, Fx.CIRCLE_LAYER_NUM_SIZE, Fx.CIRCLE_LAYER_NUM)
+			HORIZONTAL_ALIGNMENT_LEFT, -1, num, Fx.CIRCLE_LAYER_NUM)
 
 	var glyph_id := _circle.glyph_at(layer)
 	if glyph_id == Glyph.GLYPH_NONE:
