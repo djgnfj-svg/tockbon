@@ -34,7 +34,21 @@ const KIND_CIRCLE := 0
 const KIND_RUNE := 1
 const KIND_GLYPH := 2
 
-## 🔴🔴 **종류 하나 추가 = 여기 한 줄 + `KINDS` 한 줄 + `items_of` 한 갈래.**
+## 🔴🔴 **종류 하나 추가 = 다섯 곳이다.** ⚠ 처음에 「세 곳」이라고 적었는데 **틀렸다** —
+##  세어 보니 다섯이고, 그중 하나는 **다른 파일**이라 제일 빠뜨리기 쉽다:
+##
+## ```
+## 1. const KIND_X                                  (여기)
+## 2. KIND_DEFS 한 줄                               (여기)
+## 3. KINDS 한 줄                                   (여기)
+## 4. items_of 한 갈래                              (여기)
+## 5. circle_window._draw_palette_item 한 갈래      ← 🔴 **다른 파일이다**
+## ```
+##
+## 🔴 다섯이 **넷을 넘었다** — 이 리포는 「새 종류를 추가할 때 네 군데를 고쳐야 하면 설계가 틀린 것」이라고
+##  적어 뒀다. ⚠ 지금 넘기는 것은 5번이 **그림**이고 그림은 종류마다 다를 수밖에 없어서다
+##  (룬은 구슬 · 진은 테두리 · 문양은 kind별 모양). 그래도 **셀 수 있게 적어 두는 것**이
+##  다음 사람이 5번을 빠뜨리지 않는 유일한 장치다.
 ## ⚠ 이름이 여기 있는 이유: **한 개념에 딸린 것은 한 곳에 둔다**(CLAUDE.md).
 ##  종류 목록과 이름 목록을 따로 만들면 둘을 손으로 맞춰야 하고, 반드시 어긋난다.
 const KIND_DEFS: Dictionary = {
@@ -94,3 +108,23 @@ static func item_slot(sec: Rect2, item_index: int, item_count: int) -> Rect2:
 ##  거대해져서 「진이 제일 중요한가」로 잘못 읽힌다.
 static func item_symbol_radius(slot: Rect2) -> float:
 	return minf(slot.size.x, slot.size.y) * 0.5 * Fx.PALETTE_SYMBOL_RATIO
+
+
+## 🔴🔴 **무엇을 눌렀나.** `{"kind": int, "item": int}` — 아무것도 아니면 **빈 딕셔너리**다.
+##
+## ⚠ **그림과 같은 `section()`·`item_slot()`을 돈다.** 좌표를 여기서 다시 구하면
+##  「이걸 눌렀는데 저게 골라진다」가 되고 **에러가 안 난다**(위험 6의 팔레트 얼굴).
+## ⚠ 인자 `p`는 **페이지 원점 기준**이다 — 창이 `draw_set_transform`으로 옮긴 만큼을
+##  호출부가 **빼서** 넘겨야 한다(위험 22).
+##
+## 🔴 **칸 전체가 누르는 자리다**(심볼 원이 아니라). 심볼만 하면 항목이 작을 때 못 누르고,
+##  그건 「눌렀는데 아무 일도 안 난다」가 된다.
+static func item_at(page_size: Vector2, p: Vector2) -> Dictionary:
+	for ki in KINDS.size():
+		var sec := section(page_size, ki)
+		var kind: int = KINDS[ki]
+		var items := items_of(kind)
+		for ii in items.size():
+			if item_slot(sec, ii, items.size()).has_point(p):
+				return {"kind": kind, "item": items[ii]}
+	return {}

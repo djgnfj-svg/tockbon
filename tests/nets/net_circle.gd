@@ -69,6 +69,8 @@ func run(t) -> void:
 	_circle_layout_does_not_know_pages(t)
 	_spawn_rays_are_not_horizontal(t)
 	_palette_is_kind_by_item(t)
+	_symbols_are_shared(t)
+	_hit_tests_match_the_drawing(t)
 	_palette_geometry_runs(t)
 	_layout_geometry_runs(t)
 	_axes_do_not_call_each_other(t)
@@ -510,20 +512,95 @@ func _palette_is_kind_by_item(t) -> void:
 	# 🔴🔴 **항목이 표를 그대로 따라간다.**
 	#  ⚠ 지금은 같은 값이지만 **동어반복이 아니다** — 누가 `[1, 2]` 라고 손으로 적으면
 	#   표가 느는 날 여기가 빨개진다. 그게 이 검사가 사는 시점이다.
+	# ⚠ **개수만 재면 손으로 적은 목록이 통과한다** — `[GLYPH_SPREAD, GLYPH_BLAST]` 라고
+	#  적어도 개수가 2라 초록이었다(실측). ⇒ **값까지 맞댄다.**
 	var want := {
-		Palette.KIND_CIRCLE: CircleDefs.ALL.size(),
-		Palette.KIND_RUNE: Tuning.ELEM_ALL.size(),
-		Palette.KIND_GLYPH: Glyph.ALL.size(),
+		Palette.KIND_CIRCLE: CircleDefs.ALL,
+		Palette.KIND_RUNE: Tuning.ELEM_ALL,
+		Palette.KIND_GLYPH: Glyph.ALL,
 	}
 	for kind: int in Palette.KINDS:
 		var nm: StringName = Palette.KIND_DEFS[kind]["name"]
 		var items := Palette.items_of(kind)
 		t.ok(items.size() > 0, "%s 칸에 항목이 있다 (%d개)" % [nm, items.size()])
-		t.eq(items.size(), int(want[kind]), "%s 항목 수가 표와 같다" % nm)
+		t.eq(Array(items), Array(want[kind] as Array), "%s 항목이 표와 **값까지** 같다" % nm)
 
 	# 🔴 모르는 종류에 짖는다 — 종류를 늘리고 표를 안 이으면 그 칸이 **조용히 빈다.**
 	t.expect_error("PaletteLayout: 모르는 슬롯 종류")
 	t.eq(Palette.items_of(9999).size(), 0, "모르는 종류는 짖고 항목이 0이다")
+
+
+## 🔴🔴 **히트테스트가 그림과 같은 좌표를 쓰나 — 그리고 실제로 맞나.**
+##  ⚠ 좌표가 두 곳이면 「이걸 눌렀는데 저게 골라진다」가 되고 **에러가 안 난다**(위험 6).
+## 🔴 여기는 텍스트가 아니라 **실행**으로 잰다 — 그린 자리를 그대로 눌러 본다.
+func _hit_tests_match_the_drawing(t) -> void:
+	var page := Book.circle_page(Fx.WINDOW_RECT.size)
+	var area := Layout.circle_area(page.size)
+	var id := CircleDefs.CIRCLE_ROUND
+
+	# 🔴 **그린 자리를 누르면 그 층이 나온다.** 층마다 자기 번호가 나와야 한다.
+	var slots := Layout.layer_slots(id, area)
+	t.ok(slots.size() > 0, "누를 층이 %d개다" % slots.size())
+	for i in slots.size():
+		t.eq(Layout.layer_at(id, area, slots[i]), i, "%d층 심볼 자리를 누르면 %d층이다" % [i, i])
+
+	# 🔴 **이웃을 안 먹는다.** 누르는 원이 너무 크면 1층을 눌렀는데 2층이 잡힌다.
+	var clean := true
+	for i in slots.size():
+		for j in slots.size():
+			if i != j and Layout.layer_at(id, area, slots[j]) == i:
+				clean = false
+	t.ok(clean, "층 누르는 자리가 서로 안 겹친다 (누르기 반경 ×%.1f)" % Fx.SLOT_HIT_RATIO)
+
+	# 아무것도 없는 자리는 -1. ⚠ 안 그러면 배경 클릭이 엉뚱한 층을 만진다.
+	t.eq(Layout.layer_at(id, area, Vector2.ZERO), -1, "구석을 누르면 아무 층도 아니다")
+	t.eq(Layout.rune_slot_at(id, area, Layout.rune_slots(id, area)[0]), 0,
+		"룬 자리를 누르면 0번이다")
+
+	# ── 팔레트 ──
+	var pal := Book.palette_page(Fx.WINDOW_RECT.size)
+	var found := 0
+	for ki in Palette.KINDS.size():
+		var sec := Palette.section(pal.size, ki)
+		var kind: int = Palette.KINDS[ki]
+		var items := Palette.items_of(kind)
+		for ii in items.size():
+			var slot := Palette.item_slot(sec, ii, items.size())
+			var hit := Palette.item_at(pal.size, slot.get_center())
+			t.ok(not hit.is_empty(), "팔레트 항목 %d/%d을 누르면 뭔가 잡힌다" % [ki, ii])
+			if hit.is_empty():
+				continue
+			found += 1
+			t.eq(int(hit["kind"]), kind, "누른 칸의 종류가 맞다")
+			t.eq(int(hit["item"]), items[ii], "누른 칸의 항목이 맞다")
+	t.ok(found > 0, "팔레트에서 실제로 누른 항목이 %d개다" % found)
+	# ⚠ 구획 밖(맨 위 여백)은 아무것도 아니다.
+	t.ok(Palette.item_at(pal.size, Vector2.ZERO).is_empty(), "여백을 누르면 아무것도 아니다")
+
+
+## 🔴🔴 **팔레트와 슬롯이 같은 심볼 함수를 쓰나.**
+##  ⚠ 안 쓰면 「팔레트의 폭발과 진에 놓인 폭발이 다르게 보인다」가 되고, 그건 **조용하다** —
+##   실측으로 팔레트 문양을 마젠타 원반으로 바꿔도 초록이었다(verify-read).
+##  ⚠ 진이 실제로 갈라져 있었다: `_draw_frame` 이 `draw_circle` 을 직접 그리고
+##   `_draw_circle_symbol` 이 똑같은 그림을 따로 그렸다. **룬·문양은 공유하는데 진만 안 했다.**
+##
+## 🔴 재는 것은 좁다: **슬롯 쪽과 팔레트 쪽이 둘 다 같은 이름을 부르나.**
+##  ⚠ 「그 함수가 실제로 같은 그림을 그리나」는 텍스트가 못 본다(이 파일의 `contains` 한계와 같다).
+func _symbols_are_shared(t) -> void:
+	var win := _stripped(t, WINDOW_PATH, "circle_window")
+	# [심볼 함수, 슬롯 쪽 함수, 팔레트 쪽 함수]
+	var shared: Array[Array] = [
+		["_draw_circle_symbol", "_draw_frame", "_draw_palette_item"],
+		["_draw_rune_symbol", "_draw_rune_slot", "_draw_palette_item"],
+		["_draw_glyph", "_draw_ring", "_draw_palette_item"],
+	]
+	t.ok(shared.size() > 0, "심볼 공유를 재 볼 자리가 %d군데다" % shared.size())
+	for c: Array in shared:
+		for caller: String in [c[1], c[2]]:
+			var body := _func_body(win, caller)
+			t.ok(body != "", "`%s()` 를 찾았다" % caller)
+			t.ok(body.contains("%s(" % c[0]),
+				"`%s()` 가 심볼을 `%s()` 로 그린다 (따로 안 그린다)" % [caller, c[0]])
 
 
 ## 🔴 구획과 항목 칸이 **한 곳에서 나오고 서로 안 겹치나.** 겹치면 「이걸 눌렀는데 저게

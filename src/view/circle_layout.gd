@@ -106,6 +106,31 @@ static func glyph_radius(area: Rect2) -> float:
 	return _radius(area) * Fx.CIRCLE_GLYPH_RATIO
 
 
+## 🔴🔴 **어느 층을 눌렀나.** 없으면 -1.
+##  ⚠ **그림과 같은 `layer_slots()`·`glyph_radius()`를 쓴다.** 좌표를 여기서 다시 구하면
+##   「클릭이 엉뚱한 층으로 간다」가 되고 **에러가 안 난다**(위험 6).
+## ⚠ 인자 `p`는 **상자 원점 기준**이다 — 창이 `draw_set_transform`으로 옮긴 만큼을
+##  호출부가 **빼서** 넘겨야 한다(위험 22). 안 빼면 조용히 어긋난다.
+## ⚠ 누르는 원이 심볼보다 크다 — 심볼만 하면 빈 층을 정확히 겨냥해야 해서 못 누른다.
+static func layer_at(circle_id: int, area: Rect2, p: Vector2) -> int:
+	var slots := layer_slots(circle_id, area)
+	var r := glyph_radius(area) * Fx.SLOT_HIT_RATIO
+	for i in slots.size():
+		if p.distance_to(slots[i]) <= r:
+			return i
+	return -1
+
+
+## 어느 룬 자리를 눌렀나. 없으면 -1. ⚠ 위와 같은 규율이다.
+static func rune_slot_at(circle_id: int, area: Rect2, p: Vector2) -> int:
+	var slots := rune_slots(circle_id, area)
+	var r := rune_radius(area) * Fx.SLOT_HIT_RATIO
+	for i in slots.size():
+		if p.distance_to(slots[i]) <= r:
+			return i
+	return -1
+
+
 ## 층 번호의 글자 크기. 🔴 **반지름에서 파생한다** — 박으면 진이 커질 때 번호만 얼어붙고,
 ##  그건 「안쪽이 먼저」를 말하는 장치 둘 중 하나가 **약해지는** 방향이다(기획 판정 3).
 static func layer_num_size(area: Rect2) -> int:

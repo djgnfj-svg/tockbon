@@ -109,6 +109,8 @@ func _input_actions_exist(t) -> void:
 func _mouse_filter_contract(t) -> void:
 	var scene: PackedScene = load(STAGE_SCENE)
 	if scene == null or not scene.can_instantiate():
+		# 🔴🔴 위와 같은 이유 — 조용히 빠져나가면 `mouse_filter` 계약이 **한 줄도 안 재진다.**
+		t.ok(false, "무대 씬을 못 세워서 mouse_filter 계약을 **하나도 못 쟀다**")
 		return
 	var root := scene.instantiate()
 	var hud := root.get_node_or_null(HUD_PATH)
@@ -237,6 +239,9 @@ func _onready_paths_resolve(t) -> void:
 	var scene: PackedScene = load(STAGE_SCENE)
 	t.ok(scene != null and scene.can_instantiate(), "무대 씬을 세울 수 있다")
 	if scene == null or not scene.can_instantiate():
+		# 🔴🔴 **여기서 그냥 `return` 하면 검사가 「실패」가 아니라 통째로 사라진다** —
+		#  통과 수만 줄고 **아무도 안 짖는다.** 「없어진 검사」는 「통과한 검사」와 로그에서 구별이 안 된다.
+		t.ok(false, "무대 씬을 못 세워서 @onready 경로를 **하나도 못 쟀다**")
 		return
 	var root := scene.instantiate()
 	var re := RegEx.new()
