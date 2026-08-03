@@ -37,6 +37,7 @@ const ACCESSORS: Array[String] = ["layers", "rune_slots"]
 const LAYOUT_PATH := "res://src/view/circle_layout.gd"
 const WINDOW_PATH := "res://src/view/circle_window.gd"
 const BOOK_PATH := "res://src/view/book_layout.gd"
+const PALETTE_PATH := "res://src/view/palette_layout.gd"
 
 ## 마법진 지름의 **바닥값**. 🔴 연출 상수가 아니라 **검증 계약**이라 그물에 둔다 —
 ##  단계 3에서 눈이 통과시킨 크기이고, 여기 아래로 내려가면 그 판정을 다시 받아야 한다.
@@ -450,6 +451,16 @@ func _circle_layout_does_not_know_pages(t) -> void:
 	t.ok(src.contains("func circle_area(box: Vector2) -> Rect2"),
 		"마법진 자리 함수가 **크기만** 받는다 (자리를 안 받는다)")
 
+	# 🔴 **팔레트도 같은 계약인데 핀이 없었다.** `section()`에 `origin` 인자를 붙여도 초록이었다
+	#  (실측). ⚠ 같은 성격의 계약에 한쪽만 박아 두면 **안 박은 쪽이 조용히 깨진다.**
+	var pal_src := _stripped(t, PALETTE_PATH, "palette_layout")
+	t.ok(pal_src.contains("func section(page_size: Vector2, kind_index: int) -> Rect2"),
+		"팔레트 구획 함수가 **크기만** 받는다 (자리를 안 받는다)")
+	t.ok(pal_src.contains("func item_at(page_size: Vector2, p: Vector2) -> Dictionary"),
+		"팔레트 히트테스트가 **크기와 점만** 받는다")
+	t.ok(not pal_src.contains("Fx.WINDOW_"), "팔레트가 창 상수를 안 읽는다")
+	t.ok(not _read(PALETTE_PATH).contains(BOOK_PATH), "팔레트가 창 축 파일을 안 부른다")
+
 	var draw := _func_body(win, "_draw")
 	t.ok(draw != "", "창의 `_draw()` 를 찾았다")
 	# 🔴 창이 **페이지 크기**를 넘기나. `size`(창 전체)를 넘기면 반지름이 커져
@@ -558,6 +569,38 @@ func _hit_tests_match_the_drawing(t) -> void:
 	t.eq(Layout.rune_slot_at(id, area, Layout.rune_slots(id, area)[0]), 0,
 		"룬 자리를 누르면 0번이다")
 
+	# ══ 🔴🔴 **종류를 가로질러 잰다** — 지금까지 층끼리만 쟀다 ══════
+	# ⚠ 실측(verify-read): 1층 히트 원(37.7)과 룬 히트 원(55.7)이 **20.5px 겹친다**(거리 72.8).
+	#  🔴 **겹침을 없애라는 게 아니다** — 겹치는 것은 그 사이 **빈 띠**뿐이고,
+	#   **그려진 것을 누르면 그것이 잡히는 한 안전하다.** 그 안전 조건을 못박는다.
+	var rune_c := Layout.rune_slots(id, area)[0]
+	var rune_draw := Layout.rune_radius(area)
+	var layer_hit := Layout.glyph_radius(area) * Fx.SLOT_HIT_RATIO
+	for i in slots.size():
+		var gap := rune_c.distance_to(slots[i]) - layer_hit
+		t.ok(gap >= rune_draw,
+			"그려진 룬 원반(%.1f)이 %d층 히트 영역 밖이다 (여유 %.1f)" % [
+				rune_draw, i, gap - rune_draw])
+
+	# 🔴🔴 **반대 방향은 기하가 아니라 「순서」가 지킨다.**
+	#  그려진 문양 심볼은 룬 히트 원(%.1f) **안**이라, `_click_circle`이 층을 **먼저** 안 보면
+	#  문양이 통째로 안 눌린다. ⇒ **우선순위가 계약이다.**
+	var rune_hit := rune_draw * Fx.SLOT_HIT_RATIO
+	var inside := false
+	for i in slots.size():
+		if rune_c.distance_to(slots[i]) <= rune_hit + Layout.glyph_radius(area):
+			inside = true
+	t.ok(inside, "문양 심볼이 룬 히트 영역에 걸친다 (그래서 순서가 계약이다)")
+	var click := _func_body(_stripped(t, WINDOW_PATH, "circle_window"), "_click_circle")
+	t.ok(click != "", "`_click_circle()` 를 찾았다")
+	var i_layer := click.find("layer_at")
+	var i_rune := click.find("rune_slot_at")
+	var i_frame := click.find("frame_has_point")
+	t.ok(i_layer >= 0 and i_rune > i_layer,
+		"층을 룬보다 **먼저** 본다 (안 그러면 문양이 안 눌린다)")
+	t.ok(i_frame > i_rune,
+		"진을 맨 **나중에** 본다 (진 슬롯이 테두리 안 전체라 먼저 보면 다 먹는다)")
+
 	# ── 팔레트 ──
 	var pal := Book.palette_page(Fx.WINDOW_RECT.size)
 	var found := 0
@@ -630,7 +673,14 @@ func _palette_geometry_runs(t) -> void:
 			# ⚠ 제목 띠를 침범하면 글자와 심볼이 서로를 먹는다.
 			t.ok(slot.position.y >= sec.position.y + Fx.PALETTE_HEAD_PX,
 				"%s 항목 %d이 제목 띠 아래에 있다" % [nm, ii])
-			t.ok(Palette.item_symbol_radius(slot) > 0.0, "%s 항목 %d에 심볼 크기가 있다" % [nm, ii])
+			# 🔴 **심볼이 칸 안에 든다.** ⚠ `> 0` 만 보면 긴 변으로 바꿔도 통과한다 —
+			#  그러면 항목 하나짜리 종류(진·룬)만 거대해져 칸을 넘고, 「진이 제일 중요한가」로
+			#  잘못 읽힌다. 짧은 변이 정한다는 결정이 여기서 지켜진다.
+			var sym := Palette.item_symbol_radius(slot)
+			t.ok(sym > 0.0, "%s 항목 %d에 심볼 크기가 있다" % [nm, ii])
+			t.ok(sym * 2.0 <= minf(slot.size.x, slot.size.y),
+				"%s 항목 %d의 심볼(지름 %.1f)이 칸(%dx%d) 안에 든다" % [
+					nm, ii, sym * 2.0, int(slot.size.x), int(slot.size.y)])
 			for other: Rect2 in slots:
 				t.ok(not slot.intersects(other), "%s 항목 %d이 앞 항목과 안 겹친다" % [nm, ii])
 			slots.append(slot)
