@@ -26,9 +26,17 @@ if ($null -eq $godot) {
 
 # 네이티브 exe의 stderr를 파이프로 받으면 PowerShell 5.1이 각 줄을 ErrorRecord로 감싸고
 # 종료 코드 0인데도 실패로 읽는다. 파일로 받아서 텍스트로 읽는다.
+#
+# 🔴🔴 파일 이름에 PID를 붙인다. 고정 이름이면 **두 사람이 동시에 돌릴 때 서로의 출력을 덮어쓴다.**
+#  이 리포는 verify-run·verify-read가 병렬로 그물을 돌리는 구조라 반드시 난다 — 실제로 났다.
+#  ⚠ 증상이 둘인데 **뒤쪽이 훨씬 위험하다**:
+#   · 없는 실패가 뜬다 (남의 실패 줄을 내 출력으로 읽는다)
+#   · 🔴 **진짜 실패가 남의 초록에 덮여 사라진다** — 이쪽은 아무도 눈치 못 챈다
+#   · `[EXPECT]` 목록이 섞여 **사면 범위가 조용히 넓어진다**
+#  ⇒ 「내 변경 때문인가」로 시간을 버리는 대표 경로였다. 두 검증자가 독립적으로 겪고 같은 원인을 짚었다.
 $tmp = [System.IO.Path]::GetTempPath()
-$outFile = Join-Path $tmp "tockbon_nets_out.txt"
-$errFile = Join-Path $tmp "tockbon_nets_err.txt"
+$outFile = Join-Path $tmp "tockbon_nets_out_$PID.txt"
+$errFile = Join-Path $tmp "tockbon_nets_err_$PID.txt"
 
 $godotArgs = @("--headless", "--path", $root, "--script", "res://tests/run_nets.gd")
 if ($Filter -ne "") { $godotArgs += @("--", $Filter) }
