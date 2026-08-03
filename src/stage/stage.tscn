@@ -1,4 +1,4 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene load_steps=8 format=3]
 
 [ext_resource type="Script" path="res://src/stage/stage.gd" id="1_stage"]
 [ext_resource type="Script" path="res://src/view/cell_renderer.gd" id="2_cells"]
@@ -6,6 +6,7 @@
 [ext_resource type="Script" path="res://src/view/character_view.gd" id="4_char"]
 [ext_resource type="Script" path="res://src/view/spell_view.gd" id="5_spell"]
 [ext_resource type="Script" path="res://src/view/blast_fx.gd" id="6_blast"]
+[ext_resource type="Script" path="res://src/view/circle_window.gd" id="7_window"]
 
 [node name="Stage" type="Node2D"]
 script = ExtResource("1_stage")
@@ -37,3 +38,9 @@ offset_right = 900.0
 offset_bottom = 210.0
 mouse_filter = 2
 text = "…"
+
+[node name="CircleWindow" type="Control" parent="HUD"]
+visible = false
+focus_mode = 0
+mouse_filter = 0
+script = ExtResource("7_window")

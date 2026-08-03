@@ -12,6 +12,7 @@ const CellRenderer := preload("res://src/view/cell_renderer.gd")
 const CharacterView := preload("res://src/view/character_view.gd")
 const SpellView := preload("res://src/view/spell_view.gd")
 const BlastFx := preload("res://src/view/blast_fx.gd")
+const CircleWindow := preload("res://src/view/circle_window.gd")
 const Character := preload("res://src/actor/character.gd")
 const Aim := preload("res://src/actor/aim.gd")
 const SpellCircle := preload("res://src/actor/spell_circle.gd")
@@ -129,6 +130,9 @@ const LOADOUTS: Dictionary = {
 ##  ⚠ 그래도 뷰포트 좌표 → 월드 좌표 변환은 **반드시** 캔버스 변환을 되돌려야 한다
 ##   (`stage_input._to_world`). 안 하면 흔드는 동안 조준이 조용히 엉뚱한 데로 간다.
 @onready var _camera: Camera2D = $Camera2D
+## 🔴 조립창은 `HUD`(`CanvasLayer`) 아래다 — `Node2D`로 두면 화면 흔들림에 같이 흔들린다.
+##  ⚠ **껍데기는 열고 닫기만 시킨다.** 창이 제 상태를 알고, 좌표도 제 것을 쓴다.
+@onready var _circle_window: CircleWindow = $HUD/CircleWindow
 @onready var _char_view: CharacterView = $CharacterView
 @onready var _spell_view: SpellView = $SpellView
 @onready var _blast_fx: BlastFx = $BlastFx
@@ -168,6 +172,9 @@ func _ready() -> void:
 	_input.fire_requested.connect(_fire_at)
 	_input.reset_requested.connect(reset_stage)
 	_input.loadout_requested.connect(_set_loadout)
+	# 🔴🔴 **세상을 안 멈춘다** — 여기서 `get_tree().paused`를 건드리지 마라.
+	#  창을 연 채로 걷고·쏘고·불이 번지는 것이 기획 판정 4의 전부다.
+	_input.assembly_toggled.connect(_circle_window.toggle)
 	_set_loadout(_loadout)
 	reset_stage()
 

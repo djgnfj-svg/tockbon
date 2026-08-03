@@ -16,8 +16,18 @@ extends RefCounted
 const VIEW_DIR := "res://src/view"
 const STAGE_SCENE := "res://src/stage/stage.tscn"
 const STAGE_SCRIPT := "res://src/stage/stage.gd"
+const STAGE_INPUT_SCRIPT := "res://src/stage/stage_input.gd"
 const CellRenderer := preload("res://src/view/cell_renderer.gd")
 const Mat := preload("res://src/sim/cell_materials.gd")
+const Fx := preload("res://src/view/fx_tuning.gd")
+
+## HUD의 `CanvasLayer`. 🔴 **좌클릭이 발사로 가느냐가 갈리는 층이 정확히 여기다.**
+const HUD_PATH := "HUD"
+
+## 🔴🔴 **클릭을 먹어도 되는 노드.** 여기 없는 `Control`이 `STOP`이면 좌클릭이 조용히 죽는다.
+##  ⚠ **목록을 손으로 드는 것이 곧 계약이다.** 새 창을 붙이면서 여기 안 적으면 그물이 먼저 짖고,
+##   적으면 「이건 일부러 먹는다」가 리포에 남는다. 자동으로 알아내면 그 선언이 사라진다.
+const INTERACTIVE: Array[String] = ["HUD/CircleWindow"]
 
 
 func run(t) -> void:
@@ -29,6 +39,115 @@ func run(t) -> void:
 	_injection_matches_shader(t)
 	_palette_size_matches(t)
 	_onready_paths_resolve(t)
+	_mouse_filter_contract(t)
+	_input_actions_exist(t)
+
+
+## 🔴🔴 **입력 맵에 없는 액션을 부르면 엔진이 짖고, 화면에서는 「그 키만 안 먹는다」로만 보인다.**
+##  Tab이 안 먹는 원인이 **둘**인데(포커스 · 입력 맵) 증상이 똑같아 진단이 오래 걸린다 —
+##  이 검사가 **둘 중 하나를 지워 준다.**
+##
+## ⚠ 이름을 손으로 적지 않고 **소스에서 뽑는다.** 적으면 액션을 늘릴 때 조용히 낡는다.
+## ⚠ 주석 안에 `is_action_pressed("...")` 꼴을 적으면 그것도 요구로 잡힌다 —
+##  거짓 양성이지만 **빨갛게** 틀리므로 조용히 새지는 않는다.
+func _input_actions_exist(t) -> void:
+	var src := _read(STAGE_INPUT_SCRIPT)
+	var wanted: Dictionary = {}
+	for pattern: String in [
+		"is_action[a-z_]*\\(\\s*\"([A-Za-z0-9_]+)\"",
+		"get_axis\\(\\s*\"([A-Za-z0-9_]+)\"\\s*,\\s*\"([A-Za-z0-9_]+)\"",
+	]:
+		var re := RegEx.new()
+		t.eq(re.compile(pattern), OK, "액션 패턴이 컴파일된다")
+		for m: RegExMatch in re.search_all(src):
+			for g in range(1, m.get_group_count() + 1):
+				var nm := m.get_string(g)
+				if nm != "":
+					wanted[nm] = true
+	# 🔴 하나도 못 찾으면 아래가 안 돌고 **초록이 된다.**
+	t.ok(wanted.size() > 0, "껍데기가 부르는 입력 액션을 찾았다 (%d개)" % wanted.size())
+	for nm: String in wanted.keys():
+		t.ok(InputMap.has_action(nm), "입력 맵에 액션 `%s` 가 있다" % nm)
+
+
+## 🔴🔴 **이 껍데기가 죽는 1번 방식이다**(`stage.gd`가 스스로 적어 둔 것).
+##  발사가 좌클릭인데 HUD가 `Control`이다 — 뒷판 하나를 기본값(`STOP`)으로 씌우는 순간
+##  **좌클릭이 통째로 먹히고, 에러는 안 나고 전 그물이 초록이다.**
+##
+## ⚠ **양쪽이 다 위험하다:**
+##  · 전부 `STOP`   → 발사가 죽는다. 화면은 멀쩡해 보인다
+##  · 전부 `IGNORE` → **창을 클릭할 때마다 마법이 나간다**
+##
+## 🔴 그래서 한 방향만 재면 안 된다 — 아래는 **둘 다** 잰다:
+##  선언 안 된 `Control`은 `IGNORE`여야 하고, 선언된 것은 `STOP`이어야 한다.
+##
+## ⚠ **HUD의 직계 자식만 본다.** 창 **안쪽** `Control`은 이미 상호작용 영역 안이라 어느 값이든
+##  발사에 안 닿는다 — 재귀로 훑으면 단계 3~5에서 거짓 경보만 는다.
+func _mouse_filter_contract(t) -> void:
+	var scene: PackedScene = load(STAGE_SCENE)
+	if scene == null or not scene.can_instantiate():
+		return
+	var root := scene.instantiate()
+	var hud := root.get_node_or_null(HUD_PATH)
+	t.ok(hud != null, "씬에 %s 가 있다" % HUD_PATH)
+	if hud == null:
+		root.free()
+		return
+
+	# 🔴 폴더 스캔 그물의 첫 줄과 같은 이유 — 자식이 0이면 아래가 하나도 안 돌고 초록이 된다.
+	var seen := 0
+	for child in hud.get_children():
+		if not (child is Control):
+			continue
+		seen += 1
+		var ctl := child as Control
+		var path := "%s/%s" % [HUD_PATH, ctl.name]
+		if INTERACTIVE.has(path):
+			t.eq(ctl.mouse_filter, Control.MOUSE_FILTER_STOP,
+				"%s 는 클릭을 먹는다 (STOP — 여기 클릭은 발사가 아니다)" % path)
+		else:
+			t.eq(ctl.mouse_filter, Control.MOUSE_FILTER_IGNORE,
+				"%s 는 클릭을 통과시킨다 (IGNORE — 좌클릭이 발사로 간다)" % path)
+	t.ok(seen > 0, "%s 아래 Control이 있다 (%d개)" % [HUD_PATH, seen])
+	# ⚠ 선언이 비면 위 루프가 「전부 IGNORE여야 한다」만 재고, 그러면 **창이 사라져도 초록이다.**
+	t.ok(INTERACTIVE.size() > 0, "클릭을 먹는 노드가 선언돼 있다 (%d개)" % INTERACTIVE.size())
+	for path: String in INTERACTIVE:
+		t.ok(root.get_node_or_null(path) != null, "선언된 %s 가 씬에 실재한다" % path)
+
+	# 🔴 창이 **닫힌 채로** 시작한다. 열린 채로 켜지면 첫 화면이 가려지고,
+	#  그 상태를 사용자가 「창이 안 닫힌다」로 읽는다.
+	var win := root.get_node_or_null("HUD/CircleWindow") as Control
+	t.ok(win != null and not win.visible, "조립창이 닫힌 채로 시작한다")
+
+	_window_leaves_the_stage_visible(t, root)
+	root.free()
+
+
+## 🔴🔴 **창이 무대를 다 가리면 「세상이 안 멈춘다」를 눈으로 확인할 수가 없다**(계획 위험 11).
+##  ⚠ 그리고 `HUD/Stats`와 겹치면 글씨가 섞인다(위험 12) — 둘 다 화면 문제라 **에러가 안 난다.**
+## 🔴 치수의 단일 소스가 `fx_tuning`이므로 **그 값을 잰다.** 씬의 offset을 재면 두 곳이 된다.
+func _window_leaves_the_stage_visible(t, root: Node) -> void:
+	var r: Rect2 = Fx.WINDOW_RECT
+	var vw := float(ProjectSettings.get_setting("display/window/size/viewport_width"))
+	var vh := float(ProjectSettings.get_setting("display/window/size/viewport_height"))
+	t.ok(vw > 0.0 and vh > 0.0, "뷰포트 크기를 읽었다 (%dx%d)" % [int(vw), int(vh)])
+	t.ok(r.size.x > 0.0 and r.size.y > 0.0, "조립창에 크기가 있다 (%dx%d)" % [
+		int(r.size.x), int(r.size.y)])
+	t.ok(r.position.x >= 0.0 and r.position.y >= 0.0 and r.end.x <= vw and r.end.y <= vh,
+		"조립창이 화면 안에 들어간다 (%s ~ %s)" % [r.position, r.end])
+	# 절반은 넉넉한 상한이다 — 「일부」의 하한선이지 손맛값이 아니다.
+	t.ok(r.size.x * r.size.y < vw * vh * 0.5,
+		"조립창이 화면의 절반을 안 넘는다 (%d%%)" % int(r.size.x * r.size.y * 100.0 / (vw * vh)))
+
+	var stats := root.get_node_or_null("HUD/Stats") as Control
+	t.ok(stats != null, "씬에 HUD/Stats 가 있다")
+	if stats == null:
+		return
+	var sr := Rect2(
+		Vector2(stats.offset_left, stats.offset_top),
+		Vector2(stats.offset_right - stats.offset_left,
+			stats.offset_bottom - stats.offset_top))
+	t.ok(not sr.intersects(r), "조립창이 HUD/Stats(%s)와 안 겹친다" % sr)
 
 
 ## 🔴🔴 **셰이더의 `palette[N]` 과 `Mat.SLOT_COUNT` 는 짝이다.**

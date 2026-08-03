@@ -12,6 +12,8 @@ signal reset_requested
 ## 🔴🔴 **조합을 번갈아 쏘는 것이 몇 초 안에 돼야 한다** — 그게 판정 1·2를 재는 유일한 방법이다.
 ##  ⚠ 여기는 **번호만** 넘긴다. 번호 → 문양 목록 표는 `stage.gd`에 있다(조립은 껍데기의 일이다).
 signal loadout_requested(n: int)
+## 조립창 열기/닫기(Tab). ⚠ **여는지 닫는지를 여기서 안 정한다** — 창이 제 상태를 안다.
+signal assembly_toggled
 
 ## 🔴 물리 키 → 조합 번호. 입력 맵을 안 지나므로 `project.godot`을 안 고치고,
 ##  그래서 **에디터 재시작이 필요 없다**(이 파일은 본편에 안 남는다).
@@ -46,6 +48,15 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey:
 		var k := event as InputEventKey
 		if not k.pressed or k.echo:
+			return
+		# 🔴 **조립창은 본편에 남으므로 입력 맵 액션이다** — 위 디버그 키(raw keycode)와 반대다.
+		#  이동·점프와 같은 칸이고, 그래서 `project.godot`에 `toggle_assembly`가 있다.
+		# ⚠ **Tab이 안 먹는 원인이 둘이다**: ① 창 안 `Control`이 포커스를 잡으면 `ui_focus_next`가
+		#  GUI에서 Tab을 먹어 여기 **안 온다** ② 입력 맵을 고친 뒤 에디터를 안 재시작했다.
+		#  🔴 증상이 똑같으니 ①(`focus_mode = NONE`)부터 확인해라.
+		if k.is_action_pressed("toggle_assembly"):
+			assembly_toggled.emit()
+			get_viewport().set_input_as_handled()
 			return
 		if PRESET_KEYS.has(k.physical_keycode):
 			loadout_requested.emit(int(PRESET_KEYS[k.physical_keycode]))
