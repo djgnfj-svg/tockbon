@@ -1,0 +1,39 @@
+[gd_scene load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://src/stage/stage.gd" id="1_stage"]
+[ext_resource type="Script" path="res://src/view/cell_renderer.gd" id="2_cells"]
+[ext_resource type="Script" path="res://src/stage/stage_input.gd" id="3_input"]
+[ext_resource type="Script" path="res://src/view/character_view.gd" id="4_char"]
+[ext_resource type="Script" path="res://src/view/spell_view.gd" id="5_spell"]
+[ext_resource type="Script" path="res://src/view/blast_fx.gd" id="6_blast"]
+
+[node name="Stage" type="Node2D"]
+script = ExtResource("1_stage")
+
+[node name="Camera2D" type="Camera2D" parent="."]
+position = Vector2(480, 270)
+
+[node name="CellRenderer" type="Sprite2D" parent="."]
+script = ExtResource("2_cells")
+
+[node name="CharacterView" type="Node2D" parent="."]
+script = ExtResource("4_char")
+
+[node name="SpellView" type="Node2D" parent="."]
+script = ExtResource("5_spell")
+
+[node name="BlastFx" type="Node2D" parent="."]
+script = ExtResource("6_blast")
+
+[node name="StageInput" type="Node" parent="."]
+script = ExtResource("3_input")
+
+[node name="HUD" type="CanvasLayer" parent="."]
+
+[node name="Stats" type="Label" parent="HUD"]
+offset_left = 8.0
+offset_top = 8.0
+offset_right = 900.0
+offset_bottom = 210.0
+mouse_filter = 2
+text = "…"

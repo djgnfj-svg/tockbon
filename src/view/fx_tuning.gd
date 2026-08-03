@@ -1,0 +1,196 @@
+extends RefCounted
+## 🔴🔴 **연출 상수 전부가 여기 있다. 다른 데 두지 마라.**
+##  흩어지면 사용자가 튜닝을 못 한다(v1 실측 — 위력이 두 배가 되는데 화면에서 바뀐 게 0개였다).
+##
+## 🔴 **여기 값은 계약이 아니다.** 클라마다 달라도 세상이 안 갈라진다 — 화면에만 닿는다.
+##  그래서 `src/view/` 안에 있고, `net_determinism`(= `src/sim/` 폴더 스캔)의 대상이 아니다.
+##  ⚠ v1은 시뮬 상수와 연출 상수를 한 파일에 두고 `SIM-BLOCK` **텍스트 마커**로 갈랐고,
+##   그 파일 주석이 스스로 「마커를 지우거나 늘리면 그물이 조용히 헛돈다」고 적었다.
+##   **폴더로 가르니 그 장치가 통째로 사라졌다.**
+##
+## ⚠ 흔들림 진폭은 **정수 px**로 써라 — `snap_2d_transforms_to_pixel`이 켜져 있어 소수부가 버려진다.
+
+const Tuning := preload("res://src/sim/sim_tuning.gd")
+const Glyph := preload("res://src/sim/glyph_defs.gd")
+
+# ─── 캐릭터 ───────────────────────────────────────────────────────
+## 🔴 몸통은 **채운 사각형 하나**다. 스프라이트가 아직 없고, 이 단계가 재는 것은
+##  「캐릭터가 부순 지형 위를 걸어 다니나」지 「캐릭터가 예쁘나」가 아니다.
+## ⚠ 지형(돌 0.36/0.34/0.31 · 나무 0.42/0.27/0.14)과 **색상환에서 멀어야** 눈이 즉시 가른다.
+const CHAR_BODY := Color(0.86, 0.90, 0.98)
+const CHAR_TRIM := Color(0.30, 0.44, 0.72)
+## 아래쪽 띠 두께(px). 「발」이 보이면 착지 순간이 눈에 잡힌다.
+const CHAR_TRIM_PX := 3.0
+
+# ─── 지팡이 ───────────────────────────────────────────────────────
+## 🔴 지팡이 회전은 **화면 쪽이라 float이 자유롭다.** 발사하는 **그 한 순간에만**
+##  `src/actor/aim.gd`가 정수로 양자화한다.
+## ⚠ 길이는 캐릭터(16px)보다 길어야 「무기」로 읽힌다. 너무 길면 조준점과 총구가 멀어져
+##  「쏜 데서 안 나간다」가 된다 — 18px가 그 사이다.
+const STAFF_LEN_PX := 18.0
+const STAFF_WIDTH_PX := 3.0
+const STAFF_COLOR := Color(0.55, 0.40, 0.24)
+
+## 🔴🔴 **총구 — 쏘기 전에도 무엇이 장착됐는지 보인다**(기획 「화면」).
+##  이게 없으면 지팡이가 상수 색 선 하나라 **조합을 바꿔도 화면이 한 픽셀도 안 변한다.**
+##
+## 두 축이 따로 논다. 하나로 합치면 「층이 늘었다」와 「순서가 다르다」가 뭉개진다:
+##  · **크기** = 층 수. 문양을 넣고 뺀 차이(판정 1)가 쏘기 전에 보인다
+##  · **색**   = 🔴 **맨 안쪽 층의 문양.** 확산→폭발과 폭발→확산은 층 수가 같으므로
+##    **색만이 순서를 나른다** — GDD가 「순서가 화면에 안 보이면 규칙을 영영 못 배운다」고 적은 자리다
+const MUZZLE_PX := 2.5
+const MUZZLE_PER_LAYER_PX := 2.0
+const MUZZLE_GLOW_RATIO := 2.0
+const MUZZLE_GLOW_A := 0.5
+
+## 문양별 총구 색. 🔴 **문양 하나 추가 = 여기 한 줄**(계획의 「연출이 다르면 fx_tuning 한 줄」).
+## ⚠ 비어 있으면(문양 없음) 룬 색으로 떨어진다 — 아래 `muzzle_tint`.
+const GLYPH_TINT: Dictionary = {
+	# 🔴 확산과 폭발이 **색상환에서 멀어야** 키 4(확산→폭발)와 키 5(폭발→확산)의 총구가
+	#  한눈에 갈린다. 층 수가 같으므로 **색만이 순서를 나른다.**
+	Glyph.GLYPH_SPREAD: Color(0.45, 0.85, 1.0),
+	Glyph.GLYPH_BLAST: Color(1.0, 0.45, 0.15),
+}
+
+## 정의가 없는 문양의 색. 🔴 **일부러 마젠타다** — 문양을 늘렸는데 여기를 안 늘리면
+##  총구가 비명을 지른다(`cell_materials.gd`의 `MISSING_RGB`와 같은 이유).
+const GLYPH_TINT_MISSING := Color(1.0, 0.0, 1.0)
+
+# ─── 🔴🔴 확산 세대 표 — 화면 쪽 절반 ────────────────────────────
+## `sim_tuning.SIM_SIZES`와 **길이가 같아야 하고 방향도 같아야 한다**(둘 다 세대마다 감소).
+##
+## 🔴🔴 **이 표가 「작은 것들이 약해 보이나」의 전부다.** 시뮬에서 반경이 절반이 됐는데 여기가
+##  고정이면 화면에서는 아무것도 안 변하고, **그게 정확히 v1이 죽은 방식이다**
+##  (위력이 두 배가 됐는데 화면에서 바뀐 게 0개였다). `net_tables`가 두 표의 길이와 단조를 같이 잰다.
+## 🔴 값을 같게 두지 마라 — 그물이 「일부러」와 「깜빡했다」를 구별하지 못한다.
+##
+##   bolt_px      머리 반경. 날아가는 동안 세대가 눈에 보이는 유일한 축이다
+##   trail_ticks  자취가 기억하는 틱 수(= 꼬리 길이)
+##   flash_px     폭발 섬광의 최종 반경
+##   shake_px     화면 흔들림 진폭(정수 px)
+const FX_SIZES: Array[Dictionary] = [
+	{"bolt_px": 4.0, "trail_ticks": 12, "flash_px": 108.0, "shake_px": 5},
+	{"bolt_px": 2.0, "trail_ticks": 8, "flash_px": 54.0, "shake_px": 2},
+]
+
+# ─── 투사체 ───────────────────────────────────────────────────────
+## 🔴 머리 반경은 위 표에서 나온다.
+##  ⚠ 4px 셀 하나가 지형의 최소 단위이므로 탄이 그보다 작으면 「지형에 묻힌다」 —
+##   세대 1이 2px인 것은 **일부러**다. 작은 것은 묻혀야 「약하다」로 읽힌다.
+const BOLT_GLOW_RATIO := 2.4
+const BOLT_GLOW_A := 0.45
+
+## 🔴🔴 **자취는 v1(4~8틱)보다 길다.** 항력+중력을 넣었으니 꼬리가 길어야 **처지는 게 보인다** —
+##  짧으면 궤적이 직선처럼 읽히고, 그러면 판정 3이 통째로 안 나온다.
+##  ⚠ 12틱 = 0.6초. 20Hz 시뮬에서 탄이 첫 틱에 10셀(40px)을 뛰므로 초반 꼬리가 480px까지 간다 —
+##   화면 절반이다. 그래서 굵기·알파가 꼬리 쪽으로 같이 줄어든다.
+const TRAIL_PX := 5.0
+## 꼬리 끝의 알파(머리 쪽이 1.0). 0에 가까울수록 뾰족하게 사라진다.
+const TRAIL_TAIL_A := 0.12
+
+## 🔴 1px 미만은 안 그린다. **렌더 하한이라 손맛값이 아니다** — 두 군데가 같은 뜻의
+##  매직넘버를 각자 들고 있으면 반드시 갈라진다.
+const MIN_DRAW_PX := 1.0
+
+# ─── 폭발 ─────────────────────────────────────────────────────────
+## 🔴🔴 **판정 2가 여기서 갈린다.** 재는 것은 「여덟 번 터지는 리듬 vs 한 번 크게」이므로,
+##  섬광이 오래 남으면 여덟 번이 **한 덩어리로 뭉개져** 두 조합이 같아 보인다.
+##  ⇒ 지속을 짧게 두고, 겹치는 것은 개수 상한으로 자른다.
+##
+## ⚠ 값은 v1 P2(`rd 12`, 같은 반경)의 실측 튜닝을 그대로 가져왔다 —
+##  섬광 108px · 0.21초 · 흔들림 5px · 0.20초. 다시 재려면 비싸다.
+## 🔴 섬광 반경이 구멍 반경(12셀 = 48px)의 **2.25배**인 게 요점이다. 같게 두면 「구멍이 커졌다」로만
+##  보이고 「터졌다」가 안 읽힌다. ⇒ 크기는 위 `FX_SIZES`가 세대마다 들고 있다.
+const FLASH_SEC := 0.21
+## 뜨는 순간의 크기(최종 반경 대비). 작을수록 「퍼진다」, 1에 가까울수록 「번쩍한다」.
+const FLASH_START := 0.35
+## 겉 무리 밝기 · 속심 반경 비율. 속심이 「하얗게 타는 심지」다.
+const FLASH_GLOW_A := 0.55
+const FLASH_CORE_RATIO := 0.34
+
+## 동시 섬광 수 상한. 넘치면 **가장 오래된 것부터** 버린다 — 새 것을 버리면
+## 마지막 폭발이 조용히 안 보인다.
+## ⚠ 확산 8발이 두 틱에 나눠 터지므로(예산 4) 8은 상한에 안 걸린다. 16은 여유다.
+const FLASH_MAX := 16
+
+## 화면 흔들림. ⚠ **정수 px다** — `snap_2d_transforms_to_pixel`이 켜져 있어 소수부가
+##  어차피 버려진다. float으로 조이면 「0.5px로 줄였는데 아무 일도 안 난다」가 된다.
+## 🔴 **겹치는 게 아니라 더 센 쪽이 이긴다**(`_kick`). 더하면 여덟 번 터질 때 화면이 날아가고,
+##  그러면 「여덟 번인지 한 번인지」를 애초에 못 읽는다.
+const SHAKE_SEC := 0.20
+## 감쇠 곡선. 1=선형 · 클수록 **초반이 세고 빨리 죽는다**(타격감이 앞에 몰린다).
+const SHAKE_DECAY_POW := 1.6
+
+# ─── 불 ───────────────────────────────────────────────────────────
+## 🔴🔴 **타는 셀은 재료 색을 덮어쓴다.** 나무 색(0x6B4524)에 살짝 얹는 정도로는
+##  「나무가 좀 밝다」로 보이고, 그러면 「불이 번진다」가 화면에 안 나온다 —
+##  판정 5의 절반이 여기서 결정된다.
+## ⚠ 셀 격자는 **가산 합성이 아니다**(스프라이트 하나다) — 알파는 밝기가 아니라 진짜 알파다.
+const FIRE_LO := Color(0.75, 0.18, 0.05, 1.0)
+const FIRE_HI := Color(1.0, 0.80, 0.30, 1.0)
+
+## 깜빡임 속도(rad/s). 🔴 셀마다 위상이 흩어져 있으므로 이건 「면이 일렁이는 속도」다.
+## ⚠ 너무 빠르면 4px 셀에서 지글거림(노이즈)으로 보이고 불로 안 읽힌다.
+const FIRE_FLICKER_HZ := 7.0
+
+# ─── 룬 ───────────────────────────────────────────────────────────
+## 🔴 **여기가 룬의 화면 쪽 몫이다** — 규칙은 문양이 정한다.
+## ⚠ 룬이 화면만 바꾸는 건 아니다. 세상에 닿는 쪽(착탄점 점화)은 `sim_tuning.ELEM_DEFS`에 있다.
+## ⚠ 렌더가 **가산 합성**이라 알파는 밝기로 읽힌다. 1.0을 넘길 필요가 없다.
+const ELEM_FX: Dictionary = {
+	Tuning.ELEM_FIRE: {"core": Color(1.0, 0.92, 0.66), "glow": Color(1.0, 0.48, 0.12)},
+}
+
+## 정의가 없는 룬의 색. 🔴 **일부러 마젠타다** — 룬을 늘렸는데 여기를 안 늘리면
+##  화면이 비명을 지른다(`cell_materials.gd`의 `MISSING_RGB`와 같은 이유).
+const ELEM_FX_MISSING: Dictionary = {
+	"core": Color(1.0, 0.0, 1.0), "glow": Color(1.0, 0.0, 1.0),
+}
+
+static func elem_fx(element: int) -> Dictionary:
+	return ELEM_FX.get(element, ELEM_FX_MISSING)
+
+
+# ─── 세대 표 읽기 ─────────────────────────────────────────────────
+# ⚠ `sim_tuning`의 클램프와 **같은 규칙**이다. 표 길이가 갈리면 `net_tables`가 잡는다.
+
+static func bolt_px(gen: int) -> float:
+	return float(FX_SIZES[_gen_row(gen)]["bolt_px"])
+
+
+static func trail_ticks(gen: int) -> int:
+	return int(FX_SIZES[_gen_row(gen)]["trail_ticks"])
+
+
+static func flash_px(gen: int) -> float:
+	return float(FX_SIZES[_gen_row(gen)]["flash_px"])
+
+
+static func shake_px(gen: int) -> int:
+	return int(FX_SIZES[_gen_row(gen)]["shake_px"])
+
+
+static func _gen_row(gen: int) -> int:
+	return clampi(gen, 0, FX_SIZES.size() - 1)
+
+
+## 총구 반경. 층이 많을수록 크다.
+static func muzzle_radius(glyphs: int) -> float:
+	return MUZZLE_PX + MUZZLE_PER_LAYER_PX * float(_layers(glyphs))
+
+
+## 총구 색 = **맨 안쪽 층**의 문양. 목록이 비면 룬 색으로 떨어진다.
+## 🔴 안쪽부터 실행되므로 「먼저 무슨 일이 일어나나」가 곧 이 색이다(GDD 문양 해석 순서).
+static func muzzle_tint(glyphs: int, element: int) -> Color:
+	if glyphs == Glyph.GLYPH_NONE:
+		return ELEM_FX.get(element, ELEM_FX_MISSING)["glow"]
+	return GLYPH_TINT.get(Glyph.first(glyphs), GLYPH_TINT_MISSING)
+
+
+static func _layers(glyphs: int) -> int:
+	var n := 0
+	var cur := glyphs
+	while cur != Glyph.GLYPH_NONE:
+		n += 1
+		cur = Glyph.rest(cur)
+	return n

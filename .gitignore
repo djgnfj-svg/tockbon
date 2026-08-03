@@ -10,6 +10,9 @@ Godot_v*.exe
 # 도구가 쓰는 락 파일 — 로컬 상태라 리포에 안 남긴다.
 .claude/scheduled_tasks.lock
 
+# git worktree — 자기 브랜치에 이미 커밋돼 있다. 여기 넣으면 같은 파일이 두 번 들어간다.
+.claude/worktrees/
+
 # MCP 설정 — 엔진·Aseprite 실행 경로가 이 PC 절대경로로 박혀 있다.
 .mcp.json
 
