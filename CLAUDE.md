@@ -10,9 +10,9 @@
 
 | 위치 | 뜻 |
 |---|---|
-| `docs/plans/backlog/` | 기획 완료, 대기 |
-| `docs/plans/active/` | 구현 중 |
-| `docs/plans/done/` | 완료 |
+| `docs/plans/1.ready/` | 기획 완료, 대기 |
+| `docs/plans/2.active/` | 구현 중 |
+| `docs/plans/3.done/` | 완료 |
 
 한 문서는 셋 중 한 곳에만 있다. 상태가 바뀌면 **파일을 옮기고** 문서 안의 `**상태**:` 줄도 같이 고친다.
 

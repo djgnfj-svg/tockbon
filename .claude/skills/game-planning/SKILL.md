@@ -1,6 +1,6 @@
 ---
 name: game-planning
-description: tockbon의 게임 기능을 사용자와 대화로 기획하고 구현 가능한 명세 문서로 확정한다. 사용자가 새 기능 아이디어나 게임 방향을 던질 때, "기획하자" "브레인스토밍" "이런 거 어때" "이 기능 만들고 싶다" 같은 말을 할 때, 아직 구현 방법이 아니라 무엇을 만들지가 정해지지 않았을 때 사용한다. 산출물은 docs/plans/backlog/ 의 기획 문서이고, 구현 팀은 그 문서를 입력으로 받는다.
+description: tockbon의 게임 기능을 사용자와 대화로 기획하고 구현 가능한 명세 문서로 확정한다. 사용자가 새 기능 아이디어나 게임 방향을 던질 때, "기획하자" "브레인스토밍" "이런 거 어때" "이 기능 만들고 싶다" 같은 말을 할 때, 아직 구현 방법이 아니라 무엇을 만들지가 정해지지 않았을 때 사용한다. 산출물은 docs/plans/1.ready/ 의 기획 문서이고, 구현 팀은 그 문서를 입력으로 받는다.
 ---
 
 # 게임 기획
@@ -100,12 +100,12 @@ description: tockbon의 게임 기능을 사용자와 대화로 기획하고 구
 
 ## 산출물
 
-`docs/plans/backlog/<기능이름>.md`
+`docs/plans/1.ready/<기능이름>.md`
 
 ```markdown
 # <기능 이름>
 
-**상태**: backlog
+**상태**: ready
 **한 줄**: <무엇이 일어나나>
 
 ## 왜
@@ -123,9 +123,9 @@ description: tockbon의 게임 기능을 사용자와 대화로 기획하고 구
 ## 상태 이동
 
 ```
-docs/plans/backlog/   기획됨, 대기
-docs/plans/active/    구현 중 — "이거 구현하자" 하면 여기로
-docs/plans/done/      완료
+docs/plans/1.ready/   기획됨, 대기
+docs/plans/2.active/  구현 중 — "이거 구현하자" 하면 여기로
+docs/plans/3.done/    완료
 ```
 
 문서 안의 `**상태**:` 줄도 같이 고친다.

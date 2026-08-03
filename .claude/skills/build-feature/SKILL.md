@@ -1,6 +1,6 @@
 ---
 name: build-feature
-description: 기획 문서 하나를 팀으로 구현한다. 사용자가 "이거 구현하자" "만들어줘" "개발 시작" 이라고 하거나 docs/plans/backlog/ 의 문서를 지목할 때 사용한다. spec, builder, verify-run, verify-look, verify-read 다섯 에이전트를 띄우고 조율한다. 재시도, 이어서 진행, 검증만 다시 하는 경우에도 사용한다.
+description: 기획 문서 하나를 팀으로 구현한다. 사용자가 "이거 구현하자" "만들어줘" "개발 시작" 이라고 하거나 docs/plans/1.ready/ 의 문서를 지목할 때 사용한다. spec, builder, verify-run, verify-look, verify-read 다섯 에이전트를 띄우고 조율한다. 재시도, 이어서 진행, 검증만 다시 하는 경우에도 사용한다.
 ---
 
 # 기능 구현 팀 운영
@@ -31,12 +31,12 @@ SendMessage(to: "builder", ...)                   그 뒤로는 계속 이것
 ## 흐름
 
 ```
-1. 기획 확인      backlog/ 문서를 고른다
-2. spec           구현 계획 → active/ 로 이동
+1. 기획 확인      1.ready/ 문서를 고른다
+2. spec           구현 계획 → 2.active/ 로 이동
                   막히면 main에 질문 → 내가 사용자에게 묻는다
 3. builder        계획대로 구현
 4. 검증 셋 동시    verify-run · verify-look · verify-read
-5. 판정           전부 통과 → done/ 으로
+5. 판정           전부 통과 → 3.done/ 으로
                   하나라도 실패 → 해당 내용을 builder에 SendMessage (4로)
 ```
 
@@ -44,7 +44,7 @@ SendMessage(to: "builder", ...)                   그 뒤로는 계속 이것
 
 **1. 시작 전**
 
-- `docs/plans/active/` 에 이미 있는 게 있으면 그것부터 끝낸다. 동시에 두 개를 굴리지 않는다.
+- `docs/plans/2.active/` 에 이미 있는 게 있으면 그것부터 끝낸다. 동시에 두 개를 굴리지 않는다.
 - 문서에 `## 판정` 과 `## 화면` 이 비어 있으면 여기서 멈춘다. 검증자가 판정할 근거가 없다.
 
 **2. spec**
@@ -68,7 +68,7 @@ SendMessage(to: "builder", ...)                   그 뒤로는 계속 이것
 
 **5. 판정**
 
-- **전부 통과** → 문서를 `done/` 으로 옮기고 `**상태**:` 를 고친다. 사용자에게 보고한다.
+- **전부 통과** → 문서를 `3.done/` 으로 옮기고 `**상태**:` 를 고친다. 사용자에게 보고한다.
 - **실패** → 실패 내용을 정리해 `SendMessage(to: "builder")`. 다시 4로.
 - **판정 불가** (기준이 비었거나 애매) → spec에 되돌리거나 사용자에게 묻는다.
 
@@ -89,6 +89,6 @@ SendMessage(to: "builder", ...)                   그 뒤로는 계속 이것
 
 ## 이어서 하는 경우
 
-- `active/` 문서가 있고 팀이 죽어 있으면: 문서의 진행 상황을 읽고 필요한 에이전트만 새로 띄운다.
+- `2.active/` 문서가 있고 팀이 죽어 있으면: 문서의 진행 상황을 읽고 필요한 에이전트만 새로 띄운다.
 - 검증만 다시 하고 싶으면: 검증 셋만 띄운다. builder는 건드리지 않는다.
 - 팀이 살아 있으면: 그냥 `SendMessage` 한다.
