@@ -80,6 +80,7 @@ func run(t) -> void:
 	_cap_blocks_before_placing(t)
 	_both_ways_agree(t)
 	_presets_still_work(t)
+	_preset_restores_everything(t)
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -1063,6 +1064,46 @@ func _presets_still_work(t) -> void:
 
 	# 🔴 시작 상태의 룬이 불이다. 여기가 바뀌면 발사의 룬이 조용히 바뀐다.
 	t.eq(SpellCircle.new().element(), Tuning.ELEM_FIRE, "새 진의 룬 자리에 불이 들어 있다")
+
+	# 🔴🔴 **시작 상태와 프리셋이 같은 두 상수에서 나온다**(계획 §8). 두 곳에 적으면
+	#  「새로 켜면 불인데 키 1을 누르면 다른 룬」이 **에러 없이** 생긴다.
+	t.eq(SpellCircle.new().circle_id(), SpellCircle.DEFAULT_CIRCLE, "시작 진이 기본 지급이다")
+	t.eq(SpellCircle.new().rune_at(0), SpellCircle.DEFAULT_RUNE, "시작 룬이 기본 지급이다")
+	# ⚠ 껍데기가 프리셋을 **한 함수로** 넣나 — 세 줄로 풀면 순서를 거기서 다시 정하게 된다.
+	t.ok(_read("res://src/stage/stage.gd").contains("apply_preset("),
+		"디버그 키가 `apply_preset()` 으로 들어간다")
+
+
+## 🔴🔴 **프리셋의 순서 계약 — 진 → 룬 → 문양.**
+##
+## ⚠ **진이 그대로면 순서가 뒤집혀도 안 보인다**(`set_circle`이 같은 진에 no-op이라 층을 안 비운다).
+##  ⇒ **진을 뺀 상태에서 재야** 드러난다. 실측으로 그랬다 — 순서를 뒤집어 놓고 그물을 돌렸더니
+##   프리셋 검사 스물이 전부 초록이었다(전부 `set_from_packed`만 부르고 있었다).
+##
+## 🔴 그리고 이게 **「진을 뺀 사용자가 갇히지 않는다」**를 재는 자리이기도 하다 —
+##  프리셋이 진까지 놓으므로 **키 1이 곧 조립 리셋**이다.
+func _preset_restores_everything(t) -> void:
+	var c := SpellCircle.new()
+	c.set_circle(CircleDefs.CIRCLE_NONE)
+	t.eq(c.layer_count(), 0, "진을 빼면 층이 0이다")
+	t.ok(not c.can_fire(), "진을 빼면 못 쏜다")
+
+	var two: Array[int] = [Glyph.GLYPH_SPREAD, Glyph.GLYPH_BLAST]
+	t.ok(c.apply_preset(SpellCircle.DEFAULT_CIRCLE, SpellCircle.DEFAULT_RUNE,
+		Glyph.pack(two)), "진이 없는 상태에서도 프리셋이 들어간다")
+	t.eq(c.circle_id(), SpellCircle.DEFAULT_CIRCLE, "프리셋이 진을 되돌린다")
+	t.eq(c.rune_at(0), SpellCircle.DEFAULT_RUNE, "프리셋이 룬을 되돌린다")
+	# 🔴 **순서가 뒤집히면 여기가 빈다** — 문양을 먼저 넣으면 층이 0이라 못 들어가고,
+	#  그 뒤에 진이 놓여도 문양은 이미 버려졌다.
+	t.eq(c.glyph_list(), two, "프리셋이 문양까지 놓는다 (순서가 진 → 룬 → 문양이다)")
+	t.ok(c.can_fire(), "프리셋 뒤에 쏠 수 있다 (키 1이 곧 조립 리셋이다)")
+
+	# 룬만 빠진 상태에서도 되돌린다.
+	c.set_rune(0, SpellCircle.RUNE_EMPTY)
+	t.ok(not c.can_fire(), "룬을 빼면 못 쏜다")
+	c.apply_preset(SpellCircle.DEFAULT_CIRCLE, SpellCircle.DEFAULT_RUNE, Glyph.GLYPH_NONE)
+	t.ok(c.can_fire(), "프리셋이 빈 룬을 되돌린다")
+	t.eq(c.glyph_list(), [] as Array[int], "빈 프리셋은 문양을 비운다")
 
 
 # ══════════════════════════════════════════════════════════════════

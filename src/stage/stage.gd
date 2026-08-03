@@ -221,7 +221,14 @@ func _set_loadout(n: int) -> void:
 		return
 	var list: Array[int] = []
 	list.assign(LOADOUTS[n])
-	_circle.set_from_packed(Glyph.pack(list))
+	# 🔴🔴 **프리셋이 진·룬까지 놓는다.** 문양만 놓으면 진을 뺀 사용자가 **갇힌다** —
+	#  키 다섯이 전부 죽고 빠져나올 길이 조립창 하나뿐이다.
+	#  ⇒ 진까지 놓으므로 **키 1이 곧 조립 리셋**이다.
+	# ⚠ 순서(진 → 룬 → 문양)는 `apply_preset` **안에** 갇혀 있다. 여기서 세 줄로 풀면
+	#  뒤집는 날 문양이 조용히 사라진다.
+	# 🔴 표(`LOADOUTS`)를 안 넓혔다 — 진·룬은 **기본 지급 상수 둘**에서 나온다.
+	_circle.apply_preset(
+		SpellCircle.DEFAULT_CIRCLE, SpellCircle.DEFAULT_RUNE, Glyph.pack(list))
 
 
 func _enqueue(cmd: Dictionary) -> void:

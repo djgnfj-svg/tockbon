@@ -41,6 +41,12 @@ const Tuning := preload("res://src/sim/sim_tuning.gd")
 ## 🔴 그물이 **`ELEM_ALL` 안에 이 값이 없다**를 잰다 — 그 한 줄이 위 함정을 계약으로 못박는다.
 const RUNE_EMPTY := -1
 
+## 🔴🔴 **기본 지급**(GDD 「기본 지급 진: 동그라미, 2층」).
+##  **시작 상태와 프리셋이 이 둘에서만 나온다** — 두 곳에 적으면 갈라지고,
+##  그때 「새로 켜면 불인데 키 1을 누르면 다른 룬」 같은 것이 **에러 없이** 생긴다.
+const DEFAULT_CIRCLE := CircleDefs.CIRCLE_ROUND
+const DEFAULT_RUNE := Tuning.ELEM_FIRE
+
 var _circle_id := CircleDefs.CIRCLE_NONE
 ## 안쪽이 0번(= 1층)이다. `GLYPH_NONE` = 빈 층.
 var _layers: Array[int] = []
@@ -48,12 +54,12 @@ var _layers: Array[int] = []
 var _runes: Array[int] = []
 
 
-func _init(circle_id: int = CircleDefs.CIRCLE_ROUND) -> void:
+func _init(circle_id: int = DEFAULT_CIRCLE) -> void:
 	set_circle(circle_id)
-	# 🔴 **시작 상태는 진·룬이 채워져 있다**(GDD 「기본 지급 진: 동그라미, 2층」).
-	#  ⚠ 빈 룬으로 켜지면 게임이 「못 쏘는」 상태로 시작하고, 그건 고장으로 읽힌다.
+	# 🔴 **시작 상태는 진·룬이 채워져 있다.** ⚠ 빈 룬으로 켜지면 게임이 「못 쏘는」 상태로
+	#  시작하고, 그건 고장으로 읽힌다.
 	for slot in _runes.size():
-		set_rune(slot, Tuning.ELEM_FIRE)
+		set_rune(slot, DEFAULT_RUNE)
 
 
 func circle_id() -> int:
@@ -233,6 +239,29 @@ func glyph_list() -> Array[int]:
 ##  직접 시프트해서 아끼면 그 순간 규칙이 두 벌이 된다.
 func packed_glyphs() -> int:
 	return Glyph.pack(glyph_list())
+
+
+## 🔴🔴 **프리셋 — 진·룬·문양을 한 번에 놓는다. 순서가 이 함수 안에 갇힌다.**
+##
+## ```
+## 진 → 룬 → 문양      ← 🔴 이 순서여야 한다
+## ```
+##
+## ⚠ **뒤집으면 문양을 채운 뒤 진이 그걸 비운다**(`set_circle`이 층을 전부 비운다).
+##  **에러가 하나도 안 난다** — 키를 눌렀는데 문양이 없는 마법진이 된다.
+## 🔴 그래서 호출부가 순서를 아는 대신 **여기 한 곳에 가둔다.** 호출부마다 세 줄을 적게 두면
+##  그중 하나가 반드시 틀린다.
+##
+## ⚠ **디버그 키가 진·룬까지 놓는 이유**: 진을 뺀 사용자가 **갇히지 않게** 하려고다.
+##  프리셋이 문양만 놓으면 진이 없을 때 키 다섯이 전부 죽고 빠져나올 길이 조립창뿐이다.
+##  ⇒ 진까지 놓으면 **키 1이 곧 조립 리셋**이 된다.
+## ⚠ 룬을 **모든 자리에 같은 것으로** 채운다 — 룬이 1종이라 지금은 뜻이 하나다.
+##  🔴 룬이 여러 종이 되는 날 프리셋이 룬 **목록**을 받아야 한다.
+func apply_preset(circle_id: int, rune_id: int, packed: int) -> bool:
+	set_circle(circle_id)
+	for slot in _runes.size():
+		set_rune(slot, rune_id)
+	return set_from_packed(packed)
 
 
 ## 🔴🔴 **디버그 키가 들어오는 문이다.** 앞 층부터 조밀하게 채운다 —

@@ -31,16 +31,19 @@ const Book := preload("res://src/view/book_layout.gd")
 const Palette := preload("res://src/view/palette_layout.gd")
 const Glyph := preload("res://src/sim/glyph_defs.gd")
 const SpellCircle := preload("res://src/actor/spell_circle.gd")
+## 🔴 진을 **빼는** 값이 여기서 온다 — 창이 `0`을 박으면 예약값이 두 곳이 된다.
+const CircleDefs := preload("res://src/sim/circle_defs.gd")
 
 ## 🔴🔴 **사본이 아니라 참조다** — 총구와 **같은 것**을 읽는다(계획 §1의 단일 소스).
 ##  디버그 키 4↔5를 누르면 그림이 뒤집히는 것이 그 증거고, 사본을 두면 그 증거가 사라진다.
 ## ⚠ **읽기만 한다.** 이 단계는 **클릭으로 못 놓는다**(단계 4).
 var _circle: SpellCircle = null
 
-## 지금 고른 팔레트 항목. `GLYPH_NONE`이면 아무것도 안 골랐다.
-## ⚠ **문양만 고른다** — 진·룬을 놓고 빼는 것은 단계 5다. 그래서 종류를 안 들고 문양 id만 든다.
-##  🔴 종류가 늘면 여기가 `{kind, item}` 이 된다. 그때 이 한 줄이 바뀐다.
-var _picked := Glyph.GLYPH_NONE
+## 지금 고른 팔레트 항목. `_picked_kind < 0`이면 아무것도 안 골랐다.
+## 🔴 **종류까지 든다** — 진·룬·문양 셋이 다 골라지므로 항목 id만으로는 무엇인지 모른다.
+##  ⚠ 딕셔너리가 아니라 정수 둘인 이유: 키 오타가 원리적으로 없고 할당도 없다.
+var _picked_kind := -1
+var _picked_item := -1
 
 
 func setup(circle: SpellCircle) -> void:
@@ -68,8 +71,8 @@ func _ready() -> void:
 func toggle() -> void:
 	visible = not visible
 	# ⚠ 닫을 때 고른 것을 놓는다 — 안 놓으면 다시 열었을 때 **아무도 안 고른 줄 아는데**
-	#  다음 슬롯 클릭이 옛 문양을 놓는다.
-	_picked = Glyph.GLYPH_NONE
+	#  다음 슬롯 클릭이 옛 항목을 놓는다.
+	_clear_pick()
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -106,47 +109,80 @@ func _gui_input(event: InputEvent) -> void:
 
 
 ## 팔레트에서 고른다. 같은 것을 다시 누르면 고르기를 놓는다.
-## ⚠ **문양만이다** — 진·룬 칸은 그려지지만 아직 안 골라진다(단계 5).
 func _click_palette(pal: Rect2, local: Vector2) -> void:
 	var hit := Palette.item_at(pal.size, local)
 	if hit.is_empty():
 		return
-	if int(hit["kind"]) != Palette.KIND_GLYPH:
-		return
-	var id := int(hit["item"])
+	var kind := int(hit["kind"])
+	var item := int(hit["item"])
 	# 🔴🔴 **못 놓는 것은 애초에 안 골라진다.** 골라지고 나서 슬롯이 안 받으면
 	#  「눌렀는데 아무 일도 안 난다」가 되고 그게 고장으로 읽힌다(기획).
-	if not _can_pick(id):
+	if not _can_pick(kind, item):
 		return
-	_picked = Glyph.GLYPH_NONE if _picked == id else id
+	if _picked_kind == kind and _picked_item == item:
+		_clear_pick()
+		return
+	_picked_kind = kind
+	_picked_item = item
 
 
 ## 슬롯을 누른다. 🔴 고른 게 있으면 **놓고**, 없으면 **뺀다**(계획 §9-1).
-## ⚠ 규칙이 하나여야 한다 — 종류마다 다르면 배울 게 셋이 된다.
+##
+## 🔴🔴 **세 종류가 같은 규칙이다.** 종류마다 다르면 배울 게 셋이 된다.
+## ⚠ **안쪽부터 본다** — 진 슬롯은 테두리 안 전체라 층·룬 자리를 먼저 안 보면 그것들을 다 먹는다.
 func _click_circle(page: Rect2, local: Vector2) -> void:
 	var area := Layout.circle_area(page.size)
-	var layer := Layout.layer_at(_circle.circle_id(), area, local)
-	if layer < 0:
+	var id := _circle.circle_id()
+
+	var layer := Layout.layer_at(id, area, local)
+	if layer >= 0:
+		_place_or_clear(Palette.KIND_GLYPH, func(v: int) -> void:
+			_circle.place_glyph(layer, v), Glyph.GLYPH_NONE)
 		return
-	if _picked == Glyph.GLYPH_NONE:
-		_circle.place_glyph(layer, Glyph.GLYPH_NONE)
+
+	var slot := Layout.rune_slot_at(id, area, local)
+	if slot >= 0:
+		_place_or_clear(Palette.KIND_RUNE, func(v: int) -> void:
+			_circle.set_rune(slot, v), SpellCircle.RUNE_EMPTY)
 		return
-	# ⚠ `place_glyph`가 false면 **조용히** 아무 일도 안 한다 — 정상 조작이라 짖으면 안 된다.
-	#  🔴 여기 오기 전에 팔레트가 이미 막았으므로 실패는 원리적으로 드물다.
-	if _circle.place_glyph(layer, _picked):
-		# 고르고 → 놓는다가 한 동작이다. 놓았으면 손을 비운다.
-		_picked = Glyph.GLYPH_NONE
+
+	if Layout.frame_has_point(area, local):
+		_place_or_clear(Palette.KIND_CIRCLE, func(v: int) -> void:
+			_circle.set_circle(v), CircleDefs.CIRCLE_NONE)
 
 
-## 이 문양을 지금 고를 수 있나 — 🔴 **빈 층 중에 받아 줄 곳이 하나라도 있나.**
+## 🔴 **놓기와 빼기의 규칙이 여기 한 곳에 있다.** 종류마다 적으면 세 벌이 되고,
+##  그중 하나만 고치는 날 「문양은 빼지는데 룬은 안 빠진다」가 된다.
+##  ⚠ 고른 것이 **다른 종류**면 아무 일도 안 한다 — 룬을 골라 층에 놓는 것은 뜻이 없다.
+func _place_or_clear(kind: int, put: Callable, empty: int) -> void:
+	if _picked_kind < 0:
+		put.call(empty)
+		return
+	if _picked_kind != kind:
+		return
+	put.call(_picked_item)
+	# 고르고 → 놓는다가 한 동작이다. 놓았으면 손을 비운다.
+	_clear_pick()
+
+
+func _clear_pick() -> void:
+	_picked_kind = -1
+	_picked_item = -1
+
+
+## 이 항목을 지금 고를 수 있나.
 ##
-## ⚠ 제약은 `glyph_defs.DEFS`에 있고 여기서 **다시 안 적는다** — `can_place_glyph`를 부른다.
-##  적으면 규칙이 두 벌이 되고, `net_circle`의 양방향 일치가 재던 것이 무의미해진다.
+## 🔴 **제약이 있는 것은 문양뿐이다** — 빈 층 중에 받아 줄 곳이 하나라도 있나.
+##  ⚠ 제약은 `glyph_defs.DEFS`에 있고 여기서 **다시 안 적는다**(`can_place_glyph`를 부른다).
+##   적으면 규칙이 두 벌이 되고 `net_circle`의 양방향 일치가 재던 것이 무의미해진다.
 ## ⚠ **빈 층만 본다.** 확산이 1층에 있을 때 1층에 덮어쓰는 것은 규칙상 되지만, 그걸 허용하면
 ##  「확산이 있는데 확산이 눌린다」로 보인다. ⇒ 옮기려면 먼저 빼는 것이 한 규칙이다.
-func _can_pick(glyph_id: int) -> bool:
+## ⚠ 진·룬에는 제약이 없다 — 늘 고를 수 있다(계획 §2의 「놓는 규칙은 종류마다 다르다」).
+func _can_pick(kind: int, item_id: int) -> bool:
+	if kind != Palette.KIND_GLYPH:
+		return true
 	for i in _circle.layer_count():
-		if _circle.glyph_at(i) == Glyph.GLYPH_NONE and _circle.can_place_glyph(i, glyph_id):
+		if _circle.glyph_at(i) == Glyph.GLYPH_NONE and _circle.can_place_glyph(i, item_id):
 			return true
 	return false
 
@@ -245,8 +281,10 @@ func _draw_rune_slot(area: Rect2, circle_id: int) -> void:
 	for i in slots.size():
 		var rune_id := _circle.rune_at(i)
 		if rune_id == SpellCircle.RUNE_EMPTY:
-			# ⚠ 룬의 빈 자리는 **「못 쏜다」**(경고)지 「놓을 수 있다」(초대)가 아니다 —
-			#  층의 빈 자리와 **뜻이 달라서** 그림도 다르다(`fx_tuning.SLOT_EMPTY` 주석).
+			# 🔴🔴 **「못 쏜다」를 말하는 셋째 장치다**(§3.5 — 총구·HUD는 단계 1에 이미 섰다).
+			#  ⚠ 룬의 빈 자리는 **경고**지 「놓을 수 있다」(초대)가 아니다 —
+			#   층의 빈 자리(`+`)와 **뜻이 달라서 그림도 다르다.**
+			#   🔴 총구가 꺼질 때와 **같은 회색**이라 두 화면이 같은 말을 한다.
 			draw_circle(slots[i], r, Fx.MUZZLE_DEAD, false, Fx.MUZZLE_DEAD_WIDTH_PX)
 			continue
 		_draw_rune_symbol(slots[i], r, rune_id)
@@ -397,18 +435,15 @@ func _draw_palette_item(slot: Rect2, kind: int, item_id: int) -> void:
 		push_error("CircleWindow: 슬롯 종류 %d에 항목 그림이 없다" % kind)
 		return
 
-	# ⚠ 문양만 상태가 있다 — 진·룬은 아직 안 골라지므로 「막혔다」·「골랐다」로 보이면 거짓말이다(단계 5).
-	if kind != Palette.KIND_GLYPH:
-		return
-
 	# 🔴🔴 **못 놓는 것은 흐리다** — 확산이 이미 있으면 두 번째 확산이 **애초에 안 눌린다**(기획).
 	#  ⚠ 눌리는데 아무 일도 안 나면 그게 고장으로 읽힌다. 한 칸 앞에서 막는 게 요점이다.
 	#  ⚠ **`modulate`를 쓰면 안 된다** — 노드 전체에 걸리고 다음 프레임까지 남는다.
 	#   ⇒ 그 칸에만 **가림막**을 덮는다.
-	if not _can_pick(item_id):
+	# 🔴 세 종류가 같은 길을 지난다 — 제약이 문양에만 있는 것은 `_can_pick`이 안다.
+	if not _can_pick(kind, item_id):
 		draw_rect(slot, Color(Fx.PALETTE_SECTION_BG, Fx.PALETTE_BLOCKED_VEIL_A), true)
 		return
 	# 🔴 고른 것에 테두리. **연출이 아니라 동작의 절반이다** —
 	#  무엇을 골랐는지 안 보이면 「고르고 → 놓는다」의 앞 절반이 화면에 없다.
-	if _picked == item_id:
+	if _picked_kind == kind and _picked_item == item_id:
 		draw_rect(slot, Fx.PALETTE_PICK, false, Fx.PALETTE_PICK_PX)

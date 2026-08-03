@@ -8,6 +8,7 @@ const CellGrid := preload("res://src/sim/cell_grid.gd")
 const Mat := preload("res://src/sim/cell_materials.gd")
 const Tuning := preload("res://src/sim/sim_tuning.gd")
 const Glyph := preload("res://src/sim/glyph_defs.gd")
+const CircleDefs := preload("res://src/sim/circle_defs.gd")
 const Stage := preload("res://src/stage/stage.gd")
 const CellRenderer := preload("res://src/view/cell_renderer.gd")
 const Fx := preload("res://src/view/fx_tuning.gd")
@@ -27,9 +28,40 @@ func run(t) -> void:
 	_grid_constants(t)
 	_materials(t)
 	_glyphs(t)
+	_defs_and_all_agree(t)
 	_gen_tables(t)
 	_stage_map(t)
 	_wood_clumps(t)
+
+
+## 🔴🔴 **`DEFS`에 넣고 `ALL`에 안 넣으면 순회에서 빠진다.**
+##  팔레트에 안 뜨고 · 그물의 `ALL` 순회에도 안 걸리고 · **에러가 하나도 안 난다.**
+##  ⚠ 반대(`ALL`에 있는데 `DEFS`에 없다)는 표를 읽는 쪽이 죽는다.
+##
+## 🔴 이 리포는 「순회는 반드시 명시 리스트로만」을 세 곳에서 지킨다 — 그 규율의 **대가**가
+##  정확히 이 구멍이다. ⚠ **개수만 재면 못 잡는다**(하나 빼고 하나 더하면 크기가 같다) —
+##  ⇒ **집합으로 맞댄다.** 이건 「부르나만 보는 검사」가 아니라 **거동을 직접 가른다.**
+##
+## ⚠ 표를 늘리면 저절로 같이 는다 — 진이 1종이어도 지금 작동한다.
+func _defs_and_all_agree(t) -> void:
+	# [이름, DEFS, ALL]
+	var pairs: Array[Array] = [
+		["glyph_defs", Glyph.DEFS, Glyph.ALL],
+		["circle_defs", CircleDefs.DEFS, CircleDefs.ALL],
+		["sim_tuning(룬)", Tuning.ELEM_DEFS, Tuning.ELEM_ALL],
+	]
+	# ⚠ 목록이 비면 아래가 한 번도 안 돌고 **초록이 된다.**
+	t.ok(pairs.size() > 0, "표와 목록 짝이 %d개다" % pairs.size())
+	for p: Array in pairs:
+		var nm: String = p[0]
+		var defs: Dictionary = p[1]
+		var all: Array = p[2]
+		t.ok(all.size() > 0, "%s 의 ALL이 비어 있지 않다 (%d개)" % [nm, all.size()])
+		# 🔴 **집합 비교다.** 정렬해 맞대면 순서 차이에 거짓 양성이 나고, 크기만 재면 못 잡는다.
+		for id: int in all:
+			t.ok(defs.has(id), "%s: ALL의 %d가 DEFS에 있다" % [nm, id])
+		for id: int in defs.keys():
+			t.ok(all.has(id), "%s: DEFS의 %d가 ALL에 있다 (순회에서 안 빠진다)" % [nm, id])
 
 
 ## 🔴🔴 **나무가 한 덩어리면 어디에 불이 붙든 결국 전부 탄다.**

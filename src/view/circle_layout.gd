@@ -46,6 +46,13 @@ static func frame(area: Rect2) -> Dictionary:
 	return {"center": _center(area), "radius": _radius(area)}
 
 
+## 진 슬롯을 눌렀나. 🔴 **테두리 안 전체가 진의 자리다** — 층·룬 자리를 뺀 나머지고,
+##  그 우선순위는 호출부가 정한다(안쪽 것을 먼저 본다).
+## ⚠ **진이 없어도 참이다.** 그래야 진을 뺀 사용자가 다시 놓을 수 있다 — 아니면 **갇힌다.**
+static func frame_has_point(area: Rect2, p: Vector2) -> bool:
+	return p.distance_to(_center(area)) <= _radius(area)
+
+
 # ─── 룬 축 ────────────────────────────────────────────────────────
 
 ## 룬 자리의 중심들. 길이 = `circle_defs.rune_slots`.
