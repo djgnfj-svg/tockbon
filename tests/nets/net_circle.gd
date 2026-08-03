@@ -1,0 +1,501 @@
+extends RefCounted
+## 진 표와 조립 상태. 🔴 **여기가 잡는 것은 전부 「에러 없이 조용히 틀리는」 종류다.**
+##
+##  · **빈 층 팩** — 빈 층을 그대로 팩하면 `GLYPH_NONE = 0`이 「목록 끝」이라 뒤 층의 문양이
+##    **통째로 증발한다.** 화면에서는 「2층에만 넣으면 아무 일도 안 일어난다」로만 보인다
+##  · **빈 룬이 불로 읽힌다** — `ELEM_FIRE = 0`이라 0을 빈 값으로 쓰면 조립창은 빈칸을 그리는데
+##    발사는 불이 나간다. 아래 `_empty_rune_is_not_a_rune`이 그 함정을 계약으로 못박는다
+##  · **규칙이 두 벌** — 조립창이 통과시킨 배치를 `fire()`가 거부하면
+##    「눌러도 아무 일이 안 일어난다」가 된다. 아래 `_both_ways_agree`만이 이걸 잰다
+##  · **상수 박기** — 층 수를 2로 박으면 진을 늘려도 안 늘어나고, 표만 늙는다
+##
+## ⚠ **조립창 그림은 이 그물이 원리적으로 못 잰다**(계획 §7). 그건 눈의 몫이다.
+##  여기는 **모델과 규칙**만 본다.
+
+const CircleDefs := preload("res://src/sim/circle_defs.gd")
+const Glyph := preload("res://src/sim/glyph_defs.gd")
+const Tuning := preload("res://src/sim/sim_tuning.gd")
+const SpellCircle := preload("res://src/actor/spell_circle.gd")
+const SpellSim := preload("res://src/sim/spell_sim.gd")
+const CellGrid := preload("res://src/sim/cell_grid.gd")
+const Mat := preload("res://src/sim/cell_materials.gd")
+const Stage := preload("res://src/stage/stage.gd")
+
+
+func run(t) -> void:
+	_sizes_come_from_the_table(t)
+	_unknown_circle_barks(t)
+	_empty_rune_is_not_a_rune(t)
+	_swapping_the_circle_resizes(t)
+	_resize_is_table_driven(t)
+	_cannot_fire_without_a_rune(t)
+	_empty_layer_is_skipped(t)
+	_round_trip(t)
+	_cap_blocks_before_placing(t)
+	_both_ways_agree(t)
+	_presets_still_work(t)
+
+
+# ══════════════════════════════════════════════════════════════════
+#  진 표 — 층 수와 룬 자리 수가 여기 한 곳에서 나온다
+# ══════════════════════════════════════════════════════════════════
+
+## 🔴 **조립 상태가 표에서 파생되나.** 여기 2·1을 박으면 진을 늘려도 안 늘어나고,
+##  그때 조립창은 옛 층 수를 그린다 — 에러는 안 난다.
+func _sizes_come_from_the_table(t) -> void:
+	t.eq(CircleDefs.ALL.size(), CircleDefs.DEFS.size(), "ALL과 DEFS가 같다")
+	# ⚠ 이 줄이 없으면 표가 비었을 때 아래 루프가 한 번도 안 돌고 **초록으로 통과한다.**
+	t.ok(CircleDefs.ALL.size() > 0, "진이 하나라도 있다 (%d개)" % CircleDefs.ALL.size())
+	# 🔴 「없음」은 진이 아니다 — 팔레트가 `ALL`을 도는데 여기 있으면 「없음」이 항목으로 뜬다.
+	t.ok(not CircleDefs.ALL.has(CircleDefs.CIRCLE_NONE), "CIRCLE_NONE은 ALL 안에 없다")
+	t.ok(not CircleDefs.DEFS.has(CircleDefs.CIRCLE_NONE), "CIRCLE_NONE은 표에 없다 (예약값이다)")
+
+	for id: int in CircleDefs.ALL:
+		var c := SpellCircle.new(id)
+		var nm: StringName = CircleDefs.DEFS[id]["name"]
+		t.eq(c.circle_id(), id, "진 %s가 자기 id를 기억한다" % nm)
+		t.eq(c.layer_count(), CircleDefs.layers(id), "진 %s의 층 수가 표에서 나온다" % nm)
+		t.eq(c.rune_count(), CircleDefs.rune_slots(id), "진 %s의 룬 자리 수가 표에서 나온다" % nm)
+		# 🔴 층이 목록 상한을 넘으면 `pack`이 짖는다 — 표만 늘리고 여기를 안 보면
+		#  「층을 다 채우면 발사가 죽는다」가 된다.
+		t.ok(c.layer_count() <= Tuning.GLYPH_MAX_LAYERS,
+			"진 %s의 층 %d개가 목록 상한 %d 안이다" % [nm, c.layer_count(), Tuning.GLYPH_MAX_LAYERS])
+		t.ok(c.rune_count() >= 1, "진 %s에 룬 자리가 하나는 있다" % nm)
+		# 새 진의 층은 전부 비어 있다 — 안 비면 첫 발사가 아무도 안 놓은 문양을 실어 나른다.
+		t.eq(c.packed_glyphs(), Glyph.GLYPH_NONE, "새 진 %s는 빈 목록이다" % nm)
+		# 🔴 **시작 상태는 진·룬이 채워져 있다.** 빈 룬으로 켜지면 게임이 「못 쏘는」 상태로 시작한다.
+		t.ok(c.can_fire(), "새 진 %s는 바로 쏠 수 있다 (룬이 채워져 있다)" % nm)
+
+	# 🔴 GDD 확정값. 표가 조용히 바뀌면 이 줄이 먼저 빨개진다.
+	var round_id := CircleDefs.CIRCLE_ROUND
+	t.eq(CircleDefs.layers(round_id), 2, "동그라미 진은 2층이다 (GDD)")
+	t.eq(CircleDefs.rune_slots(round_id), 1, "동그라미 진은 룬 1자리다 (GDD)")
+
+
+## 🔴 표에 없는 진에 짖는다 — 진을 늘리면서 표에 안 넣으면 래퍼의 stderr 검사에 공짜로 걸린다.
+## ⚠ **「진이 없다」는 짖지 않는다.** 그건 정상 상태다 — 둘을 한 갈래로 묶으면 진을 빼는
+##  평범한 조작이 그물을 빨갛게 만든다.
+func _unknown_circle_barks(t) -> void:
+	t.eq(CircleDefs.layers(CircleDefs.CIRCLE_NONE), 0, "진이 없으면 층이 0이다 (조용히)")
+	t.eq(CircleDefs.rune_slots(CircleDefs.CIRCLE_NONE), 0, "진이 없으면 룬 자리가 0이다 (조용히)")
+
+	# ⚠ 선언에 파일 이름을 붙인다 — 사면이 **실행 전체**에 걸리므로 넓게 적으면
+	#  다른 파일의 같은 문구까지 같이 사면된다(135줄 주석).
+	t.expect_error("Circle: 모르는 진")
+	var bad := SpellCircle.new(9999)
+	t.eq(bad.layer_count(), 0, "모르는 진은 짖고 층이 0이다")
+	t.eq(bad.packed_glyphs(), Glyph.GLYPH_NONE, "층이 0이면 빈 목록이다 (폭주하지 않는다)")
+
+
+# ══════════════════════════════════════════════════════════════════
+#  🔴🔴 빈 룬 — 0은 이미 불이다
+# ══════════════════════════════════════════════════════════════════
+
+## `sim_tuning.ELEM_FIRE = 0`이라 **룬은 0 규율을 못 쓴다.** 0을 빈 룬으로 쓰면
+## 조립창은 빈칸을 그리는데 발사는 불이 나가고, **에러가 하나도 안 난다.**
+## 🔴 이 한 줄이 그 함정을 계약으로 못박는다.
+func _empty_rune_is_not_a_rune(t) -> void:
+	t.ok(not Tuning.ELEM_ALL.has(SpellCircle.RUNE_EMPTY),
+		"RUNE_EMPTY(%d)가 ELEM_ALL 안에 없다" % SpellCircle.RUNE_EMPTY)
+	t.ok(SpellCircle.RUNE_EMPTY != Tuning.ELEM_FIRE, "RUNE_EMPTY가 불 룬이 아니다")
+	# ⚠ 함정의 반대쪽 — 0이 실재 룬이라는 것 자체를 재 둔다. 이게 바뀌면 위 규율의 근거가 사라진다.
+	t.eq(Tuning.ELEM_FIRE, 0, "불 룬이 0이다 (그래서 0을 빈 값으로 못 쓴다)")
+
+	# 🔴 모르는 룬은 안 받는다 — 받으면 `can_fire()`가 통과시키고 `fire()`가 커맨드 경계에서 짖는다.
+	var c := SpellCircle.new()
+	t.expect_error("SpellCircle: 모르는 룬")
+	t.ok(not c.set_rune(0, 777), "모르는 룬은 짖고 안 놓인다")
+	t.eq(c.rune_at(0), Tuning.ELEM_FIRE, "거절된 룬이 자리를 안 건드린다")
+
+
+## 🔴 룬을 빼면 못 쏜다. 기획 「극단값」이 「진+룬만으로도 마법은 성립한다」고 적은 문장에
+##  **문양은 없어도 되고 룬은 있어야 한다**가 이미 들어 있다.
+func _cannot_fire_without_a_rune(t) -> void:
+	var c := SpellCircle.new()
+	t.ok(c.can_fire(), "룬이 있으면 쏠 수 있다")
+
+	t.ok(c.set_rune(0, SpellCircle.RUNE_EMPTY), "룬을 뺀다")
+	t.eq(c.rune_at(0), SpellCircle.RUNE_EMPTY, "룬 자리가 비었다")
+	t.ok(not c.can_fire(), "🔴 빈 룬 자리가 있으면 못 쏜다")
+
+	t.ok(c.set_rune(0, Tuning.ELEM_FIRE), "룬을 다시 넣는다")
+	t.ok(c.can_fire(), "다시 넣으면 쏠 수 있다")
+
+	# 🔴 문양은 없어도 쏜다 — 룬과 문양의 규칙이 다르다는 것이 요점이다.
+	var bare := SpellCircle.new()
+	t.eq(bare.packed_glyphs(), Glyph.GLYPH_NONE, "문양이 하나도 없다")
+	t.ok(bare.can_fire(), "문양이 없어도 쏠 수 있다 (진 + 룬만)")
+
+	# 진이 없으면 못 쏜다.
+	var gone := SpellCircle.new()
+	gone.set_circle(CircleDefs.CIRCLE_NONE)
+	t.ok(not gone.can_fire(), "진이 없으면 못 쏜다")
+
+	# ⚠ 빈 룬은 커맨드를 **아예 안 만드는** 길로 가야 한다 — 만들면 `fire()`가 짖는다.
+	#  껍데기가 `can_fire()`를 안 보면 정확히 이 짖음이 난다.
+	#
+	# 🔴🔴 **선언에 파일 이름을 붙인다.** 래퍼의 사면은 한 그물이 아니라 **실행 전체**에 걸리므로,
+	#  그냥 `모르는 룬`이라고 적으면 `SpellCircle: 모르는 룬`까지 같이 사면된다 —
+	#  그러면 위 `set_rune`이 **정상 입력(빈 룬)에도 짖게 되는 날 stderr가 깨끗하게 나온다.**
+	#  ⚠ 실제로 그랬다(verify-read가 뮤테이션으로 실증했다). 사면은 늘 좁게 적는다.
+	var sim := SpellSim.new()
+	t.expect_error("SpellSim: 모르는 룬")
+	t.ok(not sim.fire(SpellSim.cmd_fire(10, 70, 100, 0,
+		SpellCircle.RUNE_EMPTY, Glyph.GLYPH_NONE)),
+		"빈 룬으로 커맨드를 만들면 발사가 짖는다 (그래서 안 만든다)")
+
+
+# ══════════════════════════════════════════════════════════════════
+#  진 교체 — 배열 길이가 런타임에 바뀐다
+# ══════════════════════════════════════════════════════════════════
+
+## 🔴 진마다 층 수가 다르므로 `layers[]`는 **런타임에 길이가 변한다.** 진이 1종이라 지금은
+##  안 드러나지만, 모델이 그걸 표현 못 하면 진이 둘이 되는 날 모델을 다시 만든다.
+func _swapping_the_circle_resizes(t) -> void:
+	var c := SpellCircle.new()
+	t.ok(c.place_glyph(0, Glyph.GLYPH_SPREAD), "1층에 확산을 놓는다")
+	t.ok(c.place_glyph(1, Glyph.GLYPH_BLAST), "2층에 폭발을 놓는다")
+
+	# ⚠ **같은 진을 다시 놓는 것은 아무 일도 안 한다** — 안 그러면 실수로 한 번 더 클릭해서
+	#  조립이 통째로 날아간다.
+	var before := c.packed_glyphs()
+	c.set_circle(CircleDefs.CIRCLE_ROUND)
+	t.eq(c.packed_glyphs(), before, "같은 진을 다시 놓으면 조립이 안 날아간다")
+	t.ok(c.can_fire(), "같은 진을 다시 놓아도 룬이 남는다")
+
+	# 🔴 **진을 바꾸면 층과 룬 자리를 전부 비운다.** 앞에서부터 살리면 마지막 문양 하나가
+	#  **조용히** 사라진다 — 통째로 비우면 그림이 통째로 바뀌어 눈에 보인다.
+	c.set_circle(CircleDefs.CIRCLE_NONE)
+	t.eq(c.layer_count(), 0, "진을 빼면 층이 0이다")
+	t.eq(c.rune_count(), 0, "진을 빼면 룬 자리가 0이다")
+	t.eq(c.packed_glyphs(), Glyph.GLYPH_NONE, "진을 빼면 문양이 남지 않는다")
+	t.ok(not c.can_fire(), "진을 빼면 못 쏜다")
+	t.ok(not c.place_glyph(0, Glyph.GLYPH_BLAST), "진이 없으면 문양을 못 놓는다")
+	t.ok(not c.set_rune(0, Tuning.ELEM_FIRE), "진이 없으면 룬을 못 놓는다")
+
+	# 🔴 다시 놓으면 길이가 표를 따라간다.
+	c.set_circle(CircleDefs.CIRCLE_ROUND)
+	t.eq(c.layer_count(), CircleDefs.layers(CircleDefs.CIRCLE_ROUND),
+		"진을 다시 놓으면 층 수가 표를 따라간다")
+	t.eq(c.rune_count(), CircleDefs.rune_slots(CircleDefs.CIRCLE_ROUND),
+		"진을 다시 놓으면 룬 자리 수가 표를 따라간다")
+	t.eq(c.packed_glyphs(), Glyph.GLYPH_NONE, "새로 놓은 진의 층은 비어 있다")
+	# ⚠ **진을 놓으면 룬 자리도 빈다** — 시작 상태(생성자)만 룬을 채운다. 둘을 헷갈리면
+	#  「진을 바꿨더니 룬이 저절로 생겼다」가 된다.
+	t.eq(c.rune_at(0), SpellCircle.RUNE_EMPTY, "새로 놓은 진의 룬 자리는 비어 있다")
+	t.ok(not c.can_fire(), "그래서 진을 새로 놓으면 룬을 넣기 전엔 못 쏜다")
+
+	# 🔴 **두 길이가 서로 다른 수여야 한 상수로 둘 다 못 채운다.** 같은 수면
+	#  `resize(2)`를 두 줄 박아 놓고도 이 그물이 초록이다.
+	t.ok(c.layer_count() != c.rune_count(),
+		"층 수(%d)와 룬 자리 수(%d)가 서로 다른 수다 (한 상수로 둘 다 못 채운다)" % [
+			c.layer_count(), c.rune_count()])
+
+
+## 🔴🔴 **진이 1종이라 「층 배열이 표를 따라가나」를 실행만으로는 끝까지 못 잰다**(계획 위험 16).
+##  닿을 수 있는 층 수가 **2(동그라미)와 0(없음) 둘뿐**이라, `id == CIRCLE_NONE ? 0 : 2`라고
+##  박아 놔도 위 검사가 전부 초록이다.
+##
+## ⚠ **계획은 「그물이 표를 손으로 하나 더 만들어 재라」고 했는데 그게 안 된다** —
+##  `DEFS`가 `const`라 Godot이 읽기 전용으로 강제한다(실측: `DEFS.is_read_only()`가 true고,
+##  줄을 넣으면 「Dictionary is in read-only state」가 뜬다).
+##
+## ⇒ **대신 소스 텍스트를 본다.** `net_determinism`이 같은 이유로 쓰는 장치다 —
+##  실행으로 원리적으로 못 재는 계약은 **텍스트 스캔이 유일한 감지기**다.
+##  🔴 재는 것은 좁다: **길이를 정하는 곳이 전부 진 표를 지나나.**
+func _resize_is_table_driven(t) -> void:
+	var src := _read("res://src/actor/spell_circle.gd")
+	var re := RegEx.new()
+	t.eq(re.compile("\\.resize\\(([^)]*)\\)"), OK, "resize 패턴이 컴파일된다")
+	var hits := re.search_all(src)
+	# ⚠ 하나도 못 찾으면 이 검사는 **아무것도 안 재고 초록이 된다** — 그게 이 리포가 죽는 방식이다.
+	t.ok(hits.size() >= 2,
+		"spell_circle이 배열 길이를 정하는 곳이 %d군데다 (층 · 룬)" % hits.size())
+	for m: RegExMatch in hits:
+		var arg := m.get_string(1)
+		t.ok(arg.contains("CircleDefs."),
+			"길이 `%s`가 진 표에서 나온다 (상수 박기가 아니다)" % arg)
+
+
+# ══════════════════════════════════════════════════════════════════
+#  🔴🔴 빈 층 — 이 계획에서 제일 조용한 함정
+# ══════════════════════════════════════════════════════════════════
+
+## 1층을 비우고 2층에만 문양을 놓는다.
+##
+## ```
+## 그대로 팩하면  g = GLYPH_NONE | (BLAST << 4)
+##                first(g) = 0 = 「목록 끝」  →  탄은 **빈 목록**을 들고 난다
+## ```
+## ⇒ 폭발이 사라진다. **에러가 하나도 안 난다.**
+func _empty_layer_is_skipped(t) -> void:
+	var c := SpellCircle.new()
+	t.ok(c.place_glyph(1, Glyph.GLYPH_BLAST), "2층에만 폭발을 놓는다")
+	t.eq(c.glyph_at(0), Glyph.GLYPH_NONE, "1층은 비어 있다")
+	t.eq(c.glyph_at(1), Glyph.GLYPH_BLAST, "2층에 폭발이 있다")
+
+	var g := c.packed_glyphs()
+	t.eq(Glyph.first(g), Glyph.GLYPH_BLAST, "빈 1층을 건너뛰어 폭발이 **첫** 문양이 된다")
+	t.eq(Glyph.rest(g), Glyph.GLYPH_NONE, "그 뒤는 목록 끝이다")
+
+	# 🔴 함정 자체를 재 둔다 — 빈 층을 그대로 넣으면 어떤 값이 되는지.
+	#  ⚠ 시프트를 그물에서만 한다. 소스에서 하면 `glyph_defs`의 세 함수 밖에 시프트가 생긴다.
+	var naive := Glyph.GLYPH_BLAST << Tuning.GLYPH_BITS
+	t.eq(Glyph.first(naive), Glyph.GLYPH_NONE,
+		"그대로 팩하면 첫 문양이 「목록 끝」이 된다 (그래서 건너뛴다)")
+	t.ok(g != naive, "조밀하게 팩한 값(%d)이 그대로 팩한 값(%d)과 다르다" % [g, naive])
+
+	# 🔴🔴 **시뮬까지 이어 본다.** 팩만 맞고 실제로 안 터지면 아무 뜻이 없다 —
+	#  「화면만 바뀌고 시뮬은 안 바뀌기」가 이 리포의 대표 가짜다.
+	var grid := _wall_grid()
+	var sim := SpellSim.new()
+	t.ok(sim.fire(SpellSim.cmd_fire(10, 70, 100, 0, c.element(), g)),
+		"2층에만 놓은 마법진이 발사된다")
+	t.eq(_run_ticks(sim, grid, 12), 1, "그 폭발이 실제로 터진다 (증발하지 않는다)")
+
+	# 🔴 대조군 — 두 층을 다 비우면 폭발이 없다. 없으면 위 초록이 「탄이 원래 터진다」일 수 있다.
+	var empty := SpellCircle.new()
+	t.eq(empty.packed_glyphs(), Glyph.GLYPH_NONE, "두 층을 다 비우면 빈 목록이다")
+	var grid2 := _wall_grid()
+	var sim2 := SpellSim.new()
+	# 기획 「극단값」: 층을 다 비우고 쏘면 **쏴져야 한다.** 진+룬만으로도 마법은 성립한다.
+	t.ok(sim2.fire(SpellSim.cmd_fire(10, 70, 100, 0, empty.element(), empty.packed_glyphs())),
+		"층을 다 비워도 쏴진다 (진 + 룬만)")
+	t.eq(_run_ticks(sim2, grid2, 12), 0, "문양이 없으면 폭발이 없다")
+
+
+# ══════════════════════════════════════════════════════════════════
+#  왕복 — 디버그 키가 들어오는 문
+# ══════════════════════════════════════════════════════════════════
+
+## 🔴 `set_from_packed(g)` 뒤 `packed_glyphs() == g`. 안 되면 키를 누를 때마다 장착이
+##  조금씩 달라지고, 그 차이는 **횟수로만** 드러난다.
+func _round_trip(t) -> void:
+	var cases: Array[Array] = [
+		[],
+		[Glyph.GLYPH_BLAST],
+		[Glyph.GLYPH_SPREAD],
+		[Glyph.GLYPH_SPREAD, Glyph.GLYPH_BLAST],
+		[Glyph.GLYPH_BLAST, Glyph.GLYPH_SPREAD],   # 🔴 위와 같은 둘, 다른 순서
+		[Glyph.GLYPH_BLAST, Glyph.GLYPH_BLAST],
+	]
+	for list: Array in cases:
+		var typed: Array[int] = []
+		typed.assign(list)
+		var packed := Glyph.pack(typed)
+		var c := SpellCircle.new()
+		t.ok(c.set_from_packed(packed), "목록 %s가 진에 들어간다" % [typed])
+		t.eq(c.packed_glyphs(), packed, "목록 %s가 왕복한다" % [typed])
+		t.eq(c.glyph_list(), typed, "목록 %s의 층 순서가 살아남는다" % [typed])
+
+	# ⚠ **앞 층부터 채운다.** 폭발 하나면 1층 폭발 · 2층 빈칸이다.
+	var one: Array[int] = [Glyph.GLYPH_BLAST]
+	var c1 := SpellCircle.new()
+	c1.set_from_packed(Glyph.pack(one))
+	t.eq(c1.glyph_at(0), Glyph.GLYPH_BLAST, "문양 하나는 안쪽 층(1층)에 앉는다")
+	t.eq(c1.glyph_at(1), Glyph.GLYPH_NONE, "2층은 빈다")
+	# ⚠ 프리셋은 **문양만** 바꾼다 — 진과 룬은 안 건드린다.
+	t.eq(c1.circle_id(), CircleDefs.CIRCLE_ROUND, "프리셋이 진을 안 건드린다")
+	t.ok(c1.can_fire(), "프리셋이 룬을 안 건드린다")
+
+	# 🔴🔴 **덮어쓸 때 앞 상태가 안 남아야 한다.** 안 비우면 키 4(두 층) 뒤에 키 3(한 층)을
+	#  눌렀을 때 2층에 앞 문양이 남아 「뺐는데 안 빠진다」가 된다 — 판정 1이 거기서 죽는다.
+	var two: Array[int] = [Glyph.GLYPH_SPREAD, Glyph.GLYPH_BLAST]
+	var c2 := SpellCircle.new()
+	c2.set_from_packed(Glyph.pack(two))
+	c2.set_from_packed(Glyph.pack(one))
+	t.eq(c2.glyph_list(), one, "두 층 뒤에 한 층을 넣으면 뒤 층이 비워진다")
+	c2.set_from_packed(Glyph.GLYPH_NONE)
+	t.eq(c2.packed_glyphs(), Glyph.GLYPH_NONE, "빈 목록을 넣으면 층이 전부 빈다")
+
+	# ── 못 받는 것들 ──
+	var three: Array[int] = [Glyph.GLYPH_BLAST, Glyph.GLYPH_BLAST, Glyph.GLYPH_BLAST]
+	t.expect_error("층 진에 넣을 수 없다")
+	t.ok(not c2.set_from_packed(Glyph.pack(three)), "3층 목록은 2층 진에 안 들어간다")
+
+	var twice: Array[int] = [Glyph.GLYPH_SPREAD, Glyph.GLYPH_SPREAD]
+	t.expect_error("문양 제약에 걸린다")
+	t.ok(not c2.set_from_packed(Glyph.pack(twice)),
+		"클릭으로 못 놓는 배치는 프리셋으로도 안 들어간다")
+	t.eq(c2.packed_glyphs(), Glyph.GLYPH_NONE, "거절된 목록이 상태를 안 건드린다")
+
+	# 🔴 음수는 **영원히 돈다** — `rest`가 산술 시프트라 `-1 >> 4 == -1`이다.
+	#  에러 없이 프레임이 얼어붙는 종류라 문에서 막는다.
+	t.expect_error("음수 목록")
+	t.ok(not c2.set_from_packed(-1), "음수 목록은 짖고 버린다")
+
+
+# ══════════════════════════════════════════════════════════════════
+#  제약 — 놓기 **전에** 막는다
+# ══════════════════════════════════════════════════════════════════
+
+## 🔴 **쏘고 나서 실패하면 고장으로 읽힌다**(기획 「극단값」). 확산이 이미 있으면
+##  두 번째 확산은 **놓이기 전에** 막혀야 한다.
+func _cap_blocks_before_placing(t) -> void:
+	t.eq(int(Glyph.DEFS[Glyph.GLYPH_SPREAD]["max_per_circle"]), 1,
+		"확산은 한 마법진에 하나까지다 (GDD)")
+	t.eq(int(Glyph.DEFS[Glyph.GLYPH_BLAST]["max_per_circle"]), 0, "폭발은 무제한이다 (0)")
+
+	var c := SpellCircle.new()
+	t.ok(c.can_place_glyph(0, Glyph.GLYPH_SPREAD), "빈 진의 1층에 확산을 놓을 수 있다")
+	t.ok(c.place_glyph(0, Glyph.GLYPH_SPREAD), "확산을 놓는다")
+	t.ok(not c.can_place_glyph(1, Glyph.GLYPH_SPREAD), "🔴 두 번째 확산은 **놓기 전에** 막힌다")
+	t.ok(not c.place_glyph(1, Glyph.GLYPH_SPREAD), "막힌 배치는 놓기도 실패한다")
+	t.eq(c.glyph_at(1), Glyph.GLYPH_NONE, "막힌 놓기가 층을 안 건드린다")
+
+	# 🔴 **같은 층에 덮어쓰는 것은 막히면 안 된다.** 「지금 몇 개인가」만 세면 자기 자신을
+	#  한 번 더 세서 **놓을 수 있는 것을 막는다** — 그건 「이미 있는데 못 바꾼다」로 보인다.
+	t.ok(c.can_place_glyph(0, Glyph.GLYPH_SPREAD), "확산이 있는 층에 확산을 덮어쓰는 것은 된다")
+	t.ok(c.can_place_glyph(0, Glyph.GLYPH_BLAST), "확산이 있는 층을 폭발로 바꿀 수 있다")
+
+	# 폭발은 무제한이라 두 층이 통과해야 한다 — 제약이 **모든 문양에 걸리면** 그건 다른 버그다.
+	var b := SpellCircle.new()
+	t.ok(b.place_glyph(0, Glyph.GLYPH_BLAST), "1층에 폭발")
+	t.ok(b.place_glyph(1, Glyph.GLYPH_BLAST), "2층에도 폭발 (무제한이다)")
+
+	# 빼기는 늘 된다. 그리고 빼면 확산을 다시 놓을 수 있다.
+	t.ok(c.place_glyph(0, Glyph.GLYPH_NONE), "층을 비우는 것은 늘 된다")
+	t.ok(c.can_place_glyph(1, Glyph.GLYPH_SPREAD), "빼고 나면 확산을 다시 놓을 수 있다")
+
+	# 층 밖 · 표에 없는 문양. 🔴 히트테스트가 어긋나면 **에러 없이** 엉뚱한 층으로 간다.
+	t.ok(not c.can_place_glyph(-1, Glyph.GLYPH_BLAST), "없는 층(-1)에는 못 놓는다")
+	t.ok(not c.can_place_glyph(c.layer_count(), Glyph.GLYPH_BLAST), "층 수를 넘는 층에는 못 놓는다")
+	t.ok(not c.can_place_glyph(0, Glyph.MASK), "표에 없는 문양은 못 놓는다")
+
+
+# ══════════════════════════════════════════════════════════════════
+#  🔴🔴 양방향 일치 — 규칙이 두 벌이 아닌 것을 **이것만이** 잰다
+# ══════════════════════════════════════════════════════════════════
+
+## `can_place_glyph`가 통과시킨 배치는 `spell_sim.fire()`도 **받아들이고**,
+## 막은 배치는 `fire()`도 **거부한다.**
+##
+## 🔴 한쪽만 재면 갈라지는 걸 못 본다:
+##  · 조립창이 느슨하면 → 쏴도 아무 일이 안 일어난다(「고장」으로 읽힌다)
+##  · 조립창이 빡빡하면 → 만들 수 있는 마법을 못 만든다(아무도 모른다)
+##
+## ⚠ **가능한 배치를 전부 돈다** — 층마다 「빈칸 + 모든 문양」이다. 표본을 손으로 고르면
+##  문양이 늘 때 새 조합이 검사에서 빠지고, 빠진 걸 아무도 모른다.
+func _both_ways_agree(t) -> void:
+	var options: Array[int] = [Glyph.GLYPH_NONE]
+	options.append_array(Glyph.ALL)
+	var slots := SpellCircle.new().layer_count()
+	var cases := _all_arrangements(options, slots)
+	t.ok(cases.size() > 1, "돌아 볼 배치가 %d가지다 (문양 %d종 · %d층)" % [
+		cases.size(), Glyph.ALL.size(), slots])
+
+	# 🔴 막힌 배치를 `fire()`에 그대로 던지므로 거기서 짖는다 — 그게 「거부했다」의 증거다.
+	t.expect_error("한 마법진에")
+
+	var allowed_n := 0
+	var blocked_n := 0
+	var agree := true
+	var packs_agree := true
+	for arrangement: Array in cases:
+		var c := SpellCircle.new()
+		var allowed := true
+		for i in arrangement.size():
+			if not c.place_glyph(i, arrangement[i]):
+				allowed = false
+				break
+
+		# 그 배치가 **쏘려 했을** 목록. 빈 층은 건너뛴다(조립 상태와 같은 규칙이다).
+		var dense: Array[int] = []
+		for id: int in arrangement:
+			if id != Glyph.GLYPH_NONE:
+				dense.append(id)
+		var packed := Glyph.pack(dense)
+
+		var sim := SpellSim.new()
+		var accepted := sim.fire(
+			SpellSim.cmd_fire(10, 70, 100, 0, Tuning.ELEM_FIRE, packed))
+		if allowed != accepted:
+			agree = false
+			t.ok(false, "배치 %s — 조립은 %s인데 발사는 %s다" % [
+				dense, "통과" if allowed else "거부", "통과" if accepted else "거부"])
+		if allowed:
+			allowed_n += 1
+			if c.packed_glyphs() != packed:
+				packs_agree = false
+		else:
+			blocked_n += 1
+
+	t.ok(agree, "🔴 조립이 통과시킨 것은 발사도 받고, 막은 것은 발사도 거부한다")
+	t.ok(packs_agree, "통과한 배치의 팩된 목록이 발사에 넘긴 것과 같다")
+	# 🔴🔴 **양쪽이 실제로 있어야 위 초록이 뜻을 가진다.** 전부 통과면 「아무것도 안 막는다」와
+	#  구별이 안 되고, 전부 거부면 「아무것도 못 만든다」와 구별이 안 된다.
+	t.ok(allowed_n > 0, "통과한 배치가 있다 (%d가지)" % allowed_n)
+	t.ok(blocked_n > 0, "막힌 배치가 있다 (%d가지)" % blocked_n)
+
+
+## 층마다 `options` 중 하나를 고른 모든 배치. 🔴 문양이나 층이 늘면 **저절로** 늘어난다.
+func _all_arrangements(options: Array[int], slots: int) -> Array:
+	var out: Array = []
+	var total := 1
+	for _i in slots:
+		total *= options.size()
+	for k in total:
+		var one: Array[int] = []
+		var rest := k
+		for _i in slots:
+			one.append(options[rest % options.size()])
+			rest /= options.size()
+		out.append(one)
+	return out
+
+
+# ══════════════════════════════════════════════════════════════════
+#  디버그 키 — A를 깨지 않았나
+# ══════════════════════════════════════════════════════════════════
+
+## 🔴🔴 **키 1~5가 전과 똑같이 동작해야 한다.** 달라지면 A(`spell-pipeline-minimum`)를 깬 것이고,
+##  그 조합들이 판정 1·2의 측정 장치다(기획 「비교 조작」).
+## ⚠ `stage.gd`의 실제 표를 읽는다 — 그물이 사본을 들면 표가 바뀔 때 같이 안 늙는다.
+func _presets_still_work(t) -> void:
+	var keys: Array = Stage.LOADOUTS.keys()
+	keys.sort()
+	t.ok(keys.size() > 0, "프리셋이 있다 (%d개)" % keys.size())
+	for n: int in keys:
+		var list: Array[int] = []
+		list.assign(Stage.LOADOUTS[n])
+		var packed := Glyph.pack(list)
+		var c := SpellCircle.new()
+		t.ok(c.set_from_packed(packed), "키 %d의 프리셋이 진에 들어간다" % n)
+		t.eq(c.glyph_list(), list, "키 %d가 같은 목록을 같은 순서로 내놓는다" % n)
+		t.eq(c.packed_glyphs(), packed, "키 %d가 같은 정수로 팩된다" % n)
+		t.ok(c.can_fire(), "키 %d를 누른 뒤에도 쏠 수 있다" % n)
+		var sim := SpellSim.new()
+		t.ok(sim.fire(SpellSim.cmd_fire(10, 70, 100, 0, c.element(), c.packed_glyphs())),
+			"키 %d의 마법진이 발사된다" % n)
+
+	# 🔴 시작 상태의 룬이 불이다. 여기가 바뀌면 발사의 룬이 조용히 바뀐다.
+	t.eq(SpellCircle.new().element(), Tuning.ELEM_FIRE, "새 진의 룬 자리에 불이 들어 있다")
+
+
+# ══════════════════════════════════════════════════════════════════
+#  도구
+# ══════════════════════════════════════════════════════════════════
+
+## 한 타일(4셀) 두께의 돌 벽. 탄이 여기서 착탄한다.
+func _wall_grid() -> CellGrid:
+	var g := CellGrid.new()
+	g.apply(CellGrid.cmd_fill(40, 0, 43, CellGrid.H - 1, Mat.STONE))
+	return g
+
+
+## `ticks`틱을 돌리고 그동안의 **폭발 총 횟수**를 돌려준다.
+## ⚠ 통지는 틱마다 지워지므로 매 틱 걷어야 한다.
+func _run_ticks(sim: SpellSim, grid: CellGrid, ticks: int) -> int:
+	var n := 0
+	for _i in ticks:
+		sim.step(grid)
+		n += sim.blast_count()
+	return n
+
+
+func _read(path: String) -> String:
+	var f := FileAccess.open(path, FileAccess.READ)
+	if f == null:
+		push_error("net_circle: %s 를 못 읽었다" % path)
+		return ""
+	return f.get_as_text()

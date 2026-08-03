@@ -8,19 +8,20 @@ extends Node2D
 
 const Character := preload("res://src/actor/character.gd")
 const Fx := preload("res://src/view/fx_tuning.gd")
-const Glyph := preload("res://src/sim/glyph_defs.gd")
-const Tuning := preload("res://src/sim/sim_tuning.gd")
+const SpellCircle := preload("res://src/actor/spell_circle.gd")
 
 var _ch: Character = null
 
-## 🔴 지금 장착된 것. 껍데기가 조합을 바꿀 때 밀어 넣는다.
-##  ⚠ **화면 전용 사본이다** — 발사 커맨드는 껍데기가 자기 값으로 만든다. 여기서 되돌려 주지 않는다.
-var loadout_glyphs := Glyph.GLYPH_NONE
-var loadout_element := Tuning.ELEM_FIRE
+## 🔴🔴 **사본이 아니라 참조다.** 매 `_draw()`에 읽으므로 껍데기가 조합을 바꾸면 총구가
+##  **저절로** 따라온다. 사본을 두면 밀어 넣기를 한 번 깜빡하는 순간 「조합을 바꿨는데
+##  화면이 그대로다」가 되고 **에러가 안 난다** — 그게 v1이 죽은 방식이다.
+## ⚠ **읽기만 한다.** 화면이 조립 상태를 바꾸면 그 순간 단일 소스가 아니게 된다.
+var _circle: SpellCircle = null
 
 
-func setup(ch: Character) -> void:
+func setup(ch: Character, circle: SpellCircle) -> void:
 	_ch = ch
+	_circle = circle
 	queue_redraw()
 
 
@@ -57,11 +58,24 @@ func _draw() -> void:
 	var tip := tip_px()
 	draw_line(_ch.center(), tip, Fx.STAFF_COLOR, Fx.STAFF_WIDTH_PX)
 
+	if _circle == null:
+		return
+
 	# 🔴🔴 **총구가 장착을 나른다.** 크기 = 층 수 · 색 = 맨 안쪽 문양(`fx_tuning` 주석).
 	#  ⚠ 가산 합성이 아니라 보통 합성이라(이 노드는 `spell_view`와 달리 재질이 없다)
 	#   겉 무리를 알파로 깐다.
-	var r := Fx.muzzle_radius(loadout_glyphs)
-	var tint := Fx.muzzle_tint(loadout_glyphs, loadout_element)
+	# 🔴 매 프레임 **다시 읽는다** — 조립 상태가 바뀌는 순간이 따로 없다는 게 요점이다.
+	var glyphs := _circle.packed_glyphs()
+	var r := Fx.muzzle_radius(glyphs)
+
+	# 🔴🔴 **못 쏘면 총구가 꺼진다.** 조립창을 안 열고도 늘 보이는 유일한 곳이라
+	#  「지금은 못 쏜다」가 무대에서 바로 읽힌다 — 없으면 좌클릭이 안 먹는 게 **고장**으로 보인다.
+	#  ⚠ 크기(층 수)는 그대로 둔다. 조합은 그대로고 **룬만 빠진 것**이라 그 사실이 보여야 한다.
+	if not _circle.can_fire():
+		draw_circle(tip, r, Fx.MUZZLE_DEAD, false, Fx.MUZZLE_DEAD_WIDTH_PX)
+		return
+
+	var tint := Fx.muzzle_tint(glyphs, _circle.element())
 	draw_circle(tip, r * Fx.MUZZLE_GLOW_RATIO,
 		Color(tint.r, tint.g, tint.b, Fx.MUZZLE_GLOW_A), true)
 	draw_circle(tip, r, tint, true)

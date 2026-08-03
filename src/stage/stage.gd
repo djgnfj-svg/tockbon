@@ -14,6 +14,7 @@ const SpellView := preload("res://src/view/spell_view.gd")
 const BlastFx := preload("res://src/view/blast_fx.gd")
 const Character := preload("res://src/actor/character.gd")
 const Aim := preload("res://src/actor/aim.gd")
+const SpellCircle := preload("res://src/actor/spell_circle.gd")
 const SpellSim := preload("res://src/sim/spell_sim.gd")
 const Glyph := preload("res://src/sim/glyph_defs.gd")
 const StageInput := preload("res://src/stage/stage_input.gd")
@@ -136,10 +137,14 @@ var _grid := CellGrid.new()
 var _char := Character.new()
 var _spell := SpellSim.new()
 
-## 지금 장착된 조합. 🔴 **번호와 팩된 목록을 같이 들고 있는다** — 목록만 들면 HUD가 이름을
-##  못 찾고, 번호만 들면 발사할 때마다 다시 팩해야 한다.
+## 🔴🔴 **장착 상태의 단일 소스.** 디버그 키도 (앞으로) 조립창도 이것 하나를 만진다 —
+##  껍데기가 팩된 목록 사본을 따로 들면 「키를 눌렀는데 총구가 그대로다」가 되고
+##  **에러가 하나도 안 난다**(계획 §1).
+var _circle := SpellCircle.new()
+
+## 마지막으로 누른 프리셋 번호. 🔴 **장착 내용이 여기 없는 게 요점이다** — 위 `_circle`이 든다.
+##  ⚠ 조립창이 붙으면 이 번호는 거짓말이 된다(계획 §1 · 위험 9). 그때 HUD에서 뺀다.
 var _loadout := 1
-var _loadout_glyphs := Glyph.GLYPH_NONE
 
 ## 🔴 커맨드는 **「어느 틱에 적용되나」를 달고** 큐에 앉는다. 없으면 나중에 재조정이 불가능하다.
 ##  싱글에서는 로컬 입력이 채우고 멀티에서는 서버가 채운다 — 적용부 코드는 그대로다.
@@ -156,7 +161,9 @@ var _blast_count := 0
 
 func _ready() -> void:
 	_renderer.setup(_grid)
-	_char_view.setup(_char)
+	# 🔴 총구가 조립 상태를 **읽는다.** 사본을 밀어 넣으면 밀어 넣기를 한 번 깜빡하는 순간
+	#  「조합을 바꿨는데 화면이 그대로다」가 되고, 그게 v1이 죽은 방식이다.
+	_char_view.setup(_char, _circle)
 	_spell_view.setup(_spell)
 	_input.fire_requested.connect(_fire_at)
 	_input.reset_requested.connect(reset_stage)
@@ -167,24 +174,32 @@ func _ready() -> void:
 
 ## 🔴🔴 **float이 시뮬로 들어가는 유일한 문이고, `Aim.fire_cmd`가 그걸 딱 한 번 닫는다.**
 ##  지팡이 끝도 마우스도 여기서는 아직 float px다.
+## 🔴 룬도 문양도 **조립 상태에서 나온다.** 껍데기가 `ELEM_FIRE`를 따로 박으면 룬 자리가
+##  거짓 손잡이가 되고, 룬을 바꿀 수 있게 되는 날 발사만 조용히 안 따라온다.
 func _fire_at(world_px: Vector2) -> void:
+	# 🔴🔴 **못 쏘면 커맨드를 아예 안 만든다.** 만들면 빈 룬이 `fire()`의 룬 검사에 걸려 짖고,
+	#  래퍼가 stderr를 실패로 치니 **평소 조작이 그물을 빨갛게 만든다.**
+	#  ⚠ 여기서도 짖지 마라 — 빈 룬으로 클릭하는 것은 **정상 입력**이다.
+	#   「못 쏜다」는 총구가 꺼지는 것으로 말한다(`character_view`).
+	if not _circle.can_fire():
+		return
 	_enqueue(Aim.fire_cmd(
-		_char_view.tip_px(), world_px, Tuning.ELEM_FIRE, _loadout_glyphs))
+		_char_view.tip_px(), world_px, _circle.element(), _circle.packed_glyphs()))
 
 
 ## ⚠ 표에 없는 번호는 **조용히 무시한다.** 눌러도 아무 일이 없는 게 「빈 조합으로 바뀌는 것」보다
 ##  낫다 — 후자는 판정 1(문양을 넣고 뺀 차이)과 화면에서 구별이 안 된다.
 ##  🔴 HUD가 있는 번호를 늘 보여 주므로 사용자에게 그 사실이 보인다.
+##
+## 🔴🔴 **프리셋은 조립 상태를 덮어쓸 뿐이다** — 상태를 따로 안 든다. 그래서 조립창이 붙어도
+##  두 길(키 · 클릭)이 같은 것을 만지고, 총구·HUD가 **저절로** 따라온다(계획 §1).
 func _set_loadout(n: int) -> void:
 	if not LOADOUTS.has(n):
 		return
 	var list: Array[int] = []
 	list.assign(LOADOUTS[n])
 	_loadout = n
-	_loadout_glyphs = Glyph.pack(list)
-	# 🔴 총구가 장착을 나른다 — 조합을 바꿔도 화면이 안 변하면 판정 1·2를 쏘기 전에 못 읽는다.
-	_char_view.loadout_glyphs = _loadout_glyphs
-	_char_view.loadout_element = Tuning.ELEM_FIRE
+	_circle.set_from_packed(Glyph.pack(list))
 
 
 func _enqueue(cmd: Dictionary) -> void:
@@ -339,22 +354,34 @@ func _update_hud() -> void:
 		"폭발 %d · 섬광 %d · 밀림 %d" % [
 			_blast_count, _blast_fx.active_count(), _spell.pending_count(),
 		],
-		"장착 [%d] %s   (%s)" % [_loadout, _loadout_name(_loadout), _loadout_help()],
+		# 🔴 장착 줄은 **`_circle`이 실제로 든 것**에서 나온다. 프리셋 표에서 이름을 뽑으면
+		#  조립창이 붙는 날 「그림은 바뀌었는데 HUD는 그대로」가 된다(위험 9).
+		# 🔴🔴 **「못 쏜다」를 말하는 세 곳 중 하나다**(총구 · 조립창 · 여기). 좌클릭했는데
+		#  아무 일도 안 나는 것을 **사용자가 고장으로 읽는 것**을 막는다.
+		"장착 [%d] %s%s   (%s)" % [
+			_loadout, _glyph_names(_circle.glyph_list()),
+			"" if _circle.can_fire() else "  ⚠ 룬 없음 — 쏠 수 없다", _loadout_help(),
+		],
 		"A/D 이동 · Space 점프 · 좌클릭 발사 · R 무대 리셋",
 	])
 
 
 ## 🔴 이름을 표에서 **파생**한다 — 손으로 적으면 문양을 늘릴 때 조용히 낡는다.
-static func _loadout_name(n: int) -> String:
-	if not LOADOUTS.has(n):
-		return "?"
-	var list: Array = LOADOUTS[n]
+## 🔴 **장착 줄(지금 든 것)과 도움말 줄(프리셋 표)이 같은 이 함수를 지난다** — 각자 만들면
+##  같은 조합이 두 이름으로 불리는 날이 온다.
+static func _glyph_names(list: Array) -> String:
 	if list.is_empty():
 		return "없음 (진 + 룬만)"
 	var parts: Array[String] = []
 	for id: int in list:
 		parts.append(String(Glyph.DEFS[id]["name"]))
 	return " → ".join(parts)
+
+
+static func _loadout_name(n: int) -> String:
+	if not LOADOUTS.has(n):
+		return "?"
+	return _glyph_names(LOADOUTS[n])
 
 
 ## 지금 있는 조합 키만 보여 준다. ⚠ 없는 번호를 안내하면 「눌렀는데 안 먹는다」가 된다.
