@@ -20,6 +20,12 @@ const SpellSim := preload("res://src/sim/spell_sim.gd")
 const CellGrid := preload("res://src/sim/cell_grid.gd")
 const Mat := preload("res://src/sim/cell_materials.gd")
 const Stage := preload("res://src/stage/stage.gd")
+## 🔴 주석·문자열 스트리퍼를 **빌려 온다** — 소스 텍스트를 훑는 그물이 둘이라 스트리퍼는 하나여야 한다.
+const NetDeterminism := preload("res://tests/nets/net_determinism.gd")
+
+## 표를 읽어야 하는 접근자들. 🔴 `circle_defs`에 접근자가 늘면 여기 한 줄을 늘려라 —
+##  안 늘리면 새 접근자만 상수를 돌려줘도 아무도 안 짖는다.
+const ACCESSORS: Array[String] = ["layers", "rune_slots"]
 
 
 func run(t) -> void:
@@ -28,6 +34,7 @@ func run(t) -> void:
 	_empty_rune_is_not_a_rune(t)
 	_swapping_the_circle_resizes(t)
 	_resize_is_table_driven(t)
+	_accessors_read_the_table(t)
 	_cannot_fire_without_a_rune(t)
 	_empty_layer_is_skipped(t)
 	_round_trip(t)
@@ -56,6 +63,16 @@ func _sizes_come_from_the_table(t) -> void:
 		t.eq(c.circle_id(), id, "진 %s가 자기 id를 기억한다" % nm)
 		t.eq(c.layer_count(), CircleDefs.layers(id), "진 %s의 층 수가 표에서 나온다" % nm)
 		t.eq(c.rune_count(), CircleDefs.rune_slots(id), "진 %s의 룬 자리 수가 표에서 나온다" % nm)
+
+		# 🔴 접근자를 **표와 직접** 맞댄다. 위 두 줄은 「모델이 접근자를 따라가나」만 본다.
+		#  ⚠ **이 두 줄로는 `return 2` 뮤테이션을 못 잡는다** — 표의 값이 마침 2라서
+		#   상수와 표가 같은 답을 낸다. 진이 1종인 한 **값으로는 원리적으로 못 가른다.**
+		#   ⇒ 그 구멍은 아래 `_accessors_read_the_table`이 텍스트로 막는다.
+		#   여기 두 줄이 잡는 것은 **표의 값과 다른 상수**(`return 5` 꼴)다.
+		t.eq(CircleDefs.layers(id), int(CircleDefs.DEFS[id]["layers"]),
+			"진 %s의 층 수 접근자가 표와 같은 값을 준다" % nm)
+		t.eq(CircleDefs.rune_slots(id), int(CircleDefs.DEFS[id]["rune_slots"]),
+			"진 %s의 룬 자리 접근자가 표와 같은 값을 준다" % nm)
 		# 🔴 층이 목록 상한을 넘으면 `pack`이 짖는다 — 표만 늘리고 여기를 안 보면
 		#  「층을 다 채우면 발사가 죽는다」가 된다.
 		t.ok(c.layer_count() <= Tuning.GLYPH_MAX_LAYERS,
@@ -203,8 +220,18 @@ func _swapping_the_circle_resizes(t) -> void:
 ## ⇒ **대신 소스 텍스트를 본다.** `net_determinism`이 같은 이유로 쓰는 장치다 —
 ##  실행으로 원리적으로 못 재는 계약은 **텍스트 스캔이 유일한 감지기**다.
 ##  🔴 재는 것은 좁다: **길이를 정하는 곳이 전부 진 표를 지나나.**
+##
+## 🔴🔴 **주석과 문자열을 먼저 걷어낸다.** 안 걷으면 주석에 `.resize(nl)` 한 줄만 적어도
+##  빨개진다(verify-read 실측). ⚠ **거짓 양성이 거짓 음성보다 나쁠 수 있다** —
+##  못 믿는 그물은 다음 사람이 지운다.
+## ⚠ 스트리퍼는 `net_determinism`의 것을 **빌려 쓴다.** 베끼면 두 벌이 되고,
+##  한쪽만 고쳐지는 날 두 그물이 서로 다른 텍스트를 본다(CLAUDE.md).
 func _resize_is_table_driven(t) -> void:
-	var src := _read("res://src/actor/spell_circle.gd")
+	var raw := _read("res://src/actor/spell_circle.gd")
+	# ⚠ `_strip`이 삼중 따옴표를 못 다룬다 — 그러면 파일 나머지가 통째로 스캔에서 빠지고
+	#  **조용히 초록**이 된다. `net_determinism`이 같은 가정을 재는 자리다.
+	t.ok(not raw.contains("\"\"\""), "spell_circle에 삼중 따옴표가 없다 (스트리퍼가 못 다룬다)")
+	var src := NetDeterminism._strip(raw)
 	var re := RegEx.new()
 	t.eq(re.compile("\\.resize\\(([^)]*)\\)"), OK, "resize 패턴이 컴파일된다")
 	var hits := re.search_all(src)
@@ -215,6 +242,34 @@ func _resize_is_table_driven(t) -> void:
 		var arg := m.get_string(1)
 		t.ok(arg.contains("CircleDefs."),
 			"길이 `%s`가 진 표에서 나온다 (상수 박기가 아니다)" % arg)
+
+
+## 🔴🔴 **접근자 자신이 표를 읽나.** 위 `_sizes_come_from_the_table`은 이걸 **원리적으로 못 잰다** —
+##  진이 1종이고 그 진의 층이 2라, `layers()`를 `return 2`로 바꿔도 표와 **같은 값**이 나온다.
+##  ⚠ 실측했다: 그렇게 바꾸고 그물을 돌리니 **접근자 검사까지 포함해 전부 초록이었다.**
+##
+## ⇒ 값으로 못 가르므로 **텍스트로 가른다.** 위 `_resize_is_table_driven`과 같은 이유·같은 장치다.
+## 🔴 재는 것은 좁다: **각 접근자 몸통이 `DEFS[`를 지나나.** `return 2`가 되면 그 줄이 사라진다.
+##  ⚠ 표를 어떻게 읽든(중간 변수를 두든) `DEFS[`는 남으므로 정상 리팩터링에는 안 문다.
+func _accessors_read_the_table(t) -> void:
+	var raw := _read("res://src/sim/circle_defs.gd")
+	t.ok(not raw.contains("\"\"\""), "circle_defs에 삼중 따옴표가 없다 (스트리퍼가 못 다룬다)")
+	var src := NetDeterminism._strip(raw)
+	# ⚠ 목록이 비면 아래가 한 번도 안 돌고 **초록이 된다.**
+	t.ok(ACCESSORS.size() > 0, "재 볼 접근자가 %d개다" % ACCESSORS.size())
+	for fname: String in ACCESSORS:
+		var body := _func_body(src, fname)
+		t.ok(body != "", "circle_defs에 %s()가 있다" % fname)
+		t.ok(body.contains("DEFS["), "%s()가 표를 읽는다 (상수를 안 돌려준다)" % fname)
+
+
+## `static func <이름>(` 부터 다음 `static func` 전까지. 못 찾으면 빈 문자열이다.
+func _func_body(src: String, fname: String) -> String:
+	var head := src.find("static func %s(" % fname)
+	if head < 0:
+		return ""
+	var tail := src.find("\nstatic func ", head + 1)
+	return src.substr(head) if tail < 0 else src.substr(head, tail - head)
 
 
 # ══════════════════════════════════════════════════════════════════
