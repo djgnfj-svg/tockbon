@@ -96,7 +96,9 @@ func _draw() -> void:
 	#  바뀌는 날 마법진 코드가 같이 열린다(§3.7).
 	#  ⚠ **그 대가로 단계 4b가 이 변환을 되돌려 클릭을 받아야 한다**(위험 22).
 	#   뺄 값은 `pages()["right"].position` — **여기서 쓰는 것과 같은 값**이다.
-	var page: Rect2 = pages["right"]
+	# 🔴 **어느 페이지가 마법진인가는 `book_layout`이 정한다.** 여기서 키를 박으면 좌우를
+	#  뒤집는 날 창과 그물이 따로 뒤집혀 **한쪽만 옮겨 간 채로 초록**이 된다(§3.7 — 이미 한 번 뒤집혔다).
+	var page := Book.circle_page(size)
 	draw_set_transform(page.position)
 
 	# 🔴 **좌표는 전부 `circle_layout`에서 온다.** 여기서 하나라도 계산하면
@@ -200,7 +202,9 @@ func _draw_glyph(at: Vector2, r: float, glyph_id: int) -> void:
 	if kind == Glyph.KIND_SPAWN:
 		# 밖으로 뻗는 가지 — **새 탄을 만든다**가 모양에 있다.
 		for k in Fx.GLYPH_SPAWN_RAYS:
-			var a := TAU * float(k) / float(Fx.GLYPH_SPAWN_RAYS)
+			# ⚠ 반 칸 돌린다 — 안 돌리면 수평 갈래가 고리 선에 포개져 **사라진다**
+			#  (`fx_tuning.GLYPH_SPAWN_ANGLE_STEP_FRAC` 주석에 실측이 있다).
+			var a := TAU * (float(k) + Fx.GLYPH_SPAWN_ANGLE_STEP_FRAC) / float(Fx.GLYPH_SPAWN_RAYS)
 			var d := Vector2(cos(a), sin(a))
 			draw_line(at + d * (r * Fx.GLYPH_SPAWN_INNER_RATIO), at + d * r,
 				tint, Fx.GLYPH_SYMBOL_PX)

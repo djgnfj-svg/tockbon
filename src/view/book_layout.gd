@@ -55,3 +55,20 @@ static func pages(window_size: Vector2) -> Dictionary:
 		"fold": Rect2(m + page_w, top, fold_w, h),
 		"right": Rect2(m + page_w + fold_w, top, page_w, h),
 	}
+
+
+## 🔴🔴 **어느 페이지가 무엇인가 — 여기가 단일 소스다.** 창도 그물도 이 둘만 부른다.
+##
+## ⚠ **좌우는 이미 한 번 뒤집혔다** (spec의 처음 안은 「왼쪽 팔레트 · 오른쪽 마법진」이었고
+##  사용자 판정으로 반대가 됐다). 또 뒤집힐 수 있으므로 **키를 여기저기 박지 않는다** —
+##  박으면 뒤집는 날 창과 그물이 따로 뒤집혀 **한쪽만 옮겨 간 채로 초록**이 된다.
+## 🔴 뒤집기는 **아래 두 줄을 맞바꾸는 일**이어야 한다.
+##
+## ⚠ 구조 근거는 좌우와 **무관하게 그대로다**(§3.7): 마법진이 **바깥쪽** 페이지에 있어야
+##  룬 자리가 늘 때 창 바깥으로 자라며 팔레트를 안 민다. 지금은 왼쪽이 바깥이다.
+static func circle_page(window_size: Vector2) -> Rect2:
+	return pages(window_size)["left"]
+
+
+static func palette_page(window_size: Vector2) -> Rect2:
+	return pages(window_size)["right"]

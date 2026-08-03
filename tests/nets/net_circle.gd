@@ -40,11 +40,20 @@ const BOOK_PATH := "res://src/view/book_layout.gd"
 ## 마법진 지름의 **바닥값**. 🔴 연출 상수가 아니라 **검증 계약**이라 그물에 둔다 —
 ##  단계 3에서 눈이 통과시킨 크기이고, 여기 아래로 내려가면 그 판정을 다시 받아야 한다.
 ##
-## ⚠🔴 **여유가 19.3px뿐이다** (지금 지름 199.3 vs 바닥 180, 2026-08-04 실측).
-##  ⇒ 창을 조금만 줄이거나 여백(`CIRCLE_AREA_PAD_PX` · `BOOK_MARGIN_PX` · `BOOK_FOLD_PX`)을
-##   조금만 키워도 **여기가 먼저 빨개진다.** 그때 이 줄을 낮추기 전에 **눈으로 다시 봐라** —
-##   이 값이 지키는 것은 「고리 둘·룬·문양 심볼이 서로 안 먹는 크기」다.
-##  🔴 **원인이 여기가 아니라는 걸 알고 만나야** 「왜 갑자기 빨갛지」로 시간을 안 버린다.
+## ⚠ **실측이 두 번 바뀌었다:**
+##
+## | 언제 | 창 | 지름 | 바닥값 여유 |
+## |---|---|---|---|
+## | 단계 4a | 514×286 (28.4%) | 199.3 | **19.3px** — 빠듯했다 |
+## | 단계 4b-1 | 864×486 (**90%**) | **363.8** | **183.8px** |
+##
+## 🔴 **바닥값 180은 아직 「199px에서 눈이 통과시켰다」가 근거다** — 지금 지름과 두 배 차이지만
+##  **아직 안 올렸다.** verify-look이 363.8px 화면을 통과시키면 **그때 그 새 관측을 근거로 올려라.**
+##  ⚠ 지금 올리면 근거 없는 숫자가 된다 — 이 리포가 계속 잡아 온 바로 그 모양이다.
+##
+## ⚠ 이 값이 지키는 것은 「고리 둘·룬·문양 심볼이 서로 안 먹는 크기」다. 창을 줄이거나
+##  여백(`CIRCLE_AREA_PAD_PX` · `BOOK_MARGIN_PX` · `BOOK_FOLD_PX`)을 키우면 여기가 먼저 빨개진다.
+##  🔴 **원인이 이 상수가 아니라는 걸 알고 만나야** 「왜 갑자기 빨갛지」로 시간을 안 버린다.
 const CIRCLE_DIAMETER_FLOOR_PX := 180.0
 
 
@@ -353,6 +362,20 @@ func _book_pages_are_one_source(t) -> void:
 		t.ok(win_rect.encloses(p), "%s 가 창 안에 들어간다" % key)
 		t.ok(p.position.y >= Fx.WINDOW_TITLE_BAND_PX, "%s 가 제목 띠 아래에서 시작한다" % key)
 
+	# 🔴 **어느 페이지가 마법진인가를 그물도 `book_layout`에서 읽는다.** 여기 키를 박으면
+	#  좌우를 뒤집는 날 **창만 뒤집히고 그물은 옛 페이지를 재면서 초록**이 된다.
+	var circle_page := Book.circle_page(win)
+	var palette_page := Book.palette_page(win)
+	t.ok(not circle_page.intersects(palette_page), "마법진 페이지와 팔레트 페이지가 안 겹친다")
+	t.ok(circle_page == l or circle_page == r, "마법진 페이지가 두 페이지 중 하나다")
+	t.ok(palette_page == l or palette_page == r, "팔레트 페이지가 두 페이지 중 하나다")
+	# ⚠🔴 **「마법진이 바깥쪽이다」(§3.7 ③)는 여기서 못 잰다 — 재려다 동어반복을 만들었다.**
+	#  `circle.position.x <= palette.position.x or circle.end.x >= palette.end.x` 로 적었더니
+	#  **좌우를 완전히 반전해도 초록이었다**(실측). 페이지가 둘뿐이면 **둘 다 한쪽에서 바깥**이라
+	#  그 술어가 늘 참이다.
+	#  🔴 ③의 진짜 내용은 「자랄 때 어디로 자라나」라 **지금 기하에 없다** — 룬 자리가 여럿인 진이
+	#   와서 마법진이 실제로 가로로 커지는 날에야 잴 것이 생긴다. 그때까지는 **눈과 문서의 몫**이다.
+
 	# 🔴🔴 **계약: 마법진 페이지가 진 지름을 담는다.**
 	#
 	# ⚠ 처음엔 `지름 <= min(페이지)`로 적었는데 **그건 동어반복이었다** — 실측으로 확인했다:
@@ -363,12 +386,13 @@ func _book_pages_are_one_source(t) -> void:
 	#  (층 번호와 명도차가 읽힌다)을 통과시켰다. 여기서 더 작아지면 **그 판정이 낡는다** —
 	#  고리 둘·룬·문양 심볼이 그 안에 다 들어가야 하고, 작아지면 서로 먹는다.
 	#  ⚠ 창을 줄이고 싶으면 이 줄을 낮추기 전에 **눈으로 다시 봐라.**
-	var area := Layout.circle_area(r.size)
+	var area := Layout.circle_area(circle_page.size)
 	var fr: float = Layout.frame(area)["radius"]
-	t.ok(fr > 0.0, "오른쪽 페이지에서 진 반지름이 나온다 (%.1f)" % fr)
+	t.ok(fr > 0.0, "마법진 페이지에서 진 반지름이 나온다 (%.1f)" % fr)
 	t.ok(fr * 2.0 >= CIRCLE_DIAMETER_FLOOR_PX,
 		"진 지름(%.1f)이 바닥값 %d 이상이다 (페이지 %dx%d)" % [
-			fr * 2.0, int(CIRCLE_DIAMETER_FLOOR_PX), int(r.size.x), int(r.size.y)])
+			fr * 2.0, int(CIRCLE_DIAMETER_FLOOR_PX),
+			int(circle_page.size.x), int(circle_page.size.y)])
 
 	# 창이 화면 안에 있나. ⚠ 「몇 %냐」는 안 잰다 — 그 숫자는 낡는다(계획 §3.7).
 	#  「캐릭터가 보이나」는 **눈이 판정한다.**
@@ -417,6 +441,10 @@ func _circle_layout_does_not_know_pages(t) -> void:
 	#  마법진이 접힘을 넘어 **왼쪽 페이지를 침범한다** — 그림만 틀리고 아무도 안 짖는다.
 	t.ok(draw.contains("Layout.circle_area(page.size)"),
 		"창이 마법진에 **페이지 크기**를 넘긴다 (창 크기가 아니다)")
+	# 🔴 창이 페이지 키를 **직접 박지 않는다.** 박으면 좌우를 뒤집을 때 창만 뒤집히고
+	#  그물은 옛 페이지를 재면서 **둘 다 초록**이다.
+	t.ok(draw.contains("Book.circle_page("),
+		"창이 마법진 페이지를 `book_layout`에게 묻는다 (키를 안 박는다)")
 
 	# ⚠ 그리기가 변환을 쓰면 **되돌리는 줄이 반드시 있어야 한다** — 없으면 뒤에 붙는 것이
 	#  전부 페이지만큼 밀리고, 지금은 뒤에 아무것도 없어서 증상조차 없다.
@@ -443,8 +471,9 @@ func _circle_layout_does_not_know_pages(t) -> void:
 ## 🔴 그리고 계획이 「`rune_slots != 1`이면 짖는다」를 **래퍼 stderr에 공짜로 걸리는 장치**라고 적었는데,
 ##  그 함수를 부르는 그물이 없어서 **공짜가 아니었다.** 아래가 그 함수를 실제로 부른다.
 func _layout_geometry_runs(t) -> void:
-	# 🔴 마법진은 **오른쪽 페이지 안**에서 산다. 창 크기가 아니라 페이지 크기를 받는다.
-	var page: Rect2 = Book.pages(Fx.WINDOW_RECT.size)["right"]
+	# 🔴 마법진은 **자기 페이지 안**에서 산다. 창 크기가 아니라 페이지 크기를 받는다.
+	#  ⚠ 어느 쪽인지는 `book_layout`이 안다 — 여기 키를 박으면 좌우를 뒤집는 날 갈라진다.
+	var page := Book.circle_page(Fx.WINDOW_RECT.size)
 	var area := Layout.circle_area(page.size)
 	t.ok(area.size.x > 0.0 and area.size.y > 0.0,
 		"마법진 자리에 크기가 있다 (%dx%d)" % [int(area.size.x), int(area.size.y)])

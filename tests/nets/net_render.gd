@@ -32,6 +32,10 @@ const HUD_PATH := "HUD"
 ##   적으면 「이건 일부러 먹는다」가 리포에 남는다. 자동으로 알아내면 그 선언이 사라진다.
 const INTERACTIVE: Array[String] = ["HUD/CircleWindow"]
 
+## 창이 화면에서 차지하는 비율. 🔴 **사용자 판정이라 계약이다**(§8) — 연출값이 아니다.
+##  「책이 그냥 화면 90%를 차지하게 해줘」(2026-08-03).
+const WINDOW_SCREEN_FRAC := 0.9
+
 
 func run(t) -> void:
 	var shaders := _scan_shaders(VIEW_DIR)
@@ -163,19 +167,25 @@ func _window_leaves_the_stage_visible(t, root: Node) -> void:
 		int(r.size.x), int(r.size.y)])
 	t.ok(r.position.x >= 0.0 and r.position.y >= 0.0 and r.end.x <= vw and r.end.y <= vh,
 		"조립창이 화면 안에 들어간다 (%s ~ %s)" % [r.position, r.end])
-	# 절반은 넉넉한 상한이다 — 「일부」의 하한선이지 손맛값이 아니다.
-	t.ok(r.size.x * r.size.y < vw * vh * 0.5,
-		"조립창이 화면의 절반을 안 넘는다 (%d%%)" % int(r.size.x * r.size.y * 100.0 / (vw * vh)))
 
+	# 🔴🔴 **계약이 「절반 이하」에서 「화면 90%」로 바뀌었다** — 사용자 판정(§3.7·§8).
+	#  ⚠ 옛 검사는 「일부만 덮는다」를 지켰는데, 그 근거였던 「캐릭터가 보인다」가 **유예**됐다
+	#   (지금 게임에 몬스터도 체력도 없어 못 보는 대가가 0이다).
+	#  🔴 **유예지 삭제가 아니다** — 캐릭터가 다칠 수 있게 되는 날 이 줄이 다시 바뀐다.
+	t.ok(absf(r.size.x / vw - WINDOW_SCREEN_FRAC) <= 0.01,
+		"창 가로가 화면의 %d%%다 (%.1f%%)" % [
+			int(WINDOW_SCREEN_FRAC * 100.0), r.size.x / vw * 100.0])
+	t.ok(absf(r.size.y / vh - WINDOW_SCREEN_FRAC) <= 0.01,
+		"창 세로가 화면의 %d%%다 (%.1f%%)" % [
+			int(WINDOW_SCREEN_FRAC * 100.0), r.size.y / vh * 100.0])
+
+	# 🔴🔴 **90%면 `HUD/Stats`를 덮는다. 그게 안전한 이유는 창이 불투명해서다.**
+	#  ⚠ 옛 검사는 「안 겹친다」였고 근거는 위험 12(「겹치면 글씨가 섞인다」)였는데,
+	#   그 위험은 **반투명 창의 것**이다. 불투명 창은 섞지 않고 **가린다.**
+	#  ⇒ 겹침을 금지하는 대신 **겹쳐도 되는 조건**을 잰다. 반투명으로 되돌리면 여기가 빨개진다.
 	var stats := root.get_node_or_null("HUD/Stats") as Control
 	t.ok(stats != null, "씬에 HUD/Stats 가 있다")
-	if stats == null:
-		return
-	var sr := Rect2(
-		Vector2(stats.offset_left, stats.offset_top),
-		Vector2(stats.offset_right - stats.offset_left,
-			stats.offset_bottom - stats.offset_top))
-	t.ok(not sr.intersects(r), "조립창이 HUD/Stats(%s)와 안 겹친다" % sr)
+	t.eq(Fx.WINDOW_BG.a, 1.0, "창 배경이 불투명하다 (겹친 HUD 글씨가 안 섞인다)")
 
 
 ## 🔴🔴 **위 검사는 `Fx.WINDOW_RECT` 라는 상수만 잰다 — 창이 그걸 쓰는지는 안 본다.**
