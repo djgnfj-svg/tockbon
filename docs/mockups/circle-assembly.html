@@ -1,0 +1,756 @@
+<title>조립창 목업 — 마법진 · 링 · 회전</title>
+
+<style>
+  :root{
+    --paper:#eceaef; --ink:#1a1622; --muted:#6a6379; --rule:#d5d1dc;
+    --accent:#8a5f1f; --card:#f6f5f8;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --paper:#15121b; --ink:#e9e5ef; --muted:#968ea8; --rule:#2c2637;
+      --accent:#d9b877; --card:#1c1826;
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#15121b; --ink:#e9e5ef; --muted:#968ea8; --rule:#2c2637;
+    --accent:#d9b877; --card:#1c1826;
+  }
+  :root[data-theme="light"]{
+    --paper:#eceaef; --ink:#1a1622; --muted:#6a6379; --rule:#d5d1dc;
+    --accent:#8a5f1f; --card:#f6f5f8;
+  }
+
+  body{
+    background:var(--paper); color:var(--ink);
+    font-family:ui-sans-serif,-apple-system,"Segoe UI","Malgun Gothic",sans-serif;
+    line-height:1.65; margin:0; padding:40px 20px 72px;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1000px; margin:0 auto; display:flex; flex-direction:column; gap:28px;}
+
+  .eyebrow{
+    font-size:12px; letter-spacing:.14em; text-transform:uppercase;
+    color:var(--muted); font-weight:600; margin:0;
+  }
+  h1{
+    font-size:clamp(26px,4vw,38px); line-height:1.15; margin:6px 0 0;
+    font-weight:700; letter-spacing:-.02em; text-wrap:balance;
+  }
+  .lede{margin:10px 0 0; max-width:62ch; color:var(--muted); font-size:16px;}
+  .lede strong{color:var(--ink); font-weight:600;}
+
+  .screen{
+    width:100%; border:1px solid var(--rule); border-radius:3px;
+    background:#14101a; overflow:hidden; display:block;
+    box-shadow:0 18px 48px -28px rgba(0,0,0,.6);
+  }
+  .screen svg{display:block; width:100%; height:auto; touch-action:none;}
+
+  .screen-meta{
+    display:flex; flex-wrap:wrap; gap:6px 20px; align-items:baseline;
+    font-family:ui-monospace,"Cascadia Mono",Consolas,monospace;
+    font-size:12px; color:var(--muted); margin-top:-16px;
+  }
+  .screen-meta b{color:var(--ink); font-weight:600;}
+
+  .bar{
+    display:flex; flex-wrap:wrap; gap:10px; align-items:center;
+    padding:14px 16px; background:var(--card);
+    border:1px solid var(--rule); border-radius:3px;
+  }
+  .bar .label{
+    font-size:11px; letter-spacing:.12em; text-transform:uppercase;
+    color:var(--muted); font-weight:600; margin-right:2px;
+  }
+  button{
+    font:inherit; font-size:13px; font-weight:500;
+    color:var(--ink); background:transparent;
+    border:1px solid var(--rule); border-radius:2px;
+    padding:6px 13px; cursor:pointer;
+    transition:border-color .12s, color .12s, background .12s;
+  }
+  button:hover{border-color:var(--accent); color:var(--accent);}
+  button:focus-visible{outline:2px solid var(--accent); outline-offset:2px;}
+  button[aria-pressed="true"]{
+    border-color:var(--accent); color:var(--accent);
+    background:color-mix(in srgb, var(--accent) 12%, transparent);
+  }
+  .spacer{flex:1 1 auto;}
+
+  h2{
+    font-size:13px; letter-spacing:.12em; text-transform:uppercase;
+    color:var(--muted); font-weight:600; margin:0 0 14px;
+    padding-bottom:8px; border-bottom:1px solid var(--rule);
+  }
+  .notes{display:flex; flex-direction:column; gap:18px; margin:0; padding:0; list-style:none;}
+  .notes li{display:grid; grid-template-columns:auto 1fr; gap:0 14px; align-items:baseline;}
+  .notes .k{
+    font-family:ui-monospace,"Cascadia Mono",Consolas,monospace;
+    font-size:11px; font-weight:600; letter-spacing:.06em;
+    color:var(--paper); background:var(--accent);
+    padding:2px 7px; border-radius:2px; white-space:nowrap;
+  }
+  .notes .k.warn{background:#b4472e; color:#fff;}
+  .notes .k.open{background:transparent; color:var(--muted); border:1px solid var(--rule);}
+  .notes p{margin:0; max-width:64ch;}
+  .notes strong{font-weight:650;}
+  code{
+    font-family:ui-monospace,"Cascadia Mono",Consolas,monospace;
+    font-size:.9em; background:var(--card); padding:1px 5px;
+    border:1px solid var(--rule); border-radius:2px;
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    *{animation-duration:.01ms !important; animation-iteration-count:1 !important;}
+  }
+
+  .hit{cursor:pointer;}
+  .clack{animation:clack .24s cubic-bezier(.18,1.5,.42,1);}
+  @keyframes clack{
+    0%{transform:scale(1.16); opacity:.15;}
+    55%{transform:scale(.975); opacity:1;}
+    100%{transform:scale(1);}
+  }
+  .ringspin{cursor:grab;}
+  .ringspin:active{cursor:grabbing;}
+</style>
+
+<div class="wrap">
+
+  <header>
+    <p class="eyebrow">tockbon · 조립창 레이아웃 목업</p>
+    <h1>좌에 마법진, 우에 인벤토리</h1>
+    <p class="lede">
+      실제 게임 해상도 960×540 비율 그대로입니다. 우 패널은 <strong>마법진 · 진 · 룬 · 문양</strong> 네 탭입니다.
+      「마법진」 탭이 저장고고, 조립한 것이 거기 쌓입니다. 저장된 것을 누르면 <strong>다시 열려 고쳐집니다.</strong>
+      링은 끌어서 돌릴 수 있습니다.
+    </p>
+  </header>
+
+  <div class="screen">
+    <svg id="stage" viewBox="0 0 960 540" role="img" aria-label="조립창 레이아웃 목업">
+      <defs>
+        <pattern id="cells" width="4" height="4" patternUnits="userSpaceOnUse">
+          <path d="M4 0V4H0" fill="none" stroke="#ffffff" stroke-opacity=".028" stroke-width="1"/>
+        </pattern>
+        <radialGradient id="glow">
+          <stop offset="0%" stop-color="#ff7326" stop-opacity=".5"/>
+          <stop offset="100%" stop-color="#ff7326" stop-opacity="0"/>
+        </radialGradient>
+      </defs>
+
+      <!-- ── 세상 ── -->
+      <g id="world">
+        <rect width="960" height="540" fill="#14101a"/>
+        <rect x="0" y="0" width="960" height="24" fill="#453f4e"/>
+        <rect x="0" y="500" width="960" height="40" fill="#453f4e"/>
+        <rect x="0" y="0" width="24" height="540" fill="#453f4e"/>
+        <rect x="936" y="0" width="24" height="540" fill="#453f4e"/>
+        <rect x="152" y="376" width="32" height="124" fill="#4e4757"/>
+        <rect x="704" y="340" width="32" height="160" fill="#4e4757"/>
+        <rect x="384" y="468" width="144" height="32" fill="#6d4826"/>
+        <rect x="384" y="468" width="144" height="6" fill="#835932"/>
+        <circle cx="404" cy="470" r="26" fill="url(#glow)"/>
+        <rect x="392" y="462" width="8" height="8" fill="#ff7326"/>
+        <rect x="404" y="466" width="8" height="8" fill="#ffb02e"/>
+        <rect width="960" height="540" fill="url(#cells)"/>
+        <g>
+          <rect x="296" y="484" width="16" height="16" fill="#cfd6e4"/>
+          <rect x="300" y="488" width="8" height="4" fill="#14101a"/>
+          <path d="M312 490 L332 478" stroke="#9a7a4a" stroke-width="3" stroke-linecap="round"/>
+          <circle cx="333" cy="477" r="3" fill="#ff7326"/>
+        </g>
+        <g font-family="ui-monospace, Consolas, monospace" font-size="9" fill="#8f88a0">
+          <text x="30" y="16">tick 1284   fps 60   proj 0   burn 37</text>
+          <text x="30" y="30">슬롯 1: 확산 → 폭발    슬롯 2: —</text>
+        </g>
+      </g>
+
+      <!-- ── 좌 패널: 편집기 ── -->
+      <g id="panelL">
+        <rect x="32" y="44" width="460" height="452" rx="3"
+              fill="#181322" fill-opacity=".9" stroke="#6a5836" stroke-width="1"/>
+        <text x="52" y="70" font-size="13" font-weight="600" fill="#d9b877" letter-spacing=".06em">마법진</text>
+        <text id="editName" x="52" y="88" font-size="11" fill="#7d7590"></text>
+        <g id="equipBtns"></g>
+        <g id="circleArt"></g>
+      </g>
+
+      <!-- ── 우 패널: 인벤토리 ── -->
+      <g id="panelR">
+        <rect x="512" y="44" width="416" height="452" rx="3"
+              fill="#181322" fill-opacity=".9" stroke="#6a5836" stroke-width="1"/>
+        <g id="tabs"></g>
+        <g id="invArt"></g>
+        <text id="hintR"  x="540" y="424" font-size="11" fill="#7d7590"></text>
+        <text id="hintR2" x="540" y="442" font-size="11" fill="#7d7590"></text>
+      </g>
+    </svg>
+  </div>
+
+  <div class="screen-meta">
+    <span><b>960×540</b> 뷰포트 (창 1920×1080)</span>
+    <span>셀 <b>4px</b> · 화면 240×135셀</span>
+    <span>캐릭터 <b>16px</b> — 화면 너비의 1/60</span>
+  </div>
+
+  <div class="bar">
+    <span class="label">조작</span>
+    <button id="btnReset" type="button">처음부터</button>
+    <button id="btnSnap" type="button" aria-pressed="false">회전 45° 스냅</button>
+    <button id="btnSound" type="button" aria-pressed="true">철컥 소리</button>
+    <span class="spacer"></span>
+    <button id="btnBg" type="button" aria-pressed="true">배경 비침</button>
+  </div>
+
+  <section>
+    <h2>이번에 정해진 것</h2>
+    <ul class="notes">
+      <li>
+        <span class="k">저장고</span>
+        <p>「마법진」 탭이 <strong>내가 조립한 완제품의 저장고</strong>입니다. 던전 드랍이 아니라 내가 만든 것만 쌓입니다.
+        누르면 좌 창에 다시 열려서 <strong>층을 바꿀 수 있습니다</strong> — 「거의 맞는데 1층만 바꿔 보자」가 됩니다.</p>
+      </li>
+      <li>
+        <span class="k">자동 저장</span>
+        <p>저장 버튼을 두지 않았습니다. 부품을 꽂는 순간 저장고의 그 칸이 바뀝니다.
+        수정이 가능한 이상 명시 저장은 클릭만 늘리고, GDD가 <strong>「조립이 길면 실전에서 아무도 안 쓴다」</strong>고 이미 경고했습니다.
+        <strong>이건 제 판단이라 아니면 되돌립니다.</strong></p>
+      </li>
+      <li>
+        <span class="k">장착</span>
+        <p>좌 창 위의 <strong>슬롯 1 · 슬롯 2</strong> 버튼이 지금 편집 중인 마법진을 그 자리에 끼웁니다.
+        저장고 칸에는 <strong>어느 슬롯에 끼워져 있는지 뱃지</strong>가 붙습니다.</p>
+      </li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>남은 것</h2>
+    <ul class="notes">
+      <li>
+        <span class="k open">게임 루프</span>
+        <p><strong>부품이 소모되나 — 미정.</strong> 소모가 있으면 「무엇을 모으러 내려가나」가 생기고,
+        없으면 조립이 순수 실험이 됩니다. 지금 목업은 <strong>소모 없음</strong>으로 세워져 있고,
+        나중에 소모가 붙어도 칸에 개수가 붙는 정도라 이 레이아웃은 안 바뀝니다.</p>
+      </li>
+      <li>
+        <span class="k warn">정수</span>
+        <p><strong>회전이 시뮬에 영향을 주는 순간 정수 계약에 걸립니다.</strong>
+        순수 장식이면 <code>src/view/</code>라 각도가 float이어도 자유롭습니다. 하지만 회전이 탄 방향이나
+        확산 각도를 조금이라도 바꾸면 그 각도는 커맨드를 타고 <code>src/sim/</code>으로 들어가고,
+        거기는 float·<code>sin</code>·<code>cos</code>가 금지입니다. 그때는 <strong>45° 8단계</strong>처럼
+        각도가 정수 인덱스여야 합니다. 위 스냅 토글로 두 감각을 비교해 보세요.</p>
+      </li>
+      <li>
+        <span class="k open">미정</span>
+        <p><strong>저장고가 몇 칸인가, 지우기가 있나.</strong> 지금은 12칸이고 지우기가 없습니다.
+        수정이 되니까 지우기 없이도 돌아가긴 합니다.</p>
+      </li>
+      <li>
+        <span class="k open">미정</span>
+        <p>배경 비침을 토글로 뒀습니다. 지금은 몬스터도 체력도 없어서 <strong>비쳐도 아무 압력이 없습니다.</strong>
+        이 결정이 참인지는 몬스터가 붙을 때 처음 재집니다.</p>
+      </li>
+      <li>
+        <span class="k">휑함</span>
+        <p>부품 탭이 <strong>진 1 · 룬 1 · 문양 2</strong>로 정직하게 비어 있습니다.
+        「조립창 뼈만」을 고른 결과가 이 그림입니다 — 뼈는 다 서지만,
+        <strong>이 창으로 만들 수 있는 마법진은 여전히 5개</strong>이고 그건 디버그 키 1~5와 같습니다.</p>
+      </li>
+    </ul>
+  </section>
+
+</div>
+
+<script>
+(() => {
+  "use strict";
+
+  const CX = 262, CY = 292;
+  const R_FRAME = 172, R_L2 = 134, R_L1 = 94, R_RUNE = 52;
+  const LAYER_R = [R_L1, R_L2];          // 1층이 안쪽
+
+  const GOLD = "#d9b877", GOLD_DIM = "#6a5836", SEL = "#6fe3ff",
+        FIRE = "#ff8a3d", GREY = "#8c8598", INK = "#181322";
+
+  const FRAMES = [{ id:"round2", name:"동그라미", layers:2 }];
+  const RUNES  = [{ id:"fire", name:"불", color:FIRE }];
+  const GLYPHS = [{ id:"spread", name:"확산" }, { id:"blast", name:"폭발" }];
+
+  const TABS = [
+    { id:"circles", name:"마법진" },
+    { id:"frames",  name:"진" },
+    { id:"runes",   name:"룬" },
+    { id:"glyphs",  name:"문양" }
+  ];
+
+  const S = {
+    tab:"circles",
+    saved:[],          // {frame, rune, layers:[a,b], rot:[a,b]}
+    editing:-1,        // saved 인덱스. -1이면 편집 중인 게 없다
+    slots:[-1,-1],     // 슬롯 1·2에 끼워진 saved 인덱스
+    selLayer:null,
+    snap:false, sound:true, bg:true
+  };
+
+  const svg     = document.getElementById("stage");
+  const gCircle = document.getElementById("circleArt");
+  const gEquip  = document.getElementById("equipBtns");
+  const gTabs   = document.getElementById("tabs");
+  const gInv    = document.getElementById("invArt");
+  const editNm  = document.getElementById("editName");
+  const hintR   = document.getElementById("hintR");
+  const hintR2  = document.getElementById("hintR2");
+  const world   = document.getElementById("world");
+  const NS = "http://www.w3.org/2000/svg";
+
+  const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const cur = () => S.editing >= 0 ? S.saved[S.editing] : null;
+
+  // ── 소리: 짧은 노이즈 버스트 = 철컥 ─────────────────────────
+  let actx = null;
+  function clackSound(pitch = 1){
+    if (!S.sound) return;
+    try {
+      actx ||= new (window.AudioContext || window.webkitAudioContext)();
+      if (actx.state === "suspended") actx.resume();
+      const t = actx.currentTime, n = 1400;
+      const buf = actx.createBuffer(1, n, actx.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < n; i++) d[i] = (Math.random()*2 - 1) * Math.pow(1 - i/n, 7);
+      const src = actx.createBufferSource(); src.buffer = buf;
+      const f = actx.createBiquadFilter();
+      f.type = "bandpass"; f.frequency.value = 1500 * pitch; f.Q.value = 1.6;
+      const g = actx.createGain();
+      g.gain.setValueAtTime(.22, t);
+      g.gain.exponentialRampToValueAtTime(.0008, t + .085);
+      src.connect(f); f.connect(g); g.connect(actx.destination);
+      src.start(t);
+    } catch (e) { /* 소리는 있으면 좋은 것이지 없으면 안 되는 것이 아니다 */ }
+  }
+
+  // ── SVG 헬퍼 ───────────────────────────────────────────────
+  function el(tag, attrs = {}, parent = null){
+    const n = document.createElementNS(NS, tag);
+    for (const k in attrs) n.setAttribute(k, attrs[k]);
+    if (parent) parent.appendChild(n);
+    return n;
+  }
+  function txt(parent, x, y, s, attrs = {}){
+    const n = el("text", Object.assign({ x, y }, attrs), parent);
+    n.textContent = s;
+    return n;
+  }
+  const rad = a => a * Math.PI / 180;
+
+  function spokes(cx, cy, r, count, inset, out, halfDeg, rot){
+    let d = "";
+    for (let i = 0; i < count; i++){
+      const a = rot + i * 360 / count;
+      const a1 = rad(a - halfDeg), a2 = rad(a + halfDeg), am = rad(a);
+      d += `M${cx + Math.cos(a1)*(r-inset)} ${cy + Math.sin(a1)*(r-inset)}`
+        +  `L${cx + Math.cos(am)*(r+out)} ${cy + Math.sin(am)*(r+out)}`
+        +  `L${cx + Math.cos(a2)*(r-inset)} ${cy + Math.sin(a2)*(r-inset)}Z`;
+    }
+    return d;
+  }
+
+  // 확산: 8방향으로 뻗는 화살촉. 8이라는 수 자체가 확산의 정체다.
+  // 폭발: 두 겹 링 + 촘촘한 짧은 톱니. 한 점에서 터지는 느낌.
+  function glyphRing(parent, id, cx, cy, r, rot, color, strong){
+    const w = strong ? 2.4 : 1.6;
+    if (id === "spread"){
+      el("circle", { cx, cy, r, fill:"none", stroke:color, "stroke-width":w, "stroke-opacity":.85 }, parent);
+      el("path", { d: spokes(cx, cy, r, 8, 7, 17, 3.6, rot), fill:color, "fill-opacity":.9 }, parent);
+      el("path", { d: spokes(cx, cy, r, 8, 2, -9, 1.6, rot + 22.5), fill:"none",
+                   stroke:color, "stroke-width":1, "stroke-opacity":.45 }, parent);
+    } else {
+      el("circle", { cx, cy, r:r-4, fill:"none", stroke:color, "stroke-width":w, "stroke-opacity":.6 }, parent);
+      el("circle", { cx, cy, r:r+4, fill:"none", stroke:color, "stroke-width":w, "stroke-opacity":.85 }, parent);
+      el("path", { d: spokes(cx, cy, r+4, 20, 0, 8, 2.2, rot), fill:color, "fill-opacity":.8 }, parent);
+      el("path", { d: spokes(cx, cy, r-4, 20, 0, -7, 2.2, rot + 9), fill:color, "fill-opacity":.45 }, parent);
+    }
+  }
+
+  function glyphIcon(parent, id, cx, cy, r, color){
+    if (id === "spread"){
+      el("circle", { cx, cy, r, fill:"none", stroke:color, "stroke-width":1.4 }, parent);
+      el("path", { d: spokes(cx, cy, r, 8, 3, 7, 5, 0), fill:color }, parent);
+    } else {
+      el("circle", { cx, cy, r:r-2.5, fill:"none", stroke:color, "stroke-width":1.2, "stroke-opacity":.6 }, parent);
+      el("circle", { cx, cy, r:r+2.5, fill:"none", stroke:color, "stroke-width":1.4 }, parent);
+      el("path", { d: spokes(cx, cy, r+2.5, 16, 0, 4.5, 3, 0), fill:color }, parent);
+    }
+  }
+
+  function runeMark(parent, cx, cy, r, color, dim){
+    let d = "";
+    for (let i = 0; i < 6; i++){
+      const a = rad(-90 + i*60);
+      d += (i ? "L" : "M") + (cx + Math.cos(a)*r) + " " + (cy + Math.sin(a)*r);
+    }
+    el("path", { d: d + "Z", fill: dim ? "none" : color, "fill-opacity": dim ? 0 : .16,
+                 stroke: color, "stroke-width": dim ? 1.2 : 2,
+                 "stroke-dasharray": dim ? "4 5" : "none" }, parent);
+  }
+
+  const runeColor = c => (c && c.rune) ? RUNES.find(r => r.id === c.rune).color : GREY;
+
+  function nameOf(c){
+    if (!c) return "";
+    const gs = c.layers.filter(Boolean).map(g => GLYPHS.find(x => x.id === g).name);
+    const rn = c.rune ? RUNES.find(r => r.id === c.rune).name : null;
+    if (!gs.length) return rn ? rn + " · 문양 없음" : "빈 마법진";
+    return (rn ? rn + " · " : "") + gs.join("→");
+  }
+
+  // ── 좌 패널: 편집기 ────────────────────────────────────────
+  function renderEditor(clackWhat){
+    gCircle.textContent = "";
+    gEquip.textContent = "";
+    const c = cur();
+
+    // 슬롯 장착 버튼
+    [0,1].forEach(i => {
+      const x = 336 + i*76, on = S.slots[i] >= 0 && S.slots[i] === S.editing;
+      const has = S.slots[i] >= 0;
+      const g = el("g", { class: c ? "hit" : "" }, gEquip);
+      el("rect", { x, y:58, width:70, height:24, rx:2,
+                   fill: on ? "#2a2135" : "transparent",
+                   stroke: on ? GOLD : (c ? GOLD_DIM : "#3a3145"), "stroke-width":1 }, g);
+      txt(g, x+35, 74, "슬롯 " + (i+1), { "text-anchor":"middle", "font-size":10,
+            fill: on ? GOLD : (has ? "#9a92aa" : "#6b6479") });
+      if (c) g.addEventListener("click", () => {
+        S.slots[i] = (S.slots[i] === S.editing) ? -1 : S.editing;
+        clackSound(1.45); render();
+      });
+    });
+
+    if (!c || !c.frame){
+      editNm.textContent = c ? "진을 놓으세요" : "";
+      el("circle", { cx:CX, cy:CY, r:R_FRAME, fill:"none", stroke:GOLD_DIM,
+                     "stroke-width":1.5, "stroke-dasharray":"6 9" }, gCircle);
+      txt(gCircle, CX, CY - 6, c ? "진을 놓으세요" : "만들거나 불러오세요",
+          { "text-anchor":"middle", "font-size":15, fill:"#6b6479" });
+      txt(gCircle, CX, CY + 18,
+          c ? "「진」 탭에서 고릅니다" : "「마법진」 탭에서 + 를 누르세요",
+          { "text-anchor":"middle", "font-size":11, fill:"#57506a" });
+      return;
+    }
+
+    editNm.textContent = nameOf(c);
+    const col = runeColor(c);
+
+    // 진 틀
+    const frame = el("g", { class: clackWhat === "frame" ? "clack" : "",
+                            style:`transform-box:view-box; transform-origin:${CX}px ${CY}px` }, gCircle);
+    el("circle", { cx:CX, cy:CY, r:R_FRAME, fill:"none", stroke:GOLD, "stroke-width":2.6 }, frame);
+    el("circle", { cx:CX, cy:CY, r:R_FRAME-7, fill:"none", stroke:GOLD, "stroke-width":1, "stroke-opacity":.5 }, frame);
+    el("path", { d: spokes(CX, CY, R_FRAME-3.5, 48, 4, 4, .55, 0), fill:GOLD, "fill-opacity":.35 }, frame);
+
+    // 층(링)
+    for (let i = 0; i < 2; i++){
+      const r = LAYER_R[i], id = c.layers[i], isSel = S.selLayer === i;
+      const g = el("g", { class: clackWhat === "layer" + i ? "clack" : "",
+                          style:`transform-box:view-box; transform-origin:${CX}px ${CY}px` }, gCircle);
+
+      if (id) glyphRing(g, id, CX, CY, r, c.rot[i], isSel ? SEL : col, isSel);
+      else el("circle", { cx:CX, cy:CY, r, fill:"none",
+                          stroke: isSel ? SEL : GOLD_DIM, "stroke-width": isSel ? 2 : 1.3,
+                          "stroke-dasharray":"5 7" }, g);
+
+      if (isSel){
+        const lx = CX, ly = CY - r;
+        el("circle", { cx:lx, cy:ly, r:11, fill:INK, stroke:SEL, "stroke-width":1.5 }, g);
+        txt(g, lx, ly+4, String(i+1), { "text-anchor":"middle", "font-size":11, fill:SEL, "font-weight":"600" });
+      }
+
+      const hit = el("circle", { cx:CX, cy:CY, r, fill:"none", stroke:"transparent",
+                                 "stroke-width":32, "pointer-events":"stroke",
+                                 class: id ? "ringspin" : "hit" }, gCircle);
+      attachLayer(hit, i);
+    }
+
+    // 룬 자리
+    const rg = el("g", { class: clackWhat === "rune" ? "clack" : "",
+                         style:`transform-box:view-box; transform-origin:${CX}px ${CY}px` }, gCircle);
+    if (c.rune){
+      const rc = RUNES.find(r => r.id === c.rune);
+      el("circle", { cx:CX, cy:CY, r:R_RUNE+6, fill:"none", stroke:rc.color, "stroke-width":1, "stroke-opacity":.35 }, rg);
+      runeMark(rg, CX, CY, R_RUNE-8, rc.color, false);
+      txt(rg, CX, CY+5, rc.name, { "text-anchor":"middle", "font-size":16, "font-weight":"600", fill:rc.color });
+    } else {
+      runeMark(rg, CX, CY, R_RUNE-8, GOLD_DIM, true);
+      txt(rg, CX, CY+4, "룬", { "text-anchor":"middle", "font-size":12, fill:"#57506a" });
+    }
+    const rhit = el("circle", { cx:CX, cy:CY, r:R_RUNE, fill:"transparent", class:"hit" }, gCircle);
+    rhit.addEventListener("click", () => { S.selLayer = null; render(); });
+
+    txt(gCircle, CX, CY + R_FRAME + 20, "안쪽 1층  →  바깥 2층   순서로 실행",
+        { "text-anchor":"middle", "font-size":10, fill:"#6b6479", "letter-spacing":".04em" });
+
+    const gs = c.layers.filter(Boolean).map(g => GLYPHS.find(x => x.id === g).name);
+    txt(gCircle, CX, CY + R_FRAME + 42,
+        gs.length ? "실행 순서:  " + gs.join("  →  ") : "층이 비었습니다 — 진과 룬만으로도 마법은 성립합니다",
+        { "text-anchor":"middle", "font-size":11, fill: gs.length ? "#9a92aa" : "#6b6479" });
+  }
+
+  // ── 링 드래그 회전 + 클릭 선택 ─────────────────────────────
+  function attachLayer(node, i){
+    let dragging = false, moved = 0, last = 0;
+
+    const angOf = (e) => {
+      const p = svg.createSVGPoint();
+      p.x = e.clientX; p.y = e.clientY;
+      const q = p.matrixTransform(svg.getScreenCTM().inverse());
+      return Math.atan2(q.y - CY, q.x - CX) * 180 / Math.PI;
+    };
+
+    node.addEventListener("pointerdown", (e) => {
+      dragging = true; moved = 0; last = angOf(e);
+      node.setPointerCapture(e.pointerId);
+      e.preventDefault();
+    });
+
+    node.addEventListener("pointermove", (e) => {
+      const c = cur();
+      if (!dragging || !c || !c.layers[i]) return;
+      const a = angOf(e);
+      let d = a - last;
+      if (d > 180) d -= 360;
+      if (d < -180) d += 360;
+      last = a; moved += Math.abs(d);
+      c.rot[i] = (c.rot[i] + d) % 360;
+      if (S.snap) c.rot[i] = Math.round(c.rot[i] / 45) * 45;
+      S.selLayer = i;
+      render();
+    });
+
+    node.addEventListener("pointerup", (e) => {
+      dragging = false;
+      try { node.releasePointerCapture(e.pointerId); } catch (_) {}
+      if (moved < 3){                     // 안 돌았으면 클릭으로 친다
+        S.selLayer = (S.selLayer === i) ? null : i;
+        clackSound(1.5);
+        render();
+      }
+    });
+    node.addEventListener("pointercancel", () => { dragging = false; });
+  }
+
+  // ── 우 패널: 탭 + 칸 ───────────────────────────────────────
+  const CELL = 82.5, GAP = 10, X0 = 540, ROW_Y = [100, 195, 290];
+  const cellX = c => X0 + c * (CELL + GAP);
+
+  function renderTabs(){
+    gTabs.textContent = "";
+    TABS.forEach((t, i) => {
+      const w = 90, x = X0 + i*w, on = S.tab === t.id;
+      const g = el("g", { class:"hit" }, gTabs);
+      el("rect", { x, y:58, width:w, height:26,
+                   fill: on ? "#241c30" : "transparent",
+                   stroke: on ? GOLD : "#3a3145", "stroke-width":1 }, g);
+      txt(g, x + w/2, 75, t.name, { "text-anchor":"middle", "font-size":11,
+            "font-weight": on ? "600" : "400", fill: on ? GOLD : "#8d85a2" });
+      g.addEventListener("click", () => { S.tab = t.id; clackSound(1.6); render(); });
+    });
+  }
+
+  function cellBox(parent, x, y, filled, equipped, dim){
+    return el("rect", { x, y, width:CELL, height:CELL, rx:2,
+      fill: filled ? (equipped ? "#241c30" : "#1e1829") : "#191424",
+      stroke: equipped ? GOLD : (filled ? GOLD_DIM : "#241f30"),
+      "stroke-width": equipped ? 1.6 : 1,
+      "stroke-dasharray": filled ? "none" : "3 4",
+      "stroke-opacity": dim ? .4 : 1 }, parent);
+  }
+
+  function renderInv(){
+    gInv.textContent = "";
+    const c = cur();
+
+    if (S.tab === "circles"){
+      // 저장고 — 첫 칸은 「+ 새 마법진」
+      for (let n = 0; n < 12; n++){
+        const col = n % 4, row = (n / 4) | 0;
+        const x = cellX(col), y = ROW_Y[row];
+        if (n === 0){
+          const g = el("g", { class:"hit" }, gInv);
+          cellBox(g, x, y, false, false, false);
+          txt(g, x + CELL/2, y + CELL/2 + 2, "+", { "text-anchor":"middle", "font-size":26, fill:"#6a5836" });
+          txt(g, x + CELL/2, y + CELL - 10, "새 마법진", { "text-anchor":"middle", "font-size":9, fill:"#8d85a2" });
+          g.addEventListener("click", () => {
+            S.saved.push({ frame:null, rune:null, layers:[null,null], rot:[0,0] });
+            S.editing = S.saved.length - 1; S.selLayer = null; S.tab = "frames";
+            clackSound(1.1); render();
+          });
+          continue;
+        }
+        const idx = n - 1, sv = S.saved[idx];
+        if (!sv){ cellBox(gInv, x, y, false, false, true); continue; }
+
+        const g = el("g", { class:"hit" }, gInv);
+        const editing = S.editing === idx;
+        cellBox(g, x, y, true, editing, false);
+
+        // 미니 마법진
+        const mx = x + CELL/2, my = y + CELL/2 - 7, col2 = runeColor(sv);
+        el("circle", { cx:mx, cy:my, r:24, fill:"none", stroke: sv.frame ? GOLD : GOLD_DIM,
+                       "stroke-width":1.4, "stroke-dasharray": sv.frame ? "none" : "3 4" }, g);
+        [16, 9].forEach((rr, li) => {
+          if (sv.layers[1-li]) glyphIcon(g, sv.layers[1-li], mx, my, rr, col2);
+          else el("circle", { cx:mx, cy:my, r:rr, fill:"none", stroke:GOLD_DIM,
+                              "stroke-width":.9, "stroke-dasharray":"3 4" }, g);
+        });
+        if (sv.rune) el("circle", { cx:mx, cy:my, r:3.5, fill:col2 }, g);
+
+        // 슬롯 뱃지
+        const si = S.slots.indexOf(idx);
+        if (si >= 0){
+          el("rect", { x:x+CELL-19, y:y+5, width:14, height:14, rx:2, fill:GOLD }, g);
+          txt(g, x+CELL-12, y+16, String(si+1), { "text-anchor":"middle", "font-size":10,
+                "font-weight":"700", fill:"#181322" });
+        }
+
+        txt(g, mx, y + CELL - 8, nameOf(sv), { "text-anchor":"middle", "font-size":8,
+              fill: editing ? GOLD : "#9a92aa" });
+
+        g.addEventListener("click", () => {
+          S.editing = idx; S.selLayer = null; clackSound(1.2); render();
+        });
+      }
+      hintR.textContent = S.saved.length ? "누르면 왼쪽에 다시 열려서 고쳐집니다." : "+ 를 눌러 새 마법진을 시작하세요.";
+      hintR2.textContent = S.saved.length ? "고치면 바로 저장됩니다 — 저장 버튼이 없습니다." : "";
+      return;
+    }
+
+    const kind = S.tab;
+    const items = kind === "frames" ? FRAMES : kind === "runes" ? RUNES : GLYPHS;
+
+    for (let n = 0; n < 12; n++){
+      const col = n % 4, row = (n / 4) | 0;
+      const x = cellX(col), y = ROW_Y[row], item = items[n];
+      if (!item){ cellBox(gInv, x, y, false, false, true); continue; }
+
+      const equipped =
+        (kind === "frames" && c && c.frame === item.id) ||
+        (kind === "runes"  && c && c.rune  === item.id) ||
+        (kind === "glyphs" && c && c.layers.includes(item.id));
+
+      const g = el("g", { class:"hit" }, gInv);
+      cellBox(g, x, y, true, equipped, false);
+
+      const cx = x + CELL/2, cy = y + CELL/2 - 6;
+      if (kind === "frames"){
+        el("circle", { cx, cy, r:22, fill:"none", stroke:GOLD, "stroke-width":1.8 }, g);
+        el("circle", { cx, cy, r:15, fill:"none", stroke:GOLD, "stroke-width":1, "stroke-opacity":.55, "stroke-dasharray":"4 5" }, g);
+        el("circle", { cx, cy, r:8,  fill:"none", stroke:GOLD, "stroke-width":1, "stroke-opacity":.55, "stroke-dasharray":"4 5" }, g);
+        txt(g, cx, y + CELL - 8, item.name + " · 2층", { "text-anchor":"middle", "font-size":9, fill:"#9a92aa" });
+      } else if (kind === "runes"){
+        runeMark(g, cx, cy, 20, item.color, false);
+        txt(g, cx, cy + 5, item.name, { "text-anchor":"middle", "font-size":14, "font-weight":"600", fill:item.color });
+        txt(g, cx, y + CELL - 8, "룬", { "text-anchor":"middle", "font-size":9, fill:"#9a92aa" });
+      } else {
+        glyphIcon(g, item.id, cx, cy, 20, runeColor(c));
+        txt(g, cx, y + CELL - 8, item.name, { "text-anchor":"middle", "font-size":9, fill:"#9a92aa" });
+      }
+
+      g.addEventListener("click", () => pick(kind, item));
+    }
+
+    if (!c){
+      hintR.textContent = "먼저 「마법진」 탭에서 + 를 누르세요.";
+      hintR2.textContent = "";
+    } else if (kind === "glyphs" && S.selLayer === null){
+      hintR.textContent = "문양을 넣으려면 왼쪽에서 층을 먼저 누르세요.";
+      hintR2.textContent = "링을 끌면 돌아갑니다.";
+    } else if (kind === "glyphs"){
+      hintR.textContent = (S.selLayer + 1) + "층이 선택됐습니다 — 문양을 누르면 들어갑니다.";
+      hintR2.textContent = "같은 문양을 다시 누르면 뺍니다.";
+    } else {
+      hintR.textContent = "누르면 왼쪽 마법진에 들어갑니다.";
+      hintR2.textContent = "다시 누르면 뺍니다.";
+    }
+  }
+
+  // ── 집기 ───────────────────────────────────────────────────
+  function pick(kind, item){
+    const c = cur();
+    if (!c){ flash("먼저 「마법진」 탭에서 + 를 누르세요.", "#e07a4e"); return; }
+
+    if (kind === "frames"){
+      if (c.frame === item.id){
+        c.frame = null; c.rune = null; c.layers = [null,null]; c.rot = [0,0]; S.selLayer = null;
+        clackSound(.8); render();
+      } else {
+        c.frame = item.id; clackSound(1); render("frame");
+      }
+      return;
+    }
+    if (!c.frame){ flash("진을 먼저 놓아야 합니다.", "#e07a4e"); return; }
+
+    if (kind === "runes"){
+      c.rune = (c.rune === item.id) ? null : item.id;
+      clackSound(1.15);
+      render(c.rune ? "rune" : null);
+      return;
+    }
+
+    if (S.selLayer === null){ flash("왼쪽에서 층을 먼저 누르세요.", "#e07a4e"); return; }
+    const i = S.selLayer;
+
+    if (c.layers[i] === item.id){
+      c.layers[i] = null; c.rot[i] = 0;
+      clackSound(.85); render();
+      return;
+    }
+    // 확산은 한 마법진에 하나만 — 놓기 전에 막는다 (GDD 문양 제약)
+    if (item.id === "spread" && c.layers.some((g, j) => g === "spread" && j !== i)){
+      flash("확산은 한 마법진에 하나만 들어갑니다.", "#e07a4e");
+      return;
+    }
+    c.layers[i] = item.id;
+    clackSound(1.35);
+    render("layer" + i);
+  }
+
+  let flashTimer = null;
+  function flash(msg, color){
+    hintR.textContent = msg;
+    hintR.setAttribute("fill", color);
+    clearTimeout(flashTimer);
+    flashTimer = setTimeout(() => render(), 1900);
+  }
+
+  // ── 렌더 ───────────────────────────────────────────────────
+  function render(clackWhat){
+    renderEditor(reduced ? null : clackWhat);
+    renderTabs();
+    renderInv();
+    world.setAttribute("opacity", S.bg ? "1" : "0.18");
+  }
+
+  document.getElementById("btnReset").addEventListener("click", () => {
+    S.saved = []; S.editing = -1; S.slots = [-1,-1]; S.selLayer = null; S.tab = "circles";
+    clackSound(.7); render();
+  });
+  const toggle = (id, key, after) => {
+    const b = document.getElementById(id);
+    b.addEventListener("click", () => {
+      S[key] = !S[key];
+      b.setAttribute("aria-pressed", String(S[key]));
+      if (after) after();
+      render();
+    });
+  };
+  toggle("btnSnap", "snap", () => {
+    if (!S.snap) return;
+    S.saved.forEach(c => { c.rot = c.rot.map(a => Math.round(a / 45) * 45); });
+  });
+  toggle("btnSound", "sound");
+  toggle("btnBg", "bg");
+
+  render();
+})();
+</script>
