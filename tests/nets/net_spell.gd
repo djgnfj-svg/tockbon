@@ -30,6 +30,12 @@ const CAVE_X1 := 60
 const CAVE_Y0 := 55
 const CAVE_Y1 := 85
 
+## 🔴 위로 쏘는 검사들의 발사 원점(셀). **상자 바닥 가까이에서 위로 쏜다** —
+##  올라간 만큼 다시 떨어질 자리가 있어야 vx가 0이 되는 것을 **날면서** 볼 수 있다.
+## ⚠ 32px 전환에서 ×2 했다(128,130 → 256,260). 아래 `_box_grid` 는 격자에서 파생돼 저절로 2배다.
+const UP_OX := 256
+const UP_OY := 260
+
 
 func run(t) -> void:
 	_pack_unpack(t)
@@ -170,13 +176,19 @@ func _aim_normalizes(t) -> void:
 #  궤적 — 항력 + 중력 (기획 판정 3의 그물 대리)
 # ══════════════════════════════════════════════════════════════════
 
-## 🔴🔴 **거의 수직으로 쏜다.** 수평으로 쏘면 벽에 먼저 닿아 40틱을 못 채우고,
+## 🔴🔴 **거의 수직으로 쏜다.** 수평으로 쏘면 벽에 먼저 닿아 틱을 못 채우고,
 ##  그러면 아래 「vx가 결국 정확히 0이 된다」를 **날면서** 확인할 수가 없다.
-##  ⚠ 조준 (1,-100)은 vx = 25fp로 시작해 20틱쯤에 0에 닿는데, 비행은 40틱 넘게 이어진다.
+##  ⚠ 조준 (1,-100)은 vx가 속도의 1/100쯤으로 시작해 항력에 절삭되어 0이 되는데,
+##   비행은 그보다 오래 이어진다.
+##
+## 🔴🔴 **32px 전환에서 원점을 ×2 했다**(128,130 → 256,260). `speed` 와 `GRAVITY_FP` 가 **함께**
+##  2배가 돼서 **비행 틱 수는 그대로이고 거리만 2배**가 됐다 — 원점을 안 옮기면 탄이 상자 천장을
+##  뚫고 올라가 **오르는 중에 죽고**, 그러면 「올라갔다가 처진다」를 잴 수가 없다(실측으로 그렇게 빨개졌다).
+##  ⚠ `_box_grid` 는 격자 크기에서 파생되므로 저절로 2배가 됐다. **원점만 손으로 옮긴다.**
 func _drag_and_gravity(t) -> void:
 	var g := _box_grid()
 	var sim := SpellSim.new()
-	t.ok(_fire(sim, 128, 130, 1, -100), "거의 수직으로 위로 쏜다")
+	t.ok(_fire(sim, UP_OX, UP_OY, 1, -100), "거의 수직으로 위로 쏜다")
 
 	var vxs: Array[int] = [sim.get_vx()[0]]
 	var vys: Array[int] = [sim.get_vy()[0]]
@@ -225,7 +237,7 @@ func _drag_is_symmetric(t) -> void:
 func _vx_series(sign: int) -> Array[int]:
 	var g := _box_grid()
 	var sim := SpellSim.new()
-	_fire(sim, 128, 130, sign, -100)
+	_fire(sim, UP_OX, UP_OY, sign, -100)
 	var out: Array[int] = [sim.get_vx()[0]]
 	while sim.active_count() > 0 and out.size() <= Tuning.LIFETIME_TICKS:
 		sim.step(g)
@@ -239,7 +251,7 @@ func _vx_series(sign: int) -> Array[int]:
 #  이동 판정 — 지나간 칸을 전부 밟나
 # ══════════════════════════════════════════════════════════════════
 
-## 🔴🔴 **벽이 1셀이다.** 탄은 첫 틱에 10셀을 뛰므로 벽이 두 틱 사이 **중간**에 들어온다 —
+## 🔴🔴 **벽이 1셀이다.** 탄은 첫 틱에 20셀을 뛰므로 벽이 두 틱 사이 **중간**에 들어온다 —
 ##  「도착 칸만 검사」로 짜면 그냥 통과하고, **한 프레임이라 눈으로 절대 못 본다.**
 ##  사용자에게는 「가끔 안 터진다」로만 보인다.
 func _thin_wall(t) -> void:
@@ -269,8 +281,8 @@ func _thin_wall(t) -> void:
 func _up_and_back(t) -> void:
 	var g := _box_grid()
 	var sim := SpellSim.new()
-	var ox := 128
-	var oy := 130
+	var ox := UP_OX
+	var oy := UP_OY
 	t.ok(_fire(sim, ox, oy, 0, -1), "수직으로 위로 쏜다")
 
 	var turned := false

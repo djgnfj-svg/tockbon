@@ -2,8 +2,10 @@ extends Sprite2D
 ## 격자를 화면에 올린다. 🔴 **읽기만 한다 — 격자에 절대 쓰지 않는다.**
 ##
 ## 🔴 **셀→픽셀 변환 패스가 아예 없다.** `_mat` 바이트 배열이 그대로 L8 텍스처 데이터다.
-##  틱당 GDScript 호출 2회(`set_data` + `update`) · 36,864바이트 업로드.
-##  ⚠ `Image.set_pixel` 루프로 바꾸지 마라 — 틱당 36,864회 VM 호출이라 그것만으로 4~11ms다.
+##  틱당 GDScript 호출 2회(`set_data` + `update`) · 147,456바이트 업로드 × 2장.
+##  ⚠ `Image.set_pixel` 루프로 바꾸지 마라 — 틱당 147,456회 VM 호출이라 그것만으로 16~44ms다.
+## 🔴 **업로드 비용은 아직 안 쟀다.** 헤드리스는 더미 렌더러라 GPU가 없어 `update()` 가 0μs로 나온다 —
+##  「싸다」가 아니라 **「못 쟀다」**다. 32px 전환에서 4배가 되는 항목이고, 답은 FPS로만 난다.
 
 const CellGrid := preload("res://src/sim/cell_grid.gd")
 const Mat := preload("res://src/sim/cell_materials.gd")

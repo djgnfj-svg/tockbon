@@ -18,14 +18,38 @@ var _ch: Character = null
 ## ⚠ **읽기만 한다.** 화면이 조립 상태를 바꾸면 그 순간 단일 소스가 아니게 된다.
 var _circle: SpellCircle = null
 
+## 몸 시트. 🔴 **경로는 `fx_tuning` 이 든다**(연출 상수는 한 파일) — 여기 문자열을 또 적으면
+##  `assets/` 를 옮기는 날 한쪽만 따라오고, 그 어긋남을 잡는 그물이 **없다**(`assets/` 는 폴더 스캔 밖이다).
+## ⚠ **null 검사를 안 붙인다.** 못 읽으면 `load()` 와 `draw_texture_rect_region` 이 둘 다 짖는다 —
+##  조용히 `return` 하면 **캐릭터가 안 보이는데 아무도 안 짖는** 이 리포의 대표 침묵사가 된다.
+var _body_tex: Texture2D = load(Fx.CHAR_SHEET)
+
+## 🔴🔴 **「걷는 중인가」를 캐릭터에 묻지 않는다.** `character.gd` 에 그런 상태가 없고, 넣으려면
+##  그 파일을 고쳐야 하는데 **화면만 만진다**가 이 파일의 계약이다.
+##  ⇒ **직전 프레임의 x와 비교한다.** 뷰가 드는 상태는 이 하나뿐이다.
+## ⚠ 밀려서 움직일 때도 「걷는 중」이 된다 — `fx_tuning.CHAR_WALK_PX_PER_FRAME` 주석에 적은
+##  대로 알고 고른 것이다.
+var _prev_x := 0
+var _moving := false
+
 
 func setup(ch: Character, circle: SpellCircle) -> void:
 	_ch = ch
 	_circle = circle
+	# ⚠ **여기서 `_prev_x` 를 맞춰 둔다.** 안 맞추면 첫 프레임에 「0 → 스폰 x」 가 움직임으로 읽혀
+	#  가만히 선 캐릭터가 한 프레임 걷는다.
+	if _ch != null:
+		_prev_x = _ch.x
 	queue_redraw()
 
 
 func _process(_dt: float) -> void:
+	# 🔴🔴 **걷기 시계를 따로 만들지 않는다.** 「움직였나」도 「몇 번째 칸인가」도 전부 `_ch.x` 에서
+	#  나온다 — `delta` 를 누산하면 그 순간 시계가 둘이 되고 **「멈췄는데 다리가 움직인다」**가 난다.
+	#  ⚠ `_process` 는 프레임당 한 번이고 `_draw` 는 그 뒤에 온다 ⇒ 여기가 갱신 자리다.
+	if _ch != null:
+		_moving = _ch.x != _prev_x
+		_prev_x = _ch.x
 	# 캐릭터가 매 프레임 움직이고 지팡이가 매 프레임 마우스를 따라간다 ⇒ 늘 다시 그린다.
 	queue_redraw()
 
@@ -48,6 +72,41 @@ func tip_px() -> Vector2:
 	return _ch.center() + aim_dir() * Fx.STAFF_LEN_PX
 
 
+## 🔴🔴 **어느 칸을 그릴지 고른다. 순수 static 이라 그물이 직접 부를 수 있다.**
+##  ⚠ 이게 **판정 3(걷기·점프·낙하 구별)과 4(쓰러짐)를 눈에서 그물로 옮기는 자리**다 —
+##   씬도 캐릭터도 없이 조합을 넣고 칸 번호를 받아 볼 수 있다.
+##
+## 🔴🔴 **그래도 그물이 재는 것은 「코드가 다른 칸을 고른다」까지다.**
+##  **여섯 칸을 전부 똑같이 그려도 그물은 초록이다** — 「그 칸의 그림이 실제로 다르다」는
+##  원리적으로 눈만 잰다(계획 §7.2). 라벨을 거기까지 넓히지 마라.
+##
+## 우선순위가 계약이다:
+##  ① **쓰러짐이 무엇보다 먼저다** — 쓰러진 채로 떨어지는 중이라도 「쓰러졌다」가 보여야
+##    「살려야 한다」를 아무도 못 놓친다
+##  ② 공중 — 올라가는 중과 떨어지는 중이 갈려야 점프가 화면에서 읽힌다
+##  ③ 걷는 중 · 그밖에
+## ⚠ `vy == 0` 인 공중은 **낙하**로 떨어진다(정점의 한 순간이라 어느 쪽이든 되지만 갈래를 하나로 둔다).
+static func pick_state(downed: bool, on_ground: bool, vy: float, moving: bool) -> int:
+	if downed:
+		return Fx.CHAR_DOWNED
+	if not on_ground:
+		return Fx.CHAR_JUMP if vy < 0.0 else Fx.CHAR_FALL
+	return Fx.CHAR_WALK if moving else Fx.CHAR_STAND
+
+
+## 상태 → 시트에서 잘라 올 칸. 🔴 **표(`Fx.CHAR_FRAMES`)가 단일 소스다** — 여기서 칸 번호를
+##  계산하면 「표를 고쳤는데 화면이 그대로다」가 난다.
+## 🔴 **여러 칸짜리 상태(걷기)의 시계가 `_ch.x` 다.** `CHAR_WALK_PX_PER_FRAME` 마다 한 칸 넘어간다 —
+##  ⚠ `absi` 인 이유: 왼쪽으로 걸으면 x가 줄고, 음수 나눗셈이 0 쪽으로 잘려 **좌우가 비대칭**이 된다.
+## 🔴 없는 상태를 물으면 **여기서 짖는다.** `get`으로 덮으면 표를 빠뜨린 상태가 조용히 0번 칸을 쓴다.
+func _cell_rect(state: int) -> Rect2:
+	var cells: Array = Fx.CHAR_FRAMES[state]
+	var idx := 0
+	if cells.size() > 1:
+		idx = (absi(_ch.x) / Fx.CHAR_WALK_PX_PER_FRAME) % cells.size()
+	return Rect2(int(cells[idx]) * Character.W_PX, 0, Character.W_PX, Character.H_PX)
+
+
 func _draw() -> void:
 	if _ch == null:
 		return
@@ -56,23 +115,36 @@ func _draw() -> void:
 	#  무적이 끝났는데 깜빡이는 일이 난다. ⚠ **읽기만 한다**(이 파일 첫 줄).
 	var dim := 1.0 if (_ch.invuln_left & 1) == 0 else Fx.INVULN_DIM_A
 
-	# 🔴🔴 **쓰러지면 실루엣이 통째로 바뀐다** — 눕힌 납작한 상자다. 색만 바꾸면 무적 흐림·불
-	#  테두리와 같은 축을 써서 셋이 겹칠 때 못 가른다. ⚠ 지팡이도 총구도 안 그린다 —
+	# 🔴🔴 **어느 칸을 그리나 — 갈래는 `pick_state()` 하나뿐이다.** 여기서 조건을 또 쓰면
+	#  화면과 그물이 서로 다른 규칙을 보게 된다(그물은 그 함수를 직접 부른다).
+	var state := pick_state(_ch.downed, _ch.on_ground, _ch.vy, _moving)
+
+	# 🔴🔴 **좌우는 한 벌 + 코드 반전이다.** 두 벌을 손으로 그리면 한쪽만 고치는 날이 오고,
+	#  그 어긋남은 **왼쪽을 볼 때만** 드러나 눈으로 거의 못 잡는다. 반전은 그 갈라짐이 원리적으로 없다.
+	#  ⚠ 그림이 4분의 3 각도라 반전이 **거울상**이 된다 — 알고 고른 것이다(기획 「몸은 좌우 두 벌」).
+	# 🔴🔴 **`draw_set_transform` 은 뒤에 그리는 것 전부에 걸린다 — 반드시 되돌린다.**
+	#  안 되돌리면 불 테두리·지팡이·**총구**가 뒤집힌 좌표계에서 그려진다. 총구는 조립창을 안 열고도
+	#  늘 보이는 유일한 곳이라 그게 곧 조합 표시가 죽는 것이고, ⚠ **에러는 하나도 안 난다.**
+	#  🔴 **그물이 이걸 못 잡는다** — 16px 때 verify-read가 복원 줄을 지워도 **전부 초록**인 것을
+	#   확인했다. 지키는 것은 이 주석과 눈뿐이다.
+	# ⚠ 왼쪽을 볼 때 원점을 상자 오른쪽 끝에 두는 이유: 스케일 -1이 로컬 x를 왼쪽으로 보내므로
+	#  거기서 시작해야 그림이 **같은 32px 상자 안**에 정확히 앉는다.
+	#  🔴 그리고 그림 쪽 조건은 **`minx + maxx == W_PX − 1`** 이다 — `net_sprite` 가 잰다.
+	var flip := _ch.facing < 0
+	draw_set_transform(
+		Vector2(_ch.x + (Character.W_PX if flip else 0), _ch.y),
+		0.0, Vector2(-1.0 if flip else 1.0, 1.0))
+	draw_texture_rect_region(_body_tex,
+		Rect2(0.0, 0.0, Character.W_PX, Character.H_PX),
+		_cell_rect(state), Color(1.0, 1.0, 1.0, dim))
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+	# 🔴🔴 **쓰러졌으면 여기서 끝이다 — 지팡이도 총구도 안 그린다.**
 	#  **못 쏘는 상태**라 그리면 「쏠 수 있어 보인다」가 된다.
+	#  ⚠ 불 테두리도 같이 빠진다 — 사각형 시절부터 그랬고 이번에 안 바꿨다.
 	if _ch.downed:
-		var h := Character.W_PX * Fx.CHAR_DOWN_H_RATIO
-		draw_rect(Rect2(_ch.x, _ch.y + Character.H_PX - h, Character.W_PX, h),
-			Fx.CHAR_DOWN, true)
 		return
 
-	var body := Fx.CHAR_BODY
-	var trim := Fx.CHAR_TRIM
-	body.a *= dim
-	trim.a *= dim
-	draw_rect(Rect2(_ch.x, _ch.y, Character.W_PX, Character.H_PX), body, true)
-	draw_rect(Rect2(
-		_ch.x, _ch.y + Character.H_PX - Fx.CHAR_TRIM_PX,
-		Character.W_PX, Fx.CHAR_TRIM_PX), trim, true)
 	# 🔴 **테두리라 무적 흐림과 겹쳐도 둘 다 보인다.** 불은 무적에 안 걸려서 그 겹침이 정상이다.
 	if _ch.burning:
 		draw_rect(Rect2(_ch.x, _ch.y, Character.W_PX, Character.H_PX),

@@ -2,7 +2,7 @@ extends RefCounted
 ## 캐릭터가 다친다 — `docs/plans/3.done/character-damage-minimum.md`.
 ##
 ## **여섯 단계가 다 들어와 있다** — 틱 순서(0) · 체력·직격/폭발·무적(2) · 불 지속(3) ·
-##  밀림·반동(4) · 쓰러짐(5). 판정 1~6이 전부 여기서 재진다(7은 `net_spell`).
+##  반동(5) · 쓰러짐(6). ⚠ **판정 4(맞으면 밀리나)는 기능째로 삭제됐다** — 아래 그 자리에 표시가 있다.
 ##
 ## 🔴🔴 **이 그물의 요점은 「그물도 `frame()` 을 부른다」이다.**
 ##  껍데기만 `frame()` 을 부르면 그물은 씬을 못 세워 순서를 **손으로 베끼고**, 그 순간
@@ -76,14 +76,23 @@ const MUST_PASS: Array[String] = [
 const NEW_CALL_RE := "WorldStep\\.new\\(\\s*_grid\\s*,\\s*_spell\\s*,\\s*_char\\s*\\)"
 
 const DT := 1.0 / 60.0
+
+## 🔴🔴 **아래 자리 상수는 32px 전환에서 전부 ×2 됐다. 이유가 미묘하니 여기 한 번만 적는다.**
+##  셀은 **여전히 4px**인데 게임의 길이가 전부 2배가 됐다 — 상자(16→32px) · 발사 속도(10→20셀/틱) ·
+##  폭발 반경(12→24셀). ⇒ **배치를 셀로 그대로 두면 상대 거리가 반으로 줄어** 이 그물이
+##  재던 것이 통째로 달라진다. 실제로 났다:
+##   · 「폭발 반경 **밖**에 서 있다」던 자리가 반경 **안**이 됐다
+##   · 두 폭발이 서로의 발판을 부수게 돼 「같은 틱에 둘」이라는 전제가 깨졌다
+##  ⇒ **자리는 ×2, 프레임/틱/개수는 그대로.** 방향(`AIM_DX`)도 거리가 아니라 그대로다.
+
 ## 바닥 윗면 셀. `net_character` 와 같은 자리다 — 캐릭터가 서는 높이를 같은 식으로 얻는다.
-const FLOOR_CY := 100
+const FLOOR_CY := 200
 const FLOOR_TOP := FLOOR_CY * Tuning.CELL_PX
-const STAND_X := 160
+const STAND_X := 320
 
 ## 발사 원점(셀). 🔴 벽에서 멀어야 한다 — 착탄하면 탄이 사라져서 「나아갔나」를 못 잰다.
-const FIRE_CX := 40
-const FIRE_CY := 50
+const FIRE_CX := 80
+const FIRE_CY := 100
 ## 🔴 **축 정렬 조준이다.** 대각이면 `_launch`의 정수 제곱근 절삭이 끼어서 한 틱 변위를
 ##  세대 표만으로 못 유도한다 — 그러면 기대값을 손으로 박게 되고, 그게 값이 두 벌 되는 길이다.
 const AIM_DX := 10
@@ -91,8 +100,8 @@ const AIM_DX := 10
 const FIRE_ORIGIN_FP := (FIRE_CX << SpellSim.FP_SHIFT) + SpellSim.FP_HALF
 
 ## 관문 칸이 발사 원점에서 몇 칸 오른쪽인가. 🔴 **첫 틱 도약 안**이어야 한다
-##  (세대 0 속도 10셀 × 항력 ⇒ 9셀 남짓). 밖에 두면 관문을 안 지나고 검사가 헛돈다.
-const GAUNTLET_DCX := 5
+##  (세대 0 속도 20셀 × 항력 ⇒ 18셀 남짓). 밖에 두면 관문을 안 지나고 검사가 헛돈다.
+const GAUNTLET_DCX := 10
 
 # ─── 판정 1·3의 무대 ──────────────────────────────────────────────
 # 🔴🔴 **전부 「무속성 + 문양 없음」으로 잰다**(기획). 불 룬이면 착탄이 발판을 태우고
@@ -102,47 +111,56 @@ const GAUNTLET_DCX := 5
 ## 캐릭터 **왼쪽 같은 높이**의 발사 원점. 상자보다 이만큼 왼쪽이다.
 ## 🔴 상자를 **첫 틱에** 지나는 자리여야 한다 — 두 틱 걸리면 중력이 끼어들어
 ##  「몇 틱째에 맞나」가 흔들리고, 판정 3-②의 틱 간격 제어가 통째로 무너진다.
-##  (세대 0은 첫 틱에 37.5px 뛴다 ⇒ 18px 앞에서 쏘면 상자 안쪽 19.5px까지 그린다)
-## 🔴🔴 **캐릭터 x에서 파생시킨다. 상수로 박지 마라** — 단계 4부터 **맞으면 밀리므로**
-##  두 번째 발사 때 캐릭터가 이미 옆으로 가 있다. 박아 두면 「두 번째 탄이 빗나가서」
-##  무적 검사가 조용히 무의미해진다(실측으로 그렇게 빨개졌다).
-const HIT_LEAD_PX := 18
-const HIT_ORIGIN_CY := 97
+##  (세대 0은 첫 틱에 75px 뛴다 ⇒ 36px 앞에서 쏘면 상자(32px)를 통째로 넘어간다)
+## 🔴 **캐릭터 x에서 파생시킨다. 상수로 박지 마라** — 캐릭터가 움직인 뒤의 발사가 조용히 빗나가면
+##  「두 번째 탄이 빗나가서」 무적 검사가 무의미해진다.
+##  ⚠ 이 규율이 생긴 계기(넉백으로 캐릭터가 옆으로 밀려나 있었다)는 **넉백이 사라지며 없어졌다.**
+##   규율은 남긴다 — 반동·중력·입력으로도 캐릭터는 여전히 움직인다.
+const HIT_LEAD_PX := 36
+const HIT_ORIGIN_CY := 194
 
 ## 반동만 재는 발사 원점(상자 **오른쪽 바깥**). 🔴 여기서 오른쪽으로 쏘면 탄이 상자를 안 지난다 —
-##  지나면 **직격 밀림(+400)과 반동(−200)이 더해져** 반동의 부호가 뒤집힌다(실측).
-const RECOIL_CX := 44
+##  ⚠ 이 자리를 고른 근거(「지나면 직격 밀림이 반동과 더해져 부호가 뒤집힌다」)는 **넉백이 사라지며
+##   없어졌다.** 자리는 그대로 둔다 — 탄이 상자를 안 지나면 **반동만 남아** 배치가 여전히 제일 깨끗하다.
+const RECOIL_CX := 88
 
 ## 폭발 판정 — 캐릭터 **옆 바닥**에 내리꽂는다.
 ## 🔴 탄이 상자를 **안 지나야** 한다. 지나면 직격과 폭발이 섞여 「무엇에 맞았나」를 못 가른다.
-const BLAST_CX := 52
-const BLAST_FROM_CY := 90
+const BLAST_CX := 104
+const BLAST_FROM_CY := 180
 ## 🔴🔴 상자 **반대쪽**의 두 번째 자리(판정 3-①). 같은 자리에 두 발을 쏘면 **먼저 터진 폭발이
 ##  두 번째 탄의 바닥을 부숴서** 그 탄이 크레이터로 빠지고 **다음 틱에** 터진다(실측) —
 ##  그러면 「같은 틱에 둘」이라는 전제 자체가 성립하지 않는다.
 ##  ⚠ 왼쪽 폭발의 원반이 오른쪽 탄의 바닥까지 닿지 않는 간격이어야 한다.
-const BLAST_L_CX := 31
-## 반경 밖에 세울 자리(뒤집어 보기 ①). 폭발 반경(세대 0 = 12셀 = 48px) **밖**이다.
-const FAR_STAND_X := 96
+const BLAST_L_CX := 62
+## 반경 밖에 세울 자리(뒤집어 보기 ①). 폭발 반경(세대 0 = 24셀 = 96px) **밖**이다.
+## 🔴 **여기가 32px 전환에서 실제로 뚫린 자리다** — 반경이 2배가 되며 옛 자리(96px)가
+##  반경 **안**으로 들어와 「밖에 서 있으면 안 깎인다」가 빨개졌다. ⚠ 조용히 통과한 게 아니라
+##  빨개졌다는 것이 요점이다 — 그물이 배율 변경을 실제로 물었다.
+const FAR_STAND_X := 192
 
 ## 발사 원점과 상자 **사이**의 돌 한 칸. 🔴 상자에는 안 닿는 자리여야 한다 —
 ##  닿으면 「벽에 막혔다」와 「상자에 맞았다」가 섞인다.
-const WALL_CX := 38
+const WALL_CX := 76
 
 ## 수직 직격 — 상자 **바로 위**에서 곧장 아래로. 🔴 `_slab` 의 축평행 갈래를 지나는 유일한 배치다.
-const VERT_CX := 40
-const VERT_FROM_CY := 85
+const VERT_CX := 80
+const VERT_FROM_CY := 170
 
-## 지팡이 끝이 아래를 볼 때의 자리(상자 **아래**). 중심에서 18px 아래라 셀로는 바닥 속이다 —
+## 지팡이 끝이 아래를 볼 때의 자리(상자 **아래**). 중심에서 36px 아래라 셀로는 바닥 속이다 —
 ## 🔴 게임에서 「발밑을 쏜다」가 실제로 나가는 자리다.
-const FEET_CY := FLOOR_CY + 2
+## ⚠ **+5는 유도값이지 ×2가 아니다.** 중심 `FLOOR_TOP − H_PX/2` = 784px · `+ STAFF_LEN_PX 36`
+##  = 820px · `÷ CELL_PX 4` = 205 = `FLOOR_CY + 5`. 16px 때의 `+2` 도 같은 유도였다(410/4 = 102).
+##  🔴 내림 결과를 기계적으로 ×2 하면 **+4**가 나오는데, 그러면 위 「중심에서 36px 아래」가
+##   실제로는 34px이 되어 **주석이 거짓**이 된다. ⚠ 그물은 이걸 못 가른다(+4도 초록이었다).
+const FEET_CY := FLOOR_CY + 5
 
 ## 🔴 발밑 나무. 캐릭터가 선 자리의 셀은 **빈칸이라 연료가 0**이고 불은 여기 붙는다.
 ##  ⚠ 아래에 돌을 깔아 둔다 — 나무가 다 타면 **빈칸이 되어 바닥이 사라지므로**,
 ##   안 깔면 「불이 꺼져서 안 깎인다」와 「떨어져서 안 깎인다」가 섞인다(계획 뒤집기).
 const WOOD_CY := FLOOR_CY
-const WOOD_CX0 := 39
-const WOOD_CX1 := 45
+const WOOD_CX0 := 78
+const WOOD_CX1 := 90
 
 ## 「시간에 비례하나」를 재는 창(프레임). 🔴 **두 창 + 앞의 탐색이 나무 수명(2초) 안**이어야 한다.
 const BURN_WINDOW := 50
@@ -150,30 +168,21 @@ const BURN_WINDOW := 50
 ## 한 번 밟는 길이(프레임). 🔴 **1점이 쌓이는 6프레임보다 짧아야** 「톡톡 밟기」가 된다.
 const TAP_FRAMES := 5
 
-## 밀림을 재는 창(프레임) = 0.5초. 🔴 **입력은 영원히 들어오고 밀림은 감쇠하므로** 창이 길면
-##  반드시 되돌아온다 — 재는 것은 「밀림이 도는 동안 입력을 이기나」다(계획 §2 단계 4).
-const KB_WINDOW := 30
+## 반동을 재는 창(프레임) = 0.5초. 🔴 **입력은 영원히 들어오고 반동은 감쇠하므로** 창이 길면
+##  반드시 되돌아온다 — 재는 것은 「반동이 도는 동안 입력을 이기나」다.
+const RECOIL_WINDOW := 30
 
 ## `fire()` 가 거부하는 문양 목록. 🔴 표에 없는 id라 `_valid_glyphs` 가 짖고 버린다.
 const BAD_GLYPHS := 15
 
 ## 쓰러진 캐릭터를 떨어뜨릴 구덩이의 바닥. 🔴 좌우는 **캐릭터 자리에서 파생**시킨다 —
-##  열 대를 맞는 동안 한참 밀려나 있어서 박아 두면 구덩이가 엉뚱한 데 생긴다.
-const PIT_BOTTOM_CY := 110
+##  박아 두면 캐릭터가 조금만 움직여도 구덩이가 엉뚱한 데 생긴다.
+##  ⚠ 이 규율의 계기(넉백으로 열 대 맞는 동안 한참 밀려났다)는 **넉백이 사라지며 없어졌다.**
+const PIT_BOTTOM_CY := 220
 
-## 밀림이 잦아들기를 기다리는 프레임. 🔴 지수 감쇠라 **완전히 0이 되지 않는다** —
-##  계획의 30프레임으로는 6px이 흘러서 행동불능 검사가 빨개졌다(실측).
-const KB_SETTLE := 120
-
-## 공중 피격 검사. 🔴 창이 끝날 때까지 **바닥에 안 닿아야** 한다 — 닿으면 「밀렸다」가 지워진다.
-const AIR_Y := 60
-const AIR_FROM_CY := 5
-const AIR_WINDOW := 20
-
-## 낭떠러지 검사의 발판. 🔴 캐릭터가 서는 자리(셀 40~43)를 덮고 **오른쪽이 끊겨 있어야** 한다 —
-##  밀림이 오른쪽이라 그쪽으로 떨어진다.
-const LEDGE_CX0 := 36
-const LEDGE_CX1 := 46
+## 반동 잔량이 잦아들기를 기다리는 프레임. 🔴 지수 감쇠라 **완전히 0이 되지 않는다** —
+##  30프레임으로는 6px이 흘러서 행동불능 검사가 빨개졌다(실측 — 넉백이 있던 때의 값이다).
+const SETTLE_FRAMES := 120
 
 
 func run(t) -> void:
@@ -199,13 +208,8 @@ func run(t) -> void:
 	_fire_burns_through_invuln(t)
 	_burnout_stops_the_damage(t)
 	_burn_acc_survives_tapping(t)
-	_hit_pushes_me(t)
-	_knockback_beats_input_for_a_while(t)
-	_knockback_decays(t)
-	_vertical_knockback_slams_me_down(t)
-	_blast_pushes_away(t)
-	_knockback_off_a_ledge(t)
 	_firing_pushes_me_back(t)
+	_recoil_decays(t)
 	_firing_down_lifts_me(t)
 	_rejected_fire_has_no_recoil(t)
 	_zero_hp_downs_me(t)
@@ -388,8 +392,13 @@ func _run_gauntlet(t, tag: String, early: bool) -> int:
 	var g := _floor_grid()
 	var wx := FIRE_CX + GAUNTLET_DCX
 	var wy := FIRE_CY
-	g.apply(CellGrid.cmd_fill(wx, wy, wx, wy, Mat.WOOD))
-	t.ok(g.ignite(wx, wy), "%s: 관문 칸에 불이 붙었다 (전제)" % tag)
+	# 🔴🔴 **관문이 두 칸이다. 32px 전환에서 한 칸으로는 안 막혔다**(실측).
+	#  `GRAVITY_FP` 가 ×2 되며 탄이 **첫 틱 안에 한 행 내려간다**(0.5셀/틱²) ⇒ Bresenham 경로가
+	#  발사 행 아래로 넘어가고, 한 칸짜리 관문은 그 아래로 **비껴간다.**
+	#  ⚠ 그러면 대조군이 「막혔다」가 아니라 「지나갔다」가 되어 **관문이 관문이 아니게 된다.**
+	#  ⚠ 두 칸은 연료가 같아 **같은 틱에 같이 꺼진다** — 「사라지는 틱」은 여전히 하나다.
+	g.apply(CellGrid.cmd_fill(wx, wy, wx, wy + 1, Mat.WOOD))
+	t.ok(g.ignite(wx, wy) and g.ignite(wx, wy + 1), "%s: 관문 두 칸에 불이 붙었다 (전제)" % tag)
 
 	# 🔴 틱 수를 박지 않는다 — **연료와 틱당 소모에서 나온다.** `last` 틱까지는 살아 있고
 	#  그 다음 틱에 연료가 0이 되어 칸이 사라진다.
@@ -519,8 +528,9 @@ func _direct_hit_costs_hp(t) -> void:
 	# 🔴 오염 0의 기준선. 여기서 계수기를 0으로 맞춰야 「지형을 판 것」이 안 섞인다.
 	g.consume_changed()
 
-	# 🔴 **판정이 돈 시점의 상자**를 들고 있어야 한다 — 맞으면 **밀려서** 프레임이 끝날 때쯤
-	#  캐릭터가 이미 옆으로 가 있다(단계 4). 지금 자리로 재면 도약 단언이 거짓으로 빨개진다.
+	# 🔴 **판정이 돈 시점의 상자**를 들고 있어야 한다 — 프레임이 끝날 때 캐릭터가 이미 움직여 있으면
+	#  지금 자리로 잰 도약 단언이 거짓으로 빨개진다.
+	#  ⚠ 계기였던 「맞으면 밀린다」는 **넉백이 사라지며 없어졌다.** 규율은 남긴다.
 	var box_x := ch.x
 	w.enqueue(_hit_cmd_at(ch))
 	_frames(w, Tuning.TICK_DIVIDER)
@@ -727,8 +737,9 @@ func _spread_hit_count_is_recorded(t) -> void:
 	g.consume_changed()
 	var one: Array[int] = [Glyph.GLYPH_SPREAD]
 	# 캐릭터 바로 오른쪽 바닥에 내리꽂아 여덟이 그 자리에서 흩어지게 한다.
+	# ⚠ 빼는 칸 수도 **거리라서 ×2 했다**(6 → 12).
 	w.enqueue(SpellSim.cmd_fire(
-		BLAST_CX - 6, BLAST_FROM_CY, 0, 10, Tuning.ELEM_NONE, Glyph.pack(one)))
+		BLAST_CX - 12, BLAST_FROM_CY, 0, 10, Tuning.ELEM_NONE, Glyph.pack(one)))
 	_frames(w, Tuning.TICK_DIVIDER * 20)
 
 	var hits := (Character.MAX_HP - ch.hp) / Character.DAMAGE_HIT
@@ -748,9 +759,9 @@ func _fire_burns_through_invuln(t) -> void:
 	var ch := _stander()
 	var w := WorldStep.new(g, spell, ch)
 
-	# 🔴 **수직 직격으로 무적을 켠다.** 수평으로 맞히면 **밀려서** 발밑 나무를 벗어나고,
-	#  그러면 「불에 안 깎인다」가 코드가 아니라 배치 탓이 된다(실측으로 그렇게 빨개졌다).
-	#  ⚠ 수직 탄은 가로 성분이 0이라 **밀림이 안 걸린다** — 그래서 이 배치가 성립한다.
+	# 🔴 **수직 직격으로 무적을 켠다.** ⚠ 이 배치를 고른 근거(「수평으로 맞히면 밀려서 발밑 나무를
+	#  벗어난다」)는 **넉백이 사라지며 없어졌다.** 배치는 그대로 둔다 — 캐릭터가 제자리에 있는 것이
+	#  「발밑 한 줄만 탄다」를 재는 데 여전히 제일 깨끗하다.
 	# 🔴🔴 **큐를 안 지난다.** 큐로 넣으면 `world_step` 이 **반동**을 걸어서(아래로 쐈으니 위로)
 	#  캐릭터가 떠올랐다가 20프레임 뒤에 내려앉고, 그 사이 무적이 다 닳는다(실측).
 	#  ⚠ 여기서 재는 것은 **불이 무적과 무관한가**지 커맨드 경로가 아니다 — 반동은 판정 5가 잰다.
@@ -766,7 +777,6 @@ func _fire_burns_through_invuln(t) -> void:
 	_frames(w, Tuning.TICK_DIVIDER * 2)
 	t.eq(ch.hp, Character.MAX_HP - Character.DAMAGE_HIT, "탄으로 먼저 맞았다 (검사의 전제)")
 	t.ok(ch.invuln_left > 0, "그래서 무적이 켜져 있다 (검사의 전제)")
-	t.eq(ch.kb_vx, 0.0, "수직 직격이라 안 밀렸다 (발밑 나무를 안 벗어난다 — 배치의 전제)")
 	_ignite_under(t, g, ch)
 
 	# 🔴 **첫 불 피해가 들어온 순간의 무적 잔량**을 본다. 그게 「무적과 무관하다」의 전부다.
@@ -875,180 +885,10 @@ func _ignite_under(t, g: CellGrid, ch: Character) -> void:
 	t.eq(inside, 0, "상자가 덮는 셀에는 타는 칸이 하나도 없다 (발밑 한 줄만 탄다)")
 
 
-# ── 판정 4 — 맞으면 밀리나 ────────────────────────────────────────
-
-## 🔴🔴 **무속성 + 문양 없음으로만 잰다.** 폭발 피해 반경 = **카브 반경**이라
-##  (`blast_rd × CELL_PX` = 48px) **나를 때리는 폭발은 반드시 내 발판도 판다** ⇒
-##  「밀렸다」와 「발판이 사라져 떨어졌다」가 섞인다. ⚠ 무속성이어도 **폭발 문양이 끼면** 같다.
-##  ⇒ **격자가 한 셀도 안 변하는 것을 같이 단언**해서 오염이 0임을 그물이 스스로 증명한다.
-func _hit_pushes_me(t) -> void:
-	var g := _floor_grid()
-	var spell := SpellSim.new()
-	var ch := _stander()
-	var w := WorldStep.new(g, spell, ch)
-	g.consume_changed()
-	var x0 := ch.x
-
-	w.enqueue(_hit_cmd_at(ch))
-	_frames(w, Tuning.TICK_DIVIDER)
-	t.ok(ch.hp < Character.MAX_HP, "먼저 맞았다 (검사의 전제)")
-	t.ok(ch.kb_vx > 0.0, "탄이 가던 쪽(+x)으로 밀림이 걸렸다 (%.0f px/s)" % ch.kb_vx)
-
-	_frames(w, KB_WINDOW)
-	t.ok(ch.x > x0, "%d프레임 뒤 오른쪽으로 밀려 있다 (%d → %d)" % [KB_WINDOW, x0, ch.x])
-	t.eq(g.consume_changed(), 0, "그 동안 격자가 한 칸도 안 변했다 (떨어진 게 아니라 밀린 것이다)")
-
-
-## 🔴🔴 **뒤집어 보기(필수) — 반대 입력을 계속 넣고도 변위가 남나.**
-##  ⚠ **입력이 즉시 이기면 「구현했는데 화면에서 안 보인다」가 초록이 된다**(사용자 답 4).
-##  ⚠ **창을 정해야 한다** — 입력은 영원히 들어오고 밀림은 감쇠하므로 시간이 길면 반드시 되돌아온다.
-##   재는 것은 **밀림이 도는 동안 입력을 이기나**다.
-## 🔴 **대조군이 없으면 창이 너무 짧아서 통과한 것과 구별이 안 된다** — 같은 창에서 밀림 없이
-##  같은 입력만 넣으면 **왼쪽으로 가야** 한다.
-func _knockback_beats_input_for_a_while(t) -> void:
-	var pushed := _window_dx(t, true, -1.0)
-	var plain := _window_dx(t, false, -1.0)
-	t.ok(plain < 0, "밀림 없이 왼쪽 입력만 넣으면 %d프레임에 %dpx 왼쪽으로 간다 (대조군)"
-		% [KB_WINDOW, plain])
-	t.ok(pushed > 0,
-		"맞은 뒤 **반대 입력을 계속 넣어도** 그 창의 순 변위가 +%dpx다 (입력이 즉시 안 이긴다)"
-			% pushed)
-
-	# 🔴🔴 **그런데 위 둘만으로는 「덮어쓴다」가 안 걸린다** — 밀리는 동안 조작을 통째로 죽여도
-	#  변위는 오히려 더 커진다(실측: +85px로 **전부 초록**이었다). 사용자가 고른 것은
-	#  「**입력과 더해진다**」이지 「막힌다」가 아니다.
-	#  ⇒ **같은 밀림에 입력만 바꿔서 그 차이가 입력 몫만큼 나는지** 잰다.
-	var free := _window_dx(t, true, 0.0)
-	var want := int(Character.MOVE_SPEED_PX * KB_WINDOW / 60.0)
-	t.ok(absi((free - pushed) - want) <= 3,
-		"밀리는 동안에도 입력이 **더해진다** (입력 없음 %d − 반대 입력 %d = %d ≈ %d)"
-			% [free, pushed, free - pushed, want])
-
-
-## 창을 `axis` 입력으로 돈다. 순 변위(px)를 돌려준다. `hit`면 먼저 맞고 시작한다.
-func _window_dx(t, hit: bool, axis: float) -> int:
-	var g := _floor_grid()
-	var spell := SpellSim.new()
-	var ch := _stander()
-	var w := WorldStep.new(g, spell, ch)
-	if hit:
-		w.enqueue(_hit_cmd_at(ch))
-		_frames(w, Tuning.TICK_DIVIDER)
-		t.ok(ch.kb_vx > 0.0, "창을 시작할 때 밀림이 살아 있다 (검사의 전제)")
-	var x0 := ch.x
-	_frames(w, KB_WINDOW, axis)
-	return ch.x - x0
-
-
-## 🔴🔴 **시간에 따라 감쇠하나** — 사용자 답 4의 **뒤 절반**이다.
-##  ⚠ 실측: 감쇠를 `*= 1.0` 으로 지워도 **1222개가 전부 초록**이었다. 맞은 캐릭터가
-##   **영원히 미끄러지는데** 그물이 못 봤다(화면에서는 1초면 보이는 고장이다).
-## 🔴 두 창을 이어 재고 **둘째가 첫째보다 적은지** 본다. 둘 다 양수인 채로여야 한다 —
-##  안 그러면 「멈췄다」와 「되돌아왔다」가 섞인다.
-func _knockback_decays(t) -> void:
-	var g := _floor_grid()
-	var spell := SpellSim.new()
-	var ch := _stander()
-	var w := WorldStep.new(g, spell, ch)
-	w.enqueue(_hit_cmd_at(ch))
-	_frames(w, Tuning.TICK_DIVIDER)
-	t.ok(ch.kb_vx > 0.0, "맞아서 밀림이 걸렸다 (검사의 전제)")
-
-	var a := ch.x
-	_frames(w, KB_WINDOW)
-	var d1 := ch.x - a
-	var b := ch.x
-	_frames(w, KB_WINDOW)
-	var d2 := ch.x - b
-	t.ok(d1 > 0, "첫 창에서 %dpx 밀렸다" % d1)
-	t.ok(d2 >= 0 and d2 < d1, "다음 창은 %dpx뿐이다 (시간에 따라 잦아든다)" % d2)
-
-
-## 🔴🔴 **세로 밀림 — 수직으로 떨어지는 탄에 맞으면 아래로 처박힌다**(사용자 판정, 2026-08-04).
-##  ⚠ 실측: 세로 성분을 지워도 **150개가 전부 초록**이었다 — 열어 놓고 아무도 안 쟀다.
-## 🔴 **지면에서는 못 잰다**(바닥이 막는다) ⇒ **공중에서** 잰다. 점프와 반동이 있어 공중 피격은
-##  실제로 나는 상황이다.
-## 🔴 대조군(안 맞고 그냥 떨어지기)이 없으면 **중력만으로 떨어진 것**과 구별이 안 된다.
-func _vertical_knockback_slams_me_down(t) -> void:
-	var hit := _air_fall(t, true)
-	var free := _air_fall(t, false)
-	t.ok(hit > free + 20,
-		"수직 낙하 탄에 맞으면 그 창에 %dpx 떨어진다 (안 맞으면 %dpx — 중력만이 아니다)"
-			% [hit, free])
-
-
-## 공중에서 창을 돈다. 떨어진 거리(px)를 돌려준다. `hit`면 위에서 수직으로 한 발 맞는다.
-func _air_fall(t, hit: bool) -> int:
-	var g := _floor_grid()
-	var spell := SpellSim.new()
-	var ch := Character.new()
-	ch.place(STAND_X, AIR_Y)
-	var w := WorldStep.new(g, spell, ch)
-	if hit:
-		# 🔴 큐를 안 지난다 — 큐로 넣으면 **반동**(위로)이 섞여 세로 밀림만 못 잰다.
-		#  ⚠ **잃는 것**(우회 둘째 사례 — 첫째는 `_fire_burns_through_invuln`):
-		#   **공중에서 반동(위)과 세로 밀림(아래)이 어떻게 합쳐지나**가 아무도 안 재는 거동이 됐다.
-		t.ok(spell.fire(SpellSim.cmd_fire(
-			VERT_CX, AIR_FROM_CY, 0, 10, Tuning.ELEM_NONE, Glyph.GLYPH_NONE)),
-			"공중의 나를 겨눈 탄이 났다 (검사의 전제)")
-	var y0 := ch.y
-	_frames(w, AIR_WINDOW)
-	if hit:
-		t.ok(ch.hp < Character.MAX_HP, "창 안에서 실제로 맞았다 (검사의 전제)")
-	t.ok(ch.y < FLOOR_TOP - Character.H_PX, "창이 끝날 때까지 바닥에 안 닿았다 (검사의 전제)")
-	return ch.y - y0
-
-
-## 🔴🔴 **폭발은 밀어낸다. 빨아들이지 않는다.**
-##  ⚠ 실측: 부호를 뒤집어도 **1222개가 전부 초록**이었다. 그리고 **화면 검증도 못 잡는다** —
-##   밀렸든 빨려들었든 둘 다 「움직였다」로 보인다. ⇒ 여기가 유일한 감지기다.
-## 🔴 기획이 「발밑을 쏘면 바닥에서 터진 폭발이 나를 때린다」를 확정으로 적었으므로
-##  **폭발이 실전의 주 피격 경로**고, 뒤집히면 「비켜」가 「빨려든다」가 된다.
-func _blast_pushes_away(t) -> void:
-	t.ok(_blast_push_vx(t, BLAST_L_CX, "왼쪽") > 0.0,
-		"왼쪽에서 터지면 **오른쪽으로** 밀린다")
-	t.ok(_blast_push_vx(t, BLAST_CX, "오른쪽") < 0.0,
-		"오른쪽에서 터지면 **왼쪽으로** 밀린다")
-
-
-## 폭발 한 발을 맞고 그 직후의 가로 밀림 속도를 돌려준다.
-func _blast_push_vx(t, cx: int, tag: String) -> float:
-	var g := _floor_grid()
-	var spell := SpellSim.new()
-	var ch := _stander()
-	var w := WorldStep.new(g, spell, ch)
-	w.enqueue(_blast_cmd(cx))
-	for _i in 12:
-		_frames(w, Tuning.TICK_DIVIDER)
-		if ch.hp < Character.MAX_HP:
-			break
-	t.ok(ch.hp < Character.MAX_HP, "%s: 폭발에 맞았다 (검사의 전제)" % tag)
-	return ch.kb_vx
-
-
-## 🔴🔴 **낭떠러지 보호는 없다 — 발판 끝에서도 밀리고, 밀려 떨어진다**(기획 「밀림」 확정).
-##  ⚠ 아무도 안 재고 있었다. 화면에서는 실제로 난다(y 496 → 560).
-## 🔴 「떨어졌다」만 재면 **애초에 발판 위가 아니었던 것**과 구별이 안 된다 ⇒
-##  맞기 전에 **접지 상태였다**는 것을 같이 단언한다.
-func _knockback_off_a_ledge(t) -> void:
-	var g := CellGrid.new()
-	# 발판 하나. 오른쪽이 낭떠러지다.
-	g.apply(CellGrid.cmd_fill(LEDGE_CX0, FLOOR_CY, LEDGE_CX1, FLOOR_CY + 1, Mat.STONE))
-	var spell := SpellSim.new()
-	var ch := _stander()
-	var w := WorldStep.new(g, spell, ch)
-	_frames(w, 2)
-	t.ok(ch.on_ground, "발판 위에 서 있다 (검사의 전제)")
-	var y0 := ch.y
-
-	w.enqueue(_hit_cmd_at(ch))
-	_frames(w, Tuning.TICK_DIVIDER)
-	t.ok(ch.kb_vx > 0.0, "낭떠러지 쪽으로 밀렸다 (검사의 전제)")
-	_frames(w, KB_WINDOW)
-	t.ok(ch.x > (LEDGE_CX1 + 1) * Tuning.CELL_PX,
-		"발판 오른쪽 끝(%d)을 넘어갔다 (x=%d)" % [(LEDGE_CX1 + 1) * Tuning.CELL_PX, ch.x])
-	t.ok(ch.y > y0, "그리고 떨어진다 (y %d → %d) — 낭떠러지 보호가 없다" % [y0, ch.y])
-
+# ── 판정 4 — **삭제됨** ───────────────────────────────────────────
+# 🔴 **「맞으면 밀리나」(넉백)가 사라졌다**(사용자 결정, 2026-08-04) ⇒ 그걸 재던 검사 여섯과
+#  그 배치 상수들을 같이 지웠다. **없는 기능을 재는 검사는 가짜 그물이다.**
+#  ⚠ 되살리려면 `character.gd` 의 `recoil_vx` 옆 주석부터 읽어라 — 무엇을 같이 되살려야 하는지 적혀 있다.
 
 # ── 판정 5 — 쏘면 반동으로 밀리나 ─────────────────────────────────
 
@@ -1065,9 +905,38 @@ func _firing_pushes_me_back(t) -> void:
 		RECOIL_CX, HIT_ORIGIN_CY, AIM_DX, 0, Tuning.ELEM_NONE, Glyph.GLYPH_NONE))
 	_frames(w, Tuning.TICK_DIVIDER)
 	t.eq(w.fire_count(), 1, "발사가 받아들여졌다 (검사의 전제)")
-	t.ok(ch.kb_vx < 0.0, "쏜 반대쪽(-x)으로 반동이 걸렸다 (%.0f px/s)" % ch.kb_vx)
-	_frames(w, KB_WINDOW)
-	t.ok(ch.x < x0, "%d프레임 뒤 왼쪽으로 밀려 있다 (%d → %d)" % [KB_WINDOW, x0, ch.x])
+	t.ok(ch.recoil_vx < 0.0, "쏜 반대쪽(-x)으로 반동이 걸렸다 (%.0f px/s)" % ch.recoil_vx)
+	_frames(w, RECOIL_WINDOW)
+	t.ok(ch.x < x0, "%d프레임 뒤 왼쪽으로 밀려 있다 (%d → %d)" % [RECOIL_WINDOW, x0, ch.x])
+
+
+## 🔴🔴 **반동이 시간에 따라 잦아드나.**
+##  ⚠ **실측(2026-08-04): 감쇠를 `*= 1.0` 으로 지워도 그물 1280개가 전부 초록이었다** —
+##   쏜 캐릭터가 **영원히 미끄러지는데** 아무도 안 봤다(화면에서는 1초면 보이는 고장이다).
+##  🔴 그 구멍은 **넉백을 지우며 `_knockback_decays` 가 같이 사라져서** 생겼다.
+##   **감쇠는 반동 쪽에 남았으므로 검사도 남는다** — 없는 기능을 재는 것이 아니다.
+##
+## 🔴 **변위가 아니라 속도로 잰다.** 변위로 재면 감쇠를 지웠을 때 캐릭터가 격자 왼쪽 끝에 막혀
+##  둘째 창이 저절로 짧아지고, 그러면 **뒤집기가 통과해 버린다**(계산으로 확인했다: 200px → 120px).
+## ⚠ 「그래서 실제로 안 움직이나」는 위 `_firing_pushes_me_back` 이 x로 잰다. 둘이 짝이다.
+func _recoil_decays(t) -> void:
+	var g := _floor_grid()
+	var spell := SpellSim.new()
+	var ch := _stander()
+	var w := WorldStep.new(g, spell, ch)
+	w.enqueue(SpellSim.cmd_fire(
+		RECOIL_CX, HIT_ORIGIN_CY, AIM_DX, 0, Tuning.ELEM_NONE, Glyph.GLYPH_NONE))
+	_frames(w, Tuning.TICK_DIVIDER)
+	var v1 := absf(ch.recoil_vx)
+	t.ok(v1 > 0.0, "쏘아서 반동이 걸렸다 (%.0f px/s — 검사의 전제)" % v1)
+
+	_frames(w, RECOIL_WINDOW)
+	var v2 := absf(ch.recoil_vx)
+	# 🔴 기대값을 박지 않는다 — 감쇠 상수와 창 길이에서 나온다. 0.5초면 `0.02^0.5` = 0.14배다.
+	#  ⚠ 절반으로 느슨하게 잡은 것은 **프레임 수를 조금 바꿔도 안 흔들리게** 하려는 것이지
+	#   재는 것을 넓히려는 게 아니다 — 감쇠가 없으면 비율이 **1.0**이라 한참 넘는다.
+	t.ok(v2 < v1 * 0.5,
+		"%d프레임 뒤 반동이 절반 아래로 잦아든다 (%.0f → %.0f px/s)" % [RECOIL_WINDOW, v1, v2])
 
 
 ## 🔴🔴 **아래로 쏘면 위로 뜬다** — 반동이 2D라는 것(GDD의 로켓점프).
@@ -1078,13 +947,14 @@ func _firing_down_lifts_me(t) -> void:
 	var ch := _stander()
 	var w := WorldStep.new(g, spell, ch)
 	var y0 := ch.y
-	# 🔴 **지팡이 끝 자리에서 쏜다 — 상자 *아래*다.** 상자 **안**에서 아래로 쏘면 그 탄이
-	#  나를 때려서 **세로 밀림(+400)이 반동(−200)을 이기고 오히려 처박힌다**(2D 밀림을 연 뒤 실측).
-	#  ⚠ 게임에서는 아래로 조준하면 총구가 몸 아래(중심 +18px)라 그 일이 안 난다 — 배치를 거기 맞춘다.
+	# 🔴 **지팡이 끝 자리에서 쏜다 — 상자 *아래*다.** 게임에서 아래로 조준하면 총구가 몸 아래
+	#  (중심 + `STAFF_LEN_PX`)라 탄이 상자를 안 지난다 — 배치를 거기 맞춘다.
+	#  ⚠ 이 자리를 고른 계기(「상자 안에서 쏘면 세로 밀림이 반동을 이기고 오히려 처박힌다」)는
+	#   **넉백이 사라지며 없어졌다.** 자리는 게임과 같아서 그대로 둔다.
 	w.enqueue(SpellSim.cmd_fire(
 		VERT_CX, FEET_CY, 0, 10, Tuning.ELEM_NONE, Glyph.GLYPH_NONE))
 	var top := y0
-	for _i in KB_WINDOW:
+	for _i in RECOIL_WINDOW:
 		w.frame(DT, 0.0, false)
 		top = mini(top, ch.y)
 	t.ok(top < y0, "아래로 쏘면 %dpx 떠오른다 (y %d → %d)" % [y0 - top, y0, top])
@@ -1105,8 +975,8 @@ func _rejected_fire_has_no_recoil(t) -> void:
 	_frames(w, Tuning.TICK_DIVIDER)
 	t.eq(w.fire_count(), 0, "그 발사는 거부됐다 (검사의 전제)")
 	t.eq(spell.active_count(), 0, "탄도 안 났다 (검사의 전제)")
-	t.eq(ch.kb_vx, 0.0, "거부된 발사는 반동을 안 만든다")
-	_frames(w, KB_WINDOW)
+	t.eq(ch.recoil_vx, 0.0, "거부된 발사는 반동을 안 만든다")
+	_frames(w, RECOIL_WINDOW)
 	t.eq(ch.x, x0, "그래서 한 픽셀도 안 밀린다")
 
 
@@ -1114,7 +984,7 @@ func _rejected_fire_has_no_recoil(t) -> void:
 
 ## 🔴🔴 **즉사가 아니다** — 중력을 계속 받는 것으로 잰다(공중에서 쓰러지면 떨어져 지표면에 붙는다).
 ## 🔴 **행동불능을 같이 잰다.** ⚠ 안 재면 **「플래그만 켜고 아무 일도 안 하는」 구현이 통과한다.**
-##  ⚠ **밀림이 남아 있으면 x가 변한다** ⇒ 쓰러뜨린 뒤 **밀림을 재우고** 잰다.
+##  ⚠ **잔여 속도가 남아 있으면 x가 변한다** ⇒ 쓰러뜨린 뒤 **재우고** 잰다.
 func _zero_hp_downs_me(t) -> void:
 	var g := _floor_grid()
 	var spell := SpellSim.new()
@@ -1125,10 +995,10 @@ func _zero_hp_downs_me(t) -> void:
 	t.eq(ch.hp, 0, "열 대를 맞고 체력이 0이다")
 	t.ok(ch.downed, "그래서 쓰러졌다")
 
-	# 🔴 **밀림을 재운 뒤에** 행동불능을 잰다 — 남아 있으면 x가 변해서 「입력이 먹었다」로 읽힌다.
-	#  ⚠ 계획은 30프레임이라 적었는데 **실측으로 모자랐다**(그때도 6px 흘렀다). 지수 감쇠라
+	# 🔴 **잔여 속도를 재운 뒤에** 행동불능을 잰다 — 남아 있으면 x가 변해서 「입력이 먹었다」로 읽힌다.
+	#  ⚠ 30프레임으로는 **실측으로 모자랐다**(6px 흘렀다 — 넉백이 있던 때의 값이다). 지수 감쇠라
 	#   완전히 0이 되진 않으므로 넉넉히 기다린다: 초당 ×0.02면 2초 뒤 0.16px/s다.
-	_frames(w, KB_SETTLE)
+	_frames(w, SETTLE_FRAMES)
 	var x0 := ch.x
 	_frames(w, 60, 1.0)
 	t.eq(ch.x, x0, "입력을 계속 넣어도 x가 안 변한다 (행동불능)")
@@ -1143,7 +1013,7 @@ func _zero_hp_downs_me(t) -> void:
 	#  게임에서 이 상태가 되는 길은 셋이다: ① 쓰러지기 **전에** 판 구멍 ② 불에 타 죽는 동안
 	#  발판이 타서 없어짐 ③ 멀티에서 남이 쏨. ⇒ **여기 배치는 그 결과만 같게 만든 것**이고,
 	#  그 맞바꿈은 위 `_beat_down` 주석에 적어 뒀다.
-	# ⚠ 구덩이도 **지금 캐릭터 자리에서** 판다 — 열 대를 맞는 동안 한참 밀려나 있다.
+	# ⚠ 구덩이도 **지금 캐릭터 자리에서** 판다 — 박아 두면 캐릭터가 움직인 날 엉뚱한 데 생긴다.
 	var pit0 := floori(ch.x / float(Tuning.CELL_PX)) - 2
 	var pit1 := floori((ch.x + Character.W_PX - 1) / float(Tuning.CELL_PX)) + 2
 	g.apply(CellGrid.cmd_fill(pit0, FLOOR_CY, pit1, PIT_BOTTOM_CY, Mat.EMPTY))
@@ -1190,10 +1060,10 @@ func _downed_cannot_fire(t) -> void:
 	# 먼저 쓰러뜨린다. ⚠ 여기서는 큐를 안 쓴다(반동이 섞이면 배치가 무너진다 — 위 `_beat_down`).
 	_beat_down(t, w, spell, ch, Character.MAX_HP / Character.DAMAGE_HIT)
 	t.ok(ch.downed, "쓰러졌다 (검사의 전제)")
-	_frames(w, KB_SETTLE)
+	_frames(w, SETTLE_FRAMES)
 
 	var fired := w.fire_count()
-	var kb := ch.kb_vx
+	var kb := ch.recoil_vx
 	var vy := ch.vy
 	w.enqueue(SpellSim.cmd_fire(
 		RECOIL_CX, _aim_row(ch), AIM_DX, 0, Tuning.ELEM_NONE, Glyph.GLYPH_NONE))
@@ -1201,8 +1071,15 @@ func _downed_cannot_fire(t) -> void:
 	t.eq(w.fire_count(), fired, "쓰러진 채로는 발사 수가 안 오른다")
 	t.eq(spell.active_count(), 0, "탄도 안 난다")
 	# ⚠ **같은 값을 기대하지 마라** — 그 세 프레임에도 감쇠가 돈다. 반동이 붙었다면 **커진다**.
-	t.ok(absf(ch.kb_vx) <= absf(kb), "그러니 가로 반동도 안 붙는다 (잔량이 줄기만 했다)")
-	t.eq(ch.vy, vy + Character.GRAVITY_PX * DT, "세로도 중력 말고는 안 붙는다")
+	t.ok(absf(ch.recoil_vx) <= absf(kb), "그러니 가로 반동도 안 붙는다 (잔량이 줄기만 했다)")
+	# 🔴🔴 **라벨을 좁혔다. 옛 라벨(「세로도 중력 말고는 안 붙는다」)이 재는 것보다 넓었다.**
+	#  ⚠ 이 커맨드는 **수평**(ady = 0)이라 `recoil()` 의 세로 성분이 **원래 0**이다 —
+	#   쓰러짐 가드가 없어도 vy는 안 변한다. ⇒ **이 축은 원리적으로 못 무는 자리다.**
+	#  ⚠ 그리고 옛 기대식(`vy + GRAVITY_PX*DT`)은 **반올림 위상에 우연히 맞던 값**이다:
+	#   중력이 ×2 되며 프레임마다 1px이 실제로 소모되어 `_move_y` 가 매번 막고 vy를 0으로 만든다.
+	#  🔴 지금 재는 것은 **「접지한 채 위로 안 떴다」**까지다. 세로 반동을 물려면 **아래로 쏘는**
+	#   커맨드로 다시 짜야 하고, 그건 이 함수의 범위가 아니다.
+	t.eq(ch.vy, 0.0, "접지 상태의 세로 속도 0 그대로다 (위로 안 떴다)")
 
 	# 🔴 **뒤집기 — 안 쓰러졌으면 같은 커맨드가 나간다.** 안 재면 「커맨드가 애초에 틀렸다」와
 	#  구별이 안 된다.
@@ -1227,7 +1104,7 @@ func _ten_hp_still_walks(t) -> void:
 	t.eq(ch.hp, Character.DAMAGE_HIT, "체력이 %d 남았다 (한 대 남은 상태)" % Character.DAMAGE_HIT)
 	t.ok(not ch.downed, "아직 안 쓰러졌다")
 
-	_frames(w, KB_SETTLE)
+	_frames(w, SETTLE_FRAMES)
 	var x0 := ch.x
 	_frames(w, 60, 1.0)
 	t.ok(ch.x > x0, "체력 %d에서는 같은 입력에 x가 변한다 (%d → %d)"

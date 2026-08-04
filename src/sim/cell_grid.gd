@@ -35,17 +35,18 @@ const Mat := preload("res://src/sim/cell_materials.gd")
 const Tuning := preload("res://src/sim/sim_tuning.gd")
 
 # ─── 격자 수치 ─────────────────────────────────────────────────────
-## 🔴 뷰포트가 960×540px이고 셀이 4px이라 **보이는 건 240×135셀**이다.
+## 🔴 뷰포트가 1920×1080px이고 셀이 4px이라 **보이는 건 480×270셀**이다.
 ##  격자를 그보다 크게 잡은 것은 여백이고, **무대는 보이는 끝 안에 있어야 한다**(`stage.gd` MAP 주석).
-const W := 256
-const H := 144
+## ⚠ 32px 전환에서 ×2 됐다(전: 256×144). **셀은 여전히 4px이다** — 바뀐 것은 뷰포트다.
+const W := 512
+const H := 288
 
 ## 🔴 `idx = (y << X_SHIFT) | x`. W가 2의 거듭제곱이라 **곱셈이 사라진다** —
 ##  내부 루프에서 상시 계산되는 값이라 이게 그대로 성능이다.
 ##  ⚠ W를 바꾸면 여기도 바꿔야 한다. `_init()`이 안 맞으면 짖는다.
-const X_SHIFT := 8
+const X_SHIFT := 9
 const X_MASK := W - 1
-const CELL_COUNT := W * H  # 36,864
+const CELL_COUNT := W * H  # 147,456
 
 # ─── 커맨드 — 격자를 바꾸는 유일한 문 ──────────────────────────────
 enum { CMD_FILL = 0, CMD_RESET = 1, CMD_BLAST = 2, CMD_IGNITE = 3 }
@@ -72,7 +73,7 @@ var _burning := PackedInt32Array()
 ## 셀 → `_burning` 안의 자리. -1이면 안 탄다. 🔴 **파면의 소속을 정하는 단일 소스다**
 ##  (`_flag`의 BURNING 비트는 셰이더가 읽는 **거울**이고, 둘은 항상 같이 움직인다).
 ## ⚠ 이게 없으면 지워진 칸을 파면에서 빼는 데 **선형 탐색**이 필요하고, 폭발 하나가 수백 칸을
-##  지우므로 그게 곧 O(칸수 × 파면길이)가 된다. 147KB로 그걸 O(1)로 바꾼다.
+##  지우므로 그게 곧 O(칸수 × 파면길이)가 된다. 590KB로 그걸 O(1)로 바꾼다.
 var _burn_slot := PackedInt32Array()
 
 var _tick := 0
@@ -389,7 +390,8 @@ func is_solid(x: int, y: int) -> bool:
 	return _behavior[mat_at(x, y)] == Mat.BEHAVIOR_STATIC
 
 
-## 네이티브 `count()`라 36,864칸을 훑고도 ~5μs다(GDScript 루프는 ~520μs — 100배).
+## 네이티브 `count()`라 147,456칸을 훑고도 ~20μs다(실측, 2026-08-04. 36,864칸일 때 ~5μs였다).
+## ⚠ **HUD가 프레임마다 2회 부른다**(돌·나무) — 60Hz에서 ~40μs = 예산의 0.24%.
 func count_material(mat: int) -> int:
 	return _mat.count(mat)
 

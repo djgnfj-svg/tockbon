@@ -174,11 +174,9 @@ func _window_leaves_the_stage_visible(t, root: Node) -> void:
 	t.ok(r.position.x >= 0.0 and r.position.y >= 0.0 and r.end.x <= vw and r.end.y <= vh,
 		"조립창이 화면 안에 들어간다 (%s ~ %s)" % [r.position, r.end])
 
-	# 🔴🔴 **크기 단언을 버리고 「무엇을 안 가리나」를 잰다** — 계약이 크기였던 적이 없다.
-	#  ⚠ 옛 검사는 「각 축 90%」였고, 그 근거였던 「캐릭터가 보인다」는 **유예 중**이었다.
-	#   캐릭터가 다칠 수 있게 되면서 **유예가 끝났고**(사용자 판정, 2026-08-04) 창이 줄었다.
-	#  🔴 크기를 재면 「90%인데 캐릭터를 덮는 자리」도 초록이다. **덮나 안 덮나**가 계약이다.
-	_window_does_not_cover_the_player(t, r)
+	# 🔴🔴 **「창이 캐릭터를 안 가린다」 검사는 폐기됐다** — 아래 삭제 표시를 봐라.
+	#  체력 쪽은 살아 있다: `HUD/Health` 는 `CanvasLayer` 위라 **창과 같은 화면 좌표계**이고,
+	#  카메라가 어떻게 움직여도 자리가 안 바뀐다.
 	_window_does_not_cover_the_health(t, root, r)
 
 	# 🔴🔴 **90%면 `HUD/Stats`를 덮는다. 그게 안전한 이유는 창이 불투명해서다.**
@@ -190,21 +188,22 @@ func _window_leaves_the_stage_visible(t, root: Node) -> void:
 	t.eq(Fx.WINDOW_BG.a, 1.0, "창 배경이 불투명하다 (겹친 HUD 글씨가 안 섞인다)")
 
 
-## 🔴🔴 **창이 캐릭터가 걷고 뛰는 자리를 안 덮는다.** 조립 중에도 세상이 도는 게 이 게임의 계약이라
-##  (GDD 「조립하는 동안 세상은 안 멈춘다」) **내가 불에 타고 있는지가 보여야** 한다.
-## 🔴 **자리를 스폰·점프 상수에서 파생시킨다. 숫자를 박지 마라** — 스폰이나 점프를 바꾸는 날
-##  이 검사만 조용히 낡는다.
-##  ⚠ 도달 높이 = `JUMP_VY_PX² / (2·GRAVITY_PX)` — `character.gd` 의 그 식과 같은 규칙이다.
-func _window_does_not_cover_the_player(t, r: Rect2) -> void:
-	var cell := float(Tuning.CELL_PX * Tuning.TILE_CELLS)
-	var foot := Vector2(Stage.SPAWN_TILE.x * cell, Stage.SPAWN_TILE.y * cell)
-	var jump := Character.JUMP_VY_PX * Character.JUMP_VY_PX / (2.0 * Character.GRAVITY_PX)
-	t.ok(jump > 0.0, "점프 도달 높이를 상수에서 뽑았다 (%.0fpx)" % jump)
-	# 스폰 상자를 점프 도달 높이만큼 위로 늘린 사각형.
-	var zone := Rect2(foot.x, foot.y - jump, float(Character.W_PX), float(Character.H_PX) + jump)
-	t.ok(not r.intersects(zone),
-		"조립창(%s~%s)이 캐릭터가 걷고 뛰는 자리(%s~%s)를 안 덮는다"
-			% [r.position, r.end, zone.position, zone.end])
+# ── 「창이 캐릭터를 안 가린다」 — **폐기됐다** ──────────────────────
+# 🔴 **계약이 죽었다**(사용자 판정, 2026-08-04). 카메라 추종이 들어가며 캐릭터가 **항상 화면
+#  한복판**에 오는데 창이 화면 90%라 그걸 덮는다. **사용자가 그 대가를 알고 「그대로 둔다」를 골랐다.**
+#  ⇒ 없는 계약을 재는 검사는 가짜 그물이라 지웠다. 근거는 `fx_tuning.WINDOW_RECT` 주석에 있다.
+#
+# ⚠ **값으로 확인하고 지운 것이다.** 창 (48,12)~(912,384) vs 캐릭터 화면 자리:
+#   스폰 (96,240)~(128,380) · 세상 한가운데 (464,146)~(496,286) — **둘 다 창 안**이다.
+# 🔴 **검사가 틀린 게 아니라 계약이 죽은 것이다** — 대조군으로 창을 `Rect2(48,400,864,130)` 으로
+#  옮기니 **초록**이었다. 검사는 멀쩡했다.
+#
+# 🔴🔴🔴 **그리고 이 검사는 지워지기 전까지 「거짓 초록」이었다. 그게 여기 남길 자산이다.**
+#  옛 코드는 캐릭터의 **월드** 자리를 `WINDOW_RECT`(= `CanvasLayer` 위라 **화면** 좌표)와 맞댔다.
+#  카메라가 항등일 때는 월드 = 화면이라 **우연히** 맞았고, **카메라가 움직이는 순간 두 좌표계가
+#  갈라졌는데도 그물은 1328개가 전부 초록**이었다.
+#  ⇒ **좌표계를 섞은 검사는 카메라가 움직이는 날 조용히 죽는다.** 화면 쪽 값을 월드 값과 맞대기
+#   전에 이 줄을 읽어라.
 
 
 ## 🔴🔴 **창이 체력 표시를 안 덮는다.** `_toggle_assembly` 는 `HUD/Stats` 만 숨기고 `Health` 는

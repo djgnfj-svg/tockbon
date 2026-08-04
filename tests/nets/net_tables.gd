@@ -12,6 +12,8 @@ const CircleDefs := preload("res://src/sim/circle_defs.gd")
 const Stage := preload("res://src/stage/stage.gd")
 const CellRenderer := preload("res://src/view/cell_renderer.gd")
 const Fx := preload("res://src/view/fx_tuning.gd")
+## 🔴 카메라가 「내 주변」을 보여 주는지 재려면 **내가 얼마나 큰지**가 필요하다.
+const Character := preload("res://src/actor/character.gd")
 
 
 ## 4이웃. 불도 점화도 4이웃이라 연결 성분도 같은 이웃으로 세야 한다.
@@ -132,6 +134,78 @@ func _wood_clumps(t) -> void:
 		"덩어리 사이가 작은 점화원(%d셀)보다 넓다 (제일 좁은 곳 %d셀)" % [need, closest])
 
 
+## 🔴🔴 **옛 계약이 여기로 옮겨 왔다. 지운 게 아니라 뜻이 바뀐 것이다.**
+##
+## 전: 「**무대 전체가 한 화면에 들어온다**」 — 정적 카메라 전제였다.
+##  그 이유는 「무대가 여백에 걸치면 **확산 8발 중 몇이 안 보이는 데서 터지고** 사용자에게는
+##  「안 터졌다」로 읽힌다 — v1이 바닥 슬래브로 정확히 그렇게 데였다」.
+##
+## 🔴 **카메라가 캐릭터를 따라가면서 그 단언이 원리적으로 성립할 수 없게 됐다** — 무대(2048×1152)가
+##  화면(960×540)보다 크다. ⇒ **이유는 살리고 단언을 좁힌다: 「내 주변만은 반드시 보인다」.**
+##
+## **N을 무엇으로 잡았나 — 세대 0 섬광 반경(`flash_px(0)`)이다. 근거는 셋:**
+##  ① **내 발밑 폭발이 실전의 주 피격 경로다**(기획 「발밑을 쏘면 바닥에서 터진 폭발이 나를 때린다」).
+##    그 폭발의 섬광이 화면 밖으로 잘리면 **「터졌다」가 화면에서 안 읽힌다** — 옛 이유와 같은 것이다
+##  ② 섬광이 **화면에서 제일 큰 연출**이다. 구멍(반경 24셀 = 96px)보다 크고(216px) 흔들림보다 오래 남는다
+##  ③ 🔴 **상수에서 파생시킨다.** 타일 수를 손으로 박으면 섬광을 키우는 날 이 검사만 조용히 낡는다
+##
+## ⚠ **세상 밖까지 요구하지 않는다** — 요구 범위를 세상과 교집합한다. 클램프된 카메라는 세상 밖을
+##  안 보여 주는 게 **맞는** 거동이라, 안 자르면 무대 구석에서 영원히 빨갛다.
+## 🔴 **여기가 재는 것은 「카메라가 그만큼 보여 준다」까지다.** 확산 탄이 30타일 밖에 착탄하는 것은
+##  **여전히 안 보이고**, 그건 `stage.gd` 의 `MAP` 주석에 「잃은 것」으로 적어 뒀다.
+func _camera_always_shows_my_surroundings(t) -> void:
+	var view := Vector2(
+		float(ProjectSettings.get_setting("display/window/size/viewport_width")),
+		float(ProjectSettings.get_setting("display/window/size/viewport_height")))
+	var world := Stage.world_size()
+	t.ok(view.x > 0.0 and view.y > 0.0, "뷰포트 크기를 읽었다 (%dx%d)" % [int(view.x), int(view.y)])
+	t.ok(world.x > 0.0 and world.y > 0.0, "세상 크기가 격자에서 나온다 (%dx%d)" % [
+		int(world.x), int(world.y)])
+
+	var need := Fx.flash_px(0)
+	# ⚠ 요구가 화면보다 크면 **어디에 서도 못 지킨다** — 그때는 아래가 전부 빨개지는데 원인이
+	#  카메라가 아니라 이 값이다. 먼저 재서 진단을 가른다.
+	t.ok(need * 2.0 + float(Character.W_PX) <= view.x
+			and need * 2.0 + float(Character.H_PX) <= view.y,
+		"요구 반경(섬광 %dpx)이 화면에 애초에 들어간다" % int(need))
+
+	# 🔴 **구석까지 본다.** 가운데만 재면 클램프가 도는 자리를 한 번도 안 지난다 —
+	#  클램프는 **가장자리에서만** 걸리므로 거기가 이 검사의 전부다.
+	var w := float(Character.W_PX)
+	var h := float(Character.H_PX)
+	var spots: Array[Vector2] = [
+		Vector2(0.0, 0.0), Vector2(world.x - w, 0.0),
+		Vector2(0.0, world.y - h), Vector2(world.x - w, world.y - h),
+		Vector2(world.x * 0.5, world.y * 0.5),
+		Vector2(float(Stage.SPAWN_TILE.x), float(Stage.SPAWN_TILE.y))
+			* float(Tuning.CELL_PX * Tuning.TILE_CELLS),
+	]
+	t.ok(spots.size() > 0, "재 볼 자리가 %d곳이다" % spots.size())
+
+	var world_rect := Rect2(Vector2.ZERO, world)
+	for at: Vector2 in spots:
+		var box := Rect2(at, Vector2(w, h))
+		var center := Stage.camera_center(box.position + box.size * 0.5, view, world)
+		var seen := Rect2(center - view * 0.5, view)
+		# 요구 범위 = 상자를 `need` 만큼 넓힌 것 **∩ 세상**.
+		var want := box.grow(need).intersection(world_rect)
+		t.ok(seen.encloses(want),
+			"캐릭터가 %s 에 있을 때 주변 %dpx 가 보인다 (화면 %s~%s ⊇ %s~%s)" % [
+				at, int(need), seen.position, seen.end, want.position, want.end])
+		# 🔴🔴 **클램프가 실제로 도나.** ⚠ 위 줄만으로는 **클램프를 통째로 지워도 안 걸린다** —
+		#  클램프가 없으면 보이는 범위가 오히려 넓어져서 「주변이 보인다」는 더 잘 성립한다.
+		#  ⇒ **세상 밖을 안 보여 준다**를 따로 잰다. 격자 밖은 아무것도 안 그려져 「세상이 잘렸다」로 보인다.
+		t.ok(world_rect.encloses(seen),
+			"캐릭터가 %s 에 있어도 화면이 세상 밖을 안 보여 준다 (%s~%s)" % [
+				at, seen.position, seen.end])
+
+	# 🔴 **안 도는 갈래를 직접 잰다.** 지금 세상이 화면보다 커서 「좁은 세상」 갈래가 한 번도 안 도는데,
+	#  **안 도는 갈래는 틀려도 아무도 안 짖는다.** 무대를 줄이는 날 여기가 먼저 말한다.
+	var tiny := view * 0.5
+	t.eq(Stage.camera_center(Vector2.ZERO, view, tiny), tiny * 0.5,
+		"세상이 화면보다 좁으면 세상 한가운데에 둔다 (한쪽 끝에 안 붙는다)")
+
+
 ## 4이웃 연결 성분 하나를 칠한다. ⚠ 재귀가 아니라 스택이다 — 656칸짜리 덩어리에서
 ## GDScript 재귀는 깊이 제한에 걸린다.
 func _flood(g: CellGrid, label: PackedInt32Array, sx: int, sy: int, id: int) -> void:
@@ -234,10 +308,11 @@ func _grid_constants(t) -> void:
 	t.eq(1 << CellGrid.X_SHIFT, CellGrid.W, "X_SHIFT가 W와 맞는다")
 	t.eq(CellGrid.X_MASK, CellGrid.W - 1, "X_MASK가 W와 맞는다")
 	t.eq(CellGrid.CELL_COUNT, CellGrid.W * CellGrid.H, "CELL_COUNT가 W×H와 맞는다")
-	# GDD 격자: 셀 4px · 지형 타일 16px = 4×4셀 · 캐릭터 16px.
+	# GDD 격자: 셀 4px · 지형 타일 32px = 8×8셀 · 캐릭터 32px.
 	# 캐릭터와 타일 두께가 같은 게 "저 벽을 뚫으면 지나갈 수 있다"를 눈에 보이게 하는 장치다.
+	# 🔴 32px 전환에서 타일만 두꺼워졌다 — **셀 4px은 안 건드렸다**(GDD: 셀을 키우면 위력 구분이 뭉개진다).
 	t.eq(Tuning.CELL_PX, 4, "셀이 4px이다 (GDD 확정)")
-	t.eq(Tuning.TILE_CELLS * Tuning.CELL_PX, 16, "지형 타일이 16px이다 (GDD 확정)")
+	t.eq(Tuning.TILE_CELLS * Tuning.CELL_PX, 32, "지형 타일이 32px이다 (GDD 확정)")
 	t.eq(60 % Tuning.TICK_DIVIDER, 0, "분주기가 60을 딱 나눈다")
 
 
@@ -315,30 +390,16 @@ func _glyphs(t) -> void:
 			"문양 %s 예산이 DEFS에서 나온다" % Glyph.DEFS[id]["name"])
 
 
-## 무대가 화면 밖 여백에 걸치면 확산 8발 중 몇이 안 보이는 데서 터지고,
-## 사용자에게는 "안 터졌다"로 읽힌다. v1이 바닥 슬래브로 정확히 그렇게 데였다.
+## 맵이 격자 안에 들어가고 행 폭이 고르나.
 func _stage_map(t) -> void:
 	t.eq(Stage.MAP.size(), Stage.MAP_H, "맵 행 수가 MAP_H")
 	t.ok(Stage.MAP_W * Tuning.TILE_CELLS <= CellGrid.W, "맵 폭이 격자 안에 들어간다")
 	t.ok(Stage.MAP_H * Tuning.TILE_CELLS <= CellGrid.H, "맵 높이가 격자 안에 들어간다")
 
-	# 🔴 뷰포트 크기를 손으로 박지 마라 — project.godot 이 바뀌면 박아 둔 숫자가 조용히 낡는다.
-	#  "한 칸이라도 보이면 보이는 것"이라 올림이다(맨 아랫줄은 일부만 보인다 — 그건 받아들인다).
-	var tile_px := Tuning.CELL_PX * Tuning.TILE_CELLS
-	var vw := int(ProjectSettings.get_setting("display/window/size/viewport_width"))
-	var vh := int(ProjectSettings.get_setting("display/window/size/viewport_height"))
-	var vis_cols := (vw + tile_px - 1) / tile_px
-	var vis_rows := (vh + tile_px - 1) / tile_px
-	var outside := 0
 	for ty in Stage.MAP.size():
-		var row: String = Stage.MAP[ty]
-		t.eq(row.length(), Stage.MAP_W, "맵 %d행 폭이 MAP_W" % ty)
-		for tx in row.length():
-			if not Stage.MAP_CHARS.has(row[tx]):
-				continue
-			if tx >= vis_cols or ty >= vis_rows:
-				outside += 1
-	t.eq(outside, 0, "지형이 보이는 끝(타일 %dx%d) 밖에 없다" % [vis_cols, vis_rows])
+		t.eq(String(Stage.MAP[ty]).length(), Stage.MAP_W, "맵 %d행 폭이 MAP_W" % ty)
+
+	_camera_always_shows_my_surroundings(t)
 
 	# 맵 문자가 실재하는 재료를 가리키나. 오타 하나면 그 지형이 조용히 안 지어진다.
 	for ch: String in Stage.MAP_CHARS.keys():
