@@ -18,6 +18,11 @@ const FLOOR_CY := 100      # 바닥 윗면 셀
 const FLOOR_TOP := FLOOR_CY * Tuning.CELL_PX     # 400px
 const REST_Y := FLOOR_TOP - Character.H_PX       # 368px — 바닥에 선 캐릭터의 y
 
+## 🔴🔴 **사람이 낼 수 있는 최단 키 누름(프레임). 가변 점프를 이걸로 잰다.**
+##  손가락이 키를 눌렀다 떼는 데 **0.05초쯤** 걸린다 — 1~2프레임(0.017~0.033초)은
+##  **사람이 못 내는 입력**이고, 그걸로 재면 게임에서 안 되는 것도 통과한다(실제로 났다).
+const HUMAN_TAP_FRAMES := 3
+
 
 func run(t) -> void:
 	# 🔴 **32px 전환에서 안 올렸다.** 턱을 만드는 것은 폭발이고 폭발은 **셀** 단위인데
@@ -25,7 +30,13 @@ func run(t) -> void:
 	# ⚠ 반대쪽 근거("타일 하나를 통째로 올라가면 위력 감각이 뭉개진다")는 타일이 8셀이 되며
 	# **느슨해졌다**. 두 근거의 방향이 다르고, 좁은 쪽이 이긴다.
 	t.eq(Character.STEP_CELLS, 2, "스텝 오프셋이 2셀이다")
-	t.eq(Character.W_PX, 32, "캐릭터 폭이 32px = 지형 타일과 같다")
+	# 🔴🔴 **폭은 더 이상 타일과 같지 않다 — 2026-08-04에 충돌 상자만 20으로 좁혔다**
+	#  (사용자 판정: 「벽에 닿기 전에 닿았다는 판정」). GDD 「캐릭터 두께 = 타일」은 **눈에 보이는**
+	#  크기의 계약이고 그건 그림 칸(`Fx.CHAR_CELL_PX` 32)이 지킨다 — `net_sprite` 가 그쪽을 잰다.
+	#  ⚠ **여기서 32를 다시 단언하지 마라.** 그러면 그림과 상자를 가른 것이 통째로 되돌아간다.
+	t.eq(Character.W_PX, 20, "캐릭터 충돌 폭이 20px이다 (그림 칸 32px보다 좁다)")
+	t.ok(Character.W_PX < Character.H_PX,
+		"충돌 상자가 세로로 길다 (%dx%d — 세로는 안 건드렸다)" % [Character.W_PX, Character.H_PX])
 	# 🔴🔴 **`H_PX` 는 아무도 안 재고 있었다.** 아래 검사들이 `FLOOR_TOP - H_PX` 로 기대값을 만드는데
 	#  실제값도 같은 상수를 지나서 **양쪽이 같이 틀리면 상쇄된다** — 상자가 32×16이 돼도 전부 초록이다.
 	#  ⚠ 그리고 그건 「머리가 벽에 박히는데 지나간다」로만 보인다(GDD 격자).
@@ -33,6 +44,7 @@ func run(t) -> void:
 
 	_fall_and_land(t)
 	_jump_height(t)
+	_short_press_jumps_lower(t)
 	_ledge(t, 2, true)
 	_ledge(t, 3, false)
 	_broken_ground(t)
@@ -46,9 +58,10 @@ func _floor_grid() -> CellGrid:
 	return g
 
 
+## ⚠ 걷기라 점프 인자는 둘 다 거짓이다 — **누르지도 않았고 누르고 있지도 않다.**
 func _walk(g: CellGrid, ch: Character, frames: int, axis: float) -> void:
 	for _i in frames:
-		ch.step(g, DT, axis, false)
+		ch.step(g, DT, axis, false, false)
 
 
 ## 떨어지고 착지한다. 착지 위치가 1px이라도 어긋나면 캐릭터가 지형에 박히거나 떠 있다.
@@ -78,8 +91,10 @@ const LEDGE_CX := 30
 const LEDGE_PX := LEDGE_CX * Tuning.CELL_PX      # 120px — 턱의 왼쪽 면
 
 
-## 실제로 뛰어서 도달 높이를 잰다. 🔴 **점프 입력은 한 프레임뿐**이다 —
+## 실제로 뛰어서 도달 높이를 잰다. 🔴 **점프 입력(`jump`)은 한 프레임뿐**이다 —
 ##  계속 넣으면 착지할 때마다 다시 뛰어서 「한 번 뛴 높이」가 아니게 된다.
+##  ⚠ **`jump_held` 는 계속 참이다.** 가변 점프가 들어온 뒤로 이 둘이 다른 축이고,
+##   여기서 재는 「도달 높이 102px」는 **끝까지 누른 점프**의 값이다.
 func _jump_height(t) -> void:
 	var g := _floor_grid()
 	var ch := Character.new()
@@ -88,13 +103,13 @@ func _jump_height(t) -> void:
 	t.ok(ch.on_ground, "뛰기 전에 접지 상태다 (검사의 전제)")
 	var y0 := ch.y
 
-	ch.step(g, DT, 0.0, true)
+	ch.step(g, DT, 0.0, true, true)
 	var top := ch.y
 	for _i in 120:
-		ch.step(g, DT, 0.0, false)
+		ch.step(g, DT, 0.0, false, true)
 		top = mini(top, ch.y)
 
-	t.eq(y0 - top, JUMP_PEAK_PX, "점프 도달 높이가 %dpx다" % JUMP_PEAK_PX)
+	t.eq(y0 - top, JUMP_PEAK_PX, "끝까지 누른 점프의 도달 높이가 %dpx다" % JUMP_PEAK_PX)
 	# 🔴 **되돌아오는 것까지 본다.** 안 보면 「떠오른 채로 안 내려오는」 구현도 통과한다.
 	t.ok(ch.on_ground and ch.y == y0, "떨어져서 원래 높이로 돌아온다 (y=%d · 시작 %d)" % [ch.y, y0])
 
@@ -105,6 +120,62 @@ func _jump_height(t) -> void:
 	t.eq(snappedf(peak / tile, 0.001), JUMP_PEAK_TILES,
 		"해석식 도달 높이가 %s타일이다 (v²/2g = %.0fpx ÷ 타일 %.0fpx)" % [
 			JUMP_PEAK_TILES, peak, tile])
+
+
+## 🔴🔴 **가변 점프 — 누른 시간이 높이를 정한다**(2026-08-04, 사용자 요청).
+##
+## 🔴 **「짧게 누르면 낮다」만 재면 안 된다** — 점프가 통째로 죽어도(`vy = JUMP_VY_PX` 를 지워도)
+##  「낮다」는 참이다. ⇒ 세 가지를 **같이** 잰다:
+##   ① 짧게 눌러도 **실제로 뜬다**(0이 아니다)   ② 끝까지 누른 것보다 **낮다**
+##   ③ 중간까지 누르면 **그 사이에 있다** — 이게 「시간에 따라 조절된다」이고,
+##      ①②만으로는 **두 단계짜리 스위치**(눌렀나/뗐나)와 구별이 안 된다
+##
+## ⚠ 높이 비교라 **정확한 px를 안 박는다.** 컷 비율을 손대면 값이 다 바뀌는데 그때마다
+##  기대값을 고치게 하면 「그물이 상수를 베낀다」가 되고, 그건 아무것도 안 재는 것이다.
+func _short_press_jumps_lower(t) -> void:
+	# 🔴🔴 **`HUMAN_TAP_FRAMES` 로 잰다. 1프레임으로 재지 마라 — 그래서 한 번 놓쳤다.**
+	#  처음엔 1프레임(0.017초) 누름을 「짧게」로 썼고 **그물은 초록인데 게임에서는 안 됐다**
+	#  (사용자: 「안 된 듯」). 컷 비율 0.55에서 1프레임은 46%라 잘 갈렸지만, **사람이 낼 수 있는
+	#  최단 탭(0.05초)은 67%**였다 — 손으로는 거의 항상 최대가 나왔다.
+	#  🔴 **사람이 못 내는 입력으로 재면 「된다」가 나오고 게임에서는 안 된다.**
+	#
+	# ⚠ 컷이 물리는 구간은 `18 × (1 − 비율)` 프레임이다. 「중간」이 그 밖이면 `full` 과 같은 값이
+	#  나와 **검사가 경계에 앉아 조용히 아무것도 안 잰다** — 8을 골랐다가 실제로 그랬다(102 vs 102).
+	var full := _jump_peak(999)                  # 끝까지 누른다
+	var half := _jump_peak(HUMAN_TAP_FRAMES * 2) # 그 두 배로 누른다
+	var tap := _jump_peak(HUMAN_TAP_FRAMES)      # 사람이 낼 수 있는 최단 탭
+
+	t.ok(tap > 0, "사람이 낼 수 있는 최단 탭으로도 뜬다 (%dpx — 점프가 죽은 게 아니다)" % tap)
+	t.ok(tap < full, "짧게 누르면 끝까지 누른 것보다 낮다 (%d < %d)" % [tap, full])
+	# 🔴 **여기가 「스위치가 아니라 조절」을 가르는 줄이다.**
+	t.ok(tap < half and half < full,
+		"중간까지 누르면 그 사이 높이다 (%d < %d < %d — 누른 시간에 비례한다)" % [tap, half, full])
+	# 🔴🔴 **「갈리긴 한다」로는 부족하다 — 손에 잡히려면 확실히 갈려야 한다.**
+	#  이 줄이 이번 실패(컷 0.55)를 무는 자리다: 그때 최단 탭이 **67%**였고 지금은 37%다.
+	#  ⚠ 절반이라는 문턱 자체는 손맛값이다. 다만 **없으면 「조금이라도 낮으면 통과」**가 되고,
+	#   그건 화면에서 아무도 못 느끼는 차이까지 초록으로 만든다.
+	t.ok(tap * 2 < full,
+		"최단 탭이 최대의 절반 아래다 (%d / %d = %d%% — 손으로 조절이 느껴진다)" % [
+			tap, full, int(100.0 * float(tap) / float(full))])
+	# ⚠ 상수 쪽도 같이 본다. 거동만 재면 컷을 1.0으로 두고 `JUMP_VY_PX` 를 줄여도
+	#  「낮다」가 성립해서, 「가변 점프가 있다」와 「점프가 그냥 약하다」가 구별이 안 된다.
+	t.ok(Character.JUMP_CUT_RATIO > 0.0 and Character.JUMP_CUT_RATIO < 1.0,
+		"컷 비율이 0과 1 사이다 (%.2f — 1이면 안 잘리고 0이면 즉시 멈춘다)" % Character.JUMP_CUT_RATIO)
+
+
+## 점프해서 도달한 높이(px). `hold_frames` 만큼 키를 누르고 있다가 뗀다.
+## ⚠ `jump`(눌린 순간)는 첫 프레임뿐이고 `jump_held` 만 이어진다 — 게임과 같은 모양이다.
+func _jump_peak(hold_frames: int) -> int:
+	var g := _floor_grid()
+	var ch := Character.new()
+	ch.place(160, REST_Y)
+	_walk(g, ch, 5, 0.0)
+	var y0 := ch.y
+	var top := y0
+	for i in 120:
+		ch.step(g, DT, 0.0, i == 0, i < hold_frames)
+		top = mini(top, ch.y)
+	return y0 - top
 
 
 func _ledge_grid(cells: int) -> CellGrid:
@@ -189,12 +260,12 @@ func _airborne_never_climbs(t) -> void:
 	ch.place(start_x, start_y)
 
 	# 이 두 줄이 전제다. 깨지면 아래 검사가 「공중」을 안 재는 것이라 무의미해진다.
-	ch.step(g, DT, 0.0, false)
+	ch.step(g, DT, 0.0, false, false)
 	t.ok(not ch.on_ground, "시작이 공중이다 (y=%d · 바닥 %d)" % [ch.y, REST_Y])
 	t.eq(ch.x, start_x, "턱 왼쪽 면에 붙어 있다")
 
 	# 🔴 **한 프레임이면 갈린다.** 가드가 없으면 이 프레임에 4px 들려서 x가 앞으로 나간다.
-	ch.step(g, DT, 1.0, false)
+	ch.step(g, DT, 1.0, false, false)
 	t.eq(ch.x, start_x, "공중에서 턱을 밀어도 앞으로 안 나간다")
 	t.ok(ch.y >= start_y, "공중에서 들리지 않는다 (y=%d · 시작 %d)" % [ch.y, start_y])
 

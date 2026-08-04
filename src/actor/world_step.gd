@@ -67,7 +67,9 @@ func _init(grid: CellGrid, spell: SpellSim, ch: Character) -> void:
 ## 🔴🔴 **캐릭터는 60Hz, 시뮬은 20Hz다.** 캐릭터를 틱에 묶으면 조작이 뚝뚝 끊긴다.
 ##  호스트 권위라 틱에 묶일 이유가 없다(GDD 멀티 표).
 ## ⚠ 틱 **뒤에** 도는 이유: 방금 폭발이 바꾼 지형 위를 이번 프레임에 걷는다.
-func frame(dt: float, axis: float, jump: bool) -> bool:
+## ⚠ **`jump` 는 「이번 프레임에 눌렸나」, `jump_held` 는 「지금 누르고 있나」다** — 가변 점프가
+##  뒤엣것으로 상승을 자른다(`character.step`). 🔴 기본값을 안 준다: 안 넘기면 조용히 짧은 점프가 된다.
+func frame(dt: float, axis: float, jump: bool, jump_held: bool) -> bool:
 	if _broken:
 		return false
 	var ticked := false
@@ -82,7 +84,7 @@ func frame(dt: float, axis: float, jump: bool) -> bool:
 		#  ⚠ 무적이 두 대를 먹어 화면에서는 정상으로 보이고, 지속 피해에서만 3배가 드러난다.
 		_char.on_tick(_spell)
 		ticked = true
-	_char.step(_grid, dt, axis, jump)
+	_char.step(_grid, dt, axis, jump, jump_held)
 	return ticked
 
 

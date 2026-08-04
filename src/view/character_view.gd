@@ -104,7 +104,10 @@ func _cell_rect(state: int) -> Rect2:
 	var idx := 0
 	if cells.size() > 1:
 		idx = (absi(_ch.x) / Fx.CHAR_WALK_PX_PER_FRAME) % cells.size()
-	return Rect2(int(cells[idx]) * Character.W_PX, 0, Character.W_PX, Character.H_PX)
+	# 🔴🔴 **시트 안 좌표다 — `Fx.CHAR_CELL_PX` 를 쓴다. `Character.W_PX` 가 아니다.**
+	#  상자가 20px으로 좁아진 뒤로 둘이 다른 값이고, 여기에 `W_PX` 를 쓰면 시트를 20px 단위로
+	#  잘라 **엉뚱한 칸의 조각**을 그린다. ⚠ 에러가 하나도 안 난다.
+	return Rect2(int(cells[idx]) * Fx.CHAR_CELL_PX, 0, Fx.CHAR_CELL_PX, Fx.CHAR_CELL_PX)
 
 
 func _draw() -> void:
@@ -127,15 +130,23 @@ func _draw() -> void:
 	#  늘 보이는 유일한 곳이라 그게 곧 조합 표시가 죽는 것이고, ⚠ **에러는 하나도 안 난다.**
 	#  🔴 **그물이 이걸 못 잡는다** — 16px 때 verify-read가 복원 줄을 지워도 **전부 초록**인 것을
 	#   확인했다. 지키는 것은 이 주석과 눈뿐이다.
-	# ⚠ 왼쪽을 볼 때 원점을 상자 오른쪽 끝에 두는 이유: 스케일 -1이 로컬 x를 왼쪽으로 보내므로
-	#  거기서 시작해야 그림이 **같은 32px 상자 안**에 정확히 앉는다.
-	#  🔴 그리고 그림 쪽 조건은 **`minx + maxx == W_PX − 1`** 이다 — `net_sprite` 가 잰다.
+	# 🔴🔴 **그림 칸(32px)이 충돌 상자(20px)보다 넓다 — 상자 *가운데*에 맞춰 그린다.**
+	#  왼쪽 위에 맞춰 그리면 캐릭터가 상자 안에서 왼쪽으로 6px 쏠리고, 그건 「걸을 때 몸이
+	#  한쪽으로 치우쳐 보인다」로만 드러난다. ⚠ 둘 다 짝수라 이 나눗셈이 정수로 떨어진다.
+	#  🔴 그래서 **그림 중심과 상자 중심이 같다** — `_ch.center()` 에서 나가는 지팡이가
+	#   상자를 좁힌 뒤에도 몸 한가운데에서 뻗는다.
+	var pad := (Fx.CHAR_CELL_PX - Character.W_PX) / 2
+	var sprite_x := _ch.x - pad
+	# ⚠ 왼쪽을 볼 때 원점을 **그림** 오른쪽 끝에 두는 이유: 스케일 -1이 로컬 x를 왼쪽으로 보내므로
+	#  거기서 시작해야 그림이 같은 자리에 정확히 앉는다. **상자 끝이 아니라 그림 끝이다** —
+	#  상자를 쓰면 방향을 바꿀 때마다 캐릭터가 `pad` 의 두 배(12px)만큼 튄다.
+	#  🔴 그리고 그림 쪽 조건은 **`minx + maxx == CHAR_CELL_PX − 1`** 이다 — `net_sprite` 가 잰다.
 	var flip := _ch.facing < 0
 	draw_set_transform(
-		Vector2(_ch.x + (Character.W_PX if flip else 0), _ch.y),
+		Vector2(sprite_x + (Fx.CHAR_CELL_PX if flip else 0), _ch.y),
 		0.0, Vector2(-1.0 if flip else 1.0, 1.0))
 	draw_texture_rect_region(_body_tex,
-		Rect2(0.0, 0.0, Character.W_PX, Character.H_PX),
+		Rect2(0.0, 0.0, Fx.CHAR_CELL_PX, Fx.CHAR_CELL_PX),
 		_cell_rect(state), Color(1.0, 1.0, 1.0, dim))
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 

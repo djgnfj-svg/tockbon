@@ -39,18 +39,20 @@ func _body_sheet_fits_the_box(t) -> void:
 
 	var w := tex.get_width()
 	var h := tex.get_height()
-	# 🔴🔴 위 GDD 주석이 재는 자리. **높이가 상자보다 크면 안 된다.**
-	t.eq(h, Character.H_PX, "몸 시트 높이가 캐릭터 상자와 같다 (%dpx)" % Character.H_PX)
-	# 🔴 폭은 칸 수 × 상자 폭이다. 배수가 아니면 마지막 칸이 잘려 그려지는데 **에러가 안 난다.**
-	t.ok(w > 0 and w % Character.W_PX == 0,
-		"몸 시트 폭 %d 이 상자 폭 %d 의 배수다" % [w, Character.W_PX])
-	if w <= 0 or w % Character.W_PX != 0:
+	# 🔴🔴 **여기 전부가 「그림」 계약이므로 기준은 `Fx.CHAR_CELL_PX` 다 — `Character.W_PX` 가 아니다.**
+	#  2026-08-04에 둘이 갈라졌다(상자 20 · 그림 칸 32). 전에는 `W_PX` 하나가 두 뜻을 다 했고,
+	#  그대로 뒀다면 이 검사가 시트를 **20px 단위로** 세어 「9.6칸」이 되며 통째로 헛돌았다.
+	t.eq(h, Fx.CHAR_CELL_PX, "몸 시트 높이가 그림 칸과 같다 (%dpx)" % Fx.CHAR_CELL_PX)
+	# 🔴 폭은 칸 수 × 칸 폭이다. 배수가 아니면 마지막 칸이 잘려 그려지는데 **에러가 안 난다.**
+	t.ok(w > 0 and w % Fx.CHAR_CELL_PX == 0,
+		"몸 시트 폭 %d 이 그림 칸 %d 의 배수다" % [w, Fx.CHAR_CELL_PX])
+	if w <= 0 or w % Fx.CHAR_CELL_PX != 0:
 		t.ok(false, "시트 폭이 배수가 아니라 칸 수를 못 세고 **내용 검사를 하나도 못 쟀다**")
 		return
 
 	# 🔴🔴 **칸 수는 상수가 아니다** — 시트에서 나온다(`fx_tuning` 의 그 주석과 같은 규칙).
 	#  세 번째 곳에 박으면 그 셋이 갈라지는 날 그물이 **틀린 쪽 편을 든다.**
-	var cells := w / Character.W_PX
+	var cells := w / Fx.CHAR_CELL_PX
 	t.ok(cells > 0, "몸 시트에 칸이 있다 (%d칸)" % cells)
 
 	_cells_hold_their_contract(t, w, h, cells)
@@ -89,8 +91,14 @@ func _cells_hold_their_contract(t, w: int, h: int, cells: int) -> void:
 	# ⚠ 목록이 비면 아래 예외가 한 번도 안 걸리고, 그러면 「접지 칸만」이라는 라벨이 거짓이 된다.
 	t.ok(airborne.size() > 0, "공중 칸이 표에서 나온다 (%d칸 — 발 검사의 예외다)" % airborne.size())
 
+	# 🔴 벽에 붙어 **서는** 칸(`Fx.CHAR_UPRIGHT`)만 모은다 — 아래 「상자가 그림보다 넓지 않다」가
+	#  이걸로 재진다. ⚠ **접지 칸이 아니다**: 아래 ③의 「접지」에는 쓰러짐도 들어가고,
+	#   쓰러짐은 옆으로 누운 그림(폭 28)이라 섞으면 상자를 28까지 넓혀도 통과한다.
+	var upright := _upright_cells()
+	t.ok(upright.size() > 0, "서는 칸이 표에서 나온다 (%d칸 — 상자 폭 검사의 기준이다)" % upright.size())
+	var widest_upright := 0
 	for cell in cells:
-		var box := opaque_bbox(img, cell * Character.W_PX, 0, Character.W_PX, Character.H_PX)
+		var box := opaque_bbox(img, cell * Fx.CHAR_CELL_PX, 0, Fx.CHAR_CELL_PX, Fx.CHAR_CELL_PX)
 		# ① 빈 칸이 아니다.
 		t.ok(box.size.x > 0 and box.size.y > 0,
 			"칸 %d 에 불투명 픽셀이 있다 (bbox %s)" % [cell, box])
@@ -105,9 +113,9 @@ func _cells_hold_their_contract(t, w: int, h: int, cells: int) -> void:
 		#  🔴 이 단언이 참이면 **내용 폭이 짝수인 것도 따라 나온다** — 하나로 둘을 잡는다.
 		var minx: int = box.position.x
 		var maxx: int = box.position.x + box.size.x - 1
-		t.eq(minx + maxx, Character.W_PX - 1,
+		t.eq(minx + maxx, Fx.CHAR_CELL_PX - 1,
 			"칸 %d 의 minx+maxx 가 %d 이다 (좌우 반전이 제자리에 앉는다 · %d+%d)" % [
-				cell, Character.W_PX - 1, minx, maxx])
+				cell, Fx.CHAR_CELL_PX - 1, minx, maxx])
 
 		# ③ 🔴 **접지 칸만 발이 맨 아랫줄에 닿는다.** 안 닿으면 캐릭터가 지형 위에 **떠 보이고**,
 		#  칸마다 다르면 상태가 바뀔 때 **위아래로 튄다.** 상자는 그대로인데 그림만 뜨는 것이라
@@ -118,17 +126,48 @@ func _cells_hold_their_contract(t, w: int, h: int, cells: int) -> void:
 		#  ⚠ **다시 넓히지 마라** — 넓히는 순간 그림을 고쳐야 하고, 그 「고침」이 곧 늘어난 캐릭터다.
 		#  🔴 예외 목록은 `Fx.CHAR_AIRBORNE` **하나에서만** 나온다. 여기 상태 이름을 또 적으면
 		#   두 곳이 되고, 공중 포즈를 늘리는 날 한쪽만 따라온다.
+		if upright.has(cell):
+			widest_upright = maxi(widest_upright, int(box.size.x))
 		if airborne.has(cell):
 			continue
 		var maxy: int = box.position.y + box.size.y - 1
-		t.eq(maxy, Character.H_PX - 1,
+		t.eq(maxy, Fx.CHAR_CELL_PX - 1,
 			"접지 칸 %d 의 발이 맨 아랫줄에 닿는다 (maxy %d)" % [cell, maxy])
+
+	# 🔴🔴 **충돌 상자가 그림보다 넓으면 캐릭터가 벽에 닿기 전에 멈춘다.**
+	#  사용자가 그걸 보고 「벽에 닿기 전에 닿았다는 판정」이라고 했고(2026-08-04),
+	#  그래서 `Character.W_PX` 가 32 → 20이 됐다. **그 수정을 지키는 것이 이 단언 하나다** —
+	#  없으면 누가 `W_PX` 를 32로 되돌려도 그물이 전부 초록이다(되돌리기 전에도 초록이었다).
+	#
+	# 🔴🔴 **기준이 「접지 칸」이면 이 검사가 헐거워진다 — 뒤집기로 실측했다.**
+	#  처음엔 접지(= 공중이 아닌) 칸으로 쟀고, 그러면 **쓰러짐 칸(폭 28)**이 최대가 되어
+	#  「상자 32 ≤ 28」로 빨개지긴 해도 **상자를 28까지 넓히는 것은 통과**했다.
+	#  ⇒ 기준은 **벽에 붙어 서는 칸**(`Fx.CHAR_UPRIGHT`)이고 지금 그 최대는 걷기(20)다.
+	#  ⚠ 라벨이 「쓰러짐은 뺐다」라고 말하면서 안 빼고 있었다 — CLAUDE.md 「라벨이 재는 것보다 넓다」다.
+	#
+	#  🔴 **여유를 안 준다(`<=`)** — 「몇 px까지는 봐준다」를 넣는 순간 그 숫자가 근거 없는
+	#   두 번째 손잡이가 되고, 다음 사람이 그걸 늘려서 증상을 되돌린다.
+	t.ok(widest_upright > 0, "서는 칸에서 내용 폭을 쟀다 (%dpx — 검사의 전제)" % widest_upright)
+	t.ok(Character.W_PX <= widest_upright,
+		"충돌 상자가 서는 칸 그림보다 넓지 않다 (상자 %d ≤ 제일 넓은 서는 칸 %d)" % [
+			Character.W_PX, widest_upright])
 
 
 ## `Fx.CHAR_AIRBORNE` 의 상태들이 쓰는 **칸 번호** 집합.
 static func _airborne_cells() -> Dictionary:
 	var out: Dictionary = {}
 	for state: int in Fx.CHAR_AIRBORNE:
+		for cell: int in Fx.CHAR_FRAMES.get(state, []):
+			out[cell] = true
+	return out
+
+
+## 🔴 벽에 붙어 **서는** 칸. 위 `_airborne_cells` 와 **같은 모양이지만 여집합이 아니다** —
+##  쓰러짐은 둘 어디에도 안 들어간다(공중도 아니고 서 있지도 않다).
+##  ⚠ 목록은 `Fx.CHAR_UPRIGHT` 하나에서 나온다. 여기 상태 이름을 적으면 두 벌이 된다.
+static func _upright_cells() -> Dictionary:
+	var out: Dictionary = {}
+	for state: int in Fx.CHAR_UPRIGHT:
 		for cell: int in Fx.CHAR_FRAMES.get(state, []):
 			out[cell] = true
 	return out

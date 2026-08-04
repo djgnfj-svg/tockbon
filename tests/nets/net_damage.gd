@@ -126,18 +126,22 @@ const RECOIL_CX := 88
 
 ## 폭발 판정 — 캐릭터 **옆 바닥**에 내리꽂는다.
 ## 🔴 탄이 상자를 **안 지나야** 한다. 지나면 직격과 폭발이 섞여 「무엇에 맞았나」를 못 가른다.
-const BLAST_CX := 104
 const BLAST_FROM_CY := 180
-## 🔴🔴 상자 **반대쪽**의 두 번째 자리(판정 3-①). 같은 자리에 두 발을 쏘면 **먼저 터진 폭발이
-##  두 번째 탄의 바닥을 부숴서** 그 탄이 크레이터로 빠지고 **다음 틱에** 터진다(실측) —
-##  그러면 「같은 틱에 둘」이라는 전제 자체가 성립하지 않는다.
-##  ⚠ 왼쪽 폭발의 원반이 오른쪽 탄의 바닥까지 닿지 않는 간격이어야 한다.
-const BLAST_L_CX := 62
-## 반경 밖에 세울 자리(뒤집어 보기 ①). 폭발 반경(세대 0 = 24셀 = 96px) **밖**이다.
-## 🔴 **여기가 32px 전환에서 실제로 뚫린 자리다** — 반경이 2배가 되며 옛 자리(96px)가
-##  반경 **안**으로 들어와 「밖에 서 있으면 안 깎인다」가 빨개졌다. ⚠ 조용히 통과한 게 아니라
-##  빨개졌다는 것이 요점이다 — 그물이 배율 변경을 실제로 물었다.
-const FAR_STAND_X := 192
+
+## 🔴🔴 **폭발 자리를 반경에서 파생시킨다. 셀 번호를 박으면 반드시 낡는다.**
+##  ⚠ 여기 `BLAST_CX 104`·`BLAST_L_CX 62`·`FAR_STAND_X 192` 가 박혀 있었고,
+##   `rd` 를 24 → 12로 내린 날(2026-08-04) 「반경 안에 서 있다」던 두 자리가 **밖으로 나가**
+##   폭발 검사 셋이 빨개졌다.
+##  🔴 **빨개진 것은 운이 좋았던 방향이다.** 반대로 반경을 **키우면** 「밖에 서 있다」던 자리가
+##   조용히 안으로 들어오고, 그러면 뒤집어 보기 ①이 **아무도 안 짖는 채로 무의미해진다.**
+##   ⚠ 32px 전환에서 `FAR_STAND_X` 가 정확히 그 방향으로 뚫렸다 — 그때는 빨개져서 잡혔지만
+##    그건 자리가 마침 경계에 가까웠기 때문이지 구조가 막은 것이 아니었다.
+##
+## 가까운 자리는 상자 옆면에서 반경의 **60%**, 「멀리」는 폭발 중심에서 반경의 **1.5배**다.
+##  · 0%에 붙이면 탄이 상자를 지나 **직격과 폭발이 섞인다**
+##  · 100% 언저리에 두면 셀 내림 한 칸에 「안/밖」이 뒤집혀 검사가 아슬아슬해진다
+const BLAST_NEAR_RATIO := 0.6
+const BLAST_FAR_RATIO := 1.5
 
 ## 발사 원점과 상자 **사이**의 돌 한 칸. 🔴 상자에는 안 닿는 자리여야 한다 —
 ##  닿으면 「벽에 막혔다」와 「상자에 맞았다」가 섞인다.
@@ -210,7 +214,7 @@ func run(t) -> void:
 	_burn_acc_survives_tapping(t)
 	_firing_pushes_me_back(t)
 	_recoil_decays(t)
-	_firing_down_lifts_me(t)
+	_firing_down_does_not_lift_me(t)
 	_rejected_fire_has_no_recoil(t)
 	_zero_hp_downs_me(t)
 	_downed_cannot_fire(t)
@@ -276,20 +280,20 @@ func _divider_and_phase(t) -> void:
 
 	var early := 0
 	for _i in Tuning.TICK_DIVIDER - 1:
-		if w.frame(DT, 0.0, false):
+		if w.frame(DT, 0.0, false, false):
 			early += 1
 	t.eq(early, 0, "분주기 직전 %d프레임은 틱이 아니다" % (Tuning.TICK_DIVIDER - 1))
 	t.eq(g.get_tick(), 0, "그동안 격자 틱이 0 그대로다")
 	t.eq(w.phase(), Tuning.TICK_DIVIDER - 1, "위상이 프레임마다 하나씩 오른다")
 
-	t.ok(w.frame(DT, 0.0, false), "%d번째 프레임에 frame()이 참을 준다" % Tuning.TICK_DIVIDER)
+	t.ok(w.frame(DT, 0.0, false, false), "%d번째 프레임에 frame()이 참을 준다" % Tuning.TICK_DIVIDER)
 	t.eq(g.get_tick(), 1, "그 프레임에 격자 틱이 1 올랐다")
 	t.eq(w.phase(), 0, "틱 프레임에 위상이 0으로 돌아온다")
 
 	# 🔴 한 번은 우연일 수 있다 — 열 주기를 더 돌려 **비율**을 잰다.
 	var more := 0
 	for _i in Tuning.TICK_DIVIDER * 10:
-		if w.frame(DT, 0.0, false):
+		if w.frame(DT, 0.0, false, false):
 			more += 1
 	t.eq(more, 10, "%d프레임에 틱이 정확히 10번이다" % (Tuning.TICK_DIVIDER * 10))
 	t.eq(g.get_tick(), 11, "격자 틱이 11이다 (프레임을 세는 게 아니다)")
@@ -309,9 +313,9 @@ func _grid_lives_one_tick_per_tick(t) -> void:
 
 	var w := _world(g)
 	for _i in Tuning.TICK_DIVIDER - 1:
-		w.frame(DT, 0.0, false)
+		w.frame(DT, 0.0, false, false)
 	t.eq(g.fuel_at(wx, wy), fuel0, "틱이 아닌 프레임에는 불이 한 톨도 안 탄다")
-	w.frame(DT, 0.0, false)
+	w.frame(DT, 0.0, false, false)
 	t.eq(g.fuel_at(wx, wy), fuel0 - Tuning.FIRE_BURN_PER_TICK,
 		"틱 프레임에 연료가 딱 한 틱만큼 준다 (두 번 돌지 않는다)")
 
@@ -422,7 +426,7 @@ func _character_moves_every_frame(t) -> void:
 	var w := WorldStep.new(g, SpellSim.new(), ch)
 	var x0 := ch.x
 
-	t.ok(not w.frame(DT, 1.0, false), "첫 프레임은 틱이 아니다 (검사의 전제)")
+	t.ok(not w.frame(DT, 1.0, false, false), "첫 프레임은 틱이 아니다 (검사의 전제)")
 	t.ok(ch.x > x0, "그 프레임에도 캐릭터가 오른쪽으로 갔다 (%d → %d)" % [x0, ch.x])
 
 	# 뒤집기 — 「무조건 민다」가 아니다.
@@ -472,7 +476,7 @@ func _null_world_refuses(t) -> void:
 	t.ok(raw == true, "null 세상이 스스로 「부서졌다」로 표시한다")
 	if raw != true:
 		return
-	t.ok(not w.frame(DT, 1.0, false), "그리고 프레임을 안 돈다")
+	t.ok(not w.frame(DT, 1.0, false, false), "그리고 프레임을 안 돈다")
 
 	# 🔴 `enqueue()` 도 **같은 문**을 지나나. 여기만 열려 있으면 부서진 세상이 좌클릭에서 터진다.
 	# ⚠ **「안 터진다」쪽은 단언이 못 잰다** — 가드가 없으면 `enqueue()` 안에서 엔진 에러가 나고
@@ -507,7 +511,7 @@ func _stage_world_actually_runs(t) -> void:
 	if w is WorldStep:
 		var ticked := 0
 		for _i in Tuning.TICK_DIVIDER:
-			if w.call("frame", DT, 0.0, false):
+			if w.call("frame", DT, 0.0, false, false):
 				ticked += 1
 		t.eq(ticked, 1, "껍데기가 만든 세상이 분주기대로 틱을 돈다")
 	# ⚠ 트리 밖이라 `queue_free`가 아니라 `free`다.
@@ -622,14 +626,15 @@ func _place_revives(t) -> void:
 ## 폭발. 🔴 탄은 상자를 안 지나고 **바닥에서 터진 폭발**만 닿는다.
 ## **뒤집어 보기 ①**: 같은 폭발을 반경 **밖**에서 맞으면 체력이 그대로다.
 func _blast_hit_costs_hp(t) -> void:
-	var near := _blast_shot(t, STAND_X, BLAST_CX, "오른쪽")
+	var right_cx := _blast_cx_beside(STAND_X, 1)
+	var near := _blast_shot(t, STAND_X, right_cx, "오른쪽")
 	t.eq(near, Character.MAX_HP - Character.DAMAGE_HIT,
 		"폭발 반경 안에 서 있으면 체력이 %d 깎인다" % Character.DAMAGE_HIT)
-	var far := _blast_shot(t, FAR_STAND_X, BLAST_CX, "멀리")
+	var far := _blast_shot(t, _far_stand_x(right_cx), right_cx, "멀리")
 	t.eq(far, Character.MAX_HP, "폭발 반경 밖에 서 있으면 체력이 그대로다")
 	# 🔴 판정 3-①의 전제다 — **왼쪽 자리도 혼자서 때린다.** 안 재면 「폭발 둘 = 한 대」가
 	#  「사실은 하나만 닿았다」와 구별이 안 되고, 그러면 그 검사는 아무것도 안 잰다.
-	var left := _blast_shot(t, STAND_X, BLAST_L_CX, "왼쪽")
+	var left := _blast_shot(t, STAND_X, _blast_cx_beside(STAND_X, -1), "왼쪽")
 	t.eq(left, Character.MAX_HP - Character.DAMAGE_HIT,
 		"왼쪽 자리의 폭발도 혼자서 %d 깎는다 (3-①의 전제)" % Character.DAMAGE_HIT)
 
@@ -667,10 +672,13 @@ func _same_tick_two_blasts_cost_one(t) -> void:
 	var spell := SpellSim.new()
 	var ch := _stander()
 	var w := WorldStep.new(g, spell, ch)
-	# 🔴 **상자 양옆에 한 발씩.** 같은 자리에 두 발을 쏘면 먼저 터진 폭발이 두 번째 탄의
-	#  바닥을 부숴서 틱이 갈린다(위 `BLAST_L_CX` 주석 — 실측이다).
-	w.enqueue(_blast_cmd(BLAST_L_CX))
-	w.enqueue(_blast_cmd(BLAST_CX))
+	# 🔴 **상자 양옆에 한 발씩.** 같은 자리에 두 발을 쏘면 **먼저 터진 폭발이 두 번째 탄의
+	#  바닥을 부숴서** 그 탄이 크레이터로 빠지고 **다음 틱에** 터진다(실측) — 그러면
+	#  「같은 틱에 둘」이라는 전제 자체가 성립하지 않는다.
+	#  ⚠ 양옆이라 **왼쪽 폭발의 파괴 원반이 오른쪽 탄의 바닥에 못 닿는다**: 반경의 60%씩
+	#   벌어져 있으므로 두 자리의 간격이 반경의 1.2배 + 상자 폭이다.
+	w.enqueue(_blast_cmd(_blast_cx_beside(STAND_X, -1)))
+	w.enqueue(_blast_cmd(_blast_cx_beside(STAND_X, 1)))
 
 	var twin_tick := false
 	for _i in 12:
@@ -737,9 +745,10 @@ func _spread_hit_count_is_recorded(t) -> void:
 	g.consume_changed()
 	var one: Array[int] = [Glyph.GLYPH_SPREAD]
 	# 캐릭터 바로 오른쪽 바닥에 내리꽂아 여덟이 그 자리에서 흩어지게 한다.
-	# ⚠ 빼는 칸 수도 **거리라서 ×2 했다**(6 → 12).
+	# ⚠ 전에는 `BLAST_CX - 12`(폭발 자리에서 12칸 왼쪽)였다 — **폭발 반경에 묶여 있었다.**
+	#  반경이 절반이 되면 그 식이 상자 안으로 들어와 직격이 섞인다. ⇒ 상자에서 파생시킨다.
 	w.enqueue(SpellSim.cmd_fire(
-		BLAST_CX - 12, BLAST_FROM_CY, 0, 10, Tuning.ELEM_NONE, Glyph.pack(one)))
+		_spread_cx(STAND_X), BLAST_FROM_CY, 0, 10, Tuning.ELEM_NONE, Glyph.pack(one)))
 	_frames(w, Tuning.TICK_DIVIDER * 20)
 
 	var hits := (Character.MAX_HP - ch.hp) / Character.DAMAGE_HIT
@@ -783,7 +792,7 @@ func _fire_burns_through_invuln(t) -> void:
 	var invuln_at_first := -1
 	var before := ch.hp
 	for _i in 30:
-		w.frame(DT, 0.0, false)
+		w.frame(DT, 0.0, false, false)
 		if ch.hp < before:
 			invuln_at_first = ch.invuln_left
 			break
@@ -939,25 +948,36 @@ func _recoil_decays(t) -> void:
 		"%d프레임 뒤 반동이 절반 아래로 잦아든다 (%.0f → %.0f px/s)" % [RECOIL_WINDOW, v1, v2])
 
 
-## 🔴🔴 **아래로 쏘면 위로 뜬다** — 반동이 2D라는 것(GDD의 로켓점프).
-##  ⚠ 지면에 서 있으므로 **뜨지 않으면 y가 한 픽셀도 안 변한다** — 그래서 이 검사가 성립한다.
-func _firing_down_lifts_me(t) -> void:
+## 🔴🔴 **로켓점프는 삭제됐다**(사용자 결정, 2026-08-04). 반동이 1D라 아래로 쏴도 안 뜬다.
+##  전에는 이 함수가 **정반대**(`top < y0`, 「아래로 쏘면 떠오른다」)를 단언했다.
+##
+## 🔴🔴 **「안 뜬다」만 재면 이 검사는 아무것도 안 잰다** — 발사가 거부돼도, `recoil()` 이
+##  통째로 안 불려도, 반동 상수가 0이어도 **전부 초록**이다. 없는 것을 재는 검사는 가짜 그물이다.
+##  ⇒ **대각선으로 쏴서 「가로는 걸리는데 세로만 0」을 한 배치에서 같이 잰다.**
+##   그 짝이 있어야 라벨(「세로를 지웠다」)과 재는 것이 같아진다.
+##  ⚠ 수직(0,10)으로 쏘면 `d.x` 가 0이라 **가로도 0**이고, 그러면 대조군을 못 세운다.
+func _firing_down_does_not_lift_me(t) -> void:
 	var g := _floor_grid()
 	var spell := SpellSim.new()
 	var ch := _stander()
 	var w := WorldStep.new(g, spell, ch)
 	var y0 := ch.y
+	var x0 := ch.x
 	# 🔴 **지팡이 끝 자리에서 쏜다 — 상자 *아래*다.** 게임에서 아래로 조준하면 총구가 몸 아래
 	#  (중심 + `STAFF_LEN_PX`)라 탄이 상자를 안 지난다 — 배치를 거기 맞춘다.
-	#  ⚠ 이 자리를 고른 계기(「상자 안에서 쏘면 세로 밀림이 반동을 이기고 오히려 처박힌다」)는
-	#   **넉백이 사라지며 없어졌다.** 자리는 게임과 같아서 그대로 둔다.
+	#  ⚠ 오른쪽 **아래** 대각선이라 세로 성분이 살아 있다 — 로켓점프가 있었다면 이 배치에서도 떴다.
 	w.enqueue(SpellSim.cmd_fire(
-		VERT_CX, FEET_CY, 0, 10, Tuning.ELEM_NONE, Glyph.GLYPH_NONE))
+		VERT_CX, FEET_CY, 10, 10, Tuning.ELEM_NONE, Glyph.GLYPH_NONE))
 	var top := y0
 	for _i in RECOIL_WINDOW:
-		w.frame(DT, 0.0, false)
+		w.frame(DT, 0.0, false, false)
 		top = mini(top, ch.y)
-	t.ok(top < y0, "아래로 쏘면 %dpx 떠오른다 (y %d → %d)" % [y0 - top, y0, top])
+	t.eq(w.fire_count(), 1, "발사가 받아들여졌다 (검사의 전제)")
+	t.eq(top, y0, "아래로 쏴도 한 픽셀도 안 뜬다 (로켓점프 삭제 · y %d)" % y0)
+	# 🔴 **대조군.** 같은 발사에서 가로는 걸린다 ⇒ 위 줄이 「반동이 통째로 죽었다」로
+	#  초록이 되는 길이 막힌다.
+	t.ok(ch.x < x0,
+		"같은 발사의 가로 반동은 살아 있다 (%d → %d) — 세로만 지운 것이다" % [x0, ch.x])
 
 
 ## 🔴🔴 **거부된 발사는 반동을 안 만든다.**
@@ -1005,7 +1025,7 @@ func _zero_hp_downs_me(t) -> void:
 	# ⚠ 점프도 같이 막힌다 — 안 막으면 「누워서 뛴다」가 된다.
 	var y0 := ch.y
 	for _i in 60:
-		w.frame(DT, 1.0, true)
+		w.frame(DT, 1.0, true, true)
 	t.eq(ch.y, y0, "점프 입력도 안 먹는다")
 
 	# 🔴🔴 **즉사가 아님 = 중력을 계속 받는다.** 발밑을 파서 떨어뜨린다.
@@ -1073,12 +1093,14 @@ func _downed_cannot_fire(t) -> void:
 	# ⚠ **같은 값을 기대하지 마라** — 그 세 프레임에도 감쇠가 돈다. 반동이 붙었다면 **커진다**.
 	t.ok(absf(ch.recoil_vx) <= absf(kb), "그러니 가로 반동도 안 붙는다 (잔량이 줄기만 했다)")
 	# 🔴🔴 **라벨을 좁혔다. 옛 라벨(「세로도 중력 말고는 안 붙는다」)이 재는 것보다 넓었다.**
-	#  ⚠ 이 커맨드는 **수평**(ady = 0)이라 `recoil()` 의 세로 성분이 **원래 0**이다 —
+	#  ⚠ 이 커맨드는 **수평**(ady = 0)이라 `recoil()` 의 세로 성분이 **원래 0**이었다 —
 	#   쓰러짐 가드가 없어도 vy는 안 변한다. ⇒ **이 축은 원리적으로 못 무는 자리다.**
+	#  🔴🔴 **그리고 2026-08-04에 세로 반동 자체가 삭제되어(`character.recoil()`)
+	#   이제는 어떤 커맨드로도 못 문다.** 「아래로 쏘는 커맨드로 다시 짜면 된다」고 적혀 있었는데
+	#   **그 길이 없어졌다** — 재려는 거동이 사라진 것이지 검사가 게을러진 게 아니다.
 	#  ⚠ 그리고 옛 기대식(`vy + GRAVITY_PX*DT`)은 **반올림 위상에 우연히 맞던 값**이다:
 	#   중력이 ×2 되며 프레임마다 1px이 실제로 소모되어 `_move_y` 가 매번 막고 vy를 0으로 만든다.
-	#  🔴 지금 재는 것은 **「접지한 채 위로 안 떴다」**까지다. 세로 반동을 물려면 **아래로 쏘는**
-	#   커맨드로 다시 짜야 하고, 그건 이 함수의 범위가 아니다.
+	#  🔴 지금 재는 것은 **「접지한 채 위로 안 떴다」**까지다.
 	t.eq(ch.vy, 0.0, "접지 상태의 세로 속도 0 그대로다 (위로 안 떴다)")
 
 	# 🔴 **뒤집기 — 안 쓰러졌으면 같은 커맨드가 나간다.** 안 재면 「커맨드가 애초에 틀렸다」와
@@ -1133,6 +1155,35 @@ func _aim_row(ch: Character) -> int:
 	return floori((ch.y + Character.H_PX * 0.5) / float(Tuning.CELL_PX))
 
 
+## 세대 0 폭발의 반경(px). 🔴 **표에서 뽑는다** — 박으면 값이 두 벌이 되고, 갈라진 쪽은
+##  「반경 안/밖」이라는 라벨만 남고 실제로는 아무 데도 안 재게 된다.
+static func _blast_r_px() -> float:
+	return float(Tuning.blast_rd(0) * Tuning.CELL_PX)
+
+
+## 상자 `side`(+1 오른쪽 · −1 왼쪽) 바깥, 반경 **안**에 폭발을 놓을 셀.
+## 🔴 `_circle_hits_box` 는 상자에서 원 중심까지의 **최단 거리**로 판정하므로 기준점이
+##  상자 중심이 아니라 **옆면**이다. 중심에서 재면 상자 폭 절반만큼 조용히 어긋난다.
+static func _blast_cx_beside(stand_x: int, side: int) -> int:
+	var edge := stand_x + Character.W_PX if side > 0 else stand_x
+	return floori((float(edge) + side * _blast_r_px() * BLAST_NEAR_RATIO) / float(Tuning.CELL_PX))
+
+
+## 폭발 반경 **밖**에 상자를 세울 왼쪽 위 x(뒤집어 보기 ①).
+## ⚠ 상자의 **오른쪽 끝**이 반경 밖이어야 하므로 상자 폭을 빼서 왼쪽 위를 돌려준다 —
+##  안 빼면 상자 오른쪽 모서리가 원 안에 걸린 채 「밖에 세웠다」고 믿게 된다.
+static func _far_stand_x(blast_cx: int) -> int:
+	return int(Character._cell_px(blast_cx) - _blast_r_px() * BLAST_FAR_RATIO) - Character.W_PX
+
+
+## 확산 배치 — 캐릭터 **바로 오른쪽 바닥**(상자 옆면에서 반 칸).
+## 🔴 **폭발 반경에서 파생시키지 않는다.** 여기서 재는 것은 「확산 여덟이 그 자리에서 흩어질 때
+##  몇 대인가」라 자리의 기준이 상자다 — 반경으로 묶으면 반경이 작아지는 날 이 자리가
+##  **상자 안**으로 들어와 직격이 섞이고, 그러면 세는 대상이 조용히 달라진다.
+static func _spread_cx(stand_x: int) -> int:
+	return floori(float(stand_x + Character.W_PX + Character.W_PX / 2) / float(Tuning.CELL_PX))
+
+
 ## 셀 `cx` 바닥에 내리꽂는 폭발 한 발. 무속성이라 **불이 안 붙는다** — 폭발만 잰다.
 func _blast_cmd(cx: int) -> Dictionary:
 	var one: Array[int] = [Glyph.GLYPH_BLAST]
@@ -1182,7 +1233,7 @@ func _world(g: CellGrid) -> WorldStep:
 
 func _frames(w: WorldStep, n: int, axis := 0.0) -> void:
 	for _i in n:
-		w.frame(DT, axis, false)
+		w.frame(DT, axis, false, false)
 
 
 func _read(path: String) -> String:

@@ -37,6 +37,14 @@ func jump_pressed() -> bool:
 	return Input.is_action_just_pressed("jump")
 
 
+## 🔴🔴 **가변 점프가 읽는 값 — 「지금 누르고 있나」다**(위 `jump_pressed` 와 다른 물음).
+##  ⚠ **폴링이라 위 함수의 `_physics_process` 제약이 없다.** `just_pressed` 는 「이번 프레임」이라
+##   프레임 종류를 타지만 이건 상태를 그대로 읽는다 — 그래서 릴리즈를 놓치는 일이 원리적으로 없고,
+##   `character.step` 이 컷을 **클램프**로 두는 것과 짝이다.
+func jump_held() -> bool:
+	return Input.is_action_pressed("jump")
+
+
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
