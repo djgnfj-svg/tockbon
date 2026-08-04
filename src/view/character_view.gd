@@ -51,10 +51,32 @@ func tip_px() -> Vector2:
 func _draw() -> void:
 	if _ch == null:
 		return
-	draw_rect(Rect2(_ch.x, _ch.y, Character.W_PX, Character.H_PX), Fx.CHAR_BODY, true)
+	# 🔴🔴 **깜빡임의 시계가 `invuln_left` 자체다.** 틱마다 한 칸 줄므로 홀짝만 봐도
+	#  0.2초 동안 두 번 깜빡인다 — 여기서 `delta`를 누산하면 그 순간 시계가 둘이 되고,
+	#  무적이 끝났는데 깜빡이는 일이 난다. ⚠ **읽기만 한다**(이 파일 첫 줄).
+	var dim := 1.0 if (_ch.invuln_left & 1) == 0 else Fx.INVULN_DIM_A
+
+	# 🔴🔴 **쓰러지면 실루엣이 통째로 바뀐다** — 눕힌 납작한 상자다. 색만 바꾸면 무적 흐림·불
+	#  테두리와 같은 축을 써서 셋이 겹칠 때 못 가른다. ⚠ 지팡이도 총구도 안 그린다 —
+	#  **못 쏘는 상태**라 그리면 「쏠 수 있어 보인다」가 된다.
+	if _ch.downed:
+		var h := Character.W_PX * Fx.CHAR_DOWN_H_RATIO
+		draw_rect(Rect2(_ch.x, _ch.y + Character.H_PX - h, Character.W_PX, h),
+			Fx.CHAR_DOWN, true)
+		return
+
+	var body := Fx.CHAR_BODY
+	var trim := Fx.CHAR_TRIM
+	body.a *= dim
+	trim.a *= dim
+	draw_rect(Rect2(_ch.x, _ch.y, Character.W_PX, Character.H_PX), body, true)
 	draw_rect(Rect2(
 		_ch.x, _ch.y + Character.H_PX - Fx.CHAR_TRIM_PX,
-		Character.W_PX, Fx.CHAR_TRIM_PX), Fx.CHAR_TRIM, true)
+		Character.W_PX, Fx.CHAR_TRIM_PX), trim, true)
+	# 🔴 **테두리라 무적 흐림과 겹쳐도 둘 다 보인다.** 불은 무적에 안 걸려서 그 겹침이 정상이다.
+	if _ch.burning:
+		draw_rect(Rect2(_ch.x, _ch.y, Character.W_PX, Character.H_PX),
+			Fx.CHAR_BURN, false, Fx.CHAR_BURN_PX)
 	var tip := tip_px()
 	draw_line(_ch.center(), tip, Fx.STAFF_COLOR, Fx.STAFF_WIDTH_PX)
 

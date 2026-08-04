@@ -15,6 +15,10 @@ const Tuning := preload("res://src/sim/sim_tuning.gd")
 const Glyph := preload("res://src/sim/glyph_defs.gd")
 const SpellSim := preload("res://src/sim/spell_sim.gd")
 const Aim := preload("res://src/actor/aim.gd")
+## 🔴 주석·문자열 스트리퍼를 **빌려 온다** — 소스 텍스트를 훑는 그물이 여럿이고 스트리퍼는 하나여야 한다.
+const NetDeterminism := preload("res://tests/nets/net_determinism.gd")
+
+const SPELL_SIM_SCRIPT := "res://src/sim/spell_sim.gd"
 
 ## 발사 속도(고정소수점). 조준 정규화가 어느 방향에서든 이 크기를 내놔야 한다.
 const SPEED_FP := Tuning.SIM_SIZES[0]["speed"] << SpellSim.FP_SHIFT
@@ -53,6 +57,7 @@ func run(t) -> void:
 	_kind_decides_continuation(t)
 	_rune_leaves_a_trace(t)
 	_every_rune_traces(t)
+	_rune_trace_has_the_none_branch(t)
 	_empty_list_bolts_leave_marks(t)
 	_glyph_bolt_also_traces(t)
 	_rune_trace_follows_gen(t)
@@ -812,6 +817,20 @@ func _rune_leaves_a_trace(t) -> void:
 
 ## 🔴 표에만 있고 코드에 없는 룬을 **래퍼의 stderr 검사에 공짜로** 건다
 ##  (`_rune_trace`가 모르는 흔적에 짖는다). `_every_glyph_runs`와 같은 장치다.
+##
+## 🔴🔴 **라벨이 재는 것과 같아야 한다.** 옛 라벨은 「룬 %d의 흔적이 **세상에 남는다**」였고
+##  실제로 잰 것은 `burning_count() > 0` 하나였다 — **무속성은 정의상 0이라 그 라벨이 곧 거짓이 된다.**
+##  ⚠ `continue`로 무속성을 건너뛰는 것은 **사면 넓히기**다(CLAUDE.md). 라벨을 좁힌다:
+##  「**룬마다 `ELEM_DEFS`의 `trace`가 말하는 결과가 실제로 난다**」.
+## 🔴 **`else`가 `t.ok(false)`인 것이 이 교정의 핵심이다** — 흔적 종류가 셋이 되는 날
+##  코드보다 **그물이 먼저 짖는다.**
+##
+## 🔴🔴 **그리고 이것이 판정 7의 그물이다**(기획 「무속성 룬과 불 룬이 다르나」).
+##  무속성은 「아무것도 안 한다」라서 **발사가 거부된 것과 화면에서 구별이 안 된다** ⇒
+##  넷을 **같이** 단언한다: `fire()`가 참 · 탄이 실제로 났다 · 착탄해서 원본이 사라졌다 ·
+##  **그런데 격자는 한 칸도 안 변했다.** 안 하면 「무속성이면 발사가 거부된다」는 버그도 초록이다.
+## ⚠ 대조군은 따로 만들지 않는다 — **같은 루프의 불 룬이 대조군이다**(같은 자리·같은 조합).
+##  그래서 두 갈래가 **같은 두 값**(`burning_count` · 변경 칸 수)을 반대 방향으로 잰다.
 func _every_rune_traces(t) -> void:
 	t.eq(Tuning.ELEM_ALL.size(), Tuning.ELEM_DEFS.size(),
 		"착탄시켜 볼 룬이 %d개다" % Tuning.ELEM_ALL.size())
@@ -819,9 +838,77 @@ func _every_rune_traces(t) -> void:
 		var g := _wood_cave_grid()
 		var sim := SpellSim.new()
 		t.ok(sim.fire(SpellSim.cmd_fire(22, 70, 100, 0, element, Glyph.GLYPH_NONE)),
-			"룬 %d을 실은 탄이 나간다" % element)
+			"룬 %d: fire()가 참을 준다" % element)
+		# 🔴 `fire()`의 참만 믿지 않는다 — 탄이 **실제로** 났나.
+		t.eq(sim.active_count(), 1, "룬 %d: 탄이 실제로 났다" % element)
+		if sim.active_count() != 1:
+			# ⚠ 여기서 조용히 넘어가면 검사가 「실패」가 아니라 **없어진다.**
+			t.ok(false, "룬 %d: 탄이 없어서 흔적을 **하나도 못 쟀다**" % element)
+			continue
+		var origin: int = sim.get_id()[0]
+
+		# 🔴 **여기서 계수기를 0으로 맞춘다.** 동굴을 판 것까지 세면 아래 「안 변했다」가 뜻이 없다.
+		g.consume_changed()
 		_run_until_impact(sim, g, 12)
-		t.ok(g.burning_count() > 0, "룬 %d의 흔적이 세상에 남는다" % element)
+		t.ok(not _has_id(sim, origin), "룬 %d: 탄이 착탄까지 살아서 사라졌다" % element)
+		# ⚠ 한 번만 읽는다 — `consume_changed()`는 **읽으면 0으로 돌아간다.**
+		var changed := g.consume_changed()
+
+		var def: Variant = Tuning.ELEM_DEFS.get(element, null)
+		t.ok(def is Dictionary, "룬 %d이 ELEM_DEFS에 있다" % element)
+		if not (def is Dictionary):
+			continue
+		var trace := int((def as Dictionary).get("trace", -1))
+		if trace == Tuning.TRACE_IGNITE:
+			t.ok(g.burning_count() > 0,
+				"룬 %d(점화): 불이 붙는다 (%d칸)" % [element, g.burning_count()])
+			t.ok(changed > 0, "룬 %d(점화): 격자가 실제로 변했다 (%d칸)" % [element, changed])
+		elif trace == Tuning.TRACE_NONE:
+			t.eq(g.burning_count(), 0, "룬 %d(흔적 없음): 불이 한 칸도 안 붙는다" % element)
+			t.eq(changed, 0, "룬 %d(흔적 없음): 격자가 한 칸도 안 변한다" % element)
+		else:
+			t.ok(false, "흔적 종류 %d에 이 그물이 단언을 안 갖고 있다 (룬 %d)" % [trace, element])
+
+
+## 🔴🔴 **`_rune_trace`의 `TRACE_NONE` 갈래는 거동으로 못 지킨다.**
+##  그 두 줄을 지워도 **위 단언이 전부 통과한다** — 「아무것도 안 한다」와 「짖고 아무것도 안 한다」는
+##  격자에서 구별이 안 되기 때문이다(실측). 잡는 것은 래퍼의 stderr뿐이다.
+##
+## 🔴 **그런데 지금 그 짖음이 안 사면되는 이유가 「말이 우연히 다른 덕」이다.** 누가
+##  `expect_error("룬 흔적")` 류를 어디서든 선언하는 날 — 🔴 **사면은 실행 전체에 걸린다** —
+##  이 갈래는 **아무도 안 보는 코드**가 된다. ⇒ 우연에 기대지 않고 바늘을 하나 건다.
+##
+## 🔴 **라벨이 재는 것**: 「`_rune_trace`에 `TRACE_NONE` 갈래가 **있다**」까지다.
+##  ⚠ **「무속성이 아무것도 안 한다」가 아니다** — 그건 거동이고 텍스트는 문법만 본다.
+##   거동 쪽은 위 `_every_rune_traces`가 잰다.
+func _rune_trace_has_the_none_branch(t) -> void:
+	var raw := _read(SPELL_SIM_SCRIPT)
+	t.ok(raw.length() > 0, "spell_sim.gd를 읽었다 (%d바이트)" % raw.length())
+	t.ok(not raw.contains("\"\"\""), "spell_sim.gd에 삼중 따옴표가 없다 (스트리퍼가 못 다룬다)")
+	var body := _func_body(NetDeterminism._strip(raw), "_rune_trace")
+	# 🔴 **함수를 못 찾으면 빈 문자열이고 아래가 공짜로 「없다」가 된다.** 전제를 먼저 건다.
+	t.ok(body.length() > 0, "spell_sim.gd에서 `_rune_trace` 본문을 떠냈다 (%d자)" % body.length())
+	t.ok(body.contains("TRACE_IGNITE"),
+		"떠낸 것이 정말 `_rune_trace`다 (이미 아는 갈래가 들어 있다)")
+	t.ok(body.contains("Tuning.TRACE_NONE"), "`_rune_trace`에 `TRACE_NONE` 갈래가 있다")
+
+
+func _read(path: String) -> String:
+	var f := FileAccess.open(path, FileAccess.READ)
+	if f == null:
+		push_error("net_spell: %s 를 못 읽었다" % path)
+		return ""
+	return f.get_as_text()
+
+
+## `func <이름>(` 부터 **다음 `func` 직전까지.** ⚠ 함수가 없으면 빈 문자열이다 —
+##  부르는 쪽이 그걸 단언해야 한다.
+func _func_body(src: String, nm: String) -> String:
+	var head := src.find("func %s(" % nm)
+	if head < 0:
+		return ""
+	var tail := src.find("\nfunc ", head + 1)
+	return src.substr(head, -1 if tail < 0 else tail - head)
 
 
 ## 🔴🔴 **이 검사가 기획 변경의 이유 그 자체다.**

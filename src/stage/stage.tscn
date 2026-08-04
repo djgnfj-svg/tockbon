@@ -39,6 +39,14 @@ offset_bottom = 210.0
 mouse_filter = 2
 text = "…"
 
+[node name="Health" type="Label" parent="HUD"]
+offset_left = 660.0
+offset_top = 494.0
+offset_right = 952.0
+offset_bottom = 530.0
+mouse_filter = 2
+text = "…"
+
 [node name="CircleWindow" type="Control" parent="HUD"]
 visible = false
 focus_mode = 0

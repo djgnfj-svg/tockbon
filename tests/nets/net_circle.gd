@@ -25,6 +25,15 @@ const Layout := preload("res://src/view/circle_layout.gd")
 const Book := preload("res://src/view/book_layout.gd")
 const Palette := preload("res://src/view/palette_layout.gd")
 const Fx := preload("res://src/view/fx_tuning.gd")
+
+## `Rect2` 가 값을 **32비트 float**으로 담는 데서 오는 여유. 🔴 「딱 붙어 있어야 하는」 경계를
+##  64비트 산술과 맞댈 때만 쓴다 — 넓히면 진짜 겹침을 사면한다.
+##
+## ⚠ **얼마나 큰 여유인가**(실측 2026-08-04): 실제 오차는 **7.6e-6** 이고 이 값은 **0.01 — 1300배**다.
+##  `1e-4` 로 줄여도 통과한다. 🔴 **넉넉한 쪽을 고른 이유는 「1px의 1/100이라 눈에 보이는 겹침을
+##  못 숨긴다」**이고(1px 침범을 넣으면 다섯이 빨개진다), **오차가 창 크기마다 달라지기 때문**이다.
+##  ⇒ 지금 위험은 아니지만 **여기서 더 키우면 그 근거가 죽는다.**
+const RECT_EPS := 0.01
 ## 🔴 주석·문자열 스트리퍼를 **빌려 온다** — 소스 텍스트를 훑는 그물이 둘이라 스트리퍼는 하나여야 한다.
 const NetDeterminism := preload("res://tests/nets/net_determinism.gd")
 
@@ -48,6 +57,10 @@ const PALETTE_PATH := "res://src/view/palette_layout.gd"
 ## |---|---|---|---|
 ## | 단계 4a | 514×286 (28.4%) | 199.3 | **19.3px** — 빠듯했다 |
 ## | 단계 4b-1 | 864×486 (**90%**) | **363.8** | **183.8px** |
+## | `character-damage` 단계 6 | 864×**372** (가로만 90%) | **280.1** | **100.1px** |
+##
+## 🔴 마지막 줄은 **캐릭터가 다칠 수 있게 되면서** 창이 세로로 줄어든 것이다(사용자 판정) —
+##  조립 중에도 체력과 캐릭터가 보여야 한다. **가로는 그대로라 지름이 세로에 걸려 정해진다.**
 ##
 ## 🔴 **바닥값 180은 아직 「199px에서 눈이 통과시켰다」가 근거다** — 지금 지름과 두 배 차이지만
 ##  **아직 안 올렸다.** verify-look이 363.8px 화면을 통과시키면 **그때 그 새 관측을 근거로 올려라.**
@@ -684,7 +697,12 @@ func _palette_geometry_runs(t) -> void:
 			var slot := Palette.item_slot(sec, ii, items.size())
 			t.ok(sec.encloses(slot), "%s 항목 %d이 구획 안에 들어간다" % [nm, ii])
 			# ⚠ 제목 띠를 침범하면 글자와 심볼이 서로를 먹는다.
-			t.ok(slot.position.y >= sec.position.y + Fx.PALETTE_HEAD_PX,
+			# 🔴 **여유 한 톨을 둔다.** 항목의 위 끝은 **정확히** 제목 띠의 끝이고, `Rect2`는
+			#  값을 **32비트 float**으로 담는데 여기 비교는 64비트다 ⇒ 창 크기에 따라 마지막
+			#  비트가 아래로 굴러 **같은 값인데 「침범했다」가 된다.**
+			#  ⚠ 실측(2026-08-04, 창을 486 → 372로 줄이던 날): 구획 높이가 92.666…이 되면서
+			#   룬 두 항목이 그렇게 빨개졌다. **배치가 아니라 비교가 틀렸던 것이다.**
+			t.ok(slot.position.y >= sec.position.y + Fx.PALETTE_HEAD_PX - RECT_EPS,
 				"%s 항목 %d이 제목 띠 아래에 있다" % [nm, ii])
 			# 🔴 **심볼이 칸 안에 든다.** ⚠ `> 0` 만 보면 긴 변으로 바꿔도 통과한다 —
 			#  그러면 항목 하나짜리 종류(진·룬)만 거대해져 칸을 넘고, 「진이 제일 중요한가」로

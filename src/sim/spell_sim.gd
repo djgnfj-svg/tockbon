@@ -114,6 +114,29 @@ var _fx_y := PackedInt32Array()
 var _fx_e := PackedByteArray()
 var _fx_g := PackedByteArray()
 
+## 🔴🔴 **이번 틱에 탄이 지나간 구간**(고정소수점). 폭발 통지와 **같은 어법**이다 —
+##  `step()` 시작에서 지우고, 시뮬은 이걸 **안 읽는다.** 나가기만 한다.
+##  ⚠ 소비자가 다른 것뿐이다: 폭발 통지는 화면이 읽고 **이건 액터가 읽는다**
+##  (`src/actor/character.gd` 의 「맞았나」 판정).
+##
+## 🔴🔴 **왜 「지금 위치」가 아니라 구간인가.** 세대 0 탄은 틱당 10셀(40px)을 뛰고 캐릭터 상자는
+##  **16px**이다 ⇒ 틱 경계의 점만 맞대면 **도약이 상자를 통째로 넘는다.** 한 프레임이라
+##  **눈으로 절대 못 보고** 「가끔 안 맞는다」로만 보인다 — `_walk` 가 벽에 대해 같은 함정을
+##  이미 한 번 적어 뒀다(「도착 칸만 검사로 짜지 마라」).
+##
+## ⚠ **세대도 룬도 안 싣는다.** 지금 모든 탄이 같은 피해라 **소비자가 없다.** 안 쓰는 값을
+##  실어 보내면 그게 거짓 손잡이다(위 `_notify_blast` 주석과 같은 규율).
+var _seg_x0 := PackedInt32Array()
+var _seg_y0 := PackedInt32Array()
+var _seg_x1 := PackedInt32Array()
+var _seg_y1 := PackedInt32Array()
+
+## `_walk` 가 멈춘 셀. 🔴 **지역 변수가 아니라 멤버인 이유**: 착탄점이 `_impact` 의 인자이자
+##  구간 통지의 끝점이라, 두 벌로 두면 「폭발은 여기서 났는데 구간은 저기까지」가 되고
+##  그 어긋남은 **벽 너머의 캐릭터를 때리는** 모양으로만 드러난다.
+var _hit_cx := 0
+var _hit_cy := 0
+
 
 func _init() -> void:
 	var n := Tuning.MAX_PROJECTILES
@@ -255,7 +278,7 @@ func reset() -> void:
 	_pend_g.clear()
 	_pend_e.clear()
 	_pend_gen.clear()
-	_clear_fx()
+	_clear_notices()
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -268,7 +291,7 @@ func reset() -> void:
 ## ⚠ 이 안의 순서도 계약이다: **밀린 것을 먼저 갚고 새 착탄을 본다.** 뒤집으면 이번 틱 착탄이
 ##  예산을 다 먹어 밀린 것이 영원히 못 터진다 — 「몰아 쏘면 몇 발이 안 터진다」의 다른 얼굴이다.
 func step(grid: CellGrid) -> void:
-	_clear_fx()
+	_clear_notices()
 	for id: int in Glyph.ALL:
 		_budget_left[id] = _budget_cap[id]
 	_drain_pending(grid)
@@ -303,7 +326,18 @@ func _advance(grid: CellGrid, i: int) -> bool:
 	_prev_py[i] = y0
 	_px[i] = x1
 	_py[i] = y1
-	return _walk(grid, i, x0 >> FP_SHIFT, y0 >> FP_SHIFT, x1 >> FP_SHIFT, y1 >> FP_SHIFT)
+	var alive := _walk(grid, i, x0 >> FP_SHIFT, y0 >> FP_SHIFT, x1 >> FP_SHIFT, y1 >> FP_SHIFT)
+
+	# 🔴🔴 **끝점을 `x1` 로 두면 벽 *너머*의 캐릭터를 때린다.** 착탄한 탄은 x1까지 안 갔다 —
+	#  `_walk` 가 멈춘 착탄 셀까지 갔다. 살아남았을 때만 x1이 진짜 도달점이다.
+	# ⚠ **통지 자리는 여기 하나다.** `_impact` 에서도 통지하면 「어떤 탄은 통지되고 어떤 탄은
+	#  안 된다」가 생기고, 그건 「가끔 안 맞는다」로만 보인다.
+	# ⚠ 나이로 죽는 갈래는 위에서 이미 돌아갔다 — **안 움직였으니 구간도 없다.**
+	if alive:
+		_notify_seg(x0, y0, x1, y1)
+	else:
+		_notify_seg(x0, y0, _cell_center_fp(_hit_cx), _cell_center_fp(_hit_cy))
+	return alive
 
 
 ## 🔴🔴 **정수 Bresenham으로 지나간 칸을 전부 밟는다 — 「도착 칸만 검사」로 짜지 마라.**
@@ -327,8 +361,8 @@ func _walk(grid: CellGrid, i: int, x0: int, y0: int, x1: int, y1: int) -> bool:
 	# 🔴 착탄점은 **고체 셀이 아니라 그 직전 빈 셀**이다. 확산이 고체 셀에서 8발을 뿌리면
 	#  8발이 전부 벽 안에서 태어나 **그 자리에서 다 터진다** — 폭발 8번이 폭발 1번으로 보이고
 	#  판정 2가 통째로 죽는다. 폭발도 같은 점을 쓴다(1셀 차이는 반경 12셀 원에서 안 보인다).
-	var fx := x0
-	var fy := y0
+	_hit_cx = x0
+	_hit_cy = y0
 
 	# 🔴 `while`이 아니라 걸음 수 상한이 있는 `for`다 — 부호가 한 번만 어긋나도
 	#  `while`은 프레임을 통째로 먹고 멈춘다(에러 없이 게임이 얼어붙는다).
@@ -347,10 +381,10 @@ func _walk(grid: CellGrid, i: int, x0: int, y0: int, x1: int, y1: int) -> bool:
 		if cx < 0 or cx >= CellGrid.W or cy < 0 or cy >= CellGrid.H:
 			return false  # 격자 밖 = 착탄 없이 소멸
 		if _behavior[grid.mat_at(cx, cy)] != Mat.BEHAVIOR_STATIC:
-			fx = cx
-			fy = cy
+			_hit_cx = cx
+			_hit_cy = cy
 			continue
-		_impact(grid, fx, fy, i)
+		_impact(grid, _hit_cx, _hit_cy, i)
 		return false
 	return true
 
@@ -382,6 +416,11 @@ func _rune_trace(grid: CellGrid, x: int, y: int, element: int, gen: int) -> void
 	var trace := int(Tuning.ELEM_DEFS[element]["trace"])
 	if trace == Tuning.TRACE_IGNITE:
 		grid.apply(CellGrid.cmd_ignite(x, y, Tuning.rune_r(gen)))
+		return
+	# 🔴🔴 **이 `return` 하나가 무속성의 정의 전부다** — 세상에 아무것도 안 한다.
+	#  ⚠ **아래 짖음으로 대신하지 마라.** 「표에 있는데 코드에 없다」와 「일부러 아무것도 안 한다」는
+	#   다른 것이고, 둘을 한 갈래로 묶으면 진짜 구현 누락이 평소 발사에 묻혀 안 보인다.
+	if trace == Tuning.TRACE_NONE:
 		return
 	push_error("SpellSim: 룬 흔적 %d에 구현이 없다" % trace)
 
@@ -518,11 +557,29 @@ func _notify_blast(x: int, y: int, element: int, gen: int) -> void:
 	_fx_g.append(gen)
 
 
-func _clear_fx() -> void:
+## 셀 번호 → 그 셀 **한가운데**의 고정소수점. 🔴 착탄점을 셀 모서리로 두면 구간이 반 칸 짧아진다.
+func _cell_center_fp(c: int) -> int:
+	return (c << FP_SHIFT) + FP_HALF
+
+
+func _notify_seg(x0: int, y0: int, x1: int, y1: int) -> void:
+	_seg_x0.append(x0)
+	_seg_y0.append(y0)
+	_seg_x1.append(x1)
+	_seg_y1.append(y1)
+
+
+## 🔴 **통지 둘을 한 자리에서 지운다.** 따로 지우면 한쪽만 지우는 날이 오고, 그때 그 통지는
+##  **영원히 살아 있다** — 같은 섬광이 계속 재생되거나 지나간 탄이 계속 때린다.
+func _clear_notices() -> void:
 	_fx_x.clear()
 	_fx_y.clear()
 	_fx_e.clear()
 	_fx_g.clear()
+	_seg_x0.clear()
+	_seg_y0.clear()
+	_seg_x1.clear()
+	_seg_y1.clear()
 
 
 ## 마지막 슬롯을 끌어와 덮는다. ⚠ **인덱스가 뒤바뀐다** — 위 `_id` 주석을 봐라.
@@ -636,6 +693,30 @@ func get_blast_element() -> PackedByteArray:
 
 func get_blast_gen() -> PackedByteArray:
 	return _fx_g
+
+
+# ─── 이번 틱에 탄이 지나간 구간 ───────────────────────────────────
+# 🔴🔴 **액터의 「맞았나」 판정이 읽는 유일한 통지다.** 위 폭발 통지와 수명이 같다 —
+#  다음 `step()`이 지운다. ⚠ 좌표는 **셀 고정소수점**이고 px로 옮기는 일은 액터가 한다.
+
+func seg_count() -> int:
+	return _seg_x0.size()
+
+
+func get_seg_x0() -> PackedInt32Array:
+	return _seg_x0
+
+
+func get_seg_y0() -> PackedInt32Array:
+	return _seg_y0
+
+
+func get_seg_x1() -> PackedInt32Array:
+	return _seg_x1
+
+
+func get_seg_y1() -> PackedInt32Array:
+	return _seg_y1
 
 
 ## 예산이 떨어져 다음 틱으로 밀린 파이프라인 수. ⚠ 그물과 HUD가 **버려지지 않았다**를 재는 자리다.

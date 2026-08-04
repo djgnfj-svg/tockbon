@@ -29,6 +29,7 @@ func run(t) -> void:
 	_materials(t)
 	_glyphs(t)
 	_defs_and_all_agree(t)
+	_view_follows_the_rune_axis(t)
 	_gen_tables(t)
 	_stage_map(t)
 	_wood_clumps(t)
@@ -62,6 +63,41 @@ func _defs_and_all_agree(t) -> void:
 			t.ok(defs.has(id), "%s: ALL의 %d가 DEFS에 있다" % [nm, id])
 		for id: int in defs.keys():
 			t.ok(all.has(id), "%s: DEFS의 %d가 ALL에 있다 (순회에서 안 빠진다)" % [nm, id])
+
+
+## 🔴🔴 **시뮬 축(`ELEM_ALL`)이 늘었는데 화면 축(`ELEM_FX`)이 안 따라오면 그물이 전부 초록이다.**
+##  ⚠ 실측(2026-08-04, 무속성 룬을 넣던 날): 룬을 `ELEM_ALL`에 넣고 `ELEM_FX`에서 **색만 빼도
+##   통과 1127개 · stderr 깨끗함**이었다. 아무도 안 짖는다.
+##
+## 🔴 이게 CLAUDE.md가 **이 리포의 대표 가짜**로 적은 「화면만 바뀌고 시뮬은 안 바뀌기(또는 그 반대)」이고,
+##  **v1이 죽은 방식**이다 — 위력이 두 배가 됐는데 화면이 안 따라가서 아무도 강해진 걸 못 느꼈다.
+##  ⚠ `sim_tuning`의 **세대 표에는** 그 짝(`FX_SIZES` 길이)이 아래 `_gen_tables`에 있는데
+##   **룬 축에는 없었다.** 이 함수가 그 빈자리다.
+##
+## ⚠ **`ELEM_FX_MISSING`(마젠타 비명)을 대신하는 게 아니다.** 저건 화면 쪽 최후 방어선이라
+##  **사람이 봐야** 하고, 이건 자동이다. 둘 다 필요하다.
+func _view_follows_the_rune_axis(t) -> void:
+	# ⚠ 목록이 비면 아래가 한 번도 안 돌고 초록이 된다.
+	t.ok(Tuning.ELEM_ALL.size() > 0, "룬이 하나라도 있다 (%d개)" % Tuning.ELEM_ALL.size())
+	for element: int in Tuning.ELEM_ALL:
+		# 🔴 **색인(`ELEM_FX[element]`)으로 파지 마라** — 없으면 단언이 빨개지는 게 아니라
+		#  함수가 중단돼 **검사가 통째로 없어진다.** `Variant`로 받고 타입을 먼저 잰다.
+		var fx: Variant = Fx.ELEM_FX.get(element, null)
+		t.ok(fx is Dictionary, "룬 %d의 색이 ELEM_FX에 있다" % element)
+		if not (fx is Dictionary):
+			continue
+		for key: String in ["core", "glow"]:
+			t.ok((fx as Dictionary).get(key, null) is Color,
+				"룬 %d의 ELEM_FX에 `%s` 색이 있다" % [element, key])
+		# 🔴 **표에 있나**와 **쓰는 쪽이 받나**는 다른 물음이다 — 소비자가 지나는 접근자로 한 번 더 본다.
+		var got: Variant = Fx.elem_fx(element).get("glow", null)
+		t.ok(got is Color and got != Fx.ELEM_FX_MISSING.get("glow", null),
+			"룬 %d이 접근자에서 비명 색으로 안 떨어진다" % element)
+
+	# 🔴 반대쪽. 화면에만 있고 시뮬에 없는 룬은 **아무도 못 쏘는 색**이다 — 거짓 손잡이다.
+	for element: int in Fx.ELEM_FX.keys():
+		t.ok(Tuning.ELEM_ALL.has(element),
+			"ELEM_FX의 룬 %d이 ELEM_ALL에 있다 (아무도 못 쏘는 색이 아니다)" % element)
 
 
 ## 🔴🔴 **나무가 한 덩어리면 어디에 불이 붙든 결국 전부 탄다.**

@@ -32,9 +32,13 @@ const HUD_PATH := "HUD"
 ##   적으면 「이건 일부러 먹는다」가 리포에 남는다. 자동으로 알아내면 그 선언이 사라진다.
 const INTERACTIVE: Array[String] = ["HUD/CircleWindow"]
 
-## 창이 화면에서 차지하는 비율. 🔴 **사용자 판정이라 계약이다**(§8) — 연출값이 아니다.
-##  「책이 그냥 화면 90%를 차지하게 해줘」(2026-08-03).
-const WINDOW_SCREEN_FRAC := 0.9
+## ⚠ **옛 `WINDOW_SCREEN_FRAC`(각 축 90%)은 지웠다.** 계약이 크기였던 적이 없다 —
+##  「캐릭터와 그 주변이 보인다」가 계약이고 90%는 그때 그걸 **유예**한 값이었다.
+##  🔴 캐릭터가 다칠 수 있게 되면서 유예가 끝났다(사용자 판정, 2026-08-04) ⇒
+##   아래 `_window_does_not_cover_*` 가 **덮나 안 덮나**를 잰다.
+const Character := preload("res://src/actor/character.gd")
+const Stage := preload("res://src/stage/stage.gd")
+const Tuning := preload("res://src/sim/sim_tuning.gd")
 
 
 func run(t) -> void:
@@ -170,16 +174,12 @@ func _window_leaves_the_stage_visible(t, root: Node) -> void:
 	t.ok(r.position.x >= 0.0 and r.position.y >= 0.0 and r.end.x <= vw and r.end.y <= vh,
 		"조립창이 화면 안에 들어간다 (%s ~ %s)" % [r.position, r.end])
 
-	# 🔴🔴 **계약이 「절반 이하」에서 「화면 90%」로 바뀌었다** — 사용자 판정(§3.7·§8).
-	#  ⚠ 옛 검사는 「일부만 덮는다」를 지켰는데, 그 근거였던 「캐릭터가 보인다」가 **유예**됐다
-	#   (지금 게임에 몬스터도 체력도 없어 못 보는 대가가 0이다).
-	#  🔴 **유예지 삭제가 아니다** — 캐릭터가 다칠 수 있게 되는 날 이 줄이 다시 바뀐다.
-	t.ok(absf(r.size.x / vw - WINDOW_SCREEN_FRAC) <= 0.01,
-		"창 가로가 화면의 %d%%다 (%.1f%%)" % [
-			int(WINDOW_SCREEN_FRAC * 100.0), r.size.x / vw * 100.0])
-	t.ok(absf(r.size.y / vh - WINDOW_SCREEN_FRAC) <= 0.01,
-		"창 세로가 화면의 %d%%다 (%.1f%%)" % [
-			int(WINDOW_SCREEN_FRAC * 100.0), r.size.y / vh * 100.0])
+	# 🔴🔴 **크기 단언을 버리고 「무엇을 안 가리나」를 잰다** — 계약이 크기였던 적이 없다.
+	#  ⚠ 옛 검사는 「각 축 90%」였고, 그 근거였던 「캐릭터가 보인다」는 **유예 중**이었다.
+	#   캐릭터가 다칠 수 있게 되면서 **유예가 끝났고**(사용자 판정, 2026-08-04) 창이 줄었다.
+	#  🔴 크기를 재면 「90%인데 캐릭터를 덮는 자리」도 초록이다. **덮나 안 덮나**가 계약이다.
+	_window_does_not_cover_the_player(t, r)
+	_window_does_not_cover_the_health(t, root, r)
 
 	# 🔴🔴 **90%면 `HUD/Stats`를 덮는다. 그게 안전한 이유는 창이 불투명해서다.**
 	#  ⚠ 옛 검사는 「안 겹친다」였고 근거는 위험 12(「겹치면 글씨가 섞인다」)였는데,
@@ -188,6 +188,46 @@ func _window_leaves_the_stage_visible(t, root: Node) -> void:
 	var stats := root.get_node_or_null("HUD/Stats") as Control
 	t.ok(stats != null, "씬에 HUD/Stats 가 있다")
 	t.eq(Fx.WINDOW_BG.a, 1.0, "창 배경이 불투명하다 (겹친 HUD 글씨가 안 섞인다)")
+
+
+## 🔴🔴 **창이 캐릭터가 걷고 뛰는 자리를 안 덮는다.** 조립 중에도 세상이 도는 게 이 게임의 계약이라
+##  (GDD 「조립하는 동안 세상은 안 멈춘다」) **내가 불에 타고 있는지가 보여야** 한다.
+## 🔴 **자리를 스폰·점프 상수에서 파생시킨다. 숫자를 박지 마라** — 스폰이나 점프를 바꾸는 날
+##  이 검사만 조용히 낡는다.
+##  ⚠ 도달 높이 = `JUMP_VY_PX² / (2·GRAVITY_PX)` — `character.gd` 의 그 식과 같은 규칙이다.
+func _window_does_not_cover_the_player(t, r: Rect2) -> void:
+	var cell := float(Tuning.CELL_PX * Tuning.TILE_CELLS)
+	var foot := Vector2(Stage.SPAWN_TILE.x * cell, Stage.SPAWN_TILE.y * cell)
+	var jump := Character.JUMP_VY_PX * Character.JUMP_VY_PX / (2.0 * Character.GRAVITY_PX)
+	t.ok(jump > 0.0, "점프 도달 높이를 상수에서 뽑았다 (%.0fpx)" % jump)
+	# 스폰 상자를 점프 도달 높이만큼 위로 늘린 사각형.
+	var zone := Rect2(foot.x, foot.y - jump, float(Character.W_PX), float(Character.H_PX) + jump)
+	t.ok(not r.intersects(zone),
+		"조립창(%s~%s)이 캐릭터가 걷고 뛰는 자리(%s~%s)를 안 덮는다"
+			% [r.position, r.end, zone.position, zone.end])
+
+
+## 🔴🔴 **창이 체력 표시를 안 덮는다.** `_toggle_assembly` 는 `HUD/Stats` 만 숨기고 `Health` 는
+##  **숨는 게 아니라 덮인다** ⇒ 창이 그 자리를 비켜야 조립 중에도 체력이 보인다.
+## ⚠ **크기를 먼저 재는 줄의 이유를 정확히 적는다** — 처음에 「크기가 0이면 `intersects` 가 늘
+##  거짓이라 조용히 통과한다」고 적었는데 **그건 거짓이었다.** 실측(2026-08-04):
+##  🔴 **`Rect2.intersects` 는 변끼리만 걸러서 퇴화 사각형이 안쪽에 있으면 `true` 를 준다** —
+##   창 한복판의 크기 0 사각형은 **겹친 것으로 나온다.** 그리고 `Health` 는 `Label` 이라
+##   크기가 최소 `(1,23)` 이라 **0을 만들 수도 없었다.**
+##  ⇒ 이 줄이 실제로 잡는 것은 **「`Health` 가 크기를 잃었다」는 다른 결함**이고, 그건 여전히 값어치가 있다.
+## 🔴 **「Rect2 는 크기 0이면 안 겹친다」로 읽지 마라** — 다른 데 그 전제로 검사를 짜면 거기가 헛돈다.
+func _window_does_not_cover_the_health(t, root: Node, r: Rect2) -> void:
+	var hp := root.get_node_or_null("HUD/Health") as Control
+	t.ok(hp != null, "씬에 HUD/Health 가 있다")
+	if hp == null:
+		return
+	t.ok(hp.visible, "체력 표시가 켜진 채로 시작한다")
+	var box := Rect2(hp.position, hp.size)
+	t.ok(box.size.x > 0.0 and box.size.y > 0.0,
+		"체력 표시에 크기가 있다 (%dx%d — 0이면 아래 검사가 공짜로 통과한다)"
+			% [int(box.size.x), int(box.size.y)])
+	t.ok(not r.intersects(box),
+		"조립창이 체력 표시(%s~%s)를 안 덮는다" % [box.position, box.end])
 
 
 ## 🔴🔴 **위 검사는 `Fx.WINDOW_RECT` 라는 상수만 잰다 — 창이 그걸 쓰는지는 안 본다.**

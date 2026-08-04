@@ -2,8 +2,9 @@ extends Node2D
 ## 무대 — **껍데기다. 본편에 안 남는다.**
 ##  시뮬(`src/sim/`)·캐릭터(`src/actor/`)·화면(`src/view/`)과 섞지 마라. 그 경계가 폴더의 요점이다.
 ##
-## 🔴 틱은 `_physics_process` + **정수 분주기**다(`Tuning.TICK_DIVIDER`). float 누산기를 쓰면
-##  프레임 시간에 따라 틱 경계가 흔들려 클라마다 다르게 쪼개진다 — 멀티에서 틱 번호는 상태다.
+## 🔴🔴 **틱 순서·커맨드 큐·분주기는 여기 없다** — `src/actor/world_step.gd` 가 든다.
+##  껍데기가 그 순서를 다시 베끼면 그물이 게임과 다른 것을 재게 된다(`net_damage`가 잰다).
+##  ⇒ 여기 남은 것은 **틱이 돈 프레임에 화면을 치는 것**뿐이다.
 
 const CellGrid := preload("res://src/sim/cell_grid.gd")
 const Mat := preload("res://src/sim/cell_materials.gd")
@@ -14,6 +15,7 @@ const SpellView := preload("res://src/view/spell_view.gd")
 const BlastFx := preload("res://src/view/blast_fx.gd")
 const CircleWindow := preload("res://src/view/circle_window.gd")
 const Character := preload("res://src/actor/character.gd")
+const WorldStep := preload("res://src/actor/world_step.gd")
 const Aim := preload("res://src/actor/aim.gd")
 const SpellCircle := preload("res://src/actor/spell_circle.gd")
 const SpellSim := preload("res://src/sim/spell_sim.gd")
@@ -125,6 +127,10 @@ const LOADOUTS: Dictionary = {
 ##  ⚠ 런타임에 훑어서 강제로 고치지 마라 — 그러면 `.tscn`에 적힌 값이 **아무 의미 없는 거짓
 ##   손잡이**가 되고, 나중에 모달이 STOP으로 뒤를 막아야 할 때 그걸 조용히 뒤엎는다(v1 실측).
 @onready var _hud: Label = $HUD/Stats
+## 🔴🔴 **체력은 `HUD/Stats` 와 다른 노드다.** 같이 적으면 두 곳이 되는 게 아니라 —
+##  `Stats` 는 조립창을 열면 **숨는다**(`_toggle_assembly`). 체력이 거기 있으면 조립 중에
+##  「내가 불에 타고 있는지」가 화면에서 통째로 사라진다(기획 「화면」).
+@onready var _hp_label: Label = $HUD/Health
 ## 🔴 카메라는 **화면 흔들림 전용**이다 — 줌도 추적도 없다. 위치가 뷰포트 한가운데(480,270)라
 ##  흔들리지 않을 때 캔버스 변환이 항등이고, 그래서 붙이기 전과 화면이 한 픽셀도 안 다르다.
 ##  ⚠ 그래도 뷰포트 좌표 → 월드 좌표 변환은 **반드시** 캔버스 변환을 되돌려야 한다
@@ -150,14 +156,14 @@ var _circle := SpellCircle.new()
 ##  장착이 갈리기 때문이다(계획 §1 · 위험 9) — HUD에서 뺐고, 그러니 들 이유도 없어졌다.
 ##  🔴 **번호를 지우는 것이 곧 「상태가 하나다」의 마지막 조각이다.**
 
-## 🔴 커맨드는 **「어느 틱에 적용되나」를 달고** 큐에 앉는다. 없으면 나중에 재조정이 불가능하다.
-##  싱글에서는 로컬 입력이 채우고 멀티에서는 서버가 채운다 — 적용부 코드는 그대로다.
-var _queue: Array[Dictionary] = []
+## 🔴🔴 **세상을 미는 것은 이것 하나다.** 위 셋(`_grid`·`_char`·`_spell`)을 **넘겨서** 든다 —
+##  껍데기가 따로 밀면 순서가 두 벌이 되고, 그게 이 파일이 죽는 방식이다.
+##  ⚠ 선언 순서가 계약이다. 위 셋보다 먼저 선언하면 `null`을 들고 태어난다.
+var _world := WorldStep.new(_grid, _spell, _char)
 
-var _phase := 0
 ## 🔴 발사 수와 착탄 수를 **따로** 찍는다 — 둘이 갈라지는 게 곧 진단이다(HUD).
 ##  발사 0 = 좌클릭이 안 닿는다(`mouse_filter`) · 발사 > 착탄 = 격자 밖으로 나가 소멸했다.
-var _fire_count := 0
+##  ⚠ 발사 수는 `_world` 가 든다 — 커맨드가 실제로 받아들여진 자리가 거기다.
 ## 🔴🔴 **판정 2의 그물 대리치가 이 숫자다** — 확산→폭발은 8회, 폭발→확산은 1회여야 한다.
 ##  화면에서 안 갈리는데 이 숫자만 맞으면 그게 이 단계가 멈춰야 하는 신호다.
 var _blast_count := 0
@@ -206,7 +212,7 @@ func _fire_at(world_px: Vector2) -> void:
 	#   「못 쏜다」는 총구가 꺼지는 것으로 말한다(`character_view`).
 	if not _circle.can_fire():
 		return
-	_enqueue(Aim.fire_cmd(
+	_world.enqueue(Aim.fire_cmd(
 		_char_view.tip_px(), world_px, _circle.element(), _circle.packed_glyphs()))
 
 
@@ -231,33 +237,18 @@ func _set_loadout(n: int) -> void:
 		SpellCircle.DEFAULT_CIRCLE, SpellCircle.DEFAULT_RUNE, Glyph.pack(list))
 
 
-func _enqueue(cmd: Dictionary) -> void:
-	_queue.append({"tick": _grid.get_tick() + 1, "cmd": cmd})
-
-
+## 🔴🔴 **여기서 세상을 밀지 마라.** 순서는 `world_step.frame()` 안에 있고, 이 함수가 아는 것은
+##  **「틱이 돌았나」** 하나다. 베끼는 순간 그물이 재는 순서와 게임의 순서가 갈린다.
 func _physics_process(delta: float) -> void:
-	# 🔴🔴 **캐릭터는 60Hz, 시뮬은 20Hz다.** 캐릭터를 틱에 묶으면 조작이 뚝뚝 끊겨
-	#  재는 것 3(「손에 붙나」)이 통째로 깨진다. 호스트 권위라 틱에 묶일 이유가 없다(GDD 멀티 표).
-	# ⚠ 틱 **뒤에** 도는 이유: 방금 폭발이 바꾼 지형 위를 이번 프레임에 걷는다.
-	_tick_sim()
-	_char.step(_grid, delta, _input.move_axis(), _input.jump_pressed())
+	if _world.frame(delta, _input.move_axis(), _input.jump_pressed()):
+		_on_ticked()
 	_update_hud()
 
 
-func _tick_sim() -> void:
-	_phase += 1
-	if _phase < Tuning.TICK_DIVIDER:
-		return
-	_phase = 0
-
-	# 🔴🔴 **틱 순서는 계약이다** — 바꾸면 결과가 달라지고, 멀티에서는 그게 곧 desync다.
-	#   1. `_drain_queue()`   외부 커맨드(발사)
-	#   2. `_grid.step()`     격자가 한 틱 산다(불)
-	#   3. `_spell.step()`    투사체가 **움직인 뒤의 격자**를 상대로 난다
-	#   4. `_spell_view.on_tick()`  자취 기록 — 🔴 시뮬이 **돈 뒤**여야 한 틱 낡지 않는다
-	_drain_queue()
-	_grid.step()
-	_spell.step(_grid)
+## 틱이 돈 프레임에만 화면을 친다.
+## 🔴 **통지는 다음 틱의 `spell.step()` 이 지운다** — 캐릭터가 걸은 뒤에 읽어도 아직 살아 있다.
+func _on_ticked() -> void:
+	# 🔴 자취는 시뮬이 **돈 뒤**여야 한 틱 낡지 않는다.
 	_spell_view.on_tick()
 
 	# 🔴🔴 **폭발 통지는 이 틱 안에서만 유효하다** — 다음 `step()`이 지운다.
@@ -276,39 +267,15 @@ func _tick_sim() -> void:
 
 ## 🔴🔴 **렌더 시계는 여기 하나다.** 시뮬은 20Hz인데 화면은 60fps라, 보간 없이는 투사체가
 ##  틱당 40px씩 순간이동한다.
-##  ⚠ **시뮬에 시계를 하나 더 만들지 않는 게 요점이다.** `_phase`는 이미 있는 정수 분주기고,
-##   여기서는 그걸 **읽기만** 한다. 뷰가 자기 `delta`를 누산하면 그 순간 시계가 둘이 된다.
+##  ⚠ **시계를 하나 더 만들지 않는 게 요점이다.** 분주기는 `_world`가 이미 들고 있고,
+##   여기서는 그걸 **읽기만** 한다(`phase()`). 뷰가 자기 `delta`를 누산하면 그 순간 시계가 둘이 된다.
 func _process(_dt: float) -> void:
-	_spell_view.set_render_alpha(float(_phase) / float(Tuning.TICK_DIVIDER))
+	_spell_view.set_render_alpha(float(_world.phase()) / float(Tuning.TICK_DIVIDER))
 	# 🔴 흔들림은 **카메라 offset**이다. `stage_input._to_world`가 캔버스 변환을 되돌리므로
 	#  흔드는 동안에도 조준이 안 어긋난다 — 안 되돌리면 에러 없이 클릭이 엉뚱한 셀로 간다.
 	# ⚠ 이 노드의 `_process`와 `blast_fx`의 `_process` 순서는 보장이 없어 **한 프레임 늦을 수 있다** —
 	#  0.2초짜리 흔들림에서는 관측 불가다.
 	_camera.offset = Vector2(_blast_fx.shake_offset())
-
-
-## ⚠ **`keep` 갈래는 지금 소비자가 없다** — `_enqueue`가 늘 `tick + 1`을 달고 `target`도 같아서
-##  전부 이번 틱에 빠진다. 멀티(서버가 미래 틱 커맨드를 보낸다)를 위한 이음매이고,
-##  그때까지는 **죽은 분기**라는 걸 알고 봐라.
-func _drain_queue() -> void:
-	if _queue.is_empty():
-		return
-	var target := _grid.get_tick() + 1
-	var keep: Array[Dictionary] = []
-	for e: Dictionary in _queue:
-		if int(e["tick"]) > target:
-			keep.append(e)
-			continue
-		var cmd: Dictionary = e["cmd"]
-		# 🔴 커맨드가 두 시뮬로 갈린다. **`kind` 키를 공유하지 않는 게 이 분기의 안전장치다** —
-		#  같은 키를 쓰면 두 enum의 숫자가 겹쳐 엉뚱한 커맨드가 실행되고, 값이 우연히 유효
-		#  범위면 **에러 하나 없이** 발사가 채우기가 된다.
-		if cmd.has("spell_kind"):
-			if _spell.fire(cmd):
-				_fire_count += 1
-			continue
-		_grid.apply(cmd)
-	_queue = keep
 
 
 ## R. 🔴🔴 **장식이 아니다** — 지형 자국이 이 단계의 주 증거인데, 앞 실험의 구멍이 남아 있으면
@@ -320,10 +287,10 @@ func reset_stage() -> void:
 	_spell_view.clear()
 	_blast_fx.clear()
 	_camera.offset = Vector2.ZERO
-	_queue.clear()
 	# 🔴 **계수기를 전부 되돌린다.** 하나만 남기면 위 「발사 > 착탄 = 격자 밖 소멸」 진단이
 	#  R 한 번에 영영 거짓이 된다 — R은 이 단계의 주 측정 장치라 그 진단이 곧 눈이다.
-	_fire_count = 0
+	#  ⚠ 큐와 발사 수는 `_world` 가 든다 — 여기서 또 만지면 되돌리는 자리가 두 곳이 된다.
+	_world.reset()
 	_blast_count = 0
 	build_terrain_into(_grid)
 	_char.place(
@@ -364,6 +331,13 @@ static func build_terrain_into(g: CellGrid) -> void:
 
 
 func _update_hud() -> void:
+	# 🔴 **체력의 단일 소스는 캐릭터다.** 껍데기가 따로 세면 「깎였는데 숫자가 그대로」가 된다.
+	# ⚠ 쓰러짐도 **같은 값에서 파생**시킨다 — 걸쇠를 따로 들면 「0인데 안 쓰러졌다」가 화면에 남는다.
+	#  🔴 부활 방법을 같이 적는다. 혼자라 일으켜 줄 사람이 없어 **R이 유일한 길**인데,
+	#   안 적으면 사용자가 「게임이 멈췄다」로 읽는다.
+	_hp_label.text = "체력 %d / %d%s" % [
+		_char.hp, Character.MAX_HP, "   쓰러짐 — R로 다시" if _char.downed else "",
+	]
 	_hud.text = "\n".join([
 		"틱 %d · %d Hz (분주기 %d)" % [
 			_grid.get_tick(), 60 / Tuning.TICK_DIVIDER, Tuning.TICK_DIVIDER,
@@ -376,7 +350,7 @@ func _update_hud() -> void:
 		"FPS %d" % Engine.get_frames_per_second(),
 		"캐릭터 (%d,%d) %s" % [_char.x, _char.y, "접지" if _char.on_ground else "공중"],
 		"발사 %d · 비행중 %d · 자취 %d" % [
-			_fire_count, _spell.active_count(), _spell_view.trail_count(),
+			_world.fire_count(), _spell.active_count(), _spell_view.trail_count(),
 		],
 		# 🔴 밀린 수를 같이 찍는다 — **버려지지 않았다**를 사용자가 눈으로 확인하는 자리다.
 		#  틱당 폭발 4발 상한에 걸리면 여기가 잠깐 오르고 다음 틱에 0으로 돌아가야 한다.

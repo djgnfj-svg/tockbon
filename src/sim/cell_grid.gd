@@ -415,9 +415,17 @@ func claimed_slot_count() -> int:
 	return n
 
 
+## 🔴🔴 **「타고 있나」의 단일 소스다** — `is_solid`와 같은 이유다.
+##  캐릭터(지속 피해)도 연료 조회도 이걸 지난다. 각자 `flag_at() & FLAG_BURNING`을 쓰면
+##  깃발의 뜻이 바뀌는 날 한쪽만 안 따라오고, 그건 「불 위에 서 있는데 안 아프다」로만 보인다.
+## ⚠ 격자 밖은 안 탄다(`flag_at`이 0을 준다).
+func is_burning(x: int, y: int) -> bool:
+	return (flag_at(x, y) & Mat.FLAG_BURNING) != 0
+
+
 ## 남은 연료. 🔴 타는 셀이 아니면 뜻이 없다(`cell_materials.gd`의 `_aux` 절).
 func fuel_at(x: int, y: int) -> int:
-	if (flag_at(x, y) & Mat.FLAG_BURNING) == 0:
+	if not is_burning(x, y):
 		return 0
 	return aux_at(x, y)
 
