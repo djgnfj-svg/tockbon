@@ -414,8 +414,20 @@ func _run_gauntlet(t, tag: String, early: bool) -> int:
 
 	w.enqueue(_fire_cmd())
 	_frames(w, Tuning.TICK_DIVIDER)
-	# 🔴 관문이 **그 틱에** 사라졌나 / 아직 있나. 이 줄이 없으면 탄이 왜 살거나 죽었는지 모른다.
-	t.eq(g.is_solid(wx, wy), early, "%s: 쏜 틱이 끝난 뒤 관문 상태가 배치대로다" % tag)
+	# 🔴 **탄이 왜 살거나 죽었는지**를 못 박는다. 이 줄이 없으면 대조군의 0이
+	#  「관문에 막혔다」인지 「엉뚱한 데서 죽었다」인지 모른다.
+	# ⚠ **전에는 「쏜 틱 뒤에도 관문이 고체다」로 쟀고, 2026-08-05에 그 관측이 죽었다** —
+	#  모든 착탄이 반경 `carve_r` 만큼 판다(`spell_sim._impact` 의 ①) ⇒ **막힌 탄이 그 자리에서
+	#  관문을 지운다.** 관문은 배치대로 막았는데 사후 상태로는 구별이 안 된다.
+	#  ⇒ **멈춘 자리**로 잰다. 구간의 끝점이 곧 착탄 셀이고(`spell_sim._advance`), 그건 안 파인다.
+	t.eq(spell.seg_count(), 1, "%s: 이 틱에 구간이 하나다 (배치를 읽을 수 있다)" % tag)
+	if spell.seg_count() == 1:
+		var end_cx: int = spell.get_seg_x1()[0] >> SpellSim.FP_SHIFT
+		if early:
+			t.eq(end_cx, wx - 1, "%s: 탄이 관문 **직전 칸**에서 멈췄다 (관문이 관문이다)" % tag)
+		else:
+			t.ok(end_cx > wx,
+				"%s: 탄이 관문 자리를 지나 더 갔다 (셀 %d > 관문 %d)" % [tag, end_cx, wx])
 	return spell.active_count()
 
 
@@ -556,8 +568,15 @@ func _direct_hit_costs_hp(t) -> void:
 	#  `0 == 0` 으로 통과하면서 라벨만 「0틱 켜진다」가 된다(CLAUDE.md 「값 단언이 우연히 맞는다」).
 	#  🔴 이 줄이 재는 것은 **「무적을 켜기는 하나」**뿐이고, **길이는 아래 3틱/5틱 쌍이 위아래로 가둔다.**
 	t.ok(ch.invuln_left == Character.INVULN_TICKS, "맞은 틱에 무적이 켜진다")
-	# 🔴 **오염이 0인 것을 그물이 스스로 증명한다** — 무속성 + 문양 없음이라 격자가 안 변한다.
-	t.eq(g.consume_changed(), 0, "격자가 한 칸도 안 변했다 (직격만 잰 것이다)")
+	# 🔴 **오염이 0인 것을 그물이 스스로 증명한다.** ⚠ **근거 문장이 2026-08-05에 바뀌었다** —
+	#  전에는 「무속성 + 문양 없음이라 격자가 안 변한다」였는데, 이제 **모든 착탄이 판다**
+	#  (`spell_sim._impact` 의 ①) ⇒ 살아 있는 근거는 **「이 틱에는 아직 착탄이 없다」** 하나다.
+	#  ⚠ **실측(verify-read)**: 같은 배치에서 틱 1은 0이고 **틱 4에 착탄해 13칸**이다.
+	#   ⇒ 항진명제가 아니다. 배치가 밀려 착탄이 앞당겨지면 여기가 짖는다.
+	# 🔴 **`burning_count() == 0` 으로 바꾸지 않았다 — 여기서는 그게 항진이다.** 이유가 둘이다:
+	#  ① 무대가 돌만 깔려 연료가 0이고 ② **이 창 안에 착탄 자체가 없어** 어떤 룬이어도 0이다.
+	#  (`_spread_hit_count_is_recorded` 는 20틱을 돌고 나무를 깔아서 그 어법이 성립한다.)
+	t.eq(g.consume_changed(), 0, "이 틱에 아직 착탄이 없다 (직격만 잰 것이다)")
 
 
 ## 🔴🔴 **머리 위에서 수직으로 떨어지는 탄도 맞힌다.**
@@ -738,7 +757,15 @@ func _two_shots_hp(gap: int) -> int:
 ## 3-③ 확산 8발에 **몇 대인가** — 🔴 **기록이다. 목표 숫자를 단언하지 마라.**
 ##  상황을 하나 고정하고 세어서 라벨에 숫자를 찍는다. 그 값을 보고 0.2초를 조일지 정한다.
 func _spread_hit_count_is_recorded(t) -> void:
-	var g := _floor_grid()
+	# 🔴🔴 **나무 바닥이어야 아래 「불이 안 붙었다」가 무언가를 잰다.**
+	#  ⚠ 돌만 깐 `_floor_grid()` 에서는 `STONE.fuel = EMPTY.fuel = 0` 이라 `burning_count()` 가
+	#   **원리적으로 늘 0**이고, 그 줄이 **항진명제**가 된다(verify-run 실측: 무속성이 점화하게
+	#   뮤테이션해도 안 짖었다). 🔴 오염 통제가 **관측에서 무대 배치로 내려앉는** 모양이라
+	#   CLAUDE.md 「라벨이 재는 것보다 넓다」 그대로다.
+	#  ⚠ 자리가 맞아야 한다 — 확산 착탄 열이 `_spread_cx(STAND_X)` = **87**이고
+	#   나무 줄이 `WOOD_CX0..CX1` = **78~90**이라 **그 아래에 연료가 있다.**
+	#   세대 1은 `carve_r(1)=1 < rune_r(1)=2` 라 파기 바깥에 고리가 남는다 ⇒ 붙을 자리가 있다.
+	var g := _wood_floor_grid()
 	var spell := SpellSim.new()
 	var ch := _stander()
 	var w := WorldStep.new(g, spell, ch)
@@ -754,7 +781,15 @@ func _spread_hit_count_is_recorded(t) -> void:
 	var hits := (Character.MAX_HP - ch.hp) / Character.DAMAGE_HIT
 	# ⚠ 단언은 「셌다」까지다. 🔴 숫자는 **라벨에 기록**이고 목표가 아니다.
 	t.ok(hits >= 0, "확산 8발 상황에서 **%d대** 맞았다 (기록 — 목표 숫자가 아니다)" % hits)
-	t.eq(g.consume_changed(), 0, "그 동안 격자가 한 칸도 안 변했다 (무속성 + 확산뿐이다)")
+	# ⚠ **전에는 「격자가 한 칸도 안 변했다」였다.** 2026-08-05부터 모든 착탄이 파므로
+	#  (`spell_sim._impact` 의 ①) 그 문장은 못 쓴다.
+	# 🔴 **오염 통제의 알맹이는 「안 변했다」가 아니라 「불이 없다」다** — 피해 경로가
+	#  직격·폭발·불 셋인데(`character.on_tick` · `_standing_in_fire`) 여기는 무속성 + 확산이라
+	#  뒤 둘이 없다. **파기는 어느 경로도 아니다.**
+	var carved := g.consume_changed()
+	t.eq(g.burning_count(), 0, "그 동안 불이 한 칸도 안 붙었다 (피해가 직격뿐이다)")
+	# 🔴 반대쪽 — 격자가 **실제로** 파였나. 안 재면 「탄이 아예 안 왔다」도 위 초록을 낸다.
+	t.ok(carved > 0, "그런데 격자는 실제로 파였다 (착탄이 정말 일어났다 · %d칸)" % carved)
 
 
 # ── 판정 2 — 불 위에 서 있으면 깎이나 ─────────────────────────────

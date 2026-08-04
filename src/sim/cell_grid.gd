@@ -49,7 +49,7 @@ const X_MASK := W - 1
 const CELL_COUNT := W * H  # 147,456
 
 # ─── 커맨드 — 격자를 바꾸는 유일한 문 ──────────────────────────────
-enum { CMD_FILL = 0, CMD_RESET = 1, CMD_BLAST = 2, CMD_IGNITE = 3 }
+enum { CMD_FILL = 0, CMD_RESET = 1, CMD_BLAST = 2, CMD_IGNITE = 3, CMD_CARVE = 4 }
 
 # ─── 상태 ─────────────────────────────────────────────────────────
 var _mat := PackedByteArray()   # 재료 id
@@ -208,6 +208,18 @@ static func cmd_ignite(x: int, y: int, r: int) -> Dictionary:
 	return {"kind": CMD_IGNITE, "x": x, "y": y, "r": r}
 
 
+## **파기만.** 🔴 불을 한 칸도 안 붙인다 — 모든 착탄이 지나는 문이다(`spell_sim._impact` 의 ①).
+##  ⚠ 바로 위 `cmd_ignite` 의 **정확한 거울이고, 같은 이유로 이름을 따로 둔다.**
+##   `cmd_blast(x, y, r, 0)` 로도 같은 일이 되지만 「폭발인데 점화 반경이 0」은 읽는 사람에게
+##   거짓말이다. 그리고 대가가 셋 더 있다 — ① 바로 위 `cmd_blast` 가 못 박은 `ignite_r > rd`
+##   계약을 정면으로 깨는데 **런타임에 아무도 안 짖는다**(그물은 **표**를 재지 **호출**을 안 잰다)
+##   ② `cmd_blast` ↔ `spell_sim._notify_blast` 의 짝이 깨진다 ③ 착탄마다 `CMD_BLAST` 가
+##   로그와 네트워크에 남는다.
+## 🔴 **부수효과는 두 벌이 안 된다** — `_disc(…, true)` → `_write_cell` 하나를 같이 쓴다.
+static func cmd_carve(x: int, y: int, r: int) -> Dictionary:
+	return {"kind": CMD_CARVE, "x": x, "y": y, "r": r}
+
+
 func apply(cmd: Dictionary) -> void:
 	match int(cmd.get("kind", -1)):
 		CMD_FILL:
@@ -221,6 +233,10 @@ func apply(cmd: Dictionary) -> void:
 			var r := int(cmd["r"])
 			if r > 0:
 				_disc(int(cmd["x"]), int(cmd["y"]), r, false)
+		CMD_CARVE:
+			var cr := int(cmd["r"])
+			if cr > 0:
+				_disc(int(cmd["x"]), int(cmd["y"]), cr, true)
 		_:
 			push_error("CellGrid.apply: 모르는 커맨드 %s" % cmd)
 

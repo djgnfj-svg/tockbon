@@ -23,6 +23,11 @@ const SPELL_SIM_SCRIPT := "res://src/sim/spell_sim.gd"
 ## 발사 속도(고정소수점). 조준 정규화가 어느 방향에서든 이 크기를 내놔야 한다.
 const SPEED_FP := Tuning.SIM_SIZES[0]["speed"] << SpellSim.FP_SHIFT
 
+## 벽 격자(`_wall_grid`)의 돌 기둥 열. 🔴 **한 곳에 둔다** — 「몇 발에 뚫리나」를 재려면
+##  벽이 어디서 어디까지인지를 알아야 하고, 그 숫자가 두 곳에 있으면 벽을 옮길 때 조용히 갈라진다.
+const WALL_X0 := 40
+const WALL_X1 := 43
+
 ## 돌·나무 속에 판 방의 경계(셀). 🔴 **한 곳에 둔다** — 흔적 깊이를 재려면 벽이 어디서
 ##  시작하는지를 알아야 하고, 그 숫자가 두 곳에 있으면 방을 옮길 때 조용히 갈라진다.
 const CAVE_X0 := 20
@@ -61,6 +66,9 @@ func run(t) -> void:
 	_order_changes_the_spell(t)
 	_spread_capped_per_circle(t)
 	_kind_decides_continuation(t)
+	_every_impact_carves(t)
+	_repeated_shots_pierce_the_wall(t)
+	_carve_follows_gen(t)
 	_rune_leaves_a_trace(t)
 	_every_rune_traces(t)
 	_rune_trace_has_the_none_branch(t)
@@ -496,14 +504,26 @@ func _blast_glyph(t) -> void:
 	var after := g.count_material(Mat.STONE)
 	t.ok(after < before, "벽에 구멍이 남는다 (돌 %d → %d)" % [before, after])
 
-	# 🔴 대조군 — **문양 없이 쏘면 지형이 그대로다.** 이게 없으면 위 초록이
-	#  「폭발이 팠다」인지 「탄이 그냥 지형을 지운다」인지 못 가른다.
+	# 🔴 대조군 — **문양 없이 쏘면 훨씬 조금 판다.** 이게 없으면 위 초록이
+	#  「폭발이 팠다」인지 「착탄이 원래 그만큼 판다」인지 못 가른다.
+	#
+	# ⚠ **전에는 「문양이 없으면 지형이 그대로다」였다.** 2026-08-05부터 모든 착탄이 파므로
+	#  (`spell_sim._impact` 의 ①) 그 문장이 죽었다 ⇒ 「파나 마나」가 아니라 **「얼마나」**로 가른다.
+	# 🔴🔴 **그리고 그 대비가 곧 판정 4다** — 뒤집힌 결정(`_rune_trace` 의 「지형은 안 부순다」)이
+	#  원래 막으려던 것이 「확산이 폭발을 겸하는 것처럼 보인다」이고, 막는 것은 **크기 차이**다.
+	#  ⚠ 두 값이 가까워지면 화면에서 폭발과 착탄이 다시 뭉개진다 — **여기가 그 경보다.**
 	var g2 := _wall_grid()
 	var s2 := SpellSim.new()
 	var kept := g2.count_material(Mat.STONE)
 	t.ok(_fire(s2, 10, 70, 100, 0), "문양 없이 쏜다 (진 + 룬만)")
 	t.eq(_run_ticks(s2, g2, 12), 0, "문양이 없으면 폭발이 없다")
-	t.eq(g2.count_material(Mat.STONE), kept, "문양이 없으면 지형이 그대로다")
+	var carved := kept - g2.count_material(Mat.STONE)
+	var blown := before - after
+	t.ok(carved > 0, "문양이 없어도 착탄이 판다 (%d칸)" % carved)
+	# ⚠ 문턱 4는 **손으로 고른 값이다** — 반경 제곱비(8²/2² = 16배)에서 정수 격자와 「반쪽 원반」
+	#  몫을 크게 깎은 하한이다. 🔴 반경을 키워 두 개가 화면에서 뭉개지기 시작하면 여기가 먼저 짖는다.
+	t.ok(blown > carved * 4,
+		"폭발이 착탄보다 4배 넘게 판다 (%d칸 vs %d칸)" % [blown, carved])
 
 
 ## 🔴🔴 **TERMINAL은 탄을 안 만드니 같은 자리에서 다음 문양이 이어 실행된다**(GDD 문양 실행 규칙).
@@ -796,6 +816,85 @@ func _kind_decides_continuation(t) -> void:
 
 
 # ══════════════════════════════════════════════════════════════════
+#  파기 — 모든 착탄이 지형을 판다
+# ══════════════════════════════════════════════════════════════════
+
+## 🔴🔴 **문양이 없어도, 룬이 무속성이어도 착탄은 판다**(`spell_sim._impact` 의 ①).
+##
+## ⚠ **이 그물이 메우는 자리가 정확히 「파는 반경 0」이었고, 그게 내내 초록이었다** —
+##  사용자가 게임을 하고 「일반 마법이랑 불마법이 벽을 한 칸도 못 줄인다 · **공격한 건지
+##  아닌지도 구분이 안 간다**」고 보고할 때까지 아무도 안 짖었다(2026-08-05).
+##
+## 🔴🔴 **「줄었다」로 끝내면 반경이 아무 값이어도 초록이다** —
+##  `net_damage._enqueue_becomes_a_projectile` 이 「나아갔다」로 끝냈다가 **두 배 속도가
+##  그냥 통과했던** 그 모양이다. ⇒ **깊이로 반경을 못 박는다.**
+##  ⚠ **세로 폭이 아니라 깊이인 이유**: 착탄점은 벽 왼쪽 **빈칸**이라 원반의 오른쪽 절반만
+##   벽에 들어간다. 벽 첫 열의 세로 폭은 `2·√(r²−1)+1` 이라 **그물이 `_disc` 를 베끼게 되고**,
+##   둘이 갈라지면 그물이 틀린 쪽 편을 든다. 깊이는 `dy = 0` 줄이라 **반경과 정확히 같다.**
+func _every_impact_carves(t) -> void:
+	# ── ① 돌벽 + 무속성. 🔴 사용자가 지목한 절반이 여기다 — 「**일반 마법이랑** 불마법이」.
+	var stone := _cave_grid()
+	var s := SpellSim.new()
+	t.ok(s.fire(SpellSim.cmd_fire(22, 70, 100, 0, Tuning.ELEM_NONE, Glyph.GLYPH_NONE)),
+		"무속성 · 문양 없는 탄이 돌벽으로 나간다")
+	var before := stone.count_material(Mat.STONE)
+	_run_until_impact(s, stone, 12)
+	var carved := before - stone.count_material(Mat.STONE)
+	t.ok(carved > 0, "돌이 준다 (%d칸 · 돌 %d → %d)" % [
+		carved, before, stone.count_material(Mat.STONE)])
+	# 🔴 파기는 폭발이 아니다 — 섬광도 흔들림도 안 뜬다. 그게 판정 4를 돕는 방향이다.
+	t.eq(s.blast_count(), 0, "파기는 폭발 통지를 안 낸다 (구멍은 나는데 화면이 안 번쩍한다)")
+	t.eq(_eaten_depth(stone), Tuning.carve_r(0),
+		"판 깊이가 세대 0의 파는 반경(%d셀)이다" % Tuning.carve_r(0))
+
+	# ── ② 나무벽 + 불 룬 — **파고 그 자리에 불.** 실제 그림은 **고리**다:
+	#  안쪽 `carve_r` 은 파이고 `carve_r < r ≤ rune_r` 인 띠가 탄다.
+	# 🔴🔴 **`carve_r < rune_r` 이 그 고리의 유일한 조건이다** — 안 서면 파기가 태울 연료를
+	#  먼저 지워 **불만 조용히 사라진다.** 값 축은 `net_tables` 가 세대마다 잰다.
+	var wood := _wood_cave_grid()
+	var s2 := SpellSim.new()
+	t.ok(_fire(s2, 22, 70, 100, 0), "불 룬 · 문양 없는 탄이 나무벽으로 나간다")
+	_run_until_impact(s2, wood, 12)
+	t.eq(_eaten_depth(wood), Tuning.carve_r(0),
+		"나무벽도 같은 반경(%d셀)만큼 파인다 (재료를 안 가린다)" % Tuning.carve_r(0))
+	t.ok(wood.burning_count() > 0,
+		"그리고 그 자리에 불이 붙는다 (%d칸)" % wood.burning_count())
+	# 🔴 불이 파기보다 **바깥까지** 닿는 것이 「고리」의 값 표현이다.
+	t.eq(_burn_depth(wood, CAVE_X1 + 1, CAVE_X1 + 20, CAVE_Y0, CAVE_Y1, true), Tuning.rune_r(0),
+		"불이 파기 바깥 %d셀까지 닿는다 (고리다 — 점화 %d > 파기 %d)" % [
+			Tuning.rune_r(0) - Tuning.carve_r(0), Tuning.rune_r(0), Tuning.carve_r(0)])
+
+
+## 🔴🔴 **같은 자리를 여러 번 쏘면 뚫린다**(판정 3). 사용자가 「한 칸도 못 줄인다」로 연
+##  문서라 **뚫리느냐가 곧 이 단계의 답이다.**
+## ⚠ **단언은 「뚫렸다」까지고 발수는 기록이다** — 목표 숫자를 박으면 값이 두 벌이 되고,
+##  손맛은 화면이 정한다(기획 「미정」).
+## 🔴 **매번 새 `SpellSim` 이다** — 같은 격자에 한 발씩 쏘는 것이 「같은 자리를 여러 번」이고,
+##  한 시뮬에 몰아 쏘면 여덟 발이 같은 틱에 날아가 **다른 상황**이 된다.
+func _repeated_shots_pierce_the_wall(t) -> void:
+	var g := _wall_grid()
+	t.ok(not _wall_pierced(g), "쏘기 전에는 벽이 안 뚫려 있다 (검사의 전제)")
+	var shots := 0
+	while shots < 20 and not _wall_pierced(g):
+		var sim := SpellSim.new()
+		if not _fire(sim, 10, 70, 100, 0):
+			break
+		shots += 1
+		_run_until_impact(sim, g, 12)
+	# 🔴 **라벨이 「무슨 벽인지」까지 말해야 한다.** 이 벽은 4셀 = **타일 반 장**이고
+	#  무대의 진짜 타일은 8셀이다(`sim_tuning.TILE_CELLS`) — 여기 발수를 게임의 발수로 읽으면 틀린다.
+	#  ⚠ 실측(verify-run): **8셀 벽은 5발**이다. 매 발 `carve_r` 만큼 곧게 전진하지 않는다 —
+	#   중력으로 착탄 행이 흔들려 앞 발이 얕게 판 이웃 행에 떨어지는 발이 섞인다.
+	t.ok(_wall_pierced(g),
+		"같은 자리를 반복해 쏘면 벽 %d셀(타일 %s장)이 뚫린다 (**%d발** — 기록이다)" % [
+			WALL_X1 - WALL_X0 + 1,
+			"%.1f" % (float(WALL_X1 - WALL_X0 + 1) / float(Tuning.TILE_CELLS)), shots])
+	# 🔴 대조군 — **한 발로는 안 뚫린다.** 없으면 위 초록이 「여러 발이라 뚫렸다」인지
+	#  「한 발이 원래 뚫는다」인지 못 가른다. ⚠ 그 둘이 갈리는 것이 판정 4(폭발은 한 방)다.
+	t.ok(shots > 1, "한 발로는 안 뚫린다 (%d발이 필요했다)" % shots)
+
+
+# ══════════════════════════════════════════════════════════════════
 #  룬의 흔적 — 문양이 없어도 착탄은 룬만큼은 한다
 # ══════════════════════════════════════════════════════════════════
 
@@ -812,19 +911,41 @@ func _rune_leaves_a_trace(t) -> void:
 	t.ok(wood.burning_count() > 0,
 		"문양이 없어도 착탄점에 불이 붙는다 (%d칸)" % wood.burning_count())
 
-	# 🔴 **지형은 안 부순다.** 부수면 확산이 폭발을 겸하게 되고 두 조합이 화면에서 다시 뭉개진다.
+	# 🔴🔴 **흔적 자신은 지형을 안 부순다** — 파는 것은 착탄(`_impact` 의 ①)이지 룬이 아니다.
+	#  ⚠ **전에는 「한 칸도 안 부순다」로 쟀고 2026-08-05에 그 관측이 죽었다.** 이제 모든 착탄이
+	#   파므로 남는 물음은 「**룬이 파는 양을 바꾸나**」이고, 답은 「안 바꾼다」다 — ①에 분기가 없다.
+	#  🔴 **그게 「어떤 탄은 파고 어떤 탄은 안 판다」를 막는 유일한 거동 관측이다.**
+	#   `_impact` 의 ①을 `_rune_trace` 안으로 옮기면 무속성만 안 파고, 여기가 그때 빨개진다.
 	#  ⚠ 불이 번지기 전에 재야 한다 — 다 타면 나무가 줄어드는 게 맞다(그건 불의 일이지 흔적의 일이 아니다).
-	t.eq(wood.count_material(Mat.WOOD), before, "룬 흔적은 지형을 한 칸도 안 부순다")
+	t.eq(before - wood.count_material(Mat.WOOD), _carved_by(Tuning.ELEM_NONE, true),
+		"파는 양이 룬과 무관하다 (불 룬과 무속성이 나무를 같은 칸 수 판다)")
 	t.eq(sim.blast_count(), 0, "룬 흔적은 폭발이 아니다 (폭발 통지가 0이다)")
 
-	# 돌에는 아무 일도 없다 — 연료가 없으니까. 「탈 것이 있는 곳으로만」이 여기도 그대로다.
+	# 돌에는 불이 안 붙는다 — 연료가 없으니까. 「탈 것이 있는 곳으로만」이 여기도 그대로다.
 	var stone := _cave_grid()
 	var s2 := SpellSim.new()
 	t.ok(_fire(s2, 22, 70, 100, 0), "문양 없는 탄을 돌에 쏜다")
 	var kept := stone.count_material(Mat.STONE)
 	_run_until_impact(s2, stone, 12)
 	t.eq(stone.burning_count(), 0, "돌에는 흔적이 안 남는다 (연료가 0이다)")
-	t.eq(stone.count_material(Mat.STONE), kept, "돌도 한 칸도 안 부순다")
+	t.eq(kept - stone.count_material(Mat.STONE), _carved_by(Tuning.ELEM_NONE, false),
+		"돌도 룬과 무관하게 같은 만큼 파인다")
+
+
+## 같은 자리에 룬 `element` 로 **문양 없이** 한 발 쏘고, 줄어든 재료 칸 수를 돌려준다.
+## 🔴 대조군 전용이다 — 「룬이 파는 양을 바꾸나」는 **같은 배치·같은 궤적**으로만 잴 수 있고,
+##  거동(속도·궤적)이 룬과 무관한 것은 `sim_tuning.ELEM_NONE` 이 못 박은 성질이다.
+## ⚠ `grid.step()` 을 안 부르므로 **불이 번지지 않는다** — 재료가 주는 원인은 파기 하나뿐이다.
+func _carved_by(element: int, wood_walls: bool) -> int:
+	var g := _wood_cave_grid() if wood_walls else _cave_grid()
+	var mat := Mat.WOOD if wood_walls else Mat.STONE
+	var sim := SpellSim.new()
+	if not sim.fire(SpellSim.cmd_fire(22, 70, 100, 0, element, Glyph.GLYPH_NONE)):
+		push_error("net_spell: 대조군 발사가 거부됐다 (룬 %d)" % element)
+		return -1
+	var before := g.count_material(mat)
+	_run_until_impact(sim, g, 12)
+	return before - g.count_material(mat)
 
 
 ## 🔴 표에만 있고 코드에 없는 룬을 **래퍼의 stderr 검사에 공짜로** 건다
@@ -840,9 +961,11 @@ func _rune_leaves_a_trace(t) -> void:
 ## 🔴🔴 **그리고 이것이 판정 7의 그물이다**(기획 「무속성 룬과 불 룬이 다르나」).
 ##  무속성은 「아무것도 안 한다」라서 **발사가 거부된 것과 화면에서 구별이 안 된다** ⇒
 ##  넷을 **같이** 단언한다: `fire()`가 참 · 탄이 실제로 났다 · 착탄해서 원본이 사라졌다 ·
-##  **그런데 격자는 한 칸도 안 변했다.** 안 하면 「무속성이면 발사가 거부된다」는 버그도 초록이다.
+##  **그리고 격자가 실제로 변했다.** 안 하면 「무속성이면 발사가 거부된다」는 버그도 초록이다.
+##  ⚠ 마지막 항은 2026-08-05에 **부호가 뒤집혔다**(「한 칸도 안 변한다」 → 「변한다」) —
+##   파기가 룬과 무관해지면서 무속성도 판다. 갈래 안에 이유를 적어 뒀다.
 ## ⚠ 대조군은 따로 만들지 않는다 — **같은 루프의 불 룬이 대조군이다**(같은 자리·같은 조합).
-##  그래서 두 갈래가 **같은 두 값**(`burning_count` · 변경 칸 수)을 반대 방향으로 잰다.
+##  그래서 두 갈래가 `burning_count` 를 반대 방향으로 잰다.
 func _every_rune_traces(t) -> void:
 	t.eq(Tuning.ELEM_ALL.size(), Tuning.ELEM_DEFS.size(),
 		"착탄시켜 볼 룬이 %d개다" % Tuning.ELEM_ALL.size())
@@ -877,7 +1000,14 @@ func _every_rune_traces(t) -> void:
 			t.ok(changed > 0, "룬 %d(점화): 격자가 실제로 변했다 (%d칸)" % [element, changed])
 		elif trace == Tuning.TRACE_NONE:
 			t.eq(g.burning_count(), 0, "룬 %d(흔적 없음): 불이 한 칸도 안 붙는다" % element)
-			t.eq(changed, 0, "룬 %d(흔적 없음): 격자가 한 칸도 안 변한다" % element)
+			# ⚠ **전에는 「격자가 한 칸도 안 변한다」였다.** 2026-08-05에 무속성의 뜻이
+			#  「세상에 아무것도 안 한다」에서 **「흔적을 안 남긴다」**로 좁아졌다 — 파기가
+			#  `_impact` 의 ①로 올라가 룬과 무관해졌고, 사용자가 **일반 마법도** 벽을 파야
+			#  한다고 지목했다.
+			# 🔴 **그래도 「발사가 거부된 것과 구별된다」는 남아야 하므로** 0 대신 **양수**를
+			#  요구한다. 안 하면 「무속성이면 발사가 거부된다」는 버그가 다시 초록이 된다.
+			t.ok(changed > 0,
+				"룬 %d(흔적 없음): 그래도 격자를 판다 (%d칸)" % [element, changed])
 		else:
 			t.ok(false, "흔적 종류 %d에 이 그물이 단언을 안 갖고 있다 (룬 %d)" % [trace, element])
 
@@ -1029,9 +1159,36 @@ func _crater_follows_gen(t) -> void:
 
 	var two: Array[int] = [Glyph.GLYPH_SPREAD, Glyph.GLYPH_BLAST]
 	t.expect_error("동시 투사체 상한")
-	t.eq(_crater_depth(Glyph.pack(two), 1), Tuning.blast_rd(1),
-		"세대 1 구덩이가 %d셀이다 (표를 실제로 읽는다)" % Tuning.blast_rd(1))
+	# 🔴🔴 **부모의 파기가 벽을 `carve_r(0)` 만큼 물러나게 해 놓는다** — 자식은 그만큼 깊은
+	#  자리에서 착탄하므로 깊이가 **두 값의 합**이다.
+	#  ⚠ 2026-08-05 전에는 `blast_rd(1)` 하나였다. 착탄이 파기 시작하며 이 배치가 한 칸 밀렸다.
+	var want := Tuning.carve_r(0) + Tuning.blast_rd(1)
+	t.eq(_crater_depth(Glyph.pack(two), 1), want,
+		"세대 1 구덩이가 %d셀이다 (부모가 판 %d + 세대 1 폭발 %d · 표를 실제로 읽는다)" % [
+			want, Tuning.carve_r(0), Tuning.blast_rd(1)])
 	t.ok(Tuning.blast_rd(1) < Tuning.blast_rd(0), "두 값이 애초에 다르다 (검사가 헛돌지 않는다)")
+
+
+## 🔴🔴 **파는 반경도 세대를 따르나** (판정 7의 거동 축).
+##  ⚠ `net_tables` 는 **표의 단조만** 잰다 — `Tuning.carve_r(gen)` 을 `carve_r(0)` 으로 바꿔도
+##   표 축은 전부 초록이다. 🔴 `_rune_trace_follows_gen` 이 룬 흔적에서 이미 데인 자리고
+##   (실측으로 574개가 전부 초록이었다), 파기도 같은 파생 경로다.
+##
+## 🔴 **깊이의 합으로 가른다**: 부모(세대 0)가 벽을 `carve_r(0)` 물러나게 하고, 확산으로 난
+##  세대 1 탄이 **그 자리에서** `carve_r(1)` 을 더 판다 ⇒ 세대를 무시하면 `carve_r(0) × 2` 다.
+func _carve_follows_gen(t) -> void:
+	# 🔴 문양이 하나도 없다 — 파는 것은 착탄뿐이라 깊이가 곧 반경이다.
+	t.eq(_crater_depth(Glyph.GLYPH_NONE, 0), Tuning.carve_r(0),
+		"문양 없는 한 발이 벽을 세대 0 반경(%d셀)만큼 판다" % Tuning.carve_r(0))
+
+	var one: Array[int] = [Glyph.GLYPH_SPREAD]
+	t.expect_error("동시 투사체 상한")
+	var want := Tuning.carve_r(0) + Tuning.carve_r(1)
+	t.eq(_crater_depth(Glyph.pack(one), 1), want,
+		"확산 한 발이 그보다 세대 1 반경(%d셀)만큼 더 판다 (합 %d셀)" % [Tuning.carve_r(1), want])
+	t.ok(Tuning.carve_r(1) < Tuning.carve_r(0),
+		"두 값이 애초에 다르다 (%d < %d · 검사가 헛돌지 않는다)" % [
+			Tuning.carve_r(1), Tuning.carve_r(0)])
 
 
 ## 오른쪽 벽을 몇 셀 파고들었나. 자유 슬롯을 `free_slots`개만 남기고 쏜다.
@@ -1040,12 +1197,21 @@ func _crater_depth(packed: int, free_slots: int) -> int:
 	var sim := SpellSim.new()
 	if not _fire(sim, CAVE_X1 - 2, 70, 100, 0, packed):
 		return -1
-	# 🔴 채움탄은 **문양이 없다** — 지형을 안 부수므로 구덩이 측정에 안 섞인다.
+	# 🔴 채움탄은 **왼쪽으로** 난다 — 반대편 벽에서 착탄하므로 오른쪽 벽 측정에 안 섞인다.
+	#  ⚠ 「문양이 없어서 지형을 안 부순다」가 근거였는데 **2026-08-05에 그게 거짓이 됐다**
+	#   (모든 착탄이 판다). 실제로 살아 있는 근거는 **방향**이다.
 	while sim.active_count() < Tuning.MAX_PROJECTILES - free_slots:
 		if not _fire(sim, CAVE_X1 - 2, 70, -100, -20):
 			break
 	for _i in 30:
 		sim.step(g)
+	return _eaten_depth(g)
+
+
+## 오른쪽 벽이 몇 셀 사라졌나. 🔴 `_burn_depth` 의 파괴판이고 **같은 벽을 잰다** —
+##  두 깊이를 맞대면 「안쪽은 파이고 바깥 띠가 탄다」는 고리가 값으로 나온다.
+## ⚠ 방 안(x ≤ `CAVE_X1`)은 원래 빈칸이라 안 센다. 세는 것은 **벽이 먹힌 깊이**뿐이다.
+func _eaten_depth(g: CellGrid) -> int:
 	var reach := CAVE_X1
 	for y in range(CAVE_Y0, CAVE_Y1 + 1):
 		for x in range(CAVE_X1 + 1, CAVE_X1 + 40):
@@ -1163,11 +1329,25 @@ func _run_ticks(sim: SpellSim, grid: CellGrid, ticks: int) -> int:
 	return n
 
 
-## 한 타일(4셀) 두께의 돌 벽. 탄이 여기서 착탄한다.
+## 4셀 두께의 돌 벽. 탄이 여기서 착탄한다.
 func _wall_grid() -> CellGrid:
 	var g := CellGrid.new()
-	g.apply(CellGrid.cmd_fill(40, 0, 43, CellGrid.H - 1, Mat.STONE))
+	g.apply(CellGrid.cmd_fill(WALL_X0, 0, WALL_X1, CellGrid.H - 1, Mat.STONE))
 	return g
+
+
+## 벽에 **한 줄이라도 완전히 뚫린 곳**이 있나. 🔴 「돌이 줄었다」와 다른 물음이다 —
+##  줄기만 하고 안 뚫리는 것이 사용자가 보고한 상태의 반대편이다.
+func _wall_pierced(g: CellGrid) -> bool:
+	for y in range(CellGrid.H):
+		var open := true
+		for x in range(WALL_X0, WALL_X1 + 1):
+			if g.mat_at(x, y) != Mat.EMPTY:
+				open = false
+				break
+		if open:
+			return true
+	return false
 
 
 ## 통째로 돌. 폭발이 지운 칸 수를 세는 자리다.

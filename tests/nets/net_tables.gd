@@ -267,7 +267,7 @@ func _gen_tables(t) -> void:
 	t.ok(sim.size() >= Tuning.SPLIT_MAX + 1,
 		"표가 SPLIT_MAX(%d)까지 덮는다 (%d줄)" % [Tuning.SPLIT_MAX, sim.size()])
 
-	_strictly_decreasing(t, sim, "SIM_SIZES", ["speed", "rd", "ignite_r", "rune_r"])
+	_strictly_decreasing(t, sim, "SIM_SIZES", ["speed", "rd", "ignite_r", "rune_r", "carve_r"])
 	_strictly_decreasing(t, fx, "FX_SIZES", ["bolt_px", "trail_ticks", "flash_px", "shake_px"])
 
 	# 🔴 점화 반경이 파괴 반경보다 커야 불이 붙는다 — **세대마다** 성립해야 한다.
@@ -281,6 +281,21 @@ func _gen_tables(t) -> void:
 		t.ok(Tuning.rune_r(gen) < Tuning.blast_rd(gen),
 			"세대 %d의 룬 흔적이 폭발 반경보다 작다 (%d < %d)" % [
 				gen, Tuning.rune_r(gen), Tuning.blast_rd(gen)])
+		# 🔴 파는 반경이 0이면 「마법이 벽을 판다」(GDD)가 통째로 없어지는데 **에러가 안 난다** —
+		#  그게 정확히 2026-08-05 이전 상태였고 그물은 내내 초록이었다.
+		t.ok(Tuning.carve_r(gen) > 0, "세대 %d가 실제로 판다 (반경 %d)" % [
+			gen, Tuning.carve_r(gen)])
+		# 🔴 파기는 폭발보다 **훨씬** 작아야 두 개가 화면에서 갈린다. 부등식은 그 하한이다.
+		t.ok(Tuning.carve_r(gen) < Tuning.blast_rd(gen),
+			"세대 %d의 파는 반경이 폭발보다 작다 (%d < %d)" % [
+				gen, Tuning.carve_r(gen), Tuning.blast_rd(gen)])
+		# 🔴🔴 **파기(①)가 룬 흔적(②)보다 먼저다** ⇒ 같거나 크면 **불 룬이 태울 연료를
+		#  파기가 먼저 지운다.** 위 `ignite_r > rd` 와 정확히 같은 함정의 축소판이고,
+		#  「파고 그 자리에 불」에서 **불만 조용히 사라지며 에러가 안 난다.**
+		#  ⚠ 세대 1의 여유가 **1칸뿐**이다(1 < 2).
+		t.ok(Tuning.carve_r(gen) < Tuning.rune_r(gen),
+			"세대 %d의 파는 반경이 룬 흔적보다 작다 (%d < %d)" % [
+				gen, Tuning.carve_r(gen), Tuning.rune_r(gen)])
 
 	# 클램프가 실제로 도나. 표 밖 세대에서 죽으면 확산 상한을 올릴 때 그 자리가 터진다.
 	var last := sim.size() - 1
