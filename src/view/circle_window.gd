@@ -301,7 +301,7 @@ func _draw_frame(area: Rect2) -> void:
 
 
 ## 룬 축 — 룬 자리. ⚠ 자리 **수**도 자리 **위치**도 진 표에서 나온다.
-## 🔴 빈 룬은 총구가 꺼질 때와 **같은 회색**이다 — 같은 뜻이라 같은 색이어야 한 눈에 이어진다.
+## 🔴 빈 룬은 지팡이 끝이 죽을 때와 **같은 회색**이다 — 같은 뜻이라 같은 색이어야 한 눈에 이어진다.
 ##  ⚠ 「왜 못 쏘나」를 글로 적는 것은 단계 5다. 여기는 **상태를 정직하게 그리는 것**까지다.
 ##
 ## ⚠🔴 **여기서 나는 짖음은 「사건마다 한 번」이 아니라 「매 프레임」이다.**
@@ -315,11 +315,13 @@ func _draw_rune_slot(area: Rect2, circle_id: int) -> void:
 	for i in slots.size():
 		var rune_id := _circle.rune_at(i)
 		if rune_id == SpellCircle.RUNE_EMPTY:
-			# 🔴🔴 **「못 쏜다」를 말하는 셋째 장치다**(§3.5 — 총구·HUD는 단계 1에 이미 섰다).
+			# 🔴🔴 **「못 쏜다」를 말하는 셋째 장치다**(§3.5 — 지팡이 끝·HUD는 단계 1에 이미 섰다).
 			#  ⚠ 룬의 빈 자리는 **경고**지 「놓을 수 있다」(초대)가 아니다 —
 			#   층의 빈 자리(`+`)와 **뜻이 달라서 그림도 다르다.**
-			#   🔴 총구가 꺼질 때와 **같은 회색**이라 두 화면이 같은 말을 한다.
-			draw_circle(slots[i], r, Fx.MUZZLE_DEAD, false, Fx.MUZZLE_DEAD_WIDTH_PX)
+			#   🔴 지팡이 끝이 죽을 때와 **같은 회색**이라 두 화면이 같은 말을 한다.
+			#   ⚠ 상수 이름이 `MUZZLE_DEAD`·`MUZZLE_DEAD_WIDTH_PX` 였다 — 총구 구슬이 사라지며
+			#    `DEAD_TINT`·`DEAD_RING_PX` 로 바뀌었다. **값도 뜻도 그대로다.**
+			draw_circle(slots[i], r, Fx.DEAD_TINT, false, Fx.DEAD_RING_PX)
 			continue
 		_draw_rune_symbol(slots[i], r, rune_id)
 

@@ -18,6 +18,8 @@ extends RefCounted
 
 const Fx := preload("res://src/view/fx_tuning.gd")
 const Character := preload("res://src/actor/character.gd")
+## 🔴 지팡이 그림의 폭 계약이 `Staff.LEN_PX` 다 — 「보이는 끝」과 「발사 원점」이 같은 값이어야 한다.
+const Staff := preload("res://src/actor/staff.gd")
 ## 🔴 **`pick_state()` 가 순수 static 이라 씬 없이 부를 수 있다** — 그게 판정 3·4를 그물로
 ##  옮긴 이유다. ⚠ 인스턴스를 만들지 않는다(`Node2D` 라 만들면 트리가 필요하다).
 const CharacterView := preload("res://src/view/character_view.gd")
@@ -25,7 +27,74 @@ const CharacterView := preload("res://src/view/character_view.gd")
 
 func run(t) -> void:
 	_body_sheet_fits_the_box(t)
+	_staff_sheet_fits_the_reach(t)
 	_pick_state_picks_different_cells(t)
+
+
+## 🔴🔴 **지팡이 그림 계약 — 「눈에 보이는 끝」과 `Staff.tip_px()` 가 같은 자리여야 한다.**
+##  둘이 몇 px 어긋나면 **스샷으로만 드러난다**(그림 끝에서 안 나가는 마법).
+##
+## 🔴 **후보 24안 중 18개가 여기서 떨어졌다**(2026-08-05). 흔한 실패가 둘이었다:
+##  · **고리와 봉 사이가 4~5px 끊겨 있다** — 같은 프롬프트로 뽑은 것에서도 났다
+##  · **bbox가 폭에 못 미친다**(x 0~32 등)
+##  ⇒ **그림을 갈아 끼울 때 사람이 기억하는 대신 그물이 문다.**
+func _staff_sheet_fits_the_reach(t) -> void:
+	var tex: Texture2D = load(Fx.STAFF_SHEET)
+	t.ok(tex != null, "지팡이 시트를 읽는다 (%s)" % Fx.STAFF_SHEET)
+	if tex == null:
+		# 🔴 그냥 `return` 하면 검사가 「실패」가 아니라 **없어진다**(위 몸 시트와 같은 장치).
+		t.ok(false, "지팡이 시트를 못 읽어서 그림 계약을 **하나도 못 쟀다**")
+		return
+
+	# 🔴🔴 **폭이 곧 사거리다.** `Staff.LEN_PX` 와 갈라지면 「보이는 끝」과 「발사 원점」이
+	#  어긋나는데 **에러가 안 난다.** ⚠ 길이를 눈으로 보고 바꾸는 날 png도 같이 바꿔야 한다.
+	t.eq(float(tex.get_width()), Staff.LEN_PX,
+		"지팡이 시트 폭이 지팡이 길이와 같다 (%d == %.0f)" % [tex.get_width(), Staff.LEN_PX])
+
+	# ⚠ 선언을 **파일 경로까지 넣어 좁힌다** — 넓게 적으면 도는 동안 진짜 침묵사도 같이 사면된다.
+	t.expect_error("Loaded resource as image file, this will not work on export: '%s'" % Fx.STAFF_SHEET)
+	var img := Image.load_from_file(Fx.STAFF_SHEET)
+	t.ok(img != null, "지팡이 원본 png를 연다 (임포트를 안 거친다)")
+	if img == null:
+		t.ok(false, "원본 png를 못 읽어서 **내용 검사를 하나도 못 쟀다**")
+		return
+	# 🔴 png를 고치고 임포트를 안 돌리면 게임은 **낡은 `.ctex`** 를 그리는데 아래는 **새 png** 를 잰다.
+	t.eq(Vector2i(img.get_width(), img.get_height()),
+		Vector2i(tex.get_width(), tex.get_height()),
+		"원본 png 크기가 임포트된 텍스처와 같다 (임포트가 안 낡았다)")
+	if img.get_width() != tex.get_width() or img.get_height() != tex.get_height():
+		t.ok(false, "원본과 텍스처의 크기가 갈려서 **내용 검사를 하나도 못 쟀다**")
+		return
+
+	var w := img.get_width()
+	var h := img.get_height()
+	var box := opaque_bbox(img, 0, 0, w, h)
+	t.ok(box.size.x > 0 and box.size.y > 0, "지팡이 그림에 불투명 픽셀이 있다 (bbox %s)" % box)
+	if box.size.x <= 0 or box.size.y <= 0:
+		return
+
+	# 🔴🔴 **bbox가 폭을 꽉 채운다.** 맨 오른쪽 열이 투명하면 눈에 보이는 끝은 `폭−1` 인데
+	#  `tip_px()` 는 `폭` 이라 **끝이 그림 밖에 뜬다.**
+	t.eq(Vector2i(box.position.x, box.position.x + box.size.x - 1), Vector2i(0, w - 1),
+		"bbox가 폭을 꽉 채운다 (x 0~%d)" % (w - 1))
+
+	# 🔴🔴 **끊긴 열이 0개다 — 지팡이가 두 조각이 아니다.**
+	var gaps := 0
+	for x in w:
+		if opaque_bbox(img, x, 0, 1, h).size.y <= 0:
+			gaps += 1
+	t.eq(gaps, 0, "끊긴 열이 0개다 (봉과 고리가 이어져 있다)")
+
+	# 🔴🔴 **bbox의 y 중심이 앵커다.** 여기가 어긋나면 **왼쪽을 볼 때만**(180° 회전)
+	#  지팡이가 어깨 위로 뜬다 — 오른쪽만 보고는 절대 못 잡는다.
+	var cy := (float(box.position.y) + float(box.position.y + box.size.y - 1)) * 0.5
+	t.ok(is_equal_approx(cy, Fx.STAFF_ANCHOR_Y_PX),
+		"bbox의 y 중심이 앵커와 같다 (%.1f == %.1f · y %d~%d)" % [
+			cy, Fx.STAFF_ANCHOR_Y_PX, box.position.y, box.position.y + box.size.y - 1])
+
+	# 🔴 고리가 차지하는 폭이 그림 안이어야 봉 영역(`LEN_PX − ring`)이 양수다.
+	t.ok(Fx.STAFF_RING_W_PX > 0.0 and Fx.STAFF_RING_W_PX < Staff.LEN_PX,
+		"고리 폭 %.0f 가 0과 전장 %.0f 사이다" % [Fx.STAFF_RING_W_PX, Staff.LEN_PX])
 
 
 func _body_sheet_fits_the_box(t) -> void:

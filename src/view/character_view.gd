@@ -1,18 +1,26 @@
 extends Node2D
 ## 캐릭터 · 지팡이. 🔴 **화면만 만진다 — 캐릭터 상태를 안 바꾼다.**
 ##
-## 🔴 **지팡이 끝의 단일 소스가 여기다.** 그림과 발사 원점이 갈라지면
-##  「쏜 데서 안 나간다」로 보이고, 그건 스샷으로만 드러난다.
+## 🔴🔴 **지팡이 끝의 단일 소스는 이제 여기가 아니라 `src/actor/staff.gd` 다.**
+##  그림과 발사 원점이 갈라지면 「쏜 데서 안 나간다」로 보이고 그건 스샷으로만 드러난다 —
+##  ⇒ **여기서 끝을 다시 계산하지 마라.** 아래 `tip_px()` 는 그 함수를 **부르기만** 한다.
 ## ⚠ 보간이 없는 게 맞다 — 캐릭터는 60Hz(렌더와 같은 시계)라 틱 사이가 없다.
 ##  보간이 필요한 건 20Hz 시뮬을 그리는 `spell_view.gd`뿐이다.
 
+const CellGrid := preload("res://src/sim/cell_grid.gd")
 const Character := preload("res://src/actor/character.gd")
+const Staff := preload("res://src/actor/staff.gd")
 const Fx := preload("res://src/view/fx_tuning.gd")
 const SpellCircle := preload("res://src/actor/spell_circle.gd")
 
 var _ch: Character = null
 
-## 🔴🔴 **사본이 아니라 참조다.** 매 `_draw()`에 읽으므로 껍데기가 조합을 바꾸면 총구가
+## 🔴🔴 **지팡이가 지형에 막혀 짧아지므로 화면이 격자를 든다. 읽기만 한다.**
+##  ⚠ **이걸 안 받으면 화면은 옛 자리에 그리고 발사만 새 자리로 간다** — 셋이 하나라는
+##   계약이 그 자리에서 깨지고 **에러가 하나도 안 난다.** 그래서 `setup()` 의 인자다.
+var _grid: CellGrid = null
+
+## 🔴🔴 **사본이 아니라 참조다.** 매 `_draw()`에 읽으므로 껍데기가 조합을 바꾸면 지팡이 끝 색이
 ##  **저절로** 따라온다. 사본을 두면 밀어 넣기를 한 번 깜빡하는 순간 「조합을 바꿨는데
 ##  화면이 그대로다」가 되고 **에러가 안 난다** — 그게 v1이 죽은 방식이다.
 ## ⚠ **읽기만 한다.** 화면이 조립 상태를 바꾸면 그 순간 단일 소스가 아니게 된다.
@@ -24,6 +32,9 @@ var _circle: SpellCircle = null
 ##  조용히 `return` 하면 **캐릭터가 안 보이는데 아무도 안 짖는** 이 리포의 대표 침묵사가 된다.
 var _body_tex: Texture2D = load(Fx.CHAR_SHEET)
 
+## 지팡이 시트. ⚠ **`_body_tex` 와 같은 어법이다 — null 검사를 안 붙인다**(위 근거 그대로).
+var _staff_tex: Texture2D = load(Fx.STAFF_SHEET)
+
 ## 🔴🔴 **「걷는 중인가」를 캐릭터에 묻지 않는다.** `character.gd` 에 그런 상태가 없고, 넣으려면
 ##  그 파일을 고쳐야 하는데 **화면만 만진다**가 이 파일의 계약이다.
 ##  ⇒ **직전 프레임의 x와 비교한다.** 뷰가 드는 상태는 이 하나뿐이다.
@@ -33,9 +44,10 @@ var _prev_x := 0
 var _moving := false
 
 
-func setup(ch: Character, circle: SpellCircle) -> void:
+func setup(ch: Character, circle: SpellCircle, grid: CellGrid) -> void:
 	_ch = ch
 	_circle = circle
+	_grid = grid
 	# ⚠ **여기서 `_prev_x` 를 맞춰 둔다.** 안 맞추면 첫 프레임에 「0 → 스폰 x」 가 움직임으로 읽혀
 	#  가만히 선 캐릭터가 한 프레임 걷는다.
 	if _ch != null:
@@ -56,6 +68,11 @@ func _process(_dt: float) -> void:
 
 ## 마우스 쪽 단위 벡터. 마우스가 정확히 캐릭터 한가운데면 **바라보는 쪽**으로 떨어진다
 ## (0벡터를 정규화하면 0이 되고, 그러면 지팡이가 사라진다).
+##
+## ⚠ **기준이 상자 중심이지 지팡이 피벗이 아니다.** 피벗이 중심에서 `PIVOT_DY_PX` 만큼 아래라
+##  둘이 그만큼 어긋나는데, **이번 변경에서 안 건드렸다** — 기획이 손 높이를 「미정」으로 뒀고
+##  값이 정해지기 전에 기준을 옮기면 무엇 때문에 조준이 달라졌는지 갈리지 않는다.
+##  🔴 손 높이를 눈으로 정하는 날 **여기를 같이 봐라.** 마우스가 캐릭터에 붙어 있을 때 제일 크게 보인다.
 func aim_dir() -> Vector2:
 	if _ch == null:
 		return Vector2.RIGHT
@@ -66,10 +83,17 @@ func aim_dir() -> Vector2:
 
 
 ## 🔴 탄이 나가는 자리. `stage.gd`가 이걸 그대로 `aim.fire_cmd`에 넘긴다.
+##
+## 🔴🔴 **계산은 `Staff.tip_px()` 에 있다 — 여기서 다시 하지 마라.** 그리는 쪽(`_draw`)도
+##  같은 함수를 부르므로 「그림 끝 · 발사 원점」이 **구조적으로** 같은 값이다.
+##  ⚠ 여기서 한 줄이라도 다시 계산하면 그 순간 둘이 갈라질 수 있고, **에러는 안 난다.**
+## 🔴 **`_grid` 에 null 검사를 안 붙인다.** 껍데기가 격자를 안 넘기면 여기서 **짖어야** 한다 —
+##  조용히 옛 자리를 돌려주면 「화면은 옛 자리, 발사는 새 자리」가 **아무 에러 없이** 남고,
+##  그게 이 문서의 위험 2다(`_body_tex` 에 null 검사를 안 붙인 것과 같은 규율).
 func tip_px() -> Vector2:
 	if _ch == null:
 		return Vector2.ZERO
-	return _ch.center() + aim_dir() * Fx.STAFF_LEN_PX
+	return Staff.tip_px(_grid, _ch.x, _ch.y, aim_dir())
 
 
 ## 🔴🔴 **어느 칸을 그릴지 고른다. 순수 static 이라 그물이 직접 부를 수 있다.**
@@ -126,15 +150,16 @@ func _draw() -> void:
 	#  그 어긋남은 **왼쪽을 볼 때만** 드러나 눈으로 거의 못 잡는다. 반전은 그 갈라짐이 원리적으로 없다.
 	#  ⚠ 그림이 4분의 3 각도라 반전이 **거울상**이 된다 — 알고 고른 것이다(기획 「몸은 좌우 두 벌」).
 	# 🔴🔴 **`draw_set_transform` 은 뒤에 그리는 것 전부에 걸린다 — 반드시 되돌린다.**
-	#  안 되돌리면 불 테두리·지팡이·**총구**가 뒤집힌 좌표계에서 그려진다. 총구는 조립창을 안 열고도
-	#  늘 보이는 유일한 곳이라 그게 곧 조합 표시가 죽는 것이고, ⚠ **에러는 하나도 안 난다.**
+	#  안 되돌리면 불 테두리·지팡이·**끝의 고리**가 뒤집힌 좌표계에서 그려진다. 지팡이 끝은
+	#  조립창을 안 열고도 늘 보이는 유일한 곳이라 그게 곧 조합 표시가 죽는 것이고,
+	#  ⚠ **에러는 하나도 안 난다.**
 	#  🔴 **그물이 이걸 못 잡는다** — 16px 때 verify-read가 복원 줄을 지워도 **전부 초록**인 것을
 	#   확인했다. 지키는 것은 이 주석과 눈뿐이다.
 	# 🔴🔴 **그림 칸(32px)이 충돌 상자(20px)보다 넓다 — 상자 *가운데*에 맞춰 그린다.**
 	#  왼쪽 위에 맞춰 그리면 캐릭터가 상자 안에서 왼쪽으로 6px 쏠리고, 그건 「걸을 때 몸이
 	#  한쪽으로 치우쳐 보인다」로만 드러난다. ⚠ 둘 다 짝수라 이 나눗셈이 정수로 떨어진다.
-	#  🔴 그래서 **그림 중심과 상자 중심이 같다** — `_ch.center()` 에서 나가는 지팡이가
-	#   상자를 좁힌 뒤에도 몸 한가운데에서 뻗는다.
+	#  🔴 그래서 **그림 중심과 상자 중심이 같다** — `Staff.pivot_px()` 가 상자에서 나오는데
+	#   상자를 좁힌 뒤에도 그 자리가 몸 그림의 한가운데다.
 	var pad := (Fx.CHAR_CELL_PX - Character.W_PX) / 2
 	var sprite_x := _ch.x - pad
 	# ⚠ 왼쪽을 볼 때 원점을 **그림** 오른쪽 끝에 두는 이유: 스케일 -1이 로컬 x를 왼쪽으로 보내므로
@@ -150,7 +175,7 @@ func _draw() -> void:
 		_cell_rect(state), Color(1.0, 1.0, 1.0, dim))
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
-	# 🔴🔴 **쓰러졌으면 여기서 끝이다 — 지팡이도 총구도 안 그린다.**
+	# 🔴🔴 **쓰러졌으면 여기서 끝이다 — 지팡이도 끝의 고리도 안 그린다.**
 	#  **못 쏘는 상태**라 그리면 「쏠 수 있어 보인다」가 된다.
 	#  ⚠ 불 테두리도 같이 빠진다 — 사각형 시절부터 그랬고 이번에 안 바꿨다.
 	if _ch.downed:
@@ -160,27 +185,63 @@ func _draw() -> void:
 	if _ch.burning:
 		draw_rect(Rect2(_ch.x, _ch.y, Character.W_PX, Character.H_PX),
 			Fx.CHAR_BURN, false, Fx.CHAR_BURN_PX)
+	# 🔴🔴 **피벗도 끝도 `Staff` 에서 나온다.** 여기서 `_ch.center()` 로 그리면 그리는 자리와
+	#  발사 자리가 갈라지고, 그건 스샷으로만 드러난다.
+	# ⚠ `aim_dir()` 을 두 번 부른다(여기 · `tip_px()` 안). **한 프레임 안에서 같은 값이라 안전하다** —
+	#  마우스 자리는 프레임 동안 안 변한다. 🔴 `aim_dir()` 에 상태를 넣지 마라. 넣는 순간 그리는
+	#  방향과 끝이 갈라지고, 그건 「지팡이가 살짝 휘어 보인다」로만 드러난다.
+	var pivot := Staff.pivot_px(_ch.x, _ch.y)
 	var tip := tip_px()
-	draw_line(_ch.center(), tip, Fx.STAFF_COLOR, Fx.STAFF_WIDTH_PX)
+	var dir := aim_dir()
+	_draw_staff(pivot, dir, (tip - pivot).length())
 
 	if _circle == null:
 		return
 
-	# 🔴🔴 **총구가 장착을 나른다.** 크기 = 층 수 · 색 = 맨 안쪽 문양(`fx_tuning` 주석).
-	#  ⚠ 가산 합성이 아니라 보통 합성이라(이 노드는 `spell_view`와 달리 재질이 없다)
-	#   겉 무리를 알파로 깐다.
+	# 🔴🔴 **끝의 고리가 장착을 나른다 — 색 하나로.** 총구 구슬(크기 = 층 수)은 사용자 판정으로
+	#  지웠고, 무엇을 잃었는지는 `fx_tuning.STAFF_RING_*` 절에 적혀 있다.
+	#
+	# 🔴🔴 **월드 좌표계다 — 위 `_draw_staff` 가 변환을 되돌린 뒤여야 한다.**
+	#  `tip` 이 이미 월드 px라 그게 자연스럽고, **복원 줄이 어디에 있어야 하는지가 코드 모양으로
+	#  드러난다.** ⚠ 안 되돌리면 링이 엉뚱한 데 앉는데 **에러가 안 나고 그물도 못 잡는다.**
+	#
+	# 🔴 **링은 그림의 고리 위에 정확히 겹친다.** 끝에서 `INSET` 만큼 되돌아온 자리가 고리 중심이다
+	#  (실측: 끝 36.0 · 고리 중심 x 32.0). ⚠ **자리 맞춤은 눈이 볼 자리다.**
 	# 🔴 매 프레임 **다시 읽는다** — 조립 상태가 바뀌는 순간이 따로 없다는 게 요점이다.
-	var glyphs := _circle.packed_glyphs()
-	var r := Fx.muzzle_radius(glyphs)
+	# ⚠ **「못 쏜다」 갈래는 `staff_tint` 안에 있다.** 여기서 가르면 그 갈래가 그물이 못 부르는
+	#  자리로 내려가고, 그러면 판정 5가 눈에만 남는다.
+	draw_circle(tip - dir * Fx.STAFF_RING_INSET_PX, Fx.STAFF_RING_R_PX,
+		Fx.staff_tint(_circle.packed_glyphs(), _circle.element(), _circle.can_fire()),
+		false, Fx.STAFF_RING_PX)
 
-	# 🔴🔴 **못 쏘면 총구가 꺼진다.** 조립창을 안 열고도 늘 보이는 유일한 곳이라
-	#  「지금은 못 쏜다」가 무대에서 바로 읽힌다 — 없으면 좌클릭이 안 먹는 게 **고장**으로 보인다.
-	#  ⚠ 크기(층 수)는 그대로 둔다. 조합은 그대로고 **룬만 빠진 것**이라 그 사실이 보여야 한다.
-	if not _circle.can_fire():
-		draw_circle(tip, r, Fx.MUZZLE_DEAD, false, Fx.MUZZLE_DEAD_WIDTH_PX)
-		return
 
-	var tint := Fx.muzzle_tint(glyphs, _circle.element())
-	draw_circle(tip, r * Fx.MUZZLE_GLOW_RATIO,
-		Color(tint.r, tint.g, tint.b, Fx.MUZZLE_GLOW_A), true)
-	draw_circle(tip, r, tint, true)
+## 🔴🔴 **봉과 고리를 따로 그린다. 통째로 x축 스케일하면 안 된다.**
+##  지팡이가 눌리면 길이가 `LEN_PX` 보다 짧아지는데, 그림을 통째로 늘리면 **고리가 타원으로
+##  찌그러지고** 그 위에 얹을 색 링(정원)이 안 맞는다. ⇒ **봉만 줄이고 고리는 1:1로 끝에 붙인다.**
+##  ⚠ 봉이 짧아지고 고리는 그대로인 것이 「벽에 다가가면 눌려 짧아진다」의 정직한 그림이다(판정 2).
+##
+## 🔴🔴 **`draw_set_transform` 은 뒤에 그리는 것 전부에 걸린다 — 반드시 되돌린다.**
+##  안 되돌리면 뒤따르는 것(고리 색 링 · 다음 프레임)이 회전 좌표계에서 그려진다.
+##  **에러는 하나도 안 난다.** 🔴 **그물이 이걸 못 잡는다** — 위 몸 그림 쪽에 실측이 적혀 있다.
+##  지키는 것은 이 주석과 눈뿐이다.
+##
+## ⚠ **세로는 시트에서 읽는다**(`get_height()`). 상수로 박으면 「png 높이 · 상수」가 두 곳이 되고,
+##  갈라지면 지팡이가 세로로 늘어나는데 에러가 안 난다.
+## 🔴 **가로 기준은 `Staff.LEN_PX` 하나다** — `fx_tuning` 에 폭 상수를 또 두지 않는 이유가 그것이다.
+func _draw_staff(pivot: Vector2, dir: Vector2, len_px: float) -> void:
+	var sheet_h := float(_staff_tex.get_height())
+	var ring := Fx.STAFF_RING_W_PX
+	var rod := Staff.LEN_PX - ring
+	# ⚠ 회전 좌표계다 — 원점이 피벗이고 +x 가 조준 방향이다. 그래서 아래 두 사각형이
+	#  「피벗에서 얼마나 나갔나」로만 적힌다.
+	draw_set_transform(pivot, dir.angle(), Vector2.ONE)
+	# ① 봉 — 남은 길이에 맞춰 **가로로만** 줄인다. ⚠ `maxf` 는 지팡이가 고리보다 짧아지는
+	#  극단(하한이 `ring` 보다 작은 상자)에서 폭이 음수가 되는 것을 막는다.
+	draw_texture_rect_region(_staff_tex,
+		Rect2(0.0, -Fx.STAFF_ANCHOR_Y_PX, maxf(0.0, len_px - ring), sheet_h),
+		Rect2(0.0, 0.0, rod, sheet_h))
+	# ② 고리 — **1:1이다.** 끝에 붙는다.
+	draw_texture_rect_region(_staff_tex,
+		Rect2(len_px - ring, -Fx.STAFF_ANCHOR_Y_PX, ring, sheet_h),
+		Rect2(rod, 0.0, ring, sheet_h))
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)

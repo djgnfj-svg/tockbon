@@ -39,6 +39,7 @@ const Tuning := preload("res://src/sim/sim_tuning.gd")
 const SpellSim := preload("res://src/sim/spell_sim.gd")
 const Glyph := preload("res://src/sim/glyph_defs.gd")
 const Character := preload("res://src/actor/character.gd")
+const Staff := preload("res://src/actor/staff.gd")
 const WorldStep := preload("res://src/actor/world_step.gd")
 
 const STAGE_SCRIPT := "res://src/stage/stage.gd"
@@ -151,13 +152,12 @@ const WALL_CX := 76
 const VERT_CX := 80
 const VERT_FROM_CY := 170
 
-## 지팡이 끝이 아래를 볼 때의 자리(상자 **아래**). 중심에서 36px 아래라 셀로는 바닥 속이다 —
-## 🔴 게임에서 「발밑을 쏜다」가 실제로 나가는 자리다.
-## ⚠ **+5는 유도값이지 ×2가 아니다.** 중심 `FLOOR_TOP − H_PX/2` = 784px · `+ STAFF_LEN_PX 36`
-##  = 820px · `÷ CELL_PX 4` = 205 = `FLOOR_CY + 5`. 16px 때의 `+2` 도 같은 유도였다(410/4 = 102).
-##  🔴 내림 결과를 기계적으로 ×2 하면 **+4**가 나오는데, 그러면 위 「중심에서 36px 아래」가
-##   실제로는 34px이 되어 **주석이 거짓**이 된다. ⚠ 그물은 이걸 못 가른다(+4도 초록이었다).
-const FEET_CY := FLOOR_CY + 5
+## 🔴🔴 **`FEET_CY` 상수를 지웠다. 발밑 원점은 이제 `Staff.tip_px()` 에서 뽑는다**
+##  (`_firing_down_does_not_lift_me` 안). 옛 값은 `FLOOR_CY + 5` 였고 「중심에서 36px 아래 =
+##  바닥 속」에 의존했는데, 지팡이가 지형에 막혀 짧아지면서 그 전제가 거짓이 됐다.
+##  ⚠ 그 자리 주석이 스스로 「**+4도 초록이었다 — 그물은 이걸 못 가른다**」고 적고 있었다 ⇒
+##   손으로 다시 유도하면 **같은 함정에 값만 새로 넣는 것**이다. 애초에 단언이 아니라 **배치**였고,
+##   배치는 실제 코드에서 나와야 낡지 않는다(`_blast_r_px`·`_aim_row` 가 이미 그 어법이다).
 
 ## 🔴 발밑 나무. 캐릭터가 선 자리의 셀은 **빈칸이라 연료가 0**이고 불은 여기 붙는다.
 ##  ⚠ 아래에 돌을 깔아 둔다 — 나무가 다 타면 **빈칸이 되어 바닥이 사라지므로**,
@@ -998,11 +998,23 @@ func _firing_down_does_not_lift_me(t) -> void:
 	var w := WorldStep.new(g, spell, ch)
 	var y0 := ch.y
 	var x0 := ch.x
-	# 🔴 **지팡이 끝 자리에서 쏜다 — 상자 *아래*다.** 게임에서 아래로 조준하면 총구가 몸 아래
-	#  (중심 + `STAFF_LEN_PX`)라 탄이 상자를 안 지난다 — 배치를 거기 맞춘다.
+	# 🔴🔴 **지팡이 끝 자리에서 쏜다. 자리를 상수로 박지 않고 `Staff.tip_px()` 에서 뽑는다** —
+	#  게임에서 아래로 조준했을 때 탄이 실제로 태어나는 자리가 정의상 이것이다.
+	#  ⚠ **배치의 근거가 2026-08-05에 바뀌었다.** 전에는 원점이 상자 **아래**(바닥 속)라
+	#   「탄이 상자를 안 지난다」였는데, 지팡이가 지형에 막혀 짧아지면서 원점이 **상자의 마지막 줄**이 됐다
+	#   ⇒ **탄이 상자 안에서 태어나 자기가 맞는다.** 그게 맞는 거동이다(기획 「발밑을 쏘면 자기가 맞는다」).
+	#  🔴 **그래도 이 검사가 재는 것은 안 변한다**: hp를 안 보고 · 넉백이 없어 맞아도 안 밀리고 ·
+	#   `ELEM_NONE + GLYPH_NONE` 이라 룬 흔적도 없다. 재는 것은 **세로 0 · 가로 반동은 산다** 둘이다.
 	#  ⚠ 오른쪽 **아래** 대각선이라 세로 성분이 살아 있다 — 로켓점프가 있었다면 이 배치에서도 떴다.
+	var tip := Staff.tip_px(g, ch.x, ch.y, Vector2.DOWN)
+	var feet_cx := floori(tip.x / float(Tuning.CELL_PX))
+	var feet_cy := floori(tip.y / float(Tuning.CELL_PX))
+	# 🔴 **배치의 전제를 그물이 스스로 단언한다** — 발밑 원점이 고체 셀이면 탄이 벽 안에서 태어나고
+	#  (`spell_sim._walk` 가 시작 칸을 안 본다) 그 순간 이 배치가 재려던 것이 통째로 달라진다.
+	t.ok(not g.is_solid(feet_cx, feet_cy),
+		"발밑 원점(%d,%d)이 빈 셀이다 (배치의 전제)" % [feet_cx, feet_cy])
 	w.enqueue(SpellSim.cmd_fire(
-		VERT_CX, FEET_CY, 10, 10, Tuning.ELEM_NONE, Glyph.GLYPH_NONE))
+		feet_cx, feet_cy, 10, 10, Tuning.ELEM_NONE, Glyph.GLYPH_NONE))
 	var top := y0
 	for _i in RECOIL_WINDOW:
 		w.frame(DT, 0.0, false, false)
