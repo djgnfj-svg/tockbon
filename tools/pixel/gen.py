@@ -31,6 +31,17 @@ OUT = ROOT / "out"
 # 🔴🔴 **한 게임 안에서 그림이 갈리는 것을 막는 자리다.** 프롬프트마다 스타일 문구를
 #  손으로 적으면 반드시 갈라진다 — 원본 파이프라인의 TODO 두 번째 항목이 그 얘기다.
 #
+# 🔴🔴 **그런데 프리셋을 여러 개 두면 같은 일이 난다**(2026-08-05 실측).
+#  조립창에 **같이 얹히는** 것들을 서로 다른 프리셋으로 뽑고 있었다:
+#   · `frame`(진) = concentric rings · `glyph`(문양) = bold simple shapes
+#   · `rune`(룬)  = 🔴 **pixel art game icon, 16-bit shading** ← 룬만 픽셀아트였다
+#  ⇒ 프롬프트를 아무리 손봐도 안 맞는 게 맞았다. 사용자 판정이 「전혀 원하는 대로 안 나옴」이었다.
+#
+# 🔴 **한 화면에 같이 나오는 것은 한 프리셋으로 뽑는다** — 진·룬·문양은 전부 `sigil` 이다.
+#  ⚠ **시드는 이 축이 아니다.** 시드 6개로 같은 프롬프트를 뽑았더니 구도만 여섯 가지고
+#   결은 여섯이 다 같았다 ⇒ 시드는 **구도**를, 프리셋은 **결**을 정한다.
+#  세부는 `docs/design/마법진-그림.md` 의 「결을 맞추는 것은 시드다 — 통짜가 아니었다」.
+#
 # ⚠ `style` 은 프롬프트 **뒤에** 붙는다. 앞에 붙이면 모델이 스타일만 그리고 내용을 흘린다.
 # ⚠ `size` 는 **생성 해상도**고 `down` 은 **최종 픽셀 크기**다. 둘이 다른 축이다 —
 #  512로 그려 32px로 내리는 것과 처음부터 32px로 그리는 것은 결과가 완전히 다르다
@@ -51,11 +62,74 @@ PRESETS = {
                  "no shading, no color, no text",
         "lora": 0.0, "size": 512, "down": 256, "steps": 28, "cfg": 5.0,
     },
+    # 🔴🔴 진 통짜 — **세 진(일반·융합·삼각)이 한 벌로 보이게 하는 자리다.**
+    #
+    # ⚠ `frame` 과 갈라 둔 이유는 하나다: frame 의 style 에 `perfectly round` 가 있어
+    #  **삼각진이 원으로 나온다.** 🔴 실루엣을 프리셋이 말하면 진마다 프리셋이 필요해진다 ⇒
+    #  **실루엣은 프롬프트가 말하고, 프리셋은 결(선 굵기 · 바탕 · 장식의 성격)만** 든다.
+    #
+    # ⚠ **`down` 이 0인 것이 일부러다.** 채용안(`docs/mockups/fusion-circle-ref.png`)이
+    #  1024 **원본 그대로**고 `_560px` 다운스케일판이 아니다 — 선화라 k_centroid 를 거치면
+    #  가는 선이 끊긴다. 🔴 크기의 기준은 `docs/design/마법진-그림.md` 의 **진 1024** 다.
+    #
+    # ⚠ **`size` 가 1024라 한 장이 512짜리보다 4배 무겁다.** 배치를 크게 걸기 전에 한 장을 재라.
+    "sigil": {
+        # ⚠ **`thin even line weight` 로 시작했다가 바꿨다**(2026-08-05 실측). 선이 가늘게
+        #  나와 채용안과 대비가 안 맞았다. 🔴 그리고 `no border` 를 style 에 안 넣는다 —
+        #  negative 로 뺀다(style 에 넣으면 「border」라는 낱말이 그림을 오히려 부른다).
+        # 🔴🔴 **프리셋은 결만 든다. 밀도는 프롬프트가 정한다**(2026-08-05, 사용자 판정).
+        #  ⚠ 한때 여기 `ornate intricate geometric ornament, bands of repeating diamond and
+        #   chevron pattern` 이 들어 있었고, 그러자 **진까지 무늬로 꽉 찼다.**
+        #  🔴 진이 화려하면 **문양을 얹을 자리가 없다** — 얹어도 진의 무늬에 묻혀
+        #   GDD의 「순서가 화면에 안 보이면 플레이어는 규칙을 영영 못 배운다」가 죽는다.
+        #   ⇒ **화려함은 문양이 진다. 진은 빈 띠를 내준다**(`docs/design/마법진-그림.md`).
+        #  ⚠ 그러니 이 문자열에 밀도를 말하는 낱말을 다시 넣지 마라 — 프리셋은 진·룬·문양
+        #   **셋 다에 걸려서**, 여기 한 낱말이 셋을 동시에 화려하게 만든다.
+        # ⚠ **`bold` 는 굵기지 밀도가 아니다.** 밀도 낱말(`ornate` · `repeating pattern`)을 빼면서
+        #  `bold` 까지 같이 뺐더니 선이 실처럼 가늘어졌다 — 되살린 것은 굵기 하나뿐이다.
+        "style": "bold black line art on a cream white paper background, "
+                 "strong contrast, clean confident thick lines, "
+                 "flat top-down view, perfectly symmetrical, centered, "
+                 "no shading, no gradient, no color, no text",
+        "lora": 0.0, "size": 1024, "down": 0, "steps": 28, "cfg": 5.0,
+    },
     # 룬 — 🔴 기하학일 필요가 없다(사용자 결정). 속성이 한눈에 읽히는 것이 전부다.
     "rune": {
         "style": "pixel art game icon, bold readable silhouette, centered, "
                  "plain white background, 16-bit shading",
         "lora": 0.0, "size": 512, "down": 96, "steps": 28, "cfg": 5.0,
+    },
+    # 🔴🔴 탄 머리 — **날아가는 것**. 위 넷과 배경색이 갈리는 유일한 프리셋이다.
+    #  ⚠ 문양·룬·진은 **조립창(밝은 종이) 위**에 얹지만 탄은 **어두운 무대 위**를 난다.
+    #   흰 배경으로 뽑으면 밝은 코어가 배경과 안 갈려 알파를 뺄 수가 없다 —
+    #   sheet.py 주석의 「배경색이 판정을 바꾼다」가 뽑는 단계에도 걸린다.
+    #
+    # 🔴 **오른쪽으로 나는 모습 하나만 뽑는다.** 탄은 360도로 날아가므로 코드가 돌린다
+    #  (`spell_view` 가 속도 벡터를 안다). 방향마다 뽑으면 룬 10개 × 방향 N 이 된다.
+    #
+    # ⚠ **글로우를 그림에 안 넣는다.** `fx_tuning.BOLT_GLOW_RATIO` 가 이미 무리를 그린다 —
+    #  그림에도 넣으면 두 곳이 되고, 세대가 작아질 때 무리만 안 따라 줄어든다.
+    #  ⇒ 프롬프트가 요구하는 것은 **코어 실루엣**이다.
+    #
+    # ⚠ `down` 16 의 근거: `fx_tuning.FX_SIZES.bolt_px` 가 세대0에서 **반경 8px** = 지름 16px.
+    #  🔴 이 값을 고치면 그림도 다시 뽑아야 한다 — 축소로 맞추면 픽셀이 깨진다.
+    # 🔴🔴 **가산 합성이 이 프리셋의 전부다.** `spell_view._ready()` 가 BLEND_MODE_ADD 다 ⇒
+    #  검은 픽셀은 저절로 투명이지만 **어두운 색은 화면에 아예 안 나온다.**
+    #  ⇒ 외곽선도 음영도 원리적으로 못 쓴다. 그림이 「덩어리」가 아니라 **「빛」**이라야 한다.
+    #  ⚠ 이걸 모르고 뽑은 첫 판(18장)은 전부 음영이 들어가 규격 밖이었다.
+    #
+    # ⚠ **`centered` 가 없는 것이 일부러다.** 코어가 칸 중심이 아니라 **오른쪽 8px 지점**에 있다 —
+    #  회전 피벗이 코어라, 중심에 두면 꼬리 자리가 없고 왼쪽에 두면 머리가 원을 그리며 돈다.
+    #  ⇒ 배치는 프롬프트가 말한다.
+    #
+    # ⚠ `down` 32 · 생성 512×256 (2:1) ⇒ 최종 **32×16**. 근거는 `fx_tuning.FX_SIZES.bolt_px` 8
+    #  (반경 8 = 머리 지름 16)이고, 머리만으로 16×16을 꽉 채워 **꼬리 자리가 0이라** 왼쪽을 16px 늘렸다.
+    "bolt": {
+        "style": "pixel art projectile, only bright glowing hot colors, "
+                 "on a pure solid black background, "
+                 "no dark outline, no shading, no gradient background, "
+                 "no text, no character, no frame, no border",
+        "lora": 0.0, "size": 512, "down": 32, "steps": 28, "cfg": 5.0,
     },
     # 조립창 — 펼친 마도서. ⚠ 9-slice 로 늘리면 모서리가 어긋난다(원본 PROMPTS.md 실측).
     "ui": {

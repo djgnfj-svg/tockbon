@@ -22,3 +22,6 @@ Godot_v*.exe
 
 # 에셋 생성 후보 — 한 번에 수십 장씩 나온다. 🔴 **고른 것만** assets/ 로 옮겨 커밋한다.
 tools/pixel/out/
+
+# 파이썬 도구 캐시
+tools/pixel/__pycache__/
