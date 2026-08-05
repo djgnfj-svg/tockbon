@@ -1,0 +1,61 @@
+{
+  "1": {
+    "class_type": "UNETLoader",
+    "inputs": { "unet_name": "flux-2-klein-base-4b-fp8.safetensors", "weight_dtype": "default" }
+  },
+  "2": {
+    "class_type": "CLIPLoader",
+    "inputs": { "clip_name": "qwen_3_4b.safetensors", "type": "flux2" }
+  },
+  "3": {
+    "class_type": "VAELoader",
+    "inputs": { "vae_name": "flux2-vae.safetensors" }
+  },
+  "4": {
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": { "title": "pixel LoRA (0 = off for tiles)" },
+    "inputs": {
+      "model": ["1", 0],
+      "lora_name": "pixel_4walk_small.safetensors",
+      "strength_model": 0.0
+    }
+  },
+  "20": {
+    "class_type": "SeamlessTile",
+    "_meta": { "title": "circular padding on the model" },
+    "inputs": { "model": ["4", 0], "tiling": "enable", "copy_model": "Make a copy" }
+  },
+  "21": {
+    "class_type": "MakeCircularVAE",
+    "_meta": { "title": "circular padding on the VAE" },
+    "inputs": { "vae": ["3", 0], "tiling": "enable", "copy_vae": "Make a copy" }
+  },
+  "5": {
+    "class_type": "CLIPTextEncode",
+    "inputs": { "clip": ["2", 0], "text": "seamless pixel art grass texture, top-down RPG tileset" }
+  },
+  "6": {
+    "class_type": "CLIPTextEncode",
+    "inputs": { "clip": ["2", 0], "text": "" }
+  },
+  "7": {
+    "class_type": "CFGGuider",
+    "inputs": { "model": ["20", 0], "positive": ["5", 0], "negative": ["6", 0], "cfg": 5.0 }
+  },
+  "8": { "class_type": "KSamplerSelect", "inputs": { "sampler_name": "euler" } },
+  "9": { "class_type": "Flux2Scheduler", "inputs": { "steps": 28, "width": 512, "height": 512 } },
+  "10": { "class_type": "EmptyFlux2LatentImage", "inputs": { "width": 512, "height": 512, "batch_size": 1 } },
+  "11": { "class_type": "RandomNoise", "inputs": { "noise_seed": 1 } },
+  "12": {
+    "class_type": "SamplerCustomAdvanced",
+    "inputs": {
+      "noise": ["11", 0], "guider": ["7", 0], "sampler": ["8", 0],
+      "sigmas": ["9", 0], "latent_image": ["10", 0]
+    }
+  },
+  "13": { "class_type": "VAEDecode", "inputs": { "samples": ["12", 0], "vae": ["21", 0] } },
+  "14": {
+    "class_type": "SaveImage",
+    "inputs": { "images": ["13", 0], "filename_prefix": "pixel/tile" }
+  }
+}
