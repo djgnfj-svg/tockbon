@@ -38,15 +38,27 @@ const Tuning := preload("res://src/sim/sim_tuning.gd")
 ## 🔴 뷰포트가 1920×1080px이고 셀이 4px이라 **보이는 건 480×270셀**이다.
 ##  격자를 그보다 크게 잡은 것은 여백이고, **무대는 보이는 끝 안에 있어야 한다**(`stage.gd` MAP 주석).
 ## ⚠ 32px 전환에서 ×2 됐다(전: 256×144). **셀은 여전히 4px이다** — 바뀐 것은 뷰포트다.
-const W := 512
-const H := 288
+## 🔴🔴 **2026-08-06, 사용자가 그린 "1스테이지" 실물(312×126타일)을 담으려고 다시 키웠다**
+##  (전: 512×288셀 = 64×36타일). W는 2의 거듭제곱이어야 해서 312타일(2496셀)이 그대로 안 들어가고
+##  **4096셀(512타일)로 반올림됐다** — 오른쪽에 약 200타일 여백이 남는다. `terrain_baker.gd`가
+##  그린 영역이 이 용량을 넘으면 조용히 안 자르고 여기서 짖는다(굽기 실패) — 더 커지면 또 온다.
+const W := 4096
+const H := 1008
 
 ## 🔴 `idx = (y << X_SHIFT) | x`. W가 2의 거듭제곱이라 **곱셈이 사라진다** —
 ##  내부 루프에서 상시 계산되는 값이라 이게 그대로 성능이다.
 ##  ⚠ W를 바꾸면 여기도 바꿔야 한다. `_init()`이 안 맞으면 짖는다.
-const X_SHIFT := 9
+const X_SHIFT := 12
 const X_MASK := W - 1
-const CELL_COUNT := W * H  # 147,456
+## 🔴🔴 **4,128,768셀이다.** 2026-08-06에 맵이 커지며 28배가 됐고(전: 147,456),
+##  그 값에 기대던 실측 주석 넷이 안 따라와서 **하루 동안 조용히 거짓이었다**(2026-08-07에 다시 쟀다).
+##  ⇒ **W·H를 바꾸는 사람은 이 상수를 읽는 곳이 아니라 「147,456」 같은 숫자가 박힌
+##   주석을 찾아야 한다.** 코드는 파생되지만 주석은 안 따라온다.
+##
+## 🔴🔴 **물을 만들 사람이 제일 먼저 알아야 할 값이다** — GDScript로 이 격자를 **한 번 훑는 데
+##  62,676μs**(2026-08-07 실측, 헤드리스). 20Hz 틱 예산이 50,000μs이므로 **훑기 한 번이 예산의 125%**다.
+##  ⇒ **청크 재우기 없이는 물이 원리적으로 불가능하다.** 「일단 만들고 느리면 최적화」가 안 되는 자리다.
+const CELL_COUNT := W * H  # 4,128,768
 
 # ─── 커맨드 — 격자를 바꾸는 유일한 문 ──────────────────────────────
 enum { CMD_FILL = 0, CMD_RESET = 1, CMD_BLAST = 2, CMD_IGNITE = 3, CMD_CARVE = 4 }
@@ -58,6 +70,7 @@ var _aux := PackedByteArray()   # 🔴 의미는 `cell_materials.gd`의 `_aux` �
 
 ## 부팅 때 구운 평면 테이블 — 내부 루프는 이것만 인덱싱한다.
 var _behavior := PackedByteArray()
+var _indestructible := PackedByteArray()
 var _fuel := PackedByteArray()
 
 ## 🔴🔴 **불의 파면 목록 — 지금 타는 셀의 인덱스다.** 격자를 훑지 않는다.
@@ -93,6 +106,7 @@ func _init() -> void:
 	_burn_slot.fill(-1)
 	_behavior = Mat.bake_behavior()
 	_fuel = Mat.bake_fuel()
+	_indestructible = Mat.bake_indestructible()
 	# 조용히 어긋나는 자리라 부팅에서 짖게 한다 — 인덱싱이 통째로 틀리면
 	# 증상이 「격자가 이상하다」로만 나온다.
 	if (1 << X_SHIFT) != W:
@@ -299,6 +313,9 @@ func _disc(cx: int, cy: int, rd: int, destroy: bool) -> void:
 			if dx * dx + dy2 > r2:
 				continue
 			if destroy:
+				# 🔴 못 부시는 재질(`Mat.BEDROCK` 등)은 여기서 걸러진다 — `_write_cell`을 아예 안 부른다.
+				if _indestructible[_mat[row | x]] == 1:
+					continue
 				_write_cell(row | x, Mat.EMPTY)
 			else:
 				_ignite_cell(x, y)
@@ -406,8 +423,12 @@ func is_solid(x: int, y: int) -> bool:
 	return _behavior[mat_at(x, y)] == Mat.BEHAVIOR_STATIC
 
 
-## 네이티브 `count()`라 147,456칸을 훑고도 ~20μs다(실측, 2026-08-04. 36,864칸일 때 ~5μs였다).
-## ⚠ **HUD가 프레임마다 2회 부른다**(돌·나무) — 60Hz에서 ~40μs = 예산의 0.24%.
+## 네이티브 `count()`지만 **한 번에 588μs다**(2026-08-07 실측, 4,128,768칸).
+## 🔴🔴 **이 줄은 2026-08-06까지 「~20μs · 예산의 0.24%」라고 적혀 있었고 그건 격자가 28배
+##  작던 때의 값이다.** 지금 **HUD가 프레임마다 2회 부르므로 60Hz에서 70,600μs/s = CPU의 7%**다.
+##  ⚠ **네이티브라서 싸다는 직관이 격자 크기 앞에서 깨진 자리다** — 훑는 칸 수에 그대로 비례한다.
+## 🔴 **고칠 자리는 여기가 아니라 부르는 쪽이다**(`stage.gd` HUD). 셈이 필요하면 `_write_cell`에서
+##  증분으로 들거나, 매 프레임이 아니라 N틱마다 부른다. 이 함수 자체는 그물과 무대의 문이라 남는다.
 func count_material(mat: int) -> int:
 	return _mat.count(mat)
 

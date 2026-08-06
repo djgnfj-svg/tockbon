@@ -11,8 +11,9 @@ extends RefCounted
 const EMPTY := 0
 const STONE := 1
 const WOOD := 2
+const BEDROCK := 3  ## 못 부시는 벽. 거동은 STONE과 같고(고체) 파괴만 안 먹는다 — 아래 `indestructible`.
 
-const ALL: Array[int] = [EMPTY, STONE, WOOD]
+const ALL: Array[int] = [EMPTY, STONE, WOOD, BEDROCK]
 
 ## 팔레트 슬롯 수. 🔴 셰이더의 `palette[16]`과 **같은 값이어야 한다.**
 ##  16을 넘기면 재료 id가 L8 정밀도 안전선(0~15)을 벗어난다.
@@ -49,6 +50,8 @@ const DEFS: Dictionary = {
 	EMPTY: {"name": &"빈칸", "behavior": BEHAVIOR_NONE, "fuel": 0, "rgb": 0x0E0E13},
 	STONE: {"name": &"돌", "behavior": BEHAVIOR_STATIC, "fuel": 0, "rgb": 0x5C574F},
 	WOOD: {"name": &"나무", "behavior": BEHAVIOR_STATIC, "fuel": 200, "rgb": 0x6B4524},
+	BEDROCK: {"name": &"기반암", "behavior": BEHAVIOR_STATIC, "fuel": 0, "rgb": 0x232228,
+		"indestructible": true},
 }
 
 ## 정의가 없는 슬롯의 색. 🔴 **일부러 마젠타다** — 재료를 늘렸는데 팔레트가 안 따라오면
@@ -76,6 +79,16 @@ static func bake_fuel() -> PackedByteArray:
 			push_error("Mat: %s 연료 %d가 바이트 범위 밖이다" % [DEFS[id]["name"], f])
 			f = clampi(f, 0, 255)
 		out[id] = f
+	return out
+
+
+## 🔴 파괴 경로(`cell_grid._disc`)가 훑는 값. 없는 재질은 파괴된다(기본값 false) — 새 재질을
+##  추가할 때 `DEFS`에 `"indestructible"`을 안 적으면 **부서지는 쪽이 기본**이라는 뜻이다.
+static func bake_indestructible() -> PackedByteArray:
+	var out := PackedByteArray()
+	out.resize(SLOT_COUNT)
+	for id: int in ALL:
+		out[id] = 1 if bool(DEFS[id].get("indestructible", false)) else 0
 	return out
 
 
