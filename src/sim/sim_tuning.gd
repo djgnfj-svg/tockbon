@@ -139,17 +139,28 @@ const ELEM_FIRE := 0
 ##  **룬이 진짜 축인지**를 깨끗하게 잰다(위 「룬이 하나뿐이라…」가 못 재던 것).
 const ELEM_NONE := 1
 
+## 🔴🔴 **물 룬 — 착탄 자리에 물을 만든다.**
+##  ⚠ **거동은 불·무와 같다**(속도·궤적). 갈리는 축은 여전히 「세상에 무엇을 남기는가」 하나다.
+## 🔴 **이 룬이 서면서 물의 두 출처가 다 열린다**(`docs/design/물.md` 「물이 어디서 오나」).
+##  맵에만 물이 있으면 **몬스터를 물가까지 끌고 가야** 젖히는데, 룬이 물을 만들면
+##  「적시고 → 감전」이 어디서나 성립한다 — 그게 GDD 테제(순서가 다르면 결과가 다르다)의 자리다.
+##  ⚠ **번개 룬은 아직 없다.** 그래서 젖음의 쓸모는 지금 화면뿐이다.
+const ELEM_WATER := 2
+
 ## 🔴 순회는 **반드시 이 명시 리스트로만** 한다. 값이 연속이라고 가정하면 나중에 은퇴한
 ##  자리가 생겼을 때 조용히 어긋난다.
-const ELEM_ALL: Array[int] = [ELEM_FIRE, ELEM_NONE]
+const ELEM_ALL: Array[int] = [ELEM_FIRE, ELEM_NONE, ELEM_WATER]
 
 ## 룬이 세상에 남기는 흔적의 종류.
-## ⚠ 물이 들어오면 `TRACE_WET`이 는다 — **자리를 미리 만들지 않는다.**
 const TRACE_IGNITE := 0
 
 ## 🔴 **「흔적이 없다」도 흔적의 한 종류다.** 빈 값이 아니라 이름이 있는 갈래여야
 ##  `spell_sim._rune_trace`가 「구현이 없는 룬」과 구별해서 짖을 수 있다.
 const TRACE_NONE := 1
+
+## 🔴 **착탄 자리를 적신다.** 이 파일이 「물이 들어오면 는다 — **자리를 미리 만들지 않는다**」고
+##  적어 뒀던 자리이고, **오늘이 그 날이다**(2026-08-07).
+const TRACE_WET := 2
 
 ## 🔴🔴 **룬이 세상에 닿는 유일한 표다. 룬 하나 추가 = 여기 한 줄.**
 ##
@@ -162,6 +173,7 @@ const TRACE_NONE := 1
 const ELEM_DEFS: Dictionary = {
 	ELEM_FIRE: {"trace": TRACE_IGNITE},
 	ELEM_NONE: {"trace": TRACE_NONE},
+	ELEM_WATER: {"trace": TRACE_WET},
 }
 
 # ─── 문양 목록의 비트 폭 ──────────────────────────────────────────
@@ -193,6 +205,7 @@ const GLYPH_MAX_LAYERS := 7
 ##
 ## 🔴 **「작은 것들이 약한 것」이 성능까지 살린다**(GDD) — 반경이 절반이면 면적은 1/4이다.
 ##
+##   water_r   🔴 **물 룬이 적시는 반경(셀).** 문양과 무관하다 — `rune_r` 의 물 쪽 짝이다
 ##   speed     발사 속도(셀/틱). 항력 사거리 상한 = speed / (1 − DRAG) 이므로 **사거리도 여기서 나온다**
 ##   rd        폭발 반경(셀). v1 실측에서 12는 「문을 연다」, 6은 「긁는다」로 이름이 갈렸다
 ##   ignite_r  폭발의 점화 반경(셀). 🔴 **rd보다 커야 한다** — 아래 `blast_ignite_r` 주석
@@ -229,9 +242,16 @@ const GLYPH_MAX_LAYERS := 7
 ##   (1 < 2) ⇒ `net_tables._gen_tables` 가 세대마다 잰다.
 ##  ⚠ 값의 근거는 사용자 판정이다 — 「반경 2셀 = 구멍 지름 타일 절반」. 벽 한 장(8셀)을
 ##   뚫으려면 **여러 발**이고 폭발은 **한 방**이다. 그 대비가 이 값이 고른 자리다.
+## 🔴🔴 **`water_r` 은 `rune_r` 과 같은 값으로 시작한다.** 둘 다 「룬이 착탄에 남기는 흔적의 반경」이라
+##  같은 뜻이고, **다르게 둘 근거가 아직 없다** — 불과 물이 화면에서 어느 쪽이 커 보여야 하는지는
+##  아무도 안 봤다. ⚠ **열을 따로 둔 이유**는 그 근거가 생기는 날 **한쪽만** 움직일 수 있어야 해서다.
+##  🔴 `rune_r` 을 그대로 쓰면 그날 「불을 줄였더니 물도 줄었다」가 된다.
+## ⚠ **`carve_r < water_r` 도 성립해야 한다** — 파기(①)가 흔적(②)보다 먼저라, 같거나 크면
+##  **판 자리를 물이 채우는 게 아니라 물이 놓일 자리를 파기가 먼저 지운다.** 세대 1은 여유가 1칸뿐이다.
+##  🔴 `net_tables` 가 `rune_r` 에 대해 이미 그 부등식을 재고 있고, `water_r` 도 같이 재야 한다.
 const SIM_SIZES: Array[Dictionary] = [
-	{"speed": 20, "rd": 8, "ignite_r": 12, "rune_r": 6, "carve_r": 2},
-	{"speed": 12, "rd": 4, "ignite_r": 6, "rune_r": 2, "carve_r": 1},
+	{"speed": 20, "rd": 8, "ignite_r": 12, "rune_r": 6, "carve_r": 2, "water_r": 6},
+	{"speed": 12, "rd": 4, "ignite_r": 6, "rune_r": 2, "carve_r": 1, "water_r": 2},
 ]
 
 ## 🔴🔴 **크기 하한 — 여기 닿으면 확산이 안 걸린다**(GDD 「크기 하한」).
@@ -390,6 +410,14 @@ static func rune_r(gen: int) -> int:
 ##  그게 정확히 2026-08-05 이전 상태였고 그물은 내내 초록이었다.
 static func carve_r(gen: int) -> int:
 	return int(SIM_SIZES[_gen_row(gen)]["carve_r"])
+
+
+## 🔴🔴 **물 룬이 적시는 반경.** `rune_r` 의 물 쪽 짝이고 같은 계약을 진다 —
+##  **`carve_r` 보다 커야 한다**(위 `SIM_SIZES` 주석). 작으면 파기가 물 놓을 자리를 먼저 지운다.
+## ⚠ 착탄점은 **빈칸**(맞은 고체의 직전 칸)이다. 반경이 0이면 이웃에 못 닿아 **아무 일도 안 난다** —
+##  `rune_r` 과 정확히 같은 이유로 세대 1도 0이 아니다.
+static func water_r(gen: int) -> int:
+	return int(SIM_SIZES[_gen_row(gen)]["water_r"])
 
 
 static func _gen_row(gen: int) -> int:

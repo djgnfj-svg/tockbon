@@ -537,9 +537,14 @@ const ELEM_FX: Dictionary = {
 	#  ⚠ 후보 셋을 **버린 이유**가 이 줄의 값어치다:
 	#   · 회색 — 🔴 **룬 자리가 비면 지팡이 끝이 이미 회색이다.** 「못 쏜다」와 「무속성으로 쏜다」가
 	#     화면에서 같아지고, 그 구별은 `spell-circle-minimum` §3.5가 세운 경고의 전부다
-	#   · 파랑/청록 — 물 룬이 오는 날 그 자리다(`sim_tuning`의 `TRACE_WET` 주석)
+	#   · 파랑/청록 — 🔴 **2026-08-07에 물 룬이 실제로 그 자리를 가져갔다**(아래 줄)
 	#   · 마젠타 — 아래 `ELEM_FX_MISSING`의 비명 색이다. 정상 룬이 그 색이면 비명이 안 들린다
 	Tuning.ELEM_NONE: {"core": Color(0.85, 0.80, 1.0), "glow": Color(0.55, 0.35, 1.0)},
+	# 🔴 **물 — 청록(~190°).** 불(주황 ~30°)·무속성(보라 ~270°)과 색상환에서 셋 다 멀다.
+	#  ⚠ **셀의 물 색과 같은 계열이어야 한다**(`WATER_SHALLOW` · `DEFS[WATER].rgb`) —
+	#   탄이 청록인데 만들어지는 물이 남색이면 **「이 탄이 저 물을 만든다」가 화면에서 안 이어진다.**
+	#  🔴 **렌더가 가산 합성이라 여기 값은 셀 색보다 밝다** — 같은 색을 그대로 쓰면 자취가 죽는다.
+	Tuning.ELEM_WATER: {"core": Color(0.72, 0.97, 1.0), "glow": Color(0.20, 0.62, 0.95)},
 }
 
 ## 정의가 없는 룬의 색. 🔴 **일부러 마젠타다** — 룬을 늘렸는데 여기를 안 늘리면
@@ -561,12 +566,12 @@ const ELEM_FX_MISSING: Dictionary = {
 ##  즉 **검은 배경이 그대로 투명 노릇을 한다.** ⚠ 뒤집어 말하면 **어두운 색은 화면에 안 나온다** —
 ##  그림에 외곽선이나 음영을 넣으면 그 자리가 뚫려 보인다.
 ##
-## ⚠ **`assets/spell/` 에 `bolt_water.png` · `bolt_thunder.png` 가 이미 있는데 여기 없다.**
-##  🔴 **빠뜨린 게 아니다** — `sim_tuning.ELEM_ALL` 이 불·무 둘뿐이라 **그 룬이 아직 없다.**
-##  룬이 생기는 날 여기 두 줄을 더한다. 그림은 그때까지 안 쓰인다.
+## ⚠ **`bolt_thunder.png` 는 아직 여기 없다.** 🔴 **빠뜨린 게 아니다** — 번개 룬이 아직 없다.
+##  물은 2026-08-07에 룬이 서면서 한 줄 늘었다. **번개가 서는 날 한 줄 더 는다.**
 const BOLT_SHEETS: Dictionary = {
 	Tuning.ELEM_FIRE: "res://assets/spell/bolt_fire.png",
 	Tuning.ELEM_NONE: "res://assets/spell/bolt_none.png",
+	Tuning.ELEM_WATER: "res://assets/spell/bolt_water.png",
 }
 
 static func elem_fx(element: int) -> Dictionary:

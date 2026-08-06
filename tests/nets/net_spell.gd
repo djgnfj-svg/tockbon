@@ -1008,6 +1008,14 @@ func _every_rune_traces(t) -> void:
 			#  요구한다. 안 하면 「무속성이면 발사가 거부된다」는 버그가 다시 초록이 된다.
 			t.ok(changed > 0,
 				"룬 %d(흔적 없음): 그래도 격자를 판다 (%d칸)" % [element, changed])
+		elif trace == Tuning.TRACE_WET:
+			# 🔴 **불 갈래의 거울이다.** 같은 자리·같은 조합으로 쏘고, **남는 것만** 다르다.
+			#  ⇒ 같은 루프의 불 룬이 그대로 대조군이 된다(위 주석의 어법).
+			t.ok(g.count_material(Mat.WATER) > 0,
+				"룬 %d(적심): 물이 생긴다 (%d칸)" % [element, g.count_material(Mat.WATER)])
+			# 🔴 **물 룬은 불을 안 붙인다.** 반대쪽을 안 재면 「모든 룬이 다 한다」가 통과한다.
+			t.eq(g.burning_count(), 0, "룬 %d(적심): 불은 한 칸도 안 붙는다" % element)
+			t.ok(changed > 0, "룬 %d(적심): 격자가 실제로 변했다 (%d칸)" % [element, changed])
 		else:
 			t.ok(false, "흔적 종류 %d에 이 그물이 단언을 안 갖고 있다 (룬 %d)" % [trace, element])
 

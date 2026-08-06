@@ -267,7 +267,11 @@ func _gen_tables(t) -> void:
 	t.ok(sim.size() >= Tuning.SPLIT_MAX + 1,
 		"표가 SPLIT_MAX(%d)까지 덮는다 (%d줄)" % [Tuning.SPLIT_MAX, sim.size()])
 
-	_strictly_decreasing(t, sim, "SIM_SIZES", ["speed", "rd", "ignite_r", "rune_r", "carve_r"])
+	# 🔴🔴 **열을 늘리면 이 목록에도 이름을 더해야 한다.** 안 더하면 아무도 안 재는데
+	#  통과 수는 그대로 초록이다 — 이 파일이 `damage` 열로 실측해서 그렇게 적어 뒀다.
+	#  ⚠ `water_r` 은 2026-08-07에 물 룬이 서면서 늘었다.
+	_strictly_decreasing(t, sim, "SIM_SIZES",
+		["speed", "rd", "ignite_r", "rune_r", "carve_r", "water_r"])
 	_strictly_decreasing(t, fx, "FX_SIZES", ["bolt_px", "trail_ticks", "flash_px", "shake_px"])
 
 	# 🔴 점화 반경이 파괴 반경보다 커야 불이 붙는다 — **세대마다** 성립해야 한다.
@@ -296,6 +300,12 @@ func _gen_tables(t) -> void:
 		t.ok(Tuning.carve_r(gen) < Tuning.rune_r(gen),
 			"세대 %d의 파는 반경이 룬 흔적보다 작다 (%d < %d)" % [
 				gen, Tuning.carve_r(gen), Tuning.rune_r(gen)])
+		# 🔴 **물 흔적도 같은 계약을 진다.** 파기가 먼저라 같거나 크면 **물이 놓일 자리를
+		#  파기가 먼저 지운다** — 불 쪽 함정의 물 판이고 똑같이 조용하다.
+		t.ok(Tuning.water_r(gen) > 0, "세대 %d의 물 흔적 반경이 0이 아니다" % gen)
+		t.ok(Tuning.carve_r(gen) < Tuning.water_r(gen),
+			"세대 %d의 파는 반경이 물 흔적보다 작다 (%d < %d)" % [
+				gen, Tuning.carve_r(gen), Tuning.water_r(gen)])
 
 	# 클램프가 실제로 도나. 표 밖 세대에서 죽으면 확산 상한을 올릴 때 그 자리가 터진다.
 	var last := sim.size() - 1

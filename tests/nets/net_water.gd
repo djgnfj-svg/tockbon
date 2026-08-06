@@ -49,6 +49,9 @@ func run(t) -> void:
 	_sleeping_grid_is_cheap(t)
 	# ── 단계 4 ──
 	_shallow_bit_tracks_the_amount(t)
+	# ── 단계 5 ──
+	_water_disc_fills_without_wiping(t)
+	_water_rune_makes_water(t)
 
 
 ## 🔴 격자와 청크가 안 나눠떨어지면 가장자리 셀이 **범위 밖 청크를 찍는다.**
@@ -1109,6 +1112,103 @@ func _shallow_bit_tracks_the_amount(t) -> void:
 	# 🔴 **양쪽이 실제로 나왔다는 증거.** 한쪽이 0이면 위 검사가 절반만 돈 것이다.
 	t.ok(shallow_cells > 0, "얕은 칸이 실제로 생긴다 (%d칸 — 수면 쪽이다)" % shallow_cells)
 	t.ok(deep_cells > 0, "깊은 칸도 남는다 (%d칸 — 그릇 속이다)" % deep_cells)
+
+
+# ══════════════════════════════════════════════════════════════════
+#  단계 5 — 물 룬
+# ══════════════════════════════════════════════════════════════════
+
+const SpellSim := preload("res://src/sim/spell_sim.gd")
+
+## 🔴🔴 **`CMD_WATER` 는 `_write_cell` 을 지나면 안 된다.** 지나면 재료만 WATER 이고 **양이 0**인
+##  칸이 생기고, 그 칸은 첫 순회에서 조용히 증발한다(`cmd_fill` 이 데인 자리와 같다).
+## 🔴 **덮어쓰지 않고 채운다** — 얕은 값으로 깊은 물을 덮으면 **물 룬이 물을 줄인다.**
+func _water_disc_fills_without_wiping(t) -> void:
+	var g := CellGrid.new()
+	g.apply(CellGrid.cmd_water(300, 300, 6, 200))
+	var got := _water_scan(g, 280, 280, 320, 320)
+	t.ok(got[1] > 0, "물 커맨드가 칸을 적신다 (%d칸)" % got[1])
+	t.eq(got[2], 200, "양이 커맨드가 준 값 그대로 들어간다 (증발하지 않는다)")
+	t.eq(g.aux_at(300, 300), 200, "한가운데도 200이다")
+	# 🔴 **원반이다.** 네모면 모서리도 젖는다 — `_disc` 와 같은 모양이어야 한다.
+	t.eq(g.aux_at(306, 306), 0, "원 밖 모서리는 안 젖는다")
+	t.eq(g.aux_at(306, 300), 200, "원 안 끝은 젖는다")
+
+	# 🔴 **더 깊은 물을 얕은 값으로 안 덮는다.**
+	g.set_water(300, 300, Tuning.WATER_MAX)
+	g.apply(CellGrid.cmd_water(300, 300, 6, 100))
+	t.eq(g.aux_at(300, 300), Tuning.WATER_MAX, "깊은 칸이 얕은 값으로 안 줄어든다")
+	t.eq(g.aux_at(302, 300), 200, "옆 칸도 원래 값(200)보다 안 줄어든다")
+
+	# 지형은 안 건드린다 — 물 룬은 파괴가 아니다.
+	var h := CellGrid.new()
+	h.apply(CellGrid.cmd_fill(400, 400, 420, 420, Mat.STONE))
+	h.apply(CellGrid.cmd_water(410, 410, 6, Tuning.WATER_MAX))
+	t.eq(h.mat_at(410, 410), Mat.STONE, "돌은 물로 안 바뀐다")
+	t.eq(h.count_material(Mat.WATER), 0, "고체 속에는 물이 한 칸도 안 생긴다")
+
+	# 🔴 타는 칸도 건너뛴다 — 파면에 유령이 남는 경로다.
+	var f := CellGrid.new()
+	f.apply(CellGrid.cmd_fill(500, 500, 510, 500, Mat.WOOD))
+	f.ignite(505, 500)
+	f.apply(CellGrid.cmd_water(505, 500, 4, Tuning.WATER_MAX))
+	t.eq(f.unburnable_in_front_count(), 0, "타는 칸에 물을 부어도 파면이 안 오염된다")
+	t.eq(f.claimed_slot_count(), f.burning_count(), "자리 표도 맞다")
+
+	# 범위 밖 양은 짖고 버린다.
+	t.expect_error("CellGrid.cmd_water: 양")
+	var b := CellGrid.new()
+	b.apply(CellGrid.cmd_water(600, 600, 4, Tuning.WATER_MAX + 1))
+	t.eq(b.count_material(Mat.WATER), 0, "범위 밖 양은 한 칸도 안 적신다")
+
+	# 청크를 깨운다 — 안 깨우면 만든 물이 그 자리에 얼어붙는다.
+	var w := CellGrid.new()
+	w.apply(CellGrid.cmd_water(700, 700, 6, Tuning.WATER_MAX))
+	w.step()
+	t.ok(w.chunk_awake_at(700, 700), "적신 자리의 청크가 깨어난다")
+
+
+## 🔴🔴 **물 룬으로 쏘면 물이 생기고, 다른 룬으로 쏘면 안 생긴다.**
+##  ⚠ **반대쪽을 같이 재는 것이 요점이다** — 「물이 생긴다」만 재면 **모든 착탄이 물을 만드는**
+##   구현도 통과하고, 그건 룬이 축이 아니게 된 것이다.
+func _water_rune_makes_water(t) -> void:
+	for element in Tuning.ELEM_ALL:
+		var g := CellGrid.new()
+		var spell := SpellSim.new()
+		# 벽을 세우고 그 앞으로 쏜다 — 착탄이 확실히 나야 잰다.
+		g.apply(CellGrid.cmd_fill(400, 0, 400, 400, Mat.STONE))
+		t.ok(spell.fire(SpellSim.cmd_fire(300, 200, 1, 0, element, 0)),
+			"룬 %d 로 발사된다 (검사의 전제)" % element)
+		var hit := false
+		for _i in 60:
+			spell.step(g)
+			if spell.active_count() == 0:
+				hit = true
+				break
+		t.ok(hit, "룬 %d 의 탄이 벽에 닿는다" % element)
+
+		var total: int = _water_scan(g, 380, 180, 420, 220)[0]
+		if element == Tuning.ELEM_WATER:
+			t.ok(total > 0, "물 룬은 착탄점에 물을 만든다 (합 %d)" % total)
+			# ⚠ **격자를 한 틱 밀어야 본다.** `spell.step()` 은 격자의 flip 을 안 돌린다 —
+			#  커맨드는 `_dirty` 만 찍고 `awake` 가 되는 것은 `_chunk_flip()` 이다.
+			#  🔴 그걸 모르고 바로 보면 늘 거짓이라 「안 깨운다」로 오진한다(실제로 그랬다).
+			g.step()
+			t.ok(g.active_chunk_count() > 0,
+				"착탄이 만든 물이 청크를 깨운다 (%d개)" % g.active_chunk_count())
+		else:
+			t.eq(total, 0, "룬 %d 는 물을 한 톨도 안 만든다" % element)
+
+	# 🔴 **세기마다 다른 양이 반경에서 파생되나.** 세대가 깊어지면 원반이 작아지므로 총량도 준다.
+	t.ok(Tuning.water_r(1) < Tuning.water_r(0),
+		"세대 1의 물 반경이 세대 0보다 작다 (%d < %d)" % [Tuning.water_r(1), Tuning.water_r(0)])
+	var a := CellGrid.new()
+	a.apply(CellGrid.cmd_water(800, 800, Tuning.water_r(0), Tuning.WATER_MAX))
+	var b := CellGrid.new()
+	b.apply(CellGrid.cmd_water(800, 800, Tuning.water_r(1), Tuning.WATER_MAX))
+	var sum_a: int = _water_scan(a, 780, 780, 820, 820)[0]
+	var sum_b: int = _water_scan(b, 780, 780, 820, 820)[0]
+	t.ok(sum_b < sum_a, "깊은 세대가 만드는 물이 더 적다 (%d < %d)" % [sum_b, sum_a])
 
 
 ## 사각형 안의 물을 한 번에 훑는다 ⇒ `[합, 물 칸 수, 최대 양]`.

@@ -75,7 +75,7 @@ const CHUNK_H := H / Tuning.CHUNK_CELLS      # 63  ← 밴드 수
 const CHUNK_COUNT := CHUNK_W * CHUNK_H       # 16,128
 
 # ─── 커맨드 — 격자를 바꾸는 유일한 문 ──────────────────────────────
-enum { CMD_FILL = 0, CMD_RESET = 1, CMD_BLAST = 2, CMD_IGNITE = 3, CMD_CARVE = 4 }
+enum { CMD_FILL = 0, CMD_RESET = 1, CMD_BLAST = 2, CMD_IGNITE = 3, CMD_CARVE = 4, CMD_WATER = 5 }
 
 # ─── 상태 ─────────────────────────────────────────────────────────
 var _mat := PackedByteArray()   # 재료 id
@@ -313,6 +313,36 @@ func _write_water(i: int, amount: int) -> void:
 	# 안 세면 물이 움직여도 **화면이 안 올라간다**(`_changed` 가 「다시 그리나」의 단일 소스다).
 	_changed += 1
 	_touch(i)
+
+
+## 정수 원반을 적신다. 🔴 **`_disc` 의 물 쪽 짝이고, 원반을 그리는 규칙이 그것과 같아야 한다** —
+##  따로 짜면 한쪽만 원이고 한쪽만 네모가 되는 날이 온다(그 함수 주석과 같은 이유).
+##
+## 🔴🔴 **`_write_water` 를 부른다. `_write_cell` 이 아니다** — 그건 양을 0으로 만든다.
+## ⚠ **덮어쓰지 않고 채운다**(`maxi`). 이미 더 깊은 물이 있는 칸을 얕은 값으로 덮으면
+##  **물 룬이 물을 줄이는** 일이 나고, 그건 「적신다」의 뜻이 아니다.
+## ⚠ 고체는 건너뛴다 — 돌을 물로 바꾸는 것은 파괴의 일이고, 물 룬은 지형을 안 건드린다.
+## ⚠ 격자 밖은 **클램프**다(`_disc` 와 같다).
+func _water_disc(cx: int, cy: int, r: int, amount: int) -> void:
+	var r2 := r * r
+	var ax := maxi(0, cx - r)
+	var bx := mini(W - 1, cx + r)
+	var ay := maxi(0, cy - r)
+	var by := mini(H - 1, cy + r)
+	for y in range(ay, by + 1):
+		var dy := y - cy
+		var dy2 := dy * dy
+		var row := y << X_SHIFT
+		for x in range(ax, bx + 1):
+			var dx := x - cx
+			if dx * dx + dy2 > r2:
+				continue
+			var i := row | x
+			# 🔴 `_write_water` 의 계약(EMPTY 나 WATER 위에만) 을 여기서 지킨다 —
+			#  타는 칸에 쓰면 파면에 **소속을 주장하는 유령**이 남는다(`set_water` 와 같은 자리).
+			if _mat[i] != Mat.EMPTY and _mat[i] != Mat.WATER:
+				continue
+			_write_water(i, maxi(_aux[i], amount))
 
 
 ## 🔴🔴 **물 한 틱.** 순회 순서는 **파일 머리의 계약 그대로다** — 새로 정하지 않았다.
@@ -608,6 +638,20 @@ static func cmd_carve(x: int, y: int, r: int) -> Dictionary:
 	return {"kind": CMD_CARVE, "x": x, "y": y, "r": r}
 
 
+## **적시기만.** 🔴 지형을 한 칸도 안 부수고 불도 안 붙인다 — 물 룬의 흔적이 지나는 문이다.
+##
+## 🔴🔴 **`cmd_ignite` 의 물 쪽 거울이고, `cmd_carve` 와 나란한 세 번째 흔적이다.**
+##  ⚠ **`_disc` 로는 못 만든다** — 그 함수는 `_write_cell` 을 부르고 그건 `_aux` 를 0으로 만든다.
+##   물이 그 문을 지나면 **양이 그 자리에서 증발한다**(재료만 WATER, 양은 0). 에러는 0이다.
+##   ⇒ `_water_disc()` 가 따로 있고 `_write_water` 를 부른다.
+##
+## 🔴 **양을 커맨드가 들고 다닌다.** 반경만 보내고 양을 격자가 정하면, 세기마다 다른 물을
+##  만들려 할 때 **`sim_tuning` 과 `cell_grid` 두 곳이 그 규칙을 나눠 갖게 된다.**
+## 🔴 **커맨드라서 대역폭이 공짜다** — 네 정수면 각 클라가 같은 원반을 적신다(`cmd_blast` 와 같다).
+static func cmd_water(x: int, y: int, r: int, amount: int) -> Dictionary:
+	return {"kind": CMD_WATER, "x": x, "y": y, "r": r, "amount": amount}
+
+
 func apply(cmd: Dictionary) -> void:
 	match int(cmd.get("kind", -1)):
 		CMD_FILL:
@@ -625,6 +669,15 @@ func apply(cmd: Dictionary) -> void:
 			var cr := int(cmd["r"])
 			if cr > 0:
 				_disc(int(cmd["x"]), int(cmd["y"]), cr, true)
+		CMD_WATER:
+			var wr := int(cmd["r"])
+			var amount := int(cmd["amount"])
+			# ⚠ 범위 검사는 **커맨드 경계에서 한 번만**이다(`_valid_mat` 과 같은 어법) —
+			#  안쪽 원반 루프가 셀마다 보면 그게 곧 비용이고, 여기 한 번이면 충분하다.
+			if amount < 0 or amount > Tuning.WATER_MAX:
+				push_error("CellGrid.cmd_water: 양 %d 이 0~%d 밖이다" % [amount, Tuning.WATER_MAX])
+			elif wr > 0 and amount > 0:
+				_water_disc(int(cmd["x"]), int(cmd["y"]), wr, amount)
 		_:
 			push_error("CellGrid.apply: 모르는 커맨드 %s" % cmd)
 

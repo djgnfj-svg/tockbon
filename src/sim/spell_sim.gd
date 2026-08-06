@@ -463,6 +463,15 @@ func _rune_trace(grid: CellGrid, x: int, y: int, element: int, gen: int) -> void
 	if trace == Tuning.TRACE_IGNITE:
 		grid.apply(CellGrid.cmd_ignite(x, y, Tuning.rune_r(gen)))
 		return
+	# 🔴🔴 **물 룬의 흔적 — 불의 정확한 거울이다.** 같은 자리에 같은 모양으로, 남기는 것만 다르다.
+	#  ⚠ **양을 `WATER_MAX` 로 고정하고 세기는 반경으로만 낸다.** 「마법 세기마다 다른 양」은
+	#   `water_r` 이 세대마다 줄어드는 것으로 **파생된다** — 반경이 절반이면 물의 총량은 1/4이다.
+	#  🔴 양을 따로 표에 두면 **줄어야 하는 열이 하나 더 늘고**, 그 열이 안 줄어도
+	#   `net_tables` 에 이름을 안 적으면 아무도 안 잰다(그 파일의 `damage` 사례).
+	#   ⇒ **축을 하나로 유지한다.** 양이 따로 필요해지는 근거가 생기면 그때 연다.
+	if trace == Tuning.TRACE_WET:
+		grid.apply(CellGrid.cmd_water(x, y, Tuning.water_r(gen), Tuning.WATER_MAX))
+		return
 	# 🔴🔴 **이 `return` 하나가 무속성의 정의 전부다** — **흔적을 안 남긴다.**
 	#  ⚠ **「세상에 아무것도 안 한다」가 아니다.** 2026-08-05에 좁아졌다 — 파기가 `_impact` 의 ①로
 	#   올라가서 **무속성 탄도 구멍은 낸다.** 사용자가 「**일반 마법이랑** 불마법이」라고 둘 다
