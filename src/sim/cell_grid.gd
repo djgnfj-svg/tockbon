@@ -243,20 +243,35 @@ func _chunk_flip() -> void:
 ## 🔴 **8이웃을 다 찍지 않는다.** 깨어 있는 밴드 하나가 128μs이고 그건 **그 밴드의 청크 수와
 ##  무관하다**(verify-run 실측) — 넓게 깨우면 밴드 수가 늘어 그 항이 그대로 커진다.
 ##  ⇒ 아래·대각은 안 찍는다. 물은 위로도 대각으로도 안 온다.
-## 🔴🔴 **단계 3에서 좌우가 붙으면 여기에 좌우 이웃을 더해야 한다** — `_water_step` 이
-##  `(x±1, y)` 로 옮기기 시작하는 순간 **열 경계에서 같은 벽이 서고, 그쪽이 훨씬 자주 걸린다.**
-##  ⚠ 지금 미리 안 넣는 이유는 하나다: **옮기는 규칙이 없는 방향을 깨우면 재는 그물이 없다.**
+## 🔴🔴 **좌우도 깬다 — 단계 3에서 `_water_step` 이 `(x±1, y)` 로 옮기기 시작했기 때문이다.**
+##  ⚠ verify-run이 단계 2에서 「대각 경로가 없다」를 900틱 돌려 확인했는데 **그건 아래로만 가던
+##   때의 결론이고 좌우가 붙는 순간 무효다.** 그리고 **열 경계는 행 경계보다 훨씬 자주 걸린다.**
+## 🔴 **여전히 8이웃이 아니다.** 아래와 대각은 안 찍는다 — 물은 **아래에서도 대각에서도 안 온다.**
+##  실측(verify-run, 단계 2): 좁게 고른 대가로 밴드 항이 낙하 물 기준 **+1.7%**, 연속된 지형
+##  채우기는 **델타 0**이다(위 밴드가 이미 깨어 있다).
 func _touch(i: int) -> void:
 	_touch_chunk_of(i)
-	# 🔴 이 칸이 제 청크의 **첫 행**일 때만 위쪽 이웃이 다른 청크다. 아니면 위에서 이미 찍혔다.
-	if (i >> X_SHIFT) % Tuning.CHUNK_CELLS == 0 and i >= W:
+	var cc := Tuning.CHUNK_CELLS
+	var x := i & X_MASK
+	# 🔴 **경계에 걸린 칸만 이웃을 찍는다.** 안쪽 칸은 이웃이 같은 청크라 이미 찍혔다 —
+	#  안 거르면 `_fill_rect` 한 번이 `_touch_chunk_of` 를 네 배로 부른다.
+	if (i >> X_SHIFT) % cc == 0 and i >= W:
 		_touch_chunk_of(i - W)
+	if x % cc == 0 and x > 0:
+		_touch_chunk_of(i - 1)
+	elif x % cc == cc - 1 and x < W - 1:
+		_touch_chunk_of(i + 1)
 
 
 ## 셀 인덱스가 든 청크 하나를 dirty 로 찍는다.
 func _touch_chunk_of(i: int) -> void:
 	var band := (i >> X_SHIFT) / Tuning.CHUNK_CELLS
-	var c := band * CHUNK_W + ((i & X_MASK) / Tuning.CHUNK_CELLS)
+	_touch_chunk(band * CHUNK_W + ((i & X_MASK) / Tuning.CHUNK_CELLS), band)
+
+
+## 청크 인덱스로 직접 찍는다. ⚠ `band` 를 인자로 받는 이유는 **부르는 쪽이 이미 알기 때문**이다 —
+##  여기서 다시 나누면 내부 루프에 나눗셈이 하나 는다.
+func _touch_chunk(c: int, band: int) -> void:
 	# 🔴 밴드 요약은 **증분으로만** 유지된다 — 여기서 중복을 안 거르면 같은 청크를 여러 번
 	#  찍을 때 요약이 부풀고, 그러면 순회가 잠든 밴드를 깨어 있다고 읽는다(느려질 뿐 안 짖는다).
 	if _dirty[c] != 0:
@@ -294,8 +309,11 @@ func _write_water(i: int, amount: int) -> void:
 ## 🔴🔴 **물 한 틱.** 순회 순서는 **파일 머리의 계약 그대로다** — 새로 정하지 않았다.
 ##  밴드 아래→위 · 밴드 안 행도 아래→위 · **행 → 청크** · 열은 dir의 반대.
 ##
-## ⚠ **이번 단계는 아래로만 간다.** 좌우 나눔은 단계 3이다 — 그래서 지금은 평형이 **진짜로
-##  활성 청크 0**이 되고, 그게 「청크 재우기가 실제로 논다」의 가장 깨끗한 증거다.
+## 🔴🔴 **파일 머리의 「이동 도착지는 이미 지났거나 안 도는 자리」는 세로에만 성립한다.**
+##  가로는 성립하지 않고, **성립시킬 수도 없다** — 아래 `_water_spread` 주석에 이유가 있다.
+##  ⚠ 머리 주석은 v1의 **알갱이** 모델(한 틱에 한 방향으로만 미끄러진다)에서 왔고, 양 기반의
+##   좌우 평균내기는 **확산**이라 성질이 다르다. 🔴 **그 차이를 모르고 머리 주석만 읽으면
+##   「가로도 한 틱에 한 칸」으로 믿게 된다 — 아니다.**
 ##
 ## 🔴 **`_band_awake` 검사가 이 루프의 첫 줄인 이유**: 그 줄을 빼면 잠든 격자가
 ##  **5.25μs → 8,114μs/틱 = 예산의 16%** 다(실측 · `_band_awake` 주석에 표).
@@ -306,13 +324,10 @@ func _write_water(i: int, amount: int) -> void:
 ##  ⚠ **그리고 이건 아래로만 가는 단계의 값이라 하한이다** — 좌우 나눔이 붙으면 더 는다.
 ##  🔴 **값을 여기서 안 바꾼다.** 상한은 단계 3에서 서고, 정하는 것은 판정 7(FPS)이다.
 func _water_step() -> void:
-	# 🔴 dir 은 `_tick` 에서 파생시킨다 — **상태를 새로 안 든다.** `_tick` 이 이미 결정론적이라
-	#  따로 들면 그 둘이 갈라지는 날이 오고, 갈라진 쪽은 멀티에서만 보인다.
-	# ⚠🔴 **지금 dir 은 아무 일도 안 한다.** 아래로만 가는 단계라 좌우 대칭이 원리적으로 없고,
-	#  **통째로 지워도 그물이 하나도 안 짖는다**(2026-08-07에 확인했다). 순회 방향만 뒤집을 뿐이다.
-	#  ⇒ **소비자는 단계 3(좌우 나눔)에서 생긴다.** 그때 「좌우 편향 없음」 그물이 이걸 잰다.
-	var dir := 1 if (_tick & 1) == 0 else -1
+	var dir := _water_dir()
 	var cc := Tuning.CHUNK_CELLS
+	# 🔴🔴 **자르는 자리가 밴드 순회 「전」이다** — 그 함수 주석에 이유가 있다.
+	_cap_awake_chunks(dir)
 	var band := CHUNK_H - 1
 	while band >= 0:
 		if _band_awake[band] == 0:
@@ -323,50 +338,149 @@ func _water_step() -> void:
 		var y_top := band * cc
 		while y >= y_top:
 			var row := y << X_SHIFT
-			# 격자 맨 아래 행은 받을 곳이 없다. ⚠ 여기서 안 걸르면 `below` 가 격자를 넘는다.
-			if y < H - 1:
-				var below_row := row + W
-				# ⚠ **청크도 dir의 반대로 돈다.** 열 순서만 뒤집고 청크 순서를 안 뒤집으면
-				#  청크 경계에서 도착 칸이 아직 안 돈 상태가 되고, 그 물이 같은 틱에 또 움직인다.
-				var cx := (CHUNK_W - 1) if dir > 0 else 0
-				while cx >= 0 and cx < CHUNK_W:
-					if _awake[chunk_base + cx] != 0:
-						var x := (cx * cc + cc - 1) if dir > 0 else (cx * cc)
-						var n := cc
-						while n > 0:
-							var i := row | x
-							# 🔴 **재료 검사가 빠른 길이다** — 물이 한 칸도 없는 청크는
-							#  여기서 다 튕긴다(실측 12.5μs/청크, spec의 대리 측정).
-							if _mat[i] == Mat.WATER:
-								_water_fall(i, below_row | x)
-							x -= dir
-							n -= 1
-					cx -= dir
+			# 🔴 격자 맨 아래 행은 받을 곳이 없다. ⚠ 안 걸르면 `below` 가 격자를 넘고, 그건
+			#  매 틱 엔진 「Index out of bounds」다 — **단언에 안 잡히고 래퍼만 잡는다**(실측).
+			var can_fall := y < H - 1
+			var below_row := row + W
+			# ⚠ **청크도 dir의 반대로 돈다.** 열 순서만 뒤집고 청크 순서를 안 뒤집으면
+			#  청크 경계에서 도착 칸이 아직 안 돈 상태가 되고, 그 물이 같은 틱에 또 움직인다.
+			var cx := (CHUNK_W - 1) if dir > 0 else 0
+			while cx >= 0 and cx < CHUNK_W:
+				if _awake[chunk_base + cx] != 0:
+					var x := (cx * cc + cc - 1) if dir > 0 else (cx * cc)
+					var n := cc
+					while n > 0:
+						var i := row | x
+						# 🔴 **재료 검사가 빠른 길이다** — 물이 한 칸도 없는 청크는
+						#  여기서 다 튕긴다(실측 12.5μs/청크, spec의 대리 측정).
+						if _mat[i] == Mat.WATER:
+							_water_cell(i, x, row, below_row, can_fall, dir)
+						x -= dir
+						n -= 1
+				cx -= dir
 			y -= 1
 		band -= 1
 
 
-## 물 한 칸이 아래로 넘긴다. 아래 칸이 **받을 수 있는 만큼만** 간다.
-## 🔴 고체를 만나면 아무 일도 안 한다 — 그게 「돌이 물을 막는다」이고, 남은 양이 좌우로 가는 것은
-##  단계 3이다.
-func _water_fall(i: int, below: int) -> void:
+## 🔴 **dir 의 단일 소스.** `_water_step` 과 `_cap_awake_chunks` 가 **같은 값을 봐야 한다** —
+##  자르는 순서와 도는 순서가 갈리면 「잘린 청크」와 「안 돈 청크」가 달라지고, 그건 결정론이 아니라
+##  **한 틱에 두 번 도는 청크**로 나타난다. ⚠ 식을 두 곳에 적으면 한쪽만 고치는 날이 온다.
+## 🔴 `_tick` 에서 파생시킨다 — **상태를 새로 안 든다.** 매 틱 뒤집혀 좌우 편향을 없앤다.
+func _water_dir() -> int:
+	return 1 if (_tick & 1) == 0 else -1
+
+
+## 칸 하나: ① 아래로 넘기고 ② 남으면 좌우로 나눈다.
+func _water_cell(i: int, x: int, row: int, below_row: int, can_fall: bool, dir: int) -> void:
 	var amount := _aux[i]
+	if can_fall:
+		amount = _water_fall(i, below_row | x, amount)
+		if amount <= 0:
+			return
+	_water_spread(i, x, row, amount, dir)
+
+
+## ① 아래로. 아래 칸이 **받을 수 있는 만큼만** 간다. 남은 양을 돌려준다.
+## 🔴 고체를 만나면 아무 일도 안 한다 — 그게 「돌이 물을 막는다」이고, 남은 양은 ②로 간다.
+func _water_fall(i: int, below: int, amount: int) -> int:
 	var bm := _mat[below]
 	if bm == Mat.EMPTY:
 		# 빈칸은 통째로 받는다. 🔴 **두 번 다 `_write_water` 다** — 한쪽만 이 문을 지나면
 		#  다른 쪽에서 양이 증발하고 총량이 조용히 샌다.
 		_write_water(below, amount)
 		_write_water(i, 0)
-		return
+		return 0
 	if bm != Mat.WATER:
-		return
+		return amount
 	var space := Tuning.WATER_MAX - _aux[below]
 	if space <= 0:
-		return
+		return amount
 	# ⚠ `mini` 다(`min` 이 아니다) — `src/sim/` 은 float 전역 함수가 금지다(`net_determinism`).
 	var move := mini(amount, space)
 	_write_water(below, _aux[below] + move)
 	_write_water(i, amount - move)
+	return amount - move
+
+
+## ② 좌우로 나눈다. **dir 쪽 이웃을 먼저 본다.**
+##
+## 🔴🔴 **파일 머리의 순회 계약이 여기서는 성립하지 않는다. 성립시킬 수도 없다.**
+##  머리 주석은 「도착지는 이번 틱에 이미 지났거나 아예 안 도는 자리」인데, 열을 dir의 반대로 도니까
+##  `x + dir` 은 이미 지났지만 **`x - dir` 은 아직 안 지났다.** ⇒ `x - dir` 로 간 물은 이번 틱에
+##  또 움직일 수 있고, 그래서 **가로는 한 틱에 여러 칸 번진다**(255 → 127 → 63 … 로 잦아든다).
+##
+## 🔴 **이건 버그가 아니라 확산의 성질이다.** 양 기반 평균내기는 Gauss-Seidel 훑기이고,
+##  단일 버퍼에서 **어느 순서로 돌든** 한쪽 방향으로는 반드시 연쇄가 난다. 한 방향만 나누게 막으면
+##  연쇄는 사라지지만 **평형이 오는 속도가 절반이 되고 기획의 실측 틱 수가 통째로 안 맞는다.**
+## ⇒ **그래서 dir 이 매 틱 뒤집힌다.** 편향을 없애는 것이 이 축의 유일한 장치다.
+## ⚠ **머리 주석은 세로에만 적용된다** — 세로는 아래→위로 돌아 연쇄가 원리적으로 없다(그물이 잰다).
+##
+## 🔴🔴 **차이가 `WATER_MIN_DIFF` 이하면 안 옮긴다 — 여기가 멈춤의 심장이다.**
+##  없으면 홀수가 영원히 안 나눠져 1씩 왕복하고, 그러면 **청크가 절대 안 잠들어 청크 재우기가
+##  통째로 무효가 된다.** v1이 죽은 자리다.
+func _water_spread(i: int, x: int, row: int, amount: int, dir: int) -> void:
+	amount = _water_share(i, x + dir, row, amount)
+	if amount <= 0:
+		return
+	_water_share(i, x - dir, row, amount)
+
+
+## 이웃 한 칸과 평균에 가까워지게 나눈다. 남은 양을 돌려준다.
+func _water_share(i: int, nx: int, row: int, amount: int) -> int:
+	if nx < 0 or nx >= W:
+		return amount
+	var j := row | nx
+	var nm := _mat[j]
+	# 🔴 고체는 안 받는다. 빈칸과 물만 받는다 — `_write_water` 가 그 둘 위에만 쓴다는 계약과 같다.
+	if nm != Mat.EMPTY and nm != Mat.WATER:
+		return amount
+	# ⚠ 빈칸의 `_aux` 는 0이다. 「재료가 EMPTY인데 양이 남아 있다」는 원리적으로 없다
+	#  (`_write_cell` 도 `_write_water` 도 비울 때 양을 0으로 만든다).
+	var other := _aux[j]
+	var diff := amount - other
+	if diff <= Tuning.WATER_MIN_DIFF:
+		return amount
+	# ⚠ **정수 시프트가 안전하다**: `diff` 는 여기서 늘 양수라 `DRAG_NUM` 주석의
+	#  「음수에서 `>>` 가 비대칭」 함정에 안 걸린다.
+	# 🔴 넘칠 수 없다: `other + move = (amount + other) / 2 ≤ max(amount, other) ≤ WATER_MAX`.
+	var move := diff >> 1
+	_write_water(j, other + move)
+	_write_water(i, amount - move)
+	return amount - move
+
+
+## 🔴🔴 **한 틱 상한 — 깨어 있는 청크가 상한을 넘으면 나머지를 다음 틱으로 민다.**
+##
+## 🔴🔴 **자르는 자리가 밴드 순회 「전」이어야 한다.** 밴드 안에서 「행 → 청크」로 도니까
+##  **한 청크의 16행이 순회에서 연속된 구간이 아니다** — 루프 안에서 「N번째에서 멈춘다」를 하면
+##  **한 청크의 행 절반만 도는 일**이 나고 결정론이 깨진다. ⚠ **싱글에선 안 보인다.**
+## ⇒ 순회 전에 순회 순서(밴드 내림차순 → dir 반대 방향 열)로 세어, 넘는 것을 **이번 틱에서만**
+##  재운다. 🔴 **자르는 순서가 곧 상태다** — 그래서 `dir` 을 `_water_step` 과 같은 문으로 읽는다.
+##
+## 🔴 **잘린 청크는 다음 틱에 돈다** — `_touch_chunk` 로 다시 찍는다. **버리는 게 아니다.**
+##  ⚠ 안 찍으면 「상한에 걸린 물이 영영 안 움직인다」이고 그건 안전망이 아니라 고장이다.
+##
+## ⚠ **넘지 않으면 네이티브 `count()` 한 번(~2μs)에 끝난다.** 훑기는 넘을 때만 판다.
+func _cap_awake_chunks(dir: int) -> void:
+	if _awake.count(1) <= Tuning.MAX_CHUNKS_PER_TICK:
+		return
+	var kept := 0
+	var band := CHUNK_H - 1
+	while band >= 0:
+		if _band_awake[band] > 0:
+			var base := band * CHUNK_W
+			var cx := (CHUNK_W - 1) if dir > 0 else 0
+			while cx >= 0 and cx < CHUNK_W:
+				var c := base + cx
+				if _awake[c] != 0:
+					if kept < Tuning.MAX_CHUNKS_PER_TICK:
+						kept += 1
+					else:
+						_awake[c] = 0
+						_band_awake[band] -= 1
+						_touch_chunk(c, band)
+				cx -= dir
+		band -= 1
 
 
 ## 🔴🔴 **불 한 틱.** 격자를 안 훑고 파면 목록만 돈다.
