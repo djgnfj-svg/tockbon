@@ -83,7 +83,22 @@ static func bake() -> bool:
 	for row in rows:
 		out += "\t\"%s\",\n" % row
 	out += "]\n\n"
-	out += "const MAP_CHARS: Dictionary = {\"#\": Mat.STONE, \"=\": Mat.WOOD, \"B\": Mat.BEDROCK}\n"
+	# 🔴🔴 **`CHAR_BY_MAT`에서 파생한다. 리터럴로 박지 마라.**
+	#  2026-08-07까지 이 줄이 `{"#": Mat.STONE, "=": Mat.WOOD, "B": Mat.BEDROCK}` 문자열이었고,
+	#  그러면 **`CHAR_BY_MAT`을 늘리고 여기를 안 늘리는 순간 조용히 갈라진다** — 구운 맵에는
+	#  새 글자가 들어 있는데 게임이 그 글자를 모른다. `Stage.MAP_CHARS.has(ch)`가 false라
+	#  **그 칸이 에러 없이 빈칸이 된다.** 물이 들어오는 날 정확히 여기서 났을 것이다.
+	# ⚠ 이름은 `Mat.<상수>`로 뽑아야 한다 — 숫자를 박으면 재료 id를 옮기는 날 또 갈라진다.
+	var name_by_mat := {Mat.STONE: "STONE", Mat.WOOD: "WOOD", Mat.BEDROCK: "BEDROCK"}
+	var pairs := PackedStringArray()
+	for mat: int in CHAR_BY_MAT:
+		if not name_by_mat.has(mat):
+			# 재료를 늘리고 위 표를 안 늘리면 여기서 짖는다. 조용히 숫자로 뱉지 않는다 —
+			# 그러면 생성 파일이 재료 id를 하드코딩한 채로 살아남는다.
+			push_error("재질 id %d의 상수 이름을 모른다 — terrain_baker의 name_by_mat을 늘려라" % mat)
+			return false
+		pairs.append("\"%s\": Mat.%s" % [CHAR_BY_MAT[mat], name_by_mat[mat]])
+	out += "const MAP_CHARS: Dictionary = {%s}\n" % ", ".join(pairs)
 
 	var f := FileAccess.open("res://src/stage/terrain_map_generated.gd", FileAccess.WRITE)
 	if f == null:

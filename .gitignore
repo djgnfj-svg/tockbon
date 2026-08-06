@@ -25,3 +25,9 @@ tools/pixel/out/
 
 # 파이썬 도구 캐시
 tools/pixel/__pycache__/
+
+# 지형 심기가 덮기 전에 뜨는 백업 — 심을 때마다 하나씩 쌓인다.
+# 🔴 **지우지 마라, 다만 커밋도 안 한다.** 손으로 그린 Terrain을 날렸을 때 되심을 유일한 수단이고
+#  (`paint_terrain_from_map.gd` 와 같은 글자표라 그대로 입력으로 쓸 수 있다),
+#  ⚠ 구운 텍스트는 마지막 굽기 시점 것이라 **그 뒤의 붓질이 안 들어 있다.**
+tools/stage/terrain_backup_*.txt
