@@ -21,6 +21,7 @@ const CIRCLE_WINDOW_SCRIPT := "res://src/view/circle_window.gd"
 ## 🔴 주석·문자열 스트리퍼를 **빌려 온다** — 소스 텍스트를 훑는 그물이 셋이라 스트리퍼는 하나여야 한다.
 const NetDeterminism := preload("res://tests/nets/net_determinism.gd")
 const CellRenderer := preload("res://src/view/cell_renderer.gd")
+const CellGrid := preload("res://src/sim/cell_grid.gd")
 const Mat := preload("res://src/sim/cell_materials.gd")
 const Fx := preload("res://src/view/fx_tuning.gd")
 
@@ -53,6 +54,7 @@ func run(t) -> void:
 	_mouse_filter_contract(t)
 	_window_uses_the_tuning_rect(t)
 	_input_actions_exist(t)
+	_hud_counts_are_throttled(t)
 
 
 ## 🔴🔴 **입력 맵에 없는 액션을 부르면 엔진이 짖고, 화면에서는 「그 키만 안 먹는다」로만 보인다.**
@@ -368,3 +370,56 @@ func _read(path: String) -> String:
 		push_error("net_render: %s 를 못 읽었다" % path)
 		return ""
 	return f.get_as_text()
+
+
+## 🔴🔴 **HUD의 재료 세기가 조여져 있나 — 그리고 조인 값이 따라잡나.**
+##
+## `count_material` 은 한 번에 **552μs**(4,128,768칸)이고 HUD가 셋을 센다. 매 프레임이면
+## 60Hz × 3회 = **CPU의 9.9%** 다. ⚠ **에러도 화면 이상도 없이 그냥 사라지는 종류라**
+## 아무도 안 짖는다 — 그래서 값으로 잰다.
+##
+## 🔴 **씬을 트리에 안 붙인다.** `_refresh_hud_counts()` 가 `@onready` 라벨을 하나도 안 만지도록
+##  `_update_hud()` 에서 갈라져 있어서, **인스턴스만 만들어 직접 부를 수 있다.**
+##  ⚠ 그래서 이 검사가 가능하다 — 안 갈랐으면 무대를 트리에 붙여야 했고 그건 이 리포가 안 하는 일이다.
+##
+## ⚠ **「조여졌나」만 재면 「영영 안 갱신」도 통과한다.** ⇒ **따라잡는 것을 같이 잰다.**
+func _hud_counts_are_throttled(t) -> void:
+	var scene: PackedScene = load(STAGE_SCENE)
+	if scene == null or not scene.can_instantiate():
+		# 🔴 조용히 `return` 하면 검사가 **없어진다** — 통과 수만 줄고 아무도 안 짖는다.
+		t.ok(false, "무대 씬을 못 세워서 HUD 세기를 **하나도 못 쟀다**")
+		return
+	var root := scene.instantiate()
+	var g: Variant = root.get("_grid")
+	var ticks: Variant = root.get("HUD_COUNT_TICKS")
+	t.ok(g != null and ticks is int, "껍데기가 `_grid` 와 `HUD_COUNT_TICKS` 를 든다")
+	if g == null or not (ticks is int):
+		root.free()
+		return
+	var period: int = ticks
+	t.ok(period > 1, "세기 주기가 1보다 크다 (%d틱 — 1이면 조인 게 아니다)" % period)
+
+	# 첫 호출은 곧바로 센다. ⚠ 안 그러면 사용자가 첫 1초 동안 0을 보고 「안 먹는다」로 읽는다.
+	root.call("_refresh_hud_counts")
+	t.eq(root.get("_stone_cells"), 0, "빈 격자에서 돌이 0이다 (기준선)")
+
+	# 지형을 깐다. 🔴 **같은 틱에 다시 부르면 값이 안 바뀌어야 한다** — 그게 「조였다」의 뜻이다.
+	g.call("apply", CellGrid.cmd_fill(0, 0, 99, 99, Mat.STONE))
+	var poured: int = g.call("count_material", Mat.STONE)
+	t.ok(poured > 0, "돌을 실제로 깔았다 (%d칸 — 검사의 전제)" % poured)
+	root.call("_refresh_hud_counts")
+	t.eq(root.get("_stone_cells"), 0, "같은 틱에는 다시 안 센다 (조여져 있다)")
+
+	# 🔴 **주기가 지나면 따라잡아야 한다.** 안 재면 「영영 안 갱신」과 구별이 안 된다.
+	for _i in period:
+		g.call("step")
+	root.call("_refresh_hud_counts")
+	t.eq(root.get("_stone_cells"), poured, "%d틱 뒤에 따라잡는다" % period)
+
+	# 🔴 **리셋(틱이 0으로 되돌아간다)도 따라잡아야 한다.** 안 그러면 R 뒤 20틱 동안
+	#  옛 지형의 수가 화면에 남는다.
+	g.call("apply", CellGrid.cmd_reset())
+	root.call("_refresh_hud_counts")
+	t.eq(root.get("_stone_cells"), 0, "리셋 뒤 곧바로 다시 센다 (틱이 되돌아가는 갈래)")
+
+	root.free()

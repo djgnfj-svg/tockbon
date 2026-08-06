@@ -171,21 +171,39 @@ var _world := WorldStep.new(_grid, _spell, _char)
 ##  화면에서 안 갈리는데 이 숫자만 맞으면 그게 이 단계가 멈춰야 하는 신호다.
 var _blast_count := 0
 
-## 🔴🔴 **물 칸 수는 N틱마다만 센다.** `count_material` 이 한 번에 552μs이고, HUD가 매 프레임
-##  부르면 60Hz에서 **33,000μs/s = CPU의 3.3%** 다. 돌·나무 두 줄이 이미 그렇게 새고 있다
-##  (`cell_grid.count_material` 주석이 「고칠 자리는 부르는 쪽」이라고 적었다) — **물이 그 새는
-##  구멍을 넓히지 않게 한다.** 20틱 = 1초에 한 번이면 2.8%가 0.05%가 된다.
-## ⚠ **화면이 1초까지 낡는다.** 물이 퍼지는 것은 활성 청크 줄이 실시간으로 보여 주므로 괜찮다.
+## 🔴🔴 **재료 칸 수는 N틱마다만 센다. 매 프레임 세면 CPU의 5%가 그냥 사라진다.**
 ##
-## 🔴🔴 **이건 「칸 수」이지 「양의 합」이 아니다. 판정 3(총량 보존)을 여기서 읽지 마라.**
+## 🔴 **실측이다**(2026-08-07, 구현 · 헤드리스 · 무대 씬의 실제 함수로 잼):
+##
+##      count_material 1회                       **555μs**  (4,128,768칸)
+##      고치기 전 — 프레임마다 2회(돌·나무)      **65,983μs/s = CPU의 6.6%**
+##      물까지 안 조였다면 3회                   **99,728μs/s = CPU의 10.0%**
+##      고친 뒤 — 20틱마다 3회                   **약 1,677μs/s = 0.17%**  ⇒ **39배**
+##
+##  ⚠ 마지막 줄은 「조인 경로 12μs/s」 + 「1초에 한 번 실제로 세는 3 × 555μs」다.
+##   **12μs만 보고 「공짜」로 읽지 마라** — 세는 일 자체는 안 사라지고 드물어질 뿐이다.
+## 🔴 **고칠 자리가 부르는 쪽인 이유**는 `cell_grid.count_material` 주석에 있다 — 그 함수는
+##  그물과 무대의 문이라 남는다. ⚠ 그 주석은 2026-08-06까지 「~20μs · 0.24%」였고,
+##  **격자가 28배 커지며 조용히 거짓이 됐다.**
+##
+## ⚠ **왜 증분이 아닌가**: `_write_cell` 에서 세면 늘 정확하지만 **`_reset`(`fill`) 과
+##  `_write_water`(재료를 바꿀 때만) 도 같이 지나야 하고**, 셋 중 하나가 갈라지면 **조용히 틀린다.**
+##  🔴 이건 **본편에 안 남는 껍데기의 디버그 표시**다 — 정확도를 1초 늦추는 대가로
+##  시뮬에 두 번째 셈 규칙을 안 만든다. **늘 맞아야 하는 값이면 그때 증분으로 바꿔라.**
+## ⚠ **화면이 최대 1초 낡는다.** 실시간으로 봐야 하는 것들(활성 청크 · 타는 셀 · FPS)은
+##  안 조였다 — 그건 전부 O(1) 질의다.
+##
+## 🔴🔴 **물 칸은 「양의 합」이 아니다. 판정 3(총량 보존)을 여기서 읽지 마라.**
 ##  물이 퍼지면 같은 양이 **더 많은 칸**에 담기므로 이 숫자는 **늘어난다.** 그게 정상이다.
 ##  ⚠ 양의 합을 싼값에 낼 방법이 지금 없다 — `_aux` 를 GDScript로 훑으면 62,676μs다.
 ##   ⇒ **판정 3은 그물이 값으로 잰다**(`net_water` 의 `총량 보존`). 화면은 그 자리가 아니다.
-const WATER_HUD_TICKS := 20
+const HUD_COUNT_TICKS := 20
+var _stone_cells := 0
+var _wood_cells := 0
 var _water_cells := 0
-## ⚠ **첫 프레임에 바로 세게 음수로 시작한다.** -1로 두면 틱 20까지 「물 0칸」이 떠서,
+## ⚠ **첫 프레임에 바로 세게 음수로 시작한다.** 0으로 두면 틱 20까지 전부 0이 떠서,
 ##  F를 누른 사용자가 **1초 동안 키가 안 먹은 것으로 읽는다.**
-var _water_hud_tick := -WATER_HUD_TICKS
+var _hud_count_tick := -HUD_COUNT_TICKS
 
 
 func _ready() -> void:
@@ -413,13 +431,28 @@ static func build_terrain_into(g: CellGrid) -> void:
 			tx = run + 1
 
 
-func _update_hud() -> void:
-	# 🔴 **틱 번호로 조인다. 프레임 수로 조이지 마라** — 프레임률이 흔들리면 세는 주기도 흔들리고,
-	#  그러면 「느려질 때 더 자주 센다」가 된다. 위 `WATER_HUD_TICKS` 주석에 비용이 있다.
+## 🔴🔴 **비싼 셈만 모아 둔 자리. `_update_hud` 에서 갈라 둔 이유가 둘이다.**
+##  ① **씬 트리 없이 부를 수 있다** — `@onready` 라벨을 하나도 안 만진다. 그래서 **그물이 이걸
+##   직접 굴려서** 「조여졌나 · N틱 뒤에 따라잡나」를 값으로 잰다(`net_render`).
+##   ⚠ 안 갈랐으면 그물이 무대를 **트리에 붙여야** 했고, 그건 이 리포가 안 하는 일이다.
+##  ② 「무엇을 세나」와 「어떻게 보여 주나」가 한 함수에 있으면 조이는 규칙이 표시 줄마다 흩어진다.
+##
+## 🔴 **틱 번호로 조인다. 프레임 수로 조이지 마라** — 프레임률이 흔들리면 세는 주기도 흔들리고,
+##  그러면 **「느려질 때 더 자주 센다」**가 된다. 비용은 위 `HUD_COUNT_TICKS` 주석.
+## ⚠ `tick < _hud_count_tick` 갈래는 **R(리셋)** 이다 — 틱이 0으로 돌아가므로 곧바로 다시 센다.
+##  없으면 리셋 뒤 20틱 동안 **옛 지형의 수**가 화면에 남는다.
+func _refresh_hud_counts() -> void:
 	var tick := _grid.get_tick()
-	if tick - _water_hud_tick >= WATER_HUD_TICKS or tick < _water_hud_tick:
-		_water_hud_tick = tick
-		_water_cells = _grid.count_material(Mat.WATER)
+	if tick - _hud_count_tick < HUD_COUNT_TICKS and tick >= _hud_count_tick:
+		return
+	_hud_count_tick = tick
+	_stone_cells = _grid.count_material(Mat.STONE)
+	_wood_cells = _grid.count_material(Mat.WOOD)
+	_water_cells = _grid.count_material(Mat.WATER)
+
+
+func _update_hud() -> void:
+	_refresh_hud_counts()
 	# 🔴 **체력의 단일 소스는 캐릭터다.** 껍데기가 따로 세면 「깎였는데 숫자가 그대로」가 된다.
 	# ⚠ 쓰러짐도 **같은 값에서 파생**시킨다 — 걸쇠를 따로 들면 「0인데 안 쓰러졌다」가 화면에 남는다.
 	#  🔴 부활 방법을 같이 적는다. 혼자라 일으켜 줄 사람이 없어 **R이 유일한 길**인데,
@@ -432,9 +465,9 @@ func _update_hud() -> void:
 			_grid.get_tick(), 60 / Tuning.TICK_DIVIDER, Tuning.TICK_DIVIDER,
 		],
 		# 🔴 나무가 줄고 「타는 셀」이 0으로 돌아가는 것이 판정 5의 숫자 쪽 증거다.
+		# ⚠ 돌·나무는 **최대 1초 낡은 값**이다(위 `HUD_COUNT_TICKS`). 「타는 셀」은 O(1)이라 실시간이다.
 		"돌 %d · 나무 %d · 타는 셀 %d" % [
-			_grid.count_material(Mat.STONE), _grid.count_material(Mat.WOOD),
-			_grid.burning_count(),
+			_stone_cells, _wood_cells, _grid.burning_count(),
 		],
 		# 🔴🔴 **「물이 멈췄나」는 이 숫자로만 판정된다**(기획 판정 1). 「멈춘 것 같다」는 판정이
 		#  아니다 — v1은 물이 멈춘 것처럼 보이는데 안 멈추고 있었고 번개가 거기서 죽었다.
