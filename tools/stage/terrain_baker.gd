@@ -21,11 +21,34 @@ const CellGrid := preload("res://src/sim/cell_grid.gd")
 const Mat := preload("res://src/sim/cell_materials.gd")
 const Tuning := preload("res://src/sim/sim_tuning.gd")
 
-## 재질 id ↔ ASCII 글자. `build_terrain_tileset.gd`의 TILES와 한 몸으로 움직인다 — 재질을 늘리면 여기도.
+## 🔴🔴 **재료를 늘리면 여기 한 줄을 더해야 한다. 네 곳 중 유일하게 남은 손 작업이다**
+##  (붓 그림과 타일셋 표는 2026-08-07에 `terrain_palette.gd` 파생으로 사라졌다).
+## 🔴 **그리고 이게 남아 있는 것이 맞다** — 어떤 글자를 쓸지는 파생시킬 수 없고,
+##  빠뜨리면 **굽기가 짖고 멈춘다**(아래 `CHAR_BY_MAT.has(mat)`). 넷 중 유일하게 큰 소리로 죽는다.
+##  ⚠ 그래도 그물이 먼저 잡는다 — `net_tables` 가 붓이 되는 재료마다 글자가 있는지 잰다.
+## ⚠ 글자는 **한 글자여야 한다**(한 칸이 한 글자다) 그리고 **서로 달라야 한다** — 겹치면
+##  구운 맵을 되심을 때 두 재료가 하나로 합쳐진다. 둘 다 그물이 잰다.
 const CHAR_BY_MAT := {
 	Mat.STONE: "#",
 	Mat.WOOD: "=",
 	Mat.BEDROCK: "B",
+	Mat.WATER: "~",
+}
+
+## 🔴🔴 **재료 id → GDScript 상수 이름. 이것도 손으로 든다 — 「고칠 곳 넷」의 숨은 다섯째다.**
+##  ⚠ **`docs/design/지형-굽기.md` 의 표에 이 줄이 없었다**(2026-08-07에 발견했다).
+##   `bake()` 안의 지역 변수로 숨어 있었고, 물을 더할 때 `CHAR_BY_MAT` 만 늘리면
+##   **붓은 생기고 타일도 놓이는데 굽기가 「재질 id 4의 상수 이름을 모른다」로 죽는다.**
+##  🔴 **여기 올려 둔 이유가 그것이다** — 지역 변수는 그물이 못 본다. 이제 `net_tables` 가 잰다.
+##
+## ⚠ **파생시킬 수 없다.** `get_script_constant_map()` 으로 값→이름을 뒤집으면 **충돌한다** —
+##  `STONE`(1) 과 `FLAG_SHALLOW`(1), `EMPTY`(0) 과 `BEHAVIOR_NONE`(0) 이 같은 값이다.
+##  이름 규칙으로 거르는 길도 있지만 그건 **낡는 휴리스틱**이다. ⇒ 손으로 들고, 그물이 잰다.
+const NAME_BY_MAT := {
+	Mat.STONE: "STONE",
+	Mat.WOOD: "WOOD",
+	Mat.BEDROCK: "BEDROCK",
+	Mat.WATER: "WATER",
 }
 
 
@@ -89,15 +112,14 @@ static func bake() -> bool:
 	#  새 글자가 들어 있는데 게임이 그 글자를 모른다. `Stage.MAP_CHARS.has(ch)`가 false라
 	#  **그 칸이 에러 없이 빈칸이 된다.** 물이 들어오는 날 정확히 여기서 났을 것이다.
 	# ⚠ 이름은 `Mat.<상수>`로 뽑아야 한다 — 숫자를 박으면 재료 id를 옮기는 날 또 갈라진다.
-	var name_by_mat := {Mat.STONE: "STONE", Mat.WOOD: "WOOD", Mat.BEDROCK: "BEDROCK"}
 	var pairs := PackedStringArray()
 	for mat: int in CHAR_BY_MAT:
-		if not name_by_mat.has(mat):
+		if not NAME_BY_MAT.has(mat):
 			# 재료를 늘리고 위 표를 안 늘리면 여기서 짖는다. 조용히 숫자로 뱉지 않는다 —
 			# 그러면 생성 파일이 재료 id를 하드코딩한 채로 살아남는다.
-			push_error("재질 id %d의 상수 이름을 모른다 — terrain_baker의 name_by_mat을 늘려라" % mat)
+			push_error("재질 id %d의 상수 이름을 모른다 — terrain_baker의 NAME_BY_MAT을 늘려라" % mat)
 			return false
-		pairs.append("\"%s\": Mat.%s" % [CHAR_BY_MAT[mat], name_by_mat[mat]])
+		pairs.append("\"%s\": Mat.%s" % [CHAR_BY_MAT[mat], NAME_BY_MAT[mat]])
 	out += "const MAP_CHARS: Dictionary = {%s}\n" % ", ".join(pairs)
 
 	var f := FileAccess.open("res://src/stage/terrain_map_generated.gd", FileAccess.WRITE)

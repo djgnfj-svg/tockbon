@@ -14,6 +14,8 @@ const CellRenderer := preload("res://src/view/cell_renderer.gd")
 const Fx := preload("res://src/view/fx_tuning.gd")
 ## 🔴 카메라가 「내 주변」을 보여 주는지 재려면 **내가 얼마나 큰지**가 필요하다.
 const Character := preload("res://src/actor/character.gd")
+const Palette := preload("res://tools/stage/terrain_palette.gd")
+const Baker := preload("res://tools/stage/terrain_baker.gd")
 
 
 ## 4이웃. 불도 점화도 4이웃이라 연결 성분도 같은 이웃으로 세야 한다.
@@ -35,6 +37,7 @@ func run(t) -> void:
 	_gen_tables(t)
 	_stage_map(t)
 	_wood_clumps(t)
+	_terrain_brush_follows_the_material_table(t)
 
 
 ## 🔴🔴 **`DEFS`에 넣고 `ALL`에 안 넣으면 순회에서 빠진다.**
@@ -429,3 +432,103 @@ func _stage_map(t) -> void:
 	# 맵 문자가 실재하는 재료를 가리키나. 오타 하나면 그 지형이 조용히 안 지어진다.
 	for ch: String in Stage.MAP_CHARS.keys():
 		t.ok(Mat.ALL.has(int(Stage.MAP_CHARS[ch])), "맵 문자 '%s'가 실재 재료다" % ch)
+
+
+## 🔴🔴 **에디터 붓이 재료 표를 따라오나 — 「조용히 낡는다」의 유일한 그물이다.**
+##
+## `docs/design/지형-굽기.md` 가 이 위험을 이름으로 적어 뒀다: 붓 그림과 타일셋 표가 `DEFS` 와
+## 갈라져도 **게임 화면은 안 틀린다**(화면은 셀 격자가 그린다) ⇒ **아무도 눈치 못 챈다.**
+## 붓을 집을 때만 헷갈리고, 그때는 이미 잘못 그린 맵이 남는다.
+##
+## ⚠ **재료를 늘렸을 때 「고칠 곳 넷」 중 셋을 여기서 잰다.** 넷째(`DEFS` 자체)는 원본이라 잴 게 없다.
+const TILESET_PATH := "res://src/stage/terrain_tileset.tres"
+const ATLAS_PATH := "res://assets/stage/terrain_tiles.png"
+
+func _terrain_brush_follows_the_material_table(t) -> void:
+	var ids := Palette.paintable()
+	# 🔴 폴더 스캔 그물의 첫 줄과 같은 이유 — 목록이 비면 아래가 하나도 안 돌고 초록이 된다.
+	t.ok(ids.size() > 0, "붓이 되는 재료가 있다 (%d개)" % ids.size())
+	# 🔴 **빈칸은 붓이 아니다** — 타일을 안 놓는 것이 빈칸이다.
+	t.ok(not ids.has(Mat.EMPTY), "빈칸은 붓 목록에 없다")
+	t.eq(ids.size(), Mat.ALL.size() - 1, "빈칸 말고 전부 붓이 된다")
+
+	# ── ① 붓 그림 ─────────────────────────────────────────────────
+	var tex: Texture2D = load(ATLAS_PATH)
+	t.ok(tex != null, "붓 그림을 읽는다")
+	if tex == null:
+		return
+	var px := Palette.tile_px()
+	t.eq(tex.get_width(), px * ids.size(), "붓 그림의 폭이 붓 수와 맞는다")
+	t.eq(tex.get_height(), px, "붓 그림의 높이가 타일 한 변이다")
+
+	var img := tex.get_image()
+	t.ok(img != null, "붓 그림의 픽셀을 읽는다")
+	if img != null:
+		var wrong := 0
+		for i in ids.size():
+			var at := Palette.atlas_of(i)
+			# 칸 한가운데를 찍는다 — 가장자리는 임포트 필터에 흔들릴 수 있다.
+			var got := img.get_pixel(at.x * px + px / 2, at.y * px + px / 2)
+			var rgb := Mat.rgb_of(ids[i])
+			var want := Color8((rgb >> 16) & 0xFF, (rgb >> 8) & 0xFF, rgb & 0xFF)
+			if not got.is_equal_approx(want):
+				wrong += 1
+				t.ok(false, "%s 붓 색이 DEFS와 다르다 (그림 %s · 표 #%06X)" % [
+					Mat.material_name(ids[i]), got.to_html(false), rgb])
+		t.eq(wrong, 0, "붓 %d개의 색이 전부 DEFS의 rgb와 같다" % ids.size())
+
+	# ── ② 타일셋 ─────────────────────────────────────────────────
+	var tileset: TileSet = load(TILESET_PATH)
+	t.ok(tileset != null, "타일셋을 읽는다")
+	if tileset == null:
+		return
+	var src := tileset.get_source(0) as TileSetAtlasSource
+	t.ok(src != null, "타일셋에 atlas 소스가 있다")
+	if src == null:
+		return
+	t.eq(src.get_tiles_count(), ids.size(), "타일 수가 붓 수와 같다 (남는 타일도 모자란 타일도 없다)")
+	for i in ids.size():
+		var at := Palette.atlas_of(i)
+		var data := src.get_tile_data(at, 0)
+		t.ok(data != null, "%s 자리(%d,%d)에 타일이 있다" % [Mat.material_name(ids[i]), at.x, at.y])
+		if data != null:
+			t.eq(int(data.get_custom_data("material")), ids[i],
+				"%s 타일에 붙은 재질이 맞다" % Mat.material_name(ids[i]))
+
+	# 🔴 **uid 가 살아 있나.** `stage.tscn` 이 이 리소스를 **uid 로 참조한다** —
+	#  `ResourceSaver.save` 가 uid 를 지우는 것을 2026-08-07에 실제로 봤다.
+	#  ⚠ 지금은 `path` 도 같이 적혀 있어 게임이 안 깨지지만, 에디터가 새 uid 를 발급해 **씬 diff 가 난다.**
+	var head := FileAccess.get_file_as_string(TILESET_PATH).split("
+")[0]
+	t.ok(head.contains("uid://"), "타일셋 .tres 가 uid 를 들고 있다 (씬이 그걸로 참조한다)")
+
+	# ── ③ 글자표 ─────────────────────────────────────────────────
+	# 🔴 빠지면 **굽기가 짖고 멈춘다** — 넷 중 유일하게 큰 소리로 죽지만, 그물이 먼저 잡는 게 낫다.
+	var seen := {}
+	for id: int in ids:
+		var has: bool = Baker.CHAR_BY_MAT.has(id)
+		t.ok(has, "%s 에 맵 글자가 있다" % Mat.material_name(id))
+		if not has:
+			continue
+		var ch: String = Baker.CHAR_BY_MAT[id]
+		t.eq(ch.length(), 1, "%s 의 맵 글자가 한 글자다 (한 칸이 한 글자다)" % Mat.material_name(id))
+		# ⚠ 겹치면 구운 맵을 되심을 때 **두 재료가 하나로 합쳐진다.**
+		t.ok(not seen.has(ch), "맵 글자 `%s` 가 %s 에만 쓰인다" % [ch, Mat.material_name(id)])
+		seen[ch] = id
+	t.eq(seen.size(), ids.size(), "붓마다 서로 다른 글자가 하나씩이다")
+
+	# 🔴🔴 **숨어 있던 다섯째 표.** `bake()` 안의 지역 변수라 그물이 못 보던 것을 상수로 올렸다.
+	#  ⚠ 빠지면 **붓은 생기고 타일도 놓이는데 굽기가 죽는다** — 물을 더할 때 실제로 그랬다
+	#   (`CHAR_BY_MAT` 만 늘리고 이건 안 늘렸더니 「재질 id 4의 상수 이름을 모른다」).
+	#  🔴 그리고 그건 **맵에 그 재료를 실제로 그려야** 드러난다 — 안 그리면 영영 안 걸린다.
+	for id2: int in ids:
+		t.ok(Baker.NAME_BY_MAT.has(id2),
+			"%s 에 GDScript 상수 이름이 있다 (굽기가 `Mat.<이름>` 으로 뱉는다)" % Mat.material_name(id2))
+	# 그리고 그 이름이 진짜 상수여야 한다 — 오타면 생성 파일이 파스 에러를 낸다.
+	var consts := (Mat as GDScript).get_script_constant_map()
+	for id2: int in ids:
+		if not Baker.NAME_BY_MAT.has(id2):
+			continue
+		var nm: String = Baker.NAME_BY_MAT[id2]
+		t.ok(consts.has(nm) and int(consts[nm]) == id2,
+			"`Mat.%s` 가 실재하고 값이 %d다 (오타면 생성 파일이 파스 에러다)" % [nm, id2])
