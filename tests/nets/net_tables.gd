@@ -517,6 +517,29 @@ func _terrain_brush_follows_the_material_table(t) -> void:
 		seen[ch] = id
 	t.eq(seen.size(), ids.size(), "붓마다 서로 다른 글자가 하나씩이다")
 
+	# ── ④ 구워진 산출물이 글자표를 따라왔나 ─────────────────────────
+	# 🔴🔴 **코드의 파생은 「굽는 순간」만 고치고 「체크인된 산출물」은 안 고친다.**
+	#  ⚠ 2026-08-07에 실제로 어긋난 채 커밋돼 있었다 — `CHAR_BY_MAT` 에 `~` 를 넣고
+	#   **맵을 다시 안 구웠다.** 그러면 구운 맵에 새 글자가 있어도 게임이 그 글자를 모르고,
+	#   `MAP_CHARS.has(ch)` 가 false라 **그 칸이 에러 없이 빈칸이 된다.**
+	#  🔴 문서가 「파생으로 고쳤다」고 적은 그 고장이 **현재형으로** 있었다는 뜻이다 —
+	#   파생은 도구를 고친 것이고, 산출물은 **다시 구워야** 따라온다.
+	# ⇒ **양방향으로 맞댄다.** 한쪽만 보면 「글자가 남아도는 것」과 「모자란 것」 중 하나를 놓친다.
+	var baked: Dictionary = Stage.MAP_CHARS
+	for id: int in ids:
+		if not Baker.CHAR_BY_MAT.has(id):
+			continue
+		var ch: String = Baker.CHAR_BY_MAT[id]
+		t.ok(baked.has(ch),
+			"구운 맵이 `%s`(%s) 를 안다 — 아니면 그 칸이 빈칸이 된다. **다시 구워라**" % [
+				ch, Mat.material_name(id)])
+		if baked.has(ch):
+			t.eq(int(baked[ch]), id, "구운 맵의 `%s` 가 %s 를 가리킨다" % [ch, Mat.material_name(id)])
+	# 반대쪽 — 산출물에만 있는 글자는 **지워진 재료**의 흔적이다.
+	for ch2: String in baked:
+		t.ok(seen.has(ch2), "구운 맵의 글자 `%s` 가 지금도 붓에 있다 (은퇴한 재료가 안 남았다)" % ch2)
+	t.eq(baked.size(), Baker.CHAR_BY_MAT.size(), "구운 맵의 글자 수가 글자표와 같다")
+
 	# 🔴🔴 **숨어 있던 다섯째 표.** `bake()` 안의 지역 변수라 그물이 못 보던 것을 상수로 올렸다.
 	#  ⚠ 빠지면 **붓은 생기고 타일도 놓이는데 굽기가 죽는다** — 물을 더할 때 실제로 그랬다
 	#   (`CHAR_BY_MAT` 만 늘리고 이건 안 늘렸더니 「재질 id 4의 상수 이름을 모른다」).

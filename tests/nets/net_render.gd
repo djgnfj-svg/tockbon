@@ -422,4 +422,36 @@ func _hud_counts_are_throttled(t) -> void:
 	root.call("_refresh_hud_counts")
 	t.eq(root.get("_stone_cells"), 0, "리셋 뒤 곧바로 다시 센다 (틱이 되돌아가는 갈래)")
 
+	# 🔴🔴 **조이는 것이 셋뿐인가 — 「활성 청크는 실시간이다」를 지키는 유일한 자리다.**
+	#  ⚠ 활성 청크·타는 셀·FPS 는 **O(1) 질의라 안 조였다.** 그런데 그 사실을 지키는 검사가
+	#   없었다 — **누가 활성 청크를 이 캐시로 옮겨도 아무도 안 짖고**, 그러면 판정 1(물이 멈췄나)이
+	#   **최대 1초 낡은 숫자**를 읽게 된다. 「줄다가 잠기는 것」을 보는 판정이라 그게 곧 오독이다.
+	#  🔴 그래서 **이 함수가 건드리는 필드 집합 자체**를 잰다. 넷째가 늘면 빨개진다.
+	#  ⚠ **센티넬을 먼저 박는다.** 「값이 바뀐 필드」로 재면 **마침 값이 같은 필드가 빠진다** —
+	#   실측으로 돌이 0 → 0 이라 목록에서 사라졌다(2026-08-07). 재려는 것은 「값이 변했나」가
+	#   아니라 **「이 함수가 쓰는 자리가 어디까지인가」**다.
+	for nm3 in ["_stone_cells", "_wood_cells", "_water_cells"]:
+		root.set(nm3, -1)
+	var before := {}
+	for pd: Dictionary in root.get_property_list():
+		if int(pd.get("usage", 0)) & PROPERTY_USAGE_SCRIPT_VARIABLE:
+			before[pd["name"]] = root.get(pd["name"])
+	#  🔴 **셈이 도는 순간에 활성 청크가 0이 아니어야 한다.** 새로 는 필드는 센티넬을 못 박으므로,
+	#   **값이 우연히 같으면 안 걸린다** — 활성 청크를 캐시로 옮기는 뮤테이션이 실제로 그렇게
+	#   빠져나갔다(0 → 0, 2026-08-07). ⇒ 마지막 틱에 지형을 깔아 **깨어 있는 채로** 세게 만든다.
+	for _i in period - 1:
+		g.call("step")
+	g.call("apply", CellGrid.cmd_fill(0, 0, 199, 199, Mat.WOOD))
+	g.call("step")
+	t.ok(int(g.call("active_chunk_count")) > 0,
+		"셈이 도는 순간 활성 청크가 0이 아니다 (이 검사의 전제)")
+	root.call("_refresh_hud_counts")
+	var touched: Array[String] = []
+	for nm2: String in before:
+		if root.get(nm2) != before[nm2]:
+			touched.append(nm2)
+	touched.sort()
+	t.eq(touched, ["_hud_count_tick", "_stone_cells", "_water_cells", "_wood_cells"] as Array[String],
+		"조이는 필드가 정확히 셋(+틱)이다 — 실시간 값이 여기 섞이면 빨개진다")
+
 	root.free()

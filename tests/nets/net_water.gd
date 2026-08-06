@@ -57,6 +57,7 @@ func run(t) -> void:
 	_no_water_means_no_rescue(t)
 	_wet_neighbour_never_catches(t)
 	_fire_beside_water_does_not_flicker(t)
+	_no_cell_carries_both_bits(t)
 
 
 ## 🔴 격자와 청크가 안 나눠떨어지면 가장자리 셀이 **범위 밖 청크를 찍는다.**
@@ -1075,11 +1076,15 @@ func _shallow_bit_tracks_the_amount(t) -> void:
 	g.set_water(504, 100, Tuning.WATER_MAX)
 	t.eq(g.flag_at(504, 100) & Mat.FLAG_SHALLOW, 0, "다시 깊어지면 꺼진다")
 
-	# 🔴 **비우는 쪽도 내려야 한다.** 안 내리면 빈칸이 비트를 든 채 남고, 다음에 그 칸이
+	# 🔴🔴 **비우는 쪽도 내려야 한다.** 안 내리면 빈칸이 비트를 든 채 남고, 다음에 그 칸이
 	#  물이 될 때 양과 비트가 어긋난 채로 시작한다 — 화면에만 나온다.
-	g.set_water(504, 100, 0)
-	t.eq(g.mat_at(504, 100), Mat.EMPTY, "양 0이면 빈칸이 된다")
-	t.eq(g.flag_at(504, 100), 0, "빈칸에 얕음 비트가 안 남는다")
+	# ⚠ **반드시 「얕은 물」에서 비워야 잰다.** 깊은 물(비트가 이미 0)에서 비우면 지우는 줄을
+	#  통째로 지워도 **초록**이다 — 2026-08-07까지 그렇게 짜여 있었고 뮤테이션이 안 물었다.
+	g.set_water(505, 100, wet)
+	t.eq(g.flag_at(505, 100) & Mat.FLAG_SHALLOW, Mat.FLAG_SHALLOW, "먼저 얕음을 켠다 (검사의 전제)")
+	g.set_water(505, 100, 0)
+	t.eq(g.mat_at(505, 100), Mat.EMPTY, "양 0이면 빈칸이 된다")
+	t.eq(g.flag_at(505, 100), 0, "**켜져 있던** 얕음 비트가 빈칸에 안 남는다")
 
 	# 🔴🔴 **직접 쓰기 말고 시뮬이 굴러서도 맞나.** `set_water` 만 재면 `_water_step` 이 지나는
 	#  경로(`_water_fall`·`_water_share`)가 비트를 안 만져도 통과한다.
@@ -1316,12 +1321,26 @@ func _wet_neighbour_never_catches(t) -> void:
 	t.ok(not g.ignite(130, 500), "물 아래 나무에는 직접 붙여도 안 붙는다")
 	t.eq(g.burning_count(), 0, "파면에도 안 올라간다")
 
-	# 좌우·아래도 같은 축이다.
+	# 🔴🔴 **네 방향을 하나씩 다 잰다.** 왼쪽만 재면 `_water_adjacent` 를 **두 방향으로 줄여도**
+	#  전부 초록이다(2026-08-07에 확인했다). 방향 하나가 죽으면 그쪽에서만 불이 물을 건넌다.
 	# 🔴 옆 칸을 물로 만들려면 **먼저 파야 한다** — `set_water` 는 나무 위에 안 쓴다.
 	var h := _make_forest(600)
 	h.apply(CellGrid.cmd_fill(129, 600, 129, 600, Mat.EMPTY))
 	t.ok(h.set_water(129, 600, Tuning.WATER_MAX), "판 자리에 물을 놓는다 (전제)")
-	t.ok(not h.ignite(130, 600), "옆 칸이 물이어도 안 붙는다")
+	t.ok(not h.ignite(130, 600), "**왼쪽** 칸이 물이어도 안 붙는다")
+
+	var r := _make_forest(620)
+	r.apply(CellGrid.cmd_fill(131, 620, 131, 620, Mat.EMPTY))
+	t.ok(r.set_water(131, 620, Tuning.WATER_MAX), "오른쪽을 파고 물을 놓는다 (전제)")
+	t.ok(not r.ignite(130, 620), "**오른쪽** 칸이 물이어도 안 붙는다")
+
+	# 아래 — 나무 줄 **아래**가 돌바닥이라 거기를 파고 물을 놓는다.
+	var d2 := _make_forest(640)
+	d2.apply(CellGrid.cmd_fill(130, 641, 130, 641, Mat.EMPTY))
+	t.ok(d2.set_water(130, 641, Tuning.WATER_MAX), "아래를 파고 물을 놓는다 (전제)")
+	t.ok(not d2.ignite(130, 640), "**아래** 칸이 물이어도 안 붙는다")
+
+	# 위 — 이 함수 첫 줄(물 아래 나무)이 이미 잰다.
 
 	# 🔴 **반대쪽**: 물이 안 닿으면 붙는다. 안 재면 「아무 데도 안 붙는다」가 통과한다.
 	var d := _make_forest(700)
@@ -1372,6 +1391,58 @@ func _fire_beside_water_does_not_flicker(t) -> void:
 	t.ok(settle < 200, "그 뒤 격자가 잠든다 (%d틱)" % settle)
 	t.eq(g.mat_at(150, 900), Mat.WOOD, "물 아래 나무는 안 탔다")
 	t.ok(g.count_material(Mat.WATER) > 0, "물도 그대로다")
+
+
+## 🔴🔴 **한 칸이 얕음과 불을 동시에 들지 않는다.**
+##
+## ⚠ **이 성질이 코드 주석 하나를 떠받치고 있다** — `cell_grid.gdshader` 의 「물 분기를 불보다 앞에
+##  둔다」가 「두 비트는 같은 칸에 못 선다」에 기대고 있고, **그걸 재는 검사가 없었다**(2026-08-07).
+## 🔴 성립하는 이유는 둘이다: 물은 연료가 0이라 점화가 안 닿고, `_write_water` 는 EMPTY·WATER
+##  위에만 쓴다. **둘 중 하나만 깨져도** 화면에서 얕은 물이 불로 그려진다.
+##
+## 🔴 **네이티브 `count()` 로 온 격자를 잰다.** `_flag` 에 쓰이는 비트가 그 둘뿐이라
+##  「둘 다 켜짐」이 곧 바이트 값 `SHALLOW|BURNING` 이다 — 아래에서 그 전제부터 단언한다.
+##  ⚠ 세 번째 상태 비트가 생기면 이 셈이 새므로, **그때 이 검사를 고쳐야 한다.**
+##
+## ⚠🔴 **이 검사가 언제 무는지 재 봤다 — 가드 셋이 **전부** 빠져야 문다**(2026-08-07):
+##  `_ignite_cell` 의 연료 가드 · 같은 함수의 물 인접 가드 · `_burn` 의 끄기.
+##  하나나 둘만 빼면 **초록이다** — 남은 가드가 먼저 가로채기 때문이다.
+##  ⇒ **이건 1차 감지기가 아니라 뒷받침이다.** 앞의 셋은 각자 제 검사가 따로 물고,
+##   이건 **그 셋이 동시에 무너졌을 때 화면이 거짓말하는 것**을 막는 마지막 줄이다.
+##  🔴 「이게 초록이니 두 비트가 안 겹친다」로 읽지 마라 — **가드가 살아 있어서 초록일 수도 있다.**
+func _no_cell_carries_both_bits(t) -> void:
+	# 🔴 전제: `_flag` 에 쓰이는 비트가 정말 둘뿐인가. 상수 이름으로 훑어 확인한다.
+	var consts: Dictionary = (Mat as GDScript).get_script_constant_map()
+	var bits := 0
+	var names := 0
+	for nm: String in consts:
+		if nm.begins_with("FLAG_"):
+			bits |= int(consts[nm])
+			names += 1
+	t.eq(names, 2, "상태 비트가 둘이다 (셋이 되면 아래 count 셈이 샌다)")
+	var both: int = Mat.FLAG_SHALLOW | Mat.FLAG_BURNING
+	t.eq(bits, both, "그 둘이 얕음과 불이다")
+
+	var g := _make_forest(950)
+	_wet_pocket(g, 150, 950)
+	# 타는 칸과 얕은 물이 **둘 다 실재하는** 상태를 만든다 — 없으면 아래 0이 공짜다.
+	g.apply(CellGrid.cmd_fill(120, 949, 120, 949, Mat.EMPTY))
+	g.set_water(120, 949, Tuning.WATER_WET)
+	g.ignite(110, 950)
+	var lit_seen := false
+	var shallow_seen := false
+	var bad := 0
+	for _i in 200:
+		g.step()
+		if g.burning_count() > 0:
+			lit_seen = true
+		var flags := g.get_flag()
+		if flags.count(Mat.FLAG_SHALLOW) > 0:
+			shallow_seen = true
+		bad += flags.count(both)
+	t.ok(lit_seen, "그동안 불이 실제로 탔다 (검사의 전제)")
+	t.ok(shallow_seen, "얕은 물도 실제로 있었다 (검사의 전제)")
+	t.eq(bad, 0, "200틱 내내 얕음과 불을 동시에 든 칸이 한 칸도 없다")
 
 
 ## 사각형 안의 물을 한 번에 훑는다 ⇒ `[합, 물 칸 수, 최대 양]`.

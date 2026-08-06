@@ -3,7 +3,9 @@ extends RefCounted
 ## 지형을 고치려면 Godot 에디터에서 stage.tscn의 Terrain(TileMapLayer)을 다시 그리고
 ## 구워라(스크립트 에디터에서 `bake_terrain_editor.gd` 열고 실행, 또는 헤드리스 `bake_terrain.gd`).
 ## MAP_W·MAP_H는 그린 영역의 실제 크기다(`TileMapLayer.get_used_rect()`) — 손으로 안 맞춘다.
-## 재질을 새로 추가했으면 `build_terrain_tileset.gd`·`terrain_baker.gd`의 표도 같이 늘려야 한다.
+## 🔴 재질을 새로 추가했으면 `terrain_baker.gd`의 CHAR_BY_MAT·NAME_BY_MAT을 늘리고
+## **이 파일을 다시 구워야 한다** — 도구만 고치면 이 산출물은 안 따라온다.
+## (붓 그림과 타일셋 표는 `terrain_palette.gd` 파생이라 손댈 것이 없다.)
 
 const Mat := preload("res://src/sim/cell_materials.gd")
 
@@ -139,4 +141,4 @@ const MAP: Array[String] = [
 	"....................................................................................................................................................................................................##############.....#####################............................................................................",
 ]
 
-const MAP_CHARS: Dictionary = {"#": Mat.STONE, "=": Mat.WOOD, "B": Mat.BEDROCK}
+const MAP_CHARS: Dictionary = {"#": Mat.STONE, "=": Mat.WOOD, "B": Mat.BEDROCK, "~": Mat.WATER}
