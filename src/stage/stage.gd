@@ -387,6 +387,11 @@ func _update_hud() -> void:
 			_grid.count_material(Mat.STONE), _grid.count_material(Mat.WOOD),
 			_grid.burning_count(),
 		],
+		# 🔴🔴 **「물이 멈췄나」는 이 숫자로만 판정된다**(기획 판정 1). 「멈춘 것 같다」는 판정이
+		#  아니다 — v1은 물이 멈춘 것처럼 보이는데 안 멈추고 있었고 번개가 거기서 죽었다.
+		# ⚠ 사용자가 볼 것은 **줄다가 한 자리로 잠기는 것**이다. 0은 좁은 그릇에서만 나오고
+		#  그건 그물이 헤드리스로 잰다 — 화면에서 140초를 기다릴 이유가 없다.
+		"활성 청크 %d / %d" % [_grid.active_chunk_count(), CellGrid.CHUNK_COUNT],
 		"FPS %d" % Engine.get_frames_per_second(),
 		"캐릭터 (%d,%d) %s" % [_char.x, _char.y, "접지" if _char.on_ground else "공중"],
 		"발사 %d · 비행중 %d · 자취 %d" % [
