@@ -17,6 +17,10 @@ uniform vec4 fire_lo;
 uniform vec4 fire_hi;
 uniform float fire_hz;
 
+// 🔴 얕은 물. 깊은 물 색은 **여기 없다** — 그건 재료라 `palette`로 이미 들어온다.
+uniform int flag_shallow;
+uniform vec4 water_shallow;
+
 // L8 → 정수 복원. 🔴 값을 16 미만으로 묶어 둔 이유가 이 반올림이다 —
 //  정밀도가 mediump로 떨어지는 기계에서도 0~15는 안전하다.
 //
@@ -36,6 +40,13 @@ void fragment() {
 	int flags = l8_to_int(texture(flag_tex, UV));
 
 	vec4 c = palette[mat_id];
+
+	// 🔴 **불보다 먼저 본다.** 물은 안 타므로 두 비트가 같은 칸에 설 수 없지만(물은 연료가 0이다),
+	//  순서를 정해 두면 **다음 상태 색이 올 때 「어느 게 이기나」를 다시 안 정한다.**
+	//  ⚠ 아래 불 분기가 `c`를 통째로 덮어쓰므로, 둘이 겹치는 날이 오면 **불이 이긴다.**
+	if ((flags & flag_shallow) != 0) {
+		c = water_shallow;
+	}
 
 	if ((flags & flag_burning) != 0) {
 		// 🔴 **셀마다 위상을 흩는다.** 안 그러면 불 전체가 한 덩어리로 같이 깜빡여서

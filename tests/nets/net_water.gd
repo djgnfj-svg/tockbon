@@ -47,6 +47,8 @@ func run(t) -> void:
 	_tick_cap_delays_but_never_drops(t)
 	_same_commands_give_the_same_grid(t)
 	_sleeping_grid_is_cheap(t)
+	# ── 단계 4 ──
+	_shallow_bit_tracks_the_amount(t)
 
 
 ## 🔴 격자와 청크가 안 나눠떨어지면 가장자리 셀이 **범위 밖 청크를 찍는다.**
@@ -1026,6 +1028,87 @@ func _sleeping_grid_is_cheap(t) -> void:
 	t.ok(slept <= ref * 50,
 		"잠든 격자 step() 이 기준자의 50배 아래다 (%dμs vs 기준 %dμs — %d배)" % [
 			slept, ref, slept / maxi(ref, 1)])
+
+
+# ══════════════════════════════════════════════════════════════════
+#  단계 4 — 얕음 비트
+# ══════════════════════════════════════════════════════════════════
+
+## 🔴🔴 **양과 비트가 한 자리에서 움직이나.** 갈라지면 **화면에만** 나온다 —
+##  시뮬은 양만 보고 셰이더는 비트만 보므로 서로를 안 고쳐 준다.
+##
+## 🔴 **경계값 양쪽을 다 잰다.** 「임계 이하면 켜진다」만 재면 **늘 켜는 구현**도 통과한다.
+## ⚠ 임계값을 여기 박지 않는다 — `WATER_WET` 이 바뀌면 손으로 적은 숫자가 조용히 낡는다.
+func _shallow_bit_tracks_the_amount(t) -> void:
+	var wet := Tuning.WATER_WET
+	t.ok(wet > 0 and wet < Tuning.WATER_MAX,
+		"임계가 0과 최대량 사이다 (%d — 아니면 아래 두 쪽 중 하나가 원리적으로 안 나온다)" % wet)
+	# 🔴 두 비트가 안 겹친다 — 겹치면 「얕은 물」과 「타는 칸」이 화면에서 같은 칸이 된다.
+	t.eq(Mat.FLAG_SHALLOW & Mat.FLAG_BURNING, 0, "얕음 비트와 불 비트가 안 겹친다")
+	t.ok(Mat.FLAG_SHALLOW < 16, "얕음 비트가 하위 4비트 안이다 (L8 정밀도 안전선)")
+
+	var g := CellGrid.new()
+	# 경계 **바로 위**: 얕지 않다.
+	g.set_water(500, 100, wet + 1)
+	t.eq(g.flag_at(500, 100) & Mat.FLAG_SHALLOW, 0, "임계보다 한 톨 많으면 얕음이 꺼져 있다")
+	# 경계 **정확히**: 얕다(「이하」가 계약이다).
+	g.set_water(501, 100, wet)
+	t.eq(g.flag_at(501, 100) & Mat.FLAG_SHALLOW, Mat.FLAG_SHALLOW, "임계와 같으면 얕음이 켜진다")
+	g.set_water(502, 100, 1)
+	t.eq(g.flag_at(502, 100) & Mat.FLAG_SHALLOW, Mat.FLAG_SHALLOW, "한 톨만 있어도 얕음이다")
+	g.set_water(503, 100, Tuning.WATER_MAX)
+	t.eq(g.flag_at(503, 100) & Mat.FLAG_SHALLOW, 0, "꽉 찬 칸은 안 얕다")
+
+	# 🔴 **넘나들면 따라 뒤집힌다.** 한 번만 재면 「처음에만 맞다」를 못 가른다.
+	g.set_water(504, 100, Tuning.WATER_MAX)
+	t.eq(g.flag_at(504, 100) & Mat.FLAG_SHALLOW, 0, "깊게 시작한다")
+	g.set_water(504, 100, wet)
+	t.eq(g.flag_at(504, 100) & Mat.FLAG_SHALLOW, Mat.FLAG_SHALLOW, "얕아지면 켜진다")
+	g.set_water(504, 100, Tuning.WATER_MAX)
+	t.eq(g.flag_at(504, 100) & Mat.FLAG_SHALLOW, 0, "다시 깊어지면 꺼진다")
+
+	# 🔴 **비우는 쪽도 내려야 한다.** 안 내리면 빈칸이 비트를 든 채 남고, 다음에 그 칸이
+	#  물이 될 때 양과 비트가 어긋난 채로 시작한다 — 화면에만 나온다.
+	g.set_water(504, 100, 0)
+	t.eq(g.mat_at(504, 100), Mat.EMPTY, "양 0이면 빈칸이 된다")
+	t.eq(g.flag_at(504, 100), 0, "빈칸에 얕음 비트가 안 남는다")
+
+	# 🔴🔴 **직접 쓰기 말고 시뮬이 굴러서도 맞나.** `set_water` 만 재면 `_water_step` 이 지나는
+	#  경로(`_water_fall`·`_water_share`)가 비트를 안 만져도 통과한다.
+	# 🔴🔴 **벽으로 가둔 그릇이어야 두 깊이가 같이 나온다.** 열린 바닥에 부으면 물이 평형까지
+	#  퍼져서 **전부 얕아진다** — 실제로 그렇게 짰다가 「깊은 칸 0개」로 빨개졌다(2026-08-07).
+	#  ⇒ 폭 8 그릇에 **2층 + 나머지 16**이 되게 붓는다: 아래 두 줄은 255, 맨 윗줄은 16이다.
+	var h := CellGrid.new()
+	h.apply(CellGrid.cmd_fill(599, 200, 608, 200, Mat.STONE))
+	h.apply(CellGrid.cmd_fill(599, 188, 599, 199, Mat.STONE))
+	h.apply(CellGrid.cmd_fill(608, 188, 608, 199, Mat.STONE))
+	for k in 16:
+		h.set_water(600 + (k % 8), 195 - (k / 8), Tuning.WATER_MAX)
+	h.set_water(600, 193, 128)
+	var settle := _settle(h, 200)
+	t.ok(settle > 1 and settle < 200, "부은 물이 흘러 정착한다 (%d틱)" % settle)
+
+	var mismatched := 0
+	var shallow_cells := 0
+	var deep_cells := 0
+	for y in range(185, 201):
+		for x in range(600, 608):
+			if h.mat_at(x, y) != Mat.WATER:
+				# 물이 아닌 칸에 얕음 비트가 남아 있으면 그것도 어긋난 것이다.
+				if (h.flag_at(x, y) & Mat.FLAG_SHALLOW) != 0:
+					mismatched += 1
+				continue
+			var want := Mat.FLAG_SHALLOW if h.aux_at(x, y) <= wet else 0
+			if (h.flag_at(x, y) & Mat.FLAG_SHALLOW) != want:
+				mismatched += 1
+			if want != 0:
+				shallow_cells += 1
+			else:
+				deep_cells += 1
+	t.eq(mismatched, 0, "흘러서 정착한 물의 양과 비트가 한 칸도 안 어긋난다")
+	# 🔴 **양쪽이 실제로 나왔다는 증거.** 한쪽이 0이면 위 검사가 절반만 돈 것이다.
+	t.ok(shallow_cells > 0, "얕은 칸이 실제로 생긴다 (%d칸 — 수면 쪽이다)" % shallow_cells)
+	t.ok(deep_cells > 0, "깊은 칸도 남는다 (%d칸 — 그릇 속이다)" % deep_cells)
 
 
 ## 사각형 안의 물을 한 번에 훑는다 ⇒ `[합, 물 칸 수, 최대 양]`.

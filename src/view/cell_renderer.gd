@@ -58,6 +58,11 @@ func setup(grid: CellGrid) -> void:
 	sm.set_shader_parameter("fire_lo", Fx.FIRE_LO)
 	sm.set_shader_parameter("fire_hi", Fx.FIRE_HI)
 	sm.set_shader_parameter("fire_hz", Fx.FIRE_FLICKER_HZ)
+	# 🔴 물도 같은 두 축이다 — 비트 위치는 `cell_materials`, 색은 `fx_tuning`.
+	#  ⚠ **깊은 물 색은 여기서 안 준다** — 그건 재료라 `palette` 로 이미 들어간다.
+	#   여기서 또 주면 물 색이 두 곳이 되고, 한쪽만 고치는 날이 온다.
+	sm.set_shader_parameter("flag_shallow", Mat.FLAG_SHALLOW)
+	sm.set_shader_parameter("water_shallow", Fx.WATER_SHALLOW)
 	material = sm
 
 
