@@ -12,8 +12,12 @@ const EMPTY := 0
 const STONE := 1
 const WOOD := 2
 const BEDROCK := 3  ## 못 부시는 벽. 거동은 STONE과 같고(고체) 파괴만 안 먹는다 — 아래 `indestructible`.
+## 🔴🔴 **물은 재료 하나다. 「물」과 「얕은 물」로 안 가른다** — 재료를 쓰는 문(`_write_cell`)이
+##  `_flag`·`_aux` 를 같이 0으로 만들어, 양이 임계를 넘나들 때마다 **양이 그 자리에서 날아간다.**
+##  ⇒ 깊이는 `_flag` 비트로 나른다(`docs/design/물.md` 「화면」).
+const WATER := 4
 
-const ALL: Array[int] = [EMPTY, STONE, WOOD, BEDROCK]
+const ALL: Array[int] = [EMPTY, STONE, WOOD, BEDROCK, WATER]
 
 ## 팔레트 슬롯 수. 🔴 셰이더의 `palette[16]`과 **같은 값이어야 한다.**
 ##  16을 넘기면 재료 id가 L8 정밀도 안전선(0~15)을 벗어난다.
@@ -35,7 +39,12 @@ const FLAG_BURNING := 2
 # 소비자 없는 필드를 놀려두면 나중에 누가 다른 뜻으로 읽는다. **의미를 여기 못 박는다.**
 #
 #   BURNING 켜짐 → 남은 연료
+#   WATER        → 🔴🔴 **물의 양(1~255).** 0이면 그 칸은 물이 아니다 — 재료가 EMPTY가 된다.
+#                  ⇒ 「재료가 WATER인데 양이 0」은 원리적으로 없다(`cell_grid._write_water`).
 #   그 외        → 사용 안 함. 0이어야 한다
+#
+# 🔴 **BURNING과 WATER는 같은 칸에서 못 만난다** — 물은 연료가 0이라 점화가 원리적으로 안 닿고,
+#  물의 문(`_write_water`)은 EMPTY나 WATER 위에만 쓴다. ⇒ 두 뜻이 겹칠 자리가 없다.
 
 ## 재료 정의. 🔴 여기 한 곳에서 거동·색·이름·연료가 전부 파생된다.
 ##
@@ -52,6 +61,13 @@ const DEFS: Dictionary = {
 	WOOD: {"name": &"나무", "behavior": BEHAVIOR_STATIC, "fuel": 200, "rgb": 0x6B4524},
 	BEDROCK: {"name": &"기반암", "behavior": BEHAVIOR_STATIC, "fuel": 0, "rgb": 0x232228,
 		"indestructible": true},
+	# 🔴🔴 **두 값이 규칙을 파생시킨다. 따로 막는 코드를 쓰지 마라.**
+	#  · `BEHAVIOR_NONE` ⇒ `is_solid()` 가 거짓 ⇒ **캐릭터도 탄도 물을 통과한다**
+	#  · `fuel: 0`       ⇒ 「물엔 불이 안 붙는다」. `_ignite_cell` 이 연료 0에서 이미 멈춘다
+	# ⚠ 색은 **아직 아무도 안 봤다** — 배경 0x0E0E13 · 돌 0x5C574F · 나무 0x6B4524 와 색축이
+	#  안 겹치는 중간 파랑으로 자리만 채웠다. 🔴 판정 6에서 사용자가 고칠 값이고,
+	#  고쳤으면 기획 문서(`water-and-chunk-sleep.md` 「정한 것」)의 표도 같이 고쳐라.
+	WATER: {"name": &"물", "behavior": BEHAVIOR_NONE, "fuel": 0, "rgb": 0x2C5F8A},
 }
 
 ## 정의가 없는 슬롯의 색. 🔴 **일부러 마젠타다** — 재료를 늘렸는데 팔레트가 안 따라오면
