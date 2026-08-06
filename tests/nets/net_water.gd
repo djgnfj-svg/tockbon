@@ -52,6 +52,11 @@ func run(t) -> void:
 	# ── 단계 5 ──
 	_water_disc_fills_without_wiping(t)
 	_water_rune_makes_water(t)
+	# ── 단계 6 ──
+	_water_puts_out_fire(t)
+	_no_water_means_no_rescue(t)
+	_wet_neighbour_never_catches(t)
+	_fire_beside_water_does_not_flicker(t)
 
 
 ## 🔴 격자와 청크가 안 나눠떨어지면 가장자리 셀이 **범위 밖 청크를 찍는다.**
@@ -1209,6 +1214,164 @@ func _water_rune_makes_water(t) -> void:
 	var sum_a: int = _water_scan(a, 780, 780, 820, 820)[0]
 	var sum_b: int = _water_scan(b, 780, 780, 820, 820)[0]
 	t.ok(sum_b < sum_a, "깊은 세대가 만드는 물이 더 적다 (%d < %d)" % [sum_b, sum_a])
+
+
+# ══════════════════════════════════════════════════════════════════
+#  단계 6 — 불과 물
+# ══════════════════════════════════════════════════════════════════
+
+## 나무 한 줄 + 그 아래 돌바닥.
+## ⚠ 나무를 **돌 위에** 얹는다 — 물이 나무 아래로 빠지면 이웃 판정이 흐려진다.
+func _make_forest(y: int) -> CellGrid:
+	var g := CellGrid.new()
+	g.apply(CellGrid.cmd_fill(100, y + 1, 160, y + 1, Mat.STONE))
+	g.apply(CellGrid.cmd_fill(100, y, 160, y, Mat.WOOD))
+	return g
+
+
+## 나무 줄 **위**에 물 한 칸을 가둔다. 🔴 **좌우를 돌로 막는 것이 요점이다.**
+##
+## ⚠ **막지 않으면 물이 나무 줄 위를 통째로 덮는다** — 아래가 고체(나무)라 못 내려가고
+##  좌우가 빈칸이라 끝까지 퍼진다. 그러면 **숲 전체가 젖어서 아무것도 안 타고**,
+##  「불이 물까지 번져 왔나」가 원리적으로 거짓이 된다.
+## 🔴 **실제로 그렇게 짰다가 검사가 헛돌았다**(2026-08-07) — 불이 물 근처에 오지도 못했고
+##  그런데도 「깜빡임 0」이 초록이었다. **전제 단언이 그걸 잡았다.**
+func _wet_pocket(g: CellGrid, x: int, y_wood: int) -> void:
+	g.apply(CellGrid.cmd_fill(x - 1, y_wood - 1, x - 1, y_wood - 1, Mat.STONE))
+	g.apply(CellGrid.cmd_fill(x + 1, y_wood - 1, x + 1, y_wood - 1, Mat.STONE))
+	g.set_water(x, y_wood - 1, Tuning.WATER_MAX)
+
+
+## 🔴🔴 **이미 타는 칸 옆에 물이 오면 꺼진다** — `_burn` 쪽 경로다.
+##  ⚠ 아래 `_wet_neighbour_never_catches`(점화 쪽)와 **다른 검사다.** 한 검사로 묶으면
+##   어느 경로가 죽었는지 못 가른다 — 둘은 실제로 다른 함수에 산다.
+func _water_puts_out_fire(t) -> void:
+	var g := _make_forest(300)
+	g.ignite(130, 300)
+	for _i in 8:
+		g.step()
+	var lit := g.burning_count()
+	t.ok(lit > 1, "불이 먼저 번진다 (%d칸 — 검사의 전제)" % lit)
+	t.eq(g.unburnable_in_front_count(), 0, "그때 파면이 깨끗하다")
+
+	# 🔴🔴 **한 칸을 지목해서 잰다.** 「불이 결국 0이 된다」로는 **아무것도 안 재진다** —
+	#  끄기를 통째로 지워도 그 칸들은 연료가 다해서 스스로 0이 된다(뒤집어 확인했다, 2026-08-07).
+	#  ⇒ 가르는 것은 **「연료가 남았는데 꺼졌고, 나무가 살아남았나」**다.
+	t.ok(g.is_burning(130, 300), "지목한 칸이 타고 있다 (검사의 전제)")
+	t.ok(g.fuel_at(130, 300) > 0, "그 칸에 연료가 아직 남아 있다 (%d)" % g.fuel_at(130, 300))
+	t.eq(g.mat_at(130, 300), Mat.WOOD, "그리고 아직 나무다")
+
+	# 🔴 **타는 한복판에 물을 붓는다.** 물 룬이 실제로 지나는 문(`cmd_water`)을 쓴다.
+	g.apply(CellGrid.cmd_water(130, 299, 8, Tuning.WATER_MAX))
+	g.step()
+	t.ok(not g.is_burning(130, 300), "물이 닿은 다음 틱에 곧바로 꺼진다 (연료가 남았는데도)")
+	t.eq(g.mat_at(130, 300), Mat.WOOD, "그 나무가 살아남는다 (다 탄 게 아니라 꺼진 것이다)")
+	t.eq(g.aux_at(130, 300), 0, "꺼진 칸의 연료 자리가 0으로 돌아간다")
+
+	var ticks := 1
+	while g.burning_count() > 0 and ticks < 200:
+		g.step()
+		ticks += 1
+	t.ok(ticks < 200, "물 밖의 불도 결국 다 꺼진다 (%d틱)" % ticks)
+	t.eq(g.burning_count(), 0, "정말 0이다")
+	t.ok(g.count_material(Mat.WOOD) > 0,
+		"나무가 남아 있다 (%d칸)" % g.count_material(Mat.WOOD))
+	t.eq(g.unburnable_in_front_count(), 0, "끈 뒤에도 파면에 탈 수 없는 재료가 없다")
+	t.eq(g.claimed_slot_count(), g.burning_count(), "자리 표도 맞다")
+
+	# ⚠ **물은 안 준다** — 끈 만큼 증발시키면 `_burn` 이 `_write_water` 를 지나야 하고,
+	#  그건 `_touch` 를 타서 **타는 숲 옆 호수가 매 틱 깨어난다.** 그 대가로 웅덩이는 무한 소화기다.
+	t.ok(g.count_material(Mat.WATER) > 0, "물은 그대로 남는다 (%d칸)" % g.count_material(Mat.WATER))
+
+
+## 🔴🔴 **반대쪽.** 물이 없으면 안 꺼져야 한다 — 안 재면 「불이 그냥 꺼진 것」과 구별이 안 되고,
+##  위 검사가 **아무것도 안 재는 것**이 된다.
+func _no_water_means_no_rescue(t) -> void:
+	var g := _make_forest(400)
+	g.ignite(130, 400)
+	for _i in 8:
+		g.step()
+	t.ok(g.burning_count() > 1, "같은 조건에서 불이 번진다 (검사의 전제)")
+
+	# 위 검사와 **같은 틱 수**를 돌린다. 물만 없다.
+	for _i in 20:
+		g.step()
+	t.ok(g.burning_count() > 0,
+		"물이 없으면 같은 시간에 안 꺼진다 (%d칸이 아직 탄다)" % g.burning_count())
+
+	# 그리고 결국은 **연료가 다해서** 꺼진다 — 나무가 남지 않는 것이 그 증거다.
+	var ticks := 0
+	while g.burning_count() > 0 and ticks < 400:
+		g.step()
+		ticks += 1
+	t.ok(ticks < 400, "연료가 다하면 결국 꺼진다 (%d틱)" % ticks)
+	t.eq(g.count_material(Mat.WOOD), 0, "그때는 나무가 한 칸도 안 남는다 (다 탔다)")
+
+
+## 🔴🔴 **물 옆 나무에는 애초에 안 붙는다** — `_ignite_cell` 쪽 경로다.
+##  ⚠ 이게 없으면 「붙었다가 즉시 꺼진다」가 되고, 그건 화면에서 **깜빡임**이다(= 고장으로 읽힌다).
+func _wet_neighbour_never_catches(t) -> void:
+	var g := _make_forest(500)
+	g.set_water(130, 499, Tuning.WATER_MAX)
+	t.ok(not g.ignite(130, 500), "물 아래 나무에는 직접 붙여도 안 붙는다")
+	t.eq(g.burning_count(), 0, "파면에도 안 올라간다")
+
+	# 좌우·아래도 같은 축이다.
+	# 🔴 옆 칸을 물로 만들려면 **먼저 파야 한다** — `set_water` 는 나무 위에 안 쓴다.
+	var h := _make_forest(600)
+	h.apply(CellGrid.cmd_fill(129, 600, 129, 600, Mat.EMPTY))
+	t.ok(h.set_water(129, 600, Tuning.WATER_MAX), "판 자리에 물을 놓는다 (전제)")
+	t.ok(not h.ignite(130, 600), "옆 칸이 물이어도 안 붙는다")
+
+	# 🔴 **반대쪽**: 물이 안 닿으면 붙는다. 안 재면 「아무 데도 안 붙는다」가 통과한다.
+	var d := _make_forest(700)
+	d.set_water(120, 699, Tuning.WATER_MAX)
+	t.ok(d.ignite(140, 700), "물에서 떨어진 나무에는 붙는다")
+
+	# 번짐도 물에서 멈춘다 — 직접 점화만 재면 `_burn` 의 번짐 경로가 안 걸린다.
+	var s := _make_forest(800)
+	_wet_pocket(s, 140, 800)
+	s.ignite(120, 800)
+	for _i in 60:
+		s.step()
+	t.eq(s.mat_at(140, 800), Mat.WOOD, "번지던 불이 물 아래 나무에서 멈춘다")
+	t.ok(s.mat_at(125, 800) != Mat.WOOD, "그 앞쪽 나무는 탔다 (검사의 전제 — 불이 실제로 번졌다)")
+
+
+## 🔴🔴 **진동이 없나 — 물 아래 나무가 「붙었다 꺼졌다」를 반복하지 않나.**
+##
+## ⚠ **`_burn` 에서만 끄면 이렇게 된다**: 이웃 불이 번져 붙는다 → 다음 틱에 꺼진다 →
+##  그 이웃이 아직 타므로 또 붙는다. 화면엔 **물가에서 불이 깜빡이는 것**으로 보이고,
+##  매번 `_write_cell` 이 돌므로 그 청크가 그동안 계속 깨어 있다.
+##
+## 🔴🔴 **재는 것은 「잠드나」가 아니라 「한 틱이라도 붙나」다. 그 구별이 이 검사의 전부다.**
+##  ⚠ **처음에 「끝나고 잠드나」로 짰더니 막기 전에도 초록이었다**(2026-08-07 실측).
+##   진동이 **이웃 나무의 연료가 다하면 끝나기 때문**이다 — 즉 **유한하다.** 그러니 「영영 안
+##   잠든다」는 거짓이고, 「끝나고 잠드나」는 **진동이 있어도 통과한다.**
+##  ⇒ **틱마다 그 칸을 봐야만 잡힌다.** 막기 전에 빨간 것을 확인하고 박았다.
+func _fire_beside_water_does_not_flicker(t) -> void:
+	var g := _make_forest(900)
+	# 숲 한쪽 끝에 **가둔** 물, 반대쪽 끝에 불. 불이 물 쪽으로 번져 와서 멈춘다.
+	_wet_pocket(g, 150, 900)
+	g.ignite(110, 900)
+
+	# 🔴 **틱마다 물 아래 나무를 본다.** 한 틱이라도 타면 그게 깜빡임이다.
+	var lit_ticks := 0
+	var ticks := 0
+	while g.burning_count() > 0 and ticks < 400:
+		g.step()
+		ticks += 1
+		if g.is_burning(150, 900):
+			lit_ticks += 1
+	t.ok(ticks < 400, "불이 결국 꺼진다 (%d틱)" % ticks)
+	# 🔴 **불이 실제로 물까지 번져 왔다는 증거.** 안 오면 이 검사가 통째로 헛돈다.
+	t.ok(g.mat_at(149, 900) != Mat.WOOD, "불이 물 바로 옆까지 번져 왔다 (검사의 전제)")
+	t.eq(lit_ticks, 0, "물 아래 나무가 한 틱도 안 붙는다 (붙었다 꺼졌다를 반복하지 않는다)")
+
+	var settle := _settle(g, 200)
+	t.ok(settle < 200, "그 뒤 격자가 잠든다 (%d틱)" % settle)
+	t.eq(g.mat_at(150, 900), Mat.WOOD, "물 아래 나무는 안 탔다")
+	t.ok(g.count_material(Mat.WATER) > 0, "물도 그대로다")
 
 
 ## 사각형 안의 물을 한 번에 훑는다 ⇒ `[합, 물 칸 수, 최대 양]`.

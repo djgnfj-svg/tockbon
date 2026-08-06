@@ -546,6 +546,20 @@ func _burn() -> void:
 	var i := n - 1
 	while i >= 0:
 		var idx := _burning[i]
+		var x := idx & X_MASK
+		var y := idx >> X_SHIFT
+		# 🔴🔴 **물이 불을 끈다 — 파면 쪽에서 본다.**
+		#  ⚠ 물 쪽에서 「내 옆에 불이 있나」를 보면 **물이 든 모든 칸이 매 틱 이웃 넷을 읽고**,
+		#   그건 고인 호수 전체를 깨우는 것이라 「깨어 있는 청크는 표면 띠뿐」이 통째로 무효가 된다.
+		#   파면은 청크와 독립이므로 이 방향은 공짜다.
+		# 🔴 **재료를 다시 쓴다**(`_mat[idx]` 그대로) — `_write_cell` 이 `_unburn`·`_flag`·`_aux`·
+		#  `_changed`·`_touch` 를 **한 자리에서** 처리한다. 손으로 셋을 만지면 갈라진다.
+		#  ⚠ 다 탄 칸의 `_write_cell(idx, EMPTY)` 와 같은 어법·같은 루프 위치라 swap-remove
+		#   함정도 그 주석이 이미 다룬다.
+		if _water_adjacent(x, y):
+			_write_cell(idx, _mat[idx])
+			i -= 1
+			continue
 		var fuel := _aux[idx] - Tuning.FIRE_BURN_PER_TICK
 		if fuel <= 0:
 			# 🔴 다 탄 자리는 **빈칸이 된다.** 재료를 그대로 두면 불이 지나간 흔적이 화면에
@@ -557,14 +571,40 @@ func _burn() -> void:
 			continue
 		_aux[idx] = fuel
 		if spread:
-			var x := idx & X_MASK
-			var y := idx >> X_SHIFT
 			# 🔴 **네 방향이다.** 대각까지 열면 1셀 틈을 사선으로 새서 「돌에서 멈춘다」가 흐려진다.
 			_ignite_cell(x - 1, y)
 			_ignite_cell(x + 1, y)
 			_ignite_cell(x, y - 1)
 			_ignite_cell(x, y + 1)
 		i -= 1
+
+
+## 네 이웃 중에 물이 있나. 🔴 **대각은 안 본다** — 불의 번짐이 네 방향이라 같은 축이어야 한다.
+##
+## 🔴🔴 **「이웃에 물이 있다」이지 「이 나무가 젖었다」가 아니다.** 나무 칸 자체는 아무것도 안 바뀐다.
+##  ⚠ `docs/design/물.md` 의 **「젖은 나무는 안 타나」는 여전히 미정이다**(사용자가 「나중 문제」로
+##   미뤘다) — 그건 **물이 지나간 나무가 마른 뒤에도 안 타나**, 즉 나무가 젖음을 **기억하나**이다.
+##  🔴 **이 함수는 그 물음에 답하지 않는다.** 여기 물이 빠지면 그 칸은 곧바로 다시 탄다.
+##   ⇒ 이걸 「미정이 해결됐다」로 읽지 마라.
+##
+## ⚠ **임계가 없다 — 물이 있으면 있는 것이다.** 「양이 얼마면 끄나」를 상수로 두지 않았다:
+##  이 리포는 이미 물 임계 둘(`WATER_WET` · `WATER_MIN_DIFF`)을 한 손잡이로 착각해 데였고,
+##  근거 없는 **세 번째**를 세우면 그 혼동이 한 번 더 온다. 「물이 있으면 안 탄다」는 값이 아니라
+##  **규칙으로 읽힌다.** 🔴 **되살아나는 조건**: 얇게 퍼진 한 톨이 큰 불을 끄는 게 화면에서 과할 때.
+##
+## ⚠ **비용을 안 쟀다.** 부르는 자리 둘 다 이미 같은 지점에서 함수 호출 4회(`_ignite_cell`)를
+##  하고 있어 자리수가 안 바뀐다고 보지만, **읽고 낸 판단이지 실측이 아니다.**
+func _water_adjacent(x: int, y: int) -> bool:
+	var row := y << X_SHIFT
+	if x > 0 and _mat[row | (x - 1)] == Mat.WATER:
+		return true
+	if x < W - 1 and _mat[row | (x + 1)] == Mat.WATER:
+		return true
+	if y > 0 and _mat[(row - W) | x] == Mat.WATER:
+		return true
+	if y < H - 1 and _mat[(row + W) | x] == Mat.WATER:
+		return true
+	return false
 
 
 ## 셀 하나에 불을 붙인다. 붙었으면 true.
@@ -583,6 +623,16 @@ func _ignite_cell(x: int, y: int) -> bool:
 		return false
 	# ⚠ 안전망이다. 여기 걸리는 게 보이면 값이 아니라 **나무를 얼마나 뒀나**를 봐라.
 	if _burning.size() >= Tuning.MAX_BURNING:
+		return false
+	# 🔴🔴 **젖은 곳 옆에는 애초에 안 붙는다. `_burn` 의 끄기만으로는 부족하다.**
+	#  ⚠ 끄기만 두면 이렇게 된다: 이웃 불이 번져 붙는다 → 다음 틱에 꺼진다 → 그 이웃이 아직
+	#   타므로 또 붙는다. **실측 37틱 연속**(2026-08-07, 이 줄을 넣기 전에 그물로 쟀다).
+	#   화면엔 **물가에서 불이 깜빡이는 것**으로 보이고 그건 규칙이 아니라 고장으로 읽힌다.
+	#  ⚠ **「영영 안 잠든다」는 아니다** — 이웃 나무의 연료가 다하면 끝나므로 **유한하다.**
+	#   그래서 「끝나고 잠드나」로는 못 잡고 **틱마다 그 칸을 봐야** 잡힌다(`net_water` 의 그 검사).
+	# 🔴 **이 검사가 여기 마지막인 이유**: 위 셋은 전부 O(1) 비교이고 이건 배열을 넷 읽는다 —
+	#  안 붙을 칸에까지 이웃을 읽을 이유가 없다.
+	if _water_adjacent(x, y):
 		return false
 	_flag[i] |= Mat.FLAG_BURNING
 	_aux[i] = fuel
