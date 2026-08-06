@@ -9,6 +9,11 @@ extends Node
 ## 좌클릭. **월드 좌표**를 넘긴다 — 뷰포트 좌표를 그대로 넘기면 흔드는 동안 조준이 어긋난다.
 signal fire_requested(world_px: Vector2)
 signal reset_requested
+## 🔴 **F — 마우스 자리에 물을 붓는다. 껍데기 전용 디버그 키다.**
+##  게임 안에서 물이 생기는 길은 **단계 5의 물 룬**이고, 그때까지 이 키가 **물을 화면에서 보는
+##  유일한 길**이다. ⚠ 룬이 서면 이 키는 남겨도 되고 지워도 된다 — 무대는 본편에 안 남는다.
+## ⚠ **월드 좌표를 넘긴다** — 좌클릭과 같은 이유다(흔들리는 동안 어긋난다).
+signal water_requested(world_px: Vector2)
 ## 🔴🔴 **조합을 번갈아 쏘는 것이 몇 초 안에 돼야 한다** — 그게 판정 1·2를 재는 유일한 방법이다.
 ##  ⚠ 여기는 **번호만** 넘긴다. 번호 → 문양 목록 표는 `stage.gd`에 있다(조립은 껍데기의 일이다).
 signal loadout_requested(n: int)
@@ -72,6 +77,11 @@ func _unhandled_input(event: InputEvent) -> void:
 		match k.physical_keycode:
 			KEY_R:
 				reset_requested.emit()
+			KEY_F:
+				# 🔴 **키 이벤트에는 마우스 좌표가 없다.** 그래서 뷰포트에서 「지금」의 마우스를
+				#  읽어 같은 `_to_world` 로 변환한다 — 좌클릭과 **같은 문을 지나야** 두 길이
+				#  안 갈라진다. ⚠ 여기서만 따로 변환하면 흔들리는 동안 물만 엉뚱한 셀에 떨어진다.
+				water_requested.emit(_to_world(get_viewport().get_mouse_position()))
 
 
 ## 🔴🔴 **뷰포트 좌표 ≠ 월드 좌표다** — 흔들림용 `Camera2D`가 붙어 있는 한.

@@ -171,6 +171,22 @@ var _world := WorldStep.new(_grid, _spell, _char)
 ##  화면에서 안 갈리는데 이 숫자만 맞으면 그게 이 단계가 멈춰야 하는 신호다.
 var _blast_count := 0
 
+## 🔴🔴 **물 칸 수는 N틱마다만 센다.** `count_material` 이 한 번에 552μs이고, HUD가 매 프레임
+##  부르면 60Hz에서 **33,000μs/s = CPU의 3.3%** 다. 돌·나무 두 줄이 이미 그렇게 새고 있다
+##  (`cell_grid.count_material` 주석이 「고칠 자리는 부르는 쪽」이라고 적었다) — **물이 그 새는
+##  구멍을 넓히지 않게 한다.** 20틱 = 1초에 한 번이면 2.8%가 0.05%가 된다.
+## ⚠ **화면이 1초까지 낡는다.** 물이 퍼지는 것은 활성 청크 줄이 실시간으로 보여 주므로 괜찮다.
+##
+## 🔴🔴 **이건 「칸 수」이지 「양의 합」이 아니다. 판정 3(총량 보존)을 여기서 읽지 마라.**
+##  물이 퍼지면 같은 양이 **더 많은 칸**에 담기므로 이 숫자는 **늘어난다.** 그게 정상이다.
+##  ⚠ 양의 합을 싼값에 낼 방법이 지금 없다 — `_aux` 를 GDScript로 훑으면 62,676μs다.
+##   ⇒ **판정 3은 그물이 값으로 잰다**(`net_water` 의 `총량 보존`). 화면은 그 자리가 아니다.
+const WATER_HUD_TICKS := 20
+var _water_cells := 0
+## ⚠ **첫 프레임에 바로 세게 음수로 시작한다.** -1로 두면 틱 20까지 「물 0칸」이 떠서,
+##  F를 누른 사용자가 **1초 동안 키가 안 먹은 것으로 읽는다.**
+var _water_hud_tick := -WATER_HUD_TICKS
+
 
 func _ready() -> void:
 	# 🔴🔴 **글자 크기를 여기서 밀어 넣는다.** `Label` 이 엔진 기본(16)을 쓰는데, 옛 화면 배율 2.0이
@@ -191,6 +207,7 @@ func _ready() -> void:
 	_spell_view.setup(_spell)
 	_input.fire_requested.connect(_fire_at)
 	_input.reset_requested.connect(reset_stage)
+	_input.water_requested.connect(_pour_water_at)
 	_input.loadout_requested.connect(_set_loadout)
 	# 🔴🔴 **세상을 안 멈춘다** — 여기서 `get_tree().paused`를 건드리지 마라.
 	#  창을 연 채로 걷고·쏘고·불이 번지는 것이 기획 판정 4의 전부다.
@@ -225,6 +242,32 @@ func _fire_at(world_px: Vector2) -> void:
 		return
 	_world.enqueue(Aim.fire_cmd(
 		_char_view.tip_px(), world_px, _circle.element(), _circle.packed_glyphs()))
+
+
+## 🔴🔴 **F — 마우스 자리에 물을 붓는다. 껍데기 전용 디버그 문이다.**
+##  게임 안에서 물을 만드는 것은 **단계 5의 물 룬**이고, 그때까지 물을 화면에서 보는 길이 이것뿐이다.
+##
+## 🔴 **`_grid.set_water` 를 직접 부른다** — `ignite()` 와 정확히 같은 자리다(격자의 「그물·무대용 문」).
+##  ⚠ 커맨드를 안 지나므로 **멀티에는 안 간다.** 그게 맞다 — 무대는 본편에 안 남고, 물이 네트워크를
+##   타는 길은 단계 5의 `CMD_WATER` 다. 여기에 커맨드를 만들면 **쓰이지 않는 문이 하나 더 선다.**
+##
+## ⚠ **양과 반경은 「눈에 띄나」로 고른 값이다.** 반경 16셀 = 지름 128px 이고 화면이 1920×1080이라
+##  한 번 누르면 확실히 보인다. 🔴 **한 방울로 두면 사용자가 「키가 안 먹는다」로 읽는다.**
+## ⚠ `floori` 다 — `aim._to_cell` 과 같은 이유이고, `int()` 는 격자 왼쪽·위 밖에서 한 칸 튄다.
+const WATER_BRUSH_R := 16
+
+func _pour_water_at(world_px: Vector2) -> void:
+	var cx := floori(world_px.x / Tuning.CELL_PX)
+	var cy := floori(world_px.y / Tuning.CELL_PX)
+	var r2 := WATER_BRUSH_R * WATER_BRUSH_R
+	# 🔴 **정수 원반이다** — `_disc` 와 같은 모양이다. 여기서 다르게 그리면 「폭발은 동그란데
+	#  물은 네모」가 되고, 그건 화면에서만 보인다.
+	for dy in range(-WATER_BRUSH_R, WATER_BRUSH_R + 1):
+		for dx in range(-WATER_BRUSH_R, WATER_BRUSH_R + 1):
+			if dx * dx + dy * dy > r2:
+				continue
+			# ⚠ 돌·타는 칸은 `set_water` 가 조용히 거절한다 — 그릇 안에 부어도 벽을 안 먹는다.
+			_grid.set_water(cx + dx, cy + dy, Tuning.WATER_MAX)
 
 
 ## ⚠ 표에 없는 번호는 **조용히 무시한다.** 눌러도 아무 일이 없는 게 「빈 조합으로 바뀌는 것」보다
@@ -371,6 +414,12 @@ static func build_terrain_into(g: CellGrid) -> void:
 
 
 func _update_hud() -> void:
+	# 🔴 **틱 번호로 조인다. 프레임 수로 조이지 마라** — 프레임률이 흔들리면 세는 주기도 흔들리고,
+	#  그러면 「느려질 때 더 자주 센다」가 된다. 위 `WATER_HUD_TICKS` 주석에 비용이 있다.
+	var tick := _grid.get_tick()
+	if tick - _water_hud_tick >= WATER_HUD_TICKS or tick < _water_hud_tick:
+		_water_hud_tick = tick
+		_water_cells = _grid.count_material(Mat.WATER)
 	# 🔴 **체력의 단일 소스는 캐릭터다.** 껍데기가 따로 세면 「깎였는데 숫자가 그대로」가 된다.
 	# ⚠ 쓰러짐도 **같은 값에서 파생**시킨다 — 걸쇠를 따로 들면 「0인데 안 쓰러졌다」가 화면에 남는다.
 	#  🔴 부활 방법을 같이 적는다. 혼자라 일으켜 줄 사람이 없어 **R이 유일한 길**인데,
@@ -391,7 +440,10 @@ func _update_hud() -> void:
 		#  아니다 — v1은 물이 멈춘 것처럼 보이는데 안 멈추고 있었고 번개가 거기서 죽었다.
 		# ⚠ 사용자가 볼 것은 **줄다가 한 자리로 잠기는 것**이다. 0은 좁은 그릇에서만 나오고
 		#  그건 그물이 헤드리스로 잰다 — 화면에서 140초를 기다릴 이유가 없다.
-		"활성 청크 %d / %d" % [_grid.active_chunk_count(), CellGrid.CHUNK_COUNT],
+		# ⚠ **물 칸은 「양의 합」이 아니다** — 위 `WATER_HUD_TICKS` 주석. F로 붓는다.
+		"활성 청크 %d / %d · 물 %d칸 (F로 붓기)" % [
+			_grid.active_chunk_count(), CellGrid.CHUNK_COUNT, _water_cells,
+		],
 		"FPS %d" % Engine.get_frames_per_second(),
 		"캐릭터 (%d,%d) %s" % [_char.x, _char.y, "접지" if _char.on_ground else "공중"],
 		"발사 %d · 비행중 %d · 자취 %d" % [
