@@ -23,6 +23,12 @@ const FP_TO_PX: float = 1.0 * Tuning.CELL_PX / SpellSim.FP_ONE
 
 var _sim: SpellSim = null
 
+## 룬 → 탄 머리 텍스처. 🔴 **`_ready`에서 한 번만 읽는다** — `_draw()`에서 `load()`를 부르면
+##  매 프레임 캐시를 뒤지고, 경로가 틀렸을 때 **프레임마다 짖어서** 로그가 못 쓰게 된다.
+## ⚠ **없는 룬을 여기 채우지 않는다.** 비면 아래 `_draw_head`가 마젠타로 비명을 지른다 —
+##  `ELEM_FX_MISSING`과 같은 어법이고, **조용히 안 그리는 것보다 낫다.**
+var _bolt_tex: Dictionary = {}
+
 ## 이번 프레임이 두 틱 사이 어디인가(0=직전 틱 · 1=이번 틱). 껍데기가 매 프레임 밀어 넣는다.
 ## ⚠ 시계는 시뮬 소유자에게 있다 — 여기서 `delta`를 누산하면 시계가 둘이 된다.
 var _alpha := 0.0
@@ -41,6 +47,15 @@ func _ready() -> void:
 	var m := CanvasItemMaterial.new()
 	m.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
 	material = m
+	# 🔴 못 읽으면 **그 자리에서 짖는다.** 조용히 넘기면 화면에서 마젠타로만 드러나고,
+	#  마젠타는 「표에 안 적었다」와 「파일이 없다」를 구별해 주지 못한다.
+	for elem: int in Fx.BOLT_SHEETS:
+		var path: String = Fx.BOLT_SHEETS[elem]
+		var tex: Texture2D = load(path)
+		if tex == null:
+			push_error("SpellView: 탄 머리 그림을 못 읽는다 — %s" % path)
+			continue
+		_bolt_tex[elem] = tex
 
 
 func setup(sim: SpellSim) -> void:
@@ -172,12 +187,21 @@ func _draw_head(i: int) -> void:
 	var p := head_px(i)
 	var e := _elem(i)
 	var glow: Color = e["glow"]
-	var core: Color = e["core"]
 	# 🔴 **머리 크기가 세대를 나른다.** 날아가는 동안 「작은 것들」이 보이는 유일한 축이다.
 	var r := Fx.bolt_px(_gen(i))
+	# 무리는 그림이 아니라 여기가 그린다 — `fx_tuning.BOLT_SHEETS` 주석이 이유를 든다.
 	draw_circle(p, r * Fx.BOLT_GLOW_RATIO,
 		Color(glow.r, glow.g, glow.b, Fx.BOLT_GLOW_A), true)
-	draw_circle(p, r, core, true)
+	# 🔴🔴 **그림은 정확히 지름 2r 로 그린다.** 세대0에서 16px 원본과 1:1이고 세대1에서 절반이다
+	#  (`bolt_px` 8 → 4). ⚠ 그림 크기를 상수로 박지 마라 — 표와 그림이 두 곳이 되고,
+	#   갈라지면 **세대가 작아졌는데 그림만 그대로**가 되는데 에러가 안 난다.
+	var tex: Texture2D = _bolt_tex.get(_elem_id(i), null)
+	if tex == null:
+		# 🔴 **표에 없는 룬은 마젠타로 비명을 지른다.** 조용히 안 그리면 「탄이 안 나간다」로 읽히고,
+		#  그건 발사 쪽 버그를 찾게 만든다(`ELEM_FX_MISSING`과 같은 이유).
+		draw_rect(Rect2(p.x - r, p.y - r, r * 2.0, r * 2.0), Color(1.0, 0.0, 1.0), true)
+		return
+	draw_texture_rect(tex, Rect2(p.x - r, p.y - r, r * 2.0, r * 2.0), false)
 
 
 func _gen(i: int) -> int:
@@ -193,4 +217,12 @@ func _live(i: int) -> bool:
 func _elem(i: int) -> Dictionary:
 	if not _live(i):
 		return Fx.ELEM_FX_MISSING
-	return Fx.elem_fx(int(_sim.get_element()[i]))
+	return Fx.elem_fx(_elem_id(i))
+
+
+## ⚠ 죽은 슬롯이 **-1** 인 것이 일부러다 — 0(`ELEM_FIRE`)으로 떨어지면 없는 투사체가
+##  불로 그려질 뻔하고, 그건 `_live` 가드가 도는지 아무도 못 재게 만든다.
+func _elem_id(i: int) -> int:
+	if not _live(i):
+		return -1
+	return int(_sim.get_element()[i])

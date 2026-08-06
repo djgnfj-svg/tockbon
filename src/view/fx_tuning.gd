@@ -530,6 +530,27 @@ const ELEM_FX_MISSING: Dictionary = {
 	"core": Color(1.0, 0.0, 1.0), "glow": Color(1.0, 0.0, 1.0),
 }
 
+## 🔴🔴 **탄 머리 그림. 룬 하나 추가 = 여기 한 줄.** 위 `ELEM_FX` 와 **키가 같아야 한다** —
+##  갈라지면 색은 있는데 그림이 없는 룬이 생기고, 그건 마젠타로 드러난다(아래 `spell_view`).
+##
+## 🔴 **그림에는 머리만 있다. 꼬리는 코드가 그린다**(`spell_view._draw_trail`).
+##  근거는 속도다 — 탄이 1600px/s 라 **한 프레임에 26.7px** 을 가고, 그림 꼬리(16px)는
+##  그보다 짧아 **움직이는 동안 자취에 통째로 묻힌다.** 그리고 불은 처지는데 그림 꼬리는
+##  직선이라 **포물선에서 어긋난다.** 기준은 `docs/design/진-룬-문양.md` 의 「탄 머리 그림」.
+##  ⚠ **`speed` 를 12 아래로 내리면 이 근거가 뒤집힌다** — 그때는 그림 꼬리가 보이기 시작한다.
+##
+## 🔴 **알파가 없는 png 다. 그래도 맞다** — `spell_view` 가 가산 합성이라 검은 픽셀은 더해도 0,
+##  즉 **검은 배경이 그대로 투명 노릇을 한다.** ⚠ 뒤집어 말하면 **어두운 색은 화면에 안 나온다** —
+##  그림에 외곽선이나 음영을 넣으면 그 자리가 뚫려 보인다.
+##
+## ⚠ **`assets/spell/` 에 `bolt_water.png` · `bolt_thunder.png` 가 이미 있는데 여기 없다.**
+##  🔴 **빠뜨린 게 아니다** — `sim_tuning.ELEM_ALL` 이 불·무 둘뿐이라 **그 룬이 아직 없다.**
+##  룬이 생기는 날 여기 두 줄을 더한다. 그림은 그때까지 안 쓰인다.
+const BOLT_SHEETS: Dictionary = {
+	Tuning.ELEM_FIRE: "res://assets/spell/bolt_fire.png",
+	Tuning.ELEM_NONE: "res://assets/spell/bolt_none.png",
+}
+
 static func elem_fx(element: int) -> Dictionary:
 	return ELEM_FX.get(element, ELEM_FX_MISSING)
 
