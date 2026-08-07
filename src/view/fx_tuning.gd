@@ -25,6 +25,9 @@ extends RefCounted
 
 const Tuning := preload("res://src/sim/sim_tuning.gd")
 const Glyph := preload("res://src/sim/glyph_defs.gd")
+## 🔴 `src/view/`는 `src/actor/`를 참조할 수 있다(`net_layers`) — `character_view.gd`가 이미
+##  `Character`를 그렇게 쓴다. 여기서는 종류별 그림 경로의 **키**로만 쓴다(아래 `MONSTER_SHEETS`).
+const MonsterDefs := preload("res://src/actor/monster_defs.gd")
 
 # ─── 캐릭터 ───────────────────────────────────────────────────────
 ## 🔴🔴 **몸은 시트 한 장이고, 상태 → 칸은 아래 표 하나다.**
@@ -102,16 +105,29 @@ const CHAR_UPRIGHT: Array[int] = [CHAR_STAND, CHAR_WALK]
 const CHAR_WALK_PX_PER_FRAME := 24
 
 # ─── 몬스터 ───────────────────────────────────────────────────────
-## 🔴🔴 **단색 사각형.** 스프라이트는 없다(`character-sprite`가 선례 — 상자가 먼저 섰다).
+## 🔴🔴 **폴백 색이다 — 이제 기본은 스프라이트다**(`MONSTER_SHEETS` 아래).
+##  ⚠ **지우지 않는다.** 텍스처 로딩이 실패하면 `monster_view`가 이 색 사각형을 대신 그린다 —
+##  「아무것도 안 보임」보다 「분홍 네모」가 낫다(고장 신호로 읽힌다. `character_view._body_tex`는
+##  null 검사 없이 그냥 짖게 두지만, 몬스터는 종류가 늘 둘 이상이라 하나가 깨져도 나머지가
+##  마저 보여야 한다 — 그래서 여기는 **짖지 않고 대체한다**).
 ##  🔴 크기는 여기 없다 — `monster_defs.gd`(actor)에서 나온다. 여기 또 두면 상자 표가
 ##  둘이 되고, 갈라진 증상은 「돼지가 벽에서 12px 떠 있다」 하나뿐이다(위 `monster_view` 상자).
-##
-## ⚠ **단계 4에서 종류별 색 표가 된다.** 지금은 한 종류뿐이라 이름에 종류를 안 넣었다 —
-##  갈릴 때 `MONSTER_FILL`을 지우고 `monster_defs.DEFS` 같은 표 하나로 바꿔라.
 ## 🔴 지형(돌·나무)·불(주황)·물(청록)과 색상환에서 멀어야 눈이 즉시 가른다 — 붉은 자주를 골랐다.
-##  ⚠ **단계 7에서도 종류별 색은 안 건드린다** — team-lead 지시(2026-08-07): 사용자가 정할 자리고
-##   스프라이트가 곧 붙는다.
+##  ⚠ **종류별 색은 여전히 안 건드린다** — team-lead 지시(2026-08-07): 사용자가 정할 자리다.
 const MONSTER_FILL := Color(0.78, 0.22, 0.42, 1.0)
+
+## 🔴🔴 **몸 그림 — 종류 하나에 그림 한 장.** 캐릭터(`CHAR_SHEET`)처럼 상태별 칸이 아니다 —
+##  몬스터는 아직 걷기 애니메이션이 없다(미정 16번, `character-sprite`가 선례). 새 종류를
+##  늘리면 여기 한 줄 + `monster_defs.gd` 한 줄이다.
+##
+## 🔴🔴 **그림 크기가 곧 상자 크기다**(`monster_defs.w_px/h_px` — 44×32 · 24×28) — **우연이 아니다.**
+##  픽셀 아티스트가 상자에 맞춰 그렸다. ⚠ **그래도 `monster_view`는 이 그림의 실제 픽셀 크기를
+##  안 믿는다** — `Defs`에서 읽은 크기로 그린다(둘이 갈리면 그림이 늘어나 보이는 대신 여전히
+##  상자에 맞는다). `net_monster_sprite`가 "지금은 같다"를 값으로 재서, 갈라지는 날 바로 잡는다.
+const MONSTER_SHEETS: Dictionary = {
+	MonsterDefs.KIND_PIG: "res://assets/monster/pig_body.png",
+	MonsterDefs.KIND_HEN: "res://assets/monster/chicken_body.png",
+}
 
 ## 🔴🔴 **머리 위 체력바.** 폭·자리는 `monster_defs.w_px`(상자)에서 나온다 — 여기 폭을 박으면
 ##  「크기가 둘이 된다」는 위 상자와 똑같은 함정이다(`monster_view.hp_bar_rect`가 상자를 읽는다).

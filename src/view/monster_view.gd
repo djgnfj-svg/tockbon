@@ -35,6 +35,21 @@ var _flash_left: Dictionary = {}
 var _dmg_numbers: Array[Dictionary] = []
 var _corpses: Array[Dictionary] = []
 
+## 종류 → 몸 그림. 🔴 `Defs.ALL`에서 만든다 — 종류를 늘리면(`monster_defs.gd` 한 줄 +
+##  `fx_tuning.MONSTER_SHEETS` 한 줄) 여기는 안 건드려도 된다.
+## ⚠ **`null` 검사를 안 붙인다 — 대신 `.get()`으로 읽는 쪽이 대체한다**(`_draw_monster_body`).
+##  `character_view._body_tex`와 다른 규율이다: 캐릭터는 하나뿐이라 깨지면 그냥 짖어도 되지만,
+##  몬스터는 종류가 늘 여럿이라 하나가 깨져도 나머지 종류는 마저 보여야 한다(위 `MONSTER_FILL` 상자).
+var _sheets: Dictionary = _load_sheets()
+
+
+## 🔴 static — `_init`이 돌기 전에도 그물이 값을 검증할 수 있게(`net_monster_sprite`).
+static func _load_sheets() -> Dictionary:
+	var out: Dictionary = {}
+	for kind: int in Defs.ALL:
+		out[kind] = load(Fx.MONSTER_SHEETS[kind]) as Texture2D
+	return out
+
 
 func setup(world: WorldStep) -> void:
 	_world = world
@@ -174,7 +189,7 @@ func _draw() -> void:
 
 func _draw_monster(m: Monster) -> void:
 	var r := box_rect(m.kind, m.x, m.y)
-	draw_rect(r, Fx.MONSTER_FILL)
+	_draw_monster_body(m, r)
 	if _flash_left.has(m.id):
 		var frac := float(_flash_left[m.id]) / float(Fx.MONSTER_FLASH_FRAMES)
 		var c := Fx.MONSTER_FLASH_COLOR
@@ -184,6 +199,28 @@ func _draw_monster(m: Monster) -> void:
 	if m.burning:
 		draw_rect(r, Fx.CHAR_BURN, false, Fx.CHAR_BURN_PX)
 	_draw_hp_bar(m.kind, m.x, m.y, m.hp)
+
+
+## 🔴🔴 **그림은 `r`(= `Defs`에서 나온 상자)에 맞춰 그린다 — 텍스처 자기 픽셀 크기를 안 믿는다.**
+##  `draw_texture_rect`가 목적지 크기로 늘이거나 줄이므로, 그림이 상자와 갈려도 **화면은 여전히
+##  상자 크기다**(`net_monster_sprite`가 "지금은 같다"를 값으로 잰다 — 갈리면 거기가 먼저 빨개진다).
+##
+## 🔴 **텍스처가 없으면(로딩 실패) `MONSTER_FILL` 사각형으로 대체한다.** 위 `fx_tuning.MONSTER_FILL`
+##  상자가 그 이유를 적었다 — 몬스터는 종류가 늘 여럿이라 하나가 깨져도 나머지는 마저 보여야 한다.
+##
+## ⚠ **몬스터 그림은 오른쪽을 본다 — 왼쪽으로 갈 때 뒤집는다**(`character_view._draw`와 같은 어법,
+##  `draw_set_transform`으로 좌우 스케일을 뒤집는다). ⚠ **되돌리는 것을 잊지 마라** —
+##  안 되돌리면 이 뒤에 그리는 것(번쩍·불 테두리·체력바) 전부가 뒤집힌 좌표계에서 그려진다.
+func _draw_monster_body(m: Monster, r: Rect2) -> void:
+	var tex: Texture2D = _sheets.get(m.kind)
+	if tex == null:
+		draw_rect(r, Fx.MONSTER_FILL)
+		return
+	var flip := m.facing < 0
+	draw_set_transform(Vector2(r.position.x + (r.size.x if flip else 0.0), r.position.y),
+		0.0, Vector2(-1.0 if flip else 1.0, 1.0))
+	draw_texture_rect(tex, Rect2(Vector2.ZERO, r.size), false)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
 func _draw_hp_bar(kind: int, x: int, y: int, hp: int) -> void:

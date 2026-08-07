@@ -30,6 +30,11 @@ var reload_left := 0
 ##  「불에서 나왔는데 계속 타 보인다」가 원리적으로 없다.
 var burning := false
 
+## 마지막으로 향한 쪽(+1 오른쪽 · -1 왼쪽). 🔴 `character.facing`과 같은 어법이다 — 스프라이트가
+##  붙으면서(단계 7) 화면이 읽는다. `_next_axis()`가 돌려준 축이 0일 때는(멈춰 섰을 때) **그대로
+##  둔다** — 0으로 리셋하면 닭이 멈출 때마다 그림이 오른쪽 기본값으로 튄다.
+var facing := 1
+
 ## 아직 1이 안 된 불 피해. `hp`를 정수로 지키는 장치다 — `character._burn_acc`와 같은 이유.
 var _burn_acc := 0.0
 
@@ -66,6 +71,10 @@ func center() -> Vector2:
 func step(grid: CellGrid, dt: float, target_x: int, target_y: int) -> void:
 	_body.on_ground = _body.grounded(grid)
 	var axis := _next_axis(grid, target_x, target_y)
+	# 🔴 화면 전용 값이다 — 거동에 안 쓰인다(`character.step()`의 `facing` 대입과 같은 자리).
+	#  0(멈춤)일 때는 안 건드린다 — `character.gd`가 이미 그 규율을 세워 뒀다(위 헤더).
+	if axis != 0.0:
+		facing = 1 if axis > 0.0 else -1
 	_body.apply_gravity(dt, Character.GRAVITY_PX, Character.MAX_FALL_PX)
 	_body.move_x(grid, axis * Defs.speed_px(kind) * dt)
 	if _body.move_y(grid, _body.vy * dt):
