@@ -108,6 +108,11 @@ func run(t) -> void:
 	_monster_bolt_color_differs_from_magic_bolts(t)
 	_hit_triggers_flash_and_a_damage_number_that_ages_out(t)
 	_death_notification_spawns_a_corpse_that_ages_out(t)
+	# ── 단계 9 — 연출을 도형에서 그림으로 (판정 13 재도전) ────────
+	_close_damage_numbers_merge_into_one(t)
+	_death_also_makes_a_pop_that_outlives_nothing(t)
+	_body_flames_stay_put_and_stay_inside(t)
+	_flash_layer_gets_its_shader_in_a_real_tree(t)
 
 
 # ── 1. 전제 ──────────────────────────────────────────────────────
@@ -1185,3 +1190,225 @@ func _death_notification_spawns_a_corpse_that_ages_out(t) -> void:
 	view.advance()
 	t.eq(view.corpse_count(), 0, "%d프레임 뒤 시체가 사라진다" % Fx.MONSTER_CORPSE_LIFE_FRAMES)
 	view.free()  # `Node2D`라 RefCounted가 아니다 — 위 검사와 같은 이유로 직접 지운다.
+
+
+# ══════════════════════════════════════════════════════════════════
+#  단계 9 — 연출을 도형에서 그림으로 (판정 13 재도전)
+#
+#  🔴🔴 **여기 있는 것은 「값으로 잴 수 있는 절반」뿐이다.**
+#   판정 13이 실패한 이유가 **「그물이 도는데 안 재는 것」**이었다 —
+#   「번쩍이 6프레임 산다」·「시체가 30프레임 산다」가 전부 초록인 채로
+#   화면에서는 셋 다 사각형이었다. **모양은 눈 말고 잡을 방법이 없다.**
+#  ⇒ 여기서 재는 것은 **거동**(합쳐지나 · 죽으면 나나 · 자리가 안 움직이나)이고,
+#   **「도형이 아니라 그림인가」는 verify-look 의 몫으로 남는다.**
+# ══════════════════════════════════════════════════════════════════
+
+## 🔴🔴 **짧은 사이로 또 맞으면 숫자가 합쳐진다** (2026-08-07, 사용자가 정했다).
+##
+## ⚠ **화면에서 `-10` 셋이 겹쳐 `-1000` 처럼 보이고 체력바까지 덮었다.**
+##  숫자가 셋인 것이 아니라 **셋이 같은 자리에 겹치는 것**이 문제였다.
+##
+## 🔴🔴 **양쪽을 짝으로 잰다.** 「합쳐진다」만 재면 **숫자를 아예 하나만 만들게 해도** 초록이고,
+##  「따로 뜬다」만 재면 **합치기를 지워도** 초록이다.
+##  ⇒ **같은 두 방을 사이만 달리 줘서** 하나는 합쳐지고 하나는 안 합쳐져야 한다.
+func _close_damage_numbers_merge_into_one(t) -> void:
+	t.ok(Fx.MONSTER_DMG_NUM_MERGE_FRAMES < Fx.MONSTER_DMG_NUM_LIFE_FRAMES,
+		"합치는 창이 숫자 수명보다 짧다 — 같으면 숫자가 영영 안 늙는다")
+
+	# ── 붙여 때린다 ⇒ 하나로 합쳐진다 ─────────────────────────────
+	var near := _dmg_number_probe(t, 1)
+	t.eq(near[0], 1, "붙여 두 방 맞으면 숫자가 **하나**다 (%d개)" % near[0])
+	t.eq(near[1], Character.DAMAGE_HIT * 2,
+		"그 하나가 **두 방의 합**이다 (%d) — 표를 바꿔도 따라온다" % near[1])
+
+	# ── 창 밖으로 띄워 때린다 ⇒ 따로 뜬다 ────────────────────────
+	# 🔴 **여기가 없으면 「무조건 하나로 만든다」가 통과한다.**
+	var far := _dmg_number_probe(t, Fx.MONSTER_DMG_NUM_MERGE_FRAMES + 1)
+	t.eq(far[0], 2, "창 밖으로 띄워 맞으면 숫자가 **둘**이다 (%d개)" % far[0])
+	t.eq(far[1], Character.DAMAGE_HIT,
+		"그 각각은 **한 방분**이다 (%d) — 합쳐진 게 아니다" % far[1])
+
+
+## 두 방을 `gap` 프레임 사이로 때리고 `[숫자 개수, 첫 숫자의 값]` 을 돌려준다.
+## 🔴 **두 판의 유일한 차이가 `gap` 이어야 한다** — 지형·자리·피해량이 다르면 대조가 무효다.
+func _dmg_number_probe(t, gap: int) -> Array:
+	var kind := Defs.KIND_PIG   # 🔴 돼지다 — 닭은 한 방에 죽어 두 방을 못 때린다
+	var stand_x := 600
+	var y := FLOOR_TOP - Defs.h_px(kind)
+	var world := WorldStep.new(_bare_grid(), SpellSim.new(), _still_ch(stand_x, kind))
+	t.ok(world.spawn_monster(kind, stand_x, y) > 0, "gap=%d — 스폰됐다 (전제)" % gap)
+
+	var view := MonsterView.new()
+	view.setup(world)
+	view.advance()   # 맞기 전 hp를 스냅샷한다
+
+	var cx := floori((stand_x + Defs.w_px(kind) * 0.5) / float(Tuning.CELL_PX))
+	var hp0: int = world.monster_at(0).hp
+	_blast_and_observe(world, view, cx)
+	t.ok(world.monster_at(0).hp < hp0, "gap=%d — 첫 방이 실제로 맞았다 (전제)" % gap)
+
+	for _i in gap:
+		view.advance()
+
+	# 🔴 **무적을 기다린다** — 안 기다리면 둘째 방이 씹혀서 「합쳐졌다」가 공짜로 통과한다.
+	var hp1: int = world.monster_at(0).hp
+	var tries := 0
+	while world.monster_at(0).hp == hp1 and tries < 20:
+		_blast_and_observe(world, view, cx)
+		tries += 1
+	t.ok(world.monster_at(0).hp < hp1, "gap=%d — 둘째 방도 실제로 맞았다 (전제)" % gap)
+
+	var out := [view.dmg_number_count(), view.dmg_number_amount(0)]
+	view.free()   # `Node2D` 라 RefCounted 가 아니다(위 검사들과 같은 이유)
+	return out
+
+
+## 폭발 한 번을 먹이고 그 동안 뷰의 프레임도 같이 흘린다.
+## 🔴 **뷰를 안 흘리면 hp diff 를 볼 사람이 없다** — 숫자가 아예 안 생긴다.
+func _blast_and_observe(world: WorldStep, view: MonsterView, cx: int) -> void:
+	world.enqueue(_blast_cmd(cx))
+	for _i in Tuning.TICK_DIVIDER:
+		world.frame(DT, 0.0, false, false)
+	view.advance()
+
+
+## 🔴🔴 **죽으면 터진다 — 닭의 피격 피드백은 이것뿐이다** (2026-08-07, 사용자가 정했다).
+##
+## ⚠ **닭은 한 방에 죽어서 hp diff 가 볼 대상이 배열에서 이미 빠졌다** ⇒ 번쩍도 숫자도
+##  **한 프레임도 안 뜬다.** 그것을 이 검사가 **먼저 단언한다** — 안 그러면
+##  「터짐이 있다」가 「번쩍도 있는데 굳이」로 읽히고, 이 연출의 존재 이유가 사라진다.
+##
+## 🔴 **터짐이 시체보다 짧게 산다**도 같이 잰다. 길면 「터졌는데 안 걷힌다」가 되고,
+##  그건 화면에서 「고리가 남았다」로 읽힌다.
+func _death_also_makes_a_pop_that_outlives_nothing(t) -> void:
+	t.ok(Fx.MONSTER_DEATH_POP_FRAMES < Fx.MONSTER_CORPSE_LIFE_FRAMES,
+		"터짐이 시체보다 짧게 산다 (%d < %d)"
+			% [Fx.MONSTER_DEATH_POP_FRAMES, Fx.MONSTER_CORPSE_LIFE_FRAMES])
+
+	var kind := Defs.KIND_HEN
+	var stand_x := 600
+	var y := FLOOR_TOP - Defs.h_px(kind)
+	var world := WorldStep.new(_bare_grid(), SpellSim.new(), _still_ch(stand_x, kind))
+	t.ok(world.spawn_monster(kind, stand_x, y) > 0, "스폰됐다 (전제)")
+
+	var view := MonsterView.new()
+	view.setup(world)
+	view.advance()
+	t.eq(view.death_pop_count(), 0, "스폰만으로는 터짐이 없다 (전제)")
+
+	var cx := floori((stand_x + Defs.w_px(kind) * 0.5) / float(Tuning.CELL_PX))
+	world.enqueue(_blast_cmd(cx))
+	var got := false
+	for _i in Tuning.TICK_DIVIDER * 3:
+		var ticked := world.frame(DT, 0.0, false, false)
+		if ticked and world.died_count() > 0:
+			view.on_tick()   # 🔴 그 틱 안에서 붙잡는다(통지는 다음 틱이 지운다)
+			got = true
+			break
+	t.ok(got, "닭이 죽어 죽음 통지가 났다 (전제)")
+
+	# 🔴🔴 **이 연출이 왜 필요한지를 값으로 남긴다.**
+	view.advance()
+	t.eq(view.dmg_number_count(), 0,
+		"🔴 닭은 한 방에 죽어 **피해 숫자가 한 개도 안 뜬다** — 이 터짐의 존재 이유다")
+
+	t.eq(view.death_pop_count(), 1, "죽음 통지가 터짐 하나를 만들었다")
+	t.eq(view.corpse_count(), 1, "시체도 같이 생겼다 (둘이 같은 통지에서 나온다)")
+
+	# 이미 위에서 `advance()` 한 번을 썼다 — 남은 수명만 채운다.
+	for _i in Fx.MONSTER_DEATH_POP_FRAMES - 2:
+		view.advance()
+	t.eq(view.death_pop_count(), 1, "터짐 수명이 아직 안 다했다 (전제)")
+	view.advance()
+	t.eq(view.death_pop_count(), 0, "%d프레임 뒤 터짐이 걷힌다" % Fx.MONSTER_DEATH_POP_FRAMES)
+	t.eq(view.corpse_count(), 1, "🔴 그런데 **시체는 아직 남아 있다** (둘의 수명이 다르다)")
+	view.free()
+
+
+## 🔴🔴 **몸에 붙은 불꽃 — 자리가 프레임에 안 흔들리고 상자를 크게 안 벗어난다.**
+##
+## ⚠ **원래 상자 테두리 하나였고 「주황 선택 상자」로 읽혔다**(판정 13).
+##  여러 군데로 바꿀 때 **자리를 프레임마다 다시 뽑으면 불꽃이 매 프레임 순간이동하고,
+##  그건 불이 아니라 노이즈다.** 🔴 그 실수는 **화면에서만 보이므로** 여기서 값으로 못 박는다.
+##
+## 🔴 **`flame_pos` 가 순수 static 이라 그물이 직접 부른다** — `_draw` 가 이 함수만 쓰므로
+##  여기서 재는 값 = 실제로 그려지는 자리다(`box_rect` 와 같은 어법).
+func _body_flames_stay_put_and_stay_inside(t) -> void:
+	t.ok(Fx.MONSTER_BURN_FLAMES > 1,
+		"불꽃이 둘 이상이다 (%d개) — 하나면 옛 「테두리 하나」와 같은 자리다"
+			% Fx.MONSTER_BURN_FLAMES)
+
+	var kind := Defs.KIND_PIG
+	var r := MonsterView.box_rect(kind, 240, 120)
+	var seen: Dictionary = {}
+	for i in Fx.MONSTER_BURN_FLAMES:
+		var p := MonsterView.flame_pos(r, 7, i)
+		# 🔴 **부르는 것만으로는 「안 움직인다」를 못 잰다** — 두 번 불러 같은지 본다.
+		t.eq(MonsterView.flame_pos(r, 7, i), p, "불꽃 %d 의 자리가 다시 불러도 같다" % i)
+		# 🔴 **id 가 다르면 자리도 달라야 한다** — 아니면 모든 몬스터의 불이 똑같이 선다.
+		t.ok(MonsterView.flame_pos(r, 8, i) != p, "불꽃 %d 는 몬스터가 다르면 자리도 다르다" % i)
+		t.ok(r.has_point(p), "불꽃 %d 가 상자 안에 있다 (%s ∈ %s)" % [i, p, r])
+		seen[p] = true
+		# 🔴 **아래로 치우친다** — 고르게 뿌리면 「반짝이가 붙었다」로 보인다.
+		t.ok(p.y >= r.position.y + r.size.y * Fx.MONSTER_BURN_LOW_BIAS - 0.001,
+			"불꽃 %d 가 상자 위쪽 %d%% 안에는 안 선다"
+				% [i, int(Fx.MONSTER_BURN_LOW_BIAS * 100.0)])
+
+	# 🔴 **다 겹치면 「여러 군데」가 거짓이다** — 해시가 죽어 상수를 돌려줘도 위 단언은 다 통과한다.
+	t.eq(seen.size(), Fx.MONSTER_BURN_FLAMES,
+		"불꽃 %d개가 **서로 다른 자리**에 선다 (%d자리)" % [Fx.MONSTER_BURN_FLAMES, seen.size()])
+
+
+## 🔴🔴 **번쩍 레이어가 실제 트리에서 셰이더를 실제로 받나.**
+##
+## ⚠ **이 그물의 다른 뷰 검사는 전부 `MonsterView.new()` 로 세우고 트리에 안 넣는다** ⇒
+##  **`_ready()` 가 한 번도 안 돈다.** 즉 레이어 만들기·셰이더 붙이기·색 주입이
+##  **통째로 죽어도 이 파일의 나머지가 전부 초록이다.** 그 구멍을 여기서 막는다.
+## 🔴 **실측으로 확인하고 넣었다**(2026-08-07): 헤드리스로 무대 씬을 세우니 자식 둘이 서고
+##  첫째에 `monster_flash.gdshader` 가 붙고 `flash_color` 가 들어가 있었다.
+##
+## 🔴🔴 **주입한 이름이 셰이더에 실재하는지도 같이 잰다.** 한 글자 틀리면
+##  **아무 일도 안 일어나고 에러도 없다** — `get_shader_parameter` 가 `null` 을 돌려줄 뿐이다
+##  (`net_render` 의 「거짓 손잡이」 절과 같은 자리).
+func _flash_layer_gets_its_shader_in_a_real_tree(t) -> void:
+	var view := MonsterView.new()
+	# 🔴🔴 **`_ready()` 를 직접 부른다 — 트리에 못 넣는다.**
+	#  ⚠ 러너가 `SceneTree._initialize` 안이라 **`root` 가 아직 안 섰다**(실측: 넣으려다 죽었다).
+	#  🔴 **그래서 이 검사가 못 재는 것 하나**: 「엔진이 실제로 `_ready` 를 부르나」.
+	#   그건 엔진이 보장하는 자리이고, 여기서 재는 것은 **그 안에서 무슨 일이 나나**다.
+	#   ⚠ 실제 트리에서 도는 것은 헤드리스로 따로 확인했다(2026-08-07, 무대 씬 · 자식 둘 · 셰이더 부착).
+	view._ready()
+
+	t.ok(view.get_child_count() >= 2,
+		"`_ready()` 가 레이어를 세웠다 (자식 %d개 — 번쩍 + 숫자)" % view.get_child_count())
+
+	var flash: CanvasItem = view.get_child(0)
+	t.ok(flash.material != null, "번쩍 레이어에 머티리얼이 붙었다")
+	if flash.material != null:
+		var mat := flash.material as ShaderMaterial
+		t.ok(mat != null, "그것이 `ShaderMaterial` 이다")
+		t.ok(mat != null and mat.shader != null, "셰이더가 실려 있다")
+		if mat != null and mat.shader != null:
+			t.eq(mat.shader.resource_path, Fx.MONSTER_FLASH_SHADER,
+				"`fx_tuning.MONSTER_FLASH_SHADER` 가 가리키는 바로 그 셰이더다")
+			# 🔴🔴 **셰이더가 선언한 이름과 맞댄다 — `get_shader_parameter` 로는 못 잰다.**
+			#  ⚠ **실측으로 걸렸다**(2026-08-07): 처음엔 `get_shader_parameter(이름) == 색` 으로 짰는데
+			#   `ShaderMaterial` 은 **셰이더에 없는 이름도 그냥 저장하고 되돌려준다** ⇒ 이름을
+			#   `flash_colour` 로 틀려도 **초록이었다.** 자기가 넣은 값을 자기가 읽는 항진명제였다
+			#   (CLAUDE.md 「맞대기는 갈라짐만 잡고 사라짐을 못 잡는다」).
+			var declared: Dictionary = {}
+			for u: Dictionary in mat.shader.get_shader_uniform_list():
+				declared[String(u["name"])] = true
+			t.ok(declared.size() > 0, "셰이더가 uniform 을 선언한다 (%d개 — 컴파일됐다)" % declared.size())
+			t.ok(declared.has(MonsterView.FLASH_COLOR_PARAM),
+				"셰이더가 `%s` 를 **실제로 선언한다** (오타면 아무 일도 안 일어난다)"
+					% MonsterView.FLASH_COLOR_PARAM)
+			t.eq(mat.get_shader_parameter(MonsterView.FLASH_COLOR_PARAM),
+				Fx.MONSTER_FLASH_COLOR,
+				"그 자리에 `MONSTER_FLASH_COLOR` 가 들어가 있다 (거짓 손잡이가 아니다)")
+
+	# 🔴 숫자 레이어는 셰이더가 **없어야** 한다 — 있으면 피해 숫자가 흰 실루엣이 된다.
+	t.ok((view.get_child(1) as CanvasItem).material == null,
+		"숫자 레이어에는 머티리얼이 없다 (번쩍 셰이더가 숫자에 새지 않는다)")
+
+	view.free()   # 트리 안이라도 `free()` 가 떼어 낸다. 안 지우면 RID가 샌다(위 검사들과 같은 이유).

@@ -1,0 +1,35 @@
+shader_type canvas_item;
+
+// 🔴🔴 **맞으면 번쩍 — 몸 그림의 알파만 남기고 흰색으로 채운다.**
+//
+// ⚠ **원래 이것이 `draw_rect` 였고 화면에서 실패했다**(2026-08-07, 판정 13):
+//  흰 사각형이 스프라이트를 **통째로 덮어** 「도형이 깜빡인다」로 보였다.
+//  🔴 **스프라이트를 붙인 값이 여기서 절반 깎였다** — 몸은 돼지인데 맞으면 네모가 된다.
+//
+// 🔴🔴 **강도가 uniform 이 아니라 정점 색(modulate)으로 들어온다. 그게 이 셰이더의 요점이다.**
+//  ⚠ uniform 은 **노드 단위**라 한 노드가 몬스터 여럿을 그리면 **마지막 값 하나만 남는다** —
+//   돼지 셋이 서로 다른 세기로 번쩍이는 것이 원리적으로 불가능해진다.
+//  ⇒ `draw_texture_rect(tex, r, false, Color(1,1,1, 세기))` 의 알파가 여기 `v_tint.a` 로 온다.
+//
+// 🔴 **`varying` 으로 넘기는 이유**: fragment 의 `COLOR` 는 진입 시 이미 텍스처와 곱해져 있어
+//  **세기와 그림 알파를 못 가른다.** vertex 에서 정점 색을 그대로 받아 둬야 둘이 분리된다.
+//
+// ⚠ **텍스처 없이 `draw_rect` 를 해도 안전하다** — 그때 `TEXTURE` 는 흰 1×1이라 `a = 1` 이고
+//  결과가 「흰 사각형 × 세기」, 즉 **옛 동작 그대로**다. 폴백 경로가 공짜로 유지된다.
+// 🔴🔴 **색은 uniform, 세기는 정점 색 — 둘을 가른 것이 이 파일의 설계다.**
+//  ⚠ 색은 **모든 몬스터가 같으므로** 노드 단위 uniform 이 안전하다.
+//   세기는 **몬스터마다 다르므로** uniform 으로 두면 마지막 값 하나만 남아 원리적으로 깨진다.
+//  🔴 `monster_view` 가 `fx_tuning.MONSTER_FLASH_COLOR` 의 rgb 를 여기 넣는다 —
+//   **거짓 손잡이가 아니다**(CLAUDE.md). 이 값을 바꾸면 번쩍 색이 실제로 바뀐다.
+uniform vec4 flash_color : source_color = vec4(1.0);
+
+varying vec4 v_tint;
+
+void vertex() {
+	v_tint = COLOR;
+}
+
+void fragment() {
+	float a = texture(TEXTURE, UV).a;
+	COLOR = vec4(flash_color.rgb, a * v_tint.a);
+}

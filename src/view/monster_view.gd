@@ -23,6 +23,10 @@ const Monster := preload("res://src/actor/monster.gd")
 const Defs := preload("res://src/actor/monster_defs.gd")
 const Fx := preload("res://src/view/fx_tuning.gd")
 
+## 🔴 셰이더가 받는 이름. **상수로 둔다** — 문자열을 박으면 한 글자 틀렸을 때
+##  **아무 일도 안 일어나고 에러도 없다**(`net_render` 의 「거짓 손잡이」 절이 그 사연이다).
+const FLASH_COLOR_PARAM := "flash_color"
+
 var _world: WorldStep = null
 
 ## id → 직전 프레임 hp. `_scan_hp_changes()`가 채우고 지운다(위 헤더).
@@ -34,6 +38,9 @@ var _flash_left: Dictionary = {}
 ##  `blast_fx._flashes`와 같은 어법: `Array[Dictionary]` + 나이(age, 프레임).
 var _dmg_numbers: Array[Dictionary] = []
 var _corpses: Array[Dictionary] = []
+## 죽는 순간 터지는 고리. 🔴 **시체와 같은 통지에서 같이 생기지만 수명이 다르다**(더 짧다) —
+##  그래서 한 배열에 못 담는다(`_prune` 이 배열 단위로 수명을 받는다).
+var _death_pops: Array[Dictionary] = []
 
 ## 종류 → 몸 그림. 🔴 `Defs.ALL`에서 만든다 — 종류를 늘리면(`monster_defs.gd` 한 줄 +
 ##  `fx_tuning.MONSTER_SHEETS` 한 줄) 여기는 안 건드려도 된다.
@@ -41,6 +48,28 @@ var _corpses: Array[Dictionary] = []
 ##  `character_view._body_tex`와 다른 규율이다: 캐릭터는 하나뿐이라 깨지면 그냥 짖어도 되지만,
 ##  몬스터는 종류가 늘 여럿이라 하나가 깨져도 나머지 종류는 마저 보여야 한다(위 `MONSTER_FILL` 상자).
 var _sheets: Dictionary = _load_sheets()
+
+## 프레임 계수기 — 몸에 붙은 불의 흔들림 시계다.
+## 🔴 **`Time.` 을 안 쓴다.** 여기는 `src/view/` 라 결정론 계약 밖이지만, 프레임 계수기면
+##  그물이 `advance()` 를 N번 불러 **같은 그림을 재현할 수 있다**(벽시계는 못 그런다).
+var _frame: int = 0
+
+## 🔴🔴 **번쩍 전용 자식 노드.** 셰이더 머티리얼이 **노드 단위**라 여기 그리는 것 전부가
+##  흰 실루엣이 된다 ⇒ **몸과 같은 노드에 못 둔다.**
+##  ⚠ 자식이라 부모보다 **나중에** 그려진다 = 몸 위에 얹힌다. 그게 필요한 순서다.
+var _flash_layer: Node2D = null
+## 🔴 피해 숫자는 번쩍보다도 위다 — 안 그러면 번쩍이 숫자를 덮는다(둘 다 흰 계열이라 최악이다).
+var _number_layer: Node2D = null
+
+
+## 자식 노드에 그리기를 위임하는 껍데기. 🔴 **자식마다 스크립트 파일을 만들지 않으려는 것**이다 —
+##  파일이 늘면 「이 노드는 뭘 하나」가 세 곳으로 흩어진다.
+class _Layer extends Node2D:
+	var fn: Callable
+
+	func _draw() -> void:
+		if fn.is_valid():
+			fn.call()
 
 
 ## 🔴 static — `_init`이 돌기 전에도 그물이 값을 검증할 수 있게(`net_monster_sprite`).
@@ -51,6 +80,32 @@ static func _load_sheets() -> Dictionary:
 	return out
 
 
+## 🔴🔴 **레이어를 여기서 만든다 — 씬 파일에 안 넣는다.**
+##  ⚠ 그물이 이 노드를 씬 없이 `new()` 로 세워 `advance()` 만 흘리는 일이 있고(공개 함수인 이유),
+##   그때 `_ready` 가 안 돌아 레이어가 **null 인 채로 산다.** ⇒ **그리는 쪽이 null 을 견뎌야 한다.**
+##  🔴 씬 파일에 박으면 그 두 세계가 갈라지고, 갈라진 증상은 **화면에만** 나온다.
+func _ready() -> void:
+	_flash_layer = _make_layer(_draw_flashes)
+	var sh := load(Fx.MONSTER_FLASH_SHADER) as Shader
+	if sh != null:
+		var mat := ShaderMaterial.new()
+		mat.shader = sh
+		# 🔴 **색은 여기서 한 번 주입한다** — 모든 몬스터가 같으므로 노드 단위로 안전하다.
+		#  ⚠ 세기는 여기 못 넣는다(몬스터마다 다르다) — `_draw_flashes` 가 modulate 로 넘긴다.
+		mat.set_shader_parameter(FLASH_COLOR_PARAM, Fx.MONSTER_FLASH_COLOR)
+		_flash_layer.material = mat
+	# ⚠ **셰이더가 없으면 머티리얼 없이 간다** — 그러면 번쩍이 옛 모양(흰 사각형)이 된다.
+	#  🔴 **짖지 않는다**: 이 파일의 규율이 「몬스터 쪽은 대체하고 짖지 않는다」다(`_load_sheets`).
+	_number_layer = _make_layer(_draw_numbers)
+
+
+func _make_layer(fn: Callable) -> Node2D:
+	var n := _Layer.new()
+	n.fn = fn
+	add_child(n)
+	return n
+
+
 func setup(world: WorldStep) -> void:
 	_world = world
 	queue_redraw()
@@ -59,6 +114,12 @@ func setup(world: WorldStep) -> void:
 func _process(_dt: float) -> void:
 	advance()
 	queue_redraw()
+	# 🔴 자식은 부모의 `queue_redraw()` 를 **안 받는다.** 안 부르면 번쩍·숫자가 첫 프레임에서
+	#  얼어붙고, 증상은 「맞아도 안 번쩍인다」 하나뿐이다.
+	if _flash_layer != null:
+		_flash_layer.queue_redraw()
+	if _number_layer != null:
+		_number_layer.queue_redraw()
 
 
 ## 한 프레임분 갱신 — hp 변화를 읽어 번쩍·피해 숫자를 만들고, 살아 있는 연출들의 나이를 먹인다.
@@ -69,9 +130,11 @@ func _process(_dt: float) -> void:
 ##  막 생긴 번쩍·피해 숫자가 **같은 호출 안에서** 한 프레임어치를 먼저 잃는다 — 실측으로
 ##  `MONSTER_FLASH_FRAMES`(6)짜리 번쩍이 5프레임 뒤에 벌써 꺼지는 것으로 걸렸다(net 실패).
 func advance() -> void:
+	_frame += 1
 	_decay_flashes()
 	_prune(_dmg_numbers, Fx.MONSTER_DMG_NUM_LIFE_FRAMES)
 	_prune(_corpses, Fx.MONSTER_CORPSE_LIFE_FRAMES)
+	_prune(_death_pops, Fx.MONSTER_DEATH_POP_FRAMES)
 	if _world != null:
 		_scan_hp_changes()
 
@@ -83,9 +146,16 @@ func on_tick() -> void:
 	if _world == null:
 		return
 	for i in _world.died_count():
-		_corpses.append({
+		var d := {
 			"x": _world.died_x(i), "y": _world.died_y(i), "kind": _world.died_kind(i), "age": 0,
-		})
+		}
+		_corpses.append(d)
+		# 🔴🔴 **죽는 순간 터진다 — 닭의 피격 피드백은 이것뿐이다**(`fx_tuning.MONSTER_DEATH_POP_FRAMES`).
+		#  ⚠ 닭은 한 방에 죽어서 `_scan_hp_changes` 의 hp diff 가 볼 대상이 **이미 배열에서 빠졌다.**
+		#   ⇒ 번쩍도 숫자도 한 프레임도 안 뜬다. **죽음 통지만이 그 순간을 안다.**
+		#  🔴 **시체와 같은 통지에서 같이 만든다** — 따로 걸면 「시체는 있는데 터짐이 없는」
+		#   조합이 생길 수 있고, 그건 두 경로가 갈라졌다는 뜻이라 화면에서만 보인다.
+		_death_pops.append(d.duplicate())
 
 
 ## hp가 준 몬스터마다 번쩍·피해 숫자를 띄운다. id로 diff한다(위 헤더).
@@ -98,9 +168,7 @@ func _scan_hp_changes() -> void:
 			var prev: int = _prev_hp[m.id]
 			if m.hp < prev:
 				_flash_left[m.id] = Fx.MONSTER_FLASH_FRAMES
-				_dmg_numbers.append({
-					"x": m.center().x, "y": float(m.y), "amount": prev - m.hp, "age": 0,
-				})
+				_add_dmg_number(m, prev - m.hp)
 		_prev_hp[m.id] = m.hp
 	# 더 안 사는 id는 정리한다 — 안 지우면 죽은 id가 사전에 무한히 쌓인다(20마리 상한은
 	#  살아 있는 몬스터에만 걸리고, 이 사전은 그 상한 밖이다).
@@ -108,6 +176,31 @@ func _scan_hp_changes() -> void:
 		if not seen.has(id):
 			_prev_hp.erase(id)
 			_flash_left.erase(id)
+
+
+## 🔴🔴 **같은 몬스터의 최근 숫자가 있으면 거기에 더한다 — 새로 안 만든다** (2026-08-07, 사용자가 정했다).
+##
+## ⚠ **화면에서 `-10` 셋이 겹쳐 `-1000` 처럼 보이고 체력바까지 덮었다.** 숫자가 셋인 것이 아니라
+##  **셋이 같은 자리에 겹치는 것**이 문제였다 — 자리가 `m.center()` 라 연타면 좌표가 거의 같다.
+##
+## 🔴 **나이를 0으로 되감고 자리도 갱신한다.** 안 되감으면 합친 숫자가 **곧 사라져서**
+##  마지막 한 방이 표시 없이 들어간 것처럼 보인다. 자리를 갱신하는 것은 몬스터가 그동안
+##  움직였을 수 있어서다(돼지는 밀고 들어온다).
+## ⚠ **되감기가 곧 「영영 안 늙는다」의 위험이다** — `MONSTER_DMG_NUM_MERGE_FRAMES` 주석이
+##  그래서 「수명보다 짧아야 한다」를 못 박았다. **계속 맞는 동안 숫자가 안 사라지는 것은 의도다.**
+##
+## 🔴 **id 로 찾는다.** 좌표로 찾으면 두 몬스터가 겹쳐 설 때 남의 피해가 합쳐진다.
+func _add_dmg_number(m: Monster, amount: int) -> void:
+	for n: Dictionary in _dmg_numbers:
+		if n["id"] == m.id and int(n["age"]) < Fx.MONSTER_DMG_NUM_MERGE_FRAMES:
+			n["amount"] = int(n["amount"]) + amount
+			n["age"] = 0
+			n["x"] = m.center().x
+			n["y"] = float(m.y)
+			return
+	_dmg_numbers.append({
+		"id": m.id, "x": m.center().x, "y": float(m.y), "amount": amount, "age": 0,
+	})
 
 
 func _decay_flashes() -> void:
@@ -138,6 +231,7 @@ func clear() -> void:
 	_flash_left.clear()
 	_dmg_numbers.clear()
 	_corpses.clear()
+	_death_pops.clear()
 	queue_redraw()
 
 
@@ -155,6 +249,10 @@ func corpse_kind(i: int) -> int:
 
 func is_flashing(id: int) -> bool:
 	return _flash_left.has(id)
+
+
+func death_pop_count() -> int:
+	return _death_pops.size()
 
 
 func dmg_number_count() -> int:
@@ -181,8 +279,46 @@ func _draw() -> void:
 		_draw_monster(_world.monster_at(i))
 	# 🔴 닭의 탄. `MonsterBolts`가 방향을 안 넘겨서(공개 API가 `x(i)`·`y(i)`뿐이다) 점으로
 	#  그린다 — 판정 13의 요구(「작은 점/짧은 선」)를 점으로 채운다.
+	# 🔴 **두 겹이다 — 마법 탄과 같은 문법(무리 + 심), 다른 색.** 색만 바꾸면 안 갈렸다:
+	#  옛 분홍과 무속성 보라는 85° 떨어져 있었는데도 헷갈렸다(`fx_tuning.MONSTER_BOLT_COLOR` 상자).
 	for i in _world.bolt_count():
-		draw_circle(Vector2(_world.bolt_x(i), _world.bolt_y(i)), Fx.MONSTER_BOLT_R_PX, Fx.MONSTER_BOLT_COLOR)
+		var p := Vector2(_world.bolt_x(i), _world.bolt_y(i))
+		draw_circle(p, Fx.MONSTER_BOLT_R_PX, Fx.MONSTER_BOLT_COLOR)
+		draw_circle(p, Fx.MONSTER_BOLT_R_PX * Fx.MONSTER_BOLT_CORE_FRAC, Fx.MONSTER_BOLT_CORE)
+	# 🔴 죽는 순간의 터짐 — **시체·몬스터보다 위, 번쩍보다 아래**다.
+	for p: Dictionary in _death_pops:
+		_draw_death_pop(p)
+	# ⚠ 레이어가 없으면(그물이 씬 없이 세운 경우) 여기서 마저 그린다 — 안 그러면
+	#  「씬에서는 보이는데 그물에서는 없는」 두 세계가 생긴다.
+	if _flash_layer == null:
+		_draw_flashes()
+	if _number_layer == null:
+		_draw_numbers()
+
+
+## 🔴 번쩍 레이어가 부른다(`_flash_layer`). **이 노드 좌표계와 같다** — 자식이 부모 변환을 잇는다.
+func _draw_flashes() -> void:
+	if _world == null:
+		return
+	var canvas: CanvasItem = _flash_layer if _flash_layer != null else self
+	for i in _world.monster_count():
+		var m: Monster = _world.monster_at(i)
+		if not _flash_left.has(m.id):
+			continue
+		var r := box_rect(m.kind, m.x, m.y)
+		var frac := float(_flash_left[m.id]) / float(Fx.MONSTER_FLASH_FRAMES)
+		var a := Fx.MONSTER_FLASH_COLOR.a * frac
+		var tex: Texture2D = _sheets.get(m.kind)
+		if tex == null:
+			# 폴백 — 셰이더가 걸려 있어도 `TEXTURE` 가 흰 1×1이라 결과가 「흰 사각형 × 세기」다
+			#  (`monster_flash.gdshader` 머리). 즉 **옛 동작 그대로**다.
+			var c := Fx.MONSTER_FLASH_COLOR
+			canvas.draw_rect(r, Color(c.r, c.g, c.b, a))
+			continue
+		_draw_flipped(canvas, tex, r, m.facing < 0, Color(1.0, 1.0, 1.0, a))
+
+
+func _draw_numbers() -> void:
 	for n: Dictionary in _dmg_numbers:
 		_draw_dmg_number(n)
 
@@ -190,15 +326,40 @@ func _draw() -> void:
 func _draw_monster(m: Monster) -> void:
 	var r := box_rect(m.kind, m.x, m.y)
 	_draw_monster_body(m, r)
-	if _flash_left.has(m.id):
-		var frac := float(_flash_left[m.id]) / float(Fx.MONSTER_FLASH_FRAMES)
-		var c := Fx.MONSTER_FLASH_COLOR
-		draw_rect(r, Color(c.r, c.g, c.b, c.a * frac))
-	# 🔴 테두리라 번쩍과 겹쳐도 둘 다 보인다 — `character_view`의 「불은 무적 흐림과 겹쳐도
-	#  둘 다 보인다」와 같은 이유(불은 무적에 안 걸린다, `monster.gd._burn`).
+	# 🔴 **번쩍은 여기가 아니다** — 셰이더가 노드 단위라 `_flash_layer` 로 나갔다(위 상자).
 	if m.burning:
-		draw_rect(r, Fx.CHAR_BURN, false, Fx.CHAR_BURN_PX)
+		_draw_body_flames(r, m.id)
 	_draw_hp_bar(m.kind, m.x, m.y, m.hp)
+
+
+## 🔴🔴 **몸에 붙은 불 — 여러 군데다.** 원래 상자 테두리 하나였고 화면에서
+##  **「주황 선택 상자」**로 읽혔다(2026-08-07, 판정 13). 같은 화면의 땅불이 진짜 픽셀 불이라
+##  대비가 잔인했다 — `fx_tuning.MONSTER_BURN_FLAMES` 상자가 그 사연을 들고 있다.
+##
+## 🔴 **자리는 몬스터 id 로 고정한다** — 프레임마다 다시 뽑으면 불꽃이 **매 프레임 순간이동**하고
+##  그건 불이 아니라 노이즈다. 움직이는 것은 **크기뿐**이고, 위상을 어긋내 다 같이 안 뛰게 한다.
+## ⚠ **불꽃이 상자를 조금 넘어간다** — 몸 윤곽을 모르므로(알파를 안 읽는다) 안쪽에만 두면
+##  실루엣 가장자리에서 불이 끊겨 보인다. 넘치는 편이 「몸을 감싼다」로 읽힌다.
+func _draw_body_flames(r: Rect2, id: int) -> void:
+	for i in Fx.MONSTER_BURN_FLAMES:
+		var p := flame_pos(r, id, i)
+		# 위상을 불꽃마다 어긋낸다 — 안 그러면 다섯이 한 몸으로 뛴다.
+		var phase := float(i) * TAU / float(Fx.MONSTER_BURN_FLAMES)
+		var wob := sin(float(_frame) / Fx.MONSTER_BURN_PERIOD_FRAMES * TAU + phase)
+		var scale := 1.0 + Fx.MONSTER_BURN_WOBBLE * wob
+		draw_circle(p, Fx.MONSTER_BURN_R_PX * scale, Fx.FIRE_LO)
+		draw_circle(p, Fx.MONSTER_BURN_R_PX * scale * 0.5, Fx.FIRE_HI)
+
+
+## 🔴 죽는 순간 터지는 고리 — **닭의 유일한 피격 피드백**이다(`fx_tuning.MONSTER_DEATH_POP_FRAMES`).
+##  ⚠ 벌어지면서 옅어진다. 벌어지기만 하면 「고리가 남았다」로, 옅어지기만 하면 「깜빡였다」로 읽힌다.
+func _draw_death_pop(p: Dictionary) -> void:
+	var r := box_rect(p["kind"], p["x"], p["y"])
+	var t := float(p["age"]) / float(Fx.MONSTER_DEATH_POP_FRAMES)
+	var radius := maxf(r.size.x, r.size.y) * 0.5 * lerpf(1.0, Fx.MONSTER_DEATH_POP_SCALE, t)
+	var c := Fx.MONSTER_DEATH_POP_COLOR
+	draw_arc(r.get_center(), radius, 0.0, TAU, 24, Color(c.r, c.g, c.b, c.a * (1.0 - t)),
+		Fx.MONSTER_DEATH_POP_PX)
 
 
 ## 🔴🔴 **그림은 `r`(= `Defs`에서 나온 상자)에 맞춰 그린다 — 텍스처 자기 픽셀 크기를 안 믿는다.**
@@ -216,11 +377,19 @@ func _draw_monster_body(m: Monster, r: Rect2) -> void:
 	if tex == null:
 		draw_rect(r, Fx.MONSTER_FILL)
 		return
-	var flip := m.facing < 0
-	draw_set_transform(Vector2(r.position.x + (r.size.x if flip else 0.0), r.position.y),
+	_draw_flipped(self, tex, r, m.facing < 0, Color.WHITE)
+
+
+## 🔴 몸 그림을 상자에 맞춰 그린다. 왼쪽을 보면 뒤집는다.
+##  ⚠ **되돌리는 것을 잊지 마라** — 안 되돌리면 이 뒤에 그리는 것 전부가 뒤집힌 좌표계로 간다.
+##  🔴 **그래서 이 함수 하나로 묶었다.** 몸과 번쩍이 같은 뒤집기를 따로 짜면 **둘이 갈라지는 날**
+##   맞은 돼지의 흰 실루엣만 반대로 서고, 그건 화면에서만 보인다.
+## ⚠ `canvas` 를 받는 이유: 번쩍은 **자식 노드**에 그린다(셰이더가 노드 단위다).
+func _draw_flipped(canvas: CanvasItem, tex: Texture2D, r: Rect2, flip: bool, modulate: Color) -> void:
+	canvas.draw_set_transform(Vector2(r.position.x + (r.size.x if flip else 0.0), r.position.y),
 		0.0, Vector2(-1.0 if flip else 1.0, 1.0))
-	draw_texture_rect(tex, Rect2(Vector2.ZERO, r.size), false)
-	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	canvas.draw_texture_rect(tex, Rect2(Vector2.ZERO, r.size), false, modulate)
+	canvas.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
 func _draw_hp_bar(kind: int, x: int, y: int, hp: int) -> void:
@@ -233,13 +402,28 @@ func _draw_hp_bar(kind: int, x: int, y: int, hp: int) -> void:
 	draw_rect(fill, Fx.MONSTER_HP_BAR_FULL.lerp(Fx.MONSTER_HP_BAR_EMPTY, 1.0 - frac))
 
 
+## 🔴🔴 **시체도 몸 그림이다 — 어둡게 깔고 페이드한다**(2026-08-07, 판정 13이 여기서 실패했다).
+##  ⚠ **원래 자주 사각형이었고 화면에서 「UI 조각이 남았나」로 읽혔다** — 같은 화면의 몸은
+##   스프라이트인데 시체만 도형이라 **스프라이트를 붙인 값이 절반 깎였다.**
+## 🔴 **어둡게 하는 것은 `modulate` 곱셈이다** — 알파 채널이 그대로 살아서 실루엣이 정확하다.
+##  ⚠ 곱셈이라 **밝아지게는 못 한다.** 「죽으면 어두워진다」와 방향이 같아서 여기서는 맞다.
+##
+## ⚠ **방향을 모른다 — 늘 오른쪽을 본다.** 죽음 통지(`world.died_*`)가 `facing` 을 안 넘긴다.
+##  🔴 **왼쪽으로 걷다 죽으면 시체가 홱 돌아선다.** 통지에 한 칸을 더하면 고쳐지지만
+##   그건 `src/actor/` 계약을 건드리는 일이라 **이번 범위 밖**이다. 눈에 띄면 그때 하라.
 func _draw_corpse(c: Dictionary) -> void:
 	var kind: int = c["kind"]
 	var r := box_rect(kind, c["x"], c["y"])
 	var age: int = c["age"]
 	var alpha := 1.0 - float(age) / float(Fx.MONSTER_CORPSE_LIFE_FRAMES)
-	var col := Fx.MONSTER_CORPSE_COLOR
-	draw_rect(r, Color(col.r, col.g, col.b, col.a * alpha))
+	var tex: Texture2D = _sheets.get(kind)
+	if tex == null:
+		# 폴백 — `_draw_monster_body` 와 같은 규율(짖지 않고 대체한다).
+		var col := Fx.MONSTER_CORPSE_COLOR
+		draw_rect(r, Color(col.r, col.g, col.b, col.a * alpha))
+		return
+	var d := Fx.MONSTER_CORPSE_DIM
+	draw_texture_rect(tex, r, false, Color(d, d, d, alpha))
 
 
 func _draw_dmg_number(n: Dictionary) -> void:
@@ -280,6 +464,24 @@ static func box_rect(kind: int, x: int, y: int) -> Rect2:
 static func hp_bar_rect(kind: int, x: int, y: int) -> Rect2:
 	return Rect2(float(x), float(y) - Fx.MONSTER_HP_BAR_GAP_PX - Fx.MONSTER_HP_BAR_H_PX,
 		float(Defs.w_px(kind)), Fx.MONSTER_HP_BAR_H_PX)
+
+
+## 🔴🔴 **몸에 붙은 불꽃 하나의 자리. 순수 static 이라 그물이 직접 부른다.**
+##
+## 🔴 **id 와 인덱스만으로 정해진다 — 프레임이 안 들어간다.** 자리가 프레임마다 바뀌면
+##  불꽃이 **매 프레임 순간이동**하고 그건 불이 아니라 노이즈다(움직이는 것은 크기뿐).
+## ⚠ **`randi` 가 아니라 해시다.** `randi` 를 쓰면 같은 몬스터의 불이 프레임마다 다른 자리에 서고,
+##  그물도 재현을 못 한다. 여기는 `src/view/` 라 결정론 계약 밖이지만 **재현성은 여전히 필요하다.**
+##
+## 🔴 **아래로 치우친다**(`MONSTER_BURN_LOW_BIAS`) — 고르게 뿌리면 「불에 탄다」가 아니라
+##  「반짝이가 붙었다」로 보인다. 불은 아래에서 올라온다.
+static func flame_pos(r: Rect2, id: int, i: int) -> Vector2:
+	# 두 큰 홀수를 섞는다 — 인접한 id·i 가 인접한 자리로 가지 않게 하는 것이 전부다.
+	var h := (id * 2654435761 + i * 40503) & 0xFFFFFF
+	var fx := float(h & 0xFF) / 255.0
+	var fy := float((h >> 8) & 0xFF) / 255.0
+	fy = Fx.MONSTER_BURN_LOW_BIAS + (1.0 - Fx.MONSTER_BURN_LOW_BIAS) * fy
+	return r.position + Vector2(r.size.x * fx, r.size.y * fy)
 
 
 ## 체력바가 채워진 비율. 0~1로 죈다 — 음수 hp는 `Monster.on_tick`이 이미 `maxi(0, …)`로
