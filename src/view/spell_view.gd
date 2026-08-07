@@ -170,7 +170,10 @@ func _draw_trail(i: int) -> void:
 	var pts := trail_points(i)
 	if pts.size() < 2:
 		return
-	var col: Color = _elem(i)["core"]
+	# 🔴 **`glow` 다 — `core` 는 머리 그림의 코어와 같은 밝기라 꼬리가 머리를 이긴다**
+	#  (2026-08-08, 사용자: 「탄보다는 꼬리가 너무 밝아서 잘 안보임」).
+	#  `fx_tuning.TRAIL_USES_GLOW` 상자가 그 사연과 되돌리는 길을 든다.
+	var col: Color = _elem(i)["glow" if Fx.TRAIL_USES_GLOW else "core"]
 	# 🔴 자취 굵기도 머리 크기를 따라간다 — 안 그러면 세대 1이 「가는 탄에 굵은 꼬리」가 된다.
 	var w := Fx.TRAIL_PX * Fx.bolt_px(_gen(i)) / Fx.bolt_px(0)
 	var segs := pts.size() - 1
@@ -179,7 +182,8 @@ func _draw_trail(i: int) -> void:
 		var f := 1.0 - float(k) / float(segs)
 		draw_line(
 			pts[k], pts[k + 1],
-			Color(col.r, col.g, col.b, lerpf(Fx.TRAIL_TAIL_A, 1.0, f)),
+			# 🔴 머리 쪽이 **1.0 이 아니다** — 가산 합성이라 1.0이면 그 자리가 흰색으로 탄다.
+			Color(col.r, col.g, col.b, lerpf(Fx.TRAIL_TAIL_A, Fx.TRAIL_HEAD_A, f)),
 			maxf(Fx.MIN_DRAW_PX, w * f))
 
 
