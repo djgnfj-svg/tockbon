@@ -18,6 +18,15 @@ const FLOOR_CY := 100      # 바닥 윗면 셀
 const FLOOR_TOP := FLOOR_CY * Tuning.CELL_PX     # 400px
 const REST_Y := FLOOR_TOP - Character.H_PX       # 368px — 바닥에 선 캐릭터의 y
 
+## 🔴🔴 **바닥은 얇게 깐다 — CLAUDE.md 「그물이 느리면 그건 성능 문제가 아니라 하네스가
+##  버려지는 경로다」.** 실측: `CellGrid.H - 1`까지 까는 옛 바닥이 4096×908=3,719,168칸이라
+##  한 번에 2,719ms였다(이 파일이 그물 전체에서 46초 — 검사 수가 아니라 바닥을 몇 번 까느냐로
+##  시간이 정해졌다). ⚠ **안전한 이유**: `cell_grid.mat_at()`이 격자 밖을 `STONE`으로
+##  돌려주므로 바닥이 두꺼울 이유가 원래 없었다 — 캐릭터는 표면 몇 px 안에서만 논다.
+## 🔴 32셀(128px)로 잡았다 — 폭발이 지형을 파는 검사가 없는 파일이라 `carve_r`(8셀) 여유를
+##  안 볼 필요는 없지만, 이 값을 같은 파일에 실려 있을 미래의 판 검사와 값을 맞춰 둔다.
+const FLOOR_DEPTH_CY := 32
+
 ## 🔴🔴 **사람이 낼 수 있는 최단 키 누름(프레임). 가변 점프를 이걸로 잰다.**
 ##  손가락이 키를 눌렀다 떼는 데 **0.05초쯤** 걸린다 — 1~2프레임(0.017~0.033초)은
 ##  **사람이 못 내는 입력**이고, 그걸로 재면 게임에서 안 되는 것도 통과한다(실제로 났다).
@@ -54,7 +63,7 @@ func run(t) -> void:
 
 func _floor_grid() -> CellGrid:
 	var g := CellGrid.new()
-	g.apply(CellGrid.cmd_fill(0, FLOOR_CY, CellGrid.W - 1, CellGrid.H - 1, Mat.STONE))
+	g.apply(CellGrid.cmd_fill(0, FLOOR_CY, CellGrid.W - 1, FLOOR_CY + FLOOR_DEPTH_CY - 1, Mat.STONE))
 	return g
 
 
@@ -180,8 +189,9 @@ func _jump_peak(hold_frames: int) -> int:
 
 func _ledge_grid(cells: int) -> CellGrid:
 	var g := _floor_grid()
+	# 🔴 위 `FLOOR_DEPTH_CY` 상자와 같은 이유로 얇게 깐다 — 턱 위도 표면 몇 px만 있으면 된다.
 	g.apply(CellGrid.cmd_fill(
-		LEDGE_CX, FLOOR_CY - cells, CellGrid.W - 1, CellGrid.H - 1, Mat.STONE))
+		LEDGE_CX, FLOOR_CY - cells, CellGrid.W - 1, FLOOR_CY + FLOOR_DEPTH_CY - 1, Mat.STONE))
 	return g
 
 
@@ -217,7 +227,9 @@ func _broken_ground(t) -> void:
 		# 그물이 "못 올라갔다"와 "올라갔다가 내려왔다"를 못 가른다.
 		var ex := 33 + (k - 1) * 4 if k < 6 else CellGrid.W - 1
 		last_top = FLOOR_CY - k
-		g.apply(CellGrid.cmd_fill(sx, last_top, ex, CellGrid.H - 1, Mat.STONE))
+		# 🔴 마지막 단(k=6)이 가로 전체(4096칸)로 넓어지는 자리라 얇게 안 깔면 이게 또
+		#  3.7M칸이 된다 — `FLOOR_DEPTH_CY` 상자와 같은 이유.
+		g.apply(CellGrid.cmd_fill(sx, last_top, ex, FLOOR_CY + FLOOR_DEPTH_CY - 1, Mat.STONE))
 
 	var ch := Character.new()
 	ch.place(40, REST_Y)

@@ -35,6 +35,14 @@ const CAVE_X1 := 60
 const CAVE_Y0 := 55
 const CAVE_Y1 := 85
 
+## 🔴🔴 **`_solid_grid()`·`_wood_cave_grid()`가 채우는 한 변(셀)**(CLAUDE.md 「그물이 느리면…」,
+##  2026-08-07). 옛 코드는 격자 전체(4096×1008=4,128,768칸)를 채웠다 — `_cave_grid()`가
+##  이 파일에서 15번 넘게 불리므로 그것만으로도 이 파일이 그물 전체에서 125초를 먹었다.
+##  ⚠ **동굴이 「사방이 두꺼운 돌」이어야 하는 이유(`_cave_grid` 주석)는 안 죽는다** — 이 값이
+##  방 경계(X 20~60·Y 55~85)와 이 파일이 직접 쓰는 좌표(cx=100·cy=70, 폭발 반경 rd=8)를
+##  전부 감싸고도 여유가 수십 셀 남는다. 200×200=40,000칸이면 옛 값의 1/103이다.
+const SOLID_EXTENT := 200
+
 ## 🔴 위로 쏘는 검사들의 발사 원점(셀). **상자 바닥 가까이에서 위로 쏜다** —
 ##  올라간 만큼 다시 떨어질 자리가 있어야 vx가 0이 되는 것을 **날면서** 볼 수 있다.
 ## ⚠ 32px 전환에서 ×2 했다(128,130 → 256,260). 아래 `_box_grid` 는 격자에서 파생돼 저절로 2배다.
@@ -1359,9 +1367,14 @@ func _wall_pierced(g: CellGrid) -> bool:
 
 
 ## 통째로 돌. 폭발이 지운 칸 수를 세는 자리다.
+## 🔴🔴 위 `SOLID_EXTENT` 상자 — 격자 전체가 아니라 한 변만 채운다.
+## ⚠ **`mat_at()`의 「격자 밖 = STONE」 자동 클램프는 진짜 격자 경계(4096·1008)에서만 켜진다 —
+##  `SOLID_EXTENT`(200) 밖은 아직 **격자 안**이라 자동으로 안 채워지고 그냥 빈칸(EMPTY)이다.**
+##  안전한 진짜 이유는 **이 파일이 쓰는 모든 좌표(동굴 20~85 · 직접 검사 cx=100·rd=8)가
+##  200 안에 여유 있게 들어간다는 것**뿐이다 — 좌표를 200 밖으로 넓히는 날 이 값도 같이 넓혀라.
 func _solid_grid() -> CellGrid:
 	var g := CellGrid.new()
-	g.apply(CellGrid.cmd_fill(0, 0, CellGrid.W - 1, CellGrid.H - 1, Mat.STONE))
+	g.apply(CellGrid.cmd_fill(0, 0, SOLID_EXTENT - 1, SOLID_EXTENT - 1, Mat.STONE))
 	return g
 
 
@@ -1377,9 +1390,10 @@ func _cave_grid() -> CellGrid:
 
 
 ## 같은 방을 **나무**로 판 것. 룬 흔적은 연료가 있어야 보이므로 돌 동굴로는 못 잰다.
+## 🔴 `_solid_grid()`와 같은 이유로 `SOLID_EXTENT`만 채운다.
 func _wood_cave_grid() -> CellGrid:
 	var g := CellGrid.new()
-	g.apply(CellGrid.cmd_fill(0, 0, CellGrid.W - 1, CellGrid.H - 1, Mat.WOOD))
+	g.apply(CellGrid.cmd_fill(0, 0, SOLID_EXTENT - 1, SOLID_EXTENT - 1, Mat.WOOD))
 	g.apply(CellGrid.cmd_fill(CAVE_X0, CAVE_Y0, CAVE_X1, CAVE_Y1, Mat.EMPTY))
 	return g
 

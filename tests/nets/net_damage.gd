@@ -21,6 +21,8 @@ extends RefCounted
 ## | `_drain_queue()` 를 뒤로 미루기 | 점화 커맨드의 연료 · 첫 틱 변위 |
 ## | `_broken` 이름 바꾸기 | `raw is bool` (🔴 **없어지는 대신 빨개진다**) |
 ## | `enqueue()` 가 가드 밖 | 부서진 세상에 커맨드를 넣어 본다 — ⚠ 「안 터진다」는 **래퍼가** 잡는다 |
+## | `spawn_monster()` 가 가드 밖 | 부서진 세상에서 몬스터를 만들어 본다(`monsters-minimum` 검증에서
+##  실제로 뚫렸다 — 새로 생긴 공개 mutator가 이 문을 안 지나고 있었다) |
 ##
 ## 🔴 **껍데기·세상의 사유 이름 셋에 묶여 있다**: `_world` · `_broken` · `_queue`.
 ##  이름을 바꾸면 이 그물이 빨개지고, **라벨이 무엇을 고칠지 한 줄로 말한다.** 감수한 결합이다.
@@ -41,6 +43,7 @@ const Glyph := preload("res://src/sim/glyph_defs.gd")
 const Character := preload("res://src/actor/character.gd")
 const Staff := preload("res://src/actor/staff.gd")
 const WorldStep := preload("res://src/actor/world_step.gd")
+const MonsterDefs := preload("res://src/actor/monster_defs.gd")
 
 const STAGE_SCRIPT := "res://src/stage/stage.gd"
 const STAGE_SCENE := "res://src/stage/stage.tscn"
@@ -90,6 +93,13 @@ const DT := 1.0 / 60.0
 const FLOOR_CY := 200
 const FLOOR_TOP := FLOOR_CY * Tuning.CELL_PX
 const STAND_X := 320
+
+## 🔴🔴 **바닥은 얇게 깐다**(CLAUDE.md 「그물이 느리면…」, 2026-08-07). 옛 바닥(`CellGrid.H-1`까지)이
+##  4096×808=3,309,568칸이라 한 번에 수 초였다 — 이 파일이 그물 전체에서 99초를 먹은 큰 축이었다.
+##  ⚠ 안전한 이유: `cell_grid.mat_at()`이 격자 밖을 `STONE`으로 돌려주므로 두꺼울 이유가
+##  원래 없었다. 🔴 **`PIT_BOTTOM_CY`(220)가 이 안에 있어야 한다** — 32셀이면 200~231이라
+##  들어간다(여유 11셀). 폭발이 지형을 파는 검사도 여기 있어 `carve_r`(8셀)의 4배 여유이기도 하다.
+const FLOOR_DEPTH_CY := 32
 
 ## 발사 원점(셀). 🔴 벽에서 멀어야 한다 — 착탄하면 탄이 사라져서 「나아갔나」를 못 잰다.
 const FIRE_CX := 80
@@ -499,6 +509,16 @@ func _null_world_refuses(t) -> void:
 	t.ok(q is Array, "world_step 이 `_queue` 를 든다")
 	if q is Array:
 		t.eq((q as Array).size(), 0, "부서진 세상은 커맨드를 안 받는다")
+
+	# 🔴 `spawn_monster()`도 같은 문을 지나나(`monsters-minimum` 검증에서 실제로 뚫렸다) —
+	#  새로 생긴 공개 mutator가 `_broken`을 안 지나면 부서진 세상에서도 배열이 늘고
+	#  HUD 숫자가 오른다. 「프레임은 정중히 멈추는데 M에서만 늘어난다」가 그 증상이다.
+	var mid := w.spawn_monster(MonsterDefs.KIND_PIG, 0, 0)
+	t.eq(mid, 0, "부서진 세상은 몬스터를 안 만든다 (id 0)")
+	var mv: Variant = w.get("_monsters")
+	t.ok(mv is Array, "world_step 이 `_monsters` 를 든다")
+	if mv is Array:
+		t.eq((mv as Array).size(), 0, "부서진 세상의 몬스터 배열이 비어 있다")
 
 
 ## 🔴🔴 **껍데기가 만든 세상이 실제로 도나.** 위 검사는 그물이 만든 세상만 본다.
@@ -1260,7 +1280,7 @@ func _drag(v: int) -> int:
 
 func _floor_grid() -> CellGrid:
 	var g := CellGrid.new()
-	g.apply(CellGrid.cmd_fill(0, FLOOR_CY, CellGrid.W - 1, CellGrid.H - 1, Mat.STONE))
+	g.apply(CellGrid.cmd_fill(0, FLOOR_CY, CellGrid.W - 1, FLOOR_CY + FLOOR_DEPTH_CY - 1, Mat.STONE))
 	return g
 
 
