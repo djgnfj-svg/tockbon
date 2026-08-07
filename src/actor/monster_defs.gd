@@ -3,12 +3,14 @@ extends RefCounted
 ##  `ALL` 명시 목록 + static 접근자. 🔴 **새 종류 하나 = 여기 한 줄이다.**
 ##
 ## ⚠ 표에 지금 넣지 않는 것 — 넣으면 「이 값이 돈다」로 읽히고 그건 거짓 손잡이다:
-##  `invuln_ticks`(단계 3) · 「때리는 법」·「받는 피해」·「불 DPS」(단계 3·5·6).
+##  「때리는 법」·「받는 피해」·「불 DPS」(단계 5·6).
 ##  🔴 「받는 피해 10」과 「불 DPS 10/초」는 표에 열을 안 만든다 —
 ##  `monsters-minimum` 「동작 ⑦」이 「플레이어 상수를 그대로 쓴다. 축을 안 늘린다」로 못 박았다.
 ##
-## ⚠ 각 열을 처음 읽는 단계: `w_px`·`h_px`·`step_cells`·`max_hp` = 단계 1 · `speed_px` = 단계 2.
-##  `speed_px`를 지금 넣는 이유는 상자와 걸음이 **같은 표**에서 나온다를 처음부터 세우기 위해서다.
+## ⚠ 각 열을 처음 읽는 단계: `w_px`·`h_px`·`step_cells`·`max_hp` = 단계 1 · `speed_px` = 단계 2 ·
+##  `invuln_ticks` = 단계 3. `speed_px`를 처음부터 넣은 이유는 상자와 걸음이 **같은 표**에서
+##  나온다를 세우기 위해서였다 — `invuln_ticks`도 같은 이유로 여기 산다(플레이어는 상수 하나,
+##  몬스터는 종류마다 다를 수 있어 표 칸이다. 지금 값은 둘 다 2틱으로 같다).
 
 ## 🔴 예약값이다. 죽음 통지 배열(`_died_kind`)과 뷰가 종류를 정수로 나르는데,
 ##  **0이 유효한 종류면 지워진 슬롯이 조용히 돼지로 그려진다.**
@@ -27,11 +29,11 @@ const MAX_MONSTERS := 20
 const DEFS: Dictionary = {
 	KIND_PIG: {
 		"name": &"돼지", "w_px": 44, "h_px": 32, "step_cells": 1,
-		"max_hp": 30, "speed_px": 160.0,
+		"max_hp": 30, "speed_px": 160.0, "invuln_ticks": 2,
 	},
 	KIND_HEN: {
 		"name": &"닭", "w_px": 24, "h_px": 28, "step_cells": 3,
-		"max_hp": 10, "speed_px": 220.0,
+		"max_hp": 10, "speed_px": 220.0, "invuln_ticks": 2,
 	},
 }
 
@@ -60,3 +62,7 @@ static func max_hp(kind: int) -> int:
 
 static func speed_px(kind: int) -> float:
 	return DEFS[kind]["speed_px"]
+
+
+static func invuln_ticks(kind: int) -> int:
+	return DEFS[kind]["invuln_ticks"]

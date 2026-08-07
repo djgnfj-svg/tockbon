@@ -41,6 +41,8 @@ const Tuning := preload("res://src/sim/sim_tuning.gd")
 const SpellSim := preload("res://src/sim/spell_sim.gd")
 const Glyph := preload("res://src/sim/glyph_defs.gd")
 const Character := preload("res://src/actor/character.gd")
+## 🔴 `_fp_px`·`_cell_px`는 `monsters-minimum` 단계 3(두 번째 추출)에서 `Body`로 이사했다.
+const Body := preload("res://src/actor/body.gd")
 const Staff := preload("res://src/actor/staff.gd")
 const WorldStep := preload("res://src/actor/world_step.gd")
 const MonsterDefs := preload("res://src/actor/monster_defs.gd")
@@ -576,8 +578,8 @@ func _direct_hit_costs_hp(t) -> void:
 	#   점 검사로 짜도 통과한다.
 	t.eq(spell.seg_count(), 1, "이 틱에 구간이 하나다 (배치를 읽을 수 있다)")
 	if spell.seg_count() == 1:
-		var ax := Character._fp_px(spell.get_seg_x0()[0])
-		var bx := Character._fp_px(spell.get_seg_x1()[0])
+		var ax := Body._fp_px(spell.get_seg_x0()[0])
+		var bx := Body._fp_px(spell.get_seg_x1()[0])
 		t.ok(_outside_box(box_x, ax) and _outside_box(box_x, bx),
 			"구간 양 끝(%.1f → %.1f)이 둘 다 상자[%d,%d] 밖이다 (도약 배치다)"
 				% [ax, bx, box_x, box_x + Character.W_PX])
@@ -612,7 +614,7 @@ func _vertical_hit_costs_hp(t) -> void:
 	# 상자 **바로 위**에서 곧장 아래로. 🔴 `adx = 0` 이라 x축이 축평행 갈래를 지난다.
 	w.enqueue(SpellSim.cmd_fire(
 		VERT_CX, VERT_FROM_CY, 0, 10, Tuning.ELEM_NONE, Glyph.GLYPH_NONE))
-	var cx := Character._cell_px(VERT_CX)
+	var cx := Body._cell_px(VERT_CX)
 	t.ok(cx >= float(ch.x) and cx <= float(ch.x + Character.W_PX),
 		"발사선(x=%.1f)이 상자[%d,%d] 안이다 (배치의 전제)" % [cx, ch.x, ch.x + Character.W_PX])
 
@@ -640,7 +642,7 @@ func _wall_stops_the_segment(t) -> void:
 	t.eq(spell.active_count(), 0, "탄이 벽에서 죽었다 (배치의 전제)")
 	t.eq(spell.seg_count(), 1, "죽은 탄도 이번 틱 구간을 하나 남긴다")
 	if spell.seg_count() == 1:
-		var bx := Character._fp_px(spell.get_seg_x1()[0])
+		var bx := Body._fp_px(spell.get_seg_x1()[0])
 		t.ok(bx < float(ch.x),
 			"구간 끝(%.1f)이 상자 왼쪽(%d)에 못 미친다 (착탄점에서 잘렸다)" % [bx, ch.x])
 	t.eq(ch.hp, Character.MAX_HP, "벽 뒤의 캐릭터는 안 맞는다")
@@ -1240,7 +1242,7 @@ static func _blast_cx_beside(stand_x: int, side: int) -> int:
 ## ⚠ 상자의 **오른쪽 끝**이 반경 밖이어야 하므로 상자 폭을 빼서 왼쪽 위를 돌려준다 —
 ##  안 빼면 상자 오른쪽 모서리가 원 안에 걸린 채 「밖에 세웠다」고 믿게 된다.
 static func _far_stand_x(blast_cx: int) -> int:
-	return int(Character._cell_px(blast_cx) - _blast_r_px() * BLAST_FAR_RATIO) - Character.W_PX
+	return int(Body._cell_px(blast_cx) - _blast_r_px() * BLAST_FAR_RATIO) - Character.W_PX
 
 
 ## 확산 배치 — 캐릭터 **바로 오른쪽 바닥**(상자 옆면에서 반 칸).
@@ -1257,7 +1259,7 @@ func _blast_cmd(cx: int) -> Dictionary:
 	return SpellSim.cmd_fire(cx, BLAST_FROM_CY, 0, 10, Tuning.ELEM_NONE, Glyph.pack(one))
 
 
-## 🔴 **변환은 실제 코드의 것을 쓴다**(`Character._fp_px`). 그물이 제 변환을 따로 두면
+## 🔴 **변환은 실제 코드의 것을 쓴다**(`Body._fp_px`). 그물이 제 변환을 따로 두면
 ##  두 벌이 되고, 그때 이 검사는 게임과 **다른 상자**를 재게 된다.
 func _outside_box(box_x: int, px: float) -> bool:
 	return px < float(box_x) or px > float(box_x + Character.W_PX)

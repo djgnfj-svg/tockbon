@@ -295,16 +295,15 @@ func _pour_water_at(world_px: Vector2) -> void:
 			_grid.set_water(cx + dx, cy + dy, Tuning.WATER_MAX)
 
 
-## 🔴🔴 **M — 마우스 자리에 몬스터를 세운다. 껍데기 전용 디버그 문이다**(`monsters-minimum` 단계 1).
+## 🔴🔴 **M/N — 마우스 자리에 몬스터를 세운다. 껍데기 전용 디버그 문이다**(`monsters-minimum`).
 ##  배치는 맵 문서의 몫이라(문서 「경계」) 무대는 몬스터를 자동으로 안 깐다 — 이 키가
 ##  「볼 것이 화면에 도달하는 경로」다.
 ##
 ## ⚠ **스폰 자리는 마우스 자리를 상자 가운데로 둔다** — 좌상단에 두면 큰 상자(44px)일수록
 ##  커서에서 멀리 뜬다.
-## 🔴 **단계 1은 M 하나로 돼지만 세운다**(닭은 표에만 있고 그물이 헤드리스로 만든다) —
-##  두 번째 스폰 키는 단계 4다.
-func _spawn_monster_at(world_px: Vector2) -> void:
-	var kind := MonsterDefs.KIND_PIG
+## 🔴 **단계 1은 M 하나로 돼지만 세웠다**(닭은 표에만 있고 그물이 헤드리스로 만들었다) —
+##  **단계 4에서 N을 붙여 닭도 화면에서 볼 수 있게 했다**(`stage_input.MONSTER_KEYS`).
+func _spawn_monster_at(world_px: Vector2, kind: int) -> void:
 	# 🔴 `roundi(w / 2.0)` — 정수 나눗셈(`/`)이면 홀수 폭에서 1px 반내림이 조용히 생긴다.
 	#  지금 값(44·32)은 짝수라 안 드러나지만 표가 홀수 폭을 갖는 날 이 줄이 먼저 죽는다.
 	var px := int(world_px.x) - roundi(MonsterDefs.w_px(kind) / 2.0)

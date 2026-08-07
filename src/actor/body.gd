@@ -15,6 +15,9 @@ extends RefCounted
 
 const CellGrid := preload("res://src/sim/cell_grid.gd")
 const Tuning := preload("res://src/sim/sim_tuning.gd")
+## 🔴 통지의 좌표계(고정소수점)를 읽으려면 그 상수가 필요하다 — `character.gd`와 같은 이유로
+##  `src/sim/`을 참조하는 것은 계약 안쪽이다(막히는 것은 `src/view/`·`src/stage/`뿐).
+const SpellSim := preload("res://src/sim/spell_sim.gd")
 
 ## 좌상단 px. 🔴 정수다 — 소수부는 `_rem_*` 가 든다.
 ##  소수 위치로 두면 상자가 셀 경계를 반 칸 걸치고, 그러면 착지 높이가 매번 최대 1px 달라진다.
@@ -137,3 +140,92 @@ func box_free(grid: CellGrid, px: int, py: int) -> bool:
 			if grid.is_solid(cx, cy):
 				return false
 	return true
+
+
+# ══════════════════════════════════════════════════════════════════
+#  맞았나 · 불 위인가 — 🔴🔴 `monsters-minimum` 단계 3의 두 번째 추출
+# ══════════════════════════════════════════════════════════════════
+# `character.gd`에서 이사해 왔다. 몬스터도 같은 상자 모양이라 두 벌로 두면
+# 「몬스터만 안 맞는다」가 반드시 난다 — 판정 1을 여기 다시 건다(거동 변화 0).
+
+## 🔴🔴 **발밑 한 줄을 같이 본다. 이 한 줄이 이 기능의 목숨이다.**
+##  서 있는 자리의 셀들은 **빈칸이라 연료가 0**이고, 불은 **발밑 나무 셀**에 붙어 있다.
+##  ⚠ 빠뜨리면 코드는 돌고 그물도 짤 수 있는데 **게임에서만 아무 일이 안 난다.**
+## 🔴 범위가 `grounded()`가 보는 줄과 같다 — 「밟고 있다」의 뜻이 두 벌이 되지 않는다.
+func standing_in_fire(grid: CellGrid) -> bool:
+	var cx0 := floori(x / float(Tuning.CELL_PX))
+	var cx1 := floori((x + w_px - 1) / float(Tuning.CELL_PX))
+	var cy0 := floori(y / float(Tuning.CELL_PX))
+	var cy1 := floori((y + h_px) / float(Tuning.CELL_PX))
+	for cy in range(cy0, cy1 + 1):
+		for cx in range(cx0, cx1 + 1):
+			# 🔴 **「타나」는 격자에 물어본다** — 여기서 깃발을 직접 까면 규칙이 두 벌이 된다.
+			if grid.is_burning(cx, cy):
+				return true
+	return false
+
+
+## 🔴🔴 **선분 대 상자다. 사각형 대 사각형이 아니다.**
+##  세대 0 탄은 틱당 80px을 뛰고 상자는 20~44px이라, 틱 경계 위치만 맞대면 **도약이 상자를
+##  통째로 넘을 수 있다.** 한 프레임이라 눈으로 절대 못 본다(기획 「직격은 매 틱 사각형 겹침으로
+##  재면 조용히 안 걸린다」).
+func hit_by_segment(spell: SpellSim) -> bool:
+	var x0 := spell.get_seg_x0()
+	var y0 := spell.get_seg_y0()
+	var x1 := spell.get_seg_x1()
+	var y1 := spell.get_seg_y1()
+	for i in spell.seg_count():
+		if _seg_hits_box(_fp_px(x0[i]), _fp_px(y0[i]), _fp_px(x1[i]), _fp_px(y1[i])):
+			return true
+	return false
+
+
+## 🔴 **반경은 통지에 안 실려 있다** — 호출부가 `Tuning.blast_rd(gen)` 을 읽는다.
+##  실어 보내면 같은 값이 두 곳이 되고, 표를 고치는 날 한쪽만 따라온다.
+func hit_by_blast(spell: SpellSim) -> bool:
+	var bx := spell.get_blast_x()
+	var by := spell.get_blast_y()
+	var bg := spell.get_blast_gen()
+	for i in spell.blast_count():
+		var r := float(Tuning.blast_rd(bg[i]) * Tuning.CELL_PX)
+		if _circle_hits_box(_cell_px(bx[i]), _cell_px(by[i]), r):
+			return true
+	return false
+
+
+## 🔴🔴 **좌표 변환은 이 함수 하나다.** 통지는 셀 고정소수점이고 몸은 px다 —
+##  두 곳에서 바꾸면 한쪽만 고치는 날이 오고, 그 어긋남은 「가끔 안 맞는다」로만 보인다.
+static func _fp_px(fp: int) -> float:
+	return float(fp) * Tuning.CELL_PX / SpellSim.FP_ONE
+
+
+## 셀 번호 → 그 셀 **한가운데**의 px. 🔴 위 함수를 지나므로 규칙이 한 벌이다.
+static func _cell_px(c: int) -> float:
+	return _fp_px((c << SpellSim.FP_SHIFT) + SpellSim.FP_HALF)
+
+
+## 선분(a→b) 대 상자. ⚠ **시작점이 상자 안이면 참이다** — 상자 안에서 태어난 탄도 잡힌다.
+func _seg_hits_box(ax: float, ay: float, bx: float, by: float) -> bool:
+	var rng := Vector2(0.0, 1.0)
+	rng = _slab(rng, ax, bx - ax, float(x), float(x + w_px))
+	rng = _slab(rng, ay, by - ay, float(y), float(y + h_px))
+	return rng.x <= rng.y
+
+
+## 한 축의 슬랩. 살아 있는 구간 `(lo, hi)`를 좁혀서 돌려준다.
+## 🔴 **축을 함수 하나로 묶은 이유**: 두 축을 따로 쓰면 한쪽만 고치는 날이 오고,
+##  그러면 「세로로 날아오는 탄만 안 맞는다」가 된다.
+## ⚠ 축과 나란한 선분(d ≈ 0)은 나눗셈이 아니라 **범위 안에 있나**로 갈린다.
+static func _slab(rng: Vector2, a: float, d: float, e0: float, e1: float) -> Vector2:
+	if is_zero_approx(d):
+		return rng if (a >= e0 and a <= e1) else Vector2(1.0, 0.0)
+	var t0 := (e0 - a) / d
+	var t1 := (e1 - a) / d
+	return Vector2(maxf(rng.x, minf(t0, t1)), minf(rng.y, maxf(t0, t1)))
+
+
+## 원 대 상자 — 상자에서 원 중심에 **제일 가까운 점**까지의 거리로 본다.
+func _circle_hits_box(cx: float, cy: float, r: float) -> bool:
+	var dx := cx - clampf(cx, float(x), float(x + w_px))
+	var dy := cy - clampf(cy, float(y), float(y + h_px))
+	return dx * dx + dy * dy <= r * r

@@ -131,6 +131,76 @@ PRESETS = {
                  "no text, no character, no frame, no border",
         "lora": 0.0, "size": 512, "down": 32, "steps": 28, "cfg": 5.0,
     },
+    # 🔴🔴 몬스터 — **플레이어와 한 화면에 서는 것.** 위 다섯과 갈라 둔 이유가 그 하나다.
+    #  진·룬·문양은 조립창(밝은 종이) 위에 얹고 탄은 빛이지만, 몬스터는 **무대에서 플레이어 옆에 선다.**
+    #  ⇒ 맞춰야 할 기준이 「조립창과 어울리나」가 아니라 **「`assets/character/wizard_body.png` 와 같은
+    #   세계에 사나」**다. 그 그림을 실제로 재 봤다(2026-08-07):
+    #   가장 어두운 색이 **`(79,52,76)` — 순검정이 아니라 어두운 자주색**이고, 색은 35개다.
+    #  🔴 style 에 `dark desaturated outline` 을 넣고 `black outline` 을 안 넣는 이유가 이것이다 —
+    #   순검정 외곽선은 하늘 `#0e0e13`(합 41) 위에서 **사라져서** 실루엣을 칠이 혼자 지게 된다.
+    #
+    # ⚠ **`lora` 가 0인 것이 여기서는 다른 이유다.** 위 다섯은 「사람이 나와서」 0인데,
+    #  이쪽은 짐승이라 그 걱정이 없다 — 그런데도 0인 것은 4-walk LoRA 가 **4방향 걷기 시트**를
+    #  내놓기 때문이다. 🔴 지금 필요한 것은 **정지 한 칸**이고(기획 단계 1~4), 좌우는 코드가 뒤집는다.
+    #  ⇒ 걷기 애니메이션을 뽑는 날 이 값을 올려라. **그날은 `down` 도 시트 폭이 된다.**
+    #
+    # 🔴🔴 **`size` 와 `down` 을 프리셋이 안 든다.** 위 다섯과 다른 점이고, 일부러다 —
+    #  몬스터마다 상자가 다르다(`docs/design/몬스터.md`: 돼지 44×32 · 닭 24×28).
+    #  ⇒ **부르는 쪽이 `--width/--height/--down` 을 준다.** 비율을 생성 크기에 그대로 맞춰야
+    #   `run_one` 의 `dh = down * h / w` 가 기획의 높이를 내놓는다.
+    #
+    # 🔴🔴 **생성 크기는 목표의 4배다.** 위 프리셋들의 「크게 그리고 내린다」와 정반대이고,
+    #  이유가 있다 — 2026-08-07에 같은 프롬프트를 **704×512(16배) · 352×256(8배) · 176×128(4배)**로
+    #  뽑아 비교했다. 16배·8배는 **상자를 안 채우고**(44×32 자리에 41×24가 나온다) 형태가 뭉갠다.
+    #  **4배만 44×32를 꽉 채웠다.** ⚠ k_centroid 가 블록의 지배색을 고르므로 배율이 클수록
+    #  가는 것(다리 · 외곽선)이 통째로 사라진다.
+    #  실측: 돼지 `--width 176 --height 128 --down 44` → 44×32. 닭 `--width 96 --height 112 --down 24` → 24×28.
+    #  ⚠ 아래 `size` 640 은 그 둘 다 안 맞는 자리표시다. 새 몬스터를 뽑을 때 비율을 다시 계산해라.
+    #
+    # 🔴🔴 **배경이 크로마 그린인 것이 이 프리셋의 유일한 함정이다.** 흰 배경으로 뽑았더니
+    #  **흰 닭의 몸이 통째로 뚫렸다**(실측 2026-08-07) — 테두리에서 번지는 채움이 흰 몸을
+    #  배경으로 알고 지나간다. ⚠ 색으로 자르는 것도 같은 이유로 안 된다.
+    #  ⇒ **짐승에 없는 색**을 배경으로 쓰고 색상환으로 자른다. 검은 멧돼지와 흰 닭이 둘 다 산다.
+    #  ⚠ `bolt` 가 검은 배경인 것과는 다른 문제다 — 저쪽은 가산 합성이라 검정이 저절로 투명이다.
+    #
+    # ⚠ **외곽선은 포기했다.** style 에 `thick black outline` 을 넣고 cfg 를 7.5까지 올려도
+    #  44px 로 내리면 남지 않는다(네 번 다 실측). 🔴 플레이어(`wizard_body.png`)는 가장 어두운 색이
+    #  **`(79,52,76)` — 어두운 자주색 외곽선**을 두르고 있어서 **이 프리셋의 결과는 플레이어와 다르다.**
+    #  ⇒ 붙여 놓고 티가 나면 그때 여기를 다시 열어라. **모르고 지나가지 말라고 적어 둔다.**
+    "monster": {
+        "style": "pixel art game sprite of a single animal, side view, full body, "
+                 "standing on the ground, facing right, "
+                 "bold readable silhouette, flat cel shading, "
+                 "muted low-saturation dusty colors, "
+                 "on a plain solid bright chroma green background, "
+                 "no text, no frame, no border, no shadow",
+        "lora": 0.0, "size": 640, "down": 0, "steps": 28, "cfg": 5.0,
+    },
+    # 🔴🔴 배경 — **무대 뒤. 지금 게임에는 이것을 붙일 자리가 아예 없다**(2026-08-07 조사).
+    #  하늘로 보이는 `#0E0E13` 은 배경 레이어가 아니라 **`cell_materials.DEFS[EMPTY].rgb`** 이고,
+    #  `cell_renderer` 가 격자 전체를 **불투명하게** 칠한다(`_rgb_to_color` 가 `Color8` 라 알파 255).
+    #  ⇒ **CellRenderer 뒤에 무엇을 두든 100% 가린다.** 배경을 넣으려면 셰이더에서 빈칸을
+    #   투명으로 빼는 코드 변경이 먼저다. **그림은 그 결정을 기다린다.**
+    #
+    # ⚠ **`monster` 프리셋을 그대로 쓰면 안 된다.** 저쪽은 「짐승 하나를 상자에 앉힌다」라
+    #  `no_background`·`facing right`·크로마 그린이 전부 들어 있다. 여기는 **장면**이다.
+    #
+    # 🔴 **생성 2배 → 내림.** `monster` 의 4배와도 다르다 — 배경은 가는 것(다리·엄니)이 없어서
+    #  배율을 키워도 잃을 것이 없고, 2배면 색이 뭉쳐 픽셀아트 결이 나오면서 형태가 안 무너진다.
+    #  ⚠ 한 화면이 **960×540**(`project.godot` 의 viewport)이므로 1920×1088 로 그려 960×544 로 내린다.
+    #
+    # 🔴 **어두워야 한다.** 무대의 빈칸이 `#0E0E13` 이고 캐릭터·몬스터가 그 위에 선다 —
+    #  배경이 밝으면 **실루엣이 전부 죽는다.** style 이 밤 팔레트를 부르는 이유가 그것이다.
+    #
+    # ⚠ **가로로 반복되는 타일이 아니다.** FLUX 는 이음매를 안 맞춰 준다 ⇒ 방향이 정해지면
+    #  **좌우 대칭 복사로 이음매를 없애거나** 층을 갈라야 한다. 지금은 **한 화면 통짜**로 방향만 고른다.
+    "backdrop": {
+        "style": "pixel art side-scroller game background, distant scenery only, "
+                 "dark night palette, muted low-saturation dusty colors, "
+                 "simple flat shapes with a clear horizon line, "
+                 "no characters, no animals, no text, no frame, no border, no ui",
+        "lora": 0.0, "size": 1920, "down": 960, "steps": 28, "cfg": 5.0,
+    },
     # 조립창 — 펼친 마도서. ⚠ 9-slice 로 늘리면 모서리가 어긋난다(원본 PROMPTS.md 실측).
     "ui": {
         "style": "pixel art RPG UI panel, 16-bit game interface, "

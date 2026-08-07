@@ -299,7 +299,7 @@ func step(grid: CellGrid, dt: float, axis: float, jump: bool, jump_held: bool) -
 ##  **불 위에 서 있어도 안 아파지고**, 그러면 「연료를 어디 두느냐가 곧 레벨 디자인」이
 ##  플레이어에게 무의미해진다. ⇒ 여기는 `invuln_left`를 **읽지도 쓰지도 않는다.**
 func _burn(grid: CellGrid, dt: float) -> void:
-	burning = _standing_in_fire(grid)
+	burning = _body.standing_in_fire(grid)
 	if not burning:
 		return
 	_burn_acc += BURN_DPS * dt
@@ -307,24 +307,26 @@ func _burn(grid: CellGrid, dt: float) -> void:
 	if whole <= 0:
 		return
 	_burn_acc -= float(whole)
-	hp = maxi(0, hp - whole)
+	take_hit(whole, false)
 
 
-## 🔴🔴 **발밑 한 줄을 같이 본다. 이 한 줄이 이 기능의 목숨이다.**
-##  캐릭터가 서 있는 자리의 셀들은 **빈칸이라 연료가 0**이고, 불은 **발밑 나무 셀**에 붙어 있다.
-##  ⚠ 빠뜨리면 코드는 돌고 그물도 짤 수 있는데 **게임에서만 아무 일이 안 난다.**
-## 🔴 범위가 `Body.grounded`(`body.gd`)가 보는 줄과 같다 — 「밟고 있다」의 뜻이 두 벌이 되지 않는다.
-func _standing_in_fire(grid: CellGrid) -> bool:
-	var cx0 := floori(x / float(Tuning.CELL_PX))
-	var cx1 := floori((x + W_PX - 1) / float(Tuning.CELL_PX))
-	var cy0 := floori(y / float(Tuning.CELL_PX))
-	var cy1 := floori((y + H_PX) / float(Tuning.CELL_PX))
-	for cy in range(cy0, cy1 + 1):
-		for cx in range(cx0, cx1 + 1):
-			# 🔴 **「타나」는 격자에 물어본다** — 여기서 깃발을 직접 까면 규칙이 두 벌이 된다.
-			if grid.is_burning(cx, cy):
-				return true
-	return false
+## 🔴🔴 **hp를 깎는 문은 하나다**(`monsters-minimum` 단계 5). 지금 hp를 깎는 곳이 이미
+##  넷이다 — `on_tick`의 직격/폭발 · `_burn`의 지속 · **돼지 접촉** · **닭의 탄**(뒤의 둘은
+##  `world_step`이 부른다) — 넷이 각자 `hp = maxi(0, hp - dmg)`를 따로 쓰면 **하나가 하한을
+##  빠뜨렸을 때 hp가 음수로 새는데 `downed`는 `hp <= 0`이라 거동은 멀쩡하고 HUD만
+##  `-3/100`이 된다.** ⇒ 무적 검사·하한 클램프·무적 세팅을 여기 한 곳에 모은다.
+##
+## `tanks_invuln`: 이 피해가 무적을 타는지 — **직격·폭발·돼지 접촉·닭 탄은 true**,
+##  **불 지속은 false**(무적을 하나로 두면 불이 무해해진다 — 위 `_burn` 헤더와 같은 이유).
+## 돌려주는 값: 실제로 깎였으면 true, 무적에 막혔으면 false(호출부가 "하나라도 맞으면
+##  거기서 끝"을 이 반환값으로 판단한다 — `world_step`의 ⑥이 그렇게 쓴다).
+func take_hit(dmg: int, tanks_invuln: bool) -> bool:
+	if tanks_invuln and invuln_left > 0:
+		return false
+	hp = maxi(0, hp - dmg)
+	if tanks_invuln:
+		invuln_left = INVULN_TICKS
+	return true
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -349,11 +351,10 @@ func on_tick(spell: SpellSim) -> void:
 		return
 	# ②③ 구간(직격)과 폭발. 🔴 **하나라도 맞으면 거기서 끝이다** —
 	#  그게 판정 3-①(같은 틱에 폭발 둘을 맞아도 한 대)이다.
-	if not (_hit_by_segment(spell) or _hit_by_blast(spell)):
+	if not (_body.hit_by_segment(spell) or _body.hit_by_blast(spell)):
 		return
-	# ④ hp는 0 아래로 안 내려간다(계획 §4).
-	hp = maxi(0, hp - DAMAGE_HIT)
-	invuln_left = INVULN_TICKS
+	# ④ hp는 0 아래로 안 내려간다(계획 §4) — `take_hit`이 하한과 무적 세팅을 같이 한다.
+	take_hit(DAMAGE_HIT, true)
 	# 🔴🔴 **맞아도 안 밀린다**(사용자 결정, 2026-08-04). 여기 「맞은 쪽으로 민다」가 있었고
 	#  `_push_dir` 이 그걸 날랐다 — 둘 다 지웠다. ⚠ **되살리려면 방향을 찾는 자리(`_hit_by_*`)와
 	#  미는 자리(여기)를 같이 되살려야 한다.** 한쪽만 두면 방향을 찾아 놓고 아무 데도 안 쓴다.
@@ -386,72 +387,8 @@ static func _unit(dx: float, dy: float) -> Vector2:
 	return d.normalized()
 
 
-## 🔴🔴 **선분 대 상자다. 사각형 대 사각형이 아니다.**
-##  세대 0 탄은 틱당 40px을 뛰고 상자는 16px이라, 틱 경계 위치만 맞대면 **도약이 상자를
-##  통째로 넘는다.** 한 프레임이라 눈으로 절대 못 본다(기획 「직격은 매 틱 사각형 겹침으로
-##  재면 조용히 안 걸린다」).
-func _hit_by_segment(spell: SpellSim) -> bool:
-	var x0 := spell.get_seg_x0()
-	var y0 := spell.get_seg_y0()
-	var x1 := spell.get_seg_x1()
-	var y1 := spell.get_seg_y1()
-	for i in spell.seg_count():
-		if _seg_hits_box(_fp_px(x0[i]), _fp_px(y0[i]), _fp_px(x1[i]), _fp_px(y1[i])):
-			return true
-	return false
-
-
-## 🔴 **반경은 통지에 안 실려 있다** — 액터가 `Tuning.blast_rd(gen)` 을 읽는다.
-##  실어 보내면 같은 값이 두 곳이 되고, 표를 고치는 날 한쪽만 따라온다.
-func _hit_by_blast(spell: SpellSim) -> bool:
-	var bx := spell.get_blast_x()
-	var by := spell.get_blast_y()
-	var bg := spell.get_blast_gen()
-	for i in spell.blast_count():
-		var r := float(Tuning.blast_rd(bg[i]) * Tuning.CELL_PX)
-		if _circle_hits_box(_cell_px(bx[i]), _cell_px(by[i]), r):
-			return true
-	return false
-
-
-## 🔴🔴 **좌표 변환은 이 함수 하나다.** 통지는 셀 고정소수점이고 캐릭터는 px다 —
-##  두 곳에서 바꾸면 한쪽만 고치는 날이 오고, 그 어긋남은 「가끔 안 맞는다」로만 보인다.
-static func _fp_px(fp: int) -> float:
-	return float(fp) * Tuning.CELL_PX / SpellSim.FP_ONE
-
-
-## 셀 번호 → 그 셀 **한가운데**의 px. 🔴 위 함수를 지나므로 규칙이 한 벌이다.
-static func _cell_px(c: int) -> float:
-	return _fp_px((c << SpellSim.FP_SHIFT) + SpellSim.FP_HALF)
-
-
-## 선분(a→b) 대 상자. ⚠ **시작점이 상자 안이면 참이다** — 상자 안에서 태어난 탄도 잡힌다.
-func _seg_hits_box(ax: float, ay: float, bx: float, by: float) -> bool:
-	var rng := Vector2(0.0, 1.0)
-	rng = _slab(rng, ax, bx - ax, float(x), float(x + W_PX))
-	rng = _slab(rng, ay, by - ay, float(y), float(y + H_PX))
-	return rng.x <= rng.y
-
-
-## 한 축의 슬랩. 살아 있는 구간 `(lo, hi)`를 좁혀서 돌려준다.
-## 🔴 **축을 함수 하나로 묶은 이유**: 두 축을 따로 쓰면 한쪽만 고치는 날이 오고,
-##  그러면 「세로로 날아오는 탄만 안 맞는다」가 된다.
-## ⚠ 축과 나란한 선분(d ≈ 0)은 나눗셈이 아니라 **범위 안에 있나**로 갈린다.
-static func _slab(rng: Vector2, a: float, d: float, e0: float, e1: float) -> Vector2:
-	if is_zero_approx(d):
-		return rng if (a >= e0 and a <= e1) else Vector2(1.0, 0.0)
-	var t0 := (e0 - a) / d
-	var t1 := (e1 - a) / d
-	return Vector2(maxf(rng.x, minf(t0, t1)), minf(rng.y, maxf(t0, t1)))
-
-
-## 원 대 상자 — 상자에서 원 중심에 **제일 가까운 점**까지의 거리로 본다.
-func _circle_hits_box(cx: float, cy: float, r: float) -> bool:
-	var dx := cx - clampf(cx, float(x), float(x + W_PX))
-	var dy := cy - clampf(cy, float(y), float(y + H_PX))
-	return dx * dx + dy * dy <= r * r
-
-
 ## 🔴🔴 **`_move_x`·`_try_step_up`·`_move_y`·`_grounded`·`_box_free`는 `Body`로 이사했다**
-##  (`monsters-minimum` 단계 0). 사본을 여기 남기면 CLAUDE.md 그대로 반드시 갈라진다 —
-##  지형 충돌 규칙을 고칠 사람은 `body.gd`를 봐라.
+##  (`monsters-minimum` 단계 0). **`_hit_by_segment`·`_hit_by_blast`·`_seg_hits_box`·
+##  `_circle_hits_box`·`_slab`·`_fp_px`·`_cell_px`·`_standing_in_fire`도 이사했다**
+##  (`monsters-minimum` 단계 3, 두 번째 추출) — 몬스터가 같은 상자 모양을 쓰므로
+##  사본을 여기 남기면 CLAUDE.md 그대로 반드시 갈라진다. 고칠 사람은 `body.gd`를 봐라.

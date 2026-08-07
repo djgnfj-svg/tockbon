@@ -18,10 +18,20 @@ const Character := preload("res://src/actor/character.gd")
 const Tuning := preload("res://src/sim/sim_tuning.gd")
 const Monster := preload("res://src/actor/monster.gd")
 const MonsterDefs := preload("res://src/actor/monster_defs.gd")
+const MonsterBolts := preload("res://src/actor/monster_bolts.gd")
+
+## 🔴🔴 **돼지 접촉 피해**(`monsters-minimum` 「동작 ⑥」). 산수: 무적 4틱 ⇒ 실제 간격은
+##  5틱(`character.on_tick`이 「5틱 간격 = 두 대」로 적어 뒀다) = 0.25초 ⇒ 초당 4회가 상한.
+##  8 × 4 = 32/초 ⇒ 붙어 있으면 100HP를 3.1초에 잃는다. **team-lead가 정한 제안값이고
+##  사용자 판정을 안 받았다.**
+const PIG_CONTACT_DAMAGE := 8
 
 var _grid: CellGrid
 var _spell: SpellSim
 var _char: Character
+
+## 🔴 닭의 탄. `spell_sim`이 아니다(`monster_bolts.gd` 헤더) — 탄은 몬스터를 모른다.
+var _bolts := MonsterBolts.new()
 
 ## 🔴🔴 **몬스터 배열은 여기가 든다 — 껍데기가 따로 들면 「세상」이 두 곳이 된다.**
 ##  뷰는 아래 `monster_count()`·`monster_at()`(읽기 전용 질의)로만 본다(`monsters-minimum` 단계 1).
@@ -29,6 +39,13 @@ var _monsters: Array[Monster] = []
 ## ⚠ `reset()`은 이 값을 안 되돌린다 — id를 재사용하면 「37번이 죽었다」가 세션 안에서
 ##  유일하지 않게 되고 진단이 흐려진다. 되돌릴 이유가 없다(뷰가 id를 안 든다).
 var _next_monster_id := 1
+
+## 🔴🔴 **죽음 통지 — 뷰가 「이번에 누가 죽었나」를 알 길이 이것뿐이다.** 죽은 몬스터는
+##  `_monsters`에서 즉시 빠지므로(문서 「동작 ⑩」— 몬스터는 사라진다, 플레이어처럼 안 쓰러진다)
+##  배열만 보고는 알 수 없다. 🔴 **폭발 통지와 정확히 같은 어법이다** — 틱 시작에서 지운다.
+var _died_x: Array[int] = []
+var _died_y: Array[int] = []
+var _died_kind: Array[int] = []
 
 ## 🔴 커맨드는 **「어느 틱에 적용되나」를 달고** 큐에 앉는다. 없으면 나중에 재조정이 불가능하다.
 ##  싱글에서는 로컬 입력이 채우고 멀티에서는 서버가 채운다 — 적용부 코드는 그대로다.
@@ -85,6 +102,10 @@ func frame(dt: float, axis: float, jump: bool, jump_held: bool) -> bool:
 	_phase += 1
 	if _phase >= Tuning.TICK_DIVIDER:
 		_phase = 0
+		# 🔴 죽음 통지를 틱 시작에서 지운다 — 폭발 통지(`spell.step()` 시작)와 같은 자리다.
+		_died_x.clear()
+		_died_y.clear()
+		_died_kind.clear()
 		_drain_queue()
 		_grid.step()
 		_spell.step(_grid)
@@ -92,8 +113,30 @@ func frame(dt: float, axis: float, jump: bool, jump_held: bool) -> bool:
 		#  다음 `spell.step()` 까지 살아 있어서 **한 대가 세 대가 된다**(계획 §6 위험 1).
 		#  ⚠ 무적이 두 대를 먹어 화면에서는 정상으로 보이고, 지속 피해에서만 3배가 드러난다.
 		_char.on_tick(_spell)
+		# ⑤ 몬스터 on_tick — 마법이 몬스터를 때렸나. 🔴🔴 **`_char.on_tick` 뒤인 것이 계약이다**
+		#  (문서 「동작 ⑨」). 순회 중에 안 지운다(CLAUDE.md 「순회 중 제거」 함정) — 다 돌고 나서
+		#  인덱스 큰 쪽부터 지운다.
+		var dead: Array[int] = []
+		for i in _monsters.size():
+			var m: Monster = _monsters[i]
+			m.on_tick(_spell)
+			if m.hp <= 0:
+				dead.append(i)
+		for j in range(dead.size() - 1, -1, -1):
+			var idx := dead[j]
+			var dying: Monster = _monsters[idx]
+			_died_x.append(dying.x)
+			_died_y.append(dying.y)
+			_died_kind.append(dying.kind)
+			_monsters.remove_at(idx)
+		# ⑥ 🔴🔴 **플레이어가 몬스터·탄에 맞았나 — `_char.on_tick`·몬스터 on_tick **둘 다** 지난
+		#  뒤여야 한다**(문서 「동작 ⑨」). 앞에 두면 그 틱에 죽을 몬스터가 한 번 더 때린다.
+		#  ⚠ **`invuln_left`는 `_char.on_tick()` 안에서만 준다** — 여기서 또 깎으면 무적이
+		#  4틱이 아니라 3틱이 된다. 그래서 여기는 `take_hit`만 부르고 직접 감산하지 않는다.
+		_char_hit_by_monsters()
 		ticked = true
 	_char.step(_grid, dt, axis, jump, jump_held)
+	_bolts.step(_grid, dt)
 	# 🔴🔴 **캐릭터 뒤인 것이 계약이다**(`monsters-minimum` 단계 1). `_next_axis`가 플레이어
 	#  중심을 target으로 받으므로 **이번 프레임에 캐릭터가 간 자리**를 보는 것이 맞다.
 	#  ⚠ target은 `_char.center()`를 **축마다** `roundi`한 px다(판정 10: 중심 대 중심).
@@ -103,7 +146,36 @@ func frame(dt: float, axis: float, jump: bool, jump_held: bool) -> bool:
 	var target_y := roundi(center.y)
 	for m: Monster in _monsters:
 		m.step(_grid, dt, target_x, target_y)
+		if m.ready_to_fire(target_x):
+			var dir := (center - m.center())
+			if _bolts.spawn(m.center().x, m.center().y, dir.normalized()):
+				m.consume_fire()
 	return ticked
+
+
+## 🔴🔴 **⑥은 한 덩어리다 — 돼지 접촉과 닭 탄을 두 곳에 두지 마라.** `character.take_hit()`이
+##  「무적이면 실패」를 이미 들고 있으므로, 두 소스를 각자 다른 자리에서 부르면 같은 틱에
+##  두 대가 들어갈 길이 열린다(경로별로 무적 검사가 따로 도는 것처럼 보이는 사고다).
+##  ⇒ 여기 한 곳에서 **돼지 → 닭 탄** 순으로 시도한다. 첫 성공(`take_hit`이 `true`)이 나면
+##  이후 시도는 `take_hit` 자체가 무적으로 막는다 — 그게 "하나라도 맞으면 끝"이다.
+##
+## 🔴 **탄은 맞았든 무적에 막혔든 소거된다**(닿으면 사라진다 — `monster_bolts.consume_hits`).
+##  피해가 실제로 들어갔는지는 `take_hit`의 반환값이 따로 말한다.
+func _char_hit_by_monsters() -> void:
+	for m: Monster in _monsters:
+		if m.kind != MonsterDefs.KIND_PIG:
+			continue
+		if _boxes_overlap(m.x, m.y, MonsterDefs.w_px(m.kind), MonsterDefs.h_px(m.kind),
+				_char.x, _char.y, Character.W_PX, Character.H_PX):
+			_char.take_hit(PIG_CONTACT_DAMAGE, true)
+	if _bolts.consume_hits(_char):
+		_char.take_hit(MonsterBolts.BOLT_DAMAGE, true)
+
+
+## 상자 대 상자(정수 px). 🔴 `Body`류의 원·선분 검사와 다른 자리다 — 여기는 접촉(사각형
+##  대 사각형)이지 탄 궤적이 아니라서 더 간단한 검사가 맞다(돼지는 몸으로 붙는다, 「동작 ⑥」).
+static func _boxes_overlap(ax: int, ay: int, aw: int, ah: int, bx: int, by: int, bw: int, bh: int) -> bool:
+	return ax < bx + bw and ax + aw > bx and ay < by + bh and ay + ah > by
 
 
 ## 🔴 다음 틱에 적용될 커맨드로 앉힌다. **틱 번호는 격자가 준다** — 부르는 쪽이 세면
@@ -193,6 +265,36 @@ func monster_at(i: int) -> Monster:
 	return _monsters[i]
 
 
+## 🔴 이번 틱에 죽은 몬스터들. 🔴🔴 **다음 `frame()`의 틱 갈래가 지운다** — 폭발 통지와 같다.
+func died_count() -> int:
+	return _died_x.size()
+
+
+func died_x(i: int) -> int:
+	return _died_x[i]
+
+
+func died_y(i: int) -> int:
+	return _died_y[i]
+
+
+func died_kind(i: int) -> int:
+	return _died_kind[i]
+
+
+## 🔴🔴 읽기 전용 질의 — 뷰가 닭의 탄을 이걸로만 본다(단계 7).
+func bolt_count() -> int:
+	return _bolts.count()
+
+
+func bolt_x(i: int) -> float:
+	return _bolts.x(i)
+
+
+func bolt_y(i: int) -> float:
+	return _bolts.y(i)
+
+
 ## 무대 리셋(R)이 부른다. 🔴 **이 객체가 든 것만 되돌린다** — 격자·투사체·캐릭터는
 ##  각자의 리셋이 있고, 여기서 한 번 더 만지면 되돌리는 자리가 두 곳이 된다.
 ##
@@ -204,6 +306,12 @@ func reset() -> void:
 	_queue.clear()
 	_fire_count = 0
 	_monsters.clear()
+	_died_x.clear()
+	_died_y.clear()
+	_died_kind.clear()
+	# 🔴 탄도 비운다 — 안 비우면 R을 누를 때마다 죽은 실험의 탄이 남아 다음 판정을 오염시킨다
+	#  (`monsters-minimum` 「화면」이 「계수기를 전부 되돌린다」로 못 박은 것과 같은 이유).
+	_bolts = MonsterBolts.new()
 
 
 ## 🔴 렌더 보간이 읽는다. **시계를 하나 더 만들지 않는 게 요점이다** — 뷰가 자기 `delta`를
