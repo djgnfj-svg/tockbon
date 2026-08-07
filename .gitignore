@@ -37,3 +37,4 @@ tests/_*.gd.uid
 #  (`paint_terrain_from_map.gd` 와 같은 글자표라 그대로 입력으로 쓸 수 있다),
 #  ⚠ 구운 텍스트는 마지막 굽기 시점 것이라 **그 뒤의 붓질이 안 들어 있다.**
 tools/stage/terrain_backup_*.txt
+image copy.png
