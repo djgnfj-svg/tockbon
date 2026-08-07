@@ -22,6 +22,10 @@ const Tuning := preload("res://src/sim/sim_tuning.gd")
 ## 🔴 통지의 좌표계(고정소수점)를 읽으려면 그 상수가 필요하다. **`src/sim/` 을 참조하는 것은
 ##  계약 안쪽이다** — 막히는 것은 `src/view/`·`src/stage/` 뿐이다(`net_layers`).
 const SpellSim := preload("res://src/sim/spell_sim.gd")
+## 🔴🔴 **이동·중력·지형 충돌은 이제 여기 없다 — `Body` 로 뽑았다**(`monsters-minimum` 단계 0).
+##  몬스터가 같은 다섯 줄을 쓰게 만드는 것이 그 이유다. `_move_x`·`_move_y`·`_try_step_up`·
+##  `_box_free`·`_grounded` 는 `Body` 로 이사했다 — 사본을 여기 남기면 반드시 갈라진다.
+const Body := preload("res://src/actor/body.gd")
 
 ## 🔴🔴 **여기는 「충돌 상자」다. 「그림 크기」가 아니다. 둘이 갈라진 날이 2026-08-04다.**
 ##  그림 칸은 여전히 32px이고 그 상수는 `fx_tuning.CHAR_CELL_PX` 다 — **거기가 그림 쪽 단일 소스다.**
@@ -38,8 +42,9 @@ const SpellSim := preload("res://src/sim/spell_sim.gd")
 ##
 ## ⚠ **세로(`H_PX`)는 안 건드렸다.** 발이 맨 아랫줄에 닿아 있어(`net_sprite` 가 잰다) 세로는
 ##  그림과 상자가 이미 맞고, 사용자가 말한 것도 옆이다.
-## 🔴 **상자가 커지면 이 파일이 비싸진다.** `_box_free`·`_grounded`·`_standing_in_fire` 가
-##  상자가 덮는 셀을 **GDScript로** 훑는데 **25칸 → 81칸**이 됐고, 이건 틱이 아니라 **60Hz**로 돈다.
+## 🔴 **상자가 커지면 이 파일이 비싸진다.** `Body.box_free`·`Body.grounded`(`body.gd`) ·
+##  이 파일의 `_standing_in_fire` 가 상자가 덮는 셀을 **GDScript로** 훑는데
+##  **25칸 → 81칸**이 됐고, 이건 틱이 아니라 **60Hz**로 돈다.
 ##  ⚠ 실측(2026-08-04, 단계 0): `step()` 이 걷는 중 **77 → 249μs**(예산의 1.5%).
 ##   ⇒ 폭을 20으로 줄였으니 **6×9 = 54칸**으로 내려간다. 다시 재지는 않았다.
 const W_PX := 20
@@ -162,16 +167,28 @@ const BURN_DPS := 10.0
 const RECOIL_SPEED_PX := 40.0
 const RECOIL_DECAY_PER_SEC := 0.02
 
-## 좌상단 px. 🔴🔴 **정수다. 소수부는 `_rem_*`가 따로 들고 있는다.**
-##  소수 위치로 두면 상자가 셀 경계를 반 칸 걸치고, 그러면 **착지 높이가 매번 최대 1px 달라진다** —
-##  캐릭터가 지표면에서 1px 떠 있는 상태로 영원히 서 있고, 그건 그물이 「정확히 지표면」을
-##  못 재게 만든다(실측: 384가 기대인데 384.0~384.99가 나왔다).
-##  ⚠ 그리고 `snap_2d_transforms_to_pixel`이 켜져 있어 **어차피 화면에서는 정수로 그려진다** —
-##   소수 위치는 얻는 게 하나도 없이 판정만 흐린다.
-var x := 0
-var y := 0
-var vy := 0.0
-var on_ground := false
+## 🔴🔴 **위치·속도·접지·지형 충돌은 `_body`가 든다.** 선언 순서가 계약이다 —
+##  아래 프로퍼티들보다 **먼저** 선언한다. 뒤에 두면 게터가 `null`을 문다
+##  (`world_step._init`이 셋의 선언 순서로 같은 함정을 이미 적어 뒀다).
+var _body := Body.new(W_PX, H_PX, STEP_CELLS)
+
+## 좌상단 px. 🔴🔴 **`_body`로 위임한다 — 게터 함수(`x()`)로 바꾸지 마라.**
+##  리포가 `ch.x`·`_char.y`·`_ch.vy`·`ch.on_ground`를 **필드처럼** 읽는다
+##  (`character_view.gd`·`stage.gd`·`net_character`·`net_damage`). 함수로 바꾸면 그 호출부를
+##  전부 고쳐야 하고, 그 순간 판정 1이 지키던 단언을 구현자가 손대게 된다.
+##  ⚠ 소수 위치를 안 두는 이유(착지 높이가 매번 최대 1px 달라진다)는 `Body.x`의 계약이다.
+var x: int:
+	get: return _body.x
+	set(v): _body.x = v
+var y: int:
+	get: return _body.y
+	set(v): _body.y = v
+var vy: float:
+	get: return _body.vy
+	set(v): _body.vy = v
+var on_ground: bool:
+	get: return _body.on_ground
+	set(v): _body.on_ground = v
 ## 마지막으로 향한 쪽(+1 오른쪽 · -1 왼쪽). 마우스가 캐릭터 위에 정확히 있을 때의 기본 방향이다.
 var facing := 1
 
@@ -212,21 +229,11 @@ var recoil_vx := 0.0
 ##  그건 「연료를 어디 두느냐가 곧 레벨 디자인」을 갉아먹는다.
 var _burn_acc := 0.0
 
-## 아직 1px이 안 된 이동분. 🔴 이게 없으면 프레임당 2.17px가 **매번 2px로 잘려**
-##  실제 속도가 60px/s만큼 조용히 느려진다.
-var _rem_x := 0.0
-var _rem_y := 0.0
-
-
 ## 🔴🔴 **체력과 무적도 같이 되돌린다.** 안 되돌리면 R(무대 리셋)로 되살아나지 못한다 —
 ##  혼자일 때 일으켜 줄 사람이 없어서 **R이 유일한 부활**이다(계획 §4).
+## ⚠ 위치·속도·접지·`_rem_*`는 `_body.place()`가 되돌린다 — 여기서 또 만지면 되돌리는 자리가 두 곳이 된다.
 func place(px: int, py: int) -> void:
-	x = px
-	y = py
-	vy = 0.0
-	_rem_x = 0.0
-	_rem_y = 0.0
-	on_ground = false
+	_body.place(px, py)
 	hp = MAX_HP
 	invuln_left = 0
 	burning = false
@@ -235,7 +242,7 @@ func place(px: int, py: int) -> void:
 
 
 func center() -> Vector2:
-	return Vector2(x + W_PX * 0.5, y + H_PX * 0.5)
+	return _body.center()
 
 
 ## 🔴🔴 **60Hz(`_physics_process` 매번)로 돈다 — 시뮬 20Hz에 묶지 마라.**
@@ -245,7 +252,7 @@ func center() -> Vector2:
 ##  `jump_held` 는 「지금 누르고 있나」(상승을 계속 허락하나)다. 🔴 **기본값을 안 준다** —
 ##  안 넘긴 호출부가 조용히 「즉시 뗀 점프」가 되어 도달 높이가 1/3이 된다(`cmd_blast` 와 같은 규율).
 func step(grid: CellGrid, dt: float, axis: float, jump: bool, jump_held: bool) -> void:
-	on_ground = _grounded(grid)
+	on_ground = _body.grounded(grid)
 	# 🔴🔴 **대입이다. 「점프 + 반동」이 기술이 되는 자리가 정확히 여기다.**
 	#  같은 프레임에 쏘면 이 줄이 **반동을 지우고**, 떠오른 뒤에 쏘면 반동이 살아 남아
 	#  도달 높이가 **51 → 109px(2.1배)** 가 된다(실측 — **16px 세상의 값이다.**
@@ -254,7 +261,7 @@ func step(grid: CellGrid, dt: float, axis: float, jump: bool, jump_held: bool) -
 	#  ⚠ **더하기로 바꾸지 마라.** 버그로 읽히기 쉬운 자리라 여기 적어 둔다.
 	if jump and on_ground and not downed:
 		vy = JUMP_VY_PX
-	vy = minf(vy + GRAVITY_PX * dt, MAX_FALL_PX)
+	_body.apply_gravity(dt, GRAVITY_PX, MAX_FALL_PX)
 
 	# 🔴🔴 **가변 점프 — 키를 뗐고 아직 오르는 중이면 상승을 자른다**(위 `JUMP_CUT_*`).
 	#  ⚠ **`vy < 0` 이 아니라 `vy < JUMP_CUT_VY_PX` 로 본다.** 「오르는 중」으로 재면 이미
@@ -277,12 +284,12 @@ func step(grid: CellGrid, dt: float, axis: float, jump: bool, jump_held: bool) -
 	#  「벽에 붙어 점프하면 가끔 통과한다」가 된다.
 	# 🔴🔴 **입력과 반동을 더한다. 덮어쓰지 않는다** — 덮어쓰면 반동이 도는 동안
 	#  조작이 죽고, 그러면 「막힌다」가 되어 사용자가 안 고른 쪽이 된다.
-	_move_x(grid, (move * MOVE_SPEED_PX + recoil_vx) * dt)
+	_body.move_x(grid, (move * MOVE_SPEED_PX + recoil_vx) * dt)
 	# ⚠ **민 뒤에 감쇠한다.** 앞에서 감쇠하면 쏜 그 프레임의 반동이 한 프레임치 깎여 나간다.
 	recoil_vx *= pow(RECOIL_DECAY_PER_SEC, dt)
-	if _move_y(grid, vy * dt):
+	if _body.move_y(grid, vy * dt):
 		vy = 0.0
-	on_ground = _grounded(grid)
+	on_ground = _body.grounded(grid)
 	# 🔴 **다 움직인 뒤에 본다.** 앞에서 보면 「방금 떠난 자리의 불」로 깎인다.
 	_burn(grid, dt)
 
@@ -306,7 +313,7 @@ func _burn(grid: CellGrid, dt: float) -> void:
 ## 🔴🔴 **발밑 한 줄을 같이 본다. 이 한 줄이 이 기능의 목숨이다.**
 ##  캐릭터가 서 있는 자리의 셀들은 **빈칸이라 연료가 0**이고, 불은 **발밑 나무 셀**에 붙어 있다.
 ##  ⚠ 빠뜨리면 코드는 돌고 그물도 짤 수 있는데 **게임에서만 아무 일이 안 난다.**
-## 🔴 범위가 `_grounded`가 보는 줄과 같다 — 「밟고 있다」의 뜻이 두 벌이 되지 않는다.
+## 🔴 범위가 `Body.grounded`(`body.gd`)가 보는 줄과 같다 — 「밟고 있다」의 뜻이 두 벌이 되지 않는다.
 func _standing_in_fire(grid: CellGrid) -> bool:
 	var cx0 := floori(x / float(Tuning.CELL_PX))
 	var cx1 := floori((x + W_PX - 1) / float(Tuning.CELL_PX))
@@ -445,73 +452,6 @@ func _circle_hits_box(cx: float, cy: float, r: float) -> bool:
 	return dx * dx + dy * dy <= r * r
 
 
-## 수평. 막히면 **스텝 오프셋**을 시도한다.
-## ⚠ 막히면 나머지를 **버린다** — 안 들고 있으면 벽에 붙어 있는 동안 나머지가 쌓였다가
-##  벽이 사라지는 순간 캐릭터가 몇 px 순간이동한다.
-func _move_x(grid: CellGrid, dx: float) -> void:
-	_rem_x += dx
-	var n := roundi(_rem_x)
-	_rem_x -= n
-	if n == 0:
-		return
-	var sgn := signi(n)
-	# 🔴 1px씩 민다 — 한 번에 밀고 되돌리는 방식은 두꺼운 벽에서 「어디까지 갈 수 있었나」를 잃는다.
-	for _i in absi(n):
-		if _box_free(grid, x + sgn, y):
-			x += sgn
-			continue
-		if not _try_step_up(grid, sgn):
-			_rem_x = 0.0
-			return
-
-
-## 🔴 **공중에서는 안 된다.** 안 그러면 벽에 붙어 있는 동안 턱이 아니라 벽을 타고 오른다.
-## ⚠ 올라갈 자리(`y - lift`)가 비어 있는지도 같이 본다 — 천장 아래 좁은 틈에서
-##  머리를 박고 올라가면 캐릭터가 지형에 끼인다.
-func _try_step_up(grid: CellGrid, dx: int) -> bool:
-	if not on_ground:
-		return false
-	for lift in range(1, STEP_PX + 1):
-		if _box_free(grid, x, y - lift) and _box_free(grid, x + dx, y - lift):
-			x += dx
-			y -= lift
-			return true
-	return false
-
-
-## 수직. 막혔으면 true(호출부가 `vy`를 0으로 만든다).
-func _move_y(grid: CellGrid, dy: float) -> bool:
-	_rem_y += dy
-	var n := roundi(_rem_y)
-	_rem_y -= n
-	if n == 0:
-		return false
-	var sgn := signi(n)
-	for _i in absi(n):
-		if not _box_free(grid, x, y + sgn):
-			_rem_y = 0.0
-			return true
-		y += sgn
-	return false
-
-
-func _grounded(grid: CellGrid) -> bool:
-	return not _box_free(grid, x, y + 1)
-
-
-## 🔴 **「고체인가」는 격자에 물어본다**(`grid.is_solid`). 여기서 `mat_at() != EMPTY`로 다시
-##  판정하면 규칙이 두 벌이 되고, 재료가 늘 때 「탄은 뚫는데 캐릭터는 막힌다」가 된다.
-## ⚠ 상자가 덮는 마지막 픽셀은 `px + W_PX - 1`이다. `- 1`을 빼면 경계에 딱 붙었을 때
-##  옆 칸을 한 줄 더 읽어 **벽에서 1px 떠서 멈춘다.**
-## ⚠ 음수 나눗셈은 GDScript에서 0 쪽으로 잘린다(`-1 / 4 == 0`) — 격자 왼쪽·위 밖에서
-##  셀 좌표가 한 칸 튄다. `floori`로 내림을 강제한다.
-func _box_free(grid: CellGrid, px: int, py: int) -> bool:
-	var cx0 := floori(px / float(Tuning.CELL_PX))
-	var cx1 := floori((px + W_PX - 1) / float(Tuning.CELL_PX))
-	var cy0 := floori(py / float(Tuning.CELL_PX))
-	var cy1 := floori((py + H_PX - 1) / float(Tuning.CELL_PX))
-	for cy in range(cy0, cy1 + 1):
-		for cx in range(cx0, cx1 + 1):
-			if grid.is_solid(cx, cy):
-				return false
-	return true
+## 🔴🔴 **`_move_x`·`_try_step_up`·`_move_y`·`_grounded`·`_box_free`는 `Body`로 이사했다**
+##  (`monsters-minimum` 단계 0). 사본을 여기 남기면 CLAUDE.md 그대로 반드시 갈라진다 —
+##  지형 충돌 규칙을 고칠 사람은 `body.gd`를 봐라.

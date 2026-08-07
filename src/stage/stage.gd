@@ -22,6 +22,8 @@ const SpellCircle := preload("res://src/actor/spell_circle.gd")
 const SpellSim := preload("res://src/sim/spell_sim.gd")
 const Glyph := preload("res://src/sim/glyph_defs.gd")
 const StageInput := preload("res://src/stage/stage_input.gd")
+const MonsterView := preload("res://src/view/monster_view.gd")
+const MonsterDefs := preload("res://src/actor/monster_defs.gd")
 
 ## 🔴 이제 상수가 아니라 `terrain_map_generated.gd` 재수출이다 — 그린 영역 크기를 그대로 따른다.
 ##  아래 `MAP` 선언부의 재수출과 짝이다.
@@ -138,6 +140,7 @@ const LOADOUTS: Dictionary = {
 ## 🔴 조립창은 `HUD`(`CanvasLayer`) 아래다 — `Node2D`로 두면 화면 흔들림에 같이 흔들린다.
 ##  ⚠ **껍데기는 열고 닫기만 시킨다.** 창이 제 상태를 알고, 좌표도 제 것을 쓴다.
 @onready var _circle_window: CircleWindow = $HUD/CircleWindow
+@onready var _monster_view: MonsterView = $MonsterView
 @onready var _char_view: CharacterView = $CharacterView
 @onready var _spell_view: SpellView = $SpellView
 @onready var _blast_fx: BlastFx = $BlastFx
@@ -223,9 +226,13 @@ func _ready() -> void:
 	#  그게 단일 소스(계획 §1)의 눈에 보이는 유일한 증거다.
 	_circle_window.setup(_circle)
 	_spell_view.setup(_spell)
+	# 🔴🔴 **뷰가 몬스터를 잡는 길이 이것 하나다.** 몬스터는 `world_step` 안에 살고
+	#  껍데기가 배열을 따로 들면 「세상」이 두 곳이 된다(`monsters-minimum` 동작 ③).
+	_monster_view.setup(_world)
 	_input.fire_requested.connect(_fire_at)
 	_input.reset_requested.connect(reset_stage)
 	_input.water_requested.connect(_pour_water_at)
+	_input.monster_requested.connect(_spawn_monster_at)
 	_input.loadout_requested.connect(_set_loadout)
 	# 🔴🔴 **세상을 안 멈춘다** — 여기서 `get_tree().paused`를 건드리지 마라.
 	#  창을 연 채로 걷고·쏘고·불이 번지는 것이 기획 판정 4의 전부다.
@@ -286,6 +293,23 @@ func _pour_water_at(world_px: Vector2) -> void:
 				continue
 			# ⚠ 돌·타는 칸은 `set_water` 가 조용히 거절한다 — 그릇 안에 부어도 벽을 안 먹는다.
 			_grid.set_water(cx + dx, cy + dy, Tuning.WATER_MAX)
+
+
+## 🔴🔴 **M — 마우스 자리에 몬스터를 세운다. 껍데기 전용 디버그 문이다**(`monsters-minimum` 단계 1).
+##  배치는 맵 문서의 몫이라(문서 「경계」) 무대는 몬스터를 자동으로 안 깐다 — 이 키가
+##  「볼 것이 화면에 도달하는 경로」다.
+##
+## ⚠ **스폰 자리는 마우스 자리를 상자 가운데로 둔다** — 좌상단에 두면 큰 상자(44px)일수록
+##  커서에서 멀리 뜬다.
+## 🔴 **단계 1은 M 하나로 돼지만 세운다**(닭은 표에만 있고 그물이 헤드리스로 만든다) —
+##  두 번째 스폰 키는 단계 4다.
+func _spawn_monster_at(world_px: Vector2) -> void:
+	var kind := MonsterDefs.KIND_PIG
+	# 🔴 `roundi(w / 2.0)` — 정수 나눗셈(`/`)이면 홀수 폭에서 1px 반내림이 조용히 생긴다.
+	#  지금 값(44·32)은 짝수라 안 드러나지만 표가 홀수 폭을 갖는 날 이 줄이 먼저 죽는다.
+	var px := int(world_px.x) - roundi(MonsterDefs.w_px(kind) / 2.0)
+	var py := int(world_px.y) - roundi(MonsterDefs.h_px(kind) / 2.0)
+	_world.spawn_monster(kind, px, py)
 
 
 ## ⚠ 표에 없는 번호는 **조용히 무시한다.** 눌러도 아무 일이 없는 게 「빈 조합으로 바뀌는 것」보다
@@ -497,8 +521,11 @@ func _update_hud() -> void:
 			_glyph_names(_circle.glyph_list()),
 			"" if _circle.can_fire() else "  ⚠ 룬 없음 — 쏠 수 없다", _loadout_help(),
 		],
+		# 🔴 마릿수를 보여야 사용자가 상한(`MonsterDefs.MAX_MONSTERS`)에 닿는 것을 화면에서 본다.
+		"몬스터 %d / %d마리 (M으로 세우기)" % [_world.monster_count(), MonsterDefs.MAX_MONSTERS],
 		# 🔴 **Tab을 안 적으면 조립창이 「아무도 못 여는 기능」이 된다** — verify-look이 그렇게 적었다.
-		"A/D 이동 · Space 점프 · 좌클릭 발사 · Tab 조립창 · R 무대 리셋",
+		#  ⚠ M을 안 적으면 「아무도 못 여는 기능」이 되는 것은 몬스터도 같다.
+		"A/D 이동 · Space 점프 · 좌클릭 발사 · Tab 조립창 · R 무대 리셋 · M 몬스터",
 	])
 
 

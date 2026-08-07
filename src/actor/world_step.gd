@@ -16,10 +16,19 @@ const CellGrid := preload("res://src/sim/cell_grid.gd")
 const SpellSim := preload("res://src/sim/spell_sim.gd")
 const Character := preload("res://src/actor/character.gd")
 const Tuning := preload("res://src/sim/sim_tuning.gd")
+const Monster := preload("res://src/actor/monster.gd")
+const MonsterDefs := preload("res://src/actor/monster_defs.gd")
 
 var _grid: CellGrid
 var _spell: SpellSim
 var _char: Character
+
+## 🔴🔴 **몬스터 배열은 여기가 든다 — 껍데기가 따로 들면 「세상」이 두 곳이 된다.**
+##  뷰는 아래 `monster_count()`·`monster_at()`(읽기 전용 질의)로만 본다(`monsters-minimum` 단계 1).
+var _monsters: Array[Monster] = []
+## ⚠ `reset()`은 이 값을 안 되돌린다 — id를 재사용하면 「37번이 죽었다」가 세션 안에서
+##  유일하지 않게 되고 진단이 흐려진다. 되돌릴 이유가 없다(뷰가 id를 안 든다).
+var _next_monster_id := 1
 
 ## 🔴 커맨드는 **「어느 틱에 적용되나」를 달고** 큐에 앉는다. 없으면 나중에 재조정이 불가능하다.
 ##  싱글에서는 로컬 입력이 채우고 멀티에서는 서버가 채운다 — 적용부 코드는 그대로다.
@@ -85,6 +94,15 @@ func frame(dt: float, axis: float, jump: bool, jump_held: bool) -> bool:
 		_char.on_tick(_spell)
 		ticked = true
 	_char.step(_grid, dt, axis, jump, jump_held)
+	# 🔴🔴 **캐릭터 뒤인 것이 계약이다**(`monsters-minimum` 단계 1). `_next_axis`가 플레이어
+	#  중심을 target으로 받으므로 **이번 프레임에 캐릭터가 간 자리**를 보는 것이 맞다.
+	#  ⚠ target은 `_char.center()`를 **축마다** `roundi`한 px다(판정 10: 중심 대 중심).
+	#  `Vector2i(Vector2)` 생성자는 0쪽으로 자르지 반올림이 아니라 여기 안 쓴다.
+	var center := _char.center()
+	var target_x := roundi(center.x)
+	var target_y := roundi(center.y)
+	for m: Monster in _monsters:
+		m.step(_grid, dt, target_x, target_y)
 	return ticked
 
 
@@ -133,14 +151,42 @@ func _drain_queue() -> void:
 	_queue = keep
 
 
+## 🔴 껍데기의 디버그 스폰 키(M)가 부른다. 만들었으면 id, 못 만들었으면 0.
+##  🔴🔴 **상한을 넘으면 안 만든다 — 이미 있는 놈을 버리지 않는다.** 탄 상한(단계 6)과
+##  같은 어법이다: 버리면 「쏘아도 몇 마리가 안 나온다」가 고장으로 읽힌다.
+func spawn_monster(kind: int, px: int, py: int) -> int:
+	# 🔴 `enqueue`(위)와 같은 문이다 — 부서진 세상에서도 배열이 늘고 HUD 숫자가 오르면
+	#  「프레임은 정중히 멈추는데 M에서만 늘어난다」가 되고, 그건 규칙이 두 벌인 것이다.
+	if _broken:
+		return 0
+	if _monsters.size() >= MonsterDefs.MAX_MONSTERS:
+		return 0
+	var id := _next_monster_id
+	_next_monster_id += 1
+	_monsters.append(Monster.new(id, kind, px, py))
+	return id
+
+
+## 🔴🔴 읽기 전용 질의 — 뷰가 이걸로만 본다. 껍데기가 배열을 따로 들면 「세상」이 두 곳이 된다.
+func monster_count() -> int:
+	return _monsters.size()
+
+
+func monster_at(i: int) -> Monster:
+	return _monsters[i]
+
+
 ## 무대 리셋(R)이 부른다. 🔴 **이 객체가 든 것만 되돌린다** — 격자·투사체·캐릭터는
 ##  각자의 리셋이 있고, 여기서 한 번 더 만지면 되돌리는 자리가 두 곳이 된다.
 ##
 ## ⚠ **`_phase` 는 안 건드린다.** 무대 리셋은 틱 위상을 바꾸는 사건이 아니다 —
 ##  0으로 두면 R을 누른 프레임의 다음 틱이 최대 2프레임 밀린다.
+## 🔴 `_monsters.clear()` — `monsters-minimum` 문서 「화면」이 「비우는 자리는
+##  `world_step.reset()`이다」로 못 박았다. ⚠ `_next_monster_id`는 안 되돌린다(위 선언부).
 func reset() -> void:
 	_queue.clear()
 	_fire_count = 0
+	_monsters.clear()
 
 
 ## 🔴 렌더 보간이 읽는다. **시계를 하나 더 만들지 않는 게 요점이다** — 뷰가 자기 `delta`를

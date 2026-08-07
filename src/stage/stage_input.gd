@@ -14,6 +14,11 @@ signal reset_requested
 ##  유일한 길**이다. ⚠ 룬이 서면 이 키는 남겨도 되고 지워도 된다 — 무대는 본편에 안 남는다.
 ## ⚠ **월드 좌표를 넘긴다** — 좌클릭과 같은 이유다(흔들리는 동안 어긋난다).
 signal water_requested(world_px: Vector2)
+## 🔴 **M — 마우스 자리에 몬스터를 세운다. 껍데기 전용 디버그 키다**(`monsters-minimum` 단계 1).
+##  배치는 맵 문서의 몫이라(문서 「경계」) 무대는 몬스터를 자동으로 안 깐다 — 이 키가
+##  「볼 것이 화면에 도달하는 경로」다. **F(물 붓기)와 정확히 같은 어법이다.**
+## ⚠ **월드 좌표를 넘긴다** — 좌클릭과 같은 이유다(흔들리는 동안 어긋난다).
+signal monster_requested(world_px: Vector2)
 ## 🔴🔴 **조합을 번갈아 쏘는 것이 몇 초 안에 돼야 한다** — 그게 판정 1·2를 재는 유일한 방법이다.
 ##  ⚠ 여기는 **번호만** 넘긴다. 번호 → 문양 목록 표는 `stage.gd`에 있다(조립은 껍데기의 일이다).
 signal loadout_requested(n: int)
@@ -82,6 +87,9 @@ func _unhandled_input(event: InputEvent) -> void:
 				#  읽어 같은 `_to_world` 로 변환한다 — 좌클릭과 **같은 문을 지나야** 두 길이
 				#  안 갈라진다. ⚠ 여기서만 따로 변환하면 흔들리는 동안 물만 엉뚱한 셀에 떨어진다.
 				water_requested.emit(_to_world(get_viewport().get_mouse_position()))
+			KEY_M:
+				# 🔴 F와 같은 문이다 — 키 이벤트에는 마우스 좌표가 없어 뷰포트의 「지금」 마우스를 쓴다.
+				monster_requested.emit(_to_world(get_viewport().get_mouse_position()))
 
 
 ## 🔴🔴 **뷰포트 좌표 ≠ 월드 좌표다** — 흔들림용 `Camera2D`가 붙어 있는 한.

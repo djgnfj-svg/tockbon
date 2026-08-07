@@ -8,6 +8,7 @@
 [ext_resource type="Script" uid="uid://dk4lu7rp58ebd" path="res://src/view/blast_fx.gd" id="6_blast"]
 [ext_resource type="Script" uid="uid://ctywk6vo6vnx8" path="res://src/view/circle_window.gd" id="7_window"]
 [ext_resource type="TileSet" uid="uid://d4d6jvryupnxn" path="res://src/stage/terrain_tileset.tres" id="8_pvnpy"]
+[ext_resource type="Script" path="res://src/view/monster_view.gd" id="9_monster"]
 
 [node name="Stage" type="Node2D" unique_id=630605066]
 script = ExtResource("1_stage")
@@ -16,6 +17,9 @@ script = ExtResource("1_stage")
 
 [node name="CellRenderer" type="Sprite2D" parent="." unique_id=1579318127]
 script = ExtResource("2_cells")
+
+[node name="MonsterView" type="Node2D" parent="."]
+script = ExtResource("9_monster")
 
 [node name="CharacterView" type="Node2D" parent="." unique_id=1460515312]
 script = ExtResource("4_char")
