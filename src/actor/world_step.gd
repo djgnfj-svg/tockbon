@@ -154,12 +154,29 @@ func _drain_queue() -> void:
 ## 🔴 껍데기의 디버그 스폰 키(M)가 부른다. 만들었으면 id, 못 만들었으면 0.
 ##  🔴🔴 **상한을 넘으면 안 만든다 — 이미 있는 놈을 버리지 않는다.** 탄 상한(단계 6)과
 ##  같은 어법이다: 버리면 「쏘아도 몇 마리가 안 나온다」가 고장으로 읽힌다.
+##
+## 🔴🔴 **격자 밖 좌표는 여기서 막는다 — `stage.gd`가 아니다.** verify-look이 실측으로
+##  찾았다: `get_viewport().get_mouse_position()`은 OS 커서의 실제 위치라, **커서가 게임
+##  창 밖에 있으면** 월드 x가 −983 같은 값으로 들어온다. 격자 밖이면 그 몬스터는 영원히
+##  못 오는 착지를 하며 화면에 절대 안 뜨는데 **상한 20마리 중 하나를 그대로 먹는다.**
+##  ⇒ **여기 두는 이유**: `spawn_monster`가 몬스터를 만드는 **유일한 문**이라(위 상한 검사와
+##  같은 문), 껍데기에 두면 그물이 헤드리스로 못 재고(`stage.gd`는 씬이 있어야 돈다) 미래의
+##  다른 호출자(서버 스폰 등)가 각자 다시 짜야 한다. `_broken`·상한 검사와 나란히 두면
+##  「몬스터를 만드는 조건 셋」이 한 곳에 모인다.
 func spawn_monster(kind: int, px: int, py: int) -> int:
 	# 🔴 `enqueue`(위)와 같은 문이다 — 부서진 세상에서도 배열이 늘고 HUD 숫자가 오르면
 	#  「프레임은 정중히 멈추는데 M에서만 늘어난다」가 되고, 그건 규칙이 두 벌인 것이다.
 	if _broken:
 		return 0
 	if _monsters.size() >= MonsterDefs.MAX_MONSTERS:
+		return 0
+	# ⚠ 상자 전체가 격자 픽셀 범위 안이어야 한다 — 좌상단만 보면 상자가 오른쪽/아래 경계를
+	#  삐져나온 채로 살아남는다. 에러는 안 낸다(디버그 키가 흔히 지날 수 있는 입력이다).
+	var w_px := MonsterDefs.w_px(kind)
+	var h_px := MonsterDefs.h_px(kind)
+	if px < 0 or py < 0 \
+			or px + w_px > CellGrid.W * Tuning.CELL_PX \
+			or py + h_px > CellGrid.H * Tuning.CELL_PX:
 		return 0
 	var id := _next_monster_id
 	_next_monster_id += 1

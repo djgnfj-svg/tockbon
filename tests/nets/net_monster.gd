@@ -64,6 +64,7 @@ func run(t) -> void:
 	_frame_is_required_to_move(t)
 	_world_holds_monsters(t)
 	_spawn_cap(t)
+	_spawn_rejects_off_grid(t)
 	_ids_are_distinct_and_not_reused(t)
 	_view_box_comes_from_the_table(t)
 	_shell_hands_the_world_to_the_view(t)
@@ -318,6 +319,33 @@ func _spawn_cap(t) -> void:
 	var over := world.spawn_monster(Defs.KIND_PIG, 900, FLOOR_TOP - 200)
 	t.eq(over, 0, "상한을 넘으면 id 0(실패)을 돌려준다")
 	t.eq(world.monster_count(), Defs.MAX_MONSTERS, "상한을 넘어도 마릿수가 그대로다")
+
+
+# ── 14. 격자 밖 좌표는 거절한다 ───────────────────────────────────
+## 🔴🔴 verify-look 실측(2026-08-07) — M키가 `get_viewport().get_mouse_position()`을 쓰는데
+##  그건 **OS 커서의 실제 위치**라, 커서가 게임 창 밖에 있으면 월드 x가 −983 같은 값으로
+##  들어온다. 격자 밖 몬스터는 화면에 절대 안 뜨는데 **상한 20마리 중 한 자리를 유령이 먹는다.**
+## 🔴 이 문(`world_step.spawn_monster`)에 두는 이유는 그 함수 머리 주석에 적었다 —
+##  **여기가 몬스터를 만드는 유일한 문이라, `_broken`·상한과 나란히 두면 조건이 한 곳에 모인다.**
+##  ⚠ `stage.gd`에 두면 그물이 씬 없이 못 재고(헤드리스로 안 돈다), 미래의 다른 호출자
+##  (서버 스폰 등)가 각자 다시 짜야 한다.
+func _spawn_rejects_off_grid(t) -> void:
+	var world := _new_world()
+	var grid_w_px := CellGrid.W * Tuning.CELL_PX
+	var grid_h_px := CellGrid.H * Tuning.CELL_PX
+
+	t.eq(world.spawn_monster(Defs.KIND_PIG, -983, 100), 0, "왼쪽 밖 좌표는 거절한다 (x=-983)")
+	t.eq(world.spawn_monster(Defs.KIND_PIG, 100, -500), 0, "위쪽 밖 좌표는 거절한다 (y=-500)")
+	t.eq(world.spawn_monster(Defs.KIND_PIG, grid_w_px + 100, 100), 0, "오른쪽 밖 좌표는 거절한다")
+	t.eq(world.spawn_monster(Defs.KIND_PIG, 100, grid_h_px + 100), 0, "아래쪽 밖 좌표는 거절한다")
+	# 🔴 좌상단만 보면 못 잡는 자리다 — 상자 오른쪽 끝이 경계를 살짝 넘는 경우도 같이 잰다.
+	t.eq(world.spawn_monster(Defs.KIND_PIG, grid_w_px - 1, 100), 0,
+		"좌상단은 안이어도 상자 오른쪽 끝이 밖이면 거절한다")
+	t.eq(world.monster_count(), 0, "전부 거절됐으니 마릿수가 0이다 (양성 대조가 없으면 무의미하다)")
+
+	# 양성 대조 — 격자 안쪽은 여전히 된다.
+	t.ok(world.spawn_monster(Defs.KIND_PIG, 400, 400) > 0, "격자 안 좌표는 그대로 스폰된다 (양성 대조)")
+	t.eq(world.monster_count(), 1, "그 하나만 세워졌다")
 
 
 # ── 11. id가 서로 다르다 · reset() 뒤에도 재사용 안 한다 ───────────
