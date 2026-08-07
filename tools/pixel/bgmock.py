@@ -14,7 +14,11 @@ TXT = (220, 215, 210)
 
 W, H = 960, 540
 CELL = 4                       # sim_tuning.CELL_PX
-SP = "C:/Users/djgnf/AppData/Local/Temp/claude/C--Users-djgnf-Desktop-godot-games-tockbon/2ec498e3-8919-468c-8ce7-ee79377cb78b/scratchpad"
+
+# 🔴 스프라이트는 **리포의 `assets/`** 에서 읽는다. 한 번 스크래치패드를 가리켰다가
+#  다음 세션에 그 폴더가 사라져 목업을 못 만들 뻔했다.
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+OUT = sys.argv[1] if len(sys.argv) > 1 else os.path.join(ROOT, "tools", "pixel", "out", "_bgmock")
 
 
 def terrain(im):
@@ -36,8 +40,9 @@ def mock(bg_path, out, label):
     im = Image.new("RGBA", (W, H), EMPTY)
     im.alpha_composite(bg)
     g = terrain(im)
-    for p, x in [("wizard_f0.png", 240), ("final/pig_body.png", 470), ("final/chicken_body.png", 740)]:
-        s = Image.open(os.path.join(SP, p)).convert("RGBA")
+    for p, x in [("character/wizard_body.png", 240), ("monster/pig_body.png", 470),
+                 ("monster/chicken_body.png", 740)]:
+        s = Image.open(os.path.join(ROOT, "assets", p)).convert("RGBA")
         im.alpha_composite(s, (x, g - s.height))
     d = ImageDraw.Draw(im)
     d.text((6, 4), label, fill=TXT)
@@ -46,15 +51,16 @@ def mock(bg_path, out, label):
 
 
 if __name__ == "__main__":
+    os.makedirs(OUT, exist_ok=True)
     rows = []
     for folder in ("bgA_sky", "bgB_farm", "bgC_forest", "bgD_moon"):
-        fs = sorted(glob.glob(f"C:/Users/djgnf/Desktop/godot_games/tockbon/tools/pixel/out/{folder}/*960px.png"))
+        fs = sorted(glob.glob(os.path.join(ROOT, "tools", "pixel", "out", folder, "*960px.png")))
         for i, f in enumerate(fs):
-            rows.append(mock(f, f"{SP}/bgmock_{folder}_{i}.png", f"{folder}  #{i}"))
+            rows.append(mock(f, f"{OUT}/bgmock_{folder}_{i}.png", f"{folder}  #{i}"))
     cols = 2
     n = len(rows)
     sheet = Image.new("RGBA", (cols * (W + 8) + 8, ((n + cols - 1) // cols) * (H + 8) + 8), (0, 0, 0, 255))
     for i, r in enumerate(rows):
         sheet.alpha_composite(r, (8 + (i % cols) * (W + 8), 8 + (i // cols) * (H + 8)))
-    sheet.save(f"{SP}/bg_compare.png")
-    print("bg_compare.png", sheet.size, n)
+    sheet.save(f"{OUT}/bg_compare.png")
+    print("bg_compare.png", sheet.size, n, OUT)

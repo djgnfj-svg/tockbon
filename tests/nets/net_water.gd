@@ -58,6 +58,7 @@ func run(t) -> void:
 	_wet_neighbour_never_catches(t)
 	_fire_beside_water_does_not_flicker(t)
 	_no_cell_carries_both_bits(t)
+	_shallow_water_does_not_put_out_fire(t)
 
 
 ## 🔴 격자와 청크가 안 나눠떨어지면 가장자리 셀이 **범위 밖 청크를 찍는다.**
@@ -1340,7 +1341,9 @@ func _water_puts_out_fire(t) -> void:
 	t.eq(g.claimed_slot_count(), g.burning_count(), "자리 표도 맞다")
 
 	# ⚠ **물은 안 준다** — 끈 만큼 증발시키면 `_burn` 이 `_write_water` 를 지나야 하고,
-	#  그건 `_touch` 를 타서 **타는 숲 옆 호수가 매 틱 깨어난다.** 그 대가로 웅덩이는 무한 소화기다.
+	#  그건 `_touch` 를 타서 **타는 숲 옆 호수가 매 틱 깨어난다.**
+	# 🔴 **그 대가를 「얕은 물은 못 끈다」로 치렀다**(2026-08-07, 사용자가 정했다) —
+	#  양을 안 깎는 대신 **얇게 퍼지면 스스로 방화력을 잃는다.** `_shallow_water_does_not_put_out_fire` 참조.
 	t.ok(g.count_material(Mat.WATER) > 0, "물은 그대로 남는다 (%d칸)" % g.count_material(Mat.WATER))
 
 
@@ -1515,3 +1518,101 @@ func _water_scan(g: CellGrid, x0: int, y0: int, x1: int, y1: int) -> Array:
 			cells += 1
 			peak = maxi(peak, a)
 	return [total, cells, peak]
+
+
+
+## 불이 다 꺼질 때까지 돈다. 반환은 돈 틱 수.
+## ⚠ `cap` 에 닿았으면 안 꺼진 것이다 — 부르는 쪽이 그걸 단언해야 한다.
+func _burn_out(g: CellGrid, cap: int) -> int:
+	var n := 0
+	while g.burning_count() > 0 and n < cap:
+		g.step()
+		n += 1
+	return n
+
+
+## 🔴🔴 **얕은 물은 불을 못 끈다** (2026-08-07, 사용자가 정했다).
+##
+## ⚠ **왜 이 검사가 생겼나**: 화면에서 **F 한 번(797칸)이 좌우로 퍼져 숲 ≈860칸을 영구 방화
+##  처리했다.** 200초가 지나도 아직 자랐다. 물이 안 줄고 · 닿은 칸이 안 타고 · 계속 퍼지는
+##  **셋의 곱**이었고, 이 검사가 재는 것은 **가운데 항**이다.
+##
+## 🔴🔴 **어느 단언도 혼자서는 임계를 못 잰다 — 전부 짝으로 잰다.**
+##  ⚠ 「얕은 물이 못 끈다」만 재면 `_water_adjacent` 를 **통째로 `return false`** 로 만들어도 초록이고,
+##   「깊은 물이 끈다」만 재면 임계를 **지워도** 초록이다(그게 옛 코드다).
+##  ⇒ **한 배치에서 물의 양 하나만 바꾼 두 판**을 돌려 **서로 다르게 굴어야** 임계가 거기 있는 것이다.
+## 🔴 **상수를 그대로 쓴다.** 32를 박으면 값이 바뀌는 날 검사가 조용히 헛돈다.
+func _shallow_water_does_not_put_out_fire(t) -> void:
+	# ── ① 가둔 한 칸, 임계의 양쪽 ────────────────────────────────
+	# 🔴 **좌우를 돌로 막는다**(`_wet_pocket` 과 같은 이유) — 안 막으면 물이 나무 줄 위를
+	#  통째로 덮으며 얇아져서, 「얕은 한 칸」이 아니라 아래 ②의 시트를 재게 된다.
+	#  ⚠ 실제로 그렇게 짰다가 검사가 ②와 중복됐다(2026-08-07).
+	var wood_by_amount := {}
+	for amount in [Tuning.WATER_WET, Tuning.WATER_WET + 1]:
+		var g := _make_forest(400)
+		g.apply(CellGrid.cmd_fill(149, 399, 149, 399, Mat.STONE))
+		g.apply(CellGrid.cmd_fill(151, 399, 151, 399, Mat.STONE))
+		t.ok(g.set_water(150, 399, amount), "가둔 자리에 물 %d 을 놓는다 (전제)" % amount)
+		g.ignite(120, 400)
+		var ticks := _burn_out(g, 600)
+		t.ok(ticks < 600, "물 %d — 불이 결국 꺼진다 (%d틱)" % [amount, ticks])
+		wood_by_amount[amount] = g.count_material(Mat.WOOD)
+
+	# 🔴 **실측(2026-08-07): 32 ⇒ 0칸 · 33 ⇒ 11칸.** 한 톨 차이로 숲 하나가 갈린다.
+	t.eq(wood_by_amount[Tuning.WATER_WET], 0,
+		"**임계와 같은 얕은 물** 아래로 불이 지나가 숲이 한 칸도 안 남는다")
+	t.ok(wood_by_amount[Tuning.WATER_WET + 1] > 0,
+		"**한 톨만 더 깊으면** 거기서 멈춰 숲이 남는다 (%d칸)" % wood_by_amount[Tuning.WATER_WET + 1])
+
+	# ── ② 🔴🔴 진짜 문제였던 그림 — **퍼진 시트는 방화선이 안 된다** ──
+	#
+	# ⚠ **①은 「한 칸」을 잰다. 이건 「퍼진 뒤」를 잰다** — 화면에서 난 것이 이 모양이었다.
+	#  🔴 그리고 **①이 초록인데 이것만 빨간 상태가 가능하다**: 정착한 시트의 양이 임계 아래로
+	#   내려가는지는 **흐름이 정하는 것**이지 임계 하나가 정하는 게 아니다.
+	#
+	# 🔴🔴 **대조군 B가 이 검사의 절반이다.** 자리도 지형도 틱도 같고 **물의 양 하나만 다르다** —
+	#  A는 정착한 그대로(얕다), B는 같은 칸들을 `WATER_MAX` 로 올린다.
+	#  ⇒ 「A에서 숲이 탄다」가 **임계 때문**이라는 것을 B가 아니면 못 보인다.
+	var result := {}
+	var sheet_cells := 0
+	for tag in ["A", "B"]:
+		var g := _make_forest(600)
+		t.ok(g.set_water(130, 599, Tuning.WATER_MAX), "%s — 나무 줄 위에 한 덩이를 붓는다 (전제)" % tag)
+		var settle := _settle(g, 400)
+		t.ok(settle > 1, "%s — 물이 실제로 여러 틱 흘렀다 (%d틱)" % [tag, settle])
+		t.ok(settle < 400, "%s — 평형에 도달했다 (cap에 안 닿았다)" % tag)
+
+		# 시트가 어디에 눕었나. 🔴 자리를 짐작하지 않고 **읽는다** — B가 그 자리를 그대로 쓴다.
+		var xs: Array[int] = []
+		var peak := 0
+		for x in range(100, 161):
+			if g.mat_at(x, 599) == Mat.WATER:
+				xs.append(x)
+				peak = maxi(peak, g.aux_at(x, 599))
+		t.ok(xs.size() > 1, "%s — 한 칸이 아니라 여러 칸으로 퍼졌다 (%d칸)" % [tag, xs.size()])
+		sheet_cells = xs.size()
+
+		if tag == "A":
+			t.ok(peak <= Tuning.WATER_WET,
+				"A — 퍼진 뒤 가장 깊은 칸도 임계 이하다 (%d ≤ %d)" % [peak, Tuning.WATER_WET])
+		else:
+			for x in xs:
+				g.set_water(x, 599, Tuning.WATER_MAX)
+
+		g.ignite(101, 600)
+		var ticks := _burn_out(g, 600)
+		t.ok(ticks < 600, "%s — 불이 결국 꺼진다 (%d틱)" % [tag, ticks])
+		result[tag] = g.count_material(Mat.WOOD)
+
+	# 🔴 **실측(2026-08-07): 시트 17칸 · A 1칸 남음 · B 56칸 남음.**
+	#  ⚠ A가 정확히 0이 아닌 것은 **타이밍이다** — 물이 아직 깊을 때 불이 그 칸을 지나면
+	#   다시 붙여 줄 이웃이 없다. 그래서 **0을 요구하지 않는다.**
+	#  🔴 대신 **「시트가 덮은 칸 수」와 견준다**: 옛 거동이라면 시트 아래 나무가 **전부** 살았다.
+	t.ok(result["A"] < sheet_cells,
+		"A — 얇게 퍼진 시트가 **방화선이 안 된다** (시트 %d칸인데 %d칸만 남았다)"
+			% [sheet_cells, result["A"]])
+	t.ok(result["B"] > sheet_cells,
+		"B — 같은 자리가 **깊으면 여전히 막는다** (%d칸이 살았다 — 대조군이 헛돌지 않는다)"
+			% result["B"])
+	t.ok(result["B"] > result["A"] * 4,
+		"둘의 차이가 자릿수다 (A %d칸 · B %d칸)" % [result["A"], result["B"]])
