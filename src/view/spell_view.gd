@@ -190,8 +190,21 @@ func _draw_head(i: int) -> void:
 	# 🔴 **머리 크기가 세대를 나른다.** 날아가는 동안 「작은 것들」이 보이는 유일한 축이다.
 	var r := Fx.bolt_px(_gen(i))
 	# 무리는 그림이 아니라 여기가 그린다 — `fx_tuning.BOLT_SHEETS` 주석이 이유를 든다.
-	draw_circle(p, r * Fx.BOLT_GLOW_RATIO,
-		Color(glow.r, glow.g, glow.b, Fx.BOLT_GLOW_A), true)
+	#
+	# 🔴🔴 **한 겹이 아니라 여러 겹이다** (2026-08-08, verify-look 이 화면에서 잡았다).
+	#  ⚠ **채운 원 한 겹이었고 「가장자리가 딱 떨어지는 어두운 갈색 원반」으로 보였다** —
+	#   알파를 0.45 → 0.12 로 내려 **밝기는 고쳤는데 경계가 그대로**라, 사용자가 지적한
+	#   「원 하나」가 옅어진 채 그대로 남아 있었다. **빛이 아니라 물체로 읽힌다.**
+	#  🔴 **원인이 알파가 아니라 모양이었다** — 몬스터 몸에 붙은 불에서도 같은 실수를 했다.
+	#   ⇒ 반지름을 줄이며 겹쳐 **가장자리를 흐린다**. 안쪽일수록 여러 겹이 쌓여 밝다.
+	# ⚠ **알파를 겹 수로 나눈다** — 안 나누면 총 밝기가 겹 수만큼 세져서 0.12 를 고른 판단이 죽는다.
+	var layers := Fx.BOLT_GLOW_LAYERS
+	var a := Fx.BOLT_GLOW_A / float(layers)
+	for k in layers:
+		# 바깥 겹부터 안쪽으로. 마지막 겹이 머리 크기에 붙어 「빛이 탄에서 난다」가 된다.
+		var t := float(layers - k) / float(layers)
+		draw_circle(p, r * (1.0 + (Fx.BOLT_GLOW_RATIO - 1.0) * t),
+			Color(glow.r, glow.g, glow.b, a), true)
 	# 🔴🔴 **그림은 정확히 지름 2r 로 그린다.** 세대0에서 16px 원본과 1:1이고 세대1에서 절반이다
 	#  (`bolt_px` 8 → 4). ⚠ 그림 크기를 상수로 박지 마라 — 표와 그림이 두 곳이 되고,
 	#   갈라지면 **세대가 작아졌는데 그림만 그대로**가 되는데 에러가 안 난다.

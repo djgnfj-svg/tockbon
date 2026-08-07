@@ -22,6 +22,9 @@ const WorldStep := preload("res://src/actor/world_step.gd")
 const Monster := preload("res://src/actor/monster.gd")
 const Defs := preload("res://src/actor/monster_defs.gd")
 const Fx := preload("res://src/view/fx_tuning.gd")
+## 🔴 **`CELL_PX` 하나 때문에 든다** — 몸에 붙은 불을 셀 격자에 스냅해야 땅불과 어휘가 같아진다
+##  (`_draw_body_flames` 상자). ⚠ 시뮬 상수를 뷰가 읽는 것은 여기서만이다.
+const Tuning := preload("res://src/sim/sim_tuning.gd")
 
 ## 🔴 셰이더가 받는 이름. **상수로 둔다** — 문자열을 박으면 한 글자 틀렸을 때
 ##  **아무 일도 안 일어나고 에러도 없다**(`net_render` 의 「거짓 손잡이」 절이 그 사연이다).
@@ -64,12 +67,19 @@ var _number_layer: Node2D = null
 
 ## 자식 노드에 그리기를 위임하는 껍데기. 🔴 **자식마다 스크립트 파일을 만들지 않으려는 것**이다 —
 ##  파일이 늘면 「이 노드는 뭘 하나」가 세 곳으로 흩어진다.
+##
+## 🔴🔴 **`fn.call(self)` 다 — 자기를 넘긴다. 이게 이 클래스의 존재 이유의 절반이다.**
+##  ⚠ **인자 없이 부르던 때 실제 버그가 났다**(2026-08-08): 위임받은 함수가
+##   **암묵적 `self`(= 부모 MonsterView)** 에 그렸고, 부모는 그리는 중이 아니라
+##   **그 명령이 조용히 버려졌다.** 피해 숫자가 화면에서 통째로 사라졌는데 **에러도 없고
+##   그물도 전부 초록**이었다(그물은 배열을 읽지 캔버스를 안 읽는다).
+##  ⇒ 캔버스를 인자로 강제하면 **받는 쪽이 그것을 안 쓰는 것이 눈에 보인다.**
 class _Layer extends Node2D:
 	var fn: Callable
 
 	func _draw() -> void:
 		if fn.is_valid():
-			fn.call()
+			fn.call(self)
 
 
 ## 🔴 static — `_init`이 돌기 전에도 그물이 값을 검증할 수 있게(`net_monster_sprite`).
@@ -291,16 +301,24 @@ func _draw() -> void:
 	# ⚠ 레이어가 없으면(그물이 씬 없이 세운 경우) 여기서 마저 그린다 — 안 그러면
 	#  「씬에서는 보이는데 그물에서는 없는」 두 세계가 생긴다.
 	if _flash_layer == null:
-		_draw_flashes()
+		_draw_flashes(self)
 	if _number_layer == null:
-		_draw_numbers()
+		_draw_numbers(self)
 
 
 ## 🔴 번쩍 레이어가 부른다(`_flash_layer`). **이 노드 좌표계와 같다** — 자식이 부모 변환을 잇는다.
-func _draw_flashes() -> void:
+##
+## 🔴🔴 **`canvas` 를 인자로 받는다. 이 한 줄이 없어서 피해 숫자가 화면에서 통째로 사라졌었다.**
+##  ⚠ 2026-08-08, verify-look 이 잡았다 — 배열에는 `-40` 이 있고 폰트도 있고 레이어도 보이는데
+##   **화면에 아무것도 없었다.** 원인은 이 함수와 `_draw_numbers` 의 **비대칭**이었다:
+##   번쩍은 `canvas` 를 골라 잡았고 숫자는 **암묵적 `self`(= MonsterView)** 에 그렸는데,
+##   그 함수는 **자식 레이어의 `_draw()` 안에서** 불리므로 MonsterView 는 그리는 중이 아니다
+##   ⇒ **그 그리기 명령이 조용히 버려진다.**
+##  🔴 **그물이 원리적으로 못 잡았다** — 그물은 배열을 읽지 캔버스를 안 읽는다.
+##  ⇒ **이제 `_Layer` 가 캔버스를 인자로 넘긴다**(그 클래스 상자) — 실수할 자리를 문법에서 없앴다.
+func _draw_flashes(canvas: CanvasItem) -> void:
 	if _world == null:
 		return
-	var canvas: CanvasItem = _flash_layer if _flash_layer != null else self
 	for i in _world.monster_count():
 		var m: Monster = _world.monster_at(i)
 		if not _flash_left.has(m.id):
@@ -318,9 +336,10 @@ func _draw_flashes() -> void:
 		_draw_flipped(canvas, tex, r, m.facing < 0, Color(1.0, 1.0, 1.0, a))
 
 
-func _draw_numbers() -> void:
+## ⚠ **`canvas` 를 반드시 아래로 넘긴다** — 위 `_draw_flashes` 상자가 그 사연을 든다.
+func _draw_numbers(canvas: CanvasItem) -> void:
 	for n: Dictionary in _dmg_numbers:
-		_draw_dmg_number(n)
+		_draw_dmg_number(canvas, n)
 
 
 func _draw_monster(m: Monster) -> void:
@@ -328,7 +347,7 @@ func _draw_monster(m: Monster) -> void:
 	_draw_monster_body(m, r)
 	# 🔴 **번쩍은 여기가 아니다** — 셰이더가 노드 단위라 `_flash_layer` 로 나갔다(위 상자).
 	if m.burning:
-		_draw_body_flames(r, m.id)
+		_draw_body_flames(self, r, m.id)
 	_draw_hp_bar(m.kind, m.x, m.y, m.hp)
 
 
@@ -340,15 +359,36 @@ func _draw_monster(m: Monster) -> void:
 ##  그건 불이 아니라 노이즈다. 움직이는 것은 **크기뿐**이고, 위상을 어긋내 다 같이 안 뛰게 한다.
 ## ⚠ **불꽃이 상자를 조금 넘어간다** — 몸 윤곽을 모르므로(알파를 안 읽는다) 안쪽에만 두면
 ##  실루엣 가장자리에서 불이 끊겨 보인다. 넘치는 편이 「몸을 감싼다」로 읽힌다.
-func _draw_body_flames(r: Rect2, id: int) -> void:
+##
+## 🔴🔴 **원이 아니라 셀 격자에 맞춘 사각 픽셀이다** (2026-08-08, verify-look 이 화면에서 잡았다).
+##  ⚠ **`draw_circle` 두 겹이었고 「빨간 테두리 + 노란 속」이라 「과녁 다섯 개」로 읽혔다.**
+##   바로 옆 땅불은 불규칙한 픽셀 덩어리라 누가 봐도 불이었다 ⇒ **대비가 그대로였다.**
+##   「주황 선택 상자」가 「주황 과녁 다섯」이 됐을 뿐 **여전히 도형**이었다.
+##
+## 🔴🔴 **고친 방향은 색이 아니라 어휘다 — 땅불과 같은 문법으로 그린다.**
+##  땅불은 `CELL_PX`(4px) 격자에 칠해진 픽셀이다 ⇒ 몸의 불도 **4px 정렬된 사각 픽셀 덩어리**로 그린다.
+##  🔴 **완벽한 원은 이 게임 화면에 없는 모양이다** — 지형도 불도 물도 전부 셀이다.
+##   그래서 원은 아무리 색을 맞춰도 「UI」로 읽힌다. 같은 실수를 볼트 무리에서도 했다.
+##
+## ⚠ **덩어리 모양도 id·i 로 고정한다** — 프레임마다 다시 뽑으면 지글거리는 노이즈가 된다.
+##  움직이는 것은 **높이(혀가 날름거리는 것)** 뿐이다.
+func _draw_body_flames(canvas: CanvasItem, r: Rect2, id: int) -> void:
+	var cell := float(Tuning.CELL_PX)
 	for i in Fx.MONSTER_BURN_FLAMES:
 		var p := flame_pos(r, id, i)
 		# 위상을 불꽃마다 어긋낸다 — 안 그러면 다섯이 한 몸으로 뛴다.
 		var phase := float(i) * TAU / float(Fx.MONSTER_BURN_FLAMES)
 		var wob := sin(float(_frame) / Fx.MONSTER_BURN_PERIOD_FRAMES * TAU + phase)
-		var scale := 1.0 + Fx.MONSTER_BURN_WOBBLE * wob
-		draw_circle(p, Fx.MONSTER_BURN_R_PX * scale, Fx.FIRE_LO)
-		draw_circle(p, Fx.MONSTER_BURN_R_PX * scale * 0.5, Fx.FIRE_HI)
+		# 🔴 **셀에 스냅한다.** 스냅을 빼면 불이 셀 격자와 어긋나 「위에 떠 있는 것」이 된다.
+		var bx := floorf(p.x / cell) * cell
+		var by := floorf(p.y / cell) * cell
+		# 혀 높이 — 1~3셀. `wob` 이 크기가 아니라 **높이**를 흔든다(불은 위로 자란다).
+		var tall := 1 + int(roundf((wob * 0.5 + 0.5) * (Fx.MONSTER_BURN_TALL_CELLS - 1)))
+		for k in tall:
+			# 위로 갈수록 좁아지고 밝아진다 — 그것이 「불꽃 혀」의 전부다.
+			var w := cell * float(tall - k)
+			var col: Color = Fx.FIRE_LO if k < tall - 1 else Fx.FIRE_HI
+			canvas.draw_rect(Rect2(bx - w * 0.5, by - cell * float(k + 1), w, cell), col)
 
 
 ## 🔴 죽는 순간 터지는 고리 — **닭의 유일한 피격 피드백**이다(`fx_tuning.MONSTER_DEATH_POP_FRAMES`).
@@ -426,7 +466,12 @@ func _draw_corpse(c: Dictionary) -> void:
 	draw_texture_rect(tex, r, false, Color(d, d, d, alpha))
 
 
-func _draw_dmg_number(n: Dictionary) -> void:
+## 🔴🔴 **`canvas.draw_string` 이다 — 맨 `draw_string` 이 아니다.**
+##  ⚠ **여기가 2026-08-08의 그 자리다**(위 `_draw_flashes` 상자). 맨 `draw_string` 은
+##   MonsterView 자신에게 거는 것이고, 이 함수는 **자식 레이어가 그리는 중**에 불리므로
+##   **그 명령이 조용히 버려진다. 에러도 안 난다.**
+##  🔴 `net_monster` 가 이 규칙을 **소스에서** 잰다 — 거동으로는 헤드리스가 못 잡는다.
+func _draw_dmg_number(canvas: CanvasItem, n: Dictionary) -> void:
 	# ⚠ 폰트가 없으면 그리지 않는다 — `null`을 넘기면 매 프레임 짖고, 래퍼가 stderr를
 	#  실패로 치니 평소 화면이 그물을 빨갛게 만든다(`circle_window._draw`와 같은 규율).
 	# 🔴 **`get_theme_default_font()`가 아니다** — 이 노드는 `Node2D`라 `Control`이 아니고
@@ -438,12 +483,14 @@ func _draw_dmg_number(n: Dictionary) -> void:
 	var age: int = n["age"]
 	var t := float(age) / float(Fx.MONSTER_DMG_NUM_LIFE_FRAMES)
 	var alpha := 1.0 - t
-	var y := float(n["y"]) - Fx.MONSTER_DMG_NUM_RISE_PX * t
+	# 🔴 **체력바 위에서 시작한다** — `m.y` 에서 그대로 띄우면 체력바를 덮는다
+	#  (2026-08-08, verify-look 이 화면에서 봤다. `MONSTER_DMG_NUM_LIFT_PX` 상자).
+	var y := float(n["y"]) - Fx.MONSTER_DMG_NUM_LIFT_PX - Fx.MONSTER_DMG_NUM_RISE_PX * t
 	var col := Fx.MONSTER_DMG_NUM_COLOR
 	var text := "-%d" % int(n["amount"])
 	# 가운데 정렬 — `circle_window`류는 전부 LEFT라 폭을 직접 재서 절반만큼 왼쪽으로 민다.
 	var w := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, Fx.MONSTER_DMG_NUM_SIZE).x
-	draw_string(font, Vector2(float(n["x"]) - w * 0.5, y), text,
+	canvas.draw_string(font, Vector2(float(n["x"]) - w * 0.5, y), text,
 		HORIZONTAL_ALIGNMENT_LEFT, -1, Fx.MONSTER_DMG_NUM_SIZE,
 		Color(col.r, col.g, col.b, col.a * alpha))
 

@@ -113,6 +113,7 @@ func run(t) -> void:
 	_death_also_makes_a_pop_that_outlives_nothing(t)
 	_body_flames_stay_put_and_stay_inside(t)
 	_flash_layer_gets_its_shader_in_a_real_tree(t)
+	_layer_draws_go_through_the_canvas_argument(t)
 
 
 # ── 1. 전제 ──────────────────────────────────────────────────────
@@ -1412,3 +1413,91 @@ func _flash_layer_gets_its_shader_in_a_real_tree(t) -> void:
 		"숫자 레이어에는 머티리얼이 없다 (번쩍 셰이더가 숫자에 새지 않는다)")
 
 	view.free()   # 트리 안이라도 `free()` 가 떼어 낸다. 안 지우면 RID가 샌다(위 검사들과 같은 이유).
+
+
+## 🔴🔴 **레이어에 위임한 그리기는 `canvas.` 로 그린다 — 맨 `draw_*` 는 조용히 버려진다.**
+##
+## ⚠ **2026-08-08에 실제로 났다. 이 그물이 그때 초록이었다.**
+##  `_draw_dmg_number` 가 `draw_string(font, ...)` 을 **암묵적 `self`(= MonsterView)** 에 걸었는데,
+##  그 함수는 **자식 레이어의 `_draw()` 안에서** 불린다 ⇒ MonsterView 는 그리는 중이 아니라
+##  **그 명령이 조용히 버려진다. 에러도 안 난다.**
+##  🔴 증상은 **「피해 숫자가 화면에 통째로 없다」** 하나뿐이었고, verify-look 이 게임을 띄워
+##   `_number_layer` 를 null 로 바꿔 보고서야 원인이 잡혔다.
+##
+## 🔴🔴 **거동으로는 못 잡는다 — 그래서 소스를 읽는다.**
+##  ⚠ 그물은 배열을 읽지 캔버스를 안 읽고, 헤드리스는 렌더러가 dummy 라 픽셀이 없다.
+##   `_draw()` 를 직접 부르면 「그리는 중이 아니다」로 **어느 쪽이든** 짖어서 둘을 못 가른다.
+##  ⇒ **CLAUDE.md 가 「텍스트 검사로는 못 막는다」고 한 자리이지만, 이 실수는 문법 문제라
+##   텍스트로 정확히 잡힌다.** 재는 것과 라벨이 같다: 「이 함수들이 canvas 로 그리나」.
+func _layer_draws_go_through_the_canvas_argument(t) -> void:
+	var f := FileAccess.open("res://src/view/monster_view.gd", FileAccess.READ)
+	t.ok(f != null, "`monster_view.gd` 를 읽는다 (검사의 전제)")
+	if f == null:
+		return
+	var src := f.get_as_text()
+	f.close()
+
+	# 🔴 **레이어가 위임받아 부르는 함수들.** 여기 있는 것만 이 규칙에 걸린다 —
+	#  `_draw_monster` 류는 MonsterView 자신이 그리므로 맨 `draw_*` 가 **맞다.**
+	var delegated: Array[String] = ["_draw_flashes", "_draw_numbers", "_draw_dmg_number"]
+	# ⚠ **정규식을 안 쓴다.** lookbehind 를 쓰려면 GDScript 문자열에 백슬래시를 이중으로
+	#  넣어야 하고, 그게 한 번 조용히 깨졌다(파스 에러로 그물이 통째로 안 돌았다).
+	#  🔴 **읽는 사람이 규칙을 눈으로 확인할 수 있는 쪽**이 여기서는 더 낫다.
+	for name: String in delegated:
+		var body := _func_body(src, name)
+		t.ok(body != "", "`%s` 를 소스에서 찾았다 (검사의 전제 — 이름이 바뀌면 여기가 먼저 빨개진다)" % name)
+		if body == "":
+			continue
+		var bare := _bare_draw_calls(body)
+		t.eq(bare.size(), 0,
+			"`%s` 에 수신자 없는 `draw_*` 가 없다 (있으면 화면에서 통째로 사라진다): %s"
+				% [name, ", ".join(bare)])
+		# 🔴 **반대쪽** — 그리기를 하나도 안 하면 위 단언이 공짜로 통과한다.
+		t.ok(body.contains("canvas.") or body.contains("_draw_"),
+			"`%s` 가 실제로 무언가를 그린다 (`canvas.` 또는 다른 그리기 함수를 부른다)" % name)
+
+	# 🔴 **`_Layer` 가 캔버스를 넘기는가** — 안 넘기면 위 함수들이 인자를 받을 수가 없다.
+	t.ok(src.contains("fn.call(self)"),
+		"`_Layer._draw()` 가 자기 자신을 넘긴다 (`fn.call(self)`)")
+
+
+## 소스에서 함수 하나의 본문을 뽑는다(다음 `func ` 전까지).
+## ⚠ 못 찾으면 빈 문자열 — **부르는 쪽이 그걸 단언한다.** 조용히 통과하면 이름이 바뀐 날
+##  검사가 「없어진다」(CLAUDE.md 「검사가 실패가 아니라 없어진다」).
+## 본문에서 **수신자 없는** `draw_*(` 호출을 찾는다 ⇒ 찾은 것들의 이름.
+##
+## 🔴 「수신자 없다」 = 바로 앞 글자가 `.` 도 낱말 문자도 아니다. 즉 `canvas.draw_rect` 는 통과하고
+##  맨 `draw_rect` 는 걸린다. ⚠ **`_draw_flipped` 같은 자기 함수 호출은 `draw_` 로 시작을 안 하므로
+##  애초에 안 걸린다** — 밑줄이 앞에 붙어 낱말 문자 규칙에 먹힌다.
+## ⚠ **주석 줄은 건너뛴다** — 주석에 `draw_rect` 를 적었다고 빨개지면 아무도 주석을 못 쓴다.
+func _bare_draw_calls(body: String) -> Array:
+	var out: Array = []
+	for line: String in body.split("\n"):
+		var code := line.strip_edges()
+		if code.begins_with("#"):
+			continue
+		var at := code.find("draw_")
+		while at >= 0:
+			var before := "" if at == 0 else code[at - 1]
+			var is_receiver := before == "." or before == "_" or _is_word(before)
+			# 호출인지 본다 — `draw_` 로 시작하는 낱말 뒤에 여는 괄호가 와야 한다.
+			var close := code.find("(", at)
+			if not is_receiver and close > at and not code.substr(at, close - at).contains(" "):
+				out.append(code.substr(at, close - at))
+			at = code.find("draw_", at + 1)
+	return out
+
+
+func _is_word(c: String) -> bool:
+	if c == "":
+		return false
+	var b := c.unicode_at(0)
+	return (b >= 65 and b <= 90) or (b >= 97 and b <= 122) or (b >= 48 and b <= 57)
+
+
+func _func_body(src: String, name: String) -> String:
+	var at := src.find("func " + name + "(")
+	if at < 0:
+		return ""
+	var end := src.find("\nfunc ", at + 1)
+	return src.substr(at, (end - at) if end > 0 else -1)
