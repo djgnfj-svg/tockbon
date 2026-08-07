@@ -28,7 +28,7 @@ func run(t) -> void:
 	_water_material_derives_its_rules(t)
 	_water_door_refuses_bad_targets(t)
 	_write_cell_wipes_water(t)
-	_water_falls_one_cell_per_tick(t)
+	_water_falls_per_tick(t)
 	_water_falls_and_stacks(t)
 	_water_total_is_conserved(t)
 	_settled_water_sleeps(t)
@@ -316,6 +316,16 @@ func _settle(g: CellGrid, cap: int) -> int:
 	return n
 
 
+## 한 열에서 물이 든 행을 전부 모은다. 🔴 **「어디 있나」와 「몇 칸인가」를 한 번에 준다** —
+##  자리를 미리 짐작해 `aux_at` 을 찍으면 **복제된 칸이 검사 밖에 남는다.**
+func _column_water_rows(g: CellGrid, x: int, y0: int, y1: int) -> Array[int]:
+	var rows: Array[int] = []
+	for y in range(y0, y1 + 1):
+		if g.aux_at(x, y) > 0:
+			rows.append(y)
+	return rows
+
+
 ## 밴드 요약의 전체 합. 🔴 **`active_chunk_count()` 와 독립적인 경로다** — 둘을 맞대야
 ##  「요약이 부풀었다」와 「요약이 비었다」를 둘 다 잡는다.
 func _band_sum(g: CellGrid) -> int:
@@ -398,26 +408,68 @@ func _write_cell_wipes_water(t) -> void:
 ## ⚠ **뒤집으면 물이 한 틱에 격자를 가로지른다** — 그런데 **최종 상태는 똑같다.**
 ##  「다 쌓였나」·「총량이 같나」는 순서를 뒤집어도 전부 초록이다. ⇒ **틱마다 봐야만 잡힌다.**
 ## 🔴 밴드 경계(575 → 576)를 일부러 지난다. 밴드 순서만 뒤집혀도 거기서 갈린다.
-func _water_falls_one_cell_per_tick(t) -> void:
+##
+## 🔴🔴 **2026-08-07 — 「정확히 한 칸」이 「한 틱에 최대 `WATER_SUBSTEPS` 칸」이 됐다.**
+##  `cell_grid.step()` 이 `_water_step` 을 그 수만큼 돌리므로 **낙하도 같이 그만큼 빨라진다**
+##  (그 상수 주석 — 사용자가 「물이 퍼지는 게 느리다」고 판정한 결과다).
+##
+## ⚠ **왜 「정확히 N칸」이 아니라 범위인가**: 서브스텝 사이에 `_chunk_flip` 이 없어서, 물이
+##  **밴드 경계를 넘어 들어간 그 틱에는 아래 밴드가 아직 안 깨어 있으면 남은 서브스텝을 쉰다**
+##  (`cell_grid._water_tick` 주석). ⇒ 16행마다 한 번 **N보다 적게** 내려간다. 그건 이 배치의
+##  성질이지 고장이 아니다 — **그 틱 수를 검사가 예측하려면 시뮬을 검사 안에 다시 짜야 한다.**
+##
+## 🔴 **그래도 뒤집기는 그대로 잡힌다.** 밴드나 행 순서를 뒤집으면 물이 **한 틱에 바닥까지**
+##  (27칸) 내려가므로 상한 N을 훌쩍 넘는다. ⚠ **범위가 잡는 것은 「가로지르지 않는다」이고,
+##  「N이 실제로 돈다」는 아래 `max_delta == WATER_SUBSTEPS` 가 따로 잰다** — 둘을 한 단언에
+##  묶으면 서브스텝 루프를 1회로 줄여도 초록이 된다.
+func _water_falls_per_tick(t) -> void:
 	var g := CellGrid.new()
 	g.apply(CellGrid.cmd_fill(0, 600, 100, 600, Mat.STONE))
 	var y0 := 572
 	t.eq(y0 / Tuning.CHUNK_CELLS, 35, "시작 행이 밴드 35다 (아래 경계 통과의 전제)")
 	t.eq(576 / Tuning.CHUNK_CELLS, 36, "네 칸 아래가 밴드 36이다 — 이 검사가 밴드 경계를 지난다")
+	# ⚠ **이 장면의 기하가 감당하는 범위**: 아래로 갈 여유가 20칸이고 밴드 높이가 16이다.
+	#  넘는 값을 쓰려면 **장면을 다시 짜라** — 조용히 헛도는 것보다 여기서 짖는 게 낫다.
+	t.ok(Tuning.WATER_SUBSTEPS >= 1 and Tuning.WATER_SUBSTEPS <= 8,
+		"WATER_SUBSTEPS(%d)가 이 장면이 감당하는 1~8 안이다" % Tuning.WATER_SUBSTEPS)
 	g.set_water(50, y0, Tuning.WATER_MAX)
 	# 🔴🔴 **두 번째 기둥이 아래 밴드를 깨어 있게 잡아 둔다.** 없으면 밴드 순서 뒤집기가
 	#  **안 잡힌다** — 기둥이 하나면 물이 밴드 36에 처음 들어가는 그 틱에 36이 아직 잠들어 있어서
 	#  순회가 그 밴드를 아예 안 돌고, 뒤집힌 순서가 드러날 자리가 없다(2026-08-07에 확인했다).
 	g.set_water(52, 578, Tuning.WATER_MAX)
 
-	for k in 6:
+	# 아래쪽 기둥이 바닥에 닿기 전까지만 본다 — 닿으면 「한 틱에 몇 칸」이 아니라 쌓임을 재게 된다.
+	var ticks := mini(6, (598 - 578) / Tuning.WATER_SUBSTEPS)
+	t.ok(ticks >= 2, "루프가 실제로 %d바퀴 돈다 (0바퀴면 이 검사는 공짜로 통과한다)" % ticks)
+	var prev := {50: y0, 52: 578}
+	var max_delta := 0
+	for k in ticks:
 		g.step()
-		t.eq(g.aux_at(50, y0 + k + 1), Tuning.WATER_MAX,
-			"%d틱 뒤 정확히 %d칸 내려와 있다" % [k + 1, k + 1])
-		t.eq(g.aux_at(50, y0 + k), 0, "%d틱 뒤 직전 자리는 비었다" % (k + 1))
-		# 🔴 아래 밴드의 기둥도 한 틱에 한 칸이어야 한다 — 밴드 순서가 뒤집히면 여기가 먼저 깨진다.
-		t.eq(g.aux_at(52, 578 + k + 1), Tuning.WATER_MAX,
-			"%d틱 뒤 아래 밴드 기둥도 정확히 %d칸이다" % [k + 1, k + 1])
+		for x in [50, 52]:
+			var rows := _column_water_rows(g, x, 560, 599)
+			t.eq(rows.size(), 1, "%d틱 뒤 x=%d 기둥이 정확히 한 칸이다 (복제도 증발도 없다)"
+				% [k + 1, x])
+			if rows.size() != 1:
+				return
+			var y: int = rows[0]
+			t.eq(g.aux_at(x, y), Tuning.WATER_MAX, "%d틱 뒤 x=%d 의 양이 그대로다" % [k + 1, x])
+			var delta: int = y - int(prev[x])
+			# 🔴 **아래가 비어 있는 한 반드시 내려간다.** 0이면 그 칸이 잠들어 버린 것이고,
+			#  그건 「보이지 않는 벽」의 증상이다.
+			t.ok(delta >= 1, "%d틱 뒤 x=%d 가 적어도 한 칸 내려갔다 (%d칸)" % [k + 1, x, delta])
+			# 🔴🔴 **여기가 순회 순서 계약이다.** 뒤집으면 한 틱에 바닥까지 간다.
+			t.ok(delta <= Tuning.WATER_SUBSTEPS,
+				"%d틱 뒤 x=%d 가 한 틱에 %d칸을 안 넘었다 (%d칸)"
+				% [k + 1, x, Tuning.WATER_SUBSTEPS, delta])
+			max_delta = maxi(max_delta, delta)
+			prev[x] = y
+
+	# 🔴🔴 **서브스텝이 실제로 도는지는 이 한 줄이 잰다.** 루프를 1회로 줄이면 여기만 빨개진다 —
+	#  위 범위 단언은 「더 적게 내려간다」를 다 통과시킨다.
+	t.eq(max_delta, Tuning.WATER_SUBSTEPS,
+		"어느 틱엔가는 정확히 %d칸 내려간다 (서브스텝이 실제로 돈다)" % Tuning.WATER_SUBSTEPS)
+	t.ok(int(prev[50]) >= 576, "물이 실제로 밴드 경계(576)를 지났다 (이 검사의 전제)")
+	t.eq(g.count_material(Mat.WATER), 2, "물 칸 수가 내내 2다")
 
 
 ## 🔴 공중에 놓은 물이 바닥까지 내려가 쌓이나. **아래로만** 가는 단계라 결과가 정확히 예측된다.
@@ -622,7 +674,10 @@ func _water_moves_mark_the_screen_dirty(t) -> void:
 	g.consume_changed()  # 놓기까지의 몫을 걷어낸다
 
 	g.step()
-	t.eq(g.aux_at(50, 691), Tuning.WATER_MAX, "물이 실제로 한 칸 움직였다 (전제)")
+	# ⚠ **「한 칸」이라고 못 박지 않는다** — `WATER_SUBSTEPS` 가 낙하 거리를 정하고, 여기서 재는
+	#  것은 거리가 아니라 `_changed` 다. 거리는 `_water_falls_per_tick` 이 따로 잰다.
+	t.eq(g.aux_at(50, 690), 0, "물이 실제로 그 자리를 떠났다 (전제)")
+	t.eq(g.count_material(Mat.WATER), 1, "그리고 한 칸 그대로다 (복제되지도 사라지지도 않았다)")
 	t.ok(g.consume_changed() > 0, "물이 움직인 틱은 화면을 다시 올리라고 표시한다")
 
 	# 다 쌓여 잠든 뒤에는 0이어야 한다.
