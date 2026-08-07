@@ -232,6 +232,8 @@ func _ready() -> void:
 	_input.fire_requested.connect(_fire_at)
 	_input.reset_requested.connect(reset_stage)
 	_input.water_requested.connect(_pour_water_at)
+	_input.wood_requested.connect(_paint_wood_at)
+	_input.ignite_requested.connect(_ignite_at)
 	_input.monster_requested.connect(_spawn_monster_at)
 	_input.loadout_requested.connect(_set_loadout)
 	# 🔴🔴 **세상을 안 멈춘다** — 여기서 `get_tree().paused`를 건드리지 마라.
@@ -293,6 +295,36 @@ func _pour_water_at(world_px: Vector2) -> void:
 				continue
 			# ⚠ 돌·타는 칸은 `set_water` 가 조용히 거절한다 — 그릇 안에 부어도 벽을 안 먹는다.
 			_grid.set_water(cx + dx, cy + dy, Tuning.WATER_MAX)
+
+
+## 🔴🔴 **T — 마우스 자리에 나무 바닥을 깐다. 껍데기 전용 디버그 문이다** (2026-08-07).
+##
+## 🔴🔴 **왜 생겼나 — 「볼 것이 화면에 도달하는 경로」가 없었다**(CLAUDE.md).
+##  물 작업이 **「얕은 물은 불을 못 끈다」**를 넣었는데, 그 차이는 **숲 위에서만 보인다**:
+##  깊은 물은 불을 세우고 얇게 퍼진 시트는 못 세운다 — **나무가 넓게 깔려 있어야 그게 보인다.**
+##  ⚠ **실측: 맵 전체에 나무가 91칸이고 그나마 세로 기둥 모양이다** ⇒ 화면에서 원리적으로 못 본다.
+##
+## ⚠ **`set_water` 와 달리 원반이 아니라 가로 띠다.** 숲 바닥을 만드는 것이 목적이라
+##  동그라미로 깔면 「언덕」이 되어 물이 양옆으로 흘러내린다 — 그러면 재려던 그림이 안 나온다.
+## 🔴 **빈칸에만 깐다** — 돌·물 위에 덮으면 지형을 지우게 되고, 그건 붓이 아니라 파괴다.
+const WOOD_BRUSH_W := 40
+const WOOD_BRUSH_H := 2
+
+func _paint_wood_at(world_px: Vector2) -> void:
+	var cx := floori(world_px.x / Tuning.CELL_PX)
+	var cy := floori(world_px.y / Tuning.CELL_PX)
+	for dy in WOOD_BRUSH_H:
+		for dx in range(-WOOD_BRUSH_W, WOOD_BRUSH_W + 1):
+			if _grid.mat_at(cx + dx, cy + dy) != Mat.EMPTY:
+				continue
+			_grid.apply(CellGrid.cmd_fill(cx + dx, cy + dy, cx + dx, cy + dy, Mat.WOOD))
+
+
+## 🔴🔴 **G — 마우스 자리에 불을 붙인다. 껍데기 전용 디버그 문이다** (2026-08-07).
+##  ⚠ 마법 불 룬으로도 붙지만 **조준·비행·착탄을 거쳐야 해서 「여기에 붙이고 싶다」가 안 된다.**
+##  🔴 위 T와 짝이다 — 숲을 깔고(T) 물을 붓고(F) 불을 붙여(G) 세 재료가 한 화면에 모인다.
+func _ignite_at(world_px: Vector2) -> void:
+	_grid.ignite(floori(world_px.x / Tuning.CELL_PX), floori(world_px.y / Tuning.CELL_PX))
 
 
 ## 🔴🔴 **M/N — 마우스 자리에 몬스터를 세운다. 껍데기 전용 디버그 문이다**(`monsters-minimum`).
@@ -532,7 +564,10 @@ func _update_hud() -> void:
 		"몬스터 %d / %d마리 (M으로 세우기)" % [_world.monster_count(), MonsterDefs.MAX_MONSTERS],
 		# 🔴 **Tab을 안 적으면 조립창이 「아무도 못 여는 기능」이 된다** — verify-look이 그렇게 적었다.
 		#  ⚠ M을 안 적으면 「아무도 못 여는 기능」이 되는 것은 몬스터도 같다.
-		"A/D 이동 · Space 점프 · 좌클릭 발사 · Tab 조립창 · R 무대 리셋 · M 몬스터",
+		#  🔴 **T/F/G 셋을 한 덩어리로 적는다** — 「숲을 깔고 물을 붓고 불을 붙인다」가
+		#   한 절차라, 따로 적으면 셋이 한 벌인 것이 안 읽힌다.
+		"A/D 이동 · Space 점프 · 좌클릭 발사 · Tab 조립창 · R 리셋 · M/N 몬스터",
+		"T 숲 · F 물 · G 불  (마우스 자리에)",
 	])
 
 

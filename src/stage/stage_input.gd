@@ -14,6 +14,11 @@ signal reset_requested
 ##  유일한 길**이다. ⚠ 룬이 서면 이 키는 남겨도 되고 지워도 된다 — 무대는 본편에 안 남는다.
 ## ⚠ **월드 좌표를 넘긴다** — 좌클릭과 같은 이유다(흔들리는 동안 어긋난다).
 signal water_requested(world_px: Vector2)
+## 🔴 **T · G — 숲을 깔고 불을 붙인다. 껍데기 전용이다**(2026-08-07).
+##  ⚠ F와 셋이 한 벌이다 — **나무·물·불이 한 화면에 모여야** 「얕은 물은 불을 못 끈다」가 보인다.
+##  🔴 그전에는 맵에 나무가 91칸뿐이라 그 규칙이 **원리적으로 화면에 안 나왔다**(`stage.gd` 의 T 상자).
+signal wood_requested(world_px: Vector2)
+signal ignite_requested(world_px: Vector2)
 ## 🔴 **M/N — 마우스 자리에 몬스터를 세운다. 껍데기 전용 디버그 키다**(`monsters-minimum`).
 ##  배치는 맵 문서의 몫이라(문서 「경계」) 무대는 몬스터를 자동으로 안 깐다 — 이 키가
 ##  「볼 것이 화면에 도달하는 경로」다. **F(물 붓기)와 정확히 같은 어법이다.**
@@ -101,6 +106,12 @@ func _unhandled_input(event: InputEvent) -> void:
 				#  읽어 같은 `_to_world` 로 변환한다 — 좌클릭과 **같은 문을 지나야** 두 길이
 				#  안 갈라진다. ⚠ 여기서만 따로 변환하면 흔들리는 동안 물만 엉뚱한 셀에 떨어진다.
 				water_requested.emit(_to_world(get_viewport().get_mouse_position()))
+			# 🔴 F와 **같은 문**을 지난다 — 셋이 다르게 변환하면 카메라가 흔들리는 동안
+			#  나무·불만 엉뚱한 셀에 떨어진다(위 `_to_world` 상자).
+			KEY_T:
+				wood_requested.emit(_to_world(get_viewport().get_mouse_position()))
+			KEY_G:
+				ignite_requested.emit(_to_world(get_viewport().get_mouse_position()))
 
 
 ## 🔴🔴 **뷰포트 좌표 ≠ 월드 좌표다** — 흔들림용 `Camera2D`가 붙어 있는 한.
