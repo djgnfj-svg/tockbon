@@ -352,6 +352,11 @@ func _on_ticked() -> void:
 		_spell.get_blast_element(), _spell.get_blast_gen())
 	_blast_count += _spell.blast_count()
 
+	# 🔴🔴 **죽음 통지는 이 틱 안에서만 유효하다** — 다음 `frame()`의 틱 갈래가 지운다
+	#  (`world_step.gd` 헤더). 여기서 안 읽으면 시체 잔상이 원리적으로 안 생긴다 —
+	#  `blast_fx.on_blasts()`와 정확히 같은 자리(`monster_view.on_tick()`).
+	_monster_view.on_tick()
+
 	# 🔴🔴 **격자가 센 값 하나로 판단한다.** 껍데기가 따로 걸쇠를 들면 폭발처럼
 	#  **커맨드 큐를 안 지나는 변경**이 그 걸쇠를 조용히 빠뜨려 구멍이 화면에 안 뜬다.
 	#  ⚠ 읽으면 0으로 돌아가므로 **매 틱 반드시 한 번** 불러야 한다.
@@ -386,6 +391,9 @@ func reset_stage() -> void:
 	# 🔴 뷰도 같이 비운다. 안 비우면 죽은 투사체의 자취와 섬광이 R을 누를 때마다 쌓인다.
 	_spell_view.clear()
 	_blast_fx.clear()
+	# 🔴 안 비우면 죽은 세션의 hp 사전·번쩍·피해 숫자·시체가 새 세션에 잠깐 얹힌다
+	#  (`spell_view.clear()`·`blast_fx.clear()`와 같은 문 — `monster_view.gd` 헤더).
+	_monster_view.clear()
 	_camera.offset = Vector2.ZERO
 	# 🔴 **계수기를 전부 되돌린다.** 하나만 남기면 위 「발사 > 착탄 = 격자 밖 소멸」 진단이
 	#  R 한 번에 영영 거짓이 된다 — R은 이 단계의 주 측정 장치라 그 진단이 곧 눈이다.

@@ -109,7 +109,46 @@ const CHAR_WALK_PX_PER_FRAME := 24
 ## ⚠ **단계 4에서 종류별 색 표가 된다.** 지금은 한 종류뿐이라 이름에 종류를 안 넣었다 —
 ##  갈릴 때 `MONSTER_FILL`을 지우고 `monster_defs.DEFS` 같은 표 하나로 바꿔라.
 ## 🔴 지형(돌·나무)·불(주황)·물(청록)과 색상환에서 멀어야 눈이 즉시 가른다 — 붉은 자주를 골랐다.
+##  ⚠ **단계 7에서도 종류별 색은 안 건드린다** — team-lead 지시(2026-08-07): 사용자가 정할 자리고
+##   스프라이트가 곧 붙는다.
 const MONSTER_FILL := Color(0.78, 0.22, 0.42, 1.0)
+
+## 🔴🔴 **머리 위 체력바.** 폭·자리는 `monster_defs.w_px`(상자)에서 나온다 — 여기 폭을 박으면
+##  「크기가 둘이 된다」는 위 상자와 똑같은 함정이다(`monster_view.hp_bar_rect`가 상자를 읽는다).
+##  높이·간격·색만 여기 있다.
+const MONSTER_HP_BAR_H_PX := 4.0
+## 상자 위쪽에서 이만큼 띄운다 — 0이면 체력바가 머리와 겹쳐 몸 색과 섞인다.
+const MONSTER_HP_BAR_GAP_PX := 6.0
+const MONSTER_HP_BAR_BG := Color(0.08, 0.08, 0.08, 0.85)
+## 🔴 가득 찼을 때 초록 · 비면 빨강 — hp 비율로 선형 보간한다(`Color.lerp`, `monster_view._draw_hp_bar`).
+const MONSTER_HP_BAR_FULL := Color(0.25, 0.85, 0.30, 1.0)
+const MONSTER_HP_BAR_EMPTY := Color(0.9, 0.15, 0.15, 1.0)
+
+## 🔴🔴 **맞으면 번쩍 — 몸 사각형 위에 반투명 흰 사각형을 짧게 덧그린다.**
+##  ⚠ **셰이더가 아니다.** 지금은 단색 사각형이라(스프라이트가 아직 없다 — `character-sprite`가
+##   선례) 픽셀 셰이더가 낄 자리가 없다. 스프라이트가 붙는 날 다시 볼 자리다.
+## 🔴 프레임 수는 무적(`monster_defs.invuln_ticks`, 2틱 = 20Hz에서 0.1초)과 맞춰 뒀다 —
+##  「번쩍이는 동안은 방금 그 한 방이 아직 유효하다」가 자연스럽게 겹친다.
+const MONSTER_FLASH_COLOR := Color(1.0, 1.0, 1.0, 0.85)
+const MONSTER_FLASH_FRAMES := 6
+
+## 🔴 피해 숫자 — 맞은 자리 위로 떠오르며 사라진다. 값은 `monster_view`가 hp 변화량에서
+##  그대로 읽는다(여기 값은 색·크기·움직임뿐 — 숫자 자체를 여기서 만들지 않는다).
+const MONSTER_DMG_NUM_COLOR := Color(1.0, 0.35, 0.25, 1.0)
+const MONSTER_DMG_NUM_SIZE := 14
+const MONSTER_DMG_NUM_RISE_PX := 24.0
+const MONSTER_DMG_NUM_LIFE_FRAMES := 36
+
+## 🔴🔴 **닭의 탄. 마법 탄(주황 30°·보라 270°·청록 190°, 위 `ELEM_FX`)과 색상환에서 갈려야 한다**
+##  — 안 갈리면 「내 탄이 나한테 온다」로 읽힌다(`monsters-minimum` 판정 13). 몬스터 색(`MONSTER_FILL`,
+##  자주)과 같은 계열로 잡아 「몬스터가 쏜 것」이 한눈에 이어지게 한다.
+const MONSTER_BOLT_COLOR := Color(1.0, 0.30, 0.50, 1.0)
+const MONSTER_BOLT_R_PX := 4.0
+
+## 🔴 시체 잔상 — 죽은 자리에 몸 색보다 어둡게 짧게 남았다 사라진다. **격자는 안 건드린다**
+##  (`monsters-minimum` 「죽으면」— 시체 셀이 없다). `monster_view._corpses`가 나이를 먹인다.
+const MONSTER_CORPSE_COLOR := Color(0.35, 0.10, 0.19, 0.9)
+const MONSTER_CORPSE_LIFE_FRAMES := 30
 
 # ─── HUD 글자 ─────────────────────────────────────────────────────
 ## 🔴🔴 **32px 전환에서 새로 박아야 했던 상수다. 전에는 아예 없었다.**

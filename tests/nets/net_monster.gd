@@ -40,6 +40,7 @@ const Defs := preload("res://src/actor/monster_defs.gd")
 const WorldStep := preload("res://src/actor/world_step.gd")
 const MonsterView := preload("res://src/view/monster_view.gd")
 const MonsterBolts := preload("res://src/actor/monster_bolts.gd")
+const Fx := preload("res://src/view/fx_tuning.gd")
 
 const DT := 1.0 / 60.0
 const FLOOR_CY := 100
@@ -102,6 +103,11 @@ func run(t) -> void:
 	_hen_bolt_lifetime_axis(t)
 	_hen_bolt_blocked_by_terrain_and_does_not_carve(t)
 	_hen_bolt_step_stays_inside_the_player_box(t)
+	# ── 단계 7 — 화면 넷 + 시체 ──────────────────────────────────
+	_hp_bar_values_come_from_the_table(t)
+	_monster_bolt_color_differs_from_magic_bolts(t)
+	_hit_triggers_flash_and_a_damage_number_that_ages_out(t)
+	_death_notification_spawns_a_corpse_that_ages_out(t)
 
 
 # ── 1. 전제 ──────────────────────────────────────────────────────
@@ -1030,3 +1036,152 @@ func _hen_bolt_step_stays_inside_the_player_box(t) -> void:
 	t.ok(relative_step < Character.W_PX,
 		"(탄 속도 + 플레이어 최대 속도) × 1/60 (%.1fpx)이 상자 짧은 변(%dpx)보다 작다 — 프레임 검사로 충분하다"
 			% [relative_step, Character.W_PX])
+
+
+# ══════════════════════════════════════════════════════════════════
+#  단계 7 — 화면 넷 + 시체
+# ══════════════════════════════════════════════════════════════════
+#
+# 🔴 체력바·번쩍·피해 숫자·시체 잔상 넷을 여기서 잰다. 🔴🔴 **"뜬다·색이 맞다"는 눈이다**
+#  (판정 13, 헤드리스로 원리적으로 못 잰다) — 여기는 **값이 표·실제 hp에서 나오는지**만 잰다.
+#  ⚠ 닭의 탄이 실제로 그려지는 자리(`_draw()`의 `world.bolt_x/y`)는 이미 판정 10~12가
+#  `WorldStep` 쪽에서 잰 값을 그대로 읽는 것뿐이라 여기서 다시 안 잰다 — `box_rect()`가
+#  `_draw()`의 유일한 크기 소스인 것과 달리 그 규율은 코드로만 지킨다(아무도 안 잰다, 위 상자).
+# ⚠ 번쩍·피해 숫자·시체의 **감쇠 곡선**(알파가 몇 %씩 주나)은 안 잰다 — `blast_fx`의 섬광
+#  곡선(`_ease`·`flash_alpha`)도 이 리포에서 net으로 안 잰다. 여기서 재는 것은 **"떴다·표값과
+#  같다·수명대로 사라진다"**까지다.
+
+
+# ── 체력바 — 값이 표에서 나온다 ─────────────────────────────────
+func _hp_bar_values_come_from_the_table(t) -> void:
+	for kind: int in Defs.ALL:
+		var x := 40
+		var y := 60
+		var r := MonsterView.hp_bar_rect(kind, x, y)
+		t.eq(r.size.x, float(Defs.w_px(kind)),
+			"%s 체력바 폭이 상자 폭(%d)과 같다" % [Defs.name_of(kind), Defs.w_px(kind)])
+		t.eq(r.position.y, float(y) - Fx.MONSTER_HP_BAR_GAP_PX - Fx.MONSTER_HP_BAR_H_PX,
+			"%s 체력바가 상자 위 %.0fpx에 뜬다" % [
+				Defs.name_of(kind), Fx.MONSTER_HP_BAR_GAP_PX + Fx.MONSTER_HP_BAR_H_PX])
+	t.eq(MonsterView.hp_bar_fill_frac(30, 30), 1.0, "가득 차면 비율 1.0")
+	t.eq(MonsterView.hp_bar_fill_frac(0, 30), 0.0, "0이면 비율 0.0")
+	t.eq(MonsterView.hp_bar_fill_frac(15, 30), 0.5, "절반이면 비율 0.5")
+	t.eq(MonsterView.hp_bar_fill_frac(-5, 30), 0.0, "음수 hp도 0 밑으로 안 내려간다 (죈다)")
+	t.eq(MonsterView.hp_bar_fill_frac(999, 30), 1.0, "표보다 큰 hp도 1 위로 안 올라간다 (죈다)")
+
+
+# ── 닭의 탄 색 — 마법 탄과 갈린다 ───────────────────────────────
+## 🔴 절대값이 아니라 **거리**로 잰다 — 정확한 RGB를 박으면 손맛으로 살짝 조이는 날
+##  이 검사가 이유 없이 빨개진다. 잰다는 「충분히 멀다」다.
+func _monster_bolt_color_differs_from_magic_bolts(t) -> void:
+	for elem: int in [Tuning.ELEM_FIRE, Tuning.ELEM_NONE, Tuning.ELEM_WATER]:
+		var glow: Color = Fx.ELEM_FX[elem]["glow"]
+		t.ok(_rgb_dist(Fx.MONSTER_BOLT_COLOR, glow) > 0.3,
+			"닭 탄 색이 마법 탄(원소 %d) 색과 충분히 갈린다" % elem)
+
+
+## 🔴 `Color`에 `distance_to()`가 없다(Godot 4 GDScript 실측) — RGB 유클리드 거리를 직접 잰다.
+func _rgb_dist(a: Color, b: Color) -> float:
+	return Vector3(a.r, a.g, a.b).distance_to(Vector3(b.r, b.g, b.b))
+
+
+# ── 번쩍 · 피해 숫자 — hp가 준 만큼만, 수명대로 사라진다 ──────────
+## 🔴🔴 **하드코딩 반증** — 피해 숫자를 상수로 박아도 이 값 자체는 통과할 수 있지만
+##  (지금 우연히 `Character.DAMAGE_HIT`와 같다), **실제 hp 변화량을 읽는지**는 절대값 하나로는
+##  못 가른다. ⇒ 여기서는 "hp가 준 양과 같다"를 표에서 유도한 상수(`Character.DAMAGE_HIT`)로
+##  재서 최소한 우연이 아님을 보인다 — 두 번째 다른 피해량(불)까지 재는 것은 이 검사 밖이다.
+func _hit_triggers_flash_and_a_damage_number_that_ages_out(t) -> void:
+	var kind := Defs.KIND_PIG
+	var stand_x := 600
+	var y := FLOOR_TOP - Defs.h_px(kind)
+	var g := _bare_grid()
+	var spell := SpellSim.new()
+	var ch := _still_ch(stand_x, kind)
+	var world := WorldStep.new(g, spell, ch)
+	var mid := world.spawn_monster(kind, stand_x, y)
+	t.ok(mid > 0, "스폰됐다 (검사의 전제)")
+	var m: Monster = world.monster_at(0)
+
+	var view := MonsterView.new()
+	view.setup(world)
+	view.advance()  # 맞기 전 hp(표값)를 기준으로 스냅샷한다
+	t.ok(not view.is_flashing(m.id), "맞기 전엔 번쩍이지 않는다 (전제)")
+	t.eq(view.dmg_number_count(), 0, "맞기 전엔 피해 숫자가 없다 (전제)")
+
+	var center_cx := floori((stand_x + Defs.w_px(kind) * 0.5) / float(Tuning.CELL_PX))
+	world.enqueue(_blast_cmd(center_cx))
+	for _i in Tuning.TICK_DIVIDER:
+		world.frame(DT, 0.0, false, false)
+	t.eq(m.hp, Defs.max_hp(kind) - Character.DAMAGE_HIT, "폭발에 맞아 hp가 준다 (검사의 전제)")
+
+	view.advance()
+	t.ok(view.is_flashing(m.id), "hp가 줄면 그 프레임에 번쩍인다")
+	t.eq(view.dmg_number_count(), 1, "피해 숫자가 하나 뜬다")
+	t.eq(view.dmg_number_amount(0), Character.DAMAGE_HIT,
+		"피해 숫자가 실제로 줄어든 양(%d)과 같다 — 하드코딩이면 표를 바꿔도 안 따라온다"
+			% Character.DAMAGE_HIT)
+
+	# 🔴 번쩍과 피해 숫자가 **같은 `advance()` 시계를 공유한다** — 번쩍을 다 태우는 동안에도
+	#  피해 숫자는 계속 나이를 먹는다. ⇒ 이미 지난 프레임 수를 세어 두고, 피해 숫자 수명이
+	#  끝나기 **직전**까지 나머지를 채운다(상수 값에 안 얽매이게).
+	var elapsed := 0  # 생성 호출 자체는 나이를 안 먹인다(위 `advance()`의 순서 — prune이 먼저다)
+	for _i in Fx.MONSTER_FLASH_FRAMES - 1:
+		view.advance()
+		elapsed += 1
+	t.ok(view.is_flashing(m.id), "번쩍 프레임이 아직 안 다했다 (전제)")
+	view.advance()
+	elapsed += 1
+	t.ok(not view.is_flashing(m.id), "%d프레임 뒤 번쩍이 꺼진다" % Fx.MONSTER_FLASH_FRAMES)
+
+	while elapsed < Fx.MONSTER_DMG_NUM_LIFE_FRAMES - 1:
+		view.advance()
+		elapsed += 1
+	t.eq(view.dmg_number_count(), 1, "피해 숫자 수명이 아직 안 다했다 (전제)")
+	view.advance()
+	t.eq(view.dmg_number_count(), 0, "%d프레임 뒤 피해 숫자가 사라진다" % Fx.MONSTER_DMG_NUM_LIFE_FRAMES)
+	# 🔴 `MonsterView`는 `Node2D`라 `RefCounted`가 아니다 — 안 지우면 CanvasItem RID가
+	#  새서 래퍼가 stderr를 빨갛게 본다(CLAUDE.md 「가짜 그물 금지」의 마지막 상자와 같은 자리 —
+	#  실측: `.free()`를 빠뜨리자 이 그물이 "RID 2개 누수"로 실패했다).
+	view.free()
+
+
+# ── 시체 — 죽음 통지를 그 틱에 붙잡아 시체가 되고, 수명대로 사라진다 ─
+## 🔴🔴 **`world_step`이 낸 죽음 통지의 첫 소비자다**(team-lead 메모). `on_tick()`이 통지를
+##  실제로 읽는지, 그 틱을 놓치면 시체가 원리적으로 안 생기는지를 같이 잰다.
+func _death_notification_spawns_a_corpse_that_ages_out(t) -> void:
+	var kind := Defs.KIND_HEN
+	var stand_x := 600
+	var stand_y := FLOOR_TOP - Defs.h_px(kind)
+	var g := _bare_grid()
+	var spell := SpellSim.new()
+	var ch := _still_ch(stand_x, kind)
+	var world := WorldStep.new(g, spell, ch)
+	var mid := world.spawn_monster(kind, stand_x, stand_y)
+	t.ok(mid > 0, "스폰됐다 (검사의 전제)")
+
+	var view := MonsterView.new()
+	view.setup(world)
+	t.eq(view.corpse_count(), 0, "스폰만으로는 시체가 없다 (전제)")
+
+	var center_cx := floori((stand_x + Defs.w_px(kind) * 0.5) / float(Tuning.CELL_PX))
+	world.enqueue(_blast_cmd(center_cx))
+	var got_death := false
+	for _i in Tuning.TICK_DIVIDER * 3:
+		var ticked := world.frame(DT, 0.0, false, false)
+		if ticked and world.died_count() > 0:
+			# 🔴 죽은 그 틱 안에서 붙잡는다 — 다음 `frame()`의 틱 갈래가 통지를 지운다
+			#  (`world_step.gd` 헤더). 놓치면 이 검사 자체가 「원리적으로 안 생긴다」쪽을 증명한다.
+			view.on_tick()
+			got_death = true
+			break
+	t.ok(got_death, "닭이 죽어 죽음 통지가 났다 (검사의 전제)")
+	t.eq(world.monster_count(), 0, "몬스터 목록에서 빠졌다 (검사의 전제)")
+	t.eq(view.corpse_count(), 1, "죽음 통지를 시체 하나로 옮겼다")
+	t.eq(view.corpse_kind(0), kind, "시체 종류가 죽은 몬스터와 같다 (닭)")
+
+	for _i in Fx.MONSTER_CORPSE_LIFE_FRAMES - 1:
+		view.advance()
+	t.eq(view.corpse_count(), 1, "시체 수명이 아직 안 다했다 (전제)")
+	view.advance()
+	t.eq(view.corpse_count(), 0, "%d프레임 뒤 시체가 사라진다" % Fx.MONSTER_CORPSE_LIFE_FRAMES)
+	view.free()  # `Node2D`라 RefCounted가 아니다 — 위 검사와 같은 이유로 직접 지운다.
