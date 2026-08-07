@@ -179,6 +179,7 @@ func _draw() -> void:
 	#  **못 쏘는 상태**라 그리면 「쏠 수 있어 보인다」가 된다.
 	#  ⚠ 불 테두리도 같이 빠진다 — 사각형 시절부터 그랬고 이번에 안 바꿨다.
 	if _ch.downed:
+		_draw_downed_tag()
 		return
 
 	# 🔴 **테두리라 무적 흐림과 겹쳐도 둘 다 보인다.** 불은 무적에 안 걸려서 그 겹침이 정상이다.
@@ -228,6 +229,29 @@ func _draw() -> void:
 ## ⚠ **세로는 시트에서 읽는다**(`get_height()`). 상수로 박으면 「png 높이 · 상수」가 두 곳이 되고,
 ##  갈라지면 지팡이가 세로로 늘어나는데 에러가 안 난다.
 ## 🔴 **가로 기준은 `Staff.LEN_PX` 하나다** — `fx_tuning` 에 폭 상수를 또 두지 않는 이유가 그것이다.
+## 🔴🔴 **쓰러졌다는 것을 캐릭터 위에 직접 띄운다** (2026-08-08, 사용자가 정했다).
+##
+## ⚠ **왜 HUD 로 부족한가**: HUD 에 이미 「쓰러짐 — R로 다시」가 있는데도
+##  **검증하던 에이전트가 세 번 발이 묶였다.** 이유 둘:
+##  🔴 **HUD 디버그 글자가 몬스터를 덮어서 연출을 보려면 HUD 를 꺼야 한다** ⇒ 그러면 이 글자도 없다
+##  🔴 **시선이 캐릭터에 있다.** 화면 구석의 한 줄은 「클릭이 씹혔다」를 의심하는 사람에게 안 닿는다
+##
+## ⚠ **지팡이가 사라지는 것도 신호이긴 하다**(위 상자) — 하지만 **「없어진 것」은 못 알아챈다.**
+##  발사가 통째로 버려지는데(`_drain_queue`) 화면에 아무 변화가 없으면 **입력 문제로 읽는다.**
+##
+## 🔴 **가운데 정렬은 `monster_view._draw_dmg_number` 와 같은 어법**이다 — 폭을 재서 절반 민다.
+##  ⚠ 폰트가 없으면 안 그린다(`null` 을 넘기면 매 프레임 짖어 그물이 빨개진다).
+func _draw_downed_tag() -> void:
+	var font: Font = ThemeDB.fallback_font
+	if font == null:
+		return
+	var text := Fx.CHAR_DOWNED_TEXT
+	var w := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, Fx.CHAR_DOWNED_SIZE).x
+	draw_string(font,
+		Vector2(_ch.x + Character.W_PX * 0.5 - w * 0.5, float(_ch.y) - Fx.CHAR_DOWNED_LIFT_PX),
+		text, HORIZONTAL_ALIGNMENT_LEFT, -1, Fx.CHAR_DOWNED_SIZE, Fx.CHAR_DOWNED_COLOR)
+
+
 func _draw_staff(pivot: Vector2, dir: Vector2, len_px: float) -> void:
 	var sheet_h := float(_staff_tex.get_height())
 	var ring := Fx.STAFF_RING_W_PX

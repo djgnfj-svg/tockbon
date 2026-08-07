@@ -1380,10 +1380,17 @@ func _flash_layer_gets_its_shader_in_a_real_tree(t) -> void:
 	#   ⚠ 실제 트리에서 도는 것은 헤드리스로 따로 확인했다(2026-08-07, 무대 씬 · 자식 둘 · 셰이더 부착).
 	view._ready()
 
-	t.ok(view.get_child_count() >= 2,
-		"`_ready()` 가 레이어를 세웠다 (자식 %d개 — 번쩍 + 숫자)" % view.get_child_count())
+	t.ok(view.get_child_count() >= 3,
+		"`_ready()` 가 레이어를 세웠다 (자식 %d개 — 외곽선 + 번쩍 + 숫자)" % view.get_child_count())
 
-	var flash: CanvasItem = view.get_child(0)
+	# 🔴🔴 **이름으로 찾는다. 인덱스로 찾지 마라.**
+	#  ⚠ **실측(2026-08-08)**: 여기가 `get_child(0)` 이었고, 외곽선 레이어를 앞에 넣자
+	#   **조용히 엉뚱한 노드를 재기 시작했다.** 순서는 그리기 계약이지 이름표가 아니다.
+	var flash: CanvasItem = view.get_node_or_null(MonsterView.LAYER_FLASH)
+	t.ok(flash != null, "번쩍 레이어를 이름(`%s`)으로 찾는다" % MonsterView.LAYER_FLASH)
+	if flash == null:
+		view.free()
+		return
 	t.ok(flash.material != null, "번쩍 레이어에 머티리얼이 붙었다")
 	if flash.material != null:
 		var mat := flash.material as ShaderMaterial
@@ -1409,8 +1416,30 @@ func _flash_layer_gets_its_shader_in_a_real_tree(t) -> void:
 				"그 자리에 `MONSTER_FLASH_COLOR` 가 들어가 있다 (거짓 손잡이가 아니다)")
 
 	# 🔴 숫자 레이어는 셰이더가 **없어야** 한다 — 있으면 피해 숫자가 흰 실루엣이 된다.
-	t.ok((view.get_child(1) as CanvasItem).material == null,
+	var num: CanvasItem = view.get_node_or_null(MonsterView.LAYER_NUMBER)
+	t.ok(num != null, "숫자 레이어를 이름(`%s`)으로 찾는다" % MonsterView.LAYER_NUMBER)
+	t.ok(num != null and num.material == null,
 		"숫자 레이어에는 머티리얼이 없다 (번쩍 셰이더가 숫자에 새지 않는다)")
+
+	# 🔴🔴 **외곽선 레이어 — 번쩍과 같은 셰이더에 다른 색, 그리고 몸 「아래」다.**
+	#  ⚠ `show_behind_parent` 가 꺼지면 **외곽선이 몸을 덮어 실루엣이 통째로 크림색이 된다.**
+	#   그건 화면에서만 보이므로 여기서 값으로 못 박는다.
+	var out: Node2D = view.get_node_or_null(MonsterView.LAYER_OUTLINE)
+	t.ok(out != null, "외곽선 레이어를 이름(`%s`)으로 찾는다" % MonsterView.LAYER_OUTLINE)
+	if out != null:
+		t.ok(out.show_behind_parent,
+			"외곽선이 몸 **아래**에 그려진다 (꺼지면 실루엣을 통째로 덮는다)")
+		var om := out.material as ShaderMaterial
+		t.ok(om != null and om.shader != null, "외곽선 레이어에도 실루엣 셰이더가 실려 있다")
+		if om != null and om.shader != null:
+			t.eq(om.shader.resource_path, Fx.MONSTER_FLASH_SHADER,
+				"번쩍과 **같은 셰이더**다 (둘 다 「실루엣을 단색으로」다)")
+			t.eq(om.get_shader_parameter(MonsterView.FLASH_COLOR_PARAM),
+				Fx.MONSTER_OUTLINE_COLOR,
+				"그런데 **색은 다르다** — 외곽선은 `MONSTER_OUTLINE_COLOR` 다")
+			# 🔴 **둘이 같은 색이면 외곽선이 번쩍과 구별이 안 된다** — 상수 둘을 나눈 이유가 죽는다.
+			t.ok(Fx.MONSTER_OUTLINE_COLOR != Fx.MONSTER_FLASH_COLOR,
+				"외곽선 색과 번쩍 색이 서로 다르다")
 
 	view.free()   # 트리 안이라도 `free()` 가 떼어 낸다. 안 지우면 RID가 샌다(위 검사들과 같은 이유).
 

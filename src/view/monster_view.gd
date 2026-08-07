@@ -30,6 +30,14 @@ const Tuning := preload("res://src/sim/sim_tuning.gd")
 ##  **아무 일도 안 일어나고 에러도 없다**(`net_render` 의 「거짓 손잡이」 절이 그 사연이다).
 const FLASH_COLOR_PARAM := "flash_color"
 
+## 🔴🔴 **레이어 이름 — 그물이 이것으로 찾는다. 자식 인덱스로 찾지 마라.**
+##  ⚠ **실측(2026-08-08)**: 그물이 `get_child(0)` 으로 번쩍 레이어를 잡고 있었는데
+##   외곽선 레이어를 앞에 넣자 **조용히 엉뚱한 노드를 재기 시작했다.**
+##   ⇒ 순서는 그리기 계약이지 **이름표가 아니다.** 레이어가 늘 때마다 그물이 깨지면 안 된다.
+const LAYER_OUTLINE := "Outline"
+const LAYER_FLASH := "Flash"
+const LAYER_NUMBER := "Number"
+
 var _world: WorldStep = null
 
 ## id → 직전 프레임 hp. `_scan_hp_changes()`가 채우고 지운다(위 헤더).
@@ -63,6 +71,10 @@ var _frame: int = 0
 var _flash_layer: Node2D = null
 ## 🔴 피해 숫자는 번쩍보다도 위다 — 안 그러면 번쩍이 숫자를 덮는다(둘 다 흰 계열이라 최악이다).
 var _number_layer: Node2D = null
+## 🔴🔴 **외곽선은 몸 「아래」다 — 자식인데 `show_behind_parent` 로 뒤로 보낸다.**
+##  ⚠ 자식은 기본이 부모보다 위인데 외곽선이 몸을 덮으면 **실루엣이 통째로 크림색이 된다.**
+##  🔴 번쩍과 **같은 셰이더에 다른 색**을 건다 — 색이 노드 단위 uniform 이라 노드를 나눠야 한다.
+var _outline_layer: Node2D = null
 
 
 ## 자식 노드에 그리기를 위임하는 껍데기. 🔴 **자식마다 스크립트 파일을 만들지 않으려는 것**이다 —
@@ -95,23 +107,35 @@ static func _load_sheets() -> Dictionary:
 ##   그때 `_ready` 가 안 돌아 레이어가 **null 인 채로 산다.** ⇒ **그리는 쪽이 null 을 견뎌야 한다.**
 ##  🔴 씬 파일에 박으면 그 두 세계가 갈라지고, 갈라진 증상은 **화면에만** 나온다.
 func _ready() -> void:
-	_flash_layer = _make_layer(_draw_flashes)
 	var sh := load(Fx.MONSTER_FLASH_SHADER) as Shader
-	if sh != null:
-		var mat := ShaderMaterial.new()
-		mat.shader = sh
-		# 🔴 **색은 여기서 한 번 주입한다** — 모든 몬스터가 같으므로 노드 단위로 안전하다.
-		#  ⚠ 세기는 여기 못 넣는다(몬스터마다 다르다) — `_draw_flashes` 가 modulate 로 넘긴다.
-		mat.set_shader_parameter(FLASH_COLOR_PARAM, Fx.MONSTER_FLASH_COLOR)
-		_flash_layer.material = mat
-	# ⚠ **셰이더가 없으면 머티리얼 없이 간다** — 그러면 번쩍이 옛 모양(흰 사각형)이 된다.
-	#  🔴 **짖지 않는다**: 이 파일의 규율이 「몬스터 쪽은 대체하고 짖지 않는다」다(`_load_sheets`).
-	_number_layer = _make_layer(_draw_numbers)
+	# 🔴 **외곽선을 먼저 만든다** — 자식 순서가 곧 그리기 순서이고, 이것만 `show_behind_parent` 다.
+	_outline_layer = _make_layer(_draw_outlines, LAYER_OUTLINE)
+	_outline_layer.show_behind_parent = true
+	_paint(_outline_layer, sh, Fx.MONSTER_OUTLINE_COLOR)
+	_flash_layer = _make_layer(_draw_flashes, LAYER_FLASH)
+	_paint(_flash_layer, sh, Fx.MONSTER_FLASH_COLOR)
+	# ⚠ **셰이더가 없으면 머티리얼 없이 간다** — 그러면 번쩍이 옛 모양(흰 사각형)이 되고
+	#  외곽선은 **몸 그림 그대로가 여덟 번 깔려** 뭉개진다. 🔴 **그래도 짖지 않는다**:
+	#  이 파일의 규율이 「몬스터 쪽은 대체하고 짖지 않는다」다(`_load_sheets`).
+	_number_layer = _make_layer(_draw_numbers, LAYER_NUMBER)
 
 
-func _make_layer(fn: Callable) -> Node2D:
+## 레이어에 실루엣 셰이더를 걸고 색을 넣는다.
+## 🔴 **색은 노드 단위 uniform 이라 여기서 한 번 넣으면 된다** — 모든 몬스터가 같은 색이다.
+##  ⚠ **세기는 못 넣는다**(몬스터마다 다르다) — 그리는 쪽이 modulate 알파로 넘긴다.
+func _paint(layer: Node2D, sh: Shader, color: Color) -> void:
+	if sh == null:
+		return
+	var mat := ShaderMaterial.new()
+	mat.shader = sh
+	mat.set_shader_parameter(FLASH_COLOR_PARAM, color)
+	layer.material = mat
+
+
+func _make_layer(fn: Callable, nm: String) -> Node2D:
 	var n := _Layer.new()
 	n.fn = fn
+	n.name = nm   # 🔴 그물이 이 이름으로 찾는다(위 상자) — 인덱스는 레이어가 늘면 어긋난다
 	add_child(n)
 	return n
 
@@ -126,10 +150,9 @@ func _process(_dt: float) -> void:
 	queue_redraw()
 	# 🔴 자식은 부모의 `queue_redraw()` 를 **안 받는다.** 안 부르면 번쩍·숫자가 첫 프레임에서
 	#  얼어붙고, 증상은 「맞아도 안 번쩍인다」 하나뿐이다.
-	if _flash_layer != null:
-		_flash_layer.queue_redraw()
-	if _number_layer != null:
-		_number_layer.queue_redraw()
+	for layer: Node2D in [_outline_layer, _flash_layer, _number_layer]:
+		if layer != null:
+			layer.queue_redraw()
 
 
 ## 한 프레임분 갱신 — hp 변화를 읽어 번쩍·피해 숫자를 만들고, 살아 있는 연출들의 나이를 먹인다.
@@ -304,6 +327,8 @@ func _draw() -> void:
 		_draw_flashes(self)
 	if _number_layer == null:
 		_draw_numbers(self)
+	# ⚠ 외곽선은 여기서 안 그린다 — 레이어가 없으면 **몸 위에** 깔려 실루엣을 통째로 덮는다.
+	#  🔴 그물이 씬 없이 세우는 경우라 화면이 없고, 「없는 편이 틀린 것보다 낫다」.
 
 
 ## 🔴 번쩍 레이어가 부른다(`_flash_layer`). **이 노드 좌표계와 같다** — 자식이 부모 변환을 잇는다.
@@ -334,6 +359,41 @@ func _draw_flashes(canvas: CanvasItem) -> void:
 			canvas.draw_rect(r, Color(c.r, c.g, c.b, a))
 			continue
 		_draw_flipped(canvas, tex, r, m.facing < 0, Color(1.0, 1.0, 1.0, a))
+
+
+## 🔴🔴 **외곽선 — 몸 그림을 여덟 방향으로 밀어 깔고, 그 위에 몸이 덮는다.**
+##
+## ⚠ **왜 있나**: verify-look 이 돼지를 **검은 하늘**에 세우니 **다리와 아랫배가 녹았다**
+##  (2026-08-08. `fx_tuning.MONSTER_OUTLINE_COLOR` 상자가 그 사연을 든다).
+##
+## 🔴 **셰이더가 단색으로 칠하므로 밀어 깐 여덟 장이 그대로 테두리가 된다** — 알파만 남고
+##  색은 uniform 이라, 몸 그림의 어두운 픽셀이 그대로 어둡게 깔리는 일이 없다.
+##  ⚠ **`modulate` 곱셈으로는 이걸 못 한다** — 곱하면 원본이 어두워질 뿐 **밝아지지 않는다.**
+##   그래서 이 연출은 **셰이더 없이는 원리적으로 안 된다**(사용자가 그 축을 골랐다).
+##
+## 🔴 **시체에도 두른다** — 시체가 배경에 녹으면 「죽은 자리」가 안 보인다. 산 몸과 같은 문제다.
+func _draw_outlines(canvas: CanvasItem) -> void:
+	if _world == null:
+		return
+	for c: Dictionary in _corpses:
+		var age: int = c["age"]
+		var alpha := 1.0 - float(age) / float(Fx.MONSTER_CORPSE_LIFE_FRAMES)
+		# ⚠ 시체는 페이드하므로 외곽선도 같이 옅어져야 한다 — 안 그러면 몸이 사라진 뒤
+		#  **크림색 윤곽만 남아 떠 있다.**
+		_outline_one(canvas, c["kind"], c["x"], c["y"], false, alpha)
+	for i in _world.monster_count():
+		var m: Monster = _world.monster_at(i)
+		_outline_one(canvas, m.kind, m.x, m.y, m.facing < 0, 1.0)
+
+
+func _outline_one(canvas: CanvasItem, kind: int, x: int, y: int, flip: bool, alpha: float) -> void:
+	var tex: Texture2D = _sheets.get(kind)
+	if tex == null:
+		return   # 폴백은 단색 사각형이라 외곽선이 뜻을 안 갖는다
+	var r := box_rect(kind, x, y)
+	var col := Color(1.0, 1.0, 1.0, alpha)
+	for d: Vector2 in Fx.MONSTER_OUTLINE_DIRS:
+		_draw_flipped(canvas, tex, Rect2(r.position + d * Fx.MONSTER_OUTLINE_PX, r.size), flip, col)
 
 
 ## ⚠ **`canvas` 를 반드시 아래로 넘긴다** — 위 `_draw_flashes` 상자가 그 사연을 든다.
