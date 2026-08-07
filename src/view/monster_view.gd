@@ -354,7 +354,7 @@ func _draw_flashes(canvas: CanvasItem) -> void:
 		var tex: Texture2D = _sheets.get(m.kind)
 		if tex == null:
 			# 폴백 — 셰이더가 걸려 있어도 `TEXTURE` 가 흰 1×1이라 결과가 「흰 사각형 × 세기」다
-			#  (`monster_flash.gdshader` 머리). 즉 **옛 동작 그대로**다.
+			#  (`monster_silhouette.gdshader` 머리). 즉 **옛 동작 그대로**다.
 			var c := Fx.MONSTER_FLASH_COLOR
 			canvas.draw_rect(r, Color(c.r, c.g, c.b, a))
 			continue

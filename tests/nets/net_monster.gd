@@ -1366,7 +1366,7 @@ func _body_flames_stay_put_and_stay_inside(t) -> void:
 ##  **`_ready()` 가 한 번도 안 돈다.** 즉 레이어 만들기·셰이더 붙이기·색 주입이
 ##  **통째로 죽어도 이 파일의 나머지가 전부 초록이다.** 그 구멍을 여기서 막는다.
 ## 🔴 **실측으로 확인하고 넣었다**(2026-08-07): 헤드리스로 무대 씬을 세우니 자식 둘이 서고
-##  첫째에 `monster_flash.gdshader` 가 붙고 `flash_color` 가 들어가 있었다.
+##  첫째에 `monster_silhouette.gdshader` 가 붙고 `flash_color` 가 들어가 있었다.
 ##
 ## 🔴🔴 **주입한 이름이 셰이더에 실재하는지도 같이 잰다.** 한 글자 틀리면
 ##  **아무 일도 안 일어나고 에러도 없다** — `get_shader_parameter` 가 `null` 을 돌려줄 뿐이다
