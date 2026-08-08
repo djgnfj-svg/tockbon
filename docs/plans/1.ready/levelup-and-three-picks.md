@@ -1,310 +1,310 @@
-# 레벨업과 3택 — 보상이 들어오는 유일한 문
+# Leveling and the three-pick — the only door rewards come through
 
-**상태**: ready
-**한 줄**: 잡몹이 경험치와 돈을 떨구고, 레벨이 오르면 **문양 3장 중 하나를 고른다.**
-고른 것은 **그 자리에서 어느 층에 넣을지까지** 정한다. **보관함이 없다.**
+**Status**: ready
+**One line**: trash mobs drop XP and money, and on level up **you pick one of three glyphs.**
+What you pick, **you also place into a layer right there.** **There is no stash.**
 
-**기준 문서**: `docs/GDD.md` 「진행」— 「드랍」·「레벨업」·「영구인 것은 물건이 아니라 풀이다」.
-**여기 겹쳐 적지 않는다.**
+**Source doc**: `docs/GDD.md` "Progression" — "Drops" · "Leveling up" · "what is permanent is a pool, not an object".
+**Do not duplicate it here.**
 
-**맵 배치는** [stage1-map-layout.md](../3.done/stage1-map-layout.md) — **상점이 맵에 안 들어간다**(아래).
-
----
-
-## 왜
-
-**몬스터가 다 만들어졌는데 죽여도 아무 일이 안 일어난다.** 루프가 여기서 끊겨 있다.
-
-```
-잡몹을 잡는다  →  ???  →  강해진다
-```
-
-GDD가 그 가운데를 2026-08-06에 정해 뒀다 — **경험치 → 레벨업 → 문양 3택.**
-**이 문서는 그것을 실제로 만든다.**
-
-**왜 3택인가는 GDD가 이미 답했다.** 문양은 목록이 아니라 **순열**이라
-(「확산→폭발 ≠ 폭발→확산」) **무엇을 받느냐보다 무엇을 안 받느냐가 조합을 갈라놓는다.**
-⇒ 다 주면 매 런 같은 마법진이 된다.
-
-**그리고 「구역 클리어」라는 보상 단위를 안 만든 이유도 GDD에 있다** —
-경험치는 **경계를 안 만들고도** 「많이 잡아도 이득, 안 잡고 지나가도 이득」을 둘 다 살린다.
+**Map placement** is in [stage1-map-layout.md](../3.done/stage1-map-layout.md) — **the shop does not go on the map** (below).
 
 ---
 
-## 동작
+## Why
 
-### 떨구는 것 — 셋으로 갈린다
+**Monsters are fully built and killing one does nothing.** The loop is broken here.
 
-**2026-08-08에 사용자가 확정 도장을 찍었다.** GDD 「드랍」 표 그대로다.
+```
+kill a trash mob  →  ???  →  get stronger
+```
 
-| 잡는 것 | 주는 것 |
+The GDD already set that middle — **XP → level up → glyph three-pick.**
+**This doc actually builds it.**
+
+**Why three-pick is already answered by the GDD.** Glyphs are **permutations, not a list**
+("spread→blast ≠ blast→spread"), so **what you don't take separates builds more than what you do.**
+⇒ Give everything and every run has the same magic circle.
+
+**And why there is no reward unit called "zone clear" is in the GDD too** —
+XP keeps both "killing a lot is a gain" and "walking past is a gain" alive **without creating a boundary.**
+
+---
+
+## Behavior
+
+### Drops — split three ways
+
+**The user stamped this settled.** Exactly the GDD's "Drops" table.
+
+| Killing | Gives |
 |---|---|
-| **일반 몬스터** | **경험치 · 돈**뿐. **조립에 쓰는 것을 안 준다** |
-| **레벨업** | **문양 3택** |
-| **중간보스**(소) | **진행 열쇠** — 불의 룬. **이미 불을 들고 갔으면 3택을 준다**(GDD 「중간보스의 역할이 런에 따라 바뀐다」) — **이 문서가 그 분기를 만든다** |
-| **보스**(거대 수탉) | **연구 재료**(영구) + **문양 3택** |
+| **Ordinary monsters** | **XP · money** only. **Nothing used in assembly** |
+| **Level up** | **A glyph three-pick** |
+| **Midboss** (bull) | **A progression key** — the fire rune. **Already carrying fire, it gives a three-pick** (GDD "the midboss's role changes per run") — **this doc builds that branch** |
+| **Boss** (giant rooster) | **Research material** (permanent) + **a glyph three-pick** |
 
-**영구 재화는 보스만 준다. 나머지는 돈과 경험치뿐이다** (2026-08-08 확정).
+**Permanent currency comes from bosses only. Everything else is money and XP.**
 
-### 레벨업
+### Leveling up
 
-- 경험치가 차면 레벨이 오른다
-- **레벨이 오르면 달라지는 것은 3택뿐이다** (2026-08-08, 사용자가 정했다).
-  체력도 안 오르고 마법진 층도 안 는다 — **레벨은 「문양을 받는 문」일 뿐이다**
-  ⇒ **강해지는 경로가 하나**라 플레이어가 읽기 쉽고, 「뼈 먼저」와 맞는다
-- **한 런(스테이지1)에 3번** 뜨는 것이 목표 — 구역마다 한 번꼴
-  **대충값이다.** 잡몹이 20~30마리이므로 **7~10마리당 1레벨**. 놀아 보고 조정한다
+- XP fills and the level rises
+- **The only thing a level changes is the three-pick** (decided by the user).
+  Health doesn't rise and circle layers don't grow — **a level is only "the door glyphs come through"**
+  ⇒ **One path to getting stronger**, easy for the player to read, and it fits "skeleton first"
+- **Three times per run (stage 1)** is the target — about once per zone.
+  **A rough number.** With 20–30 trash mobs, **one level per 7–10 kills.** Adjust after playing
 
-### 3택이 뜨는 시점 — 바로 안 고른다
+### When the three-pick appears — you don't pick immediately
 
-**GDD 그대로 간다**(2026-08-08 확인).
-
-```
-레벨업  →  「레벨업」 표시만 뜬다  →  안전한 곳에서 키를 누른다  →  3장이 뜬다
-```
-
-**조립창과 같은 규율이다** — **세상은 안 멈춘다.** 고르는 것은 안전한 순간의 일이다.
-
-**이 게임에서 특히 그렇다** — 물이 흐르고 불이 번지는 중에 시간을 멈추면
-**그것들도 같이 멈춘다.** 「세상이 계속 산다」가 이 게임의 테제인데 보상 화면이 그걸 끊는다.
-
-### 고르면 어디로 가나 — **그 자리에서 층까지 정한다. 보관함이 없다**
-
-**2026-08-08에 사용자가 뒤집었다.** 같은 날 오전에 「보관함에 쌓고 조립은 따로」로 정했었고,
-**그 결정을 버린다.** **기준은 `docs/GDD.md` 「인벤토리가 없다」** — 여기 겹쳐 적지 않는다.
+**Exactly as the GDD says.**
 
 ```
-3장이 뜬다  →  하나를 고른다  →  같은 화면에서 어느 층에 넣을지 고른다  →  끝
-                                  층이 차 있으면 무엇을 밀어낼지까지
+level up  →  only a "level up" indicator  →  press a key in a safe place  →  three cards appear
 ```
 
-**왜 뒤집었나**: 이 게임은 **하나의 마법진을 런 내내 키워 가는 것**이라
-보관함이 있으면 **「지금 안 정해도 된다」가 생기고 선택의 무게가 미뤄진다.**
-그리고 로그라이크에 인벤토리가 사실상 없다(데드셀·스컬·아이작·노이타).
+**Same discipline as the assembly window** — **the world doesn't stop.** Choosing is for safe moments.
 
-**뒤집어도 원래 근거가 안 죽는다.** 보관함을 만든 이유는
-「자동으로 마지막 층에 끼우면 순서 선택이 사라진다」였는데,
-**받는 화면에서 층까지 고르게 하면 그 걱정이 없어진다** — 두 화면이 하나로 합쳐진 것이다.
+**Especially in this game** — freeze time while water flows and fire spreads and **those freeze too.**
+"The world stays alive" is this game's thesis, and a reward screen would cut it.
 
-**오히려 세진다** — 층이 다 찼을 때 **무엇을 버릴지**가 같이 걸린다.
-GDD가 3택에 건 논리(「무엇을 안 받느냐가 조합을 갈라놓는다」)에 **「무엇을 버리느냐」가 더해진다.**
+### Where a pick goes — **the layer is chosen right there. There is no stash**
 
-**대가는 화면이다.** 3택 창이 「고르기」와 「층 넣기」 **두 단**을 들어야 한다.
-**조립창은 오히려 가벼워진다** — 남는 일이 **이미 낀 것들의 자리 바꾸기**뿐이다.
-
-### 안 받고 넘어갈 수 있다 — 그리고 **주사위** (2026-08-08, 사용자가 정했다)
-
-**셋 다 마음에 안 들면 안 받는다.** **기준은 `docs/GDD.md` 「안 받기와 주사위」** — 겹쳐 적지 않는다.
-
-**이것이 인벤토리를 없앤 대가를 갚는다.** 보관함이 없어서 **층이 다 찼으면 새 문양은
-무언가를 밀어내야 하는데**, 셋 다 지금 것보다 나쁘면 **안 받기가 유일한 정답**이다.
-⇒ **안 받기가 없으면 3택이 벌이 된다.**
-
-**주사위** — 안 받는 대신 **다시 뽑는다.** **영구 해금이라 처음에는 없다.**
-
-**이 문서 범위에서 주사위는 「자리만 비워 두는 것」이다** — 연구대가 없으면 해금이 안 되고,
-연구대는 `docs/design/마을.md` 이며 **코드가 0**이다.
-⇒ **지금 만드는 것은 「안 받기」까지.** 주사위는 **버튼 자리와 개수 변수**만 둔다.
-
-### 후보를 어떻게 뽑나
-
-**풀 = 문양 × 등급.** **문양 등급이 3택을 살린다** — 등급이 없으면 이미 가진 문양이
-또 뜰 때 그 칸이 죽는다.
+**The user reversed this.** That same morning it was decided as "stash it and assemble separately",
+**and that decision is dropped.** **The source is `docs/GDD.md` "There is no inventory"** — not duplicated here.
 
 ```
-확산 · 폭발  ×  일반 · 희귀 · 유니크  =  후보 6개
+three cards  →  pick one  →  on the same screen, choose which layer  →  done
+                             if layers are full, also what gets pushed out
 ```
 
-- **이미 가진 것과 같은 등급은 안 뜬다** (2026-08-08, 사용자가 정했다). **죽은 칸을 안 만든다**
-- ⇒ 「가진 확산의 **상위 등급**」은 유효한 선택지다
+**Why it reversed**: this game is about **growing one magic circle across a run**, so a stash creates
+**"I don't have to decide yet" and defers the weight of the choice.**
+And roguelikes effectively have no inventory (Dead Cells · Skul · Isaac · Noita).
 
-### 그런데 풀이 6개뿐이다 — 그리고 사용자가 더미로 가기로 했다
+**The original argument survives the reversal.** The stash existed because
+"auto-slotting into the last layer removes the order choice", and
+**letting the receiving screen choose the layer removes that worry** — two screens merged into one.
 
-**코드에 있는 문양은 둘이다**(`glyph_defs.ALL` = 확산·폭발). GDD에는 이름이 17개인데
-**나머지는 이름뿐이다** — 2026-08-08에 사용자가 못박았다: **「확산 말고는 그냥 이름만 있는 거다」.**
-**「정의가 있는 것이 여섯」이라는 서술을 정해진 것으로 읽지 마라.**
+**It actually gets stronger** — with full layers, **what to discard** comes with it.
+The GDD's three-pick logic ("what you don't take separates builds") gains **"what you discard".**
 
-레벨업 3번 + 보스 3택 1번 = **4장**을 뽑는데 풀이 6개면 **중복 금지가 곧바로 막힌다.**
+**The price is the screen.** The three-pick window must carry **two steps**, "choose" and "place in a layer".
+**The assembly window gets lighter** — all that's left is **reordering what is already equipped.**
 
-**2026-08-08, 사용자가 정했다: 「문양을 만들 건데 일단 지금은 더미 데이터로 하자」.**
+### You can decline — and the **dice** (decided by the user)
 
-#### 더미가 하는 일 — **피해량만 올린다** (2026-08-08, 사용자가 정했다)
+**Dislike all three and you take none.** **The source is `docs/GDD.md` "Declining and the dice"** — not duplicated.
 
-**아무것도 안 하는 더미는 안 만든다.** 더미 문양은 **피해량을 올린다** — 등급이 높으면 더 올린다.
+**This repays the cost of removing the inventory.** With no stash, **full layers mean a new glyph must push
+something out**, and if all three are worse than what you have, **declining is the only right answer.**
+⇒ **Without declining, the three-pick becomes a punishment.**
 
-**이것이 「화면만 바뀌고 시뮬은 안 바뀌기」를 피하는 유일한 이유다**(CLAUDE.md 대표 가짜).
-3택에서 골랐는데 마법이 아무것도 안 달라지면 그게 정확히 그 자리인데,
-**피해량은 시뮬에 실제로 닿는다.**
+**Dice** — **reroll** instead of taking. **A permanent unlock, so you don't have it at first.**
 
-#### 그런데 이름을 붙이지 않는다 — 「더미」다
+**Within this doc's scope, the dice is only a reserved slot** — without a research bench nothing unlocks,
+and the research bench is `docs/design/town.md` with **zero code.**
+⇒ **What gets built now is up to declining.** For the dice, leave only **a button slot and a count variable.**
 
-**GDD의 문양 17개 중 열여섯이 이름만 있다.** `docs/design/진-룬-문양.md` 가
-**「문양 2/17(확산·폭발)만 코드에 있다」** 고 적었고, 더 나아가
-**「이름이 겹치는 쌍이 셋이다 — 증폭/강화 · 조작/제어 · 확산/분열」** 로
-**서로 뭐가 다른지조차 안 정해졌다**고 남겨 뒀다.
+### How candidates are drawn
 
-**⇒ 「피해 증가니까 증폭이다」로 이름을 붙이면 안 된다.** 그건 안 정해진 것을 정해진 것처럼
-만드는 일이고, **이 리포가 이미 데인 자리다**(`docs/design/README.md` 머리: 「적혀 있다는 것이
-곧 있다는 뜻으로 읽힌다」). 2026-08-08 대화에서 실제로 그 오독이 한 번 났고 사용자가 잘랐다.
+**Pool = glyph × rarity.** **Glyph rarity is what keeps the three-pick alive** — without it, a glyph you already
+have appearing again wastes that slot.
 
-⇒ **더미는 더미라고 부른다.** 진짜 문양이 정해지는 날 그때 이름이 붙는다.
+```
+spread · blast  ×  common · rare · unique  =  6 candidates
+```
 
-#### 더미인 게 보여야 한다
+- **The same rarity of something you already have never appears** (decided by the user). **No dead slots**
+- ⇒ "A **higher rarity** of the spread I have" is a valid option
 
-- **이름에 표시한다** — 화면에 「더미」라고 그대로 보인다
-- **`glyph_defs` 가 어느 것이 더미인지 스스로 들고 있어야 한다** — 문서에만 적으면 갈라진다
+### But the pool is only 6 — and the user chose dummies
 
-#### 비용 — 파이프라인에 종류가 하나 는다
+**Two glyphs exist in code** (`glyph_defs.ALL` = spread, blast). The GDD lists 17 names and
+**the rest are names only** — the user pinned it: **"other than spread, they're just names".**
+**Do not read the phrasing "six have definitions" as settled.**
 
-`glyph_defs` 의 종류가 **`KIND_SPAWN`(낳음) · `KIND_TERMINAL`(끝냄) 둘뿐**이다.
-**피해 증가는 탄을 낳지도 끝내지도 않는다** ⇒ **세 번째 종류(바꿈)를 세워야 한다.**
+3 level-ups + 1 boss three-pick = **4 draws** from a 6-pool, so **the no-duplicates rule blocks immediately.**
 
-`docs/design/몬스터.md` 가 **「유도를 넣는 것은 문양 하나 추가와 자릿수가 다르다」**고 경고한
-그 자리다. **다만 피해 증가는 그중 제일 싼 사례다** — 궤적을 안 건드리고 **숫자 하나만 곱한다.**
-**그래서 이 더미가 나중에 유도·가속·회전이 들어올 자리를 미리 여는 일이 된다.**
+**The user decided: "we'll build glyphs, but for now let's use dummy data".**
 
-#### 진짜 문양을 늘리는 것은 이 문서가 아니다
+#### What the dummy does — **it only raises damage** (decided by the user)
 
-**2026-08-08, 사용자가 정했다: 「나중에 추가한다. 지금은 아이디어가 없다.」**
-⇒ **별도 할 일로 뺀다** — `docs/design/README.md` 「아직 문서가 없는 기능」 표에 남긴다.
-**데모를 낼 때는 진짜 문양이 들어간다**(사용자).
+**A dummy that does nothing is not built.** The dummy glyph **raises damage** — more at higher rarity.
 
-### 돈 — 스테이지를 넘어갈 때 상점
+**This is the only reason it avoids "screen changes, sim doesn't"** (CLAUDE.md's signature fake).
+Picking from the three-pick and having the spell change nothing is exactly that place, and
+**damage actually reaches the sim.**
 
-**2026-08-08, 사용자가 정했다: 상점은 「스테이지 클리어하고 넘어갈 때」다.**
+#### But it gets no name — it is "dummy"
 
-**⇒ 상점이 맵 안에 안 들어간다.** [stage1-map-layout.md](../3.done/stage1-map-layout.md) 를
-**고칠 필요가 없다** — 400타일 맵에 상인 자리를 비울 필요도, 밀도를 다시 잴 필요도 없다.
+**Sixteen of the GDD's 17 glyphs are names only.** `docs/design/circle-rune-glyph.md` recorded
+**"only 2/17 glyphs (spread, blast) are in code"** and went further, leaving
+**"three pairs of names overlap — amplify/empower · manipulate/control · spread/split"** as
+**not even having their differences decided.**
 
-**스테이지 전환 자체가 아직 없다**(`docs/design/README.md`: 「스테이지 전환 — 없음」).
-**⇒ 상점은 이 문서에서 자리만 잡고 실제 구현은 스테이지 전환이 생길 때다.**
-**스테이지2가 다음 주 예정이므로**(2026-08-08, 사용자) 그때 같이 온다.
+**⇒ Do not name it "amplify because it raises damage".** That makes the undecided look decided, and
+**this repo has been burned there** (`docs/design/README.md` header: "being written reads as being present").
+That misreading actually happened once in conversation and the user cut it.
 
-**상점에서 뭘 파나는 미정이다.**
+⇒ **A dummy is called a dummy.** It gets a name the day the real glyph is decided.
+
+#### Being a dummy must be visible
+
+- **Marked in the name** — the screen literally shows "dummy"
+- **`glyph_defs` must itself carry which ones are dummies** — recorded only in docs, they diverge
+
+#### Cost — the pipeline gains one kind
+
+`glyph_defs` has **only `KIND_SPAWN` and `KIND_TERMINAL`.**
+**Raising damage neither spawns nor finishes** ⇒ **a third kind (modify) must be stood up.**
+
+This is the place `docs/design/monsters.md` warned that **"adding homing is a different order of magnitude
+from adding one glyph".** **But raising damage is the cheapest case of it** — it doesn't touch the trajectory,
+it **multiplies one number.**
+**So this dummy is also the work of opening the slot that homing, accelerate and spin will later enter.**
+
+#### Growing the real glyph list is not this doc
+
+**The user decided: "add them later. I have no ideas right now."**
+⇒ **Broken out as separate work** — left in `docs/design/README.md`'s "features with no doc yet" table.
+**Real glyphs go in before the demo** (user).
+
+### Money — the shop at the stage transition
+
+**The user decided: the shop is "when you clear a stage and move on".**
+
+**⇒ The shop does not go on the map.** [stage1-map-layout.md](../3.done/stage1-map-layout.md)
+**needs no change** — no merchant slot to reserve in the 400-tile map, no density to re-measure.
+
+**Stage transitions don't exist yet** (`docs/design/README.md`: "stage transition — none").
+**⇒ The shop is only slotted in this doc; the real implementation comes when stage transitions exist.**
+**Stage 2 is planned for next week** (user), so it arrives then.
+
+**What the shop sells is TBD.**
 
 ---
 
-## 화면
+## Screen
 
-- **경험치 바** — 어디에? **지금 HUD가 디버그 라벨뿐이다**
-- **「레벨업」 표시** — **키를 눌러야 열리므로 「지금 열 수 있다」가 계속 보여야 한다.**
-  안 보이면 플레이어가 3택을 들고 다니다 런이 끝난다
-- **3택 화면** — 문양 3장. 각 장에 **이름 · 등급 · 무슨 일이 일어나나**
-  - **등급이 색으로 갈려야 한다**(일반·희귀·유니크). 이 게임 팔레트가 어둡다
-  - **더미면 그게 보여야 한다**(위)
-- **층 넣기** — **3택 창의 둘째 단이다.** 마법진 그림에 층이 보이고 찬 칸은 무엇이 밀려나는지 보인다
+- **XP bar** — where? **The HUD is currently only a debug label**
+- **"Level up" indicator** — **it opens on a keypress, so "you can open it now" must stay visible.**
+  Invisible, the player carries a three-pick until the run ends
+- **The three-pick screen** — three glyph cards. Each with **name · rarity · what it does**
+  - **Rarity must separate by color** (common · rare · unique). This game's palette is dark
+  - **A dummy must show as one** (above)
+- **Layer placement** — **the three-pick window's second step.** The circle picture shows layers, and a full slot shows what gets pushed out
 
-**세상이 안 멈추므로 3택 화면 뒤에서 물·불·몬스터가 계속 돈다.**
-**그 위에 창을 띄우면 읽히나는 눈으로만 판정된다** — `fx_tuning.gd:467` 이 이미
-「특정 창이 열리는 것처럼 **배경색이 존재해야** 할 듯」이라는 사용자 판정을 들고 있다.
+**The world doesn't stop, so water, fire and monsters keep running behind the three-pick screen.**
+**Whether a window over that is readable is judged by eye only** — `fx_tuning.gd:467` already carries
+the user's note that "there probably needs to be a background color, like a window opening".
 
 ---
 
-## 경계
+## Boundary
 
 | | |
 |---|---|
-| **레벨은 3택만 준다** | 체력도 층도 안 는다 |
-| **세상이 안 멈춘다** | 3택 화면이 열려도 물·불·몬스터가 돈다 |
-| **고른 것이 즉시 안 쓰인다** | 조립창을 거쳐야 한다 |
-| **중복은 안 뜬다** | 풀이 6개라 금방 마른다 ⇒ **더미가 필요한 이유** |
-| **돈 쓸 곳이 아직 없다** | 상점은 스테이지 전환에 붙고, 그게 아직 없다 |
-| **일반 몬스터는 문양을 안 준다** | 조립창을 전투 중에 열게 만들지 않는다(GDD) |
-| **레벨이 마을에 안 쌓인다** | GDD가 「런 안에서만인가 마을에 쌓이는가」를 미정으로 뒀는데, **레벨이 3택만 준다면 런 한정이 자연스럽다** — 아래 「미정」 |
+| **A level gives only the three-pick** | No health, no layers |
+| **The world doesn't stop** | Water, fire and monsters run while the three-pick is open |
+| **A pick isn't used immediately** | It goes through the assembly window |
+| **No duplicates appear** | A 6-pool dries fast ⇒ **why the dummy is needed** |
+| **There is nowhere to spend money yet** | The shop attaches to stage transitions, which don't exist |
+| **Ordinary monsters don't give glyphs** | Don't make the assembly window open mid-fight (GDD) |
+| **Levels don't accumulate in town** | The GDD leaves "run-scoped or accumulates in town" TBD, but **if a level gives only the three-pick, run-scoped is natural** — see "TBD" |
 
 ---
 
-## 기존 것과의 상호작용
+## Interaction with what exists
 
-| 무엇 | 어떻게 |
+| What | How |
 |---|---|
-| **몬스터** | **죽을 때 경험치·돈을 뱉는 경로가 없다.** `monster.gd` 에 그 자리를 만든다 |
-| **문양** | `glyph_defs.DEFS` 에 **등급 축이 없다.** 지금은 id 하나에 이름·kind·예산뿐 |
-| **마법진** | 문양은 층에 끼운다(`spell_circle.gd`). **3택 화면이 곧바로 여기에 꽂는다** — 중간 저장이 없다 |
-| **조립창** | **디버그 라벨이다.** **보관함이 없어져 할 일이 줄었다** — 자리 바꾸기만 |
-| **보스** | 수탉이 3택 + 연구 재료를 준다 → [stage1-bosses.md](stage1-bosses.md) |
-| **맵** | **안 건드린다** — 상점이 맵 밖이다 |
-| **스테이지 전환** | **없다.** 상점과 연구 재료가 거기 매여 있다 |
+| **Monsters** | **There is no path emitting XP and money on death.** Make that slot in `monster.gd` |
+| **Glyphs** | `glyph_defs.DEFS` has **no rarity axis.** Currently one id with name, kind and budget |
+| **Magic circle** | Glyphs socket into layers (`spell_circle.gd`). **The three-pick screen sockets directly there** — no intermediate storage |
+| **Assembly window** | **A debug label.** **Removing the stash reduced its job** — reordering only |
+| **Bosses** | The rooster gives a three-pick + research material → [stage1-bosses.md](stage1-bosses.md) |
+| **Map** | **Untouched** — the shop is off-map |
+| **Stage transition** | **Doesn't exist.** The shop and research material hang on it |
 
 ---
 
-## 비용
+## Cost
 
-**싸다. 시뮬을 안 건드린다.**
+**Cheap. It doesn't touch the sim.**
 
 | | |
 |---|---|
-| 경험치·돈 누적 | 정수 몇 개 |
-| 3택 뽑기 | 런당 4번. 후보 6개에서 3개 고르기 |
-| **화면** | **여기가 전부다** — 3택 창(두 단)·경험치 바. **렌더 비용은 헤드리스로 못 잰다** |
+| XP and money accumulation | A few integers |
+| Drawing three | 4 times per run. Pick 3 of 6 candidates |
+| **Screen** | **This is all of it** — the three-pick window (two steps) and the XP bar. **Render cost can't be measured headless** |
 
-**성능 함정이 하나 있다** — GDD가 「등급이 높으면 확산이 더 퍼진다」로 정했는데
-**확산 발수는 성능에 직결된다**(8발 → 64발 폭증을 GDD가 규칙으로 막아 뒀다).
-**유니크 확산이 몇 발인지는 그 제약 안에서 정해야 한다.**
-
----
-
-## 판정
-
-**눈으로 본 결과는 그 자리에서 이 절 아래에 적는다**(CLAUDE.md).
-
-1. **잡몹을 잡으면 경험치가 오른다** — 화면에 보인다
-2. **경험치가 차면 「레벨업」 표시가 뜬다** — 그리고 **안 사라진다**(키를 누를 때까지)
-3. **키를 누르면 3장이 뜬다** — **그동안 세상이 계속 돈다**(물·불·몬스터)
-4. **셋이 서로 다르다** — 같은 문양의 같은 등급이 두 장 안 뜬다
-5. **이미 가진 것과 같은 등급이 안 뜬다**
-6. **하나를 고르면 층을 고르는 단이 이어진다** — 나머지 둘은 사라진다
-7. **층이 다 차 있으면 무엇이 밀려나는지 보이고, 밀려난 것은 사라진다**
-7b. **어디에도 안 쟁여진다** — 보관함이라 부를 상태가 코드에 없다
-8. **끼운 문양이 실제로 마법을 바꾼다** — **이 문서의 제일 큰 위험이다.**
-   **더미도 마찬가지다 — 피해량이 실제로 오른다.** 값으로 재라(같은 몬스터를 몇 대에 죽이나).
-   **「아무 일도 안 나는데 화면에만 떴다」면 그게 대표 가짜다**
-8b. **등급이 높으면 피해가 더 오른다** — 일반 < 희귀 < 유니크가 값으로 갈린다
-8c. **더미인 게 화면에 보인다** — 그리고 `glyph_defs` 가 그 표시를 들고 있다
-8d. **안 받고 닫을 수 있다** — 그리고 **아무것도 안 바뀐다**(층이 그대로다)
-9. **한 런에 레벨업이 대략 3번 온다**
-10. **풀이 마르면 어떻게 되나** — 더미가 채운다. **빈 칸이 뜨거나 창이 안 열리면 실패**
-11. **보스를 깨면 3택 + 연구 재료가 나온다**
-12. **3택 창이 격자 위에서 읽힌다** — 물·불이 뒤에서 도는데 글자가 보이나
+**There is one performance trap** — the GDD set "higher rarity spreads more", and
+**spread's shot count is directly tied to performance** (the GDD blocks the 8→64 explosion by rule).
+**How many bolts a unique spread makes must be decided within that constraint.**
 
 ---
 
-## 미정
+## Acceptance
 
-**억지로 채우지 않는다.**
+**Write what was seen by eye under this section immediately** (CLAUDE.md).
 
-- **경험치 수치** — 몬스터당 얼마, 레벨당 얼마. 「3번」만 목표다
-- **등급이 얼마나 세게 하나** — 확산이 8발→몇 발인가.
-  **GDD의 폭증 제약 안에서 정해야 한다**
-- **등급별 색** — 화면에서 갈려야 한다
-- **더미 문양을 몇 개 만드나** — 풀이 4장을 뽑을 만큼은 돼야 한다
-- **더미가 피해를 얼마나 올리나** — 등급별 수치
-- **진짜 문양을 무엇부터 만드나** — **별도 할 일**(사용자: 「지금은 아이디어가 없다」).
-  **데모 전에는 들어간다**
-- **상점에서 뭘 파나** — 문양인가 · 회복인가 · 등급 업그레이드인가.
-  **스테이지 전환이 생길 때 같이 정한다**
-- **레벨이 마을에 쌓이나** — GDD의 미정. **레벨이 3택만 준다면 런 한정이 자연스럽지만
-  사용자가 명시적으로 정하지 않았다**
-- **주사위를 런당 몇 번 쓰나** · 해금이 개수를 늘리나 · 던전에서 더 줍나
-- **레벨이 마을에 쌓이나** — GDD의 같은 미정이다. 전에 「집」으로 적혀 있어 검색으로 안 잡혔다
-- **3택을 안 열고 두 번 레벨업하면** — 쌓이나, 하나만 남나
-- **룬에도 등급이 있나** — GDD의 미정. 이 문서는 문양만 다룬다
-- **돈을 화면에 어떻게 보여주나**
+1. **Killing a trash mob raises XP** — visible on screen
+2. **Full XP shows a "level up" indicator** — and **it doesn't disappear** (until the key is pressed)
+3. **Pressing the key shows three cards** — **and the world keeps running** (water, fire, monsters)
+4. **The three differ from each other** — no two cards of the same glyph at the same rarity
+5. **The same rarity of something you already have never appears**
+6. **Picking one leads into the layer-choosing step** — the other two disappear
+7. **With full layers, what gets pushed out is visible, and it disappears**
+7b. **Nothing is stashed anywhere** — there is no state in code that could be called a stash
+8. **The socketed glyph actually changes the spell** — **the biggest risk in this doc.**
+   **The dummy included — damage actually rises.** Measure it by value (how many hits kill the same monster).
+   **"Nothing happens but it showed on screen" is the signature fake**
+8b. **Higher rarity raises damage more** — common < rare < unique separates by value
+8c. **Being a dummy is visible on screen** — and `glyph_defs` carries that marking
+8d. **You can decline and close** — and **nothing changes** (layers untouched)
+9. **Roughly 3 level-ups per run**
+10. **What happens when the pool dries** — the dummy fills it. **A blank slot or a window that won't open is a failure**
+11. **Beating the boss gives a three-pick + research material**
+12. **The three-pick window is readable over the grid** — with water and fire running behind, is the text visible
 
 ---
 
-## 정한 것 — 2026-08-08 기획 대화
+## TBD
 
-| 무엇 | 값 | 왜 |
+**Do not force these full.**
+
+- **XP values** — how much per monster, how much per level. Only "three times" is the target
+- **How much a rarity strengthens** — spread from 8 bolts to how many.
+  **Must be decided within the GDD's explosion constraint**
+- **Color per rarity** — must separate on screen
+- **How many dummy glyphs to build** — the pool must support 4 draws
+- **How much the dummy raises damage** — values per rarity
+- **Which real glyphs to build first** — **separate work** (user: "I have no ideas right now").
+  **They go in before the demo**
+- **What the shop sells** — glyphs · healing · rarity upgrades.
+  **Decided together with stage transitions**
+- **Do levels accumulate in town** — the GDD's TBD. **If a level gives only the three-pick, run-scoped is natural,
+  but the user hasn't decided explicitly.** (It previously read as "home" and didn't turn up in searches)
+- **How many dice per run** · do unlocks raise the count · are more found in the dungeon
+- **Leveling twice without opening the three-pick** — do they stack, or does only one remain
+- **Do runes have rarity too** — the GDD's TBD. This doc covers glyphs only
+- **How money is shown on screen**
+
+---
+
+## Decided — from the design conversation
+
+| What | Value | Why |
 |---|---|---|
-| 레벨의 효과 | **3택만** | 강해지는 경로가 하나라 읽기 쉽다 |
-| 3택 시점 | **키를 눌러 연다. 세상은 안 멈춘다** | GDD 그대로. 조립창과 같은 규율 |
-| 고른 뒤 | **그 자리에서 층까지. 보관함 없음** | 하나의 마법진을 키워 가는 게임이라 미룰 곳을 안 만든다 |
-| 안 받기 | **셋 다 안 받고 넘어갈 수 있다** | 인벤이 없어 층이 차면 밀어내야 하는데, 안 받기가 없으면 3택이 벌이 된다 |
-| 주사위 | **안 받고 다시 뽑기. 영구 해금** | 무한 리롤이면 「무엇을 안 받느냐」가 사라진다 |
-| 중복 | **같은 등급은 안 뜬다** | 죽은 칸을 안 만든다 |
-| 등급 | **3단 — 일반·희귀·유니크** | GDD가 적은 세 이름 그대로 |
-| 후보 부족 | **더미 문양으로 메운다** | 사용자 판정. **더미인 게 보여야 한다** |
-| 레벨업 빈도 | **한 런에 3번** | 구역마다 한 번꼴. 대충값 |
-| 영구 재화 | **보스만 준다** | 2026-08-08 확정. 나머지는 돈·경험치뿐 |
-| 돈 | **스테이지를 넘어갈 때 상점** | **맵 안에 안 들어간다** |
+| What a level does | **Three-pick only** | One path to getting stronger, easy to read |
+| Three-pick timing | **Opened by key. The world doesn't stop** | Exactly the GDD. Same discipline as the assembly window |
+| After picking | **Layer chosen right there. No stash** | A game about growing one circle doesn't create a place to defer |
+| Declining | **You can decline all three** | With no inventory, full layers force a push-out; without declining the three-pick is a punishment |
+| Dice | **Decline and reroll. A permanent unlock** | Infinite rerolls erase "what you don't take" |
+| Duplicates | **The same rarity never appears** | No dead slots |
+| Rarity | **Three tiers — common · rare · unique** | Exactly the three names in the GDD |
+| Not enough candidates | **Fill with dummy glyphs** | User decision. **Being a dummy must be visible** |
+| Level-up frequency | **Three per run** | About once per zone. A rough number |
+| Permanent currency | **Bosses only** | Settled. Everything else is money and XP |
+| Money | **The shop at the stage transition** | **It does not go on the map** |

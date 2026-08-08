@@ -1,6 +1,7 @@
-# 스테이지1 맵 구성 — 농장, 구역 셋과 잠긴 넷째
+# Stage 1 map layout — a farm, three zones and a locked fourth
 
-**상태**: done — **맵 구현은 끝났다.** 400×48이 구워져 게임에 들어가 있다 (2026-08-08 밤)
+**Status**: done — **the map is built.** 400×48 is baked and in the game
+**Why you'd reopen**: only when redrawing stage 1's terrain. Bosses are `1.ready/stage1-bosses.md`, the water escape is `2.active/water-jump-and-escape.md`.
 
  **done은 「구현이 끝났다」이지 「판정이 통과했다」가 아니다**(CLAUDE.md). **열린 것이 셋이다:**
 
@@ -59,7 +60,7 @@ net_water: 붓는 동안 활성 청크가 상한(100) 아래에 머문다 (최�
  **그리고 셋이 남아 있다:**
 - **①·③은 여전히 빈 방** — 보스 몬스터가 코드에 없다(→ `1.ready/stage1-bosses.md`)
 - **④가 안 보인 것은 배경이 없어서였다.**  배경 레이어가 2026-08-08에 섰다
-  (`docs/design/배경.md`) ⇒ **판정 3을 다시 봐야 한다**
+  (`docs/design/background.md`) ⇒ **판정 3을 다시 봐야 한다**
 - **판정 4를 고치려고 ④와 발판을 가로로 겹쳤다** — 그 뒤로 화면 확인을 안 했다
 
 ~~① 구덩이의 경사로는 임시다~~ — **그날 밤에 뺐다.** 머리의 「기반암 그릇」이 맞다.
@@ -70,7 +71,7 @@ net_water: 붓는 동안 활성 청크가 상한(100) 아래에 머문다 (최�
 [water-jump-and-escape.md](../2.active/water-jump-and-escape.md)
 
  **기준 문서**: `docs/GDD.md` 「스테이지의 틀」·「스테이지 안 — 구역 루프」 ·
-`docs/design/지형-굽기.md`(그리는 방법) · `docs/design/몬스터.md`(잡몹 값)
+`docs/design/terrain-baking.md`(그리는 방법) · `docs/design/monsters.md`(잡몹 값)
 
 ---
 
@@ -250,7 +251,7 @@ GDD가 못박은 **「중간보스 보상이 진행의 열쇠」가 통째로 �
 
 | 무엇 | 어떻게 |
 |---|---|
-| **굽기 파이프라인** | `docs/design/지형-굽기.md` 그대로. 에디터에서 그리고 `bake_terrain_editor.gd` 로 굽는다 |
+| **굽기 파이프라인** | `docs/design/terrain-baking.md` 그대로. 에디터에서 그리고 `bake_terrain_editor.gd` 로 굽는다 |
 | **왕복(클로드가 찍기)** | `paint_terrain_from_map.gd` 로 ASCII를 심을 수 있다. **값으로만 쟀고 사용자가 눈으로 본 적이 없다** — 이 맵이 그 첫 판정이 된다 |
 | **그물** | `net_tables._stage_map`·`_wood_clumps` 가 **구운 결과를 직접 잰다.** 맵을 바꾸면 이 둘이 같이 움직인다 |
 | **크기 변경** |  `MAP_W`·`MAP_H` 는 `get_used_rect()` 파생이라 손으로 안 맞춘다. **그린 만큼이 곧 맵이다** |

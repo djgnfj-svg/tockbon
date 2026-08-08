@@ -1,133 +1,133 @@
-# 탄 속도 — 그림을 볼 시간을 준다
+# Bolt speed — give the art time to be seen
 
-**상태**: ready
-**한 줄**: 탄이 프레임당 26.6px 씩 건너뛴다. 16px 그림을 그려 놓고 **볼 새가 없다.**
-속도를 내려 그림이 보이게 하되, 얼마나 내릴지는 **화면을 봐야 정해진다.**
+**Status**: ready
+**One line**: bolts skip 26.6px per frame. A 16px sprite was drawn and **there is no chance to see it.**
+Lower the speed so the art shows — but how far is **decided on screen.**
 
-**앞 문서**: [../3.done/bolt-head-sprite.md](../3.done/bolt-head-sprite.md) — 머리를 그림으로 바꾼 작업.
-그 문서가 **「탄 속도」를 「나중에, 화면 보면서」로 미뤘고**(2026-08-07, 사용자 판정) 그것이 여기다.
+**Preceding doc**: [../3.done/bolt-head-sprite.md](../3.done/bolt-head-sprite.md) — replacing the head with art.
+That doc **deferred "bolt speed" to "later, while looking at the screen"** (user decision), and this is that.
 
-**이 문서 하나만 화면을 요구한다.** 앞 문서가 남긴 나머지는 2026-08-08에 헤드리스로 다 쟀다.
-
----
-
-## 왜 — 근거가 바뀌었다
-
-**한동안 근거가 「사거리가 화면 밖」이었다. 실측으로 뒤집혔다** (2026-08-08).
-
-```
-                 수평 발사        45도 위로
- gen0(speed 20)   53셀 6.6타일    193셀 24.1타일
- gen1(speed 12)   32셀 4.0타일    102셀 12.8타일
-                                  ↑ 화면 폭 30타일 안이다
-```
-
-**`sim_tuning` 의 320셀(40타일)은 「중력이 없다면」의 값**이었다. 지면 발사는 **4틱 만에 땅**이라
-거기 못 닿는다. ⇒ **「폭발이 화면 밖에서 터진다」(GDD 「알고 가는 대가」 5번)는 평지에서는 안 난다.**
-**절벽 위에서 쏘면 더 난다** — 낙하 시간만큼이다. 위 값은 평지 기준이고 **절벽은 안 쟀다.**
-
-**⇒ 남은 진짜 근거는 가시성 하나다:**
-
-```
-프레임당 이동 = speed × 4px × 20Hz ÷ 60fps = speed × 1.33px
-speed 20  →  26.6px/프레임      그림은 16px    ⇒ 겹치지 않고 건너뛴다
-speed 12  →  16.0px/프레임      그림과 같다     ⇒ 딱 이어진다
-```
-
-**그림을 그린 값어치가 여기서 새어 나간다.** 16px 짜리를 정성껏 뽑아 놓고
-**한 프레임에 자기 몸 길이보다 멀리** 가면, 플레이어가 보는 것은 그림이 아니라 자취뿐이다.
+**This doc alone requires the screen.** Everything else the preceding doc left was measured headless.
 
 ---
 
-## 하한이 있다 — speed 12
+## Why — the argument changed
 
-앞 문서의 실측이다:
-
-> **`speed` 를 12 아래로 내리면 「꼬리는 코드가 그린다」는 근거가 뒤집힌다** —
-> 그때는 그림 꼬리가 화면에 보이기 시작하므로 꼬리를 그림에 넣는 쪽이 다시 후보가 된다.
-
-꼬리 있는 원본(32×16)이 `tools/pixel/out/` 에 있지만 **gitignore 라 사라진다** —
-`docs/design/진-룬-문양.md` 의 시드 표로 다시 뽑아야 한다.
-
-**그리고 세대1이 이미 12다.** 세대0을 12로 만들면 `net_tables` 의
-「세대마다 반드시 줄어야 한다」가 **빨개진다** — 세대0을 내리면 **세대1도 같이 내려야 한다.**
+**For a while the argument was "range goes off screen". Measurement overturned it.**
 
 ```
-지금        gen0 20 · gen1 12      비 5:3
-후보        gen0 14 · gen1 8       비 7:4, 프레임당 18.6px · 10.6px
-후보        gen0 12 · gen1 8       비 3:2, 프레임당 16.0px · 10.6px  ← 하한에 딱 닿는다
+                 horizontal      45° upward
+ gen0(speed 20)   53 cells 6.6 tiles    193 cells 24.1 tiles
+ gen1(speed 12)   32 cells 4.0 tiles    102 cells 12.8 tiles
+                                        ↑ within the 30-tile screen width
 ```
 
-**`rd`·`ignite_r`·`rune_r`·`carve_r` 는 안 건드린다** — 사거리와 다른 축이고,
-`net_tables` 가 `carve_r < rune_r` 같은 부등식을 이미 재고 있다.
+**`sim_tuning`'s 320 cells (40 tiles) was a "if there were no gravity" value.** A ground-level shot **hits dirt in 4 ticks**
+and never reaches it. ⇒ **"Blasts go off screen" (GDD "prices paid knowingly" #5) does not happen on flat ground.**
+**Firing from a cliff makes it worse** — by the fall time. The values above are flat-ground and **cliffs were not measured.**
+
+**⇒ The one real argument left is visibility:**
+
+```
+movement per frame = speed × 4px × 20Hz ÷ 60fps = speed × 1.33px
+speed 20  →  26.6px/frame      the art is 16px    ⇒ it skips without overlapping
+speed 12  →  16.0px/frame      same as the art     ⇒ exactly continuous
+```
+
+**The value of drawing the art leaks out here.** Carefully generate a 16px sprite and then move it
+**farther than its own body length in one frame**, and what the player sees is the trail, not the art.
 
 ---
 
-## 같이 움직이는 것 — 안 보면 조용히 틀린다
+## There is a floor — speed 12
 
-| 무엇 | 어떻게 |
+From the preceding doc's measurement:
+
+> **Drop `speed` below 12 and "the tail is drawn in code" is overturned** —
+> the painted tail starts being visible on screen, so putting the tail in the art becomes a candidate again.
+
+The originals with tails (32×16) are in `tools/pixel/out/` but **gitignored, so they disappear** —
+regenerate from the seed table in `docs/design/circle-rune-glyph.md`.
+
+**And generation 1 is already 12.** Make generation 0 twelve and `net_tables`' "it must decrease every generation"
+**goes red** — lowering gen 0 means **lowering gen 1 with it.**
+
+```
+now         gen0 20 · gen1 12      ratio 5:3
+candidate   gen0 14 · gen1 8       ratio 7:4, 18.6px · 10.6px per frame
+candidate   gen0 12 · gen1 8       ratio 3:2, 16.0px · 10.6px per frame  ← exactly at the floor
+```
+
+**Don't touch `rd` · `ignite_r` · `rune_r` · `carve_r`** — a different axis from range, and
+`net_tables` already measures inequalities like `carve_r < rune_r`.
+
+---
+
+## What moves with it — unseen, it goes silently wrong
+
+| What | How |
 |---|---|
-| **수평 사거리** | **speed 에 선형**(실측 0.604 vs 0.600). speed 14면 지금의 0.7배 |
-| **45도 사거리** | **비선형**(0.528). 초기 vy 도 줄어 체공이 짧아진다 ⇒ **더 많이 준다** |
-| **자취 길이** | `trail_ticks` 12틱 × speed. speed 20의 960px 이 12면 576px |
-| **중력** | **안 내려도 된다.** 항력 지배라 사거리가 v² 가 아니라 v 에 비례한다 |
+| **Horizontal range** | **Linear in speed** (measured 0.604 vs 0.600). At speed 14 it is 0.7× current |
+| **45° range** | **Non-linear** (0.528). Initial vy drops too, shortening airtime ⇒ **it gives more** |
+| **Trail length** | `trail_ticks` 12 ticks × speed. speed 20's 960px becomes 576px at 12 |
+| **Gravity** | **Doesn't need lowering.** Drag-dominated, so range is proportional to v, not v² |
 
-**마지막 줄이 앞 문서와 다르다.** 앞 문서는 「사거리가 제곱으로 준다(v²/g)」로 적고
-**「중력을 같이 안 내리면 조용히 틀린다」**고 경고했는데, 그건 **항력이 없는 포물선의 공식**이다.
-다만 **궤적의 모양은 굽는다** — 같은 시간에 덜 가는데 중력은 그대로라 더 빨리 처진다.
-**사거리가 아니라 손맛의 문제**이고, 그래서 화면을 봐야 한다.
+**The last row differs from the preceding doc.** That doc wrote "range falls as a square (v²/g)" and warned
+**"not lowering gravity with it goes silently wrong"** — but that is **the formula for a drag-free parabola.**
+**The shape of the trajectory does bend**, though — it covers less in the same time while gravity is unchanged, so it droops sooner.
+**A feel problem, not a range problem**, which is why the screen is needed.
 
 ---
 
-## 판정 — 무엇을 봐야 끝났다고 하나
+## Acceptance — what must be seen to call it done
 
-**전부 화면이다. 헤드리스로 잴 수 있는 것은 이 문서에 남지 않았다.**
+**All of it is the screen. Nothing measurable headless remains in this doc.**
 
-1. **탄 머리 그림이 날아가는 동안 보이나** — 지금은 자취만 보일 수 있다
-2. **느려서 답답하지 않나** — **1번과 정면으로 다툰다.** 이 둘의 균형이 이 작업의 전부다
-3. **궤적이 「호를 그린다」로 읽히나** — 더 굽는다. 「힘이 없다」로 읽히면 실패다
-4. **사거리가 답답하지 않나** — 45도에서 24.1 → (speed 12면) 12.8타일. 화면 폭의 절반이 안 된다
-5. **자취가 짧아진 것이 어색하지 않나**
+1. **Is the bolt head's art visible in flight** — currently only the trail may be
+2. **Is it sluggish** — **directly at odds with #1.** Balancing those two is the whole of this work
+3. **Does the trajectory read as "an arc"** — it bends more. Reading as "no power" is a failure
+4. **Is the range frustrating** — at 45°, 24.1 → 12.8 tiles (at speed 12). Less than half the screen width
+5. **Is the shortened trail awkward**
 
-**1번과 4번이 반대 방향이라 한 값으로 둘 다 만족 못 할 수 있다.**
-그때는 **`trail_ticks` 를 늘려 자취로 보완**하는 길이 있다 — 속도와 다른 손잡이다.
+**#1 and #4 pull opposite ways, so one value may not satisfy both.**
+Then there is the path of **lengthening `trail_ticks` to compensate with the trail** — a different knob from speed.
 
-### 화면을 켜는 김에 같이 볼 것 — **무 탄만 머리와 자취의 색이 다르다**
+### While the screen is up, look at this too — only the none bolt's head and trail disagree in color
 
 ```
-        머리 그림(평균)          코드가 그리는 glow
- 불     (0.98, 0.69, 0.08)      (1.00, 0.48, 0.12)   맞는다
- 무     (0.59, 0.60, 0.60) 회색  (0.55, 0.35, 1.00) **보라**   어긋난다
- 물     (0.08, 0.67, 0.99)      (0.20, 0.62, 0.95)   맞는다
+        head art (mean)          glow drawn in code
+ fire   (0.98, 0.69, 0.08)      (1.00, 0.48, 0.12)   agrees
+ none   (0.59, 0.60, 0.60) grey (0.55, 0.35, 1.00) **purple**   disagrees
+ water  (0.08, 0.67, 0.99)      (0.20, 0.62, 0.95)   agrees
 ```
 
-자취가 `core` 대신 `glow` 를 쓰게 된 2026-08-08 변경에서 생겼다(앞 문서 「결과 (3)」).
-**「보라 꼬리에 회색 머리」가 어떻게 읽히는지 아무도 안 봤다.**
-**속도와 같은 화면에서 보인다** — 따로 띄울 이유가 없다.
+It appeared in the change that made the trail use `glow` instead of `core` (preceding doc, "Result (3)").
+**Nobody has looked at how "a purple tail with a grey head" reads.**
+**It shows on the same screen as speed** — no reason to launch separately.
 
-그리고 **무의 채도가 0.03**이라 「못 쏜다」의 회색과 색축이 겹치는 문제(`진-룬-문양.md`
-「알고 깨는 계약」)도 같은 화면에서 처음으로 눈에 보인다.
-
----
-
-## 이 문서가 왜 아직 안 열렸나 — 화면을 못 띄웠다 (2026-08-08)
-
-**두 번 시도했고 두 번 다 멈췄다. 둘 다 사용자가 컴퓨터를 쓰고 있어서다.**
-
-1. 「지금 다른 데서 쓰고 있어서 헤드리스로 해야 될 거야」 ⇒ 헤드리스로 갈 수 있는 것만 쟀다
-2. 브리지를 잡으려다 **어제 세션의 `godot-mcp` 가 물고 있는 것**을 발견했다.
-   사용자 허락을 받아 껐더니 **이 세션의 MCP 서버까지 같이 끊겨 `godot_*` 도구가 사라졌다.**
-   그 사이 사용자가 「딴 거 하는 애가 써야 돼」 ⇒ **게임 창을 안 띄우고 멈췄다.**
-
-**「멈춰서 못 했다」가 「사용자 입력을 뺏어서 했다」보다 낫다**(CLAUDE.md). 그래서 멈췄고,
-**못 본 것을 못 봤다고 여기 적어 둔다.**
-
-**다음에 열 때 브리지가 필요 없을 수도 있다** — 게임이 스스로
-`get_viewport().get_texture().get_image().save_png()` 하면 된다. **창은 여전히 뜬다**(포커스를 뺏는다).
+And **none's saturation is 0.03**, so the problem of sharing a color axis with "can't fire" grey
+(`circle-rune-glyph.md`, "a contract broken knowingly") also becomes visible for the first time on that same screen.
 
 ---
 
-## 미정
+## Why this doc hasn't opened yet — the screen couldn't be launched
 
-- **절벽 위에서 쏠 때의 사거리** — 안 쟀다. 평지만 쟀고, 스테이지1은 고저차가 있다
-- **세대2 이상** — 표가 두 줄뿐이다(`SPLIT_MAX = 1` 이라 지금은 못 나온다)
+**Tried twice, stopped twice. Both times because the user was using the computer.**
+
+1. "I'm using it for something else right now, so you'll have to go headless" ⇒ only what headless allows was measured
+2. Trying to grab the bridge, **yesterday's session's `godot-mcp` was found holding it.**
+   Killing it with the user's permission **cut this session's MCP server too and the `godot_*` tools vanished.**
+   Meanwhile the user said "the other thing needs it" ⇒ **stopped without launching the game window.**
+
+**"Stopped, couldn't do it" beats "did it by taking the user's input"** (CLAUDE.md). So it stopped,
+**and what wasn't seen is recorded here as not seen.**
+
+**The bridge may not be needed next time** — the game can call
+`get_viewport().get_texture().get_image().save_png()` itself. **The window still appears** (it steals focus).
+
+---
+
+## TBD
+
+- **Range when firing from a cliff** — not measured. Only flat ground was, and stage 1 has elevation
+- **Generation 2 and up** — the table has two rows (`SPLIT_MAX = 1`, so it can't happen yet)

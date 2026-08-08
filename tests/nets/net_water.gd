@@ -1,19 +1,19 @@
 extends RefCounted
-## 물과 청크 재우기. 🔴🔴 **물의 실패는 전부 조용하다** — 그래서 여기는 짖음이 아니라 **값**을 잰다.
+## Water and chunk sleep. **Every water failure is silent** — so what is measured here is **values**, not barks.
 ##
-## ⚠ **지금 여기 있는 것은 단계 1(청크 재우기)과 단계 2(아래로 떨어진다)다.**
-##  좌우 나눔도 젖음도 물 룬도 아직 없다. 기획이 단계를 가른 이유가 이것이다: 청크가 잘못 서면
-##  물도 같이 틀리고 **어느 쪽이 원인인지 못 가른다**
-##  (`docs/plans/2.active/water-and-chunk-sleep.md` 「만드는 순서」).
+## **What lives here is stage 1 (chunk sleep) and stage 2 (it falls downward).**
+##  There is no left-right sharing, no wetness, no water rune yet. This is why the design split the stages:
+##  if the chunks stand wrong the water is wrong with them and **you cannot tell which of the two is the cause**
+##  (`docs/plans/2.active/water-and-chunk-sleep.md`, "build order").
 ##
-## 🔴 **「안 움직인다」로는 아무것도 못 잰다.** v1은 물이 멈춘 것처럼 보이는데 안 멈추고 있었다.
-##  ⇒ 여기서 재는 것은 전부 `active_chunk_count()` · `chunk_awake_at()` 같은 **숫자**다.
+## **"It doesn't move" measures nothing.** In v1 the water looked stopped and was not stopping.
+##  => Everything measured here is a **number** — `active_chunk_count()`, `chunk_awake_at()` and the like.
 
 const CellGrid := preload("res://src/sim/cell_grid.gd")
 const Mat := preload("res://src/sim/cell_materials.gd")
 const Tuning := preload("res://src/sim/sim_tuning.gd")
-## 🔴 **단계 7(K, 물비)은 `net_water_rain.gd`로 옮겨갔다**(2026-08-08, harness-manager —
-##  그 파일 머리 주석에 이유가 있다). `Stage`·`WaterSource`는 그 검사들만 썼으므로 여기서 지웠다.
+## **Stage 7 (K, water rain) moved out to `net_water_rain.gd`** (harness-manager did it — the reason is in
+##  that file's head comment). `Stage` and `WaterSource` were used by those checks only, so they were deleted here.
 
 
 func run(t) -> void:
@@ -26,7 +26,7 @@ func run(t) -> void:
 	_flip_is_at_tick_start(t)
 	_reset_clears_chunks(t)
 	_band_summary_matches_scan(t)
-	# ── 단계 2 ──
+	# -- stage 2 --
 	_water_material_derives_its_rules(t)
 	_water_door_refuses_bad_targets(t)
 	_write_cell_wipes_water(t)
@@ -39,7 +39,7 @@ func run(t) -> void:
 	_water_moves_mark_the_screen_dirty(t)
 	_bottom_row_water_is_safe(t)
 	_front_has_no_unburnable(t)
-	# ── 단계 3 ──
+	# -- stage 3 --
 	_water_lies_flat(t)
 	_min_diff_stops_the_shuffling(t)
 	_column_edge_wakes_the_neighbour(t)
@@ -49,27 +49,27 @@ func run(t) -> void:
 	_tick_cap_delays_but_never_drops(t)
 	_same_commands_give_the_same_grid(t)
 	_sleeping_grid_is_cheap(t)
-	# ── 단계 4 ──
+	# -- stage 4 --
 	_shallow_bit_tracks_the_amount(t)
-	# ── 단계 5 ──
+	# -- stage 5 --
 	_water_disc_fills_without_wiping(t)
 	_water_rune_makes_water(t)
-	# ── 단계 6 ──
+	# -- stage 6 --
 	_water_puts_out_fire(t)
 	_no_water_means_no_rescue(t)
 	_wet_neighbour_never_catches(t)
 	_fire_beside_water_does_not_flicker(t)
 	_no_cell_carries_both_bits(t)
 	_shallow_water_does_not_put_out_fire(t)
-	# ── 단계 7 (K, 물비)은 `net_water_rain.gd`에 있다 ──
-	# 🔴 **2026-08-08, harness-manager가 옮겼다.** 여기 있을 때 이 그물이 21초 → 48.5초였다
-	#  (다섯 검사만으로 35.7초). `run_nets.ps1`이 `net_*.gd` 파일마다 별도 프로세스로 돌므로
-	#  옮기면 그 다섯이 여기 나머지와 **동시에** 돈다 — 비용을 지운 게 아니라 프로세스를 갈랐다.
+	# -- stage 7 (K, water rain) lives in `net_water_rain.gd` --
+	# **harness-manager moved it.** With it here this net went 21s -> 48.5s
+	#  (35.7s from those five checks alone). `run_nets.ps1` runs a separate process per `net_*.gd` file,
+	#  so moving them makes those five run **concurrently** with the rest — the cost wasn't erased, the process was split.
 
 
-## 🔴 격자와 청크가 안 나눠떨어지면 가장자리 셀이 **범위 밖 청크를 찍는다.**
-##  `_init()` 이 짖게 해 뒀지만, 짖음에 기대지 않고 여기서 값으로 잰다
-##  (CLAUDE.md 「짖음에 기대지 마라 — 흔적을 값으로 남겨서 재라」).
+## If the grid and the chunks don't divide evenly, edge cells **index an out-of-range chunk.**
+##  `_init()` is set up to bark about it, but this doesn't lean on the bark and measures it as a value here
+##  (CLAUDE.md, "don't lean on the bark — leave a trace as a value and measure it").
 func _chunk_geometry(t) -> void:
 	t.eq(CellGrid.W % Tuning.CHUNK_CELLS, 0, "W가 청크 한 변으로 나눠떨어진다")
 	t.eq(CellGrid.H % Tuning.CHUNK_CELLS, 0, "H가 청크 한 변으로 나눠떨어진다")
@@ -77,8 +77,8 @@ func _chunk_geometry(t) -> void:
 	t.eq(CellGrid.CHUNK_H * Tuning.CHUNK_CELLS, CellGrid.H, "밴드 수 × 한 변 = H")
 	t.eq(CellGrid.CHUNK_COUNT, CellGrid.CHUNK_W * CellGrid.CHUNK_H, "청크 수가 두 축의 곱이다")
 
-	# 🔴 **마지막 셀이 마지막 청크에 들어가야 한다.** 잘림이 있으면 여기가 범위를 넘는다 —
-	#  `chunk_awake_at` 이 그 인덱스를 실제로 읽으므로 넘으면 엔진이 짖는다(= 침묵사가 아니다).
+	# **The last cell must land in the last chunk.** If there is truncation this goes out of range —
+	#  `chunk_awake_at` actually reads that index, so going out makes the engine bark (= not a silent death).
 	var g := CellGrid.new()
 	t.ok(not g.chunk_awake_at(CellGrid.W - 1, CellGrid.H - 1),
 		"격자 마지막 셀의 청크를 읽어도 범위를 안 넘는다")
@@ -86,9 +86,9 @@ func _chunk_geometry(t) -> void:
 	t.ok(not g.chunk_awake_at(0, CellGrid.H), "격자 밖은 안 깨어 있다 (아래)")
 
 
-## 🔴🔴 **이 그물의 바닥이다.** 아무도 안 건드린 격자가 스스로 깨어나면 청크 재우기는
-##  통째로 무효이고, 그 위에 얹는 물의 판정이 전부 거짓말이 된다.
-## ⚠ **한 틱으로는 못 잰다** — `_chunk_flip` 이 잘못 서 있어도 첫 틱은 우연히 0일 수 있다.
+## **This is the floor of this net.** If a grid nobody touched wakes on its own, chunk sleep is
+##  void as a whole, and every water acceptance stacked on top of it becomes a lie.
+## **One tick cannot measure it** — even with `_chunk_flip` standing wrong, the first tick can be 0 by luck.
 func _empty_grid_never_wakes(t) -> void:
 	var g := CellGrid.new()
 	t.eq(g.active_chunk_count(), 0, "갓 만든 격자는 활성 청크가 0이다")
@@ -98,18 +98,18 @@ func _empty_grid_never_wakes(t) -> void:
 	t.eq(g.get_tick(), 20, "그동안 틱은 실제로 돌았다")
 
 
-## 🔴🔴 **폭발이 청크를 깨우나.** 안 깨우면 「뚫은 그릇에서 물이 안 샌다」이고
-##  원인은 물이 아니라 폭발 쪽에 있다 — 화면에서는 「물이 고장 났다」로만 보인다.
+## **Does a blast wake a chunk.** If it doesn't you get "the bowl you punched doesn't leak",
+##  and the cause is on the blast side, not the water — on screen it only looks like "the water is broken".
 ##
-## ⚠ **`step()` 을 한 번 돌린 뒤에 봐야 한다.** 커맨드는 `_dirty` 를 찍고, 그게 `awake` 가 되는
-##  자리는 `_chunk_flip()` 이다. 🔴 **그 flip이 틱 끝에 있으면 여기가 빨개진다** — 폭발은
-##  `spell_sim.step()` 안에서 격자를 부르므로 flip이 뒤에 있으면 찍힌 dirty가 그 자리에서 지워진다.
+## **You have to look after running `step()` once.** A command marks `_dirty`, and the place that turns
+##  it into `awake` is `_chunk_flip()`. **If that flip sits at the end of the tick this goes red** — a blast
+##  calls the grid inside `spell_sim.step()`, so with the flip behind, the dirty just marked is erased on the spot.
 func _blast_wakes_chunk(t) -> void:
 	var g := CellGrid.new()
 	g.apply(CellGrid.cmd_fill(0, 0, 511, 511, Mat.STONE))
-	# 지형을 깔면 깨어난다 — 먼저 **완전히 재운다.** 그래야 아래 깨움이 폭발 때문인 게 확실하다.
-	# ⚠ **두 틱으로는 안 된다.** 1,024청크가 깨는데 한 틱 상한이 512라 **밀린다**(단계 3).
-	#  그걸 모르고 두 틱으로 두면 이 검사가 「깨어 있다」를 폭발 탓으로 오해한다.
+	# Laying terrain wakes chunks — **put it fully to sleep first.** Then the wake below is certainly the blast's.
+	# **Two ticks are not enough.** 1,024 chunks wake but the per-tick cap is 512, so they **back up** (stage 3).
+	#  Not knowing that and leaving it at two ticks makes this check mistake "it is awake" for the blast's doing.
 	var calm := _settle(g, 200)
 	t.ok(calm > 1 and calm < 200, "지형이 결국 다 잠든다 (%d틱 — 상한에 밀린 만큼 걸린다)" % calm)
 	t.eq(g.active_chunk_count(), 0, "완전히 잠들었다")
@@ -119,12 +119,12 @@ func _blast_wakes_chunk(t) -> void:
 	t.ok(g.chunk_awake_at(200, 200), "폭발 자리의 청크가 깨어난다")
 	t.ok(g.active_chunk_count() > 0, "활성 청크가 0이 아니다 (%d개)" % g.active_chunk_count())
 
-	# 🔴 **먼 곳은 안 깨어난다.** 「전부 깨운다」로 통과하면 이 그물은 아무것도 안 재는 것이다.
+	# **Far away it does not wake.** If it passes by "wake everything", this net measures nothing.
 	t.ok(not g.chunk_awake_at(2000, 800), "폭발과 먼 청크는 안 깨어난다")
 
 
-## 🔴🔴 **깨운 다음 틱에 다시 잠드나.** 안 잠들면 청크 재우기가 「전부 깨어 있다」로 퇴화하고,
-##  그건 **아무도 안 짖는다** — 그냥 예산의 12%가 사라질 뿐이다.
+## **Does a woken chunk go back to sleep the next tick.** If it doesn't, chunk sleep degenerates into
+##  "everything is awake", and **nobody barks about that** — 12% of the budget simply disappears.
 func _woken_chunk_sleeps_next_tick(t) -> void:
 	var g := CellGrid.new()
 	g.apply(CellGrid.cmd_fill(100, 100, 140, 140, Mat.WOOD))
@@ -133,52 +133,52 @@ func _woken_chunk_sleeps_next_tick(t) -> void:
 	var woke := g.active_chunk_count()
 	t.ok(woke > 0, "채우기가 청크를 깨웠다 (%d개)" % woke)
 
-	# 🔴 아무도 안 움직였으므로 dirty가 비어 있어야 하고, flip이 그걸 그대로 넘긴다.
+	# Nobody moved, so dirty must be empty, and the flip carries that through as is.
 	g.step()
 	t.ok(not g.chunk_awake_at(120, 120), "아무 일도 안 일어난 청크는 한 틱 뒤 잠든다")
 	t.eq(g.active_chunk_count(), 0, "한 틱 뒤 활성 청크가 0이다")
 
 
-## 🔴 **깬 청크 수가 지형이 덮은 청크 수와 정확히 같은가.** 「0보다 크다」로는 못 잰다 —
-##  `_touch` 가 청크 인덱스를 잘못 계산해도 그건 통과한다.
-## ⚠ 그래서 **청크 격자에 딱 맞춘 사각형**을 쓴다. 계산이 한 칸이라도 밀리면 수가 안 맞는다.
+## **Is the number of woken chunks exactly the number the terrain covers.** "Greater than 0" can't measure it —
+##  `_touch` computing the chunk index wrong passes that too.
+## That is why a **rectangle aligned exactly to the chunk grid** is used. Off by one cell and the count doesn't match.
 func _fill_wakes_exactly_the_covered_chunks(t) -> void:
 	var cc := Tuning.CHUNK_CELLS
 	var g := CellGrid.new()
-	# 청크 (2..5, 밴드 3..6) = 4 × 4 = 16개를 정확히 덮는다.
+	# Chunks (2..5, bands 3..6) = 4 x 4 = 16, covered exactly.
 	g.apply(CellGrid.cmd_fill(2 * cc, 3 * cc, 6 * cc - 1, 7 * cc - 1, Mat.STONE))
 	g.step()
-	# 🔴🔴 **16이 아니라 28이다** — `_touch` 가 **물이 흘러들 수 있는 이웃 청크도 깨우기 때문이다**
-	#  (청크 경계의 「보이지 않는 벽」 고침). 덮은 16 + 위 4밴드 + 좌 4밴드 + 우 4밴드 = 28.
-	#  ⚠ 16으로 돌아가면 고침이 통째로 사라진 것이고, 20이면 **좌우만 사라진 것**이다(단계 3).
+	# **It is 28, not 16** — because `_touch` **also wakes the neighbouring chunks water can flow in from**
+	#  (the "invisible wall" fix at chunk boundaries). Covered 16 + 4 bands above + 4 bands left + 4 bands right = 28.
+	#  Back to 16 means the fix vanished whole; 20 means **only the left-right part vanished** (stage 3).
 	t.eq(g.active_chunk_count(), 28, "덮은 16청크 + 위·좌·우 이웃 12청크 = 28이 깨어난다")
 	t.ok(g.chunk_awake_at(2 * cc, 3 * cc), "왼쪽 위 모서리 청크가 깨어 있다")
 	t.ok(g.chunk_awake_at(6 * cc - 1, 7 * cc - 1), "오른쪽 아래 모서리 청크가 깨어 있다")
 	t.ok(g.chunk_awake_at(2 * cc, 3 * cc - 1), "바로 위 청크가 깨어 있다 (물이 위에서 흘러든다)")
 
-	# 🔴🔴 **좁게 깨우는 것이 결정이다.** 8이웃을 다 찍으면 아래·좌우도 깨어 있을 것이고,
-	#  깨어 있는 밴드 하나가 128μs라 그 값이 그대로 예산이 된다(verify-run 실측).
-	#  ⇒ **물이 흘러들 수 있는 방향(위)만** 깨운다.
+	# **Waking narrowly is a decision.** Marking all 8 neighbours would leave below and both sides awake too,
+	#  and one awake band is 128us, so that value becomes the budget directly (verify-run measured).
+	#  => Only the direction water can flow in from (above) is woken.
 	t.ok(g.chunk_awake_at(2 * cc - 1, 3 * cc), "바로 왼쪽 청크가 깨어 있다 (물이 옆에서 흘러든다)")
 	t.ok(g.chunk_awake_at(6 * cc, 3 * cc), "바로 오른쪽 청크가 깨어 있다")
 	t.ok(not g.chunk_awake_at(2 * cc, 1 * cc), "두 밴드 위(밴드 1)는 안 깨어 있다 (한 칸만 번진다)")
 	t.ok(not g.chunk_awake_at(2 * cc, 7 * cc), "**아래** 청크는 안 깨어 있다 (물은 아래에서 안 온다)")
 	t.ok(not g.chunk_awake_at(0 * cc, 3 * cc), "두 청크 왼쪽(열 0)은 안 깨어 있다 (한 칸만 번진다)")
 
-	# 한 칸만 더 채우면 정확히 한 열이 더 깨어야 한다 — 인덱스가 밀리면 여기가 어긋난다.
+	# Filling one more cell must wake exactly one more column — if the index slips, this goes off.
 	var g2 := CellGrid.new()
 	g2.apply(CellGrid.cmd_fill(2 * cc, 3 * cc, 6 * cc, 7 * cc - 1, Mat.STONE))
 	g2.step()
 	t.eq(g2.active_chunk_count(), 29, "오른쪽으로 한 칸 넘치면 밴드 4개가 한 청크씩 더 깨어난다")
 
 
-## 🔴🔴 **점화는 청크를 안 찍는다 — 결정이지 사고가 아니다.**
-##  `_ignite_cell` 은 `_flag`·`_aux` 만 만지고 재료를 안 바꾼다. 불은 파면 목록이라 청크와
-##  독립이고(GDD), 점화 조건이 연료 > 0 이라 **물 칸(연료 0)에 원리적으로 못 닿는다.**
+## **Ignition does not touch chunks — a decision, not an accident.**
+##  `_ignite_cell` touches only `_flag` and `_aux` and never changes the material. Fire is a burn-slot list,
+##  so it is independent of chunks (GDD), and since ignition needs fuel > 0 it **cannot in principle reach a water cell (fuel 0).**
 ##
-## ⚠ **계획과 `_touch` 주석이 이걸 못 박아 놓고 아무도 안 쟀다.** 나중에 「불도 깨워야 하나」로
-##  누가 `_ignite_cell` 에 `_touch` 를 넣으면 **타는 나무 전체가 매 틱 청크를 깨운다** —
-##  고인 호수 옆 숲 하나가 예산을 먹는데 **에러도 화면 변화도 없다.**
+## **The plan and `_touch`'s comment nailed this down and nobody measured it.** If later, over "should fire wake
+##  chunks too", someone puts a `_touch` into `_ignite_cell`, **every burning wood cell wakes chunks every tick** —
+##  one forest beside a still lake eats the budget with **no error and no change on screen.**
 func _ignite_does_not_touch_chunks(t) -> void:
 	var g := CellGrid.new()
 	g.apply(CellGrid.cmd_fill(100, 100, 110, 100, Mat.WOOD))
@@ -189,27 +189,27 @@ func _ignite_does_not_touch_chunks(t) -> void:
 	t.ok(g.ignite(105, 100), "나무에 불이 붙는다 (검사의 전제 — 안 붙으면 아래가 헛돈다)")
 	g.step()
 	t.eq(g.active_chunk_count(), 0, "점화만으로는 청크가 안 깨어난다")
-	# 🔴 **타는 동안에도 안 깨운다.** 연료가 줄기만 하는 틱은 `_write_cell` 을 안 지난다.
+	# **It doesn't wake them while burning either.** A tick where only the fuel drops never passes `_write_cell`.
 	g.step()
 	g.step()
 	t.ok(g.burning_count() > 0, "아직 타는 중이다 (검사의 전제)")
 	t.eq(g.active_chunk_count(), 0, "타는 동안에도 청크가 안 깨어난다")
 
 
-## 🔴🔴 **`_chunk_flip()` 이 틱의 시작인가 — 이 그물에서 값이 제일 큰 검사다.**
+## **Is `_chunk_flip()` the start of the tick — the highest-value check in this net.**
 ##
-## ⚠ **틱 도중에 움직이는 것이 물뿐이라고 생각하기 쉽지만 틀렸다** — `_burn()` 이 `step()`
-##  **안에서** 다 탄 칸에 `_write_cell(EMPTY)` 를 부르고, 그게 `_touch` 를 탄다.
-##  ⇒ **물 없이도 flip 배치가 관측된다.**
+## **It is easy to think water is the only thing that moves mid-tick, and that is wrong** — `_burn()` calls
+##  `_write_cell(EMPTY)` on a burnt-out cell **inside** `step()`, and that rides `_touch`.
+##  => **The flip's placement is observable even with no water.**
 ##
-## 🔴 갈리는 자리가 정확히 여기다(실측):
-##    flip 앞(맞다) — 다 탄 그 틱: 활성 0 · 한 틱 더: 활성 1
-##    flip 뒤(틀렸다) — 다 탄 그 틱: **활성 1**
-##  ⚠ 이 검사가 없으면 flip을 끝으로 옮겨도 나머지가 **전부 초록**이고, 옮긴 사람이 그 초록을
-##   근거로 쓴다. 그때 대가는 「폭발로 뚫었는데 다음 틱에 안 샌다」이고 **에러가 안 난다.**
+## The split is exactly here (measured):
+##    flip in front (correct) — the tick it burns out: active 0 · one tick more: active 1
+##    flip behind (wrong)     — the tick it burns out: **active 1**
+## Without this check, moving the flip to the end leaves the rest **all green**, and whoever moved it uses
+##  that green as evidence. The price then is "punched it with a blast and it doesn't leak next tick", and **no error is raised.**
 func _flip_is_at_tick_start(t) -> void:
 	var g := CellGrid.new()
-	# 🔴 **한 칸이어야 한다.** 여러 칸이면 다 타는 틱이 갈려서 아래 0/1이 뭉개진다.
+	# **It must be a single cell.** With several, the burn-out ticks scatter and the 0/1 below is smeared.
 	g.apply(CellGrid.cmd_fill(100, 100, 100, 100, Mat.WOOD))
 	g.step()
 	g.step()
@@ -221,8 +221,8 @@ func _flip_is_at_tick_start(t) -> void:
 		g.step()
 		ticks += 1
 	t.eq(g.burning_count(), 0, "나무 한 칸이 다 탄다 (%d틱)" % ticks)
-	# 🔴 **`_write_cell` 이 실제로 돌았다는 증거.** 안 돌았으면 아래 0은 「아무 일도 없었다」라
-	#  같은 값이 나오고, 그러면 이 검사가 통째로 헛돈다.
+	# **Evidence that `_write_cell` actually ran.** If it didn't, the 0 below would come out the same as
+	#  "nothing happened at all", and then this check spins idle as a whole.
 	t.eq(g.mat_at(100, 100), Mat.EMPTY, "다 탄 자리가 빈칸이 됐다 (`_write_cell` 이 돌았다)")
 
 	t.eq(g.active_chunk_count(), 0, "다 탄 그 틱에는 아직 안 깨어 있다 (flip이 틱 시작이라는 증거)")
@@ -231,16 +231,16 @@ func _flip_is_at_tick_start(t) -> void:
 	t.ok(g.chunk_awake_at(100, 100), "깨어난 것이 다 탄 자리의 청크다")
 
 
-## 🔴 `_reset` 이 청크를 안 비우면 **새 무대가 옛 dirty 를 들고 태어난다** —
-##  `_burning` 과 똑같은 함정이고, `_reset` 은 `fill` 을 쓰므로 `_write_cell` 을 한 번도 안 지난다.
+## If `_reset` doesn't clear the chunks, **a new stage is born holding the old dirty** —
+##  the same trap as `_burning`, and `_reset` uses `fill`, so it never once passes `_write_cell`.
 ##
-## 🔴🔴 **awake 와 dirty 를 다른 검사로 잰다. 한 검사로 묶으면 절반이 헛돈다.**
-##  ⚠ **실측이다**(2026-08-07, 구현이 뒤집어 봤다): `_reset` 에서 `_dirty`·`_band_dirty` 지우는
-##   두 줄만 빼도 아래 ① 은 **초록**이었다 — ① 은 리셋 전에 `step()` 을 돌려서 dirty 가 이미
-##   비어 있었고, 그러니 「dirty 도 비었다」라는 라벨이 재는 것보다 넓었다.
-##   ⇒ ② 처럼 **찍힌 채로** 리셋해야 그 절반이 실제로 재진다(CLAUDE.md 「가짜 그물 금지」).
+## **awake and dirty are measured by different checks. Bundled into one, half of it spins idle.**
+##  **This is measured** (the implementation inverted it): dropping just the two lines in `_reset` that clear
+##   `_dirty` and `_band_dirty` still left (1) below **green** — (1) runs `step()` before the reset, so dirty
+##   was already empty, which made the label "dirty is empty too" wider than what it measured.
+##   => It has to be reset **while still marked**, like (2), for that half to actually be measured (CLAUDE.md, "no fake nets").
 func _reset_clears_chunks(t) -> void:
-	# ① awake 쪽 — 이미 깨어 있는 청크를 리셋이 재우나.
+	# (1) the awake side — does a reset put already-awake chunks back to sleep.
 	var g := CellGrid.new()
 	g.apply(CellGrid.cmd_fill(0, 0, 511, 511, Mat.STONE))
 	g.step()
@@ -248,15 +248,15 @@ func _reset_clears_chunks(t) -> void:
 
 	g.apply(CellGrid.cmd_reset())
 	t.eq(g.active_chunk_count(), 0, "리셋이 활성 청크를 0으로 만든다")
-	# 🔴 **밴드 요약도 같이 봐야 한다.** `_reset` 에서 `_band_awake.fill(0)` **한 줄만** 빼도
-	#  위 줄은 초록이다 — 요약은 `_awake` 와 다른 배열이라 서로를 안 고친다.
-	#  ⚠ 요약이 부푼 채 남으면 순회가 **텅 빈 밴드를 매 틱 훑는다**(느려질 뿐 안 짖는다).
+	# **The band summary has to be looked at too.** Dropping **just the one line** `_band_awake.fill(0)` from
+	#  `_reset` leaves the line above green — the summary is a different array from `_awake`, and neither fixes the other.
+	#  A summary left inflated makes the sweep **walk empty bands every tick** (it only gets slower, it doesn't bark).
 	t.eq(_band_sum(g), 0, "리셋 직후 밴드 요약 합도 0이다")
 	g.step()
 	t.eq(g.active_chunk_count(), 0, "리셋 뒤 한 틱을 돌려도 활성 청크가 0이다")
 
-	# ② dirty 쪽 — 🔴 **찍힌 채로 리셋한다.** flip 을 한 번도 안 지났으므로 옛 dirty 가
-	#  살아 있으면 리셋 다음 틱에 **새 무대가 그걸 그대로 깨운다.**
+	# (2) the dirty side — **reset while still marked.** Since a flip has never been passed, if the old dirty
+	#  survives, **the new stage wakes it straight up** on the tick after the reset.
 	var g2 := CellGrid.new()
 	g2.apply(CellGrid.cmd_fill(0, 0, 511, 511, Mat.STONE))
 	t.eq(g2.active_chunk_count(), 0, "채우기 직후는 아직 안 깨어 있다 (flip 전이다 — 이 검사의 전제)")
@@ -266,17 +266,17 @@ func _reset_clears_chunks(t) -> void:
 	t.eq(_band_sum(g2), 0, "그때 밴드 요약 합도 0이다 (밴드 쪽 dirty도 비웠다)")
 
 
-## 🔴🔴 **밴드 요약이 진짜인가.** `_band_awake` 는 `_touch` 가 증분으로 들고, 그 값이 낮으면
-##  순회가 **깨어 있는 밴드를 통째로 건너뛴다** — 물이 그 자리에 얼어붙고 에러는 0이다.
+## **Is the band summary real.** `_band_awake` is carried incrementally by `_touch`, and if that value is low
+##  the sweep **skips an awake band entirely** — the water freezes in place and there are zero errors.
 ##
-## ⚠ **없어도 격자는 정확히 돈다(느려질 뿐이다).** 그래서 이 값은 조용히 죽을 수 있고,
-##  그걸 잡는 유일한 길이 **독립 측정과 맞대는 것**이다(`claimed_slot_count` 와 같은 자리).
+## **The grid runs exactly right without it (it only gets slower).** So this value can die silently,
+##  and the only way to catch that is **butting it against an independent measurement** (the same spot as `claimed_slot_count`).
 func _band_summary_matches_scan(t) -> void:
 	var cc := Tuning.CHUNK_CELLS
 	var g := CellGrid.new()
 	t.eq(_band_sum(g), 0, "빈 격자의 밴드 요약 합이 0이다")
 
-	# 밴드 3에 청크 5개, 밴드 9에 청크 2개.
+	# 5 chunks in band 3, 2 chunks in band 9.
 	g.apply(CellGrid.cmd_fill(0, 3 * cc, 5 * cc - 1, 4 * cc - 1, Mat.STONE))
 	g.apply(CellGrid.cmd_fill(40 * cc, 9 * cc, 42 * cc - 1, 10 * cc - 1, Mat.WOOD))
 	g.step()
@@ -286,14 +286,14 @@ func _band_summary_matches_scan(t) -> void:
 		if g.band_awake_count(b) != g.scan_awake_in_band(b):
 			mismatched += 1
 	t.eq(mismatched, 0, "모든 밴드에서 요약과 직접 센 값이 같다")
-	# ⚠ 좌우 이웃까지 깨므로 덮은 수보다 크다 — 밴드 3은 청크 0..4 + 오른쪽 1 = 6
-	#  (왼쪽은 격자 끝이라 없다), 밴드 9는 청크 40·41 + 좌우 각 1 = 4.
+	# The left-right neighbours wake too, so it is more than the covered count — band 3 is chunks 0..4 + 1 on the right = 6
+	#  (there is nothing on the left, it is the grid edge), band 9 is chunks 40 and 41 + 1 on each side = 4.
 	t.eq(g.band_awake_count(3), 6, "밴드 3의 요약이 6이다 (덮은 5 + 오른쪽 이웃 1)")
 	t.eq(g.band_awake_count(9), 4, "밴드 9의 요약이 4다 (덮은 2 + 좌우 이웃 2)")
 	t.eq(_band_sum(g), g.active_chunk_count(), "밴드 요약의 합이 활성 청크 수와 같다")
 
-	# 🔴 **같은 청크를 여러 번 찍어도 요약이 안 부푼다.** `_touch` 의 중복 가드가 그 자리다 —
-	#  안 걸러지면 요약이 실제보다 커지고, 그건 「깨어 있다고 착각해서 도는」 쪽이라 안 짖는다.
+	# **Touching the same chunk several times doesn't inflate the summary.** `_touch`'s duplicate guard is that spot —
+	#  unfiltered, the summary grows past the truth, and that is the "thinks it is awake and runs" side, which doesn't bark.
 	var g2 := CellGrid.new()
 	for _i in 4:
 		g2.apply(CellGrid.cmd_fill(0, 0, cc - 1, cc - 1, Mat.STONE))
@@ -301,19 +301,19 @@ func _band_summary_matches_scan(t) -> void:
 	t.eq(g2.band_awake_count(0), 2, "한 청크를 네 번 채워도 밴드 요약이 안 부푼다 (덮은 1 + 오른쪽 1)")
 	t.eq(g2.active_chunk_count(), 2, "활성 청크도 2다")
 
-	# 잠들면 요약도 같이 0으로 돌아가야 한다 — flip이 요약을 안 갈아 끼우면 여기가 걸린다.
+	# Once they sleep the summary must go back to 0 with them — if the flip doesn't swap the summary, this catches it.
 	g2.step()
 	t.eq(_band_sum(g2), 0, "다 잠들면 밴드 요약 합도 0이다")
 
 
-## 🔴🔴 **평형까지 돌린다. 「먼저 한 틱을 돈다」가 이 함수의 존재 이유다.**
+## **Runs to equilibrium. "It steps once first" is the reason this function exists.**
 ##
-## ⚠ 커맨드는 `_dirty` 만 찍으므로 **flip 전에는 `active_chunk_count()` 가 0이다** —
-##  `while active > 0` 로 시작하는 루프는 **한 번도 안 돌고**, 그러면 「잠들었다」가 공짜로 통과한다.
-## 🔴 **이 리포에서 실제로 세 번 났다**(2026-08-07). 세 번째는 뮤테이션이 안 물어서 알았다.
-##  ⇒ **직접 while 을 쓰지 마라. 이 문을 써라.**
+## A command only marks `_dirty`, so **before the flip `active_chunk_count()` is 0** —
+##  a loop starting with `while active > 0` **never runs once**, and then "it fell asleep" passes for free.
+## **That actually happened three times in this repo.** The third time it surfaced because a mutation didn't bite.
+##  => **Do not write your own while. Use this door.**
 ##
-## 반환은 돈 틱 수다. ⚠ `cap` 에 닿았으면 평형이 **아니다** — 부르는 쪽이 그걸 단언해야 한다.
+## The return is the number of ticks run. If it hit `cap` it is **not** equilibrium — the caller must assert that.
 func _settle(g: CellGrid, cap: int) -> int:
 	g.step()
 	var n := 1
@@ -323,8 +323,8 @@ func _settle(g: CellGrid, cap: int) -> int:
 	return n
 
 
-## 한 열에서 물이 든 행을 전부 모은다. 🔴 **「어디 있나」와 「몇 칸인가」를 한 번에 준다** —
-##  자리를 미리 짐작해 `aux_at` 을 찍으면 **복제된 칸이 검사 밖에 남는다.**
+## Collects every row holding water in one column. **It gives "where is it" and "how many cells" at once** —
+##  guessing the position up front and probing `aux_at` leaves **duplicated cells outside the check.**
 func _column_water_rows(g: CellGrid, x: int, y0: int, y1: int) -> Array[int]:
 	var rows: Array[int] = []
 	for y in range(y0, y1 + 1):
@@ -333,8 +333,8 @@ func _column_water_rows(g: CellGrid, x: int, y0: int, y1: int) -> Array[int]:
 	return rows
 
 
-## 밴드 요약의 전체 합. 🔴 **`active_chunk_count()` 와 독립적인 경로다** — 둘을 맞대야
-##  「요약이 부풀었다」와 「요약이 비었다」를 둘 다 잡는다.
+## The whole sum of the band summary. **A path independent of `active_chunk_count()`** — butting the two
+##  together catches both "the summary is inflated" and "the summary is empty".
 func _band_sum(g: CellGrid) -> int:
 	var n := 0
 	for b in CellGrid.CHUNK_H:
@@ -342,13 +342,13 @@ func _band_sum(g: CellGrid) -> int:
 	return n
 
 
-# ══════════════════════════════════════════════════════════════════
-#  단계 2 — 물 재료 + 아래로만 떨어진다
-# ══════════════════════════════════════════════════════════════════
+# ==================================================================
+#  stage 2 — the water material + it only falls downward
+# ==================================================================
 
-## 🔴🔴 **물의 규칙 둘은 표에서 파생된다. 따로 막는 코드가 없다** — 그래서 표를 잰다.
-##  ⚠ 누가 `DEFS` 의 `behavior` 를 `BEHAVIOR_STATIC` 으로 바꾸면 **캐릭터가 물 위에 선다**.
-##   `fuel` 을 올리면 **물에 불이 붙는다.** 둘 다 에러가 안 나고 화면에서만 이상하다.
+## **Water's two rules derive from the table. There is no separate code enforcing them** — so the table is measured.
+##  Change `DEFS`'s `behavior` to `BEHAVIOR_STATIC` and **the character stands on water**.
+##   Raise `fuel` and **water catches fire.** Neither raises an error; it is only strange on screen.
 func _water_material_derives_its_rules(t) -> void:
 	t.ok(Mat.ALL.has(Mat.WATER), "WATER가 ALL 목록에 있다 (순회가 명시 목록으로만 돈다)")
 	t.ok(Mat.DEFS.has(Mat.WATER), "WATER가 DEFS에 있다")
@@ -358,15 +358,15 @@ func _water_material_derives_its_rules(t) -> void:
 
 	var g := CellGrid.new()
 	t.ok(g.set_water(50, 50, 200), "물을 놓는다 (아래 검사들의 전제)")
-	# 🔴 **거동을 파생값으로 잰다** — `is_solid` 가 「고체인가」의 단일 소스다.
+	# **Behaviour is measured through the derived value** — `is_solid` is the single source for "is it solid".
 	t.ok(not g.is_solid(50, 50), "물은 고체가 아니다 (캐릭터도 탄도 통과한다)")
 	t.ok(not g.ignite(50, 50), "물에는 불이 안 붙는다 (연료가 0이라 파생된다)")
 	t.eq(g.burning_count(), 0, "파면에도 안 올라간다")
 
 
-## 🔴🔴 **물의 문이 아무 데나 쓰면 안 되는 이유는 파면이다.** `_write_water` 는 `_unburn` 을
-##  안 부르므로, 타는 칸에 물을 쓰면 **소속을 주장하는 유령**이 남고 그 칸은 영영 다시 못 탄다.
-##  ⚠ `claimed_slot_count()` 로 그걸 값으로 잰다 — 화면에도 에러에도 안 나오는 종류다.
+## **The reason the water door can't be used just anywhere is the burn front.** `_write_water` doesn't call
+##  `_unburn`, so writing water into a burning cell leaves **a ghost claiming membership**, and that cell can never burn again.
+##  `claimed_slot_count()` measures that as a value — it is the kind that appears neither on screen nor as an error.
 func _water_door_refuses_bad_targets(t) -> void:
 	var g := CellGrid.new()
 	g.apply(CellGrid.cmd_fill(10, 10, 10, 10, Mat.STONE))
@@ -381,12 +381,12 @@ func _water_door_refuses_bad_targets(t) -> void:
 	t.eq(g.claimed_slot_count(), g.burning_count(), "유령 슬롯이 안 생긴다")
 
 	t.ok(not g.set_water(-1, 10, 100), "격자 밖은 조용히 거절한다")
-	# 🔴 **범위를 넘는 양은 짖고 버린다.** 안 보면 `PackedByteArray` 가 말없이 하위 8비트로 자른다.
-	t.expect_error("CellGrid.set_water: 양")
+	# **An out-of-range amount barks and is discarded.** Unwatched, `PackedByteArray` silently truncates to the low 8 bits.
+	t.expect_error("CellGrid.set_water: amount")
 	t.ok(not g.set_water(20, 20, Tuning.WATER_MAX + 1), "최대량을 넘는 양은 짖고 안 놓인다")
 	t.eq(g.mat_at(20, 20), Mat.EMPTY, "거절된 양이 칸을 안 건드린다")
 
-	# 물 위에 물은 놓인다 — 그게 「양을 고쳐 쓴다」이고 물 룬이 지날 길이다.
+	# Water onto water does go down — that is "overwrite the amount", the path the water rune will take.
 	t.ok(g.set_water(30, 30, 100), "빈칸에 물을 놓는다")
 	t.ok(g.set_water(30, 30, 200), "물 위에 물을 다시 놓는다")
 	t.eq(g.aux_at(30, 30), 200, "양이 덮어써진다")
@@ -394,9 +394,9 @@ func _water_door_refuses_bad_targets(t) -> void:
 	t.eq(g.mat_at(30, 30), Mat.EMPTY, "그 칸이 빈칸이 된다")
 
 
-## 🔴🔴 **두 문의 경계.** 폭발이 물을 지우는 것은 양을 0으로 만드는 게 아니라 **칸을 통째로
-##  비우는 것**이고, 그때는 `_write_cell` 이 맞다 — 기획 ②의 마지막 줄이 그걸 못 박았다.
-## ⚠ **반대쪽(물이 `_write_cell` 을 지나면 양이 증발한다)은 여기가 아니라 `총량 보존`이 잡는다.**
+## **The boundary between the two doors.** A blast erasing water is not zeroing the amount but **emptying the
+##  cell whole**, and `_write_cell` is right for that — the last line of design section (2) nailed that down.
+## **The other side (water passing through `_write_cell` evaporates the amount) is caught not here but by `total conserved`.**
 func _write_cell_wipes_water(t) -> void:
 	var g := CellGrid.new()
 	g.set_water(100, 200, 255)
@@ -408,65 +408,65 @@ func _write_cell_wipes_water(t) -> void:
 	t.eq(g.count_material(Mat.WATER), 0, "물이 한 칸도 안 남는다")
 
 
-## 🔴🔴 **순회 순서 계약을 정면으로 재는 유일한 검사다**(`cell_grid.gd` 머리).
-##  단일 버퍼라 「도착지는 이번 틱에 이미 지났거나 아예 안 도는 자리」여야 하고, 그걸 세우는 것이
-##  **밴드 아래→위 · 밴드 안 행도 아래→위**다.
+## **The only check that measures the traversal-order contract head-on** (`cell_grid.gd`'s header).
+##  Single-buffered, the destination must be "a place already passed this tick, or one not visited at all",
+##  and what stands that up is **bands bottom->top, and rows within a band bottom->top too**.
 ##
-## ⚠ **뒤집으면 물이 한 틱에 격자를 가로지른다** — 그런데 **최종 상태는 똑같다.**
-##  「다 쌓였나」·「총량이 같나」는 순서를 뒤집어도 전부 초록이다. ⇒ **틱마다 봐야만 잡힌다.**
-## 🔴 밴드 경계(575 → 576)를 일부러 지난다. 밴드 순서만 뒤집혀도 거기서 갈린다.
+## **Invert it and water crosses the grid in one tick** — and yet **the final state is identical.**
+##  "Is it all stacked" and "is the total the same" are all green with the order inverted. => **It is caught only by looking every tick.**
+## It deliberately crosses a band boundary (575 -> 576). Inverting only the band order splits right there.
 ##
-## 🔴🔴 **2026-08-07 — 「정확히 한 칸」이 「한 틱에 최대 `WATER_SUBSTEPS` 칸」이 됐다.**
-##  `cell_grid.step()` 이 `_water_step` 을 그 수만큼 돌리므로 **낙하도 같이 그만큼 빨라진다**
-##  (그 상수 주석 — 사용자가 「물이 퍼지는 게 느리다」고 판정한 결과다).
+## **"Exactly one cell" became "at most `WATER_SUBSTEPS` cells per tick".**
+##  `cell_grid.step()` runs `_water_step` that many times, so **the fall speeds up by the same factor**
+##  (that constant's comment — the result of the user judging "the water spreads too slowly").
 ##
-## 🔴🔴 **2026-08-08 — 「한 틱에 최대 N칸」이 「한 틱에 최대 `K × N`칸」이 됐다**
-##  (`water-jump-and-escape.md` 단계 2, `sim_tuning.WATER_FALL_CELLS`). `_water_fall` 이
-##  한 서브스텝 안에서 이미 K칸까지 한 번에 옮기고, 그 서브스텝이 틱당 N번 돈다.
-##  ⇒ **상한이 하나 늘었을 뿐 계약의 모양은 그대로다** — 아래 `cap`이 그 상한이다.
+## **"At most N cells per tick" became "at most `K x N` cells per tick"**
+##  (`water-jump-and-escape.md` stage 2, `sim_tuning.WATER_FALL_CELLS`). `_water_fall` already moves
+##  up to K cells at once within one substep, and that substep runs N times per tick.
+##  => **One more ceiling, and the shape of the contract is unchanged** — `cap` below is that ceiling.
 ##
-## ⚠ **왜 「정확히 N칸」이 아니라 범위인가**: 서브스텝 사이에 `_chunk_flip` 이 없어서, 물이
-##  **밴드 경계를 넘어 들어간 그 틱에는 아래 밴드가 아직 안 깨어 있으면 남은 서브스텝을 쉰다**
-##  (`cell_grid._water_tick` 주석). ⇒ 어느 틱은 `cap`보다 **적게** 내려간다. 그건 이 배치의
-##  성질이지 고장이 아니다 — **그 틱 수를 검사가 예측하려면 시뮬을 검사 안에 다시 짜야 한다.**
+## **Why a range and not "exactly N cells"**: there is no `_chunk_flip` between substeps, so on the tick water
+##  **crosses a band boundary it rests for the remaining substeps if the band below is not awake yet**
+##  (`cell_grid._water_tick`'s comment). => Some ticks descend **less** than `cap`. That is a property of
+##  this arrangement, not a fault — **for a check to predict that tick count it would have to rewrite the sim inside the check.**
 ##
-## 🔴 **그래도 뒤집기는 그대로 잡힌다.** 밴드나 행 순서를 뒤집으면 물이 **한 틱에 바닥까지**
-##  (자유낙하 여유만큼) 내려가므로 상한 `cap`을 훌쩍 넘는다. ⚠ **범위가 잡는 것은
-##  「가로지르지 않는다」이고, 「cap이 실제로 돈다」는 아래 `max_delta == cap`이 따로 잰다** —
-##  둘을 한 단언에 묶으면 서브스텝 루프를 1회로 줄이거나 K를 1로 되돌려도 초록이 된다.
+## **The inversion is still caught all the same.** Invert the band or row order and water goes **to the floor
+##  in one tick** (as far as free fall allows), blowing well past the ceiling `cap`. **What the range catches
+##  is "it doesn't cross", and "the cap actually runs" is measured separately by `max_delta == cap` below** —
+##  bundling the two into one assertion goes green even with the substep loop cut to 1 or K put back to 1.
 func _water_falls_per_tick(t) -> void:
 	var cap := Tuning.WATER_FALL_CELLS * Tuning.WATER_SUBSTEPS
-	# 🔴 지형·기둥 자리를 먼저 정한다 — 아래 가드가 **이 값들에서 직접 파생**돼야
-	#  장면을 넓혀도(또는 K가 올라가도) 둘이 저절로 같이 움직인다. 숫자를 손으로 두 번 안 적는다
-	#  (CLAUDE.md 「같은 설명이 두 파일에 나오면 한 곳으로 옮긴다」 — 이전에 `sim_tuning.
-	#  WATER_FALL_CELLS`가 27칸짜리 표를 따로 들고 있었는데 이 장면을 row 700으로 넓히고
-	#  그 표를 안 고쳐서 두 파일이 갈렸다. 표를 지우고 이 함수 하나로 합쳤다).
+	# The terrain and column positions are fixed first — the guards below must be **derived directly from these
+	#  values** so that widening the scene (or raising K) moves both together. The numbers are not written by hand
+	#  twice (CLAUDE.md, "if the same explanation appears in two files, move it to one place" — previously `sim_tuning.
+	#  WATER_FALL_CELLS` carried its own 27-cell table, and widening this scene to row 700 without fixing that table
+	#  split the two files. The table was deleted and folded into this one function).
 	var floor_row := 700
 	var y0 := 572
-	var y1 := 578  # 두 번째 기둥 — 바닥에서 가장 가까워 이 장면의 진짜 제약이다
+	var y1 := 578  # the second column — closest to the floor, so it is this scene's real constraint
 	var room := floor_row - 1 - y1
 
-	# 🔴🔴 **장면이 스스로 짖는 자리다.** 이 검사는 「한 틱에 바닥까지 떨어지면 뒤집기가
-	#  걸린다」는 것에 기대는데, `cap`이 여유(`room`)에 가까워지면 뒤집어도 정상 범위와
-	#  구별이 안 돼 **이빨이 없어진다.** ⚠ **`20`처럼 손으로 박은 수가 아니다** — 여유의
-	#  절반을 넘기지 말라는 것으로, 장면을 넓히면(=`room`이 커지면) 이 한도도 같이 커진다.
+	# **This is where the scene barks at itself.** This check leans on "if it falls to the floor in one tick the
+	#  inversion is caught", and once `cap` approaches the headroom (`room`) an inversion is indistinguishable
+	#  from the normal range and **it loses its teeth.** **It is not a hand-baked number like `20`** — it says
+	#  don't exceed half the headroom, so widening the scene (= a bigger `room`) raises this limit with it.
 	t.ok(cap * 2 <= room,
 		"K×서브스텝(%d)이 이 장면의 여유(%d칸)의 절반 안이다 — 뒤집어도 확실히 갈린다"
 			% [cap, room])
-	# 🔴 **그리고 루프가 헛돌 만큼 좁지도 않은지도 같이 본다.** `cap`이 `room`에 거의 안 닿아도
-	#  `room / cap`이 2 밑이면 아래 `ticks >= 2`가 먼저 걸린다 — 그건 다른 검사의 몫이다.
+	# **And it checks it isn't so narrow that the loop spins idle either.** Even if `cap` barely reaches `room`,
+	#  a `room / cap` below 2 trips `ticks >= 2` below first — that is another check's job.
 
 	var g := CellGrid.new()
 	g.apply(CellGrid.cmd_fill(0, floor_row, 100, floor_row, Mat.STONE))
 	t.eq(y0 / Tuning.CHUNK_CELLS, 35, "시작 행이 밴드 35다 (아래 경계 통과의 전제)")
 	t.eq(576 / Tuning.CHUNK_CELLS, 36, "네 칸 아래가 밴드 36이다 — 이 검사가 밴드 경계를 지난다")
 	g.set_water(50, y0, Tuning.WATER_MAX)
-	# 🔴🔴 **두 번째 기둥이 아래 밴드를 깨어 있게 잡아 둔다.** 없으면 밴드 순서 뒤집기가
-	#  **안 잡힌다** — 기둥이 하나면 물이 밴드 36에 처음 들어가는 그 틱에 36이 아직 잠들어 있어서
-	#  순회가 그 밴드를 아예 안 돌고, 뒤집힌 순서가 드러날 자리가 없다(2026-08-07에 확인했다).
+	# **The second column holds the band below awake.** Without it the band-order inversion is **not caught** —
+	#  with a single column, on the tick water first enters band 36 that band is still asleep, so the sweep
+	#  never runs it and there is nowhere for the inverted order to show (confirmed).
 	g.set_water(52, y1, Tuning.WATER_MAX)
 
-	# 아래쪽 기둥이 바닥에 닿기 전까지만 본다 — 닿으면 「한 틱에 몇 칸」이 아니라 쌓임을 재게 된다.
+	# Only looked at until the lower column reaches the floor — past that it measures stacking, not "cells per tick".
 	var ticks := mini(6, room / cap)
 	t.ok(ticks >= 2, "루프가 실제로 %d바퀴 돈다 (0바퀴면 이 검사는 공짜로 통과한다)" % ticks)
 	var prev := {50: y0, 52: y1}
@@ -482,30 +482,30 @@ func _water_falls_per_tick(t) -> void:
 			var y: int = rows[0]
 			t.eq(g.aux_at(x, y), Tuning.WATER_MAX, "%d틱 뒤 x=%d 의 양이 그대로다" % [k + 1, x])
 			var delta: int = y - int(prev[x])
-			# 🔴 **아래가 비어 있는 한 반드시 내려간다.** 0이면 그 칸이 잠들어 버린 것이고,
-			#  그건 「보이지 않는 벽」의 증상이다.
+			# **As long as below is empty it must descend.** A 0 means that cell fell asleep,
+			#  which is the symptom of the "invisible wall".
 			t.ok(delta >= 1, "%d틱 뒤 x=%d 가 적어도 한 칸 내려갔다 (%d칸)" % [k + 1, x, delta])
-			# 🔴🔴 **여기가 순회 순서 계약이다.** 뒤집으면 한 틱에 바닥까지 간다.
+			# **This is the traversal-order contract.** Invert it and it reaches the floor in one tick.
 			t.ok(delta <= cap,
 				"%d틱 뒤 x=%d 가 한 틱에 %d칸을 안 넘었다 (%d칸)" % [k + 1, x, cap, delta])
 			max_delta = maxi(max_delta, delta)
 			prev[x] = y
 
-	# 🔴🔴 **K×서브스텝이 실제로 도는지는 이 한 줄이 잰다.** 셋 다 여기서 걸린다:
-	#  서브스텝 루프를 1회로 줄이면, K를 1로 되돌리면, 또는 둘 다면 — `max_delta`가 `cap`에
-	#  못 미쳐 여기만 빨개진다. 위 범위 단언(`delta <= cap`)은 「더 적게 내려간다」를 다 통과시킨다.
+	# **Whether K x substeps actually runs is measured by this one line.** All three are caught here:
+	#  cutting the substep loop to 1, putting K back to 1, or both — `max_delta` falls short of `cap` and only
+	#  this goes red. The range assertion above (`delta <= cap`) lets every "descends less" through.
 	t.eq(max_delta, cap, "어느 틱엔가는 정확히 %d칸(K×서브스텝) 내려간다 — 둘 다 실제로 돈다" % cap)
 	t.ok(int(prev[50]) >= 576, "물이 실제로 밴드 경계(576)를 지났다 (이 검사의 전제)")
 	t.eq(g.count_material(Mat.WATER), 2, "물 칸 수가 내내 2다")
 
 
-## 🔴 공중에 놓은 물이 바닥까지 내려가 쌓이나. **아래로만** 가는 단계라 결과가 정확히 예측된다.
+## Does water placed in mid-air fall to the floor and stack. This stage goes **downward only**, so the result is exactly predictable.
 func _water_falls_and_stacks(t) -> void:
 	var g := CellGrid.new()
-	# 바닥 한 줄과 그 위 기둥 하나.
+	# One row of floor and one column above it.
 	g.apply(CellGrid.cmd_fill(0, 300, 200, 300, Mat.STONE))
-	# 🔴 **좌우 벽이 필요하다**(단계 3부터). 없으면 물이 옆으로 퍼져 「기둥으로 쌓인다」를
-	#  못 잰다 — 재는 것이 낙하인데 확산이 섞이면 두 축이 한 검사에 들어간다.
+	# **Left and right walls are needed** (from stage 3 on). Without them water spreads sideways and "it stacks
+	#  as a column" can't be measured — what is measured is the fall, and mixing spreading in puts two axes in one check.
 	g.apply(CellGrid.cmd_fill(99, 280, 99, 299, Mat.STONE))
 	g.apply(CellGrid.cmd_fill(101, 280, 101, 299, Mat.STONE))
 	var poured := 0
@@ -517,7 +517,7 @@ func _water_falls_and_stacks(t) -> void:
 	for _i in 60:
 		g.step()
 
-	# 🔴 **꽉 찬 물 4칸이 바닥 위 4칸에 그대로 쌓인다.** 한 칸이라도 새면 여기가 어긋난다.
+	# **Four full water cells stack into the four cells above the floor unchanged.** One cell leaking throws this off.
 	for k in 4:
 		t.eq(g.aux_at(100, 299 - k), Tuning.WATER_MAX,
 			"바닥에서 %d칸 위가 꽉 찼다" % (k + 1))
@@ -526,7 +526,7 @@ func _water_falls_and_stacks(t) -> void:
 	t.eq(g.mat_at(100, 300), Mat.STONE, "바닥 돌은 그대로다 (물이 고체를 안 지난다)")
 	t.eq(g.count_material(Mat.WATER), 4, "물 칸 수가 정확히 4다")
 
-	# 부분량도 옮겨진다 — 「받을 수 있는 만큼만」이 실제로 도나.
+	# Partial amounts move too — does "only as much as it can take" actually run.
 	var g2 := CellGrid.new()
 	g2.apply(CellGrid.cmd_fill(0, 300, 200, 300, Mat.STONE))
 	g2.apply(CellGrid.cmd_fill(49, 290, 49, 299, Mat.STONE))
@@ -539,19 +539,19 @@ func _water_falls_and_stacks(t) -> void:
 	t.eq(g2.aux_at(50, 298), 300 - Tuning.WATER_MAX, "넘친 %d 이 위에 남는다" % (300 - Tuning.WATER_MAX))
 
 
-## 🔴🔴 **총량 보존 — 새는 물은 화면에서 안 보인다.**
-##  ⚠ 물이 `_write_cell` 을 지나는 순간 `_flag`·`_aux` 가 0이 되어 **양이 그 자리에서 증발한다.**
-##   에러도 화면 변화도 없다. 이 검사가 그 위험의 유일한 그물이다.
+## **Total conservation — leaking water is invisible on screen.**
+##  The moment water passes through `_write_cell`, `_flag` and `_aux` go to 0 and **the amount evaporates on the spot.**
+##   No error, no change on screen. This check is the only net for that risk.
 ##
-## 🔴 **세 가지를 한 번의 훑기로 잰다**: 합 · 물 칸 수 · 최대 양.
-##  · 합    ⇒ 새나
-##  · 칸 수 ⇒ **훑은 사각형 밖으로 샜나**(`count_material` 과 맞댄다 — 독립 경로다)
-##  · 최대 ⇒ `_aux` 가 255를 넘어 **하위 8비트로 잘렸나**
+## **Three things are measured in one scan**: the sum · the water cell count · the maximum amount.
+##  · sum   => is it leaking
+##  · count => **did it leak outside the scanned rectangle** (butted against `count_material` — an independent path)
+##  · max   => did `_aux` pass 255 and get **truncated to the low 8 bits**
 func _water_total_is_conserved(t) -> void:
 	var g := CellGrid.new()
 	g.apply(CellGrid.cmd_fill(0, 400, 300, 400, Mat.STONE))
 	var poured := 0
-	# 여러 높이 · 여러 열에 붓는다. 한 기둥만 쓰면 「한 줄에서만 맞다」를 못 가른다.
+	# Poured at several heights and several columns. A single column can't separate out "correct in one column only".
 	for x in range(20, 60):
 		for k in 3:
 			var amount := 60 + (x % 7) * 20 + k * 10
@@ -570,29 +570,29 @@ func _water_total_is_conserved(t) -> void:
 	t.eq(after[0], poured, "200틱 뒤에도 총량이 정확히 같다")
 	t.eq(after[1], g.count_material(Mat.WATER), "200틱 뒤에도 사각형 밖으로 안 샜다")
 	t.ok(after[2] <= Tuning.WATER_MAX, "어떤 칸도 최대량을 안 넘는다 (최대 %d)" % after[2])
-	# 🔴 **실제로 움직였다는 증거.** 안 움직였어도 총량은 맞으므로, 이게 없으면 위 둘이 헛돈다.
+	# **Evidence it actually moved.** The total matches even if nothing moved, so without this the two above spin idle.
 	t.ok(after[1] < before[1], "물이 실제로 아래로 모였다 (칸 수 %d → %d)" % [before[1], after[1]])
 
 
-## 🔴🔴 **단계 2의 심장.** 좌우가 없으므로 평형이 **진짜로 0**이 된다 —
-##  기획이 「여기서 0이 안 나오면 단계 3으로 가지 마라」고 적은 자리다.
-## ⚠ **「물이 안 움직인다」로는 못 잰다.** 안 움직이는데 안 자는 것이 v1이었다.
+## **The heart of stage 2.** There is no left-right yet, so equilibrium **really does reach 0** —
+##  this is the spot where the design wrote "if 0 doesn't come out here, do not go on to stage 3".
+## **"The water doesn't move" can't measure it.** Not moving and not sleeping was exactly v1.
 func _settled_water_sleeps(t) -> void:
 	var g := CellGrid.new()
 	g.apply(CellGrid.cmd_fill(0, 500, 200, 500, Mat.STONE))
 	g.apply(CellGrid.cmd_fill(39, 460, 39, 499, Mat.STONE))
 	g.apply(CellGrid.cmd_fill(80, 460, 80, 499, Mat.STONE))
-	# 🔴🔴 **여러 층을 부어야 한다.** 한 층만 부으면 쌓인 물 위에 물이 없어서
-	#  `_water_fall` 의 「아래가 꽉 찼다(`space <= 0`)」 가지를 **한 번도 안 지난다** —
-	#  그 조기 탈출을 지워도 이 검사가 초록이었다(2026-08-07에 확인했다).
-	#  ⚠ 지우면 꽉 찬 칸끼리 매 틱 **양이 안 바뀌는 쓰기**를 주고받으며 청크를 영영 깨운다.
+	# **Several layers have to be poured.** With one layer there is no water above the stacked water, so
+	#  `_water_fall`'s "below is full (`space <= 0`)" branch is **never once passed** —
+	#  deleting that early exit still left this check green (confirmed).
+	#  Deleted, full cells trade **writes that change no amount** every tick and wake the chunk forever.
 	for x in range(40, 80):
 		for k in 3:
 			g.set_water(x, 470 + k, Tuning.WATER_MAX)
-	# ⚠ 벽 사이 40열에 3층을 부었으므로 평형은 정확히 3층이다 — 아래 「꽉 찬 채로 남아 있다」의 근거.
+	# 3 layers poured into the 40 columns between the walls, so equilibrium is exactly 3 layers — the basis for "stays full" below.
 	g.step()
 
-	# 떨어지는 동안에는 깨어 있어야 한다 — 안 그러면 아래 0이 「처음부터 아무 일도 없었다」다.
+	# It must be awake while falling — otherwise the 0 below is just "nothing ever happened".
 	t.ok(g.active_chunk_count() > 0, "떨어지는 동안 활성 청크가 0이 아니다 (%d개)" % g.active_chunk_count())
 
 	var ticks := 0
@@ -602,58 +602,58 @@ func _settled_water_sleeps(t) -> void:
 	t.eq(g.active_chunk_count(), 0, "다 쌓이면 활성 청크가 0이 된다 (%d틱)" % ticks)
 	t.eq(_band_sum(g), 0, "밴드 요약 합도 0이다")
 
-	# 🔴 **그리고 계속 0이어야 한다.** 한 틱만 0인 것은 평형이 아니다.
+	# **And it must stay 0.** Being 0 for one tick is not equilibrium.
 	for _i in 50:
 		g.step()
 	t.eq(g.active_chunk_count(), 0, "그 뒤 50틱을 더 돌려도 0이다")
-	# 🔴 **세 층이 실제로 꽉 찬 채 겹쳐 있다** — 이게 「아래가 꽉 찼다」 가지를 매 틱 지나는
-	#  형태이고, 그런데도 잠든다는 것이 이 검사의 요점이다.
+	# **The three layers really do sit stacked and full** — that is the shape that passes the "below is full"
+	#  branch every tick, and the point of this check is that it sleeps anyway.
 	for k in 3:
 		t.eq(g.aux_at(60, 499 - k), Tuning.WATER_MAX,
 			"바닥에서 %d칸 위가 꽉 찬 채로 남아 있다" % (k + 1))
 
 
-## 🔴🔴 **청크 경계의 「보이지 않는 벽」.** 잠든 물 **바로 아래**를 파는데 그 아래가 **다음 밴드**면,
-##  판 칸의 청크만 깨어나고 **물이 든 밴드는 잠든 채**라 순회가 통째로 건너뛴다.
+## **The "invisible wall" at a chunk boundary.** Digging **directly below** sleeping water when what is below
+##  is **the next band** wakes only the dug cell's chunk, and **the band holding the water stays asleep**, so the sweep skips it whole.
 ##
-## ⚠ **원본 코드에서 실제로 났다**(2026-08-07, verify-read2 · 뮤테이션 없이):
-##  물이 y=335에 `aux=255` 인 채 **10틱 뒤에도 공중에 떠 있었다.** 에러 0.
-## 🔴 **폭발·파기·다 탄 나무가 전부 이 경로다** — 물기둥 바닥의 y가 16의 배수 −1일 때 걸리므로
-##  **대략 16번에 1번**이다. 화면엔 「공중에 뜬 물」로만 보인다.
+## **It actually happened in the original code** (verify-read2 · with no mutation):
+##  water sat in mid-air at y=335 with `aux=255` **still after 10 ticks.** Zero errors.
+## **Blasts, carves and burnt-out wood all take this path** — it hits when the bottom y of a water column is
+##  a multiple of 16 minus 1, so **roughly 1 time in 16**. On screen it only looks like "water floating in mid-air".
 ##
-## 🔴 **대조군을 같이 잰다.** 같은 청크 안에서 판 경우는 늘 동작하므로, 그것만 재면
-##  「물이 떨어진다」가 초록인 채 경계만 조용히 죽는다.
+## **A control is measured alongside.** Digging within the same chunk always works, so measuring only that
+##  leaves "water falls" green while the boundary dies quietly.
 func _digging_below_a_chunk_edge_wakes_the_water(t) -> void:
 	var cc := Tuning.CHUNK_CELLS
-	# 밴드 20의 **마지막 행** = 청크 경계 바로 위.
+	# The **last row** of band 20 = right above the chunk boundary.
 	var y_edge := 21 * cc - 1
 	t.eq(y_edge / cc, 20, "물이 밴드 20의 마지막 행에 있다")
 	t.eq((y_edge + 1) / cc, 21, "그 바로 아래가 밴드 21이다 — 이 검사의 전제")
 
 	var g := CellGrid.new()
 	g.apply(CellGrid.cmd_fill(90, y_edge + 1, 110, y_edge + 4, Mat.STONE))
-	# 🔴 좌우를 막는다 — 재는 것은 **아래로 흘러드나**이고, 옆으로 새면 그 축이 흐려진다.
+	# The sides are walled off — what is measured is **does it flow down**, and leaking sideways blurs that axis.
 	g.apply(CellGrid.cmd_fill(99, y_edge, 99, y_edge, Mat.STONE))
 	g.apply(CellGrid.cmd_fill(101, y_edge, 101, y_edge, Mat.STONE))
 	g.set_water(100, y_edge, Tuning.WATER_MAX)
-	# 🔴🔴 **먼저 한 틱을 돌려야 한다.** 커맨드는 `_dirty` 만 찍으므로 flip 전에는
-	#  `active_chunk_count()` 가 **0이다** — 그냥 `while active > 0` 로 시작하면 루프가
-	#  **한 번도 안 돌고** 아래 「잠들었다」가 공짜로 통과한다.
-	#  ⚠ 실제로 그렇게 짰다가 뮤테이션이 안 물어서 알았다(2026-08-07). 검사가 헛돌고 있었다.
+	# **One tick has to run first.** A command only marks `_dirty`, so before the flip
+	#  `active_chunk_count()` is **0** — starting straight into `while active > 0` makes the loop run
+	#  **not even once**, and "it fell asleep" below passes for free.
+	#  It was actually written that way, and it surfaced because a mutation didn't bite. The check was spinning idle.
 	var settle := _settle(g, 20)
 	t.ok(settle > 1, "물이 실제로 떨어지는 동안 깨어 있었다 (%d틱 — 루프가 헛돌지 않았다)" % settle)
 	t.eq(g.active_chunk_count(), 0, "돌 위에 얹힌 물이 먼저 잠든다 (%d틱)" % settle)
 	t.eq(g.aux_at(100, y_edge), Tuning.WATER_MAX, "물은 그 자리에 있다")
 
-	# 🔴 **물 바로 아래만 판다.** 물 칸은 안 건드린다 — 건드리면 물의 청크가 제 손으로 깨어나
-	#  이 검사가 통째로 헛돈다.
+	# **Only the cell directly below the water is dug.** The water cell is left alone — touching it wakes the
+	#  water's own chunk and this check spins idle as a whole.
 	g.apply(CellGrid.cmd_fill(100, y_edge + 1, 100, y_edge + 1, Mat.EMPTY))
 	for _i in 10:
 		g.step()
 	t.eq(g.aux_at(100, y_edge), 0, "10틱 뒤 물이 원래 자리에 없다 (공중에 안 떠 있다)")
 	t.eq(g.aux_at(100, y_edge + 1), Tuning.WATER_MAX, "판 자리로 내려왔다")
 
-	# 대조군 — 같은 청크 안에서 파면 원래도 됐다. 둘이 갈리는 것이 이 버그의 모양이다.
+	# Control — digging within the same chunk always worked. The two splitting apart is the shape of this bug.
 	var h := CellGrid.new()
 	var y_mid := 21 * cc + 5
 	t.eq(y_mid / cc, (y_mid + 1) / cc, "대조군은 위아래가 같은 밴드다 (전제)")
@@ -662,8 +662,8 @@ func _digging_below_a_chunk_edge_wakes_the_water(t) -> void:
 	h.apply(CellGrid.cmd_fill(101, y_mid, 101, y_mid, Mat.STONE))
 	h.set_water(100, y_mid, Tuning.WATER_MAX)
 	var h_settle := _settle(h, 20)
-	# 🔴 **511과 같은 줄이다.** 없으면 이 대조군이 나중에 헛돌게 돼도 `(1틱)` 이라고 찍고 통과한다 —
-	#  대조군이 죽으면 위 경계 검사의 「갈린다」가 통째로 뜻을 잃는다.
+	# **The same line as 511.** Without it, if this control later starts spinning idle it prints `(1 tick)` and passes —
+	#  and if the control dies, the "they split" of the boundary check above loses its whole meaning.
 	t.ok(h_settle > 1, "대조군도 실제로 떨어지는 동안 깨어 있었다 (%d틱)" % h_settle)
 	t.eq(h.active_chunk_count(), 0, "대조군도 먼저 잠든다 (%d틱)" % h_settle)
 	h.apply(CellGrid.cmd_fill(100, y_mid + 1, 100, y_mid + 1, Mat.EMPTY))
@@ -672,46 +672,46 @@ func _digging_below_a_chunk_edge_wakes_the_water(t) -> void:
 	t.eq(h.aux_at(100, y_mid + 1), Tuning.WATER_MAX, "대조군도 내려온다 (같은 청크 안)")
 
 
-## 🔴🔴 **`cmd_fill` 로는 물을 못 놓는다.** 그 문은 `_write_cell` 을 지나 `_aux` 를 0으로 만들고,
-##  그러면 **재료는 WATER인데 양이 0인 칸**이 선다 — `cell_materials.gd` 의 `_aux` 절이
-##  「원리적으로 없다」고 못 박은 상태다.
-## ⚠ 실측(2026-08-07, verify-read2): 그렇게 놓은 물 55칸이 **20틱 뒤 0개**다. 조용히 증발한다.
-## 🔴 **곧 실제로 밟는다** — 맵에 물을 두는 날 지형 굽기가 이 경로를 쓴다. 그래서 짖게 해 뒀다.
+## **Water cannot be placed with `cmd_fill`.** That door passes `_write_cell` and zeroes `_aux`,
+##  which stands up **a cell whose material is WATER but whose amount is 0** — a state that
+##  `cell_materials.gd`'s `_aux` section nailed down as "cannot exist in principle".
+## Measured (verify-read2): 55 water cells placed that way are **0 cells after 20 ticks**. They evaporate silently.
+## **This will actually be stepped on soon** — the day water goes on the map, terrain baking uses this path. That is why it barks.
 func _cmd_fill_refuses_water(t) -> void:
 	var g := CellGrid.new()
-	t.expect_error("CellGrid: 물은 cmd_fill 로 못 놓는다")
+	t.expect_error("CellGrid: water cannot be placed with cmd_fill")
 	g.apply(CellGrid.cmd_fill(10, 695, 20, 699, Mat.WATER))
 	t.eq(g.count_material(Mat.WATER), 0, "cmd_fill 이 물을 한 칸도 안 놓는다")
 	t.eq(g.mat_at(15, 697), Mat.EMPTY, "그 자리가 빈칸 그대로다")
 
-	# 🔴 **거절이 「양 0짜리 물」보다 낫다는 것이 요점이다.** 물의 문으로는 여전히 놓인다.
+	# **The point is that refusing is better than "water with amount 0".** Through the water door it still goes down.
 	t.ok(g.set_water(15, 697, 128), "같은 자리에 물의 문으로는 놓인다")
 	t.eq(g.aux_at(15, 697), 128, "양이 실제로 들어간다")
 
 
-## 🔴🔴 **시뮬은 도는데 화면이 안 바뀐다 — CLAUDE.md 의 대표 가짜.**
-##  `_changed` 가 「화면을 다시 올리나」의 단일 소스인데 **`net_water` 가 한 번도 안 봤다** ⇒
-##  `_write_water` 의 `_changed += 1` 을 지워도 전 그물이 초록이었다(2026-08-07에 확인했다).
-## ⚠ **반대쪽도 같이 잰다** — 늘 0이 아닌 값을 주면 그건 「매 프레임 전부 다시 올린다」라
-##  또 다른 고장이고, 그쪽은 성능으로만 드러난다.
+## **The sim runs but the screen doesn't change — CLAUDE.md's flagship fake.**
+##  `_changed` is the single source for "does the screen get re-uploaded", and **`net_water` had never once looked at it** =>
+##  deleting `_write_water`'s `_changed += 1` left the whole net green (confirmed).
+## **The other side is measured too** — always giving a nonzero value is another fault, "re-upload everything
+##  every frame", and that one shows up only as performance.
 func _water_moves_mark_the_screen_dirty(t) -> void:
 	var g := CellGrid.new()
 	g.apply(CellGrid.cmd_fill(0, 700, 100, 700, Mat.STONE))
 	g.set_water(50, 690, Tuning.WATER_MAX)
-	g.consume_changed()  # 놓기까지의 몫을 걷어낸다
+	g.consume_changed()  # sweep away the share from the placement itself
 
 	g.step()
-	# ⚠ **「한 칸」이라고 못 박지 않는다** — `WATER_SUBSTEPS` 가 낙하 거리를 정하고, 여기서 재는
-	#  것은 거리가 아니라 `_changed` 다. 거리는 `_water_falls_per_tick` 이 따로 잰다.
+	# **It is not nailed down to "one cell"** — `WATER_SUBSTEPS` sets the fall distance, and what is measured
+	#  here is not distance but `_changed`. Distance is measured separately by `_water_falls_per_tick`.
 	t.eq(g.aux_at(50, 690), 0, "물이 실제로 그 자리를 떠났다 (전제)")
 	t.eq(g.count_material(Mat.WATER), 1, "그리고 한 칸 그대로다 (복제되지도 사라지지도 않았다)")
 	t.ok(g.consume_changed() > 0, "물이 움직인 틱은 화면을 다시 올리라고 표시한다")
 
-	# 다 쌓여 잠든 뒤에는 0이어야 한다.
-	# 🔴🔴 **상한이 있어야 한다.** 물이 안 멈추면 **실패가 아니라 러너가 영원히 매달린다** —
-	#  단언 하나가 빨개지는 것과 그물 전체가 안 끝나는 것은 다른 사고다.
-	#  ⚠ **바로 다음 단계에 그 조건이 온다**: 기획이 「단계 3의 넓은 물은 원리적으로 안 멈춘다」고
-	#   적어 뒀다(폭 128셀은 4,000틱에도 평형이 안 난다). ⇒ 닿으면 **실패로 떨어뜨린다.**
+	# Once it has stacked and gone to sleep it must be 0.
+	# **There has to be a ceiling.** If the water never stops, **it is not a failure, the runner hangs forever** —
+	#  one assertion going red and the whole net never finishing are different accidents.
+	#  **That condition arrives in the very next stage**: the design wrote "stage 3's wide water cannot in
+	#   principle stop" (128 cells wide doesn't reach equilibrium in 4,000 ticks). => Hitting it **drops to failure.**
 	var settle := _settle(g, 200)
 	t.ok(settle < 200, "물이 상한 안에 잠든다 (%d틱 — 닿으면 안 멈춘 것이다)" % settle)
 	g.consume_changed()
@@ -720,30 +720,30 @@ func _water_moves_mark_the_screen_dirty(t) -> void:
 	t.eq(g.consume_changed(), 0, "잠든 뒤에는 화면을 안 건드린다")
 
 
-## 🔴 **격자 맨 아래 행.** `_water_step` 의 `y < H - 1` 가드가 없으면 `below` 가 격자를 넘어
-##  **매 틱 엔진 「Index out of bounds」**가 난다 — 그건 단언에 안 잡히는 침묵사고, 래퍼만 잡는다.
-## ⚠ 그물이 물을 y=600대까지만 놓고 있어서 이 가드가 **한 번도 안 밟혔다**(2026-08-07).
+## **The bottom row of the grid.** Without `_water_step`'s `y < H - 1` guard, `below` runs past the grid and
+##  **an engine "Index out of bounds" fires every tick** — a silent death no assertion catches, only the wrapper does.
+## The net was placing water only down to the y=600s, so this guard had **never once been stepped on**.
 func _bottom_row_water_is_safe(t) -> void:
 	var g := CellGrid.new()
 	var last := CellGrid.H - 1
-	# 🔴 좌우를 막는다(단계 3부터) — 재는 것은 **아래 경계**이지 확산이 아니다.
+	# The sides are walled off (from stage 3 on) — what is measured is the **bottom edge**, not spreading.
 	g.apply(CellGrid.cmd_fill(299, last - 3, 299, last, Mat.STONE))
 	g.apply(CellGrid.cmd_fill(301, last - 3, 301, last, Mat.STONE))
 	t.ok(g.set_water(300, last, Tuning.WATER_MAX), "격자 맨 아래 행에 물을 놓는다")
 	t.ok(g.set_water(300, last - 1, Tuning.WATER_MAX), "그 바로 위에도 놓는다")
 	for _i in 20:
 		g.step()
-	# 🔴 아래로 갈 곳이 없으므로 그대로 있어야 한다. 격자 밖으로 새면 총량이 준다.
+	# There is nowhere below to go, so it must stay put. Leaking off the grid would drop the total.
 	t.eq(g.aux_at(300, last), Tuning.WATER_MAX, "맨 아래 물이 격자 밖으로 안 샌다")
 	t.eq(g.aux_at(300, last - 1), Tuning.WATER_MAX, "위 칸도 그대로다 (아래가 꽉 찼다)")
 	t.eq(g.active_chunk_count(), 0, "그리고 잠든다")
 
 
-## 🔴🔴 **파면에 탈 수 없는 재료가 앉아 있나.** 물과 불이 같은 칸에서 만나는 것을 막는 불변량이고,
-##  **단계 6의 전제**다.
-## ⚠ **`claimed == burning` 으로는 원리적으로 못 잡는다** — 그 둘은 서로만 맞대므로 물 칸이
-##  파면 소속을 주장해도 두 수가 같다. 그때 `_burn` 이 **물의 양을 연료로 먹는다**
-##  (255 → 250 → 245 …, verify-read2 실측). 물이 조용히 마른다.
+## **Is an unburnable material sitting on the burn front.** It is the invariant that keeps water and fire out of
+##  the same cell, and **the premise of stage 6**.
+## **`claimed == burning` cannot catch it in principle** — those two are butted only against each other, so a
+##  water cell can claim front membership with both counts still equal. Then `_burn` **eats the water's amount as fuel**
+##  (255 -> 250 -> 245 ..., verify-read2 measured). The water dries up silently.
 func _front_has_no_unburnable(t) -> void:
 	var g := CellGrid.new()
 	g.apply(CellGrid.cmd_fill(0, 800, 200, 800, Mat.STONE))
@@ -753,11 +753,11 @@ func _front_has_no_unburnable(t) -> void:
 	t.ok(g.burning_count() > 0, "나무가 탄다 (전제)")
 	t.eq(g.unburnable_in_front_count(), 0, "붙인 직후 파면에 탈 수 없는 재료가 없다")
 
-	# 🔴🔴 **가드의 「결과」를 잰다. 반환값만 보면 안 된다.**
-	#  `set_water` 가 false 를 돌려주는 것을 보는 검사는 위에 이미 있다(`_water_door_refuses_bad_targets`).
-	#  ⚠ 그건 **「거절했다」만 재고 「거절 안 했으면 뭐가 나쁜가」는 안 잰다** — 가드를 지우면
-	#   그 검사는 빨개지지만 **파면이 실제로 오염되는 것은 아무도 안 본다.**
-	#  🔴 여기서 오염 자체를 값으로 잰다: 물 칸이 파면에 앉으면 `_burn` 이 **물의 양을 연료로 먹는다.**
+	# **The guard's "consequence" is measured. Looking at the return value alone is not enough.**
+	#  The check that watches `set_water` return false is already above (`_water_door_refuses_bad_targets`).
+	#  That one **measures only "it refused" and not "what is bad if it doesn't"** — delete the guard and
+	#   that check goes red, but **nobody watches the front actually get contaminated.**
+	#  Here the contamination itself is measured as a value: a water cell on the front makes `_burn` **eat the water's amount as fuel.**
 	var fuel_before := g.fuel_at(100, 799)
 	t.ok(fuel_before > 0, "타는 칸에 연료가 있다 (전제)")
 	g.set_water(100, 799, Tuning.WATER_MAX)
@@ -768,11 +768,11 @@ func _front_has_no_unburnable(t) -> void:
 	t.eq(g.fuel_at(100, 799), fuel_before - Tuning.FIRE_BURN_PER_TICK,
 		"연료가 정상적으로 준다 (물의 양을 연료로 먹고 있지 않다)")
 
-	# 타는 나무 위로 물을 붓는다 — 두 축이 만날 수 있는 유일한 자리다.
+	# Water is poured over burning wood — the only place the two axes can meet.
 	for x in range(100, 121):
 		g.set_water(x, 790, Tuning.WATER_MAX)
-	# 🔴 **매 틱 본다.** 마지막 틱만 보면 「잠깐 들어갔다 빠졌다」를 놓치는데, 그 한 틱에
-	#  `_burn` 이 이미 물의 양을 먹는다.
+	# **It is looked at every tick.** Looking only at the last tick misses "it slipped in and back out", and in
+	#  that one tick `_burn` has already eaten the water's amount.
 	var dirty_ticks := 0
 	for _i in 30:
 		g.step()
@@ -783,17 +783,17 @@ func _front_has_no_unburnable(t) -> void:
 	t.eq(g.unburnable_in_front_count(), 0, "물이 타는 자리에 닿아도 파면에 물이 안 들어간다")
 	t.eq(g.claimed_slot_count(), g.burning_count(), "그때 자리 표도 여전히 맞다")
 
-	# 🔴 다 태운 뒤에도. 자기교환(`at == last`)이 도는 구간이다.
+	# And after it has all burnt out. That is the stretch where the self-swap (`at == last`) runs.
 	for _i in 100:
 		g.step()
 	t.eq(g.unburnable_in_front_count(), 0, "다 탄 뒤에도 파면에 탈 수 없는 재료가 없다")
 
 
-# ══════════════════════════════════════════════════════════════════
-#  단계 3 — 좌우 나눔 · 한 틱 상한
-# ══════════════════════════════════════════════════════════════════
+# ==================================================================
+#  stage 3 — left-right sharing · the per-tick cap
+# ==================================================================
 
-## 그릇 하나를 만들고 한쪽에 물을 붓는다. `[격자, 부은 양]`.
+## Builds one bowl and pours water into one side. `[grid, amount poured]`.
 func _make_bowl(width: int, y_floor: int, poured_cols: int, depth: int) -> Array:
 	var g := CellGrid.new()
 	var x0 := 200
@@ -808,8 +808,8 @@ func _make_bowl(width: int, y_floor: int, poured_cols: int, depth: int) -> Array
 	return [g, poured]
 
 
-## 🔴 **판정 2 — 계단이 아니라 수면이 되나.** 좌우 나눔이 실제로 도는지의 가장 직접적인 값이다.
-## ⚠ **「퍼졌다」로는 부족하다** — 한쪽으로만 퍼져도 퍼진 것이다. **높이 차이**를 재야 한다.
+## **Acceptance 2 — does it become a water surface rather than a staircase.** The most direct value for whether left-right sharing runs.
+## **"It spread" is not enough** — spreading to one side only is still spreading. The **height difference** has to be measured.
 func _water_lies_flat(t) -> void:
 	var made := _make_bowl(32, 700, 8, 8)
 	var g: CellGrid = made[0]
@@ -818,7 +818,7 @@ func _water_lies_flat(t) -> void:
 	var settle := _settle(g, 4000)
 	t.ok(settle > 1 and settle < 4000, "폭 32 그릇이 상한 안에 평형에 든다 (%d틱)" % settle)
 
-	# 수면 높이 = 열마다 물이 있는 가장 위 행.
+	# Surface height = the topmost row holding water in each column.
 	var lo := 1 << 30
 	var hi := -1
 	var dry := 0
@@ -833,27 +833,27 @@ func _water_lies_flat(t) -> void:
 			continue
 		lo = mini(lo, top)
 		hi = maxi(hi, top)
-	# 🔴 **마른 열이 하나라도 있으면 눕지 않은 것이다.** 안 보면 「퍼진 8열만 평평하다」가
-	#  통과하고, 그건 정확히 계단 모양이다.
+	# **One dry column means it did not lie flat.** Unwatched, "only the 8 poured columns are flat" passes,
+	#  and that is exactly a staircase.
 	t.eq(dry, 0, "32열이 전부 젖는다 (한쪽에만 8열 부었다)")
-	# 🔴 부은 양(8열 × 8칸)이 32열에 퍼지면 2칸 높이다. 수면이 **한 칸 안**이어야 눕는 것이다.
+	# The poured amount (8 columns x 8 cells) spread over 32 columns is 2 cells high. The surface must be **within one cell** to count as flat.
 	t.ok(hi - lo <= 1, "수면이 평평하다 (가장 높은 곳과 낮은 곳의 차 %d칸)" % (hi - lo))
 	t.eq(_water_scan(g, 190, 650, 240, 705)[0], poured, "그동안 총량이 정확히 보존된다")
 
 
-## 🔴🔴 **`WATER_MIN_DIFF` 가 멈춤의 심장인가.** 0으로 두면 홀수가 영원히 안 나눠져
-##  1씩 왕복하고 **청크가 절대 안 잠든다** — v1이 죽은 자리다.
-## ⚠ **이 검사는 「멈춘다」를 재는 게 아니라 「그 상수가 멈춤의 원인이다」를 잰다** —
-##  값을 0으로 낮추면 빨개져야 하고, 그게 손잡이가 진짜 손잡이라는 뜻이다.
+## **Is `WATER_MIN_DIFF` the heart of stopping.** Left at 0, odd numbers never divide, they shuttle by 1
+##  and **the chunk never sleeps** — the spot where v1 died.
+## **This check does not measure "it stops", it measures "that constant is the cause of stopping"** —
+##  drop the value to 0 and it must go red, and that is what makes the knob a real knob.
 func _min_diff_stops_the_shuffling(t) -> void:
 	t.ok(Tuning.WATER_MIN_DIFF > 0,
 		"차이 하한이 0보다 크다 (0이면 1씩 왕복하며 청크가 영영 안 잠든다)")
 
-	# 이웃과의 차이가 하한 이하인 두 칸은 **한 톨도** 안 움직여야 한다.
+	# Two cells whose difference from the neighbour is at or below the floor must not move **a single grain**.
 	var g := CellGrid.new()
 	g.apply(CellGrid.cmd_fill(400, 800, 410, 800, Mat.STONE))
-	# 🔴🔴 **두 칸을 벽으로 가둬야 한다.** 옆이 빈칸이면 차이가 255라 하한과 **무관하게** 퍼지고,
-	#  그러면 이 검사는 하한을 재는 게 아니라 확산을 재는 것이 된다.
+	# **The two cells have to be walled in.** With an empty cell beside them the difference is 255, so it spreads
+	#  **regardless** of the floor, and then this check measures spreading, not the floor.
 	g.apply(CellGrid.cmd_fill(403, 795, 403, 799, Mat.STONE))
 	g.apply(CellGrid.cmd_fill(406, 795, 406, 799, Mat.STONE))
 	g.set_water(404, 799, 100)
@@ -864,7 +864,7 @@ func _min_diff_stops_the_shuffling(t) -> void:
 	t.eq(g.aux_at(405, 799), 100 + Tuning.WATER_MIN_DIFF, "오른쪽도 그대로다")
 	t.eq(g.active_chunk_count(), 0, "그래서 그 청크가 잠든다")
 
-	# 하한을 한 톨 넘으면 움직인다 — 반대쪽을 같이 재야 「아무것도 안 움직인다」와 안 헷갈린다.
+	# One grain over the floor and it moves — measuring the other side too keeps this from being confused with "nothing moves at all".
 	var h := CellGrid.new()
 	h.apply(CellGrid.cmd_fill(400, 800, 410, 800, Mat.STONE))
 	h.apply(CellGrid.cmd_fill(403, 795, 403, 799, Mat.STONE))
@@ -876,12 +876,12 @@ func _min_diff_stops_the_shuffling(t) -> void:
 	t.ok(h.aux_at(404, 799) > 100, "하한을 넘으면 실제로 옮겨진다 (%d)" % h.aux_at(404, 799))
 
 
-## 🔴🔴 **열 경계의 「보이지 않는 벽」.** 행 경계와 같은 사고이고 **훨씬 자주 걸린다** —
-##  좌우 나눔이 붙은 지금 처음으로 잴 수 있다.
-## ⚠ verify-run이 단계 2에서 「대각 경로가 없다」를 확인했지만 **그건 아래로만 가던 때의 결론이다.**
+## **The "invisible wall" at a column boundary.** The same accident as the row boundary, and **it hits far more often** —
+##  it can be measured for the first time now that left-right sharing is in.
+## verify-run confirmed "there is no diagonal path" in stage 2, but **that was a conclusion from when it only went downward.**
 func _column_edge_wakes_the_neighbour(t) -> void:
 	var cc := Tuning.CHUNK_CELLS
-	# 청크 열 25의 **마지막 칸**에 물, 그 오른쪽(청크 열 26의 첫 칸)은 막혀 있다.
+	# Water in the **last cell** of chunk column 25, with its right (the first cell of chunk column 26) blocked.
 	var x_edge := 26 * cc - 1
 	t.eq(x_edge / cc, 25, "물이 청크 열 25의 마지막 칸에 있다")
 	t.eq((x_edge + 1) / cc, 26, "그 오른쪽이 청크 열 26이다 — 이 검사의 전제")
@@ -889,16 +889,16 @@ func _column_edge_wakes_the_neighbour(t) -> void:
 	var g := CellGrid.new()
 	var y := 850
 	g.apply(CellGrid.cmd_fill(x_edge - 4, y + 1, x_edge + 6, y + 1, Mat.STONE))
-	g.apply(CellGrid.cmd_fill(x_edge + 1, y, x_edge + 1, y, Mat.STONE))  # 오른쪽 벽
-	# 🔴 왼쪽도 막는다. 안 막으면 물이 그쪽으로 새고, 그러면 **뚫기 전에 이미 청크가 깨어 있어**
-	#  아래 「경계 너머로 흘러든다」가 무엇 때문인지 못 가른다.
+	g.apply(CellGrid.cmd_fill(x_edge + 1, y, x_edge + 1, y, Mat.STONE))  # right wall
+	# The left is blocked too. Unblocked, water leaks that way, and then **the chunk is already awake before the
+	#  punch**, so what makes "it flows across the boundary" below happen can't be told apart.
 	g.apply(CellGrid.cmd_fill(x_edge - 1, y, x_edge - 1, y, Mat.STONE))
 	g.set_water(x_edge, y, Tuning.WATER_MAX)
 	var settle := _settle(g, 60)
 	t.ok(settle > 1, "물이 먼저 자리를 잡는다 (%d틱 — 루프가 헛돌지 않았다)" % settle)
 	t.eq(g.active_chunk_count(), 0, "그리고 잠든다")
 
-	# 🔴 **벽만 뚫는다.** 물 칸은 안 건드린다 — 건드리면 물의 청크가 제 손으로 깨어난다.
+	# **Only the wall is punched.** The water cell is left alone — touching it wakes the water's chunk by its own hand.
 	g.apply(CellGrid.cmd_fill(x_edge + 1, y, x_edge + 1, y, Mat.EMPTY))
 	for _i in 20:
 		g.step()
@@ -907,10 +907,10 @@ func _column_edge_wakes_the_neighbour(t) -> void:
 	t.ok(g.aux_at(x_edge, y) < Tuning.WATER_MAX, "그만큼 원래 칸이 줄었다")
 
 
-## 🔴🔴 **판정 1-a — 좁은 물은 진짜로 활성 청크 0이 되나.**
-##  ⚠ **판정 1-b와 다른 검사다. 묶으면 라벨이 재는 것보다 넓어진다**(기획이 그렇게 갈랐다).
-## ⚠ 기획의 「폭 32 · MIN_DIFF 16 ⇒ 약 2,800틱」은 **spec의 대리 구현** 값이고 지금 `MIN_DIFF` 는 4다.
-##  ⇒ **틱 수를 단언하지 않는다** — 재는 것은 **0이 되나**이고, 실제 틱 수는 라벨에 찍는다.
+## **Acceptance 1-a — does narrow water really reach 0 active chunks.**
+##  **A different check from acceptance 1-b. Bundled, the label gets wider than what it measures** (the design split it that way).
+## The design's "width 32 · MIN_DIFF 16 => about 2,800 ticks" is a value from **spec's proxy implementation**, and `MIN_DIFF` is 4 now.
+##  => **The tick count is not asserted** — what is measured is **does it reach 0**, and the actual tick count goes in the label.
 func _narrow_bowl_reaches_zero(t) -> void:
 	var made := _make_bowl(32, 750, 8, 6)
 	var g: CellGrid = made[0]
@@ -921,19 +921,19 @@ func _narrow_bowl_reaches_zero(t) -> void:
 	t.eq(g.active_chunk_count(), 0, "정말 0이다")
 	t.eq(_band_sum(g), 0, "밴드 요약 합도 0이다")
 
-	# 🔴 **그리고 계속 0이어야 한다.** 한 틱만 0인 것은 평형이 아니다.
+	# **And it must stay 0.** Being 0 for one tick is not equilibrium.
 	for _i in 50:
 		g.step()
 	t.eq(g.active_chunk_count(), 0, "그 뒤 50틱을 더 돌려도 0이다")
 	t.eq(_water_scan(g, 190, 700, 240, 755)[0], poured, "총량이 보존된다")
 
 
-## 🔴🔴 **판정 1-b — 넓은 물은 0이 안 된다. 대신 활성 청크가 한 자리로 잠긴다.**
+## **Acceptance 1-b — wide water does not reach 0. Instead the active chunks lock into a single digit.**
 ##
-## ⚠ **이게 「실패」로 읽히면 안 된다.** 반씩 나누는 규칙은 확산이라 평평해지는 데 폭의 제곱에
-##  비례하는 시간이 들고, **총량은 정확히 보존된다 — 새는 게 아니라 안 끝나는 것이다.**
-## 🔴 **실패인 경우는 둘뿐이다**: 총량이 새거나, 활성 청크가 **계속 느는** 것.
-##  ⇒ 여기서 재는 것도 정확히 그 둘이다.
+## **This must not be read as a "failure".** The halving rule is diffusion, so lying flat takes time proportional
+##  to the square of the width, and **the total is conserved exactly — it is not leaking, it just doesn't finish.**
+## **There are only two failure cases**: the total leaking, or the active chunks **growing without bound**.
+##  => Those two are exactly what is measured here.
 func _wide_bowl_settles_under_the_cap(t) -> void:
 	var made := _make_bowl(128, 900, 32, 8)
 	var g: CellGrid = made[0]
@@ -950,23 +950,23 @@ func _wide_bowl_settles_under_the_cap(t) -> void:
 			late = maxi(late, a)
 
 	t.ok(peak > 0, "넓은 물은 도는 내내 깨어 있다 (최대 %d청크)" % peak)
-	# 🔴🔴 **재는 것은 「는가」가 아니라 「경계 안에 갇히나」다.**
-	#  ⚠ 인접한 두 구간의 최대값을 맞대는 것은 **잡음을 성장으로 읽는다** — 실측으로 9 ↔ 10 을
-	#   오가고, 그건 성장이 아니라 표면 띠가 출렁이는 것이다. 그렇게 짰다가 빨개졌다(2026-08-07).
-	#  🔴 진짜 실패는 **경계 없이 느는 것**이고, 그건 고정 상한으로 잡힌다.
-	#   기획 실측은 폭 128에서 최대 16~18이었다 ⇒ 32면 두 배 여유다.
+	# **What is measured is not "does it grow" but "is it penned inside a bound".**
+	#  Butting the maxima of two adjacent windows against each other **reads noise as growth** — measured, it
+	#   oscillates between 9 and 10, and that is not growth but the surface band sloshing. Written that way, it went red.
+	#  The real failure is **growing without bound**, and that is caught by a fixed ceiling.
+	#   The design measured a maximum of 16-18 at width 128 => 32 gives twice the headroom.
 	t.ok(late <= 32, "1,100틱 뒤에도 활성 청크가 32 아래에 갇힌다 (최대 %d)" % late)
 	t.ok(peak < 64, "도는 내내도 64 아래다 (최대 %d, 상한 %d 훨씬 아래)" % [
 		peak, Tuning.MAX_CHUNKS_PER_TICK])
-	# 🔴 **총량이 이 판정의 나머지 절반이다** — 안 멈추는 것은 괜찮지만 새는 것은 아니다.
+	# **The total is the other half of this acceptance** — not stopping is fine, leaking is not.
 	t.eq(_water_scan(g, 190, 850, 340, 905)[0], poured, "1,200틱 뒤에도 총량이 정확히 같다")
 
 
-## 🔴🔴 **좌우 편향 — dir 뒤집기가 실제로 도나.** v1이 이 그물을 갖고 있었다.
+## **Left-right bias — does the dir flip actually run.** v1 had this net.
 ##
-## ⚠ **대칭 지형 · 대칭 투입이어야 한다.** 한쪽이라도 안 대칭이면 이 검사는 아무것도 안 잰다.
-## 🔴 **틱 수를 짝수로 끊는다** — dir 이 매 틱 뒤집히므로 홀수에서 끊으면 마지막 한 틱의
-##  방향이 남아 **편향이 없어도 좌우가 다르다.** 그건 고장이 아니라 재는 방법이 틀린 것이다.
+## **The terrain and the pour must both be symmetric.** If either is not, this check measures nothing.
+## **The tick count is cut on an even number** — dir flips every tick, so cutting on an odd number leaves the
+##  last tick's direction hanging and **the two sides differ even with no bias.** That is not a fault, it is measuring wrong.
 func _left_right_has_no_bias(t) -> void:
 	var g := CellGrid.new()
 	var cx := 600
@@ -974,7 +974,7 @@ func _left_right_has_no_bias(t) -> void:
 	g.apply(CellGrid.cmd_fill(cx - 40, y + 1, cx + 40, y + 1, Mat.STONE))
 	g.apply(CellGrid.cmd_fill(cx - 41, y - 20, cx - 41, y + 1, Mat.STONE))
 	g.apply(CellGrid.cmd_fill(cx + 41, y - 20, cx + 41, y + 1, Mat.STONE))
-	# 한가운데 한 열에만 붓는다 — 좌우로 정확히 대칭인 유일한 투입이다.
+	# Poured into the single middle column — the only pour that is exactly left-right symmetric.
 	var poured := 0
 	for d in 12:
 		g.set_water(cx, y - d, Tuning.WATER_MAX)
@@ -988,51 +988,51 @@ func _left_right_has_no_bias(t) -> void:
 	var mid: int = _water_scan(g, cx, y - 30, cx, y + 1)[0]
 	t.ok(left + right + mid == poured, "총량이 보존된다 (좌 %d + 중 %d + 우 %d)" % [left, mid, right])
 	t.ok(left > 0 and right > 0, "양쪽으로 다 퍼졌다 (좌 %d · 우 %d)" % [left, right])
-	# 🔴🔴 **「좌우가 정확히 같다」는 이 규칙으로 원리적으로 안 나온다. 기획의 그 문장이 틀렸다.**
-	#  한 칸에서 dir 쪽을 **먼저** 나누고 **그 결과로 줄어든 양**을 반대쪽에 나누므로 한 틱 안의
-	#  좌우가 대칭이 아니다. dir 이 매 틱 뒤집혀도 `diff >> 1` 이 **내림**이라 반올림 잔돈이 남고,
-	#  그건 정확히 상쇄되지 않는다. ⚠ 실측 차이는 3,060 중 **1**이다(0.03%).
-	# 🔴 **그래서 재는 것은 「편향」이지 「동일」이 아니다.** 편향이면 차이가 물 한 칸 값을 넘고
-	#  틱이 늘수록 커진다 — 아래 임계가 그 둘을 가른다.
-	# ⚠ **임계를 0으로 좁히지 마라.** 초록으로 만들 수 없고, 그러면 다음 사람이 이 검사를 지운다.
+	# **"Left and right are exactly equal" cannot come out of this rule in principle. That sentence in the design is wrong.**
+	#  Within one cell the dir side is divided **first** and **the amount left after that** is divided to the other
+	#  side, so left and right are not symmetric within one tick. Even with dir flipping every tick, `diff >> 1`
+	#  **rounds down**, so rounding change is left over and does not cancel exactly. The measured difference is **1** out of 3,060 (0.03%).
+	# **So what is measured is "bias", not "identity".** Bias means the difference exceeds one water cell's worth
+	#  and grows as the ticks go on — the threshold below splits those two.
+	# **Do not narrow the threshold to 0.** It cannot be made green, and then the next person deletes this check.
 	t.ok(absi(left - right) <= Tuning.WATER_MAX,
 		"좌우 편향이 없다 (차이 %d — 물 한 칸 %d 아래면 반올림 잔돈이다)" % [
 			absi(left - right), Tuning.WATER_MAX])
 
 
-## 🔴🔴 **한 틱 상한 — 미는 것이지 버리는 것이 아니다.**
-##  ⚠ 버리면 「물이 사라진다」이고 그건 안전망이 아니라 고장이다. 총량으로 잰다.
-## 🔴 **상한에 실제로 닿게 만들어야 한다** — 안 닿으면 이 검사가 통째로 헛돈다.
-##  `cmd_fill` 로 넓게 깔면 `_write_cell` 이 수천 청크를 찍는다(기획 「위험」의 R 항목).
+## **The per-tick cap — it pushes them back, it does not throw them away.**
+##  Throwing them away means "the water disappears", and that is not a safety net but a fault. It is measured by the total.
+## **The cap has to actually be hit** — unhit, this check spins idle as a whole.
+##  Laying `cmd_fill` broadly makes `_write_cell` mark thousands of chunks (item R of the design's "risks").
 func _tick_cap_delays_but_never_drops(t) -> void:
 	var g := CellGrid.new()
-	# 상한(512)을 훌쩍 넘는 지형을 깐다.
+	# Lays terrain well past the cap (512).
 	g.apply(CellGrid.cmd_fill(0, 100, 2047, 500, Mat.STONE))
 	g.step()
-	# 🔴 **상한이 실제로 물렸다는 증거.** 이게 없으면 아래가 아무것도 안 잰다.
+	# **Evidence the cap actually bit.** Without this, everything below measures nothing.
 	t.eq(g.active_chunk_count(), Tuning.MAX_CHUNKS_PER_TICK,
 		"깨어 있는 청크가 상한에서 정확히 잘린다")
 
-	# 🔴 **잘린 것이 사라지지 않는다** — 다음 틱에도 상한만큼 깨어 있어야 한다.
+	# **What was cut off does not disappear** — the next tick must be awake up to the cap again.
 	g.step()
 	t.ok(g.active_chunk_count() > 0, "다음 틱에도 깨어 있다 (잘린 청크가 버려지지 않았다)")
 
-	# 그리고 결국 전부 처리되고 잠든다.
+	# And in the end they are all worked through and it falls asleep.
 	var ticks := _settle(g, 200)
 	t.ok(ticks < 200, "밀린 청크가 결국 다 처리되고 잠든다 (%d틱)" % ticks)
 
-	# 상한 아래에서는 안 자른다 — 반대쪽을 재야 「늘 자른다」와 안 헷갈린다.
+	# Below the cap nothing is cut — measuring the other side keeps this from being confused with "it always cuts".
 	var h := CellGrid.new()
 	h.apply(CellGrid.cmd_fill(0, 100, 100, 120, Mat.STONE))
 	h.step()
 	t.ok(h.active_chunk_count() < Tuning.MAX_CHUNKS_PER_TICK,
 		"작은 지형은 상한에 안 걸린다 (%d청크)" % h.active_chunk_count())
 
-	# 🔴 물이 상한에 걸려도 총량이 보존된다 — 안전망의 계약 그 자체다.
+	# Even while the cap bites, the total is conserved — that is the safety net's contract itself.
 	var w := CellGrid.new()
 	w.apply(CellGrid.cmd_fill(0, 600, 2047, 600, Mat.STONE))
-	# 🔴 오른쪽 벽. 없으면 물이 바닥 끝을 지나 **검사 사각형 밖으로** 나가고, 그건 「샜다」와
-	#  구별이 안 된다 — 안 새는데 빨개지면 다음 사람이 검사를 지운다.
+	# The right wall. Without it water passes the end of the floor and goes **outside the checked rectangle**,
+	#  which is indistinguishable from "it leaked" — going red without leaking makes the next person delete the check.
 	w.apply(CellGrid.cmd_fill(2048, 560, 2048, 600, Mat.STONE))
 	var poured := 0
 	for x in range(0, 2048, 4):
@@ -1043,20 +1043,20 @@ func _tick_cap_delays_but_never_drops(t) -> void:
 	t.eq(_water_scan(w, 0, 540, 2047, 601)[0], poured, "상한에 걸리는 동안에도 총량이 보존된다")
 
 
-## 결정론 — 같은 커맨드 열이 같은 격자를 만드나(물은 멀티에서 각자 계산한다).
+## Determinism — does the same command sequence build the same grid (in multiplayer each side computes water itself).
 ##
-## ⚠🔴 **이 검사가 재는 것은 좁다. 라벨을 넓게 읽지 마라.**
-##  같은 프로세스에서 같은 코드를 두 번 돌리면 **틀린 순서도 똑같이 틀리므로 늘 같은 답이 나온다.**
-##  ⇒ 잡는 것은 「상태가 아닌 것에 기댔나」(딕셔너리 해시 순서 · 객체 주소 · 시계 · 난수)뿐이고,
-##   **「자르는 순서가 틀렸다」는 원리적으로 못 잡는다.**
-## 🔴 **그건 `net_determinism` 의 텍스트 스캔과 위 상한 검사가 나눠서 맡는다** —
-##  상한이 **청크 단위로** 잘리는 것은 `active_chunk_count() == MAX_CHUNKS_PER_TICK` 이 고정하고,
-##  「한 청크의 행 절반만 돈다」는 **`_awake` 를 청크마다 읽는 순회 구조 자체**가 막는다(구조 논증이다).
-## ⚠ **구조 논증이라는 말은 그물이 없다는 뜻이다.** 순회를 고치는 사람이 여기를 읽어야 한다.
+## **What this check measures is narrow. Do not read the label broadly.**
+##  Running the same code twice in the same process **always gives the same answer, because a wrong order is wrong identically.**
+##  => It catches only "did it lean on something that isn't state" (dictionary hash order · object addresses · clocks · randomness),
+##   and **"the cutting order is wrong" cannot be caught in principle.**
+## **That is split between `net_determinism`'s text scan and the cap check above** —
+##  that the cap cuts **per chunk** is pinned by `active_chunk_count() == MAX_CHUNKS_PER_TICK`, and
+##  "only half a chunk's rows run" is prevented by **the sweep structure itself, which reads `_awake` per chunk** (a structural argument).
+## **Calling it a structural argument means there is no net.** Whoever changes the sweep has to read this.
 func _same_commands_give_the_same_grid(t) -> void:
 	var a := _run_scenario()
 	var b := _run_scenario()
-	# 🔴 **`_aux` 전체를 바이트로 맞댄다.** 한 칸만 달라도 그 뒤로 두 세상이 영영 갈린다.
+	# **All of `_aux` is butted byte for byte.** One differing cell splits the two worlds forever after.
 	var diff := 0
 	for y in range(560, 640):
 		for x in range(150, 350):
@@ -1081,25 +1081,25 @@ func _run_scenario() -> CellGrid:
 	return g
 
 
-## 🔴🔴 **`_band_awake` 가 살아 있나 — 시간으로만 잴 수 있다.**
+## **Is `_band_awake` alive — measurable only through time.**
 ##
-## ⚠ **구조로는 못 잡는다.** 요약과 직접 센 값을 맞대는 검사는 **갈라짐**만 잡고,
-##  `_band_awake`·`_band_dirty` 를 **통째로 죽이면 격자는 여전히 정확히 돈다** — 느려질 뿐이다.
-##  ⇒ 실측으로 잠든 격자 `step()` 이 **5.25μs → 8,114μs(1,546배)** 가 된다. 그게 예산의 16%다.
+## **Structure cannot catch it.** The check butting the summary against a direct count catches only **divergence**,
+##  and **killing `_band_awake` and `_band_dirty` outright still leaves the grid running exactly right** — it only gets slower.
+##  => Measured, `step()` on a sleeping grid goes **5.25us -> 8,114us (1,546x)**. That is 16% of the budget.
 ##
-## 🔴 **절대값으로 재지 않는다 — 기계마다 흔들린다.** 같은 기계에서 잰 **기준자와의 배수**로 잰다.
-##  기준자는 `active_chunk_count()`(16,128칸 네이티브 count, 실측 2.25μs) — 기계가 빠르면 이것도
-##  같이 빨라지므로 비율이 유지된다.
+## **It is not measured in absolute terms — machines vary.** It is measured as a **multiple of a yardstick** taken on the same machine.
+##  The yardstick is `active_chunk_count()` (a native count over 16,128 entries, measured 2.25us) — a faster machine
+##  speeds that up too, so the ratio holds.
 ##
-##      지금       잠든 step() / 기준자 ≈ 5.25 / 2.25 = **2.3배**
-##      요약 없으면                    ≈ 8,114 / 2.25 = **3,600배**
-##  ⇒ **임계 50배.** 지금보다 21배 위, 깨진 상태보다 72배 아래다. 양쪽에 여유가 충분하다.
-## ⚠ 임계를 좁히지 마라 — 이 그물이 **흔들려서 꺼지는 것**이 `_band_awake` 가 죽는 것보다 나쁘다.
+##      now              sleeping step() / yardstick ~ 5.25 / 2.25 = **2.3x**
+##      without summary                              ~ 8,114 / 2.25 = **3,600x**
+##  => **Threshold 50x.** 21x above where it is now, 72x below the broken state. There is plenty of room on both sides.
+## Do not narrow the threshold — **this net switching itself off from jitter** is worse than `_band_awake` dying.
 func _sleeping_grid_is_cheap(t) -> void:
 	var g := CellGrid.new()
 	g.apply(CellGrid.cmd_fill(0, 0, CellGrid.W - 1, CellGrid.H - 1, Mat.STONE))
-	# ⚠ 16,128청크가 깨는데 한 틱 상한이 512라 **다 재우는 데 수십 틱이 든다.**
-	#  고정 횟수로 두면 이 검사가 「안 잠든 격자」를 재게 된다.
+	# 16,128 chunks wake but the per-tick cap is 512, so **putting them all to sleep takes dozens of ticks.**
+	#  Left at a fixed count, this check would be measuring a grid that isn't asleep.
 	var calm := _settle(g, 500)
 	t.ok(calm > 1 and calm < 500, "격자가 결국 다 잠든다 (%d틱)" % calm)
 	t.eq(g.active_chunk_count(), 0, "격자가 완전히 잠들었다 (이 검사의 전제)")
@@ -1121,28 +1121,28 @@ func _sleeping_grid_is_cheap(t) -> void:
 			slept, ref, slept / maxi(ref, 1)])
 
 
-# ══════════════════════════════════════════════════════════════════
-#  단계 4 — 얕음 비트
-# ══════════════════════════════════════════════════════════════════
+# ==================================================================
+#  stage 4 — the shallow bit
+# ==================================================================
 
-## 🔴🔴 **양과 비트가 한 자리에서 움직이나.** 갈라지면 **화면에만** 나온다 —
-##  시뮬은 양만 보고 셰이더는 비트만 보므로 서로를 안 고쳐 준다.
+## **Do the amount and the bit move in one place.** If they diverge it shows up **on screen only** —
+##  the sim looks only at the amount and the shader only at the bit, so neither corrects the other.
 ##
-## 🔴 **경계값 양쪽을 다 잰다.** 「임계 이하면 켜진다」만 재면 **늘 켜는 구현**도 통과한다.
-## ⚠ 임계값을 여기 박지 않는다 — `WATER_WET` 이 바뀌면 손으로 적은 숫자가 조용히 낡는다.
+## **Both sides of the boundary value are measured.** Measuring only "at or below the threshold it turns on" passes an implementation that **always turns it on**.
+## The threshold value is not baked in here — if `WATER_WET` changes, a hand-written number goes quietly stale.
 func _shallow_bit_tracks_the_amount(t) -> void:
 	var wet := Tuning.WATER_WET
 	t.ok(wet > 0 and wet < Tuning.WATER_MAX,
 		"임계가 0과 최대량 사이다 (%d — 아니면 아래 두 쪽 중 하나가 원리적으로 안 나온다)" % wet)
-	# 🔴 두 비트가 안 겹친다 — 겹치면 「얕은 물」과 「타는 칸」이 화면에서 같은 칸이 된다.
+	# The two bits don't overlap — overlapping would make "shallow water" and "a burning cell" the same cell on screen.
 	t.eq(Mat.FLAG_SHALLOW & Mat.FLAG_BURNING, 0, "얕음 비트와 불 비트가 안 겹친다")
 	t.ok(Mat.FLAG_SHALLOW < 16, "얕음 비트가 하위 4비트 안이다 (L8 정밀도 안전선)")
 
 	var g := CellGrid.new()
-	# 경계 **바로 위**: 얕지 않다.
+	# **Just above** the boundary: not shallow.
 	g.set_water(500, 100, wet + 1)
 	t.eq(g.flag_at(500, 100) & Mat.FLAG_SHALLOW, 0, "임계보다 한 톨 많으면 얕음이 꺼져 있다")
-	# 경계 **정확히**: 얕다(「이하」가 계약이다).
+	# **Exactly** at the boundary: shallow ("at or below" is the contract).
 	g.set_water(501, 100, wet)
 	t.eq(g.flag_at(501, 100) & Mat.FLAG_SHALLOW, Mat.FLAG_SHALLOW, "임계와 같으면 얕음이 켜진다")
 	g.set_water(502, 100, 1)
@@ -1150,7 +1150,7 @@ func _shallow_bit_tracks_the_amount(t) -> void:
 	g.set_water(503, 100, Tuning.WATER_MAX)
 	t.eq(g.flag_at(503, 100) & Mat.FLAG_SHALLOW, 0, "꽉 찬 칸은 안 얕다")
 
-	# 🔴 **넘나들면 따라 뒤집힌다.** 한 번만 재면 「처음에만 맞다」를 못 가른다.
+	# **Crossing back and forth flips it along.** Measuring once can't separate out "correct only at the start".
 	g.set_water(504, 100, Tuning.WATER_MAX)
 	t.eq(g.flag_at(504, 100) & Mat.FLAG_SHALLOW, 0, "깊게 시작한다")
 	g.set_water(504, 100, wet)
@@ -1158,21 +1158,21 @@ func _shallow_bit_tracks_the_amount(t) -> void:
 	g.set_water(504, 100, Tuning.WATER_MAX)
 	t.eq(g.flag_at(504, 100) & Mat.FLAG_SHALLOW, 0, "다시 깊어지면 꺼진다")
 
-	# 🔴🔴 **비우는 쪽도 내려야 한다.** 안 내리면 빈칸이 비트를 든 채 남고, 다음에 그 칸이
-	#  물이 될 때 양과 비트가 어긋난 채로 시작한다 — 화면에만 나온다.
-	# ⚠ **반드시 「얕은 물」에서 비워야 잰다.** 깊은 물(비트가 이미 0)에서 비우면 지우는 줄을
-	#  통째로 지워도 **초록**이다 — 2026-08-07까지 그렇게 짜여 있었고 뮤테이션이 안 물었다.
+	# **The clearing side has to bring it down too.** Otherwise an empty cell is left holding the bit, and the next
+	#  time that cell becomes water it starts with the amount and the bit out of step — it shows up on screen only.
+	# **It only measures if the clearing happens from "shallow water".** Clearing from deep water (bit already 0)
+	#  leaves it **green** even with the clearing line deleted whole — it had been written that way and the mutation didn't bite.
 	g.set_water(505, 100, wet)
 	t.eq(g.flag_at(505, 100) & Mat.FLAG_SHALLOW, Mat.FLAG_SHALLOW, "먼저 얕음을 켠다 (검사의 전제)")
 	g.set_water(505, 100, 0)
 	t.eq(g.mat_at(505, 100), Mat.EMPTY, "양 0이면 빈칸이 된다")
 	t.eq(g.flag_at(505, 100), 0, "**켜져 있던** 얕음 비트가 빈칸에 안 남는다")
 
-	# 🔴🔴 **직접 쓰기 말고 시뮬이 굴러서도 맞나.** `set_water` 만 재면 `_water_step` 이 지나는
-	#  경로(`_water_fall`·`_water_share`)가 비트를 안 만져도 통과한다.
-	# 🔴🔴 **벽으로 가둔 그릇이어야 두 깊이가 같이 나온다.** 열린 바닥에 부으면 물이 평형까지
-	#  퍼져서 **전부 얕아진다** — 실제로 그렇게 짰다가 「깊은 칸 0개」로 빨개졌다(2026-08-07).
-	#  ⇒ 폭 8 그릇에 **2층 + 나머지 16**이 되게 붓는다: 아래 두 줄은 255, 맨 윗줄은 16이다.
+	# **Beyond direct writes — is it right when the sim rolls too.** Measuring only `set_water` passes even if
+	#  the paths `_water_step` takes (`_water_fall`, `_water_share`) never touch the bit.
+	# **It takes a bowl walled in for both depths to appear at once.** Poured onto an open floor, water spreads to
+	#  equilibrium and **goes entirely shallow** — it was written that way and went red with "0 deep cells".
+	#  => Poured into a width-8 bowl so it comes to **2 layers + 16 left over**: the lower two rows are 255, the top row 16.
 	var h := CellGrid.new()
 	h.apply(CellGrid.cmd_fill(599, 200, 608, 200, Mat.STONE))
 	h.apply(CellGrid.cmd_fill(599, 188, 599, 199, Mat.STONE))
@@ -1189,7 +1189,7 @@ func _shallow_bit_tracks_the_amount(t) -> void:
 	for y in range(185, 201):
 		for x in range(600, 608):
 			if h.mat_at(x, y) != Mat.WATER:
-				# 물이 아닌 칸에 얕음 비트가 남아 있으면 그것도 어긋난 것이다.
+				# A shallow bit left on a non-water cell is out of step too.
 				if (h.flag_at(x, y) & Mat.FLAG_SHALLOW) != 0:
 					mismatched += 1
 				continue
@@ -1201,20 +1201,20 @@ func _shallow_bit_tracks_the_amount(t) -> void:
 			else:
 				deep_cells += 1
 	t.eq(mismatched, 0, "흘러서 정착한 물의 양과 비트가 한 칸도 안 어긋난다")
-	# 🔴 **양쪽이 실제로 나왔다는 증거.** 한쪽이 0이면 위 검사가 절반만 돈 것이다.
+	# **Evidence both sides actually appeared.** If either is 0, the check above ran only half.
 	t.ok(shallow_cells > 0, "얕은 칸이 실제로 생긴다 (%d칸 — 수면 쪽이다)" % shallow_cells)
 	t.ok(deep_cells > 0, "깊은 칸도 남는다 (%d칸 — 그릇 속이다)" % deep_cells)
 
 
-# ══════════════════════════════════════════════════════════════════
-#  단계 5 — 물 룬
-# ══════════════════════════════════════════════════════════════════
+# ==================================================================
+#  stage 5 — the water rune
+# ==================================================================
 
 const SpellSim := preload("res://src/sim/spell_sim.gd")
 
-## 🔴🔴 **`CMD_WATER` 는 `_write_cell` 을 지나면 안 된다.** 지나면 재료만 WATER 이고 **양이 0**인
-##  칸이 생기고, 그 칸은 첫 순회에서 조용히 증발한다(`cmd_fill` 이 데인 자리와 같다).
-## 🔴 **덮어쓰지 않고 채운다** — 얕은 값으로 깊은 물을 덮으면 **물 룬이 물을 줄인다.**
+## **`CMD_WATER` must not pass through `_write_cell`.** Passing it makes cells whose material is WATER and
+##  whose **amount is 0**, and those evaporate silently on the first sweep (the same spot `cmd_fill` got burned).
+## **It fills without overwriting** — overwriting deep water with a shallow value makes **the water rune reduce water.**
 func _water_disc_fills_without_wiping(t) -> void:
 	var g := CellGrid.new()
 	g.apply(CellGrid.cmd_water(300, 300, 6, 200))
@@ -1222,24 +1222,24 @@ func _water_disc_fills_without_wiping(t) -> void:
 	t.ok(got[1] > 0, "물 커맨드가 칸을 적신다 (%d칸)" % got[1])
 	t.eq(got[2], 200, "양이 커맨드가 준 값 그대로 들어간다 (증발하지 않는다)")
 	t.eq(g.aux_at(300, 300), 200, "한가운데도 200이다")
-	# 🔴 **원반이다.** 네모면 모서리도 젖는다 — `_disc` 와 같은 모양이어야 한다.
+	# **It is a disc.** A square would wet the corners too — it must be the same shape as `_disc`.
 	t.eq(g.aux_at(306, 306), 0, "원 밖 모서리는 안 젖는다")
 	t.eq(g.aux_at(306, 300), 200, "원 안 끝은 젖는다")
 
-	# 🔴 **더 깊은 물을 얕은 값으로 안 덮는다.**
+	# **Deeper water is not overwritten with a shallower value.**
 	g.set_water(300, 300, Tuning.WATER_MAX)
 	g.apply(CellGrid.cmd_water(300, 300, 6, 100))
 	t.eq(g.aux_at(300, 300), Tuning.WATER_MAX, "깊은 칸이 얕은 값으로 안 줄어든다")
 	t.eq(g.aux_at(302, 300), 200, "옆 칸도 원래 값(200)보다 안 줄어든다")
 
-	# 지형은 안 건드린다 — 물 룬은 파괴가 아니다.
+	# Terrain is left alone — the water rune is not destruction.
 	var h := CellGrid.new()
 	h.apply(CellGrid.cmd_fill(400, 400, 420, 420, Mat.STONE))
 	h.apply(CellGrid.cmd_water(410, 410, 6, Tuning.WATER_MAX))
 	t.eq(h.mat_at(410, 410), Mat.STONE, "돌은 물로 안 바뀐다")
 	t.eq(h.count_material(Mat.WATER), 0, "고체 속에는 물이 한 칸도 안 생긴다")
 
-	# 🔴 타는 칸도 건너뛴다 — 파면에 유령이 남는 경로다.
+	# Burning cells are skipped too — that is the path that leaves a ghost on the burn front.
 	var f := CellGrid.new()
 	f.apply(CellGrid.cmd_fill(500, 500, 510, 500, Mat.WOOD))
 	f.ignite(505, 500)
@@ -1247,27 +1247,27 @@ func _water_disc_fills_without_wiping(t) -> void:
 	t.eq(f.unburnable_in_front_count(), 0, "타는 칸에 물을 부어도 파면이 안 오염된다")
 	t.eq(f.claimed_slot_count(), f.burning_count(), "자리 표도 맞다")
 
-	# 범위 밖 양은 짖고 버린다.
-	t.expect_error("CellGrid.cmd_water: 양")
+	# An out-of-range amount barks and is discarded.
+	t.expect_error("CellGrid.cmd_water: amount")
 	var b := CellGrid.new()
 	b.apply(CellGrid.cmd_water(600, 600, 4, Tuning.WATER_MAX + 1))
 	t.eq(b.count_material(Mat.WATER), 0, "범위 밖 양은 한 칸도 안 적신다")
 
-	# 청크를 깨운다 — 안 깨우면 만든 물이 그 자리에 얼어붙는다.
+	# It wakes the chunk — without that, the water it made freezes in place.
 	var w := CellGrid.new()
 	w.apply(CellGrid.cmd_water(700, 700, 6, Tuning.WATER_MAX))
 	w.step()
 	t.ok(w.chunk_awake_at(700, 700), "적신 자리의 청크가 깨어난다")
 
 
-## 🔴🔴 **물 룬으로 쏘면 물이 생기고, 다른 룬으로 쏘면 안 생긴다.**
-##  ⚠ **반대쪽을 같이 재는 것이 요점이다** — 「물이 생긴다」만 재면 **모든 착탄이 물을 만드는**
-##   구현도 통과하고, 그건 룬이 축이 아니게 된 것이다.
+## **Fire the water rune and water appears; fire another rune and it doesn't.**
+##  **Measuring the other side is the point** — measuring only "water appears" also passes an implementation
+##   where **every impact makes water**, and then the rune is no longer an axis.
 func _water_rune_makes_water(t) -> void:
 	for element in Tuning.ELEM_ALL:
 		var g := CellGrid.new()
 		var spell := SpellSim.new()
-		# 벽을 세우고 그 앞으로 쏜다 — 착탄이 확실히 나야 잰다.
+		# A wall is stood up and it is fired at — the impact has to actually happen for this to measure.
 		g.apply(CellGrid.cmd_fill(400, 0, 400, 400, Mat.STONE))
 		t.ok(spell.fire(SpellSim.cmd_fire(300, 200, 1, 0, element, 0)),
 			"룬 %d 로 발사된다 (검사의 전제)" % element)
@@ -1282,16 +1282,16 @@ func _water_rune_makes_water(t) -> void:
 		var total: int = _water_scan(g, 380, 180, 420, 220)[0]
 		if element == Tuning.ELEM_WATER:
 			t.ok(total > 0, "물 룬은 착탄점에 물을 만든다 (합 %d)" % total)
-			# ⚠ **격자를 한 틱 밀어야 본다.** `spell.step()` 은 격자의 flip 을 안 돌린다 —
-			#  커맨드는 `_dirty` 만 찍고 `awake` 가 되는 것은 `_chunk_flip()` 이다.
-			#  🔴 그걸 모르고 바로 보면 늘 거짓이라 「안 깨운다」로 오진한다(실제로 그랬다).
+			# **The grid has to be stepped one tick to see it.** `spell.step()` does not run the grid's flip —
+			#  a command only marks `_dirty`, and the thing that turns it into `awake` is `_chunk_flip()`.
+			#  Not knowing that and looking straight away is always false, so it misdiagnoses as "it doesn't wake" (that actually happened).
 			g.step()
 			t.ok(g.active_chunk_count() > 0,
 				"착탄이 만든 물이 청크를 깨운다 (%d개)" % g.active_chunk_count())
 		else:
 			t.eq(total, 0, "룬 %d 는 물을 한 톨도 안 만든다" % element)
 
-	# 🔴 **세기마다 다른 양이 반경에서 파생되나.** 세대가 깊어지면 원반이 작아지므로 총량도 준다.
+	# **Does a different amount per generation derive from the radius.** A deeper generation makes a smaller disc, so the total drops too.
 	t.ok(Tuning.water_r(1) < Tuning.water_r(0),
 		"세대 1의 물 반경이 세대 0보다 작다 (%d < %d)" % [Tuning.water_r(1), Tuning.water_r(0)])
 	var a := CellGrid.new()
@@ -1303,12 +1303,12 @@ func _water_rune_makes_water(t) -> void:
 	t.ok(sum_b < sum_a, "깊은 세대가 만드는 물이 더 적다 (%d < %d)" % [sum_b, sum_a])
 
 
-# ══════════════════════════════════════════════════════════════════
-#  단계 6 — 불과 물
-# ══════════════════════════════════════════════════════════════════
+# ==================================================================
+#  stage 6 — fire and water
+# ==================================================================
 
-## 나무 한 줄 + 그 아래 돌바닥.
-## ⚠ 나무를 **돌 위에** 얹는다 — 물이 나무 아래로 빠지면 이웃 판정이 흐려진다.
+## One row of wood + a stone floor beneath it.
+## The wood is laid **on stone** — water dropping below the wood would blur the neighbour acceptance.
 func _make_forest(y: int) -> CellGrid:
 	var g := CellGrid.new()
 	g.apply(CellGrid.cmd_fill(100, y + 1, 160, y + 1, Mat.STONE))
@@ -1316,22 +1316,22 @@ func _make_forest(y: int) -> CellGrid:
 	return g
 
 
-## 나무 줄 **위**에 물 한 칸을 가둔다. 🔴 **좌우를 돌로 막는 것이 요점이다.**
+## Pens one water cell **above** the wood row. **Walling the sides in stone is the point.**
 ##
-## ⚠ **막지 않으면 물이 나무 줄 위를 통째로 덮는다** — 아래가 고체(나무)라 못 내려가고
-##  좌우가 빈칸이라 끝까지 퍼진다. 그러면 **숲 전체가 젖어서 아무것도 안 타고**,
-##  「불이 물까지 번져 왔나」가 원리적으로 거짓이 된다.
-## 🔴 **실제로 그렇게 짰다가 검사가 헛돌았다**(2026-08-07) — 불이 물 근처에 오지도 못했고
-##  그런데도 「깜빡임 0」이 초록이었다. **전제 단언이 그걸 잡았다.**
+## **Unwalled, the water covers the whole wood row** — below is solid (wood) so it can't descend, and the
+##  sides are empty so it spreads to the ends. Then **the whole forest is wet and nothing burns at all**,
+##  and "did the fire spread as far as the water" becomes false in principle.
+## **It was actually written that way and the check spun idle** — the fire never even got near the water
+##  and "0 flickers" was green anyway. **The premise assertion caught it.**
 func _wet_pocket(g: CellGrid, x: int, y_wood: int) -> void:
 	g.apply(CellGrid.cmd_fill(x - 1, y_wood - 1, x - 1, y_wood - 1, Mat.STONE))
 	g.apply(CellGrid.cmd_fill(x + 1, y_wood - 1, x + 1, y_wood - 1, Mat.STONE))
 	g.set_water(x, y_wood - 1, Tuning.WATER_MAX)
 
 
-## 🔴🔴 **이미 타는 칸 옆에 물이 오면 꺼진다** — `_burn` 쪽 경로다.
-##  ⚠ 아래 `_wet_neighbour_never_catches`(점화 쪽)와 **다른 검사다.** 한 검사로 묶으면
-##   어느 경로가 죽었는지 못 가른다 — 둘은 실제로 다른 함수에 산다.
+## **Water arriving beside an already-burning cell puts it out** — the `_burn` side path.
+##  **A different check from `_wet_neighbour_never_catches` below (the ignition side).** Bundled into one,
+##   you can't tell which path died — the two really do live in different functions.
 func _water_puts_out_fire(t) -> void:
 	var g := _make_forest(300)
 	g.ignite(130, 300)
@@ -1341,14 +1341,14 @@ func _water_puts_out_fire(t) -> void:
 	t.ok(lit > 1, "불이 먼저 번진다 (%d칸 — 검사의 전제)" % lit)
 	t.eq(g.unburnable_in_front_count(), 0, "그때 파면이 깨끗하다")
 
-	# 🔴🔴 **한 칸을 지목해서 잰다.** 「불이 결국 0이 된다」로는 **아무것도 안 재진다** —
-	#  끄기를 통째로 지워도 그 칸들은 연료가 다해서 스스로 0이 된다(뒤집어 확인했다, 2026-08-07).
-	#  ⇒ 가르는 것은 **「연료가 남았는데 꺼졌고, 나무가 살아남았나」**다.
+	# **One named cell is measured.** "Fire eventually reaches 0" measures **nothing at all** —
+	#  deleting the extinguishing whole still takes those cells to 0 on their own as the fuel runs out (confirmed by inverting).
+	#  => What splits it is **"fuel was left, it went out, and the wood survived"**.
 	t.ok(g.is_burning(130, 300), "지목한 칸이 타고 있다 (검사의 전제)")
 	t.ok(g.fuel_at(130, 300) > 0, "그 칸에 연료가 아직 남아 있다 (%d)" % g.fuel_at(130, 300))
 	t.eq(g.mat_at(130, 300), Mat.WOOD, "그리고 아직 나무다")
 
-	# 🔴 **타는 한복판에 물을 붓는다.** 물 룬이 실제로 지나는 문(`cmd_water`)을 쓴다.
+	# **Water is poured into the middle of the fire.** It uses the door the water rune actually takes (`cmd_water`).
 	g.apply(CellGrid.cmd_water(130, 299, 8, Tuning.WATER_MAX))
 	g.step()
 	t.ok(not g.is_burning(130, 300), "물이 닿은 다음 틱에 곧바로 꺼진다 (연료가 남았는데도)")
@@ -1366,15 +1366,15 @@ func _water_puts_out_fire(t) -> void:
 	t.eq(g.unburnable_in_front_count(), 0, "끈 뒤에도 파면에 탈 수 없는 재료가 없다")
 	t.eq(g.claimed_slot_count(), g.burning_count(), "자리 표도 맞다")
 
-	# ⚠ **물은 안 준다** — 끈 만큼 증발시키면 `_burn` 이 `_write_water` 를 지나야 하고,
-	#  그건 `_touch` 를 타서 **타는 숲 옆 호수가 매 틱 깨어난다.**
-	# 🔴 **그 대가를 「얕은 물은 못 끈다」로 치렀다**(2026-08-07, 사용자가 정했다) —
-	#  양을 안 깎는 대신 **얇게 퍼지면 스스로 방화력을 잃는다.** `_shallow_water_does_not_put_out_fire` 참조.
+	# **The water is not reduced** — evaporating it by the amount extinguished would make `_burn` pass
+	#  `_write_water`, and that rides `_touch`, so **a lake beside a burning forest wakes every tick.**
+	# **That price was paid as "shallow water can't extinguish"** (decided by the user) —
+	#  instead of shaving the amount, **spread thin it loses its firebreak on its own.** See `_shallow_water_does_not_put_out_fire`.
 	t.ok(g.count_material(Mat.WATER) > 0, "물은 그대로 남는다 (%d칸)" % g.count_material(Mat.WATER))
 
 
-## 🔴🔴 **반대쪽.** 물이 없으면 안 꺼져야 한다 — 안 재면 「불이 그냥 꺼진 것」과 구별이 안 되고,
-##  위 검사가 **아무것도 안 재는 것**이 된다.
+## **The other side.** Without water it must not go out — unmeasured, it is indistinguishable from "the fire just
+##  went out", and the check above becomes **one that measures nothing.**
 func _no_water_means_no_rescue(t) -> void:
 	var g := _make_forest(400)
 	g.ignite(130, 400)
@@ -1382,13 +1382,13 @@ func _no_water_means_no_rescue(t) -> void:
 		g.step()
 	t.ok(g.burning_count() > 1, "같은 조건에서 불이 번진다 (검사의 전제)")
 
-	# 위 검사와 **같은 틱 수**를 돌린다. 물만 없다.
+	# Runs **the same number of ticks** as the check above. Only the water is missing.
 	for _i in 20:
 		g.step()
 	t.ok(g.burning_count() > 0,
 		"물이 없으면 같은 시간에 안 꺼진다 (%d칸이 아직 탄다)" % g.burning_count())
 
-	# 그리고 결국은 **연료가 다해서** 꺼진다 — 나무가 남지 않는 것이 그 증거다.
+	# And in the end it goes out **because the fuel runs out** — no wood left is the evidence.
 	var ticks := 0
 	while g.burning_count() > 0 and ticks < 400:
 		g.step()
@@ -1397,17 +1397,17 @@ func _no_water_means_no_rescue(t) -> void:
 	t.eq(g.count_material(Mat.WOOD), 0, "그때는 나무가 한 칸도 안 남는다 (다 탔다)")
 
 
-## 🔴🔴 **물 옆 나무에는 애초에 안 붙는다** — `_ignite_cell` 쪽 경로다.
-##  ⚠ 이게 없으면 「붙었다가 즉시 꺼진다」가 되고, 그건 화면에서 **깜빡임**이다(= 고장으로 읽힌다).
+## **Wood beside water never catches in the first place** — the `_ignite_cell` side path.
+##  Without this it becomes "it catches and goes out at once", and on screen that is a **flicker** (= read as a fault).
 func _wet_neighbour_never_catches(t) -> void:
 	var g := _make_forest(500)
 	g.set_water(130, 499, Tuning.WATER_MAX)
 	t.ok(not g.ignite(130, 500), "물 아래 나무에는 직접 붙여도 안 붙는다")
 	t.eq(g.burning_count(), 0, "파면에도 안 올라간다")
 
-	# 🔴🔴 **네 방향을 하나씩 다 잰다.** 왼쪽만 재면 `_water_adjacent` 를 **두 방향으로 줄여도**
-	#  전부 초록이다(2026-08-07에 확인했다). 방향 하나가 죽으면 그쪽에서만 불이 물을 건넌다.
-	# 🔴 옆 칸을 물로 만들려면 **먼저 파야 한다** — `set_water` 는 나무 위에 안 쓴다.
+	# **All four directions are measured one by one.** Measuring only the left leaves everything green even with
+	#  `_water_adjacent` **cut down to two directions** (confirmed). One dead direction lets fire cross water on that side.
+	# To make a neighbouring cell water it has to **be dug first** — `set_water` does not write over wood.
 	var h := _make_forest(600)
 	h.apply(CellGrid.cmd_fill(129, 600, 129, 600, Mat.EMPTY))
 	t.ok(h.set_water(129, 600, Tuning.WATER_MAX), "판 자리에 물을 놓는다 (전제)")
@@ -1418,20 +1418,20 @@ func _wet_neighbour_never_catches(t) -> void:
 	t.ok(r.set_water(131, 620, Tuning.WATER_MAX), "오른쪽을 파고 물을 놓는다 (전제)")
 	t.ok(not r.ignite(130, 620), "**오른쪽** 칸이 물이어도 안 붙는다")
 
-	# 아래 — 나무 줄 **아래**가 돌바닥이라 거기를 파고 물을 놓는다.
+	# Below — **below** the wood row is stone floor, so it is dug there and water is placed.
 	var d2 := _make_forest(640)
 	d2.apply(CellGrid.cmd_fill(130, 641, 130, 641, Mat.EMPTY))
 	t.ok(d2.set_water(130, 641, Tuning.WATER_MAX), "아래를 파고 물을 놓는다 (전제)")
 	t.ok(not d2.ignite(130, 640), "**아래** 칸이 물이어도 안 붙는다")
 
-	# 위 — 이 함수 첫 줄(물 아래 나무)이 이미 잰다.
+	# Above — the first lines of this function (wood under water) already measure it.
 
-	# 🔴 **반대쪽**: 물이 안 닿으면 붙는다. 안 재면 「아무 데도 안 붙는다」가 통과한다.
+	# **The other side**: out of the water's reach it does catch. Unmeasured, "it never catches anywhere" passes.
 	var d := _make_forest(700)
 	d.set_water(120, 699, Tuning.WATER_MAX)
 	t.ok(d.ignite(140, 700), "물에서 떨어진 나무에는 붙는다")
 
-	# 번짐도 물에서 멈춘다 — 직접 점화만 재면 `_burn` 의 번짐 경로가 안 걸린다.
+	# Spreading stops at water too — measuring only direct ignition never touches `_burn`'s spread path.
 	var s := _make_forest(800)
 	_wet_pocket(s, 140, 800)
 	s.ignite(120, 800)
@@ -1441,24 +1441,24 @@ func _wet_neighbour_never_catches(t) -> void:
 	t.ok(s.mat_at(125, 800) != Mat.WOOD, "그 앞쪽 나무는 탔다 (검사의 전제 — 불이 실제로 번졌다)")
 
 
-## 🔴🔴 **진동이 없나 — 물 아래 나무가 「붙었다 꺼졌다」를 반복하지 않나.**
+## **Is there no oscillation — does the wood under water not repeat "catches, goes out".**
 ##
-## ⚠ **`_burn` 에서만 끄면 이렇게 된다**: 이웃 불이 번져 붙는다 → 다음 틱에 꺼진다 →
-##  그 이웃이 아직 타므로 또 붙는다. 화면엔 **물가에서 불이 깜빡이는 것**으로 보이고,
-##  매번 `_write_cell` 이 돌므로 그 청크가 그동안 계속 깨어 있다.
+## **Extinguishing only in `_burn` gives exactly this**: a neighbouring fire spreads and it catches -> next tick
+##  it goes out -> that neighbour is still burning so it catches again. On screen it looks like **fire flickering
+##  at the water's edge**, and since `_write_cell` runs each time, that chunk stays awake throughout.
 ##
-## 🔴🔴 **재는 것은 「잠드나」가 아니라 「한 틱이라도 붙나」다. 그 구별이 이 검사의 전부다.**
-##  ⚠ **처음에 「끝나고 잠드나」로 짰더니 막기 전에도 초록이었다**(2026-08-07 실측).
-##   진동이 **이웃 나무의 연료가 다하면 끝나기 때문**이다 — 즉 **유한하다.** 그러니 「영영 안
-##   잠든다」는 거짓이고, 「끝나고 잠드나」는 **진동이 있어도 통과한다.**
-##  ⇒ **틱마다 그 칸을 봐야만 잡힌다.** 막기 전에 빨간 것을 확인하고 박았다.
+## **What is measured is not "does it sleep" but "does it catch for even one tick". That distinction is this check's whole point.**
+##  **Written first as "does it finish and sleep", it was green even before the block was added** (measured).
+##   The oscillation **ends when the neighbouring wood runs out of fuel** — that is, it is **finite.** So "it never
+##   sleeps" is false, and "does it finish and sleep" **passes even with the oscillation present.**
+##  => **It is caught only by looking at that cell every tick.** It was pinned after confirming it was red before the block.
 func _fire_beside_water_does_not_flicker(t) -> void:
 	var g := _make_forest(900)
-	# 숲 한쪽 끝에 **가둔** 물, 반대쪽 끝에 불. 불이 물 쪽으로 번져 와서 멈춘다.
+	# **Penned** water at one end of the forest, fire at the other. The fire spreads toward the water and stops.
 	_wet_pocket(g, 150, 900)
 	g.ignite(110, 900)
 
-	# 🔴 **틱마다 물 아래 나무를 본다.** 한 틱이라도 타면 그게 깜빡임이다.
+	# **The wood under the water is looked at every tick.** Burning for even one tick is a flicker.
 	var lit_ticks := 0
 	var ticks := 0
 	while g.burning_count() > 0 and ticks < 400:
@@ -1467,7 +1467,7 @@ func _fire_beside_water_does_not_flicker(t) -> void:
 		if g.is_burning(150, 900):
 			lit_ticks += 1
 	t.ok(ticks < 400, "불이 결국 꺼진다 (%d틱)" % ticks)
-	# 🔴 **불이 실제로 물까지 번져 왔다는 증거.** 안 오면 이 검사가 통째로 헛돈다.
+	# **Evidence the fire actually spread as far as the water.** If it doesn't, this check spins idle as a whole.
 	t.ok(g.mat_at(149, 900) != Mat.WOOD, "불이 물 바로 옆까지 번져 왔다 (검사의 전제)")
 	t.eq(lit_ticks, 0, "물 아래 나무가 한 틱도 안 붙는다 (붙었다 꺼졌다를 반복하지 않는다)")
 
@@ -1477,25 +1477,25 @@ func _fire_beside_water_does_not_flicker(t) -> void:
 	t.ok(g.count_material(Mat.WATER) > 0, "물도 그대로다")
 
 
-## 🔴🔴 **한 칸이 얕음과 불을 동시에 들지 않는다.**
+## **No cell carries shallow and burning at the same time.**
 ##
-## ⚠ **이 성질이 코드 주석 하나를 떠받치고 있다** — `cell_grid.gdshader` 의 「물 분기를 불보다 앞에
-##  둔다」가 「두 비트는 같은 칸에 못 선다」에 기대고 있고, **그걸 재는 검사가 없었다**(2026-08-07).
-## 🔴 성립하는 이유는 둘이다: 물은 연료가 0이라 점화가 안 닿고, `_write_water` 는 EMPTY·WATER
-##  위에만 쓴다. **둘 중 하나만 깨져도** 화면에서 얕은 물이 불로 그려진다.
+## **This property holds up one code comment** — `cell_grid.gdshader`'s "put the water branch ahead of the fire
+##  branch" leans on "the two bits cannot stand on the same cell", and **there was no check measuring that**.
+## It holds for two reasons: water has 0 fuel so ignition can't reach it, and `_write_water` writes only over
+##  EMPTY and WATER. **If either one breaks**, shallow water is drawn as fire on screen.
 ##
-## 🔴 **네이티브 `count()` 로 온 격자를 잰다.** `_flag` 에 쓰이는 비트가 그 둘뿐이라
-##  「둘 다 켜짐」이 곧 바이트 값 `SHALLOW|BURNING` 이다 — 아래에서 그 전제부터 단언한다.
-##  ⚠ 세 번째 상태 비트가 생기면 이 셈이 새므로, **그때 이 검사를 고쳐야 한다.**
+## **The whole grid is measured with a native `count()`.** Those two are the only bits used in `_flag`,
+##  so "both on" is exactly the byte value `SHALLOW|BURNING` — that premise is asserted first below.
+##  A third state bit would make this arithmetic leak, so **this check has to be fixed that day.**
 ##
-## ⚠🔴 **이 검사가 언제 무는지 재 봤다 — 가드 셋이 **전부** 빠져야 문다**(2026-08-07):
-##  `_ignite_cell` 의 연료 가드 · 같은 함수의 물 인접 가드 · `_burn` 의 끄기.
-##  하나나 둘만 빼면 **초록이다** — 남은 가드가 먼저 가로채기 때문이다.
-##  ⇒ **이건 1차 감지기가 아니라 뒷받침이다.** 앞의 셋은 각자 제 검사가 따로 물고,
-##   이건 **그 셋이 동시에 무너졌을 때 화면이 거짓말하는 것**을 막는 마지막 줄이다.
-##  🔴 「이게 초록이니 두 비트가 안 겹친다」로 읽지 마라 — **가드가 살아 있어서 초록일 수도 있다.**
+## **When this check bites was measured — it bites only when all three guards are gone**:
+##  `_ignite_cell`'s fuel guard · the water-adjacency guard in the same function · `_burn`'s extinguishing.
+##  Remove one or two and it stays **green** — the remaining guard intercepts first.
+##  => **This is not a first-line detector but a backstop.** Each of the three ahead of it has its own check,
+##   and this is the last line preventing **the screen from lying when all three collapse at once.**
+## Do not read it as "this is green, so the two bits don't overlap" — **it can be green because the guards are alive.**
 func _no_cell_carries_both_bits(t) -> void:
-	# 🔴 전제: `_flag` 에 쓰이는 비트가 정말 둘뿐인가. 상수 이름으로 훑어 확인한다.
+	# Premise: are the bits used in `_flag` really only two. Confirmed by sweeping the constant names.
 	var consts: Dictionary = (Mat as GDScript).get_script_constant_map()
 	var bits := 0
 	var names := 0
@@ -1509,7 +1509,7 @@ func _no_cell_carries_both_bits(t) -> void:
 
 	var g := _make_forest(950)
 	_wet_pocket(g, 150, 950)
-	# 타는 칸과 얕은 물이 **둘 다 실재하는** 상태를 만든다 — 없으면 아래 0이 공짜다.
+	# Builds a state where a burning cell and shallow water **both really exist** — without it the 0 below is free.
 	g.apply(CellGrid.cmd_fill(120, 949, 120, 949, Mat.EMPTY))
 	g.set_water(120, 949, Tuning.WATER_WET)
 	g.ignite(110, 950)
@@ -1529,8 +1529,8 @@ func _no_cell_carries_both_bits(t) -> void:
 	t.eq(bad, 0, "200틱 내내 얕음과 불을 동시에 든 칸이 한 칸도 없다")
 
 
-## 사각형 안의 물을 한 번에 훑는다 ⇒ `[합, 물 칸 수, 최대 양]`.
-## ⚠ **`aux_at` 을 쓴다** — `_aux` 를 직접 못 읽으므로 격자의 공개 문만 지난다.
+## Scans the water in a rectangle in one pass => `[sum, water cell count, maximum amount]`.
+## **It uses `aux_at`** — `_aux` can't be read directly, so it goes only through the grid's public door.
 func _water_scan(g: CellGrid, x0: int, y0: int, x1: int, y1: int) -> Array:
 	var total := 0
 	var cells := 0
@@ -1547,8 +1547,8 @@ func _water_scan(g: CellGrid, x0: int, y0: int, x1: int, y1: int) -> Array:
 
 
 
-## 불이 다 꺼질 때까지 돈다. 반환은 돈 틱 수.
-## ⚠ `cap` 에 닿았으면 안 꺼진 것이다 — 부르는 쪽이 그걸 단언해야 한다.
+## Runs until the fire is fully out. The return is the number of ticks run.
+## If it hit `cap` it did not go out — the caller must assert that.
 func _burn_out(g: CellGrid, cap: int) -> int:
 	var n := 0
 	while g.burning_count() > 0 and n < cap:
@@ -1557,22 +1557,22 @@ func _burn_out(g: CellGrid, cap: int) -> int:
 	return n
 
 
-## 🔴🔴 **얕은 물은 불을 못 끈다** (2026-08-07, 사용자가 정했다).
+## **Shallow water cannot put out fire** (decided by the user).
 ##
-## ⚠ **왜 이 검사가 생겼나**: 화면에서 **F 한 번(797칸)이 좌우로 퍼져 숲 ≈860칸을 영구 방화
-##  처리했다.** 200초가 지나도 아직 자랐다. 물이 안 줄고 · 닿은 칸이 안 타고 · 계속 퍼지는
-##  **셋의 곱**이었고, 이 검사가 재는 것은 **가운데 항**이다.
+## **Why this check came to exist**: on screen **one press of F (797 cells) spread left and right and permanently
+##  fireproofed a forest of ~860 cells.** It was still growing after 200 seconds. It was the **product of three** —
+##  the water not shrinking · the cells it touched not burning · it spreading on — and this check measures the **middle term**.
 ##
-## 🔴🔴 **어느 단언도 혼자서는 임계를 못 잰다 — 전부 짝으로 잰다.**
-##  ⚠ 「얕은 물이 못 끈다」만 재면 `_water_adjacent` 를 **통째로 `return false`** 로 만들어도 초록이고,
-##   「깊은 물이 끈다」만 재면 임계를 **지워도** 초록이다(그게 옛 코드다).
-##  ⇒ **한 배치에서 물의 양 하나만 바꾼 두 판**을 돌려 **서로 다르게 굴어야** 임계가 거기 있는 것이다.
-## 🔴 **상수를 그대로 쓴다.** 32를 박으면 값이 바뀌는 날 검사가 조용히 헛돈다.
+## **No single assertion can measure the threshold on its own — they are all measured in pairs.**
+##  Measuring only "shallow water can't extinguish" is green even with `_water_adjacent` turned into **`return false` whole**,
+##   and measuring only "deep water extinguishes" is green even with the threshold **deleted** (that was the old code).
+##  => Only two runs **from one arrangement differing in the water amount alone** that **behave differently** put the threshold there.
+## **The constant is used as is.** Baking in 32 makes the check spin idle silently the day the value changes.
 func _shallow_water_does_not_put_out_fire(t) -> void:
-	# ── ① 가둔 한 칸, 임계의 양쪽 ────────────────────────────────
-	# 🔴 **좌우를 돌로 막는다**(`_wet_pocket` 과 같은 이유) — 안 막으면 물이 나무 줄 위를
-	#  통째로 덮으며 얇아져서, 「얕은 한 칸」이 아니라 아래 ②의 시트를 재게 된다.
-	#  ⚠ 실제로 그렇게 짰다가 검사가 ②와 중복됐다(2026-08-07).
+	# -- (1) one penned cell, both sides of the threshold ----------------
+	# **The sides are walled in stone** (the same reason as `_wet_pocket`) — unwalled, the water covers the whole
+	#  wood row and thins out, so it measures (2)'s sheet below instead of "one shallow cell".
+	#  It was actually written that way and the check duplicated (2).
 	var wood_by_amount := {}
 	for amount in [Tuning.WATER_WET, Tuning.WATER_WET + 1]:
 		var g := _make_forest(400)
@@ -1584,21 +1584,21 @@ func _shallow_water_does_not_put_out_fire(t) -> void:
 		t.ok(ticks < 600, "물 %d — 불이 결국 꺼진다 (%d틱)" % [amount, ticks])
 		wood_by_amount[amount] = g.count_material(Mat.WOOD)
 
-	# 🔴 **실측(2026-08-07): 32 ⇒ 0칸 · 33 ⇒ 11칸.** 한 톨 차이로 숲 하나가 갈린다.
+	# **Measured: 32 => 0 cells · 33 => 11 cells.** One grain of difference splits a whole forest.
 	t.eq(wood_by_amount[Tuning.WATER_WET], 0,
 		"**임계와 같은 얕은 물** 아래로 불이 지나가 숲이 한 칸도 안 남는다")
 	t.ok(wood_by_amount[Tuning.WATER_WET + 1] > 0,
 		"**한 톨만 더 깊으면** 거기서 멈춰 숲이 남는다 (%d칸)" % wood_by_amount[Tuning.WATER_WET + 1])
 
-	# ── ② 🔴🔴 진짜 문제였던 그림 — **퍼진 시트는 방화선이 안 된다** ──
+	# -- (2) the picture that was the real problem — **a spread sheet is not a firebreak** --
 	#
-	# ⚠ **①은 「한 칸」을 잰다. 이건 「퍼진 뒤」를 잰다** — 화면에서 난 것이 이 모양이었다.
-	#  🔴 그리고 **①이 초록인데 이것만 빨간 상태가 가능하다**: 정착한 시트의 양이 임계 아래로
-	#   내려가는지는 **흐름이 정하는 것**이지 임계 하나가 정하는 게 아니다.
+	# **(1) measures "one cell". This measures "after it spread"** — this is the shape it took on screen.
+	#  And **(1) can be green while only this is red**: whether the settled sheet's amount drops below the
+	#   threshold is decided by **the flow**, not by the threshold alone.
 	#
-	# 🔴🔴 **대조군 B가 이 검사의 절반이다.** 자리도 지형도 틱도 같고 **물의 양 하나만 다르다** —
-	#  A는 정착한 그대로(얕다), B는 같은 칸들을 `WATER_MAX` 로 올린다.
-	#  ⇒ 「A에서 숲이 탄다」가 **임계 때문**이라는 것을 B가 아니면 못 보인다.
+	# **Control B is half of this check.** Same position, same terrain, same ticks, **only the water amount differs** —
+	#  A is the settled sheet as it lies (shallow), B raises those same cells to `WATER_MAX`.
+	#  => Without B there is no way to show that "the forest burns in A" is **because of the threshold**.
 	var result := {}
 	var sheet_cells := 0
 	for tag in ["A", "B"]:
@@ -1608,7 +1608,7 @@ func _shallow_water_does_not_put_out_fire(t) -> void:
 		t.ok(settle > 1, "%s — 물이 실제로 여러 틱 흘렀다 (%d틱)" % [tag, settle])
 		t.ok(settle < 400, "%s — 평형에 도달했다 (cap에 안 닿았다)" % tag)
 
-		# 시트가 어디에 눕었나. 🔴 자리를 짐작하지 않고 **읽는다** — B가 그 자리를 그대로 쓴다.
+		# Where the sheet came to rest. The positions are not guessed but **read** — B uses those same positions.
 		var xs: Array[int] = []
 		var peak := 0
 		for x in range(100, 161):
@@ -1630,10 +1630,10 @@ func _shallow_water_does_not_put_out_fire(t) -> void:
 		t.ok(ticks < 600, "%s — 불이 결국 꺼진다 (%d틱)" % [tag, ticks])
 		result[tag] = g.count_material(Mat.WOOD)
 
-	# 🔴 **실측(2026-08-07): 시트 17칸 · A 1칸 남음 · B 56칸 남음.**
-	#  ⚠ A가 정확히 0이 아닌 것은 **타이밍이다** — 물이 아직 깊을 때 불이 그 칸을 지나면
-	#   다시 붙여 줄 이웃이 없다. 그래서 **0을 요구하지 않는다.**
-	#  🔴 대신 **「시트가 덮은 칸 수」와 견준다**: 옛 거동이라면 시트 아래 나무가 **전부** 살았다.
+	# **Measured: sheet 17 cells · A leaves 1 cell · B leaves 56 cells.**
+	#  A is not exactly 0 because of **timing** — if the fire passes a cell while the water is still deep,
+	#   there is no neighbour left to light it again. So **0 is not demanded.**
+	#  Instead it is **weighed against "the number of cells the sheet covers"**: under the old behaviour **all** the wood under the sheet survived.
 	t.ok(result["A"] < sheet_cells,
 		"A — 얇게 퍼진 시트가 **방화선이 안 된다** (시트 %d칸인데 %d칸만 남았다)"
 			% [sheet_cells, result["A"]])

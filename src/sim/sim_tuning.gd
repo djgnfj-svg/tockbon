@@ -1,523 +1,527 @@
 extends RefCounted
-## 시뮬 손잡이 — 🔴🔴 **정수만.** 격자와 투사체에 닿는 값이 전부 여기 있다.
+## Sim knobs — **integers only.** Every value touching the grid and projectiles lives here.
 ##
-## 🔴 **연출 상수는 여기 없다.** 그건 `src/view/fx_tuning.gd`다.
-##  v1은 둘을 한 파일에 두고 `SIM-BLOCK-BEGIN/END` 텍스트 마커로 갈랐고, 그 파일 주석이 스스로
-##  「마커를 지우거나 늘리면 그물이 조용히 헛돈다」고 적었다. ⇒ **폴더로 가르니 마커가 통째로 사라졌다.**
-##  「연출 상수는 한 파일」은 `fx_tuning.gd`가 그대로 지킨다.
+## **Presentation constants are not here.** Those are `src/view/fx_tuning.gd`.
+##  v1 kept both in one file split by `SIM-BLOCK-BEGIN/END` text markers, and that file's own comment said
+##  "delete or add a marker and the net silently spins". => **Splitting by folder removed the markers entirely.**
+##  "Presentation constants in one file" is still held by `fx_tuning.gd`.
 ##
-## 🔴 이 파일이 `src/sim/` 안에 있으므로 `net_determinism`의 폴더 스캔에 걸린다 —
-##  float·`Vector2`·`sqrt`·삼각함수·`randi`·`Time.`이 하나도 없어야 한다.
+## This file being inside `src/sim/` puts it in `net_determinism`'s folder scan —
+##  not one float, `Vector2`, `sqrt`, trig function, `randi` or `Time.` may appear.
 
-# ─── 격자 ↔ 화면 ──────────────────────────────────────────────────
-## 셀 하나가 화면에서 몇 px인가. GDD 확정값.
-## 🔴 **여기가 단일 소스다.** 렌더도(`src/view/`) 조준도(`src/actor/aim.gd`) 이 값을 읽는다 —
-##  4를 각자 박으면 「조준이 미묘하게 빗나간다」로만 보인다.
-## ⚠ `src/actor/`는 `src/view/`를 preload 할 수 없으므로(`net_layers`) 이 상수가 `sim`에 있어야 한다.
+# --- grid <-> screen ------------------------------------------------
+## How many screen px one cell is. A GDD-settled value.
+## **This is the single source.** Rendering (`src/view/`) and aiming (`src/actor/aim.gd`) both read it —
+##  hardcode 4 in each and it only ever looks like "aim is subtly off".
+## `src/actor/` cannot preload `src/view/` (`net_layers`), so this constant has to live in `sim`.
 const CELL_PX := 4
 
-## 지형 타일 한 변의 셀 수. 32px 타일 = 8×8 셀 = 캐릭터와 같은 두께(GDD 격자).
-## 🔴🔴 **셀(`CELL_PX` 4)은 안 바뀌었다. 바뀐 것은 타일 한 변의 셀 수다.**
-##  GDD가 「셀을 16px로 키우면 구멍 하나가 곧 통과라서 위력 구분이 통째로 뭉개진다」고 못 박았다 —
-##  타일을 두껍게 하는 길로 간 이유가 그것이다.
-## ⚠ **화면 배율이 2배 → 1배가 됐다**(뷰포트 960×540 → 1920×1080, 창은 그대로).
-##  ⇒ **셀 단위인데 뜻이 「화면에서 이만큼 크다」인 값은 전부 ×2 해야 화면이 보존된다.**
-##  「단위가 셀이니까 그대로」로 판단하면 폭발·탄·흔적이 화면에서 절반이 된다 — 실제로 한 번 틀렸다.
+## Cells per terrain tile side. A 32px tile = 8x8 cells = the same thickness as the character (GDD grid).
+## **The cell (`CELL_PX` 4) did not change. What changed is cells per tile side.**
+##  The GDD pins "raise cells to 16px and one hole is a passage, mushing power tiers entirely" —
+##  that is why the path taken was thickening the tile.
+## **Screen scale went 2x -> 1x** (viewport 960x540 -> 1920x1080, window unchanged).
+##  => **Any value in cells whose meaning is "this big on screen" must be doubled to preserve the screen.**
+##  Judging "the unit is cells, so leave it" halves blasts, bolts and traces on screen — that mistake was made once.
 const TILE_CELLS := 8
 
-# ─── 청크 재우기 ──────────────────────────────────────────────────
-## 청크 한 변의 셀 수. 🔴🔴 **최적화 손잡이가 아니라 물의 전제다** —
-##  격자를 GDScript로 한 번 훑는 데 62,676μs, 20Hz 틱 예산이 50,000μs다(`cell_grid.CELL_COUNT` 주석).
+# --- chunk sleep ----------------------------------------------------
+## Cells per chunk side. **Not an optimization knob but water's prerequisite** —
+##  one GDScript sweep of the grid is 62,676us against a 20Hz budget of 50,000us (`cell_grid.CELL_COUNT` comment).
 ##
-## 🔴 **16은 고른 값이 아니라 유일한 값이다.** `W=4096 / 16 = 256` · `H=1008 / 16 = 63` 으로
-##  양쪽이 나눠떨어지는 유일한 후보다 — 32는 H가 31.5, 64는 15.75다. ⚠ v1도 16이었다.
-##  🔴 안 나눠떨어지면 `cell_grid._init()` 이 짖는다. 조용히 두면 가장자리 셀이
-##   **범위 밖 청크를 찍는다**(`X_SHIFT` 검사와 같은 자리·같은 이유).
-## ⚠ **격자 크기(`W`·`H`)는 `cell_grid` 에 있다.** 여기서 파생 상수를 만들 수 없다 —
-##  `cell_grid` 가 이 파일을 읽으므로 순환이다(`MAX_BURNING` 주석과 같은 함정).
+## **16 is not a chosen value but the only one.** `W=4096 / 16 = 256` and `H=1008 / 16 = 63` is the only
+##  candidate dividing both — 32 gives H 31.5, 64 gives 15.75. v1 was 16 too.
+##  Not dividing evenly makes `cell_grid._init()` bark. Left silent, edge cells
+##   **index out-of-range chunks** (same place, same reason as the `X_SHIFT` check).
+## **Grid size (`W`, `H`) lives in `cell_grid`.** A derived constant can't be made here —
+##  `cell_grid` reads this file, so it would be circular (the same trap as the `MAX_BURNING` comment).
 const CHUNK_CELLS := 16
 
-# ─── 물 ───────────────────────────────────────────────────────────
-## 한 칸이 담는 물의 최대량. 🔴 **255는 고른 값이 아니다** — 양이 `_aux` 에 들어가고
-##  그건 `PackedByteArray` 다. 넘기면 **에러 없이 하위 8비트로 잘린다**(`bake_fuel` 이 데인 자리).
-## ⚠ **채워진 칸(255)이 많을수록 싸다** — 위아래가 꽉 차면 아무것도 안 옮기고 그 청크는 잠든다.
-##  호수 속이 공짜인 이유가 이것이다(`docs/design/물.md` 「왜 양인가」).
+# --- water ----------------------------------------------------------
+## Maximum water one cell holds. **255 is not a chosen value** — the amount goes into `_aux`,
+##  which is a `PackedByteArray`. Exceed it and it is **truncated to the low 8 bits with no error**
+##  (the place `bake_fuel` got burned).
+## **The more full cells (255), the cheaper** — packed above and below, nothing moves and that chunk sleeps.
+##  That is why a lake's interior is free (`docs/design/water.md`, "why amount").
 const WATER_MAX := 255
 
-## 좌우 이웃과의 양 차이가 이 값 **이하면 안 옮긴다.**
+## If the amount differs from a left/right neighbor by this much **or less, nothing moves.**
 ##
-## 🔴🔴 **여기가 「물이 멈추나」의 유일한 손잡이다.** 없으면 홀수가 영원히 안 나눠져
-##  1씩 좌우로 왕복하고, 그러면 청크가 **절대 안 잠들어** 청크 재우기가 통째로 무효가 된다.
-##  ⚠ v1이 죽은 자리가 정확히 그것이다(`docs/design/물.md` 「v1이 죽은 자리」).
+## **This is the sole knob for "does water stop".** Without it an odd number never divides and
+##  ping-pongs 1 left and right forever, so the chunk **never sleeps** and chunk sleep is void.
+##  That is exactly where v1 died (`docs/design/water.md`, "where v1 died").
 ##
-## 🔴🔴 **「젖음 임계」와 다른 손잡이다. 섞지 마라.** spec이 2026-08-07에 뒤집어 쟀다 —
-##  젖음 임계만 0 → 8 → 32 → 64로 바꾸면 이동 셀 수가 **하나도 안 달라진다.**
-##  ⇒ 멈춤을 정하는 것은 이 값이고, 젖음은 **화면 값**이다.
+## **A different knob from the wetness threshold. Do not mix them.** spec inverted and measured it —
+##  changing only the wetness threshold 0 -> 8 -> 32 -> 64 changes **the moved-cell count by nothing.**
+##  => This value decides stopping; wetness is **a screen value.**
 ##
-## 🔴 **4는 「돌아가는 최소」로 고른 값이지 멈춤을 산 값이 아니다.** 실측이 말하는 것은
-##  **어떤 값도 넓은 물을 멈추게 못 한다**는 것이다(폭 128셀은 32로도 4,000틱에 안 멈춘다):
+## **4 was chosen as "the minimum that runs", not as a value that buys stopping.** What the measurements say
+##  is that **no value stops wide water** (128 cells wide doesn't stop by 4,000 ticks even at 32):
 ##
-##      폭 32셀   MIN_DIFF 16 → 2,798틱 · 32 → 1,662틱 · 8 이하 → 안 멈춤
-##      폭 64셀   32 → 3,958틱 · 16 이하 → 안 멈춤
-##      폭 128셀  전부 안 멈춤
+##      width 32   MIN_DIFF 16 -> 2,798 ticks · 32 -> 1,662 · 8 or less -> never
+##      width 64   32 -> 3,958 ticks · 16 or less -> never
+##      width 128  never, at any value
 ##
-## ⚠ **판정 2(평평하게 눕나)와 판정 1-a(좁은 물이 0이 되나)가 서로 당기는 축이다** —
-##  올리면 빨리 멈추고 **수면이 눈에 띄게 기울고**(이웃마다 최대 32/255 = 12.5% 차),
-##  내리면 평평하고 오래 산다. 🔴 **화면을 보고 바꿀 값이다.**
-## ⚠ 1-b(넓은 물이 잠기나)는 이 축에 거의 안 걸린다 — 깨어 있는 청크는 **표면 띠뿐**이라
-##  폭이 8배가 돼도 7 → 18이다(`docs/design/물.md` 「왜 양인가」).
+## **Acceptance 2 (does it lie flat) and 1-a (does narrow water reach 0) pull against each other** —
+##  raise it and it stops sooner but **the surface visibly tilts** (up to 32/255 = 12.5% per neighbor);
+##  lower it and it lies flat and lives long. **A value to change while looking at the screen.**
+## 1-b (does wide water sleep) barely feels this axis — only the **surface band** stays awake,
+##  so eight times the width goes 7 -> 18 (`docs/design/water.md`, "why amount").
 const WATER_MIN_DIFF := 4
 
-## 🔴🔴 **한 틱에 `_water_step` 을 몇 번 도나 — 「물만」 빠르게 하는 유일한 손잡이다.**
-##  2026-08-07에 사용자가 화면을 보고 「물이 퍼지는 게 느리다」고 판정했다. 낙하가 아니라
-##  **고인 뒤 좌우로 평평해지는 속도**다.
+## **How many times `_water_step` runs per tick — the only knob that speeds up water alone.**
+##  The user watched the screen and judged "water spreads slowly". Not the fall but
+##  **how fast it flattens left and right after pooling.**
 ##
-## 🔴🔴 **`TICK_DIVIDER` 로 대신하면 게임 전체가 빨라진다** — 탄 속도·사거리·불 번짐이 같이
-##  N배가 되고 **틱 예산이 50,000 → 16,667μs 로 준다.** ⇒ 물만 손대는 문은 여기뿐이다.
+## **Using `TICK_DIVIDER` instead speeds up the whole game** — bolt speed, range and fire spread all go
+##  N times faster and **the tick budget drops 50,000 -> 16,667us.** => This is the only door touching water alone.
 ##
-## 🔴 **`WATER_MIN_DIFF` 로도 못 산다 — 그 축은 이미 쟀다**(2026-08-07):
+## **`WATER_MIN_DIFF` can't buy it either — that axis was already measured**:
 ##
-##      폭 32   MIN_DIFF 4 → 620틱   · 16 → 504틱
-##      폭 128  MIN_DIFF 4 → 6,192틱 · 16 → 4,047틱
+##      width 32   MIN_DIFF 4 -> 620 ticks   · 16 -> 504
+##      width 128  MIN_DIFF 4 -> 6,192 ticks · 16 -> 4,047
 ##
-##  **1.5배가 전부**이고, 16으로 올리면 **수면이 7배 기운다**(폭 128에서 높이 차 1칸 → 7칸) ⇒
-##  **판정 2를 팔아서 1.5배를 사는 것**이다. 서브스텝은 그 축을 안 판다 — 규칙은 그대로고
-##  **같은 규칙을 더 자주 돌릴 뿐**이다.
+##  **1.5x is all of it**, and raising it to 16 **tilts the surface 7x** (at width 128, a 1-cell height
+##  difference becomes 7) => **it sells acceptance 2 to buy 1.5x.** Substeps don't dig that axis —
+##  the rule is unchanged and **the same rule simply runs more often.**
 ##
-## 🔴🔴 **1이면 이 상수가 들어오기 전과 정확히 같다.** `_water_dir(sub)` 이 `(_tick + sub)` 에서
-##  파생되므로 sub가 0 하나뿐이면 옛 식과 같은 값이 나온다. **되돌리는 길이 이 줄 하나여야 한다.**
+## **At 1 this is exactly identical to before this constant existed.** `_water_dir(sub)` derives from
+##  `(_tick + sub)`, so with only sub 0 it produces the old expression's value. **The way back must be this one line.**
 ##
-## 🔴 **비용이 그대로 N배다** — 밴드 항도 청크 항도 N번 낸다(`cell_grid._water_tick` 주석).
-##  ⚠ **읽고 낸 판단이지 실측이 아니다**(루프가 N번 돈다는 것까지가 확실한 것이다).
-##  🔴 **그래서 `MAX_CHUNKS_PER_TICK` 의 실효 한계가 N분의 1이 된다** — 그 상수 주석의 절벽 표를 봐라.
-##  ⚠ **평소엔 안 닿는다**: 고인 호수는 깨어 있는 청크가 7~18이라 3배여도 21~54이고
-##   절벽은 ≈100청크(N=1 기준)였다. 닿는 것은 **댐이 터지는 순간**뿐이다.
+## **Cost is N times, exactly** — both the band term and the chunk term are paid N times
+##  (`cell_grid._water_tick` comment). **A judgment from reading, not a measurement** (what is certain is only
+##  that the loop runs N times).
+##  **So `MAX_CHUNKS_PER_TICK`'s effective limit becomes one Nth** — see the cliff table in that constant's comment.
+##  **Normally it isn't reached**: a still lake keeps 7-18 chunks awake, so 3x is 21-54 while the cliff was
+##   ~100 chunks (at N=1). Only **the moment a dam breaks** reaches it.
 ##
-## ⚠ **낙하도 같이 N배가 된다.** 이 값은 `_water_step` **전체**를 반복하지 좌우 나눔만 반복하지
-##  않는다 — 사용자가 느리다고 한 것은 좌우뿐이다. 🔴 **낙하가 과해 보이면 그때 축을 가른다.**
-##  ⚠ `net_water` 의 「한 틱에 정확히 N칸」이 그 사실을 값으로 들고 있다.
+## **The fall scales N times too.** This value repeats **all of** `_water_step`, not just the left/right share —
+##  what the user called slow was only left/right. **If the fall looks excessive, split the axes then.**
+##  `net_water`'s "exactly N cells per tick" holds that fact by value.
 ##
-## ── 🔴 잰 값 (2026-08-07, verify-run. N=1 은 격리 사본에서 이 줄만 1로 바꿔 쟀다) ──
+## -- measured (verify-run. N=1 was measured in an isolated copy with only this line set to 1) --
 ##
-##      눕는 데 걸리는 틱   폭 32  719 → 244 (2.95×) · 폭 64 2,284 → 742 (3.08×)
-##                          폭 128 7,252 → 2,388 (3.04×)
-##      낙하                1칸/틱 → **2.67칸/틱** (3배가 아니다 — 위 「밴드 경계」)
-##      비용                **3.0~3.4배**. 폭 512 최악이 예산의 68% (N=1 은 16%)
-##      총량 · 좌우 편향 · 최대 활성 청크   **N=1 과 같다**(편향 0.0046% · 청크 28/42/90)
+##      ticks to lie flat   width 32  719 -> 244 (2.95x) · width 64 2,284 -> 742 (3.08x)
+##                          width 128 7,252 -> 2,388 (3.04x)
+##      fall                1 cell/tick -> **2.67 cells/tick** (not 3x — see "band boundary" above)
+##      cost                **3.0-3.4x**. Width 512 worst case is 68% of budget (16% at N=1)
+##      total volume · left-right bias · max active chunks   **same as N=1** (bias 0.0046% · chunks 28/42/90)
 ##
-## 🔴🔴 **근사가 아니다 — N=3 의 틱 k 가 옛 코드의 틱 3k 와 물 상태가 정확히 같다**
-##  (자리-가중 체크섬 100/100 일치). **시간을 3배로 압축한 것**이지 규칙이 달라진 게 아니다.
-## ⚠ **총 일의 양은 거의 안 는다** — 폭 128 정착까지 벽시계가 9,867ms → 10,426ms 다.
-##  **같은 일을 짧은 시간에 몰아서 한다**가 맞는 문장이다.
-## 🔴 **`= 1` 이 옛 코드와 바이트 단위로 같다는 것도 확인됐다**(300틱 체크섬 0/300 불일치,
-##  음성 대조로 N=3 은 600/300 다름). **되돌리는 길이 이 줄 하나다.**
+## **Not an approximation — tick k at N=3 has exactly the same water state as tick 3k in the old code**
+##  (position-weighted checksum, 100/100 match). **Time was compressed 3x**, the rule did not change.
+## **Total work barely grows** — settling at width 128 goes 9,867ms -> 10,426ms of wall clock.
+##  "The same work crammed into less time" is the accurate sentence.
+## **`= 1` being byte-identical to the old code was confirmed too** (300-tick checksum, 0/300 mismatches;
+##  the negative control at N=3 differed 600/300). **The way back is this one line.**
 ##
-## 🔴🔴 **3은 사용자가 화면을 보고 고른 값이다** (2026-08-07). 게임을 띄워 F로 물을 붓고
-##  퍼지는 것을 본 뒤 「좋네」로 확정했다. ⚠ **낙하가 2.67배가 된 것도 같이 통과했다** —
-##  사용자가 원래 「낙하는 안 느리다」고 했으므로 **그게 과해 보였으면 여기서 걸렸을 것이다.**
-## ⚠ **확인 범위: 눈으로만.** 스크린샷 없고, F 키로 부은 웅덩이 하나를 봤다.
-##  **댐이 터지는 규모(활성 청크 100↑)는 안 봤다** — 거기는 판정 7이고 아직 실패 상태다.
+## **3 is a value the user chose while looking at the screen.** They launched the game, poured water with F,
+##  watched it spread, and settled on "that's good". **The fall becoming 2.67x passed with it** —
+##  the user had said "the fall isn't slow", so **had it looked excessive it would have been caught here.**
+## **Scope of confirmation: eye only.** No screenshot, and one puddle poured with F.
+##  **Dam-break scale (100+ active chunks) was not seen** — that is acceptance 7, still failing.
 const WATER_SUBSTEPS := 3
 
-## 🔴🔴 **한 틱의 낙하가 몇 칸인가 — 낙하 속도의 유일한 손잡이다**(`water-jump-and-escape.md` 단계 2).
+## **How many cells one tick's fall covers — the only knob for fall speed** (`water-jump-and-escape.md`, stage 2).
 ##
-## 🔴 **셀당 속도 상태를 안 든다.** `_aux`가 이미 양(0~255)으로 꽉 차 있어 새 속도 바이트를
-##  깔 자리가 없다(`docs/design/물.md` 「낙하에 가속이 없다」). ⇒ **속도를 흉내 내는 대신,
-##  한 틱에 아래로 연속된 빈칸을 이 칸 수까지 한 번에 훑어 제일 낮은 빈칸에 통째로 옮긴다.**
-##  물이나 고체를 만나면 거기서 멈추고 지금 규칙(합치거나 막힌다) 그대로 처리한다.
+## **It carries no per-cell velocity state.** `_aux` is already full with the amount (0-255), leaving no room
+##  for a velocity byte (`docs/design/water.md`, "falling has no acceleration"). => **Instead of imitating
+##  velocity, scan up to this many consecutive empty cells below in one tick and move the whole thing to the
+##  lowest empty cell.** On hitting water or solid, stop there and handle it by the current rules (merge, or blocked).
 ##
-## 🔴🔴 **4로 시작한다. 잴 수 있는 목표가 있었다** (물속 중력과 달리 K는 미룰 수 없다 —
-##  상수가 없으면 낙하 코드를 한 글자도 못 쓴다).
+## **Starts at 4. There was a measurable target** (unlike underwater gravity, K can't be deferred —
+##  without the constant not one line of fall code can be written).
 ##
-## 🔴🔴 **그런데 산술(`K × 서브스텝`)로 짠 속도 표는 틀렸다 — 실측으로 갈아 끼웠다**
-##  (2026-08-08, verify-read·verify-run 두 검증자가 독립으로 재고 값이 일치했다).
-##  **「한 틱 최댓값」과 「평균 속도」는 다른 수다** — 아래가 그 둘을 갈라 적은 것이다:
+## **But the speed table computed arithmetically (`K x substeps`) was wrong — it was replaced by measurement**
+##  (verify-read and verify-run measured independently and agreed).
+##  **"Per-tick maximum" and "average speed" are different numbers** — split here:
 ##
-##      틱당 평균(K=4, 실측)   **8.0~8.04칸/틱 · 640~643 px/s · 20.1타일/초**
-##      한 틱 최댓값(`K×서브스텝`)   12칸/틱 · 960 px/s          ← 안전망 상한일 때만 맞는 값
+##      per-tick average (K=4, measured)   **8.0-8.04 cells/tick · 640-643 px/s · 20.1 tiles/s**
+##      per-tick maximum (`K x substeps`)  12 cells/tick · 960 px/s     <- correct only as a safety ceiling
 ##
-## 🔴 **원인이 값으로 잡혔다.** 틱별 이동이 `12, 4, 12, 4 …` 로 **정확히 교대한다**
-##  (12+4=16=밴드 높이) — 아래 ⚠(밴드 경계 스킵)의 그 배치가 K칸 낙하에서는 **매 틱 걸러
-##  한 번** 걸린다. ⇒ **손실률이 K가 커질수록 는다**: K=1일 때 11%였던 손실이 K=4에서 **33%**다.
-## ⚠ **`K × WATER_SUBSTEPS` 가 틀린 상수는 아니다** — **「평균 속도」로 읽으면** 틀리고,
-##  `net_water._water_falls_per_tick` 이 재는 **「한 틱에 못 넘는 상한(안전망)」로는 여전히 맞다.**
-##  그 검사와 안전선 표는 **그 파일에 한 곳만** 둔다(CLAUDE.md 「같은 설명이 두 파일에 나오면
-##  한 곳으로 옮긴다」 — 여기 뒀다가 장면을 넓히고 여길 안 고쳐서 한 번 갈렸다).
-## ⚠ **최종 값은 사용자가 화면을 보고 정한다.** 4가 「아직 느리다」면 6, 그 위로 가려면
-##  `net_water` 의 장면(자유낙하 여유)부터 키워야 한다 — 그리고 **K가 커지면 밴드 교대 손실도
-##  커지므로 그때 이 평균값(8칸/틱)도 다시 실측해라.** K에 선형으로 안 따라간다.
+## **The cause was caught by value.** Per-tick movement alternates **exactly `12, 4, 12, 4 …`**
+##  (12+4=16=band height) — the band-boundary skip below is hit **every other tick** for a K-cell fall.
+##  => **The loss rate grows with K**: 11% at K=1 becomes **33%** at K=4.
+## **`K x WATER_SUBSTEPS` is not a wrong constant** — it is wrong **read as "average speed"** and
+##  still correct as **"the ceiling a tick cannot exceed (the safety net)"**, which is what
+##  `net_water._water_falls_per_tick` measures.
+##  That check and its safety table live **in one place, in that file** (CLAUDE.md, "if the same explanation
+##  appears in two files, move it to one" — it was kept here once, the scene grew, this wasn't updated, and they diverged).
+## **The final value is the user's, decided on screen.** 6 if 4 is "still slow"; going higher requires
+##  enlarging `net_water`'s scene (free-fall headroom) first — and **as K grows the band-alternation loss
+##  grows too, so re-measure this average (8 cells/tick) then.** It does not track K linearly.
 ##
-## ⚠ **밴드 경계를 K칸씩 건너뛸 수 있다** — `_write_water` 가 도착 청크를 깨우니 원리적으론
-##  맞지만, 건너뛴 밴드가 그 틱에 안 깨어 있으면 물이 잠깐 공중에 멈춘 것처럼 보일 수 있다.
-##  ⚠ **실측으로 닫혔다(2026-08-08)**: 40틱·111틱 관측 둘 다 **0칸짜리 틱이 0개다** —
-##  K(4)가 밴드 높이(16)보다 작아 원리적으로 못 건너뛴다. `net_water` 가 값으로 잰다.
+## **A band boundary can be skipped K cells at a time** — `_write_water` wakes the destination chunk so it is
+##  correct in principle, but if a skipped band isn't awake that tick, water can look briefly stalled in mid-air.
+##  **Closed by measurement**: both the 40-tick and 111-tick observations had **zero 0-cell ticks** —
+##  K (4) is smaller than the band height (16), so skipping is impossible in principle. `net_water` measures it by value.
 const WATER_FALL_CELLS := 4
 
-## 🔴🔴 **한 틱에 도는 청크 수의 안전망.** 넘으면 나머지는 **다음 틱으로 민다** — 버리지 않는다.
-##  화면엔 「물이 잠깐 천천히 흐른다」로 보이고 **물이 멈추거나 사라지지 않는다.**
+## **Safety net on chunks processed per tick.** Over it, the rest is **pushed to the next tick** — never discarded.
+##  On screen it looks like "water flows slowly for a moment" and **water never stops or vanishes.**
 ##
-## 🔴 **`MAX_BURNING` 과 정확히 같은 어법이다 — 안전망이지 조절 손잡이가 아니다.**
-##  여기 자주 걸리는 게 보이면 값을 올리지 말고 **레벨에 물을 얼마나 뒀나**를 봐라.
+## **Exactly the same idiom as `MAX_BURNING` — a safety net, not a tuning knob.**
+##  If it starts biting often, don't raise the value — look at **how much water the level holds.**
 ##
-## ⚠ **원래 512였던 근거**(지금은 안 쓴다): 화면 한 판이 480×270셀 = 30×17 = **510청크**이므로
-##  상한이 그보다 작으면 보이는 물이 상시 밀린다는 것이었다.
-##  🔴 **그 값은 「화면에 몇 청크가 보이나」에서 나왔고 「몇 청크를 감당하나」를 안 봤다.** 아래 상자를 봐라.
-## ⚠ **비용 근거가 2026-08-07에 두 번 갈렸다. 지금 값이 세 번째다.**
-##  계획은 청크당 41μs(spec 대리 측정)로 42%를 셌고, 구현이 낙하 물로 재니 78μs라 80%였다.
-##  🔴🔴 **verify-run이 댐 붕괴로 다시 재니 그보다 훨씬 나쁘다**:
+## **The original grounds for 512** (no longer used): one screenful is 480x270 cells = 30x17 = **510 chunks**,
+##  so a lower cap would constantly delay visible water.
+##  **That value came from "how many chunks are visible" and never looked at "how many we can afford."**
+## **The cost rationale flipped twice; this is the third value.**
+##  The plan counted 42% at 41us/chunk (spec's proxy measurement); the implementation measured falling water at 78us, giving 80%.
+##  **verify-run re-measured with a dam break and it is far worse**:
 ##
-##      한 틱 최악      **예산의 273~290%**
-##      400틱 평균      **예산의 101.5%**
+##      worst tick      **273-290% of budget**
+##      400-tick mean   **101.5% of budget**
 ##
-##  ⚠ **즉 상한에 실제로 닿는 순간에는 20Hz가 안 나온다.** 그게 「물이 잠깐 천천히 흐른다」의 정체다.
+##  **So while actually pinned at the cap, 20Hz is not achieved.** That is what "water flows slowly for a moment" is.
 ##
-## 🔴🔴 **2026-08-07 — `WATER_SUBSTEPS` 가 서면서 이 값의 뜻이 「청크 수」이지 「일의 양」이 아니게 됐다.**
-##  자르는 것은 **틱마다 한 번**이고 잘린 청크는 **N번 돈다** ⇒ 한 틱의 실제 일이
-##  **`MAX_CHUNKS_PER_TICK × WATER_SUBSTEPS` 청크-패스**다.
+## **Once `WATER_SUBSTEPS` stood up, this value means "chunk count", not "amount of work".**
+##  The cut happens **once per tick** and a surviving chunk **runs N times** => a tick's real work is
+##  **`MAX_CHUNKS_PER_TICK` x `WATER_SUBSTEPS` chunk-passes**.
 ##
-## 🔴🔴 **512 → 100 (2026-08-07, 사용자가 정했다).** 위 「512인 근거」는 **화면 넓이**에서 나온 값이고
-##  **비용에서 나온 값이 아니었다.** verify-look 이 실제 FPS를 재니 절벽이다:
+## **512 -> 100 (decided by the user).** The grounds for 512 above came from **screen area**,
+##  **not from cost.** verify-look measured real FPS and it is a cliff:
 ##
-##      85청크    229 FPS  🟢
-##      126청크     6 FPS  🔴      ← 깎이는 게 아니라 떨어진다
+##      85 chunks    229 FPS
+##      126 chunks     6 FPS      <- it doesn't taper, it drops
 ##
-##  ⇒ 낙하 중인 물의 실한계가 **≈100청크**이고 상한이 **그 5배**였다 ⇒ 안전망이 안전망 노릇을 못 했다.
-##  🔴 본문이 미리 적어 뒀다 — 「판정 7이 실패하면 최적화하지 말고 값을 내려라」. **그 자리가 왔다.**
+##  => The real limit for falling water is **~100 chunks** and the cap was **5x that** => the safety net wasn't one.
+##  The body text wrote it in advance — "if acceptance 7 fails, don't optimize, lower the value". **That day came.**
 ##
-## ⚠ **내리는 것이 「빨라진다」가 아니다** — 총 일의 양은 같고 **느린 구간이 얇고 길게 펴진다.**
-##  바뀌는 것은 **「한 자릿수 FPS로 떨어짐」 → 「물이 잠깐 천천히 흐름」** 이다.
-## ⚠ **지금 게임에서는 체감이 0이다** — F 한 번이 797칸·7청크이고 절벽은 ≈24,000칸이다.
-##  🔴 걸리는 날은 **맵에 저수지를 그리는 날**이고 그 경고는 `docs/design/지형-굽기.md` 에 있다.
-## ⚠ **N=3 이므로 화면에서 본 절벽(N=1 기준 ≈100)은 실제로 ≈33청크에 온다.**
-##  그래도 100으로 둔 것은 **한 화면(510청크)의 1/5 는 유지하려는 것**이다 — 더 내리면
-##  보이는 물이 상시 밀려 안전망이 조절 손잡이가 된다(위 「같은 어법」).
+## **Lowering it is not "faster"** — total work is the same and **the slow stretch is spread thin and long.**
+##  What changes is **"dropping into single-digit FPS" -> "water flows slowly for a moment".**
+## **In the game today it is imperceptible** — one F press is 797 cells / 7 chunks and the cliff is ~24,000 cells.
+##  The day it bites is **the day a reservoir is painted on the map**, and that warning is in `docs/design/terrain-baking.md`.
+## **With N=3, the cliff seen on screen (~100 at N=1) actually arrives at ~33 chunks.**
+##  It is still 100 because **keeping a fifth of a screenful (510 chunks) is the intent** — lower and
+##  visible water is constantly delayed, turning the safety net into a tuning knob (see "same idiom" above).
 const MAX_CHUNKS_PER_TICK := 100
 
-## 이 양 **이하**면 얕은 물이다(`cell_materials.FLAG_SHALLOW`).
+## At or **below** this amount, water is shallow (`cell_materials.FLAG_SHALLOW`).
 ##
-## 🔴🔴 **2026-08-07부터 이 값이 「불을 끄나」도 정한다 — 더 이상 화면 전용이 아니다.**
-##  `cell_grid._deep_water` 가 이 선을 쓴다: **임계 이하의 물은 불을 못 끈다.**
-##  ⚠ 사용자가 정했고, 이유는 **F 한 번(797칸)이 좌우로 퍼져 숲 ≈860칸을 영구 방화 처리한 것**이다.
-##  🟢 **새 상수를 안 세운 것이 요점이다** — 규칙과 화면이 **같은 선**을 쓰므로
-##   「밝은 하늘색 젖은 자국은 못 끄고 어두운 남색 진짜 물만 끈다」가 **화면에 이미 그려져 있다.**
-##  🔴 **⇒ 이 값을 바꾸면 색과 방화가 같이 움직인다.** 하나만 보고 고르지 마라.
+## **This value also decides "does it put out fire" — it is no longer screen-only.**
+##  `cell_grid._deep_water` uses this line: **water at or below the threshold cannot extinguish.**
+##  Decided by the user, because **one F press (797 cells) spread sideways and permanently fireproofed ~860 cells of forest.**
+##  **The point is that no new constant was created** — rule and screen use **the same line**, so
+##   "bright sky-blue wet stains can't extinguish, dark navy real water can" is **already drawn on screen.**
+##  **=> Change this value and color and fire-proofing move together.** Do not pick it looking at one of them.
 ##
-## 🔴 **멈춤과는 여전히 아무 상관이 없다** — spec이 뒤집어 쟀다(2026-08-07):
-##  이 값만 0 → 8 → 32 → 64로 바꾸면 **이동 셀 수가 하나도 안 달라진다.**
-##  멈춤을 정하는 것은 `WATER_MIN_DIFF` 다. ⚠ **둘을 한 손잡이로 읽으면 없는 손잡이를 돌리게 된다.**
+## **It still has nothing to do with stopping** — spec inverted and measured it:
+##  changing only this value 0 -> 8 -> 32 -> 64 changes **the moved-cell count by nothing.**
+##  Stopping is set by `WATER_MIN_DIFF`. **Read as one knob, you end up turning a knob that isn't there.**
 ##
-## 🔴🔴 **이 비트가 「수면」을 마크한다고 읽지 마라. 「얇은 물」을 마크한다.**
-##  구조가 그렇다: 물은 아래부터 채우므로 **정착한 기둥은 255가 쌓이고 맨 윗칸만 나머지**를 든다.
-##  그 나머지가 얼마인지는 **부은 양이 정한다** — 임계 위면 수면이 **한 줄도 안 갈리고**,
-##  아래면 **수면 전체가 통째로** 갈린다. ⇒ **켜지거나 안 켜지거나이지 「수면 한 줄」이 아니다.**
-##  ⚠ 얕게 퍼진 웅덩이의 **가장자리**는 확실히 갈린다 — 거기가 이 비트의 진짜 자리다(= 젖은 자국).
+## **Do not read this bit as marking "the surface". It marks "thin water".**
+##  Structurally: water fills from the bottom, so **a settled column stacks 255s and only the top cell holds
+##  the remainder.** How big that remainder is **depends on how much was poured** — above the threshold,
+##  **not one row of the surface splits**; below it, **the whole surface splits at once.**
+##  => **On or off, not "one row at the surface".**
+##  The **edge** of a thinly spread puddle does split cleanly — that is this bit's real home (= a wet stain).
 ##
-## 🔴 **32는 계획이 자리를 채운 값이다.** 색은 verify-look 이 봤고(얕은 쪽이 밝은 것이 맞게 보였다)
-##  **사용자는 아직 안 봤다.** 올리면 갈리는 물이 늘고, `WATER_MAX` 에 가까워질수록
-##  **물 전체가 얕아 보이고 동시에 불을 못 끄게 된다.**
-##  ⇒ **판정 6에서 사용자가 정한다. 정하면 이 줄과 `fx_tuning.WATER_SHALLOW` 를 같이 고쳐라.**
-## ⚠ **실측(2026-08-07)**: 나무 줄 위에 `WATER_MAX` 한 덩이를 부으면 정착한 시트가 **17칸에 최대 27**이다.
-##  ⇒ **32는 「한 덩이가 눕고 나면 방화력을 잃는」 자리에 있다.** 27과 32 사이가 그 여유고,
-##   임계를 27 아래로 내리면 **얇은 시트가 다시 방화선이 된다.**
+## **32 is a value the plan put in place.** verify-look saw the color (the shallow side reading brighter was right)
+##  and **the user has not seen it.** Raise it and more water splits, and approaching `WATER_MAX`
+##  **makes all water look shallow and stop extinguishing at the same time.**
+##  => **The user decides at acceptance 6. When they do, change this line and `fx_tuning.WATER_SHALLOW` together.**
+## **Measured**: pouring one `WATER_MAX` blob onto a row of wood settles into a sheet of **max 27 across 17 cells.**
+##  => **32 sits exactly where "one blob loses its fire-proofing once it lies down".** The gap between 27 and 32
+##   is that margin, and lowering the threshold below 27 makes **a thin sheet a firebreak again.**
 const WATER_WET := 32
 
-## 🔴🔴 **K(물비) 소스의 폭 — 마우스 행 좌우 ±88셀, 총 176셀.**
+## **Width of the K (rain) source — mouse row, plus and minus 88 cells, 176 total.**
 ##
-## 🔴 **임의의 값이 아니다.** `water-jump-and-escape.md` 「대안 A/B/C 재측정」이 이 폭으로
-##  잰 표(25%→5.0s·50%→8.0s·95%→11.0s)를 남겼다 — 폭을 바꾸면 그 표가 뜻을 잃는다.
+## **Not arbitrary.** `water-jump-and-escape.md`'s "A/B/C re-measurement" left a table measured at this width
+##  (25%->5.0s · 50%->8.0s · 95%->11.0s) — change the width and that table means nothing.
 const WATER_RAIN_HALF_W := 88
 
-## 🔴🔴 **K(물비) 소스가 한 틱에 위 폭 전체에 붓는 총량.** 20,000이 시작값이다.
+## **Total the K (rain) source pours across that whole width per tick.** 20,000 is the starting value.
 ##
-## 🔴 **실측(2026-08-08, verify-run·A방식·폭 176셀)**: 25%→5.0s·50%→8.0s·75%→9.0s·95%→11.0s,
-##  전부 목표(5~15s) 안. 활성 청크는 지형을 세우는 첫 틱들만 상한(100)에 닿고 붓는 동안은
-##  39~81 사이를 오간다 — 「물이 밀린다」가 이 폭·이 속도에서는 안 난다.
-## ⚠ **8,000도 25~50% 구간(9~14s)은 범위 안이다** — 만수를 요구하지 않는 장면이면 그쪽도 쓸 만하다.
-##  15,000~20,000이 범위이고 **20,000이 시작값**이다. 화면을 보고 그 안에서 움직인다.
+## **Measured (verify-run · approach A · 176 cells wide)**: 25%->5.0s · 50%->8.0s · 75%->9.0s · 95%->11.0s,
+##  all within target (5-15s). Active chunks touch the cap (100) only in the first terrain-building ticks and
+##  range 39-81 while pouring — "water gets delayed" doesn't occur at this width and this rate.
+## **8,000 is also in range for the 25-50% stretch (9-14s)** — usable for a scene that doesn't require a full room.
+##  15,000-20,000 is the range and **20,000 is the starting value**. Move within it after seeing the screen.
 const WATER_RAIN_PER_TICK := 20000
 
-# ─── 틱 ───────────────────────────────────────────────────────────
-## 물리 프레임(60Hz) 몇 번에 시뮬 한 틱인가. 3 ⇒ 20Hz(GDD).
-## 🔴 **정수 분주기다.** float 누산기를 쓰면 프레임 시간에 따라 틱 경계가 흔들려
-##  클라마다 다르게 쪼개진다 — 멀티에서 틱 번호는 상태다.
+# --- ticks ----------------------------------------------------------
+## Physics frames (60Hz) per sim tick. 3 => 20Hz (GDD).
+## **An integer divider.** A float accumulator makes tick boundaries wobble with frame time and split
+##  differently per client — in multiplayer the tick number is state.
 const TICK_DIVIDER := 3
 
-# ─── 룬 ───────────────────────────────────────────────────────────
-## 🔴 룬이 하나뿐이라 비교 대상이 없고, 물이 없어 「물+불 = 증기」도 못 잰다 —
-##  **룬이 진짜 축인지는 이 단계로 확인되지 않는다**(기획 「경계」).
-##  그래도 축을 **자리로** 만들어 두는 이유는, 룬을 늘릴 때 고칠 곳이 표 한 줄이어야 하기 때문이다.
-## ⚠ **「색만 바꾼다」는 아니다.** 아래 `ELEM_DEFS`에서 룬이 세상에 닿는다 —
-##  기획이 그 경계를 한 칸 넓혔고, 넓힌 이유는 거기 주석에 있다.
+# --- runes ----------------------------------------------------------
+## With one rune there is nothing to compare against, and with no water "water+fire = steam" can't be measured —
+##  **whether the rune is a real axis is not confirmed at this stage** (design, "Boundary").
+##  The axis is still made **as a slot** so that adding runes means editing one table row.
+## **It is not "only the color changes".** In `ELEM_DEFS` below, runes touch the world —
+##  the design widened that boundary by one notch, and the reason is in that comment.
 const ELEM_FIRE := 0
 
-## 🔴🔴 **무속성 — 「흔적을 안 남긴다」가 정의다.** 색만 다른 불이 아니다.
-##  ⚠ **「세상에 아무것도 안 한다」가 아니다 — 그 문장은 2026-08-05에 좁아졌다.**
-##   착탄이 지형을 파는 일이 `spell_sim._impact` 의 ①로 올라가면서 **룬과 무관해졌다** ⇒
-##   무속성 탄도 구멍은 낸다. 안 좁히면 다음 사람이 「무속성은 세상에 안 닿는다」로 읽고
-##   그 위에 설계를 얹는다(같은 문장이 `spell_sim._rune_trace` 에도 있다 — **두 곳이다**).
-##  ⚠ **0이면 안 된다.** `ELEM_FIRE`가 0이라 `ELEM_DEFS`의 키가 겹친다.
-##   🔴 **조용한 실패가 아니다** — 실측(2026-08-04): GDScript가 **파스 시점에** 짖고
-##   `Parse Error: Key "0" was already used in this dictionary` 로 **파일이 통째로 안 읽힌다**
-##   (`fx_tuning`의 `ELEM_FX`도 같이 짖었다).
-##   ⚠ 그러니 여기를 「딕셔너리 키 충돌은 조용하다」로 읽지 마라 — 없는 위험에 그물을 짜게 된다.
-##  ⚠ **다만 그 실패가 그물에서 보이는 모양은 조용하다**: 같은 뮤테이션에서 통과 수가
-##   **1138 → 723으로 주는데 실패는 2개**였다. 「src가 안 컴파일되면 검사가 빨개지는 게 아니라
-##   **없어진다**」의 세 번째 사례다(`net_layers`의 `_parses` 주석 · `net_damage` 헤더).
-## 🔴 거동(속도·궤적)은 **불과 같다.** 그래야 갈리는 축이 「세상에 닿는가」 하나로 좁혀져
-##  **룬이 진짜 축인지**를 깨끗하게 잰다(위 「룬이 하나뿐이라…」가 못 재던 것).
+## **None — "leaves no trace" is the definition.** Not fire with a different color.
+##  **It is not "does nothing to the world" — that sentence narrowed.**
+##   Impact carving terrain moved up to step (1) of `spell_sim._impact` and **became rune-independent** =>
+##   a none bolt still makes a hole. Left unnarrowed, the next person reads "none doesn't touch the world"
+##   and builds on it (the same sentence is also in `spell_sim._rune_trace` — **two places**).
+##  **It cannot be 0.** `ELEM_FIRE` is 0, so the `ELEM_DEFS` keys would collide.
+##   **Not a silent failure** — measured: GDScript barks **at parse time** with
+##   `Parse Error: Key "0" was already used in this dictionary` and **the whole file fails to load**
+##   (`fx_tuning`'s `ELEM_FX` barked with it).
+##   So don't read this as "dictionary key collisions are silent" — you'd write a net for a risk that doesn't exist.
+##  **But the shape of that failure in the nets is quiet**: the same mutation took the pass count
+##   **1138 -> 723 while only 2 checks failed.** That is the third instance of "when src doesn't compile,
+##   checks don't go red — **they disappear**" (`net_layers`'s `_parses` comment · `net_damage` header).
+## Behavior (speed, trajectory) is **identical to fire.** That narrows the differing axis to "does it touch the
+##  world", which measures **whether the rune is a real axis** cleanly (what "with one rune…" above couldn't).
 const ELEM_NONE := 1
 
-## 🔴🔴 **물 룬 — 착탄 자리에 물을 만든다.**
-##  ⚠ **거동은 불·무와 같다**(속도·궤적). 갈리는 축은 여전히 「세상에 무엇을 남기는가」 하나다.
-## 🔴 **이 룬이 서면서 물의 두 출처가 다 열린다**(`docs/design/물.md` 「물이 어디서 오나」).
-##  맵에만 물이 있으면 **몬스터를 물가까지 끌고 가야** 젖히는데, 룬이 물을 만들면
-##  「적시고 → 감전」이 어디서나 성립한다 — 그게 GDD 테제(순서가 다르면 결과가 다르다)의 자리다.
-##  ⚠ **번개 룬은 아직 없다.** 그래서 젖음의 쓸모는 지금 화면뿐이다.
+## **Water rune — creates water at the impact point.**
+##  **Behavior matches fire and none** (speed, trajectory). The differing axis is still only "what it leaves in the world".
+## **This rune standing up opens both of water's sources** (`docs/design/water.md`, "where water comes from").
+##  With water only on the map you must **drag a monster to the waterside** to wet it; a rune that makes water
+##  lets "wet it -> shock it" hold anywhere — that is where the GDD thesis (different order, different result) lives.
+##  **There is no lightning rune yet.** So wetness is currently useful only on screen.
 const ELEM_WATER := 2
 
-## 🔴 순회는 **반드시 이 명시 리스트로만** 한다. 값이 연속이라고 가정하면 나중에 은퇴한
-##  자리가 생겼을 때 조용히 어긋난다.
+## Iteration goes **only through this explicit list**. Assuming contiguous values breaks silently the day
+##  a slot is retired.
 const ELEM_ALL: Array[int] = [ELEM_FIRE, ELEM_NONE, ELEM_WATER]
 
-## 룬이 세상에 남기는 흔적의 종류.
+## Kinds of trace a rune leaves in the world.
 const TRACE_IGNITE := 0
 
-## 🔴 **「흔적이 없다」도 흔적의 한 종류다.** 빈 값이 아니라 이름이 있는 갈래여야
-##  `spell_sim._rune_trace`가 「구현이 없는 룬」과 구별해서 짖을 수 있다.
+## **"No trace" is itself a kind of trace.** It must be a named branch rather than an empty value so
+##  `spell_sim._rune_trace` can bark for "a rune with no implementation" and tell them apart.
 const TRACE_NONE := 1
 
-## 🔴 **착탄 자리를 적신다.** 이 파일이 「물이 들어오면 는다 — **자리를 미리 만들지 않는다**」고
-##  적어 뒀던 자리이고, **오늘이 그 날이다**(2026-08-07).
+## **Wets the impact point.** This file recorded "it grows when water arrives — **don't make the slot in advance**",
+##  and that day came.
 const TRACE_WET := 2
 
-## 🔴🔴 **룬이 세상에 닿는 유일한 표다. 룬 하나 추가 = 여기 한 줄.**
+## **The only table where a rune touches the world. One rune = one row here.**
 ##
-## ⚠ **이것이 「A에서 룬은 색만 바꾼다」를 한 칸 넘는 자리다**(기획 「경계」가 그래서 바뀌었다).
-##  넘긴 이유는 하나다 — 안 넘으면 **「폭발 → 확산」의 절반이 화면에서 증발한다.**
-##  확산이 마지막 층이면 만들어진 탄 여덟이 **빈 목록**을 들고 나고, 착탄해도 아무것도 안 해서
-##  0.4초짜리 자취만 남는다. 실측으로 키 5는 매끈한 구멍 하나 외에 아무 데도 안 건드렸다.
-## 🔴 GDD가 이미 답을 적어 뒀다 — 「불 룬 + 확산 → 착탄 후 **작은 불꽃** 8개」.
-##  그 불꽃이 불꽃인 이유는 문양이 아니라 **룬**이다.
+## **This is the notch past "in A the rune only changes color"** (which is why the design's "Boundary" changed).
+##  There is one reason for crossing — without it, **half of "blast -> spread" evaporates on screen.**
+##  With spread as the last layer, the eight bolts created carry an **empty list** and do nothing on impact,
+##  leaving only a 0.4-second trail. Measured: key 5 touched nothing beyond one smooth hole.
+## The GDD already wrote the answer — "fire rune + spread -> 8 **small flames** after impact".
+##  Those flames are flames because of the **rune**, not the glyph.
 const ELEM_DEFS: Dictionary = {
 	ELEM_FIRE: {"trace": TRACE_IGNITE},
 	ELEM_NONE: {"trace": TRACE_NONE},
 	ELEM_WATER: {"trace": TRACE_WET},
 }
 
-# ─── 문양 목록의 비트 폭 ──────────────────────────────────────────
-## 🔴🔴 탄이 들고 다니는 「남은 문양 목록」은 **정수 하나**다. 4비트씩 니블에 쌓는다.
-##  ⚠ **7층이 상한이다.** `PackedInt32Array`가 부호 있는 32비트라, 8층째가 최상위 니블에
-##   앉으면 음수가 되고 `>> 4`가 산술 시프트라 부호 확장으로 **에러 없이 망가진다.**
-##  기본 진이 2층이라 차고 넘친다.
+# --- bit width of the glyph list ------------------------------------
+## The "remaining glyph list" a bolt carries is **a single integer**, stacked 4 bits per nibble.
+##  **7 layers is the ceiling.** `PackedInt32Array` is signed 32-bit, so an 8th layer sitting in the top nibble
+##   makes it negative, and `>> 4` being an arithmetic shift corrupts it via sign extension, **with no error.**
+##  The base circle is 2 layers, so there is room to spare.
 const GLYPH_BITS := 4
 const GLYPH_MAX_LAYERS := 7
 
-# ─── 투사체 ───────────────────────────────────────────────────────
-# ─── 🔴🔴 확산 세대 표 — 「작은 것들이 약하다」가 여기 한 곳에서 나온다 ────────────
-## `_gen` 0 = 원본, 1 = 확산으로 나온 것. **크기·사거리·폭발 반경·점화 반경이 전부 여기서 파생된다.**
+# --- projectiles ----------------------------------------------------
+# --- the spread generation table — "small things are weak" comes from this one place ---
+## `_gen` 0 = original, 1 = produced by spread. **Size, range, blast radius and ignition radius all derive from here.**
 ##
-## 🔴 **아래 네 열은 세대마다 반드시 줄어야 한다.** 값을 같게 두면 그물이
-##  「일부러 안 줄였다」와 **「줄이는 걸 깜빡했다」를 구별하지 못한다** — 한 축을 끄고 싶으면
-##  표에서 같게 두지 말고 소비자 쪽에서 상수를 곱해라.
+## **The four columns below must decrease every generation.** Leaving values equal makes the net unable to
+##  distinguish **"deliberately not decreased" from "forgot to decrease"** — to turn an axis off, don't equalize
+##  the table, multiply by a constant on the consumer side.
 ##
-## 🔴🔴 **「모든 열」이 아니다 — `net_tables`는 이름을 손으로 적은 것만 잰다**
+## **Not "every column" — `net_tables` measures only names written by hand**
 ##  (`_strictly_decreasing(..., ["speed", "rd", "ignite_r", "rune_r", "carve_r"])`).
-##  ⚠ **여기에 열을 새로 추가하면 그물에도 그 이름을 더해야 한다.** 안 더하면 아무도 안 재는데
-##   `[그물] 통과 N개`는 **그대로 초록이다** — 실측으로 확인했다(감소하지 않는 `damage` 열을
-##   두 줄에 넣고 전체 그물을 돌렸더니 통과 1038개·exit 0이었고 단언 한 줄에도 안 나왔다).
-##  🔴 이 주석이 전에 「모든 열」이라고 적고 있었고, 그 라벨을 믿은 기획 문서가
-##   「새 열은 자동으로 검사에 걸린다」고 적었다 — CLAUDE.md 「가짜 그물 금지」의
-##   **「라벨이 재는 것보다 넓다」가 실제로 사람을 속인 사례다.**
-## ⚠ **단조 방향이 v1과 반대다.** v1은 위력 단이 올라가며 커졌고, 여기는 세대가 깊어지며 작아진다.
-##  v1 그물을 그대로 베끼면 빨개진다.
+##  **Adding a column here means adding its name to the net too.** Skip that and nobody measures it while
+##   `[net] N passed` **stays green** — confirmed by measurement (a non-decreasing `damage` column added to
+##   both rows ran the full nets: 1038 passed, exit 0, and not one assertion mentioned it).
+##  This comment used to say "every column", and a design doc that trusted the label wrote
+##   "new columns are checked automatically" — a real case of CLAUDE.md's "No fake nets",
+##   **the label claiming more than the check measures, actually deceiving a person.**
+## **The monotonic direction is the opposite of v1's.** v1 grew with power tier; here it shrinks with generation depth.
+##  Copying a v1 net verbatim goes red.
 ##
-## 🔴 **「작은 것들이 약한 것」이 성능까지 살린다**(GDD) — 반경이 절반이면 면적은 1/4이다.
+## **"Small things being weak" saves performance too** (GDD) — half the radius is a quarter the area.
 ##
-##   water_r   🔴 **물 룬이 적시는 반경(셀).** 문양과 무관하다 — `rune_r` 의 물 쪽 짝이다
-##   speed     발사 속도(셀/틱). 항력 사거리 상한 = speed / (1 − DRAG) 이므로 **사거리도 여기서 나온다**
-##   rd        폭발 반경(셀). v1 실측에서 12는 「문을 연다」, 6은 「긁는다」로 이름이 갈렸다
-##   ignite_r  폭발의 점화 반경(셀). 🔴 **rd보다 커야 한다** — 아래 `blast_ignite_r` 주석
-##   rune_r    🔴 **룬 흔적의 점화 반경(셀).** 문양이 하나도 없는 착탄도 이만큼은 한다
-##   carve_r   🔴🔴 **모든 착탄이 파는 반경(셀).** 룬도 문양도 안 본다 — 아래 절을 봐라
+##   water_r   **Radius the water rune wets (cells).** Glyph-independent — the water-side sibling of `rune_r`
+##   speed     Launch speed (cells/tick). Drag range ceiling = speed / (1 - DRAG), so **range comes from here too**
+##   rd        Blast radius (cells). In v1 measurements, 12 was named "opens a door" and 6 "scratches"
+##   ignite_r  A blast's ignition radius (cells). **Must exceed rd** — see the `blast_ignite_r` comment
+##   rune_r    **Ignition radius of the rune trace (cells).** Even an impact with no glyph does this much
+##   carve_r   **Radius every impact carves (cells).** Sees neither rune nor glyph — see the section below
 ##
-## 🔴🔴 **`speed` 와 `rune_r` 은 32px 전환에서 ×2 된 값 그대로다**(전: speed 10·6 / rune_r 3·1).
-##  단위는 셀인데 **뜻이 「화면에서 이만큼」**이라 위 `TILE_CELLS` 주석의 갈래에 걸린다 —
-##  안 올리면 화면에서 절반이 된다.
+## **`speed` and `rune_r` are the doubled values from the 32px switch** (before: speed 10/6, rune_r 3/1).
+##  The unit is cells but **the meaning is "this big on screen"**, so they fall under the `TILE_CELLS` branch above —
+##  left unraised they halve on screen.
 ##
-## 🔴🔴 **`rd`·`ignite_r` 은 사용자가 화면을 보고 두 번 내렸다**(2026-08-04).
-##  `rd` 24 → 12 → **8**(구멍 지름 6타일 → 3타일 → **2타일**), 점화는 따라서 36 → 18 → **12**.
-##  ⚠ **두 번째는 화면을 보고 정한 값이다** — 첫 번째(절반)를 띄워 보고 「2타일이면 될 듯」이었다.
-##  🔴 **「문을 연다 / 긁는다」의 이름이 24·12에서 떨어졌다.** v1이 「긁는다」로 부르던 것이
-##   12였으니 지금 세대 0은 **그보다도 작다** — 벽을 한 방에 뚫는 감각은 없다.
-##  ⚠ **`speed` 를 같이 안 내렸다.** 사거리는 마법의 성격이라 별개 축이고, 사용자가 말한 것은
-##   범위뿐이다. 궤적이 그대로인 채 자국만 작아진다.
-## ⚠ `ignite_r` 는 **따라올 수밖에 없다** — `ignite_r > rd` 가 깨지면 「폭발은 되는데 불이 안 난다」다.
-##  ⇒ 비율 1.5배를 내내 지켰다.
+## **`rd` and `ignite_r` were lowered twice by the user, on screen.**
+##  `rd` 24 -> 12 -> **8** (hole diameter 6 tiles -> 3 -> **2**), ignition following 36 -> 18 -> **12**.
+##  **The second was decided on screen** — the first (half) was launched, looked at, and "2 tiles should do it".
+##  **The names "opens a door / scratches" fell off at 24 and 12.** What v1 called "scratches" was 12,
+##   so generation 0 is now **smaller than that** — there is no sense of punching a wall in one shot.
+##  **`speed` was not lowered with them.** Range is a spell's character, a separate axis, and what the user
+##   spoke about was radius only. The trajectory is unchanged; only the mark shrinks.
+## `ignite_r` **has no choice but to follow** — break `ignite_r > rd` and you get "the blast works but nothing burns".
+##  => The 1.5x ratio was held throughout.
 ##
-## 🔴🔴 **`rune_r` 은 안 내렸고, 그래서 계약이 아슬아슬해졌다.**
-##  「룬 흔적은 폭발보다 **작아야** 한다」(아래 `rune_r` 주석)의 여유가 **6/24 = 0.25에서
-##  6/8 = 0.75로** 줄었다 — 부등식은 서고 `net_tables` 도 통과하지만, 화면에서는
-##  **흔적과 폭발이 거의 같은 크기**다. ⚠ 「확산이 폭발을 겸하는 것처럼 보인다」가 여기서 온다.
-##  🔴 **`net_tables` 는 부등식만 재고 비율은 안 잰다** — 초록을 「여유가 있다」로 읽지 마라.
-##  ⇒ 판정 2(확산→폭발 vs 폭발→확산)가 뭉개져 보이면 **여기가 첫 용의자다.**
+## **`rune_r` was not lowered, and the contract got tight because of it.**
+##  "The rune trace must be **smaller** than the blast" (see the `rune_r` comment) went from a margin of
+##  **6/24 = 0.25 to 6/8 = 0.75** — the inequality holds and `net_tables` passes, but on screen
+##  **trace and blast are nearly the same size.** "Spread looks like it doubles as blast" comes from here.
+##  **`net_tables` measures only the inequality, never the ratio** — don't read green as "there is margin".
+##  => If acceptance 2 (spread->blast vs blast->spread) looks mushy, **this is the first suspect.**
 ##
-## 🔴🔴 **`carve_r` 은 2026-08-05에 늘었다 — 사용자가 「벽을 한 칸도 못 줄인다」고 보고했다.**
-##  ⚠ **폭발 문양 없이는 지형이 안 변하는 게 옛 규칙이었다.** 그 결정을 뒤집은 근거와
-##   뒤집어도 「폭발 → 확산」이 안 뭉개지는 근거는 `spell_sim._impact` 에 한 번만 적혀 있다.
-##  🔴 **`carve_r < rune_r` 이 계약이다.** 파기(①)가 룬 흔적(②)보다 먼저라, 같거나 크면
-##   **불 룬이 태울 연료를 파기가 먼저 지운다** — 아래 `blast_ignite_r` 주석의 함정이
-##   축소판으로 다시 나는 것이고 **에러가 하나도 안 난다.** 세대 1은 여유가 **1칸뿐**이다
-##   (1 < 2) ⇒ `net_tables._gen_tables` 가 세대마다 잰다.
-##  ⚠ 값의 근거는 사용자 판정이다 — 「반경 2셀 = 구멍 지름 타일 절반」. 벽 한 장(8셀)을
-##   뚫으려면 **여러 발**이고 폭발은 **한 방**이다. 그 대비가 이 값이 고른 자리다.
-## 🔴🔴 **`water_r` 은 `rune_r` 과 같은 값으로 시작한다.** 둘 다 「룬이 착탄에 남기는 흔적의 반경」이라
-##  같은 뜻이고, **다르게 둘 근거가 아직 없다** — 불과 물이 화면에서 어느 쪽이 커 보여야 하는지는
-##  아무도 안 봤다. ⚠ **열을 따로 둔 이유**는 그 근거가 생기는 날 **한쪽만** 움직일 수 있어야 해서다.
-##  🔴 `rune_r` 을 그대로 쓰면 그날 「불을 줄였더니 물도 줄었다」가 된다.
-## ⚠ **`carve_r < water_r` 도 성립해야 한다** — 파기(①)가 흔적(②)보다 먼저라, 같거나 크면
-##  **판 자리를 물이 채우는 게 아니라 물이 놓일 자리를 파기가 먼저 지운다.** 세대 1은 여유가 1칸뿐이다.
-##  🔴 `net_tables` 가 `rune_r` 에 대해 이미 그 부등식을 재고 있고, `water_r` 도 같이 재야 한다.
+## **`carve_r` grew after the user reported "it doesn't shrink a wall by one cell".**
+##  **The old rule was that terrain doesn't change without a blast glyph.** The grounds for overturning that,
+##   and the grounds that "blast -> spread" still isn't mushed by it, are written once in `spell_sim._impact`.
+##  **`carve_r < rune_r` is a contract.** Carving (1) comes before the rune trace (2), so equal or larger means
+##   **the carve erases the fuel the fire rune would burn** — the trap in the `blast_ignite_r` comment below,
+##   recurring in miniature, **with no error at all.** Generation 1 has **1 cell of margin** (1 < 2)
+##   => `net_tables._gen_tables` measures it per generation.
+##  The value's grounds are a user judgment — "radius 2 cells = a hole half a tile across". Punching one wall
+##   (8 cells) takes **several shots** while a blast is **one**. That contrast is where this value sits.
+## **`water_r` starts equal to `rune_r`.** Both mean "radius of the trace a rune leaves at impact",
+##  and **there is no reason yet to differ** — nobody has looked at whether fire or water should read larger.
+##  **The reason for a separate column** is so that when such grounds appear, **only one** can move.
+##  Reusing `rune_r` would make that day "I shrank fire and water shrank too".
+## **`carve_r < water_r` must hold too** — carving (1) precedes the trace (2), so equal or larger means
+##  **the carve erases the place water would go, rather than water filling what was carved.** Generation 1 has 1 cell of margin.
+##  `net_tables` already measures that inequality for `rune_r`, and it must measure `water_r` too.
 const SIM_SIZES: Array[Dictionary] = [
 	{"speed": 20, "rd": 8, "ignite_r": 12, "rune_r": 6, "carve_r": 2, "water_r": 6},
 	{"speed": 12, "rd": 4, "ignite_r": 6, "rune_r": 2, "carve_r": 1, "water_r": 2},
 ]
 
-## 🔴🔴 **크기 하한 — 여기 닿으면 확산이 안 걸린다**(GDD 「크기 하한」).
-##  ⚠ 확산이 한 마법진에 하나뿐이라(`glyph_defs`의 `max_per_circle`) 2세대는 **이미 원리적으로
-##   못 나온다.** 이 값은 그 규칙이 느슨해지는 날을 위한 **구조적 바닥**이고, 표 길이와 함께
-##   `net_tables`가 잰다 — 상한만 올리고 표를 안 늘리면 없는 줄을 읽게 된다.
+## **Size floor — reach it and spread doesn't apply** (GDD, "size floor").
+##  With one spread per magic circle (`glyph_defs`'s `max_per_circle`), generation 2 **already can't occur
+##   in principle.** This value is a **structural floor** for the day that rule loosens, and `net_tables`
+##   measures it together with the table length — raise the ceiling without extending the table and you read a row that isn't there.
 const SPLIT_MAX := 1
 
-## 확산이 만드는 탄 수. 🔴 `(±1,0) (0,±1) (±1,±1)` **여덟 개는 `sin`·`cos` 없이 정수로 그대로
-##  나온다** — 문양의 정수 제약이 여기서는 비용이 아니다(GDD).
+## Bolts spread creates. `(±1,0) (0,±1) (±1,±1)` — **eight come out as integers with no `sin` or `cos`.**
+##  The glyph's integer constraint costs nothing here (GDD).
 const SPREAD_COUNT := 8
 
-## ⚠ 발사 속도는 위 표에 있다(`speed_cells(gen)`). 세대 0 값을 **따로 이름 붙이지 않는다** —
-##  표의 첫 줄을 두 이름으로 부르면 한쪽만 고치는 날이 온다.
-##  실측: 20틱 × 20셀 × 4px = 1,600px/s. 타일로는 **50타일/s** 로 16px 세상과 같다.
+## Launch speed lives in the table above (`speed_cells(gen)`). Generation 0's value gets **no separate name** —
+##  give the table's first row two names and one day only one gets fixed.
+##  Measured: 20 ticks x 20 cells x 4px = 1,600px/s. In tiles that is **50 tiles/s**, the same as the 16px world.
 
-## 🔴🔴 **항력.** 매 틱 `v * DRAG_NUM / DRAG_DEN`. 240/256 = 0.9375/틱.
-##  ⚠ **비율이라 안 건드린다** — 사거리는 `speed` 가 정한다.
-##  ⇒ 가로 사거리 상한 = v0 / (1 − 0.9375) = 20 / 0.0625 = **320셀 = 40타일 = 1,280px**.
+## **Drag.** Every tick, `v * DRAG_NUM / DRAG_DEN`. 240/256 = 0.9375/tick.
+##  **A ratio, so leave it alone** — range is set by `speed`.
+##  => Horizontal range ceiling = v0 / (1 - 0.9375) = 20 / 0.0625 = **320 cells = 40 tiles = 1,280px**.
 ##
-## 🔴🔴 **위 320셀(40타일)은 「중력이 없다면」의 값이다. 실제로는 그만큼 안 난다.**
-##  ⚠ **한동안 여기 「사거리 40타일은 화면 폭 30타일의 4/3이라 탄이 화면 밖까지 난다」고 적혀
-##   있었고, 그 문장이 기획 문서로 옮겨가 「탄 속도를 줄여야 한다」의 근거가 되어 있었다.**
+## **That 320 cells (40 tiles) is the "if there were no gravity" value. It doesn't actually fly that far.**
+##  **This used to say "40 tiles of range is 4/3 of the 30-tile screen width, so bolts fly off screen",
+##   and that sentence migrated into a design doc as the grounds for "bolt speed must be reduced".**
 ##
-##  **실측 (2026-08-08, 헤드리스. 지면 4셀 위에서 발사)**:
+##  **Measured (headless, fired 4 cells above the ground)**:
 ##
 ## ```
-##            수평 발사        45도 위로
-##  gen0(20)   53셀 6.6타일    193셀 24.1타일
-##  gen1(12)   32셀 4.0타일    102셀 12.8타일
+##            horizontal      45 degrees up
+##  gen0(20)   53 cells 6.6 tiles    193 cells 24.1 tiles
+##  gen1(12)   32 cells 4.0 tiles    102 cells 12.8 tiles
 ## ```
 ##
-##  🔴 **중력이 항력보다 먼저 탄을 꽂는다.** 항력 상한에 닿으려면 320셀을 나는 동안 안 떨어져야
-##   하는데, 지면 발사에서는 **4틱 만에 땅이다.** ⇒ **화면 폭 30타일을 45도에서도 안 넘는다.**
-##  ⚠ **절벽 위에서 쏘면 더 난다** — 낙하 시간이 길어지는 만큼이다. 위 값은 **평지 기준**이다.
-##  🔴 **수평 사거리는 `speed` 에 선형이다**(실측 비 0.604 vs speed 비 0.600).
-##   45도는 비선형이다(0.528) — 초기 vy 도 같이 줄어 체공이 짧아지기 때문이다.
-##  ⇒ **「사거리 때문에 speed 를 내린다」는 근거가 없다.** 내릴 이유가 있다면 그건 **가시성**이다
-##   (speed 20 = 프레임당 26.6px 이라 16px 그림이 겹치지 않고 건너뛴다).
-##  🔴 **값을 여기서 안 바꾼다.** 사거리는 마법의 성격이라 마법진 기획이 볼 자리이고,
-##   화면 쪽 대가는 `stage.gd` 의 `MAP` 주석에 「폭발이 화면 밖에서 터질 수 있다」로 적어 뒀다.
-##  ⚠ 지수 감쇠라 계수를 조금만 바꿔도 사거리가 확 변한다. 248/256이면 **2배(640셀)** 다
-##   (1 − 248/256 = 1/32 ⇒ 사거리 = 32·v). ⚠ 여기 적혀 있던 「2.5배」는 산수가 틀렸었다.
-##  ⚠ 지수 감쇠라 계수를 조금만 바꿔도 사거리가 확 변한다. 248/256이면 사거리가 2.5배(400셀)다.
+##  **Gravity plants the bolt before drag does.** Reaching the drag ceiling would require not falling across
+##   320 cells, and a ground-level shot **hits dirt in 4 ticks.** => **It doesn't exceed the 30-tile screen width even at 45 degrees.**
+##  **Firing from a cliff goes farther** — by however long the fall lasts. The values above are **flat ground.**
+##  **Horizontal range is linear in `speed`** (measured ratio 0.604 vs speed ratio 0.600).
+##   45 degrees is non-linear (0.528) — initial vy shrinks too, shortening airtime.
+##  => **"Lower speed because of range" has no grounds.** If there is a reason to lower it, it is **visibility**
+##   (speed 20 = 26.6px per frame, so a 16px sprite skips without overlapping).
+##  **Don't change the value here.** Range is a spell's character, the magic-circle design's call, and
+##   the screen-side price is recorded in `stage.gd`'s `MAP` comment as "blasts can go off screen".
+##  Exponential decay means a small coefficient change swings range hard. 248/256 gives **2x (640 cells)**
+##   (1 - 248/256 = 1/32 => range = 32*v).
 ##
-## 🔴 **정수 나눗셈(`/`)이지 시프트(`>>`)가 아니다.** `>>`는 음수에서 내림이라
-##  왼쪽으로 나는 탄만 감쇠가 0.5/256 더 세진다 — 좌우가 미묘하게 안 대칭이 되고
-##  그건 「왼쪽으로 쏘면 조금 덜 나간다」로만 보인다. `/`는 0 쪽으로 잘려 대칭이다.
-## ⚠ **정수 절삭으로 가로 속도가 결국 정확히 0이 된다.** vx가 작아질수록 절삭 비중이 커지고,
-##  그때부터 탄은 수직으로만 떨어진다. 그림으로는 「힘이 다해 수직으로 꽂힌다」라 맞고,
-##  **의도해서 고른 것이다**(기획 「궤적」). 결정론은 안전하다 — 정수 나눗셈은 플랫폼 무관이다.
+## **Integer division (`/`), not a shift (`>>`).** `>>` floors on negatives, so only left-flying bolts
+##  decay 0.5/256 harder — left and right become subtly asymmetric, visible only as "shots to the left go
+##  slightly less far". `/` truncates toward zero and is symmetric.
+## **Integer truncation eventually makes horizontal speed exactly 0.** The smaller vx gets, the larger
+##  truncation's share, and from then the bolt falls straight down. As a picture, "it runs out of force and
+##  plants vertically" is right, and **it was chosen deliberately** (design, "trajectory"). Determinism is safe —
+##  integer division is platform-independent.
 const DRAG_NUM := 240
 const DRAG_DEN := 256
 
-## 중력(고정소수점 1/256셀 per 틱²). 128 = 0.5셀/틱².
-## ⇒ 종단 낙하 속도 = 128 / (1 − 0.9375) = 2048fp = **8셀/틱 = 640px/s**.
-##  캐릭터 낙하 상한(1,800px/s)보다 훨씬 느리다 — 탄이 「무겁게 꽂힌다」가 아니라 「호를 그린다」로 읽힌다.
+## Gravity (fixed point, 1/256 cell per tick^2). 128 = 0.5 cells/tick^2.
+## => Terminal fall speed = 128 / (1 - 0.9375) = 2048fp = **8 cells/tick = 640px/s**.
+##  Far slower than the character's fall cap (1,800px/s) — a bolt reads as "arcing", not "planting heavily".
 ##
-## 🔴🔴 **`speed` 와 함께 ×2 해야 한다. 하나만 올리면 조용히 틀린다** — 포물선 사거리가 v²/g 라
-##  speed만 2배면 궤적이 **4배 멀리** 난다. `character.gd` 의 `JUMP_VY_PX`·`GRAVITY_PX` 와 **똑같은 함정**이고,
-##  둘 다 에러가 안 난다.
+## **Must be doubled together with `speed`. Raise one alone and it goes silently wrong** — parabolic range is
+##  v^2/g, so doubling speed alone makes the trajectory fly **4x farther**. **Exactly the same trap** as
+##  `character.gd`'s `JUMP_VY_PX` and `GRAVITY_PX`, and neither raises an error.
 const GRAVITY_FP := 128
 
-## 아무것도 안 맞은 투사체가 사라지는 틱 수 = **10초.**
-## 🔴 **진짜 안전망이다.** 중력이 있으면 탄은 반드시 땅에 닿거나 격자 밖으로 나가므로
-##  영원히 도는 투사체가 원리적으로 없다. 위로 수직으로 쏜 탄이 되돌아오는 데 걸리는 시간
-##  (상승 ~15틱 + 화면 높이 270셀 / 종단 8셀·틱 ≈ 34틱 = 50틱)보다 4배 길다.
-##  ⚠ **32px 전환에서 이 값은 안 건드렸다** — 틱 수이고, 위 계산이 화면도 종단속도도 함께
-##   2배가 되며 **같은 34틱으로 떨어진다.** 「2배니까 200도 2배」로 읽지 마라.
-##  ⚠ v1의 40틱은 **도달 불가 가드**였지만, 항력이 붙으면서 느려진 탄이 오래 산다 —
-##   공중에서 그냥 사라지면 그건 고장으로 읽힌다.
+## Ticks before a projectile that hit nothing disappears = **10 seconds.**
+## **A genuine safety net.** With gravity, a bolt must reach the ground or leave the grid, so an
+##  eternally circling projectile is impossible in principle. It is 4x longer than a straight-up shot's
+##  round trip (rise ~15 ticks + screen height 270 cells / terminal 8 cells per tick ~= 34 ticks = 50 ticks).
+##  **This value was not touched in the 32px switch** — it is a tick count, and the calculation above doubles
+##   both screen and terminal speed, **landing on the same 34 ticks.** Don't read it as "everything doubled, so 200 doubles".
+##  v1's 40 ticks was an **unreachable guard**, but with drag added, slowed bolts live longer —
+##   and a bolt simply vanishing in mid-air reads as a malfunction.
 const LIFETIME_TICKS := 200
 
-## 동시 투사체. 32 × 2μs = 64μs/틱 = 예산의 0.4%(v1 실측). 여기는 병목이 아니다.
-## ⚠ **개수라 32px 전환에서 안 바뀌었다. 다만 한 발의 값이 2배가 됐다** —
-##  `_walk` 의 DDA 걸음 수가 **한 틱에 지나는 셀 수 = `speed`** 이고 그게 ×2 됐다.
-##  ⇒ 어림 128μs/틱 = 0.8%. ⚠ **잰 값이 아니다** — 단계 0은 탄 **0발**로만 쟀다.
+## Simultaneous projectiles. 32 x 2us = 64us/tick = 0.4% of budget (v1 measurement). Not the bottleneck.
+## **A count, so unchanged in the 32px switch. But one bolt's cost doubled** —
+##  `_walk`'s DDA step count is **cells crossed per tick = `speed`**, and that doubled.
+##  => Roughly 128us/tick = 0.8%. **Not a measured value** — stage 0 was measured with **0 bolts**.
 const MAX_PROJECTILES := 32
 
-# ─── 폭발 ─────────────────────────────────────────────────────────
-## 🔴🔴 **진짜 상한이 여기다.** v1 실측으로 큰 폭발 4발 동시 적용이 **8,940μs = 예산의 54%**다.
-##  투사체 32발 상한은 0.4%라 병목이 아니다 — 조일 곳은 늘 이쪽이다.
-## ⚠ **이 기계에서 다시 재니 `rd` 12에서 1,291μs였다**(builder, 2026-08-04 · 헤드리스).
-##  v1 값과 6.9배 차이인데 **기계 탓인지 코드 탓인지는 안 갈랐다** — 비율로만 읽어라.
-## 🔴 `rd` 가 24로 갔다가 **12로 돌아왔다**(사용자 판정, 위 `SIM_SIZES`) — 셀 면적이 1/4이라
-##  폭발 적용도 그만큼 줄고, 위 1,291μs 실측이 **다시 그대로 맞는 자리로 돌아왔다.**
-##  ⇒ 24였을 때 1.6배까지 좁혔던 예산 여유가 2.6배로 되돌아온다. **재지는 않았다** —
-##   같은 `rd` 값이니 옛 실측이 유효하다는 것이지 새로 잰 것이 아니다.
-## ⚠ **넘치면 버리지 말고 다음 틱으로 민다**(`spell_sim._pend_*`). 버리면
-##  「몰아 쏘면 몇 발이 안 터진다」가 되고 그건 **고장**으로 읽힌다.
-##  🔴 투사체 상한과 정반대인 게 요점이다 — 그쪽은 원리적으로 도달 불가라 **짖고 버리는** 게 맞고,
-##   여기는 확산 8발이 같은 틱에 착탄하면 **실제로 걸리므로** 밀어야 맞다.
+# --- blasts ---------------------------------------------------------
+## **The real ceiling is here.** v1 measured four large blasts applied simultaneously at **8,940us = 54% of budget.**
+##  The 32-projectile cap is 0.4% and not the bottleneck — the place to tighten is always this one.
+## **Re-measured on this machine at 1,291us with `rd` 12** (builder, headless).
+##  A 6.9x gap from v1's number, and **whether that's the machine or the code was never separated** — read it as a ratio only.
+## `rd` went to 24 and **came back to 12** (user judgment, see `SIM_SIZES` above) — cell area is a quarter,
+##  so blast application shrinks with it and **the 1,291us measurement is valid again.**
+##  => The budget margin, squeezed to 1.6x at 24, returns to 2.6x. **Not re-measured** —
+##   the same `rd` value means the old measurement holds, not that a new one was taken.
+## **On overflow, defer to the next tick rather than discard** (`spell_sim._pend_*`). Discarding gives
+##  "spam shots and some don't detonate", which reads as **a malfunction.**
+##  The point is that it is the exact opposite of the projectile cap — that one is unreachable in principle,
+##   so **barking and discarding** is right; here 8 spread bolts landing on one tick **actually reaches it**, so deferring is right.
 const MAX_BLASTS_PER_TICK := 4
 
-# ─── 불 ───────────────────────────────────────────────────────────
-## 틱마다 깎는 연료. 나무 연료 200 ⇒ 한 셀이 40틱 = **2초** 탄다.
-## 🔴 셀 하나의 수명이지 불 전체의 수명이 아니다 — 전체 수명은 **나무를 얼마나 뒀나**가 정한다
-##  (GDD 「연료를 어디 두느냐가 곧 레벨 디자인」).
+# --- fire -----------------------------------------------------------
+## Fuel consumed per tick. Wood fuel 200 => one cell burns for 40 ticks = **2 seconds.**
+## One cell's lifespan, not the fire's — the fire's lifespan is set by **how much wood you placed**
+##  (GDD, "where you put fuel is level design").
 const FIRE_BURN_PER_TICK := 5
 
-## 몇 틱마다 이웃으로 번지나. 1 ⇒ 20셀/초 = 80px/s.
-## ⚠ 느리게 두면 「번진다」가 아니라 「가만히 탄다」로 보인다 —
-##  불이 번지는 걸 보는 게 판정 5라 속도 자체가 그 판정의 일부다.
+## Ticks between spreading to a neighbor. 1 => 20 cells/s = 80px/s.
+## Set too slow, it reads as "smouldering" rather than "spreading" —
+##  watching fire spread is acceptance 5, so the speed itself is part of that check.
 ##
-## 🔴🔴 **32px 전환에서 2 → 1로 내렸다. 사용자가 화면을 보고 정했다**(2026-08-04).
-##  셀이 그대로인데 화면 배율이 2배 → 1배가 되어 **번짐이 화면에서 절반 속도로 보였다** —
-##  실측(verify-look): 2일 때 **1.25타일/s**, 전에는 **2.5타일/s**. 1로 내려 전과 같게 되돌렸다.
-## ⚠ **비용 걱정은 과장이었다**(verify-read가 코드를 읽고 정정했다): `_burning` 전체 순회와
-##  연료 소모는 **매 틱 돈다.** 이 값이 가르는 것은 **이웃 점화 네 줄뿐**이라
-##  2배가 되는 것은 번짐 패스지 불 비용 전체가 아니다. ⚠ **읽어서 한 말이고 재지는 않았다.**
+## **Lowered 2 -> 1 in the 32px switch. The user decided it on screen.**
+##  Cells were unchanged while the screen scale went 2x -> 1x, so **spread looked half speed on screen** —
+##  measured (verify-look): **1.25 tiles/s** at 2, previously **2.5 tiles/s**. Lowering to 1 restored it.
+## **The cost worry was overstated** (verify-read read the code and corrected it): the full `_burning` sweep
+##  and fuel consumption **run every tick.** What this value gates is **only the four neighbor-ignition lines**,
+##  so what doubles is the spread pass, not fire's total cost. **Said from reading, not measured.**
 const FIRE_SPREAD_TICKS := 1
 
-## 🔴🔴 **안전망이다. 조절 손잡이가 아니다**(GDD).
-##  「불이 N개를 넘으면 안 붙는다」가 플레이어 눈에 보이면 그건 규칙이 아니라 **고장**으로 읽힌다 —
-##  불을 막는 것은 연료여야 한다.
+## **A safety net. Not a tuning knob** (GDD).
+##  "Fire won't catch past N" visible to the player reads as **a malfunction**, not a rule —
+##  what stops fire must be fuel.
 ##
-## 🔴🔴 **원래 근거는 「격자 셀 수의 11%」였고 그 근거는 죽었다**(2026-08-07).
-##  4,096/36,864 = 11.1% → 16,384/147,456 = 11.1% 까지는 따라왔는데, 2026-08-06에 격자가
-##  **4,128,768셀**이 되며 같은 값이 **0.397%** 가 됐다. **비율을 지키려면 46만이어야 한다.**
+## **The original grounds were "11% of the grid's cell count", and those grounds are dead.**
+##  4,096/36,864 = 11.1% -> 16,384/147,456 = 11.1% tracked fine, but once the grid became
+##  **4,128,768 cells** the same value became **0.397%.** **Holding the ratio would require 460,000.**
 ##
-## 🔴 **그런데 값은 16,384 그대로 둔다. 비율이 근거가 아니게 됐을 뿐이다.**
-##  이건 안전망이고, 안전망의 크기를 정하는 것은 **한 틱에 감당 가능한 불의 양**이지 격자 넓이가 아니다 —
-##  격자를 키운다고 CPU가 같이 커지지 않는다. 16,384 × 0.36μs ≈ 5,900μs 가 이론상 최악이고
-##  그건 20Hz 예산(50,000μs)의 12%다. **비율을 따라 46만으로 올리면 그 최악이 165,000μs 로
-##  예산의 330%가 된다** — 안전망이 안전하지 않아진다.
-## ⚠ **무대(`stage.gd`)로 근거를 잡으면 조용히 낡는다** — 무대는 껍데기라 본편에 안 남는다.
+## **The value stays 16,384 anyway. The ratio simply stopped being the rationale.**
+##  This is a safety net, and a safety net's size is set by **how much fire one tick can afford**, not by grid area —
+##  a bigger grid doesn't grow the CPU. 16,384 x 0.36us ~= 5,900us is the theoretical worst, 12% of the
+##  20Hz budget (50,000us). **Following the ratio to 460,000 makes that worst case 165,000us = 330% of budget** —
+##  the safety net stops being safe.
+## **Grounding it on the stage (`stage.gd`) goes stale silently** — the stage is the shell and won't survive into the real game.
 ##
-## 🔴 **안 올렸으면 계약이 깨질 뻔했다** — 타일이 8×8셀이 되며 무대 나무가 736 → 2,944셀이 되어
-##  여유가 5.6배 → 1.4배로 줄었고, 단계 0의 최악 시나리오에서 **실제로 4,096에 닿았다**(실측).
-## ⚠ **비용은 안 오른다.** 상한에 닿으려면 나무가 16,384셀 있어야 하는데 무대엔 2,944셀뿐이라
-##  **도달 불가**다 — 그게 「안전망」의 뜻이다. 오르는 것은 이론상 최악(16,384 × 0.36μs ≈ 5,900μs)뿐이다.
-## ⚠ **파생 상수로 못 만든다** — 셀 수는 `cell_grid` 에 있고 `cell_grid` 가 이 파일을 읽으므로 순환이다.
+## **Not raising it would have nearly broken the contract** — with 8x8-cell tiles, stage wood went 736 -> 2,944 cells,
+##  cutting the margin from 5.6x to 1.4x, and stage 0's worst case **actually reached 4,096** (measured).
+## **Cost doesn't rise.** Reaching the cap needs 16,384 cells of wood and the stage has only 2,944, so it is
+##  **unreachable** — that is what "safety net" means. What rises is only the theoretical worst (16,384 x 0.36us ~= 5,900us).
+## **It can't be a derived constant** — the cell count lives in `cell_grid` and `cell_grid` reads this file, so it would be circular.
 const MAX_BURNING := 16384
 
 
-# ─── 세대 표 읽기 ─────────────────────────────────────────────────
-## ⚠ 세대를 **클램프한다** — 표보다 깊은 세대가 생기면 여기서 죽는 대신 마지막 줄로 떨어진다.
-##  🔴 그 상태를 조용히 두면 안 되므로 `net_tables`가 **표 길이가 `SPLIT_MAX`를 덮는지**를 따로 잰다.
+# --- reading the generation table ------------------------------------
+## The generation is **clamped** — a generation deeper than the table falls to the last row instead of dying here.
+##  Leaving that silent is not acceptable, so `net_tables` separately measures **whether the table length covers `SPLIT_MAX`.**
 
 static func speed_cells(gen: int) -> int:
 	return int(SIM_SIZES[_gen_row(gen)]["speed"])
@@ -527,38 +531,38 @@ static func blast_rd(gen: int) -> int:
 	return int(SIM_SIZES[_gen_row(gen)]["rd"])
 
 
-## 🔴🔴 **점화 반경이 곧 불의 진입로다.**
-##  ⚠ 폭발은 `rd` 안을 **EMPTY로 만든다 = 연료를 0으로 만든다.** 그래서 점화 반경이 파괴 반경보다
-##   **크지 않으면 불이 원리적으로 안 붙는다** — 자기가 태울 것을 자기가 먼저 지운다.
-##   에러는 안 나고 「폭발은 되는데 불이 안 난다」로만 보인다.
-##  ⇒ 두 반경의 차이가 만드는 **고리 모양 띠**가 불이 들어오는 유일한 문이고,
-##   `net_tables._gen_tables`가 그 부등식을 **세대마다** 잰다(`net_fire`는 세대 0만 본다).
+## **The ignition radius is fire's way in.**
+##  A blast turns everything inside `rd` **into EMPTY = sets fuel to 0.** So unless the ignition radius is
+##   **larger** than the destruction radius, **fire cannot catch in principle** — it erases its own fuel first.
+##   No error is raised; it only looks like "the blast works but nothing burns".
+##  => The **ring-shaped band** between the two radii is fire's only way in, and
+##   `net_tables._gen_tables` measures that inequality **per generation** (`net_fire` sees only generation 0).
 static func blast_ignite_r(gen: int) -> int:
 	return int(SIM_SIZES[_gen_row(gen)]["ignite_r"])
 
 
-## 🔴 룬 흔적의 반경. **「작게」가 계약이다** — 크게 두면 확산이 폭발을 겸하는 것처럼 보여
-##  두 조합이 다시 뭉개진다.
-## ⚠ 착탄점은 **빈칸**(맞은 고체의 직전 칸)이라 연료가 0이다. 반경이 0이면 이웃에 못 닿아
-##  **아무 일도 안 일어난다** — 세대 1의 1도 그래서 0이 아니다.
+## The rune trace's radius. **"Small" is the contract** — set it large and spread looks like it doubles as blast,
+##  mushing the two combinations together again.
+## The impact point is an **empty cell** (the cell just before the solid that was hit), so its fuel is 0.
+##  At radius 0 it can't reach a neighbor and **nothing happens** — that is why generation 1's value is 1, not 0.
 static func rune_r(gen: int) -> int:
 	return int(SIM_SIZES[_gen_row(gen)]["rune_r"])
 
 
-## 🔴🔴 **모든 착탄이 파는 반경.** 문양이 없어도, 룬이 무속성이어도 이만큼은 판다
-##  (`spell_sim._impact` 의 ①).
-## 🔴 **`rune_r` 보다 작아야 한다** — 위 `SIM_SIZES` 주석. 크면 「파고 그 자리에 불」에서
-##  **불만 조용히 사라진다.**
-## ⚠ 0이면 「마법이 벽을 판다」(GDD 자연법칙 첫 줄)가 통째로 없어지는데 **에러가 안 난다** —
-##  그게 정확히 2026-08-05 이전 상태였고 그물은 내내 초록이었다.
+## **The radius every impact carves.** Even with no glyph and a none rune, it carves this much
+##  (step (1) of `spell_sim._impact`).
+## **Must be smaller than `rune_r`** — see the `SIM_SIZES` comment. Larger and, in "carve then set fire there",
+##  **only the fire quietly disappears.**
+## At 0, "magic digs walls" (the GDD's first natural law) vanishes entirely **with no error** —
+##  that was exactly the state before this was added, and the nets were green the whole time.
 static func carve_r(gen: int) -> int:
 	return int(SIM_SIZES[_gen_row(gen)]["carve_r"])
 
 
-## 🔴🔴 **물 룬이 적시는 반경.** `rune_r` 의 물 쪽 짝이고 같은 계약을 진다 —
-##  **`carve_r` 보다 커야 한다**(위 `SIM_SIZES` 주석). 작으면 파기가 물 놓을 자리를 먼저 지운다.
-## ⚠ 착탄점은 **빈칸**(맞은 고체의 직전 칸)이다. 반경이 0이면 이웃에 못 닿아 **아무 일도 안 난다** —
-##  `rune_r` 과 정확히 같은 이유로 세대 1도 0이 아니다.
+## **The radius the water rune wets.** The water-side sibling of `rune_r`, bearing the same contract —
+##  **it must exceed `carve_r`** (see the `SIM_SIZES` comment). Smaller, and the carve erases the place water would go.
+## The impact point is an **empty cell** (the cell just before the solid that was hit). At radius 0 it can't
+##  reach a neighbor and **nothing happens** — generation 1 is non-zero for exactly the same reason as `rune_r`.
 static func water_r(gen: int) -> int:
 	return int(SIM_SIZES[_gen_row(gen)]["water_r"])
 

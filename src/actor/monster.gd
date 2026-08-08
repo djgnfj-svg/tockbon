@@ -1,11 +1,12 @@
 extends RefCounted
-## 몬스터 한 마리 — `Body`를 쓰고 체력·종류·id를 든다. 격자를 **읽기만** 한다.
+## One monster — uses `Body` and holds HP, kind and id. It only **reads** the grid.
 ##
-## 🔴🔴 **`_next_axis()`가 「다음 한 걸음을 어디로」를 답하는 유일한 자리다**
-##  (`docs/design/몬스터.md`가 미리 요구한 함수). AI가 오면 이 함수만 갈아 끼운다 —
-##  여기 말고 다른 곳에 「플레이어 쪽으로」가 나오면 안 된다.
+## **`_next_axis()` is the only place answering "where does the next step go"**
+##  (a function `docs/design/monsters.md` demanded in advance). When AI arrives, only this function gets swapped —
+##  "toward the player" must not appear anywhere else.
 ##
-## ⚠ `src/actor/`라 float을 써도 되고 씬 트리는 모른다(GDD 멀티 표 — 몬스터는 호스트 권위).
+## It is `src/actor/`, so floats are allowed and it does not know the scene tree (GDD multiplayer table —
+##  monsters are host-authoritative).
 
 const CellGrid := preload("res://src/sim/cell_grid.gd")
 const Body := preload("res://src/actor/body.gd")
@@ -14,31 +15,34 @@ const SpellSim := preload("res://src/sim/spell_sim.gd")
 const Defs := preload("res://src/actor/monster_defs.gd")
 const MonsterBolts := preload("res://src/actor/monster_bolts.gd")
 
-var id: int          # 🔴 판정 7이 이것으로 잰다. 「개수가 줄었다」로는 못 잰다(죽은 놈이 빠졌는지 안 보인다)
+var id: int          # Acceptance 7 measures with this. "The count went down" cannot measure it (you cannot see which one died)
 var kind: int
 var hp: int
 
-## 남은 무적 **틱** 수. 🔴 캐릭터의 `invuln_left`와 같은 어법 — 종류마다 다른 값은
-##  `Defs.invuln_ticks(kind)`가 든다(플레이어는 상수, 몬스터는 표. 값 자체는 지금 둘 다 2틱).
+## Remaining invulnerability **ticks**. Same idiom as the character's `invuln_left` — the per-kind values are
+##  held by `Defs.invuln_ticks(kind)` (the player uses a constant, monsters use the table. The values
+##  themselves are 2 ticks for both right now).
 var invuln_left := 0
 
-## 🔴 닭 전용 재장전 시계(틱). 다른 종류는 안 쓴다 — 지금은 닭만 원거리라 필드 하나로
-##  충분하다. 틱마다 `on_tick`이 깎는다(무적과 같은 시계 어법 — 20Hz).
+## The hen's reload clock (ticks). No other kind uses it — only the hen is ranged for now, so one field is
+##  enough. `on_tick` shaves it every tick (the same clock idiom as invulnerability — 20Hz).
 var reload_left := 0
 
-## 지금 불 위에 서 있나. 🔴 화면이 읽을 값이다(단계 7) — 매 프레임 다시 판정하므로
-##  「불에서 나왔는데 계속 타 보인다」가 원리적으로 없다.
+## Am I standing in fire right now. A value the screen will read (stage 7) — it is re-decided every frame,
+##  so "I left the fire but keep looking like I am burning" is impossible in principle.
 var burning := false
 
-## 마지막으로 향한 쪽(+1 오른쪽 · -1 왼쪽). 🔴 `character.facing`과 같은 어법이다 — 스프라이트가
-##  붙으면서(단계 7) 화면이 읽는다. `_next_axis()`가 돌려준 축이 0일 때는(멈춰 섰을 때) **그대로
-##  둔다** — 0으로 리셋하면 닭이 멈출 때마다 그림이 오른쪽 기본값으로 튄다.
+## The last direction faced (+1 right, -1 left). Same idiom as `character.facing` — the screen reads it once
+##  the sprite is attached (stage 7). When the axis `_next_axis()` returned is 0 (standing still), **leave it
+##  as is** — reset it to 0 and the hen's sprite snaps to the right-facing default every time it stops.
 var facing := 1
 
-## 아직 1이 안 된 불 피해. `hp`를 정수로 지키는 장치다 — `character._burn_acc`와 같은 이유.
+## Fire damage that has not reached 1 yet. The device that keeps `hp` an integer — same reason as
+##  `character._burn_acc`.
 var _burn_acc := 0.0
 
-## x·y·on_ground는 캐릭터와 같은 어법 — **프로퍼티로 `_body`를 넘긴다**(뷰가 `m.x`로 읽는다).
+## x, y and on_ground use the same idiom as the character — **`_body` is exposed through properties**
+##  (the view reads `m.x`).
 var _body: Body
 
 
@@ -62,17 +66,17 @@ func center() -> Vector2:
 	return _body.center()
 
 
-## 🔴🔴 **다섯 줄, 순서가 계약이다**(`monsters-minimum` 단계 1). 접지를 먼저 갱신한 뒤에
-##  `_next_axis()`를 부른다 — 사거리에서 멈추는 판단이 그 값을 쓰게 될 날을 위해서다.
+## **Five lines, and the order is a contract** (`monsters-minimum` stage 1). Grounding is refreshed first,
+##  then `_next_axis()` is called — for the day the "stop at range" decision starts using that value.
 ##
-## 🔴 중력은 `Character.GRAVITY_PX`·`MAX_FALL_PX`에서 그대로 읽는다 — 「받는 피해」·「불 DPS」와
-##  같은 자리다(축을 안 늘린다). 몬스터용 중력 열을 만들면 미정이 두 곳으로 는다.
-##  ⚠ 귀결: 돼지도 닭도 플레이어와 낙하 곡선이 같다. 큰 놈이 무겁게 안 떨어진다.
+## Gravity is read straight from `Character.GRAVITY_PX` and `MAX_FALL_PX` — the same place as "damage taken"
+##  and "fire DPS" (no axes are added). Make a monster gravity column and the undecided items grow to two places.
+##  Consequence: pigs and hens have the same fall curve as the player. A big one does not fall heavily.
 func step(grid: CellGrid, dt: float, target_x: int, target_y: int) -> void:
 	_body.on_ground = _body.grounded(grid)
 	var axis := _next_axis(grid, target_x, target_y)
-	# 🔴 화면 전용 값이다 — 거동에 안 쓰인다(`character.step()`의 `facing` 대입과 같은 자리).
-	#  0(멈춤)일 때는 안 건드린다 — `character.gd`가 이미 그 규율을 세워 뒀다(위 헤더).
+	# A screen-only value — not used for behavior (the same place as the `facing` assignment in `character.step()`).
+	#  When it is 0 (stopped) it is not touched — `character.gd` already set that discipline (header above).
 	if axis != 0.0:
 		facing = 1 if axis > 0.0 else -1
 	_body.apply_gravity(dt, Character.GRAVITY_PX, Character.MAX_FALL_PX)
@@ -80,26 +84,29 @@ func step(grid: CellGrid, dt: float, target_x: int, target_y: int) -> void:
 	if _body.move_y(grid, _body.vy * dt):
 		_body.vy = 0.0
 	_body.on_ground = _body.grounded(grid)
-	# 🔴 **다 움직인 뒤에 본다** — `character.step()`과 같은 이유(방금 떠난 자리의 불로 안 깎인다).
+	# **Look after all the moving is done** — the same reason as `character.step()` (you do not get shaved by
+	#  the fire at the spot you just left).
 	_burn(grid, dt)
 
 
-## 다음 한 걸음을 어디로. 🔴🔴 **단계 2 — 「플레이어 쪽으로」한 줄이다.**
-##  타깃(플레이어 중심)이 내 중심보다 오른쪽이면 +1, 왼쪽이면 -1, 같으면 0.
-##  ⚠ **중심 대 중심으로 잰다** — 상자 왼쪽 끝으로 재면 상자 폭만큼 조용히 치우친다
-##  (닭의 사거리 판정 10이 「중심 대 중심」을 이미 정의로 못 박았다 — 여기도 같은 기준을 쓴다).
+## Where does the next step go. **Stage 2 — the one line of "toward the player".**
+##  If the target (the player's center) is right of my center, +1; left, -1; equal, 0.
+##  **It is measured center to center** — measure from the box's left edge and it silently skews by the box
+##  width (the hen's range acceptance 10 already pinned "center to center" as the definition — the same
+##  standard is used here).
 ##
-## 🔴🔴 **인자를 지금 넓혀 둔다. 아직 `grid`·`target_y`는 안 쓴다.** `target_x` 하나면 이 함수가
-##  격자를 못 보는데, 길찾기는 지형을 읽어야 하고 활성화 거리(미정 13번)도 이 함수 안이다 ⇒
-##  AI를 넣는 날 서명부터 바뀌고, 그러면 미리 뽑아 둔 값이 절반 무효가 된다.
-## 🔴 닭의 「사거리에서 멈춘다」도 이 함수 안이다(단계 6) — 밖에 두면 「어디로 갈까」가 두 곳이 되고,
-##  AI를 넣는 날 한쪽만 갈아끼운다 ⇒ 닭만 멍청하게 남는다.
+## **The arguments are widened now. `grid` and `target_y` are not used yet.** With only `target_x` this
+##  function cannot see the grid, but pathfinding has to read the terrain and the activation distance
+##  (undecided item 13) also lives inside this function => the day AI goes in, the signature changes first,
+##  and then half the values pulled out in advance become void.
+## The hen's "stop at range" is also inside this function (stage 6) — put it outside and "where do I go" lives
+##  in two places, and the day AI goes in only one gets swapped => only the hen stays stupid.
 ##
-## ⚠ 안 쓰는 인자가 그물을 빨갛게 만들지 않는다(실측, 2026-08-07 Godot 4.7.1 헤드리스) —
-##  `@warning_ignore`를 붙이지 마라. 없어도 된다.
+## An unused argument does not turn the nets red (measured, Godot 4.7.1 headless) —
+##  do not attach `@warning_ignore`. It is not needed.
 func _next_axis(_grid: CellGrid, target_x: int, _target_y: int) -> float:
-	# 🔴🔴 **단계 6 — 닭은 사거리(`MonsterBolts.BOLT_STOP_PX`)에서 멈춘다.** 여기가 그 자리다 —
-	#  밖에 두면 「어디로 갈까」가 두 곳이 되고 AI를 넣는 날 한쪽만 갈아끼운다.
+	# **Stage 6 — the hen stops at range (`MonsterBolts.BOLT_STOP_PX`).** This is that place —
+	#  put it outside and "where do I go" lives in two places and only one gets swapped the day AI goes in.
 	if kind == Defs.KIND_HEN and _dist_to_target(target_x) <= MonsterBolts.BOLT_STOP_PX:
 		return 0.0
 	var my_x := _body.center().x
@@ -110,16 +117,18 @@ func _next_axis(_grid: CellGrid, target_x: int, _target_y: int) -> float:
 	return 0.0
 
 
-## 🔴 중심 대 중심 거리(px). `_next_axis`(멈춤)와 `ready_to_fire`(사격 조건)가 같은 기준을
-##  써야 한다 — 두 곳에서 다르게 재면 「멈췄는데 사거리 밖이라 안 쏜다」가 조용히 난다.
+## Center-to-center distance (px). `_next_axis` (stopping) and `ready_to_fire` (the firing condition) have to
+##  use the same standard — measure differently in the two places and "it stopped but is out of range so it
+##  does not fire" happens silently.
 func _dist_to_target(target_x: int) -> float:
 	return absf(float(target_x) - _body.center().x)
 
 
-## 🔴🔴 **틱에서만 돈다** — `character.on_tick`과 같은 이유(60Hz에서 부르면 한 대가 세 대가 된다).
-##  입구는 `world_step.frame()`의 틱 갈래 안, `_char.on_tick` **뒤**다(문서 「동작 ⑨」).
+## **It runs only on ticks** — the same reason as `character.on_tick` (call it at 60Hz and one hit becomes three).
+##  The entrance is inside `world_step.frame()`'s tick branch, **after** `_char.on_tick` (doc: "behavior (9)").
 func on_tick(spell: SpellSim) -> void:
-	# 🔴 재장전은 무적과 별개 시계지만 **같은 문(틱)을 지난다** — 닭이 아니어도 그냥 0에서 안 움직인다.
+	# The reload is a separate clock from the invulnerability but **goes through the same door (the tick)** —
+	#  for non-hens it simply never moves off 0.
 	if reload_left > 0:
 		reload_left -= 1
 	if invuln_left > 0:
@@ -131,10 +140,10 @@ func on_tick(spell: SpellSim) -> void:
 	invuln_left = Defs.invuln_ticks(kind)
 
 
-## 🔴🔴 **닭이 지금 쏘고 싶은가.** `world_step`이 프레임마다 읽어 실제 탄을 만들고
-##  `consume_fire()`로 재장전 시계를 되돌린다. 🔴 탄을 여기서 직접 만들지 않는다 —
-##  `Monster`가 `MonsterBolts`를 만들면 몬스터가 탄을 "소유"하게 되고, 그건 이 우회로
-##  전체(`monster_bolts.gd` 헤더)가 피하려던 것이다. **신호만 낸다.**
+## **Does the hen want to fire right now.** `world_step` reads it every frame to make the actual bolt and calls
+##  `consume_fire()` to reset the reload clock. The bolt is not made here directly —
+##  if `Monster` made a `MonsterBolts`, the monster would "own" the bolt, and that is exactly what this whole
+##  detour (`monster_bolts.gd` header) was avoiding. **It only raises a signal.**
 func ready_to_fire(target_x: int) -> bool:
 	return kind == Defs.KIND_HEN and reload_left <= 0 \
 		and _dist_to_target(target_x) <= MonsterBolts.BOLT_STOP_PX
@@ -144,10 +153,10 @@ func consume_fire() -> void:
 	reload_left = MonsterBolts.RELOAD_TICKS
 
 
-## 🔴🔴 **불 위에 서 있으면 깎인다 — 무적을 갱신하지도, 무적에 걸리지도 않는다**
-##  (`character._burn`과 같은 계약 — 「연료를 어디 두느냐가 곧 레벨 디자인」이 몬스터에도 산다).
-## 🔴 「받는 피해」·「불 DPS」는 표에 열을 안 만든다 — 플레이어 상수(`Character.DAMAGE_HIT`·
-##  `Character.BURN_DPS`)를 그대로 쓴다(문서 「동작 ⑦」·「축을 안 늘린다」).
+## **Standing in fire shaves you — it neither refreshes invulnerability nor is stopped by it**
+##  (the same contract as `character._burn` — "where you put fuel is level design" lives for monsters too).
+## "Damage taken" and "fire DPS" get no columns in the table — the player's constants
+##  (`Character.DAMAGE_HIT`, `Character.BURN_DPS`) are used verbatim (doc: "behavior (7)", "no axes are added").
 func _burn(grid: CellGrid, dt: float) -> void:
 	burning = _body.standing_in_fire(grid)
 	if not burning:

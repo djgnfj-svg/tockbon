@@ -1,11 +1,12 @@
 extends Node2D
-## 캐릭터 · 지팡이. 🔴 **화면만 만진다 — 캐릭터 상태를 안 바꾼다.**
+## Character and staff. **It touches the screen only — it does not change character state.**
 ##
-## 🔴🔴 **지팡이 끝의 단일 소스는 이제 여기가 아니라 `src/actor/staff.gd` 다.**
-##  그림과 발사 원점이 갈라지면 「쏜 데서 안 나간다」로 보이고 그건 스샷으로만 드러난다 —
-##  ⇒ **여기서 끝을 다시 계산하지 마라.** 아래 `tip_px()` 는 그 함수를 **부르기만** 한다.
-## ⚠ 보간이 없는 게 맞다 — 캐릭터는 60Hz(렌더와 같은 시계)라 틱 사이가 없다.
-##  보간이 필요한 건 20Hz 시뮬을 그리는 `spell_view.gd`뿐이다.
+## **The single source for the staff tip is no longer here but `src/actor/staff.gd`.**
+##  Let the drawing and the firing origin diverge and it looks like "it doesn't come out of where I aimed",
+##  and that only shows up in a screenshot —
+##  => **do not recompute the tip here.** `tip_px()` below only **calls** that function.
+## Having no interpolation is correct — the character runs at 60Hz (the same clock as rendering), so there is
+##  nothing between ticks. The only thing needing interpolation is `spell_view.gd`, which draws the 20Hz sim.
 
 const CellGrid := preload("res://src/sim/cell_grid.gd")
 const Character := preload("res://src/actor/character.gd")
@@ -15,31 +16,33 @@ const SpellCircle := preload("res://src/actor/spell_circle.gd")
 
 var _ch: Character = null
 
-## 🔴🔴 **지팡이가 지형에 막혀 짧아지므로 화면이 격자를 든다. 읽기만 한다.**
-##  ⚠ **이걸 안 받으면 화면은 옛 자리에 그리고 발사만 새 자리로 간다** — 셋이 하나라는
-##   계약이 그 자리에서 깨지고 **에러가 하나도 안 난다.** 그래서 `setup()` 의 인자다.
+## **The staff is shortened when blocked by terrain, so the screen holds the grid. It only reads.**
+##  **Without taking this, the screen draws at the old seat while only firing goes to the new one** — the contract
+##   that the three are one breaks right there and **not one error is raised.** That is why it is an argument of `setup()`.
 var _grid: CellGrid = null
 
-## 🔴🔴 **사본이 아니라 참조다.** 매 `_draw()`에 읽으므로 껍데기가 조합을 바꾸면 지팡이 끝 색이
-##  **저절로** 따라온다. 사본을 두면 밀어 넣기를 한 번 깜빡하는 순간 「조합을 바꿨는데
-##  화면이 그대로다」가 되고 **에러가 안 난다** — 그게 v1이 죽은 방식이다.
-## ⚠ **읽기만 한다.** 화면이 조립 상태를 바꾸면 그 순간 단일 소스가 아니게 된다.
+## **A reference, not a copy.** It is read on every `_draw()`, so when the shell changes the assembly the staff
+##  tip color follows **on its own.** Keep a copy and the moment one push is forgotten it becomes "I changed the
+##  combination and the screen stayed the same", and **no error is raised** — that is the way v1 died.
+## **It only reads.** The moment the screen changes assembly state, it stops being the single source.
 var _circle: SpellCircle = null
 
-## 몸 시트. 🔴 **경로는 `fx_tuning` 이 든다**(연출 상수는 한 파일) — 여기 문자열을 또 적으면
-##  `assets/` 를 옮기는 날 한쪽만 따라오고, 그 어긋남을 잡는 그물이 **없다**(`assets/` 는 폴더 스캔 밖이다).
-## ⚠ **null 검사를 안 붙인다.** 못 읽으면 `load()` 와 `draw_texture_rect_region` 이 둘 다 짖는다 —
-##  조용히 `return` 하면 **캐릭터가 안 보이는데 아무도 안 짖는** 이 리포의 대표 침묵사가 된다.
+## Body sheet. **The path is held by `fx_tuning`** (presentation constants live in one file) — write the string
+## again here and the day `assets/` moves only one side follows, and there is **no** net catching that drift
+## (`assets/` is outside the folder scan).
+## **No null check is attached.** If it cannot be read, `load()` and `draw_texture_rect_region` both bark —
+##  a quiet `return` would make it **the character being invisible with nobody barking**, this repo's
+##  representative silent death.
 var _body_tex: Texture2D = load(Fx.CHAR_SHEET)
 
-## 지팡이 시트. ⚠ **`_body_tex` 와 같은 어법이다 — null 검사를 안 붙인다**(위 근거 그대로).
+## Staff sheet. **The same idiom as `_body_tex` — no null check is attached** (same grounds as above).
 var _staff_tex: Texture2D = load(Fx.STAFF_SHEET)
 
-## 🔴🔴 **「걷는 중인가」를 캐릭터에 묻지 않는다.** `character.gd` 에 그런 상태가 없고, 넣으려면
-##  그 파일을 고쳐야 하는데 **화면만 만진다**가 이 파일의 계약이다.
-##  ⇒ **직전 프레임의 x와 비교한다.** 뷰가 드는 상태는 이 하나뿐이다.
-## ⚠ 밀려서 움직일 때도 「걷는 중」이 된다 — `fx_tuning.CHAR_WALK_PX_PER_FRAME` 주석에 적은
-##  대로 알고 고른 것이다.
+## **"Is it walking" is not asked of the character.** `character.gd` has no such state, and adding it would mean
+##  editing that file, while **touching the screen only** is this file's contract.
+##  => **Compare against the previous frame's x.** This is the only state the view holds.
+## Being pushed also counts as "walking" — chosen knowingly, as written in the
+##  `fx_tuning.CHAR_WALK_PX_PER_FRAME` comment.
 var _prev_x := 0
 var _moving := false
 
@@ -48,31 +51,33 @@ func setup(ch: Character, circle: SpellCircle, grid: CellGrid) -> void:
 	_ch = ch
 	_circle = circle
 	_grid = grid
-	# ⚠ **여기서 `_prev_x` 를 맞춰 둔다.** 안 맞추면 첫 프레임에 「0 → 스폰 x」 가 움직임으로 읽혀
-	#  가만히 선 캐릭터가 한 프레임 걷는다.
+	# **`_prev_x` is aligned here.** Without aligning it, the first frame reads "0 -> spawn x" as movement
+	#  and a standing-still character walks for one frame.
 	if _ch != null:
 		_prev_x = _ch.x
 	queue_redraw()
 
 
 func _process(_dt: float) -> void:
-	# 🔴🔴 **걷기 시계를 따로 만들지 않는다.** 「움직였나」도 「몇 번째 칸인가」도 전부 `_ch.x` 에서
-	#  나온다 — `delta` 를 누산하면 그 순간 시계가 둘이 되고 **「멈췄는데 다리가 움직인다」**가 난다.
-	#  ⚠ `_process` 는 프레임당 한 번이고 `_draw` 는 그 뒤에 온다 ⇒ 여기가 갱신 자리다.
+	# **Do not build a separate walk clock.** Both "did it move" and "which frame of the cycle" come out of
+	#  `_ch.x` — accumulate `delta` and there are two clocks from that moment, giving **"it stopped but the legs
+	#  keep moving"**.
+	#  `_process` runs once per frame and `_draw` comes after it => this is the seat for the update.
 	if _ch != null:
 		_moving = _ch.x != _prev_x
 		_prev_x = _ch.x
-	# 캐릭터가 매 프레임 움직이고 지팡이가 매 프레임 마우스를 따라간다 ⇒ 늘 다시 그린다.
+	# The character moves every frame and the staff follows the mouse every frame => always redraw.
 	queue_redraw()
 
 
-## 마우스 쪽 단위 벡터. 마우스가 정확히 캐릭터 한가운데면 **바라보는 쪽**으로 떨어진다
-## (0벡터를 정규화하면 0이 되고, 그러면 지팡이가 사라진다).
+## Unit vector toward the mouse. If the mouse is exactly at the character's center it falls back to
+## **the facing direction** (normalizing a zero vector gives zero, and then the staff disappears).
 ##
-## ⚠ **기준이 상자 중심이지 지팡이 피벗이 아니다.** 피벗이 중심에서 `PIVOT_DY_PX` 만큼 아래라
-##  둘이 그만큼 어긋나는데, **이번 변경에서 안 건드렸다** — 기획이 손 높이를 「미정」으로 뒀고
-##  값이 정해지기 전에 기준을 옮기면 무엇 때문에 조준이 달라졌는지 갈리지 않는다.
-##  🔴 손 높이를 눈으로 정하는 날 **여기를 같이 봐라.** 마우스가 캐릭터에 붙어 있을 때 제일 크게 보인다.
+## **The reference is the box center, not the staff pivot.** The pivot is `PIVOT_DY_PX` below the center,
+##  so the two are off by that much, and **this change did not touch it** — the design left hand height "undecided",
+##  and moving the reference before that value is settled makes it impossible to tell what changed the aim.
+##  **Look at this together the day hand height is decided by eye.** It shows up largest when the mouse is
+##  right up against the character.
 func aim_dir() -> Vector2:
 	if _ch == null:
 		return Vector2.RIGHT
@@ -82,34 +87,35 @@ func aim_dir() -> Vector2:
 	return d.normalized()
 
 
-## 🔴 탄이 나가는 자리. `stage.gd`가 이걸 그대로 `aim.fire_cmd`에 넘긴다.
+## Where the bolt comes out. `stage.gd` passes this straight into `aim.fire_cmd`.
 ##
-## 🔴🔴 **계산은 `Staff.tip_px()` 에 있다 — 여기서 다시 하지 마라.** 그리는 쪽(`_draw`)도
-##  같은 함수를 부르므로 「그림 끝 · 발사 원점」이 **구조적으로** 같은 값이다.
-##  ⚠ 여기서 한 줄이라도 다시 계산하면 그 순간 둘이 갈라질 수 있고, **에러는 안 난다.**
-## 🔴 **`_grid` 에 null 검사를 안 붙인다.** 껍데기가 격자를 안 넘기면 여기서 **짖어야** 한다 —
-##  조용히 옛 자리를 돌려주면 「화면은 옛 자리, 발사는 새 자리」가 **아무 에러 없이** 남고,
-##  그게 이 문서의 위험 2다(`_body_tex` 에 null 검사를 안 붙인 것과 같은 규율).
+## **The computation is in `Staff.tip_px()` — do not redo it here.** The drawing side (`_draw`) calls the same
+##  function, so "sprite tip" and "firing origin" are **structurally** the same value.
+##  Recompute even one line here and the two can diverge from that moment, and **no error is raised.**
+## **No null check is attached to `_grid`.** If the shell does not pass the grid, this must **bark** —
+##  quietly returning the old seat leaves "screen at the old seat, firing at the new one" **with no error at all**,
+##  and that is risk 2 of this document (the same discipline as attaching no null check to `_body_tex`).
 func tip_px() -> Vector2:
 	if _ch == null:
 		return Vector2.ZERO
 	return Staff.tip_px(_grid, _ch.x, _ch.y, aim_dir())
 
 
-## 🔴🔴 **어느 칸을 그릴지 고른다. 순수 static 이라 그물이 직접 부를 수 있다.**
-##  ⚠ 이게 **판정 3(걷기·점프·낙하 구별)과 4(쓰러짐)를 눈에서 그물로 옮기는 자리**다 —
-##   씬도 캐릭터도 없이 조합을 넣고 칸 번호를 받아 볼 수 있다.
+## **Picks which sheet cell to draw. Pure static, so a net can call it directly.**
+##  This is **the seat that moves acceptance 3 (telling walk, jump and fall apart) and 4 (downed) from the eye
+##   into the net** — a combination can be fed in and a cell number read back with no scene and no character.
 ##
-## 🔴🔴 **그래도 그물이 재는 것은 「코드가 다른 칸을 고른다」까지다.**
-##  **여섯 칸을 전부 똑같이 그려도 그물은 초록이다** — 「그 칸의 그림이 실제로 다르다」는
-##  원리적으로 눈만 잰다(계획 §7.2). 라벨을 거기까지 넓히지 마라.
+## **Even so, what the net measures stops at "the code picks a different cell".**
+##  **Draw all six cells identically and the net is still green** — "the art in that cell is actually different"
+##  is measured by the eye only, in principle (plan section 7.2). Do not widen the label past that.
 ##
-## 우선순위가 계약이다:
-##  ① **쓰러짐이 무엇보다 먼저다** — 쓰러진 채로 떨어지는 중이라도 「쓰러졌다」가 보여야
-##    「살려야 한다」를 아무도 못 놓친다
-##  ② 공중 — 올라가는 중과 떨어지는 중이 갈려야 점프가 화면에서 읽힌다
-##  ③ 걷는 중 · 그밖에
-## ⚠ `vy == 0` 인 공중은 **낙하**로 떨어진다(정점의 한 순간이라 어느 쪽이든 되지만 갈래를 하나로 둔다).
+## The priority is a contract:
+##  (1) **Downed comes before everything** — even while falling in a downed state, "it is downed" must show
+##    so that nobody misses "I have to revive it"
+##  (2) Airborne — rising and falling must split or the jump does not read on screen
+##  (3) Walking, and everything else
+## Airborne with `vy == 0` falls to **fall** (it is a single instant at the apex so either would do, but the
+##  branch is kept to one).
 static func pick_state(downed: bool, on_ground: bool, vy: float, moving: bool) -> int:
 	if downed:
 		return Fx.CHAR_DOWNED
@@ -118,54 +124,58 @@ static func pick_state(downed: bool, on_ground: bool, vy: float, moving: bool) -
 	return Fx.CHAR_WALK if moving else Fx.CHAR_STAND
 
 
-## 상태 → 시트에서 잘라 올 칸. 🔴 **표(`Fx.CHAR_FRAMES`)가 단일 소스다** — 여기서 칸 번호를
-##  계산하면 「표를 고쳤는데 화면이 그대로다」가 난다.
-## 🔴 **여러 칸짜리 상태(걷기)의 시계가 `_ch.x` 다.** `CHAR_WALK_PX_PER_FRAME` 마다 한 칸 넘어간다 —
-##  ⚠ `absi` 인 이유: 왼쪽으로 걸으면 x가 줄고, 음수 나눗셈이 0 쪽으로 잘려 **좌우가 비대칭**이 된다.
-## 🔴 없는 상태를 물으면 **여기서 짖는다.** `get`으로 덮으면 표를 빠뜨린 상태가 조용히 0번 칸을 쓴다.
+## State -> the cell to cut from the sheet. **The table (`Fx.CHAR_FRAMES`) is the single source** — compute
+## the cell number here and you get "I fixed the table and the screen stayed the same".
+## **The clock for multi-cell states (walking) is `_ch.x`.** One cell advances per `CHAR_WALK_PX_PER_FRAME` —
+##  why `absi`: walking left decreases x, and negative division truncating toward zero makes **left and right
+##  asymmetric**.
+## Asking for a state that does not exist **barks here.** Cover it with `get` and a state missing from the table
+## quietly uses cell 0.
 func _cell_rect(state: int) -> Rect2:
 	var cells: Array = Fx.CHAR_FRAMES[state]
 	var idx := 0
 	if cells.size() > 1:
 		idx = (absi(_ch.x) / Fx.CHAR_WALK_PX_PER_FRAME) % cells.size()
-	# 🔴🔴 **시트 안 좌표다 — `Fx.CHAR_CELL_PX` 를 쓴다. `Character.W_PX` 가 아니다.**
-	#  상자가 20px으로 좁아진 뒤로 둘이 다른 값이고, 여기에 `W_PX` 를 쓰면 시트를 20px 단위로
-	#  잘라 **엉뚱한 칸의 조각**을 그린다. ⚠ 에러가 하나도 안 난다.
+	# **These are in-sheet coordinates — use `Fx.CHAR_CELL_PX`, not `Character.W_PX`.**
+	#  Since the box narrowed to 20px the two are different values, and using `W_PX` here cuts the sheet in
+	#  20px units and draws **a fragment of the wrong cell**. Not one error is raised.
 	return Rect2(int(cells[idx]) * Fx.CHAR_CELL_PX, 0, Fx.CHAR_CELL_PX, Fx.CHAR_CELL_PX)
 
 
 func _draw() -> void:
 	if _ch == null:
 		return
-	# 🔴🔴 **깜빡임의 시계가 `invuln_left` 자체다.** 틱마다 한 칸 줄므로 홀짝만 봐도
-	#  0.2초 동안 두 번 깜빡인다 — 여기서 `delta`를 누산하면 그 순간 시계가 둘이 되고,
-	#  무적이 끝났는데 깜빡이는 일이 난다. ⚠ **읽기만 한다**(이 파일 첫 줄).
+	# **The blink's clock is `invuln_left` itself.** It drops by one per tick, so watching only odd/even
+	#  blinks twice over 0.2 seconds — accumulate `delta` here and there are two clocks from that moment,
+	#  and it blinks after invulnerability has ended. **It only reads** (the first line of this file).
 	var dim := 1.0 if (_ch.invuln_left & 1) == 0 else Fx.INVULN_DIM_A
 
-	# 🔴🔴 **어느 칸을 그리나 — 갈래는 `pick_state()` 하나뿐이다.** 여기서 조건을 또 쓰면
-	#  화면과 그물이 서로 다른 규칙을 보게 된다(그물은 그 함수를 직접 부른다).
+	# **Which cell to draw — the only branch is `pick_state()`.** Write the conditions again here and
+	#  the screen and the net see different rules (the net calls that function directly).
 	var state := pick_state(_ch.downed, _ch.on_ground, _ch.vy, _moving)
 
-	# 🔴🔴 **좌우는 한 벌 + 코드 반전이다.** 두 벌을 손으로 그리면 한쪽만 고치는 날이 오고,
-	#  그 어긋남은 **왼쪽을 볼 때만** 드러나 눈으로 거의 못 잡는다. 반전은 그 갈라짐이 원리적으로 없다.
-	#  ⚠ 그림이 4분의 3 각도라 반전이 **거울상**이 된다 — 알고 고른 것이다(기획 「몸은 좌우 두 벌」).
-	# 🔴🔴 **`draw_set_transform` 은 뒤에 그리는 것 전부에 걸린다 — 반드시 되돌린다.**
-	#  안 되돌리면 불 테두리·지팡이·**끝의 고리**가 뒤집힌 좌표계에서 그려진다. 지팡이 끝은
-	#  조립창을 안 열고도 늘 보이는 유일한 곳이라 그게 곧 조합 표시가 죽는 것이고,
-	#  ⚠ **에러는 하나도 안 난다.**
-	#  🔴 **그물이 이걸 못 잡는다** — 16px 때 verify-read가 복원 줄을 지워도 **전부 초록**인 것을
-	#   확인했다. 지키는 것은 이 주석과 눈뿐이다.
-	# 🔴🔴 **그림 칸(32px)이 충돌 상자(20px)보다 넓다 — 상자 *가운데*에 맞춰 그린다.**
-	#  왼쪽 위에 맞춰 그리면 캐릭터가 상자 안에서 왼쪽으로 6px 쏠리고, 그건 「걸을 때 몸이
-	#  한쪽으로 치우쳐 보인다」로만 드러난다. ⚠ 둘 다 짝수라 이 나눗셈이 정수로 떨어진다.
-	#  🔴 그래서 **그림 중심과 상자 중심이 같다** — `Staff.pivot_px()` 가 상자에서 나오는데
-	#   상자를 좁힌 뒤에도 그 자리가 몸 그림의 한가운데다.
+	# **Left and right are one set plus a code flip.** Draw two sets by hand and the day comes when only one
+	#  is fixed, and that drift shows up **only when looking left**, which the eye almost never catches.
+	#  A flip has no such divergence in principle.
+	#  The art is at a three-quarter angle, so flipping makes it **a mirror image** — chosen knowingly
+	#  (the design's "the body is two sets, left and right").
+	# **`draw_set_transform` applies to everything drawn afterwards — it must be restored.**
+	#  Without restoring, the burn outline, the staff and **the ring at the tip** are drawn in a flipped
+	#  coordinate system. The staff tip is the only place always visible without opening the assembly window,
+	#  so that means the combination readout dies, and **not one error is raised.**
+	#  **The nets cannot catch this** — at 16px, verify-read confirmed that deleting the restore line left
+	#   **everything green**. All that guards it is this comment and the eye.
+	# **The sprite cell (32px) is wider than the collision box (20px) — draw it centered on the box.**
+	#  Draw it aligned to the top left and the character skews 6px left inside the box, and that only shows up
+	#  as "the body looks off to one side when walking". Both are even, so this division lands on an integer.
+	#  So **the sprite center and the box center are the same** — `Staff.pivot_px()` comes out of the box,
+	#   and even after narrowing the box that seat is the middle of the body sprite.
 	var pad := (Fx.CHAR_CELL_PX - Character.W_PX) / 2
 	var sprite_x := _ch.x - pad
-	# ⚠ 왼쪽을 볼 때 원점을 **그림** 오른쪽 끝에 두는 이유: 스케일 -1이 로컬 x를 왼쪽으로 보내므로
-	#  거기서 시작해야 그림이 같은 자리에 정확히 앉는다. **상자 끝이 아니라 그림 끝이다** —
-	#  상자를 쓰면 방향을 바꿀 때마다 캐릭터가 `pad` 의 두 배(12px)만큼 튄다.
-	#  🔴 그리고 그림 쪽 조건은 **`minx + maxx == CHAR_CELL_PX − 1`** 이다 — `net_sprite` 가 잰다.
+	# Why the origin goes at the right edge of the **sprite** when facing left: scale -1 sends local x leftward,
+	#  so starting there is what makes the sprite land exactly in the same seat. **It is the sprite edge, not
+	#  the box edge** — use the box and the character jumps by twice `pad` (12px) on every direction change.
+	#  And the condition on the art side is **`minx + maxx == CHAR_CELL_PX - 1`** — `net_sprite` measures it.
 	var flip := _ch.facing < 0
 	draw_set_transform(
 		Vector2(sprite_x + (Fx.CHAR_CELL_PX if flip else 0), _ch.y),
@@ -175,22 +185,24 @@ func _draw() -> void:
 		_cell_rect(state), Color(1.0, 1.0, 1.0, dim))
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
-	# 🔴🔴 **쓰러졌으면 여기서 끝이다 — 지팡이도 끝의 고리도 안 그린다.**
-	#  **못 쏘는 상태**라 그리면 「쏠 수 있어 보인다」가 된다.
-	#  ⚠ 불 테두리도 같이 빠진다 — 사각형 시절부터 그랬고 이번에 안 바꿨다.
+	# **If downed, it ends here — neither the staff nor the ring at its tip is drawn.**
+	#  It is a **state that cannot fire**, so drawing them would read as "it looks like I can shoot".
+	#  The burn outline drops out with it — it has been that way since the rectangle days and was not changed.
 	if _ch.downed:
 		_draw_downed_tag()
 		return
 
-	# 🔴 **테두리라 무적 흐림과 겹쳐도 둘 다 보인다.** 불은 무적에 안 걸려서 그 겹침이 정상이다.
+	# **It is an outline, so it stays visible together with the invulnerability dim.** Fire is not subject to
+	# invulnerability, so that overlap is correct.
 	if _ch.burning:
 		draw_rect(Rect2(_ch.x, _ch.y, Character.W_PX, Character.H_PX),
 			Fx.CHAR_BURN, false, Fx.CHAR_BURN_PX)
-	# 🔴🔴 **피벗도 끝도 `Staff` 에서 나온다.** 여기서 `_ch.center()` 로 그리면 그리는 자리와
-	#  발사 자리가 갈라지고, 그건 스샷으로만 드러난다.
-	# ⚠ `aim_dir()` 을 두 번 부른다(여기 · `tip_px()` 안). **한 프레임 안에서 같은 값이라 안전하다** —
-	#  마우스 자리는 프레임 동안 안 변한다. 🔴 `aim_dir()` 에 상태를 넣지 마라. 넣는 순간 그리는
-	#  방향과 끝이 갈라지고, 그건 「지팡이가 살짝 휘어 보인다」로만 드러난다.
+	# **Both the pivot and the tip come from `Staff`.** Draw from `_ch.center()` here and the drawn seat and
+	#  the firing seat diverge, and that only shows up in a screenshot.
+	# `aim_dir()` is called twice (here and inside `tip_px()`). **It is safe because the value is the same
+	#  within one frame** — the mouse position does not change during a frame. Do not put state into `aim_dir()`.
+	#  The moment you do, the drawn direction and the tip diverge, and that only shows up as
+	#  "the staff looks slightly bent".
 	var pivot := Staff.pivot_px(_ch.x, _ch.y)
 	var tip := tip_px()
 	var dir := aim_dir()
@@ -199,48 +211,53 @@ func _draw() -> void:
 	if _circle == null:
 		return
 
-	# 🔴🔴 **끝의 고리가 장착을 나른다 — 색 하나로.** 총구 구슬(크기 = 층 수)은 사용자 판정으로
-	#  지웠고, 무엇을 잃었는지는 `fx_tuning.STAFF_RING_*` 절에 적혀 있다.
+	# **The ring at the tip carries what is equipped — with one color.** The muzzle bead (size = layer count)
+	# was erased by the user's acceptance, and what was lost is written in the `fx_tuning.STAFF_RING_*` section.
 	#
-	# 🔴🔴 **월드 좌표계다 — 위 `_draw_staff` 가 변환을 되돌린 뒤여야 한다.**
-	#  `tip` 이 이미 월드 px라 그게 자연스럽고, **복원 줄이 어디에 있어야 하는지가 코드 모양으로
-	#  드러난다.** ⚠ 안 되돌리면 링이 엉뚱한 데 앉는데 **에러가 안 나고 그물도 못 잡는다.**
+	# **This is world coordinates — it must come after `_draw_staff` above restored the transform.**
+	#  `tip` is already world px so that is natural, and **it makes where the restore line has to be visible
+	#  in the shape of the code.** Without restoring, the ring sits in the wrong place and
+	#  **no error is raised and the nets cannot catch it either.**
 	#
-	# 🔴 **링은 그림의 고리 위에 정확히 겹친다.** 끝에서 `INSET` 만큼 되돌아온 자리가 고리 중심이다
-	#  (실측: 끝 36.0 · 고리 중심 x 32.0). ⚠ **자리 맞춤은 눈이 볼 자리다.**
-	# 🔴 매 프레임 **다시 읽는다** — 조립 상태가 바뀌는 순간이 따로 없다는 게 요점이다.
-	# ⚠ **「못 쏜다」 갈래는 `staff_tint` 안에 있다.** 여기서 가르면 그 갈래가 그물이 못 부르는
-	#  자리로 내려가고, 그러면 판정 5가 눈에만 남는다.
+	# **The ring overlaps the drawn ring exactly.** The seat `INSET` back from the tip is the ring's center
+	#  (measured: tip 36.0, ring center x 32.0). **Alignment is something the eye has to look at.**
+	# It is **re-read every frame** — the point is that there is no separate moment when the assembly changes.
+	# **The "cannot fire" branch is inside `staff_tint`.** Split it here and that branch drops to a seat
+	#  the nets cannot call, and then acceptance 5 is left to the eye only.
 	draw_circle(tip - dir * Fx.STAFF_RING_INSET_PX, Fx.STAFF_RING_R_PX,
 		Fx.staff_tint(_circle.packed_glyphs(), _circle.element(), _circle.can_fire()),
 		false, Fx.STAFF_RING_PX)
 
 
-## 🔴🔴 **봉과 고리를 따로 그린다. 통째로 x축 스케일하면 안 된다.**
-##  지팡이가 눌리면 길이가 `LEN_PX` 보다 짧아지는데, 그림을 통째로 늘리면 **고리가 타원으로
-##  찌그러지고** 그 위에 얹을 색 링(정원)이 안 맞는다. ⇒ **봉만 줄이고 고리는 1:1로 끝에 붙인다.**
-##  ⚠ 봉이 짧아지고 고리는 그대로인 것이 「벽에 다가가면 눌려 짧아진다」의 정직한 그림이다(판정 2).
+## **The rod and the ring are drawn separately. Do not x-scale the whole thing.**
+##  When the staff is pressed its length drops below `LEN_PX`, and stretching the whole sprite
+##  **squashes the ring into an ellipse** so the color ring (a true circle) laid over it does not fit.
+##  => **Shrink only the rod and attach the ring 1:1 at the end.**
+##  The rod shortening while the ring stays is the honest picture of "it gets pressed short near a wall"
+##  (acceptance 2).
 ##
-## 🔴🔴 **`draw_set_transform` 은 뒤에 그리는 것 전부에 걸린다 — 반드시 되돌린다.**
-##  안 되돌리면 뒤따르는 것(고리 색 링 · 다음 프레임)이 회전 좌표계에서 그려진다.
-##  **에러는 하나도 안 난다.** 🔴 **그물이 이걸 못 잡는다** — 위 몸 그림 쪽에 실측이 적혀 있다.
-##  지키는 것은 이 주석과 눈뿐이다.
+## **`draw_set_transform` applies to everything drawn afterwards — it must be restored.**
+##  Without restoring, what follows (the ring's color ring, the next frame) is drawn in a rotated
+##  coordinate system. **Not one error is raised.** **The nets cannot catch this** — the measurement is
+##  written on the body-sprite side above. All that guards it is this comment and the eye.
 ##
-## ⚠ **세로는 시트에서 읽는다**(`get_height()`). 상수로 박으면 「png 높이 · 상수」가 두 곳이 되고,
-##  갈라지면 지팡이가 세로로 늘어나는데 에러가 안 난다.
-## 🔴 **가로 기준은 `Staff.LEN_PX` 하나다** — `fx_tuning` 에 폭 상수를 또 두지 않는 이유가 그것이다.
-## 🔴🔴 **쓰러졌다는 것을 캐릭터 위에 직접 띄운다** (2026-08-08, 사용자가 정했다).
+## **The vertical is read from the sheet** (`get_height()`). Pin it as a constant and "png height" and
+##  "constant" become two places, and when they diverge the staff stretches vertically with no error.
+## **The single horizontal reference is `Staff.LEN_PX`** — that is why no width constant is kept in `fx_tuning`.
+## **Being downed is put up directly above the character** (decided by the user).
 ##
-## ⚠ **왜 HUD 로 부족한가**: HUD 에 이미 「쓰러짐 — R로 다시」가 있는데도
-##  **검증하던 에이전트가 세 번 발이 묶였다.** 이유 둘:
-##  🔴 **HUD 디버그 글자가 몬스터를 덮어서 연출을 보려면 HUD 를 꺼야 한다** ⇒ 그러면 이 글자도 없다
-##  🔴 **시선이 캐릭터에 있다.** 화면 구석의 한 줄은 「클릭이 씹혔다」를 의심하는 사람에게 안 닿는다
+## **Why the HUD is not enough**: even though the HUD already has "downed — R to restart",
+##  **verifying agents got stuck on it three times.** Two reasons:
+##  **The HUD debug text covers the monsters, so seeing the presentation means turning the HUD off** => and
+##   then this text is gone too
+##  **The eyes are on the character.** One line in a screen corner does not reach someone suspecting
+##   "my click got eaten"
 ##
-## ⚠ **지팡이가 사라지는 것도 신호이긴 하다**(위 상자) — 하지만 **「없어진 것」은 못 알아챈다.**
-##  발사가 통째로 버려지는데(`_drain_queue`) 화면에 아무 변화가 없으면 **입력 문제로 읽는다.**
+## **The staff disappearing is a signal too** (the box above) — but **"something gone" is not noticed.**
+##  When firing is discarded wholesale (`_drain_queue`) with no change on screen, **it reads as an input problem.**
 ##
-## 🔴 **가운데 정렬은 `monster_view._draw_dmg_number` 와 같은 어법**이다 — 폭을 재서 절반 민다.
-##  ⚠ 폰트가 없으면 안 그린다(`null` 을 넘기면 매 프레임 짖어 그물이 빨개진다).
+## **Centering is the same idiom as `monster_view._draw_dmg_number`** — measure the width and shift by half.
+##  If there is no font it does not draw (passing `null` barks every frame and turns the nets red).
 func _draw_downed_tag() -> void:
 	var font: Font = ThemeDB.fallback_font
 	if font == null:
@@ -256,15 +273,15 @@ func _draw_staff(pivot: Vector2, dir: Vector2, len_px: float) -> void:
 	var sheet_h := float(_staff_tex.get_height())
 	var ring := Fx.STAFF_RING_W_PX
 	var rod := Staff.LEN_PX - ring
-	# ⚠ 회전 좌표계다 — 원점이 피벗이고 +x 가 조준 방향이다. 그래서 아래 두 사각형이
-	#  「피벗에서 얼마나 나갔나」로만 적힌다.
+	# This is a rotated coordinate system — the origin is the pivot and +x is the aim direction. That is why
+	#  the two rectangles below are written purely as "how far out from the pivot".
 	draw_set_transform(pivot, dir.angle(), Vector2.ONE)
-	# ① 봉 — 남은 길이에 맞춰 **가로로만** 줄인다. ⚠ `maxf` 는 지팡이가 고리보다 짧아지는
-	#  극단(하한이 `ring` 보다 작은 상자)에서 폭이 음수가 되는 것을 막는다.
+	# (1) The rod — shrunk **horizontally only** to the remaining length. `maxf` prevents a negative width
+	#  in the extreme where the staff gets shorter than the ring (a box whose floor is below `ring`).
 	draw_texture_rect_region(_staff_tex,
 		Rect2(0.0, -Fx.STAFF_ANCHOR_Y_PX, maxf(0.0, len_px - ring), sheet_h),
 		Rect2(0.0, 0.0, rod, sheet_h))
-	# ② 고리 — **1:1이다.** 끝에 붙는다.
+	# (2) The ring — **1:1.** It attaches at the end.
 	draw_texture_rect_region(_staff_tex,
 		Rect2(len_px - ring, -Fx.STAFF_ANCHOR_Y_PX, ring, sheet_h),
 		Rect2(rod, 0.0, ring, sheet_h))

@@ -1,8 +1,8 @@
-# 배경 후보 위에 **실제 게임 색**의 지형과 스프라이트를 얹는다.
+# Lays terrain and sprites in **the real game colors** on top of a backdrop candidate.
 #
-# 🔴 배경만 보면 판정이 거짓이 된다 — 이 게임의 배경은 「보는 그림」이 아니라
-#  **캐릭터·몬스터·불이 그 위에 서는 바닥**이다. 대비가 죽으면 실루엣이 죽는다.
-#  ⚠ 색은 전부 `src/sim/cell_materials.gd` 의 `DEFS.rgb` 에서 그대로 가져왔다.
+# Looking at the backdrop alone makes the judgment false — this game's backdrop is not "a picture to look at"
+#  but **the ground the character, monsters and fire stand on.** Kill the contrast and you kill the silhouette.
+#  Every color is taken verbatim from `DEFS.rgb` in `src/sim/cell_materials.gd`.
 import sys, glob, os
 from PIL import Image, ImageDraw
 
@@ -15,22 +15,22 @@ TXT = (220, 215, 210)
 W, H = 960, 540
 CELL = 4                       # sim_tuning.CELL_PX
 
-# 🔴 스프라이트는 **리포의 `assets/`** 에서 읽는다. 한 번 스크래치패드를 가리켰다가
-#  다음 세션에 그 폴더가 사라져 목업을 못 만들 뻔했다.
+# Sprites are read from **the repo's `assets/`**. This once pointed at the scratchpad and the folder was gone
+#  by the next session, nearly making the mockup impossible to build.
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 OUT = sys.argv[1] if len(sys.argv) > 1 else os.path.join(ROOT, "tools", "pixel", "out", "_bgmock")
 
 
 def terrain(im):
-    """대충의 지형 한 조각. 셀 4px 격자에 맞춰 그린다."""
+    """A rough slice of terrain. Drawn on the 4px cell grid."""
     d = ImageDraw.Draw(im)
     ground = 400
-    d.rectangle([0, ground, W, H], fill=WOOD)                 # 흙
-    d.rectangle([0, ground + 60, W, H], fill=BEDROCK)         # 기반암
-    d.rectangle([120, ground - 48, 300, ground], fill=STONE)  # 돌 기둥
+    d.rectangle([0, ground, W, H], fill=WOOD)                 # dirt
+    d.rectangle([0, ground + 60, W, H], fill=BEDROCK)         # bedrock
+    d.rectangle([120, ground - 48, 300, ground], fill=STONE)  # stone pillar
     d.rectangle([640, ground - 96, 700, ground], fill=STONE)
     d.rectangle([700, ground - 32, 900, ground], fill=WOOD)
-    # 구덩이 — 플레이어가 판 자리
+    # A pit — where the player dug
     d.rectangle([400, ground, 500, ground + 60], fill=EMPTY)
     return ground
 

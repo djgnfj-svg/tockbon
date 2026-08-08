@@ -1,38 +1,38 @@
 extends RefCounted
-## 캐릭터가 다친다 — `docs/plans/3.done/character-damage-minimum.md`.
+## The character takes damage — `docs/plans/3.done/character-damage-minimum.md`.
 ##
-## **여섯 단계가 다 들어와 있다** — 틱 순서(0) · 체력·직격/폭발·무적(2) · 불 지속(3) ·
-##  반동(5) · 쓰러짐(6). ⚠ **판정 4(맞으면 밀리나)는 기능째로 삭제됐다** — 아래 그 자리에 표시가 있다.
+## **All six stages are in here** — tick order (0), health / direct hit / blast / invulnerability (2), fire over time (3),
+##  recoil (5), knockdown (6). **Acceptance 4 (does a hit push me) was deleted along with the feature** — there is a marker in its place below.
 ##
-## 🔴🔴 **이 그물의 요점은 「그물도 `frame()` 을 부른다」이다.**
-##  껍데기만 `frame()` 을 부르면 그물은 씬을 못 세워 순서를 **손으로 베끼고**, 그 순간
-##  **그물이 게임과 다른 것을 재게 된다.** ⇒ 아래 거동 검사가 곧 그 두 번째 호출자다.
+## **The point of this net is "the net calls `frame()` too".**
+##  If only the shell calls `frame()`, the net cannot stand up a scene and **copies the order by hand**, and at that moment
+##  **the net starts measuring something different from the game.** => The behavior checks below are that second caller.
 ##
-## 🔴🔴 **아래 검사들은 전부 「실제로 뚫린 뮤테이션」에서 나왔다.** 각각이 무엇을 막는지:
+## **Every check below came out of "a mutation that actually got through".** What each one blocks:
 ##
-## | 뚫렸던 것 | 지금 무는 것 |
+## | what got through | what bites now |
 ## |---|---|
-## | `frame()` 본문 통째로 삭제 | 거동 검사 넷이 동시에 (틱 · 연료 · 탄 · 발사 수) |
-## | 껍데기가 지역 별칭으로 순서를 다시 듦 | `.step(` 바늘 (이름이 아니라 **호출 모양**) |
-## | `_world` 가 null 셋을 들고 태어남 | `_null_world_refuses` + `world_step._init` 의 짖음 |
-## | **선언 순서만** 뒤집기(텍스트 불변) | 같음 — 🔴 텍스트로는 원리적으로 못 잡는다 |
-## | 탄이 두 배 속도로 낢 | 첫 틱 변위를 **세대 표에서 유도해** 맞댄다 |
-## | `grid.step()` ↔ `spell.step()` 맞바꾸기 | `_tick_order_is_grid_then_spell` (사라지는 칸 관문) |
-## | `_drain_queue()` 를 뒤로 미루기 | 점화 커맨드의 연료 · 첫 틱 변위 |
-## | `_broken` 이름 바꾸기 | `raw is bool` (🔴 **없어지는 대신 빨개진다**) |
-## | `enqueue()` 가 가드 밖 | 부서진 세상에 커맨드를 넣어 본다 — ⚠ 「안 터진다」는 **래퍼가** 잡는다 |
-## | `spawn_monster()` 가 가드 밖 | 부서진 세상에서 몬스터를 만들어 본다(`monsters-minimum` 검증에서
-##  실제로 뚫렸다 — 새로 생긴 공개 mutator가 이 문을 안 지나고 있었다) |
+## | deleting the whole body of `frame()` | four behavior checks at once (tick, fuel, bolt, fire count) |
+## | the shell taking the order back via a local alias | the `.step(` needle (**the call shape**, not the name) |
+## | `_world` being born holding three nulls | `_null_world_refuses` plus `world_step._init`'s bark |
+## | reversing **only the declaration order** (text unchanged) | the same — **text cannot catch it in principle** |
+## | the bolt flying at double speed | the first tick's displacement, **derived from the generation table** and compared |
+## | swapping `grid.step()` and `spell.step()` | `_tick_order_is_grid_then_spell` (the disappearing-cell gauntlet) |
+## | pushing `_drain_queue()` later | the ignite command's fuel, and the first tick's displacement |
+## | renaming `_broken` | `raw is bool` (**it goes red instead of disappearing**) |
+## | `enqueue()` outside the guard | a command is pushed into a broken world — "it does not blow up" is caught by **the wrapper** |
+## | `spawn_monster()` outside the guard | a monster is created in a broken world (it actually got through during
+##  `monsters-minimum` verification — a newly added public mutator was not going through this door) |
 ##
-## 🔴 **껍데기·세상의 사유 이름 셋에 묶여 있다**: `_world` · `_broken` · `_queue`.
-##  이름을 바꾸면 이 그물이 빨개지고, **라벨이 무엇을 고칠지 한 줄로 말한다.** 감수한 결합이다.
+## **It is coupled to three private names in the shell and the world**: `_world`, `_broken`, `_queue`.
+##  Rename one and this net goes red, and **the label says in one line what to fix.** An accepted coupling.
 ##
-## ⚠ **텍스트 검사가 원리적으로 못 보는 것**: `.step(` 이라고 안 쓰는 호출(`callv("step")` 따위).
-##  그건 이 모양 검사의 한계고, 라벨을 거기까지 넓히지 마라.
-## ⚠ **이 그물이 원리적으로 못 잴 것**: 껍데기가 `frame()` 을 **갖고 있으면서 안 부르는** 경우
-##  (단락 평가 등). `_physics_process` 는 씬 트리라 헤드리스 밖이다 — 화면 검증이 메운다.
+## **What a text check cannot see in principle**: a call not written as `.step(` (`callv("step")` and the like).
+##  That is the limit of this shape check; do not widen the label that far.
+## **What this net cannot measure in principle**: the shell **holding** `frame()` while not calling it
+##  (short-circuit evaluation and so on). `_physics_process` is scene tree, so it is outside headless — screen verification fills that in.
 
-## 🔴 주석·문자열 스트리퍼를 **빌려 온다** — 소스 텍스트를 훑는 그물이 여럿이고 스트리퍼는 하나여야 한다.
+## **Borrows** the comment/string stripper — several nets sweep source text and there must be exactly one stripper.
 const NetDeterminism := preload("res://tests/nets/net_determinism.gd")
 
 const CellGrid := preload("res://src/sim/cell_grid.gd")
@@ -41,7 +41,7 @@ const Tuning := preload("res://src/sim/sim_tuning.gd")
 const SpellSim := preload("res://src/sim/spell_sim.gd")
 const Glyph := preload("res://src/sim/glyph_defs.gd")
 const Character := preload("res://src/actor/character.gd")
-## 🔴 `_fp_px`·`_cell_px`는 `monsters-minimum` 단계 3(두 번째 추출)에서 `Body`로 이사했다.
+## `_fp_px` and `_cell_px` moved to `Body` in `monsters-minimum` stage 3 (the second extraction).
 const Body := preload("res://src/actor/body.gd")
 const Staff := preload("res://src/actor/staff.gd")
 const WorldStep := preload("res://src/actor/world_step.gd")
@@ -51,14 +51,14 @@ const STAGE_SCRIPT := "res://src/stage/stage.gd"
 const STAGE_SCENE := "res://src/stage/stage.tscn"
 const WORLD_STEP_PATH := "res://src/actor/world_step.gd"
 
-## 🔴 껍데기에 있으면 안 되는 호출. **`_grid.step(` 이 아니라 `.step(` 이다** —
-##  이름을 좁게 박으면 `var g := _grid; g.step()` 두 줄로 우회되고, 그러면 격자가
-##  **틱마다 두 번** 돌아도 이 검사는 초록이다(실측).
+## The call that must not appear in the shell. **It is `.step(`, not `_grid.step(`** —
+##  pin the name narrowly and two lines of `var g := _grid; g.step()` detour around it, and then the grid can run
+##  **twice per tick** while this check stays green (measured).
 const ORDER_CALLS: Array[String] = [".step("]
 
-## 🔴🔴 **감지기 자신을 재는 표본.** 바늘을 한 글자 틀리게 적으면 아래 검사는 **영원히 통과한다** —
-##  없는 것을 찾으니 늘 「없다」다. 그게 이 모양 검사가 죽는 유일한 방식이라 먼저 재 둔다.
-## ⚠ 뒤 둘이 **지역 별칭 우회**다. 이 둘이 여기 있는 것이 바늘을 넓게 잡은 이유다.
+## **Samples that measure the detector itself.** Get one character of the needle wrong and the check below **passes forever** —
+##  it looks for something that does not exist, so it is always "absent". That is the only way this shape check dies, so it is measured first.
+## The last two are the **local alias detour.** Their presence here is the reason the needle was made broad.
 const MUST_CATCH: Array[String] = [
 	"\t_grid.step()",
 	"\t_spell.step(_grid)",
@@ -67,8 +67,8 @@ const MUST_CATCH: Array[String] = [
 	"\ts.step(g)",
 ]
 
-## 🔴 반대쪽. 바늘이 너무 넓으면 껍데기가 정상적으로 하는 일까지 물어서, 그 압력이 결국
-##  검사를 끄는 것으로 끝난다. ⚠ 마지막 줄은 **스트리퍼가 걸려 있나**를 같이 잰다.
+## The other side. Too broad a needle bites the shell's normal work too, and that pressure ends in
+##  the check being switched off. The last line also measures **whether the stripper is wired in.**
 const MUST_PASS: Array[String] = [
 	"\t_grid.apply(CellGrid.cmd_reset())",
 	"\tif _world.frame(delta, 0.0, false):",
@@ -76,128 +76,127 @@ const MUST_PASS: Array[String] = [
 	"\t# _grid.step() 을 주석에 적는 것은 안 걸린다",
 ]
 
-## 🔴 껍데기가 `WorldStep` 을 만드는 모양. **null 셋을 넘기면 화면이 통째로 멈추는데
-##  그물은 전부 초록이었다**(실측) — 만드는 자리가 리포에 하나뿐이라 여기서 잰다.
-##  ⚠ 재는 것은 **인자로 적힌 이름**이지 「런타임에 null이 아니다」가 아니다.
+## The shape in which the shell constructs `WorldStep`. **Pass three nulls and the whole screen stops while
+##  the net stays entirely green** (measured) — there is only one construction site in the repo, so it is measured here.
+##  What is measured is **the names written as arguments**, not "they are not null at runtime".
 const NEW_CALL_RE := "WorldStep\\.new\\(\\s*_grid\\s*,\\s*_spell\\s*,\\s*_char\\s*\\)"
 
 const DT := 1.0 / 60.0
 
-## 🔴🔴 **아래 자리 상수는 32px 전환에서 전부 ×2 됐다. 이유가 미묘하니 여기 한 번만 적는다.**
-##  셀은 **여전히 4px**인데 게임의 길이가 전부 2배가 됐다 — 상자(16→32px) · 발사 속도(10→20셀/틱) ·
-##  폭발 반경(12→24셀). ⇒ **배치를 셀로 그대로 두면 상대 거리가 반으로 줄어** 이 그물이
-##  재던 것이 통째로 달라진다. 실제로 났다:
-##   · 「폭발 반경 **밖**에 서 있다」던 자리가 반경 **안**이 됐다
-##   · 두 폭발이 서로의 발판을 부수게 돼 「같은 틱에 둘」이라는 전제가 깨졌다
-##  ⇒ **자리는 ×2, 프레임/틱/개수는 그대로.** 방향(`AIM_DX`)도 거리가 아니라 그대로다.
+## **The position constants below were all doubled at the 32px switch. The reason is subtle, so it is written here once.**
+##  The cell is **still 4px** while every length in the game doubled — the box (16 -> 32px), launch speed (10 -> 20 cells/tick),
+##  blast radius (12 -> 24 cells). => **Leave the layout in cells as it was and the relative distances halve**, so what this
+##  net measured changes entirely. It actually happened:
+##   · a position said to be **outside** the blast radius ended up **inside** it
+##   · the two blasts started breaking each other's footing, so the premise "two on the same tick" broke
+##  => **Positions doubled; frames, ticks and counts unchanged.** Direction (`AIM_DX`) is not a distance, so it is unchanged too.
 
-## 바닥 윗면 셀. `net_character` 와 같은 자리다 — 캐릭터가 서는 높이를 같은 식으로 얻는다.
+## The floor's top cell. The same place as in `net_character` — the standing height is obtained the same way.
 const FLOOR_CY := 200
 const FLOOR_TOP := FLOOR_CY * Tuning.CELL_PX
 const STAND_X := 320
 
-## 🔴🔴 **바닥은 얇게 깐다**(CLAUDE.md 「그물이 느리면…」, 2026-08-07). 옛 바닥(`CellGrid.H-1`까지)이
-##  4096×808=3,309,568칸이라 한 번에 수 초였다 — 이 파일이 그물 전체에서 99초를 먹은 큰 축이었다.
-##  ⚠ 안전한 이유: `cell_grid.mat_at()`이 격자 밖을 `STONE`으로 돌려주므로 두꺼울 이유가
-##  원래 없었다. 🔴 **`PIT_BOTTOM_CY`(220)가 이 안에 있어야 한다** — 32셀이면 200~231이라
-##  들어간다(여유 11셀). 폭발이 지형을 파는 검사도 여기 있어 `carve_r`(8셀)의 4배 여유이기도 하다.
+## **The floor is laid thin** (CLAUDE.md, "when the net is slow..."). The old floor (down to `CellGrid.H-1`) was
+##  4096x808 = 3,309,568 cells, several seconds each time — a large part of the 99 seconds this file ate of the whole net run.
+##  Why it is safe: `cell_grid.mat_at()` returns `STONE` outside the grid, so there was never a reason for it to be thick.
+##  **`PIT_BOTTOM_CY` (220) has to fit inside this** — at 32 cells the range is 200-231, so it fits (11 cells to spare).
+##  The blast-carves-terrain checks live here too, so it is also 4 times the margin of `carve_r` (8 cells).
 const FLOOR_DEPTH_CY := 32
 
-## 발사 원점(셀). 🔴 벽에서 멀어야 한다 — 착탄하면 탄이 사라져서 「나아갔나」를 못 잰다.
+## Launch origin (cells). It has to be far from any wall — on impact the bolt disappears and "did it advance" cannot be measured.
 const FIRE_CX := 80
 const FIRE_CY := 100
-## 🔴 **축 정렬 조준이다.** 대각이면 `_launch`의 정수 제곱근 절삭이 끼어서 한 틱 변위를
-##  세대 표만으로 못 유도한다 — 그러면 기대값을 손으로 박게 되고, 그게 값이 두 벌 되는 길이다.
+## **Axis-aligned aim.** Diagonally, `_launch`'s integer square root truncation gets in the way and the one-tick
+##  displacement cannot be derived from the generation table alone — then the expected value gets hardcoded, and that is the road to two copies of a value.
 const AIM_DX := 10
-## 탄이 태어나는 자리(고정소수점). `_launch`가 셀 **한가운데**에서 낸다.
+## Where the bolt is born (fixed point). `_launch` births it at the **center** of the cell.
 const FIRE_ORIGIN_FP := (FIRE_CX << SpellSim.FP_SHIFT) + SpellSim.FP_HALF
 
-## 관문 칸이 발사 원점에서 몇 칸 오른쪽인가. 🔴 **첫 틱 도약 안**이어야 한다
-##  (세대 0 속도 20셀 × 항력 ⇒ 18셀 남짓). 밖에 두면 관문을 안 지나고 검사가 헛돈다.
+## How many cells right of the launch origin the gauntlet cell sits. It has to be **within the first tick's leap**
+##  (generation 0 speed 20 cells times drag => about 18 cells). Put it outside and the gauntlet is never crossed and the check spins idle.
 const GAUNTLET_DCX := 10
 
-# ─── 판정 1·3의 무대 ──────────────────────────────────────────────
-# 🔴🔴 **전부 「무속성 + 문양 없음」으로 잰다**(기획). 불 룬이면 착탄이 발판을 태우고
-#  폭발 문양이면 지형이 바뀐다 ⇒ 「맞았다」와 「지형이 바뀌어서 그렇다」가 섞인다.
-#  ⚠ 폭발 판정만 예외다(폭발 문양이 있어야 폭발이 난다).
+# ─── The stage for acceptance 1 and 3 ──────────────────────────────
+# **Everything is measured with "no element plus no glyph"** (design doc). With a fire rune the impact burns the footing,
+#  and with a blast glyph the terrain changes => "it hit" and "the terrain changed and that is why" get mixed.
+#  The blast acceptance is the one exception (a blast needs a blast glyph).
 
-## 캐릭터 **왼쪽 같은 높이**의 발사 원점. 상자보다 이만큼 왼쪽이다.
-## 🔴 상자를 **첫 틱에** 지나는 자리여야 한다 — 두 틱 걸리면 중력이 끼어들어
-##  「몇 틱째에 맞나」가 흔들리고, 판정 3-②의 틱 간격 제어가 통째로 무너진다.
-##  (세대 0은 첫 틱에 75px 뛴다 ⇒ 36px 앞에서 쏘면 상자(32px)를 통째로 넘어간다)
-## 🔴 **캐릭터 x에서 파생시킨다. 상수로 박지 마라** — 캐릭터가 움직인 뒤의 발사가 조용히 빗나가면
-##  「두 번째 탄이 빗나가서」 무적 검사가 무의미해진다.
-##  ⚠ 이 규율이 생긴 계기(넉백으로 캐릭터가 옆으로 밀려나 있었다)는 **넉백이 사라지며 없어졌다.**
-##   규율은 남긴다 — 반동·중력·입력으로도 캐릭터는 여전히 움직인다.
+## A launch origin **at the same height, to the character's left.** This far left of the box.
+## It has to be a position that crosses the box **on the first tick** — take two ticks and gravity gets involved,
+##  "on which tick does it hit" wobbles, and acceptance 3-2's tick-interval control collapses entirely.
+##  (Generation 0 leaps 75px on the first tick => firing from 36px away clears the box (32px) entirely.)
+## **Derived from the character's x. Do not hardcode it** — if a shot after the character has moved silently misses,
+##  the invulnerability check becomes meaningless because "the second bolt missed".
+##  The occasion for this discipline (the character had been pushed sideways by knockback) **disappeared along with knockback.**
+##   The discipline stays — recoil, gravity and input still move the character.
 const HIT_LEAD_PX := 36
 const HIT_ORIGIN_CY := 194
 
-## 반동만 재는 발사 원점(상자 **오른쪽 바깥**). 🔴 여기서 오른쪽으로 쏘면 탄이 상자를 안 지난다 —
-##  ⚠ 이 자리를 고른 근거(「지나면 직격 밀림이 반동과 더해져 부호가 뒤집힌다」)는 **넉백이 사라지며
-##   없어졌다.** 자리는 그대로 둔다 — 탄이 상자를 안 지나면 **반동만 남아** 배치가 여전히 제일 깨끗하다.
+## The launch origin for measuring recoil alone (**outside the box to the right**). Firing right from here, the bolt does not cross the box.
+##  The reason this position was chosen ("if it crosses, the direct hit's push adds to the recoil and flips the sign") **disappeared
+##   along with knockback.** The position stays — with the bolt not crossing the box **only the recoil is left**, so the layout is still the cleanest.
 const RECOIL_CX := 88
 
-## 폭발 판정 — 캐릭터 **옆 바닥**에 내리꽂는다.
-## 🔴 탄이 상자를 **안 지나야** 한다. 지나면 직격과 폭발이 섞여 「무엇에 맞았나」를 못 가른다.
+## The blast acceptance — driven straight down into the floor **beside** the character.
+## The bolt **must not cross** the box. If it does, direct hit and blast mix and "what did it get hit by" cannot be split.
 const BLAST_FROM_CY := 180
 
-## 🔴🔴 **폭발 자리를 반경에서 파생시킨다. 셀 번호를 박으면 반드시 낡는다.**
-##  ⚠ 여기 `BLAST_CX 104`·`BLAST_L_CX 62`·`FAR_STAND_X 192` 가 박혀 있었고,
-##   `rd` 를 24 → 12로 내린 날(2026-08-04) 「반경 안에 서 있다」던 두 자리가 **밖으로 나가**
-##   폭발 검사 셋이 빨개졌다.
-##  🔴 **빨개진 것은 운이 좋았던 방향이다.** 반대로 반경을 **키우면** 「밖에 서 있다」던 자리가
-##   조용히 안으로 들어오고, 그러면 뒤집어 보기 ①이 **아무도 안 짖는 채로 무의미해진다.**
-##   ⚠ 32px 전환에서 `FAR_STAND_X` 가 정확히 그 방향으로 뚫렸다 — 그때는 빨개져서 잡혔지만
-##    그건 자리가 마침 경계에 가까웠기 때문이지 구조가 막은 것이 아니었다.
+## **The blast position is derived from the radius. Hardcode a cell number and it is guaranteed to go stale.**
+##  `BLAST_CX 104`, `BLAST_L_CX 62` and `FAR_STAND_X 192` used to be hardcoded here, and the day `rd` dropped
+##   24 -> 12 the two positions said to be "standing inside the radius" **fell outside** and three blast checks went red.
+##  **Going red was the lucky direction.** Grow the radius instead and a position said to be "standing outside"
+##   quietly comes inside, and then inversion 1 **becomes meaningless with nobody barking.**
+##   At the 32px switch `FAR_STAND_X` was breached in exactly that direction — it went red and got caught then,
+##    but that was because the position happened to be near the boundary, not because the structure blocked it.
 ##
-## 가까운 자리는 상자 옆면에서 반경의 **60%**, 「멀리」는 폭발 중심에서 반경의 **1.5배**다.
-##  · 0%에 붙이면 탄이 상자를 지나 **직격과 폭발이 섞인다**
-##  · 100% 언저리에 두면 셀 내림 한 칸에 「안/밖」이 뒤집혀 검사가 아슬아슬해진다
+## The near position is **60%** of the radius out from the box's side, and "far" is **1.5 times** the radius from the blast center.
+##  · at 0% the bolt crosses the box and **direct hit and blast mix**
+##  · around 100% a single cell's rounding flips "inside/outside" and the check becomes precarious
 const BLAST_NEAR_RATIO := 0.6
 const BLAST_FAR_RATIO := 1.5
 
-## 발사 원점과 상자 **사이**의 돌 한 칸. 🔴 상자에는 안 닿는 자리여야 한다 —
-##  닿으면 「벽에 막혔다」와 「상자에 맞았다」가 섞인다.
+## A single stone cell **between** the launch origin and the box. It has to be a position that does not touch the box —
+##  if it touches, "blocked by the wall" and "hit the box" get mixed.
 const WALL_CX := 76
 
-## 수직 직격 — 상자 **바로 위**에서 곧장 아래로. 🔴 `_slab` 의 축평행 갈래를 지나는 유일한 배치다.
+## Vertical direct hit — straight down from **right above** the box. The only layout that goes through `_slab`'s axis-parallel branch.
 const VERT_CX := 80
 const VERT_FROM_CY := 170
 
-## 🔴🔴 **`FEET_CY` 상수를 지웠다. 발밑 원점은 이제 `Staff.tip_px()` 에서 뽑는다**
-##  (`_firing_down_does_not_lift_me` 안). 옛 값은 `FLOOR_CY + 5` 였고 「중심에서 36px 아래 =
-##  바닥 속」에 의존했는데, 지팡이가 지형에 막혀 짧아지면서 그 전제가 거짓이 됐다.
-##  ⚠ 그 자리 주석이 스스로 「**+4도 초록이었다 — 그물은 이걸 못 가른다**」고 적고 있었다 ⇒
-##   손으로 다시 유도하면 **같은 함정에 값만 새로 넣는 것**이다. 애초에 단언이 아니라 **배치**였고,
-##   배치는 실제 코드에서 나와야 낡지 않는다(`_blast_r_px`·`_aim_row` 가 이미 그 어법이다).
+## **The `FEET_CY` constant was deleted. The under-foot origin now comes from `Staff.tip_px()`**
+##  (inside `_firing_down_does_not_lift_me`). The old value was `FLOOR_CY + 5` and depended on "36px below the
+##  center = inside the floor", and that premise became false once the staff got shortened by terrain.
+##  The comment there said of itself "**+4 was green too — the net cannot tell these apart**" =>
+##   deriving it by hand again would be **putting a new value into the same trap.** It was never an assertion but **a layout**,
+##   and a layout has to come from the real code to stay fresh (`_blast_r_px` and `_aim_row` already speak that way).
 
-## 🔴 발밑 나무. 캐릭터가 선 자리의 셀은 **빈칸이라 연료가 0**이고 불은 여기 붙는다.
-##  ⚠ 아래에 돌을 깔아 둔다 — 나무가 다 타면 **빈칸이 되어 바닥이 사라지므로**,
-##   안 깔면 「불이 꺼져서 안 깎인다」와 「떨어져서 안 깎인다」가 섞인다(계획 뒤집기).
+## The wood under the feet. The cells where the character stands are **empty, so fuel is 0**, and the fire catches here.
+##  Stone is laid underneath — when the wood burns out it **becomes empty and the floor disappears**, so
+##   without the stone "no damage because the fire went out" and "no damage because it fell" get mixed (plan inversion).
 const WOOD_CY := FLOOR_CY
 const WOOD_CX0 := 78
 const WOOD_CX1 := 90
 
-## 「시간에 비례하나」를 재는 창(프레임). 🔴 **두 창 + 앞의 탐색이 나무 수명(2초) 안**이어야 한다.
+## The window (frames) for measuring "is it proportional to time". **Both windows plus the search before them have to fit inside the wood's lifetime (2 seconds).**
 const BURN_WINDOW := 50
 
-## 한 번 밟는 길이(프레임). 🔴 **1점이 쌓이는 6프레임보다 짧아야** 「톡톡 밟기」가 된다.
+## The length of one step (frames). It has to be **shorter than the 6 frames that accumulate 1 point** for it to be "tapping".
 const TAP_FRAMES := 5
 
-## 반동을 재는 창(프레임) = 0.5초. 🔴 **입력은 영원히 들어오고 반동은 감쇠하므로** 창이 길면
-##  반드시 되돌아온다 — 재는 것은 「반동이 도는 동안 입력을 이기나」다.
+## The window (frames) for measuring recoil = 0.5 seconds. **Input comes in forever while recoil decays**, so a long
+##  window necessarily returns to the start — what is measured is "while the recoil runs, does it beat the input".
 const RECOIL_WINDOW := 30
 
-## `fire()` 가 거부하는 문양 목록. 🔴 표에 없는 id라 `_valid_glyphs` 가 짖고 버린다.
+## A glyph list `fire()` rejects. The id is not in the table, so `_valid_glyphs` barks and drops it.
 const BAD_GLYPHS := 15
 
-## 쓰러진 캐릭터를 떨어뜨릴 구덩이의 바닥. 🔴 좌우는 **캐릭터 자리에서 파생**시킨다 —
-##  박아 두면 캐릭터가 조금만 움직여도 구덩이가 엉뚱한 데 생긴다.
-##  ⚠ 이 규율의 계기(넉백으로 열 대 맞는 동안 한참 밀려났다)는 **넉백이 사라지며 없어졌다.**
+## The bottom of the pit the downed character falls into. Left and right are **derived from the character's position** —
+##  hardcode them and the pit appears in the wrong place the moment the character moves a little.
+##  The occasion for this discipline (knockback pushed it far away over ten hits) **disappeared along with knockback.**
 const PIT_BOTTOM_CY := 220
 
-## 반동 잔량이 잦아들기를 기다리는 프레임. 🔴 지수 감쇠라 **완전히 0이 되지 않는다** —
-##  30프레임으로는 6px이 흘러서 행동불능 검사가 빨개졌다(실측 — 넉백이 있던 때의 값이다).
+## Frames spent waiting for the residual recoil to die down. It is exponential decay, so **it never reaches exactly 0** —
+##  at 30 frames 6px drifted and the incapacitation check went red (measured, from when knockback existed).
 const SETTLE_FRAMES := 120
 
 
@@ -233,27 +232,27 @@ func run(t) -> void:
 	_ten_hp_still_walks(t)
 
 
-# ── 껍데기가 순서를 안 든다 (텍스트) ────────────────────────────────
+# ── The shell does not own the order (text) ────────────────────────
 
 func _stage_does_not_own_the_order(t) -> void:
 	_detector_self_test(t)
 
 	var raw := _read(STAGE_SCRIPT)
-	# 🔴🔴 **못 읽으면 `src`가 빈 문자열이고 아래 「없다」가 전부 공짜로 통과한다.**
-	#  폴더 스캔 그물의 첫 줄과 같은 장치다.
+	# **If the read fails, `src` is an empty string and every "absent" below passes for free.**
+	#  The same device as the first line of the folder-scanning nets.
 	t.ok(raw.length() > 0, "stage.gd 를 읽었다 (%d바이트)" % raw.length())
 	t.ok(not raw.contains("\"\"\""), "stage.gd 에 삼중 따옴표가 없다 (스트리퍼가 못 다룬다)")
 	var src := NetDeterminism._strip(raw)
-	# 🔴 스트리퍼가 파일을 통째로 먹어도 아래가 전부 통과한다. 코드가 남아 있는지 먼저 본다.
+	# If the stripper eats the whole file, everything below still passes. Whether code is left is checked first.
 	t.ok(src.contains("func _physics_process("),
 		"스트립 뒤에도 stage.gd 에 코드가 남아 있다 (아래 검사의 전제)")
 
 	for needle: String in ORDER_CALLS:
 		t.ok(not src.contains(needle), "stage.gd 에 `%s` 호출이 하나도 없다" % needle)
 
-	# ⚠ **문자열이라 스트립 뒤에는 사라진다** — preload 경로는 원문으로 잰다.
+	# **It is a string, so it disappears after stripping** — preload paths are measured in the raw source.
 	t.ok(raw.contains(WORLD_STEP_PATH), "stage.gd 가 `%s` 를 preload 한다" % WORLD_STEP_PATH)
-	# 🔴 「안 든다」만 재면 **아무도 안 미는 껍데기**도 초록이다. 미는 쪽을 같이 잰다.
+	# Measuring only "it does not own it" leaves **a shell that pushes nothing** green too. The pushing side is measured alongside.
 	t.ok(src.contains("_world.frame("), "stage.gd 가 `_world.frame(` 으로 세상을 민다")
 
 	var re := RegEx.new()
@@ -266,7 +265,7 @@ func _stage_does_not_own_the_order(t) -> void:
 		"stage.gd 가 `WorldStep.new()` 에 `_grid`·`_spell`·`_char` 를 넘긴다")
 
 
-## 표본을 **스트리퍼에 통과시켜** 잰다. 실제 검사가 보는 텍스트와 같은 텍스트여야 뜻이 있다.
+## The samples are measured **after passing through the stripper.** It only means something if the text is the same text the real check sees.
 func _detector_self_test(t) -> void:
 	for sample: String in MUST_CATCH:
 		t.ok(_hits(NetDeterminism._strip(sample)), "감지기가 문다: %s" % sample.strip_edges())
@@ -281,11 +280,11 @@ func _hits(line: String) -> bool:
 	return false
 
 
-# ── 세상이 실제로 도나 (거동) ──────────────────────────────────────
-# 🔴🔴 **텍스트 검사로는 여기를 못 대신한다**(CLAUDE.md 「부르나만 보고 쓰나는 안 본다」).
-#  아래가 `frame()` · `enqueue()` · `reset()` · `phase()` · `fire_count()` 의 유일한 자동 검사다.
+# ── Does the world actually run (behavior) ─────────────────────────
+# **A text check cannot stand in for this** (CLAUDE.md, "looks at whether it is called but not whether it is used").
+#  What follows is the only automatic check of `frame()`, `enqueue()`, `reset()`, `phase()` and `fire_count()`.
 
-## 분주기대로 틱이 오르나 · 위상이 프레임마다 오르나.
+## Does the tick rise per the divider, and does the phase rise every frame.
 func _divider_and_phase(t) -> void:
 	var g := _floor_grid()
 	var w := _world(g)
@@ -302,7 +301,7 @@ func _divider_and_phase(t) -> void:
 	t.eq(g.get_tick(), 1, "그 프레임에 격자 틱이 1 올랐다")
 	t.eq(w.phase(), 0, "틱 프레임에 위상이 0으로 돌아온다")
 
-	# 🔴 한 번은 우연일 수 있다 — 열 주기를 더 돌려 **비율**을 잰다.
+	# Once could be luck — ten more periods are run to measure the **ratio.**
 	var more := 0
 	for _i in Tuning.TICK_DIVIDER * 10:
 		if w.frame(DT, 0.0, false, false):
@@ -311,8 +310,8 @@ func _divider_and_phase(t) -> void:
 	t.eq(g.get_tick(), 11, "격자 틱이 11이다 (프레임을 세는 게 아니다)")
 
 
-## 🔴 **틱 계수기가 아니라 연료로 잰다.** 계수기만 보면 「격자가 살았나」가 아니라
-##  「누가 숫자를 올렸나」를 재는 것이고, 둘은 다르다.
+## **Measured by fuel, not by the tick counter.** Looking only at the counter measures "who incremented a number",
+##  not "did the grid live", and the two are different.
 func _grid_lives_one_tick_per_tick(t) -> void:
 	var g := _floor_grid()
 	var wx := 10
@@ -332,13 +331,13 @@ func _grid_lives_one_tick_per_tick(t) -> void:
 		"틱 프레임에 연료가 딱 한 틱만큼 준다 (두 번 돌지 않는다)")
 
 
-## 큐에 넣은 커맨드가 다음 틱에 탄이 되고, 그 탄이 **얼마나** 움직이나.
+## A queued command becomes a bolt on the next tick, and **how far** that bolt moves.
 ##
-## 🔴🔴 **「나아갔다」로 끝내면 탄이 두 배 속도로 날아도 초록이다**(실측: `spell.step()` 을 두 번
-##  부르는 뮤테이션이 그냥 통과했다). 격자 축은 연료로 **양**을 재는데 투사체 축만 방향이면
-##  같은 파일 안에서 비대칭이다. ⇒ 세대 표에서 유도한 값과 **맞댄다.**
-## 🔴 그리고 이 변위가 곧 **「커맨드가 `spell.step()` 보다 먼저 빠졌다」**이기도 하다 —
-##  뒤로 밀리면 태어난 탄이 그 틱에 안 움직여 변위가 0이다.
+## **Ending at "it advanced" leaves it green even when the bolt flies at double speed** (measured: a mutation calling
+##  `spell.step()` twice passed straight through). The grid axis measures **quantity** by fuel, so having only the projectile
+##  axis measure direction is asymmetric within one file. => It is **compared** against a value derived from the generation table.
+## And this displacement is also **"the command drained before `spell.step()`"** —
+##  push it later and the newborn bolt does not move on that tick, so the displacement is 0.
 func _enqueue_becomes_a_projectile(t) -> void:
 	var g := _floor_grid()
 	var spell := SpellSim.new()
@@ -351,7 +350,7 @@ func _enqueue_becomes_a_projectile(t) -> void:
 	t.eq(spell.active_count(), 1, "다음 틱에 탄이 실제로 났다")
 	t.eq(w.fire_count(), 1, "발사 수가 1 올랐다")
 
-	# ⚠ 탄이 없으면 아래 `[0]` 이 터져서 **검사가 빨개지는 게 아니라 없어진다.** 전제를 먼저 건다.
+	# With no bolt, the `[0]` below blows up and **the check disappears instead of going red.** The premise is asserted first.
 	if spell.active_count() != 1:
 		t.ok(false, "탄이 없어서 변위를 **하나도 못 쟀다**")
 		return
@@ -368,9 +367,9 @@ func _enqueue_becomes_a_projectile(t) -> void:
 	t.eq(spell.get_px()[0] - x1, vx2, "다음 틱 변위는 항력을 한 번 더 먹은 값이다 (%d)" % vx2)
 
 
-## 🔴 **커맨드가 격자보다 먼저다.** 큐에서 이번 틱에 나온 점화는 **이번 틱에 이미 한 번 탄다.**
-##  뒤로 밀리면 불은 붙는데 **연료가 그대로**라, 「붙었나」만 보면 안 걸린다.
-## ⚠ `_drain_queue` 의 **격자 갈래**를 재는 유일한 자리이기도 하다(발사 갈래는 위에서 잰다).
+## **Commands come before the grid.** An ignition drained this tick **already burns once this tick.**
+##  Push it later and the fire catches while **the fuel stays put**, so looking only at "did it catch" misses it.
+## This is also the only place that measures `_drain_queue`'s **grid branch** (the fire branch is measured above).
 func _queue_lands_before_the_grid_lives(t) -> void:
 	var g := _floor_grid()
 	var wx := 20
@@ -383,41 +382,41 @@ func _queue_lands_before_the_grid_lives(t) -> void:
 
 	_frames(w, Tuning.TICK_DIVIDER)
 	t.eq(g.burning_count(), 1, "다음 틱에 점화 커맨드가 실제로 걸렸다")
-	# ⚠ 없는 키를 바로 파면 **검사가 없어진다.** 기본값으로 받고 전제를 건다.
+	# Digging straight into a missing key makes **the check disappear.** It is read with a default and the premise asserted.
 	var fuel := int(Mat.DEFS[Mat.WOOD].get("fuel", -1))
 	t.ok(fuel > 0, "나무 표에 연료가 있다 (%d — 전제)" % fuel)
 	t.eq(g.fuel_at(wx, wy), fuel - Tuning.FIRE_BURN_PER_TICK,
 		"붙은 그 틱에 이미 한 틱치가 탔다 (커맨드가 격자보다 먼저다)")
 
 
-## 🔴🔴 **투사체는 「움직인 뒤의 격자」를 상대로 난다** — `world_step.gd` 가 계약이라고 적은 순서다.
-##  ⚠ 옮겨만 놓고 안 재면 **옮긴 값어치의 절반이 아직 안 온 것이다**(실측: 둘을 맞바꿔도 초록이었다).
+## **Projectiles fly against "the grid after it moved"** — the order `world_step.gd` writes down as the contract.
+##  Move it and not measure it and **half the value of the move has not arrived yet** (measured: swapping the two stayed green).
 ##
-## 배치: 탄의 첫 틱 경로에 **이 틱에 연료가 다해 사라질 나무 한 칸**을 둔다.
-##   순서가 맞으면  `grid.step()` 이 그 칸을 지우고 ⇒ 탄이 지나간다
-##   뒤집히면       아직 고체인 칸에 부딪혀    ⇒ 탄이 죽는다
-## 🔴 **대조군이 없으면 이 배치가 관문인지도 모르는 채로 초록이 난다.** 한 틱 일찍 쏘면 막혀야 한다.
+## Layout: on the bolt's first-tick path sits **one wood cell whose fuel runs out this tick.**
+##   with the right order  `grid.step()` erases that cell => the bolt passes through
+##   reversed              it hits a cell that is still solid => the bolt dies
+## **Without a control it goes green without anyone knowing whether this layout is even a gauntlet.** Fire one tick earlier and it has to be blocked.
 func _tick_order_is_grid_then_spell(t) -> void:
 	t.eq(_run_gauntlet(t, "대조군", true), 0, "아직 안 사라진 칸은 탄을 막는다 (관문이 관문이다)")
 	t.eq(_run_gauntlet(t, "본검사", false), 1, "사라지는 틱에 쏜 탄은 그 자리를 지나간다")
 
 
-## 관문을 세우고 한 발 쏜다. 살아남은 탄 수를 돌려준다.
-## `early` 면 **사라지기 한 틱 전**에 쏜다(대조군).
+## Sets up the gauntlet and fires one shot. Returns the number of surviving bolts.
+## With `early`, it fires **one tick before the cell disappears** (the control).
 func _run_gauntlet(t, tag: String, early: bool) -> int:
 	var g := _floor_grid()
 	var wx := FIRE_CX + GAUNTLET_DCX
 	var wy := FIRE_CY
-	# 🔴🔴 **관문이 두 칸이다. 32px 전환에서 한 칸으로는 안 막혔다**(실측).
-	#  `GRAVITY_FP` 가 ×2 되며 탄이 **첫 틱 안에 한 행 내려간다**(0.5셀/틱²) ⇒ Bresenham 경로가
-	#  발사 행 아래로 넘어가고, 한 칸짜리 관문은 그 아래로 **비껴간다.**
-	#  ⚠ 그러면 대조군이 「막혔다」가 아니라 「지나갔다」가 되어 **관문이 관문이 아니게 된다.**
-	#  ⚠ 두 칸은 연료가 같아 **같은 틱에 같이 꺼진다** — 「사라지는 틱」은 여전히 하나다.
+	# **The gauntlet is two cells. At the 32px switch one cell no longer blocked** (measured).
+	#  `GRAVITY_FP` doubled, so the bolt **drops one row within the first tick** (0.5 cells/tick^2) => the Bresenham path
+	#  crosses below the launch row, and a one-cell gauntlet **is missed underneath.**
+	#  Then the control becomes "it passed" instead of "it was blocked" and **the gauntlet stops being a gauntlet.**
+	#  The two cells have the same fuel, so **they go out together on the same tick** — "the tick it disappears" is still one.
 	g.apply(CellGrid.cmd_fill(wx, wy, wx, wy + 1, Mat.WOOD))
 	t.ok(g.ignite(wx, wy) and g.ignite(wx, wy + 1), "%s: 관문 두 칸에 불이 붙었다 (전제)" % tag)
 
-	# 🔴 틱 수를 박지 않는다 — **연료와 틱당 소모에서 나온다.** `last` 틱까지는 살아 있고
-	#  그 다음 틱에 연료가 0이 되어 칸이 사라진다.
+	# The tick count is not hardcoded — **it comes from the fuel and the per-tick burn.** It is alive up to tick `last`,
+	#  and on the next tick the fuel hits 0 and the cell disappears.
 	var last := (g.fuel_at(wx, wy) - 1) / Tuning.FIRE_BURN_PER_TICK
 	var spell := SpellSim.new()
 	var w := WorldStep.new(g, spell, _stander())
@@ -426,12 +425,12 @@ func _run_gauntlet(t, tag: String, early: bool) -> int:
 
 	w.enqueue(_fire_cmd())
 	_frames(w, Tuning.TICK_DIVIDER)
-	# 🔴 **탄이 왜 살거나 죽었는지**를 못 박는다. 이 줄이 없으면 대조군의 0이
-	#  「관문에 막혔다」인지 「엉뚱한 데서 죽었다」인지 모른다.
-	# ⚠ **전에는 「쏜 틱 뒤에도 관문이 고체다」로 쟀고, 2026-08-05에 그 관측이 죽었다** —
-	#  모든 착탄이 반경 `carve_r` 만큼 판다(`spell_sim._impact` 의 ①) ⇒ **막힌 탄이 그 자리에서
-	#  관문을 지운다.** 관문은 배치대로 막았는데 사후 상태로는 구별이 안 된다.
-	#  ⇒ **멈춘 자리**로 잰다. 구간의 끝점이 곧 착탄 셀이고(`spell_sim._advance`), 그건 안 파인다.
+	# Pins down **why the bolt lived or died.** Without this line, the control's 0 could be
+	#  "blocked by the gauntlet" or "died somewhere else".
+	# **This used to be measured as "the gauntlet is still solid after the firing tick", and that observation died** —
+	#  every impact carves a radius of `carve_r` (`spell_sim._impact` step (1)) => **a blocked bolt erases the gauntlet
+	#  right where it stopped.** The gauntlet blocked it as laid out, but the after-state cannot tell them apart.
+	#  => It is measured by **where it stopped.** The segment's end point is the impact cell (`spell_sim._advance`), and that is not carved.
 	t.eq(spell.seg_count(), 1, "%s: 이 틱에 구간이 하나다 (배치를 읽을 수 있다)" % tag)
 	if spell.seg_count() == 1:
 		var end_cx: int = spell.get_seg_x1()[0] >> SpellSim.FP_SHIFT
@@ -443,7 +442,7 @@ func _run_gauntlet(t, tag: String, early: bool) -> int:
 	return spell.active_count()
 
 
-## 🔴 캐릭터는 **틱이 아닌 프레임에도** 움직인다(60Hz). 틱 갈래 안으로 들어가면 여기가 빨개진다.
+## The character moves **on non-tick frames too** (60Hz). Move it inside the tick branch and this goes red.
 func _character_moves_every_frame(t) -> void:
 	var g := _floor_grid()
 	var ch := _stander()
@@ -453,13 +452,13 @@ func _character_moves_every_frame(t) -> void:
 	t.ok(not w.frame(DT, 1.0, false, false), "첫 프레임은 틱이 아니다 (검사의 전제)")
 	t.ok(ch.x > x0, "그 프레임에도 캐릭터가 오른쪽으로 갔다 (%d → %d)" % [x0, ch.x])
 
-	# 뒤집기 — 「무조건 민다」가 아니다.
+	# Inversion — it is not "it always pushes".
 	var x1 := ch.x
 	_frames(w, 10)
 	t.eq(ch.x, x1, "입력이 0이면 안 움직인다")
 
 
-## `reset()` 이 큐와 발사 수를 되돌리나.
+## Does `reset()` roll back the queue and the fire count.
 func _reset_clears_the_queue(t) -> void:
 	var g := _floor_grid()
 	var spell := SpellSim.new()
@@ -478,22 +477,22 @@ func _reset_clears_the_queue(t) -> void:
 	t.eq(spell.active_count(), live, "reset() 뒤에는 큐에 있던 발사가 안 나간다 (탄이 안 는다)")
 
 
-## 🔴 `_init` 이 null 셋을 받으면 짖고 멈추나.
+## Does `_init` bark and stop when it receives three nulls.
 ##
-## ⚠ **`expect_error` 만으로는 아무것도 안 재는 검사가 된다** — 러너는 stderr를 못 보고
-##  선언은 사면일 뿐이라, 짖음이 사라져도 빨개지는 것이 없다.
-##  ⇒ 짖음의 **흔적**을 값으로 잰다.
-## 🔴 이 검사가 막는 것은 껍데기에서 **선언 순서가 뒤집히는 사고**다. 텍스트로는 못 잡는다 —
-##  `WorldStep.new(_grid, _spell, _char)` 는 한 글자도 안 바뀌고 멤버 초기화 순서만 바뀐다.
+## **`expect_error` alone makes this a check that measures nothing** — the runner cannot see stderr and the
+##  declaration is only an amnesty, so nothing goes red if the bark disappears.
+##  => The bark's **trace** is measured as a value.
+## What this check blocks is the accident of **the declaration order being reversed** in the shell. Text cannot catch it —
+##  `WorldStep.new(_grid, _spell, _char)` does not change by one character; only the member initialization order does.
 ##
-## ⚠ **`frame()` 부터 부르지 않는다.** 가드가 없으면 그 호출이 엔진 에러를 뿜는데,
-##  그때 러너는 **단언을 전부 통과시키고**(중단된 호출이 null → 거짓으로 읽힌다) 래퍼만 빨개진다.
-##  실측으로 그 모양이 났다 — 「통과 57개」 + 「침묵사 8줄」. ⇒ **표시를 먼저 값으로 잰다.**
-## 🔴🔴 **`get()` 을 타입 있는 변수에 바로 대입하지 마라.** 이름이 바뀌면 `get()` 이 null을 주고
-##  **대입이 터져 함수가 중단된다** — 그러면 아래 단언들이 **빨개지는 게 아니라 없어진다**
-##  (실측: `_broken` → `_brkn` 으로 1101 → 1099 · 실패 0개). ⇒ `Variant` 로 받아 **타입을 먼저 잰다.**
+## **`frame()` is not called first.** Without the guard that call spews an engine error, and then the runner
+##  **passes every assertion** (an aborted call reads as null -> false) while only the wrapper goes red.
+##  That shape actually happened, measured — "57 passed" plus "8 lines of silent death". => **The flag is measured as a value first.**
+## **Do not assign `get()` straight into a typed variable.** If the name changes, `get()` returns null and
+##  **the assignment blows up and aborts the function** — and then the assertions below **disappear instead of going red**
+##  (measured: `_broken` -> `_brkn` gave 1101 -> 1099 with 0 failures). => Receive it as a `Variant` and **measure the type first.**
 func _null_world_refuses(t) -> void:
-	t.expect_error("WorldStep: 세상 셋 중에 null이 있다")
+	t.expect_error("WorldStep: one of the three worlds is null")
 	var w := WorldStep.new(null, null, null)
 	var raw: Variant = w.get("_broken")
 	t.ok(raw is bool, "world_step 이 `_broken` 표시를 든다")
@@ -502,19 +501,19 @@ func _null_world_refuses(t) -> void:
 		return
 	t.ok(not w.frame(DT, 1.0, false, false), "그리고 프레임을 안 돈다")
 
-	# 🔴 `enqueue()` 도 **같은 문**을 지나나. 여기만 열려 있으면 부서진 세상이 좌클릭에서 터진다.
-	# ⚠ **「안 터진다」쪽은 단언이 못 잰다** — 가드가 없으면 `enqueue()` 안에서 엔진 에러가 나고
-	#  호출만 중단돼 큐는 **어차피 비어 있다.** 그 갈래를 잡는 것은 **래퍼의 stderr뿐**이고
-	#  실측으로 확인했다. 아래 단언이 재는 것은 「커맨드가 안 앉는다」까지다.
+	# Does `enqueue()` go through **the same door.** Leave only this one open and a broken world blows up on left click.
+	# **The "it does not blow up" side cannot be measured by an assertion** — without the guard, an engine error occurs
+	#  inside `enqueue()`, only the call aborts, and the queue **ends up empty anyway.** The only thing that catches that
+	#  branch is **the wrapper's stderr**, confirmed by measurement. What the assertion below measures is only "the command does not land".
 	w.enqueue(_fire_cmd())
 	var q: Variant = w.get("_queue")
 	t.ok(q is Array, "world_step 이 `_queue` 를 든다")
 	if q is Array:
 		t.eq((q as Array).size(), 0, "부서진 세상은 커맨드를 안 받는다")
 
-	# 🔴 `spawn_monster()`도 같은 문을 지나나(`monsters-minimum` 검증에서 실제로 뚫렸다) —
-	#  새로 생긴 공개 mutator가 `_broken`을 안 지나면 부서진 세상에서도 배열이 늘고
-	#  HUD 숫자가 오른다. 「프레임은 정중히 멈추는데 M에서만 늘어난다」가 그 증상이다.
+	# Does `spawn_monster()` go through the same door (it actually got through during `monsters-minimum` verification) —
+	#  if a newly added public mutator does not go through `_broken`, the array grows even in a broken world and
+	#  the HUD number rises. "Frames stop politely but M alone keeps incrementing" is the symptom.
 	var mid := w.spawn_monster(MonsterDefs.KIND_PIG, 0, 0)
 	t.eq(mid, 0, "부서진 세상은 몬스터를 안 만든다 (id 0)")
 	var mv: Variant = w.get("_monsters")
@@ -523,23 +522,23 @@ func _null_world_refuses(t) -> void:
 		t.eq((mv as Array).size(), 0, "부서진 세상의 몬스터 배열이 비어 있다")
 
 
-## 🔴🔴 **껍데기가 만든 세상이 실제로 도나.** 위 검사는 그물이 만든 세상만 본다.
+## **Does the world the shell built actually run.** The check above only looks at the world the net built.
 ##
-## ⚠ **짖음으로는 못 잡는다** — `expect_error` 사면은 **도는 내내** 유효해서, `net_render` 가
-##  씬을 세울 때 나는 같은 짖음까지 같이 사면된다. 실측: 선언 순서를 뒤집었더니
-##  **1098개가 전부 초록**이었다(짖음은 났는데 사면됐고, 아무도 값을 안 봤다).
-## ⇒ **껍데기가 만든 그 객체를 직접 굴린다.** 선언 순서가 뒤집히면 여기서 틱이 0이다.
-## ⚠ 씬을 세우기만 한다(`_ready`는 안 돈다) — 지형도 스폰도 없는 빈 세상이지만
-##  「분주기대로 도나」를 재는 데는 그걸로 충분하다.
+## **A bark cannot catch it** — an `expect_error` amnesty stays valid **for the whole run**, so the same bark raised
+##  when `net_render` stands up a scene gets amnestied along with it. Measured: reversing the declaration order left
+##  **all 1098 checks green** (the bark happened, it was amnestied, and nobody looked at the value).
+## => **That object the shell built is driven directly.** With the declaration order reversed, the tick here is 0.
+## Only the scene is stood up (`_ready` does not run) — an empty world with no terrain and no spawns, but
+##  that is enough to measure "does it run per the divider".
 func _stage_world_actually_runs(t) -> void:
 	var scene: PackedScene = load(STAGE_SCENE)
 	if scene == null or not scene.can_instantiate():
-		# 🔴🔴 여기서 그냥 `return` 하면 검사가 「실패」가 아니라 **없어진다** — 통과 수만 줄고
-		#  아무도 안 짖는다. 「없어진 검사」는 로그에서 「통과한 검사」와 구별이 안 된다.
+		# Just `return`ing here makes the check **disappear** rather than "fail" — only the pass count drops
+		#  and nobody barks. In the log, "a check that disappeared" is indistinguishable from "a check that passed".
 		t.ok(false, "무대 씬을 못 세워서 껍데기의 세상을 **하나도 못 쟀다**")
 		return
 	var root := scene.instantiate()
-	# ⚠ `Variant` 로 받아 **타입을 먼저 잰다** — 이름이 바뀌면 빨개져야지 없어지면 안 된다.
+	# Received as a `Variant` so **the type is measured first** — a renamed member has to go red, not disappear.
 	var w: Variant = root.get("_world")
 	t.ok(w is WorldStep, "껍데기가 `_world` 로 WorldStep 을 든다")
 	if w is WorldStep:
@@ -548,34 +547,34 @@ func _stage_world_actually_runs(t) -> void:
 			if w.call("frame", DT, 0.0, false, false):
 				ticked += 1
 		t.eq(ticked, 1, "껍데기가 만든 세상이 분주기대로 틱을 돈다")
-	# ⚠ 트리 밖이라 `queue_free`가 아니라 `free`다.
+	# Outside the tree, so it is `free`, not `queue_free`.
 	root.free()
 
 
-# ── 판정 1 — 내 마법에 내가 맞나 ───────────────────────────────────
+# ── Acceptance 1 — do I get hit by my own spell ────────────────────
 
-## 직격. 🔴 **터널링 반증이 이 검사의 절반이다** — 40px 도약이 16px 상자를 넘는 배치를
-##  일부러 만들고, **그 배치가 정말 도약 배치인 것을 그물이 스스로 단언한다.**
-##  ⚠ 안 하면 이 검사는 「함수를 부르나」만 재는 것이 된다(기획 판정 1이 경계한 그대로).
+## Direct hit. **Disproving tunneling is half of this check** — a layout where a 40px leap clears a 16px box
+##  is built deliberately, and **the net asserts for itself that the layout really is a leap layout.**
+##  Without that, this check only measures "is the function called" (exactly what design acceptance 1 warned about).
 func _direct_hit_costs_hp(t) -> void:
 	var g := _floor_grid()
 	var spell := SpellSim.new()
 	var ch := _stander()
 	var w := WorldStep.new(g, spell, ch)
 	t.eq(ch.hp, Character.MAX_HP, "시작 체력이 가득이다 (%d)" % Character.MAX_HP)
-	# 🔴 오염 0의 기준선. 여기서 계수기를 0으로 맞춰야 「지형을 판 것」이 안 섞인다.
+	# The zero-contamination baseline. Zeroing the counter here keeps "terrain that got carved" out of the mix.
 	g.consume_changed()
 
-	# 🔴 **판정이 돈 시점의 상자**를 들고 있어야 한다 — 프레임이 끝날 때 캐릭터가 이미 움직여 있으면
-	#  지금 자리로 잰 도약 단언이 거짓으로 빨개진다.
-	#  ⚠ 계기였던 「맞으면 밀린다」는 **넉백이 사라지며 없어졌다.** 규율은 남긴다.
+	# It has to hold **the box as of when the hit test ran** — if the character has already moved by the end of the frame,
+	#  the leap assertion measured against the current position goes red falsely.
+	#  The occasion for it ("a hit pushes you") **disappeared along with knockback.** The discipline stays.
 	var box_x := ch.x
 	w.enqueue(_hit_cmd_at(ch))
 	_frames(w, Tuning.TICK_DIVIDER)
 
-	# 🔴🔴 **배치가 도약 배치인가** — 구간의 **양 끝이 둘 다 상자 밖**이어야 한다.
-	#  ⚠ 이 줄이 없으면 배치가 우연히 상자 위에 걸쳐도 초록이고, 그러면 선분 검사가 아니라
-	#   점 검사로 짜도 통과한다.
+	# **Is the layout a leap layout** — **both ends of the segment** have to be outside the box.
+	#  Without this line, a layout that happens to straddle the box is still green, and then writing it as
+	#   a point test rather than a segment test also passes.
 	t.eq(spell.seg_count(), 1, "이 틱에 구간이 하나다 (배치를 읽을 수 있다)")
 	if spell.seg_count() == 1:
 		var ax := Body._fp_px(spell.get_seg_x0()[0])
@@ -586,32 +585,32 @@ func _direct_hit_costs_hp(t) -> void:
 
 	t.eq(ch.hp, Character.MAX_HP - Character.DAMAGE_HIT,
 		"그 도약 구간에 맞아 체력이 %d 깎였다" % Character.DAMAGE_HIT)
-	# ⚠ **라벨을 「N틱」으로 적지 마라** — 양쪽이 같은 상수라 `INVULN_TICKS = 0` 으로 바꿔도
-	#  `0 == 0` 으로 통과하면서 라벨만 「0틱 켜진다」가 된다(CLAUDE.md 「값 단언이 우연히 맞는다」).
-	#  🔴 이 줄이 재는 것은 **「무적을 켜기는 하나」**뿐이고, **길이는 아래 3틱/5틱 쌍이 위아래로 가둔다.**
+	# **Do not write the label as "N ticks"** — both sides are the same constant, so changing `INVULN_TICKS = 0`
+	#  still passes as `0 == 0` while the label alone becomes "0 ticks turn on" (CLAUDE.md, "a value assertion that happens to match").
+	#  What this line measures is only **"does it turn invulnerability on at all"**, and **the length is bounded above and below by the 3-tick/5-tick pair further down.**
 	t.ok(ch.invuln_left == Character.INVULN_TICKS, "맞은 틱에 무적이 켜진다")
-	# 🔴 **오염이 0인 것을 그물이 스스로 증명한다.** ⚠ **근거 문장이 2026-08-05에 바뀌었다** —
-	#  전에는 「무속성 + 문양 없음이라 격자가 안 변한다」였는데, 이제 **모든 착탄이 판다**
-	#  (`spell_sim._impact` 의 ①) ⇒ 살아 있는 근거는 **「이 틱에는 아직 착탄이 없다」** 하나다.
-	#  ⚠ **실측(verify-read)**: 같은 배치에서 틱 1은 0이고 **틱 4에 착탄해 13칸**이다.
-	#   ⇒ 항진명제가 아니다. 배치가 밀려 착탄이 앞당겨지면 여기가 짖는다.
-	# 🔴 **`burning_count() == 0` 으로 바꾸지 않았다 — 여기서는 그게 항진이다.** 이유가 둘이다:
-	#  ① 무대가 돌만 깔려 연료가 0이고 ② **이 창 안에 착탄 자체가 없어** 어떤 룬이어도 0이다.
-	#  (`_spread_hit_count_is_recorded` 는 20틱을 돌고 나무를 깔아서 그 어법이 성립한다.)
+	# **The net proves for itself that contamination is 0.** **The reasoning sentence changed** —
+	#  it used to be "no element plus no glyph, so the grid does not change", and now **every impact carves**
+	#  (`spell_sim._impact` step (1)) => the reasoning still alive is the single **"there is no impact yet on this tick".**
+	#  **Measured (verify-read)**: with the same layout, tick 1 is 0 and **tick 4 impacts for 13 cells.**
+	#   => Not a tautology. If the layout shifts and the impact comes earlier, this barks.
+	# **It was not changed to `burning_count() == 0` — here that would be a tautology.** Two reasons:
+	#  (1) the stage is all stone so fuel is 0, and (2) **there is no impact at all within this window**, so any rune gives 0.
+	#  (`_spread_hit_count_is_recorded` runs 20 ticks and lays wood, which is why that wording holds there.)
 	t.eq(g.consume_changed(), 0, "이 틱에 아직 착탄이 없다 (직격만 잰 것이다)")
 
 
-## 🔴🔴 **머리 위에서 수직으로 떨어지는 탄도 맞힌다.**
-##  ⚠ 실측: `_slab` 의 축평행 갈래(`d ≈ 0`)를 **「늘 빗나간다」로 바꿔도 1170개가 전부 초록**이었다 —
-##   「빗나가야 할 때 빗나간다」는 재는데 **「맞아야 할 때 맞는다」를 아무도 안 재고 있었다.**
-##  🔴 도달 가능한 상황이다 — 기획이 「**발밑을 쏘면 탄이 나를 통과한다**」를 확정으로 적었다.
-##   그 갈래가 깨지면 **조용히 안 아프다.**
+## **A bolt falling straight down from overhead hits too.**
+##  Measured: changing `_slab`'s axis-parallel branch (`d ~= 0`) to **"always miss" left all 1170 checks green** —
+##   "it misses when it should miss" was measured while **nobody was measuring "it hits when it should hit".**
+##  It is a reachable situation — the design doc settled on "**shoot at your feet and the bolt passes through me**".
+##   Break that branch and **it quietly stops hurting.**
 func _vertical_hit_costs_hp(t) -> void:
 	var g := _floor_grid()
 	var spell := SpellSim.new()
 	var ch := _stander()
 	var w := WorldStep.new(g, spell, ch)
-	# 상자 **바로 위**에서 곧장 아래로. 🔴 `adx = 0` 이라 x축이 축평행 갈래를 지난다.
+	# Straight down from **right above** the box. `adx = 0`, so the x axis goes through the axis-parallel branch.
 	w.enqueue(SpellSim.cmd_fire(
 		VERT_CX, VERT_FROM_CY, 0, 10, Tuning.ELEM_NONE, Glyph.GLYPH_NONE))
 	var cx := Body._cell_px(VERT_CX)
@@ -624,11 +623,11 @@ func _vertical_hit_costs_hp(t) -> void:
 	t.eq(ch.hp, Character.MAX_HP - Character.DAMAGE_HIT, "둘째 틱에 수직 직격으로 깎인다")
 
 
-## 🔴🔴 **벽 뒤의 캐릭터는 안 맞는다.** 구간 끝점을 `x1`(안 잘린 도달점)으로 두면 착탄한 탄이
-##  **벽 너머까지** 선을 긋고 그 뒤의 캐릭터를 때린다(계획 §6 위험 2).
-##  ⚠ 실측: 그 뮤테이션이 **1163개 전부 초록**이었다 — 아무도 안 재고 있었다.
-## 🔴 「안 맞았다」만 재면 **탄이 아예 안 나가도 초록**이다 ⇒ 탄이 벽에서 죽은 것과
-##  구간이 착탄점에서 잘린 것을 **같이** 단언한다.
+## **A character behind a wall does not get hit.** Set the segment's end point to `x1` (the unclipped reach) and a bolt
+##  that has impacted draws its line **past the wall** and strikes the character behind it (plan section 6, risk 2).
+##  Measured: that mutation left **all 1163 checks green** — nobody was measuring it.
+## Measuring only "it was not hit" stays **green even if no bolt was fired at all** => the bolt dying at the wall
+##  and the segment being clipped at the impact point are asserted **together.**
 func _wall_stops_the_segment(t) -> void:
 	var g := _floor_grid()
 	var spell := SpellSim.new()
@@ -648,8 +647,8 @@ func _wall_stops_the_segment(t) -> void:
 	t.eq(ch.hp, Character.MAX_HP, "벽 뒤의 캐릭터는 안 맞는다")
 
 
-## 🔴 **R(무대 리셋)이 유일한 부활이다** — 혼자라 일으켜 줄 사람이 없다(계획 §4).
-##  `place()` 가 체력·무적을 안 되돌리면 쓰러진 채로 영영 남는다(계획 §6 위험 11).
+## **R (stage reset) is the only revival** — you are alone, so nobody can pick you up (plan section 4).
+##  If `place()` does not roll back health and invulnerability, you stay downed forever (plan section 6, risk 11).
 func _place_revives(t) -> void:
 	var g := _floor_grid()
 	var spell := SpellSim.new()
@@ -664,8 +663,8 @@ func _place_revives(t) -> void:
 	t.eq(ch.invuln_left, 0, "place()가 무적도 되돌린다")
 
 
-## 폭발. 🔴 탄은 상자를 안 지나고 **바닥에서 터진 폭발**만 닿는다.
-## **뒤집어 보기 ①**: 같은 폭발을 반경 **밖**에서 맞으면 체력이 그대로다.
+## Blast. The bolt does not cross the box; only **the blast that went off on the floor** reaches it.
+## **Inversion 1**: take the same blast from **outside** the radius and health is unchanged.
 func _blast_hit_costs_hp(t) -> void:
 	var right_cx := _blast_cx_beside(STAND_X, 1)
 	var near := _blast_shot(t, STAND_X, right_cx, "오른쪽")
@@ -673,14 +672,14 @@ func _blast_hit_costs_hp(t) -> void:
 		"폭발 반경 안에 서 있으면 체력이 %d 깎인다" % Character.DAMAGE_HIT)
 	var far := _blast_shot(t, _far_stand_x(right_cx), right_cx, "멀리")
 	t.eq(far, Character.MAX_HP, "폭발 반경 밖에 서 있으면 체력이 그대로다")
-	# 🔴 판정 3-①의 전제다 — **왼쪽 자리도 혼자서 때린다.** 안 재면 「폭발 둘 = 한 대」가
-	#  「사실은 하나만 닿았다」와 구별이 안 되고, 그러면 그 검사는 아무것도 안 잰다.
+	# The premise of acceptance 3-1 — **the left position hits on its own too.** Without measuring it, "two blasts = one hit"
+	#  is indistinguishable from "actually only one landed", and then that check measures nothing.
 	var left := _blast_shot(t, STAND_X, _blast_cx_beside(STAND_X, -1), "왼쪽")
 	t.eq(left, Character.MAX_HP - Character.DAMAGE_HIT,
 		"왼쪽 자리의 폭발도 혼자서 %d 깎는다 (3-①의 전제)" % Character.DAMAGE_HIT)
 
 
-## 캐릭터 옆 바닥에 폭발 한 발. 남은 체력을 돌려준다.
+## One blast into the floor beside the character. Returns the remaining health.
 func _blast_shot(t, stand_x: int, cx: int, tag: String) -> int:
 	var g := _floor_grid()
 	var spell := SpellSim.new()
@@ -692,32 +691,32 @@ func _blast_shot(t, stand_x: int, cx: int, tag: String) -> int:
 	for _i in 12:
 		_frames(w, Tuning.TICK_DIVIDER)
 		blasts += spell.blast_count()
-	# 🔴 **폭발이 정말 났나** — 안 재면 「아무 일도 안 나서 체력이 그대로」가 뒤집어 보기 ①의
-	#  초록이 된다. 두 갈래가 **같은 폭발**을 쓴다는 것이 이 줄로 성립한다.
+	# **Did a blast really happen** — without this, "nothing happened so health is unchanged" becomes inversion 1's
+	#  green. This line is what establishes that both branches use **the same blast.**
 	t.eq(blasts, 1, "%s: 폭발이 정확히 한 번 났다" % tag)
 	return ch.hp
 
 
-# ── 판정 3 — 무적 ─────────────────────────────────────────────────
+# ── Acceptance 3 — invulnerability ─────────────────────────────────
 
-## 3-① 같은 틱에 폭발 둘 → **한 대**.
-## 🔴 **「폭발이 그 틱에 둘이었다」를 같이 단언한다** — 안 하면 폭발이 하나만 난 상황에서도
-##  「한 대」가 나와서 검사가 헛돈다.
+## 3-1: two blasts on the same tick -> **one hit.**
+## **"There really were two blasts on that tick" is asserted alongside** — without it, "one hit" also comes out
+##  when only one blast happened, and the check spins idle.
 ##
-## 🔴🔴 **이 검사가 재는 것은 무적이 아니라 `on_tick` 의 「첫 히트에서 끝내는」 구조다.**
-##  ⚠ 기획 문서의 뒤집기(「무적을 0으로 두면 두 번 깎인다」)는 **실측으로 거짓이었다** —
-##   무적을 0으로 둬도 같은 틱 안에서는 여전히 10만 깎인다. **무적이 막는 것은 틱 사이**다.
-##   ⇒ 이 라벨을 「무적이 같은 틱을 막는다」로 읽지 마라.
+## **What this check measures is not invulnerability but `on_tick`'s "stop at the first hit" structure.**
+##  The design doc's inversion ("set invulnerability to 0 and it takes damage twice") was **false, measured** —
+##   even at 0, within the same tick still only 10 is lost. **What invulnerability blocks is between ticks.**
+##   => Do not read this label as "invulnerability blocks the same tick".
 func _same_tick_two_blasts_cost_one(t) -> void:
 	var g := _floor_grid()
 	var spell := SpellSim.new()
 	var ch := _stander()
 	var w := WorldStep.new(g, spell, ch)
-	# 🔴 **상자 양옆에 한 발씩.** 같은 자리에 두 발을 쏘면 **먼저 터진 폭발이 두 번째 탄의
-	#  바닥을 부숴서** 그 탄이 크레이터로 빠지고 **다음 틱에** 터진다(실측) — 그러면
-	#  「같은 틱에 둘」이라는 전제 자체가 성립하지 않는다.
-	#  ⚠ 양옆이라 **왼쪽 폭발의 파괴 원반이 오른쪽 탄의 바닥에 못 닿는다**: 반경의 60%씩
-	#   벌어져 있으므로 두 자리의 간격이 반경의 1.2배 + 상자 폭이다.
+	# **One shot on each side of the box.** Fire two at the same spot and **the first blast breaks the second bolt's
+	#  footing**, so that bolt falls into the crater and goes off **on the next tick** (measured) — and then
+	#  the premise "two on the same tick" does not hold at all.
+	#  Being on opposite sides, **the left blast's destruction disc cannot reach the right bolt's footing**: they are
+	#   60% of the radius out on each side, so the gap between the two positions is 1.2 times the radius plus the box width.
 	w.enqueue(_blast_cmd(_blast_cx_beside(STAND_X, -1)))
 	w.enqueue(_blast_cmd(_blast_cx_beside(STAND_X, 1)))
 
@@ -731,12 +730,12 @@ func _same_tick_two_blasts_cost_one(t) -> void:
 		"같은 틱에 폭발 둘을 맞아도 한 대만 깎인다")
 
 
-## 🔴🔴 **무적이 「틱마다 하나씩」 준다** — 계획 §6 위험 1(60Hz에서 통지를 읽으면 한 대가 세 대)을
-##  **직접 무는 검사다.**
-##  ⚠ 위험 1은 「한 대가 세 대」로는 **안 나타난다** — 무적이 나머지 둘을 먹어서 피해는 한 대
-##   그대로이고, **무적이 3배 빨리 닳는 것으로만** 드러난다. 그걸 여기서 센다.
-##  ⚠ 아래 3틱/5틱 쌍도 같은 뮤테이션을 물지만, 그 검사의 간격 상수를 누가 손대면
-##   두 위험이 **동시에** 안 보이게 된다 ⇒ 감지기를 둘로 나눠 둔다.
+## **Invulnerability ticks down "one per tick"** — the check that **directly bites** plan section 6, risk 1
+##  (reading notices at 60Hz turns one hit into three).
+##  Risk 1 **does not show up as "one hit became three"** — invulnerability eats the other two so the damage stays one hit,
+##   and it shows **only as invulnerability draining 3 times faster.** That is what is counted here.
+##  The 3-tick/5-tick pair below bites the same mutation, but if someone touches that check's interval constants
+##   both risks become invisible **at the same time** => the detector is split in two.
 func _invuln_ticks_down_once_per_tick(t) -> void:
 	var g := _floor_grid()
 	var spell := SpellSim.new()
@@ -753,8 +752,8 @@ func _invuln_ticks_down_once_per_tick(t) -> void:
 		t.eq(ch.invuln_left, want, "한 틱 지나 무적이 %d 남는다 (틱마다 하나씩)" % want)
 
 
-## 3-② 무적이 **4틱**인가. 🔴 직격으로 잰다 — 커맨드를 넣으면 **다음 틱**에 나가 그 틱에
-##  상자를 지나므로 틱 간격을 정확히 제어할 수 있다.
+## 3-2: is invulnerability **4 ticks.** Measured with direct hits — a queued command goes out **on the next tick**
+##  and crosses the box on that tick, so the tick interval can be controlled exactly.
 func _invuln_lasts_four_ticks(t) -> void:
 	t.eq(_two_shots_hp(3), Character.MAX_HP - Character.DAMAGE_HIT,
 		"3틱 간격 두 발은 **한 대**다 (무적 안이다)")
@@ -762,81 +761,81 @@ func _invuln_lasts_four_ticks(t) -> void:
 		"5틱 간격 두 발은 **두 대**다 (무적이 풀렸다)")
 
 
-## 첫 발이 맞은 틱으로부터 `gap` 틱 뒤에 두 번째 발이 상자를 지나게 한다. 남은 체력을 돌려준다.
+## Makes the second shot cross the box `gap` ticks after the tick the first shot landed. Returns the remaining health.
 func _two_shots_hp(gap: int) -> int:
 	var g := _floor_grid()
 	var spell := SpellSim.new()
 	var ch := _stander()
 	var w := WorldStep.new(g, spell, ch)
 	w.enqueue(_hit_cmd_at(ch))
-	_frames(w, Tuning.TICK_DIVIDER)          # 이 틱에 첫 발이 나고 그대로 상자를 지난다
+	_frames(w, Tuning.TICK_DIVIDER)          # the first shot goes out on this tick and crosses the box right away
 	_frames(w, Tuning.TICK_DIVIDER * (gap - 1))
 	w.enqueue(_hit_cmd_at(ch))
-	_frames(w, Tuning.TICK_DIVIDER)          # 첫 발로부터 gap 틱째
+	_frames(w, Tuning.TICK_DIVIDER)          # the gap-th tick from the first shot
 	return ch.hp
 
 
-## 3-③ 확산 8발에 **몇 대인가** — 🔴 **기록이다. 목표 숫자를 단언하지 마라.**
-##  상황을 하나 고정하고 세어서 라벨에 숫자를 찍는다. 그 값을 보고 0.2초를 조일지 정한다.
+## 3-3: **how many hits** from 8 spread bolts — **this is a record. Do not assert a target number.**
+##  One situation is fixed, counted, and the number stamped into the label. That value decides whether to tighten the 0.2 seconds.
 func _spread_hit_count_is_recorded(t) -> void:
-	# 🔴🔴 **나무 바닥이어야 아래 「불이 안 붙었다」가 무언가를 잰다.**
-	#  ⚠ 돌만 깐 `_floor_grid()` 에서는 `STONE.fuel = EMPTY.fuel = 0` 이라 `burning_count()` 가
-	#   **원리적으로 늘 0**이고, 그 줄이 **항진명제**가 된다(verify-run 실측: 무속성이 점화하게
-	#   뮤테이션해도 안 짖었다). 🔴 오염 통제가 **관측에서 무대 배치로 내려앉는** 모양이라
-	#   CLAUDE.md 「라벨이 재는 것보다 넓다」 그대로다.
-	#  ⚠ 자리가 맞아야 한다 — 확산 착탄 열이 `_spread_cx(STAND_X)` = **87**이고
-	#   나무 줄이 `WOOD_CX0..CX1` = **78~90**이라 **그 아래에 연료가 있다.**
-	#   세대 1은 `carve_r(1)=1 < rune_r(1)=2` 라 파기 바깥에 고리가 남는다 ⇒ 붙을 자리가 있다.
+	# **The floor has to be wood for "no fire caught" below to measure anything.**
+	#  On the stone-only `_floor_grid()`, `STONE.fuel = EMPTY.fuel = 0`, so `burning_count()` is
+	#   **always 0 in principle** and that line becomes a **tautology** (verify-run measured it: mutating no-element
+	#   to ignite still did not bark). Contamination control **sinking from the observation into the stage layout**
+	#   is exactly CLAUDE.md's "the label is wider than what is measured".
+	#  The position has to line up — the spread impact column is `_spread_cx(STAND_X)` = **87** and
+	#   the wood row is `WOOD_CX0..CX1` = **78-90**, so **there is fuel underneath it.**
+	#   For generation 1, `carve_r(1)=1 < rune_r(1)=2`, so a ring survives outside the carve => there is somewhere to catch.
 	var g := _wood_floor_grid()
 	var spell := SpellSim.new()
 	var ch := _stander()
 	var w := WorldStep.new(g, spell, ch)
 	g.consume_changed()
 	var one: Array[int] = [Glyph.GLYPH_SPREAD]
-	# 캐릭터 바로 오른쪽 바닥에 내리꽂아 여덟이 그 자리에서 흩어지게 한다.
-	# ⚠ 전에는 `BLAST_CX - 12`(폭발 자리에서 12칸 왼쪽)였다 — **폭발 반경에 묶여 있었다.**
-	#  반경이 절반이 되면 그 식이 상자 안으로 들어와 직격이 섞인다. ⇒ 상자에서 파생시킨다.
+	# Driven into the floor immediately right of the character so the eight scatter from that spot.
+	# It used to be `BLAST_CX - 12` (12 cells left of the blast position) — **tied to the blast radius.**
+	#  Halve the radius and that expression moves inside the box and direct hits mix in. => It is derived from the box.
 	w.enqueue(SpellSim.cmd_fire(
 		_spread_cx(STAND_X), BLAST_FROM_CY, 0, 10, Tuning.ELEM_NONE, Glyph.pack(one)))
 	_frames(w, Tuning.TICK_DIVIDER * 20)
 
 	var hits := (Character.MAX_HP - ch.hp) / Character.DAMAGE_HIT
-	# ⚠ 단언은 「셌다」까지다. 🔴 숫자는 **라벨에 기록**이고 목표가 아니다.
+	# The assertion stops at "it was counted". The number is **a record in the label**, not a target.
 	t.ok(hits >= 0, "확산 8발 상황에서 **%d대** 맞았다 (기록 — 목표 숫자가 아니다)" % hits)
-	# ⚠ **전에는 「격자가 한 칸도 안 변했다」였다.** 2026-08-05부터 모든 착탄이 파므로
-	#  (`spell_sim._impact` 의 ①) 그 문장은 못 쓴다.
-	# 🔴 **오염 통제의 알맹이는 「안 변했다」가 아니라 「불이 없다」다** — 피해 경로가
-	#  직격·폭발·불 셋인데(`character.on_tick` · `_standing_in_fire`) 여기는 무속성 + 확산이라
-	#  뒤 둘이 없다. **파기는 어느 경로도 아니다.**
+	# **This used to read "not a single grid cell changed".** Since every impact carves
+	#  (`spell_sim._impact` step (1)), that sentence cannot be used.
+	# **The substance of contamination control is not "it did not change" but "there is no fire"** — the damage paths
+	#  are three: direct hit, blast and fire (`character.on_tick`, `_standing_in_fire`), and here it is no element plus spread,
+	#  so the latter two are absent. **Carving is none of those paths.**
 	var carved := g.consume_changed()
 	t.eq(g.burning_count(), 0, "그 동안 불이 한 칸도 안 붙었다 (피해가 직격뿐이다)")
-	# 🔴 반대쪽 — 격자가 **실제로** 파였나. 안 재면 「탄이 아예 안 왔다」도 위 초록을 낸다.
+	# The other side — was the grid **actually** carved. Without it, "no bolt arrived at all" also produces the green above.
 	t.ok(carved > 0, "그런데 격자는 실제로 파였다 (착탄이 정말 일어났다 · %d칸)" % carved)
 
 
-# ── 판정 2 — 불 위에 서 있으면 깎이나 ─────────────────────────────
+# ── Acceptance 2 — does standing in fire cost health ───────────────
 
-## 🔴🔴 **「무적과 무관하게」를 재는 유일한 방법**: 탄으로 먼저 맞혀 **무적을 켠 상태에서**
-##  불 위에 세운다. ⚠ 무적을 안 켜고 재면 「그냥 불 피해」를 재는 것이고 **틀린 구현도 통과한다.**
-## 🔴 그리고 **시간에 비례**하는지까지 본다 — 「한 번 깎인다」면 상수를 박아도 통과한다.
+## **The only way to measure "regardless of invulnerability"**: hit with a bolt first and stand the character
+##  in fire **with invulnerability on.** Measure without turning invulnerability on and you measure "just fire damage", and **a wrong implementation passes too.**
+## And it also checks whether it is **proportional to time** — at "it costs health once", a hardcoded constant passes.
 func _fire_burns_through_invuln(t) -> void:
 	var g := _wood_floor_grid()
 	var spell := SpellSim.new()
 	var ch := _stander()
 	var w := WorldStep.new(g, spell, ch)
 
-	# 🔴 **수직 직격으로 무적을 켠다.** ⚠ 이 배치를 고른 근거(「수평으로 맞히면 밀려서 발밑 나무를
-	#  벗어난다」)는 **넉백이 사라지며 없어졌다.** 배치는 그대로 둔다 — 캐릭터가 제자리에 있는 것이
-	#  「발밑 한 줄만 탄다」를 재는 데 여전히 제일 깨끗하다.
-	# 🔴🔴 **큐를 안 지난다.** 큐로 넣으면 `world_step` 이 **반동**을 걸어서(아래로 쐈으니 위로)
-	#  캐릭터가 떠올랐다가 20프레임 뒤에 내려앉고, 그 사이 무적이 다 닳는다(실측).
-	#  ⚠ 여기서 재는 것은 **불이 무적과 무관한가**지 커맨드 경로가 아니다 — 반동은 판정 5가 잰다.
+	# **Invulnerability is turned on with a vertical direct hit.** The reason this layout was chosen ("hit horizontally
+	#  and it gets pushed off the wood under its feet") **disappeared along with knockback.** The layout stays — the character
+	#  staying put is still the cleanest way to measure "only the row under the feet burns".
+	# **It does not go through the queue.** Queued, `world_step` applies **recoil** (fired downward, so upward)
+	#  and the character rises and settles back 20 frames later, and invulnerability drains away in between (measured).
+	#  What is measured here is **whether fire is independent of invulnerability**, not the command path — recoil is measured by acceptance 5.
 	#
-	# 🔴🔴 **이 리포에서 「그물이 게임과 다른 길을 지나는」 첫 사례다. 값을 정확히 적어 둔다:**
-	#  이 배치는 **게임이 만들 수 없는 상태**(반동 없는 자기 피격)를 세운다 ⇒ 그 대가로
-	#  **「불 위에서 발밑을 쏘면 반동으로 떠서 불에서 벗어난다」가 아무도 안 재는 거동이 됐다.**
-	#  ⚠ 그게 버그인지 사양인지는 **기획 문서에도 없다.** 무적·불의 성질은 경로와 무관해서
-	#   이 맞바꿈을 받아들였지만, **다음에 같은 우회를 할 때는 이 줄을 먼저 읽어라.**
+	# **This is the first case in this repo of "the net going down a different path from the game". The cost is written down exactly:**
+	#  This layout builds **a state the game cannot produce** (self-hit without recoil) => in exchange,
+	#  **"shooting at your feet while standing in fire lifts you out of the fire on the recoil" became behavior nobody measures.**
+	#  Whether that is a bug or a spec **is not in the design doc either.** The properties of invulnerability and fire are
+	#   path-independent, so this trade was accepted, but **read this line first before taking the same detour again.**
 	t.ok(spell.fire(SpellSim.cmd_fire(
 		VERT_CX, VERT_FROM_CY, 0, 10, Tuning.ELEM_NONE, Glyph.GLYPH_NONE)),
 		"맞힐 탄을 시뮬에 직접 넣었다 (반동을 안 만든다)")
@@ -845,7 +844,7 @@ func _fire_burns_through_invuln(t) -> void:
 	t.ok(ch.invuln_left > 0, "그래서 무적이 켜져 있다 (검사의 전제)")
 	_ignite_under(t, g, ch)
 
-	# 🔴 **첫 불 피해가 들어온 순간의 무적 잔량**을 본다. 그게 「무적과 무관하다」의 전부다.
+	# Looks at **the invulnerability left at the moment the first fire damage lands.** That is all of "independent of invulnerability".
 	var invuln_at_first := -1
 	var before := ch.hp
 	for _i in 30:
@@ -857,9 +856,9 @@ func _fire_burns_through_invuln(t) -> void:
 		"**무적이 %d틱 남은 채로** 첫 불 피해가 들어왔다 (무적에 안 걸린다)" % invuln_at_first)
 	t.ok(ch.burning, "그 동안 캐릭터가 「불붙음」으로 표시된다 (화면이 읽는 값)")
 
-	# 시간에 비례하나 — 같은 길이의 두 창을 맞댄다.
-	# ⚠ **두 창이 나무 수명(연료 200 / 틱당 5 = 40틱 = 2초) 안에 끝나야 한다** —
-	#  넘으면 「불이 꺼져서 덜 깎였다」가 「비례가 깨졌다」로 읽힌다(실측으로 한 번 그랬다).
+	# Is it proportional to time — two windows of the same length are compared.
+	# **Both windows have to finish within the wood's lifetime (fuel 200 / 5 per tick = 40 ticks = 2 seconds)** —
+	#  go over and "less damage because the fire went out" reads as "proportionality broke" (it happened once, measured).
 	var a := ch.hp
 	_frames(w, BURN_WINDOW)
 	var d1 := a - ch.hp
@@ -867,7 +866,7 @@ func _fire_burns_through_invuln(t) -> void:
 	_frames(w, BURN_WINDOW)
 	var d2 := b - ch.hp
 	t.ok(g.burning_count() > 0, "두 창 내내 불이 살아 있었다 (검사의 전제)")
-	# 🔴 기대값을 박지 않는다 — 초당 피해와 창 길이에서 나온다. 절삭 때문에 +1까지 허용한다.
+	# The expected value is not hardcoded — it comes from the damage per second and the window length. Truncation allows +1.
 	var want := int(Character.BURN_DPS * BURN_WINDOW / 60.0)
 	t.ok(d1 >= want and d1 <= want + 1,
 		"%d프레임에 %d 깎인다 (초당 %d에서 나온 %d~%d)"
@@ -875,9 +874,9 @@ func _fire_burns_through_invuln(t) -> void:
 	t.ok(absi(d2 - d1) <= 1, "다음 창도 같은 만큼 깎인다 (%d vs %d — 시간에 비례한다)" % [d1, d2])
 
 
-## **뒤집어 보기**: 연료가 다해 불이 꺼지면 깎임이 멈춘다.
-## 🔴 「안 깎인다」만 재면 **애초에 안 붙은 것과 구별이 안 된다** ⇒ 먼저 깎인 것과
-##  불이 실제로 꺼진 것을 **같이** 단언한다.
+## **Inversion**: when the fuel runs out and the fire goes out, the damage stops.
+## Measuring only "no damage" is **indistinguishable from it never having caught** => the earlier damage and
+##  the fire actually going out are asserted **together.**
 func _burnout_stops_the_damage(t) -> void:
 	var g := _wood_floor_grid()
 	var spell := SpellSim.new()
@@ -886,7 +885,7 @@ func _burnout_stops_the_damage(t) -> void:
 	_ignite_under(t, g, ch)
 
 	var start := ch.hp
-	# 나무 연료 200 / 틱당 5 = 40틱이면 다 탄다. 넉넉히 돌린다.
+	# Wood fuel 200 / 5 per tick = 40 ticks to burn out. Run generously past that.
 	_frames(w, Tuning.TICK_DIVIDER * 60)
 	t.ok(ch.hp < start, "불이 도는 동안 깎였다 (%d → %d)" % [start, ch.hp])
 	t.eq(g.burning_count(), 0, "연료가 다해 불이 꺼졌다 (배치의 전제)")
@@ -897,12 +896,12 @@ func _burnout_stops_the_damage(t) -> void:
 	t.eq(ch.hp, after, "불이 꺼진 뒤에는 한 톨도 안 깎인다")
 
 
-## 🔴🔴 **불을 톡톡 밟고 지나가는 것이 공짜가 아니다.**
-##  `10dps × 1/60` 이라 1점 쌓는 데 **6프레임**이 걸린다 ⇒ 누산기를 불에서 나올 때 비우면
-##  **0.1초 미만 접촉이 영원히 공짜**가 되고 그걸 무한히 반복할 수 있다.
-##  ⚠ 계획에 없는 결정이라 **「정리」한다고 비우는 사람이 나오면 아무도 안 짖는다** —
-##   실측: 비우든 안 비우든 그물 1193개가 그대로였다. 그래서 이 검사가 있다.
-## ⚠ 불을 끄고 켜는 것으로 「밟았다 뗐다」를 만든다 — 캐릭터를 옮기면 `place()`가 체력을 되돌린다.
+## **Tapping across fire is not free.**
+##  At `10dps x 1/60` it takes **6 frames** to accumulate 1 point => clear the accumulator on leaving the fire and
+##  **any contact under 0.1 seconds is free forever**, and that can be repeated indefinitely.
+##  It is a decision the plan does not record, so **if someone clears it while "tidying up", nobody barks** —
+##   measured: clearing or not, the net stayed at 1193. That is why this check exists.
+## "Stepped on and off" is produced by turning the fire off and on — moving the character would make `place()` restore health.
 func _burn_acc_survives_tapping(t) -> void:
 	var g := _wood_floor_grid()
 	var spell := SpellSim.new()
@@ -917,12 +916,12 @@ func _burn_acc_survives_tapping(t) -> void:
 			g.ignite(cx, WOOD_CY)
 		t.ok(g.burning_count() > 0, "발밑에 불이 붙었다 (전제)")
 		_frames(w, TAP_FRAMES)
-		# 나무를 다시 깔면 깃발이 지워진다(`_write_cell`이 파면에서도 뺀다) = 불에서 나온 것과 같다.
+		# Re-laying the wood clears the flag (`_write_cell` removes it from the burn slot too) = the same as leaving the fire.
 		g.apply(CellGrid.cmd_fill(WOOD_CX0, WOOD_CY, WOOD_CX1, WOOD_CY, Mat.WOOD))
 		t.eq(g.burning_count(), 0, "불에서 나왔다 (전제)")
 		_frames(w, 2)
 
-	# 🔴 한 번에 %d프레임씩이라 **접촉 하나로는 절대 1점이 안 쌓인다**(6프레임 필요).
+	# At this many frames per contact, **a single contact can never accumulate 1 point** (6 frames are needed).
 	t.ok(TAP_FRAMES * Character.BURN_DPS / 60.0 < 1.0,
 		"한 번 접촉(%d프레임)만으로는 1점이 안 쌓인다 (배치의 전제)" % TAP_FRAMES)
 	t.ok(ch.hp < Character.MAX_HP,
@@ -930,8 +929,8 @@ func _burn_acc_survives_tapping(t) -> void:
 			% [contacts, ch.hp])
 
 
-## 발밑 나무에 불을 붙인다. 🔴 **상자 아래 한 줄**이라 상자 안에는 타는 셀이 하나도 없다 —
-##  그게 계획이 못 박은 「발밑 한 줄을 빠뜨리면 게임에서만 아무 일이 안 난다」를 재는 배치다.
+## Sets fire to the wood under the feet. It is **one row below the box**, so no burning cell is inside the box —
+##  that is the layout for measuring the plan's pinned "miss the row under the feet and nothing happens in the game alone".
 func _ignite_under(t, g: CellGrid, ch: Character) -> void:
 	var cx0 := floori(ch.x / float(Tuning.CELL_PX))
 	var cx1 := floori((ch.x + Character.W_PX - 1) / float(Tuning.CELL_PX))
@@ -940,7 +939,7 @@ func _ignite_under(t, g: CellGrid, ch: Character) -> void:
 		if g.ignite(cx, WOOD_CY):
 			lit += 1
 	t.ok(lit > 0, "발밑 나무 %d칸에 불이 붙었다 (검사의 전제)" % lit)
-	# 🔴 **상자 안에는 불이 없다**는 것을 단언한다. 이게 참이어야 「발밑 한 줄」을 재는 것이다.
+	# Asserts that **there is no fire inside the box.** Only if this is true is "the row under the feet" what is being measured.
 	var top := floori(ch.y / float(Tuning.CELL_PX))
 	var bottom := floori((ch.y + Character.H_PX - 1) / float(Tuning.CELL_PX))
 	var inside := 0
@@ -951,22 +950,22 @@ func _ignite_under(t, g: CellGrid, ch: Character) -> void:
 	t.eq(inside, 0, "상자가 덮는 셀에는 타는 칸이 하나도 없다 (발밑 한 줄만 탄다)")
 
 
-# ── 판정 4 — **삭제됨** ───────────────────────────────────────────
-# 🔴 **「맞으면 밀리나」(넉백)가 사라졌다**(사용자 결정, 2026-08-04) ⇒ 그걸 재던 검사 여섯과
-#  그 배치 상수들을 같이 지웠다. **없는 기능을 재는 검사는 가짜 그물이다.**
-#  ⚠ 되살리려면 `character.gd` 의 `recoil_vx` 옆 주석부터 읽어라 — 무엇을 같이 되살려야 하는지 적혀 있다.
+# ── Acceptance 4 — **deleted** ─────────────────────────────────────
+# **"Does a hit push me" (knockback) is gone** (decided by the user) => the six checks that measured it and
+#  their layout constants were deleted with it. **A check measuring a feature that does not exist is a fake net.**
+#  To bring it back, start from the comment beside `recoil_vx` in `character.gd` — it says what has to come back with it.
 
-# ── 판정 5 — 쏘면 반동으로 밀리나 ─────────────────────────────────
+# ── Acceptance 5 — does firing push me back on the recoil ──────────
 
-## 🔴 **거는 자리가 함정이다** — 발사는 큐를 지나므로 큐에 넣는 시점에 걸면
-##  **거부된 발사에도 밀린다**. 아래 뒤집기가 그 자리를 지킨다.
+## **Where it is applied is the trap** — firing goes through the queue, so applying it at enqueue time
+##  **pushes even on a rejected shot.** The inversion below holds that spot.
 func _firing_pushes_me_back(t) -> void:
 	var g := _floor_grid()
 	var spell := SpellSim.new()
 	var ch := _stander()
 	var w := WorldStep.new(g, spell, ch)
 	var x0 := ch.x
-	# 오른쪽으로 쏜다 ⇒ 왼쪽으로 밀려야 한다.
+	# Fires right => it has to be pushed left.
 	w.enqueue(SpellSim.cmd_fire(
 		RECOIL_CX, HIT_ORIGIN_CY, AIM_DX, 0, Tuning.ELEM_NONE, Glyph.GLYPH_NONE))
 	_frames(w, Tuning.TICK_DIVIDER)
@@ -976,15 +975,15 @@ func _firing_pushes_me_back(t) -> void:
 	t.ok(ch.x < x0, "%d프레임 뒤 왼쪽으로 밀려 있다 (%d → %d)" % [RECOIL_WINDOW, x0, ch.x])
 
 
-## 🔴🔴 **반동이 시간에 따라 잦아드나.**
-##  ⚠ **실측(2026-08-04): 감쇠를 `*= 1.0` 으로 지워도 그물 1280개가 전부 초록이었다** —
-##   쏜 캐릭터가 **영원히 미끄러지는데** 아무도 안 봤다(화면에서는 1초면 보이는 고장이다).
-##  🔴 그 구멍은 **넉백을 지우며 `_knockback_decays` 가 같이 사라져서** 생겼다.
-##   **감쇠는 반동 쪽에 남았으므로 검사도 남는다** — 없는 기능을 재는 것이 아니다.
+## **Does the recoil die down over time.**
+##  **Measured: erasing the decay to `*= 1.0` left all 1280 net checks green** —
+##   the character who fired **slid forever** and nobody looked (on screen it is a failure visible within a second).
+##  That hole appeared because **`_knockback_decays` disappeared along with knockback when it was deleted.**
+##   **The decay stayed on the recoil side, so the check stays too** — it is not measuring a feature that does not exist.
 ##
-## 🔴 **변위가 아니라 속도로 잰다.** 변위로 재면 감쇠를 지웠을 때 캐릭터가 격자 왼쪽 끝에 막혀
-##  둘째 창이 저절로 짧아지고, 그러면 **뒤집기가 통과해 버린다**(계산으로 확인했다: 200px → 120px).
-## ⚠ 「그래서 실제로 안 움직이나」는 위 `_firing_pushes_me_back` 이 x로 잰다. 둘이 짝이다.
+## **Measured by velocity, not displacement.** Measured by displacement, erasing the decay pins the character against
+##  the grid's left edge so the second window shortens by itself, and then **the inversion passes** (confirmed by calculation: 200px -> 120px).
+## "So does it actually move" is measured in x by `_firing_pushes_me_back` above. The two are a pair.
 func _recoil_decays(t) -> void:
 	var g := _floor_grid()
 	var spell := SpellSim.new()
@@ -998,21 +997,21 @@ func _recoil_decays(t) -> void:
 
 	_frames(w, RECOIL_WINDOW)
 	var v2 := absf(ch.recoil_vx)
-	# 🔴 기대값을 박지 않는다 — 감쇠 상수와 창 길이에서 나온다. 0.5초면 `0.02^0.5` = 0.14배다.
-	#  ⚠ 절반으로 느슨하게 잡은 것은 **프레임 수를 조금 바꿔도 안 흔들리게** 하려는 것이지
-	#   재는 것을 넓히려는 게 아니다 — 감쇠가 없으면 비율이 **1.0**이라 한참 넘는다.
+	# The expected value is not hardcoded — it comes from the decay constant and the window length. At 0.5 seconds it is `0.02^0.5` = 0.14x.
+	#  Loosening it to a half is to keep it **from wobbling when the frame count changes slightly**, not
+	#   to widen what is measured — with no decay the ratio is **1.0**, far above it.
 	t.ok(v2 < v1 * 0.5,
 		"%d프레임 뒤 반동이 절반 아래로 잦아든다 (%.0f → %.0f px/s)" % [RECOIL_WINDOW, v1, v2])
 
 
-## 🔴🔴 **로켓점프는 삭제됐다**(사용자 결정, 2026-08-04). 반동이 1D라 아래로 쏴도 안 뜬다.
-##  전에는 이 함수가 **정반대**(`top < y0`, 「아래로 쏘면 떠오른다」)를 단언했다.
+## **Rocket jumping was deleted** (decided by the user). The recoil is 1D, so firing downward does not lift you.
+##  This function used to assert **the exact opposite** (`top < y0`, "firing down lifts you").
 ##
-## 🔴🔴 **「안 뜬다」만 재면 이 검사는 아무것도 안 잰다** — 발사가 거부돼도, `recoil()` 이
-##  통째로 안 불려도, 반동 상수가 0이어도 **전부 초록**이다. 없는 것을 재는 검사는 가짜 그물이다.
-##  ⇒ **대각선으로 쏴서 「가로는 걸리는데 세로만 0」을 한 배치에서 같이 잰다.**
-##   그 짝이 있어야 라벨(「세로를 지웠다」)과 재는 것이 같아진다.
-##  ⚠ 수직(0,10)으로 쏘면 `d.x` 가 0이라 **가로도 0**이고, 그러면 대조군을 못 세운다.
+## **Measuring only "it does not lift" measures nothing** — a rejected shot, `recoil()` never being called at all,
+##  or a recoil constant of 0 would **all be green.** A check measuring something that is not there is a fake net.
+##  => **It fires diagonally and measures "horizontal is applied while only vertical is 0" in one layout.**
+##   Only with that pair does the label ("the vertical was erased") equal what is measured.
+##  Fired vertically (0,10), `d.x` is 0 so **the horizontal is 0 too**, and then no control can be built.
 func _firing_down_does_not_lift_me(t) -> void:
 	var g := _floor_grid()
 	var spell := SpellSim.new()
@@ -1020,19 +1019,19 @@ func _firing_down_does_not_lift_me(t) -> void:
 	var w := WorldStep.new(g, spell, ch)
 	var y0 := ch.y
 	var x0 := ch.x
-	# 🔴🔴 **지팡이 끝 자리에서 쏜다. 자리를 상수로 박지 않고 `Staff.tip_px()` 에서 뽑는다** —
-	#  게임에서 아래로 조준했을 때 탄이 실제로 태어나는 자리가 정의상 이것이다.
-	#  ⚠ **배치의 근거가 2026-08-05에 바뀌었다.** 전에는 원점이 상자 **아래**(바닥 속)라
-	#   「탄이 상자를 안 지난다」였는데, 지팡이가 지형에 막혀 짧아지면서 원점이 **상자의 마지막 줄**이 됐다
-	#   ⇒ **탄이 상자 안에서 태어나 자기가 맞는다.** 그게 맞는 거동이다(기획 「발밑을 쏘면 자기가 맞는다」).
-	#  🔴 **그래도 이 검사가 재는 것은 안 변한다**: hp를 안 보고 · 넉백이 없어 맞아도 안 밀리고 ·
-	#   `ELEM_NONE + GLYPH_NONE` 이라 룬 흔적도 없다. 재는 것은 **세로 0 · 가로 반동은 산다** 둘이다.
-	#  ⚠ 오른쪽 **아래** 대각선이라 세로 성분이 살아 있다 — 로켓점프가 있었다면 이 배치에서도 떴다.
+	# **Fired from the staff's tip. The position is not hardcoded but taken from `Staff.tip_px()`** —
+	#  by definition that is where the bolt is really born when aiming downward in the game.
+	#  **The layout's reasoning changed.** The origin used to be **below** the box (inside the floor), so
+	#   "the bolt does not cross the box"; once the staff got shortened by terrain the origin became **the box's last row**
+	#   => **the bolt is born inside the box and hits its owner.** That is the correct behavior (design doc, "shoot at your feet and you hit yourself").
+	#  **What this check measures is unchanged even so**: hp is not looked at, with no knockback a hit does not push, and
+	#   `ELEM_NONE + GLYPH_NONE` means there is no rune trace either. What is measured is the two: **vertical 0, horizontal recoil alive.**
+	#  It is a **down**-right diagonal, so the vertical component is alive — had rocket jumping existed, this layout would have lifted too.
 	var tip := Staff.tip_px(g, ch.x, ch.y, Vector2.DOWN)
 	var feet_cx := floori(tip.x / float(Tuning.CELL_PX))
 	var feet_cy := floori(tip.y / float(Tuning.CELL_PX))
-	# 🔴 **배치의 전제를 그물이 스스로 단언한다** — 발밑 원점이 고체 셀이면 탄이 벽 안에서 태어나고
-	#  (`spell_sim._walk` 가 시작 칸을 안 본다) 그 순간 이 배치가 재려던 것이 통째로 달라진다.
+	# **The net asserts the layout's premise for itself** — if the under-foot origin is a solid cell the bolt is born inside a wall
+	#  (`spell_sim._walk` does not look at the starting cell), and at that moment what this layout meant to measure changes entirely.
 	t.ok(not g.is_solid(feet_cx, feet_cy),
 		"발밑 원점(%d,%d)이 빈 셀이다 (배치의 전제)" % [feet_cx, feet_cy])
 	w.enqueue(SpellSim.cmd_fire(
@@ -1043,22 +1042,22 @@ func _firing_down_does_not_lift_me(t) -> void:
 		top = mini(top, ch.y)
 	t.eq(w.fire_count(), 1, "발사가 받아들여졌다 (검사의 전제)")
 	t.eq(top, y0, "아래로 쏴도 한 픽셀도 안 뜬다 (로켓점프 삭제 · y %d)" % y0)
-	# 🔴 **대조군.** 같은 발사에서 가로는 걸린다 ⇒ 위 줄이 「반동이 통째로 죽었다」로
-	#  초록이 되는 길이 막힌다.
+	# **The control.** In the same shot the horizontal is applied => the path where the line above goes green
+	#  because "the recoil died entirely" is blocked.
 	t.ok(ch.x < x0,
 		"같은 발사의 가로 반동은 살아 있다 (%d → %d) — 세로만 지운 것이다" % [x0, ch.x])
 
 
-## 🔴🔴 **거부된 발사는 반동을 안 만든다.**
-##  ⚠ 라벨을 「빈 룬」이라고 적지 마라 — 그 경로는 껍데기(`_fire_at` 의 `can_fire()`)에 있어
-##   그물이 못 부른다. 여기서 재는 것은 **`fire()` 가 거부하는 커맨드**다.
+## **A rejected shot produces no recoil.**
+##  Do not write the label as "an empty rune" — that path lives in the shell (`can_fire()` in `_fire_at`) and
+##   the net cannot call it. What is measured here is **a command `fire()` rejects.**
 func _rejected_fire_has_no_recoil(t) -> void:
 	var g := _floor_grid()
 	var spell := SpellSim.new()
 	var ch := _stander()
 	var w := WorldStep.new(g, spell, ch)
 	var x0 := ch.x
-	t.expect_error("SpellSim: 모르는 문양 id")
+	t.expect_error("SpellSim: unknown glyph id")
 	w.enqueue(SpellSim.cmd_fire(
 		RECOIL_CX, HIT_ORIGIN_CY, AIM_DX, 0, Tuning.ELEM_NONE, BAD_GLYPHS))
 	_frames(w, Tuning.TICK_DIVIDER)
@@ -1069,11 +1068,11 @@ func _rejected_fire_has_no_recoil(t) -> void:
 	t.eq(ch.x, x0, "그래서 한 픽셀도 안 밀린다")
 
 
-# ── 판정 6 — 100 → 0 이면 쓰러지나 ────────────────────────────────
+# ── Acceptance 6 — does 100 -> 0 knock me down ─────────────────────
 
-## 🔴🔴 **즉사가 아니다** — 중력을 계속 받는 것으로 잰다(공중에서 쓰러지면 떨어져 지표면에 붙는다).
-## 🔴 **행동불능을 같이 잰다.** ⚠ 안 재면 **「플래그만 켜고 아무 일도 안 하는」 구현이 통과한다.**
-##  ⚠ **잔여 속도가 남아 있으면 x가 변한다** ⇒ 쓰러뜨린 뒤 **재우고** 잰다.
+## **It is not instant death** — measured by still being subject to gravity (downed in mid-air, it falls and settles on the surface).
+## **Incapacitation is measured alongside.** Without it, **an implementation that only sets a flag and does nothing else passes.**
+##  **With residual velocity left, x changes** => it is knocked down, **left to settle**, and then measured.
 func _zero_hp_downs_me(t) -> void:
 	var g := _floor_grid()
 	var spell := SpellSim.new()
@@ -1084,25 +1083,25 @@ func _zero_hp_downs_me(t) -> void:
 	t.eq(ch.hp, 0, "열 대를 맞고 체력이 0이다")
 	t.ok(ch.downed, "그래서 쓰러졌다")
 
-	# 🔴 **잔여 속도를 재운 뒤에** 행동불능을 잰다 — 남아 있으면 x가 변해서 「입력이 먹었다」로 읽힌다.
-	#  ⚠ 30프레임으로는 **실측으로 모자랐다**(6px 흘렀다 — 넉백이 있던 때의 값이다). 지수 감쇠라
-	#   완전히 0이 되진 않으므로 넉넉히 기다린다: 초당 ×0.02면 2초 뒤 0.16px/s다.
+	# Incapacitation is measured **after the residual velocity has settled** — leftover velocity changes x and reads as "the input worked".
+	#  30 frames was **not enough, measured** (6px drifted — a value from when knockback existed). Exponential decay
+	#   never reaches exactly 0, so it waits generously: at x0.02 per second, after 2 seconds it is 0.16px/s.
 	_frames(w, SETTLE_FRAMES)
 	var x0 := ch.x
 	_frames(w, 60, 1.0)
 	t.eq(ch.x, x0, "입력을 계속 넣어도 x가 안 변한다 (행동불능)")
-	# ⚠ 점프도 같이 막힌다 — 안 막으면 「누워서 뛴다」가 된다.
+	# Jumping is blocked too — otherwise it becomes "jumping while lying down".
 	var y0 := ch.y
 	for _i in 60:
 		w.frame(DT, 1.0, true, true)
 	t.eq(ch.y, y0, "점프 입력도 안 먹는다")
 
-	# 🔴🔴 **즉사가 아님 = 중력을 계속 받는다.** 발밑을 파서 떨어뜨린다.
-	# ⚠ **「자기 폭발로 판다」는 이제 거짓이다** — 쓰러지면 못 쏜다(`world_step._drain_queue`).
-	#  게임에서 이 상태가 되는 길은 셋이다: ① 쓰러지기 **전에** 판 구멍 ② 불에 타 죽는 동안
-	#  발판이 타서 없어짐 ③ 멀티에서 남이 쏨. ⇒ **여기 배치는 그 결과만 같게 만든 것**이고,
-	#  그 맞바꿈은 위 `_beat_down` 주석에 적어 뒀다.
-	# ⚠ 구덩이도 **지금 캐릭터 자리에서** 판다 — 박아 두면 캐릭터가 움직인 날 엉뚱한 데 생긴다.
+	# **Not instant death = still subject to gravity.** The ground under the feet is dug away to make it fall.
+	# **"Dug by its own blast" is false now** — you cannot fire while downed (`world_step._drain_queue`).
+	#  There are three ways into this state in the game: (1) a hole dug **before** going down, (2) the footing burning
+	#  away while dying to fire, (3) someone else shooting in multiplayer. => **This layout only reproduces the outcome**,
+	#  and that trade is written in the `_beat_down` comment above.
+	# The pit is dug **from the character's current position** too — hardcoded, it appears in the wrong place the day the character moves.
 	var pit0 := floori(ch.x / float(Tuning.CELL_PX)) - 2
 	var pit1 := floori((ch.x + Character.W_PX - 1) / float(Tuning.CELL_PX)) + 2
 	g.apply(CellGrid.cmd_fill(pit0, FLOOR_CY, pit1, PIT_BOTTOM_CY, Mat.EMPTY))
@@ -1113,40 +1112,40 @@ func _zero_hp_downs_me(t) -> void:
 		"지표면에 정확히 붙는다 (튀거나 파묻히지 않는다)")
 
 
-## `n`대를 맞힌다. 🔴 무적이 4틱이라 **5틱 간격**이어야 매번 들어간다.
-## ⚠ 큐를 안 지난다 — 반동이 섞이면 캐릭터가 뜨고 다음 발이 빗나간다(위 불 검사와 같은 이유).
+## Lands `n` hits. Invulnerability is 4 ticks, so the interval has to be **5 ticks** for every one to land.
+## It does not go through the queue — mixing in recoil lifts the character and the next shot misses (the same reason as the fire check above).
 ##
-## 🔴🔴 **잃는 것 — 우회 셋째 사례이고 이게 제일 크다.** 게임에서 자기를 쓰러뜨리는 것은
-##  **반동이 붙은 자기 탄**인데 그 경로로는 한 번도 안 재진다 ⇒ **판정 6이 통째로 우회 경로에
-##  얹혀 있다.**
-## ⚠ **우회가 셋이 되면 다음 사람은 그걸 기본값으로 읽는다.** 넷째를 만들기 전에 멈추고,
-##  「이 성질이 정말 경로와 무관한가」를 먼저 답해라.
+## **What is lost — the third case of a detour, and the biggest one.** In the game what knocks you down is
+##  **your own bolt with recoil on it**, and that path is never measured => **acceptance 6 rests entirely on a
+##  detour path.**
+## **Once there are three detours the next person reads that as the default.** Stop before making a fourth and
+##  first answer "is this property really path-independent".
 ##
-## 🔴🔴 **그리고 이 우회는 이미 한 번 결과를 가렸다 — 이 리포의 첫 사례다.**
-##  아래 「쓰러진 채 중력을 받나」의 도달 근거를 처음엔 **「자기 폭발로 발밑을 판다」**로 적었는데,
-##  **같은 날 「쓰러지면 못 쏜다」를 넣으면서 그 길이 닫혔다.** 실제 게임 경로로 재던 프로브는
-##  그 자리가 `y 308 → 308` 로 빨개졌는데 **그물은 1288개 그대로 통과했다** —
-##  `spell.fire()` 를 직접 불러 **새 문을 안 지나기 때문**이다.
-## 🔴 **지금 게임에서 쓰러진 채 떨어지는 길은 셋뿐이다:**
-##  ① 쓰러지기 **전에** 판 구멍 ② 불에 타 죽는 동안 발판이 타서 없어짐 ③ **멀티에서 남이 쏨.**
-##  ⇒ 아래 검사가 세우는 「쓰러진 뒤에 발밑을 판다」는 **그물만의 상황**이다. 성질(중력을 계속
-##   받나)은 경로와 무관해서 그대로 두지만, **도달 근거로 「자기 폭발」을 다시 적지 마라.**
+## **And this detour has already hidden a result once — the first case in this repo.**
+##  The reachability reasoning for "does it stay subject to gravity while downed" below was first written as
+##  **"it digs under its own feet with its own blast"**, and **that path closed the same day "you cannot fire while downed" was added.**
+##  A probe measuring through the real game path went red there at `y 308 -> 308` while **the net passed all 1288 checks** —
+##  because it calls `spell.fire()` directly and **does not go through the new door.**
+## **There are only three ways to fall while downed in the game today:**
+##  (1) a hole dug **before** going down, (2) the footing burning away while dying to fire, (3) **someone else shooting in multiplayer.**
+##  => "Dig under the feet after going down", which the check below sets up, is **a net-only situation.** The property
+##   (does it stay subject to gravity) is path-independent so it stays, but **do not write "its own blast" as the reachability reasoning again.**
 func _beat_down(t, w: WorldStep, spell: SpellSim, ch: Character, n: int) -> void:
 	for _i in n:
 		t.ok(spell.fire(_hit_cmd_at(ch)), "때릴 탄이 났다 (검사의 전제)")
 		_frames(w, Tuning.TICK_DIVIDER * 5)
 
 
-## 🔴🔴 **쓰러지면 못 쏜다.** 안 막으면 지팡이도 총구도 안 그려지는데 **마법이 나가고
-##  그 반동으로 시체가 날아다닌다**(실측: 발사 10 → 11 · 위로 59px).
-## 🔴 **커맨드가 큐를 지나는 길로 잰다** — 막는 자리가 거기이기도 하고, 그 길이 멀티에서
-##  서버가 쓰는 길이다.
+## **You cannot fire while downed.** Without the block, neither staff nor muzzle is drawn while **the spell goes out
+##  and the corpse flies around on the recoil** (measured: fire count 10 -> 11, 59px upward).
+## **Measured along the path where the command goes through the queue** — that is also where the block lives, and
+##  that is the path the server uses in multiplayer.
 func _downed_cannot_fire(t) -> void:
 	var g := _floor_grid()
 	var spell := SpellSim.new()
 	var ch := _stander()
 	var w := WorldStep.new(g, spell, ch)
-	# 먼저 쓰러뜨린다. ⚠ 여기서는 큐를 안 쓴다(반동이 섞이면 배치가 무너진다 — 위 `_beat_down`).
+	# Knock it down first. The queue is not used here (mixing in recoil collapses the layout — see `_beat_down` above).
 	_beat_down(t, w, spell, ch, Character.MAX_HP / Character.DAMAGE_HIT)
 	t.ok(ch.downed, "쓰러졌다 (검사의 전제)")
 	_frames(w, SETTLE_FRAMES)
@@ -1159,21 +1158,21 @@ func _downed_cannot_fire(t) -> void:
 	_frames(w, Tuning.TICK_DIVIDER)
 	t.eq(w.fire_count(), fired, "쓰러진 채로는 발사 수가 안 오른다")
 	t.eq(spell.active_count(), 0, "탄도 안 난다")
-	# ⚠ **같은 값을 기대하지 마라** — 그 세 프레임에도 감쇠가 돈다. 반동이 붙었다면 **커진다**.
+	# **Do not expect the same value** — the decay runs during those three frames too. Had recoil been applied it would have **grown.**
 	t.ok(absf(ch.recoil_vx) <= absf(kb), "그러니 가로 반동도 안 붙는다 (잔량이 줄기만 했다)")
-	# 🔴🔴 **라벨을 좁혔다. 옛 라벨(「세로도 중력 말고는 안 붙는다」)이 재는 것보다 넓었다.**
-	#  ⚠ 이 커맨드는 **수평**(ady = 0)이라 `recoil()` 의 세로 성분이 **원래 0**이었다 —
-	#   쓰러짐 가드가 없어도 vy는 안 변한다. ⇒ **이 축은 원리적으로 못 무는 자리다.**
-	#  🔴🔴 **그리고 2026-08-04에 세로 반동 자체가 삭제되어(`character.recoil()`)
-	#   이제는 어떤 커맨드로도 못 문다.** 「아래로 쏘는 커맨드로 다시 짜면 된다」고 적혀 있었는데
-	#   **그 길이 없어졌다** — 재려는 거동이 사라진 것이지 검사가 게을러진 게 아니다.
-	#  ⚠ 그리고 옛 기대식(`vy + GRAVITY_PX*DT`)은 **반올림 위상에 우연히 맞던 값**이다:
-	#   중력이 ×2 되며 프레임마다 1px이 실제로 소모되어 `_move_y` 가 매번 막고 vy를 0으로 만든다.
-	#  🔴 지금 재는 것은 **「접지한 채 위로 안 떴다」**까지다.
+	# **The label was narrowed. The old label ("the vertical gets nothing but gravity either") was wider than what is measured.**
+	#  This command is **horizontal** (ady = 0), so `recoil()`'s vertical component was **0 to begin with** —
+	#   vy does not change even without the downed guard. => **This axis cannot be bitten in principle.**
+	#  **And the vertical recoil itself was deleted (`character.recoil()`), so no command can bite it now.**
+	#   It used to say "just rewrite it with a downward-firing command", and **that path is gone** —
+	#   the behavior to be measured disappeared; the check did not get lazy.
+	#  The old expected expression (`vy + GRAVITY_PX*DT`) was **a value that happened to match the rounding phase**:
+	#   with gravity doubled, 1px is actually consumed every frame so `_move_y` blocks each time and zeroes vy.
+	#  What is measured now stops at **"grounded and did not rise".**
 	t.eq(ch.vy, 0.0, "접지 상태의 세로 속도 0 그대로다 (위로 안 떴다)")
 
-	# 🔴 **뒤집기 — 안 쓰러졌으면 같은 커맨드가 나간다.** 안 재면 「커맨드가 애초에 틀렸다」와
-	#  구별이 안 된다.
+	# **Inversion — if it is not downed, the same command goes out.** Without it, this is indistinguishable
+	#  from "the command was wrong to begin with".
 	var g2 := _floor_grid()
 	var spell2 := SpellSim.new()
 	var ch2 := _stander()
@@ -1184,8 +1183,8 @@ func _downed_cannot_fire(t) -> void:
 	t.eq(w2.fire_count(), 1, "안 쓰러졌으면 같은 커맨드가 나간다 (대조군)")
 
 
-## **뒤집어 보기**: 안 쓰러진 체력에서는 **같은 입력에 x가 변한다.**
-## ⚠ 기획 문서는 「체력 1」이라 적었지만 기준 피해가 10이라 1이 안 나온다 — 실제 값은 **10**이다.
+## **Inversion**: at a health that is not yet down, **the same input changes x.**
+## The design doc wrote "health 1", but with a base damage of 10 that value never occurs — the real value is **10.**
 func _ten_hp_still_walks(t) -> void:
 	var g := _floor_grid()
 	var spell := SpellSim.new()
@@ -1202,65 +1201,65 @@ func _ten_hp_still_walks(t) -> void:
 		% [Character.DAMAGE_HIT, x0, ch.x])
 
 
-# ── 세상 만들기 ────────────────────────────────────────────────────
+# ── Building the world ─────────────────────────────────────────────
 
-## 캐릭터가 서는 줄만 **나무**, 그 아래는 돌.
+## Only the row the character stands on is **wood**; below it is stone.
 func _wood_floor_grid() -> CellGrid:
 	var g := _floor_grid()
 	g.apply(CellGrid.cmd_fill(WOOD_CX0, WOOD_CY, WOOD_CX1, WOOD_CY, Mat.WOOD))
 	return g
 
 
-## 캐릭터 상자를 **첫 틱에** 지나는 수평 한 발. 무속성 + 문양 없음이다.
-## 🔴 원점을 **지금 캐릭터 자리에서** 낸다 — 위 `HIT_LEAD_PX` 주석.
+## One horizontal shot that crosses the character's box **on the first tick.** No element plus no glyph.
+## The origin is produced **from the character's current position** — see the `HIT_LEAD_PX` comment above.
 func _hit_cmd_at(ch: Character) -> Dictionary:
 	var cx := floori((ch.x - HIT_LEAD_PX) / float(Tuning.CELL_PX))
 	return SpellSim.cmd_fire(cx, _aim_row(ch), AIM_DX, 0, Tuning.ELEM_NONE, Glyph.GLYPH_NONE)
 
 
-## 상자 **한가운데**를 지나는 줄. 🔴 x와 같은 이유로 **캐릭터에서 파생시킨다** —
-##  박아 두면 캐릭터가 위아래로 움직인 뒤의 발사가 조용히 빗나간다.
+## The row through the **middle** of the box. For the same reason as x it is **derived from the character** —
+##  hardcode it and a shot after the character has moved vertically silently misses.
 func _aim_row(ch: Character) -> int:
 	return floori((ch.y + Character.H_PX * 0.5) / float(Tuning.CELL_PX))
 
 
-## 세대 0 폭발의 반경(px). 🔴 **표에서 뽑는다** — 박으면 값이 두 벌이 되고, 갈라진 쪽은
-##  「반경 안/밖」이라는 라벨만 남고 실제로는 아무 데도 안 재게 된다.
+## The radius (px) of a generation 0 blast. **Taken from the table** — hardcode it and the value exists in two copies,
+##  and the diverged one keeps the label "inside/outside the radius" while measuring nothing at all.
 static func _blast_r_px() -> float:
 	return float(Tuning.blast_rd(0) * Tuning.CELL_PX)
 
 
-## 상자 `side`(+1 오른쪽 · −1 왼쪽) 바깥, 반경 **안**에 폭발을 놓을 셀.
-## 🔴 `_circle_hits_box` 는 상자에서 원 중심까지의 **최단 거리**로 판정하므로 기준점이
-##  상자 중심이 아니라 **옆면**이다. 중심에서 재면 상자 폭 절반만큼 조용히 어긋난다.
+## The cell for placing a blast outside the box on `side` (+1 right, -1 left) but **inside** the radius.
+## `_circle_hits_box` decides by the **shortest distance** from the box to the circle's center, so the reference point
+##  is the box's **side**, not its center. Measure from the center and it drifts silently by half the box width.
 static func _blast_cx_beside(stand_x: int, side: int) -> int:
 	var edge := stand_x + Character.W_PX if side > 0 else stand_x
 	return floori((float(edge) + side * _blast_r_px() * BLAST_NEAR_RATIO) / float(Tuning.CELL_PX))
 
 
-## 폭발 반경 **밖**에 상자를 세울 왼쪽 위 x(뒤집어 보기 ①).
-## ⚠ 상자의 **오른쪽 끝**이 반경 밖이어야 하므로 상자 폭을 빼서 왼쪽 위를 돌려준다 —
-##  안 빼면 상자 오른쪽 모서리가 원 안에 걸린 채 「밖에 세웠다」고 믿게 된다.
+## The top-left x for standing the box **outside** the blast radius (inversion 1).
+## The box's **right edge** has to be outside the radius, so the box width is subtracted and the top-left returned —
+##  without subtracting it, the box's right corner catches inside the circle while you believe "it was stood outside".
 static func _far_stand_x(blast_cx: int) -> int:
 	return int(Body._cell_px(blast_cx) - _blast_r_px() * BLAST_FAR_RATIO) - Character.W_PX
 
 
-## 확산 배치 — 캐릭터 **바로 오른쪽 바닥**(상자 옆면에서 반 칸).
-## 🔴 **폭발 반경에서 파생시키지 않는다.** 여기서 재는 것은 「확산 여덟이 그 자리에서 흩어질 때
-##  몇 대인가」라 자리의 기준이 상자다 — 반경으로 묶으면 반경이 작아지는 날 이 자리가
-##  **상자 안**으로 들어와 직격이 섞이고, 그러면 세는 대상이 조용히 달라진다.
+## The spread layout — **the floor immediately right of the character** (half a box width out from the box's side).
+## **It is not derived from the blast radius.** What is measured here is "how many hits when eight spread bolts scatter
+##  from that spot", so the reference for the position is the box — tie it to the radius and the day the radius shrinks
+##  this position moves **inside the box**, direct hits mix in, and what is being counted quietly changes.
 static func _spread_cx(stand_x: int) -> int:
 	return floori(float(stand_x + Character.W_PX + Character.W_PX / 2) / float(Tuning.CELL_PX))
 
 
-## 셀 `cx` 바닥에 내리꽂는 폭발 한 발. 무속성이라 **불이 안 붙는다** — 폭발만 잰다.
+## One blast driven into the floor at cell `cx`. It is no-element, so **nothing catches fire** — only the blast is measured.
 func _blast_cmd(cx: int) -> Dictionary:
 	var one: Array[int] = [Glyph.GLYPH_BLAST]
 	return SpellSim.cmd_fire(cx, BLAST_FROM_CY, 0, 10, Tuning.ELEM_NONE, Glyph.pack(one))
 
 
-## 🔴 **변환은 실제 코드의 것을 쓴다**(`Body._fp_px`). 그물이 제 변환을 따로 두면
-##  두 벌이 되고, 그때 이 검사는 게임과 **다른 상자**를 재게 된다.
+## **The conversion is the real code's** (`Body._fp_px`). If the net keeps its own conversion there are
+##  two copies, and then this check measures **a different box** from the game.
 func _outside_box(box_x: int, px: float) -> bool:
 	return px < float(box_x) or px > float(box_x + Character.W_PX)
 
@@ -1269,13 +1268,13 @@ func _fire_cmd() -> Dictionary:
 	return SpellSim.cmd_fire(FIRE_CX, FIRE_CY, AIM_DX, 0, Tuning.ELEM_FIRE, Glyph.GLYPH_NONE)
 
 
-## 세대 0의 발사 속도(고정소수점). 🔴 **표에서 뽑는다** — 박으면 값이 두 벌이 된다.
+## Generation 0's launch speed (fixed point). **Taken from the table** — hardcode it and the value exists in two copies.
 func _speed_fp() -> int:
 	return Tuning.speed_cells(0) << SpellSim.FP_SHIFT
 
 
-## 항력 한 번. ⚠ `spell_sim._advance` 와 **같은 차례**여야 한다 — 거기는 항력을 먼저 곱하고
-##  위치를 더하므로, 한 틱 변위는 「항력을 먹인 뒤의 속도」다.
+## One application of drag. It has to be in **the same order** as `spell_sim._advance` — there drag is multiplied first
+##  and then the position added, so one tick's displacement is "the speed after drag has been applied".
 func _drag(v: int) -> int:
 	return v * Tuning.DRAG_NUM / Tuning.DRAG_DEN
 

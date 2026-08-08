@@ -1,108 +1,110 @@
 extends RefCounted
-## 재료 표. 🔴🔴 **재료 하나 추가 = `DEFS` 한 줄.** 거동·색·이름·연료가 전부 거기서 파생된다.
+## Material table. **One material = one row in `DEFS`.** Behavior, color, name and fuel all derive from there.
 ##
-## 🔴 런타임 형식은 **평면 배열**이고 부팅 때 한 번 굽는다 — 내부 루프가 `Dictionary`를 조회하면
-##  그것만으로 틱당 수천 번 VM 호출이다.
-## 🔴 **팔레트도 이 표에서 나온다.** 셰이더에 색 리터럴을 쓰면 시뮬과 렌더가 갈린다.
+## The runtime form is a **flat array**, baked once at boot — a `Dictionary` lookup in an inner loop
+## is thousands of VM calls per tick on its own.
+## **The palette also comes from this table.** Color literals in the shader split sim from render.
 
-# ─── 재료 id ───────────────────────────────────────────────────────
-# 🔴 id는 int이고 **순회는 반드시 `ALL` 명시 리스트로만** 한다.
-#  값이 연속이라고 가정하면 나중에 은퇴한 자리가 생겼을 때 조용히 어긋난다.
+# --- material ids -------------------------------------------------
+# ids are int and **iteration goes only through the explicit `ALL` list**.
+#  Assuming the values are contiguous breaks silently the day a slot is retired.
 const EMPTY := 0
 const STONE := 1
 const WOOD := 2
-const BEDROCK := 3  ## 못 부시는 벽. 거동은 STONE과 같고(고체) 파괴만 안 먹는다 — 아래 `indestructible`.
-## 🔴🔴 **물은 재료 하나다. 「물」과 「얕은 물」로 안 가른다** — 재료를 쓰는 문(`_write_cell`)이
-##  `_flag`·`_aux` 를 같이 0으로 만들어, 양이 임계를 넘나들 때마다 **양이 그 자리에서 날아간다.**
-##  ⇒ 깊이는 `_flag` 비트로 나른다(`docs/design/물.md` 「화면」).
+const BEDROCK := 3  ## Unbreakable wall. Behaves like STONE (solid); only destruction is refused — see `indestructible`.
+## **Water is one material. It does not split into "water" and "shallow water"** — the door that writes
+##  materials (`_write_cell`) zeroes `_flag` and `_aux` together, so **the amount vanishes on the spot**
+##  every time it crosses the threshold.
+##  => Depth rides on a `_flag` bit (`docs/design/water.md`, "Screen").
 const WATER := 4
 
 const ALL: Array[int] = [EMPTY, STONE, WOOD, BEDROCK, WATER]
 
-## 팔레트 슬롯 수. 🔴 셰이더의 `palette[16]`과 **같은 값이어야 한다.**
-##  16을 넘기면 재료 id가 L8 정밀도 안전선(0~15)을 벗어난다.
+## Palette slot count. Must **equal the shader's `palette[16]`.**
+##  Past 16, a material id leaves the L8 precision safe range (0..15).
 const SLOT_COUNT := 16
 
-# ─── 거동 ─────────────────────────────────────────────────────────
-const BEHAVIOR_NONE := 0    # 아무것도 안 한다 (EMPTY)
-const BEHAVIOR_STATIC := 1  # 안 움직인다. 🔴 **고체다** — 탄이 여기서 착탄하고 캐릭터가 여기 선다
+# --- behavior ------------------------------------------------------
+const BEHAVIOR_NONE := 0    # does nothing (EMPTY)
+const BEHAVIOR_STATIC := 1  # does not move. **Solid** — bolts land on it and the character stands on it
 
-# ─── 상태 비트(`_flag`) ────────────────────────────────────────────
-# 🔴 **하위 4비트만 쓴다.** L8 텍스처를 셰이더에서 `int(v*255+0.5)`로 되찾는데,
-#  정밀도가 mediump로 떨어지는 기계에서도 0~15는 안전하다.
-# 🔴 이 값은 셰이더에 **uniform으로 주입된다**(`cell_renderer.gd`) — 셰이더에 다시 박지 마라.
+# --- state bits (`_flag`) ------------------------------------------
+# **Only the low 4 bits are used.** The L8 texture is recovered in the shader as `int(v*255+0.5)`,
+#  and 0..15 is safe even on machines that drop to mediump.
+# These values are **injected into the shader as uniforms** (`cell_renderer.gd`) — do not re-hardcode them there.
 const FLAG_BURNING := 2
-## 🔴 **물의 양이 임계 이하다 = 얕다.** 별도 상태가 아니라 **양에서 파생된 거울**이고,
-##  `cell_grid._write_water` 가 양을 쓰는 **그 자리에서** 같이 갱신한다.
-## ⚠ **따로 만지지 마라.** 양과 비트가 두 곳에서 움직이면 갈라지고, **갈라진 쪽은 화면에만 나온다** —
-##  시뮬은 양만 보고 셰이더는 비트만 보므로 서로를 안 고쳐 준다.
-## 🔴 `FLAG_BURNING` 과 **같은 칸에 못 선다** — 물은 연료가 0이라 점화가 원리적으로 안 닿는다.
+## **Water amount at or below the threshold = shallow.** Not a separate state but **a mirror derived
+##  from the amount**, updated by `cell_grid._write_water` **at the same place** it writes the amount.
+## Do not touch it separately. If amount and bit move in two places they diverge, and
+##  **the diverged side shows only on screen** — the sim reads only the amount and the shader only the bit,
+##  so neither corrects the other.
+## It **cannot stand on the same cell as `FLAG_BURNING`** — water has 0 fuel, so ignition can't reach it in principle.
 const FLAG_SHALLOW := 1
-# ⚠ 비트 4·8은 비어 있다. **이름을 미리 붙이지 마라** — 소비자도 계획도 없는 이름은 거짓 손잡이다.
-#  v1에 `FLAG_FROZEN := 8`이 정확히 그렇게 있었다.
+# Bits 4 and 8 are free. **Do not name them in advance** — a name with no consumer and no plan is a false handle.
+#  v1 had exactly that, `FLAG_FROZEN := 8`.
 
-# ─── 🔴 `_aux`의 의미 ──────────────────────────────────────────────
-# 소비자 없는 필드를 놀려두면 나중에 누가 다른 뜻으로 읽는다. **의미를 여기 못 박는다.**
+# --- what `_aux` means ---------------------------------------------
+# An idle field with no consumer gets read with a different meaning later. **Pin the meaning here.**
 #
-#   BURNING 켜짐 → 남은 연료
-#   WATER        → 🔴🔴 **물의 양(1~255).** 0이면 그 칸은 물이 아니다 — 재료가 EMPTY가 된다.
-#                  ⇒ 「재료가 WATER인데 양이 0」은 원리적으로 없다(`cell_grid._write_water`).
-#   그 외        → 사용 안 함. 0이어야 한다
+#   BURNING set -> remaining fuel
+#   WATER       -> **water amount (1..255).** 0 means that cell is not water — the material becomes EMPTY.
+#                  => "material is WATER with amount 0" cannot exist (`cell_grid._write_water`).
+#   otherwise   -> unused. Must be 0
 #
-# 🔴 **BURNING과 WATER는 같은 칸에서 못 만난다** — 물은 연료가 0이라 점화가 원리적으로 안 닿고,
-#  물의 문(`_write_water`)은 EMPTY나 WATER 위에만 쓴다. ⇒ 두 뜻이 겹칠 자리가 없다.
+# **BURNING and WATER cannot meet on one cell** — water has 0 fuel so ignition can't reach it, and
+#  water's door (`_write_water`) writes only over EMPTY or WATER. => The two meanings never overlap.
 
-## 재료 정의. 🔴 여기 한 곳에서 거동·색·이름·연료가 전부 파생된다.
+## Material definitions. Behavior, color, name and fuel all derive from this one place.
 ##
-##   fuel  🔴 **불의 예산이다.** 0이면 안 탄다. `_aux`(PackedByteArray)에 들어가므로 **255 이하.**
-##         「타면서 연료가 줄고 0이 되면 꺼진다」 ⇒ 나무를 어디 두느냐가 곧 불의 수명이다(GDD).
-##   rgb   🔴🔴 **색은 `Color`가 아니라 24비트 정수 `0xRRGGBB`다.**
-##         이 폴더의 계약이 「정수만」이고 `net_determinism`이 **실수 리터럴을 잡기** 때문이다.
-##         ⚠ 색을 `Color(0.36, ...)`로 두면 폴더 계약과 그물이 재는 것이 갈라지고,
-##          그 틈을 예외 목록으로 메우면 **그 목록이 다음에 낡는다.** ⇒ 예외를 없앴다.
-##         🔴 그래도 단일 소스는 그대로다 — `Color`로 굽는 일만 `src/view/cell_renderer.gd`가 한다.
+##   fuel  **This is fire's budget.** 0 means it doesn't burn. It goes into `_aux` (PackedByteArray), so **255 or less.**
+##         "burning consumes fuel and it goes out at 0" => where you put wood is fire's lifespan (GDD).
+##   rgb   **Color is a 24-bit integer `0xRRGGBB`, not a `Color`.**
+##         This folder's contract is "integers only" and `net_determinism` **catches float literals.**
+##         A color written as `Color(0.36, ...)` splits the folder contract from what the net measures,
+##          and patching that gap with an exception list means **the list goes stale next.** => The exception was removed.
+##         The single source still holds — only `src/view/cell_renderer.gd` bakes it into `Color`.
 const DEFS: Dictionary = {
 	EMPTY: {"name": &"빈칸", "behavior": BEHAVIOR_NONE, "fuel": 0, "rgb": 0x0E0E13},
 	STONE: {"name": &"돌", "behavior": BEHAVIOR_STATIC, "fuel": 0, "rgb": 0x5C574F},
-	# 🔴🔴 **`indestructible` 인데 탄다. 모순이 아니라 이 게임의 규칙이다** (2026-08-08, 사용자가 정했다).
-	#  · **폭발은 못 판다** — `cell_grid._disc(…, destroy)` 가 `_indestructible` 로 거른다
-	#  · **불은 태운다** — `_burn()` 이 `_write_cell(idx, EMPTY)` 를 **별도 경로로** 부른다(필터를 안 지난다)
-	#  ⇒ **나무를 없애는 길은 불뿐이다.**
+	# **`indestructible` yet it burns. Not a contradiction — it is this game's rule** (decided by the user).
+	#  · **Blasts cannot dig it** — `cell_grid._disc(…, destroy)` filters on `_indestructible`
+	#  · **Fire consumes it** — `_burn()` calls `_write_cell(idx, EMPTY)` **on a separate path** (skipping the filter)
+	#  => **Fire is the only way to remove wood.**
 	#
-	# 🔴 **왜 바꿨나 — GDD의 진행 열쇠가 코드에서 성립을 안 했다.** 실측(2026-08-08, verify-read):
-	#  스테이지1의 나무벽(3타일)을 **불 없이 폭발 세 발로 지나갔다**. 게다가 폭발이 `element` 를
-	#  안 들고 가서 **룬 없는 폭발 한 발이 159셀에 불을 붙였다** ⇒ 「중간보스에게 불의 룬을 얻어야
-	#  나무를 태워 길이 열린다」가 **처음부터 잠금이 아니었다.**
-	#  ⚠ 두께로는 못 막는다 — 발수만 는다. `blast_rd(0)` 이 8셀이라 3타일 벽이 3발이었다.
+	# **Why it changed — the GDD's progression key did not hold in code.** Measured (verify-read):
+	#  stage 1's wood wall (3 tiles) **was passed with three blasts and no fire.** Worse, the blast
+	#  did not carry `element`, so **one runeless blast ignited 159 cells** => "get the fire rune from the
+	#  midboss to burn wood and open the path" **was never a lock at all.**
+	#  Thickness can't fix it — it only adds shots. `blast_rd(0)` is 8 cells, so a 3-tile wall was 3 shots.
 	#
-	# ⚠ **대가**: 맵의 모든 나무가 폭발에 안 파인다. 「폭발로 나무를 치우는」 플레이가 사라진다.
-	#  🔴 그게 목적이다 — **불만이 나무를 없앤다**가 규칙으로 서야 진행 열쇠가 산다.
+	# **The price**: no wood anywhere on the map is dug by blasts. "Clear wood with a blast" play disappears.
+	#  That is the point — **only fire removes wood** must stand as a rule for the progression key to survive.
 	WOOD: {"name": &"나무", "behavior": BEHAVIOR_STATIC, "fuel": 200, "rgb": 0x6B4524,
 		"indestructible": true},
 	BEDROCK: {"name": &"기반암", "behavior": BEHAVIOR_STATIC, "fuel": 0, "rgb": 0x232228,
 		"indestructible": true},
-	# 🔴🔴 **두 값이 규칙을 파생시킨다. 따로 막는 코드를 쓰지 마라.**
-	#  · `BEHAVIOR_NONE` ⇒ `is_solid()` 가 거짓 ⇒ **캐릭터도 탄도 물을 통과한다**
-	#  · `fuel: 0`       ⇒ 「물엔 불이 안 붙는다」. `_ignite_cell` 이 연료 0에서 이미 멈춘다
-	# 🔴🔴 **0x2C5F8A → 0x1B3E5E (2026-08-08, 사용자가 정했다). 어둡게 내렸다.**
-	#  ⚠ **취향이 아니라 규칙을 읽히게 하려는 것이다** — `sim_tuning.WATER_WET` 이
-	#   **색과 방화를 둘 다 정하므로** 얕은 물은 불을 못 끈다. 두 색이 가까우면
-	#   **「왜 이 물은 불을 못 끄나」가 화면에서 안 읽힌다.**
-	#  🔴 실제로 그 증상이 났다: verify-look 이 「깊은 쪽이 **꽤 밝고 채도가 높아** 4px 두께에서는
-	#   같은 파랑의 음영 차이로 읽힌다」고 봤고, 파란 선 아래로 불이 달리는 것이
-	#   **「물속에서 불이 탄다」**로 보였다(`water-and-chunk-sleep` 「결과 (6)」).
-	#  ⇒ **얕은 쪽(`fx_tuning.WATER_SHALLOW`)은 밝게, 이쪽은 어둡게** — 양쪽에서 벌렸다.
-	# ⚠ **색상은 그대로다**(파랑 계열). 색상까지 벌리면 두 깊이가 **다른 재료 둘**로 보인다.
-	# 🔴 **아직 화면에서 안 봤다.** 이 값이 충분한지가 다음에 볼 자리다.
+	# **Two values derive the rules. Do not write separate blocking code.**
+	#  · `BEHAVIOR_NONE` => `is_solid()` is false => **both character and bolts pass through water**
+	#  · `fuel: 0`       => "water doesn't catch fire". `_ignite_cell` already stops at 0 fuel
+	# **0x2C5F8A -> 0x1B3E5E (decided by the user). Darkened.**
+	#  **Not taste — making the rule readable.** `sim_tuning.WATER_WET` **sets both color and fire-proofing**,
+	#   so shallow water can't put out fire. With the two colors close,
+	#   **"why can't this water put out fire" doesn't read on screen.**
+	#  That symptom actually occurred: verify-look saw that "the deep side is **fairly bright and saturated**,
+	#   so at 4px thickness it reads as a shade of the same blue", and fire running below the blue line
+	#   looked like **"fire burning underwater"** (`water-and-chunk-sleep`, "Result (6)").
+	#  => **The shallow side (`fx_tuning.WATER_SHALLOW`) brighter, this one darker** — pushed apart from both ends.
+	# **The hue is unchanged** (still blue). Splitting the hue too makes the two depths read as two different materials.
+	# **Not yet seen on screen.** Whether this value is enough is what gets looked at next.
 	WATER: {"name": &"물", "behavior": BEHAVIOR_NONE, "fuel": 0, "rgb": 0x1B3E5E},
 }
 
-## 정의가 없는 슬롯의 색. 🔴 **일부러 마젠타다** — 재료를 늘렸는데 팔레트가 안 따라오면
-##  화면이 비명을 지른다. 얌전한 검정으로 두면 「쏘는 것 ≠ 보이는 것」이 조용히 난다.
+## Color for a slot with no definition. **Deliberately magenta** — add a material without the palette
+##  following and the screen screams. A quiet black lets "what you fire ≠ what you see" happen silently.
 const MISSING_RGB := 0xFF00FF
 
 
-## 부팅 1회. 내부 루프는 이 배열을 인덱싱만 한다 — 딕셔너리 조회 0회.
+## Once at boot. Inner loops only index this array — zero dictionary lookups.
 static func bake_behavior() -> PackedByteArray:
 	var out := PackedByteArray()
 	out.resize(SLOT_COUNT)
@@ -111,22 +113,22 @@ static func bake_behavior() -> PackedByteArray:
 	return out
 
 
-## 🔴 연료도 평면 배열이다. 불은 매 틱 수십~수백 셀의 연료를 만진다.
+## Fuel is a flat array too. Fire touches tens to hundreds of cells' fuel every tick.
 static func bake_fuel() -> PackedByteArray:
 	var out := PackedByteArray()
 	out.resize(SLOT_COUNT)
 	for id: int in ALL:
 		var f := int(DEFS[id]["fuel"])
 		if f < 0 or f > 255:
-			# `_aux`가 PackedByteArray라 범위 밖 연료는 **에러 없이 하위 8비트로 잘린다.**
-			push_error("Mat: %s 연료 %d가 바이트 범위 밖이다" % [DEFS[id]["name"], f])
+			# `_aux` is a PackedByteArray, so out-of-range fuel is **truncated to the low 8 bits, with no error.**
+			push_error("Mat: fuel %d of %s is out of byte range" % [f, DEFS[id]["name"]])
 			f = clampi(f, 0, 255)
 		out[id] = f
 	return out
 
 
-## 🔴 파괴 경로(`cell_grid._disc`)가 훑는 값. 없는 재질은 파괴된다(기본값 false) — 새 재질을
-##  추가할 때 `DEFS`에 `"indestructible"`을 안 적으면 **부서지는 쪽이 기본**이라는 뜻이다.
+## The value the destruction path (`cell_grid._disc`) sweeps. Missing materials are destructible
+##  (default false) — omitting `"indestructible"` from `DEFS` for a new material means **breakable is the default.**
 static func bake_indestructible() -> PackedByteArray:
 	var out := PackedByteArray()
 	out.resize(SLOT_COUNT)
@@ -135,8 +137,8 @@ static func bake_indestructible() -> PackedByteArray:
 	return out
 
 
-## 슬롯의 색(0xRRGGBB). 정의가 없으면 마젠타 센티넬.
-## 🔴 **`Color`로 굽는 일은 여기가 아니라 `src/view/cell_renderer.gd`가 한다** — 위 `rgb` 주석.
+## A slot's color (0xRRGGBB). Magenta sentinel if undefined.
+## **Baking into `Color` happens in `src/view/cell_renderer.gd`, not here** — see the `rgb` comment above.
 static func rgb_of(id: int) -> int:
 	if not DEFS.has(id):
 		return MISSING_RGB

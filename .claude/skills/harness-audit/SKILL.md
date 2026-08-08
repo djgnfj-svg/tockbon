@@ -1,92 +1,95 @@
 ---
 name: harness-audit
-description: 이 리포의 하네스(CLAUDE.md, .claude/agents/, .claude/skills/, tests/)를 점검하고 문제를 보고한다. 사용자가 "하네스 평가" "하네스 점검" "감사" "지금 상태 어때" "제대로 돌아가나" 라고 하거나 하네스 전체를 검토해 달라고 할 때 사용한다. 보고만 하고 고치지 않는다.
+description: Inspects this repo's harness (CLAUDE.md, .claude/agents/, .claude/skills/, tests/) and reports problems. Use when the user says "하네스 평가" "하네스 점검" "감사" "지금 상태 어때" "제대로 돌아가나" "audit the harness", or asks for a full harness review. Reports only; fixes nothing.
 ---
 
-# 하네스 감사
+# Harness audit
 
-## 절대 규칙
+## Absolute rule
 
-**아무것도 고치지 않는다.** 파일을 만들거나 수정하거나 지우지 않는다.
+**Fix nothing.** Do not create, modify or delete any file.
 
-문제를 찾으면 보고만 한다. 사용자가 읽고 무엇을 고칠지 정한다. "이건 명백하니까 고쳐두자"도 하지 않는다. 감사자가 고치기 시작하면 다음 감사 때 자기 작업을 감사하게 된다.
+Find problems and report them. The user reads and decides what to fix. Not even "this one's obvious, let's just fix it."
+Once the auditor starts fixing, the next audit is auditing its own work.
 
-## 두 번째 규칙: 후하게 주지 마라
+## Second rule: do not grade generously
 
-대개 이 하네스는 나 자신이 만든 것이다. 자기 작업은 후하게 보인다. 그래서:
+This harness was usually built by you. Your own work looks good. So:
 
-- **증거가 없으면 "미검증"이다.** 통과가 아니다.
-- "잘 되어 있다"고 쓰려면 무엇을 보고 그렇게 판단했는지 같이 적는다.
-- 돌려보지 않은 것을 "동작한다"고 쓰지 않는다.
+- **No evidence means "unverified".** Not a pass.
+- To write "this is in good shape", write down what you looked at to conclude that.
+- Never write "works" about something you didn't run.
 
-## 점검 항목
+## Checklist
 
-### 1. 죽은 참조
+### 1. Dead references
 
-문서가 가리키는 대상이 실제로 있는가. 이 리포는 전에 이걸로 크게 당했다 — 코드 주석이 `SKILL.md`, `설계 §8`, `test_cell_grid_auto.gd` 를 참조하는데 셋 다 없었다.
+Does what a doc points at actually exist. This repo got burned badly by this before — code comments referenced
+`SKILL.md`, `설계 §8`, and `test_cell_grid_auto.gd`, none of which existed.
 
-- `CLAUDE.md`, 스킬, 에이전트 정의가 언급하는 경로가 실재하는가
-- `src/` 주석이 참조하는 문서·테스트가 실재하는가
-- 스킬이 다른 스킬·에이전트 이름을 부르는데 그 이름이 실재하는가
+- Do the paths named in `CLAUDE.md`, skills and agent definitions exist
+- Do the docs and tests referenced by `src/` comments exist
+- When a skill names another skill or agent, does that name exist
 
-### 2. 도는가
+### 2. Does it run
 
-"있다"와 "돈다"는 다르다.
+"Exists" and "runs" are different.
 
-- `tests/run_nets.ps1` 을 실제로 돌려서 결과를 본다. 통과 개수와 소요 시간을 적는다
-- 훅이 설정돼 있으면 실제로 발동하는지 확인한다
-- 에이전트 정의가 있는데 한 번도 쓰인 적 없으면 그 사실을 적는다
+- Actually run `tests/run_nets.ps1` and look at the result. Record pass count and elapsed time
+- If hooks are configured, confirm they actually fire
+- If an agent definition exists but has never been used, record that
 
-### 3. 역할 구멍과 겹침
+### 3. Role gaps and overlaps
 
-에이전트 정의를 나란히 놓고 본다.
+Put the agent definitions side by side.
 
-- **구멍**: 아무도 안 맡는 일이 있는가
-- **겹침**: 두 에이전트가 같은 일을 하는가. 경계 문장이 서로 모순되는가
-- **경계 누수**: "안 하는 일" 목록이 반대쪽 에이전트의 "하는 일"과 짝이 맞는가
+- **Gap**: is there work nobody owns
+- **Overlap**: do two agents do the same thing. Do their boundary statements contradict
+- **Boundary leak**: does each "never do" list pair with the other agent's "do" list
 
-### 4. 트리거
+### 4. Triggers
 
-스킬은 description이 안 맞으면 영원히 안 불린다. 가장 흔한 실패 원인이다.
+A skill with a mismatched description is never invoked. That is the most common failure.
 
-- description에 사용자가 **실제로 칠 법한 말**이 들어 있는가. 요약문이 아니라 트리거 문구인가
-- 3인칭으로 쓰였는가
-- 두 스킬의 트리거가 겹쳐 어느 쪽이 불릴지 모호한가
+- Does the description contain **words the user would actually type**. Is it a trigger phrase, not a summary
+- Is it written in third person
+- Do two skills' triggers overlap so it's ambiguous which fires
 
-### 5. 비대
+### 5. Bloat
 
-- `CLAUDE.md` — 매 세션 전부 로딩된다. 길면 그만큼 매번 비싸다
-- 스킬 본문 — 500줄이 상한이다. 넘으면 references/ 로 쪼개야 한다
-- 내가 이미 아는 것을 설명하고 있지 않은가. 그건 순수 낭비다
+- `CLAUDE.md` — fully loaded every session. Length is a per-session cost
+- Skill body — 500 lines is the ceiling. Over that, split into references/
+- Is it explaining what you already know. That is pure waste
 
-### 6. 가짜 하네스
+### 6. Fake harness
 
-가장 위험한 항목이다. **있다고 적혀 있는데 실제로는 아무 일도 안 하는 것.**
+The most dangerous item. **Written as present, does nothing in reality.**
 
-- 그물이 있는데 아무도 안 돌린다
-- 규칙이 적혀 있는데 강제하는 장치가 없다
-- 훅이 설정돼 있는데 실패해도 아무도 모른다
-- 검증자가 있는데 판정 기준이 비어 있다
+- A net exists and nobody runs it
+- A rule is written with nothing enforcing it
+- A hook is configured and nobody notices when it fails
+- A verifier exists with empty acceptance criteria
 
-이건 없는 것보다 나쁘다. 있다고 믿게 만들기 때문이다.
+This is worse than absence, because it makes people believe it's there.
 
-## 보고 형식
+## Report format
 
 ```
-## 요약
-한 문단. 지금 하네스가 실제로 무엇을 막아주고 있는지.
+## Summary
+One paragraph. What the harness actually prevents right now.
 
-## 문제
-심각한 것부터. 항목마다:
-- 무엇이 문제인가
-- 근거 (파일·줄, 또는 실행 결과)
-- 안 고치면 어떻게 되나
+## Problems
+Worst first. Per item:
+- What is wrong
+- Evidence (file · line, or run output)
+- What happens if it isn't fixed
 
-## 미검증
-확인하지 못한 것과 그 이유.
+## Unverified
+What you couldn't check, and why.
 
-## 멀쩡한 것
-근거와 함께 짧게.
+## Sound
+Briefly, with evidence.
 ```
 
-문제가 없으면 없다고 말한다. 억지로 찾지 않는다. 다만 **"미검증"이 비어 있으면 의심하라** — 전부 확인했다는 뜻인데, 대개는 확인을 안 한 것이다.
+If there is no problem, say so. Do not manufacture findings. But **be suspicious of an empty "Unverified"** —
+it claims everything was checked, and usually it wasn't.

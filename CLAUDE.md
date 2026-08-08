@@ -1,159 +1,178 @@
 # tockbon
 
-이 파일은 매 세션·매 에이전트에 실린다. **모두에게 걸리는 것만 둔다.**
+Loaded into every session and every agent. **Keep only what applies to everyone.**
 
-| 찾는 것 | 거기 |
+## Language — answer the user in Korean, always
+
+**Every reply to the user is in 한국어.** Even when they write in English — they cannot read English.
+
+Docs, comments and prompts are English. **Korean is what the user reads**: their own commands,
+commit messages, in-game text (material names, HUD), **net check labels** and the net runner's console output.
+Details and the terminology table are in `docs/plans/3.done/english-migration.md`.
+
+**A `push_error` message and the `t.expect_error` that forgives it are one unit** — they are matched by plain
+substring, so translating one side alone leaves the bark undeclared and the wrapper's silence check fails.
+Change both in the same edit.
+
+## Reply rule — **the whole reply under 50 characters**
+
+"Be brief" didn't work, so it is a number now (decided by the user). Long replies go unread and block work.
+
+- **Not one sentence — the entire reply is 50 chars.** Over that, write it in a doc and name the file
+- **No tables or lists in chat.** Docs carry detail
+- **Don't ask.** Look for the answer in the conversation first. If you must ask, one sentence
+- **No emoji.** Bold is the only emphasis
+- **No dates.** "Decided by the user" is enough. Only a reversed decision needs one
+- **Cut every word that isn't load-bearing** — in docs and in chat
+
+## Where things live
+
+| Looking for | Go to |
 |---|---|
-| 그물이 죽는 형태 · 뮤테이션 | `.claude/agents/verify-read.md` |
-| 그물 속도 · 러너 내부 | `.claude/agents/harness-manager.md`, `tests/run_nets.ps1` |
-| 헤드리스 관측의 함정 | `.claude/agents/verify-run.md` |
-| 에디터 브리지 · 스크린샷 | `.claude/agents/verify-look.md` |
-| 팀 운영 · 검증 시점 | `.claude/skills/build-feature/SKILL.md` |
+| How nets die · mutation testing | `.claude/agents/verify-read.md` |
+| Net speed · runner internals | `.claude/agents/harness-manager.md`, `tests/run_nets.ps1` |
+| Headless observation traps | `.claude/agents/verify-run.md` |
+| Editor bridge · screenshots | `.claude/agents/verify-look.md` |
+| Team operation · when to verify | `.claude/skills/build-feature/SKILL.md` |
 
-## 언어
-
-**사용자에게 하는 답변은 항상 한국어다.** 사용자가 영어로 물어도 한국어로 답한다 — 영어를 못 읽는다.
-
-문서·주석·프롬프트는 영어로 옮기는 중이다(`docs/plans/1.ready/english-migration.md`).
-**아직 시작 안 했다. 사용자가 신호를 줄 때 시작한다.**
-
-## 응답 규칙 — **답변 전체를 50자 안에**
-
-「짧게」로는 안 통해서 숫자로 못박았다(사용자가 정했다). 긴 답변은 안 읽히고 작업을 막는다.
-
-- **한 문장이 아니라 답변 전체가 50자다.** 넘으면 문서에 적고 대화엔 파일명만
-- **표·목록·설명을 대화에 쌓지 마라.** 상세는 문서가 든다
-- **질문하지 마라.** 답이 대화에 이미 있는지 먼저 봐라. 물어야만 하면 한 문장
-- **이모지 금지.** 강조는 굵게로만
-- **날짜를 적지 마라.** 「사용자가 정했다」면 충분하다. 예외는 뒤집힌 결정뿐
-- **필요 없는 글자를 빼라.** 문서든 대화든
-
-## 문서
-
-| 위치 | 답하는 질문 |
+| Doc | Question it answers |
 |---|---|
-| `docs/GDD.md` | 이 게임은 무엇인가 |
-| `docs/design/` | 이 기능은 어떻게 생겼나 |
-| `docs/decisions/` | **왜 저건 안 했나** |
-| `docs/plans/` `1.ready` `2.active` `3.done` | 이번에 무엇을 만드나 |
+| `docs/GDD.md` | What is this game |
+| `docs/design/` | What does this feature look like |
+| `docs/decisions/` | **Why was that not done** |
+| `docs/plans/` `1.ready` `2.active` `3.done` | What are we building now |
 
-`design/` 과 `decisions/` 는 폴더를 안 옮긴다. `plans/` 만 옮긴다.
+`design/` and `decisions/` never move between folders. Only `plans/` moves.
 
-**겹쳐 적지 마라.** GDD는 얼굴만 적고 세부는 가리킨다. 같은 값을 두 곳에서 세면 갈라진다.
+**Never state the same thing twice.** GDD holds the face and points at the detail.
+A value counted in two places will diverge.
 
-**갈림길에서 한쪽을 버리면 `docs/decisions/` 에 남긴다.** 버린 쪽과 그 이유만. 형식은 그 폴더 README.
+**When a fork is taken, record the rejected branch in `docs/decisions/`** — what was dropped
+and why, nothing else. Format lives in that folder's README.
 
-**기능 얘기가 나오면 `docs/design/` 에 문서를 만들고 README 표에 한 줄 넣는다.** 문서 머리에 「구현」·「판정」 두 줄을 단다 — 안 달면 적혀 있다는 게 곧 있다는 뜻으로 읽힌다.
+**When a feature comes up in conversation, create a `docs/design/` doc and add one row to its README.**
+Head the doc with two lines, `Implemented` and `Accepted` — without them, "written down" reads as "exists".
 
-**`plans/` 문서를 옮기면 셋을 같이 한다**: 안의 `**상태**:` 줄(하나뿐이다)을 고치고, 그 문서를 가리키는 링크를 전부 고치고, 세 폴더 현황을 표로 보고한다. **링크가 매번 샌다.**
+**Moving a `plans/` doc means three edits**: fix the `**Status**:` line inside it (there is exactly one),
+fix every link pointing at it, and report all three folders as a table. **Links leak every single time.**
 
-## 판정은 그 자리에서 문서에 적는다
+## Acceptance goes into the doc the moment it happens
 
-사용자가 「확인했다·보인다」고 하면 들은 쪽이 즉시 기획 문서 「판정」 절 아래에 적는다.
-**대화는 안 남고 리포만 남는다.** 다음 세션은 리포만 본다.
+When the user says "confirmed" or "I can see it", whoever heard it writes it under the
+design doc's `Accepted` section immediately.
+**Conversations are lost; the repo is kept.** The next session sees only the repo.
 
-**`3.done/` 은 「구현이 끝났다」이지 「판정이 통과했다」가 아니다.**
+**`3.done/` means "implementation finished", not "acceptance passed".**
 
-**격리 worktree로 도는 검증자는 문서에 못 적는다** — 사본에만 남는다. 띄운 쪽이 직접 적고, 검증자에게는 보고만 시킨다. 끝나면 `git worktree remove --force` + `prune` (자동 정리가 거의 안 걸린다. 하룻밤에 700MB 먹은 적 있다).
+**A verifier running in an isolated worktree cannot write docs** — its edits live only in the copy.
+The spawner writes; the verifier only reports. Afterwards `git worktree remove --force` + `prune`
+(automatic cleanup almost never fires — 700MB in one night, measured).
 
-**뼈 먼저, 살 나중.** 기획 문서의 「미정」을 구현 전에 다 채우라고 요구하지 않는다.
+**Skeleton first, flesh later.** Do not demand every `TBD` in a design doc be filled before implementing.
 
-## 폴더가 곧 계약이다
+## Folders are contracts
 
-| 폴더 | 계약 | 형 |
+| Folder | Contract | Base type |
 |---|---|---|
-| `src/sim/` | **정수 결정론.** float · `Vector2` · `sqrt` · `sin` · `randi` · `OS.` · `Time.` 금지. 씬 트리 모름 | `RefCounted` |
-| `src/actor/` | float 허용. 씬 트리는 여전히 모름 | `RefCounted` |
-| `src/view/` | 화면만. 시뮬을 읽기만 한다 | `Node` |
-| `src/stage/` | 껍데기 — 틱 루프 · 입력 · HUD · 무대. 본편에 안 남는다 | `Node` |
+| `src/sim/` | **Integer determinism.** No float · `Vector2` · `sqrt` · `sin` · `randi` · `OS.` · `Time.`. Knows nothing of the scene tree | `RefCounted` |
+| `src/actor/` | float allowed. Still knows nothing of the scene tree | `RefCounted` |
+| `src/view/` | Screen only. Reads the sim, never writes it | `Node` |
+| `src/stage/` | Shell — tick loop · input · HUD · stage. Will not survive into the real game | `Node` |
 
-정수로 들어가는 문은 `src/actor/aim.gd` 의 `fire_cmd()` 하나.
-연출 상수는 `src/view/fx_tuning.gd`, 시뮬 상수는 `src/sim/sim_tuning.gd`.
-그물이 폴더를 재귀 스캔한다 — 등록 목록을 손으로 안 든다.
+`fire_cmd()` in `src/actor/aim.gd` is the single door into integer land.
+Presentation constants live in `src/view/fx_tuning.gd`, sim constants in `src/sim/sim_tuning.gd`.
+Nets scan the folders recursively — no hand-maintained registry.
 
-## 주석
+## Comments
 
-- **「왜 다르게 하면 조용히 죽는가」를 적는다.** 「무엇을 하는가」는 코드가 말한다
-- 실측은 그 자리에 남긴다
-- 같은 설명이 두 파일에 나오면 한 곳으로 옮긴다
-- 문서를 요약해 넣지 말고 가리킨다
+- **Write why doing it differently dies silently.** What the code does, the code says
+- Keep measurements where they were taken
+- If the same explanation appears in two files, move it to one
+- Point at a doc; never summarize one
 
-## 가짜 코드 금지
+## No fake code
 
-되는 척하는 코드는 안 되는 코드보다 나쁘다.
+Code that pretends to work is worse than code that doesn't.
 
-- 이번 입력·이번 테스트에만 맞춘 하드코딩
-- 계산 안 하고 그럴듯한 값 돌려주기
-- 스텁을 완성이라고 보고하기
-- 에러를 삼켜서 성공처럼 보이게 하기
-- **화면만 바뀌고 시뮬은 안 바뀌기(또는 반대)** — 대표 가짜
+- Hardcoding for this input or this test only
+- Returning a plausible value instead of computing one
+- Reporting a stub as finished
+- Swallowing an error so it looks like success
+- **Screen changes but sim doesn't (or the reverse)** — the signature fake
 
-못 하면 「못 한다」고 말한다.
+If you can't do it, say you can't.
 
-## 가짜 그물 금지
+## No fake nets
 
-라벨이 재는 것보다 넓으면 그 초록은 거짓 보증이다.
+When the label claims more than the check measures, that green is a false guarantee.
 
-**새 검사를 넣으면 뒤집어 봐라.** 안 뒤집어 본 검사는 「돈다」까지고 「잰다」가 아니다.
-**뒤집기가 안 물리면 검사부터 의심하지 말고 뮤테이션이 실제로 들어갔는지 봐라** — 문자열 치환이 0매치로 조용히 실패한 적이 두 번 있다.
+**Invert every new check.** An uninverted check proves "it runs", not "it measures".
+**If the inversion doesn't bite, suspect the check last — first confirm the mutation actually landed.**
+String replacement has silently matched zero times, twice.
 
-형태 목록은 `verify-read.md`. 거기 없는 셋만 여기 둔다 — **「모든 뮤테이션이 빨개진다」를 확인해도 안 잡히는 것들이다**:
+Failure shapes are listed in `verify-read.md`. Only these three live here — **they survive
+even after you confirm every mutation goes red**:
 
-- **최종 상태만 보는 검사는 순서 계약을 못 잰다.** 순회를 뒤집었는데 최종 상태가 같아 셋 다 초록이었다. 과정을 재는 검사를 따로 둬라
-- **맞대기는 「갈라짐」만 잡고 「사라짐」을 못 잡는다.** 두 경로를 하나로 접으면 `scan == scan` 이 되어 39개가 전부 초록이었다. 「없으면 느려진다」는 시간으로만 잡힌다
-- **루프 조건이 처음부터 거짓이면 검사가 통째로 안 돈다.** 정착 루프가 한 바퀴도 안 돌고 통과했다. 몇 바퀴 돌았는지를 같이 단언해라
+- **A check that reads only final state cannot measure an ordering contract.** Iteration order was reversed, final state was identical, three checks stayed green. Add a check that measures the process
+- **A/B comparison catches "diverged", never "vanished".** Fold two paths into one and `scan == scan` — 39 checks all green. "Slower without it" is caught only by timing
+- **A loop whose condition is false from the start never runs the check at all.** A settle loop passed with zero iterations. Assert the iteration count too
 
-## 그물을 돌릴 때
+## Running the nets
 
-1. **「통과 N개」를 초록으로 읽지 마라.** `load()` 는 파스 실패해도 null이 아니라 `src/` 가 깨져도 수가 같다. 판정은 마지막 `[래퍼]` 줄뿐이다
-2. **`[경합]` 이 찍히면 결과를 믿지 마라 — 초록이어도.** 남이 고치는 중에 돌면 절반 쓰인 파일을 읽는다
-3. **그물마다 별도 프로세스로 병렬 실행한다.** 성능이 아니라 정직성이다 — 사면이 자기 그물에 갇힌다. 이 성질을 깨지 마라
-4. **한 바퀴가 10초를 넘으면 `harness-manager` 를 부른다.** 느리면 검증을 피하게 되고 위 전부가 무의미해진다
+1. **"N passed" is not green.** `load()` returns non-null on a parse failure, so the count holds even with `src/` broken. Only the final `[wrapper]` line decides
+2. **If `[race]` prints, distrust the result — green included.** Running while someone edits reads half-written files
+3. **Each net runs in its own process, in parallel.** Not for speed — for honesty: amnesty stays inside its own net. Do not break this property
+4. **If a full round exceeds 10s, call `harness-manager`.** Slow means verification gets skipped, and then none of the above matters
 
-## 에이전트 모델
+## Agent models
 
-부르는 쪽이 `model` 을 판단해 넣는다. 정의 파일에 박힌 것이 이긴다(`harness-manager` = sonnet 하나뿐).
+The caller decides `model`. A model pinned in the definition file wins (`harness-manager` = sonnet, the only one).
 
-| 성격 | 모델 |
+| Character | Model |
 |---|---|
-| 판단이 결과를 바꾼다 — spec · verify-read · verify-look · 기획 | opus |
-| 계획대로 옮긴다 — builder | sonnet |
-| 기계적이다 — 값 관측 · 파일 찾기 | haiku |
+| Judgment changes the outcome — spec · verify-read · verify-look · design | opus |
+| Executes a plan — builder | sonnet |
+| Mechanical — reading values, finding files | haiku |
 
-**싸게 하려다 검증을 낮추지 마라.** 대표 사고가 「돌아가는 척」이고 그걸 잡는 게 verify-read·verify-look 이다.
+**Never lower verification to save money.** The signature failure is "pretends to run",
+and verify-read · verify-look are what catch it.
 
 ## godot MCP
 
-브리지(`127.0.0.1:6550`)는 한 클라이언트만 문다. **`godot_*` 는 verify-look 전용.** 나머지는 전부 헤드리스.
-도구를 안 불러도 서버가 스스로 재연결한다 — 다짐으로는 못 막는다. 해법은 `build-feature/SKILL.md`.
+The bridge (`127.0.0.1:6550`) accepts one client. **`godot_*` is verify-look only.** Everything else is headless.
+The server reconnects on its own even if no tool is called — resolve is not a mechanism. The fix is in `build-feature/SKILL.md`.
 
-**사용자의 마우스·키보드를 뺏지 않는다.** 창 포커스 · 키 주입 · OS 화면 캡처 금지. 사용자가 같은 컴퓨터를 쓴다.
-**`godot_*` 스크린샷은 예외다** — 에디터가 뷰포트를 직접 캡처해서 입력을 안 뺏는다.
+**Never take the user's mouse or keyboard.** No window focus, key injection, or OS screen capture.
+The user is on the same machine.
+**`godot_*` screenshots are the exception** — the editor captures its viewport directly and steals no input.
 
-띄우기 전에 셋을 본다:
+Check three things before launching:
 
-1. 에디터가 떠 있나
-2. 게임 창은 포커스를 가져간다. 사용자가 쓰는 중이면 물어라
-3. **볼 것이 화면에 도달하는 경로가 있나** — 제일 자주 빠진다. 물 재료도 색도 다 들어갔는데 `set_water` 를 부르는 곳이 없어 한 칸도 안 나온 적이 있다. 없으면 무대에 그 경로부터 붙여라
+1. Is the editor already up
+2. The game window steals focus. If the user is working, ask
+3. **Is there a path for the thing you want to see to reach the screen** — the most common miss.
+   Water material and color were both in, but nothing called `set_water`, so not one cell appeared.
+   If the path is missing, wire it into the stage first
 
-**못 잡으면 멈추고 보고한다.** 남의 유휴 `godot-mcp` 를 죽이는 건 답이 아니다 — 죽였더니 이 세션의 서버까지 끊겨 도구가 통째로 사라졌다.
-브리지 없이 찍으려면 게임이 스스로 `save_png()` 한다. `--headless` 로는 못 찍는다.
-**세션이 끝나면 자기가 띄운 에디터를 끈다.**
+**If you can't grab the bridge, stop and report.** Killing someone else's idle `godot-mcp` is not the answer —
+it once killed this session's server too and the tools vanished entirely.
+Without the bridge the game can `save_png()` itself. `--headless` cannot capture.
+**Close any editor you launched when the session ends.**
 
-### 🔴🔴 에디터를 끄는 것으로 안 끝난다 — `godot-mcp`(node)가 남는다 (2026-08-08, 사용자가 화면을 못 봤다)
+### Closing the editor is not enough — `godot-mcp` (node) survives
 
-**그 node는 에이전트가 띄우는 게 아니다.** Claude Code가 **세션을 열 때 자동으로 띄우고, 세션이 끝나도 안 죽는다.**
-⇒ **끌 대상이 위 규칙 밖에 있었다.** 실측: 에디터가 하나도 안 떠 있는데 **node가 3쌍(6개)** 살아 있었다(01:08 · 07:41 · 09:09).
+**Agents do not launch that node.** Claude Code starts it automatically when a session opens,
+and **it does not die when the session ends.** Measured: no editor running, **6 node processes** alive.
 
-🔴 **증상은 「브리지를 못 잡는다」가 아니라 「사용자가 화면을 못 본다」다.**
-에디터를 띄우는 순간 셋이 동시에 6550을 물고, 진 쪽이 **재시도를 멈추지 않아**
-`Another client is already connected` 가 **에디터 출력 창을 도배한다.** 사용자가 다른 것을 못 읽는다.
+**The symptom is not "can't grab the bridge" — it is "the user can't see the screen".**
+The moment an editor launches, all of them grab 6550, and the losers **retry forever**,
+flooding the editor output panel with `Another client is already connected` until nothing else is readable.
 
-⇒ 🔴 **`verify-look` 을 띄우기 전에 경쟁자를 먼저 세라:**
+**Count the competitors before launching verify-look:**
 ```powershell
 Get-CimInstance Win32_Process -Filter "Name='node.exe'" | Where-Object { $_.CommandLine -match 'godot' }
 ```
-**여러 개면 에디터를 띄우기 전에 사용자에게 말한다.** 띄우고 나서 알면 이미 로그가 도배된 뒤다.
+**More than one: tell the user before launching the editor.** Finding out afterwards is finding out too late.
 
-⚠ **죽이는 것은 여전히 사용자 결정이다** — 죽이면 **이 세션의 서버도 끊겨 `godot_*` 가 통째로 사라지고**,
-게다가 **곧바로 새 node가 자동 재시작된다**(실측: 6개를 죽였더니 2개가 즉시 떴다). **깨끗해지지 않는다.**
+Killing them stays the user's call — it also cuts this session's server (`godot_*` disappears
+entirely) and new nodes restart immediately (killed 6, 2 came back). **It does not get clean.**

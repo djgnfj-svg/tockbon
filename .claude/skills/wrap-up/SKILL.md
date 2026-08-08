@@ -1,63 +1,64 @@
 ---
 name: wrap-up
-description: 세션을 마무리한다. 이번 세션에서 실제로 끝난 것을 문서에 반영하고, 그물을 돌리고, 커밋한다. 사용자가 "마무리" "마무리하자" "정리하고 끝내자" "커밋하고 끝" 이라고 할 때 사용한다.
+description: Closes out the session. Reflects what actually finished into the docs, runs the nets, and commits. Use when the user says "마무리" "마무리하자" "정리하고 끝내자" "커밋하고 끝" "wrap up".
 ---
 
-# 마무리
+# Wrap-up
 
-## 이 스킬이 존재하는 이유
+## Why this skill exists
 
-**일은 끝났는데 상태를 안 바꾸는 것.** 이게 매번 반복되는 실패다.
+**The work finishes and the state never changes.** That is the failure that repeats every time.
 
-기능을 다 만들고 `2.active/` 에 그대로 두거나, 파일을 지웠는데 그걸 가리키는 문서를 안 고치거나, 알게 된 걸 메모리에 안 남긴다. 다음 세션은 그걸 사실로 믿고 시작한다.
+A feature is built and left in `2.active/`; a file is deleted and the doc pointing at it isn't fixed;
+something learned never reaches memory. The next session starts believing all of it.
 
-그래서 마무리는 "커밋"이 아니라 **"현실과 문서를 맞추는 일"**이다. 커밋은 마지막 한 줄이다.
+So wrap-up is not "commit" — it is **making the docs match reality.** The commit is the last line.
 
-## 순서
+## Order
 
-### 1. 이번 세션에서 무엇이 끝났는지 훑는다
+### 1. Sweep what actually finished this session
 
-대화를 되짚어 **실제로 완료된 것**을 나열한다. 만든 것, 고친 것, 지운 것, 결정한 것.
+Walk back through the conversation and list **what is genuinely done.** Built, fixed, deleted, decided.
 
-"거의 다 됐다"는 완료가 아니다. 완료와 미완료를 섞지 않는다.
+"Almost done" is not done. Do not mix done and not-done.
 
-### 2. 문서를 현실에 맞춘다
+### 2. Make the docs match reality
 
-빠지기 쉬운 순서대로:
+In order of how easily each is missed:
 
-- **`docs/plans/` 상태 이동** — 끝난 문서가 `2.active/` 에 남아 있지 않은가. 옮겼으면 문서 안의 `**상태**:` 줄도 같이 고쳤는가
-- **죽은 참조** — 이번에 지우거나 이름을 바꾼 것을 아직 가리키는 문서·주석이 있는가
-- **`CLAUDE.md`** — 이번에 바뀐 구조나 규칙이 반영돼야 하는가. 짧게 유지한다
-- **메모리** — 이번 세션에서 **틀린 게 된 것을 지운다.** 새로 추가하지 않는다. 리포에 적을 수 있는 건 전부 리포에 적는다
+- **`docs/plans/` status moves** — is a finished doc still sitting in `2.active/`. If you moved it, did you fix the `**Status**:` line inside too
+- **Dead references** — does any doc or comment still point at what you deleted or renamed this session
+- **`CLAUDE.md`** — does a structure or rule that changed this session need to land here. Keep it short
+- **Memory** — **delete what became wrong this session.** Do not add. Anything that can live in the repo lives in the repo
 
-각 항목은 **확인했으면 확인했다고, 해당 없으면 해당 없다고 말한다.** 조용히 건너뛰지 않는다.
+For each item, **say you checked it, or say it doesn't apply.** Do not skip silently.
 
-### 3. 그물을 돌린다
+### 3. Run the nets
 
 ```
 powershell -ExecutionPolicy Bypass -File tests/run_nets.ps1
 ```
 
-빠르니까(수십 ms) 커밋 전에 한 번 더 돌린다. **빨간 상태로 커밋하지 않는다.**
+It's fast (tens of ms), so run it once more before committing. **Never commit red.**
 
-실패하면 커밋을 멈추고 사용자에게 가져간다. 그물을 고쳐서 통과시키지 않는다.
+If it fails, stop the commit and take it to the user. Do not fix the net to make it pass.
 
-### 4. 커밋
+### 4. Commit
 
-- **`main` 에 그대로 커밋한다. 브랜치를 파지도, 물어보지도 않는다** — 이 리포는 그렇게 하기로
-  정해져 있다(사용자, 2026-08-05). **묻는 것 자체가 마찰이다** — 여기 「main이면 물어라」가
-  적혀 있어서 실제로 물었고 「왜 갑자기 확인하지, 마무리하면 main인 걸로 했었는데」가 나왔다
-- `git status` 로 실제로 들어갈 것을 확인한다. 의도 안 한 파일이 섞이지 않았는가
-- 커밋 메시지는 이 리포의 방식대로 **한글 한 문장**. 무엇을 왜 했는지가 보이게
+- **Commit straight to `main`. Do not branch, do not ask** — that is settled for this repo (decided by the user).
+  **Asking is itself friction** — "ask if on main" was written here once, so it was asked, and the reply was
+  "왜 갑자기 확인하지, 마무리하면 main인 걸로 했었는데"
+- Check what actually goes in with `git status`. Anything unintended mixed in
+- Commit message follows this repo's way: **one Korean sentence.** What was done and why, visible
 
-### 5. 보고
+### 5. Report
 
-- 이번에 끝난 것
-- **끝나지 않은 것과 그 이유**
-- 다음에 이어서 할 후보
+- What finished this session
+- **What didn't, and why**
+- Candidates to pick up next
 
-## 하지 않는 것
+## Do not
 
-- **미완성을 완성처럼 적지 않는다.** 문서에 "완료"라고 쓰는 순간 다음 세션이 그걸 사실로 믿는다
-- **push 하지 않는다.** 사용자가 명시적으로 말할 때만
-- 그물이 빨간데 커밋하지 않는다
+- **Do not write unfinished as finished.** The moment a doc says "done", the next session believes it
+- **Do not push.** Only when the user says so explicitly
+- Do not commit with nets red

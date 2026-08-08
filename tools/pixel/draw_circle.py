@@ -1,13 +1,13 @@
-"""진을 그린다 — AI가 아니라 코드로.
+"""Draws the circle — with code, not AI.
 
-🔴🔴 **단순한 기하학은 뽑지 말고 그린다**(2026-08-05, 사용자 판정
-「그냥 원이라고. 그냥 문양을 넣을 수 있는 층만 있으라는 거잖아」).
+**Simple geometry is drawn, not generated** (user judgment:
+"it's just a circle. I'm only asking for layers you can put glyphs into").
 
-⚠ **AI 생성이 이걸 못 한다.** 「장식 없이 원 세 개」를 요구해도 매번 다른 것이 나오고,
-소켓 크기·띠 반지름이 규격(368 · 288 · 192)과 안 맞는다 — 네 판을 돌려도 안 맞았다.
-⇒ 그림이 필요한 것은 **무늬**(문양 링 · 룬 심볼)뿐이고, **틀은 좌표다.**
+**AI generation cannot do this.** Asking for "three circles with no ornament" gives something different every time,
+and the socket size and band radii do not match the spec (368 · 288 · 192) — four batches still did not match.
+=> What needs art is only the **pattern** (glyph rings, rune symbols); **the frame is coordinates.**
 
-🔴 규격의 기준은 `docs/design/마법진-그림.md` 다. 여기는 그 값을 쓰는 코드다.
+The spec reference is `docs/design/circle-art.md`. This is the code that uses those values.
 """
 
 import math
@@ -18,30 +18,30 @@ from PIL import Image, ImageDraw
 
 OUT = Path(__file__).parent / "out" / "drawn"
 S = 1024
-SS = 4  # 수퍼샘플 배율. ⚠ PIL 의 ellipse 는 안티앨리어싱을 안 해서 이게 없으면 계단이 진다
-BG = (250, 248, 240)   # 크림 종이
-FG = (26, 24, 22)      # 검정
+SS = 4  # Supersample factor. PIL's ellipse does no antialiasing, so without this it stairsteps
+BG = (250, 248, 240)   # cream paper
+FG = (26, 24, 22)      # black
 
-W_OUTER = 10   # 바깥 링 굵기
-W_DIV = 4      # 층을 가르는 나눔선
-W_SOCKET = 7   # 소켓 테두리
+W_OUTER = 10   # outer ring weight
+W_DIV = 4      # divider line separating layers
+W_SOCKET = 7   # socket border
 
 
 def circ(d, p, r, w):
-    """점 p 를 중심으로 한 원. 좌표는 이미 SS 배율이다."""
+    """A circle centered on point p. The coordinates are already at SS scale."""
     x, y = p
     d.ellipse([x - r, y - r, x + r, y + r], outline=FG, width=w * SS)
 
 
 def disc(d, p, r, color):
-    """꽉 찬 원. 🔴 **연결 띠를 소켓 안에서 지우는 데 쓴다** — 띠를 먼저 긋고
-    소켓 자리를 배경색으로 덮은 뒤 링을 다시 그리면 선이 소켓을 안 침범한다."""
+    """A filled circle. **Used to erase the connecting band inside a socket** — draw the band first,
+    cover the socket's spot with the background color, then redraw the ring and the line never invades the socket."""
     x, y = p
     d.ellipse([x - r, y - r, x + r, y + r], fill=color)
 
 
 def band(d, a, b, half_w, w):
-    """두 점을 **두 줄 평행선**으로 잇는다. 채용안의 연결이 한 줄이 아니라 띠다."""
+    """Joins two points with **two parallel lines**. The adopted candidate's connection is a band, not a single line."""
     ax, ay = a
     bx, by = b
     dx, dy = bx - ax, by - ay
@@ -52,7 +52,7 @@ def band(d, a, b, half_w, w):
 
 
 def at(angle_deg, dist):
-    """진 중심에서 각도·거리로 잡은 점 (SS 배율 좌표)."""
+    """A point taken by angle and distance from the circle's center (SS-scale coordinates)."""
     c = S * SS / 2
     a = math.radians(angle_deg)
     return c + math.cos(a) * dist * SS, c + math.sin(a) * dist * SS
@@ -63,7 +63,7 @@ def ring(d, r, w):
 
 
 def socket(d, angle_deg, dist, r, w=W_SOCKET):
-    """진 중심에서 `dist` 만큼 떨어진 자리에 지름 2r 의 빈 소켓."""
+    """An empty socket of diameter 2r, `dist` away from the circle's center."""
     circ(d, at(angle_deg, dist), r * SS, w)
 
 
@@ -79,69 +79,69 @@ def save(im, name):
     print(p)
 
 
-# ─── 일반진 — 룬 1자리 · 통합 2층 ──────────────────────────────────
-# 바깥 링 하나, 그 안에 층 띠 둘. 🔴 **띠 안은 비운다** — 문양이 거기 들어간다.
+# --- plain circle — 1 rune slot · 2 shared layers ------------------
+# One outer ring with two layer bands inside it. **The bands are left empty** — glyphs go in there.
 def plain(layers=2, band_out=480, band_in=210, socket_r=96):
     im, d = new()
-    ring(d, 506, W_OUTER)          # 바깥 링
-    ring(d, band_out, W_DIV)       # 띠 바깥 경계
-    for k in range(1, layers):     # 층 사이 나눔선
+    ring(d, 506, W_OUTER)          # outer ring
+    ring(d, band_out, W_DIV)       # band outer boundary
+    for k in range(1, layers):     # divider lines between layers
         ring(d, band_out - (band_out - band_in) * k / layers, W_DIV)
-    ring(d, band_in, W_DIV)        # 띠 안쪽 경계
-    socket(d, 0, 0, socket_r)      # 룬 소켓 — 가운데
+    ring(d, band_in, W_DIV)        # band inner boundary
+    socket(d, 0, 0, socket_r)      # rune socket — center
     return im
 
 
-# ─── 융합진 — 룬 2자리 · 통합 1층 ─────────────────────────────────
+# --- fusion circle — 2 rune slots · 1 shared layer -----------------
 def fusion(band_out=480, band_in=300, socket_r=96):
     im, d = new()
     ring(d, 506, W_OUTER)
     ring(d, band_out, W_DIV)
     ring(d, band_in, W_DIV)
-    for ang in (180, 0):           # 좌 · 우
+    for ang in (180, 0):           # left · right
         socket(d, ang, 110, socket_r)
     return im
 
 
-# ─── 삼각진 — 룬 3자리 · 룬마다 1층 ───────────────────────────────
-# 🔴 소켓마다 띠가 하나씩. 가운데는 장식(문양이 아니다).
+# --- triangle circle — 3 rune slots · 1 layer per rune -------------
+# One band per socket. The center is ornament (not a glyph).
 def triangle(socket_r=144, band_gap=48, dist=368, center_r=112, link_half=26,
              ring_r=420):
-    """🔴🔴 **이 기본값이 사용자가 확정한 삼각진이다** (2026-08-05, 「4번 너무 잘나왔다 이걸로 확정」).
-    ⚠ **인자를 바꾸면 확정된 그림이 아니다.** 다른 값이 필요하면 호출할 때 넘겨라.
+    """**These defaults are the triangle circle the user settled on** ("number 4 came out great, that's the one").
+    **Change an argument and it is no longer the settled image.** If different values are needed, pass them at the call site.
 
-    🔴🔴 **`band_gap` 34 → 48 (2026-08-07, 사용자가 정했다).** 구도가 아니라 **등식** 때문이다:
+    **`band_gap` 34 -> 48 (decided by the user).** Not for composition but because of an **equation**:
 
-        288 − 48×2 = 192      ← 원형 진의 룬 심볼 자리와 **정확히 같다**
-        288 − 34×2 = 220      ← 옛 값. 192가 아니라 **에셋이 두 벌이 된다**
+        288 - 48x2 = 192      <- **exactly the same** as the round circle's rune symbol slot
+        288 - 34x2 = 220      <- the old value. Not 192, so **the assets become two sets**
 
-    ⚠ 눈으로는 띠가 조금 두꺼워지는 차이뿐이다. **값어치는 룬 열 개에 스무 장이 열 장이 되는 것**이다.
-    🔴 그래서 이 한 줄이 **뽑기 전에** 정해져야 했다 — 뽑고 나서 바꾸면 그 장수만큼 다시 뽑는다.
+    By eye the difference is only a slightly thicker band. **The worth is that ten runes need ten images instead of twenty.**
+    That is why this one line had to be settled **before generating** — change it afterward and you regenerate that many images.
 
-    🔴 `ring_r` 이 삼각진을 감싸는 바깥 링이다.
+    `ring_r` is the outer ring that wraps the triangle circle.
 
-    ⚠ **소켓이 이 링을 넘치는 것이 요점이다**(2026-08-05, 사용자 요청 「삼각형이 링을 넘치게」).
-     `dist + socket_r > ring_r` 이면 넘치고, 소켓을 **링보다 나중에** 그려서 링을 덮는다 —
-     순서를 바꾸면 링이 소켓 위를 지나가 「뚫고 나온다」가 「겹쳐 있다」로 읽힌다.
+    **The point is that the sockets overflow this ring** (user request: "make the triangle overflow the ring").
+     They overflow when `dist + socket_r > ring_r`, and the sockets are drawn **after** the ring so they cover it —
+     swap the order and the ring runs over the sockets, turning "punching through" into "overlapping".
     """
     im, d = new()
-    pts = [at(ang, dist) for ang in (-90, 30, 150)]   # 12시 · 4시 · 8시
+    pts = [at(ang, dist) for ang in (-90, 30, 150)]   # 12 o'clock · 4 o'clock · 8 o'clock
 
-    # ① 연결 띠를 **먼저** 긋는다. 소켓 셋을 서로 잇는 삼각 변이다.
+    # (1) Draw the connecting bands **first**. They are the triangle's edges joining the three sockets.
     for i in range(3):
         band(d, pts[i], pts[(i + 1) % 3], link_half * SS, W_DIV)
 
-    # ② 감싸는 링
+    # (2) The wrapping ring
     if ring_r:
         ring(d, ring_r, W_OUTER)
 
-    # ③ 소켓 자리를 배경으로 덮고 링을 다시 그린다 ⇒ 띠도 바깥 링도 소켓 안으로 안 들어간다
+    # (3) Cover each socket's spot with the background and redraw the ring => neither the bands nor the outer ring enter the socket
     for p in pts:
         disc(d, p, socket_r * SS, BG)
-        circ(d, p, socket_r * SS, W_OUTER)                 # 소켓 바깥 테두리
-        circ(d, p, (socket_r - band_gap) * SS, W_DIV)      # 문양 띠 안쪽 경계
+        circ(d, p, socket_r * SS, W_OUTER)                 # socket outer border
+        circ(d, p, (socket_r - band_gap) * SS, W_DIV)      # glyph band inner boundary
 
-    # ③ 가운데 장식 — 🔴 문양이 아니다(룬마다 1층이라 가운데에 층이 없다)
+    # (3) Center ornament — not a glyph (one layer per rune, so there is no layer in the center)
     ctr = at(0, 0)
     disc(d, ctr, center_r * SS, BG)
     circ(d, ctr, center_r * SS, W_OUTER)

@@ -1,22 +1,22 @@
 extends RefCounted
-## 🔴🔴 **붓 팔레트의 단일 소스. 「무엇을 그릴 수 있나」와 「몇 번 칸인가」가 여기서만 나온다.**
+## **The single source for the brush palette. "What can be painted" and "which slot is it" come only from here.**
 ##
-## 이 파일이 생기기 전에는 같은 것이 **두 곳에 손으로** 적혀 있었다 —
-## `assets/stage/terrain_tiles.png` 의 칸 순서와 `build_terrain_tileset.gd` 의 `TILES` 표.
-## ⚠ **둘이 갈라져도 게임 화면은 안 틀린다**(화면은 셀 격자가 그린다) — **붓을 집을 때만** 헷갈리고,
-##  그래서 `docs/design/지형-굽기.md` 가 「아무도 눈치 못 챈다」고 적어 뒀다.
+## Before this file existed the same thing was written **by hand in two places** —
+## the slot order of `assets/stage/terrain_tiles.png` and the `TILES` table in `build_terrain_tileset.gd`.
+## **Even when the two diverge the game screen is not wrong** (the screen is drawn by the cell grid) — it only
+##  confuses you **when picking up a brush**, which is why `docs/design/terrain-baking.md` wrote "nobody notices".
 ##
-## 🔴 **표가 아니라 파생이다.** 그릴 수 있는 것 = `Mat.ALL` 에서 `EMPTY` 를 뺀 것 —
-##  빈칸은 「타일을 안 놓는 것」이라 붓이 될 수 없다. ⇒ **재료를 늘려도 여기는 안 고친다.**
+## **Not a table but a derivation.** What can be painted = `Mat.ALL` minus `EMPTY` —
+##  an empty cell is "not placing a tile", so it cannot be a brush. => **Adding a material does not change this file.**
 ##
-## ⚠ **순서가 계약이다.** atlas 좌표가 `Mat.ALL` 안의 순서에서 나오므로, `ALL` 의 **앞쪽 순서를
-##  바꾸면 이미 그려 둔 맵의 타일이 통째로 다른 재료가 된다.** 🔴 뒤에 **더하는 것만** 안전하다.
-##  (지금 순서: 돌 0 · 나무 1 · 기반암 2 · 물 3 — 물은 2026-08-07에 **뒤에** 붙었다.)
+## **The order is a contract.** Atlas coordinates come from the order inside `Mat.ALL`, so **changing the order
+##  of the front of `ALL` turns every tile of an already painted map into a different material.** Only **appending** is safe.
+##  (Current order: stone 0 · wood 1 · bedrock 2 · water 3 — water was appended **at the end**.)
 
 const Mat := preload("res://src/sim/cell_materials.gd")
 
 
-## 붓이 되는 재료를 **순서대로**. index 가 곧 atlas 열이다.
+## The materials that become brushes, **in order**. The index is the atlas column.
 static func paintable() -> Array[int]:
 	var out: Array[int] = []
 	for id: int in Mat.ALL:
@@ -26,15 +26,15 @@ static func paintable() -> Array[int]:
 	return out
 
 
-## 팔레트 순서 → atlas 좌표. 🔴 한 줄로 늘어놓는다 — 세로로 접으면 두 스크립트가 접는 규칙을
-##  각자 갖게 되고, 그게 이 파일이 없애려는 것이다.
+## Palette order -> atlas coordinates. **Laid out in one row** — fold it vertically and the two scripts each
+##  get their own folding rule, which is exactly what this file exists to remove.
 static func atlas_of(index: int) -> Vector2i:
 	return Vector2i(index, 0)
 
 
-## 붓 그림 한 칸의 px. 🔴 타일 크기이자 atlas 격자라 **둘이 같은 값이어야 한다.**
-##  ⚠ 지형 타일은 8×8셀 = 32px이다(`sim_tuning.TILE_CELLS` × `CELL_PX`) — 여기 박지 않고
-##   그 둘에서 파생시킨다. 안 그러면 타일 크기를 바꾸는 날 붓만 낡는다.
+## Px of one slot of the brush image. It is both the tile size and the atlas grid, so **the two must be the same value.**
+##  A terrain tile is 8x8 cells = 32px (`sim_tuning.TILE_CELLS` x `CELL_PX`) — not hardcoded here but
+##   derived from those two. Otherwise the day the tile size changes, only the brush goes stale.
 const Tuning := preload("res://src/sim/sim_tuning.gd")
 
 static func tile_px() -> int:

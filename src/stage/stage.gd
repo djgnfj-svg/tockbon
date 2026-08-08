@@ -1,10 +1,12 @@
 extends Node2D
-## 무대 — **껍데기다. 본편에 안 남는다.**
-##  시뮬(`src/sim/`)·캐릭터(`src/actor/`)·화면(`src/view/`)과 섞지 마라. 그 경계가 폴더의 요점이다.
+## The stage — **the shell. It won't survive into the real game.**
+##  Do not mix it with the sim (`src/sim/`), the character (`src/actor/`) or the screen (`src/view/`).
+##  That boundary is the whole point of the folders.
 ##
-## 🔴🔴 **틱 순서·커맨드 큐·분주기는 여기 없다** — `src/actor/world_step.gd` 가 든다.
-##  껍데기가 그 순서를 다시 베끼면 그물이 게임과 다른 것을 재게 된다(`net_damage`가 잰다).
-##  ⇒ 여기 남은 것은 **틱이 돈 프레임에 화면을 치는 것**뿐이다.
+## **Tick order, the command queue and the divider are not here** — `src/actor/world_step.gd` holds them.
+##  If the shell copies that order again, the nets end up measuring something other than the game
+##  (`net_damage` measures it).
+##  => What is left here is only **hitting the screen on frames where a tick ran.**
 
 const CellGrid := preload("res://src/sim/cell_grid.gd")
 const Mat := preload("res://src/sim/cell_materials.gd")
@@ -27,96 +29,105 @@ const MonsterView := preload("res://src/view/monster_view.gd")
 const MonsterDefs := preload("res://src/actor/monster_defs.gd")
 const WaterSource := preload("res://src/sim/water_source.gd")
 
-## 🔴 이제 상수가 아니라 `terrain_map_generated.gd` 재수출이다 — 그린 영역 크기를 그대로 따른다.
-##  아래 `MAP` 선언부의 재수출과 짝이다.
+## No longer a constant but a re-export of `terrain_map_generated.gd` — it follows the painted region's size verbatim.
+##  It pairs with the re-export at the `MAP` declaration below.
 
-## 캐릭터 시작 자리(타일). 스테이지1 맵의 왼쪽 끝 지면 위다.
+## The character's starting position (tiles). On the ground at the left end of the stage 1 map.
 ##
-## 🔴🔴 **맵을 다시 그리면 이 값도 같이 고쳐야 한다 — 아무도 안 짖는다.**
-## ⚠ 2026-08-08에 실제로 났다: 맵을 312×126 → 400×48로 새로 그렸는데 이 상수가 `(3, 30)` 그대로라
-##  **y30이 지면(y20) 아래**가 되어 캐릭터가 **밀폐된 지하 동굴 바닥(y44)에 떨어져** 시작했다.
-##  BFS로 확인한 도달 범위가 **동굴 바닥 한 줄뿐**이었고, 6타일 지각을 `carve_r`(2셀)로는 못 뚫는다.
-##  ⇒ **게임을 띄우면 지표면을 아예 못 본다. 에러는 한 줄도 안 난다.**
-## 🔴 그물도 못 잡는다 — `net_tables._stage_map` 은 맵의 **모양**만 재고 **스폰이 그 안 어디인지**는 안 본다.
+## **Redraw the map and this value must be fixed with it — nobody barks.**
+## It actually happened: the map was redrawn 312x126 -> 400x48 while this constant stayed `(3, 30)`, so
+##  **y30 fell below the ground surface (y20)** and the character started by **dropping onto the floor of a
+##  sealed underground cave (y44).** The reachable range confirmed by BFS was **a single row of cave floor**,
+##  and a 6-tile crust cannot be pierced with `carve_r` (2 cells).
+##  => **Launch the game and the surface is never seen at all. Not one line of error is raised.**
+## The nets can't catch it either — `net_tables._stage_map` measures only the map's **shape** and never looks
+##  at **where inside it the spawn sits.**
 const SPAWN_TILE := Vector2i(3, 19)
 
-## 초기 지형. `#` 돌 · `=` 나무 · `.` 빈칸. 타일 하나 = 8×8 셀 = 32px.
+## Initial terrain. `#` stone · `=` wood · `.` empty. One tile = 8x8 cells = 32px.
 ##
-## 🔴🔴 **이제 손으로 이 배열을 안 고친다.** 진짜 원본은 `stage.tscn`의 `Terrain`(TileMapLayer)이고,
-##  Godot 에디터에서 마우스로 그린다. `MAP`은 `terrain_map_generated.gd`(자동 생성)를 그대로
-##  재수출한 것뿐이다 — Terrain을 고치고 `tools/stage/bake_terrain.gd`를 다시 돌려야 반영된다.
-##  ⚠ **왜 재수출인가**: `net_tables.gd`의 `_wood_clumps`·`_stage_map`이 `Stage.MAP`·
-##  `Stage.build_terrain_into()`를 직접 재기 때문이다 — 이름을 바꾸면 그 그물이 죽은 곁가지를
-##  재는 가짜 그물이 된다. 아래 측정 근거(칸막이 두께 · 지형 높이)는 그림으로 그려도 그대로 산다.
-## 🔴 **타일이 16px → 32px이 되는 동안 이 ASCII는 한 글자도 안 바뀌었다** — 전부 **타일 단위**로
-##  쓰여 있어서다.
+## **This array is no longer edited by hand.** The real original is `stage.tscn`'s `Terrain` (TileMapLayer),
+##  painted with the mouse in the Godot editor. `MAP` is only a verbatim re-export of
+##  `terrain_map_generated.gd` (auto-generated) — Terrain must be edited and
+##  `tools/stage/bake_terrain.gd` re-run for it to take effect.
+##  **Why a re-export**: because `net_tables.gd`'s `_wood_clumps` and `_stage_map` measure `Stage.MAP` and
+##  `Stage.build_terrain_into()` directly — rename them and that net becomes a fake net measuring a dead
+##  branch. The measurement grounds below (partition thickness · terrain height) stay alive even when painted.
+## **Not one character of this ASCII changed while tiles went 16px -> 32px** — because it is all written
+##  **in tile units.**
 ##
-## 🔴🔴 **무대가 한 화면보다 크다. 그래서 카메라가 따라간다**(아래 `camera_center`).
-##  격자 = 512×288셀 = **64×36타일 = 2048×1152 월드px** · 화면에 보이는 것 = **960×540 = 30×16.9타일**.
+## **The stage is bigger than one screen. That is why the camera follows** (`camera_center` below).
+##  Grid = 512x288 cells = **64x36 tiles = 2048x1152 world px** · visible on screen = **960x540 = 30x16.9 tiles**.
 ##
-## 🔴🔴🔴 **정적 카메라를 버리며 잃은 것을 정확히 적는다 — 폭발이 화면 밖에서 터질 수 있다.**
-##  옛 계약은 「무대 전체가 한 화면에 들어온다」였고, 그 이유는
-##  「무대가 여백에 걸치면 **확산 8발 중 몇이 안 보이는 데서 터지고** 사용자에게는 「안 터졌다」로
-##  읽힌다 — v1이 바닥 슬래브로 정확히 그렇게 데였다」였다.
-##  ⇒ **그 이유는 안 사라졌다. 다만 이제 막을 수가 없다** — 확산 탄의 사거리(40타일)가
-##   보이는 폭(30타일)보다 길어서, 수평으로 쏘면 **화면 밖 착탄이 원리적으로 난다.**
-##  🔴 남은 것은 **「내 주변만은 반드시 보인다」**이고 `net_tables._stage_map` 이 그걸 잰다.
-##  ⚠ 「안 터졌다」로 읽히는 일이 다시 나면 **여기가 원인이다.** 카메라를 줌아웃하거나
-##   무대를 줄이거나 사거리를 줄이는 셋 중 하나다 — 셋 다 이 파일 밖의 결정이다.
-##  ⚠ 무대가 여백에 걸치면 **확산 8발 중 몇이 안 보이는 데서 터지고**, 사용자에게는
-##   「안 터졌다」로 읽힌다. v1이 바닥 슬래브를 여백에 세워 정확히 그렇게 데였다.
-##  ⇒ **무대는 전부 보이는 끝 안에 있어야 한다.**
+## **Writing down exactly what was lost by abandoning the static camera — blasts can go off screen.**
+##  The old contract was "the whole stage fits in one screen", and its reason was
+##  "if the stage crosses into the margin, **some of the 8 spread bolts detonate where they can't be seen**
+##  and the user reads it as 'it didn't go off' — v1 got burned exactly that way by its floor slab".
+##  => **That reason has not gone away. It simply can no longer be prevented** — a spread bolt's range
+##   (40 tiles) is longer than the visible width (30 tiles), so firing horizontally makes
+##   **off-screen impacts happen in principle.**
+##  What is left is **"at least my surroundings are always visible"**, and `net_tables._stage_map` measures that.
+##  If something reads as "it didn't go off" again, **this is the cause.** Zoom the camera out, shrink the
+##   stage, or shorten the range — all three are decisions outside this file.
+##  If the stage crosses into the margin, **some of the 8 spread bolts detonate where they can't be seen**,
+##   and the user reads it as "it didn't go off". v1 stood its floor slab in the margin and got burned exactly that way.
+##  => **The stage must sit entirely within the visible edge.**
 ##
-## 🔴 상자다 — 돌 바닥·천장·좌우 벽. **확산 8발이 전부 뭔가에 맞는다.**
-##  위로 간 것들이 허공으로 사라지지 않는다.
-## ⚠ 랜덤 지형을 쓰지 않는다 — 매번 달라지면 두 조합을 비교할 수 없다(기획 「무대」).
+## It is a box — stone floor, ceiling and side walls. **All 8 spread bolts hit something.**
+##  The ones that went upward do not vanish into thin air.
+## Random terrain is not used — differ every time and two combinations cannot be compared (design, "the stage").
 ##
-## 🔴🔴 **나무를 돌로 끊어 여러 덩어리로 나눈다. 이게 이 맵에서 제일 중요한 줄이다.**
-##  한 덩어리로 이어 두면 **어디에 불이 붙든 결국 전부 탄다** — 실측으로 키 1(문양 없음)·키 4·키 5의
-##  최종 나무가 셋 다 48로 수렴했다. 「가라앉은 뒤」 축이 조합을 통째로 구별 못 하게 된다.
-##  ⇒ 끊어 두면 **몇 덩어리에 불이 붙었나**가 조합마다 달라진다(GDD 「연료를 어디 두느냐가 곧 레벨 디자인」).
+## **Wood is broken up with stone into several clumps. This is the most important line in this map.**
+##  Left connected as one clump, **wherever fire catches everything burns in the end** — measured, the final
+##  wood for key 1 (no glyph), key 4 and key 5 all converged on 48. The "after it settles" axis then fails
+##  to distinguish the combinations at all.
+##  => Broken up, **how many clumps caught fire** differs per combination (GDD, "where you put fuel is level design").
 ##
-## 🔴 **칸막이 두께를 「폭발이 못 뚫는 두께」로 잡지 않았다.** 그 기준은 전제가 틀렸다 —
-##  폭발이 칸막이를 뚫어도 그 자리는 **빈칸**이 되고, **불은 빈칸도 못 건넌다**(`net_fire`가 잰다).
-##  즉 폭발은 덩어리를 잇지 못하고 **틈을 넓힐 뿐**이라, 돌 한 칸만 있어도 격리는 영구적이다.
-## ⇒ 실제로 중요한 기준은 **「작은 점화원이 두 덩어리를 동시에 못 켜는 폭」**이다:
-##    룬 흔적 6셀 · 세대 1 폭발의 점화 9셀 ⇒ 칸막이 **3타일 = 24셀**이면 둘 다 못 건넌다.
-##  🔴 `net_tables`가 덩어리 수와 이 간격을 잰다. 맵을 손보면 거기가 먼저 빨개진다.
+## **Partition thickness was not set as "a thickness blasts cannot pierce".** That criterion had a false
+##  premise — even when a blast pierces the partition, that spot becomes **empty**, and **fire cannot cross
+##  empty either** (`net_fire` measures it). That is, a blast cannot join clumps and **only widens the gap**,
+##  so one cell of stone makes the isolation permanent.
+## => The criterion that actually matters is **"a width a small ignition source cannot light both clumps across"**:
+##    rune trace 6 cells · generation 1 blast's ignition 9 cells => a partition of **3 tiles = 24 cells** blocks both.
+##  `net_tables` measures the clump count and this gap. Touch the map and that goes red first.
 ##
-## 🔴🔴 **폭발 반경이 절반이 되며(2026-08-04, 사용자 판정) 이 설계의 한 축이 죽었다 —
-##  맵은 안 고쳤고 그물도 안 빨개진다. 그래서 여기 적는다.**
-##  전에는 네 값이 `6 < 24 · 18 < 24 · 36 > 24` 였고 **마지막 부등식이 뒤집힌 게 요점이었다** —
-##  「세대 0 폭발의 점화는 **일부러** 칸막이를 건너간다. 큰 폭발은 넓게 지른다가 그 조합의 성격이다」.
-##  지금은 세대 0 점화가 36 → **18셀**이라 `18 < 24` 다 ⇒ **큰 폭발도 두 덩어리를 동시에 못 켠다.**
-##  ⚠ **그물은 이걸 못 잡는다** — `net_tables._wood_clumps` 의 `need` 는 세대 0을 **일부러 뺐고**,
-##   빠진 축은 방향이 뒤집혀도 아무도 안 짖는다. 「초록이니 설계가 산다」로 읽지 마라.
-##  ⇒ 「큰 폭발이 불을 옆 덩어리로 옮긴다」를 되살리려면 **칸막이를 2타일(16셀)로 좁혀라** —
-##   그러면 `9 < 16 · 6 < 16 · 18 > 16` 으로 세 부등식이 다시 선다. **안 했다**: 사용자가 말한 것은
-##   폭발 범위뿐이고, 맵을 같이 바꾸면 무엇 때문에 화면이 달라졌는지 갈리지 않는다.
+## **A blast's radius was halved (user judgment) and one axis of this design died —
+##  the map was not fixed and the nets do not go red. So it is written here.**
+##  The four values used to be `6 < 24 · 18 < 24 · 36 > 24`, and **the point was that the last inequality
+##  was flipped** — "a generation 0 blast's ignition crosses the partition **deliberately.** A big blast
+##  setting a wide area alight is that combination's character".
+##  Now generation 0's ignition is 36 -> **18 cells**, so `18 < 24` => **even a big blast cannot light two clumps at once.**
+##  **The nets cannot catch this** — `net_tables._wood_clumps`'s `need` **deliberately left generation 0 out**,
+##   and a missing axis draws no bark even when its direction flips. Do not read it as "it's green, so the design lives".
+##  => To bring back "a big blast carries fire to the next clump", **narrow the partition to 2 tiles (16 cells)** —
+##   then `9 < 16 · 6 < 16 · 18 > 16` stands the three inequalities back up. **It was not done**: what the
+##   user spoke about was the blast range only, and changing the map along with it makes it impossible to
+##   tell what the screen difference came from.
 ##
-## 🔴🔴 **지형 높이가 캐릭터의 점프(108px = 3.4타일)를 기준으로 갈린다.** 이게 무대 설계의 전부다:
-##   · 기둥 3타일(96px) · 나무 2타일(64px)  → **걸어서/뛰어서 넘는다.** 무대를 돌아다닐 수 있다
-##   · 오른쪽 돌 벽 12타일                   → **뚫어야 지나간다.** GDD의 「저 벽을 뚫으면
-##     지나갈 수 있다」가 화면에서 세어지는 자리다
-##  ⚠ 처음엔 기둥을 6타일로 세웠다가 **캐릭터가 왼쪽 구석에 갇혔다** — 그러면 재는 것 3
-##   (「캐릭터를 움직이며 쏘는 것이 손에 붙나」)을 애초에 못 잰다.
+## **Terrain height is split against the character's jump (108px = 3.4 tiles).** That is the whole of the stage design:
+##   · pillars 3 tiles (96px) · wood 2 tiles (64px)  -> **crossed by walking/jumping.** The stage can be roamed
+##   · the right stone wall 12 tiles                 -> **it must be pierced to pass.** This is where the GDD's
+##     "pierce that wall and you can get through" becomes countable on screen
+##  Pillars were first stood at 6 tiles and **the character got trapped in the left corner** — that makes
+##   measurement 3 ("does moving the character while firing feel right in the hand") unmeasurable to begin with.
 const TerrainMap := preload("res://src/stage/terrain_map_generated.gd")
 const MAP_W: int = TerrainMap.MAP_W
 const MAP_H: int = TerrainMap.MAP_H
 const MAP: Array[String] = TerrainMap.MAP
 const MAP_CHARS: Dictionary = TerrainMap.MAP_CHARS
 
-## 🔴🔴 **디버그 조합 — 이 단계의 측정 장치다.** 조합을 번갈아 쏘는 것이 몇 초 안에 돼야
-##  판정 1·2(문양을 넣고 뺀 차이 · 순서를 바꾼 차이)를 잴 수 있다.
+## **Debug loadouts — this stage's measuring instrument.** Firing combinations alternately must be doable
+##  within seconds for acceptance 1 and 2 (the difference of adding and removing a glyph · the difference
+##  of changing the order) to be measurable.
 ##
-## 🔴🔴 **4와 5가 이 단계의 전부다.** 같은 문양 둘, 순서만 다르다:
-##   4 확산 → 폭발 = 8방향으로 퍼지고 **퍼진 것들이 각자 터진다** → 구멍 여덟
-##   5 폭발 → 확산 = 먼저 크게 터지고 **그 자리에서 8갈래로 퍼진다** → 큰 구멍 하나 + 잔불 여덟
-##  ⇒ 지형 자국이 다르면 판정 2가 참이다.
+## **4 and 5 are the whole of this stage.** The same two glyphs, only the order differs:
+##   4 spread -> blast = it spreads in 8 directions and **each of the spread ones detonates** -> eight holes
+##   5 blast -> spread = it detonates big first and **spreads into 8 branches from that spot** -> one big hole + eight embers
+##  => If the terrain marks differ, acceptance 2 is true.
 ##
-## 🔴 확산이 두 번 든 목록은 애초에 여기 안 만든다(GDD 「확산은 한 마법진에 하나만」).
-##  그래도 `spell_sim.fire()`가 커맨드 경계에서 한 번 더 본다 — 네트워크는 이 표를 안 지난다.
-## ⚠ 없는 번호는 표에 없고, HUD가 **있는 번호만** 보여 준다(아래 `_loadout_help`).
+## A list holding spread twice is never built here in the first place (GDD, "one spread per magic circle").
+##  Even so `spell_sim.fire()` looks once more at the command boundary — the network does not go through this table.
+## Numbers that don't exist aren't in the table, and the HUD shows **only the numbers that exist** (`_loadout_help` below).
 const LOADOUTS: Dictionary = {
 	1: [],
 	2: [Glyph.GLYPH_SPREAD],
@@ -125,127 +136,136 @@ const LOADOUTS: Dictionary = {
 	5: [Glyph.GLYPH_BLAST, Glyph.GLYPH_SPREAD],
 }
 
-## 🔴🔴 **격자보다 **먼저** 그려져야 한다** — `stage.tscn` 의 노드 순서가 곧 그리는 순서다.
-##  ⚠ 그리고 그것만으로는 안 보인다: `cell_grid.gdshader` 가 **빈칸을 투명으로 빼야** 한다
-##   (`cell_renderer` 가 `empty_id` 를 주입한다). **셋이 한 짝이고 하나만 빠져도 조용히 안 보인다.**
+## **It must be drawn **before** the grid** — `stage.tscn`'s node order is the draw order.
+##  And that alone is not enough to see it: `cell_grid.gdshader` must **cut empty cells out as transparent**
+##   (`cell_renderer` injects `empty_id`). **The three are one set and missing just one hides it silently.**
 @onready var _sky: SkyBackground = $SkyBackground
 @onready var _renderer: CellRenderer = $CellRenderer
 @onready var _input: StageInput = $StageInput
-## 🔴🔴 **이 껍데기가 죽는 1번 방식이 `mouse_filter`다.** 발사가 좌클릭인데 HUD가 `Control`이다.
-##  `Panel`·`ColorRect`·컨테이너를 뒷판으로 씌우는 순간 기본값 STOP이 좌클릭을 통째로 먹고,
-##  **에러는 안 나고 전 그물은 그린이다.** ⇒ HUD 아래 `Control`은 전부 `mouse_filter = 2`(IGNORE).
-##  ⚠ 런타임에 훑어서 강제로 고치지 마라 — 그러면 `.tscn`에 적힌 값이 **아무 의미 없는 거짓
-##   손잡이**가 되고, 나중에 모달이 STOP으로 뒤를 막아야 할 때 그걸 조용히 뒤엎는다(v1 실측).
+## **The number one way this shell dies is `mouse_filter`.** Firing is left click while the HUD is a `Control`.
+##  The moment a `Panel`, `ColorRect` or container is laid over as a backing plate, the default STOP eats
+##  left click wholesale, and **no error is raised while every net stays green.** => Every `Control` under
+##  HUD is `mouse_filter = 2` (IGNORE).
+##  Do not sweep them at runtime and force-fix them — that turns the values written in the `.tscn` into
+##   **a meaningless false knob**, and later, when a modal must block what is behind it with STOP, it
+##   silently overturns that (measured in v1).
 @onready var _hud: Label = $HUD/Stats
-## 🔴🔴 **체력은 `HUD/Stats` 와 다른 노드다.** 같이 적으면 두 곳이 되는 게 아니라 —
-##  `Stats` 는 조립창을 열면 **숨는다**(`_toggle_assembly`). 체력이 거기 있으면 조립 중에
-##  「내가 불에 타고 있는지」가 화면에서 통째로 사라진다(기획 「화면」).
+## **Health is a different node from `HUD/Stats`.** Writing them together does not make two places — rather,
+##  `Stats` **hides** when the assembly window opens (`_toggle_assembly`). With health in there, "am I on
+##  fire" disappears from the screen entirely while assembling (design, "the screen").
 @onready var _hp_label: Label = $HUD/Health
-## 🔴🔴 **카메라가 캐릭터를 따라간다.** 옛 계약(「흔들림 전용 · 위치가 뷰포트 한가운데라 변환이 항등」)은
-##  **죽었다** — 화면 확대율이 2배가 되며 보이는 월드가 960×540으로 줄어 무대(2048×1152)가
-##  한 화면에 안 들어간다. 정적 카메라로는 캐릭터가 화면 밖이다.
+## **The camera follows the character.** The old contract ("shake only · its position is the viewport center,
+##  so the transform is the identity") is **dead** — the screen scale doubled, shrinking the visible world to
+##  960x540, so the stage (2048x1152) does not fit in one screen. With a static camera the character is off screen.
 ##
-## 🔴 **두 축이 한 노드에 얹힌다**: `position` = 추종(아래 `camera_center`) · `offset` = 흔들림.
-##  ⚠ **섞지 마라** — 흔들림을 `position` 에 더하면 다음 프레임 추종이 그걸 덮어써서 흔들림이 사라진다.
-## ⚠ 뷰포트 좌표 → 월드 좌표 변환은 **반드시** 캔버스 변환을 되돌려야 한다(`stage_input._to_world`).
-##  🔴 **그게 이제 흔들림뿐 아니라 추종에도 걸린다** — 안 되돌리면 조준이 카메라가 움직인 만큼 어긋난다.
+## **Two axes ride on one node**: `position` = following (`camera_center` below) · `offset` = shake.
+##  **Do not mix them** — add shake into `position` and the next frame's following overwrites it, and the shake vanishes.
+## The viewport -> world coordinate conversion **must** undo the canvas transform (`stage_input._to_world`).
+##  **That now applies to following, not just shake** — without undoing it, aim drifts by however far the camera moved.
 @onready var _camera: Camera2D = $Camera2D
-## 🔴 조립창은 `HUD`(`CanvasLayer`) 아래다 — `Node2D`로 두면 화면 흔들림에 같이 흔들린다.
-##  ⚠ **껍데기는 열고 닫기만 시킨다.** 창이 제 상태를 알고, 좌표도 제 것을 쓴다.
+## The assembly window sits under `HUD` (a `CanvasLayer`) — put it under `Node2D` and it shakes along with the screen shake.
+##  **The shell only tells it to open and close.** The window knows its own state and uses its own coordinates.
 @onready var _circle_window: CircleWindow = $HUD/CircleWindow
 @onready var _monster_view: MonsterView = $MonsterView
 @onready var _char_view: CharacterView = $CharacterView
 @onready var _spell_view: SpellView = $SpellView
 @onready var _blast_fx: BlastFx = $BlastFx
-## 🔴 **에디터 전용 원본이다.** 실제로 도는 지형은 `MAP`(위, `terrain_map_generated.gd` 재수출)이고
-##  화면은 `_renderer`(격자를 읽는 `CellRenderer`)가 그린다 — 이 노드가 화면에 남아 있으면 파괴된
-##  자리도 안 뚫린 것처럼 덮어 그린다. `_ready()`에서 곧바로 숨긴다.
+## **An editor-only original.** The terrain that actually runs is `MAP` (above, the re-export of
+##  `terrain_map_generated.gd`) and the screen is drawn by `_renderer` (a `CellRenderer` reading the grid) —
+##  leave this node visible and it paints over destroyed spots as if they were never pierced.
+##  It is hidden immediately in `_ready()`.
 @onready var _terrain: TileMapLayer = $Terrain
 
 var _grid := CellGrid.new()
 var _char := Character.new()
 var _spell := SpellSim.new()
 
-## 🔴🔴 **장착 상태의 단일 소스.** 디버그 키도 (앞으로) 조립창도 이것 하나를 만진다 —
-##  껍데기가 팩된 목록 사본을 따로 들면 「키를 눌렀는데 총구가 그대로다」가 되고
-##  **에러가 하나도 안 난다**(계획 §1).
+## **The single source of the equipped state.** Both the debug keys and (from now on) the assembly window
+##  touch this one thing — if the shell holds a separate copy of the packed list it becomes "I pressed a key
+##  but the muzzle is unchanged", and **not one error is raised** (plan §1).
 var _circle := SpellCircle.new()
 
-## ⚠ **프리셋 번호를 안 든다.** 조립창이 문양을 손대는 순간 「마지막으로 누른 번호」와 실제
-##  장착이 갈리기 때문이다(계획 §1 · 위험 9) — HUD에서 뺐고, 그러니 들 이유도 없어졌다.
-##  🔴 **번호를 지우는 것이 곧 「상태가 하나다」의 마지막 조각이다.**
+## **The preset number is not held.** The moment the assembly window touches a glyph, "the last number
+##  pressed" and the actual equipment diverge (plan §1 · risk 9) — it was removed from the HUD, so there is
+##  no longer a reason to hold it either.
+##  **Erasing the number is the last piece of "the state is one".**
 
-## 🔴🔴 **세상을 미는 것은 이것 하나다.** 위 셋(`_grid`·`_char`·`_spell`)을 **넘겨서** 든다 —
-##  껍데기가 따로 밀면 순서가 두 벌이 되고, 그게 이 파일이 죽는 방식이다.
-##  ⚠ 선언 순서가 계약이다. 위 셋보다 먼저 선언하면 `null`을 들고 태어난다.
+## **This one thing is what pushes the world.** It holds the three above (`_grid`, `_char`, `_spell`) by
+##  **being handed** them — if the shell pushes separately there are two sets of order, and that is how this
+##  file dies.
+##  Declaration order is a contract. Declare it before those three and it is born holding `null`.
 var _world := WorldStep.new(_grid, _spell, _char)
 
-## 🔴 발사 수와 착탄 수를 **따로** 찍는다 — 둘이 갈라지는 게 곧 진단이다(HUD).
-##  발사 0 = 좌클릭이 안 닿는다(`mouse_filter`) · 발사 > 착탄 = 격자 밖으로 나가 소멸했다.
-##  ⚠ 발사 수는 `_world` 가 든다 — 커맨드가 실제로 받아들여진 자리가 거기다.
-## 🔴🔴 **판정 2의 그물 대리치가 이 숫자다** — 확산→폭발은 8회, 폭발→확산은 1회여야 한다.
-##  화면에서 안 갈리는데 이 숫자만 맞으면 그게 이 단계가 멈춰야 하는 신호다.
+## The fire count and the impact count are printed **separately** — the two diverging is itself the diagnosis (HUD).
+##  fire 0 = left click is not reaching (`mouse_filter`) · fire > impact = it left the grid and vanished.
+##  The fire count is held by `_world` — that is where a command is actually accepted.
+## **This number is the nets' proxy for acceptance 2** — spread->blast must be 8, blast->spread 1.
+##  If they do not separate on screen while only this number is right, that is the signal this stage must stop.
 var _blast_count := 0
 
-## 🔴🔴 **K로 토글하는 물비 소스. `null` = 꺼짐.** 상태와 셈은 `water_source.gd` 가 전부 든다 —
-##  여기서는 「있나 없나」와 「매 틱 부른다」만 안다(그 파일 헤더의 「어디에 두나」).
+## **The rain source toggled with K. `null` = off.** `water_source.gd` holds all of the state and counting —
+##  here it knows only "is there one" and "call it every tick" (that file's header, "where to put it").
 var _water_source: WaterSource = null
 
-## 🔴🔴 **재료 칸 수는 N틱마다만 센다. 매 프레임 세면 CPU의 5%가 그냥 사라진다.**
+## **Material cell counts are counted only every N ticks. Count them every frame and 5% of the CPU just vanishes.**
 ##
-## 🔴 **실측이다**(2026-08-07, 구현 · 헤드리스 · 무대 씬의 실제 함수로 잼):
+## **Measured** (implementation · headless · with the stage scene's actual functions):
 ##
-##      count_material 1회                       **555μs**  (4,128,768칸)
-##      고치기 전 — 프레임마다 2회(돌·나무)      **65,983μs/s = CPU의 6.6%**
-##      물까지 안 조였다면 3회                   **99,728μs/s = CPU의 10.0%**
-##      고친 뒤 — 20틱마다 3회                   **약 1,677μs/s = 0.17%**  ⇒ **39배**
+##      count_material once                             **555us**  (4,128,768 cells)
+##      before the fix — twice per frame (stone, wood)  **65,983us/s = 6.6% of CPU**
+##      3 times if water had not been throttled too     **99,728us/s = 10.0% of CPU**
+##      after the fix — 3 times every 20 ticks          **about 1,677us/s = 0.17%**  => **39x**
 ##
-##  ⚠ 마지막 줄은 「조인 경로 12μs/s」 + 「1초에 한 번 실제로 세는 3 × 555μs」다.
-##   **12μs만 보고 「공짜」로 읽지 마라** — 세는 일 자체는 안 사라지고 드물어질 뿐이다.
-## 🔴 **고칠 자리가 부르는 쪽인 이유**는 `cell_grid.count_material` 주석에 있다 — 그 함수는
-##  그물과 무대의 문이라 남는다. ⚠ 그 주석은 2026-08-06까지 「~20μs · 0.24%」였고,
-##  **격자가 28배 커지며 조용히 거짓이 됐다.**
+##  The last line is "the throttled path 12us/s" + "3 x 555us actually counted once per second".
+##   **Do not read the 12us alone as "free"** — the counting work itself does not disappear, it only becomes rare.
+## **Why the place to fix is the caller** is in the `cell_grid.count_material` comment — that function is the
+##  door for the nets and the stage, so it stays. That comment used to say "~20us · 0.24%", and
+##  **it quietly became false when the grid grew 28x.**
 ##
-## ⚠ **왜 증분이 아닌가**: `_write_cell` 에서 세면 늘 정확하지만 **`_reset`(`fill`) 과
-##  `_write_water`(재료를 바꿀 때만) 도 같이 지나야 하고**, 셋 중 하나가 갈라지면 **조용히 틀린다.**
-##  🔴 이건 **본편에 안 남는 껍데기의 디버그 표시**다 — 정확도를 1초 늦추는 대가로
-##  시뮬에 두 번째 셈 규칙을 안 만든다. **늘 맞아야 하는 값이면 그때 증분으로 바꿔라.**
-## ⚠ **화면이 최대 1초 낡는다.** 실시간으로 봐야 하는 것들(활성 청크 · 타는 셀 · FPS)은
-##  안 조였다 — 그건 전부 O(1) 질의다.
+## **Why not incremental**: counting in `_write_cell` is always exact, but **`_reset` (`fill`) and
+##  `_write_water` (only when it changes the material) must be passed through too**, and if one of the three
+##  diverges it is **quietly wrong.**
+##  This is **a debug display of the shell, which won't survive into the real game** — at the cost of delaying
+##  accuracy by a second, a second counting rule is not created in the sim.
+##  **If it becomes a value that must always be right, switch to incremental then.**
+## **The screen goes up to 1 second stale.** The things that must be seen in real time (active chunks ·
+##  burning cells · FPS) were not throttled — those are all O(1) queries.
 ##
-## 🔴🔴 **물 칸은 「양의 합」이 아니다. 판정 3(총량 보존)을 여기서 읽지 마라.**
-##  물이 퍼지면 같은 양이 **더 많은 칸**에 담기므로 이 숫자는 **늘어난다.** 그게 정상이다.
-##  ⚠ 양의 합을 싼값에 낼 방법이 지금 없다 — `_aux` 를 GDScript로 훑으면 62,676μs다.
-##   ⇒ **판정 3은 그물이 값으로 잰다**(`net_water` 의 `총량 보존`). 화면은 그 자리가 아니다.
+## **The water cell count is not "the sum of amounts". Do not read acceptance 3 (total conservation) here.**
+##  When water spreads, the same amount is held in **more cells**, so this number **grows.** That is normal.
+##  There is no cheap way to produce the sum of amounts right now — sweeping `_aux` in GDScript is 62,676us.
+##   => **Acceptance 3 is measured by value in the nets** (`net_water`'s `_water_total_is_conserved`).
+##   The screen is not the place for it.
 const HUD_COUNT_TICKS := 20
 var _stone_cells := 0
 var _wood_cells := 0
 var _water_cells := 0
-## ⚠ **첫 프레임에 바로 세게 음수로 시작한다.** 0으로 두면 틱 20까지 전부 0이 떠서,
-##  F를 누른 사용자가 **1초 동안 키가 안 먹은 것으로 읽는다.**
+## **It starts negative so that it counts right on the first frame.** Left at 0, everything reads 0 until
+##  tick 20, and a user who pressed F **reads the key as dead for a second.**
 var _hud_count_tick := -HUD_COUNT_TICKS
 
 
 func _ready() -> void:
-	# 🔴🔴 **글자 크기를 여기서 밀어 넣는다.** `Label` 이 엔진 기본(16)을 쓰는데, 옛 화면 배율 2.0이
-	#  그걸 암묵적으로 화면 32px로 만들어 주고 있었다 — 배율이 1.0이 되며 **크기만 안 따라왔다.**
-	#  ⚠ **왜 씬이 아니라 여기인지**는 `fx_tuning.HUD_FONT_SIZE` 주석에 있다(연출 상수는 한 파일).
+	# **The font size is pushed in here.** `Label` uses the engine default (16), and the old screen scale of
+	#  2.0 was implicitly making that 32px on screen — the scale became 1.0 and **only the size did not follow.**
+	#  **Why here and not the scene** is in the `fx_tuning.HUD_FONT_SIZE` comment (presentation constants in one file).
 	for label: Label in [_hud, _hp_label]:
 		label.add_theme_font_size_override("font_size", Fx.HUD_FONT_SIZE)
 	_terrain.visible = false
 	_sky.setup(_camera)
 	_renderer.setup(_grid)
-	# 🔴 지팡이 끝 색이 조립 상태를 **읽는다.** 사본을 밀어 넣으면 밀어 넣기를 한 번 깜빡하는 순간
-	#  「조합을 바꿨는데 화면이 그대로다」가 되고, 그게 v1이 죽은 방식이다.
-	# 🔴🔴 **격자도 같이 넘긴다 — 지팡이가 지형에 막혀 짧아진다.** ⚠ 안 넘기면 화면은 옛 자리에
-	#  그리고 발사만 새 자리로 가는데 **에러가 하나도 안 난다**(`character_view._grid`).
+	# The staff tip's color **reads** the assembly state. Push a copy in and, the moment one push is
+	#  forgotten, it becomes "I changed the combination but the screen is unchanged" — that is how v1 died.
+	# **The grid is handed over too — the staff is blocked by terrain and shortens.** Do not hand it over and
+	#  the screen draws at the old spot while only firing goes to the new one, and **not one error is raised**
+	#  (`character_view._grid`).
 	_char_view.setup(_char, _circle, _grid)
-	# 🔴 조립창도 **같은 것**을 읽는다 — 사본을 주면 「키 4↔5로 그림이 뒤집힌다」가 사라지고,
-	#  그게 단일 소스(계획 §1)의 눈에 보이는 유일한 증거다.
+	# The assembly window reads **the same thing** — give it a copy and "keys 4 and 5 flip the picture"
+	#  disappears, and that is the single source's (plan §1) only visible evidence.
 	_circle_window.setup(_circle)
 	_spell_view.setup(_spell)
-	# 🔴🔴 **뷰가 몬스터를 잡는 길이 이것 하나다.** 몬스터는 `world_step` 안에 살고
-	#  껍데기가 배열을 따로 들면 「세상」이 두 곳이 된다(`monsters-minimum` 동작 ③).
+	# **This one path is how the view gets hold of monsters.** Monsters live inside `world_step`, and if the
+	#  shell holds a separate array there are two "worlds" (`monsters-minimum`, behavior (3)).
 	_monster_view.setup(_world)
 	_input.fire_requested.connect(_fire_at)
 	_input.reset_requested.connect(reset_stage)
@@ -255,77 +275,87 @@ func _ready() -> void:
 	_input.rain_requested.connect(_toggle_rain_at)
 	_input.monster_requested.connect(_spawn_monster_at)
 	_input.loadout_requested.connect(_set_loadout)
-	# 🔴🔴 **세상을 안 멈춘다** — 여기서 `get_tree().paused`를 건드리지 마라.
-	#  창을 연 채로 걷고·쏘고·불이 번지는 것이 기획 판정 4의 전부다.
+	# **The world is not stopped** — do not touch `get_tree().paused` here.
+	#  Walking, firing and fire spreading with the window open is the whole of design acceptance 4.
 	_input.assembly_toggled.connect(_toggle_assembly)
-	# ⚠ 시작 장착은 **모델의 기본값**이다(`SpellCircle`의 생성자) — 여기서 프리셋을 한 번
-	#  밀어 넣던 줄을 지웠다. 밀어 넣으면 「시작 상태」가 두 곳이 되고, 그중 하나만 고치는 날이 온다.
+	# The starting equipment is **the model's default** (`SpellCircle`'s constructor) — the line that pushed
+	#  a preset in once here was deleted. Push it in and "the starting state" is in two places, and the day
+	#  comes when only one of them gets fixed.
 	reset_stage()
 
 
-## 🔴🔴 **float이 시뮬로 들어가는 유일한 문이고, `Aim.fire_cmd`가 그걸 딱 한 번 닫는다.**
-##  지팡이 끝도 마우스도 여기서는 아직 float px다.
-## Tab. 🔴 **창을 열면 HUD를 숨긴다**(사용자 판정, 2026-08-03).
-##  창이 화면 90%라 `HUD/Stats`를 덮는데, 왼쪽 96px 띠에 **글자 앞부분만 잘려 남아** 창에 붙어 보였다.
-##  ⚠ **대가를 알고 고른 것이다** — 조립 중에는 틱·발사 수를 못 본다. 이 HUD는 껍데기의 디버그
-##   표시라 본편에 안 남는다(이 파일 첫 줄).
+## **The only door through which float enters the sim, and `Aim.fire_cmd` closes it exactly once.**
+##  Both the staff tip and the mouse are still float px here.
+## Tab. **Opening the window hides the HUD** (decided by the user).
+##  The window is 90% of the screen and covers `HUD/Stats`, but in the 96px strip on the left
+##  **only the front of the letters was left, clipped**, and looked stuck to the window.
+##  **The price was known when it was chosen** — the tick and fire counts cannot be seen while assembling.
+##   This HUD is the shell's debug display and won't survive into the real game (this file's first line).
 ##
-## 🔴 **창이 단일 소스다.** HUD 걸쇠를 따로 들면 둘이 갈라져 「닫았는데 HUD가 안 돌아온다」가 되고,
-##  그건 껍데기가 죽는 조용한 방식이다. ⇒ 창의 상태를 **읽어서** 정한다.
+## **The window is the single source.** Hold a separate HUD latch and the two diverge into "I closed it but
+##  the HUD did not come back", and that is a quiet way for the shell to die. => It is decided by **reading**
+##  the window's state.
 func _toggle_assembly() -> void:
 	_circle_window.toggle()
 	_hud.visible = not _circle_window.visible
 
 
-## 🔴 룬도 문양도 **조립 상태에서 나온다.** 껍데기가 `ELEM_FIRE`를 따로 박으면 룬 자리가
-##  거짓 손잡이가 되고, 룬을 바꿀 수 있게 되는 날 발사만 조용히 안 따라온다.
+## Both the rune and the glyphs **come out of the assembly state.** If the shell nails `ELEM_FIRE` in
+##  separately, the rune slot becomes a false knob, and the day runes become changeable only firing quietly
+##  fails to follow.
 func _fire_at(world_px: Vector2) -> void:
-	# 🔴🔴 **못 쏘면 커맨드를 아예 안 만든다.** 만들면 빈 룬이 `fire()`의 룬 검사에 걸려 짖고,
-	#  래퍼가 stderr를 실패로 치니 **평소 조작이 그물을 빨갛게 만든다.**
-	#  ⚠ 여기서도 짖지 마라 — 빈 룬으로 클릭하는 것은 **정상 입력**이다.
-	#   「못 쏜다」는 지팡이 끝이 회색으로 죽는 것으로 말한다(`character_view`).
+	# **If it can't fire, no command is made at all.** Make one and an empty rune trips `fire()`'s rune check
+	#  and barks, and since the wrapper counts stderr as failure **ordinary play turns the nets red.**
+	#  Do not bark here either — clicking with an empty rune is **normal input.**
+	#   "It can't fire" is said by the staff tip dying to gray (`character_view`).
 	if not _circle.can_fire():
 		return
 	_world.enqueue(Aim.fire_cmd(
 		_char_view.tip_px(), world_px, _circle.element(), _circle.packed_glyphs()))
 
 
-## 🔴🔴 **F — 마우스 자리에 물을 붓는다. 껍데기 전용 디버그 문이다.**
-##  게임 안에서 물을 만드는 것은 **단계 5의 물 룬**이고, 그때까지 물을 화면에서 보는 길이 이것뿐이다.
+## **F — pours water at the mouse position. A shell-only debug door.**
+##  What makes water inside the game is **stage 5's water rune**, and until then this is the only way to see
+##  water on screen.
 ##
-## 🔴 **`_grid.set_water` 를 직접 부른다** — `ignite()` 와 정확히 같은 자리다(격자의 「그물·무대용 문」).
-##  ⚠ 커맨드를 안 지나므로 **멀티에는 안 간다.** 그게 맞다 — 무대는 본편에 안 남고, 물이 네트워크를
-##   타는 길은 단계 5의 `CMD_WATER` 다. 여기에 커맨드를 만들면 **쓰이지 않는 문이 하나 더 선다.**
+## **It calls `_grid.set_water` directly** — exactly the same place as `ignite()` (the grid's "door for nets and the stage").
+##  Not going through a command, it **does not go to multiplayer.** That is right — the stage won't survive
+##   into the real game, and the way water rides the network is stage 5's `CMD_WATER`. Make a command here
+##   and **one more unused door stands up.**
 ##
-## ⚠ **양과 반경은 「눈에 띄나」로 고른 값이다.** 반경 16셀 = 지름 128px 이고 화면이 1920×1080이라
-##  한 번 누르면 확실히 보인다. 🔴 **한 방울로 두면 사용자가 「키가 안 먹는다」로 읽는다.**
-## ⚠ `floori` 다 — `aim._to_cell` 과 같은 이유이고, `int()` 는 격자 왼쪽·위 밖에서 한 칸 튄다.
+## **Amount and radius are values chosen by "is it noticeable".** Radius 16 cells = 128px across, and with a
+##  1920x1080 screen one press is clearly visible. **Leave it at a single drop and the user reads it as "the
+##  key doesn't work".**
+## It is `floori` — the same reason as `aim._to_cell`, and `int()` jumps one cell outside the grid's left and top.
 const WATER_BRUSH_R := 16
 
 func _pour_water_at(world_px: Vector2) -> void:
 	var cx := floori(world_px.x / Tuning.CELL_PX)
 	var cy := floori(world_px.y / Tuning.CELL_PX)
 	var r2 := WATER_BRUSH_R * WATER_BRUSH_R
-	# 🔴 **정수 원반이다** — `_disc` 와 같은 모양이다. 여기서 다르게 그리면 「폭발은 동그란데
-	#  물은 네모」가 되고, 그건 화면에서만 보인다.
+	# **An integer disc** — the same shape as `_disc`. Draw it differently here and it becomes "the blast is
+	#  round but the water is square", and that only shows on screen.
 	for dy in range(-WATER_BRUSH_R, WATER_BRUSH_R + 1):
 		for dx in range(-WATER_BRUSH_R, WATER_BRUSH_R + 1):
 			if dx * dx + dy * dy > r2:
 				continue
-			# ⚠ 돌·타는 칸은 `set_water` 가 조용히 거절한다 — 그릇 안에 부어도 벽을 안 먹는다.
+			# `set_water` silently refuses stone and burning cells — pour into a vessel and it does not eat the walls.
 			_grid.set_water(cx + dx, cy + dy, Tuning.WATER_MAX)
 
 
-## 🔴🔴 **T — 마우스 자리에 나무 바닥을 깐다. 껍데기 전용 디버그 문이다** (2026-08-07).
+## **T — lays a wooden floor at the mouse position. A shell-only debug door.**
 ##
-## 🔴🔴 **왜 생겼나 — 「볼 것이 화면에 도달하는 경로」가 없었다**(CLAUDE.md).
-##  물 작업이 **「얕은 물은 불을 못 끈다」**를 넣었는데, 그 차이는 **숲 위에서만 보인다**:
-##  깊은 물은 불을 세우고 얇게 퍼진 시트는 못 세운다 — **나무가 넓게 깔려 있어야 그게 보인다.**
-##  ⚠ **실측: 맵 전체에 나무가 91칸이고 그나마 세로 기둥 모양이다** ⇒ 화면에서 원리적으로 못 본다.
+## **Why it came about — there was no "path by which the thing to be seen reaches the screen"** (CLAUDE.md).
+##  The water work put in **"shallow water cannot put out fire"**, and that difference **is only visible over
+##  a forest**: deep water stops fire and a thinly spread sheet does not — **wood must be laid down widely
+##  for that to be seen.**
+##  **Measured: the whole map holds 91 cells of wood, and even those are shaped as vertical pillars**
+##   => it cannot be seen on screen in principle.
 ##
-## ⚠ **`set_water` 와 달리 원반이 아니라 가로 띠다.** 숲 바닥을 만드는 것이 목적이라
-##  동그라미로 깔면 「언덕」이 되어 물이 양옆으로 흘러내린다 — 그러면 재려던 그림이 안 나온다.
-## 🔴 **빈칸에만 깐다** — 돌·물 위에 덮으면 지형을 지우게 되고, 그건 붓이 아니라 파괴다.
+## **Unlike `set_water` it is a horizontal band, not a disc.** The purpose is to make a forest floor, so
+##  laying it as a circle makes a "hill" and water runs off both sides — then the picture being measured
+##  never appears.
+## **It is laid on empty cells only** — cover stone or water and it erases terrain, and that is destruction, not a brush.
 const WOOD_BRUSH_W := 40
 const WOOD_BRUSH_H := 2
 
@@ -339,21 +369,24 @@ func _paint_wood_at(world_px: Vector2) -> void:
 			_grid.apply(CellGrid.cmd_fill(cx + dx, cy + dy, cx + dx, cy + dy, Mat.WOOD))
 
 
-## 🔴🔴 **G — 마우스 자리에 불을 붙인다. 껍데기 전용 디버그 문이다** (2026-08-07).
-##  ⚠ 마법 불 룬으로도 붙지만 **조준·비행·착탄을 거쳐야 해서 「여기에 붙이고 싶다」가 안 된다.**
-##  🔴 위 T와 짝이다 — 숲을 깔고(T) 물을 붓고(F) 불을 붙여(G) 세 재료가 한 화면에 모인다.
+## **G — sets fire at the mouse position. A shell-only debug door.**
+##  The magic fire rune lights it too, but **it has to go through aiming, flight and impact, so "I want it
+##  lit right here" is impossible.**
+##  It pairs with T above — lay a forest (T), pour water (F) and set it alight (G), and the three materials
+##  gather on one screen.
 func _ignite_at(world_px: Vector2) -> void:
 	_grid.ignite(floori(world_px.x / Tuning.CELL_PX), floori(world_px.y / Tuning.CELL_PX))
 
 
-## 🔴🔴 **K — 마우스 행에 물비를 토글한다. 껍데기 전용 디버그 문이다**(2026-08-08).
-##  ⚠ F(한 점 붓기, 위)와 다르다 — F는 한 번에 붓고 끝나지만 K는 **매 틱** `_on_ticked()` 가
-##  `tick()` 을 불러야 계속 붓는다. 그 배선은 아래 `_on_ticked()` 에 있다.
+## **K — toggles rain on the mouse row. A shell-only debug door.**
+##  It differs from F (a single-point pour, above) — F pours once and is done, while K keeps pouring only
+##  because `_on_ticked()` calls `tick()` **every tick.** That wiring is in `_on_ticked()` below.
 ##
-## 🔴 **토글이다.** 이미 켜져 있으면 (인자를 안 보고) 끈다 — 다시 누르면 멈춘다.
-##  안 그러면 R로 무대를 통째로 리셋해야 물비를 끌 수 있다.
-## ⚠ **폭이 176셀(±88)로 고정이다** — `Tuning.WATER_RAIN_HALF_W` 주석이 그 값의 근거(실측 표)를 든다.
-##  누른 자리를 **가운데**로 176셀을 잡는다. `floori` 는 `WATER_BRUSH_R` 과 같은 이유다.
+## **It is a toggle.** If it is already on it turns off (without looking at the argument) — press again and
+##  it stops. Otherwise the only way to turn rain off is resetting the whole stage with R.
+## **The width is fixed at 176 cells (plus and minus 88)** — the `Tuning.WATER_RAIN_HALF_W` comment holds the
+##  grounds for that value (the measured table). The 176 cells are taken with the pressed spot at **the
+##  center.** `floori` is for the same reason as `WATER_BRUSH_R`.
 func _toggle_rain_at(world_px: Vector2) -> void:
 	if _water_source != null:
 		_water_source = null
@@ -365,117 +398,122 @@ func _toggle_rain_at(world_px: Vector2) -> void:
 		Tuning.WATER_RAIN_PER_TICK)
 
 
-## 🔴🔴 **M/N — 마우스 자리에 몬스터를 세운다. 껍데기 전용 디버그 문이다**(`monsters-minimum`).
-##  배치는 맵 문서의 몫이라(문서 「경계」) 무대는 몬스터를 자동으로 안 깐다 — 이 키가
-##  「볼 것이 화면에 도달하는 경로」다.
+## **M/N — stands a monster at the mouse position. A shell-only debug door** (`monsters-minimum`).
+##  Placement is the map doc's share (that doc's "Boundary"), so the stage does not lay monsters down
+##  automatically — these keys are "the path by which the thing to be seen reaches the screen".
 ##
-## ⚠ **스폰 자리는 마우스 자리를 상자 가운데로 둔다** — 좌상단에 두면 큰 상자(44px)일수록
-##  커서에서 멀리 뜬다.
-## 🔴 **단계 1은 M 하나로 돼지만 세웠다**(닭은 표에만 있고 그물이 헤드리스로 만들었다) —
-##  **단계 4에서 N을 붙여 닭도 화면에서 볼 수 있게 했다**(`stage_input.MONSTER_KEYS`).
+## **The spawn position puts the mouse position at the center of the box** — put it at the top left and the
+##  bigger the box (44px) the farther it floats from the cursor.
+## **Stage 1 stood only pigs, with M alone** (the hen was in the table only and the nets made it headless) —
+##  **stage 4 added N so the hen can be seen on screen too** (`stage_input.MONSTER_KEYS`).
 func _spawn_monster_at(world_px: Vector2, kind: int) -> void:
-	# 🔴 `roundi(w / 2.0)` — 정수 나눗셈(`/`)이면 홀수 폭에서 1px 반내림이 조용히 생긴다.
-	#  지금 값(44·32)은 짝수라 안 드러나지만 표가 홀수 폭을 갖는 날 이 줄이 먼저 죽는다.
+	# `roundi(w / 2.0)` — with integer division (`/`), odd widths silently lose 1px to rounding down.
+	#  The current values (44, 32) are even so it does not show, but the day the table holds an odd width this
+	#  line dies first.
 	var px := int(world_px.x) - roundi(MonsterDefs.w_px(kind) / 2.0)
 	var py := int(world_px.y) - roundi(MonsterDefs.h_px(kind) / 2.0)
 	_world.spawn_monster(kind, px, py)
 
 
-## ⚠ 표에 없는 번호는 **조용히 무시한다.** 눌러도 아무 일이 없는 게 「빈 조합으로 바뀌는 것」보다
-##  낫다 — 후자는 판정 1(문양을 넣고 뺀 차이)과 화면에서 구별이 안 된다.
-##  🔴 HUD가 있는 번호를 늘 보여 주므로 사용자에게 그 사실이 보인다.
+## A number not in the table is **silently ignored.** Nothing happening on a press is better than "switching
+##  to an empty combination" — the latter cannot be told apart on screen from acceptance 1 (the difference of
+##  adding and removing a glyph).
+##  The HUD always shows the numbers that exist, so the user can see that fact.
 ##
-## 🔴🔴 **프리셋은 조립 상태를 덮어쓸 뿐이다** — 상태를 따로 안 든다. 그래서 조립창이 붙어도
-##  두 길(키 · 클릭)이 같은 것을 만지고, 총구·HUD가 **저절로** 따라온다(계획 §1).
+## **A preset only overwrites the assembly state** — it holds no state of its own. So even once the assembly
+##  window is attached, the two paths (key · click) touch the same thing and the muzzle and HUD follow
+##  **on their own** (plan §1).
 func _set_loadout(n: int) -> void:
 	if not LOADOUTS.has(n):
 		return
 	var list: Array[int] = []
 	list.assign(LOADOUTS[n])
-	# 🔴🔴 **프리셋이 진·룬까지 놓는다.** 문양만 놓으면 진을 뺀 사용자가 **갇힌다** —
-	#  키 다섯이 전부 죽고 빠져나올 길이 조립창 하나뿐이다.
-	#  ⇒ 진까지 놓으므로 **키 1이 곧 조립 리셋**이다.
-	# ⚠ 순서(진 → 룬 → 문양)는 `apply_preset` **안에** 갇혀 있다. 여기서 세 줄로 풀면
-	#  뒤집는 날 문양이 조용히 사라진다.
-	# 🔴 표(`LOADOUTS`)를 안 넓혔다 — 진·룬은 **기본 지급 상수 둘**에서 나온다.
+	# **A preset places the circle and the rune too.** Place only the glyphs and a user who removed the
+	#  circle is **trapped** — all five keys die and the only way out is the assembly window.
+	#  => Since it places the circle too, **key 1 is an assembly reset.**
+	# The order (circle -> rune -> glyphs) is locked **inside** `apply_preset`. Unfold it into three lines
+	#  here and the day it gets flipped the glyphs quietly vanish.
+	# The table (`LOADOUTS`) was not widened — the circle and rune come from **the two default-issue constants.**
 	_circle.apply_preset(
 		SpellCircle.DEFAULT_CIRCLE, SpellCircle.DEFAULT_RUNE, Glyph.pack(list))
 
 
-## 🔴🔴 **여기서 세상을 밀지 마라.** 순서는 `world_step.frame()` 안에 있고, 이 함수가 아는 것은
-##  **「틱이 돌았나」** 하나다. 베끼는 순간 그물이 재는 순서와 게임의 순서가 갈린다.
+## **Do not push the world here.** The order is inside `world_step.frame()`, and the one thing this function
+##  knows is **"did a tick run".** The moment it is copied, the order the nets measure and the game's order diverge.
 func _physics_process(delta: float) -> void:
 	if _world.frame(delta, _input.move_axis(), _input.jump_pressed(), _input.jump_held()):
 		_on_ticked()
 	_update_hud()
 
 
-## 틱이 돈 프레임에만 화면을 친다.
-## 🔴 **통지는 다음 틱의 `spell.step()` 이 지운다** — 캐릭터가 걸은 뒤에 읽어도 아직 살아 있다.
+## Hits the screen only on frames where a tick ran.
+## **Notifications are cleared by the next tick's `spell.step()`** — read after the character has walked, they are still alive.
 func _on_ticked() -> void:
-	# 🔴🔴 **여기가 물비의 유일한 박동이다.** `_physics_process` 에서 부르면 `TICK_DIVIDER`(3)배
-	#  빨리 붓는다(`water_source.tick()` 헤더) — 켜져 있을 때만, 틱마다 정확히 한 번.
+	# **This is rain's only heartbeat.** Call it from `_physics_process` and it pours `TICK_DIVIDER` (3) times
+	#  faster (`water_source.tick()`'s header) — only while on, exactly once per tick.
 	if _water_source != null:
 		_water_source.tick(_grid)
 
-	# 🔴 자취는 시뮬이 **돈 뒤**여야 한 틱 낡지 않는다.
+	# The trail must come **after** the sim has run, or it is one tick stale.
 	_spell_view.on_tick()
 
-	# 🔴🔴 **폭발 통지는 이 틱 안에서만 유효하다** — 다음 `step()`이 지운다.
-	#  여기서 안 읽으면 섬광도 흔들림도 없이 구멍만 남고, **에러는 안 난다.**
+	# **A blast notification is valid only within this tick** — the next `step()` clears it.
+	#  Do not read it here and only the hole is left, with no flash and no shake, and **no error is raised.**
 	_blast_fx.on_blasts(_spell.get_blast_x(), _spell.get_blast_y(),
 		_spell.get_blast_element(), _spell.get_blast_gen())
 	_blast_count += _spell.blast_count()
 
-	# 🔴🔴 **죽음 통지는 이 틱 안에서만 유효하다** — 다음 `frame()`의 틱 갈래가 지운다
-	#  (`world_step.gd` 헤더). 여기서 안 읽으면 시체 잔상이 원리적으로 안 생긴다 —
-	#  `blast_fx.on_blasts()`와 정확히 같은 자리(`monster_view.on_tick()`).
+	# **A death notification is valid only within this tick** — the tick branch of the next `frame()` clears
+	#  it (`world_step.gd`'s header). Do not read it here and the corpse afterimage cannot appear in principle —
+	#  exactly the same place as `blast_fx.on_blasts()` (`monster_view.on_tick()`).
 	_monster_view.on_tick()
 
-	# 🔴🔴 **격자가 센 값 하나로 판단한다.** 껍데기가 따로 걸쇠를 들면 폭발처럼
-	#  **커맨드 큐를 안 지나는 변경**이 그 걸쇠를 조용히 빠뜨려 구멍이 화면에 안 뜬다.
-	#  ⚠ 읽으면 0으로 돌아가므로 **매 틱 반드시 한 번** 불러야 한다.
-	#  ⇒ 아무것도 안 바뀐 틱에는 업로드를 건너뛴다 = 정지 상태 비용 ≈ 0.
+	# **The judgment is made from one value the grid counted.** If the shell holds a separate latch, changes
+	#  that **do not go through the command queue** — like a blast — quietly miss that latch and the hole
+	#  never appears on screen.
+	#  Reading it returns it to 0, so it **must be called exactly once per tick.**
+	#  => On ticks where nothing changed the upload is skipped = the cost at rest is about 0.
 	if _grid.consume_changed() > 0:
 		_renderer.refresh()
 
 
-## 🔴🔴 **렌더 시계는 여기 하나다.** 시뮬은 20Hz인데 화면은 60fps라, 보간 없이는 투사체가
-##  틱당 40px씩 순간이동한다.
-##  ⚠ **시계를 하나 더 만들지 않는 게 요점이다.** 분주기는 `_world`가 이미 들고 있고,
-##   여기서는 그걸 **읽기만** 한다(`phase()`). 뷰가 자기 `delta`를 누산하면 그 순간 시계가 둘이 된다.
+## **The render clock is this one.** The sim is 20Hz while the screen is 60fps, so without interpolation a
+##  projectile teleports 40px per tick.
+##  **The point is that a second clock is not created.** `_world` already holds the divider and here it is
+##   **only read** (`phase()`). The moment a view accumulates its own `delta` there are two clocks.
 func _process(_dt: float) -> void:
 	_spell_view.set_render_alpha(float(_world.phase()) / float(Tuning.TICK_DIVIDER))
-	# 🔴🔴 **추종은 `position`, 흔들림은 `offset`.** 한 축에 둘을 얹으면 다음 프레임 추종이
-	#  흔들림을 덮어써서 **흔들림이 조용히 사라진다.**
-	# ⚠ 보이는 크기는 `get_viewport_rect()` 에서 읽는다 — `ProjectSettings` 를 여기서 또 읽으면
-	#  창 모드가 바뀌는 날 두 곳이 갈라진다.
+	# **Following is `position`, shake is `offset`.** Put both on one axis and the next frame's following
+	#  overwrites the shake, and **the shake quietly disappears.**
+	# The visible size is read from `get_viewport_rect()` — read `ProjectSettings` here as well and the day
+	#  the window mode changes the two places diverge.
 	_camera.position = camera_center(_char.center(), get_viewport_rect().size, world_size())
-	# 🔴 흔들림은 **카메라 offset**이다. `stage_input._to_world`가 캔버스 변환을 되돌리므로
-	#  흔드는 동안에도 조준이 안 어긋난다 — 안 되돌리면 에러 없이 클릭이 엉뚱한 셀로 간다.
-	# ⚠ 이 노드의 `_process`와 `blast_fx`의 `_process` 순서는 보장이 없어 **한 프레임 늦을 수 있다** —
-	#  0.2초짜리 흔들림에서는 관측 불가다.
+	# Shake is **the camera's offset**. `stage_input._to_world` undoes the canvas transform, so aim does not
+	#  drift even while shaking — without undoing it, a click goes to the wrong cell with no error.
+	# The order of this node's `_process` and `blast_fx`'s `_process` is not guaranteed, so it **can be one
+	#  frame late** — unobservable on a 0.2-second shake.
 	_camera.offset = Vector2(_blast_fx.shake_offset())
 
 
-## R. 🔴🔴 **장식이 아니다** — 지형 자국이 이 단계의 주 증거인데, 앞 실험의 구멍이 남아 있으면
-##  두 조합을 비교할 수가 없다. 리셋 없이는 판정 1·2가 성립하지 않는다.
+## R. **Not decoration** — terrain marks are this stage's main evidence, and with holes left over from the
+##  previous experiment two combinations cannot be compared. Without a reset, acceptance 1 and 2 do not hold.
 func reset_stage() -> void:
 	_grid.apply(CellGrid.cmd_reset())
 	_spell.reset()
-	# 🔴 뷰도 같이 비운다. 안 비우면 죽은 투사체의 자취와 섬광이 R을 누를 때마다 쌓인다.
+	# The views are cleared with it. Without clearing, dead projectiles' trails and flashes pile up every time R is pressed.
 	_spell_view.clear()
 	_blast_fx.clear()
-	# 🔴 안 비우면 죽은 세션의 hp 사전·번쩍·피해 숫자·시체가 새 세션에 잠깐 얹힌다
-	#  (`spell_view.clear()`·`blast_fx.clear()`와 같은 문 — `monster_view.gd` 헤더).
+	# Without clearing, the dead session's hp dictionary, flashes, damage numbers and corpses briefly ride
+	#  into the new session (the same door as `spell_view.clear()` and `blast_fx.clear()` — `monster_view.gd`'s header).
 	_monster_view.clear()
 	_camera.offset = Vector2.ZERO
-	# 🔴 **계수기를 전부 되돌린다.** 하나만 남기면 위 「발사 > 착탄 = 격자 밖 소멸」 진단이
-	#  R 한 번에 영영 거짓이 된다 — R은 이 단계의 주 측정 장치라 그 진단이 곧 눈이다.
-	#  ⚠ 큐와 발사 수는 `_world` 가 든다 — 여기서 또 만지면 되돌리는 자리가 두 곳이 된다.
+	# **Every counter is reset.** Leave one behind and the "fire > impact = it left the grid and vanished"
+	#  diagnosis above becomes false forever after a single R — R is this stage's main measuring instrument,
+	#  so that diagnosis is the eye.
+	#  The queue and the fire count are held by `_world` — touch them here as well and there are two places to reset.
 	_world.reset()
 	_blast_count = 0
-	# 🔴 물비도 리셋 대상이다 — 안 끄면 지형이 새로 서는 순간부터 옛 소스가 계속 붓는다.
+	# Rain is a reset target too — leave it on and the old source keeps pouring from the moment terrain is rebuilt.
 	_water_source = null
 	build_terrain_into(_grid)
 	_char.place(
@@ -483,20 +521,21 @@ func reset_stage() -> void:
 		SPAWN_TILE.y * Tuning.TILE_CELLS * Tuning.CELL_PX)
 
 
-## 세상의 크기(월드 px). 🔴 **격자에서 나온다** — `MAP` 에서 세면 맵을 줄이는 날 카메라만 안 따라온다.
+## The world's size (world px). **It comes from the grid** — count it from `MAP` and the day the map shrinks only the camera fails to follow.
 static func world_size() -> Vector2:
 	return Vector2(CellGrid.W, CellGrid.H) * float(Tuning.CELL_PX)
 
 
-## 🔴🔴 **카메라가 볼 한가운데. 순수 static 이라 그물이 직접 잰다.**
-##  씬도 캐릭터도 없이 자리를 넣고 카메라 위치를 받아 볼 수 있다 — `pick_state` 와 같은 어법이다.
+## **The center the camera will look at. Being pure static, the nets measure it directly.**
+##  A position can be fed in and a camera position taken back with no scene and no character — the same
+##  idiom as `pick_state`.
 ##
-## 🔴 **세상 밖을 안 보여 준다(클램프).** 안 막으면 무대 가장자리에서 화면에 빈 공간이 들어오고,
-##  그 빈 공간은 **격자 밖이라 아무것도 안 그려져** 「세상이 잘렸다」로 보인다.
-## ⚠ **세상이 화면보다 좁으면 클램프 구간이 뒤집힌다**(`lo > hi`) — `clampf` 에 그대로 넘기면
-##  조용히 한쪽 끝으로 붙는다. 그때는 **세상 한가운데**에 두는 것이 맞다.
-##  🔴 지금 세상(2048×1152)이 화면(960×540)보다 크므로 이 갈래는 안 도는데, **안 도는 갈래라
-##   틀려도 아무도 안 짖는다** — 그물이 그 갈래를 따로 잰다.
+## **It does not show outside the world (clamp).** Without blocking it, empty space enters the screen at the
+##  stage's edge, and that empty space is **outside the grid so nothing is drawn**, reading as "the world is cut off".
+## **If the world is narrower than the screen the clamp range inverts** (`lo > hi`) — pass that straight to
+##  `clampf` and it silently sticks to one end. In that case putting it at **the world's center** is right.
+##  The world today (2048x1152) is bigger than the screen (960x540), so this branch does not run, and
+##   **being a branch that does not run, nobody barks when it is wrong** — the nets measure that branch separately.
 static func camera_center(focus: Vector2, view: Vector2, world: Vector2) -> Vector2:
 	return Vector2(_axis_center(focus.x, view.x, world.x), _axis_center(focus.y, view.y, world.y))
 
@@ -507,19 +546,19 @@ static func _axis_center(f: float, v: float, w: float) -> float:
 	return clampf(f, v * 0.5, w - v * 0.5)
 
 
-## ASCII 맵 → 커맨드. 🔴 지형도 `apply()`를 지난다 — 외부 이벤트가 커맨드 문을 우회하면
-##  나중에 붙는 부수효과(깨우기·통지)를 통째로 건너뛰어 **에러 없이 아무 일도 안 난다.**
+## ASCII map -> commands. Terrain goes through `apply()` too — if an external event bypasses the command
+##  door, side effects added later (waking, notifications) are skipped wholesale and **nothing happens, with no error.**
 ##
-## 🔴 **static인 이유**: 그물이 **실제로 도는 이 코드와 이 맵**을 세워 잰다.
-##  그물이 맵을 복사해 들고 있으면 지형이 바뀔 때 같이 안 늙는다.
+## **Why static**: the nets stand up **this code and this map, the ones that actually run**, and measure them.
+##  If a net held a copy of the map, it would not age along when the terrain changes.
 static func build_terrain_into(g: CellGrid) -> void:
 	if MAP.size() != MAP_H:
-		push_error("MAP 행 수가 %d다 — %d여야 한다" % [MAP.size(), MAP_H])
+		push_error("MAP has %d rows - it must be %d" % [MAP.size(), MAP_H])
 		return
 	for ty in MAP.size():
 		var row := MAP[ty]
 		if row.length() != MAP_W:
-			push_error("MAP %d행 폭이 %d다 — %d여야 한다" % [ty, row.length(), MAP_W])
+			push_error("MAP row %d is %d wide - it must be %d" % [ty, row.length(), MAP_W])
 			return
 		var tx := 0
 		while tx < MAP_W:
@@ -527,7 +566,7 @@ static func build_terrain_into(g: CellGrid) -> void:
 			if not MAP_CHARS.has(ch):
 				tx += 1
 				continue
-			# 같은 문자가 이어지는 만큼 한 커맨드로 묶는다 — 타일마다 부르면 커맨드가 2,304개다.
+			# Runs of the same character are bundled into one command — calling per tile gives 2,304 commands.
 			var run := tx
 			while run + 1 < MAP_W and row[run + 1] == ch:
 				run += 1
@@ -539,16 +578,17 @@ static func build_terrain_into(g: CellGrid) -> void:
 			tx = run + 1
 
 
-## 🔴🔴 **비싼 셈만 모아 둔 자리. `_update_hud` 에서 갈라 둔 이유가 둘이다.**
-##  ① **씬 트리 없이 부를 수 있다** — `@onready` 라벨을 하나도 안 만진다. 그래서 **그물이 이걸
-##   직접 굴려서** 「조여졌나 · N틱 뒤에 따라잡나」를 값으로 잰다(`net_render`).
-##   ⚠ 안 갈랐으면 그물이 무대를 **트리에 붙여야** 했고, 그건 이 리포가 안 하는 일이다.
-##  ② 「무엇을 세나」와 「어떻게 보여 주나」가 한 함수에 있으면 조이는 규칙이 표시 줄마다 흩어진다.
+## **The place where only the expensive counting is gathered. There are two reasons it was split out of `_update_hud`.**
+##  (1) **It can be called with no scene tree** — it touches not one `@onready` label. So **the nets run this
+##   directly** and measure "was it throttled · does it catch up after N ticks" by value (`net_render`).
+##   Without the split the nets would have had to **attach the stage to the tree**, and this repo does not do that.
+##  (2) With "what is counted" and "how it is shown" in one function, the throttling rule scatters across every display line.
 ##
-## 🔴 **틱 번호로 조인다. 프레임 수로 조이지 마라** — 프레임률이 흔들리면 세는 주기도 흔들리고,
-##  그러면 **「느려질 때 더 자주 센다」**가 된다. 비용은 위 `HUD_COUNT_TICKS` 주석.
-## ⚠ `tick < _hud_count_tick` 갈래는 **R(리셋)** 이다 — 틱이 0으로 돌아가므로 곧바로 다시 센다.
-##  없으면 리셋 뒤 20틱 동안 **옛 지형의 수**가 화면에 남는다.
+## **It is throttled by tick number. Do not throttle by frame count** — when the frame rate wobbles the
+##  counting period wobbles with it, and that becomes **"it counts more often when it is slow".** The cost is
+##  in the `HUD_COUNT_TICKS` comment above.
+## The `tick < _hud_count_tick` branch is **R (reset)** — the tick returns to 0, so it counts again immediately.
+##  Without it, **the old terrain's counts** stay on screen for 20 ticks after a reset.
 func _refresh_hud_counts() -> void:
 	var tick := _grid.get_tick()
 	if tick - _hud_count_tick < HUD_COUNT_TICKS and tick >= _hud_count_tick:
@@ -561,10 +601,10 @@ func _refresh_hud_counts() -> void:
 
 func _update_hud() -> void:
 	_refresh_hud_counts()
-	# 🔴 **체력의 단일 소스는 캐릭터다.** 껍데기가 따로 세면 「깎였는데 숫자가 그대로」가 된다.
-	# ⚠ 쓰러짐도 **같은 값에서 파생**시킨다 — 걸쇠를 따로 들면 「0인데 안 쓰러졌다」가 화면에 남는다.
-	#  🔴 부활 방법을 같이 적는다. 혼자라 일으켜 줄 사람이 없어 **R이 유일한 길**인데,
-	#   안 적으면 사용자가 「게임이 멈췄다」로 읽는다.
+	# **The single source of health is the character.** Count it separately in the shell and it becomes "it took damage but the number is unchanged".
+	# Downed is **derived from the same value** — hold a separate latch and "it is 0 but not downed" stays on screen.
+	#  The way to revive is written alongside. Being alone there is nobody to pick you up, so **R is the only
+	#   way**, and without writing it the user reads it as "the game froze".
 	_hp_label.text = "체력 %d / %d%s" % [
 		_char.hp, Character.MAX_HP, "   쓰러짐 — R로 다시" if _char.downed else "",
 	]
@@ -572,21 +612,22 @@ func _update_hud() -> void:
 		"틱 %d · %d Hz (분주기 %d)" % [
 			_grid.get_tick(), 60 / Tuning.TICK_DIVIDER, Tuning.TICK_DIVIDER,
 		],
-		# 🔴 나무가 줄고 「타는 셀」이 0으로 돌아가는 것이 판정 5의 숫자 쪽 증거다.
-		# ⚠ 돌·나무는 **최대 1초 낡은 값**이다(위 `HUD_COUNT_TICKS`). 「타는 셀」은 O(1)이라 실시간이다.
+		# Wood decreasing and "burning cells" returning to 0 is acceptance 5's evidence on the number side.
+		# Stone and wood are **values up to 1 second stale** (`HUD_COUNT_TICKS` above). "Burning cells" is O(1) and real time.
 		"돌 %d · 나무 %d · 타는 셀 %d" % [
 			_stone_cells, _wood_cells, _grid.burning_count(),
 		],
-		# 🔴🔴 **「물이 멈췄나」는 이 숫자로만 판정된다**(기획 판정 1). 「멈춘 것 같다」는 판정이
-		#  아니다 — v1은 물이 멈춘 것처럼 보이는데 안 멈추고 있었고 번개가 거기서 죽었다.
-		# ⚠ 사용자가 볼 것은 **줄다가 한 자리로 잠기는 것**이다. 0은 좁은 그릇에서만 나오고
-		#  그건 그물이 헤드리스로 잰다 — 화면에서 140초를 기다릴 이유가 없다.
-		# ⚠ **물 칸은 「양의 합」이 아니다** — 위 `WATER_HUD_TICKS` 주석. F로 붓는다.
+		# **"Has the water stopped" is judged by this number alone** (design acceptance 1). "It looks stopped"
+		#  is not a judgment — in v1 the water looked stopped while it was not, and lightning died there.
+		# What the user should watch is **it dropping and then locking to one figure.** 0 comes only in a
+		#  narrow vessel and the nets measure that headless — there is no reason to wait 140 seconds on screen.
+		# **The water cell count is not "the sum of amounts"** — the `WATER_HUD_TICKS` comment above. Pour with F.
 		"활성 청크 %d / %d · 물 %d칸 (F로 붓기)" % [
 			_grid.active_chunk_count(), CellGrid.CHUNK_COUNT, _water_cells,
 		],
-		# 🔴🔴 **「K가 먹었나」를 여기서만 판단한다.** F와 달리 K는 누른 순간 화면이 안 변하고
-		#  몇 틱 뒤에야 수면이 오른다 — 켜짐/꺼짐과 누적량이 없으면 사용자가 「안 먹는다」로 읽는다.
+		# **"Did K work" is judged only here.** Unlike F, K does not change the screen the moment it is
+		#  pressed and the water level rises only a few ticks later — without on/off and the accumulated
+		#  amount the user reads it as "it does not work".
 		"물비 %s" % (
 			"켜짐 · 누적 %d" % _water_source.poured() if _water_source != null else "꺼짐 (K로 토글)"),
 		"FPS %d" % Engine.get_frames_per_second(),
@@ -594,35 +635,38 @@ func _update_hud() -> void:
 		"발사 %d · 비행중 %d · 자취 %d" % [
 			_world.fire_count(), _spell.active_count(), _spell_view.trail_count(),
 		],
-		# 🔴 밀린 수를 같이 찍는다 — **버려지지 않았다**를 사용자가 눈으로 확인하는 자리다.
-		#  틱당 폭발 4발 상한에 걸리면 여기가 잠깐 오르고 다음 틱에 0으로 돌아가야 한다.
+		# The deferred count is printed alongside — this is where the user confirms with their eyes that
+		#  **nothing was discarded.** When the 4-blasts-per-tick cap bites, this rises briefly and must return
+		#  to 0 on the next tick.
 		"폭발 %d · 섬광 %d · 밀림 %d" % [
 			_blast_count, _blast_fx.active_count(), _spell.pending_count(),
 		],
-		# 🔴 장착 줄은 **`_circle`이 실제로 든 것**에서 나온다. 프리셋 표에서 이름을 뽑으면
-		#  조립창이 붙는 날 「그림은 바뀌었는데 HUD는 그대로」가 된다(위험 9).
-		# 🔴🔴 **「못 쏜다」를 말하는 세 곳 중 하나다**(지팡이 끝 · 조립창 · 여기). 좌클릭했는데
-		#  아무 일도 안 나는 것을 **사용자가 고장으로 읽는 것**을 막는다.
-		# 🔴 **번호를 뺐다.** 조립창이 문양을 손대는 순간부터 「장착 [4]」가 거짓말이 된다(계획 §1).
-		#  ⇒ 이름을 **지금 상태에서만** 파생시킨다. 아래 도움말은 「어떤 키가 있나」라 번호가 맞다.
+		# The equipped line comes from **what `_circle` actually holds.** Pull the name from the preset table
+		#  and the day the assembly window is attached it becomes "the picture changed but the HUD did not" (risk 9).
+		# **One of the three places that say "it can't fire"** (the staff tip · the assembly window · here).
+		#  It stops **the user reading nothing happening on a left click as a malfunction.**
+		# **The number was removed.** From the moment the assembly window touches a glyph, "equipped [4]"
+		#  becomes a lie (plan §1).
+		#  => The name is derived **from the current state only.** The help line below is "which keys exist",
+		#   so numbers are right there.
 		"장착 %s%s   (%s)" % [
 			_glyph_names(_circle.glyph_list()),
 			"" if _circle.can_fire() else "  ⚠ 룬 없음 — 쏠 수 없다", _loadout_help(),
 		],
-		# 🔴 마릿수를 보여야 사용자가 상한(`MonsterDefs.MAX_MONSTERS`)에 닿는 것을 화면에서 본다.
+		# The head count must be shown for the user to see on screen that the cap (`MonsterDefs.MAX_MONSTERS`) is reached.
 		"몬스터 %d / %d마리 (M으로 세우기)" % [_world.monster_count(), MonsterDefs.MAX_MONSTERS],
-		# 🔴 **Tab을 안 적으면 조립창이 「아무도 못 여는 기능」이 된다** — verify-look이 그렇게 적었다.
-		#  ⚠ M을 안 적으면 「아무도 못 여는 기능」이 되는 것은 몬스터도 같다.
-		#  🔴 **T/F/G 셋을 한 덩어리로 적는다** — 「숲을 깔고 물을 붓고 불을 붙인다」가
-		#   한 절차라, 따로 적으면 셋이 한 벌인 것이 안 읽힌다.
+		# **Without writing Tab, the assembly window becomes "a feature nobody can open"** — verify-look wrote that.
+		#  Without writing M, monsters become "a feature nobody can open" just the same.
+		#  **T/F/G are written as one lump** — "lay a forest, pour water, set it alight" is one procedure,
+		#   and written separately it does not read as the three being one set.
 		"A/D 이동 · Space 점프 · 좌클릭 발사 · Tab 조립창 · R 리셋 · M/N 몬스터",
 		"T 숲 · F 물 · G 불  (마우스 자리에) · K 물비 토글 (마우스 행에)",
 	])
 
 
-## 🔴 이름을 표에서 **파생**한다 — 손으로 적으면 문양을 늘릴 때 조용히 낡는다.
-## 🔴 **장착 줄(지금 든 것)과 도움말 줄(프리셋 표)이 같은 이 함수를 지난다** — 각자 만들면
-##  같은 조합이 두 이름으로 불리는 날이 온다.
+## The names are **derived** from the table — write them by hand and they go quietly stale when glyphs are added.
+## **The equipped line (what is held now) and the help line (the preset table) go through this same function** —
+##  build them separately and the day comes when one combination is called by two names.
 static func _glyph_names(list: Array) -> String:
 	if list.is_empty():
 		return "없음 (진 + 룬만)"
@@ -638,7 +682,7 @@ static func _loadout_name(n: int) -> String:
 	return _glyph_names(LOADOUTS[n])
 
 
-## 지금 있는 조합 키만 보여 준다. ⚠ 없는 번호를 안내하면 「눌렀는데 안 먹는다」가 된다.
+## Shows only the loadout keys that exist. Advertise a number that does not exist and it becomes "I pressed it but it does not work".
 static func _loadout_help() -> String:
 	var keys: Array = LOADOUTS.keys()
 	keys.sort()

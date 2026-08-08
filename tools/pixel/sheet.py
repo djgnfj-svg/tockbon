@@ -1,11 +1,11 @@
-"""후보를 한 장에 붙여 눈으로 고르게 한다.
+"""Pastes candidates onto one sheet so they can be chosen by eye.
 
     python sheet.py out/glyph_spread --cols 4 --zoom 3
 
-🔴🔴 **이 도구가 있는 이유는 「그림은 말로 안 갈린다」다.** 후보를 하나씩 열어 보면
- 서로 비교가 안 되고, 비교가 안 되면 「이게 나은가」를 판정할 수가 없다.
-⚠ 배경색이 판정을 바꾼다 — 흰 종이 위에서 볼 그림을 검은 배경에서 고르면 그 판정은 거짓이다.
- ⇒ `--bg` 기본이 **조립창 종이색**인 것이 그 이유고, 어두운 무대 위에 얹을 것만 `--bg 0E0E13` 으로 본다.
+**This tool exists because "art cannot be settled in words".** Opening candidates one at a time
+ gives nothing to compare against, and without comparison "is this one better" cannot be judged.
+The background color changes the judgment — choosing art meant for white paper against a black background makes that judgment false.
+ => That is why the `--bg` default is **the assembly window's paper color**, and only things that go on the dark stage are viewed with `--bg 0E0E13`.
 """
 
 import argparse
@@ -16,7 +16,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 
 ROOT = Path(__file__).parent
-SHEET_NAME = "_sheet.png"  ## 이 도구의 산출물 이름. 🔴 아래 필터가 이 값 하나로 자기를 뺀다
+SHEET_NAME = "_sheet.png"  ## This tool's output name. The filter below excludes itself by this one value
 
 
 def hexcolor(s):
@@ -37,9 +37,9 @@ def main():
 
     src = Path(args.folder)
     if src.is_dir():
-        # ⚠ 자기가 만든 시트만 뺀다. 다시 붙이면 시트의 시트가 된다.
-        #  🔴 **`_` 로 시작하는 것을 다 빼면 안 된다** — 이름이 `_smoke` 인 폴더의 파일이
-        #   통째로 사라져 「png 가 없다」가 났다(실측). 라벨보다 넓은 필터의 실물이다.
+        # Only the sheet it made itself is excluded. Paste it again and you get a sheet of a sheet.
+        #  **Excluding everything starting with `_` is wrong** — the files in a folder named `_smoke`
+        #   vanished wholesale and gave "there are no pngs" (measured). A filter wider than its label, in the flesh.
         files = sorted(f for f in src.glob(args.glob) if f.name != SHEET_NAME)
     else:
         files = [Path(args.folder)]
@@ -63,8 +63,8 @@ def main():
         x = pad + (i % cols) * (cw + pad)
         y = pad + (i // cols) * (ch + pad + labh)
         d.rectangle([x, y, x + cw - 1, y + ch - 1], fill=hexcolor(args.cell))
-        # 🔴 NEAREST 다. BILINEAR 로 늘리면 픽셀 경계가 흐려져 **없는 안티에일리어싱이 보인다** —
-        #  그 상태로 고른 판정은 실제 화면과 다르다.
+        # NEAREST. Scaling with BILINEAR blurs the pixel boundaries and **shows antialiasing that isn't there** —
+        #  a judgment made in that state differs from the real screen.
         big = t.resize((t.width * args.zoom, t.height * args.zoom), Image.NEAREST)
         sheet.paste(big, (x + (cw - big.width) // 2, y + (ch - big.height) // 2), big)
         d.text((x + 2, y + ch + 3), f"{i}: {f.stem[-14:]}", fill=(70, 70, 80))

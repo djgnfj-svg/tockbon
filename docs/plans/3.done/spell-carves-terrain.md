@@ -1,7 +1,8 @@
-# 마법이 지형을 판다 — 문양이 없어도
+# Magic carves terrain — even with no glyph
 
-**상태**: done — **판정 1~7은 전부 통과했다. 남은 것은 사용자의 손맛 판정 둘이다**(아래 「닫으며」)
-**다시 열 이유**: 착탄이 파는 크기를 고칠 때만. 손잡이는 `sim_tuning` 의 `carve_r`·`blast_rd`.
+**Status**: done — **acceptance 1–7 all passed. What remains is two feel judgments from the user** (see "Closing")
+**Why you'd reopen**: only when changing how much an impact carves. The knobs are `carve_r` and `blast_rd` in `sim_tuning`.
+
 **한 줄**: **모든 착탄이 작은 구멍을 낸다.** 폭발은 그것이 커지는 것이지 「파는 것 자체」가 아니다.
 
 ## 왜

@@ -1,50 +1,51 @@
-# docs/decisions — 안 고른 것과 그 이유
+# docs/decisions — what wasn't chosen, and why
 
-결정은 대화에서 나오고 결과만 GDD·design에 녹아 든다. **「그건 왜 안 했지?」의 답이 아무 데도 안 남아서 같은 고민을 다시 한다.**
+Decisions come out of conversation and only the outcome dissolves into the GDD and design docs.
+**The answer to "why didn't we do that?" survives nowhere, so the same deliberation happens again.**
 
-**적는 것은 버린 쪽뿐이다.** 고른 것은 코드와 기획 문서에 남는다.
+**Record only the rejected side.** The chosen side survives in code and design docs.
 
-**「안 고른 것」이 비면 결정이 아니다. 두지 마라.** 값을 고른 것(「20으로 하자」)도 아니다.
+**If "what wasn't chosen" is empty, it isn't a decision. Don't file it.** Nor is picking a value ("let's make it 20").
 
-폴더를 안 옮긴다. 뒤집혀도 지우지 마라 — 뒤집힌 이유가 다음 결정의 근거다.
+Never moves folders. Don't delete a reversed one — why it reversed is the grounds for the next decision.
 
-## 형식
+## Format
 
 ```markdown
-# <결정 한 문장>
+# <the decision in one sentence>
 
-**상태**: 유효 | 뒤집힘 (무엇으로)
+**Status**: valid | reversed (by what)
 
-## 무엇을 정했나
-두세 줄.
+## What was decided
+Two or three lines.
 
-## 안 고른 것
-| 버린 쪽 | 왜 |
+## What wasn't chosen
+| Rejected | Why |
 
-## 묶이는 것
-뒤집으면 같이 흔들리는 곳.
+## What's tied to it
+Where it shakes if this reverses.
 
-## 다시 열릴 조건
-없으면 「없다」.
+## Conditions to reopen
+"None" if none.
 ```
 
-## 목록
+## Index
 
-| 결정 | 상태 | 버린 쪽 |
+| Decision | Status | Rejected |
 |---|---|---|
-| [인벤토리를 안 넣는다](인벤토리를-안-넣는다.md) | 유효 | 보관함에 쌓고 조립창에서 끼우기 |
-| [발수 폭증은 규칙으로 막는다](발수-폭증은-규칙으로-막는다.md) | 유효 | 동시 투사체 상한을 손잡이로 쓰기 |
+| [No inventory](no-inventory.md) | valid | Stash it and equip from the assembly window |
+| [Shot explosion is blocked by rule](shot-explosion-by-rule.md) | valid | Using the simultaneous-projectile cap as a knob |
 
-## 아직 안 적힌 결정
+## Decisions not yet written down
 
-| 결정 | 어디에 묻혀 있나 |
+| Decision | Where it's buried |
 |---|---|
-| 진 셋이 사다리가 아니다 — 룬을 늘리면 층을 뺏는다 | `GDD.md` 진 |
-| 소의 불이 지형에 붙는다 → 나무벽을 ① 밖으로 | `plans/1.ready/stage1-bosses.md` |
-| 물속 무한 점프 — 부력도 수영도 아니다 | `plans/2.active/water-jump-and-escape.md` |
-| 맵은 고정이다 (던전을 생성하지 않는다) | `design/지형-굽기.md` |
-| 상점은 스테이지 전환 시점이다 (맵 안이 아니다) | `plans/1.ready/levelup-and-three-picks.md` |
-| 영구 재화는 보스만 준다 | 같은 문서 |
-| 포션이 없다 | `GDD.md` 장착과 발사 |
-| 히트스톱을 뺐다 — 섬광 지속으로 대신 | 코드 주석뿐 |
-| 수탉은 착지한다 (계속 안 뜬다) | `plans/1.ready/stage1-bosses.md` |
+| The three circles are not a ladder — more runes means fewer layers | `GDD.md`, Circle |
+| The bull's fire sticks to terrain → move the wood wall outside ① | `plans/1.ready/stage1-bosses.md` |
+| Unlimited jumping underwater — neither buoyancy nor swimming | `plans/2.active/water-jump-and-escape.md` |
+| The map is fixed (dungeons are not generated) | `design/terrain-baking.md` |
+| The shop is at the stage transition (not inside the map) | `plans/1.ready/levelup-and-three-picks.md` |
+| Permanent currency comes from bosses only | Same doc |
+| There are no potions | `GDD.md`, Equipping and firing |
+| Hitstop was dropped — replaced by flash duration | Code comments only |
+| The rooster lands (it doesn't stay airborne) | `plans/1.ready/stage1-bosses.md` |

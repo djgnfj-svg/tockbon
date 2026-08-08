@@ -1,74 +1,81 @@
 extends Node
-## 키·마우스 → **커맨드**. 🔴 껍데기 전용이고, **격자를 직접 안 만진다.**
-##  여기서 `_mat[i] = STONE`을 하는 순간 멀티를 붙일 때 그 자리가 통째로 재작성이다.
+## Keys and mouse -> **commands**. The shell only, and it **never touches the grid directly.**
+##  The moment `_mat[i] = STONE` happens here, that spot gets rewritten wholesale when multiplayer is added.
 ##
-## 🔴 **디버그 키는 입력 맵을 안 지난다**(raw keycode). 이 파일은 본편에 안 남으므로
-##  `project.godot`에 액션을 늘릴 이유가 없고, 늘리면 **에디터 재시작이 필요해진다.**
-##  ⚠ 반대로 이동·점프는 본편에 남으므로 **입력 맵 액션**이다(`move_left`·`move_right`·`jump`).
+## **Debug keys do not go through the input map** (raw keycode). This file won't survive into the real game,
+##  so there is no reason to add actions to `project.godot`, and adding them **would require an editor restart.**
+##  Conversely, movement and jump do survive into the real game, so they are **input map actions**
+##  (`move_left`, `move_right`, `jump`).
 
-## 좌클릭. **월드 좌표**를 넘긴다 — 뷰포트 좌표를 그대로 넘기면 흔드는 동안 조준이 어긋난다.
+## Left click. Passes **world coordinates** — pass viewport coordinates as-is and aim drifts while shaking.
 signal fire_requested(world_px: Vector2)
 signal reset_requested
-## 🔴 **F — 마우스 자리에 물을 붓는다. 껍데기 전용 디버그 키다.**
-##  게임 안에서 물이 생기는 길은 **단계 5의 물 룬**이고, 그때까지 이 키가 **물을 화면에서 보는
-##  유일한 길**이다. ⚠ 룬이 서면 이 키는 남겨도 되고 지워도 된다 — 무대는 본편에 안 남는다.
-## ⚠ **월드 좌표를 넘긴다** — 좌클릭과 같은 이유다(흔들리는 동안 어긋난다).
+## **F — pours water at the mouse position. A shell-only debug key.**
+##  The way water comes into being inside the game is **stage 5's water rune**, and until then this key is
+##  **the only way to see water on screen.** Once the rune stands up this key may stay or go — the stage
+##  won't survive into the real game.
+## **Passes world coordinates** — the same reason as left click (it drifts while shaking).
 signal water_requested(world_px: Vector2)
-## 🔴 **T · G — 숲을 깔고 불을 붙인다. 껍데기 전용이다**(2026-08-07).
-##  ⚠ F와 셋이 한 벌이다 — **나무·물·불이 한 화면에 모여야** 「얕은 물은 불을 못 끈다」가 보인다.
-##  🔴 그전에는 맵에 나무가 91칸뿐이라 그 규칙이 **원리적으로 화면에 안 나왔다**(`stage.gd` 의 T 상자).
+## **T and G — lay down a forest and set it alight. Shell only.**
+##  Together with F the three are one set — **wood, water and fire must gather on one screen** for
+##  "shallow water cannot put out fire" to be visible.
+##  Before that the map held only 91 cells of wood, so that rule **could not appear on screen in principle**
+##  (`stage.gd`'s T box).
 signal wood_requested(world_px: Vector2)
 signal ignite_requested(world_px: Vector2)
-## 🔴🔴 **K — 마우스 행에 물비를 토글한다. 껍데기 전용 디버그 키다**(2026-08-08).
-##  F(한 점 붓기)와 달리 **N틱에 걸쳐 조금씩** 붓는다 — 상태는 `src/sim/water_source.gd`(`stage.gd` 의 몫이 아니다).
-## ⚠ **토글이다** — 다시 누르면 멈춘다. 안 그러면 R로 무대를 통째로 리셋해야 끌 수 있다.
+## **K — toggles rain on the mouse row. A shell-only debug key.**
+##  Unlike F (a single-point pour) it pours **a little at a time across N ticks** — the state lives in
+##  `src/sim/water_source.gd` (not `stage.gd`'s share).
+## **It is a toggle** — press again and it stops. Otherwise the only way to turn it off is resetting the whole stage with R.
 signal rain_requested(world_px: Vector2)
-## 🔴 **M/N — 마우스 자리에 몬스터를 세운다. 껍데기 전용 디버그 키다**(`monsters-minimum`).
-##  배치는 맵 문서의 몫이라(문서 「경계」) 무대는 몬스터를 자동으로 안 깐다 — 이 키가
-##  「볼 것이 화면에 도달하는 경로」다. **F(물 붓기)와 정확히 같은 어법이다.**
-## ⚠ **월드 좌표를 넘긴다** — 좌클릭과 같은 이유다(흔들리는 동안 어긋난다).
-## 🔴🔴 **`kind`를 인자로 넘긴다 — M(돼지)·N(닭)이 신호 하나를 공유한다.** 신호를 둘로
-##  가르면 `stage.gd`의 핸들러도 둘이 되고, 세 번째 종류가 오는 날 그 짝이 또 는다.
+## **M/N — stands a monster at the mouse position. Shell-only debug keys** (`monsters-minimum`).
+##  Placement is the map doc's share (that doc's "Boundary"), so the stage does not lay monsters down
+##  automatically — these keys are "the path by which the thing to be seen reaches the screen".
+##  **Exactly the same idiom as F (pouring water).**
+## **Passes world coordinates** — the same reason as left click (it drifts while shaking).
+## **`kind` is passed as an argument — M (pig) and N (hen) share one signal.** Split the signal in two and
+##  `stage.gd`'s handler becomes two as well, and the day a third kind arrives that pair grows again.
 signal monster_requested(world_px: Vector2, kind: int)
-## 🔴🔴 **조합을 번갈아 쏘는 것이 몇 초 안에 돼야 한다** — 그게 판정 1·2를 재는 유일한 방법이다.
-##  ⚠ 여기는 **번호만** 넘긴다. 번호 → 문양 목록 표는 `stage.gd`에 있다(조립은 껍데기의 일이다).
+## **Firing combinations alternately must be doable within seconds** — that is the only way to measure
+##  acceptance 1 and 2.
+##  Only **the number** is passed here. The number -> glyph list table is in `stage.gd` (assembly is the shell's job).
 signal loadout_requested(n: int)
-## 조립창 열기/닫기(Tab). ⚠ **여는지 닫는지를 여기서 안 정한다** — 창이 제 상태를 안다.
+## Open/close the assembly window (Tab). **Whether it opens or closes is not decided here** — the window knows its own state.
 signal assembly_toggled
 
-## 🔴 물리 키 → 조합 번호. 입력 맵을 안 지나므로 `project.godot`을 안 고치고,
-##  그래서 **에디터 재시작이 필요 없다**(이 파일은 본편에 안 남는다).
-## ⚠ `keycode`가 아니라 **`physical_keycode`**다 — `project.godot`의 액션이 전부 물리 키라
-##  이 파일만 논리 키를 쓰면 **AZERTY·Dvorak에서 이동은 되는데 디버그 키만 안 먹는다.**
-##  한 리포에 규칙이 두 벌이면 그 갈라짐은 남의 자판에서만 드러난다.
+## Physical key -> loadout number. It doesn't go through the input map, so `project.godot` isn't touched
+##  and **no editor restart is needed** (this file won't survive into the real game).
+## It is **`physical_keycode`**, not `keycode` — every action in `project.godot` is a physical key, so if
+##  this file alone used logical keys, **on AZERTY and Dvorak movement would work while only the debug keys die.**
+##  With two sets of rules in one repo, that divergence only shows up on someone else's keyboard.
 const PRESET_KEYS: Dictionary = {
 	KEY_1: 1, KEY_2: 2, KEY_3: 3, KEY_4: 4, KEY_5: 5,
 }
 
-## 🔴 물리 키 → 몬스터 종류. `monster_defs.gd`의 id를 그대로 쓴다 — 여기서 새 숫자를
-##  만들면 종류 id가 두 벌이 된다.
+## Physical key -> monster kind. Uses `monster_defs.gd`'s ids verbatim — invent a new number here
+##  and there are two sets of kind ids.
 const MonsterDefs := preload("res://src/actor/monster_defs.gd")
 const MONSTER_KEYS: Dictionary = {
 	KEY_M: MonsterDefs.KIND_PIG, KEY_N: MonsterDefs.KIND_HEN,
 }
 
 
-## 🔴 이동·점프는 **폴링**이다 — 이벤트로 받으면 키를 누르고 있는 동안의 상태를 껍데기가
-##  따로 들고 있어야 하고, 창이 포커스를 잃으면 그 상태가 눌린 채로 남는다.
+## Movement and jump are **polled** — taking them as events would make the shell hold the held-key state
+##  separately, and that state stays stuck as pressed when the window loses focus.
 func move_axis() -> float:
 	return Input.get_axis("move_left", "move_right")
 
 
-## ⚠ **`_physics_process`에서만 불러라.** `is_action_just_pressed`는 「이번 프레임에 눌렸나」인데,
-##  물리 프레임이 렌더 프레임보다 드물면 `_process`에서 부를 때 같은 누름을 두 번 본다.
+## **Call this only from `_physics_process`.** `is_action_just_pressed` means "was it pressed this frame",
+##  and when physics frames are rarer than render frames, calling it from `_process` sees the same press twice.
 func jump_pressed() -> bool:
 	return Input.is_action_just_pressed("jump")
 
 
-## 🔴🔴 **가변 점프가 읽는 값 — 「지금 누르고 있나」다**(위 `jump_pressed` 와 다른 물음).
-##  ⚠ **폴링이라 위 함수의 `_physics_process` 제약이 없다.** `just_pressed` 는 「이번 프레임」이라
-##   프레임 종류를 타지만 이건 상태를 그대로 읽는다 — 그래서 릴리즈를 놓치는 일이 원리적으로 없고,
-##   `character.step` 이 컷을 **클램프**로 두는 것과 짝이다.
+## **The value variable jump reads — "is it held right now"** (a different question from `jump_pressed` above).
+##  **Being polled, it carries none of that function's `_physics_process` constraint.** `just_pressed` means
+##   "this frame" and so depends on the frame kind, while this reads the state directly — so missing a release
+##   is impossible in principle, and it pairs with `character.step` keeping the cut as a **clamp**.
 func jump_held() -> bool:
 	return Input.is_action_pressed("jump")
 
@@ -85,11 +92,13 @@ func _unhandled_input(event: InputEvent) -> void:
 		var k := event as InputEventKey
 		if not k.pressed or k.echo:
 			return
-		# 🔴 **조립창은 본편에 남으므로 입력 맵 액션이다** — 위 디버그 키(raw keycode)와 반대다.
-		#  이동·점프와 같은 칸이고, 그래서 `project.godot`에 `toggle_assembly`가 있다.
-		# ⚠ **Tab이 안 먹는 원인이 둘이다**: ① 창 안 `Control`이 포커스를 잡으면 `ui_focus_next`가
-		#  GUI에서 Tab을 먹어 여기 **안 온다** ② 입력 맵을 고친 뒤 에디터를 안 재시작했다.
-		#  🔴 증상이 똑같으니 ①(`focus_mode = NONE`)부터 확인해라.
+		# **The assembly window survives into the real game, so it is an input map action** — the opposite
+		#  of the debug keys above (raw keycode). It sits in the same slot as movement and jump, which is
+		#  why `project.godot` has `toggle_assembly`.
+		# **There are two causes for Tab not working**: (1) if a `Control` inside the window takes focus,
+		#  `ui_focus_next` eats Tab in the GUI and it **never gets here** (2) the editor wasn't restarted
+		#  after editing the input map.
+		#  The symptoms are identical, so check (1) (`focus_mode = NONE`) first.
 		if k.is_action_pressed("toggle_assembly"):
 			assembly_toggled.emit()
 			get_viewport().set_input_as_handled()
@@ -98,7 +107,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			loadout_requested.emit(int(PRESET_KEYS[k.physical_keycode]))
 			return
 		if MONSTER_KEYS.has(k.physical_keycode):
-			# 🔴 F와 같은 문이다 — 키 이벤트에는 마우스 좌표가 없어 뷰포트의 「지금」 마우스를 쓴다.
+			# The same door as F — a key event carries no mouse coordinates, so the viewport's "right now" mouse is used.
 			monster_requested.emit(_to_world(get_viewport().get_mouse_position()),
 				int(MONSTER_KEYS[k.physical_keycode]))
 			return
@@ -106,12 +115,13 @@ func _unhandled_input(event: InputEvent) -> void:
 			KEY_R:
 				reset_requested.emit()
 			KEY_F:
-				# 🔴 **키 이벤트에는 마우스 좌표가 없다.** 그래서 뷰포트에서 「지금」의 마우스를
-				#  읽어 같은 `_to_world` 로 변환한다 — 좌클릭과 **같은 문을 지나야** 두 길이
-				#  안 갈라진다. ⚠ 여기서만 따로 변환하면 흔들리는 동안 물만 엉뚱한 셀에 떨어진다.
+				# **A key event carries no mouse coordinates.** So the "right now" mouse is read from the
+				#  viewport and converted by the same `_to_world` — the two paths only stay together by
+				#  **going through the same door** as left click. Convert separately just here and, while
+				#  shaking, only the water lands on the wrong cell.
 				water_requested.emit(_to_world(get_viewport().get_mouse_position()))
-			# 🔴 F와 **같은 문**을 지난다 — 셋이 다르게 변환하면 카메라가 흔들리는 동안
-			#  나무·불만 엉뚱한 셀에 떨어진다(위 `_to_world` 상자).
+			# Goes through **the same door** as F — convert the three differently and, while the camera
+			#  shakes, only wood and fire land on the wrong cells (the `_to_world` box above).
 			KEY_T:
 				wood_requested.emit(_to_world(get_viewport().get_mouse_position()))
 			KEY_G:
@@ -120,13 +130,13 @@ func _unhandled_input(event: InputEvent) -> void:
 				rain_requested.emit(_to_world(get_viewport().get_mouse_position()))
 
 
-## 🔴🔴 **뷰포트 좌표 ≠ 월드 좌표다** — 흔들림용 `Camera2D`가 붙어 있는 한.
-##  캔버스 변환을 되돌리지 않으면 **에러 하나 없이 클릭이 엉뚱한 셀로 간다.**
-##  ⚠ 흔들리지 않을 때 카메라가 뷰포트 한가운데라 변환이 다시 항등이 된다 —
-##   그래서 **가만히 있을 때 테스트하면 버그가 안 보인다.** 흔드는 동안에만 드러난다.
+## **Viewport coordinates != world coordinates** — as long as a `Camera2D` for shake is attached.
+##  Without undoing the canvas transform, **a click goes to the wrong cell with no error at all.**
+##  When not shaking, the camera sits at the viewport center and the transform is the identity again —
+##   so **testing while standing still hides the bug.** It only shows up while shaking.
 ##
-## 🔴 `CanvasItem.get_global_mouse_position()`을 못 쓴다 — 이 노드는 `Node`라 `CanvasItem`이
-##  아니다. `Viewport.get_canvas_transform()`이 같은 값을 주고, **이벤트가 준 좌표에도** 쓸 수 있다
-##  (`get_global_mouse_position()`은 늘 「지금」의 마우스라 이벤트 좌표를 못 변환한다).
+## `CanvasItem.get_global_mouse_position()` can't be used — this node is a `Node`, not a `CanvasItem`.
+##  `Viewport.get_canvas_transform()` gives the same value and can be used **on coordinates an event gave too**
+##  (`get_global_mouse_position()` is always the "right now" mouse and cannot convert event coordinates).
 func _to_world(pos: Vector2) -> Vector2:
 	return get_viewport().get_canvas_transform().affine_inverse() * pos

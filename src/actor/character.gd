@@ -1,208 +1,230 @@
 extends RefCounted
-## 캐릭터 — 이동·중력·점프·착지·**스텝 오프셋**. 격자를 **읽기만** 한다.
+## The character — movement, gravity, jumping, landing, **step offset**. It only **reads** the grid.
 ##
-## 🔴🔴 **`Node`가 아니라 `RefCounted`인 게 요점이다.** 캐릭터가 `Node`면 스텝 오프셋을
-##  헤드리스로 못 잰다 — 판정 4(「자기가 부순 지형 위를 걸어 다니나」)가 그물로 넘어가느냐
-##  눈으로만 보느냐가 여기서 갈린다.
+## **The point is that it is a `RefCounted`, not a `Node`.** If the character were a `Node`, the step offset
+##  could not be measured headless — whether acceptance 4 ("does it walk over terrain it broke itself") goes
+##  to the nets or stays eye-only is decided right here.
 ##
-## 🔴🔴 **Godot 물리(`CharacterBody2D` + 콜리전)를 쓰지 않는다.** 지형이 TileMap이 아니라 4px
-##  셀 배열이라, 물리 엔진에 태우려면 **폭발마다 콜리전 셰이프를 다시 구워야 한다.**
-##  폭발 하나가 셀 수백 개를 바꾸니 그게 진짜 비용이다. ⇒ 이동·착지를 직접 짜고 셀을 직접 읽는다.
+## **Godot physics (`CharacterBody2D` + collision) is not used.** The terrain is not a TileMap but a 4px cell
+##  array, so putting it on the physics engine would mean **rebaking collision shapes on every blast.**
+##  One blast changes hundreds of cells, and that is the real cost. => Movement and landing are written by
+##  hand and the cells are read directly.
 ##
-## 🔴 **여기는 float을 써도 된다.** GDD 멀티 표가 못 박았다 — 격자·투사체는 결정론,
-##  **플레이어·몬스터·아이템은 호스트 권위**다. 정수 지옥은 격자에 닿는 코드만이다.
-##  ⚠ 그래서 이 파일은 `net_determinism`의 대상이 아니다. 대신 `net_layers`가
-##   **`src/view/`·`src/stage/` 경로 문자열이 안 나오는 것**을 잰다.
-##   🔴 그건 「화면을 참조하지 않는다」까지고, **「씬 트리를 모른다」는 아무도 안 잰다** —
-##    `Input`·`Engine` 같은 전역은 preload 없이 닿으므로 경로 스캔에 안 걸린다.
-##    지키는 것은 규율뿐이다. 여기에 `Input.`을 한 줄 쓰면 그물은 초록이고 서버만 죽는다.
+## **Floats are allowed here.** The GDD's multiplayer table pinned it — the grid and projectiles are
+##  deterministic, and **the player, monsters and items are host-authoritative.** Integer hell applies only to
+##  code touching the grid.
+##  That is why this file is not a target of `net_determinism`. Instead `net_layers` measures that
+##   **no `src/view/` or `src/stage/` path string appears.**
+##   That only reaches "it does not reference the screen", and **"it does not know the scene tree" is measured
+##    by nobody** — globals like `Input` and `Engine` are reachable without a preload, so the path scan misses them.
+##    Discipline is the only thing holding it. Write one `Input.` line here and the nets are green and only the
+##    server dies.
 
 const CellGrid := preload("res://src/sim/cell_grid.gd")
 const Tuning := preload("res://src/sim/sim_tuning.gd")
-## 🔴 통지의 좌표계(고정소수점)를 읽으려면 그 상수가 필요하다. **`src/sim/` 을 참조하는 것은
-##  계약 안쪽이다** — 막히는 것은 `src/view/`·`src/stage/` 뿐이다(`net_layers`).
+## Reading the notification's coordinate system (fixed point) needs that constant. **Referencing `src/sim/` is
+##  inside the contract** — what is blocked is only `src/view/` and `src/stage/` (`net_layers`).
 const SpellSim := preload("res://src/sim/spell_sim.gd")
-## 🔴🔴 **이동·중력·지형 충돌은 이제 여기 없다 — `Body` 로 뽑았다**(`monsters-minimum` 단계 0).
-##  몬스터가 같은 다섯 줄을 쓰게 만드는 것이 그 이유다. `_move_x`·`_move_y`·`_try_step_up`·
-##  `_box_free`·`_grounded` 는 `Body` 로 이사했다 — 사본을 여기 남기면 반드시 갈라진다.
+## **Movement, gravity and terrain collision are no longer here — they were extracted into `Body`**
+##  (`monsters-minimum` stage 0). Making the monsters use the same five lines is the reason.
+##  `_move_x`, `_move_y`, `_try_step_up`, `_box_free` and `_grounded` moved into `Body` — leave a copy here
+##  and it will diverge.
 const Body := preload("res://src/actor/body.gd")
 
-## 🔴🔴 **여기는 「충돌 상자」다. 「그림 크기」가 아니다. 둘이 갈라진 날이 2026-08-04다.**
-##  그림 칸은 여전히 32px이고 그 상수는 `fx_tuning.CHAR_CELL_PX` 다 — **거기가 그림 쪽 단일 소스다.**
+## **This is the "collision box". Not the "sprite size". The day the two split apart is recorded here.**
+##  The sprite cell is still 32px and that constant is `fx_tuning.CHAR_CELL_PX` — **that is the single source
+##  on the sprite side.**
 ##
-## 🔴 **`W_PX` 를 32 → 20으로 좁혔다**(사용자 판정): 「**캐릭터가 벽에 닿기 전에 닿았다는 판정**」.
-##  몸 그림의 내용 폭이 **18~22px**(칸마다 다르다 — 섬 18 · 걷기 20 · 점프 22)인데 상자가 32라
-##  **양옆에 7px씩 빈 칸을 끼고 벽에 부딪혔다.** 20은 걷기 칸에 딱 맞는 값이다.
-##  ⚠ 점프 칸(22)은 이제 상자를 1px씩 넘는다 — **겹치는 쪽이 뜨는 쪽보다 낫다**고 보고 골랐다.
+## **`W_PX` was narrowed 32 -> 20** (decided by the user): "**the character registers as touching the wall
+##  before it touches it**". The body sprite's content width is **18-22px** (it differs per cell — idle 18,
+##  walk 20, jump 22) while the box was 32, so **it hit walls with 7px of empty space on each side.**
+##  20 is the value that fits the walk cell exactly.
+##  The jump cell (22) now overflows the box by 1px on each side — **overlapping is better than floating**
+##  was the judgment behind the choice.
 ##
-## 🔴🔴 **GDD 「캐릭터와 타일 두께를 같게」는 안 깨졌다 — 그건 *눈에 보이는* 크기의 계약이다.**
-##  「저 벽을 뚫으면 지나갈 수 있다」를 화면에서 세는 장치이고, 세는 것은 **그림**이다.
-##  그림은 여전히 32px 칸으로 그려진다. ⚠ 이 구분을 잃고 `W_PX` 를 다시 32로 되돌리면
-##  벽에 뜨는 증상이 그대로 돌아온다.
+## **The GDD's "keep the character and the tile the same thickness" is not broken — that is a contract about
+##  the *visible* size.** It is the device for counting "break that wall and I can get through" on screen, and
+##  what does the counting is the **sprite**. The sprite is still drawn on a 32px cell. Lose this distinction
+##  and put `W_PX` back to 32 and the floating-off-the-wall symptom comes right back.
 ##
-## ⚠ **세로(`H_PX`)는 안 건드렸다.** 발이 맨 아랫줄에 닿아 있어(`net_sprite` 가 잰다) 세로는
-##  그림과 상자가 이미 맞고, 사용자가 말한 것도 옆이다.
-## 🔴 **상자가 커지면 이 파일이 비싸진다.** `Body.box_free`·`Body.grounded`(`body.gd`) ·
-##  이 파일의 `_standing_in_fire` 가 상자가 덮는 셀을 **GDScript로** 훑는데
-##  **25칸 → 81칸**이 됐고, 이건 틱이 아니라 **60Hz**로 돈다.
-##  ⚠ 실측(2026-08-04, 단계 0): `step()` 이 걷는 중 **77 → 249μs**(예산의 1.5%).
-##   ⇒ 폭을 20으로 줄였으니 **6×9 = 54칸**으로 내려간다. 다시 재지는 않았다.
+## **The vertical (`H_PX`) was not touched.** The feet touch the bottom row (`net_sprite` measures it), so
+##  vertically the sprite and the box already match, and what the user spoke about was the sides.
+## **A bigger box makes this file expensive.** `Body.box_free` and `Body.grounded` (`body.gd`) and this file's
+##  `_standing_in_fire` sweep the cells the box covers **in GDScript**, and that went **25 cells -> 81 cells**,
+##  and this runs at **60Hz**, not per tick.
+##  Measured (stage 0): `step()` while walking went **77 -> 249us** (1.5% of budget).
+##   => Since the width was reduced to 20, it comes down to **6x9 = 54 cells**. Not re-measured.
 const W_PX := 20
 const H_PX := 32
 
-## 🔴🔴 **스텝 오프셋 2셀(8px).** 이게 없으면 캐릭터가 **자기가 부순 4px 턱에 걸려 멈춘다.**
-##  셀이 4px이라 폭발이 지나간 자리는 매끈한 바닥이 아니라 1~2셀짜리 턱이 널린 면이고,
-##  이 게임에서는 그게 예외가 아니라 **기본 상태**다 — 마법을 쏘는 게 곧 지형을 부수는 것이니까.
+## **A 2-cell (8px) step offset.** Without it the character **stops on the 4px ledge it broke itself.**
+##  Cells are 4px, so the place a blast passed through is not a smooth floor but a surface littered with
+##  1-2 cell ledges, and in this game that is not the exception but **the default state** — firing magic is
+##  the same thing as breaking terrain.
 ##
-## 🔴🔴 **32px 전환에서 안 올렸다. 「타일 대비 반」으로 읽어 4로 올리고 싶어지는 자리인데
-##  근거가 방향이 다른 둘이고, 살아남는 쪽이 셀 기준이다:**
-##  · 「타일 하나를 통째로 걸어 올라가면 위력 감각이 뭉개진다」 ← **타일 기준.** 타일이 8셀이 되며
-##    **느슨해졌다** — 이제 7셀까지가 안전선이다
-##  · 「1셀이면 **조금만 파여도** 걸린다」 ← 🔴 **셀 기준이고 셀은 안 변했다.**
-##    폭발이 남기는 턱은 여전히 1~2셀짜리다
-##  ⇒ **턱을 만드는 것이 셀이고 셀이 안 변했으므로 2가 맞다.**
-## ⚠ 대신 쓸 수 있던 것(경사면 처리 · 캡슐 충돌 · 아무것도 안 함)은 기획 문서 「나중에 다시 열 것」에 있다.
+## **It was not raised in the 32px switch. This is the spot where you want to read it as "half a tile" and
+##  raise it to 4, but the two grounds point in different directions, and the surviving one is cell-based:**
+##  · "Walking up a whole tile mushes the sense of power" <- **tile-based.** It **loosened** as a tile became
+##    8 cells — 7 cells is now the safe line
+##  · "At 1 cell you get stuck on **the slightest gouge**" <- **cell-based, and the cell did not change.**
+##    The ledges a blast leaves are still 1-2 cells
+##  => **What makes the ledges is the cell, and the cell did not change, so 2 is right.**
+## The alternatives that could have been used (slope handling, capsule collision, doing nothing) are in the
+##  design doc's "to reopen later".
 const STEP_CELLS := 2
 const STEP_PX := STEP_CELLS * Tuning.CELL_PX
 
-## 🔴 손맛값이다 — 화면을 보고 정했다. 근거를 같이 적어야 다음 사람이 못 되돌린다.
-##  🔴🔴 **32px 전환에서 넷 다 ×2 됐고, 근거는 「타일로 읽은 값이 그대로여야 한다」 하나다.**
-##  · 이동 260px/s = 8타일/s. 1,920px 화면을 7.4초에 가로지른다(뷰포트도 2배다). 「걷는다」의 하한쯤이다
-##  · 중력 2400px/s² + 점프 -720px/s ⇒ 도달 높이 v²/2g = 108px = **3.4타일**,
-##    체공 0.6초. 3타일 = 캐릭터 셋을 쌓은 높이라 「저기까지 뛴다」가 눈으로 가늠된다
-##  · 낙하 상한 1800px/s는 프레임당 30px으로, **상자 높이(32px)보다 작다** — 벽을 뚫고 지나가지 않는다
+## Feel values — decided while looking at the screen. The grounds must be written alongside or the next person
+##  will undo them.
+##  **All four were doubled in the 32px switch, and the ground is one: "the value read in tiles must stay the same".**
+##  · Movement 260px/s = 8 tiles/s. It crosses the 1,920px screen in 7.4s (the viewport doubled too).
+##    That is about the lower bound of "walking"
+##  · Gravity 2400px/s^2 + jump -720px/s => reachable height v^2/2g = 108px = **3.4 tiles**, 0.6s of airtime.
+##    3 tiles = three characters stacked, so "I can jump up there" is gaugeable by eye
+##  · The 1800px/s fall cap is 30px per frame, **smaller than the box height (32px)** — it does not pass through walls
 ##
-## 🔴🔴 **`GRAVITY_PX` 와 `JUMP_VY_PX` 중 하나만 2배로 하면 조용히 틀린다.**
-##  도달 높이가 `v²/2g` 라 `v` 만 2배면 **4배**, `g` 만 2배면 **절반**이 된다. **에러가 안 난다.**
-##  ⚠ 무대의 기둥·벽 높이가 전부 이 값으로 설계돼 있어서, 틀리면 「기둥을 못 넘는다」로만 보인다.
+## **Double just one of `GRAVITY_PX` and `JUMP_VY_PX` and it silently goes wrong.**
+##  Reachable height is `v^2/2g`, so doubling only `v` gives **4x** and doubling only `g` gives **half**.
+##  **No error is raised.** The stage's pillar and wall heights are all designed around these values, so
+##  getting it wrong only looks like "I cannot clear the pillar".
 const MOVE_SPEED_PX := 260.0
 const GRAVITY_PX := 2400.0
 const JUMP_VY_PX := -720.0
 const MAX_FALL_PX := 1800.0
 
-## 🔴🔴 **가변 점프 — 「얼마나 오래 눌렀나」가 높이를 정한다**(사용자 요청, 2026-08-04).
-##  키를 뗀 뒤에는 상승 속도가 이 비율까지 **잘린다.** 계속 누르고 있으면 안 잘린다.
+## **Variable jump — "how long you held it" sets the height** (user request).
+##  After the key is released, the rising speed is **clipped** down to this ratio. Keep holding and it is not clipped.
 ##
-## 🔴🔴 **0.55로 넣었다가 0.2로 내렸다. 이유가 이 상수의 전부다 —
-##  「사람이 낼 수 있는 누름 시간」에서 높이가 안 갈렸다**(사용자: 「안 된 듯」).
-##  손으로 낼 수 있는 최단 탭이 **0.05~0.1초**인데 0.55에서는 그 구간이 이미 **67~92%**였다.
-##  ⚠ **그물은 이걸 못 봤다** — 1프레임(0.017초) 누름을 재고 있었고 거기서는 46%라 잘 갈렸다.
-##   🔴 **사람이 못 내는 입력으로 재면 「된다」가 나오고 게임에서는 안 된다.**
+## **It went in at 0.55 and was lowered to 0.2. The reason is this constant's whole story —
+##  the height did not vary across "the press durations a human can produce"** (user: "seems like it does not work").
+##  The shortest tap a hand can produce is **0.05-0.1s**, and at 0.55 that stretch was already **67-92%**.
+##  **The nets did not see this** — they were measuring a 1-frame (0.017s) press, and there it was 46%, which
+##   separated well.
+##   **Measure with input a human cannot produce and you get "it works" while the game does not.**
 ##
-## 🔴 **높이는 속도의 제곱이다(`v²/2g`) — 비율을 그대로 높이로 읽지 마라.** 실측(2026-08-04, 헤드리스):
+## **Height is the square of speed (`v^2/2g`) — do not read the ratio directly as height.** Measured (headless):
 ## ```
-##   누른 시간   0.55일 때        0.2일 때(지금)
-##   0.05초 (3F)  68px  67%   →   38px  37%   ← 손으로 낼 수 있는 최단
-##   0.10초 (6F)  94px  92%   →   64px  63%   = 2.0타일 (나무 높이)
-##   0.17초(10F) 102px 100%   →   89px  87%
-##   0.25초(15F) 102px 100%   →  102px 100%   = 3.2타일 (기둥 높이)
+##   hold time    at 0.55          at 0.2 (now)
+##   0.05s (3F)   68px  67%    ->  38px  37%   <- the shortest a hand can produce
+##   0.10s (6F)   94px  92%    ->  64px  63%   = 2.0 tiles (tree height)
+##   0.17s (10F) 102px 100%    ->  89px  87%
+##   0.25s (15F) 102px 100%    -> 102px 100%   = 3.2 tiles (pillar height)
 ## ```
-##  ⇒ 무대에서 「나무(2타일)는 톡, 기둥(3타일)은 꾹」이 **손에 잡히는 것이 이 값 덕이다.**
+##  => On the stage, "a tap for the tree (2 tiles), a press for the pillar (3 tiles)" **being graspable in the
+##   hand is thanks to this value.**
 ##
-## ⚠ **조절이 먹히는 구간 = `18 × (1 − 비율)` 프레임.** 그 뒤에는 중력이 이미 상승 속도를
-##  컷 아래로 깎아 놔서 **떼도 아무 일이 없다.** 0.55는 8프레임(0.13초)이었고 0.2는 14프레임(0.24초)다.
-##  🔴 비율을 올리려거든 이 구간이 **사람의 탭 시간(0.05~0.2초)을 덮는지** 먼저 계산해라.
+## **The stretch where the control bites = `18 * (1 - ratio)` frames.** After that gravity has already shaved
+##  the rising speed below the cut, so **releasing does nothing.** 0.55 was 8 frames (0.13s); 0.2 is 14 frames (0.24s).
+##  If you want to raise the ratio, first compute whether that stretch **covers a human's tap time (0.05-0.2s).**
 ##
-## 🔴🔴 **자르는 방식이 「곱하기」가 아니라 「클램프」인 게 요점이다.**
-##  매 프레임 곱하면 뗀 뒤에도 계속 줄어 **뗀 시점에 따라 결과가 흔들리고**, 릴리즈 이벤트를
-##  한 프레임 놓치면 그 차이가 그대로 남는다. 클램프는 **몇 번 걸려도 결과가 같다.**
-##  ⚠ 그래서 입력도 `is_action_just_released` 가 아니라 **폴링**(`is_action_pressed`)이다 —
-##   `stage_input` 의 「이동·점프는 폴링이다」와 같은 이유이고, 창이 포커스를 잃어도 안 엉킨다.
+## **The point is that the clipping is a "clamp", not a "multiply".**
+##  Multiply every frame and it keeps shrinking after release, so **the result wobbles with when you let go**,
+##  and missing the release event by one frame leaves that difference in place. A clamp **gives the same result
+##  no matter how many times it fires.**
+##  That is also why the input is **polling** (`is_action_pressed`) rather than `is_action_just_released` —
+##   the same reason as `stage_input`'s "movement and jumping are polled", and it does not get tangled when
+##   the window loses focus.
 const JUMP_CUT_RATIO := 0.2
 const JUMP_CUT_VY_PX := JUMP_VY_PX * JUMP_CUT_RATIO
 
-# ─── 체력 ─────────────────────────────────────────────────────────
-## 🔴 **숫자다**(기획 「체력과 피해량」). 기준 피해 10이라 **열 대**를 맞아야 쓰러진다 —
-##  한 방 죽음이면 재미가 아니라 분노라는 것이 이 값의 전부다.
+# --- HP ------------------------------------------------------------
+## **A number** (design: "HP and damage"). Base damage is 10, so it takes **ten hits** to go down —
+##  the whole of this value is that a one-shot death is not fun but rage.
 const MAX_HP := 100
 
-## 🔴 **직격과 폭발이 같은 값이다.** 기획이 정한 것은 기준선 하나뿐이고, 축을 안 늘리는 것이
-##  뼈 먼저다 — ⚠ **폭발 쪽은 가정이고 사용자가 뒤집을 자리다**(계획 §4).
+## **A direct hit and a blast are the same value.** What the design settled is one baseline only, and not
+##  adding axes is skeleton first — **the blast side is an assumption and a place the user may overturn** (plan section 4).
 const DAMAGE_HIT := 10
 
-## 🔴🔴 **타격만 걸리는 무적이다. 0.2초 = 4틱**(기획 「무적」).
-##  ⚠ **불 위에 서 있는 것(지속)은 여기 안 걸린다** — 무적을 하나로 두면 불이 무해해지고,
-##   그러면 「연료를 어디 두느냐가 곧 레벨 디자인」이 플레이어에게 무의미해진다.
-##   ⇒ 지속 피해 경로는 이 값을 **읽지도 쓰지도 않는다**(단계 3).
+## **Invulnerability that applies only to hits. 0.2s = 4 ticks** (design: "invulnerability").
+##  **Standing in fire (continuous damage) is not covered by it** — make invulnerability a single thing and
+##   fire becomes harmless, and then "where you put fuel is level design" becomes meaningless to the player.
+##   => The continuous damage path **neither reads nor writes** this value (stage 3).
 const INVULN_TICKS := 4
 
-## 불 위에 서 있으면 **초당** 이만큼 깎인다.
-## ⚠ **가정이다**(계획 §4) — 「불 위 1초 = 탄 한 대」로 읽힌다. 사용자가 뒤집을 자리다.
-## 🔴 **초당이라 프레임(60Hz)에서 돈다.** 비율이라 프레임이 자연스럽고, 틱에 두면
-##  「한 대가 세 대」 문제가 아예 없다.
+## Standing in fire shaves this much **per second.**
+## **An assumption** (plan section 4) — it reads as "1 second in fire = one bolt". A place the user may overturn.
+## **It is per second, so it runs on frames (60Hz).** Being a rate, frames are natural, and on ticks the
+##  "one hit becomes three" problem does not exist at all.
 const BURN_DPS := 10.0
 
-# ─── 반동 ─────────────────────────────────────────────────────────
-## 🔴 **쏘면 밀린다**(GDD 자연법칙). 마법진 재미의 일부라 남는다.
+# --- recoil --------------------------------------------------------
+## **Fire and you get pushed** (GDD natural law). It stays because it is part of the magic circle's fun.
 ##
-## 🔴🔴 **피격 밀림(넉백)은 삭제됐다**(사용자 결정, 2026-08-04). 맞아도 몸이 안 움직인다.
-##  ⚠ **둘을 헷갈리지 마라** — 사라진 것은 「**맞으면** 밀린다」이고, 남은 것은 「**쏘면** 밀린다」다.
-##  ⚠ 지운 것: `KB_SPEED_PX` · `_push_dir` · `on_tick` 의 미는 갈래 · 그걸 재던 그물 여섯.
+## **Hit knockback was deleted** (decided by the user). Getting hit does not move the body.
+##  **Do not confuse the two** — what disappeared is "pushed **when hit**", and what remains is "pushed **when firing**".
+##  Deleted: `KB_SPEED_PX`, `_push_dir`, the pushing branch of `on_tick`, and the six nets that measured it.
 ##
-## 🔴🔴 **반동이 1D가 됐다 — 세로 성분(로켓점프)이 삭제됐다**(사용자 결정, 2026-08-04).
-##  아래로 쏴도 안 뜬다. ⚠ **이건 손잡이를 0으로 내린 게 아니라 축을 지운 것이다** —
-##  `recoil()` 에 `vy` 를 미는 줄이 **없다.** 세기를 아무리 올려도 세로로는 안 움직인다.
-##  🔴 **GDD 자연법칙 「마법의 반동으로 캐릭터가 밀릴 수 있다」의 가로 몫만 남았다.**
-##   되살리려면 아래 `recoil()` 의 삭제 표시를 읽어라 — 무엇이 같이 따라오는지 적혀 있다.
-##  ⚠ 지운 것이 하나 더 있다: 「위험과 기동이 같은 행동에서 나온다」(계획 「마법 반동」).
-##   발밑을 쏘는 것이 이제 **위험이기만 하고 기동이 아니다.**
+## **The recoil became 1D — the vertical component (rocket jumping) was deleted** (decided by the user).
+##  Firing downward does not lift you. **This is not a knob turned to 0 but an axis erased** —
+##  `recoil()` has **no** line pushing `vy`. Raise the strength as high as you like and it does not move vertically.
+##  **Only the horizontal share of the GDD natural law "magic recoil can push the character" remains.**
+##   To revive it, read the deletion note on `recoil()` below — it records what has to come along with it.
+##  One more thing was deleted: "danger and mobility come out of the same action" (plan: "magic recoil").
+##   Shooting at your own feet is now **only danger and not mobility.**
 ##
-## ⚠ **가정이다**(계획 §4) — 기획이 「세기는 미정」으로 두었고 **사용자가 뒤집을 자리**다.
-##  · 반동 40px/s — 가로 총 변위 약 10px. 🔴 **400 → 200 → 100 → 40 으로 세 번 내렸다**
-##    (2026-08-04, 전부 사용자가 화면을 보고 정했다. 마지막은 「정말 조금만 있어야 할 듯」).
+## **An assumption** (plan section 4) — the design left "strength undecided" and **it is a place the user may overturn.**
+##  · Recoil 40px/s — total horizontal displacement about 10px. **It was lowered three times, 400 -> 200 -> 100 -> 40**
+##    (all decided by the user while looking at the screen. The last was "there should really only be a little").
 ##
-## 🔴🔴 **총 변위는 `v0 × τ` 다. 감쇠를 안 보고 속도만 읽으면 크기를 못 가늠한다.**
-##  τ = 1 / ln(1/0.02) = **0.256초** ⇒ 40px/s면 10.2px. 셀로는 2.5칸, 타일로는 1/3칸이다.
-##  ⚠ **이동 속도(260px/s)의 15%다** — 입력을 넣으면 즉시 이긴다. 「밀리는 게 느껴지되
-##   조작을 안 뺏는다」가 이 값이 고른 자리다.
+## **Total displacement is `v0 * tau`. Read only the speed without looking at the decay and you cannot gauge the size.**
+##  tau = 1 / ln(1/0.02) = **0.256s** => at 40px/s that is 10.2px. In cells, 2.5; in tiles, 1/3.
+##  **It is 15% of the movement speed (260px/s)** — put in an input and it wins immediately. "You feel the push
+##   but it does not take the controls away" is the spot this value picked.
 ##
-## 🔴 **여기가 「있으나 마나」의 문턱이다. 더 내리려거든 값을 깎지 말고 축을 지워라** —
-##  세로(로켓점프)가 정확히 그렇게 없어졌다. 값만 계속 깎으면 **기능은 있는데 아무도 못 느끼는
-##  거짓 손잡이**가 남고, 그건 다음 사람이 「반동이 있다」고 읽고 설계를 얹는 자리가 된다.
-##  · 감쇠 초당 ×0.02 (τ≈0.26초) — 「탁 밀고 잦아든다」
-## 🔴 **감쇠는 시간 상수라 배율·타일과 무관하다.**
-##  ⚠ **감쇠를 지우면 쏜 뒤 캐릭터가 영원히 미끄러진다.** 넉백을 지우면서 같이 지우고 싶어지는
-##   자리인데, 아래 `recoil_vx` 가 **가로에 감쇠 장치가 없어서** 생긴 축이라 이게 그 장치다.
-##  🔴 **세로가 사라지며 이 장치가 유일해졌다** — 전에는 세로 쪽을 중력이 맡았다.
+## **This is the threshold of "might as well not exist". To go lower, do not shave the value, erase the axis** —
+##  the vertical (rocket jump) disappeared in exactly that way. Keep shaving the value and what remains is a
+##  **false knob whose feature exists but nobody can feel**, and that becomes the spot where the next person
+##  reads "there is recoil" and builds a design on top of it.
+##  · Decay x0.02 per second (tau ~= 0.26s) — "a sharp push that dies down"
+## **The decay is a time constant, so it is independent of scale and tiles.**
+##  **Erase the decay and the character slides forever after firing.** It is a spot you want to delete along
+##   with the knockback, but `recoil_vx` below exists as an axis precisely **because the horizontal has no
+##   decay mechanism**, and this is that mechanism.
+##  **With the vertical gone, this mechanism became the only one** — before, gravity handled the vertical side.
 const RECOIL_SPEED_PX := 40.0
 const RECOIL_DECAY_PER_SEC := 0.02
 
-# ─── 물살 ─────────────────────────────────────────────────────────
-## 🔴🔴 **물살 — 반동의 형제지만 감쇠하지 않는다**(`water-jump-and-escape.md` 단계 4,
-##  `docs/design/물.md` 「물이 캐릭터를 민다」). **매 프레임 새로 읽는 「장(場)」이라 감쇠를
-##  붙이면 두 번 세게 된다** — 반동은 잦아드는 충격량이고 물살은 그 프레임의 상태다.
+# --- current -------------------------------------------------------
+## **Current — recoil's sibling, but it does not decay** (`water-jump-and-escape.md` stage 4,
+##  `docs/design/water.md`, "water pushes the character"). **It is a "field" re-read every frame, so attaching
+##  decay makes it shrink twice** — recoil is an impulse dying down, the current is that frame's state.
 ##
-## 🔴 **정의: 「이웃 칸 양 차이가 최대(255)일 때의 속도」이고 차이에 선형 비례한다.**
-##  `_body.water_flow()` 가 이미 행 수로 나눈 평균 차이(범위 -255~255)를 돌려주므로,
-##  여기서는 그 값을 `WATER_MAX` 로 나눠 비율로 만들기만 한다(`step()` 참조).
+## **Definition: "the speed when the neighbor cells' amount difference is at maximum (255)", and it is linear
+##  in the difference.** `_body.water_flow()` already returns the average difference divided by the row count
+##  (range -255 to 255), so here it is only divided by `WATER_MAX` to turn it into a ratio (see `step()`).
 ##
-## 🔴🔴 **130 — 걷기(260)의 절반. 기존 두 값이 자를 준다:**
+## **130 — half of walking (260). The two existing values give the ruler:**
 ##
-##      RECOIL_SPEED_PX   40    쏠 때 반동
-##      MOVE_SPEED_PX    260    걷기
-##      WATER_PUSH_PX    130    ← 이 값
+##      RECOIL_SPEED_PX   40    recoil when firing
+##      MOVE_SPEED_PX    260    walking
+##      WATER_PUSH_PX    130    <- this value
 ##
-##  · **반동(40)보다 세다** — 안 그러면 「밀린다」가 손에 안 잡힌다
-##  · **걷기(260)보다 약하다** — 🔴 **물살을 거슬러 걸을 수 있어야 한다.** 못 가면 사용자가
-##    갇히고, 이 기능의 목적(「물이 나에게 영향을 미친다」)이 「물이 나를 가둔다」로 바뀐다.
-##    ⚠ 뼈 단계에서 갇히는 위험을 피하려고 **거슬러도 최소 130px/s로는 나아가게** 잡았다.
+##  · **Stronger than the recoil (40)** — otherwise "I am being pushed" is not graspable in the hand
+##  · **Weaker than walking (260)** — **you must be able to walk against the current.** If you cannot, the user
+##    gets trapped and this feature's purpose ("water affects me") turns into "water imprisons me".
+##    To avoid the risk of being trapped at the skeleton stage, it is set so that **even against the current
+##    you still advance at at least 130px/s.**
 ##
-## ⚠ **화면에서 다시 잴 것 하나가 남아 있다** — 실제로 흐르는 물의 이웃 칸 차이가 몇인지
-##  아직 아무도 안 쟀다(평형은 `WATER_MIN_DIFF`(4) 이하지만 **흐르는 중**의 값은 다르다).
-##  차이가 늘 10 안팎이면 `130 × (10/255) ≈ 5px/s` 라 아무도 못 느낀다 — **스케일은
-##  실측 뒤에 다시 열 자리다.** 여기서 「느껴지게」 조정하지 않는다(그물이 그 값을 잰다).
+## **One thing remains to be re-measured on screen** — nobody has yet measured what the neighbor-cell difference
+##  of actually flowing water is (at equilibrium it is at or below `WATER_MIN_DIFF` (4), but the value **while
+##  flowing** is different). If the difference is always around 10, `130 * (10/255) ~= 5px/s` and nobody feels
+##  it — **the scale is a place to reopen after measurement.** Do not tune it here to "make it felt"
+##  (the nets measure that value).
 const WATER_PUSH_PX := 130.0
 
-## 🔴🔴 **위치·속도·접지·지형 충돌은 `_body`가 든다.** 선언 순서가 계약이다 —
-##  아래 프로퍼티들보다 **먼저** 선언한다. 뒤에 두면 게터가 `null`을 문다
-##  (`world_step._init`이 셋의 선언 순서로 같은 함정을 이미 적어 뒀다).
+## **Position, velocity, grounding and terrain collision are held by `_body`.** The declaration order is a
+##  contract — declare it **before** the properties below. Put it after and the getters bite `null`
+##  (`world_step._init` already recorded the same trap in the declaration order of its three fields).
 var _body := Body.new(W_PX, H_PX, STEP_CELLS)
 
-## 좌상단 px. 🔴🔴 **`_body`로 위임한다 — 게터 함수(`x()`)로 바꾸지 마라.**
-##  리포가 `ch.x`·`_char.y`·`_ch.vy`·`ch.on_ground`를 **필드처럼** 읽는다
-##  (`character_view.gd`·`stage.gd`·`net_character`·`net_damage`). 함수로 바꾸면 그 호출부를
-##  전부 고쳐야 하고, 그 순간 판정 1이 지키던 단언을 구현자가 손대게 된다.
-##  ⚠ 소수 위치를 안 두는 이유(착지 높이가 매번 최대 1px 달라진다)는 `Body.x`의 계약이다.
+## Top-left px. **Delegated to `_body` — do not turn these into getter functions (`x()`).**
+##  The repo reads `ch.x`, `_char.y`, `_ch.vy` and `ch.on_ground` **as fields**
+##  (`character_view.gd`, `stage.gd`, `net_character`, `net_damage`). Turn them into functions and every one of
+##  those call sites has to be fixed, and at that moment the implementer starts touching the assertions
+##  acceptance 1 was guarding.
+##  The reason for not keeping a fractional position (the landing height differs by up to 1px every time) is
+##  `Body.x`'s contract.
 var x: int:
 	get: return _body.x
 	set(v): _body.x = v
@@ -215,49 +237,56 @@ var vy: float:
 var on_ground: bool:
 	get: return _body.on_ground
 	set(v): _body.on_ground = v
-## 마지막으로 향한 쪽(+1 오른쪽 · -1 왼쪽). 마우스가 캐릭터 위에 정확히 있을 때의 기본 방향이다.
+## The last direction faced (+1 right, -1 left). It is the default direction when the mouse is exactly on top
+##  of the character.
 var facing := 1
 
-## 🔴 **정수다**(계획 §6 위험 12). float HP는 HUD도 판정도 흐린다 — 지속 피해가 붙는 날
-##  누산기를 따로 들지 이 값을 소수로 만들지 마라.
+## **An integer** (plan section 6, risk 12). A float HP blurs both the HUD and the acceptance — the day
+##  continuous damage is attached, hold a separate accumulator rather than making this value fractional.
 var hp := MAX_HP
-## 남은 무적 **틱** 수. 🔴 **화면도 이 값을 읽는다**(`character_view`의 깜빡임) —
-##  깜빡임 시계를 따로 만들면 시계가 둘이 되고, 무적이 끝났는데 깜빡이는 일이 난다.
+## Remaining invulnerability **ticks**. **The screen reads this value too** (`character_view`'s blinking) —
+##  make a separate clock for the blinking and there are two clocks, and you get blinking after the
+##  invulnerability has ended.
 var invuln_left := 0
 
-## 쓰러졌나(체력 0). 🔴 **즉사가 아니다** — 행동불능이 되고 **중력은 그대로 받는다**(기획 「죽음」).
-##  「팀킬이 재미이려면 복구할 길이 있어야 한다」가 이 상태의 이유다.
-## ⚠ **혼자일 때 부활은 R(무대 리셋)뿐이다**(계획 §4 가정) — 동료가 일으켜 주는 것은 멀티가 붙는 날이다.
-## 🔴 **파생값이지 따로 드는 상태가 아니다** — `hp == 0` 과 갈라지면 「체력은 0인데 걸어 다닌다」가
-##  에러 없이 난다(계획 §1이 캐릭터를 한 덩어리로 둔 이유가 이것이다).
-## ⚠ **언제 진짜 상태가 되나**: 조건은 하나다 — **「쓰러졌는데 hp가 0이 아닐 수 있다」**.
-##  기획의 미정 둘이 그날을 만든다: **쓰러진 채 버티는 시간**(그 동안 hp가 회복될 수 있다) ·
-##  **일으켜지면 체력이 얼마인가**(부분 체력 부활). 둘 중 하나가 정해지면 게터를 버리고 상태로 바꿔라.
+## Am I downed (HP 0). **It is not instant death** — you become incapacitated and **still take gravity**
+##  (design: "death"). "For team-killing to be fun there has to be a way back" is the reason for this state.
+## **When alone, the only revival is R (stage reset)** (plan section 4 assumption) — being picked up by an ally
+##  is for the day multiplayer arrives.
+## **It is a derived value, not separately held state** — diverge from `hp == 0` and "HP is 0 but it walks
+##  around" happens with no error (that is why plan section 1 kept the character as one lump).
+## **When does it become real state**: there is one condition — **"you can be downed while HP is not 0"**.
+##  Two undecided items in the design make that day: **how long you hold out while downed** (during which HP
+##  may recover) and **how much HP you have when picked up** (partial-HP revival). Once either is settled,
+##  drop the getter and turn it into state.
 var downed: bool:
 	get:
 		return hp <= 0
 
-## 지금 불 위에 서 있나. 🔴 **화면이 읽는다**(불붙은 캐릭터). 매 프레임 다시 판정하므로
-##  「불에서 나왔는데 계속 타 보인다」가 원리적으로 없다.
+## Am I standing in fire right now. **The screen reads it** (a burning character). It is re-decided every
+##  frame, so "I left the fire but keep looking like I am burning" is impossible in principle.
 var burning := false
 
-## 🔴🔴 **반동의 가로 속도.** `vy`와 달리 **가로에는 감쇠 장치가 없어서** 새 축이 필요했다 —
-##  세로는 중력이 이미 그 일을 한다(그래서 반동의 세로 성분은 `vy`에 그냥 더한다).
-## 🔴 **입력과 더해지고 시간에 따라 감쇠한다.** 「막힌다」도 「서서히 되돌아온다」도 아니다 —
-##  반대 입력을 넣어도 반동이 도는 동안에는 **입력이 즉시 이기지 않는다.**
-## ⚠ **이름이 `kb_vx`(넉백) 였다.** 넉백이 사라지고 **쓰는 쪽이 `recoil()` 하나만 남아서** 바꿨다 —
-##  없는 기능의 이름을 단 축은 다음 사람이 「맞으면 밀리는구나」로 잘못 읽는다.
+## **The recoil's horizontal speed.** Unlike `vy`, **the horizontal has no decay mechanism**, so a new axis was
+##  needed — the vertical already has gravity doing that job (which is why the recoil's vertical component was
+##  simply added to `vy`).
+## **It is added to the input and decays over time.** It is neither "blocked" nor "gradually restored" —
+##  put in the opposite input and while the recoil is running **the input does not win immediately.**
+## **Its name was `kb_vx` (knockback).** It was renamed once the knockback disappeared and **`recoil()` was the
+##  only remaining user** — an axis named after a feature that does not exist gets misread by the next person
+##  as "so you get pushed when hit".
 var recoil_vx := 0.0
 
-## 🔴 아직 1이 안 된 불 피해. **`hp`를 정수로 지키는 장치다**(계획 §6 위험 12) —
-##  float HP는 HUD도 판정도 흐린다.
-## ⚠ **불에서 나와도 안 비운다.** 비우면 불을 톡톡 밟고 지나가는 것이 **공짜**가 되고,
-##  그건 「연료를 어디 두느냐가 곧 레벨 디자인」을 갉아먹는다.
+## Fire damage that has not reached 1 yet. **The device that keeps `hp` an integer** (plan section 6, risk 12) —
+##  a float HP blurs both the HUD and the acceptance.
+## **It is not cleared when you leave the fire.** Clear it and tapping across fire becomes **free**, and that
+##  eats away at "where you put fuel is level design".
 var _burn_acc := 0.0
 
-## 🔴🔴 **체력과 무적도 같이 되돌린다.** 안 되돌리면 R(무대 리셋)로 되살아나지 못한다 —
-##  혼자일 때 일으켜 줄 사람이 없어서 **R이 유일한 부활**이다(계획 §4).
-## ⚠ 위치·속도·접지·`_rem_*`는 `_body.place()`가 되돌린다 — 여기서 또 만지면 되돌리는 자리가 두 곳이 된다.
+## **HP and invulnerability are reverted too.** Without that, R (stage reset) cannot bring you back —
+##  when alone there is nobody to pick you up, so **R is the only revival** (plan section 4).
+## Position, velocity, grounding and `_rem_*` are reverted by `_body.place()` — touch them again here and
+##  there are two places doing the reverting.
 func place(px: int, py: int) -> void:
 	_body.place(px, py)
 	hp = MAX_HP
@@ -271,72 +300,74 @@ func center() -> Vector2:
 	return _body.center()
 
 
-## 🔴🔴 **60Hz(`_physics_process` 매번)로 돈다 — 시뮬 20Hz에 묶지 마라.**
-##  20Hz에 묶으면 조작이 뚝뚝 끊겨 재는 것 3(「손에 붙나」)이 통째로 깨진다.
-##  호스트 권위라 틱에 묶일 이유가 없다(GDD 멀티 표).
-## ⚠ **`jump` 와 `jump_held` 는 다른 것이다.** `jump` 는 「이번 프레임에 눌렸나」(뛰기 시작),
-##  `jump_held` 는 「지금 누르고 있나」(상승을 계속 허락하나)다. 🔴 **기본값을 안 준다** —
-##  안 넘긴 호출부가 조용히 「즉시 뗀 점프」가 되어 도달 높이가 1/3이 된다(`cmd_blast` 와 같은 규율).
+## **Runs at 60Hz (every `_physics_process`) — do not tie it to the 20Hz sim.**
+##  Tie it to 20Hz and the controls stutter, breaking measurement 3 ("does it stick to the hand") entirely.
+##  It is host-authoritative, so there is no reason to tie it to ticks (GDD multiplayer table).
+## **`jump` and `jump_held` are different things.** `jump` is "was it pressed this frame" (start jumping),
+##  `jump_held` is "is it held now" (keep allowing the rise). **No default is given** — a call site that does
+##  not pass it silently becomes an "instantly released jump" and the reachable height drops to a third
+##  (the same discipline as `cmd_blast`).
 func step(grid: CellGrid, dt: float, axis: float, jump: bool, jump_held: bool) -> void:
 	on_ground = _body.grounded(grid)
-	# 🔴🔴 **물속인가 — 매 프레임 새로 읽는다.** `on_tick()`(burning을 세우는 자리)에 두면
-	#  `TICK_DIVIDER`(3) 탓에 최대 2프레임 낡은 답으로 점프를 판정하게 되고, 물 밖으로 나온
-	#  뒤에도 두 프레임 더 뛰어진다 — **눈으로 못 본다**(`water-jump-and-escape.md` 단계 1,
-	#  그물 A-3이 그걸 값으로 잡는다).
+	# **Am I in water — re-read every frame.** Put it in `on_tick()` (where `burning` is set) and
+	#  `TICK_DIVIDER` (3) makes the jump decision use an answer up to 2 frames stale, so you can still jump
+	#  for two more frames after leaving the water — **the eye cannot see it**
+	#  (`water-jump-and-escape.md` stage 1; net A-3 catches it by value).
 	var in_water := _body.standing_in_water(grid)
-	# 🔴🔴 **대입이다. 「점프 + 반동」이 기술이 되는 자리가 정확히 여기다.**
-	#  같은 프레임에 쏘면 이 줄이 **반동을 지우고**, 떠오른 뒤에 쏘면 반동이 살아 남아
-	#  도달 높이가 **51 → 109px(2.1배)** 가 된다(실측 — **16px 세상의 값이다.**
-	#  32px에서는 두 값이 다 2배지만 **비율 2.1배가 그대로인지는 다시 안 쟀다**).
-	#  🔴 **의도된 것이다**(사용자 판정, 2026-08-04) — 「**언제 쏘느냐**」가 높이를 정하는 게 손맛이다.
-	#  ⚠ **더하기로 바꾸지 마라.** 버그로 읽히기 쉬운 자리라 여기 적어 둔다.
-	# 🔴🔴 **`or in_water` — 물속에서는 지면 여부와 무관하게 몇 번이든 점프한다**
-	#  (`water-jump-and-escape.md` 「부력도 수영도 아니다 — 점프 제한 해제다」).
-	#  ⚠ 점프 자체의 값(`JUMP_VY_PX`)은 물 안팎에서 같다 — 부력이라는 새 물리 축을 안 만든다.
+	# **It is an assignment. This is exactly where "jump + recoil" becomes a technique.**
+	#  Fire on the same frame and this line **erases the recoil**; fire after lifting off and the recoil
+	#  survives, taking the reachable height to **51 -> 109px (2.1x)** (measured — **that is the 16px world's
+	#  value.** At 32px both numbers double, but **whether the 2.1x ratio holds was not re-measured**).
+	#  **This is intended** (decided by the user) — "**when** you fire" setting the height is the feel.
+	#  **Do not change it to an addition.** It is an easy spot to read as a bug, so it is written down here.
+	# **`or in_water` — underwater you jump any number of times regardless of grounding**
+	#  (`water-jump-and-escape.md`, "it is not buoyancy or swimming — it is lifting the jump limit").
+	#  The jump's own value (`JUMP_VY_PX`) is the same in and out of water — no new physics axis of buoyancy is made.
 	if jump and (on_ground or in_water) and not downed:
 		vy = JUMP_VY_PX
 	_body.apply_gravity(dt, GRAVITY_PX, MAX_FALL_PX)
 
-	# 🔴🔴 **가변 점프 — 키를 뗐고 아직 오르는 중이면 상승을 자른다**(위 `JUMP_CUT_*`).
-	#  ⚠ **`vy < 0` 이 아니라 `vy < JUMP_CUT_VY_PX` 로 본다.** 「오르는 중」으로 재면 이미
-	#   컷보다 느린 상승까지 손대게 되는데, 클램프라 값은 안 바뀌어도 **의도가 흐려진다** —
-	#   여기서 재는 것은 「컷보다 빠르게 오르고 있나」다.
-	#  🔴 **중력 뒤에 둔다.** 앞에 두면 이 프레임의 중력이 컷 위에 한 번 더 얹혀
-	#   같은 입력인데 뗀 프레임의 위상에 따라 높이가 흔들린다.
-	#  ⚠ 쓰러졌을 때도 돈다 — 위로 뜨는 경로가 점프뿐이라(로켓점프 삭제) 걸릴 일이 없고,
-	#   갈래를 늘리면 「쓰러진 채 뜨는」 경로가 생기는 날 두 곳을 고쳐야 한다.
+	# **Variable jump — if the key was released and it is still rising, clip the rise** (`JUMP_CUT_*` above).
+	#  **It checks `vy < JUMP_CUT_VY_PX`, not `vy < 0`.** Measure it as "is it rising" and you end up touching
+	#   even rises already slower than the cut, and while the clamp leaves the value unchanged, **the intent
+	#   gets blurred** — what is measured here is "is it rising faster than the cut".
+	#  **Put it after gravity.** Put it before and this frame's gravity lands on top of the cut one more time,
+	#   so the same input gives a height that wobbles with the phase of the release frame.
+	#  It runs while downed too — the only path upward is the jump (rocket jumping was deleted) so it cannot
+	#   trigger, and adding a branch means two places to fix the day a "floating while downed" path appears.
 	if not jump_held and vy < JUMP_CUT_VY_PX:
 		vy = JUMP_CUT_VY_PX
 
-	# 🔴🔴 **쓰러지면 입력이 죽는다. 중력·반동 잔량은 그대로다.**
-	#  ⚠ 여기서 `vy`나 `recoil_vx`까지 지우면 「즉사」와 화면에서 구별이 안 된다 —
-	#   쓰러진 채로 **떨어지는 것**이 「행동불능」을 「죽음」과 가르는 유일한 표시다.
+	# **Go down and the input dies. Gravity and the leftover recoil stay.**
+	#  Erase `vy` or `recoil_vx` here too and it becomes indistinguishable from "instant death" on screen —
+	#   **falling** while downed is the only mark separating "incapacitated" from "dead".
 	var move := 0.0 if downed else axis
 	if move != 0.0:
 		facing = 1 if move > 0.0 else -1
-	# 🔴 축을 나눠 푼다 — 한 번에 대각으로 밀면 모서리에서 어느 쪽이 막혔는지 알 수 없어
-	#  「벽에 붙어 점프하면 가끔 통과한다」가 된다.
-	# 🔴🔴 **물살 — 반동과 같은 자리에서 합에 더한다.** ⚠ **감쇠는 안 붙인다** — 반동 줄 바로
-	#  아래(감쇠 다음 줄)에 물살을 끼우면 물살까지 감쇠를 먹어 **두 번 세지고**, 물이 없어져도
-	#  한동안 밀림이 남는다. `water_flow()`는 프레임마다 새로 읽으므로 그 자체가 이미 "감쇠"다.
+	# The axes are solved separately — push diagonally in one go and you cannot tell which side was blocked at
+	#  a corner, and you get "jumping while pressed against a wall sometimes passes through".
+	# **Current — added into the same sum as the recoil.** **No decay is attached** — slip the current in
+	#  right below the recoil line (the line after the decay) and the current eats the decay too, so it
+	#  **shrinks twice**, and the push lingers a while after the water is gone. `water_flow()` is re-read every
+	#  frame, so that in itself is already "decay".
 	var water_push := float(_body.water_flow(grid)) / float(Tuning.WATER_MAX) * WATER_PUSH_PX
-	# 🔴🔴 **입력과 반동과 물살을 더한다. 덮어쓰지 않는다** — 덮어쓰면 반동이 도는 동안
-	#  조작이 죽고, 그러면 「막힌다」가 되어 사용자가 안 고른 쪽이 된다.
+	# **Input, recoil and current are added. They do not overwrite** — overwrite and the controls die while the
+	#  recoil is running, and that becomes "blocked", which is the side the user did not choose.
 	_body.move_x(grid, (move * MOVE_SPEED_PX + recoil_vx + water_push) * dt)
-	# ⚠ **민 뒤에 감쇠한다.** 앞에서 감쇠하면 쏜 그 프레임의 반동이 한 프레임치 깎여 나간다.
-	#  🔴 물살은 감쇠 대상이 아니다 — `recoil_vx`만 줄인다.
+	# **Decay after pushing.** Decay before and the recoil of the very frame you fired gets one frame shaved off.
+	#  The current is not a decay target — only `recoil_vx` is reduced.
 	recoil_vx *= pow(RECOIL_DECAY_PER_SEC, dt)
 	if _body.move_y(grid, vy * dt):
 		vy = 0.0
 	on_ground = _body.grounded(grid)
-	# 🔴 **다 움직인 뒤에 본다.** 앞에서 보면 「방금 떠난 자리의 불」로 깎인다.
+	# **Look after all the moving is done.** Look before and you get shaved by "the fire at the spot you just left".
 	_burn(grid, dt)
 
 
-## 🔴🔴 **불 위에 서 있으면 깎인다 — 무적을 갱신하지도, 무적에 걸리지도 않는다.**
-##  이 갈래가 이 기능의 전부다(기획 「무엇이 나를 때리나」). 무적을 하나로 두면
-##  **불 위에 서 있어도 안 아파지고**, 그러면 「연료를 어디 두느냐가 곧 레벨 디자인」이
-##  플레이어에게 무의미해진다. ⇒ 여기는 `invuln_left`를 **읽지도 쓰지도 않는다.**
+## **Standing in fire shaves you — it neither refreshes invulnerability nor is stopped by it.**
+##  That branch is the whole of this feature (design: "what hits me"). Make invulnerability a single thing and
+##  **standing in fire stops hurting**, and then "where you put fuel is level design" becomes meaningless to
+##  the player. => This function **neither reads nor writes** `invuln_left`.
 func _burn(grid: CellGrid, dt: float) -> void:
 	burning = _body.standing_in_fire(grid)
 	if not burning:
@@ -349,16 +380,18 @@ func _burn(grid: CellGrid, dt: float) -> void:
 	take_hit(whole, false)
 
 
-## 🔴🔴 **hp를 깎는 문은 하나다**(`monsters-minimum` 단계 5). 지금 hp를 깎는 곳이 이미
-##  넷이다 — `on_tick`의 직격/폭발 · `_burn`의 지속 · **돼지 접촉** · **닭의 탄**(뒤의 둘은
-##  `world_step`이 부른다) — 넷이 각자 `hp = maxi(0, hp - dmg)`를 따로 쓰면 **하나가 하한을
-##  빠뜨렸을 때 hp가 음수로 새는데 `downed`는 `hp <= 0`이라 거동은 멀쩡하고 HUD만
-##  `-3/100`이 된다.** ⇒ 무적 검사·하한 클램프·무적 세팅을 여기 한 곳에 모은다.
+## **There is one door that shaves HP** (`monsters-minimum` stage 5). There are already four places shaving
+##  HP — `on_tick`'s direct hit and blast, `_burn`'s continuous damage, **pig contact** and **the hen's bolt**
+##  (the latter two are called by `world_step`) — and if all four wrote their own `hp = maxi(0, hp - dmg)`,
+##  **then when one of them forgets the floor, HP leaks negative while `downed` is `hp <= 0` so the behavior
+##  looks fine and only the HUD reads `-3/100`.** => The invulnerability check, the floor clamp and the
+##  invulnerability set are gathered here in one place.
 ##
-## `tanks_invuln`: 이 피해가 무적을 타는지 — **직격·폭발·돼지 접촉·닭 탄은 true**,
-##  **불 지속은 false**(무적을 하나로 두면 불이 무해해진다 — 위 `_burn` 헤더와 같은 이유).
-## 돌려주는 값: 실제로 깎였으면 true, 무적에 막혔으면 false(호출부가 "하나라도 맞으면
-##  거기서 끝"을 이 반환값으로 판단한다 — `world_step`의 ⑥이 그렇게 쓴다).
+## `tanks_invuln`: whether this damage rides the invulnerability — **direct hits, blasts, pig contact and hen
+##  bolts are true**, **fire's continuous damage is false** (make invulnerability a single thing and fire
+##  becomes harmless — the same reason as the `_burn` header above).
+## Return value: true if HP was actually shaved, false if the invulnerability blocked it (the caller judges
+##  "one hit and that is the end of it" from this return value — `world_step`'s (6) uses it that way).
 func take_hit(dmg: int, tanks_invuln: bool) -> bool:
 	if tanks_invuln and invuln_left > 0:
 		return false
@@ -369,56 +402,61 @@ func take_hit(dmg: int, tanks_invuln: bool) -> bool:
 
 
 # ══════════════════════════════════════════════════════════════════
-#  맞았나 — 🔴🔴 **두 세계가 만나는 자리다**
+#  Was I hit — **this is where two worlds meet**
 # ══════════════════════════════════════════════════════════════════
-# 시뮬(`src/sim/`)은 캐릭터를 **모른다.** 여기가 시뮬의 통지를 **읽기만** 해서 판정한다.
-# ⚠ 거꾸로 하면(시뮬이 캐릭터를 알면) 결정론이 호스트 권위 위치에 묶여 **클라마다 격자가
-#  갈라진다** — 에러는 안 나고 「멀티에서 지형이 서로 다르게 보인다」로만 드러난다(GDD).
+# The sim (`src/sim/`) does **not know** the character. Here is where the sim's notifications are **only read**
+# and judged.
+# Do it the other way around (the sim knowing the character) and determinism gets tied to a host-authoritative
+#  position, so **the grid diverges per client** — no error is raised and it only shows up as "the terrain looks
+#  different to each player in multiplayer" (GDD).
 
-## 🔴🔴 **틱에서만 돈다.** 60Hz에서 부르면 **한 대가 세 대가 된다** — 통지 배열은
-##  `spell.step()` 시작에서만 지워지므로 틱 사이 세 프레임 동안 같은 값이 남아 있다.
-##  ⚠ 무적이 두 대를 먹어서 **화면에서는 정상으로 보이고**, 무적과 무관한 지속 피해에서만
-##   3배가 드러난다. ⇒ 입구는 `world_step.frame()` 의 **틱 갈래 안** 하나뿐이다.
+## **It runs only on ticks.** Call it at 60Hz and **one hit becomes three** — the notification arrays are
+##  cleared only at the start of `spell.step()`, so the same values stay there for the three frames between ticks.
+##  The invulnerability eats two of them, so **on screen it looks normal**, and the 3x only shows up in
+##   continuous damage, which is unrelated to invulnerability. => The only entrance is inside `world_step.frame()`'s
+##   **tick branch**.
 ##
-## ⚠ **격자를 안 받는다.** 지금 이 판정에 격자가 필요 없고(지속 피해는 `step()`의 몫이다),
-##  안 쓰는 인자는 「여기서 지형을 본다」는 거짓 손잡이가 된다.
+## **It does not take the grid.** This judgment does not need the grid right now (continuous damage is `step()`'s
+##  job), and an unused argument becomes a false knob saying "the terrain is looked at here".
 func on_tick(spell: SpellSim) -> void:
-	# ① 무적이면 아무것도 안 한다. 🔴 이 갈래가 판정 3-②의 전부다 —
-	#  맞은 틱에 4를 채우고 다음 4틱을 이 줄이 먹는다(3틱 간격 = 한 대 · 5틱 간격 = 두 대).
+	# (1) If invulnerable, do nothing. This branch is the whole of acceptance 3-(2) —
+	#  the tick you get hit fills it with 4 and this line eats the next 4 ticks
+	#  (3-tick spacing = one hit, 5-tick spacing = two hits).
 	if invuln_left > 0:
 		invuln_left -= 1
 		return
-	# ②③ 구간(직격)과 폭발. 🔴 **하나라도 맞으면 거기서 끝이다** —
-	#  그게 판정 3-①(같은 틱에 폭발 둘을 맞아도 한 대)이다.
+	# (2)(3) Segment (direct hit) and blast. **One hit and that is the end of it** —
+	#  that is acceptance 3-(1) (taking two blasts on the same tick is still one hit).
 	if not (_body.hit_by_segment(spell) or _body.hit_by_blast(spell)):
 		return
-	# ④ hp는 0 아래로 안 내려간다(계획 §4) — `take_hit`이 하한과 무적 세팅을 같이 한다.
+	# (4) HP does not go below 0 (plan section 4) — `take_hit` does the floor and the invulnerability set together.
 	take_hit(DAMAGE_HIT, true)
-	# 🔴🔴 **맞아도 안 밀린다**(사용자 결정, 2026-08-04). 여기 「맞은 쪽으로 민다」가 있었고
-	#  `_push_dir` 이 그걸 날랐다 — 둘 다 지웠다. ⚠ **되살리려면 방향을 찾는 자리(`_hit_by_*`)와
-	#  미는 자리(여기)를 같이 되살려야 한다.** 한쪽만 두면 방향을 찾아 놓고 아무 데도 안 쓴다.
+	# **Getting hit does not push you** (decided by the user). There used to be a "push toward the hit direction"
+	#  here and `_push_dir` carried it — both were deleted. **To revive it you must revive both the place that
+	#  finds the direction (`_hit_by_*`) and the place that pushes (here).** Leave only one and you find the
+	#  direction and use it nowhere.
 
 
-## 🔴 **쏘면 밀린다**(GDD 자연법칙). `world_step` 이 **`fire()` 가 참을 준 뒤에** 부른다 —
-##  큐에 넣는 시점에 걸면 **거부된 발사에도 밀려서** 「안 나갔는데 밀린다」가 된다.
+## **Fire and you get pushed** (GDD natural law). `world_step` calls it **after `fire()` returned true** —
+##  hook it at the moment of queueing and **even rejected shots push you**, giving "it did not fire but I got pushed".
 ##
-## 🔴🔴 **1D다. 여기 `vy -= d.y * RECOIL_SPEED_PX` 가 있었고 지웠다**(사용자 결정, 2026-08-04).
-##  그 한 줄이 GDD의 **로켓점프**였다 — 아래로 쏘면 떠올랐고, 자기 폭발에 맞는 것이 확정이라
-##  **뜨면서 동시에 아팠다**. 지금은 아픈 것만 남았다.
-##  ⚠ **되살리려면 그 줄만으로는 안 된다** — 그물의 `_firing_down_does_not_lift_me` 가
-##   지금 **「안 뜬다」를 단언하고 있으므로** 되살리는 순간 빨개진다. 그게 맞는 거동이다.
+## **It is 1D. There used to be a `vy -= d.y * RECOIL_SPEED_PX` here and it was deleted** (decided by the user).
+##  That one line was the GDD's **rocket jump** — firing downward lifted you, and since getting caught in your
+##  own blast was guaranteed, **you rose and hurt at the same time**. Now only the hurting is left.
+##  **Reviving it takes more than that line** — the net's `_firing_down_does_not_lift_me` currently
+##   **asserts "it does not lift"**, so it goes red the moment you revive it. That is the correct behavior.
 ##
-## 🔴🔴 **`ady` 는 여전히 쓴다. 인자를 지우지 마라.** 세로로 안 밀 뿐이지
-##  **정규화에는 필요하다** — 빼면 `d.x` 가 늘 ±1이 되어 **아래로 쏴도 옆으로 세게 밀린다.**
-##  지금은 아래로 쏘면 `d.x ≈ 0` 이라 가로 반동도 거의 없다. 에러는 안 나고
-##  「아래로 쏘면 옆으로 미끄러진다」로만 보인다.
+## **`ady` is still used. Do not delete the argument.** It just does not push vertically; **it is needed for the
+##  normalization** — remove it and `d.x` is always plus or minus 1, so **firing downward pushes you hard sideways.**
+##  Right now firing downward gives `d.x ~= 0`, so the horizontal recoil is nearly nothing too. No error is
+##  raised and it only looks like "firing downward makes me slide sideways".
 func recoil(adx: int, ady: int) -> void:
 	var d := _unit(float(adx), float(ady))
 	recoil_vx -= d.x * RECOIL_SPEED_PX
 
 
-## 단위 벡터. ⚠ **0벡터는 0으로 돌려준다** — 정규화하면 0으로 나눈다.
-##  (조준 0벡터는 `spell_sim.fire()`도 조용히 버리는 정상 입력이다.)
+## Unit vector. **The zero vector returns zero** — normalizing it divides by zero.
+##  (A zero aim vector is normal input that `spell_sim.fire()` also silently discards.)
 static func _unit(dx: float, dy: float) -> Vector2:
 	var d := Vector2(dx, dy)
 	if d.length_squared() <= 0.0:
@@ -426,8 +464,8 @@ static func _unit(dx: float, dy: float) -> Vector2:
 	return d.normalized()
 
 
-## 🔴🔴 **`_move_x`·`_try_step_up`·`_move_y`·`_grounded`·`_box_free`는 `Body`로 이사했다**
-##  (`monsters-minimum` 단계 0). **`_hit_by_segment`·`_hit_by_blast`·`_seg_hits_box`·
-##  `_circle_hits_box`·`_slab`·`_fp_px`·`_cell_px`·`_standing_in_fire`도 이사했다**
-##  (`monsters-minimum` 단계 3, 두 번째 추출) — 몬스터가 같은 상자 모양을 쓰므로
-##  사본을 여기 남기면 CLAUDE.md 그대로 반드시 갈라진다. 고칠 사람은 `body.gd`를 봐라.
+## **`_move_x`, `_try_step_up`, `_move_y`, `_grounded` and `_box_free` moved into `Body`**
+##  (`monsters-minimum` stage 0). **`_hit_by_segment`, `_hit_by_blast`, `_seg_hits_box`, `_circle_hits_box`,
+##  `_slab`, `_fp_px`, `_cell_px` and `_standing_in_fire` moved too**
+##  (`monsters-minimum` stage 3, the second extraction) — monsters use the same box shape, so leaving a copy
+##  here guarantees divergence exactly as CLAUDE.md says. Whoever fixes them, look at `body.gd`.

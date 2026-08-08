@@ -1,22 +1,22 @@
-# 에셋 생성 — 로컬 ComfyUI
+# Asset generation — local ComfyUI
 
-pixellab 크레딧을 안 쓰고 **이 PC의 GPU로** 마법진 UI · 문양 · 룬 · 진을 뽑는다.
+Generates magic circle UI · glyphs · runes · circles **on this PC's GPU**, without spending pixellab credits.
 
-## 어디에 무엇이 있나
+## Where things are
 
-| 무엇 | 어디 | 왜 |
+| What | Where | Why |
 |---|---|---|
-| 스크립트 (이 폴더) | `tools/pixel/` | 리포에 커밋된다 |
-| ComfyUI 본체 · 모델 12GB | `config.json` 의 `comfy_root` | 🔴 **리포에 안 들어온다.** 기계가 바뀌면 그 한 줄만 고친다 |
-| 뽑은 후보 | `tools/pixel/out/` | gitignore. 🔴 **고른 것만** `assets/` 로 옮긴다 |
+| Scripts (this folder) | `tools/pixel/` | committed to the repo |
+| ComfyUI itself · 12GB of models | `comfy_root` in `config.json` | **Not in the repo.** When the machine changes, fix that one line |
+| Generated candidates | `tools/pixel/out/` | gitignored. **Only the chosen ones** move to `assets/` |
 
-원본 파이프라인은 `CompyUI_2DPixel/pixel_pipeline/` 이고 **캐릭터 4방향 걷기 시트 전용**이다.
-여기는 그 모델만 빌려 쓰고 워크플로우를 새로 잡았다.
+The original pipeline is `CompyUI_2DPixel/pixel_pipeline/` and it is **for character 4-direction walk sheets only.**
+This borrows only its models and lays out a new workflow.
 
-## 쓰는 법
+## How to use
 
 ```powershell
-powershell -File tools\pixel\serve.ps1          # 서버 (한 번만, 켜 두면 됨)
+powershell -File tools\pixel\serve.ps1          # server (once; leave it running)
 
 $py = "C:\Users\djgnf\Desktop\window_project\CompyUI_2DPixel\ComfyUI_windows_portable\python_embeded\python.exe"
 & $py tools\pixel\gen.py "eight straight rays radiating from a center point inside a hexagon" `
@@ -25,72 +25,73 @@ $py = "C:\Users\djgnf\Desktop\window_project\CompyUI_2DPixel\ComfyUI_windows_por
 & $py tools\pixel\sheet.py tools\pixel\out\glyph_spread --cols 4 --zoom 3
 ```
 
-`_sheet.png` 한 장이 나오고, 거기서 골라 `assets/` 로 옮긴다.
+One `_sheet.png` comes out; pick from it and move the choice to `assets/`.
 
-## 프리셋 — 스타일이 갈리는 것을 막는 자리
+## Presets — the place that stops the style from splitting
 
-`gen.py` 의 `PRESETS` 하나가 스타일 문구 · LoRA 강도 · 크기를 같이 들고 있다.
+One entry in `gen.py`'s `PRESETS` holds the style phrasing, the LoRA strength and the size together.
 
-| 프리셋 | 무엇 | 생성 → 최종 |
+| Preset | What | Generate -> final |
 |---|---|---|
-| `glyph` | 층에 끼우는 기하학 무늬 | 512 → 64px |
-| `frame` | 진 — 층이 갈리는 동심 틀 | 512 → 256px |
-| `rune` | 룬 — 🔴 기하학일 필요 없다 | 512 → 96px |
-| `ui` | 조립창 (펼친 마도서) | 512 → 그대로 |
-| `raw` | 스타일 문구 없이 | 512 → 그대로 |
+| `glyph` | geometric pattern that goes into a layer | 512 -> 64px |
+| `frame` | the circle — the concentric frame whose layers read apart | 512 -> 256px |
+| `rune` | the rune — **it does not need to be geometric** | 512 -> 96px |
+| `ui` | the assembly window (an open grimoire) | 512 -> unchanged |
+| `raw` | with no style phrasing | 512 -> unchanged |
 
-🔴🔴 **`--lora` 는 전부 0이다.** 4-walk LoRA를 켜면 UI 프롬프트에도 **사람 스프라이트시트가 나온다**
-(원본 `PROMPTS.md` 의 실측). 캐릭터를 뽑을 때만 1.0이고, 그건 원본 파이프라인의 몫이다.
+**`--lora` is 0 everywhere.** Turn on the 4-walk LoRA and even a UI prompt yields **a human spritesheet**
+(measured in the original `PROMPTS.md`). It is 1.0 only when generating characters, and that is the original pipeline's job.
 
-## 🔴 크기 — 뽑기 전에 본다
+## Sizes — read before generating
 
-🔴🔴 **기준 문서는 `docs/design/마법진-그림.md` 다.** 왜 이 크기인지, 무엇이 안 풀렸는지가 거기 있다.
-여기는 뽑을 때 쓰는 **숫자만** 든다.
+**The reference document is `docs/design/circle-art.md`.** Why these sizes and what is unresolved live there.
+This holds **only the numbers** used when generating.
 
-| 무엇 | 파일 크기 | 생성 → 내림 |
+| What | File size | Generate -> downscale |
 |---|---|---|
-| 문양 1층 (2층 진) | **112** | 768 → 112 |
-| 문양 2층 (2층 진) | **224** | 768 → 224 |
-| 룬 (진 테두리) | **96** | 768 → 96 |
-| 진 | **560** | **1120 → 560** |
-| 조립창 | 864×372 | 864×376 로 뽑아 4px 자른다 |
+| Glyph layer 1 (2-layer circle) | **112** | 768 -> 112 |
+| Glyph layer 2 (2-layer circle) | **224** | 768 -> 224 |
+| Rune (circle border) | **96** | 768 -> 96 |
+| Circle | **560** | **1120 -> 560** |
+| Assembly window | 864x372 | generate at 864x376 and trim 4px |
 
-🔴🔴 **비정수 축소를 피해라.** 1024 → 560 은 1.83배라 **선이 깨져 자글자글해진다**(실측).
-**1120 → 560(정확히 2배)** 로 뽑으면 안 깨진다.
+**Avoid non-integer downscales.** 1024 -> 560 is 1.83x, so **the lines break up and go jagged** (measured).
+Generate at **1120 -> 560 (exactly 2x)** and they do not break.
 
-⚠ **문양은 「층에 붙는 점」이 아니라 「층을 채우는 링」이다.** 도넛으로 뽑고, 층마다
-안쪽 구멍 비율이 다르므로(1층 0 · 2층 1/2 · 3층 2/3) **띠 밖을 잘라내서** 얹는다.
+**A glyph is not "a dot attached to a layer" but "a ring that fills a layer".** Generate it as a donut, and because
+the inner hole ratio differs per layer (layer 1: 0 · layer 2: 1/2 · layer 3: 2/3), **cut away what falls outside the band** before laying it on.
 
-🔴 **지형은 여기 없다.** 4px 셀 단위로 파괴돼서 셰이더가 셀마다 색을 칠한다
-(`cell_materials.DEFS`) — 타일 그림이 들어갈 자리가 없다.
+**Terrain is not here.** It is destroyed in 4px cell units and the shader colors each cell
+(`cell_materials.DEFS`) — there is no place for a tile image to go.
 
-## 🔴 다음에 뽑을 것 — 사용자가 고를 자리 (2026-08-05에 훑었다)
+## What to generate next — the user's call
 
-지금 화면에서 **그림인 것은 캐릭터 몸 · 지팡이 · 탄 머리 넷뿐**이고 나머지는 전부 코드로 그린 도형이다.
-⚠ **순서는 GDD 「재미가 어디서 오나」를 따른다** — 마법 연출이 최우선, 세상의 정밀도가 마지막.
+Right now the only things on screen that are **art are the character body, the staff and the bolt head — four items**;
+everything else is a shape drawn by code.
+**The order follows the GDD's "where the fun comes from"** — magic presentation first, precision of the world last.
 
-| 묶음 | 무엇 | 왜 지금인가 · 무엇이 막나 |
+| Bundle | What | Why now · what blocks it |
 |---|---|---|
-| **폭발** | 72×72 6~8프레임 + 32×32 | 🔴 `flash_px` 72/36 이 **정확히 2배**라 **작은 쪽을 뽑고 ×2** 하면 한 벌로 둘을 덮는다. 축소는 픽셀이 깨진다 |
-| **착탄·확산 순간** | 64×64 4프레임 | 「폭발 8번 vs 1번」이 화면에서 갈려야 한다(GDD 테제) |
-| **파괴 파편·먼지** | 16×16 4프레임 | 벽이 뚫릴 때 지금 아무 연출도 없다 |
-| **불 셀** | 16×16 4~6프레임 | 지금 셀 색 + 사인 깜빡임 |
-| **배경 레이어** | 512×288 | 파낸 구멍 뒤가 지금 검정이다 |
-| **바닥 픽업**(진·룬·문양 두루마리) | 16×16 | 로그라이크의 「얻는다」가 화면에 없다 |
-| **슬롯 1/2 틀 · 체력바 틀** | — | 장착 슬롯이 화면에 아예 없다 |
-| 캐릭터 추가 칸 | 일으켜지는 중 · 젖음 · 불붙음 | ⚠ **거동이 아직 없다** — 물 시뮬도 코옵도 없어서 지금 그리면 쓸 데가 없다 |
-| 몬스터 | — | ⛔ GDD가 **종류·행동 전부 미정**으로 뒀다. 지금 뽑으면 낡는다 |
+| **Blast** | 72x72 6-8 frames + 32x32 | `flash_px` 72/36 is **exactly 2x**, so **generating the small one and doubling it** covers both with one set. Downscaling breaks the pixels |
+| **Impact / spread moment** | 64x64 4 frames | "8 blasts vs 1" has to read apart on screen (the GDD thesis) |
+| **Destruction debris / dust** | 16x16 4 frames | there is no presentation at all right now when a wall is punched through |
+| **Fire cell** | 16x16 4-6 frames | currently cell color plus a sine flicker |
+| **Backdrop layer** | 512x288 | behind a dug-out hole it is currently black |
+| **Floor pickups** (circle · rune · glyph scrolls) | 16x16 | the roguelike's "you gain something" is not on screen |
+| **Slot 1/2 frames · health bar frame** | — | the equip slots are not on screen at all |
+| Extra character frames | being raised · wet · on fire | **the behavior does not exist yet** — there is no water sim and no co-op, so drawing them now has nowhere to go |
+| Monsters | — | the GDD left **kinds and behavior entirely undecided.** Generate now and it goes stale |
 
-🔴🔴 **지형은 이 목록에 없고, 앞으로도 「타일셋」으로는 못 들어온다.**
-파괴가 **4px 셀 단위**라 마법이 판 구멍이 32px 타일 그림을 가로지른다 ⇒ 타일셋이 아니라
-**셀 격자에 깔 타일러블 재질 패턴**이어야 하고, `src/view/cell_grid.gdshader` 를 먼저 고쳐야 쓸 수 있다.
-⚠ 위 「크기」 절의 「지형은 여기 없다」와 같은 얘기다.
+**Terrain is not on this list, and it will never arrive as a "tileset".**
+Destruction happens **in 4px cell units**, so a hole dug by magic cuts across a 32px tile image => it must be
+**a tileable material pattern laid on the cell grid**, not a tileset, and `src/view/cell_grid.gdshader` has to be fixed first.
+This is the same point as "terrain is not here" in the Sizes section above.
 
-## 함정 — 원본 파이프라인이 실측으로 남긴 것
+## Traps — what the original pipeline left as measurements
 
-`CompyUI_2DPixel/pixel_pipeline/PROMPTS.md` 가 기준이다. 옮겨 적지 않고 요점만 가리킨다.
+`CompyUI_2DPixel/pixel_pipeline/PROMPTS.md` is the reference. Rather than copying it, this points at the key points.
 
-- **버튼 상태(normal/hover/pressed)는 안 나온다.** 다섯이 거의 같게 나온다 — 하나 뽑고 손으로 만든다
-- **9-slice 로 늘리면 모서리가 어긋난다.** 네 모서리 장식이 제각각이다
-- **참조 이미지는 그림 자체를 거의 복제한다.** 남의 그림을 스타일 참조로 넣지 마라
-- **아이콘은 `no slots no frames` · `evenly spaced apart` 를 넣어야** 낱장으로 갈린다
+- **Button states (normal/hover/pressed) do not come out.** All five come out nearly identical — generate one and make the rest by hand
+- **Stretching with 9-slice misaligns the corners.** The four corner ornaments are all different
+- **A reference image nearly replicates the art itself.** Do not feed someone else's art in as a style reference
+- **Icons need `no slots no frames` and `evenly spaced apart`** to come out as separate pieces

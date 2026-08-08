@@ -1,7 +1,8 @@
-# 탄 머리 그림 — 원을 스프라이트로
+# Bolt head art — the circle becomes a sprite
 
-**상태**: done —  **판정 다섯을 다 잰다** (2026-08-08).
-**다시 열 이유**: 탄 머리 그림을 다시 뽑을 때만. 탄 속도는 `1.ready/bolt-speed-and-visibility.md` 다.
+**Status**: done — **all five acceptance checks are measured**.
+**Why you'd reopen**: only when regenerating bolt head art. Bolt speed is `1.ready/bolt-speed-and-visibility.md`.
+
 1·5 는 사용자가 눈으로, **2·3·4 는 헤드리스로 값으로** 봤다.
 
  **「탄 속도」는 이 문서에서 떼어냈다** → [../1.ready/bolt-speed-and-visibility.md](../1.ready/bolt-speed-and-visibility.md).
@@ -58,7 +59,7 @@
 
  **그런데 이 검사가 원래 걱정을 못 잡는다.** 걱정은 「무를 무채색으로 골라서 **「못 쏜다」의
 회색**과 색축이 겹친다」였고, **룬끼리 갈리는 것과 다른 문제다.** 채도 0.03이 그 걱정을
-**숫자로 확인**해 준 셈이다. ⇒ 사연은 `진-룬-문양.md` 의 「알고 깨는 계약」.
+**숫자로 확인**해 준 셈이다. ⇒ 사연은 `circle-rune-glyph.md` 의 「알고 깨는 계약」.
 
 ###  값을 재다가 하나 나왔다 — **머리 그림과 자취의 색이 룬마다 다르게 어긋난다**
 
@@ -259,7 +260,7 @@ verify-look 은 판정 5를 **안 봤다**고 적어 두었고, 사용자가 그
 | 그림 경로 표 | `fx_tuning.BOLT_SHEETS` — 룬 하나 추가 = 한 줄 |
 | 그리는 코드 | `spell_view._draw_head` 가 `draw_texture_rect`. `_ready` 에서 한 번 `load()` |
 
- **규격과 색·시드는 `docs/design/진-룬-문양.md` 의 「탄 머리 그림」이 기준이다.** 여기 겹쳐 적지 않는다.
+ **규격과 색·시드는 `docs/design/circle-rune-glyph.md` 의 「탄 머리 그림」이 기준이다.** 여기 겹쳐 적지 않는다.
 
 ##  물·번개 그림은 있는데 화면에 안 나온다 — 빠뜨린 게 아니다
 
@@ -310,7 +311,7 @@ verify-look 은 판정 5를 **안 봤다**고 적어 두었고, 사용자가 그
  **`speed` 를 12 아래로 내리면 「꼬리는 코드가 그린다」는 근거가 뒤집힌다** —
 그때는 그림 꼬리가 화면에 보이기 시작하므로 **꼬리를 그림에 넣는 쪽이 다시 후보가 된다.**
 꼬리 있는 원본(32×16)이 `tools/pixel/out/` 에 있지만 **gitignore 라 사라진다** —
-`docs/design/진-룬-문양.md` 의 시드 표로 다시 뽑아야 한다.
+`docs/design/circle-rune-glyph.md` 의 시드 표로 다시 뽑아야 한다.
 
  **사거리가 제곱으로 준다.** 포물선 사거리가 **v²/g** 라 speed 절반이면 사거리 **1/4**이다.
 ⇒ **중력을 같이 안 내리면 조용히 틀린다**(`sim_tuning` 주석의 「하나만 올리면 조용히 틀린다」).

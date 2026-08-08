@@ -1,13 +1,13 @@
 extends SceneTree
-## 그물 러너. 헤드리스로 돈다. 씬도 화면도 없다.
+## The net runner. Runs headless. There is no scene and no screen.
 ##
-## 러너 단독 실행은 반쪽이다. 엔진 에러는 러너 안에서 못 가로챈다(Godot에 로거 훅이 없다).
-## stderr 검사는 run_nets.ps1이 한다. 반드시 래퍼로 돌려라.
+## Running the runner alone is only half of it. Engine errors cannot be intercepted from inside the runner
+## (Godot has no logger hook). The stderr check is done by run_nets.ps1. Always run it through the wrapper.
 ##
-## 그물은 tests/nets/net_*.gd 에 둔다. 러너가 디렉토리를 훑어 자동 등록한다.
-## 목록을 손으로 들고 있으면 그물을 추가하고 등록을 깜빡하는 순간 조용히 안 돈다.
+## Nets live in tests/nets/net_*.gd. The runner sweeps the directory and registers them automatically.
+## Keeping the list by hand means the moment a net is added and registration is forgotten, it quietly does not run.
 ##
-## 사용: Godot.exe --headless --path <프로젝트> --script res://tests/run_nets.gd -- [필터]
+## Usage: Godot.exe --headless --path <project> --script res://tests/run_nets.gd -- [filter]
 
 const NETS_DIR := "res://tests/nets"
 
@@ -21,7 +21,7 @@ func _initialize() -> void:
 	var filter := _arg_filter()
 	var files := _collect_nets()
 	if files.is_empty():
-		printerr("[그물] %s 에 net_*.gd 가 하나도 없다" % NETS_DIR)
+		printerr("[net] not one net_*.gd in %s" % NETS_DIR)
 		quit(1)
 		return
 
@@ -35,15 +35,16 @@ func _initialize() -> void:
 	var ms := Time.get_ticks_msec() - total
 	print("")
 	if _fail == 0:
-		print("[그물] 통과 %d개 · %dms" % [_pass, ms])
+		print("[net] %d passed · %dms" % [_pass, ms])
 	else:
-		print("[그물] 실패 %d개 / %d개 중 · %dms" % [_fail, _pass + _fail, ms])
+		print("[net] %d failed / %d · %dms" % [_fail, _pass + _fail, ms])
 		for f: String in _failures:
 			print("   x " + f)
 	quit(1 if _fail > 0 else 0)
 
 
-## 실패해도 다음 그물을 계속 돈다. 첫 실패에서 멈추면 한 번에 하나씩만 알게 된다.
+## It keeps running the next net even after a failure. Stopping at the first failure means learning about
+## only one thing at a time.
 func _run_net(path: String, nm: String) -> void:
 	var script: GDScript = load(path)
 	if script == null:
@@ -60,11 +61,11 @@ func _run_net(path: String, nm: String) -> void:
 	print("  (%dms)" % (Time.get_ticks_msec() - t0))
 
 
-# ── 단언 ──────────────────────────────────────────────────────────
-# assert()를 쓰지 마라. 릴리스에서 사라지고, 첫 실패에서 프로세스가 죽어 나머지가 안 돈다.
+# -- assertions ----------------------------------------------------
+# Do not use assert(). It disappears in release, and the process dies at the first failure so the rest does not run.
 
-## label에는 무엇을 재는지 적어라. "값이 다르다"가 아니라 "물이 왼쪽으로 안 갔다"여야
-## 실패 로그만 보고 원인 후보를 좁힐 수 있다.
+## Write what is being measured into the label. It has to be "water did not go left", not "the values differ",
+## for the failure log alone to narrow down the candidate causes.
 func ok(cond: bool, label: String) -> void:
 	if cond:
 		_pass += 1
@@ -87,31 +88,33 @@ func _note_fail(net: String, label: String) -> void:
 	printerr("  x %s: %s" % [net, label])
 
 
-## 일부러 짖게 하는 그물이 자기 짖음에 안 걸리게 하는 문.
-## 래퍼는 stderr에 뜬 에러를 전부 실패로 친다. 그런데 "범위 밖 값을 던지면 버리나" 같은
-## 그물은 통과할 때 오히려 에러를 낸다. 선언 없이 두면 래퍼가 빨개지고, 사람은 곧 래퍼를 끈다.
-## substr는 좁게 적어라. 넓게 적으면 그 그물이 도는 동안 진짜 침묵사도 같이 사면된다.
+## The door that keeps a net which barks on purpose from being caught by its own bark.
+## The wrapper treats every error on stderr as a failure. But a net like "does it discard an out-of-range value"
+## raises an error precisely when it passes. Left undeclared the wrapper goes red, and a person soon turns the
+## wrapper off. Write the substr narrowly. Written wide, a real silent death is amnestied along with it while
+## that net runs.
 func expect_error(substr: String) -> void:
 	print("[EXPECT] %s" % substr)
 
 
-# ──────────────────────────────────────────────────────────────────
+# ------------------------------------------------------------------
 
-## 🔴🔴 **`^` 접두는 정확히 일치다 — 부분 일치가 아니다** (2026-08-08, harness-manager 실측).
-##  ⚠ **이유**: 병렬 러너는 그물마다 프로세스를 하나씩 띄우고 그 프로세스를 **딱 그 그물에만**
-##  묶으려고 짧은 이름을 필터로 준다(`run_nets.ps1`). 그런데 부분 일치라 이름이 서로를 포함하면
-##  (`net_sprite` ⊂ `net_monster_sprite`, `net_water` ⊂ `net_water_rain`) **한 프로세스가 여러
-##  그물을 몰래 같이 돌린다** — 격리가 깨지고, 시간은 두 그물의 합이 되어 병렬화의 이유가 없어진다.
-##  실측: `net_water`용 프로세스가 필터 "water"로 `net_water_rain`까지 물어 57초가 나왔다
-##  (`net_water_rain`만 도는 프로세스는 45초였다 — 겹쳐 돈 시간이 그대로 낭비였다).
-##  ⇒ **병렬 스폰만 `^`를 쓴다.** 사람이 CLI에 직접 타이핑하는 `-Serial`·수동 실행은
-##  그대로 부분 일치다(짧게 쳐서 여러 그물을 한 번에 돌리는 편의가 사라지면 안 된다).
+## **The `^` prefix is an exact match — not a substring match** (harness-manager, measured).
+##  **Why**: the parallel runner spawns one process per net and gives a short name as the filter to bind that
+##  process **to that one net only** (`run_nets.ps1`). But with a substring match, names that contain each other
+##  (`net_sprite` in `net_monster_sprite`, `net_water` in `net_water_rain`) mean **one process secretly runs
+##  several nets** — the isolation breaks, and the time becomes the sum of the two nets, so there is no reason
+##  left for the parallelism.
+##  Measured: the process for `net_water` bit `net_water_rain` too with the filter "water" and came out at 57 seconds
+##  (the process running only `net_water_rain` was 45 seconds — the overlapping time was pure waste).
+##  => **Only the parallel spawn uses `^`.** `-Serial` and manual runs, typed into the CLI by a person, stay
+##  substring matches (the convenience of typing something short to run several nets at once must not be lost).
 func _arg_filter() -> String:
 	var user := OS.get_cmdline_user_args()
 	return user[0] if user.size() > 0 else ""
 
 
-## `filter`가 그물 이름 `nm`("net_xxx")에 맞는가. `^` 접두면 정확히, 아니면 부분 일치.
+## Does `filter` match the net name `nm` ("net_xxx"). Exactly if it has the `^` prefix, otherwise as a substring.
 func _filter_matches(nm: String, filter: String) -> bool:
 	if filter == "":
 		return true
@@ -128,5 +131,5 @@ func _collect_nets() -> Array[String]:
 	for f: String in d.get_files():
 		if f.begins_with("net_") and f.ends_with(".gd"):
 			out.append(NETS_DIR.path_join(f))
-	out.sort()  # 실행 순서를 고정한다. 순서가 흔들리면 실패 재현이 안 된다
+	out.sort()  # fixes the execution order. A shifting order makes failures unreproducible
 	return out

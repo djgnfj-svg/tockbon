@@ -1,217 +1,216 @@
-# 스테이지1 보스 둘 — 불을 삼킨 소, 그리고 거대 수탉
+# Stage 1's two bosses — the bull that swallowed fire, and the giant rooster
 
-**상태**: ready
-**한 줄**: 중간보스 **소**는 돌진해 박고 불을 뿜는다. 스테이지 보스 **거대 수탉**은
-뛰어올라 덮친다. 둘 다 **반피에 빨라진다.**
+**Status**: ready
+**One line**: the midboss **bull** charges, rams and breathes fire. The stage boss **giant rooster**
+leaps and pounces. Both **speed up at half health.**
 
-**맵 배치는** [stage1-map-layout.md](../3.done/stage1-map-layout.md), **물 탈출은**
-[water-jump-and-escape.md](../2.active/water-jump-and-escape.md). **셋이 서로를 물고 있다** — 아래 「기존 것과의 상호작용」.
+**Map placement** is in [stage1-map-layout.md](../3.done/stage1-map-layout.md), **the water escape** in
+[water-jump-and-escape.md](../2.active/water-jump-and-escape.md). **The three constrain each other** — see "Interaction".
 
-**기준 문서**: `docs/design/몬스터.md`(잡몹 규칙과 AI 자리) ·
-`docs/GDD.md` 「스테이지 안 — 구역 루프」(중간보스 보상 = 진행 열쇠)
-
----
-
-## 왜
-
-**스테이지1이 이것 없이는 안 굴러간다.** 몬스터 표에 있는 것은 **돼지와 닭 둘뿐**이고
-(`monster_defs.DEFS`), 맵 문서가 ①·③을 **「빈 방」**이라고 적어 뒀다.
-
-그리고 **중간보스가 GDD 설계의 중심이다** — 「강해지는 곳」이 아니라
-**「없으면 못 지나가는 곳」**이다. 소를 잡아 불의 룬을 얻어야 나무벽을 태워 길이 열린다.
-
-**소는 이미 정해져 있었다** — `docs/design/몬스터.md` 가 2026-08-07에
-「중간보스가 **소**다. 작은 가축이 큰 가축을 예고한다」고 적었고, 돼지를 잡몹으로 고른
-이유의 일부였다. **이 문서는 그 소의 거동을 채운다.**
-
-### AI가 없다는 것부터 안다
-
-`monster.gd` 의 `_next_axis()` 가 **「플레이어 쪽으로」 한 줄**이다.
-몬스터 문서가 **「AI는 미룬다. 대신 자리를 비운다」**로 그 함수를 격리해 뒀다.
-
-⇒ **보스는 그 자리에 처음 들어가는 진짜 코드다.** 「큰 돼지」로 만들면 보스가 아니다.
-**그래도 범용 AI를 만들지 않는다** — 보스 둘의 패턴만 만든다. 길찾기는 여전히 없다.
+**Source docs**: `docs/design/monsters.md` (trash-mob rules and the AI slot) ·
+`docs/GDD.md` "Inside a stage — the zone loop" (midboss reward = progression key)
 
 ---
 
-## 동작
+## Why
 
-### 중간보스 — 소 (①, 구덩이)
+**Stage 1 doesn't roll without this.** The monster table holds **only pig and chicken** (`monster_defs.DEFS`),
+and the map doc records ① and ③ as **"empty rooms".**
 
-| 무엇 | 어떻게 |
+And **the midboss is the center of the GDD's design** — not "a place to get stronger" but
+**"a place you can't pass without it".** Kill the bull, get the fire rune, burn the wood wall, open the path.
+
+**The bull was already decided** — `docs/design/monsters.md` recorded "the midboss is a **bull.**
+Small livestock foreshadows large" and that was part of why the pig was chosen as a trash mob.
+**This doc fills in that bull's behavior.**
+
+### Start from knowing there is no AI
+
+`_next_axis()` in `monster.gd` is **one line, "toward the player".**
+The monster doc isolated that function with **"AI is deferred; the slot is left open".**
+
+⇒ **The boss is the first real code to enter that slot.** Built as "a big pig", it isn't a boss.
+**Still, do not build general AI** — build only these two bosses' patterns. There is still no pathfinding.
+
+---
+
+## Behavior
+
+### Midboss — the bull (①, the pit)
+
+| What | How |
 |---|---|
-| **돌진** | 플레이어 쪽으로 **직선으로 달려와 박는다** |
-| **박으면 패인다** | **지형 파괴는 돌진할 때만.** 박은 자리가 파인다 |
-| **박으면 멈춘다** | 벽에 박으면 **잠시 스턴** — **그때가 때리는 창이다** |
-| **불을 뿜는다** | **지형에 붙는다.** 나무가 있으면 탄다 |
-| **페이즈** | **반피에 빨라진다**(2026-08-08). 돌진이 빨라지거나 불이 잦아진다 |
+| **Charge** | **Runs straight at the player and rams** |
+| **Ramming digs** | **Terrain destruction only while charging.** The impact point is carved |
+| **Ramming stuns it** | Hitting a wall **briefly stuns it** — **that is the window to hit back** |
+| **Breathes fire** | **It sticks to terrain.** Wood burns |
+| **Phases** | **Speeds up at half health.** Faster charges or more frequent fire |
 
-**「박으면 스턴」이 이 보스의 전부다.** 무뇌 직진이 그대로 약점이 되는 구조 —
-플레이어는 **피하고, 소가 박게 만들고, 그 틈에 때린다.** AI를 안 똑똑하게 만들고도 싸움이 성립한다.
+**"Ram and get stunned" is the whole of this boss.** Brainless charging becomes its own weakness —
+the player **dodges, makes the bull ram, and hits in that gap.** A fight works without making the AI smart.
 
-**파괴가 공격 패턴에 묶여 있다.** 「걷다가 막히면 부순다」가 아니라 **돌진할 때만**이라
-플레이어가 **예측할 수 있다.** 그리고 방 모양이 싸우면서 변한다.
+**Destruction is bound to an attack pattern.** Not "breaks what blocks it while walking" but **only while charging**,
+so the player **can predict it.** And the room's shape changes as you fight.
 
-#### 소의 불이 지형에 붙는다 — 그리고 그게 맵을 제약한다
+#### The bull's fire sticks to terrain — and that constrains the map
 
-**2026-08-08, 사용자가 정했다.** 「안 붙는다(플레이어만 때린다)」 쪽도 있었는데
-**「세상이 반응한다」는 GDD 테제를 지키는 쪽**을 골랐다.
+**Decided by the user.** "It doesn't stick (it only hits the player)" was an option, and
+**the side that preserves the GDD thesis "the world reacts"** was chosen.
 
-**대가가 맵에 온다.** ①에서 ②로 가는 길목의 **나무벽이 진행 열쇠**인데,
-소의 불이 그 벽에 닿으면 **플레이어가 불의 룬을 얻기 전에 벽이 저절로 탄다.**
-⇒ GDD가 못박은 「중간보스 보상이 진행의 열쇠」가 통째로 무너진다.
+**The price lands on the map.** The **wood wall** on the path from ① to ② is the progression key,
+and if the bull's fire reaches it, **the wall burns on its own before the player gets the fire rune.**
+⇒ The GDD's "the midboss reward is the key to progression" collapses entirely.
 
-**⇒ 나무벽을 ① 방 밖으로 뺀다**(사용자 판정, 2026-08-08). 맵 문서가 이걸 반영한다.
+**⇒ Move the wood wall outside room ①** (user decision). The map doc reflects this.
 
-**거리보다 「나무가 이어져 있나」가 핵심이다** — 불은 **나무를 타고** 번진다.
-① 방과 나무벽 사이에 **나무가 한 칸도 없으면** 소가 아무리 불을 뿜어도 벽에 안 닿는다.
-`net_tables._wood_clumps` 가 이미 「덩어리 사이가 점화원보다 넓나」를 재고 있다.
+**"Is the wood connected" matters more than distance** — fire spreads **through wood.**
+With **not one cell of wood** between room ① and the wood wall, no amount of fire reaches it.
+`net_tables._wood_clumps` already measures "are the gaps wider than an ignition source".
 
-**① 방 안에 나무를 두지 않는다.** 두면 방이 통째로 타서 싸움이 안 된다.
+**Put no wood inside room ①.** With wood there, the whole room burns and there is no fight.
 
-### 스테이지 보스 — 거대 수탉 (③, 20×12타일 방)
+### Stage boss — the giant rooster (③, a 20×12-tile room)
 
-| 무엇 | 어떻게 |
+| What | How |
 |---|---|
-| **뛰어오른다** | 날개로 **뛰어올라 덮친다.** **착지한다 — 공중에 머무르지 않는다** |
-| **덮치기 예고** | 뛰기 전 동작이 필요하다(피할 수 있어야 한다) |
-| **페이즈** | **반피에 빨라진다** |
-| **죽으면** | **옆벽이 무너지고 물이 들어온다** → [water-jump-and-escape.md](../2.active/water-jump-and-escape.md) |
+| **Leaps** | **Leaps with its wings and pounces.** **It lands — it does not stay airborne** |
+| **Pounce telegraph** | A wind-up before leaping is required (it must be dodgeable) |
+| **Phases** | **Speeds up at half health** |
+| **On death** | **The side wall collapses and water comes in** → [water-jump-and-escape.md](../2.active/water-jump-and-escape.md) |
 
-**왜 「계속 떠 있는」 게 아닌가**: `docs/design/몬스터.md` 가 **나는 놈을 일부러 뺐다** —
-문양이 2/17만 돌고 **유도가 없어서 손조준밖에 없다.** 계속 떠 있으면 「위협」이 아니라
-**「성가심」**이 된다. ⇒ **착지하는 순간이 때리는 창**이고, 그게 소의 스턴과 같은 문법이다.
+**Why not "permanently airborne"**: `docs/design/monsters.md` **deliberately dropped flyers** —
+only 2/17 glyphs run and **there is no homing, so only manual aiming exists.** Permanently airborne makes
+**"annoying", not "threatening".** ⇒ **The landing is the window to hit**, the same grammar as the bull's stun.
 
-**순서가 맞는다** — 돼지(잡몹) → 소(중간보스) → 닭의 왕(보스). 잡몹 둘이 보스 둘을 예고한다.
-
----
-
-## 화면
-
-- **소** — 돌진 전 예고 · 박을 때 흙먼지 · 스턴 중 표시(**때릴 때라는 걸 알아야 한다**) ·
-  뿜는 불
-- **수탉** — 뛰기 전 예고 · 착지 충격
-- **둘 다** 체력바 · 번쩍 · 피해 숫자 · 몸에 붙은 불 — **잡몹과 같은 계열**(이미 있다)
-- **스프라이트가 없다.** 잡몹 둘은 로컬 ComfyUI(`tools/pixel/`)로 뽑았다 — 같은 경로다.
-  **보스는 크므로 축소 배율 문제가 다르다**(몬스터 문서: 생성 크기가 목표의 4배여야 한다)
-- **외곽선이 없다** — 잡몹에서 원리적으로 못 넣었고 셰이더로 둘렀다. **보스도 같다**
+**The order fits** — pig (trash) → bull (midboss) → king of chickens (boss). Two trash mobs foreshadow two bosses.
 
 ---
 
-## 경계
+## Screen
+
+- **Bull** — charge telegraph · dust on impact · a stun indicator (**you must know it's time to hit**) · the fire it breathes
+- **Rooster** — leap telegraph · landing impact
+- **Both** health bars · flash · damage numbers · fire on the body — **same family as trash mobs** (already exists)
+- **There are no sprites.** The two trash mobs were generated with local ComfyUI (`tools/pixel/`) — same path.
+  **Bosses are large, so the downscaling factor problem differs** (monster doc: generation size must be 4× the target)
+- **There is no outline** — impossible in principle for trash mobs, so a shader was used. **Same for bosses**
+
+---
+
+## Boundary
 
 | | |
 |---|---|
-| **길찾기는 여전히 없다** | 보스도 무뇌 직진이 바탕이다. 패턴만 얹는다 |
-| **① 방 안에 나무가 없다** | 소의 불이 방을 태우면 싸움이 안 된다 |
-| **나무벽이 ① 밖이다** | 소의 불에 안 닿아야 진행 열쇠가 산다 |
-| **파괴는 돌진할 때만** | 「걷다 막히면 부순다」가 아니다 — 지형으로 가두는 전술이 잡몹에는 여전히 통한다 |
-| **수탉은 착지한다** | 계속 뜨면 유도 문양이 없어 못 잡는다 |
-| **물은 수탉이 죽은 뒤** | 전투와 안 겹친다 ⇒ **싸우는 동안은 성능 문제가 없다** |
-| **탄에 소유자가 없다** | 소의 불·수탉의 공격을 `spell_sim` 에 넣으면 **자기가 자기를 때린다.** 닭 탄과 같이 `src/actor/` 쪽이다 |
+| **Still no pathfinding** | Bosses are brainless-forward at base. Patterns go on top |
+| **No wood inside room ①** | The bull's fire burning the room means no fight |
+| **The wood wall is outside ①** | It must be out of the bull's fire's reach for the progression key to survive |
+| **Destruction only while charging** | Not "breaks what blocks it" — terrain trapping still works on trash mobs |
+| **The rooster lands** | Permanently airborne is unkillable with no homing glyph |
+| **Water only after the rooster dies** | It doesn't overlap the fight ⇒ **no performance problem while fighting** |
+| **Bolts have no owner** | Putting the bull's fire or the rooster's attacks into `spell_sim` means **they hit themselves.** Like chicken bolts, they go in `src/actor/` |
 
 ---
 
-## 기존 것과의 상호작용
+## Interaction with what exists
 
-**이 문서는 혼자 서지 못한다. 셋이 서로를 문다.**
+**This doc cannot stand alone. Three constrain each other.**
 
 ```
-stage1-bosses          소의 불이 지형에 붙는다
-      ↓ 제약
-stage1-map-layout      ⇒ 나무벽을 ① 밖으로.  ① 방에 나무 금지.  보스방 20×12
-      ↓ 제약
-water-jump-and-escape  ⇒ 20×12 = 15,360셀.  옆벽이 무너져 물이 온다
+stage1-bosses          the bull's fire sticks to terrain
+      ↓ constrains
+stage1-map-layout      ⇒ wood wall outside ①.  No wood in room ①.  Boss room 20×12
+      ↓ constrains
+water-jump-and-escape  ⇒ 20×12 = 15,360 cells.  The side wall collapses and water comes
 ```
 
-| 무엇 | 어떻게 |
+| What | How |
 |---|---|
-| **불** | 소의 불이 `_ignite_cell` 을 탄다. `MAX_BURNING` 안에 들어야 한다 |
-| **물** | **물 옆에서는 불이 안 붙는다**(`_deep_water`). ① 방에 물이 없으니 지금은 무관 |
-| **지형 파괴** | 돌진 파괴가 청크를 깨운다. 폭발의 `carve` 와 같은 경로 |
-| **잡몹** | 같은 `monster.gd` 를 재쓴다. **`_next_axis()` 격리가 여기서 값을 한다** |
-| **20마리 상한** | 보스는 1마리. **보스전에 잡몹이 같이 나오나는 미정** |
-| **피해·무적·쓰러짐** | `character-damage-minimum` 이 기준. 보스도 재쓴다 |
+| **Fire** | The bull's fire goes through `_ignite_cell`. It must fit within `MAX_BURNING` |
+| **Water** | **Fire doesn't catch next to water** (`_deep_water`). No water in room ①, so irrelevant for now |
+| **Terrain destruction** | Charge destruction wakes chunks. Same path as a blast's `carve` |
+| **Trash mobs** | Reuses the same `monster.gd`. **The `_next_axis()` isolation earns its keep here** |
+| **The 20-mob cap** | A boss is 1. **Whether trash mobs appear during a boss fight is TBD** |
+| **Damage · invulnerability · knockdown** | `character-damage-minimum` is the source. Bosses reuse it |
 
 ---
 
-## 비용
+## Cost
 
-**보스 자체는 싸다 — 1마리다.** 비싼 것은 **딸려 오는 것**이다.
+**The boss itself is cheap — it's one.** What's expensive is **what comes with it.**
 
-| 무엇 | 비용 |
+| What | Cost |
 |---|---|
-| 보스 이동·판정 | 1마리. 잡몹 20마리 추정이 ~5,000μs였으니 무시할 수준 |
-| **소의 불** | 지형 화재다. 실측 최대 화재 16,384칸이 **20Hz 예산의 33%** |
-| **돌진 파괴** | 청크를 깨운다. 폭발과 같은 자리 |
-| **물 (수탉 사후)** | **전투 밖이다** — 싸우는 동안은 물 비용이 0이다. 20×12 = 15,360셀 |
+| Boss movement and checks | 1 mob. The 20-mob estimate was ~5,000μs, so negligible |
+| **The bull's fire** | A terrain fire. Measured max fire at 16,384 cells is **33% of the 20Hz budget** |
+| **Charge destruction** | Wakes chunks. Same place as blasts |
+| **Water (post-rooster)** | **Outside the fight** — water costs 0 while fighting. 20×12 = 15,360 cells |
 
-**답 안 된 것이 하나 있다** — `docs/design/몬스터.md` 의 첫 미정:
-**「몬스터가 20Hz 틱으로 도나 60Hz 프레임으로 도나」.** 예산의 30%와 10%가 이 하나로 갈린다.
-**구현 계획이 제일 먼저 답할 것이다.**
-
----
-
-## 판정
-
-**눈으로 본 결과는 그 자리에서 이 절 아래에 적는다**(CLAUDE.md).
-
-**소**
-1. **돌진해서 박는다** — 직선으로 달려온다
-2. **박은 자리가 패인다** — 그리고 **돌진할 때만 패인다**(걷다 막힐 땐 안 패인다)
-3. **박으면 잠시 멈춘다** — **그게 때리는 창이라는 게 보인다**
-4. **불을 뿜고 그 불이 지형에 붙는다**
-5. **그 불이 나무벽까지 안 간다** — **이 문서의 제일 큰 위험이다.**
-   벽이 저절로 열리면 진행 열쇠가 죽는다
-6. **① 방이 통째로 안 탄다** — 방 안에 나무가 없다
-7. **반피에 빨라진다** — 눈으로 구별된다
-8. **소가 방을 부수고 나가지 않는다** — 돌진 파괴가 쌓여 벽이 뚫릴 수 있다
-
-**수탉**
-9. **뛰어올라 덮치고 착지한다** — 공중에 안 머문다
-10. **착지 순간에 때릴 수 있다**
-11. **예고가 보인다** — 피할 수 있다
-12. **반피에 빨라진다**
-13. **죽으면 옆벽이 무너지고 물이 들어온다**
-
-**둘 다**
-14. **손조준으로 잡힌다** — 유도 문양이 없다
-15. **자기 공격에 자기가 안 맞는다** — 탄에 소유자가 없는 구조
+**One thing is unanswered** — the first TBD in `docs/design/monsters.md`:
+**"do monsters run on the 20Hz tick or the 60Hz frame".** 30% vs 10% of budget splits on that alone.
+**The implementation plan answers it first.**
 
 ---
 
-## 미정
+## Acceptance
 
-**억지로 채우지 않는다.**
+**Write what was seen by eye under this section immediately** (CLAUDE.md).
 
-- **불의 룬을 어떻게 받나** (2026-08-08, 사용자가 미정으로 남겼다) —
-  바로 장착되나 · 떨궈서 주워 조립하나 · 시체가 불타고 그걸 줍나.
-  **GDD가 조립을 「안전한 순간의 일」로 밀어 뒀는데** 바로 장착이면 그 규율이 흔들린다.
-  **조립창 UI가 지금 디버그 라벨이라 이 결정이 그것에 매여 있다**
-- **체력 · 피해 · 속도 수치** — 하나도 안 정했다. 「뼈 먼저」라 화면 보고 정한다
-- **상자 크기** — 소가 돼지(44×32)보다 얼마나 큰가. **크기는 공짜가 아니다**
-  (`character.gd`: 상자가 커지면 훑는 셀이 제곱으로 는다)
-- **불을 어떻게 뿜나** — 원뿔인가 · 탄인가 · 사거리는 · 예고 동작
-- **스턴이 몇 초인가** — 싸움의 리듬이 여기서 나온다
-- **돌진 파괴가 얼마나 깊나** — 쌓이면 방이 뚫린다
-- **수탉이 착지할 때 지형을 부수나** — 소와 같은 축인데 안 정했다
-- **보스전에 잡몹이 같이 나오나**
-- **보스 보상**(수탉) — GDD는 「연구 재료(영구) + 문양 3택」. **3택 화면이 아직 없다**
-- **스프라이트** — 아직 안 뽑았다
-- **페이즈 전환 연출** — 반피에 무엇이 보이나
+**Bull**
+1. **It charges and rams** — running in a straight line
+2. **The impact point is carved** — and **only while charging** (not when blocked while walking)
+3. **Ramming stops it briefly** — **and it's visible that this is the window**
+4. **It breathes fire and that fire sticks to terrain**
+5. **That fire does not reach the wood wall** — **the biggest risk in this doc.**
+   A wall that opens on its own kills the progression key
+6. **Room ① does not burn entirely** — there is no wood in the room
+7. **It speeds up at half health** — distinguishable by eye
+8. **The bull doesn't break out of the room** — charge destruction could accumulate and breach a wall
+
+**Rooster**
+9. **It leaps, pounces and lands** — it doesn't stay airborne
+10. **It can be hit at the moment of landing**
+11. **The telegraph is visible** — it can be dodged
+12. **It speeds up at half health**
+13. **On death the side wall collapses and water comes in**
+
+**Both**
+14. **They can be killed with manual aim** — there is no homing glyph
+15. **They don't hit themselves with their own attacks** — bolts have no owner
 
 ---
 
-## 정한 것 — 2026-08-08 기획 대화
+## TBD
 
-| 무엇 | 값 | 왜 |
+**Do not force these full.**
+
+- **How the fire rune is received** (the user left this open) —
+  auto-equipped · dropped and picked up and assembled · the corpse burns and you pick it out of that.
+  **The GDD pushed assembly to "safe moments"**, and auto-equipping shakes that discipline.
+  **The assembly window is a debug label right now, so this decision is tied to that**
+- **Health · damage · speed values** — none decided. "Skeleton first", set on screen
+- **Box size** — how much larger than a pig (44×32) is a bull. **Size is not free**
+  (`character.gd`: a bigger box sweeps cells quadratically)
+- **How it breathes fire** — cone · projectile · range · telegraph
+- **How many seconds the stun lasts** — the fight's rhythm comes from here
+- **How deep charge destruction goes** — accumulated, it breaches the room
+- **Does the rooster break terrain on landing** — same axis as the bull, undecided
+- **Do trash mobs appear during a boss fight**
+- **Boss reward** (rooster) — the GDD says "research material (permanent) + a glyph three-pick". **The three-pick screen doesn't exist yet**
+- **Sprites** — not generated
+- **Phase transition presentation** — what is visible at half health
+
+---
+
+## Decided — from the design conversation
+
+| What | Value | Why |
 |---|---|---|
-| 중간보스 | **소** | 2026-08-07에 이미 정해져 있었다. 돼지가 예고한다 |
-| 소의 거동 | **돌진+스턴 · 불 뿜기 · 지형 부수기** 셋 다 | 무뇌 직진이 그대로 약점이 되는 구조 |
-| 소의 파괴 | **돌진할 때만** | 공격 패턴에 묶여 예측 가능하다. 「막히면 부순다」면 가두기가 통째로 죽는다 |
-| 소의 불 | **지형에 붙는다** | 「세상이 반응한다」를 지킨다. ⇒ **나무벽을 방 밖으로** |
-| 스테이지 보스 | **거대 수탉** | 돼지→소→닭의 왕. 잡몹 둘이 보스 둘을 예고한다 |
-| 수탉의 비행 | **뛰어오를 때만. 착지한다** | 유도 문양이 없어 계속 뜨면 못 잡는다 |
-| 페이즈 | **둘 — 반피에 빨라진다** | |
-| 보스방 | **20×12타일** | 물 탈출의 성능이 여기서 정해진다(15,360셀). 키우면 물이 느려진다 |
-| 물의 출처 | **옆벽이 무너진다** | 지형이 물을 막고 있었다는 게 자연스럽고, **구멍 크기로 붓는 속도를 조절한다** |
+| Midboss | **Bull** | Already decided earlier. The pig foreshadows it |
+| Bull behavior | **Charge+stun · fire breath · terrain destruction**, all three | Brainless charging becomes its own weakness |
+| Bull destruction | **Only while charging** | Bound to an attack pattern and predictable. "Breaks what blocks it" would kill trapping entirely |
+| Bull's fire | **Sticks to terrain** | Preserves "the world reacts". ⇒ **wood wall outside the room** |
+| Stage boss | **Giant rooster** | pig → bull → king of chickens. Two trash mobs foreshadow two bosses |
+| Rooster's flight | **Only while leaping. It lands** | With no homing glyph, permanently airborne is unkillable |
+| Phases | **Two — speeds up at half health** | |
+| Boss room | **20×12 tiles** | The water escape's performance is set here (15,360 cells). Enlarge it and water slows |
+| Water source | **The side wall collapses** | Terrain having held the water back is natural, and **the hole size tunes the pour rate** |

@@ -1,133 +1,133 @@
-# 기획 문서 모순 고치기 — 적대적 리뷰가 찾은 12건
+# Fixing design-doc contradictions — 12 found by adversarial review
 
-**상태**: ready — **문서 쪽 8건은 반영했다. 남은 셋은 설계 결정이라 문서로 못 닫는다**
+**Status**: ready — **the 8 doc-side items are applied. The remaining three are design decisions and can't be closed by docs**
 
-| | 무엇 | 상태 |
+| | What | State |
 |---|---|---|
-| 1 | 불 룬이 이미 있다 | **고침** — 마일스톤 표를 「만들기」에서 「잠그기」로 |
-| 2 | 「매 런 무속성」 옛 전제 | **고침** — GDD 두 곳 · 마을 한 곳 |
-| 3 | ① 구덩이 물의 주인 | **미해결** — 마일스톤 구멍 표에 올렸다. **누가 붓나를 정해야 한다** |
-| 4 | 사슬 그림에 물 빠짐 | **고침** |
-| 5 | 나무벽 잠금이 깨졌다 | **미해결** — 표에 올렸다. **폭발이 element를 안 들고 가는 것이 원인** |
-| 6 | 룬 받는 화면이 잘린 쪽 | **미해결** — 표에 올렸다. **룬 받는 최소 경로만 따로 낸다**고 적었다 |
-| 7 | decisions 재개 조건 | **고침** |
-| 8 | README 잉크 | **고침** |
-| 9 | 마을 「룬 0」 | **고침** — 반대다. 셋이 무료로 열려 있다 |
-| 10 | 인벤 절이 조립대와 부딪힘 | **고침** — 판별선을 넣었다(런 중 늘면 인벤, 마을에서만 보이면 목록) |
-| 11 | 중간보스 3택 분기 | **고침** — levelup 드랍 표에 |
-| 12 | 「집」 잔여 | **고침** — plans 넷 |
+| 1 | The fire rune already exists | **Fixed** — the milestone table went from "build" to "lock" |
+| 2 | The old "none every run" premise | **Fixed** — two places in the GDD, one in town |
+| 3 | Who owns pit ①'s water | **Open** — added to the milestone gap table. **Who pours it must be decided** |
+| 4 | Water missing from the chain diagram | **Fixed** |
+| 5 | The wood-wall lock is broken | **Open** — added to the table. **Cause: the blast doesn't carry element** |
+| 6 | The rune-receiving screen is on the cut side | **Open** — added to the table. Recorded as **break out only the minimum rune-receiving path** |
+| 7 | decisions' reopen condition | **Fixed** |
+| 8 | README ink | **Fixed** |
+| 9 | Town's "0 runes" | **Fixed** — it's the reverse. Three are open for free |
+| 10 | The inventory section collides with the assembly bench | **Fixed** — added the test line (growing during a run is an inventory; visible only in town is a list) |
+| 11 | The midboss three-pick branch | **Fixed** — into the levelup drop table |
+| 12 | Leftover "home" | **Fixed** — four in plans |
 
-**한 줄**: 마을·포인트·인벤 없음이 들어가면서 **옛 전제가 안 지워졌다.**
-그리고 **1차 마일스톤 표가 코드 상태를 정반대로 적었다.**
+**One line**: as town, points and no-inventory landed, **the old premises were never deleted.**
+And **the first-milestone table recorded the code state exactly backwards.**
 
-⚠ **대화를 못 본 에이전트가 문서만 읽고 찾은 것이다.** 그게 요점이다 —
-대화를 본 쪽은 구멍을 「정해졌겠지」로 메운다.
+**Found by an agent that never saw the conversation, reading only the docs.** That is the point —
+whoever saw the conversation fills holes with "it must have been decided".
 
 ---
 
-## 상 — 마일스톤이 이것 때문에 안 닫힌다
+## High — the milestone won't close because of these
 
-### 1. 「불의 룬이 없다」가 코드와 정반대다
+### 1. "There is no fire rune" is the exact opposite of the code
 
-GDD 1차 마일스톤 표: 「룬 정의 파일이 아예 없다. 제일 조용한 구멍」
+GDD first-milestone table: "there is no rune definition file at all. The quietest hole"
 
-**실제**: 룬 셋이 이미 돈다.
+**Actually**: three runes already run.
 ```
 sim_tuning.gd:280   ELEM_ALL = [ELEM_FIRE, ELEM_NONE, ELEM_WATER]
-spell_circle.gd:48  DEFAULT_RUNE := Tuning.ELEM_FIRE      ← 기본 지급이 불이다
-palette_layout.gd:71 return Tuning.ELEM_ALL               ← 조립창에 항상 다 떠 있다
+spell_circle.gd:48  DEFAULT_RUNE := Tuning.ELEM_FIRE      ← the starting kit is fire
+palette_layout.gd:71 return Tuning.ELEM_ALL               ← always all visible in the assembly window
 ```
 
-🔴 **진짜 구멍은 반대다** — 불이 처음부터 꽂혀 있고 언제든 고를 수 있어
-**「중간보스에서 불을 얻는다」가 이미 무의미하다.**
-⇒ 할 일은 **룬 정의 파일 만들기가 아니라 시작 룬을 무속성으로 바꾸고 팔레트를 잠그는 것.**
+**The real hole is the reverse** — fire is socketed from the start and selectable any time, so
+**"get fire from the midboss" is already meaningless.**
+⇒ The work is **not creating a rune definition file but changing the starting rune to none and locking the palette.**
 
-### 2. 「매 런 무속성으로 시작한다」가 안 지워졌다
+### 2. "You start with none every run" was never deleted
 
-포인트 시작이 들어오면서 죽은 전제인데 세 곳에 살아 있다.
+A premise killed by the point-based start, alive in three places.
 
-- `마을.md` 「런의 시작」 — 「시작 지급은 매 런 같다」
-- `GDD.md` 「영구인 것은 풀이다」 — 「매 런 무속성으로 시작하니 불의 룬은 계속 의미가 있고」
-- `GDD.md` 「3택에는 문양만 뜬다」 — 룬을 3택에서 빼는 **근거 자체가 죽은 전제**다
+- `town.md`, "A run's start" — "the starting kit is the same every run"
+- `GDD.md`, "what is permanent is a pool" — "starting with none every run keeps the fire rune meaningful"
+- `GDD.md`, "the three-pick shows only glyphs" — **the argument itself for excluding runes is a dead premise**
 
-⚠ `마을.md` 는 **자기 문서 안에서 모순**이다(조립대 절은 포인트로 고른다고 적는다).
+`town.md` **contradicts itself** (the assembly bench section says it's chosen with points).
 
-### 3. ① 구덩이의 물을 아무 문서도 소유하지 않는다
-
-```
-map:  「① 구덩이는 기반암 그릇이고 나가는 길이 물뿐이다」
-boss: 「① 방에 물이 없으니 지금은 무관」        ← 없다고 단언
-water:「쓰이는 자리 = 스테이지1 ③ 보스 직후」   ← 구덩이를 범위에 안 셈
-```
-
-🔴 **소를 잡고 나오는 유일한 수단인데 세 문서 어디에도 주인이 없다.**
-지금은 F키를 눌러야 나온다. ⇒ **사슬이 두 번째 칸에서 끊겨 있고 구멍 표에 안 잡혔다.**
-
-### 4. 마일스톤 사슬 그림에서 물이 한 칸 빠졌다
+### 3. No doc owns pit ①'s water
 
 ```
-GDD:  맵 → 소 → 불의 룬 → 나무벽 → 수탉 → 물 탈출 → 문
-실제: … 소를 잡아 불의 룬 → [물이 차오른다 → 물을 타고 올라온다] → 나무벽 → …
+map:  "pit ① is a bedrock bowl whose only exit is water"
+boss: "there is no water in room ①, so it's irrelevant for now"     ← asserts absence
+water:"where it's used = right after stage 1's boss ③"              ← doesn't count the pit in scope
 ```
 
-🔴 **판정이 이 사슬 하나로 매겨진다.** 그림에 없으니 구멍 목록에도 없다
-⇒ **다섯 구멍을 다 채워도 끝까지 안 걸어진다.**
+**It is the only way out after killing the bull, and none of the three docs owns it.**
+Currently it takes an F press. ⇒ **The chain is broken at its second link and the gap table missed it.**
 
-### 5. 나무벽 잠금이 값으로 이미 깨졌는데 마일스톤 표가 초록이다
+### 4. Water is missing a link in the milestone chain diagram
 
-`stage1-map-layout.md` 실측: **폭발 세 발로 나무벽을 지나간다. 불의 룬도 필요 없다**
-(`spell_sim.gd:525-526` 의 폭발이 `element` 를 안 들고 가서 룬 없는 폭발이 159셀에 불을 붙였다).
+```
+GDD:    map → bull → fire rune → wood wall → rooster → water escape → gate
+Actual: … kill the bull for the fire rune → [water rises → ride it up] → wood wall → …
+```
 
-🔴 **GDD 「중간보스 보상이 진행의 열쇠」가 코드에서 무효다.**
-표에 남은 미해결은 「판정 3·4 화면 미확인」뿐이라 **표만 읽으면 다 된 것으로 보인다.**
-⚠ 그 문서가 「어느 그물도 안 잰다」고 적어 뒀다.
+**Acceptance is judged on this one chain.** Missing from the diagram means missing from the gap list
+⇒ **fill all five gaps and it still can't be walked end to end.**
 
-### 6. 「불의 룬을 받는 화면」이 사슬 안인데 잘린 쪽에 있다
+### 5. The wood-wall lock is already broken by value while the milestone table shows green
 
-인벤토리가 없으므로 룬도 **받는 순간 자리를 정해야 한다.** 이 리포의 유일한 받는 화면이 3택 창인데
-마일스톤이 3택을 잘랐다. 룬 자리가 1개라 **무속성을 밀어내는 선택이 반드시 걸린다.**
-⇒ 「사슬 밖이라 없어도 걸어진다」가 성립하지 않는다.
+`stage1-map-layout.md` measured: **three blasts get you through the wood wall. No fire rune needed**
+(the blast at `spell_sim.gd:525-526` doesn't carry `element`, so a runeless blast ignited 159 cells).
+
+**The GDD's "the midboss reward is the key to progression" is void in code.**
+The only open item left in the table is "acceptance 3·4 unconfirmed on screen", so **reading the table alone, it looks done.**
+That doc recorded that **no net measures it.**
+
+### 6. "The screen for receiving the fire rune" is inside the chain and on the cut side
+
+With no inventory, a rune's **placement must be decided on receipt.** The repo's only receiving screen is the
+three-pick window, and the milestone cut the three-pick. With one rune slot, **the choice to push out none is unavoidable.**
+⇒ "It's outside the chain, so it walks without it" does not hold.
 
 ---
 
-## 중 — 삭제 자국과 갈라진 이름
+## Medium — deletion scars and split names
 
-### 7. `docs/decisions/인벤토리를-안-넣는다.md` 의 재개 조건이 지워진 것을 가리킨다
+### 7. `docs/decisions/no-inventory.md`'s reopen condition points at something deleted
 
-「가방 슬롯을 열 때 다시 본다」인데 **가방을 지웠다** ⇒ **영원히 안 열린다.**
-GDD가 적은 잉크의 진짜 재개 조건(「들고 다니지 않는 형태여야」)이 그 문서에 안 왔다.
+It says "revisit when a bag slot opens" and **the bag was deleted** ⇒ **it never reopens.**
+Ink's real reopen condition as recorded in the GDD ("it must take a form you don't carry") never reached that doc.
 
-### 8. `design/README.md` 미구현 표에 「장비·잉크」가 살아 있다
+### 8. `design/README.md`'s unimplemented table still lists "gear · ink"
 
-잉크는 지웠다. 그 표는 **「문서를 만들어야 할 자리」** 목록이라 다음 세션이 기획하러 간다.
+Ink was deleted. That table is the list of **"places that need a doc"**, so the next session goes off to design it.
 
-### 9. `마을.md` 의 「룬 0」이 틀렸다
+### 9. `town.md`'s "0 runes" is wrong
 
-**룬 셋이 전부 무료로 열려 있다.** 연구대가 얇은 이유가 반대이고,
-**살 것이 이미 다 열려 있다**는 것이 포인트 설계 전체의 전제를 바꾼다.
+**All three runes are open for free.** The reason the research bench is thin is the reverse, and
+**everything already being open** changes the premise of the entire point design.
 
-### 10. 「안 낀 채로 들고 있는 상태가 없다」가 조립대와 부딪힌다
+### 10. "There is no state of carrying it unequipped" collides with the assembly bench
 
-GDD 「인벤토리가 없다」의 서술이 **절대형**이라 「안 낀 진·룬·문양 목록 UI」가 금지로 읽힌다.
-**조립대가 정확히 그 목록이다.** `마을.md` 는 「마을에도 인벤토리를 만들지 마라」로 다시 못박아
-**조립대를 만드는 사람이 어느 쪽을 따를지 문서만 보고 못 정한다.**
+The GDD's "there is no inventory" is worded **absolutely**, so "a UI listing unequipped circles/runes/glyphs"
+reads as forbidden. **The assembly bench is exactly that list.** `town.md` re-pins it with
+"don't build an inventory in town either", so **whoever builds the assembly bench can't tell from the docs which to follow.**
 
-### 11. 중간보스의 「고르는 보상」 분기가 구현 문서에 없다
+### 11. The midboss's "choice of reward" branch is absent from the implementation doc
 
-GDD는 「불 룬을 들고 갔으면 3택을 준다」로 정했는데
-`levelup-and-three-picks.md` 드랍 표에는 **「중간보스 = 진행 열쇠」 한 줄뿐**이고 판정에도 없다.
-⇒ 구현하면 중간보스는 **언제나 불 룬만 준다.**
+The GDD decided "carrying the fire rune, it gives a three-pick", but `levelup-and-three-picks.md`'s drop table
+has **only "midboss = progression key"** and it isn't in acceptance.
+⇒ Implemented as written, the midboss **always gives only the fire rune.**
 
-### 12. 「집」 금지를 `plans/` 셋이 어기고 있다
+### 12. Three docs in `plans/` violate the "home" ban
 
-GDD 열 곳만 고쳤다. `levelup-and-three-picks` · `stage1-map-layout` 에 「집」이 남아 있고,
-**「레벨이 마을에 쌓이나」가 GDD의 같은 미정과 검색으로 안 잡힌다.**
+Only ten places in the GDD were fixed. "Home" remains in `levelup-and-three-picks` and `stage1-map-layout`, and
+**"does a level accumulate in town" doesn't turn up in a search alongside the GDD's identical TBD.**
 
 ---
 
-## 고치는 순서
+## Fix order
 
-1. **1·2** — 옛 전제 삭제와 마일스톤 표 정정. 나머지가 이 위에 선다
-2. **3·4** — 사슬에 구덩이 물을 넣고 주인을 정한다
-3. **5·6** — 나무벽 잠금과 룬 받는 화면. **마일스톤 범위가 바뀔 수 있다**
-4. **7~12** — 문서 정리. 싸다
+1. **1 · 2** — delete the old premises and correct the milestone table. Everything else stands on this
+2. **3 · 4** — put the pit's water in the chain and assign an owner
+3. **5 · 6** — the wood-wall lock and the rune-receiving screen. **The milestone's scope may change**
+4. **7–12** — doc cleanup. Cheap

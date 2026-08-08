@@ -1,781 +1,788 @@
 # tockbon GDD
 
-**한 줄**: 진·룬·문양을 조합해 나만의 마법진을 만들고, 그게 세상에서 전개되는 걸 보며 던전을 내려가는 횡스크롤 로그라이크 코옵.
+**One line**: a side-scrolling roguelike co-op where you combine circles, runes and glyphs into your own magic
+circle and watch it unfold in the world as you descend.
 
-이 문서는 상태가 없다. `docs/plans/` 의 기획 문서와 달리 **계속 살아 있는 기준 문서**다.
-개별 기능의 구현 명세는 `docs/plans/1.ready/` 에 따로 있다.
-
----
-
-## 재미가 어디서 오나
-
-**내가 조합한 마법진이 전개되는 걸 보는 것.** 이 한 줄이 나머지 전부의 판정 기준이다.
-
-그래서 이 게임의 우선순위는 이렇게 갈린다:
-
-- **마법의 궤적·모양·연쇄** — 최우선. 문양 목록(확산·응축·폭발·유도·회전·전개)이 전부 *탄의 형태*지 지형이 아닌 게 그 증거다
-- **세상이 반응하는 것** — 그 다음. 지형이 뚫리고 물이 쏟아지고 몬스터가 죽는다
-- **세상 자체의 정밀도** — 마지막. 픽셀 하나하나가 녹는 것은 목표가 아니다
-
-이 순서를 뒤집으면 v1이 죽은 방식으로 죽는다: 시뮬은 정교한데 **화면이 그걸 안 따라가서** 아무도 강해진 걸 못 느꼈다.
+This doc has no status. Unlike the design docs in `docs/plans/`, it is **a living reference.**
+Implementation specs for individual features live in `docs/plans/1.ready/`.
 
 ---
 
-## 세계관 — 왜 마법진을 모으러 다니나 (2026-08-07, 사용자가 정했다)
+## Where the fun comes from
 
-**마법진이 붕괴했다.** 그 안에 있던 진·룬·문양이 세상으로 흩어졌고, **짐승들이 그걸 삼켰다.**
-플레이어는 **흩어진 것을 되찾으러 다니는 마법사**다.
+**Watching the magic circle you assembled unfold.** That one line is the criterion for everything else.
 
-**이것이 게임의 세 구조를 한꺼번에 설명한다** — 지금까지 각각 따로 서 있던 것들이다:
+So the priorities split like this:
 
-| 구조 | 세계관이 주는 이유 |
+- **A spell's trajectory, shape and chaining** — first. The glyph list (spread · condense · blast · home · spin · deploy) being *all about bolt shape* rather than terrain is the evidence
+- **The world reacting** — next. Terrain breaks, water pours, monsters die
+- **The precision of the world itself** — last. Melting individual pixels is not the goal
+
+Invert this order and it dies the way v1 died: the sim was precise and **the screen didn't follow**, so nobody felt stronger.
+
+---
+
+## World — why you go collecting magic circles (decided by the user)
+
+**The magic circle collapsed.** The circles, runes and glyphs inside it scattered into the world, and
+**beasts swallowed them.** The player is **a mage recovering what was scattered.**
+
+**This explains three of the game's structures at once** — each of which stood alone until now:
+
+| Structure | The reason the world gives |
 |---|---|
-| **시작 지급이 초라한 것** | 다 잃어버린 뒤라서다. 무속성 룬 하나로 시작하는 게 당연해진다 |
-| **몬스터가 왜 거기 있나** | 삼킨 놈들이다. 「농장이니까 돼지가 있다」가 아니다 |
-| **중간보스가 진행의 열쇠인 것** | **불의 룬을 삼킨 소.** 잡아야 그 룬이 돌아오고, 그래야 나무를 태워 길을 연다 |
+| **The starting kit is meager** | Because you lost everything. Starting with one none-rune becomes natural |
+| **Why monsters are there** | They are the ones that swallowed. Not "it's a farm, so there are pigs" |
+| **Why the midboss is a progression key** | **A bull that swallowed the fire rune.** Kill it, get the rune back, and burn wood to open a path |
 
-**삼킨 티가 얼마나 나는지는 놈마다 다르다**(2026-08-07, 사용자가 정정했다).
-**잡몹은 거의 티가 안 난다** — 조금 삼켰을 뿐이다. **보스가 거의 다 삼켰다.**
-**그것이 화면에 어떻게 나오나(또는 안 나오나)는 `docs/design/몬스터.md` 가 기준이다.**
+**How much the swallowing shows varies per beast** (the user corrected this).
+**Trash mobs barely show it** — they swallowed only a little. **Bosses swallowed almost all of it.**
+**How that appears on screen (or doesn't) is set by `docs/design/monsters.md`.**
 
-**그래서 일반 몬스터가 룬을 안 떨군다**(아래 「드랍」)는 규칙과 안 부딪힌다 —
-잡몹이 삼킨 것은 **무속성 조각**이고 무속성은 이미 시작 지급이라 새로 줄 것이 없다.
-⇒ **경험치와 돈으로 환산돼 나온다.**
+**So it doesn't collide with "ordinary monsters don't drop runes"** (see "Drops") —
+what trash mobs swallowed is **none-element fragments**, and none is already the starting kit, so there is nothing new to give.
+⇒ **It comes out converted into XP and money.**
 
-**몬스터 쪽 세부는 `docs/design/몬스터.md` 가 기준이다.** 여기 겹쳐 적지 않는다.
+**Monster detail is set by `docs/design/monsters.md`.** Do not duplicate it here.
 
-**아직 안 정한 것**: 마법진이 **왜** 붕괴했나 · 누가 그랬나 · 마을과 연구가 이 이야기에서 무엇인가.
-스테이지 2·3의 짐승이 무엇을 삼켰는지도 미정이다.
+**Not decided**: **why** the circle collapsed · who did it · what the town and research are in this story.
+What the beasts of stages 2 and 3 swallowed is also TBD.
 
 ---
 
-## 마법진
+## The magic circle
 
-일반적인 마법진 그림 그대로다. **동그란 틀 안에 가운데 룬이 있고, 그 바깥으로 동심원 층이 있다.**
+Exactly the usual magic-circle picture. **A round frame with a rune at the center and concentric layers outside it.**
 
 ```
-   ╭──────────────╮ ← 진 (틀 · 동그라미)
+   ╭──────────────╮ ← circle (the frame)
    │ ╭──────────╮ │
    │ │ ╭──────╮ │ │
-   │ │ │  ⬢   │ │ │   ⬢  룬     — 무엇이 나가나
-   │ │ ╰──────╯ │ │   1층 문양  — 착탄하면 무엇을 하나
-   │ ╰──────────╯ │   2층 문양  — 그 다음에 무엇을 하나
+   │ │ │  ⬢   │ │ │   ⬢  rune       — what goes out
+   │ │ ╰──────╯ │ │   layer 1 glyph — what it does on impact
+   │ ╰──────────╯ │   layer 2 glyph — what it does next
    ╰──────────────╯
-      안쪽 ──▶ 바깥 순서로 해석된다
+      interpreted inside ──▶ outward
 ```
 
-**마법진은 목록이 아니라 파이프라인이다.** 층 순서가 곧 실행 순서다.
+**A magic circle is a pipeline, not a list.** Layer order is execution order.
 
-**세 축이 각각 무엇을 담는지는 `docs/design/진-룬-문양.md` 가 기준이다.**
-여기는 그 요약이 아니라 **게임 쪽에서 보이는 얼굴**만 적는다 — 겹쳐 적으면 두 문서가 갈라진다.
+**What each of the three axes holds is set by `docs/design/circle-rune-glyph.md`.**
+This doc records not a summary of it but **only the face visible from the game side** — duplicate it and the two diverge.
 
-**그림이 어떻게 생겼는지는 `docs/design/마법진-그림.md` 가 기준이다**(2026-08-05, 사용자가 눈으로 정했다).
-위 그림의 「가운데 룬 · 층마다 심볼 하나」가 **둘 다 바뀌었다** — **문양은 층을 꽉 채우는 링**이고
-**룬은 진 테두리에 박힌다**(룬 8개를 가운데 모으면 지름 34px 로 뭉개진다. 실측).
+**How it looks is set by `docs/design/circle-art.md`** (the user decided by eye).
+The picture above's "rune at the center · one symbol per layer" **both changed** — **a glyph is a ring that fills a layer**
+and **runes socket into the circle's rim** (gather 8 runes at the center and they mush to 34px diameter — measured).
 
-### 진 — 틀
+### Circle — the frame
 
-- 마법진 하나에 **진은 하나뿐**이다
-- **틀을 정한다** — 층 수 · 룬 자리 수 · **룬을 어떻게 합치나**(융합 · 병렬 · 순차)
-- **층 수가 진마다 다르다.** 진이 곧 "그릇의 크기"다
-- 기본 지급 진: **동그라미, 2층**
-- **진은 셋이다** (2026-08-05, 사용자가 정했다) — **일반진 · 융합진 · 삼각진.** 추후 추가된다.
-  각자의 룬 자리·층·합치는 방식은 `docs/design/진-룬-문양.md` 의 「진 목록」이 기준이다
+- **One circle per magic circle**
+- **It sets the frame** — layer count · rune slots · **how runes combine** (fusion · parallel · sequential)
+- **Layer count varies per circle.** The circle *is* "the size of the vessel"
+- Starting circle: **round, 2 layers**
+- **There are three circles** (decided by the user) — **basic · fusion · triangle.** More will be added.
+  Their rune slots, layers and combining modes are set by "the circle list" in `docs/design/circle-rune-glyph.md`
 
-**셋이 사다리가 아니다 — 룬을 늘리는 대신 층을 뺏는다.**
-룬 3자리인 삼각진은 **룬마다 층이 하나씩**이라 탄 하나가 지나는 층이 하나뿐이고,
-⇒ **순서 조합이 아예 없다.** 아래 「문양은 안쪽부터」의 순열이 삼각진에서는 안 생긴다.
-이것이 고장이 아니라 **다른 종류의 진**인 것이 이 설계의 요점이다 —
-층 수만 다르면 그건 선택이 아니라 업그레이드이고, 로그라이크에서 업그레이드는 고를 이유가 없다.
+**The three are not a ladder — runes are added by taking layers away.**
+The 3-slot triangle circle gives **one layer per rune**, so one bolt passes through exactly one layer,
+⇒ **there is no order combination at all.** The permutations from "glyphs, inside out" below don't exist for it.
+That this is **a different kind of circle** rather than a defect is the point of this design —
+if only the layer count differs, that's an upgrade, not a choice, and in a roguelike an upgrade needs no deciding.
 
-**삼각진의 발사 순서는 12시에서 시계방향이고, 그림이 그것을 표시하지 않는다**(사용자 판정).
-아래 「순서가 화면에 안 보이면 플레이어는 규칙을 영영 못 배운다」를 **알고 깬 유일한 자리**다 —
-사연과 남은 안전판은 `docs/design/진-룬-문양.md` 의 「그림이 순서를 안 말한다」에 있다.
+**The triangle circle fires clockwise from 12 o'clock, and the picture does not show that** (user decision).
+It is **the one place where "if order isn't visible on screen the player never learns the rule" was broken knowingly** —
+the story and remaining safeguards are in `docs/design/circle-rune-glyph.md`, "the picture doesn't state the order".
 
-**진은 날아가는 모양을 정하지 않는다. 그건 룬이 정한다.**
-진이 발사 형태를 정하면 **같은 진을 끼는 한 모든 속성이 똑같이 날아가고 룬이 색 축으로 죽는다.**
-번개가 포물선을 그리며 느리게 날아가면 그건 번개가 아니다.
+**The circle does not set how things fly. The rune does.**
+If the circle set the firing shape, **every element flies identically under the same circle and the rune dies as a color axis.**
+Lightning arcing slowly through the air is not lightning.
 
-**발사 수도 진이 따로 정하지 않는다 — 룬 배치에서 파생된다.** 룬 3개를 병렬로 두면 그게 3발이고,
-그 3발은 서로 다른 속성이다. ⇒ 진 N종 × 룬 M종이 **표 두 개**에서 나온다.
+**The circle doesn't set the shot count either — it derives from the rune layout.** Three runes in parallel *is*
+three shots, each a different element. ⇒ N circles × M runes falls out of **two tables.**
 
-### 룬 — 속성
+### Rune — the element
 
-- 가운데에 들어간다
-- **여러 개 들어갈 수 있다.** 진에 따라 개수가 다르다
-- 여러 개면 진이 정한 방식으로 **융합**되거나(물 + 불 = 증기) **병렬·순차**로 나간다
-- 기본 지급 진은 룬 **1개**
+- Goes in the center
+- **Several can fit.** The count varies per circle
+- With several, they **fuse** (water + fire = steam) or go **parallel/sequential** as the circle dictates
+- The starting circle takes **1** rune
 
-**룬이 속성이자 거동이다 — 그 속성이면 자연히 그렇게 난다.**
-불은 덩어리가 느리게 처지며 날고, 번개는 아주 빠르게 곧게 가고, 물은 무겁게 떨어진다.
-⇒ 플레이어가 표를 외울 필요가 없다. **「번개는 빠르고 곧다」는 상식이다.**
+**The rune is both element and behavior — being that element, it flies that way.**
+Fire flies as a slow drooping mass, lightning goes very fast and straight, water drops heavily.
+⇒ The player never memorizes a table. **"Lightning is fast and straight" is common sense.**
 
-### 문양 — 부가 효과
+### Glyph — the added effect
 
-- **층마다 하나씩** 들어간다. 2층 진이면 문양 2개
-- **열일곱 개다** (2026-08-05, 사용자가 정했다) — 확산 · 폭발 · 응축 · 가속 · 유도 · 회전 · 분열 ·
-  굴절 · 증폭 · 방출 · 강화 · 왜곡 · 흡수 · 조작 · 제어 · 전개 · 전환
-  **셋(바꿈·낳음·끝냄) 중 어디에 속하는지는 `docs/design/진-룬-문양.md` 의 문양 표가 기준이다.**
-  **코드에 있는 것은 둘뿐이다 — 확산·폭발**(`glyph_defs.ALL`). 나머지 열다섯은 이름이거나 예시다.
-  **여기에 개수를 다시 적지 마라.** 그 표 한 곳에서만 센다 — 두 곳에서 세면 갈라진다(실제로 갈라졌다).
-- 기본 지급 문양: **확산 하나**. 나머지는 던전에서 얻는다
+- **One per layer.** A 2-layer circle takes 2 glyphs
+- **There are seventeen** (decided by the user) — spread · blast · condense · accelerate · home · spin · split ·
+  refract · amplify · emit · empower · distort · absorb · manipulate · control · deploy · convert
+  **Which of the three kinds (modify/spawn/finish) each belongs to is set by the glyph table in `docs/design/circle-rune-glyph.md`.**
+  **Only two exist in code — spread and blast** (`glyph_defs.ALL`). The other fifteen are names or examples.
+  **Do not restate the count here.** It is counted in that one table — count it in two places and they diverge (they did)
+- Starting glyph: **one spread.** The rest are found in the dungeon
 
-**문양마다 등급이 있다** (2026-08-06, 사용자가 정했다) — 일반 · 희귀 · 유니크.
-**같은 문양이라도 등급이 높으면 더 세게 한다** — 확산이 더 퍼지고, 더 더 퍼지고, 더 더 더 퍼진다.
-⇒ 「확산」과 「유니크 확산」은 **다른 문양이 아니라 같은 문양의 다른 등급**이다.
+**Glyphs have rarity** (decided by the user) — common · rare · unique.
+**The same glyph at a higher rarity does more** — spread spreads more, and more, and more.
+⇒ "Spread" and "unique spread" are **not different glyphs but different rarities of one glyph.**
 
-**등급이 3택(아래 「진행」의 레벨업)을 살린다.** 등급이 없으면 이미 가진 문양이 또 뜰 때
-그 칸이 죽는데, 등급이 있으면 **「가진 확산의 상위 등급」이 유효한 선택지**가 된다.
-**3단으로 확정됐다 — 일반·희귀·유니크** (2026-08-08). 등급 수치(얼마나 더 퍼지나)는 여전히 **미정**이고,
-**확산 발수는 성능에 직결되므로 위 「문양 제약」 안에서 정해야 한다.**
-**룬에도 등급이 있는지는 안 정했다.**
+**Rarity is what keeps the three-pick alive.** Without it, a glyph you already have appearing again wastes that slot;
+with it, **"a higher rarity of the spread I have" is a valid option.**
+**Three tiers settled — common · rare · unique.** The rarity numbers (how much more it spreads) are still **TBD**, and
+**spread's shot count is directly tied to performance, so it must be set within "glyph constraints" below.**
+**Whether runes have rarity is undecided.**
 
-**문양은 새로 만들지 않는다. 이미 있는 것에 보탠다.**
-문양이 뭐든 할 수 있으면 나머지 둘을 먹는다 — 「불 속성 부여」 문양이 있으면 룬이 필요 없어지고,
-「3발로 나눠 발사」 문양이 있으면 진이 필요 없어진다.
-⇒ 속성을 바꾸는 것은 룬의 몫, 발사 배치를 바꾸는 것은 진의 몫이다.
+**A glyph creates nothing new. It adds to what exists.**
+If a glyph can do anything it eats the other two — an "apply fire element" glyph makes runes unnecessary,
+and a "split into 3 shots" glyph makes circles unnecessary.
+⇒ Changing the element is the rune's job; changing the firing arrangement is the circle's.
 
-**문양은 안쪽 층부터 바깥으로 해석된다. 순서가 바뀌면 다른 마법이 된다.**
+**Glyphs are interpreted from the inner layer outward. Change the order and it's a different spell.**
 
-같은 문양 두 개라도 순서가 다르면 결과의 **종류**가 다르다:
+Even with two identical glyphs, a different order gives a different **kind** of result:
 
-| 조합 | 무슨 일이 일어나나 | 결과 |
+| Combination | What happens | Result |
 |---|---|---|
-| **확산 → 폭발** | 맞으면 8방향으로 퍼지고, **퍼진 것들이 각자 맞을 때 폭발한다** | **폭발이 8번** — 넓은 지역이 여덟 군데서 터진다 |
-| **폭발 → 확산** | 맞으면 먼저 폭발하고, **그 자리에서 8방향으로 퍼진다** | **폭발 1번 + 잔불 8갈래** — 한 군데가 크게 터지고 불씨가 퍼진다 |
+| **spread → blast** | On hit, spreads in 8 directions, and **each of those blasts when it hits** | **8 blasts** — a wide area detonating in eight places |
+| **blast → spread** | On hit, blasts first, then **spreads in 8 directions from there** | **1 blast + 8 embers** — one big detonation with fire spreading out |
 
-이것이 이 게임의 조합이 깊은 이유다. 문양이 N개면 **조합이 아니라 순열**이다 — 3개면 6가지, 4개면 24가지.
+That is why this game's combinations run deep. With N glyphs it is **permutations, not combinations** — 3 gives 6, 4 gives 24.
 
-### 문양의 실행 규칙
+### Glyph execution rules
 
-탄은 **남은 문양 목록**을 들고 난다. 착탄하면 목록의 **첫 문양**을 실행한다.
+A bolt carries a **remaining glyph list.** On impact it executes the **first** glyph in the list.
 
-문양은 세 종류로 갈리고, 이 구분이 파이프라인의 전부다:
+Glyphs split into three kinds, and that distinction is the entire pipeline:
 
-- **바꿈** (가속 · 유도 · 회전) → 착탄을 기다리지 않고 **목록에서 만나는 즉시** 날아가는 방식을 고친다. 곧바로 다음 문양으로 이어진다
-- **낳음** (확산) → 새로 생긴 탄들에게 **남은 목록을 넘긴다.** 다음 문양은 그 탄들이 착탄할 때 실행된다
-- **끝냄** (폭발) → 탄이 안 생기므로 **같은 자리에서 다음 문양이 이어 실행된다**
+- **Modify** (accelerate · home · spin) → doesn't wait for impact; **alters flight the moment it is reached in the list.** Continues straight into the next glyph
+- **Spawn** (spread) → **hands the remaining list to the newly created bolts.** The next glyph runs when those bolts land
+- **Finish** (blast) → no bolt is created, so **the next glyph continues at the same spot**
 
-목록이 비면 그걸로 끝이다.
+An empty list ends it.
 
-**바꿈은 룬의 거동을 덮어쓰지 않고 수정한다.** 가속은 「속도를 직선으로 만든다」가 아니라
-「지금 속도가 뭐든 키운다」다 — 불에 걸면 빠른 포물선, 번개에 걸면 더 먼 직선이다.
-덮어쓰면 룬이 다시 죽는다. 계층이라야 둘 다 산다.
+**Modify does not overwrite the rune's behavior; it modifies it.** Accelerate is not "make the velocity straight"
+but "increase whatever the velocity is" — on fire it gives a fast arc, on lightning a longer straight line.
+Overwrite and the rune dies again. Layering keeps both alive.
 
-**바꿈에서도 순서가 산다:**
+**Order lives in modify too:**
 
-| 조합 | 무슨 일이 일어나나 |
+| Combination | What happens |
 |---|---|
-| **가속 → 확산** | 빠르게 날아가 착탄, 그 자리에서 8발. **그 8발은 안 빠르다** |
-| **확산 → 가속** | 착탄해서 8발, **그 8발이 각자 가속된다** |
+| **accelerate → spread** | Flies fast, lands, 8 bolts there. **Those 8 are not fast** |
+| **spread → accelerate** | Lands, 8 bolts, **each of the 8 accelerates** |
 
-### 문양 제약 — 폭증을 상한이 아니라 규칙으로 막는다
+### Glyph constraints — block the explosion with rules, not a cap
 
-"확산 → 확산"은 원리적으로 8 → 64발이 되고, 4인이면 256발이다. 이걸 어떻게 막느냐가 갈림길이다.
+"Spread → spread" is 8 → 64 bolts in principle, and 256 with four players. How you block that is the fork.
 
-**동시 투사체 상한을 조절 손잡이로 쓰지 않는다.** 상한에 걸려 탄이 안 나가면 플레이어에게는 **고장으로 읽힌다.**
-⇒ 대신 **문양 자체에 제약을 걸어 조립 시점에 막는다.** 그러면 고장이 아니라 규칙이 된다.
-**문제가 발사 시점이 아니라 조립 시점에 드러나는 것**이 이 선택의 전부다.
+**Do not use the simultaneous-projectile cap as a tuning knob.** A bolt that fails to fire because of a cap
+**reads as a malfunction** to the player.
+⇒ Instead, **constrain the glyph itself so it's blocked at assembly time.** Then it's a rule, not a malfunction.
+**The problem surfacing at assembly time rather than firing time** is the whole of this choice.
 
-제약의 종류:
+Kinds of constraint:
 
-- **개수** — 확산은 한 마법진에 **하나만**
-- **위치** — 어떤 문양은 마지막 층에만, 어떤 것은 첫 층에만
+- **Count** — only **one** spread per magic circle
+- **Position** — some glyphs only in the last layer, some only in the first
 
-⇒ 확산이 하나뿐이면 8 → 64 폭증이 **구조적으로 불가능해진다.**
+⇒ With one spread, the 8 → 64 explosion becomes **structurally impossible.**
 
-**제약은 성능·네트워크 예산의 조절 손잡이다.** 나중에 4인에서 터지는 조합이 나오면
-상한을 조이는 게 아니라 **그 문양에 제약을 추가한다.** 예산이 규칙으로 표현된다.
+**Constraints are the tuning knob for performance and network budget.** When a four-player combination blows up later,
+you don't tighten the cap — **you add a constraint to that glyph.** The budget is expressed as rules.
 
-문양별 구체적인 제약은 **미정**이다. 확산이 "하나만"인 것 외에는 정한 바 없다.
+Per-glyph constraints are **TBD.** Nothing is decided beyond spread being "one only".
 
-**룬 병렬이 이 제약의 옆으로 돌아간다.**
+**Parallel runes walk around this constraint.**
 
 ```
-룬 3 병렬 × 각자 확산 = 3 × 8 = 24발.  4인이면 96발
+3 runes parallel × spread each = 3 × 8 = 24 bolts.  96 with four players
 ```
 
-확산은 하나뿐인데 **마법진이 사실상 셋이라서** 8 → 64를 막던 논리가 안 먹는다.
-그리고 「한 마법진에 하나만」의 **단위 자체가 흔들린다** — 룬마다 층이 따로면 라인마다 하나인가
-진 전체에 하나인가. 앞이면 위 폭증이 그대로 나고, 뒤면 룬 3개인데 확산이 한 라인만 걸린다.
+There is one spread, but **effectively three magic circles**, so the logic blocking 8 → 64 doesn't apply.
+And **the unit of "one per magic circle" itself wobbles** — with per-rune layers, is it one per line or one per circle?
+The former reproduces the explosion; the latter gives three runes with spread on only one line.
 
-⇒ **미정.** 후보: 룬 자리가 많은 진은 확산을 못 넣는다 / 진마다 총 발수 상한을 못박는다 /
-병렬 진은 층이 얕아 자연히 막힌다.
+⇒ **TBD.** Candidates: circles with many rune slots can't take spread / pin a total shot cap per circle /
+parallel circles are shallow and naturally blocked.
 
-### 크기 하한
+### Size floor
 
-확산할 때마다 나오는 것이 **작아지고 약해진다.** 그리고 **더 이상 못 쪼개는 하한이 있다.**
-하한에 닿으면 확산이 안 걸린다.
+Each spread makes what comes out **smaller and weaker.** And **there is a floor below which it can't split.**
+At the floor, spread doesn't apply.
 
-하한 값은 **미정**이다.
-**"작은 것들이 약한 것"이 성능까지 살린다** — 약하면 폭발 반경도 작고, 반경이 절반이면 비용은 1/4이다.
+The floor value is **TBD.**
+**"Small things being weak" saves performance too** — weak means a smaller blast radius, and half the radius is a quarter the cost.
 
-### 룬과 문양의 관계
+### The relationship between runes and glyphs
 
-문양은 룬에 따라 **그림이 달라진다. 규칙은 같다** — **다만 그건 룬이 계수만 다를 때다.**
+A glyph's **picture varies by rune. The rule is the same** — **but only when the runes differ in coefficients only.**
 
-- 불 룬 + 확산 → 착탄 후 **작은 불꽃** 8개
-- 물 룬 + 확산 → 착탄 후 **작은 물** 8개
-- 번개 룬 + 확산 → 착탄 후 **작은 번개** 8개
+- fire rune + spread → 8 **small flames** after impact
+- water rune + spread → 8 **small waters** after impact
+- lightning rune + spread → 8 **small bolts** after impact
 
-**8방향은 정수 계약과 궁합이 완벽하다.** `(±1,0) (0,±1) (±1,±1)` 여덟 개는 `sin`·`cos` 없이 정수로 그대로 나온다. 문양의 정수 제약이 여기서는 비용이 아니다.
+**Eight directions fit the integer contract perfectly.** `(±1,0) (0,±1) (±1,±1)` come out as integers with no
+`sin` or `cos`. Here the glyph's integer constraint costs nothing.
 
-**어떤 룬은 아예 다른 종류로 날아간다.** 번개가 투사체가 아니라 **선**이면 「확산」이
-선의 끝에서 8방향인지 선 전체에서 갈라지는지가 갈린다 — **그런 룬에서는 규칙도 달라진다.**
+**Some runes fly as an entirely different kind.** If lightning is a **line** rather than a projectile, "spread" splits
+into "8 directions at the line's end" or "splitting along the line" — **for such runes the rule differs too.**
 
-그래서 **다 열지 않는다.** 계수만 다른 것으로 시작하고, 정체성이 강한 룬만 하나씩 연다
-(번개가 선인 것, 물이 쏟아지는 것). 전부 열면 **문양 6개 × 룬 4개 = 24가지를 다 정의해야 하고**,
-그중 대부분은 만들기 전에 낡는다. 자세한 것은 `docs/design/진-룬-문양.md` 의 「거동은 두 단계로 갈린다」.
+So **they are not all opened.** Start with coefficient-only differences and open runes with strong identity one at a time
+(lightning as a line, water pouring). Open everything and **6 glyphs × 4 runes = 24 cases must be defined**,
+most of which go stale before they're built. Detail in `docs/design/circle-rune-glyph.md`, "behavior splits into two stages".
 
-### 장착과 발사
+### Equipping and firing
 
-- 장착 슬롯은 **1번과 2번, 둘뿐**이다
-- 좌클릭으로 발사한다
-- **포션이 없다** (2026-08-08, 사용자가 정했다). ~~별도 고정 키~~ 안도 같이 사라졌다
+- There are **exactly two equip slots, 1 and 2**
+- Left click fires
+- **There are no potions** (decided by the user). The ~~separate fixed key~~ idea went with it
 
-슬롯이 둘뿐인 것은 제약이 아니라 설계다. **전투 중에 "바꿔 낀다"가 아니라 "골라 쓴다"**는 뜻이고, 그래서 조립은 전투 밖의 일이 된다.
+Two slots is design, not constraint. It means **"choose and use", not "swap mid-fight"**, which makes assembly
+something you do outside combat.
 
-### 조립 — 던전 중 언제든
+### Assembly — any time during a dungeon
 
-- 던전 안에서 **탭으로 언제든 연다**
-- **세상은 안 멈춘다.** 조립하는 동안 몬스터가 다가온다
-- **층 순서는 조립창을 보면 저절로 보인다.** 동심원이 안에서 밖으로 그려지니 순서가 그림에 있다
-- 규칙 자체는 **온보딩(초반 튜토리얼)에서 가르친다**
+- **Tab opens it any time** inside a dungeon
+- **The world doesn't stop.** Monsters approach while you assemble
+- **Layer order is visible just by looking at the window.** Concentric rings drawn inside-out put the order in the picture
+- The rule itself is taught **in onboarding**
 
-**순서가 효과를 바꾸는데 순서가 화면에 안 보이면 플레이어는 규칙을 영영 못 배운다.**
-조합이 아무리 깊어도 아무도 안 쓰게 된다. ⇒ 조립창의 그림과 온보딩이 그 자리다.
+**If order changes the effect and order isn't visible on screen, the player never learns the rule.**
+However deep the combinations, nobody uses them. ⇒ The assembly window's picture and onboarding are that place.
 
-**멈추지 않는 이유는 멀티다.** 2~4인 코옵에서 한 명이 창을 열 때마다 나머지가 멈추면 게임이 안 된다.
-**대가**: 조립이 길면 실전에서 아무도 안 쓴다. 그래서 기본 진이 2층이고 슬롯이 2개다.
-진의 층 수가 늘어날수록 **조립은 안전한 순간에 하는 일**로 자연히 밀려난다 — 그 압력 자체가 설계의 일부다.
+**The reason it doesn't stop is multiplayer.** In 2–4 player co-op, freezing everyone every time one person opens a window
+makes the game unplayable.
+**The price**: long assembly means nobody uses it in a real fight. That is why the base circle is 2 layers and there are 2 slots.
+As layer counts grow, **assembly naturally gets pushed to safe moments** — that pressure is itself part of the design.
 
-### 인벤토리가 없다 (2026-08-08, 사용자가 정했다)
+### There is no inventory (decided by the user)
 
-**버린 쪽과 「다시 열릴 조건」은 `docs/decisions/인벤토리를-안-넣는다.md` 에 있다.**
+**The rejected side and the conditions for reopening are in `docs/decisions/no-inventory.md`.**
 
-**주운 것을 쟁여 두는 곳이 없다. 받는 순간 「어디에 넣을지」까지 그 자리에서 정한다.**
-안 넣기로 하면 **그것은 사라진다.**
+**There is nowhere to stash what you pick up. The moment you receive it, you also decide where it goes.**
+Decline to place it and **it disappears.**
 
-**이 게임 쪽 근거가 장르 관례보다 세다.**
-이 게임은 **하나의 마법진을 런 내내 키워 가는 것**이지 상황마다 바꿔 끼는 게 아니다
-(위 「장착과 발사」의 「바꿔 낀다가 아니라 골라 쓴다」와 같은 압력이다).
-⇒ **보관함이 있으면 「지금 안 정해도 된다」가 생기고, 그 순간 선택의 무게가 통째로 미뤄진다.**
+**The game-side reason is stronger than genre convention.**
+This game is about **growing one magic circle across a run**, not swapping per situation
+(the same pressure as "choose and use, not swap mid-fight" above).
+⇒ **A stash creates "I don't have to decide yet", and the weight of the choice is deferred wholesale.**
 
-**장르 관례도 같은 쪽이다** — 데드셀 · 스컬 · 아이작 · 노이타 **전부 인벤토리가 없다.**
+**Genre convention agrees** — Dead Cells · Skul · Isaac · Noita **all have no inventory.**
 
-**그래서 「받는다」가 「버린다」와 한 몸이 된다.**
-2층 진에 문양이 이미 둘 차 있으면 새 문양은 **무엇을 밀어내고 들어갈지**를 같이 고르는 일이다.
-⇒ GDD가 3택에 건 논리(**「무엇을 안 받느냐가 조합을 갈라놓는다」**)가 **한 단 더 세진다** —
-안 받는 것에 더해 **무엇을 버리느냐**까지 온다.
+**So "receiving" becomes one act with "discarding".**
+With a 2-layer circle already full, a new glyph means choosing **what it pushes out.**
+⇒ The logic the GDD attached to the three-pick (**"what you don't take is what separates builds"**)
+**gets one notch stronger** — beyond what you don't take comes **what you discard.**
 
-**순서 선택은 안 죽는다.** 「보관함이 없으면 자동으로 마지막 층에 끼워져 순서가 사라진다」가
-보관함을 만든 이유였는데, **받는 화면에서 층까지 고르게 하면 그 걱정이 없어진다** —
-단계가 사라지는 게 아니라 **둘이 한 화면으로 합쳐지는 것**이다.
+**Order selection doesn't die.** "Without a stash it auto-slots into the last layer and order disappears" was the
+argument for a stash, but **letting the receiving screen choose the layer removes that worry** —
+the step doesn't vanish; **two screens merge into one.**
 
-⇒ **조립창에 남는 일은 「이미 낀 것들의 자리를 바꾸는 것」뿐이다.** 그건 보관함이 아니다.
+⇒ **All that remains in the assembly window is reordering what is already equipped.** That is not a stash.
 
-**장비도 같은 규율이다** — 바닥의 것을 밟으면 그 자리에서 갈아입을지 정하고, 안 입으면 지나친다.
+**Gear follows the same discipline** — step on something on the ground and decide there whether to wear it; decline and walk past.
 
-### 그런데 **장비창은 인벤토리가 아니다** (2026-08-08, 사용자가 정리했다)
+### But **an equipment screen is not an inventory** (the user sorted this out)
 
-**둘은 다른 것이다. 뭉뚱그리면 장비를 못 만들게 된다.**
+**They are different things. Blur them and gear becomes unbuildable.**
 
-| 무엇 | 무엇을 들고 있나 | 판정 |
+| What | What it holds | Verdict |
 |---|---|---|
-| **인벤토리** | **안 낀 것**을 쟁여 둔다. 칸이 늘어난다 | **없다** |
-| **장비창** | **낀 것**을 보여 준다. 슬롯 수가 고정이다 | **있다** |
+| **Inventory** | Stashes **what isn't equipped.** Slots grow | **None** |
+| **Equipment screen** | Shows **what is equipped.** Fixed slot count | **Exists** |
 
-**핵심(진·룬·문양)에는 인벤토리가 설 자리가 없다** — 셋 다 **마법진에 직접 꽂히므로**
-「런 도중에 안 낀 채로 들고 다니는 상태」가 없다.
+**The core (circles · runes · glyphs) has no room for an inventory** — all three **socket directly into the magic circle**,
+so there is no state of "carrying it unequipped during a run".
 
-**「해금 목록」은 여기 안 걸린다.** 마을 조립대는 해금한 것들을 보여 주고 고르게 하는데,
-그건 **들고 다니는 물건이 아니라 계정에 열린 목록**이다 — 카탈로그지 가방이 아니다.
-**판별은 하나다: 런 중에 늘어나면 인벤토리, 마을에서만 보이면 목록.** ⇒ **쟁일 것이 없어서 창이 필요 없다.**
-스컬·데드셀이 「인벤이 없다」면서 장비창은 있는 것이 정확히 이 구분이다.
+**The "unlock list" doesn't fall under this.** The town assembly bench shows unlocks and lets you choose,
+but that is **a list opened on the account, not objects you carry** — a catalog, not a bag.
+**One test: growing during a run is an inventory; visible only in town is a list.** ⇒ **Nothing to stash, so no window is needed.**
+Skul and Dead Cells having equipment screens while "having no inventory" is exactly this distinction.
 
-**그래서 앞서 「가방이 정면으로 부딪힌다」고 적었던 것이 해소됐다** —
-**가방과 포션과 잉크를 셋 다 지웠다**(아래 「장비」). 들고 다닐 것이 없으면 칸도 필요 없다.
+**So the earlier claim that "a bag collides head-on" is resolved** —
+**bag, potions and ink were all deleted** (see "Gear"). With nothing to carry, no slots are needed.
 
 ---
 
-## 세상
+## The world
 
-### 격자
+### The grid
 
-| 값 | 크기 | 관계 |
+| Value | Size | Relation |
 |---|---|---|
-| 셀 | **4px** | 시뮬의 최소 단위 |
-| 지형 타일 | 32px | = **8×8 셀** |
-| 캐릭터 | **32px** | = **8 셀** = 지형 타일과 정확히 같다 |
+| Cell | **4px** | The sim's smallest unit |
+| Terrain tile | 32px | = **8×8 cells** |
+| Character | **32px** | = **8 cells** = exactly one terrain tile |
 
-**2026-08-04에 16px → 32px로 키웠다. 셀은 4px 그대로다.**
-이유는 **16px 안에서 캐릭터가 「마법사로 읽힌다」가 안 나왔기 때문**이다 — 실루엣을 여러 판 다시 파고
-사용자가 눈으로 판정해 내린 결론이다. 세부는 **`character-sprite`**.
-**아래 두 문단은 이 변경으로 안 죽는다.** 캐릭터와 타일이 여전히 같고 셀이 여전히 4px이라,
-「세어서 안다」는 오히려 **단이 4에서 8로 촘촘해졌다.**
+**Raised 16px → 32px. Cells stayed at 4px.**
+The reason is that **"reads as a mage" never came out within 16px** — the silhouette was reworked several times and
+the user judged it by eye. Detail in **`character-sprite`**.
+**The two paragraphs below survive this change.** Character and tile still match and cells are still 4px, so
+"you can count it" got **finer, from 4 steps to 8.**
 
-캐릭터와 타일 두께를 같게 잡은 것이 **위력 단이 눈에 보이게 만드는 장치**다.
-「저 벽을 뚫으면 지나갈 수 있다」를 화면에서 세어서 알 수 있다.
-셀을 16px로 키우면 **구멍 하나가 곧 통과**라서 위력 구분이 통째로 뭉개진다. 그래서 4px이다.
+Matching character and tile thickness is **the device that makes power tiers visible.**
+"Breach that wall and I can get through" can be counted on screen.
+Raise cells to 16px and **one hole is a passage**, mushing the power distinction entirely. Hence 4px.
 
-### 자연법칙
+### Natural law
 
-- **지형이 파괴된다.** 마법이 벽을 판다 — **문양이 없어도 판다**(2026-08-05). 세부는 **`spell-carves-terrain`**
-  그 문서가 **「뚫렸다 ≠ 지나갈 수 있다」**를 미해결로 남겼다 — 원반 파기가 굴 천장에 4px 톱니를
-  남겨 관통한 굴에서도 캐릭터가 낀다. **아래 「캐릭터와 타일 두께를 같게」의 장치가 거기서 흔들린다**
-- **물이 흐른다.** 쏟아지고 고인다 — 세부는 **`docs/design/물.md`**
-- **물이 플레이어와 몬스터에게 닿는다.** 젖고, 젖으면 전기가 통한다
-  **젖음은 별도 상태가 아니라 「물이 조금 있는 것」이다**(2026-08-07, 사용자가 정했다)
-- **불이 번진다.** 탈 것이 있는 곳으로만
-- **번개가 전도체를 따라간다.** 물과 젖은 것을 타고 퍼지다 꺼진다
-- 발판을 만들 수 있고, 마법의 반동으로 캐릭터가 **좌우로** 밀릴 수 있다
-- **마법이 플레이어에게도 닿는다.** 내 탄도 동료의 탄도 나를 때린다
+- **Terrain is destructible.** Magic digs walls — **it digs even with no glyph.** Detail in **`spell-carves-terrain`**
+  That doc left **"breached ≠ passable"** unresolved — disc carving leaves 4px teeth on a tunnel's ceiling and
+  the character gets stuck even in a fully pierced tunnel. **The device in "matching character and tile thickness" wobbles there**
+- **Water flows.** It pours and pools — detail in **`docs/design/water.md`**
+- **Water touches the player and monsters.** They get wet, and wet conducts.
+  **Wet is not a separate state but "a little water"** (decided by the user)
+- **Fire spreads.** Only where there is fuel
+- **Lightning follows conductors.** It travels through water and wet things, then dies
+- You can make platforms, and spell recoil can push the character **sideways**
+- **Magic hits the player too.** Your bolts and your ally's bolts both hit you
 
-**"순서가 다르면 결과가 다르다"가 이 게임의 테제다.**
-먼저 적시고 번개를 치는 것과 번개를 먼저 치는 것은 결과의 **종류**가 다르다.
+**"Different order, different result" is this game's thesis.**
+Wetting first and then striking with lightning gives a different **kind** of result than lightning first.
 
-**그래서 플레이어 자신이 이 법칙의 첫 번째 대상이다.** 몬스터가 없어도 테제를 몸으로 배운다.
-세부(체력·피해·무적·쓰러짐)는 **`character-damage-minimum`** 이 기준이다.
-**2026-08-04에 반동에서 둘이 삭제됐다** — **피격 밀림**(맞으면 밀린다)과 **로켓점프**(아래로
-쏘면 뜬다). 남은 것은 「**쏘면 좌우로 밀린다**」 하나다. 그 문서가 사연을 든다.
-**로켓점프가 없어지며 「위험과 기동이 같은 행동에서 나온다」가 같이 사라졌다** — 발밑을 쏘는 것이
-이제 위험이기만 하다. 위 자연법칙의 「마법이 플레이어에게도 닿는다」는 그대로 산다.
+**So the player is the first subject of these laws.** Even with no monsters, you learn the thesis with your body.
+Detail (health · damage · invulnerability · knockdown) is set by **`character-damage-minimum`**.
+**Two things were deleted from recoil** — **hit knockback** (being pushed when hit) and **rocket jumping**
+(shooting down to rise). What remains is **"firing pushes you sideways"**. That doc has the story.
+**Losing the rocket jump also lost "danger and mobility come from the same action"** — shooting at your feet is now
+only danger. "Magic hits the player too" above survives.
 
-**같은 날 점프가 「누른 시간으로 높이가 갈리는」 것이 됐다**(사용자 요청) — 톡 치면 1.2타일,
-꾹 누르면 3.2타일. ⇒ **기동이 로켓점프에서 점프 자체로 옮겨 왔다.** 값과 실측은 `character.gd`.
+**The same day, jump height became a function of how long you hold** (user request) — a tap gives 1.2 tiles,
+a hold gives 3.2. ⇒ **Mobility moved from the rocket jump to the jump itself.** Values and measurements in `character.gd`.
 
-**문서 이름만 적고 경로는 안 적는다** — `docs/plans/` 안의 문서는 상태에 따라 폴더를 옮기므로
-경로를 적으면 그날 링크가 죽는다.
+**Name docs, don't path them** — docs under `docs/plans/` change folders with their status, so a path dies that day.
 
-### 상태는 파면 목록으로 돈다 — 청크 밖에서
+### State runs on burn-slot lists — outside chunks
 
-물은 격자를 훑어야 하지만(물질이 이동한다), **불과 번개는 그럴 필요가 없다.**
-둘은 "지금 타는/전도되는 셀 목록"만 돌면 된다.
+Water has to sweep the grid (matter moves), but **fire and lightning don't.**
+Both only need to iterate "the cells currently burning/conducting".
 
-**이것이 「시한부 상태가 구역을 안 재운다」는 문제를 통째로 없앤다.**
-파면 목록은 청크 재우기와 **독립**이라, 격자가 잠들어 있어도 불은 타고 번개는 퍼진다.
-v1의 전하가 이미 이 구조였고 검증됐다. 불도 같은 구조를 쓴다.
+**This removes the "a timed state keeps a region awake" problem entirely.**
+Burn-slot lists are **independent** of chunk sleep, so fire burns and lightning spreads even with the grid asleep.
+v1's charge already had this structure and it was proven. Fire uses the same structure.
 
-**v1에서 번개가 안 꺼진 원인은 TTL이 아니었다** — 물이 평평한 바닥에서 영원히 왕복하는 버그가 있었고,
-움직이는 물이 매 틱 파면에 재등록됐기 때문이다. **불은 안 움직이니 그 문제가 없다.**
-**물을 만드는 사람이 읽어야 할 조항이라 `docs/design/물.md` 의 첫 절로 올렸다**(2026-08-07).
-여기 남은 것은 **「불에겐 그 문제가 없다」**는 대비뿐이다 — 물 쪽 사연은 그 문서가 든다.
+**The reason lightning wouldn't go out in v1 was not TTL** — water ping-ponged forever on a flat floor,
+and moving water re-registered into the burn slot every tick. **Fire doesn't move, so it doesn't have that problem.**
+**It was promoted to the first section of `docs/design/water.md` because whoever builds water needs to read it.**
+What remains here is only the contrast — **fire doesn't have that problem.** The water story lives in that doc.
 
-### 불의 연료 — 자연법칙이 곧 예산이다
+### Fire fuel — natural law is the budget
 
-- 셀마다 **연료**가 있다. 나무는 많고, 돌은 0(안 탄다), 물은 불을 끈다
-- 타면서 연료가 줄고, **0이 되면 꺼지고 목록에서 빠진다**
+- Every cell has **fuel.** Wood has a lot, stone has 0 (doesn't burn), water puts fire out
+- Burning consumes fuel, and **at 0 it goes out and leaves the list**
 
-**불의 총량을 상한으로 막지 않고 연료로 막는다.**
-"탈 게 없으면 안 탄다"는 플레이어에게 **규칙**으로 읽히지만,
-"불이 N개를 넘으면 안 붙는다"는 같은 일을 하면서 **고장**으로 읽힌다.
-⇒ 문양 제약을 투사체 상한 대신 고른 것과 정확히 같은 판단이다.
+**Total fire is limited by fuel, not by a cap.**
+"Nothing to burn, so it doesn't burn" reads to the player as **a rule**;
+"fire won't catch past N" does the same job and reads as **a malfunction.**
+⇒ Exactly the same judgment as choosing glyph constraints over a projectile cap.
 
-**그래서 연료를 어디 두느냐가 곧 레벨 디자인이다.**
-나무 많은 방은 불이 무섭고, 돌방은 안 타고, 물 있는 방은 번개가 무섭다.
-**방마다 어떤 룬이 강한지가 지형으로 정해진다.**
+**So where you put fuel is level design.**
+A room full of wood makes fire terrifying, a stone room doesn't burn, a room with water makes lightning terrifying.
+**Terrain decides which rune is strong in which room.**
 
-총량 상한은 **안전망으로만** 둔다. 숲 전체가 타는 극단에서만 걸리고 평소엔 도달하지 않는 가드다.
+A total cap exists **only as a safety net** — a guard that trips only in the extreme of a whole forest burning.
 
 ---
 
-## 멀티 — 2인 필수, 4인 목표
+## Multiplayer — 2 players required, 4 the goal
 
-**호스트 권위 코옵**이다. 다만 세상의 절반은 결정론으로 돌린다.
+**Host-authoritative co-op.** But half the world runs deterministically.
 
-| 무엇 | 어떻게 | 왜 |
+| What | How | Why |
 |---|---|---|
-| 격자 · 마법 투사체 | **결정론** — 입력만 보내고 각자 똑같이 계산 | 흐르는 물은 매 틱 수백 셀이 바뀌어서 **네트워크로 못 보낸다** |
-| 몬스터 · 플레이어 · 아이템 | **호스트 권위** — 호스트가 진실, 위치를 뿌린다 | 중간 참가가 되고, float을 써도 되고, 예측·보정이 자유롭다 |
+| Grid · spell projectiles | **Deterministic** — send input only and everyone computes identically | Flowing water changes hundreds of cells a tick and **cannot go over the network** |
+| Monsters · players · items | **Host-authoritative** — the host is truth and broadcasts positions | Allows mid-join, allows float, and frees prediction and correction |
 
-**파괴는 이벤트라 공짜다.** `(x, y, 반경)` 몇 바이트를 보내면 각자 같은 원을 지운다. 폭발이 아무리 커도 대역폭이 안 는다.
-**흐르는 물은 그게 안 된다.** 활발할 때 셀 500개/틱 × 20Hz × 3명 ≈ 720kbps 상향이고, 하필 **물이 제일 많이 쏟아지는 순간(= 마법이 제일 화려한 순간)에 최대**가 된다. 그래서 각자 계산한다.
+**Destruction is an event, so it's free.** A few bytes of `(x, y, radius)` and everyone erases the same circle.
+Bandwidth doesn't grow with blast size.
+**Flowing water can't do that.** Active, it's 500 cells/tick × 20Hz × 3 players ≈ 720kbps upstream, peaking exactly
+**when the most water is pouring (= when magic is at its most spectacular).** So everyone computes it.
 
-결정론 쪽과 호스트 권위 쪽의 **경계는 좁게 유지한다.** "물에 젖었나" 같은 판정은 호스트가 내려서 뿌린다. 두 세계가 넓게 만나면 그 자리가 desync 최대 위험지대다.
+**Keep the boundary between the deterministic and host-authoritative sides narrow.** Judgments like "is it wet"
+are made by the host and broadcast. A wide meeting point between the two worlds is the maximum desync risk zone.
 
-### 팀킬은 사고가 아니라 재미다
+### Team kill is fun, not an accident
 
-**동료의 탄이 나를 때린다.** 「앞사람 비켜」가 매 전투에서 나오는 것이 **의도**다.
+**An ally's bolt hits you.** "Get out of the way" coming up every fight is **intended.**
 
-⇒ 그래서 죽으면 즉사가 아니라 **쓰러지고 동료가 살린다.**
+⇒ So death is not instant — **you go down and an ally revives you.**
 
-왜 안전한 쪽을 안 골랐는지, 복구가 왜 필수인지, 체력·피해·무적이 얼마인지는
-**`character-damage-minimum`** 이 기준이다. 여기 겹쳐 적지 않는다.
-
----
-
-## 진행
-
-로그라이크다. **두 단이다**(2026-08-06, 사용자가 정했다) — 위는 스테이지, 아래는 그 안의 구역.
-
-### 세션 루프 — 한 런
-
-```
-마을 → 스테이지1(농장) → 스테이지2 → 스테이지3 → 클리어
-              ↓ 죽으면
-             마을
-```
-
-- 스테이지 하나 = **연속된 씬 하나.** 안에서 걸어 다니고 로딩이 없다(위 「던전 생성」)
-- 스테이지 사이는 **진짜 전환** — 테마가 바뀐다. **보스를 깨면 문이 열린다**
-- 죽거나 클리어하면 마을로 돌아간다
-- **마을에서 해금이 쌓인다.** 다음 런에서 맞출 수 있는 진·룬·문양이 늘어난다
-
-**처음 만드는 것은 둘이다**(2026-08-07, 사용자가 정했다). 위 그림은 셋이지만 그건 최종 모습이고,
-**먼저 스테이지 둘로 한 런이 굴러가는 것**을 본다. 최종 개수는 여전히 미정이다.
-⇒ **맵이 고정이라 이 수가 곧 손으로 그릴 양이다**(아래 「던전 생성」). 둘 × 구역 4개 = **여덟 구역.**
-**한 런이 몇 분인지도 미정이다** — 그게 스테이지 크기와 구역 개수를 결정한다.
-
-### 스테이지 안 — 구역 루프
-
-```
-입장 → 구역들을 지나며 전투·상자 → 중간보스 → 더 지나감 → 보스(게이트) → 다음 스테이지
-```
-
-**중간보스 보상이 진행의 열쇠다.** 「강해지는 곳」이 아니라 **「없으면 못 지나가는 곳」**이다.
-⇒ 스테이지1에서 **불의 룬**을 얻어야 나무를 태워 길을 연다.
-**자연법칙(「불이 번진다」)이 그대로 진행 수단이 되는 것**이 이 설계의 요점이다 —
-전투용 능력과 이동용 능력이 따로 놀지 않는다.
-
-**드랍은 셋으로 갈린다**(2026-08-06, 사용자가 정했다). **일반 몬스터는 조립에 쓰는 것을 안 준다.**
-
-| 잡는 것 | 주는 것 |
-|---|---|
-| 일반 몬스터 | **경험치 · 돈**뿐 **2026-08-08 확정 — 영구 재화는 보스만 준다** |
-| **레벨업** | **문양 — 3장 띄우고 하나 고른다** |
-| 중간보스 | **진행 열쇠** (스테이지1 = 불의 룬) |
-| 보스 | **연구 재료**(영구) + **문양 3택** |
-
-**일반 몬스터가 문양을 직접 떨구게 하지 않은 이유**: 그러면 조립창을 전투 중에 계속 열게 되고,
-GDD가 「조립은 안전한 순간에 하는 일」로 밀어 둔 압력이 정면으로 깨진다.
-⇒ 대신 **경험치와 돈**을 주고, 문양은 **레벨업이라는 문 하나로만** 들어온다.
-
-**3장 중 1택이 이 게임에서 특히 잘 맞는다.** 문양은 목록이 아니라 **순열**이라
-(「확산→폭발 ≠ 폭발→확산」) 무엇을 받느냐보다 **무엇을 안 받느냐가 조합을 갈라놓는다.**
-⇒ 다 주면 매 런 같은 마법진이 된다. 3택이 그걸 구조적으로 막는다.
-
-**3택에는 당분간 문양만 뜬다**(2026-08-06). 룬·진도 섞자는 얘기가 나왔으나 **보류했다.**
-**원래 근거(「무속성으로 시작해 중간보스에서 불을 얻는다」가 흔들린다)는 죽었다** —
-포인트 시작이 그 전제를 뒤집었다. **남은 근거는 하나뿐이다: 만들 것이 적다.**
-문양에 등급이 생겼으므로(위 「문양」) **문양만으로도 3택이 빈칸 없이 채워진다.**
-
-### 레벨업 — 보상의 문 (2026-08-06, 사용자가 정했다)
-
-몬스터가 주는 경험치가 쌓이면 레벨이 오른다. **레벨이 오르면 문양 3택이 뜬다.**
-
-- **바로 안 고른다.** 「레벨업」 표시만 뜨고, **안전한 곳에서 특정 키를 눌러** 그때 고른다
-- **조립창과 같은 규율이다** — 세상은 안 멈추고, 고르는 것은 안전한 순간의 일이다
-- **안 받고 넘어갈 수 있다** (2026-08-08, 사용자가 정했다)
-
-#### 안 받기와 주사위 (2026-08-08, 사용자가 정했다)
-
-**셋 다 마음에 안 들면 안 받고 넘어간다.** ⇒ 위 「인벤토리가 없다」가 만든 문제
-(**층이 다 찼는데 셋 다 지금 것보다 나쁘면 억지로 하나를 버려야 한다**)가 여기서 풀린다.
-
-**그리고 「주사위」가 있다 — 안 받는 대신 다시 뽑는다.**
-
-**주사위는 영구 해금이다.** 마을에서 연구로 연다 — **처음에는 없다.**
-⇒ 초반에는 「안 받기」만 있고, 해금이 쌓이면 **「안 받고 다시 뽑기」가 생긴다.**
-
-**왜 공짜로 안 주나**: 무한히 다시 뽑을 수 있으면 **3택이 3택이 아니게 된다** —
-매번 원하는 것이 나올 때까지 돌리면 GDD가 3택에 건 「무엇을 안 받느냐」가 통째로 사라진다.
-⇒ **영구 해금이자 소모품**이라야 그 축이 산다.
-
-**미정**: 주사위를 런당 몇 번 쓰나 · 해금이 개수를 늘리나 · 던전에서 더 주울 수 있나.
-
-**이 설계의 목표는 「많이 잡아도 이득, 안 잡고 지나가도 이득」이다.**
-- 잡으면 → 경험치가 쌓여 **레벨업이 빨라진다**
-- 안 잡으면 → **시간을 벌고 앞으로 간다**
-
-**그래서 「구역 클리어」라는 보상 단위를 안 만들었다.** 구역은 물리적 경계가 없는 개념적
-구획이라 클리어를 판정하려면 **문을 닫아야 하는데**, 문을 닫으면 「안 잡고 지나가도 이득」이
-원리적으로 불가능해진다. ⇒ **경험치는 경계를 안 만들고도 두 선택을 다 살린다.**
-
-**2026-08-08에 채워졌다** — **레벨이 오르면 달라지는 것은 3택뿐이다.**
-체력도 안 오르고 마법진 층도 안 는다. ⇒ **강해지는 경로가 하나**라 읽기 쉽다.
-**한 런에 3번**이 목표(구역마다 한 번꼴). **런 안에서만인가 마을에 쌓이는가는 여전히 미정이다.**
-세부는 `docs/plans/1.ready/levelup-and-three-picks.md`.
-
-### 스테이지의 틀 — 스테이지 하나를 정한다는 것
-
-**스테이지를 새로 만들 때 채우는 칸이 넷이다.** 넷이 차면 그 스테이지는 정의된 것이다.
-
-| 칸 | 스테이지 1 |
-|---|---|
-| **테마**(= 재질 배치) | 농장 — 나무가 많다 |
-| **진행 방향** | 오른쪽 |
-| **중간보스 보상**(= 진행 열쇠) | **불의 룬** — 나무를 태워 길을 연다 |
-| **보스 보상** | 영구 재료 (장비 인챈트 얘기가 나왔으나 미확정) |
-
-**스테이지1의 실제 지형과 보스가 정해졌다** (2026-08-08) — **400×48타일, 구역 셋 + 잠긴 넷째.**
-잡몹 구간 → ①**소**(중간보스, 불의 룬) → 나무벽 태우기 → ②잡몹 → ③**거대 수탉**(보스)
-→ **물이 차오르며 탈출.** **물속에서는 점프가 무한이다** — 그게 스테이지2의 이동 문법이 된다.
-세부는 `3.done/stage1-map-layout` · `1.ready/stage1-bosses` · `2.active/water-jump-and-escape` 다
-— **여기 겹쳐 적지 않는다.**
-
-**GDD는 스테이지당 구역 4개로 잡았는데 스테이지1은 셋이다.** 넷째 자리를 **더블점프로만
-닿는 잠긴 구역**이 대신한다 — 첫 런에는 보이기만 하고 다음 런에 간다.
-
-스테이지 2·3의 네 칸은 **미정**이다. **물은 스테이지2다**(2026-08-08, 사용자가 정했다).
-
-### 시작 지급 — **고정이 아니라 포인트로 고른다** (2026-08-08, 사용자가 정했다)
-
-**마을에서 나가기 전에, 지금까지 해금한 진·룬·문양 중 무엇을 들고 갈지 고른다.**
-**고를 수 있는 양이 「포인트」로 정해져 있다.**
-
-**그 포인트가 영구 해금의 축이다** — 연구로 포인트를 늘리면 **더 많이 들고 나갈 수 있다.**
-⇒ **「강해진다」가 물건이 아니라 예산으로 온다.** GDD가 이미 고른 「물건이 아니라 풀」과 같은 모양이다.
-
-**처음 포인트는 무속성 룬 하나 · 일반진(2층) · 확산 하나**가 나오는 양이다.
-⇒ **첫 런의 시작 지급은 예전 고정값과 똑같다.** 달라지는 것은 **해금이 쌓인 뒤**다.
-
-### 그래서 **중간보스의 역할이 런에 따라 바뀐다** (2026-08-08, 사용자가 정했다)
-
-**마을에서 불 룬을 사서 나가면 스테이지1 중간보스가 진행의 열쇠가 아니게 된다.**
-**그것이 고장이 아니라 의도다.**
-
-| 언제 | 중간보스가 무엇인가 |
-|---|---|
-| **불 룬을 못 살 때**(초반) | **없으면 못 지나가는 곳.** 잡아야 나무벽이 열린다 |
-| **불 룬을 사서 갈 때**(해금 뒤) | **그냥 보상 주는 몬스터.** 잡으면 **고르는 보상**이 나온다 |
-
-**「열쇠 → 보상」으로 내려오는 것이 곧 영구 진행이 체감되는 자리다.**
-어제 벽이던 것이 오늘 선택지가 된다 — **플레이어가 강해진 것을 지형이 증명한다.**
-
-**이것은 위 「고정 맵」의 대가를 갚기도 한다** — 지형에 놀라움이 없는 대신
-**같은 지형이 런마다 다른 뜻을 갖는다.**
-
-**값은 여전히 중요하다.** 싸게 매기면 **첫 런부터** 열쇠가 사라져서
-위 표의 왼쪽 칸이 아예 안 나온다. ⇒ **한 번은 벽으로 만나야 한다.** 값은 미정이다.
-
-**보상은 레벨업 3택과 같은 것이다** — **뜬 것 중 하나를 고른다.** 새 축을 안 만든다.
-
-**그리고 잡을지 말지가 플레이어의 선택이 된다** (2026-08-08, 사용자가 정했다).
-**불 룬을 들고 갔으면 중간보스를 안 만나도 된다** — 나무벽을 바로 태우고 지나간다.
-⇒ **구덩이는 「들어가면 보상, 안 가도 되는 곳」이 된다.**
-
-**맵을 안 고쳐도 된다.** 위 「고정 맵」이 이미 적어 둔
-**「길을 외운 플레이어가 더 빨리 지나가는 것이 실력이 된다」**가 그대로 여기다.
-
-**나중에 확장할 수 있게만 만든다**(사용자 지시). 포인트 상한과 항목 값이
-**수가 아니라 표에서 오게** 해 두면 해금이 늘어도 코드가 안 바뀐다.
-
-### 영구인 것은 「물건」이 아니라 「풀」이다 (2026-08-06, 사용자가 정했다)
-
-**보스를 처음 잡으면 그 다음부터 등장 선택지가 넓어진다** — 다음 보스부터 더 많은 문양·룬 중에서 뜬다.
-
-| 무엇 | 영구인가 |
-|---|---|
-| 이번 런에서 주운 문양·룬 | **아니다.** 런이 끝나면 잃는다 |
-| **뜰 수 있는 것들의 풀** | **영구.** 보스를 처음 깰 때마다 넓어진다 |
-| 연구 재료 · 마을의 해금 | **영구** |
-
-**이 갈래가 앞의 딜레마를 푼다.** 물건이 영구면 두 번째 런부터 스테이지1 중간보스가 줄 게
-없어지고, 전부 런 한정이면 매 런 스테이지1이 똑같아진다.
-⇒ **물건은 런 한정, 풀은 영구**로 나누면 둘 다 안 난다 — **뜨는 것이 런마다 달라지니 같은 판이 안 된다.**
-**「매 런 무속성으로 시작하니 불의 룬이 계속 의미 있다」는 옛 근거다.** 위 「시작 지급 — 포인트」가
-그것을 뒤집었다 — 이제 **불 룬을 살 수 있으면 사서 나간다.**
-
-**더블 점프는 마을에서 연구로 연다** (2026-08-08, 사용자가 정했다).
-~~스테이지1 보스 보상으로 주는 안~~ 은 버린다. 기운 이유: 마을의 해금은
-**이미 영구라고 정해진 축**이라 위 갈래를 안 건드린다.
-
-**그리고 이제 그 위에 지형이 서 있다.** 스테이지1 맵에 **더블점프가 있어야만 닿는 구역(④)**이
-있고, 첫 런에는 보이지만 못 간다 ⇒ **더블점프가 런 안에서 나오면 그 구역이 무의미해진다.**
-세부는 `docs/plans/3.done/stage1-map-layout.md`.
+Why the safe option wasn't chosen, why revival is mandatory, and what health/damage/invulnerability are
+is set by **`character-damage-minimum`**. Do not duplicate it here.
 
 ---
 
-## 장비
+## Progression
 
-**지팡이 · 로브 · 신발. 셋이다** (2026-08-08, 사용자가 정했다 — **가방을 지웠다**).
-확장은 새 축으로 한다.
+It is a roguelike. **Two tiers** (decided by the user) — stages on top, zones within them below.
 
-### 아직 확정 아님 — 2026-08-06 대화에서 나온 방향
+### Session loop — one run
 
-**사용자가 「마법진만 세지고 캐릭터 빌드가 전무하다」는 문제를 제기했고**, 그 자리에서 나온 안이다.
-**사용자가 고른 것이 아니다** — 다음에 이 절을 열 때 여기서부터 이어 간다.
+```
+town → stage 1 (farm) → stage 2 → stage 3 → clear
+              ↓ on death
+             town
+```
 
-> **마법진은 「무엇이 나가나」, 캐릭터는 「그걸 어떻게 쓰나」를 정한다.**
+- One stage = **one continuous scene.** You walk through it with no loading (see "Dungeon generation")
+- Between stages is **a real transition** — the theme changes. **Beat the boss and a gate opens**
+- Die or clear and you return to town
+- **Unlocks accumulate in town.** More circles, runes and glyphs become available next run
 
-**둘이 같은 것을 세게 만들면 하나가 죽는다.** 장비가 「화속성 피해 +20%」를 주면
-그건 마법진이 할 일을 뺏는 것이다. 대신 장비는 **같은 마법진을 다르게 쓰게** 만든다.
+**The first build is two stages** (decided by the user). The diagram shows three, but that is the final form —
+first see **one run rolling across two stages.** The final count is still TBD.
+⇒ **A fixed map means this number is the amount to hand-draw** (see "Dungeon generation"). Two × 4 zones = **eight zones.**
+**How many minutes a run takes is also TBD** — that determines stage size and zone count.
 
-| 슬롯 | 맡는 축 |
+### Inside a stage — the zone loop
+
+```
+enter → pass zones, fighting and looting → midboss → keep going → boss (gate) → next stage
+```
+
+**The midboss reward is the key to progression.** Not "a place to get stronger" but **"a place you can't pass without it".**
+⇒ In stage 1, you need the **fire rune** to burn wood and open a path.
+**Natural law ("fire spreads") becoming the means of progression** is the point of this design —
+combat abilities and traversal abilities are not separate systems.
+
+**Drops split three ways** (decided by the user). **Ordinary monsters give nothing used in assembly.**
+
+| Killing | Gives |
 |---|---|
-| 지팡이 | 쏘는 리듬 — 발사 속도 · 사거리 · 반동 |
-| 로브 | 버티는 것 — 체력 · 무적 · **속성 저항** |
-| 신발 | 움직이는 것 — 이동 · 점프 · 대시 |
+| Ordinary monsters | **XP · money** only. **Settled — permanent currency comes from bosses only** |
+| **Level up** | **A glyph — three appear, pick one** |
+| Midboss | **A progression key** (stage 1 = fire rune) |
+| Boss | **Research material** (permanent) + **a glyph three-pick** |
 
-**~~가방~~ 을 지웠다** (2026-08-08). 「들고 다니는 칸」은 슬롯이 곧 인벤토리라
-위 「인벤토리가 없다」와 정면으로 부딪혔고, **담을 것(포션·잉크)도 같이 지웠으므로 칸이 필요 없어졌다.**
-넷째 슬롯이 필요해지면 **다른 축으로** 연다 — 「들고 다니는 것」으로는 안 연다.
+**Why ordinary monsters don't drop glyphs directly**: it would mean opening the assembly window constantly mid-fight,
+breaking head-on the pressure the GDD built toward "assembly is for safe moments".
+⇒ They give **XP and money** instead, and glyphs enter **through the single door of leveling up.**
 
-**두 축을 잇는 고리는 「속성 저항」이다.** GDD의 「**마법이 플레이어에게도 닿는다**」에서
-공짜로 나온다 — 불 빌드를 깎을수록 자기 불에 자기가 타므로 **불 저항 로브가 필요해진다.**
-⇒ 마법진 빌드가 장비 선택을 **강제한다.** 새 규칙을 하나도 안 만들고 두 시스템이 하나가 된다.
+**One-of-three fits this game particularly well.** Glyphs are **permutations, not a list**
+("spread→blast ≠ blast→spread"), so **what you don't take separates builds** more than what you do.
+⇒ Give everything and every run has the same magic circle. The three-pick blocks that structurally.
 
-**~~잉크~~ 도 지웠다** (2026-08-08, 사용자가 정했다).
-**아이디어 자체는 좋았다** — 마법진의 층에 발라 그 층을 지나는 탄을 바꾸는 것이라
-**순열 축을 재사용**했다. **버린 이유는 그것이 아니라 「들고 다녀야 한다」였다** —
-바르기 전의 잉크는 **안 낀 채로 들고 있는 물건**이고, 그것이 곧 인벤토리다.
-⇒ 되살리려면 **들고 다니지 않는 형태**여야 한다(예: 받는 순간 층에 발린다). **지금은 없다.**
+**For now the three-pick shows only glyphs.** Mixing in runes and circles came up but was **held.**
+**The original argument ("start with none and get fire at the midboss" wobbles) is dead** —
+the point-based start overturned that premise. **One argument remains: less to build.**
+Since glyphs have rarity (above), **glyphs alone fill the three-pick with no blanks.**
 
-**지금 만들지 않는다**(「뼈 먼저」). 몬스터도 물도 없어서 잴 대상이 없다.
+### Leveling up — the reward door (decided by the user)
+
+XP from monsters accumulates and you level. **A level grants a glyph three-pick.**
+
+- **You don't pick immediately.** Only a "level up" indicator appears; **you press a key in a safe place** and pick then
+- **Same discipline as the assembly window** — the world doesn't stop, and choosing is for safe moments
+- **You can decline and move on** (decided by the user)
+
+#### Declining and the dice (decided by the user)
+
+**Dislike all three and you take none.** ⇒ The problem "no inventory" created
+(**layers full and all three worse than what you have, so you must discard something anyway**) is solved here.
+
+**And there is a "dice" — reroll instead of taking.**
+
+**The dice is a permanent unlock.** Opened by research in town — **you don't have it at first.**
+⇒ Early on there is only declining; as unlocks accumulate, **"decline and reroll" appears.**
+
+**Why it isn't free**: with infinite rerolls, **a three-pick stops being a three-pick** —
+roll until you get what you want and the GDD's "what you don't take" disappears entirely.
+⇒ It must be **a permanent unlock and a consumable** for that axis to survive.
+
+**TBD**: how many dice per run · do unlocks raise the count · can more be found in the dungeon.
+
+**This design's goal is "killing a lot is a gain, walking past is also a gain".**
+- Kill → XP accumulates and **leveling comes faster**
+- Don't kill → **save time and move forward**
+
+**So there is no reward unit called "zone clear".** A zone is a conceptual division with no physical boundary,
+so judging a clear would require **closing a door**, and closing the door makes "walking past is also a gain"
+impossible in principle. ⇒ **XP keeps both choices alive without creating a boundary.**
+
+**Filled in later** — **the only thing a level changes is the three-pick.**
+Health doesn't rise and circle layers don't grow. ⇒ **One path to getting stronger**, easy to read.
+**Three times per run** is the target (about once per zone). **Whether it is run-scoped or accumulates in town is still TBD.**
+Detail in `docs/plans/1.ready/levelup-and-three-picks.md`.
+
+### The stage template — what defining a stage means
+
+**Defining a new stage means filling four slots.** Fill them and the stage is defined.
+
+| Slot | Stage 1 |
+|---|---|
+| **Theme** (= material layout) | Farm — lots of wood |
+| **Direction** | Right |
+| **Midboss reward** (= progression key) | **Fire rune** — burn wood to open a path |
+| **Boss reward** | Permanent material (gear enchanting came up, unconfirmed) |
+
+**Stage 1's actual terrain and bosses are settled** — **400×48 tiles, three zones + a locked fourth.**
+Trash section → ①**bull** (midboss, fire rune) → burn the wood wall → ②trash → ③**giant rooster** (boss)
+→ **escape as water rises.** **Jumps are unlimited underwater** — that becomes stage 2's movement grammar.
+Detail in `3.done/stage1-map-layout` · `1.ready/stage1-bosses` · `2.active/water-jump-and-escape`
+— **do not duplicate it here.**
+
+**The GDD assumed 4 zones per stage; stage 1 has three.** The fourth slot is taken by a
+**locked zone reachable only with a double jump** — visible on the first run, entered on the next.
+
+Stages 2 and 3's four slots are **TBD.** **Water is stage 2** (decided by the user).
+
+### Starting kit — **chosen with points, not fixed** (decided by the user)
+
+**Before leaving town, choose which of your unlocked circles, runes and glyphs to take.**
+**How much you can choose is set by "points".**
+
+**Those points are the axis of permanent unlocking** — raise points through research and **you take more out with you.**
+⇒ **"Getting stronger" arrives as a budget, not an object.** The same shape as the already-chosen "a pool, not an object".
+
+**The initial points come to one none-rune · a basic (2-layer) circle · one spread.**
+⇒ **The first run's starting kit is identical to the old fixed values.** What changes is **after unlocks accumulate.**
+
+### So **the midboss's role changes per run** (decided by the user)
+
+**Buy the fire rune in town and stage 1's midboss stops being the key to progression.**
+**That is intended, not broken.**
+
+| When | What the midboss is |
+|---|---|
+| **Can't afford the fire rune** (early) | **A place you can't pass without it.** Kill it and the wood wall opens |
+| **Took the fire rune** (after unlocks) | **Just a monster that gives a reward.** Kill it and **a choice of reward** appears |
+
+**Dropping from "key" to "reward" is where permanent progress is felt.**
+What was a wall yesterday is an option today — **the terrain proves the player got stronger.**
+
+**This also repays the price of the fixed map** — in exchange for terrain holding no surprises,
+**the same terrain means something different each run.**
+
+**The price still matters.** Priced cheap, the key disappears **from the first run** and the left column above never occurs.
+⇒ **It must be met as a wall once.** The value is TBD.
+
+**The reward is the same thing as the level-up three-pick** — **choose one of what appears.** No new axis.
+
+**And whether to kill it becomes the player's choice** (decided by the user).
+**Carrying the fire rune, you can skip the midboss** — burn the wood wall directly and walk on.
+⇒ **The pit becomes "a reward if you enter, skippable if you don't".**
+
+**The map needs no change.** What "fixed map" already recorded —
+**"a player who memorized the route passing faster becomes skill"** — is exactly this.
+
+**Build it only so it can expand later** (user instruction). Make the point ceiling and item values come
+**from a table rather than numbers** and code won't change as unlocks grow.
+
+### What is permanent is a pool, not an object (decided by the user)
+
+**Beat a boss for the first time and the pool of possible appearances widens from then on** — later bosses
+draw from more glyphs and runes.
+
+| What | Permanent? |
+|---|---|
+| Glyphs and runes picked up this run | **No.** Lost when the run ends |
+| **The pool of what can appear** | **Permanent.** Widens each time a boss is first beaten |
+| Research material · town unlocks | **Permanent** |
+
+**This split resolves the earlier dilemma.** With permanent objects, stage 1's midboss has nothing to give from the
+second run on; with everything run-scoped, stage 1 is identical every run.
+⇒ **Objects run-scoped, pool permanent** avoids both — **what appears differs per run, so no two runs are the same.**
+**"Starting with none every run keeps the fire rune meaningful" is the old argument.** "Starting kit — points" overturned it —
+**now, if you can buy the fire rune, you buy it and leave with it.**
+
+**The double jump is unlocked by research in town** (decided by the user).
+The ~~give it as stage 1's boss reward~~ option is dropped. Why it tipped: town unlocks are
+**an axis already declared permanent**, so it doesn't disturb the split above.
+
+**And terrain now stands on top of that.** Stage 1's map has a **zone (④) reachable only with a double jump**,
+visible but unreachable on the first run ⇒ **a double jump obtained within a run would make that zone meaningless.**
+Detail in `docs/plans/3.done/stage1-map-layout.md`.
 
 ---
 
-## 만드는 순서 — 뼈 먼저
+## Gear
 
-**뼈를 다 세운 뒤에 살을 붙인다.**
-각 부분을 **"돌아가기까지만"** 만들고 다음으로 넘어간다. 한 부분의 디테일을 끝까지 파고 다음으로 가지 않는다.
+**Staff · robe · boots. Three** (decided by the user — **the bag was deleted**).
+Expansion goes on a new axis.
 
-**이유는 경험이다.** 뼈가 없는 상태에서 디테일을 챙기면 그 디테일이 무엇을 위한 것인지 알 수 없고,
-뼈가 서면서 대부분 다시 만들게 된다. 이 프로젝트에서 이미 한 번 그렇게 됐다.
+### Not settled — a direction that came out of conversation
 
-⇒ **`docs/plans/` 문서의 「미정」과 제약은 뼈 단계에서 다 채우지 않는다.**
-돌아가는 데 필요한 최소만 정하고, 나머지는 **살 붙이는 단계에서 그 부분을 다시 열 때** 정한다.
-미정이 남아 있는 것은 문서가 덜 된 게 아니라 **아직 그 차례가 아닌 것**이다.
+**The user raised the problem "only the magic circle gets stronger; there is no character build"**, and this came out then.
+**The user did not choose it** — pick this section up here next time.
 
-### 지금의 순서 (2026-08-06, 사용자가 정했다)
+> **The magic circle sets "what goes out"; the character sets "how you use it".**
 
-세션을 넘겨 가며 **하나씩** 한다. 한 번에 여럿 열지 않는다.
+**Make both strengthen the same thing and one of them dies.** Gear giving "+20% fire damage" steals the circle's job.
+Gear should instead make **the same magic circle play differently.**
 
-1. **물 + 맵** — 물 시뮬과 스테이지1 지형을 같이
-2. **날아가는 마법** — 탄의 궤적·모양
-3. **몬스터**
-4. **3택 선택 화면** — 레벨업 보상
+| Slot | The axis it owns |
+|---|---|
+| Staff | Firing rhythm — rate · range · recoil |
+| Robe | Enduring — health · invulnerability · **elemental resistance** |
+| Boots | Moving — movement · jump · dash |
 
-**그 뒤(장비·마을·멀티)는 이 넷이 돌아간 다음에 연다.**
-**지금 무엇이 실제로 도는지는 `docs/design/README.md` 의 표가 기준이다** — GDD에 적혀
-있다는 것이 곧 있다는 뜻이 아니다.
+**~~The bag~~ was deleted.** "Slots you carry" made slots into an inventory, colliding head-on with "there is no inventory",
+and **what would go in it (potions, ink) was deleted too, so the slots became unnecessary.**
+If a fourth slot is needed, open it **on a different axis** — never as "things you carry".
 
-### 1차 마일스톤 — 「스테이지1이 끝까지 굴러간다」 (2026-08-08, 사용자가 정했다)
+**The link between the two axes is elemental resistance.** It falls out for free from the GDD's
+**"magic hits the player too"** — the more you sharpen a fire build, the more your own fire burns you,
+so **a fire-resistant robe becomes necessary.**
+⇒ The magic-circle build **forces** the gear choice. Two systems become one with no new rules.
 
-**목표**: 이번 주에 **스테이지1을 만든다.**
-**판정은 하나다** — **사용자가 한 번 시작해서 중간에 안 막히고 끝까지 간다.**
+**~~Ink~~ was deleted too** (decided by the user).
+**The idea itself was good** — painting it onto a circle's layer to alter bolts passing through that layer
+**reused the permutation axis.** **What killed it was not that but "you have to carry it"** —
+unpainted ink is **an object held unequipped**, which is an inventory.
+⇒ Reviving it requires **a form you don't carry** (e.g. it paints onto a layer the moment you receive it). **Not now.**
 
-**왜 필요했나**: 위 「지금의 순서」는 **무엇을 하는지**만 말하고 **언제 끝나는지**를 안 말한다.
-사용자가 그것을 **「골의 부재」**라고 짚었다 — 어디서 막히는지조차 문서에 안 적혀 있었다.
+**Not built now** ("skeleton first"). There are no monsters and no water, so there is nothing to measure against.
 
-**사슬이 하나다. 하나가 비면 그 뒤가 전부 안 보인다:**
+---
+
+## Build order — skeleton first
+
+**Stand up the whole skeleton before adding flesh.**
+Build each part **only until it works** and move on. Do not exhaust one part's detail before moving on.
+
+**The reason is experience.** Detail without a skeleton has no reference for what it's for, and most of it
+gets rebuilt as the skeleton comes up. That already happened once in this project.
+
+⇒ **TBDs and constraints in `docs/plans/` docs are not all filled during the skeleton stage.**
+Decide only the minimum needed to run; decide the rest **when that part reopens for flesh.**
+Remaining TBDs are not an unfinished doc but **something whose turn hasn't come.**
+
+### The current order (decided by the user)
+
+Do them **one at a time**, across sessions. Never open several at once.
+
+1. **Water + map** — the water sim and stage 1's terrain together
+2. **Flying magic** — bolt trajectory and shape
+3. **Monsters**
+4. **The three-pick screen** — level-up rewards
+
+**What comes after (gear · town · multiplayer) opens once these four run.**
+**What actually runs right now is set by the table in `docs/design/README.md`** — being written in the GDD does not mean it exists.
+
+### First milestone — "stage 1 rolls end to end" (decided by the user)
+
+**Goal**: **build stage 1** this week.
+**One acceptance check** — **the user starts once and reaches the end without getting stuck.**
+
+**Why it was needed**: "the current order" above says **what** to do and never **when it's done.**
+The user named that **"the absence of a goal"** — not even where you get stuck was written down.
+
+**It is one chain. One gap and everything after it is invisible:**
 
 ```
-맵 → 나무벽에 막힘 → 구덩이 → 소 → 불의 룬 → [물이 차 구덩이 탈출]
-→ 나무벽 태움 → 수탉 → [물이 차 스테이지 탈출] → 문
+map → blocked by the wood wall → pit → bull → fire rune → [water rises, escape the pit]
+→ burn the wood wall → rooster → [water rises, escape the stage] → gate
 ```
 
-⇒ **이번 주는 깊이가 아니라 사슬을 잇는 것이 일이다.**
+⇒ **This week the work is linking the chain, not depth.**
 
-| 채울 구멍 | 지금 | 어디 |
+| Gap to fill | Now | Where |
 |---|---|---|
-| ~~**맵 지형**~~ | **메꿔졌다** — 400×48이 구워져 들어갔다(2026-08-08 밤). 판정 3·4는 화면 미확인 | `docs/plans/3.done/stage1-map-layout.md` |
-| **불의 룬** | 🔴 **거꾸로다 — 이미 있고, 기본 지급이 불이다.** `sim_tuning.ELEM_ALL` 에 불·무·물 셋, `spell_circle.DEFAULT_RUNE = ELEM_FIRE`, 팔레트가 `ELEM_ALL` 을 통째로 띄운다 ⇒ **「중간보스에서 불을 얻는다」가 이미 무의미하다.** 할 일은 **만들기가 아니라 시작 룬을 무속성으로 바꾸고 팔레트를 잠그는 것** | 문서 없음 |
-| **보스 둘** | 기획은 섰고 **코드 0** | `docs/plans/1.ready/stage1-bosses.md` |
-| **물 넷 중 셋** | 붓기만 됐다 | `docs/plans/2.active/water-jump-and-escape.md` |
-| **① 구덩이의 물** | **주인이 없다.** 맵은 「나가는 길이 물뿐」, 보스 문서는 「① 방에 물이 없다」, 물 문서는 「③ 보스 직후」만 범위다 ⇒ **지금은 F키로만 나온다** | 셋 다 안 물었다 |
-| **나무벽 잠금이 깨졌다** | **폭발 세 발로 지나간다. 불 없이도.** `spell_sim.gd:525` 의 폭발이 `element` 를 안 들고 가 룬 없는 폭발이 불을 붙인다(실측) ⇒ **「중간보스가 진행의 열쇠」가 코드에서 무효다** | `3.done/stage1-map-layout.md` |
-| **불의 룬을 받는 화면** | 인벤이 없어 **받는 순간 자리를 정해야 하는데** 유일한 받는 화면이 3택이고 **그걸 잘랐다.** 룬 자리가 1개라 무속성을 밀어내는 선택이 반드시 걸린다 | 아래 「자른 것」과 충돌 |
-| **끝나는 자리** | 없다. 문 하나 놓고 닿으면 표시 | 문서 없음 |
+| ~~**Map terrain**~~ | **Filled** — 400×48 baked and in. Acceptance 3·4 unconfirmed on screen | `docs/plans/3.done/stage1-map-layout.md` |
+| **Fire rune** | **Backwards — it already exists, and the starting kit is fire.** `sim_tuning.ELEM_ALL` has fire, none and water; `spell_circle.DEFAULT_RUNE = ELEM_FIRE`; the palette shows all of `ELEM_ALL` ⇒ **"get fire from the midboss" is already meaningless.** The work is **not building it but changing the starting rune to none and locking the palette** | No doc |
+| **Two bosses** | Designed, **zero code** | `docs/plans/1.ready/stage1-bosses.md` |
+| **Three of water's four** | Only pouring works | `docs/plans/2.active/water-jump-and-escape.md` |
+| **Water in pit ①** | **No owner.** The map says "the only exit is water", the boss doc says "there is no water in room ①", the water doc scopes only "right after boss ③" ⇒ **currently it comes only from the F key** | None of the three claimed it |
+| **The wood-wall lock is broken** | **Three blasts get you through. Without fire.** The blast at `spell_sim.gd:525` doesn't carry `element`, so a runeless blast ignites (measured) ⇒ **"the midboss is the key to progression" is void in code** | `3.done/stage1-map-layout.md` |
+| **The screen for receiving the fire rune** | With no inventory, **placement must be decided on receipt**, and the only receiving screen is the three-pick, **which was cut.** With one rune slot, the choice to push out none is unavoidable | Conflicts with "what was cut" below |
+| **An ending** | None. Place a gate and mark it on contact | No doc |
 
-**자른 것**: 레벨업·3택 · 삼각진 붙이기 · 탄 속도 · 상점 · **마을.**
-**「다섯 다 사슬 밖」이 더 이상 정확하지 않다** — 위 표의 「불의 룬을 받는 화면」이 3택에 매여 있다.
-⇒ **룬을 받는 최소 경로만 따로 낸다**(3택 창 전체가 아니라). 나머지 넷은 그대로 밖이다.
+**What was cut**: leveling and the three-pick · wiring the triangle circle · bolt speed · the shop · **town.**
+**"All five are outside the chain" is no longer accurate** — "the screen for receiving the fire rune" above is tied to the three-pick.
+⇒ **Break out only the minimum path for receiving a rune** (not the whole three-pick window). The other four stay outside.
 
-**마을을 자른 것에는 대가가 있다** — **죽으면 갈 데가 없다**(`docs/design/마을.md` 「왜」).
-⇒ 이번 주는 **죽으면 그 자리에서 다시 시작**으로 때우고, **마을이 바로 다음 순서다.**
-**마을 없이는 로그라이크가 안 닫힌다** — 그건 이번 주 판정에 안 들어갈 뿐 사라진 문제가 아니다.
+**Cutting town has a price** — **there is nowhere to go when you die** (`docs/design/town.md`, "Why").
+⇒ This week is patched with **restart in place on death**, and **town is next in order.**
+**Without town the roguelike doesn't close** — it is merely outside this week's acceptance, not a vanished problem.
 
-## 알고 가는 대가
+## Prices paid knowingly
 
-기획 단계에서 이미 알고 고른 것들이다. 나중에 "몰랐다"가 되면 안 된다.
+Things chosen with the price known at design time. "We didn't know" must never happen later.
 
-1. **격자에 닿는 코드는 영원히 정수다.**
-   결정론이 전제라 `float`·`sqrt`·`sin`·`atan2`·`randi()`를 못 쓴다.
-   **문양의 유도·회전·확산도 여기 걸린다.** 문양을 하나 만들 때마다 이 벽을 넘는다.
+1. **Code touching the grid is integer, forever.**
+   Determinism is the premise, so `float` · `sqrt` · `sin` · `atan2` · `randi()` are unavailable.
+   **Glyphs like home, spin and spread fall under this too.** Every new glyph crosses this wall.
 
-2. **GDScript로 부족해질 수 있다.**
-   실측: 네이티브 5μs = GDScript 루프 520μs (100배).
-   그때는 **격자 루프만** GDExtension(C++/Rust)으로 옮기고 나머지는 GDScript로 둔다.
-   **미리 하지 않는다.** 실제로 느려진 뒤에 옮긴다.
+2. **GDScript may not be enough.**
+   Measured: native 5μs = GDScript loop 520μs (100×).
+   When that day comes, move **only the grid loop** to GDExtension (C++/Rust) and leave the rest in GDScript.
+   **Do not pre-empt it.** Move after it is actually slow.
 
-3. **격자에 스크롤이 없다.**
-   던전은 한 화면보다 넓다. 잠든 청크를 메모리에서 내리고 올리는 **스트리밍을 새로 만들어야 한다** — 결정론을 지키면서.
+3. **The grid has no scrolling.**
+   A dungeon is wider than a screen. **Streaming sleeping chunks in and out of memory must be built** — while preserving determinism.
 
-4. **v1(현재 `src/`)은 버린다.**
-   재미와 멀티 가능성을 확인한 프로토타입이었고 그 몫을 했다. 확인된 것은 남기되 코드는 다시 쓴다.
+4. **v1 (the current `src/`) is discarded.**
+   It was a prototype that confirmed the fun and the multiplayer potential, and it did its job. Keep the findings, rewrite the code.
 
-5. **폭발이 화면 밖에서 터질 수 있다.** (2026-08-04, 카메라 추종을 고르며)
-   옛 계약은 「무대 전체가 한 화면에 들어온다」였고, 이유는 **「안 보이는 데서 터지면 사용자에게는
-   「안 터졌다」로 읽힌다」**였다 — v1이 정확히 그렇게 데였다.
-   **그 이유는 안 사라졌다. 다만 이제 막을 수가 없다** — 확산 탄 사거리(40타일)가
-   보이는 폭(30타일)보다 길어서 **수평으로 쏘면 화면 밖 착탄이 원리적으로 난다.**
-   남은 것은 **「내 주변만은 반드시 보인다」** 하나다.
-   ⇒ 「안 터졌다」가 다시 나오면 **여기가 원인이다.** 줌아웃 · 무대 축소 · 사거리 축소 셋 중 하나이고,
-   **사거리는 마법진 기획이 볼 자리다**(GDScript 성능이 아니라 화면의 문제다).
-   **성능은 대가가 아니었다** — 무대 나무 전소 + 폭발 10발에서 낙프레임 **0/711**이다.
-   위 2번(GDScript 100배)이 앞당겨지지 않았다.
+5. **Blasts can go off screen.** (from choosing camera follow)
+   The old contract was "the whole stage fits on one screen", because **"detonating out of sight reads as 'it didn't detonate'"** —
+   v1 got burned exactly that way.
+   **That reason hasn't gone away. It just can't be prevented now** — spread bolt range (40 tiles) exceeds the
+   visible width (30 tiles), so **firing horizontally lands off-screen in principle.**
+   What remains is **"at least my surroundings are always visible".**
+   ⇒ If "it didn't detonate" comes back, **this is the cause.** It's one of zoom-out · shrink the stage · shorten the range,
+   and **range is the magic-circle design's call** (a screen problem, not a GDScript performance one).
+   **Performance was not the price** — full forest burn plus 10 blasts gave **0/711** dropped frames.
+   Item 2 above (GDScript 100×) did not arrive early.
 
 ---
 
-## 미정
+## TBD
 
-여기 적힌 것은 **아직 안 정한 것**이다. 아는 척해서 채우지 않는다.
+What is written here is **not yet decided.** Do not fill it in by pretending to know.
 
-- **진행 방향 — 스테이지마다 다르다**(2026-08-06). 전역으로 "오른쪽"을 못 박지 않는다 — 스테이지 1(테마: 농장) 예시는
-  오른쪽이지만, 대각선으로 내려가는 스테이지도 있을 수 있다. 스테이지 하나 안에서는 방향이 고정.
-- **룬 조합표** — 물+불 = 증기 외에는 정한 게 없다. **융합진의 전제다** — 병렬·순차는 조합표가 필요 없다
-- ~~**진의 종류**~~ → **정해졌다** (위 「진 — 틀」의 셋). **최대 층 수는 여전히 미정이다** —
-  셋 중 제일 깊은 것이 2층이라 아직 그 벽에 안 닿았을 뿐이다(`docs/design/마법진-그림.md` 「7층 문제」)
-- **룬 병렬의 폭증 제약** — 위 「문양 제약」
-- **마법의 수치가 어디서 오나** — **절반만 정해졌다.**
-  정해진 것: 체력 100 · 기준 피해 10 · **룬 · 문양 · 장비 셋 다 관여할 수 있다**(`character-damage-minimum`).
-  **안 정해진 것: 그 셋을 어떻게 합치나.**
-  곱셈 체인으로 합치면 **교환법칙 때문에 순서가 수치에서 죽는다** — 이 게임의 테제가 거기서 조용히 사라진다.
-  자세한 것은 `docs/design/진-룬-문양.md` 의 「곱셈은 순서를 죽인다」
-- ~~**몬스터** — 종류·행동·물과의 상호작용 전부~~ → **스테이지1 것은 정해졌다**(2026-08-07, 사용자가 정했다).
-  잡몹 둘(돼지·닭) · 무뇌 이동 · 동시 20마리 · 자연법칙 전부 받음 — **기준은 `docs/design/몬스터.md`**.
-  **여전히 미정**: 체력·피해 수치 · 중간보스(불의 룬을 삼킨 소)의 거동 · 스테이지 2·3의 몬스터
-- ~~**던전 생성 — 방 단위인가 연속인가**~~ → **두 단 구조로 정해졌다**(2026-08-06, 사용자가 정했다):
-  **스테이지(챕터) 안에서는 "방"이 씬 전환 단위가 아니다.** 스테이지 하나 = 연속된 씬 하나 —
-  걸어서 이어지고 로딩·문이 없다. "방"은 그 안을 나누는 **개념적 구역**(재질 테마 단위, 예: 농장 스테이지의
-  밭·수로·헛간)일 뿐이다. **처음엔 "방 = 독립 씬 + 문 전환"(아이작식)으로 잘못 정했다가 같은 날 뒤집었다**
-  — "방클방클방클" 느낌을 사용자가 원하지 않았다.
-  **보스방만 예외다.** 물리적으로 실제 게이트가 걸려 봉쇄되는 유일한 자리 — 나머지 구역엔 그런 경계가 없다.
-  **스테이지 ↔ 스테이지 사이는 진짜 전환이다**(테마가 바뀌므로) — 여기서만 「알고 가는 대가」 3번
-  (청크 스트리밍)이 문제될 여지가 있는데, 스테이지 하나의 크기가 유한(사용자 감각: 구역 4개 정도)하면
-  기존 청크 재우기로 충분할 수 있다. **스테이지 하나가 얼마나 커질 수 있는지는 여전히 미정** —
-  이게 커지면 대가 3번이 다시 걸린다.
-  **미정으로 남은 것**: 갈림길(물리적 포크)이 이 연속 구조에서도 살아남는지, 탭 키의 「맵」이
-  뭘 보여주나(스테이지를 다 드러낼지 일부만 보여줄지 — 사용자가 아직 고민 중), 구역 사이 재질을
-  어떻게 배분하나(방마다 하나씩 진하게 vs 골고루).
+- **Direction — varies per stage.** Do not pin "right" globally — stage 1 (theme: farm) goes right, but a stage
+  descending diagonally is possible. Within one stage the direction is fixed.
+- **Rune combination table** — nothing decided beyond water+fire = steam. **It is the fusion circle's prerequisite** — parallel and sequential need no table
+- ~~**Circle types**~~ → **decided** (the three under "Circle — the frame"). **The max layer count is still TBD** —
+  the deepest of the three is 2 layers, so that wall hasn't been reached (`docs/design/circle-art.md`, "the 7-layer problem")
+- **The parallel-rune explosion constraint** — see "Glyph constraints"
+- **Where a spell's numbers come from** — **half decided.**
+  Decided: health 100 · base damage 10 · **rune, glyph and gear can all take part** (`character-damage-minimum`).
+  **Undecided: how those three combine.**
+  Combine as a multiplication chain and **commutativity kills order in the numbers** — this game's thesis quietly disappears there.
+  Detail in `docs/design/circle-rune-glyph.md`, "multiplication kills order"
+- ~~**Monsters** — types, behavior, water interaction~~ → **stage 1's are decided** (by the user).
+  Two trash mobs (pig · chicken) · brainless movement · 20 at once · all natural laws apply — **source is `docs/design/monsters.md`**.
+  **Still TBD**: health and damage values · the midboss's (the bull that swallowed the fire rune) behavior · stages 2 and 3 monsters
+- ~~**Dungeon generation — rooms or continuous**~~ → **decided as a two-tier structure** (by the user):
+  **within a stage (chapter), a "room" is not a scene-transition unit.** One stage = one continuous scene —
+  walkable throughout, no loading, no doors. A "room" is only **a conceptual zone** dividing it (a material-theme unit,
+  e.g. the fields, canals and barn of a farm stage). **It was first wrongly decided as "room = independent scene + door
+  transition" (Isaac-style) and reversed the same day** — the user did not want that room-by-room-by-room feel.
+  **The boss room is the only exception.** The one place physically sealed by an actual gate — no other zone has such a boundary.
+  **Between stages is a real transition** (the theme changes) — this is the only place price #3 (chunk streaming) could
+  become a problem, and if one stage's size is finite (the user's sense: about 4 zones), existing chunk sleep may suffice.
+  **How large one stage can get is still TBD** — grow it and price #3 returns.
+  **Still TBD**: whether forks (physical branches) survive this continuous structure, what the Tab "map" shows
+  (the whole stage or part — the user is still thinking), and how materials are distributed across zones
+  (one dominant per zone vs evenly).
 
-- ~~**시드 분배 · 절차 생성**~~ → **안 한다. 맵은 고정이다**(2026-08-07, 사용자가 정했다).
-  **사용자가 직접 디자인해서 그린 맵을 그대로 쓴다.** 스테이지1은 이미 그려져 있다(312×126타일).
-  ⇒ **시드도 없고 방 조합도 없다.** 매 런 같은 지형이다.
+- ~~**Seed distribution · procedural generation**~~ → **Not doing it. The map is fixed** (decided by the user).
+  **The map the user designed and drew is used as-is.** Stage 1 is already drawn (312×126 tiles).
+  ⇒ **No seeds, no room composition.** The same terrain every run.
 
-  **그래서 매 런의 변주가 지형이 아니라 「무엇을 들고 가느냐」에서만 온다** — 조립(진·룬·문양) ·
-  레벨업 3택 · 드랍. GDD의 테제가 원래 조립이므로 그 축을 더 세게 잡는 결정이다.
-  **대가를 알고 간다**: 두 번째 런부터 **지형에는 놀라움이 없다.** 「저 벽 뒤에 뭐가 있나」가
-  한 번만 산다. 그 대신 **길을 외운 플레이어가 더 빨리 지나가는 것**이 실력이 된다.
+  **So the variation per run comes only from what you bring** — assembly (circle · rune · glyph) ·
+  the level-up three-pick · drops. The GDD's thesis was always assembly, so this decision sharpens that axis.
+  **The price is known**: from the second run on, **terrain holds no surprises.** "What's behind that wall" lives once.
+  In exchange, **a player who memorized the route passing faster becomes skill.**
 
-  **그리고 레벨 디자인이 전부 손이다.** 스테이지 3개 × 구역 4개면 그릴 양이 유한하고,
-  그건 절차 생성기를 만들고 튜닝하는 것보다 **싸고 확실하다** — 다만 **양이 정해져 있다.**
+  **And level design is entirely by hand.** Three stages × 4 zones is a finite amount to draw, and that is
+  **cheaper and more certain** than building and tuning a generator — but **the amount is fixed.**
 
-  **`src/stage/` 의 폴더 계약이 이것 때문에 흔들린다.** CLAUDE.md가 그 폴더를
-  「껍데기 — 본편에 안 남는다」로 못 박았는데, **고정 맵이면 `terrain_map_generated.gd` 는
-  본편 데이터다.** 지형 굽기 도구(`tools/stage/`)도 마찬가지로 **본편 도구**가 된다.
-  ⇒ 그 계약을 언제 어떻게 고칠지는 **미정**이다. 지금은 자리가 임시라는 것만 안다.
-- **카메라** — **1인은 정해졌다: 캐릭터를 따라가고 무대 경계에서 멈춘다**(2026-08-04).
-  **4인은 여전히 미정이다** — 흩어지면 남의 마법을 못 본다. 화면 묶기 / 밧줄 / 각자 중 무엇인가.
-  **1인 추종을 고른 대가는 아래 「알고 가는 대가」 5번**이다.
-- **엔진 최종** — Godot가 유력하나 확정은 아니다
-- **화면 확대율** — **기본 창(1920×1080)에서 2배**다(뷰포트 960×540, 필터 Nearest).
-  32px 캐릭터가 **화면에서 64px**로 보인다.
-  **한때 1배(뷰포트 1920×1080)로 적혀 있었는데 그건 실물과 달랐다** — 이 줄은 `project.godot` 을
-  직접 읽어 맞췄다(2026-08-04). **기준 문서가 코드와 갈리면 그게 제일 비싼 거짓말이다.**
-  **상수가 아니라 창 크기의 함수인 것은 그대로다** — `stretch/aspect="expand"` 이고 전체화면 키가
-  있어서, 2560×1440이면 2.67배 같은 **비정수 배율**이 나온다. Nearest에서 비정수 배율은
-  픽셀 크기가 들쭉날쭉해져 실루엣을 무너뜨린다.
-  **정수 배율을 강제할지가 여전히 미정이다.** 32px이 16px보다 덜 아플 것 같지만 **안 쟀다.**
-  세부는 **`character-sprite`**
+  **`src/stage/`'s folder contract wobbles because of this.** CLAUDE.md pins that folder as
+  "the shell — it won't survive into the real game", but **with a fixed map, `terrain_map_generated.gd` is real-game data.**
+  The terrain baking tools (`tools/stage/`) likewise become **real-game tools.**
+  ⇒ When and how to fix that contract is **TBD.** For now all that's known is that the placement is provisional.
+- **Camera** — **single-player is decided: follow the character, stop at the stage boundary.**
+  **Four-player is still TBD** — scatter and you can't see anyone's magic. Locked screen / tether / individual?
+  **The price of choosing single-player follow is price #5 above.**
+- **Final engine** — Godot is likely but not settled
+- **Screen scale** — **2× at the default window (1920×1080)** (viewport 960×540, Nearest filtering).
+  A 32px character appears at **64px on screen.**
+  **This once read as 1× (viewport 1920×1080) and that differed from reality** — this line was corrected by reading
+  `project.godot` directly. **A reference doc diverging from code is the most expensive lie there is.**
+  **It remains a function of window size, not a constant** — `stretch/aspect="expand"` plus a fullscreen key means
+  2560×1440 gives a **non-integer scale** like 2.67. Under Nearest, a non-integer scale makes pixel sizes uneven and
+  breaks the silhouette.
+  **Whether to force integer scaling is still TBD.** 32px probably hurts less than 16px, but **it wasn't measured.**
+  Detail in **`character-sprite`**

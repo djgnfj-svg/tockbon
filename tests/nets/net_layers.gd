@@ -1,26 +1,28 @@
 extends RefCounted
-## 폴더가 계약이라는 걸 지킨다. **참조 방향은 한 방향이다.**
+## Holds the rule that the folder is a contract. **References go one way.**
 ##
-##   src/sim/    정수 결정론. 씬 트리를 모른다
-##   src/actor/  float 허용(플레이어는 호스트 권위). 씬 트리는 여전히 모른다
-##   src/view/   화면만. 시뮬을 읽기만 한다
-##   src/stage/  껍데기. 본편에 안 남는다
+##   src/sim/    Integer determinism. Knows nothing of the scene tree
+##   src/actor/  float allowed (the player is host-authoritative). Still knows nothing of the scene tree
+##   src/view/   Screen only. Reads the sim, never writes it
+##   src/stage/  The shell. Will not survive into the real game
 ##
-## 🔴 sim·actor 가 view·stage 를 참조하는 순간 "시뮬이 씬 트리를 안다"가 되고,
-## 서버가 헤드리스로 못 돌린다. 그물이 씬 없이 도는 것도 같이 죽는다.
+## The moment sim or actor references view or stage, "the sim knows the scene tree" becomes true,
+## and the server cannot run headless. The nets running without a scene die with it.
 ##
-## 🔴 그리고 **아무도 죽은 경로(src/world/ · src/sandbox/)를 안 적는다.**
+## And **nobody writes down the dead paths (src/world/ · src/sandbox/).**
 ##
-## ⚠ **이 검사가 재는 것이 v1 삭제로 바뀌었다. 라벨을 옛것으로 두면 안 된다.**
-##  옛 계약이던 「새 코드가 v1을 preload 안 한다」는 이제 **원리적으로 불가능**하다 —
-##  없는 파일을 preload 하면 파스 에러라 아래 `_parses`가 먼저 문다.
-##  ⇒ 지금 남아서 실제로 잡는 것은 **죽은 경로 문자열**(주석·상수·씬 안의 `res://src/world/...`)이다.
-##   약해 보이지만 진짜다: 실제로 오늘 리포의 다른 문서가 사라진 `spell_tuning.gd`를 가리키고 있었다.
-##   `src/` 안에서는 이 검사가 그걸 막는다.
-## 🔴 **「v1 지웠으니 이제 필요 없다」며 지우지 마라.** 지우는 순간 죽은 경로가 조용히 쌓인다.
+## **What this check measures changed when v1 was deleted. The label must not stay the old one.**
+##  The old contract "new code does not preload v1" is now **impossible in principle** —
+##  preloading a file that does not exist is a parse error, so `_parses` below bites first.
+##  => What remains and actually catches things is the **dead path strings** (in comments, constants,
+##   and scenes: `res://src/world/...`).
+##   It looks weak but it is real: another doc in this repo was actually pointing at a vanished
+##   `spell_tuning.gd` today. Inside `src/`, this check blocks that.
+## **Do not delete it saying "v1 is gone, so this is no longer needed".** The moment it goes,
+##  dead paths quietly pile up.
 
-## 각 폴더가 참조하면 안 되는 경로들.
-## ⚠ 키를 늘릴 때 값도 같이 봐라 — 빈 배열을 넣으면 그 폴더는 아무것도 안 재고 초록이 된다.
+## Paths each folder must not reference.
+## When adding a key, look at the value too — an empty array means that folder measures nothing and goes green.
 const RULES: Dictionary = {
 	"res://src/sim": ["res://src/view", "res://src/stage", "res://src/actor"],
 	"res://src/actor": ["res://src/view", "res://src/stage"],
@@ -28,7 +30,7 @@ const RULES: Dictionary = {
 	"res://src/stage": [],
 }
 
-## 폴더와 무관하게 새 코드 전체에 걸리는 금지. v1은 버릴 코드다.
+## Banned across all new code regardless of folder. v1 is code to be thrown away.
 const V1_DIRS: Array[String] = ["res://src/world", "res://src/sandbox"]
 
 
@@ -36,8 +38,8 @@ func run(t) -> void:
 	var total := 0
 	for dir: String in RULES.keys():
 		var files := _scan_dir(dir)
-		# 🔴🔴 폴더 스캔 그물의 첫 줄. 빈 폴더를 스캔하면 검사가 하나도 안 돌고
-		# 초록으로 통과한다 — 그게 정확히 이 리포가 죽는 방식이다.
+		# **The first line of any folder-scanning net.** Scanning an empty folder runs no check at all
+		# and the net passes green — that is exactly how this repo dies.
 		t.ok(files.size() > 0, "%s 에 파일이 있다 (%d개)" % [dir, files.size()])
 		total += files.size()
 		for path: String in files:
@@ -51,19 +53,19 @@ func run(t) -> void:
 	t.ok(total > 0, "새 코드가 하나라도 있다 (%d개)" % total)
 
 
-## 🔴🔴 **읽히기라도 하나 — 「파일이 없다·못 읽는다」까지다.**
-##  그물이 preload 하지 않는 파일(`blast_fx.gd`·`character_view.gd`·`spell_view.gd`·씬·셰이더)은
-##  게임을 띄워야만 드러나는 자리라, 이름이 죽은 것만이라도 여기서 문다.
+## **Does it even load — that is as far as this goes: "the file is missing / cannot be read".**
+##  Files the nets do not preload (`blast_fx.gd` · `character_view.gd` · `spell_view.gd`, scenes, shaders)
+##  only surface when the game is launched, so at least a dead name gets bitten here.
 ##
-## 🔴🔴 **⚠ 「문법이 깨지면 여기서 잡힌다」로 읽지 마라 — 거짓이다.**
-##  실측(2026-08-04, 단계 0 검증): `world_step.gd`에 문법 오류를 넣고 전체 그물을 돌렸더니
-##  **이 줄이 초록이었고 실패는 0개**였다 — 통과 수만 1056 → 1054로 줄었다.
-##  즉 검사가 **실패한 게 아니라 없어졌다**(로그에서 통과와 구별이 안 되는 그 모양이다).
-##  ⇒ CLAUDE.md 쪽이 맞다: **`load()`는 파스 실패해도 null이 아니다.** 셰이더도 같고
-##   (컴파일 실패해도 null이 아니다) 그 구멍은 `net_render`가 `get_shader_uniform_list()`로 메웠다.
-## 🔴 **깨진 문법을 실제로 잡는 것은 래퍼의 stderr 한 줄뿐이다.** 여기를 그 대신으로 세우지 마라.
-## ⚠ **도는 것까지 재지는 못한다.** 시그니처가 갈린 호출은 런타임 에러라 여기 안 걸린다.
-##  씬의 `@onready` 경로는 `net_render`가 따로 본다.
+## **Do not read this as "broken syntax gets caught here" — that is false.**
+##  Measured (stage 0 verification): a syntax error was put into `world_step.gd` and the full nets ran —
+##  **this line was green and there were 0 failures**; only the pass count dropped 1056 -> 1054.
+##  That is, the check **did not fail, it disappeared** (the shape that is indistinguishable from a pass in the log).
+##  => CLAUDE.md is right: **`load()` is not null even when parsing fails.** Shaders are the same
+##   (not null even when compilation fails) and `net_render` filled that hole with `get_shader_uniform_list()`.
+## **The only thing that actually catches broken syntax is the wrapper's stderr line.** Do not stand this up in its place.
+## **It cannot measure whether things run.** A call with a diverged signature is a runtime error and is not caught here.
+##  `@onready` paths in scenes are looked at separately by `net_render`.
 func _parses(t, path: String, nm: String) -> void:
 	if not (path.ends_with(".gd") or path.ends_with(".gdshader") or path.ends_with(".tscn")):
 		return
@@ -76,7 +78,7 @@ func _scan_dir(dir: String) -> Array[String]:
 	if d == null:
 		return out
 	for f: String in d.get_files():
-		# .gdshader 도 본다 — 셰이더가 v1 경로를 물고 있어도 조용히 안 돌 뿐 에러가 안 난다.
+		# .gdshader is looked at too — a shader holding a v1 path just quietly does not run, with no error.
 		if f.ends_with(".gd") or f.ends_with(".gdshader") or f.ends_with(".tscn"):
 			out.append(dir.path_join(f))
 	for sub: String in d.get_directories():

@@ -1,34 +1,35 @@
 shader_type canvas_item;
 
-// 🔴🔴 **몸 그림의 알파만 남기고 단색으로 채운다. 쓰는 곳이 둘이다.**
+// **Keep only the body sprite's alpha and fill it with a flat color. There are two users.**
 //
-//      번쩍   맞은 몬스터를 흰 실루엣으로       세기 = modulate 알파
-//      외곽선 몸을 8방향으로 밀어 깔아 테두리   세기 = 1
+//      flash     a hit monster as a white silhouette      strength = modulate alpha
+//      outline   the body laid out in 8 directions        strength = 1
 //
-// 🔴 **둘이 같은 셰이더인 것이 우연이 아니다** — 「실루엣을 단색으로」가 정확히 같은 일이다.
-//  ⚠ 원래 이름이 `monster_flash` 였고 2026-08-08에 외곽선이 붙으며 바꿨다. **파일 하나로 둔 이유**:
-//   나누면 「알파만 남긴다」가 두 곳이 되고, 한쪽만 고치는 날 번쩍과 외곽선의 모양이 갈라진다.
-//  🔴 **색이 노드 단위 uniform 이므로 둘은 서로 다른 노드에 걸린다**(`monster_view` 의 레이어 상자).
+// **That the two share one shader is not a coincidence** — "silhouette in a flat color" is exactly the same job.
+//  The file was originally named `monster_flash` and was renamed when the outline was added. **Why it stays one file**:
+//   split it and "keep only the alpha" lives in two places, and the day only one is fixed, the flash and the
+//   outline drift apart in shape.
+//  **The color is a per-node uniform, so the two hang on different nodes** (`monster_view`'s layer boxes).
 //
-// ⚠ **원래 이것이 `draw_rect` 였고 화면에서 실패했다**(2026-08-07, 판정 13):
-//  흰 사각형이 스프라이트를 **통째로 덮어** 「도형이 깜빡인다」로 보였다.
-//  🔴 **스프라이트를 붙인 값이 여기서 절반 깎였다** — 몸은 돼지인데 맞으면 네모가 된다.
+// **This was originally a `draw_rect` and it failed on screen** (acceptance 13):
+//  a white rectangle covered the sprite **wholesale**, so it read as "a shape blinking".
+//  **The value of having attached sprites was cut in half right here** — the body is a pig but a hit makes it a square.
 //
-// 🔴🔴 **강도가 uniform 이 아니라 정점 색(modulate)으로 들어온다. 그게 이 셰이더의 요점이다.**
-//  ⚠ uniform 은 **노드 단위**라 한 노드가 몬스터 여럿을 그리면 **마지막 값 하나만 남는다** —
-//   돼지 셋이 서로 다른 세기로 번쩍이는 것이 원리적으로 불가능해진다.
-//  ⇒ `draw_texture_rect(tex, r, false, Color(1,1,1, 세기))` 의 알파가 여기 `v_tint.a` 로 온다.
+// **The strength comes in as vertex color (modulate), not as a uniform. That is the point of this shader.**
+//  A uniform is **per node**, so when one node draws several monsters **only the last value survives** —
+//   three pigs flashing at different strengths becomes impossible in principle.
+//  => The alpha of `draw_texture_rect(tex, r, false, Color(1,1,1, strength))` arrives here as `v_tint.a`.
 //
-// 🔴 **`varying` 으로 넘기는 이유**: fragment 의 `COLOR` 는 진입 시 이미 텍스처와 곱해져 있어
-//  **세기와 그림 알파를 못 가른다.** vertex 에서 정점 색을 그대로 받아 둬야 둘이 분리된다.
+// **Why pass it through a `varying`**: fragment's `COLOR` has already been multiplied by the texture on entry,
+//  so **strength and sprite alpha cannot be separated.** Taking the vertex color as-is in vertex keeps the two apart.
 //
-// ⚠ **텍스처 없이 `draw_rect` 를 해도 안전하다** — 그때 `TEXTURE` 는 흰 1×1이라 `a = 1` 이고
-//  결과가 「흰 사각형 × 세기」, 즉 **옛 동작 그대로**다. 폴백 경로가 공짜로 유지된다.
-// 🔴🔴 **색은 uniform, 세기는 정점 색 — 둘을 가른 것이 이 파일의 설계다.**
-//  ⚠ 색은 **모든 몬스터가 같으므로** 노드 단위 uniform 이 안전하다.
-//   세기는 **몬스터마다 다르므로** uniform 으로 두면 마지막 값 하나만 남아 원리적으로 깨진다.
-//  🔴 `monster_view` 가 여기에 색을 넣는다 — 번쩍 레이어에는 `MONSTER_FLASH_COLOR`,
-//   외곽선 레이어에는 `MONSTER_OUTLINE_COLOR`. **거짓 손잡이가 아니다**(CLAUDE.md).
+// **A `draw_rect` with no texture is safe too** — `TEXTURE` is then a white 1x1 so `a = 1`, and the result is
+//  "white rectangle x strength", i.e. **the old behavior exactly.** The fallback path is kept for free.
+// **Color as a uniform, strength as vertex color — splitting the two is this file's design.**
+//  The color is safe as a per-node uniform because **every monster shares it.**
+//   The strength **differs per monster**, so as a uniform only the last value would survive and it breaks in principle.
+//  `monster_view` puts the color in here — `MONSTER_FLASH_COLOR` for the flash layer,
+//   `MONSTER_OUTLINE_COLOR` for the outline layer. **Not a false knob** (CLAUDE.md).
 uniform vec4 flash_color : source_color = vec4(1.0);
 
 varying vec4 v_tint;

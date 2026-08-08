@@ -1,91 +1,96 @@
 extends Node2D
-## 몬스터 · 닭의 탄 · 죽은 자리. 🔴 화면만 만진다 — 세상은 `WorldStep`에서 **읽기만** 한다.
+## Monsters, chicken bolts, and death sites. It touches the screen only — the world is **read** from `WorldStep`.
 ##
-## ⚠ 보간이 없는 게 맞다 — 몬스터는 60Hz(렌더와 같은 시계)라 틱 사이가 없다
-##  (`character_view.gd` 첫 줄과 같은 이유).
+## Having no interpolation is correct — monsters run at 60Hz (the same clock as rendering), so there is nothing
+##  between ticks (the same reason as `character_view.gd`'s first line).
 ##
-## 🔴🔴 **죽음 통지(`world.died_*`)는 그 틱 안에서만 유효하다**(다음 틱이 지운다 — 폭발 통지와
-##  같은 계약, `world_step.gd` 헤더). ⇒ **시체는 `_process()`가 아니라 `on_tick()`에서 붙잡는다**
-##  (`blast_fx.on_blasts()`와 같은 문 — `stage.gd`의 `_on_ticked()`가 부른다).
-##  ⚠ 안 그러면 통지가 다음 틱에 지워진 뒤에야 읽어서 시체가 원리적으로 안 생긴다.
+## **Death notifications (`world.died_*`) are valid only within that tick** (the next tick clears them — the same
+##  contract as blast notifications, `world_step.gd` header). => **Corpses are caught in `on_tick()`, not in
+##  `_process()`** (the same door as `blast_fx.on_blasts()` — `stage.gd`'s `_on_ticked()` calls it).
+##  Otherwise it is read only after the next tick has cleared the notification, so corpses cannot exist in principle.
 ##
-## 🔴🔴 **번쩍·피해 숫자는 액터에 새 통지를 안 만든다 — 뷰가 hp를 프레임마다 관찰해서 만든다.**
-##  hp는 이미 공개 필드이고 **id는 절대 재사용되지 않으므로**(`world_step._next_monster_id` 주석)
-##  **id로 키를 잡으면 diff가 안전하다** — `character_view._prev_x`(직전 프레임과 비교)와 같은
-##  어법이다. ⚠ **id 목록으로 "누가 죽었나"를 diff하는 것과는 다르다** — 그건 `world_step`이
-##  통지 배열로 이미 풀어 준 문제이고(위 「동작 ⑩」의 함정), 여기서 diff하는 것은 "살아 있는
-##  같은 id의 hp가 줄었나" 하나뿐이라 재사용·순간이동 함정이 안 걸린다.
-## ⚠ **못 잡는 자리 하나**: 죽는 바로 그 틱의 마지막 피해는 몬스터가 배열에서 이미 빠진 뒤라
-##  이 diff가 못 본다 — 그 프레임엔 번쩍·숫자 없이 시체만 나타난다. 확신 없는 곳(아래 보고).
+## **Flashes and damage numbers do not add a new notification to the actor — the view observes hp every frame
+##  and makes them.** hp is already a public field, and **ids are never reused**
+##  (`world_step._next_monster_id` comment), so **keying by id makes the diff safe** — the same idiom as
+##  `character_view._prev_x` (comparing against the previous frame). **It is different from diffing an id list to
+##  find "who died"** — that is a problem `world_step` already solved with notification arrays (the trap under
+##  "behavior (10)" above), and what is diffed here is only "did a living monster of the same id lose hp",
+##  so the reuse and teleport traps do not bite.
+## **One seat it cannot catch**: the last damage on the very tick a monster dies is not seen by this diff,
+##  because the monster is already out of the array — on that frame the corpse appears with no flash and no
+##  number. A place of no certainty (reported below).
 
 const WorldStep := preload("res://src/actor/world_step.gd")
 const Monster := preload("res://src/actor/monster.gd")
 const Defs := preload("res://src/actor/monster_defs.gd")
 const Fx := preload("res://src/view/fx_tuning.gd")
-## 🔴 **`CELL_PX` 하나 때문에 든다** — 몸에 붙은 불을 셀 격자에 스냅해야 땅불과 어휘가 같아진다
-##  (`_draw_body_flames` 상자). ⚠ 시뮬 상수를 뷰가 읽는 것은 여기서만이다.
+## **It is held for `CELL_PX` alone** — fire attached to a body has to snap to the cell grid for its vocabulary
+##  to match the ground fire (the `_draw_body_flames` box). This is the only place the view reads a sim constant.
 const Tuning := preload("res://src/sim/sim_tuning.gd")
 
-## 🔴 셰이더가 받는 이름. **상수로 둔다** — 문자열을 박으면 한 글자 틀렸을 때
-##  **아무 일도 안 일어나고 에러도 없다**(`net_render` 의 「거짓 손잡이」 절이 그 사연이다).
+## The name the shader receives. **Kept as a constant** — pin the string and one wrong letter means
+##  **nothing happens at all and there is no error** (`net_render`'s "false knob" section is that story).
 const FLASH_COLOR_PARAM := "flash_color"
 
-## 🔴🔴 **레이어 이름 — 그물이 이것으로 찾는다. 자식 인덱스로 찾지 마라.**
-##  ⚠ **실측(2026-08-08)**: 그물이 `get_child(0)` 으로 번쩍 레이어를 잡고 있었는데
-##   외곽선 레이어를 앞에 넣자 **조용히 엉뚱한 노드를 재기 시작했다.**
-##   ⇒ 순서는 그리기 계약이지 **이름표가 아니다.** 레이어가 늘 때마다 그물이 깨지면 안 된다.
+## **Layer names — the nets find them by these. Do not find them by child index.**
+##  **Measured**: a net was grabbing the flash layer with `get_child(0)`, and putting the outline layer in
+##   front of it made it **quietly start measuring the wrong node.**
+##   => Order is a drawing contract, **not a name tag.** A net must not break every time a layer is added.
 const LAYER_OUTLINE := "Outline"
 const LAYER_FLASH := "Flash"
 const LAYER_NUMBER := "Number"
 
 var _world: WorldStep = null
 
-## id → 직전 프레임 hp. `_scan_hp_changes()`가 채우고 지운다(위 헤더).
+## id -> previous frame's hp. `_scan_hp_changes()` fills and clears it (the header above).
 var _prev_hp: Dictionary = {}
-## id → 남은 번쩍 프레임 수.
+## id -> remaining flash frames.
 var _flash_left: Dictionary = {}
 
-## 피해 숫자 · 시체 — **독립 개체다**(몬스터가 사라져도 얼마간 화면에 남는다).
-##  `blast_fx._flashes`와 같은 어법: `Array[Dictionary]` + 나이(age, 프레임).
+## Damage numbers and corpses — **independent entities** (they stay on screen for a while after the monster is gone).
+##  The same idiom as `blast_fx._flashes`: `Array[Dictionary]` plus an age in frames.
 var _dmg_numbers: Array[Dictionary] = []
 var _corpses: Array[Dictionary] = []
-## 죽는 순간 터지는 고리. 🔴 **시체와 같은 통지에서 같이 생기지만 수명이 다르다**(더 짧다) —
-##  그래서 한 배열에 못 담는다(`_prune` 이 배열 단위로 수명을 받는다).
+## The ring that pops at the moment of death. **It is born from the same notification as the corpse but has a
+##  different lifetime** (shorter) — so the two cannot share one array (`_prune` takes a lifetime per array).
 var _death_pops: Array[Dictionary] = []
 
-## 종류 → 몸 그림. 🔴 `Defs.ALL`에서 만든다 — 종류를 늘리면(`monster_defs.gd` 한 줄 +
-##  `fx_tuning.MONSTER_SHEETS` 한 줄) 여기는 안 건드려도 된다.
-## ⚠ **`null` 검사를 안 붙인다 — 대신 `.get()`으로 읽는 쪽이 대체한다**(`_draw_monster_body`).
-##  `character_view._body_tex`와 다른 규율이다: 캐릭터는 하나뿐이라 깨지면 그냥 짖어도 되지만,
-##  몬스터는 종류가 늘 여럿이라 하나가 깨져도 나머지 종류는 마저 보여야 한다(위 `MONSTER_FILL` 상자).
+## Kind -> body sprite. Built from `Defs.ALL` — growing the kinds (one line in `monster_defs.gd` plus one line
+## in `fx_tuning.MONSTER_SHEETS`) needs no edit here.
+## **No `null` check is attached — instead the reading side substitutes with `.get()`** (`_draw_monster_body`).
+##  A different discipline from `character_view._body_tex`: there is only one character, so barking when it
+##  breaks is fine, but monsters always have several kinds and the rest must still show when one breaks
+##  (the `MONSTER_FILL` box above).
 var _sheets: Dictionary = _load_sheets()
 
-## 프레임 계수기 — 몸에 붙은 불의 흔들림 시계다.
-## 🔴 **`Time.` 을 안 쓴다.** 여기는 `src/view/` 라 결정론 계약 밖이지만, 프레임 계수기면
-##  그물이 `advance()` 를 N번 불러 **같은 그림을 재현할 수 있다**(벽시계는 못 그런다).
+## Frame counter — the clock for the wobble of fire attached to a body.
+## **`Time.` is not used.** This is `src/view/` so it is outside the determinism contract, but as a frame counter
+##  a net can call `advance()` N times and **reproduce the same picture** (a wall clock cannot).
 var _frame: int = 0
 
-## 🔴🔴 **번쩍 전용 자식 노드.** 셰이더 머티리얼이 **노드 단위**라 여기 그리는 것 전부가
-##  흰 실루엣이 된다 ⇒ **몸과 같은 노드에 못 둔다.**
-##  ⚠ 자식이라 부모보다 **나중에** 그려진다 = 몸 위에 얹힌다. 그게 필요한 순서다.
+## **A child node dedicated to the flash.** The shader material is **per node**, so everything drawn here
+##  becomes a white silhouette => **it cannot sit on the same node as the body.**
+##  Being a child, it is drawn **after** the parent = laid on top of the body. That is the order needed.
 var _flash_layer: Node2D = null
-## 🔴 피해 숫자는 번쩍보다도 위다 — 안 그러면 번쩍이 숫자를 덮는다(둘 다 흰 계열이라 최악이다).
+## Damage numbers go above even the flash — otherwise the flash covers the numbers (both being whitish is
+## the worst case).
 var _number_layer: Node2D = null
-## 🔴🔴 **외곽선은 몸 「아래」다 — 자식인데 `show_behind_parent` 로 뒤로 보낸다.**
-##  ⚠ 자식은 기본이 부모보다 위인데 외곽선이 몸을 덮으면 **실루엣이 통째로 크림색이 된다.**
-##  🔴 번쩍과 **같은 셰이더에 다른 색**을 건다 — 색이 노드 단위 uniform 이라 노드를 나눠야 한다.
+## **The outline goes "below" the body — it is a child pushed behind with `show_behind_parent`.**
+##  A child is above the parent by default, and an outline covering the body makes **the whole silhouette cream.**
+##  It hangs **the same shader with a different color** as the flash — the color is a per-node uniform, so the
+##   nodes have to be split.
 var _outline_layer: Node2D = null
 
 
-## 자식 노드에 그리기를 위임하는 껍데기. 🔴 **자식마다 스크립트 파일을 만들지 않으려는 것**이다 —
-##  파일이 늘면 「이 노드는 뭘 하나」가 세 곳으로 흩어진다.
+## A shell delegating drawing to child nodes. **The point is to avoid making a script file per child** —
+##  more files scatter "what does this node do" across three places.
 ##
-## 🔴🔴 **`fn.call(self)` 다 — 자기를 넘긴다. 이게 이 클래스의 존재 이유의 절반이다.**
-##  ⚠ **인자 없이 부르던 때 실제 버그가 났다**(2026-08-08): 위임받은 함수가
-##   **암묵적 `self`(= 부모 MonsterView)** 에 그렸고, 부모는 그리는 중이 아니라
-##   **그 명령이 조용히 버려졌다.** 피해 숫자가 화면에서 통째로 사라졌는데 **에러도 없고
-##   그물도 전부 초록**이었다(그물은 배열을 읽지 캔버스를 안 읽는다).
-##  ⇒ 캔버스를 인자로 강제하면 **받는 쪽이 그것을 안 쓰는 것이 눈에 보인다.**
+## **It is `fn.call(self)` — it passes itself. That is half this class's reason to exist.**
+##  **A real bug happened when it was called with no argument**: the delegated function drew onto
+##   **the implicit `self` (= the parent MonsterView)**, and the parent was not drawing, so
+##   **that command was silently discarded.** Damage numbers disappeared from the screen wholesale with
+##   **no error and every net green** (nets read arrays, not the canvas).
+##  => Forcing the canvas as an argument makes **the receiving side not using it visible.**
 class _Layer extends Node2D:
 	var fn: Callable
 
@@ -94,7 +99,7 @@ class _Layer extends Node2D:
 			fn.call(self)
 
 
-## 🔴 static — `_init`이 돌기 전에도 그물이 값을 검증할 수 있게(`net_monster_sprite`).
+## static — so a net can verify the values even before `_init` runs (`net_monster_sprite`).
 static func _load_sheets() -> Dictionary:
 	var out: Dictionary = {}
 	for kind: int in Defs.ALL:
@@ -102,27 +107,29 @@ static func _load_sheets() -> Dictionary:
 	return out
 
 
-## 🔴🔴 **레이어를 여기서 만든다 — 씬 파일에 안 넣는다.**
-##  ⚠ 그물이 이 노드를 씬 없이 `new()` 로 세워 `advance()` 만 흘리는 일이 있고(공개 함수인 이유),
-##   그때 `_ready` 가 안 돌아 레이어가 **null 인 채로 산다.** ⇒ **그리는 쪽이 null 을 견뎌야 한다.**
-##  🔴 씬 파일에 박으면 그 두 세계가 갈라지고, 갈라진 증상은 **화면에만** 나온다.
+## **The layers are created here — not put in the scene file.**
+##  A net sometimes stands this node up with `new()` and no scene and only pushes `advance()` through
+##   (the reason those are public functions), and then `_ready` does not run and the layers **live as null.**
+##   => **The drawing side must tolerate null.**
+##  Pin them in the scene file and those two worlds diverge, and the divergent symptom shows up **on screen only.**
 func _ready() -> void:
 	var sh := load(Fx.MONSTER_FLASH_SHADER) as Shader
-	# 🔴 **외곽선을 먼저 만든다** — 자식 순서가 곧 그리기 순서이고, 이것만 `show_behind_parent` 다.
+	# **The outline is created first** — child order is drawing order, and this is the only one with
+	# `show_behind_parent`.
 	_outline_layer = _make_layer(_draw_outlines, LAYER_OUTLINE)
 	_outline_layer.show_behind_parent = true
 	_paint(_outline_layer, sh, Fx.MONSTER_OUTLINE_COLOR)
 	_flash_layer = _make_layer(_draw_flashes, LAYER_FLASH)
 	_paint(_flash_layer, sh, Fx.MONSTER_FLASH_COLOR)
-	# ⚠ **셰이더가 없으면 머티리얼 없이 간다** — 그러면 번쩍이 옛 모양(흰 사각형)이 되고
-	#  외곽선은 **몸 그림 그대로가 여덟 번 깔려** 뭉개진다. 🔴 **그래도 짖지 않는다**:
-	#  이 파일의 규율이 「몬스터 쪽은 대체하고 짖지 않는다」다(`_load_sheets`).
+	# **With no shader it goes without a material** — then the flash becomes its old shape (a white rectangle)
+	#  and the outline is **the body sprite itself laid down eight times**, smeared. **It still does not bark**:
+	#  this file's discipline is "on the monster side, substitute and do not bark" (`_load_sheets`).
 	_number_layer = _make_layer(_draw_numbers, LAYER_NUMBER)
 
 
-## 레이어에 실루엣 셰이더를 걸고 색을 넣는다.
-## 🔴 **색은 노드 단위 uniform 이라 여기서 한 번 넣으면 된다** — 모든 몬스터가 같은 색이다.
-##  ⚠ **세기는 못 넣는다**(몬스터마다 다르다) — 그리는 쪽이 modulate 알파로 넘긴다.
+## Hangs the silhouette shader on a layer and puts the color in.
+## **The color is a per-node uniform, so putting it in once here is enough** — every monster is the same color.
+##  **The strength cannot go in** (it differs per monster) — the drawing side passes it as modulate alpha.
 func _paint(layer: Node2D, sh: Shader, color: Color) -> void:
 	if sh == null:
 		return
@@ -135,7 +142,7 @@ func _paint(layer: Node2D, sh: Shader, color: Color) -> void:
 func _make_layer(fn: Callable, nm: String) -> Node2D:
 	var n := _Layer.new()
 	n.fn = fn
-	n.name = nm   # 🔴 그물이 이 이름으로 찾는다(위 상자) — 인덱스는 레이어가 늘면 어긋난다
+	n.name = nm   # the nets find it by this name (the box above) — indices drift as layers are added
 	add_child(n)
 	return n
 
@@ -148,20 +155,20 @@ func setup(world: WorldStep) -> void:
 func _process(_dt: float) -> void:
 	advance()
 	queue_redraw()
-	# 🔴 자식은 부모의 `queue_redraw()` 를 **안 받는다.** 안 부르면 번쩍·숫자가 첫 프레임에서
-	#  얼어붙고, 증상은 「맞아도 안 번쩍인다」 하나뿐이다.
+	# Children **do not receive** the parent's `queue_redraw()`. Without calling it, the flash and the numbers
+	#  freeze on the first frame, and the only symptom is "it does not flash when hit".
 	for layer: Node2D in [_outline_layer, _flash_layer, _number_layer]:
 		if layer != null:
 			layer.queue_redraw()
 
 
-## 한 프레임분 갱신 — hp 변화를 읽어 번쩍·피해 숫자를 만들고, 살아 있는 연출들의 나이를 먹인다.
-## 🔴 `_process`가 부르는 것과 **같은 함수다**(`blast_fx.advance()`와 같은 어법) — 그물이 씬 없이
-##  프레임을 흘려보낼 수 있게 공개다.
+## One frame's update — reads hp changes to make flashes and damage numbers, and ages the living presentations.
+## **The same function `_process` calls** (the same idiom as `blast_fx.advance()`) — public so a net can push
+## frames through with no scene.
 ##
-## 🔴🔴 **나이를 먹이는 것이 먼저고, hp를 읽는 것이 나중이다.** 순서를 바꾸면 이번 프레임에
-##  막 생긴 번쩍·피해 숫자가 **같은 호출 안에서** 한 프레임어치를 먼저 잃는다 — 실측으로
-##  `MONSTER_FLASH_FRAMES`(6)짜리 번쩍이 5프레임 뒤에 벌써 꺼지는 것으로 걸렸다(net 실패).
+## **Aging comes first and reading hp comes second.** Reverse the order and a flash or damage number created
+##  this frame **loses one frame's worth inside the same call** — it was caught by measurement as a
+##  `MONSTER_FLASH_FRAMES` (6) flash already going out after 5 frames (net failure).
 func advance() -> void:
 	_frame += 1
 	_decay_flashes()
@@ -172,9 +179,9 @@ func advance() -> void:
 		_scan_hp_changes()
 
 
-## 🔴🔴 **죽음 통지를 여기서만 읽는다.** `stage.gd`의 `_on_ticked()`가 부른다 — 프레임마다
-##  부르면 통지가 다음 `frame()`의 틱 갈래까지 살아 있어서 시체가 여러 번 생긴다
-##  (`world_step.frame()`의 「한 대가 세 대가 된다」 함정과 같은 자리).
+## **Death notifications are read only here.** `stage.gd`'s `_on_ticked()` calls it — call it every frame and
+##  the notification is still alive by the next `frame()`'s tick branch, so corpses get created several times
+##  (the same seat as the "one hit becomes three" trap in `world_step.frame()`).
 func on_tick() -> void:
 	if _world == null:
 		return
@@ -183,15 +190,18 @@ func on_tick() -> void:
 			"x": _world.died_x(i), "y": _world.died_y(i), "kind": _world.died_kind(i), "age": 0,
 		}
 		_corpses.append(d)
-		# 🔴🔴 **죽는 순간 터진다 — 닭의 피격 피드백은 이것뿐이다**(`fx_tuning.MONSTER_DEATH_POP_FRAMES`).
-		#  ⚠ 닭은 한 방에 죽어서 `_scan_hp_changes` 의 hp diff 가 볼 대상이 **이미 배열에서 빠졌다.**
-		#   ⇒ 번쩍도 숫자도 한 프레임도 안 뜬다. **죽음 통지만이 그 순간을 안다.**
-		#  🔴 **시체와 같은 통지에서 같이 만든다** — 따로 걸면 「시체는 있는데 터짐이 없는」
-		#   조합이 생길 수 있고, 그건 두 경로가 갈라졌다는 뜻이라 화면에서만 보인다.
+		# **It pops at the moment of death — this is the chicken's only hit feedback**
+		#  (`fx_tuning.MONSTER_DEATH_POP_FRAMES`).
+		#  A chicken dies in one hit, so what `_scan_hp_changes`'s hp diff would look at is **already out of
+		#   the array.** => Neither flash nor number shows for even one frame. **Only the death notification
+		#   knows that moment.**
+		#  **It is created from the same notification as the corpse** — hang it separately and a combination of
+		#   "there is a corpse but no pop" can appear, which means the two paths diverged and it is visible
+		#   on screen only.
 		_death_pops.append(d.duplicate())
 
 
-## hp가 준 몬스터마다 번쩍·피해 숫자를 띄운다. id로 diff한다(위 헤더).
+## Puts up a flash and a damage number for each monster whose hp dropped. Diffed by id (the header above).
 func _scan_hp_changes() -> void:
 	var seen: Dictionary = {}
 	for i in _world.monster_count():
@@ -203,26 +213,29 @@ func _scan_hp_changes() -> void:
 				_flash_left[m.id] = Fx.MONSTER_FLASH_FRAMES
 				_add_dmg_number(m, prev - m.hp)
 		_prev_hp[m.id] = m.hp
-	# 더 안 사는 id는 정리한다 — 안 지우면 죽은 id가 사전에 무한히 쌓인다(20마리 상한은
-	#  살아 있는 몬스터에만 걸리고, 이 사전은 그 상한 밖이다).
+	# ids that no longer live are cleaned up — without erasing them, dead ids pile up in the dictionary forever
+	#  (the cap of 20 applies only to living monsters, and this dictionary is outside that cap).
 	for id in _prev_hp.keys().duplicate():
 		if not seen.has(id):
 			_prev_hp.erase(id)
 			_flash_left.erase(id)
 
 
-## 🔴🔴 **같은 몬스터의 최근 숫자가 있으면 거기에 더한다 — 새로 안 만든다** (2026-08-07, 사용자가 정했다).
+## **If there is a recent number for the same monster, add to it — do not make a new one** (decided by the user).
 ##
-## ⚠ **화면에서 `-10` 셋이 겹쳐 `-1000` 처럼 보이고 체력바까지 덮었다.** 숫자가 셋인 것이 아니라
-##  **셋이 같은 자리에 겹치는 것**이 문제였다 — 자리가 `m.center()` 라 연타면 좌표가 거의 같다.
+## **On screen three `-10`s overlapped and looked like `-1000`, covering the hp bar too.** The problem was not
+##  that there were three numbers but **that the three overlapped in the same spot** — the seat is `m.center()`,
+##  so on rapid hits the coordinates are nearly identical.
 ##
-## 🔴 **나이를 0으로 되감고 자리도 갱신한다.** 안 되감으면 합친 숫자가 **곧 사라져서**
-##  마지막 한 방이 표시 없이 들어간 것처럼 보인다. 자리를 갱신하는 것은 몬스터가 그동안
-##  움직였을 수 있어서다(돼지는 밀고 들어온다).
-## ⚠ **되감기가 곧 「영영 안 늙는다」의 위험이다** — `MONSTER_DMG_NUM_MERGE_FRAMES` 주석이
-##  그래서 「수명보다 짧아야 한다」를 못 박았다. **계속 맞는 동안 숫자가 안 사라지는 것은 의도다.**
+## **The age is rewound to 0 and the seat is refreshed.** Without rewinding, the merged number **disappears
+##  soon after**, making it look as if the last hit landed with no display. The seat is refreshed because the
+##  monster may have moved in the meantime (pigs push their way in).
+## **The rewind is itself the risk of "it never ages"** — which is why the `MONSTER_DMG_NUM_MERGE_FRAMES`
+##  comment pinned down "it must be shorter than the lifetime". **The number not disappearing while it keeps
+##  getting hit is intended.**
 ##
-## 🔴 **id 로 찾는다.** 좌표로 찾으면 두 몬스터가 겹쳐 설 때 남의 피해가 합쳐진다.
+## **It searches by id.** Search by coordinates and, when two monsters stand overlapping, someone else's damage
+##  gets merged in.
 func _add_dmg_number(m: Monster, amount: int) -> void:
 	for n: Dictionary in _dmg_numbers:
 		if n["id"] == m.id and int(n["age"]) < Fx.MONSTER_DMG_NUM_MERGE_FRAMES:
@@ -256,9 +269,9 @@ func _prune(list: Array[Dictionary], max_age: int) -> void:
 		i -= 1
 
 
-## 무대 리셋(R)이 부른다. `spell_view.clear()`·`blast_fx.clear()`와 같은 문이다 —
-##  안 비우면 R 뒤에도 옛 세션의 죽은 id가 사전에 남고, 새 세션의 시체·숫자가 안 섞이는 대신
-##  옛 흔적이 화면에 잠깐 얹힐 수 있다(안전을 위해 그냥 비운다).
+## The stage reset (R) calls this. The same door as `spell_view.clear()` and `blast_fx.clear()` —
+##  without emptying, dead ids from the old session remain in the dictionary after R, and instead of the new
+##  session's corpses and numbers mixing in, old traces can briefly sit on screen (it is emptied for safety).
 func clear() -> void:
 	_prev_hp.clear()
 	_flash_left.clear()
@@ -269,7 +282,7 @@ func clear() -> void:
 
 
 # ══════════════════════════════════════════════════════════════════
-#  질의 — 그물이 여기서만 읽는다(`blast_fx`의 「질의」 절과 같은 어법)
+#  Queries — the nets read only here (the same idiom as `blast_fx`'s "queries" section)
 # ══════════════════════════════════════════════════════════════════
 
 func corpse_count() -> int:
@@ -297,50 +310,56 @@ func dmg_number_amount(i: int) -> int:
 
 
 # ══════════════════════════════════════════════════════════════════
-#  그리기
+#  Drawing
 # ══════════════════════════════════════════════════════════════════
 
 func _draw() -> void:
 	if _world == null:
 		return
-	# 🔴 시체가 산 몬스터보다 먼저 그려진다 — 산 몬스터(같은 자리에 새로 선 것)가 시체를
-	#  덮어야 「사라졌다」가 자연스럽다. 겹칠 일은 드물지만(다음 스폰이 같은 자리일 때) 순서는
-	#  씬 자식 순서(지형 위 · 캐릭터 아래)와 같은 규칙 — 먼저 그린 것이 아래다.
+	# Corpses are drawn before living monsters — a living monster (newly standing in the same spot) must cover
+	#  the corpse for "it is gone" to feel natural. Overlap is rare (when the next spawn is in the same spot),
+	#  but the order follows the same rule as scene child order (above terrain, below the character) —
+	#  what is drawn first is below.
 	for c: Dictionary in _corpses:
 		_draw_corpse(c)
 	for i in _world.monster_count():
 		_draw_monster(_world.monster_at(i))
-	# 🔴 닭의 탄. `MonsterBolts`가 방향을 안 넘겨서(공개 API가 `x(i)`·`y(i)`뿐이다) 점으로
-	#  그린다 — 판정 13의 요구(「작은 점/짧은 선」)를 점으로 채운다.
-	# 🔴 **두 겹이다 — 마법 탄과 같은 문법(무리 + 심), 다른 색.** 색만 바꾸면 안 갈렸다:
-	#  옛 분홍과 무속성 보라는 85° 떨어져 있었는데도 헷갈렸다(`fx_tuning.MONSTER_BOLT_COLOR` 상자).
+	# Chicken bolts. `MonsterBolts` does not pass a direction (its public API is only `x(i)` and `y(i)`), so they
+	# are drawn as dots — acceptance 13's requirement ("a small dot / short line") is met with a dot.
+	# **It is two layers — the same grammar as a magic bolt (glow + core), a different color.** Changing only
+	#  the color did not split them: the old pink and the none purple were 85 degrees apart and still got
+	#  confused (the `fx_tuning.MONSTER_BOLT_COLOR` box).
 	for i in _world.bolt_count():
 		var p := Vector2(_world.bolt_x(i), _world.bolt_y(i))
 		draw_circle(p, Fx.MONSTER_BOLT_R_PX, Fx.MONSTER_BOLT_COLOR)
 		draw_circle(p, Fx.MONSTER_BOLT_R_PX * Fx.MONSTER_BOLT_CORE_FRAC, Fx.MONSTER_BOLT_CORE)
-	# 🔴 죽는 순간의 터짐 — **시체·몬스터보다 위, 번쩍보다 아래**다.
+	# The pop at the moment of death — **above corpses and monsters, below the flash.**
 	for p: Dictionary in _death_pops:
 		_draw_death_pop(p)
-	# ⚠ 레이어가 없으면(그물이 씬 없이 세운 경우) 여기서 마저 그린다 — 안 그러면
-	#  「씬에서는 보이는데 그물에서는 없는」 두 세계가 생긴다.
+	# If the layers are missing (a net stood this up with no scene), they are drawn here instead — otherwise
+	#  two worlds appear, "visible in the scene but absent in the net".
 	if _flash_layer == null:
 		_draw_flashes(self)
 	if _number_layer == null:
 		_draw_numbers(self)
-	# ⚠ 외곽선은 여기서 안 그린다 — 레이어가 없으면 **몸 위에** 깔려 실루엣을 통째로 덮는다.
-	#  🔴 그물이 씬 없이 세우는 경우라 화면이 없고, 「없는 편이 틀린 것보다 낫다」.
+	# The outline is not drawn here — with no layer it would be laid **on top of the body** and cover the
+	#  silhouette wholesale.
+	#  This is the case where a net stands it up with no scene, so there is no screen, and "absent is better
+	#  than wrong".
 
 
-## 🔴 번쩍 레이어가 부른다(`_flash_layer`). **이 노드 좌표계와 같다** — 자식이 부모 변환을 잇는다.
+## The flash layer calls this (`_flash_layer`). **The same coordinate system as this node** — a child inherits
+## the parent's transform.
 ##
-## 🔴🔴 **`canvas` 를 인자로 받는다. 이 한 줄이 없어서 피해 숫자가 화면에서 통째로 사라졌었다.**
-##  ⚠ 2026-08-08, verify-look 이 잡았다 — 배열에는 `-40` 이 있고 폰트도 있고 레이어도 보이는데
-##   **화면에 아무것도 없었다.** 원인은 이 함수와 `_draw_numbers` 의 **비대칭**이었다:
-##   번쩍은 `canvas` 를 골라 잡았고 숫자는 **암묵적 `self`(= MonsterView)** 에 그렸는데,
-##   그 함수는 **자식 레이어의 `_draw()` 안에서** 불리므로 MonsterView 는 그리는 중이 아니다
-##   ⇒ **그 그리기 명령이 조용히 버려진다.**
-##  🔴 **그물이 원리적으로 못 잡았다** — 그물은 배열을 읽지 캔버스를 안 읽는다.
-##  ⇒ **이제 `_Layer` 가 캔버스를 인자로 넘긴다**(그 클래스 상자) — 실수할 자리를 문법에서 없앴다.
+## **It takes `canvas` as an argument. Without this one line, damage numbers disappeared from the screen wholesale.**
+##  verify-look caught it — the array had `-40`, the font was there, the layer was visible, and yet
+##   **nothing was on screen.** The cause was the **asymmetry** between this function and `_draw_numbers`:
+##   the flash took `canvas` properly while the numbers drew onto **the implicit `self` (= MonsterView)**,
+##   and that function is called **inside a child layer's `_draw()`**, so MonsterView is not drawing
+##   => **that draw command is silently discarded.**
+##  **The nets could not catch it in principle** — nets read arrays, not the canvas.
+##  => **Now `_Layer` passes the canvas as an argument** (that class's box) — the seat for the mistake was
+##   removed at the syntax level.
 func _draw_flashes(canvas: CanvasItem) -> void:
 	if _world == null:
 		return
@@ -353,33 +372,35 @@ func _draw_flashes(canvas: CanvasItem) -> void:
 		var a := Fx.MONSTER_FLASH_COLOR.a * frac
 		var tex: Texture2D = _sheets.get(m.kind)
 		if tex == null:
-			# 폴백 — 셰이더가 걸려 있어도 `TEXTURE` 가 흰 1×1이라 결과가 「흰 사각형 × 세기」다
-			#  (`monster_silhouette.gdshader` 머리). 즉 **옛 동작 그대로**다.
+			# Fallback — even with the shader hung, `TEXTURE` is a white 1x1 so the result is
+			#  "white rectangle x strength" (the head of `monster_silhouette.gdshader`). That is
+			#  **the old behavior exactly.**
 			var c := Fx.MONSTER_FLASH_COLOR
 			canvas.draw_rect(r, Color(c.r, c.g, c.b, a))
 			continue
 		_draw_flipped(canvas, tex, r, m.facing < 0, Color(1.0, 1.0, 1.0, a))
 
 
-## 🔴🔴 **외곽선 — 몸 그림을 여덟 방향으로 밀어 깔고, 그 위에 몸이 덮는다.**
+## **The outline — the body sprite laid down in eight directions, with the body covering it on top.**
 ##
-## ⚠ **왜 있나**: verify-look 이 돼지를 **검은 하늘**에 세우니 **다리와 아랫배가 녹았다**
-##  (2026-08-08. `fx_tuning.MONSTER_OUTLINE_COLOR` 상자가 그 사연을 든다).
+## **Why it exists**: verify-look stood a pig against **a black sky** and **its legs and belly melted away**
+##  (the `fx_tuning.MONSTER_OUTLINE_COLOR` box holds that story).
 ##
-## 🔴 **셰이더가 단색으로 칠하므로 밀어 깐 여덟 장이 그대로 테두리가 된다** — 알파만 남고
-##  색은 uniform 이라, 몸 그림의 어두운 픽셀이 그대로 어둡게 깔리는 일이 없다.
-##  ⚠ **`modulate` 곱셈으로는 이걸 못 한다** — 곱하면 원본이 어두워질 뿐 **밝아지지 않는다.**
-##   그래서 이 연출은 **셰이더 없이는 원리적으로 안 된다**(사용자가 그 축을 골랐다).
+## **The shader paints in a flat color, so the eight offset copies become the border directly** — only alpha
+##  survives and the color is a uniform, so dark pixels of the body sprite never get laid down dark.
+##  **`modulate` multiplication cannot do this** — multiplying only darkens the original, it **never brightens.**
+##   So this presentation is **impossible in principle without a shader** (the user chose that axis).
 ##
-## 🔴 **시체에도 두른다** — 시체가 배경에 녹으면 「죽은 자리」가 안 보인다. 산 몸과 같은 문제다.
+## **It is drawn around corpses too** — a corpse melting into the background makes "where it died" invisible.
+##  The same problem as a living body.
 func _draw_outlines(canvas: CanvasItem) -> void:
 	if _world == null:
 		return
 	for c: Dictionary in _corpses:
 		var age: int = c["age"]
 		var alpha := 1.0 - float(age) / float(Fx.MONSTER_CORPSE_LIFE_FRAMES)
-		# ⚠ 시체는 페이드하므로 외곽선도 같이 옅어져야 한다 — 안 그러면 몸이 사라진 뒤
-		#  **크림색 윤곽만 남아 떠 있다.**
+		# A corpse fades, so its outline has to fade with it — otherwise, after the body is gone,
+		#  **only a cream outline is left floating.**
 		_outline_one(canvas, c["kind"], c["x"], c["y"], false, alpha)
 	for i in _world.monster_count():
 		var m: Monster = _world.monster_at(i)
@@ -389,14 +410,14 @@ func _draw_outlines(canvas: CanvasItem) -> void:
 func _outline_one(canvas: CanvasItem, kind: int, x: int, y: int, flip: bool, alpha: float) -> void:
 	var tex: Texture2D = _sheets.get(kind)
 	if tex == null:
-		return   # 폴백은 단색 사각형이라 외곽선이 뜻을 안 갖는다
+		return   # the fallback is a flat rectangle, so an outline would carry no meaning
 	var r := box_rect(kind, x, y)
 	var col := Color(1.0, 1.0, 1.0, alpha)
 	for d: Vector2 in Fx.MONSTER_OUTLINE_DIRS:
 		_draw_flipped(canvas, tex, Rect2(r.position + d * Fx.MONSTER_OUTLINE_PX, r.size), flip, col)
 
 
-## ⚠ **`canvas` 를 반드시 아래로 넘긴다** — 위 `_draw_flashes` 상자가 그 사연을 든다.
+## **`canvas` must be passed down** — the `_draw_flashes` box above holds that story.
 func _draw_numbers(canvas: CanvasItem) -> void:
 	for n: Dictionary in _dmg_numbers:
 		_draw_dmg_number(canvas, n)
@@ -405,54 +426,57 @@ func _draw_numbers(canvas: CanvasItem) -> void:
 func _draw_monster(m: Monster) -> void:
 	var r := box_rect(m.kind, m.x, m.y)
 	_draw_monster_body(m, r)
-	# 🔴 **번쩍은 여기가 아니다** — 셰이더가 노드 단위라 `_flash_layer` 로 나갔다(위 상자).
+	# **The flash is not here** — the shader being per node sent it out to `_flash_layer` (the box above).
 	if m.burning:
 		_draw_body_flames(self, r, m.id)
 	_draw_hp_bar(m.kind, m.x, m.y, m.hp)
 
 
-## 🔴🔴 **몸에 붙은 불 — 여러 군데다.** 원래 상자 테두리 하나였고 화면에서
-##  **「주황 선택 상자」**로 읽혔다(2026-08-07, 판정 13). 같은 화면의 땅불이 진짜 픽셀 불이라
-##  대비가 잔인했다 — `fx_tuning.MONSTER_BURN_FLAMES` 상자가 그 사연을 들고 있다.
+## **Fire attached to a body — in several places.** It was originally one box outline and read on screen as
+##  **"an orange selection box"** (acceptance 13). The ground fire on the same screen is real pixel fire, so
+##  the contrast was brutal — the `fx_tuning.MONSTER_BURN_FLAMES` box holds that story.
 ##
-## 🔴 **자리는 몬스터 id 로 고정한다** — 프레임마다 다시 뽑으면 불꽃이 **매 프레임 순간이동**하고
-##  그건 불이 아니라 노이즈다. 움직이는 것은 **크기뿐**이고, 위상을 어긋내 다 같이 안 뛰게 한다.
-## ⚠ **불꽃이 상자를 조금 넘어간다** — 몸 윤곽을 모르므로(알파를 안 읽는다) 안쪽에만 두면
-##  실루엣 가장자리에서 불이 끊겨 보인다. 넘치는 편이 「몸을 감싼다」로 읽힌다.
+## **The seats are fixed by monster id** — draw them again each frame and the flames **teleport every frame**,
+##  and that is noise, not fire. What moves is **size only**, with the phases offset so they do not all jump together.
+## **The flames spill a little outside the box** — the body outline is unknown (alpha is not read), so keeping
+##  them strictly inside makes the fire look cut off at the silhouette's edge. Spilling reads as "it wraps the body".
 ##
-## 🔴🔴 **원이 아니라 셀 격자에 맞춘 사각 픽셀이다** (2026-08-08, verify-look 이 화면에서 잡았다).
-##  ⚠ **`draw_circle` 두 겹이었고 「빨간 테두리 + 노란 속」이라 「과녁 다섯 개」로 읽혔다.**
-##   바로 옆 땅불은 불규칙한 픽셀 덩어리라 누가 봐도 불이었다 ⇒ **대비가 그대로였다.**
-##   「주황 선택 상자」가 「주황 과녁 다섯」이 됐을 뿐 **여전히 도형**이었다.
+## **They are square pixels snapped to the cell grid, not circles** (verify-look caught it on screen).
+##  **It was two layers of `draw_circle` and, being "a red rim with a yellow inside", it read as "five targets".**
+##   The ground fire right next to it is an irregular pixel clump that anyone reads as fire => **the contrast
+##   was unchanged.** "An orange selection box" had merely become "five orange targets" — **still a shape.**
 ##
-## 🔴🔴 **고친 방향은 색이 아니라 어휘다 — 땅불과 같은 문법으로 그린다.**
-##  땅불은 `CELL_PX`(4px) 격자에 칠해진 픽셀이다 ⇒ 몸의 불도 **4px 정렬된 사각 픽셀 덩어리**로 그린다.
-##  🔴 **완벽한 원은 이 게임 화면에 없는 모양이다** — 지형도 불도 물도 전부 셀이다.
-##   그래서 원은 아무리 색을 맞춰도 「UI」로 읽힌다. 같은 실수를 볼트 무리에서도 했다.
+## **The fix went at the vocabulary, not the color — it is drawn with the same grammar as the ground fire.**
+##  Ground fire is pixels painted on the `CELL_PX` (4px) grid => body fire is drawn as **4px-aligned square
+##  pixel clumps** too.
+##  **A perfect circle is a shape that does not exist on this game's screen** — terrain, fire and water are all cells.
+##   So a circle reads as "UI" no matter how well the color is matched. The same mistake was made with the bolt glow.
 ##
-## ⚠ **덩어리 모양도 id·i 로 고정한다** — 프레임마다 다시 뽑으면 지글거리는 노이즈가 된다.
-##  움직이는 것은 **높이(혀가 날름거리는 것)** 뿐이다.
+## **The clump shapes are fixed by id and i too** — draw them again each frame and it becomes sizzling noise.
+##  What moves is **the height (the tongue licking upward)** only.
 func _draw_body_flames(canvas: CanvasItem, r: Rect2, id: int) -> void:
 	var cell := float(Tuning.CELL_PX)
 	for i in Fx.MONSTER_BURN_FLAMES:
 		var p := flame_pos(r, id, i)
-		# 위상을 불꽃마다 어긋낸다 — 안 그러면 다섯이 한 몸으로 뛴다.
+		# The phase is offset per flame — otherwise the five jump as one body.
 		var phase := float(i) * TAU / float(Fx.MONSTER_BURN_FLAMES)
 		var wob := sin(float(_frame) / Fx.MONSTER_BURN_PERIOD_FRAMES * TAU + phase)
-		# 🔴 **셀에 스냅한다.** 스냅을 빼면 불이 셀 격자와 어긋나 「위에 떠 있는 것」이 된다.
+		# **Snapped to the cell.** Drop the snap and the fire is misaligned with the cell grid, becoming
+		#  "something floating on top".
 		var bx := floorf(p.x / cell) * cell
 		var by := floorf(p.y / cell) * cell
-		# 혀 높이 — 1~3셀. `wob` 이 크기가 아니라 **높이**를 흔든다(불은 위로 자란다).
+		# Tongue height — 1 to 3 cells. `wob` shakes the **height**, not the size (fire grows upward).
 		var tall := 1 + int(roundf((wob * 0.5 + 0.5) * (Fx.MONSTER_BURN_TALL_CELLS - 1)))
 		for k in tall:
-			# 위로 갈수록 좁아지고 밝아진다 — 그것이 「불꽃 혀」의 전부다.
+			# Narrower and brighter toward the top — that is the whole of "a flame tongue".
 			var w := cell * float(tall - k)
 			var col: Color = Fx.FIRE_LO if k < tall - 1 else Fx.FIRE_HI
 			canvas.draw_rect(Rect2(bx - w * 0.5, by - cell * float(k + 1), w, cell), col)
 
 
-## 🔴 죽는 순간 터지는 고리 — **닭의 유일한 피격 피드백**이다(`fx_tuning.MONSTER_DEATH_POP_FRAMES`).
-##  ⚠ 벌어지면서 옅어진다. 벌어지기만 하면 「고리가 남았다」로, 옅어지기만 하면 「깜빡였다」로 읽힌다.
+## The ring that pops at the moment of death — **the chicken's only hit feedback**
+##  (`fx_tuning.MONSTER_DEATH_POP_FRAMES`).
+##  It fades as it opens. Opening alone reads as "a ring was left behind", fading alone reads as "it blinked".
 func _draw_death_pop(p: Dictionary) -> void:
 	var r := box_rect(p["kind"], p["x"], p["y"])
 	var t := float(p["age"]) / float(Fx.MONSTER_DEATH_POP_FRAMES)
@@ -462,16 +486,19 @@ func _draw_death_pop(p: Dictionary) -> void:
 		Fx.MONSTER_DEATH_POP_PX)
 
 
-## 🔴🔴 **그림은 `r`(= `Defs`에서 나온 상자)에 맞춰 그린다 — 텍스처 자기 픽셀 크기를 안 믿는다.**
-##  `draw_texture_rect`가 목적지 크기로 늘이거나 줄이므로, 그림이 상자와 갈려도 **화면은 여전히
-##  상자 크기다**(`net_monster_sprite`가 "지금은 같다"를 값으로 잰다 — 갈리면 거기가 먼저 빨개진다).
+## **The sprite is drawn to fit `r` (= the box coming from `Defs`) — the texture's own pixel size is not trusted.**
+##  `draw_texture_rect` stretches or shrinks to the destination size, so even if the art diverges from the box,
+##  **the screen is still box-sized** (`net_monster_sprite` measures "they are the same today" as a value —
+##  if they diverge, that goes red first).
 ##
-## 🔴 **텍스처가 없으면(로딩 실패) `MONSTER_FILL` 사각형으로 대체한다.** 위 `fx_tuning.MONSTER_FILL`
-##  상자가 그 이유를 적었다 — 몬스터는 종류가 늘 여럿이라 하나가 깨져도 나머지는 마저 보여야 한다.
+## **If the texture is missing (load failure) it substitutes a `MONSTER_FILL` rectangle.** The
+##  `fx_tuning.MONSTER_FILL` box above wrote the reason — monsters always have several kinds, so the rest
+##  must still show when one breaks.
 ##
-## ⚠ **몬스터 그림은 오른쪽을 본다 — 왼쪽으로 갈 때 뒤집는다**(`character_view._draw`와 같은 어법,
-##  `draw_set_transform`으로 좌우 스케일을 뒤집는다). ⚠ **되돌리는 것을 잊지 마라** —
-##  안 되돌리면 이 뒤에 그리는 것(번쩍·불 테두리·체력바) 전부가 뒤집힌 좌표계에서 그려진다.
+## **Monster art faces right — it is flipped when going left** (the same idiom as `character_view._draw`,
+##  flipping the horizontal scale with `draw_set_transform`). **Do not forget to restore it** —
+##  without restoring, everything drawn afterwards (flash, burn outline, hp bar) is drawn in a flipped
+##  coordinate system.
 func _draw_monster_body(m: Monster, r: Rect2) -> void:
 	var tex: Texture2D = _sheets.get(m.kind)
 	if tex == null:
@@ -480,11 +507,13 @@ func _draw_monster_body(m: Monster, r: Rect2) -> void:
 	_draw_flipped(self, tex, r, m.facing < 0, Color.WHITE)
 
 
-## 🔴 몸 그림을 상자에 맞춰 그린다. 왼쪽을 보면 뒤집는다.
-##  ⚠ **되돌리는 것을 잊지 마라** — 안 되돌리면 이 뒤에 그리는 것 전부가 뒤집힌 좌표계로 간다.
-##  🔴 **그래서 이 함수 하나로 묶었다.** 몸과 번쩍이 같은 뒤집기를 따로 짜면 **둘이 갈라지는 날**
-##   맞은 돼지의 흰 실루엣만 반대로 서고, 그건 화면에서만 보인다.
-## ⚠ `canvas` 를 받는 이유: 번쩍은 **자식 노드**에 그린다(셰이더가 노드 단위다).
+## Draws the body sprite to fit the box. Flipped when facing left.
+##  **Do not forget to restore it** — without restoring, everything drawn afterwards goes into a flipped
+##  coordinate system.
+##  **That is why it was gathered into this one function.** Write the same flip separately for the body and
+##   the flash and **the day the two diverge**, a hit pig's white silhouette alone stands the wrong way,
+##   and that is visible on screen only.
+## Why it takes `canvas`: the flash is drawn onto **a child node** (the shader is per node).
 func _draw_flipped(canvas: CanvasItem, tex: Texture2D, r: Rect2, flip: bool, modulate: Color) -> void:
 	canvas.draw_set_transform(Vector2(r.position.x + (r.size.x if flip else 0.0), r.position.y),
 		0.0, Vector2(-1.0 if flip else 1.0, 1.0))
@@ -502,15 +531,18 @@ func _draw_hp_bar(kind: int, x: int, y: int, hp: int) -> void:
 	draw_rect(fill, Fx.MONSTER_HP_BAR_FULL.lerp(Fx.MONSTER_HP_BAR_EMPTY, 1.0 - frac))
 
 
-## 🔴🔴 **시체도 몸 그림이다 — 어둡게 깔고 페이드한다**(2026-08-07, 판정 13이 여기서 실패했다).
-##  ⚠ **원래 자주 사각형이었고 화면에서 「UI 조각이 남았나」로 읽혔다** — 같은 화면의 몸은
-##   스프라이트인데 시체만 도형이라 **스프라이트를 붙인 값이 절반 깎였다.**
-## 🔴 **어둡게 하는 것은 `modulate` 곱셈이다** — 알파 채널이 그대로 살아서 실루엣이 정확하다.
-##  ⚠ 곱셈이라 **밝아지게는 못 한다.** 「죽으면 어두워진다」와 방향이 같아서 여기서는 맞다.
+## **A corpse is a body sprite too — laid down dark and faded** (acceptance 13 failed right here).
+##  **It was originally a purple rectangle and read on screen as "is that a leftover UI fragment"** — bodies on
+##   the same screen are sprites while only corpses were shapes, so **the value of having attached sprites was
+##   cut in half.**
+## **Darkening is `modulate` multiplication** — the alpha channel survives intact so the silhouette is exact.
+##  Being multiplication it **cannot brighten.** That matches the direction of "it darkens when it dies",
+##  so it is right here.
 ##
-## ⚠ **방향을 모른다 — 늘 오른쪽을 본다.** 죽음 통지(`world.died_*`)가 `facing` 을 안 넘긴다.
-##  🔴 **왼쪽으로 걷다 죽으면 시체가 홱 돌아선다.** 통지에 한 칸을 더하면 고쳐지지만
-##   그건 `src/actor/` 계약을 건드리는 일이라 **이번 범위 밖**이다. 눈에 띄면 그때 하라.
+## **The direction is unknown — it always faces right.** The death notification (`world.died_*`) does not pass
+##  `facing`.
+##  **Die while walking left and the corpse snaps around.** Adding one field to the notification fixes it,
+##   but that touches the `src/actor/` contract so it is **outside this scope.** Do it when it becomes noticeable.
 func _draw_corpse(c: Dictionary) -> void:
 	var kind: int = c["kind"]
 	var r := box_rect(kind, c["x"], c["y"])
@@ -518,7 +550,7 @@ func _draw_corpse(c: Dictionary) -> void:
 	var alpha := 1.0 - float(age) / float(Fx.MONSTER_CORPSE_LIFE_FRAMES)
 	var tex: Texture2D = _sheets.get(kind)
 	if tex == null:
-		# 폴백 — `_draw_monster_body` 와 같은 규율(짖지 않고 대체한다).
+		# Fallback — the same discipline as `_draw_monster_body` (substitute, do not bark).
 		var col := Fx.MONSTER_CORPSE_COLOR
 		draw_rect(r, Color(col.r, col.g, col.b, col.a * alpha))
 		return
@@ -526,29 +558,30 @@ func _draw_corpse(c: Dictionary) -> void:
 	draw_texture_rect(tex, r, false, Color(d, d, d, alpha))
 
 
-## 🔴🔴 **`canvas.draw_string` 이다 — 맨 `draw_string` 이 아니다.**
-##  ⚠ **여기가 2026-08-08의 그 자리다**(위 `_draw_flashes` 상자). 맨 `draw_string` 은
-##   MonsterView 자신에게 거는 것이고, 이 함수는 **자식 레이어가 그리는 중**에 불리므로
-##   **그 명령이 조용히 버려진다. 에러도 안 난다.**
-##  🔴 `net_monster` 가 이 규칙을 **소스에서** 잰다 — 거동으로는 헤드리스가 못 잡는다.
+## **It is `canvas.draw_string` — not a bare `draw_string`.**
+##  **This is that seat** (the `_draw_flashes` box above). A bare `draw_string` hangs it on MonsterView itself,
+##   and this function is called **while a child layer is drawing**, so **that command is silently discarded.
+##   No error is raised either.**
+##  `net_monster` measures this rule **in the source** — headless cannot catch it by behavior.
 func _draw_dmg_number(canvas: CanvasItem, n: Dictionary) -> void:
-	# ⚠ 폰트가 없으면 그리지 않는다 — `null`을 넘기면 매 프레임 짖고, 래퍼가 stderr를
-	#  실패로 치니 평소 화면이 그물을 빨갛게 만든다(`circle_window._draw`와 같은 규율).
-	# 🔴 **`get_theme_default_font()`가 아니다** — 이 노드는 `Node2D`라 `Control`이 아니고
-	#  그 함수가 없다(`circle_window`는 `Control`이라 쓸 수 있었다). `Node2D`에서 기본 폰트를
-	#  얻는 길은 `ThemeDB`뿐이다.
+	# If there is no font it does not draw — passing `null` barks every frame, and since the wrapper counts
+	#  stderr as failure, an ordinary screen turns the nets red (the same discipline as `circle_window._draw`).
+	# **It is not `get_theme_default_font()`** — this node is a `Node2D`, not a `Control`, so that function
+	#  does not exist (`circle_window` is a `Control` so it could use it). The only way to get the default font
+	#  from a `Node2D` is `ThemeDB`.
 	var font: Font = ThemeDB.fallback_font
 	if font == null:
 		return
 	var age: int = n["age"]
 	var t := float(age) / float(Fx.MONSTER_DMG_NUM_LIFE_FRAMES)
 	var alpha := 1.0 - t
-	# 🔴 **체력바 위에서 시작한다** — `m.y` 에서 그대로 띄우면 체력바를 덮는다
-	#  (2026-08-08, verify-look 이 화면에서 봤다. `MONSTER_DMG_NUM_LIFT_PX` 상자).
+	# **It starts above the hp bar** — put it up straight from `m.y` and it covers the hp bar
+	#  (verify-look saw it on screen. The `MONSTER_DMG_NUM_LIFT_PX` box).
 	var y := float(n["y"]) - Fx.MONSTER_DMG_NUM_LIFT_PX - Fx.MONSTER_DMG_NUM_RISE_PX * t
 	var col := Fx.MONSTER_DMG_NUM_COLOR
 	var text := "-%d" % int(n["amount"])
-	# 가운데 정렬 — `circle_window`류는 전부 LEFT라 폭을 직접 재서 절반만큼 왼쪽으로 민다.
+	# Centered — everything in the `circle_window` family is LEFT, so the width is measured directly and it is
+	# shifted left by half.
 	var w := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, Fx.MONSTER_DMG_NUM_SIZE).x
 	canvas.draw_string(font, Vector2(float(n["x"]) - w * 0.5, y), text,
 		HORIZONTAL_ALIGNMENT_LEFT, -1, Fx.MONSTER_DMG_NUM_SIZE,
@@ -556,34 +589,36 @@ func _draw_dmg_number(canvas: CanvasItem, n: Dictionary) -> void:
 
 
 # ══════════════════════════════════════════════════════════════════
-#  순수 static — 그물이 직접 부른다(`character_view.pick_state`와 같은 어법)
+#  Pure static — the nets call these directly (the same idiom as `character_view.pick_state`)
 # ══════════════════════════════════════════════════════════════════
 
-## 🔴🔴 **순수 static이라 그물이 직접 부른다.** `_draw()`가 이 함수만 쓰므로
-##  그물이 재는 값 = 실제로 그려지는 값이다(`character_view.pick_state`·`spell_view`의 「질의」절).
-## 🔴 크기가 `monster_defs`(actor)에서 나온다. `fx_tuning`에 크기를 두면 상자 표가 둘이 되고,
-##  증상은 「돼지가 벽에서 12px 떠 있다」 하나뿐이다(문서 「화면」 상자).
+## **Pure static, so the nets call it directly.** `_draw()` uses only this function, so the value the nets
+## measure = the value actually drawn (`character_view.pick_state` and `spell_view`'s "queries" section).
+## The size comes from `monster_defs` (actor). Put the size in `fx_tuning` and the box table lives in two places,
+## and the only symptom is "the pig floats 12px off the wall" (the design doc's "screen" box).
 static func box_rect(kind: int, x: int, y: int) -> Rect2:
 	return Rect2(x, y, Defs.w_px(kind), Defs.h_px(kind))
 
 
-## 🔴 체력바 자리 — 상자 폭에서 나온다(위 상자와 같은 이유로 여기서 폭을 다시 안 만든다).
+## The hp bar's seat — it comes from the box width (for the same reason as the box above, the width is not
+## rebuilt here).
 static func hp_bar_rect(kind: int, x: int, y: int) -> Rect2:
 	return Rect2(float(x), float(y) - Fx.MONSTER_HP_BAR_GAP_PX - Fx.MONSTER_HP_BAR_H_PX,
 		float(Defs.w_px(kind)), Fx.MONSTER_HP_BAR_H_PX)
 
 
-## 🔴🔴 **몸에 붙은 불꽃 하나의 자리. 순수 static 이라 그물이 직접 부른다.**
+## **The seat of one flame attached to a body. Pure static, so the nets call it directly.**
 ##
-## 🔴 **id 와 인덱스만으로 정해진다 — 프레임이 안 들어간다.** 자리가 프레임마다 바뀌면
-##  불꽃이 **매 프레임 순간이동**하고 그건 불이 아니라 노이즈다(움직이는 것은 크기뿐).
-## ⚠ **`randi` 가 아니라 해시다.** `randi` 를 쓰면 같은 몬스터의 불이 프레임마다 다른 자리에 서고,
-##  그물도 재현을 못 한다. 여기는 `src/view/` 라 결정론 계약 밖이지만 **재현성은 여전히 필요하다.**
+## **It is decided by id and index alone — the frame does not go in.** Change the seat per frame and the flames
+##  **teleport every frame**, and that is noise, not fire (what moves is size only).
+## **It is a hash, not `randi`.** Use `randi` and the same monster's fire stands somewhere different each frame,
+##  and the nets cannot reproduce it either. This is `src/view/` so it is outside the determinism contract,
+##  but **reproducibility is still needed.**
 ##
-## 🔴 **아래로 치우친다**(`MONSTER_BURN_LOW_BIAS`) — 고르게 뿌리면 「불에 탄다」가 아니라
-##  「반짝이가 붙었다」로 보인다. 불은 아래에서 올라온다.
+## **It is biased downward** (`MONSTER_BURN_LOW_BIAS`) — scattered evenly it reads as "glitter attached"
+##  rather than "burning". Fire rises from below.
 static func flame_pos(r: Rect2, id: int, i: int) -> Vector2:
-	# 두 큰 홀수를 섞는다 — 인접한 id·i 가 인접한 자리로 가지 않게 하는 것이 전부다.
+	# Two large odd numbers are mixed — all it does is keep adjacent ids and is from landing in adjacent seats.
 	var h := (id * 2654435761 + i * 40503) & 0xFFFFFF
 	var fx := float(h & 0xFF) / 255.0
 	var fy := float((h >> 8) & 0xFF) / 255.0
@@ -591,9 +626,9 @@ static func flame_pos(r: Rect2, id: int, i: int) -> Vector2:
 	return r.position + Vector2(r.size.x * fx, r.size.y * fy)
 
 
-## 체력바가 채워진 비율. 0~1로 죈다 — 음수 hp는 `Monster.on_tick`이 이미 `maxi(0, …)`로
-##  막지만(문서 「hp를 깎는 문은 하나다」), 화면 쪽에서 한 번 더 죄어 두면 표를 잘못 읽어도
-##  체력바가 상자 밖으로 안 나간다.
+## The filled fraction of the hp bar. Clamped to 0-1 — negative hp is already blocked by `Monster.on_tick`'s
+## `maxi(0, …)` (the doc's "there is one door that cuts hp"), but clamping once more on the screen side keeps
+## the hp bar inside the box even if the table is misread.
 static func hp_bar_fill_frac(hp: int, max_hp: int) -> float:
 	if max_hp <= 0:
 		return 0.0

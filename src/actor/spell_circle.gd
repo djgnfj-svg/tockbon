@@ -1,63 +1,65 @@
 extends RefCounted
-## 조립된 마법진 하나 — 🔴🔴 **장착 상태의 단일 소스다.**
+## One assembled magic circle — **the single source of the equipped state.**
 ##
-## 디버그 키도 (앞으로) 조립창도 **이것 하나**를 만진다. 각자 상태를 들면
-## 「키를 눌렀는데 총구가 그대로다」가 되고 **에러가 하나도 안 난다.**
+## The debug keys and (in future) the assembly window both touch **this one object.** If each held its own
+## state you get "I pressed the key but the muzzle did not change" and **not one error is raised.**
 ##
 ## ```
-##    디버그 키 1~5 ──▶ set_from_packed()
-##                          SpellCircle ──▶ 총구 그림 (character_view가 **읽는다**)
-##    조립창 클릭   ──▶ set_circle()      ├─▶ HUD
-##                      set_rune()        └─▶ 발사 커맨드 (can_fire · element · packed_glyphs)
-##                      place_glyph()
+##    debug keys 1-5 --> set_from_packed()
+##                           SpellCircle --> muzzle drawing (`character_view` **reads** it)
+##    assembly click --> set_circle()      |-> HUD
+##                       set_rune()        \-> fire command (can_fire · element · packed_glyphs)
+##                       place_glyph()
 ## ```
 ##
-## 🔴 **좌표를 안 든다.** 좌표는 화면의 몫이다 — `src/actor/`는 float 허용이라 `Vector2`가
-##  들어와도 **그물이 안 짖고**, 그때부터 조립 규칙과 그림이 한 덩어리가 된다.
+## **It holds no coordinates.** Coordinates are the screen's job — `src/actor/` allows floats, so a `Vector2`
+##  coming in **would not make the nets bark**, and from then on the assembly rules and the drawing become one lump.
 ##
-## ⚠ **왜 `src/sim/`이 아닌가**: 조립 상태는 매 틱 도는 결정론 상태가 아니다. 격자·투사체는
-##  락스텝이지만 **플레이어의 장착은 호스트 권위**다(GDD 멀티 표).
+## **Why not `src/sim/`**: the assembly state is not deterministic state running every tick. The grid and the
+##  projectiles are lockstep, but **the player's loadout is host-authoritative** (GDD multiplayer table).
 ##
-## 🔴🔴 **제약을 여기 적지 않는다.** `glyph_defs.DEFS`를 **읽기만** 한다 — 따로 적으면 규칙이
-##  두 벌이 되고, `spell_sim.fire()`가 막는 배치를 조립창이 통과시킨다. 그 상태는
-##  「눌러도 아무 일이 안 일어난다」로만 보인다.
+## **The constraints are not written here.** It only **reads** `glyph_defs.DEFS` — write them separately and
+##  the rule has two copies, and the assembly window lets through a placement that `spell_sim.fire()` blocks.
+##  That state only ever looks like "I press it and nothing happens".
 ##
-## 🔴 **놓는 규칙이 종류마다 달라서 함수를 안 합쳤다** — 진은 늘 놓이고(층을 비운다),
-##  룬도 늘 놓이고, 문양만 `max_per_circle`을 본다. `slot_kind` 스위치 하나로 합치면
-##  룬 자리와 진이 늘 때마다 그 스위치가 커지고, 세 축이 그 안에서 다시 붙는다.
+## **The functions were not merged because the placement rule differs per kind** — a circle is always placed
+##  (it clears the layers), a rune is always placed, and only a glyph looks at `max_per_circle`. Merge them
+##  with one `slot_kind` switch and that switch grows every time rune slots and circles grow, and the three
+##  axes get stuck back together inside it.
 
 const CircleDefs := preload("res://src/sim/circle_defs.gd")
 const Glyph := preload("res://src/sim/glyph_defs.gd")
 const Tuning := preload("res://src/sim/sim_tuning.gd")
 
-## 🔴🔴 **빈 룬 자리. 여기가 단일 소스다** — 뷰도 이 상수를 읽는다.
+## **The empty rune slot. This is the single source** — the view reads this constant too.
 ##
-## ⚠ **왜 0이 아닌가**: `sim_tuning.ELEM_FIRE`가 이미 0이다. 0을 빈 값으로 쓰면
-##  **빈 룬 자리가 불 룬으로 읽히고**, 조립창은 빈칸을 그리는데 발사는 불이 나간다.
-##  **에러가 하나도 안 난다.** 진(`CIRCLE_NONE`)·문양(`GLYPH_NONE`)만 0 규율을 쓸 수 있다.
+## **Why not 0**: `sim_tuning.ELEM_FIRE` is already 0. Use 0 as the empty value and **an empty rune slot reads
+##  as the fire rune**, so the assembly window draws a blank while firing sends fire.
+##  **Not one error is raised.** Only circles (`CIRCLE_NONE`) and glyphs (`GLYPH_NONE`) can use the 0 discipline.
 ##
-## ⚠ **왜 `src/sim/`이 아닌가**: 시뮬은 빈 룬을 **모른다.** 빈 룬이면 커맨드를 아예 안 만든다.
-##  소비자 없는 상수를 sim에 두면 그게 거짓 손잡이다.
-## 🔴 그물이 **`ELEM_ALL` 안에 이 값이 없다**를 잰다 — 그 한 줄이 위 함정을 계약으로 못박는다.
+## **Why not `src/sim/`**: the sim does **not know** about an empty rune. With an empty rune no command is made
+##  at all. A constant with no consumer in sim would itself be a false knob.
+## A net measures that **this value is not inside `ELEM_ALL`** — that one line pins the trap above as a contract.
 const RUNE_EMPTY := -1
 
-## 🔴🔴 **기본 지급**(GDD 「기본 지급 진: 동그라미, 2층」).
-##  **시작 상태와 프리셋이 이 둘에서만 나온다** — 두 곳에 적으면 갈라지고,
-##  그때 「새로 켜면 불인데 키 1을 누르면 다른 룬」 같은 것이 **에러 없이** 생긴다.
+## **The default issue** (GDD, "default issued circle: round, 2 layers").
+##  **The starting state and the presets come only from these two** — write them in two places and they diverge,
+##  and then something like "a fresh launch is fire but pressing key 1 gives a different rune" appears
+##  **with no error.**
 const DEFAULT_CIRCLE := CircleDefs.CIRCLE_ROUND
 const DEFAULT_RUNE := Tuning.ELEM_FIRE
 
 var _circle_id := CircleDefs.CIRCLE_NONE
-## 안쪽이 0번(= 1층)이다. `GLYPH_NONE` = 빈 층.
+## The innermost is index 0 (= layer 1). `GLYPH_NONE` = an empty layer.
 var _layers: Array[int] = []
-## `RUNE_EMPTY` = 빈 자리.
+## `RUNE_EMPTY` = an empty slot.
 var _runes: Array[int] = []
 
 
 func _init(circle_id: int = DEFAULT_CIRCLE) -> void:
 	set_circle(circle_id)
-	# 🔴 **시작 상태는 진·룬이 채워져 있다.** ⚠ 빈 룬으로 켜지면 게임이 「못 쏘는」 상태로
-	#  시작하고, 그건 고장으로 읽힌다.
+	# **The starting state has the circle and the rune filled in.** Boot with an empty rune and the game
+	#  starts in a "cannot fire" state, and that reads as a malfunction.
 	for slot in _runes.size():
 		set_rune(slot, DEFAULT_RUNE)
 
@@ -87,19 +89,20 @@ func rune_at(slot: int) -> int:
 
 
 # ══════════════════════════════════════════════════════════════════
-#  놓기 — 🔴 **종류마다 규칙이 다르다**
+#  Placing — **the rule differs per kind**
 # ══════════════════════════════════════════════════════════════════
 
-## 진을 놓는다. **늘 놓인다** — 진에는 제약이 없어서 `can_place_circle`이 없다(그러면 거짓 손잡이다).
+## Places a circle. **It is always placed** — circles have no constraint, so there is no `can_place_circle`
+##  (that would be a false knob).
 ##
-## 🔴 진마다 층 수가 다르므로 `_layers`·`_runes`는 **런타임에 길이가 변한다.** 진이 1종이라
-##  지금은 안 드러나지만, 모델이 그걸 표현 못 하게 짜면 진이 둘이 되는 날 모델을 다시 만든다.
+## Layer counts differ per circle, so `_layers` and `_runes` **change length at runtime.** With only one kind
+##  of circle it does not show today, but write a model that cannot express it and you rebuild the model the
+##  day there are two circles.
 ##
-## 🔴 **진을 바꾸면 층과 룬 자리를 전부 비운다.** 앞에서부터 살리고 넘치는 것만 버리면
-##  **마지막 문양 하나가 조용히 사라진다.** 통째로 비우면 그림이 통째로 바뀌어 **눈에 보인다.**
+## **Changing the circle clears all layers and rune slots.** Keep the front ones and drop only the overflow and
+##  **the last glyph silently disappears.** Clearing wholesale changes the drawing wholesale, so **it is visible.**
 func set_circle(id: int) -> void:
-	# ⚠ **같은 진을 다시 놓는 것은 아무 일도 안 한다** — 안 그러면 실수로 한 번 더 클릭해서
-	#  조립이 통째로 날아간다.
+	# **Placing the same circle again does nothing** — otherwise one accidental extra click wipes the whole assembly.
 	if id == _circle_id:
 		return
 	_circle_id = id
@@ -109,38 +112,40 @@ func set_circle(id: int) -> void:
 	_runes.fill(RUNE_EMPTY)
 
 
-## 룬을 놓는다(`RUNE_EMPTY`면 뺀다). **늘 놓인다** — 룬에도 제약이 없다.
+## Places a rune (`RUNE_EMPTY` removes it). **It is always placed** — runes have no constraint either.
 ##
-## 🔴 **모르는 룬은 안 받는다.** 받으면 `can_fire()`가 통과시키고 `spell_sim.fire()`가
-##  커맨드 경계에서 짖는데, 그때 화면에서는 이미 「좌클릭했는데 아무 일도 안 난다」다.
+## **An unknown rune is not accepted.** Accept it and `can_fire()` lets it through and `spell_sim.fire()`
+##  barks at the command boundary, and by then the screen already shows "I left-clicked and nothing happened".
 func set_rune(slot: int, rune_id: int) -> bool:
 	if slot < 0 or slot >= _runes.size():
 		return false
 	if rune_id != RUNE_EMPTY and not Tuning.ELEM_ALL.has(rune_id):
-		push_error("SpellCircle: 모르는 룬 %d — 놓지 않는다" % rune_id)
+		push_error("SpellCircle: unknown rune %d - not placing it" % rune_id)
 		return false
 	_runes[slot] = rune_id
 	return true
 
 
-## 이 층에 이 문양을 놓을 수 있나. 🔴 **`can_place_*`가 문양에만 있는 이유**는 제약이 문양에만
-##  있어서다 — 진·룬에 검사 함수를 만들면 늘 true를 주는 거짓 손잡이가 된다.
+## Can this glyph go on this layer. **The reason `can_place_*` exists only for glyphs** is that the constraint
+##  exists only for glyphs — make check functions for circles and runes and they become false knobs that always
+##  return true.
 ##
-## 🔴🔴 **쏘고 나서 실패하면 고장으로 읽힌다**(기획 「극단값」). 그래서 제약이 발사 시점이
-##  아니라 **조립 시점**에 드러나야 한다. ⚠ 그래도 `spell_sim.fire()`의 검증은 남는다 —
-##  네트워크는 조립창을 안 지난다. 두 검사는 서로 다른 것을 지키고 **같은 표를 읽는다.**
+## **Failing after you fire reads as a malfunction** (design: "extreme values"). So the constraint has to show
+##  at **assembly time**, not at firing time. The validation in `spell_sim.fire()` still stays —
+##  the network does not go through the assembly window. The two checks guard different things and **read the
+##  same table.**
 func can_place_glyph(layer: int, glyph_id: int) -> bool:
 	if layer < 0 or layer >= _layers.size():
 		return false
-	# 빼기는 늘 된다. 🔴 빼기를 다른 길로 만들면 「놓기는 막혔는데 빼기가 상태를 깬다」가 생긴다.
+	# Removing is always allowed. Make removal a different path and you get "placing is blocked but removing breaks the state".
 	if glyph_id == Glyph.GLYPH_NONE:
 		return true
 	return _list_ok(_with(layer, glyph_id))
 
 
-## 문양을 놓는다(`GLYPH_NONE`이면 뺀다). 못 놓으면 false — **조용히**다.
-## ⚠ 여기서 짖으면 안 된다. 못 놓는 것은 **정상 조작**이고(팔레트가 흐리게 보여 주는 것이
-##  단계 4의 몫), 짖으면 클릭 한 번이 래퍼의 stderr 검사를 빨갛게 만든다.
+## Places a glyph (`GLYPH_NONE` removes it). false if it cannot be placed — **silently.**
+## It must not bark here. Not being able to place is **normal operation** (showing the palette greyed out is
+##  stage 4's job), and barking makes one click turn the wrapper's stderr check red.
 func place_glyph(layer: int, glyph_id: int) -> bool:
 	if not can_place_glyph(layer, glyph_id):
 		return false
@@ -148,9 +153,9 @@ func place_glyph(layer: int, glyph_id: int) -> bool:
 	return true
 
 
-## 🔴 **놓은 뒤의 목록을 미리 만들어 잰다.** 「지금 이 문양이 몇 개인가」만 세면
-##  덮어쓰기(그 층에 이미 확산이 있는데 같은 층에 확산을 또 놓기)를 하나 더 세서
-##  **놓을 수 있는 것을 막는다.**
+## **It builds the post-placement list in advance and measures that.** Count only "how many of this glyph are
+##  there now" and an overwrite (that layer already has spread and you place spread on the same layer again)
+##  gets counted once too many, **blocking something that is placeable.**
 func _with(layer: int, glyph_id: int) -> Array[int]:
 	var out: Array[int] = []
 	for i in _layers.size():
@@ -160,9 +165,9 @@ func _with(layer: int, glyph_id: int) -> Array[int]:
 	return out
 
 
-## 🔴🔴 **규칙이 한 벌인 지점.** `can_place_glyph`와 `set_from_packed`가 **같은 이 함수**를
-##  부른다 — 둘이 각자 재면 「프리셋으로는 들어가는데 클릭으로는 못 놓는」 배치가 생긴다.
-## ⚠ 여기 적힌 규칙이 하나도 없는 게 요점이다. 전부 `glyph_defs.DEFS`에서 읽는다.
+## **The point where the rule has one copy.** `can_place_glyph` and `set_from_packed` call **this same
+##  function** — measure separately and you get placements that "go in via a preset but cannot be placed by clicking".
+## The point is that not one rule is written here. Everything is read from `glyph_defs.DEFS`.
 static func _list_ok(list: Array[int]) -> bool:
 	if list.size() > Tuning.GLYPH_MAX_LAYERS:
 		return false
@@ -170,26 +175,28 @@ static func _list_ok(list: Array[int]) -> bool:
 		if not Glyph.DEFS.has(id):
 			return false
 		var cap := int(Glyph.DEFS[id]["max_per_circle"])
-		# 🔴 **0 = 무제한.** 세지도 않는다 — `spell_sim._valid_glyphs`와 같은 읽기다.
+		# **0 = unlimited.** It is not even counted — the same reading as `spell_sim._valid_glyphs`.
 		if cap > 0 and list.count(id) > cap:
 			return false
 	return true
 
 
 # ══════════════════════════════════════════════════════════════════
-#  🔴🔴 쏠 수 있나 — 빈 룬 자리가 하나라도 있으면 못 쏜다
+#  Can I fire — one empty rune slot and you cannot
 # ══════════════════════════════════════════════════════════════════
 
 ## ```
-## can_fire()  =  진이 있다  &&  빈 룬 자리가 하나도 없다
+## can_fire()  =  there is a circle  &&  there is not one empty rune slot
 ## ```
 ##
-## 🔴 **문양은 없어도 되고 룬은 있어야 한다.** 기획 「극단값」이 「층 2개를 다 비우고 쏘면
-##  쏴져야 한다 — **진+룬만으로도** 마법은 성립한다」고 적은 문장에 이미 들어 있다.
+## **Glyphs are optional and a rune is required.** It is already contained in the sentence the design's
+##  "extreme values" wrote: "empty both layers and fire and it must fire — **a circle plus a rune alone**
+##  makes a spell".
 ##
-## ⚠ **룬 자리가 하나뿐이라 「전부 차야 한다」와 「하나라도 차면 된다」가 지금 같은 답을 낸다.**
-##  룬 자리가 여럿이 되는 날 갈라진다(병렬 진에서 2/3만 채우면 2발이 나가는 게 자연스럽다).
-##  🔴 **그때 정한다.** 지금 고른 것은 「전부 차야 한다」고, 적어 두는 것이 요점이다.
+## **Because there is only one rune slot, "all must be filled" and "any one filled is enough" currently give
+##  the same answer.** They diverge the day there are several rune slots (with a parallel circle, filling 2 of
+##  3 firing 2 bolts is natural).
+##  **That gets settled then.** What was chosen now is "all must be filled", and writing it down is the point.
 func can_fire() -> bool:
 	if _circle_id == CircleDefs.CIRCLE_NONE:
 		return false
@@ -199,32 +206,33 @@ func can_fire() -> bool:
 	return true
 
 
-## 발사 커맨드가 쓰는 룬.
-## ⚠ **`can_fire()`가 참일 때만 뜻이 있다** — 빈 자리면 커맨드가 아예 안 만들어진다.
-## 🔴 **룬 자리가 하나라는 가정이 여기 한 곳에만 있다.** 진을 늘리면서 여러 룬을 어떻게 합칠지
-##  (융합·병렬·순차) 안 정하면 래퍼의 stderr 검사에 공짜로 걸린다 — 진 표에 아직 칸조차 없다.
+## The rune the fire command uses.
+## **It only has meaning when `can_fire()` is true** — with an empty slot the command is never made at all.
+## **The assumption that there is one rune slot lives only in this one place.** Grow the circles without
+##  settling how several runes combine (fusion, parallel, sequential) and you get caught for free by the
+##  wrapper's stderr check — the circle table does not even have a column for it yet.
 func element() -> int:
 	if _runes.size() != 1:
-		push_error("SpellCircle: 룬 자리가 %d개다 — 발사는 아직 하나만 안다" % _runes.size())
+		push_error("SpellCircle: there are %d rune slots - firing still knows only one" % _runes.size())
 		return Tuning.ELEM_FIRE
 	return _runes[0]
 
 
 # ══════════════════════════════════════════════════════════════════
-#  목록 ↔ 정수
+#  list <-> integer
 # ══════════════════════════════════════════════════════════════════
 
-## 🔴🔴 **빈 층을 건너뛴다.** 그대로 팩하면 문양이 **에러 없이 증발한다**:
+## **Empty layers are skipped.** Pack them as is and glyphs **vanish with no error**:
 ##
 ## ```
-## 1층 비었다 · 2층 폭발  →  그대로 팩하면 g = GLYPH_NONE | (BLAST << 4)
-##                          그런데 GLYPH_NONE = 0 이 「목록 끝」이다
-##                          first(g) = 0  →  탄은 **빈 목록**을 들고 난다
+## layer 1 empty · layer 2 blast  ->  packing as is gives g = GLYPH_NONE | (BLAST << 4)
+##                                    but GLYPH_NONE = 0 means "end of list"
+##                                    first(g) = 0  ->  the bolt flies carrying an **empty list**
 ## ```
 ##
-## ⇒ 「2층에만 넣으면 아무 일도 안 일어난다」로만 보인다. 빈 층은 아무 일도 안 하니
-## 건너뛰는 것이 규칙이고, 「두 층을 다 비우고 쏘면 쏴져야 한다」(기획 「극단값」)는
-## `g == 0`이라는 **이미 있는 경로**로 그대로 떨어진다.
+## => It only looks like "putting something on layer 2 alone does nothing". An empty layer does nothing, so
+## skipping is the rule, and "empty both layers and fire and it must fire" (design: "extreme values") falls
+## straight through the **path that already exists**, `g == 0`.
 func glyph_list() -> Array[int]:
 	var out: Array[int] = []
 	for id: int in _layers:
@@ -233,30 +241,30 @@ func glyph_list() -> Array[int]:
 	return out
 
 
-## 🔴 **시프트를 여기서 하지 않는다** — `glyph_defs`의 세 함수가 유일한 시프트 자리다
-##  (그 파일 주석: 두 곳에서 시프트하면 반드시 갈라진다).
-## ⚠ 총구가 매 `_draw()`에 부르므로 배열 하나를 만드는 값을 **일부러 치른다.**
-##  직접 시프트해서 아끼면 그 순간 규칙이 두 벌이 된다.
+## **The shifting is not done here** — the three functions in `glyph_defs` are the only place that shifts
+##  (that file's comment: shift in two places and they will diverge).
+## The muzzle calls this on every `_draw()`, so the cost of building one array is **paid on purpose.**
+##  Save it by shifting directly and at that moment the rule has two copies.
 func packed_glyphs() -> int:
 	return Glyph.pack(glyph_list())
 
 
-## 🔴🔴 **프리셋 — 진·룬·문양을 한 번에 놓는다. 순서가 이 함수 안에 갇힌다.**
+## **The preset — it places the circle, the rune and the glyphs at once. The order is trapped inside this function.**
 ##
 ## ```
-## 진 → 룬 → 문양      ← 🔴 이 순서여야 한다
+## circle -> rune -> glyph      <- it must be this order
 ## ```
 ##
-## ⚠ **뒤집으면 문양을 채운 뒤 진이 그걸 비운다**(`set_circle`이 층을 전부 비운다).
-##  **에러가 하나도 안 난다** — 키를 눌렀는데 문양이 없는 마법진이 된다.
-## 🔴 그래서 호출부가 순서를 아는 대신 **여기 한 곳에 가둔다.** 호출부마다 세 줄을 적게 두면
-##  그중 하나가 반드시 틀린다.
+## **Reverse it and the circle clears the glyphs after they were filled in** (`set_circle` clears every layer).
+##  **Not one error is raised** — you press the key and get a magic circle with no glyphs.
+## So instead of the call sites knowing the order, it is **trapped here in one place.** Let each call site write
+##  the three lines and one of them will certainly be wrong.
 ##
-## ⚠ **디버그 키가 진·룬까지 놓는 이유**: 진을 뺀 사용자가 **갇히지 않게** 하려고다.
-##  프리셋이 문양만 놓으면 진이 없을 때 키 다섯이 전부 죽고 빠져나올 길이 조립창뿐이다.
-##  ⇒ 진까지 놓으면 **키 1이 곧 조립 리셋**이 된다.
-## ⚠ 룬을 **모든 자리에 같은 것으로** 채운다 — 룬이 1종이라 지금은 뜻이 하나다.
-##  🔴 룬이 여러 종이 되는 날 프리셋이 룬 **목록**을 받아야 한다.
+## **Why the debug keys also place the circle and the rune**: so that a user who removed the circle **is not
+##  trapped.** If the preset only placed glyphs, all five keys would be dead with no circle and the only way out
+##  would be the assembly window. => Placing the circle too makes **key 1 an assembly reset.**
+## The rune is filled into **every slot with the same value** — with one kind of rune that has a single meaning
+##  today. **The day there are several kinds of rune, the preset has to take a rune list.**
 func apply_preset(circle_id: int, rune_id: int, packed: int) -> bool:
 	set_circle(circle_id)
 	for slot in _runes.size():
@@ -264,21 +272,22 @@ func apply_preset(circle_id: int, rune_id: int, packed: int) -> bool:
 	return set_from_packed(packed)
 
 
-## 🔴🔴 **디버그 키가 들어오는 문이다.** 앞 층부터 조밀하게 채운다 —
-##  키 3(폭발 하나)이면 1층 폭발 · 2층 빈칸이다. 🔴 왕복이 계약이다:
-##  `set_from_packed(g)` 뒤 `packed_glyphs() == g`.
+## **The door the debug keys come in through.** It fills densely from the front layer —
+##  key 3 (one blast) gives layer 1 blast, layer 2 empty. The round trip is a contract:
+##  after `set_from_packed(g)`, `packed_glyphs() == g`.
 ##
-## ⚠ **문양만 바꾼다** — 진과 룬은 안 건드린다. 프리셋은 「어떤 문양 조합인가」지 장착 전체가 아니다.
+## **It changes only the glyphs** — the circle and the rune are not touched. A preset is "which glyph
+##  combination", not the whole loadout.
 ##
-## ⚠ **못 놓는 배치는 짖고 안 받는다.** 받으면 「클릭으로는 못 놓는데 프리셋으로는 들어가는」
-##  상태가 생기고, 그 상태의 `packed_glyphs()`를 `fire()`가 거부해서 화면에서는
-##  **「눌러도 아무 일이 안 일어난다」**로만 보인다.
+## **An unplaceable arrangement barks and is not accepted.** Accept it and you get a state that
+##  "cannot be placed by clicking but goes in via the preset", and `fire()` rejects that state's
+##  `packed_glyphs()`, so on screen it only looks like **"I press it and nothing happens"**.
 func set_from_packed(g: int) -> bool:
-	# 🔴 음수는 **영원히 돈다.** `rest`가 산술 시프트라 `-1 >> 4 == -1`이고, 아래 while이
-	#  안 끝나 프레임이 통째로 얼어붙는다(에러 없이). `Glyph.pack`은 음수를 안 내놓지만
-	#  이 함수는 정수를 그대로 받는 문이다.
+	# A negative number **loops forever.** `rest` is an arithmetic shift so `-1 >> 4 == -1`, and the while
+	#  below never ends, freezing the whole frame (with no error). `Glyph.pack` never emits a negative, but
+	#  this function is the door that takes an integer as is.
 	if g < 0:
-		push_error("SpellCircle: 음수 목록 %d — 받지 않는다" % g)
+		push_error("SpellCircle: negative list %d - not accepting it" % g)
 		return false
 
 	var list: Array[int] = []
@@ -288,15 +297,15 @@ func set_from_packed(g: int) -> bool:
 		cur = Glyph.rest(cur)
 
 	if list.size() > _layers.size():
-		push_error("SpellCircle: 문양 %d개를 %d층 진에 넣을 수 없다" % [
+		push_error("SpellCircle: cannot put %d glyphs into a %d-layer circle" % [
 			list.size(), _layers.size()])
 		return false
 	if not _list_ok(list):
-		push_error("SpellCircle: 목록 %s가 문양 제약에 걸린다" % [list])
+		push_error("SpellCircle: list %s hits a glyph constraint" % [list])
 		return false
 
-	# ⚠ **먼저 전부 비운다.** 안 비우면 키 4(두 층) 뒤에 키 3(한 층)을 눌렀을 때
-	#  2층에 앞 문양이 남아 「뺐는데 안 빠진다」가 된다.
+	# **Clear everything first.** Without clearing, pressing key 3 (one layer) after key 4 (two layers) leaves
+	#  the previous glyph on layer 2, giving "I took it out but it did not come out".
 	_layers.fill(Glyph.GLYPH_NONE)
 	for i in list.size():
 		_layers[i] = list[i]

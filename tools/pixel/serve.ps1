@@ -1,7 +1,8 @@
-# ComfyUI 서버를 띄운다. 이미 떠 있으면 아무것도 안 한다.
+﻿# Brings up the ComfyUI server. If it is already up, it does nothing.
 #
-# 🔴 서버는 켜 둔 채로 두는 것이 맞다 — 모델 로딩에 30초쯤 걸리고, 그 뒤로는 한 장에 몇 초다.
-# ⚠ 이 창을 닫아도 서버는 안 죽는다(별도 프로세스). 끄려면 stop.ps1.
+# Leaving the server running is the right thing — model loading takes about 30 seconds, and after that
+# it is a few seconds per image.
+# Closing this window does not kill the server (separate process). To stop it, use stop.ps1.
 
 $ErrorActionPreference = "Stop"
 $cfg = Get-Content "$PSScriptRoot\config.json" -Raw | ConvertFrom-Json
@@ -23,21 +24,21 @@ $py = Join-Path $root "python_embeded\python.exe"
 $main = Join-Path $root "ComfyUI\main.py"
 if (-not (Test-Path $py)) { throw "python_embeded 가 없다: $py  (config.json 의 comfy_root 확인)" }
 
-# 🔴 로그를 반드시 파일로 받는다. 안 받으면 안 떴을 때 **이유가 어디에도 안 남고**
-#  「3분 안에 안 떴다」만 보인다 — 실측으로 그렇게 한 번 막혔다.
-# ⚠ ComfyUI 는 진행 로그를 stderr 로 낸다. `.err` 쪽이 실제 내용이다.
+# Always capture the log to a file. Without it, when startup fails **the reason is left nowhere**
+#  and all you see is "it didn't come up in 3 minutes" — that actually blocked things once.
+# ComfyUI writes its progress log to stderr. The `.err` side is the real content.
 $log = Join-Path $PSScriptRoot "out\_comfy.log"
 New-Item -ItemType Directory -Force (Split-Path $log) | Out-Null
 
 Write-Output "ComfyUI: 시작 (로그: $log.err)"
-# --enable-dynamic-vram: VRAM 보다 큰 모델을 동적 오프로딩으로 돌린다 (원본 리포의 run_h3_16gb.bat)
+# --enable-dynamic-vram: runs a model larger than VRAM via dynamic offloading (the original repo's run_h3_16gb.bat)
 Start-Process -FilePath $py `
     -ArgumentList @("-s", $main, "--windows-standalone-build", "--listen", "127.0.0.1",
                     "--port", "8188", "--enable-dynamic-vram", "--async-offload") `
     -WorkingDirectory $root -WindowStyle Minimized `
     -RedirectStandardOutput $log -RedirectStandardError "$log.err"
 
-# ⚠ **3분으로 잡았다가 실패했다.** 첫 기동은 커스텀 노드 임포트까지 그보다 오래 걸린다.
+# **This was set to 3 minutes and failed.** The first startup takes longer than that, through custom node imports.
 for ($i = 0; $i -lt 100; $i++) {
     Start-Sleep -Seconds 3
     try {

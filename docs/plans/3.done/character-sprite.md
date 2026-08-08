@@ -1,7 +1,7 @@
-# 캐릭터 그림 — 로브 입은 마법사 **32×32**
+# Character art — a robed mage, **32×32**
 
-**상태**: done — **단계 4·5를 안 하고 닫았다**(아래)
-**다시 열 이유**: 캐릭터 그림을 다시 뽑을 때만. 수치는 전부 옛 값이다 — 코드가 맞다.
+**Status**: done — **closed without stages 4 and 5** (below)
+**Why you'd reopen**: only when regenerating character art. Every number here is stale — the code is right.
 
 > **이 문서의 반동·로켓점프 수치는 「그때」 값이다.** 2026-08-04에 **로켓점프가 삭제**되고
 > `RECOIL_SPEED_PX` 가 **400 → 40** 이 됐다(`character-damage-minimum` 배너가 사연을 든다).

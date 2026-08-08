@@ -1,54 +1,55 @@
 ---
 name: game-planning
-description: tockbon의 게임 기능을 사용자와 대화로 기획하고 구현 가능한 명세 문서로 확정한다. 사용자가 새 기능 아이디어나 게임 방향을 던질 때, "기획하자" "브레인스토밍" "이런 거 어때" "이 기능 만들고 싶다" 같은 말을 할 때, 아직 구현 방법이 아니라 무엇을 만들지가 정해지지 않았을 때 사용한다. 산출물은 docs/plans/1.ready/ 의 기획 문서이고, 구현 팀은 그 문서를 입력으로 받는다.
+description: Designs a tockbon game feature in conversation with the user and lands it as an implementable spec doc. Use when the user throws out a feature idea or a direction for the game — "기획하자" "브레인스토밍" "이런 거 어때" "이 기능 만들고 싶다" "let's design this" — or when what to build, not how, is still open. Output is a design doc in docs/plans/1.ready/, which the build team takes as input.
 ---
 
-# 게임 기획
+# Game design
 
-## 원칙 두 개
+## Two principles
 
-**1. 최소 4바퀴, 최대 10바퀴 캐묻는다.**
-평소에는 질문을 줄이는 게 맞지만 여기서는 반대다. 4바퀴 전에 문서를 쓰지 않는다.
-이유: 기획 한 줄이 성능 예산을 통째로 날릴 수 있고, 나중에 발견하면 이미 구현된 뒤다.
+**1. Dig for at least 4 rounds, at most 10.**
+Normally fewer questions is right; here it is the opposite. Do not write the doc before round 4.
+Why: one line of design can burn the entire performance budget, and by the time you find out it is already built.
 
-**2. 질문하지 말고 선택지를 펼친다.**
-사용자는 게임 코딩을 하지 않는다. "어떻게 할까요?"는 답할 재료가 없는 질문이다.
-대신 **일반적인 게임 개발에서 그 축을 어떻게 다루는지 목록으로 보여주고 고르게 한다.**
+**2. Don't ask — lay out the options.**
+The user does not write game code. "How should we do it?" is a question with nothing to answer from.
+Instead, **show how game development generally handles that axis, as a list, and let them pick.**
 
-## 시작 전에 현황부터 확인한다
+## Survey the current state before you start
 
-선택지를 펼치기 전에 **무엇이 이미 있는지 반드시 조사한다.** 안 하면 있는 걸 또 제안한다.
+Before laying out options, **always find out what already exists.** Skip it and you propose what's already there.
 
-- `docs/plans/` 의 `3.done` · `2.active` — 이미 기획되거나 구현된 것
-- 관련 코드. 폴더가 곧 계약이라 **어디를 볼지가 질문에서 갈린다**:
+- `docs/plans/` `3.done` · `2.active` — already designed or built
+- The related code. Folders are contracts, so **the question decides where to look**:
 
-| 폴더 | 무엇 | 상수는 |
+| Folder | What | Constants |
 |---|---|---|
-| `src/sim/` | 격자 · 투사체 · 문양 · 불. **정수 결정론** | `sim_tuning.gd` |
-| `src/actor/` | 캐릭터 · 조준. float 허용 | — |
-| `src/view/` | 화면 전부 | **`fx_tuning.gd` — 연출 손잡이가 전부 여기 있다** |
-| `src/stage/` | 껍데기(틱 루프 · 입력 · HUD · 무대 맵). 본편에 안 남는다 | — |
+| `src/sim/` | Grid · projectiles · glyphs · fire. **Integer determinism** | `sim_tuning.gd` |
+| `src/actor/` | Character · aim. float allowed | — |
+| `src/view/` | Everything on screen | **`fx_tuning.gd` — every presentation knob is here** |
+| `src/stage/` | Shell (tick loop · input · HUD · stage map). Won't survive into the real game | — |
 
-목록의 각 항목에 상태를 붙인다: **있음(현재 값까지) / 없음 / 불가(전제가 빠졌다)**
+Tag every item with a state: **exists (with its current value) / missing / impossible (a prerequisite is absent)**
 
-### 이미 있는데 마음에 안 드는 경우
+### When it exists but they don't like it
 
-"타격감이 별로다"는 대부분 축 추가가 아니라 **기존 값 조이기**로 풀린다. 순서:
+"The hit feel is weak" is usually solved by **tightening existing values**, not adding an axis. Order:
 
-1. 지금 값이 얼마인지 먼저 보여준다
-2. 뭐가 부족한지 가른다 — 약한가 / 안 보이나 / 타이밍이 어긋나나
-3. 조여서 될 문제인지, 축 자체가 없는 건지 판단한다
+1. Show what the value is now
+2. Split what's lacking — too weak / not visible / mistimed
+3. Decide whether tightening fixes it, or the axis genuinely doesn't exist
 
-흔한 원인 하나: **축은 있는데 위력 단마다 값이 안 따라오는 것.** 위력이 2배인데 화면이 그대로면 여기다. 이 게임의 v1이 그렇게 죽었다.
+One common cause: **the axis exists but values don't follow per power tier.** Double the power with no screen
+change and it's this. This game's v1 died that way.
 
-## 예
+## Example
 
-사용자: *"맞았을 때 타격감이 있었으면 좋겠다"*
+User: *"맞았을 때 타격감이 있었으면 좋겠다"*
 
-**이렇게 하지 않는다**
+**Not this**
 > "타격감을 어떻게 구현할까요?"
 
-**이렇게 한다**
+**This**
 > 타격감은 보통 이 7가지로 만듭니다.
 >
 > - **사운드** — 체감 1위. 이 게임엔 지금 하나도 없음
@@ -61,92 +62,96 @@ description: tockbon의 게임 기능을 사용자와 대화로 기획하고 구
 >
 > 뭘 쓸까요? 추천은 사운드입니다. 없는 것 중 체감이 제일 큽니다.
 
-목록을 다 보여준 **뒤에** 추천한다. 추천부터 하면 나머지가 있었다는 걸 모른 채 고르게 된다.
+(The user reads this, so it stays Korean.)
 
-## 바퀴 운영
+Recommend **after** showing the whole list. Recommend first and they choose without knowing the rest existed.
 
-- 한 바퀴에 한 축만 판다.
-- 바퀴 끝마다 "지금까지 확정된 것"을 3줄 이내로 갱신한다.
-- 사용자의 답에서 새 질문이 나오면 그게 다음 바퀴다. 미리 정한 순서보다 우선한다.
+## Running the rounds
 
-## 파는 축
+- One axis per round.
+- At the end of each round, update "what's settled so far" in 3 lines or fewer.
+- If the user's answer raises a new question, that is the next round. It outranks any pre-planned order.
 
-| 축 | 묻는 것 | |
+## Axes to dig
+
+| Axis | What you ask | |
 |---|---|---|
-| 무엇 | 정확히 무슨 일이 일어나나 | 항상 |
-| 왜 | 재미가 어디서 오나 | 항상 |
-| 보임 | 사용자가 무엇을 보고 그게 일어났다고 아나 | 항상 |
-| 경계 | 안 되는 건 뭔가. 극단값에서는 | 항상 |
-| 섞임 | 물·번개·폭발·지형과 만나면 | 필요시 |
-| 비용 | 아래 체크리스트 | 필요시 |
-| 실패 | 잘못 만들면 어떤 모습인가 | 필요시 |
-| 측정 | 잘 됐는지 무엇을 보고 판정하나 | 필요시 |
+| What | What exactly happens | Always |
+| Why | Where the fun comes from | Always |
+| Visible | What does the user see that tells them it happened | Always |
+| Bounds | What doesn't work. At extremes | Always |
+| Mixing | When it meets water · lightning · explosions · terrain | As needed |
+| Cost | The checklist below | As needed |
+| Failure | What does it look like built wrong | As needed |
+| Measure | What do you look at to judge it worked | As needed |
 
-## 비용 체크리스트
+## Cost checklist
 
-이 게임 특유의 함정이라 기획 단계에서 안 물으면 구현에서 터진다. 전부 코드 주석의 실측이다.
+These traps are specific to this game — unasked at design time, they blow up during implementation.
+All of them are measurements from code comments.
 
-| 기획이 이렇게 말하면 | 실제로 일어나는 일 |
+| When the design says | What actually happens |
 |---|---|
-| "시간이 지나면 마른다/사라진다" | 그 셀이 매 틱 갱신 → 청크가 영영 안 잠듦 → 성능 예산 붕괴 |
-| "지속 효과 / 버프" | 시한부 상태는 그동안 그 구역이 안 잠든다. 영구 상태는 공짜 |
-| "부드럽게 움직인다" | 시뮬은 20Hz 정수. float·sqrt·sin을 쓰면 멀티가 죽는다 |
-| "큰 폭발을 여러 발" | 틱당 4발이 이미 예산의 54% |
-| "화면 전체 효과" | 렌더 비용은 헤드리스로 못 잰다. FPS로만 보인다 |
-| "재료·원소 추가" | 팔레트 슬롯 16개. 상태 비트는 하위 4비트만 안전 |
+| "dries up / disappears over time" | That cell updates every tick → the chunk never sleeps → performance budget collapses |
+| "lasting effect / buff" | A timed state keeps that region awake the whole time. A permanent state is free |
+| "moves smoothly" | Sim is 20Hz integer. float · sqrt · sin kills multiplayer |
+| "several big explosions" | 4 shots per tick is already 54% of budget |
+| "full-screen effect" | Render cost can't be measured headless. Only visible as FPS |
+| "add a material / element" | 16 palette slots. Only the low 4 state bits are safe |
 
-걸린다고 기각하지 않는다. **대가를 알리고 사용자가 고르게 한다.**
+Do not reject something because it's on this list. **State the price and let the user choose.**
 
-## 버린 쪽은 `docs/decisions/` 에 남긴다 (2026-08-08, 사용자가 정했다)
+## Record the rejected branch in `docs/decisions/` (decided by the user)
 
-**이 스킬의 방식이 바로 그 문제를 만든다.** 「선택지를 펼치고 고르게 한다」는 곧
-**매 바퀴마다 안 고른 것이 둘셋씩 생긴다**는 뜻인데, 기획 문서에는 **고른 것만** 적힌다.
-⇒ **몇 달 뒤에 같은 선택지를 처음부터 다시 편다.** 사용자가 인벤토리에서 실제로 겪었다.
+**This skill's method is what creates that problem.** "Lay out options and let them pick" means
+**two or three unpicked options appear every round**, and the design doc records **only the picked one.**
+⇒ **Months later the same options get laid out from scratch.** The user lived this with inventory.
 
-**한 바퀴에서 갈림길이 갈렸으면 그 자리에서 결정문을 만든다.** 다음 바퀴로 미루지 않는다 —
-**대화는 안 남고 리포만 남는다.**
+**When a fork is taken in a round, write the decision right there.** Do not defer to the next round —
+**conversations are lost; the repo is kept.**
 
-**전부 남기는 게 아니다.** 「A와 B 중 B를 버렸다」에 **이유가 있을 때**만이다.
-값을 고른 것(「20으로 하자」)은 결정문이 아니라 기획 문서의 값이다.
+**Not everything gets recorded.** Only "we dropped B in favor of A" **with a reason.**
+Picking a value ("let's make it 20") is not a decision doc; it's a value in the design doc.
 
-형식과 목록 갱신은 `docs/decisions/README.md` 가 기준이다.
+Format and index updates follow `docs/decisions/README.md`.
 
-## 종료 조건
+## Stopping conditions
 
-- 4바퀴 이상 돌았고 앞의 4개 축이 답을 얻었다
-- 사용자가 "됐다 / 문서로 써"라고 한다
-- 10바퀴에 도달했다
+- 4+ rounds done and the first four axes are answered
+- The user says "done / write it up"
+- Round 10 reached
 
-문서를 쓰기 전에 확정 사항을 한 번에 보여주고 확인받는다.
+Before writing the doc, show everything settled at once and get confirmation.
 
-## 산출물
+## Output
 
-`docs/plans/1.ready/<기능이름>.md`
+`docs/plans/1.ready/<feature-name>.md`
 
 ```markdown
-# <기능 이름>
+# <Feature name>
 
-**상태**: ready
-**한 줄**: <무엇이 일어나나>
+**Status**: ready
+**One line**: <what happens>
 
-## 왜
-## 동작
-## 화면
-## 경계
-## 기존 것과의 상호작용
-## 비용
-## 판정
-## 미정
+## Why
+## Behavior
+## Screen
+## Bounds
+## Interaction with what exists
+## Cost
+## Acceptance
+## TBD
 ```
 
-**"미정" 절을 억지로 채우지 않는다.** 모르는 걸 아는 척한 명세가 가짜 구현을 낳는다. 미정이라고 적혀 있으면 구현 팀이 물어본다.
+**Do not force the TBD section full.** A spec that pretends to know produces a fake implementation.
+Written as TBD, the build team will ask.
 
-## 상태 이동
+## Status moves
 
 ```
-docs/plans/1.ready/   기획됨, 대기
-docs/plans/2.active/  구현 중 — "이거 구현하자" 하면 여기로
-docs/plans/3.done/    완료
+docs/plans/1.ready/   designed, waiting
+docs/plans/2.active/  building — "let's build this" moves it here
+docs/plans/3.done/    finished
 ```
 
-문서 안의 `**상태**:` 줄도 같이 고친다.
+Fix the `**Status**:` line inside the doc at the same time.

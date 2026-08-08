@@ -1,118 +1,118 @@
-# 삼각진을 게임에 붙인다 — 그림은 있고 코드가 모른다
+# Wire the triangle circle into the game — the art exists and the code doesn't know
 
-**상태**: ready
-**한 줄**: 삼각진 에셋(진 뼈대 · 소켓 문양 링 둘)이 나왔는데 **코드가 삼각진의 존재를 모른다.**
-`circle_defs` 에 진을 하나 더 세우고, 룬 자리 셋과 소켓마다 붙는 층을 화면에 그린다.
+**Status**: ready
+**One line**: the triangle circle's assets (skeleton · two socket glyph rings) exist, and **the code doesn't know
+the triangle circle exists.** Stand up one more circle in `circle_defs` and draw three rune slots with a band per socket.
 
-**앞 문서**: [../3.done/triangle-circle-art.md](../3.done/triangle-circle-art.md) — 에셋을 뽑은 작업.
-그 문서의 「경계」가 **「그림이 나오는 것이 이 작업의 끝이다. 게임에 붙이는 것은 별도 문서다」**
-라고 미리 잘라 뒀고, **이 문서가 그 별도 문서다.**
+**Preceding doc**: [../3.done/triangle-circle-art.md](../3.done/triangle-circle-art.md) — generating the assets.
+That doc's "Boundary" cut it off in advance with **"art coming out is where this work ends. Wiring it into the game
+is a separate doc"**, and **this is that separate doc.**
 
-**기준 문서**: `docs/design/마법진-그림.md`(규격·그림) · `docs/design/진-룬-문양.md`(진 셋의 규칙)
-
----
-
-## 왜
-
-**에셋이 있는데 게임에 한 픽셀도 안 나온다.** 이 리포가 대표 가짜로 꼽는 것이
-「화면만 바뀌고 시뮬은 안 바뀌기(또는 그 반대)」인데, 지금은 그 앞 단계다 — **양쪽 다 안 바뀐다.**
-
-그리고 이 상태가 **길어지면 에셋이 낡는다.** 규격을 재서 맞춘 것이 288·192·368인데,
-붙여 보기 전에는 그 값이 **화면에서 맞는지 아무도 모른다**(에셋 원본에서만 쟀다).
+**Source docs**: `docs/design/circle-art.md` (spec · art) · `docs/design/circle-rune-glyph.md` (the three circles' rules)
 
 ---
 
-## 무엇이 막나 — 실측
+## Why
 
-| 어디 | 지금 | 삼각진에 필요한 것 |
+**The assets exist and not one pixel appears in the game.** This repo's signature fake is
+"screen changes, sim doesn't (or the reverse)" — this is the stage before that: **neither changes.**
+
+And **left long enough the assets go stale.** The spec was measured to 288 · 192 · 368, but until it's attached
+**nobody knows whether those values are right on screen** (they were measured only on the asset originals).
+
+---
+
+## What blocks it — measured
+
+| Where | Now | What the triangle circle needs |
 |---|---|---|
-| `src/sim/circle_defs.gd` | `CIRCLE_ROUND` **하나뿐**. `ALL = [CIRCLE_ROUND]` | 진을 하나 더 세운다 (`rune_slots` 3) |
-| `src/view/circle_layout.gd` `rune_slots()` | **`n != 1` 이면 짖고 빈 배열**을 준다 | 셋을 12시·4시·8시에 놓는다 |
-| 같은 파일 층 축 | **층 = 동심원** 전제 | **소켓마다 띠 하나** — 동심원이 아니다 |
+| `src/sim/circle_defs.gd` | **Only `CIRCLE_ROUND`.** `ALL = [CIRCLE_ROUND]` | Stand up one more circle (`rune_slots` 3) |
+| `rune_slots()` in `src/view/circle_layout.gd` | **Barks and returns an empty array when `n != 1`** | Place three at 12, 4 and 8 o'clock |
+| Layer axis in the same file | Assumes **layer = concentric ring** | **One band per socket** — not concentric |
 
-**셋째가 제일 크다.** 원형 진은 「층이 안쪽부터 밖으로 자란다」가 그림 자체에 들어가 있는데
-(`circle_layout` 주석), **삼각진은 층이 소켓 셋에 흩어진다.** ⇒ 「안쪽부터 실행」이 그림으로
-표현이 안 되고, **그 자리를 시계방향 순서가 대신 진다.**
+**The third is the biggest.** For round circles, "layers grow from the inside out" is in the picture itself
+(`circle_layout` comment), but **the triangle scatters layers across three sockets.** ⇒ "Execute from the inside"
+can't be expressed as a picture, and **clockwise order takes that job instead.**
 
-`circle_layout.gd` 의 짖음은 **일부러 심어 둔 것**이다(「진을 늘리면서 룬을 어떻게 늘어놓을지
-안 정하면 래퍼의 stderr 검사에 공짜로 걸린다」). ⇒ **그 짖음을 지우는 것이 이 작업의 첫 줄이 아니다.**
-배치를 정하고 나서 지워야 한다.
+The bark in `circle_layout.gd` was **planted deliberately** ("add a circle without deciding how runes lay out and
+the wrapper's stderr check catches it for free"). ⇒ **Removing that bark is not this work's first line.**
+Remove it after deciding the layout.
 
 ---
 
-## 정해야 할 것 — **코드보다 먼저다**
+## To decide — **before any code**
 
-**앞 문서에서 그대로 넘어온 것들이다. 안 정하면 짤 수가 없다.**
+**Carried straight over from the preceding doc. Unresolved, it can't be written.**
 
-### ① 확산 「한 마법진에 하나만」의 단위
+### ① The unit of spread's "only one per magic circle"
 
-삼각진은 **룬마다 문양 칸이 따로**라 「한 마법진」이 무엇인지 흔들린다.
+The triangle has **separate glyph slots per rune**, so what "one magic circle" means wobbles.
 
-| 고르면 | 결과 |
+| If you pick | Result |
 |---|---|
-| 칸마다 하나 | 확산 셋 ⇒ **24발.** 지금 상한 32발에 닿는다 |
-| 진 전체에 하나 | **그림이 거짓말을 한다** — 소켓 셋이 똑같이 생겼는데 하나만 확산을 받는다 |
+| One per slot | Three spreads ⇒ **24 bolts.** Hits the current cap of 32 |
+| One per circle | **The picture lies** — three identical-looking sockets and only one gets spread |
 
-### ② 삼각진의 순차 간격
+### ② The triangle's sequence interval
 
-세 발이 **몇 틱 간격**으로 나가나. 0이면 사실상 병렬이고, 길면 「고장 났다」로 읽힌다.
-**이 값이 ①의 폭증 크기를 직접 정한다** — 흩어져 착탄하면 24발이 동시에 안 산다.
+**How many ticks apart** the three shots leave. Zero is effectively parallel; long reads as "broken".
+**This value directly sets the size of ①'s explosion** — scattered impacts mean 24 bolts never coexist.
 
-### ③ 시계방향 순서를 어떻게 가르치나
+### ③ How the clockwise order gets taught
 
-**그림이 순서를 표시하지 않기로 했다**(사용자 판정). 남은 안전판이 **12시 소켓**과 **온보딩** 둘인데,
-온보딩에 넣을지는 안 정했다.
+**The picture deliberately doesn't show order** (user decision). Two safeguards remain, the **12 o'clock socket**
+and **onboarding**, and whether it goes into onboarding is undecided.
 
-**앞 문서의 판정 2가 여기서 반쯤 실패했다** — 12시에 소켓이 있다는 것 말고는 단서가 없고,
-**소켓 셋이 똑같이 생겼다.** ⇒ 「12시가 1번」은 **그림이 아니라 규칙으로만** 존재한다.
-GDD의 「순서가 화면에 안 보이면 플레이어는 규칙을 영영 못 배운다」가 정확히 이 자리다.
+**The preceding doc's acceptance check 2 half-failed here** — beyond a socket at 12 o'clock there is no clue,
+and **the three sockets look identical.** ⇒ "12 o'clock is #1" exists **as a rule, not as a picture.**
+The GDD's "if order isn't visible on screen the player never learns the rule" is exactly this place.
 
 ---
 
-## 같이 다시 볼 것 — 소켓 띠 48
+## Look at again alongside — the 48 socket band
 
-**앞 문서가 임시로 넘긴 미해결이다.** `docs/design/마법진-그림.md` 의
-「문양은 직관적이고 기하학적이어야 한다」 아래 상자가 기준이다.
+**An unresolved item the preceding doc handed over provisionally.** The box under "glyphs must be intuitive and
+geometric" in `docs/design/circle-art.md` is the source.
 
 ```
-띠 두껍게  →  뜻이 읽힌다              →  안쪽 구멍 72~75, 룬 자리 96 을 침범
-띠 얇게    →  안쪽 구멍이 규격에 맞음    →  무늬가 눈금이 되어 뜻이 사라진다
+thicker band  →  meaning reads          →  inner hole 72–75, intrudes on the rune's 96
+thinner band  →  inner hole meets spec  →  the pattern becomes tick marks and the meaning is gone
 ```
 
-지금 에셋은 **침범 쪽**이다. **불 룬(선화)에서만 확인했다** — 게임에 붙이면
-**다른 룬과 겹치는 모습이 처음으로 보인다.** 그때 다시 판단할 자리다.
+The current asset is on the **intruding** side. **Verified only on the fire rune (line art)** — attached to the game,
+**overlap with other runes becomes visible for the first time.** That is when to judge again.
 
-**게임 크기 144 는 앞 문서에서 쟀다** — 둘은 **144 에서도 갈린다.**
-다만 **확산의 쐐기 안 해칭이 회색 얼룩이 된다** — 뜻은 남고 질감이 죽는다.
-**다음 문양 15개를 뽑을 때 그 규칙이 먼저다**: 굵은 형태가 뜻을 지고 **해칭 · 가는 평행선 ·
-잔 점은 못 간다.**
-
----
-
-## 경계
-
-**안 하는 것**:
-- 일반진 · 융합진의 그림 — `docs/design/마법진-그림.md` 「안 풀린 것」에 남아 있다
-- 나머지 15개 문양의 288판
-- 진을 얻는 경로(드랍 · 상점) — GDD에 문서가 없다
+**Game size 144 was measured in the preceding doc** — the two separate **even at 144.**
+But **the hatching inside spread's wedges becomes a grey smudge** — the meaning survives, the texture dies.
+**That rule comes first when generating the next 15 glyphs**: bold forms carry the meaning, and
+**hatching, thin parallel lines and fine dots cannot travel.**
 
 ---
 
-## 판정 — 무엇을 봐야 끝났다고 하나
+## Boundary
 
-1. **조립창에서 삼각진이 선택되고 그려지나** — 소켓 셋 · 12시 시작
-2. **룬 셋을 끼우면 소켓 셋에 각각 들어가나**
-3. **문양을 끼우면 그 룬의 소켓 띠에만 붙나** — 가운데에 붙으면 「룬마다 1층」이 깨진 것이다
-4. **쏘면 세 발이 나가나** — 위 ②의 간격대로
-5. **실제 화면에서 문양 둘이 갈리나** — 에셋 단계에서는 144 로 줄여 확인했다.
-   여기서 새로 재는 것은 **진 · 룬 · 문양이 겹친 뒤에도** 갈리나다
+**Not doing**:
+- Art for the basic and fusion circles — left in `docs/design/circle-art.md`, "Unresolved"
+- 288 boards for the remaining 15 glyphs
+- How circles are obtained (drops · shop) — no doc in the GDD
 
 ---
 
-## 미정 — 아직 차례가 아닌 것
+## Acceptance — what must be seen to call it done
 
-**억지로 채우지 않는다**(GDD 「뼈 먼저」).
+1. **Is the triangle circle selectable and drawn in the assembly window** — three sockets · starting at 12 o'clock
+2. **Do three runes each go into a socket**
+3. **Does a glyph attach only to that rune's socket band** — attaching at the center means "one layer per rune" broke
+4. **Do three shots go out when firing** — at the interval from ② above
+5. **Do the two glyphs separate on the real screen** — at the asset stage this was checked by shrinking to 144.
+   What is newly measured here is whether they separate **after circle, rune and glyph overlap**
 
-- 가운데 장식이 무엇을 뜻하나 — 크기는 정해졌다(반지름 112). **문양이 아니다**
-- 좌표가 두 곳이다 — `tools/pixel/draw_circle.py`(에셋)와 `src/view/circle_layout.gd`(게임).
-  갈리면 「에셋은 맞는데 게임에서 어긋난다」가 되고 **에러가 안 난다**
+---
+
+## TBD — not its turn yet
+
+**Do not force these full** (GDD "skeleton first").
+
+- What the center ornament means — its size is set (radius 112). **It is not a glyph**
+- Coordinates live in two places — `tools/pixel/draw_circle.py` (assets) and `src/view/circle_layout.gd` (game).
+  Diverge and you get "the asset is right but the game is off", **with no error**

@@ -1,11 +1,11 @@
 extends RefCounted
-## 자동 생성 — 손으로 고치지 마라.
-## 지형을 고치려면 Godot 에디터에서 stage.tscn의 Terrain(TileMapLayer)을 다시 그리고
-## 구워라(스크립트 에디터에서 `bake_terrain_editor.gd` 열고 실행, 또는 헤드리스 `bake_terrain.gd`).
-## MAP_W·MAP_H는 그린 영역의 실제 크기다(`TileMapLayer.get_used_rect()`) — 손으로 안 맞춘다.
-## 🔴 재질을 새로 추가했으면 `terrain_baker.gd`의 CHAR_BY_MAT·NAME_BY_MAT을 늘리고
-## **이 파일을 다시 구워야 한다** — 도구만 고치면 이 산출물은 안 따라온다.
-## (붓 그림과 타일셋 표는 `terrain_palette.gd` 파생이라 손댈 것이 없다.)
+## Generated automatically - do not edit by hand.
+## To change the terrain, redraw stage.tscn's Terrain(TileMapLayer) in the Godot editor and
+## bake (open `bake_terrain_editor.gd` in the script editor and run it, or headless `bake_terrain.gd`).
+## MAP_W and MAP_H are the drawn region's real size (`TileMapLayer.get_used_rect()`) - not matched by hand.
+## If a new material was added, extend `terrain_baker.gd`'s CHAR_BY_MAT and NAME_BY_MAT and
+## **this file must be baked again** - fix only the tool and this artifact does not follow.
+## (The brush drawing and the tileset table derive from `terrain_palette.gd`, so there is nothing to touch.)
 
 const Mat := preload("res://src/sim/cell_materials.gd")
 

@@ -1,7 +1,8 @@
-# 지팡이 — 그림과 발사 원점
+# The staff — art and the firing origin
 
-**상태**: done — **사용자 통과이되 「살짝 짜친다」가 붙었고 그게 무엇인지 안 물었다**(「판정」 절)
-**다시 열 이유**: 지팡이 그림이나 발사 원점을 고칠 때만.
+**Status**: done — **the user passed it with "it's slightly off" attached, and nobody asked what that meant** (see "Acceptance")
+**Why you'd reopen**: only when changing the staff art or the firing origin.
+
 **한 줄**: 지팡이가 선에서 그림이 되고, **지형에 막히면 그림·끝 색·발사 원점이 한 덩어리로 짧아진다.**
 
 ## 왜

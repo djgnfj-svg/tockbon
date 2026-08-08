@@ -1,54 +1,56 @@
 extends RefCounted
-## 창 축 좌표 — **책이 펼쳐진 두 페이지.** 🔴 페이지 사각형이 여기 한 곳에서 나온다.
+## Window-axis coordinates — **a book opened to two pages.** The page rectangles come from this one place.
 ##
 ## ```
-##  ┌─ 제목 띠 ──────────────────────────┐
+##  ┌─ title band ───────────────────────┐
 ##  │ ┌──────────┬┬──────────┐           │
-##  │ │  왼쪽    ││  오른쪽  │           │
-##  │ │ 팔레트   ││ 마법진   │           │
+##  │ │  left    ││  right   │           │
+##  │ │ palette  ││ circle   │           │
 ##  │ └──────────┴┴──────────┘           │
-##  └────────접힘────────────────────────┘
+##  └────────fold────────────────────────┘
 ## ```
 ##
-## 🔴🔴 **왜 별도 파일인가 — 마법진이 페이지를 모르게 하려고.**
-##  `circle_layout`이 이 파일을 참조하는 순간 **마법진 축이 창 축에 매달린다.** 창 모양이 바뀌는 날
-##  마법진 코드가 같이 열린다. ⚠ 단계 3에서 `_draw_ring`이 `frame()["center"]`를 부르다 고친 것과
-##  **똑같은 병이 한 층 위에서 반복되는 것**이다. ⇒ 파일을 가르면 그 결합이 **참조로 드러난다**
-##  (`net_circle`이 텍스트로 잰다).
+## **Why a separate file — to keep the magic circle from knowing about pages.**
+##  The moment `circle_layout` references this file, **the circle axis hangs off the window axis.** The day the
+##  window shape changes, the magic circle's code opens with it. It is **exactly the same disease one level up**
+##  as what was fixed in stage 3 when `_draw_ring` was calling `frame()["center"]`. => Splitting the file makes
+##  that coupling **show up as a reference** (`net_circle` measures it as text).
 ##
-## 🔴🔴 **왜 두 페이지인가 — 은유가 아니라 자라는 방향이다.**
-##  팔레트는 표가 늘면 **세로**로 자라고(진 N · 룬 M · 문양 K), 마법진은 층·룬 자리가 늘면
-##  **가로·지름**으로 자란다. 한 축에 쌓으면 하나가 자랄 때 다른 하나를 민다 —
-##  팔레트를 아래 띠로 두면 문양을 여섯으로 늘리는 날 마법진이 밀린다.
-##  ⇒ 옆에 두면 각자 자기 페이지 안에서 자란다.
+## **Why two pages — not a metaphor but the direction of growth.**
+##  The palette grows **vertically** as the tables grow (N circles, M runes, K glyphs), while the magic circle grows
+##  **horizontally and in diameter** as layers and rune slots grow. Stack them on one axis and one growing pushes
+##  the other — put the palette in a band below and the day glyphs go to six, the magic circle gets pushed.
+##  => Side by side, each grows inside its own page.
 ##
-## 🔴 **접힘은 장식이 아니라 경계의 그림이다.** 보이는 경계와 (단계 4b의) 히트테스트 경계가
-##  같아야 한다 — 다르면 「이쪽을 눌렀는데 저쪽이 반응한다」가 되고 **에러가 안 난다.**
-##  ⇒ 그림도 클릭도 아래 `pages()` 하나를 읽는다.
+## **The fold is not decoration but a picture of the boundary.** The visible boundary and the hit-test boundary
+##  (of stage 4b) must be the same — differ and it becomes "I clicked this side and that side responded",
+##  and **no error is raised.**
+##  => Drawing and clicking both read the single `pages()` below.
 ##
-## 🔴🔴 **그리기는 변환 안에서 하고 클릭은 변환 밖에서 받으면 조용히 어긋난다**(위험 22).
-##  창이 `draw_set_transform(pages()["right"].position)`으로 마법진을 페이지에 앉히므로,
-##  **클릭도 같은 `position`을 빼서 받아야 한다.** ⚠ 이 리포에 같은 실측이 있다 —
-##  `stage_input._to_world`가 캔버스 변환을 안 되돌리면 「흔드는 동안 조준이 엉뚱한 셀로 간다」.
-##  **같은 병이고 같은 답이다: 뺄 값이 여기 한 곳에서 나온다.**
+## **Draw inside the transform and take clicks outside it and they diverge silently** (risk 22).
+##  The window seats the magic circle on its page with `draw_set_transform(pages()["right"].position)`, so
+##  **the click must subtract that same `position`.** This repo has the same measurement —
+##  when `stage_input._to_world` fails to undo the canvas transform, "aim goes to the wrong cell while shaking".
+##  **The same disease and the same answer: the value to subtract comes from this one place.**
 
 const Fx := preload("res://src/view/fx_tuning.gd")
 
 
-## 창 안쪽 좌표계의 두 페이지와 접힘.
+## The two pages and the fold, in the window's inner coordinate system.
 ##
-## 🔴 **페이지 크기를 박지 않고 창 크기에서 파생시킨다.** 박으면 창을 키우는 날 페이지가
-##  창 밖으로 나가거나 안쪽에 빈 띠가 생기고, 둘 다 화면 문제라 **에러가 안 난다.**
-## ⚠ 제목 띠 **아래**에서 시작한다 — 그래서 마법진이 제목과 부딪히는 일이 **구조적으로 없어진다**
-##  (위험 24의 여유 6.4px가 여기서 사라진다. 단계 3에서는 창 전체가 마법진 자리였다).
+## **Page size is derived from window size rather than pinned.** Pin it and the day the window grows, the pages
+##  either run outside the window or leave an empty band inside, and both are screen problems, so **no error is raised.**
+## It starts **below** the title band — which is why the magic circle colliding with the title becomes
+##  **structurally impossible** (risk 24's 6.4px of margin disappears here. In stage 3 the whole window was
+##  the magic circle's seat).
 static func pages(window_size: Vector2) -> Dictionary:
 	var m := Fx.BOOK_MARGIN_PX
 	var top := Fx.WINDOW_TITLE_BAND_PX
 	var fold_w := Fx.BOOK_FOLD_PX
 	var w := maxf(window_size.x - m * 2.0, 0.0)
 	var h := maxf(window_size.y - top - m, 0.0)
-	# ⚠ 두 페이지가 **같은 폭**이다. 다르게 두면 「어느 쪽이 본체인가」가 생기고,
-	#  책 펼침이 아니라 「본문 + 곁다리」로 읽힌다.
+	# The two pages are **the same width.** Make them differ and "which one is the main body" appears,
+	#  and it reads as "body text + a sidebar" rather than an opened book.
 	var page_w := maxf((w - fold_w) * 0.5, 0.0)
 	return {
 		"left": Rect2(m, top, page_w, h),
@@ -57,28 +59,29 @@ static func pages(window_size: Vector2) -> Dictionary:
 	}
 
 
-## 🔴🔴 **어느 페이지가 무엇인가 — 여기가 단일 소스다.** 창도 그물도 이 둘만 부른다.
+## **Which page is what — this is the single source.** The window and the nets call only these two.
 ##
-## ⚠ **좌우는 이미 한 번 뒤집혔다** (spec의 처음 안은 「왼쪽 팔레트 · 오른쪽 마법진」이었고
-##  사용자 판정으로 반대가 됐다). 또 뒤집힐 수 있으므로 **키를 여기저기 박지 않는다** —
-##  박으면 뒤집는 날 창과 그물이 따로 뒤집혀 **한쪽만 옮겨 간 채로 초록**이 된다.
-## 🔴 뒤집기는 **아래 두 줄을 맞바꾸는 일**이어야 한다.
+## **Left and right have already been flipped once** (spec's first proposal was "palette on the left, magic circle
+##  on the right" and the user's acceptance reversed it). It may flip again, so **do not pin the keys all over** —
+##  pin them and the day it flips, the window and the nets flip separately and it stays **green with only one side moved.**
+## Flipping must be **swapping the two lines below.**
 ##
-## 🔴🔴 **좌우의 근거는 사용자 판정 하나뿐이다** (2026-08-03:
-##  「왼쪽에 마법진, 오른쪽에는 진·룬·문양 들을 선택할 수 있게 해」).
+## **The only grounds for left and right is one user judgment**
+##  ("put the magic circle on the left, and on the right let me pick circles, runes and glyphs" — decided by the user).
 ##
-## ⚠ **여기 「마법진이 바깥쪽이라 팔레트를 안 민다」고 적혀 있었는데 거짓이었다. 남겨 둔다.**
-##  위 `pages()` 가 창을 **늘 정확히 반으로** 가르고(스스로 「두 페이지 폭이 같다」고 적었다)
-##  `circle_layout.circle_area()` 는 그 상자에서 패딩만 준다 ⇒ **마법진은 어느 쪽에 있든
-##  자기 절반 안에서 좁아질 뿐 바깥으로 자랄 수가 없다.** 그 구조가 **실재하지 않았다.**
+## **It used to say here "the magic circle is on the outside so it doesn't push the palette", and that was false.
+##  It is left in place.**
+##  `pages()` above splits the window **always exactly in half** (it says so itself: "the two pages are the same width")
+##  and `circle_layout.circle_area()` only pads inside that box => **wherever the magic circle sits, it can only
+##  narrow within its own half and can never grow outward.** That structure **did not exist.**
 ##
-## 🔴 그건 **미래 근거**다 — `pages()` 가 **비대칭 분할**을 할 수 있게 되는 날 참이 된다.
-##  ⚠ **걸리는 것은 진의 종류가 아니라 분할 방식이다.** 룬 자리가 여럿인 진이 와도
-##   `pages()` 가 지금 모양이면 여전히 못 자란다.
+## That is a **future** rationale — it becomes true the day `pages()` can do an **asymmetric split.**
+##  **What binds is the split method, not the kind of circle.** Even when a circle with several rune slots arrives,
+##   it still cannot grow while `pages()` has its current shape.
 ##
-## ⚠ **교훈은 이 파일 밖에도 걸린다**: 계획 문서의 한 줄을 코드 주석으로 옮길 때
-##  **그게 검증된 문장인지 코드에서 한 번 더 봐라.** 「구조 근거」라고 부르려면 그 구조가
-##  실재해야 한다. 🔴 CLAUDE.md의 「문서를 요약해 넣지 않는다. 가리키기만 한다」가 이 자리다.
+## **The lesson binds outside this file too**: when moving a line from a plan doc into a code comment,
+##  **check once more in the code whether that sentence is verified.** To call it "structural grounds",
+##  that structure must actually exist. CLAUDE.md's "do not summarize a doc into a comment, point at it" is this seat.
 static func circle_page(window_size: Vector2) -> Rect2:
 	return pages(window_size)["left"]
 

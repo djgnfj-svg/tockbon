@@ -1,76 +1,91 @@
 ---
 name: verify-run
-description: 실제로 돌려서 검증한다. 게임을 띄우고 값을 관측해 정말 되는지 확인한다. 코드를 읽는 검증은 verify-read가 맡는다.
+description: Verifies by actually running. Launches the game and observes values to confirm it really works. Reading code belongs to verify-read.
 ---
 
-# verify-run — 돌려서 검증
+# verify-run — verify by running
 
-**코드가 뭐라고 적혀 있는지는 보지 않는다. 돌렸을 때 무슨 일이 일어나는지만 본다.**
+**Never look at what the code says. Only at what happens when it runs.**
 
-## 판정 기준
+## Acceptance criteria
 
-`docs/plans/2.active/<이름>.md` 의 `## 판정` 절. 거기 적힌 것을 실제로 관측한다.
+The `## Acceptance` section of `docs/plans/2.active/<name>.md`. Observe what is written there, for real.
 
-판정 절이 비어 있거나 관측 불가능하게 적혀 있으면 **그 자체가 실패다.** spec에 돌려보낸다.
+An empty acceptance section, or one written so it can't be observed, **is itself a failure.** Send it back to spec.
 
-## 잡아야 할 것
+## What to catch
 
-이 리포의 실패는 대부분 에러 없이 조용히 일어난다. 그래서 "에러가 안 났다"는 통과 근거가 못 된다.
+Failure in this repo is usually silent. So "no error" is not grounds for a pass.
 
-- **화면은 바뀌는데 시뮬은 안 바뀐다** (또는 반대). 둘 다 따로 관측한다.
-- **아무 일도 안 일어난다.** 커맨드 문을 우회하면 에러 없이 조용히 무시된다.
-- **숫자는 바뀌는데 화면은 그대로다.** 위력을 올렸는데 눈에 보이는 변화가 없으면 실패다.
-- **정지 상태에서 비용이 0이 아니다.** 아무것도 안 움직이는데 활성 청크가 남아 있으면 성능이 곧 무너진다.
+- **Screen changes, sim doesn't** (or the reverse). Observe both separately.
+- **Nothing happens at all.** Bypass the command gate and it is silently ignored, without error.
+- **Numbers change, screen doesn't.** Power went up with no visible change — that's a failure.
+- **Cost isn't zero at rest.** Nothing moving but active chunks remaining means performance collapses soon.
 
-## 관측 방법 — 헤드리스로만 한다
+## How to observe — headless only
 
-**`godot_*` MCP 도구를 쓰지 않는다** — 이유는 `CLAUDE.md` 「godot MCP는 화면을 보는 검증만 쓴다」에 있다. 게임은 `Godot_*.exe --headless --script` 로 직접 띄운다 (`tests/run_nets.ps1` 과 같은 방식). 값은 그 스크립트가 찍는다.
+**No `godot_*` MCP tools** — reason is in `CLAUDE.md` under "godot MCP". Launch the game directly with
+`Godot_*.exe --headless --script` (same as `tests/run_nets.ps1`). That script prints the values.
 
-### 헤드리스에서 클릭을 재려면 `in_local_coords = true` 다
+### Measuring a click headless requires `in_local_coords = true`
 
-`root.push_input(ev)` 는 **GUI 파이프라인을 안 탄다.** 헤드리스 창이 64×64인데 `visible_rect` 는 960×960이라 비-로컬 경로가 좌표를 뭉갠다 — `_gui_input` 이 0회 돌고 `gui_get_hovered_control()` 이 늘 null이다.
+`root.push_input(ev)` **does not go through the GUI pipeline.** The headless window is 64×64 while
+`visible_rect` is 960×960, so the non-local path mangles coordinates — `_gui_input` runs 0 times and
+`gui_get_hovered_control()` is always null.
 
-**그러면 모든 클릭이 발사로 새서 「창이 클릭을 안 막는다」로 잘못 읽힌다.** 실제로 그 오판이 났다. 양성 대조(내가 만든 `STOP` Control 안을 클릭)와 음성 대조(아무 Control도 없는 자리를 클릭)를 세워서야 하네스 탓인 것이 드러났다 — 둘 다 똑같이 샜다.
+**Then every click leaks through to firing and reads as "the window doesn't block clicks".** That misreading
+happened. Only a positive control (click inside a `STOP` Control I built) plus a negative control (click where
+no Control exists) exposed it as a harness problem — both leaked identically.
 
-`root.push_input(ev, true)` 가 맞는 길이다. `Input.parse_input_event(ev)` 도 GUI를 안 탄다.
+`root.push_input(ev, true)` is the right call. `Input.parse_input_event(ev)` also skips the GUI.
 
-**클릭 판정은 「그 프레임 안에서 커맨드 큐가 늘었나」로 잰다.** 틱 타이밍에 안 의존해야 반복 측정이 흔들리지 않는다.
+**Measure a click as "did the command queue grow within that frame".** Independent of tick timing, so repeats don't wobble.
 
-**음성 대조를 반드시 붙여라.** 「창이 막았다」와 「GUI가 통째로 죽었다」는 관측이 같다. `IGNORE` Control 위를 클릭해 발사가 되는 것을 같이 보여야 앞의 것이 증명된다.
+**Always attach a negative control.** "The window blocked it" and "the GUI is dead entirely" observe identically.
+Clicking over an `IGNORE` Control and seeing the shot fire is what proves the former.
 
-### 러너는 `src/`의 파스 에러를 못 잰다. 반드시 래퍼로 돌리고 마지막 줄을 봐라
+### The runner cannot measure parse errors in `src/`. Always run through the wrapper and read the last line
 
-**`load()`는 파스 실패해도 null이 아닌 객체를 돌려준다.** 그래서 `net_layers`의 「읽힌다」가 **깨진 파일에도 통과한다.** 통제 실험으로 확인했다 — `circle_window.gd`를 통째로 깨뜨렸는데 러너 출력이 이랬다:
+**`load()` returns a non-null object even on parse failure.** So `net_layers`' "it loads" **passes on a broken file.**
+Confirmed by controlled experiment — `circle_window.gd` was fully broken and the runner printed:
 
 ```
-o circle_window.gd 가 읽힌다      ← 파스 실패한 파일인데 통과
-[그물] 통과 959개                 ← 깨끗할 때와 똑같다. 실패 0개
+o circle_window.gd loads          ← parse-failed file, passes
+[net] 959 passed                  ← identical to clean. 0 failures
 ```
 
-**잡은 것은 래퍼의 stderr 검사 하나뿐이다.** 따뜻한 캐시든 찬 캐시든 1회차에 바로 잡았고, 「첫 실행만 초록」은 6/6에서 한 번도 안 났다.
+**The only thing that caught it was the wrapper's stderr check.** Warm cache or cold, it caught it on the first
+run, and "green only on the first run" never occurred in 6/6.
 
-⇒ **「통과 N개」를 보고 초록으로 읽지 마라.** 그 아래 `[래퍼]` 줄이 판정이다. 그리고 이건 **여러 번 돌려서 잡히는 종류가 아니다** — 매번 똑같이 초록으로 보인다.
+⇒ **Do not read "N passed" as green.** The `[wrapper]` line below it is the verdict. And this is **not the kind
+of thing repeated runs catch** — it looks green identically every time.
 
-**그리고 씬을 못 세우면 검사가 「실패」가 아니라 없어진다.** `net_render`의 씬 검사들이 `if scene == null: return`으로 조용히 빠져나가서, 통과 수만 줄고 아무도 안 짖는다. 통과 수가 **줄어든** 것도 신호다 — 늘어난 것만 보지 마라.
+**And a check whose scene fails to build doesn't fail — it disappears.** `net_render`'s scene checks bail out via
+`if scene == null: return`, so the pass count drops and nobody barks. A **drop** in the pass count is a signal too —
+don't watch only for increases.
 
-### 측정 중에 트리가 안 흔들렸는지 해시로 못박는다
+### Pin down that the tree didn't move during measurement, with a hash
 
-이 팀은 builder와 검증자가 병렬로 돈다. **관측하는 동안 리포가 바뀌면 그 결과는 통째로 무효다** — 실제로 여러 번 났다. 실행 직전·직후에 해시를 찍어 같은 판본을 쟀다는 것까지가 관측이다.
+builder and the verifiers run in parallel on this team. **If the repo changes while you observe, the result is void** —
+it happened repeatedly. Hash immediately before and after; proving you measured one revision is part of the observation.
 
-**파일 목록을 고정으로 들지 마라. 디렉터리를 통째로 재귀 해시해라.** 목록에 없는 **새 파일**은 안 보이고, 그러면 트리가 실제로 바뀌었는데 「안 바뀌었다」로 읽는다. 실측으로 겪었다 — builder가 새 파일 하나를 더했는데 해시 검사가 「안정」이라고 답했다.
+**Do not hold a fixed file list. Hash the directory recursively.** A **new file** isn't in the list, so a tree that
+really did change reads as "unchanged". Measured: builder added one new file and the hash check answered "stable".
 
-**그물이 갑자기 빨개지면 새 파일부터 의심해라.** `net_layers`가 `src/`를 재귀 스캔해서 새 파일을 자동으로 파스한다. 아직 없는 상수를 참조하는 반쯤 쓰인 파일이 들어오면 그 순간 파스 에러가 난다. **통과 수가 파일당 3씩 늘어난 것이 그 증거다** — 내 변경 때문이 아니라 남이 작업 중인 것이다.
+**If nets suddenly go red, suspect a new file first.** `net_layers` scans `src/` recursively and auto-parses new files.
+A half-written file referencing a constant that doesn't exist yet throws a parse error the moment it lands.
+**Pass count up by 3 per file is the evidence** — it's not your change, someone else is mid-work.
 
-- **스크린샷을 찍지 않는다.** 보기에 어떤가는 verify-look의 일이다. 나는 수치만 본다.
-- **화면 비율은 못 잰다.** 헤드리스 `visible_rect` 가 960×960이라 실제 창(960×540)과 종횡비가 다르다. 「창이 무대를 얼마나 가리나」는 verify-look의 몫이다.
-- **렌더 비용(FPS)은 헤드리스로 원리적으로 못 잰다.** 그건 내 몫이 아니다 — 못 쟀다고 보고하고 verify-look에게 넘긴다.
-- **사용자의 마우스·키보드를 뺏지 않는다.** 창을 포커스하거나 키를 주입하는 경로는 금지다. 사용자가 같은 컴퓨터를 쓰고 있다.
+- **Do not take screenshots.** How it looks is verify-look's job. Numbers only.
+- **You cannot measure aspect ratio.** Headless `visible_rect` is 960×960, a different ratio from the real window (960×540). "How much of the stage the window covers" is verify-look's.
+- **Render cost (FPS) is impossible to measure headless, in principle.** Not yours — report that you couldn't and hand it to verify-look.
+- **Never take the user's mouse or keyboard.** Focusing a window or injecting keys is forbidden. The user is on the same machine.
 
-## 보고
+## Report
 
-통과든 실패든 **무엇을 어떻게 관측했는지** 같이 적는다.
+Pass or fail, write **what you observed and how.**
 
-- 통과: 관측값과 기대값
-- 실패: 무엇이 일어났고 무엇이 안 일어났는지. 원인 추측은 하되 단정하지 않는다
+- Pass: observed value and expected value
+- Fail: what happened and what didn't. Guess at a cause, but don't assert one
 
-**"확인했다"만 적지 않는다.** 무엇을 봤는지 적히지 않은 통과는 통과가 아니다.
+**Never write just "confirmed".** A pass with no record of what you saw is not a pass.

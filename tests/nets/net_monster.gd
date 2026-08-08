@@ -1,31 +1,31 @@
 extends RefCounted
-## 몬스터 단계 0·1 — `Body` 추출과 몬스터 한 마리가 서는 것.
+## Monster stages 0 and 1 — extracting `Body`, and one monster standing up.
 ##
-## 🔴 판정 1(단계 0)은 새 검사 0개다. `Character.W_PX`류는 `net_character`가 이미 재고,
-##  층 계약(`src/view/`·`src/stage/` 미참조)도 `net_layers`가 폴더를 재귀 스캔해서 잰다.
-## 🔴 여기는 `monster_defs`·`body`·`monster`·`world_step`의 몬스터 몫·`monster_view`를 잰다.
+## Acceptance 1 (stage 0) adds zero new checks. `Character.W_PX` and its kind are already measured by
+##  `net_character`, and the layer contract (no reference to `src/view/` or `src/stage/`) is measured by `net_layers`, which scans the folders recursively.
+## What is measured here is `monster_defs` · `body` · `monster` · `world_step`'s monster share · `monster_view`.
 ##
-## 🔴🔴 **아래 검사들 중 여섯은 첫 판(verify-read)이 격리 사본에서 뮤테이션 12개를 걸어
-##  실제로 안 물린 것을 찾은 뒤 고친 것이다** — 새 검사를 넣으면 뒤집어 봐라(CLAUDE.md).
-##  | 뚫렸던 것 | 지금 무는 것 |
+## **Six of the checks below were fixed after the first pass (verify-read) ran 12 mutations on an isolated
+##  copy and found the ones that did not actually bite** — put a new check through an inversion (CLAUDE.md).
+##  | what used to get through | what bites now |
 ##  |---|---|
-##  | `Monster`가 `Body`에 `w_px`를 안 넘겨도(20px 고정) 착지 y만 보면 안 걸린다 | 가로 이동 없는
-##    세로 굴뚝(`_monster_collision_width_gates_the_chimney`) — 32px 틈에 닭은 들어가고 돼지는 걸린다 |
-##  | `MAX_MONSTERS`를 20 → 3으로 낮춰도 검사 10이 항진명제라 안 걸린다 | 절대값
-##    (`_defs_accessors`의 `MAX_MONSTERS = 20`) |
-##  | `stage.gd`의 `monster_requested.connect(`를 지워도(= M키가 죽어도) 66개 전부 초록 | 검사 13이
-##    그 문자열도 같이 문다 |
-##  | `on_ground`가 영원히 거짓이어도(= 몬스터가 턱을 못 오른다) 전부 초록 | 착지 뒤 `on_ground`가
-##    참인지 직접 잰다(옛 검사 7) |
-##  | `spawn_monster()`가 `_broken` 문 밖에 있어도 전부 초록 | `net_damage._null_world_refuses`에
-##    옮겨 걸었다(그쪽이 `_broken` 계약의 단일 소스다) |
-##  | 옛 검사 6·7이 `Monster.step()`을 직접 불러 「몬스터가 세상 루프 안에 산다」의 증인이
-##    검사 8 하나뿐이었다 | 6·7을 `world.frame()`을 지나게 다시 짰다 |
+##  | `Monster` not passing `w_px` to `Body` (fixed 20px) isn't caught if you only look at the landing y | the vertical
+##    chimney with no horizontal movement (`_monster_collision_width_gates_the_chimney`) — a hen fits the 32px gap, a pig catches |
+##  | lowering `MAX_MONSTERS` from 20 to 3 isn't caught, because check 10 is a tautology | the absolute value
+##    (`MAX_MONSTERS = 20` in `_defs_accessors`) |
+##  | deleting `monster_requested.connect(` from `stage.gd` (= the M key dies) leaves all 66 green | check 13
+##    bites that string too |
+##  | `on_ground` being false forever (= the monster can't climb a ledge) leaves everything green | it measures
+##    directly whether `on_ground` is true after landing (old check 7) |
+##  | `spawn_monster()` sitting outside the `_broken` door leaves everything green | it was moved onto
+##    `net_damage._null_world_refuses` (that one is the single source for the `_broken` contract) |
+##  | old checks 6 and 7 called `Monster.step()` directly, so check 8 was the only witness that "a monster
+##    lives inside the world loop" | 6 and 7 were rewritten to go through `world.frame()` |
 
-## 🔴 주석·문자열 스트리퍼를 **빌려 온다** — 소스 텍스트를 훑는 그물이 여럿이고 스트리퍼는
-##  하나여야 한다(`net_damage`·`net_render`와 같은 이유). ⚠ **없이 짰다가 데었다** — 뒤집기로
-##  `monster_requested.connect(`를 지우면서 그 사실을 적은 주석에 같은 문자열을 남겼더니
-##  `.contains()`가 주석에서 그 문자열을 찾아 **뮤테이션이 하나도 안 물렸다**(실측).
+## The comment/string stripper is **borrowed** — several nets sweep source text and there must be only
+##  one stripper (the same reason as `net_damage` and `net_render`). **It got burned when written without it** —
+##  an inversion deleting `monster_requested.connect(` left the same string in the comment recording that fact,
+##  and `.contains()` found that string in the comment, so **not one mutation bit** (measured).
 const NetDeterminism := preload("res://tests/nets/net_determinism.gd")
 
 const CellGrid := preload("res://src/sim/cell_grid.gd")
@@ -48,23 +48,23 @@ const FLOOR_TOP := FLOOR_CY * Tuning.CELL_PX
 const LEDGE_CX := 30
 const STAGE_SCRIPT := "res://src/stage/stage.gd"
 
-# ─── 단계 3 — 탄·폭발 배치 상수 ─────────────────────────────────────
-## 발사 원점이 상자 왼쪽으로 이만큼 떨어진다. 🔴 `net_damage.HIT_LEAD_PX`와 같은 값 ·
-##  같은 이유다 — 세대 0의 첫 틱 도약(`Tuning.speed_cells(0) * Tuning.CELL_PX`)이 상자보다
-##  훨씬 커서, 이 정도 앞에서 쏘면 구간의 양 끝이 **둘 다 상자 밖**인 「도약 배치」가 된다.
+# --- stage 3 — bolt and blast placement constants -------------------
+## The firing origin sits this far to the left of the box. The same value and the same reason as
+##  `net_damage.HIT_LEAD_PX` — generation 0's first-tick leap (`Tuning.speed_cells(0) * Tuning.CELL_PX`) is
+##  far larger than the box, so firing from this far ahead gives a "leaping placement" with **both ends of the segment outside the box**.
 const HIT_LEAD_PX := 36
 
-## 폭발을 내리꽂을 발사 원점(셀) — 바닥보다 훨씬 위. `net_damage.BLAST_FROM_CY`와 같은 어법이다.
+## The firing origin (in cells) to slam a blast down from — well above the floor. The same idiom as `net_damage.BLAST_FROM_CY`.
 const BLAST_FROM_CY := FLOOR_CY - 20
 
 func _blast_cmd(cx: int) -> Dictionary:
 	var one: Array[int] = [Glyph.GLYPH_BLAST]
 	return SpellSim.cmd_fire(cx, BLAST_FROM_CY, 0, 10, Tuning.ELEM_NONE, Glyph.pack(one))
 
-## 🔴🔴 **바닥은 얇게 깐다**(CLAUDE.md 「그물이 느리면…」, 2026-08-07). 옛 바닥(`CellGrid.H-1`까지)이
-##  4096×908=3,719,168칸이라 한 번에 2,719ms였다 — 이 파일이 43초를 먹은 원인이 그것이다.
-##  ⚠ 안전한 이유: `cell_grid.mat_at()`이 격자 밖을 `STONE`으로 돌려주므로 두꺼울 이유가
-##  원래 없었다. 몬스터는 표면 몇 px 안에서만 논다. 32셀(128px)이면 `carve_r`(8셀)의 4배 여유다.
+## **The floor is laid thin** (CLAUDE.md, "if the net is slow..."). The old floor (down to `CellGrid.H-1`) was
+##  4096x908 = 3,719,168 cells, 2,719ms at a time — that is why this file ate 43 seconds.
+##  Why it is safe: `cell_grid.mat_at()` returns `STONE` outside the grid, so there was never any reason for it
+##  to be thick. Monsters only play within a few px of the surface. 32 cells (128px) is 4x the headroom of `carve_r` (8 cells).
 const FLOOR_DEPTH_CY := 32
 
 
@@ -84,31 +84,31 @@ func run(t) -> void:
 	_ids_are_distinct_and_not_reused(t)
 	_view_box_comes_from_the_table(t)
 	_shell_hands_the_world_to_the_view(t)
-	# ── 단계 2 — 걷는다 ──────────────────────────────────────────
+	# -- stage 2 — it walks ----------------------------------------
 	_walks_toward_the_player(t)
 	_walking_monster_blocked_by_wall(t)
-	# ── 단계 3 — 다친다 ──────────────────────────────────────────
+	# -- stage 3 — it gets hurt ------------------------------------
 	_monster_takes_blast_damage(t)
 	_monster_hit_by_a_leaping_segment(t)
 	_monster_burns_regardless_of_invuln(t)
 	_dead_monsters_leave_the_list_correctly(t)
-	# ── 단계 4 — 둘이 된다 ───────────────────────────────────────
+	# -- stage 4 — there are two of them ---------------------------
 	_pig_and_hen_cross_the_ledge_differently(t)
-	# ── 단계 5 — 돼지가 때린다 ───────────────────────────────────
+	# -- stage 5 — the pig hits ------------------------------------
 	_pig_contact_damages_the_player(t)
 	_pig_contact_respects_invulnerability(t)
-	# ── 단계 6 — 닭이 쏜다 ───────────────────────────────────────
+	# -- stage 6 — the hen shoots ----------------------------------
 	_hen_stops_at_bolt_range(t)
 	_hen_bolt_hits_only_the_player(t)
 	_hen_bolt_lifetime_axis(t)
 	_hen_bolt_blocked_by_terrain_and_does_not_carve(t)
 	_hen_bolt_step_stays_inside_the_player_box(t)
-	# ── 단계 7 — 화면 넷 + 시체 ──────────────────────────────────
+	# -- stage 7 — four screen things + the corpse -----------------
 	_hp_bar_values_come_from_the_table(t)
 	_monster_bolt_color_differs_from_magic_bolts(t)
 	_hit_triggers_flash_and_a_damage_number_that_ages_out(t)
 	_death_notification_spawns_a_corpse_that_ages_out(t)
-	# ── 단계 9 — 연출을 도형에서 그림으로 (판정 13 재도전) ────────
+	# -- stage 9 — effects from shapes to pictures (acceptance 13, second try) --
 	_close_damage_numbers_merge_into_one(t)
 	_death_also_makes_a_pop_that_outlives_nothing(t)
 	_body_flames_stay_put_and_stay_inside(t)
@@ -116,7 +116,7 @@ func run(t) -> void:
 	_layer_draws_go_through_the_canvas_argument(t)
 
 
-# ── 1. 전제 ──────────────────────────────────────────────────────
+# -- 1. premises --------------------------------------------------
 func _defs_preconditions(t) -> void:
 	t.ok(Defs.ALL.size() >= 2, "종류가 둘 이상이다 (%d개)" % Defs.ALL.size())
 	t.ok(not Defs.ALL.has(Defs.KIND_NONE), "KIND_NONE(예약값)이 ALL에 없다")
@@ -129,8 +129,8 @@ func _defs_preconditions(t) -> void:
 				Defs.name_of(kind), Tuning.CELL_PX, Defs.h_px(kind)])
 
 
-# ── 2. 표 접근자 — 절대값과 「다르다」를 둘 다 잰다 ─────────────────
-## 🔴 절대값만 재면 표를 죽이고 상수를 박아도 초록이고, 「다르다」만 재면 값이 틀려도 초록이다.
+# -- 2. table accessors — both the absolute value and "they differ" --
+## Measuring only the absolute value goes green even with the table killed and a constant baked in; measuring only "they differ" goes green with the values wrong.
 func _defs_accessors(t) -> void:
 	t.eq(Defs.w_px(Defs.KIND_PIG), 44, "돼지 w_px = 44")
 	t.eq(Defs.h_px(Defs.KIND_PIG), 32, "돼지 h_px = 32")
@@ -144,9 +144,9 @@ func _defs_accessors(t) -> void:
 	t.ok(Defs.h_px(Defs.KIND_PIG) != Defs.h_px(Defs.KIND_HEN), "돼지 ≠ 닭 (h_px)")
 	t.ok(Defs.step_cells(Defs.KIND_PIG) != Defs.step_cells(Defs.KIND_HEN), "돼지 ≠ 닭 (step_cells)")
 	t.ok(Defs.max_hp(Defs.KIND_PIG) != Defs.max_hp(Defs.KIND_HEN), "돼지 ≠ 닭 (max_hp)")
-	# 🔴🔴 없으면 `MAX_MONSTERS`를 3으로 낮춰도 검사 10(상한)이 두 값을 같이 읽어 항진명제가
-	#  되고, 통과 수만 조용히 준다(실측: 66 → 49, 실패 0개). 20은 사용자가 정한 값이라
-	#  「재 보고 조정할 값이 아니다」 — 이 값만은 표에서 파생시키지 않고 직접 박는다.
+	# Without it, lowering `MAX_MONSTERS` to 3 makes check 10 (the cap) read both values and turn into a
+	#  tautology, and only the pass count quietly drops (measured: 66 -> 49, 0 failures). 20 is a value the user
+	#  decided, so it is "not a value to measure and adjust" — this one value is baked in directly instead of derived from the table.
 	t.eq(Defs.MAX_MONSTERS, 20, "MAX_MONSTERS = 20 (사용자가 정한 값이다)")
 
 
@@ -170,9 +170,9 @@ func _ledge_grid(cells: int) -> CellGrid:
 	return g
 
 
-# ── 3. Body의 폭이 생성 인자다 ────────────────────────────────────
-## 🔴 이게 없으면 `Body`가 인자를 무시하고 20×32를 박아도 `net_character`는 전부 초록이다.
-##  ⚠ 높이는 여기서 안 잰다(4가 잰다).
+# -- 3. Body's width is a constructor argument --------------------
+## Without this, `Body` ignoring the argument and baking in 20x32 leaves `net_character` all green.
+##  Height is not measured here (4 measures it).
 func _body_width_is_a_ctor_arg(t) -> void:
 	var g := _wall_grid()
 	var wall_px := 30 * Tuning.CELL_PX
@@ -189,8 +189,8 @@ func _body_width_is_a_ctor_arg(t) -> void:
 	t.eq(narrow.x - wide.x, 24, "멈추는 x 차이가 폭 차이(44-20=24)와 같다")
 
 
-# ── 4. Body의 높이가 생성 인자다 ───────────────────────────────────
-## 🔴 인자 순서를 뒤바꾼 실패(w↔h)는 3이 잡는다.
+# -- 4. Body's height is a constructor argument -------------------
+## A failure that swaps the argument order (w <-> h) is caught by 3.
 func _body_height_is_a_ctor_arg(t) -> void:
 	var g := _floor_grid()
 	var short := Body.new(20, 28, 1)
@@ -204,23 +204,23 @@ func _body_height_is_a_ctor_arg(t) -> void:
 	t.ok(short.y != tall.y, "높이가 다르면 착지 y도 다르다")
 
 
-# ── 5. Body의 스텝이 생성 인자다 ───────────────────────────────────
-## 🔴 몬스터가 그 Body를 쓰는지는 안 잰다(단계 2가 잰다). 없으면 「안 넘기면 단계 4가
-##  추출을 다시 연다」가 단계 4까지 조용하다.
+# -- 5. Body's step is a constructor argument ---------------------
+## Whether the monster uses that Body is not measured here (stage 2 measures it). Without it, "not passing it
+##  reopens the extraction in stage 4" stays quiet all the way to stage 4.
 func _body_step_is_a_ctor_arg(t) -> void:
 	var g := _ledge_grid(2)
 	var ledge_px := LEDGE_CX * Tuning.CELL_PX
-	# 🔴 `_try_step_up`은 `on_ground`가 참일 때만 작동한다(공중 가드) — 실제 사용(`monster.step`)이
-	#  매 프레임 `grounded()`로 갱신하는 것을 여기서도 흉내 낸다. 안 하면 두 Body가 똑같이
-	#  「그냥 막힌다」가 되어 이 검사의 요점(step이 실제로 다른 결과를 낸다)이 안 물린다.
+	# `_try_step_up` only works while `on_ground` is true (the airborne guard) — the real use (`monster.step`)
+	#  refreshes it every frame with `grounded()`, and that is imitated here too. Without it both Bodies simply
+	#  "get blocked" and this check's point (that step actually produces a different result) doesn't bite.
 	var short_step := Body.new(20, 32, 1)
 	short_step.place(40, FLOOR_TOP - 32)
 	short_step.on_ground = short_step.grounded(g)
 	for _i in 200:
 		short_step.move_x(g, 1.0)
 	t.eq(short_step.x, ledge_px - 20, "step=1은 2셀 턱에 딱 붙어 막힌다")
-	# 🔴 `step_cells` 필드 자체는 아무 로직도 안 읽는다(`step_px`가 생성자에서 직접 나온다) —
-	#  값으로 직접 안 재면 그 필드에 든 뮤테이션이 원리적으로 안 잡힌다(검증자 실측).
+	# The `step_cells` field itself is read by no logic (`step_px` comes straight out of the constructor) —
+	#  without measuring it directly as a value, a mutation in that field cannot be caught in principle (verifier measured).
 	t.eq(short_step.step_cells, 1, "step_cells 필드가 생성 인자(1)를 그대로 든다")
 
 	var tall_step := Body.new(20, 32, 3)
@@ -232,15 +232,15 @@ func _body_step_is_a_ctor_arg(t) -> void:
 	t.eq(tall_step.step_cells, 3, "step_cells 필드가 생성 인자(3)를 그대로 든다")
 
 
-# ── 6-도움. 몬스터 충돌 폭 — 가로 이동 없이 세로 굴뚝으로 잰다 ─────
-## 🔴🔴 **착지 y만 보면(옛 검사 6) `Monster`가 `Body`에 `w_px`를 안 넘겨도(20px 고정)
-##  66개가 전부 초록이다**(검증자 실측) — 가로 이동이 없으면 폭이 한 번도 안 걸린다.
-##  ⇒ **낙하만으로 폭을 건다**: 32px 틈에 닭(24px)은 들어가고 돼지(44px)는 위에 걸린다.
+# -- 6-helper. monster collision width — measured with a vertical chimney, no horizontal movement --
+## **Looking only at the landing y (old check 6) leaves all 66 green even when `Monster` doesn't pass
+##  `w_px` to `Body` (fixed 20px)** (verifier measured) — with no horizontal movement the width is never once engaged.
+##  => **The width is engaged by falling alone**: a hen (24px) fits the 32px gap, a pig (44px) catches on top.
 const HOLE_CX := 50
-const HOLE_W_CELLS := 8   # 32px — 닭보다 넓고 돼지보다 좁다
-## ⚠ 얇은 바닥(`FLOOR_DEPTH_CY` 32셀)보다 깊다 — **일부러 그대로 둔다.** 굴뚝 아래는 어차피
-##  얇은 바닥 밖이라 뚫려 있어서, 닭은 격자 밖(자동 고체)에 닿을 때까지 계속 떨어진다.
-##  아래 검사는 정확한 깊이가 아니라 `y > FLOOR_TOP`(더 떨어졌나)만 재므로 무관하다.
+const HOLE_W_CELLS := 8   # 32px — wider than a hen, narrower than a pig
+## It is deeper than the thin floor (`FLOOR_DEPTH_CY`, 32 cells) — **left that way on purpose.** Below the
+##  chimney is outside the thin floor anyway and therefore open, so the hen keeps falling until it reaches
+##  outside the grid (automatically solid). The check below measures not an exact depth but only `y > FLOOR_TOP` (did it fall further), so it doesn't matter.
 const HOLE_DEPTH_CELLS := 40
 
 
@@ -251,17 +251,17 @@ func _chimney_grid() -> CellGrid:
 	return g
 
 
-## ⚠ **왼쪽 끝을 굴뚝 왼쪽 끝에 맞춘다 — 표에서 나온 값으로 가운데를 잡지 않는다.**
-##  가운데로 잡으면(= `hole_center - Defs.w_px(kind)/2`) 오프셋 계산 자체가 `Defs.w_px`를
-##  다시 읽어서, `Monster`가 `Body`에 **다른** 폭을 몰래 넘겨도 왼쪽 여백이 자리를 대신 막아
-##  「걸린다」가 우연히 다시 나온다(실측 — 돼지 폭을 20으로 몰래 바꿔도 이 검사가 안 물렸다).
-##  **왼쪽을 고정하면 실제로 쓰인 폭만이 「굴뚝에 들어맞나」를 정한다.**
+## **The left edge is aligned with the chimney's left edge — the centre is not taken from a table value.**
+##  Taking the centre (= `hole_center - Defs.w_px(kind)/2`) makes the offset calculation itself read `Defs.w_px`
+##  again, so even when `Monster` secretly passes a **different** width to `Body`, the left margin blocks the
+##  spot instead and "it catches" comes out right by accident (measured — secretly changing the pig's width to 20 did not make this check bite).
+##  **Fixing the left edge makes only the width actually used decide "does it fit the chimney".**
 func _monster_collision_width_gates_the_chimney(t) -> void:
 	var g := _chimney_grid()
 	var hole_left := HOLE_CX * Tuning.CELL_PX
 
-	# 🔴 단계 2부터 `_next_axis`가 target을 실제로 읽는다 — target을 스폰 자리의 중심과
-	#  같게 둬서 axis가 늘 0이 되게 한다(순수 낙하만 잰다. 걷기는 다른 검사의 몫이다).
+	# From stage 2 on, `_next_axis` actually reads the target — the target is set equal to the centre of the
+	#  spawn position so axis is always 0 (pure falling only. Walking is another check's job).
 	var hen := Monster.new(1, Defs.KIND_HEN, hole_left, FLOOR_TOP - 200)
 	var hen_target_x := int(hen.center().x)
 	for _i in 600:
@@ -276,11 +276,11 @@ func _monster_collision_width_gates_the_chimney(t) -> void:
 		"돼지(44px > 32px 틈)는 굴뚝에 안 들어가고 바닥 위에 걸린다 (y=%d)" % pig.y)
 
 
-# ── 6. 몬스터가 떨어져 지표면에 정확히 선다 ────────────────────────
-## 🔴 「보인다」는 헤드리스로 원리적으로 못 잰다 — verify-look이 본다.
-## 🔴🔴 **`Monster.step()`을 직접 안 부르고 `world.frame()`을 지나게 짰다** — 안 그러면
-##  「몬스터가 세상 루프 안에 산다」의 증인이 검사 8 하나뿐이 되고, 그 증인은
-##  「1프레임에 1px 이상 움직였나」만 재서 얇다(검증자 지적).
+# -- 6. the monster falls and stands exactly on the surface -------
+## "You can see it" cannot be measured headless in principle — verify-look sees that.
+## **It is written to go through `world.frame()` rather than calling `Monster.step()` directly** — otherwise
+##  check 8 would be the only witness that "a monster lives inside the world loop", and that witness is thin:
+##  it measures only "did it move at least 1px in one frame" (the verifier pointed it out).
 func _monster_lands_exactly(t) -> void:
 	for kind: int in Defs.ALL:
 		var world := _new_world()
@@ -293,8 +293,8 @@ func _monster_lands_exactly(t) -> void:
 			"%s 몬스터가 바닥 − h_px(%d)에 정확히 선다 (y=%d)" % [Defs.name_of(kind), Defs.h_px(kind), m.y])
 
 
-# ── 7. 떨어지는 과정 ────────────────────────────────────────────
-## ⚠ 없으면 스폰을 바닥에 붙여 놓는 구현이 6을 공짜로 통과한다.
+# -- 7. the falling itself ----------------------------------------
+## Without it, an implementation that spawns flush with the floor passes 6 for free.
 func _monster_falls_through_the_air(t) -> void:
 	var world := _new_world()
 	var id := world.spawn_monster(Defs.KIND_PIG, 160, FLOOR_TOP - 200)
@@ -308,18 +308,18 @@ func _monster_falls_through_the_air(t) -> void:
 			saw_airborne = true
 	t.ok(m.y != y0, "떨어지며 y가 실제로 바뀐다 (시작 %d → 끝 %d)" % [y0, m.y])
 	t.ok(saw_airborne, "떨어지는 동안 on_ground가 거짓인 프레임이 있었다")
-	# 🔴🔴 없으면 `on_ground`가 영원히 거짓이어도(= `_try_step_up`의 공중 가드가 늘 막혀
-	#  몬스터가 턱을 한 칸도 못 오른다) 66개가 전부 초록이다(검증자 실측). 단계 1엔 `_next_axis`가
-	#  0이라 증상이 안 보이고, 단계 2에서 「닭이 턱을 못 넘는다」가 날 때 원인을 엉뚱한 데서 찾게 된다.
+	# Without it, `on_ground` being false forever (= `_try_step_up`'s airborne guard always blocking, so the
+	#  monster can't climb a single cell) leaves all 66 green (verifier measured). In stage 1 `_next_axis` is 0 so
+	#  the symptom is invisible, and when "the hen can't cross the ledge" hits in stage 2 the cause gets hunted in the wrong place.
 	t.ok(m.on_ground, "착지한 뒤 on_ground가 참이다")
 
 
-# ── 8. frame()을 지나야 움직인다 ───────────────────────────────────
+# -- 8. it moves only by going through frame() --------------------
 func _new_world() -> WorldStep:
 	var g := CellGrid.new()
-	# 🔴 여기도 얇게 깐다 — `_floor_grid()`와 같은 이유(위 `FLOOR_DEPTH_CY` 상자).
-	#  ⚠ 놓쳤던 자리다: 이 함수가 검사 6·7·8·9·10·11에서 반복 호출되는데 옛 채우기가
-	#  그대로 남아 있어서 `net_monster`가 43s→25s로만 줄고 계속 제일 느린 그물이었다.
+	# This is laid thin too — the same reason as `_floor_grid()` (the `FLOOR_DEPTH_CY` box above).
+	#  This is the spot that got missed: this function is called repeatedly by checks 6, 7, 8, 9, 10 and 11 while
+	#  the old fill was still sitting here, so `net_monster` only dropped 43s -> 25s and stayed the slowest net.
 	g.apply(CellGrid.cmd_fill(0, FLOOR_CY, CellGrid.W - 1, FLOOR_CY + FLOOR_DEPTH_CY - 1, Mat.STONE))
 	var spell := SpellSim.new()
 	var ch := Character.new()
@@ -333,15 +333,15 @@ func _frame_is_required_to_move(t) -> void:
 	var id := world.spawn_monster(Defs.KIND_PIG, 400, spawn_y)
 	t.ok(id > 0, "스폰됐다 (검사의 전제)")
 	var m: Monster = world.monster_at(0)
-	# 🔴 스폰 자체가 몬스터를 스텝시키지 않는지를 잰다 — 스폰이 조용히 한 프레임을 태우면
-	#  여기가 걸린다.
+	# It measures that the spawn itself doesn't step the monster — if the spawn quietly burns a frame,
+	#  this catches it.
 	t.eq(m.y, spawn_y, "frame()을 부르기 전에는 스폰한 y 그대로다")
 	world.frame(DT, 0.0, false, false)
 	t.ok(m.y != spawn_y, "frame()을 한 번 부르면 몬스터가 움직인다 (y=%d → %d)" % [spawn_y, m.y])
 
 
-# ── 9. 세상이 든다 ──────────────────────────────────────────────
-## 🔴 셋을 같이 걸어야 한다 — 물에서 루프가 한 번도 안 돌고 「잠들었다」가 공짜로 통과했다.
+# -- 9. the world holds them --------------------------------------
+## All three have to be hooked together — in the water net a loop never ran once and "it fell asleep" passed for free.
 func _world_holds_monsters(t) -> void:
 	var world := _new_world()
 	world.spawn_monster(Defs.KIND_PIG, 400, FLOOR_TOP - 200)
@@ -358,8 +358,8 @@ func _world_holds_monsters(t) -> void:
 	t.eq(world.monster_count(), 0, "reset() 뒤 monster_count()가 0이다")
 
 
-# ── 10. 상한 ───────────────────────────────────────────────────
-## ⚠ 양성 대조가 없으면 아무것도 안 만드는 구현이 통과한다.
+# -- 10. the cap --------------------------------------------------
+## Without a positive control, an implementation that creates nothing passes.
 func _spawn_cap(t) -> void:
 	var world := _new_world()
 	for i in Defs.MAX_MONSTERS:
@@ -371,14 +371,14 @@ func _spawn_cap(t) -> void:
 	t.eq(world.monster_count(), Defs.MAX_MONSTERS, "상한을 넘어도 마릿수가 그대로다")
 
 
-# ── 14. 격자 밖 좌표는 거절한다 ───────────────────────────────────
-## 🔴🔴 verify-look 실측(2026-08-07) — M키가 `get_viewport().get_mouse_position()`을 쓰는데
-##  그건 **OS 커서의 실제 위치**라, 커서가 게임 창 밖에 있으면 월드 x가 −983 같은 값으로
-##  들어온다. 격자 밖 몬스터는 화면에 절대 안 뜨는데 **상한 20마리 중 한 자리를 유령이 먹는다.**
-## 🔴 이 문(`world_step.spawn_monster`)에 두는 이유는 그 함수 머리 주석에 적었다 —
-##  **여기가 몬스터를 만드는 유일한 문이라, `_broken`·상한과 나란히 두면 조건이 한 곳에 모인다.**
-##  ⚠ `stage.gd`에 두면 그물이 씬 없이 못 재고(헤드리스로 안 돈다), 미래의 다른 호출자
-##  (서버 스폰 등)가 각자 다시 짜야 한다.
+# -- 14. off-grid coordinates are refused -------------------------
+## verify-look measured it — the M key uses `get_viewport().get_mouse_position()`, and that is
+##  **the OS cursor's real position**, so with the cursor outside the game window the world x arrives as
+##  something like -983. A monster off the grid never appears on screen, yet **a ghost eats one of the 20 cap slots.**
+## The reason it lives at this door (`world_step.spawn_monster`) is written in that function's head comment —
+##  **this is the only door that makes monsters, so putting it beside `_broken` and the cap gathers the conditions in one place.**
+##  In `stage.gd` the net couldn't measure it without a scene (it wouldn't run headless), and future other
+##  callers (server-side spawning and so on) would each have to write it again.
 func _spawn_rejects_off_grid(t) -> void:
 	var world := _new_world()
 	var grid_w_px := CellGrid.W * Tuning.CELL_PX
@@ -388,17 +388,17 @@ func _spawn_rejects_off_grid(t) -> void:
 	t.eq(world.spawn_monster(Defs.KIND_PIG, 100, -500), 0, "위쪽 밖 좌표는 거절한다 (y=-500)")
 	t.eq(world.spawn_monster(Defs.KIND_PIG, grid_w_px + 100, 100), 0, "오른쪽 밖 좌표는 거절한다")
 	t.eq(world.spawn_monster(Defs.KIND_PIG, 100, grid_h_px + 100), 0, "아래쪽 밖 좌표는 거절한다")
-	# 🔴 좌상단만 보면 못 잡는 자리다 — 상자 오른쪽 끝이 경계를 살짝 넘는 경우도 같이 잰다.
+	# Looking only at the top-left corner can't catch this — the case where the box's right edge just crosses the boundary is measured too.
 	t.eq(world.spawn_monster(Defs.KIND_PIG, grid_w_px - 1, 100), 0,
 		"좌상단은 안이어도 상자 오른쪽 끝이 밖이면 거절한다")
 	t.eq(world.monster_count(), 0, "전부 거절됐으니 마릿수가 0이다 (양성 대조가 없으면 무의미하다)")
 
-	# 양성 대조 — 격자 안쪽은 여전히 된다.
+	# Positive control — inside the grid it still works.
 	t.ok(world.spawn_monster(Defs.KIND_PIG, 400, 400) > 0, "격자 안 좌표는 그대로 스폰된다 (양성 대조)")
 	t.eq(world.monster_count(), 1, "그 하나만 세워졌다")
 
 
-# ── 11. id가 서로 다르다 · reset() 뒤에도 재사용 안 한다 ───────────
+# -- 11. ids differ from each other · not reused after reset() ----
 func _ids_are_distinct_and_not_reused(t) -> void:
 	var world := _new_world()
 	var a := world.spawn_monster(Defs.KIND_PIG, 100, FLOOR_TOP - 200)
@@ -411,8 +411,8 @@ func _ids_are_distinct_and_not_reused(t) -> void:
 	t.ok(d > c, "reset() 뒤 새 id가 이전 id를 재사용하지 않는다 (%d > %d)" % [d, c])
 
 
-# ── 12. 뷰가 그리는 상자가 표에서 나온다 ───────────────────────────
-## 🔴 색이 맞나 · 화면에 뜨나는 눈이다. `_draw()`가 `box_rect()`만 쓰는지는 아무도 안 잰다 — 규율이다.
+# -- 12. the box the view draws comes from the table --------------
+## "Is the colour right" and "does it show on screen" are for the eye. Nobody measures whether `_draw()` uses only `box_rect()` — that is discipline.
 func _view_box_comes_from_the_table(t) -> void:
 	for kind: int in Defs.ALL:
 		var r := MonsterView.box_rect(kind, 40, 60)
@@ -420,18 +420,18 @@ func _view_box_comes_from_the_table(t) -> void:
 			"%s의 box_rect가 표(w=%d,h=%d)에서 나온다" % [Defs.name_of(kind), Defs.w_px(kind), Defs.h_px(kind)])
 
 
-# ── 13. 껍데기가 뷰에 세상을 넘긴다 · M키가 스폰까지 이어진다 ───────
-## 🔴 텍스트라 「부르나」까지고 「도나」가 아니다 — 씬에 노드가 있는지는 `net_render`가 잰다.
-## 🔴🔴 **`monster_requested.connect(`와 `_world.spawn_monster(`를 같이 문다** — 없으면
-##  M키의 연결이 통째로 지워져도(= 게임에서 M을 눌러도 아무 일이 안 나도) 66개가 전부
-##  초록이었다(검증자 실측). HUD가 「몬스터 0/20마리 (M으로 세우기)」로 정상처럼 보여서 더 위험하다.
+# -- 13. the shell hands the world to the view · the M key reaches the spawn --
+## It is text, so it goes as far as "does it call" and not "does it run" — whether the node is in the scene is measured by `net_render`.
+## **It bites `monster_requested.connect(` and `_world.spawn_monster(` together** — without it, the M key's
+##  connection could be deleted whole (= pressing M in the game does nothing) and all 66 stayed
+##  green (verifier measured). It is more dangerous because the HUD still looks normal with "monsters 0/20 (M to place)".
 func _shell_hands_the_world_to_the_view(t) -> void:
 	var f := FileAccess.open(STAGE_SCRIPT, FileAccess.READ)
 	t.ok(f != null, "stage.gd를 읽었다")
 	if f == null:
 		return
-	# 🔴🔴 **주석·문자열을 지우고 나서 찾는다.** `.contains()`를 원본 소스에 바로 쓰면
-	#  「이 문자열을 지웠다」라고 적은 주석 자체가 그 문자열을 다시 담고 있어 검사가 속는다(위 상자).
+	# **The comments and strings are stripped before searching.** Using `.contains()` straight on the raw source
+	#  fools the check, because the very comment saying "this string was deleted" holds that string again (the box above).
 	var src := NetDeterminism._strip(f.get_as_text())
 	t.ok(src.contains("_monster_view.setup("), "껍데기가 `_monster_view.setup(` 을 부른다")
 	t.ok(src.contains("monster_requested.connect("),
@@ -440,9 +440,9 @@ func _shell_hands_the_world_to_the_view(t) -> void:
 		"껍데기가 `_world.spawn_monster(` 를 부른다 (스폰 핸들러가 실제로 세상에 만든다)")
 
 
-# ══════════════════════════════════════════════════════════════════
-#  단계 2 — 걷는다
-# ══════════════════════════════════════════════════════════════════
+# ==================================================================
+#  stage 2 — it walks
+# ==================================================================
 
 func _bare_grid() -> CellGrid:
 	var g := CellGrid.new()
@@ -450,12 +450,12 @@ func _bare_grid() -> CellGrid:
 	return g
 
 
-## 🔴🔴 **단계 3의 피해 검사들이 걸렸던 함정** — 단계 2부터 몬스터가 플레이어 쪽으로 실제로
-##  걷는다. 피해·불 검사가 캐릭터를 몬스터에서 먼 곳(예: x=160)에 두면, 판정을 재는 동안
-##  몬스터가 그쪽으로 걸어가며 **표적 자리(불 자리 · 폭발 자리)를 벗어난다** — 실측으로
-##  「불 위에 서 있었는데 16프레임 만에 burning이 거짓이 됐다」로 드러났다(몬스터가 걸어서
-##  불에서 벗어난 것이었다). ⇒ **캐릭터를 몬스터의 스폰 중심과 같은 자리에 둬서 axis가
-##  0으로 고정되게 한다** — 걷기가 이 검사들의 관심사가 아닐 때 쓴다.
+## **The trap the stage 3 damage checks fell into** — from stage 2 on the monster actually walks toward the
+##  player. If a damage or fire check puts the character far from the monster (e.g. x=160), the monster walks
+##  that way while the acceptance is being measured and **leaves the target spot (the fire, the blast)** — it
+##  showed up as "it was standing on fire and burning went false in 16 frames" (the monster had walked out
+##  of the fire). => **The character is placed at the same spot as the monster's spawn centre so that axis is
+##  pinned to 0** — used when walking is not what these checks care about.
 func _still_ch(stand_x: int, kind: int) -> Character:
 	var ch := Character.new()
 	var monster_center_x := float(stand_x) + Defs.w_px(kind) * 0.5
@@ -463,15 +463,15 @@ func _still_ch(stand_x: int, kind: int) -> Character:
 	return ch
 
 
-## 🔴🔴 **못 재는 것 — 최종 위치만 보면 이 판정이 죽는다**(CLAUDE.md 「최종 상태만 보는 검사」).
-##  ⇒ 과정을 잰다: **누적**(`N프레임 이동량 == round(v×N×dt)` ±1px)과 **한 걸음 상한**
-##  (`ceil(v×dt)`를 어느 프레임도 안 넘는다 — 순간이동을 잡는다). 수치는 표에서 읽는다.
+## **What cannot be measured — looking only at the final position kills this acceptance** (CLAUDE.md, "a check
+##  that looks only at the final state"). => The process is measured: the **accumulation** (`movement over N
+##  frames == round(v x N x dt)` +-1px) and the **per-step ceiling** (`ceil(v x dt)` exceeded by no frame — that catches teleporting). The numbers are read from the table.
 func _walks_toward_the_player(t) -> void:
 	var speed := Defs.speed_px(Defs.KIND_PIG)
 	var n := 30
 	var step_cap := ceili(speed * DT)
 
-	# 오른쪽에 스폰 → 플레이어(왼쪽)로 걸어와 x가 준다.
+	# Spawned on the right -> walks toward the player (left) and x drops.
 	var g1 := _bare_grid()
 	var spell1 := SpellSim.new()
 	var ch1 := Character.new()
@@ -495,8 +495,8 @@ func _walks_toward_the_player(t) -> void:
 		"%d프레임 누적 이동이 v×N×dt에 ±1px로 붙는다 (%d ≈ %d)" % [n, moved_left, want])
 	t.ok(not over_cap_right, "어느 프레임도 ceil(v×dt)(%dpx)를 안 넘는다 — 순간이동이 아니다" % step_cap)
 
-	# 왼쪽에 스폰 → 플레이어(오른쪽)로 걸어와 x가 는다. 왼쪽 검사만 있으면 `return 1.0`(늘
-	# 오른쪽) 같은 뮤테이션이 안 잡힌다 — 방향을 반대로도 걸어야 그 갈래가 걸린다.
+	# Spawned on the left -> walks toward the player (right) and x rises. With only the left-side check, a
+	# mutation like `return 1.0` (always right) isn't caught — it has to walk the other way for that branch to be engaged.
 	var g2 := _bare_grid()
 	var spell2 := SpellSim.new()
 	var ch2 := Character.new()
@@ -519,10 +519,10 @@ func _walks_toward_the_player(t) -> void:
 	t.ok(not over_cap_left, "어느 프레임도 ceil(v×dt)(%dpx)를 안 넘는다 — 순간이동이 아니다" % step_cap)
 
 
-## 🔴🔴 **뒤집어 보기 — `is_solid`를 통째로 무시하게 만들면 안 된다.** 그러면 바닥을 뚫고
-##  영원히 떨어져서 「가로가 막히나」와 무관하게 빨개진다(판정 5가 스스로 금지한 형태).
-##  ⇒ 뒤집을 것은 `Body.move_x`의 가로 갈래 하나뿐이고, **대조군**(착지 판정)이 초록으로
-##  남아야 진짜 뒤집기다.
+## **Inverting it — it must not be made to ignore `is_solid` entirely.** That falls through the floor and
+##  drops forever, going red regardless of "is horizontal blocked" (the shape acceptance 5 forbids by itself).
+##  => The only thing to invert is `Body.move_x`'s horizontal branch, and the **control** (the landing check)
+##  has to stay green for it to be a real inversion.
 func _walking_monster_blocked_by_wall(t) -> void:
 	var wall_cx := 60
 	var wall_w_cells := 4
@@ -530,8 +530,8 @@ func _walking_monster_blocked_by_wall(t) -> void:
 	g.apply(CellGrid.cmd_fill(wall_cx, FLOOR_CY - 8, wall_cx + wall_w_cells - 1, FLOOR_CY - 1, Mat.STONE))
 	var spell := SpellSim.new()
 	var ch := Character.new()
-	# 벽 왼쪽에 플레이어를 둔다 — 몬스터는 벽 오른쪽에서 스폰돼 왼쪽(플레이어)으로 걸어오다가
-	# 벽의 **오른쪽 면**에서 막힌다(상자 왼쪽 끝이 벽 오른쪽 끝에 닿는다).
+	# The player is placed left of the wall — the monster spawns right of the wall, walks left (toward the
+	# player) and is blocked at the wall's **right face** (its box's left edge meets the wall's right edge).
 	var wall_right_px := (wall_cx + wall_w_cells) * Tuning.CELL_PX
 	ch.place(160, FLOOR_TOP - Character.H_PX)
 	var world := WorldStep.new(g, spell, ch)
@@ -546,12 +546,12 @@ func _walking_monster_blocked_by_wall(t) -> void:
 	t.eq(m.y, y, "가로만 막힌다 — 세로(착지)는 그대로다 (대조군)")
 
 
-# ══════════════════════════════════════════════════════════════════
-#  단계 3 — 다친다
-# ══════════════════════════════════════════════════════════════════
+# ==================================================================
+#  stage 3 — it gets hurt
+# ==================================================================
 
-## 🔴 값은 표에서 읽는다 — **100(플레이어 MAX_HP)이 아니라 돼지는 30이다.**
-## 🔴🔴 **음성 대조(반경 밖)가 필수다** — 없으면 「가까우면 아프다」로 짜도 통과한다.
+## The values are read from the table — **the pig is 30, not 100 (the player's MAX_HP).**
+## **A negative control (outside the radius) is mandatory** — without it, "close by, it hurts" also passes.
 func _monster_takes_blast_damage(t) -> void:
 	var kind := Defs.KIND_PIG
 	var stand_x := 600
@@ -572,7 +572,7 @@ func _monster_takes_blast_damage(t) -> void:
 	t.eq(m.hp, Defs.max_hp(kind) - Character.DAMAGE_HIT,
 		"폭발 반경 안이면 hp가 %d 준다" % Character.DAMAGE_HIT)
 
-	# 음성 대조 — 아주 먼 곳에 세운 몬스터는 같은 폭발에 안 맞는다.
+	# Negative control — a monster stood far away is not hit by the same blast.
 	var far_x := stand_x + 3000
 	var g2 := _bare_grid()
 	var spell2 := SpellSim.new()
@@ -587,10 +587,10 @@ func _monster_takes_blast_damage(t) -> void:
 	t.eq(m2.hp, Defs.max_hp(kind), "폭발 반경 밖이면 hp가 그대로다 (음성 대조)")
 
 
-## 🔴🔴 **터널링 반증 — 닭(24px, 제일 좁은 상자)으로 잰다.** 세대 0의 첫 틱 도약을
-##  `Tuning.speed_cells(0) * Tuning.CELL_PX`에서 **읽는다**(40px으로 박으면 반증이 헛돈다 —
-##  판정 12와 같은 규율). 닭 hp(10) == `DAMAGE_HIT`(10)이라 **한 방에 죽으므로** 관측은
-##  「hp가 준다」가 아니라 「죽는다」다. 돼지로 바꿔서 우회하지 않는다.
+## **Disproving tunnelling — measured with the hen (24px, the narrowest box).** Generation 0's first-tick leap
+##  is **read** from `Tuning.speed_cells(0) * Tuning.CELL_PX` (baking in 40px makes the disproof spin idle —
+##  the same discipline as acceptance 12). The hen's hp (10) == `DAMAGE_HIT` (10) so **it dies in one hit**, and
+##  what is observed is not "hp drops" but "it dies". It is not worked around by switching to the pig.
 func _monster_hit_by_a_leaping_segment(t) -> void:
 	var kind := Defs.KIND_HEN
 	var stand_x := 600
@@ -615,7 +615,7 @@ func _monster_hit_by_a_leaping_segment(t) -> void:
 	for _i in Tuning.TICK_DIVIDER:
 		world.frame(DT, 0.0, false, false)
 
-	# 🔴 배치가 정말 도약 배치인가 — 구간의 양 끝이 둘 다 상자 밖이어야 한다.
+	# Is the placement really a leaping placement — both ends of the segment must be outside the box.
 	t.eq(spell.seg_count(), 1, "이 틱에 구간이 하나다 (배치를 읽을 수 있다)")
 	if spell.seg_count() == 1:
 		var ax := Body._fp_px(spell.get_seg_x0()[0])
@@ -632,11 +632,11 @@ func _monster_hit_by_a_leaping_segment(t) -> void:
 		t.eq(world.died_kind(0), kind, "죽음 통지의 종류가 닭이다")
 
 
-## 🔴 돼지로 잰다 — 닭(hp10)은 불 DPS 10/초에 1초면 죽어 「비례」가 두세 점밖에 안 나온다.
-## 🔴🔴 **「무적과 무관하게」를 재는 유일한 방법 — 탄으로 먼저 맞혀 무적을 켠 채로 잰다.**
-##  hp가 아니라 **불 누산기**(`_burn_acc`)로 잰다 — 무적 2틱(6프레임)과 10dps×1/60의 산수가
-##  정확히 겹쳐서(0.1초 = 정확히 1점), hp 정수 차감과 무적 만료가 같은 프레임에 겹칠 수 있다.
-##  누산기는 매 프레임 값으로 쌓이므로 무적이 뚜렷이 남은 시점에도 이미 잴 수 있다.
+## Measured with the pig — the hen (hp 10) dies in one second at fire's 10 dps, giving only two or three points for "proportional".
+## **The only way to measure "regardless of invulnerability" — hit it with a bolt first and measure with invulnerability on.**
+##  It is measured by the **fire accumulator** (`_burn_acc`), not hp — the arithmetic of 2 ticks of invulnerability
+##  (6 frames) and 10dps x 1/60 overlaps exactly (0.1s = exactly 1 point), so the integer hp subtraction and the
+##  invulnerability expiring can land on the same frame. The accumulator builds up by value every frame, so it can already be measured while invulnerability clearly remains.
 func _monster_burns_regardless_of_invuln(t) -> void:
 	var kind := Defs.KIND_PIG
 	var g := _bare_grid()
@@ -673,9 +673,9 @@ func _monster_burns_regardless_of_invuln(t) -> void:
 	t.ok(m.burning, "불 위에 서 있다고 표시된다 (매 프레임 다시 잰다 — 무적을 안 본다)")
 	t.ok(m._burn_acc > 0.0, "무적이 남은 채로도 불 피해 누산기가 쌓인다 (무적을 안 보는 갈래다)")
 
-	# 🔴 시간에 비례해 깎이는지는 hp로 잰다. **짧은 창 둘**(20프레임 = 1/3초씩,
-	#  합쳐서 2/3초)로 본다 — 나무 연료가 정확히 2초라 60프레임 창 둘(=2초)을 쓰면
-	#  「관측 창이 끝나는 순간과 연료가 다하는 순간이 겹치는」 우연이 또 난다(실측으로 데었다).
+	# Whether it is shaved proportionally to time is measured by hp. It is looked at through **two short windows**
+	#  (20 frames = 1/3 second each, 2/3 second together) — the wood's fuel is exactly 2 seconds, so two 60-frame
+	#  windows (= 2 seconds) bring back the coincidence of "the observation window ending just as the fuel runs out" (got burned by it, measured).
 	var before := m.hp
 	for _i in 20:
 		world.frame(DT, 0.0, false, false)
@@ -686,9 +686,9 @@ func _monster_burns_regardless_of_invuln(t) -> void:
 	var after_b := m.hp
 	t.ok(after_b < after_a, "다음 1/3초에도 계속 깎인다")
 
-	# 🔴 뒤집어 보기 — 불에서 나오면(꺼지면) 깎임이 멈춘다. 자연 연료 소진 대신 나무를
-	#  다시 깔아 깃발을 지운다(`net_damage._burn_acc_survives_tapping`과 같은 수법 —
-	#  나무 재적용이 곧 「불에서 나왔다」다). 자연 소진을 기다리면 돼지가 먼저 죽을 수 있다.
+	# Inverting it — out of the fire (extinguished) the shaving stops. Instead of natural fuel exhaustion the
+	#  wood is laid again to clear the flag (the same trick as `net_damage._burn_acc_survives_tapping` —
+	#  re-applying wood is exactly "it left the fire"). Waiting for natural exhaustion can kill the pig first.
 	g.apply(CellGrid.cmd_fill(cx0 - 2, FLOOR_CY, cx1 + 2, FLOOR_CY, Mat.WOOD))
 	world.frame(DT, 0.0, false, false)
 	world.frame(DT, 0.0, false, false)
@@ -699,9 +699,9 @@ func _monster_burns_regardless_of_invuln(t) -> void:
 	t.eq(m.hp, after_out, "불이 꺼진 뒤에는 더 안 깎인다")
 
 
-## 세 마리를 나란히 세운다. 🔴 못 재는 것 셋(개수만/집합만/위치)을 문서가 지목해서
-##  전부 같이 잰다 — 특히 **위치**는 「순회 중 제거」(인접한 산 놈이 그 틱을 건너뛴다)를
-##  개수·id 집합 둘 다 못 잡는 유일한 자리다.
+## Stands three of them in a row. The three things that cannot be measured (count only / set only / position)
+##  are named by the doc and all measured together — **position** in particular is the only place that catches
+##  "removal during traversal" (an adjacent live one skipping that tick), which neither the count nor the id set catches.
 func _three_hens_world() -> Dictionary:
 	var g := _bare_grid()
 	var spell := SpellSim.new()
@@ -723,7 +723,7 @@ func _dead_monsters_leave_the_list_correctly(t) -> void:
 	var frames_to_run := 40
 	var kind := Defs.KIND_HEN
 
-	# 대조군 — 아무도 안 죽는 같은 배치. a·c의 「정상 한 걸음」 기준을 여기서 얻는다.
+	# Control — the same arrangement with nobody dying. a and c's "normal one step" baseline comes from here.
 	var control: Dictionary = _three_hens_world()
 	var cw: WorldStep = control["world"]
 	for _i in frames_to_run:
@@ -731,7 +731,7 @@ func _dead_monsters_leave_the_list_correctly(t) -> void:
 	var expect_a_x: int = cw.monster_at(0).x
 	var expect_c_x: int = cw.monster_at(2).x
 
-	# 본검사 — 가운데(b)만 죽인다.
+	# The main check — only the middle one (b) is killed.
 	var setup: Dictionary = _three_hens_world()
 	var world: WorldStep = setup["world"]
 	var ids: Array = setup["ids"]
@@ -746,9 +746,9 @@ func _dead_monsters_leave_the_list_correctly(t) -> void:
 	var b_cx := floori((b_x0 + Defs.w_px(kind) * 0.5) / float(Tuning.CELL_PX))
 	world.enqueue(_blast_cmd(b_cx))
 
-	# 🔴🔴 **죽음 통지는 그 틱 안에서만 유효하다**(폭발 통지와 같다 — 다음 틱이 지운다).
-	#  40프레임을 다 돌고 나서 읽으면 이미 여러 틱이 더 지나 통지가 비어 있다(실측으로 데었다).
-	#  ⇒ **죽는 바로 그 틱에서** 통지를 붙잡는다.
+	# **A death notification is valid only within that tick** (the same as the blast notification — the next tick
+	#  clears it). Read after all 40 frames have run, several more ticks have passed and the notification is empty
+	#  (got burned by it, measured). => The notification is caught **on the very tick it dies**.
 	var loops := 0
 	var died_snapshot_count := -1
 	var died_snapshot_kind := -1
@@ -763,7 +763,7 @@ func _dead_monsters_leave_the_list_correctly(t) -> void:
 	t.eq(died_snapshot_count, 1, "죽는 그 틱에 죽음 통지가 정확히 하나 났다")
 	t.eq(died_snapshot_kind, kind, "그 통지의 종류가 닭이다")
 
-	# id로 잰다 — 죽은 놈 하나만 빠지고 나머지 집합이 그대로인가.
+	# Measured by id — is only the dead one removed with the rest of the set unchanged.
 	var live_ids: Array[int] = []
 	for i in world.monster_count():
 		live_ids.append(world.monster_at(i).id)
@@ -773,7 +773,7 @@ func _dead_monsters_leave_the_list_correctly(t) -> void:
 	t.eq(live_ids, expect_ids,
 		"죽은 id(%d) 하나만 사라지고 나머지 id 집합(%s)이 그대로다" % [id_b, expect_ids])
 
-	# 위치로 잰다 — a·c가 대조군과 정확히 같은 자리인가(누구도 한 걸음을 안 놓쳤다).
+	# Measured by position — are a and c in exactly the same place as the control (nobody missed a step).
 	var a: Monster = null
 	var c: Monster = null
 	for i in world.monster_count():
@@ -788,16 +788,16 @@ func _dead_monsters_leave_the_list_correctly(t) -> void:
 	if c != null:
 		t.eq(c.x, expect_c_x, "c가 대조군과 정확히 같은 자리다")
 
-	# ⚠ 죽음 통지 자체는 위 루프 안에서 **그 틱에** 이미 확인했다(died_snapshot_*) —
-	#  여기서 다시 읽으면 그새 지난 틱들이 지워 놔서 항상 비어 있다.
+	# The death notification itself was already confirmed **on that tick** inside the loop above (died_snapshot_*) —
+	#  reading it again here is always empty, because the ticks that have passed since have cleared it.
 
 
-# ══════════════════════════════════════════════════════════════════
-#  단계 4 — 둘이 된다
-# ══════════════════════════════════════════════════════════════════
+# ==================================================================
+#  stage 4 — there are two of them
+# ==================================================================
 
-## 🔴🔴 **턱 높이를 2 또는 3셀로 세운다** — 1셀이면 둘 다 넘고 4셀이면 둘 다 막힌다.
-##  3셀을 골랐다: 돼지(`step_cells`=1)는 막히고 닭(`step_cells`=3)은 넘는다.
+## **The ledge is stood at 2 or 3 cells** — at 1 cell both cross it, at 4 cells both are blocked.
+##  3 was chosen: the pig (`step_cells`=1) is blocked and the hen (`step_cells`=3) crosses.
 func _pig_and_hen_cross_the_ledge_differently(t) -> void:
 	var ledge_cells := 3
 	var ledge_cx := 80
@@ -809,7 +809,7 @@ func _pig_and_hen_cross_the_ledge_differently(t) -> void:
 	for kind in Defs.ALL:
 		var spell := SpellSim.new()
 		var ch := Character.new()
-		# 플레이어를 턱 훨씬 오른쪽에 둔다 — 몬스터가 왼쪽에서 턱 쪽(오른쪽)으로 걷는다.
+		# The player is placed well to the right of the ledge — the monster walks from the left toward the ledge (right).
 		ch.place(ledge_left_px + 400, FLOOR_TOP - Character.H_PX)
 		var world := WorldStep.new(g, spell, ch)
 		var stand_x := ledge_left_px - 150
@@ -827,12 +827,12 @@ func _pig_and_hen_cross_the_ledge_differently(t) -> void:
 				"닭(step=%d)은 %d셀 턱을 넘는다 (x=%d)" % [Defs.step_cells(kind), ledge_cells, m.x])
 
 
-# ══════════════════════════════════════════════════════════════════
-#  단계 5 — 돼지가 때린다
-# ══════════════════════════════════════════════════════════════════
+# ==================================================================
+#  stage 5 — the pig hits
+# ==================================================================
 
-## 🔴 값 ①·② — 절대값(`WorldStep.PIG_CONTACT_DAMAGE`)과 음성 대조(안 겹치면 안 준다)를
-##  같이 잰다. **「준다」만 재면 1도 100도 통과한다** — 절대값이 이 판정의 진짜 몸통이다.
+## Values (1) and (2) — the absolute value (`WorldStep.PIG_CONTACT_DAMAGE`) and the negative control (no overlap,
+##  no damage) are measured together. **Measuring only "it deals damage" passes 1 and 100 alike** — the absolute value is this acceptance's real body.
 func _pig_contact_damages_the_player(t) -> void:
 	var kind := Defs.KIND_PIG
 	var stand_x := 400
@@ -848,9 +848,9 @@ func _pig_contact_damages_the_player(t) -> void:
 		"겹치면 정확히 %d 깎인다" % WorldStep.PIG_CONTACT_DAMAGE)
 	t.ok(ch.invuln_left > 0, "무적이 켜졌다 (돼지 접촉도 기존 무적을 탄다)")
 
-	# 🔴 음성 대조 — 안 겹치게 멀찍이 세운다. `_still_ch`는 안 쓴다 — 그건 캐릭터 중심을
-	#  몬스터 중심에 맞춰 "겹치게" 만드는 헬퍼라 여기선 정반대다. 딱 1틱만 재서 걷기
-	#  드리프트(160px/s × 1틱 = 8px)가 500px 간격을 못 건드리게 한다.
+	# Negative control — stood far enough apart not to overlap. `_still_ch` is not used — that helper lines the
+	#  character's centre up with the monster's centre to make them "overlap", which is the exact opposite here.
+	#  Only 1 tick is measured so the walking drift (160px/s x 1 tick = 8px) can't touch the 500px gap.
 	var far_x := stand_x + 500
 	var g2 := _bare_grid()
 	var spell2 := SpellSim.new()
@@ -864,9 +864,9 @@ func _pig_contact_damages_the_player(t) -> void:
 	t.eq(ch2.hp, Character.MAX_HP, "안 겹치면 안 준다 (음성 대조)")
 
 
-## 🔴🔴 값 ③ — 무적을 탄다. **계속 겹쳐 둬도 매 틱 안 깎이고 5틱 간격에 한 번씩만 깎인다**
-##  (`character.on_tick`이 이미 「5틱 간격 = 두 대」로 적어 둔 그 시계를 그대로 쓴다 —
-##  `invuln_left`는 `_char.on_tick()` 안에서만 준다. 「4틱」으로 짜면 이 검사가 빨개진다).
+## Value (3) — it rides invulnerability. **Left overlapping continuously it is not shaved every tick but only
+##  once per 5-tick interval** (it uses the same clock `character.on_tick` already wrote down as "5-tick interval
+##  = two hits" — `invuln_left` only drops inside `_char.on_tick()`. Written as "4 ticks", this check goes red).
 func _pig_contact_respects_invulnerability(t) -> void:
 	var kind := Defs.KIND_PIG
 	var stand_x := 400
@@ -882,24 +882,24 @@ func _pig_contact_respects_invulnerability(t) -> void:
 	var after_first := ch.hp
 	t.eq(after_first, Character.MAX_HP - WorldStep.PIG_CONTACT_DAMAGE, "첫 접촉에 깎인다 (검사의 전제)")
 
-	# 3틱 더(누적 4틱째) — 계속 겹쳐 있어도 무적 안이라 안 더 깎인다.
+	# 3 more ticks (the 4th cumulative) — still overlapping, but inside invulnerability, so nothing more is shaved.
 	for _i in Tuning.TICK_DIVIDER * 3:
 		world.frame(DT, 0.0, false, false)
 	t.eq(ch.hp, after_first, "무적이 도는 동안은 계속 붙어 있어도 더 안 깎인다")
 
-	# 1틱 더(누적 5틱째) — 무적이 풀려 다시 깎인다.
+	# 1 more tick (the 5th cumulative) — invulnerability lifts and it is shaved again.
 	for _i in Tuning.TICK_DIVIDER:
 		world.frame(DT, 0.0, false, false)
 	t.eq(ch.hp, after_first - WorldStep.PIG_CONTACT_DAMAGE,
 		"5틱째에 다시 깎인다 (계속 붙어 있어도 초당 4회가 상한이다)")
 
 
-# ══════════════════════════════════════════════════════════════════
-#  단계 6 — 닭이 쏜다
-# ══════════════════════════════════════════════════════════════════
+# ==================================================================
+#  stage 6 — the hen shoots
+# ==================================================================
 
-## 값 — **빈 공간에서 재야 한다**(막혔다와 헷갈리지 않게). 멈춘 자리와 플레이어의 거리가
-##  `BOLT_STOP_PX` ± 한 걸음이어야 한다. 「거리」는 **중심 대 중심**이다(문서 판정 10).
+## Value — **it has to be measured in open space** (so it isn't confused with being blocked). The distance
+##  between the stopping spot and the player must be `BOLT_STOP_PX` +- one step. "Distance" is **centre to centre** (doc acceptance 10).
 func _hen_stops_at_bolt_range(t) -> void:
 	var kind := Defs.KIND_HEN
 	var g := _bare_grid()
@@ -918,26 +918,26 @@ func _hen_stops_at_bolt_range(t) -> void:
 	t.ok(absf(dist - MonsterBolts.BOLT_STOP_PX) <= step_cap,
 		"멈춘 자리와 플레이어의 거리(%.1f)가 BOLT_STOP_PX(%.0f) ± 한 걸음(%d) 안이다"
 			% [dist, MonsterBolts.BOLT_STOP_PX, step_cap])
-	# 🔴🔴 **위 단언만으로는 안 된다** — 기대값을 `MonsterBolts.BOLT_STOP_PX`에서 그대로
-	#  읽으므로, 그 상수 자체가 0으로 깨져도(닭이 돼지처럼 들러붙어도) `0 ≈ 0`이라 초록이다
-	#  (실측 — CLAUDE.md 「표의 값이 마침 2라 접근자를 return 2로 박아도 2==2다」와 같은 함정).
-	#  ⇒ 상수와 무관한 **고정 문턱**으로 "안 붙는다"를 따로 잰다 — 상자가 맞닿는 거리는
-	#  기하로 계산하면 약 22px(`(20+24)/2`)이라 60px 문턱이면 넉넉히 가른다.
+	# **The assertion above is not enough on its own** — the expected value is read straight from
+	#  `MonsterBolts.BOLT_STOP_PX`, so even if that constant broke to 0 (the hen sticking like a pig) `0 ~ 0` is green
+	#  (measured — the same trap as CLAUDE.md's "the table's value happens to be 2, so baking the accessor to return 2 still gives 2==2").
+	#  => "It doesn't stick" is measured separately with a **fixed threshold** independent of the constant — the
+	#  distance at which the boxes touch works out geometrically to about 22px (`(20+24)/2`), so a 60px threshold splits it comfortably.
 	t.ok(dist > 60.0, "닭이 플레이어에 바짝 안 붙는다 (거리 %.1f — 돼지처럼 들러붙지 않는다)" % dist)
 
 
-## 🔴🔴 값 ①·②(음성 대조 셋) — 정지한 플레이어를 맞히고(무적을 탄다), **①쏜 닭 자신
-##  ②경로 위 다른 닭 ③경로 위 돼지는 안 맞는다**(탄이 몬스터를 아예 모른다 — `monster_bolts.gd`).
-## ⚠ 탄을 직접 만든다(`world._bolts.spawn`) — 자연 발사 주기까지 기다리면 경로 위의 다른
-##  닭도 스스로 쏠 수 있어 관측이 섞인다. 자연 발사·정지는 판정 10이 따로 잰다.
+## Values (1) and (2) (three negative controls) — it hits a standing player (and rides invulnerability), and
+##  **(1) the shooting hen itself (2) another hen on the path (3) a pig on the path are not hit** (the bolt doesn't know monsters at all — `monster_bolts.gd`).
+## The bolt is made directly (`world._bolts.spawn`) — waiting for the natural firing cycle lets another hen on
+##  the path shoot on its own and mixes the observation. Natural firing and stopping are measured separately by acceptance 10.
 func _hen_bolt_hits_only_the_player(t) -> void:
 	var hen_kind := Defs.KIND_HEN
 	var g := _bare_grid()
 	var spell := SpellSim.new()
 	var ch := Character.new()
 	var row_y := FLOOR_TOP - Defs.h_px(hen_kind) + Defs.h_px(hen_kind) * 0.5
-	# 🔴 자리를 origin 가까이 몰아 둔다 — 돼지·다른 닭이 "경로 위"이면서도 자기 발로
-	#  플레이어까지 걸어가 접촉/자연 발사로 관측을 오염시킬 시간이 없게 한다.
+	# The positions are packed near the origin — so the pig and the other hen are "on the path" while having no
+	#  time to walk to the player on their own and pollute the observation with contact or natural firing.
 	var player_x := 420
 	ch.place(player_x, FLOOR_TOP - Character.H_PX)
 	var world := WorldStep.new(g, spell, ch)
@@ -949,8 +949,8 @@ func _hen_bolt_hits_only_the_player(t) -> void:
 	var shooter_hp0 := world.monster_at(0).hp
 	var other_hen_hp0 := world.monster_at(1).hp
 	var pig_hp0 := world.monster_at(2).hp
-	# 🔴 다른 닭의 **자연 발사**를 막는다(이 검사는 "직접 쏜 탄"만 잰다 — 자연 발사·정지는
-	#  판정 10이 따로 잰다). reload를 크게 박아 이 검사가 도는 동안 다시는 안 쏘게 한다.
+	# The other hen's **natural firing** is blocked (this check measures only "a bolt fired directly" — natural
+	#  firing and stopping are measured separately by acceptance 10). A huge reload is baked in so it never shoots again while this check runs.
 	world.monster_at(1).reload_left = 999999
 
 	var bolts: MonsterBolts = world.get("_bolts")
@@ -968,10 +968,10 @@ func _hen_bolt_hits_only_the_player(t) -> void:
 	t.eq(world.monster_at(2).hp, pig_hp0, "③ 경로 위 돼지도 안 맞는다")
 
 
-## 🔴🔴 값 ③ — 수명 축. **셋을 같이 재야 이 축이 실제로 갈렸는지 안다**(하나만 재면
-##  `BOLT_RANGE_PX`를 `BOLT_STOP_PX`로 되돌려도 초록이다). 정지하면 맞고, 다가오면 더
-##  빨리 맞고, **260px/s로 물러나면 원리적으로 안 맞는다**(의도된 결과다 — 「고장」으로 읽고
-##  값을 올리지 마라. `monster_bolts.gd` 상자의 산수).
+## Value (3) — the lifetime axis. **All three have to be measured together to know this axis really split**
+##  (measuring only one goes green even with `BOLT_RANGE_PX` reverted to `BOLT_STOP_PX`). Standing still it
+##  hits, approaching it hits sooner, and **retreating at 260px/s it cannot in principle hit** (that is the
+##  intended result — do not read it as a "fault" and raise the value. The arithmetic is in `monster_bolts.gd`'s box).
 func _hen_bolt_lifetime_axis(t) -> void:
 	var hit := {}
 	for the_case: String in ["stand", "approach", "retreat"]:
@@ -986,9 +986,9 @@ func _hen_bolt_lifetime_axis(t) -> void:
 		bolts.spawn(100.0, row_y, Vector2(1.0, 0.0))
 		var axis := 0.0
 		if the_case == "approach":
-			axis = -1.0  # 탄 쪽(왼쪽)으로 다가온다
+			axis = -1.0  # approaches the bolt's side (left)
 		elif the_case == "retreat":
-			axis = 1.0   # 탄에서 먼 쪽(오른쪽)으로 물러난다
+			axis = 1.0   # retreats to the side away from the bolt (right)
 		var got_hit := false
 		for _i in 200:
 			world.frame(DT, axis, false, false)
@@ -1004,19 +1004,19 @@ func _hen_bolt_lifetime_axis(t) -> void:
 			% Character.MOVE_SPEED_PX)
 
 
-## 값 ①·② — 벽 뒤 플레이어는 안 맞고 탄이 사라진다. **격자가 한 칸도 안 바뀐다**
-##  (`consume_changed()`로 잰다 — 「구멍이 없다」를 눈으로 보는 것보다 좁다. 이게 없으면
-##  탄이 `carve_r`을 부르는 구현(마법 탄에서 복사해 오기 쉬운 자리)이 통과한다).
+## Values (1) and (2) — a player behind a wall is not hit and the bolt disappears. **Not one grid cell changes**
+##  (measured with `consume_changed()` — narrower than eyeballing "there is no hole". Without it, an implementation
+##  where the bolt calls `carve_r` passes, and that is an easy thing to copy over from the magic bolts).
 func _hen_bolt_blocked_by_terrain_and_does_not_carve(t) -> void:
 	var wall_cx := 60
 	var g := _bare_grid()
 	g.apply(CellGrid.cmd_fill(wall_cx, FLOOR_CY - 8, wall_cx + 3, FLOOR_CY - 1, Mat.STONE))
-	g.consume_changed()  # 기준선을 0으로 맞춘다
+	g.consume_changed()  # sets the baseline to 0
 	var spell := SpellSim.new()
 	var ch := Character.new()
 	var wall_right_px := (wall_cx + 4) * Tuning.CELL_PX
-	# 🔴 플레이어가 **탄의 사거리(`BOLT_RANGE_PX`) 안**에 있어야 한다 — 벽이 없으면
-	#  실제로 맞을 자리여야 "막혔다"와 "그냥 사거리가 다했다"가 안 섞인다.
+	# The player has to be **within the bolt's range (`BOLT_RANGE_PX`)** — it must be a spot that would actually
+	#  be hit if the wall weren't there, so "blocked" and "the range simply ran out" don't get mixed up.
 	ch.place(wall_right_px + 90, FLOOR_TOP - Character.H_PX)
 	var world := WorldStep.new(g, spell, ch)
 	var row_y := float(ch.y) + Character.H_PX * 0.5
@@ -1034,9 +1034,9 @@ func _hen_bolt_blocked_by_terrain_and_does_not_carve(t) -> void:
 	t.eq(g.consume_changed(), 0, "탄이 지나도 격자가 한 칸도 안 바뀐다 (지형을 안 판다)")
 
 
-## 값 ③ — 터널링 부등식을 숫자로 잰다. **상대 속도로 재야 진짜 한계다** — 탄 속도만 쓰면
-##  이 검사가 거짓말한다(마법 탄이 정확히 그래서 선분 대 상자가 됐다는 것과 같은 이유).
-##  🔴 상수를 읽어서 계산한다 — 숫자를 박으면 탄 속도를 올리는 날 이 검사가 무의미해진다.
+## Value (3) — the tunnelling inequality measured as a number. **It has to be measured with the relative speed
+##  to be a real limit** — using the bolt speed alone makes this check lie (the same reason the magic bolts became segment-vs-box).
+##  The constants are read and computed with — baking in a number makes this check meaningless the day the bolt speed goes up.
 func _hen_bolt_step_stays_inside_the_player_box(t) -> void:
 	var relative_step := (MonsterBolts.BOLT_SPEED_PX + Character.MOVE_SPEED_PX) * DT
 	t.ok(relative_step < Character.W_PX,
@@ -1044,21 +1044,21 @@ func _hen_bolt_step_stays_inside_the_player_box(t) -> void:
 			% [relative_step, Character.W_PX])
 
 
-# ══════════════════════════════════════════════════════════════════
-#  단계 7 — 화면 넷 + 시체
-# ══════════════════════════════════════════════════════════════════
+# ==================================================================
+#  stage 7 — four screen things + the corpse
+# ==================================================================
 #
-# 🔴 체력바·번쩍·피해 숫자·시체 잔상 넷을 여기서 잰다. 🔴🔴 **"뜬다·색이 맞다"는 눈이다**
-#  (판정 13, 헤드리스로 원리적으로 못 잰다) — 여기는 **값이 표·실제 hp에서 나오는지**만 잰다.
-#  ⚠ 닭의 탄이 실제로 그려지는 자리(`_draw()`의 `world.bolt_x/y`)는 이미 판정 10~12가
-#  `WorldStep` 쪽에서 잰 값을 그대로 읽는 것뿐이라 여기서 다시 안 잰다 — `box_rect()`가
-#  `_draw()`의 유일한 크기 소스인 것과 달리 그 규율은 코드로만 지킨다(아무도 안 잰다, 위 상자).
-# ⚠ 번쩍·피해 숫자·시체의 **감쇠 곡선**(알파가 몇 %씩 주나)은 안 잰다 — `blast_fx`의 섬광
-#  곡선(`_ease`·`flash_alpha`)도 이 리포에서 net으로 안 잰다. 여기서 재는 것은 **"떴다·표값과
-#  같다·수명대로 사라진다"**까지다.
+# The hp bar, the flash, the damage number and the corpse afterimage are measured here. **"It shows up · the colour is right" is for the eye**
+#  (acceptance 13 — not measurable headless in principle) — what is measured here is only **whether the values come from the table and the real hp**.
+#  Where the hen's bolt actually gets drawn (`_draw()`'s `world.bolt_x/y`) is only reading back the values
+#  acceptances 10-12 already measured on the `WorldStep` side, so it is not measured again here — unlike `box_rect()`
+#  being `_draw()`'s only source of size, that discipline is kept in code alone (nobody measures it, the box above).
+# The **decay curves** of the flash, the damage number and the corpse (how many % the alpha drops by) are not measured —
+#  `blast_fx`'s flash curve (`_ease`, `flash_alpha`) isn't measured by a net in this repo either. What is measured
+#  here goes as far as **"it showed up · it matches the table value · it disappears on schedule"**.
 
 
-# ── 체력바 — 값이 표에서 나온다 ─────────────────────────────────
+# -- the hp bar — the values come from the table ------------------
 func _hp_bar_values_come_from_the_table(t) -> void:
 	for kind: int in Defs.ALL:
 		var x := 40
@@ -1076,9 +1076,9 @@ func _hp_bar_values_come_from_the_table(t) -> void:
 	t.eq(MonsterView.hp_bar_fill_frac(999, 30), 1.0, "표보다 큰 hp도 1 위로 안 올라간다 (죈다)")
 
 
-# ── 닭의 탄 색 — 마법 탄과 갈린다 ───────────────────────────────
-## 🔴 절대값이 아니라 **거리**로 잰다 — 정확한 RGB를 박으면 손맛으로 살짝 조이는 날
-##  이 검사가 이유 없이 빨개진다. 잰다는 「충분히 멀다」다.
+# -- the hen's bolt colour — it splits from the magic bolts -------
+## It is measured as a **distance**, not an absolute value — baking in an exact RGB makes this check go red for
+##  no reason the day someone nudges it by feel. What is measured is "far enough apart".
 func _monster_bolt_color_differs_from_magic_bolts(t) -> void:
 	for elem: int in [Tuning.ELEM_FIRE, Tuning.ELEM_NONE, Tuning.ELEM_WATER]:
 		var glow: Color = Fx.ELEM_FX[elem]["glow"]
@@ -1086,16 +1086,16 @@ func _monster_bolt_color_differs_from_magic_bolts(t) -> void:
 			"닭 탄 색이 마법 탄(원소 %d) 색과 충분히 갈린다" % elem)
 
 
-## 🔴 `Color`에 `distance_to()`가 없다(Godot 4 GDScript 실측) — RGB 유클리드 거리를 직접 잰다.
+## `Color` has no `distance_to()` (measured on Godot 4 GDScript) — the RGB Euclidean distance is computed directly.
 func _rgb_dist(a: Color, b: Color) -> float:
 	return Vector3(a.r, a.g, a.b).distance_to(Vector3(b.r, b.g, b.b))
 
 
-# ── 번쩍 · 피해 숫자 — hp가 준 만큼만, 수명대로 사라진다 ──────────
-## 🔴🔴 **하드코딩 반증** — 피해 숫자를 상수로 박아도 이 값 자체는 통과할 수 있지만
-##  (지금 우연히 `Character.DAMAGE_HIT`와 같다), **실제 hp 변화량을 읽는지**는 절대값 하나로는
-##  못 가른다. ⇒ 여기서는 "hp가 준 양과 같다"를 표에서 유도한 상수(`Character.DAMAGE_HIT`)로
-##  재서 최소한 우연이 아님을 보인다 — 두 번째 다른 피해량(불)까지 재는 것은 이 검사 밖이다.
+# -- the flash · the damage number — only as much as hp dropped, gone on schedule --
+## **Disproving hardcoding** — baking the damage number in as a constant could still pass this value itself
+##  (it happens to equal `Character.DAMAGE_HIT` right now), but **whether it reads the real hp change** cannot
+##  be told apart by one absolute value. => Here "it equals the amount hp dropped" is measured with a constant
+##  derived from the table (`Character.DAMAGE_HIT`) to show at least that it is not a coincidence — measuring a second, different damage amount (fire) is outside this check.
 func _hit_triggers_flash_and_a_damage_number_that_ages_out(t) -> void:
 	var kind := Defs.KIND_PIG
 	var stand_x := 600
@@ -1110,7 +1110,7 @@ func _hit_triggers_flash_and_a_damage_number_that_ages_out(t) -> void:
 
 	var view := MonsterView.new()
 	view.setup(world)
-	view.advance()  # 맞기 전 hp(표값)를 기준으로 스냅샷한다
+	view.advance()  # snapshots against the pre-hit hp (the table value)
 	t.ok(not view.is_flashing(m.id), "맞기 전엔 번쩍이지 않는다 (전제)")
 	t.eq(view.dmg_number_count(), 0, "맞기 전엔 피해 숫자가 없다 (전제)")
 
@@ -1127,10 +1127,10 @@ func _hit_triggers_flash_and_a_damage_number_that_ages_out(t) -> void:
 		"피해 숫자가 실제로 줄어든 양(%d)과 같다 — 하드코딩이면 표를 바꿔도 안 따라온다"
 			% Character.DAMAGE_HIT)
 
-	# 🔴 번쩍과 피해 숫자가 **같은 `advance()` 시계를 공유한다** — 번쩍을 다 태우는 동안에도
-	#  피해 숫자는 계속 나이를 먹는다. ⇒ 이미 지난 프레임 수를 세어 두고, 피해 숫자 수명이
-	#  끝나기 **직전**까지 나머지를 채운다(상수 값에 안 얽매이게).
-	var elapsed := 0  # 생성 호출 자체는 나이를 안 먹인다(위 `advance()`의 순서 — prune이 먼저다)
+	# The flash and the damage number **share the same `advance()` clock** — the damage number keeps ageing while
+	#  the flash burns out. => The frames already passed are counted, and the rest is filled in to just **before**
+	#  the damage number's lifetime ends (so it isn't tied to the constant's value).
+	var elapsed := 0  # the creating call itself doesn't age it (the order in `advance()` above — prune comes first)
 	for _i in Fx.MONSTER_FLASH_FRAMES - 1:
 		view.advance()
 		elapsed += 1
@@ -1145,15 +1145,15 @@ func _hit_triggers_flash_and_a_damage_number_that_ages_out(t) -> void:
 	t.eq(view.dmg_number_count(), 1, "피해 숫자 수명이 아직 안 다했다 (전제)")
 	view.advance()
 	t.eq(view.dmg_number_count(), 0, "%d프레임 뒤 피해 숫자가 사라진다" % Fx.MONSTER_DMG_NUM_LIFE_FRAMES)
-	# 🔴 `MonsterView`는 `Node2D`라 `RefCounted`가 아니다 — 안 지우면 CanvasItem RID가
-	#  새서 래퍼가 stderr를 빨갛게 본다(CLAUDE.md 「가짜 그물 금지」의 마지막 상자와 같은 자리 —
-	#  실측: `.free()`를 빠뜨리자 이 그물이 "RID 2개 누수"로 실패했다).
+	# `MonsterView` is a `Node2D`, so it is not `RefCounted` — not freeing it leaks the CanvasItem RID and the
+	#  wrapper sees red stderr (the same spot as the last box of CLAUDE.md's "no fake nets" —
+	#  measured: leaving out `.free()` made this net fail with "2 RIDs leaked").
 	view.free()
 
 
-# ── 시체 — 죽음 통지를 그 틱에 붙잡아 시체가 되고, 수명대로 사라진다 ─
-## 🔴🔴 **`world_step`이 낸 죽음 통지의 첫 소비자다**(team-lead 메모). `on_tick()`이 통지를
-##  실제로 읽는지, 그 틱을 놓치면 시체가 원리적으로 안 생기는지를 같이 잰다.
+# -- the corpse — the death notification is caught on that tick, becomes a corpse, and goes on schedule --
+## **It is the first consumer of the death notification `world_step` raises** (team-lead memo). Whether
+##  `on_tick()` actually reads the notification, and whether missing that tick makes a corpse impossible in principle, are measured together.
 func _death_notification_spawns_a_corpse_that_ages_out(t) -> void:
 	var kind := Defs.KIND_HEN
 	var stand_x := 600
@@ -1175,8 +1175,8 @@ func _death_notification_spawns_a_corpse_that_ages_out(t) -> void:
 	for _i in Tuning.TICK_DIVIDER * 3:
 		var ticked := world.frame(DT, 0.0, false, false)
 		if ticked and world.died_count() > 0:
-			# 🔴 죽은 그 틱 안에서 붙잡는다 — 다음 `frame()`의 틱 갈래가 통지를 지운다
-			#  (`world_step.gd` 헤더). 놓치면 이 검사 자체가 「원리적으로 안 생긴다」쪽을 증명한다.
+			# It is caught within the tick it dies — the next `frame()`'s tick branch clears the notification
+			#  (`world_step.gd` header). Missing it makes this check itself prove the "impossible in principle" side.
 			view.on_tick()
 			got_death = true
 			break
@@ -1190,50 +1190,50 @@ func _death_notification_spawns_a_corpse_that_ages_out(t) -> void:
 	t.eq(view.corpse_count(), 1, "시체 수명이 아직 안 다했다 (전제)")
 	view.advance()
 	t.eq(view.corpse_count(), 0, "%d프레임 뒤 시체가 사라진다" % Fx.MONSTER_CORPSE_LIFE_FRAMES)
-	view.free()  # `Node2D`라 RefCounted가 아니다 — 위 검사와 같은 이유로 직접 지운다.
+	view.free()  # a `Node2D`, so not RefCounted — freed directly for the same reason as the check above.
 
 
-# ══════════════════════════════════════════════════════════════════
-#  단계 9 — 연출을 도형에서 그림으로 (판정 13 재도전)
+# ==================================================================
+#  stage 9 — effects from shapes to pictures (acceptance 13, second try)
 #
-#  🔴🔴 **여기 있는 것은 「값으로 잴 수 있는 절반」뿐이다.**
-#   판정 13이 실패한 이유가 **「그물이 도는데 안 재는 것」**이었다 —
-#   「번쩍이 6프레임 산다」·「시체가 30프레임 산다」가 전부 초록인 채로
-#   화면에서는 셋 다 사각형이었다. **모양은 눈 말고 잡을 방법이 없다.**
-#  ⇒ 여기서 재는 것은 **거동**(합쳐지나 · 죽으면 나나 · 자리가 안 움직이나)이고,
-#   **「도형이 아니라 그림인가」는 verify-look 의 몫으로 남는다.**
-# ══════════════════════════════════════════════════════════════════
+#  **What is here is only the half that can be measured as a value.**
+#   The reason acceptance 13 failed was **"the net runs but doesn't measure"** —
+#   "the flash lives 6 frames" and "the corpse lives 30 frames" were all green while
+#   on screen all three were rectangles. **There is no way to catch shape but the eye.**
+#  => What is measured here is **behaviour** (does it merge · does it appear on death · does its position stay put),
+#   and **"is it a picture rather than a shape" is left to verify-look.**
+# ==================================================================
 
-## 🔴🔴 **짧은 사이로 또 맞으면 숫자가 합쳐진다** (2026-08-07, 사용자가 정했다).
+## **Hit again within a short interval and the numbers merge** (decided by the user).
 ##
-## ⚠ **화면에서 `-10` 셋이 겹쳐 `-1000` 처럼 보이고 체력바까지 덮었다.**
-##  숫자가 셋인 것이 아니라 **셋이 같은 자리에 겹치는 것**이 문제였다.
+## **On screen three `-10`s overlapped into what looked like `-1000` and covered the hp bar too.**
+##  The problem was not that there were three numbers but **that the three overlapped in the same place**.
 ##
-## 🔴🔴 **양쪽을 짝으로 잰다.** 「합쳐진다」만 재면 **숫자를 아예 하나만 만들게 해도** 초록이고,
-##  「따로 뜬다」만 재면 **합치기를 지워도** 초록이다.
-##  ⇒ **같은 두 방을 사이만 달리 줘서** 하나는 합쳐지고 하나는 안 합쳐져야 한다.
+## **Both sides are measured as a pair.** Measuring only "they merge" is green even if **only one number is ever
+##  made**, and measuring only "they show separately" is green even with **the merging deleted**.
+##  => **The same two hits with only the interval differing** must merge in one case and not in the other.
 func _close_damage_numbers_merge_into_one(t) -> void:
 	t.ok(Fx.MONSTER_DMG_NUM_MERGE_FRAMES < Fx.MONSTER_DMG_NUM_LIFE_FRAMES,
 		"합치는 창이 숫자 수명보다 짧다 — 같으면 숫자가 영영 안 늙는다")
 
-	# ── 붙여 때린다 ⇒ 하나로 합쳐진다 ─────────────────────────────
+	# -- hit back to back => they merge into one -------------------
 	var near := _dmg_number_probe(t, 1)
 	t.eq(near[0], 1, "붙여 두 방 맞으면 숫자가 **하나**다 (%d개)" % near[0])
 	t.eq(near[1], Character.DAMAGE_HIT * 2,
 		"그 하나가 **두 방의 합**이다 (%d) — 표를 바꿔도 따라온다" % near[1])
 
-	# ── 창 밖으로 띄워 때린다 ⇒ 따로 뜬다 ────────────────────────
-	# 🔴 **여기가 없으면 「무조건 하나로 만든다」가 통과한다.**
+	# -- hit spaced outside the window => they show separately -----
+	# **Without this, "always make just one" passes.**
 	var far := _dmg_number_probe(t, Fx.MONSTER_DMG_NUM_MERGE_FRAMES + 1)
 	t.eq(far[0], 2, "창 밖으로 띄워 맞으면 숫자가 **둘**이다 (%d개)" % far[0])
 	t.eq(far[1], Character.DAMAGE_HIT,
 		"그 각각은 **한 방분**이다 (%d) — 합쳐진 게 아니다" % far[1])
 
 
-## 두 방을 `gap` 프레임 사이로 때리고 `[숫자 개수, 첫 숫자의 값]` 을 돌려준다.
-## 🔴 **두 판의 유일한 차이가 `gap` 이어야 한다** — 지형·자리·피해량이 다르면 대조가 무효다.
+## Hits twice with `gap` frames between and returns `[number count, the first number's value]`.
+## **The only difference between the two runs must be `gap`** — differing terrain, position or damage makes the control void.
 func _dmg_number_probe(t, gap: int) -> Array:
-	var kind := Defs.KIND_PIG   # 🔴 돼지다 — 닭은 한 방에 죽어 두 방을 못 때린다
+	var kind := Defs.KIND_PIG   # the pig — a hen dies in one hit and can't take two
 	var stand_x := 600
 	var y := FLOOR_TOP - Defs.h_px(kind)
 	var world := WorldStep.new(_bare_grid(), SpellSim.new(), _still_ch(stand_x, kind))
@@ -1241,7 +1241,7 @@ func _dmg_number_probe(t, gap: int) -> Array:
 
 	var view := MonsterView.new()
 	view.setup(world)
-	view.advance()   # 맞기 전 hp를 스냅샷한다
+	view.advance()   # snapshots the pre-hit hp
 
 	var cx := floori((stand_x + Defs.w_px(kind) * 0.5) / float(Tuning.CELL_PX))
 	var hp0: int = world.monster_at(0).hp
@@ -1251,7 +1251,7 @@ func _dmg_number_probe(t, gap: int) -> Array:
 	for _i in gap:
 		view.advance()
 
-	# 🔴 **무적을 기다린다** — 안 기다리면 둘째 방이 씹혀서 「합쳐졌다」가 공짜로 통과한다.
+	# **It waits out the invulnerability** — without waiting, the second hit is swallowed and "they merged" passes for free.
 	var hp1: int = world.monster_at(0).hp
 	var tries := 0
 	while world.monster_at(0).hp == hp1 and tries < 20:
@@ -1260,12 +1260,12 @@ func _dmg_number_probe(t, gap: int) -> Array:
 	t.ok(world.monster_at(0).hp < hp1, "gap=%d — 둘째 방도 실제로 맞았다 (전제)" % gap)
 
 	var out := [view.dmg_number_count(), view.dmg_number_amount(0)]
-	view.free()   # `Node2D` 라 RefCounted 가 아니다(위 검사들과 같은 이유)
+	view.free()   # a `Node2D`, so not RefCounted (the same reason as the checks above)
 	return out
 
 
-## 폭발 한 번을 먹이고 그 동안 뷰의 프레임도 같이 흘린다.
-## 🔴 **뷰를 안 흘리면 hp diff 를 볼 사람이 없다** — 숫자가 아예 안 생긴다.
+## Feeds one blast and lets the view's frames flow along with it.
+## **Without flowing the view there is nobody to see the hp diff** — no number gets made at all.
 func _blast_and_observe(world: WorldStep, view: MonsterView, cx: int) -> void:
 	world.enqueue(_blast_cmd(cx))
 	for _i in Tuning.TICK_DIVIDER:
@@ -1273,14 +1273,14 @@ func _blast_and_observe(world: WorldStep, view: MonsterView, cx: int) -> void:
 	view.advance()
 
 
-## 🔴🔴 **죽으면 터진다 — 닭의 피격 피드백은 이것뿐이다** (2026-08-07, 사용자가 정했다).
+## **It pops on death — that is the hen's only hit feedback** (decided by the user).
 ##
-## ⚠ **닭은 한 방에 죽어서 hp diff 가 볼 대상이 배열에서 이미 빠졌다** ⇒ 번쩍도 숫자도
-##  **한 프레임도 안 뜬다.** 그것을 이 검사가 **먼저 단언한다** — 안 그러면
-##  「터짐이 있다」가 「번쩍도 있는데 굳이」로 읽히고, 이 연출의 존재 이유가 사라진다.
+## **A hen dies in one hit, so what the hp diff would look at is already out of the array** => neither the
+##  flash nor the number **shows for a single frame.** This check **asserts that first** — otherwise
+##  "there is a pop" reads as "there's a flash too, so why bother", and this effect's reason to exist disappears.
 ##
-## 🔴 **터짐이 시체보다 짧게 산다**도 같이 잰다. 길면 「터졌는데 안 걷힌다」가 되고,
-##  그건 화면에서 「고리가 남았다」로 읽힌다.
+## **That the pop lives shorter than the corpse** is measured too. Longer and it becomes "it popped and never
+##  cleared", which on screen reads as "a ring is left behind".
 func _death_also_makes_a_pop_that_outlives_nothing(t) -> void:
 	t.ok(Fx.MONSTER_DEATH_POP_FRAMES < Fx.MONSTER_CORPSE_LIFE_FRAMES,
 		"터짐이 시체보다 짧게 산다 (%d < %d)"
@@ -1303,37 +1303,37 @@ func _death_also_makes_a_pop_that_outlives_nothing(t) -> void:
 	for _i in Tuning.TICK_DIVIDER * 3:
 		var ticked := world.frame(DT, 0.0, false, false)
 		if ticked and world.died_count() > 0:
-			view.on_tick()   # 🔴 그 틱 안에서 붙잡는다(통지는 다음 틱이 지운다)
+			view.on_tick()   # caught within that tick (the next tick clears the notification)
 			got = true
 			break
 	t.ok(got, "닭이 죽어 죽음 통지가 났다 (전제)")
 
-	# 🔴🔴 **이 연출이 왜 필요한지를 값으로 남긴다.**
+	# **Why this effect is needed is left behind as a value.**
 	view.advance()
 	t.eq(view.dmg_number_count(), 0,
-		"🔴 닭은 한 방에 죽어 **피해 숫자가 한 개도 안 뜬다** — 이 터짐의 존재 이유다")
+		"닭은 한 방에 죽어 **피해 숫자가 한 개도 안 뜬다** — 이 터짐의 존재 이유다")
 
 	t.eq(view.death_pop_count(), 1, "죽음 통지가 터짐 하나를 만들었다")
 	t.eq(view.corpse_count(), 1, "시체도 같이 생겼다 (둘이 같은 통지에서 나온다)")
 
-	# 이미 위에서 `advance()` 한 번을 썼다 — 남은 수명만 채운다.
+	# One `advance()` was already spent above — only the remaining lifetime is filled in.
 	for _i in Fx.MONSTER_DEATH_POP_FRAMES - 2:
 		view.advance()
 	t.eq(view.death_pop_count(), 1, "터짐 수명이 아직 안 다했다 (전제)")
 	view.advance()
 	t.eq(view.death_pop_count(), 0, "%d프레임 뒤 터짐이 걷힌다" % Fx.MONSTER_DEATH_POP_FRAMES)
-	t.eq(view.corpse_count(), 1, "🔴 그런데 **시체는 아직 남아 있다** (둘의 수명이 다르다)")
+	t.eq(view.corpse_count(), 1, "그런데 **시체는 아직 남아 있다** (둘의 수명이 다르다)")
 	view.free()
 
 
-## 🔴🔴 **몸에 붙은 불꽃 — 자리가 프레임에 안 흔들리고 상자를 크게 안 벗어난다.**
+## **Flames on the body — the positions don't jitter frame to frame and don't stray far outside the box.**
 ##
-## ⚠ **원래 상자 테두리 하나였고 「주황 선택 상자」로 읽혔다**(판정 13).
-##  여러 군데로 바꿀 때 **자리를 프레임마다 다시 뽑으면 불꽃이 매 프레임 순간이동하고,
-##  그건 불이 아니라 노이즈다.** 🔴 그 실수는 **화면에서만 보이므로** 여기서 값으로 못 박는다.
+## **It was originally one box outline and read as an "orange selection box"** (acceptance 13).
+##  Moving to several spots, **picking the positions afresh every frame makes the flames teleport every frame,
+##  and that is noise, not fire.** That mistake is **visible on screen only**, so it is pinned as a value here.
 ##
-## 🔴 **`flame_pos` 가 순수 static 이라 그물이 직접 부른다** — `_draw` 가 이 함수만 쓰므로
-##  여기서 재는 값 = 실제로 그려지는 자리다(`box_rect` 와 같은 어법).
+## **`flame_pos` is pure static, so the net calls it directly** — `_draw` uses only this function, so the value
+##  measured here = the position actually drawn (the same idiom as `box_rect`).
 func _body_flames_stay_put_and_stay_inside(t) -> void:
 	t.ok(Fx.MONSTER_BURN_FLAMES > 1,
 		"불꽃이 둘 이상이다 (%d개) — 하나면 옛 「테두리 하나」와 같은 자리다"
@@ -1344,48 +1344,48 @@ func _body_flames_stay_put_and_stay_inside(t) -> void:
 	var seen: Dictionary = {}
 	for i in Fx.MONSTER_BURN_FLAMES:
 		var p := MonsterView.flame_pos(r, 7, i)
-		# 🔴 **부르는 것만으로는 「안 움직인다」를 못 잰다** — 두 번 불러 같은지 본다.
+		# **Calling it once can't measure "it doesn't move"** — it is called twice and checked for equality.
 		t.eq(MonsterView.flame_pos(r, 7, i), p, "불꽃 %d 의 자리가 다시 불러도 같다" % i)
-		# 🔴 **id 가 다르면 자리도 달라야 한다** — 아니면 모든 몬스터의 불이 똑같이 선다.
+		# **A different id must give a different position** — otherwise every monster's fire stands identically.
 		t.ok(MonsterView.flame_pos(r, 8, i) != p, "불꽃 %d 는 몬스터가 다르면 자리도 다르다" % i)
 		t.ok(r.has_point(p), "불꽃 %d 가 상자 안에 있다 (%s ∈ %s)" % [i, p, r])
 		seen[p] = true
-		# 🔴 **아래로 치우친다** — 고르게 뿌리면 「반짝이가 붙었다」로 보인다.
+		# **It is biased low** — spread evenly it looks like "glitter got stuck on".
 		t.ok(p.y >= r.position.y + r.size.y * Fx.MONSTER_BURN_LOW_BIAS - 0.001,
 			"불꽃 %d 가 상자 위쪽 %d%% 안에는 안 선다"
 				% [i, int(Fx.MONSTER_BURN_LOW_BIAS * 100.0)])
 
-	# 🔴 **다 겹치면 「여러 군데」가 거짓이다** — 해시가 죽어 상수를 돌려줘도 위 단언은 다 통과한다.
+	# **If they all overlap, "several spots" is false** — with the hash dead and returning a constant, every assertion above still passes.
 	t.eq(seen.size(), Fx.MONSTER_BURN_FLAMES,
 		"불꽃 %d개가 **서로 다른 자리**에 선다 (%d자리)" % [Fx.MONSTER_BURN_FLAMES, seen.size()])
 
 
-## 🔴🔴 **번쩍 레이어가 실제 트리에서 셰이더를 실제로 받나.**
+## **Does the flash layer actually get its shader in a real tree.**
 ##
-## ⚠ **이 그물의 다른 뷰 검사는 전부 `MonsterView.new()` 로 세우고 트리에 안 넣는다** ⇒
-##  **`_ready()` 가 한 번도 안 돈다.** 즉 레이어 만들기·셰이더 붙이기·색 주입이
-##  **통째로 죽어도 이 파일의 나머지가 전부 초록이다.** 그 구멍을 여기서 막는다.
-## 🔴 **실측으로 확인하고 넣었다**(2026-08-07): 헤드리스로 무대 씬을 세우니 자식 둘이 서고
-##  첫째에 `monster_silhouette.gdshader` 가 붙고 `flash_color` 가 들어가 있었다.
+## **Every other view check in this net stands a `MonsterView.new()` and never puts it in the tree** =>
+##  **`_ready()` never runs once.** That is, building the layers, attaching the shader and injecting the colour
+##  could **die whole and the rest of this file would be all green.** That hole is plugged here.
+## **It was confirmed by measurement before being added**: standing the stage scene headless gave two children,
+##  with `monster_silhouette.gdshader` on the first and `flash_color` filled in.
 ##
-## 🔴🔴 **주입한 이름이 셰이더에 실재하는지도 같이 잰다.** 한 글자 틀리면
-##  **아무 일도 안 일어나고 에러도 없다** — `get_shader_parameter` 가 `null` 을 돌려줄 뿐이다
-##  (`net_render` 의 「거짓 손잡이」 절과 같은 자리).
+## **Whether the injected name really exists in the shader is measured too.** One wrong letter and
+##  **nothing happens and there is no error** — `get_shader_parameter` just returns `null`
+##  (the same spot as `net_render`'s "false knob" section).
 func _flash_layer_gets_its_shader_in_a_real_tree(t) -> void:
 	var view := MonsterView.new()
-	# 🔴🔴 **`_ready()` 를 직접 부른다 — 트리에 못 넣는다.**
-	#  ⚠ 러너가 `SceneTree._initialize` 안이라 **`root` 가 아직 안 섰다**(실측: 넣으려다 죽었다).
-	#  🔴 **그래서 이 검사가 못 재는 것 하나**: 「엔진이 실제로 `_ready` 를 부르나」.
-	#   그건 엔진이 보장하는 자리이고, 여기서 재는 것은 **그 안에서 무슨 일이 나나**다.
-	#   ⚠ 실제 트리에서 도는 것은 헤드리스로 따로 확인했다(2026-08-07, 무대 씬 · 자식 둘 · 셰이더 부착).
+	# **`_ready()` is called directly — it cannot be put in the tree.**
+	#  The runner is inside `SceneTree._initialize`, so **`root` has not stood up yet** (measured: trying to add it died).
+	#  **So there is one thing this check cannot measure**: "does the engine actually call `_ready`".
+	#   That is the engine's guarantee, and what is measured here is **what happens inside it**.
+	#   That it runs in a real tree was confirmed separately headless (stage scene · two children · shader attached).
 	view._ready()
 
 	t.ok(view.get_child_count() >= 3,
 		"`_ready()` 가 레이어를 세웠다 (자식 %d개 — 외곽선 + 번쩍 + 숫자)" % view.get_child_count())
 
-	# 🔴🔴 **이름으로 찾는다. 인덱스로 찾지 마라.**
-	#  ⚠ **실측(2026-08-08)**: 여기가 `get_child(0)` 이었고, 외곽선 레이어를 앞에 넣자
-	#   **조용히 엉뚱한 노드를 재기 시작했다.** 순서는 그리기 계약이지 이름표가 아니다.
+	# **It is found by name. Do not find it by index.**
+	#  **Measured**: this used to be `get_child(0)`, and putting the outline layer in front made it
+	#   **quietly start measuring the wrong node.** Order is a drawing contract, not a name tag.
 	var flash: CanvasItem = view.get_node_or_null(MonsterView.LAYER_FLASH)
 	t.ok(flash != null, "번쩍 레이어를 이름(`%s`)으로 찾는다" % MonsterView.LAYER_FLASH)
 	if flash == null:
@@ -1399,11 +1399,11 @@ func _flash_layer_gets_its_shader_in_a_real_tree(t) -> void:
 		if mat != null and mat.shader != null:
 			t.eq(mat.shader.resource_path, Fx.MONSTER_FLASH_SHADER,
 				"`fx_tuning.MONSTER_FLASH_SHADER` 가 가리키는 바로 그 셰이더다")
-			# 🔴🔴 **셰이더가 선언한 이름과 맞댄다 — `get_shader_parameter` 로는 못 잰다.**
-			#  ⚠ **실측으로 걸렸다**(2026-08-07): 처음엔 `get_shader_parameter(이름) == 색` 으로 짰는데
-			#   `ShaderMaterial` 은 **셰이더에 없는 이름도 그냥 저장하고 되돌려준다** ⇒ 이름을
-			#   `flash_colour` 로 틀려도 **초록이었다.** 자기가 넣은 값을 자기가 읽는 항진명제였다
-			#   (CLAUDE.md 「맞대기는 갈라짐만 잡고 사라짐을 못 잡는다」).
+			# **It is butted against the names the shader declares — `get_shader_parameter` cannot measure it.**
+			#  **It was caught by measurement**: at first this was written as `get_shader_parameter(name) == colour`, but
+			#   `ShaderMaterial` **stores and hands back names the shader doesn't even have** => misspelling the name
+			#   as `flash_colour` was **still green.** It was a tautology reading back the value it had just written
+			#   (CLAUDE.md, "butting catches divergence only and cannot catch disappearance").
 			var declared: Dictionary = {}
 			for u: Dictionary in mat.shader.get_shader_uniform_list():
 				declared[String(u["name"])] = true
@@ -1415,15 +1415,15 @@ func _flash_layer_gets_its_shader_in_a_real_tree(t) -> void:
 				Fx.MONSTER_FLASH_COLOR,
 				"그 자리에 `MONSTER_FLASH_COLOR` 가 들어가 있다 (거짓 손잡이가 아니다)")
 
-	# 🔴 숫자 레이어는 셰이더가 **없어야** 한다 — 있으면 피해 숫자가 흰 실루엣이 된다.
+	# The number layer must have **no** shader — with one, the damage numbers turn into white silhouettes.
 	var num: CanvasItem = view.get_node_or_null(MonsterView.LAYER_NUMBER)
 	t.ok(num != null, "숫자 레이어를 이름(`%s`)으로 찾는다" % MonsterView.LAYER_NUMBER)
 	t.ok(num != null and num.material == null,
 		"숫자 레이어에는 머티리얼이 없다 (번쩍 셰이더가 숫자에 새지 않는다)")
 
-	# 🔴🔴 **외곽선 레이어 — 번쩍과 같은 셰이더에 다른 색, 그리고 몸 「아래」다.**
-	#  ⚠ `show_behind_parent` 가 꺼지면 **외곽선이 몸을 덮어 실루엣이 통째로 크림색이 된다.**
-	#   그건 화면에서만 보이므로 여기서 값으로 못 박는다.
+	# **The outline layer — the same shader as the flash with a different colour, and **below** the body.**
+	#  If `show_behind_parent` goes off, **the outline covers the body and the silhouette turns cream all over.**
+	#   That is visible on screen only, so it is pinned as a value here.
 	var out: Node2D = view.get_node_or_null(MonsterView.LAYER_OUTLINE)
 	t.ok(out != null, "외곽선 레이어를 이름(`%s`)으로 찾는다" % MonsterView.LAYER_OUTLINE)
 	if out != null:
@@ -1437,27 +1437,27 @@ func _flash_layer_gets_its_shader_in_a_real_tree(t) -> void:
 			t.eq(om.get_shader_parameter(MonsterView.FLASH_COLOR_PARAM),
 				Fx.MONSTER_OUTLINE_COLOR,
 				"그런데 **색은 다르다** — 외곽선은 `MONSTER_OUTLINE_COLOR` 다")
-			# 🔴 **둘이 같은 색이면 외곽선이 번쩍과 구별이 안 된다** — 상수 둘을 나눈 이유가 죽는다.
+			# **If the two share a colour the outline is indistinguishable from the flash** — the reason for splitting the two constants dies.
 			t.ok(Fx.MONSTER_OUTLINE_COLOR != Fx.MONSTER_FLASH_COLOR,
 				"외곽선 색과 번쩍 색이 서로 다르다")
 
-	view.free()   # 트리 안이라도 `free()` 가 떼어 낸다. 안 지우면 RID가 샌다(위 검사들과 같은 이유).
+	view.free()   # even inside the tree `free()` detaches it. Not freeing leaks an RID (the same reason as the checks above).
 
 
-## 🔴🔴 **레이어에 위임한 그리기는 `canvas.` 로 그린다 — 맨 `draw_*` 는 조용히 버려진다.**
+## **Drawing delegated to a layer is drawn with `canvas.` — a bare `draw_*` is silently discarded.**
 ##
-## ⚠ **2026-08-08에 실제로 났다. 이 그물이 그때 초록이었다.**
-##  `_draw_dmg_number` 가 `draw_string(font, ...)` 을 **암묵적 `self`(= MonsterView)** 에 걸었는데,
-##  그 함수는 **자식 레이어의 `_draw()` 안에서** 불린다 ⇒ MonsterView 는 그리는 중이 아니라
-##  **그 명령이 조용히 버려진다. 에러도 안 난다.**
-##  🔴 증상은 **「피해 숫자가 화면에 통째로 없다」** 하나뿐이었고, verify-look 이 게임을 띄워
-##   `_number_layer` 를 null 로 바꿔 보고서야 원인이 잡혔다.
+## **It actually happened. This net was green at the time.**
+##  `_draw_dmg_number` hung `draw_string(font, ...)` on the **implicit `self` (= MonsterView)**, but that
+##  function is called **inside a child layer's `_draw()`** => MonsterView is not the one drawing, so
+##  **the command is silently discarded. No error is raised either.**
+##  The only symptom was **"the damage numbers are missing from the screen entirely"**, and the cause was
+##   only found once verify-look ran the game and tried setting `_number_layer` to null.
 ##
-## 🔴🔴 **거동으로는 못 잡는다 — 그래서 소스를 읽는다.**
-##  ⚠ 그물은 배열을 읽지 캔버스를 안 읽고, 헤드리스는 렌더러가 dummy 라 픽셀이 없다.
-##   `_draw()` 를 직접 부르면 「그리는 중이 아니다」로 **어느 쪽이든** 짖어서 둘을 못 가른다.
-##  ⇒ **CLAUDE.md 가 「텍스트 검사로는 못 막는다」고 한 자리이지만, 이 실수는 문법 문제라
-##   텍스트로 정확히 잡힌다.** 재는 것과 라벨이 같다: 「이 함수들이 canvas 로 그리나」.
+## **Behaviour cannot catch it — so the source is read.**
+##  The net reads arrays, not the canvas, and headless the renderer is dummy so there are no pixels.
+##   Calling `_draw()` directly barks "not drawing" **either way**, so the two can't be told apart.
+##  => **This is the spot where CLAUDE.md says "a text check can't prevent it", but this mistake is a syntax
+##   problem and text catches it exactly.** What is measured equals the label: "do these functions draw with canvas".
 func _layer_draws_go_through_the_canvas_argument(t) -> void:
 	var f := FileAccess.open("res://src/view/monster_view.gd", FileAccess.READ)
 	t.ok(f != null, "`monster_view.gd` 를 읽는다 (검사의 전제)")
@@ -1466,12 +1466,12 @@ func _layer_draws_go_through_the_canvas_argument(t) -> void:
 	var src := f.get_as_text()
 	f.close()
 
-	# 🔴 **레이어가 위임받아 부르는 함수들.** 여기 있는 것만 이 규칙에 걸린다 —
-	#  `_draw_monster` 류는 MonsterView 자신이 그리므로 맨 `draw_*` 가 **맞다.**
+	# **The functions a layer calls by delegation.** Only what is listed here falls under this rule —
+	#  `_draw_monster` and its kind are drawn by MonsterView itself, so a bare `draw_*` is **correct** there.
 	var delegated: Array[String] = ["_draw_flashes", "_draw_numbers", "_draw_dmg_number"]
-	# ⚠ **정규식을 안 쓴다.** lookbehind 를 쓰려면 GDScript 문자열에 백슬래시를 이중으로
-	#  넣어야 하고, 그게 한 번 조용히 깨졌다(파스 에러로 그물이 통째로 안 돌았다).
-	#  🔴 **읽는 사람이 규칙을 눈으로 확인할 수 있는 쪽**이 여기서는 더 낫다.
+	# **No regex is used.** A lookbehind would need doubled backslashes in a GDScript string, and that broke
+	#  quietly once (a parse error kept the whole net from running).
+	#  **The side a reader can verify the rule with their own eyes** is the better one here.
 	for name: String in delegated:
 		var body := _func_body(src, name)
 		t.ok(body != "", "`%s` 를 소스에서 찾았다 (검사의 전제 — 이름이 바뀌면 여기가 먼저 빨개진다)" % name)
@@ -1481,24 +1481,24 @@ func _layer_draws_go_through_the_canvas_argument(t) -> void:
 		t.eq(bare.size(), 0,
 			"`%s` 에 수신자 없는 `draw_*` 가 없다 (있으면 화면에서 통째로 사라진다): %s"
 				% [name, ", ".join(bare)])
-		# 🔴 **반대쪽** — 그리기를 하나도 안 하면 위 단언이 공짜로 통과한다.
+		# **The other side** — drawing nothing at all lets the assertion above pass for free.
 		t.ok(body.contains("canvas.") or body.contains("_draw_"),
 			"`%s` 가 실제로 무언가를 그린다 (`canvas.` 또는 다른 그리기 함수를 부른다)" % name)
 
-	# 🔴 **`_Layer` 가 캔버스를 넘기는가** — 안 넘기면 위 함수들이 인자를 받을 수가 없다.
+	# **Does `_Layer` hand the canvas over** — without it the functions above cannot receive the argument.
 	t.ok(src.contains("fn.call(self)"),
 		"`_Layer._draw()` 가 자기 자신을 넘긴다 (`fn.call(self)`)")
 
 
-## 소스에서 함수 하나의 본문을 뽑는다(다음 `func ` 전까지).
-## ⚠ 못 찾으면 빈 문자열 — **부르는 쪽이 그걸 단언한다.** 조용히 통과하면 이름이 바뀐 날
-##  검사가 「없어진다」(CLAUDE.md 「검사가 실패가 아니라 없어진다」).
-## 본문에서 **수신자 없는** `draw_*(` 호출을 찾는다 ⇒ 찾은 것들의 이름.
+## Extracts one function's body from the source (up to the next `func `).
+## Not found gives an empty string — **the caller asserts that.** Passing silently makes the check
+##  "disappear" the day the name changes (CLAUDE.md, "the check doesn't fail, it disappears").
+## Finds **receiverless** `draw_*(` calls in the body => the names it found.
 ##
-## 🔴 「수신자 없다」 = 바로 앞 글자가 `.` 도 낱말 문자도 아니다. 즉 `canvas.draw_rect` 는 통과하고
-##  맨 `draw_rect` 는 걸린다. ⚠ **`_draw_flipped` 같은 자기 함수 호출은 `draw_` 로 시작을 안 하므로
-##  애초에 안 걸린다** — 밑줄이 앞에 붙어 낱말 문자 규칙에 먹힌다.
-## ⚠ **주석 줄은 건너뛴다** — 주석에 `draw_rect` 를 적었다고 빨개지면 아무도 주석을 못 쓴다.
+## "Receiverless" = the character right before is neither a `.` nor a word character. So `canvas.draw_rect`
+##  passes and a bare `draw_rect` is caught. **A call to an own function like `_draw_flipped` doesn't start
+##  with `draw_`, so it isn't caught at all** — the leading underscore falls under the word-character rule.
+## **Comment lines are skipped** — going red because someone wrote `draw_rect` in a comment would mean nobody could write comments.
 func _bare_draw_calls(body: String) -> Array:
 	var out: Array = []
 	for line: String in body.split("\n"):
@@ -1509,7 +1509,7 @@ func _bare_draw_calls(body: String) -> Array:
 		while at >= 0:
 			var before := "" if at == 0 else code[at - 1]
 			var is_receiver := before == "." or before == "_" or _is_word(before)
-			# 호출인지 본다 — `draw_` 로 시작하는 낱말 뒤에 여는 괄호가 와야 한다.
+			# Checks it is a call — a word starting with `draw_` must be followed by an opening parenthesis.
 			var close := code.find("(", at)
 			if not is_receiver and close > at and not code.substr(at, close - at).contains(" "):
 				out.append(code.substr(at, close - at))

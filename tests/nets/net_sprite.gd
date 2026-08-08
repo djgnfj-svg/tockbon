@@ -1,27 +1,30 @@
 extends RefCounted
-## 캐릭터 그림이 **상자와 맞나.** 🔴 「마법사로 읽히나」는 원리적으로 못 잰다 —
-## 여기가 재는 것은 **크기 계약**과 **자리 계약**뿐이다. 나머지는 눈이 본다(계획 §7.2).
+## Does the character sprite **match the box.** "Does it read as a wizard" cannot be measured in principle —
+## what is measured here is only the **size contract** and the **placement contract**. The rest is for the eye
+## (plan 7.2).
 ##
-## 🔴🔴 **왜 크기가 계약인가.** GDD가 「캐릭터와 타일 두께를 같게 잡은 것이 위력 단을 눈에 보이게
-##  만드는 장치다 — 저 벽을 뚫으면 지나갈 수 있다를 화면에서 **세어서** 알 수 있다」고 못 박았다.
-##  ⚠ 그림이 32×48이면(머리가 위로 튀어나오면) **「머리가 벽에 박히는데 지나간다」**가 생기고,
-##   그 순간 「세어서 안다」가 거짓이 된다. **에러는 하나도 안 나고 스샷에서만 보인다.**
+## **Why size is a contract.** The GDD pins down that "making the character and the tile the same thickness is
+##  the device that makes power tiers visible — you can **count** off the screen that breaking through that wall
+##  lets you pass."
+##  If the sprite were 32x48 (the head sticking out above), **"the head is stuck in the wall but it passes through"**
+##   appears, and at that moment "you can tell by counting" becomes false. **No error at all is raised; it only
+##   shows in a screenshot.**
 ##
-## 🔴🔴 **텍스처(`load`)로는 그림의 내용을 못 잰다 — 원본 png를 따로 연다.**
-##  `Image.load_from_file` 이 임포트를 안 거치고 디스크의 png를 그대로 읽으며 **헤드리스에서 돈다**
-##  (verify-read 실측). ⚠ 그래서 이 그물은 **소스 트리에서만** 유효하다 — 내보낸 빌드에는 원본 png가
-##  없다. 그물은 소스에서만 도니 문제가 아니다.
+## **The texture (`load`) cannot measure the sprite's content — the original png is opened separately.**
+##  `Image.load_from_file` skips the import, reads the png on disk directly, and **runs headless**
+##  (measured by verify-read). So this net is valid **only in the source tree** — an exported build has no
+##  original png. The nets only run from source, so that is not a problem.
 ##
-## ⚠ **이 리포에서 png가 그물에 걸리는 길이 여기 하나다.** `.godot/` 이 `.gitignore` 대상이라
-##  구운 `.ctex` 는 커밋되지 않는다 ⇒ 새 기계에서는 `--import` 가 한 번 돌아야 한다.
-##  안 돌면 아래 첫 줄이 **빨개진다**(조용히 없어지지 않는다).
+## **This is the one path by which a png is caught by a net in this repo.** `.godot/` is a `.gitignore` target
+##  so the baked `.ctex` is not committed => on a new machine `--import` has to run once.
+##  Without it the first line below **goes red** (it does not vanish quietly).
 
 const Fx := preload("res://src/view/fx_tuning.gd")
 const Character := preload("res://src/actor/character.gd")
-## 🔴 지팡이 그림의 폭 계약이 `Staff.LEN_PX` 다 — 「보이는 끝」과 「발사 원점」이 같은 값이어야 한다.
+## The staff sprite's width contract is `Staff.LEN_PX` — "the visible tip" and "the firing origin" must be the same value.
 const Staff := preload("res://src/actor/staff.gd")
-## 🔴 **`pick_state()` 가 순수 static 이라 씬 없이 부를 수 있다** — 그게 판정 3·4를 그물로
-##  옮긴 이유다. ⚠ 인스턴스를 만들지 않는다(`Node2D` 라 만들면 트리가 필요하다).
+## **`pick_state()` is purely static so it can be called without a scene** — that is what let acceptances 3 and 4
+##  move into the nets. No instance is made (it is a `Node2D`, so making one would need a tree).
 const CharacterView := preload("res://src/view/character_view.gd")
 
 
@@ -31,34 +34,35 @@ func run(t) -> void:
 	_pick_state_picks_different_cells(t)
 
 
-## 🔴🔴 **지팡이 그림 계약 — 「눈에 보이는 끝」과 `Staff.tip_px()` 가 같은 자리여야 한다.**
-##  둘이 몇 px 어긋나면 **스샷으로만 드러난다**(그림 끝에서 안 나가는 마법).
+## **The staff sprite contract — "the visible tip" and `Staff.tip_px()` must be the same place.**
+##  A few px of divergence **only surfaces in a screenshot** (magic that does not leave the tip of the sprite).
 ##
-## 🔴 **후보 24안 중 18개가 여기서 떨어졌다**(2026-08-05). 흔한 실패가 둘이었다:
-##  · **고리와 봉 사이가 4~5px 끊겨 있다** — 같은 프롬프트로 뽑은 것에서도 났다
-##  · **bbox가 폭에 못 미친다**(x 0~32 등)
-##  ⇒ **그림을 갈아 끼울 때 사람이 기억하는 대신 그물이 문다.**
+## **18 of the 24 candidates were rejected right here.** Two failures were common:
+##  · **a 4-5px break between the ring and the shaft** — it happened even among ones from the same prompt
+##  · **the bbox falls short of the width** (x 0-32 and the like)
+##  => **When swapping the sprite, the net bites instead of a person remembering.**
 func _staff_sheet_fits_the_reach(t) -> void:
 	var tex: Texture2D = load(Fx.STAFF_SHEET)
 	t.ok(tex != null, "지팡이 시트를 읽는다 (%s)" % Fx.STAFF_SHEET)
 	if tex == null:
-		# 🔴 그냥 `return` 하면 검사가 「실패」가 아니라 **없어진다**(위 몸 시트와 같은 장치).
+		# A bare `return` makes the check **disappear** rather than "fail" (same device as the body sheet above).
 		t.ok(false, "지팡이 시트를 못 읽어서 그림 계약을 **하나도 못 쟀다**")
 		return
 
-	# 🔴🔴 **폭이 곧 사거리다.** `Staff.LEN_PX` 와 갈라지면 「보이는 끝」과 「발사 원점」이
-	#  어긋나는데 **에러가 안 난다.** ⚠ 길이를 눈으로 보고 바꾸는 날 png도 같이 바꿔야 한다.
+	# **The width is the reach.** Diverge from `Staff.LEN_PX` and "the visible tip" and "the firing origin"
+	#  come apart **with no error.** The day the length is changed by eye, the png has to change with it.
 	t.eq(float(tex.get_width()), Staff.LEN_PX,
 		"지팡이 시트 폭이 지팡이 길이와 같다 (%d == %.0f)" % [tex.get_width(), Staff.LEN_PX])
 
-	# ⚠ 선언을 **파일 경로까지 넣어 좁힌다** — 넓게 적으면 도는 동안 진짜 침묵사도 같이 사면된다.
+	# The declaration is **narrowed down to the file path** — written wide, a real silent death is amnestied along with it.
 	t.expect_error("Loaded resource as image file, this will not work on export: '%s'" % Fx.STAFF_SHEET)
 	var img := Image.load_from_file(Fx.STAFF_SHEET)
 	t.ok(img != null, "지팡이 원본 png를 연다 (임포트를 안 거친다)")
 	if img == null:
 		t.ok(false, "원본 png를 못 읽어서 **내용 검사를 하나도 못 쟀다**")
 		return
-	# 🔴 png를 고치고 임포트를 안 돌리면 게임은 **낡은 `.ctex`** 를 그리는데 아래는 **새 png** 를 잰다.
+	# Fix the png without running the import and the game draws the **stale `.ctex`** while the code below
+	#  measures the **new png**.
 	t.eq(Vector2i(img.get_width(), img.get_height()),
 		Vector2i(tex.get_width(), tex.get_height()),
 		"원본 png 크기가 임포트된 텍스처와 같다 (임포트가 안 낡았다)")
@@ -73,26 +77,26 @@ func _staff_sheet_fits_the_reach(t) -> void:
 	if box.size.x <= 0 or box.size.y <= 0:
 		return
 
-	# 🔴🔴 **bbox가 폭을 꽉 채운다.** 맨 오른쪽 열이 투명하면 눈에 보이는 끝은 `폭−1` 인데
-	#  `tip_px()` 는 `폭` 이라 **끝이 그림 밖에 뜬다.**
+	# **The bbox fills the width.** If the rightmost column is transparent the visible tip is at `width-1`
+	#  while `tip_px()` says `width`, so **the tip floats outside the sprite.**
 	t.eq(Vector2i(box.position.x, box.position.x + box.size.x - 1), Vector2i(0, w - 1),
 		"bbox가 폭을 꽉 채운다 (x 0~%d)" % (w - 1))
 
-	# 🔴🔴 **끊긴 열이 0개다 — 지팡이가 두 조각이 아니다.**
+	# **Zero broken columns — the staff is not in two pieces.**
 	var gaps := 0
 	for x in w:
 		if opaque_bbox(img, x, 0, 1, h).size.y <= 0:
 			gaps += 1
 	t.eq(gaps, 0, "끊긴 열이 0개다 (봉과 고리가 이어져 있다)")
 
-	# 🔴🔴 **bbox의 y 중심이 앵커다.** 여기가 어긋나면 **왼쪽을 볼 때만**(180° 회전)
-	#  지팡이가 어깨 위로 뜬다 — 오른쪽만 보고는 절대 못 잡는다.
+	# **The bbox's y center is the anchor.** Off here and the staff floats above the shoulder **only when facing
+	#  left** (rotated 180 degrees) — looking at the right side alone can never catch it.
 	var cy := (float(box.position.y) + float(box.position.y + box.size.y - 1)) * 0.5
 	t.ok(is_equal_approx(cy, Fx.STAFF_ANCHOR_Y_PX),
 		"bbox의 y 중심이 앵커와 같다 (%.1f == %.1f · y %d~%d)" % [
 			cy, Fx.STAFF_ANCHOR_Y_PX, box.position.y, box.position.y + box.size.y - 1])
 
-	# 🔴 고리가 차지하는 폭이 그림 안이어야 봉 영역(`LEN_PX − ring`)이 양수다.
+	# The width the ring occupies has to be inside the sprite for the shaft region (`LEN_PX - ring`) to be positive.
 	t.ok(Fx.STAFF_RING_W_PX > 0.0 and Fx.STAFF_RING_W_PX < Staff.LEN_PX,
 		"고리 폭 %.0f 가 0과 전장 %.0f 사이다" % [Fx.STAFF_RING_W_PX, Staff.LEN_PX])
 
@@ -101,26 +105,26 @@ func _body_sheet_fits_the_box(t) -> void:
 	var tex: Texture2D = load(Fx.CHAR_SHEET)
 	t.ok(tex != null, "몸 시트를 읽는다 (%s)" % Fx.CHAR_SHEET)
 	if tex == null:
-		# 🔴🔴 **여기서 그냥 `return` 하면 검사가 「실패」가 아니라 통째로 사라진다** —
-		#  통과 수만 줄고 아무도 안 짖는다. 로그에서 「없어진 검사」는 「통과한 검사」와 구별이 안 된다.
+		# **A bare `return` here makes the check vanish entirely rather than "fail"** —
+		#  only the pass count drops and nobody barks. In the log a "vanished check" is indistinguishable from a passed one.
 		t.ok(false, "몸 시트를 못 읽어서 크기 계약을 **하나도 못 쟀다**")
 		return
 
 	var w := tex.get_width()
 	var h := tex.get_height()
-	# 🔴🔴 **여기 전부가 「그림」 계약이므로 기준은 `Fx.CHAR_CELL_PX` 다 — `Character.W_PX` 가 아니다.**
-	#  2026-08-04에 둘이 갈라졌다(상자 20 · 그림 칸 32). 전에는 `W_PX` 하나가 두 뜻을 다 했고,
-	#  그대로 뒀다면 이 검사가 시트를 **20px 단위로** 세어 「9.6칸」이 되며 통째로 헛돌았다.
+	# **Everything here is the "sprite" contract, so the reference is `Fx.CHAR_CELL_PX` — not `Character.W_PX`.**
+	#  The two split apart (box 20 · sprite cell 32). Before that, `W_PX` alone carried both meanings, and had it
+	#  stayed that way this check would count the sheet **in units of 20px**, arrive at "9.6 cells", and spin idle end to end.
 	t.eq(h, Fx.CHAR_CELL_PX, "몸 시트 높이가 그림 칸과 같다 (%dpx)" % Fx.CHAR_CELL_PX)
-	# 🔴 폭은 칸 수 × 칸 폭이다. 배수가 아니면 마지막 칸이 잘려 그려지는데 **에러가 안 난다.**
+	# The width is cell count x cell width. Not a multiple and the last cell is drawn clipped, **with no error.**
 	t.ok(w > 0 and w % Fx.CHAR_CELL_PX == 0,
 		"몸 시트 폭 %d 이 그림 칸 %d 의 배수다" % [w, Fx.CHAR_CELL_PX])
 	if w <= 0 or w % Fx.CHAR_CELL_PX != 0:
 		t.ok(false, "시트 폭이 배수가 아니라 칸 수를 못 세고 **내용 검사를 하나도 못 쟀다**")
 		return
 
-	# 🔴🔴 **칸 수는 상수가 아니다** — 시트에서 나온다(`fx_tuning` 의 그 주석과 같은 규칙).
-	#  세 번째 곳에 박으면 그 셋이 갈라지는 날 그물이 **틀린 쪽 편을 든다.**
+	# **The cell count is not a constant** — it comes from the sheet (the same rule as that comment in `fx_tuning`).
+	#  Hardcode it in a third place and the day those three diverge the net **takes the wrong side.**
 	var cells := w / Fx.CHAR_CELL_PX
 	t.ok(cells > 0, "몸 시트에 칸이 있다 (%d칸)" % cells)
 
@@ -128,17 +132,17 @@ func _body_sheet_fits_the_box(t) -> void:
 	_table_stays_inside_the_sheet(t, cells)
 
 
-## 🔴🔴 **칸이 통째로 투명해도 위 검사는 전부 초록이다** — 16px 시트에서 verify-read가 실측했다:
-##  투명한 시트로 바꿔도 **그물이 초록이고 stderr까지 깨끗했다.** 캐릭터가 화면에서 사라지는데
-##  아무도 안 짖는다. ⇒ **`null` 은 막혀 있었고 「빈 그림」이 열려 있었다.**
+## **Even an entirely transparent cell leaves every check above green** — verify-read measured it on the 16px sheet:
+##  swapping in a transparent sheet left **the nets green and stderr clean.** The character disappears from the
+##  screen and nobody barks. => **`null` was blocked and "an empty sprite" was wide open.**
 ##
-## ⚠ **칸 단위로 짠다.** 지금은 칸이 하나지만 단계 3에서 6칸이 되고, 그때 「한 칸만 안 그렸다」와
-##  「한 칸만 정렬이 어긋났다」가 정확히 조용히 새는 모양이다.
+## **It is written per cell.** There is one cell now, but at stage 3 there will be six, and then "only one cell
+##  was not drawn" and "only one cell is misaligned" are exactly the shape that leaks quietly.
 func _cells_hold_their_contract(t, w: int, h: int, cells: int) -> void:
-	# 🔴 엔진이 「내보낸 빌드에서는 안 된다」고 짖는다. **정당한 짖음이다** — 그물은 소스 트리에서만
-	#  돌고, 게임이 그리는 쪽은 임포트된 `.ctex`(`load()`)라 내보내기에 아무 영향이 없다.
-	# ⚠ **선언을 파일 경로까지 넣어 좁힌다.** 넓게 적으면 도는 동안 진짜 침묵사도 같이 사면된다 —
-	#  그리고 사면은 **그물 하나가 아니라 실행 전체**에 걸린다(러너가 stdout의 `[EXPECT]` 를 다 모은다).
+	# The engine barks "this will not work on export". **That bark is legitimate** — the nets run only in the
+	# source tree, and the side the game draws is the imported `.ctex` (`load()`), so exporting is unaffected.
+	# **The declaration is narrowed down to the file path.** Written wide, a real silent death is amnestied along with it —
+	#  and an amnesty covers **the whole run, not one net** (the runner collects every `[EXPECT]` from stdout).
 	t.expect_error("Loaded resource as image file, this will not work on export: '%s'" % Fx.CHAR_SHEET)
 	var img := Image.load_from_file(Fx.CHAR_SHEET)
 	t.ok(img != null, "몸 시트 원본 png를 연다 (임포트를 안 거친다)")
@@ -146,55 +150,58 @@ func _cells_hold_their_contract(t, w: int, h: int, cells: int) -> void:
 		t.ok(false, "원본 png를 못 읽어서 **내용 검사를 하나도 못 쟀다**")
 		return
 
-	# 🔴🔴 **원본과 임포트된 텍스처가 같은 그림인지 먼저 본다.** png를 고치고 임포트를 안 돌리면
-	#  게임은 **낡은 `.ctex`** 를 그리는데 이 함수는 **새 png** 를 잰다 ⇒ 아래 초록이 화면과 무관해진다.
-	#  ⚠ 크기까지 같게 고친 경우는 못 잡는다. 그래도 「칸 수가 늘었는데 화면은 그대로」는 여기서 문다.
+	# **Whether the original and the imported texture are the same picture is looked at first.** Fix the png
+	#  without running the import and the game draws the **stale `.ctex`** while this function measures the
+	#  **new png** => the green below becomes unrelated to the screen.
+	#  The case where the size was also made to match cannot be caught. Still, "the cell count grew but the
+	#  screen did not" is bitten here.
 	t.eq(Vector2i(img.get_width(), img.get_height()), Vector2i(w, h),
 		"원본 png 크기가 임포트된 텍스처와 같다 (임포트가 안 낡았다)")
 	if img.get_width() != w or img.get_height() != h:
 		t.ok(false, "원본과 텍스처의 크기가 갈려서 **내용 검사를 하나도 못 쟀다**")
 		return
 
-	# 🔴 **공중 칸을 표에서 뽑는다.** 번호를 손으로 적으면 `fx_tuning` 과 두 벌이 된다.
+	# **The airborne cells are pulled from the table.** Writing the numbers by hand makes a second copy alongside `fx_tuning`.
 	var airborne := _airborne_cells()
-	# ⚠ 목록이 비면 아래 예외가 한 번도 안 걸리고, 그러면 「접지 칸만」이라는 라벨이 거짓이 된다.
+	# If the list is empty the exception below never triggers, and then the label "grounded cells only" is false.
 	t.ok(airborne.size() > 0, "공중 칸이 표에서 나온다 (%d칸 — 발 검사의 예외다)" % airborne.size())
 
-	# 🔴 벽에 붙어 **서는** 칸(`Fx.CHAR_UPRIGHT`)만 모은다 — 아래 「상자가 그림보다 넓지 않다」가
-	#  이걸로 재진다. ⚠ **접지 칸이 아니다**: 아래 ③의 「접지」에는 쓰러짐도 들어가고,
-	#   쓰러짐은 옆으로 누운 그림(폭 28)이라 섞으면 상자를 28까지 넓혀도 통과한다.
+	# Only the cells that **stand** against a wall (`Fx.CHAR_UPRIGHT`) are collected — "the box is not wider than
+	# the sprite" below is measured with this. **These are not the grounded cells**: "grounded" in (3) below
+	#  includes downed, and downed is a sprite lying sideways (width 28), so mixing it in lets the box widen to 28 and still pass.
 	var upright := _upright_cells()
 	t.ok(upright.size() > 0, "서는 칸이 표에서 나온다 (%d칸 — 상자 폭 검사의 기준이다)" % upright.size())
 	var widest_upright := 0
 	for cell in cells:
 		var box := opaque_bbox(img, cell * Fx.CHAR_CELL_PX, 0, Fx.CHAR_CELL_PX, Fx.CHAR_CELL_PX)
-		# ① 빈 칸이 아니다.
+		# (1) It is not an empty cell.
 		t.ok(box.size.x > 0 and box.size.y > 0,
 			"칸 %d 에 불투명 픽셀이 있다 (bbox %s)" % [cell, box])
 		if box.size.x <= 0 or box.size.y <= 0:
 			continue
 
-		# ② 🔴🔴 **좌우 반전이 상자 안 같은 자리에 앉는 조건.**
-		#  상자를 기준으로 뒤집으면 x 가 `W−1−x` 로 간다 ⇒ 내용이 제자리에 앉으려면
-		#  **`minx + maxx == W−1`** 이어야 한다. 한 열만 밀려도 **방향을 바꿀 때 캐릭터가 1px 튄다.**
-		#  ⚠ 화면에서 거의 안 보이고 그물이 아니면 아무도 안 잡는다 — 실제로 이 png의 앞 판이
-		#   `7+23 = 30` 이라 1px 모자랐다(계획 §3.1).
-		#  🔴 이 단언이 참이면 **내용 폭이 짝수인 것도 따라 나온다** — 하나로 둘을 잡는다.
+		# (2) **The condition for a horizontal flip to land in the same place inside the box.**
+		#  Flipping about the box sends x to `W-1-x` => for the content to land in place,
+		#  **`minx + maxx == W-1`** must hold. One column off and **the character jumps 1px when it turns.**
+		#  It is nearly invisible on screen and nobody but a net catches it — the earlier version of this png
+		#   was actually `7+23 = 30`, one px short (plan 3.1).
+		#  If this assertion holds, **an even content width follows from it** — one line catches two things.
 		var minx: int = box.position.x
 		var maxx: int = box.position.x + box.size.x - 1
 		t.eq(minx + maxx, Fx.CHAR_CELL_PX - 1,
 			"칸 %d 의 minx+maxx 가 %d 이다 (좌우 반전이 제자리에 앉는다 · %d+%d)" % [
 				cell, Fx.CHAR_CELL_PX - 1, minx, maxx])
 
-		# ③ 🔴 **접지 칸만 발이 맨 아랫줄에 닿는다.** 안 닿으면 캐릭터가 지형 위에 **떠 보이고**,
-		#  칸마다 다르면 상태가 바뀔 때 **위아래로 튄다.** 상자는 그대로인데 그림만 뜨는 것이라
-		#  거동 검사에는 하나도 안 걸린다.
+		# (3) **Only grounded cells have their feet touching the bottom row.** Not touching makes the character
+		#  **float above the terrain**, and differing per cell makes it **jump up and down** when the state changes.
+		#  The box is unchanged and only the sprite floats, so no behavior check catches it at all.
 		#
-		# 🔴🔴 **점프·낙하는 예외다. 빠뜨린 게 아니다.** 다리를 접은 **공중 포즈**라 발이 아래에 없고,
-		#  억지로 맨 아랫줄까지 내리면 **캐릭터가 세로로 늘어난다**(실측: 점프 maxy 28 · 낙하 29).
-		#  ⚠ **다시 넓히지 마라** — 넓히는 순간 그림을 고쳐야 하고, 그 「고침」이 곧 늘어난 캐릭터다.
-		#  🔴 예외 목록은 `Fx.CHAR_AIRBORNE` **하나에서만** 나온다. 여기 상태 이름을 또 적으면
-		#   두 곳이 되고, 공중 포즈를 늘리는 날 한쪽만 따라온다.
+		# **Jump and fall are exceptions. They were not overlooked.** They are **airborne poses** with the legs
+		#  tucked, so the feet are not at the bottom, and forcing them down to the bottom row **stretches the
+		#  character vertically** (measured: jump maxy 28 · fall 29).
+		#  **Do not widen it again** — widening means fixing the sprite, and that "fix" is precisely the stretched character.
+		#  The exception list comes from `Fx.CHAR_AIRBORNE` **and nowhere else.** Write a state name here again and
+		#   there are two places, and the day airborne poses are added only one of them follows.
 		if upright.has(cell):
 			widest_upright = maxi(widest_upright, int(box.size.x))
 		if airborne.has(cell):
@@ -203,26 +210,26 @@ func _cells_hold_their_contract(t, w: int, h: int, cells: int) -> void:
 		t.eq(maxy, Fx.CHAR_CELL_PX - 1,
 			"접지 칸 %d 의 발이 맨 아랫줄에 닿는다 (maxy %d)" % [cell, maxy])
 
-	# 🔴🔴 **충돌 상자가 그림보다 넓으면 캐릭터가 벽에 닿기 전에 멈춘다.**
-	#  사용자가 그걸 보고 「벽에 닿기 전에 닿았다는 판정」이라고 했고(2026-08-04),
-	#  그래서 `Character.W_PX` 가 32 → 20이 됐다. **그 수정을 지키는 것이 이 단언 하나다** —
-	#  없으면 누가 `W_PX` 를 32로 되돌려도 그물이 전부 초록이다(되돌리기 전에도 초록이었다).
+	# **If the collision box is wider than the sprite, the character stops before touching the wall.**
+	#  The user saw that and called it "a hit registered before touching the wall", which is why
+	#  `Character.W_PX` went 32 -> 20. **This one assertion is what protects that fix** —
+	#  without it, anyone reverting `W_PX` to 32 leaves the nets all green (they were green before the fix too).
 	#
-	# 🔴🔴 **기준이 「접지 칸」이면 이 검사가 헐거워진다 — 뒤집기로 실측했다.**
-	#  처음엔 접지(= 공중이 아닌) 칸으로 쟀고, 그러면 **쓰러짐 칸(폭 28)**이 최대가 되어
-	#  「상자 32 ≤ 28」로 빨개지긴 해도 **상자를 28까지 넓히는 것은 통과**했다.
-	#  ⇒ 기준은 **벽에 붙어 서는 칸**(`Fx.CHAR_UPRIGHT`)이고 지금 그 최대는 걷기(20)다.
-	#  ⚠ 라벨이 「쓰러짐은 뺐다」라고 말하면서 안 빼고 있었다 — CLAUDE.md 「라벨이 재는 것보다 넓다」다.
+	# **With "grounded cells" as the reference this check goes slack — measured by inversion.**
+	#  It first measured grounded (= non-airborne) cells, and then the **downed cell (width 28)** became the
+	#  maximum, so while "box 32 <= 28" did go red, **widening the box to 28 passed.**
+	#  => The reference is **the cells that stand against a wall** (`Fx.CHAR_UPRIGHT`) and their current max is walking (20).
+	#  The label said "downed is excluded" while not excluding it — CLAUDE.md's "the label is wider than what it measures".
 	#
-	#  🔴 **여유를 안 준다(`<=`)** — 「몇 px까지는 봐준다」를 넣는 순간 그 숫자가 근거 없는
-	#   두 번째 손잡이가 되고, 다음 사람이 그걸 늘려서 증상을 되돌린다.
+	#  **No slack is given (`<=`)** — the moment "we allow a few px" goes in, that number becomes a second
+	#   groundless knob, and the next person raises it and brings the symptom back.
 	t.ok(widest_upright > 0, "서는 칸에서 내용 폭을 쟀다 (%dpx — 검사의 전제)" % widest_upright)
 	t.ok(Character.W_PX <= widest_upright,
 		"충돌 상자가 서는 칸 그림보다 넓지 않다 (상자 %d ≤ 제일 넓은 서는 칸 %d)" % [
 			Character.W_PX, widest_upright])
 
 
-## `Fx.CHAR_AIRBORNE` 의 상태들이 쓰는 **칸 번호** 집합.
+## The set of **cell numbers** used by the states in `Fx.CHAR_AIRBORNE`.
 static func _airborne_cells() -> Dictionary:
 	var out: Dictionary = {}
 	for state: int in Fx.CHAR_AIRBORNE:
@@ -231,9 +238,9 @@ static func _airborne_cells() -> Dictionary:
 	return out
 
 
-## 🔴 벽에 붙어 **서는** 칸. 위 `_airborne_cells` 와 **같은 모양이지만 여집합이 아니다** —
-##  쓰러짐은 둘 어디에도 안 들어간다(공중도 아니고 서 있지도 않다).
-##  ⚠ 목록은 `Fx.CHAR_UPRIGHT` 하나에서 나온다. 여기 상태 이름을 적으면 두 벌이 된다.
+## The cells that **stand** against a wall. **The same shape as `_airborne_cells` above but not its complement** —
+##  downed belongs to neither (it is not airborne and it is not standing).
+##  The list comes from `Fx.CHAR_UPRIGHT` alone. Write a state name here and there are two copies.
 static func _upright_cells() -> Dictionary:
 	var out: Dictionary = {}
 	for state: int in Fx.CHAR_UPRIGHT:
@@ -242,23 +249,24 @@ static func _upright_cells() -> Dictionary:
 	return out
 
 
-## 🔴 표의 칸 번호가 시트를 벗어나면 화면이 **엉뚱한 칸을 그리는데 에러가 안 난다.**
+## If a table's cell number falls outside the sheet, the screen **draws the wrong cell with no error.**
 func _table_stays_inside_the_sheet(t, cells: int) -> void:
-	# ⚠ 표가 비면 아래 루프가 한 번도 안 돌고 **초록이 된다.** 폴더 스캔 그물의 첫 줄과 같은 이유다.
+	# If the table is empty the loop below never runs and **it goes green.** Same reason as the first line of a folder-scanning net.
 	t.ok(Fx.CHAR_FRAMES.size() > 0, "상태 → 칸 표가 비어 있지 않다 (%d줄)" % Fx.CHAR_FRAMES.size())
 	for state: int in Fx.CHAR_FRAMES.keys():
 		var frames: Variant = Fx.CHAR_FRAMES[state]
 		t.ok(frames is Array, "상태 %d 의 칸 목록이 배열이다" % state)
 		if not (frames is Array):
 			continue
-		# 🔴 빈 목록은 **그릴 칸이 없다**는 뜻인데, 소비자는 `[0]` 을 인덱싱한다 — 런타임에 죽는다.
+		# An empty list means **there is no cell to draw**, but the consumer indexes `[0]` — it dies at runtime.
 		t.ok((frames as Array).size() > 0, "상태 %d 에 칸이 하나라도 있다" % state)
 		for cell: int in (frames as Array):
 			t.ok(cell >= 0 and cell < cells,
 				"상태 %d 의 칸 %d 이 시트 안이다 (0~%d)" % [state, cell, cells - 1])
 
-	# 🔴🔴 **빠진 칸도 남는 칸도 없다.** 표에 안 적힌 칸은 **아무도 안 그리는 그림**이고(시트만 무거워진다),
-	#  두 상태가 같은 칸을 쓰면 **그 둘이 화면에서 구별이 안 된다** — 판정 3·4가 조용히 죽는 자리다.
+	# **No missing cells and no spare cells.** A cell not listed in the table is **a sprite nobody draws**
+	#  (it only makes the sheet heavier), and two states sharing a cell means **those two are indistinguishable
+	#  on screen** — the spot where acceptances 3 and 4 quietly die.
 	var used: Dictionary = {}
 	var overlap := 0
 	for state: int in Fx.CHAR_FRAMES.keys():
@@ -270,14 +278,14 @@ func _table_stays_inside_the_sheet(t, cells: int) -> void:
 	t.eq(used.size(), cells, "표가 쓰는 칸 수와 시트의 칸 수가 같다 (빠진 칸도 남는 칸도 없다)")
 
 
-## 🔴🔴 **판정 3(걷기·점프·낙하 구별)과 4(쓰러짐)를 눈에서 그물로 옮기는 자리다.**
-##  `pick_state()` 가 **순수 static** 이라 씬도 캐릭터도 없이 조합을 넣고 칸을 받아 볼 수 있다.
+## **This is where acceptance 3 (walk/jump/fall told apart) and 4 (downed) move from the eye into the nets.**
+##  `pick_state()` is **purely static**, so combinations can be fed in and cells read back with no scene and no character.
 ##
-## 🔴🔴 **다만 여기가 재는 것은 「코드가 다른 칸을 고른다」까지다.**
-##  **여섯 칸을 전부 똑같이 그려도 이 검사는 초록이다** — 「그 칸의 그림이 실제로 다르다」는
-##  원리적으로 눈만 잰다(계획 §7.2). ⚠ 라벨을 거기까지 넓히지 마라.
+## **But what is measured here is only "the code picks a different cell".**
+##  **Drawing all six cells identically still leaves this check green** — "the sprites in those cells really
+##  differ" is measured by the eye alone in principle (plan 7.2). Do not widen the label that far.
 func _pick_state_picks_different_cells(t) -> void:
-	# [쓰러짐, 접지, vy, 움직임] → 기대 상태
+	# [downed, grounded, vy, moving] -> expected state
 	var cases: Array[Array] = [
 		[true, true, 0.0, false, Fx.CHAR_DOWNED, "쓰러짐"],
 		[true, false, -100.0, true, Fx.CHAR_DOWNED, "쓰러진 채 공중이어도 쓰러짐이 이긴다"],
@@ -286,7 +294,7 @@ func _pick_state_picks_different_cells(t) -> void:
 		[false, true, 0.0, true, Fx.CHAR_WALK, "걷는 중"],
 		[false, true, 0.0, false, Fx.CHAR_STAND, "서기"],
 	]
-	# ⚠ 목록이 비면 아래가 한 번도 안 돌고 **초록이 된다.**
+	# If the list is empty the code below never runs and **it goes green.**
 	t.ok(cases.size() > 0, "조합이 %d개다" % cases.size())
 
 	var seen: Dictionary = {}
@@ -295,18 +303,20 @@ func _pick_state_picks_different_cells(t) -> void:
 		t.eq(got, int(c[4]), "%s → 상태 %d" % [c[5], int(c[4])])
 		seen[got] = true
 
-	# 🔴 **조합마다 다른 상태가 나오나.** 위 `t.eq` 만 있으면 `pick_state` 가 늘 같은 값을 줘도
-	#  기대값을 그 값으로 적어 두면 통과한다 — **서로 다르다**를 따로 잰다.
-	#  ⚠ 조합 여섯 중 둘은 일부러 같은 상태(쓰러짐)라 서로 다른 상태는 다섯이다.
+	# **Does each combination yield a different state.** With only the `t.eq` above, `pick_state` always
+	#  returning the same value would still pass as long as the expected values were written as that value —
+	#  **"they differ from each other"** is measured separately.
+	#  Two of the six combinations are deliberately the same state (downed), so there are five distinct states.
 	t.eq(seen.size(), Fx.CHAR_FRAMES.size(),
 		"조합이 표의 상태 %d개를 전부 고른다 (하나도 도달 불가가 아니다)" % Fx.CHAR_FRAMES.size())
 
 
-## 영역 안에서 **불투명 픽셀이 실제로 차지하는 사각형**(영역 로컬 좌표). 빈 영역이면 크기 0이다.
+## The rectangle **the opaque pixels actually occupy** within a region (region-local coordinates). Size 0 for an empty region.
 ##
-## 🔴 **단계 4가 이 함수를 그대로 쓴다.** 계획 §7.1의 7이 같은 모양이다 —
-##  「지팡이 png 폭이 36이어도 **맨 오른쪽 열이 투명하면** 눈에 보이는 끝은 35px인데 `tip_px()` 는
-##  36px이라 총구가 그림 밖에 뜬다」. 그건 `box.end.x == 폭` 인지를 이 bbox로 재는 일이다.
+## **Stage 4 uses this function as-is.** Item 7 of plan 7.1 is the same shape —
+##  "even if the staff png is 36 wide, **if the rightmost column is transparent** the visible tip is at 35px
+##  while `tip_px()` says 36px, so the muzzle floats outside the sprite". That is measuring `box.end.x == width`
+##  with this bbox.
 static func opaque_bbox(img: Image, ox: int, oy: int, w: int, h: int) -> Rect2i:
 	var x0 := w
 	var y0 := h
@@ -314,7 +324,7 @@ static func opaque_bbox(img: Image, ox: int, oy: int, w: int, h: int) -> Rect2i:
 	var y1 := -1
 	for y in h:
 		for x in w:
-			# ⚠ `> 0.0` 이 아니라 `<= 0.0` 을 걸러내는 쪽으로 적는다 — 반투명 1픽셀도 「그렸다」다.
+			# It is written as filtering out `<= 0.0` rather than testing `> 0.0` — even one semi-transparent pixel counts as "drawn".
 			if img.get_pixel(ox + x, oy + y).a <= 0.0:
 				continue
 			x0 = mini(x0, x)

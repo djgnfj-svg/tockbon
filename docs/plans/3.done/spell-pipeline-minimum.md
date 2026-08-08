@@ -1,7 +1,8 @@
-# 문양 파이프라인 최소 — 캐릭터 · 궤적 · 확산/폭발 · 불
+# Glyph pipeline, minimum — character · trajectory · spread/blast · fire
 
-**상태**: done
-**다시 열 이유**: 탄이 나는 방식이나 문양 실행 순서를 고칠 때만.
+**Status**: done
+**Why you'd reopen**: only when changing how bolts fly or the glyph execution order.
+
 **한 줄**: 캐릭터가 지형 위를 걷고 지팡이로 구체를 쏘면, 그 구체가 항력·중력을 받아 처지며 날아가 착탄하고, **남은 문양 목록이 순서대로 돌아** 지형과 불에 자국을 남긴다.
 
 ## 왜

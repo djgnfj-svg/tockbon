@@ -1,76 +1,79 @@
 extends RefCounted
-## 🔴🔴 **연출 상수 전부가 여기 있다. 다른 데 두지 마라.**
-##  흩어지면 사용자가 튜닝을 못 한다(v1 실측 — 위력이 두 배가 되는데 화면에서 바뀐 게 0개였다).
+## **Every presentation constant is here. Do not put them anywhere else.**
+##  Scatter them and the user cannot tune (v1 measured — the power doubled and 0 things changed on screen).
 ##
-## 🔴 **여기 값은 계약이 아니다.** 클라마다 달라도 세상이 안 갈라진다 — 화면에만 닿는다.
-##  그래서 `src/view/` 안에 있고, `net_determinism`(= `src/sim/` 폴더 스캔)의 대상이 아니다.
-##  ⚠ v1은 시뮬 상수와 연출 상수를 한 파일에 두고 `SIM-BLOCK` **텍스트 마커**로 갈랐고,
-##   그 파일 주석이 스스로 「마커를 지우거나 늘리면 그물이 조용히 헛돈다」고 적었다.
-##   **폴더로 가르니 그 장치가 통째로 사라졌다.**
+## **Values here are not a contract.** They may differ per client without the world diverging — they only touch the screen.
+##  That is why this lives inside `src/view/` and is not a target of `net_determinism` (= the `src/sim/` folder scan).
+##  v1 kept sim constants and presentation constants in one file split by `SIM-BLOCK` **text markers**,
+##   and that file's own comment said "delete or add a marker and the net silently spins".
+##   **Splitting by folder removed that device entirely.**
 ##
-## ⚠ 흔들림 진폭은 **정수 px**로 써라 — `snap_2d_transforms_to_pixel`이 켜져 있어 소수부가 버려진다.
+## Write shake amplitude in **integer px** — `snap_2d_transforms_to_pixel` is on, so the fraction is thrown away.
 ##
-## 🔴🔴 **판별 규칙 — 값을 새로 넣을 때 이걸로 갈라라.** 물어야 할 것은 단위가 아니라
-##  **「이 값이 무엇에서 나왔나」** 다. 갈래가 셋이고 셋이 서로 다르게 움직인다:
-##   · **개수 · 시간 · 비율**(`_RATIO`·`_FRAC`·`_ticks`·`_SEC`) → 배율·타일과 무관하다
-##   · **캐릭터 · 타일 · 폭발에서 나온 값** → 타일 크기를 따라간다
+## **The sorting rule — split a new value with this.** What to ask is not the unit but
+##  **"what did this value come from"**. There are three branches and the three move differently:
+##   · **count · time · ratio** (`_RATIO`·`_FRAC`·`_ticks`·`_SEC`) -> unrelated to scale and tiles
+##   · **values that came from the character · a tile · a blast** -> they follow tile size
 ##     (`STAFF_*` · `TRAIL_PX` · `bolt_px`·`flash_px` · `CHAR_BURN_PX`)
-##   · **뷰포트에서 나온 값** → 뷰포트를 따라간다 (조립창·HUD·`shake_px`)
+##   · **values that came from the viewport** -> they follow the viewport (the assembly window · HUD · `shake_px`)
 ##
-## 🔴 **지금 상태: 타일 32px · 뷰포트 1920×1080 · 화면 확대율 1배** ⇒ 캐릭터가 화면에서 32px,
-##  보이는 타일 60×34로 무대(64×36)가 화면에 들어온다.
-##  ⚠ **「32px 세상인데 배율이 1배」가 어색해 보이는 자리다** — 배율을 2배로 올리면 보이는 월드가
-##   960×540으로 줄어 **무대가 화면 밖으로 나간다**(정적 카메라라 못 따라간다). 그래서 1배다.
-## ⚠ 「단위가 셀이니까 그대로」로 갈랐다가 **한 번 틀렸다** — 폭발·탄·흔적이 화면에서 절반이 됐다.
+## **Current state: tile 32px · viewport 1920x1080 · screen scale 1x** => the character is 32px on screen,
+##  and 60x34 visible tiles fit the stage (64x36) into the screen.
+##  **This is the spot where "a 32px world at 1x scale" looks odd** — raise the scale to 2x and the visible world
+##   shrinks to 960x540, so **the stage goes off screen** (a static camera cannot follow). Hence 1x.
+## Splitting by "the unit is cells, so leave it" **got it wrong once** — blasts, bolts and trails halved on screen.
 
 const Tuning := preload("res://src/sim/sim_tuning.gd")
 const Glyph := preload("res://src/sim/glyph_defs.gd")
-## 🔴 `src/view/`는 `src/actor/`를 참조할 수 있다(`net_layers`) — `character_view.gd`가 이미
-##  `Character`를 그렇게 쓴다. 여기서는 종류별 그림 경로의 **키**로만 쓴다(아래 `MONSTER_SHEETS`).
+## `src/view/` may reference `src/actor/` (`net_layers`) — `character_view.gd` already uses
+##  `Character` that way. Here it is used only as the **key** for per-kind art paths (`MONSTER_SHEETS` below).
 const MonsterDefs := preload("res://src/actor/monster_defs.gd")
 
-# ─── 캐릭터 ───────────────────────────────────────────────────────
-## 🔴🔴 **몸은 시트 한 장이고, 상태 → 칸은 아래 표 하나다.**
-##  새 상태를 넣는 데 고칠 곳이 **셋을 넘으면 구조가 틀린 것이다**:
-##   ① 시트 png 에 칸 하나 ② 아래 표 한 줄 ③ 상태를 고르는 조건 한 줄
-##  ③이 남는 것은 조건이 자료가 아니라 **논리**여서다(「쓰러졌나」는 캐릭터를 읽는 갈래다).
+# --- character ------------------------------------------------------
+## **The body is one sheet, and state -> frame is the single table below.**
+##  If adding a new state takes edits in **more than three places, the structure is wrong**:
+##   (1) one frame in the sheet png (2) one row in the table below (3) one line of the condition that picks the state
+##  (3) remains because the condition is not data but **logic** ("is it downed" is a branch that reads the character).
 ##
-## 🔴🔴 **그림 경로는 이 파일에만 있어야 한다.** `assets/` 는 `net_layers` 의 폴더 스캔 **밖이라**
-##  `src/sim/`·`src/actor/` 가 `res://assets/…` 를 참조해도 **아무도 안 짖는다.** ⇒ **규율로만 지킨다.**
+## **Art paths must exist only in this file.** `assets/` is **outside** `net_layers`' folder scan,
+##  so **nobody barks** even when `src/sim/`·`src/actor/` reference `res://assets/...`. => **Held by discipline only.**
 ##
-## ⚠ 지형(돌 0x5C574F · 나무 0x6B4524)과 **색상환에서 멀어야** 눈이 즉시 가른다 ⇒ 로브가
-##  차가운 파랑인 것은 취향이 아니라 그 계약이다. 🔴 **불바다 위가 최악의 경우다.**
+## It must be **far on the color wheel** from terrain (stone 0x5C574F · wood 0x6B4524) so the eye splits it instantly =>
+##  the robe being a cold blue is not taste but that contract. **The worst case is on top of a sea of fire.**
 ##
-## 🔴🔴 **지운 `CHAR_BODY`·`CHAR_TRIM`·`CHAR_TRIM_PX` 의 근거는 이제 그림 안에 있다.**
-##  그 셋이 있던 이유는 「**「발」이 보이면 착지 순간이 눈에 잡힌다**」였고, verify-look이 32px 사각형에서
-##  「아래 6px 띠가 착지를 눈에 잡히게 한다」를 확인했다. ⇒ **자락이 몸통과 명도로 갈려 있어야 한다.**
-##  ⚠ 상수로 남겨 두면 **아무도 안 읽는 거짓 손잡이**가 된다 — 근거만 여기 남기고 값은 지웠다.
-##  🔴 **다음에 칸을 새로 만들 때 이 줄을 먼저 읽어라.** 자락을 몸통과 같은 명도로 그리면
-##   착지가 화면에서 조용히 안 보이게 되고, 그건 그물이 원리적으로 못 잡는다.
+## **The grounds for the deleted `CHAR_BODY`·`CHAR_TRIM`·`CHAR_TRIM_PX` now live inside the art.**
+##  Those three existed because "**seeing the "feet" makes the moment of landing visible**", and verify-look confirmed
+##  on a 32px square that "the bottom 6px band makes landing visible to the eye".
+##  => **The hem must be split from the torso by brightness.**
+##  Left as constants they become **false knobs nobody reads** — only the grounds are kept here, the values were deleted.
+##  **Read this line first the next time a frame is drawn.** Draw the hem at the same brightness as the torso
+##   and landing goes silently invisible on screen, and that is something the net cannot catch in principle.
 const CHAR_SHEET := "res://assets/character/wizard_body.png"
 
-## 🔴🔴 **몸 시트 한 칸의 한 변(px). 「그림 크기」의 단일 소스다 — `Character.W_PX` 가 아니다.**
-##  2026-08-04에 둘이 갈라졌다: 충돌 상자는 **20px**으로 좁아졌고(벽에 뜨는 것을 고쳤다)
-##  그림 칸은 **32px** 그대로다. ⚠ 갈라지기 전에는 `Character.W_PX` 하나가 두 뜻을 다 했고,
-##  **그 상태로 상자만 줄이면 시트가 20px 단위로 잘려 캐릭터가 통째로 어긋난다** — 에러는 안 난다.
+## **One side of one frame in the body sheet (px). The single source of "art size" — not `Character.W_PX`.**
+##  The two split apart: the collision box narrowed to **20px** (fixing the character floating off walls)
+##  while the art frame stayed **32px**. Before the split, `Character.W_PX` alone carried both meanings,
+##  and **shrinking only the box in that state slices the sheet in 20px units, throwing the character off entirely** — no error is raised.
 ##
-## 🔴 **GDD 「캐릭터와 타일 두께를 같게」를 지키는 것은 이 값이다**(눈에 보이는 크기).
-##  ⚠ 시트 칸은 정사각이라 세로도 이 값이다 — `net_sprite` 가 시트 높이를 이걸로 잰다.
+## **This value is what holds the GDD's "make the character and tile thickness the same"** (the visible size).
+##  Sheet frames are square, so this is the height too — `net_sprite` measures the sheet height with it.
 const CHAR_CELL_PX := 32
 
-## 상태 id. 🔴🔴 **칸 번호가 아니다** — 칸은 아래 표가 준다.
-##  ⚠ 둘이 우연히 같으면 「표를 읽는다」와 「id를 그대로 칸으로 쓴다」가 **화면에서도 그물에서도
-##   구별이 안 된다.** 지금은 걷기가 두 칸이라 그 우연이 구조적으로 없다(`CHAR_JUMP` 2 → 칸 3).
+## State ids. **These are not frame numbers** — frames come from the table below.
+##  If the two coincidentally match, "read the table" and "use the id directly as the frame" become
+##   **indistinguishable both on screen and in the net.** Right now walking is two frames, so that coincidence
+##   is structurally absent (`CHAR_JUMP` 2 -> frame 3).
 const CHAR_STAND := 0
 const CHAR_WALK := 1
 const CHAR_JUMP := 2
 const CHAR_FALL := 3
 const CHAR_DOWNED := 4
 
-## 🔴 값은 **시트의 칸 번호**다. 표 한 줄 = 시트 한 칸.
-## ⚠ **칸 수를 상수로 박지 마라** — `tex.get_width() / Character.W_PX` 로 나온다.
-##  박으면 시트와 표와 상수가 **세 곳**이 되고, 셋이 갈라지면 화면이 엉뚱한 칸을 그리는데
-##  **에러가 안 난다.** `net_sprite` 가 표의 칸 번호가 시트 안인지 · 합집합이 시트 전체인지 잰다.
+## The values are **frame numbers in the sheet**. One table row = one sheet frame.
+## **Do not hardcode the frame count** — it comes out of `tex.get_width() / Character.W_PX`.
+##  Hardcode it and the sheet, the table and the constant become **three places**, and when the three diverge
+##  the screen draws the wrong frame with **no error raised**. `net_sprite` measures whether the table's frame
+##  numbers are inside the sheet · whether their union is the whole sheet.
 const CHAR_FRAMES: Dictionary = {
 	CHAR_STAND: [0],
 	CHAR_WALK: [1, 2],
@@ -79,755 +82,775 @@ const CHAR_FRAMES: Dictionary = {
 	CHAR_DOWNED: [5],
 }
 
-## 🔴🔴 **공중 포즈는 발이 바닥에 안 닿는다.** 다리를 접은 그림이라 억지로 맨 아랫줄까지 내리면
-##  캐릭터가 세로로 늘어난다 — 실측: 점프 칸 maxy 28 · 낙하 칸 maxy 29.
-##  ⇒ `net_sprite` 의 「발이 맨 아랫줄에 닿는다」가 **이 목록에 없는 상태에만** 걸린다.
-## 🔴 **여기가 그 예외의 단일 소스다.** 그물에 상태 이름을 또 적으면 두 곳이 되고, 공중 포즈를
-##  늘리는 날 한쪽만 따라온다.
-## ⚠ **접지 칸에서 이 예외를 쓰지 마라** — 발이 안 닿는 접지 칸은 캐릭터가 지형 위에 떠 보인다.
+## **Airborne poses do not have their feet on the ground.** The art has the legs folded, so forcing them down
+##  to the bottom row stretches the character vertically — measured: jump frame maxy 28 · fall frame maxy 29.
+##  => `net_sprite`'s "the feet touch the bottom row" applies **only to states not in this list**.
+## **This is the single source of that exception.** Write state names in the net too and there are two places,
+##  and the day airborne poses grow only one of them follows.
+## **Do not use this exception on a grounded frame** — a grounded frame whose feet do not touch makes the
+##  character look like it floats above the terrain.
 const CHAR_AIRBORNE: Array[int] = [CHAR_JUMP, CHAR_FALL]
 
-## 🔴🔴 **벽에 붙어 「서는」 상태.** `net_sprite` 가 「충돌 상자가 그림보다 넓지 않다」를 이걸로 잰다.
-##  ⚠ **`CHAR_AIRBORNE` 의 여집합이 아니다.** 쓰러짐도 땅에 있지만 **옆으로 누운 그림(폭 28)**이라
-##   여집합으로 재면 상자를 28까지 넓혀도 그물이 초록이다 — 실측으로 그 구멍을 확인하고 이 목록을 만들었다.
-##  🔴 그러니 **여기에 공중·쓰러짐을 넣지 마라.** 넣는 순간 「벽에 뜨는 것을 막는다」는 계약이
-##   조용히 느슨해지고, 느슨해진 것은 아무도 안 짖는다.
-## ⚠ 서는 상태를 늘리면(웅크리기 등) **여기 한 줄이다** — 그물에 상태 이름을 적지 않는다.
+## **The state of "standing" against a wall.** `net_sprite` measures "the collision box is not wider than the art" with this.
+##  **It is not the complement of `CHAR_AIRBORNE`.** Downed is on the ground too but is **art lying sideways (width 28)**,
+##   so measured as the complement the net stays green even with the box widened to 28 — that hole was confirmed
+##   by measurement and this list was made.
+##  So **do not put airborne or downed in here.** The moment you do, the contract "stop the character floating off walls"
+##   silently loosens, and what has loosened nobody barks about.
+## Growing the standing states (crouching, etc.) is **one line here** — state names are not written into the net.
 const CHAR_UPRIGHT: Array[int] = [CHAR_STAND, CHAR_WALK]
 
-## 🔴🔴 **걷기 시계의 눈금(px).** 시계는 `character.x` 자체다 — 이 값마다 칸이 한 번 바뀐다.
-##  ⚠ **`delta` 를 누산해 시계를 따로 만들지 마라.** 그 순간 시계가 둘이 되고
-##   **「멈췄는데 다리가 움직인다」**가 난다(`invuln_left` 가 깜빡임 시계인 것과 같은 어법).
-## ⚠ 근거: 이동 260px/s ÷ 24px = **초당 10.8회 전환** = 2칸 주기로 초당 5.4주기.
-##  8타일/s로 달리는 캐릭터에 맞는 빠른 걸음이다. **손맛값이므로 눈으로 보고 고친다** —
-##  근거를 여기 적어 둬야 다음 사람이 못 되돌린다.
-## ⚠ 밀려서 움직일 때도 걷기로 보인다. **알고 고른 것이다** — 가만히 미끄러지는 것보다 낫다.
+## **The tick of the walk clock (px).** The clock is `character.x` itself — the frame changes once per this value.
+##  **Do not accumulate `delta` into a separate clock.** The moment you do there are two clocks and
+##   **"it stopped but the legs are moving"** happens (the same idiom as `invuln_left` being the blink clock).
+## Grounds: movement 260px/s / 24px = **10.8 transitions per second** = 5.4 cycles per second on a 2-frame loop.
+##  That is a fast gait suited to a character running at 8 tiles/s. **It is a feel value, so fix it by eye** —
+##  the grounds have to be written here so the next person cannot undo it.
+## Being pushed also looks like walking. **Chosen knowingly** — it beats sliding while standing still.
 const CHAR_WALK_PX_PER_FRAME := 24
 
-# ─── 몬스터 ───────────────────────────────────────────────────────
-## 🔴🔴 **폴백 색이다 — 이제 기본은 스프라이트다**(`MONSTER_SHEETS` 아래).
-##  ⚠ **지우지 않는다.** 텍스처 로딩이 실패하면 `monster_view`가 이 색 사각형을 대신 그린다 —
-##  「아무것도 안 보임」보다 「분홍 네모」가 낫다(고장 신호로 읽힌다. `character_view._body_tex`는
-##  null 검사 없이 그냥 짖게 두지만, 몬스터는 종류가 늘 둘 이상이라 하나가 깨져도 나머지가
-##  마저 보여야 한다 — 그래서 여기는 **짖지 않고 대체한다**).
-##  🔴 크기는 여기 없다 — `monster_defs.gd`(actor)에서 나온다. 여기 또 두면 상자 표가
-##  둘이 되고, 갈라진 증상은 「돼지가 벽에서 12px 떠 있다」 하나뿐이다(위 `monster_view` 상자).
-## 🔴 지형(돌·나무)·불(주황)·물(청록)과 색상환에서 멀어야 눈이 즉시 가른다 — 붉은 자주를 골랐다.
-##  ⚠ **종류별 색은 여전히 안 건드린다** — team-lead 지시(2026-08-07): 사용자가 정할 자리다.
+# --- monsters -------------------------------------------------------
+## **A fallback color — the default is a sprite now** (`MONSTER_SHEETS` below).
+##  **Do not delete it.** If texture loading fails, `monster_view` draws a rectangle of this color instead —
+##  "a pink box" beats "nothing visible" (it reads as a breakage signal. `character_view._body_tex` is simply
+##  left to bark with no null check, but monsters always have two or more kinds, so one breaking must still leave
+##  the rest visible — that is why this side **substitutes instead of barking**).
+##  The size is not here — it comes from `monster_defs.gd` (actor). Put it here too and the box table
+##  becomes two, and the only symptom of divergence is "the pig floats 12px off the wall" (the `monster_view` box above).
+## It must be far on the color wheel from terrain (stone · wood) · fire (orange) · water (cyan) so the eye splits
+##  it instantly — a red purple was chosen.
+##  **Per-kind colors are still untouched** — a team-lead instruction: that is the user's place to decide.
 const MONSTER_FILL := Color(0.78, 0.22, 0.42, 1.0)
 
-## 🔴🔴 **몸 그림 — 종류 하나에 그림 한 장.** 캐릭터(`CHAR_SHEET`)처럼 상태별 칸이 아니다 —
-##  몬스터는 아직 걷기 애니메이션이 없다(미정 16번, `character-sprite`가 선례). 새 종류를
-##  늘리면 여기 한 줄 + `monster_defs.gd` 한 줄이다.
+## **Body art — one image per kind.** Unlike the character (`CHAR_SHEET`) these are not per-state frames —
+##  monsters have no walk animation yet (open question 16, `character-sprite` is the precedent). Growing a new
+##  kind is one line here + one line in `monster_defs.gd`.
 ##
-## 🔴🔴 **그림 크기가 곧 상자 크기다**(`monster_defs.w_px/h_px` — 44×32 · 24×28) — **우연이 아니다.**
-##  픽셀 아티스트가 상자에 맞춰 그렸다. ⚠ **그래도 `monster_view`는 이 그림의 실제 픽셀 크기를
-##  안 믿는다** — `Defs`에서 읽은 크기로 그린다(둘이 갈리면 그림이 늘어나 보이는 대신 여전히
-##  상자에 맞는다). `net_monster_sprite`가 "지금은 같다"를 값으로 재서, 갈라지는 날 바로 잡는다.
+## **The art size is the box size** (`monster_defs.w_px/h_px` — 44x32 · 24x28) — **not a coincidence.**
+##  The pixel artist drew to the box. **Even so `monster_view` does not trust this art's actual pixel size** —
+##  it draws with the size read from `Defs` (if the two diverge the art looks stretched but still fits
+##  the box). `net_monster_sprite` measures "right now they are the same" by value, so the day they diverge it is caught at once.
 const MONSTER_SHEETS: Dictionary = {
 	MonsterDefs.KIND_PIG: "res://assets/monster/pig_body.png",
 	MonsterDefs.KIND_HEN: "res://assets/monster/chicken_body.png",
 }
 
-## 🔴🔴 **머리 위 체력바.** 폭·자리는 `monster_defs.w_px`(상자)에서 나온다 — 여기 폭을 박으면
-##  「크기가 둘이 된다」는 위 상자와 똑같은 함정이다(`monster_view.hp_bar_rect`가 상자를 읽는다).
-##  높이·간격·색만 여기 있다.
+## **The health bar above the head.** Width and position come from `monster_defs.w_px` (the box) — hardcode
+##  a width here and it is exactly the "size in two places" trap above (`monster_view.hp_bar_rect` reads the box).
+##  Only the height, the gap and the colors are here.
 const MONSTER_HP_BAR_H_PX := 4.0
-## 상자 위쪽에서 이만큼 띄운다 — 0이면 체력바가 머리와 겹쳐 몸 색과 섞인다.
+## Lifted this far above the top of the box — at 0 the health bar overlaps the head and mixes with the body color.
 const MONSTER_HP_BAR_GAP_PX := 6.0
 const MONSTER_HP_BAR_BG := Color(0.08, 0.08, 0.08, 0.85)
-## 🔴 가득 찼을 때 초록 · 비면 빨강 — hp 비율로 선형 보간한다(`Color.lerp`, `monster_view._draw_hp_bar`).
+## Green when full · red when empty — linearly interpolated by hp ratio (`Color.lerp`, `monster_view._draw_hp_bar`).
 const MONSTER_HP_BAR_FULL := Color(0.25, 0.85, 0.30, 1.0)
 const MONSTER_HP_BAR_EMPTY := Color(0.9, 0.15, 0.15, 1.0)
 
-## 🔴🔴 **맞으면 번쩍 — 몸 그림의 실루엣을 흰색으로 채운다**(2026-08-07, 판정 13을 고쳤다).
+## **Flash on hit — fills the body art's silhouette with white** (this fixed acceptance 13).
 ##
-## ⚠ **원래 「몸 위에 반투명 흰 사각형」이었고 화면에서 실패했다** — 사각형이 스프라이트를
-##  **통째로 덮어** 「도형이 깜빡인다」로 보였다. 🔴 **스프라이트를 붙인 값이 거기서 절반 깎였다.**
-## 🔴 **이제 셰이더다** — `monster_silhouette.gdshader`. 그 파일 머리가 「왜 uniform 이 아니라
-##  정점 색인가」를 적었다(uniform 은 노드 단위라 몬스터 여럿이 서로 다른 세기로 못 번쩍인다).
+## **It was originally "a translucent white rectangle over the body" and it failed on screen** — the rectangle
+##  **covered the sprite entirely** and read as "a shape is blinking". **The value of attaching sprites was cut in half right there.**
+## **It is a shader now** — `monster_silhouette.gdshader`. That file's head wrote down "why vertex color and not
+##  a uniform" (a uniform is per node, so several monsters cannot flash at different intensities).
 ##
-## 🔴 프레임 수는 무적(`monster_defs.invuln_ticks`, 2틱 = 20Hz에서 0.1초)과 맞춰 뒀다 —
-##  「번쩍이는 동안은 방금 그 한 방이 아직 유효하다」가 자연스럽게 겹친다.
-## 🔴 **rgb 는 셰이더의 `flash_color` uniform 으로 들어가고, 알파는 최대 세기다** — 둘 다 산다.
-##  ⚠ **색이 uniform 이고 세기가 정점 색인 것은 우연이 아니다**: 색은 모든 몬스터가 같지만
-##   세기는 몬스터마다 다르고, uniform 은 노드 단위라 **다른 세기를 원리적으로 못 담는다.**
+## The frame count was matched to invulnerability (`monster_defs.invuln_ticks`, 2 ticks = 0.1s at 20Hz) —
+##  "while it flashes, that one hit is still in effect" overlaps naturally.
+## **The rgb goes into the shader's `flash_color` uniform, and the alpha is the maximum intensity** — both live.
+##  **Color being a uniform and intensity being vertex color is no coincidence**: the color is the same for every
+##   monster but the intensity differs per monster, and a uniform is per node so it **cannot hold different intensities in principle.**
 const MONSTER_FLASH_COLOR := Color(1.0, 1.0, 1.0, 0.85)
 const MONSTER_FLASH_FRAMES := 6
-## 🔴 **번쩍과 외곽선이 같은 셰이더를 쓴다** — 둘 다 「실루엣을 단색으로」다(그 파일 머리).
+## **The flash and the outline use the same shader** — both are "a silhouette in one flat color" (that file's head).
 const MONSTER_FLASH_SHADER := "res://src/view/monster_silhouette.gdshader"
 
-## 🔴🔴 **외곽선 — 2026-08-08, 사용자가 정했다.**
+## **The outline — decided by the user.**
 ##
-## ⚠ **왜**: verify-look 이 돼지를 **검은 하늘 배경**에 세우니 **다리와 아랫배가 녹았다.**
-##  네 다리의 어두운 적갈색이 배경과 명도가 너무 가까워 **개별 다리가 안 보이고 뭉갠 얼룩**이 됐고,
-##  뒷다리 아래쪽은 거의 사라졌다. 알아보이는 것은 **흰 엄니**뿐이었다.
-##  🔴 **지형을 등지면 안 보인다** — 그래서 그전 판정에서 두 번 못 봤다.
+## **Why**: verify-look stood a pig against a **black sky background** and **its legs and belly melted.**
+##  The dark reddish brown of the four legs was too close in brightness to the background, so **the individual
+##  legs were invisible, a smeared blob**, and the underside of the hind legs almost vanished.
+##  The only recognizable part was **the white tusks**.
+##  **Against terrain it is invisible** — that is why the two earlier acceptances missed it.
 ##
-## 🔴 **png 에 굽지 않고 런타임에 두른다** — 사용자가 그 축을 골랐다. **모든 몬스터에 한 번에
-##  걸리고 에셋을 다시 안 뽑는다.** ⚠ 몬스터를 늘릴 때 공정을 기억할 필요가 없다는 것이 값어치다.
+## **It is drawn at runtime, not baked into the png** — the user chose that axis. **It applies to every monster
+##  at once and no asset has to be regenerated.** The value is that growing monsters requires no memory of the process.
 ##
-## 🔴🔴 **밝은 색이다. 픽셀아트 관례(어두운 외곽선)와 반대이고, 알고 뒤집었다.**
-##  지금 문제가 **「어두운 픽셀이 검은 배경에 붙는다」**라서 어두운 테두리는 아무것도 안 고친다.
-##  ⚠ **배경이 들어오면 다시 볼 자리다**(`docs/design/배경.md`) — 지금 「검은 하늘」은
-##   배경이 아니라 **빈칸 재료의 색**이고, 거기 그림이 깔리면 대비의 방향이 달라진다.
+## **It is a bright color. That is the opposite of the pixel-art convention (a dark outline), and it was inverted knowingly.**
+##  The problem right now is **"dark pixels stick to a black background"**, so a dark border fixes nothing.
+##  **This is a place to look at again once a background lands** (`docs/design/background.md`) — the current
+##   "black sky" is not a background but **the color of the empty material**, and once art is laid there the
+##   direction of the contrast changes.
 const MONSTER_OUTLINE_COLOR := Color(1.0, 0.93, 0.82, 0.9)
 
-## 외곽선 두께(px). ⚠ 1이면 4배 확대에서만 보이고 1배에서는 거의 없다 — 화면 배율이 1이다.
+## Outline thickness (px). At 1 it is only visible at 4x zoom and nearly absent at 1x — the screen scale is 1.
 const MONSTER_OUTLINE_PX := 2.0
 
-## 🔴 **여덟 방향이다. 넷이면 대각 가장자리에서 끊긴다** — 돼지 다리처럼 비스듬한 실루엣이
-##  정확히 그 자리다. ⚠ 몬스터 하나에 `draw_texture_rect` 가 8회 더 든다(20마리면 160회).
-##  **아무도 안 쟀다.** 판정 14(비용)를 다시 잴 때 같이 봐라.
+## **Eight directions. With four it breaks along diagonal edges** — a slanted silhouette like a pig's leg
+##  is exactly that place. It costs 8 more `draw_texture_rect` per monster (160 for 20 monsters).
+##  **Nobody measured it.** Look at it together when acceptance 14 (cost) is measured again.
 const MONSTER_OUTLINE_DIRS: Array[Vector2] = [
 	Vector2(1, 0), Vector2(-1, 0), Vector2(0, 1), Vector2(0, -1),
 	Vector2(1, 1), Vector2(1, -1), Vector2(-1, 1), Vector2(-1, -1),
 ]
 
-## 🔴 피해 숫자 — 맞은 자리 위로 떠오르며 사라진다. 값은 `monster_view`가 hp 변화량에서
-##  그대로 읽는다(여기 값은 색·크기·움직임뿐 — 숫자 자체를 여기서 만들지 않는다).
+## Damage numbers — they rise above the spot that was hit and fade. `monster_view` reads the value straight
+##  from the hp delta (the values here are only color · size · movement — the number itself is not made here).
 const MONSTER_DMG_NUM_COLOR := Color(1.0, 0.35, 0.25, 1.0)
 const MONSTER_DMG_NUM_SIZE := 14
 const MONSTER_DMG_NUM_RISE_PX := 24.0
 
-## 🔴🔴 **숫자가 시작하는 높이 — 체력바보다 위에서 뜬다** (2026-08-08).
-##  ⚠ **verify-look 이 화면에서 잡았다**: 숫자를 강제로 그리게 하니 **체력바 오른쪽 절반을 덮었다.**
-##   원래 `m.y`(상자 위쪽)에서 시작했는데 **체력바가 바로 거기 있다**(`hp_bar_rect`).
-##  🔴 **체력바 높이·간격에서 파생시킨다 — 숫자를 박지 않는다.** 셋이 따로 놀면
-##   체력바를 두껍게 하는 날 숫자가 다시 덮는데 **에러가 안 난다.**
+## **The height the number starts at — it floats above the health bar.**
+##  **verify-look caught it on screen**: forcing the numbers to draw **covered the right half of the health bar.**
+##   It originally started at `m.y` (the top of the box), and **the health bar is right there** (`hp_bar_rect`).
+##  **Derive it from the health bar's height and gap — do not hardcode the number.** If the three drift apart
+##   the number covers the bar again the day the bar is thickened, and **no error is raised.**
 const MONSTER_DMG_NUM_LIFT_PX := MONSTER_HP_BAR_GAP_PX + MONSTER_HP_BAR_H_PX + 4.0
 const MONSTER_DMG_NUM_LIFE_FRAMES := 36
 
-## 🔴🔴 **같은 몬스터에 이 프레임 안으로 또 맞으면 숫자를 합친다** (2026-08-07, 사용자가 정했다).
+## **Hit the same monster again within this many frames and the numbers are merged** (decided by the user).
 ##
-## ⚠ **왜**: 화면에서 `-10` 셋이 겹쳐 **`-1000` 처럼 보였고 체력바까지 덮었다.**
-##  🔴 **숫자가 셋인 것이 문제가 아니라 셋이 같은 자리에 겹치는 것이 문제였다** —
-##   합치면 **연타가 「한 방이 세게」로 읽혀서 때리는 맛이 오히려 산다.**
+## **Why**: on screen three `-10`s overlapped and **looked like `-1000`, covering the health bar too.**
+##  **The problem was not that there were three numbers but that the three overlapped in the same spot** —
+##   merged, **a flurry reads as "one heavy hit", which actually makes the hitting feel better.**
 ##
-## 🔴 **`MONSTER_DMG_NUM_LIFE_FRAMES`(36)보다 짧아야 한다.** 같으면 **숫자가 영영 하나로 뭉친다** —
-##  계속 맞는 동안 나이가 계속 되감겨서 늙지를 않는다. 12는 0.2초(60Hz)로,
-##  **연타(무적 2틱 = 6프레임 간격)는 묶이고 별개의 공격은 안 묶이는** 자리다.
+## **It must be shorter than `MONSTER_DMG_NUM_LIFE_FRAMES` (36).** Equal and **the numbers merge into one forever** —
+##  while hits keep landing the age keeps rewinding and it never grows old. 12 is 0.2s (60Hz), the spot where
+##  **a flurry (invulnerability 2 ticks = 6 frames apart) is bound and separate attacks are not.**
 const MONSTER_DMG_NUM_MERGE_FRAMES := 12
 
-## 🔴🔴 **닭의 탄 — 마법 탄과 갈려야 한다. 2026-08-07에 잣대를 바꿨다.**
+## **The hen's bolt — it must split from magic bolts. The yardstick was changed.**
 ##
-## ⚠ **원래 잣대는 「몬스터 색(자주)과 이어지게」였고, 그것이 실패의 원인이었다** —
-##  자주-분홍이 **무속성 마법 자취(보라)와 안 갈려** 화면에서 「내 탄이 나한테 온다」로 읽혔다.
-##  🔴 **판정 13이 그 자리에서 「잣대가 틀렸다 — 몬스터 색이 아니라 마법 자취와의 거리로 재라」**고 적었다.
+## **The original yardstick was "make it continue from the monster color (purple)", and that was the cause of the failure** —
+##  purple-pink **did not split from the none-element magic trail (violet)** and read on screen as "my own bolt is coming at me".
+##  **Acceptance 13 wrote right there that "the yardstick was wrong — measure by distance from the magic trail, not by the monster color".**
 ##
-## 🔴 **색상환에서 실제로 비어 있는 자리를 골랐다 — 산성 라임(~90°)**:
+## **A spot that is genuinely empty on the color wheel was chosen — acid lime (~90°)**:
 ##
-##      불 30° · 물 190° · 무속성 258°   ← 마법 셋
-##      피해 숫자 8° · 죽음 터짐 44° · 셀 불 15~40°
-##      마젠타 300° = `ELEM_FX_MISSING` 의 비명 색이라 **쓰면 안 된다**
+##      fire 30° · water 190° · none 258°   <- the three magics
+##      damage numbers 8° · death pop 44° · cell fire 15-40°
+##      magenta 300° = `ELEM_FX_MISSING`'s scream color, so it **must not be used**
 ##
-##  ⇒ **80~110° 가 통째로 비어 있다.** 체력바 초록(120°)과는 30° 차이지만 **자리가 다르다**
-##   (체력바는 머리 위 4px 바, 탄은 날아다니는 점) — 그리고 라임 쪽이 더 노랗다.
+##  => **80-110° is entirely empty.** It is 30° from the health bar green (120°) but **it is in a different place**
+##   (the health bar is a 4px bar above the head, the bolt is a flying dot) — and the lime side is yellower.
 ##
-## 🔴🔴 **색만으로는 부족했다 — 두 겹으로 그린다.** 원래 분홍(343°)과 보라(258°)는 **85° 떨어져
-##  있었는데도 헷갈렸다.** 탄이 작고 빠르고, 자취가 가산 합성이라 밝게 번져서
-##  **명도·채도가 비슷하면 색상 차가 안 보인다.** ⇒ 마법 탄과 **같은 문법**(무리 + 심)을 쓰되
-##  색을 달리한다 — 「같은 문법의 다른 색」이 「다른 색」보다 훨씬 빨리 읽힌다.
+## **Color alone was not enough — it is drawn in two layers.** The original pink (343°) and violet (258°) were
+##  **85° apart and still got confused.** The bolt is small and fast and the trail is additively composited so it
+##  blooms bright, so **when brightness and saturation are close the hue difference is invisible.**
+##  => It uses the **same grammar** as a magic bolt (glow + core) with a different color — "the same grammar in a
+##  different color" reads far faster than "a different color".
 const MONSTER_BOLT_COLOR := Color(0.45, 0.85, 0.15, 1.0)
-## 🔴 심 — 무리보다 밝고 노랗다. 없으면 「초록 점」이 되어 체력바와 같은 계열로 뭉친다.
+## The core — brighter and yellower than the glow. Without it it becomes "a green dot" and lumps in with the health bar family.
 const MONSTER_BOLT_CORE := Color(0.85, 1.0, 0.55, 1.0)
 const MONSTER_BOLT_R_PX := 4.0
-## 심의 반지름 비율. ⚠ 0.5보다 크면 무리가 테두리로만 남아 두 겹이 안 읽힌다.
+## The core's radius ratio. Above 0.5 the glow is left as a border only and the two layers do not read.
 const MONSTER_BOLT_CORE_FRAC := 0.45
 
-## 🔴 시체 잔상 — 죽은 자리에 몸 색보다 어둡게 짧게 남았다 사라진다. **격자는 안 건드린다**
-##  (`monsters-minimum` 「죽으면」— 시체 셀이 없다). `monster_view._corpses`가 나이를 먹인다.
+## The corpse afterimage — it stays briefly where the monster died, darker than the body color, then fades.
+##  **The grid is untouched** (`monsters-minimum` "on death" — there is no corpse cell). `monster_view._corpses` ages it.
 ##
-## 🔴🔴 **폴백 색이다 — 이제 시체도 스프라이트다**(2026-08-07, 판정 13 실패를 고쳤다).
-##  ⚠ **원래 이 색 사각형이 시체의 전부였고, 화면에서 「UI 조각이 남았나」로 읽혔다.**
-##   같은 화면에 몸은 스프라이트인데 시체만 도형이라 **대비가 잔인했다.**
-##  ⇒ 지금은 몸 그림을 `MONSTER_CORPSE_DIM` 만큼 어둡게 깔고 페이드한다. 이 색은
-##   **텍스처가 없을 때만** 쓰인다(`MONSTER_FILL` 과 같은 어법).
+## **A fallback color — corpses are sprites now too** (this fixed the acceptance 13 failure).
+##  **Originally a rectangle of this color was the whole corpse, and on screen it read as "was a UI fragment left behind".**
+##   On the same screen the body was a sprite and only the corpse was a shape, so **the contrast was brutal.**
+##  => Now the body art is laid down darkened by `MONSTER_CORPSE_DIM` and faded. This color is used
+##   **only when there is no texture** (the same idiom as `MONSTER_FILL`).
 const MONSTER_CORPSE_COLOR := Color(0.35, 0.10, 0.19, 0.9)
 const MONSTER_CORPSE_LIFE_FRAMES := 30
 
-## 시체를 얼마나 어둡게 깔 것인가(몸 그림에 곱하는 밝기). 🔴 **0이면 실루엣이라 종류가 안 갈리고,
-##  1이면 「산 몬스터가 반투명하게 서 있다」로 읽힌다.** 어두운 배경에서 형태는 남고
-##  「살아 있음」은 빠지는 자리를 골랐다.
+## How dark to lay the corpse down (a brightness multiplied into the body art). **At 0 it is a silhouette so kinds
+##  do not split, and at 1 it reads as "a living monster standing there translucent."** The spot chosen keeps the
+##  shape on a dark background while dropping "alive".
 const MONSTER_CORPSE_DIM := 0.42
 
-## 🔴🔴 **죽는 순간 터지는 고리** (2026-08-07, 사용자가 정했다).
+## **The ring that bursts at the moment of death** (decided by the user).
 ##
-## ⚠ **왜 이것이 필요한가 — 닭은 원리적으로 피격 피드백이 0이다.** 한 방에 죽으므로
-##  `monster_view._scan_hp_changes` 의 hp diff 가 볼 대상이 **배열에서 이미 빠져 있다.**
-##  ⇒ 번쩍도 피해 숫자도 **한 프레임도 안 뜬다.** 「맞았다」가 아니라 「없어졌다」로만 보인다.
-## 🔴 **그래서 hp 가 아니라 죽음 통지에 건다** — 그 경로는 시체가 이미 쓰고 있어서 공짜다
-##  (`monster_view.on_tick`). ⇒ **hp 가 몇이든, 몇 방에 죽든 반드시 한 번 뜬다.**
+## **Why this is needed — the hen has zero hit feedback in principle.** It dies in one hit, so what
+##  `monster_view._scan_hp_changes`' hp diff would look at is **already gone from the array.**
+##  => Neither the flash nor the damage number **appears for a single frame.** It reads not as "it was hit" but as "it vanished".
+## **So it hangs off the death notification, not hp** — that path is already used by the corpse so it is free
+##  (`monster_view.on_tick`). => **Whatever the hp is, however many hits it takes, it appears exactly once.**
 ##
-## ⚠ **시체(30프레임)보다 짧다.** 터짐이 먼저 걷히고 시체가 남아야 「터졌고 남았다」로 읽힌다.
+## **Shorter than the corpse (30 frames).** The pop has to clear first with the corpse left behind, so it reads
+##  as "it burst and something was left".
 const MONSTER_DEATH_POP_FRAMES := 10
-## 고리가 상자 반지름의 몇 배까지 벌어지나. 🔴 **1.0이면 몸 안에서 끝나 안 보인다.**
+## How far the ring spreads, as a multiple of the box radius. **At 1.0 it ends inside the body and is invisible.**
 const MONSTER_DEATH_POP_SCALE := 2.1
 const MONSTER_DEATH_POP_COLOR := Color(1.0, 0.86, 0.55, 0.95)
 const MONSTER_DEATH_POP_PX := 3.0
 
-## 🔴🔴 **몸에 붙은 불 — 여러 군데다**(2026-08-07, 판정 13을 고쳤다. 기획 원문이 「여러 군데」였다).
+## **Fire stuck to the body — in several places** (this fixed acceptance 13. The design text said "several places").
 ##
-## ⚠ **원래 상자 테두리 하나였고 화면에서 「주황 선택 상자」로 읽혔다.**
-##  🔴 **그리고 같은 화면의 땅불은 진짜 픽셀 불이라 대비가 잔인했다** — 한쪽은 불이고
-##   한쪽은 UI 강조였다. `CHAR_BURN` 테두리 어법을 몬스터에서만 버린 이유가 그것이다.
-##  ⚠ **캐릭터(`CHAR_BURN`)는 안 건드린다** — 저쪽은 무적 흐림과 축을 나눠야 해서 테두리가
-##   구조적 선택이다(그 상수 주석). 몬스터에는 무적 흐림이 없다.
+## **It was originally one box border and read on screen as "an orange selection box".**
+##  **And the ground fire on the same screen is real pixel fire, so the contrast was brutal** — one side was fire,
+##   the other was UI emphasis. That is why the `CHAR_BURN` border idiom was abandoned for monsters only.
+##  **The character (`CHAR_BURN`) is untouched** — that side has to split axes with the invulnerability dim, so the
+##   border is a structural choice (that constant's comment). Monsters have no invulnerability dim.
 ##
-## 🔴 **색이 셀 불(`FIRE_LO`·`FIRE_HI`)에서 나온다** — 「저 불에 타고 있다」가 이어져야 한다.
-##  두 겹으로 그린다: 바깥이 `FIRE_LO`(붉은), 심이 `FIRE_HI`(노란).
+## **The colors come from cell fire (`FIRE_LO`·`FIRE_HI`)** — "it is burning in that fire" has to carry over.
+##  It is drawn in two layers: the outside is `FIRE_LO` (red), the core is `FIRE_HI` (yellow).
 const MONSTER_BURN_FLAMES := 5
-## 🔴🔴 **불꽃 혀가 몇 셀까지 자라나** (2026-08-08).
-##  ⚠ **원래 `MONSTER_BURN_R_PX`(원의 반지름)였고, 원이 문제였다** — verify-look 이
-##   **「과녁 다섯 개」**로 읽었다. 옆의 땅불은 픽셀 덩어리라 대비가 그대로였다.
-##  🔴 **완벽한 원은 이 게임 화면에 없는 모양이다** — 지형·불·물이 전부 셀이다.
-##   ⇒ 색을 아무리 맞춰도 원은 「UI」로 읽힌다. **고친 것은 색이 아니라 어휘다.**
-## ⚠ 3이면 최대 12px — 돼지 상자 높이(32px)의 3분의 1이 조금 넘는다. 더 키우면 몸을 덮는다.
+## **How many cells the flame tongues grow to.**
+##  **It was originally `MONSTER_BURN_R_PX` (a circle's radius), and the circle was the problem** — verify-look
+##   read it as **"five targets"**. The ground fire beside it is a mass of pixels, so the contrast stayed.
+##  **A perfect circle is a shape that does not exist on this game's screen** — terrain, fire and water are all cells.
+##   => However well the color is matched, a circle reads as "UI". **What was fixed was not the color but the vocabulary.**
+## At 3 that is at most 12px — a bit over a third of the pig's box height (32px). Grow it further and it covers the body.
 const MONSTER_BURN_TALL_CELLS := 3
-## 🔴 진동 폭 — 0이면 **불이 얼어붙어 「점 다섯 개」로 읽힌다.** 이 값이 불을 살아 있게 한다.
+## The wobble amplitude — at 0 **the fire freezes and reads as "five dots".** This value is what keeps the fire alive.
 const MONSTER_BURN_WOBBLE := 0.42
-## 몇 프레임에 한 바퀴 도나. ⚠ 불꽃마다 위상을 어긋내므로 **다 같이 뛰지 않는다.**
+## How many frames per cycle. The phase is offset per flame, so **they do not all jump together.**
 const MONSTER_BURN_PERIOD_FRAMES := 14.0
-## 🔴 불꽃을 상자 **아래쪽에 몰아 둔다**(0 = 위, 1 = 아래). 몸 전체에 고르게 뿌리면
-##  「불에 탄다」가 아니라 「반짝이가 붙었다」로 보인다 — 불은 아래에서 올라온다.
+## Cluster the flames toward the **bottom of the box** (0 = top, 1 = bottom). Scattered evenly over the whole body
+##  it looks not like "it is burning" but like "glitter got stuck on" — fire rises from below.
 const MONSTER_BURN_LOW_BIAS := 0.35
 
-# ─── HUD 글자 ─────────────────────────────────────────────────────
-## 🔴🔴 **32px 전환에서 새로 박아야 했던 상수다. 전에는 아예 없었다.**
-##  `HUD/Stats`·`HUD/Health` 는 `Label` 이라 엔진 기본 글자 크기(16)를 쓰고 있었고,
-##  **화면 배율 2.0이 그걸 암묵적으로 화면 32px로 만들어 주고 있었다.**
-##  32px 세상으로 오며 좌표는 ×2 됐는데 **크기만 안 따라와 글자가 화면에서 절반이 됐다**
-##  (verify-look 관측) ⇒ 32로 박았고, verify-look이 잉크로 재서 화면 32px을 확인했다.
+# --- HUD text -------------------------------------------------------
+## **A constant that had to be pinned down at the 32px transition. Before, it did not exist at all.**
+##  `HUD/Stats`·`HUD/Health` are `Label`s and were using the engine's default font size (16), and
+##  **screen scale 2.0 was implicitly making that 32px on screen.**
+##  Coming into the 32px world the coordinates got x2 but **only the size did not follow, so the text halved on screen**
+##  (a verify-look observation) => it was pinned to 32, and verify-look measured the ink and confirmed 32px on screen.
 ##
-## 🔴 **「엔진 기본값이면 되지」로 지우지 마라.** 배율이 바뀌는 날 같은 사고가 다시 나고,
-##  그건 「글자가 좀 작다」로만 보여서 원인을 찾는 데 오래 걸린다 — 고칠 자리가 여기 하나로
-##  남아 있는 것이 이 상수의 값어치다.
-## ⚠ **`.tscn` 에 안 적는다.** 연출 상수는 한 파일이고, 씬에 적으면 두 곳이 되어 갈라진다 —
-##  껍데기(`stage.gd._ready`)가 이 값을 Label 에 밀어 넣는다.
-## ⚠ 조립창은 여기 안 걸린다 — `circle_window` 의 `draw_string` 셋은 이미 크기를 넘긴다
-##  (`WINDOW_TITLE_SIZE` · `PALETTE_HEAD_SIZE` · 반지름에서 파생하는 층 번호).
+## **Do not delete it with "the engine default will do".** The day the scale changes the same accident happens again,
+##  and it only looks like "the text is a bit small", so finding the cause takes a long time — the value of this
+##  constant is that the place to fix it stays here, in one place.
+## **It is not written in the `.tscn`.** Presentation constants live in one file, and writing it into the scene
+##  makes two places that diverge — the shell (`stage.gd._ready`) pushes this value into the Label.
+## The assembly window is not covered by this — `circle_window`'s three `draw_string`s already pass a size
+##  (`WINDOW_TITLE_SIZE` · `PALETTE_HEAD_SIZE` · the layer number derived from the radius).
 const HUD_FONT_SIZE := 16
 
-## 🔴🔴 **무적이 눈에 보이는 것이 「지금은 안 맞는다」를 말하는 유일한 방법이다**(기획 「화면」).
-##  ⚠ **깜빡임의 시계는 여기 없다** — `character.invuln_left`(틱 계수기)의 홀짝이 그대로 시계다.
-##   0.2초에 4틱이라 두 번 깜빡인다. 🔴 렌더가 자기 시계를 만들면 시계가 둘이 되고,
-##   무적이 끝났는데 깜빡이거나 그 반대가 난다.
-## ⚠ **0이 아니다.** 완전히 지우면 「사라졌다 = 죽었나」로 읽힌다 — 흐려지는 것이 「무적」이다.
+## **Invulnerability being visible is the only way to say "you cannot be hit right now"** (design "screen").
+##  **The blink clock is not here** — the parity of `character.invuln_left` (a tick counter) is the clock itself.
+##   0.2s is 4 ticks, so it blinks twice. If the renderer makes its own clock there are two clocks, and
+##   it blinks after invulnerability has ended, or the reverse.
+## **It is not 0.** Erased completely it reads as "it vanished = did it die" — fading is what says "invulnerable".
 const INVULN_DIM_A := 0.35
 
-## 🔴🔴 **쓰러졌을 때 캐릭터 위에 뜨는 글자** (2026-08-08, 사용자가 정했다).
+## **Text that floats above the character when downed** (decided by the user).
 ##
-## ⚠ **HUD 에 이미 같은 뜻의 줄이 있는데도 검증자가 세 번 발이 묶였다** —
-##  돼지가 붙어 `downed` 가 되면 `_drain_queue` 가 **발사를 통째로 버리는데**
-##  화면에 아무 변화가 없어 **「클릭이 씹혔다」로 읽힌다.**
-## 🔴 **HUD 로 부족한 이유 둘**: 연출을 보려면 HUD 를 꺼야 하고(디버그 글자가 몬스터를 덮는다),
-##  **시선이 캐릭터에 있다.** ⇒ **글자를 캐릭터 머리 위로 옮겼다.**
+## **Verifiers got stuck three times even though the HUD already has a line meaning the same thing** —
+##  when a pig closes in and it becomes `downed`, `_drain_queue` **throws the shot away entirely** while
+##  nothing changes on screen, so it **reads as "the click was swallowed".**
+## **Two reasons the HUD is not enough**: seeing the presentation means turning the HUD off (the debug text
+##  covers the monsters), and **the gaze is on the character.** => **The text was moved above the character's head.**
 ##
-## ⚠ **「R」을 꼭 적는다** — 혼자라 일으켜 줄 사람이 없어 **리셋이 유일한 길**이다.
-##  안 적으면 「게임이 멈췄다」로 읽힌다(`stage._update_hud` 가 같은 이유를 든다).
+## **"R" is written on purpose** — you are alone and there is nobody to pick you up, so **a reset is the only way out.**
+##  Without it it reads as "the game froze" (`stage._update_hud` gives the same reason).
 const CHAR_DOWNED_TEXT := "쓰러짐 — R"
 const CHAR_DOWNED_COLOR := Color(1.0, 0.35, 0.30, 1.0)
 const CHAR_DOWNED_SIZE := 14
-## 머리 위로 이만큼. ⚠ 0이면 글자가 몸과 겹쳐 둘 다 안 읽힌다.
+## This far above the head. At 0 the text overlaps the body and neither reads.
 const CHAR_DOWNED_LIFT_PX := 10.0
 
-## 🔴 불붙은 캐릭터. **테두리다** — 몸통 색을 물들이면 위 무적 흐림과 같은 축(몸통 밝기)을 써서
-##  둘이 겹칠 때 서로를 지운다. ⚠ 그 겹침이 예외가 아니다: **불은 무적에 안 걸리므로**
-##  「무적인 채로 불에 타는」 순간이 정상이고, 화면이 그 둘을 **동시에** 말할 수 있어야 한다.
-## ⚠ 셀 불(`FIRE_HI`)과 같은 계열이라 「저 불에 타고 있다」가 한눈에 이어진다.
-## ⚠ **두께를 ×2 했다**(2.0 → 4.0). 뜻이 「테두리가 화면에서 이만큼 두껍다」라 배율 갈래에 걸린다.
-##  🔴 **단계 5에서 뜻이 바뀌면 다시 정해야 한다** — 거기서는 실루엣을 미는 **정수 오프셋 px**이 되고,
-##   그때는 「셀 대비」쪽으로 넘어갈 수 있다. 기획이 그 자리에 「2 그대로」라고 적어 뒀다.
+## A burning character. **It is a border** — tinting the torso color uses the same axis as the invulnerability dim
+##  above (torso brightness), so the two erase each other when they overlap. That overlap is not an exception:
+##  **fire is not gated by invulnerability**, so "burning while invulnerable" is normal, and the screen has to be
+##  able to say both **at once**.
+## It is the same family as cell fire (`FIRE_HI`) so "it is burning in that fire" connects at a glance.
+## **The thickness was x2'd** (2.0 -> 4.0). Its meaning is "the border is this thick on screen", so it falls in the scale branch.
+##  **If the meaning changes in stage 5 it has to be decided again** — there it becomes an **integer offset in px**
+##   that pushes the silhouette, and then it could move over to the "cell-relative" side. The design wrote "keep 2" in that spot.
 const CHAR_BURN := Color(1.0, 0.55, 0.15, 0.95)
 const CHAR_BURN_PX := 4.0
 
-# ─── 지팡이 ───────────────────────────────────────────────────────
-## 🔴 지팡이 회전은 **화면 쪽이라 float이 자유롭다.** 발사하는 **그 한 순간에만**
-##  `src/actor/aim.gd`가 정수로 양자화한다.
+# --- the staff ------------------------------------------------------
+## Staff rotation is **on the screen side, so float is free.** Only at **that one moment of firing**
+##  does `src/actor/aim.gd` quantize it to integers.
 ##
-## 🔴🔴 **길이(`STAFF_LEN_PX`)는 여기 없다 — `src/actor/staff.gd` 의 `LEN_PX` 로 이사했다.**
-##  ⚠ 이 파일 첫 줄이 「여기 값은 화면에만 닿는다」고 적었는데 그 값은
-##   `character_view` → `stage` → `aim.fire_cmd` 로 **세상에 닿았고**, 지형에 막혀 짧아지는
-##   규칙이 얹히며 어긋남이 load-bearing 이 됐다. 🔴 `src/actor/` 는 이 파일을 **못 읽는다**
-##   (`net_layers` 가 막는다) ⇒ 인자로 넘기든 이사하든 둘 중 하나였고 이사가 맞았다.
-##  ⚠ **「연출 상수는 전부 fx_tuning」은 안 깨졌다** — 이사한 값이 연출이 아니라는 것이 위 논거다.
+## **The length (`STAFF_LEN_PX`) is not here — it moved to `LEN_PX` in `src/actor/staff.gd`.**
+##  The first line of this file says "values here only touch the screen", but that value reached
+##   **the world** through `character_view` -> `stage` -> `aim.fire_cmd`, and with the rule of shortening against
+##   terrain layered on, the mismatch became load-bearing. `src/actor/` **cannot read this file**
+##   (`net_layers` blocks it) => it was either pass it as an argument or move it, and moving was right.
+##  **"Every presentation constant is in fx_tuning" is not broken** — the argument above is that the moved value is not presentation.
 ##
-## 🔴🔴 **`STAFF_COLOR`·`STAFF_WIDTH_PX` 를 지웠다 — 선이 그림이 됐다.**
-##  ⚠ 지운 색(0.55, 0.40, 0.24)이 **정확히 나무 지형(0x6B4524)이었다.** 아래 시트가
-##   검붉은 자주인 것은 취향이 아니라 「지형과 색상환에서 멀어야 눈이 즉시 가른다」의 계약이다.
+## **`STAFF_COLOR`·`STAFF_WIDTH_PX` were deleted — the line became art.**
+##  The deleted color (0.55, 0.40, 0.24) was **exactly the wood terrain (0x6B4524).** The sheet below being
+##   a dark red purple is not taste but the contract "it must be far on the color wheel from terrain so the eye splits it instantly".
 ##
-## 🔴 **그림 경로는 이 파일에만 있어야 한다**(위 `CHAR_SHEET` 와 같은 규율).
-##  `assets/` 는 `net_layers` 의 폴더 스캔 **밖이라** 아무도 안 짖는다.
+## **Art paths must exist only in this file** (the same discipline as `CHAR_SHEET` above).
+##  `assets/` is **outside** `net_layers`' folder scan, so nobody barks.
 const STAFF_SHEET := "res://assets/character/wizard_staff.png"
 
-## 🔴🔴 **그림 안에서 「지팡이의 축」이 앉은 높이(px). 실측 y 1~8 ⇒ 4.5.**
-##  봉의 중심선 · 고리의 중심 · bbox의 중심이 **셋 다 여기**다 ⇒ 그림을 이 높이에 앉히면
-##  **180° 회전(= 왼쪽 조준)이 실루엣을 그대로 둔다.**
-##  ⚠ 이 셋이 어긋난 그림으로 갈아 끼우면 **왼쪽을 볼 때만 지팡이가 어깨 위로 뜬다.**
-##  🔴 `net_sprite` 가 bbox의 y 중심이 이 값인지 잰다 — 사람이 기억하는 대신 그물이 문다.
+## **The height at which "the staff's axis" sits inside the art (px). Measured y 1-8 => 4.5.**
+##  The centerline of the shaft · the center of the ring · the center of the bbox are **all three here** =>
+##  seating the art at this height means **a 180° rotation (= aiming left) leaves the silhouette unchanged.**
+##  Swap in art where those three are misaligned and **the staff floats above the shoulder only when looking left.**
+##  `net_sprite` measures whether the bbox's y center is this value — the net bites instead of a person remembering.
 const STAFF_ANCHOR_Y_PX := 4.5
 
-## 🔴🔴 **끝의 고리가 차지하는 오른쪽 폭(px). 실측 x 29~35 ⇒ 7.**
-##  **봉만 줄이고 고리는 원래 크기로 끝에 붙인다** — 그림을 통째로 x축 스케일하면 지팡이가
-##  눌릴 때 고리가 **타원으로 찌그러지고**, 그 위에 얹는 색 링(정원)이 안 맞는다.
-## ⚠ **그림 폭 상수를 여기 만들지 않는다.** 길이는 `Staff.LEN_PX` 하나다 —
-##  여기 폭을 또 두면 「png 36 · 길이 36 · 폭 상수 36」이 세 곳이 되고, 갈라진 날
-##  **끝이 그림 밖에 뜨는데 에러가 안 난다**(`net_sprite` 가 미리 적어 둔 함정이다).
+## **The right-side width the ring at the tip occupies (px). Measured x 29-35 => 7.**
+##  **Only the shaft is shortened and the ring is attached at the end at its original size** — scaling the whole
+##  art on x **squashes the ring into an ellipse** when the staff is compressed, and the color ring (a true circle)
+##  laid on top no longer fits.
+## **Do not make an art-width constant here.** The length is `Staff.LEN_PX` alone —
+##  put a width here too and "png 36 · length 36 · width constant 36" becomes three places, and the day they diverge
+##  **the tip floats outside the art with no error raised** (a trap `net_sprite` wrote down in advance).
 const STAFF_RING_W_PX := 7.0
 
-## 🔴🔴 **끝의 고리가 장착 색으로 물든다 — 쏘기 전에도 무엇이 장착됐는지 보인다**(기획 「화면」).
-##  이게 없으면 지팡이가 상수 색 그림 한 장이라 **조합을 바꿔도 화면이 한 픽셀도 안 변한다.**
+## **The ring at the tip is tinted with the equipped color — what is equipped is visible before firing** (design "screen").
+##  Without this the staff is a single image in a constant color, so **changing the assembly changes not one pixel on screen.**
 ##
-## 🔴🔴 **`modulate` 로는 못 나른다 — 그래서 링을 위에 덧그린다.**
-##  `CanvasItem.modulate` 는 **곱셈**이라, 봉이 검붉은 자주(≈0.4,0.1,0.2)인데 청록을 곱하면
-##  `(0.18, 0.085, 0.20)` — **거의 안 변한다.** 그리고 이 노드는 재질이 없어 가산 합성도 못 쓴다.
-##  ⇒ **틴트는 픽셀을 덮어써야 한다** = 그림의 고리 자리에 정확히 겹치는 **빈 링**을 하나 그린다.
+## **It cannot be carried by `modulate` — that is why the ring is drawn on top.**
+##  `CanvasItem.modulate` is **multiplication**, so with the shaft a dark red purple (~0.4,0.1,0.2), multiplying by
+##  cyan gives `(0.18, 0.085, 0.20)` — **almost no change.** And this node has no material, so additive blending is out too.
+##  => **The tint has to overwrite pixels** = draw one **empty ring** that overlaps exactly where the ring is in the art.
 ##
-## 🔴🔴 **총구 구슬을 지우며 두 축 중 「크기」가 사라졌다. 알고 지운 것이다**(사용자 판정 2026-08-05:
-##  「총구 구슬을 지워줘. 별로야. 그냥 지팡이에서 나가는 게 좀 좋을 거 같아」).
-##  ⚠ **잃은 것을 정확히 적는다: 문양을 넣고 뺀 차이가 쏘기 전 화면에서 안 보인다.**
-##   색이 나르는 것은 **맨 안쪽 문양**이라 「확산→폭발」과 「확산」이 같은 색이다.
-##  🔴 **순서(키 4 ↔ 키 5)는 여전히 색이 나른다** — GDD가 「순서가 화면에 안 보이면 플레이어는
-##   규칙을 영영 못 배운다」고 적은 자리는 **안 깨졌다.**
-##  ⇒ **되살리고 싶어지면 크기가 아닌 다른 축을 찾아라**(고리 굵기 · 고리 개수 · 끝의 밝기).
-##   여기 반지름을 층 수로 키우면 그림의 고리와 어긋나서 **링이 그림 밖으로 나간다.**
+## **Deleting the muzzle bead removed "size", one of the two axes. It was deleted knowingly** (user acceptance:
+##  "delete the muzzle bead. I don't like it. Just coming out of the staff would be better").
+##  **Write down exactly what was lost: the difference between adding and removing a glyph is invisible on screen before firing.**
+##   What the color carries is **the innermost glyph**, so "spread->blast" and "spread" are the same color.
+##  **The order (key 4 <-> key 5) is still carried by color** — the place where the GDD wrote "if the order is
+##   invisible on screen the player can never learn the rule" is **not broken.**
+##  => **If you want it back, find an axis other than size** (ring thickness · ring count · tip brightness).
+##   Growing the radius here by layer count misaligns it with the ring in the art and **the ring goes outside the art.**
 ##
-## ⚠ 값 넷은 전부 §0-① 실측에서 나온다(고리 x 29~35 · 세로 8px · 가로 7px · 벽 두께 2px).
-##  **자리 맞춤은 눈이 볼 자리다** — 그물은 링이 그림의 고리와 겹쳐 보이는지 원리적으로 못 잰다.
+## All four values come from the section 0-(1) measurement (ring x 29-35 · height 8px · width 7px · wall thickness 2px).
+##  **Alignment is a place for the eye** — the net cannot measure in principle whether the ring looks aligned with the art's ring.
 const STAFF_RING_INSET_PX := 4.0
 const STAFF_RING_R_PX := 3.5
 const STAFF_RING_PX := 2.0
 
-## 문양별 끝 색. 🔴 **문양 하나 추가 = 여기 한 줄**(계획의 「연출이 다르면 fx_tuning 한 줄」).
-## ⚠ 비어 있으면(문양 없음) 룬 색으로 떨어진다 — 아래 `staff_tint`.
+## The tip color per glyph. **One new glyph = one line here** (the plan's "one line in fx_tuning if the presentation differs").
+## If it is empty (no glyph) it falls back to the rune color — `staff_tint` below.
 const GLYPH_TINT: Dictionary = {
-	# 🔴 확산과 폭발이 **색상환에서 멀어야** 키 4(확산→폭발)와 키 5(폭발→확산)의 지팡이 끝이
-	#  한눈에 갈린다. 층 수가 같으므로 **색만이 순서를 나른다.**
+	# Spread and blast must be **far apart on the color wheel** so the staff tip for key 4 (spread->blast) and
+	#  key 5 (blast->spread) split at a glance. The layer counts are the same, so **only the color carries the order.**
 	Glyph.GLYPH_SPREAD: Color(0.45, 0.85, 1.0),
 	Glyph.GLYPH_BLAST: Color(1.0, 0.45, 0.15),
 }
 
-## 정의가 없는 문양의 색. 🔴 **일부러 마젠타다** — 문양을 늘렸는데 여기를 안 늘리면
-##  화면이 비명을 지른다(`cell_materials.gd`의 `MISSING_RGB`와 같은 이유).
+## The color of a glyph with no definition. **Deliberately magenta** — grow the glyphs without growing this
+##  and the screen screams (the same reason as `MISSING_RGB` in `cell_materials.gd`).
 const GLYPH_TINT_MISSING := Color(1.0, 0.0, 1.0)
 
-## 🔴🔴 **「지금은 못 쏜다」의 화면 쪽 몫.** 룬 자리가 비면 지팡이 끝이 **회색으로 죽는다.**
-##  지팡이 끝은 **조립창을 안 열고도 늘 보이는 유일한 곳**이라, 좌클릭했는데 아무 일도 안 나는 것을
-##  사용자가 **고장으로 읽는 것**을 여기가 막는다(기획 「쏘고 나서 실패하면 고장으로 읽힌다」).
+## **The screen's share of "you cannot fire right now".** With the rune slot empty the staff tip **dies to gray.**
+##  The staff tip is **the only place always visible without opening the assembly window**, so this is what stops
+##  the user from **reading a left-click that does nothing as a breakage** (design "failing after firing reads as a breakage").
 ##
-## 🔴🔴 **쓰는 곳이 둘이고 뜻이 같아서 한 벌이다** — 지팡이 끝(`character_view`)과
-##  조립창의 **빈 룬 자리**(`circle_window._draw_rune_slot`). 두 화면이 같은 회색으로 같은 말을 한다.
-##  ⚠ **이름이 `MUZZLE_DEAD`·`MUZZLE_DEAD_WIDTH_PX` 였다.** 총구 구슬이 사라졌으므로
-##   그 이름을 두면 **총구 없는 리포에 「총구」가 남는다** — 이 리포가 「거짓 손잡이」라고 부르는 모양이다.
-##   🔴 **지운 게 아니라 이름만 바꿨다**: 그대로 지웠으면 `circle_window` 가 런타임에 죽었고,
-##    그건 **조립창을 열어야 보인다.**
-## ⚠ **채우지 않는 게 요점이다.** 회색으로 채우면 「어두운 구슬」로 보이고, 그건 「꺼졌다」가 아니라
-##  「약하다」로 읽힌다.
-## ⚠ **돌 벽(0x5C574F ≈ 0.36,0.34,0.31) 위에서 묻히나는 안 쟀다** — 명도차가 있어 갈릴 것 같지만
-##  눈이 볼 자리다.
+## **There are two uses and they mean the same thing, so it is one set** — the staff tip (`character_view`) and
+##  the **empty rune slot** in the assembly window (`circle_window._draw_rune_slot`). Two screens say the same thing in the same gray.
+##  **The names were `MUZZLE_DEAD`·`MUZZLE_DEAD_WIDTH_PX`.** The muzzle bead is gone, so keeping those names
+##   **leaves a "muzzle" in a repo with no muzzle** — the shape this repo calls a "false knob".
+##   **They were renamed, not deleted**: deleting them outright would have killed `circle_window` at runtime,
+##    and that is **only visible once the assembly window is opened.**
+## **Not filling it is the point.** Filled with gray it looks like "a dark bead", and that reads not as "it is off" but as "it is weak".
+## **Whether it gets lost on a stone wall (0x5C574F ~ 0.36,0.34,0.31) was not measured** — there is a brightness
+##  difference so it looks like it would split, but it is a place for the eye.
 const DEAD_TINT := Color(0.62, 0.62, 0.66, 0.85)
 const DEAD_RING_PX := 3.0
 
-# ─── 조립창 ───────────────────────────────────────────────────────
-## 🔴🔴 **창이 무대를 다 가리면 안 된다.** 세상이 안 보이면 「창을 연 채로 세상이 계속 돈다」를
-##  **눈으로 확인할 수가 없고**, 그게 이 단계가 재는 것 전부다(기획 판정 4).
-##  ⇒ 화면 일부 + 반투명. `net_render`가 넓이와 자리를 잰다.
+# --- the assembly window --------------------------------------------
+## **The window must not cover the whole stage.** With the world invisible, "the world keeps running with the
+##  window open" **cannot be confirmed by eye**, and that is everything this stage measures (design acceptance 4).
+##  => Part of the screen + translucent. `net_render` measures the size and the position.
 ##
-## ⚠ **자리가 오른쪽 아래인 이유는 `HUD/Stats`다.** 그 Label이 (8,8)~(900,210)을 쓰므로
-##  겹치면 글씨가 섞인다. 그리고 캐릭터 시작 자리가 왼쪽 아래(96,960)라 **거기도 피한다** —
-##  창에 가려 캐릭터가 안 보이면 「창을 연 채로 걷는다」를 못 본다.
-## 🔴 **여기가 치수의 단일 소스다.** 씬에 offset을 적으면 두 곳이 되고, 그때 창은 씬 값으로 뜨는데
-##  그물은 이 값을 재서 **둘 다 초록인 채로 갈라진다.**
-## 🔴🔴 **화면 90%다** — 사용자 판정(2026-08-03): 「책이 그냥 화면 90%를 차지하게 해줘」.
-##  뷰포트 960×540의 90% = 864×486, 가운데 정렬 ⇒ (48, 27).
-##  ⚠ **90%라는 계약은 숫자가 아니라 비율이다** — 뷰포트가 바뀌면 여기 숫자도 같이 간다.
+## **The reason the position is bottom-right is `HUD/Stats`.** That Label uses (8,8)-(900,210), so overlapping mixes the text.
+##  And the character's start position is bottom-left (96,960), so **that is avoided too** —
+##  if the window hides the character you cannot see "walking with the window open".
+## **This is the single source of the dimensions.** Write offsets into the scene and there are two places, and then
+##  the window opens with the scene's values while the net measures these — **both green while diverged.**
+## **90% of the screen** — a user acceptance: "just make the book take up 90% of the screen".
+##  90% of the 960x540 viewport = 864x486, centered => (48, 27).
+##  **The 90% contract is a ratio, not a number** — change the viewport and the numbers here go with it.
 ##
-## 🔴🔴🔴 **「창을 연 채로 캐릭터가 보인다」 계약은 폐기됐다**(사용자 판정, 2026-08-04).
-##  **카메라 추종이 들어가면서 캐릭터가 항상 화면 한복판에 오는데 창이 화면 90%라 그걸 덮는다.**
-##  ⇒ 창을 아래 띠로 옮기거나 세로를 134px 이하로 줄이면 지킬 수 있었는데, **사용자가 그 대가를
-##   알고 「그대로 둔다」를 골랐다.**
-##  ⚠ **잃은 것을 정확히 적는다: 조립창을 연 동안에는 「내가 불에 타고 있는지」가 안 보인다.**
-##   그게 이 계약이 처음 걸렸던 이유였다(「몬스터도 체력도 없어서 못 보는 대가가 0이다」가 사라졌었다).
-##  🔴 **되살리고 싶어지면 창을 옮기거나 줄여라. 카메라를 되돌리는 건 답이 아니다** —
-##   정적 카메라로는 무대가 한 화면에 안 들어간다(`stage.gd` 의 `MAP` 주석).
-##  ⚠ `net_render` 의 그 검사는 지웠다. 값과 대조군은 거기 삭제 표시에 남겼다.
+## **The contract "the character is visible with the window open" was abandoned** (a user acceptance).
+##  **With camera following in, the character is always at the center of the screen and the window at 90% covers it.**
+##  => It could have been kept by moving the window to a bottom band or shrinking the height to 134px or less, but
+##   **the user knew that price and chose "leave it as is".**
+##  **Write down exactly what was lost: while the assembly window is open you cannot see whether you are on fire.**
+##   That was the reason this contract was made in the first place ("with no monsters and no health the price of not
+##   seeing it is 0" had disappeared).
+##  **If you want it back, move or shrink the window. Reverting the camera is not the answer** —
+##   with a static camera the stage does not fit in one screen (the `MAP` comment in `stage.gd`).
+##  That check in `net_render` was deleted. The values and the control are left in the deletion note there.
 ##
-## ⚠ **세로만 줄여 위로 붙인다**(사용자 판정, 2026-08-04). **가로 90%는 그대로다.**
-##  ⚠ **크기를 바꾸면 `net_circle.CIRCLE_DIAMETER_FLOOR_PX`(180)를 다시 계산해라** —
-##   지금 값에서 진 지름이 **280.1px**이라 여유 100px이다(계획 §5).
+## **Only the height was shrunk and it was pushed up** (a user acceptance). **The 90% width is unchanged.**
+##  **If the size changes, recompute `net_circle.CIRCLE_DIAMETER_FLOOR_PX` (180)** —
+##   at the current values the circle diameter is **280.1px**, leaving 100px of headroom (plan section 5).
 ##
-## ⚠ 이 크기면 `HUD/Stats`(8,8~900,210)를 여전히 **덮는다.** 겹침이 안전한 것은 창이 **불투명**해서고
-##  (글씨가 섞이지 않고 가려질 뿐), 그래서 `net_render`가 「안 겹친다」가 아니라
-##  **「불투명하다」**를 잰다. 반투명으로 되돌리면 거기가 먼저 빨개진다.
-## 🔴 **체력은 `HUD/Health`(660,494~952,530)라 이 창 밖이다** — 조립 중에도 보인다.
-##  ⚠ **그건 살아 있는 계약이다** — `Health` 는 창과 같은 화면 좌표계라 카메라와 무관하고,
-##   `net_render._window_does_not_cover_the_health` 가 그대로 잰다.
+## At this size it still **covers** `HUD/Stats` (8,8-900,210). The overlap is safe because the window is **opaque**
+##  (the text is not mixed, just hidden), which is why `net_render` measures **"it is opaque"** rather than
+##  "it does not overlap". Revert it to translucent and that goes red first.
+## **Health is `HUD/Health` (660,494-952,530) so it is outside this window** — visible during assembly too.
+##  **That is a living contract** — `Health` is in the same screen coordinate space as the window so it is
+##   camera-independent, and `net_render._window_does_not_cover_the_health` measures it as is.
 const WINDOW_RECT := Rect2(48, 12, 864, 372)
 
-## 🔴🔴 **불투명이다.** 사용자 판정 — 「특정 창이 열리는 것처럼 **배경색이 존재해야** 할 듯」.
-##  ⚠ 단계 2가 「반투명」을 판정 4의 근거로 적었는데 **그건 틀린 근거였다.** 실제로 재진 것은
-##   창 밖 클릭이 쏘고 · 틱이 오르고 · A/D가 먹고 · 불이 번진다였다 ⇒ **불투명해도 안 깨진다.**
-##  🔴 대신 계약이 **자리**로 옮겨 갔다: 창을 연 채로 캐릭터와 그 주변이 보여야 한다(위 `WINDOW_RECT`).
+## **It is opaque.** A user acceptance — "there should **be a background color**, like a particular window opening".
+##  Stage 2 wrote "translucent" as the grounds for acceptance 4, but **that was the wrong grounds.** What was
+##   actually measured was clicks outside the window firing · ticks rising · A/D working · fire spreading
+##   => **none of that breaks when it is opaque.**
+##  Instead the contract moved to **position**: the character and its surroundings must be visible with the window
+##   open (`WINDOW_RECT` above).
 const WINDOW_BG := Color(0.05, 0.055, 0.085, 1.0)
 const WINDOW_EDGE := Color(0.45, 0.55, 0.75, 0.9)
 const WINDOW_EDGE_PX := 2.0
 const WINDOW_PAD_PX := 12.0
 
-## ⚠ 팔레트는 단계 4~5가 채운다. 지금은 뒷판 · 제목 · 마법진 그림뿐이다.
+## The palette is filled in by stages 4-5. Right now there is only the backing · the title · the magic circle art.
 const WINDOW_TITLE := "마법진 조립"
 const WINDOW_TITLE_COLOR := Color(0.86, 0.90, 0.98)
 const WINDOW_TITLE_SIZE := 16
-## 제목이 차지하는 띠. **두 페이지는 이 아래에서 시작한다** — 겹치면 둘 다 안 읽힌다.
-## 🔴 단계 3에서는 창 전체가 마법진 자리라 여유가 **6.4px뿐**이었다(위험 24).
-##  페이지가 이 아래에서 시작하면서 그 빠듯함이 **구조적으로 사라졌다** — 마법진은 이제
-##  페이지 안에만 있으므로 제목에 닿을 길이 없다.
+## The band the title occupies. **The two pages start below it** — overlapping and neither reads.
+## In stage 3 the whole window was the circle's place, so there was only **6.4px** of headroom (risk 24).
+##  With the pages starting below this, that tightness **disappeared structurally** — the circle now exists
+##  only inside a page, so it has no way of reaching the title.
 const WINDOW_TITLE_BAND_PX := 34.0
 
-# ─── 책 펼침 — 두 페이지 ──────────────────────────────────────────
-## 🔴 **페이지 크기는 여기 없다.** 창 크기에서 파생된다(`book_layout.pages`) —
-##  박으면 창을 키우는 날 페이지가 창 밖으로 나가고, 화면 문제라 에러가 안 난다.
+# --- the open book — two pages --------------------------------------
+## **Page size is not here.** It is derived from the window size (`book_layout.pages`) —
+##  hardcode it and the day the window grows the pages go outside it, and being a screen problem no error is raised.
 const BOOK_MARGIN_PX := 12.0
-## 가운데 접힘의 폭. ⚠ **경계의 그림이다** — 여기가 보이는 경계이자 (단계 4b의) 클릭 경계다.
+## The width of the center fold. **It is the art of a boundary** — this is both the visible boundary and (in stage 4b) the click boundary.
 const BOOK_FOLD_PX := 10.0
-## 페이지 바탕. ⚠ 창 뒷판보다 **밝아야** 「펼쳐진 종이」로 읽힌다 — 같으면 페이지가 안 보인다.
+## The page ground. It must be **brighter** than the window backing to read as "an opened sheet" — the same and the page is invisible.
 const BOOK_PAGE := Color(0.12, 0.13, 0.18, 1.0)
-## 접힘. ⚠ 페이지보다 **어두워야** 골이 파인 것으로 읽힌다.
+## The fold. It must be **darker** than the page to read as a carved groove.
 const BOOK_FOLD := Color(0.03, 0.035, 0.055, 1.0)
 
-# ─── 조립창 — 마법진 그림 ─────────────────────────────────────────
-## 🔴 **전부 비율이다.** 픽셀을 박으면 창 크기를 바꾸는 날 그림이 창 밖으로 나간다.
-##  ⚠ 층 고리 반지름은 **층 수로 나눠서** 나온다(`circle_layout.layer_rings`) — 여기엔 고리가
-##   차지하는 **바깥 끝**만 있다. 고리마다 상수를 두면 3층 진이 오는 날 겹친다.
+# --- the assembly window — the magic circle art ---------------------
+## **They are all ratios.** Hardcode pixels and the day the window size changes the art goes outside the window.
+##  The layer ring radii come out **divided by the layer count** (`circle_layout.layer_rings`) — only the
+##   **outer end** the rings occupy is here. Put a constant per ring and they overlap the day a 3-layer circle arrives.
 const CIRCLE_AREA_PAD_PX := 14.0
 const CIRCLE_DISC_RATIO := 0.94
 const CIRCLE_RING_ZONE := 0.80
 const CIRCLE_RUNE_RATIO := 0.17
 const CIRCLE_GLYPH_RATIO := 0.115
-## 룬 자리 속심. ⚠ 「하얗게 타는 심지」라 겉 무리보다 작아야 한다(총구·섬광과 같은 어법).
+## The rune slot's inner core. It is "a wick burning white", so it must be smaller than the outer glow
+##  (the same idiom as the muzzle and the flash).
 const CIRCLE_RUNE_CORE_RATIO := 0.45
 
-## 진 테두리 — 그릇의 가장자리다. ⚠ 층 고리보다 **어둡고 굵어야** 「틀」로 읽힌다.
+## The circle's border — the rim of the vessel. It must be **darker and thicker** than the layer rings to read as "a frame".
 const CIRCLE_FRAME := Color(0.38, 0.45, 0.62, 0.85)
 const CIRCLE_FRAME_PX := 2.0
 
-## 🔴🔴 **「안쪽이 먼저」를 동심원 하나에 맡기지 않는다**(기획 판정 3).
-##  동심원은 순서가 **있다**는 것만 말하고 **어느 쪽이 먼저인지**는 안 말한다.
-##  ⇒ 장치 **둘**을 건다: ① 층 번호(1·2) ② **안쪽이 밝은 명도차**(아래 두 색을 층마다 섞는다).
-## ⚠ 색 하나만 두면 그 장치가 하나로 줄고, 그러면 판정 3이 동심원 하나에 매달린다.
+## **"Innermost first" is not entrusted to concentric circles alone** (design acceptance 3).
+##  Concentric circles say only that an order **exists**, not **which side comes first**.
+##  => **Two** devices are hung: (1) layer numbers (1·2) (2) **a brightness difference with the inside brighter**
+##  (the two colors below are mixed per layer).
+## With only one color that device drops to one, and then acceptance 3 hangs on concentric circles alone.
 const CIRCLE_RING_INNER := Color(0.72, 0.86, 1.0, 0.95)
 const CIRCLE_RING_OUTER := Color(0.30, 0.40, 0.58, 0.95)
 const CIRCLE_RING_PX := 2.0
 
-## 층 번호. ⚠ 고리 **왼쪽**에 적는다 — 문양 심볼이 12시에 앉으므로 거기 적으면 겹친다.
+## Layer numbers. They are written to the **left** of the ring — the glyph symbol sits at 12 o'clock, so writing there overlaps.
 const CIRCLE_LAYER_NUM := Color(0.80, 0.86, 0.96)
 
-## 🔴🔴 **글자 크기를 반지름에서 파생시킨다.** 상수로 박으면 진이 커질 때 번호만 그대로라
-##  큰 그림에서 눈에 덜 띄고, 그건 **판정 3의 장치 ①이 약해지는 방향**이다.
-##  ⚠ 실측: 창이 28.4%→90%가 되며 지름이 199→364인데 번호는 12로 얼어 있었다(verify-look).
-## ⚠ 비율 0.12는 단계 4a의 모양(반지름 99.6 · 글자 12)을 그대로 옮긴 값이다.
+## **The text size is derived from the radius.** Hardcode it and when the circle grows only the number stays,
+##  making it less noticeable on a large drawing, and that is **the direction of weakening device (1) of acceptance 3.**
+##  Measured: as the window went 28.4% -> 90% the diameter went 199 -> 364 while the number was frozen at 12 (verify-look).
+## The ratio 0.12 is stage 4a's shape (radius 99.6 · text 12) carried over as is.
 const CIRCLE_LAYER_NUM_RATIO := 0.12
-## 아무리 작아져도 이 아래로는 안 읽힌다.
+## However small it gets, below this it does not read.
 const CIRCLE_LAYER_NUM_MIN := 10
 
-## 고리 왼쪽 끝에서 안쪽으로 들인 만큼 · 글자 기준선을 올린 만큼. **글자 크기에 비례한다.**
-## ⚠ 번호가 고리 선 위에 정확히 앉으면 선과 글자가 서로를 갉아먹어 **둘 다 안 읽힌다.**
-##  ⚠ px로 박으면 글자만 커지고 밀기는 그대로라 **커질수록 고리에 파묻힌다.**
-## ⚠ 0.25는 단계 4a의 모양(글자 12 · 밀기 3px)을 그대로 옮긴 값이다.
+## How far inward from the ring's left end · how far the text baseline is lifted. **Proportional to the text size.**
+## If the number sits exactly on the ring's line, the line and the text eat each other and **neither reads.**
+##  Hardcoded in px, only the text grows while the push stays, so **the bigger it gets the more it is buried in the ring.**
+## 0.25 is stage 4a's shape (text 12 · push 3px) carried over as is.
 const CIRCLE_LAYER_NUM_INSET_FRAC := 0.25
 const CIRCLE_LAYER_NUM_LIFT_FRAC := 0.25
 
-## 🔴 **문양 심볼의 모양은 `kind`가 정한다**(`glyph_defs.DEFS`) — 문양마다 그리면 그게
-##  「문양 추가 = 고칠 곳 넷째」가 된다. 색은 `GLYPH_TINT`라 **지팡이 끝과 같은 색**이고,
-##  그래서 창과 지팡이가 같은 마법으로 읽힌다.
-##  ⚠ SPAWN의 가지 수는 **연출값이다.** 확산의 8방향과 같을 필요가 없다 —
-##   같게 두면 「탄을 만드는 문양은 전부 8개를 만든다」로 잘못 읽힌다.
+## **The shape of a glyph symbol is decided by `kind`** (`glyph_defs.DEFS`) — drawing per glyph would make that
+##  "a fourth place to fix when adding a glyph". The color is `GLYPH_TINT`, so it is **the same color as the staff tip**,
+##  and that is why the window and the staff read as the same magic.
+##  SPAWN's ray count is **a presentation value.** It does not need to equal spread's 8 directions —
+##   kept equal it misreads as "every glyph that makes bolts makes 8 of them".
 const GLYPH_SPAWN_RAYS := 6
 const GLYPH_SYMBOL_PX := 2.0
 
-## 🔴 **가지를 반 칸 돌린다.** 안 돌리면 0°·180° 가지가 **수평**인데, 심볼이 고리 위 12시에 앉아
-##  그 점의 접선도 수평이라 **두 갈래가 고리 선에 포개져 사라진다** —
-##  실측으로 6갈래가 화면에서 **4갈래 X자**로 보였다(verify-look, 2026-08-03).
-##  반 칸(=간격/2) 돌리면 6갈래에서 0°·180°가 비고 대신 90°·270°가 서서 고리와 직각으로 만난다.
+## **Rotate the rays by half a step.** Without it the 0° and 180° rays are **horizontal**, and since the symbol sits
+##  at 12 o'clock on the ring the tangent at that point is horizontal too, so **the two rays fold onto the ring's line and vanish** —
+##  measured, 6 rays looked like **a 4-ray X** on screen (verify-look).
+##  Rotating half a step (= spacing/2) empties 0° and 180° out of 6 rays and stands 90° and 270° instead, meeting the ring at a right angle.
 ##
-## ⚠🔴 **`GLYPH_SPAWN_RAYS`가 홀수면 반 칸을 돌려도 하나가 반드시 180°에 선다.**
-##  「설 수 있다」가 아니라 **「반드시 선다」**다:
-##  `360(k+0.5)/N = 180` ⟺ `k = (N-1)/2` 이고, 그게 정수인 것이 **N이 홀수**와 동치다.
-##  ⇒ 갈래 수는 **짝수여야 한다.** `net_circle`이 각도를 실제로 재고 짝수인 것도 같이 잰다.
-## 🔴 그리고 이건 **배치의 임시 답이다.** 원인은 심볼이 고리 **위에** 앉는 것 자체라,
-##  층이 늘어 고리 간격이 좁아지면 다시 걸린다 — 그때는 심볼을 줄이거나 고리 밖으로 빼야 한다.
+## **If `GLYPH_SPAWN_RAYS` is odd, one ray necessarily stands at 180° even with the half step.**
+##  Not "it can stand" but **"it necessarily stands"**:
+##  `360(k+0.5)/N = 180` <=> `k = (N-1)/2`, and that being an integer is equivalent to **N being odd**.
+##  => The ray count **must be even.** `net_circle` actually measures the angles and measures that it is even too.
+## And this is **a stopgap answer about placement.** The cause is the symbol sitting **on** the ring itself, so
+##  it comes back when layers grow and the ring spacing narrows — then the symbol has to shrink or move outside the ring.
 const GLYPH_SPAWN_ANGLE_STEP_FRAC := 0.5
-# ─── 빈 슬롯 — 「여기 놓을 수 있다」 ──────────────────────────────
-## 🔴🔴 **슬롯 상태가 셋인데 첫째가 없었다**(빈 자리 · 찬 자리 · 못 놓는 자리).
-##  실측: 지금 빈 고리는 **「1층·2층이라는 자리」로는 읽히지만 「놓을 수 있다」로는 안 읽힌다**
-##  (verify-look). ⚠ **셋째(못 놓는 자리)만 있고 첫째가 없으면 「막힌 것」과 「빈 것」이 같아 보인다.**
+# --- empty slot — "you can put something here" -----------------------
+## **There are three slot states and the first one was missing** (empty · filled · blocked).
+##  Measured: the currently empty rings **read as "a place called layer 1 / layer 2" but not as "you can put
+##  something here"** (verify-look). **With only the third (blocked) and not the first, "blocked" and "empty" look the same.**
 ##
-## ⚠ **룬의 빈 자리와 뜻이 다르다** — 룬이 비면 「못 쏜다」(경고, `DEAD_TINT` 회색)고
-##  층이 비면 「놓을 수 있다」(초대)다. 🔴 **색과 모양을 달리 둔다** — 같으면 두 뜻이 섞인다.
+## **It means something different from an empty rune slot** — an empty rune means "you cannot fire" (a warning,
+##  `DEAD_TINT` gray) while an empty layer means "you can put something here" (an invitation).
+##  **Keep the color and the shape different** — the same and the two meanings mix.
 const SLOT_EMPTY := Color(0.55, 0.62, 0.78, 0.55)
 const SLOT_EMPTY_PX := 1.5
-## 빈 자리에 그리는 **더하기 표시**. ⚠ 십자가 없으면 그냥 옅은 원이라 「자리」로만 읽힌다.
+## The **plus mark** drawn in an empty slot. Without the cross it is just a faint circle and reads only as "a place".
 const SLOT_PLUS_RATIO := 0.5
 const SLOT_PLUS_PX := 1.5
 
-## 🔴 **누르는 원이 심볼보다 크다.** 심볼과 같게 두면 빈 층을 정확히 겨냥해야 눌리고,
-##  그건 「눌렀는데 아무 일도 안 난다」가 된다. ⚠ 너무 키우면 이웃 층까지 먹는다 —
-##  고리 간격(반지름의 절반)보다는 작아야 한다. `net_circle`이 겹치는지 잰다.
+## **The circle you press is bigger than the symbol.** Kept the same as the symbol you have to aim exactly at an
+##  empty layer for it to click, and that becomes "I pressed it and nothing happened". Grown too far it eats the
+##  neighboring layer — it must be smaller than the ring spacing (half the radius). `net_circle` measures whether they overlap.
 const SLOT_HIT_RATIO := 1.8
 
-## 고른 항목 테두리. ⚠ **연출이 아니라 동작의 일부다** — 무엇을 골랐는지 안 보이면
-##  「고르고 → 놓는다」의 첫 절반이 화면에 없다.
+## The border of the picked item. **It is part of the behavior, not presentation** — if what you picked is invisible,
+##  the first half of "pick, then place" is not on screen.
 const PALETTE_PICK := Color(1.0, 0.92, 0.55, 0.95)
 const PALETTE_PICK_PX := 2.0
-## 못 고르는 항목을 덮는 **가림막의 진하기**. 🔴 **확산이 이미 있으면 두 번째 확산이
-##  애초에 안 눌린다**(기획). ⚠ 눌리는데 아무 일도 안 나면 그게 고장으로 읽힌다 —
-##  한 칸 앞에서 막는 게 요점이다.
-## ⚠ **`modulate`가 아니라 가림막인 이유**: `modulate`는 노드 전체에 걸리고 다음 프레임까지 남는다.
+## **The opacity of the veil** covering an unpickable item. **If spread is already there, a second spread
+##  cannot be pressed in the first place** (design). If it can be pressed and nothing happens, that reads as a breakage —
+##  blocking it one step earlier is the point.
+## **Why a veil and not `modulate`**: `modulate` applies to the whole node and persists into the next frame.
 const PALETTE_BLOCKED_VEIL_A := 0.72
 
-# ─── 팔레트 ───────────────────────────────────────────────────────
-## 🔴 구획 크기는 **종류 수**로, 항목 칸은 **항목 수**로 나뉜다(`palette_layout`) —
-##  여기엔 여백과 제목 띠만 있다. 칸 크기를 박으면 진·룬 항목이 느는 날 겹친다.
+# --- palette --------------------------------------------------------
+## Section size is divided by the **kind count** and item cells by the **item count** (`palette_layout`) —
+##  only the margins and the title band are here. Hardcode cell sizes and they overlap the day circle or rune items grow.
 const PALETTE_PAD_PX := 14.0
 const PALETTE_SECTION_GAP_PX := 10.0
 const PALETTE_HEAD_PX := 24.0
 const PALETTE_SYMBOL_RATIO := 0.52
 
-## 구획 테두리·바탕. 🔴 **구획을 그리는 것이 「빈 팔레트」의 답이다** — 항목이 넷뿐이라
-##  페이지가 크게 비는데, 구획이 있으면 그 빈 곳이 **「무엇이 들어올 자리인가」**로 읽힌다.
-##  ⚠ 구획이 없으면 같은 화면이 그냥 「미완성」으로 읽힌다.
+## Section border and ground. **Drawing sections is the answer to "an empty palette"** — with only four items
+##  the page is largely empty, and with sections that emptiness reads as **"what is this a place for"**.
+##  Without sections the same screen just reads as "unfinished".
 const PALETTE_SECTION_BG := Color(0.09, 0.10, 0.145, 1.0)
 const PALETTE_SECTION_EDGE := Color(0.30, 0.36, 0.50, 0.8)
 const PALETTE_SECTION_EDGE_PX := 1.0
 const PALETTE_HEAD_COLOR := Color(0.72, 0.79, 0.92)
 const PALETTE_HEAD_SIZE := 14
-## 제목 글자의 기준선이 띠 안 어디에 앉나. ⚠ `draw_string`은 **기준선** 기준이라 0이면
-##  글자가 구획 **위로** 삐져나간다. 1.0이면 띠 바닥에 붙어 항목과 부딪힌다.
+## Where the title text's baseline sits within the band. `draw_string` is **baseline**-based, so at 0
+##  the text sticks out **above** the section. At 1.0 it clings to the bottom of the band and collides with the items.
 const PALETTE_HEAD_BASELINE_FRAC := 0.7
 
-## SPAWN 가지가 **시작하는** 자리(반지름 대비). 0이면 한 점에서 뻗어 나와 별이 아니라 뭉치로 보인다.
+## Where the SPAWN rays **start** (relative to the radius). At 0 they emanate from a single point and look like a clump, not a star.
 const GLYPH_SPAWN_INNER_RATIO := 0.3
-## TERMINAL 원반의 반지름(심볼 반지름 대비). ⚠ 1.0이면 가지 심볼과 크기가 같아 보여
-##  「퍼진다 / 그 자리에서 끝난다」의 대비가 약해진다.
+## The TERMINAL disc's radius (relative to the symbol radius). At 1.0 it looks the same size as the ray symbol,
+##  weakening the contrast of "it spreads / it ends right there".
 const GLYPH_TERMINAL_RATIO := 0.8
 
-# ─── 🔴🔴 확산 세대 표 — 화면 쪽 절반 ────────────────────────────
-## `sim_tuning.SIM_SIZES`와 **길이가 같아야 하고 방향도 같아야 한다**(둘 다 세대마다 감소).
+# --- **the spread generation table — the screen's half** -------------
+## It must have **the same length and the same direction** as `sim_tuning.SIM_SIZES` (both decrease per generation).
 ##
-## 🔴🔴 **이 표가 「작은 것들이 약해 보이나」의 전부다.** 시뮬에서 반경이 절반이 됐는데 여기가
-##  고정이면 화면에서는 아무것도 안 변하고, **그게 정확히 v1이 죽은 방식이다**
-##  (위력이 두 배가 됐는데 화면에서 바뀐 게 0개였다). `net_tables`가 두 표의 길이와 단조를 같이 잰다.
-## 🔴 값을 같게 두지 마라 — 그물이 「일부러」와 「깜빡했다」를 구별하지 못한다.
+## **This table is all of "do small things look weak".** If the radius halved in the sim while this stays fixed,
+##  nothing changes on screen, and **that is exactly how v1 died**
+##  (the power doubled and 0 things changed on screen). `net_tables` measures the two tables' length and monotonicity together.
+## Do not make the values equal — the net cannot tell "on purpose" from "forgot".
 ##
-##   bolt_px      머리 반경. 날아가는 동안 세대가 눈에 보이는 유일한 축이다
-##   trail_ticks  자취가 기억하는 틱 수(= 꼬리 길이)
-##   flash_px     폭발 섬광의 최종 반경
-##   shake_px     화면 흔들림 진폭(정수 px)
+##   bolt_px      head radius. The only axis by which the generation is visible while flying
+##   trail_ticks  how many ticks the trail remembers (= the tail length)
+##   flash_px     the final radius of the blast flash
+##   shake_px     screen shake amplitude (integer px)
 ##
-## 🔴 **32px 전환에서 `bolt_px`·`flash_px`·`shake_px` 만 ×2 했다.** 셋 다 뜻이
-##  「화면에서 이만큼」이고, `trail_ticks` 는 **틱 수**라 배율과 무관하다 —
-##  ⚠ 같이 2배로 하면 꼬리가 두 배로 **길어지는 게 아니라 두 배로 오래 남는다**(다른 축이다).
+## **At the 32px transition only `bolt_px`·`flash_px`·`shake_px` were x2'd.** All three mean
+##  "this big on screen", while `trail_ticks` is **a tick count** and so is scale-independent —
+##  doubling it too makes the tail not **twice as long but twice as long-lived** (a different axis).
 ##
-## 🔴🔴 **`flash_px` 만 `rd` 를 따라 두 번 내렸다**(2026-08-04): 216 → 108 → **72**.
-##  ⚠ 값은 늘 **`rd` × `CELL_PX` × 2.25** 다(아래 `FLASH_SEC` 절). 손으로 맞춘 것이지
-##   코드가 강제하지 않는다 — **아무 그물도 이 비율을 안 잰다.**
-##  🔴 **`sim_tuning.SIM_SIZES.rd` 를 줄이면 여기가 반드시 따라온다** — 아래 `FLASH_SEC` 절이
-##   「섬광이 구멍의 2.25배」를 이 표의 몫으로 못 박았고, 그 비율이 「구멍이 커졌다」와
-##   「터졌다」를 가른다. 시뮬만 줄이고 여기를 두면 **구멍은 작아졌는데 섬광은 그대로**라
-##   화면에서 폭발이 안 작아진 것처럼 보인다 — CLAUDE.md 가 이 리포의 **대표 가짜**로 적은 형태다.
-##  ⚠ **`bolt_px`·`shake_px` 는 안 건드렸다.** 탄 머리 크기는 「날아가는 동안 세대가 보이는 축」이고
-##   흔들림은 「얼마나 세게 터졌나」라, 둘 다 **반경과 다른 축**이다. 사용자가 말한 것은 범위뿐이다.
-##   ⇒ 섬광만 작아지고 흔들림은 그대로라 **손맛이 어긋나 보이면 거기가 다음 손잡이다.**
+## **Only `flash_px` was lowered twice, following `rd`**: 216 -> 108 -> **72**.
+##  The value is always **`rd` x `CELL_PX` x 2.25** (the `FLASH_SEC` section below). It is matched by hand;
+##   the code does not enforce it — **no net measures this ratio.**
+##  **Shrink `sim_tuning.SIM_SIZES.rd` and this must follow** — the `FLASH_SEC` section below pinned
+##   "the flash is 2.25x the hole" as this table's share, and that ratio is what splits "the hole got bigger"
+##   from "it exploded". Shrink only the sim and leave this, and **the hole shrinks while the flash stays**,
+##   so on screen the blast looks like it did not shrink — the shape CLAUDE.md writes down as this repo's **representative fake**.
+##  **`bolt_px`·`shake_px` were not touched.** The bolt head size is "the axis by which the generation is visible
+##   while flying" and shake is "how hard it exploded", so both are **axes other than the radius**. What the user
+##   spoke about was only the range.
+##   => With only the flash shrinking and the shake unchanged, **if the feel looks off, that is the next knob.**
 const FX_SIZES: Array[Dictionary] = [
 	{"bolt_px": 8.0, "trail_ticks": 12, "flash_px": 72.0, "shake_px": 5},
 	{"bolt_px": 4.0, "trail_ticks": 8, "flash_px": 36.0, "shake_px": 2},
 ]
 
-# ─── 투사체 ───────────────────────────────────────────────────────
-## 🔴 머리 반경은 위 표에서 나온다.
-##  ⚠ 4px 셀 하나가 지형의 최소 단위이므로 탄이 그보다 작으면 「지형에 묻힌다」 —
-##   세대 1이 **화면에서** 셀 하나쯤인 것은 **일부러**다. 작은 것은 묻혀야 「약하다」로 읽힌다.
-##  🔴 32px 전환에서 배율이 2 → 1이 됐으므로 **화면 크기를 보존하려면 값이 2배여야** 이 뜻이 산다
-##   (전: 4·2 월드px × 2배 = 8·4 화면px / 후: 8·4 월드px × 1배 = 같은 8·4 화면px).
+# --- projectiles ----------------------------------------------------
+## The head radius comes from the table above.
+##  One 4px cell is terrain's smallest unit, so a bolt smaller than that "gets buried in the terrain" —
+##   generation 1 being about one cell **on screen** is **on purpose**. Small things have to get buried to read as "weak".
+##  At the 32px transition the scale went 2 -> 1, so **preserving the screen size requires the value to be doubled**
+##   for that meaning to survive (before: 4·2 world px x 2 = 8·4 screen px / after: 8·4 world px x 1 = the same 8·4 screen px).
 const BOLT_GLOW_RATIO := 2.4
 
-## 🔴🔴 **0.45 → 0.12 (2026-08-07, 사용자가 정했다). 이 값이 판정 1을 실패시킨 범인이다.**
+## **0.45 -> 0.12 (decided by the user). This value is the culprit that failed acceptance 1.**
 ##
-## ⚠ **2026-08-05에 사용자가 게임을 띄워 보고 「빛이 따라가니까 안보임」으로 실패 판정했다.**
-##  🔴 **원인은 규격이 아니라 「원 시절의 잔재」다** — 이 값과 `BOLT_GLOW_RATIO` 는
-##   머리가 **단색 원**이던 때 「빛나는 것」으로 읽히게 하려고 있던 것이다.
-##  **그림에는 밝은 코어 → 어두운 가장자리 그라데이션이 이미 들어 있어 자체가 빛이고**,
-##  그 위에 반경 19.2px 무리를 **가산으로** 얹으니 디테일이 씻겨 나갔다.
+## **The user launched the game, looked, and failed it with "the light follows it so I can't see it".**
+##  **The cause was not the spec but "a leftover from the circle era"** — this value and `BOLT_GLOW_RATIO`
+##   existed to make the head read as "something glowing" back when it was **a flat circle**.
+##  **The art already contains a bright core -> dark edge gradient, so it is light by itself**,
+##  and laying a radius 19.2px glow on top of it **additively** washed the detail away.
 ##
-## 🔴 **통째로 지우지 않은 이유는 세대1이다.** 확산 8발은 머리가 **8px** 이라
-##  검은 배경에 묻힐 수 있고, **그것을 아무도 안 쟀다**(계획 문서가 미리 경고했다).
-##  ⇒ 무리를 「그림을 씻는 것」에서 **「작은 탄이 안 묻히게 받쳐 주는 것」**으로 뜻을 바꿨다.
-## 🟢 **2026-08-08, verify-look 이 봤다 — 둘 다 됐다. 「세대별로 갈라야 할까」 걱정은 현실이 아니었다.**
-##  - 세대0: 탄 머리 그림이 **보인다.** 노란 코어에서 주황으로 빠지는 불덩이. 빛에 안 씻긴다
-##  - 세대1(확산 8발, 8px): **안 묻힌다.** 검은 하늘에 밝은 노란 화살이 또렷하게 부챗살로 퍼진다
+## **The reason it was not deleted outright is generation 1.** The 8 spread bolts have an **8px** head
+##  so they can get buried on a black background, and **nobody measured that** (the plan doc warned in advance).
+##  => The glow's meaning was changed from "washing out the art" to **"propping small bolts up so they do not get buried".**
+## **verify-look saw it — both worked. The worry "should it be split per generation" was not real.**
+##  - generation 0: the bolt head art **is visible.** A fireball falling from a yellow core into orange. Not washed out by the light
+##  - generation 1 (the 8 spread bolts, 8px): **not buried.** Bright yellow arrows spread clearly in a fan against the black sky
 ##
-## 🔴🔴 **대신 다른 것이 걸렸다 — 알파가 아니라 모양이었다.**
-##  채운 원 한 겹이라 **「가장자리가 딱 떨어지는 어두운 갈색 원반」**으로 보였다.
-##  ⇒ 밝기는 고쳤는데 **사용자가 지적한 「원 하나」가 옅어진 채 그대로**였다.
-##  **고친 것은 이 값이 아니라 `BOLT_GLOW_LAYERS`** — 겹쳐 그려 가장자리를 흐린다.
+## **Something else got caught instead — it was the shape, not the alpha.**
+##  One filled circle looked like **"a dark brown disc with a hard edge".**
+##  => The brightness was fixed but **the "one circle" the user pointed at was still there, just fainter.**
+##  **What fixed it was not this value but `BOLT_GLOW_LAYERS`** — overlapping draws blur the edge.
 const BOLT_GLOW_A := 0.12
 
-## 🔴 무리를 몇 겹으로 겹치나. **1이면 옛 동작(딱딱한 원반)이다.**
-##  ⚠ **알파는 `BOLT_GLOW_A / 겹 수` 로 나눠 쓴다** — 안 나누면 총 밝기가 겹 수만큼 세져서
-##   0.12 를 고른 판단이 죽는다. 겹 수는 **경계의 부드러움만** 바꾼다.
-## ⚠ 4는 「탄 하나에 `draw_circle` 4회」다. 상한 32발이면 128회 — 아무도 안 쟀다.
+## How many layers the glow is drawn in. **At 1 it is the old behavior (a hard disc).**
+##  **The alpha is divided as `BOLT_GLOW_A / layer count`** — without dividing, the total brightness gets
+##   layer-count times stronger and the judgment behind picking 0.12 dies. The layer count changes **only the softness of the edge.**
+## 4 means "4 `draw_circle`s per bolt". At the cap of 32 bolts that is 128 calls — nobody measured it.
 const BOLT_GLOW_LAYERS := 4
 
-## 🔴🔴 **자취는 v1(4~8틱)보다 길다.** 항력+중력을 넣었으니 꼬리가 길어야 **처지는 게 보인다** —
-##  짧으면 궤적이 직선처럼 읽히고, 그러면 판정 3이 통째로 안 나온다.
-##  ⚠ 12틱 = 0.6초. 20Hz 시뮬에서 탄이 첫 틱에 20셀(80px)을 뛰므로 초반 꼬리가 960px까지 간다 —
-##   화면(1,920px) 절반이다. 그래서 굵기·알파가 꼬리 쪽으로 같이 줄어든다.
-## ⚠ 굵기는 화면 기준이라 ×2 했다(5.0 → 10.0). **틱 수는 안 건드렸다** — 위 표 주석을 봐라.
+## **The trail is longer than v1's (4-8 ticks).** With drag and gravity in, the tail has to be long for **the droop
+##  to be visible** — short and the trajectory reads as a straight line, and then acceptance 3 does not come out at all.
+##  12 ticks = 0.6s. In a 20Hz sim a bolt jumps 20 cells (80px) on the first tick, so the early tail reaches 960px —
+##   half the screen (1,920px). That is why the thickness and alpha shrink toward the tail as well.
+## The thickness is screen-based so it was x2'd (5.0 -> 10.0). **The tick count was not touched** — see the table comment above.
 const TRAIL_PX := 10.0
-## 꼬리 끝의 알파. 0에 가까울수록 뾰족하게 사라진다.
+## The alpha at the tail's end. The closer to 0 the more sharply it vanishes.
 const TRAIL_TAIL_A := 0.12
 
-## 🔴🔴 **꼬리의 머리 쪽 알파. 1.0 이 아니다** (2026-08-08, 사용자가 화면을 보고 말했다).
+## **The tail's alpha at the head end. It is not 1.0** (the user said so looking at the screen).
 ##
-## ⚠ **사용자 판정: 「탄보다는 꼬리가 너무 밝아서 잘 안보임」.**
-##  🔴 **원인은 셋의 곱이었다**: 꼬리 색이 `core`(밝은 크림) · 머리 쪽 알파가 **1.0** ·
-##   렌더가 **가산 합성**. ⇒ 머리 바로 뒤에서 꼬리가 **흰색으로 타** 머리 그림을 이긴다.
-##  ⚠ **머리 그림은 가장자리가 어두운 그라데이션**이라 굵고 균일한 선에 원리적으로 진다.
+## **User acceptance: "the tail is too bright compared to the bolt so I can't see it well".**
+##  **The cause was the product of three things**: the tail color is `core` (a bright cream) · the head-end alpha
+##   was **1.0** · the renderer is **additive**. => Right behind the head the tail **burns white** and beats the head art.
+##  **The head art has a dark-edged gradient**, so it loses to a thick, uniform line in principle.
 ##
-## 🔴 **머리가 탄이고 꼬리는 잔상이다 — 잔상이 본체보다 밝으면 안 된다.**
-##  ⇒ 이 값과 `TRAIL_USES_GLOW` 를 같이 넣었다. 둘 다 「꼬리를 머리 아래로 내리는」 손잡이다.
+## **The head is the bolt and the tail is an afterimage — an afterimage must not be brighter than the body.**
+##  => This value and `TRAIL_USES_GLOW` went in together. Both are knobs for "putting the tail below the head".
 const TRAIL_HEAD_A := 0.55
 
-## 🔴 **꼬리가 `core` 가 아니라 `glow` 를 쓴다.** `core` 는 머리 그림의 코어와 같은 밝기라
-##  꼬리가 머리와 **같은 세기로 빛난다.** `glow`(불이면 주황)는 한 단 어두워서 머리가 이긴다.
-## ⚠ **false 로 두면 옛 동작이다** — 되돌리는 길이 이 줄 하나다.
+## **The tail uses `glow`, not `core`.** `core` is the same brightness as the head art's core, so
+##  the tail **glows at the same intensity as the head.** `glow` (orange for fire) is one step darker so the head wins.
+## **Set to false it is the old behavior** — the way back is this one line.
 const TRAIL_USES_GLOW := true
 
-## 🔴 1px 미만은 안 그린다. **렌더 하한이라 손맛값이 아니다** — 두 군데가 같은 뜻의
-##  매직넘버를 각자 들고 있으면 반드시 갈라진다.
-## 🔴 **배율이 바뀌어도 안 건드린다.** 하한의 뜻은 「렌더가 못 그리는 크기를 거르는 것」이고
-##  **월드 쪽이 기준**이라 배율과 무관하다 — 배율을 따라 움직이면 오히려 배율마다 다른 것을 거르게 된다.
-##  ⚠ 지금은 배율 1배라 이 하한이 **정확히 화면 1px**이다.
+## Below 1px it is not drawn. **It is a render floor, not a feel value** — two places each holding a magic number
+##  with the same meaning will necessarily diverge.
+## **Do not touch it when the scale changes.** The floor means "filter out sizes the renderer cannot draw",
+##  and it is **based on the world side**, so it is scale-independent — moving it with the scale would instead
+##  filter out different things at each scale.
+##  Right now the scale is 1x, so this floor is **exactly 1 screen px.**
 const MIN_DRAW_PX := 1.0
 
-# ─── 폭발 ─────────────────────────────────────────────────────────
-## 🔴🔴 **판정 2가 여기서 갈린다.** 재는 것은 「여덟 번 터지는 리듬 vs 한 번 크게」이므로,
-##  섬광이 오래 남으면 여덟 번이 **한 덩어리로 뭉개져** 두 조합이 같아 보인다.
-##  ⇒ 지속을 짧게 두고, 겹치는 것은 개수 상한으로 자른다.
+# --- blasts ---------------------------------------------------------
+## **Acceptance 2 splits here.** What is measured is "the rhythm of eight bursts vs one big one", so
+##  a flash that lingers **smears the eight into one lump** and the two assemblies look the same.
+##  => Keep the duration short and cut the overlap with a count cap.
 ##
-## ⚠ 값은 v1 P2(`rd 12`, 같은 반경)의 실측 튜닝을 그대로 가져왔다 —
-##  섬광 108px · 0.21초 · 흔들림 5px · 0.20초. 다시 재려면 비싸다.
-##  🔴 `rd` 가 12 → 24 → 12 → **8** 로 갔다. 섬광은 늘 따라갔고 지금은 **72px** 다.
-##   초 둘은 시간이라 내내 그대로다. ⚠ **위 실측 튜닝(`rd 12` 기준)보다 작아졌다** —
-##   섬광·흔들림의 손맛은 `rd 8` 에서 **다시 재지 않았다.**
-##  ⚠ **이 줄에 「32px 전환에서 흔들림도 ×2 해서 10」이라고 적혀 있었는데 표는 5였다.**
-##   표(`FX_SIZES.shake_px` 5·2)가 실제로 도는 값이고 그 「10」은 어디에도 없었다 —
-##   **어느 쪽이 의도였는지는 안 갈랐다.** 흔들림을 손대는 사람은 그것부터 정해라.
-## 🔴 섬광 반경이 구멍 반경(8셀 = 32px)의 **2.25배**인 게 요점이다. 같게 두면 「구멍이 커졌다」로만
-##  보이고 「터졌다」가 안 읽힌다. ⇒ 크기는 위 `FX_SIZES`가 세대마다 들고 있다.
-##  ⚠ **`rd` 와 `flash_px` 는 늘 같은 배로 움직여야 2.25배가 산다** — 한쪽만 건드리면 깨지고,
-##   깨진 모습은 에러가 아니라 「폭발이 안 작아진 것 같다」다.
+## The values were taken straight from v1 P2's measured tuning (`rd 12`, the same radius) —
+##  flash 108px · 0.21s · shake 5px · 0.20s. Measuring again is expensive.
+##  `rd` went 12 -> 24 -> 12 -> **8**. The flash always followed and is now **72px**.
+##   The two seconds are time, so they stayed the same throughout. **They got smaller than the measured tuning
+##   above (based on `rd 12`)** — the feel of the flash and the shake was **not measured again at `rd 8`.**
+##  **This line said "at the 32px transition shake was x2'd to 10" while the table said 5.**
+##   The table (`FX_SIZES.shake_px` 5·2) is what actually runs, and that "10" was nowhere —
+##   **which one was intended was not settled.** Whoever touches shake should settle that first.
+## The point is that the flash radius is **2.25x** the hole radius (8 cells = 32px). Kept equal it only reads as
+##  "the hole got bigger" and "it exploded" does not read. => The sizes are held per generation by `FX_SIZES` above.
+##  **`rd` and `flash_px` must always move by the same factor for the 2.25x to survive** — touch only one and it
+##   breaks, and the broken shape is not an error but "the blast doesn't seem to have gotten smaller".
 const FLASH_SEC := 0.21
-## 뜨는 순간의 크기(최종 반경 대비). 작을수록 「퍼진다」, 1에 가까울수록 「번쩍한다」.
+## The size at the moment it appears (relative to the final radius). Smaller reads as "it spreads", closer to 1 as "it flashes".
 const FLASH_START := 0.35
-## 겉 무리 밝기 · 속심 반경 비율. 속심이 「하얗게 타는 심지」다.
+## The outer glow's brightness · the inner core's radius ratio. The core is "a wick burning white".
 const FLASH_GLOW_A := 0.55
 const FLASH_CORE_RATIO := 0.34
 
-## 동시 섬광 수 상한. 넘치면 **가장 오래된 것부터** 버린다 — 새 것을 버리면
-## 마지막 폭발이 조용히 안 보인다.
-## ⚠ 확산 8발이 두 틱에 나눠 터지므로(예산 4) 8은 상한에 안 걸린다. 16은 여유다.
+## The cap on simultaneous flashes. Overflow drops **the oldest first** — dropping the newest makes
+## the last blast silently invisible.
+## The 8 spread bolts burst split across two ticks (budget 4), so 8 does not hit the cap. 16 is headroom.
 const FLASH_MAX := 16
 
-## 화면 흔들림. ⚠ **정수 px다** — `snap_2d_transforms_to_pixel`이 켜져 있어 소수부가
-##  어차피 버려진다. float으로 조이면 「0.5px로 줄였는데 아무 일도 안 난다」가 된다.
-## 🔴 **겹치는 게 아니라 더 센 쪽이 이긴다**(`_kick`). 더하면 여덟 번 터질 때 화면이 날아가고,
-##  그러면 「여덟 번인지 한 번인지」를 애초에 못 읽는다.
+## Screen shake. **It is integer px** — `snap_2d_transforms_to_pixel` is on so the fraction is
+##  thrown away anyway. Tightening it as a float gives "I lowered it to 0.5px and nothing happened".
+## **They do not stack; the stronger one wins** (`_kick`). Adding them makes the screen fly apart on eight bursts,
+##  and then "eight or one" cannot be read at all.
 const SHAKE_SEC := 0.20
-## 감쇠 곡선. 1=선형 · 클수록 **초반이 세고 빨리 죽는다**(타격감이 앞에 몰린다).
+## The decay curve. 1 = linear · larger means **strong early and dying fast** (the impact is front-loaded).
 const SHAKE_DECAY_POW := 1.6
 
-# ─── 불 ───────────────────────────────────────────────────────────
-## 🔴🔴 **타는 셀은 재료 색을 덮어쓴다.** 나무 색(0x6B4524)에 살짝 얹는 정도로는
-##  「나무가 좀 밝다」로 보이고, 그러면 「불이 번진다」가 화면에 안 나온다 —
-##  판정 5의 절반이 여기서 결정된다.
-## ⚠ 셀 격자는 **가산 합성이 아니다**(스프라이트 하나다) — 알파는 밝기가 아니라 진짜 알파다.
+# --- fire -----------------------------------------------------------
+## **Burning cells overwrite the material color.** Laid lightly over the wood color (0x6B4524) it looks like
+##  "the wood is a bit brighter", and then "fire spreads" does not appear on screen —
+##  half of acceptance 5 is decided here.
+## The cell grid is **not additively composited** (it is one sprite) — the alpha is real alpha, not brightness.
 const FIRE_LO := Color(0.75, 0.18, 0.05, 1.0)
 const FIRE_HI := Color(1.0, 0.80, 0.30, 1.0)
 
-## 깜빡임 속도(rad/s). 🔴 셀마다 위상이 흩어져 있으므로 이건 「면이 일렁이는 속도」다.
-## ⚠ 너무 빠르면 4px 셀에서 지글거림(노이즈)으로 보이고 불로 안 읽힌다.
+## Flicker speed (rad/s). The phase is scattered per cell, so this is "the speed the surface ripples at".
+## Too fast and it looks like sizzling (noise) on 4px cells and does not read as fire.
 const FIRE_FLICKER_HZ := 7.0
 
-# ─── 물 ───────────────────────────────────────────────────────────
-## 얕은 물(`cell_materials.FLAG_SHALLOW`)의 색.
+# --- water ----------------------------------------------------------
+## The color of shallow water (`cell_materials.FLAG_SHALLOW`).
 ##
-## 🔴 **왜 여기인가**: 재료 색은 `cell_materials.DEFS` 의 **정수**이고(그 폴더는 `Color` 가 금지다),
-##  **상태에서 나오는 색**은 뷰 폴더의 `Color` 다 — 불이 이미 같은 길을 냈다(`FIRE_LO`·`FIRE_HI`).
+## **Why here**: material colors are **integers** in `cell_materials.DEFS` (that folder forbids `Color`),
+##  and **a color that comes out of state** is a `Color` in the view folder — fire already paved the same road
+##  (`FIRE_LO`·`FIRE_HI`).
 ##
-## 🔴🔴 **얕은 쪽이 더 밝다. 뒤집으면 화면이 거짓말을 한다** — 실제로 얕은 물은 바닥이 비쳐 밝고,
-##  반대로 두면 **「깊을수록 밝다」**가 되어 눈이 깊이를 반대로 읽는다.
-## ⚠ 깊은 물(`DEFS[WATER].rgb` = 0x2C5F8A)과 **같은 색상 계열**이어야 한다 — 색상까지 갈리면
-##  두 깊이가 「같은 물의 두 얼굴」이 아니라 **다른 재료 둘**로 보인다.
+## **The shallow side is brighter. Invert it and the screen lies** — real shallow water is bright because the
+##  bottom shows through, and the other way round it becomes **"the deeper the brighter"** and the eye reads depth backwards.
+## It must be **the same hue family** as deep water (`DEFS[WATER].rgb` = 0x2C5F8A) — split the hue too and
+##  the two depths look like **two different materials** rather than "two faces of the same water".
 ##
-## 🔴 **이 색이 푸는 화면 문제가 하나 있다**(verify-look, 2026-08-07): 물이 **「파란 벽돌」**로 보였고
-##  원인 첫째가 **「면 안에 변화가 0」**이었다 — 수면 한 줄도 안쪽과 같은 색이라 한 덩어리로 보인다.
-##  ⇒ 얕은 칸만 밝아지면 그 덩어리가 깨진다.
-##  ⚠ **다만 그게 늘 수면 한 줄이 되지는 않는다** — 조건은 `sim_tuning.WATER_WET` 주석에 있다.
+## **This color solves one screen problem** (verify-look): the water looked like **"a blue brick"**,
+##  and the first cause was **"zero variation inside the surface"** — even the top row is the same color as the
+##  inside, so it looks like one lump.
+##  => Brightening only the shallow cells breaks up that lump.
+##  **That does not always come out as one row at the surface, though** — the condition is in the `sim_tuning.WATER_WET` comment.
 ##
-## 🔴🔴 **밝기를 올렸다 (2026-08-08, 사용자가 정했다). 취향이 아니라 규칙을 읽히게 하려는 것이다.**
+## **The brightness was raised (decided by the user). Not taste, but making the rule readable.**
 ##
-## ⚠ **verify-look 이 화면에서 봤다**: 두 색이 갈리긴 하는데 **명도 차가 작아 4px 두께에서는
-##  「같은 파랑의 음영 차이」로 읽힌다.** 그런데 이 게임에서 그 차이는 **규칙**이다 —
-##  **`WATER_WET` 이 색과 방화를 둘 다 정하므로**(`sim_tuning.WATER_WET`) 얕은 물은 불을 못 끈다.
-## 🔴 **그래서 두 색이 가까우면 「왜 이 물은 불을 못 끄나」가 화면에서 안 읽힌다.**
-##  실제로 그 증상이 났다: 파란 선 아래로 불이 달리는 것이 **「물속에서 불이 탄다」로 보였다**
-##  (`water-and-chunk-sleep` 「결과 (6)」).
+## **verify-look saw it on screen**: the two colors do split, but **the brightness difference is small, so at 4px
+##  thickness it reads as "a shading difference in the same blue".** But in this game that difference is **a rule** —
+##  **`WATER_WET` decides both the color and fireproofing** (`sim_tuning.WATER_WET`), so shallow water cannot put out fire.
+## **So when the two colors are close, "why can't this water put out the fire" does not read on screen.**
+##  That symptom actually happened: fire running under the blue line **looked like "fire burning underwater"**
+##  (`water-and-chunk-sleep` "result (6)").
 ##
-## ⚠ **색상은 그대로 두고 밝기와 채도만 올렸다** — 색상까지 벌리면 위 「다른 재료 둘」에 걸린다.
-##  🔴 **아직 화면에서 안 봤다.** 이 값이 충분한지가 다음에 볼 자리다.
+## **The hue was left alone and only the brightness and saturation were raised** — split the hue too and it runs
+##  into "two different materials" above.
+##  **It has not been seen on screen yet.** Whether this value is enough is the next thing to look at.
 const WATER_SHALLOW := Color(0.62, 0.86, 1.0, 1.0)
 
-# ─── 룬 ───────────────────────────────────────────────────────────
-## 🔴 **여기가 룬의 화면 쪽 몫이다** — 규칙은 문양이 정한다.
-## ⚠ 룬이 화면만 바꾸는 건 아니다. 세상에 닿는 쪽(착탄점 점화)은 `sim_tuning.ELEM_DEFS`에 있다.
-## ⚠ 렌더가 **가산 합성**이라 알파는 밝기로 읽힌다. 1.0을 넘길 필요가 없다.
+# --- runes ----------------------------------------------------------
+## **This is the rune's screen share** — the rules are decided by glyphs.
+## Runes do not only change the screen. The side that touches the world (igniting the impact point) is in `sim_tuning.ELEM_DEFS`.
+## The renderer is **additive**, so alpha reads as brightness. There is no need to go above 1.0.
 const ELEM_FX: Dictionary = {
 	Tuning.ELEM_FIRE: {"core": Color(1.0, 0.92, 0.66), "glow": Color(1.0, 0.48, 0.12)},
-	# 🔴 **불(주황 ~30°)과 색상환에서 멀어야** 지팡이 끝과 룬 자리가 눈으로 갈린다. 보라(~270°)다.
-	#  ⚠ 후보 셋을 **버린 이유**가 이 줄의 값어치다:
-	#   · 회색 — 🔴 **룬 자리가 비면 지팡이 끝이 이미 회색이다.** 「못 쏜다」와 「무속성으로 쏜다」가
-	#     화면에서 같아지고, 그 구별은 `spell-circle-minimum` §3.5가 세운 경고의 전부다
-	#   · 파랑/청록 — 🔴 **2026-08-07에 물 룬이 실제로 그 자리를 가져갔다**(아래 줄)
-	#   · 마젠타 — 아래 `ELEM_FX_MISSING`의 비명 색이다. 정상 룬이 그 색이면 비명이 안 들린다
+	# It must be **far on the color wheel from fire (orange ~30°)** so the staff tip and the rune slot split by eye. Violet (~270°).
+	#  The value of this line is **why three candidates were dropped**:
+	#   · gray — **when the rune slot is empty the staff tip is already gray.** "Cannot fire" and "fire with no
+	#     element" become the same on screen, and that distinction is the whole of the warning `spell-circle-minimum` section 3.5 set up
+	#   · blue/cyan — **the water rune actually took that spot** (the line below)
+	#   · magenta — that is `ELEM_FX_MISSING`'s scream color. If a normal rune is that color the scream is not heard
 	Tuning.ELEM_NONE: {"core": Color(0.85, 0.80, 1.0), "glow": Color(0.55, 0.35, 1.0)},
-	# 🔴 **물 — 청록(~190°).** 불(주황 ~30°)·무속성(보라 ~270°)과 색상환에서 셋 다 멀다.
-	#  ⚠ **셀의 물 색과 같은 계열이어야 한다**(`WATER_SHALLOW` · `DEFS[WATER].rgb`) —
-	#   탄이 청록인데 만들어지는 물이 남색이면 **「이 탄이 저 물을 만든다」가 화면에서 안 이어진다.**
-	#  🔴 **렌더가 가산 합성이라 여기 값은 셀 색보다 밝다** — 같은 색을 그대로 쓰면 자취가 죽는다.
+	# **Water — cyan (~190°).** Far on the color wheel from both fire (orange ~30°) and none (violet ~270°).
+	#  **It must be the same family as the water cell color** (`WATER_SHALLOW` · `DEFS[WATER].rgb`) —
+	#   a cyan bolt that makes navy water means **"this bolt makes that water" does not connect on screen.**
+	#  **The renderer is additive so the values here are brighter than the cell color** — use the same color as is and the trail dies.
 	Tuning.ELEM_WATER: {"core": Color(0.72, 0.97, 1.0), "glow": Color(0.20, 0.62, 0.95)},
 }
 
-## 정의가 없는 룬의 색. 🔴 **일부러 마젠타다** — 룬을 늘렸는데 여기를 안 늘리면
-##  화면이 비명을 지른다(`cell_materials.gd`의 `MISSING_RGB`와 같은 이유).
+## The color of a rune with no definition. **Deliberately magenta** — grow the runes without growing this
+##  and the screen screams (the same reason as `MISSING_RGB` in `cell_materials.gd`).
 const ELEM_FX_MISSING: Dictionary = {
 	"core": Color(1.0, 0.0, 1.0), "glow": Color(1.0, 0.0, 1.0),
 }
 
-## 🔴🔴 **탄 머리 그림. 룬 하나 추가 = 여기 한 줄.** 위 `ELEM_FX` 와 **키가 같아야 한다** —
-##  갈라지면 색은 있는데 그림이 없는 룬이 생기고, 그건 마젠타로 드러난다(아래 `spell_view`).
+## **The bolt head art. One new rune = one line here.** It must have **the same keys** as `ELEM_FX` above —
+##  diverge and a rune appears with a color but no art, and that shows up as magenta (`spell_view` below).
 ##
-## 🔴 **그림에는 머리만 있다. 꼬리는 코드가 그린다**(`spell_view._draw_trail`).
-##  근거는 속도다 — 탄이 1600px/s 라 **한 프레임에 26.7px** 을 가고, 그림 꼬리(16px)는
-##  그보다 짧아 **움직이는 동안 자취에 통째로 묻힌다.** 그리고 불은 처지는데 그림 꼬리는
-##  직선이라 **포물선에서 어긋난다.** 기준은 `docs/design/진-룬-문양.md` 의 「탄 머리 그림」.
-##  ⚠ **`speed` 를 12 아래로 내리면 이 근거가 뒤집힌다** — 그때는 그림 꼬리가 보이기 시작한다.
+## **The art has only the head. The tail is drawn by code** (`spell_view._draw_trail`).
+##  The grounds are speed — the bolt goes 1600px/s, so **26.7px per frame**, and the art's tail (16px) is
+##  shorter than that, so it is **entirely buried in the trail while moving.** And fire droops while the art's
+##  tail is straight, so **it diverges from the parabola.** The reference is "the bolt head art" in
+##  `docs/design/circle-rune-glyph.md`.
+##  **Drop `speed` below 12 and those grounds invert** — then the art's tail starts to be visible.
 ##
-## 🔴 **알파가 없는 png 다. 그래도 맞다** — `spell_view` 가 가산 합성이라 검은 픽셀은 더해도 0,
-##  즉 **검은 배경이 그대로 투명 노릇을 한다.** ⚠ 뒤집어 말하면 **어두운 색은 화면에 안 나온다** —
-##  그림에 외곽선이나 음영을 넣으면 그 자리가 뚫려 보인다.
+## **It is a png with no alpha. That is still right** — `spell_view` is additive so black pixels add to 0,
+##  i.e. **the black background acts as transparency.** Turned around, **dark colors do not appear on screen** —
+##  put an outline or shading into the art and that area looks punched out.
 ##
-## ⚠ **`bolt_thunder.png` 는 아직 여기 없다.** 🔴 **빠뜨린 게 아니다** — 번개 룬이 아직 없다.
-##  물은 2026-08-07에 룬이 서면서 한 줄 늘었다. **번개가 서는 날 한 줄 더 는다.**
+## **`bolt_thunder.png` is not here yet.** **It was not forgotten** — there is no thunder rune yet.
+##  Water added a line when its rune stood up. **The day thunder stands up, one more line.**
 const BOLT_SHEETS: Dictionary = {
 	Tuning.ELEM_FIRE: "res://assets/spell/bolt_fire.png",
 	Tuning.ELEM_NONE: "res://assets/spell/bolt_none.png",
@@ -838,8 +861,8 @@ static func elem_fx(element: int) -> Dictionary:
 	return ELEM_FX.get(element, ELEM_FX_MISSING)
 
 
-# ─── 세대 표 읽기 ─────────────────────────────────────────────────
-# ⚠ `sim_tuning`의 클램프와 **같은 규칙**이다. 표 길이가 갈리면 `net_tables`가 잡는다.
+# --- reading the generation table ------------------------------------
+# The **same rule** as `sim_tuning`'s clamp. If the table lengths diverge, `net_tables` catches it.
 
 static func bolt_px(gen: int) -> float:
 	return float(FX_SIZES[_gen_row(gen)]["bolt_px"])
@@ -861,14 +884,15 @@ static func _gen_row(gen: int) -> int:
 	return clampi(gen, 0, FX_SIZES.size() - 1)
 
 
-## 🔴🔴 **지팡이 끝 색 = 맨 안쪽 층의 문양. 못 쏘면 회색으로 죽는다.**
-##  🔴 안쪽부터 실행되므로 「먼저 무슨 일이 일어나나」가 곧 이 색이다(GDD 문양 해석 순서).
-##  ⚠ 목록이 비면 룬 색으로 떨어진다.
+## **The staff tip color = the innermost layer's glyph. If it cannot fire it dies to gray.**
+##  Execution runs from the inside out, so "what happens first" is exactly this color (the GDD's glyph interpretation order).
+##  If the list is empty it falls back to the rune color.
 ##
-## 🔴🔴 **「못 쏜다」 갈래를 이 함수가 삼킨다.** 호출부에서 `if can_fire()` 로 가르면 그 갈래가
-##  화면 코드에 남아 **그물이 못 부르는 자리**가 되고, 그러면 판정 5가 눈에만 남는다.
-##  ⇒ 순수 static 이라 `net_staff` 가 값으로 잰다.
-## ⚠ **`muzzle_radius`(층 수 = 크기)는 지웠다.** 크기 축이 사라진 근거는 위 `STAFF_RING_*` 절에 있다.
+## **This function swallows the "cannot fire" branch.** Splitting it at the call site with `if can_fire()` leaves
+##  that branch in screen code, **a place the net cannot call**, and then acceptance 5 lives only in the eye.
+##  => Being pure static, `net_staff` measures it by value.
+## **`muzzle_radius` (layer count = size) was deleted.** The grounds for the size axis disappearing are in the
+##  `STAFF_RING_*` section above.
 static func staff_tint(glyphs: int, element: int, can_fire: bool) -> Color:
 	if not can_fire:
 		return DEAD_TINT
@@ -877,27 +901,28 @@ static func staff_tint(glyphs: int, element: int, can_fire: bool) -> Color:
 	return GLYPH_TINT.get(Glyph.first(glyphs), GLYPH_TINT_MISSING)
 
 
-## ─────────────────────────────────────────────────────────────────────────
-## 배경 (`src/view/sky_background.gd`). 개념은 `docs/design/배경.md`.
+## ---------------------------------------------------------------------
+## The background (`src/view/sky_background.gd`). The concept is `docs/design/background.md`.
 ##
-## 🔴🔴 **이 값들만으로는 화면에 아무것도 안 나온다.** 격자 스프라이트가 월드를 불투명하게
-##  덮으므로 `cell_grid.gdshader` 의 `empty_id` 로 **빈칸을 투명으로 빼야** 비로소 보인다.
-##  ⚠ 셋이 한 짝이다 — 셰이더 · `cell_renderer` 의 주입 · `stage.tscn` 의 노드 순서.
+## **These values alone put nothing on screen.** The grid sprite covers the world opaquely, so
+##  **empty cells have to be pulled out as transparent** by `cell_grid.gdshader`'s `empty_id` before it becomes visible.
+##  The three are one set — the shader · the injection in `cell_renderer` · the node order in `stage.tscn`.
 ##
-## 🔴 **밤 팔레트를 강제한다.** 무대 빈칸이 `#0E0E13`(거의 검정)이라 배경이 밝으면
-##  캐릭터·몬스터 실루엣이 전부 죽는다. ⇒ 위아래 둘 다 어둡게 두고 **차이만** 준다.
-## ⚠ 실측(2026-08-08, verify-look): 기반암 `(35,34,40)` 이 빈칸 `(14,14,19)` 앞에 서면
-##  **채널당 21 차이라 눈에 전혀 안 보였다.** 배경이 그 자리를 메우는 것이 이 값들의 목적이다.
+## **It forces a night palette.** The stage's empty cells are `#0E0E13` (nearly black), so a bright background
+##  kills every character and monster silhouette. => Keep both top and bottom dark and give **only a difference.**
+## Measured (verify-look): bedrock `(35,34,40)` standing in front of empty `(14,14,19)` was
+##  **21 per channel apart and completely invisible to the eye.** The purpose of these values is for the
+##  background to fill that place.
 
-const BG_Z_INDEX := -100          ## 🔴 격자(`CellRenderer`)보다 확실히 뒤. 씬 순서와 이중으로 건다
-const BG_GRADIENT_STEPS := 24     ## 세로 띠 개수. 적으면 계단이 보이고 많으면 draw 호출이 는다
-const BG_TOP := Color8(9, 9, 16)      ## 위 — 빈칸(#0E0E13)보다 **어둡다**. 하늘이 위로 깊어 보인다
-const BG_BOTTOM := Color8(26, 24, 38) ## 아래 — 지평선 쪽이 살짝 밝다(자주 기운 남색)
+const BG_Z_INDEX := -100          ## Clearly behind the grid (`CellRenderer`). Hung doubly with the scene order
+const BG_GRADIENT_STEPS := 24     ## The number of vertical bands. Too few and stair-stepping shows, too many and draw calls grow
+const BG_TOP := Color8(9, 9, 16)      ## Top — **darker** than empty (#0E0E13). The sky looks deeper going up
+const BG_BOTTOM := Color8(26, 24, 38) ## Bottom — slightly brighter toward the horizon (a purple-leaning navy)
 
-## 별. 🔴 **월드 좌표 격자에서 뽑는다** — 화면 좌표로 뽑으면 카메라를 따라와 「창에 붙은 점」이 된다.
-const BG_STAR_CELL_PX := 96.0     ## 한 칸에 최대 별 하나
-const BG_STAR_DENSITY := 0.22     ## 그중 실제로 별이 서는 비율
+## Stars. **They are sampled from a world-coordinate grid** — sampled in screen coordinates they follow the camera and become "dots stuck to the window".
+const BG_STAR_CELL_PX := 96.0     ## At most one star per cell
+const BG_STAR_DENSITY := 0.22     ## The fraction of those that actually get a star
 const BG_STAR_PX := 2.0
 const BG_STAR_COLOR := Color8(190, 200, 230)
-const BG_STAR_ALPHA_MIN := 0.12   ## ⚠ 너무 밝으면 탄·불꽃과 헷갈린다. 배경은 **읽히면 안 되고 느껴져야** 한다
+const BG_STAR_ALPHA_MIN := 0.12   ## Too bright and it gets confused with bolts and sparks. A background **must not be read but felt**
 const BG_STAR_ALPHA_MAX := 0.45

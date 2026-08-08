@@ -1,75 +1,75 @@
-# docs/design 목록 — 무엇이 기획됐고 무엇이 실제로 도는가
+# docs/design index — what is designed, and what actually runs
 
-이 폴더는 **개념 정리**다. `docs/plans/` 와 달리 **폴더를 옮겨 다니지 않는다** — 개념은 계속 살아 있다.
-다만 **각 문서는 「지금 얼마나 구현됐나」를 머리에 달고 있다**(2026-08-06부터).
+This folder holds **concepts**. Unlike `docs/plans/`, **nothing moves between folders** — a concept stays alive.
+But **every doc carries "how much of this is built" in its header.**
 
-**왜 상태를 다는가**: 개념 문서가 상태를 안 들면 **적혀 있다는 것이 곧 있다는 뜻으로 읽힌다.**
-GDD에 문양이 열일곱 개 적혀 있는데 실제로 도는 것은 둘이다 — 그 간격이 어디에도 안 적혀 있으면
-다음 사람(과 다음 세션)이 **없는 것을 있다고 믿고 그 위에 계획을 세운다.**
+**Why carry status**: without it, **being written reads as being present.**
+The GDD lists seventeen glyphs; two of them run. If that gap is recorded nowhere,
+the next person (and the next session) **plans on top of something that doesn't exist.**
 
-## 두 축은 따로다 — 「구현」과 「판정」
+## Two separate axes — `Implemented` and `Accepted`
 
-CLAUDE.md 가 못박은 구분을 여기서도 지킨다. **구현이 끝났다 ≠ 판정이 통과했다.**
+The distinction `CLAUDE.md` pins down holds here too. **Implementation finished ≠ acceptance passed.**
 
-| 축 | 값 | 뜻 |
+| Axis | Value | Meaning |
 |---|---|---|
-| **구현** | `없음` | 문서만 있다. 코드가 한 줄도 없다 |
-| | `일부` | 일부만 돈다. **무엇이 되고 무엇이 안 되는지 문서 안에 적는다** |
-| | `완료` | 문서에 적힌 것이 전부 돈다 |
-| **판정** | `안 봤다` | 사용자가 화면에서 확인한 적이 없다 |
-| | `통과 (날짜)` | 사용자가 눈으로 보고 됐다고 했다 |
-| | `실패 (날짜)` | 봤는데 아니었다. **그 사연을 문서 안에 적는다** |
+| **Implemented** | `none` | Doc only. Not one line of code |
+| | `partial` | Some of it runs. **Write in the doc what does and doesn't** |
+| | `full` | Everything the doc describes runs |
+| **Accepted** | `unseen` | The user has never confirmed it on screen |
+| | `pass (date)` | The user looked and said yes |
+| | `fail (date)` | They looked and it wasn't. **Write the story in the doc** |
 
-**`구현: 완료` + `판정: 안 봤다` 는 정상적인 조합이다.** 그 둘을 한 칸으로 합치면
-「돌아는 가는데 아무도 안 봤다」가 표현이 안 되고, 그게 이 리포가 실제로 데인 자리다.
+**`Implemented: full` + `Accepted: unseen` is a normal combination.** Merge those two into one column and
+"it runs but nobody has looked" becomes inexpressible — this repo got burned exactly there.
 
-## 문서 머리 형식
+## Header format
 
-`# 제목` 과 `**한 줄**:` 바로 아래에 넣는다.
+Goes directly under `# Title` and `**One line**:`.
 
 ```markdown
-**구현**: 일부 — 진 1/3 · 룬 2/N · 문양 2/17
-**판정**: 안 봤다
+**Implemented**: partial — circles 1/3 · runes 2/N · glyphs 2/17
+**Accepted**: unseen
 ```
 
-`일부` 면 **반드시 무엇이 되고 무엇이 안 되는지 짧게 붙인다.** 「일부」만 있으면 아무 정보가 없다.
+For `partial`, **always attach what works and what doesn't, briefly.** "Partial" alone carries no information.
 
 ---
 
-## 목록
+## Index
 
-| 문서 | 구현 | 판정 | 한 줄 |
+| Doc | Impl | Accepted | One line |
 |---|---|---|---|
-| [진-룬-문양.md](진-룬-문양.md) | **일부** | 부분 통과 (2026-08-08) | 세 축이 각각 무엇을 담는가. **탄 머리 그림 판정 다섯 다 통과** — 셋은 값으로. **무만 머리(회색)와 자취(보라)의 색이 어긋난다** |
-| [마법진-그림.md](마법진-그림.md) | **일부** | 부분 통과 (2026-08-05) | 마법진을 화면에 어떻게 그리나. 삼각진 뼈대 + **소켓 문양 링 둘**(2026-08-08, **임시 채택 — 사용자 판정 없음**). **띠 48이 「뜻이 읽힘」과 부딪힌다** |
-| [물.md](물.md) | **완료** | 부분 통과 (2026-08-08) | 물은 칸마다 든 **양**이다. 젖음은 그 양이 적은 것. **판정 7의 절벽이 사라졌다**(상한 100). **「물속에서 불이 탄다」로 보인다** · **낙하에 가속이 없다 — 사용자가 「허접하다」고 했다**(등속 7.5타일/초) |
-| [지형-굽기.md](지형-굽기.md) | **완료** | 통과 (2026-08-06) | 그림으로 그리고 텍스트로 굽는다. 맵은 고정이다 |
-| [몬스터.md](몬스터.md) | **완료** | 부분 통과 (2026-08-08) | 룬을 삼킨 농장 짐승. 잡몹 둘(돼지·닭) · 무뇌 이동 · 동시 20마리. **AI가 없다** · 외곽선 미확인 |
-| [마을.md](마을.md) | **없음** | 안 봤다 | **문서가 생겼다**(2026-08-08) — 런이 닫히는 곳. 걸어 다니는 **방 하나** · 연구대·조립대·출발문 · 전부 기반암. **풀이 넓어진 게 보이는 유일한 자리** |
-| [배경.md](배경.md) | **일부** | 안 봤다 | **레이어가 섰다**(2026-08-08) — 빈칸이 투명해지고 `SkyBackground` 가 그 뒤에 선다. 지금은 **밤하늘+별**이고 **그림·시차는 없다**. 화면으로 확인 안 함 |
+| [circle-rune-glyph.md](circle-rune-glyph.md) | **partial** | partial pass (2026-08-08) | What each of the three axes holds. **All five bolt-head-art checks pass** — three by value. **Bare-head grey and trail purple disagree** |
+| [circle-art.md](circle-art.md) | **partial** | partial pass (2026-08-05) | How a circle is drawn. Triangle skeleton + **two socket glyph rings** (**provisional — no user judgment**). **Band 48 collides with "the meaning is readable"** |
+| [water.md](water.md) | **full** | partial pass (2026-08-08) | Water is an **amount** per cell. Wet is a small amount. **Acceptance 7's cliff is gone** (cap 100). **Reads as "fire burns underwater"** · **falling has no acceleration — the user called it cheap** (constant 7.5 tiles/s) |
+| [terrain-baking.md](terrain-baking.md) | **full** | pass (2026-08-06) | Drawn as an image, baked as text. The map is fixed |
+| [monsters.md](monsters.md) | **full** | partial pass (2026-08-08) | Farm animals that swallowed runes. Two trash mobs (pig · chicken) · brainless movement · 20 at once. **No AI** · outline unconfirmed |
+| [town.md](town.md) | **none** | unseen | Where a run closes. **One walkable room** · research bench · assembly bench · departure gate · all bedrock. **The only place a widened pool is visible** |
+| [background.md](background.md) | **partial** | unseen | The layer stands up — empty cells go transparent and `SkyBackground` stands behind. Currently **night sky + stars**, **no art, no parallax**. Not confirmed on screen |
 
-## 아직 문서가 없는 기능
+## Features with no doc yet
 
-**여기 있는 것은 「기획이 없다」는 뜻이다.** 대화에서만 정해졌거나 아예 안 정해진 것 —
-GDD의 「미정」과 겹치지만, 이쪽은 **「문서를 만들어야 할 자리」** 목록이다.
+**Being listed here means there is no design.** Decided only in conversation, or not decided at all —
+overlaps GDD's "TBD", but this is the list of **places that need a doc.**
 
-**순서는 GDD 「만드는 순서 — 지금의 순서」가 기준이다** — 1) 물+맵 2) 날아가는 마법 3) 몬스터 4) 3택 화면.
+**Order follows GDD "Build order — the current order"** — 1) water + map 2) flying spells 3) monsters 4) three-pick screen.
 
-| 기능 | 구현 | 지금 상태 |
+| Feature | Impl | State |
 |---|---|---|
-| **맵(스테이지1)** | **완료** | **구워져 게임에 들어갔다**(2026-08-08 밤) → `docs/plans/3.done/stage1-map-layout.md`. **400×48타일 · 구역 셋 + 잠긴 넷째.** ① 구덩이는 **기반암 그릇이고 나가는 길이 물뿐이다**(경사로를 뺐다). **판정 3·4는 화면 미확인** · **보스가 코드에 없어 ①·③은 빈 방이다**(`stage1-bosses.md`) |
-| 날아가는 마법 | **일부** | 탄은 난다. 궤적·모양을 손볼 차례가 그 다음이다 |
-| ~~몬스터~~ | — | **문서가 생겼다** → [몬스터.md](몬스터.md) (2026-08-07). **구현도 끝났다**(2026-08-08) |
-| **세계관** | — | **정해졌다** (2026-08-07) — 마법진 붕괴 · 짐승이 룬을 삼킴. **`docs/GDD.md` 「세계관」이 기준이다**(별도 문서를 안 만들었다) |
-| 3택 선택 화면 | **없음** | **기획이 생겼다**(2026-08-08) → `docs/plans/1.ready/levelup-and-three-picks.md`. **문양이 코드에 둘뿐이라 더미로 메운다** |
-| 레벨·경험치 | **없음** | **같은 문서에 들어갔다**(2026-08-08). **레벨은 3택만 준다** — 체력도 층도 안 는다. 한 런에 3번 |
-| 문양 등급 | **없음** | **3단 확정**(2026-08-08) — 일반·희귀·유니크. **이게 3택의 후보 풀을 만든다**(2문양 × 3등급 = 6). 수치는 미정 |
-| 드랍·경제 | **없음** | **확정 도장을 찍었다**(2026-08-08) — **영구 재화는 보스만.** 돈은 **스테이지 넘어갈 때 상점**에서 쓴다(맵 안이 아니다) |
-| 보스·중간보스 | **없음** | **스테이지1 둘의 기획이 생겼다**(2026-08-08) → `docs/plans/1.ready/stage1-bosses.md`. **소**(돌진+스턴·불 뿜기) · **거대 수탉**(뛰어올라 덮치고 착지). **코드는 한 줄도 없다** — 몬스터 표에 돼지·닭뿐 |
-| **문양 늘리기** | **2/17** | **확산·폭발만 진짜다. 나머지 열다섯은 이름뿐이다**(2026-08-08, 사용자가 못박았다). 3택은 **더미 문양(피해 증가)**으로 굴린다 → `docs/plans/1.ready/levelup-and-three-picks.md`. **데모 전에는 진짜를 넣는다** |
-| 번개 | **없음** | 룬이 없다. **물의 짝이다** |
-| 스테이지 전환 | **없음** | **방식이 정해졌다**(2026-08-08) — **스테이지1 보스를 깨면 그 뒤에 문이 생기고 그 문으로 간다.** 상점도 이 시점이다. 코드는 0 |
-| 장비 | **없음** | **슬롯 셋으로 줄었다**(지팡이·로브·신발). ~~가방·포션·잉크~~ 는 **지웠다** — 인벤토리 금지와 부딪혔다. 방향만 나왔고 사용자가 안 골랐다 |
-| ~~집·메타(해금)~~ | — | **문서가 생겼다** → [마을.md](마을.md) (2026-08-08). **걸어 다니는 방 하나**로 정했다. 코드는 0 |
-| 멀티 | **없음** | GDD에 방침은 있다. 코드는 한 줄도 없다 |
-| UI | **없음** | 지금 HUD는 디버그 라벨이다 |
+| **Map (stage 1)** | **full** | **Baked and in the game** → `docs/plans/3.done/stage1-map-layout.md`. **400×48 tiles · three zones + a locked fourth.** ① The pit is **a bedrock bowl whose only exit is water** (the ramp was removed). **Acceptance 3·4 unconfirmed on screen** · **no boss in code, so ① and ③ are empty rooms** (`stage1-bosses.md`) |
+| Flying spells | **partial** | Bolts fly. Trajectory and shape are the next pass |
+| ~~Monsters~~ | — | Doc exists → [monsters.md](monsters.md). Implementation done too |
+| **World** | — | Settled — the circle collapsed, beasts swallowed the runes. **`docs/GDD.md` "World" is the source** (no separate doc) |
+| Three-pick screen | **none** | Design exists → `docs/plans/1.ready/levelup-and-three-picks.md`. **Only two glyphs in code, so dummies fill the rest** |
+| Level · XP | **none** | Same doc. **A level grants only the three-pick** — no health, no tiers. 3 times per run |
+| Glyph rarity | **none** | **Three tiers settled** — common · rare · unique. **This makes the three-pick candidate pool** (2 glyphs × 3 tiers = 6). Numbers TBD |
+| Drops · economy | **none** | **Stamped settled** — **permanent currency drops from bosses only.** Money is spent **at the shop between stages** (not inside the map) |
+| Bosses · midbosses | **none** | Stage-1 pair designed → `docs/plans/1.ready/stage1-bosses.md`. **Bull** (charge + stun · fire breath) · **giant rooster** (leaps, pounces, lands). **Not one line of code** — the monster table has only pig and chicken |
+| **More glyphs** | **2/17** | **Only spread and blast are real. The other fifteen are names** (pinned by the user). The three-pick runs on a **dummy glyph (damage up)** → `docs/plans/1.ready/levelup-and-three-picks.md`. **Real ones go in before the demo** |
+| Lightning | **none** | No rune. **It is water's counterpart** |
+| Stage transition | **none** | **Method settled** — **beat the stage-1 boss, a gate appears behind it, you go through.** The shop is at this moment too. Zero code |
+| Gear | **none** | **Cut to three slots** (staff · robe · boots). ~~Bag · potions · ink~~ **removed** — collided with the no-inventory rule. Direction only; the user hasn't picked |
+| ~~Home · meta (unlocks)~~ | — | Doc exists → [town.md](town.md). Settled as **one walkable room**. Zero code |
+| Multiplayer | **none** | The GDD has a policy. Not one line of code |
+| UI | **none** | The HUD is a debug label |

@@ -1,16 +1,17 @@
 extends RefCounted
-## 세상이 한 프레임 산다 — 정수 분주기 · 커맨드 큐 · **틱 순서**.
+## The world lives one frame — integer divider, command queue, **tick order**.
 ##
-## 🔴🔴 **이 파일이 있는 이유는 「순서가 한 곳에만 있다」 하나다.**
-##  순서가 껍데기(`src/stage/`) 안에만 있으면 그물은 씬을 못 세워서 그 순서를 **손으로 베낀다.**
-##  그 순간 **그물이 게임과 다른 것을 재게 되고**, 둘이 갈라져도 아무도 안 짖는다.
-##  ⇒ 껍데기와 그물이 **둘 다 `frame()` 을 부른다.**
+## **This file exists for one reason: "the order lives in only one place".**
+##  If the order lived only inside the shell (`src/stage/`), the nets could not stand up a scene and would
+##  **copy that order by hand.** At that moment **the nets start measuring something different from the game**,
+##  and nothing barks when the two diverge.
+##  => The shell and the nets **both call `frame()`.**
 ##
-## 🔴 **화면을 모른다** — `src/actor/` 는 `src/view/`·`src/stage/` 를 참조할 수 없다(`net_layers`가 잰다).
-##  ⇒ 뷰 통지(자취·섬광·업로드)는 여기 안 들어온다. `frame()` 이 **「이번 프레임에 틱이 돌았다」를
-##  bool로** 돌려주고, 껍데기가 그걸 보고 화면을 친다.
+## **It does not know the screen** — `src/actor/` cannot reference `src/view/` or `src/stage/` (`net_layers`
+##  measures it). => View notifications (trails, flashes, uploads) do not come in here. `frame()` returns
+##  **"a tick ran this frame" as a bool**, and the shell looks at that and hits the screen.
 ##
-## ⚠ **씬 트리도 모른다**(`RefCounted`). 그래서 그물이 헤드리스로 세상을 통째로 돌릴 수 있다.
+## **It does not know the scene tree either** (`RefCounted`). That is why the nets can run the whole world headless.
 
 const CellGrid := preload("res://src/sim/cell_grid.gd")
 const SpellSim := preload("res://src/sim/spell_sim.gd")
@@ -20,81 +21,86 @@ const Monster := preload("res://src/actor/monster.gd")
 const MonsterDefs := preload("res://src/actor/monster_defs.gd")
 const MonsterBolts := preload("res://src/actor/monster_bolts.gd")
 
-## 🔴🔴 **돼지 접촉 피해**(`monsters-minimum` 「동작 ⑥」). 산수: 무적 4틱 ⇒ 실제 간격은
-##  5틱(`character.on_tick`이 「5틱 간격 = 두 대」로 적어 뒀다) = 0.25초 ⇒ 초당 4회가 상한.
-##  8 × 4 = 32/초 ⇒ 붙어 있으면 100HP를 3.1초에 잃는다. **team-lead가 정한 제안값이고
-##  사용자 판정을 안 받았다.**
+## **Pig contact damage** (`monsters-minimum`, "behavior (6)"). The arithmetic: invulnerability 4 ticks => the
+##  real interval is 5 ticks (`character.on_tick` recorded "5-tick spacing = two hits") = 0.25s => 4 times per
+##  second is the ceiling. 8 x 4 = 32/s => stay attached and you lose 100 HP in 3.1 seconds. **A proposed value
+##  set by team-lead, and it has not had the user's acceptance.**
 const PIG_CONTACT_DAMAGE := 8
 
 var _grid: CellGrid
 var _spell: SpellSim
 var _char: Character
 
-## 🔴 닭의 탄. `spell_sim`이 아니다(`monster_bolts.gd` 헤더) — 탄은 몬스터를 모른다.
+## The hen's bolts. Not `spell_sim` (`monster_bolts.gd` header) — the bolt does not know about monsters.
 var _bolts := MonsterBolts.new()
 
-## 🔴🔴 **몬스터 배열은 여기가 든다 — 껍데기가 따로 들면 「세상」이 두 곳이 된다.**
-##  뷰는 아래 `monster_count()`·`monster_at()`(읽기 전용 질의)로만 본다(`monsters-minimum` 단계 1).
+## **The monster array is held here — let the shell hold its own and "the world" lives in two places.**
+##  The view sees it only through `monster_count()` and `monster_at()` below (read-only queries)
+##  (`monsters-minimum` stage 1).
 var _monsters: Array[Monster] = []
-## ⚠ `reset()`은 이 값을 안 되돌린다 — id를 재사용하면 「37번이 죽었다」가 세션 안에서
-##  유일하지 않게 되고 진단이 흐려진다. 되돌릴 이유가 없다(뷰가 id를 안 든다).
+## `reset()` does not revert this value — reuse an id and "number 37 died" stops being unique within the
+##  session and the diagnostics get blurry. There is no reason to revert it (the view does not hold ids).
 var _next_monster_id := 1
 
-## 🔴🔴 **죽음 통지 — 뷰가 「이번에 누가 죽었나」를 알 길이 이것뿐이다.** 죽은 몬스터는
-##  `_monsters`에서 즉시 빠지므로(문서 「동작 ⑩」— 몬스터는 사라진다, 플레이어처럼 안 쓰러진다)
-##  배열만 보고는 알 수 없다. 🔴 **폭발 통지와 정확히 같은 어법이다** — 틱 시작에서 지운다.
+## **The death notification — this is the view's only way to know "who died this time".** A dead monster is
+##  removed from `_monsters` immediately (doc, "behavior (10)" — monsters disappear, they do not go down like
+##  the player), so looking at the array alone cannot tell you. **Exactly the same idiom as the blast
+##  notification** — cleared at the start of the tick.
 var _died_x: Array[int] = []
 var _died_y: Array[int] = []
 var _died_kind: Array[int] = []
 
-## 🔴 커맨드는 **「어느 틱에 적용되나」를 달고** 큐에 앉는다. 없으면 나중에 재조정이 불가능하다.
-##  싱글에서는 로컬 입력이 채우고 멀티에서는 서버가 채운다 — 적용부 코드는 그대로다.
+## Commands sit in the queue **carrying "which tick do I apply to"**. Without it, later rescheduling is impossible.
+##  In single player the local input fills it and in multiplayer the server does — the applying code is unchanged.
 var _queue: Array[Dictionary] = []
 
-## 🔴 틱은 float 누산기가 아니라 **정수 분주기**다(`Tuning.TICK_DIVIDER`). 누산기를 쓰면
-##  프레임 시간에 따라 틱 경계가 흔들려 클라마다 다르게 쪼개진다 — 멀티에서 틱 번호는 상태다.
+## The tick is an **integer divider** (`Tuning.TICK_DIVIDER`), not a float accumulator. Use an accumulator and
+##  the tick boundary wobbles with frame time and splits differently per client — in multiplayer the tick
+##  number is state.
 var _phase := 0
 
-## 🔴 발사 수는 껍데기의 HUD 진단이 읽는다(발사 0 = 좌클릭이 안 닿는다 · 발사 > 착탄 = 격자 밖 소멸).
-##  ⚠ 세는 자리가 `fire()` 가 참을 준 **직후**여야 한다 — 큐에 넣을 때 세면 거부된 커맨드까지 센다.
+## The fire count is read by the shell's HUD diagnostics (fires 0 = the left click is not reaching · fires >
+##  impacts = it vanished outside the grid).
+##  The counting has to happen **right after** `fire()` returned true — count at queue time and rejected
+##  commands get counted too.
 var _fire_count := 0
 
-## 🔴 `_init`이 null을 받았다. **짖음만으로는 그물이 아무것도 못 잰다** — 러너는 stderr를
-##  못 보고 `expect_error`는 사면 선언일 뿐이라, 짖음이 사라져도 검사가 안 빨개진다.
-##  ⇒ 짖음의 흔적을 **값으로** 남겨서 「짖었나」를 잴 수 있게 한다.
-## ⚠ 그리고 이 갈래 덕에 부서진 세상이 **매 프레임 엔진 에러를 뿜는 대신** 조용히 멈춘다 —
-##  원인을 말하는 줄은 위에서 한 번 나왔다.
+## `_init` received a null. **Barking alone lets the nets measure nothing** — the runner cannot see stderr and
+##  `expect_error` is only an amnesty declaration, so the check would not go red even if the bark disappeared.
+##  => Leave a trace of the bark **as a value** so that "did it bark" can be measured.
+## And thanks to this branch a broken world stops quietly **instead of spewing an engine error every frame** —
+##  the line naming the cause came out once, above.
 var _broken := false
 
 
-## 셋 중 하나라도 없으면 세상이 없다.
-## 🔴🔴 **이 검사가 막는 것은 「null이라고 손으로 쓰는 사람」이 아니라 「선언 순서를 옮기는 사람」이다.**
-##  껍데기에서 `var _world := WorldStep.new(_grid, _spell, _char)` 줄이 `_grid` 선언보다
-##  **위로 올라가면 셋이 전부 null인데 텍스트는 한 글자도 안 바뀐다.**
-##  ⚠ 실측: 그 상태로 그물 1085개가 **전부 초록**이었고, 게임만 매 프레임 짖으며 멈췄다.
-##  ⇒ 텍스트 검사로는 원리적으로 못 잡으므로 **계약을 코드가 스스로 지킨다.**
-##  ⚠ 정상 경로에서는 아무 일도 안 난다 — 거동은 그대로다.
+## If any one of the three is missing there is no world.
+## **What this check blocks is not "the person who writes null by hand" but "the person who moves a declaration".**
+##  If the shell's `var _world := WorldStep.new(_grid, _spell, _char)` line moves **above** the `_grid`
+##  declaration, all three are null while **not one character of text changes.**
+##  Measured: in that state 1085 nets were **all green**, and only the game barked every frame and stopped.
+##  => A text check cannot catch it in principle, so **the code holds the contract itself.**
+##  On the normal path nothing happens — the behavior is unchanged.
 func _init(grid: CellGrid, spell: SpellSim, ch: Character) -> void:
 	if grid == null or spell == null or ch == null:
-		push_error("WorldStep: 세상 셋 중에 null이 있다 — 껍데기의 선언 순서를 봐라")
+		push_error("WorldStep: one of the three worlds is null - check the shell's declaration order")
 		_broken = true
 	_grid = grid
 	_spell = spell
 	_char = ch
 
 
-## 한 프레임. **틱이 돈 프레임에만 참**을 돌려준다.
+## One frame. Returns true **only on frames where a tick ran.**
 ##
-## 🔴🔴 **아래 순서가 계약이다** — 바꾸면 결과가 달라지고, 멀티에서는 그게 곧 desync다.
-##   1. `_drain_queue()`   외부 커맨드(발사)
-##   2. `_grid.step()`     격자가 한 틱 산다(불)
-##   3. `_spell.step()`    투사체가 **움직인 뒤의 격자**를 상대로 난다
+## **The order below is a contract** — change it and the result changes, and in multiplayer that is desync.
+##   1. `_drain_queue()`   external commands (firing)
+##   2. `_grid.step()`     the grid lives one tick (fire)
+##   3. `_spell.step()`    projectiles fly against **the grid after it moved**
 ##
-## 🔴🔴 **캐릭터는 60Hz, 시뮬은 20Hz다.** 캐릭터를 틱에 묶으면 조작이 뚝뚝 끊긴다.
-##  호스트 권위라 틱에 묶일 이유가 없다(GDD 멀티 표).
-## ⚠ 틱 **뒤에** 도는 이유: 방금 폭발이 바꾼 지형 위를 이번 프레임에 걷는다.
-## ⚠ **`jump` 는 「이번 프레임에 눌렸나」, `jump_held` 는 「지금 누르고 있나」다** — 가변 점프가
-##  뒤엣것으로 상승을 자른다(`character.step`). 🔴 기본값을 안 준다: 안 넘기면 조용히 짧은 점프가 된다.
+## **The character is 60Hz and the sim is 20Hz.** Tie the character to ticks and the controls stutter.
+##  It is host-authoritative, so there is no reason to tie it to ticks (GDD multiplayer table).
+## Why it runs **after** the tick: this frame you walk over the terrain the blast just changed.
+## **`jump` is "was it pressed this frame" and `jump_held` is "is it held now"** — the variable jump clips the
+##  rise with the latter (`character.step`). No default is given: not passing it silently gives a short jump.
 func frame(dt: float, axis: float, jump: bool, jump_held: bool) -> bool:
 	if _broken:
 		return false
@@ -102,20 +108,23 @@ func frame(dt: float, axis: float, jump: bool, jump_held: bool) -> bool:
 	_phase += 1
 	if _phase >= Tuning.TICK_DIVIDER:
 		_phase = 0
-		# 🔴 죽음 통지를 틱 시작에서 지운다 — 폭발 통지(`spell.step()` 시작)와 같은 자리다.
+		# The death notification is cleared at the start of the tick — the same place as the blast
+		#  notification (the start of `spell.step()`).
 		_died_x.clear()
 		_died_y.clear()
 		_died_kind.clear()
 		_drain_queue()
 		_grid.step()
 		_spell.step(_grid)
-		# 🔴🔴 **통지를 여기서 읽는다 — 틱 갈래 *안*이다.** 프레임마다 부르면 통지 배열이
-		#  다음 `spell.step()` 까지 살아 있어서 **한 대가 세 대가 된다**(계획 §6 위험 1).
-		#  ⚠ 무적이 두 대를 먹어 화면에서는 정상으로 보이고, 지속 피해에서만 3배가 드러난다.
+		# **The notifications are read here — *inside* the tick branch.** Call it every frame and the
+		#  notification arrays stay alive until the next `spell.step()`, so **one hit becomes three**
+		#  (plan section 6, risk 1).
+		#  The invulnerability eats two of them so it looks normal on screen, and the 3x only shows up in
+		#  continuous damage.
 		_char.on_tick(_spell)
-		# ⑤ 몬스터 on_tick — 마법이 몬스터를 때렸나. 🔴🔴 **`_char.on_tick` 뒤인 것이 계약이다**
-		#  (문서 「동작 ⑨」). 순회 중에 안 지운다(CLAUDE.md 「순회 중 제거」 함정) — 다 돌고 나서
-		#  인덱스 큰 쪽부터 지운다.
+		# (5) Monster on_tick — did magic hit a monster. **Being after `_char.on_tick` is a contract**
+		#  (doc, "behavior (9)"). Nothing is removed during iteration (CLAUDE.md's "removal during iteration"
+		#  trap) — finish the walk, then remove from the highest index down.
 		var dead: Array[int] = []
 		for i in _monsters.size():
 			var m: Monster = _monsters[i]
@@ -129,18 +138,20 @@ func frame(dt: float, axis: float, jump: bool, jump_held: bool) -> bool:
 			_died_y.append(dying.y)
 			_died_kind.append(dying.kind)
 			_monsters.remove_at(idx)
-		# ⑥ 🔴🔴 **플레이어가 몬스터·탄에 맞았나 — `_char.on_tick`·몬스터 on_tick **둘 다** 지난
-		#  뒤여야 한다**(문서 「동작 ⑨」). 앞에 두면 그 틱에 죽을 몬스터가 한 번 더 때린다.
-		#  ⚠ **`invuln_left`는 `_char.on_tick()` 안에서만 준다** — 여기서 또 깎으면 무적이
-		#  4틱이 아니라 3틱이 된다. 그래서 여기는 `take_hit`만 부르고 직접 감산하지 않는다.
+		# (6) **Was the player hit by a monster or a bolt — it must be after **both** `_char.on_tick` and the
+		#  monster on_tick** (doc, "behavior (9)"). Put it earlier and a monster dying on that tick gets one
+		#  more hit in.
+		#  **`invuln_left` is only ever set inside `_char.on_tick()`** — decrement it here too and the
+		#  invulnerability becomes 3 ticks instead of 4. So this place only calls `take_hit` and never
+		#  subtracts directly.
 		_char_hit_by_monsters()
 		ticked = true
 	_char.step(_grid, dt, axis, jump, jump_held)
 	_bolts.step(_grid, dt)
-	# 🔴🔴 **캐릭터 뒤인 것이 계약이다**(`monsters-minimum` 단계 1). `_next_axis`가 플레이어
-	#  중심을 target으로 받으므로 **이번 프레임에 캐릭터가 간 자리**를 보는 것이 맞다.
-	#  ⚠ target은 `_char.center()`를 **축마다** `roundi`한 px다(판정 10: 중심 대 중심).
-	#  `Vector2i(Vector2)` 생성자는 0쪽으로 자르지 반올림이 아니라 여기 안 쓴다.
+	# **Being after the character is a contract** (`monsters-minimum` stage 1). `_next_axis` takes the player's
+	#  center as the target, so looking at **where the character went this frame** is the correct thing.
+	#  The target is `_char.center()` rounded **per axis** with `roundi` into px (acceptance 10: center to center).
+	#  The `Vector2i(Vector2)` constructor truncates toward 0 rather than rounding, so it is not used here.
 	var center := _char.center()
 	var target_x := roundi(center.x)
 	var target_y := roundi(center.y)
@@ -153,14 +164,15 @@ func frame(dt: float, axis: float, jump: bool, jump_held: bool) -> bool:
 	return ticked
 
 
-## 🔴🔴 **⑥은 한 덩어리다 — 돼지 접촉과 닭 탄을 두 곳에 두지 마라.** `character.take_hit()`이
-##  「무적이면 실패」를 이미 들고 있으므로, 두 소스를 각자 다른 자리에서 부르면 같은 틱에
-##  두 대가 들어갈 길이 열린다(경로별로 무적 검사가 따로 도는 것처럼 보이는 사고다).
-##  ⇒ 여기 한 곳에서 **돼지 → 닭 탄** 순으로 시도한다. 첫 성공(`take_hit`이 `true`)이 나면
-##  이후 시도는 `take_hit` 자체가 무적으로 막는다 — 그게 "하나라도 맞으면 끝"이다.
+## **(6) is one lump — do not put pig contact and hen bolts in two places.** `character.take_hit()` already
+##  holds "fail if invulnerable", so calling the two sources from separate places opens a path for two hits on
+##  the same tick (the kind of accident that looks like the invulnerability check runs separately per path).
+##  => Here, in one place, it tries **pig -> hen bolt** in order. Once the first succeeds (`take_hit` returns
+##  `true`), later attempts are blocked by `take_hit` itself via the invulnerability — that is "one hit and that
+##  is the end of it".
 ##
-## 🔴 **탄은 맞았든 무적에 막혔든 소거된다**(닿으면 사라진다 — `monster_bolts.consume_hits`).
-##  피해가 실제로 들어갔는지는 `take_hit`의 반환값이 따로 말한다.
+## **The bolt is erased whether it hit or was blocked by invulnerability** (touch and it disappears —
+##  `monster_bolts.consume_hits`). Whether the damage actually landed is told separately by `take_hit`'s return value.
 func _char_hit_by_monsters() -> void:
 	for m: Monster in _monsters:
 		if m.kind != MonsterDefs.KIND_PIG:
@@ -172,26 +184,27 @@ func _char_hit_by_monsters() -> void:
 		_char.take_hit(MonsterBolts.BOLT_DAMAGE, true)
 
 
-## 상자 대 상자(정수 px). 🔴 `Body`류의 원·선분 검사와 다른 자리다 — 여기는 접촉(사각형
-##  대 사각형)이지 탄 궤적이 아니라서 더 간단한 검사가 맞다(돼지는 몸으로 붙는다, 「동작 ⑥」).
+## Box versus box (integer px). A different place from `Body`'s circle and segment checks — this is contact
+##  (rectangle versus rectangle), not a bolt trajectory, so the simpler check is the right one (the pig attaches
+##  with its body, "behavior (6)").
 static func _boxes_overlap(ax: int, ay: int, aw: int, ah: int, bx: int, by: int, bw: int, bh: int) -> bool:
 	return ax < bx + bw and ax + aw > bx and ay < by + bh and ay + ah > by
 
 
-## 🔴 다음 틱에 적용될 커맨드로 앉힌다. **틱 번호는 격자가 준다** — 부르는 쪽이 세면
-##  두 시계가 되고, 그러면 「넣었는데 영영 안 빠지는」 커맨드가 생긴다.
+## Seats it as a command to be applied on the next tick. **The tick number comes from the grid** — let the
+##  caller count and there are two clocks, and then commands appear that "went in and never come out".
 ##
-## ⚠ **`frame()` 과 같은 문을 지난다.** 여기만 열어 두면 부서진 세상이 「프레임은 정중히
-##  멈추는데 좌클릭에서만 터진다」가 되고, 그건 규칙이 두 벌인 것이다.
+## **It goes through the same door as `frame()`.** Leave only this one open and a broken world becomes "the
+##  frame stops politely but only the left click explodes", and that is the rule having two copies.
 func enqueue(cmd: Dictionary) -> void:
 	if _broken:
 		return
 	_queue.append({"tick": _grid.get_tick() + 1, "cmd": cmd})
 
 
-## ⚠ **`keep` 갈래는 지금 소비자가 없다** — `enqueue`가 늘 `tick + 1`을 달고 `target`도 같아서
-##  전부 이번 틱에 빠진다. 멀티(서버가 미래 틱 커맨드를 보낸다)를 위한 이음매이고,
-##  그때까지는 **죽은 분기**라는 걸 알고 봐라.
+## **The `keep` branch has no consumer right now** — `enqueue` always attaches `tick + 1` and `target` is the
+##  same, so everything drains on this tick. It is a seam for multiplayer (where the server sends future-tick
+##  commands), and until then, read it knowing it is **a dead branch.**
 func _drain_queue() -> void:
 	if _queue.is_empty():
 		return
@@ -202,48 +215,49 @@ func _drain_queue() -> void:
 			keep.append(e)
 			continue
 		var cmd: Dictionary = e["cmd"]
-		# 🔴 커맨드가 두 시뮬로 갈린다. **`kind` 키를 공유하지 않는 게 이 분기의 안전장치다** —
-		#  같은 키를 쓰면 두 enum의 숫자가 겹쳐 엉뚱한 커맨드가 실행되고, 값이 우연히 유효
-		#  범위면 **에러 하나 없이** 발사가 채우기가 된다.
+		# Commands split into two sims. **Not sharing the `kind` key is this branch's safety device** —
+		#  use the same key and the two enums' numbers overlap so the wrong command runs, and if the value
+		#  happens to be in a valid range, **with no error at all** a fire becomes a fill.
 		if cmd.has("spell_kind"):
-			# 🔴🔴 **쓰러지면 못 쏜다.** 안 막으면 지팡이도 총구도 안 그려지는데 **마법이 나가고
-			#  그 반동으로 시체가 날아다닌다**(실측: 발사 10 → 11 · 위로 59px).
-			# 🔴 **껍데기가 아니라 여기서 막는다** — 껍데기는 로컬 입력만 지나지만 이 문은
-			#  **모든 커맨드가 지난다**(멀티에서는 서버가 채운다). 룬 검사를 `spell_sim.fire()` 에
-			#  둔 것과 같은 이유다.
+			# **Go down and you cannot fire.** Without blocking it, neither the staff nor the muzzle is drawn
+			#  while **the magic still comes out and the recoil flies the corpse around** (measured: fires
+			#  10 -> 11, 59px upward).
+			# **Blocked here, not in the shell** — the shell only sees local input, but **every command passes
+			#  through this door** (in multiplayer the server fills it). The same reason the rune check was put
+			#  in `spell_sim.fire()`.
 			if _char.downed:
 				continue
 			if _spell.fire(cmd):
 				_fire_count += 1
-				# 🔴🔴 **`fire()` 가 참을 준 *뒤*다.** 큐에 넣는 시점에 걸면 거부된 발사에도
-				#  밀려서 「안 나갔는데 밀린다」가 된다 — 그건 고장으로 읽힌다.
+				# **This is *after* `fire()` returned true.** Hook it at queue time and even rejected shots
+				#  push you, giving "it did not fire but I got pushed" — and that reads as a malfunction.
 				_char.recoil(int(cmd.get("adx", 0)), int(cmd.get("ady", 0)))
 			continue
 		_grid.apply(cmd)
 	_queue = keep
 
 
-## 🔴 껍데기의 디버그 스폰 키(M)가 부른다. 만들었으면 id, 못 만들었으면 0.
-##  🔴🔴 **상한을 넘으면 안 만든다 — 이미 있는 놈을 버리지 않는다.** 탄 상한(단계 6)과
-##  같은 어법이다: 버리면 「쏘아도 몇 마리가 안 나온다」가 고장으로 읽힌다.
+## Called by the shell's debug spawn key (M). The id if it was made, 0 if not.
+##  **Over the cap it does not make one — it does not discard an existing one.** The same idiom as the bolt cap
+##  (stage 6): discard and "I spawn and some do not come out" reads as a malfunction.
 ##
-## 🔴🔴 **격자 밖 좌표는 여기서 막는다 — `stage.gd`가 아니다.** verify-look이 실측으로
-##  찾았다: `get_viewport().get_mouse_position()`은 OS 커서의 실제 위치라, **커서가 게임
-##  창 밖에 있으면** 월드 x가 −983 같은 값으로 들어온다. 격자 밖이면 그 몬스터는 영원히
-##  못 오는 착지를 하며 화면에 절대 안 뜨는데 **상한 20마리 중 하나를 그대로 먹는다.**
-##  ⇒ **여기 두는 이유**: `spawn_monster`가 몬스터를 만드는 **유일한 문**이라(위 상한 검사와
-##  같은 문), 껍데기에 두면 그물이 헤드리스로 못 재고(`stage.gd`는 씬이 있어야 돈다) 미래의
-##  다른 호출자(서버 스폰 등)가 각자 다시 짜야 한다. `_broken`·상한 검사와 나란히 두면
-##  「몬스터를 만드는 조건 셋」이 한 곳에 모인다.
+## **Out-of-grid coordinates are blocked here — not in `stage.gd`.** verify-look found it by measurement:
+##  `get_viewport().get_mouse_position()` is the OS cursor's real position, so **when the cursor is outside the
+##  game window** the world x comes in as something like -983. Outside the grid, that monster makes a landing it
+##  can never reach and never appears on screen while **eating one of the 20-monster cap.**
+##  => **Why it lives here**: `spawn_monster` is the **only door** that makes a monster (the same door as the cap
+##  check above), so putting it in the shell means the nets cannot measure it headless (`stage.gd` needs a scene
+##  to run) and future callers (server spawning and so on) would each have to write it again. Placing it beside
+##  `_broken` and the cap check gathers "the three conditions for making a monster" in one place.
 func spawn_monster(kind: int, px: int, py: int) -> int:
-	# 🔴 `enqueue`(위)와 같은 문이다 — 부서진 세상에서도 배열이 늘고 HUD 숫자가 오르면
-	#  「프레임은 정중히 멈추는데 M에서만 늘어난다」가 되고, 그건 규칙이 두 벌인 것이다.
+	# The same door as `enqueue` (above) — if the array grew and the HUD number rose in a broken world, it
+	#  would be "the frame stops politely but only M keeps growing", and that is the rule having two copies.
 	if _broken:
 		return 0
 	if _monsters.size() >= MonsterDefs.MAX_MONSTERS:
 		return 0
-	# ⚠ 상자 전체가 격자 픽셀 범위 안이어야 한다 — 좌상단만 보면 상자가 오른쪽/아래 경계를
-	#  삐져나온 채로 살아남는다. 에러는 안 낸다(디버그 키가 흔히 지날 수 있는 입력이다).
+	# The whole box must be inside the grid's pixel range — look only at the top-left and the box survives
+	#  sticking out past the right or bottom boundary. No error is raised (it is input a debug key can commonly pass).
 	var w_px := MonsterDefs.w_px(kind)
 	var h_px := MonsterDefs.h_px(kind)
 	if px < 0 or py < 0 \
@@ -256,7 +270,8 @@ func spawn_monster(kind: int, px: int, py: int) -> int:
 	return id
 
 
-## 🔴🔴 읽기 전용 질의 — 뷰가 이걸로만 본다. 껍데기가 배열을 따로 들면 「세상」이 두 곳이 된다.
+## Read-only queries — the view sees it only through these. Let the shell hold its own array and "the world"
+##  lives in two places.
 func monster_count() -> int:
 	return _monsters.size()
 
@@ -265,7 +280,7 @@ func monster_at(i: int) -> Monster:
 	return _monsters[i]
 
 
-## 🔴 이번 틱에 죽은 몬스터들. 🔴🔴 **다음 `frame()`의 틱 갈래가 지운다** — 폭발 통지와 같다.
+## The monsters that died this tick. **The next `frame()`'s tick branch clears it** — the same as the blast notification.
 func died_count() -> int:
 	return _died_x.size()
 
@@ -282,7 +297,7 @@ func died_kind(i: int) -> int:
 	return _died_kind[i]
 
 
-## 🔴🔴 읽기 전용 질의 — 뷰가 닭의 탄을 이걸로만 본다(단계 7).
+## Read-only queries — the view sees the hen's bolts only through these (stage 7).
 func bolt_count() -> int:
 	return _bolts.count()
 
@@ -295,13 +310,13 @@ func bolt_y(i: int) -> float:
 	return _bolts.y(i)
 
 
-## 무대 리셋(R)이 부른다. 🔴 **이 객체가 든 것만 되돌린다** — 격자·투사체·캐릭터는
-##  각자의 리셋이 있고, 여기서 한 번 더 만지면 되돌리는 자리가 두 곳이 된다.
+## Called by the stage reset (R). **It reverts only what this object holds** — the grid, the projectiles and
+##  the character have their own resets, and touching them once more here makes two places doing the reverting.
 ##
-## ⚠ **`_phase` 는 안 건드린다.** 무대 리셋은 틱 위상을 바꾸는 사건이 아니다 —
-##  0으로 두면 R을 누른 프레임의 다음 틱이 최대 2프레임 밀린다.
-## 🔴 `_monsters.clear()` — `monsters-minimum` 문서 「화면」이 「비우는 자리는
-##  `world_step.reset()`이다」로 못 박았다. ⚠ `_next_monster_id`는 안 되돌린다(위 선언부).
+## **`_phase` is not touched.** A stage reset is not an event that changes the tick phase —
+##  set it to 0 and the next tick after the frame R was pressed is delayed by up to 2 frames.
+## `_monsters.clear()` — the `monsters-minimum` doc's "screen" section pinned "the place that clears is
+##  `world_step.reset()`". `_next_monster_id` is not reverted (its declaration above).
 func reset() -> void:
 	_queue.clear()
 	_fire_count = 0
@@ -309,13 +324,13 @@ func reset() -> void:
 	_died_x.clear()
 	_died_y.clear()
 	_died_kind.clear()
-	# 🔴 탄도 비운다 — 안 비우면 R을 누를 때마다 죽은 실험의 탄이 남아 다음 판정을 오염시킨다
-	#  (`monsters-minimum` 「화면」이 「계수기를 전부 되돌린다」로 못 박은 것과 같은 이유).
+	# The bolts are cleared too — without it, every press of R leaves bolts from the dead experiment and they
+	#  contaminate the next acceptance (the same reason `monsters-minimum`'s "screen" pinned "revert every counter").
 	_bolts = MonsterBolts.new()
 
 
-## 🔴 렌더 보간이 읽는다. **시계를 하나 더 만들지 않는 게 요점이다** — 뷰가 자기 `delta`를
-##  누산하면 그 순간 시계가 둘이 되고, 투사체가 틱 경계에서 미끄러진다.
+## Read by the render interpolation. **The point is not making one more clock** — the moment the view
+##  accumulates its own `delta` there are two clocks, and projectiles slip at the tick boundary.
 func phase() -> int:
 	return _phase
 

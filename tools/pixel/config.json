@@ -1,5 +1,5 @@
 {
   "comfy_root": "C:/Users/djgnf/Desktop/window_project/CompyUI_2DPixel/ComfyUI_windows_portable",
   "server": "http://127.0.0.1:8188",
-  "_note": "ComfyUI 본체와 모델(12GB+)은 위 경로에 그대로 둔다. 이 리포에는 스크립트만 있다. 기계가 바뀌면 comfy_root 한 줄만 고친다."
+  "_note": "ComfyUI itself and the models (12GB+) stay at the path above. This repo holds only the scripts. On a different machine, change the one comfy_root line."
 }

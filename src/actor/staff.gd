@@ -1,75 +1,78 @@
 extends RefCounted
-## 지팡이 — **끝이 어디인가.** 🔴🔴 **그 답을 내는 함수는 이 파일 하나뿐이다.**
-##  화면은 그 값을 **그리기만** 하고, 발사는 그 값을 `aim.fire_cmd` 에 **넘기기만** 한다.
+## The staff — **where is the tip.** **This file is the only one that answers that question.**
+##  The screen only **draws** that value, and firing only **passes** it to `aim.fire_cmd`.
 ##
-## 🔴🔴 **셋(그림 끝 · 물드는 자리 · 발사 원점)이 갈라지면 「쏜 데서 안 나간다」가 되고,
-##  그건 스샷으로만 드러난다** — `character_view.gd` 가 같은 것을 미리 적어 뒀다.
-##  ⇒ **여기서 나온 값을 호출부가 다시 계산하지 마라.**
+## **If the three (the drawn tip, the place that gets stained, the firing origin) diverge you get "it does not
+##  come out of where I shot", and that only shows up in a screenshot** — `character_view.gd` recorded the same
+##  thing in advance.
+##  => **Do not recompute the value produced here at the call site.**
 ##
-## 🔴 **`src/view/` 가 아니라 여기 사는 이유**: 화면에 두면 그물이 씬을 세워야 하는데
-##  헤드리스에는 픽셀이 없다(`character-sprite` 판정 기록: `SubViewport` 텍스처가 NULL).
-##  여기 있으면 격자·상자·방향만 넣고 **값으로** 잰다 — `character.gd` 의
-##  `pick_state`·`camera_center` 와 같은 어법이다.
+## **Why it lives here and not in `src/view/`**: put it on the screen and the nets have to stand up a scene,
+##  but headless has no pixels (`character-sprite` acceptance record: the `SubViewport` texture was NULL).
+##  Here, you feed in only the grid, the box and the direction and measure it **by value** — the same idiom as
+##  `character.gd`'s `pick_state` and `camera_center`.
 ##
-## 🔴 **float을 써도 된다** — GDD 멀티 표: 격자·투사체는 결정론, **플레이어는 호스트 권위**다.
-##  ⚠ **`src/sim/` 은 한 줄도 안 건드린다.** `spell_sim._walk` 의 「시작 칸은 검사하지 않는다」가
-##   그대로 사는 것이 이 파일의 요점이다 — 그 주석은 틀리지 않았고 **전제(「지팡이 끝은 벽 앞이다」)가
-##   깨져 있었다.** 여기가 그 전제를 되돌린다.
+## **Floats are allowed** — GDD multiplayer table: the grid and projectiles are deterministic, **the player is
+##  host-authoritative.**
+##  **`src/sim/` is not touched by a single line.** The point of this file is that `spell_sim._walk`'s
+##   "the starting cell is not checked" stays alive — that comment was not wrong and **its premise ("the staff
+##   tip is in front of the wall") had been broken.** This is what restores that premise.
 
 const CellGrid := preload("res://src/sim/cell_grid.gd")
 const Tuning := preload("res://src/sim/sim_tuning.gd")
 const Character := preload("res://src/actor/character.gd")
 
-## 🔴🔴 **지팡이 png의 폭과 같아야 한다**(`net_sprite` 가 잰다). 갈라지면 「눈에 보이는 끝」과
-##  「발사 원점」이 몇 px 어긋나고, 그건 스샷으로만 드러난다.
-## 🔴 **`fx_tuning` 에서 이사해 왔다.** 거기 값은 「화면에만 닿는다」가 계약인데 이 값은
-##  `character_view` → `stage` → `aim.fire_cmd` 로 **세상에 닿는다** — 이 파일이 그 위에
-##  지형 의존성까지 얹으므로 어긋남이 load-bearing 이 된다.
-##  ⚠ 선례가 이미 있다: `character.gd` 의 `MOVE_SPEED_PX`·`RECOIL_*` 가 전부 여기 사는 손맛값이다.
-##   실제 규칙은 **「세상에 닿는 손잡이는 그 세상 코드 옆에 있다」**다.
-## ⚠ 캐릭터(32px)보다 길어야 「무기」로 읽힌다. 너무 길면 조준점과 끝이 멀어져
-##  「쏜 데서 안 나간다」가 된다 — 36px가 그 사이다. **눈으로 보고 정할 값이다.**
+## **It must equal the width of the staff png** (`net_sprite` measures it). Diverge and "the visible tip" and
+##  "the firing origin" are a few px apart, and that only shows up in a screenshot.
+## **It moved here from `fx_tuning`.** Values there have "they only touch the screen" as their contract, but
+##  this value reaches **the world** via `character_view` -> `stage` -> `aim.fire_cmd` — and this file stacks a
+##  terrain dependency on top, which makes any mismatch load-bearing.
+##  There is already a precedent: `character.gd`'s `MOVE_SPEED_PX` and `RECOIL_*` are all feel values living there.
+##   The real rule is **"a knob that reaches the world lives next to that world's code".**
+## It must be longer than the character (32px) to read as a "weapon". Too long and the aim point and the tip
+##  get far apart, giving "it does not come out of where I shot" — 36px is between the two.
+##  **A value to settle by eye.**
 const LEN_PX := 36.0
 
-## 손 높이 — 몸 중심에서 아래로 이만큼. ⚠ **눈이 정할 값이다**(기획 「미정」).
-## 🔴 상자 **안**이어야 한다(`0 ≤ 이 값 < H_PX/2`) — 넘으면 피벗이 상자 밖이고,
-##  그러면 아래 하한의 안전 근거(「상자 안은 지형이 없다」)가 죽는다. `net_staff` 가 잰다.
+## Hand height — this far below the body's center. **A value the eye settles** (design: "undecided").
+## It must be **inside** the box (`0 <= this value < H_PX/2`) — beyond that the pivot is outside the box, and
+##  then the safety grounds for the floor below ("inside the box there is no terrain") die. `net_staff` measures it.
 const PIVOT_DY_PX := 4.0
 
-## 훑기 간격. 🔴 **셀(4px)의 절반이다 — 이보다 크면 셀을 건너뛴다.**
-##  ⚠ 건너뛰면 **가끔** 끝이 벽 안에 앉고 재현이 어렵다.
+## Scan interval. **Half a cell (4px) — larger than this and it skips cells.**
+##  Skip and the tip **occasionally** sits inside a wall, and it is hard to reproduce.
 const SCAN_STEP_PX := 2.0
 
 
-## 지팡이가 뻗어 나오는 자리. 🔴 **몸 중심이 아니라 손 높이다** — 배 한가운데에서 나가면
-##  「지팡이를 들고 있다」로 안 읽힌다(기획 판정 6).
+## Where the staff extends from. **The hand height, not the body center** — coming out of the middle of the
+##  belly does not read as "holding a staff" (design acceptance 6).
 static func pivot_px(box_x: int, box_y: int) -> Vector2:
 	return Vector2(
 		float(box_x) + Character.W_PX * 0.5,
 		float(box_y) + Character.H_PX * 0.5 + PIVOT_DY_PX)
 
 
-## 🔴🔴 **지팡이 끝. 지형에 막히면 짧아진다.**
+## **The staff tip. Blocked by terrain, it gets shorter.**
 ##
 ## ```
-## ① 피벗   = 손 높이
-## ② 최대 끝 = 피벗 + 조준방향 × LEN_PX
-## ③ 그 사이를 훑어 **고체 셀을 만나면 그 직전까지** 자른다
-## ④ 하한   = 몸 상자의 **마지막 안쪽 픽셀**. 그 아래로는 안 줄어든다
+## (1) pivot    = hand height
+## (2) max tip  = pivot + aim direction * LEN_PX
+## (3) scan between them and **cut just before** any solid cell
+## (4) floor    = the box's **last inner pixel**. It never shrinks below that
 ## ```
 ##
-## 🔴 **돌려주는 점은 「고체가 아닌 것을 실제로 확인한 마지막 표본」이다.** 그게 계약이고
-##  `net_staff` 가 그걸 잰다 — 「빈 셀에 있다」는 값이지 「클램프를 부른다」가 아니다.
+## **The returned point is "the last sample actually confirmed not to be solid".** That is the contract and
+##  `net_staff` measures that — "it is in an empty cell" is the value, not "it calls the clamp".
 ##
-## ⚠ `dir` 은 **단위벡터로 받는다. 여기서 정규화하지 않는다** — 호출부가 이미 했고,
-##  두 번 하면 「어디서 정규화하나」가 두 곳이 된다. 0벡터면 피벗을 그대로 돌려준다.
-## ⚠ `LEN_PX < min_len`(지팡이가 몸보다 짧다)이면 **하한이 이긴다.** 그래도 상자 안이라 안전하다.
+## `dir` is **taken as a unit vector. It is not normalized here** — the caller already did it, and doing it
+##  twice makes "where do we normalize" live in two places. For the zero vector it returns the pivot as is.
+## If `LEN_PX < min_len` (the staff is shorter than the body) **the floor wins.** It is still inside the box, so it is safe.
 static func tip_px(grid: CellGrid, box_x: int, box_y: int, dir: Vector2) -> Vector2:
 	var pivot := pivot_px(box_x, box_y)
 	if dir.length_squared() <= 0.0:
 		return pivot
-	# ⚠ 하한 자체는 **표본을 안 뜬다.** 뜰 필요가 없다 — 상자 안은 캐릭터가 지금 서 있는 자리라
-	#  지형이 없는 것을 `_box_free` 가 매 프레임 지킨다.
+	# The floor itself **takes no sample.** It does not need to — inside the box is where the character is
+	#  standing right now, and `_box_free` guards every frame that there is no terrain there.
 	var d := _min_len(pivot, box_x, box_y, dir)
 	while d < LEN_PX:
 		var nd := minf(d + SCAN_STEP_PX, LEN_PX)
@@ -81,30 +84,32 @@ static func tip_px(grid: CellGrid, box_x: int, box_y: int, dir: Vector2) -> Vect
 	return pivot + dir * d
 
 
-## 🔴🔴 **하한 — 「몸 상자의 마지막 안쪽 픽셀」까지의 광선 거리다. 「표면」이 아니다.**
+## **The floor — the ray distance to "the box's last inner pixel". It is not "the surface".**
 ##
-## `_box_free` 가 실제로 지키는 범위는 `[px, px+W−1] × [py, py+H−1]` 이라
-## `px + W_PX` · `py + H_PX`(표면)는 **이미 다음 셀**이다. 바닥에 선 캐릭터로 밟아 보면:
+## The range `_box_free` actually guards is `[px, px+W-1] x [py, py+H-1]`, so
+## `px + W_PX` and `py + H_PX` (the surface) are **already the next cell.** Stepping through it with a
+## character standing on the floor:
 ##
 ## ```
-## 상자 y 768~799 (셀 192~199)      바닥 셀 200 = px 800~803, 고체
-## 표면      (y = 800) → floori(800/4) = 200 = 고체     ✗ 여기서 태어나면 옛 버그 그대로다
-## 마지막 안쪽(y = 799) → floori(799/4) = 199 = 빈칸     ✓
+## box y 768-799 (cells 192-199)      floor cell 200 = px 800-803, solid
+## surface     (y = 800) -> floori(800/4) = 200 = solid     X born here and it is the old bug all over again
+## last inner  (y = 799) -> floori(799/4) = 199 = empty     O
 ## ```
 ##
-## ⚠ **표면으로 짜면 옆·위는 멀쩡하고 발밑에만 옛 버그가 남는다. 에러가 하나도 안 난다.**
-## ⚠ **왼쪽·위 모서리는 `box` 그대로가 맞다** — `floori` 가 그 픽셀을 상자 셀로 매핑한다.
-##  비대칭이 정상이다.
+## **Write it with the surface and the sides and the top are fine while only under the feet keeps the old bug.
+##  Not one error is raised.**
+## **The left and top corners are correct as plain `box`** — `floori` maps that pixel to the box's cell.
+##  The asymmetry is normal.
 static func _min_len(pivot: Vector2, box_x: int, box_y: int, dir: Vector2) -> float:
 	return minf(
 		_axis_exit(pivot.x, dir.x, float(box_x), float(box_x + Character.W_PX - 1)),
 		_axis_exit(pivot.y, dir.y, float(box_y), float(box_y + Character.H_PX - 1)))
 
 
-## 한 축에서 광선이 `[lo, hi]` 를 벗어나는 거리.
-## ⚠ 축과 나란하면(`d ≈ 0`) 그 축은 광선을 **안 가둔다** — 나눗셈이 아니라 갈래로 처리한다
-##  (`character._slab` 과 같은 어법). 두 축이 다 0인 경우는 호출부가 먼저 걸렀다.
-## ⚠ 피벗이 상자 밖이면 음수가 나올 수 있다 — 0으로 막는다(하한이 뒤로 가면 안 된다).
+## The distance at which the ray leaves `[lo, hi]` on one axis.
+## If it is parallel to the axis (`d ~= 0`) that axis **does not confine** the ray — handled by a branch, not a
+##  division (the same idiom as `character._slab`). The case of both axes being 0 was filtered by the caller first.
+## If the pivot is outside the box the result can be negative — it is clamped at 0 (the floor must not go backwards).
 static func _axis_exit(a: float, d: float, lo: float, hi: float) -> float:
 	if is_zero_approx(d):
 		return INF

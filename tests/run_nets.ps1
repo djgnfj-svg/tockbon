@@ -1,28 +1,30 @@
-﻿# 그물 래퍼. 이 파일이 침묵사 감지기다. 러너 단독 실행은 반쪽이다.
+﻿# The net wrapper. This file is the silent-death detector. Running the runner alone is only half of it.
 #
-# 이 리포의 실패는 거의 전부 "에러 없이 조용히 틀림"이고,
-# 그중 "엔진이 짖긴 하는데 아무도 안 듣는" 종류가 가장 많다.
-# push_error는 게임을 안 멈춘다. 테스트가 초록인 채로 세상만 틀어진다.
-# 그래서 stderr에 뭐라도 뜨면 실패다. 예외는 그물이 expect_error()로 선언한 것뿐.
+# Almost every failure in this repo is "wrong with no error", and among those the most common kind is
+# "the engine does bark but nobody listens".
+# push_error does not stop the game. The tests stay green while only the world goes wrong.
+# So anything appearing on stderr is a failure. The only exception is what a net declared with expect_error().
 #
-# 사용:
+# Usage:
 #   powershell -ExecutionPolicy Bypass -File tests/run_nets.ps1
 #   powershell -ExecutionPolicy Bypass -File tests/run_nets.ps1 tables
-#   powershell -ExecutionPolicy Bypass -File tests/run_nets.ps1 -Serial     (한 프로세스로)
+#   powershell -ExecutionPolicy Bypass -File tests/run_nets.ps1 -Serial     (in one process)
 #
-# 이 파일은 반드시 UTF-8 BOM으로 저장해야 한다.
-# PowerShell 5.1은 BOM 없는 UTF-8을 ANSI로 읽어 한글이 깨지고 파서가 죽는다.
+# This file must be saved as UTF-8 with BOM.
+# PowerShell 5.1 reads BOM-less UTF-8 as ANSI, mangles the Korean and kills the parser.
 #
-# 🔴🔴 **그물마다 별도 프로세스로 병렬 실행한다** (2026-08-07). 이유가 둘이고 둘 다 크다:
+# **Each net runs in its own process in parallel.** There are two reasons and both are big:
 #
-#  1. **속도.** 한 프로세스로 전부 돌면 332초다(실측). 병렬이면 가장 느린 그물 하나의 시간이다.
-#  2. 🔴 **사면이 자기 그물 안에 갇힌다.** CLAUDE.md가 「사면의 수명이 무제한이다 — 폭보다 이게 더 넓다」를
-#     가짜 그물의 한 형태로 꼽았다: 한 프로세스로 돌면 stdout의 [EXPECT]를 **먼저 다 모은 뒤**
-#     stderr를 그 목록 **전부**와 맞대므로 **그물별·시점별 범위가 하나도 없다.**
-#     실측으로 **첫 그물에 위조 짖음을 넣고 선언은 세 번째 그물이 했는데 초록**이었다.
-#     ⇒ 프로세스를 가르면 그 구멍이 **구조적으로** 막힌다. 3번 그물의 선언이 1번 그물을 못 덮는다.
+#  1. **Speed.** Running everything in one process is 332 seconds (measured). In parallel it is the time of the
+#     single slowest net.
+#  2. **The amnesty is confined to its own net.** CLAUDE.md lists "an amnesty's lifetime is unlimited — this is
+#     wider than its breadth" as a form of fake net: in one process the [EXPECT] entries on stdout are **all
+#     collected first** and then stderr is compared against **the entire** list, so **there is no per-net or
+#     per-moment scope at all.**
+#     Measured: **a forged bark was put in the first net while the third net made the declaration, and it was green.**
+#     => Splitting the processes closes that hole **structurally.** Net 3's declaration cannot cover net 1.
 #
-# ⚠ `-Serial`은 옛 동작(한 프로세스)이다. 병렬 결과가 의심스러울 때 대조용으로만 써라.
+# `-Serial` is the old behavior (one process). Use it only as a control when the parallel result is suspect.
 
 param([string]$Filter = "", [switch]$Serial)
 
@@ -36,21 +38,23 @@ if ($null -eq $godot) {
     exit 1
 }
 
-# 네이티브 exe의 stderr를 파이프로 받으면 PowerShell 5.1이 각 줄을 ErrorRecord로 감싸고
-# 종료 코드 0인데도 실패로 읽는다. 파일로 받아서 텍스트로 읽는다.
+# Piping a native exe's stderr makes PowerShell 5.1 wrap each line in an ErrorRecord and read it as a failure
+# even with exit code 0. It is taken to a file and read back as text.
 #
-# 🔴🔴 파일 이름에 PID와 그물 이름을 붙인다. 고정 이름이면 **두 사람이 동시에 돌릴 때 서로의 출력을 덮어쓴다.**
-#  이 리포는 verify-run·verify-read가 병렬로 그물을 돌리는 구조라 반드시 난다 — 실제로 났다.
-#  ⚠ 증상이 둘인데 **뒤쪽이 훨씬 위험하다**:
-#   · 없는 실패가 뜬다 (남의 실패 줄을 내 출력으로 읽는다)
-#   · 🔴 **진짜 실패가 남의 초록에 덮여 사라진다** — 이쪽은 아무도 눈치 못 챈다
-#   · `[EXPECT]` 목록이 섞여 **사면 범위가 조용히 넓어진다**
-#  ⇒ 「내 변경 때문인가」로 시간을 버리는 대표 경로였다. 두 검증자가 독립적으로 겪고 같은 원인을 짚었다.
+# The PID and the net name are put into the file name. With a fixed name, **two people running at the same time
+#  overwrite each other's output.** This repo has verify-run and verify-read running the nets in parallel, so it
+#  is bound to happen — and it did.
+#  There are two symptoms and **the latter is far more dangerous**:
+#   · failures appear that do not exist (someone else's failure lines are read as mine)
+#   · **a real failure is buried under someone else's green** — nobody notices this one
+#   · the `[EXPECT]` lists mix and **the amnesty scope quietly widens**
+#  => It was the classic path to wasting time on "is this because of my change". Two verifiers hit it
+#   independently and pointed at the same cause.
 $tmp = [System.IO.Path]::GetTempPath()
 
-# stderr 판정. 🔴 **한 그물의 출력만** 받는다 — 그게 사면을 좁히는 장치다.
-# 줄이 아니라 블록으로 판정한다. Godot 에러 하나는 헤더 1줄 + 백트레이스 8줄쯤이다.
-# 줄 단위로 사면하면 선언이 헤더만 지우고 나머지가 남아 여전히 빨갛다.
+# The stderr verdict. It receives **the output of one net only** — that is the device that narrows the amnesty.
+# The verdict is per block, not per line. One Godot error is 1 header line plus roughly 8 backtrace lines.
+# Amnestying per line lets the declaration erase only the header while the rest remains and it is still red.
 function Get-Noise([string]$stdout, [string]$stderr) {
     $expected = @()
     foreach ($line in ($stdout -split "`r?`n")) {
@@ -65,8 +69,8 @@ function Get-Noise([string]$stdout, [string]$stderr) {
     foreach ($line in ($stderr -split "`r?`n")) {
         $trimmed = $line.Trim()
         if ($trimmed -eq "") { continue }
-        if ($trimmed -match '^x\s') { continue }        # 러너가 이미 집계한 단언 실패
-        if ($trimmed -match '^\[그물\]') { continue }
+        if ($trimmed -match '^x\s') { continue }        # an assertion failure the runner already counted
+        if ($trimmed -match '^\[net\]') { continue }
 
         $isCont = $inBlock -and ($trimmed -match '^(at:|GDScript backtrace|\[\d+\]\s)')
         if ($isCont) {
@@ -87,7 +91,7 @@ function Get-Noise([string]$stdout, [string]$stderr) {
     return ,$noise
 }
 
-# ── 그물 목록. 🔴 폴더를 스캔한다 — 손으로 관리하는 목록이 아니다(CLAUDE.md).
+# -- The net list. The folder is scanned — it is not a hand-maintained list (CLAUDE.md).
 $netFiles = Get-ChildItem -Path (Join-Path $root "tests\nets") -Filter "net_*.gd" | Sort-Object Name
 $nets = @()
 foreach ($f in $netFiles) {
@@ -100,20 +104,23 @@ if ($nets.Count -eq 0) {
     exit 1
 }
 
-# 🔴 **0개가 아니다를 먼저 확인한다.** CLAUDE.md: 폴더 스캔의 첫 줄이 늘 이것인 이유는
-#  「씬을 못 세우면 검사가 실패가 아니라 없어진다」를 여기서도 막기 위해서다.
+# **"It is not 0" is confirmed first.** CLAUDE.md: the reason the first line of a folder scan is always this
+#  is to block "if the scene cannot be stood up the check does not fail, it disappears" here too.
 if ($netFiles.Count -lt 5) {
     Write-Host "[그물] tests/nets/ 에 그물이 $($netFiles.Count)개뿐이다. 스캔이 깨졌다." -ForegroundColor Red
     exit 1
 }
 
-# 🔴🔴 **도는 동안 누가 소스를 고치면 가짜 실패가 난다** (2026-08-07, 실측으로 두 번 났다).
-#  헤드리스 프로세스가 **절반 쓰인 파일**을 읽으면 「점프 높이 0」·「착지 y 안 맞음」류로 우수수 빨개진다.
-#  ⚠ **그게 이 리포에서 시간을 제일 많이 버리는 경로다** — 가짜 실패를 진짜로 알고 원인을 쫓는다.
-#   실제로 두 번 났다: builder가 `character.gd` 를 쓰는 중에 그물이 돌아 13개가 빨개졌고,
-#   또 한 번은 builder의 **뒤집기 창**(값을 일부러 깨 둔 짧은 구간)을 그물이 밟아 38개가 빨개졌다.
-#  ⇒ **막을 수는 없다**(남의 편집을 못 막는다). **대신 「의심스럽다」를 러너가 말하게 한다.**
-#   시작과 끝의 최신 수정 시각을 대 보고, 도는 동안 바뀌었으면 결과를 믿지 말라고 찍는다.
+# **If someone edits the source while it is running, false failures appear** (measured; it happened twice).
+#  A headless process reading a **half-written file** goes red in bunches with things like "jump height 0" ·
+#  "landing y does not match".
+#  **That is the path that wastes the most time in this repo** — a false failure is taken as real and the cause is chased.
+#   It happened twice: the nets ran while the builder was writing `character.gd` and 13 went red, and another
+#   time the nets stepped into the builder's **inversion window** (a short stretch with a value deliberately
+#   broken) and 38 went red.
+#  => **It cannot be prevented** (someone else's edits cannot be blocked). **Instead the runner is made to say
+#   "this is suspect".** It compares the newest modification time at the start and at the end, and if anything
+#   changed while running it prints that the result should not be trusted.
 function Get-SrcStamp([string]$r) {
     $newest = [DateTime]::MinValue
     foreach ($d in @("src", "tests")) {
@@ -129,7 +136,7 @@ $stampBefore = Get-SrcStamp $root
 
 $sw = [System.Diagnostics.Stopwatch]::StartNew()
 
-# ── Serial: 옛 동작. 한 프로세스로 전부.
+# -- Serial: the old behavior. Everything in one process.
 if ($Serial) {
     $outFile = Join-Path $tmp "tockbon_nets_out_$PID.txt"
     $errFile = Join-Path $tmp "tockbon_nets_err_$PID.txt"
@@ -159,8 +166,8 @@ if ($Serial) {
     exit $exitCode
 }
 
-# ── 병렬. 동시에 뜨는 프로세스를 제한한다.
-#  ⚠ 격자 하나가 412만 칸 × 배열 넷이라 프로세스마다 메모리를 먹는다. 코어 수로 묶는다.
+# -- Parallel. The number of processes alive at once is limited.
+#  One grid is 4.12M cells x four arrays, so each process eats memory. It is bounded by the core count.
 $maxParallel = [Math]::Max(2, [Math]::Min(8, [Environment]::ProcessorCount - 2))
 Write-Host "[그물] $($nets.Count)개를 병렬로 돈다 (동시 ${maxParallel}개)"
 
@@ -174,16 +181,16 @@ while ($queue.Count -gt 0 -or $running.Count -gt 0) {
         $n = $queue.Dequeue()
         $o = Join-Path $tmp "tockbon_net_${n}_out_$PID.txt"
         $e = Join-Path $tmp "tockbon_net_${n}_err_$PID.txt"
-        # 🔴🔴 **`^`로 정확히 이 그물 하나에만 묶는다** (2026-08-08, harness-manager 실측).
-        #  부분 일치(`$n`을 그냥 넘기면)로는 이름이 서로를 포함하는 그물(`net_water` ⊂
-        #  `net_water_rain`, `net_sprite` ⊂ `net_monster_sprite`)에서 한 프로세스가 여러 그물을
-        #  몰래 같이 돌린다 — 격리가 깨지고 병렬화가 시간을 못 줄인다(`run_nets.gd` 쪽 주석 참조).
+        # **`^` binds it to exactly this one net** (harness-manager, measured).
+        #  With a substring match (passing `$n` as-is), nets whose names contain each other (`net_water` in
+        #  `net_water_rain`, `net_sprite` in `net_monster_sprite`) let one process secretly run several nets —
+        #  the isolation breaks and the parallelism does not reduce the time (see the comment on the `run_nets.gd` side).
         $a = @("--headless", "--path", $root, "--script", "res://tests/run_nets.gd", "--", "^$n")
         $p = Start-Process -FilePath $godot.FullName -ArgumentList $a -NoNewWindow -PassThru `
             -RedirectStandardOutput $o -RedirectStandardError $e
-        # 🔴🔴 **핸들을 한 번 읽어 둬야 종료 뒤에 `ExitCode` 가 남는다.**
-        #  안 읽으면 .NET이 프로세스 핸들을 놓고, `HasExited` 는 참인데 `ExitCode` 가 비어 있다
-        #  ⇒ **모든 그물이 실패로 읽힌다.** 실측으로 그 사고가 났다 — 통과 수는 정상인데 13개 전부 [실패]였다.
+        # **The handle has to be read once for `ExitCode` to survive after exit.**
+        #  Unread, .NET drops the process handle and `HasExited` is true while `ExitCode` is empty
+        #  => **every net reads as a failure.** That accident was measured — the pass counts were normal while all 13 read [failure].
         $null = $p.Handle
         $running += [PSCustomObject]@{ Net = $n; Proc = $p; Out = $o; Err = $e; Started = $sw.Elapsed.TotalSeconds }
     }
@@ -200,7 +207,7 @@ while ($queue.Count -gt 0 -or $running.Count -gt 0) {
 
 $sw.Stop()
 
-# ── 집계
+# -- Aggregation
 $totalPass = 0
 $totalFail = 0
 $exitCode = 0
@@ -213,7 +220,7 @@ foreach ($j in ($jobs | Sort-Object Net)) {
     if ($null -eq $stderr) { $stderr = "" }
 
     $pass = 0
-    if ($stdout -match '통과\s+(\d+)\s*개') { $pass = [int]$Matches[1] }
+    if ($stdout -match '\[net\]\s+(\d+)\s+passed') { $pass = [int]$Matches[1] }
     $fail = 0
     foreach ($l in ($stdout -split "`r?`n")) { if ($l -match '^x\s') { $fail++ } }
     foreach ($l in ($stderr -split "`r?`n")) { if ($l.Trim() -match '^x\s') { $fail++ } }
@@ -224,9 +231,11 @@ foreach ($j in ($jobs | Sort-Object Net)) {
     $totalPass += $pass
     $totalFail += $fail
 
-    # 🔴 실패 **줄만** 뽑는다. 전문을 뿌리면 출력이 폭발해 정작 실패가 스크롤 위로 사라진다.
-    #  ⚠ 실측: 13개 그물의 전문이 6천 자를 넘겨 잘렸고, 그 안에서 실패 다섯 줄을 못 찾을 뻔했다.
-    #  ⚠ 러너가 같은 실패를 stdout·stderr 양쪽에 쓴다 ⇒ **중복을 지운다.** 안 지우면 두 배로 보인다.
+    # Only the failure **lines** are pulled out. Dumping the full text explodes the output and the actual
+    #  failures scroll off the top.
+    #  Measured: the full text of 13 nets went past 6,000 characters and was truncated, and five failure lines
+    #  were nearly lost inside it.
+    #  The runner writes the same failure to both stdout and stderr => **duplicates are removed.** Otherwise it looks doubled.
     $failLines = @()
     foreach ($l in (($stdout + "`n" + $stderr) -split "`r?`n")) {
         if ($l.Trim() -match '^x\s') { $failLines += $l.Trim() }
@@ -250,7 +259,7 @@ foreach ($l in ($lines | Sort-Object Sec -Descending)) {
     }
 }
 
-# 🔴 실패한 그물만, 그것도 실패 줄만. 전문이 필요하면 출력 파일 경로를 찍어 준다.
+# Only the failing nets, and only their failure lines. If the full text is needed, the output file path is printed.
 foreach ($l in $lines) {
     if (-not $l.Bad) { continue }
     Write-Host ""
@@ -268,15 +277,15 @@ foreach ($l in $lines) {
 Write-Host ""
 Write-Host ("[그물] 통과 {0}개 · 실패 {1}개 · {2}개 그물 · {3:N1}s" -f $totalPass, $totalFail, $nets.Count, $sw.Elapsed.TotalSeconds)
 
-# 🔴 도는 동안 소스가 바뀌었으면 **결과를 믿지 마라.** 위 함수 주석에 왜인지 적어 뒀다.
+# If the source changed while it was running, **do not trust the result.** The why is in the comment on the function above.
 $stampAfter = Get-SrcStamp $root
 if ($stampAfter -ne $stampBefore) {
     Write-Host ""
     Write-Host "[경합] 그물이 도는 동안 src/ 또는 tests/ 가 바뀌었다." -ForegroundColor Yellow
     Write-Host "       (마지막 수정 $stampBefore UTC -> $stampAfter UTC)" -ForegroundColor Yellow
-    Write-Host "       🔴 이 결과를 믿지 마라. 절반 쓰인 파일을 읽었을 수 있다." -ForegroundColor Yellow
+    Write-Host "       이 결과를 믿지 마라. 절반 쓰인 파일을 읽었을 수 있다." -ForegroundColor Yellow
     Write-Host "       실패가 났다면 편집이 멈춘 뒤 다시 돌리고 나서 판단해라." -ForegroundColor Yellow
-    Write-Host "       ⚠ 초록이어도 마찬가지다 - 옛 파일을 읽고 통과했을 수 있다." -ForegroundColor Yellow
+    Write-Host "       초록이어도 마찬가지다 - 옛 파일을 읽고 통과했을 수 있다." -ForegroundColor Yellow
 }
 
 if ($exitCode -eq 0) {

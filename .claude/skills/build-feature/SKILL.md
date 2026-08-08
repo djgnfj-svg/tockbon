@@ -1,174 +1,188 @@
 ---
 name: build-feature
-description: 기획 문서 하나를 팀으로 구현한다. 사용자가 "이거 구현하자" "만들어줘" "개발 시작" 이라고 하거나 docs/plans/1.ready/ 의 문서를 지목할 때 사용한다. spec, builder, verify-run, verify-look, verify-read 다섯 에이전트를 띄우고 조율한다. 재시도, 이어서 진행, 검증만 다시 하는 경우에도 사용한다.
+description: Implements one design doc with a team. Use when the user says "이거 구현하자" "만들어줘" "개발 시작" "let's build this", or points at a doc in docs/plans/1.ready/. Spawns and coordinates five agents — spec, builder, verify-run, verify-look, verify-read. Also used for retries, resuming, and re-running verification only.
 ---
 
-# 기능 구현 팀 운영
+# Running the feature team
 
-## 가장 중요한 규칙
+## The most important rule
 
-**에이전트를 다시 만들지 않는다. 말을 건다.**
-
-```
-Agent(name: "builder", run_in_background: true)   최초 1회
-SendMessage(to: "builder", ...)                   그 뒤로는 계속 이것
-```
-
-**`name` 을 주면 팀원(teammate)이 되고, 안 주면 그냥 서브에이전트다.** 팀원은 팀 명부에 등록되고 서로 직접 메시지를 주고받는다.
-**화면에서는 둘이 똑같이 보인다** — 구분하는 설정이 없다(공식 문서 확인). ⇒ **띄울 때마다 사용자에게 어느 쪽인지 말해라.**
-그리고 **idle은 죽음이 아니다.** 메시지를 보내면 transcript에서 재개되어 **파일을 다시 안 읽는다**(실측). 진짜 죽었으면 `SendMessage` 가 「reachable하지 않다」로 실패하고, 그때만 새로 띄운다.
-
-### `CLAUDE.md` 는 스폰 시점에 얼어붙는다
-
-**자동 로드는 된다** — 팀원은 `Read` 없이도 `CLAUDE.md` 를 안다(실측: 도구 0회로 「응답 규칙」을 정확히 답했다).
-**그런데 그 사본은 띄운 순간의 것이고 갱신되지 않는다.** 실측으로 확인했다 — 세션 중간에 폴더 이름이 바뀌었는데
-팀원의 사본은 옛 이름 그대로였고, 새 이름은 **내 메시지로** 알았다.
-
-⇒ **세션 중간에 `CLAUDE.md` 나 기획 문서를 고쳤으면 `SendMessage` 로 직접 알려라.** 안 알리면 팀원은 옛 내용대로 계속 일한다.
-반대로 **에이전트 정의 파일(`agents/*.md`)을 고치면 변경 알림이 새 본문을 실어 나른다**(실측). 그쪽은 중간에 바꿔도 닿는다.
-
-`Agent`를 다시 부르면 새 인스턴스가 처음부터 코드를 다시 읽는다. `SendMessage`는 하던 맥락을 그대로 이어간다. 검증에서 되돌아오는 일이 반복되므로 이 차이가 전체 비용을 정한다.
-
-실측으로 확인했다. 파일을 읽은 에이전트에게 나중에 그 내용을 물으면 **다시 읽지 않고 답한다.**
-
-## 두 번째 규칙: 답을 main으로 보내라고 시켜라
-
-**팀원의 최종 텍스트는 나에게 자동으로 오지 않는다.** 이것도 실측으로 확인했다 — 시키지 않으면 에이전트는 일을 끝내고 조용히 idle이 된다.
-
-모든 지시 끝에 붙인다:
-
-> 결과는 `SendMessage(to: "main")` 으로 보내라.
-
-이걸 빼먹으면 builder가 구현을 다 하고도 나에게 아무 보고가 오지 않는다.
-
-## 흐름
+**Do not recreate an agent. Talk to it.**
 
 ```
-1. 기획 확인      1.ready/ 문서를 고른다
-2. spec           구현 계획 → 2.active/ 로 이동
-                  막히면 main에 질문 → 내가 사용자에게 묻는다
-3. builder        계획대로 구현
-4. 검증 셋 동시    verify-run · verify-look · verify-read
-5. 판정           전부 통과 → 3.done/ 으로
-                  하나라도 실패 → 해당 내용을 builder에 SendMessage (4로)
+Agent(name: "builder", run_in_background: true)   once
+SendMessage(to: "builder", ...)                   everything after
 ```
 
-## 검증은 구현이 끝난 뒤가 아니라 **단계마다**다
+**Give a `name` and it becomes a teammate; omit it and it's just a subagent.** Teammates are registered in
+the roster and message each other directly.
+**On screen the two look identical** — there is no setting that distinguishes them (confirmed in the docs).
+⇒ **Say which one it is every time you spawn.**
 
-**계획이 여러 단계로 쪼개져 있으면 단계마다 3↔4를 돈다.** 마지막에 한 번만 검증하면 안 된다.
+And **idle is not dead.** Send a message and it resumes from the transcript, **without re-reading files** (measured).
+If it really died, `SendMessage` fails with "not reachable" — spawn a new one only then.
 
-이유가 비용이 아니라 **역할 경계**다. builder는 「에러 없이 뜨나」만 본다(`agents/builder.md`) —
-그래서 **단계 하나가 끝난 순간, 그것이 계획대로인지는 아무도 모르는 상태**가 된다.
-검증을 미루면 그 미지의 단계 위에 다음 단계를 쌓는 것이고, 틀렸을 때 되돌릴 양이 단계 수만큼 는다.
+### `CLAUDE.md` freezes at spawn time
 
-**builder가 「값을 재서 보고」하면 그건 검증이 아니라 경계를 넘은 것이다.** 그 보고를 판정 근거로 쓰지 마라.
-자기가 만든 것을 자기가 재면 유리하게 읽는다. 그 자리를 메우라고 검증자가 있다.
+**Auto-load works** — a teammate knows `CLAUDE.md` without any `Read` (measured: answered the reply rule
+exactly with 0 tool calls).
+**But that copy is from the spawn moment and never refreshes.** Measured — a folder was renamed mid-session
+and the teammate's copy still had the old name; it learned the new one **from my message.**
 
-**검증자에게 builder의 소감을 전달하지 마라.** 「builder는 잘 나온다고 했다」를 넘기는 순간
-그게 앵커가 되어 독립적인 눈이 아니게 된다. 넘길 것은 **무엇을 어디에 썼는지와 확신 없다고 한 지점**뿐이다.
+⇒ **If you edit `CLAUDE.md` or a design doc mid-session, tell them directly with `SendMessage`.** Otherwise
+they keep working from the old content.
+Conversely, **editing an agent definition (`agents/*.md`) sends a change notification carrying the new body**
+(measured). That side does reach them mid-flight.
 
-## 단계별
+Calling `Agent` again makes a new instance re-read all the code from scratch. `SendMessage` continues the context.
+Verification bounces work back repeatedly, so this difference sets the total cost.
 
-**1. 시작 전**
+## Second rule: tell them to send results to main
 
-- `docs/plans/2.active/` 에 이미 있는 게 있으면 그것부터 끝낸다. 동시에 두 개를 굴리지 않는다.
-- 문서에 `## 판정` 과 `## 화면` 이 비어 있으면 여기서 멈춘다. 검증자가 판정할 근거가 없다.
+**A teammate's final text does not reach me automatically.** Also measured — unasked, the agent finishes and
+goes quietly idle.
+
+Append to every instruction:
+
+> Send the result via `SendMessage(to: "main")`.
+
+Skip it and builder finishes the whole implementation with no report reaching me.
+
+## Flow
+
+```
+1. Pick design     choose a doc in 1.ready/
+2. spec            plan → move to 2.active/
+                   stuck → question to main → I ask the user
+3. builder         implement per plan
+4. Three verifiers verify-run · verify-look · verify-read, together
+5. Judgment        all pass → 3.done/
+                   any fail → SendMessage the details to builder (back to 4)
+```
+
+## Verify **per stage**, not after the implementation ends
+
+**If the plan is split into stages, loop 3↔4 per stage.** Never verify once at the end.
+
+The reason is not cost but **role boundaries.** builder only checks "does it come up without errors"
+(`agents/builder.md`) — so **the moment a stage finishes, nobody knows whether it matches the plan.**
+Delaying verification stacks the next stage on top of an unknown one, and the rollback grows with the stage count.
+
+**If builder "measures a value and reports it", that is crossing the boundary, not verification.** Do not use
+that report as grounds for a judgment. Measuring your own work reads favorably. The verifiers exist to fill that gap.
+
+**Do not pass builder's impressions to the verifiers.** The moment "builder said it looks good" is relayed,
+it anchors them and they are no longer independent eyes. Pass only **what was written where, and where builder said it was unsure.**
+
+## Stage by stage
+
+**1. Before starting**
+
+- If something is already in `docs/plans/2.active/`, finish that first. Never run two at once.
+- If the doc's `## Acceptance` and `## Screen` are empty, stop here. The verifiers have no grounds to judge.
 
 **2. spec**
 
-띄우고 기다린다. spec이 main에 질문을 올리면 사용자에게 그대로 전한다. 내가 대신 답하지 않는다.
+Spawn and wait. When spec sends a question to main, relay it verbatim to the user. Do not answer on their behalf.
 
-계획이 나오면 **사용자에게 한 번 보여주고 확인받는다.** 여기서 틀리면 뒤가 전부 헛돈다.
+When the plan lands, **show it to the user once and get confirmation.** Wrong here and everything after it spins.
 
 **3. builder**
 
-계획을 넘긴다. builder가 "확신 없다"고 말한 곳은 기억해 둔다. 검증자에게 그 지점을 알려준다.
+Hand over the plan. Remember where builder said "unsure". Tell the verifiers those spots.
 
-**4. 검증 셋**
+**4. Three verifiers**
 
-세 명을 **동시에** 띄운다. 서로 다른 것을 보므로 순서가 없다.
+Spawn all three **at once.** They look at different things, so there is no order.
 
-각자에게 넘길 것:
-- 셋 모두: 기획 문서 경로, builder가 무엇을 어디에 썼는지
-- verify-run·verify-look: 판정 기준 (`## 판정`, `## 화면`)
-- verify-read: builder가 확신 없다고 한 지점
+Hand each:
+- All three: design doc path, what builder wrote where
+- verify-run · verify-look: acceptance criteria (`## Acceptance`, `## Screen`)
+- verify-read: the spots builder was unsure about
 
-### 검증 중에는 builder를 멈춰라
+### Freeze builder during verification
 
-**builder가 파일을 고치는 동안 검증자가 그 순간을 밟으면 검증 결과가 통째로 무효가 된다.**
-실제로 겪었다 — verify-run이 관측하는 동안 리포가 **세 번** 깨진 상태였고(파스 에러 둘, 표 단조 깨짐 하나), 전부 builder의 중간 저장 상태였다.
+**If a verifier steps on the moment builder is editing a file, the entire verification result is void.**
+It happened — the repo was broken **three times** while verify-run was observing (two parse errors, one broken
+table monotonicity), all of them builder's intermediate saves.
 
-⇒ builder에게 **「한 덩어리 → 그물 초록 → 보고 → 지시가 올 때까지 정지」**를 시킨다. 그 정지 구간이 검증 시간이다.
+⇒ Instruct builder: **"one chunk → nets green → report → halt until instructed."** That halt is the verification window.
 
-### 에디터 브리지는 한 번에 한 에이전트만 문다
+### The editor bridge takes one agent at a time
 
-`127.0.0.1:6550` 은 **한 클라이언트만** 잡는다. 그런데 에이전트마다 자기 godot-mcp 서버 인스턴스가 뜨고, **에이전트가 idle이 돼도 그 연결은 안 죽는다.**
+`127.0.0.1:6550` holds **one client.** But each agent gets its own godot-mcp server instance, and
+**going idle does not kill that connection.**
 
-⇒ 「검증 셋을 동시에」가 여기서 깨진다. 실제로 verify-look이 브리지를 못 잡아 **화면 검증이 통째로 멈췄다.**
+⇒ "Three verifiers at once" breaks here. verify-look actually failed to grab the bridge and **screen verification stopped entirely.**
 
-#### 「`godot_*` 를 쓰지 마라」는 이 문제를 못 막는다
+#### "Don't use `godot_*`" does not prevent this
 
-**도구 금지는 호출을 막지 연결을 막지 않는다.** 실측:
+**A tool ban blocks calls, not connections.** Measured:
 
-- 머신에 godot-mcp 클라이언트가 **셋** 떠 있었고 셋 다 **세션 시작 시각에** 스폰됐다 — 도구 호출과 무관하게 뜬다
-- 에디터가 없던 30분 내내 살아 있다가, 에디터가 올라온 **직후** 그중 하나가 6550을 잡았다. 그 세션이 `godot_*` 를 불렀다는 증거는 없다
-- 클라이언트가 뱉는 문구가 재시도 루프를 명시한다 — `"This client keeps retrying and will connect once the other disconnects"`. 거절 횟수가 호출 사이에 **스스로** 늘어난다
-- 에디터를 재시작해 경쟁을 다시 시켜도 **같은 쪽이 또 잡았다**
+- **Three** godot-mcp clients were up on the machine, all spawned **at session start** — independent of any tool call
+- They stayed alive through 30 minutes with no editor, and one grabbed 6550 **immediately** after an editor came up. No evidence that session ever called `godot_*`
+- The client's own message states the retry loop — `"This client keeps retrying and will connect once the other disconnects"`. The refusal count grows **on its own** between calls
+- Restarting the editor to re-run the race gave **the same winner again**
 
-⇒ **확실한 해법은 브리지를 쓸 에이전트 외에는 godot MCP 서버를 아예 안 붙이는 것**이지, 프롬프트로 도구를 금지하는 것이 아니다. `agents/verify-run.md` · `agents/verify-read.md` 에 「헤드리스로만」이 적혀 있는 이유가 이것이다.
+⇒ **The only reliable fix is not attaching the godot MCP server to any agent except the one using the bridge**,
+not banning the tool in a prompt. That is why `agents/verify-run.md` and `agents/verify-read.md` say "headless only".
 
-그래도 막히면 **다른 세션의 godot-mcp(node) 프로세스**가 물고 있는 것이다. 죽이면 풀리지만 **남의 도구를 끊는 일이라 사용자에게 물어야 한다.** 부모 `claude.exe` 는 절대 안 건드린다 — 그건 세션 본체다.
+If it still blocks, **a godot-mcp (node) process from another session** is holding it. Killing it frees the bridge
+but **cuts someone else's tools, so ask the user.** Never touch the parent `claude.exe` — that is the session itself.
 
-#### 막혔을 때 사용자 입력을 뺏지 않는다
+#### When blocked, do not take the user's input
 
-브리지가 안 잡히면 **거기서 멈추고 사용자에게 보고한다.** 게임을 CLI로 띄우고 창을 포커스해 키를 주입하는 우회로는 **금지다** — 사용자가 같은 컴퓨터를 쓰고 있다.
+If the bridge won't come, **stop there and report to the user.** Launching the game via CLI, focusing the window
+and injecting keys is **forbidden** — the user is on the same machine.
 
-실제로 났다. 전역 키 주입(`keybd_event`)을 썼는데 Windows 포그라운드 잠금에 막혀 게임이 포커스를 못 받았고, **키가 사용자의 Chrome으로 갔다.** 사용자가 그 자리에서 멈추라고 했다.
+It happened. Global key injection (`keybd_event`) hit Windows foreground lock, the game never got focus, and
+**the keys went into the user's Chrome.** The user stopped it on the spot.
 
-**「멈춰서 못 했다」가 「사용자 입력을 뺏어서 했다」보다 낫다.** 못 본 것은 「못 봤다」로 문서에 적으면 된다.
+**"Stopped, couldn't do it" beats "did it by taking the user's input".** What you couldn't see, write down as "couldn't see".
 
-**갈라 두면 동시에 돌아간다:**
+**Split this way and they run concurrently:**
 
-| 누가 | 어떻게 |
+| Who | How |
 |---|---|
-| **verify-look** | **에디터 브리지를 쓴다.** 화면은 이 에이전트만 본다 |
-| **verify-run** | **헤드리스로만** — `Godot_*.exe --headless --script`(`run_nets.ps1` 과 같은 방식). 별도 프로세스라 안 부딪힌다 |
-| **verify-read** | 코드만 읽는다. 충돌 없음 |
-| **builder** | `godot_*` **금지**(`agents/builder.md`) |
+| **verify-look** | **Uses the editor bridge.** Only this agent sees the screen |
+| **verify-run** | **Headless only** — `Godot_*.exe --headless --script` (same as `run_nets.ps1`). Separate process, no collision |
+| **verify-read** | Reads code. No conflict |
+| **builder** | `godot_*` **forbidden** (`agents/builder.md`) |
 
-그래도 막히면 **유휴 godot-mcp 프로세스가 물고 있는 것**이다. 정리해도 되지만
-**에디터 본체(`Godot_*.exe --editor`)는 절대 죽이지 마라** — 사용자가 띄운 것이고, 죽으면 화면 검증이 불가능해진다.
+If it still blocks, **an idle godot-mcp process is holding it.** Cleaning those up is allowed, but
+**never kill the editor itself (`Godot_*.exe --editor`)** — the user launched it, and screen verification dies with it.
 
-### verify-read에게는 뮤테이션을 시켜라
+### Make verify-read mutate
 
-「그물이 초록이다」는 「그물이 무언가를 잰다」가 아니다. **가드를 지워 보고 빨개지는지** 확인시켜라.
-실제로 이번에 **헛도는 그물 둘**과 **셰이더가 통째로 깨져도 초록인 상태**가 그렇게 잡혔다.
+"The nets are green" is not "the nets measure something". Have them **delete a guard and check that it goes red.**
+That is how **two idle-spinning nets** and **a shader fully broken yet still green** were caught.
 
-뮤테이션은 파일을 잠깐 깨뜨린다. **한 번에 하나씩, `try/finally` 로 즉시 복원**시켜라 — 안 그러면 위의 「검증 중 편집」 문제를 검증자가 일으킨다.
+Mutation breaks a file briefly. **One at a time, restored immediately via `try/finally`** — otherwise the verifier
+causes the "editing during verification" problem above.
 
-**5. 판정**
+**5. Judgment**
 
-- **전부 통과** → 문서를 `3.done/` 으로 옮기고 `**상태**:` 를 고친다. 사용자에게 보고한다.
-- **실패** → 실패 내용을 정리해 `SendMessage(to: "builder")`. 다시 4로.
-- **판정 불가** (기준이 비었거나 애매) → spec에 되돌리거나 사용자에게 묻는다.
+- **All pass** → move the doc to `3.done/` and fix `**Status**:`. Report to the user.
+- **Fail** → summarize the failures and `SendMessage(to: "builder")`. Back to 4.
+- **Cannot judge** (criteria empty or ambiguous) → return to spec, or ask the user.
 
-## 되돌림 상한
+## Rollback limit
 
-같은 기능을 **3번** 되돌렸는데도 통과 못 하면 멈추고 사용자에게 가져간다.
+If the same feature has bounced back **3 times** without passing, stop and take it to the user.
 
-계속 돌리면 builder가 검증을 통과시키려고 코드를 비틀기 시작한다. 그게 가짜 코드가 태어나는 가장 흔한 경로다.
+Keep going and builder starts bending the code to get past verification. That is the most common path to fake code.
 
-## 사용자에게 물어야 할 때
+## When to ask the user
 
-- spec이나 builder가 main에 질문을 올렸을 때
-- verify-look이 "세 보이나" 같은 주관 판정을 못 하겠다고 할 때
-- 되돌림이 3번을 넘었을 때
-- 계획이 기획 문서의 범위를 벗어나야 할 때
+- spec or builder sent a question to main
+- verify-look can't make a subjective call like "does it look strong"
+- rollbacks passed 3
+- the plan has to go outside the design doc's scope
 
-**모아서 한 번에 묻는다.** 여러 번 부르는 게 더 비싸다.
+**Batch them into one ask.** Pulling the user in repeatedly costs more.
 
-## 이어서 하는 경우
+## Resuming
 
-- `2.active/` 문서가 있고 팀이 죽어 있으면: 문서의 진행 상황을 읽고 필요한 에이전트만 새로 띄운다.
-- 검증만 다시 하고 싶으면: 검증 셋만 띄운다. builder는 건드리지 않는다.
-- 팀이 살아 있으면: 그냥 `SendMessage` 한다.
+- A `2.active/` doc exists and the team is dead: read the doc's progress and spawn only the agents you need.
+- Want to re-verify only: spawn the three verifiers. Leave builder alone.
+- Team is alive: just `SendMessage`.

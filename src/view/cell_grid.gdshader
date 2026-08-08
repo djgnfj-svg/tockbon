@@ -1,46 +1,48 @@
 shader_type canvas_item;
 render_mode unshaded;
 
-// 셀 격자 렌더. 🔴 **CPU는 색을 만들지 않는다** — `_mat`·`_flag` 바이트 배열이 그대로 L8 텍스처이고,
-//  여기서 팔레트 룩업만 한다.
+// Cell grid rendering. **The CPU does not make colors** — the `_mat` and `_flag` byte arrays are L8 textures
+//  as-is, and all that happens here is a palette lookup.
 //
-// 🔴 **색 리터럴을 재료에 쓰지 마라.** 팔레트는 `cell_materials.gd`의 `DEFS`에서 구워 주입한다.
-//  여기 색을 박으면 시뮬 표와 렌더가 갈린다(파생 대신 복제).
-// 🔴 불 색과 비트 위치도 마찬가지로 **주입된다**(`fx_tuning.gd` · `cell_materials.gd`).
+// **Do not write color literals for materials.** The palette is baked from `cell_materials.gd`'s `DEFS` and injected.
+//  Pin a color here and the sim table and the rendering diverge (duplication instead of derivation).
+// Fire colors and bit positions are likewise **injected** (`fx_tuning.gd` and `cell_materials.gd`).
 
 uniform vec4 palette[16];
 
-// 🔴 `_flag` 텍스처. 재료는 그대로인데 상태만 바뀌는 것(= 타는 중)을 나르는 유일한 축이다.
+// The `_flag` texture. The only axis carrying what changes state while the material stays the same (= burning).
 uniform sampler2D flag_tex : filter_nearest, repeat_disable;
 uniform int flag_burning;
 uniform vec4 fire_lo;
 uniform vec4 fire_hi;
 uniform float fire_hz;
 
-// 🔴 얕은 물. 깊은 물 색은 **여기 없다** — 그건 재료라 `palette`로 이미 들어온다.
+// Shallow water. The deep water color is **not here** — that is a material and already arrives via `palette`.
 uniform int flag_shallow;
 uniform vec4 water_shallow;
 
-// 🔴🔴 **빈칸을 투명으로 뺀다 — 배경이 화면에 도달하는 유일한 경로다** (2026-08-08).
-//  ⚠ 전에는 빈칸도 `palette`의 `#0E0E13`으로 **불투명하게 칠했다.** 격자 스프라이트가
-//   월드 전체를 빠짐없이 덮으므로 **그 뒤에 무엇을 넣어도 100% 가려졌다** —
-//   `docs/design/배경.md` 가 「무엇을 먼저 해야 하나: 그림이 아니라 코드다」로 적어 둔 자리다.
-//  🔴 **재료 표에 알파를 넣는 길은 안 골랐다** — `src/sim/`의 「정수만」 계약을 건드리고
-//   `rgb`가 24비트라 알파 채널이 표에 아예 없다. ⇒ **셰이더 쪽이 싸다.**
-//  ⚠ `palette[EMPTY]`의 색은 그대로 남는다 — **배경이 없는 무대에서는 그 색이 그대로 보인다**
-//   (`empty_id`를 -1로 주면 옛 거동이다).
+// **Empty cells are pulled out as transparent — the only path by which the background reaches the screen.**
+//  Before, empty cells were painted **opaquely** with `palette`'s `#0E0E13` too. The grid sprite covers
+//   the whole world with no gaps, so **whatever was put behind it was 100% hidden** —
+//   the seat `docs/design/background.md` wrote down as "what has to come first: not the art, the code".
+//  **The path of putting alpha in the material table was not taken** — it touches `src/sim/`'s "integers only"
+//   contract, and since `rgb` is 24-bit there is no alpha channel in the table at all. => **The shader side is cheap.**
+//  The color of `palette[EMPTY]` stays as it is — **on a stage with no background that color shows through**
+//   (pass -1 for `empty_id` and you get the old behavior).
 uniform int empty_id;
 
-// L8 → 정수 복원. 🔴 값을 16 미만으로 묶어 둔 이유가 이 반올림이다 —
-//  정밀도가 mediump로 떨어지는 기계에서도 0~15는 안전하다.
+// L8 -> integer restore. The reason values are kept below 16 is this rounding —
+//  0 to 15 is safe even on a machine where precision drops to mediump.
 //
-// 🔴🔴 **인자가 sampler가 아니라 「이미 읽은 texel」인 것이 이 함수의 전부다.**
-//  sampler를 인자로 받으면 같은 함수를 내장(`TEXTURE`)과 uniform(`flag_tex`) 양쪽으로 못 부른다
+// **That the argument is an already-read texel rather than a sampler is the whole point of this function.**
+//  Take a sampler as an argument and the same function cannot be called with both a built-in (`TEXTURE`)
+//  and a uniform (`flag_tex`)
 //  (`Sampler argument 0 ... called more than once using both built-ins and uniform textures`).
-//  ⇒ 그렇게 짜면 **컴파일이 통째로 실패하는데 게임은 안 멈추고 화면만 검게 뜬다** —
-//   격자가 L8 원본 바이트값(돌 1 · 나무 2)으로 그려지고, `_draw()`로 그리는 캐릭터만 제 색으로 남는다.
-//  ⚠ 실측으로 그 상태에서 그물 534개가 전부 초록이었다. `net_render`가 그래서 생겼다.
-//  ⚠ 파서 규칙이라 **백엔드·헤드리스와 무관하다**(검증자가 변형 4개를 컴파일해 좁혔다).
+//  => Written that way, **compilation fails outright while the game does not stop and only the screen goes black** —
+//   the grid is drawn with the raw L8 byte values (stone 1, wood 2), and only the character drawn via `_draw()`
+//   keeps its real color.
+//  Measured: in that state all 534 nets were green. That is why `net_render` exists.
+//  It is a parser rule, so **it is independent of backend and headless** (a verifier compiled 4 variants to narrow it).
 int l8_to_int(vec4 texel) {
 	return clamp(int(texel.r * 255.0 + 0.5), 0, 15);
 }
@@ -51,33 +53,34 @@ void fragment() {
 
 	vec4 c = palette[mat_id];
 
-	// 🔴🔴 **빈칸은 알파를 0으로 만든다. `return` 으로 빠져나가지 않는다.**
-	//  ⚠ 2026-08-08에 `if (…) { COLOR = vec4(0.0); return; }` 로 썼다가 **`net_render` 가 잡았다** —
-	//   `fragment()` 안의 이른 `return` 이 컴파일을 깨뜨린다.
-	//  🔴 그리고 그 증상이 위 `l8_to_int` 주석과 **정확히 같다**: 컴파일이 통째로 실패하는데
-	//   게임은 안 멈추고 화면만 검게 뜬다. **`net_render` 가 있어서 잡혔다.**
-	//  ⇒ 아래 상태 분기(얕은 물·불)는 빈칸에 설 수 없으므로(물은 재료, 불은 연료가 필요하다)
-	//   알파만 0으로 두고 그대로 흘려보내도 결과가 같다.
+	// **Empty cells get alpha 0. They do not escape via `return`.**
+	//  It was once written as `if (…) { COLOR = vec4(0.0); return; }` and **`net_render` caught it** —
+	//   an early `return` inside `fragment()` breaks compilation.
+	//  And that symptom is **exactly the same** as the `l8_to_int` comment above: compilation fails outright
+	//   while the game does not stop and only the screen goes black. **It was caught because `net_render` exists.**
+	//  => The state branches below (shallow water, fire) cannot stand on an empty cell (water is a material,
+	//   fire needs fuel), so setting alpha alone to 0 and letting it flow through gives the same result.
 	float a = (mat_id == empty_id) ? 0.0 : 1.0;
 
-	// 🔴 **불보다 먼저 본다.** 물은 안 타므로 두 비트가 같은 칸에 설 수 없지만(물은 연료가 0이다),
-	//  순서를 정해 두면 **다음 상태 색이 올 때 「어느 게 이기나」를 다시 안 정한다.**
-	//  ⚠ 아래 불 분기가 `c`를 통째로 덮어쓰므로, 둘이 겹치는 날이 오면 **불이 이긴다.**
+	// **Looked at before fire.** Water does not burn, so the two bits cannot stand on the same cell
+	//  (water has 0 fuel), but fixing an order means **not having to decide "which one wins" again
+	//  when the next state color arrives.**
+	//  The fire branch below overwrites `c` wholesale, so the day the two do overlap, **fire wins.**
 	if ((flags & flag_shallow) != 0) {
 		c = water_shallow;
 	}
 
 	if ((flags & flag_burning) != 0) {
-		// 🔴 **셀마다 위상을 흩는다.** 안 그러면 불 전체가 한 덩어리로 같이 깜빡여서
-		//  「타는 면」이 아니라 「깜빡이는 사각형」으로 보인다.
-		// ⚠ 격자 크기를 여기 박지 않는다 — `TEXTURE_PIXEL_SIZE`가 그 값을 이미 들고 있고,
-		//  손으로 적으면 W/H를 바꾸는 날 조용히 낡는다.
+		// **Scatter the phase per cell.** Without it the whole fire blinks together as one lump and reads as
+		//  "a blinking rectangle" rather than "a burning surface".
+		// Do not pin the grid size here — `TEXTURE_PIXEL_SIZE` already holds that value, and written by hand
+		//  it goes silently stale the day W/H change.
 		vec2 cell = floor(UV / TEXTURE_PIXEL_SIZE);
 		float ph = fract(sin(dot(cell, vec2(12.9898, 78.233))) * 43758.5453);
 		c = mix(fire_lo, fire_hi, 0.5 + 0.5 * sin(TIME * fire_hz + ph * 6.2831853));
 	}
 
-	// 🔴 알파를 마지막에 곱한다 — 위 분기들이 `c` 를 통째로 덮어쓰므로 여기가 유일하게 안전한 자리다.
+	// Alpha is multiplied last — the branches above overwrite `c` wholesale, so this is the only safe seat.
 	c.a *= a;
 	COLOR = c;
 }

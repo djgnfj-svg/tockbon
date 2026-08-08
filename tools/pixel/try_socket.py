@@ -1,24 +1,24 @@
-"""소켓 문양 링 후보를 **실제 삼각진 위에 얹어** 본다.
+"""Tries socket glyph ring candidates **laid on the real triangle circle.**
 
-🔴🔴 **낱장으로는 판정이 안 난다.** `triangle-circle-art.md` 의 판정 3·4·5 가 전부
-「진 위에 얹었을 때」를 묻는다 — 잘리나 · 룬이 읽히나 · 둘이 갈리나.
-⚠ 실제로 낱장만 보고 두 판을 헛돌렸다: 링에 테두리 원이 있어도 낱장에선 멀쩡해 보이는데,
- `draw_circle.triangle()` 이 **소켓 바깥 테두리(r=144)와 띠 안쪽 경계(r=96)를 이미 그리므로**
- 얹으면 삼중선이 된다. ⇒ 문양 링이 그릴 것은 **그 두 원 사이를 채우는 무늬뿐**이다.
+**A single image cannot be judged.** Acceptance 3, 4 and 5 in `triangle-circle-art.md` all ask about
+"when laid on the circle" — does it get cut off · does the rune read · do the two read apart.
+Two batches were actually wasted by looking at single images only: a ring with a border circle looks fine alone,
+ but because `draw_circle.triangle()` **already draws the socket outer border (r=144) and the band inner boundary (r=96)**,
+ laying it on gives a triple line. => All a glyph ring should draw is **the pattern filling between those two circles.**
 
-## 🔴 규격은 저절로 안 맞는다 — 재서 맞춘다
+## The spec does not match by itself — it is matched by measuring
 
-`마법진-그림.md` 가 「뽑은 뒤 재서 확인해야 한다」고 적어 둔 자리다. AI 는 안쪽 구멍 비율을
-프롬프트대로 안 준다(2/3 을 요구해도 0.5~0.8 로 흔들린다) ⇒ **잉크의 반경 분포를 재서
-바깥 잉크가 정확히 r=144 에 오도록 스케일한다.** 그래야 무늬가 소켓을 꽉 채운다.
+This is the spot `circle-art.md` marked with "it must be measured and checked after generating". The AI does not give
+the inner hole ratio the prompt asks for (ask for 2/3 and it wobbles between 0.5 and 0.8) => **measure the ink's radial
+distribution and scale it so the outer ink lands exactly at r=144.** Only then does the pattern fill the socket.
 
-⚠ **잘라 쓰는 것과 다르다**(문서 「조각을 붙이면 통짜만 못하다」의 경고). 잘라내면 무늬가
-중간에서 끊기는데, 여기는 **통째로 줄여 맞추는 것**이라 무늬가 안 끊긴다.
-🔴 다만 소켓 원 밖은 마스크로 자른다 — 안 자르면 링의 흰 배경이 **사각으로** 남는다(실측).
+**This is not the same as cutting it out** (the document's warning, "gluing pieces is worse than one whole piece").
+Cutting breaks the pattern midway; here it is **shrunk whole to fit**, so the pattern does not break.
+Outside the socket circle is masked away, though — without that, the ring's white background stays as **a square** (measured).
 
-**곱하기로 얹는 이유**: 링 후보는 크림 배경에 검은 선이라 알파가 없다. 임계로 자르면
-안티앨리어싱된 가장자리가 계단이 진다 ⇒ 밝기를 그대로 곱해 선만 남긴다.
-⚠ 배경이 순백(255)이 아니라 크림이라 곱하면 소켓 안이 살짝 어두워진다 — **정규화로 편다.**
+**Why it is composited by multiplication**: a ring candidate is black line on a cream ground, so it has no alpha.
+Cutting by threshold stairsteps the antialiased edges => multiply the brightness straight through and only the lines survive.
+The background is cream rather than pure white (255), so multiplying darkens the socket interior slightly — **normalization flattens that.**
 """
 
 import sys
@@ -28,23 +28,24 @@ import numpy as np
 from PIL import Image, ImageChops, ImageDraw
 
 HERE = Path(__file__).parent
-sys.path.insert(0, str(HERE))   # 리포 루트에서 불러도 draw_circle 을 찾게 한다
+sys.path.insert(0, str(HERE))   # so draw_circle is found even when invoked from the repo root
 
 from draw_circle import S, at, triangle  # noqa: E402
 
-SOCKET_R = 144   # 소켓 반지름 (지름 288 = 문양 링 에셋 크기)
-BAND_IN = 96     # 문양 띠 안쪽 경계 = 144 − 48
-DIST = 368       # 소켓 중심까지의 반지름
-RUNE_D = 192     # 룬 심볼 = 288 − 48×2
-INK = 160        # 이 밝기보다 어두우면 잉크로 센다
+SOCKET_R = 144   # socket radius (diameter 288 = the glyph ring asset size)
+BAND_IN = 96     # glyph band inner boundary = 144 - 48
+DIST = 368       # radius out to a socket's center
+RUNE_D = 192     # rune symbol = 288 - 48x2
+INK = 160        # darker than this brightness counts as ink
 
 
 def _normalize(im):
-    """배경을 흰색으로 편다. 안 하면 곱할 때마다 소켓이 한 겹씩 어두워진다.
+    """Flattens the background to white. Without it the socket darkens one layer per multiply.
 
-    🔴 **최대 밝기로 나누면 부족하다** — 후보의 배경이 균일하지 않으면(생성 그림은 거의 늘 그렇다)
-    가장 밝은 한 점만 255가 되고 **나머지 배경은 회색으로 남아 사각이 그대로 보인다**(실측: 룬 심볼).
-    ⇒ **상위 2% 지점**을 흰색으로 잡아 배경 전체를 민다.
+    **Dividing by the maximum brightness is not enough** — if a candidate's background is not uniform
+    (generated art almost always isn't), only the single brightest point becomes 255 and **the rest of the
+    background stays gray, leaving the square plainly visible** (measured: the rune symbol).
+    => Take **the top 2% point** as white and push the whole background up.
     """
     g = im.convert("L")
     a = np.asarray(g)
@@ -55,11 +56,11 @@ def _normalize(im):
 
 
 def ink_radii(gray):
-    """잉크가 걸쳐 있는 반경 구간을 이미지 반지름 대비 비율로 돌려준다.
+    """Returns the radial span the ink covers, as a ratio of the image radius.
 
-    🔴 **행마다 세지 않고 반경 히스토그램으로 센다** — 무늬가 별 모양이면 특정 각도로만
-    멀리 뻗어서, 최대 반경만 보면 그 한 가시가 전체를 대표해 버린다.
-    ⇒ 그 반경 고리의 **잉크 비율**이 임계를 넘는 구간만 「링이 있다」로 본다.
+    **Counted with a radial histogram rather than per row** — if the pattern is star-shaped it reaches far
+    at only certain angles, and looking at the maximum radius lets that one spike represent the whole.
+    => Only spans where that radial ring's **ink fraction** exceeds a threshold count as "there is a ring here".
     """
     a = np.asarray(gray, dtype=np.int16)
     h, w = a.shape
@@ -78,16 +79,16 @@ def ink_radii(gray):
 
 
 def fit_ring(patch, out_r=SOCKET_R):
-    """링 후보를 소켓 좌표로 맞춘다 — 바깥 잉크가 `out_r` 에 오도록 통째로 스케일한다.
+    """Fits a ring candidate to socket coordinates — scales it whole so the outer ink lands at `out_r`.
 
-    돌려주는 것: (소켓 지름 크기의 회색 이미지, 안쪽 구멍 반지름). 안쪽 반지름은 부르는 쪽이
-    `BAND_IN`(96) 과 대 봐서 **룬 자리를 침범하는지** 판단한다.
+    Returns: (a grayscale image the size of the socket diameter, the inner hole radius). The caller compares the
+    inner radius against `BAND_IN` (96) to judge **whether it invades the rune's slot.**
     """
     g = _normalize(patch)
     r_in, r_out = ink_radii(g)
     if r_out <= 0:
         r_out = 1.0
-    # 원본에서 「바깥 잉크」가 이미지 반지름의 r_out 배에 있다 ⇒ 그것을 out_r 로 보낸다
+    # In the original, "the outer ink" sits at r_out times the image radius => send that to out_r
     full = int(round(out_r * 2 / r_out))
     big = g.resize((full, full), Image.LANCZOS)
     box = (full - out_r * 2) // 2
@@ -96,8 +97,8 @@ def fit_ring(patch, out_r=SOCKET_R):
 
 
 def _paste_masked(base, gray, center, size):
-    """원 마스크로 곱해 얹는다. 🔴 마스크가 없으면 후보의 흰 배경이 **사각으로** 남는다(실측).
-    ⚠ 링만이 아니라 룬 심볼도 그렇다 — 룬은 원형이 아니지만 배경은 사각이다."""
+    """Composites by multiplying through a circular mask. Without the mask the candidate's white background
+    stays as **a square** (measured). This goes for the rune symbol too, not just the ring — a rune is not round, but its background is square."""
     mask = Image.new("L", (size, size), 0)
     ImageDraw.Draw(mask).ellipse([0, 0, size - 1, size - 1], fill=255)
     x, y = center
@@ -112,7 +113,7 @@ def paste_socket(base, fit, center, out_r=SOCKET_R):
 
 
 def paste_plain(base, patch, center, size):
-    """룬 심볼처럼 규격이 이미 맞는 것을 그대로 얹는다."""
+    """Lays on something already at spec, such as a rune symbol, as-is."""
     _paste_masked(base, _normalize(patch).resize((size, size), Image.LANCZOS), center, size)
 
 
@@ -120,9 +121,9 @@ def build(ring_path, rune_path=None, report=False):
     tri = triangle().resize((S, S), Image.LANCZOS).convert("RGB")
     fit, r_in = fit_ring(Image.open(ring_path))
     rune = Image.open(rune_path) if rune_path else None
-    for ang in (-90, 30, 150):          # 12시 · 4시 · 8시
+    for ang in (-90, 30, 150):          # 12 o'clock · 4 o'clock · 8 o'clock
         cx, cy = at(ang, DIST)
-        c = (cx / 4, cy / 4)            # at() 은 SS(4) 배율 좌표를 준다
+        c = (cx / 4, cy / 4)            # at() gives SS (4) scale coordinates
         paste_socket(tri, fit, c)
         if rune is not None:
             paste_plain(tri, rune, c, RUNE_D)
@@ -133,14 +134,15 @@ def build(ring_path, rune_path=None, report=False):
 
 
 def save_asset(ring_path, out_path):
-    """채택본을 **288 알파 png** 로 굳힌다 — 이것이 `assets/` 로 가는 파일이다.
+    """Freezes the adopted candidate as a **288 alpha png** — this is the file that goes to `assets/`.
 
-    🔴 **알파로 굳히는 이유**: 후보는 크림 종이에 검은 선이라 배경이 불투명하다. 그대로 얹으면
-    소켓 안이 사각으로 덮인다(미리보기는 곱하기로 피했지만 **게임에는 곱하기 합성이 없다**).
-    ⇒ **밝기를 알파로 뒤집고 색은 진과 같은 먹색으로 고정**한다.
-    ⚠ 임계로 자르지 않는다 — 안티앨리어싱된 가장자리가 계단이 진다.
+    **Why freeze it with alpha**: a candidate is black line on cream paper, so its background is opaque. Laid on as-is,
+    the socket interior gets covered by a square (the preview dodged it with multiplication, but **the game has no
+    multiply blending**).
+    => **Invert brightness into alpha and fix the color to the same ink black as the circle.**
+    It is not cut by threshold — that stairsteps the antialiased edges.
 
-    🔴 **소켓 원 밖은 지운다.** 368 + 144 = 512 라 여유가 0이고, 한 픽셀이라도 넘치면 잘린다.
+    **Outside the socket circle is erased.** 368 + 144 = 512, so the margin is 0 and even one pixel of overflow gets clipped.
     """
     fit, r_in = fit_ring(Image.open(ring_path))
     size = SOCKET_R * 2
@@ -148,7 +150,7 @@ def save_asset(ring_path, out_path):
     mask = Image.new("L", (size, size), 0)
     ImageDraw.Draw(mask).ellipse([0, 0, size - 1, size - 1], fill=255)
     alpha = ImageChops.multiply(alpha, mask)
-    ink = Image.new("RGB", (size, size), (26, 24, 22))   # draw_circle.FG 와 같은 먹색
+    ink = Image.new("RGB", (size, size), (26, 24, 22))   # the same ink black as draw_circle.FG
     out = ink.convert("RGBA")
     out.putalpha(alpha)
     Path(out_path).parent.mkdir(parents=True, exist_ok=True)

@@ -1,97 +1,98 @@
-# 물속 무한 점프와 탈출 — 물이 캐릭터에 처음 닿는다
+# Unlimited jumping underwater and the escape — water touches the character for the first time
 
-**상태**: active — 🔴 **코드는 다 끝났다. 남은 것은 사용자가 화면을 보는 것뿐이다** (2026-08-08).
+**Status**: active — **the code is finished. All that remains is the user looking at the screen.**
 
-⚠ **위 한 줄이 이 문서에서 제일 자주 낡는다.** 아래 표가 기준이다.
+**The line above goes stale more often than anything in this doc.** The table below is the source.
 
-| 단계 | 상태 |
+| Stage | State |
 |---|---|
-| **1 물속 무한 점프** | 🟢 **코드 완료 · 값 통과**(판정 1·2·3). `net_character` A-1~A-4 |
-| **2 낙하 가속 K = 4** | 🟢 **코드 완료.** ⚠ **실측 3.0배**(4.0이 아니다 — 밴드 경계 손실) |
-| **3 A방식 붓기** | 🟢 **코드 완료.** 95%까지 12초(목표 5~15s). 🔴 **그물 B-5 하나가 빨갛다 — 아래** |
-| **4 물살이 민다** | 🟢 **코드 완료.** F키 45 px/s. 🔴 **보스방에서는 0이다**(설계 충돌 — 아래) |
-| 5 물속 중력 | ⬜ **안 한다.** 판정 4가 화면에서 통과했다 — **허둥대지 않는다. 열 근거가 없다** |
+| **1 unlimited jumping underwater** | **Code done · passes by value** (acceptance 1·2·3). `net_character` A-1–A-4 |
+| **2 fall acceleration K = 4** | **Code done.** **Measured 3.0×** (not 4.0 — band-boundary loss) |
+| **3 approach-A pouring** | **Code done.** 12 seconds to 95% (target 5–15s). **One net, B-5, is red — below** |
+| **4 current pushes** | **Code done.** F key 45 px/s. **It is 0 in the boss room** (design collision — below) |
+| 5 underwater gravity | **Not doing it.** Acceptance 4 passed on screen — **no flailing. No grounds to open it** |
 
-### 🔴 화면 — verify-look이 두 번 봤다. **줄무늬 수정 뒤는 못 봤다**
+### Screen — verify-look looked twice. **Nobody has seen it since the striping fix**
 
-**1차(줄무늬 수정 전)**: 🔴 **이 작업의 시작 이유가 실패했다** — 떨어지는 물이 물줄기가 아니라
-**48px 간격 가로 줄무늬**였다. 원인은 K가 아니라 **붓기의 시간 해상도**(한 틱에 한 행만 만든다).
-🟢 판정 4·6·7 통과 · 버벅임 없음 · 고인 수면 깨끗 · F키 물살 확인.
+**First pass (before the striping fix)**: **the reason this work started failed** — falling water was not a stream
+but **horizontal stripes 48px apart.** The cause was not K but **the pour's temporal resolution** (one row per tick).
+Acceptance 4·6·7 passed · no stutter · pooled surface clean · F-key current confirmed.
 
-**수정**: 붓기를 **`WATER_FALL_CELLS × WATER_SUBSTEPS` 행 띠**로 넓혔다 ⇒ 빈틈이 원리적으로 0.
+**Fix**: the pour was widened to a **`WATER_FALL_CELLS × WATER_SUBSTEPS` band of rows** ⇒ gaps are 0 in principle.
 
-**2차**: 🔴 **브리지를 못 잡아 화면을 못 봤다**(다른 세션의 `godot-mcp` 가 물고 있었다).
-값으로만 확인했다 — 🟢 **빈틈 0**(전 11칸) · 🟢 차오르는 시간 12.0초 유지 · 🟢 고인 물 얕은칸 0.
-🔴 **대신 새 우려가 값으로 확인됐다 — 칸당 양이 9로 줄어 `WATER_WET`(32) 아래다** ⇒
-**처음 1~2초 낙하 기둥의 84%가 「얕은 물」 색(거의 흰 연하늘)이 된다.**
-⚠ **폭포의 흰 거품처럼 보일 수도, 고장으로 보일 수도 있다. 값으로는 못 가른다.**
+**Second pass**: **couldn't grab the bridge, so the screen wasn't seen** (another session's `godot-mcp` held it).
+Confirmed by value only — **0 gaps** (was 11 cells) · fill time held at 12.0s · 0 shallow cells in pooled water.
+**Instead a new worry was confirmed by value — per-cell amount dropped to 9, below `WATER_WET` (32)** ⇒
+**for the first 1–2 seconds, 84% of the falling column takes the "shallow water" color (near-white pale blue).**
+**It could read as a waterfall's white foam or as a malfunction. Value can't separate them.**
 
-🔴 **⇒ 사용자가 봐야 닫히는 것 둘**: ① 떨어지는 물이 **물줄기로 보이나**(빈틈 0은 필요조건일 뿐이다)
-② **연하늘 기둥이 폭포인가 고장인가**. 그리고 원래 질문 — **「물이 아직도 배경인가」**
+**⇒ Two things only the user can close**: ① does the falling water **read as a stream** (0 gaps is only necessary)
+② **is the pale-blue column a waterfall or a malfunction.** And the original question — **"is water still background?"**
 
-### 🟡 안 정한 것 셋 — 이 문서를 `3.done/` 으로 옮기기 전에 닫아라
+### Three things undecided — close them before moving this doc to `3.done/`
 
-1. **판정 5(「옆에서 들어온다」)가 A방식과 안 맞는다.** A는 위에서 폭 전체에 붓는다 —
-   「옆벽이 무너진다」로 읽힐 것이 화면에 하나도 없다. **기획을 고칠지 붓기를 고칠지 사용자 판단**
-2. **물살 세기** — `WATER_PUSH_PX` 130은 **걷기의 10~17%**다. 서 있으면 보이고 걸으면 거의 안 느껴진다
-3. 🔴 **`g.step()` 이 활성 청크 상한에서 84ms/틱** — **예산(50ms)의 168%**.
-   화면에서는 아직 안 터졌지만(FPS 60) **폭이나 속도를 키우면 넘어간다.** 세부는 `docs/design/물.md` 「비용」
+1. **Acceptance 5 ("it comes in from the side") doesn't match approach A.** A rains across the full width from above —
+   nothing on screen would read as "the side wall collapsed". **Whether to fix the design or the pour is the user's call**
+2. **Current strength** — `WATER_PUSH_PX` 130 is **10–17% of walking.** Visible standing still, barely felt while walking
+3. **`g.step()` is 84ms/tick at the active-chunk cap** — **168% of budget (50ms).**
+   It hasn't shown on screen yet (60 FPS) but **widening or speeding it up goes over.** Detail in `docs/design/water.md`, "Cost"
 
-### 🔴 물살이 보스방에서 0인 이유 — 후보 셋이 같은 벽에 부딪힌다
+### Why the current is 0 in the boss room — three candidates hit the same wall
 
-**빠르고 고르게 차는 방은 정의상 평형에 가깝고, 평형은 어느 방향으로도 힘이 없다.**
-가로도 세로도 유입도 전부 0이다. 「빨리 찬다」와 「민다」는 **같은 손잡이의 양 끝**이다.
-⇒ spec 추천은 **④ 받아들인다**(보스방에서 물이 닿는 축은 원래 무한 점프다). 세부는 `docs/design/물.md`.
+**A room that fills fast and evenly is by definition near equilibrium, and equilibrium means no force in any direction.**
+Horizontal, vertical and inflow are all 0. "Fills fast" and "pushes" are **two ends of one knob.**
+⇒ spec recommends **④ accept it** (the axis for water touching you in the boss room was always unlimited jumping).
+Detail in `docs/design/water.md`.
 
-### 그물 하나가 빨갛다 — 맵 문서에서 넘어왔다 (2026-08-08 밤)
+### One net is red — carried over from the map doc
 
 ```
-net_water: 붓는 동안 활성 청크가 상한(100) 아래에 머문다 (최대 100)
+net_water: active chunks stay below the cap (100) while pouring (max 100)
 ```
 
-**구덩이의 임시 경사로를 빼서 났다**(`3.done/stage1-map-layout.md`). 바닥이 평평해져
-**물이 더 넓게 동시에 떨어지고** 상한에 닿는다. 경사로가 있을 때 실측은 **39~81청크**였다.
-FPS가 죽는 게 아니라 **물이 밀린다** — 상한은 안전망이다.
+**Caused by removing the pit's temporary ramp** (`3.done/stage1-map-layout.md`). A flat floor means
+**water falls across a wider area at once** and hits the cap. With the ramp it measured **39–81 chunks.**
+FPS doesn't die — **water gets delayed.** The cap is a safety net.
 
-⇒ **손잡이가 둘이고 둘 다 이 문서 쪽이다**: 붓는 속도(`WATER_RAIN_PER_TICK` 20,000)를
-낮추거나 구덩이 바닥을 계단지게 하거나. **맵을 다시 굽는 쪽은 마지막 수단이다** —
-경사로를 뺀 것이 「나가는 길은 물뿐」의 근거이므로 되돌리면 기획이 죽는다.
+⇒ **Two knobs, both on this doc's side**: lower the pour rate (`WATER_RAIN_PER_TICK` 20,000) or
+step the pit floor. **Re-baking the map is the last resort** — removing the ramp is the grounds for
+"the only exit is water", so reverting kills the design.
 
-**이 문서의 제목이 이제 범위보다 좁다.** 2026-08-08에 사용자가 눈으로 보고 말했다 —
-**「물이 배경 같다는 느낌을 계속 받는다. 물이 전혀 나에게 아무런 영향도 안 미친다.」**
-⇒ 사용자가 **「물살까지 넣고 물을 이번에 끝내자」**고 정했다. **축이 넷이다**:
-**① 물속 무한 점프 · ② 낙하 가속 · ③ 물살이 민다 · ④ A방식 붓기**
-(②③의 개념은 `docs/design/물.md` 「낙하에 가속이 없다」·「물이 캐릭터를 민다」).
+**This doc's title is now narrower than its scope.** The user said, having seen it —
+**"I keep feeling the water is background. The water has no effect on me whatsoever."**
+⇒ The user decided **"put in the current too and finish water this round".** **There are four axes**:
+**① unlimited jumping underwater · ② fall acceleration · ③ the current pushes · ④ approach-A pouring**
+(concepts for ②③ in `docs/design/water.md`, "falling has no acceleration" and "water pushes the character").
 
-**여전히 범위 밖**: 보스 사망 훅 · 문과 물 · 몬스터와 물 · 폴백 글자 · 익사 · 부력(「범위 밖」 표).
-**한 줄**: 물속에서는 점프 제한이 없다. 스테이지1 보스를 깨면 물이 차오르고,
-플레이어는 그 안에서 **점프를 반복해 위로 올라가며 그 사실을 스스로 깨닫는다.**
+**Still out of scope**: the boss-death hook · the gate and water · monsters and water · fallback text · drowning · buoyancy.
+**One line**: underwater there is no jump limit. Beat stage 1's boss and water rises, and the player
+**climbs by jumping repeatedly and works that out for themselves.**
 
-**맵 배치는 별 문서다** → [../3.done/stage1-map-layout.md](../3.done/stage1-map-layout.md)
-**개념 기준**: `docs/design/물.md` — 특히 마지막 절 「물이 캐릭터를 민다」
+**Map placement is a separate doc** → [../3.done/stage1-map-layout.md](../3.done/stage1-map-layout.md)
+**Concept source**: `docs/design/water.md` — especially the last section, "water pushes the character"
 
 ---
 
-## 왜
+## Why
 
-**지금 캐릭터는 물을 한 글자도 모른다.** `character.gd`·`body.gd` 를 다 훑어도
-`WATER` 참조가 **0개**다. 물은 `BEHAVIOR_NONE` 이라 `is_solid()` 가 거짓이고,
-**캐릭터 입장에서 빈칸과 완전히 같다.** 부력도 저항도 없고 빠지지도 않는다.
+**The character currently knows nothing about water.** Sweeping `character.gd` and `body.gd`,
+`WATER` references number **zero.** Water is `BEHAVIOR_NONE`, so `is_solid()` is false and
+**to the character it is identical to empty.** No buoyancy, no drag, no sinking.
 
-**불과 비대칭이다** — 불은 `character.gd:302` 가 `_body.standing_in_fire(grid)` 를 부르고
-그 함수(`body.gd:155-164`)가 상자 셀 + 발밑 한 줄을 훑으며 `grid.is_burning()` 을 물어서 캐릭터에게 닿는다.
-**물만 안 닿는다.**
+**Asymmetric with fire** — `character.gd:302` calls `_body.standing_in_fire(grid)` and that function
+(`body.gd:155-164`) sweeps the box cells plus the row underfoot asking `grid.is_burning()`, so fire reaches the character.
+**Only water doesn't.**
 
-`docs/design/물.md` 가 2026-08-07에 이렇게 남겨 뒀다:
+`docs/design/water.md` left this:
 
-> **물에 무게가 있다. 많이 흘러오면 캐릭터가 밀려간다** — 이게 핵심이다
-> **물 위에 뜨는 것**도 얘기가 나왔다. **부력인지 수영인지는 안 정했다**
+> **Water has weight. Enough of it flowing at you pushes you** — this is the core
+> **Floating on water** came up too. **Buoyancy or swimming was not decided**
 
-⇒ **2026-08-08에 정해졌다. 부력도 수영도 아니다 — 점프 제한 해제다.**
+⇒ **Decided. Neither buoyancy nor swimming — the jump limit is removed.**
 
-### 왜 이게 좋은 답인가 — 셋이다
+### Why this is a good answer — three reasons
 
-**1. 거의 공짜다.** 점프 조건이 지금 이렇다:
+**1. Nearly free.** The jump condition is currently:
 
 ```gdscript
 # src/actor/character.gd:262
@@ -99,367 +100,366 @@ if jump and on_ground and not downed:
     vy = JUMP_VY_PX
 ```
 
-조건이 **`on_ground` 하나뿐이다.** `or in_water` 를 더하면 그대로 된다.
-**부력이라는 새 물리 축을 안 만든다** — 물이 밀어 올리는 게 아니라 **플레이어가 스스로 올라간다.**
+The condition is **only `on_ground`.** Adding `or in_water` does it.
+**No new physics axis called buoyancy** — the water doesn't push you up; **you climb on your own.**
 
-**2. 진행 언어가 하나로 맞물린다.**
+**2. The progression language locks together.**
 
 ```
-④  더블점프 잠금   ── 점프를 한 번 더 하면 갈 수 있는 곳
-③  물속 무한 점프  ── 물에서는 점프 제한이 없다
+④  double-jump lock     ── somewhere you reach with one more jump
+③  unlimited jumps in water ── in water there is no jump limit
 ```
 
-둘이 따로 노는 기믹이 아니라 **같은 문법의 두 사례**다.
-「점프 횟수」가 이 게임의 진행 축이 된다.
+Not two unrelated gimmicks but **two instances of one grammar.**
+"Jump count" becomes this game's progression axis.
 
-**3. 스테이지1의 마지막 장면이 스테이지2의 튜토리얼이다.**
-스테이지2가 물 스테이지이므로, 여기서 배운 이동 문법을 거기서 그대로 쓴다.
-**글자로 안 알려줘도 몸이 먼저 배운다** — 그게 사용자가 원한 것이다
-(2026-08-08: 「유저가 점프점프하면 물에서는 점프가 무한이라는 것을 깨달았으면 좋겠다」).
+**3. Stage 1's final scene is stage 2's tutorial.**
+Stage 2 is the water stage, so the movement grammar learned here transfers directly.
+**The body learns before any text does** — that is what the user wanted
+("I want the player to jump around and realize that jumps are unlimited in water").
 
-**폴백은 글자다** — 안 깨달으면 화면에 띄운다(사용자가 그렇게 말했다). 아래 「미정」.
+**Text is the fallback** — put it on screen if they don't work it out (the user said so). See "TBD".
 
 ---
 
-## 동작
+## Behavior
 
-### ① 물속 무한 점프
+### ① Unlimited jumping underwater
 
-- **캐릭터가 있는 칸의 물 양이 기준선 이상이면** 점프 제한이 풀린다
-- 지면 여부와 무관하게 **몇 번이든 점프한다**
-- 점프 자체의 값(`JUMP_VY_PX` −720)은 그대로 쓴다 — **물속에서 달라야 하는지는 미정**
+- **If the water amount in the character's cell is at or above the threshold**, the jump limit lifts
+- **Jump any number of times**, regardless of being grounded
+- The jump's own value (`JUMP_VY_PX` −720) is reused — **whether it should differ underwater is TBD**
 
-### ② 「물속인가」를 어떻게 아나
+### ② How "am I in water" is known
 
-격자에서 캐릭터 위치의 물 양을 읽는다.
+Read the water amount at the character's position from the grid.
 
-**폴더 계약은 안 깨진다.** `body.grounded(grid)` 가 이미 격자를 읽고 있고,
-`is_solid`·`is_burning` 이 선례다. **물 → 캐릭터는 읽기라 안전하다.**
-**반대는 안 된다** — 캐릭터가 물을 밀면 float(`src/actor/`)가 정수 결정론(`src/sim/`)을 침범한다.
+**The folder contract isn't broken.** `body.grounded(grid)` already reads the grid, and
+`is_solid` and `is_burning` are the precedent. **Water → character is a read and safe.**
+**The reverse is not** — a character pushing water lets float (`src/actor/`) invade integer determinism (`src/sim/`).
 
-**기준선이 필요하다.** 발목까지 오는 젖은 자국에서 무한 점프면 이상하다.
+**A threshold is needed.** Unlimited jumping in an ankle-deep wet stain would be strange.
 
-- `WATER_WET`(32)이 이미 **얕은 물의 선**이고 **불을 끄는 선**이다
-  ⇒ 같은 선을 쓰면 「밝은 하늘색에서는 안 되고 어두운 남색에서만 된다」가 **화면에 이미 그려져 있다**
-- **대가**: `WATER_WET` 이 이제 **색 · 방화 · 점프** 셋을 정한다.
-  하나만 보고 고치면 나머지 둘이 따라 움직인다
-- **어느 칸을 보나도 정해야 한다** — 발밑인가 · 몸통 중앙인가 · 머리인가.
-  캐릭터가 32×32px = 8×8셀이라 **칸에 따라 답이 다르다**
+- `WATER_WET` (32) is already **the shallow-water line** and **the fire-extinguishing line**
+  ⇒ reusing it means "not in bright sky-blue, only in dark navy" is **already drawn on screen**
+- **The price**: `WATER_WET` now sets **color · fire-proofing · jumping.** Tune one and the other two follow
+- **Which cell to look at must also be decided** — underfoot · torso center · head.
+  The character is 32×32px = 8×8 cells, so **different cells give different answers**
 
-### ③ 물속 중력
+### ③ Underwater gravity
 
-**지금 중력 그대로면 점프해도 금방 가라앉아 「점프점프」가 허둥대는 느낌이 될 수 있다.**
+**At current gravity, a jump may sink back fast enough that "jump jump" feels like flailing.**
 
 ```
 GRAVITY_PX     2400.0
 MAX_FALL_PX    (character.gd)
-JUMP_VY_PX     -720.0     ⇒ 최고 높이 108px = 3.4타일
+JUMP_VY_PX     -720.0     ⇒ peak height 108px = 3.4 tiles
 ```
 
-물속에서 중력·최대 낙하 속도를 줄이는 것이 보통이다.
-**이건 눈으로 봐야 아는 값이다. 실측해서 맞춘다** — 문서가 숫자를 미리 정하지 않는다.
+Lowering gravity and max fall speed underwater is standard.
+**This is a value you must see to know. Measure and tune** — the doc doesn't pre-set the number.
 
-**`GRAVITY_PX` 와 `JUMP_VY_PX` 중 하나만 건드리면 조용히 틀린다**
-(`character.gd:75` 이 그 이유를 든다 — 도달 높이가 제곱으로 움직인다).
+**Touching only one of `GRAVITY_PX` and `JUMP_VY_PX` goes silently wrong**
+(`character.gd:75` gives the reason — reachable height moves as a square).
 
-### ④ 보스를 깨면 물이 들어온다
+### ④ Beat the boss and water comes in
 
-**방과 출처가 확정됐다** (2026-08-08): **20×12타일 방 · 옆벽이 무너진다.**
+**Room and source are settled**: **a 20×12-tile room · the side wall collapses.**
 
-**「옆벽」을 고른 이유가 성능이다** — 지형이 물을 막고 있었다는 게 자연스럽고,
-**무너진 구멍의 크기가 그대로 「붓는 속도」 손잡이**가 된다. 위에서 쏟으면 낙하 중인 물이라
-제일 비싸고, 아래에서 솟는 경로는 지금 없다.
+**"Side wall" was chosen for performance** — terrain having held the water back is natural, and
+**the collapsed hole's size becomes the pour-rate knob directly.** Pouring from above is the most
+expensive (water in mid-fall), and there is no path for it to well up from below.
 
-- **③ 보스방(20×12타일) 옆벽이 무너지고 물이 들어와 방을 채운다**
-- 플레이어는 **점프를 반복해 위로 올라가며** 탈출한다
-- 물이 차오르는 것이 **압박이자 동시에 탈출 수단**이다 — **익사를 안 만들어도 성립한다**
+- **The side wall of boss room ③ (20×12 tiles) collapses and water fills the room**
+- The player escapes **by climbing with repeated jumps**
+- Rising water is **both the pressure and the means of escape** — **it works without building drowning**
 
-**물을 붓는 경로는 이미 있다.** `cell_grid.set_water()`(`cell_grid.gd:1088`)가 격자의 공식 문이고
-`stage.gd:304` 가 그것을 부른다 — 함수는 `_pour_water_at`(`stage.gd:293`), 연결은 `stage.gd:241`,
-키는 `stage_input.gd:104`(F)다. `ignite()` 와 같은 자리다. 보스 사망에 붙이는 건 같은 자리다.
+**The path for pouring water already exists.** `cell_grid.set_water()` (`cell_grid.gd:1088`) is the grid's official door
+and `stage.gd:304` calls it — the function is `_pour_water_at` (`stage.gd:293`), wired at `stage.gd:241`,
+key at `stage_input.gd:104` (F). Same place as `ignite()`. Attaching it to boss death is the same place.
 
-**다만 「어떤 속도로 붓나」가 이 기능의 핵심 값이다.** 아래 「비용」을 봐라.
-
----
-
-## 화면
-
-- 물이 **옆에서 들어와 차오른다.** 수면이 올라가는 게 보인다
-- 플레이어가 물에 들어가면 **점프가 계속 먹는다** — **아무 표시가 없다.**
-  **그게 의도다**(스스로 깨닫게 한다). 폴백 글자는 미정
-- **물속인 것이 화면에서 구별되나** — 얕은 물/깊은 물 색이 이미 다르다(`FLAG_SHALLOW`).
-  **캐릭터 쪽에는 아무 변화가 없다** — 젖은 표시도 거품도 없다
-
-**`docs/design/물.md` 가 경고한 것**: 정지 수면이 균일하지 않아
-**「수면 위에 떠 있는 짧은 하늘색 조각」이 얼룩처럼 읽힌다.** 차오르는 중에는 다르게 보일 수 있고
-**안 재봤다.**
+**But "at what rate does it pour" is this feature's core value.** See "Cost".
 
 ---
 
-## 경계
+## Screen
+
+- Water **comes in from the side and rises.** The surface visibly climbs
+- Entering the water, **jumps keep working** — **with no indicator.**
+  **That is intended** (the player works it out). Fallback text is TBD
+- **Is being underwater distinguishable on screen** — shallow and deep water already differ in color (`FLAG_SHALLOW`).
+  **Nothing changes on the character** — no wet marking, no bubbles
+
+**What `docs/design/water.md` warns about**: a still surface isn't uniform, so
+**"short sky-blue fragments floating above the surface" read as a stain.** It may look different while rising,
+and **that was never measured.**
+
+---
+
+## Boundary
 
 | | |
 |---|---|
-| **얕은 물에서는 안 된다** | 기준선(`WATER_WET` 32) 이하면 평소와 같다 |
-| **캐릭터가 물을 밀지 않는다** | 폴더 계약. 읽기만 한다 |
-| **몬스터는?** | **미정.** 돼지·닭이 물에서 어떻게 되는지 안 정했다 |
-| **익사가 없다** | 물에 잠겨도 아무 일이 없다. 무한 점프가 그 자리를 대신한다 |
-| **물살에 밀리는 것은 이 문서가 아니다** | `docs/design/물.md` 의 「물에 무게가 있다」는 **여전히 미정**이다 |
+| **Not in shallow water** | At or below the threshold (`WATER_WET` 32) it behaves as usual |
+| **The character doesn't push water** | Folder contract. Read only |
+| **Monsters?** | **TBD.** What happens to pigs and chickens in water is undecided |
+| **There is no drowning** | Being submerged does nothing. Unlimited jumping takes that place |
+| **Being pushed by current is not this doc** | `docs/design/water.md`'s "water has weight" is **still TBD** |
 
 ---
 
-## 비용 — 위험의 **성격이 하루 만에 바뀌었다** (2026-08-08)
+## Cost — the **nature of the risk changed in one day**
 
-**이 절을 읽을 때 날짜를 봐라. 이 값은 이틀에 세 번 갈렸다.**
+**Check dates when reading this section. This value flipped three times in two days.**
 
-**2026-08-07 실측**(verify-look, `MAX_CHUNKS_PER_TICK` = 512일 때):
+**Measured** (verify-look, with `MAX_CHUNKS_PER_TICK` = 512):
 
-| 물 칸 | 활성 청크 | 실제 FPS |
+| Water cells | Active chunks | Real FPS |
 |---|---|---|
 | 16,384 | 85 | **229** |
 | 24,576 | 126 | **6** |
 | 32,768 | 165 | **4** |
 
-**깎이는 게 아니라 절벽이었다.**
+**Not a slope — a cliff.**
 
-### 그런데 2026-08-08에 **절벽이 사라졌다**
+### But then **the cliff disappeared**
 
-`MAX_CHUNKS_PER_TICK` 을 **512 → 100** 으로 내리니 **비용이 물의 양과 무관해졌다**
-(`docs/design/물.md` 「판정 7」: 65,677칸에서 512는 예산의 **724%**, 100은 **219%로 평평**).
+Lowering `MAX_CHUNKS_PER_TICK` **512 → 100** made **cost independent of water volume**
+(`docs/design/water.md`, "Acceptance 7": at 65,677 cells, 512 is **724%** of budget, 100 is **a flat 219%**).
 
-**⇒ 이 기능의 위험이 「게임이 멈춘다」에서 「물이 느리게 흐른다」로 바뀌었다.**
+**⇒ This feature's risk changed from "the game freezes" to "water flows slowly".**
 
-**그게 더 쉬운 문제라는 뜻이 아니다.** 상한은 **안전망이지 조절 손잡이가 아니고**,
-넘친 청크는 다음 틱으로 밀린다 ⇒ **화면에서는 물이 천천히 차오른다.**
-**탈출 장면에서 물이 느려지면 그건 연출이 망가지는 것이다** — FPS는 살아도 장면은 죽는다.
+**That does not mean it's an easier problem.** The cap is **a safety net, not a tuning knob**,
+and overflow chunks push to the next tick ⇒ **on screen the water rises slowly.**
+**Water slowing during the escape scene means the presentation is broken** — the FPS survives and the scene dies.
 
-**그리고 사용자가 정할 것이 아직 남아 있다 — 상한 100 vs 33**(`물.md` 「판정」).
-**33으로 내려가면 물이 더 느려진다** ⇒ **이 장면이 그 결정의 첫 이해당사자다.**
+**And there is still a user decision pending — cap 100 vs 33** (`water.md`, "Acceptance").
+**Dropping to 33 makes water slower** ⇒ **this scene is that decision's first stakeholder.**
 
-### 계산 — 이제 「FPS가 사나」가 아니라 「물이 제 속도로 오나」다
+### The arithmetic — no longer "does FPS survive" but "does water arrive at the right rate"
 
-**2026-08-08에 보스방이 20×12타일로 확정됐다.**
+**The boss room is settled at 20×12 tiles.**
 
 ```
-20×12타일 = 160×96셀 = 15,360셀
-수면 한 줄 160셀 = 10청크 가로 × 2~3밴드 ≈ 20~30청크
+20×12 tiles = 160×96 cells = 15,360 cells
+one surface row of 160 cells = 10 chunks wide × 2–3 bands ≈ 20–30 chunks
 ```
 
-**고인 물은 싸다** — 평형에 들면 그 조각은 잠든다(실측: 고인 물은 7~18청크).
-⇒ 아래가 잠들고 수면 띠만 활성이면 **20~30청크**다.
+**Still water is cheap** — at equilibrium that piece sleeps (measured: still water is 7–18 chunks).
+⇒ With the bottom asleep and only the surface band active, that is **20–30 chunks.**
 
-**`WATER_SUBSTEPS` 가 3이라 한 청크가 한 틱에 3번 돈다** ⇒ 상한 100의 실효 폭이 **≈33청크**다
-(`sim_tuning.gd:120`. `MAX_CHUNKS_PER_TICK` 이 `:160` 이다 — 둘을 헷갈리지 마라).
-**추정 20~30이 그 선에 붙어 있다.**
+**`WATER_SUBSTEPS` is 3, so one chunk runs 3 times per tick** ⇒ the cap of 100 has an effective width of **≈33 chunks**
+(`sim_tuning.gd:120`. `MAX_CHUNKS_PER_TICK` is at `:160` — don't confuse the two).
+**The estimated 20–30 sits right on that line.**
 
-**선을 넘어도 FPS는 안 죽는다 — 물이 밀린다.** 상한이 그렇게 설계됐다(안전망).
-⇒ **판정을 「초당 몇 타일 차오르나」로 재라.** **FPS만 보면 통과인데 장면이 죽어 있을 수 있다.**
+**Crossing the line doesn't kill FPS — water gets delayed.** That is how the cap was designed (a safety net).
+⇒ **Measure acceptance as "how many tiles per second does it rise".** **Watching FPS alone passes while the scene is dead.**
 
-30×20 방이었으면 30~45청크로 확실히 넘겼다 — **방을 줄인 것이 여유를 벌었다.**
-**그래도 추정이지 실측이 아니다.**
+A 30×20 room would have been 30–45 chunks and definitely over — **shrinking the room bought headroom.**
+**Still an estimate, not a measurement.**
 
-### 그래서 만들기 전에 재야 한다
+### So measure before building
 
-**헤드리스로 잴 수 있다** — 보스방 크기 격자를 만들고 초당 N칸씩 부으면서
-**활성 청크 수를 틱마다 관측한다.** 이 문서를 여는 사람이 제일 먼저 할 일이다.
+**It can be measured headless** — build a boss-room-sized grid, pour N cells per second, and
+**observe active chunk count per tick.** That is the first job for whoever opens this doc.
 
-**손잡이는 「붓는 속도」다.**
-- 천천히 부으면 → 아래가 평형에 들어 잠들고 수면 띠만 활성 ⇒ 싸다
-- 한꺼번에 쏟으면 → 방 전체가 동시에 흐른다 ⇒ 상한에 걸려 **물이 밀린다**
-  **상한 512 시절이면 6FPS였다.** 지금은 안 죽고 **느려진다**
+**The knob is the pour rate.**
+- Pour slowly → the bottom reaches equilibrium and sleeps, only the surface band active ⇒ cheap
+- Dump it all at once → the whole room flows at once ⇒ hits the cap and **water gets delayed**
+  **In the cap-512 era that was 6 FPS.** Now it doesn't die, it **slows**
 
-**`MAX_CHUNKS_PER_TICK`(100)은 안전망이지 조절 손잡이가 아니다.**
-넘으면 **「물이 잠깐 천천히 흐른다」**로 보이고 멈추거나 사라지지 않는다 —
-**하지만 탈출 장면에서 물이 느려지면 그건 연출이 망가지는 것이다.**
+**`MAX_CHUNKS_PER_TICK` (100) is a safety net, not a tuning knob.**
+Over it, you see **"water flows slowly for a moment"** and it never stops or vanishes —
+**but water slowing during the escape scene means the presentation is broken.**
 
-### 방 크기가 곧 예산이다 — 그래서 20×12는 못 키운다
+### Room size is the budget — which is why 20×12 can't grow
 
-**2026-08-08에 사용자가 이 이유로 20×12를 골랐다**(30×20 · 40×10 · 16×24 중에서).
+**The user chose 20×12 for this reason** (from 30×20 · 40×10 · 16×24).
 
-**이 값은 맵 문서(`stage1-map-layout`)에 적혀 있지만 근거는 여기 있다.**
-**누가 「보스전이 좁다」고 방을 키우면 이 장면이 죽는다.** 두 문서가 이 자리에서 만난다.
+**That value is written in the map doc (`stage1-map-layout`) but its grounds are here.**
+**If someone enlarges the room because "the boss fight is cramped", this scene dies.** The two docs meet here.
 
-**보스 쪽에서 오는 압력이 둘이다**([stage1-bosses.md](../1.ready/stage1-bosses.md)):
-- **수탉이 뛰어올라 덮치려면 세로 여유가 필요하다** — 12타일이 좁을 수 있다
-- **「수탉이 착지할 때 지형을 부수나」가 미정이다.** 부순다면 **물이 들어올 때의 방은
-  20×12보다 크다** ⇒ 그쪽으로 정해지면 **실측을 그 넓어진 크기로 해야 한다**
+**Two pressures come from the boss side** ([stage1-bosses.md](../1.ready/stage1-bosses.md)):
+- **The rooster leaping and pouncing needs vertical room** — 12 tiles may be tight
+- **"Does the rooster break terrain on landing" is TBD.** If it does, **the room when water arrives is larger
+  than 20×12** ⇒ decided that way, **the measurement must be redone at that larger size**
 
-소의 돌진 파괴는 ① 방의 일이라 여기와 무관하다.
+The bull's charge destruction belongs to room ① and is unrelated here.
 
 ---
 
-## 판정
+## Acceptance
 
-**눈으로 본 결과는 그 자리에서 이 절 아래에 적는다**(CLAUDE.md).
+**Write what was seen by eye under this section immediately** (CLAUDE.md).
 
-1. **물속에서 점프가 계속 먹는다** — 지면이 없어도 몇 번이든
-2. **얕은 물에서는 안 먹는다** — 발목 젖은 자국에서는 평소와 같다
-3. **물 밖으로 나오면 다시 제한된다** — 공중에서 물 위로 나가면 그때부터 못 뛴다
-4. **점프점프로 위로 올라갈 수 있다** — **허둥대지 않고 올라간다.** 물속 중력 값이 여기서 갈린다
-5. **보스를 깨면 물이 들어온다** — 옆에서 차오른다
-6. **물이 제 속도로 차오른다** — **이 기능의 제일 큰 위험이다.**
-   **FPS로 재지 마라.** 2026-08-08에 상한이 100으로 내려가 **절벽은 사라졌고**,
-   이제 넘치면 **FPS가 아니라 물이 밀린다.** ⇒ **「초당 몇 타일 올라오나」를 재고,
-   그 값이 연출로 쓸 만한지 눈으로 본다**
-7. **탈출이 성립한다** — 물이 차오르는 속도와 올라가는 속도가 맞아서 **긴장이 생기되 갇히지 않는다**
-8. **플레이어가 스스로 깨닫는다** — 글자 없이. **이게 실패하면 폴백 글자를 넣는다**
-9. **수면이 얼룩으로 안 보인다** — `물.md` 가 경고한 「짧은 하늘색 조각」이 차오르는 중에 어떻게 보이나
+1. **Jumps keep working underwater** — any number of times, without ground
+2. **They don't work in shallow water** — an ankle-deep stain behaves as usual
+3. **Leaving the water re-limits it** — going above the surface mid-air stops further jumps
+4. **You can climb by jumping** — **climbing, not flailing.** The underwater gravity value splits here
+5. **Beating the boss brings water in** — it rises from the side
+6. **Water arrives at the right rate** — **this feature's biggest risk.**
+   **Do not measure it with FPS.** The cap dropped to 100, **the cliff is gone**,
+   and overflow now delays **water, not FPS.** ⇒ **Measure "how many tiles per second it rises"
+   and look at whether that value works as presentation**
+7. **The escape works** — the rise rate and the climb rate match so there is **tension without being trapped**
+8. **The player works it out alone** — with no text. **If this fails, add fallback text**
+9. **The surface doesn't read as a stain** — how `water.md`'s "short sky-blue fragments" look while rising
 
-### 결과 — 2026-08-08, verify-look 이 **처음으로 화면을 봤다**
+### Result — verify-look **saw the screen for the first time**
 
-**장면**: 실제 ① 구덩이(셀 x1888~2063 · 입구 y208 · 바닥 y312 = **폭 176셀 · 높이 104셀**,
-헤드리스 실측과 정확히 일치). `_toggle_rain_at()` 를 구덩이 입구 행에 걸어 **출하되는 경로 그대로** 부었다.
-게임을 얼려 놓고 프레임을 넘겨 가며 봤다.
+**Scene**: the real pit ① (cells x1888–2063 · entrance y208 · floor y312 = **176 cells wide · 104 tall**,
+exactly matching the headless measurement). `_toggle_rain_at()` was hooked to the pit's entrance row,
+**pouring through the shipping path.** The game was frozen and stepped frame by frame.
 
-#### 제일 큰 것 — **「또로록」이 안 없어졌다. 오히려 더 도드라졌다**
+#### The biggest thing — **the trickle didn't go away. It got more pronounced**
 
-**이게 이 작업이 시작된 이유였고, 여기서 실패한다.**
+**This was the reason the work started, and it fails here.**
 
-떨어지는 물이 물줄기가 아니라 **가로 줄무늬**다. 격자를 직접 읽어 확인했다 (열 cx=1975):
+Falling water is not a stream but **horizontal stripes.** Confirmed by reading the grid (column cx=1975):
 
 ```
-y208 aux=112      ← 소스 행
-y209~219 전부 0
+y208 aux=112      ← source row
+y209–219 all 0
 y220 aux=112
-y221~231 전부 0
-y232 aux=112 …    12셀 간격으로 정확히 반복 (관측 시점에 9장)
+y221–231 all 0
+y232 aux=112 …    repeating exactly every 12 cells (9 stripes at the observed moment)
 ```
 
-**행별로 세도 똑같다 — 물이 있는 행은 176칸이 꽉 차고, 사이 행은 0칸이다.**
-⇒ 화면에서는 **구덩이 폭을 가로지르는 밝은 하늘색 가로줄 여러 개가 48px 간격으로 내려온다.**
-연속된 물줄기가 **한 순간도 안 생긴다.**
+**Counting per row gives the same — rows with water are 176 cells full, rows between are 0.**
+⇒ On screen, **several bright sky-blue horizontal lines crossing the pit's width descend 48px apart.**
+**A continuous stream never forms, not for one instant.**
 
-**원인은 K가 아니다 — K는 줄 간격을 벌렸을 뿐이다.**
+**The cause is not K — K only widened the gaps.**
 
 ```
-붓기가 한 틱에 한 행을 만든다        (A방식: 176셀 폭에 매 틱 한 번)
-낙하가 한 틱에 K × WATER_SUBSTEPS 내려간다 = 4 × 3 = 12셀
-⇒ 줄 간격 = 12셀 = 48px          (관측값과 정확히 일치)
+the pour makes one row per tick        (approach A: one pass over 176 cells per tick)
+the fall drops K × WATER_SUBSTEPS per tick = 4 × 3 = 12 cells
+⇒ stripe spacing = 12 cells = 48px      (exactly the observed value)
 ```
 
-**K=1이던 시절의 간격은 3셀(12px)이라 사실상 이어져 보였다.**
-⇒ **단계 2(낙하 가속)가 「또로록」을 고치려고 들어갔는데 화면에서는 반대로 갔다.**
-**값은 맞았다**(3.0배 빨라졌다). **틀린 것은 「빨라지면 물줄기처럼 보인다」는 전제다.**
+**When K was 1, the spacing was 3 cells (12px) and it effectively looked continuous.**
+⇒ **Stage 2 (fall acceleration) went in to fix the trickle and went backwards on screen.**
+**The values were right** (3.0× faster). **What was wrong is the premise that "faster looks like a stream".**
 
-⇒ **손잡이는 K가 아니라 「붓기의 시간 해상도」다** — 한 틱에 한 행을 통째로 만드는 한
-간격은 항상 `K × SUBSTEPS` 다. (이 문서는 방향만 적는다. 무엇을 할지는 기획이 정한다.)
+⇒ **The knob is not K but the pour's temporal resolution** — as long as one whole row is made per tick,
+the spacing is always `K × SUBSTEPS`. (This doc records only the direction. What to do is the design's call.)
 
-#### 판정별
+#### Per acceptance check
 
-| # | 결과 | 무엇을 봤나 |
+| # | Result | What was seen |
 |---|---|---|
-| 4 | **통과 — 허둥대지 않는다** | 아래 궤적 |
-| 5 | **「옆에서」는 성립 안 한다** | A방식은 **위에서 폭 전체**에 붓는다. 화면에 「옆벽이 무너져 들어온다」로 읽힐 것이 **하나도 없다** |
-| 6 | **통과 — 실게임에서도 제 속도다** | 부피 13.6%@2.3s → 39%@5.4s → **85%@10.7s** ⇒ 95%가 12초 근방. 헤드리스 12.6s와 맞는다 |
-| 7 | **통과 — 수위가 문지기다** | 아래 |
-| 8 | ⬜ **못 봤다** | 사용자만 판정한다 |
-| 9 | **반반** | 아래 |
+| 4 | **Pass — no flailing** | Trajectory below |
+| 5 | **"From the side" doesn't hold** | A pours **from above across the full width.** **Nothing** on screen would read as "the side wall collapsed and it's coming in" |
+| 6 | **Pass — the right rate in the real game** | Volume 13.6%@2.3s → 39%@5.4s → **85%@10.7s** ⇒ 95% around 12s. Matches the headless 12.6s |
+| 7 | **Pass — the water level is the gatekeeper** | Below |
+| 8 | **Not seen** | Only the user judges it |
+| 9 | **Half** | Below |
 
-**판정 4 — 궤적을 프레임 단위로 재고 눈으로 봤다.** 바닥에 세우고 점프를 **5Hz(200ms마다)** 로 두드렸다.
-100ms마다 뽑은 y(작을수록 위):
+**Acceptance 4 — the trajectory was measured frame by frame and watched.** Standing on the floor, jump was
+tapped at **5Hz (every 200ms).** y sampled every 100ms (smaller is higher):
 
 ```
 1216 1171 1174 1129 1132 1087 1090 1045 1049 1003 1007 961 965 919 923 877 881 836
 ```
 
-⇒ **한 주기(200ms)마다 정확히 42~45px씩 오르고, 사이의 처짐은 3~4px뿐이다.**
-**허둥대는 그림이 아니다. 계단처럼 규칙적으로 올라간다.**
-**바닥(y1216)에서 입구 위(y800)까지 416px = 13타일을 약 2.0초에 올라갔다.**
-⇒ **단계 5(물속 중력)를 열 근거가 없다.** 기본 중력 그대로 좋다.
+⇒ **Exactly 42–45px of rise per 200ms cycle, with only 3–4px of sag between.**
+**Not a picture of flailing. It climbs as regularly as a staircase.**
+**From the floor (y1216) to above the entrance (y800) is 416px = 13 tiles, climbed in about 2.0 seconds.**
+⇒ **No grounds to open stage 5 (underwater gravity).** Default gravity is fine.
 
-**판정 7 — 「긴장이 있되 갇히지 않는다」가 실제로 성립한다.** 궤적 뒷부분이 그것을 보여줬다:
+**Acceptance 7 — "tension without being trapped" actually holds.** The trajectory's tail showed it:
 
 ```
 … 836 839 (867 897) 854 844 801
-              ↑ 수면 위로 나가자 점프가 끊겨 58px 도로 떨어졌다
+              ↑ above the surface the jump cut out and it fell 58px back
 ```
 
-**판정 3(물 밖에서는 제한된다)이 화면 위에서 그대로 작동했고, 그것이 곧 문지기다** —
-점프는 **수면 + 한 번 뛴 높이(108px)** 까지밖에 못 올라가므로 **수위가 입구에서 108px 안에 들어올 때까지
-못 나간다**(계산상 74% ≈ 9초). ⇒ **기다림이 강제된다.**
-**다만 일단 나갈 수 있게 되면 여유가 크다** — 오르는 속도 **208 px/s** 대 수면 상승 **35 px/s** 로 **6배**다.
-**「쫓기는」 느낌은 아니다.** 긴장은 「아직 못 나간다」에서 오지 「따라잡힌다」에서 오지 않는다.
+**Acceptance 3 (limited outside water) worked live on screen, and that *is* the gatekeeper** —
+a jump only reaches **surface + one jump height (108px)**, so **you can't leave until the water level is
+within 108px of the entrance** (computed 74% ≈ 9 seconds). ⇒ **Waiting is enforced.**
+**But once you can leave, the margin is large** — climbing at **208 px/s** against a **35 px/s** surface rise, **6×**.
+**It doesn't feel like being chased.** The tension comes from "I can't get out yet", not from "it's catching me".
 
-**판정 9 — 고인 수면은 깨끗한데, 떠 있는 줄무늬가 그 자리를 대신했다.**
-**`물.md` 가 경고한 「수면 위에 뜬 짧은 하늘색 조각」은 안 보였다** — 고인 물은 **완전히 평평한
-균일한 남색 덩어리**이고 윗면이 칼같이 곧다. 얼룩이 없다.
-**대신 수면 위 허공에 폭 전체를 가로지르는 밝은 하늘색 줄이 떠 있다**(85% 시점에 2줄).
-**`FLAG_SHALLOW` 이 아니다** — 확인했다(`shallow=false`). **양(112 대 255)으로 밝기가 갈려서 밝게 보인다.**
-⇒ **경고했던 것보다 나쁘다.** 짧은 조각이 아니라 **화면을 가로지르는 띠**다.
+**Acceptance 9 — the pooled surface is clean, and floating stripes took its place.**
+**`water.md`'s warned-about "short sky-blue fragments above the surface" were not visible** — pooled water is
+**a completely flat, uniform navy mass** with a knife-straight top. No stain.
+**Instead, bright sky-blue lines crossing the full width float in the air above the surface** (2 lines at the 85% mark).
+**It is not `FLAG_SHALLOW`** — confirmed (`shallow=false`). **The brightness splits by amount (112 vs 255).**
+⇒ **Worse than warned.** Not short fragments but **bands crossing the screen.**
 
-#### 물살(F키) — **민다. 다만 「밀린다」까지는 아니다**
+#### Current (F key) — **it pushes. Just not "shoves"**
 
-평지(구덩이 바닥)에 세우고 왼쪽 옆에 F로 물덩이를 떨궜다. 2.0초 관측:
+Standing on flat ground (the pit floor), a water blob was dropped to the left with F. 2.0 seconds observed:
 
-| | 값 |
+| | Value |
 |---|---|
-| 이동 | **+49px** (오른쪽으로) |
-| `water_flow()` 최대 | **87** / 255 ⇒ 밀리는 속도 **44 px/s** |
-| 정상 구간 | flow 44~50 ⇒ **23~25 px/s** |
-| 걷기 속도 대비 | **최대 17% · 보통 10%** (`MOVE_SPEED_PX` 260) |
+| Movement | **+49px** (to the right) |
+| `water_flow()` max | **87** / 255 ⇒ push speed **44 px/s** |
+| Steady segment | flow 44–50 ⇒ **23–25 px/s** |
+| Vs walking speed | **max 17% · typical 10%** (`MOVE_SPEED_PX` 260) |
 
-**가만히 서 있으면 떠내려가는 게 보인다**(2초에 1.5타일).
-**걷기 시작하면 거의 안 느껴진다.** 계획의 「45 px/s」와 맞다 — **값은 맞고, 세기 판단이 남았다.**
+**Standing still, you visibly drift** (1.5 tiles in 2 seconds).
+**Start walking and it's barely felt.** Matches the plan's "45 px/s" — **the value is right, the strength judgment remains.**
 
-#### 성능 — **버벅이지 않는다. B-5 실패는 화면에서 안 보인다**
+#### Performance — **no stutter. B-5's failure isn't visible on screen**
 
-**FPS 60 유지**(붓는 내내). 활성 청크는 **76~100**을 오갔고 상한 100에 자주 닿았는데
-**화면에서 물이 끊기거나 튀는 것은 안 보였다.** 차오르는 속도도 위 표대로 고르다.
-⇒ **B-5(그물)를 이 이유로 고칠 필요는 없다.**
+**60 FPS held** (throughout the pour). Active chunks ranged **76–100**, frequently touching the cap of 100, and
+**no break or jitter in the water was visible on screen.** The fill rate was as even as the table above.
+⇒ **B-5 (the net) doesn't need fixing for this reason.**
 
-**다만 붓기 첫 0.3초는 소스 행에만 쌓이고 아래로 한 칸도 안 내려간다**(176칸이 전부 255로 포화).
-**키를 누르고 잠깐 아무 일도 안 일어나는 것처럼 보인다.** HUD의 「누적」이 도는 것이 유일한 신호다.
+**But the pour's first 0.3 seconds only stack on the source row and don't descend one cell** (all 176 cells saturate to 255).
+**It looks like nothing happens for a moment after pressing the key.** The HUD's "accumulated" counter is the only signal.
 
-#### 확인 범위
+#### Scope of confirmation
 
-- **스크린샷 4장**으로 봤고 게임을 얼려 프레임을 넘겼다. **사용자는 아직 안 봤다.**
-- **판정 8(스스로 깨닫는가)은 원리적으로 여기서 못 닫는다.**
-- **보스는 코드에 없다** ⇒ **판정 5의 「보스를 깨면」 부분은 안 봤고, 볼 수 없었다.**
-  본 것은 「A방식 붓기가 화면에 어떻게 보이나」뿐이다.
-- **HUD를 껐다 켜며 봤다** — 물비 상태 줄(「물비 켜짐 · 누적 N」)은 **실제로 보이고 값이 돈다**(확인).
+- Seen via **4 screenshots** with the game frozen and stepped. **The user has not seen it.**
+- **Acceptance 8 (do they work it out) cannot be closed here in principle.**
+- **The boss doesn't exist in code** ⇒ **the "beat the boss" part of acceptance 5 wasn't and couldn't be seen.**
+  What was seen is only "how approach-A pouring looks on screen".
+- **The HUD was toggled while watching** — the rain status line ("rain on · accumulated N") **is visible and its values move** (confirmed).
 
 ---
 
-### 결과 — 2026-08-08, **줄무늬 수정 뒤** (verify-look). **화면은 못 봤다 — 브리지를 못 잡았다**
+### Result — **after the striping fix** (verify-look). **The screen wasn't seen — the bridge wasn't available**
 
-**먼저 범위를 못 박는다. 이 블록은 「화면 판정」이 아니다.**
-에디터를 띄웠는데 **다른 세션의 `godot-mcp`(PID 30544)가 브리지를 먼저 물었고**
-내 클라이언트가 계속 거절됐다(`Another client is already connected`, 11회).
-**우회하지 않았다**(CLAUDE.md·`agents/verify-look.md`). ⇒ **아래는 전부 헤드리스 값이다.**
-**「연속된 물줄기로 보이나」와 「밝은 하늘색이 보기 싫은가」는 여전히 아무도 안 봤다.**
+**Pin the scope first. This block is not a screen judgment.**
+The editor came up, but **another session's `godot-mcp` (PID 30544) grabbed the bridge first** and this client
+was refused repeatedly (`Another client is already connected`, 11 times).
+**No workaround was attempted** (CLAUDE.md · `agents/verify-look.md`). ⇒ **Everything below is headless values.**
+**"Does it read as a continuous stream" and "is the bright sky-blue ugly" remain unseen by anyone.**
 
-**잰 방법**: 그물과 같은 자리에서 **출하되는 `WaterSource`** 를 돌렸다 —
-`Stage.build_terrain_into()` 로 진짜 ① 구덩이를 세우고 400틱 재운 뒤(활성 청크 0 확인)
-`WaterSource(1888, 2063, 208, 20000)` 를 240틱(12초) 돌리며 **열 x=1975**(지난번에 줄무늬를 본 바로 그 열)를 봤다.
+**Method**: the **shipping `WaterSource`** was run in the same place as the net —
+`Stage.build_terrain_into()` built the real pit ①, settled for 400 ticks (active chunks confirmed 0), then
+`WaterSource(1888, 2063, 208, 20000)` ran for 240 ticks (12 seconds) watching **column x=1975** (the exact column where striping was seen).
 
-#### 1. 줄무늬 — **값으로는 없어졌다**
+#### 1. Striping — **gone, by value**
 
-**표본 12회(20틱마다 240틱까지) 전부 최대 빈틈 0칸.** 지난번 관측값은 11칸이었다(`K×서브스텝−1`).
+**All 12 samples (every 20 ticks to 240) had a maximum gap of 0 cells.** The previous observation was 11 (`K×substeps−1`).
 
 ```
-칸당 양 = 20,000 / (176 × 12) = 9      ← 옛 방식은 113
-띠 = WATER_FALL_CELLS(4) × WATER_SUBSTEPS(3) = 12행
+per-cell amount = 20,000 / (176 × 12) = 9      ← the old way was 113
+band = WATER_FALL_CELLS(4) × WATER_SUBSTEPS(3) = 12 rows
 ```
 
-**다만 이것은 「빈칸이 없다」까지다.** **「연속된 물줄기로 보이나」는 다른 물음이고 못 봤다** —
-빈틈이 0이어도 **양이 행마다 계단지면 눈에는 띠로 보일 수 있다.** 아래 2번이 바로 그 우려다.
+**But that is only "there are no empty cells".** **"Does it read as a continuous stream" is a different question and wasn't seen** —
+even with 0 gaps, **an amount that steps per row can still read as banding.** Item 2 below is exactly that worry.
 
-#### 2. 색 — **우려가 값으로 확인됐다. 떨어지는 물이 밝은 하늘색이 된다**
+#### 2. Color — **the worry is confirmed by value. Falling water turns bright sky-blue**
 
-**칸당 9는 `WATER_WET`(32) 이하다** ⇒ `_write_water` 가 `FLAG_SHALLOW` 를 세우고,
-**셰이더는 그 깃발만 보고 색을 통째로 갈아치운다**(`cell_grid.gdshader:66` — **양에 따른 음영이 아예 없다**).
+**9 per cell is at or below `WATER_WET` (32)** ⇒ `_write_water` sets `FLAG_SHALLOW`, and
+**the shader swaps the color wholesale on that flag alone** (`cell_grid.gdshader:66` — **no shading by amount at all**).
 
-| | 값 | 보이는 것 |
+| | Value | What it looks like |
 |---|---|---|
-| 깊은 물 | `0x1B3E5E` = RGB(27,62,94) | **어두운 남색** |
-| 얕은 물 | `Color(0.62,0.86,1.0)` = RGB(158,219,255) | **거의 흰 연하늘** |
+| Deep water | `0x1B3E5E` = RGB(27,62,94) | **Dark navy** |
+| Shallow water | `Color(0.62,0.86,1.0)` = RGB(158,219,255) | **Near-white pale blue** |
 
-**이 둘은 2026-08-08에 사용자가 일부러 최대한 벌려 놓은 값이다**(「왜 이 물은 불을 못 끄나」를
-화면에서 읽히게 하려고). ⇒ **어중간하게 안 섞인다. 확 갈린다.**
+**These two were deliberately pushed as far apart as possible by the user** (to make "why can't this water put out
+fire" readable on screen). ⇒ **They don't blend in between. They split hard.**
 
-**얕은 칸 비율 실측** (수면 위 = 떨어지는 중):
+**Measured shallow-cell ratio** (above the surface = mid-fall):
 
-| 틱 | 초 | 낙하 중 얕은칸 / 전체 | 고인 물 얕은칸 | 채움% |
+| Tick | Sec | Shallow / total, falling | Shallow, pooled | Fill % |
 |---|---|---|---|---|
 | 20 | 1.0 | **14,784 / 17,600 = 84%** | **0** | 8.1% |
 | 40 | 2.0 | 3,696 / 17,072 = 22% | **0** | 16.3% |
@@ -467,928 +467,936 @@ y232 aux=112 …    12셀 간격으로 정확히 반복 (관측 시점에 9장)
 | 200 | 10.0 | 1,584 / 3,168 = 50% | **0** | 81.4% |
 | 240 | 12.0 | 352 / 352 = 100% | **0** | 95.3% |
 
-**읽는 법 — 두 국면이다:**
+**How to read it — two phases:**
 
-- **처음 1~2초: 낙하 기둥이 통째로 밝다**(84%). 물이 아직 안 합쳐져 온 열이 9~27이다.
-  **여기가 제일 잘 보이는 순간이다** — 「물이 쏟아져 들어온다」의 첫인상이 **연하늘 기둥**이 된다
-- **그 뒤: 위 9행만 밝고 아래는 어둡다.** 1,584 = **176 × 9행**으로 고정이다
-  (아래로 갈수록 합쳐져 32를 넘는다). ⇒ **소스 밑 36px 띠만 밝은 그라데이션**
-- **고인 물은 한 칸도 안 밝다 — 전 구간 0.** 수면은 지난번처럼 깨끗할 것이다
+- **First 1–2 seconds: the falling column is bright end to end** (84%). Water hasn't merged yet, so whole columns are 9–27.
+  **This is the most visible moment** — the first impression of "water pours in" is **a pale-blue column**
+- **After that: only the top 9 rows are bright, the rest dark.** 1,584 = **176 × 9 rows**, fixed
+  (merging pushes it past 32 further down). ⇒ **only a 36px band under the source is a bright gradient**
+- **Pooled water has not one bright cell — 0 throughout.** The surface will be as clean as last time
 
-**그리고 무한 점프는 안 깨진다** — 점프 조건이 「WATER이고 `FLAG_SHALLOW` 가 아니다」인데
-**고인 물의 얕은칸이 전 구간 0**이다. ⇒ **판정 1~4는 이 변경에 안 흔들린다.**
-**다만 떨어지는 물 안에서는 점프가 안 먹는다**(설계대로다. 다만 아무도 그 상황을 안 봤다).
+**And unlimited jumping doesn't break** — the jump condition is "WATER and not `FLAG_SHALLOW`", and
+**pooled water's shallow count is 0 throughout.** ⇒ **Acceptance 1–4 are unaffected by this change.**
+**But jumping doesn't work inside the falling water** (as designed — though nobody has seen that situation).
 
-#### 3. 판정 6(차오르는 속도) — **눈에 띄게 안 달라졌다**
+#### 3. Acceptance 6 (fill rate) — **no noticeable change**
 
 | | 25% | 50% | 80% | 95% |
 |---|---|---|---|---|
-| **수정 전**(실게임 관측) | ~4s | ~6.5s | ~10s | ~12s |
-| **수정 후**(헤드리스) | 3.1s | 6.1s | 9.8s | **12.0s** |
+| **Before** (real game) | ~4s | ~6.5s | ~10s | ~12s |
+| **After** (headless) | 3.1s | 6.1s | 9.8s | **12.0s** |
 
-**같다고 봐도 된다.** 칸당 양이 113→9로 줄고 띠가 12행이 되어 틱당 총량이
-19,712 → 19,008(−3.6%)이 됐는데 **화면에 보일 차이가 아니다.**
-**비교의 한쪽은 실게임, 한쪽은 헤드리스다** — 지난번에 둘이 잘 맞았으므로 붙였지만 **엄밀히는 다른 저울이다.**
+**Effectively the same.** Per-cell dropped 113→9 and the band became 12 rows, taking per-tick total from
+19,712 → 19,008 (−3.6%), **which is not a visible difference.**
+**One side of the comparison is the real game and the other headless** — they matched well last time, so they're
+placed side by side, but **strictly they are different scales.**
 
-#### 남은 것 — **사람 눈이 있어야 닫힌다**
+#### What remains — **it needs human eyes to close**
 
-1. **떨어지는 물이 물줄기로 보이나** (빈틈 0은 필요조건이지 충분조건이 아니다)
-2. **처음 1~2초의 「연하늘 기둥」이 폭포로 보이나, 고장으로 보이나**
-   **실제 폭포의 흰 거품과 같은 방향이라 오히려 나을 수도 있다. 값으로는 못 가른다**
+1. **Does the falling water read as a stream** (0 gaps is necessary, not sufficient)
+2. **Does the first 1–2 seconds' pale-blue column read as a waterfall or a malfunction?**
+   **It runs the same direction as real waterfall foam, so it may be better. Value can't separate them**
 
-**손잡이가 있다는 것만 적어 둔다**(무엇을 할지는 기획이 정한다): 칸당 양 9를 `WATER_WET`(32)
-위로 올리려면 **틱당 총량을 약 3.6배(≈72,000)로 올리거나** 띠를 낮춰야 하는데, **앞은 차오르는
-시간을 3.6배 빠르게 만들어 판정 6을 깨고, 뒤는 줄무늬를 도로 부른다.** **셋이 한 손잡이에 묶여 있다.**
+**Only noting that a knob exists** (what to do is the design's call): raising per-cell 9 above `WATER_WET` (32)
+requires **raising the per-tick total ~3.6× (≈72,000)** or lowering the band, but **the former makes filling 3.6×
+faster and breaks acceptance 6, and the latter brings the striping back.** **Three things are tied to one knob.**
 
 ---
 
-### 결과 — 2026-08-08, 단계 1·2 뒤 verify-read · verify-run (헤드리스, 둘 다 독립)
+### Result — after stages 1·2, verify-read · verify-run (headless, both independent)
 
-**화면은 아직 아무도 안 봤다.** 아래는 전부 값이다. **판정 4·5·7·8·9는 여기서 안 닫힌다.**
+**Nobody has seen the screen.** Everything below is values. **Acceptance 4·5·7·8·9 do not close here.**
 
-**판정 1·2·3 — 값으로 통과.**
-`net_character` A-1~A-4 초록(38/38). 그리고 verify-run이 **그물이 안 보는 조합**을 따로 쟀다 —
-그물은 물을 지워서 캐릭터를 밖으로 냈지 **실제 이동으로 나간 적이 없었다**:
+**Acceptance 1·2·3 — pass by value.**
+`net_character` A-1–A-4 green (38/38). And verify-run separately measured **combinations the net doesn't see** —
+the net deleted water to get the character out, so it **never left by actual movement**:
 
-| 장면 | 결과 |
+| Scene | Result |
 |---|---|
-| 얕은 풀에서 점프 → 8프레임 뒤 몸 전체가 수면 위 → 점프 시도 | **안 먹었다**(중력만) |
-| 30프레임 뒤 다시 잠김 → 점프 시도 | **먹었다**(vy = −680) |
-| 깊은 물↔얕은 물 **가로** 경계 | 셀 800에서 정확히 전환(오차 0칸) |
+| Jump in a shallow pool → body fully above the surface 8 frames later → attempt a jump | **Didn't work** (gravity only) |
+| Submerged again 30 frames later → attempt a jump | **Worked** (vy = −680) |
+| **Horizontal** deep/shallow boundary | Transitioned exactly at cell 800 (0 cells of error) |
 
-**다만 A-4는 가짜였다** — 라벨이 「발밑 한 줄을 포함한다」인데 그 줄을 **한 글자도 안 쟀다.**
-발밑 판정을 지워도 38/38 초록이었다. 원인은 검사가 `step()` 을 한 번 부르는 사이 **캐릭터가 1px 떨어져
-상자 자기 밑변이 물 행에 들어간 것.** ⇒ **다시 짜는 중이다.**
+**But A-4 was fake** — its label says "includes the row underfoot" and it **never measured that row at all.**
+Deleting the underfoot check still gave 38/38 green. The cause was that between one `step()` call,
+**the character fell 1px and the box's own bottom edge entered the water row.** ⇒ **Being rewritten.**
 
-**낙하 K=4 — 「4배」가 아니라 3.0배다.** 세부는 `docs/design/물.md` 「낙하에 가속이 없다」.
-둘이 독립으로 재서 값이 일치했다(640 · 642.9 px/s). **공중에 멈추는 틱은 0개**다.
+**Fall K=4 — not "4×" but 3.0×.** Detail in `docs/design/water.md`, "falling has no acceleration".
+Two independent measurements agreed (640 · 642.9 px/s). **Zero ticks stalled in mid-air.**
 
-**판정 6 — 시간은 목표 안인데 청크는 상한에 닿는다. 둘이 갈린다.**
+**Acceptance 6 — the time is within target while chunks touch the cap. The two disagree.**
 
-| % | 지금(K=4 · 볼륨 기준) | 옛 실측(행 기준 — **방법이 달라 절대 비교는 못 한다**) |
+| % | Now (K=4 · volume basis) | Old measurement (row basis — **different method, not directly comparable**) |
 |---|---|---|
 | 25% | **4.0s** | 5.0s |
 | 50% | **7.1s** | 8.0s |
 | 75% | **10.2s** | 9.0s |
 | 95% | **12.6s** | 11.0s |
 
-**전부 목표(5~15s) 안이다.** 넘치지도 않았다(스캔 박스 위 경계 미도달).
+**All within target (5–15s).** No overflow either (the scan box's top boundary was never reached).
 
-**그런데 B-5(「붓는 동안 활성 청크가 상한 100 아래」)는 실패 중이다.** 틱 1~51이 상한에 계속 닿는다
-(지형 세우는 스파이크는 배제하고 쟀다). 문서 위쪽 「39~81, 상한 안 닿음」과 다르다.
+**But B-5 ("active chunks stay below the cap of 100 while pouring") is failing.** Ticks 1–51 sit at the cap
+(terrain-building spikes excluded). This differs from "39–81, never touching the cap" above.
 
-⇒ **지금 상태는 「밀리지만 제 시간에 찬다」다.** **그물을 고쳐 초록으로 만들지 않는다** —
-판정 6은 원래 **「초당 몇 타일 올라오나를 재고 눈으로 본다」**이지 청크 수가 아니다. **화면 판정으로 넘긴다.**
+⇒ **The current state is "delayed but fills on time".** **Do not fix the net to make it green** —
+acceptance 6 was always **"measure how many tiles per second it rises and look at it"**, not a chunk count.
+**Handed to the screen judgment.**
 
-**원인 진단 — 두 검증자가 갈렸고, 직접 증거 쪽을 택했다:**
+**Cause diagnosis — the two verifiers disagreed, and the direct-evidence side was taken:**
 
-| 누가 | 무엇 | 근거 |
+| Who | What | Grounds |
 |---|---|---|
-| verify-read | **맵 탓** | **K를 1로 되돌려도 똑같이 실패**(peak 100). K는 도달을 앞당길 뿐(37틱 → 13틱) |
-| verify-run | 낙하 K 탓일 **가능성** | 추정이라고 스스로 명시했다 |
+| verify-read | **The map** | **Setting K back to 1 fails identically** (peak 100). K only makes it arrive sooner (37 ticks → 13) |
+| verify-run | **Possibly** the fall K | Stated as an estimate itself |
 
-⇒ **verify-read 쪽이 직접 증거다**(K를 실제로 되돌려 쟀다). **맵이 바뀐 것이 원인으로 본다** —
-다른 세션이 이 작업 중에 맵을 다시 구웠고(08:50:39), ① 구덩이의 램프가 사라져 사각 통로가 됐다.
-그 맵 작업은 **끝났다**(`stage1-map-layout` 이 `3.done/` 으로 갔다). 바닥은 이제 멈춰 있다.
+⇒ **verify-read has the direct evidence** (it actually reverted K and measured). **The map change is taken as the cause** —
+another session re-baked the map during this work (08:50:39), removing the pit's ramp and making it a square shaft.
+That map work is **finished** (`stage1-map-layout` went to `3.done/`). The floor is stable now.
 
-**관측 규율** — verify-run이 첫 실행에서 **트리가 흔들리는 창을 밟았고**(`body.gd`·`character.gd`·
-`cell_grid.gd`·`sim_tuning.gd` 의 mtime이 동시에 바뀌었다) 「892칸이 200틱에 도착도 못 한다」는
-**가짜 실패 값**이 나왔다. **그 값은 버렸고**, 채택한 값은 전부 **실행 전후 해시가 같았던 실행**에서 나왔다(재현도 확인).
+**Observation discipline** — verify-run's first run **stepped on a window where the tree was moving**
+(`body.gd` · `character.gd` · `cell_grid.gd` · `sim_tuning.gd` mtimes all changed at once), producing a
+**fake failure value** ("892 cells don't even arrive in 200 ticks"). **That value was discarded**, and every
+adopted value came from runs whose **before/after hashes matched** (reproduction confirmed).
 
 ---
 
-### 결과 — 2026-08-08(이전), verify-run 이 헤드리스로 실측
+### Result — earlier, verify-run measured headless
 
-**판정 6 실패. 「옆벽이 무너져 들어온다」로는 물이 안 차오른다.**
+**Acceptance 6 failed. "The side wall collapses and it comes in" does not fill the room.**
 
-실제 스테이지1 ① 구덩이(x236~258 · y28~42 = 22,080셀)로 쟀다.
+Measured with the real stage-1 pit ① (x236–258 · y28–42 = 22,080 cells).
 
-| 붓는 방식 | 최대 활성 청크 | 잠드는 데 | 수면 상승 |
+| Pour method | Max active chunks | Time to sleep | Surface rise |
 |---|---|---|---|
-| **한꺼번에 다 채움** | **100 (상한에 닿음)** | **17틱 = 0.85초** | 없음 — 처음부터 평평하다 |
-| **옆에서(왼쪽 1/3만 부어 댐 붕괴)** | **100 (상한에 닿음)** | **5,631틱 = 281.6초** | 초기 **0.19타일/초** → 1,500틱 뒤 **0.01타일/초 미만** |
+| **Fill everything at once** | **100 (at the cap)** | **17 ticks = 0.85s** | None — flat from the start |
+| **From the side (dam break, left third only)** | **100 (at the cap)** | **5,631 ticks = 281.6s** | initial **0.19 tiles/s** → after 1,500 ticks **under 0.01 tiles/s** |
 
-**둘 다 못 쓴다.** 한꺼번에 부으면 **차오르는 그림이 아예 없고**(0.85초에 끝난다),
-옆에서 부으면 **4분 30초가 걸린다.**
+**Neither is usable.** All at once means **there is no rising picture at all** (over in 0.85s);
+from the side takes **4 minutes 30 seconds.**
 
-**원인은 확산이다.** 양 기반 물은 반씩 나누므로 **평평해지는 데 폭의 제곱에 비례하는 시간**이 든다
-(`docs/design/물.md` 「양을 고른 결정적 이유」의 실측 상자와 같은 자리).
-⇒ **「구멍 크기로 붓는 속도를 조절한다」는 이 문서의 가정이 틀렸다** — 구멍이 아니라
-**물이 가로로 퍼지는 속도**가 병목이고, 그건 구멍과 무관하다.
+**The cause is diffusion.** Amount-based water halves, so **flattening takes time proportional to the square of the width**
+(same place as the measurement box in `docs/design/water.md`, "the decisive reason for amount").
+⇒ **This doc's assumption "the hole size tunes the pour rate" is wrong** — the bottleneck is not the hole but
+**how fast water spreads sideways**, which has nothing to do with the hole.
 
-**활성 청크는 두 방식 다 상한 100에 닿았다**(실효폭 ≈33의 3배) ⇒ **물이 밀린다.**
-그래도 FPS는 안 죽는다(2026-08-08에 절벽이 사라졌다).
+**Active chunks hit the cap of 100 both ways** (3× the effective width of ≈33) ⇒ **water gets delayed.**
+FPS still doesn't die (the cliff is gone).
 
-**누수는 0이다** — 벽(x232~235 · x259~262)과 바닥 아래로 한 칸도 안 샜다. 그릇은 튼튼하다.
+**Leakage is 0** — not one cell escaped past the walls (x232–235 · x259–262) or below the floor. The bowl is sound.
 
-**⇒ 다른 방식이 필요하다** (미정. 후보):
-- **구덩이 전체 폭에 매 틱 조금씩 넣는다**(비처럼) — 수면이 균일하게 올라오고 확산을 안 기다린다
-- **여러 지점에서 동시에 넣는다** — 퍼질 거리를 줄인다
-- **구덩이를 좁게 만든다** — 폭이 줄면 확산 시간이 제곱으로 준다
+**⇒ A different method is needed** (TBD. Candidates):
+- **Add a little across the pit's full width every tick** (like rain) — the surface rises evenly and doesn't wait on diffusion
+- **Add at several points at once** — shortens the distance to spread
+- **Make the pit narrower** — halving width cuts diffusion time quadratically
 
-**연출 속도를 먼저 정해야 한다** — 「15타일을 몇 초에 올라오게 할 것인가」.
-그 값이 정해지면 위 셋 중 무엇이 맞는지가 따라 나온다.
+**The presentation speed must be decided first** — "how many seconds should 15 tiles take".
+Once that value exists, which of the three fits follows.
 
-### 결과 — 2026-08-08, verify-run이 대안 A/B/C를 헤드리스로 재측정
+### Result — verify-run re-measured alternatives A/B/C headless
 
-**맵이 이 사이에 다시 바뀌어 있었다** — 지금 ① 구덩이는 실측으로 **x1888~2063셀(타일236~258) ·
-입구 y208(타일26) · 바닥 y311(타일38) · 빈칸 13,312셀 = 208타일 · 높이 13타일**이다.
-`Stage.build_terrain_into()`로 실제 지형을 세워서 잰 값이고, 문서 위쪽의 208타일/13,312셀과
-정확히 일치한다. **첫 스캔은 틀렸었다** — x·y 범위를 넓게 잡고 EMPTY만 찾았더니 구덩이 위
-**열린 하늘까지 같이 잡혀 889타일**이 나왔다. 왼쪽 벽 안쪽 한 점(타일231)이 STONE인 행만
-구덩이 행으로 인정하도록 고치고 나서야 208타일이 나왔다 — **관측 도구 자체도 뒤집어 봐야
-믿을 수 있다**는 사례가 이 재측정 안에서 한 번 더 났다.
+**The map changed in between** — the pit ① now measures **x1888–2063 cells (tiles 236–258) ·
+entrance y208 (tile 26) · floor y311 (tile 38) · 13,312 empty cells = 208 tiles · 13 tiles tall.**
+Measured by building the real terrain with `Stage.build_terrain_into()`, matching the 208 tiles / 13,312 cells above exactly.
+**The first scan was wrong** — taking wide x·y ranges and looking only for EMPTY also caught **the open sky above the pit,
+giving 889 tiles.** Only after requiring that a row have STONE at one point inside the left wall (tile 231) did 208 come out —
+**the observation tool itself must be inverted before it can be trusted**, a lesson that recurred inside this re-measurement.
 
-**A. 전체 폭(176셀)에 매 틱 비처럼**(입구 행에 총량을 폭만큼 나눠 매 틱 붓는다):
+**A. Full width (176 cells), like rain every tick** (the total divided across the entrance row every tick):
 
-| 틱당 총량 | 25% | 50% | 75% | 95%(거의 만수) | 최대 활성청크 | 상한(100) 닿은 구간 |
+| Per-tick total | 25% | 50% | 75% | 95% (near full) | Max active chunks | At cap (100) |
 |---|---|---|---|---|---|---|
-| 2,000 | 22.0s | 41.0s | 못 함(>60s) | 못 함(>60s) | 100 | 초반 29틱뿐 |
-| 8,000 | **9.0s** | 14.0s | 19.0s | 23.0s | 100 | 초반 29틱뿐 |
-| 20,000 | **5.0s** | **8.0s** | **9.0s** | **11.0s** | 100 | 초반 29틱뿐 |
+| 2,000 | 22.0s | 41.0s | never (>60s) | never (>60s) | 100 | first 29 ticks only |
+| 8,000 | **9.0s** | 14.0s | 19.0s | 23.0s | 100 | first 29 ticks only |
+| 20,000 | **5.0s** | **8.0s** | **9.0s** | **11.0s** | 100 | first 29 ticks only |
 
-**틱당 20,000이 5~15초 범위에 정확히 든다**(5.0~11.0s). 8,000도 25~50% 구간(9~14s)은
-범위 안이고 95%만 23s로 살짝 넘는다 — **탈출에 만수를 요구하지 않는다면 8,000도 쓸 만하다.**
-**활성 청크가 상한 100에 닿는 것은 지형을 세우는 첫 틱들뿐이고, 붓는 동안에는 39~81 사이를
-오가며 100 아래에 머문다** — 「물이 밀린다」가 이 폭(23타일)·이 속도에서는 안 난다.
+**20,000 per tick lands exactly in the 5–15 second range** (5.0–11.0s). 8,000 is also in range for 25–50% (9–14s)
+with only 95% slightly over at 23s — **if the escape doesn't require a full room, 8,000 works too.**
+**Active chunks touch the cap of 100 only during the first terrain-building ticks; while pouring they range 39–81,
+staying under 100** — "water gets delayed" doesn't occur at this width (23 tiles) and this rate.
 
-**B. 5개 지점(각 구멍 폭 1타일=8셀, 총 40셀)에서만**:
+**B. From 5 points only** (each hole 1 tile = 8 cells, 40 cells total):
 
-| 틱당 총량 | 25% | 50% | 75% | 95% | 최대 활성청크 | 상한 닿은 구간 |
+| Per-tick total | 25% | 50% | 75% | 95% | Max active chunks | At cap |
 |---|---|---|---|---|---|---|
-| 2,000 | 22.0s | 43.0s | 못 함 | 못 함 | 100 | 초반 28틱뿐 |
-| 8,000 | 9.0s | 15.0s | 20.0s | 23.0s | 100 | 초반 28틱뿐 |
-| 20,000 | 7.0s | 12.0s | 16.0s | 19.0s | 100 | 초반 28틱뿐 |
+| 2,000 | 22.0s | 43.0s | never | never | 100 | first 28 ticks only |
+| 8,000 | 9.0s | 15.0s | 20.0s | 23.0s | 100 | first 28 ticks only |
+| 20,000 | 7.0s | 12.0s | 16.0s | 19.0s | 100 | first 28 ticks only |
 
-**B가 A보다 안 좋다** — 같은 총량인데 A보다 늦다(20,000에서 95% 도달이 A는 11s, B는 19s).
-**5곳으로 모아 부어도 이 폭(176셀)에서는 확산이 이미 안 느려서 이득이 없고, 오히려 국지적으로
-쌓인 물이 옆으로 퍼지는 시간만 더 든다.** ⇒ **B를 고를 이유가 없다. A가 더 간단하고 더 빠르다.**
+**B is worse than A** — same total, slower (at 20,000, A reaches 95% in 11s, B in 19s).
+**Concentrating into 5 points gains nothing at this width (176 cells) since diffusion isn't the limiter there;
+it only adds time for locally piled water to spread sideways.** ⇒ **No reason to choose B. A is simpler and faster.**
 
-**구멍을 1셀로 두면 안 된다** — 처음에 1셀 구멍 5곳으로 쟀더니 **2,000·8,000·20,000 세
-총량이 전부 똑같은 결과(총 부은 양까지 1,503,225로 동일)**가 나왔다. 양이 달라도 결과가
-똑같다는 것 자체가 「그 칸(255가 한계)의 배출 속도가 병목이지 붓는 양이 병목이 아니다」라는
-증거였다 — 구멍 폭을 8셀(1타일)로 넓히고 나서야 총량 차이가 결과에 반영됐다.
+**Do not make the holes 1 cell** — the first measurement used five 1-cell holes and **2,000 · 8,000 · 20,000 all gave
+identical results (down to 1,503,225 total poured).** Different amounts giving identical results was itself the evidence
+that **the cell's drain rate (capped at 255) is the bottleneck, not the pour rate** — only widening the holes to
+8 cells (1 tile) made the totals matter.
 
-**C. 그릇 폭 대 「완전히 잠드는」 시간**(옆에서 댐 붕괴 — 왼쪽 1/3에 전량을 한 번에):
+**C. Bowl width vs time to fully sleep** (dam break — the whole amount into the left third at once):
 
-| 폭 | 잠드는 데 | 최대 활성청크 |
+| Width | Time to sleep | Max active chunks |
 |---|---|---|
-| 22타일(실제 폭에 가까움) | 195.4s | 17 |
-| 12타일 | 71.0s | 13 |
-| 8타일 | 36.2s | 10 |
+| 22 tiles (close to the real width) | 195.4s | 17 |
+| 12 tiles | 71.0s | 13 |
+| 8 tiles | 36.2s | 10 |
 
-**폭을 좁혀도 댐 붕괴 방식으로는 목표(5~15s)에 못 닿는다** — 가장 좁은 8타일도 36.2초다.
-폭이 줄면 확산 시간이 준다는 가설의 방향은 맞다(22→8타일에서 5.4배 빨라졌다, 폭 제곱 비 7.6배에는
-못 미치지만 뚜렷한 초선형이다). **그런데 이건 「완전히 평평해져 잠드는」 것을 재는 것이라 기준이
-너무 세다** — 탈출은 수면이 입구 근처까지만 오르면 되지 격자 전체가 잠들 필요는 없다.
-⇒ **C는 가설 확인 자료로는 값지지만, 이 문제의 해법은 아니다.**
+**Narrowing doesn't get the dam-break method to target (5–15s)** — even the narrowest, 8 tiles, is 36.2 seconds.
+The hypothesis's direction is right (22→8 tiles is 5.4× faster, short of the 7.6× width-squared ratio but clearly superlinear).
+**But this measures "flattening completely and going to sleep", which is too strict a bar** — the escape only needs the
+surface near the entrance, not the whole grid asleep.
+⇒ **C is valuable as hypothesis confirmation but is not this problem's solution.**
 
-**⇒ 결론: A(전체 폭에 비처럼, 틱당 15,000~20,000 근방)를 쓴다.** 지금 보스방 폭(20×12,
-구덩이 실측 폭 23타일)을 줄일 필요가 없다 — **붓는 방식만 바꾸면 이 폭 그대로 5~15초 안에
-찬다.** B는 이득이 없어 버린다. C(좁히기)는 필요하면 여유를 더 벌 수 있다는 근거로만 남긴다.
+**⇒ Conclusion: use A (rain across the full width, around 15,000–20,000 per tick).** The current boss room width
+(20×12; the pit measures 23 tiles) needs no shrinking — **changing only the pour method fills this width in 5–15 seconds.**
+B gains nothing and is dropped. C (narrowing) is kept only as grounds that more headroom is available if needed.
 
-**안 잰 것**: 「95%」는 균일 채움 기준(폭의 50% 이상이 젖어야 그 행을 「올라왔다」로 센다)으로
-잰 것이라 실제 화면에서 「거의 다 찼다」는 인상과 대략 맞겠지만 **눈으로는 아직 안 봤다** —
-verify-look의 몫이다. 그리고 **플레이어가 정말 몇 초 안에 뛰어서 탈출하는지**(캐릭터의 점프
-높이·속도와 수면 상승 속도를 맞물려 보는 것)는 이 그물이 안 쟀다 — 캐릭터를 안 띄웠다.
+**Not measured**: "95%" was measured on a uniform-fill basis (a row counts as risen once over 50% of the width is wet),
+which should roughly match the impression of "nearly full" on screen but **hasn't been seen** — verify-look's job.
+And **whether the player really escapes by jumping within those seconds** (jump height and speed against the surface rise)
+was not measured — no character was instantiated.
 
-**관측 중 트리 안정성**: `src/`·`tests/`는 측정 시작·끝 해시가 같았다(안 바뀌었다).
-`stage1-map-layout.md`(당시 `2.active/`, 지금 `3.done/`)가 측정 도중 바뀌었지만(다른 세션이 verify-look
-결과를 적고 있었다) 그 파일은 지형 소스가 아니라 위 구덩이 실측(x1888~2063 등)과 정확히
-일치해 서로를 확인해 줬다 — 결과는 무효화되지 않는다.
-
----
-
-## 미정
-
-**억지로 채우지 않는다.**
-
-- **물속 중력·최대 낙하 속도** — 눈으로 보고 정한다.
-  **여전히 미정이고, 그게 계획이다** — 단계 1은 **기본 중력 그대로** 가고 **판정 4를 보고 나서** 연다(단계 2)
-- ~~**어느 칸의 물을 보나**~~ — **닫혔다(2026-08-08): 불과 같은 범위.**
-  `body.gd:155 standing_in_fire()` 가 이미 「상자가 덮는 셀 + 발밑 한 줄」을 훑는다. **그 옆에 같은 모양으로 놓는다.**
-  이유: 새 범위를 세우면 **「불은 끄는데 점프는 안 먹는다」**가 나고 그 어긋남을 아무도 설명 못 한다
-- ~~**기준선을 `WATER_WET`(32)으로 쓸 것인가**~~ — **닫혔다(2026-08-08): 쓴다. 새 상수를 안 세운다.**
-  위 78~81행이 그 대가(색·방화·점프 셋이 한 값에 묶인다)를 이미 적어 놨다
-- **폴백 글자를 언제 띄우나** — 몇 초 못 깨달으면인가, 항상인가.
-  지금 UI가 디버그 라벨뿐이다
-- ~~**물이 얼마나 빨리 차오르나**~~ — **닫혔다(2026-08-08): A방식 · 틱당 총량 20,000에서 시작한다.**
-  위 「대안 A/B/C 재측정」이 값을 줬다(25%→5.0s · 50%→8.0s · 95%→11.0s, 목표 5~15s 안).
-  **15,000~20,000이 범위이고 20,000이 시작값이다** — 화면을 보고 그 안에서 움직인다
-- **몬스터와 물** — 돼지·닭이 물에서 어떻게 되나
-- ~~**물살이 캐릭터를 미나** — 이 문서 범위 밖~~ — **범위 안으로 들어왔다(2026-08-08).**
-  사용자가 「물이 배경 같다」고 판정하고 **「물살까지 넣고 물을 이번에 끝내자」**고 정했다.
-  ⇒ **구현 계획 단계 4.** 세기(`WATER_PUSH_PX`)만 화면을 보고 정한다
-- **낙하에 가속이 없다** — 범위 안(2026-08-08). ⇒ **구현 계획 단계 2.** K 시작값 4
-- **문과 물이 어떻게 만나나** — 2026-08-08에 **문이 ③ 방 뒤(오른쪽)에 있다**로 정해졌는데
-  (`stage1-map-layout.md`) **물도 옆벽에서 들어온다.** 물이 문을 잠그나 · 문이 높이 있어
-  점프로 올라가야 닿나 · 차기 전에 나가야 하나. **여기가 안 정해지면 탈출 장면이 성립 안 한다**
-- **스테이지1에 물이 이 장면에만 나오는가** — 맵 문서는 「물 없음」이고 여기만 예외다.
-  **그러면 플레이어가 물을 처음 보는 것이 보스전 직후다** — 그게 의도인지 확인이 필요하다
+**Tree stability during observation**: `src/` and `tests/` had identical start and end hashes.
+`stage1-map-layout.md` (then in `2.active/`, now `3.done/`) changed mid-measurement (another session was recording
+verify-look results), but that file is not the terrain source and matched the pit measurements above (x1888–2063 etc.)
+exactly — they confirmed each other, so the results stand.
 
 ---
 
-## 정한 것 — 2026-08-08 기획 대화
+## TBD
 
-| 무엇 | 값 | 왜 |
+**Do not force these full.**
+
+- **Underwater gravity and max fall speed** — decided by eye.
+  **Still TBD, and that is the plan** — stage 1 goes with **default gravity** and this opens **after acceptance 4** (stage 2)
+- ~~**Which cell's water to read**~~ — **closed: the same range as fire.**
+  `body.gd:155 standing_in_fire()` already sweeps "the cells the box covers + the row underfoot". **Put it beside that, same shape.**
+  Reason: a new range produces **"fire is extinguished but jumping doesn't work"**, and nobody can explain that mismatch
+- ~~**Use `WATER_WET` (32) as the threshold?**~~ — **closed: yes. No new constant.**
+  The price (color, fire-proofing and jumping tied to one value) is already recorded above
+- **When to show fallback text** — after some seconds of not working it out, or always.
+  The UI is only a debug label right now
+- ~~**How fast the water rises**~~ — **closed: approach A, starting at 20,000 per tick.**
+  The A/B/C re-measurement gave the values (25%→5.0s · 50%→8.0s · 95%→11.0s, within the 5–15s target).
+  **15,000–20,000 is the range and 20,000 is the starting value** — move within it after seeing the screen
+- **Monsters and water** — what happens to pigs and chickens in water
+- ~~**Does current push the character** — out of scope~~ — **now in scope.**
+  The user judged "water is background" and decided **"put in the current too and finish water this round".**
+  ⇒ **Implementation stage 4.** Only the strength (`WATER_PUSH_PX`) is set on screen
+- **Falling has no acceleration** — in scope. ⇒ **Implementation stage 2.** K starts at 4
+- **How the gate and water meet** — the gate was placed behind room ③ (to the right) (`stage1-map-layout.md`)
+  **and water also comes from the side wall.** Does water lock the gate · is the gate high enough to need a jump ·
+  must you leave before it fills. **Unresolved, the escape scene doesn't hold**
+- **Is this the only water in stage 1** — the map doc says "no water" and this is the sole exception.
+  **Then the player's first sight of water is right after the boss fight** — confirm that is intended
+
+---
+
+## Decided — from the design conversation
+
+| What | Value | Why |
 |---|---|---|
-| 물속 이동 | **점프 무한** | 부력·수영이라는 새 물리 축을 안 만든다. 조건 한 줄이다 |
-| 부력 | **안 만든다** | 물이 미는 게 아니라 플레이어가 스스로 올라간다 |
-| 익사 | **안 만든다** | 무한 점프가 압박과 탈출을 동시에 만든다 |
-| 배우는 법 | **스스로 깨닫는다** | 글자는 폴백 |
-| 쓰이는 자리 | **스테이지1 ③ 보스 직후** | 스테이지2(물 스테이지)의 이동 튜토리얼이 된다 |
+| Underwater movement | **Unlimited jumps** | No new physics axis called buoyancy or swimming. It is one line of condition |
+| Buoyancy | **Not built** | The water doesn't push you; you climb on your own |
+| Drowning | **Not built** | Unlimited jumping creates pressure and escape at once |
+| How it's learned | **Worked out alone** | Text is the fallback |
+| Where it's used | **Right after stage 1's boss ③** | It becomes stage 2's (the water stage) movement tutorial |
 
-⇒ **`docs/design/물.md` 의 「부력인지 수영인지는 안 정했다」가 이것으로 닫힌다.**
+⇒ **`docs/design/water.md`'s "buoyancy or swimming was not decided" closes with this.**
 
 ---
 
-# 구현 계획 — 2026-08-08
+# Implementation plan
 
-## 진단이 먼저 — 이 계획이 무엇을 고치려는 것인가
+## Diagnosis first — what is this plan fixing
 
-**사용자의 불평 셋이 따로 온 것처럼 보이지만 한 원인이다:**
+**The user's three complaints look separate and share one cause:**
 
 ```
-「배경 같다 · 나에게 아무 영향도 안 미친다」   ← 진단
-「한 줄씩 또로록 떨어진다 · 허접하다」          ← 증상 (낙하에 가속이 없다)
-「물살이 없다」                                  ← 증상 (물이 캐릭터를 못 민다)
+"feels like background · has no effect on me"   ← the diagnosis
+"trickles down one row at a time · cheap"       ← symptom (falling has no acceleration)
+"there is no current"                           ← symptom (water can't push the character)
 ```
 
-**물이 캐릭터에 한 글자도 안 닿는다**(`character.gd` 에 `WATER` 참조 0개).
-⇒ **물을 「더 예쁘게」 고치는 것으로는 이 느낌이 안 없어진다. 닿아야 없어진다.**
+**Water does not touch the character at all** (zero `WATER` references in `character.gd`).
+⇒ **Making the water "prettier" will not remove this feeling. Only touching will.**
 
-**이 판단이 아래 「순서」를 정한다** — 축 넷 중 **캐릭터에 닿는 것은 ①과 ③뿐**이고,
-**②는 물이 물답게 보이는 것**이며 **④는 화면이 변하는 것**이다.
+**That judgment sets the order below** — of the four axes, **only ① and ③ touch the character**,
+**② is water looking like water**, and **④ is the screen changing.**
 
-## 구조 — 새 종류는 하나뿐이다. 나머지 셋은 전부 「변형」이다
+## Structure — only one is a new kind. The other three are all "variants"
 
-| 축 | 변형인가 새 종류인가 | 근거 |
+| Axis | Variant or new kind | Grounds |
 |---|---|---|
-| **① 물속 점프** | **변형.** 새 파일 0 | `body.gd` 에 `standing_in_fire` 의 짝 하나 + 점프 조건에 항 하나 |
-| **② 낙하 가속** | **변형.** 새 파일 0 | `_water_fall` 이 보는 칸 수가 1에서 K로 는다. **새 상태를 안 만든다** |
-| **③ 물살** | **변형.** 새 파일 0 | **아래 「물살은 반동의 형제다」** |
-| **④ 붓기** | **새 종류** | 이 리포에 「여러 틱에 걸쳐 진행되는 연출 상태」가 없다 |
+| **① underwater jump** | **Variant.** 0 new files | One sibling of `standing_in_fire` in `body.gd` + one term in the jump condition |
+| **② fall acceleration** | **Variant.** 0 new files | `_water_fall` looks at K cells instead of 1. **No new state** |
+| **③ current** | **Variant.** 0 new files | See "current is recoil's sibling" |
+| **④ pouring** | **New kind** | This repo has no "presentation state that progresses across many ticks" |
 
-### 물살은 반동(`recoil_vx`)의 형제다 — 새 물리 축이 아니다
+### Current is recoil's (`recoil_vx`) sibling — not a new physics axis
 
-**계획을 세우다 찾았다.** 캐릭터의 가로 이동이 이미 **「입력 + 외력」의 합**이다:
+**Found while planning.** The character's horizontal movement is already **the sum of "input + external force"**:
 
 ```gdscript
 # src/actor/character.gd:287
 _body.move_x(grid, (move * MOVE_SPEED_PX + recoil_vx) * dt)
 ```
 
-**`recoil_vx` 가 정확히 「밖에서 캐릭터를 미는 가로 속도」다.** 물살은 **그 합에 항을 하나 더하는 것**이고,
-`move_x` 가 벽 막힘·계단 오르기를 이미 다 처리한다. ⇒ **새 축도, 새 상태도, 새 파일도 없다.**
+**`recoil_vx` is exactly "an external horizontal velocity pushing the character".** Current is **one more term in
+that sum**, and `move_x` already handles wall blocking and stair climbing. ⇒ **No new axis, no new state, no new files.**
 
-**다만 반동과 다른 점이 하나 있다 — 물살은 감쇠하지 않는다.**
-반동은 `recoil_vx *= pow(RECOIL_DECAY_PER_SEC, dt)`(`character.gd:289`)로 잦아드는 **충격량**이지만,
-물살은 **매 프레임 격자에서 새로 읽는 장(場)**이다. **감쇠를 붙이면 두 번 세는 것이 된다** —
-물이 그대로인데 힘이 줄고, 물이 없어졌는데 힘이 남는다.
+**One difference from recoil — current does not decay.**
+Recoil is an **impulse** dying down via `recoil_vx *= pow(RECOIL_DECAY_PER_SEC, dt)` (`character.gd:289`), but
+current is **a field re-read from the grid every frame.** **Adding decay counts it twice** —
+force falls while the water is unchanged, and force lingers after the water is gone.
 
-### ④(붓기)만 새 파일을 세운다
+### Only ④ (pouring) stands up a new file
 
-`spell_sim` 은 탄을, `cell_grid` 는 칸을 들지만 **「N틱 동안 조금씩 붓는 것」을 드는 자리가 없다.**
-⇒ `src/sim/water_source.gd`(`RefCounted`) 하나를 세운다. 아래가 그 근거다.
+`spell_sim` holds bolts and `cell_grid` holds cells, but **nothing holds "pour a little over N ticks".**
+⇒ Stand up one `src/sim/water_source.gd` (`RefCounted`). Grounds below.
 
-### 붓기를 어디에 두나 — `src/sim/` 이다. 근거는 폴더 계약이 아니라 **그물이다**
+### Where pouring lives — `src/sim/`. The grounds are not the folder contract but **the nets**
 
-먼저 계약을 본다: 붓기는 **정수만 쓴다**(행 하나 · x 범위 · 틱당 양 · 남은 양). float도
-`Vector2` 도 `randi` 도 `Time.` 도 안 쓰고 씬 트리를 모른다 ⇒ **`src/sim/` 계약을 문자 그대로 만족한다.**
+The contract first: pouring uses **only integers** (one row · an x range · a per-tick amount · a remaining amount).
+No float, no `Vector2`, no `randi`, no `Time.`, and it knows nothing of the scene tree ⇒ **it satisfies `src/sim/` literally.**
 
-**그런데 계약만으로는 `stage.gd` 도 후보다** — 껍데기는 디버그 문을 다는 자리이고
-`_pour_water_at`(F) · `ignite`(G) 가 선례다. **가르는 것은 이것이다:**
+**But the contract alone leaves `stage.gd` as a candidate too** — the shell is where debug doors go, and
+`_pour_water_at` (F) and `ignite` (G) are the precedent. **What decides it is this:**
 
-> **이 기능의 제일 큰 위험이 「물이 제 속도로 오나」(판정 6)이고, 그건 값으로만 재진다.**
-> 붓는 상태를 `stage.gd` 안에 두면 **그물이 씬을 못 세워서 그 코드를 못 돌린다** ⇒
-> 그물은 **붓기를 자기 안에 다시 구현해서** 재게 된다.
-> **그러면 재는 것과 출하되는 것이 다른 코드다.** CLAUDE.md 「가짜 그물 금지」의
-> **「라벨이 재는 것보다 넓다」** 그 자리다 — 초록이 나와도 게임의 물 속도는 아무도 안 잰 것이 된다.
+> **This feature's biggest risk is "does water arrive at the right rate" (acceptance 6), and that is measurable only by value.**
+> Put the pour state inside `stage.gd` and **the nets can't build a scene, so they can't run that code** ⇒
+> the net would **reimplement pouring inside itself** to measure it.
+> **Then what is measured and what ships are different code.** That is CLAUDE.md's "No fake nets",
+> **the label claiming more than the check measures** — a green result while nobody has measured the game's water rate.
 
-⇒ **상태와 셈은 `src/sim/water_source.gd` 가 들고, `stage.gd` 는 「언제 시작하나」와 「매 틱 부른다」만 안다.**
-그물은 **게임이 돌리는 바로 그 객체**를 헤드리스로 돌린다.
-부수 효과가 하나 더 있다 — 보스 훅이 생기는 날 `world_step` 이 **같은 객체**를 들면 되고,
-껍데기에서 본편으로 **옮길 코드가 없다.**
+⇒ **State and arithmetic live in `src/sim/water_source.gd`; `stage.gd` knows only "when to start" and "call it every tick".**
+The net runs **the very object the game runs**, headless.
+There is a side benefit — the day the boss hook exists, `world_step` holds **the same object**, and
+**there is no code to move** from the shell into the real game.
 
-### `cell_grid.step()` 안에 넣지 않는다
+### Do not put it inside `cell_grid.step()`
 
-물 소스를 격자의 틱 안에 넣으면 **모든 그물의 `step()` 이 의미가 바뀐다**(지금 39개가 그걸 부른다).
-소스는 **부르는 쪽이 돌린다.** 격자는 계속 「칸을 드는 것」이다.
-
----
-
-## 붓기의 셈 — 「덮어쓰기」가 아니라 「더하기」다
-
-**이건 취향이 아니라 정확성이다. 계획에 박아 둔다.**
-
-`set_water(x, y, amount)`(`cell_grid.gd:1088`)는 **덮어쓴다** — 안에서 `_write_water(i, amount)` 가
-`_aux[i]` 를 **그 값으로 만든다**(`cell_grid.gd:309`). ⇒ 이미 200이 든 칸에 113을 「부으면」
-**87이 사라진다.** **에러가 안 난다.** 물이 조용히 줄고 「왜 안 차지」만 남는다.
-
-⇒ **읽고 더해서 쓴다.** 둘 다 이미 있는 공개 문이다:
-
-```
-새 값 = mini(WATER_MAX, aux_at(x, row) + 칸당_양)
-set_water(x, row, 새 값)
-```
-
-**벽은 알아서 거절된다** — `set_water` 가 `EMPTY`·`WATER` 가 아니면 `false` 를 돌려준다
-(`cell_grid.gd:1096`). 그릇 밖으로 안 샌다(위 「누수 0」과 같은 성질).
-**그리고 소스가 「이번 틱에 실제로 들어간 양」을 스스로 센다** — 거절된 칸과 `WATER_MAX` 에
-막혀 못 들어간 몫을 빼고. **그 카운터가 아래 그물 B-1의 한쪽 변이다.**
+Putting the water source inside the grid's tick **changes what `step()` means for every net** (39 call it now).
+**The caller runs the source.** The grid stays "the thing that holds cells".
 
 ---
 
-## 물살의 세기와 방향을 어디서 얻나 — **격자에 안 남긴다. 캐릭터가 읽는다**
+## The pour's arithmetic — it is "add", not "overwrite"
 
-`docs/design/물.md:452` 가 이 자리를 짚어 뒀다 — **`_water_share` 가 이미 `diff` 를 계산하고 버린다**
-(`cell_grid.gd:537`). **남길지 버릴지가 설계 판단**이라고. 판단한다: **버린 채로 둔다.**
+**This is accuracy, not taste. Pinned into the plan.**
 
-### 두 길의 비용
+`set_water(x, y, amount)` (`cell_grid.gd:1088`) **overwrites** — internally `_write_water(i, amount)`
+**sets `_aux[i]` to that value** (`cell_grid.gd:309`). ⇒ "Pouring" 113 into a cell already holding 200
+**destroys 87.** **No error is raised.** Water quietly shrinks and all that remains is "why won't it fill".
 
-| | **A. 격자에 남긴다** | **B. 캐릭터가 이웃 칸을 읽는다** |
-|---|---|---|
-| 메모리 | **셀당 1바이트 = 4,128,768칸 ⇒ 4.1MB** (`cell_grid.gd:53-54`) | **0** |
-| 시뮬 변경 | `_water_share` 안(가장 뜨거운 루프)에 쓰기가 는다 | **없다** |
-| 새 축 | **잔류값을 매 틱 지우거나 감쇠시켜야 한다** — 안 하면 물이 멈춘 뒤에도 힘이 남는다 | 없다 — 늘 지금 격자에서 읽는다 |
-| 기존 그물 | `net_water` 39개의 전제(격자 상태)가 다 움직인다 | **한 개도 안 건드린다** |
-| 폴더 계약 | `src/sim/` 안이라 안전하지만 계약이 는다 | **순수 읽기** — 위 「반대는 안 된다」에 원리적으로 안 걸린다 |
-| 비용이 드는 곳 | 매 틱 · 모든 물 칸 | **매 프레임 · 캐릭터 상자 둘레만**(불이 이미 하는 것과 같은 크기) |
-
-**B가 이긴다. 접전이 아니다.** A의 4.1MB와 「잔류값 감쇠」라는 새 축을 사는 대가로 얻는 것이
-**정확도 조금**인데, ③이 재는 것은 물리량이 아니라 **손맛**이다.
-
-### B는 무엇을 읽나 — `_water_share` 가 보는 바로 그 양
+⇒ **Read, add, write.** Both are existing public doors:
 
 ```
-body.water_flow(grid) -> int          # 부호 있는 정수. 양수면 오른쪽으로 민다
-  범위: standing_in_fire 와 같은 셀 범위 (상자가 덮는 셀)
-  left  = Σ aux_at(cx0 - 1, cy)       왼쪽 바로 바깥 기둥
-  right = Σ aux_at(cx1 + 1, cy)       오른쪽 바로 바깥 기둥
-  diff  = left - right                왼쪽이 무거우면 오른쪽으로 밀린다
-  |diff| 가 WATER_MIN_DIFF × 행수 이하면 0을 돌려준다
+new = mini(WATER_MAX, aux_at(x, row) + per_cell)
+set_water(x, row, new)
 ```
 
-**마지막 줄이 「고인 물에서는 안 밀린다」다.** `_water_share` 가 `diff <= WATER_MIN_DIFF` 면
-안 옮기므로(`cell_grid.gd:540`) **평형에 든 웅덩이의 좌우 차이는 원리적으로 그 선 아래**다.
-⇒ **같은 상수를 쓰면 「물이 실제로 흐르는 곳에서만 민다」가 공짜로 따라온다.**
-**여기서 새 임계를 세우면 「물은 멈췄는데 나는 밀린다」가 난다.**
-
-### B의 한계 — **여기 적혀 있던 문장이 틀렸다** (2026-08-08에 실측으로 무너졌다)
-
-**이 자리에 이렇게 적혀 있었다:**
-
-> ~~이번 장면은 그 경우가 아니다 — 방으로 쏟아져 들어와 차오르는 **전선(front)**이라 불균형이 크다.~~
-
-**틀렸다. 그 문장은 「옆벽 붕괴」 시절의 것이다.** 붓기가 A방식으로 갈아엎어졌을 때
-**전제가 사라졌는데 아무도 안 이어 봤다.** ⇒ 실측: **열린 물 가운데에서 좌우 차이가 매 틱 정확히 0.**
-
-**이게 이 리포가 경계하는 그 사고다** — 「구조 근거」라고 부른 문장의 구조가 **다른 결정에 의해
-치워졌는데** 문장만 남았다. **말과 실물을 대조하지 않으면 다음 사람이 그걸 전제로 짠다.**
-
-#### 왜 0인가 — 그리고 왜 **다른 방향으로 바꿔도 0인가**
-
-**A방식은 176셀 폭 전체에 매 틱 같은 양을 붓는다** ⇒ 모든 열이 똑같이 찬다 ⇒ **좌우가 항상 평평하다.**
-**정수 시뮬이라 그 대칭이 정확히 유지된다.**
-
-**그리고 이건 가로만의 문제가 아니다.** 출하 상수로 셈해 보면(실측 12.6초와 맞는다 — 아래 11.7초):
-
-```
-칸당/틱 = 20,000 / 176 = 113
-수위 상승 = 113/255 = 0.44셀/틱 = 8.9셀/초 = 1.11타일/초
-13타일(104셀) 채우는 데 = 11.7초        ← 실측 95% 12.6초와 맞는다
-한 칸이 0 → 255 가 되는 데 = 2.26틱
-```
-
-⇒ **수면 아래는 전부 255다. 위는 0이다. 그 사이는 2틱짜리 띠뿐이다.**
-**잠긴 캐릭터 둘레는 어느 방향으로 봐도 255 대 255 — 세로 차이도 0이고 유입도 0이다.**
-
-**이 문단은 실측이 아니라 실측에서 나온 셈이다.** 다만 **입력이 출하 상수이고 결과가
-독립 실측(12.6초)과 맞는다** ⇒ 근거로 쓸 만하다. **틀렸다면 위 네 줄 중 하나가 틀린 것이다.**
-
-#### ⇒ 그래서 후보 ②(유입)·③(세로)로 바꿔도 이 장면에서는 안 산다
-
-**빠르고 고르게 차는 방은 정의상 평형에 가깝고, 평형은 「어느 방향으로도 힘이 없다」는 뜻이다.**
-**12.6초라는 시간 자체가 「평형에 가깝다」의 증거다.** 4분 30초 걸리던 댐 붕괴에 물살이 있었던
-이유가 정확히 **4분 30초 동안 평형에서 멀었기 때문**이다.
-
-**⇒ 「빨리 찬다」와 「민다」는 같은 손잡이의 양 끝이다. 둘 다는 못 가진다.**
+**Walls reject themselves** — `set_water` returns `false` for anything but `EMPTY` and `WATER`
+(`cell_grid.gd:1096`). Nothing leaks outside the bowl (the same property as "leakage 0" above).
+**And the source counts what actually went in this tick** — excluding rejected cells and the portion blocked by
+`WATER_MAX`. **That counter is one side of net B-1.**
 
 ---
 
-## 순서 — 사용자가 말한 순서와 다르다. 근거를 먼저 댄다
+## Where current's strength and direction come from — **not stored in the grid. The character reads**
 
-**사용자는 「물 차오르는 거 먼저 하자」고 두 번 말했다**(`물.md:386`). **그 순서로 안 짰다.**
-**그 말은 「배경 같다」 진단이 나오기 전에 한 것**이고, 그 뒤에 사용자가 **「물살까지 넣고 끝내자」**로
-범위를 넓혔다. 넓어진 범위에서 같은 순서를 쓰면 **두 가지가 어긋난다:**
+`docs/design/water.md:452` flagged this spot — **`_water_share` already computes `diff` and discards it**
+(`cell_grid.gd:537`) — and called keeping or discarding it a design call. The call: **leave it discarded.**
 
-**1. 차오르기를 먼저 보여주면, 사용자가 방금 「허접하다」고 한 그 낙하로 채워진 장면을 본다.**
-A방식은 **176셀 폭 전체**에서 물이 떨어진다 ⇒ 「또로록」이 한 줄이 아니라 **176줄**로 보인다.
-초반 낙하 거리가 13타일 ≈ 104셀이고 지금 낙하가 60셀/초라 **첫 1.7초가 통째로 「떨어지는 물」**이다.
-**`물.md:389` 자신이 이렇게 적어 뒀다** — 「달라지는 것은 떨어지는 물줄기의 모양이고,
-**그게 탈출 장면에서 보이는 것이다**」. ⇒ **그 모양을 고치기 전에 그 장면을 보여주면 안 된다.**
-**이건 추론이지 실측이 아니다.** 재려면 ②를 넣기 전후로 같은 장면을 찍어 대 보면 된다.
+### The cost of both paths
 
-**2. 붓기 실측을 두 번 하게 된다.** ②(낙하 K)가 「25%→5초 · 95%→11초」를 무효로 만든다
-(`물.md:381`). ④를 먼저 하면 **재고, ② 뒤에 또 잰다.**
+| | **A. Store in the grid** | **B. The character reads neighbor cells** |
+|---|---|---|
+| Memory | **1 byte/cell × 4,128,768 ⇒ 4.1MB** (`cell_grid.gd:53-54`) | **0** |
+| Sim change | Writes added inside `_water_share` (the hottest loop) | **None** |
+| New axis | **The residual must be cleared or decayed every tick** — otherwise force remains after the water stops | None — it always reads the current grid |
+| Existing nets | All 39 of `net_water`'s premises (grid state) move | **Not one touched** |
+| Folder contract | Safe inside `src/sim/` but the contract grows | **Pure read** — cannot violate "the reverse is not allowed" in principle |
+| Where cost lands | Every tick · every water cell | **Every frame · around the character's box only** (same size as what fire already does) |
 
-### 2026-08-08 갱신 — **붓기가 이미 끝났다. 근거 하나가 약해졌고 하나는 그대로다**
+**B wins. Not close.** What A buys with 4.1MB and a new "decay the residual" axis is **slightly more accuracy**,
+and what ③ measures is not a physical quantity but **feel.**
 
-**builder가 정지 지시가 닿기 전에 단계 3을 끝냈다**(그물 초록). ⇒ 위 두 근거를 다시 본다:
-
-- **근거 2(실측을 두 번 한다)는 약해졌다.** **낙하가 바뀌어도 `water_source.gd` 는 안 바뀐다** —
-  다시 볼 것은 **`WATER_RAIN_PER_TICK`(20,000)이 여전히 5~15초를 주는가** 하나뿐이고,
-  **그걸 재는 그물이 이미 서 있다.** 「두 번 잰다」의 값이 **한 번 돌리는 비용**으로 줄었다
-- **근거 1(안 고친 낙하로 채워진 장면을 보여주게 된다)은 그대로다.** 오히려 **급해졌다** —
-  지금 게임을 띄우고 K를 누르면 **사용자가 바로 그 장면을 본다**
-
-**⇒ 순서를 이렇게 고친다:**
+### What B reads — the very amount `_water_share` looks at
 
 ```
-단계 1  ① 물속 무한 점프    2파일 · 전부 헤드리스 · 다른 축과 완전 독립
-   ↓
-단계 2  ② 낙하 가속 K       화면을 보기 전에 친다 (근거 1)
-   ↓
-   ★ verify-look 한 번에 셋을 본다 — 점프 · 낙하 모양 · 이미 서 있는 붓기 장면
-   ↓
-단계 4  ③ 물살이 민다       진짜 장면(가장 센 흐름) 위에서 세기를 조율한다
-   ↓
-단계 5  물속 중력           조건부. 판정 4가 「허둥댄다」로 나올 때만
+body.water_flow(grid) -> int          # signed integer. Positive pushes right
+  range: the same cell range as standing_in_fire (cells the box covers)
+  left  = Σ aux_at(cx0 - 1, cy)       the column just outside on the left
+  right = Σ aux_at(cx1 + 1, cy)       the column just outside on the right
+  diff  = left - right                heavier on the left pushes right
+  returns 0 if |diff| <= WATER_MIN_DIFF × row count
 ```
 
-### 진행 상태 — 2026-08-08. **이 표가 위 순서보다 최신이다**
+**That last line is "no push in still water".** `_water_share` doesn't move anything when `diff <= WATER_MIN_DIFF`
+(`cell_grid.gd:540`), so **a settled puddle's left-right difference is below that line in principle.**
+⇒ **Reusing the same constant gives "it only pushes where water actually flows" for free.**
+**Standing up a new threshold here produces "the water stopped but I'm still being pushed".**
 
-**이 절을 안 보고 위 순서만 읽으면 「낙하 K가 아직 안 됐다」로 읽는다.** 실제로 그 오해가 났다
-(spec이 두 번 「남은 것은 단계 2」라고 보고했는데 **이미 들어가 있었다**).
+### B's limit — **the sentence that was here was wrong** (demolished by measurement)
 
-| 단계 | 상태 | 근거 |
+**It used to read:**
+
+> ~~This scene is not that case — water pouring into a room and rising forms a **front**, so the imbalance is large.~~
+
+**Wrong. That sentence belongs to the "side wall collapse" era.** When pouring was replaced with approach A,
+**the premise vanished and nobody carried it forward.** ⇒ Measured: **in the middle of open water the left-right
+difference is exactly 0 every tick.**
+
+**This is the accident this repo guards against** — a sentence called a "structural argument" whose structure was
+**removed by another decision**, leaving only the sentence.
+**Without checking the claim against reality, the next person builds on it.**
+
+#### Why it's 0 — and why **changing direction is also 0**
+
+**Approach A pours the same amount across all 176 cells of width every tick** ⇒ every column fills equally ⇒
+**left and right are always level.** **Integer sim keeps that symmetry exact.**
+
+**And this is not just a horizontal problem.** Computed from shipping constants (matching the measured 12.6s — below, 11.7s):
+
+```
+per cell/tick = 20,000 / 176 = 113
+water rise    = 113/255 = 0.44 cells/tick = 8.9 cells/s = 1.11 tiles/s
+filling 13 tiles (104 cells) = 11.7s        ← matches the measured 95% at 12.6s
+one cell going 0 → 255 = 2.26 ticks
+```
+
+⇒ **Below the surface everything is 255. Above it is 0. Between them is only a 2-tick band.**
+**A submerged character is surrounded by 255 vs 255 in every direction — vertical difference 0, inflow 0.**
+
+**This paragraph is arithmetic from measurement, not measurement.** But **the inputs are shipping constants and
+the result matches an independent measurement (12.6s)** ⇒ usable as evidence. **If it's wrong, one of the four lines above is.**
+
+#### ⇒ So switching to candidates ② (inflow) or ③ (vertical) doesn't survive in this scene either
+
+**A room that fills fast and evenly is by definition near equilibrium, and equilibrium means "no force in any direction".**
+**The 12.6 seconds is itself the evidence of near-equilibrium.** The dam break had current for exactly the reason that
+**it stayed far from equilibrium for 4:30.**
+
+**⇒ "Fills fast" and "pushes" are two ends of one knob. You can't have both.**
+
+---
+
+## Order — different from what the user said. Grounds first
+
+**The user said "do the water rising first" twice** (`water.md:386`). **The plan doesn't use that order.**
+**That was said before the "feels like background" diagnosis**, after which the user widened the scope to
+**"put in the current too and finish it".** In the widened scope, the same order breaks two things:
+
+**1. Showing the rise first shows the user a scene filled by the very fall they just called "cheap".**
+Approach A drops water across **all 176 cells of width** ⇒ the trickle appears not as one line but **176 lines.**
+The initial fall distance is 13 tiles ≈ 104 cells and the current fall is 60 cells/s, so **the first 1.7 seconds is
+entirely "falling water".**
+**`water.md:389` says it itself** — "what changes is the shape of the falling stream, **and that is what the escape
+scene shows**". ⇒ **Don't show that scene before fixing that shape.**
+**This is inference, not measurement.** To measure it, capture the same scene before and after ②.
+
+**2. The pour would be measured twice.** ② (fall K) invalidates "25%→5s · 95%→11s" (`water.md:381`).
+Doing ④ first means **measuring, then measuring again after ②.**
+
+### Update — **pouring is already done. One argument weakened, one stands**
+
+**builder finished stage 3 before the stop instruction arrived** (nets green). ⇒ Revisiting the two arguments:
+
+- **Argument 2 (measuring twice) weakened.** **`water_source.gd` doesn't change when the fall changes** —
+  all that needs revisiting is **whether `WATER_RAIN_PER_TICK` (20,000) still gives 5–15 seconds**,
+  and **a net measuring that already stands.** "Measure twice" shrank to **the cost of one run**
+- **Argument 1 (showing a scene filled by an unfixed fall) stands.** In fact it got **more urgent** —
+  launch the game now and press K and **the user sees exactly that scene**
+
+**⇒ The order becomes:**
+
+```
+stage 1  ① unlimited jumping underwater    2 files · fully headless · completely independent of the other axes
+   ↓
+stage 2  ② fall acceleration K             land it before looking at the screen (argument 1)
+   ↓
+   ★ verify-look sees three things in one pass — jumping · fall shape · the already-standing pour scene
+   ↓
+stage 4  ③ the current pushes              tune strength over the real scene (the strongest flow)
+   ↓
+stage 5  underwater gravity                conditional. Only if acceptance 4 reads as "flailing"
+```
+
+### Progress — **this table is more current than the order above**
+
+**Reading the order above without this section reads as "fall K isn't done yet".** That misreading happened
+(spec reported "what remains is stage 2" twice when **it was already in**).
+
+| Stage | State | Grounds |
 |---|---|---|
-| **1. 물속 무한 점프** | **들어갔다** | `body.gd` `standing_in_water` · `character.gd:262` 조건. `net_character` A-1~A-4 |
-| **2. 낙하 가속 K = 4** | **들어갔다** | `sim_tuning.WATER_FALL_CELLS` · `cell_grid._water_fall` K칸 스캔. **실측 3.0배**(4.0이 아니다) |
-| **4. 붓기(A방식)** | **들어갔다** | `src/sim/water_source.gd` · K키. **순서를 어겨 제일 먼저 됐다**(정지 지시가 늦게 닿았다) |
-| **3. 물살** | **들어갔다** | `body.gd` `water_flow` · `character.WATER_PUSH_PX` 130. **침수 장면에서는 0이다 — 아래 참조** |
-| **5. 물속 중력** | **안 연다 — 조건이 안 걸렸다** | verify-look이 판정 4를 봤다: **주기마다 42~45px씩 규칙적으로 오르고 처짐은 3~4px.** 「허둥댄다」가 아니다 |
+| **1. Unlimited jumping underwater** | **In** | `body.gd` `standing_in_water` · `character.gd:262` condition. `net_character` A-1–A-4 |
+| **2. Fall acceleration K = 4** | **In** | `sim_tuning.WATER_FALL_CELLS` · `cell_grid._water_fall` K-cell scan. **Measured 3.0×** (not 4.0) |
+| **4. Pouring (approach A)** | **In** | `src/sim/water_source.gd` · K key. **Done first, out of order** (the stop instruction arrived late) |
+| **3. Current** | **In** | `body.gd` `water_flow` · `character.WATER_PUSH_PX` 130. **It is 0 in the flooding scene — see above** |
+| **5. Underwater gravity** | **Not opening — the condition never triggered** | verify-look saw acceptance 4: **42–45px of regular rise per cycle with 3–4px of sag.** Not flailing |
 
-**⇒ 코드로 할 일은 남은 게 없다. 남은 것은 화면(`verify-look`)과 그 뒤의 조율뿐이다.**
+**⇒ No code work remains. What remains is the screen (`verify-look`) and the tuning after it.**
 
-### 2026-08-08 갱신 — **화면을 봤고, 축 하나가 화면에서 실패했다**
+### Update — **the screen was seen, and one axis failed on screen**
 
-**진행 상태 표의 다섯 개는 「코드가 들어갔다」이지 「화면이 됐다」가 아니다.** 눈으로 본 결과:
+**The five rows in the progress table mean "the code is in", not "the screen works".** What was seen:
 
-| 축 | 값 | **화면** |
+| Axis | Value | **Screen** |
 |---|---|---|
-| ① 물속 무한 점프 | | **된다. 규칙적으로 올라간다** |
-| ② 낙하 가속 K=4 | 3.0배 | **실패. 줄무늬 간격만 4배로 벌어졌다** |
-| ③ 물살 | 44 px/s | **가만히 있으면 보이고 걸으면 안 느껴진다**(걷기의 10~17%) |
-| ④ A방식 붓기 | 12초 | **속도는 맞는데 「옆에서 들어온다」로 안 보인다** |
+| ① unlimited jumping | | **Works. It climbs regularly** |
+| ② fall acceleration K=4 | 3.0× | **Failed. It only widened the stripe spacing 4×** |
+| ③ current | 44 px/s | **Visible standing still, unfelt while walking** (10–17% of walking) |
+| ④ approach-A pouring | 12s | **The rate is right but it doesn't read as "coming in from the side"** |
 
-**②가 이 작업의 시작 이유였다.** 자세한 것은 「판정」 절의 verify-look 결과 블록.
+**② was the reason this work started.** Detail in the verify-look result block under "Acceptance".
 
-**그물 구멍 셋도 메웠다**(2026-08-08) — `net_character` **76개 · 실패 0**, 전체 **2,122개 · 실패 1**(B-5, 아는 것).
+**Three net holes were filled too** — `net_character` **76 checks · 0 failures**, overall **2,122 · 1 failure** (B-5, known).
 
-| 무엇 | 어떻게 |
+| What | How |
 |---|---|
-| **C-4** 항진명제 | 캐릭터가 **실제로 잠기는** 웅덩이로 다시 짰다. 뒤집기(문턱 `<=0`) **red 확인** |
-| **C-7** 신규 | 타는 나무 기둥 옆에서 `water_flow() == 0`. 가드 두 줄 삭제로 **red 확인**(기대 0, 실제 200) |
-| **C-8** 신규 | 밀린 뒤 **물을 지우면 그 프레임에 멈춘다**. A-3(점프)의 짝이다 |
+| **C-4** tautology | Rewritten with a puddle the character **actually submerges in.** Inversion (threshold `<=0`) **confirmed red** |
+| **C-7** new | `water_flow() == 0` beside a burning wood column. Deleting two guard lines **confirmed red** (expected 0, got 200) |
+| **C-8** new | **Delete the water after being pushed and it stops that frame.** The sibling of A-3 (jumping) |
 
-**C-4는 재작성이 한 번 더 헛돌았다 — builder가 스스로 잡아서 보고했다.**
-30행 깊이로 부었더니 **두 이웃 기둥이 스캔 범위 안에서 둘 다 255로 꽉 차** 진짜 잔차(수면 맨 위 한 줄)가
-**스캔 범위 위**로 밀려났다 ⇒ 문턱을 지워도 초록이었다. **깊이를 16행(상자 높이)으로 줄여서야 잔차가 범위에 들어왔다.**
-**같은 검사가 두 번 연속 다른 이유로 헛돈 것이다** — 「잠기게 만들면 된다」가 아니라
-**「잔차가 스캔 범위 안에 있나」**가 진짜 조건이었다. 그 경위는 검사 주석에 남아 있다.
+**C-4's rewrite spun idle once more — builder caught and reported it.**
+Poured to a depth of 30 rows, **both neighbor columns filled to 255 within the scan range**, pushing the real residual
+(the top row of the surface) **above the scan range** ⇒ deleting the threshold still gave green.
+**Only reducing the depth to 16 rows (the box height) brought the residual into range.**
+**The same check spun idle twice for different reasons** — the real condition was not "make it submerge" but
+**"is the residual inside the scan range".** That history lives in the check's comment.
 
-**C-8만 뒤집기를 안 걸었다** — 새 검사라 뒤집을 변형이 마땅치 않았다고 builder가 밝혔다.
-verify-read가 「감쇠 없음을 재는 검사가 없다」를 이미 값으로 보였으므로 **필요성은 확인됐지만,
-이 검사 자체가 재는지는 아직 안 뒤집어 봤다.**
+**Only C-8 has no inversion** — builder stated that being a new check, there was no natural mutation to invert.
+verify-read had already shown by value that "no check measures the absence of decay", so **the need is confirmed,
+but whether this check itself measures has not been inverted.**
 
-**①이 여전히 먼저인 이유**: ②와 완전히 독립이고(물의 **양**만 읽지 속도를 안 본다)
-**2파일에 전부 헤드리스**라 제일 싸다. **먼저 붙여 두면 뒤가 깨졌을 때 「점프가 안 먹는 건지
-물이 이상한 건지」를 가를 수 있다.** ①을 나중에 두면 그 분리가 사라진다.
+**Why ① is still first**: it is completely independent of ② (it reads only the water **amount**, never speed) and is
+**2 files, fully headless** — the cheapest. **Landing it first lets you separate "is the jump broken or is the water
+weird" when something downstream breaks.** Putting ① later removes that separation.
 
-**그리고 화면을 한 번만 본다.** verify-look은 **에디터가 필요하고 사용자의 포커스를 뺏는다**
-(CLAUDE.md 판단 기준 2) ⇒ **①+②를 붙인 뒤 한 번에 셋을 판정하는 것이 두 번 보는 것보다 싸다.**
+**And the screen is seen once.** verify-look **needs the editor and steals the user's focus**
+(CLAUDE.md check #2) ⇒ **judging all three after landing ①+② is cheaper than looking twice.**
 
-**「붓기를 지금 먼저 보는」 선택지도 있다** — 그물이 안 덮는 곳이 **무대 배선**(K키 → 시그널 →
-토글 → 틱당 한 번 → HUD)이라 거기가 깨졌으면 늦게 안다. **그래도 뒤로 미룬 이유**: 배선 고장은
-**「K를 눌러도 아무 일이 없다」**로 보이고 낙하 고장은 **「물이 또로록 떨어진다」**로 보여
-**증상이 안 겹친다** ⇒ 한 번에 봐도 원인이 갈린다. **대가는 에디터 세션 하나와 사용자의 포커스다.**
+**There is also the option of "looking at the pour first"** — what the nets don't cover is the **stage wiring**
+(K key → signal → toggle → once per tick → HUD), so a break there is found late. **Why it was deferred anyway**:
+a wiring break looks like **"pressing K does nothing"** and a fall break looks like **"water trickles down"**, so
+**the symptoms don't overlap** ⇒ one viewing still separates the causes. **The price is one editor session and the user's focus.**
 
-**③이 마지막인 이유는 안 바뀌었다**: 물살의 세기는 **가장 센 흐름에서 조율해야** 약한 흐름에서도
-맞는다. F키 원반은 작은 방사 확산이라 조율 기준으로 약하다. **⇒ 붓기가 이미 서 있으니 지금 바로
-그 기준이 있다.** 반대는 성립 안 한다 — 붓기는 물살에 전혀 안 기댄다(캐릭터가 물을 안 민다).
+**Why ③ is last hasn't changed**: current strength must be **tuned on the strongest flow** to also fit weak flows.
+The F-key disc is a small radial spread, weak as a tuning reference. **⇒ With pouring already standing, that reference
+exists now.** The reverse doesn't hold — pouring doesn't lean on current at all (the character doesn't push water).
 
 ---
 
-## 단계 — 다섯. 단계마다 builder가 멈추고 검증이 돈다
+## Stages — five. builder stops after each and verification runs
 
-### 단계 1 — 물속 무한 점프 (건드릴 `src/` 파일 **2개**)
+### Stage 1 — unlimited jumping underwater (**2** `src/` files touched)
 
-| 파일 | 무엇을 | 왜 |
+| File | What | Why |
 |---|---|---|
-| `src/actor/body.gd` | `standing_in_fire`(:155) **바로 아래**에 `standing_in_water(grid) -> bool` | 범위를 불과 같게 두는 유일한 방법이 **같은 모양으로 옆에 놓는 것**이다 |
-| `src/actor/character.gd` | `step()` 의 `on_ground = ...`(:261) 옆에 `in_water = ...`, 점프 조건(:262)에 `or in_water` | 「물속인가」는 **프레임마다** 새로 읽어야 한다 (아래 ) |
+| `src/actor/body.gd` | `standing_in_water(grid) -> bool` **directly below** `standing_in_fire` (:155) | Placing it beside, in the same shape, is the only way to keep the range identical to fire's |
+| `src/actor/character.gd` | `in_water = ...` beside `on_ground = ...` in `step()` (:261), and `or in_water` in the jump condition (:262) | "Am I in water" must be re-read **every frame** (below) |
 
-**「깊은 물인가」를 어떻게 묻나 — 화면과 같은 값을 읽는다:**
+**How "is it deep water" is asked — read the same value the screen does:**
 
 ```
 mat_at(cx, cy) == Mat.WATER and (flag_at(cx, cy) & Mat.FLAG_SHALLOW) == 0
 ```
 
-**`FLAG_SHALLOW` 는 렌더러가 얕은 물을 밝게 칠할 때 보는 바로 그 깃발이다.**
-`_write_water`(`cell_grid.gd:319`)가 `amount <= WATER_WET` 일 때 세우고,
-불 끄기(`_deep_water`, `cell_grid.gd:687`)는 `aux > WATER_WET` 로 같은 선을 본다.
-⇒ **셋이 한 선을 보는 것이 값으로 보장된다.** 「어두운 남색에서만 점프가 먹는다」가 화면에 이미 그려져 있다.
-`aux_at() > WATER_WET` 로 직접 재도 **지금은 같은 답**이지만, 그러면 **선이 두 벌**이 된다.
+**`FLAG_SHALLOW` is the exact flag the renderer looks at to paint shallow water bright.**
+`_write_water` (`cell_grid.gd:319`) sets it when `amount <= WATER_WET`, and
+extinguishing (`_deep_water`, `cell_grid.gd:687`) uses `aux > WATER_WET`, the same line.
+⇒ **Three things looking at one line is guaranteed by value.** "Jumping works only in dark navy" is already drawn on screen.
+Measuring `aux_at() > WATER_WET` directly gives **the same answer today**, but then **the line exists in two copies.**
 
-**`on_tick()`(:302, `burning` 을 세우는 자리)에 두지 마라.** 그건 **틱마다**만 돌고
-`TICK_DIVIDER` 가 3이라 **최대 2프레임 낡은 답**으로 점프를 판정하게 된다 —
-물 밖으로 나온 뒤에도 두 프레임 더 뛰어진다. **눈으로 못 본다.** 아래 그물 A-3이 그걸 잡는다.
+**Do not put it in `on_tick()` (:302, where `burning` is set).** That runs **per tick** and
+`TICK_DIVIDER` is 3, so jumping would be judged on **an answer up to 2 frames stale** —
+you'd get two extra jumps after leaving the water. **Invisible to the eye.** Net A-3 catches it.
 
-**여기서 재는 판정**: 1 · 2 · 3 — **전부 헤드리스**(verify-run).
-판정 4(허둥대지 않고 올라간다)는 **여기서 못 잰다** — 단계 5로.
+**Acceptance measured here**: 1 · 2 · 3 — **all headless** (verify-run).
+Acceptance 4 (climbing without flailing) **cannot be measured here** — that's stage 5.
 
-### 단계 2 — 낙하 가속 K (건드릴 `src/` 파일 **2개** + 그물 수리)
+### Stage 2 — fall acceleration K (**2** `src/` files + net repair)
 
-| 파일 | 무엇을 | 왜 |
+| File | What | Why |
 |---|---|---|
-| `src/sim/sim_tuning.gd` | `WATER_FALL_CELLS`(K) 상수 하나 | 낙하 속도의 유일한 손잡이 |
-| `src/sim/cell_grid.gd` | `_water_fall`(:480)이 아래로 **연속된 빈칸을 K칸까지** 훑는다 | `_aux` 가 양으로 꽉 차 새 속도 바이트를 못 깐다(`물.md:370`) |
+| `src/sim/sim_tuning.gd` | One constant, `WATER_FALL_CELLS` (K) | The only knob for fall speed |
+| `src/sim/cell_grid.gd` | `_water_fall` (:480) scans **up to K consecutive empty cells** below | `_aux` is full with the amount; no new velocity byte fits (`water.md:370`) |
 
-**규칙을 정확히**: 아래로 **빈칸이 연속되는 동안만** 최대 K칸 내려가 **제일 낮은 빈칸에 통째로 놓는다.**
-**물이나 고체를 만나면 거기서 멈추고, 그 자리에서 지금 규칙 그대로 처리한다**
-(물이면 `space` 만큼 합치고, 고체면 남겨서 ②(좌우)로 넘긴다). ⇒ **쌓임과 막힘의 뜻이 안 바뀐다.**
+**The exact rule**: descend at most K cells **only while empty cells are consecutive** and **place the whole amount in
+the lowest empty cell.** **On hitting water or solid, stop there and handle it exactly as today**
+(merge by `space` for water; leave the remainder to ② (left-right) for solid). ⇒ **Stacking and blocking keep their meaning.**
 
-#### K의 시작값 = **4**. 미루지 않는 이유가 있다
+#### K's starting value = **4**. There is a reason not to defer it
 
-**물속 중력과 달리 K는 미룰 수 없다** — 상수가 없으면 builder가 한 글자도 못 쓴다.
-그리고 **잴 수 있는 목표가 있다**(물속 중력에는 없다):
+**Unlike underwater gravity, K can't be deferred** — with no constant, builder can't write a line.
+And **there is a measurable target** (underwater gravity has none):
 
 ```
-지금        60셀/초 =  240 px/s      캐릭터의 1/10 이고 안 빨라진다
-K=4        240셀/초 =  960 px/s      캐릭터 낙하 상한(1800)의 절반
-캐릭터      MAX_FALL_PX 1800 px/s  (= 450셀/초 ⇒ K로 치면 7.5)
+now        60 cells/s =  240 px/s      one tenth of the character's, and it never speeds up
+K=4       240 cells/s =  960 px/s      half the character's fall cap (1800)
+character  MAX_FALL_PX 1800 px/s  (= 450 cells/s ⇒ K equivalent 7.5)
 ```
 
-**그런데 위를 못 올리는 한계가 그물에 있다.** `net_water._water_falls_per_tick` 의 장면은
-**자유낙하 여유가 27칸**이고, 이 검사가 행·밴드 순서 뒤집기를 잡는 방식이
-**「한 틱에 27칸까지 간다」가 상한을 넘는 것**이다(`net_water.gd:420-422`).
+**But a net limits how high it can go.** The scene in `net_water._water_falls_per_tick` has
+**27 cells of free-fall headroom**, and the way that check catches row/band order reversal is that
+**"it goes up to 27 cells in one tick" exceeds the ceiling** (`net_water.gd:420-422`).
 
-| K | 한 틱 최대 낙하 | 순서 뒤집기를 아직 잡나 |
+| K | Max fall per tick | Still catches order reversal? |
 |---|---|---|
-| 4 | 12칸 | 잡는다 (여유 15칸) |
-| 6 | 18칸 | 잡는다 (여유 9칸) |
-| 8 | 24칸 | **여유 3칸 — 사실상 못 잡는다** |
+| 4 | 12 cells | Yes (15 cells of margin) |
+| 6 | 18 cells | Yes (9 cells of margin) |
+| 8 | 24 cells | **3 cells of margin — effectively no** |
 
-⇒ **4로 시작한다. 6까지는 지금 장면 그대로 안전하고, 8 이상으로 가려면 그물 장면을 먼저 키워라.**
-**최종 값은 사용자가 화면을 보고 정한다** — 4가 「아직 느리다」면 6, 그 위는 장면부터.
+⇒ **Start at 4. Up to 6 is safe with the current scene; going to 8 or above means enlarging the net's scene first.**
+**The final value is the user's, decided on screen** — 6 if 4 is "still slow", above that only after the scene grows.
 
-**여기서 재는 판정**: 헤드리스로 **낙하 속도가 K배가 됐나**(아래 그물 D). **「물다워 보이나」는 화면만.**
+**Acceptance measured here**: headless, **did fall speed become K×** (net D). **"Does it look like water" is screen-only.**
 
-### 단계 3 — A방식 붓기 — **구현 완료 (2026-08-08). 화면은 아직 안 봤다**
+### Stage 3 — approach-A pouring — **implementation complete. The screen hasn't been seen**
 
-**실제로 들어간 것** (계획대로 + 상수 파일 하나):
+**What actually landed** (as planned + one constants file):
 
 ```
-src/sim/water_source.gd  🆕  _init(x0,x1,row,per_tick) · tick(grid) · poured()
-src/sim/sim_tuning.gd        WATER_RAIN_HALF_W 88 · WATER_RAIN_PER_TICK 20000
-src/stage/stage_input.gd     rain_requested 시그널 + KEY_K (F/T/G와 같은 문)
-src/stage/stage.gd           _water_source(null=꺼짐) · _toggle_rain_at() ·
-                             _on_ticked()에서 tick() · reset에서 null · HUD 상태 줄
-tests/nets/net_water.gd      B-1~B-5 (「단계 7」 절, 진짜 ① 구덩이 지형)
+src/sim/water_source.gd  NEW  _init(x0,x1,row,per_tick) · tick(grid) · poured()
+src/sim/sim_tuning.gd         WATER_RAIN_HALF_W 88 · WATER_RAIN_PER_TICK 20000
+src/stage/stage_input.gd      rain_requested signal + KEY_K (the same door as F/T/G)
+src/stage/stage.gd            _water_source (null=off) · _toggle_rain_at() ·
+                              tick() in _on_ticked() · null on reset · HUD status line
+tests/nets/net_water.gd       B-1–B-5 ("stage 7" section, the real pit ① terrain)
 ```
 
-**제일 중요한 것 — `set_water` 덮어쓰기 함정을 피했다.** `aux_at()` 으로 읽고
-`mini(WATER_MAX, before + per_cell)` 로 더해서 쓰고, **거절된 칸은 `_poured` 에 안 넣는다**
-(`water_source.gd`). ⇒ B-1(보존)이 항진명제가 아니다.
+**Most important — the `set_water` overwrite trap was avoided.** It reads with `aux_at()`, writes
+`mini(WATER_MAX, before + per_cell)`, and **doesn't count rejected cells into `_poured`**
+(`water_source.gd`). ⇒ B-1 (conservation) is not a tautology.
 
-**builder가 확신 없다고 한 것 둘 — 판단한다. 둘 다 맞다:**
+**Two things builder flagged as uncertain — judged. Both correct:**
 
-- **`sim_tuning.gd` 에 상수를 넣은 것 (지시한 3파일 밖)** — **맞다. 계약이 그렇게 시킨다.**
-  CLAUDE.md: 「시뮬 상수는 전부 `src/sim/sim_tuning.gd` 에 있다」. 다른 데 뒀으면 그게 위반이다.
-  **파일 수 계약과 충돌하지 않는다** — 지정된 상수 파일은 **새 구조 자리가 아니다.**
-  (이 문서 「구조를 먼저」의 「한 파일 안의 세 자리는 한 곳이다」와 같은 어법)
-- **HUD에 물비 상태 줄을 넣은 것** — **맞다. 오히려 없으면 안 됐다.**
-  **토글인데 상태가 안 보이면 「키가 안 먹는다」로 읽힌다** — `_pour_water_at` 이
-  「한 방울로 두면 사용자가 키가 안 먹는다로 읽는다」고 적어 둔 것과 같은 자리다.
-  CLAUDE.md 판단 기준 3(「볼 것이 화면에 도달하는 경로」)이 요구하는 것이기도 하다
+- **Putting a constant in `sim_tuning.gd` (outside the 3 files specified)** — **correct. The contract requires it.**
+  CLAUDE.md: "sim constants all live in `src/sim/sim_tuning.gd`". Anywhere else would be the violation.
+  **It doesn't conflict with the file-count contract** — the designated constants file **is not a new structural site.**
+  (Same idiom as "three spots in one file are one place")
+- **Adding a rain status line to the HUD** — **correct. Its absence would have been wrong.**
+  **A toggle with no visible state reads as "the key doesn't work"** — the same place `_pour_water_at` recorded
+  "leave it at one drop and the user reads it as the key not working".
+  It is also what CLAUDE.md check #3 ("a path for the thing you want to see to reach the screen") demands
 
-#### builder가 계획과 다르게 짠 그물 둘 — **둘 다 내 계획보다 낫다. 채택한다**
+#### Two nets builder wrote differently from the plan — **both better than the plan. Adopted**
 
-**1. B-3·B-4를 절대 틱 수가 아니라 「반으로 줄이면 약 두 배」 비율로 쟀다.** ✅
-**내 「160틱」이 틀린 값이었다.** 그건 **행 기준 50%**(문서 332행: 「폭의 50% 이상이 젖어야
-그 행을 올라왔다로 센다」)에서 나온 수인데 builder는 **부피 기준**으로 잰다 — **단위가 다르다.**
-**틀린 절대값을 박았으면 더 나빴다** — 헛되게 빨개지거나, 더 흔하게는 **초록이 날 때까지 숫자를
-고치게 되고 그러면 그 단언은 장식이 된다.** 비율은 **지형이 바뀌어도 안 흔들린다.**
+**1. B-3·B-4 measured as a "halve it and it takes about twice as long" ratio, not an absolute tick count.**
+**My "160 ticks" was a wrong value.** That number came from a **row basis** ("a row counts as risen once over 50%
+of the width is wet") while builder measures on a **volume basis** — **different units.**
+**Pinning a wrong absolute would have been worse** — it goes red for nothing, or more commonly
+**the number gets edited until it's green, at which point the assertion is decoration.** A ratio **doesn't move when the terrain does.**
 
-**2. B-5를 「첫 30틱 면제」 대신 「붓기 전에 완전히 재운다」로 바꿨다.** ✅
-**내 30틱 면제가 사면이었고, CLAUDE.md 가 사면의 폭과 수명을 경계하라고 한 그 모양이다.**
-builder는 **면제할 구간 자체를 없앴다**(`_build_settled_pit`) — 더 강하다.
-그리고 **`peak > 0` 을 전제로 같이 단언**해서 「아무것도 안 재고 통과」를 막았다.
+**2. B-5 became "settle completely before pouring" instead of "exempt the first 30 ticks".**
+**My 30-tick exemption was an amnesty, exactly the shape CLAUDE.md warns about in width and lifetime.**
+builder **removed the segment needing exemption entirely** (`_build_settled_pit`) — stronger.
+And it **asserts `peak > 0` alongside**, blocking "passes while measuring nothing".
 
-**원래 계획 표는 아래에 그대로 둔다** — 무엇을 만들려 했는지가 남아야 다음 사람이 비교한다.
+**The original plan table stays below** — what was intended must survive for the next person to compare.
 
-### (원래 계획) 단계 3 — A방식 붓기 (건드릴 `src/` 파일 **3개**, 그중 1개 새 파일)
+### (Original plan) Stage 3 — approach-A pouring (**3** `src/` files, 1 of them new)
 
-| 파일 | 무엇을 | 왜 |
+| File | What | Why |
 |---|---|---|
-| `src/sim/water_source.gd` 🆕 | `RefCounted`. 상태(x0·x1·row·틱당 총량·누적 카운터) + `tick(grid)` + `poured()` | 위 「어디에 두나」 |
-| `src/stage/stage.gd` | 소스 인스턴스 하나 · `_on_ticked()`(:384)에서 `tick(_grid)` · 시작 함수 | 껍데기가 「언제」만 안다 |
-| `src/stage/stage_input.gd` | **K키** → `rain_requested(world_px)` 시그널 | F(:104)·T·G와 **같은 문**을 지난다 |
+| `src/sim/water_source.gd` NEW | `RefCounted`. State (x0 · x1 · row · per-tick total · accumulator) + `tick(grid)` + `poured()` | See "where it lives" |
+| `src/stage/stage.gd` | One source instance · `tick(_grid)` in `_on_ticked()` (:384) · a start function | The shell knows only "when" |
+| `src/stage/stage_input.gd` | **K key** → `rain_requested(world_px)` signal | Goes through the **same door** as F (:104) · T · G |
 
-**K를 고른 이유**: 1~5·F·G·M·N·R·T가 이미 찼다(`stage_input.gd:41-113`).
+**Why K**: 1–5 · F · G · M · N · R · T are taken (`stage_input.gd:41-113`).
 
-**붓는 자리는 마우스다** — F·T·G와 같다. 마우스 셀의 **행**에, 좌우 **±88셀(총 176셀)** 폭으로 붓는다.
-**176은 임의의 값이 아니라 위 A 실측의 폭이다** — 같은 폭이어야 5.0/8.0/9.0/11.0s 표가 그대로 뜻을 갖는다.
-**한 번 더 누르면 멈춘다**(토글). 안 그러면 껐다 켜려고 R로 무대를 리셋해야 한다.
+**It pours at the mouse** — same as F · T · G. Into the **row** of the mouse cell, across **±88 cells (176 total)** of width.
+**176 is not arbitrary; it is the width from measurement A** — the same width is required for the 5.0/8.0/9.0/11.0s table to mean anything.
+**Press again to stop** (toggle). Otherwise turning it off requires resetting the stage with R.
 
-**`tick()` 은 `_on_ticked()` 안이다 — `_physics_process` 가 아니다**(`stage.gd:377-379`).
-프레임마다 부르면 붓는 속도가 **`TICK_DIVIDER` 배(3배)** 가 되고, 화면 주사율이 흔들리면 같이 흔들린다.
-**에러가 안 난다. 「생각보다 빨리 찬다」로만 보인다.** 그물 B-2가 그걸 잡는다.
+**`tick()` goes inside `_on_ticked()`, not `_physics_process`** (`stage.gd:377-379`).
+Called per frame, the pour rate becomes **`TICK_DIVIDER`× (3×)** and wobbles with the refresh rate.
+**No error. It just looks like "it fills faster than expected".** Net B-2 catches it.
 
-**여기서 재는 판정**:
-- **6(물이 제 속도로 차오른다) — 헤드리스**(verify-run). **다시 잰다. 이유가 둘이다:**
-  (a) 앞의 A/B/C 실측은 **측정 스크립트가 붓던 값**이라 그 코드는 게임에 안 들어간다 —
-  이번엔 **출하되는 `water_source.gd`** 로 잰다.
-  (b) **단계 2(낙하 K)가 「25%→5초 · 95%→11초」를 무효로 만들었다**(`물.md:381`).
-  **순서를 이렇게 짠 덕에 여기서 한 번만 잰다** — ④를 먼저 했으면 두 번 쟀다.
-  **더 빨라지는 쪽이라 목표(5~15초)를 위로 벗어날 수 있다** ⇒ **틱당 총량을 내리는 것이 손잡이**다
-- **5(옆에서 차오른다) · 9(수면이 얼룩으로 안 보이나) — 화면만**(verify-look)
-- **7(탈출이 성립한다) — 화면만.** **문서 334~335행이 「캐릭터를 안 띄웠다」고 이미 적어 놨다** —
-  수면 상승과 점프 높이가 맞물리는지는 **여기서 처음 본다**
-- **8(스스로 깨닫는다)** — 사용자만 판정한다
+**Acceptance measured here**:
+- **6 (water arrives at the right rate) — headless** (verify-run). **Re-measured. Two reasons:**
+  (a) the earlier A/B/C measurements used **values the measuring script poured**, and that code doesn't ship —
+  this time it is measured with **the shipping `water_source.gd`**.
+  (b) **Stage 2 (fall K) invalidated "25%→5s · 95%→11s"** (`water.md:381`).
+  **Ordering it this way means measuring once here** — doing ④ first would have measured twice.
+  **It moves faster, so the target (5–15s) can be exceeded from above** ⇒ **lowering the per-tick total is the knob**
+- **5 (it rises from the side) · 9 (does the surface read as a stain) — screen only** (verify-look)
+- **7 (the escape works) — screen only.** **Lines 334–335 already recorded "no character was instantiated"** —
+  whether the surface rise and jump height mesh **is seen here for the first time**
+- **8 (they work it out alone)** — only the user judges
 
 ---
 
-### 단계 4 — 물살 — **구현 완료. 다만 보스방에서는 0이다** (2026-08-08)
+### Stage 4 — current — **implementation complete. But it is 0 in the boss room**
 
-**코드는 계획대로 맞게 들어갔고 verify-read가 확인했다.** **그런데 목표 장면에서 힘이 정확히 0이다**
-(위 「B의 한계」). **기능이 아니라 장면의 문제다** — F키 원반에서는 **45 px/s로 실제로 민다**(실측).
+**The code landed correctly as planned and verify-read confirmed it.** **But the force is exactly 0 in the target scene**
+(see "B's limit"). **A scene problem, not a feature problem** — on the F-key disc it **actually pushes at 45 px/s** (measured).
 
-#### 판단 — **④(받아들인다)를 고른다. 이 장면에서는 안 민다**
+#### Judgment — **choose ④ (accept it). It doesn't push in this scene**
 
-**후보 넷 중 ①②③이 전부 같은 벽에 부딪힌다**: 위 셈이 보여주듯 **평형에 가까운 방에는
-어느 방향으로도 힘이 없고, 「12.6초에 찬다」가 곧 「평형에 가깝다」다.**
+**Three of the four candidates hit the same wall**: as the arithmetic shows, **a room near equilibrium has no force in
+any direction, and "fills in 12.6 seconds" *is* "near equilibrium".**
 
-- **① 붓는 방식을 다시 연다** — **차오르는 시간을 깨지 말라는 제약과 정면충돌한다.**
-  B방식(5지점)은 이미 A보다 느렸고(95%가 19s vs 11s), 폭을 좁히면 확산 시간이 **제곱으로** 는다
-- **② 유입** — 위 셈: 한 칸이 0→255 되는 데 **2.26틱**이라 **2틱짜리 펄스**다. 잠기면 0
-- **③ 세로** — 수면 아래는 **255 대 255**라 세로 차이도 0이다
-- **④ 받아들인다** — **비용 0 · 새 축 0 · 되돌릴 것 0.** 그리고 **틀린 것이 없다**
+- **① reopen the pour method** — **collides head-on with the constraint of not breaking the fill time.**
+  Method B (5 points) was already slower than A (95% at 19s vs 11s), and narrowing raises diffusion time **quadratically**
+- **② inflow** — from the arithmetic: a cell goes 0→255 in **2.26 ticks**, so it's a **2-tick pulse.** Submerged, it's 0
+- **③ vertical** — below the surface it is **255 vs 255**, so the vertical difference is 0 too
+- **④ accept it** — **0 cost · 0 new axes · 0 to revert.** And **nothing about it is wrong**
 
-**④는 「포기」가 아니다.** 물살은 **댐·폭포·벽 근처·F키 웅덩이·스테이지2 강**에서 느껴진다.
-**보스방에서 「물이 나에게 닿는」 축은 원래 무한 점프다** — 그게 이 문서의 「정한 것」이었고,
-**물살은 그 자리를 대신하려고 만든 게 아니다.**
+**④ is not "giving up".** Current is felt at **dams · waterfalls · near walls · the F-key puddle · stage 2's river.**
+**The axis for "water touching me" in the boss room was always unlimited jumping** — that was this doc's "Decided",
+and **current was not built to replace it.**
 
-#### 그래서 verify-look 계획을 바꾼다 — **물살을 K가 아니라 F로 보여준다**
+#### So the verify-look plan changes — **show the current with F, not K**
 
-**이걸 안 바꾸면 사용자가 「물살이 없다」를 한 번 더 본다.** 그게 이 단계를 만든 이유였다.
+**Without this change the user sees "there is no current" one more time.** That was the reason this stage existed.
 
-| 무엇을 | 어떻게 |
+| What | How |
 |---|---|
-| **물살이 민다** | **F키.** 평지에 서서 옆에 물덩이를 떨군다 — 실측 45 px/s · 2초에 35px |
-| 차오르는 장면 · 낙하 모양 | K키 |
-| 물속 무한 점프 | K키로 채운 뒤 |
+| **The current pushes** | **F key.** Stand on flat ground and drop a water blob beside you — measured 45 px/s · 35px in 2 seconds |
+| The rising scene · fall shape | K key |
+| Unlimited jumping underwater | After filling with K |
 
-### (원래 계획) 단계 4 — 물살이 캐릭터를 민다 (건드릴 `src/` 파일 **2개**)
+### (Original plan) Stage 4 — the current pushes the character (**2** `src/` files touched)
 
-| 파일 | 무엇을 | 왜 |
+| File | What | Why |
 |---|---|---|
-| `src/actor/body.gd` | `water_flow(grid) -> int` — 위 「B는 무엇을 읽나」의 넉 줄 | 격자를 읽는 자리는 전부 여기다(`standing_in_fire` 와 같은 자리) |
-| `src/actor/character.gd` | `WATER_PUSH_PX` 상수 + `move_x` 의 합에 항 하나 | `recoil_vx` 와 같은 줄(`:287`) |
+| `src/actor/body.gd` | `water_flow(grid) -> int` — the four lines from "what B reads" | Every grid read lives here (same place as `standing_in_fire`) |
+| `src/actor/character.gd` | A `WATER_PUSH_PX` constant + one term in `move_x`'s sum | The same line as `recoil_vx` (`:287`) |
 
 ```gdscript
-# 지금
+# now
 _body.move_x(grid, (move * MOVE_SPEED_PX + recoil_vx) * dt)
-# 뒤
+# after
 _body.move_x(grid, (move * MOVE_SPEED_PX + recoil_vx + water_push) * dt)
 ```
 
-**`water_push` 는 매 프레임 새로 계산하고 감쇠시키지 않는다**(위 「반동의 형제다」).
-**`recoil_vx` 처럼 멤버 변수로 두고 누적하지 마라** — 그러면 물에서 나와도 계속 밀린다.
+**`water_push` is recomputed every frame and never decayed** (see "recoil's sibling").
+**Do not hold it as a member variable and accumulate like `recoil_vx`** — you'd keep being pushed after leaving the water.
 
-**`water_flow` 도 프레임마다 읽는다** — 이유는 「물이 프레임마다 변해서」가 **아니다**(물은 틱마다 변한다).
-**캐릭터가 프레임마다 움직여서** 자기가 보는 칸이 달라지기 때문이다. `in_water` 와 같은 이유다.
+**`water_flow` is also read per frame** — the reason is **not** "water changes every frame" (it changes per tick).
+It is that **the character moves every frame**, so which cells it sees changes. Same reason as `in_water`.
 
-**`WATER_PUSH_PX` 시작값은 안 박는다.** **여기는 물속 중력과 같은 종류다** — 목표가
-「밀리는 게 재미있나」라는 손맛이고 잴 수 있는 앵커가 없다. ⇒ **단계 3의 장면 위에서 화면을 보고 정한다.**
-builder는 **눈에 확실히 보이는 값 하나**를 넣고 멈춘다(안 보이면 「키가 안 먹는다」로 읽힌다).
+**`WATER_PUSH_PX` gets no pinned starting value.** **Same category as underwater gravity** — the target is
+"is being pushed fun", a feel with no measurable anchor. ⇒ **Set it on screen, over stage 3's scene.**
+builder puts in **one clearly visible value** and stops (invisible reads as "the key doesn't work").
 
-**여기서 재는 판정**: 헤드리스로 **부호·비례·고인 물에서 0**(아래 그물 C). **세기는 화면만.**
+**Acceptance measured here**: headless — **sign · proportionality · 0 in still water** (net C). **Strength is screen-only.**
 
-### 단계 5 — 물속 중력 (**조건부. 값을 지금 정하지 않는다**)
+### Stage 5 — underwater gravity (**conditional. The value is not set now**)
 
-**판정 4를 눈으로 보기 전에는 이 단계를 열지 않는다.** 단계 1~4를 **기본 중력 그대로** 띄우고,
-verify-look이 「점프점프로 올라가지는가, 허둥대는가」를 본 **뒤에** 값을 연다.
-**허둥대지 않으면 이 단계는 아예 안 한다.**
+**Do not open this stage before seeing acceptance 4 by eye.** Run stages 1–4 with **default gravity** and open the
+value **after** verify-look sees "does it climb by jumping, or flail".
+**If it doesn't flail, this stage is never done.**
 
-**열게 되면 `GRAVITY_PX` 와 `MAX_FALL_PX` 를 같이 본다** — `character.gd:75` 가
-「하나만 건드리면 조용히 틀린다(도달 높이가 `v²/2g`)」를 이미 적어 놨다.
-**물속 값은 `JUMP_VY_PX` 를 건드리지 않고 중력 쪽만 낮추는 것으로 시작한다** — 점프의 손맛
-(반동 대입, `character.gd:255-262`)을 물 안팎에서 다르게 만들지 않기 위해서다.
+**If opened, look at `GRAVITY_PX` and `MAX_FALL_PX` together** — `character.gd:75` already records
+"touch one and it goes silently wrong (reachable height is `v²/2g`)".
+**Start by lowering only gravity underwater, not `JUMP_VY_PX`** — so the jump's feel
+(the recoil assignment, `character.gd:255-262`) isn't different in and out of water.
 
-**여기서 재는 판정**: 4 — **화면만**(verify-look). 값이 서면 A-1을 물속 중력으로 한 번 더 돌린다.
+**Acceptance measured here**: 4 — **screen only** (verify-look). Once the value stands, run A-1 once more under underwater gravity.
 
 ---
 
-## 그물 계획 — 각 검사가 **무엇을 뒤집으면 빨개지나**
+## Net plan — what each check goes red on when inverted
 
-**CLAUDE.md 「가짜 그물 금지」를 읽고 짰다. 뒤집기가 없는 검사는 넣지 않는다.**
+**Written against CLAUDE.md's "No fake nets". A check with no inversion doesn't go in.**
 
-**묶음 이름이 단계 순서와 다르다.** 단계 순으로 읽어라:
+**Group names differ from stage order.** Read by stage:
 
-| 단계 | 묶음 | 어디에 |
+| Stage | Group | Where |
 |---|---|---|
-| 1 물속 점프 | **A** (4개) | `net_character.gd` |
-| 2 낙하 K | **D** (기존 검사 수리 + 뒤집기 3종) + **B-6** | `net_water.gd` |
-| 3 붓기 | **B-1~B-5 — 이미 서 있다** | `net_water.gd` 「단계 7」 |
-| 4 물살 | **C** (6개) | `net_character.gd` |
-| 5 물속 중력 | 없음 — 화면만 | — |
+| 1 underwater jump | **A** (4) | `net_character.gd` |
+| 2 fall K | **D** (repair existing + 3 inversions) + **B-6** | `net_water.gd` |
+| 3 pouring | **B-1–B-5 — already standing** | `net_water.gd`, "stage 7" |
+| 4 current | **C** (6) | `net_character.gd` |
+| 5 underwater gravity | None — screen only | — |
 
-### A. 단계 1 — `tests/nets/net_character.gd` 에 붙인다
+### A. Stage 1 — attached to `tests/nets/net_character.gd`
 
-**`net_water` 가 아니다.** 재는 것이 **캐릭터의 거동**이지 물의 거동이 아니다.
-**`net_character` 는 274줄에 46초였다**(CLAUDE.md의 그 예). **바닥을 새로 깔지 마라** — 기존 헬퍼를 쓴다.
+**Not `net_water`.** What is measured is **the character's behavior**, not water's.
+**`net_character` was 46 seconds over 274 lines** (CLAUDE.md's example). **Do not lay a fresh floor** — use the existing helpers.
 
-| 검사 | 뒤집으면 빨개지는 것 |
+| Check | What goes red when inverted |
 |---|---|
-| **A-1 깊은 물에서 공중 점프가 먹는다** — 땅에서 떼고 물(33 이상)에 담근 뒤 **연속 3번** 뛰어 매번 `vy == JUMP_VY_PX` | 점프 조건을 `on_ground` 만으로 되돌리면 red |
-| **A-2 경계 짝 — 32에서는 안 먹고 33에서는 먹는다** | `>` ↔ `>=` 를 바꾸면 red. **둘을 같이 재야 한다** — 0에서만 재면 임계를 200으로 바꿔도 통과한다(「값이 우연히 맞는다」) |
-| **A-3 물 밖으로 나오면 그 프레임에 막힌다** — 물을 지우고 **다음 `step()`** 에서 점프 실패 | `in_water` 를 `on_tick()` 으로 옮기거나 한 번만 캐시하면 red. **이게 「프레임마다 읽나」를 값으로 잡는 자리다** |
-| **A-4 범위가 발밑 한 줄을 포함한다** — 상자 안은 비우고 **발밑 한 줄에만** 깊은 물 → 점프가 먹어야 한다 | `standing_in_water` 의 `cy1` 을 `+1` 없이 쓰면 red. 불의 그 한 줄이 「이 기능의 목숨」이라고 `body.gd:151` 이 적어 둔 것과 같은 자리 |
+| **A-1 a mid-air jump works in deep water** — lift off the ground, submerge (33+), jump **3 times in a row**, `vy == JUMP_VY_PX` each time | Reverting the jump condition to `on_ground` only → red |
+| **A-2 the boundary pair — 32 doesn't work, 33 does** | Swapping `>` ↔ `>=` → red. **Both must be measured** — measuring only at 0 passes even with the threshold changed to 200 ("the value happens to be right") |
+| **A-3 leaving the water blocks it that frame** — delete the water and the **next `step()`** fails to jump | Moving `in_water` into `on_tick()` or caching it once → red. **This is where "is it read per frame" is caught by value** |
+| **A-4 the range includes the row underfoot** — empty inside the box, deep water **only in the row underfoot** → the jump must work | Using `standing_in_water`'s `cy1` without `+1` → red. The same place `body.gd:151` records that fire's one row is "this feature's life" |
 
-**A-4를 「`standing_in_fire` 와 답이 같나」로 짜지 마라.** 둘을 한 헬퍼로 접으면
-**`scan == scan` 인 항진명제**가 된다(CLAUDE.md 「맞대기는 갈라짐만 잡고 사라짐을 못 잡는다」).
-**셀 배치를 직접 만들고 절대 답을 단언한다.**
+**Do not write A-4 as "does it agree with `standing_in_fire`".** Folding both into one helper makes it a
+**`scan == scan` tautology** (CLAUDE.md, "A/B comparison catches diverged, never vanished").
+**Build the cell layout directly and assert the absolute answer.**
 
-### B. 단계 3 — `tests/nets/net_water.gd` 에 붙인다
+### B. Stage 3 — attached to `tests/nets/net_water.gd`
 
-| 검사 | 뒤집으면 빨개지는 것 |
+| Check | What goes red when inverted |
 |---|---|
-| **B-1 보존 — 소스가 센 누적량 == 격자의 물 총량** (`mat == WATER` 인 칸의 `aux_at` 합) | **더하기를 덮어쓰기로 바꾸면 red.** 위 「덮어쓰기가 아니라 더하기」를 값으로 잡는 유일한 검사다 |
-| **B-2 한 틱에 정확히 한 번, 정확히 그 행에만** — 한 틱 돌리고 **입구 행 말고 다른 행이 늘지 않았나** | `tick()` 을 두 번 부르거나 두 행에 부으면 red. **최종 상태로는 못 잡는다** — 다 차고 나면 어느 행으로 들어왔든 똑같다 |
-| **B-3 목표 시각 — 50% 수위가 예상 틱 수 안에 온다** (틱당 20,000, 20틱/초 ⇒ 8.0s ≈ **160틱**) | 틱당 양을 반으로 줄이면 red |
-| **B-4 루프가 실제로 돌았다** — 위 루프의 **바퀴 수를 같이 단언**(`ticks > 1`, 그리고 목표에 **도달했다**) | 시작 조건이 거짓이라 0바퀴 돌고 「통과」하는 것을 막는다(CLAUDE.md의 `settle > 1` 사례) |
-| **B-5 붓는 동안 상한(100)에 안 닿는다** — **지형 세우는 첫 30틱을 빼고** `active_chunk_count()` 최댓값 < 100 | 폭을 키우거나 양을 올리면 red. **사면 구간을 30틱으로 좁게 못 박는다** — 「전 구간 면제」로 쓰면 검사가 없는 것과 같다 |
+| **B-1 conservation — the source's accumulated count == the grid's total water** (sum of `aux_at` over `mat == WATER` cells) | **Changing add back to overwrite → red.** The only check catching "add, not overwrite" by value |
+| **B-2 exactly once per tick, exactly that row** — run one tick and check **no row other than the entrance grew** | Calling `tick()` twice or pouring into two rows → red. **Final state can't catch it** — once full, which row it entered by is identical |
+| **B-3 target time — 50% level arrives within the expected tick count** (20,000/tick, 20 ticks/s ⇒ 8.0s ≈ **160 ticks**) | Halving the per-tick amount → red |
+| **B-4 the loop actually ran** — **assert the iteration count** alongside (`ticks > 1`, and that the target **was reached**) | Blocks a false start condition passing with 0 iterations (CLAUDE.md's `settle > 1` case) |
+| **B-5 the cap (100) isn't touched while pouring** — max `active_chunk_count()` < 100, **excluding the first 30 terrain-building ticks** | Widening or raising the amount → red. **Pin the amnesty narrowly at 30 ticks** — used as a blanket exemption, the check may as well not exist |
 
-#### B-6 — **아직 없다. 비율로 바꾸면서 열린 구멍이다** (단계 2와 같이 넣는다)
+#### B-6 — **doesn't exist yet. A hole opened by switching to ratios** (goes in with stage 2)
 
-**builder의 비율 단언은 옳지만, 절대 속도를 아무도 안 잰다.**
-B-3의 유일한 절대 가드가 `ticks1 < 400`(20Hz에서 **20초**)이라 **판정 6의 목표(5~15초)보다 훨씬 헐겁다.**
+**builder's ratio assertion is right, but nobody measures the absolute speed.**
+B-3's only absolute guard is `ticks1 < 400` (**20 seconds** at 20Hz), **far looser than acceptance 6's target (5–15s).**
 
-**⇒ 이 문서가 「제일 큰 위험」이라고 부른 값이 상시 그물로는 안 잡히고 있다.**
-문서가 이미 못 쓴다고 기록한 두 실패 모드가 **지금 둘 다 이 그물을 통과한다**:
+**⇒ The value this doc calls "the biggest risk" is not caught by any standing net.**
+**Both failure modes the doc records as unusable currently pass this net:**
 
 ```
-0.85초에 끝난다 (차오르는 그림이 없다)   → ticks1 이 작아서 통과
-281초 걸린다   (4분 30초)                → 목표를 400틱 안에 못 닿아 잡히지만, 그 사이는 다 통과
+over in 0.85 seconds (no rising picture)  → passes because ticks1 is small
+takes 281 seconds (4:30)                  → caught by missing the target within 400 ticks, but everything between passes
 ```
 
-**⇒ B-6: 정착 용량의 50%에 닿는 틱 수가 넉넉한 띠 안에 있다** (예: **60~400틱 = 3~20초**).
-**일부러 헐겁게 잡는다** — 좁게 박으면 지형·K가 바뀔 때마다 **멀쩡한 코드가 빨개진다.**
-**띠의 목적은 「5~15초를 보증하는 것」이 아니라 「자릿수가 틀어진 것을 잡는 것」이다.**
-**5~15초는 verify-look과 사용자가 판정한다** — 그물이 손맛을 판정하는 척하면 안 된다.
+**⇒ B-6: the tick count to reach 50% of settled capacity is inside a generous band** (e.g. **60–400 ticks = 3–20s**).
+**Deliberately loose** — pinned narrowly, **healthy code goes red** every time terrain or K changes.
+**The band's purpose is not "guaranteeing 5–15 seconds" but "catching an order-of-magnitude slip".**
+**5–15 seconds is judged by verify-look and the user** — a net must not pretend to judge feel.
 
-#### 단계 2(낙하 K)가 B 묶음에 미치는 영향 — **미리 적어 둔다**
+#### How stage 2 (fall K) affects group B — **recorded in advance**
 
-**B-5가 제일 위험하다.** K=4면 물이 한 틱에 4배 멀리 떨어진다 ⇒ **한 틱에 움직이는 칸이 늘고
-활성 청크가 는다.** B-5는 `peak < 100` 을 단언한다.
-**⇒ 여기가 빨개지면 그건 가짜 실패가 아니다** — 「이 폭·이 속도에서 물이 밀리기 시작했다」는 **진짜 신호**다.
-**고치는 손잡이는 그물이 아니라 `WATER_RAIN_PER_TICK` 이다**(내리면 활성 청크가 준다).
-**그러면 차오르는 시간이 늘어 판정 6으로 되돌아온다** — **둘이 한 손잡이에 묶여 있다.**
+**B-5 is the most at risk.** At K=4 water falls 4× farther per tick ⇒ **more cells move per tick and active chunks grow.**
+B-5 asserts `peak < 100`.
+**⇒ If it goes red there, that is not a fake failure** — it is **a real signal** that "water started getting delayed
+at this width and this rate".
+**The knob to fix it is not the net but `WATER_RAIN_PER_TICK`** (lower it and active chunks drop).
+**Which lengthens the fill time and returns you to acceptance 6** — **the two are tied to one knob.**
 
-**B-3의 비율도 흔들릴 수 있다.** 지금은 입구 행이 `WATER_MAX` 에 막혀 소스가 명목 속도보다
-느리게 붓는 구간이 있는데(그래서 정상/반속 차이가 압축된다), **K가 커지면 그 행이 빨리 비어
-throttle이 풀린다** ⇒ 비율이 2.0에 **가까워지는** 쪽이라 띠(1.6~2.4) 안에 남을 것으로 본다.
-**예측이지 실측이 아니다. 단계 2를 넣고 실제로 돌려 봐라.**
+**B-3's ratio may wobble too.** Currently the entrance row is capped at `WATER_MAX`, so there is a segment where the
+source pours slower than nominal (compressing the full/half-speed difference); **a larger K empties that row faster
+and releases the throttle** ⇒ the ratio moves **toward** 2.0, so it should stay within the band (1.6–2.4).
+**A prediction, not a measurement. Land stage 2 and actually run it.**
 
-**B는 진짜 지형을 세워야 뜻이 있다**(`Stage.build_terrain_into()`, `stage.gd:477` — static이라
-씬 없이 헤드리스로 불린다. `net_tables` 가 이미 그렇게 쓴다).
-**그런데 그게 이 그물을 느리게 만드는 유일한 원인이다** — 400×48타일이다.
-⇒ **지형은 그물 안에서 딱 한 번 세우고 B-1~B-5가 나눠 쓴다.** 검사마다 새로 세우면 CLAUDE.md의
-「바닥 채우기 2,719ms」를 다섯 번 내는 것이다. **한 바퀴가 10초를 넘으면 `harness-manager` 를 부른다.**
+**B only means something with real terrain built** (`Stage.build_terrain_into()`, `stage.gd:477` — static, so it can be
+called headless with no scene. `net_tables` already uses it that way).
+**But that is the sole reason this net is slow** — 400×48 tiles.
+⇒ **Build the terrain exactly once inside the net and share it across B-1–B-5.** Building per check pays
+CLAUDE.md's "floor fill 2,719ms" five times. **If a round exceeds 10 seconds, call `harness-manager`.**
 
-### D. 단계 2 — **깨지는 그물을 고치고, 고친 뒤에도 재는지 확인한다**
+### D. Stage 2 — **fix the net that breaks, and confirm it still measures after the fix**
 
-**CLAUDE.md 가 「과정을 재는 검사」의 대표 사례로 든 바로 그 검사가 깨진다** —
-`net_water._water_falls_per_tick`(`net_water.gd:426`). 지금 이렇게 단언한다:
+**The very check CLAUDE.md cites as its example of "a check that measures the process" breaks** —
+`net_water._water_falls_per_tick` (`net_water.gd:426`). It currently asserts:
 
 ```gdscript
-t.ok(delta <= Tuning.WATER_SUBSTEPS, ...)          # 한 틱에 N칸을 안 넘었다
-t.eq(max_delta, Tuning.WATER_SUBSTEPS, ...)        # 어느 틱엔가는 정확히 N칸 (서브스텝이 실제로 돈다)
+t.ok(delta <= Tuning.WATER_SUBSTEPS, ...)          # never exceeded N cells in one tick
+t.eq(max_delta, Tuning.WATER_SUBSTEPS, ...)        # some tick hit exactly N (substeps really run)
 ```
 
-**고칠 것은 `WATER_SUBSTEPS` → `K × WATER_SUBSTEPS` 둘뿐이다.** **그런데 거기서 멈추면 안 된다** —
-**그 검사가 여전히 무언가를 재는지**를 뒤집어서 확인해야 한다. **세 개를 다 돌려라:**
+**The fix is only `WATER_SUBSTEPS` → `K × WATER_SUBSTEPS`, twice.** **But stopping there is not enough** —
+you must invert to confirm **the check still measures something.** **Run all three:**
 
-| 뒤집기 | 고친 뒤에도 빨개져야 한다 | 왜 이걸 봐야 하나 |
+| Inversion | Must still go red after the fix | Why look at this |
 |---|---|---|
-| **행·밴드 순회 순서를 뒤집는다** | 한 틱에 27칸 간다 > 상한 12 ⇒ red | **이 검사의 존재 이유다.** K가 커지면 상한이 27에 가까워져 **조용히 못 잡게 된다**(위 K 표) |
-| **서브스텝 루프를 1회로 줄인다** | `max_delta` 가 `K×1` ≠ `K×3` ⇒ red | 서브스텝이 실제로 도나 |
-| 🆕 **K를 1로 되돌린다**(= 이번 변경을 무효화) | `max_delta` 가 `3` ≠ `12` ⇒ red | **K 경로가 실제로 돌고 있나.** 이게 없으면 「고쳤다」가 「상한만 헐겁게 했다」와 구별이 안 된다 |
+| **Reverse row/band traversal order** | 27 cells in one tick > ceiling of 12 ⇒ red | **This check's reason to exist.** As K grows, the ceiling approaches 27 and it **silently stops catching** (K table above) |
+| **Reduce the substep loop to 1 iteration** | `max_delta` is `K×1` ≠ `K×3` ⇒ red | Do substeps really run |
+| **Set K back to 1** (= void this change) | `max_delta` is `3` ≠ `12` ⇒ red | **Does the K path actually run.** Without it, "fixed" is indistinguishable from "loosened the ceiling" |
 
-**그리고 장면이 스스로 짖게 만든다.** 지금 `t.ok(WATER_SUBSTEPS >= 1 and <= 8, ...)` 가 있는 자리에
-**`K × WATER_SUBSTEPS <= 20`** 을 같이 건다(자유낙하 여유 27칸 대비 안전폭).
-**없으면 K를 올린 다음 사람이 「초록이니 괜찮다」로 읽고, 그때 이 검사는 이미 이빨이 없다.**
+**And make the scene bark for itself.** Where `t.ok(WATER_SUBSTEPS >= 1 and <= 8, ...)` sits, also assert
+**`K × WATER_SUBSTEPS <= 20`** (safety margin against 27 cells of free-fall headroom).
+**Without it, the next person raising K reads green as fine, and by then this check has no teeth.**
 
-**같이 손볼 곳**: `_water_falls_and_stacks`(:477)와 `sim_tuning.WATER_SUBSTEPS` 주석의
-「낙하도 같이 N배가 된다」, 그리고 `물.md:355-357` 의 실측 상자. **값이 바뀌면 그 상자도 바뀐다.**
+**Also touch**: `_water_falls_and_stacks` (:477), the `sim_tuning.WATER_SUBSTEPS` comment's "the fall scales N× too",
+and the measurement box in `water.md:355-357`. **Change the value and that box changes.**
 
-### C. 단계 4 — 물살. **「밀린다」를 최종 위치로만 재면 중력·입력과 구별이 안 된다**
+### C. Stage 4 — current. **Measuring "it's pushed" by final position alone can't be distinguished from gravity and input**
 
-⇒ **힘을 돌려주는 함수(`body.water_flow`)를 따로 재고, 그 힘이 실제로 움직임에 닿는지를 짝으로 잰다.**
+⇒ **Measure the force-returning function (`body.water_flow`) separately, and pair it with whether that force reaches movement.**
 
-| 검사 | 뒤집으면 빨개지는 것 |
+| Check | What goes red when inverted |
 |---|---|
-| **C-1 좌우 대칭이면 0이다** — 양쪽에 같은 양 | 한쪽만 세거나 부호를 빠뜨리면 red |
-| **C-2 부호** — 왼쪽에만 물 ⇒ **양수(오른쪽으로)**, 오른쪽에만 물 ⇒ 음수. **둘 다 잰다** | 부호를 뒤집으면 red. 한쪽만 재면 **부호 뒤집기가 반은 통과한다** |
-| **C-3 세기가 차이에 비례한다** — 차이를 2배로 하면 힘이 **엄격히 커진다** | **상수를 돌려주면 red.** 「계산 안 하고 그럴듯한 값 돌려주기」를 잡는 자리 |
-| **C-4 고인 물에서는 0이다** — 웅덩이를 **평형에 들 때까지 돌린 뒤**(`active_chunk_count() == 0`) 잰다 | `WATER_MIN_DIFF` 문턱을 빼면 red. **정착 루프의 바퀴 수를 같이 단언해라**(0바퀴면 공짜 통과) |
-| **C-5 짝 검사 — 힘이 움직임에 닿는다** ① 입력 0 · 땅 위 · 한쪽에만 물 ⇒ **x가 움직인다** ② **같은 배치에서 물만 지우면 안 움직인다** | `water_push` 를 합에 안 더하면 ①이 red. **②만으로는 항진명제다** — 반드시 짝으로 |
-| **C-6 캐릭터가 물을 안 민다** — ①을 여러 프레임 돌린 뒤 **격자의 물 총량이 그대로** | 실수로 격자에 쓰면 red. 폴더 계약(`src/actor/` → `src/sim/`)을 값으로 지키는 자리 |
+| **C-1 symmetric left/right is 0** — the same amount on both sides | Counting only one side or dropping the sign → red |
+| **C-2 sign** — water only on the left ⇒ **positive (rightward)**, only on the right ⇒ negative. **Measure both** | Flipping the sign → red. Measuring one side lets **a sign flip half-pass** |
+| **C-3 strength is proportional to the difference** — double the difference and the force **strictly increases** | **Returning a constant → red.** The place that catches "returning a plausible value instead of computing" |
+| **C-4 still water gives 0** — measured after running the puddle **to equilibrium** (`active_chunk_count() == 0`) | Removing the `WATER_MIN_DIFF` threshold → red. **Assert the settle loop's iteration count too** (0 iterations passes for free) |
+| **C-5 paired check — force reaches movement** ① 0 input · on ground · water on one side ⇒ **x moves** ② **delete only the water in the same layout and it doesn't move** | Not adding `water_push` to the sum makes ① red. **② alone is a tautology** — always paired |
+| **C-6 the character doesn't push water** — run ① for several frames and **the grid's total water is unchanged** | Accidentally writing to the grid → red. Where the folder contract (`src/actor/` → `src/sim/`) is held by value |
 
-**C-3을 「2배 차이면 정확히 2배 힘」으로 박지 마라** — 문턱을 빼는 식이라 정확히 비례가 아니다.
-**「엄격히 커진다」로 재라.** 정확한 배율을 단언하면 문턱 값을 바꾸는 날 **멀쩡한 코드가 빨개진다.**
-
----
-
-## 위험 — 조용히 깨질 수 있는 것
-
-1. **덮어쓰기로 물이 새는 것** — 위에 크게 적었다. **에러가 안 난다.** B-1이 유일한 방어다
-2. **붓기를 프레임마다 부르는 것** — 속도가 3배가 되고 「생각보다 빨리 찬다」로만 보인다. B-2
-3. **`in_water` 를 틱마다만 읽는 것** — 물 밖에서 두 프레임 더 뛰어진다. **눈으로 절대 못 본다.** A-3
-4. **`WATER_WET` 이 이제 셋을 정한다**(색 · 방화 · 점프). **하나 보고 고치면 나머지 둘이 따라 움직인다.**
-   `sim_tuning.gd:184` 가 이미 「판정 6에서 사용자가 정한다」고 예약해 뒀다 — **그날 이 문서도 같이 열어라**
-5. **측정한 그릇과 쓸 그릇이 다르다.** A 실측은 **① 구덩이**(폭 23타일 · 높이 13 · 빈칸 13,312셀,
-   **위가 열린 하늘**)에서 났는데, 장면은 **③ 보스방**(내부 20×12타일 = 15,360셀, **천장이 막혀 있다** —
-   `terrain_map_generated.gd` MAP의 y13행이 `####`)이다. 크기는 비슷하지만 **같지 않다.**
-   ⇒ **붓는 행이 방 안(천장 아래)이어야 한다.** 판정 6을 **보스방 좌표로 한 번 더** 재라
-6. **`water_source` 가 「새 종류」라 다음 사람이 여기에 살을 붙이려 든다**(비·분수·수도꼭지).
-   **이번에는 균일한 한 행뿐이다.** 그 이상은 범위 밖
-7. **A-1이 물속 중력 없이 통과한 뒤 단계 5가 중력을 바꾸면 A-1의 값이 흔들린다** —
-   `vy == JUMP_VY_PX` 는 대입 직후를 재므로 중력과 무관하다. **그 자리를 재도록 짜라**(중력 적용 뒤를 재면 red가 난다)
-8. **단계 2가 그물의 이빨을 조용히 뽑을 수 있다** — K를 올릴수록 「한 틱 상한」이
-   자유낙하 거리(27칸)에 가까워져 **순서 뒤집기를 못 잡게 된다. 라벨은 그대로 초록이다.**
-   CLAUDE.md 「라벨은 정확했는데 그 라벨에 도달하는 경로가 죽었다」 그 자리. **위 D의 장면 가드가 방어다**
-9. **단계 2가 밴드 경계를 한 번에 뛰어넘는다** — 지금은 한 틱에 최대 3칸이라 16행 밴드를
-   못 건너뛰지만, K=4면 12칸이라 **한 번에 밴드를 지나칠 수 있다.**
-   도착 칸의 청크를 깨우는 것은 `_write_water` 가 하므로 원리적으로는 맞다 —
-   **그래도 「건너뛴 밴드가 안 깨어 물이 공중에 멈추나」를 verify-read가 봐야 한다**
-10. **물살이 캐릭터를 벽에 박거나 지형에 끼울 수 있다** — `move_x` 가 막힘을 처리하지만
-   `_try_step_up`(`body.gd:96`)이 있어 **물살이 캐릭터를 계단으로 밀어 올릴 수 있다.**
-   세기를 올릴 때 눈으로 봐라
-11. **단계 4가 「밀린다」를 넣으면 단계 1의 점프 판정이 흔들려 보인다** — 물속에서 뛰는데
-   옆으로도 밀리면 「점프가 이상하다」로 읽힌다. **순서상 점프는 이미 헤드리스로 닫혀 있다** ⇒
-   그때는 **그물을 의심하지 말고 세기를 의심해라**
-12. **`WATER_RAIN_PER_TICK` 하나에 두 판정이 묶여 있다** — 내리면 활성 청크가 줄어 B-5가
-   살지만 **차오르는 시간이 늘어 판정 6이 위험해지고**, 올리면 반대다. **K가 그 균형을 민다.**
-   ⇒ **단계 2 뒤에 이 값을 다시 고를 각오를 하고, 고르면 두 쪽을 같이 재라**
-13. **단계 3이 이미 들어가 있어서 「내 변경이 깨뜨렸나」가 헷갈릴 수 있다** — 단계 2가
-   `cell_grid` 를 건드리므로 **B 묶음이 빨개지면 원인이 K일 가능성이 높다.**
-   **CLAUDE.md 「가짜 실패」와 헷갈리지 마라** — `[경합]` 이 없으면 그건 진짜 실패다
+**Don't pin C-3 as "double the difference, exactly double the force"** — the threshold is subtracted, so it isn't
+exactly proportional. **Measure it as "strictly increases".** Asserting an exact multiple turns **healthy code red**
+the day the threshold changes.
 
 ---
 
-## 판정 — 다 되면 무엇을 보고 아나
+## Risk — what could break silently
 
-**헤드리스로 닫히는 것**(verify-run): 판정 1 · 2 · 3 · 6 + **낙하가 K배가 됐나**(D) + **물살의 부호·비례·0**(C)
-**화면으로만 닫히는 것**(verify-look): 판정 4 · 5 · 7 · 9 + **「또로록」이 없어졌나** + **물살 세기**
-**사용자만 닫는 것**: 판정 8, 그리고 **진단 그 자체 — 「물이 이제 나에게 영향을 미치나」**
+1. **Water leaking via overwrite** — written large above. **No error is raised.** B-1 is the only defense
+2. **Calling the pour per frame** — 3× the rate, visible only as "it fills faster than expected". B-2
+3. **Reading `in_water` only per tick** — two extra jumps outside water. **Invisible to the eye.** A-3
+4. **`WATER_WET` now sets three things** (color · fire-proofing · jumping). **Tune one and the other two follow.**
+   `sim_tuning.gd:184` already reserves "the user decides at acceptance 6" — **open this doc that same day**
+5. **The bowl measured and the bowl used are different.** Measurement A was done in **pit ①** (23 tiles wide · 13 tall ·
+   13,312 empty cells, **open sky above**), and the scene is **boss room ③** (interior 20×12 tiles = 15,360 cells,
+   **ceilinged** — row y13 of `terrain_map_generated.gd`'s MAP is `####`). Similar in size but **not the same.**
+   ⇒ **The pour row must be inside the room (below the ceiling).** Measure acceptance 6 **again in boss-room coordinates**
+6. **`water_source` being a "new kind" invites the next person to add flesh** (rain · fountains · taps).
+   **This time it is one uniform row.** Anything more is out of scope
+7. **A-1 passing without underwater gravity, then stage 5 changing gravity, shakes A-1's value** —
+   `vy == JUMP_VY_PX` measures right after assignment, so it's gravity-independent. **Write it to measure that spot**
+   (measuring after gravity is applied goes red)
+8. **Stage 2 can silently pull the net's teeth** — the higher K, the closer "the per-tick ceiling" gets to the
+   free-fall distance (27 cells), **and order reversal stops being caught. The label stays green.**
+   CLAUDE.md's "the label was accurate and the path reaching it died". **D's scene guard above is the defense**
+9. **Stage 2 crosses a band boundary in one hop** — at most 3 cells per tick today, so a 16-row band can't be
+   skipped, but K=4 gives 12 cells and **a band can be passed in one hop.**
+   Waking the destination cell's chunk is `_write_water`'s job, so it's correct in principle —
+   **but verify-read must check "does a skipped band stay asleep and leave water hanging in mid-air"**
+10. **Current can ram the character into a wall or wedge it into terrain** — `move_x` handles blocking, but
+   `_try_step_up` (`body.gd:96`) means **current can push the character up a stair.** Watch it by eye when raising strength
+11. **Stage 4 adding "being pushed" can make stage 1's jump look shaky** — jumping underwater while also
+   drifting sideways reads as "the jump is weird". **In this order, jumping is already closed headless** ⇒
+   **don't suspect the net, suspect the strength**
+12. **Two acceptance checks hang on one `WATER_RAIN_PER_TICK`** — lower it and active chunks drop so B-5 survives
+   **but the fill time grows and acceptance 6 is at risk**; raise it and the reverse. **K pushes that balance.**
+   ⇒ **Expect to re-pick this value after stage 2, and when you do, measure both sides**
+13. **Stage 3 already being in makes "did my change break it" ambiguous** — stage 2 touches `cell_grid`, so
+   **if group B goes red, K is the likely cause.**
+   **Don't confuse it with CLAUDE.md's "fake failure"** — with no `[race]`, it is a real failure
 
-**마지막 줄이 이 계획의 진짜 판정이다.** 판정 1~9가 전부 초록이어도 사용자가 여전히
-「배경 같다」고 하면 **안 된 것이다.** ⇒ **단계 4가 끝나면 그 문장을 그대로 물어라.**
+---
 
-### 단계 3에 대해 아직 안 닫힌 것 — 검증자에게 넘길 목록
+## Acceptance — what tells you it's done
 
-**그물이 초록이라고 끝난 게 아니다.** 남은 셋:
+**Closed headless** (verify-run): acceptance 1 · 2 · 3 · 6 + **did the fall become K×** (D) + **current's sign, proportionality and 0** (C)
+**Closed only on screen** (verify-look): acceptance 4 · 5 · 7 · 9 + **did the trickle go away** + **current strength**
+**Closed only by the user**: acceptance 8, and **the diagnosis itself — "does water affect me now?"**
 
-| 무엇 | 누가 | 왜 아직인가 |
+**That last line is this plan's real acceptance.** Even with 1–9 all green, if the user still says
+**"it feels like background", it isn't done.** ⇒ **When stage 4 finishes, ask that sentence verbatim.**
+
+### Still open for stage 3 — the list handed to the verifiers
+
+**Green nets are not the end.** Three remain:
+
+| What | Who | Why not yet |
 |---|---|---|
-| **화면을 아무도 안 봤다** — K가 먹나 · 물이 보이나 · HUD가 세나 · 수면이 얼룩인가(판정 5·9) | **verify-look** | 헤드리스만 돌았다. ⇒ **단계 2 뒤 한 번에 본다**(위 「순서」) |
-| **보스방(③ 20×12) 좌표에서는 안 쟀다** — 잰 것은 ① 구덩이(23×13, **하늘이 열림**)다. 보스방은 **천장이 막혀 있다** | verify-run | 보스가 없어 그 지형이 아직 안 선다. **단계 2 뒤 재측정에 같이 넣어라** |
-| **B-3의 비율·B-5의 상한이 K를 견디나** | verify-run | 위 「단계 2가 B 묶음에 미치는 영향」 |
+| **Nobody has seen the screen** — does K work · is water visible · does the HUD count · is the surface a stain (acceptance 5·9) | **verify-look** | Only headless ran. ⇒ **Seen all at once after stage 2** (see "Order") |
+| **Not measured in boss-room (③ 20×12) coordinates** — what was measured is pit ① (23×13, **open sky**). The boss room is **ceilinged** | verify-run | With no boss, that terrain doesn't stand yet. **Include it in the re-measurement after stage 2** |
+| **Do B-3's ratio and B-5's cap survive K** | verify-run | See "how stage 2 affects group B" |
 
-**`3.done/` 으로 옮길 때 이 표가 비어 있어야 한다** — 「구현이 끝났다」와 「판정이 통과했다」는
-다르다(CLAUDE.md).
+**This table must be empty when the doc moves to `3.done/`** — "implementation finished" and "acceptance passed"
+are different (CLAUDE.md).
 
-**화면에 도달하는 경로는 이미 다 있다.** 물은 F키(`stage_input.gd:104` → `stage.gd:241` → `:304`),
-캐릭터는 `stage.gd:377` → `world_step.gd:138` 이 **매 프레임 격자를 넘긴다**.
-⇒ **CLAUDE.md의 「볼 것이 화면에 도달하는 경로가 없다」에 안 걸린다.** 단계 3의 K키가 하나 더 붙는다.
+**Every path to the screen already exists.** Water via the F key (`stage_input.gd:104` → `stage.gd:241` → `:304`),
+and the character via `stage.gd:377` → `world_step.gd:138`, which **hands the grid over every frame.**
+⇒ **CLAUDE.md's "no path for the thing you want to see" doesn't apply.** Stage 3 adds one more, the K key.
 
 ---
 
-## 범위 밖 — 이번에 안 한다
+## Out of scope — not this round
 
-| 무엇 | 왜 |
+| What | Why |
 |---|---|
-| **보스 사망 훅** | **보스가 코드에 없다** — `monster_defs.gd:19-24` 는 돼지·닭 둘뿐이다. `stage1-bosses.md` 의 일이다. **K키가 그 자리를 대신한다** |
-| **옆벽이 실제로 무너지는 것** | 붓는 방식이 A(비처럼)로 바뀌어 **연출과 메커니즘이 갈렸다.** 벽 붕괴는 그림이지 물길이 아니다 |
-| **문과 물이 만나는 법** | 위 「미정」. **여기가 안 정해지면 탈출 장면이 안 성립하지만, 물이 차오르는 것은 그것 없이 볼 수 있다** |
-| **몬스터와 물** · **폴백 글자** | 「미정」에 그대로 둔다 |
-| **물속 중력 값** | 단계 5. **판정 4를 보고 열고, 안 허둥대면 아예 안 한다** |
-| **익사 · 부력 · 수영** | 「정한 것」에서 안 만들기로 닫혔다 |
-| **캐릭터가 물을 미는 것** | 폴더 계약을 넘는다(`src/actor/` float → `src/sim/` 정수 결정론). **그물 C-6이 값으로 막는다** |
-| **물살의 세로 성분** | 이번엔 **가로만.** 위로 가는 축은 점프 무한이 이미 닫았고(「정한 것」), 아래로 미는 것은 익사 쪽 얘기다 |
-| **셀당 흐름 상태를 격자에 남기는 것** | 위 「A vs B」에서 B를 골랐다. **4.1MB와 감쇠 축을 안 산다** |
-| **넓고 고른 강물에서의 물살** | B의 한계(위). **강을 만드는 날 다시 연다** |
-| **K를 8 이상으로 올리는 것** | **그물 장면을 먼저 키워야 한다**(위 D). 이번엔 4에서 시작해 최대 6 |
+| **The boss-death hook** | **The boss doesn't exist in code** — `monster_defs.gd:19-24` has only pig and chicken. That is `stage1-bosses.md`'s job. **The K key stands in for it** |
+| **The side wall actually collapsing** | The pour became A (rain), so **presentation and mechanism diverged.** Wall collapse is a picture, not a water path |
+| **How the gate and water meet** | See "TBD". **Unresolved, the escape scene doesn't hold, but the water rising can be seen without it** |
+| **Monsters and water** · **fallback text** | Left in "TBD" |
+| **The underwater gravity value** | Stage 5. **Opened after seeing acceptance 4; if it doesn't flail, never** |
+| **Drowning · buoyancy · swimming** | Closed as not-built under "Decided" |
+| **The character pushing water** | Crosses the folder contract (`src/actor/` float → `src/sim/` integer determinism). **Net C-6 blocks it by value** |
+| **The current's vertical component** | **Horizontal only** this round. The upward axis is already closed by unlimited jumping, and pushing down is a drowning conversation |
+| **Storing per-cell flow state in the grid** | B was chosen over A. **We don't buy 4.1MB and a decay axis** |
+| **Current in a wide, even river** | B's limit (above). **Reopen the day a river is built** |
+| **Raising K to 8 or above** | **The net's scene must be enlarged first** (D above). This round starts at 4, max 6 |
