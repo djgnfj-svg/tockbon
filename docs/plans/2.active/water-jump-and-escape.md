@@ -1,6 +1,10 @@
 # Unlimited jumping underwater and the escape — water touches the character for the first time
 
-**Status**: active — **the code is finished. All that remains is the user looking at the screen.**
+**Status**: active — **the code is finished. The user deferred the screen check** (decided by the user).
+
+**Deferred, not passed.** Water took long enough that the user cut it back to **"unlimited jumping underwater is
+enough for now"**; the pour, the current and the escape **come back out and get looked at when that work reopens.**
+⇒ **Nothing below is accepted**, and this doc does not move to `3.done/` on that decision.
 
 **The line above goes stale more often than anything in this doc.** The table below is the source.
 

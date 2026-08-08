@@ -1,6 +1,6 @@
 extends RefCounted
 ## `src/actor/progress.gd` and its award integration in `world_step.gd`'s death loop
-## (`docs/plans/2.active/levelup-and-three-picks.md`, Stage B).
+## (`docs/plans/3.done/levelup-and-three-picks.md`, Stage B).
 ##
 ## **Everything here that touches `WorldStep` builds a bare pig kill by writing `hp = 0` directly and running
 ## one tick** — combat itself (does a bolt connect, does invulnerability hold) is already `net_damage`'s and

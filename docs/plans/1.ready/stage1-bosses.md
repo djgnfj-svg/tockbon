@@ -45,12 +45,77 @@ The monster doc isolated that function with **"AI is deferred; the slot is left 
 | **Ramming stuns it** | Hitting a wall **briefly stuns it** — **that is the window to hit back** |
 | **Breathes fire** | **It sticks to terrain.** Wood burns |
 | **Phases** | **Speeds up at half health.** Faster charges or more frequent fire |
+| **On death** | **You take the reward, and then the side wall collapses and water comes in** (decided by the user) |
+
+#### The charge is not one move — it is a family (decided by the user)
+
+**One charge is not a fight.** The user split it into variants that share the same tell and differ in what
+they ask of the player:
+
+| Pattern | What | Art |
+|---|---|---|
+| **Triple charge** | Three charges back to back, no pause between | **`bull_charge` replayed 3×** — no new sheet |
+| **Sweeping charge** | Charges, turns, charges back — left and right | **`bull_charge` mirrored** — no new sheet |
+| **Jump slam** | Leaps and slams both front hooves down; **the impact throws fire outward across the ground** | **`bull_slam`, 17 frames** |
+| **Gore** | The close-range answer — **when you are next to it, it swings its horns** | **`bull_gore`, 17 frames** |
+
+**Two of the four need no art at all.** Repetition and mirroring are code, and spending generations on them
+would produce a second, slightly different charge — **the tell would stop being one thing the player can learn.**
+
+**The jump slam is the one that changes the room.** Fire that spreads along the ground is the bull's fire
+under a new delivery, so **every constraint in "the bull's fire sticks to terrain" applies to it unchanged** —
+including the wood wall. **A slam near the wall is the same failure as a breath near the wall.**
+
+**Gore exists because a charge has a dead zone.** Standing under the bull's nose beats a move that needs
+runway, and without an answer the fight's lesson becomes "hug it".
+
+**Frame count is 17 (16 generated + the input frame), deliberately** — the user asked for as many frames
+as possible on these two. The others sit at 5–9.
+
+#### The way out of the pit — **this doc owns it** (decided by the user)
+
+**The pit is a bedrock bowl whose only exit is rising water** (`3.done/stage1-map-layout`), and until this
+decision **no doc owned the water** — the map asserted it, this doc said "there is no water in ①", and
+`2.active/water-jump-and-escape` scoped only the pour after the rooster. **It came out of the F key.**
+
+**The same shape as the rooster's**: the wall collapses and water pours in from the side.
+**One thing differs and it is load-bearing — the order.** Death alone does not open it;
+**the reward is taken first, then the wall goes.** With one rune slot and no stash, the fire rune has to be
+received before the room starts filling, or the player is choosing a layer while drowning.
+
+⇒ **The trigger is "the reward closed", not "hp reached 0".**
+
+**"Terrain having held the water back" is the reason it reads as natural** rather than as a scripted flood —
+the same argument already made for the rooster's wall, and **the hole size tunes the pour rate** the same way.
+
+**And it settles `water-jump-and-escape`'s open item 1** — that doc's acceptance 5 ("water comes in from
+the side") did not match approach A, which rains across the full width from above. **This pour is genuinely
+from the side.** Whether the two pours share one implementation is that doc's call, not this one's.
 
 **"Ram and get stunned" is the whole of this boss.** Brainless charging becomes its own weakness —
 the player **dodges, makes the bull ram, and hits in that gap.** A fight works without making the AI smart.
 
 **Destruction is bound to an attack pattern.** Not "breaks what blocks it while walking" but **only while charging**,
 so the player **can predict it.** And the room's shape changes as you fight.
+
+#### The fire is not on the body — the **rune** is (decided by the user)
+
+The first sprite breathed a flame at the nose **all the time.** The user cut it: **fire appears only while the
+pattern is running**, and what the body carries is **the swallowed fire rune, burning under the hide.**
+
+**Two things are bought at once.**
+The GDD's "**bosses swallowed almost all of it**" ("World") stops being a line in a doc and becomes
+**visible on the beast** — the player sees what they are about to be given before they win it.
+And **the telegraph gets its channel back**: with flame on the face permanently, the wind-up before a fire
+breath has nothing to say. Fire appearing *is* the tell.
+
+⇒ **The idle sprite carries no flame.** Every flame on screen belongs to a pattern that is currently running.
+
+**What actually shipped is only the removal.** The user kept the bull they had already picked and had the
+nose flame **erased from it** (60 pixels, cut by "red dominates" — the beast is grey, so no body pixel is
+near that hue), rather than take one of the regenerated candidates that wore the rune on its shoulder.
+**So the rune is not on the body yet.** The candidates sit in `tools/pixel/out/boss_bull_rune` and
+`boss_bull_red` — **regenerating is not needed if one of those is picked later.**
 
 #### The bull's fire sticks to terrain — and that constrains the map
 
@@ -91,8 +156,24 @@ only 2/17 glyphs run and **there is no homing, so only manual aiming exists.** P
 - **Bull** — charge telegraph · dust on impact · a stun indicator (**you must know it's time to hit**) · the fire it breathes
 - **Rooster** — leap telegraph · landing impact
 - **Both** health bars · flash · damage numbers · fire on the body — **same family as trash mobs** (already exists)
-- **There are no sprites.** The two trash mobs were generated with local ComfyUI (`tools/pixel/`) — same path.
-  **Bosses are large, so the downscaling factor problem differs** (monster doc: generation size must be 4× the target)
+- **The standing sprites exist** — `assets/monster/bull_body.png` (86×54) · `rooster_body.png` (72×80), local ComfyUI.
+  **The 4× generation rule held at this size too** (bull 384×256 → 96, rooster 288×336 → 72).
+  **Every pattern in this doc now has a sheet** (`assets/monster/`, one horizontal row each):
+
+  | Bull | Rooster |
+  |---|---|
+  | `bull_idle` 5 · `bull_walk` 9 · `bull_charge` 9 | `rooster_idle` 5 · `rooster_walk` 9 |
+  | `bull_stun` 7 · `bull_fire` 9 · `bull_death` 7 | `rooster_leap` 9 · `rooster_land` 7 · `rooster_death` 7 |
+
+  Generated by **pixellab** from the standing frame (**1 generation each**), since the local pipeline's walk
+  LoRA is for human characters only. **The input had to be quantized to 16–32 colors first** — the MCP client
+  truncates a base64 argument past roughly 3,000 characters and the call fails with "could not decode image".
+  **The trash mobs got walks in the same pass** — `pig_walk` 9 · `chicken_walk` 9.
+  **What is still not drawn**: the phase change at half health, and being hit (the hit flash shader covers it today)
+- **The walk sheet has no way onto the screen yet.** `fx_tuning.MONSTER_SHEETS` is **one image per kind** and
+  `monster_view` fits that whole texture to the box — hand it a 9-frame sheet and the beast draws squashed.
+  Playing it needs the character's idiom (`CHAR_SHEET` + a state→frame table) brought over to monsters,
+  which is **`docs/design/monsters.md` open question 16**, not this doc's
 - **There is no outline** — impossible in principle for trash mobs, so a shader was used. **Same for bosses**
 
 ---
@@ -106,7 +187,7 @@ only 2/17 glyphs run and **there is no homing, so only manual aiming exists.** P
 | **The wood wall is outside ①** | It must be out of the bull's fire's reach for the progression key to survive |
 | **Destruction only while charging** | Not "breaks what blocks it" — terrain trapping still works on trash mobs |
 | **The rooster lands** | Permanently airborne is unkillable with no homing glyph |
-| **Water only after the rooster dies** | It doesn't overlap the fight ⇒ **no performance problem while fighting** |
+| **Water only after a boss dies — now both of them** | ① after the bull's reward, ③ after the rooster. **Neither overlaps its fight** ⇒ no performance problem while fighting |
 | **Bolts have no owner** | Putting the bull's fire or the rooster's attacks into `spell_sim` means **they hit themselves.** Like chicken bolts, they go in `src/actor/` |
 
 ---
@@ -126,7 +207,7 @@ water-jump-and-escape  ⇒ 20×12 = 15,360 cells.  The side wall collapses and w
 | What | How |
 |---|---|
 | **Fire** | The bull's fire goes through `_ignite_cell`. It must fit within `MAX_BURNING` |
-| **Water** | **Fire doesn't catch next to water** (`_deep_water`). No water in room ①, so irrelevant for now |
+| **Water** | **Fire doesn't catch next to water** (`_deep_water`). **Room ① now floods too** — but only after the fight ends, so it costs the fight nothing. **The bull's leftover fire goes out as it fills**, and that is the correct picture |
 | **Terrain destruction** | Charge destruction wakes chunks. Same path as a blast's `carve` |
 | **Trash mobs** | Reuses the same `monster.gd`. **The `_next_axis()` isolation earns its keep here** |
 | **The 20-mob cap** | A boss is 1. **Whether trash mobs appear during a boss fight is TBD** |
@@ -165,6 +246,8 @@ water-jump-and-escape  ⇒ 20×12 = 15,360 cells.  The side wall collapses and w
 6. **Room ① does not burn entirely** — there is no wood in the room
 7. **It speeds up at half health** — distinguishable by eye
 8. **The bull doesn't break out of the room** — charge destruction could accumulate and breach a wall
+8b. **The reward is taken, and only then the side wall collapses and water comes in** — and
+   **the water carries the player out of the pit.** Reversing the order (water first, reward second) is the failure
 
 **Rooster**
 9. **It leaps, pounces and lands** — it doesn't stay airborne
@@ -189,14 +272,21 @@ water-jump-and-escape  ⇒ 20×12 = 15,360 cells.  The side wall collapses and w
   **The assembly window is a debug label right now, so this decision is tied to that**
 - **Health · damage · speed values** — none decided. "Skeleton first", set on screen
 - **Box size** — how much larger than a pig (44×32) is a bull. **Size is not free**
-  (`character.gd`: a bigger box sweeps cells quadratically)
+  (`character.gd`: a bigger box sweeps cells quadratically).
+  **The sprites came out at 86×54 (bull) and 72×80 (rooster)** — that is the art's size, **not a decided box.**
+  Deciding the box smaller than the art means regenerating, not scaling (downscaling breaks the pixels)
 - **How it breathes fire** — cone · projectile · range · telegraph
 - **How many seconds the stun lasts** — the fight's rhythm comes from here
 - **How deep charge destruction goes** — accumulated, it breaches the room
 - **Does the rooster break terrain on landing** — same axis as the bull, undecided
 - **Do trash mobs appear during a boss fight**
 - **Boss reward** (rooster) — the GDD says "research material (permanent) + a glyph three-pick". **The three-pick screen doesn't exist yet**
-- **Sprites** — not generated
+- ~~**Sprites**~~ → **generated and picked by the user.**
+  `assets/monster/bull_body.png` (86×54) · `assets/monster/rooster_body.png` (72×80).
+  Local ComfyUI, `--preset monster`, generated at 4× and downscaled — same path as the trash mobs.
+  **The rooster took two rounds** — the first came out as a farm rooster and the user said "more like a boss";
+  what was picked is the **grey monstrous** one, not the red-plumed demon of the third round.
+  **Only the standing pose exists.** Charge, stun, leap and landing frames are not drawn
 - **Phase transition presentation** — what is visible at half health
 
 ---

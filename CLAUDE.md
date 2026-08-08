@@ -25,6 +25,15 @@ Change both in the same edit.
 - **No dates.** "Decided by the user" is enough. Only a reversed decision needs one
 - **Cut every word that isn't load-bearing** — in docs and in chat
 
+### The exception — **when the user asks to be told something, answer in chat** (decided by the user)
+
+**The 50 characters govern work reports** ("done", "here's the file"). **They do not govern answers.**
+When the user asks a question — "what is this", "list the options", "how does it work", "what's next and why" —
+**write the answer, and a list is allowed.** Keep it as short as it can be while still answering; do not pad.
+
+**Filing the answer in a doc and replying with the filename is the failure this exception exists to stop.**
+A doc may be written *as well*, when the answer is worth keeping — **but the chat still carries the answer.**
+
 ## Where things live
 
 | Looking for | Go to |
@@ -116,6 +125,12 @@ even after you confirm every mutation goes red**:
 - **A check that reads only final state cannot measure an ordering contract.** Iteration order was reversed, final state was identical, three checks stayed green. Add a check that measures the process
 - **A/B comparison catches "diverged", never "vanished".** Fold two paths into one and `scan == scan` — 39 checks all green. "Slower without it" is caught only by timing
 - **A loop whose condition is false from the start never runs the check at all.** A settle loop passed with zero iterations. Assert the iteration count too
+- **A check that greps a file measures its text, never what it computes.** Five scans shipped in one feature and
+  **every one was evaded** — a decoy line, one added term (`PICK_RECT.position + Vector2(600,500)`), an `@export`
+  moving the declaration off `^var`, the same write from another file, an early `return` between the two lines a
+  scan compared. **Drive the value instead.** `_ready()` · `_gui_input()` · `_physics_process()` and ordinary
+  methods are all callable on an **untreed node** with enough wiring. Only `_draw()` truly resists — no live font.
+  **"It can't be driven headless" was claimed three times and was wrong three times; the last one cost three lines**
 
 ## Running the nets
 

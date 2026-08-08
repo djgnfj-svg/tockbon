@@ -20,6 +20,13 @@ format per [README.md](README.md).
 **The user opened this with "shouldn't there be a background too".** Until then
 **the word "background" appeared zero times across the GDD and all of `docs/design/`.**
 
+**Stage 1's background is a farm — and not now** (decided by the user).
+Night sky + stars is **placeholder**, not the stage-1 look: the theme is a farm (GDD, "the stage template"),
+so what stands behind the grid is **fields, fences, a barn, a horizon.** ⇒ **What this doc is waiting for is art,
+not code** — the three-piece layer above already works and needs nothing further to show a farm.
+**The user explicitly deferred it**; do not start it because it reads as an obvious gap.
+**It is also the first thing that will need a second variant** — `town.md` needs a bright room.
+
 ---
 
 ## The current "sky" is not a background

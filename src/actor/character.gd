@@ -127,6 +127,21 @@ const MAX_FALL_PX := 1800.0
 const JUMP_CUT_RATIO := 0.2
 const JUMP_CUT_VY_PX := JUMP_VY_PX * JUMP_CUT_RATIO
 
+## **Coyote time and the jump buffer — the two forgiveness windows** (`docs/design/game-feel.md`).
+##  The user's report was "moving, the camera and jumping feel slightly unpleasant", and **neither of these
+##  existed**: step off a ledge and the jump was simply eaten, press just before landing and it was eaten again.
+##
+## **They forgive opposite mistakes and are not one feature:**
+##  · **Coyote** — pressed **after** leaving the ground. Keeps a jump alive for a moment past the ledge
+##  · **Buffer** — pressed **before** touching the ground. Keeps the press alive until the landing frame
+##
+## **0.1s = 6 frames, and it comes from the same measurement `JUMP_CUT_RATIO` above stands on** — a hand
+##  produces a 0.05-0.1s press, so a window shorter than a tap forgives nothing a hand can actually do.
+## **Do not raise it much past this.** Coyote is airtime in which you may still jump, so a large value reads
+##  as a double jump — and the double jump is a **town research unlock** (GDD), an axis this must not blur.
+const COYOTE_SEC := 0.1
+const JUMP_BUFFER_SEC := 0.1
+
 # --- HP ------------------------------------------------------------
 ## **A number** (design: "HP and damage"). Base damage is 10, so it takes **ten hits** to go down —
 ##  the whole of this value is that a one-shot death is not fun but rage.
@@ -283,6 +298,12 @@ var recoil_vx := 0.0
 ##  eats away at "where you put fuel is level design".
 var _burn_acc := 0.0
 
+## **The two forgiveness windows' remaining time** (`COYOTE_SEC` · `JUMP_BUFFER_SEC` above), in seconds.
+## **Seconds, not frames** — everything else in this file that ages is `dt`-driven, and a frame counter
+##  would be the one thing in here that changes meaning if the physics rate ever moves.
+var _coyote_left := 0.0
+var _jump_buffer_left := 0.0
+
 ## **HP and invulnerability are reverted too.** Without that, R (stage reset) cannot bring you back —
 ##  when alone there is nobody to pick you up, so **R is the only revival** (plan section 4).
 ## Position, velocity, grounding and `_rem_*` are reverted by `_body.place()` — touch them again here and
@@ -294,6 +315,10 @@ func place(px: int, py: int) -> void:
 	burning = false
 	_burn_acc = 0.0
 	recoil_vx = 0.0
+	# **Reverted with everything else.** Leave them and R (stage reset) can drop you into the new position
+	#  already holding a buffered press from before the reset — one free jump on the first frame.
+	_coyote_left = 0.0
+	_jump_buffer_left = 0.0
 
 
 func center() -> Vector2:
@@ -320,11 +345,29 @@ func step(grid: CellGrid, dt: float, axis: float, jump: bool, jump_held: bool) -
 	#  value.** At 32px both numbers double, but **whether the 2.1x ratio holds was not re-measured**).
 	#  **This is intended** (decided by the user) — "**when** you fire" setting the height is the feel.
 	#  **Do not change it to an addition.** It is an easy spot to read as a bug, so it is written down here.
+	# **The two windows age before the jump is judged, not after.** Age them afterwards and a press on the
+	#  landing frame itself is judged against last frame's answer — the exact staleness `in_water` above
+	#  refuses to accept.
+	# **Coyote is refilled, not decremented, while grounded.** A counter that only counts down has to be reset
+	#  somewhere else too, and the day a second grounding path appears (a platform, a revive) that reset is the
+	#  line that gets forgotten.
+	_coyote_left = COYOTE_SEC if on_ground else maxf(0.0, _coyote_left - dt)
+	# **`jump` is a press edge** (`stage_input.jump_pressed` is `is_action_just_pressed`), so the buffer is armed
+	#  once per press. **If it ever becomes a polled `is_action_pressed`, holding the key would re-arm it every
+	#  frame and the character would bounce on every landing** — that is the one change that breaks this line.
+	_jump_buffer_left = JUMP_BUFFER_SEC if jump else maxf(0.0, _jump_buffer_left - dt)
 	# **`or in_water` — underwater you jump any number of times regardless of grounding**
 	#  (`water-jump-and-escape.md`, "it is not buoyancy or swimming — it is lifting the jump limit").
 	#  The jump's own value (`JUMP_VY_PX`) is the same in and out of water — no new physics axis of buoyancy is made.
-	if jump and (on_ground or in_water) and not downed:
+	#  **Water grants no coyote** — `on_ground` is false throughout a water column, so `_coyote_left` never fills
+	#  there, and A-3 ("leaving water is blocked that very frame") survives this change untouched.
+	if _jump_buffer_left > 0.0 and (on_ground or in_water or _coyote_left > 0.0) and not downed:
 		vy = JUMP_VY_PX
+		# **Both are spent, and the coyote one is what stops a double jump.** Leave `_coyote_left` standing and
+		#  the window is still open next frame while airborne ⇒ a second press jumps again. **That is a double
+		#  jump, which is a town unlock** (GDD) — it must not fall out of a feel fix.
+		_jump_buffer_left = 0.0
+		_coyote_left = 0.0
 	_body.apply_gravity(dt, GRAVITY_PX, MAX_FALL_PX)
 
 	# **Variable jump — if the key was released and it is still rising, clip the rise** (`JUMP_CUT_*` above).

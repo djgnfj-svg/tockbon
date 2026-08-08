@@ -6,9 +6,9 @@
 |---|---|---|
 | 1 | The fire rune already exists | **Fixed** — the milestone table went from "build" to "lock" |
 | 2 | The old "none every run" premise | **Fixed** — two places in the GDD, one in town |
-| 3 | Who owns pit ①'s water | **Open** — added to the milestone gap table. **Who pours it must be decided** |
+| 3 | Who owns pit ①'s water | **Closed by the user** — take the reward, then the side wall collapses and water comes in. **`1.ready/stage1-bosses` owns it** ("the way out of the pit") |
 | 4 | Water missing from the chain diagram | **Fixed** |
-| 5 | The wood-wall lock is broken | **Open** — added to the table. **Cause: the blast doesn't carry element** |
+| 5 | The wood-wall lock is broken | **Closed by the user — it stays broken and that is fine.** The wall sits beyond pit ①, and the pit only opens with the bull's water ⇒ **nobody reaches it without fire.** The lock is geometric |
 | 6 | The rune-receiving screen is on the cut side | **Open** — added to the table. Recorded as **break out only the minimum rune-receiving path** |
 | 7 | decisions' reopen condition | **Fixed** |
 | 8 | README ink | **Fixed** |

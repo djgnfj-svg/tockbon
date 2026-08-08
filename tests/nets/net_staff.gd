@@ -23,6 +23,9 @@ const Tuning := preload("res://src/sim/sim_tuning.gd")
 const Glyph := preload("res://src/sim/glyph_defs.gd")
 const Character := preload("res://src/actor/character.gd")
 const Staff := preload("res://src/actor/staff.gd")
+## Net 7b builds a circle and takes it back out — the assembly window's own path.
+const SpellCircle := preload("res://src/actor/spell_circle.gd")
+const CircleDefs := preload("res://src/sim/circle_defs.gd")
 ## Nets are **outside** the folder contract — they may look at `src/view/` (`net_layers.RULES` only sweeps `src/`).
 ##  The ring color (`staff_tint`) is a presentation constant so it lives there, and there is one check for it below.
 const Fx := preload("res://src/view/fx_tuning.gd")
@@ -184,6 +187,35 @@ func _staff_tint_carries_the_loadout(t) -> void:
 			"못 쏘면 목록(%d)과 무관하게 회색으로 죽는다" % g)
 	# The inversion — it blocks the path where writing it as "always grey" would pass the lines above.
 	t.ok(Fx.staff_tint(k4, elem, true) != Fx.DEAD_TINT, "쏠 수 있으면 회색이 아니다")
+
+	_ring_tint_never_barks_with_the_circle_removed(t)
+
+
+## Net 7b — **the ring colour survives the circle being taken out.**
+##
+## **The bark this exists for**: `element()` has meaning only with exactly one rune slot and **`push_error`s
+##  otherwise**, and the assembly window can write `CIRCLE_NONE`, which takes the slots to 0. The view asked
+##  it unconditionally ⇒ **539 barks in one play session while every net stayed green** — the call lived in
+##  `_draw`, which nothing can invoke.
+##
+## **What goes red when inverted**: put `circle.element()` back in unconditionally. **This function asserts
+##  nothing about the bark** — it does not need to. The bark reaches stderr and **the wrapper fails the run**,
+##  which is the whole reason the wrapper exists (CLAUDE.md: anything on stderr is a failure).
+## **So the assertions below are about the colour**; the silence is measured by the harness around them.
+func _ring_tint_never_barks_with_the_circle_removed(t) -> void:
+	var circle := SpellCircle.new()
+	t.ok(circle.can_fire(), "갓 만든 서클은 쏠 수 있다 (전제 — 기본 지급이 채워져 있다)")
+
+	# The assembly window's own path (`circle_window.gd` writes this value), not a state invented here.
+	circle.set_circle(CircleDefs.CIRCLE_NONE)
+	t.eq(circle.rune_count(), 0, "서클을 빼면 룬 자리가 0이 된다 (전제)")
+	t.ok(not circle.can_fire(), "서클이 없으면 못 쏜다 (전제)")
+	t.eq(Fx.staff_ring_tint(circle), Fx.DEAD_TINT, "서클을 빼도 지팡이 고리는 회색으로 죽는다")
+
+	# **And it still carries the loadout when there is one** — otherwise "always grey" passes the line above.
+	circle.set_circle(SpellCircle.DEFAULT_CIRCLE)
+	circle.set_rune(0, SpellCircle.DEFAULT_RUNE)
+	t.ok(Fx.staff_ring_tint(circle) != Fx.DEAD_TINT, "서클을 되돌리면 다시 색이 산다")
 
 
 # -- building the world --------------------------------------------

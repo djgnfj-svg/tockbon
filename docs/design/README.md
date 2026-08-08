@@ -46,7 +46,7 @@ For `partial`, **always attach what works and what doesn't, briefly.** "Partial"
 | [terrain-baking.md](terrain-baking.md) | **full** | pass (2026-08-06) | Drawn as an image, baked as text. The map is fixed |
 | [monsters.md](monsters.md) | **full** | partial pass (2026-08-08) | Farm animals that swallowed runes. Two trash mobs (pig · chicken) · brainless movement · 20 at once. **No AI** · outline unconfirmed |
 | [town.md](town.md) | **none** | unseen | Where a run closes. **One walkable room** · research bench · assembly bench · departure gate · all bedrock. **The only place a widened pool is visible** |
-| [game-feel.md](game-feel.md) | **partial** | **fail (2026-08-08)** | **A menu of every juice lever, with its cost.** **The user reports moving · the camera · jumping as unpleasant** — camera locked to the character, no coyote time, 20Hz grounding, 0.6s airtime. Only blast shake · flash · damage numbers exist. **No sound anywhere** |
+| [game-feel.md](game-feel.md) | **partial** | **fail (2026-08-08)** | **A menu of every juice lever, with its cost.** **The user reports moving · the camera · jumping as unpleasant.** **Coyote time and the jump buffer are now in** (unseen); **the camera is still locked to the character** and airtime is still 0.6s. **No sound anywhere** |
 | [background.md](background.md) | **partial** | unseen | The layer stands up — empty cells go transparent and `SkyBackground` stands behind. Currently **night sky + stars**, **no art, no parallax**. Not confirmed on screen |
 
 ## Features with no doc yet

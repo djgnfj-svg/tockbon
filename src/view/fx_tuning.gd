@@ -28,6 +28,9 @@ const Glyph := preload("res://src/sim/glyph_defs.gd")
 ## `src/view/` may reference `src/actor/` (`net_layers`) — `character_view.gd` already uses
 ##  `Character` that way. Here it is used only as the **key** for per-kind art paths (`MONSTER_SHEETS` below).
 const MonsterDefs := preload("res://src/actor/monster_defs.gd")
+## Same allowance as `MonsterDefs` above — used by `staff_ring_tint`, which reads a circle's own state so the
+##  decision can be driven by a net instead of living inside `_draw`.
+const SpellCircle := preload("res://src/actor/spell_circle.gd")
 
 # --- character ------------------------------------------------------
 ## **The body is one sheet, and state -> frame is the single table below.**
@@ -923,6 +926,23 @@ const SHAKE_SEC := 0.20
 ## The decay curve. 1 = linear · larger means **strong early and dying fast** (the impact is front-loaded).
 const SHAKE_DECAY_POW := 1.6
 
+# --- camera work ------------------------------------------------------
+## **How far the camera runs ahead in the direction you are moving, and how fast it comes back**
+##  (user request: "the camera goes a bit the way I move, and comes back when I stop").
+##
+## **Follows the viewport, not the tile** — it is a fraction of what is on screen (72px is 15% of the 480px
+##  half-width at zoom 1), so the sorting rule at the top of this file puts it in the third branch.
+## **Raise it far and aiming suffers**: the shot origin is the character, and the further the character sits
+##  from the screen centre the less of the far side you can see before firing. 72px was chosen as
+##  "visible, and it does not move the character out of the middle third".
+const CAM_LEAD_PX := 72.0
+
+## The fraction of the remaining distance **left after one second** — the same idiom as
+##  `character.gd`'s `RECOIL_DECAY_PER_SEC`, and for the same reason: raised to `dt` it is
+##  **frame-rate independent**, whereas a per-frame lerp constant silently changes the feel with the frame rate.
+## 0.02 = 98% of the way there in one second, so it reads as **"it drifts", not "it snaps"**.
+const CAM_LEAD_DECAY_PER_SEC := 0.02
+
 # --- fire -----------------------------------------------------------
 ## **Burning cells overwrite the material color.** Laid lightly over the wood color (0x6B4524) it looks like
 ##  "the wood is a bit brighter", and then "fire spreads" does not appear on screen —
@@ -1051,6 +1071,25 @@ static func _gen_row(gen: int) -> int:
 ##  => Being pure static, `net_staff` measures it by value.
 ## **`muzzle_radius` (layer count = size) was deleted.** The grounds for the size axis disappearing are in the
 ##  `STAFF_RING_*` section above.
+## **The staff ring's colour, decided from the circle itself.**
+##
+## **It lives here and not in `character_view._draw` for one reason: `_draw` is the one seat the nets cannot
+##  call** (CLAUDE.md — "only `_draw` truly resists, no live font"). The bug this was extracted after was
+##  exactly that: the view asked `element()` unconditionally, and **removing the circle in the assembly window**
+##  takes the rune slots to 0, which that function **barks** at. **539 `push_error`s in one play session, and
+##  3,509 green checks never saw it** — because the call sat inside `_draw`.
+## ⇒ Now a net can build a circle with no circle socketed and call this, and **the wrapper's stderr check is
+##  what fails** if the bark ever comes back. Nothing here needs to assert "it did not bark".
+##
+## **`element()` is asked only when it can fire.** On the other branch `staff_tint` returns `DEAD_TINT` without
+##  ever reading the element, so passing `RUNE_EMPTY` there changes no colour — it just stops asking a question
+##  the circle has said it cannot answer.
+static func staff_ring_tint(circle: SpellCircle) -> Color:
+	var can_fire := circle.can_fire()
+	return staff_tint(circle.packed_glyphs(),
+		circle.element() if can_fire else SpellCircle.RUNE_EMPTY, can_fire)
+
+
 static func staff_tint(glyphs: int, element: int, can_fire: bool) -> Color:
 	if not can_fire:
 		return DEAD_TINT

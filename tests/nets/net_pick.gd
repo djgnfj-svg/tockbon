@@ -1,6 +1,6 @@
 extends RefCounted
 ## `src/view/pick_layout.gd` — the three-pick window's coordinates
-## (`docs/plans/2.active/levelup-and-three-picks.md`, Stage D).
+## (`docs/plans/3.done/levelup-and-three-picks.md`, Stage D).
 ##
 ## **`circle_window.gd`'s own header pins the reason this file exists at all**: `_draw()` cannot be measured
 ## headless (it needs a live draw context; `get_theme_default_font()` returns null untreed), so judgment is

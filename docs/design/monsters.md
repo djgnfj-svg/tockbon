@@ -7,6 +7,11 @@ Stand · walk · die to bolts/blasts/fire · pig shoves with its body · chicken
 sprites · health bars · hit flash (shader) · damage numbers (they merge) · fire on the body · corpses · death burst · outline.
 **Not done**: **AI** (`_next_axis()` is one line — see "AI is deferred; the slot is left open") ·
 walk animation · per-species color.
+**The walk art now exists and the code still cannot play it** — `assets/monster/pig_walk.png` and
+`chicken_walk.png` (9 frames each, pixellab). `fx_tuning.MONSTER_SHEETS` holds **one image per kind** and
+`monster_view` fits that whole texture to the box, so handing it a 9-frame row draws the beast squashed.
+**Playing it means bringing the character's idiom over** (`CHAR_SHEET` + a state→frame table).
+⇒ "walk animation" above is now **a code gap, not an art gap.**
 
 **Accepted**: **partial pass (2026-08-08)** — **not seen by the user.** verify-look saw it in the editor.
 - Pass: spawns run end to end · they stand exactly on terrain · the three sizes separate ·

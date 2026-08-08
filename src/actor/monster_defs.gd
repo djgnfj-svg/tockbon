@@ -28,7 +28,7 @@ const MAX_MONSTERS := 20
 
 ## `xp`/`money` are **per-kind by nature, not "how it attacks"** — the header above excludes damage-taken and
 ##  fire-DPS columns because those read as "this value is live" (a false knob), but a pig being worth more
-##  than a hen is a plain fact about the kind (`docs/plans/2.active/levelup-and-three-picks.md`, Stage B).
+##  than a hen is a plain fact about the kind (`docs/plans/3.done/levelup-and-three-picks.md`, Stage B).
 ##  Provisional values from that plan's own table — knobs to turn once XP is on screen, not by the user yet.
 const DEFS: Dictionary = {
 	KIND_PIG: {

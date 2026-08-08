@@ -63,6 +63,12 @@ func run(t) -> void:
 	_fall_and_land(t)
 	_jump_height(t)
 	_short_press_jumps_lower(t)
+	# -- F. the two forgiveness windows (game-feel.md, the user's report) --
+	_coyote_jump_after_the_ground_is_gone(t)
+	_coyote_expires(t)
+	_coyote_is_spent_by_the_jump_it_paid_for(t)
+	_buffered_press_fires_on_landing(t)
+	_buffer_expires(t)
 	_ledge(t, 2, true)
 	_ledge(t, 3, false)
 	_broken_ground(t)
@@ -214,6 +220,133 @@ func _jump_peak(hold_frames: int) -> int:
 		ch.step(g, DT, 0.0, i == 0, i < hold_frames)
 		top = mini(top, ch.y)
 	return y0 - top
+
+
+#  F. coyote time and the jump buffer (`docs/design/game-feel.md`)
+#
+# **The window is measured in frames derived from the constant, never as a literal 6.** Write 6 here and the
+#  day `COYOTE_SEC` is tuned the check either goes red for no reason or silently stops covering the window.
+#
+# **Why the boundary frame itself is not pinned** (A-2 pins its boundary; this cannot). At exactly
+#  `COYOTE_SEC / DT` frames the remaining time is `0.1 - 6*(1/60)`, which in floats is **1.4e-17, not 0** —
+#  the branch there is decided by rounding, not by design. So the pair measured is **one frame inside** and
+#  **two frames past** the window, and the frame on the line is deliberately left unmeasured.
+const COYOTE_IN_FRAMES := int(Character.COYOTE_SEC / DT) - 1
+const COYOTE_OUT_FRAMES := int(Character.COYOTE_SEC / DT) + 2
+
+
+## Stands the character on the floor, then **erases the floor** — the same vessel idiom as A-3's vanishing water.
+## **Walking off a real ledge would measure the ledge too**; this isolates "the ground stopped being there".
+func _standing_then_cut_loose() -> Array:
+	var g := _floor_grid()
+	var ch := Character.new()
+	ch.place(160, REST_Y)
+	_walk(g, ch, 5, 0.0)
+	g.apply(CellGrid.cmd_fill(0, FLOOR_CY, CellGrid.W - 1, FLOOR_CY + FLOOR_DEPTH_CY - 1, Mat.EMPTY))
+	return [g, ch]
+
+
+## `vy` for a frame in which the jump fired, one frame of gravity already added — A-1's reasoning, and the
+## reason this file measures that sum rather than `JUMP_VY_PX` itself.
+func _fired_vy() -> float:
+	return Character.JUMP_VY_PX + Character.GRAVITY_PX * DT
+
+
+## **F-1 — pressed after the ground is gone, and it still jumps.**
+##
+## **What goes red when inverted**: drop `or _coyote_left > 0.0` from the jump condition — the character is
+##  airborne with no water, so it never jumps and just falls.
+func _coyote_jump_after_the_ground_is_gone(t) -> void:
+	var made := _standing_then_cut_loose()
+	var g: CellGrid = made[0]
+	var ch: Character = made[1]
+
+	for _i in COYOTE_IN_FRAMES:
+		ch.step(g, DT, 0.0, false, false)
+	t.ok(not ch.on_ground, "발판이 사라져 공중이다 (전제)")
+
+	ch.step(g, DT, 0.0, true, true)
+	t.eq(ch.vy, _fired_vy(),
+		"땅을 떠난 뒤 %d프레임까지는 점프가 살아 있다 (코요테, vy=%.1f)" % [COYOTE_IN_FRAMES, ch.vy])
+
+
+## **F-2 — and it does expire. The pair with F-1.**
+##
+## **What goes red when inverted**: refill `_coyote_left` every frame instead of only while grounded (or never
+##  age it) — then the window never closes and this jump fires too, which is **flying**, not coyote time.
+## **F-1 alone would pass with an infinite window**, which is exactly the shape A-2 was written to refuse.
+func _coyote_expires(t) -> void:
+	var made := _standing_then_cut_loose()
+	var g: CellGrid = made[0]
+	var ch: Character = made[1]
+
+	for _i in COYOTE_OUT_FRAMES:
+		ch.step(g, DT, 0.0, false, false)
+	var vy_before := ch.vy
+	ch.step(g, DT, 0.0, true, true)
+	t.eq(ch.vy, vy_before + Character.GRAVITY_PX * DT,
+		"%d프레임이 지나면 코요테가 닫힌다 (중력만 더해진 vy=%.1f)" % [COYOTE_OUT_FRAMES, ch.vy])
+
+
+## **F-3 — the jump it paid for spends it. This is the double-jump guard.**
+##
+## **What goes red when inverted**: delete `_coyote_left = 0.0` inside the jump branch. The frame you jump from
+##  the ground refilled the window to full, so a second press a few frames later **jumps again** — and a double
+##  jump is a town research unlock (GDD), not something a feel fix may hand out.
+## **This is the check that would have caught it silently**: on screen a double jump looks like a feature.
+func _coyote_is_spent_by_the_jump_it_paid_for(t) -> void:
+	var g := _floor_grid()
+	var ch := Character.new()
+	ch.place(160, REST_Y)
+	_walk(g, ch, 5, 0.0)
+
+	ch.step(g, DT, 0.0, true, true)
+	t.eq(ch.vy, _fired_vy(), "땅에서 한 번 뛴다 (전제)")
+
+	for _i in COYOTE_IN_FRAMES - 1:
+		ch.step(g, DT, 0.0, false, true)
+	var vy_before := ch.vy
+	ch.step(g, DT, 0.0, true, true)
+	t.eq(ch.vy, vy_before + Character.GRAVITY_PX * DT,
+		"뛴 직후 다시 눌러도 두 번은 안 뛴다 (중력만 더해진 vy=%.1f)" % ch.vy)
+
+
+## The apex reached **after first touching the ground**, when the only press happens `press_at` frames in.
+## **Measuring the apex, not `vy`** — a buffered jump fires on the landing frame, and reading `vy` there means
+##  guessing which frame that is. The height is the same answer with no frame counting.
+func _buffer_peak(press_at: int) -> int:
+	var g := _floor_grid()
+	var ch := Character.new()
+	# **Dropped from a height, so it is never grounded before the press** — that keeps the coyote window empty
+	#  and makes this a measurement of the buffer alone. 100px is 17 frames of falling.
+	ch.place(160, REST_Y - 100)
+	var landed := false
+	var top := REST_Y
+	for i in 60:
+		ch.step(g, DT, 0.0, i == press_at, i >= press_at)
+		if ch.on_ground:
+			landed = true
+		if landed:
+			top = mini(top, ch.y)
+	return REST_Y - top
+
+
+## **F-4 — pressed just before landing, and it fires on the landing frame.**
+##
+## **What goes red when inverted**: judge the raw `jump` argument instead of `_jump_buffer_left` — the press
+##  happened in the air with nothing to jump from, so it is eaten and the character just lands (peak 0).
+func _buffered_press_fires_on_landing(t) -> void:
+	var peak := _buffer_peak(14)   # 17 frames of falling, so this is 3 frames before touching down
+	t.ok(peak > 50, "착지 3프레임 전에 누른 점프가 착지 순간 발사된다 (%dpx 떴다)" % peak)
+
+
+## **F-5 — and the buffer expires too. The pair with F-4.**
+##
+## **What goes red when inverted**: never age `_jump_buffer_left` — a press from the very start of the fall
+##  survives 17 frames and still jumps, which means **any press ever made** is queued forever.
+func _buffer_expires(t) -> void:
+	var peak := _buffer_peak(0)    # 17 frames before landing — far outside the window
+	t.eq(peak, 0, "너무 일찍 누른 점프는 착지해도 안 나간다 (%dpx)" % peak)
 
 
 func _ledge_grid(cells: int) -> CellGrid:

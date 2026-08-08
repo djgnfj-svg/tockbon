@@ -255,6 +255,65 @@ func _camera_always_shows_my_surroundings(t) -> void:
 	t.eq(Stage.camera_center(Vector2.ZERO, view, tiny), tiny * 0.5,
 		"세상이 화면보다 좁으면 세상 한가운데에 둔다 (한쪽 끝에 안 붙는다)")
 
+	_camera_lead(t)
+
+
+## **Camera work — it runs ahead the way you move and comes back when you stop** (user request).
+## `Stage.camera_lead` is static and pure, so the curve is measured directly — no scene, no camera.
+func _camera_lead(t) -> void:
+	var dt := 1.0 / 60.0
+
+	# **Both directions, and the target is the constant.**
+	var right := 0.0
+	var left := 0.0
+	for _i in 120:
+		right = Stage.camera_lead(right, 1.0, dt)
+		left = Stage.camera_lead(left, -1.0, dt)
+	t.ok(absf(right - Fx.CAM_LEAD_PX) < 1.0,
+		"오른쪽으로 움직이면 카메라가 %dpx 앞을 본다 (%.1f)" % [int(Fx.CAM_LEAD_PX), right])
+	t.ok(absf(left + Fx.CAM_LEAD_PX) < 1.0,
+		"왼쪽도 같은 만큼 대칭으로 앞을 본다 (%.1f)" % left)
+
+	# **A partial axis leads the full distance — `signf`, not the raw axis.**
+	#  **This is the only check that bites dropping `signf`**: with ±1 keyboard input the two are identical,
+	#  so measuring the two directions above proves nothing about it. **Written the raw way, a gamepad held
+	#  halfway leads half as far**, and the camera then breathes in and out with the stick — the thing the
+	#  user asked for is "it goes and it comes back", once, not continuously.
+	var partial := 0.0
+	for _i in 120:
+		partial = Stage.camera_lead(partial, 0.4, dt)
+	t.ok(absf(partial - Fx.CAM_LEAD_PX) < 1.0,
+		"살짝만 기울여도 앞을 보는 거리는 같다 (축 0.4 → %.1f)" % partial)
+
+	# **It comes back. This is the half the user actually asked for** — leading out is useless if it stays out.
+	var home := right
+	for _i in 120:
+		home = Stage.camera_lead(home, 0.0, dt)
+	t.ok(absf(home) < 1.0, "손을 떼면 제자리로 돌아온다 (%.1f)" % home)
+
+	# **It never overshoots.** An easing written as a spring would pass everything above and still sail past
+	#  the target and swing back — on screen that is a camera that wobbles after every stop.
+	var march := 0.0
+	var worst := 0.0
+	for _i in 120:
+		march = Stage.camera_lead(march, 1.0, dt)
+		worst = maxf(worst, march)
+	t.ok(worst <= Fx.CAM_LEAD_PX,
+		"목표를 넘어갔다 되돌아오지 않는다 (최대 %.1f ≤ %d)" % [worst, int(Fx.CAM_LEAD_PX)])
+
+	# **Frame-rate independence — the one thing a per-frame lerp constant gets wrong and nobody sees.**
+	#  One second of 60fps and one second of 30fps must land in the same place. Written as
+	#  `lead += (target - lead) * 0.1` these differ by tens of px, and **the machine it was tuned on is the
+	#  only one where it feels right.**
+	var at60 := 0.0
+	for _i in 60:
+		at60 = Stage.camera_lead(at60, 1.0, 1.0 / 60.0)
+	var at30 := 0.0
+	for _i in 30:
+		at30 = Stage.camera_lead(at30, 1.0, 1.0 / 30.0)
+	t.ok(absf(at60 - at30) < 0.5,
+		"60fps와 30fps에서 1초 뒤 위치가 같다 (%.2f vs %.2f)" % [at60, at30])
+
 
 ## Paints one 4-neighbour connected component. It is a stack, not recursion — GDScript recursion hits the
 ## depth limit on a 656-cell lump.

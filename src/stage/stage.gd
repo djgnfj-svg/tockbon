@@ -182,6 +182,10 @@ const LOADOUTS: Dictionary = {
 ## The viewport -> world coordinate conversion **must** undo the canvas transform (`stage_input._to_world`).
 ##  **That now applies to following, not just shake** — without undoing it, aim drifts by however far the camera moved.
 @onready var _camera: Camera2D = $Camera2D
+## **How far the camera is currently led ahead, in world px** (`camera_lead` below · `Fx.CAM_LEAD_*`).
+## It is state, so it cannot live in the static function — **the function stays pure and the net measures it
+##  directly**, the same split `camera_center` already uses.
+var _cam_lead := 0.0
 ## The assembly window sits under `HUD` (a `CanvasLayer`) — put it under `Node2D` and it shakes along with the screen shake.
 ##  **The shell only tells it to open and close.** The window knows its own state and uses its own coordinates.
 @onready var _circle_window: CircleWindow = $HUD/CircleWindow
@@ -575,8 +579,15 @@ func _on_ticked() -> void:
 ##  projectile teleports 40px per tick.
 ##  **The point is that a second clock is not created.** `_world` already holds the divider and here it is
 ##   **only read** (`phase()`). The moment a view accumulates its own `delta` there are two clocks.
-func _process(_dt: float) -> void:
+func _process(dt: float) -> void:
 	_spell_view.set_render_alpha(float(_world.phase()) / float(Tuning.TICK_DIVIDER))
+	# **Camera work — it runs ahead the way you move and comes back when you stop** (user request).
+	#  **It rides on `position`, folded into the focus, not on `offset`** — `offset` is the shake's axis and
+	#   the two would overwrite each other. And going through the focus means **the clamp still applies**:
+	#   led toward the stage edge, the camera still refuses to show the void outside the map.
+	# **The input axis, not `_char.facing`** — facing survives after you let go, so the camera would stay led
+	#  out while standing still, which is the opposite of what was asked for.
+	_cam_lead = camera_lead(_cam_lead, _input.move_axis(), dt)
 	# **Following is `position`, shake is `offset`.** Put both on one axis and the next frame's following
 	#  overwrites the shake, and **the shake quietly disappears.**
 	# The visible size is read from `get_viewport_rect()` — read `ProjectSettings` here as well and the day
@@ -586,7 +597,8 @@ func _process(_dt: float) -> void:
 	#  stops at the old margin and **half the screen fills with the void outside the map**, with no error.
 	var z: float = ZOOM_STEPS[_zoom_step]
 	_camera.zoom = Vector2(z, z)
-	_camera.position = camera_center(_char.center(), get_viewport_rect().size / z, world_size())
+	_camera.position = camera_center(
+		_char.center() + Vector2(_cam_lead, 0.0), get_viewport_rect().size / z, world_size())
 	# Shake is **the camera's offset**. `stage_input._to_world` undoes the canvas transform, so aim does not
 	#  drift even while shaking — without undoing it, a click goes to the wrong cell with no error.
 	# The order of this node's `_process` and `blast_fx`'s `_process` is not guaranteed, so it **can be one
@@ -640,6 +652,23 @@ static func world_size() -> Vector2:
 ##  `clampf` and it silently sticks to one end. In that case putting it at **the world's center** is right.
 ##  The world today (2048x1152) is bigger than the screen (960x540), so this branch does not run, and
 ##   **being a branch that does not run, nobody barks when it is wrong** — the nets measure that branch separately.
+## **The camera runs ahead the way you move, and comes back when you stop** (user request).
+##  Returns the new lead in world px, given the current one and this frame's input axis.
+##
+## **`pow(rate, dt)` and not a fixed per-frame fraction.** Written as `lead += (target - lead) * 0.1`, the
+##  same code gives **a different feel at a different frame rate** — and the one machine where that shows up
+##  is not the one it was tuned on. `character.gd`'s `RECOIL_DECAY_PER_SEC` is the same shape for the same reason.
+##
+## **Standing still is not a special case.** Axis 0 makes the target 0, so returning home runs through the
+##  identical line as leading out — one path, so the two cannot drift apart in feel.
+##
+## **Static and pure, like `camera_center`** — a lead can be fed in and the next one taken back with no scene,
+##  no camera and no character, so the nets measure the curve itself rather than a screenshot of it.
+static func camera_lead(lead: float, axis: float, dt: float) -> float:
+	var target := Fx.CAM_LEAD_PX * signf(axis)
+	return lead + (target - lead) * (1.0 - pow(Fx.CAM_LEAD_DECAY_PER_SEC, dt))
+
+
 static func camera_center(focus: Vector2, view: Vector2, world: Vector2) -> Vector2:
 	return Vector2(_axis_center(focus.x, view.x, world.x), _axis_center(focus.y, view.y, world.y))
 

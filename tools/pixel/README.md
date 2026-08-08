@@ -27,6 +27,31 @@ $py = "C:\Users\djgnf\Desktop\window_project\CompyUI_2DPixel\ComfyUI_windows_por
 
 One `_sheet.png` comes out; pick from it and move the choice to `assets/`.
 
+**`monster` preset output cannot be moved as-is** — it carries a chroma-green ground. Cut it first:
+
+```powershell
+& $py tools\pixel\cutbg.py tools\pixel\out\boss_bull\boss_bull_05_seed1882469963_96px.png assets\monster\bull_body.png
+```
+
+**Why a script and not "erase the background color"**: downscaling blends the edge into the ground, so an
+exact-color match leaves a **green fringe**, and on the stage's `#0E0E13` that fringe is the brightest thing
+on screen. `cutbg.py` cuts by "green dominates" and then pulls the cast out of the surviving edge pixels.
+
+## Animation — **this is the one thing local cannot do**
+
+The original pipeline's walk LoRA is **for human characters**, so an animal walk cycle has no local path.
+The bosses' walks were made with **pixellab `animate_image`** (1 generation each, ~2 minutes) from the
+standing frame, and the returned frames go through `anim_sheet.py` into one horizontal sheet plus a
+GIF to judge the motion by:
+
+```powershell
+& $py tools\pixel\anim_sheet.py tools\pixel\out\anim_bull assets\monster\bull_walk.png
+```
+
+**The input must be quantized to 16-32 colors first.** Past roughly 3,000 base64 characters the MCP client
+**silently truncates the argument** and the call comes back "could not decode image" — a 88×54 RGBA png is
+already twice that. A palette png with a transparent index gets under it; RGBA never does.
+
 ## Presets — the place that stops the style from splitting
 
 One entry in `gen.py`'s `PRESETS` holds the style phrasing, the LoRA strength and the size together.

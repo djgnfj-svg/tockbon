@@ -224,9 +224,12 @@ func _draw() -> void:
 	# It is **re-read every frame** — the point is that there is no separate moment when the assembly changes.
 	# **The "cannot fire" branch is inside `staff_tint`.** Split it here and that branch drops to a seat
 	#  the nets cannot call, and then acceptance 5 is left to the eye only.
+	# **The colour decision is not made here.** It used to be, and it asked `element()` unconditionally —
+	#  remove the circle in the assembly window and that **barks on every redraw** (539 in one session), with
+	#  every net green, because **nothing can call `_draw`.** `Fx.staff_ring_tint`'s header has the story.
+	#  ⇒ **Do not unfold it back into this line.** What comes back with it is the blind spot, not the bug.
 	draw_circle(tip - dir * Fx.STAFF_RING_INSET_PX, Fx.STAFF_RING_R_PX,
-		Fx.staff_tint(_circle.packed_glyphs(), _circle.element(), _circle.can_fire()),
-		false, Fx.STAFF_RING_PX)
+		Fx.staff_ring_tint(_circle), false, Fx.STAFF_RING_PX)
 
 
 ## **The rod and the ring are drawn separately. Do not x-scale the whole thing.**
