@@ -174,7 +174,11 @@ while ($queue.Count -gt 0 -or $running.Count -gt 0) {
         $n = $queue.Dequeue()
         $o = Join-Path $tmp "tockbon_net_${n}_out_$PID.txt"
         $e = Join-Path $tmp "tockbon_net_${n}_err_$PID.txt"
-        $a = @("--headless", "--path", $root, "--script", "res://tests/run_nets.gd", "--", $n)
+        # 🔴🔴 **`^`로 정확히 이 그물 하나에만 묶는다** (2026-08-08, harness-manager 실측).
+        #  부분 일치(`$n`을 그냥 넘기면)로는 이름이 서로를 포함하는 그물(`net_water` ⊂
+        #  `net_water_rain`, `net_sprite` ⊂ `net_monster_sprite`)에서 한 프로세스가 여러 그물을
+        #  몰래 같이 돌린다 — 격리가 깨지고 병렬화가 시간을 못 줄인다(`run_nets.gd` 쪽 주석 참조).
+        $a = @("--headless", "--path", $root, "--script", "res://tests/run_nets.gd", "--", "^$n")
         $p = Start-Process -FilePath $godot.FullName -ArgumentList $a -NoNewWindow -PassThru `
             -RedirectStandardOutput $o -RedirectStandardError $e
         # 🔴🔴 **핸들을 한 번 읽어 둬야 종료 뒤에 `ExitCode` 가 남는다.**

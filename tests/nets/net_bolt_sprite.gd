@@ -23,6 +23,8 @@ func run(t) -> void:
 		_sheet_is_square_and_not_blank(t, elem)
 	_head_diameter_follows_the_generation_table(t)
 	_glow_no_longer_washes_out_the_sprite(t)
+	_core_sits_at_the_center(t)
+	_runes_are_told_apart_by_color(t)
 
 
 ## 🔴🔴 **표의 키가 `ELEM_ALL` 을 덮나 — 안 덮이면 그 룬의 탄이 화면에서 마젠타가 된다.**
@@ -126,3 +128,87 @@ func _glow_no_longer_washes_out_the_sprite(t) -> void:
 		"무리 알파가 원 시절 값(0.45)에서 크게 내려왔다 (%.2f)" % Fx.BOLT_GLOW_A)
 	t.ok(Fx.BOLT_GLOW_A > 0.0,
 		"그래도 0은 아니다 — 세대1(8px)이 검은 배경에 묻히지 않게 받쳐 준다")
+
+
+## 🔴🔴 **판정 2 — 머리가 실제 위치와 어긋나나. 값으로 잴 수 있는 절반.**
+##
+## `spell_view._draw_head` 는 그림을 **머리 좌표 중심의 정사각형**에 그린다 ⇒ **그림 안에서
+## 코어가 치우쳐 있으면 그만큼 어긋난다.** 시뮬은 맞는데 눈에는 틀린, 에러가 안 나는 종류다.
+## 🔴 `tools/pixel/crop_head.py` 가 **밝기² 무게중심으로 코어를 중앙에** 맞춰 자르는 이유가 이것이고,
+##  **그 도구가 실제로 일했는지를 아무도 안 재고 있었다.**
+##
+## ⚠ **1px 을 요구하지 않는다** — 자르기가 정수 픽셀이라 반 픽셀은 원리적으로 남는다.
+##  실측(2026-08-08): 불 **1.49px** · 무 0.59 · 물 0.89. 폭의 15%(16px 에서 2.4px)를 선으로 둔다.
+## 🔴 **왜 15%인가**: 세대1은 그림이 절반(8px)이라 같은 비율이 **0.75px** 이 된다 — 이 선을 넘으면
+##  세대1에서 「탄이 진행 방향에서 한 칸 밀려 보인다」가 시작될 수 있다.
+func _core_sits_at_the_center(t) -> void:
+	for elem: int in Tuning.ELEM_ALL:
+		if not Fx.BOLT_SHEETS.has(elem):
+			continue
+		var img := Image.load_from_file(
+			ProjectSettings.globalize_path(Fx.BOLT_SHEETS[elem]))
+		if img == null:
+			continue
+		var w := img.get_width()
+		var h := img.get_height()
+		var sw := 0.0
+		var sx := 0.0
+		var sy := 0.0
+		for y in h:
+			for x in w:
+				var c := img.get_pixel(x, y)
+				# 🔴 밝기의 **제곱**이다 — `crop_head.py` 와 같은 무게라야 같은 것을 잰다.
+				#  선형으로 재면 어두운 가장자리가 무게를 나눠 가져 중심이 안쪽으로 끌린다.
+				var v: float = maxf(c.r, maxf(c.g, c.b))
+				var wgt := v * v
+				sw += wgt
+				sx += wgt * (float(x) + 0.5)
+				sy += wgt * (float(y) + 0.5)
+		if sw <= 0.0:
+			continue      # 위 「비어 있지 않나」가 이미 빨갛다
+		var off := Vector2(sx / sw - w * 0.5, sy / sw - h * 0.5)
+		t.ok(absf(off.x) < w * 0.15 and absf(off.y) < h * 0.15,
+			"룬 %d 의 코어가 중앙에 있다 (%+.2f, %+.2f)px — 그림 폭의 15%% 안" % [elem, off.x, off.y])
+
+
+## 🔴🔴 **판정 4 — 룬이 화면에서 갈리나. 색으로 잴 수 있는 절반.**
+##
+## ⚠ **「보이나」가 아니라 「색이 다른가」다.** 눈이 갈라 보는지는 여전히 사람의 몫이고,
+##  여기서 막는 것은 **「두 룬의 그림이 사실상 같은 색이 되는 것」**뿐이다 —
+##  룬을 늘리다 보면 조용히 일어나고, 그때 플레이어는 **무슨 마법을 쐈는지 화면에서 못 읽는다.**
+##
+## 🔴 **배경을 평균에서 뺀다.** 가산 합성이라 **검정 = 투명**이고, 넣으면 셋 다 회색으로 수렴해
+##  「거리가 0에 가깝다」가 나온다 — 라벨은 「색이 같다」인데 실제로 잰 것은 「배경이 같다」다.
+##
+## 실측(2026-08-08): 불(채도 0.92 주황) · 무(**채도 0.03 무채색**) · 물(채도 0.92 하늘).
+##  거리는 0.64~1.29 다. 0.3 을 선으로 둔다.
+## 🔴 **무의 채도 0.03 이 계획이 경고한 그 자리다** — 「못 쏜다」의 회색과 색축이 겹친다.
+##  ⚠ **이 검사는 그 문제를 못 잡는다.** 룬끼리는 갈리기 때문이다. 사연은 `진-룬-문양.md`.
+func _runes_are_told_apart_by_color(t) -> void:
+	var means := {}
+	for elem: int in Tuning.ELEM_ALL:
+		if not Fx.BOLT_SHEETS.has(elem):
+			continue
+		var img := Image.load_from_file(
+			ProjectSettings.globalize_path(Fx.BOLT_SHEETS[elem]))
+		if img == null:
+			continue
+		var sum := Vector3.ZERO
+		var n := 0
+		for y in img.get_height():
+			for x in img.get_width():
+				var c := img.get_pixel(x, y)
+				if maxf(c.r, maxf(c.g, c.b)) < 0.1:
+					continue
+				sum += Vector3(c.r, c.g, c.b)
+				n += 1
+		if n > 0:
+			means[elem] = sum / float(n)
+	t.ok(means.size() >= 2, "색을 맞댈 룬이 둘 이상이다 (검사의 전제)")
+	var keys: Array = means.keys()
+	for i in keys.size():
+		for j in range(i + 1, keys.size()):
+			var a: Vector3 = means[keys[i]]
+			var b: Vector3 = means[keys[j]]
+			t.ok((a - b).length() > 0.3,
+				"룬 %d 와 %d 가 색으로 갈린다 (거리 %.2f)" % [keys[i], keys[j], (a - b).length()])

@@ -12,6 +12,10 @@ const CellGrid := preload("res://src/sim/cell_grid.gd")
 const Mat := preload("res://src/sim/cell_materials.gd")
 const Tuning := preload("res://src/sim/sim_tuning.gd")
 const Character := preload("res://src/actor/character.gd")
+## 🔴 C-시리즈(물살)가 힘 함수(`water_flow`)를 캐릭터 없이 직접 잰다 — `standing_in_fire`처럼
+##  `Body`는 자기 상수를 안 들어서 `Body.new(w, h, step)`으로 세워야 한다(이 파일 헤더 참조 없음,
+##  `body.gd` 헤더가 그 이유를 든다).
+const Body := preload("res://src/actor/body.gd")
 
 const DT := 1.0 / 60.0
 const FLOOR_CY := 100      # 바닥 윗면 셀
@@ -59,6 +63,20 @@ func run(t) -> void:
 	_broken_ground(t)
 	_wall(t)
 	_airborne_never_climbs(t)
+	# ── A. 물속 무한 점프 (water-jump-and-escape.md 단계 1) ──
+	_submerged_jump_fires_repeatedly(t)
+	_submerged_jump_boundary(t)
+	_leaving_water_blocks_the_very_next_frame(t)
+	_submerged_jump_includes_the_foot_row(t)
+	# ── C. 물살이 캐릭터를 민다 (water-jump-and-escape.md 단계 4) ──
+	_water_push_zero_when_symmetric(t)
+	_water_push_sign_both_ways(t)
+	_water_push_scales_with_diff(t)
+	_water_push_zero_at_equilibrium(t)
+	_water_push_pair_moves_and_stops(t)
+	_water_push_does_not_move_water(t)
+	_water_push_ignores_fire(t)
+	_water_push_stops_the_frame_water_leaves(t)
 
 
 func _floor_grid() -> CellGrid:
@@ -284,3 +302,418 @@ func _airborne_never_climbs(t) -> void:
 	# 착지한 뒤에는 같은 턱을 올라선다 — 가드가 「영영 못 오른다」가 아니라 「공중에서만 안 된다」임을 잰다.
 	_walk(g, ch, 90, 1.0)
 	t.eq(ch.y, ledge_top_y, "착지한 뒤에는 같은 턱을 올라선다")
+
+
+# ══════════════════════════════════════════════════════════════════
+#  A. 물속 무한 점프 (`docs/plans/2.active/water-jump-and-escape.md` 단계 1)
+# ══════════════════════════════════════════════════════════════════
+#
+# ⚠ `net_water`가 아니다 — 재는 것이 **캐릭터의 거동**이지 물의 거동이 아니다(계획).
+# 🔴 **바닥을 새로 안 깐다** — 이 아래 그릇들은 **바닥이 없는** 빈 격자 + 물기둥뿐이다.
+#  `_floor_grid()`(위, 32셀 깊이의 STONE)을 재사용하지 않는 이유는 정확히 반대다: A-시리즈는
+#  `on_ground`가 **시종 거짓**이어야 「물만으로 점프가 먹는다」가 값으로 잡힌다 — 바닥이 있으면
+#  캐릭터가 착지해서 `on_ground`가 껴들고, 그러면 이 검사들이 무엇을 재는지 갈리지 않는다.
+
+## `set_water`는 `cmd_fill`을 못 지난다(`net_water._cmd_fill_refuses_water`와 같은 이유) —
+## 칸마다 부른다. 상자가 작아서(아래 상수) 비용은 무시할 만하다.
+func _water_box(g: CellGrid, x0: int, x1: int, y0: int, y1: int, amount: int) -> void:
+	for y in range(y0, y1 + 1):
+		for x in range(x0, x1 + 1):
+			g.set_water(x, y, amount)
+
+
+## A-시리즈가 공유하는 물기둥의 자리(셀). 폭은 캐릭터 상자(5칸) + 발밑 한 줄 여유,
+## 높이는 점프 도달(102px = 25.5셀)보다 훨씬 넉넉하다 — 3연속 점프가 위아래 어느 쪽 가장자리도
+## 안 벗어난다.
+const WATER_CX0 := 300
+const WATER_CX1 := 314
+const WATER_CY0 := 150
+const WATER_CY1 := 230
+const WATER_START_Y := (WATER_CY0 + 20) * Tuning.CELL_PX
+
+
+## 바닥 없는 그릇 + 그 물기둥 한가운데에 놓인 캐릭터. `amount`가 곧 물의 깊이다 —
+## A-2(경계 짝)가 이 인자로 32와 33을 갈라 잰다.
+func _submerged(amount: int) -> Array:
+	var g := CellGrid.new()
+	_water_box(g, WATER_CX0, WATER_CX1, WATER_CY0, WATER_CY1, amount)
+	var ch := Character.new()
+	ch.place(WATER_CX0 * Tuning.CELL_PX, WATER_START_Y)
+	return [g, ch]
+
+
+## 🔴🔴 **A-1 — 깊은 물에서 공중 점프가 먹는다. 연속 3번.**
+##
+## ⚠ **뒤집으면 빨개지는 것**: 점프 조건을 `on_ground` 만으로 되돌리면 — 이 그릇엔 바닥이
+##  없어 `on_ground`가 시종 거짓이므로 **한 번도 못 뛰고 그대로 떨어진다.**
+##
+## 🔴 **「vy == JUMP_VY_PX」를 문자 그대로는 안 잰다 — 계획의 표현과 다르게 짰다.**
+##  `character.step()`은 점프를 대입한 **그 프레임 안에서 곧바로 중력을 더한다**
+##  (`_body.apply_gravity`: `vy = minf(vy + GRAVITY_PX*dt, ...)`, 점프 대입 바로 다음 줄).
+##  이건 지면 점프도 똑같이 겪는 것이라 물이 만든 문제가 아니다 — 그래서 매 점프 직후의 `vy`는
+##  정확히 `JUMP_VY_PX + GRAVITY_PX*DT`(한 프레임의 중력)다. **그 결정론적인 값**으로
+##  「점프가 실제로 발사됐다」를 잰다. `net_character`의 다른 검사들도 `vy`를 직접 안 재고
+##  `y`로 재는 것과 같은 이유다.
+func _submerged_jump_fires_repeatedly(t) -> void:
+	var made := _submerged(Tuning.WATER_MAX)
+	var g: CellGrid = made[0]
+	var ch: Character = made[1]
+
+	ch.step(g, DT, 0.0, false, false)
+	t.ok(not ch.on_ground, "물기둥엔 바닥이 없어 시작이 공중이다 (전제)")
+
+	var expected := Character.JUMP_VY_PX + Character.GRAVITY_PX * DT
+	for i in 3:
+		ch.step(g, DT, 0.0, true, true)
+		t.eq(ch.vy, expected, "%d번째 공중 점프가 물속에서 발사된다 (vy=%.1f)" % [i + 1, ch.vy])
+
+
+## 🔴🔴 **A-2 — 경계 짝. 32(임계 그대로, 얕음)에서는 안 먹고 33(한 톨 더 깊다)에서는 먹는다.**
+##
+## ⚠ **뒤집으면 빨개지는 것**: `>` ↔ `>=`를 바꾸면 둘 중 하나가 반대로 나온다.
+## 🔴 **0에서만 재면 임계를 200으로 바꿔도 통과한다**(계획이 짚은 함정 — 「값이 우연히 맞는다」).
+##  그래서 임계값의 바로 위·아래를 **같이** 잰다.
+func _submerged_jump_boundary(t) -> void:
+	var expected := Character.JUMP_VY_PX + Character.GRAVITY_PX * DT
+
+	var shallow := _submerged(Tuning.WATER_WET)
+	var g0: CellGrid = shallow[0]
+	var ch0: Character = shallow[1]
+	ch0.step(g0, DT, 0.0, false, false)
+	ch0.step(g0, DT, 0.0, true, true)
+	t.ok(ch0.vy != expected,
+		"물 %d(임계, 얕음)에서는 공중 점프가 안 먹는다 (vy=%.1f)" % [Tuning.WATER_WET, ch0.vy])
+
+	var deep := _submerged(Tuning.WATER_WET + 1)
+	var g1: CellGrid = deep[0]
+	var ch1: Character = deep[1]
+	ch1.step(g1, DT, 0.0, false, false)
+	ch1.step(g1, DT, 0.0, true, true)
+	t.eq(ch1.vy, expected,
+		"물 %d(한 톨 더 깊다)에서는 공중 점프가 먹는다 (vy=%.1f)" % [Tuning.WATER_WET + 1, ch1.vy])
+
+
+## 🔴🔴 **A-3 — 물 밖으로 나오면 그 프레임에 막힌다.**
+##
+## ⚠ **뒤집으면 빨개지는 것**: `in_water`를 `on_tick()`에서만 갱신하거나 한 번만 캐시하면 —
+##  물을 지운 바로 다음 프레임에도 점프가 먹는다(최대 `TICK_DIVIDER`(3)프레임 낡은 답으로 판정한다).
+##  🔴 **이게 「프레임마다 읽나」를 값으로 잡는 자리다.** 한 프레임 안에서만 갈리므로
+##  **눈으로는 절대 못 본다** — 그물만 잡는다(계획).
+func _leaving_water_blocks_the_very_next_frame(t) -> void:
+	var made := _submerged(Tuning.WATER_MAX)
+	var g: CellGrid = made[0]
+	var ch: Character = made[1]
+
+	ch.step(g, DT, 0.0, false, false)
+	var expected := Character.JUMP_VY_PX + Character.GRAVITY_PX * DT
+	ch.step(g, DT, 0.0, true, true)
+	t.eq(ch.vy, expected, "물속에서 점프가 먹는다 (전제)")
+
+	# 물을 통째로 지운다 — 캐릭터가 있는 상자 + 발밑 한 줄이 전부 사라진다.
+	_water_box(g, WATER_CX0, WATER_CX1, WATER_CY0, WATER_CY1, 0)
+	t.ok(not ch.on_ground, "여전히 공중이다 (전제 — 바닥이 없어서 물이 없어도 안 선다)")
+
+	# 🔴 물이 사라진 바로 다음 프레임이다. 점프를 다시 누르지만 이제는 안 먹어야 한다 —
+	#  그러면 이번 프레임의 `vy`는 중력만 더한 값이지 `JUMP_VY_PX`로 되돌아간 값이 아니다.
+	var vy_before := ch.vy
+	ch.step(g, DT, 0.0, true, true)
+	t.eq(ch.vy, vy_before + Character.GRAVITY_PX * DT,
+		"물 밖으로 나온 바로 다음 프레임에 점프가 안 먹는다 (중력만 더해진 vy=%.1f)" % ch.vy)
+
+
+## 🔴🔴 **A-4 — 범위가 발밑 한 줄을 포함한다.**
+##
+## ⚠ **뒤집으면 빨개지는 것**: `standing_in_water`의 `cy1`을 `+1` 없이(`(x+h_px-1)`로) 계산하면
+##  상자 안이 완전히 비어 있으므로 점프가 안 먹는다.
+## 🔴 **`standing_in_fire`와 답이 같은지로 짜지 않는다** — 둘을 한 헬퍼로 접으면
+##  `scan == scan`인 항진명제가 된다(CLAUDE.md 「맞대기는 갈라짐만 잡고 사라짐을 못 잡는다」).
+##  대신 **셀 배치를 직접 만들고 절대 답을 단언한다**: 상자 안은 그대로 EMPTY로 두고
+##  발밑 한 줄에만 깊은 물을 놓는다.
+## 🔴🔴 **확인 스텝을 안 둔다 — 이게 이 검사의 핵심이다.**
+## `standing_in_water`는 `step()` **맨 앞**(중력이 캐릭터를 움직이기 전)에서 읽힌다.
+## ⚠ **처음엔 확인용 `step()`을 먼저 한 번 불렀었고, 그게 가짜 그물이었다** — verify-read가
+##  `body.gd`의 `+h_px` 를 `+h_px-1`(발밑 줄 삭제)로 바꿔도 38/38 초록인 것을 값으로 잡았다:
+##  확인 스텝의 중력이 캐릭터를 1px 떨어뜨려(`py=800→801`) **상자 자기 밑변이 발밑 행(208)과
+##  겹쳐 버렸다** — 발밑 줄이 없어도 물이 이미 상자 안이라 통과한 것이다.
+##  ⇒ **점프를 시도하는 그 `step()` 을 처음이자 유일한 호출로 만든다** — 그러면 `in_water`가
+##  `place()`가 놓은 자리 그대로(중력이 한 톨도 안 움직인 채로) 읽힌다.
+func _submerged_jump_includes_the_foot_row(t) -> void:
+	var g := CellGrid.new()
+	var ch := Character.new()
+	var px := 400 * Tuning.CELL_PX
+	var py := 200 * Tuning.CELL_PX
+	ch.place(px, py)
+
+	var cx0 := floori(px / float(Tuning.CELL_PX))
+	var cx1 := floori((px + Character.W_PX - 1) / float(Tuning.CELL_PX))
+	var cy1 := floori((py + Character.H_PX) / float(Tuning.CELL_PX))
+	# 🔴 **상자의 마지막 줄(cy1-1)이 비어 있다는 것을 값으로 먼저 잰다** — 안 재면 물이 실은
+	#  상자 안에 있는데 「발밑 줄만 있다」고 우연히 믿는 것과 못 가른다.
+	t.eq(g.mat_at(cx0, cy1 - 1), Mat.EMPTY, "상자의 마지막 줄엔 물이 없다 (전제)")
+	# 상자가 덮는 줄(cy0..cy1-1)은 그대로 EMPTY다 — 발밑 한 줄(cy1)에만 깊은 물을 놓는다.
+	for x in range(cx0, cx1 + 1):
+		g.set_water(x, cy1, Tuning.WATER_MAX)
+
+	var expected := Character.JUMP_VY_PX + Character.GRAVITY_PX * DT
+	ch.step(g, DT, 0.0, true, true)
+	t.ok(not ch.on_ground, "공중이다 (전제 — 바닥이 없다)")
+	t.eq(ch.vy, expected,
+		"발밑 한 줄에만 깊은 물이 있어도 점프가 먹는다 (vy=%.1f)" % ch.vy)
+
+
+# ══════════════════════════════════════════════════════════════════
+#  C. 물살이 캐릭터를 민다 (`docs/plans/2.active/water-jump-and-escape.md` 단계 4)
+# ══════════════════════════════════════════════════════════════════
+#
+# ⚠ **C-1~C-4는 `Body.water_flow()`를 직접 잰다** — 계획이 「힘 함수를 따로 재라」고 못 박은
+#  자리다. **C-5·C-6은 그 힘이 실제로 `Character.step()`의 움직임에 닿는지를 짝으로 잰다**
+#  (힘 함수 따로 · 그 힘이 움직임에 닿는지 따로 — CLAUDE.md 「짝으로 짜라, 뒤쪽만 쓰면
+#  항진명제다」의 그 자리).
+
+## `Body` 하나를 세우고 좌표를 돌려준다 — `standing_in_water`·`water_flow`가 보는 것과
+## 같은 범위(상자 + 발밑 한 줄)를 여기서 구해 **어디에 물을 놓을지**를 정한다.
+## `[body, cx0, cx1, cy0, cy1]`.
+func _water_push_body(px: int, py: int) -> Array:
+	var body := Body.new(Character.W_PX, Character.H_PX, Character.STEP_CELLS)
+	body.place(px, py)
+	var cx0 := floori(px / float(Tuning.CELL_PX))
+	var cx1 := floori((px + Character.W_PX - 1) / float(Tuning.CELL_PX))
+	var cy0 := floori(py / float(Tuning.CELL_PX))
+	var cy1 := floori((py + Character.H_PX) / float(Tuning.CELL_PX))
+	return [body, cx0, cx1, cy0, cy1]
+
+
+## 🔴🔴 **C-1 — 좌우가 같으면 물살이 0이다.**
+## ⚠ **뒤집으면 빨개지는 것**: 한쪽만 세거나 부호를 빠뜨리면(예: `right`를 안 빼고 `left`만
+##  돌려주면) 대칭인데도 0이 아닌 값이 나온다.
+func _water_push_zero_when_symmetric(t) -> void:
+	var g := CellGrid.new()
+	var made := _water_push_body(500 * Tuning.CELL_PX, 200 * Tuning.CELL_PX)
+	var body: Body = made[0]
+	var cx0: int = made[1]
+	var cx1: int = made[2]
+	var cy0: int = made[3]
+	var cy1: int = made[4]
+	for cy in range(cy0, cy1 + 1):
+		t.ok(g.set_water(cx0 - 1, cy, Tuning.WATER_MAX), "왼쪽 기둥에 물을 놓는다 (전제)")
+		t.ok(g.set_water(cx1 + 1, cy, Tuning.WATER_MAX), "오른쪽 기둥에도 같은 양을 놓는다 (전제)")
+	t.eq(body.water_flow(g), 0, "좌우가 같으면 물살이 0이다")
+
+
+## 🔴🔴 **C-2 — 부호. 왼쪽에만 물 ⇒ 양수(오른쪽으로), 오른쪽에만 물 ⇒ 음수. 둘 다 잰다.**
+## ⚠ **뒤집으면 빨개지는 것**: `diff`를 `right - left`로 뒤집으면 둘 다 반대로 나온다.
+##  🔴 **한쪽만 재면 부호 뒤집기가 반은 통과한다** — 그래서 둘을 같이 잰다.
+func _water_push_sign_both_ways(t) -> void:
+	var g_left := CellGrid.new()
+	var made_left := _water_push_body(500 * Tuning.CELL_PX, 200 * Tuning.CELL_PX)
+	var body_left: Body = made_left[0]
+	for cy in range(made_left[3], made_left[4] + 1):
+		g_left.set_water(made_left[1] - 1, cy, Tuning.WATER_MAX)
+	var push_left := body_left.water_flow(g_left)
+	t.ok(push_left > 0, "왼쪽에만 물 — 오른쪽으로 민다 (양수, %d)" % push_left)
+
+	var g_right := CellGrid.new()
+	var made_right := _water_push_body(500 * Tuning.CELL_PX, 200 * Tuning.CELL_PX)
+	var body_right: Body = made_right[0]
+	for cy in range(made_right[3], made_right[4] + 1):
+		g_right.set_water(made_right[2] + 1, cy, Tuning.WATER_MAX)
+	var push_right := body_right.water_flow(g_right)
+	t.ok(push_right < 0, "오른쪽에만 물 — 왼쪽으로 민다 (음수, %d)" % push_right)
+
+
+## 🔴🔴 **C-3 — 세기가 차이에 비례한다. 차이를 늘리면 힘이 엄격히 커진다.**
+## ⚠ **뒤집으면 빨개지는 것**: 상수를 그냥 돌려주면(「계산 안 하고 그럴듯한 값」) 세 값이 같아진다.
+## ⚠ **정확히 비례라고 안 박는다** — `WATER_MIN_DIFF` 문턱이 낮은 차이를 깎아내려 정확한
+##  선형은 아니다(계획이 그렇게 경고했다). **엄격히 커지나만** 잰다.
+func _water_push_scales_with_diff(t) -> void:
+	var amounts := [80, 160, Tuning.WATER_MAX]
+	var pushes: Array[int] = []
+	for amount in amounts:
+		var g := CellGrid.new()
+		var made := _water_push_body(500 * Tuning.CELL_PX, 200 * Tuning.CELL_PX)
+		var body: Body = made[0]
+		for cy in range(made[3], made[4] + 1):
+			g.set_water(made[1] - 1, cy, amount)
+		pushes.append(body.water_flow(g))
+	t.ok(pushes[0] < pushes[1] and pushes[1] < pushes[2],
+		"차이가 늘수록 힘이 엄격히 커진다 (%d < %d < %d)" % [pushes[0], pushes[1], pushes[2]])
+
+
+## 🔴🔴 **C-4 — 고인 물(평형)에서는 0이다.**
+##
+## 🔴 **처음 버전이 항진명제였다**(verify-read, 2026-08-08) — 웅덩이가 캐릭터 발밑보다
+##  **아래**에 고여 스캔 범위(상자+발밑 줄) 안에 물이 한 칸도 없었다. 문턱을 0으로 지워도
+##  「볼 물이 없어서」 여전히 0이 나와 69/69 초록이었다 — **문턱이 잡은 게 아니었다.**
+##  ⇒ **캐릭터가 실제로 잠기는 웅덩이로 다시 짠다**(verify-read가 확인한 폭 12 장면).
+##
+## ⚠ **뒤집으면 빨개지는 것**: `WATER_MIN_DIFF` 문턱을 빼면(0으로 하면) 정착 뒤에도 반올림
+##  잔차 때문에 0이 아닌 값이 계속 나온다.
+## 🔴 **웅덩이 폭을 12칸으로 좁게 판다** — 넓은 웅덩이는 `docs/design/물.md`가 적어 둔
+##  「정지 수면이 균일하지 않다」(먼 칸끼리는 어긋날 수 있다)에 걸린다. verify-read 실측
+##  (폭 12 → 정착 69틱, 잔차 |left-right| 23, 문턱 36)이 이 폭에서 문턱 안에 든다는 것을 이미 쟀다.
+## ⚠ **왼쪽 절반에만 붓는다** — 「처음부터 대칭이라 0」이 아니라 「흘러서 0이 됐다」임을 재려면
+##  시작을 비대칭으로 둬야 한다.
+## ⚠ **여유가 크지 않다**(잔차 23 vs 문턱 36 — 1.6배). 이 폭·이 배치에서는 통과하지만,
+##  캐릭터 상자가 수면에 걸쳐 절반만 잠기는 배치라면 넘길 수 있다 — **그건 안 쟀다.**
+func _water_push_zero_at_equilibrium(t) -> void:
+	var g := CellGrid.new()
+	var pool_w := 12
+	var bx0 := 500                     # 웅덩이 왼쪽 안쪽 칸
+	var cx0 := bx0 + 3                 # 캐릭터를 웅덩이 안쪽에 둔다(양쪽에 다 여유가 있게)
+	var cy1 := 300                     # 웅덩이 바닥 = 캐릭터 상자의 발밑 줄
+	var cy0 := cy1 - (Character.H_PX / Tuning.CELL_PX)  # 상자 위쪽 줄
+	# 🔴🔴 **깊이가 절반의 요점이다.** 처음엔 30행 깊이로 부었는데, 그러면 웅덩이가 상자 높이보다
+	#  훨씬 두꺼워져 **두 이웃 기둥이 상자 범위(8행) 안에서 전부 255로 꽉 찬다** — 진짜 잔차(수면
+	#  꼭대기 한 줄에서만 남는다, `물.md` 「정지 수면이 균일하지 않다」)는 상자 범위 **위**에
+	#  있어서 안 보였다. 그때는 문턱을 0으로 지워도 **여전히 0**이었다(실측·verify-read가
+	#  다른 경로로도 짚은 자리) — 상자 범위 안이 이미 좌우가 완전히 같아서 문턱이 할 일이 없었다.
+	#  ⇒ **깊이를 상자 높이(8행)에 맞춰 얕게 부어 수면이 상자 범위 안에 오게 한다.**
+	var cy_pour_top := cy1 - 16
+
+	var made := _water_push_body(cx0 * Tuning.CELL_PX, cy0 * Tuning.CELL_PX)
+	var body: Body = made[0]
+
+	# 벽 둘 + 바닥 하나 — 캐릭터의 두 이웃 기둥(cx0-1·cx1+1)이 전부 이 웅덩이 안이다.
+	g.apply(CellGrid.cmd_fill(bx0 - 1, cy_pour_top, bx0 - 1, cy1, Mat.STONE))
+	g.apply(CellGrid.cmd_fill(bx0 + pool_w, cy_pour_top, bx0 + pool_w, cy1, Mat.STONE))
+	g.apply(CellGrid.cmd_fill(bx0 - 1, cy1, bx0 + pool_w, cy1, Mat.STONE))
+	# 왼쪽 절반에만, 바닥까지 깊게 붓는다 — 12칸에 퍼진 뒤에도 상자 높이(8칸)를 넉넉히 덮는다.
+	for cx in range(bx0, bx0 + pool_w / 2):
+		for cy in range(cy_pour_top + 1, cy1):
+			g.set_water(cx, cy, Tuning.WATER_MAX)
+
+	g.step()
+	var settle := 1
+	while g.active_chunk_count() > 0 and settle < 2000:
+		g.step()
+		settle += 1
+	t.ok(settle > 1 and settle < 2000, "웅덩이가 상한 안에 평형에 든다 (%d틱 — 루프가 헛돌지 않았다)"
+		% settle)
+	t.eq(g.active_chunk_count(), 0, "정말 평형이다 (전제)")
+
+	# 🔴 **캐릭터가 실제로 물에 잠겼는지 먼저 잰다** — 이게 없으면 이전처럼 「볼 물이 없어서
+	#  0」과 「평형이라 0」을 못 가른다.
+	t.eq(g.mat_at(cx0, cy0), Mat.WATER, "캐릭터 상자 맨 위 줄이 실제로 물에 잠겼다 (전제)")
+	t.eq(g.mat_at(cx0, cy1 - 1), Mat.WATER, "캐릭터 상자 맨 아래 줄도 잠겼다 (전제)")
+	t.eq(body.water_flow(g), 0, "실제로 잠긴 채로도 평형에 든 웅덩이에서는 물살이 0이다")
+
+
+## 🔴🔴 **C-5 — 짝 검사. 힘이 실제로 움직임에 닿는지, 그리고 안 닿을 때(대조군)도 확인한다.**
+## ⚠ **뒤집으면 빨개지는 것**: `water_push`를 `move_x`의 합에 안 더하면 ①이 안 움직여 red.
+## 🔴 **②만으로는 항진명제다** — 물이 없는데 안 움직이는 것은 당연하다. **①이 있어야**
+##  「그 물살이 실제로 움직임에 닿았다」가 값으로 선다.
+func _water_push_pair_moves_and_stops(t) -> void:
+	var px := 500 * Tuning.CELL_PX
+	var cx0 := floori(px / float(Tuning.CELL_PX))
+	var cy0 := floori(REST_Y / float(Tuning.CELL_PX))
+	var cy1 := floori((REST_Y + Character.H_PX) / float(Tuning.CELL_PX))
+
+	# ① 왼쪽에만 물 — 입력 0 · 땅 위. 밀리면 오른쪽(+x)으로 간다.
+	var g_water := _floor_grid()
+	var ch_water := Character.new()
+	ch_water.place(px, REST_Y)
+	for cy in range(cy0, cy1 + 1):
+		g_water.set_water(cx0 - 1, cy, Tuning.WATER_MAX)
+	for _i in 30:
+		ch_water.step(g_water, DT, 0.0, false, false)
+	t.ok(ch_water.x > px, "① 왼쪽에만 물이 있으면(입력 0·땅 위) x가 오른쪽으로 움직인다 (%d → %d)"
+		% [px, ch_water.x])
+
+	# ② 같은 배치에서 물만 지운다 — ①과 짝이다.
+	var g_dry := _floor_grid()
+	var ch_dry := Character.new()
+	ch_dry.place(px, REST_Y)
+	for _i in 30:
+		ch_dry.step(g_dry, DT, 0.0, false, false)
+	t.eq(ch_dry.x, px, "② 같은 배치에서 물만 지우면 안 움직인다 (①과 짝이다)")
+
+
+## 🔴🔴 **C-6 — 캐릭터가 물을 안 민다. 폴더 계약(`src/actor/` float → `src/sim/` 정수 결정론
+##  읽기 전용)을 값으로 지킨다.**
+## ⚠ **뒤집으면 빨개지는 것**: 실수로 격자에 쓰면(예: 지나간 자리의 물을 지운다) red.
+func _water_push_does_not_move_water(t) -> void:
+	var px := 500 * Tuning.CELL_PX
+	var g := _floor_grid()
+	var ch := Character.new()
+	ch.place(px, REST_Y)
+	var cx0 := floori(px / float(Tuning.CELL_PX))
+	var cy0 := floori(REST_Y / float(Tuning.CELL_PX))
+	var cy1 := floori((REST_Y + Character.H_PX) / float(Tuning.CELL_PX))
+	for cy in range(cy0, cy1 + 1):
+		g.set_water(cx0 - 1, cy, Tuning.WATER_MAX)
+	var before := g.count_material(Mat.WATER)
+	t.ok(before > 0, "물이 실제로 놓였다 (전제)")
+
+	for _i in 30:
+		ch.step(g, DT, 0.0, false, false)
+
+	t.eq(g.count_material(Mat.WATER), before, "캐릭터가 여러 프레임 움직여도 물 칸 수가 그대로다")
+	var total := 0
+	for cy in range(cy0 - 5, cy1 + 6):
+		for cx in range(cx0 - 10, cx0 + 20):
+			if g.mat_at(cx, cy) == Mat.WATER:
+				total += g.aux_at(cx, cy)
+	t.eq(total, before * Tuning.WATER_MAX, "물의 총량도 그대로다 (캐릭터가 시뮬을 안 건드린다)")
+
+
+## 🔴🔴 **C-7 — 옆에 불이 있어도 물살이 안 오염된다.**
+##
+## 🔴 **verify-read가 이 가드 없이 값으로 확인했다**(2026-08-08): 왼쪽 기둥을 나무로 채우고
+##  불을 붙이면 `_aux`(남은 연료) 합이 590 — `mat_at()==WATER` 확인 없이 그냥 더하면
+##  `diff = 590`(9행 기준 평균 ≈65)이 문턱(36)을 넘어 **불이 캐릭터를 물처럼 민다.**
+##  ⚠ **뒤집으면 빨개지는 것**: `body.gd`의 `water_flow`에서 `mat_at(...) == Mat.WATER` 두 줄을
+##  지우면(또는 우회하면) 이 검사가 0이 아닌 값을 보고 red가 된다.
+func _water_push_ignores_fire(t) -> void:
+	var g := CellGrid.new()
+	var made := _water_push_body(500 * Tuning.CELL_PX, 200 * Tuning.CELL_PX)
+	var body: Body = made[0]
+	var cx0: int = made[1]
+	var cy0: int = made[3]
+	var cy1: int = made[4]
+	# 왼쪽 기둥을 나무로 채우고 불을 붙인다 — 오른쪽은 그대로 비어 있다.
+	for cy in range(cy0, cy1 + 1):
+		g.apply(CellGrid.cmd_fill(cx0 - 1, cy, cx0 - 1, cy, Mat.WOOD))
+	for cy in range(cy0, cy1 + 1):
+		g.ignite(cx0 - 1, cy)
+	t.ok(g.burning_count() > 0, "나무가 실제로 탄다 (전제)")
+
+	var fuel_sum := 0
+	for cy in range(cy0, cy1 + 1):
+		fuel_sum += g.aux_at(cx0 - 1, cy)
+	t.ok(fuel_sum > 0, "타는 기둥에 남은 연료(`_aux`)가 실제로 있다 (전제, 합 %d)" % fuel_sum)
+
+	t.eq(body.water_flow(g), 0, "물이 아닌(타는) 이웃은 물살에 안 섞인다 — 0이다")
+
+
+## 🔴🔴 **C-8 — 물 밖으로 나오면 그 프레임에 멈춘다.** 점프의 A-3과 같은 자리(짝)다.
+##
+## 🔴 **코드는 맞았지만 이 검사가 없어서 안 잡혔다**(verify-read, 2026-08-08): `water_push`를
+##  `recoil_vx`처럼 멤버로 바꿔 감쇠시키고 물이 없어져도 남게 했더니 **69/69 초록**이었다 —
+##  「물 밖으로 나오면 멈춘다」를 재는 검사가 하나도 없었기 때문이다.
+## ⚠ **뒤집으면 빨개지는 것**: `water_push`를 지역 변수가 아니라 누적되는 멤버로 만들면,
+##  물을 지운 다음 프레임에도 (감쇠하며) 계속 밀려 `x2 != x1`이 된다.
+## 🔴 **1프레임만 민다** — 여러 프레임을 밀면 캐릭터가 원래 기둥 밖으로(1셀=4px) 나가
+##  「물 밖」과 「물살이 셀 경계를 벗어났다」가 섞인다. 여기서 재는 것은 **물을 지운 그 자체**다.
+func _water_push_stops_the_frame_water_leaves(t) -> void:
+	var px := 500 * Tuning.CELL_PX
+	var cx0 := floori(px / float(Tuning.CELL_PX))
+	var cy0 := floori(REST_Y / float(Tuning.CELL_PX))
+	var cy1 := floori((REST_Y + Character.H_PX) / float(Tuning.CELL_PX))
+
+	var g := _floor_grid()
+	var ch := Character.new()
+	ch.place(px, REST_Y)
+	for cy in range(cy0, cy1 + 1):
+		g.set_water(cx0 - 1, cy, Tuning.WATER_MAX)
+
+	# 한 프레임만 민다 — 아직 같은 기둥 옆이다(4px 미만 이동, 셀 경계를 안 넘는다).
+	ch.step(g, DT, 0.0, false, false)
+	var x1 := ch.x
+	t.ok(x1 > px, "한 프레임 만에 물살로 밀렸다 (전제, %d → %d)" % [px, x1])
+
+	# 물을 지운다 — 같은 기둥(cx0-1)이다. 캐릭터가 아직 안 옮겨간 것이 위 전제다.
+	for cy in range(cy0, cy1 + 1):
+		g.set_water(cx0 - 1, cy, 0)
+	ch.step(g, DT, 0.0, false, false)
+	var x2 := ch.x
+	t.eq(x2, x1, "물이 사라진 바로 다음 프레임에 더 안 밀린다 (감쇠하며 남지 않는다)")

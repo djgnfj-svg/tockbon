@@ -423,10 +423,9 @@ func _water_step(dir: int) -> void:
 		var y_top := band * cc
 		while y >= y_top:
 			var row := y << X_SHIFT
-			# 🔴 격자 맨 아래 행은 받을 곳이 없다. ⚠ 안 걸르면 `below` 가 격자를 넘고, 그건
-			#  매 틱 엔진 「Index out of bounds」다 — **단언에 안 잡히고 래퍼만 잡는다**(실측).
+			# 🔴 격자 맨 아래 행은 받을 곳이 없다. ⚠ 안 걸르면 `_water_fall` 이 격자를 넘겨 읽고,
+			#  그건 매 틱 엔진 「Index out of bounds」다 — **단언에 안 잡히고 래퍼만 잡는다**(실측).
 			var can_fall := y < H - 1
-			var below_row := row + W
 			# ⚠ **청크도 dir의 반대로 돈다.** 열 순서만 뒤집고 청크 순서를 안 뒤집으면
 			#  청크 경계에서 도착 칸이 아직 안 돈 상태가 되고, 그 물이 같은 틱에 또 움직인다.
 			var cx := (CHUNK_W - 1) if dir > 0 else 0
@@ -439,7 +438,7 @@ func _water_step(dir: int) -> void:
 						# 🔴 **재료 검사가 빠른 길이다** — 물이 한 칸도 없는 청크는
 						#  여기서 다 튕긴다(실측 12.5μs/청크, spec의 대리 측정).
 						if _mat[i] == Mat.WATER:
-							_water_cell(i, x, row, below_row, can_fall, dir)
+							_water_cell(i, x, row, y, can_fall, dir)
 						x -= dir
 						n -= 1
 				cx -= dir
@@ -466,25 +465,41 @@ func _water_dir(sub: int) -> int:
 
 
 ## 칸 하나: ① 아래로 넘기고 ② 남으면 좌우로 나눈다.
-func _water_cell(i: int, x: int, row: int, below_row: int, can_fall: bool, dir: int) -> void:
+func _water_cell(i: int, x: int, row: int, y: int, can_fall: bool, dir: int) -> void:
 	var amount := _aux[i]
 	if can_fall:
-		amount = _water_fall(i, below_row | x, amount)
+		amount = _water_fall(i, x, y, amount)
 		if amount <= 0:
 			return
 	_water_spread(i, x, row, amount, dir)
 
 
-## ① 아래로. 아래 칸이 **받을 수 있는 만큼만** 간다. 남은 양을 돌려준다.
-## 🔴 고체를 만나면 아무 일도 안 한다 — 그게 「돌이 물을 막는다」이고, 남은 양은 ②로 간다.
-func _water_fall(i: int, below: int, amount: int) -> int:
-	var bm := _mat[below]
-	if bm == Mat.EMPTY:
-		# 빈칸은 통째로 받는다. 🔴 **두 번 다 `_write_water` 다** — 한쪽만 이 문을 지나면
-		#  다른 쪽에서 양이 증발하고 총량이 조용히 샌다.
-		_write_water(below, amount)
+## ① 아래로. `Tuning.WATER_FALL_CELLS`(K)까지 **연속된 빈칸**을 훑어 제일 낮은 빈칸에
+## 통째로 옮긴다(`sim_tuning.WATER_FALL_CELLS` 헤더 — 셀당 속도 상태를 안 든다).
+## 물이나 고체를 만나면 그 자리에서 멈추고 **지금 규칙 그대로** 처리한다 ⇒ 쌓임과 막힘의
+## 뜻이 안 바뀐다. 아래 칸이 **받을 수 있는 만큼만** 간다. 남은 양을 돌려준다.
+## ⚠ `can_fall`(호출부, `y < H - 1`)이 이미 보장한 조건이라 여기서 다시 안 본다.
+func _water_fall(i: int, x: int, y: int, amount: int) -> int:
+	var last_empty_y := -1
+	var k := 0
+	while k < Tuning.WATER_FALL_CELLS:
+		var ny := y + k + 1
+		if ny >= H or _mat[(ny << X_SHIFT) | x] != Mat.EMPTY:
+			break
+		last_empty_y = ny
+		k += 1
+	if last_empty_y >= 0:
+		# 빈칸을 찾았다 — **그중 제일 낮은 자리**에 통째로 옮긴다.
+		# 🔴 **두 번 다 `_write_water` 다** — 한쪽만 이 문을 지나면 다른 쪽에서 양이 증발하고
+		#  총량이 조용히 샌다.
+		_write_water((last_empty_y << X_SHIFT) | x, amount)
 		_write_water(i, 0)
 		return 0
+
+	# 연속 빈칸이 없다(바로 아래가 이미 물이거나 고체다) — 1칸짜리 지금 규칙 그대로.
+	var below := ((y + 1) << X_SHIFT) | x
+	var bm := _mat[below]
+	# 🔴 고체를 만나면 아무 일도 안 한다 — 그게 「돌이 물을 막는다」이고, 남은 양은 ②로 간다.
 	if bm != Mat.WATER:
 		return amount
 	var space := Tuning.WATER_MAX - _aux[below]

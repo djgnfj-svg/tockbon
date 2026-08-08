@@ -10,6 +10,7 @@ const CellGrid := preload("res://src/sim/cell_grid.gd")
 const Mat := preload("res://src/sim/cell_materials.gd")
 const Tuning := preload("res://src/sim/sim_tuning.gd")
 const CellRenderer := preload("res://src/view/cell_renderer.gd")
+const SkyBackground := preload("res://src/view/sky_background.gd")
 const Fx := preload("res://src/view/fx_tuning.gd")
 const CharacterView := preload("res://src/view/character_view.gd")
 const SpellView := preload("res://src/view/spell_view.gd")
@@ -24,12 +25,20 @@ const Glyph := preload("res://src/sim/glyph_defs.gd")
 const StageInput := preload("res://src/stage/stage_input.gd")
 const MonsterView := preload("res://src/view/monster_view.gd")
 const MonsterDefs := preload("res://src/actor/monster_defs.gd")
+const WaterSource := preload("res://src/sim/water_source.gd")
 
 ## 🔴 이제 상수가 아니라 `terrain_map_generated.gd` 재수출이다 — 그린 영역 크기를 그대로 따른다.
 ##  아래 `MAP` 선언부의 재수출과 짝이다.
 
-## 캐릭터 시작 자리(타일). 왼쪽 빈 바닥 — 기둥·나무 구역·돌 벽이 **오른쪽에 차례로 보이는** 자리다.
-const SPAWN_TILE := Vector2i(3, 30)
+## 캐릭터 시작 자리(타일). 스테이지1 맵의 왼쪽 끝 지면 위다.
+##
+## 🔴🔴 **맵을 다시 그리면 이 값도 같이 고쳐야 한다 — 아무도 안 짖는다.**
+## ⚠ 2026-08-08에 실제로 났다: 맵을 312×126 → 400×48로 새로 그렸는데 이 상수가 `(3, 30)` 그대로라
+##  **y30이 지면(y20) 아래**가 되어 캐릭터가 **밀폐된 지하 동굴 바닥(y44)에 떨어져** 시작했다.
+##  BFS로 확인한 도달 범위가 **동굴 바닥 한 줄뿐**이었고, 6타일 지각을 `carve_r`(2셀)로는 못 뚫는다.
+##  ⇒ **게임을 띄우면 지표면을 아예 못 본다. 에러는 한 줄도 안 난다.**
+## 🔴 그물도 못 잡는다 — `net_tables._stage_map` 은 맵의 **모양**만 재고 **스폰이 그 안 어디인지**는 안 본다.
+const SPAWN_TILE := Vector2i(3, 19)
 
 ## 초기 지형. `#` 돌 · `=` 나무 · `.` 빈칸. 타일 하나 = 8×8 셀 = 32px.
 ##
@@ -116,6 +125,10 @@ const LOADOUTS: Dictionary = {
 	5: [Glyph.GLYPH_BLAST, Glyph.GLYPH_SPREAD],
 }
 
+## 🔴🔴 **격자보다 **먼저** 그려져야 한다** — `stage.tscn` 의 노드 순서가 곧 그리는 순서다.
+##  ⚠ 그리고 그것만으로는 안 보인다: `cell_grid.gdshader` 가 **빈칸을 투명으로 빼야** 한다
+##   (`cell_renderer` 가 `empty_id` 를 주입한다). **셋이 한 짝이고 하나만 빠져도 조용히 안 보인다.**
+@onready var _sky: SkyBackground = $SkyBackground
 @onready var _renderer: CellRenderer = $CellRenderer
 @onready var _input: StageInput = $StageInput
 ## 🔴🔴 **이 껍데기가 죽는 1번 방식이 `mouse_filter`다.** 발사가 좌클릭인데 HUD가 `Control`이다.
@@ -174,6 +187,10 @@ var _world := WorldStep.new(_grid, _spell, _char)
 ##  화면에서 안 갈리는데 이 숫자만 맞으면 그게 이 단계가 멈춰야 하는 신호다.
 var _blast_count := 0
 
+## 🔴🔴 **K로 토글하는 물비 소스. `null` = 꺼짐.** 상태와 셈은 `water_source.gd` 가 전부 든다 —
+##  여기서는 「있나 없나」와 「매 틱 부른다」만 안다(그 파일 헤더의 「어디에 두나」).
+var _water_source: WaterSource = null
+
 ## 🔴🔴 **재료 칸 수는 N틱마다만 센다. 매 프레임 세면 CPU의 5%가 그냥 사라진다.**
 ##
 ## 🔴 **실측이다**(2026-08-07, 구현 · 헤드리스 · 무대 씬의 실제 함수로 잼):
@@ -216,6 +233,7 @@ func _ready() -> void:
 	for label: Label in [_hud, _hp_label]:
 		label.add_theme_font_size_override("font_size", Fx.HUD_FONT_SIZE)
 	_terrain.visible = false
+	_sky.setup(_camera)
 	_renderer.setup(_grid)
 	# 🔴 지팡이 끝 색이 조립 상태를 **읽는다.** 사본을 밀어 넣으면 밀어 넣기를 한 번 깜빡하는 순간
 	#  「조합을 바꿨는데 화면이 그대로다」가 되고, 그게 v1이 죽은 방식이다.
@@ -234,6 +252,7 @@ func _ready() -> void:
 	_input.water_requested.connect(_pour_water_at)
 	_input.wood_requested.connect(_paint_wood_at)
 	_input.ignite_requested.connect(_ignite_at)
+	_input.rain_requested.connect(_toggle_rain_at)
 	_input.monster_requested.connect(_spawn_monster_at)
 	_input.loadout_requested.connect(_set_loadout)
 	# 🔴🔴 **세상을 안 멈춘다** — 여기서 `get_tree().paused`를 건드리지 마라.
@@ -327,6 +346,25 @@ func _ignite_at(world_px: Vector2) -> void:
 	_grid.ignite(floori(world_px.x / Tuning.CELL_PX), floori(world_px.y / Tuning.CELL_PX))
 
 
+## 🔴🔴 **K — 마우스 행에 물비를 토글한다. 껍데기 전용 디버그 문이다**(2026-08-08).
+##  ⚠ F(한 점 붓기, 위)와 다르다 — F는 한 번에 붓고 끝나지만 K는 **매 틱** `_on_ticked()` 가
+##  `tick()` 을 불러야 계속 붓는다. 그 배선은 아래 `_on_ticked()` 에 있다.
+##
+## 🔴 **토글이다.** 이미 켜져 있으면 (인자를 안 보고) 끈다 — 다시 누르면 멈춘다.
+##  안 그러면 R로 무대를 통째로 리셋해야 물비를 끌 수 있다.
+## ⚠ **폭이 176셀(±88)로 고정이다** — `Tuning.WATER_RAIN_HALF_W` 주석이 그 값의 근거(실측 표)를 든다.
+##  누른 자리를 **가운데**로 176셀을 잡는다. `floori` 는 `WATER_BRUSH_R` 과 같은 이유다.
+func _toggle_rain_at(world_px: Vector2) -> void:
+	if _water_source != null:
+		_water_source = null
+		return
+	var cx := floori(world_px.x / Tuning.CELL_PX)
+	var cy := floori(world_px.y / Tuning.CELL_PX)
+	_water_source = WaterSource.new(
+		cx - Tuning.WATER_RAIN_HALF_W, cx + Tuning.WATER_RAIN_HALF_W, cy,
+		Tuning.WATER_RAIN_PER_TICK)
+
+
 ## 🔴🔴 **M/N — 마우스 자리에 몬스터를 세운다. 껍데기 전용 디버그 문이다**(`monsters-minimum`).
 ##  배치는 맵 문서의 몫이라(문서 「경계」) 무대는 몬스터를 자동으로 안 깐다 — 이 키가
 ##  「볼 것이 화면에 도달하는 경로」다.
@@ -375,6 +413,11 @@ func _physics_process(delta: float) -> void:
 ## 틱이 돈 프레임에만 화면을 친다.
 ## 🔴 **통지는 다음 틱의 `spell.step()` 이 지운다** — 캐릭터가 걸은 뒤에 읽어도 아직 살아 있다.
 func _on_ticked() -> void:
+	# 🔴🔴 **여기가 물비의 유일한 박동이다.** `_physics_process` 에서 부르면 `TICK_DIVIDER`(3)배
+	#  빨리 붓는다(`water_source.tick()` 헤더) — 켜져 있을 때만, 틱마다 정확히 한 번.
+	if _water_source != null:
+		_water_source.tick(_grid)
+
 	# 🔴 자취는 시뮬이 **돈 뒤**여야 한 틱 낡지 않는다.
 	_spell_view.on_tick()
 
@@ -432,6 +475,8 @@ func reset_stage() -> void:
 	#  ⚠ 큐와 발사 수는 `_world` 가 든다 — 여기서 또 만지면 되돌리는 자리가 두 곳이 된다.
 	_world.reset()
 	_blast_count = 0
+	# 🔴 물비도 리셋 대상이다 — 안 끄면 지형이 새로 서는 순간부터 옛 소스가 계속 붓는다.
+	_water_source = null
 	build_terrain_into(_grid)
 	_char.place(
 		SPAWN_TILE.x * Tuning.TILE_CELLS * Tuning.CELL_PX,
@@ -540,6 +585,10 @@ func _update_hud() -> void:
 		"활성 청크 %d / %d · 물 %d칸 (F로 붓기)" % [
 			_grid.active_chunk_count(), CellGrid.CHUNK_COUNT, _water_cells,
 		],
+		# 🔴🔴 **「K가 먹었나」를 여기서만 판단한다.** F와 달리 K는 누른 순간 화면이 안 변하고
+		#  몇 틱 뒤에야 수면이 오른다 — 켜짐/꺼짐과 누적량이 없으면 사용자가 「안 먹는다」로 읽는다.
+		"물비 %s" % (
+			"켜짐 · 누적 %d" % _water_source.poured() if _water_source != null else "꺼짐 (K로 토글)"),
 		"FPS %d" % Engine.get_frames_per_second(),
 		"캐릭터 (%d,%d) %s" % [_char.x, _char.y, "접지" if _char.on_ground else "공중"],
 		"발사 %d · 비행중 %d · 자취 %d" % [
@@ -567,7 +616,7 @@ func _update_hud() -> void:
 		#  🔴 **T/F/G 셋을 한 덩어리로 적는다** — 「숲을 깔고 물을 붓고 불을 붙인다」가
 		#   한 절차라, 따로 적으면 셋이 한 벌인 것이 안 읽힌다.
 		"A/D 이동 · Space 점프 · 좌클릭 발사 · Tab 조립창 · R 리셋 · M/N 몬스터",
-		"T 숲 · F 물 · G 불  (마우스 자리에)",
+		"T 숲 · F 물 · G 불  (마우스 자리에) · K 물비 토글 (마우스 행에)",
 	])
 
 

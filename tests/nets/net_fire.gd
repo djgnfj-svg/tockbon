@@ -33,19 +33,20 @@ func run(t) -> void:
 
 ## 🔴🔴 **파면 = BURNING 칸의 집합.** 이 등식이 파면 자료구조의 전부다.
 ##
-## ⚠ 폭발이 타는 칸을 지우면 `_flag`만 0이 되고 **인덱스는 파면에 남는다** —
-##  실측으로 키 4에서 217칸 중 90칸(**41%**)이 유령이었다. 다음 틱에 스스로 빠지지만
-##  그 자가 치유는 **「지워진 자리가 그대로 비어 있다」에 기대고 있다.**
+## ⚠ 유령의 원래 현장은 **폭발이 타는 칸을 지우는 순간**이었다 — `_flag`만 0이 되고
+##  인덱스는 파면에 남는 것. 실측으로 키 4에서 217칸 중 90칸(**41%**)이 유령이었다.
+## 🔴🔴 **그런데 이제 폭발이 나무를 못 지운다**(`cell_materials.gd`의 `WOOD indestructible`,
+##  2026-08-08) — `_disc(...,true)`가 나무를 전부 `continue`한다(약 888줄). ⇒ **그 현장이
+##  더는 안 생긴다.** 위험 자체는 안 죽었다 — `_write_cell(idx, Mat.EMPTY)`를 부르는 자리가
+##  하나 더 있다: **`_burn()`이 연료 0에서 다 탄 칸을 지우는 그 자리다**(약 630줄). 폭발로
+##  지우나 다 타서 지우나 **같은 문(`_write_cell` → `_unburn`)을 지난다** — 같은 위험을
+##  이 문으로 옮겨 재도 된다. ⇒ 아래는 **한 번에 넓게 붙인 불이 동시에 다 타서 사라지는 그 틱**을 잡는다.
 ## 🔴 물이나 지형 재생성이 들어와 그 자리가 나무로 다시 채워지면 유령이 진짜 버그가 된다:
 ##  새 나무가 `_aux` 0이라 다음 틱에 빈칸이 되고, 같은 칸이 파면에 두 번 들어간다.
 ## ⇒ 등식을 **그 틱 안에서** 잰다. 「다음 틱에 낫는다」로는 못 잰다.
 func _front_has_no_ghosts(t) -> void:
 	var g := CellGrid.new()
 	g.apply(CellGrid.cmd_fill(0, 0, 127, 63, Mat.WOOD))
-	# 🔴 **폭발의 점화 고리로 태우면 안 된다** — 그 고리는 파괴 반경 **밖**(rd..ignite_r)에 있어서
-	#  같은 자리에 다시 폭발해도 타는 칸을 안 덮는다. 그러면 이 검사가 통째로 헛돈다
-	#  (처음에 그렇게 짰다가 유령을 되살려 놓고도 초록이 나왔다).
-	#  ⇒ 폭발이 **덮을 자리**를 직접 태운다.
 	for y in range(20, 45):
 		for x in range(50, 80):
 			g.ignite(x, y)
@@ -53,12 +54,18 @@ func _front_has_no_ghosts(t) -> void:
 	t.ok(lit > 0, "먼저 넓게 불이 붙는다 (%d칸)" % lit)
 	t.eq(lit, _flagged(g), "붙인 직후 파면과 BURNING 칸 수가 같다")
 
-	# 🔴 **타는 칸 한복판에 폭발을 얹는다.** 유령이 생기던 바로 그 순간이다.
-	g.apply(CellGrid.cmd_blast(64, 32, Tuning.blast_rd(0), 0))
-	t.ok(g.burning_count() < lit, "폭발이 타는 칸을 실제로 지웠다 (%d → %d)" % [lit, g.burning_count()])
-	t.eq(g.burning_count(), _flagged(g), "타는 칸을 폭발로 지운 **그 틱에** 파면이 안 부푼다")
+	# 🔴🔴 **다 타서 사라지는 그 틱 — 유령이 생기던 자리가 옮겨 온 곳이다.** 전부 같은 틱에
+	#  붙였으므로 연료도 같은 틱(`BURN_TICKS`번째)에 함께 0이 된다 — 이 750칸이 동시에
+	#  `_write_cell(EMPTY)`를 지난다. 번짐이 그 사이 테두리를 넓히므로 **순 감소**로 잰다.
+	for _i in BURN_TICKS - 1:
+		g.step()
+	var before_extinguish := g.burning_count()
+	g.step()  # 이 틱에 원래 750칸이 fuel 0 → EMPTY 로 한꺼번에 사라진다
+	t.ok(g.burning_count() < before_extinguish,
+		"다 탄 칸이 그 틱에 실제로 사라진다 (%d → %d)" % [before_extinguish, g.burning_count()])
+	t.eq(g.burning_count(), _flagged(g), "대량으로 사라진 **그 틱에** 파면이 안 부푼다 (유령이 없다)")
 
-	# 한 틱 돌려도 등식이 유지되나(꺼짐 경로도 같은 문을 지나나).
+	# 한 틱 더 돌려도 등식이 유지되나(꺼짐 경로도 같은 문을 지나나).
 	g.step()
 	t.eq(g.burning_count(), _flagged(g), "한 틱 뒤에도 등식이 유지된다")
 
@@ -80,10 +87,19 @@ func _burn_slot_has_no_orphans(t) -> void:
 			g.ignite(x, y)
 	t.eq(g.claimed_slot_count(), g.burning_count(), "붙인 직후 고아 슬롯이 없다")
 
-	g.apply(CellGrid.cmd_blast(64, 32, Tuning.blast_rd(0), 0))
-	t.eq(g.claimed_slot_count(), g.burning_count(), "폭발로 지운 직후 고아 슬롯이 없다")
+	# 🔴🔴 **폭발로는 더 못 잰다 — 나무가 indestructible이라 파괴 패스가 아무것도 안 지운다**
+	#  (`cell_materials.gd`, 2026-08-08). ⚠ **전에는 여기서 `cmd_blast(...,rd,0)`으로 타는 칸
+	#  한복판을 지웠다** — 지금은 그 호출이 통째로 no-op이라 뒤집어도 안 빨개지는 죽은 검사가 된다.
+	#  ⇒ 같은 위험(자리 표가 실제 BURNING과 어긋나는 것)을 **다 타서 사라지는 경로**로 옮긴다 —
+	#  `_front_has_no_ghosts`와 같은 사건(같은 틱에 붙인 750칸이 동시에 fuel 0이 된다)이고,
+	#  여기서는 `_flag`가 아니라 **자리 표**(`claimed_slot_count`)를 재는 것이 다르다.
+	for _i in BURN_TICKS - 1:
+		g.step()
+	t.eq(g.claimed_slot_count(), g.burning_count(), "다 타기 직전에도 고아 슬롯이 없다")
+	g.step()  # 이 틱에 처음 붙인 750칸이 fuel 0 → EMPTY 로 한꺼번에 사라진다
+	t.eq(g.claimed_slot_count(), g.burning_count(), "대량으로 사라진 그 틱에도 고아 슬롯이 없다")
 
-	# 🔴 **다 태운다.** 마지막 한 칸이 빠질 때가 자기교환(`at == last`)이 도는 자리다.
+	# 🔴 **마저 다 태운다.** 마지막 한 칸이 빠질 때가 자기교환(`at == last`)이 도는 자리다.
 	for _i in BURN_TICKS * 6:
 		g.step()
 		if g.burning_count() == 0:
@@ -217,26 +233,42 @@ func _always_goes_out(t) -> void:
 	t.eq(g.count_material(Mat.WOOD), 0, "탈 것이 남지 않는다")
 
 
-## 🔴🔴 **점화 반경이 파괴 반경보다 커야 한다.** 같으면 폭발이 자기가 태울 것을 먼저 지워서
-##  **불이 원리적으로 안 붙고, 에러는 하나도 안 난다.**
+## 🔴🔴 **점화 반경이 파괴 반경보다 커야 한다 — 단, 그 이유는 이제 나무 얘기가 아니다.**
+##  ⚠ **원래 근거**: 폭발은 `rd` 안을 EMPTY로 만든다 = 연료를 0으로 만든다. 점화 반경이
+##  파괴 반경보다 크지 않으면 불이 원리적으로 안 붙는다 — 자기가 태울 것을 자기가 먼저 지운다.
+## 🔴🔴 **`WOOD`에 `indestructible: true`(2026-08-08)가 그 근거를 나무에서 지웠다.**
+##  파괴 패스(`_disc(...,true)`)가 나무를 전부 `continue`한다(약 888줄) — **나무는 파괴 반경
+##  안에서도 안 지워진다.** `ignite_r`이 `rd`보다 크든 작든 나무는 그 자리에서 점화 패스에
+##  그대로 걸린다. ⇒ **지금 게임의 유일한 가연재(나무)에서는 이 부등식이 「불의 진입로」가 아니다.**
+##  🔴 그래도 값 자체는 남긴다 — **부서지면서 또 타는 미래 재료**가 생기면 그 재료에서
+##  이 부등식이 다시 살아있는 규칙이 된다(`net_tables`가 세대마다 재는 것도 이 값이다).
 func _blast_lights_wood(t) -> void:
 	t.ok(Tuning.blast_ignite_r(0) > Tuning.blast_rd(0),
-		"점화 반경 %d이 파괴 반경 %d보다 크다 (불의 유일한 진입로다)" % [
+		"점화 반경 %d이 파괴 반경 %d보다 크다 (미래의 부서지고 또 타는 재료를 위한 하한)" % [
 			Tuning.blast_ignite_r(0), Tuning.blast_rd(0)])
 
 	var g := CellGrid.new()
 	g.apply(CellGrid.cmd_fill(0, 0, 127, 63, Mat.WOOD))
 	g.apply(CellGrid.cmd_blast(64, 32, Tuning.blast_rd(0), Tuning.blast_ignite_r(0)))
 	t.ok(g.burning_count() > 0, "폭발이 나무에 불을 붙인다 (%d칸)" % g.burning_count())
-	# 구덩이 안은 이미 빈칸이라 안 탄다 — 타는 것은 **파괴 반경 밖의 고리**뿐이다.
-	t.eq(g.flag_at(64, 32) & Mat.FLAG_BURNING, 0, "구덩이 한가운데는 안 탄다 (이미 빈칸이다)")
+
+	# 🔴🔴 **구덩이가 없다.** 나무가 indestructible이라 파괴 패스가 아무것도 못 지워서
+	#  한가운데도 여전히 나무이고, 점화 패스가 거기도 덮는다.
+	#  ⚠ **전에는 여기가 "안 탄다"였다** — 구덩이가 빈칸(연료 0)이라 못 붙었다. 2026-08-08
+	#  `indestructible` 도입으로 구덩이 자체가 사라졌으므로 이 관측이 뒤집힌다.
+	t.eq(g.mat_at(64, 32), Mat.WOOD, "폭발 한가운데도 나무 그대로다 (안 파인다)")
+	t.eq(g.flag_at(64, 32) & Mat.FLAG_BURNING, Mat.FLAG_BURNING, "그리고 그 나무에 불이 붙는다")
 	t.eq(g.flag_at(64 + Tuning.blast_rd(0) + 2, 32) & Mat.FLAG_BURNING, Mat.FLAG_BURNING,
-		"구덩이 바로 바깥 고리가 탄다")
+		"파괴 반경 밖도 점화 반경 안이면 탄다")
+	t.eq(g.flag_at(64 + Tuning.blast_ignite_r(0) + 2, 32) & Mat.FLAG_BURNING, 0,
+		"점화 반경 밖은 안 탄다")
 
 	var stone := CellGrid.new()
 	stone.apply(CellGrid.cmd_fill(0, 0, 127, 63, Mat.STONE))
 	stone.apply(CellGrid.cmd_blast(64, 32, Tuning.blast_rd(0), Tuning.blast_ignite_r(0)))
 	t.eq(stone.burning_count(), 0, "돌방에서는 폭발해도 불이 안 난다 (지형이 곧 룬의 세기다)")
+	# 🔴 대조군 — **돌은 그대로 파인다.** 나무만 특별 취급인지, 파괴 패스 자체가 죽었는지를 가른다.
+	t.eq(stone.mat_at(64, 32), Mat.EMPTY, "그런데 돌은 파괴 패스로 지워진다 (재료를 가린다)")
 
 
 ## 🔴 리셋이 파면을 안 비우면, 새 지형의 **같은 인덱스**에 옛 불이 앉아 있다가

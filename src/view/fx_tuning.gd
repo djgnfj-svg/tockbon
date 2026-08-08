@@ -875,3 +875,29 @@ static func staff_tint(glyphs: int, element: int, can_fire: bool) -> Color:
 	if glyphs == Glyph.GLYPH_NONE:
 		return ELEM_FX.get(element, ELEM_FX_MISSING)["glow"]
 	return GLYPH_TINT.get(Glyph.first(glyphs), GLYPH_TINT_MISSING)
+
+
+## ─────────────────────────────────────────────────────────────────────────
+## 배경 (`src/view/sky_background.gd`). 개념은 `docs/design/배경.md`.
+##
+## 🔴🔴 **이 값들만으로는 화면에 아무것도 안 나온다.** 격자 스프라이트가 월드를 불투명하게
+##  덮으므로 `cell_grid.gdshader` 의 `empty_id` 로 **빈칸을 투명으로 빼야** 비로소 보인다.
+##  ⚠ 셋이 한 짝이다 — 셰이더 · `cell_renderer` 의 주입 · `stage.tscn` 의 노드 순서.
+##
+## 🔴 **밤 팔레트를 강제한다.** 무대 빈칸이 `#0E0E13`(거의 검정)이라 배경이 밝으면
+##  캐릭터·몬스터 실루엣이 전부 죽는다. ⇒ 위아래 둘 다 어둡게 두고 **차이만** 준다.
+## ⚠ 실측(2026-08-08, verify-look): 기반암 `(35,34,40)` 이 빈칸 `(14,14,19)` 앞에 서면
+##  **채널당 21 차이라 눈에 전혀 안 보였다.** 배경이 그 자리를 메우는 것이 이 값들의 목적이다.
+
+const BG_Z_INDEX := -100          ## 🔴 격자(`CellRenderer`)보다 확실히 뒤. 씬 순서와 이중으로 건다
+const BG_GRADIENT_STEPS := 24     ## 세로 띠 개수. 적으면 계단이 보이고 많으면 draw 호출이 는다
+const BG_TOP := Color8(9, 9, 16)      ## 위 — 빈칸(#0E0E13)보다 **어둡다**. 하늘이 위로 깊어 보인다
+const BG_BOTTOM := Color8(26, 24, 38) ## 아래 — 지평선 쪽이 살짝 밝다(자주 기운 남색)
+
+## 별. 🔴 **월드 좌표 격자에서 뽑는다** — 화면 좌표로 뽑으면 카메라를 따라와 「창에 붙은 점」이 된다.
+const BG_STAR_CELL_PX := 96.0     ## 한 칸에 최대 별 하나
+const BG_STAR_DENSITY := 0.22     ## 그중 실제로 별이 서는 비율
+const BG_STAR_PX := 2.0
+const BG_STAR_COLOR := Color8(190, 200, 230)
+const BG_STAR_ALPHA_MIN := 0.12   ## ⚠ 너무 밝으면 탄·불꽃과 헷갈린다. 배경은 **읽히면 안 되고 느껴져야** 한다
+const BG_STAR_ALPHA_MAX := 0.45

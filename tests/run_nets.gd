@@ -28,7 +28,7 @@ func _initialize() -> void:
 	var total := Time.get_ticks_msec()
 	for path: String in files:
 		var nm := path.get_file().trim_suffix(".gd")
-		if filter != "" and not nm.contains(filter):
+		if not _filter_matches(nm, filter):
 			continue
 		_run_net(path, nm)
 
@@ -97,9 +97,27 @@ func expect_error(substr: String) -> void:
 
 # ──────────────────────────────────────────────────────────────────
 
+## 🔴🔴 **`^` 접두는 정확히 일치다 — 부분 일치가 아니다** (2026-08-08, harness-manager 실측).
+##  ⚠ **이유**: 병렬 러너는 그물마다 프로세스를 하나씩 띄우고 그 프로세스를 **딱 그 그물에만**
+##  묶으려고 짧은 이름을 필터로 준다(`run_nets.ps1`). 그런데 부분 일치라 이름이 서로를 포함하면
+##  (`net_sprite` ⊂ `net_monster_sprite`, `net_water` ⊂ `net_water_rain`) **한 프로세스가 여러
+##  그물을 몰래 같이 돌린다** — 격리가 깨지고, 시간은 두 그물의 합이 되어 병렬화의 이유가 없어진다.
+##  실측: `net_water`용 프로세스가 필터 "water"로 `net_water_rain`까지 물어 57초가 나왔다
+##  (`net_water_rain`만 도는 프로세스는 45초였다 — 겹쳐 돈 시간이 그대로 낭비였다).
+##  ⇒ **병렬 스폰만 `^`를 쓴다.** 사람이 CLI에 직접 타이핑하는 `-Serial`·수동 실행은
+##  그대로 부분 일치다(짧게 쳐서 여러 그물을 한 번에 돌리는 편의가 사라지면 안 된다).
 func _arg_filter() -> String:
 	var user := OS.get_cmdline_user_args()
 	return user[0] if user.size() > 0 else ""
+
+
+## `filter`가 그물 이름 `nm`("net_xxx")에 맞는가. `^` 접두면 정확히, 아니면 부분 일치.
+func _filter_matches(nm: String, filter: String) -> bool:
+	if filter == "":
+		return true
+	if filter.begins_with("^"):
+		return nm == "net_" + filter.substr(1)
+	return nm.contains(filter)
 
 
 func _collect_nets() -> Array[String]:

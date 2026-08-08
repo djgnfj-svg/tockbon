@@ -19,6 +19,10 @@ signal water_requested(world_px: Vector2)
 ##  🔴 그전에는 맵에 나무가 91칸뿐이라 그 규칙이 **원리적으로 화면에 안 나왔다**(`stage.gd` 의 T 상자).
 signal wood_requested(world_px: Vector2)
 signal ignite_requested(world_px: Vector2)
+## 🔴🔴 **K — 마우스 행에 물비를 토글한다. 껍데기 전용 디버그 키다**(2026-08-08).
+##  F(한 점 붓기)와 달리 **N틱에 걸쳐 조금씩** 붓는다 — 상태는 `src/sim/water_source.gd`(`stage.gd` 의 몫이 아니다).
+## ⚠ **토글이다** — 다시 누르면 멈춘다. 안 그러면 R로 무대를 통째로 리셋해야 끌 수 있다.
+signal rain_requested(world_px: Vector2)
 ## 🔴 **M/N — 마우스 자리에 몬스터를 세운다. 껍데기 전용 디버그 키다**(`monsters-minimum`).
 ##  배치는 맵 문서의 몫이라(문서 「경계」) 무대는 몬스터를 자동으로 안 깐다 — 이 키가
 ##  「볼 것이 화면에 도달하는 경로」다. **F(물 붓기)와 정확히 같은 어법이다.**
@@ -112,6 +116,8 @@ func _unhandled_input(event: InputEvent) -> void:
 				wood_requested.emit(_to_world(get_viewport().get_mouse_position()))
 			KEY_G:
 				ignite_requested.emit(_to_world(get_viewport().get_mouse_position()))
+			KEY_K:
+				rain_requested.emit(_to_world(get_viewport().get_mouse_position()))
 
 
 ## 🔴🔴 **뷰포트 좌표 ≠ 월드 좌표다** — 흔들림용 `Camera2D`가 붙어 있는 한.

@@ -855,22 +855,43 @@ func _every_impact_carves(t) -> void:
 	t.eq(_eaten_depth(stone), Tuning.carve_r(0),
 		"판 깊이가 세대 0의 파는 반경(%d셀)이다" % Tuning.carve_r(0))
 
-	# ── ② 나무벽 + 불 룬 — **파고 그 자리에 불.** 실제 그림은 **고리**다:
-	#  안쪽 `carve_r` 은 파이고 `carve_r < r ≤ rune_r` 인 띠가 탄다.
-	# 🔴🔴 **`carve_r < rune_r` 이 그 고리의 유일한 조건이다** — 안 서면 파기가 태울 연료를
-	#  먼저 지워 **불만 조용히 사라진다.** 값 축은 `net_tables` 가 세대마다 잰다.
+	# ── ② 나무벽 + 불 룬 — 🔴🔴 **더는 「파고 그 자리에 불」이 아니다. 나무는 아예 안 판다**
+	#  (`cell_materials.gd`의 `WOOD`에 `indestructible: true`, 2026-08-08, 사용자가 정했다).
+	#  ⚠ **전에는 여기가 「고리」였다** — 안쪽 `carve_r`은 파이고(=빈칸=연료 0=못 붙는다)
+	#  `carve_r < r ≤ rune_r`인 띠만 탔다. 그 그림의 유일한 조건은 「`carve_r < rune_r`」이었다
+	#  (안 서면 파기가 태울 연료를 먼저 지워 불만 조용히 사라진다).
+	# 🔴🔴 **그 조건이 나무에서는 이제 의미가 없다.** 파기(①)가 `cell_grid._disc(...,true)`이고
+	#  그 함수가 `_indestructible`로 나무를 거른다(약 888줄, `continue`) — 안쪽이 파일 일이
+	#  원리적으로 없으므로 **`carve_r`와 `rune_r`의 대소가 결과를 안 바꾼다**(전체 원반이 그대로 붙는다).
+	#  ⚠ 부등식 자체는 `net_tables`가 세대마다 여전히 잰다 — **미래에 부서지면서 또 타는 재료**가
+	#  생기는 날을 위한 하한이지, 지금 나무의 그림을 설명하는 문장이 아니다.
 	var wood := _wood_cave_grid()
 	var s2 := SpellSim.new()
 	t.ok(_fire(s2, 22, 70, 100, 0), "불 룬 · 문양 없는 탄이 나무벽으로 나간다")
 	_run_until_impact(s2, wood, 12)
-	t.eq(_eaten_depth(wood), Tuning.carve_r(0),
-		"나무벽도 같은 반경(%d셀)만큼 파인다 (재료를 안 가린다)" % Tuning.carve_r(0))
-	t.ok(wood.burning_count() > 0,
-		"그리고 그 자리에 불이 붙는다 (%d칸)" % wood.burning_count())
-	# 🔴 불이 파기보다 **바깥까지** 닿는 것이 「고리」의 값 표현이다.
+
+	t.eq(_eaten_depth(wood), 0, "나무벽은 안 파인다 (폭발이 못 파듯 파기도 못 판다)")
+	# 🔴 대조군 — **돌은 그대로 판다**(위 ①과 같은 값). 없으면 위 「안 파인다」가 「재료를
+	#  가린다」인지 「파기 자체가 없어졌다」인지 못 가른다.
+	t.eq(_eaten_depth(stone), Tuning.carve_r(0), "대조군 — 돌은 그대로 판다 (재료를 가린다)")
+
+	t.ok(wood.burning_count() > 0, "그리고 나무에 불이 붙는다 (%d칸)" % wood.burning_count())
+	# 🔴🔴 **고리가 아니라 꽉 찬 원반이다.** 파기가 안 지우므로 파괴 반경 안쪽도 여전히 나무이고,
+	#  점화 반경(rune_r) 안이면 똑같이 붙는다 — 안쪽만 비어 있던 옛 그림이 사라졌다.
+	t.eq(wood.mat_at(CAVE_X1 + 1, 70), Mat.WOOD, "파괴 반경 안쪽도 나무 그대로다 (안 파였다)")
+	t.eq(wood.flag_at(CAVE_X1 + 1, 70) & Mat.FLAG_BURNING, Mat.FLAG_BURNING,
+		"그 칸도 탄다 (더는 고리가 아니라 원반 전체다)")
 	t.eq(_burn_depth(wood, CAVE_X1 + 1, CAVE_X1 + 20, CAVE_Y0, CAVE_Y1, true), Tuning.rune_r(0),
-		"불이 파기 바깥 %d셀까지 닿는다 (고리다 — 점화 %d > 파기 %d)" % [
-			Tuning.rune_r(0) - Tuning.carve_r(0), Tuning.rune_r(0), Tuning.carve_r(0)])
+		"불이 점화 반경(%d셀)까지 닿는다 (중심에서 잰 반경이지 고리 폭이 아니라 이 값은 안 바뀐다)" % Tuning.rune_r(0))
+
+	# 🔴🔴 **없어지는 경로가 살아 있다 — 파기가 아니라 불이 나무를 없앤다.**
+	#  ⚠ 여기부터는 `grid.step()`을 직접 불러야 한다 — 방금까지 돈 `sim.step(grid)`는
+	#  탄만 움직이고 불은 안 태운다(`_burn_depth` 주석과 같은 함정, 이 그물이 안 부르는 이유).
+	var burn_ticks := int(Mat.DEFS[Mat.WOOD]["fuel"]) / Tuning.FIRE_BURN_PER_TICK
+	for _i in burn_ticks + 5:
+		wood.step()
+	t.eq(wood.mat_at(CAVE_X1 + 1, 70), Mat.EMPTY,
+		"다 타면 그 나무 칸이 빈칸이 된다 (없앤 것은 불이지 파기가 아니다)")
 
 
 ## 🔴🔴 **같은 자리를 여러 번 쏘면 뚫린다**(판정 3). 사용자가 「한 칸도 못 줄인다」로 연

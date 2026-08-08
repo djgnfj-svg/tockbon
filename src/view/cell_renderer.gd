@@ -63,6 +63,11 @@ func setup(grid: CellGrid) -> void:
 	#   여기서 또 주면 물 색이 두 곳이 되고, 한쪽만 고치는 날이 온다.
 	sm.set_shader_parameter("flag_shallow", Mat.FLAG_SHALLOW)
 	sm.set_shader_parameter("water_shallow", Fx.WATER_SHALLOW)
+
+	# 🔴🔴 **빈칸을 투명으로 뺀다 — 배경이 화면에 도달하는 유일한 경로다** (2026-08-08).
+	#  격자 스프라이트가 월드 전체를 덮으므로 이게 없으면 **뒤에 무엇을 넣어도 100% 가려진다.**
+	#  ⚠ **`Mat.EMPTY` 에서 파생시킨다. 0을 박지 마라** — 재료 id가 바뀌는 날 조용히 낡는다.
+	sm.set_shader_parameter("empty_id", Mat.EMPTY)
 	material = sm
 
 

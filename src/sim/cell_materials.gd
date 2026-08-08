@@ -64,7 +64,21 @@ const FLAG_SHALLOW := 1
 const DEFS: Dictionary = {
 	EMPTY: {"name": &"빈칸", "behavior": BEHAVIOR_NONE, "fuel": 0, "rgb": 0x0E0E13},
 	STONE: {"name": &"돌", "behavior": BEHAVIOR_STATIC, "fuel": 0, "rgb": 0x5C574F},
-	WOOD: {"name": &"나무", "behavior": BEHAVIOR_STATIC, "fuel": 200, "rgb": 0x6B4524},
+	# 🔴🔴 **`indestructible` 인데 탄다. 모순이 아니라 이 게임의 규칙이다** (2026-08-08, 사용자가 정했다).
+	#  · **폭발은 못 판다** — `cell_grid._disc(…, destroy)` 가 `_indestructible` 로 거른다
+	#  · **불은 태운다** — `_burn()` 이 `_write_cell(idx, EMPTY)` 를 **별도 경로로** 부른다(필터를 안 지난다)
+	#  ⇒ **나무를 없애는 길은 불뿐이다.**
+	#
+	# 🔴 **왜 바꿨나 — GDD의 진행 열쇠가 코드에서 성립을 안 했다.** 실측(2026-08-08, verify-read):
+	#  스테이지1의 나무벽(3타일)을 **불 없이 폭발 세 발로 지나갔다**. 게다가 폭발이 `element` 를
+	#  안 들고 가서 **룬 없는 폭발 한 발이 159셀에 불을 붙였다** ⇒ 「중간보스에게 불의 룬을 얻어야
+	#  나무를 태워 길이 열린다」가 **처음부터 잠금이 아니었다.**
+	#  ⚠ 두께로는 못 막는다 — 발수만 는다. `blast_rd(0)` 이 8셀이라 3타일 벽이 3발이었다.
+	#
+	# ⚠ **대가**: 맵의 모든 나무가 폭발에 안 파인다. 「폭발로 나무를 치우는」 플레이가 사라진다.
+	#  🔴 그게 목적이다 — **불만이 나무를 없앤다**가 규칙으로 서야 진행 열쇠가 산다.
+	WOOD: {"name": &"나무", "behavior": BEHAVIOR_STATIC, "fuel": 200, "rgb": 0x6B4524,
+		"indestructible": true},
 	BEDROCK: {"name": &"기반암", "behavior": BEHAVIOR_STATIC, "fuel": 0, "rgb": 0x232228,
 		"indestructible": true},
 	# 🔴🔴 **두 값이 규칙을 파생시킨다. 따로 막는 코드를 쓰지 마라.**
