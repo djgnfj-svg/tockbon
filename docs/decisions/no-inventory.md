@@ -34,7 +34,7 @@ Genre convention agrees (Dead Cells · Skul · Isaac · Noita). But the game-sid
 | Where | How |
 |---|---|
 | `GDD.md`, There is no inventory | Body text |
-| `plans/1.ready/levelup-and-three-picks.md` | Why the three-pick window must be two-step (choose → place in a layer) |
+| `plans/3.done/levelup-and-three-picks.md` | Why the three-pick window must be two-step (choose → place in a layer) |
 | The assembly window, `circle_window.gd` | No stash UI is built |
 | Gear | Step on it and decide there whether to wear it. Same discipline |
 

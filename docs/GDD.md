@@ -501,7 +501,7 @@ impossible in principle. ⇒ **XP keeps both choices alive without creating a bo
 **Filled in later** — **the only thing a level changes is the three-pick.**
 Health doesn't rise and circle layers don't grow. ⇒ **One path to getting stronger**, easy to read.
 **Three times per run** is the target (about once per zone). **Whether it is run-scoped or accumulates in town is still TBD.**
-Detail in `docs/plans/1.ready/levelup-and-three-picks.md`.
+Detail in `docs/plans/3.done/levelup-and-three-picks.md`.
 
 ### The stage template — what defining a stage means
 
@@ -535,6 +535,11 @@ Stages 2 and 3's four slots are **TBD.** **Water is stage 2** (decided by the us
 
 **The initial points come to one none-rune · a basic (2-layer) circle · one spread.**
 ⇒ **The first run's starting kit is identical to the old fixed values.** What changes is **after unlocks accumulate.**
+
+**Re-pinned by the user: you leave with the none rune and the basic circle. That is fixed.**
+The points system does not make the *first* departure negotiable — **there is nothing else unlocked to spend on.**
+⇒ Whoever builds the starting kit **builds the fixed pair first**; points are the shape it grows into, not a
+step-one feature. (`spell_circle.DEFAULT_RUNE` is still `ELEM_FIRE` — that is the gap, see "First milestone".)
 
 ### So **the midboss's role changes per run** (decided by the user)
 
@@ -678,11 +683,11 @@ map → blocked by the wood wall → pit → bull → fire rune → [water rises
 | Gap to fill | Now | Where |
 |---|---|---|
 | ~~**Map terrain**~~ | **Filled** — 400×48 baked and in. Acceptance 3·4 unconfirmed on screen | `docs/plans/3.done/stage1-map-layout.md` |
-| **Fire rune** | **Backwards — it already exists, and the starting kit is fire.** `sim_tuning.ELEM_ALL` has fire, none and water; `spell_circle.DEFAULT_RUNE = ELEM_FIRE`; the palette shows all of `ELEM_ALL` ⇒ **"get fire from the midboss" is already meaningless.** The work is **not building it but changing the starting rune to none and locking the palette** | No doc |
+| **Fire rune** | **Decided by the user — the run starts with the none rune equipped.** So the work is **not building fire but taking it away**: `spell_circle.DEFAULT_RUNE` goes to `ELEM_NONE` and the palette stops offering all of `ELEM_ALL`, or "get fire from the midboss" stays meaningless | No doc |
 | **Two bosses** | Designed, **zero code** | `docs/plans/1.ready/stage1-bosses.md` |
 | **Three of water's four** | Only pouring works | `docs/plans/2.active/water-jump-and-escape.md` |
-| **Water in pit ①** | **No owner.** The map says "the only exit is water", the boss doc says "there is no water in room ①", the water doc scopes only "right after boss ③" ⇒ **currently it comes only from the F key** | None of the three claimed it |
-| **The wood-wall lock is broken** | **Three blasts get you through. Without fire.** The blast at `spell_sim.gd:525` doesn't carry `element`, so a runeless blast ignites (measured) ⇒ **"the midboss is the key to progression" is void in code** | `3.done/stage1-map-layout.md` |
+| **Water in pit ①** | **Owner settled** (decided by the user) — **take the bull's reward, then the side wall collapses and water comes in.** Zero code; it lands with the bull | `docs/plans/1.ready/stage1-bosses.md` |
+| ~~**The wood-wall lock is broken**~~ | **Not a problem — decided by the user.** A runeless blast does open the wall (`spell_sim.gd:633` ignites without `element`), but **the wall is on the far side of pit ①, and the only way out of the pit is the water the bull's death brings** ⇒ **you cannot stand in front of that wall without already holding fire.** **The lock is held by the map's shape, not by the ignition rule** | `3.done/stage1-map-layout.md` |
 | **The screen for receiving the fire rune** | With no inventory, **placement must be decided on receipt**, and the only receiving screen is the three-pick, **which was cut.** With one rune slot, the choice to push out none is unavoidable | Conflicts with "what was cut" below |
 | **An ending** | None. Place a gate and mark it on contact | No doc |
 
@@ -758,7 +763,9 @@ What is written here is **not yet decided.** Do not fill it in by pretending to 
   (one dominant per zone vs evenly).
 
 - ~~**Seed distribution · procedural generation**~~ → **Not doing it. The map is fixed** (decided by the user).
-  **The map the user designed and drew is used as-is.** Stage 1 is already drawn (312×126 tiles).
+  **The map the user designed and drew is used as-is.** Stage 1 is already drawn — **400×48 tiles**
+  (`terrain_map_generated.gd`, `MAP_W`/`MAP_H`). **This line read 312×126 and was wrong**; the size is counted
+  in one place only, and that place is the baked file.
   ⇒ **No seeds, no room composition.** The same terrain every run.
 
   **So the variation per run comes only from what you bring** — assembly (circle · rune · glyph) ·

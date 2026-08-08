@@ -44,8 +44,9 @@ Where it shakes if this reverses.
 | The bull's fire sticks to terrain → move the wood wall outside ① | `plans/1.ready/stage1-bosses.md` |
 | Unlimited jumping underwater — neither buoyancy nor swimming | `plans/2.active/water-jump-and-escape.md` |
 | The map is fixed (dungeons are not generated) | `design/terrain-baking.md` |
-| The shop is at the stage transition (not inside the map) | `plans/1.ready/levelup-and-three-picks.md` |
+| The shop is at the stage transition (not inside the map) | `plans/3.done/levelup-and-three-picks.md` |
 | Permanent currency comes from bosses only | Same doc |
 | There are no potions | `GDD.md`, Equipping and firing |
 | Hitstop was dropped — replaced by flash duration | Code comments only |
 | The rooster lands (it doesn't stay airborne) | `plans/1.ready/stage1-bosses.md` |
+| Pit ①'s water comes from the bull — reward first, then the wall collapses | Same doc |

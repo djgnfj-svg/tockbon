@@ -427,10 +427,15 @@ func on_tick(spell: SpellSim) -> void:
 		return
 	# (2)(3) Segment (direct hit) and blast. **One hit and that is the end of it** —
 	#  that is acceptance 3-(1) (taking two blasts on the same tick is still one hit).
-	if not (_body.hit_by_segment(spell) or _body.hit_by_blast(spell)):
+	# **`hit_by_segment`/`hit_by_blast` return a power percent, 0 = not hit — `max`, not `or`.**
+	#  `if a() or b()` short-circuits, so whichever the array order finds first would silently decide the
+	#  damage the moment the two ever disagree (`body.gd`'s "why max" comment). Base 100 keeps this identical
+	#  to the pre-Stage-A flat `DAMAGE_HIT` for every combination that existed before.
+	var pw := maxi(_body.hit_by_segment(spell), _body.hit_by_blast(spell))
+	if pw <= 0:
 		return
 	# (4) HP does not go below 0 (plan section 4) — `take_hit` does the floor and the invulnerability set together.
-	take_hit(DAMAGE_HIT, true)
+	take_hit(DAMAGE_HIT * pw / 100, true)
 	# **Getting hit does not push you** (decided by the user). There used to be a "push toward the hit direction"
 	#  here and `_push_dir` carried it — both were deleted. **To revive it you must revive both the place that
 	#  finds the direction (`_hit_by_*`) and the place that pushes (here).** Leave only one and you find the

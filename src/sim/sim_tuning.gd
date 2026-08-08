@@ -308,6 +308,27 @@ const ELEM_DEFS: Dictionary = {
 	ELEM_WATER: {"trace": TRACE_WET},
 }
 
+# --- power ------------------------------------------------------------
+## **Base damage percent.** `Character.DAMAGE_HIT * power / 100` is the whole formula
+##  (`spell_sim.gd`'s "power_pct" section). Common-rarity glyphs are 100, so a bolt carrying only common
+##  glyphs (or none at all) deals exactly the pre-Stage-A damage — that identity is the honesty check.
+const POWER_BASE := 100
+
+## **A bark ceiling, not a tuning knob** — the same idiom as `MAX_BURNING`. 7 layers of 200% composes to
+##  12,800 (comfortably inside int32); this exists so a future glyph with a much larger `power_pct` cannot
+##  silently overflow through repeated MODIFY composition at `_launch`. Unreachable with today's table —
+##  `net_spell` measures the clamp fires when forced past it directly, since "unreachable today" is not the
+##  same claim as "tested".
+##
+## **Only `_launch`'s MODIFY composition clamps against this.** `_run_glyph`'s `blast_power`
+##  (`power * Glyph.power_pct_of(id) / 100`, one multiplication against an already-clamped `power`) and
+##  `_pend_pow` (which only ever carries a value `_launch` already clamped) cannot exceed
+##  `POWER_MAX * 1.5 = 1,500,000` — comfortably inside int32 (2,147,483,647) with today's highest `power_pct`
+##  (150). Not clamped a second time **because they cannot overflow with today's table**, not because the
+##  question was skipped — the day a `power_pct` column is added that could push that product past int32, this
+##  line is where to add the clamp, not a guess made in advance.
+const POWER_MAX := 1000000
+
 # --- bit width of the glyph list ------------------------------------
 ## The "remaining glyph list" a bolt carries is **a single integer**, stacked 4 bits per nibble.
 ##  **7 layers is the ceiling.** `PackedInt32Array` is signed 32-bit, so an 8th layer sitting in the top nibble

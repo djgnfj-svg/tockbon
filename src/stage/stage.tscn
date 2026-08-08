@@ -10,6 +10,7 @@
 [ext_resource type="TileSet" uid="uid://d4d6jvryupnxn" path="res://src/stage/terrain_tileset.tres" id="8_pvnpy"]
 [ext_resource type="Script" path="res://src/view/monster_view.gd" id="9_monster"]
 [ext_resource type="Script" path="res://src/view/sky_background.gd" id="10_sky"]
+[ext_resource type="Script" path="res://src/view/three_pick_window.gd" id="11_pick"]
 
 [node name="Stage" type="Node2D" unique_id=630605066]
 script = ExtResource("1_stage")
@@ -42,15 +43,31 @@ script = ExtResource("3_input")
 [node name="Stats" type="Label" parent="HUD" unique_id=1530758245]
 offset_left = 16.0
 offset_top = 16.0
-offset_right = 1800.0
-offset_bottom = 420.0
+offset_right = 944.0
+offset_bottom = 524.0
 text = "…"
 
 [node name="Health" type="Label" parent="HUD" unique_id=622335655]
-offset_left = 1320.0
-offset_top = 988.0
-offset_right = 1904.0
-offset_bottom = 1060.0
+offset_left = 660.0
+offset_top = 494.0
+offset_right = 952.0
+offset_bottom = 530.0
+text = "…"
+
+[node name="Progress" type="Label" parent="HUD" unique_id=3859206611]
+mouse_filter = 2
+offset_left = 660.0
+offset_top = 450.0
+offset_right = 952.0
+offset_bottom = 486.0
+text = "…"
+
+[node name="LevelUp" type="Label" parent="HUD" unique_id=3157460882]
+mouse_filter = 2
+offset_left = 660.0
+offset_top = 404.0
+offset_right = 952.0
+offset_bottom = 440.0
 text = "…"
 
 [node name="CircleWindow" type="Control" parent="HUD" unique_id=2120730422]
@@ -58,6 +75,13 @@ visible = false
 layout_mode = 3
 anchors_preset = 0
 script = ExtResource("7_window")
+
+[node name="ThreePickWindow" type="Control" parent="HUD"]
+visible = false
+mouse_filter = 0
+layout_mode = 3
+anchors_preset = 0
+script = ExtResource("11_pick")
 
 [node name="Terrain" type="TileMapLayer" parent="." unique_id=1198090814]
 position = Vector2(0, 1)

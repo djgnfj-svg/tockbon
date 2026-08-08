@@ -114,6 +114,8 @@ func run(t) -> void:
 	_body_flames_stay_put_and_stay_inside(t)
 	_flash_layer_gets_its_shader_in_a_real_tree(t)
 	_layer_draws_go_through_the_canvas_argument(t)
+	# -- levelup-and-three-picks Stage A — acceptance 8, measured by value --
+	_dummy_raises_hits_to_kill_a_pig(t)
 
 
 # -- 1. premises --------------------------------------------------
@@ -1542,3 +1544,65 @@ func _func_body(src: String, name: String) -> String:
 		return ""
 	var end := src.find("\nfunc ", at + 1)
 	return src.substr(at, (end - at) if end > 0 else -1)
+
+
+# ══════════════════════════════════════════════════════════════════
+#  levelup-and-three-picks Stage A — acceptance 8, measured by value
+# ══════════════════════════════════════════════════════════════════
+
+## **Damage by value, absolute — not only relative** (the plan's own warning: an A/B comparison alone catches
+##  "diverged", never "vanished"). How many hits it actually takes to kill a pig at base power vs at
+##  `DUMMY_U` — both counts are checked against the table's own numbers, not only against each other, so a
+##  mutation that breaks *both* sides identically (e.g. `power_pct` read but never applied) cannot pass by
+##  keeping the two equal.
+func _dummy_raises_hits_to_kill_a_pig(t) -> void:
+	var kind := Defs.KIND_PIG
+	var boost := Glyph.power_pct_of(Glyph.DUMMY_U)
+	t.ok(boost > 100, "더미(상)이 실제로 100%%보다 세다 (%d%% — 검사의 전제)" % boost)
+
+	var common := _hits_to_kill(kind, Glyph.GLYPH_NONE)
+	var boosted := _hits_to_kill(kind, Glyph.pack([Glyph.DUMMY_U]))
+
+	var want_common := ceili(float(Defs.max_hp(kind)) / float(Character.DAMAGE_HIT))
+	var dmg_boosted := Character.DAMAGE_HIT * boost / 100
+	var want_boosted := ceili(float(Defs.max_hp(kind)) / float(dmg_boosted))
+
+	t.eq(common, want_common,
+		"기본 위력이면 돼지(hp %d)가 %d대에 죽는다 (한 대 %d)" % [Defs.max_hp(kind), want_common, Character.DAMAGE_HIT])
+	t.eq(boosted, want_boosted,
+		"더미(상)을 실으면 %d대에 죽는다 (한 대 %d — %d%%)" % [want_boosted, dmg_boosted, boost])
+	t.ok(boosted < common, "그리고 실제로 더 적은 대수로 죽는다 (%d < %d) — 이것이 「소켓한 문양이 주문을 바꾼다」다" % [
+		boosted, common])
+
+
+## Fires repeated direct hits (`ELEM_NONE`, so no fire/blast side effects mix in) at a freshly spawned
+##  monster of `kind` until it dies. Returns the number of shots that connected.
+## **The origin is recomputed every shot from the monster's current position** — `_still_ch` keeps the target
+##  stationary so the pig has no reason to walk, but re-aiming costs nothing and removes the assumption entirely.
+## Spacing between shots is `invuln_ticks + 1` — one tick beyond invulnerability, the same margin
+##  `net_damage._invuln_lasts_four_ticks` uses for "the gap that guarantees a second hit lands".
+func _hits_to_kill(kind: int, glyphs: int) -> int:
+	var stand_x := 600
+	var stand_y := FLOOR_TOP - Defs.h_px(kind)
+	var g := _bare_grid()
+	var spell := SpellSim.new()
+	var ch := _still_ch(stand_x, kind)
+	var world := WorldStep.new(g, spell, ch)
+	var mid := world.spawn_monster(kind, stand_x, stand_y)
+	# **No `t` in scope here** — the caller asserts the premise. Returning -1 makes a spawn failure show up as
+	#  a comparison mismatch in the caller rather than disappearing silently.
+	if mid <= 0:
+		return -1
+	var m: Monster = world.monster_at(0)
+
+	var hits := 0
+	var safety := 0
+	while world.monster_count() > 0 and safety < 50:
+		var row_cy := floori((m.y + Defs.h_px(kind) * 0.5) / float(Tuning.CELL_PX))
+		var origin_cx := floori((m.x - HIT_LEAD_PX) / float(Tuning.CELL_PX))
+		world.enqueue(SpellSim.cmd_fire(origin_cx, row_cy, 10, 0, Tuning.ELEM_NONE, glyphs))
+		for _i in Tuning.TICK_DIVIDER * (Defs.invuln_ticks(kind) + 1):
+			world.frame(DT, 0.0, false, false)
+		hits += 1
+		safety += 1
+	return hits

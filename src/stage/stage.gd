@@ -18,6 +18,7 @@ const CharacterView := preload("res://src/view/character_view.gd")
 const SpellView := preload("res://src/view/spell_view.gd")
 const BlastFx := preload("res://src/view/blast_fx.gd")
 const CircleWindow := preload("res://src/view/circle_window.gd")
+const ThreePickWindow := preload("res://src/view/three_pick_window.gd")
 const Character := preload("res://src/actor/character.gd")
 const WorldStep := preload("res://src/actor/world_step.gd")
 const Aim := preload("res://src/actor/aim.gd")
@@ -27,6 +28,7 @@ const Glyph := preload("res://src/sim/glyph_defs.gd")
 const StageInput := preload("res://src/stage/stage_input.gd")
 const MonsterView := preload("res://src/view/monster_view.gd")
 const MonsterDefs := preload("res://src/actor/monster_defs.gd")
+const Progress := preload("res://src/actor/progress.gd")
 const WaterSource := preload("res://src/sim/water_source.gd")
 
 ## No longer a constant but a re-export of `terrain_map_generated.gd` — it follows the painted region's size verbatim.
@@ -128,12 +130,19 @@ const MAP_CHARS: Dictionary = TerrainMap.MAP_CHARS
 ## A list holding spread twice is never built here in the first place (GDD, "one spread per magic circle").
 ##  Even so `spell_sim.fire()` looks once more at the command boundary — the network does not go through this table.
 ## Numbers that don't exist aren't in the table, and the HUD shows **only the numbers that exist** (`_loadout_help` below).
+##
+## **1-5 use the common-rarity names now** (`SPREAD_C`/`BLAST_C`, not the `GLYPH_SPREAD`/`GLYPH_BLAST` aliases)
+##  — the levelup-and-three-picks plan's Stage A contract for this file. Common rows are `power_pct = 100`, so
+##  this is not a behavior change; it only says on screen which specific id is firing.
+## **6 is Stage A's own measuring instrument** — one dummy layer plus common blast, so acceptance 8 (does the
+##  socketed glyph actually raise damage) is one keypress instead of a trip through the palette.
 const LOADOUTS: Dictionary = {
 	1: [],
-	2: [Glyph.GLYPH_SPREAD],
-	3: [Glyph.GLYPH_BLAST],
-	4: [Glyph.GLYPH_SPREAD, Glyph.GLYPH_BLAST],
-	5: [Glyph.GLYPH_BLAST, Glyph.GLYPH_SPREAD],
+	2: [Glyph.SPREAD_C],
+	3: [Glyph.BLAST_C],
+	4: [Glyph.SPREAD_C, Glyph.BLAST_C],
+	5: [Glyph.BLAST_C, Glyph.SPREAD_C],
+	6: [Glyph.DUMMY_U, Glyph.BLAST_C],
 }
 
 ## **It must be drawn **before** the grid** — `stage.tscn`'s node order is the draw order.
@@ -154,6 +163,16 @@ const LOADOUTS: Dictionary = {
 ##  `Stats` **hides** when the assembly window opens (`_toggle_assembly`). With health in there, "am I on
 ##  fire" disappears from the screen entirely while assembling (design, "the screen").
 @onready var _hp_label: Label = $HUD/Health
+## **Also a different node from `HUD/Stats`, for the same reason as `Health`** — the level-up indicator is
+##  acceptance 2's whole claim ("it doesn't disappear"), and `Stats` hiding when the assembly window opens
+##  would make that false by construction. Seated in the same band as `Health`, which `WINDOW_RECT`
+##  deliberately does not cover (`net_render._window_does_not_cover_the_health`).
+@onready var _progress_label: Label = $HUD/Progress
+## **A third node, not a second line appended to `_progress_label`.** A `Label` cannot mix colors within one
+##  string, and the indicator has to draw the eye in a way the status line must not (verify-look: appended in
+##  the same color and weight, nobody looked). `Fx.LEVEL_UP_COLOR` is pushed in once, in `_ready()`, the same
+##  place `HUD_FONT_SIZE` already is.
+@onready var _levelup_label: Label = $HUD/LevelUp
 ## **The camera follows the character.** The old contract ("shake only · its position is the viewport center,
 ##  so the transform is the identity") is **dead** — the screen scale doubled, shrinking the visible world to
 ##  960x540, so the stage (2048x1152) does not fit in one screen. With a static camera the character is off screen.
@@ -166,6 +185,10 @@ const LOADOUTS: Dictionary = {
 ## The assembly window sits under `HUD` (a `CanvasLayer`) — put it under `Node2D` and it shakes along with the screen shake.
 ##  **The shell only tells it to open and close.** The window knows its own state and uses its own coordinates.
 @onready var _circle_window: CircleWindow = $HUD/CircleWindow
+## **`Progress` is the single source of "is it open"** — the same discipline `_circle_window` already holds
+##  for the assembly window (`_toggle_assembly`'s own comment). `_toggle_pick()` only ever calls
+##  `Progress.open_pick()`/`decline()`; this node reads that state itself, every frame, in its own `_process()`.
+@onready var _pick_window: ThreePickWindow = $HUD/ThreePickWindow
 @onready var _monster_view: MonsterView = $MonsterView
 @onready var _char_view: CharacterView = $CharacterView
 @onready var _spell_view: SpellView = $SpellView
@@ -257,8 +280,11 @@ func _ready() -> void:
 	# **The font size is pushed in here.** `Label` uses the engine default (16), and the old screen scale of
 	#  2.0 was implicitly making that 32px on screen — the scale became 1.0 and **only the size did not follow.**
 	#  **Why here and not the scene** is in the `fx_tuning.HUD_FONT_SIZE` comment (presentation constants in one file).
-	for label: Label in [_hud, _hp_label]:
+	for label: Label in [_hud, _hp_label, _progress_label, _levelup_label]:
 		label.add_theme_font_size_override("font_size", Fx.HUD_FONT_SIZE)
+	# **Pushed once, not every `_update_hud()` frame** — the same discipline as the font size above. Only the
+	#  text changes per frame; the color is a standing property of this node.
+	_levelup_label.add_theme_color_override("font_color", Fx.LEVEL_UP_COLOR)
 	_terrain.visible = false
 	_sky.setup(_camera)
 	_renderer.setup(_grid)
@@ -271,6 +297,11 @@ func _ready() -> void:
 	# The assembly window reads **the same thing** — give it a copy and "keys 4 and 5 flip the picture"
 	#  disappears, and that is the single source's (plan §1) only visible evidence.
 	_circle_window.setup(_circle)
+	# **`Progress` is owned by `_world`, not the shell** (`world_step.gd`'s own comment) — handed over as a
+	#  reference, the same reason `_circle_window` is handed `_circle` rather than a copy. **`_circle` too** —
+	#  Stage E's layer click calls `SpellCircle.place_glyph()` directly (the one door), so the pick window
+	#  needs the same live reference `_circle_window` already holds, not a second copy of the loadout.
+	_pick_window.setup(_world.progress(), _circle)
 	_spell_view.setup(_spell)
 	# **This one path is how the view gets hold of monsters.** Monsters live inside `world_step`, and if the
 	#  shell holds a separate array there are two "worlds" (`monsters-minimum`, behavior (3)).
@@ -286,6 +317,7 @@ func _ready() -> void:
 	# **The world is not stopped** — do not touch `get_tree().paused` here.
 	#  Walking, firing and fire spreading with the window open is the whole of design acceptance 4.
 	_input.assembly_toggled.connect(_toggle_assembly)
+	_input.pick_toggled.connect(_toggle_pick)
 	_input.zoom_requested.connect(_step_zoom)
 	# The starting equipment is **the model's default** (`SpellCircle`'s constructor) — the line that pushed
 	#  a preset in once here was deleted. Push it in and "the starting state" is in two places, and the day
@@ -304,9 +336,49 @@ func _ready() -> void:
 ## **The window is the single source.** Hold a separate HUD latch and the two diverge into "I closed it but
 ##  the HUD did not come back", and that is a quiet way for the shell to die. => It is decided by **reading**
 ##  the window's state.
+##
+## **`_hud.visible` is not written here, or anywhere else that opens or closes a window.** It used to be —
+##  and the pick window's own `취소` button is the counter-example that killed that approach: it calls
+##  `Progress.decline()` **directly** (`three_pick_window._gui_input`'s own design — the window owns its own
+##  click handling), which this function and `_toggle_pick()` below never see. A toggle-time write here would
+##  restore `Stats` on Tab and P, but not on a decline that came from the button, and `Stats` would strand
+##  hidden with nothing open — measured on screen. `_update_hud()` derives `_hud.visible` from `Progress` and
+##  `_circle_window` **every frame** instead, which makes that whole class of "one path forgot to restore it"
+##  bug impossible rather than patching the one path that got caught.
 func _toggle_assembly() -> void:
+	# **Opening one closes the other** (Stage C's own file-table line) — `HUD/Stats` is the only place either
+	#  can show right now (the pick has no window yet), so the two cannot both claim it. Declining does not
+	#  consume the pick (`Progress.decline()`'s own comment) — it only clears the room to show something else.
+	_world.progress().decline()
+	# **Stage E's confirmation afterglow does not derive from `Progress`** (`three_pick_window.is_showing()`'s
+	#  own comment) — `decline()` above cannot touch it, so without this line Tab pressed during the
+	#  afterglow would show both windows at once, the exact bug `_opening_one_window_closes_the_other`
+	#  exists to prevent.
+	_pick_window.cancel_confirm()
 	_circle_window.toggle()
-	_hud.visible = not _circle_window.visible
+
+
+## P. **The three-pick's Stage-C door** — text only, no window yet (that is Stage D). Mirrors
+## `_toggle_assembly()`'s own shape: **`Progress` is the single source of "is it open"**, read here, not held
+## as a second latch — the same reason `_toggle_assembly` reads `_circle_window.visible` instead of a bool of
+## its own. **`_hud.visible` is likewise not written here** — see the comment above `_toggle_assembly`.
+func _toggle_pick() -> void:
+	var pr := _world.progress()
+	if pr.is_pick_open():
+		pr.decline()
+		return
+	# **Check first, close second.** With nothing pending, `open_pick()` below would fail anyway — closing
+	#  the assembly window *before* knowing that trades the player's open window for nothing. Measured:
+	#  pressing P with 0 pending while the window was open used to close it regardless (`pending_picks <= 0`
+	#  is exactly `open_pick()`'s own first guard, read here before touching the window at all).
+	if pr.pending_picks <= 0:
+		return
+	# **Opening the pick closes the assembly window** — the same reason in reverse.
+	if _circle_window.visible:
+		_circle_window.toggle()
+	# **`owned` comes from the circle, not from `Progress`** — `Progress` knows nothing about circles
+	#  (that file's own comment), the same boundary it holds against monsters and glyphs elsewhere.
+	pr.open_pick(_circle.glyph_list())
 
 
 ## `-` / `=`. **Clamped, not wrapped** — wrapping would send "one more step out" from the widest view
@@ -459,6 +531,12 @@ func _set_loadout(n: int) -> void:
 func _physics_process(delta: float) -> void:
 	if _world.frame(delta, _input.move_axis(), _input.jump_pressed(), _input.jump_held()):
 		_on_ticked()
+	# **Before `_update_hud()`, not after, and not left to the pick window's own `_process()`.**
+	#  `three_pick_window.tick_confirm()`'s own header: ticking the confirmation countdown here, in the same
+	#  synchronous call as `_update_hud()` (which reads `is_showing()`), closes the one-render-frame seam that
+	#  existed when the countdown lived on the idle clock instead — a frame where the window had already
+	#  gone invisible but the HUD had not yet been told.
+	_pick_window.tick_confirm()
 	_update_hud()
 
 
@@ -533,6 +611,11 @@ func reset_stage() -> void:
 	#  so that diagnosis is the eye.
 	#  The queue and the fire count are held by `_world` — touch them here as well and there are two places to reset.
 	_world.reset()
+	# **`cancel_confirm()` too** — `_world.reset()` clears `Progress` (so a lingering `pending_picks`/`_drawn`
+	#  do not ride into the new run), but the confirmation afterglow does not live in `Progress` at all
+	#  (`is_showing()`'s own comment) and nothing else would clear it. Left out, pressing R during the
+	#  afterglow left it floating over a freshly reset world for up to 0.7s, `Stats` hidden the whole time.
+	_pick_window.cancel_confirm()
 	_blast_count = 0
 	# Rain is a reset target too — leave it on and the old source keeps pouring from the moment terrain is rebuilt.
 	_water_source = null
@@ -622,6 +705,17 @@ func _refresh_hud_counts() -> void:
 
 func _update_hud() -> void:
 	_refresh_hud_counts()
+	# **`Stats` hides while either window claims the screen — derived here, every frame, not written at the
+	#  moment either window opens or closes.** The pick window's `취소` button calls `Progress.decline()`
+	#  directly (`three_pick_window._gui_input`), bypassing `_toggle_pick()` entirely — a toggle-time write
+	#  there cannot see that path, and `Stats` stranded hidden with nothing open (measured on screen). Reading
+	#  the two windows' own state here instead makes that whole class of bug impossible rather than adding a
+	#  second restore call for the one path that got caught.
+	# **`_pick_window.is_showing()`, not `_world.progress().is_pick_open()` directly** — Stage E's
+	#  confirmation afterglow can hold the pick window on screen a few frames after the pick itself already
+	#  closed (`is_showing()`'s own comment), and `Progress` alone cannot see that. One expression still,
+	#  widened at its one call site rather than duplicated at a second.
+	_hud.visible = not _pick_window.is_showing() and not _circle_window.visible
 	# **The single source of health is the character.** Count it separately in the shell and it becomes "it took damage but the number is unchanged".
 	# Downed is **derived from the same value** — hold a separate latch and "it is 0 but not downed" stays on screen.
 	#  The way to revive is written alongside. Being alone there is nobody to pick you up, so **R is the only
@@ -629,6 +723,22 @@ func _update_hud() -> void:
 	_hp_label.text = "체력 %d / %d%s" % [
 		_char.hp, Character.MAX_HP, "   쓰러짐 — R로 다시" if _char.downed else "",
 	]
+	# **A different node from `Stats`, on purpose** (the `_progress_label` comment above) — this has to keep
+	#  showing while the assembly window is open, and `Stats` is the one node that hides for it.
+	var pr := _world.progress()
+	_progress_label.text = "Lv.%d · XP %d/%d · 돈 %d" % [
+		pr.level, pr.xp, Progress.xp_for_level(pr.level), pr.money,
+	]
+	# **A third node, its own line, its own color** (`_levelup_label`'s comment above) — appended to the status
+	#  line in the same white it was legible but drew nobody's eye (verify-look).
+	# **The key is named now** — Stage B left this as a count with no instruction on purpose (the key did not
+	#  exist yet); Stage C binds `open_pick` to P, so a bare number stopped being honest.
+	_levelup_label.text = "⬆ 레벨업! P키로 뽑기 (%d개 대기)" % pr.pending_picks if pr.pending_picks > 0 else ""
+
+	# **`Stats` is the plain debug readout, always.** Stage C borrowed this node to print the pick as text
+	#  ("no window yet... it lets the rule be accepted before the picture is argued about" — that stage's own
+	#  words). Stage D built the real picture (`HUD/ThreePickWindow`), so the borrow ends here — showing the
+	#  same information in two places at once would just be confusing, not doubly correct.
 	_hud.text = "\n".join([
 		"틱 %d · %d Hz (분주기 %d)" % [
 			_grid.get_tick(), 60 / Tuning.TICK_DIVIDER, Tuning.TICK_DIVIDER,
@@ -680,7 +790,7 @@ func _update_hud() -> void:
 		#  Without writing M, monsters become "a feature nobody can open" just the same.
 		#  **T/F/G are written as one lump** — "lay a forest, pour water, set it alight" is one procedure,
 		#   and written separately it does not read as the three being one set.
-		"A/D 이동 · Space 점프 · 좌클릭 발사 · Tab 조립창 · R 리셋 · M/N 몬스터",
+		"A/D 이동 · Space 점프 · 좌클릭 발사 · Tab 조립창 · P 세 장 뽑기 · R 리셋 · M/N 몬스터",
 		"T 숲 · F 물 · G 불  (마우스 자리에) · K 물비 토글 (마우스 행에)",
 	])
 

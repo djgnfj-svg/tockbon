@@ -212,6 +212,8 @@ func run(t) -> void:
 	_character_moves_every_frame(t)
 	_reset_clears_the_queue(t)
 	_direct_hit_costs_hp(t)
+	_direct_hit_scales_with_power(t)
+	_direct_hit_takes_the_max_power(t)
 	_vertical_hit_costs_hp(t)
 	_wall_stops_the_segment(t)
 	_place_revives(t)
@@ -598,6 +600,55 @@ func _direct_hit_costs_hp(t) -> void:
 	#  (1) the stage is all stone so fuel is 0, and (2) **there is no impact at all within this window**, so any rune gives 0.
 	#  (`_spread_hit_count_is_recorded` runs 20 ticks and lays wood, which is why that wording holds there.)
 	t.eq(g.consume_changed(), 0, "이 틱에 아직 착탄이 없다 (직격만 잰 것이다)")
+
+
+## **Stage A's own regression — the player side of "the socketed glyph changes the spell" was unmeasured.**
+##  Reverting `character.gd`'s `take_hit(DAMAGE_HIT * pw / 100, true)` back to the flat `take_hit(DAMAGE_HIT,
+##  true)` passed the whole suite green — `net_monster` covers the monster side, nothing covered the player.
+func _direct_hit_scales_with_power(t) -> void:
+	var g := _floor_grid()
+	var spell := SpellSim.new()
+	var ch := _stander()
+	var w := WorldStep.new(g, spell, ch)
+	var boost := Glyph.power_pct_of(Glyph.DUMMY_U)
+	t.ok(boost != Tuning.POWER_BASE, "더미(상)의 power_pct(%d)가 기본값(%d)과 다르다 (검사의 전제)" % [
+		boost, Tuning.POWER_BASE])
+
+	w.enqueue(_hit_cmd_at_with(ch, Glyph.pack([Glyph.DUMMY_U])))
+	_frames(w, Tuning.TICK_DIVIDER)
+
+	var want := Character.DAMAGE_HIT * boost / 100
+	t.ok(want != Character.DAMAGE_HIT, "기대 피해(%d)가 기본 피해(%d)와 실제로 다르다 (전제)" % [
+		want, Character.DAMAGE_HIT])
+	t.eq(ch.hp, Character.MAX_HP - want,
+		"더미(상)을 실은 직격이 플레이어의 체력도 %d 깎는다 (%d%%)" % [want, boost])
+
+
+## **"Max, not first-found" was unmeasured.** Reverting `body.hit_by_segment`'s `best = maxi(best, powv[i])`
+##  back to "return on the first match" passed the whole suite green — nothing fired two segments of
+##  different power at the character on the same tick before this.
+## The **weaker** bolt is queued first (so it lands first in the segment array, at index 0) and the
+##  **boosted** one second — a first-found implementation would report the weaker one; only `max` reports
+##  the true damage.
+func _direct_hit_takes_the_max_power(t) -> void:
+	var g := _floor_grid()
+	var spell := SpellSim.new()
+	var ch := _stander()
+	var w := WorldStep.new(g, spell, ch)
+	var boost := Glyph.power_pct_of(Glyph.DUMMY_U)
+
+	w.enqueue(_hit_cmd_at(ch))
+	w.enqueue(_hit_cmd_at_with(ch, Glyph.pack([Glyph.DUMMY_U])))
+	_frames(w, Tuning.TICK_DIVIDER)
+
+	t.eq(spell.seg_count(), 2, "이번 틱에 구간이 둘이다 (검사의 전제)")
+	if spell.seg_count() == 2:
+		t.eq(int(spell.get_seg_power()[0]), Tuning.POWER_BASE, "먼저 넣은 약한 탄이 배열의 앞이다 (전제)")
+		t.eq(int(spell.get_seg_power()[1]), boost, "나중에 넣은 위력 오른 탄이 배열의 뒤다 (전제)")
+
+	var want := Character.DAMAGE_HIT * boost / 100
+	t.eq(ch.hp, Character.MAX_HP - want,
+		"약한 탄이 배열 앞인데도 **더 센 쪽**으로 깎인다 (%d — 최댓값이지 처음 찾은 값이 아니다)" % want)
 
 
 ## **A bolt falling straight down from overhead hits too.**
@@ -1213,8 +1264,14 @@ func _wood_floor_grid() -> CellGrid:
 ## One horizontal shot that crosses the character's box **on the first tick.** No element plus no glyph.
 ## The origin is produced **from the character's current position** — see the `HIT_LEAD_PX` comment above.
 func _hit_cmd_at(ch: Character) -> Dictionary:
+	return _hit_cmd_at_with(ch, Glyph.GLYPH_NONE)
+
+
+## Same leaping placement as `_hit_cmd_at`, carrying `glyphs` instead of an empty list — the Stage-A power
+##  checks below need a direct hit that also carries a MODIFY glyph.
+func _hit_cmd_at_with(ch: Character, glyphs: int) -> Dictionary:
 	var cx := floori((ch.x - HIT_LEAD_PX) / float(Tuning.CELL_PX))
-	return SpellSim.cmd_fire(cx, _aim_row(ch), AIM_DX, 0, Tuning.ELEM_NONE, Glyph.GLYPH_NONE)
+	return SpellSim.cmd_fire(cx, _aim_row(ch), AIM_DX, 0, Tuning.ELEM_NONE, glyphs)
 
 
 ## The row through the **middle** of the box. For the same reason as x it is **derived from the character** —

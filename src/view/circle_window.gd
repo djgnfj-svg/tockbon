@@ -387,9 +387,9 @@ func _draw_ring(area: Rect2, circle_id: int, layer: int, font: Font) -> void:
 	_draw_glyph(slots[layer], Layout.glyph_radius(area), glyph_id)
 
 
-## **Shape from `kind`, color from the glyph id.** Give each glyph its own drawing and that becomes
-##  **a fourth place to fix**, and `glyph_defs.gd` itself wrote "if a fourth place appears the structure is
-##  wrong, so stop".
+## **Shape from `kind`, color from the glyph id, rarity from a ring around it.** Give each glyph its own
+##  drawing and that becomes **a fourth place to fix**, and `glyph_defs.gd` itself wrote "if a fourth place
+##  appears the structure is wrong, so stop".
 ##  => A new glyph gets its shape **for free.** The day "swap" arrives, kinds become three and shapes become three.
 ## And that axis is **the whole of the pipeline** (design doc), so **the drawing teaches the rule.**
 func _draw_glyph(at: Vector2, r: float, glyph_id: int) -> void:
@@ -397,6 +397,12 @@ func _draw_glyph(at: Vector2, r: float, glyph_id: int) -> void:
 		push_error("CircleWindow: glyph %d is not in the table - cannot draw it" % glyph_id)
 		return
 	var tint: Color = Fx.GLYPH_TINT.get(glyph_id, Fx.GLYPH_TINT_MISSING)
+	# **A second, independent device — the same "two devices" idiom `_draw_ring` already uses for
+	#  "innermost first"** (layer number + brightness). Rarity sits **outside** the symbol's own radius so it
+	#  never fights `GLYPH_TINT`'s color for the same pixels.
+	var rarity_col: Color = Fx.RARITY_TINT.get(Glyph.rarity_of(glyph_id), Fx.GLYPH_TINT_MISSING)
+	draw_circle(at, r * Fx.RARITY_RING_RATIO, rarity_col, false, Fx.RARITY_RING_PX)
+
 	var kind := int(Glyph.DEFS[glyph_id]["kind"])
 	if kind == Glyph.KIND_SPAWN:
 		# Branches reaching outward — "it makes new bolts" is in the shape.
@@ -411,6 +417,16 @@ func _draw_glyph(at: Vector2, r: float, glyph_id: int) -> void:
 	if kind == Glyph.KIND_TERMINAL:
 		# A filled disc — "it ends right there" is in the shape.
 		draw_circle(at, r * Fx.GLYPH_TERMINAL_RATIO, tint, true)
+		return
+	if kind == Glyph.KIND_MODIFY:
+		# A hollow diamond — outline only, so "touches neither trajectory nor list" does not read as either
+		#  of the other two shapes (`fx_tuning.GLYPH_MODIFY_RATIO`'s comment).
+		var d := r * Fx.GLYPH_MODIFY_RATIO
+		var pts: Array[Vector2] = [
+			at + Vector2(0.0, -d), at + Vector2(d, 0.0), at + Vector2(0.0, d), at + Vector2(-d, 0.0),
+		]
+		for k in pts.size():
+			draw_line(pts[k], pts[(k + 1) % pts.size()], tint, Fx.GLYPH_MODIFY_PX)
 		return
 	# It barks on an unknown kind — grow the table's kinds without growing the drawing and it gets caught here.
 	push_error("CircleWindow: glyph kind %d has no drawing" % kind)

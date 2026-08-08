@@ -175,10 +175,33 @@ static func _list_ok(list: Array[int]) -> bool:
 		if not Glyph.DEFS.has(id):
 			return false
 		var cap := int(Glyph.DEFS[id]["max_per_circle"])
-		# **0 = unlimited.** It is not even counted — the same reading as `spell_sim._valid_glyphs`.
-		if cap > 0 and list.count(id) > cap:
+		# **Counted by family, not by exact id** — the same reading as `spell_sim._valid_glyphs`, and it has to
+		#  read the table the **same** way: common-spread and rare-spread are two ids in one family, and letting
+		#  the assembly window place both while `fire()` blocks them is exactly "a buildable-looking circle that
+		#  cannot actually fire" (`_both_ways_agree`'s whole reason to exist).
+		#  **0 = unlimited.** It is not even counted.
+		if cap > 0 and _count_family(list, Glyph.family_of(id)) > cap:
 			return false
 	return true
+
+
+## `Glyph.count_family` walks a packed integer; this is the same count over a plain `Array[int]` — the shape
+##  `_list_ok` already holds its working list in, before it is ever packed.
+##
+## **Skips ids not in `DEFS` instead of dereferencing them — the same guard as `Glyph.count_family`, for the
+## same reason.** `_list_ok`'s own loop only validates ids **before** the one it is currently checking; the cap
+## check for an early, valid id calls this over the **whole** list, including ids further along that have not
+## been validated yet. `[SPREAD_C, an unknown id]` reaches `Glyph.family_of` on that unknown id with no guard
+## here — measured: it does not raise a catchable error, it silently coerces the crashed comparison into
+## matching `FAMILY_SPREAD`, so an unguarded count comes back **2**, not 1, for exactly that list. An id this
+## function skips is still caught — `_list_ok`'s own loop reaches it next and its `not Glyph.DEFS.has(id)`
+## check rejects the placement.
+static func _count_family(list: Array[int], family: int) -> int:
+	var n := 0
+	for id: int in list:
+		if Glyph.DEFS.has(id) and Glyph.family_of(id) == family:
+			n += 1
+	return n
 
 
 # ══════════════════════════════════════════════════════════════════

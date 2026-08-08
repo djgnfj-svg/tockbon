@@ -42,6 +42,11 @@ signal monster_requested(world_px: Vector2, kind: int)
 signal loadout_requested(n: int)
 ## Open/close the assembly window (Tab). **Whether it opens or closes is not decided here** — the window knows its own state.
 signal assembly_toggled
+## **P — open or decline the three-pick.** An input-map action, not a raw keycode, for the same reason as
+##  `toggle_assembly`: this key survives into the real game, so it belongs in `project.godot`, not this file's
+##  debug-key dictionaries. **Whether it opens or declines is not decided here** — `Progress` knows its own
+##  state, the same discipline as the assembly window.
+signal pick_toggled
 ## **`-` / `=` — camera zoom out / in. A shell-only debug key.**
 ##  The map is 400x48 tiles = 12800x1536 world px while the screen shows 960x540, so **1/13th of the map is
 ##  visible at once** and level design cannot be read while playing. This key is the only way to see the whole
@@ -56,7 +61,7 @@ signal zoom_requested(dir: int)
 ##  this file alone used logical keys, **on AZERTY and Dvorak movement would work while only the debug keys die.**
 ##  With two sets of rules in one repo, that divergence only shows up on someone else's keyboard.
 const PRESET_KEYS: Dictionary = {
-	KEY_1: 1, KEY_2: 2, KEY_3: 3, KEY_4: 4, KEY_5: 5,
+	KEY_1: 1, KEY_2: 2, KEY_3: 3, KEY_4: 4, KEY_5: 5, KEY_6: 6,
 }
 
 ## Physical key -> monster kind. Uses `monster_defs.gd`'s ids verbatim — invent a new number here
@@ -108,6 +113,14 @@ func _unhandled_input(event: InputEvent) -> void:
 		#  The symptoms are identical, so check (1) (`focus_mode = NONE`) first.
 		if k.is_action_pressed("toggle_assembly"):
 			assembly_toggled.emit()
+			get_viewport().set_input_as_handled()
+			return
+		# **Same two causes as Tab if this key looks dead**: (1) a focused `Control` eating it via
+		#  `ui_focus_next`-style consumption (not a risk yet — Stage C has no `Control` for the pick) and
+		#  (2) `project.godot`'s input map was edited but the editor was not restarted. Check (2) first here —
+		#  there is no window yet to have stolen focus.
+		if k.is_action_pressed("open_pick"):
+			pick_toggled.emit()
 			get_viewport().set_input_as_handled()
 			return
 		if PRESET_KEYS.has(k.physical_keycode):

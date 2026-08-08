@@ -249,28 +249,40 @@ func water_flow(grid: CellGrid) -> int:
 ##  A generation 0 bolt jumps 80px per tick and the box is 20-44px, so matching only the tick-boundary positions
 ##  lets **the jump clear the whole box.** It is one frame, so the eye can never see it (design: "measuring a
 ##  direct hit by rectangle overlap every tick silently fails to catch it").
-func hit_by_segment(spell: SpellSim) -> bool:
+##
+## Returns the **power percent** of the hit, `0` meaning not hit (not a `bool` any more — the levelup-and-
+##  three-picks plan's Stage A). **The max across every matching segment, not the first found** — several
+##  bolts can cross the box on the same tick, and picking "whichever the array order found first" would let
+##  the damage depend on an implementation detail nobody chose.
+func hit_by_segment(spell: SpellSim) -> int:
 	var x0 := spell.get_seg_x0()
 	var y0 := spell.get_seg_y0()
 	var x1 := spell.get_seg_x1()
 	var y1 := spell.get_seg_y1()
+	var powv := spell.get_seg_power()
+	var best := 0
 	for i in spell.seg_count():
 		if _seg_hits_box(_fp_px(x0[i]), _fp_px(y0[i]), _fp_px(x1[i]), _fp_px(y1[i])):
-			return true
-	return false
+			best = maxi(best, powv[i])
+	return best
 
 
 ## **The radius is not carried in the notification** — the caller reads `Tuning.blast_rd(gen)`.
 ##  Ship it along and the same value lives in two places, and the day the table changes only one follows.
-func hit_by_blast(spell: SpellSim) -> bool:
+##
+## Returns the **power percent** of the hit, `0` meaning not hit — same contract and same "take the max, not
+##  the first" reasoning as `hit_by_segment` above.
+func hit_by_blast(spell: SpellSim) -> int:
 	var bx := spell.get_blast_x()
 	var by := spell.get_blast_y()
 	var bg := spell.get_blast_gen()
+	var powv := spell.get_blast_power()
+	var best := 0
 	for i in spell.blast_count():
 		var r := float(Tuning.blast_rd(bg[i]) * Tuning.CELL_PX)
 		if _circle_hits_box(_cell_px(bx[i]), _cell_px(by[i]), r):
-			return true
-	return false
+			best = maxi(best, powv[i])
+	return best
 
 
 ## **Coordinate conversion is this one function.** The notification is cell fixed-point and the body is px —

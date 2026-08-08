@@ -86,6 +86,19 @@ func run(t) -> void:
 	_spread_without_room(t)
 	_spread_partial(t)
 	_crater_follows_gen(t)
+	# -- levelup-and-three-picks Stage A — power_pct / MODIFY --------
+	_power_composition_is_a_product(t)
+	_modify_composes_at_launch_not_impact(t)
+	_modify_never_reaches_the_pipeline(t)
+	_family_cap_blocks_mixed_rarity(t)
+	_deferred_blast_keeps_its_power(t)
+	_terminal_compounds_carried_power(t)
+	_spawn_does_not_compound_carried_power(t)
+	_blast_power_does_not_leak_between_layers(t)
+	_spread_power_pct_reaches_the_children(t)
+	_notice_power_arrays_clear_with_the_rest(t)
+	_power_clamp_actually_fires(t)
+	_unknown_id_after_a_capped_glyph_barks_not_crashes(t)
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -125,7 +138,9 @@ func _pack_unpack(t) -> void:
 	t.expect_error("Glyph: glyph id 16")
 	t.eq(Glyph.pack(too_big), Glyph.GLYPH_NONE, "니블을 넘는 id는 짖고 버려진다")
 
-	# count_of is the consumer of the `max_per_circle` constraint — if it is wrong, a list holding spread twice passes.
+	# **`count_of` is no longer the `max_per_circle` consumer as of Stage A** (`glyph_defs.gd`'s own comment on
+	#  the function — `count_family` replaced it at both call sites). This block only measures that `count_of`
+	#  still correctly counts exact-id repeats, a real and separate fact from what enforces the cap.
 	var twice: Array[int] = [1, 2, 1]
 	t.eq(Glyph.count_of(Glyph.pack(twice), 1), 2, "count_of가 같은 문양을 두 번 센다")
 	t.eq(Glyph.count_of(Glyph.pack(twice), 2), 1, "count_of가 다른 문양을 한 번 센다")
@@ -1316,6 +1331,373 @@ func _burning_spread(packed: int) -> int:
 				lo = mini(lo, x)
 				hi = maxi(hi, x)
 	return 0 if hi < 0 else hi - lo + 1
+
+
+# ══════════════════════════════════════════════════════════════════
+#  levelup-and-three-picks Stage A — power_pct / MODIFY
+# ══════════════════════════════════════════════════════════════════
+
+## **Composition is a product.** `[DUMMY_U, DUMMY_R]` -> `100 * 200/100 * 150/100 = 300` — the plan's own
+##  worked example. Read right after `fire()`, before any tick runs, so nothing but `_launch`'s own MODIFY
+##  stripping could have produced this number.
+func _power_composition_is_a_product(t) -> void:
+	var sim := SpellSim.new()
+	var list: Array[int] = [Glyph.DUMMY_U, Glyph.DUMMY_R]
+	t.ok(_fire(sim, 100, 70, 1, 0, Glyph.pack(list)), "[더미(상), 더미(중)]을 실은 탄이 나간다")
+	var want := Tuning.POWER_BASE * Glyph.power_pct_of(Glyph.DUMMY_U) / 100 \
+		* Glyph.power_pct_of(Glyph.DUMMY_R) / 100
+	t.eq(sim.get_power()[0], want,
+		"위력 합성이 곱이다 (100 × %d%% × %d%% = %d)" % [
+			Glyph.power_pct_of(Glyph.DUMMY_U), Glyph.power_pct_of(Glyph.DUMMY_R), want])
+	t.eq(sim.get_glyphs()[0], Glyph.GLYPH_NONE, "더미 둘 다 발사 시점에 소모돼 남은 목록이 빈다")
+
+
+## **The check that proves MODIFY is applied at launch and not at impact.** `[dummy, spread]` and
+##  `[spread, dummy]` must differ: in the first, the flying **parent** is boosted and the 8 **children** are not
+##  (the parent already flew; only what SPAWN makes can change); in the second, the parent is normal and each
+##  child strips the dummy **at its own launch** when spread hands it the remaining list.
+## Built as a `_run_glyph` branch instead, MODIFY could never raise the damage of the bolt carrying it — the
+##  direct hit is tested per tick during flight and has already happened by the time impact runs. This is the
+##  net that would catch exactly that regression: both combinations would collapse to "nobody is boosted".
+func _modify_composes_at_launch_not_impact(t) -> void:
+	var boost := Glyph.power_pct_of(Glyph.DUMMY_U)
+
+	# [dummy, spread] — the parent hits harder, the 8 children do not.
+	var g_a := _cave_grid()
+	var sim_a := SpellSim.new()
+	var list_a: Array[int] = [Glyph.DUMMY_U, Glyph.SPREAD_C]
+	t.ok(_fire(sim_a, 22, 70, 100, 0, Glyph.pack(list_a)), "[더미, 확산]을 실은 탄이 나간다")
+	t.eq(sim_a.get_power()[0], boost, "발사 즉시 부모 탄의 위력이 더미만큼 올랐다 (%d)" % boost)
+	var origin_a: int = sim_a.get_id()[0]
+	for _i in 12:
+		sim_a.step(g_a)
+		if not _has_id(sim_a, origin_a):
+			break
+	var alive_a := sim_a.active_count()
+	t.ok(alive_a > 0, "확산 자식이 살아 있다 (%d발)" % alive_a)
+	var pow_a := sim_a.get_power()
+	var children_boosted := false
+	for i in alive_a:
+		if pow_a[i] != Tuning.POWER_BASE:
+			children_boosted = true
+	t.ok(not children_boosted, "확산 자식은 부모의 위력을 안 물려받는다 (전부 기본값 %d)" % Tuning.POWER_BASE)
+
+	# [spread, dummy] — the parent is normal, each child strips the dummy at its own launch.
+	var g_b := _cave_grid()
+	var sim_b := SpellSim.new()
+	var list_b: Array[int] = [Glyph.SPREAD_C, Glyph.DUMMY_U]
+	t.ok(_fire(sim_b, 22, 70, 100, 0, Glyph.pack(list_b)), "[확산, 더미]를 실은 탄이 나간다")
+	t.eq(sim_b.get_power()[0], Tuning.POWER_BASE, "발사 즉시 부모 탄의 위력이 그대로다 (%d)" % Tuning.POWER_BASE)
+	var origin_b: int = sim_b.get_id()[0]
+	for _i in 12:
+		sim_b.step(g_b)
+		if not _has_id(sim_b, origin_b):
+			break
+	var alive_b := sim_b.active_count()
+	t.ok(alive_b > 0, "확산 자식이 살아 있다 (%d발)" % alive_b)
+	var pow_b := sim_b.get_power()
+	var all_children_boosted := true
+	for i in alive_b:
+		if pow_b[i] != boost:
+			all_children_boosted = false
+	t.ok(all_children_boosted, "이번엔 자식들이 **자기** 발사에서 더미를 벗겨 위력이 올랐다 (전부 %d)" % boost)
+
+
+## **`count_family` is the actual `max_per_circle` consumer now, not `count_of`.** Common-spread and
+##  rare-spread are two different ids in one family — `count_of` (counting exact ids) would let them into the
+##  same circle together, and that is precisely the 8 -> 64 explosion the GDD's constraint exists to block.
+##
+## **Why this net does not assert 64**: `SPLIT_MAX` (generation floor) independently blocks a *second* spread
+##  from ever spawning children at all — measured, even driving this exact packed list straight into `_launch`
+##  (bypassing `fire()`'s gate entirely) produces only the first spread's 8 children, never 64, because the
+##  children's own generation already exceeds `SPLIT_MAX` before they could spawn again. Asserting 64 here
+##  would be measuring a number the running code cannot actually produce — the label would claim more than the
+##  check measures (CLAUDE.md, "no fake nets"). What this net asserts instead is the two things
+##  `count_family` is actually responsible for: the rejection at the gate, and that the counting itself really
+##  spans different ids of one family (which `count_of` — kept below it, unrenamed — provably does not).
+func _family_cap_blocks_mixed_rarity(t) -> void:
+	var sim := SpellSim.new()
+	var mixed: Array[int] = [Glyph.SPREAD_C, Glyph.SPREAD_R]
+	t.eq(Glyph.family_of(Glyph.SPREAD_C), Glyph.family_of(Glyph.SPREAD_R),
+		"커먼 확산과 레어 확산이 같은 계통이다 (검사의 전제)")
+	t.ok(Glyph.SPREAD_C != Glyph.SPREAD_R, "그런데 id는 서로 다르다 (count_of라면 안 걸렸을 조합)")
+
+	t.expect_error("per magic circle")
+	t.ok(not _fire(sim, 10, 70, 100, 0, Glyph.pack(mixed)),
+		"커먼 확산 + 레어 확산은 (한 계통이라) 발사 시점에 짖고 버려진다")
+	t.eq(sim.active_count(), 0, "버린 발사가 탄을 안 남긴다")
+
+	# The function itself, isolated from the sim — this is exactly what `_valid_glyphs` calls.
+	t.eq(Glyph.count_family(Glyph.pack(mixed), Glyph.FAMILY_SPREAD), 2,
+		"count_family가 서로 다른 id 둘을 한 계통으로 센다 (2)")
+	# **Inversion, by contrast**: `count_of` (unrenamed, still a real function) counts only the exact id —
+	#  this is the value the old cap check would have seen, and why it would have let the combination through.
+	t.eq(Glyph.count_of(Glyph.pack(mixed), Glyph.SPREAD_C), 1,
+		"대조 — count_of는 정확히 이 id만 센다 (그래서 id 기준이면 이 조합을 못 막는다)")
+
+
+## **A behavior pin for `net_tables`'s `LAUNCH_KINDS` partition** — that table check can only say MODIFY is
+##  *classified* as launch-only; it cannot see whether the running code actually honors that. Fire a list
+##  starting with a dummy and confirm the launched bolt's own remaining list holds **no** MODIFY id (it was
+##  fully consumed at `_launch`), asserted directly rather than by the absence of a bark.
+func _modify_never_reaches_the_pipeline(t) -> void:
+	var sim := SpellSim.new()
+	var list: Array[int] = [Glyph.DUMMY_C, Glyph.BLAST_C]
+	t.ok(_fire(sim, 100, 70, 1, 0, Glyph.pack(list)), "[더미, 폭발]을 실은 탄이 나간다")
+	var g := sim.get_glyphs()[0]
+	var cur := g
+	var saw_modify := false
+	while cur != Glyph.GLYPH_NONE:
+		if int(Glyph.DEFS[Glyph.first(cur)]["kind"]) == Glyph.KIND_MODIFY:
+			saw_modify = true
+		cur = Glyph.rest(cur)
+	t.ok(not saw_modify, "발사된 탄의 남은 목록에 MODIFY 문양이 하나도 없다 (발사 시점에 다 소모됐다)")
+	t.eq(Glyph.first(g), Glyph.BLAST_C, "더미가 빠지고 폭발만 남았다")
+
+
+## **`[DUMMY_U, BLAST_C]` blast power is 200, `[BLAST_C]` alone is 100.** Inversion: drop the `power *`
+##  multiplication in `_run_glyph`'s TERMINAL branch and this goes red — a dummy in one of the game's only
+##  two real glyph families (blast) would become a false knob that does nothing when it matters most, since
+##  the terrain effect is what actually reaches a monster (a bolt detonates on terrain; the monster is hit by
+##  the blast, not the segment).
+func _terminal_compounds_carried_power(t) -> void:
+	var plain_power := _first_blast_power(_wall_grid(), Glyph.pack([Glyph.BLAST_C]))
+	t.eq(plain_power, Tuning.POWER_BASE, "혼자면 폭발 위력이 기본값이다 (%d)" % Tuning.POWER_BASE)
+
+	var boosted_power := _first_blast_power(_wall_grid(), Glyph.pack([Glyph.DUMMY_U, Glyph.BLAST_C]))
+	var want := Tuning.POWER_BASE * Glyph.power_pct_of(Glyph.DUMMY_U) / 100 * Glyph.power_pct_of(Glyph.BLAST_C) / 100
+	t.eq(boosted_power, want,
+		"더미를 앞세우면 폭발 위력이 그 값을 물려받아 곱해진다 (%d)" % want)
+	t.ok(boosted_power != plain_power, "그리고 실제로 혼자일 때와 다르다 (%d ≠ %d)" % [boosted_power, plain_power])
+
+
+## **`[DUMMY_U, SPREAD_C]` child power is 100, not 200.** Inversion: make SPAWN compound the carried power
+##  instead of reseeding (mirror the TERMINAL branch's `power *` onto SPAWN) and this goes red — inheriting
+##  the parent's power would multiply one dummy across all 8 children, the GDD's explosion runaway showing up
+##  in the damage dimension instead of the bolt-count dimension.
+## **A narrower, standalone pin of the same fact `_modify_composes_at_launch_not_impact` already establishes**
+##  in the middle of a longer two-combination scenario — kept anyway, the same reasoning as
+##  `_blast_power_does_not_leak_between_layers` below: pin it before someone "simplifies" it.
+func _spawn_does_not_compound_carried_power(t) -> void:
+	var g := _cave_grid()
+	var sim := SpellSim.new()
+	t.ok(_fire(sim, 22, 70, 100, 0, Glyph.pack([Glyph.DUMMY_U, Glyph.SPREAD_C])),
+		"[더미(상), 확산]을 실은 탄이 나간다")
+	var origin: int = sim.get_id()[0]
+	for _i in 12:
+		sim.step(g)
+		if not _has_id(sim, origin):
+			break
+	var alive := sim.active_count()
+	t.ok(alive > 0, "확산 자식이 살아 있다 (%d발)" % alive)
+	var powv := sim.get_power()
+	var all_base := true
+	for i in alive:
+		if powv[i] != Tuning.POWER_BASE:
+			all_base = false
+	t.ok(all_base, "자식 위력이 100이지 200이 아니다 (부모의 위력을 안 물려받는다)")
+
+
+## **`[BLAST_R, BLAST_R]` gives 120 and 120, not 144.** TERMINAL continues at the same spot (`kind` says so),
+##  so the second blast must read the **same** carried `power` the first one did — `blast_power` in
+##  `_run_glyph` has to be a local, never written back into `power`, or the second blast in a chain would
+##  compound onto the first's already-boosted result. **Already correct** — pinned so it stays that way.
+func _blast_power_does_not_leak_between_layers(t) -> void:
+	var g := _wall_grid()
+	var sim := SpellSim.new()
+	var two: Array[int] = [Glyph.BLAST_R, Glyph.BLAST_R]
+	t.ok(_fire(sim, 10, 70, 100, 0, Glyph.pack(two)), "[폭발(레어), 폭발(레어)]을 실은 탄이 나간다")
+
+	var want := Tuning.POWER_BASE * Glyph.power_pct_of(Glyph.BLAST_R) / 100
+	var bp := PackedInt32Array()
+	for _i in 12:
+		sim.step(g)
+		if sim.blast_count() > 0 and bp.is_empty():
+			bp = sim.get_blast_power().duplicate()
+	t.eq(bp.size(), 2, "TERMINAL이 같은 자리에서 두 번 이어 터진다 (검사의 전제)")
+	if bp.size() == 2:
+		t.eq(bp[0], want, "첫 폭발 위력이 %d다 (144가 아니다)" % want)
+		t.eq(bp[1], want, "둘째 폭발도 **똑같이** %d다 — `blast_power`가 `power`에 다시 안 쓰인다" % want)
+
+
+## Fires `packed` from a fixed origin into `grid` and returns the **first** blast's power percent, or -1 if
+##  none went off within the window. Shared by the TERMINAL-compounding checks above so their own bodies stay
+##  about the comparison, not the plumbing.
+func _first_blast_power(grid: CellGrid, packed: int) -> int:
+	var sim := SpellSim.new()
+	if not _fire(sim, 10, 70, 100, 0, packed):
+		return -1
+	for _i in 12:
+		sim.step(grid)
+		if sim.blast_count() > 0:
+			return sim.get_blast_power()[0]
+	return -1
+
+
+## **A deferred blast keeps the power it was carrying when it was pushed to the next tick.**
+##  Inversion: forget `_pend_pow` (thread `Tuning.POWER_BASE` into the deferred `_resume` call instead of
+##  `_pend_pow[k]`) and this goes red — visible only when the budget actually bites, which is why
+##  `_blast_budget` above (unboosted) cannot catch it on its own.
+## **The premise was false the first time — rebuilt.** Firing plain blasts then the boosted one does not
+##  make the boosted one the one deferred: `_remove` is swap-remove, so the moment slot 0 is vacated, the
+##  *last-fired* bolt is pulled into it and processed **early**, not late. Verified by mutation (dropping
+##  `_pend_pow` entirely and even killing deferral outright both passed the old version green) and by hand
+##  trace: with `MAX_BLASTS_PER_TICK + 1` bolts fired in slots `[0..n]`, `_remove`'s repeated swap visits them
+##  in the order `B0, Bn, B(n-1), …, B2, B1` — the bolt fired **second** is the one the chain visits last, so
+##  it is the one that actually exceeds the budget. Position the boosted bolt there instead of last.
+func _deferred_blast_keeps_its_power(t) -> void:
+	var g := _wall_grid()
+	var sim := SpellSim.new()
+	var gap := Tuning.blast_rd(0) + 4
+	var plain_packed := Glyph.pack([Glyph.BLAST_C])
+	var boosted_packed := Glyph.pack([Glyph.DUMMY_U, Glyph.BLAST_C])
+	var want := Tuning.POWER_BASE * Glyph.power_pct_of(Glyph.DUMMY_U) / 100 \
+		* Glyph.power_pct_of(Glyph.BLAST_C) / 100
+	t.ok(want != Tuning.POWER_BASE, "위력이 오른 폭발이 기본값과 실제로 다르다 (%d ≠ %d — 검사의 전제)" % [
+		want, Tuning.POWER_BASE])
+
+	var n := Tuning.MAX_BLASTS_PER_TICK
+	t.ok(_fire(sim, 10, 8, 100, 0, plain_packed), "평범한 폭발 1발째")
+	t.ok(_fire(sim, 10, 8 + gap, 100, 0, boosted_packed), "위력이 오른 폭발을 **두 번째로** 쏜다 (밀릴 자리)")
+	for k in range(2, n + 1):
+		t.ok(_fire(sim, 10, 8 + k * gap, 100, 0, plain_packed), "예산을 채울 평범한 폭발 %d발째" % k)
+
+	# **The wall is not one tick away** — origin x=10, wall x=40, and drag shaves the first tick's leap short of
+	#  it (measured: it takes 2 ticks, not 1). Hardcoding "step once, read tick1" assumed the wrong tick and
+	#  the check's own premises failed instead of its assertions — caught here by looping and catching the
+	#  **first** non-empty tick, the same idiom `_blast_chain`/`_blast_budget` already use for this wall.
+	var first: Array[int] = []
+	var second: Array[int] = []
+	var found_first := false
+	for _i in 12:
+		sim.step(g)
+		if sim.blast_count() == 0:
+			continue
+		if not found_first:
+			for p in sim.get_blast_power():
+				first.append(p)
+			found_first = true
+			continue
+		for p in sim.get_blast_power():
+			second.append(p)
+		break
+	t.ok(found_first, "탄들이 벽에 닿아 폭발이 시작됐다 (검사의 전제)")
+	t.eq(first.size(), n, "폭발이 시작된 틱에 예산만큼(%d발) 터진다" % n)
+	var first_all_base := true
+	for p in first:
+		if p != Tuning.POWER_BASE:
+			first_all_base = false
+	t.ok(first_all_base, "그 틱에 터진 넷은 전부 기본 위력이다 (위력 오른 것은 아직 안 터졌다)")
+	t.eq(second.size(), 1, "다음 틱에 밀렸던 한 발이 터진다")
+	if second.size() == 1:
+		t.eq(second[0], want, "밀렸다가 재개된 폭발이 위력 %d를 그대로 든다 (100으로 떨어지지 않는다)" % want)
+
+
+## **Spread's own `power_pct` was a false knob.** Replacing `Glyph.power_pct_of(id)` with `Tuning.POWER_BASE`
+##  in `_run_glyph`'s SPAWN branch passed the whole suite green — the only existing coverage
+##  (`_spawn_does_not_compound_carried_power`) fires `SPREAD_C`, whose `power_pct` (100) is identical to
+##  `POWER_BASE`, so that check is right for the wrong reason. `SPREAD_R`/`SPREAD_U` are the only values that
+##  can tell "reads its own column" apart from "always 100".
+func _spread_power_pct_reaches_the_children(t) -> void:
+	for id: int in [Glyph.SPREAD_R, Glyph.SPREAD_U]:
+		var want := Glyph.power_pct_of(id)
+		t.ok(want != Tuning.POWER_BASE, "문양 %d의 power_pct(%d)가 기본값과 실제로 다르다 (검사의 전제)" % [id, want])
+
+		var g := _cave_grid()
+		var sim := SpellSim.new()
+		t.ok(_fire(sim, 22, 70, 100, 0, Glyph.pack([id])), "확산(문양 %d)만 실은 탄이 나간다" % id)
+		var origin: int = sim.get_id()[0]
+		for _i in 12:
+			sim.step(g)
+			if not _has_id(sim, origin):
+				break
+		var alive := sim.active_count()
+		t.ok(alive > 0, "확산 자식이 살아 있다 (%d발)" % alive)
+		var powv := sim.get_power()
+		var all_match := true
+		for i in alive:
+			if powv[i] != want:
+				all_match = false
+		t.ok(all_match, "자식 위력이 이 확산 고유의 power_pct(%d)를 따른다 (기본값 %d로 뭉개지지 않는다)" % [
+			want, Tuning.POWER_BASE])
+
+
+## **The new notice arrays have to clear in `_clear_notices`, the same one place as the rest.**
+##  Dropping `_seg_pow.clear()` or `_fx_pow.clear()` passed the whole suite green — `seg_count()`/`blast_count()`
+##  read `_seg_x0.size()`/`_fx_x.size()`, which reset every tick regardless, so a check that only reads those
+##  counts cannot see a power array quietly growing unbounded beside them. Consequence if it drifts: the
+##  *next* notice's `get_*_power()[i]` reads a value appended ticks ago, not this notice's own power —
+##  silent wrong damage, invisible today only because the powers used in these checks don't happen to collide.
+## **What actually catches the mutation**: comparing the power array's length against the count every tick.
+##  If `.clear()` is dropped, the power array keeps growing while the count resets to 0 each quiet tick, and
+##  the two diverge starting the very next tick — no need to read the stale value itself.
+func _notice_power_arrays_clear_with_the_rest(t) -> void:
+	var g := _wall_grid()
+	var sim := SpellSim.new()
+	t.ok(_fire(sim, 10, 70, 100, 0, Glyph.pack([Glyph.BLAST_C])), "폭발 하나를 쏜다")
+	var fired := false
+	for _i in 12:
+		sim.step(g)
+		t.eq(sim.get_blast_power().size(), sim.blast_count(), "위력 배열 길이가 매 틱 통지 수와 같다")
+		if sim.blast_count() > 0:
+			fired = true
+	t.ok(fired, "폭발이 실제로 났다 (검사의 전제)")
+	# Several more quiet ticks — nothing fires, so the length has to keep tracking 0, not accumulate.
+	for _i in 6:
+		sim.step(g)
+		t.eq(sim.get_blast_power().size(), 0, "조용한 틱에는 위력 배열 길이가 0이다 (밀리지 않고 자란 값이 없다)")
+
+	# The same property for the segment notice — a bolt that keeps flying (never impacts) within the window.
+	var g2 := CellGrid.new()
+	var sim2 := SpellSim.new()
+	t.ok(_fire(sim2, 100, 70, 1, -2, Glyph.GLYPH_NONE), "허공으로 탄을 쏜다")
+	for _i in 8:
+		sim2.step(g2)
+		t.eq(sim2.get_seg_power().size(), sim2.seg_count(),
+			"날아가는 매 틱마다 구간 위력 배열 길이가 구간 수와 같다")
+
+
+## **"Unreachable with today's table" is not the same claim as "tested".** Bypasses `fire()`'s gate — no
+##  combination of today's 9 rows can compose past `POWER_MAX` — and drives `_launch` directly with a seed
+##  already past the ceiling.
+func _power_clamp_actually_fires(t) -> void:
+	var sim := SpellSim.new()
+	var origin_fp := (100 << SpellSim.FP_SHIFT) + SpellSim.FP_HALF
+	t.expect_error("composed power")
+	t.ok(sim._launch(origin_fp, origin_fp, 1, 0, Glyph.GLYPH_NONE, Tuning.ELEM_FIRE, 0, Tuning.POWER_MAX + 500000),
+		"상한을 넘는 위력으로 직접 발사해도 탄은 여전히 난다 (짖고 죽이지 않는다)")
+	t.eq(sim.get_power()[0], Tuning.POWER_MAX, "위력이 상한(%d)으로 눌린다" % Tuning.POWER_MAX)
+
+	# Negative control — a normal composition well under the ceiling is not touched.
+	var sim2 := SpellSim.new()
+	t.ok(_fire(sim2, 100, 70, 1, 0, Glyph.pack([Glyph.DUMMY_U, Glyph.DUMMY_R])), "평범한 합성은 짖지 않는다 (전제)")
+	t.ok(sim2.get_power()[0] < Tuning.POWER_MAX, "그 값이 상한보다 한참 작다 (%d) — 안 눌렸다" % sim2.get_power()[0])
+
+
+## **Real Stage-A regression, fixed** (`glyph_defs.count_family`'s own comment has the trace). The cap check
+##  for an early, valid id used to walk the **whole** list and dereference every id's `DEFS` entry, including
+##  ones the outer loop had not validated yet — an unknown id positioned *after* a capped one crashed the
+##  command boundary instead of being barked and dropped.
+## **`expect_error` alone cannot separate "rejected cleanly" from "crashed underneath" — it is only an
+##  amnesty for the wrapper, not an assertion** (this file's own `_null_world_refuses`-style device is the
+##  fix, borrowed from `net_damage`: measure the bark's trace as a value, not its absence from the log).
+## **Measured, not assumed**: with the guard removed, `fire()` still returns `false` and `active_count()`
+##  still reads 0 — those two assertions alone stayed green under the mutation (312 passed, 0 failed) and only
+##  the wrapper's blanket stderr rule caught it. What actually differs is `count_family`'s own return value —
+##  the crashed `family_of(15)` call silently coerces into matching `FAMILY_SPREAD`, so the guardless version
+##  counts **2**, not 1, for this exact list. That is the value this check pins.
+func _unknown_id_after_a_capped_glyph_barks_not_crashes(t) -> void:
+	var sim := SpellSim.new()
+	t.ok(not Glyph.DEFS.has(Glyph.MASK), "MASK 자체는 정의되지 않은 id다 (검사의 전제)")
+	var list: Array[int] = [Glyph.SPREAD_C, Glyph.MASK]
+	var packed := Glyph.pack(list)
+	t.eq(Glyph.count_family(packed, Glyph.FAMILY_SPREAD), 1,
+		"모르는 id를 건너뛰고 정확히 1로 센다 (죽으면서 우연히 맞는 값이 나오는 게 아니다)")
+
+	t.expect_error("unknown glyph id")
+	t.ok(not _fire(sim, 100, 70, 1, 0, packed),
+		"한도 있는 문양 뒤에 모르는 id가 와도 짖고 버릴 뿐, 죽지 않는다")
+	t.eq(sim.active_count(), 0, "버린 발사가 탄을 안 남긴다")
 
 
 # ══════════════════════════════════════════════════════════════════

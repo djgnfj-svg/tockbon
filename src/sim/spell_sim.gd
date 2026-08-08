@@ -23,6 +23,38 @@ extends RefCounted
 ##  **A net that runs it twice and compares cannot hold this contract in principle** — two instances in the same
 ##   process give identical float answers too. `net_determinism`'s **folder text scan** is the only detector.
 ## =================================================================
+##
+## == **`power_pct` — one column, three natural seats** ================
+##  Base 100. `Character.DAMAGE_HIT * power / 100` is the whole formula, wherever it is finally applied.
+##
+##  **The rule underneath all three rows**: power belongs to a bolt. A glyph's `power_pct` applies to
+##  *whatever that glyph produces.*
+##   · A TERMINAL produces an effect **of this bolt** (a blast at the spot this bolt reached) => it composes
+##     its own `power_pct` onto the power this bolt already carries
+##   · A SPAWN produces **new bolts** (a different object, with its own life ahead of it) => those bolts get
+##     a fresh seed, not the parent's carried power
+##
+##   MODIFY (dummy)     the bolt **carrying** it, composed at `_launch` and nowhere else (that function's
+##                       header explains why impact is too late)
+##   SPAWN (spread)     **the children it spawns** — a fresh seed equal to the spawning glyph's own
+##                       `power_pct`, discarding whatever the parent bolt itself carried. Inheriting instead
+##                       would multiply one dummy across all 8 children — the GDD's explosion runaway showing
+##                       up in the damage dimension instead of the bolt-count dimension
+##   TERMINAL (blast)   **the blast it makes** — the terminal glyph's own `power_pct` multiplied onto the
+##                       carried power. A bolt detonates *on terrain*, so in a blast build the monster is hit
+##                       by the blast, not the segment — without composing here, `[dummy, blast]` would do
+##                       nothing and the dummy would be a false knob in one of only two real glyph families.
+##                       **TERMINAL is not the end of the list either** (`kind` only means "no bolt is made
+##                       here" — `_run_glyph` returns `rest`, and `[blast, spread]` is debug key 5), so this is
+##                       not "there is nothing left to give power to"; it is specifically "no new bolt is born
+##                       from this glyph, so there is no fresh seed to hand off instead"
+##
+##  This is why `_resume`/`_run_glyph`/`_defer` all thread one `power: int` — it is always exactly the
+##  impacting bolt's own `_power[i]`, unchanged until a SPAWN or TERMINAL glyph spends or replaces it. A
+##  TERMINAL's own `power_pct` multiplication is a **local** (`_run_glyph`'s `blast_power`) — it must never
+##  write back into `power`, or a chain of TERMINALs would compound onto each other instead of each reading
+##  the same carried value (`[BLAST_R, BLAST_R]` must give 120 and 120, not 144).
+## =================================================================
 
 const CellGrid := preload("res://src/sim/cell_grid.gd")
 const Mat := preload("res://src/sim/cell_materials.gd")
@@ -68,6 +100,10 @@ var _prev_px := PackedInt32Array()
 var _prev_py := PackedInt32Array()
 ## **The remaining glyph list** (`glyph_defs.gd`). A single integer.
 var _glyphs := PackedInt32Array()
+## **This bolt's own power percent, composed once at `_launch`** (see the "power_pct" section below).
+##  Base 100. It is what a direct hit deals (`_seg_pow`) and — for a SPAWN glyph — is discarded and replaced
+##  by a fresh seed for the children it makes, not carried into them (that file section explains why).
+var _power := PackedInt32Array()
 var _element := PackedByteArray()
 var _age := PackedInt32Array()
 ## **The spread generation.** 0 = original. **Size, range, blast radius, ignition radius and presentation all
@@ -106,6 +142,10 @@ var _pend_e := PackedByteArray()
 ## The generation is pushed along too — without it a deferred blast detonates **at generation 0 size**, so small
 ##  blasts grow only when you spam. To the eye it reads only as "sometimes it detonates unusually large".
 var _pend_gen := PackedByteArray()
+## **The power flowing through the pipeline at the moment it was deferred.** Without it, a deferred blast
+##  resumes next tick at `Tuning.POWER_BASE` (100) instead of the power the impacting bolt actually carried —
+##  invisible except when the 4-blast budget bites, so a spammed volley's later blasts would quietly weaken.
+var _pend_pow := PackedInt32Array()
 
 ## Blasts that went off this tick — **the only notice presentation gets.** The sim **does not read this.**
 ##  Cleared at the start of `step()`. Leave it to the shell and the moment someone forgets once, the same flash
@@ -114,6 +154,10 @@ var _fx_x := PackedInt32Array()
 var _fx_y := PackedInt32Array()
 var _fx_e := PackedByteArray()
 var _fx_g := PackedByteArray()
+## **The blast's own power percent** — what that blast actually deals, not the flying bolt's launch power.
+##  `body.hit_by_blast` reads this; the screen has no use for it today (a false knob otherwise), so it is not
+##  read anywhere but there.
+var _fx_pow := PackedInt32Array()
 
 ## **The spans a bolt crossed this tick** (fixed point). **The same idiom as the blast notice** —
 ##  cleared at the start of `step()`, and the sim **does not read it.** It only goes out.
@@ -128,12 +172,16 @@ var _fx_g := PackedByteArray()
 ##  **These were stale values across the 32px switch** (the old 40px/16px are from the 16px world) —
 ##  `monsters-minimum` fixed them passing through stage 3.
 ##
-## **It carries neither generation nor rune.** Every bolt does the same damage today, so **there is no consumer.**
-##  Sending a value nobody uses makes it a false knob (the same discipline as the `_notify_blast` comment).
+## **It carries neither generation nor rune.** Bolts no longer all deal the same damage (`_seg_pow` below), but
+##  generation and rune still have no consumer on this notice — sending a value nobody uses makes it a false
+##  knob (the same discipline as the `_notify_blast` comment).
 var _seg_x0 := PackedInt32Array()
 var _seg_y0 := PackedInt32Array()
 var _seg_x1 := PackedInt32Array()
 var _seg_y1 := PackedInt32Array()
+## **The power percent of the bolt that crossed this span** — the same `_power[i]` value that bolt was
+##  launched with. Without it, `body.hit_by_segment` has a segment but no way to answer "how hard".
+var _seg_pow := PackedInt32Array()
 
 ## The cell `_walk` stopped at. **Why a member and not a local**: the impact point is both an argument to
 ##  `_impact` and the end point of the span notice, so keeping two copies gives "the blast happened here but the
@@ -151,6 +199,7 @@ func _init() -> void:
 	_prev_px.resize(n)
 	_prev_py.resize(n)
 	_glyphs.resize(n)
+	_power.resize(n)
 	_element.resize(n)
 	_age.resize(n)
 	_gen.resize(n)
@@ -206,7 +255,7 @@ func fire(cmd: Dictionary) -> bool:
 		return false
 
 	return _launch((ox << FP_SHIFT) + FP_HALF, (oy << FP_SHIFT) + FP_HALF,
-		adx, ady, glyphs, element, 0)
+		adx, ady, glyphs, element, 0, Tuning.POWER_BASE)
 
 
 ## **The glyph constraint bites here too, not only at assembly time.** The GDD chose to stop the explosion with a
@@ -222,7 +271,10 @@ func _valid_glyphs(glyphs: int) -> bool:
 			push_error("SpellSim: unknown glyph id %d - discarding the shot" % id)
 			return false
 		var cap := int(Glyph.DEFS[id]["max_per_circle"])
-		if cap > 0 and Glyph.count_of(glyphs, id) > cap:
+		# **Counted by family, not by exact id** — common-spread + rare-spread are two different ids but one
+		#  family, and letting them both into the same circle is exactly the 8 -> 64 explosion the GDD's
+		#  constraint exists to block. `spell_circle._list_ok` reads the same table the same way.
+		if cap > 0 and Glyph.count_family(glyphs, Glyph.family_of(id)) > cap:
 			push_error("SpellSim: glyph %s is limited to %d per magic circle - discarding the shot" % [
 				Glyph.DEFS[id]["name"], cap])
 			return false
@@ -237,8 +289,18 @@ func _valid_glyphs(glyphs: int) -> bool:
 ## **Fire and spread go through the same door.** Normalize separately in each and you get "only the 8 spread bolts
 ##  have a different speed", which to the eye reads only as "the spreading shape is off".
 ## The arguments are **fixed-point positions** (not cells) — spread must leave from the middle of the impact point.
+##
+## `power` is this bolt's **seed** — `Tuning.POWER_BASE` from `fire()`, or a SPAWN glyph's own `power_pct` when
+##  a child is born from `_spread()` (that seed deliberately does not carry the parent's own composed power —
+##  see the "power_pct" section of this file's header for why).
+##
+## **MODIFY is consumed here, and only here.** The leading run of MODIFY glyphs is stripped off `glyphs` and
+##  composed multiplicatively into `power` before anything is stored — `_resume` must never see a MODIFY id,
+##  because the direct hit is tested per tick during flight (`_notify_seg`) and has **already happened** by the
+##  time the impact pipeline would run; a MODIFY that only fired at impact could never raise the damage of the
+##  bolt carrying it. Both fire and spread go through this same door, so both get this for free.
 func _launch(pfx: int, pfy: int, adx: int, ady: int,
-		glyphs: int, element: int, gen: int) -> bool:
+		glyphs: int, element: int, gen: int, power: int) -> bool:
 	if _count >= Tuning.MAX_PROJECTILES:
 		# **Bark and drop.** In single player spread is one per magic circle, so 1 -> 8 bolts is the ceiling and
 		#  32 is unreachable in principle. Reaching it is a bug, so it must bark
@@ -263,7 +325,21 @@ func _launch(pfx: int, pfy: int, adx: int, ady: int,
 	_prev_py[i] = pfy
 	_vx[i] = (adx << AIM_SHIFT) * speed_fp / norm
 	_vy[i] = (ady << AIM_SHIFT) * speed_fp / norm
-	_glyphs[i] = glyphs
+
+	# Strip the **leading run** of MODIFY glyphs and compose their `power_pct` into `power`. Stop at the first
+	#  non-MODIFY id — this repo pinned "MODIFY is consumed at launch, never as a `_run_glyph` branch", so a
+	#  MODIFY buried after a SPAWN/TERMINAL glyph belongs to whatever bolt is born *after* that glyph runs,
+	#  not to this one (that is exactly `[spread, dummy]`'s "each child strips it at ITS launch").
+	var cur := glyphs
+	while cur != Glyph.GLYPH_NONE and int(Glyph.DEFS[Glyph.first(cur)]["kind"]) == Glyph.KIND_MODIFY:
+		power = power * Glyph.power_pct_of(Glyph.first(cur)) / 100
+		cur = Glyph.rest(cur)
+	if power > Tuning.POWER_MAX:
+		push_error("SpellSim: composed power %d exceeds the ceiling %d - clamping" % [power, Tuning.POWER_MAX])
+		power = Tuning.POWER_MAX
+
+	_glyphs[i] = cur
+	_power[i] = power
 	_element[i] = element
 	_age[i] = 0
 	_gen[i] = gen
@@ -283,6 +359,7 @@ func reset() -> void:
 	_pend_g.clear()
 	_pend_e.clear()
 	_pend_gen.clear()
+	_pend_pow.clear()
 	_clear_notices()
 
 
@@ -340,9 +417,9 @@ func _advance(grid: CellGrid, i: int) -> bool:
 	#  some are not", which reads only as "sometimes it doesn't hit".
 	# The die-of-age branch already returned above — **it did not move, so there is no span.**
 	if alive:
-		_notify_seg(x0, y0, x1, y1)
+		_notify_seg(x0, y0, x1, y1, _power[i])
 	else:
-		_notify_seg(x0, y0, _cell_center_fp(_hit_cx), _cell_center_fp(_hit_cy))
+		_notify_seg(x0, y0, _cell_center_fp(_hit_cx), _cell_center_fp(_hit_cy), _power[i])
 	return alive
 
 
@@ -404,7 +481,7 @@ func _impact(grid: CellGrid, x: int, y: int, i: int) -> void:
 	# (2) **The rune trace comes before the glyph.** The trace is the floor value and the glyph stacks on top of it.
 	_rune_trace(grid, x, y, _element[i], _gen[i])
 	# (3) The glyph pipeline. A blast digs far larger here than (1) does.
-	_resume(grid, x, y, _glyphs[i], _element[i], _gen[i])
+	_resume(grid, x, y, _glyphs[i], _element[i], _gen[i], _power[i])
 
 
 ## **Every impact carves — even with no glyph, even with a none rune** (the GDD's first natural law,
@@ -505,7 +582,11 @@ func _rune_trace(grid: CellGrid, x: int, y: int, element: int, gen: int) -> void
 ##
 ## Why it takes **only position, list and rune** and not the impacting projectile: when a deferred pipeline resumes
 ##  next tick, that projectile is already gone. Hang it on the slot index and there is no way to resume then.
-func _resume(grid: CellGrid, x: int, y: int, glyphs: int, element: int, gen: int) -> void:
+##
+## `power` is the impacting bolt's own `_power[i]` — **`_resume` never sees a MODIFY id** (it was fully consumed
+##  at `_launch`), so this single value is all the power information the pipeline ever has, and it is threaded
+##  unchanged through every TERMINAL/SPAWN glyph in the list until one of them spends or replaces it.
+func _resume(grid: CellGrid, x: int, y: int, glyphs: int, element: int, gen: int, power: int) -> void:
 	var g := glyphs
 	while g != Glyph.GLYPH_NONE:
 		var id := Glyph.first(g)
@@ -514,28 +595,44 @@ func _resume(grid: CellGrid, x: int, y: int, glyphs: int, element: int, gen: int
 		# 0 = unlimited, so **it isn't even counted.** Count it and the counter drifts negative and loses meaning.
 		if _budget_cap[id] > 0:
 			if _budget_left[id] <= 0:
-				_defer(x, y, g, element, gen)
+				_defer(x, y, g, element, gen, power)
 				return
 			_budget_left[id] -= 1
-		g = _run_glyph(grid, x, y, id, Glyph.rest(g), element, gen)
+		g = _run_glyph(grid, x, y, id, Glyph.rest(g), element, gen, power)
 
 
 ## Runs one glyph and returns **the remaining list to run next.**
 ## Returns `GLYPH_NONE` (= ends here) if the list was handed to new bolts or the glyph is unknown.
 ##
-## **Barks on an unknown id.** When the nets run each of `Glyph.ALL` once, a glyph that exists in the table but not
-##  in code is caught **for free** by the wrapper's stderr check.
-## Why `if` and not `match`: in a `match`, an attribute access like `Glyph.GLYPH_BLAST` **risks being read as a
+## **Barks on an unknown id — and on a MODIFY id too**, now that branching is by `kind` and MODIFY has no branch
+##  of its own here (it falls to the `else`). That is exactly the contract this repo pinned: MODIFY must never
+##  reach `_resume`, so seeing one here is the same class of bug as an id with no implementation at all, and it
+##  is caught by the same bark for free.
+## Why by `kind` and not by exact id: rarity folded three ids per family (`glyph_defs.gd`'s header) — branching
+##  on `id == Glyph.GLYPH_BLAST` would only ever run the common-blast branch and leave `BLAST_R`/`BLAST_U`
+##  unimplemented, silently.
+## Why `if` and not `match`: in a `match`, an attribute access like `Glyph.KIND_TERMINAL` **risks being read as a
 ##  binding pattern**, and then every id hits the first branch with no error raised.
 func _run_glyph(grid: CellGrid, x: int, y: int, id: int, rest: int,
-		element: int, gen: int) -> int:
-	if id == Glyph.GLYPH_BLAST:
+		element: int, gen: int, power: int) -> int:
+	var kind := int(Glyph.DEFS[id]["kind"])
+	if kind == Glyph.KIND_TERMINAL:
+		# **"the blast it makes"** — the terminal glyph's own `power_pct` composes onto the carried power
+		#  (this file's "power_pct" header section has the full rule and why it differs from SPAWN below).
+		#  **Not "nothing is born after a TERMINAL"** — `kind` only decides "no bolt is made *by this glyph*";
+		#  `[blast, spread]` (debug key 5) proves a TERMINAL is not the end of the list. The real reason this
+		#  composes rather than reseeds is narrower: a bolt detonates on terrain, so the monster is hit by the
+		#  blast itself, not by a fresh object this glyph created — there is no new bolt to hand a seed to.
+		# **`blast_power` is a local — it must never write back into `power`.** A chain of TERMINALs
+		#  (`[BLAST_R, BLAST_R]`) has to compose from the same carried value each time (120, 120), not compound
+		#  onto the previous blast's result (144) — `_blast_power_does_not_leak_between_layers` pins this.
+		var blast_power := power * Glyph.power_pct_of(id) / 100
 		# The one door that changes the grid is `apply(cmd)` — touch `_mat` directly here and the side effects
 		#  added later (waking, ignition) are skipped wholesale and **nothing happens, with no error.**
 		var rd := Tuning.blast_rd(gen)
 		grid.apply(CellGrid.cmd_blast(x, y, rd, Tuning.blast_ignite_r(gen)))
-		_notify_blast(x, y, element, gen)
-	elif id == Glyph.GLYPH_SPREAD:
+		_notify_blast(x, y, element, gen, blast_power)
+	elif kind == Glyph.KIND_SPAWN:
 		# **"Blocked by the floor" and "no slot" must be told apart.** Both are "no bolt was made", but the former
 		#  is **a designed normal path** and must be quiet, and the latter is **a bug** and must bark.
 		#  Fold them into one branch and the bug hides behind the normal path's silence.
@@ -545,7 +642,14 @@ func _run_glyph(grid: CellGrid, x: int, y: int, id: int, rest: int,
 			#   bolt cannot carry spread. It is a structural floor for the day that constraint loosens, and
 			#   **the nets cannot reach this branch either** (it cannot be produced through the public API).
 			return rest
-		if _spread(x, y, rest, element, gen) == 0:
+		# **"the children it spawns"** — SPAWN does not hand the carried `power` to its children at all. The
+		#  parent already flew (and already dealt whatever its own composed power let it deal on a direct hit);
+		#  only what SPAWN itself makes can change, so each child's power **starts fresh** from this glyph's
+		#  own `power_pct` — not multiplied by the parent's. `[dummy, spread]` is exactly the case that would
+		#  break here if this reset were skipped: the parent's dummy-boosted power would leak into all 8
+		#  children and "the parent hits harder, the 8 children do not" would stop being true.
+		var spawn_power := Glyph.power_pct_of(id)
+		if _spread(x, y, rest, element, gen, spawn_power) == 0:
 			# **Not one slot = a bug.** `return rest` here would run the remaining list **at the impact point at
 			#  generation 0** — "spread -> blast" would become **one big hole** instead of eight small ones, and
 			#  that is exactly the difference the GDD pinned as **different magic.**
@@ -562,7 +666,7 @@ func _run_glyph(grid: CellGrid, x: int, y: int, id: int, rest: int,
 	#   · TERMINAL no bolt was made => continue at the same place
 	#  Without this branch, changing `kind` does nothing, and then table and code diverge while
 	#   "the glyph's execution rule" survives only in a comment.
-	if int(Glyph.DEFS[id]["kind"]) == Glyph.KIND_SPAWN:
+	if kind == Glyph.KIND_SPAWN:
 		return Glyph.GLYPH_NONE
 	return rest
 
@@ -576,7 +680,12 @@ func _run_glyph(grid: CellGrid, x: int, y: int, id: int, rest: int,
 ##  are faster", which on screen reads only as **a squashed radial burst.**
 ## **Only some of them flying is a bug too** — the burst goes lopsided. `_launch` already barks on the slot cap, so
 ##  it does not bark again here (bark the same fact twice and the amnesty declaration widens).
-func _spread(x: int, y: int, rest: int, element: int, gen: int) -> int:
+##
+## `seed_power` is the SPAWN glyph's own `power_pct` (`_run_glyph`'s comment on why it is a fresh seed, not the
+##  carried power). Each child still runs it through `_launch`'s own MODIFY-stripping — a leading MODIFY in
+##  `rest` composes onto **this** seed at the child's own launch, which is `[spread, dummy]`'s "each child
+##  strips it at ITS launch".
+func _spread(x: int, y: int, rest: int, element: int, gen: int, seed_power: int) -> int:
 	# It leaves from **the middle** of the impact point. Emitting from a cell corner makes the eight directions asymmetric.
 	var pfx := (x << FP_SHIFT) + FP_HALF
 	var pfy := (y << FP_SHIFT) + FP_HALF
@@ -584,17 +693,18 @@ func _spread(x: int, y: int, rest: int, element: int, gen: int) -> int:
 	for k in Tuning.SPREAD_COUNT:
 		# **Hands the remaining list through as-is** (`rest`) — this one integer assignment is the whole of the
 		#  GDD's "a glyph that makes bolts hands the remaining list to the new bolts".
-		if _launch(pfx, pfy, SPREAD_DX[k], SPREAD_DY[k], rest, element, gen + 1):
+		if _launch(pfx, pfy, SPREAD_DX[k], SPREAD_DY[k], rest, element, gen + 1, seed_power):
 			born += 1
 	return born
 
 
-func _defer(x: int, y: int, glyphs: int, element: int, gen: int) -> void:
+func _defer(x: int, y: int, glyphs: int, element: int, gen: int, power: int) -> void:
 	_pend_x.append(x)
 	_pend_y.append(y)
 	_pend_g.append(glyphs)
 	_pend_e.append(element)
 	_pend_gen.append(gen)
+	_pend_pow.append(power)
 
 
 ## **Only the count at the start is iterated.** Look at ones deferred again this tick within the same tick and
@@ -604,7 +714,7 @@ func _drain_pending(grid: CellGrid) -> void:
 	if n == 0:
 		return
 	for k in n:
-		_resume(grid, _pend_x[k], _pend_y[k], _pend_g[k], _pend_e[k], _pend_gen[k])
+		_resume(grid, _pend_x[k], _pend_y[k], _pend_g[k], _pend_e[k], _pend_gen[k], _pend_pow[k])
 	# Drop the first n. What is appended after them is what was just deferred again.
 	# `slice` makes a new array and **reassigns it to the member** — the opposite direction from the trap of
 	#  passing it as an argument and writing to a CoW copy (`_px` comment above), so it is safe.
@@ -613,6 +723,7 @@ func _drain_pending(grid: CellGrid) -> void:
 	_pend_g = _pend_g.slice(n)
 	_pend_e = _pend_e.slice(n)
 	_pend_gen = _pend_gen.slice(n)
+	_pend_pow = _pend_pow.slice(n)
 
 
 ## **It carries the generation and not the radius.** The radius is a sim-table value (`SIM_SIZES.rd`) and
@@ -620,11 +731,12 @@ func _drain_pending(grid: CellGrid) -> void:
 ##  nobody uses makes it a false knob.
 ## What keeps the two tables from diverging is **not stuffing the radius into the notice** but `net_tables`
 ##  measuring both tables' length and monotonicity **together**.
-func _notify_blast(x: int, y: int, element: int, gen: int) -> void:
+func _notify_blast(x: int, y: int, element: int, gen: int, power: int) -> void:
 	_fx_x.append(x)
 	_fx_y.append(y)
 	_fx_e.append(element)
 	_fx_g.append(gen)
+	_fx_pow.append(power)
 
 
 ## Cell number -> the fixed point at **the middle** of that cell. Put the impact point at a cell corner and the
@@ -633,11 +745,12 @@ func _cell_center_fp(c: int) -> int:
 	return (c << FP_SHIFT) + FP_HALF
 
 
-func _notify_seg(x0: int, y0: int, x1: int, y1: int) -> void:
+func _notify_seg(x0: int, y0: int, x1: int, y1: int, power: int) -> void:
 	_seg_x0.append(x0)
 	_seg_y0.append(y0)
 	_seg_x1.append(x1)
 	_seg_y1.append(y1)
+	_seg_pow.append(power)
 
 
 ## **Both notices are cleared in one place.** Clear them separately and the day comes when only one is cleared, and
@@ -647,10 +760,12 @@ func _clear_notices() -> void:
 	_fx_y.clear()
 	_fx_e.clear()
 	_fx_g.clear()
+	_fx_pow.clear()
 	_seg_x0.clear()
 	_seg_y0.clear()
 	_seg_x1.clear()
 	_seg_y1.clear()
+	_seg_pow.clear()
 
 
 ## Pulls the last slot over to overwrite. **Indices shuffle** — see the `_id` comment above.
@@ -664,6 +779,7 @@ func _remove(i: int) -> void:
 		_prev_px[i] = _prev_px[last]
 		_prev_py[i] = _prev_py[last]
 		_glyphs[i] = _glyphs[last]
+		_power[i] = _power[last]
 		_element[i] = _element[last]
 		_age[i] = _age[last]
 		_gen[i] = _gen[last]
@@ -730,6 +846,12 @@ func get_glyphs() -> PackedInt32Array:
 	return _glyphs
 
 
+## This bolt's own composed power percent (`_launch`'s "power_pct" comment). What a direct hit through this
+##  bolt deals — the same value `get_seg_power()` reports once the segment notice fires.
+func get_power() -> PackedInt32Array:
+	return _power
+
+
 ## The spread generation. The renderer derives head size and trail length from it — the sim axis growing while
 ##  the screen doesn't follow is how v1 died.
 func get_gen() -> PackedByteArray:
@@ -762,6 +884,11 @@ func get_blast_element() -> PackedByteArray:
 	return _fx_e
 
 
+## The blast's own power percent — **not** the flying bolt's launch power (`_run_glyph`'s TERMINAL comment).
+func get_blast_power() -> PackedInt32Array:
+	return _fx_pow
+
+
 func get_blast_gen() -> PackedByteArray:
 	return _fx_g
 
@@ -788,6 +915,11 @@ func get_seg_x1() -> PackedInt32Array:
 
 func get_seg_y1() -> PackedInt32Array:
 	return _seg_y1
+
+
+## The power percent of the bolt that crossed this span.
+func get_seg_power() -> PackedInt32Array:
+	return _seg_pow
 
 
 ## The number of pipelines pushed to the next tick because the budget ran out. Where the nets and the HUD measure

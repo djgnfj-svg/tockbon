@@ -104,6 +104,7 @@ func run(t) -> void:
 	_both_ways_agree(t)
 	_presets_still_work(t)
 	_preset_restores_everything(t)
+	_unknown_id_after_a_capped_glyph_does_not_crash_the_window(t)
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -1045,6 +1046,33 @@ func _cap_blocks_before_placing(t) -> void:
 	t.ok(not c.can_place_glyph(-1, Glyph.GLYPH_BLAST), "없는 층(-1)에는 못 놓는다")
 	t.ok(not c.can_place_glyph(c.layer_count(), Glyph.GLYPH_BLAST), "층 수를 넘는 층에는 못 놓는다")
 	t.ok(not c.can_place_glyph(0, Glyph.MASK), "표에 없는 문양은 못 놓는다")
+
+
+## **The mirror of `net_spell._unknown_id_after_a_capped_glyph_barks_not_crashes` — the same bug class,
+##  the assembly-window side.** `_cap_blocks_before_placing`'s own `can_place_glyph(0, Glyph.MASK)` line just
+##  above does **not** reach `_count_family` — a single unknown id at an otherwise-empty layer is rejected by
+##  `_list_ok`'s own loop before any counting happens. **It needs a capped, valid glyph placed first**, so the
+##  cap check for *that* glyph walks the whole list and reaches the unknown one.
+##
+## **`expect_error` is not used here — `can_place_glyph`/`_list_ok` are deliberately silent by design**
+##  (`can_place_glyph`'s own header: "It must not bark here"), so there is no bark to declare an amnesty for in
+##  the first place. That silence is exactly why this class of bug hides so well on this side: a crash inside
+##  a function that returns `false` either way changes nothing about the boolean the caller sees.
+## **Measured, not assumed**: with the guard removed, `can_place_glyph` still returns `false` — that assertion
+##  alone would have stayed green under the mutation, the same way the `fire()`-side check did before its own
+##  fix. What actually differs is `_count_family`'s own return value: the crashed `family_of` call on the
+##  unknown id silently coerces into matching `FAMILY_SPREAD`, so the guardless version counts **2**, not 1,
+##  for this exact list — that is the value this check pins.
+func _unknown_id_after_a_capped_glyph_does_not_crash_the_window(t) -> void:
+	var c := SpellCircle.new()
+	t.ok(c.place_glyph(0, Glyph.SPREAD_C), "1층에 확산을 놓는다 (전제)")
+	t.ok(not Glyph.DEFS.has(Glyph.MASK), "MASK 자체는 정의되지 않은 id다 (검사의 전제)")
+
+	var list: Array[int] = [Glyph.SPREAD_C, Glyph.MASK]
+	t.eq(SpellCircle._count_family(list, Glyph.FAMILY_SPREAD), 1,
+		"모르는 id를 건너뛰고 정확히 1로 센다 (죽으면서 우연히 맞는 값이 나오는 게 아니다)")
+	t.ok(not c.can_place_glyph(1, Glyph.MASK),
+		"확산이 있는 층 뒤에 모르는 id가 와도 죽지 않고 그냥 거절한다")
 
 
 # ══════════════════════════════════════════════════════════════════

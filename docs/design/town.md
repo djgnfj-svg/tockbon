@@ -175,7 +175,7 @@ Revisit as stages grow.
 
 ## Relationship to the shop — there is no shop in town
 
-Money is spent **at the shop between stages** (`docs/plans/1.ready/levelup-and-three-picks.md`). **That is inside the run.**
+Money is spent **at the shop between stages** (`docs/plans/3.done/levelup-and-three-picks.md`). **That is inside the run.**
 
 ⇒ **Town spends materials; the shop spends money.** Different currencies, so they don't overlap.
 
@@ -189,6 +189,21 @@ keeping it means **town needs somewhere to spend money, which muddies the clean 
 
 **Start**: through the departure gate, **carrying the build chosen with points at the assembly bench.**
 **It is not "the same every run"** — only the first run matches the old fixed values, and **it changes as unlocks accumulate.**
+
+### **The starting kit is handed over here** (decided by the user)
+
+**You receive the none rune and the basic circle in town and leave with them** — town is where the very first
+socketing happens, not the dungeon. **The first departure is fixed** (GDD, "Starting kit"): there is nothing
+else unlocked, so the bench has nothing to offer yet. **The bench is the same object either way** — on run one
+it hands over a fixed pair, later it spends points.
+
+**And the usage is taught by a tutorial, not by this room.** ⇒ **The town does not explain anything.**
+No tooltip, no fixture whose job is to teach — **that pressure goes to the tutorial**, which has no doc yet
+(`README.md`, "Features with no doc yet").
+
+**What this settles for the milestone**: the in-run "screen for receiving a rune" (GDD's first-milestone gap)
+is **the bull's fire rune only.** The *start* is not a receiving problem — **it is a town problem, and town is cut
+from this week** ⇒ until town exists, **code holds the fixed pair directly** (`spell_circle.DEFAULT_RUNE`).
 
 **End**: die or clear and you return to town.
 

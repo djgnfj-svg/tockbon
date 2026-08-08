@@ -318,6 +318,16 @@ const MONSTER_BURN_LOW_BIAS := 0.35
 ##  (`WINDOW_TITLE_SIZE` · `PALETTE_HEAD_SIZE` · the layer number derived from the radius).
 const HUD_FONT_SIZE := 16
 
+## **The level-up indicator's color — a call to action, not a status.** `HUD/Stats`·`Health`·`Progress` are all
+##  the engine's default white; a `Label` cannot mix colors within one string, so the indicator got its own
+##  node (`HUD/LevelUp`) instead of living appended to `HUD/Progress`'s status line, and this is that node's
+##  distinct `font_color` override (verify-look's own finding — appended in the same color and weight, it read
+##  as legible but never drew the eye, and the plan's own risk is "the player carries a three-pick until the
+##  run ends").
+## **A warm gold** — reads as "reward", far from the plain white status text and from `CHAR_DOWNED_COLOR`'s red
+##  (danger) on the same screen.
+const LEVEL_UP_COLOR := Color(1.0, 0.82, 0.25, 1.0)
+
 ## **Invulnerability being visible is the only way to say "you cannot be hit right now"** (design "screen").
 ##  **The blink clock is not here** — the parity of `character.invuln_left` (a tick counter) is the clock itself.
 ##   0.2s is 4 ticks, so it blinks twice. If the renderer makes its own clock there are two clocks, and
@@ -412,16 +422,46 @@ const STAFF_RING_PX := 2.0
 
 ## The tip color per glyph. **One new glyph = one line here** (the plan's "one line in fx_tuning if the presentation differs").
 ## If it is empty (no glyph) it falls back to the rune color — `staff_tint` below.
+##
+## **Rarity does not get its own color here** — every rarity of one family shares its family's color
+##  (`RARITY_TINT` below carries rarity as a separate device, the same "two independent devices" idiom
+##  `CIRCLE_RING_INNER`/`OUTER` already uses for "innermost first"). Splitting color by rarity too would mean
+##  the staff tip alone has to carry **two** axes (which family · which rarity) in one hue, and nine ids would
+##  need nine distinguishable colors instead of three.
 const GLYPH_TINT: Dictionary = {
 	# Spread and blast must be **far apart on the color wheel** so the staff tip for key 4 (spread->blast) and
 	#  key 5 (blast->spread) split at a glance. The layer counts are the same, so **only the color carries the order.**
-	Glyph.GLYPH_SPREAD: Color(0.45, 0.85, 1.0),
-	Glyph.GLYPH_BLAST: Color(1.0, 0.45, 0.15),
+	Glyph.SPREAD_C: Color(0.45, 0.85, 1.0),
+	Glyph.SPREAD_R: Color(0.45, 0.85, 1.0),
+	Glyph.SPREAD_U: Color(0.45, 0.85, 1.0),
+	Glyph.BLAST_C: Color(1.0, 0.45, 0.15),
+	Glyph.BLAST_R: Color(1.0, 0.45, 0.15),
+	Glyph.BLAST_U: Color(1.0, 0.45, 0.15),
+	# **Deliberately neutral — the dummy is not a decided glyph** (`glyph_defs.gd`'s header). Cyan (spread) and
+	#  orange (blast) are both spoken for; this sits away from both and away from `DEAD_TINT`'s cool grey
+	#  ("cannot fire") so a dummy on the staff tip never misreads as either.
+	Glyph.DUMMY_C: Color(0.72, 0.66, 0.56),
+	Glyph.DUMMY_R: Color(0.72, 0.66, 0.56),
+	Glyph.DUMMY_U: Color(0.72, 0.66, 0.56),
 }
 
 ## The color of a glyph with no definition. **Deliberately magenta** — grow the glyphs without growing this
 ##  and the screen screams (the same reason as `MISSING_RGB` in `cell_materials.gd`).
 const GLYPH_TINT_MISSING := Color(1.0, 0.0, 1.0)
+
+## **Rarity — a ring drawn around the glyph symbol, independent of `GLYPH_TINT`'s family color** (the design
+##  doc's "rarity must separate by color", provisional values: common grey-blue · rare violet · unique amber).
+##  Common is deliberately close to neutral so the eye reads rare and unique as "lit up", not the reverse.
+const RARITY_TINT: Dictionary = {
+	Glyph.RARITY_COMMON: Color(0.62, 0.68, 0.78, 0.85),
+	Glyph.RARITY_RARE: Color(0.62, 0.35, 0.92, 0.95),
+	Glyph.RARITY_UNIQUE: Color(0.95, 0.74, 0.22, 0.95),
+}
+## How far outside the symbol's own radius the rarity ring sits (a ratio, so it grows with the symbol).
+##  Sitting **on** the symbol would fight `GLYPH_TINT`'s color for the same pixels — the same trap
+##  `GLYPH_SPAWN_ANGLE_STEP_FRAC`'s comment already measured for the spawn rays and the ring line.
+const RARITY_RING_RATIO := 1.3
+const RARITY_RING_PX := 1.5
 
 ## **The screen's share of "you cannot fire right now".** With the rune slot empty the staff tip **dies to gray.**
 ##  The staff tip is **the only place always visible without opening the assembly window**, so this is what stops
@@ -474,6 +514,16 @@ const DEAD_RING_PX := 3.0
 ## **Health is `HUD/Health` (660,494-952,530) so it is outside this window** — visible during assembly too.
 ##  **That is a living contract** — `Health` is in the same screen coordinate space as the window so it is
 ##   camera-independent, and `net_render._window_does_not_cover_the_health` measures it as is.
+##
+## **All `.tscn` `offset_*` values for `HUD` children live in this 960x540 canvas, not the 1920x1080 window.**
+##  `project.godot`'s `stretch/mode = "canvas_items"` scales the whole canvas 2x to fill the window; Control
+##  coordinates are never doubled by hand. `HUD/Health` shipped for a full session at `(1320,988)-(1904,1060)`
+##  — a plausible-looking 1920x1080-scale box that was **entirely off the 960x540 canvas**, so the label never
+##  drew one pixel and nobody noticed (correct value, correct `visible`, blank screen — CLAUDE.md's "screen
+##  changes but sim doesn't" has a presentation-only cousin: **script state changes, the canvas doesn't**).
+##  `net_render._hud_controls_are_inside_the_viewport` measures every `HUD` child against the real,
+##  project-settings-read canvas size — the trap this comment describes is exactly what it catches.
+## `HUD/Progress` sits just above `Health`, at `(660,450)-(952,486)` — same reasoning, same margin.
 const WINDOW_RECT := Rect2(48, 12, 864, 372)
 
 ## **It is opaque.** A user acceptance — "there should **be a background color**, like a particular window opening".
@@ -496,6 +546,107 @@ const WINDOW_TITLE_SIZE := 16
 ##  With the pages starting below this, that tightness **disappeared structurally** — the circle now exists
 ##  only inside a page, so it has no way of reaching the title.
 const WINDOW_TITLE_BAND_PX := 34.0
+
+# --- the three-pick window (Stage D) ---------------------------------
+## **The same rect as `WINDOW_RECT`, on purpose — "copy `CircleWindow`'s contract exactly"** (the plan's own
+##  words). The two windows are never both visible (`_toggle_pick`/`_toggle_assembly` each close the other),
+##  so sharing a footprint is not a collision risk, and it inherits every position guarantee `WINDOW_RECT`
+##  already has for free: enclosed by the 960x540 canvas, does not cover the `Health`/`Progress`/`LevelUp`
+##  column (which starts at y 404 — `WINDOW_RECT` ends at y 384, **a 20px gap that is the entire margin**
+##  in this layout).
+const PICK_RECT := WINDOW_RECT
+
+## **Opaque, for the same reason as the assembly window** — acceptance 12, "there should be a background
+##  color, like a window opening" (the user's note this file already carried before Stage D existed).
+const PICK_BG := Color(0.05, 0.055, 0.085, 1.0)
+const PICK_EDGE := Color(0.62, 0.5, 0.35, 0.9)
+const PICK_EDGE_PX := 2.0
+const PICK_PAD_PX := 12.0
+
+const PICK_TITLE := "세 장 중 하나"
+const PICK_TITLE_COLOR := Color(0.86, 0.90, 0.98)
+const PICK_TITLE_SIZE := 16
+
+## **The confirmation screen's own title — not `PICK_TITLE` reused.** "세 장 중 하나" ("one of three") kept
+## reading during confirmation, when choosing was already over — measured, verify-look read that combination
+## as the window failing to close, not as a placement confirmed.
+const PICK_CONFIRM_TITLE := "장착 완료"
+## Cards start below this band, the same reason `WINDOW_TITLE_BAND_PX` exists — overlapping the title reads as neither.
+const PICK_TITLE_BAND_PX := 34.0
+
+## The band the decline/dice buttons occupy, **below** the cards.
+const PICK_BUTTON_BAND_PX := 40.0
+## Gap between the (up to 3) cards.
+const PICK_CARD_GAP_PX := 12.0
+
+const PICK_CARD_BG := Color(0.10, 0.11, 0.15, 1.0)
+## **The card's border is the rarity color** (`RARITY_TINT`) — this is the whole of "rarity separates by
+##  color on the card". Stage A already proved these three read on this dark palette, magnified and at
+##  native size (verify-look).
+const PICK_CARD_EDGE_PX := 3.0
+
+const PICK_NAME_COLOR := Color(0.92, 0.92, 0.90)
+const PICK_NAME_SIZE := 16
+const PICK_RARITY_SIZE := 12
+const PICK_EFFECT_COLOR := Color(0.72, 0.76, 0.82)
+const PICK_EFFECT_SIZE := 12
+
+## **Text names for `Glyph.RARITY_*`, in the same one place as their colors** — split the name into a
+##  second table and the day a rarity is renamed only one of the two follows.
+const RARITY_NAME: Dictionary = {
+	0: "일반", 1: "희귀", 2: "유니크",
+}
+
+## **The dummy marking's screen half** (Stage A closed the name half — `glyph_defs.DEFS`'s "더미" — and
+##  left this to Stage D). A small hollow diamond, the same silhouette `circle_window._draw_glyph` uses for
+##  `KIND_MODIFY` in the assembly window, so "this shape means dummy" reads the same on both screens.
+##  **Not a shared function** — `CanvasItem.draw_*` calls only work inside the calling node's own `_draw()`,
+##  so the two screens each draw their own copy of the same simple geometry; what is shared is the
+##  **silhouette and the color** (`GLYPH_TINT`'s dummy entry), not a function.
+const PICK_DUMMY_MARK_RATIO := 0.35
+const PICK_DUMMY_MARK_PX := 2.0
+
+## Decline is always available — **`can_place_glyph`'s "removing is always allowed" idiom, one level up.**
+const PICK_DECLINE_TEXT := "취소"
+const PICK_DECLINE_COLOR := Color(0.85, 0.55, 0.5)
+
+## **The dice button — drawn, visibly disabled.** `Progress.dice_left` is 0 and nothing raises it
+##  (that field's own comment); a normal-looking button that silently does nothing on click is exactly the
+##  fake this doc's own "Against CLAUDE.md's fake-code list" paragraph warns against, so this reads as
+##  **off**, not merely unlucky to click — the same device `DEAD_TINT` already uses for "you cannot fire".
+const PICK_DICE_TEXT := "주사위 (0)"
+const PICK_DICE_COLOR := DEAD_TINT
+
+# --- step 2 — the layer choice ----------------------------------------
+## Width of the picked card once it shrinks into the corner (`pick_layout.picked_card_rect`) — narrower than
+## a step-1 card (`(864-24)/3 ≈ 280px`), wide enough that its three lines of text (name · rarity · effect,
+## the same "what it does, not only what it is" reading Stage D's own draw already leans on) still fit.
+const PICK_PICKED_CARD_W_PX := 220.0
+
+## **A layer already holding a glyph draws that glyph dimmed, with the incoming one beside it** — the design
+## doc's own words for what "gets pushed out" has to show. `GLYPH_TINT`'s color, alpha-scaled — not a second
+## color table, the same "one column, every kind reads it in its own place" idiom `power_pct` already holds.
+##
+## **"Over it" was tried literally first and failed for one shape combination** — verify-look measured a
+## dimmed `MODIFY` diamond (`GLYPH_MODIFY_RATIO` 0.75) sitting entirely inside an incoming `TERMINAL` disc
+## (`GLYPH_TERMINAL_RATIO` 0.8) at the *same point, same radius*: **invisible**, alpha or not. `PICK_PUSHOUT_
+## OFFSET_RATIO`/`_SCALE` below move the outgoing glyph beside the incoming one instead, so no combination of
+## shapes can fully occlude another regardless of which two glyphs happen to collide.
+const PICK_PUSHOUT_DIM_ALPHA := 0.35
+## How far to the side (a multiple of the glyph radius) the outgoing glyph sits from the incoming one.
+const PICK_PUSHOUT_OFFSET_RATIO := 1.3
+## The outgoing glyph draws smaller than the incoming one — visually secondary, not competing for attention
+## with the placement that is actually about to happen.
+const PICK_PUSHOUT_SCALE := 0.55
+
+## **A rejected placement must be visible, not silent** (Stage D's own screen finding, one level up: a card
+## reading as identical to its siblings was a real defect; a click that does nothing with no reason shown is
+## the same disease). The only rejection `place_glyph` can hand back today is the family cap
+## (`glyph_defs.gd`'s `max_per_circle`, counted by family) — layer bounds are unreachable through a real
+## `layer_at()` hit, and an unknown glyph id cannot reach this window at all (it only ever holds ids `drawn()`
+## itself produced). So the message names the one real cause rather than a generic "no".
+const PICK_REJECT_TEXT := "여기엔 놓을 수 없다 — 같은 계열이 이미 있다"
+const PICK_REJECT_COLOR := Color(0.85, 0.35, 0.3)
 
 # --- the open book — two pages --------------------------------------
 ## **Page size is not here.** It is derived from the window size (`book_layout.pages`) —
@@ -626,6 +777,13 @@ const GLYPH_SPAWN_INNER_RATIO := 0.3
 ## The TERMINAL disc's radius (relative to the symbol radius). At 1.0 it looks the same size as the ray symbol,
 ##  weakening the contrast of "it spreads / it ends right there".
 const GLYPH_TERMINAL_RATIO := 0.8
+
+## **MODIFY's shape — a hollow diamond.** It must differ in silhouette from SPAWN's outward rays and
+##  TERMINAL's filled disc, the same discipline that separates those two — "it touches neither trajectory nor
+##  list" reads as **an outline, not a filled shape and not a burst**, so it does not compete visually with
+##  "it spreads" or "it ends here" and is not mistaken for a stronger version of either.
+const GLYPH_MODIFY_RATIO := 0.75
+const GLYPH_MODIFY_PX := 2.0
 
 # --- **the spread generation table — the screen's half** -------------
 ## It must have **the same length and the same direction** as `sim_tuning.SIM_SIZES` (both decrease per generation).

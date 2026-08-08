@@ -26,14 +26,20 @@ const ALL: Array[int] = [KIND_PIG, KIND_HEN]
 ## 20 is a value decided by the user — not a value to measure and adjust.
 const MAX_MONSTERS := 20
 
+## `xp`/`money` are **per-kind by nature, not "how it attacks"** — the header above excludes damage-taken and
+##  fire-DPS columns because those read as "this value is live" (a false knob), but a pig being worth more
+##  than a hen is a plain fact about the kind (`docs/plans/2.active/levelup-and-three-picks.md`, Stage B).
+##  Provisional values from that plan's own table — knobs to turn once XP is on screen, not by the user yet.
 const DEFS: Dictionary = {
 	KIND_PIG: {
 		"name": &"돼지", "w_px": 44, "h_px": 32, "step_cells": 1,
 		"max_hp": 30, "speed_px": 160.0, "invuln_ticks": 2,
+		"xp": 12, "money": 5,
 	},
 	KIND_HEN: {
 		"name": &"닭", "w_px": 24, "h_px": 28, "step_cells": 3,
 		"max_hp": 10, "speed_px": 220.0, "invuln_ticks": 2,
+		"xp": 6, "money": 3,
 	},
 }
 
@@ -66,3 +72,11 @@ static func speed_px(kind: int) -> float:
 
 static func invuln_ticks(kind: int) -> int:
 	return DEFS[kind]["invuln_ticks"]
+
+
+static func xp_of(kind: int) -> int:
+	return DEFS[kind]["xp"]
+
+
+static func money_of(kind: int) -> int:
+	return DEFS[kind]["money"]

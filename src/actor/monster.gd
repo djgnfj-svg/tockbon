@@ -134,9 +134,12 @@ func on_tick(spell: SpellSim) -> void:
 	if invuln_left > 0:
 		invuln_left -= 1
 		return
-	if not (_body.hit_by_segment(spell) or _body.hit_by_blast(spell)):
+	# **`hit_by_segment`/`hit_by_blast` return a power percent, 0 = not hit — `max`, not `or`**
+	#  (the same reasoning as `character.on_tick`, so the two do not read the notice differently).
+	var pw := maxi(_body.hit_by_segment(spell), _body.hit_by_blast(spell))
+	if pw <= 0:
 		return
-	hp = maxi(0, hp - Character.DAMAGE_HIT)
+	hp = maxi(0, hp - Character.DAMAGE_HIT * pw / 100)
 	invuln_left = Defs.invuln_ticks(kind)
 
 

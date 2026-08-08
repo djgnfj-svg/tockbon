@@ -20,6 +20,7 @@ const Tuning := preload("res://src/sim/sim_tuning.gd")
 const Monster := preload("res://src/actor/monster.gd")
 const MonsterDefs := preload("res://src/actor/monster_defs.gd")
 const MonsterBolts := preload("res://src/actor/monster_bolts.gd")
+const Progress := preload("res://src/actor/progress.gd")
 
 ## **Pig contact damage** (`monsters-minimum`, "behavior (6)"). The arithmetic: invulnerability 4 ticks => the
 ##  real interval is 5 ticks (`character.on_tick` recorded "5-tick spacing = two hits") = 0.25s => 4 times per
@@ -49,6 +50,11 @@ var _next_monster_id := 1
 var _died_x: Array[int] = []
 var _died_y: Array[int] = []
 var _died_kind: Array[int] = []
+
+## **Owned here, not by the shell** — the same reason `_monsters` is owned here (`monsters-minimum` stage 1's
+##  comment above): let the shell hold its own copy and "the world" lives in two places. `stage.gd` only reads
+##  it through `progress()` below to draw the HUD.
+var _progress := Progress.new()
 
 ## Commands sit in the queue **carrying "which tick do I apply to"**. Without it, later rescheduling is impossible.
 ##  In single player the local input fills it and in multiplayer the server does — the applying code is unchanged.
@@ -137,6 +143,11 @@ func frame(dt: float, axis: float, jump: bool, jump_held: bool) -> bool:
 			_died_x.append(dying.x)
 			_died_y.append(dying.y)
 			_died_kind.append(dying.kind)
+			# **Awarded in the same one place `_died_*` is built** — the plan's own instruction. `dead` holds
+			#  exactly the monsters that crossed `hp <= 0` *this* tick, and each is removed from `_monsters`
+			#  in this same pass, so this line runs **once per death, never once per tick a corpse sits at 0 hp.**
+			_progress.add_xp(MonsterDefs.xp_of(dying.kind))
+			_progress.add_money(MonsterDefs.money_of(dying.kind))
 			_monsters.remove_at(idx)
 		# (6) **Was the player hit by a monster or a bolt — it must be after **both** `_char.on_tick` and the
 		#  monster on_tick** (doc, "behavior (9)"). Put it earlier and a monster dying on that tick gets one
@@ -327,6 +338,9 @@ func reset() -> void:
 	# The bolts are cleared too — without it, every press of R leaves bolts from the dead experiment and they
 	#  contaminate the next acceptance (the same reason `monsters-minimum`'s "screen" pinned "revert every counter").
 	_bolts = MonsterBolts.new()
+	# **Progress reverts here too, in this same one place** — not a separate call from `stage.gd`, or the day
+	#  comes when only one of the two reset paths gets touched and R quietly stops reverting it.
+	_progress.reset()
 
 
 ## Read by the render interpolation. **The point is not making one more clock** — the moment the view
@@ -337,3 +351,9 @@ func phase() -> int:
 
 func fire_count() -> int:
 	return _fire_count
+
+
+## Read-only — the shell's HUD and the nets read `xp`/`level`/`money`/`pending_picks` straight off the
+## returned object, the same idiom as `monster_at(i)` returning a `Monster` directly.
+func progress() -> Progress:
+	return _progress

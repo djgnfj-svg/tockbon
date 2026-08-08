@@ -46,6 +46,7 @@ For `partial`, **always attach what works and what doesn't, briefly.** "Partial"
 | [terrain-baking.md](terrain-baking.md) | **full** | pass (2026-08-06) | Drawn as an image, baked as text. The map is fixed |
 | [monsters.md](monsters.md) | **full** | partial pass (2026-08-08) | Farm animals that swallowed runes. Two trash mobs (pig · chicken) · brainless movement · 20 at once. **No AI** · outline unconfirmed |
 | [town.md](town.md) | **none** | unseen | Where a run closes. **One walkable room** · research bench · assembly bench · departure gate · all bedrock. **The only place a widened pool is visible** |
+| [game-feel.md](game-feel.md) | **partial** | **fail (2026-08-08)** | **A menu of every juice lever, with its cost.** **The user reports moving · the camera · jumping as unpleasant** — camera locked to the character, no coyote time, 20Hz grounding, 0.6s airtime. Only blast shake · flash · damage numbers exist. **No sound anywhere** |
 | [background.md](background.md) | **partial** | unseen | The layer stands up — empty cells go transparent and `SkyBackground` stands behind. Currently **night sky + stars**, **no art, no parallax**. Not confirmed on screen |
 
 ## Features with no doc yet
@@ -61,15 +62,16 @@ overlaps GDD's "TBD", but this is the list of **places that need a doc.**
 | Flying spells | **partial** | Bolts fly. Trajectory and shape are the next pass |
 | ~~Monsters~~ | — | Doc exists → [monsters.md](monsters.md). Implementation done too |
 | **World** | — | Settled — the circle collapsed, beasts swallowed the runes. **`docs/GDD.md` "World" is the source** (no separate doc) |
-| Three-pick screen | **none** | Design exists → `docs/plans/1.ready/levelup-and-three-picks.md`. **Only two glyphs in code, so dummies fill the rest** |
-| Level · XP | **none** | Same doc. **A level grants only the three-pick** — no health, no tiers. 3 times per run |
-| Glyph rarity | **none** | **Three tiers settled** — common · rare · unique. **This makes the three-pick candidate pool** (2 glyphs × 3 tiers = 6). Numbers TBD |
+| Three-pick screen | **done** | → `docs/plans/3.done/levelup-and-three-picks.md`. **All five stages built and accepted by the user.** `P` opens the window, three cards carry name · rarity · `위력 %`, picking one leads into the layer step, and placement goes through `spell_circle.place_glyph()` — **there is no stash.** **Only two glyphs are real, so dummies fill the pool** |
+| Level · XP | **done** | Same doc. `src/actor/progress.gd` (xp · level · money · `pending_picks`), `xp`/`money` columns in `monster_defs`, `net_progress.gd`. **Level 3 lands near kill 23 pure-pig and kill 30 mixed** (`60 + 30*level`) — measured, and the mixed population is the one that matters |
+| Glyph rarity | **done** | Rarity folded into the glyph id, `power_pct` reaches damage, the palette shows 9 cells in three families. **Three tiers** — common · rare · unique, separated on screen by border color **and by the `위력 %` line, which is what actually makes three same-named cards readable.** Numbers still provisional |
 | Drops · economy | **none** | **Stamped settled** — **permanent currency drops from bosses only.** Money is spent **at the shop between stages** (not inside the map) |
 | Bosses · midbosses | **none** | Stage-1 pair designed → `docs/plans/1.ready/stage1-bosses.md`. **Bull** (charge + stun · fire breath) · **giant rooster** (leaps, pounces, lands). **Not one line of code** — the monster table has only pig and chicken |
-| **More glyphs** | **2/17** | **Only spread and blast are real. The other fifteen are names** (pinned by the user). The three-pick runs on a **dummy glyph (damage up)** → `docs/plans/1.ready/levelup-and-three-picks.md`. **Real ones go in before the demo** |
+| **More glyphs** | **2/17** | **Only spread and blast are real. The other fifteen are names** (pinned by the user). The three-pick runs on a **dummy glyph (damage up)** → `docs/plans/3.done/levelup-and-three-picks.md`. **Real ones go in before the demo** |
 | Lightning | **none** | No rune. **It is water's counterpart** |
 | Stage transition | **none** | **Method settled** — **beat the stage-1 boss, a gate appears behind it, you go through.** The shop is at this moment too. Zero code |
 | Gear | **none** | **Cut to three slots** (staff · robe · boots). ~~Bag · potions · ink~~ **removed** — collided with the no-inventory rule. Direction only; the user hasn't picked |
 | ~~Home · meta (unlocks)~~ | — | Doc exists → [town.md](town.md). Settled as **one walkable room**. Zero code |
 | Multiplayer | **none** | The GDD has a policy. Not one line of code |
 | UI | **none** | The HUD is a debug label |
+| **Tutorial** | **none** | **Newly named by the user** — **it teaches how to use the magic circle**, and the town deliberately teaches nothing (`town.md`, "the starting kit is handed over here"). The GDD already leans on it twice ("the rule is taught in onboarding" — layer order, and the assembly window). **No doc, no owner** |

@@ -10,17 +10,29 @@ const Tuning := preload("res://src/sim/sim_tuning.gd")
 const Glyph := preload("res://src/sim/glyph_defs.gd")
 const CircleDefs := preload("res://src/sim/circle_defs.gd")
 const Stage := preload("res://src/stage/stage.gd")
+const MonsterDefs := preload("res://src/actor/monster_defs.gd")
 const CellRenderer := preload("res://src/view/cell_renderer.gd")
 const Fx := preload("res://src/view/fx_tuning.gd")
 ## Measuring whether the camera shows "my surroundings" needs **how big I am**.
 const Character := preload("res://src/actor/character.gd")
 const Palette := preload("res://tools/stage/terrain_palette.gd")
 const Baker := preload("res://tools/stage/terrain_baker.gd")
+const SpellSim := preload("res://src/sim/spell_sim.gd")
 
 
 ## 4-neighbourhood. Fire and ignition are both 4-neighbour, so connected components must be counted with the same neighbourhood.
 const NB_DX: Array[int] = [1, -1, 0, 0]
 const NB_DY: Array[int] = [0, 0, 1, -1]
+
+
+## **A partition, hand-written here — not read from `glyph_defs`.** `Glyph.KIND_ALL.has(kind)` would be
+##  circular (a 4th kind joins that list in the same edit that adds the row, and the check is green forever) —
+##  the same medicine `_strictly_decreasing`'s column names already take, for the same reason.
+##  Every `kind` in `Glyph.DEFS` must land in **exactly one** of these two, never zero, never both:
+##   PIPELINE_KINDS  reach `_resume`/`_run_glyph` — a glyph that runs at impact
+##   LAUNCH_KINDS    consumed at `_launch` and never reach `_resume` — MODIFY today
+const PIPELINE_KINDS: Array[int] = [Glyph.KIND_SPAWN, Glyph.KIND_TERMINAL]
+const LAUNCH_KINDS: Array[int] = [Glyph.KIND_MODIFY]
 
 
 ## Color -> 0xRRGGBB. The **inverse** of `bake_palette` — reusing the same formula makes the check test itself.
@@ -38,6 +50,13 @@ func run(t) -> void:
 	_stage_map(t)
 	_wood_clumps(t)
 	_terrain_brush_follows_the_material_table(t)
+	# -- levelup-and-three-picks Stage A — rarity folded into the glyph id --
+	_glyph_nibble_ceiling(t)
+	_glyph_pool_is_complete(t)
+	_power_pct_increases_by_rarity(t)
+	_glyph_tint_covers_every_glyph(t)
+	# -- levelup-and-three-picks Stage B — XP · money columns --
+	_monster_defs_columns_are_complete(t)
 
 
 ## **Put it in `DEFS` and not in `ALL` and it drops out of iteration.**
@@ -423,11 +442,22 @@ func _glyphs(t) -> void:
 		t.ok(Glyph.DEFS.has(id), "ALL의 문양 %d가 DEFS에 있다" % id)
 		t.ok(id > Glyph.GLYPH_NONE and id <= Glyph.MASK, "문양 %d가 니블 범위 안이다" % id)
 		var d: Dictionary = Glyph.DEFS[id]
-		t.ok(d.has("name") and d.has("kind") and d.has("max_per_circle") and d.has("tick_budget"),
-			"문양 %d 정의에 네 칸이 다 있다" % id)
+		# **Seven, not four.** A row missing `family` passes this and then crashes `Glyph.family_of` at
+		#  runtime — which is `max_per_circle`'s only actual enforcement path (`spell_sim._valid_glyphs`).
+		t.ok(d.has("name") and d.has("kind") and d.has("max_per_circle") and d.has("tick_budget")
+				and d.has("family") and d.has("rarity") and d.has("power_pct"),
+			"문양 %d 정의에 일곱 칸이 다 있다" % id)
 		var kind := int(d["kind"])
-		t.ok(kind == Glyph.KIND_SPAWN or kind == Glyph.KIND_TERMINAL,
-			"문양 %s의 종류가 SPAWN/TERMINAL 중 하나다" % d["name"])
+		# **A partition, not an or-list.** `PIPELINE_KINDS`/`LAUNCH_KINDS` above must together cover every
+		#  `kind` exactly once — in neither list, `_run_glyph`'s tail (`spell_sim.gd`, "if kind == KIND_SPAWN
+		#  -> NONE else -> rest") silently treats an unimplemented kind as TERMINAL ("continue in place");
+		#  in both lists, a MODIFY-like kind could reach the pipeline undetected.
+		var in_pipeline := PIPELINE_KINDS.has(kind)
+		var in_launch := LAUNCH_KINDS.has(kind)
+		t.ok(in_pipeline or in_launch,
+			"문양 %s의 종류가 PIPELINE_KINDS나 LAUNCH_KINDS 어느 한쪽에 있다 (%d)" % [d["name"], kind])
+		t.ok(not (in_pipeline and in_launch),
+			"문양 %s의 종류가 두 목록에 동시에 있지 않다" % d["name"])
 		# 0 = unlimited. A negative has no meaning and is quietly read as "no limit".
 		t.ok(int(d["max_per_circle"]) >= 0, "문양 %s의 max_per_circle이 음수가 아니다" % d["name"])
 		t.ok(int(d["tick_budget"]) >= 0, "문양 %s의 tick_budget이 음수가 아니다" % d["name"])
@@ -586,3 +616,82 @@ func _terrain_brush_follows_the_material_table(t) -> void:
 		var nm: String = Baker.NAME_BY_MAT[id2]
 		t.ok(consts.has(nm) and int(consts[nm]) == id2,
 			"`Mat.%s` 가 실재하고 값이 %d다 (오타면 생성 파일이 파스 에러다)" % [nm, id2])
+
+
+# ══════════════════════════════════════════════════════════════════
+#  levelup-and-three-picks Stage A — rarity folded into the glyph id
+# ══════════════════════════════════════════════════════════════════
+
+## **The nibble ceiling.** `GLYPH_BITS` is 4 -> 15 ids fit -> 5 families at 3 rarities each is the practical
+##  cap, not 15 separate glyphs. Grow `ALL` past `MASK` and `pack()`'s range check refuses the 16th id and
+##  returns `GLYPH_NONE` — which reads as "the glyph I socketed does nothing", not as an error.
+func _glyph_nibble_ceiling(t) -> void:
+	t.ok(Glyph.ALL.size() <= Glyph.MASK,
+		"문양이 니블 상한 %d개를 안 넘는다 (지금 %d개)" % [Glyph.MASK, Glyph.ALL.size()])
+
+
+## **A hole in the pool means a three-pick draw with no candidate for that slot.** Every family must have
+##  exactly one row at every rarity — not "at least one", not "no duplicates" — both directions are measured.
+func _glyph_pool_is_complete(t) -> void:
+	t.ok(Glyph.FAMILY_ALL.size() > 0, "문양 계통이 하나라도 있다 (%d개)" % Glyph.FAMILY_ALL.size())
+	t.ok(Glyph.RARITY_ALL.size() > 0, "희귀도가 하나라도 있다 (%d개)" % Glyph.RARITY_ALL.size())
+	for family: int in Glyph.FAMILY_ALL:
+		for rarity: int in Glyph.RARITY_ALL:
+			var n := 0
+			for id: int in Glyph.ALL:
+				if Glyph.family_of(id) == family and Glyph.rarity_of(id) == rarity:
+					n += 1
+			t.eq(n, 1, "계통 %d · 희귀도 %d 짜리가 정확히 하나다 (%d개 있었다)" % [family, rarity, n])
+
+
+## **`power_pct` has to strictly increase common < rare < unique, per family** — the same idiom as
+##  `SIM_SIZES`'s monotonicity (`_strictly_decreasing` above), but this table climbs instead of falls, and its
+##  column name is written by hand here rather than discovered from the dictionary — that file's own comment
+##  records that a non-monotonic column was added once and 1038 checks stayed green without it.
+func _power_pct_increases_by_rarity(t) -> void:
+	for family: int in Glyph.FAMILY_ALL:
+		var by_rarity: Dictionary = {}
+		for id: int in Glyph.ALL:
+			if Glyph.family_of(id) == family:
+				by_rarity[Glyph.rarity_of(id)] = Glyph.power_pct_of(id)
+		var seen: Array[int] = []
+		for rarity: int in Glyph.RARITY_ALL:
+			t.ok(by_rarity.has(rarity), "계통 %d 희귀도 %d의 power_pct를 읽었다 (전제)" % [family, rarity])
+			seen.append(int(by_rarity.get(rarity, -1)))
+		var ok := true
+		for k in range(1, seen.size()):
+			if seen[k] <= seen[k - 1]:
+				ok = false
+		t.ok(ok, "계통 %d의 power_pct가 희귀도마다 반드시 오른다 %s" % [family, seen])
+
+
+## **The sim axis (`Glyph.ALL`) growing while the screen axis (`GLYPH_TINT`) does not follow is exactly how
+##  v1 died** — the same shape `_view_follows_the_rune_axis` above measures for runes, applied to glyphs.
+##  Missing, `circle_window._draw_glyph` falls back to `GLYPH_TINT_MISSING` (magenta) — silent unless a person looks.
+func _glyph_tint_covers_every_glyph(t) -> void:
+	t.ok(Glyph.ALL.size() > 0, "문양이 하나라도 있다 (%d개)" % Glyph.ALL.size())
+	for id: int in Glyph.ALL:
+		var got: Variant = Fx.GLYPH_TINT.get(id, null)
+		t.ok(got is Color, "문양 %d의 색이 GLYPH_TINT에 있다" % id)
+		if got is Color:
+			t.ok(got != Fx.GLYPH_TINT_MISSING, "문양 %d이 비명 색(마젠타)으로 안 떨어진다" % id)
+	# The other side — a color nobody can socket is a false handle.
+	for id2: int in Fx.GLYPH_TINT.keys():
+		t.ok(Glyph.ALL.has(id2), "GLYPH_TINT의 문양 %d가 ALL에 있다 (아무도 못 놓는 색이 아니다)" % id2)
+
+
+## **The same medicine `_glyphs(t)` above applies to `monster_defs`, hand-written, not derived from any one
+##  row's own keys** — deriving the expected key set from a row would make the check compare a table against
+##  itself and pass no matter what is missing. Removing `"xp"` from the hen row moved **zero** assertions in
+##  the rest of the suite before this — `net_progress` only ever kills pig and hen, so a **third** kind with no
+##  `xp`/`money` (the `stage1-bosses` session is adding one to this exact table right now) would ship green.
+func _monster_defs_columns_are_complete(t) -> void:
+	t.ok(MonsterDefs.ALL.size() > 0, "몬스터 종류가 하나라도 있다 (%d개)" % MonsterDefs.ALL.size())
+	for kind: int in MonsterDefs.ALL:
+		var d: Dictionary = MonsterDefs.DEFS[kind]
+		t.ok(d.has("name") and d.has("w_px") and d.has("h_px") and d.has("step_cells")
+				and d.has("max_hp") and d.has("speed_px") and d.has("invuln_ticks")
+				and d.has("xp") and d.has("money"),
+			"종류 %d 정의에 아홉 칸이 다 있다 (xp·money 포함)" % kind)
+		t.ok(int(d.get("xp", -1)) >= 0, "종류 %d의 xp가 음수가 아니다" % kind)
+		t.ok(int(d.get("money", -1)) >= 0, "종류 %d의 money가 음수가 아니다" % kind)
