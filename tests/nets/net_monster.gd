@@ -925,6 +925,18 @@ func _hen_stops_at_bolt_range(t) -> void:
 	#  distance at which the boxes touch works out geometrically to about 22px (`(20+24)/2`), so a 60px threshold splits it comfortably.
 	t.ok(dist > 60.0, "닭이 플레이어에 바짝 안 붙는다 (거리 %.1f — 돼지처럼 들러붙지 않는다)" % dist)
 
+	# **Stopped means stopped — down to the pixel.** `Body.move_x` carries the sub-pixel leftover as a signed
+	#  value, so a body that stops with `_rem_x` near 0.5 rounds it to +1, subtracts to -0.5, rounds that to
+	#  -1, and **shivers one pixel forever with `dx` exactly 0.** The distance check above cannot see it: the
+	#  oscillation averages out and the final position is right either way.
+	#  Measured before the fix: **87px of movement across a run that never left the "stopped" state.**
+	var jitter := 0
+	for _i in 120:
+		var before := m.x
+		world.frame(DT, 0.0, false, false)
+		jitter += absi(m.x - before)
+	t.eq(jitter, 0, "멈춘 뒤로는 1픽셀도 안 떤다 (120프레임 누적 %dpx)" % jitter)
+
 
 ## Values (1) and (2) (three negative controls) — it hits a standing player (and rides invulnerability), and
 ##  **(1) the shooting hen itself (2) another hen on the path (3) a pig on the path are not hit** (the bolt doesn't know monsters at all — `monster_bolts.gd`).

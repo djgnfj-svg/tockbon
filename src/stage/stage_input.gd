@@ -42,6 +42,13 @@ signal monster_requested(world_px: Vector2, kind: int)
 signal loadout_requested(n: int)
 ## Open/close the assembly window (Tab). **Whether it opens or closes is not decided here** — the window knows its own state.
 signal assembly_toggled
+## **`-` / `=` — camera zoom out / in. A shell-only debug key.**
+##  The map is 400x48 tiles = 12800x1536 world px while the screen shows 960x540, so **1/13th of the map is
+##  visible at once** and level design cannot be read while playing. This key is the only way to see the whole
+##  thing without opening the editor.
+## Only the **direction** is passed (-1 out, +1 in). The zoom steps live in `stage.gd` — the shell owns
+##  the camera, and holding a copy of the table here would make the two drift.
+signal zoom_requested(dir: int)
 
 ## Physical key -> loadout number. It doesn't go through the input map, so `project.godot` isn't touched
 ##  and **no editor restart is needed** (this file won't survive into the real game).
@@ -128,6 +135,12 @@ func _unhandled_input(event: InputEvent) -> void:
 				ignite_requested.emit(_to_world(get_viewport().get_mouse_position()))
 			KEY_K:
 				rain_requested.emit(_to_world(get_viewport().get_mouse_position()))
+			# **Both the main row and the numpad** — `-` on the main row is `KEY_MINUS` and the numpad's is a
+			#  different keycode entirely. Bind only one and it reads as "the key does nothing".
+			KEY_MINUS, KEY_KP_SUBTRACT:
+				zoom_requested.emit(-1)
+			KEY_EQUAL, KEY_KP_ADD:
+				zoom_requested.emit(1)
 
 
 ## **Viewport coordinates != world coordinates** — as long as a `Camera2D` for shake is attached.

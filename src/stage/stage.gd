@@ -207,6 +207,14 @@ var _blast_count := 0
 ##  here it knows only "is there one" and "call it every tick" (that file's header, "where to put it").
 var _water_source: WaterSource = null
 
+## **Debug camera zoom (`-` / `=`).** 1.0 is the play scale; 0.075 fits all 400x48 tiles on the 960x540 screen.
+##  The steps are held as a list rather than a multiply so that "the whole map" is **exactly reachable** —
+##  with `zoom *= 0.5` the map-wide value falls between two steps and can never be landed on.
+## **This is a shell debug view, not a design axis.** Nothing in the sim reads it, and the stage does not
+##  survive into the real game.
+const ZOOM_STEPS: Array[float] = [1.0, 0.5, 0.25, 0.125, 0.075]
+var _zoom_step := 0
+
 ## **Material cell counts are counted only every N ticks. Count them every frame and 5% of the CPU just vanishes.**
 ##
 ## **Measured** (implementation · headless · with the stage scene's actual functions):
@@ -278,6 +286,7 @@ func _ready() -> void:
 	# **The world is not stopped** — do not touch `get_tree().paused` here.
 	#  Walking, firing and fire spreading with the window open is the whole of design acceptance 4.
 	_input.assembly_toggled.connect(_toggle_assembly)
+	_input.zoom_requested.connect(_step_zoom)
 	# The starting equipment is **the model's default** (`SpellCircle`'s constructor) — the line that pushed
 	#  a preset in once here was deleted. Push it in and "the starting state" is in two places, and the day
 	#  comes when only one of them gets fixed.
@@ -298,6 +307,13 @@ func _ready() -> void:
 func _toggle_assembly() -> void:
 	_circle_window.toggle()
 	_hud.visible = not _circle_window.visible
+
+
+## `-` / `=`. **Clamped, not wrapped** — wrapping would send "one more step out" from the widest view
+##  straight back to the play scale, and that reads as the key having done nothing.
+func _step_zoom(dir: int) -> void:
+	_zoom_step = clampi(_zoom_step - dir, 0, ZOOM_STEPS.size() - 1)
+	print("[zoom] %.3fx" % ZOOM_STEPS[_zoom_step])
 
 
 ## Both the rune and the glyphs **come out of the assembly state.** If the shell nails `ELEM_FIRE` in
@@ -487,7 +503,12 @@ func _process(_dt: float) -> void:
 	#  overwrites the shake, and **the shake quietly disappears.**
 	# The visible size is read from `get_viewport_rect()` — read `ProjectSettings` here as well and the day
 	#  the window mode changes the two places diverge.
-	_camera.position = camera_center(_char.center(), get_viewport_rect().size, world_size())
+	# **Zoom is applied to the clamp too.** `Camera2D.zoom` 0.5 makes the visible world **twice** as wide, and
+	#  feeding the raw viewport size to `camera_center` keeps clamping at the play scale — the camera then
+	#  stops at the old margin and **half the screen fills with the void outside the map**, with no error.
+	var z: float = ZOOM_STEPS[_zoom_step]
+	_camera.zoom = Vector2(z, z)
+	_camera.position = camera_center(_char.center(), get_viewport_rect().size / z, world_size())
 	# Shake is **the camera's offset**. `stage_input._to_world` undoes the canvas transform, so aim does not
 	#  drift even while shaking — without undoing it, a click goes to the wrong cell with no error.
 	# The order of this node's `_process` and `blast_fx`'s `_process` is not guaranteed, so it **can be one

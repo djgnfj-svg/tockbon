@@ -78,7 +78,18 @@ func apply_gravity(dt: float, gravity_px: float, max_fall_px: float) -> void:
 ## Horizontal. If blocked, try the **step offset**.
 ## **If blocked, the remainder is discarded** — hold onto it and the remainder piles up while pressed against
 ##  a wall, then the body teleports a few px the moment the wall disappears.
+## **Standing still discards the remainder too — otherwise a stopped body shivers 1px forever.**
+##  `roundi` carries the leftover as a signed value: stop walking with `_rem_x` near 0.5 and every later
+##  frame rounds it to +1, subtracts it to -0.5, rounds that to -1, and the body oscillates x by one pixel
+##  with `dx` exactly 0. **Nothing barks** — position stays within a pixel of correct and the eye reads it as
+##  sprite jitter, if it reads it at all.
+##  Found by the rooster's wind-up: "it does not move a single pixel while telegraphing" measured **87px of
+##  movement** across a run. **The hen has been doing this since it learned to stop at range**, and the
+##  character does it whenever the key is released.
 func move_x(grid: CellGrid, dx: float) -> void:
+	if dx == 0.0:
+		_rem_x = 0.0
+		return
 	_rem_x += dx
 	var n := roundi(_rem_x)
 	_rem_x -= n

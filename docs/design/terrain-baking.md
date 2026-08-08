@@ -174,6 +174,33 @@ And **it backs up the current Terrain as text before overwriting** (`tools/stage
 Same character table as baking, so **it can be planted straight back.**
 **Why the baked text can't serve as the backup**: it is from the last bake, so **brush work since then isn't in it.**
 
+### 사용자가 직접 그리는 쪽 — `tools/stage/map_png.gd` (2026-08-08)
+
+**에디터 브러시로는 레벨을 볼 수 없다.** 400×48타일인데 에디터 화면에 30타일쯤 들어오므로
+**그리는 동안 모양이 안 보인다.** 사용자가 맵 전체를 처음 본 순간 나온 말이 「내가 생각한 느낌이 아니다」였다.
+
+⇒ **1픽셀 = 1타일.** 스테이지 전체가 작은 그림 한 장이 되고, 그림 도구면 아무거나 고쳐 그린다.
+
+```
+bake  →  [--to-png]  →  그림 도구에서 고쳐 그린다  →  [--to-map]  →  paint_terrain_from_map  →  bake  →  game
+```
+
+```
+--script tools/stage/map_png.gd -- --to-png <출력.png> [배율]
+--script tools/stage/map_png.gd -- --to-map <입력.png> <출력.txt> [배율]
+```
+
+| | |
+|---|---|
+| **색은 게임 색이 아니다** | 기반암(`0x232228`)과 빈칸(`0x0e0e13`)이 채널당 21 차이라 **그림 도구에서 눈으로 구분이 안 된다.** 그리기용 팔레트를 따로 든다 — 흰=빈칸 · 회색=돌 · 갈색=나무 · 검정=기반암 · 파랑=물 |
+| **읽기는 최근접 색** | 손으로 고른 색은 리터럴과 절대 안 맞는다. 정확히 일치를 요구하면 **맵 전체가 빈칸으로 떨어지고 에러가 없다** |
+| **타일 중심 픽셀을 읽는다** | 모서리는 안티에일리어싱이 이웃과 섞인다 ⇒ 1타일 벽이 이웃 재료가 되고 **그래도 맵은 그럴듯해 보인다** |
+| **한 재료가 95%를 넘으면 경고** | 배율이나 색이 틀렸다는 신호다. 그대로 심어도 에러가 안 난다 |
+| **변환만 한다** | 심기는 `paint_terrain_from_map.gd` 몫이다. 지형으로 들어가는 문이 둘이 되면 한쪽이 자란 날 다른 쪽이 조용히 건너뛴다 |
+
+**왕복 무손실을 값으로 확인했다** — 400×48을 내보내고 되읽어 **다른 타일 0개**.
+Aseprite로 열려면 팔레트 4칸짜리 `.aseprite` 로 저장해 두면 색 고르기가 클릭 한 번이 된다.
+
 ### Don't re-save the whole scene — swap one `tile_map_data` line
 
 **Burned three times here.** Rewriting the scene with `ResourceSaver.save(packed_scene)` makes all of the
