@@ -108,9 +108,22 @@ func _view_follows_the_rune_axis(t) -> void:
 			"ELEM_FX의 룬 %d이 ELEM_ALL에 있다 (아무도 못 쏘는 색이 아니다)" % element)
 
 
-## **If the wood is one lump, wherever the fire is lit it all burns in the end.**
-## Measured: the final wood for key 1 (no glyph) · key 4 · key 5 all converged to 48 —
-## the "after it settles" axis stops distinguishing combinations. Broken up, how many lumps burn varies per combination.
+## **What this measures changed when the user redrew stage 1's left half** (the user confirmed the terrain
+## on screen and said "this is right"). **It was not deleted — the contract underneath it moved.**
+##
+## **Before**: "at least 4 clumps". Its ground was the v1 box map — one lump means wherever fire is lit
+##  everything burns in the end, and the "after it settles" axis stops telling combinations apart
+##  (measured: final wood for key 1 · key 4 · key 5 all converged on 48).
+##
+## **Now**: stage 1's design says **the left stretch holds no wood at all** (`3.done/stage1-map-layout.md`) —
+##  the map's only wood is the **wood wall** that the mid-boss's fire rune opens. So the live contract is
+##  **"there is exactly one clump, and nothing else for fire to jump to"**, which is what the map doc
+##  demands to keep "the mid-boss reward is the key to progress" standing.
+##
+## **The count is pinned rather than left as `>= 1`.** With a bare lower bound, the gap check below would
+##  loop zero times and **the check would silently stop measuring anything** — a failure shape CLAUDE.md
+##  lists by name. Pinned, **the day farm props add wood this goes red on purpose** (the map doc warns
+##  that day is coming) and whoever adds it must state the gap.
 ##
 ## **The terrain that actually runs is stood up.** Re-reading the map string here would go stale with the terrain.
 func _wood_clumps(t) -> void:
@@ -129,12 +142,18 @@ func _wood_clumps(t) -> void:
 				continue
 			_flood(g, label, x, y, clumps)
 			clumps += 1
-	t.ok(clumps >= 4, "무대의 나무가 여러 덩어리로 끊겨 있다 (%d덩어리)" % clumps)
+	t.eq(clumps, 1, "맵의 나무가 나무벽 한 덩어리뿐이다 — 불이 옮겨붙을 다른 나무가 없다 (%d덩어리)" % clumps)
 
 	# The gap criterion is not "a thickness a blast cannot punch through" — even if a blast punches through,
 	#  that spot is empty and fire cannot cross empty either. The real criterion is **a width at which a small
 	#  ignition source cannot light two lumps at once.**
 	#  The generation 0 blast's ignition radius is deliberately excluded — crossing over is that combination's character.
+	# **With one clump `_closest_gap` has no pair to measure and returns its sentinel.** Running it anyway
+	#  would print a green line about a distance nobody measured — the "a loop that never runs still passes"
+	#  shape. So the gap is asserted **only when there are two or more**, and the count above is what holds
+	#  the contract in the single-clump case.
+	if clumps < 2:
+		return
 	var need := maxi(Tuning.rune_r(0), Tuning.blast_ignite_r(Tuning.SPLIT_MAX))
 	var closest := _closest_gap(g, label)
 	t.ok(closest > need,

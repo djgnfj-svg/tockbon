@@ -58,6 +58,27 @@ FPS doesn't die — **water gets delayed.** The cap is a safety net.
 step the pit floor. **Re-baking the map is the last resort** — removing the ramp is the grounds for
 "the only exit is water", so reverting kills the design.
 
+###  그 그물은 통과했다. 대신 다른 셋이 빨개졌다 — **구덩이가 없어졌다** (2026-08-08 저녁)
+
+**사용자가 맵 전체를 처음 눈으로 보고 왼쪽 절반을 다시 그리게 했다**(「이걸로 해줘 이게 맞아」) →
+[../3.done/stage1-map-layout.md](../3.done/stage1-map-layout.md) 머리. **① 은 이제 구덩이가 아니라
+계단 6단으로 걸어 내려가는 넓은 평지다.**
+
+```
+ net_water_rain_cap: 활성 청크가 상한 아래에 머문다     ← 계단 바닥이 위 두 손잡이를 대신했다
+ net_water_rain: 구덩이 오른쪽 끝도 열려 있다 (전제)
+ net_water_rain: 물이 안 샌다 · 부은 양이 소스와 정확히 같다
+```
+
+`_PIT_ROW`(타일 26)에서 **좌우가 막힌 그릇**을 전제하는데, 그 행이 이제 계단이라 **열려 있다.**
+⇒ 물이 왼쪽 계단으로 넘어간다.
+
+ **좌표를 옮겨서 될 일이 아니다.** 이 문서의 뼈대가 **「① 에서 나가는 길이 물뿐」**인데
+**지금은 계단으로 걸어 나온다.** 사용자는 「구덩이보다는 계단」이라고 명시했고 그 화면을 보고 확정했다.
+⇒ **먼저 정할 것은 하나다: 물이 여전히 ① 의 탈출 수단인가, 아니면 물 장면이 ③ 보스방으로만 가는가.**
+**정하기 전에는 `net_water_rain` 을 손대지 않는다** — 좌표만 맞춰 초록으로 만들면
+**죽은 설계를 재는 가짜 그물**이 된다.
+
 **This doc's title is now narrower than its scope.** The user said, having seen it —
 **"I keep feeling the water is background. The water has no effect on me whatsoever."**
 ⇒ The user decided **"put in the current too and finish water this round".** **There are four axes**:
