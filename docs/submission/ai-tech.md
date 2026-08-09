@@ -5,8 +5,8 @@
 | | |
 |---|---|
 | **게임 제목** | **tockbon** (톡본) · 참가 형태 **개인(1인)** |
-| **플레이 링크** | `(GitHub Pages URL — 배포 후 기입)` |
-| **소스 코드** | `(GitHub 저장소 URL — 공개 후 기입)` |
+| **플레이 링크** | **https://djgnfj-svg.github.io/tockbon/** |
+| **소스 코드** | **https://github.com/djgnfj-svg/tockbon** (공개, 커밋 기록 유지) |
 | **플레이 영상** | `(YouTube URL — 업로드 후 기입)` |
 
 **이 문서가 담는 것** — 요강이 요구하는 세 가지를 각각 다음 장이 맡는다.

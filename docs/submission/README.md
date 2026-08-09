@@ -15,11 +15,19 @@
 
 | # | 항목 | 형식 | 이 리포의 대응 | 상태 |
 |---|---|---|---|---|
-| 1 | 플레이 가능한 빌드 + **전체 소스** | GitHub Pages 링크 | `build/web/` · 저장소 공개 | **배포 필요** |
+| 1 | 플레이 가능한 빌드 + **전체 소스** | GitHub Pages 링크 | 아래 두 링크 | **배포 완료** |
 | 2 | 플레이 동영상 | YouTube 링크, **30~60초** | 아래 구성안 | **촬영 필요** |
 | 3 | 게임 소개 및 설명 문서 | **PDF** | [`plan.md`](plan.md) | 작성 완료, PDF 변환 필요 |
 | 4 | AI 활용 기술 문서 | **PDF** | [`ai-tech.md`](ai-tech.md) | 작성 완료, PDF 변환 필요 |
 | 5 | 팀원 롤 기술서 | PDF | [`roles.md`](roles.md) | **개인 참여이므로 제출 불필요** |
+
+**제출 링크**
+
+| | |
+|---|---|
+| 플레이 | **https://djgnfj-svg.github.io/tockbon/** |
+| 소스 | **https://github.com/djgnfj-svg/tockbon** (공개) |
+| 영상 | `(업로드 후 기입)` |
 
 **5번은 요강상 "2인 이상 팀인 경우에만" 제출한다.** `roles.md`는 참고용으로 남겨 두되 제출하지 않는다.
 
@@ -39,17 +47,38 @@ New-Item -ItemType Directory -Force build\web
 **스레드 없는 빌드**라 COOP/COEP 헤더 없이 GitHub Pages에서 그대로 돈다.
 로컬 확인은 `python -m http.server 8123 --directory build\web`.
 
-### 요강이 요구하는 저장소 조건
+### 배포한 방식 (재현용)
 
-- **전체 소스 코드를 같은 저장소에 포함**
-- **커밋 기록 유지** — 122개 커밋이 그대로 증거가 된다. squash 금지
-- **공개(public) 권장.** 비공개면 심사 계정 `dl_gameai_reviewer@nhn.com` 초대
+`gh-pages` **orphan 브랜치**에 `build/web/`의 내용만 올린다. `.nojekyll`을 넣어야
+Jekyll이 파일을 건드리지 않는다.
 
-### 공개 전 확인 (중요)
+```powershell
+git worktree add --detach C:\temp\ghp
+cd C:\temp\ghp; git checkout --orphan gh-pages
+# 내용을 비우고 build/web/. 를 복사, .nojekyll 생성
+git add -A; git commit -m "웹 빌드 배포"; git push -f origin gh-pages
+gh api repos/<user>/<repo>/pages -f "source[branch]=gh-pages" -f "source[path]=/"
+git worktree remove --force C:\temp\ghp; git worktree prune
+```
 
-- **`.mcp.json`은 gitignore돼 있다** — PixelLab API 키가 평문으로 들어 있다. 공개 전 `git log`에
-  과거 커밋된 적이 없는지 확인할 것
-- `build/`도 gitignore. GitHub Pages는 `gh-pages` 브랜치나 별도 배포로 올린다
+**워크트리는 반드시 지운다** — 자동 정리는 거의 안 걸린다(하룻밤에 700MB, 실측).
+
+### 요강이 요구하는 저장소 조건 — 전부 충족
+
+- **전체 소스 코드를 같은 저장소에 포함** — `main` 브랜치
+- **커밋 기록 유지** — 123개 커밋. squash하지 않았다
+- **공개(public)** — 전환 완료. 심사 계정 초대 불필요
+
+### 공개 전 시크릿 검사 (완료)
+
+`.mcp.json`에 PixelLab API 키가 평문으로 들어 있어서 **전체 히스토리를 훑었다.**
+
+```bash
+git rev-list --all | xargs -n 50 git grep -lE "Bearer [a-f0-9]{8}-|gho_|ghp_|sk-[A-Za-z0-9]{20}"
+```
+
+**결과 0건.** 과거에 커밋된 `.mcp.json`은 godot·aseprite만 있던 버전이고,
+PixelLab이 추가된 뒤로는 gitignore에 걸려 한 번도 올라가지 않았다.
 
 ---
 

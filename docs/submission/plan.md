@@ -8,8 +8,8 @@
 | **한 줄 소개** | **원·룬·글리프를 조합해 내 마법진을 만들고, 그것이 세계에서 펼쳐지는 것을 보며 내려가는 횡스크롤 로그라이크.** |
 | **장르** | 2D 횡스크롤 · 로그라이크 (협동 2~4인이 목표, **현재 빌드는 1인**) |
 | **엔진** | Godot 4.7.1 (GDScript, GL Compatibility) |
-| **플레이 링크** | `(GitHub Pages URL — 배포 후 기입)` |
-| **소스 코드** | `(GitHub 저장소 URL — 공개 후 기입)` |
+| **플레이 링크** | **https://djgnfj-svg.github.io/tockbon/** — 브라우저에서 바로 실행 |
+| **소스 코드** | **https://github.com/djgnfj-svg/tockbon** (공개, 커밋 기록 유지) |
 | **플레이 영상** | `(YouTube URL — 업로드 후 기입)` |
 
 ---
