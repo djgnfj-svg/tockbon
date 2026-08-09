@@ -136,8 +136,8 @@ const MOVE_FIRE: Dictionary = {
 ## centre-to-edge gradient reads as "radiating outward from the impact" rather than "a solid band under the
 ## body" or "a ring floating past it with a gap in the middle". **Picked, then measured, not derived and
 ## trusted** — the ±8px-short first version was itself the product of trusting the formula once already
-## (this same comment's own prior correction, catching a doubled half-count); `docs/plans/2.active/
-## stage1-bosses.md` Risk 11 records both the original miss and this fix.
+## (this same comment's own prior correction, catching a doubled half-count); `stage1-bosses.md` Risk 11
+## records both the original miss and this fix.
 ##
 ## **`jump_vy_px` was `-600.0` ("a bigger hop than the rooster's") and it broke acceptance 8** — verify-run
 ## reproduced the bull leaving room ① on the real map (89 slams, out at frame 660, 236px past the left

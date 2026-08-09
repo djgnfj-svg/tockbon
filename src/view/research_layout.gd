@@ -1,13 +1,20 @@
 extends RefCounted
 ## Research-window coordinates — the panel's nine slices, the four unlock rows, the material line.
 ##
-## **Static, so the nets read the same rects the drawing uses** — `circle_window.gd`'s own header pins the
-## reason and `pick_layout.gd` is the shape this file copies: `Control._draw()` cannot be measured headless,
-## so the judgment is pushed into a file the nets *can* call directly.
+## **Static, so the drawing and the hit test read the same rects** — `pick_layout.gd` is the shape this file
+## copies. That is the whole reason, and it is about **one function instead of two copies**, not about what a
+## net can run.
 ##
-## **There is no hit test here.** The research window has no buttons — nothing is buyable
-## (`docs/design/town.md`'s own TBD), so `pick_layout.card_at`'s counterpart would be a function with no
-## caller. **Add it the day a price exists, not before.**
+## **This header used to say "`Control._draw()` cannot be measured headless". That was false**, and CLAUDE.md
+## names that exact sentence as the one that let a settlement panel ship under 5,576 green checks with
+## `visible` never set. `run_nets.gd` pumps real engine frames (`t.pump_frames`), the default theme's font is
+## there untreed, and `net_research` drives this window's `_draw()` treed and reads the arguments it hands its
+## paint hooks. **Nothing in this engine resists headless — only pixel appearance is verify-look's.**
+##
+## **The hit test arrived the day a price did** (`research-bench-unlocks.md`) — this
+## file's header used to say "add `pick_layout.card_at`'s counterpart the day a price exists, not before",
+## and `unlock_chip_rects`/`unlock_chip_at` below are exactly that. **Generic over unlocks, not over runes**:
+## the item row asks for three chips and the body row for one, and neither count is written down here.
 
 const Fx := preload("res://src/view/fx_tuning.gd")
 
@@ -120,6 +127,63 @@ static func text_baselines(row: Rect2) -> Array:
 		row.position.y + Fx.RESEARCH_TEXT_SIZE,
 		row.end.y - BASELINE_DROP_PX,
 	]
+
+
+## **The chips sit where the state line used to, not on a line of their own.** Measured, not assumed: at the
+##  real `RESEARCH_RECT` (480x400) the inner area is 352x272 and each of the four rows gets exactly **35px**,
+##  which already carries two baselines (name at `row.y + 15`, state at `row.end.y - 3`). **A third text line
+##  does not fit** — so the chips replace the state line rather than being added below it, and this band is
+##  the row's lower half.
+##
+## **It starts at `text_x(row)`, so it is clear of the slot frame by construction** rather than by a constant
+##  that happens to be big enough. Shrink the window and the band follows the slot instead of sliding under it.
+static func chip_band(row: Rect2) -> Rect2:
+	var x := text_x(row)
+	var h := row.size.y * 0.5
+	return Rect2(x, row.end.y - h, maxf(row.end.x - x, 0.0), h)
+
+
+## The gap between two chips on one row. **`ROW_GAP_PX`'s horizontal sibling** — the same value, because the
+##  eye reads them as the same kind of separation and two constants at 8.0 would be one edit away from
+##  disagreeing for no reason.
+const CHIP_GAP_PX := 8.0
+## The pressable chip's outline width. **1px, and it is the only mark that says "this one is meant to be
+##  pressed"** — every other chip state draws text alone. Kept here with the other pixel geometry
+##  (`PAD_PX`, `BASELINE_DROP_PX`) rather than in `fx_tuning`, which holds the research window's *art* values.
+const CHIP_BOX_PX := 1.0
+## How far the chip's text starts in from its own left edge, so a buyable chip's outline does not run through
+##  the first glyph. Shared by every state so the four never sit at four different x's as the state changes.
+const CHIP_TEXT_INSET_PX := 4.0
+
+
+## **`count` chips across the row's chip band, evenly divided** — the exact shape `pick_layout.cards` holds,
+##  and for the same reason: the count is the live number of unlocks on that axis, so a row with fewer chips
+##  must not leave a gap where a missing one would be.
+##
+## **The window is not resized in this game, but this divides rather than using a fixed chip width anyway** —
+##  the same argument `rows()` above makes. At 480x400 three chips come out ~94px wide and one comes out
+##  ~299px; `net_research` pins a 40px floor as a **literal**, not as a re-read of this function.
+static func unlock_chip_rects(row: Rect2, count: int) -> Array[Rect2]:
+	var out: Array[Rect2] = []
+	if count <= 0:
+		return out
+	var band := chip_band(row)
+	var w := maxf((band.size.x - CHIP_GAP_PX * float(count - 1)) / float(count), 0.0)
+	for i in count:
+		out.append(Rect2(band.position.x + float(i) * (w + CHIP_GAP_PX), band.position.y, w, band.size.y))
+	return out
+
+
+## Which chip index is at `p` (window-local coordinates) — `-1` if none.
+## **Walks the exact rects `unlock_chip_rects()` produced.** Measuring separately here is how a click lands on
+## the wrong chip — and with 10 원석 leaving the counter on every click, on the wrong *purchase* — with no
+## error at all (`pick_layout.card_at`'s own header names the same trap).
+static func unlock_chip_at(row: Rect2, count: int, p: Vector2) -> int:
+	var rects := unlock_chip_rects(row, count)
+	for i in rects.size():
+		if rects[i].has_point(p):
+			return i
+	return -1
 
 
 ## The material line, between the title and the first row.

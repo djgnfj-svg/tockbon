@@ -73,7 +73,7 @@ signal reward_taken_requested
 signal interact_requested
 
 ## **`-` / `=` — camera zoom out / in. A shell-only debug key.**
-##  The map is 400x48 tiles = 12800x1536 world px while the screen shows 960x540, so **1/13th of the map is
+##  The map is 300x48 tiles = 9600x1536 world px while the screen shows 960x540, so **a tenth of the map is
 ##  visible at once** and level design cannot be read while playing. This key is the only way to see the whole
 ##  thing without opening the editor.
 ## Only the **direction** is passed (-1 out, +1 in). The zoom steps live in `stage.gd` — the shell owns

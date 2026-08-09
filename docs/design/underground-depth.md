@@ -37,7 +37,9 @@ And below the picture, `_bottom_fill` is sampled from the far picture's own bott
 independent: the picture follows the camera down, and the fill under it is a lawn.
 
 **Second measurement, because it changes what "underground" even means here**: the grid is 4096x1008 cells
-but the map is **400x48 tiles = 3200x384 cells**, seated at (0,0). ⇒ **Everything below world y 1536 is
+but the map is **300x48 tiles = 2400x384 cells**, seated at (0,0) (it was 400 wide until the left run's
+100 flat columns were cut — `left-run-clumps-and-platforms`; **the height, which is the only part this
+measurement uses, did not move**). ⇒ **Everything below world y 1536 is
 `EMPTY`** — 2,496px, **62% of the world's height, is not underground, it is off the bottom of the map.**
 Any depth ramp tuned against `CellGrid.H` is tuned against a number the player never reaches.
 

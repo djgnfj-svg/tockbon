@@ -10,6 +10,9 @@ const Tuning := preload("res://src/sim/sim_tuning.gd")
 const Glyph := preload("res://src/sim/glyph_defs.gd")
 const CircleDefs := preload("res://src/sim/circle_defs.gd")
 const Stage := preload("res://src/stage/stage.gd")
+## The spawn check below needs the bull's own row to walk to.
+const Stage1Monsters := preload("res://src/stage/stage1_monsters.gd")
+const BossAi := preload("res://src/actor/boss_ai.gd")
 const MonsterDefs := preload("res://src/actor/monster_defs.gd")
 const CellRenderer := preload("res://src/view/cell_renderer.gd")
 const Fx := preload("res://src/view/fx_tuning.gd")
@@ -49,6 +52,7 @@ func run(t) -> void:
 	_gen_tables(t)
 	_bolt_head_keeps_up(t)
 	_stage_map(t)
+	_the_stage_spawn_is_on_ground_and_connected_to_the_bull(t)
 	_wood_clumps(t)
 	_terrain_brush_follows_the_material_table(t)
 	# -- levelup-and-three-picks Stage A — rarity folded into the glyph id --
@@ -152,6 +156,112 @@ func _view_follows_the_rune_axis(t) -> void:
 ##  that day is coming) and whoever adds it must state the gap.
 ##
 ## **The terrain that actually runs is stood up.** Re-reading the map string here would go stale with the terrain.
+
+## **The check that did not exist, added by `left-run-clumps-and-platforms.md` §2 because that doc is a
+## redraw and a redraw is the one operation that breaks this.**
+##
+## `stage.gd:SPAWN_TILE`'s own box records the accident in its own words: the map was repainted
+## 312x126 -> 400x48, `SPAWN_TILE` stayed `(3, 30)`, the character started inside a **sealed underground
+## cave**, and "not one line of error is raised. The nets can't catch it either." `_stage_map` above
+## measures the map's **shape** and never asks what is under the spawn; `net_tables`' camera-clamp test
+## uses `SPAWN_TILE` as one of six sample positions and never asks either.
+## **`net_town._you_land_inside_the_room_and_on_its_floor` is the twin that already exists — for the
+## town.** This is the stage's.
+##
+## Three questions, and the third is the one a cave would pass the first two of:
+##  1. the spawn box fits — **the whole box, not one cell.** The character is 32px tall, so a spawn on the
+##     floor row needs the row above clear too (`net_town`'s own note)
+##  2. there is floor immediately under it — otherwise "the box fits" is true in mid-air
+##  3. **it is horizontally connected to the bull's row.** A sealed cave has ground and headroom; what it
+##     does not have is a walk to the midboss. Measured as a flood over standable positions, which is what
+##     the player actually is
+func _the_stage_spawn_is_on_ground_and_connected_to_the_bull(t) -> void:
+	var g := CellGrid.new()
+	Stage.build_terrain_into(g)
+	var cell := float(Tuning.CELL_PX)
+	var tile_px := Tuning.TILE_CELLS * Tuning.CELL_PX
+	var px := Stage.SPAWN_TILE.x * tile_px
+	var py := Stage.SPAWN_TILE.y * tile_px
+
+	var blocked := 0
+	for cy in range(floori(py / cell), floori((py + Character.H_PX - 1) / cell) + 1):
+		for cx in range(floori(px / cell), floori((px + Character.W_PX - 1) / cell) + 1):
+			if g.is_solid(cx, cy):
+				blocked += 1
+	t.eq(blocked, 0, "출발 자리에 캐릭터 상자가 통째로 들어간다 (막힌 칸 %d개)" % blocked)
+
+	var feet_cy := floori((py + Character.H_PX) / cell)
+	var under := 0
+	for cx in range(floori(px / cell), floori((px + Character.W_PX - 1) / cell) + 1):
+		if not g.is_solid(cx, feet_cy):
+			under += 1
+	t.eq(under, 0, "발밑 전체가 땅이다 — 허공에서 시작하지 않는다 (빈 칸 %d개)" % under)
+
+	# ── connected to the bull ──
+	var bull_tx := -1
+	for row: Dictionary in Stage1Monsters.ROWS:
+		if BossAi.has_pattern(int(row["kind"])) and int(row["kind"]) == MonsterDefs.KIND_BULL:
+			bull_tx = int(row["tx"])
+			break
+	t.ok(bull_tx >= 0, "전제 — 표에서 황소 행을 찾았다")
+
+	# **A walk, not a flood over open cells.** Open air above a sealed cave is connected to the sky and
+	#  would make a cave read as "connected to everything". This steps tile by tile the way the player
+	#  does: from a standing tile, the next tile counts as reachable if the character's box fits there
+	#  and there is floor under it, at any surface height the ground actually has.
+	var reach := {}
+	var stack: Array[Vector2i] = [Vector2i(Stage.SPAWN_TILE.x, Stage.SPAWN_TILE.y)]
+	var steps := 0
+	while not stack.is_empty() and steps < 20000:
+		steps += 1
+		var cur: Vector2i = stack.pop_back()
+		if reach.has(cur):
+			continue
+		reach[cur] = true
+		for dx: int in [1, -1]:
+			var ntx := cur.x + dx
+			if ntx < 0 or ntx >= Stage.MAP_W:
+				continue
+			# Any standable row in that column, found by dropping from the current row's own height —
+			# the same "scan for the surface" the placement resolver does, bounded to the map.
+			for nty in range(maxi(cur.y - 3, 0), mini(cur.y + 12, Stage.MAP_H)):
+				if _tile_is_standable(g, ntx, nty, tile_px, cell):
+					var nxt := Vector2i(ntx, nty)
+					if not reach.has(nxt):
+						stack.push_back(nxt)
+					break
+	t.ok(steps < 20000, "연결 탐색이 한도 안에서 끝났다 (전제 — 무한 루프가 아니다)")
+
+	var reached_bull := false
+	for k: Vector2i in reach:
+		if k.x == bull_tx:
+			reached_bull = true
+			break
+	t.ok(reached_bull,
+		"출발 자리에서 황소 행(tx%d)까지 걸어서 이어져 있다 (닿은 타일 %d개)" % [bull_tx, reach.size()])
+	# **Literal columns along the way, not a count.** A count ("more than half the map") drifts with every
+	#  repaint and would have to be retuned instead of catching anything. These five are the run itself:
+	#  the tile beside the west wall, the middle of the flat, its east end, the stairs, and room ①.
+	for want_tx: int in [2, 45, 89, 100, 145]:
+		var hit := false
+		for k: Vector2i in reach:
+			if k.x == want_tx:
+				hit = true
+				break
+		t.ok(hit, "x%d 열까지 이어져 있다" % want_tx)
+
+
+## Is the character's box free at this tile, with floor right under it. The helper for the walk above.
+func _tile_is_standable(g: CellGrid, tx: int, ty: int, tile_px: int, cell: float) -> bool:
+	var px := tx * tile_px
+	var py := ty * tile_px
+	for cy in range(floori(py / cell), floori((py + Character.H_PX - 1) / cell) + 1):
+		for cx in range(floori(px / cell), floori((px + Character.W_PX - 1) / cell) + 1):
+			if g.is_solid(cx, cy):
+				return false
+	return g.is_solid(floori(px / cell), floori((py + Character.H_PX) / cell))
+
+
 func _wood_clumps(t) -> void:
 	var g := CellGrid.new()
 	Stage.build_terrain_into(g)

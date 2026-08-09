@@ -425,6 +425,39 @@ const MONSTER_DEATH_POP_SCALE := 2.1
 const MONSTER_DEATH_POP_COLOR := Color(1.0, 0.86, 0.55, 0.95)
 const MONSTER_DEATH_POP_PX := 3.0
 
+## ══ Waking up (`left-run-clumps-and-platforms.md`, Screen) ══
+## **A sleeping mob and a walking one were drawn identically** — `monster_view` never read `asleep`
+## (grepped: zero hits in `src/view/`). With the clump layout a whole clump now stands there dormant
+## before the player arrives, so "you can tell a clump woke up" is a requirement, not a garnish.
+##
+## **The doc offers A (tint) · B (a staggered mark) · C (a sleep pose) and says A and B compose.**
+## **A+B is what shipped** — C is an art job (a sheet per kind) and the user has not picked.
+##
+## **A · tint.** A dormant body draws at this alpha. **Not a darker colour** — the sky here is near black
+##  (verify-look measured bedrock 35,34,40 against sky 14,14,19), so darkening reads as "gone", while
+##  alpha keeps the silhouette and its outline readable as "there, but not yet awake".
+const MONSTER_ASLEEP_ALPHA := 0.45
+## **B · the mark.** The same ring vocabulary as `MONSTER_DEATH_POP_*`, deliberately — copied rather than
+##  reinvented so "something changed state" reads as one family. It **opens and fades**, the same two
+##  motions together: opening alone reads as a leftover ring, fading alone reads as a blink.
+const MONSTER_WAKE_MARK_FRAMES := 14
+const MONSTER_WAKE_MARK_SCALE := 1.9
+## **The ring's own starting radius, not the box's.** The death pop scales off the box because "this body
+##  is gone" is about that body; a wake mark is a fixed-size notice, so six of them across a clump of
+##  differently-sized animals read as one repeated symbol instead of six different circles.
+const MONSTER_WAKE_MARK_R_PX := 9.0
+const MONSTER_WAKE_MARK_COLOR := Color(0.62, 0.86, 1.0, 0.95)
+const MONSTER_WAKE_MARK_PX := 3.0
+## **How far above the box's own centre the mark sits.** On the box centre it is swallowed by the body;
+##  above the head it reads as "this one just noticed you".
+const MONSTER_WAKE_MARK_LIFT_PX := 10.0
+## **The stagger** (the doc's own word: the clump wakes as a ripple, not as a switch). Frames of delay per
+##  monster, applied in world-array order — which is spawn order, which is row order in
+##  `stage1_monsters.ROWS`. **A whole clump stirring on one tick is the ordinary case**, not the rare one:
+##  `world_step`'s sleep pass walks every monster inside one tick, so with no stagger six rings would pop
+##  on the same frame and read as a single UI flash rather than as six animals waking.
+const MONSTER_WAKE_STAGGER_FRAMES := 4
+
 ## **Fire stuck to the body — in several places** (this fixed acceptance 13. The design text said "several places").
 ##
 ## **It was originally one box border and read on screen as "an orange selection box".**
@@ -1434,7 +1467,7 @@ const BG_NEAR_GROUND_Y := 640.0
 ##  bands replace it, darkening toward bedrock as depth grows.
 ##
 ## **The bottom of the range is derived, not guessed.** `CellGrid` is 4096x1008 cells but the map is only
-##  400x48 tiles (384 cells) seated at (0,0) — 62% of the grid's height is `EMPTY`, off the map entirely,
+##  300x48 tiles (384 cells tall) seated at (0,0) — 62% of the grid's height is `EMPTY`, off the map entirely,
 ##  and a range tuned against `CellGrid.H` lands at a third of what it was tuned for (measured in the doc).
 ##  `TerrainMap.MAP_H` x `TILE_CELLS` x `CELL_PX` is the map's real floor in world px (48 x 8 x 4 = 1536).
 const TerrainMap := preload("res://src/stage/terrain_map_generated.gd")
@@ -1565,7 +1598,12 @@ const RESEARCH_INK := Color(0.24, 0.19, 0.14, 1.0)
 const RESEARCH_INK_DIM := Color(0.24, 0.19, 0.14, 0.62)
 ## **The footer says what the bench cannot do.** `town.md` says the town explains nothing, and this is not an
 ##  explanation — it is the state of the bench, and leaving it unsaid would make an inert list look broken.
-const RESEARCH_FOOTER := "원석으로 푸는 해금은 아직 없다 · [E] 닫기"
+## **It stopped saying "there is nothing to unlock yet"** (`research-bench-unlocks.md`) — three unlocks are
+##  for sale now, and a footer still denying it would be the bench lying about itself on screen.
+## **A format, not a sentence, so the price is printed from `progress.GEMS_PER_UNLOCK` rather than typed
+##  here.** Typed as a literal, retuning the price would move the number the player is charged and leave the
+##  number the player reads behind, with nothing barking.
+const RESEARCH_FOOTER_FMT := "해금 하나에 원석 %d · [E] 닫기"
 const RESEARCH_LOCKED_TEXT := "잠김"
 ## The currency line. **원석** — `docs/decisions/gems-from-bosses-and-levels.md` named it.
 const RESEARCH_GEMS_FMT := "원석 %d"
@@ -1591,10 +1629,14 @@ const SETTLEMENT_PAD_PX := 48.0
 
 const SETTLEMENT_TITLE := "런 종료"
 ## **The gate's own title** (`docs/plans/3.done/gate-ending-to-game.md`, Stage D) — a death and a clear must
-##  not read identically on the one screen this whole feature exists to produce. **Provisional value, decided
-##  by the user to build with**: `"런 클리어"`. Changing it later is this one constant; nothing downstream
-##  reads the string itself (`settlement_window._draw` only branches on the `cleared` bool).
-const SETTLEMENT_TITLE_CLEAR := "런 클리어"
+##  not read identically on the one screen this whole feature exists to produce. Nothing downstream reads the
+##  string itself (`settlement_window._draw` only branches on the `cleared` bool), so it is this one constant.
+##
+## **No longer provisional.** `gate-ending-to-game.md` shipped `"런 클리어"` as a placeholder and named the
+##  swap as the one thing the user had to decide; `stage-clear-sequence.md`'s own string table decides it.
+##  **It says which stage was cleared** — the notice below tells the player there is no second one, and that
+##  only reads as information if the title already said this was stage 1.
+const SETTLEMENT_TITLE_CLEAR := "스테이지 1 클리어"
 const SETTLEMENT_TITLE_COLOR := Color(0.86, 0.90, 0.98)
 const SETTLEMENT_TITLE_SIZE := 30
 
@@ -1628,3 +1670,78 @@ const SETTLEMENT_BUTTON_TEXT_COLOR := Color(0.92, 0.94, 1.0)
 ##  Read only by `settlement_layout.count_value`, so this is the one place to slow or speed it once it is seen
 ##  on screen (verify-look's own job — "does the count-up read as counting, the rate, not the endpoints").
 const SETTLEMENT_COUNT_FRAMES_PER_POINT := 3
+
+## **Two lines saying the build ends at stage 1** (`stage-clear-sequence.md`, Beat 4).
+##  Drawn on a clear only — a death is not the end of the content.
+##
+## **Two constants rather than one wrapped sentence**: `draw_string` does not wrap, and hand-wrapping a
+##  40-character sentence is a layout problem for text that gets deleted the day stage 2 exists.
+##
+## **Neither line apologises, thanks anybody, or promises anything.** They are the user's own words shortened
+##  by one clause, in the same plain voice `docs/submission/README.md`'s risk list is written in.
+const SETTLEMENT_NOTICE_1 := "지금은 여기까지만 개발돼 있습니다."
+const SETTLEMENT_NOTICE_2 := "스테이지 2는 아직 없습니다."
+## Dimmer and warmer than `SETTLEMENT_ROW_VALUE_COLOR` — it is an aside about the build, not a figure from
+##  the run, and the two must not read as the same kind of thing.
+const SETTLEMENT_NOTICE_COLOR := Color(0.78, 0.70, 0.52)
+## Under `SETTLEMENT_ROW_SIZE` (20) — smaller than the numbers it sits below, larger than nothing.
+const SETTLEMENT_NOTICE_SIZE := 18
+
+# --- stage 1's ending, the beats (`stage-clear-sequence.md`) ---
+## **Named, not pathed** (GDD's own rule): a doc under `docs/plans/` changes folders as its status changes,
+##  so a path into it dies the day it moves — and it dies **silently**, since nothing compiles a comment.
+##  This one had already gone stale once (`1.ready/` → `3.done/`) before the prefix came off. The bare name
+##  is greppable and cannot rot. **Every citation in this file follows it.**
+## **The east wall coming down, felt rather than seen.** The player is 300-600px west of that wall and, per
+##  `net_gate`'s own camera check, it is off screen from most of the room — so this is a shake and not a
+##  picture. `blast_fx.kick()` is the one door; `_kick`'s "the stronger one wins" rule still applies.
+##
+## **7px is larger than any blast in `FX_SIZES`** and 0.35s is longer than `SHAKE_SEC` (0.20, a bolt) — a
+##  twelve-tile stone wall reads as *something collapsed*, not as *something hit me*, and length is what
+##  carries that difference.
+const GATE_WALL_SHAKE_PX := 7
+const GATE_WALL_SHAKE_SECS := 0.35
+
+## **Physics frames, both of them — 0.4s at 60Hz.** `gate_view.tick_gate()` is called from
+##  `stage._sync_settlement()`, which is physics; put either counter on `_process` and 24 frames becomes
+##  0.167s on a 144Hz panel, with nothing barking. `project.godot` never sets
+##  `physics/common/physics_ticks_per_second` (grepped), so this is Godot's default 60 and not a project
+##  value — the day someone sets it, both constants change meaning silently.
+##
+## **`GATE_TAKE_FRAMES` is safe at any length only because the take latches** (`gate_view.tick_gate`'s own
+##  header): a running player crosses the 96px band in ~22 frames, so a resettable hold near this length
+##  would simply never fire.
+const GATE_ARCH_FADE_FRAMES := 24
+const GATE_TAKE_FRAMES := 24
+
+## The colour the arch reaches while it is taking you. **Over-bright warm, and the over-1 components are the
+##  point**: the renderer is `gl_compatibility` (`project.godot:88`) — no 2D HDR, no glow, and nobody should
+##  later reach for either to "fix" this. What produces the flare is that the arch's dark linework and mid
+##  greys multiply up into bright warm tones while only the already-near-white pixels saturate. **Clamping is
+##  what limits the effect, not what creates it.**
+##
+## **Never rendered.** Only verify-look can say whether this reads as flaring; every net asserts the colour
+##  handed to `gate_view._paint_arch`, never pixels. Fallback if it does not read: a ramp with no component
+##  above 1, toward a warm near-white.
+const GATE_TAKE_TINT := Color(1.7, 1.6, 1.25, 1.0)
+
+# --- the air-jump ring (`research-bench-unlocks.md`) ---
+## **A second jump with no mark reads as a bug the first time it fires.** That is the whole job of these
+##  three: the town unlock changes what the character can do, and CLAUDE.md's signature failure is the sim
+##  changing while the screen does not.
+##
+## **Every value here is a starting value, not a tuned one, and nobody has seen any of them.** Whether a ring
+##  is even the right mark — versus a puff, a stretch of the sprite, or a sound — is that doc's own TBD.
+##  Radius is set against the character's collision box (`character.W_PX` = 20) so the ring reads as *at the
+##  feet* rather than as a halo around the whole body; the colour is the pale warm the staff ring already
+##  uses for "this came from you", at reduced alpha so it does not compete with the character sprite.
+##
+## **Never rendered.** Only verify-look can say whether it reads. Every net asserts the arguments handed to
+##  `character_view._paint_air_jump_ring`, never pixels — the same discipline `GATE_TAKE_TINT` above holds.
+##
+## **The ring's lifetime is not here.** It is `character.AIR_JUMP_FLASH_TICKS`, because the counter is sim-side
+##  state the screen reads (`invuln_left`'s own precedent) — a second copy of the duration in this file would
+##  be a second clock, which is exactly what that comment forbids.
+const AIR_JUMP_RING_R_PX := 13.0
+const AIR_JUMP_RING_PX := 2.0
+const AIR_JUMP_RING_COLOR := Color(1.0, 0.93, 0.72, 0.85)

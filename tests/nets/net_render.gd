@@ -40,7 +40,19 @@ const HUD_PATH := "HUD"
 ##  **Keeping the list by hand is itself the contract.** Attach a new window without listing it and the net
 ##   barks first; list it and "this one eats clicks on purpose" stays in the repo. Work it out automatically
 ##   and that declaration disappears.
-const INTERACTIVE: Array[String] = ["HUD/CircleWindow", "HUD/ThreePickWindow", "HUD/SettlementWindow"]
+## **`HUD/ResearchWindow` added here** (`research-bench-unlocks.md`) — the bench sells
+##  three unlocks now, so its chips have to be pressable and it has to be `STOP` like the other three.
+##
+## **This entry is written *before* the `mouse_filter` 2 -> 0 edit lands in `stage.tscn`, deliberately, and
+##  the order matters.** Flip the scene first and this net goes red — and the cheapest-looking fix is to put
+##  `mouse_filter` back to `IGNORE`, which turns every net in the suite green again **while making the entire
+##  research feature unreachable**: the window would open, draw its chips, print its prices, and refuse to be
+##  pressed, with nothing barking. That is precisely the failure CLAUDE.md is built around (the settlement
+##  panel that shipped under 5,576 green checks with `visible` never set). ⇒ **If this line is here and the
+##  scene still says `IGNORE`, the check below is what says so, out loud.**
+const INTERACTIVE: Array[String] = [
+	"HUD/CircleWindow", "HUD/ThreePickWindow", "HUD/SettlementWindow", "HUD/ResearchWindow",
+]
 
 ## **The old `WINDOW_SCREEN_FRAC` (90% on each axis) was deleted.** The contract was never about size —
 ##  "the character and its surroundings are visible" is the contract, and 90% was the value that **deferred** it.
@@ -746,6 +758,9 @@ func _progress_text_survives_the_assembly_window(t) -> void:
 	# **And `_settlement`, same reason again** (`run-end-settlement.md`, Stage D) — `_update_hud()` now reads
 	#  `_settlement.is_showing()` too, unconditionally, every call.
 	root.set("_settlement", root.get_node("HUD/SettlementWindow"))
+	# **And `_gate_view`, same reason a third time** (`stage-clear-sequence.md`) — `_sync_settlement()` calls
+	#  `tick_gate()` on it every physics frame, and `reset_stage()` calls `reset_gate()`. Both unconditional.
+	root.set("_gate_view", root.get_node("GateView"))
 
 	# **Blanking `_progress_label.text` was also currently green** — this call is what proves it fills back in,
 	#  not merely that the node happens to hold leftover text from before.
@@ -1460,6 +1475,9 @@ func _wired_stage_root(t) -> Node:
 	#  before it will even call `_world.frame()`, and `_update_hud()`/`reset_stage()` both reach it too — an
 	#  unwired null crashes every check in this file that drives any of the three before it measures anything.
 	root.set("_settlement", root.get_node("HUD/SettlementWindow"))
+	# **`_gate_view`, and the same sentence applies** (`stage-clear-sequence.md`) — `_sync_settlement()` calls
+	#  `tick_gate()` on it every physics frame and `reset_stage()` calls `reset_gate()`, both unconditionally.
+	root.set("_gate_view", root.get_node("GateView"))
 	# **`_renderer`, so `_on_ticked()` can be driven for real too** — it calls `_renderer.refresh()` whenever
 	#  `_grid.consume_changed() > 0`, and any test that drives `_physics_process()` far enough to change the
 	#  grid (Stage I's own water pour is the first to do this through this helper) crashes on a null `_renderer`

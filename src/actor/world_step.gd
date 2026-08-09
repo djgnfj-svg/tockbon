@@ -258,8 +258,11 @@ func frame(dt: float, axis: float, jump: bool, jump_held: bool) -> bool:
 		_placement.wake_scan(_grid, boss_target_x, Callable(self, &"spawn_monster"))
 		# `docs/plans/3.done/monster-placement-stage1.md` Stage D — every live monster's own sleep state,
 		#  once per tick. **After `wake_scan`**, so a monster that just woke this tick gets classified too
-		#  (it was necessarily within `WAKE_PX`, so this immediately reads `asleep = false` — not a wasted
-		#  pass). **Distance from the monster's own current position**, not the placement row's rest `tx` —
+		#  the tick it is born. **It materialises at `MATERIALIZE_PX`(720), which is *outside*
+		#  `STIR_ENTER_PX`(420), so it reads `asleep = true` on that very first pass** — that is
+		#  `left-run-clumps-and-platforms.md` §8a's whole point: the clump exists, standing still and
+		#  dimmed, before the player can see it, instead of row -> live -> walking in one step off screen.
+		#  **Distance from the monster's own current position**, not the placement row's rest `tx` —
 		#  it may have walked since spawning. `MonsterPlacement.stays_active` is the same hysteresis
 		#  `wake_scan`'s own `_primed` bit already uses — one band, two audiences, not two copies of the
 		#  arithmetic.
@@ -273,7 +276,7 @@ func frame(dt: float, axis: float, jump: bool, jump_held: bool) -> bool:
 		#    `net_monster`'s own jump checks (it never even started walking) and, before the next
 		#    exclusion was found, every boss pattern net too.
 		#  · **Bosses never sleep** (`BossAi.has_pattern`) — even a *placed* one. Room ①'s own floor is 30
-		#    tiles (960px) wide, past `SLEEP_PX`(840) end to end, so a mid-fight retreat to the far side of
+		#    tiles (960px) wide, past `STIR_EXIT_PX`(560) end to end, so a mid-fight retreat to the far side of
 		#    its own room would otherwise freeze the pattern machine mid-charge or mid-leap — measured on
 		#    `net_monster_charge`/`_slam`/`_breath`, which deliberately park the character 3,000-5,000px
 		#    away for runway and went fully inert the moment sleep applied to bosses too. The cap already
@@ -283,11 +286,12 @@ func frame(dt: float, axis: float, jump: bool, jump_held: bool) -> bool:
 			if BossAi.has_pattern(m.kind) or not _placement.has_row_for(m.id):
 				continue
 			var dist := absf(float(boss_target_x) - m.center().x)
-			var should_sleep := not MonsterPlacement.stays_active(not m.asleep, dist)
+			var should_sleep := not MonsterPlacement.stays_active(not m.asleep, dist,
+				MonsterPlacement.STIR_ENTER_PX, MonsterPlacement.STIR_EXIT_PX)
 			# **A mob mid-jump does not fall asleep** (`monster-ai-jump-and-separation.md`, verify-read's
 			#  own finding, item 5). `Monster.step()`'s asleep-gate skips refreshing `on_ground` entirely —
 			#  that skip is where most of sleep's cost saving comes from — so a monster that crossed
-			#  `SLEEP_PX` mid-air would freeze there forever: `on_ground` stuck `false`, the screen stuck on
+			#  `STIR_EXIT_PX` mid-air would freeze there forever: `on_ground` stuck `false`, the screen stuck on
 			#  `MON_AIRBORNE` (`monster_view.resolve_state`). **Plausible, not exotic**: a walled-off pig
 			#  jumps repeatedly forever by design (the plan's own Bounds — "trapped, and visibly trying"),
 			#  and a player digging a pit trap and walking away to fight elsewhere is an ordinary sequence.
@@ -554,7 +558,27 @@ func spawn_monster(kind: int, px: int, py: int) -> int:
 	#  would be "the frame stops politely but only M keeps growing", and that is the rule having two copies.
 	if _broken:
 		return 0
-	if _monsters.size() >= MonsterDefs.MAX_MONSTERS:
+	# **The boss reserve** (`left-run-clumps-and-platforms.md` §5 — **named, not pathed**: a doc under
+	#  `docs/plans/` changes folders with its status, so a path dies that day. GDD's own rule). Without it the cap is
+	#  first-come-first-served, and a player who kills nothing on the left run arrives at the pit with the
+	#  cap full of trash: the bull's row is refused, `wake_scan` never spends it, and **the midboss simply
+	#  does not exist.** The fire rune is behind the bull and the wood wall is behind the rune, so the whole
+	#  chain stops — **and nothing is raised anywhere.** That was live in this build (20 pre-① rows against
+	#  `MAX_MONSTERS` 20).
+	#  **A row-count convention is not the fix.** "Keep the table under 20" is deleted by the next edit that
+	#  adds a row, and the failure stays exactly as silent.
+	#  ⇒ **A non-boss kind is refused `reserve` slots early; a boss kind is refused only at the real cap**,
+	#  so a boss always has somewhere to land. `BossAi.has_pattern` is already this repo's boss gate
+	#  (`monster.gd`'s sleep exclusion, `net_monster_placement`), so nothing new decides what a boss is.
+	var boss := BossAi.has_pattern(kind)
+	var reserve := 0 if boss else _placement.boss_row_count()
+	if _monsters.size() >= MonsterDefs.MAX_MONSTERS - reserve:
+		# **The bark is the backstop, and it is unreachable in a correct build** — with the reserve in
+		#  place a refused boss can only mean the reserve itself is wrong (a boss spawned outside the
+		#  table, or a table pushed after the world filled). That is exactly when a `push_error` earns its
+		#  cost. **English, one text** — its `t.expect_error` is matched by plain substring (CLAUDE.md).
+		if boss:
+			push_error("WorldStep: boss kind %d refused a slot at the cap - the boss reserve is wrong" % kind)
 		return 0
 	# The whole box must be inside the grid's pixel range — look only at the top-left and the box survives
 	#  sticking out past the right or bottom boundary. No error is raised (it is input a debug key can commonly pass).

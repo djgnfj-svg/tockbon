@@ -59,7 +59,11 @@ can be added by accident. Casting in town is not blocked; nothing changes shape.
 |---|---|
 | **Departure gate** | **Real.** Builds stage 1 and puts you on its spawn tile |
 | **Assembly bench** | **The same window Tab opens** — which is what `town.md` says it is. What the town *adds* (choosing what to equip within a point budget) needs a point table that does not exist |
-| **Research bench** | **A window**: the 원석 count, the four unlock axes with their icons, and the rune pool as the item row — read live from `Progress`. **It spends nothing and says so** |
+| **Research bench** | **A window**: the 원석 count, the four unlock axes with their icons, and the rune pool as the item row — read live from `Progress`. ~~**It spends nothing and says so**~~ — **superseded: it spends now** (`research-bench-unlocks.md`) |
+
+> **Superseded on the buy half** (`research-bench-unlocks.md`): a price exists now, the chips on the item and
+> body rows are pressable, and 원석 leaves the counter. **The paragraph below is kept as the record of why the
+> bench shipped inert first**, not as a description of the bench today.
 
 **The research bench is not a placeholder.** That list is the design's own core requirement — "unlocked and
 locked sitting in one list is the best possible demonstration that the pool widened". What it does *not* have

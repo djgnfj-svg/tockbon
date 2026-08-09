@@ -8,7 +8,7 @@ extends RefCounted
 ##  at the right rate") is measurable only by value. Keeping the state inside the shell means the nets
 ##  can't build a scene and would **reimplement pouring inside themselves** to measure it, splitting
 ##  the measured code from the shipping code
-##  (`docs/plans/2.active/water-jump-and-escape.md`, "where it lives").
+##  (`water-jump-and-escape.md`, "where it lives").
 ##  => **The caller (`stage.gd`) knows only "when to start" and "call it every tick".** The arithmetic all lives here.
 ##
 ## **Do not put it inside `cell_grid.step()`** — that changes the meaning of `step()` for all 39 nets

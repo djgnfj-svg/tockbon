@@ -161,7 +161,7 @@ const DEFS: Dictionary = {
 ##     measured, not a regression.
 ##  2. **Sleep (this same plan's Stage D) made the *old* placement measure the wrong thing entirely.**
 ##     `Monster.step()` now skips its own movement block while `asleep`, and the old placement stood the
-##     character 3,200px away from every monster — past `WorldStep`'s own `SLEEP_PX`(840) from the very
+##     character 3,200px away from every monster — past `MonsterPlacement.STIR_EXIT_PX`(560) from the very
 ##     first tick. Being asleep, those monsters never walked a single pixel closer, so they stayed asleep
 ##     the entire run. **Measured, not assumed**: with the old, unfixed placement the pig's own numbers had
 ##     silently dropped to +39µs/+679µs — an "awake" cost that was actually a sleeping one. `_one_run`'s

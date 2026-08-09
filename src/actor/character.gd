@@ -142,6 +142,14 @@ const JUMP_CUT_VY_PX := JUMP_VY_PX * JUMP_CUT_RATIO
 const COYOTE_SEC := 0.1
 const JUMP_BUFFER_SEC := 0.1
 
+## **How long the air-jump ring stays on screen, in ticks** (`research-bench-unlocks.md`). 4 ticks = 0.2s,
+##  the same length as `INVULN_TICKS`, and **that is a starting value, not a tuned one** — whether a ring is
+##  even the right mark (versus a puff, a stretch of the sprite, or a sound) is unseen. That doc's TBD.
+## **Ticks, not seconds, because the screen reads the counter directly** — the same shape `invuln_left` holds,
+##  and for the reason its own box gives: make a separate clock for the drawing and there are two clocks, and
+##  you get a ring still showing after the jump it marked is long over.
+const AIR_JUMP_FLASH_TICKS := 4
+
 # --- HP ------------------------------------------------------------
 ## **A number** (design: "HP and damage"). Base damage is 10, so it takes **ten hits** to go down —
 ##  the whole of this value is that a one-shot death is not fun but rage.
@@ -304,6 +312,35 @@ var _burn_acc := 0.0
 var _coyote_left := 0.0
 var _jump_buffer_left := 0.0
 
+## **How many air jumps this character is allowed — pushed in from outside, every frame.**
+##  `stage._physics_process` re-derives it from `Progress.air_jump_budget()` immediately before the world
+##  steps, so buying the double jump is felt without any reset, purchase hook or application moment. **Do not
+##  latch it here** and do not give `Character` a `Progress` reference to read it from — `src/actor/` holds no
+##  reference to the run's progress today and adding one to answer "may I jump twice" would be a second
+##  ownership path for a value the shell already derives.
+## **0 by default, which is what keeps every existing jump check untouched** — with 0 the `or` term in
+##  `step()` is never true and the spend branch below it is unreachable, so the condition reduces to exactly
+##  today's. `net_character`'s A-1~A-4 water checks need no edit, and `net_research` asserts that identity by
+##  driving the same frame sequences rather than assuming it.
+var air_jump_budget := 0
+
+## **How many are left in this airtime.** Counted down by the spend below, and **refilled on the ground and
+##  nowhere else** — the same single-site discipline `_coyote_left`'s own box argues for ("a counter that only
+##  counts down has to be reset somewhere else too, and the day a second grounding path appears that reset is
+##  the line that gets forgotten").
+## **Water deliberately does not refill it.** Air-jump over land, fall into water, jump freely, leave the
+##  surface — you leave with 0. Refilling in water would mean the water path *writes* this counter, and the
+##  whole point is that water short-circuits it without touching it.
+var _air_jumps_left := 0
+
+## **Ticks left on the air-jump ring. `invuln_left`'s exact shape, and read by the screen the same way**
+##  (`character_view`) — one field, one clock. A second jump with no mark reads as a bug the first time it
+##  fires, which is the whole reason this exists.
+## **It is decremented at the very top of `on_tick()`, above the invulnerability branch** — that branch
+##  `return`s, so a decrement below it stops counting for the entire invulnerability window and an air jump
+##  taken just after being hit leaves the ring **frozen on screen**. Nothing barks.
+var air_jump_flash_left := 0
+
 ## **HP and invulnerability are reverted too.** Without that, R (stage reset) cannot bring you back —
 ##  when alone there is nobody to pick you up, so **R is the only revival** (plan section 4).
 ## Position, velocity, grounding and `_rem_*` are reverted by `_body.place()` — touch them again here and
@@ -319,6 +356,12 @@ func place(px: int, py: int) -> void:
 	#  already holding a buffered press from before the reset — one free jump on the first frame.
 	_coyote_left = 0.0
 	_jump_buffer_left = 0.0
+	# **Reverted with the two windows above, for the same reason.** Left standing, R (stage reset) could drop
+	#  you into the new position already holding an unspent air jump from before the reset. `air_jump_budget`
+	#  itself is **not** touched — it is the shell's value, re-derived every frame, and clearing it here would
+	#  be this object writing over something it does not own.
+	_air_jumps_left = 0
+	air_jump_flash_left = 0
 
 
 func center() -> Vector2:
@@ -352,6 +395,12 @@ func step(grid: CellGrid, dt: float, axis: float, jump: bool, jump_held: bool) -
 	#  somewhere else too, and the day a second grounding path appears (a platform, a revive) that reset is the
 	#  line that gets forgotten.
 	_coyote_left = COYOTE_SEC if on_ground else maxf(0.0, _coyote_left - dt)
+	# **The air-jump budget is refilled the same way and in the same place, and the ground is the only site.**
+	#  Written as a refill rather than "reset it when you land" for the reason the line above it gives — a
+	#  landing *event* has to be detected somewhere, and the day a second grounding path appears that detection
+	#  is what gets forgotten. `air_jump_budget` is 0 unless the town unlock is bought, so with no unlock this
+	#  line writes 0 over 0 every frame and changes nothing.
+	_air_jumps_left = air_jump_budget if on_ground else _air_jumps_left
 	# **`jump` is a press edge** (`stage_input.jump_pressed` is `is_action_just_pressed`), so the buffer is armed
 	#  once per press. **If it ever becomes a polled `is_action_pressed`, holding the key would re-arm it every
 	#  frame and the character would bounce on every landing** — that is the one change that breaks this line.
@@ -361,13 +410,39 @@ func step(grid: CellGrid, dt: float, axis: float, jump: bool, jump_held: bool) -
 	#  The jump's own value (`JUMP_VY_PX`) is the same in and out of water — no new physics axis of buoyancy is made.
 	#  **Water grants no coyote** — `on_ground` is false throughout a water column, so `_coyote_left` never fills
 	#  there, and A-3 ("leaving water is blocked that very frame") survives this change untouched.
-	if _jump_buffer_left > 0.0 and (on_ground or in_water or _coyote_left > 0.0) and not downed:
+	# **`ground_jump` is named because it is asked twice** — once to allow the jump, once to decide who paid
+	#  for it. Inline it and the two can drift, and the drift is a free air jump off every ledge.
+	var ground_jump := on_ground or _coyote_left > 0.0
+	# **`_air_jumps_left` is the town research unlock** (`research-bench-unlocks.md`). The unlock is a
+	#  structural no-op underwater rather than a special case — but **read the next box for where that
+	#  property actually lives, because it is not here.**
+	#
+	# **The term order in this `or` chain is cosmetic. Measured, and the design doc was wrong about it.**
+	#  `research-bench-unlocks.md` says `in_water` sitting before the budget is what makes the unlock a
+	#  no-op in water, and its acceptance 13 asks for an inversion that moves the budget ahead of `in_water`.
+	#  **That mutation was run and every net stayed green — and it must, because it is a semantic no-op**: a
+	#  disjunction's truth value does not depend on term order, both operands here are pure reads (`in_water`
+	#  is a local computed above, `_air_jumps_left` a field), so short-circuiting skips no side effect. No
+	#  check can catch it, and no check should be written claiming to.
+	#  ⇒ **The whole no-op property is the `not in_water` guard on the spend below.** Drop *that* and water
+	#  eats the budget immediately (that mutation turns 9 checks red). Reorder these terms freely; delete
+	#  that guard and the feature breaks silently.
+	if _jump_buffer_left > 0.0 and (ground_jump or in_water or _air_jumps_left > 0) and not downed:
 		vy = JUMP_VY_PX
-		# **Both are spent, and the coyote one is what stops a double jump.** Leave `_coyote_left` standing and
-		#  the window is still open next frame while airborne ⇒ a second press jumps again. **That is a double
-		#  jump, which is a town unlock** (GDD) — it must not fall out of a feel fix.
+		# **Both are spent, and the coyote one is what stops a *free* double jump.** Leave `_coyote_left`
+		#  standing and the window is still open next frame while airborne ⇒ a second press jumps again, for
+		#  nothing. **The bought double jump does not come from here** — it is `_air_jumps_left`, a separate
+		#  counter, and `COYOTE_SEC`'s own box forbids widening the forgiveness window into it.
 		_jump_buffer_left = 0.0
 		_coyote_left = 0.0
+		# **Spent only when neither the ground nor the water paid for it.** This guard is the other half of
+		#  the term ordering above: without it a jump in deep water would still charge the budget, and the
+		#  no-op property is gone. **The jump's own value is `JUMP_VY_PX` unchanged** — whether an air jump
+		#  should be weaker than the first is that doc's TBD, to be decided by eye and retuned as *height*
+		#  (`v²/2g`, the box on `JUMP_CUT_RATIO`), never as a velocity ratio.
+		if not ground_jump and not in_water:
+			_air_jumps_left -= 1
+			air_jump_flash_left = AIR_JUMP_FLASH_TICKS
 	_body.apply_gravity(dt, GRAVITY_PX, MAX_FALL_PX)
 
 	# **Variable jump — if the key was released and it is still rising, clip the rise** (`JUMP_CUT_*` above).
@@ -462,6 +537,12 @@ func take_hit(dmg: int, tanks_invuln: bool) -> bool:
 ## **It does not take the grid.** This judgment does not need the grid right now (continuous damage is `step()`'s
 ##  job), and an unused argument becomes a false knob saying "the terrain is looked at here".
 func on_tick(spell: SpellSim) -> void:
+	# (0) **The air-jump ring's clock, and it has to be above (1).** That branch `return`s, so a decrement
+	#  written below it stops counting for the whole invulnerability window — take an air jump just after
+	#  being hit and the ring **freezes on screen for four ticks** with nothing barking. This is the same
+	#  passage CLAUDE.md names three times over (`_charge_blocked`/`_leaped_landed`/`_grounded_recently`): a
+	#  fact latched at 60Hz that the tick has to read regardless of what else the tick decides to skip.
+	air_jump_flash_left = maxi(0, air_jump_flash_left - 1)
 	# (1) If invulnerable, do nothing. This branch is the whole of acceptance 3-(2) —
 	#  the tick you get hit fills it with 4 and this line eats the next 4 ticks
 	#  (3-tick spacing = one hit, 5-tick spacing = two hits).

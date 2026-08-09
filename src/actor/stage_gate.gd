@@ -12,13 +12,13 @@ extends RefCounted
 const Tuning := preload("res://src/sim/sim_tuning.gd")  ## `src/sim` is allowed from `src/actor` (`net_layers.RULES`).
 const TILE_PX := Tuning.TILE_CELLS * Tuning.CELL_PX  ## 32 — one tile, in world px.
 
-const SEAT_TILE_X := 370      ## The arch's column.
+const SEAT_TILE_X := 270      ## The arch's column.
 const FLOOR_TILE_Y := 25      ## The row it stands ON — its top edge is the ground line.
 const REACH_PX := 48          ## x half-band, +/- from the seat centre.
 const BAND_UP_PX := 96        ## y band, upward from the ground line (3 tiles).
 
-const WALL_TILE_X0 := 367     ## Room ③'s east wall — both stone columns.
-const WALL_TILE_X1 := 368
+const WALL_TILE_X0 := 267     ## Room ③'s east wall — both stone columns.
+const WALL_TILE_X1 := 268
 const WALL_TILE_Y0 := 13
 const WALL_TILE_Y1 := 24
 
@@ -37,7 +37,7 @@ static func floor_y_px() -> float:
 ## **Is `center` standing at the gate.** x is a band around the seat; y is a band reaching up from the
 ## ground line, never down through the floor.
 ##
-## **Why a y band at all**: the x370 column is open from row 0 to row 24 (the room has no ceiling there), so
+## **Why a y band at all**: the x270 column is open from row 0 to row 24 (the room has no ceiling there), so
 ## an x-only test would say "at the gate" while the player is still sailing over the roof.
 ##
 ## **Why not `on_ground` instead**: room ③'s escape is a water escape — a player floating at the gate is not

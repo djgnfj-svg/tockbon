@@ -806,9 +806,10 @@ func _slam_safety_cap_timeout_ignites_nothing(t) -> void:
 ##
 ## **On the real map, not a synthetic wall** (`Stage.build_terrain_into` — the same static door
 ## `net_water_rain.gd`/`net_tables.gd` already use, no scene tree needed). **The boundary is a fixed literal
-## measured once from the baked map** (cx=1840, tile 230 — matches `stage1-bosses.md` Risk 3's own "x230-259"
+## measured once from the baked map** (cx=1040, tile 130 — `stage1-bosses.md` Risk 3's own "x230-259",
+## **now x130-159** after `left-run-clumps-and-platforms.md` §1 cut 100 columns off the left run,
 ## reading almost exactly, and confirmed independently here by scanning `is_solid` down the actual left wall:
-## cy192->1648, cy208->1712, cy224->1776, cy240->1840, cy256 (the floor itself) fully solid — a clean
+## cy192->848, cy208->912, cy224->976, cy240->1040, cy256 (the floor itself) fully solid — a clean
 ## 4-step, 16-cell-tall/64-cell-wide staircase, the first tread of which is exactly the "2-tile step" Risk 3
 ## names), **not re-derived inside this test** — a mutation that broke confinement would not also move the map.
 func _bull_slam_does_not_leave_room1_on_the_real_map(t) -> void:
@@ -816,16 +817,16 @@ func _bull_slam_does_not_leave_room1_on_the_real_map(t) -> void:
 	var g := CellGrid.new()
 	Stage.build_terrain_into(g)
 	# Room ①'s left boundary at floor height, in px — the fixed literal the scan above found.
-	var room1_left_boundary_px := 1840 * Tuning.CELL_PX
+	var room1_left_boundary_px := 1040 * Tuning.CELL_PX
 	var floor_top_cy := 256
-	var stand_x := 1900 * Tuning.CELL_PX
+	var stand_x := 1100 * Tuning.CELL_PX
 	var stand_y := floor_top_cy * Tuning.CELL_PX - Defs.h_px(kind)
 	var spell := SpellSim.new()
 	var ch := Character.new()
-	# **On the room's own first step** (cy224..239 open, solid at cy240 below it, open range cx1776..1839) —
+	# **On the room's own first step** (cy224..239 open, solid at cy240 below it, open range cx976..1039) —
 	#  "a spot a player can simply walk to" (verify-run's own repro setup), which lures the bull's ordinary
 	#  `IDLE` walk-toward-player flush against the exact wall a slam would need to clear.
-	var player_x := 1800 * Tuning.CELL_PX
+	var player_x := 1000 * Tuning.CELL_PX
 	var player_y := 240 * Tuning.CELL_PX - Character.H_PX
 	ch.place(player_x, player_y)
 	var world := WorldStep.new(g, spell, ch)

@@ -99,6 +99,15 @@ Nets scan the folders recursively — no hand-maintained registry.
 - Keep measurements where they were taken
 - If the same explanation appears in two files, move it to one
 - Point at a doc; never summarize one
+- **Name a doc; never path it, never line-number it.** The GDD's rule (`Name docs, don't path them` — a doc
+  under `docs/plans/` changes folders with its status, so the path dies that day) extends one level down:
+  **a line number is a path into a file.** Adding four lines to `town.md`'s header killed ten `town.md:NNN`
+  citations at once, and the fix is to name the section, not to renumber — renumbering breaks again on the
+  next edit above it. **This leak was found four separate times in one night, each time by someone other than
+  whoever caused it**, including twice by the person who had just fixed the same thing elsewhere.
+  ⇒ A net greps `src/` and `tests/` for `docs/plans/[0-9]` and fails. **That check is the only reason this
+  stopped** — grep is the right instrument here because the rule being enforced is itself a text rule about
+  comments, not a proxy for behaviour (contrast "a check that greps a file measures its text", below)
 
 ## No fake code
 
@@ -153,6 +162,17 @@ even after you confirm every mutation goes red**:
   **Null the field back out before calling `_ready()`**, or the shell's only wiring line is untested.
 - **A check whose bounds come from the thing it checks proves nothing.** A wall test read `wall_cells()` and
   asserted inside it — shrink the rectangle and the test shrinks with it. **Pin literal coordinates.**
+- **Measuring a pure function is not measuring that anything calls it.** `notice_rect()` was asserted to sit
+  between the last row and the button; `_draw()` was then free to hand `_draw_notice` a bare `Rect2()` and
+  **320 checks stayed green** — the end-of-content notice painting at zero size, invisible, in the one feature
+  written to tell the player the build ends there. **Capture the argument at the hook and assert it equals what
+  the pure function returns.** The builder had closed this exact hole for `gate_view` in the same feature and
+  left it open one file over; a verifier who had not built it found it. **This is the case for the verifier
+  never being the builder** — measured, not assumed.
+- **A tuning constant with a floor on one end and none on the other is half-measured.** `GATE_TAKE_FRAMES`
+  carried `>= 12`; its twin `GATE_ARCH_FADE_FRAMES` did not, so **2 through 11 were green** and the fade
+  collapsed to a pop — the very thing the beat existed to remove. `= 1` bit only because integer division
+  made the midpoint probe read `tint(0,0)`. **One bite does not prove the range.**
 
 ## Running the nets
 
@@ -161,8 +181,12 @@ even after you confirm every mutation goes red**:
    the day a missing `await` made a net **vanish with exit code 0** instead of going red
 2. **If `[race]` prints, distrust the result — green included.** Running while someone edits reads half-written files
 3. **Each net runs in its own process, in parallel.** Not for speed — for honesty: amnesty stays inside its own net. Do not break this property
-4. **A round is ~14s and `net_water` alone is 12.4s of it.** That one is **not a target** — its two slow checks
-   (waking every cell, the design doc's 1,200-tick settle) were measured and kept on purpose.
+4. **A round is ~28s and `net_gate` alone is 24.3s of it** — measured either side of `left-run-clumps-and-platforms`
+   (29.8s round / 29.7s gate before, 24.4s / 24.3s after). **`net_gate` has been the long pole for some time and
+   nobody noticed**, because this line said `net_water`. `net_water` is 14.4s and is **not a target** — its two
+   slow checks (waking every cell, the design doc's 1,200-tick settle) were measured and kept on purpose.
+   ⇒ **`net_gate` is `harness-manager`'s**, and so is converting it to a treed root (rejected in-feature because
+   uncounted engine frames would break its exact-frame check — a harness job, not a feature's).
    ⇒ **Call `harness-manager` when a round grows for any other reason.** Slow means verification gets skipped,
    and then none of the above matters
 5. **`_draw()` is measurable headless.** The runner pumps real frames (`t.pump_frames(n)` after `t.root.add_child`).

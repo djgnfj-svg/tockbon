@@ -154,6 +154,11 @@ func _draw() -> void:
 	_draw_row(rows[1], font, Fx.SETTLEMENT_DAMAGE_LABEL, "%d" % _damage)
 	_draw_gems_row(rows[2], font)
 
+	# **On a clear only** (`stage-clear-sequence.md`, Beat 4) — a death is not the end of
+	#  the content, and telling a player who just died that the build stops here says the wrong thing.
+	if _cleared:
+		_draw_notice(font, Fx.SETTLEMENT_NOTICE_1, Fx.SETTLEMENT_NOTICE_2, Layout.notice_rect(size))
+
 	var btn := Layout.button_rect(size)
 	draw_rect(btn, Fx.SETTLEMENT_BUTTON_BG, true)
 	draw_rect(btn, Fx.SETTLEMENT_BUTTON_EDGE, false, Fx.SETTLEMENT_EDGE_PX)
@@ -170,6 +175,22 @@ func _draw() -> void:
 ## subclass overrides `_draw_title` and catches exactly the string `_draw()` decided to paint.
 func _draw_title(font: Font, title: String, pos: Vector2) -> void:
 	draw_string(font, pos, title, HORIZONTAL_ALIGNMENT_LEFT, -1, Fx.SETTLEMENT_TITLE_SIZE, Fx.SETTLEMENT_TITLE_COLOR)
+
+
+## **The one thing on this panel that is not about the run** — two lines saying the build ends at stage 1
+## (`stage-clear-sequence.md`, Beat 4). Two lines rather than one because `draw_string`
+## does not wrap and a wrapped sentence is a layout problem for text that gets deleted the day stage 2 exists.
+##
+## **A hook for the same reason `_draw_title` is one**: GDScript refuses to override the native `draw_string`
+## (a hard parse error, measured directly in `net_settlement.gd`), so without this seam a net can only ask
+## whether `_draw()` ran — never whether either Korean line reached the paint, nor that a death draws neither.
+func _draw_notice(font: Font, line1: String, line2: String, r: Rect2) -> void:
+	var line_h := float(Fx.SETTLEMENT_NOTICE_SIZE) * 1.6
+	var y := r.position.y + float(Fx.SETTLEMENT_NOTICE_SIZE)
+	draw_string(font, Vector2(r.position.x, y), line1,
+		HORIZONTAL_ALIGNMENT_LEFT, -1, Fx.SETTLEMENT_NOTICE_SIZE, Fx.SETTLEMENT_NOTICE_COLOR)
+	draw_string(font, Vector2(r.position.x, y + line_h), line2,
+		HORIZONTAL_ALIGNMENT_LEFT, -1, Fx.SETTLEMENT_NOTICE_SIZE, Fx.SETTLEMENT_NOTICE_COLOR)
 
 
 ## Label on the left, value right-aligned to the row's own width — the mockup's own "label ... value" reading.

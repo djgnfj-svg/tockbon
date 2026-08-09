@@ -81,6 +81,17 @@ func clear() -> void:
 	queue_redraw()
 
 
+## **The same shake every blast raises**, opened to callers that are not a blast at all — stage 1's east wall
+##  coming down (`stage-clear-sequence.md`, Beat 1). The player is 300-600px west of that
+##  wall and usually not looking at it, so a flash there is a constant nobody can verify; **the shake is felt
+##  wherever you are standing**, which is the whole reason that beat is a shake and not a picture.
+##
+##  Public for the same reason `advance()` below is: a net drives it with no scene. `_kick`'s "the stronger
+##  one wins" rule, decay curve and circular offset all still apply — this adds no second shake path.
+func kick(px: int, secs: float) -> void:
+	_kick(px, secs)
+
+
 ## **The same function `_process` calls** — public so a net can pass time with no scene.
 ##  Were this private, "does it disappear when its life runs out" could not be measured headless at all.
 func advance(dt: float) -> void:

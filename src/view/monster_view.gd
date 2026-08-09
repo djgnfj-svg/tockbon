@@ -106,6 +106,18 @@ var _prev_reload: Dictionary = {}
 ## id -> frames left of a latched one-shot. **A latch, not a live condition**: the hen fires on one tick and
 ##  the spit sheet runs 8 frames, so asking "is it firing right now" would show a single frame of it.
 var _attack_left: Dictionary = {}
+## id -> the previous frame's `asleep`. **The stir has no notification** — `world_step` writes
+## `Monster.asleep` straight onto the monster once a tick, so the only trace a stir leaves is this field
+## going true -> false, exactly the way `_prev_reload` catches the hen's shot.
+## **A monster seen for the first time never fires a mark**: the lookup defaults to *its own current*
+##  value, so a debug-key spawn (which never sleeps at all) does not pop a ring the frame it appears.
+##  That is `character_view.setup()`'s `_prev_x` alignment, applied to a bool.
+var _prev_asleep: Dictionary = {}
+## The wake marks — **independent entities**, the same idiom and the same reason as `_death_pops`: the
+## monster walks away immediately, and the mark belongs to the spot where it stirred.
+## **`age` starts negative** — that is the stagger (`Fx.MONSTER_WAKE_STAGGER_FRAMES`). `_prune` counts it
+##  up like any other age, and the drawing side skips anything still below zero.
+var _wake_marks: Array[Dictionary] = []
 ## id -> frames left of the hurt animation. **Separate from `_flash_left`, deliberately.** The flash is 6
 ##  frames (matched to invulnerability, `MONSTER_FLASH_FRAMES`'s own comment) and the hurt sheet is 12; driven
 ##  off the flash, the animation would be cut at frame 2 of 4 and never once reach its last cell.
@@ -246,6 +258,7 @@ func advance() -> void:
 	_prune(_dmg_numbers, Fx.MONSTER_DMG_NUM_LIFE_FRAMES)
 	_prune(_corpses, Fx.MONSTER_CORPSE_LIFE_FRAMES)
 	_prune(_death_pops, Fx.MONSTER_DEATH_POP_FRAMES)
+	_prune(_wake_marks, Fx.MONSTER_WAKE_MARK_FRAMES)
 	_decay(_attack_left)
 	_decay(_hurt_left)
 	if _world != null:
@@ -254,6 +267,7 @@ func advance() -> void:
 		#  first would show the hurt pose one frame late — the same one-frame ordering bug the "aging comes
 		#  first" note above records, found the same way (by measurement).
 		_scan_anim()
+		_scan_wake()
 
 
 ## **Death notifications are read only here.** `stage.gd`'s `_on_ticked()` calls it — call it every frame and
@@ -336,6 +350,34 @@ func _scan_anim() -> void:
 			_prev_reload.erase(id)
 			_attack_left.erase(id)
 			_hurt_left.erase(id)
+
+
+## One frame of "who just stirred". **`asleep` true -> false, per id** (the `_prev_asleep` box above).
+##
+## **The delay is assigned in world-array order within this one frame**, which is spawn order, which is
+##  row order in `stage1_monsters.ROWS` — the doc's "staggered by row index" with no new field on
+##  `Monster` and no reach into `MonsterPlacement` from a file whose whole contract is the screen.
+##  **A whole clump stirring on one tick is the ordinary case**, not the rare one: `world_step`'s sleep
+##  pass walks every monster inside a single tick.
+func _scan_wake() -> void:
+	var seen: Dictionary = {}
+	var wave := 0
+	for i in _world.monster_count():
+		var m: Monster = _world.monster_at(i)
+		seen[m.id] = true
+		# Defaulting to the monster's own value is what makes the first sighting silent (the field's box).
+		var was := bool(_prev_asleep.get(m.id, m.asleep))
+		if was and not m.asleep:
+			_wake_marks.append({
+				"id": m.id, "kind": m.kind, "x": m.x, "y": m.y,
+				"age": -wave * Fx.MONSTER_WAKE_STAGGER_FRAMES,
+			})
+			wave += 1
+		_prev_asleep[m.id] = m.asleep
+	# Dead ids are dropped — the same cleanup, and the same reason, as `_prev_hp`/`_anim` above.
+	for id in _prev_asleep.keys().duplicate():
+		if not seen.has(id):
+			_prev_asleep.erase(id)
 
 
 ## **Is this monster hitting the player right now.**
@@ -432,6 +474,8 @@ func clear() -> void:
 	_dmg_numbers.clear()
 	_corpses.clear()
 	_death_pops.clear()
+	_wake_marks.clear()
+	_prev_asleep.clear()
 	queue_redraw()
 
 
@@ -485,6 +529,13 @@ func death_pop_count() -> int:
 	return _death_pops.size()
 
 
+## How many wake marks are alive — **including the ones still inside their stagger delay** (age < 0),
+## which is why a net that wants "how many are actually on screen" must drive `_paint_wake_mark` instead
+## of reading this. This counts the entities; the hook counts the picture.
+func wake_mark_count() -> int:
+	return _wake_marks.size()
+
+
 func dmg_number_count() -> int:
 	return _dmg_numbers.size()
 
@@ -523,6 +574,16 @@ func _draw() -> void:
 	# The pop at the moment of death — **above corpses and monsters, below the flash.**
 	for p: Dictionary in _death_pops:
 		_draw_death_pop(p)
+	# The wake mark, at the same height in the stack and for the same reason.
+	# **The seat and the age are computed here; the paint is a separate overridable hook** — see
+	#  `_paint_wake_mark` below for why that split exists at all.
+	for w: Dictionary in _wake_marks:
+		var w_age := int(w["age"])
+		if w_age < 0:
+			continue   # still inside its stagger delay
+		var w_c := box_rect(w["kind"], w["x"], w["y"]).get_center()
+		_paint_wake_mark(Vector2(w_c.x, w_c.y - Fx.MONSTER_WAKE_MARK_LIFT_PX),
+			float(w_age) / float(Fx.MONSTER_WAKE_MARK_FRAMES))
 	# If the layers are missing (a net stood this up with no scene), they are drawn here instead — otherwise
 	#  two worlds appear, "visible in the scene but absent in the net".
 	if _flash_layer == null:
@@ -592,7 +653,11 @@ func _draw_outlines(canvas: CanvasItem) -> void:
 		_outline_one(canvas, _corpse_art(c["kind"], int(c["age"])), c["kind"], c["x"], c["y"], false, alpha)
 	for i in _world.monster_count():
 		var m: Monster = _world.monster_at(i)
-		_outline_one(canvas, _art_of(m.id, m.kind), m.kind, m.x, m.y, m.facing < 0, 1.0)
+		# **The outline dims with the body, not separately.** A full-strength outline around a dimmed body
+		#  reads as a cream cut-out, which is the same "the two diverged" shape `_draw_flipped` was
+		#  gathered to prevent.
+		_outline_one(canvas, _art_of(m.id, m.kind), m.kind, m.x, m.y, m.facing < 0,
+			Fx.MONSTER_ASLEEP_ALPHA if m.asleep else 1.0)
 
 
 ## **`art` is passed in, not looked up here.** The outline is the body sprite laid down eight times, so it has
@@ -680,6 +745,24 @@ func _draw_death_pop(p: Dictionary) -> void:
 		Fx.MONSTER_DEATH_POP_PX)
 
 
+## **Cut out of `_draw()` so a net can measure that the mark is actually painted, not merely that `_draw()`
+## ran** — the exact remedy `gate_view._paint` records, for the exact reason: GDScript refuses to let a
+## script override a *native* `CanvasItem` call like `draw_arc` (a hard parse error, not a warning), so a
+## test subclass cannot intercept the native call. This is an ordinary script method instead, freely
+## overridable, and it receives **the two things `_draw()` decided**: where the mark goes and how far
+## through its life it is. A subclass asserting those arguments is asserting the picture.
+##
+## **It is not called `_paint`** — `monster_view._paint` above is already taken by an unrelated
+##  shader-uniform setter, and one overloaded name is how a hook ends up hung on the wrong thing.
+##
+## `age` is 0.0 at birth and 1.0 at expiry. The ring opens and fades together (`fx_tuning`'s own note).
+func _paint_wake_mark(center: Vector2, age: float) -> void:
+	var radius := Fx.MONSTER_WAKE_MARK_R_PX * lerpf(1.0, Fx.MONSTER_WAKE_MARK_SCALE, age)
+	var c := Fx.MONSTER_WAKE_MARK_COLOR
+	draw_arc(center, radius, 0.0, TAU, 20, Color(c.r, c.g, c.b, c.a * (1.0 - age)),
+		Fx.MONSTER_WAKE_MARK_PX)
+
+
 ## **The sprite is drawn to fit `r` (= the box coming from `Defs`) — the texture's own pixel size is not trusted.**
 ##  `draw_texture_rect` stretches or shrinks to the destination size, so even if the art diverges from the box,
 ##  **the screen is still box-sized** (`net_monster_sprite` measures "they are the same today" as a value —
@@ -693,13 +776,20 @@ func _draw_death_pop(p: Dictionary) -> void:
 ##  flipping the horizontal scale with `draw_set_transform`). **Do not forget to restore it** —
 ##  without restoring, everything drawn afterwards (flash, burn outline, hp bar) is drawn in a flipped
 ##  coordinate system.
+## **A dormant body draws dimmed** (`fx_tuning.MONSTER_ASLEEP_ALPHA`, presentation A of
+## `left-run-clumps-and-platforms.md`'s Screen section). Before this, a sleeping mob and a walking one
+## were the same picture, so a clump standing there dormant was indistinguishable from a clump already
+## coming for you. **The fallback rectangle dims too** — dim only the sprite path and the day a sheet
+## fails to load the fallback silently claims every mob is awake.
 func _draw_monster_body(m: Monster, r: Rect2) -> void:
 	var art := _art_of(m.id, m.kind)
+	var a := Fx.MONSTER_ASLEEP_ALPHA if m.asleep else 1.0
 	var tex: Texture2D = art[0]
 	if tex == null:
-		draw_rect(r, Fx.MONSTER_FILL)
+		var f := Fx.MONSTER_FILL
+		draw_rect(r, Color(f.r, f.g, f.b, f.a * a))
 		return
-	_draw_flipped(self, tex, art[1], r, m.facing < 0, Color.WHITE)
+	_draw_flipped(self, tex, art[1], r, m.facing < 0, Color(1.0, 1.0, 1.0, a))
 
 
 ## Draws the body sprite to fit the box. Flipped when facing left.

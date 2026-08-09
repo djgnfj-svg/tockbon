@@ -185,6 +185,16 @@ func _draw() -> void:
 		_cell_rect(state), Color(1.0, 1.0, 1.0, dim))
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
+	# **The air-jump mark, and it is drawn before the downed branch below on purpose.** The ring says "that
+	#  second jump was real", and a jump that ended in going down is exactly the moment a player is most
+	#  likely to think the input was eaten. **Its clock is `air_jump_flash_left` itself** — the same one field
+	#  / one clock rule `invuln_left` above already holds; a `delta` accumulator here would be a second clock
+	#  and the ring would outlive the jump.
+	if _ch.air_jump_flash_left > 0:
+		_paint_air_jump_ring(
+			Vector2(float(_ch.x) + Character.W_PX * 0.5, float(_ch.y + Character.H_PX)),
+			Fx.AIR_JUMP_RING_R_PX, Fx.AIR_JUMP_RING_COLOR)
+
 	# **If downed, it ends here — neither the staff nor the ring at its tip is drawn.**
 	#  It is a **state that cannot fire**, so drawing them would read as "it looks like I can shoot".
 	#  The burn outline drops out with it — it has been that way since the rectangle days and was not changed.
@@ -261,6 +271,21 @@ func _draw() -> void:
 ##
 ## **Centering is the same idiom as `monster_view._draw_dmg_number`** — measure the width and shift by half.
 ##  If there is no font it does not draw (passing `null` barks every frame and turns the nets red).
+## **The air-jump ring, cut out of `_draw()` as its own method so a net can override it and read what it was
+##  handed** — CLAUDE.md: "`_draw()` ran" is not "anything was drawn", and counting `_draw()` calls measures
+##  the engine. Godot refuses to let a script override a native `draw_circle` (a hard parse error, measured
+##  in `net_gate.gd`), so an ordinary method like this one is the only seam available.
+##
+## **Not named `_paint`** — that name is already taken twice with different signatures, by `gate_view.gd` and
+##  `monster_view.gd`. A third overload would compile and then dispatch to whichever the reader did not mean.
+##
+## **World coordinates, so it must come after the body sprite restored its transform** (`draw_set_transform`
+##  above). Drawn inside the flipped coordinate system it lands on the wrong side of the character while
+##  facing left, and **no error is raised** — the same trap the staff ring's own comment records.
+func _paint_air_jump_ring(center: Vector2, radius: float, color: Color) -> void:
+	draw_circle(center, radius, color, false, Fx.AIR_JUMP_RING_PX)
+
+
 func _draw_downed_tag() -> void:
 	var font: Font = ThemeDB.fallback_font
 	if font == null:

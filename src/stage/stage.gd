@@ -299,10 +299,10 @@ var _room1_reward_water: WaterSource = null
 ##  deferral honored, not a decision made here. **The visual mismatch (rain, not a side breach) is a known,
 ##  named gap**, not hidden — see that risk note in the plan doc.
 ## **Placed well inside room ①'s own open interior** — `x` sits just past the room's left boundary (measured
-##  in `stage1-bosses.md` Risk 11: the real wall is at cx1840), `row` sits high enough in the room's air for
+##  in `stage1-bosses.md` Risk 11: the real wall is at cx1040 after the left run was cut), `row` sits high enough in the room's air for
 ##  the fall to read as a pour, not an instant puddle at the floor.
-const ROOM1_WATER_X0 := 1840
-const ROOM1_WATER_X1 := 1860
+const ROOM1_WATER_X0 := 1040
+const ROOM1_WATER_X1 := 1060
 const ROOM1_WATER_ROW := 200
 
 ## **Room ③'s east wall — comes down once, on the rooster's death, and only once**
@@ -312,7 +312,10 @@ const ROOM1_WATER_ROW := 200
 ##  cannot disagree — unlike a `mouse_filter` latch, nothing here can strand the game.
 var _room3_gate_open := false
 
-## **Debug camera zoom (`-` / `=`).** 1.0 is the play scale; 0.075 fits all 400x48 tiles on the 960x540 screen.
+## **Debug camera zoom (`-` / `=`).** 1.0 is the play scale; 0.075 shows 12,800px of world on the 960x540
+##  screen. **The map is 300x48 = 9,600px wide since `left-run-clumps-and-platforms.md` cut 100 columns**,
+##  so the last step now over-fits it rather than framing it exactly. Left as it is — that doc does not
+##  touch zoom, and nothing measures this step.
 ##  The steps are held as a list rather than a multiply so that "the whole map" is **exactly reachable** —
 ##  with `zoom *= 0.5` the map-wide value falls between two steps and can never be landed on.
 ## **This is a shell debug view, not a design axis.** Nothing in the sim reads it, and the stage does not
@@ -770,6 +773,19 @@ func _set_loadout(n: int) -> void:
 ## than called and ignored. `net_settlement` measures this as a value (`_grid.get_tick()` does not move across
 ## N calls), not assumed from reading the branch.
 func _physics_process(delta: float) -> void:
+	# **The double-jump unlock, re-derived every frame** (`research-bench-unlocks.md`) — **immediate is the
+	#  absence of a latch.** There is no purchase hook and no reset hook, so there is no hook to forget: buy it
+	#  at the bench and the very next physics frame the character can use it, and `Progress.reset()` cannot
+	#  strip it because nothing was ever pushed anywhere to go stale.
+	#  This is the repo's own "derive, do not push" rule, the same one `gate_view._process` states for
+	#  `visible` and `_build_room` states for `_town_view.visible`.
+	# **It sits in the shell rather than in `world_step.gd` (which is where `_char.step()` is actually called,
+	#  and which holds `Progress` too) only to avoid colliding with another track mid-edit.** The day
+	#  `WorldStep` owns this wiring, **one line moves and nothing else changes** — it is a per-frame derivation
+	#  either way. Flagged rather than hidden.
+	# **Above the `_settlement.is_showing()` gate on purpose**: the settlement screen freezes the world, and a
+	#  budget left stale across that freeze would be a latch by accident.
+	_char.air_jump_budget = _world.progress().air_jump_budget()
 	if not _settlement.is_showing():
 		if _world.frame(delta, _input.move_axis(), _input.jump_pressed(), _input.jump_held()):
 			_on_ticked()
@@ -814,10 +830,27 @@ func _physics_process(delta: float) -> void:
 ## state instead of holding a second latch" idiom `_toggle_assembly()` already holds for `_circle_window.visible`.
 func _sync_settlement() -> void:
 	var at_gate := _world.progress().boss_died(MonsterDefs.KIND_ROOSTER) and StageGate.at(_char.center())
-	var want := (_char.downed or at_gate) and not _in_town
+	# **The gate's two clocks, and the only place they are driven** (`stage-clear-sequence.md`, Beats 2 and 3).
+	#  This function is physics, which is why they live here and not on `_gate_view._process()` — 24 frames is
+	#  0.4s at 60Hz and 0.167s on a 144Hz panel, and one animation whose halves run at machine-dependent speeds
+	#  is the seam `three_pick_window.tick_confirm()`'s own header records.
+	# **Increment first, then test.** `take_done()` below reads the counter this call just raised, so the first
+	#  frame inside the band counts as 1 and the panel opens on the `GATE_TAKE_FRAMES`-th frame of contact.
+	_gate_view.tick_gate(at_gate)
+	# **`take_done()` *replaces* `at_gate` here — it is not `and`ed with it.** The take latches inside
+	#  `tick_gate()` (its own header), so by the time it completes the player may well have walked out of the
+	#  band; requiring `at_gate` again on the opening frame would undo the latch entirely and hand back exactly
+	#  the outrunnable hold it exists to prevent. `at_gate` above is now read for one purpose only: starting
+	#  the clock.
+	# **`_char.downed` is still the other half and still wins the tie** — a death opens the panel on the frame
+	#  it happens, take clock or not, and the fourth argument below is what makes it read as a death.
+	var want := (_char.downed or _gate_view.take_done()) and not _in_town
 	if want and not _settlement.is_showing():
 		var pr := _world.progress()
-		_settlement.open(pr.run_seconds(), pr.damage_dealt, pr.gems_this_run(), at_gate and not _char.downed)
+		# **`take_done()` here too, for the same reason `want` uses it** — read `at_gate` on the opening frame
+		#  and a player who walked out of the band during the take gets the death title on a run they cleared.
+		_settlement.open(pr.run_seconds(), pr.damage_dealt, pr.gems_this_run(),
+			_gate_view.take_done() and not _char.downed)
 		# **The three-pick may be open when you go down** — the same reason `reset_stage()` already cancels
 		#  the confirm afterglow and `_toggle_assembly()`/`_toggle_research()` already decline a pending pick
 		#  before claiming the screen for themselves.
@@ -847,6 +880,11 @@ func _on_ticked() -> void:
 		var gate_wall := StageGate.wall_cells()
 		_grid.apply(CellGrid.cmd_fill(
 			gate_wall.position.x, gate_wall.position.y, gate_wall.end.x, gate_wall.end.y, Mat.EMPTY))
+		# **The one thing that tells the player the wall fell** (`stage-clear-sequence.md`, Beat 1). The wall is
+		#  off screen from most of room ③ — `net_gate`'s own camera check measures that — so a flash there is a
+		#  picture nobody sees. **A shake is felt wherever you are standing.**
+		# **Inside the latch, so it can only fire once**: a per-tick re-kick is structurally impossible here.
+		_blast_fx.kick(Fx.GATE_WALL_SHAKE_PX, Fx.GATE_WALL_SHAKE_SECS)
 
 	# The trail must come **after** the sim has run, or it is one tick stale.
 	_spell_view.on_tick()
@@ -935,6 +973,11 @@ func reset_stage() -> void:
 	#  so nothing else would clear it. Left out, pressing `R` while the panel is open would leave a settlement
 	#  screen reporting a run that no longer exists standing over a fresh stage.
 	_settlement.close()
+	# **`reset_gate()` too, and it zeroes both counters** (`stage-clear-sequence.md`, Beat 3 / acceptance 8).
+	#  Same reason `_settlement.close()` above exists: the gate's two clocks live in the view, not in
+	#  `Progress`, so `_world.reset()` does not reach them. **`_lit` surviving is not cosmetic** — the arch
+	#  would pop fully opaque on the second run instead of fading up, with every other check still green.
+	_gate_view.reset_gate()
 	_blast_count = 0
 	# Rain is a reset target too — leave it on and the old source keeps pouring from the moment terrain is rebuilt.
 	_water_source = null
@@ -1029,7 +1072,11 @@ func _interact() -> void:
 			_toggle_research()
 
 
-## **The research bench, as far as it honestly goes today: the rune pool, unlocked and locked in one list.**
+## **The research bench's HUD line — the rune pool, unlocked and locked in one list, and what an unlock costs.**
+##
+## **It stopped saying `해금은 아직 없다`** (`research-bench-unlocks.md`): three unlocks are for sale now, and
+##  the price is read from `Progress.GEMS_PER_UNLOCK` rather than typed here, so retuning it moves what the
+##  player is charged and what the player reads in one edit.
 ##
 ## **That list is the design's own core requirement, not a placeholder** — "unlocked and locked sitting in one
 ##  list is the best possible demonstration that the pool widened" (`town.md`), and it reads `Progress`, the
@@ -1060,7 +1107,7 @@ static func research_text(pr: Progress) -> String:
 	var parts: Array[String] = []
 	for rune: int in Tuning.ELEM_ALL:
 		parts.append("%s%s" % [Fx.ELEM_NAMES.get(rune, "?"), "" if pr.owns_rune(rune) else " (잠김)"])
-	return "[연구대] 룬 %s — 원석으로 푸는 해금은 아직 없다" % " · ".join(parts)
+	return "[연구대] 룬 %s — 해금 하나에 원석 %d" % [" · ".join(parts), Progress.GEMS_PER_UNLOCK]
 
 
 ## **Into the town.** Called when the player takes E while downed — the run is over, so the whole world is

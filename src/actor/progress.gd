@@ -13,6 +13,7 @@ extends RefCounted
 ##  death loop; `stage.gd` only reads it to draw the HUD.
 
 const ThreePick := preload("res://src/actor/three_pick.gd")
+const UnlockDefs := preload("res://src/actor/unlock_defs.gd")
 const Tuning := preload("res://src/sim/sim_tuning.gd")
 
 ## **The XP needed to advance past `level`.** Provisional, chosen while looking at nothing yet — a knob to
@@ -72,11 +73,10 @@ var dice_left := 0
 ##  "what is permanent is a pool, not an object" (GDD) is unimplementable if the count restarts at 0 every
 ##  time you die. `reset()`'s own body names this as its single exception.
 ##
-## **Nothing spends it, and that is not an oversight.** The price of an unlock is one of `town.md`'s open
-##  TBDs and belongs to the user, and that doc's old "three per unlock" arithmetic was **voided** by this
-##  yield being 5x what it was written against. A counter that goes up with nothing to spend it on is honest;
-##  a buy button that took a number and gave nothing back would be the fake. **The research window says so on
-##  screen**, rather than leaving the player to infer it.
+## **What spends it is `buy()` below** (`research-bench-unlocks.md`) — three unlocks at
+##  `GEMS_PER_UNLOCK` each, which at 9~11 a full run is roughly one unlock per run. Until that feature there
+##  was deliberately no sink at all, and this box said so: a counter that goes up with nothing to spend it on
+##  is honest, a buy button that took a number and gave nothing back is the fake.
 ##
 ## **The name in code is `gems`, on screen 원석** — the same split every other identifier here holds
 ##  (CLAUDE.md: code is English, what the player reads is Korean).
@@ -88,6 +88,18 @@ var gems := 0
 const GEMS_PER_BOSS_MIN := 3
 const GEMS_PER_BOSS_MAX := 4
 const GEMS_PER_LEVEL := 1
+
+## **What one unlock costs — the user's number, and it sits beside the two that pay it out on purpose.**
+##  Earn and spend in one file, so "is the pace right" is a question you can answer by reading eleven lines
+##  rather than by opening two. At 9~11 원석 a full run this is **about one unlock per run**, the shape the
+##  user picked ("한 번 갔다 오면 하나 열린다"). `town.md`'s 원석 section — its old "three per unlock"
+##  arithmetic is void, having been written when a run yielded 1~2.
+##  **Named, not line-numbered.** This read `town.md:212` and landed on the wrong paragraph the moment that
+##  file's header grew by four lines: **a line number is a path into a file**, and it rots exactly the way
+##  the GDD's "name docs, don't path them" rule (`GDD.md`, "Natural law") says a folder path does.
+## **The whole sink is three purchases (30).** After that the counter climbs with nothing to spend on again;
+##  widening it is the dice axis's job, not this constant's.
+const GEMS_PER_UNLOCK := 10
 
 ## **Stage I (`stage1-bosses.md`) — which bosses have died with their reward not yet taken.** Keyed by
 ## `MonsterDefs` kind, not a bare bool — the bull's own room ① water and the rooster's own room ③ water gate
@@ -113,6 +125,12 @@ var _reward_pending: Dictionary = {}
 ## that decides which rune sits in the seat (`spell_circle.DEFAULT_RUNE` does that), but the player boots
 ## already owning the none rune, or the palette would veil the very rune the seat starts with.
 ##
+## **This default stays `_starting_runes()` and must NOT become `_run_start_runes()`, even though `reset()`
+## now uses the latter.** GDScript initialises fields in declaration order, and `_unlocked` (declared below)
+## does not exist yet at this point — folding purchases in here would read an empty set at best. It is also
+## correct on its own terms: a freshly constructed `Progress` has bought nothing, so the two functions agree
+## at boot anyway. The place the fold actually has to happen is `reset()`, where a *later* run begins.
+##
 ## **This is the actual lock** (Stage B). Change only `spell_circle.DEFAULT_RUNE` and leave this at `{none,
 ## fire}` and the player presses Tab, fire is unveiled (never locked), and it goes straight into the seat —
 ## the lock is void and nothing barks (`spell_circle.DEFAULT_RUNE`'s own comment says the same from the other
@@ -122,6 +140,28 @@ var _reward_pending: Dictionary = {}
 ## file for a top-level `Array`/`Dictionary` field not on its own hardcoded allowlist (the no-inventory
 ## decision, `docs/decisions/no-inventory.md`). `grant_rune()`/`owns_rune()` below are the only door in or out.
 var _owned_runes: Dictionary = _starting_runes()
+
+## **What has been bought at the research bench — permanent, and the second thing here that survives
+##  `reset()`** (`research-bench-unlocks.md`). Set-shaped, keyed by `UnlockDefs` id, the
+##  same idiom `_reward_pending` and `_owned_runes` above already hold.
+##
+## **One set, not one field per axis.** Had the double jump been its own `var _unlocked_double_jump := false`,
+##  `reset()` would have **two** things to not clear instead of one, and a bare bool is invisible to
+##  `net_pick`'s stash scan — so the second one would be protected by nothing at all. One collection means one
+##  thing to protect and one inverted check protecting it.
+##
+## **`reset()` does not mention this field, and that absence is the whole feature.** Adding `_unlocked.clear()`
+##  there erases every purchase of every past run at once and **nothing barks** — the player simply finds the
+##  bench empty again. `net_research` measures the survival by value, so adding that line goes red, exactly
+##  the way adding `gems = 0` already does.
+##
+## **Private, like `_reward_pending` and `_owned_runes`** — `net_pick._no_pushed_out_glyph_is_stashed_anywhere`
+##  scans every `.gd` under `src/` for a class-level `Array`/`Dictionary` not on its own allowlist
+##  (`docs/decisions/no-inventory.md`). This field is **on that allowlist deliberately**, not missed by a
+##  widened regex: it is a record of what has been bought, not of a glyph that left a spell layer — the same
+##  argument `_owned_runes`'s own entry there makes. `can_buy()`/`buy()`/`air_jump_budget()` are the only
+##  doors in or out.
+var _unlocked: Dictionary = {}
 
 ## **Empty = no pick is open.** Not a separate bool — a bool and a list can disagree (open with nothing
 ##  drawn, or drawn but marked closed), and this repo has already been burned by exactly that shape of state
@@ -237,9 +277,14 @@ func clear_pending_boss_rewards() -> void:
 
 ## **The fixed starting kit** (`rune-lock-and-receiving.md`, Stage B) — **none, and only none.** Independent of
 ## whatever `spell_circle.DEFAULT_RUNE` currently is (that constant only says which rune sits in the seat, not
-## which the player is allowed to place there). Both `_owned_runes`'s field default and `reset()` call this
-## **one** function — write it as a literal in both places and a future retune of the kit only updates one of
-## them, and the day the field and `reset()` disagree, R would hand back a different kit than a fresh boot.
+## which the player is allowed to place there). Written as a literal in two places, a future retune of the kit
+## would update only one, and the day the field and `reset()` disagree R hands back a different kit than a
+## fresh boot.
+##
+## **`reset()` no longer calls this directly — it calls `_run_start_runes()`, which calls this.** The kit is
+## still stated in exactly one place; what changed is that a run now begins with the kit **plus what has been
+## bought** (`research-bench-unlocks.md`). Do not "restore" `reset()` to calling this function: that strips
+## every purchased rune out on the way through the departure gate, silently.
 static func _starting_runes() -> Dictionary:
 	return {Tuning.ELEM_NONE: true}
 
@@ -255,6 +300,74 @@ func grant_rune(rune_id: int) -> void:
 ## entirely (`rune-lock-and-receiving.md`: "veiled, not hidden").
 func owns_rune(rune_id: int) -> bool:
 	return _owned_runes.get(rune_id, false)
+
+
+## **Is this unlock buyable at all — asked of the catalogue and of what is already bought, never of
+##  `owns_rune()`.** That distinction is the feature's sharpest edge: the bull grants 불 mid-run
+##  (`stage.gd`'s boss reward), so `owns_rune(불)` is true while nothing has been bought. Guarding on
+##  ownership would **refuse a legitimate purchase** — and read the other way round, it would let a granted
+##  rune count as bought and survive `reset()` for free, which is exactly the permanence the player is
+##  paying 10 원석 for.
+## **It does not look at `gems`.** Affordability is a separate question with a separate answer on screen (a
+##  dim chip, not a missing one), so `buy()` asks both and this asks one.
+func can_buy(unlock_id: int) -> bool:
+	return UnlockDefs.is_for_sale(unlock_id) and not _unlocked.has(unlock_id)
+
+
+## **The single door onto spending.** Returns whether anything happened; **false moves nothing at all** —
+##  a partial spend (원석 gone, unlock not recorded) is unrecoverable and would look exactly like a UI that
+##  ate the click.
+##
+## **It calls `grant_rune()` rather than writing `_owned_runes` itself** —
+##  `net_progress._grant_rune_is_the_only_door_in` states that as a contract, and the reason survives here:
+##  the rune becomes usable **this instant**, so the town's assembly bench can show it on the same visit
+##  rather than only after the next departure. That immediacy changes nothing about *runs*, because the
+##  bench is reachable only in town (`stage._interact()` returns early when not in town, and `_build_room()`
+##  closes the window on every room switch) — a purchase can never happen mid-run, so "the run after the
+##  purchase" is the next one either way.
+func buy(unlock_id: int) -> bool:
+	if not can_buy(unlock_id) or gems < GEMS_PER_UNLOCK:
+		return false
+	gems -= GEMS_PER_UNLOCK
+	_unlocked[unlock_id] = true
+	var rune := UnlockDefs.rune_of(unlock_id)
+	if rune >= 0:
+		grant_rune(rune)
+	return true
+
+
+## Has `unlock_id` been bought. **Not `owns_rune()`** — see `can_buy()`'s box for why the two must never be
+##  read as the same question.
+func is_unlocked(unlock_id: int) -> bool:
+	return _unlocked.has(unlock_id)
+
+
+## **How many air jumps the character gets. 0 or 1 — a function, never a stored number.**
+##
+## `stage._physics_process` re-derives `_char.air_jump_budget` from this every frame, immediately before the
+##  world steps. **Immediate is the absence of a latch**: there is no purchase hook and no reset hook, and so
+##  there is no hook to forget. This is the repo's own "derive, do not push" rule, the same one
+##  `gate_view._process` states for `visible` ("hold a second flag here and the arch can go stale") and
+##  `stage._build_room` states for `_town_view.visible`.
+## **The return type is `int` and not `bool` so the budget can grow** — but nothing sells a second air jump
+##  and the catalogue has no row for one, so today it is only ever 0 or 1.
+func air_jump_budget() -> int:
+	return 1 if _unlocked.has(UnlockDefs.UNLOCK_DOUBLE_JUMP) else 0
+
+
+## **The rune set a run begins with — the fixed starting kit plus whatever has been bought.**
+##
+## **An instance method, not a `static` like `_starting_runes()`**, because it reads `_unlocked`. The two are
+##  a pair on purpose: `_starting_runes()` stays the one place that says what a *fresh boot* owns, and this
+##  is the one place that folds permanence into it. Inline either into `reset()` and the field default and
+##  the reset would hand out different kits.
+func _run_start_runes() -> Dictionary:
+	var out := _starting_runes()
+	for id: int in _unlocked:
+		var r := UnlockDefs.rune_of(id)
+		if r >= 0:
+			out[r] = true
+	return out
 
 
 func is_pick_open() -> bool:
@@ -325,9 +438,13 @@ func reset() -> void:
 	damage_dealt = 0
 	_drawn.clear()
 	_reward_pending.clear()
-	# **`gems` is not here, and its absence is the point.** It is the one permanent thing this object holds
-	#  (its own box above) — the town's whole reason to exist is that something survives the run.
+	# **`gems` is not here, and its absence is the point.** It is one of the two permanent things this object
+	#  holds (its own box above) — the town's whole reason to exist is that something survives the run.
 	#  `net_progress` measures that it survives, so deleting this comment and adding the line goes red.
+	# **`_unlocked` is not here either, for the same reason and with more at stake.** `gems = 0` here would
+	#  cost the player one run's earnings; `_unlocked.clear()` here would erase **every purchase ever made**,
+	#  silently, and the bench would simply look empty again. `net_research` measures its survival across
+	#  this call by value, for a rune unlock and for the double jump separately.
 	# **`_gems_at_run_start` is re-snapshotted here, every time.** `reset()` is the one place that means "a
 	#  run begins" — a second reset call site added later that forgets this line would leave the settlement
 	#  screen's delta silently reading against a stale snapshot (`run-end-settlement.md`'s own Risk 5).
@@ -337,4 +454,8 @@ func reset() -> void:
 	#  holds. Clearing to `{}` would brick the reset run's own starting rune (risk 2, `circle_window`'s header:
 	#  "the rune stays bright and pickable" is the failure this avoids for a different reason here). Any rune
 	#  earned mid-run (fire, from the bull) does **not** survive — a reset is a fresh run, not a checkpoint.
-	_owned_runes = _starting_runes()
+	# **A *bought* rune does survive, and that is the whole difference between a grant and a purchase**
+	#  (`research-bench-unlocks.md`): `_run_start_runes()` is `_starting_runes()` with the permanent set
+	#  folded in. Write `_starting_runes()` here instead and every rune the player paid 10 원석 for is stripped
+	#  out on the way through the departure gate, with nothing barking.
+	_owned_runes = _run_start_runes()

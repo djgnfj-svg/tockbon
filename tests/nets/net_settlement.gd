@@ -35,10 +35,35 @@ const SettlementWindow := preload("res://src/view/settlement_window.gd")
 ## `_cleared`'s only visible effect is *which string* reaches the title — a check that only follows `_cleared`
 ## itself (the stored bool) never asks whether that bool actually reaches the screen; deleting the title's
 ## own ternary and hardcoding `Fx.SETTLEMENT_TITLE` left every such check green.
+##
+## **`_draw_notice` is caught the same way, and for a sharper reason**: on a death it must not be called at
+## all, and "was not called" is only measurable if there is a call to count. `notice_calls` is that count —
+## `notices.is_empty()` alone would stay true if the hook were called with two empty strings.
+##
+## **`notice_rect` is captured too, and it was not — this is the hole that shipped** (verify-read, an
+## adversarial pass by an agent that did not build this feature). The rect argument was named `_r` and
+## discarded, so `settlement_window._draw()` could hand the hook **`Rect2()`** — the notice drawn at (0,0)
+## with zero size, off the panel, invisible — and **all 320 checks in this file stayed green.** Measured, not
+## reasoned: the mutation was run.
+##
+## **What makes it worth this much comment is that the identical hole was found and closed *in the same
+## feature*, one file over, by the same author.** `net_gate._the_drawn_tint_is_the_one_the_counters_decided`
+## exists because hardcoding `_paint_arch(_tex, rect(), Color.WHITE)` left the pure tint curve measured and
+## the wiring unmeasured. `_notice_rect_sits_between_the_last_row_and_the_button` below is that same pure
+## function, and nothing asked whether `_draw()` used it. ⇒ **Measuring a pure layout function is never
+## measuring the layout.** The second one was missed by the person who had just fixed the first.
 class _CapturingSettlementWindow extends SettlementWindow:
 	var drawn: Array[String] = []
+	var notices: Array[String] = []
+	var notice_calls := 0
+	var notice_rects: Array[Rect2] = []
 	func _draw_title(_font: Font, title: String, _pos: Vector2) -> void:
 		drawn.append(title)
+	func _draw_notice(_font: Font, line1: String, line2: String, r: Rect2) -> void:
+		notice_calls += 1
+		notices.append(line1)
+		notices.append(line2)
+		notice_rects.append(r)
 
 
 func run(t) -> void:
@@ -49,6 +74,11 @@ func run(t) -> void:
 	_open_then_tick_countup_walks_shown_gems_from_zero_to_total(t)
 	_gui_input_inside_button_rect_fires_signal_outside_it_does_not(t)
 	await _the_title_actually_drawn_matches_cleared_or_not(t)
+	# -- Stage clear sequence — the notice --
+	_notice_rect_sits_between_the_last_row_and_the_button(t)
+	_the_three_clear_strings_are_the_ones_the_plan_names(t)
+	_the_two_notice_lines_fit_inside_the_band_they_are_drawn_in(t)
+	await _the_notice_is_painted_on_a_clear_and_never_on_a_death(t)
 	# -- Stage D — the wired shell --
 	_hud_hides_while_the_settlement_screen_shows(t)
 	_snapshot_values_equal_progresss_live_values_at_the_instant_it_opens(t)
@@ -213,6 +243,100 @@ func _the_title_actually_drawn_matches_cleared_or_not(t) -> void:
 	t.ok(win.drawn.has(Fx.SETTLEMENT_TITLE), "죽음으로 열면 '%s'이 그려진다" % Fx.SETTLEMENT_TITLE)
 	t.ok(not win.drawn.has(Fx.SETTLEMENT_TITLE_CLEAR),
 		"그리고 클리어 제목('%s')은 안 그려진다" % Fx.SETTLEMENT_TITLE_CLEAR)
+
+	t.root.remove_child(win)
+	win.queue_free()
+
+
+## **The notice's own rect, computed against its two neighbours — never against a literal y.**
+## `settlement_layout.gd`'s panel-internal numbers are hand-derived from its own constants, so a literal here
+## would rot the day any of them moves and would still read green. The claim is "it clears both neighbours",
+## and that is what is asked directly.
+func _notice_rect_sits_between_the_last_row_and_the_button(t) -> void:
+	var size := Fx.SETTLEMENT_RECT.size
+	var panel := Rect2(Vector2.ZERO, size)
+	var notice := Layout.notice_rect(size)
+	t.ok(panel.encloses(notice), "안내 문구 자리가 패널(960x540) 안에 있다")
+	t.ok(notice.size.x > 0.0 and notice.size.y > 0.0, "안내 문구 자리에 크기가 있다")
+
+	var last_row := Layout.rows(size)[2]
+	var btn := Layout.button_rect(size)
+	t.ok(not notice.intersects(last_row), "안내 문구가 마지막 행(원석)과 안 겹친다")
+	t.ok(not notice.intersects(btn), "안내 문구가 '마을로' 버튼과 안 겹친다")
+	t.ok(notice.position.y >= last_row.end.y, "안내 문구가 마지막 행보다 아래에 있다")
+	t.ok(notice.end.y <= btn.position.y, "안내 문구가 버튼보다 위에 있다")
+
+
+## **Do the two lines actually fit in the box they are given** — **a value, not a feel.**
+##
+## `stage-clear-sequence.md` filed this under Screen, for verify-look. **It does not belong there**: font
+## metrics are readable headless (`ThemeDB.fallback_font`, the same default theme font `settlement_window`
+## itself falls back to), so "two 18px lines inside a 64px band" is measurable and therefore must be
+## measured. Only *whether the notice reads as information rather than as an error message* is the eye's.
+##
+## **Measured today: line height 26, two lines 52, against `NOTICE_H_PX` 64 — it fits, with 12px to spare.**
+## Nothing is broken; what was missing was anything that says so the day `SETTLEMENT_NOTICE_SIZE` is bumped
+## or a line is lengthened. Both would silently clip, and clipping the one sentence that tells the player the
+## build ends here is the failure this whole beat exists to prevent.
+func _the_two_notice_lines_fit_inside_the_band_they_are_drawn_in(t) -> void:
+	var font := ThemeDB.fallback_font
+	t.ok(font != null, "기본 테마 글꼴을 읽었다 (전제 — 트리 밖에서도 있다)")
+	if font == null:
+		return
+	var s := Fx.SETTLEMENT_NOTICE_SIZE
+	var r := Layout.notice_rect(Fx.SETTLEMENT_RECT.size)
+	var line_h := font.get_height(s)
+	t.ok(line_h * 2 <= r.size.y,
+		"안내 두 줄(%dpx)이 자리 높이(%dpx) 안에 들어간다" % [line_h * 2, int(r.size.y)])
+	for line: String in [Fx.SETTLEMENT_NOTICE_1, Fx.SETTLEMENT_NOTICE_2]:
+		var w := font.get_string_size(line, HORIZONTAL_ALIGNMENT_LEFT, -1, s).x
+		t.ok(w <= r.size.x,
+			"'%s'의 폭(%dpx)이 자리 폭(%dpx)을 안 넘는다" % [line, int(w), int(r.size.x)])
+
+
+## **The strings themselves are the deliverable** (`stage-clear-sequence.md`'s own table), so they are pinned
+## by literal here and nowhere else. Every other check in this file reads the constant — which is right for
+## measuring *which* string reaches the screen, and useless for measuring *what the string says*: leaving
+## `SETTLEMENT_TITLE_CLEAR` at the provisional `런 클리어` would keep all of them green.
+func _the_three_clear_strings_are_the_ones_the_plan_names(t) -> void:
+	t.eq(Fx.SETTLEMENT_TITLE_CLEAR, "스테이지 1 클리어", "클리어 제목이 '스테이지 1 클리어'다 (임시값 '런 클리어'가 아니다)")
+	t.eq(Fx.SETTLEMENT_NOTICE_1, "지금은 여기까지만 개발돼 있습니다.", "안내 첫 줄이 정해진 문장 그대로다")
+	t.eq(Fx.SETTLEMENT_NOTICE_2, "스테이지 2는 아직 없습니다.", "안내 둘째 줄이 정해진 문장 그대로다")
+	t.ok(Fx.SETTLEMENT_TITLE_CLEAR != Fx.SETTLEMENT_TITLE, "클리어 제목과 죽음 제목이 다른 문장이다")
+
+
+## **The notice reaching the paint, and — the half that matters — not reaching it on a death.**
+## Driven treed and pumped, exactly as the title check above is and for the same recorded reason: `_draw()`
+## still calls `draw_rect`/`draw_string`/`draw_texture_rect` for the rows and the button, and the engine
+## refuses those outside a real `NOTIFICATION_DRAW` dispatch. A hand `_draw()` here would bark, and the
+## wrapper counts stderr as failure.
+func _the_notice_is_painted_on_a_clear_and_never_on_a_death(t) -> void:
+	var win := _CapturingSettlementWindow.new()
+	t.root.add_child(win)
+
+	win.open(10, 20, 3, true)
+	win.queue_redraw()
+	await t.pump_frames(3)
+	t.ok(win.notice_calls > 0, "클리어로 열면 안내 문구가 실제로 그려진다 (_draw()가 돌았다가 아니라)")
+	t.ok(win.notices.has(Fx.SETTLEMENT_NOTICE_1),
+		"첫 줄 '%s'이 그대로 화면에 닿는다" % Fx.SETTLEMENT_NOTICE_1)
+	t.ok(win.notices.has(Fx.SETTLEMENT_NOTICE_2),
+		"둘째 줄 '%s'도 그대로 화면에 닿는다" % Fx.SETTLEMENT_NOTICE_2)
+	# **And at the rect the layout decided, not merely at some rect** (the class header's own story).
+	#  `_draw()` handing `Rect2()` here left every other check in this file green.
+	t.eq(win.notice_rects.size(), win.notice_calls, "잡은 자리 수가 호출 수와 같다 (전제)")
+	if not win.notice_rects.is_empty():
+		t.eq(win.notice_rects[0], Layout.notice_rect(Fx.SETTLEMENT_RECT.size),
+			"그리고 실제로 넘기는 자리가 notice_rect()가 정한 그 자리다 (Rect2()를 넘겨도 여기 말고는 다 초록이었다)")
+
+	win.notices.clear()
+	win.notice_rects.clear()
+	win.notice_calls = 0
+	win.open(10, 20, 3, false)
+	win.queue_redraw()
+	await t.pump_frames(3)
+	t.eq(win.notice_calls, 0, "죽음으로 열면 안내 문구는 한 번도 안 그려진다 (죽음은 콘텐츠의 끝이 아니다)")
+	t.ok(win.drawn.has(Fx.SETTLEMENT_TITLE), "그리고 죽음 제목은 그대로 그려진다 (그리기 자체는 멀쩡하다는 전제)")
 
 	t.root.remove_child(win)
 	win.queue_free()

@@ -24,8 +24,10 @@ const WaterSource := preload("res://src/sim/water_source.gd")
 ##  asserts the walls, is the only one that went red. **That is the shape of a fake net**: written down as
 ##  "same as", it can drift without a single check noticing. Derived, it cannot.
 const _PIT_ROW := 208
-const _MOUTH_X0 := 1712
-const _MOUTH_X1 := 2079
+## **-800 cells (-100 tiles) when the left run was cut** (`left-run-clumps-and-platforms.md` §1).
+##  The vessel itself did not move one tile — the bake re-origined around it.
+const _MOUTH_X0 := 912
+const _MOUTH_X1 := 1279
 const _PIT_X0 := _MOUTH_X0 + ((_MOUTH_X1 - _MOUTH_X0 + 1) - Tuning.WATER_RAIN_HALF_W * 2) / 2
 
 

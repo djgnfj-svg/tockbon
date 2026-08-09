@@ -6,12 +6,17 @@ at the **assembly bench**, and leave through the **departure gate**. Die or clea
 **Implemented**: **partial** — **the room, the loop and the art all run** ([../plans/3.done/town-room-and-fixtures.md](../plans/3.done/town-room-and-fixtures.md)).
 One bedrock room · three fixtures with their own sprites · **the position-checking door** (E) · the gate
 builds stage 1 · dying sends you back · **the burnt-village backdrop** · **the research window** (panel,
-slot frames, the four unlock icons) · **원석 that survives a run**, from both doors (boss 3~4, level 1).
-**Not done**: the point budget · **any unlock, and therefore any way to spend 원석** · the assembly bench's
-own "choose what to equip" half (it opens the existing reorder window)
+four slot frames, and **five icon files: one per unlock row — 점수 · 아이템 · 신체 · 주사위 — plus the 원석
+icon on the material line**) · **원석 that survives a run**, from both doors (boss 3~4, level 1).
+**Not done**: the point budget · the assembly bench's own "choose what to equip" half (it opens the existing
+reorder window) · **the 점수 and 주사위 unlock axes** — deferred, and *why* each is deferred is filed in
+[../decisions/unlocks-are-runes-and-the-double-jump.md](../decisions/unlocks-are-runes-and-the-double-jump.md)
 **Built since, screen unverified**: the run-end settlement screen
 ([../plans/3.done/run-end-settlement.md](../plans/3.done/run-end-settlement.md)) — **`E` while downed no
-longer goes straight to the town**; the panel opens on its own and its button is the door. Nobody has looked at it
+longer goes straight to the town**; the panel opens on its own and its button is the door. Nobody has looked at it ·
+**and 원석 now buys something** ([../plans/3.done/research-bench-unlocks.md](../plans/3.done/research-bench-unlocks.md)) —
+the 물 rune, the 불 rune and the double jump. **The loop's biggest hole is closed: the next run can start
+wider than the last.**
 **Accepted**: **unseen** — walked end to end by an agent in the editor, never by the user
 
 **A concept stays alive and never changes folders.** The two header lines are only "how much runs now" —
@@ -164,10 +169,26 @@ a glyph is **socketed into a layer the moment you receive it**, so there is noth
 state, and the material count. **The item row is the rune pool**, read live from `Progress`, so earning fire
 visibly moves it — which is this bench's whole stated purpose.
 
-**Nothing can be bought, and the window says so.** There is no price table (see the TBD list) and therefore
-no button; a button that took a material and returned nothing would be worse than an honest empty shelf.
-⇒ **Material accrues and cannot be spent.** That split is deliberate: the drop was already decided (the GDD's
-"Drops"), the price was not.
+~~**Nothing can be bought, and the window says so.**~~ **Void — three things can be bought now**
+([../plans/3.done/research-bench-unlocks.md](../plans/3.done/research-bench-unlocks.md)): the **물 rune**,
+the **불 rune** and the **double jump**. Press a locked one, 원석 leaves the counter, and it is yours across
+runs — a single `_unlocked` set that **`Progress.reset()` must never clear**, guarded by an inverted check.
+**The price and the yield are values and live in that doc**, not here.
+
+**What that closes**: the window used to be an honest empty shelf — no price table, therefore no button,
+because a button that took a material and returned nothing is worse than nothing. **The price existing is
+what turned the shelf into a shop.**
+
+⚠ **And the shelf empties again after about three runs.** **The sink is three purchases deep and then dry**
+— 원석 keeps climbing with nothing left to buy. **That is the honest cost of shipping one axis rather than
+four**, it was known when the axis was chosen, and it is recorded rather than hidden: the arithmetic is in
+the plan doc's Bounds and the reasoning in
+[../decisions/unlocks-are-runes-and-the-double-jump.md](../decisions/unlocks-are-runes-and-the-double-jump.md).
+⇒ **Widening it is the 주사위 axis's job**, and that decision names exactly what has to be answered first.
+
+**Only two of the four slots on the table above can be bought at all**, and the split is not about price:
+**점수 has nothing in `src/` that reads a point budget** (an unlock raising a ceiling nobody reads is a false
+handle), and **주사위 waits on a rule, not a value**. Same file.
 
 **"Items" and "points" are a pair.** Opening items grows what there is to buy;
 raising points grows the vessel — **you need both for a build to widen.**
@@ -210,8 +231,11 @@ that — including that the roll really spans its range rather than pinning to t
 **On screen it is `원석 N` at the research bench; in code the field is `gems`.**
 
 **That number is the pace of research.** ~~Three materials per unlock means one unlock every three runs.~~
-**Void — that arithmetic was written against 1–2 per run.** At 9–11 a run, three 원석 an unlock would open
-three or four unlocks per run. **The price is TBD and must be re-derived from the new yield.**
+~~**Void — that arithmetic was written against 1–2 per run.**~~ **Re-derived and settled** against the real
+yield — the price now buys **roughly one unlock per full run**, which is the shape the user asked for
+(*한 번 갔다 오면 하나 열린다*). **The number itself lives in
+[../plans/3.done/research-bench-unlocks.md](../plans/3.done/research-bench-unlocks.md)** and is deliberately
+not repeated here; it is one value and a value counted twice diverges.
 **There is one kind of material** (decided by the user). Splitting kinds would create "beat this boss to unlock that",
 giving each boss its own reason to be fought, **but with two bosses that axis is still thin** — nothing to split.
 Revisit as stages grow.
@@ -350,13 +374,26 @@ header records a white chicken on a white ground being walked straight through).
 
 ## TBD
 
-- **How the research bench's four slots are separated on screen** — tabs or one list. **Only "body" behaves differently** (effective immediately); the other three are next-run
+- **How the research bench's four slots are separated on screen** — tabs or one list. **Still one list**;
+  the first three unlocks added no row, so nothing has forced the question yet.
+  **The immediate-vs-next-run split is no longer hypothetical, and it is real in the code**: the **body**
+  slot's double jump takes effect **from purchase**, the **items** slot's two runes take effect **next run**.
+  ⇒ **Two of the four slots now demonstrate opposite halves of the table above** — the **items** row and the
+  **body** row, which are adjacent and easy to cite the wrong way round. **Cite them by row name, never by
+  line number**: adding four lines to this file's header moved the whole table, which is how the citation in
+  this very bullet was wrong for about a minute.
+  **How each is applied is a mechanism, and it lives in
+  [../plans/3.done/research-bench-unlocks.md](../plans/3.done/research-bench-unlocks.md)** — including why
+  the immediate one needs no application moment at all
 - **The point value table** — how many points is one circle/rune/glyph.
   **The fire rune's value matters most** — cheap and **stage 1's midboss stops being a wall from the very first run.**
   **It becoming not-a-wall later is intended** (GDD "the midboss's role changes per run").
   The only thing to preserve is that **it must be met as a wall once**
 - **How many dice per run** · do unlocks raise the count · are more found in the dungeon
-- **The price of one unlock** — how many 원석. **Re-derive against 9–11 per run**, not the old 1–2
+- ~~**The price of one unlock**~~ → **decided and no longer TBD.** Re-derived against the real yield and
+  landed in [../plans/3.done/research-bench-unlocks.md](../plans/3.done/research-bench-unlocks.md).
+  **What is still open is the price of the *next* unlock**, whenever a fourth exists — the sink is three
+  purchases deep and then dry
 - **Do death and clearing look different** — moved onto the settlement screen (`../plans/3.done/run-end-settlement.md`)
 - **Saving.** 원석 is permanent and **nothing in `src/` writes a file** — no `user://`, no `FileAccess`.
   Research cannot outlive the process until this exists. No doc, no owner

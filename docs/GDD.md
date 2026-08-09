@@ -521,7 +521,7 @@ Detail in `docs/plans/3.done/levelup-and-three-picks.md`.
 | **Midboss reward** (= progression key) | **Fire rune** — burn wood to open a path |
 | **Boss reward** | Permanent material (gear enchanting came up, unconfirmed) |
 
-**Stage 1's actual terrain and bosses are settled** — **400×48 tiles, three zones + a locked fourth.**
+**Stage 1's actual terrain and bosses are settled** — **300×48 tiles, three zones + a locked fourth.**
 Trash section → ①**bull** (midboss, fire rune) → burn the wood wall → ②trash → ③**giant rooster** (boss)
 → **escape as water rises.** **Jumps are unlimited underwater** — that becomes stage 2's movement grammar.
 Detail in `3.done/stage1-map-layout` · `3.done/stage1-bosses` · `2.active/water-jump-and-escape`
@@ -689,7 +689,7 @@ map → blocked by the wood wall → pit → bull → fire rune → [water rises
 
 | Gap to fill | Now | Where |
 |---|---|---|
-| ~~**Map terrain**~~ | **Filled** — 400×48 baked and in. Acceptance 3·4 unconfirmed on screen | `docs/plans/3.done/stage1-map-layout.md` |
+| ~~**Map terrain**~~ | **Filled** — **300×48** baked and in (was 400×48; the left run's 100 flat columns were cut). Acceptance 3·4 still unconfirmed on screen, and the cut's own screen half is unlooked-at too | `docs/plans/3.done/stage1-map-layout.md`, `3.done/left-run-clumps-and-platforms.md` |
 | ~~**Fire rune**~~ | **Implemented, not accepted** — `spell_circle.DEFAULT_RUNE` is `ELEM_NONE`; the palette veils any rune not owned instead of offering all of `ELEM_ALL`; the bull's reward grants fire (`Progress.grant_rune`) | `docs/plans/3.done/rune-lock-and-receiving.md` |
 | ~~**Two bosses**~~ | **Implemented, not accepted** — bull and rooster both written and verified headless. Two screen fixes (the slam's fire ring, the phase-2 tell's shape) are unlooked-at, blocked by another session holding the editor bridge | `docs/plans/3.done/stage1-bosses.md` |
 | **Three of water's four** | Only pouring works | `docs/plans/2.active/water-jump-and-escape.md` |
@@ -701,7 +701,14 @@ map → blocked by the wood wall → pit → bull → fire rune → [water rises
 **The chain has every square now — in code. Not one of them is accepted.**
 `map → wood wall → pit → bull → fire rune → water out of the pit → rooster → gate` runs end to end, and
 **the mobs and both bosses stand on it before you arrive** (`3.done/monster-placement-stage1.md`) ⇒ **the
-chain is walked, not debug-keyed.** **The one acceptance check this milestone has is "the user starts once
+chain is walked, not debug-keyed.**
+
+**And that sentence was not true until the monster cap was fixed** — the spawn door was first-come-first-served,
+so **a player who killed nothing on the left run filled the cap with trash and the bull was silently refused**,
+taking the fire rune and everything behind it with it, with no error anywhere. It was live in the build while
+this paragraph claimed the chain ran. The door now reserves the boss slots
+(`3.done/left-run-clumps-and-platforms`) — **the fix is in the spawn door, not in the boss docs**, and it is
+driven headless. ⇒ **The claim holds now; it is worth remembering it read as true for a while before it was.** **The one acceptance check this milestone has is "the user starts once
 and reaches the end without getting stuck" — which only the user can run.** The single row still open above
 is water's other three (`2.active`), whose pour in room ③ is also **a constraint on the ending** (that doc's
 own item 4) and **the reason zone ② is placed but unreachable.**
@@ -792,9 +799,11 @@ What is written here is **not yet decided.** Do not fill it in by pretending to 
   (one dominant per zone vs evenly).
 
 - ~~**Seed distribution · procedural generation**~~ → **Not doing it. The map is fixed** (decided by the user).
-  **The map the user designed and drew is used as-is.** Stage 1 is already drawn — **400×48 tiles**
-  (`terrain_map_generated.gd`, `MAP_W`/`MAP_H`). **This line read 312×126 and was wrong**; the size is counted
-  in one place only, and that place is the baked file.
+  **The map the user designed and drew is used as-is.** Stage 1 is already drawn — **300×48 tiles**
+  (`terrain_map_generated.gd`, `MAP_W`/`MAP_H`). **This line has now been wrong twice** — it read 312×126,
+  then 400×48 — because the size is counted in one place only, and that place is the baked file, not here.
+  **It shrank because the left run was cut**: 100 columns of uniform flat deleted from the map itself, so
+  the walk to the midboss stops being 30 seconds of unchanging ground (`left-run-clumps-and-platforms`).
   ⇒ **No seeds, no room composition.** The same terrain every run.
 
   **So the variation per run comes only from what you bring** — assembly (circle · rune · glyph) ·

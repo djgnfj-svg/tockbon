@@ -15,6 +15,16 @@ const WorldStep := preload("res://src/actor/world_step.gd")
 const SpellSim := preload("res://src/sim/spell_sim.gd")
 const Character := preload("res://src/actor/character.gd")
 const BossAi := preload("res://src/actor/boss_ai.gd")
+## The clump XP invariant is "one engagement levels you", so the bound comes from the levelling curve
+## itself, not from a number typed twice. `MonsterBolts.BOLT_STOP_PX` is the hen's own stopping distance,
+## which is what forces the shelf width.
+const Progress := preload("res://src/actor/progress.gd")
+const MonsterBolts := preload("res://src/actor/monster_bolts.gd")
+## The waking presentation is this feature's own screen half, and its hook is measured here rather
+## than in `net_monster_sprite` — what it actually measures is *when a placed row stirs*, which is
+## this file's subject. `net_gate` preloads a view for the same reason.
+const MonsterView := preload("res://src/view/monster_view.gd")
+const Fx := preload("res://src/view/fx_tuning.gd")
 ## S1 (verify-read) — the wiring line itself must be measured through the real stage, not just through
 ## `WorldStep` built by hand. Borrowed, not copied — `_wired_root` is the one door every net that stands
 ## up the real scene already shares (`net_gate.gd`'s own header).
@@ -29,6 +39,19 @@ const SYN_FLOOR_CY := 200
 ## kept as its own constant so Stage D's checks below do not repeat `(SYN_FLOOR_CY - 4) * Tuning.CELL_PX`.
 const SYN_FLOOR_TOP := (SYN_FLOOR_CY - 4) * Tuning.CELL_PX
 
+## ══ The clump layout, as literal tile numbers (`left-run-clumps-and-platforms.md` §3/§4) ══
+## **Literal on purpose.** Reading these back out of `stage1_monsters.ROWS` or out of the baked map would
+## make every check below shrink with whatever it is supposed to be catching — CLAUDE.md's "a check whose
+## bounds come from the thing it checks proves nothing", which cost this repo a wall test once already.
+## Move a clump or a shelf and these numbers have to be retyped by hand. That is the point.
+const CLUMP_TX: Array = [[14, 29], [45, 60], [73, 88]]
+const SHELF_TILES: Array = [[20, 30], [51, 61], [79, 89]]
+## The shelf's top tile row and the flat's own ground tile row — 2 tiles apart, which is the 64px hop.
+const SHELF_TOP_TY := 18
+const FLAT_GROUND_TY := 20
+## One tile in world px.
+const TILE_PX := Tuning.TILE_CELLS * Tuning.CELL_PX
+
 
 func run(t) -> void:
 	_table_is_sorted_by_tx(t)
@@ -40,12 +63,17 @@ func run(t) -> void:
 	_a_low_ceiling_barks_and_reports_not_ok(t)
 	_teaching_order_pig_then_hen_then_wolf(t)
 	_zone_totals(t)
+	_every_clump_is_worth_at_least_sixty_xp(t)
+	_the_stone_shelves_are_solid_to_the_ground_by_literal_tile(t)
+	_a_shelf_row_resolves_onto_the_shelf_top_not_the_ground(t)
+	_every_shelf_hen_keeps_its_240px_of_shelf_to_the_west(t)
 	_wake_scan_creates_a_monster_inside_the_activation_band_not_before(t)
 	_a_killed_row_never_comes_back(t)
 	_reset_rearms_every_row(t)
 	_a_capped_refusal_leaves_the_row_dormant_not_spent(t)
 	_the_wake_scan_only_runs_on_the_tick(t)
-	_hysteresis_flips_once_not_every_tick(t)
+	_the_stir_band_flips_once_not_every_tick(t)
+	_materialising_is_one_threshold_with_no_hysteresis(t)
 	_a_sleeping_monster_standing_in_fire_still_takes_damage_and_can_die(t)
 	_a_sleeping_monster_on_flat_ground_does_not_move(t)
 	_a_sleeping_monster_does_not_jump_even_when_blocked(t)
@@ -57,6 +85,9 @@ func run(t) -> void:
 	_the_real_map_scan_direction_matters_not_just_synthetic_grids(t)
 	_bosses_are_placed_inside_their_own_room(t)
 	_pre_stage1_row_count_stays_under_the_cap(t)
+	_a_boss_row_still_spawns_when_the_trash_cap_is_full(t)
+	_a_boss_refused_at_the_real_cap_barks(t)
+	await _the_view_paints_a_wake_mark_exactly_when_a_mob_stirs(t)
 	_wake_scan_runs_after_death_removal_so_a_freed_slot_is_usable_the_same_tick(t)
 	_wake_scan_runs_before_contact_damage_so_a_mob_that_wakes_overlapping_the_player_hits_the_same_tick(t)
 
@@ -182,11 +213,133 @@ func _zone_totals(t) -> void:
 		var k: int = row["kind"]
 		counts[k] = counts.get(k, 0) + 1
 	t.eq(counts.get(MonsterDefs.KIND_PIG, 0), 17, "돼지 총수가 17이다 (pre-① 11 + zone② 6)")
-	t.eq(counts.get(MonsterDefs.KIND_HEN, 0), 11, "닭 총수가 11이다 (pre-① 7 + zone② 4)")
+	t.eq(counts.get(MonsterDefs.KIND_HEN, 0), 9, "닭 총수가 9다 (pre-① 5 + zone② 4)")
 	t.eq(counts.get(MonsterDefs.KIND_WOLF, 0), 4, "늑대 총수가 4다 (pre-① 2 + zone② 2)")
 	t.eq(counts.get(MonsterDefs.KIND_BULL, 0), 1, "황소가 정확히 하나다")
 	t.eq(counts.get(MonsterDefs.KIND_ROOSTER, 0), 1, "수탉이 정확히 하나다")
-	t.eq(Stage1Monsters.ROWS.size(), 34, "표 전체 행 수가 34다")
+	t.eq(Stage1Monsters.ROWS.size(), 32, "표 전체 행 수가 32다")
+
+
+## **§6's invariant, and it is per clump, not per run.** A clump is easier to skip than an even spread —
+## with three clumps, walking past one throws away a third of the run's XP in a single decision, and
+## nothing forces the fight (the player at 260px/s outruns wolf 240, hen 220, pig 160). So **every single
+## clump has to be worth a level on its own**, which is `Progress.xp_for_level(0)` — read from the
+## levelling curve rather than typed as a second copy of 60.
+##
+## **The last assert is the one that stops a row from quietly falling outside every clump.** Without it,
+## moving one row into a gap leaves the three clump sums untouched and this check green.
+func _every_clump_is_worth_at_least_sixty_xp(t) -> void:
+	var need := Progress.xp_for_level(0)
+	t.ok(need > 0, "전제 — 레벨 1 문턱을 읽었다 (%d)" % need)
+	var covered := 0
+	for c: Array in CLUMP_TX:
+		var xp := 0
+		var n := 0
+		for row: Dictionary in Stage1Monsters.ROWS:
+			var tx := int(row["tx"])
+			if tx < int(c[0]) or tx > int(c[1]):
+				continue
+			xp += MonsterDefs.xp_of(int(row["kind"]))
+			n += 1
+		covered += n
+		t.eq(n, 6, "무리(tx %d-%d)는 6행이다" % [c[0], c[1]])
+		t.ok(xp >= need,
+			"무리(tx %d-%d) 하나만 잡아도 레벨 1(%dxp)이 된다 (%dxp)" % [c[0], c[1], need, xp])
+
+	var bull_tx := _first_tx_of(MonsterDefs.KIND_BULL)
+	var pre := 0
+	for row: Dictionary in Stage1Monsters.ROWS:
+		if int(row["tx"]) < bull_tx and not BossAi.has_pattern(int(row["kind"])):
+			pre += 1
+	t.eq(covered, pre, "① 앞 잡몹 %d행이 전부 세 무리 안에 들어 있다 (무리 밖에 흘린 행 %d개)"
+		% [pre, pre - covered])
+
+
+## **The shelves themselves, measured on the real baked map by literal tile number.** §4: ordinary
+## `STONE`, top surface 2 tiles (64px) above the flat, **solid all the way down to the ground**, vertical
+## sides. Every one of those four words is a separate assert here:
+##  · rows 18-19 stone across the whole span — that is "solid to the ground", and it is what makes
+##    `resolve()`'s upward scan land on the shelf with no `ty` hint and no code change at all
+##  · row 17 open — the top surface really is at row 18, so the rise really is 64px
+##  · row 20 stone under it — the shelf sits on the flat, it is not floating
+##  · the columns immediately west and east open at rows 18-19 — **vertical faces.** A ramp here would
+##    still pass every other check and would be the "ground mound" the user rejected, walkable with
+##    `Character.STEP_CELLS`, with no jump involved at all
+func _the_stone_shelves_are_solid_to_the_ground_by_literal_tile(t) -> void:
+	var g := CellGrid.new()
+	Stage.build_terrain_into(g)
+	var tc := Tuning.TILE_CELLS
+	var not_stone := 0
+	var not_open_above := 0
+	var no_ground_under := 0
+	var face_blocked := 0
+	for sh: Array in SHELF_TILES:
+		for tx in range(int(sh[0]), int(sh[1]) + 1):
+			for ty in range(SHELF_TOP_TY, FLAT_GROUND_TY):
+				for dy in tc:
+					for dx in tc:
+						if g.mat_at(tx * tc + dx, ty * tc + dy) != Mat.STONE:
+							not_stone += 1
+			if g.is_solid(tx * tc + tc / 2, (SHELF_TOP_TY - 1) * tc + tc / 2):
+				not_open_above += 1
+			if not g.is_solid(tx * tc + tc / 2, FLAT_GROUND_TY * tc + tc / 2):
+				no_ground_under += 1
+		for ty in range(SHELF_TOP_TY, FLAT_GROUND_TY):
+			if g.is_solid((int(sh[0]) - 1) * tc + tc / 2, ty * tc + tc / 2):
+				face_blocked += 1
+			if g.is_solid((int(sh[1]) + 1) * tc + tc / 2, ty * tc + tc / 2):
+				face_blocked += 1
+	t.eq(not_stone, 0, "선반 세 개가 18~19번 줄 전체까지 돌로 꽉 차 있다 (빈 칸 %d개)" % not_stone)
+	t.eq(not_open_above, 0, "선반 바로 위(17번 줄)는 뚫려 있다 — 윗면이 정말 18번 줄이다 (%d칸)"
+		% not_open_above)
+	t.eq(no_ground_under, 0, "선반 아래 20번 줄은 원래 바닥이다 — 떠 있지 않다 (%d칸)" % no_ground_under)
+	t.eq(face_blocked, 0, "선반 양 옆은 비어 있다 — 옆면이 수직이다 (경사면이면 걸어 올라간다) (%d칸)"
+		% face_blocked)
+
+
+## **The row lands on the shelf, and that is the whole "no new column in the table" claim** (§4).
+## Pinned as absolute px, both ways: three rows whose `tx` sits inside a shelf must resolve 64px higher
+## than three rows that do not. **`tx29`/`tx60`/`tx88` are the east-end rows of the three shelves**;
+## `tx14`/`tx45`/`tx73` are the approach-ground rows of the same three clumps.
+func _a_shelf_row_resolves_onto_the_shelf_top_not_the_ground(t) -> void:
+	var g := CellGrid.new()
+	Stage.build_terrain_into(g)
+	var shelf_feet := SHELF_TOP_TY * TILE_PX
+	var ground_feet := FLAT_GROUND_TY * TILE_PX
+	t.eq(ground_feet - shelf_feet, 64, "전제 — 선반 윗면이 바닥보다 정확히 64px 높다")
+	for tx: int in [29, 60, 88]:
+		var res := MonsterPlacement.resolve(g, tx, MonsterDefs.KIND_HEN, Stage1Monsters.FLOOR_CY)
+		t.ok(res.get("ok", false), "tx%d가 착지한다 (전제)" % tx)
+		t.eq(int(res["py"]) + MonsterDefs.h_px(MonsterDefs.KIND_HEN), shelf_feet,
+			"tx%d는 선반 윗면(%dpx)에 선다 — 바닥이 아니다" % [tx, shelf_feet])
+	for tx: int in [14, 45, 73]:
+		var res := MonsterPlacement.resolve(g, tx, MonsterDefs.KIND_HEN, Stage1Monsters.FLOOR_CY)
+		t.ok(res.get("ok", false), "tx%d가 착지한다 (전제)" % tx)
+		t.eq(int(res["py"]) + MonsterDefs.h_px(MonsterDefs.KIND_HEN), ground_feet,
+			"tx%d는 그대로 바닥(%dpx)에 선다 — 선반 밖이다" % [tx, ground_feet])
+
+
+## **§8b — the shelf carries the hen's own stopping distance.** `_dist_to_target` is horizontal only and
+## a stirred hen walks until it is `BOLT_STOP_PX` from the player, so a hen with less than that much
+## shelf to its west steps off its own platform during the approach and Acceptance 6 is simply false.
+## **That is also why a shelf can hold exactly one hen** — the second one would have to sit further west.
+func _every_shelf_hen_keeps_its_240px_of_shelf_to_the_west(t) -> void:
+	var need := int(MonsterBolts.BOLT_STOP_PX)
+	var total := 0
+	for sh: Array in SHELF_TILES:
+		var hens := 0
+		for row: Dictionary in Stage1Monsters.ROWS:
+			var tx := int(row["tx"])
+			if int(row["kind"]) != MonsterDefs.KIND_HEN or tx < int(sh[0]) or tx > int(sh[1]):
+				continue
+			hens += 1
+			total += 1
+			var west_px := (tx - int(sh[0])) * TILE_PX
+			t.ok(west_px >= need,
+				"선반(x%d-%d) 위 닭 tx%d의 서쪽에 선반이 %dpx 남아 있다 (%dpx 필요)"
+				% [sh[0], sh[1], tx, west_px, need])
+		t.ok(hens <= 1, "선반(x%d-%d) 위 닭은 최대 하나다 (%d마리)" % [sh[0], sh[1], hens])
+	t.ok(total >= 2, "선반 위 닭이 실제로 존재한다 (%d마리) — 없으면 위 규칙이 아무것도 안 잰다" % total)
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -209,8 +362,8 @@ func _wake_scan_creates_a_monster_inside_the_activation_band_not_before(t) -> vo
 		return 1
 	var center_x := 100 * Tuning.TILE_CELLS * Tuning.CELL_PX
 
-	mp.wake_scan(g, center_x - int(MonsterPlacement.WAKE_PX) - 50, spy)
-	t.eq(spawned.size(), 0, "활성화 거리(720px) 밖에서는 스폰 시도가 없다")
+	mp.wake_scan(g, center_x - int(MonsterPlacement.MATERIALIZE_PX) - 50, spy)
+	t.eq(spawned.size(), 0, "구현 거리(720px) 밖에서는 스폰 시도가 없다")
 
 	mp.wake_scan(g, center_x, spy)
 	t.eq(spawned.size(), 1, "활성화 거리 안에 들어오면 정확히 한 번 스폰된다")
@@ -307,51 +460,68 @@ func _the_wake_scan_only_runs_on_the_tick(t) -> void:
 	t.eq(world.monster_count(), 1, "틱이 도는 바로 그 프레임에 깬다")
 
 
-## **Hysteresis** — `WAKE_PX`(720)/`SLEEP_PX`(840) as a band, not one threshold. A row hovering inside
-## the band must not flip its internal `_primed` bit every tick.
-func _hysteresis_flips_once_not_every_tick(t) -> void:
+## **Hysteresis, and it moved** (`left-run-clumps-and-platforms.md` §8). The band no longer governs a
+## dormant row — it governs a **live monster's `asleep`**, and its numbers are `STIR_ENTER_PX`(420) /
+## `STIR_EXIT_PX`(560), inside the half-viewport so the player watches the stir happen.
+## `stays_active` is pure, so this drives the real production function with no world at all — the same
+## door `world_step`'s sleep pass calls, not a copy of the comparison.
+##
+## A monster hovering inside the band must not flip state every tick.
+func _the_stir_band_flips_once_not_every_tick(t) -> void:
+	var enter := MonsterPlacement.STIR_ENTER_PX
+	var exit_px := MonsterPlacement.STIR_EXIT_PX
+	t.ok(exit_px > enter, "전제 — 나가는 문턱이 들어오는 문턱보다 멀다 (그게 대역이다)")
+	# Becomes active at 400 (inside `enter`); then jitters between 422 and 540 — **inside the dead band**,
+	# never below 420 (already active) and never above 560 (which would deactivate) — before dropping to
+	# 400 again. A single-threshold rule flips on every crossing of 420; the band must not.
+	var offsets := [400.0, 422.0, 540.0, 422.0, 540.0, 422.0, 540.0, 422.0, 540.0, 400.0]
+	var flips := 0
+	var naive_flips := 0
+	var last := false
+	var naive_last := false
+	for d in offsets:
+		var now := MonsterPlacement.stays_active(last, d, enter, exit_px)
+		if now != last:
+			flips += 1
+		last = now
+		# **Not a copy of the production algorithm** — the naive rule the band exists to replace.
+		var naive_now: bool = d <= enter
+		if naive_now != naive_last:
+			naive_flips += 1
+		naive_last = naive_now
+
+	t.eq(flips, 1, "420/560 대역 안에서 흔들려도 실제로는 한 번만 뒤집힌다 (%d번)" % flips)
+	t.ok(naive_flips > flips,
+		"단일 문턱이었다면 훨씬 자주 뒤집혔을 것이다 (naive %d회 vs 실제 %d회)" % [naive_flips, flips])
+
+
+## **The other half of §8: materialising has no hysteresis at all** — `wake_scan` passes
+## `MATERIALIZE_PX` as *both* ends. A row never returns to dormant once it is live, so an exit threshold
+## could only ever have governed how often a refused row re-knocks, and with the boss reserve a pre-①
+## row is not refused any more.
+##
+## **This is what a leftover band would look like**: at 722px a `[720, 840)` exit keeps `_primed` true,
+## and a single threshold drops it. The three offsets below are chosen so those two answers differ.
+## *Inversion: pass `STIR_EXIT_PX` (or the old 840) as `wake_scan`'s exit and the middle assert goes red.*
+func _materialising_is_one_threshold_with_no_hysteresis(t) -> void:
 	var g := _flat_grid()
 	var mp := MonsterPlacement.new()
 	var kind := MonsterDefs.KIND_PIG
 	mp.set_rows([{"tx": 50, "kind": kind}], SYN_FLOOR_CY)
 	var refuse := func(_kind: int, _px: int, _py: int) -> int:
 		return 0  # stays dormant regardless — isolates the `_primed` bit from the spawn outcome
-	# **Verify-read's own finding**: production measures distance to the row's **centre**
-	#  (`monster_placement.gd:171-173`, `tx * TILE_CELLS * CELL_PX + half_w`), not its left edge. A
-	#  variable named `center_x` that actually held the left edge made every offset below land ~22px
-	#  (the pig's own `half_w`) short of where it claimed to be — every one of 700/715/725 landed at
-	#  678/693/703, **never once inside [720, 840)**, so this check never entered the band it claims to
-	#  test. Fixed by adding `half_w` here, so `d` below **is** the real `dist` `wake_scan` computes.
+	# **Production measures distance to the row's centre**, not its left edge (verify-read's own finding
+	#  on the check this replaced) — `half_w` is added here so `d` below **is** the real `dist`.
 	var half_w := float(MonsterDefs.w_px(kind)) * 0.5
 	var row_center_x := 50 * Tuning.TILE_CELLS * Tuning.CELL_PX + int(half_w)
 
-	# Primes once at 700 (inside `WAKE_PX`=720); then jitters between 722 and 780 — **inside the [720,
-	# 840) dead band**, never below 720 (which would re-prime, already primed) and never above 840 (which
-	# would un-prime) — before finally dropping to 700 again. A single-threshold rule (no band) flips on
-	# every crossing of 720; the band must not.
-	var offsets := [700.0, 722.0, 780.0, 722.0, 780.0, 722.0, 780.0, 722.0, 780.0, 700.0]
-	var flips := 0
-	var naive_flips := 0
-	var last: bool = mp.get("_primed")[0]
-	var naive_last := false
-	for d in offsets:
-		mp.wake_scan(g, int(row_center_x + d), refuse)
-		var now: bool = mp.get("_primed")[0]
-		if now != last:
-			flips += 1
-		last = now
-		# **Not a copy of the production algorithm** — the naive rule the band exists to replace:
-		#  "primed iff dist <= WAKE_PX", recomputed from `d`, which (now) **is** the real `dist` — the
-		#  same value production's own `wake_scan` computes, not a separate quantity like the raw offset
-		#  used to be before the fix above.
-		var naive_now: bool = d <= MonsterPlacement.WAKE_PX
-		if naive_now != naive_last:
-			naive_flips += 1
-		naive_last = naive_now
-
-	t.eq(flips, 1, "720/840 대역 안에서 흔들려도 실제로는 한 번만 뒤집힌다 (%d번)" % flips)
-	t.ok(naive_flips > flips,
-		"단일 문턱이었다면 훨씬 자주 뒤집혔을 것이다 (naive %d회 vs 실제 %d회)" % [naive_flips, flips])
+	mp.wake_scan(g, int(row_center_x + 700.0), refuse)
+	t.ok(mp.get("_primed")[0], "720 안(700)에서 준비된다")
+	mp.wake_scan(g, int(row_center_x + 722.0), refuse)
+	t.ok(not mp.get("_primed")[0],
+		"720을 넘자마자(722) 바로 풀린다 — 대역이 남아 있었다면 840까지 붙어 있었을 자리다")
+	mp.wake_scan(g, int(row_center_x + 700.0), refuse)
+	t.ok(mp.get("_primed")[0], "다시 들어오면 다시 준비된다")
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -610,52 +780,252 @@ func _the_wiring_line_actually_reaches_the_real_stage(t) -> void:
 ## **S6 — the real map never actually exercises the scan direction.** Both synthetic checks above
 ## (`_the_floating_platform_trap_...`) prove the *logic*; this pins `resolve()`'s real output on the real
 ## map at the two columns where up/down genuinely disagree (measured directly, not assumed):
-##  · `tx149` — upward finds `ty20` (the real ground); downward finds `ty15` (the floating bedrock block)
-##  · `tx358` (the rooster's own row) — upward finds `ty25` (room ③'s real floor); downward finds `ty12`
+##  · `tx49` — upward finds `ty20` (the real ground); downward finds `ty15` (the floating bedrock block)
+##  · `tx258` (the rooster's own row) — upward finds `ty25` (room ③'s real floor); downward finds `ty12`
 ##    (its roof)
+## **Both columns are -100 from what they were** — `left-run-clumps-and-platforms.md` §1 cut map columns
+##  x2-101 and the bake re-origined; the slab and the room themselves did not move one tile relative to
+##  each other. The cell rows below (160, 200) are unchanged, which is the point: only x moved.
 ## Flipping the scan direction would move both of these, on the real map, not only in a hand-built grid.
 func _the_real_map_scan_direction_matters_not_just_synthetic_grids(t) -> void:
 	var g := CellGrid.new()
 	Stage.build_terrain_into(g)
-	var res149 := MonsterPlacement.resolve(g, 149, MonsterDefs.KIND_PIG, Stage1Monsters.FLOOR_CY)
-	t.ok(res149.get("ok", false), "tx149가 실제 맵에서 착지한다 (전제)")
-	t.eq(int(res149["py"]) + MonsterDefs.h_px(MonsterDefs.KIND_PIG), 160 * Tuning.CELL_PX,
-		"tx149가 실제 지면(ty20, cy160)에 선다 — 위에 뜬 기반암(ty15)이 아니다")
+	var res49 := MonsterPlacement.resolve(g, 49, MonsterDefs.KIND_PIG, Stage1Monsters.FLOOR_CY)
+	t.ok(res49.get("ok", false), "tx49가 실제 맵에서 착지한다 (전제)")
+	t.eq(int(res49["py"]) + MonsterDefs.h_px(MonsterDefs.KIND_PIG), 160 * Tuning.CELL_PX,
+		"tx49가 실제 지면(ty20, cy160)에 선다 — 위에 뜬 기반암(ty15)이 아니다")
 
-	var res358 := MonsterPlacement.resolve(g, 358, MonsterDefs.KIND_ROOSTER, Stage1Monsters.FLOOR_CY)
-	t.ok(res358.get("ok", false), "tx358가 실제 맵에서 착지한다 (전제)")
-	t.eq(int(res358["py"]) + MonsterDefs.h_px(MonsterDefs.KIND_ROOSTER), 200 * Tuning.CELL_PX,
-		"tx358가 방③의 실제 바닥(ty25, cy200)에 선다 — 지붕(ty12)이 아니다")
+	var res258 := MonsterPlacement.resolve(g, 258, MonsterDefs.KIND_ROOSTER, Stage1Monsters.FLOOR_CY)
+	t.ok(res258.get("ok", false), "tx258가 실제 맵에서 착지한다 (전제)")
+	t.eq(int(res258["py"]) + MonsterDefs.h_px(MonsterDefs.KIND_ROOSTER), 200 * Tuning.CELL_PX,
+		"tx258가 방③의 실제 바닥(ty25, cy200)에 선다 — 지붕(ty12)이 아니다")
 
 
 ## **S3 — a boss placed outside its own room is undetectable by every other check here** (they only ask
-## "does it land on solid ground", never "in the right room"). Room ① floor is `tx230-259`, measured
-## directly. Room ③'s **interior** floor is `tx345-366`** — `tx367`/`368` are the room's own right wall
+## "does it land on solid ground", never "in the right room"). Room ① floor is `tx130-159`, measured
+## directly. Room ③'s **interior** floor is `tx245-266`** — `tx267`/`268` are the room's own right wall
 ## (measured: `topmost_solid_cy` jumps from `200` to `96` there, the wall's own height, not the floor's).
 func _bosses_are_placed_inside_their_own_room(t) -> void:
 	var bull_tx := _first_tx_of(MonsterDefs.KIND_BULL)
 	t.ok(bull_tx >= 0, "표에 황소가 있다 (전제)")
-	t.ok(bull_tx >= 230 and bull_tx <= 259,
-		"황소의 tx(%d)가 방① 바닥 범위(230-259) 안이다" % bull_tx)
+	t.ok(bull_tx >= 130 and bull_tx <= 159,
+		"황소의 tx(%d)가 방① 바닥 범위(130-159) 안이다" % bull_tx)
 
 	var rooster_tx := _first_tx_of(MonsterDefs.KIND_ROOSTER)
 	t.ok(rooster_tx >= 0, "표에 수탉이 있다 (전제)")
-	t.ok(rooster_tx >= 345 and rooster_tx <= 366,
-		"수탉의 tx(%d)가 방③ 내부 바닥 범위(345-366) 안이다 (367-368은 오른쪽 벽)" % rooster_tx)
+	t.ok(rooster_tx >= 245 and rooster_tx <= 266,
+		"수탉의 tx(%d)가 방③ 내부 바닥 범위(245-266) 안이다 (267-268은 오른쪽 벽)" % rooster_tx)
 
 
 ## **S4 — `_zone_totals` pins numbers, not the invariant those numbers exist to protect.** Reverting
 ## pre-① to 24 rows and updating only the hardcoded expected counts there stays green. This asks the
 ## actual question: does the trash-mob count before the bull's own row fit under `MAX_MONSTERS`.
+##
+## **The bound was one comparison too loose and this net was green with the bug live**
+## (`left-run-clumps-and-platforms.md` §5): `pre_count <= MAX_MONSTERS` reads 20 <= 20 as fine, while
+## **20 trash + 1 bull = 21** is the number that decides whether the midboss exists at all. The reserve
+## is what the cap actually holds back, so the bound is `MAX_MONSTERS - boss_rows`.
+## **This is still only the cheap sibling** — it counts rows and never makes a monster.
+## `_a_boss_row_still_spawns_when_the_trash_cap_is_full` below drives the real door.
 func _pre_stage1_row_count_stays_under_the_cap(t) -> void:
 	var bull_tx := _first_tx_of(MonsterDefs.KIND_BULL)
 	t.ok(bull_tx >= 0, "전제 — 황소 tx를 찾았다")
 	var pre_count := 0
+	var boss_rows := 0
 	for row: Dictionary in Stage1Monsters.ROWS:
-		if int(row["tx"]) < bull_tx and not BossAi.has_pattern(int(row["kind"])):
+		if BossAi.has_pattern(int(row["kind"])):
+			boss_rows += 1
+		elif int(row["tx"]) < bull_tx:
 			pre_count += 1
-	t.ok(pre_count <= MonsterDefs.MAX_MONSTERS,
-		"① 앞(tx < %d) 잡몹 행 수(%d)가 상한(%d) 이하다" % [bull_tx, pre_count, MonsterDefs.MAX_MONSTERS])
+	t.ok(boss_rows > 0, "전제 — 표에 보스 행이 있다")
+	t.ok(pre_count <= MonsterDefs.MAX_MONSTERS - boss_rows,
+		"① 앞(tx < %d) 잡몹 행 수(%d)가 상한에서 보스 몫(%d칸)을 뺀 값(%d) 이하다"
+		% [bull_tx, pre_count, boss_rows, MonsterDefs.MAX_MONSTERS - boss_rows])
+
+
+## **The cap bug, driven — the check the row count above cannot be** (§5). Fill the world with trash to
+## the ceiling the reserve leaves, then let the boss row wake, and assert **the boss is actually alive**.
+## Counting rows can only ever say "the table looks fine"; this says "the midboss exists".
+##
+## **Two asserts, and the first one is the reserve itself.** With `MAX_MONSTERS` 20 and one boss row, the
+## trash ceiling is 19 — a 20th trash mob must be turned away *while a slot is still empty*, which is the
+## whole mechanism. Without it the 20th trash mob is accepted and the bull is refused with **no error at
+## all**, which is exactly what shipped.
+##
+## *Inversion: delete the `- reserve` from `world_step.spawn_monster` and both asserts go red* — `made`
+## becomes 20 and the boss never appears.
+func _a_boss_row_still_spawns_when_the_trash_cap_is_full(t) -> void:
+	var kind := MonsterDefs.KIND_PIG
+	var tx := 50
+	var mob_x := tx * Tuning.TILE_CELLS * Tuning.CELL_PX
+	var g := _flat_grid()
+	var ch := Character.new()
+	ch.place(mob_x, SYN_FLOOR_TOP - Character.H_PX)
+	var world := WorldStep.new(g, SpellSim.new(), ch)
+	# One boss row, resolving where the player already stands — inside `MATERIALIZE_PX` from tick one.
+	world.set_placement([{"tx": tx, "kind": MonsterDefs.KIND_BULL}], SYN_FLOOR_CY)
+	# Trash, far away so none of them ever touch the player or the waking row. **More than the cap on
+	#  purpose** — the refusals are what is being measured.
+	var made := 0
+	for i in MonsterDefs.MAX_MONSTERS + 5:
+		if world.spawn_monster(kind, mob_x + 5000 + i * 200, SYN_FLOOR_TOP - MonsterDefs.h_px(kind)) > 0:
+			made += 1
+	t.eq(made, MonsterDefs.MAX_MONSTERS - 1,
+		"잡몹은 상한(%d)에서 보스 몫 1칸을 남기고 %d마리에서 거절된다 (실제 %d마리)"
+		% [MonsterDefs.MAX_MONSTERS, MonsterDefs.MAX_MONSTERS - 1, made])
+
+	_frames(world, Tuning.TICK_DIVIDER)
+	var bulls := 0
+	for i in world.monster_count():
+		if world.monster_at(i).kind == MonsterDefs.KIND_BULL:
+			bulls += 1
+	t.eq(bulls, 1, "잡몹이 꽉 찬 채로도 보스 행이 남겨 둔 자리로 깬다 (황소 %d마리)" % bulls)
+	t.eq(world.monster_count(), MonsterDefs.MAX_MONSTERS,
+		"그리고 그 자리가 마지막 한 칸이다 (%d마리)" % world.monster_count())
+
+
+## **The backstop bark** (§5's other half). The reserve is what keeps a boss's slot; the `push_error` is
+## for the day the reserve is wrong — a boss made **outside** the table, when the world is genuinely
+## full. Unreachable in a correct build, which is what a guard should be. Driven here by spawning a boss
+## directly with no placement table at all, so `boss_row_count()` is 0 and every slot is taken.
+func _a_boss_refused_at_the_real_cap_barks(t) -> void:
+	var kind := MonsterDefs.KIND_PIG
+	var g := _flat_grid()
+	var ch := Character.new()
+	ch.place(0, SYN_FLOOR_TOP - Character.H_PX)
+	var world := WorldStep.new(g, SpellSim.new(), ch)
+	for i in MonsterDefs.MAX_MONSTERS:
+		world.spawn_monster(kind, 5000 + i * 200, SYN_FLOOR_TOP - MonsterDefs.h_px(kind))
+	t.eq(world.monster_count(), MonsterDefs.MAX_MONSTERS, "전제 — 표 없이 상한까지 꽉 찼다 (예비 0칸)")
+	t.expect_error("boss reserve is wrong")
+	var id := world.spawn_monster(MonsterDefs.KIND_BULL, 4000, SYN_FLOOR_TOP - MonsterDefs.h_px(MonsterDefs.KIND_BULL))
+	t.eq(id, 0, "진짜 상한에서는 보스도 거절된다")
+	# A trash mob at the same full cap is refused **silently** — the bark is for bosses only, or every
+	#  ordinary over-cap debug spawn would start shouting.
+	var id2 := world.spawn_monster(kind, 4000, SYN_FLOOR_TOP - MonsterDefs.h_px(kind))
+	t.eq(id2, 0, "잡몹도 거절되지만 조용하다 (짖음은 보스 몫이다)")
+
+
+
+## **A `MonsterView` that catches its own wake mark.** The same technique, and the same reason, as
+## `net_gate._CapturingGateView`: GDScript refuses to override a native `CanvasItem` call, so the
+## production class cuts an ordinary script method out of `_draw()` and a subclass intercepts *that*.
+## `super()` still runs, so the real drawing is not replaced by the measurement.
+class _CapturingMonsterView extends MonsterView:
+	var centers: Array[Vector2] = []
+	var ages: Array[float] = []
+	## **The modulate the body and the outline each draw with, this frame.** `_draw_flipped` is an
+	## ordinary script method (the native `draw_texture_rect_region` sits *inside* it), so overriding it
+	## catches presentation A — the dim on a dormant body — which has no other trace at all.
+	##
+	## **Split by canvas, and that split is not cosmetic.** Measured: with the two folded into one array
+	## the check stayed **green** while `_draw_monster_body`'s dim was deleted outright — the outline's
+	## own dim (drawn onto a child layer) alone kept the minimum at 0.45. One array measured "something
+	## on this node is dim", never "the body is dim". The body is the only thing drawn onto `self`.
+	var alphas: Array[float] = []
+	var outline_alphas: Array[float] = []
+
+	func _paint_wake_mark(center: Vector2, age: float) -> void:
+		centers.append(center)
+		ages.append(age)
+		super(center, age)
+
+	func _draw_flipped(canvas: CanvasItem, tex: Texture2D, src: Rect2, r: Rect2, flip: bool,
+			modulate: Color) -> void:
+		if canvas == self:
+			alphas.append(modulate.a)
+		elif canvas.name == MonsterView.LAYER_OUTLINE:
+			outline_alphas.append(modulate.a)
+		super(canvas, tex, src, r, flip, modulate)
+
+
+## **"`_draw()` ran" is not "anything was drawn"** (CLAUDE.md) — so this asserts the arguments
+## `MonsterView._draw()` hands its own hook, treed and pumped through real engine frames.
+##
+## The three states the mark has to tell apart, in one world:
+##  · a **debug-spawned** monster, which never sleeps at all (`world_step`'s `has_row_for` gate) — it must
+##    never mark, not even on the frame the view first sees it. That is the "already awake" case, and the
+##    naive `if not m.asleep: mark()` would fire on it every single frame
+##  · a **placed row that is asleep** — materialised at 720 but outside the 420 stir band. No mark
+##  · the **stir itself** — the player walks inside 420 and the row's `asleep` flips. **One mark, at that
+##    monster's own centre, at age 0**
+##
+## *Inversion: delete the `_paint_wake_mark` call from `_draw()` and the last three asserts go red.*
+func _the_view_paints_a_wake_mark_exactly_when_a_mob_stirs(t) -> void:
+	var kind := MonsterDefs.KIND_PIG
+	var tx := 50
+	var mob_x := tx * Tuning.TILE_CELLS * Tuning.CELL_PX
+	var g := _flat_grid()
+	var ch := Character.new()
+	# **Inside `MATERIALIZE_PX`(720) and outside `STIR_ENTER_PX`(420)** — the exact gap §8a exists to
+	#  create: the row is standing there, asleep, before the player can see it.
+	ch.place(mob_x + 600, SYN_FLOOR_TOP - Character.H_PX)
+	var world := WorldStep.new(g, SpellSim.new(), ch)
+	# The control: never placed by the table, so it can never sleep and must never mark.
+	world.spawn_monster(kind, mob_x + 3000, SYN_FLOOR_TOP - MonsterDefs.h_px(kind))
+	world.set_placement([{"tx": tx, "kind": kind}], SYN_FLOOR_CY)
+	_frames(world, Tuning.TICK_DIVIDER * 8)
+	t.eq(world.monster_count(), 2, "행이 구현됐다 — 디버그 몹 하나 + 표 행 하나 (전제)")
+	var placed := world.monster_at(1)
+	t.ok(placed.asleep, "표 행은 720 안·420 밖이라 자고 있다 (전제)")
+	t.ok(not world.monster_at(0).asleep, "디버그 몹은 애초에 잠들지 않는다 (전제)")
+
+	var view := _CapturingMonsterView.new()
+	view.setup(world)
+	t.root.add_child(view)
+	await t.pump_frames(3)
+	t.eq(view.centers.size(), 0,
+		"이미 깨어 있는 몹에도, 자고 있는 몹에도 표시를 안 그린다 (그린 횟수 %d)" % view.centers.size())
+
+	# ── presentation A: the dormant body is drawn dim, the awake one is not ──
+	# **The control is in the same frame**, so this cannot pass by everything being dim.
+	view.alphas.clear()
+	view.outline_alphas.clear()
+	await t.pump_frames(1)
+	t.eq(view.alphas.size(), 2, "전제 — 이 프레임에 몸통이 둘 다 그려졌다 (%d번)" % view.alphas.size())
+	t.ok(view.outline_alphas.size() > 0,
+		"전제 — 테두리도 그려졌다 (%d번)" % view.outline_alphas.size())
+	if view.alphas.size() > 0:
+		t.ok(absf(view.alphas.min() - Fx.MONSTER_ASLEEP_ALPHA) < 0.01,
+			"자는 몹의 **몸통**을 %.2f 투명도로 흐리게 그린다 (가장 흐린 값 %.3f)"
+			% [Fx.MONSTER_ASLEEP_ALPHA, view.alphas.min()])
+		t.ok(view.alphas.max() > 0.99,
+			"같은 프레임에서 깨어 있는 몹 몸통은 그대로 그린다 (가장 진한 값 %.3f)" % view.alphas.max())
+	if view.outline_alphas.size() > 0:
+		t.ok(absf(view.outline_alphas.min() - Fx.MONSTER_ASLEEP_ALPHA) < 0.01,
+			"**테두리도 같이** 흐려진다 — 몸통만 흐리면 크림색 실루엣만 남는다 (가장 흐린 값 %.3f)"
+			% view.outline_alphas.min())
+
+	# The player walks in — inside the stir band.
+	ch.place(mob_x, SYN_FLOOR_TOP - Character.H_PX)
+	_frames(world, Tuning.TICK_DIVIDER)
+	t.ok(not placed.asleep, "표 행이 깨어났다 (전제)")
+
+	var want := MonsterView.box_rect(placed.kind, placed.x, placed.y).get_center()
+	want.y -= Fx.MONSTER_WAKE_MARK_LIFT_PX
+	view.alphas.clear()
+	view.outline_alphas.clear()
+	await t.pump_frames(1)
+	if view.alphas.size() > 0:
+		t.ok(view.alphas.min() > 0.99,
+			"깨어난 뒤에는 흐린 몸통이 하나도 없다 (가장 흐린 값 %.3f)" % view.alphas.min())
+	if view.outline_alphas.size() > 0:
+		t.ok(view.outline_alphas.min() > 0.99,
+			"테두리도 마찬가지다 (가장 흐린 값 %.3f)" % view.outline_alphas.min())
+	t.eq(view.centers.size(), 1, "깨어난 그 프레임에 정확히 한 번 그린다 (%d번)" % view.centers.size())
+	if view.centers.size() > 0:
+		t.eq(view.centers[0], want, "그 몹 자신의 자리 바로 위에 그린다 (%s)" % want)
+		t.eq(view.ages[0], 0.0, "그리고 그 순간의 나이는 0이다 (막 태어난 표시다)")
+
+	# It ages instead of re-firing: one stir, one mark, and the mark moves through its own life.
+	await t.pump_frames(1)
+	t.eq(view.centers.size(), 2, "다음 프레임에도 같은 표시 하나를 계속 그린다")
+	if view.ages.size() > 1:
+		t.ok(view.ages[1] > view.ages[0], "나이가 늘어난다 (%f -> %f)" % [view.ages[0], view.ages[1]])
+	t.eq(view.wake_mark_count(), 1, "표시는 여전히 하나뿐이다 (깨어남 한 번 = 표시 한 개)")
+
+	t.root.remove_child(view)
+	view.queue_free()
 
 
 ## **S7, half 1 — the wake scan's position relative to the death-removal loop was an unmeasured comment.**

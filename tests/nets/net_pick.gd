@@ -584,7 +584,11 @@ func _no_pushed_out_glyph_is_stashed_anywhere(t) -> void:
 		#  discipline `_reward_pending`'s own comment names: a record of which runes have been granted, not a
 		#  glyph that left a spell layer, so it is not what this file's no-inventory check exists to catch
 		#  (`docs/decisions/no-inventory.md`'s own exception for exactly this field).
-		"res://src/actor/progress.gd": ["_drawn", "_owned_runes", "_reward_pending"],
+		# **`_unlocked` (`research-bench-unlocks.md`) added here, deliberately, and not by widening the regex
+		#  to miss it** — a set of what has been bought at the research bench, keyed by `UnlockDefs` id. The
+		#  same argument `_owned_runes` one line up already makes: it is a record of a purchase, not of a
+		#  glyph that left a spell layer, which is what this file's no-inventory check exists to catch.
+		"res://src/actor/progress.gd": ["_drawn", "_owned_runes", "_reward_pending", "_unlocked"],
 		"res://src/actor/spell_circle.gd": ["_layers", "_runes"],
 		"res://src/actor/world_step.gd": ["_died_kind", "_died_x", "_died_y", "_monsters", "_queue"],
 		# **`monster_placement.gd` added here, deliberately** (`docs/plans/3.done/
@@ -610,8 +614,14 @@ func _no_pushed_out_glyph_is_stashed_anywhere(t) -> void:
 		#  **monster id** and hold a frame counter, and `_anim_sheets` is loaded art; none of them is a record
 		#  of a glyph that left a spell layer, which is what this file's no-inventory check exists to catch.
 		"res://src/view/monster_view.gd": [
+			# **`_prev_asleep`/`_wake_marks` are in this list deliberately** — the waking presentation
+			#  (`left-run-clumps-and-platforms.md`, Screen). One is a per-id previous-frame bool, the exact
+			#  shape `_prev_hp`/`_prev_reload` already are; the other is a list of short-lived view
+			#  effects, the exact shape `_death_pops` is. Neither is a glyph that left a spell layer.
+			#  **Sorted** — this check compares the two lists as sorted arrays.
 			"_anim", "_anim_sheets", "_attack_left", "_corpses", "_death_pops", "_dmg_numbers",
-			"_flash_left", "_hurt_left", "_prev_hp", "_prev_reload", "_prev_x", "_sheets",
+			"_flash_left", "_hurt_left", "_prev_asleep", "_prev_hp", "_prev_reload", "_prev_x",
+			"_sheets", "_wake_marks",
 		],
 		"res://src/view/spell_view.gd": ["_bolt_tex", "_trails"],
 		# **`_seats` added here, deliberately** — the town's three fixture positions, read once out of

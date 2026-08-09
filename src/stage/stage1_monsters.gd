@@ -1,8 +1,13 @@
 extends RefCounted
-## Stage 1's monster placement table — `docs/plans/3.done/monster-placement-stage1.md`, Stage A.
+## Stage 1's monster placement table — `docs/plans/3.done/monster-placement-stage1.md`, Stage A, re-authored
+## for `left-run-clumps-and-platforms.md` (the left run cut by 100 columns, the even
+## sprinkle replaced by 3 clumps).
 ## `(tx, kind)` rows only. **`y` is never written down** — `MonsterPlacement` (`src/actor/`) finds the
 ## ground by scanning **up** from the map's bottom row at wake time, so a terrain redraw cannot rot a
 ## hand-typed `y` (the doc's own §1: "hand-written y values silently rot the moment a slope moves").
+## **That is also what puts a row on a shelf**: a stone shelf is solid to the ground, so the upward scan
+## climbs straight through it and stops on its top surface (`left-run-clumps-and-platforms.md` §4) — a row
+## whose `tx` lands inside a shelf's tile span resolves onto the shelf with no new column in this table.
 ##
 ## **`src/actor/` cannot preload this file** (`net_layers`) — `stage.gd._build_room()` reads `ROWS`/
 ## `FLOOR_CY` and hands them down through `WorldStep.set_placement()`, the same "shell pushes it in"
@@ -23,100 +28,122 @@ const FLOOR_CY: int = TerrainMap.MAP_H * Tuning.TILE_CELLS - 1
 ## Sorted by `tx` — the gap rule and the wake scan both assume it (`monster_placement.gd`'s own header
 ## on why an unsorted table would make "adjacent" meaningless).
 ##
-## **Why the pre-① total is 20, not the design doc's original 24** (its own "What the user has to
-## decide", item 1): `net_monster._defs_accessors` asserts `MonsterDefs.MAX_MONSTERS == 20` as a literal,
-## and 24 rows all wakeable by the time a player who kills nothing reaches ① (activation half-width
-## 720px, well inside every zone's own width) would refuse the last 4 with **no error at all** — not a
-## crash, just monsters that quietly never appear. **The user's call**: cut to ≤20 rather than raise the
-## cap. **One row cut from each of the four pre-① zones, not a whole zone deleted** — deleting a zone
-## would either break the teaching order (pig -> hen -> wolf) or erase a zone's own rhythm; a single row
-## per zone keeps both. **The row that first introduces a kind into the run is never the one cut** — a
-## pig alone, then pig+hen, then pig+wolf still happens in exactly that order, only slightly thinner.
-## Cut, one each: a pig from Warm-up A, a pig from Warm-up B, a wolf from Warm-up C, a hen from Approach.
+## ══ Pre-① is **18 rows in 3 clumps**, not 20 evenly sprinkled ══
+## (`left-run-clumps-and-platforms.md` §3/§6. The old 4-zone sprinkle is gone with the 100 columns it
+##  lived on — every pre-① `tx` below is new, not shifted.)
 ##
-## **Zone ② (real usable range 290–344, not the design doc's 290–355 — spec's own correction: 345–355
-## sits under room ③'s roof, `ty12`, not on ②'s own floor) is placed here, fully, and stays dormant in
-## this build.** The step from ①'s pit floor (`ty32`) to ②'s shelf (`ty26`) is 6 tiles against a
-## 3.375-tile jump (`character.gd:91-92`) — not walkable in a normal run until
-## `docs/plans/2.active/water-jump-and-escape.md` lands. **Placed anyway, per the user's call**
-## ("user decision 3" in the same plan doc): there is no reason to ever reopen this table again once
-## that door opens — the rows simply start waking the day a player can reach them.
+## **Clump territory is `x14–89`** — the retained flat minus the `0–10` opening. Each clump is 6 rows:
+##  2 on the ground of the approach, 4 on an 11-tile `STONE` shelf 2 tiles up whose east end carries the
+##  clump's one hen.
 ##
-## **Bosses ride this same table** — the user's call ("user decision 2"): the rooster has to be
-## reachable through ordinary play, not only the debug `C` key, or the stage's own ending stays behind a
-## door nobody in a normal run ever presses. Coordinates below are read from measured map data, not
-## invented:
-##  · **bull, `tx245`** — room ① is `x230–259`, floor `ty32`, flat, measured directly by walking a bot
-##    through it (`stage1-map-layout.md`, "값으로 확인"). `tx245` sits mid-room, clear of the left 2-tile
-##    step at `x229/230` and the right 6-tile rise at `x260`.
-##  · **rooster, `tx358`** — room ③'s exact tile bounds are not separately re-measured here (the map
-##    doc's own `x360–380` is stated as approximate, "좌표는 대략값이다"), but this plan's own spec pass
-##    computed the real terrain profile of `terrain_map_generated.gd` directly and found `tx345–368`
-##    sitting under the room's roof (solid at `ty12`) with `tx350` resolving to floor `ty25` (surface
-##    `ty24`) — **inside the room, not on the roof**. `tx358` sits inside that same confirmed span,
-##    clear of both `tx345` and `tx368`'s edges.
+## | clump | rows | shelf tiles | mix | XP |
+## |---|---|---|---|---|
+## | A | `tx14–29` | `x20–30` | 6 pig | 72 |
+## | B | `tx45–60` | `x51–61` | 4 pig · 2 hen | 60 |
+## | C | `tx73–88` | `x79–89` | 1 pig · 3 hen · 2 wolf | 60 |
 ##
-## **Totals**: pre-① 11 pigs · 7 hens · 2 wolves = 20 · ① 1 bull · ② (dormant) 6 pigs · 4 hens · 2 wolves
-## = 12 · ③ 1 rooster. 34 rows.
+## **Every clump is worth ≥60 XP on its own** (§6's invariant — one engagement levels you; `net_monster_
+## placement` measures it by grouping these rows and summing `xp_of`). Total 192.
+##
+## **Two numbers in the design doc do not survive contact with this table, and both are its own examples:**
+##  · **"~189 XP" is unreachable.** A pig-only first clump of 6 is 72 by arithmetic, and ≥60 each for the
+##    other two floors the run at **192**. 192 is the minimum, and it is unique: `4 pig · 2 hen` and
+##    `1 pig · 3 hen · 2 wolf` are the only 6-row mixes that hit exactly 60.
+##  · **"a clump's footprint is its shelf, ~11 tiles" does not hold.** §3's own 3-tile authoring gap
+##    (`monster-placement-stage1.md` §3) makes 6 rows **15 tiles** wide at the very least, and the 4 that
+##    fit on an 11-tile shelf leave 2 for the ground west of it. ⇒ **clumps are 16 tiles, gaps 15 and 12.**
+##
+## **The one hen per shelf is a hard limit, not a taste**: §8 requires **≥240px (7.5 tiles) of shelf west
+##  of a shelf hen** (a stirred hen walks until it is `BOLT_STOP_PX` from the player and would otherwise
+##  step off its own west edge), so on an 11-tile shelf only the easternmost slot qualifies. Clump B's and
+##  C's remaining hens stand on the ground.
+##
+## **Clump A's shelf carries no hen at all** — §6's teaching order is `pig alone -> pig+hen -> pig+wolf`,
+##  so the first clump the player ever meets is pigs and nothing else. Its shelf is the uncontested one:
+##  it teaches the hop before anything shoots back.
+##
+## **No clump on the stairs** (§7) and **no shelf under the floating bedrock slab at `tx49–50`** (§9) —
+##  clump B's shelf starts at `x51`, one tile clear of it, which is why the two quiet gaps came out uneven.
+##
+## ══ East of the cut: every `tx` shifted **-100** and nothing else changed ══
+##
+## **Zone ② (usable range 190–244 after the cut — 245–255 sits under room ③'s roof, `ty12`, not on ②'s own
+## floor) stays dormant in this build.** The step from ①'s pit floor (`ty32`) to ②'s shelf (`ty26`) is 6
+## tiles against a 3.375-tile jump (`character.gd:91-92`) — not walkable in a normal run until
+## `water-jump-and-escape.md` lands. **Placed anyway, per the user's call**
+## ("user decision 3" in the same plan doc): the rows simply start waking the day a player can reach them.
+##
+## **Bosses ride this same table** — the user's call ("user decision 2"): the rooster has to be reachable
+## through ordinary play, not only the debug `C` key. Both are also what `spawn_monster`'s boss reserve
+## counts (`world_step.gd`, §5) — **the reserve is the number of boss rows in this table, derived, so
+## adding a boss row here needs no second edit anywhere.**
+##  · **bull, `tx145`** (was 245) — room ① is `x130–159`, floor `ty32`, flat. Mid-room, clear of the left
+##    2-tile step at `x129/130` and the right 6-tile rise at `x160`.
+##  · **rooster, `tx258`** (was 358) — room ③'s confirmed span is `x245–268`, under its own roof.
+##
+## **Totals**: pre-① 11 pigs · 5 hens · 2 wolves = 18 · ① 1 bull · ② (dormant) 6 pigs · 4 hens · 2 wolves
+## = 12 · ③ 1 rooster. 32 rows. **Boss rows: 2** — that is `spawn_monster`'s reserve.
 const ROWS: Array[Dictionary] = [
-	# -- Warm-up A (10-60): pig alone. The first mob the player ever meets. --
+	# ══ Clump A (tx14-29, shelf x20-30): pig alone. The first mobs the player ever meets. ══
+	#  Two on the approach ground, four on the shelf — the shelf four walk west and drop off it, which is
+	#  the "우르르" arrival the user asked for.
+	{"tx": 14, "kind": MonsterDefs.KIND_PIG},
+	{"tx": 17, "kind": MonsterDefs.KIND_PIG},
 	{"tx": 20, "kind": MonsterDefs.KIND_PIG},
+	{"tx": 23, "kind": MonsterDefs.KIND_PIG},
+	{"tx": 26, "kind": MonsterDefs.KIND_PIG},
+	{"tx": 29, "kind": MonsterDefs.KIND_PIG},
+
+	# ══ Clump B (tx45-60, shelf x51-61): the hen's first appearance. ══
+	#  `tx60` is the shelf's east-end hen — 9 tiles (288px) of shelf west of it, past §8's 240px.
+	#  The second hen stands on the ground at `tx48`, two tiles clear of the bedrock slab at `x49-50`.
 	{"tx": 45, "kind": MonsterDefs.KIND_PIG},
+	{"tx": 48, "kind": MonsterDefs.KIND_HEN},
+	{"tx": 51, "kind": MonsterDefs.KIND_PIG},
+	{"tx": 54, "kind": MonsterDefs.KIND_PIG},
+	{"tx": 57, "kind": MonsterDefs.KIND_PIG},
+	{"tx": 60, "kind": MonsterDefs.KIND_HEN},
 
-	# -- Warm-up B (60-130): the hen's first appearance. --
-	{"tx": 65, "kind": MonsterDefs.KIND_PIG},
-	{"tx": 72, "kind": MonsterDefs.KIND_HEN},
+	# ══ Clump C (tx73-88, shelf x79-89): the wolf's first appearance. The last fight before the stairs. ══
+	#  Shelf slots `79/82/85` are wolf·pig·wolf on purpose — only `tx88` has the 288px of shelf west of it
+	#  a hen needs, so the other two hens stay on the approach ground.
+	{"tx": 73, "kind": MonsterDefs.KIND_HEN},
+	{"tx": 76, "kind": MonsterDefs.KIND_HEN},
+	{"tx": 79, "kind": MonsterDefs.KIND_WOLF},
 	{"tx": 82, "kind": MonsterDefs.KIND_PIG},
-	{"tx": 92, "kind": MonsterDefs.KIND_HEN},
-	{"tx": 102, "kind": MonsterDefs.KIND_PIG},
-	{"tx": 112, "kind": MonsterDefs.KIND_HEN},
-	{"tx": 122, "kind": MonsterDefs.KIND_HEN},
+	{"tx": 85, "kind": MonsterDefs.KIND_WOLF},
+	{"tx": 88, "kind": MonsterDefs.KIND_HEN},
 
-	# -- Warm-up C (130-190): the wolf's first appearance. --
-	{"tx": 138, "kind": MonsterDefs.KIND_PIG},
-	{"tx": 148, "kind": MonsterDefs.KIND_WOLF},
-	{"tx": 160, "kind": MonsterDefs.KIND_PIG},
-	{"tx": 172, "kind": MonsterDefs.KIND_WOLF},
-	{"tx": 182, "kind": MonsterDefs.KIND_PIG},
+	# -- ① pit (130-159): the midboss. --
+	{"tx": 145, "kind": MonsterDefs.KIND_BULL},
 
-	# -- Approach to ① (190-230): slightly denser, the last stretch before the bull. --
-	{"tx": 196, "kind": MonsterDefs.KIND_PIG},
-	{"tx": 203, "kind": MonsterDefs.KIND_HEN},
-	{"tx": 211, "kind": MonsterDefs.KIND_PIG},
-	{"tx": 218, "kind": MonsterDefs.KIND_HEN},
-	{"tx": 224, "kind": MonsterDefs.KIND_PIG},
-	{"tx": 228, "kind": MonsterDefs.KIND_HEN},
-
-	# -- ① pit (230-259): the midboss. Room measured directly, not the map doc's approximate range. --
-	{"tx": 245, "kind": MonsterDefs.KIND_BULL},
-
-	# -- ② combat zone (290-344, the usable range only — 345-355 is room ③'s roof). Dormant until the
-	#  water escape lands; see the header above.
-	#  **`tx294`, not `tx290`** — measured directly (net_monster_placement, the real map): `285-292` sits
-	#  at `ty26` and `293-312` rises to `ty24`, a real 2-tile step at the `292/293` seam. A row resolved
-	#  from `292`'s own (lower) column spills its right edge into `293`'s already-solid, higher ground —
+	# -- ② combat zone (190-244, the usable range only — 245-255 is room ③'s roof). Dormant until the
+	#  water escape lands; see the header above. Every `tx` here is its old value minus 100.
+	#  **`tx194`, not `tx190`** — measured directly (net_monster_placement, the real map): `185-192` sits
+	#  at `ty26` and `193-212` rises to `ty24`, a real 2-tile step at the `192/193` seam. A row resolved
+	#  from `192`'s own (lower) column spills its right edge into `193`'s already-solid, higher ground —
 	#  `box_free` correctly refuses it as "no headroom". Starting the row inside the higher segment
-	#  (`294`, two tiles clear of the seam) avoids straddling it; the whole box then sits in one
+	#  (`194`, two tiles clear of the seam) avoids straddling it; the whole box then sits in one
 	#  uniform-height stretch instead of two. --
-	{"tx": 294, "kind": MonsterDefs.KIND_PIG},
-	{"tx": 297, "kind": MonsterDefs.KIND_HEN},
-	{"tx": 302, "kind": MonsterDefs.KIND_PIG},
-	{"tx": 307, "kind": MonsterDefs.KIND_WOLF},
-	# **`tx311`, not `tx312`** — verify-read's own finding, measured against the real map with
-	#  `resolve()`'s full-width footing check (added because of this exact row): `293-312` sits at `ty24`
-	#  and `313-330` drops to `ty27`, a real 3-tile fall at the `312/313` seam. The hen (48px = 1.5 tiles)
-	#  placed at `tx312` had its right edge hanging over `313`'s lower ground — 4 of its 12 footprint
-	#  cells with nothing solid under them. `tx311` keeps the whole box inside `293-312`'s own uniform
+	{"tx": 194, "kind": MonsterDefs.KIND_PIG},
+	{"tx": 197, "kind": MonsterDefs.KIND_HEN},
+	{"tx": 202, "kind": MonsterDefs.KIND_PIG},
+	{"tx": 207, "kind": MonsterDefs.KIND_WOLF},
+	# **`tx211`, not `tx212`** — verify-read's own finding, measured against the real map with
+	#  `resolve()`'s full-width footing check (added because of this exact row): `193-212` sits at `ty24`
+	#  and `213-230` drops to `ty27`, a real 3-tile fall at the `212/213` seam. The hen (48px = 1.5 tiles)
+	#  placed at `tx212` had its right edge hanging over `213`'s lower ground — 4 of its 12 footprint
+	#  cells with nothing solid under them. `tx211` keeps the whole box inside `193-212`'s own uniform
 	#  stretch, one tile clear of the seam.
-	{"tx": 311, "kind": MonsterDefs.KIND_HEN},
-	{"tx": 317, "kind": MonsterDefs.KIND_PIG},
-	{"tx": 322, "kind": MonsterDefs.KIND_HEN},
-	{"tx": 327, "kind": MonsterDefs.KIND_PIG},
-	{"tx": 332, "kind": MonsterDefs.KIND_WOLF},
-	{"tx": 337, "kind": MonsterDefs.KIND_HEN},
-	{"tx": 341, "kind": MonsterDefs.KIND_PIG},
-	{"tx": 344, "kind": MonsterDefs.KIND_PIG},
+	{"tx": 211, "kind": MonsterDefs.KIND_HEN},
+	{"tx": 217, "kind": MonsterDefs.KIND_PIG},
+	{"tx": 222, "kind": MonsterDefs.KIND_HEN},
+	{"tx": 227, "kind": MonsterDefs.KIND_PIG},
+	{"tx": 232, "kind": MonsterDefs.KIND_WOLF},
+	{"tx": 237, "kind": MonsterDefs.KIND_HEN},
+	{"tx": 241, "kind": MonsterDefs.KIND_PIG},
+	{"tx": 244, "kind": MonsterDefs.KIND_PIG},
 
-	# -- ③ boss room (confirmed span 345-368, under its own roof): the stage boss. --
-	{"tx": 358, "kind": MonsterDefs.KIND_ROOSTER},
+	# -- ③ boss room (confirmed span 245-268, under its own roof): the stage boss. --
+	{"tx": 258, "kind": MonsterDefs.KIND_ROOSTER},
 ]

@@ -18,10 +18,15 @@ const Progress := preload("res://src/actor/progress.gd")
 const STAGE_SCENE := "res://src/stage/stage.tscn"
 
 ## Room ③'s interior column range (`docs/plans/3.done/gate-ending-to-game.md`'s own "Confirmed" table:
-## "Room ③ interior x347-366"). Only used here, to place a character for the camera-window check below —
-## `stage_gate.gd` itself knows nothing about the room's own bounds, only the seat and the wall.
-const ROOM3_INTERIOR_X0 := 347
-const ROOM3_INTERIOR_X1 := 366
+## "Room ③ interior x347-366", **now x247-266**). Only used here, to place a character for the camera-window
+## check below — `stage_gate.gd` itself knows nothing about the room's own bounds, only the seat and the wall.
+##
+## **Every literal tile number in this file is -100 from what it was** — `left-run-clumps-and-platforms.md`
+##  §1 deleted map columns x2-101, so `get_used_rect()` re-origined the bake and room ③ moved with it.
+##  **They stay literals on purpose** (verify-read, H5, below): a number read back out of `stage_gate.gd`
+##  shrinks with whatever it is supposed to be catching.
+const ROOM3_INTERIOR_X0 := 247
+const ROOM3_INTERIOR_X1 := 266
 
 ## A `GateView` that counts its own `_draw()` calls — `net_frame_runner.gd`'s own `_CountingBox` technique,
 ## applied to the real production class instead of a stand-in, by subclassing and calling `super()`.
@@ -37,19 +42,28 @@ class _CountingGateView extends GateView:
 		draw_count += 1
 
 
-## **Overrides `_paint`, not the native `draw_texture_rect`** — GDScript refuses to let a script override a
-## method from a native class (`draw_texture_rect()` overrides a method from native class "CanvasItem" is a
-## hard parse error here, measured directly, not a warning) — that path is closed. `gate_view._paint` is a
-## small ordinary script method `_draw()` calls instead, added for exactly this seam, so this subclass can
-## catch the texture and rect `_draw()` decided to hand it without touching the engine at all. This is what
-## answers "does `_draw()` draw the arch, at the right spot, with the right picture" — `_CountingGateView`
-## above only answers "does the engine call `_draw()` at all", which stayed true in verify-read's own
-## inversion (H2) even with the real draw call deleted.
+## **Overrides `_paint_arch`, not the native `draw_texture_rect`** — GDScript refuses to let a script override
+## a method from a native class (`draw_texture_rect()` overrides a method from native class "CanvasItem" is a
+## hard parse error here, measured directly, not a warning) — that path is closed. `gate_view._paint_arch` is
+## a small ordinary script method `_draw()` calls instead, added for exactly this seam, so this subclass can
+## catch the texture, rect **and modulate** `_draw()` decided to hand it without touching the engine at all.
+## This is what answers "does `_draw()` draw the arch, at the right spot, with the right picture" —
+## `_CountingGateView` above only answers "does the engine call `_draw()` at all", which stayed true in
+## verify-read's own inversion (H2) even with the real draw call deleted.
+##
+## **The override's name is load-bearing, not cosmetic.** `stage-clear-sequence.md`'s step 6 says the hand
+## called `_draw()` below is safe "because `_paint_arch` is `_draw()`'s only drawing call" — that holds *only
+## while this subclass overrides the current name.* Renamed in `gate_view.gd` and not here, the override goes
+## orphan, `_draw()` reaches the real `draw_texture_rect` on an untreed node, and the engine barks
+## "Drawing is only allowed inside this node's `_draw()`" — 9 undeclared stderr lines, which the wrapper's
+## silence check turns into a failed round for **every** net, not just this one. Measured, not predicted.
 class _CapturingGateView extends GateView:
 	var calls := 0
 	var last_texture: Texture2D = null
 	var last_rect := Rect2()
-	func _paint(tex: Texture2D, r: Rect2) -> void:
+	var last_tint := Color()
+	func _paint_arch(tex: Texture2D, r: Rect2, arch_tint: Color) -> void:
+		last_tint = arch_tint
 		calls += 1
 		last_texture = tex
 		last_rect = r
@@ -77,6 +91,13 @@ func run(t) -> void:
 	await _draw_actually_runs_once_treed_and_pumped(t)
 	_the_draw_call_actually_paints_the_arch_texture_at_its_rect(t)
 	_the_arch_is_inside_the_camera_window_only_from_the_rooms_east_half(t)
+	# -- The clear sequence — the beats (`docs/plans/1.ready/stage-clear-sequence.md`) --
+	_the_wall_falling_kicks_the_camera_and_it_settles_back(t)
+	_the_tint_curve_walks_from_transparent_to_opaque_to_the_flare(t)
+	_the_drawn_tint_is_the_one_the_counters_decided(t)
+	_the_shell_actually_turns_the_take_clock(t)
+	_the_panel_opens_on_exactly_the_take_frames_th_frame(t)
+	_one_frame_on_the_seat_is_enough_the_take_latches(t)
 	# -- Stage D — the ending --
 	_standing_on_the_seat_before_the_kill_does_nothing(t)
 	_standing_on_the_seat_after_the_kill_ends_the_run(t)
@@ -100,12 +121,12 @@ func run(t) -> void:
 ## the town's spawn tile.
 ##
 ## **Measured inversion — this check alone does not pin the seat's *column*.** `SEAT_TILE_X` mutated to
-## 384 (still inside the same flat, open floor) leaves this check green: x384 is standing ground too, so
+## 284 (still inside the same flat, open floor) leaves this check green: x284 is standing ground too, so
 ## "is it standing ground" cannot tell "the right tile" from "a tile on the same floor", and
 ## `_the_walk_from_the_room_to_the_seat_has_no_drop` below does not catch it either (its tile numbers are
 ## hardcoded, not read from `SEAT_TILE_X`). **What does catch it, measured**:
-## `_the_arch_is_inside_the_camera_window_only_from_the_rooms_east_half` (Stage C, below) — a seat at 384
-## sits 308px outside the camera's own window while 370 sits inside it. Pinning the exact column was
+## `_the_arch_is_inside_the_camera_window_only_from_the_rooms_east_half` (Stage C, below) — a seat at 284
+## sits 308px outside the camera's own window while 270 sits inside it. Pinning the exact column was
 ## verify-look's job before that check existed; now it is a value this suite measures too.
 func _the_seat_is_standing_ground_on_the_real_map(t) -> void:
 	var g := CellGrid.new()
@@ -147,28 +168,28 @@ func _the_east_wall_is_stone_not_bedrock(t) -> void:
 ## the rows that fall outside the new (wrong) rect are never looked at. Measured: `WALL_TILE_Y0` mutated 13
 ## -> 21 left eight full rows (13-20) of stone floating over the doorway with nothing red anywhere, because
 ## both the check above and Stage B's own drop-check read the same shrunken rect. This one hardcodes the
-## design doc's own confirmed numbers (367/368, rows 13-24) so a shrunk rect has nothing left to hide behind.
+## design doc's own confirmed numbers (267/268, rows 13-24) so a shrunk rect has nothing left to hide behind.
 func _the_wall_tiles_are_stone_by_literal_tile_number(t) -> void:
 	var g := CellGrid.new()
 	Stage.build_terrain_into(g)
 	var tc := Tuning.TILE_CELLS
 	var not_stone := 0
 	for ty in range(13, 25):  # rows 13..24 inclusive
-		for tx in [367, 368]:
+		for tx in [267, 268]:
 			for dy in tc:
 				for dx in tc:
 					if g.mat_at(tx * tc + dx, ty * tc + dy) != Mat.STONE:
 						not_stone += 1
 	t.eq(not_stone, 0,
-		"동벽 타일 367·368의 13~24번 줄 전체가 돌이다 (리터럴 타일 번호로 잰다 — 어긋난 칸 %d개)" % not_stone)
+		"동벽 타일 267·268의 13~24번 줄 전체가 돌이다 (리터럴 타일 번호로 잰다 — 어긋난 칸 %d개)" % not_stone)
 
 
 ## The ground either side of the (still-standing) wall has no drop — row 25 solid, row 24 clear — so that
 ## once Stage B takes the wall down, the walk from the room out to the seat is flat with nothing else to fix.
 ##
-## **x367/368 (the wall's own columns) are deliberately not in this range.** They are solid stone through row
+## **x267/268 (the wall's own columns) are deliberately not in this range.** They are solid stone through row
 ## 24 right now (check 2, above) — asserting "row 24 clear" there as well would contradict check 2, not
-## extend it. That fact belongs to Stage B's own check (`_the_walk_out_is_flat_after_the_drop`, x366..x370,
+## extend it. That fact belongs to Stage B's own check (`_the_walk_out_is_flat_after_the_drop`, x266..x270,
 ## measured *after* a real death opens the wall) — this check is the premise that everything **outside** the
 ## wall was already flat before that.
 func _the_walk_from_the_room_to_the_seat_has_no_drop(t) -> void:
@@ -176,14 +197,14 @@ func _the_walk_from_the_room_to_the_seat_has_no_drop(t) -> void:
 	Stage.build_terrain_into(g)
 	var tc := Tuning.TILE_CELLS
 	var drop := 0
-	for tx: int in [366, 369, 370]:
+	for tx: int in [266, 269, 270]:
 		var cx := tx * tc + tc / 2
 		if not g.is_solid(cx, 25 * tc + tc / 2):
 			drop += 1
 		if g.is_solid(cx, 24 * tc + tc / 2):
 			drop += 1
 	t.eq(drop, 0,
-		"방 안쪽 끝(366)과 벽 너머 땅(369-370)에 턱이 없다 (25번 줄 바닥·24번 줄 빈칸, 어긋난 타일 %d개)" % drop)
+		"방 안쪽 끝(266)과 벽 너머 땅(269-270)에 턱이 없다 (25번 줄 바닥·24번 줄 빈칸, 어긋난 타일 %d개)" % drop)
 
 
 ## `at()` must fire exactly at the seat and refuse everywhere else that matters: past the reach band, above
@@ -198,7 +219,7 @@ func _at_fires_only_at_the_seat_and_nowhere_else(t) -> void:
 		"위 밴드 끝까지는 게이트다")
 	t.ok(not StageGate.at(Vector2(StageGate.seat_px(), StageGate.floor_y_px() - StageGate.BAND_UP_PX - 1.0)),
 		"위 밴드를 한 칸 넘으면 아니다")
-	# **The roof case.** x370은 0~24번 줄이 통째로 뚫려 있으므로, y밴드가 없으면 지붕 위에 떠 있어도 참이 된다.
+	# **The roof case.** x270은 0~24번 줄이 통째로 뚫려 있으므로, y밴드가 없으면 지붕 위에 떠 있어도 참이 된다.
 	t.ok(not StageGate.at(Vector2(StageGate.seat_px(), 5.0 * StageGate.TILE_PX)),
 		"같은 x라도 지붕 위(5번 줄)에서는 게이트가 아니다 (y밴드가 하는 일)")
 	# The town's own departure-gate seat — a wholly different x, on the same predicate.
@@ -269,7 +290,7 @@ func _a_real_rooster_death_opens_the_wall(t) -> void:
 ## **Literal tile numbers, not `wall_cells()`** (verify-read, H5 — the companion to the pre-drop literal
 ## check above). The production drop code (`stage.gd`'s `_on_ticked()`) also reads `wall_cells()`, so a
 ## shrunk `WALL_TILE_Y0`/`Y1` shrinks the carved rectangle *and* every check built on the same rect together —
-## rows left outside a wrong rect stay solid and nothing sees it. This hardcodes 367/368, rows 13-24 instead.
+## rows left outside a wrong rect stay solid and nothing sees it. This hardcodes 267/268, rows 13-24 instead.
 func _the_wall_tiles_are_open_by_literal_tile_number_after_the_kill(t) -> void:
 	var root := _wired_root(t)
 	if root == null:
@@ -284,11 +305,11 @@ func _the_wall_tiles_are_open_by_literal_tile_number_after_the_kill(t) -> void:
 	var tc := Tuning.TILE_CELLS
 	var still_solid := 0
 	for ty in range(13, 25):
-		for tx in [367, 368]:
+		for tx in [267, 268]:
 			if g.is_solid(tx * tc + tc / 2, ty * tc + tc / 2):
 				still_solid += 1
 	t.eq(still_solid, 0,
-		"동벽 타일 367·368의 13~24번 줄 전체가 뚫렸다 (리터럴 타일 번호로 잰다 — 여전히 막힌 타일 %d개)" % still_solid)
+		"동벽 타일 267·268의 13~24번 줄 전체가 뚫렸다 (리터럴 타일 번호로 잰다 — 여전히 막힌 타일 %d개)" % still_solid)
 	root.free()
 
 
@@ -307,7 +328,7 @@ func _the_walk_out_is_flat_after_the_drop(t) -> void:
 	var g: Variant = root.get("_grid")
 	var tc := Tuning.TILE_CELLS
 	var drop := 0
-	for tx in range(366, 371):
+	for tx in range(266, 271):
 		var cx := tx * tc + tc / 2
 		if not g.is_solid(cx, 25 * tc + tc / 2):
 			drop += 1
@@ -397,10 +418,11 @@ func _the_arch_is_invisible_before_the_kill_and_visible_after(t) -> void:
 
 
 ## `GateView.rect()` pinned to the exact number the design doc derives by hand (`seat_px() - w/2`,
-## `floor_y_px() - h`, `w/h` from the town's own fixture table x2 zoom) — 72x88 at (11820, 712).
+## `floor_y_px() - h`, `w/h` from the town's own fixture table x2 zoom) — 72x88 at (8620, 712).
+## **-3200px from what it was** — the seat moved 100 tiles west with the cut (the header's own note).
 func _the_drawn_rect_is_where_the_arch_belongs(t) -> void:
 	var r := GateView.rect()
-	t.eq(r, Rect2(11820.0, 712.0, 72.0, 88.0), "아치 사각형이 정확히 그 자리다 (72x88 at 11820,712)")
+	t.eq(r, Rect2(8620.0, 712.0, 72.0, 88.0), "아치 사각형이 정확히 그 자리다 (72x88 at 8620,712)")
 	t.eq(r.end.y, StageGate.floor_y_px(), "아치의 밑변이 바닥선과 정확히 같다 (뜨지도 파묻히지도 않는다)")
 
 
@@ -455,6 +477,57 @@ func _the_draw_call_actually_paints_the_arch_texture_at_its_rect(t) -> void:
 	t.eq(view.calls, 1, "_draw()가 draw_texture_rect를 정확히 한 번 부른다")
 	t.ok(view.last_texture != null, "그리고 실제 텍스처를 넘긴다 (null이 아니다)")
 	t.eq(view.last_rect, GateView.rect(), "그리고 정확히 아치의 자리(rect())에 그린다")
+	# **The modulate comes from the counters, not from a literal white** — a fresh view has both at 0, so the
+	#  arch starts fully transparent. Hardcode `Color.WHITE` in `_draw()` and this is the line that goes red.
+	t.eq(view.last_tint, GateView.tint(0, 0), "그리고 색조를 두 시계에서 뽑아 넘긴다 (흰색 상수가 아니다)")
+	t.eq(view.last_tint.a, 0.0, "아직 한 프레임도 안 흘렀으니 완전 투명이다 (튀어나오지 않는다)")
+	view.free()
+
+
+## **Beats 2 and 3 as a pure curve, walked by value** — no scene, no tree. The three points that carry the
+## whole shape: nothing at the start, fully opaque once the fade is done, and exactly the flare colour once
+## the take is done.
+func _the_tint_curve_walks_from_transparent_to_opaque_to_the_flare(t) -> void:
+	t.eq(GateView.tint(0, 0).a, 0.0, "죽은 직후 0프레임째엔 아치가 완전 투명이다 (튀어나오지 않는다)")
+	t.eq(GateView.tint(Fx.GATE_ARCH_FADE_FRAMES, 0).a, 1.0,
+		"%d프레임이면 완전히 떠오른다" % Fx.GATE_ARCH_FADE_FRAMES)
+	t.ok(GateView.tint(Fx.GATE_ARCH_FADE_FRAMES / 2, 0).a > 0.0
+			and GateView.tint(Fx.GATE_ARCH_FADE_FRAMES / 2, 0).a < 1.0,
+		"중간엔 중간값이다 (0에서 1로 한 프레임에 건너뛰지 않는다)")
+	t.eq(GateView.tint(Fx.GATE_ARCH_FADE_FRAMES, Fx.GATE_TAKE_FRAMES), Fx.GATE_TAKE_TINT,
+		"데려가기가 끝나면 정확히 GATE_TAKE_TINT다 (아치가 밝아진다)")
+	# **Clamped past the end** — `_take` keeps climbing while the panel is open (nothing stops it until
+	#  `reset_gate()`), so the curve must not run past the flare into nonsense.
+	t.eq(GateView.tint(Fx.GATE_ARCH_FADE_FRAMES * 4, Fx.GATE_TAKE_FRAMES * 4), Fx.GATE_TAKE_TINT,
+		"한참 더 흘려도 그 색에 머문다 (넘어가지 않는다)")
+
+
+## **The curve through a real node, not only the pure function** (`stage-clear-sequence.md`, step 6).
+## Without this, `_paint_arch(_tex, rect(), Color.WHITE)` hardcoded in `_draw()` leaves the pure-function
+## check above entirely green — the value would be measured and the wiring would not.
+##
+## The hand-called `_draw()` is safe here **only because `_paint_arch` is `_draw()`'s one drawing call** and
+## this subclass overrides it, so nothing native runs (this file's own `_CapturingGateView` header records
+## what happens when that stops being true).
+func _the_drawn_tint_is_the_one_the_counters_decided(t) -> void:
+	var pr := Progress.new()
+	pr.set_boss_reward_pending(MonsterDefs.KIND_ROOSTER)
+	var view := _CapturingGateView.new()
+	view.setup(pr)
+
+	# **Half the fade, so neither end of the curve can be mistaken for the answer** — at a full
+	#  `GATE_ARCH_FADE_FRAMES` the alpha is 1.0, which is also what a hardcoded white would give.
+	var n := Fx.GATE_ARCH_FADE_FRAMES / 2
+	for _i in n:
+		view.call("tick_gate", true)
+	t.eq(view.call("lit_frames"), n, "tick_gate()를 %d번 부르면 밝기 시계가 %d이다 (전제)" % [n, n])
+	t.eq(view.call("take_frames"), n, "데려가기 시계도 같이 %d이다 (전제)" % n)
+
+	view.call("_draw")
+	t.eq(view.calls, 1, "_draw()가 아치를 한 번 그린다 (전제)")
+	t.eq(view.last_tint, GateView.tint(n, n),
+		"그리고 실제로 넘기는 색조가 두 시계가 정한 그 값이다 (흰색을 박아넣으면 여기가 빨개진다)")
+	t.eq(view.last_rect, GateView.rect(), "자리는 그대로다 (색조만 움직인다)")
 	view.free()
 
 
@@ -463,9 +536,9 @@ func _the_draw_call_actually_paints_the_arch_texture_at_its_rect(t) -> void:
 ## read from `ProjectSettings`, the same source `stage.gd._process` itself reads at runtime — a resized
 ## window is what this avoids silently going stale against.
 ##
-## **Measured, not assumed: this is what makes `SEAT_TILE_X` actually matter.** Mutating it to 384 (still
+## **Measured, not assumed: this is what makes `SEAT_TILE_X` actually matter.** Mutating it to 284 (still
 ## inside the plan's own "check 1 alone is not enough" example) was tried by hand against this exact check —
-## the arch at 384 sits 308px outside the window computed below while 370 sits inside it, confirming the
+## the arch at 284 sits 308px outside the window computed below while 270 sits inside it, confirming the
 ## camera table (not the standing-ground check) is what would catch a seat moved elsewhere on the same floor.
 ##
 ## **Not "visible from anywhere in the room" — that claim is false and is not made here.** Room ③'s interior
@@ -538,7 +611,11 @@ func _standing_on_the_seat_after_the_kill_ends_the_run(t) -> void:
 		root.call("_physics_process", 1.0 / 60.0)
 	var ch: Variant = root.get("_char")
 	ch.place(int(StageGate.seat_px() - float(Character.W_PX) * 0.5), int(StageGate.floor_y_px()) - Character.H_PX)
-	root.call("_physics_process", 1.0 / 60.0)
+	# **`GATE_TAKE_FRAMES` frames, derived — never a literal** (`stage-clear-sequence.md`, Beat 3). The arch
+	#  now takes ~0.4s instead of opening the panel on the first frame of contact. Which frame exactly is
+	#  `_the_panel_opens_on_exactly_the_take_frames_th_frame` below; this one only needs it to have opened.
+	for _i in Fx.GATE_TAKE_FRAMES:
+		root.call("_physics_process", 1.0 / 60.0)
 	var settlement: Variant = root.get("_settlement")
 	t.ok(bool(settlement.call("is_showing")), "수탉이 죽은 뒤 자리에 서면 정산 화면이 연다")
 	t.ok(bool(settlement.visible), "그리고 실제 Control.visible도 켜진다")
@@ -561,7 +638,14 @@ func _it_opens_exactly_once_over_two_hundred_frames(t) -> void:
 		root.call("_physics_process", 1.0 / 60.0)
 	var ch: Variant = root.get("_char")
 	ch.place(int(StageGate.seat_px() - float(Character.W_PX) * 0.5), int(StageGate.floor_y_px()) - Character.H_PX)
-	root.call("_physics_process", 1.0 / 60.0)  # This is the opening frame — `_frames` becomes 1 inside it.
+	# **The drive changes; the 200 does not.** The take delay means the panel no longer opens on the frame the
+	#  character is placed — it opens on the **last** of these `GATE_TAKE_FRAMES` frames, and `_frames` becomes
+	#  1 inside that one exactly as it used to, so the 199-frame loop below still lands on 200.
+	# **Deliberately not a new expected value.** An earlier draft of the plan predicted `176`, which is unsound:
+	#  increment-then-test gives 177 and test-then-increment 176, and hardcoding either is the same brittle
+	#  equality this check already broke on once.
+	for _i in Fx.GATE_TAKE_FRAMES:
+		root.call("_physics_process", 1.0 / 60.0)
 	var settlement: Variant = root.get("_settlement")
 	t.ok(bool(settlement.call("is_showing")), "정산 화면이 열렸다 (전제)")
 	for _i in 199:
@@ -646,15 +730,159 @@ func _the_button_closes_the_gate_panel_and_returns_to_town(t) -> void:
 		root.call("_physics_process", 1.0 / 60.0)
 	var ch: Variant = root.get("_char")
 	ch.place(int(StageGate.seat_px() - float(Character.W_PX) * 0.5), int(StageGate.floor_y_px()) - Character.H_PX)
-	root.call("_physics_process", 1.0 / 60.0)
+	for _i in Fx.GATE_TAKE_FRAMES:
+		root.call("_physics_process", 1.0 / 60.0)
 	var settlement: Variant = root.get("_settlement")
 	t.ok(bool(settlement.call("is_showing")), "정산 화면이 열렸다 (전제)")
+
+	var gate_view: Variant = root.get("_gate_view")
+	t.ok(int(gate_view.call("take_frames")) > 0, "돌아가기 전엔 데려가기 시계가 돌아 있었다 (전제)")
+	t.ok(int(gate_view.call("lit_frames")) > 0, "밝기 시계도 돌아 있었다 (전제)")
 
 	root.call("enter_town")
 	t.ok(not bool(settlement.call("is_showing")), "버튼(enter_town)을 실행하면 정산 화면이 닫힌다")
 	t.ok(bool(root.get("_in_town")), "그리고 마을로 돌아온다")
 	var pr: Variant = world.call("progress")
 	t.ok(not bool(pr.boss_died(MonsterDefs.KIND_ROOSTER)), "그리고 깃발도 지워진다 (다음 런이 갇히지 않는다)")
+	# **두 시계가 다 지워진다** (`stage-clear-sequence.md`, acceptance 8). `_lit`이 살아남는 건 꾸밈이 아니다 —
+	#  다음 런에서 아치가 한 프레임에 완전 불투명으로 튀어나오고, 다른 검사는 전부 초록으로 남는다.
+	t.eq(gate_view.call("take_frames"), 0, "그리고 데려가기 시계가 0으로 지워진다")
+	t.eq(gate_view.call("lit_frames"), 0, "밝기 시계도 같이 0으로 지워진다 (다음 런에서 아치가 안 튀어나온다)")
+	gate_view.call("_process", 0.0)
+	t.ok(not bool(gate_view.visible), "그리고 아치도 화면에서 사라진다")
+	root.free()
+
+
+## **Beat 1 — the wall coming down kicks the camera, and it settles back on its own.**
+## Two different claims, and a single non-zero reading would only make the first: "it shook" and "it stops
+## shaking" are measured separately, the same split `blast_fx`'s own shake checks already hold.
+##
+## `advance()` is driven by hand because `_wired_root` never trees the root, so `blast_fx._process` — the only
+## thing that would otherwise pass time — never runs. That is what leaves the kick sitting untouched here.
+func _the_wall_falling_kicks_the_camera_and_it_settles_back(t) -> void:
+	var root := _wired_root(t)
+	if root == null:
+		return
+	root.call("_leave_town")
+	var blast_fx: Variant = root.get("_blast_fx")
+	t.eq(blast_fx.call("shake_offset"), Vector2i.ZERO, "수탉이 죽기 전엔 화면이 안 흔들린다 (전제)")
+
+	var world: Variant = root.get("_world")
+	world.spawn_monster(MonsterDefs.KIND_ROOSTER, 400, 600)
+	world.monster_at(0).hp = 0
+	for _i in 10:
+		root.call("_physics_process", 1.0 / 60.0)
+	t.ok(bool(world.call("progress").boss_died(MonsterDefs.KIND_ROOSTER)), "수탉이 죽었다 (전제)")
+
+	blast_fx.call("advance", 0.01)
+	t.ok(blast_fx.call("shake_offset") != Vector2i.ZERO,
+		"동벽이 무너지자 화면이 실제로 흔들린다 (얻은 값 %s)" % blast_fx.call("shake_offset"))
+
+	blast_fx.call("advance", Fx.GATE_WALL_SHAKE_SECS + 0.1)
+	t.eq(blast_fx.call("shake_offset"), Vector2i.ZERO, "그리고 제 시간이 지나면 스스로 멎는다 (계속 안 떤다)")
+	root.free()
+
+
+## **The shell actually turns the take clock** (`stage-clear-sequence.md`, step 7). Every other take check
+## could pass with `tick_gate()`'s call site deleted from `_sync_settlement()`, because the view checks above
+## drive `tick_gate()` by hand. This is the one that reads the shell's own line.
+func _the_shell_actually_turns_the_take_clock(t) -> void:
+	var root := _wired_root(t)
+	if root == null:
+		return
+	root.call("_leave_town")
+	var world: Variant = root.get("_world")
+	world.spawn_monster(MonsterDefs.KIND_ROOSTER, 400, 600)
+	world.monster_at(0).hp = 0
+	for _i in 10:
+		root.call("_physics_process", 1.0 / 60.0)
+	var gate_view: Variant = root.get("_gate_view")
+	t.eq(gate_view.call("take_frames"), 0, "자리에 서기 전엔 데려가기 시계가 0이다 (전제)")
+	t.ok(int(gate_view.call("lit_frames")) > 0, "그런데 밝기 시계는 죽은 순간부터 이미 돌고 있다")
+
+	var ch: Variant = root.get("_char")
+	ch.place(int(StageGate.seat_px() - float(Character.W_PX) * 0.5), int(StageGate.floor_y_px()) - Character.H_PX)
+	root.call("_physics_process", 1.0 / 60.0)
+	t.eq(gate_view.call("take_frames"), 1,
+		"자리에 서서 물리 프레임 하나를 돌리면 무대가 실제로 시계를 1로 올린다 (_sync_settlement()의 tick_gate() 호출)")
+	root.free()
+
+
+## **The exact opening frame, counted — not "it eventually opens"** (`stage-clear-sequence.md`, step 8).
+##
+## **Derived from the constant, plus a literal floor.** The equality pins that the code obeys the tuning
+## value; the floor pins the tuning value itself, so shrinking `GATE_TAKE_FRAMES` to 1 or 2 — which would
+## delete beat 3 outright while leaving every other check here green — goes red.
+func _the_panel_opens_on_exactly_the_take_frames_th_frame(t) -> void:
+	t.ok(Fx.GATE_TAKE_FRAMES >= 12,
+		"데려가기가 최소 12프레임(0.2초)은 된다 — 상수 자체가 1~2로 줄면 여기가 빨개진다 (얻은 값 %d)"
+			% Fx.GATE_TAKE_FRAMES)
+
+	var root := _wired_root(t)
+	if root == null:
+		return
+	root.call("_leave_town")
+	var world: Variant = root.get("_world")
+	world.spawn_monster(MonsterDefs.KIND_ROOSTER, 400, 600)
+	world.monster_at(0).hp = 0
+	for _i in 10:
+		root.call("_physics_process", 1.0 / 60.0)
+	var ch: Variant = root.get("_char")
+	ch.place(int(StageGate.seat_px() - float(Character.W_PX) * 0.5), int(StageGate.floor_y_px()) - Character.H_PX)
+	var settlement: Variant = root.get("_settlement")
+	t.ok(not bool(settlement.call("is_showing")), "자리에 막 섰을 뿐, 아직 안 열렸다 (전제)")
+
+	# 1-based: the first frame inside the band is frame 1, which is what "increment first, then test" means.
+	var opened_on := -1
+	var stepped := 0
+	for i in range(Fx.GATE_TAKE_FRAMES * 2):
+		root.call("_physics_process", 1.0 / 60.0)
+		stepped += 1
+		if opened_on < 0 and bool(settlement.call("is_showing")):
+			opened_on = i + 1
+	t.eq(stepped, Fx.GATE_TAKE_FRAMES * 2, "루프가 실제로 %d프레임을 돌았다 (전제)" % (Fx.GATE_TAKE_FRAMES * 2))
+	t.eq(opened_on, Fx.GATE_TAKE_FRAMES,
+		"정확히 %d번째 프레임에 정산 화면이 열린다 (첫 프레임에 삼키지 않는다)" % Fx.GATE_TAKE_FRAMES)
+	root.free()
+
+
+## **The latch — measured as what survives the player leaving** (`stage-clear-sequence.md`, step 9).
+## At `MOVE_SPEED_PX` 260 a running player crosses the 96px band in ~22 frames, so a resettable hold near
+## `GATE_TAKE_FRAMES` would simply never complete and the ending would never fire. One frame of contact must
+## be enough.
+##
+## **Moved to `Stage.SPAWN_TILE`, not "the seat plus 400px"** — the one tile the shell itself guarantees is
+## standing ground (`_build_room()` stands the character there). A guessed offset east of a seat whose column
+## has already moved once is a fall waiting to happen, and a fall would fail this check for a reason that has
+## nothing to do with the latch — which is why `not downed` is asserted as an explicit premise below.
+func _one_frame_on_the_seat_is_enough_the_take_latches(t) -> void:
+	var root := _wired_root(t)
+	if root == null:
+		return
+	root.call("_leave_town")
+	var world: Variant = root.get("_world")
+	world.spawn_monster(MonsterDefs.KIND_ROOSTER, 400, 600)
+	world.monster_at(0).hp = 0
+	for _i in 10:
+		root.call("_physics_process", 1.0 / 60.0)
+	var ch: Variant = root.get("_char")
+	ch.place(int(StageGate.seat_px() - float(Character.W_PX) * 0.5), int(StageGate.floor_y_px()) - Character.H_PX)
+	root.call("_physics_process", 1.0 / 60.0)
+
+	var settlement: Variant = root.get("_settlement")
+	t.ok(not bool(settlement.call("is_showing")), "한 프레임만으로는 아직 안 열린다 (전제)")
+
+	# Off the seat entirely, onto the stage's own spawn tile — the run is now outrunning the take.
+	ch.place(Stage.SPAWN_TILE.x * Tuning.TILE_CELLS * Tuning.CELL_PX,
+		Stage.SPAWN_TILE.y * Tuning.TILE_CELLS * Tuning.CELL_PX)
+	t.ok(not StageGate.at(ch.center()), "이제 자리에서 완전히 벗어났다 (전제)")
+
+	for _i in Fx.GATE_TAKE_FRAMES:
+		root.call("_physics_process", 1.0 / 60.0)
+	t.ok(not bool(ch.downed), "가는 동안 쓰러지지 않았다 (전제 — 쓰러졌다면 아래가 빗장이 아니라 낙사로 빨개진다)")
+	t.ok(bool(settlement.call("is_showing")),
+		"자리에 한 프레임만 닿아도 끝까지 간다 (빗장 — 안 그러면 뛰어가는 플레이어는 엔딩을 영영 못 본다)")
+	t.ok(bool(settlement.get("_cleared")), "그리고 클리어로 기록된다 (자리를 떠났어도 죽음이 아니다)")
 	root.free()
 
 

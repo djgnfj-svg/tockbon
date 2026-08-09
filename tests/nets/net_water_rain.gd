@@ -84,16 +84,19 @@ func _water_scan(g: CellGrid, x0: int, y0: int, x1: int, y1: int) -> Array:
 
 ## The pit's mouth row (cells). Tile row 26 of `stage1-map-layout.md` = cell 208.
 const _PIT_ROW := 208
-## **The mouth's two ends (cells), inclusive** — tiles 214..259 of that row, the topmost fully enclosed span
+## **The mouth's two ends (cells), inclusive** — tiles 114..159 of that row, the topmost fully enclosed span
 ##  of the funnel that descends to the floor at tile row 32.
+##  **Re-derived, -100 tiles, when the left run was cut** (`left-run-clumps-and-platforms.md` §1): the cut
+##  deleted map columns x2-101, so `get_used_rect()` re-origined the whole bake and everything east of it
+##  moved left by 100 tiles = 800 cells. The vessel itself did not change one tile.
 ##
 ## **These three constants went stale once and the net went red for it — that is the system working, and the
 ##  fix is to re-derive them, never to loosen the check.** The map was repainted (312x126 -> 400x48) and
 ##  `_PIT_X0` 1888 kept pointing into open air; the two "there is a wall here" premises below are what said so.
 ##  To re-derive after a repaint: read `src/stage/terrain_map_generated.gd` and find the topmost row whose
 ##  open run is bounded by solid at both ends and has the floor below it. Multiply tiles by 8 for cells.
-const _MOUTH_X0 := 1712
-const _MOUTH_X1 := 2079
+const _MOUTH_X0 := 912
+const _MOUTH_X1 := 1279
 
 ## **The rain band is centred inside the mouth, not fitted to it.** It used to be assumed that the two were
 ##  the same width — `_PIT_X0 + WATER_RAIN_HALF_W * 2 - 1` was asserted to have a wall immediately beyond it.

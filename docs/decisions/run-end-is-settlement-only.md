@@ -21,12 +21,17 @@ that animates is the currency counting up**, and those two do not scroll, expand
 | A second screen (settle, then summary) | **One screen.** Two screens make the end of a run a sequence of menus |
 | A cause-of-death shot (Spelunky/Noita) | Death and clearing share this screen; a death-only picture doesn't fit it |
 | Settling inside the town instead (a shelf, a board) | Would remove the screen entirely — the fork above is about what the screen holds, not whether it exists |
+| **The end-of-content notice in the town instead** (added later — the "지금은 여기까지" lines a cleared stage must say) | The town's only text channel is `_town_message`, a debug HUD line `docs/submission/README.md` already lists as a risk. Putting the one message that must not be missed on the surface already flagged as noise is the worst option — **and the moment has passed**, the player has pressed the button and walked into another room. Its own beat between the panel and the town was refused by the "second screen" row above |
 
 ## What's tied to it
 
 - **The screen has nothing to show unless something converts.** With settlement as its only job, a run with
   no boss kill settles nothing and the screen is blank. What actually converts is the next question
 - `docs/design/town.md`'s TBD **"do death and clearing look different"** now lands *on this screen*, not in the room
+- **The end-of-content notice does not reverse this.** It is two static lines that never scroll, expand or
+  break down, and — the deciding point — **they say nothing about the run.** They are a statement about the
+  build: a run that ends the same way twice prints the identical two lines. The banned thing is a *run report*
+  (`../plans/3.done/stage-clear-sequence.md`)
 
 ## Conditions to reopen
 

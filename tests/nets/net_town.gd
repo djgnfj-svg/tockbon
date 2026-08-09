@@ -535,7 +535,12 @@ func _wired_root(t) -> Node:
 			# **`_settlement`** (`docs/plans/3.done/run-end-settlement.md`, Stage D) — `reset_stage()`'s own
 			#  last line below now calls `_settlement.close()`, so every check in this file dies on a null
 			#  before measuring anything without this.
-			["_settlement", "HUD/SettlementWindow"]]:
+			["_settlement", "HUD/SettlementWindow"],
+			# **`_gate_view`** (`stage-clear-sequence.md`) — `_sync_settlement()` now calls `tick_gate()` on it
+			#  every physics frame and `reset_stage()` calls `reset_gate()`, both unconditionally. Left out,
+			#  every check in this file that drives either one dies on a null mid-call and **disappears rather
+			#  than fails** — the shape this file's own `if root == null: return` discipline exists for.
+			["_gate_view", "GateView"]]:
 		var n := root.get_node_or_null(NodePath(pair[1]))
 		t.ok(n != null, "씬에 %s 가 있다 (전제)" % pair[1])
 		if n == null:

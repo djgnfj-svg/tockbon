@@ -96,7 +96,7 @@ var _dealt_acc := 0
 
 ## **Sleep** (`docs/plans/3.done/monster-placement-stage1.md`, Stage D) — far from the player, `step()`
 ## below skips its own movement/collision block and runs only `_burn`. Updated **once per 20Hz tick** by
-## `world_step` (`MonsterPlacement.stays_active`'s hysteresis, the same `WAKE_PX`/`SLEEP_PX` band the wake
+## `world_step` (`MonsterPlacement.stays_active`'s hysteresis, the `STIR_ENTER_PX`/`STIR_EXIT_PX` band — the wake
 ## scan already uses), never touched at 60Hz — the same clock discipline `pattern_left`/`invuln_left`
 ## already hold.
 ## **Only ever set for a monster `MonsterPlacement` actually placed, and never for a boss** — both gates

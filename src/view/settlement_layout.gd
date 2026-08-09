@@ -38,6 +38,24 @@ static func rows(window_size: Vector2) -> Array[Rect2]:
 	return out
 
 
+## Where the two "the build ends here" lines go on a clear (`stage-clear-sequence.md`,
+## Beat 4). **Measured from the top like `rows()`, not stacked after them** — stacking would let a fourth row
+## added later push this into the button rect, and neither a net nor the screen would say so.
+##
+## **Not built on `BUTTON_BOTTOM_MARGIN_PX`.** That constant declares itself to be what keeps the button clear
+## of the rows and `button_rect()` never reads it (grepped: zero consumers anywhere in `src/` or `tests/`), so
+## the 64 in its comment describes nothing. Deleting it or wiring it in is a separate edit, deliberately not
+## smuggled in here.
+const NOTICE_TOP_PX := 330.0
+const NOTICE_H_PX := 64.0
+
+
+static func notice_rect(window_size: Vector2) -> Rect2:
+	var pad := Fx.SETTLEMENT_PAD_PX
+	var w := maxf(window_size.x - pad * 2.0, 0.0)
+	return Rect2(pad, NOTICE_TOP_PX, w, NOTICE_H_PX)
+
+
 ## **The one button.** No "retry", no "quit" (the doc's own Screen section) — centred, near the bottom,
 ## clear of the rows above it by construction (`BUTTON_BOTTOM_MARGIN_PX` measures from the bottom edge, not
 ## from the last row, so the two can never collide regardless of how many rows exist above).
