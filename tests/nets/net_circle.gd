@@ -173,6 +173,7 @@ const CIRCLE_DIAMETER_FLOOR_PX := 180.0
 
 
 func run(t) -> void:
+	await _the_ring_and_rune_art_actually_reaches_the_paint(t)
 	_round_numbers_pinned_before_the_triangle_arrives(t)
 	_sizes_come_from_the_table(t)
 	_unknown_circle_barks(t)
@@ -2041,3 +2042,58 @@ func _read(path: String) -> String:
 		push_error("net_circle: %s 를 못 읽었다" % path)
 		return ""
 	return f.get_as_text()
+
+
+## ══ The ring and rune pictures actually reach the screen ══
+##
+## **These eight files sat in `assets/circle/` with zero references anywhere in `src/` or `tests/`** — drawn
+## procedurally instead, art on disk that nothing painted. That is this repo's named failure ("water material
+## and colour were both in, but nothing called `set_water`"), and a call count on `_draw()` cannot see it.
+##
+## ⇒ `_paint_art(tex, rect, tint)` is the one seat both go through, and this subclass records **which texture
+## went to which rect**. *Inversion: delete either `_paint_art` call from `circle_window.gd` and the
+## matching assert below goes red.*
+class _CapturingCircleWindow extends CircleWindow:
+	var art: Array[Dictionary] = []
+
+	func _paint_art(tex: Texture2D, r: Rect2, tint: Color) -> void:
+		art.append({"path": tex.resource_path, "rect": r, "tint": tint})
+		super(tex, r, tint)
+
+
+func _the_ring_and_rune_art_actually_reaches_the_paint(t) -> void:
+	var win := _CapturingCircleWindow.new()
+	var circle := SpellCircle.new()
+	circle.set_rune(0, Tuning.ELEM_FIRE)
+	circle.place_glyph(0, Glyph.SPREAD_C)
+	win.setup(Progress.new(), circle)
+	t.root.add_child(win)
+	win.visible = true
+	win.queue_redraw()
+	await t.pump_frames(3)
+
+	t.ok(win.art.size() >= 2,
+		"고리와 룬 그림이 실제로 그려진다 (_draw()가 돌았다가 아니라 — %d장)" % win.art.size())
+
+	var paths: Array[String] = []
+	for a: Dictionary in win.art:
+		paths.append(String(a["path"]))
+	t.ok(paths.has(Fx.RING_TEX[Glyph.SPREAD_C]),
+		"확산이 얹힌 층의 고리에 확산 고리 그림이 간다 (%s)" % Fx.RING_TEX[Glyph.SPREAD_C])
+	t.ok(paths.has(Fx.RUNE_TEX[Tuning.ELEM_FIRE]),
+		"불 룬 자리에 불 룬 그림이 간다 (%s)" % Fx.RUNE_TEX[Tuning.ELEM_FIRE])
+
+	# **A rect with size, at a real place.** A texture handed a zero rect is drawn nowhere, and the path
+	#  check above would still pass — the same hole found in `settlement_window`'s notice tonight.
+	for a: Dictionary in win.art:
+		var r: Rect2 = a["rect"]
+		t.ok(r.size.x > 0.0 and r.size.y > 0.0,
+			"%s 를 크기 있는 자리에 그린다 (%s)" % [String(a["path"]).get_file(), r.size])
+
+	# **Tinted, not raw.** This art is dark strokes on a transparent field; drawn untinted on the window's
+	#  dark panel nothing appears while every check above still passes.
+	for a: Dictionary in win.art:
+		t.eq(a["tint"], Fx.CIRCLE_ART_TINT, "%s 를 정해진 색조로 그린다" % String(a["path"]).get_file())
+
+	t.root.remove_child(win)
+	win.queue_free()

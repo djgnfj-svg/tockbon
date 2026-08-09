@@ -700,6 +700,11 @@ const GLYPH_TINT: Dictionary = {
 
 ## The color of a glyph with no definition. **Deliberately magenta** — grow the glyphs without growing this
 ##  and the screen screams (the same reason as `MISSING_RGB` in `cell_materials.gd`).
+## **Ring and rune art is tinted, not drawn raw** — the same measured reason `_draw_socket_glyph_texture`
+## tints its own: this art is dark strokes on a transparent field, and on this window's dark panel an
+## untinted draw puts **nothing** on screen while every check stays green. Cream, matching the window's
+## own line work.
+const CIRCLE_ART_TINT := Color(0.93, 0.89, 0.78)
 const GLYPH_TINT_MISSING := Color(1.0, 0.0, 1.0)
 
 ## **Rarity — a ring drawn around the glyph symbol, independent of `GLYPH_TINT`'s family color** (the design
@@ -738,6 +743,35 @@ const RARITY_RING_PX := 1.5
 ##  what keeps a socket circle drawable at all before the remaining families get art (`circle-art.md`,
 ##  "Unresolved"). Falling back to nothing would be this repo's signature fake (CLAUDE.md: "screen changes
 ##  but sim doesn't" — the model already knows a glyph sits there, and the screen would have to hide it).
+## **The layer ring's own picture, by the glyph sitting on it.** Same shape and same discipline as
+## `SOCKET_GLYPH_TEX` below: all three rarities of a family point at one file, and a glyph with no entry
+## falls through to the procedural stroke rather than drawing nothing.
+##
+## **`ring_accel.png` and `ring_home.png` are on disk and are deliberately not here** — `glyph_defs` has
+## nine ids (spread · blast · dummy, three rarities each) and **there is no accelerate or home glyph in
+## code**. Wiring them to a family they do not belong to would be worse than leaving them unused; they are
+## waiting for the glyph, not the other way round.
+const RING_TEX: Dictionary = {
+	Glyph.SPREAD_C: "res://assets/circle/ring_spread.png",
+	Glyph.SPREAD_R: "res://assets/circle/ring_spread.png",
+	Glyph.SPREAD_U: "res://assets/circle/ring_spread.png",
+	Glyph.BLAST_C: "res://assets/circle/ring_blast.png",
+	Glyph.BLAST_R: "res://assets/circle/ring_blast.png",
+	Glyph.BLAST_U: "res://assets/circle/ring_blast.png",
+	Glyph.DUMMY_C: "res://assets/circle/ring_dummy.png",
+	Glyph.DUMMY_R: "res://assets/circle/ring_dummy.png",
+	Glyph.DUMMY_U: "res://assets/circle/ring_dummy.png",
+}
+
+## **The rune bead's own picture, by element.** All three elements have art, so unlike the two maps around
+## it this one has no fall-through case in practice — the procedural bead stays as the fallback anyway,
+## because a missing file must not draw nothing.
+const RUNE_TEX: Dictionary = {
+	Tuning.ELEM_FIRE: "res://assets/circle/rune_fire.png",
+	Tuning.ELEM_NONE: "res://assets/circle/rune_none.png",
+	Tuning.ELEM_WATER: "res://assets/circle/rune_water.png",
+}
+
 const SOCKET_GLYPH_TEX: Dictionary = {
 	Glyph.SPREAD_C: "res://assets/circle/socket_glyph_spread.png",
 	Glyph.SPREAD_R: "res://assets/circle/socket_glyph_spread.png",

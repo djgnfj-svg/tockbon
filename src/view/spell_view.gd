@@ -225,7 +225,48 @@ func _draw_head(i: int) -> void:
 		#  come out", and that sends people hunting for a bug on the firing side (the same reason as `ELEM_FX_MISSING`).
 		draw_rect(Rect2(p.x - r, p.y - r, r * 2.0, r * 2.0), Color(1.0, 0.0, 1.0), true)
 		return
-	draw_texture_rect(tex, Rect2(p.x - r, p.y - r, r * 2.0, r * 2.0), false)
+	_paint_bolt(tex, p, r, heading(i))
+
+
+## **The bolt sprite faces where it is going.** Every `bolt_*.png` is a comet — a bright head with a tail
+##  behind it — drawn pointing **+x**, so a bolt fired left used to fly tail-first. `draw_texture_rect` takes
+##  an axis-aligned `Rect2` and **has no angle argument at all**, which is why this was not a tuning miss but
+##  a structural one: there was nowhere to put the angle.
+##
+## ⇒ `draw_set_transform(origin, rotation, scale)` rotates everything drawn after it, so the rect is written
+##  **around the origin** (`-r, -r, 2r, 2r`) and the transform carries it to `p`.
+##
+## **The transform must be restored.** Everything drawn afterwards — the next bolt, the next frame — inherits
+##  it otherwise, and **nothing raises an error**; `character_view._draw` records the same trap costing a
+##  whole flipped coordinate system.
+##
+## **Cut out of `_draw_head()` as its own method so a net can override it and read the angle** — CLAUDE.md:
+##  counting `_draw()` calls measures the engine, not the picture, and Godot refuses to let a script override
+##  a native `draw_texture_rect`. **Not named `_paint`** — that name is taken twice already with different
+##  signatures (`gate_view`, `monster_view`).
+func _paint_bolt(tex: Texture2D, p: Vector2, r: float, rot: float) -> void:
+	draw_set_transform(p, rot, Vector2.ONE)
+	draw_texture_rect(tex, Rect2(-r, -r, r * 2.0, r * 2.0), false)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
+## Which way bolt `i` is pointing, in radians.
+##
+## **Read off the sim's velocity, which it already exposes** (`get_vx`/`get_vy`) — no sim change, and none
+##  would be right: an angle needs `atan2` and a float, and `src/sim/` is integer-deterministic. **The heading
+##  is presentation; the velocity is the fact.** The fixed-point scale cancels in the ratio, so no conversion
+##  is needed here.
+##
+## **A standing bolt keeps the sprite's own orientation (0).** `atan2(0, 0)` is 0 anyway, but relying on that
+##  would make "what does a zero-velocity bolt look like" an accident of the C library rather than a decision.
+func heading(i: int) -> float:
+	if not _live(i):
+		return 0.0
+	var vx := float(_sim.get_vx()[i])
+	var vy := float(_sim.get_vy()[i])
+	if vx == 0.0 and vy == 0.0:
+		return 0.0
+	return atan2(vy, vx)
 
 
 func _gen(i: int) -> int:

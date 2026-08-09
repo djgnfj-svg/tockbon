@@ -320,6 +320,9 @@ func _apply_room_reads_every_field_out_of_the_row(t) -> void:
 	# **The pair is deliberately mismatched** (`SYN_BG_FAR`/`SYN_BG_NEAR`: the town's far picture with the
 	#  farm's near one). Either real pair would leave "it came from the row" and "it came from the ternary
 	#  this line replaced" indistinguishable for one of the two rooms.
+	#  **Measured: only one of the two lines below bites per hardcode**, and which one names the culprit —
+	#  push the farm pair and the *far* check goes red, push the town pair and the *near* one does. Neither
+	#  half alone covers both; the mismatch is what makes the pair cover them.
 	# **Read off the node, not scanned in the source.** `net_town` covers row -> node for the town; what is
 	#  missing without this is **per-row** coverage — a `_apply_room()` that pushed one fixed pair regardless
 	#  of the row would still satisfy that check and give stage 2 stage 1's sky.

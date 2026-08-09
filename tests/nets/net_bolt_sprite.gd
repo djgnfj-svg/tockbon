@@ -18,6 +18,8 @@ extends RefCounted
 const Fx := preload("res://src/view/fx_tuning.gd")
 const Tuning := preload("res://src/sim/sim_tuning.gd")
 const SpellView := preload("res://src/view/spell_view.gd")
+const SpellSim := preload("res://src/sim/spell_sim.gd")
+const Glyph := preload("res://src/sim/glyph_defs.gd")
 
 
 func run(t) -> void:
@@ -28,6 +30,8 @@ func run(t) -> void:
 	_glow_no_longer_washes_out_the_sprite(t)
 	_core_sits_at_the_center(t)
 	_runes_are_told_apart_by_color(t)
+	_the_bolt_sprite_faces_its_direction_of_travel(t)
+	await _draw_head_really_hands_the_angle_to_the_draw(t)
 
 
 ## **Do the table's keys cover `ELEM_ALL` — if not, that rune's bolt turns magenta on screen.**
@@ -222,3 +226,87 @@ func _runes_are_told_apart_by_color(t) -> void:
 			var b: Vector3 = means[keys[j]]
 			t.ok((a - b).length() > 0.3,
 				"룬 %d 와 %d 가 색으로 갈린다 (거리 %.2f)" % [keys[i], keys[j], (a - b).length()])
+
+
+## **The bolt faces where it flies.** Every `bolt_*.png` is a comet drawn pointing **+x**, and
+##  `draw_texture_rect` takes an axis-aligned `Rect2` with **no angle argument** — so before this, a bolt
+##  fired left flew tail-first. The user caught it on screen.
+##
+## **The angle handed to the draw is what is asserted, not that `_draw()` ran** (CLAUDE.md). `_paint_bolt` is
+##  the hook cut out of `_draw_head()` for exactly this; a native `draw_texture_rect` cannot be overridden.
+##
+## **Driven against a real `SpellSim`**, not a hand-set field — the heading is read off `get_vx`/`get_vy`, so
+##  a check that set those by hand would be measuring its own arithmetic.
+func _the_bolt_sprite_faces_its_direction_of_travel(t) -> void:
+	# Right and left, from the same origin. `atan2(0, +x)` = 0, `atan2(0, -x)` = PI.
+	var right := SpellSim.new()
+	t.ok(right.fire(SpellSim.cmd_fire(128, 70, 3, 0, Tuning.ELEM_FIRE, Glyph.GLYPH_NONE)),
+		"오른쪽으로 발사됐다 (전제)")
+	var left := SpellSim.new()
+	t.ok(left.fire(SpellSim.cmd_fire(128, 70, -3, 0, Tuning.ELEM_FIRE, Glyph.GLYPH_NONE)),
+		"왼쪽으로 발사됐다 (전제)")
+
+	var vr := SpellView.new()
+	vr.setup(right)
+	var vl := SpellView.new()
+	vl.setup(left)
+
+	t.ok(right.active_count() > 0 and left.active_count() > 0, "양쪽 다 탄이 살아 있다 (전제)")
+	var ar := vr.heading(0)
+	var al := vl.heading(0)
+
+	# **Absolute values, not "they differ"** — an A/B that only compares catches "diverged" and never
+	#  "both became 0" (CLAUDE.md). PI apart is what right-vs-left actually means.
+	t.ok(absf(ar) < 0.01, "오른쪽으로 나는 탄의 각도가 0이다 (%.3f)" % ar)
+	t.ok(absf(absf(al) - PI) < 0.01, "왼쪽으로 나는 탄의 각도가 PI다 (%.3f)" % al)
+	t.ok(absf(ar - al) > 3.0, "좌우 탄의 각도가 실제로 다르다 (%.3f 대 %.3f)" % [ar, al])
+
+	# Down — the third axis, so "it only handles the x sign" cannot pass.
+	var down := SpellSim.new()
+	t.ok(down.fire(SpellSim.cmd_fire(128, 70, 0, 3, Tuning.ELEM_FIRE, Glyph.GLYPH_NONE)),
+		"아래로 발사됐다 (전제)")
+	var vd := SpellView.new()
+	vd.setup(down)
+	var ad := vd.heading(0)
+	t.ok(absf(ad - PI * 0.5) < 0.01, "아래로 나는 탄의 각도가 PI/2다 (%.3f)" % ad)
+
+	# **A dead index is 0, not a crash** — `_live()` guards it, and the magenta fallback path draws no sprite.
+	t.eq(vr.heading(999), 0.0, "없는 탄의 각도를 물어도 0이고 안 터진다")
+
+	vr.free()
+	vl.free()
+	vd.free()
+
+
+## **What `heading()` alone cannot prove: that `_draw_head()` actually hands it to the draw.**
+##  A correct angle computed and then dropped on the floor is exactly this repo's signature fake — the sim
+##  changes and the screen does not. This subclass catches the argument at the paint hook.
+class _CapturingSpellView extends SpellView:
+	var last_rot := 0.0
+	var calls := 0
+	func _paint_bolt(_tex: Texture2D, _p: Vector2, _r: float, rot: float) -> void:
+		calls += 1
+		last_rot = rot
+
+
+## **Treed and frame-pumped**, so the real `_draw()` runs and the real `_draw_head()` decides the argument.
+##
+## **What goes red when inverted**: replace `heading(i)` in `_draw_head()` with `0.0`, or drop the
+##  `draw_set_transform` pair — the first turns the left bolt's angle to 0, the second is caught by the
+##  capture never receiving a rotation at all.
+func _draw_head_really_hands_the_angle_to_the_draw(t) -> void:
+	var sim := SpellSim.new()
+	t.ok(sim.fire(SpellSim.cmd_fire(128, 70, -3, 0, Tuning.ELEM_FIRE, Glyph.GLYPH_NONE)),
+		"왼쪽으로 발사됐다 (전제)")
+	var view := _CapturingSpellView.new()
+	view.setup(sim)
+	t.root.add_child(view)
+	await t.pump_frames(3)
+
+	t.ok(view.calls > 0, "프레임을 돌리면 탄 스프라이트가 실제로 그려진다 (%d회)" % view.calls)
+	if view.calls > 0:
+		t.ok(absf(absf(view.last_rot) - PI) < 0.01,
+			"그리는 쪽이 받은 각도가 PI다 — 각도를 계산만 하고 안 넘기면 여기가 빨개진다 (%.3f)" % view.last_rot)
+
+	t.root.remove_child(view)
+	view.queue_free()

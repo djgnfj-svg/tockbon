@@ -66,6 +66,9 @@ var _picked_item := -1
 ##  no entry (nine ids total, six with art, three — `DUMMY_C`/`R`/`U` — without) is the normal case
 ##  `_draw_ring` falls back on, not an error.
 var _socket_glyph_tex: Dictionary = {}
+## The ring and rune art, loaded once beside the socket glyphs and for the same reason.
+var _ring_tex: Dictionary = {}
+var _rune_tex: Dictionary = {}
 
 
 func setup(progress: Progress, circle: SpellCircle) -> void:
@@ -89,6 +92,8 @@ func _ready() -> void:
 	position = Fx.WINDOW_RECT.position
 	size = Fx.WINDOW_RECT.size
 	_socket_glyph_tex = load_socket_glyph_tex()
+	_ring_tex = _load_tex_map(Fx.RING_TEX)
+	_rune_tex = _load_tex_map(Fx.RUNE_TEX)
 
 
 ## **Pulled out of `_ready()` so a second `_draw()`-owning node can load the same art without a second copy
@@ -464,7 +469,11 @@ func _draw_rune_slot(area: Rect2, circle_id: int) -> void:
 			#    `DEAD_TINT` and `DEAD_RING_PX` when the muzzle bead disappeared. **Value and meaning are unchanged.**
 			draw_circle(slots[i], r, Fx.DEAD_TINT, false, Fx.DEAD_RING_PX)
 			continue
-		_draw_rune_symbol(slots[i], r, rune_id)
+		# **The rune's own picture** (`Fx.RUNE_TEX`); the two beads stay as the fallback.
+		if _rune_tex.has(rune_id):
+			_paint_art(_rune_tex[rune_id], _square_at(slots[i], r), Fx.CIRCLE_ART_TINT)
+		else:
+			_draw_rune_symbol(slots[i], r, rune_id)
 
 
 ## Layer axis — one ring, the layer number, and the glyph placed on it.
@@ -496,6 +505,15 @@ func _draw_ring(area: Rect2, circle_id: int, layer: int, font: Font) -> void:
 	#  actually stroked). `_draw_ring_edge` exists so a test can override it and record.
 	for e in edges:
 		_draw_ring_edge(center, e, col)
+	# **The ring's own picture, laid over the rim rather than replacing it** (`Fx.RING_TEX`).
+	#  **Replacing the stroke was tried first and is wrong**: `_draw_ring_edge` is what
+	#  `net_circle`'s edge checks count, and they exist because dropping a socket band's inner rim once
+	#  passed every check in that file. Swapping the stroke for art would have silently retired that guard
+	#  to draw a picture. ⇒ The rim keeps its contract, and the art sits on it.
+	#  A layer with no glyph, or a glyph with no art, is byte-for-byte what it was before.
+	var ring_glyph := _circle.glyph_at(layer)
+	if _ring_tex.has(ring_glyph):
+		_paint_art(_ring_tex[ring_glyph], _square_at(center, edges[0]), Fx.CIRCLE_ART_TINT)
 
 	# `edges[0]` is always the outer edge (`edges` is outer-first) — the one radius to hang the layer number
 	#  beside regardless of how many edges this band owns.
@@ -574,6 +592,34 @@ func _draw_ring_edge(center: Vector2, r: float, col: Color) -> void:
 ## untinted on this window's dark panel **nothing appears**. The socket showed a bare rarity ring and the
 ## glyph read as absent while the model held it. Same `GLYPH_TINT` the palette and the procedural fallback
 ## use, so the three drawing paths stay one color axis (`three_pick_window._draw_pick_card_texture` too).
+## **The one seat every ring and rune picture is painted through, and it exists to be overridden.**
+## `_draw()` running is not the same as a picture reaching the screen — the art in `assets/circle/` sat on
+## disk unreferenced until now, which is that failure in its purest form. A test subclass overrides this and
+## records the **texture and the rect**, so "the ring stopped being drawn" cannot pass as green.
+##
+## **Not named `_paint`** — `monster_view.gd` already owns that name with a different signature, and
+##  `gate_view` had to be renamed once already for exactly this collision.
+func _paint_art(tex: Texture2D, r: Rect2, tint: Color) -> void:
+	draw_texture_rect(tex, r, false, tint)
+
+
+## The bounding square of a circle of radius `r` at `at` — the same framing `_draw_socket_glyph_texture`
+## uses, kept in one place now that three callers want it.
+func _square_at(at: Vector2, r: float) -> Rect2:
+	return Rect2(at - Vector2(r, r), Vector2(r, r) * 2.0)
+
+
+## Path map -> loaded map, dropping anything that fails to load. **A failed load must leave the id absent**,
+## not present-and-null, so the caller's `has()` falls through to the procedural drawing.
+static func _load_tex_map(paths: Dictionary) -> Dictionary:
+	var out: Dictionary = {}
+	for id: int in paths:
+		var tex: Texture2D = load(paths[id]) as Texture2D
+		if tex != null:
+			out[id] = tex
+	return out
+
+
 func _draw_socket_glyph_texture(at: Vector2, r: float, tex: Texture2D, glyph_id: int) -> void:
 	var tint: Color = Fx.GLYPH_TINT.get(glyph_id, Fx.GLYPH_TINT_MISSING)
 	draw_texture_rect(tex, Rect2(at - Vector2(r, r), Vector2(r, r) * 2.0), false, tint)
