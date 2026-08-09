@@ -1346,6 +1346,40 @@ const SHAKE_SEC := 0.20
 ## The decay curve. 1 = linear · larger means **strong early and dying fast** (the impact is front-loaded).
 const SHAKE_DECAY_POW := 1.6
 
+# --- the health readout (`hp_view.gd`) --------------------------------
+## **Bottom-left, and top-left was tried first and does not fit.** `WINDOW_RECT` is `(48, 12, 864, 372)` —
+##  the assembly and three-pick windows start 12px from the top and run to y 384, so **anything in the top
+##  left is under them**, and `net_render`'s standing rule that no window may cover the health readout went
+##  red immediately. The band below y 384 is the only clear strip, and the left of it is where a player
+##  looks for health.
+## **Height fits the number plus the gauge plus the gap**, and `hp_gauge_rect` derives the gauge from it, so
+##  moving this rectangle moves both parts together.
+const HP_RECT := Rect2(16.0, 460.0, 160.0, 52.0)
+
+## The number's size. **Large on purpose** — the user's ask was 숫자만, so the digits carry the reading and
+##  the gauge only qualifies it.
+const HP_NUMBER_SIZE := 34
+
+## The gauge's own strip, derived from the panel rather than written again. **Thin**: it is the adverb, not
+##  the sentence (`hp_view.gd`'s header).
+const HP_GAUGE_H_PX := 8.0
+const HP_GAUGE_GAP_PX := 4.0
+
+static func hp_gauge_rect(panel: Vector2) -> Rect2:
+	return Rect2(0.0, float(HP_NUMBER_SIZE) + HP_GAUGE_GAP_PX, panel.x, HP_GAUGE_H_PX)
+
+## **Full red to warning red.** The number lerps between the two as health drains — no threshold, so there
+##  is no value to tune and no frame where the colour jumps and reads as a state change.
+## **Not a blink.** The character sprite already blinks on invulnerability (`character_view`'s
+##  `invuln_left & 1`); a second blinking thing reads as a rendering fault rather than as danger.
+const HP_FULL := Color(0.85, 0.18, 0.20, 1.0)
+const HP_LOW := Color(1.0, 0.42, 0.30, 1.0)
+## The empty part of the strip — **dark, not black**, so the gauge still reads as an object on the dark
+## background rather than as a hole.
+const HP_GAUGE_BG := Color(0.20, 0.07, 0.08, 0.85)
+const HP_GAUGE_EDGE := Color(0.05, 0.02, 0.02, 0.9)
+const HP_GAUGE_EDGE_PX := 1.0
+
 # --- camera work ------------------------------------------------------
 ## **How far the camera runs ahead in the direction you are moving, and how fast it comes back**
 ##  (user request: "the camera goes a bit the way I move, and comes back when I stop").
@@ -1355,7 +1389,11 @@ const SHAKE_DECAY_POW := 1.6
 ## **Raise it far and aiming suffers**: the shot origin is the character, and the further the character sits
 ##  from the screen centre the less of the far side you can see before firing. 72px was chosen as
 ##  "visible, and it does not move the character out of the middle third".
-const CAM_LEAD_PX := 72.0
+## **32, down from 72 (decided by the user: 「방향에 따라 카메라 이동하는 거 좀 줄여줘」).**
+##  At 72 the camera swung a fifth of the half-width every time the walk direction changed, and on a
+##  direction flip that is 144px of travel with the character standing still relative to the world — read as
+##  the screen lurching. 32 keeps the "it leans the way I go" reading and cuts the swing to 64px.
+const CAM_LEAD_PX := 32.0
 
 ## The fraction of the remaining distance **left after one second** — the same idiom as
 ##  `character.gd`'s `RECOIL_DECAY_PER_SEC`, and for the same reason: raised to `dt` it is

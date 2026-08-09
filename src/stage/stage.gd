@@ -13,6 +13,7 @@ const Mat := preload("res://src/sim/cell_materials.gd")
 const Tuning := preload("res://src/sim/sim_tuning.gd")
 const CellRenderer := preload("res://src/view/cell_renderer.gd")
 const SkyBackground := preload("res://src/view/sky_background.gd")
+const HpView := preload("res://src/view/hp_view.gd")
 const Fx := preload("res://src/view/fx_tuning.gd")
 const CharacterView := preload("res://src/view/character_view.gd")
 const SpellView := preload("res://src/view/spell_view.gd")
@@ -181,7 +182,10 @@ const LOADOUTS: Dictionary = {
 ## **Health is a different node from `HUD/Stats`.** Writing them together does not make two places — rather,
 ##  `Stats` **hides** when the assembly window opens (`_toggle_assembly`). With health in there, "am I on
 ##  fire" disappears from the screen entirely while assembling (design, "the screen").
-@onready var _hp_label: Label = $HUD/Health
+## **It is a drawn gauge now, not a `Label`** (`hp_view.gd`) — and that changes the shell's job here from
+##  "write a string every frame" to "hand it the character once". The node reads `hp` itself, so the old
+##  `_update_hud()` line that formatted `체력 %d / %d` is gone rather than moved.
+@onready var _hp_view: HpView = $HUD/HpBar
 ## **Also a different node from `HUD/Stats`, for the same reason as `Health`** — the level-up indicator is
 ##  acceptance 2's whole claim ("it doesn't disappear"), and `Stats` hiding when the assembly window opens
 ##  would make that false by construction. Seated in the same band as `Health`, which `WINDOW_RECT`
@@ -403,7 +407,9 @@ func _ready() -> void:
 	# **The font size is pushed in here.** `Label` uses the engine default (16), and the old screen scale of
 	#  2.0 was implicitly making that 32px on screen — the scale became 1.0 and **only the size did not follow.**
 	#  **Why here and not the scene** is in the `fx_tuning.HUD_FONT_SIZE` comment (presentation constants in one file).
-	for label: Label in [_hud, _hp_label, _progress_label, _levelup_label]:
+	# **`_hp_view` is not in this list** — it draws its own text at its own size (`Fx.HP_NUMBER_SIZE`), and a
+	#  theme override pushed onto a `Control` that never calls `get_theme_font_size` would be a false knob.
+	for label: Label in [_hud, _progress_label, _levelup_label]:
 		label.add_theme_font_size_override("font_size", Fx.HUD_FONT_SIZE)
 	# **Pushed once, not every `_update_hud()` frame** — the same discipline as the font size above. Only the
 	#  text changes per frame; the color is a standing property of this node.
@@ -417,6 +423,9 @@ func _ready() -> void:
 	#  the screen draws at the old spot while only firing goes to the new one, and **not one error is raised**
 	#  (`character_view._grid`).
 	_char_view.setup(_char, _circle, _grid)
+	# **The gauge takes the character and nothing else** — it reads `hp` every frame itself, the same
+	#  reference-not-copy rule `_char_view` above already holds.
+	_hp_view.setup(_char)
 	# The assembly window reads **the same thing** — give it a copy and "keys 4 and 5 flip the picture"
 	#  disappears, and that is the single source's (plan §1) only visible evidence.
 	# **`Progress` too, since Stage A of `rune-lock-and-receiving.md`** — the window's palette asks it
@@ -1453,7 +1462,6 @@ func _update_hud() -> void:
 	#  now (`run-end-settlement.md`, replacing this line and the old E-while-downed door in `_interact()`).
 	#  Being alone there is nobody to pick you up, so the settlement screen's own button remains the only way
 	#  out; **nothing is said in the town** either, since nothing there can hit you.
-	_hp_label.text = "체력 %d / %d" % [_char.hp, Character.MAX_HP]
 	# **A different node from `Stats`, on purpose** (the `_progress_label` comment above) — this has to keep
 	#  showing while the assembly window is open, and `Stats` is the one node that hides for it.
 	var pr := _world.progress()

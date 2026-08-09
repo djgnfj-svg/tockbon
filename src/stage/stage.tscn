@@ -1,6 +1,7 @@
 [gd_scene format=4 uid="uid://y2d8g25cfwxx"]
 
 [ext_resource type="Script" uid="uid://xn8o4osv1xf7" path="res://src/stage/stage.gd" id="1_stage"]
+[ext_resource type="Script" path="res://src/view/hp_view.gd" id="15_hp"]
 [ext_resource type="Script" uid="uid://2px4aildwex2" path="res://src/view/cell_renderer.gd" id="2_cells"]
 [ext_resource type="Script" uid="uid://edvwi2hqulqb" path="res://src/stage/stage_input.gd" id="3_input"]
 [ext_resource type="Script" uid="uid://b6ish531ghqkd" path="res://src/view/character_view.gd" id="4_char"]
@@ -57,27 +58,26 @@ offset_right = 944.0
 offset_bottom = 524.0
 text = "…"
 
-[node name="Health" type="Label" parent="HUD" unique_id=622335655]
-offset_left = 660.0
-offset_top = 494.0
-offset_right = 952.0
-offset_bottom = 530.0
-text = "…"
+[node name="HpBar" type="Control" parent="HUD" unique_id=622335655]
+mouse_filter = 2
+layout_mode = 3
+anchors_preset = 0
+script = ExtResource("15_hp")
 
 [node name="Progress" type="Label" parent="HUD" unique_id=3859206611]
 mouse_filter = 2
-offset_left = 660.0
-offset_top = 450.0
-offset_right = 952.0
-offset_bottom = 486.0
+offset_left = 16.0
+offset_top = 424.0
+offset_right = 500.0
+offset_bottom = 452.0
 text = "…"
 
 [node name="LevelUp" type="Label" parent="HUD" unique_id=3157460882]
 mouse_filter = 2
-offset_left = 660.0
-offset_top = 404.0
-offset_right = 952.0
-offset_bottom = 440.0
+offset_left = 16.0
+offset_top = 392.0
+offset_right = 500.0
+offset_bottom = 420.0
 text = "…"
 
 [node name="CircleWindow" type="Control" parent="HUD" unique_id=2120730422]

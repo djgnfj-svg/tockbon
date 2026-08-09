@@ -238,9 +238,14 @@ func _pick_window_leaves_the_stage_visible(t, root: Node) -> void:
 	t.ok(r.position.x >= 0.0 and r.position.y >= 0.0 and r.end.x <= vw and r.end.y <= vh,
 		"뽑기 창이 화면 안에 들어간다 (%s ~ %s)" % [r.position, r.end])
 
-	var hp := root.get_node_or_null("HUD/Health") as Control
-	t.ok(hp != null, "씬에 HUD/Health 가 있다 (전제)")
+	var hp := root.get_node_or_null("HUD/HpBar") as Control
+	t.ok(hp != null, "씬에 HUD/HpBar 가 있다 (전제)")
 	if hp != null:
+		# **`_ready()` is driven by hand, and that is the point** — the gauge takes its rectangle from
+		#  `Fx.HP_RECT` there rather than from scene offsets (the same idiom `circle_window` uses for
+		#  `WINDOW_RECT`), so an untreed node is 0x0 until it runs. Skipping this would make the size assert
+		#  below measure the scene file, which no longer carries the number.
+		hp.call("_ready")
 		var box := Rect2(hp.position, hp.size)
 		t.ok(box.size.x > 0.0 and box.size.y > 0.0,
 			"체력 표시에 크기가 있다 (%dx%d — 0이면 아래 검사가 공짜로 통과한다)"
@@ -281,7 +286,7 @@ func _window_leaves_the_stage_visible(t, root: Node) -> void:
 		"조립창이 화면 안에 들어간다 (%s ~ %s)" % [r.position, r.end])
 
 	# **The "the window does not cover the character" check was scrapped** — see the deletion note below.
-	#  The health side is alive: `HUD/Health` sits on a `CanvasLayer`, so it is in **the same screen coordinate
+	#  The health side is alive: `HUD/HpBar` sits on a `CanvasLayer`, so it is in **the same screen coordinate
 	#  space as the window**, and its position does not change however the camera moves.
 	_window_does_not_cover_the_health(t, root, r)
 
@@ -325,10 +330,12 @@ func _window_leaves_the_stage_visible(t, root: Node) -> void:
 ##  => What this line actually catches is the different defect **"`Health` lost its size"**, and that is still worth having.
 ## **Do not read this as "Rect2 does not overlap at size 0"** — write a check elsewhere on that premise and it spins idle.
 func _window_does_not_cover_the_health(t, root: Node, r: Rect2) -> void:
-	var hp := root.get_node_or_null("HUD/Health") as Control
-	t.ok(hp != null, "씬에 HUD/Health 가 있다")
+	var hp := root.get_node_or_null("HUD/HpBar") as Control
+	t.ok(hp != null, "씬에 HUD/HpBar 가 있다")
 	if hp == null:
 		return
+	# `_ready()` is what gives it `Fx.HP_RECT` (the note at the other call site above).
+	hp.call("_ready")
 	t.ok(hp.visible, "체력 표시가 켜진 채로 시작한다")
 	var box := Rect2(hp.position, hp.size)
 	t.ok(box.size.x > 0.0 and box.size.y > 0.0,
@@ -622,7 +629,7 @@ func _hud_counts_are_throttled(t) -> void:
 	root.free()
 
 
-## **Nothing measured whether a `Control` is actually inside the canvas — `HUD/Health` shipped off-screen for
+## **Nothing measured whether a `Control` is actually inside the canvas — `HUD/HpBar` shipped off-screen for
 ##  a full session because of exactly that hole** (the `fx_tuning.WINDOW_RECT` comment carries the story).
 ##  `_window_leaves_the_stage_visible` above checks `Fx.WINDOW_RECT` against the viewport; it never looked at
 ##  the `.tscn`-authored positions of the labels sitting beside it.
@@ -740,7 +747,7 @@ func _progress_text_survives_the_assembly_window(t) -> void:
 	if scene == null or not scene.can_instantiate():
 		return
 	var root := scene.instantiate()
-	for path: String in [paths["_hud"], paths["_progress_label"], paths["_levelup_label"], "HUD/Health",
+	for path: String in [paths["_hud"], paths["_progress_label"], paths["_levelup_label"], "HUD/HpBar",
 			"HUD/CircleWindow", "HUD/ThreePickWindow", "HUD/ResearchWindow", "HUD/SettlementWindow",
 			"SpellView", "BlastFx"]:
 		t.ok(root.get_node_or_null(path) != null, "씬에 %s 가 있다 (전제)" % path)
@@ -751,7 +758,7 @@ func _progress_text_survives_the_assembly_window(t) -> void:
 	root.set("_hud", root.get_node(paths["_hud"]))
 	root.set("_progress_label", root.get_node(paths["_progress_label"]))
 	root.set("_levelup_label", root.get_node(paths["_levelup_label"]))
-	root.set("_hp_label", root.get_node("HUD/Health"))
+	root.set("_hp_view", root.get_node("HUD/HpBar"))
 	root.set("_spell_view", root.get_node("SpellView"))
 	root.set("_blast_fx", root.get_node("BlastFx"))
 	root.set("_circle_window", root.get_node("HUD/CircleWindow"))
@@ -1448,7 +1455,7 @@ func _wired_stage_root(t) -> Node:
 		root.free()
 		return null
 
-	for path: String in [paths["_hud"], paths["_progress_label"], paths["_levelup_label"], "HUD/Health",
+	for path: String in [paths["_hud"], paths["_progress_label"], paths["_levelup_label"], "HUD/HpBar",
 			"HUD/CircleWindow", "HUD/ThreePickWindow", "SpellView", "BlastFx", "StageInput", "Camera2D",
 			"MonsterView", "CellRenderer", "TownView", "SkyBackground", "HUD/ResearchWindow",
 			"HUD/SettlementWindow"]:
@@ -1460,7 +1467,7 @@ func _wired_stage_root(t) -> Node:
 	root.set("_hud", root.get_node(paths["_hud"]))
 	root.set("_progress_label", root.get_node(paths["_progress_label"]))
 	root.set("_levelup_label", root.get_node(paths["_levelup_label"]))
-	root.set("_hp_label", root.get_node("HUD/Health"))
+	root.set("_hp_view", root.get_node("HUD/HpBar"))
 	root.set("_spell_view", root.get_node("SpellView"))
 	root.set("_blast_fx", root.get_node("BlastFx"))
 	root.set("_circle_window", root.get_node("HUD/CircleWindow"))

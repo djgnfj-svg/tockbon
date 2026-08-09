@@ -87,6 +87,29 @@ const STEP_PX := STEP_CELLS * Tuning.CELL_PX
 ##  Reachable height is `v^2/2g`, so doubling only `v` gives **4x** and doubling only `g` gives **half**.
 ##  **No error is raised.** The stage's pillar and wall heights are all designed around these values, so
 ##  getting it wrong only looks like "I cannot clear the pillar".
+## **260 does not divide 60, and it is left that way on purpose. Read this before changing it.**
+##
+## `body.x` is an integer (the fraction lives in `_rem_*`), so 260/60 = 4.333 makes the character advance in
+##  an uneven **4, 4, 5** pattern. The camera follows, so on screen the character is nearly still and **the
+##  world scrolls in that rhythm** — a candidate cause for the 부르르 떨림 the user reports, and one that
+##  survives `stage.snap_camera_px` because that fix is about the camera, not the gait.
+##
+## **Both divisible neighbours were tried and both broke the hen's bolt** (measured, same day):
+##
+## ```
+## 300 (5px/frame)   closing speed vs a bolt 620px/s = 10.3px/frame   -> tunnels through, never hit
+## 240 (4px/frame)   closing speed 560px/s = 9.3px/frame              -> also never hit
+## 260 (4.33)        closing speed 580px/s = 9.7px/frame              -> hit
+## ```
+##
+## The middle row is the interesting one: **240 is *slower* than 260 and still misses**, so this is not a
+##  simple speed ceiling. The hit test is an instantaneous box overlap, and an exactly-4px step keeps landing
+##  the character on the same side of the bolt every frame; 260's uneven step happens to sample both sides.
+##  `net_monster._hen_bolt_lifetime_axis` is what catches it — "다가오면 더 빨리 맞는다" goes red.
+##
+## ⇒ **The real fix is a swept hit test in `monster_bolts`, not a speed value**, and that is not a
+##  deadline-day change. Until it exists, moving this number breaks bolts in a way that looks like
+##  "the egg went through me".
 const MOVE_SPEED_PX := 260.0
 const GRAVITY_PX := 2400.0
 const JUMP_VY_PX := -720.0

@@ -567,8 +567,17 @@ func _the_arch_is_inside_the_camera_window_only_from_the_rooms_east_half(t) -> v
 	# The same spot, leading away (retreating): the window slides off the gate.
 	var window_out := Rect2(
 		Stage.camera_center(Vector2(room_mid_x - lead, stand_y), view_size, world) - view_size * 0.5, view_size)
-	t.ok(not window_out.intersects(arch),
-		"같은 자리에서 반대로 리드가 붙으면(도망) 아치가 화면 밖으로 빠진다")
+	# **This used to assert the arch left the screen entirely, and that was a claim about `CAM_LEAD_PX`'s
+	#  *size*, not about the lead working.** At 72 it happened to be true; the user cut the lead to 32
+	#  (「방향에 따라 카메라 이동하는 거 좀 줄여줘」) and it stopped being true, with nothing about the gate
+	#  having changed. ⇒ **The direction is what this measures now**: retreating pushes the arch further from
+	#  the middle of the screen than approaching does. That holds at any lead above zero and goes red the
+	#  moment the lead is applied with the wrong sign — which is the actual defect worth catching.
+	var to_arch_in := absf(window_in.get_center().x - arch.get_center().x)
+	var to_arch_out := absf(window_out.get_center().x - arch.get_center().x)
+	t.ok(to_arch_out > to_arch_in,
+		"같은 자리에서 반대로 리드가 붙으면(도망) 아치가 화면 중앙에서 더 멀어진다 (%.0f > %.0f)"
+			% [to_arch_out, to_arch_in])
 
 	# The room's own west half, even leaning toward the gate, still does not reach — the room (640px) is
 	#  wider than the half-screen (480px).
@@ -945,7 +954,7 @@ func _wired_root(t) -> Node:
 	if scene == null or not scene.can_instantiate():
 		return null
 	var root := scene.instantiate()
-	for pair: Array in [["_hud", "HUD/Stats"], ["_hp_label", "HUD/Health"],
+	for pair: Array in [["_hud", "HUD/Stats"], ["_hp_view", "HUD/HpBar"],
 			["_progress_label", "HUD/Progress"], ["_levelup_label", "HUD/LevelUp"],
 			["_spell_view", "SpellView"], ["_blast_fx", "BlastFx"],
 			["_circle_window", "HUD/CircleWindow"], ["_pick_window", "HUD/ThreePickWindow"],

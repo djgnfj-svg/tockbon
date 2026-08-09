@@ -40,6 +40,7 @@ For `partial`, **always attach what works and what doesn't, briefly.** "Partial"
 
 | Doc | Impl | Accepted | One line |
 |---|---|---|---|
+| [hud.md](hud.md) | **full** | **unseen** | 플레이 중 읽는 정보. 체력은 **큰 빨간 숫자 + 얇은 게이지**, 좌하단 (위쪽은 조립창이 덮는다). 프레임이 도는 화면에서 본 사람이 없다 |
 | [circle-rune-glyph.md](circle-rune-glyph.md) | **partial** | partial pass (2026-08-08) | What each of the three axes holds. **All five bolt-head-art checks pass** — three by value. **Bare-head grey and trail purple disagree** |
 | [circle-art.md](circle-art.md) | **partial** | partial pass (2026-08-05) | How a circle is drawn. Triangle skeleton + **two socket glyph rings** (**provisional — no user judgment**). **Band 48 collides with "the meaning is readable"** |
 | [water.md](water.md) | **full** | partial pass (2026-08-08) | Water is an **amount** per cell. Wet is a small amount. **Acceptance 7's cliff is gone** (cap 100). **Reads as "fire burns underwater"** · **falling has no acceleration — the user called it cheap** (constant 7.5 tiles/s) |

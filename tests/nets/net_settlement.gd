@@ -629,7 +629,7 @@ func _wired_root(t) -> Node:
 		root.free()
 		return null
 
-	for path: String in [paths["_hud"], paths["_progress_label"], paths["_levelup_label"], "HUD/Health",
+	for path: String in [paths["_hud"], paths["_progress_label"], paths["_levelup_label"], "HUD/HpBar",
 			"HUD/CircleWindow", "HUD/ThreePickWindow", "SpellView", "BlastFx", "StageInput", "Camera2D",
 			"MonsterView", "CellRenderer", "TownView", "SkyBackground", "HUD/ResearchWindow",
 			# **`GateView`** (`gate-ending-to-game.md`, Stage C) — `_ready()` now calls `_gate_view.setup(...)`
@@ -642,7 +642,7 @@ func _wired_root(t) -> Node:
 	root.set("_hud", root.get_node(paths["_hud"]))
 	root.set("_progress_label", root.get_node(paths["_progress_label"]))
 	root.set("_levelup_label", root.get_node(paths["_levelup_label"]))
-	root.set("_hp_label", root.get_node("HUD/Health"))
+	root.set("_hp_view", root.get_node("HUD/HpBar"))
 	root.set("_spell_view", root.get_node("SpellView"))
 	root.set("_blast_fx", root.get_node("BlastFx"))
 	root.set("_circle_window", root.get_node("HUD/CircleWindow"))

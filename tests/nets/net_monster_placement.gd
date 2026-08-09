@@ -1084,7 +1084,7 @@ func _wake_scan_runs_before_contact_damage_so_a_mob_that_wakes_overlapping_the_p
 ##
 ## **Two readers in one night inferred the opposite** from "`STIR_ENTER_PX` 420 < half-viewport 480" and
 ## concluded mobs wake off screen, so the fix must be to *raise* it. **The camera lead is what they missed**:
-## `Fx.CAM_LEAD_PX` (72) leads toward travel, so the visible edge ahead is **552**, not 480 — the mob was
+## `Fx.CAM_LEAD_PX` leads toward travel, so the visible edge ahead is **480 + that**, not 480 — the mob was
 ## already visible while asleep, and raising the stir distance **shrinks** that window.
 ##
 ## **This does not pin the constant's value** (that would be counting it in two places). It pins the three
@@ -1092,7 +1092,11 @@ func _wake_scan_runs_before_contact_damage_so_a_mob_that_wakes_overlapping_the_p
 func _the_sleeping_approach_is_visible_and_the_hen_stays_on_its_shelf(t) -> void:
 	var half_view := 480.0        # 960 viewport / 2, at ZOOM_STEPS[0] = 1.0
 	var visible_ahead := half_view + Fx.CAM_LEAD_PX
-	t.eq(visible_ahead, 552.0, "진행 방향으로 보이기 시작하는 거리가 552px다 (480 + 카메라 선행 72 — 전제)")
+	# **Derived, not written down.** It read `552.0` as a literal and went red the day `CAM_LEAD_PX` moved
+	#  72 -> 32 — the number was right and the *source* of it was the bug.
+	t.eq(visible_ahead, 480.0 + Fx.CAM_LEAD_PX,
+		"진행 방향으로 보이기 시작하는 거리가 %.0fpx다 (480 + 카메라 선행 %.0f — 전제)"
+			% [480.0 + Fx.CAM_LEAD_PX, Fx.CAM_LEAD_PX])
 
 	# (1) **Visible before it wakes.** This is the one the two wrong inferences would have broken.
 	var window_px := visible_ahead - MonsterPlacement.STIR_ENTER_PX
