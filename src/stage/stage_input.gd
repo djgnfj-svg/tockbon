@@ -191,6 +191,14 @@ func _unhandled_input(event: InputEvent) -> void:
 			_debug_on = not _debug_on
 			debug_hud_toggled.emit()
 			return
+		# **R is a player key and it sits above the gate — this was got wrong once and it mattered.**
+		#  Terrain is destructible, so a player can blow a pit under their own feet, and with no air-jump
+		#  unlock bought the jump clears **108px**. A deeper pit is a run that cannot continue, and **R is the
+		#  only way out of it.** Gated behind F3 it becomes a trap a judge cannot escape — strictly worse than
+		#  the stray-keypress risk the gate exists for.
+		if k.physical_keycode == KEY_R:
+			reset_requested.emit()
+			return
 		# **The gate. Everything past this line is a developer key** (`_debug_on`'s own header).
 		if not _debug_on:
 			return
@@ -203,8 +211,6 @@ func _unhandled_input(event: InputEvent) -> void:
 				int(MONSTER_KEYS[k.physical_keycode]))
 			return
 		match k.physical_keycode:
-			KEY_R:
-				reset_requested.emit()
 			# **A key event carries no mouse coordinates**, so the "right now" mouse is read from the viewport
 			#  and converted by the same `_to_world` left click goes through. Convert separately here and,
 			#  while the camera shakes, only wood and fire land on the wrong cells.

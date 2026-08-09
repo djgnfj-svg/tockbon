@@ -1587,20 +1587,24 @@ func _developer_keys_are_gated_behind_f3(t) -> void:
 	#  `match`. All three are separate branches and a gate in front of only one would leave the others live.
 	#  **T and M are not driven while ON** — those branches read `get_viewport()`, which is null on an
 	#  untreed node; the off case is what this check is for and it never reaches that line.
-	for code: int in [KEY_M, KEY_1, KEY_R, KEY_T, KEY_L, KEY_MINUS]:
+	for code: int in [KEY_M, KEY_1, KEY_T, KEY_L, KEY_MINUS]:
 		si.call("_unhandled_input", _key(code))
 	t.ok(fired.is_empty(), "개발자 모드가 꺼져 있으면 디버그 키가 아무 신호도 내지 않는다 (%s)" % [fired])
 
-	# **F is a player key and must work with the mode off** — it is the town's interaction, moved off E.
+	# **F and R are player keys and must work with the mode off.** F is the town's interaction (moved off E);
+	#  **R is the only way out of a pit the player blew under themselves** — terrain is destructible and the
+	#  jump clears 108px without the air-jump unlock, so gating it makes a trap a judge cannot escape.
 	si.call("_unhandled_input", _key(KEY_F))
 	t.ok(fired.has("interact_requested"), "F(상호작용)는 개발자 모드와 무관하게 먹는다")
+	si.call("_unhandled_input", _key(KEY_R))
+	t.ok(fired.has("reset_requested"), "R(리셋)도 먹는다 — 구덩이에 갇혔을 때 유일한 탈출구다")
 
 	fired.clear()
 	si.call("_unhandled_input", _key(KEY_F3))
 	t.ok(bool(si.call("debug_on")), "F3는 게이트 앞에 있어서 언제나 먹는다 (전제 — 못 켜면 아래가 무의미)")
-	for code: int in [KEY_1, KEY_R, KEY_L, KEY_MINUS]:
+	for code: int in [KEY_1, KEY_L, KEY_MINUS]:
 		si.call("_unhandled_input", _key(code))
-	for want: String in ["loadout_requested", "reset_requested", "reward_taken_requested", "zoom_requested"]:
+	for want: String in ["loadout_requested", "reward_taken_requested", "zoom_requested"]:
 		t.ok(fired.has(want), "켜면 %s 가 다시 산다" % want)
 	si.free()
 
