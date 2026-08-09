@@ -102,6 +102,7 @@ func run(t) -> void:
 	_reset_does_not_touch_glyphs(t)
 	_revoke_unowned_rune_only_touches_what_is_not_owned(t)
 	_developer_keys_are_gated_behind_f3(t)
+	_the_help_lines_only_name_keys_that_exist(t)
 	await _the_camera_sits_on_whole_screen_pixels(t)
 
 
@@ -1669,3 +1670,54 @@ func _the_camera_sits_on_whole_screen_pixels(t) -> void:
 			"프레임 루프가 쓴 카메라 위치가 화면 픽셀 격자에 앉는다 (%s · 줌 %.3f)" % [cam.position, z])
 	t.root.remove_child(root)
 	root.queue_free()
+
+
+## ══ **The help lines only name keys that exist** ══
+##
+## **「F 물 · K 물비」 stayed on screen for a day after both keys were deleted**, and it was found by opening
+## the deployed page — not by any of the 8,400 checks. The two lines are the only place the game tells a
+## developer what is bound, so a stale one is a straight lie: press F and you interact, press K and nothing
+## happens at all.
+##
+## **This greps, and that is legitimate here** — the rule being enforced is itself about text (a help string
+## naming a binding), not a proxy for behaviour.
+##
+## **What it measures, exactly: no help line names a key that is bound to nothing.** It does **not** check
+## that the *description* is right — `F 물` would pass today, because F is bound (to the town interaction).
+## Catching that would mean reading Korean labels against signal names, and this check does not claim to.
+## What it does catch is the other half of the same bug: `K 물비` naming a key that no longer exists at all.
+## *Inversion: put `K 물비 토글` back in the help string and this goes red.*
+func _the_help_lines_only_name_keys_that_exist(t) -> void:
+	var src := _read(STAGE_SCRIPT)
+	var input_src := _read(STAGE_INPUT_SCRIPT)
+	# **`project.godot` too, because a key can be bound two ways.** Debug keys are raw keycodes in
+	#  `stage_input.gd`; player keys (D, P, Tab, Space) are input-map actions and appear only as
+	#  `physical_keycode:<n>` in the project file. A check that knew only the first form called D and P
+	#  missing — measured, on the first run.
+	var proj := _read("res://project.godot")
+	t.ok(src.length() > 0 and input_src.length() > 0 and proj.length() > 0, "세 파일을 읽었다 (전제)")
+
+	# The help lines are the ones carrying `이동` and `몬스터` — found by content, not by line number.
+	var lines: Array[String] = []
+	for raw: String in src.split("\n"):
+		var line := raw.strip_edges()
+		if line.begins_with("\"") and (line.contains("A/D 이동") or line.contains("몬스터 ·")):
+			lines.append(line)
+	t.eq(lines.size(), 2, "안내 두 줄을 찾았다 (%d줄 — 0이면 아래가 아무것도 안 잰다)" % lines.size())
+
+	# **`F3` before `F`**: scanning single characters alone would read F3's `F` and never see the `3`.
+	var re := RegEx.new()
+	t.eq(re.compile("(?<![A-Za-z0-9])(F3|[A-Z0-9])(?= )"), OK, "키 토큰 패턴이 컴파일된다")
+	var checked := 0
+	for line: String in lines:
+		for m: RegExMatch in re.search_all(line):
+			var tok := m.get_string(1)
+			checked += 1
+			# **A word boundary, and the inversion is what taught it.** Restoring the dead `K 물비` line
+			#  stayed green because `contains("KEY_K")` matches **`KEY_KP_SUBTRACT`** — the check carried the
+			#  very defect it was written to catch (CLAUDE.md: invert the instrument, not only the subject).
+			var word := RegEx.new()
+			word.compile("KEY_" + tok + "(?![A-Za-z0-9_])")
+			var bound := word.search(input_src) != null 				or proj.contains("\"physical_keycode\":%d" % OS.find_keycode_from_string(tok))
+			t.ok(bound, "안내가 말하는 %s 키가 실제로 묶여 있다 (raw 또는 입력 맵)" % tok)
+	t.ok(checked >= 6, "실제로 검사한 키 토큰 수 (%d — 적으면 패턴이 안 물린 것)" % checked)

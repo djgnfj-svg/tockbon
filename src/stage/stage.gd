@@ -1528,8 +1528,11 @@ func _update_hud() -> void:
 		#  Without writing M, monsters become "a feature nobody can open" just the same.
 		#  **T/F/G are written as one lump** — "lay a forest, pour water, set it alight" is one procedure,
 		#   and written separately it does not read as the three being one set.
-		"A/D 이동 · Space 점프 · 좌클릭 발사 · Tab 조립창 · P 세 장 뽑기 · R 리셋 · M/N 몬스터",
-		"T 숲 · F 물 · G 불  (마우스 자리에) · K 물비 토글 (마우스 행에)",
+		# **이 두 줄은 F3를 켠 사람만 본다** — 개발자 모드 안내다(`stage_input._debug_on`).
+		#  **없는 키를 적으면 그대로 거짓말이 된다**: 「F 물 · K 물비」가 그 키들이 사라진 뒤에도
+		#  하루 남아 있었고, 배포된 화면을 열어보고서야 잡혔다. 키를 지우는 편집은 이 줄을 같이 고친다.
+		"A/D 이동 · Space 점프 · 좌클릭 발사 · F 상호작용 · Tab 조립창 · P 세 장 뽑기 · R 리셋",
+		"M/N/B/C/V 몬스터 · T 숲 · G 불  (마우스 자리에) · L 보상 · F3 이 창 · -/= 줌",
 	])
 
 
