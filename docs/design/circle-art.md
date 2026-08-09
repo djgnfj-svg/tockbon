@@ -13,6 +13,30 @@
 > palette card, where a ring has no room to read as anything. `_draw_palette_item` already calls the same
 > `_draw_glyph` as the circle does, and that is exactly the sharing that has to end when rings arrive.
 
+> ## ⚠ Half of this landed 2026-08-10, and the half that did not is the palette
+>
+> **The circle side now draws real art.** `RING_TEX` / `RUNE_TEX` load `assets/circle/ring_*.png` and
+> `rune_*.png`, and `_paint_art()` paints them — the equipped ring over its rim, the seated rune inside the
+> ring's hole. Two things had to be measured to make that work, both recorded at their constants:
+> the art's strokes are near-black `RGB(26,24,22)` while the socket glyphs are **white**, and
+> `draw_texture_rect`'s modulate **multiplies** — so a tint under 1.0 made the picture *darker than raw*.
+> `CIRCLE_ART_TINT` is above 1.0 for that reason. And `RUNE_ART_FRAC` exists because the rune's ink reached
+> 0.70 of its half-size against a ring hole starting at 0.30, which is the bead being eaten by the teeth.
+>
+> **The palette still draws procedurally** — `_draw_circle_symbol`, the sharing this box's own paragraph
+> above says has to end. ⇒ **The same item is drawn two different ways depending on where you look**, which
+> is worse than either alone. **The user called it a half fix and deferred it** (2026-08-10): *"오른쪽
+> 팔레트에도 이미지로 보여야지 반쪽짜리 수정이네"*.
+>
+> **What is left is small and the pieces exist**: the textures are already loaded in `circle_window`, the
+> `_paint_art()` hook is already there, and the palette rects are already laid out. What is **not** solved is
+> this box's own point — **a ring drawn at palette-card size has no room to read**, so a compact icon per
+> glyph is a separate art job, not a wiring one. `assets/circle/icon_*.png` exists for three ids only.
+>
+> **And three of nine glyph ids have no socket art at all** (`DUMMY_C/R/U`), so they fall through to a
+> featureless disc while an empty layer draws a `+` — **two different "nothing here" pictures, neither of
+> which says which.** Verify-look reads them as broken slots.
+
 **Implemented**: partial — the round circle's assembly-window art runs. **The triangle circle exists only as art
 and is not in code** (`circle_defs.ALL` holds only `CIRCLE_ROUND`) — the skeleton is drawn by `triangle()` in
 `tools/pixel/draw_circle.py`, and the two socket glyph rings are in `assets/circle/`
