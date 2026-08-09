@@ -19,14 +19,27 @@ format per [README.md](README.md).
 Two constraints and one delegation: **the number is the health readout** (not a sentence), **red carries it**,
 and the rest was left to whoever built it.
 
+**Then the first build was judged and the layout was cut down again:**
+
+> "XP는 아래 얇은 선으로 (…) HP가 숫자가 바 안에 있어야 줬으면 좋겠고 (…) 레벨도 굳이 여기 보일 필요가
+> 없을 거 그냥 레벨이라는 존재 자체가 있다는 것만 알면 될 거 같은데? 돈도 오른쪽 구석에 표시해 주고"
+
+Four decisions: **the number goes inside the bar**, **XP is a hairline** (not a second gauge), **level is
+off screen entirely**, and **money moves to the corner** with an icon.
+
+**The level-up prompt survives that cut on purpose** — it is an instruction ("P키로 뽑기"), not a statistic.
+Dropping it would leave a pick waiting with nothing on screen saying so.
+
 ## The layout, and why the corner is not a taste question
 
 ```
                                     ← WINDOW_RECT (48,12)-(912,384): assembly · three-pick
    ⬆ 레벨업! P키로 뽑기               y 392
-   Lv.3 · XP 12/60 · 돈 24           y 424
-   87                                y 460, 34px, red
-   ▰▰▰▰▰▰▰▱▱▱                        y 498, 8px strip
+   ┌──────────────┐                  y 448, hp_frame.png at half scale
+   │      87      │                  the number lives INSIDE the bar
+   └──────────────┘
+   ▬▬▬▬▬▬▬▬                          y 501, 5px XP hairline
+                          ★ 24       y 452, right-aligned in the corner
 ```
 
 **The top-left was tried first and does not fit.** `WINDOW_RECT` starts 12px from the top and runs to y 384,
@@ -41,11 +54,18 @@ that corner is the first thing to fall outside the picture when a browser window
 
 | | |
 |---|---|
-| `HP_FULL` `(0.85, 0.18, 0.20)` | full health |
-| `HP_LOW` `(1.0, 0.42, 0.30)` | empty — brighter, not darker, so draining reads as *alarm* |
+| `HP_FULL` `(0.80, 0.16, 0.18)` | the bar's fill |
+| `HP_TEXT` → `HP_TEXT_LOW` | the number, cream → white as it drains |
+| `XP_BAR` `(0.38, 0.72, 0.95)` | the hairline — **cool on purpose** |
 
-**Interpolated, never stepped.** No threshold to tune, and no frame where the colour jumps and reads as a
-state change.
+**The number is not red, and that is a consequence of putting it inside the bar.** A red number on red fill
+is invisible at full health and only appears as the bar drains away from under it — which reads as the
+number breaking, not as health dropping. It goes cream → white instead, so it gets *more* legible as the
+fill retreats.
+
+**XP is deliberately not red.** Sharing health's colour would make the hairline read as a second health bar.
+
+**Interpolated, never stepped.** No threshold to tune, and no frame where the colour jumps.
 
 **And no blink.** The character sprite already blinks on invulnerability (`character_view`'s
 `invuln_left & 1`); a second blinking thing on screen reads as a rendering fault, not as danger.
@@ -55,5 +75,7 @@ state change.
 - **Nobody has seen it at speed.** The check was done in a background browser tab at FPS 8
 - **The gauge has no ticks.** At 100 max hp one pixel is not one point, so "how much is that" is only
   readable from the number — which is the division the user asked for, but it has not been judged on screen
+- **The money icon is `icon_point.png`, a star.** It was the closest thing on disk to 「그 점 그 표시」 and
+  it has not been judged; a coin would read as money more directly
 - **The bottom third of the screen is empty in the town** (the map has nothing under the floor line and
   `sky_background`'s depth fill does not reach it). Not this doc's problem, but it is what the health sits on

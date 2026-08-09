@@ -717,15 +717,17 @@ func _progress_text_survives_the_assembly_window(t) -> void:
 	var src := _read(STAGE_SCRIPT)
 	var re := RegEx.new()
 	t.eq(re.compile(
-			"@onready\\s+var\\s+(_progress_label|_levelup_label|_hud)\\s*:[^=]+=\\s*\\$([A-Za-z0-9_/]+)"),
+			"@onready\\s+var\\s+(_levelup_label|_hud)\\s*:[^=]+=\\s*\\$([A-Za-z0-9_/]+)"),
 		OK, "onready 패턴이 컴파일된다")
 	var paths: Dictionary = {}
 	for m: RegExMatch in re.search_all(src):
 		paths[m.get_string(1)] = m.get_string(2)
-	var names := ["_hud", "_progress_label", "_levelup_label"]
-	t.ok(paths.has("_hud") and paths.has("_progress_label") and paths.has("_levelup_label"),
-		"`_hud`·`_progress_label`·`_levelup_label` 의 onready 선언을 소스에서 찾았다 (전제)")
-	if not (paths.has("_hud") and paths.has("_progress_label") and paths.has("_levelup_label")):
+	# **`_progress_label` is gone from this list because the node is gone** — the level line was cut
+	#  from the screen (「레벨은 안 보이게」); money and XP are drawn by `money_view`/`hp_view` now.
+	var names := ["_hud", "_levelup_label"]
+	t.ok(paths.has("_hud") and paths.has("_levelup_label"),
+		"`_hud`·`_levelup_label` 의 onready 선언을 소스에서 찾았다 (전제)")
+	if not (paths.has("_hud") and paths.has("_levelup_label")):
 		return
 	# **All three pairwise, not just one pair** — the indicator is a third node precisely so it can carry its
 	#  own color; repointing it at either of the other two collapses that.
@@ -747,7 +749,7 @@ func _progress_text_survives_the_assembly_window(t) -> void:
 	if scene == null or not scene.can_instantiate():
 		return
 	var root := scene.instantiate()
-	for path: String in [paths["_hud"], paths["_progress_label"], paths["_levelup_label"], "HUD/HpBar",
+	for path: String in [paths["_hud"], paths["_levelup_label"], "HUD/HpBar", "HUD/Money",
 			"HUD/CircleWindow", "HUD/ThreePickWindow", "HUD/ResearchWindow", "HUD/SettlementWindow",
 			"SpellView", "BlastFx"]:
 		t.ok(root.get_node_or_null(path) != null, "씬에 %s 가 있다 (전제)" % path)
@@ -756,7 +758,6 @@ func _progress_text_survives_the_assembly_window(t) -> void:
 	#  Left null it barks on every call — which is what happened the day the flag moved out of `stage.gd`.
 	root.set("_input", root.get_node("StageInput"))
 	root.set("_hud", root.get_node(paths["_hud"]))
-	root.set("_progress_label", root.get_node(paths["_progress_label"]))
 	root.set("_levelup_label", root.get_node(paths["_levelup_label"]))
 	root.set("_hp_view", root.get_node("HUD/HpBar"))
 	root.set("_spell_view", root.get_node("SpellView"))
@@ -776,15 +777,11 @@ func _progress_text_survives_the_assembly_window(t) -> void:
 	#  `tick_gate()` on it every physics frame, and `reset_stage()` calls `reset_gate()`. Both unconditional.
 	root.set("_gate_view", root.get_node("GateView"))
 
-	# **Blanking `_progress_label.text` was also currently green** — this call is what proves it fills back in,
-	#  not merely that the node happens to hold leftover text from before.
-	var progress_node := root.get_node(paths["_progress_label"]) as Label
+	# **Blanking the text first is what proves it fills back in**, not merely that the node happens to hold
+	#  leftover text from before.
 	var levelup_node := root.get_node(paths["_levelup_label"]) as Label
-	progress_node.text = ""
 	levelup_node.text = ""
 	root.call("_update_hud")
-	t.ok(progress_node.text.contains("Lv."),
-		"상태 표시 노드에 실제로 레벨 글이 채워진다 (다른 글이 뒤에서 덮어쓰지 않는다)")
 	t.eq(levelup_node.text, "",
 		"대기 중인 뽑기가 없으면 레벨업 표시는 비어 있다 (조용한 상태에서 뜬 글씨가 없다)")
 
@@ -797,8 +794,8 @@ func _progress_text_survives_the_assembly_window(t) -> void:
 		root.call("_update_hud")
 		t.ok(levelup_node.text.contains("레벨업"),
 			"대기 중인 뽑기가 있으면 레벨업 표시 노드에 실제로 글이 채워진다")
-		t.ok(progress_node.text != levelup_node.text,
-			"상태 글과 레벨업 글이 서로 다른 노드에, 서로 다른 내용으로 있다 (한쪽에 뭉치지 않는다)")
+		t.ok(levelup_node.text != root.get_node("HUD/Stats").text,
+			"레벨업 글이 디버그 readout에 뭉쳐 있지 않다 (서로 다른 노드, 서로 다른 내용)")
 
 	# **The readout is off at boot now** (`stage_input._debug_on`), so a check about *window yielding* has to
 	#  switch it on first. What it measures is unchanged: Stats hides for a window and comes back.
@@ -810,8 +807,6 @@ func _progress_text_survives_the_assembly_window(t) -> void:
 	#  same reason `_opening_one_window_closes_the_other` below drives it by hand after every toggle.
 	root.call("_update_hud")
 	t.ok(not root.get_node("HUD/Stats").visible, "조립창을 열면 Stats는 숨는다 (기존 계약)")
-	t.ok(root.get_node(paths["_progress_label"]).visible,
-		"그런데 상태 표시 노드는 계속 보인다 (사라지지 않는다 — 인수 2)")
 	t.ok(root.get_node(paths["_levelup_label"]).visible,
 		"레벨업 표시 노드도 계속 보인다 (사라지지 않는다 — 인수 2)")
 
@@ -1445,17 +1440,17 @@ func _wired_stage_root(t) -> Node:
 
 	var src := _read(STAGE_SCRIPT)
 	var re := RegEx.new()
-	re.compile("@onready\\s+var\\s+(_progress_label|_levelup_label|_hud)\\s*:[^=]+=\\s*\\$([A-Za-z0-9_/]+)")
+	re.compile("@onready\\s+var\\s+(_levelup_label|_hud)\\s*:[^=]+=\\s*\\$([A-Za-z0-9_/]+)")
 	var paths: Dictionary = {}
 	for m: RegExMatch in re.search_all(src):
 		paths[m.get_string(1)] = m.get_string(2)
-	t.ok(paths.has("_hud") and paths.has("_progress_label") and paths.has("_levelup_label"),
+	t.ok(paths.has("_hud") and paths.has("_levelup_label"),
 		"onready 경로를 찾았다 (전제)")
-	if not (paths.has("_hud") and paths.has("_progress_label") and paths.has("_levelup_label")):
+	if not (paths.has("_hud") and paths.has("_levelup_label")):
 		root.free()
 		return null
 
-	for path: String in [paths["_hud"], paths["_progress_label"], paths["_levelup_label"], "HUD/HpBar",
+	for path: String in [paths["_hud"], paths["_levelup_label"], "HUD/HpBar", "HUD/Money",
 			"HUD/CircleWindow", "HUD/ThreePickWindow", "SpellView", "BlastFx", "StageInput", "Camera2D",
 			"MonsterView", "CellRenderer", "TownView", "SkyBackground", "HUD/ResearchWindow",
 			"HUD/SettlementWindow"]:
@@ -1465,7 +1460,6 @@ func _wired_stage_root(t) -> Node:
 	#  Left null it barks on every call — which is what happened the day the flag moved out of `stage.gd`.
 	root.set("_input", root.get_node("StageInput"))
 	root.set("_hud", root.get_node(paths["_hud"]))
-	root.set("_progress_label", root.get_node(paths["_progress_label"]))
 	root.set("_levelup_label", root.get_node(paths["_levelup_label"]))
 	root.set("_hp_view", root.get_node("HUD/HpBar"))
 	root.set("_spell_view", root.get_node("SpellView"))

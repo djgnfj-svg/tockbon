@@ -14,6 +14,7 @@ const Tuning := preload("res://src/sim/sim_tuning.gd")
 const CellRenderer := preload("res://src/view/cell_renderer.gd")
 const SkyBackground := preload("res://src/view/sky_background.gd")
 const HpView := preload("res://src/view/hp_view.gd")
+const MoneyView := preload("res://src/view/money_view.gd")
 const Fx := preload("res://src/view/fx_tuning.gd")
 const CharacterView := preload("res://src/view/character_view.gd")
 const SpellView := preload("res://src/view/spell_view.gd")
@@ -186,12 +187,12 @@ const LOADOUTS: Dictionary = {
 ##  "write a string every frame" to "hand it the character once". The node reads `hp` itself, so the old
 ##  `_update_hud()` line that formatted `체력 %d / %d` is gone rather than moved.
 @onready var _hp_view: HpView = $HUD/HpBar
-## **Also a different node from `HUD/Stats`, for the same reason as `Health`** — the level-up indicator is
-##  acceptance 2's whole claim ("it doesn't disappear"), and `Stats` hiding when the assembly window opens
-##  would make that false by construction. Seated in the same band as `Health`, which `WINDOW_RECT`
-##  deliberately does not cover (`net_render._window_does_not_cover_the_health`).
-@onready var _progress_label: Label = $HUD/Progress
-## **A third node, not a second line appended to `_progress_label`.** A `Label` cannot mix colors within one
+## **Money, and it is all that is left of the old status line.** `HUD/Progress` used to read
+##  `Lv.%d · XP %d/%d · 돈 %d` in one `Label`; the user split it — level off screen entirely
+##  (「레벨은 안 보이게」), XP into `hp_view`'s hairline, money into the corner. A `Label` cannot put an icon
+##  beside its text, so this is a drawn `Control` (`money_view.gd`) rather than the old label moved.
+@onready var _money_view: MoneyView = $HUD/Money
+## **Its own node, not a line appended to something else.** A `Label` cannot mix colors within one
 ##  string, and the indicator has to draw the eye in a way the status line must not (verify-look: appended in
 ##  the same color and weight, nobody looked). `Fx.LEVEL_UP_COLOR` is pushed in once, in `_ready()`, the same
 ##  place `HUD_FONT_SIZE` already is.
@@ -409,7 +410,7 @@ func _ready() -> void:
 	#  **Why here and not the scene** is in the `fx_tuning.HUD_FONT_SIZE` comment (presentation constants in one file).
 	# **`_hp_view` is not in this list** — it draws its own text at its own size (`Fx.HP_NUMBER_SIZE`), and a
 	#  theme override pushed onto a `Control` that never calls `get_theme_font_size` would be a false knob.
-	for label: Label in [_hud, _progress_label, _levelup_label]:
+	for label: Label in [_hud, _levelup_label]:
 		label.add_theme_font_size_override("font_size", Fx.HUD_FONT_SIZE)
 	# **Pushed once, not every `_update_hud()` frame** — the same discipline as the font size above. Only the
 	#  text changes per frame; the color is a standing property of this node.
@@ -425,7 +426,8 @@ func _ready() -> void:
 	_char_view.setup(_char, _circle, _grid)
 	# **The gauge takes the character and nothing else** — it reads `hp` every frame itself, the same
 	#  reference-not-copy rule `_char_view` above already holds.
-	_hp_view.setup(_char)
+	_hp_view.setup(_char, _world.progress())
+	_money_view.setup(_world.progress())
 	# The assembly window reads **the same thing** — give it a copy and "keys 4 and 5 flip the picture"
 	#  disappears, and that is the single source's (plan §1) only visible evidence.
 	# **`Progress` too, since Stage A of `rune-lock-and-receiving.md`** — the window's palette asks it
@@ -1462,16 +1464,11 @@ func _update_hud() -> void:
 	#  now (`run-end-settlement.md`, replacing this line and the old E-while-downed door in `_interact()`).
 	#  Being alone there is nobody to pick you up, so the settlement screen's own button remains the only way
 	#  out; **nothing is said in the town** either, since nothing there can hit you.
-	# **A different node from `Stats`, on purpose** (the `_progress_label` comment above) — this has to keep
-	#  showing while the assembly window is open, and `Stats` is the one node that hides for it.
+	# **The level line is gone from the screen** (「레벨은 안 보이게」) — money is drawn by `money_view` and
+	#  XP by `hp_view`, both straight off `Progress`, so no statistic is formatted into a label here any more.
+	# **The level-up prompt stays**, and it is not a statistic: it is the only thing that says a pick is
+	#  waiting and which key opens it.
 	var pr := _world.progress()
-	_progress_label.text = "Lv.%d · XP %d/%d · 돈 %d" % [
-		pr.level, pr.xp, Progress.xp_for_level(pr.level), pr.money,
-	]
-	# **A third node, its own line, its own color** (`_levelup_label`'s comment above) — appended to the status
-	#  line in the same white it was legible but drew nobody's eye (verify-look).
-	# **The key is named now** — Stage B left this as a count with no instruction on purpose (the key did not
-	#  exist yet); Stage C binds `open_pick` to P, so a bare number stopped being honest.
 	_levelup_label.text = "⬆ 레벨업! P키로 뽑기 (%d개 대기)" % pr.pending_picks if pr.pending_picks > 0 else ""
 
 	# **`Stats` is the plain debug readout, always.** Stage C borrowed this node to print the pick as text

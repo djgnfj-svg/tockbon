@@ -1346,39 +1346,70 @@ const SHAKE_SEC := 0.20
 ## The decay curve. 1 = linear · larger means **strong early and dying fast** (the impact is front-loaded).
 const SHAKE_DECAY_POW := 1.6
 
-# --- the health readout (`hp_view.gd`) --------------------------------
+# --- the health / XP readout (`hp_view.gd`) ---------------------------
 ## **Bottom-left, and top-left was tried first and does not fit.** `WINDOW_RECT` is `(48, 12, 864, 372)` —
-##  the assembly and three-pick windows start 12px from the top and run to y 384, so **anything in the top
-##  left is under them**, and `net_render`'s standing rule that no window may cover the health readout went
-##  red immediately. The band below y 384 is the only clear strip, and the left of it is where a player
-##  looks for health.
-## **Height fits the number plus the gauge plus the gap**, and `hp_gauge_rect` derives the gauge from it, so
-##  moving this rectangle moves both parts together.
-const HP_RECT := Rect2(16.0, 460.0, 160.0, 52.0)
+##  the assembly and three-pick windows run to y 384, so **anything in the top left is under them**, and
+##  `net_render`'s standing rule that no window may cover the health readout went red immediately. The band
+##  below y 384 is the only clear strip on a 540px viewport.
+## **Everything else here derives from this rectangle** (`hp_inner_rect` · `hp_xp_rect`), so moving the
+##  readout moves the frame, the fill, the number and the XP line together.
+const HP_RECT := Rect2(16.0, 448.0, 192.0, 48.0)
 
-## The number's size. **Large on purpose** — the user's ask was 숫자만, so the digits carry the reading and
-##  the gauge only qualifies it.
-const HP_NUMBER_SIZE := 34
+## The frame art. **It sat in `assets/ui/` referenced by nothing until `hp_view` wired it** — a hollow
+##  rounded box at 384x96, drawn here at exactly half that so the pixels land 1:1.
+const HP_FRAME_TEX := "res://assets/ui/hp_frame.png"
+## **Tinted, and above 1.0 for the same reason `CIRCLE_ART_TINT` is**: `modulate` multiplies, so a tint under
+##  1.0 can only darken. The frame's ink is near-black and the panel behind it is dark.
+const HP_FRAME_TINT := Color(1.6, 1.55, 1.5)
 
-## The gauge's own strip, derived from the panel rather than written again. **Thin**: it is the adverb, not
-##  the sentence (`hp_view.gd`'s header).
-const HP_GAUGE_H_PX := 8.0
-const HP_GAUGE_GAP_PX := 4.0
+## How far inside the frame the bar sits. **The art's border is 12px at 384 wide, so 6 at half scale** — one
+##  pixel more and a full bar shows a gap at the ends, one less and it laps over the rounded corner.
+const HP_FRAME_INSET_PX := 6.0
 
-static func hp_gauge_rect(panel: Vector2) -> Rect2:
-	return Rect2(0.0, float(HP_NUMBER_SIZE) + HP_GAUGE_GAP_PX, panel.x, HP_GAUGE_H_PX)
+static func hp_inner_rect(panel: Vector2) -> Rect2:
+	var i := HP_FRAME_INSET_PX
+	return Rect2(i, i, maxf(0.0, panel.x - i * 2.0), maxf(0.0, panel.y - i * 2.0))
 
-## **Full red to warning red.** The number lerps between the two as health drains — no threshold, so there
-##  is no value to tune and no frame where the colour jumps and reads as a state change.
-## **Not a blink.** The character sprite already blinks on invulnerability (`character_view`'s
-##  `invuln_left & 1`); a second blinking thing reads as a rendering fault rather than as danger.
-const HP_FULL := Color(0.85, 0.18, 0.20, 1.0)
-const HP_LOW := Color(1.0, 0.42, 0.30, 1.0)
-## The empty part of the strip — **dark, not black**, so the gauge still reads as an object on the dark
-## background rather than as a hole.
-const HP_GAUGE_BG := Color(0.20, 0.07, 0.08, 0.85)
-const HP_GAUGE_EDGE := Color(0.05, 0.02, 0.02, 0.9)
-const HP_GAUGE_EDGE_PX := 1.0
+## The XP hairline, under the frame. **Its own gap so it does not touch the frame's shadow.**
+const XP_BAR_H_PX := 5.0
+const XP_BAR_GAP_PX := 5.0
+
+static func hp_xp_rect(panel: Vector2) -> Rect2:
+	return Rect2(0.0, panel.y + XP_BAR_GAP_PX, panel.x, XP_BAR_H_PX)
+
+## The number's size, and where its baseline sits relative to the bar's centre. **`draw_string` takes a
+##  baseline, not a top**, so centring vertically means pushing down by roughly a third of the size — measured
+##  by eye against this font, not derived.
+const HP_NUMBER_SIZE := 26
+const HP_NUMBER_BASELINE_FRAC := 0.36
+
+## **The fill is red; the number on top of it is not.** A red number inside a red bar is invisible at full
+##  health and only appears as the bar drains — which reads as the number breaking, not as health dropping.
+const HP_FULL := Color(0.80, 0.16, 0.18, 1.0)
+const HP_BAR_BG := Color(0.18, 0.06, 0.07, 1.0)
+## Cream at full, pushed toward white as it empties — the number gets *more* legible as the bar behind it
+## shrinks away from underneath it.
+const HP_TEXT := Color(0.98, 0.93, 0.86, 1.0)
+const HP_TEXT_LOW := Color(1.0, 1.0, 1.0, 1.0)
+
+## XP. **Deliberately not red** — sharing health's colour would make the hairline read as a second health
+##  bar. A cool tone separates "how hurt am I" from "how close am I".
+const XP_BAR := Color(0.38, 0.72, 0.95, 1.0)
+const XP_BAR_BG := Color(0.10, 0.14, 0.20, 1.0)
+
+# --- money, bottom-right (`money_view.gd`) ----------------------------
+## **The one number the user asked to keep on screen besides health** (「돈도 오른쪽 구석에 표시해 주고」).
+##  Level was dropped in the same breath — 「레벨은 안 보이게」.
+## **Right-aligned against this rectangle's own right edge**, so the digits grow leftward and the icon does
+##  not walk as the amount changes.
+const MONEY_RECT := Rect2(768.0, 452.0, 176.0, 40.0)
+const MONEY_ICON_TEX := "res://assets/ui/icon_point.png"
+const MONEY_ICON_PX := 24.0
+const MONEY_GAP_PX := 8.0
+const MONEY_TEXT_SIZE := 22
+const MONEY_TEXT := Color(0.98, 0.88, 0.55, 1.0)
+## The icon is near-black ink like the rest of `assets/ui/`, so it needs lifting the same way the frame does.
+const MONEY_ICON_TINT := Color(3.4, 2.9, 1.6)
 
 # --- camera work ------------------------------------------------------
 ## **How far the camera runs ahead in the direction you are moving, and how fast it comes back**

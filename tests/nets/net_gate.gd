@@ -955,7 +955,7 @@ func _wired_root(t) -> Node:
 		return null
 	var root := scene.instantiate()
 	for pair: Array in [["_hud", "HUD/Stats"], ["_hp_view", "HUD/HpBar"],
-			["_progress_label", "HUD/Progress"], ["_levelup_label", "HUD/LevelUp"],
+			["_levelup_label", "HUD/LevelUp"],
 			["_spell_view", "SpellView"], ["_blast_fx", "BlastFx"],
 			["_circle_window", "HUD/CircleWindow"], ["_pick_window", "HUD/ThreePickWindow"],
 			["_camera", "Camera2D"], ["_monster_view", "MonsterView"],

@@ -619,17 +619,17 @@ func _wired_root(t) -> Node:
 
 	var src := _read(STAGE_SCRIPT)
 	var re := RegEx.new()
-	re.compile("@onready\\s+var\\s+(_progress_label|_levelup_label|_hud)\\s*:[^=]+=\\s*\\$([A-Za-z0-9_/]+)")
+	re.compile("@onready\\s+var\\s+(_levelup_label|_hud)\\s*:[^=]+=\\s*\\$([A-Za-z0-9_/]+)")
 	var paths: Dictionary = {}
 	for m: RegExMatch in re.search_all(src):
 		paths[m.get_string(1)] = m.get_string(2)
-	t.ok(paths.has("_hud") and paths.has("_progress_label") and paths.has("_levelup_label"),
+	t.ok(paths.has("_hud") and paths.has("_levelup_label") and paths.has("_levelup_label"),
 		"onready 경로를 찾았다 (전제)")
-	if not (paths.has("_hud") and paths.has("_progress_label") and paths.has("_levelup_label")):
+	if not (paths.has("_hud") and paths.has("_levelup_label") and paths.has("_levelup_label")):
 		root.free()
 		return null
 
-	for path: String in [paths["_hud"], paths["_progress_label"], paths["_levelup_label"], "HUD/HpBar",
+	for path: String in [paths["_hud"], paths["_levelup_label"], "HUD/HpBar",
 			"HUD/CircleWindow", "HUD/ThreePickWindow", "SpellView", "BlastFx", "StageInput", "Camera2D",
 			"MonsterView", "CellRenderer", "TownView", "SkyBackground", "HUD/ResearchWindow",
 			# **`GateView`** (`gate-ending-to-game.md`, Stage C) — `_ready()` now calls `_gate_view.setup(...)`
@@ -640,7 +640,6 @@ func _wired_root(t) -> Node:
 		t.ok(root.get_node_or_null(path) != null, "씬에 %s 가 있다 (전제)" % path)
 
 	root.set("_hud", root.get_node(paths["_hud"]))
-	root.set("_progress_label", root.get_node(paths["_progress_label"]))
 	root.set("_levelup_label", root.get_node(paths["_levelup_label"]))
 	root.set("_hp_view", root.get_node("HUD/HpBar"))
 	root.set("_spell_view", root.get_node("SpellView"))
