@@ -69,6 +69,7 @@ const SpellCircle := preload("res://src/actor/spell_circle.gd")
 
 
 func run(t) -> void:
+	_the_debug_readout_is_off_at_boot_and_f3_turns_it_on(t)
 	var shaders := _scan_shaders(VIEW_DIR)
 	# The first line of a folder-scanning net. Sweeping an empty list runs none of the below and passes green.
 	t.ok(shaders.size() > 0, "%s 에서 셰이더를 찾았다 (%d개)" % [VIEW_DIR, shaders.size()])
@@ -786,6 +787,10 @@ func _progress_text_survives_the_assembly_window(t) -> void:
 		t.ok(progress_node.text != levelup_node.text,
 			"상태 글과 레벨업 글이 서로 다른 노드에, 서로 다른 내용으로 있다 (한쪽에 뭉치지 않는다)")
 
+	# **The readout is off at boot now** (`stage._debug_hud`), so a check about *window yielding* has to
+	#  switch it on first. What it measures is unchanged: Stats hides for a window and comes back.
+	root.set("_debug_hud", true)
+	root.call("_update_hud")
 	t.ok(root.get_node("HUD/Stats").visible, "조립창을 열기 전엔 Stats가 보인다 (전제)")
 	root.call("_toggle_assembly")
 	# **`_hud.visible` is derived inside `_update_hud()`, not written by `_toggle_assembly()` itself** — the
@@ -816,6 +821,9 @@ func _opening_one_window_closes_the_other(t) -> void:
 	var stats := root.get_node("HUD/Stats") as Label
 	var win := root.get_node("HUD/CircleWindow") as Control
 	var pick_win := root.get_node("HUD/ThreePickWindow") as Control
+	# Same reason as above — this check is about windows, not about the boot default.
+	root.set("_debug_hud", true)
+	root.call("_update_hud")
 	t.ok(stats.visible, "시작할 때 Stats가 보인다 (전제)")
 
 	# **`_hud.visible` is derived inside `_update_hud()`, not written by `_toggle_pick()`/`_toggle_assembly()`
@@ -1030,6 +1038,8 @@ func _physics_process_actually_ticks_confirm_before_the_hud_reacts(t) -> void:
 	#  bites while `Progress` itself reports a pick open, which the confirm-only phase below never does
 	#  (it sets the window's afterglow fields directly, bypassing `Progress` entirely). Skip this phase and
 	#  the mutation passes clean, as it first did.
+	# The readout is off at boot; this check is about the tick driving , not the default.
+	root.set("_debug_hud", true)
 	pr.pending_picks = 1
 	t.ok(pr.open_pick([] as Array[int]), "뽑기가 열렸다 (전제)")
 	stats.visible = true
@@ -1502,3 +1512,38 @@ func _wired_stage_root(t) -> Node:
 ## never this node's own `visible` would not actually be measuring the window at all.
 func _sync_pick_window(root: Node) -> void:
 	root.get_node("HUD/ThreePickWindow").call("_process", 0.0)
+
+
+## **The debug readout is off when the game boots, and F3 is what turns it on.**
+##
+## **Found on screen, not headless**: it is fifteen lines of black text — not the two `docs/submission/`
+## records — and it lands straight on the research window's bright parchment, covering the prices the player
+## opened it to read. **Every check above this one measures that Stats *yields to a window and comes back*,
+## which stayed true the whole time.** None of them asked whether it should have been on to begin with.
+##
+## *Inversion: default `_debug_hud` to `true` and the first assert goes red; delete the F3 wiring and the
+## second does.*
+func _the_debug_readout_is_off_at_boot_and_f3_turns_it_on(t) -> void:
+	var root := _wired_stage_root(t)
+	if root == null:
+		return
+	var stats: Label = root.get_node("HUD/Stats")
+
+	root.call("_update_hud")
+	t.ok(not stats.visible,
+		"게임을 켜면 디버그 readout이 안 보인다 (열다섯 줄이 연구창 위를 덮던 자리)")
+	t.ok(not bool(root.get("_debug_hud")), "그리고 그 플래그 자체가 꺼져 있다")
+
+	# **The handler, called directly — and what that does NOT measure is stated rather than implied.**
+	#  `_wired_stage_root` hand-wires fields and never runs `_ready()`, so `_input.debug_hud_toggled.connect(
+	#  _toggle_debug_hud)` does not exist in this harness and emitting the signal reaches nothing. ⇒ **the
+	#  connect line itself is unmeasured here**; deleting it would leave these three green while F3 did
+	#  nothing in the real game. `net_gate`'s treed root is where that class of line is reachable, and this
+	#  check is not worth converting a harness for.
+	root.call("_toggle_debug_hud")
+	root.call("_update_hud")
+	t.ok(stats.visible, "켜면 실제로 보인다 (플래그가 visible까지 이어진다)")
+	root.call("_toggle_debug_hud")
+	root.call("_update_hud")
+	t.ok(not stats.visible, "한 번 더 끄면 다시 사라진다")
+	root.free()

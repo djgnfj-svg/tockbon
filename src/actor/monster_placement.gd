@@ -41,10 +41,26 @@ const BossAi := preload("res://src/actor/boss_ai.gd")
 ##
 ## **`STIR_ENTER_PX` is bounded from above by the shelf, not by taste** (§8b): `_dist_to_target` is
 ## horizontal only and a stirred hen walks until it is `MonsterBolts.BOLT_STOP_PX` (240) from the player,
-## so it covers `STIR_ENTER_PX - 240` px. At 420 that is **180px against the 288px of shelf** west of
-## every shelf hen in `stage1_monsters.gd` — it stays on its shelf through the approach and the fight.
+## so it covers `STIR_ENTER_PX - 240` px against the **288px of shelf** west of every shelf hen in
+## `stage1_monsters.gd`. ⇒ **ceiling 528.** At 300 the hen covers **60px** and stays on its shelf easily.
+##
+## **420 -> 300, and the arithmetic is here because the obvious reading of it is backwards** (verify-look
+## reported the dormant presentation as "almost never seen" and the first instruction was to *raise* this):
+##
+## | | |
+## |---|---|
+## | half the viewport at zoom 1.0 | 480px |
+## | `Fx.CAM_LEAD_PX`, leading toward travel | **+72px** |
+## | ⇒ **the distance a mob becomes visible at** | **552px** |
+##
+## **The mob does not wake before it is visible — 300 < 552.** It is visible *and asleep* across
+## `552 - STIR_ENTER_PX`, so the pale dormant tint and the wake mark got **132px = 0.51s** at 260px/s.
+## ⇒ **Raising this SHRINKS the window** (at 520 it is 32px, 0.12s). **Lowering widens it**: 300 gives
+## **252px = 0.97s** of walking toward a clump you can see is asleep.
+## **Do not "fix" this by raising it.** Two readers have now made that inference from "420 < 480", which is
+## the right comparison against the wrong number — the camera lead is what puts the edge at 552.
 const MATERIALIZE_PX := 720.0
-const STIR_ENTER_PX := 420.0
+const STIR_ENTER_PX := 300.0
 const STIR_EXIT_PX := 560.0
 
 

@@ -643,56 +643,91 @@ func _chip_rects_sit_in_the_row_clear_of_the_slot_and_do_not_overlap(t) -> void:
 	t.eq(sz, Vector2(480.0, 400.0), "연구창이 480x400이다 (전제 — 아래 40px 하한이 이 크기의 값이다)")
 	var rows := Layout.rows(sz)
 	t.eq(rows.size(), 4, "줄이 넷이다 (전제)")
-	for row_i in [ROW_ITEM, ROW_BODY]:
+	# **Driven against the real axes, not an invented count.** Chips are now sized to their own labels, so
+	#  "3 chips" is only meaningful as *the item row's three*. A bare count would measure nothing real.
+	var pr := Progress.new()
+	for pair: Array in [[ROW_ITEM, UnlockDefs.AXIS_ITEM], [ROW_BODY, UnlockDefs.AXIS_BODY]]:
+		var row_i: int = pair[0]
+		var ids := _ids(pair[1])
 		var row: Rect2 = rows[row_i]
 		t.eq(row.size.y, 35.0, "%d번 줄의 높이가 35px다 (문서의 손계산과 같은 값 — 리터럴)" % row_i)
 		var slot := Layout.slot(row)
-		for count in [1, 3]:
-			var chips := Layout.unlock_chip_rects(row, count)
-			t.eq(chips.size(), count, "%d번 줄에 %d개를 요청하면 %d개가 나온다" % [row_i, count, count])
-			for c in chips.size():
-				var r: Rect2 = chips[c]
-				t.ok(row.encloses(r), "%d번 줄 / %d개 배치의 칩 %d(%s~%s)가 줄 안이다" % [
-					row_i, count, c, r.position, r.end])
-				t.ok(not r.intersects(slot),
-					"그 칩이 슬롯 틀(%s~%s)을 안 침범한다" % [slot.position, slot.end])
-				t.ok(r.size.x >= MIN_CHIP_W_PX,
-					"그 칩이 %.0fpx 이상 넓다 (실측 %.1fpx)" % [MIN_CHIP_W_PX, r.size.x])
-				t.ok(r.size.y > 0.0, "그 칩에 높이가 있다 (%.1fpx)" % r.size.y)
-			for i in chips.size():
-				for j in range(i + 1, chips.size()):
-					t.ok(not chips[i].intersects(chips[j]),
-						"%d번 줄 / %d개 배치에서 칩 %d·%d가 안 겹친다" % [row_i, count, i, j])
-		t.eq(Layout.unlock_chip_rects(row, 0).size(), 0, "%d번 줄에 0개를 요청하면 없다" % row_i)
+		var chips := Layout.unlock_chip_rects(row, _widths(ids, pr))
+		t.eq(chips.size(), ids.size(), "%d번 줄에 해금 수(%d)만큼 칩이 나온다" % [row_i, ids.size()])
+		for c in chips.size():
+			var r: Rect2 = chips[c]
+			t.ok(row.encloses(r), "%d번 줄 칩 %d(%s~%s)가 줄 안이다" % [row_i, c, r.position, r.end])
+			t.ok(not r.intersects(slot), "그 칩이 슬롯 틀(%s~%s)을 안 침범한다" % [slot.position, slot.end])
+			t.ok(r.size.x >= MIN_CHIP_W_PX,
+				"그 칩이 %.0fpx 이상 넓다 (실측 %.1fpx)" % [MIN_CHIP_W_PX, r.size.x])
+			t.ok(r.size.y > 0.0, "그 칩에 높이가 있다 (%.1fpx)" % r.size.y)
+		for i in chips.size():
+			for j in range(i + 1, chips.size()):
+				t.ok(not chips[i].intersects(chips[j]), "%d번 줄에서 칩 %d·%d가 안 겹친다" % [row_i, i, j])
+		t.eq(Layout.unlock_chip_rects(row, PackedFloat32Array()).size(), 0, "%d번 줄에 0개를 요청하면 없다" % row_i)
+
+	# **The contract verify-look's complaint actually names: a chip hugs its label.** The old rects divided
+	#  the row, so the body row's single chip came out **299px** for a short label — *"a stretched empty box
+	#  reads as a text input, not a button"*. Now each chip is its own text plus the inset, floored.
+	#
+	# **Asserted as the equation, not as a ratio.** A ratio between the widest and narrowest chip was tried
+	#  first and it is a proxy: it fails on `무` being genuinely one character (21px of text) while nothing is
+	#  stretched at all. **The equation is the thing that was wrong before and is right now.**
+	var pr2 := Progress.new()
+	for pair2: Array in [[ROW_ITEM, UnlockDefs.AXIS_ITEM], [ROW_BODY, UnlockDefs.AXIS_BODY]]:
+		var ri: int = pair2[0]
+		var ids2 := _ids(pair2[1])
+		var w2 := _widths(ids2, pr2)
+		var rects2 := Layout.unlock_chip_rects(rows[ri], w2)
+		for k in rects2.size():
+			var want: float = maxf(w2[k] + Layout.CHIP_TEXT_INSET_PX * 2.0, Layout.CHIP_MIN_W_PX)
+			t.ok(absf(rects2[k].size.x - want) < 0.01,
+				"%d번 줄 칩 %d의 폭이 제 글자폭(%.1f)+여백이다 (%.1f) — 줄을 나눠 가진 게 아니다"
+					% [ri, k, w2[k], rects2[k].size.x])
+		# **And no chip spans the whole band any more** — that is the shape of the 299px complaint.
+		var band := Layout.chip_band(rows[ri])
+		for r2: Rect2 in rects2:
+			t.ok(r2.size.x < band.size.x * 0.9,
+				"%d번 줄 칩이 띠 전체(%.0fpx)를 차지하지 않는다 (%.0fpx)" % [ri, band.size.x, r2.size.x])
 
 
 ## **Acceptance 22.** Centres **and** the four inset corners — `net_pick`'s own finding is that a hit box
 ##  shrunk on one side survives a centre-only check entirely.
 func _chip_at_reads_the_same_rects_as_chip_rects(t) -> void:
 	var rows := Layout.rows(Fx.RESEARCH_RECT.size)
-	for row_i in [ROW_ITEM, ROW_BODY]:
+	var pr := Progress.new()
+	for pair: Array in [[ROW_ITEM, UnlockDefs.AXIS_ITEM], [ROW_BODY, UnlockDefs.AXIS_BODY]]:
+		var row_i: int = pair[0]
+		var ids := _ids(pair[1])
 		var row: Rect2 = rows[row_i]
-		for count in [1, 3]:
-			var chips := Layout.unlock_chip_rects(row, count)
-			for i in chips.size():
-				var r := chips[i]
-				t.eq(Layout.unlock_chip_at(row, count, r.get_center()), i,
-					"%d번 줄 / %d개 배치에서 칩 %d 한가운데를 찍으면 %d다" % [row_i, count, i, i])
-				for corner: Vector2 in [
-						r.position + Vector2(CORNER_INSET_PX, CORNER_INSET_PX),
-						Vector2(r.end.x - CORNER_INSET_PX, r.position.y + CORNER_INSET_PX),
-						r.position + Vector2(CORNER_INSET_PX, r.size.y - CORNER_INSET_PX),
-						r.end - Vector2(CORNER_INSET_PX, CORNER_INSET_PX),
-				]:
-					t.eq(Layout.unlock_chip_at(row, count, corner), i,
-						"칩 %d의 안쪽 모서리(%s)를 찍어도 %d다" % [i, corner, i])
-			t.eq(Layout.unlock_chip_at(row, count, Vector2(-50.0, -50.0)), -1,
-				"%d번 줄 / %d개 배치에서 창 밖을 찍으면 -1이다" % [row_i, count])
-			# **Above the band is a miss** — the chips are the row's lower half, and the name line above them
-			#  must not be pressable.
-			t.eq(Layout.unlock_chip_at(row, count, Vector2(row.get_center().x, row.position.y + 1.0)), -1,
-				"%d번 줄 / %d개 배치에서 이름 줄(윗절반)을 찍으면 -1이다" % [row_i, count])
-		t.eq(Layout.unlock_chip_at(row, 0, row.get_center()), -1, "칩이 0개면 어디를 찍어도 -1이다")
+		var w := _widths(ids, pr)
+		var chips := Layout.unlock_chip_rects(row, w)
+		for i in chips.size():
+			var r := chips[i]
+			t.eq(Layout.unlock_chip_at(row, w, r.get_center()), i,
+				"%d번 줄에서 칩 %d 한가운데를 찍으면 %d다" % [row_i, i, i])
+			for corner: Vector2 in [
+					r.position + Vector2(CORNER_INSET_PX, CORNER_INSET_PX),
+					Vector2(r.end.x - CORNER_INSET_PX, r.position.y + CORNER_INSET_PX),
+					r.position + Vector2(CORNER_INSET_PX, r.size.y - CORNER_INSET_PX),
+					r.end - Vector2(CORNER_INSET_PX, CORNER_INSET_PX),
+			]:
+				t.eq(Layout.unlock_chip_at(row, w, corner), i,
+					"칩 %d의 안쪽 모서리(%s)를 찍어도 %d다" % [i, corner, i])
+		t.eq(Layout.unlock_chip_at(row, w, Vector2(-50.0, -50.0)), -1,
+			"%d번 줄에서 창 밖을 찍으면 -1이다" % row_i)
+		# **Above the band is a miss** — the chips are the row's lower half, and the name line above them
+		#  must not be pressable.
+		t.eq(Layout.unlock_chip_at(row, w, Vector2(row.get_center().x, row.position.y + 1.0)), -1,
+			"%d번 줄에서 이름 줄(윗절반)을 찍으면 -1이다" % row_i)
+		# **The gap between chips is a miss too** — content-sized chips leave real space between them, and a
+		#  click there must buy nothing. With the old row-divided rects there was no such space to test.
+		if chips.size() >= 2:
+			var gap_x := chips[0].end.x + Layout.CHIP_GAP_PX * 0.5
+			t.eq(Layout.unlock_chip_at(row, w, Vector2(gap_x, row.end.y - 4.0)), -1,
+				"%d번 줄에서 칩 사이 틈을 찍으면 -1이다 (내용 맞춤이라 진짜 틈이 생긴다)" % row_i)
+		t.eq(Layout.unlock_chip_at(row, PackedFloat32Array(), row.get_center()), -1,
+			"칩이 0개면 어디를 찍어도 -1이다")
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -813,10 +848,13 @@ func _click(win: Control, pos: Vector2) -> void:
 
 
 ## Where the chip for `unlock_id` sits, in window-local coordinates.
-func _chip_center(win: Control, row_i: int, axis: String, unlock_id: int) -> Vector2:
+## **`pr` is required, not read off the window** — chip widths depend on the label, and the label depends on
+##  what has been bought (`물 잠김 10` is wider than `물`). A helper that guessed the state would point at
+##  where the chip *used* to be.
+func _chip_center(win: Control, row_i: int, axis: String, unlock_id: int, pr: Progress) -> Vector2:
 	var row: Rect2 = Layout.rows(win.size)[row_i]
 	var ids := UnlockDefs.ids_for_axis(axis)
-	return Layout.unlock_chip_rects(row, ids.size())[ids.find(unlock_id)].get_center()
+	return Layout.unlock_chip_rects(row, _widths(ids, pr))[ids.find(unlock_id)].get_center()
 
 
 ## **Acceptance 18.** Untreed window, `_ready()` by hand (it only writes `position`/`size`), then real
@@ -835,7 +873,7 @@ func _clicking_a_chip_spends_and_grants(t) -> void:
 	t.eq(win.size, Fx.RESEARCH_RECT.size, "창 크기가 자리 잡혔다 (전제 — 좌표계가 맞아야 한다)")
 
 	# -- a chip you can afford --
-	var water_at := _chip_center(win, ROW_ITEM, UnlockDefs.AXIS_ITEM, UnlockDefs.UNLOCK_RUNE_WATER)
+	var water_at := _chip_center(win, ROW_ITEM, UnlockDefs.AXIS_ITEM, UnlockDefs.UNLOCK_RUNE_WATER, pr)
 	_click(win, water_at)
 	t.ok(pr.is_unlocked(UnlockDefs.UNLOCK_RUNE_WATER), "물 칩을 누르면 해금이 기록된다")
 	t.ok(pr.owns_rune(Tuning.ELEM_WATER), "그리고 룬이 손에 들어온다")
@@ -848,18 +886,18 @@ func _clicking_a_chip_spends_and_grants(t) -> void:
 
 	# -- a chip you cannot afford --
 	pr.gems = 0
-	_click(win, _chip_center(win, ROW_ITEM, UnlockDefs.AXIS_ITEM, UnlockDefs.UNLOCK_RUNE_FIRE))
+	_click(win, _chip_center(win, ROW_ITEM, UnlockDefs.AXIS_ITEM, UnlockDefs.UNLOCK_RUNE_FIRE, pr))
 	t.ok(not pr.is_unlocked(UnlockDefs.UNLOCK_RUNE_FIRE), "원석 0에서 불 칩을 눌러도 아무 일도 없다")
 	t.eq(pr.gems, 0, "원석도 음수로 안 내려간다")
 
 	# -- the 무 chip is never for sale, however much you hold --
 	pr.gems = Progress.GEMS_PER_UNLOCK * 5
-	_click(win, _chip_center(win, ROW_ITEM, UnlockDefs.AXIS_ITEM, UnlockDefs.UNLOCK_RUNE_NONE))
+	_click(win, _chip_center(win, ROW_ITEM, UnlockDefs.AXIS_ITEM, UnlockDefs.UNLOCK_RUNE_NONE, pr))
 	t.eq(pr.gems, Progress.GEMS_PER_UNLOCK * 5, "무 칩을 눌러도 원석이 안 나간다 (팔지 않는다)")
 	t.ok(not pr.is_unlocked(UnlockDefs.UNLOCK_RUNE_NONE), "무 룬이 '샀다'로 기록되지도 않는다")
 
 	# -- the body row's own chip, the same three --
-	var jump_at := _chip_center(win, ROW_BODY, UnlockDefs.AXIS_BODY, UnlockDefs.UNLOCK_DOUBLE_JUMP)
+	var jump_at := _chip_center(win, ROW_BODY, UnlockDefs.AXIS_BODY, UnlockDefs.UNLOCK_DOUBLE_JUMP, pr)
 	pr.gems = Progress.GEMS_PER_UNLOCK
 	_click(win, jump_at)
 	t.ok(pr.is_unlocked(UnlockDefs.UNLOCK_DOUBLE_JUMP), "2단 점프 칩을 누르면 산다")
@@ -878,7 +916,7 @@ func _clicking_a_chip_spends_and_grants(t) -> void:
 	var rmb := InputEventMouseButton.new()
 	rmb.button_index = MOUSE_BUTTON_RIGHT
 	rmb.pressed = true
-	rmb.position = _chip_center(win, ROW_ITEM, UnlockDefs.AXIS_ITEM, UnlockDefs.UNLOCK_RUNE_FIRE)
+	rmb.position = _chip_center(win, ROW_ITEM, UnlockDefs.AXIS_ITEM, UnlockDefs.UNLOCK_RUNE_FIRE, pr)
 	win.call("_gui_input", rmb)
 	t.eq(pr.gems, Progress.GEMS_PER_UNLOCK, "오른쪽 클릭으론 안 사진다")
 	var up := InputEventMouseButton.new()
@@ -931,8 +969,8 @@ func _the_rows_really_paint_their_chips(t) -> void:
 	var last: Array = win.chip_calls.slice(win.chip_calls.size() - per_frame)
 
 	var rows := Layout.rows(win.size)
-	var want_item := Layout.unlock_chip_rects(rows[ROW_ITEM], item_ids.size())
-	var want_body := Layout.unlock_chip_rects(rows[ROW_BODY], body_ids.size())
+	var want_item := Layout.unlock_chip_rects(rows[ROW_ITEM], _widths(item_ids, pr))
+	var want_body := Layout.unlock_chip_rects(rows[ROW_BODY], _widths(body_ids, pr))
 	for i in item_ids.size():
 		var call: Dictionary = last[i]
 		t.eq(call["id"], item_ids[i], "아이템 줄 %d번 칩이 표 순서대로 %d번 해금이다" % [i, item_ids[i]])
@@ -1172,7 +1210,7 @@ func _closing_the_bench_refreshes_the_town_message(t) -> void:
 	t.eq(win.size, Fx.RESEARCH_RECT.size, "연구창이 fx_tuning이 말한 크기로 앉는다 (전제)")
 	var row: Rect2 = Layout.rows(win.size)[ROW_ITEM]
 	var ids := UnlockDefs.ids_for_axis(UnlockDefs.AXIS_ITEM)
-	_click(win, Layout.unlock_chip_rects(row, ids.size())[ids.find(UnlockDefs.UNLOCK_RUNE_WATER)].get_center())
+	_click(win, Layout.unlock_chip_rects(row, _widths(ids, pr))[ids.find(UnlockDefs.UNLOCK_RUNE_WATER)].get_center())
 	t.ok(pr.call("is_unlocked", UnlockDefs.UNLOCK_RUNE_WATER), "창 안에서 클릭으로 물 룬을 샀다 (전제)")
 
 	root.call("_interact")
@@ -1328,3 +1366,15 @@ func _the_hud_line_states_the_cost_and_follows_a_purchase(t) -> void:
 	t.eq(before.count("잠김") - after.count("잠김"), 1,
 		"잠긴 룬이 정확히 하나 줄어든다 (net_town이 세는 것과 같은 계약)")
 	t.ok(after.contains("%d" % Progress.GEMS_PER_UNLOCK), "사고 나서도 값은 계속 적혀 있다 (아직 살 게 남았다)")
+
+
+## Chip widths the way the window measures them — `ResearchWindow.chip_widths` itself, not a second
+## measurement. Measuring separately here would make every geometry check below assert its own arithmetic.
+func _widths(ids: Array[int], pr: Progress) -> PackedFloat32Array:
+	var font: Font = ThemeDB.fallback_font
+	return ResearchWindow.chip_widths(font, ids, pr)
+
+
+## The item/body id lists, in table order — what the window itself lays out.
+func _ids(axis: String) -> Array[int]:
+	return UnlockDefs.ids_for_axis(axis)

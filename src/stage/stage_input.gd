@@ -56,6 +56,12 @@ signal pick_toggled
 ## **Which window closes, and whether closing one loses anything, is not decided here** — the same
 ##  discipline every other toggle signal above already holds.
 signal cancel_requested
+## **F3 — shows or hides the debug readout** (`HUD/Stats`). **A shell-only debug key**, like the spawn keys.
+##  The readout is **off when the game boots**: it is fifteen lines of black text and it draws straight over
+##  the research window's parchment, covering the thing the player opened it to read. Keeping it is right —
+##  it is the only view of tick, chunk and monster counts there is — but it is a developer's view, and
+##  nothing about it belongs on a first screen.
+signal debug_hud_toggled
 ## **L — takes a pending boss reward. A shell-only debug key** (`stage1-bosses.md` Stage I).
 ## **Stands in for a decision the user has explicitly left open** ("how the fire rune is received" — the
 ## GDD's own open TBD) — the real reward (a rune card through the three-pick window) is milestone step 3, not
@@ -190,6 +196,8 @@ func _unhandled_input(event: InputEvent) -> void:
 				reward_taken_requested.emit()
 			KEY_E:
 				interact_requested.emit()
+			KEY_F3:
+				debug_hud_toggled.emit()
 			# **Both the main row and the numpad** — `-` on the main row is `KEY_MINUS` and the numpad's is a
 			#  different keycode entirely. Bind only one and it reads as "the key does nothing".
 			KEY_MINUS, KEY_KP_SUBTRACT:

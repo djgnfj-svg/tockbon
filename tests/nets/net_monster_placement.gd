@@ -54,6 +54,7 @@ const TILE_PX := Tuning.TILE_CELLS * Tuning.CELL_PX
 
 
 func run(t) -> void:
+	_the_sleeping_approach_is_visible_and_the_hen_stays_on_its_shelf(t)
 	_table_is_sorted_by_tx(t)
 	_adjacent_rows_are_at_least_3_tiles_apart(t)
 	_no_two_resolved_boxes_intersect_on_the_real_map(t)
@@ -462,7 +463,7 @@ func _the_wake_scan_only_runs_on_the_tick(t) -> void:
 
 ## **Hysteresis, and it moved** (`left-run-clumps-and-platforms.md` §8). The band no longer governs a
 ## dormant row — it governs a **live monster's `asleep`**, and its numbers are `STIR_ENTER_PX`(420) /
-## `STIR_EXIT_PX`(560), inside the half-viewport so the player watches the stir happen.
+## `STIR_EXIT_PX`, inside the visible band so the player watches the stir happen.
 ## `stays_active` is pure, so this drives the real production function with no world at all — the same
 ## door `world_step`'s sleep pass calls, not a copy of the comparison.
 ##
@@ -471,10 +472,17 @@ func _the_stir_band_flips_once_not_every_tick(t) -> void:
 	var enter := MonsterPlacement.STIR_ENTER_PX
 	var exit_px := MonsterPlacement.STIR_EXIT_PX
 	t.ok(exit_px > enter, "전제 — 나가는 문턱이 들어오는 문턱보다 멀다 (그게 대역이다)")
-	# Becomes active at 400 (inside `enter`); then jitters between 422 and 540 — **inside the dead band**,
-	# never below 420 (already active) and never above 560 (which would deactivate) — before dropping to
-	# 400 again. A single-threshold rule flips on every crossing of 420; the band must not.
-	var offsets := [400.0, 422.0, 540.0, 422.0, 540.0, 422.0, 540.0, 422.0, 540.0, 400.0]
+	# **Derived from the constants, not written as literals.** This used to be
+	#  `[400, 422, 540, ...]` — chosen by hand to sit inside the 420/560 band, and it **broke the day
+	#  `STIR_ENTER_PX` was retuned to 300**, because 400 stopped being inside `enter`. The check owned
+	#  neither number and should never have spelled them.
+	#  Becomes active just inside `enter`; then jitters strictly **inside the dead band** (above `enter`,
+	#  below `exit_px`), where a single-threshold rule would flip on every crossing and the band must not.
+	var inside := enter - 20.0
+	var lo := enter + 2.0
+	var hi := exit_px - 20.0
+	t.ok(lo < hi, "전제 — 대역이 흔들릴 만큼 넓다 (%.0f ~ %.0f)" % [lo, hi])
+	var offsets := [inside, lo, hi, lo, hi, lo, hi, lo, hi, inside]
 	var flips := 0
 	var naive_flips := 0
 	var last := false
@@ -490,7 +498,7 @@ func _the_stir_band_flips_once_not_every_tick(t) -> void:
 			naive_flips += 1
 		naive_last = naive_now
 
-	t.eq(flips, 1, "420/560 대역 안에서 흔들려도 실제로는 한 번만 뒤집힌다 (%d번)" % flips)
+	t.eq(flips, 1, "%.0f/%.0f 대역 안에서 흔들려도 실제로는 한 번만 뒤집힌다 (%d번)" % [enter, exit_px, flips])
 	t.ok(naive_flips > flips,
 		"단일 문턱이었다면 훨씬 자주 뒤집혔을 것이다 (naive %d회 vs 실제 %d회)" % [naive_flips, flips])
 
@@ -946,8 +954,8 @@ class _CapturingMonsterView extends MonsterView:
 ##  · a **debug-spawned** monster, which never sleeps at all (`world_step`'s `has_row_for` gate) — it must
 ##    never mark, not even on the frame the view first sees it. That is the "already awake" case, and the
 ##    naive `if not m.asleep: mark()` would fire on it every single frame
-##  · a **placed row that is asleep** — materialised at 720 but outside the 420 stir band. No mark
-##  · the **stir itself** — the player walks inside 420 and the row's `asleep` flips. **One mark, at that
+##  · a **placed row that is asleep** — materialised at 720 but outside the stir band. No mark
+##  · the **stir itself** — the player walks inside `STIR_ENTER_PX` and the row's `asleep` flips. **One mark, at that
 ##    monster's own centre, at age 0**
 ##
 ## *Inversion: delete the `_paint_wake_mark` call from `_draw()` and the last three asserts go red.*
@@ -957,7 +965,7 @@ func _the_view_paints_a_wake_mark_exactly_when_a_mob_stirs(t) -> void:
 	var mob_x := tx * Tuning.TILE_CELLS * Tuning.CELL_PX
 	var g := _flat_grid()
 	var ch := Character.new()
-	# **Inside `MATERIALIZE_PX`(720) and outside `STIR_ENTER_PX`(420)** — the exact gap §8a exists to
+	# **Inside `MATERIALIZE_PX`(720) and outside `STIR_ENTER_PX`** — the exact gap §8a exists to
 	#  create: the row is standing there, asleep, before the player can see it.
 	ch.place(mob_x + 600, SYN_FLOOR_TOP - Character.H_PX)
 	var world := WorldStep.new(g, SpellSim.new(), ch)
@@ -967,7 +975,7 @@ func _the_view_paints_a_wake_mark_exactly_when_a_mob_stirs(t) -> void:
 	_frames(world, Tuning.TICK_DIVIDER * 8)
 	t.eq(world.monster_count(), 2, "행이 구현됐다 — 디버그 몹 하나 + 표 행 하나 (전제)")
 	var placed := world.monster_at(1)
-	t.ok(placed.asleep, "표 행은 720 안·420 밖이라 자고 있다 (전제)")
+	t.ok(placed.asleep, "표 행은 깨우기 거리 밖이라 자고 있다 (전제)")
 	t.ok(not world.monster_at(0).asleep, "디버그 몹은 애초에 잠들지 않는다 (전제)")
 
 	var view := _CapturingMonsterView.new()
@@ -1070,3 +1078,38 @@ func _wake_scan_runs_before_contact_damage_so_a_mob_that_wakes_overlapping_the_p
 	t.eq(world.monster_count(), 1, "이 틱에 행이 깬다 (전제)")
 	t.ok(ch.hp < Character.MAX_HP,
 		"겹친 채로 깨어난 바로 그 틱에 접촉 피해를 입는다 (깨우기가 접촉 판정보다 먼저 돈다)")
+
+
+## **The dormant approach is visible before the mob wakes — and that is a *relationship*, not a value.**
+##
+## **Two readers in one night inferred the opposite** from "`STIR_ENTER_PX` 420 < half-viewport 480" and
+## concluded mobs wake off screen, so the fix must be to *raise* it. **The camera lead is what they missed**:
+## `Fx.CAM_LEAD_PX` (72) leads toward travel, so the visible edge ahead is **552**, not 480 — the mob was
+## already visible while asleep, and raising the stir distance **shrinks** that window.
+##
+## **This does not pin the constant's value** (that would be counting it in two places). It pins the three
+## things that make the value legal, so a future retune has to stay inside them.
+func _the_sleeping_approach_is_visible_and_the_hen_stays_on_its_shelf(t) -> void:
+	var half_view := 480.0        # 960 viewport / 2, at ZOOM_STEPS[0] = 1.0
+	var visible_ahead := half_view + Fx.CAM_LEAD_PX
+	t.eq(visible_ahead, 552.0, "진행 방향으로 보이기 시작하는 거리가 552px다 (480 + 카메라 선행 72 — 전제)")
+
+	# (1) **Visible before it wakes.** This is the one the two wrong inferences would have broken.
+	var window_px := visible_ahead - MonsterPlacement.STIR_ENTER_PX
+	t.ok(window_px > 0.0,
+		"몹이 깨기 전에 화면에 보인다 (자는 채로 보이는 구간 %.0fpx)" % window_px)
+	# **And long enough to read**, not a technicality. At 260px/s, half a second was the complaint.
+	t.ok(window_px / Character.MOVE_SPEED_PX >= 0.8,
+		"그 구간이 0.8초 이상이다 (%.2f초 — 0.51초일 때 '거의 안 보인다'는 보고가 나왔다)"
+			% (window_px / Character.MOVE_SPEED_PX))
+
+	# (2) **The shelf ceiling.** A stirred hen walks until `BOLT_STOP_PX` from the player, so it covers
+	#  `STIR_ENTER_PX - 240` px, against 288px of shelf west of every shelf hen.
+	var walk := MonsterPlacement.STIR_ENTER_PX - 240.0
+	t.ok(walk <= 288.0,
+		"깬 닭이 걷는 거리가 선반 여유 288px 안이다 (%.0fpx — 넘으면 선반에서 떨어진다)" % walk)
+
+	# (3) **Hysteresis survives.** Collapsing the band makes a monster on the boundary flip every tick.
+	t.ok(MonsterPlacement.STIR_ENTER_PX < MonsterPlacement.STIR_EXIT_PX,
+		"들어가는 거리가 나가는 거리보다 작다 (%.0f < %.0f)"
+			% [MonsterPlacement.STIR_ENTER_PX, MonsterPlacement.STIR_EXIT_PX])

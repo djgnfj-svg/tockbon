@@ -2061,9 +2061,21 @@ class _CapturingCircleWindow extends CircleWindow:
 		super(tex, r, tint)
 
 
+## **Both circles are driven, and that is not thoroughness — it is the difference between measuring the bug
+## and missing it.** The round circle's rune already fitted its hole by **0.2px** before any fix; the
+## triangle's overran by **8px**, and the triangle is what verify-look photographed. A version of this check
+## that drove only the default circle stayed **green with `RUNE_ART_FRAC` reverted to 1.0** — measured, not
+## supposed. The triangle is the binding case for the same reason it is in `Fx.RUNE_ART_FRAC`'s own box: its
+## ring is smaller and its rune seat is bigger.
 func _the_ring_and_rune_art_actually_reaches_the_paint(t) -> void:
+	for circle_id: int in CircleDefs.ALL:
+		await _art_reaches_the_paint_for(t, circle_id)
+
+
+func _art_reaches_the_paint_for(t, circle_id: int) -> void:
 	var win := _CapturingCircleWindow.new()
 	var circle := SpellCircle.new()
+	circle.set_circle(circle_id)
 	circle.set_rune(0, Tuning.ELEM_FIRE)
 	circle.place_glyph(0, Glyph.SPREAD_C)
 	win.setup(Progress.new(), circle)
@@ -2090,10 +2102,46 @@ func _the_ring_and_rune_art_actually_reaches_the_paint(t) -> void:
 		t.ok(r.size.x > 0.0 and r.size.y > 0.0,
 			"%s 를 크기 있는 자리에 그린다 (%s)" % [String(a["path"]).get_file(), r.size])
 
-	# **Tinted, not raw.** This art is dark strokes on a transparent field; drawn untinted on the window's
-	#  dark panel nothing appears while every check above still passes.
+	# ══ The colour that actually lands, not the constant that was passed ══
+	#
+	# **Asserting `tint == CIRCLE_ART_TINT` proves nothing** — it stayed green through the version where the
+	#  modulate was **under** 1.0 and quietly made near-black art darker still. What matters is the product:
+	#  the art's own stroke colour times the modulate, against the panel it sits on.
+	#  **Measured**: strokes are RGB(26,24,22), `WINDOW_BG` is (13,14,22). verify-look's report was that the
+	#  picture was the least visible thing in the window.
+	var stroke := Color8(26, 24, 22)
 	for a: Dictionary in win.art:
-		t.eq(a["tint"], Fx.CIRCLE_ART_TINT, "%s 를 정해진 색조로 그린다" % String(a["path"]).get_file())
+		var tint: Color = a["tint"]
+		var lit := Color(stroke.r * tint.r, stroke.g * tint.g, stroke.b * tint.b)
+		var nm := String(a["path"]).get_file()
+		t.ok(lit.r > Fx.WINDOW_BG.r + 0.25 and lit.g > Fx.WINDOW_BG.g + 0.25,
+			"%s 의 획이 패널보다 확실히 밝게 찍힌다 (획 %.2f vs 패널 %.2f)" % [nm, lit.r, Fx.WINDOW_BG.r])
+		t.ok(lit.r > stroke.r, "%s 를 어둡게 만들지 않는다 (곱셈이 1 아래면 여기가 빨개진다)" % nm)
+
+	# ══ The donut: the rune sits INSIDE the ring's hole, not under its teeth ══
+	#
+	# **The relationship, not the two rects.** Each rect on its own was already "right" while the pictures
+	#  overlapped — the user's complaint ("도넛 모양으로 들어가는 것") and verify-look's ("the bead's lower
+	#  edge is eaten by the toothed pattern") are both about how the two sit *together*.
+	# **Pairs are matched by centre**, because that is what makes them a donut: `circle_layout` already puts
+	#  every band's centre on its own rune slot, which is why this was a size fix and not a layout one.
+	var pairs := 0
+	for ring: Dictionary in win.art:
+		if not String(ring["path"]).get_file().begins_with("ring_"):
+			continue
+		var rr: Rect2 = ring["rect"]
+		for rune: Dictionary in win.art:
+			if not String(rune["path"]).get_file().begins_with("rune_"):
+				continue
+			var ur: Rect2 = rune["rect"]
+			if not rr.get_center().is_equal_approx(ur.get_center()):
+				continue
+			pairs += 1
+			var hole := rr.size.x * 0.5 * Fx.RING_HOLE_FRAC
+			var ink := ur.size.x * 0.5 * Fx.RUNE_INK_FRAC
+			t.ok(ink < hole,
+				"룬 그림(%.1f)이 고리 구멍(%.1f) 안에 들어간다 — 톱니 밑에 깔리지 않는다" % [ink, hole])
+	t.ok(pairs > 0, "같은 중심에 놓인 고리·룬 쌍이 실제로 있다 (0이면 위 규칙이 아무것도 안 잰다)")
 
 	t.root.remove_child(win)
 	win.queue_free()

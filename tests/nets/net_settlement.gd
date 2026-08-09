@@ -79,6 +79,7 @@ func run(t) -> void:
 	_the_three_clear_strings_are_the_ones_the_plan_names(t)
 	_the_two_notice_lines_fit_inside_the_band_they_are_drawn_in(t)
 	await _the_notice_is_painted_on_a_clear_and_never_on_a_death(t)
+	_the_notice_is_centred_in_its_rect(t)
 	# -- Stage D — the wired shell --
 	_hud_hides_while_the_settlement_screen_shows(t)
 	_snapshot_values_equal_progresss_live_values_at_the_instant_it_opens(t)
@@ -672,3 +673,38 @@ func _read(path: String) -> String:
 		push_error("net_settlement: %s 를 못 읽었다" % path)
 		return ""
 	return f.get_as_text()
+
+
+## **The notice is centred, not left-aligned to the row margin** (verify-look: left-aligned it read as a
+##  fourth data row, while the title above and the button below are centred).
+##
+## **`_centred_x` is asserted directly because the capture subclass above cannot see it** — that subclass
+##  overrides `_draw_notice` wholesale and never calls `super()`, so the centring happens on a path the
+##  capture replaces. The same gap shape as `spell_view._paint_bolt`'s. **A pure static is the cheap way
+##  to close it**: no font-in-a-tree problem, no frame pumping, and it is the exact function the drawing calls.
+func _the_notice_is_centred_in_its_rect(t) -> void:
+	var font: Font = ThemeDB.fallback_font
+	t.ok(font != null, "기본 폰트가 있다 (전제)")
+	if font == null:
+		return
+	var r := Layout.notice_rect(Fx.SETTLEMENT_RECT.size)
+
+	for s: String in [Fx.SETTLEMENT_NOTICE_1, Fx.SETTLEMENT_NOTICE_2]:
+		var w := font.get_string_size(s, HORIZONTAL_ALIGNMENT_LEFT, -1, Fx.SETTLEMENT_NOTICE_SIZE).x
+		var x: float = SettlementWindow._centred_x(font, s, r)
+		# **The gap on the left equals the gap on the right** — that is what centred means, and it is
+		#  measured rather than compared against a recomputed x (which would be the same arithmetic twice).
+		var left := x - r.position.x
+		var right := r.end.x - (x + w)
+		t.ok(absf(left - right) < 1.0,
+			"'%s' 의 좌우 여백이 같다 (왼쪽 %.1f · 오른쪽 %.1f)" % [s, left, right])
+		# **And it is not the old left-aligned value** — without this, centring a string exactly as wide as
+		#  the rect would pass the symmetry check while nothing had changed.
+		t.ok(x > r.position.x + 1.0,
+			"'%s' 가 줄 라벨과 같은 왼쪽 여백에 붙어 있지 않다 (x %.1f > %.1f)" % [s, x, r.position.x])
+
+	# **A line wider than the rect must not be pushed off the left edge** — centring a too-wide string gives
+	#  a negative offset, and clamping is a decision, not an accident. Recorded as what it does today.
+	var wide := "가".repeat(200)
+	var wx: float = SettlementWindow._centred_x(font, wide, r)
+	t.ok(wx < r.position.x, "칸보다 긴 줄은 왼쪽으로 넘친다 (클램프 안 한다 — 오늘의 동작을 적어 둔다)")

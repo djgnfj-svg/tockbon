@@ -336,6 +336,21 @@ const ROOM1_WATER_ROW := 200
 ##  cannot disagree — unlike a `mouse_filter` latch, nothing here can strand the game.
 var _room3_gate_open := false
 
+## **Is the debug readout showing. Off at boot, F3 toggles it** (`stage_input.debug_hud_toggled`).
+##
+## **It is fifteen lines, not two.** `docs/submission/` has been describing it as two, which is wrong and is
+##  worth correcting there separately. Fifteen lines of black text land on top of the research window's
+##  bright parchment and cover the prices the player opened it to read — found on screen, not reasoned.
+##
+## **Not deleted, defaulted off.** Tick number, chunk counts, monster counts and the pick state have no other
+##  view anywhere, and they are how most of this repo's headless findings get confirmed by eye. What was
+##  wrong was booting into them.
+##
+## **A plain `bool`, and `_update_hud()` derives `visible` from it every frame** — never written at the key
+##  itself. That is the same rule the line below already follows for the four windows, and its own comment
+##  records why: a visibility written at toggle time cannot see the paths that bypass the toggle.
+var _debug_hud := false
+
 ## **Debug camera zoom (`-` / `=`).** 1.0 is the play scale; 0.075 shows 12,800px of world on the 960x540
 ##  screen. **The map is 300x48 = 9,600px wide since `left-run-clumps-and-platforms.md` cut 100 columns**,
 ##  so the last step now over-fits it rather than framing it exactly. Left as it is — that doc does not
@@ -447,6 +462,7 @@ func _ready() -> void:
 	#  Walking, firing and fire spreading with the window open is the whole of design acceptance 4.
 	_input.assembly_toggled.connect(_toggle_assembly)
 	_input.pick_toggled.connect(_toggle_pick)
+	_input.debug_hud_toggled.connect(_toggle_debug_hud)
 	_input.cancel_requested.connect(_handle_cancel)
 	_input.zoom_requested.connect(_step_zoom)
 	# The starting equipment is **the model's default** (`SpellCircle`'s constructor) — the line that pushed
@@ -1429,6 +1445,12 @@ func _refresh_hud_counts() -> void:
 	_water_cells = _grid.count_material(Mat.WATER)
 
 
+## **F3.** Flips the flag only — `_update_hud()` is what turns it into `visible`, on the next frame and
+## through the same derivation as every other term.
+func _toggle_debug_hud() -> void:
+	_debug_hud = not _debug_hud
+
+
 func _update_hud() -> void:
 	_refresh_hud_counts()
 	# **`Stats` hides while either window claims the screen — derived here, every frame, not written at the
@@ -1443,7 +1465,9 @@ func _update_hud() -> void:
 	#  widened at its one call site rather than duplicated at a second.
 	# **`_settlement.is_showing()` too** (`run-end-settlement.md`, Stage D) — otherwise this debug readout
 	#  prints straight over the settlement panel, and nothing barks.
-	_hud.visible = not _pick_window.is_showing() and not _circle_window.visible \
+	# **`_debug_hud` first, and it is false at boot** — see its own declaration. The window terms below are
+	#  unchanged: even switched on, the readout still yields to anything that claims the screen.
+	_hud.visible = _debug_hud and not _pick_window.is_showing() and not _circle_window.visible \
 		and not _research_window.visible and not _settlement.is_showing()
 	# **The single source of health is the character.** Count it separately in the shell and it becomes "it took damage but the number is unchanged".
 	# **Downed no longer says anything here** — the settlement screen is what tells the player the run is over

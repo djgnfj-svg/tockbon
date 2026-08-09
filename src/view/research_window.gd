@@ -171,7 +171,7 @@ func _draw_rows(font: Font) -> void:
 			draw_string(font, Vector2(tx, base[1]), _row_state(key),
 				HORIZONTAL_ALIGNMENT_LEFT, -1, Fx.RESEARCH_DIM_SIZE, Fx.RESEARCH_INK_DIM)
 			continue
-		var chips := Layout.unlock_chip_rects(row, ids.size())
+		var chips := Layout.unlock_chip_rects(row, chip_widths(font, ids, _progress))
 		for c in mini(chips.size(), ids.size()):
 			_paint_unlock_chip(font, ids[c], chips[c], chip_state(ids[c], _progress))
 
@@ -257,6 +257,21 @@ static func chip_text(unlock_id: int, progress: Progress) -> String:
 	return out
 
 
+## **How wide each chip's label is, in draw order.** The one place chip widths are measured — `_draw_rows`
+##  and `_gui_input` both call it, so **the rect the player sees and the rect the click tests are the same
+##  by construction** rather than by two measurements happening to agree.
+##
+## **Static and font-in, so a net drives it** with `ThemeDB.fallback_font` and no scene. It measures the
+##  **same string at the same size** `_paint_unlock_chip` draws (`chip_text`, `RESEARCH_DIM_SIZE`) — measure a
+##  different string here and every chip is the wrong width with nothing barking.
+static func chip_widths(font: Font, ids: Array[int], progress: Progress) -> PackedFloat32Array:
+	var out := PackedFloat32Array()
+	for id: int in ids:
+		out.append(font.get_string_size(
+			chip_text(id, progress), HORIZONTAL_ALIGNMENT_LEFT, -1, Fx.RESEARCH_DIM_SIZE).x)
+	return out
+
+
 ## **One chip. Cut out of `_draw_rows()` as its own method so a net can override it and read the arguments**
 ##  — CLAUDE.md's own rule: "`_draw()` ran" is not "anything was drawn", and Godot refuses to let a script
 ##  override a native draw call (`draw_string`/`draw_rect` are hard parse errors), so the seam has to be an
@@ -292,7 +307,12 @@ func _gui_input(event: InputEvent) -> void:
 		var ids := UnlockDefs.ids_for_axis(String(Fx.RESEARCH_ROWS[i][0]))
 		if ids.is_empty():
 			continue
-		var idx := Layout.unlock_chip_at(rects[i], ids.size(), mb.position)
+		# **The same widths the drawing used, from the same function.** Measure them a second way here and a
+		#  click lands on the wrong chip — and with 10 원석 leaving the counter, on the wrong *purchase*.
+		var font: Font = get_theme_default_font()
+		if font == null:
+			return
+		var idx := Layout.unlock_chip_at(rects[i], chip_widths(font, ids, _progress), mb.position)
 		if idx < 0:
 			continue
 		# **`queue_redraw()` runs whether or not the buy took**, because the row under the cursor is the one

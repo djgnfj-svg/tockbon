@@ -154,6 +154,14 @@ const CHIP_BOX_PX := 1.0
 ## How far the chip's text starts in from its own left edge, so a buyable chip's outline does not run through
 ##  the first glyph. Shared by every state so the four never sit at four different x's as the state changes.
 const CHIP_TEXT_INSET_PX := 4.0
+## **A floor, so a one-character label is still a target.** `무` measures **21px** at `RESEARCH_DIM_SIZE` —
+##  content-sizing alone would make it a sliver next to `불 잠김 10`'s 106px. **40px is `net_research`'s own
+##  literal minimum**, and the two are deliberately the same number: the check asserts the floor holds and
+##  this is the floor.
+## **It applies to every chip, not only pressable ones.** `무` is `CHIP_FIXED` and never takes a click, but a
+##  row of boxes where one is half the height-width of its neighbours reads as a rendering fault, and the
+##  eye does not know which ones are pressable.
+const CHIP_MIN_W_PX := 40.0
 
 
 ## **`count` chips across the row's chip band, evenly divided** — the exact shape `pick_layout.cards` holds,
@@ -163,14 +171,28 @@ const CHIP_TEXT_INSET_PX := 4.0
 ## **The window is not resized in this game, but this divides rather than using a fixed chip width anyway** —
 ##  the same argument `rows()` above makes. At 480x400 three chips come out ~94px wide and one comes out
 ##  ~299px; `net_research` pins a 40px floor as a **literal**, not as a re-read of this function.
-static func unlock_chip_rects(row: Rect2, count: int) -> Array[Rect2]:
+## **Each chip is as wide as its own text, not as wide as its share of the row** (verify-look: the body row's
+##  single chip came out **299px** against the item row's **94.3px** — 3.2x — and *"a stretched empty box
+##  reads as a text input, not a button"*).
+##
+## **`text_w` is measured by the caller, which has the font.** This file stays static and pure and never
+##  touches a `Font`; the window measures each label once with the same size it draws at. **The old signature
+##  took a count and divided the band** — that is why the body row, with one chip, got the whole band.
+##
+## **Packed left to right with `CHIP_GAP_PX`, and they may run past the band** — a row whose labels are wider
+##  than the band would overflow rather than shrink. Left overflowing on purpose: shrinking would make the
+##  chips disagree with the text drawn in them, and **a chip narrower than its own label is the bug this
+##  change exists to remove.** `net_research` pins that today's real labels fit.
+static func unlock_chip_rects(row: Rect2, text_w: PackedFloat32Array) -> Array[Rect2]:
 	var out: Array[Rect2] = []
-	if count <= 0:
+	if text_w.is_empty():
 		return out
 	var band := chip_band(row)
-	var w := maxf((band.size.x - CHIP_GAP_PX * float(count - 1)) / float(count), 0.0)
-	for i in count:
-		out.append(Rect2(band.position.x + float(i) * (w + CHIP_GAP_PX), band.position.y, w, band.size.y))
+	var x := band.position.x
+	for w: float in text_w:
+		var cw := maxf(maxf(w, 0.0) + CHIP_TEXT_INSET_PX * 2.0, CHIP_MIN_W_PX)
+		out.append(Rect2(x, band.position.y, cw, band.size.y))
+		x += cw + CHIP_GAP_PX
 	return out
 
 
@@ -178,8 +200,8 @@ static func unlock_chip_rects(row: Rect2, count: int) -> Array[Rect2]:
 ## **Walks the exact rects `unlock_chip_rects()` produced.** Measuring separately here is how a click lands on
 ## the wrong chip — and with 10 원석 leaving the counter on every click, on the wrong *purchase* — with no
 ## error at all (`pick_layout.card_at`'s own header names the same trap).
-static func unlock_chip_at(row: Rect2, count: int, p: Vector2) -> int:
-	var rects := unlock_chip_rects(row, count)
+static func unlock_chip_at(row: Rect2, text_w: PackedFloat32Array, p: Vector2) -> int:
+	var rects := unlock_chip_rects(row, text_w)
 	for i in rects.size():
 		if rects[i].has_point(p):
 			return i

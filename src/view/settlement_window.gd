@@ -196,13 +196,25 @@ func _draw_title(font: Font, title: String, pos: Vector2) -> void:
 ## **A hook for the same reason `_draw_title` is one**: GDScript refuses to override the native `draw_string`
 ## (a hard parse error, measured directly in `net_settlement.gd`), so without this seam a net can only ask
 ## whether `_draw()` ran — never whether either Korean line reached the paint, nor that a death draws neither.
+## **Centred, each line on its own width** — verify-look: left-aligned to the row labels' margin, the notice
+##  **read as a fourth data row** while the title and the button above and below it are centred.
+##  It is not a row; it is a statement about the build.
+## **Measured per line, not once for the pair** — the two Korean lines differ in width, and centring both on
+##  the longer one would leave the short one visibly off-axis. Same idiom `_draw_title` uses.
 func _draw_notice(font: Font, line1: String, line2: String, r: Rect2) -> void:
 	var line_h := float(Fx.SETTLEMENT_NOTICE_SIZE) * 1.6
 	var y := r.position.y + float(Fx.SETTLEMENT_NOTICE_SIZE)
-	draw_string(font, Vector2(r.position.x, y), line1,
+	draw_string(font, Vector2(_centred_x(font, line1, r), y), line1,
 		HORIZONTAL_ALIGNMENT_LEFT, -1, Fx.SETTLEMENT_NOTICE_SIZE, Fx.SETTLEMENT_NOTICE_COLOR)
-	draw_string(font, Vector2(r.position.x, y + line_h), line2,
+	draw_string(font, Vector2(_centred_x(font, line2, r), y + line_h), line2,
 		HORIZONTAL_ALIGNMENT_LEFT, -1, Fx.SETTLEMENT_NOTICE_SIZE, Fx.SETTLEMENT_NOTICE_COLOR)
+
+
+## Where a notice line starts so that it sits centred in `r`. **Static and pure, so a net reads the same x
+##  the drawing does** — the seat `SettlementLayout`'s own functions sit in.
+static func _centred_x(font: Font, s: String, r: Rect2) -> float:
+	var w := font.get_string_size(s, HORIZONTAL_ALIGNMENT_LEFT, -1, Fx.SETTLEMENT_NOTICE_SIZE).x
+	return r.position.x + (r.size.x - w) * 0.5
 
 
 ## Label on the left, value right-aligned to the row's own width — the mockup's own "label ... value" reading.

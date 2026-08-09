@@ -700,11 +700,55 @@ const GLYPH_TINT: Dictionary = {
 
 ## The color of a glyph with no definition. **Deliberately magenta** — grow the glyphs without growing this
 ##  and the screen screams (the same reason as `MISSING_RGB` in `cell_materials.gd`).
-## **Ring and rune art is tinted, not drawn raw** — the same measured reason `_draw_socket_glyph_texture`
-## tints its own: this art is dark strokes on a transparent field, and on this window's dark panel an
-## untinted draw puts **nothing** on screen while every check stays green. Cream, matching the window's
-## own line work.
-const CIRCLE_ART_TINT := Color(0.93, 0.89, 0.78)
+## **Ring and rune art, and the modulate is over-bright on purpose — measured, and the first value was
+## wrong in the wrong direction.**
+##
+## **The measurement**: `ring_*.png` and `rune_*.png` are strokes at **RGB(26,24,22)** on transparent — very
+## nearly black. `WINDOW_BG` is **(13,14,22)**. So the art is barely 11 red above the panel it sits on, and
+## verify-look duly reported the newly added picture as **the least visible thing in the window**, with the
+## two thin procedural rims outside it reading fine.
+##
+## ⚠ **A cream modulate under 1.0 made it worse, not better.** `draw_texture_rect`'s modulate **multiplies**:
+## (26,24,22) x (0.93,0.89,0.78) = **(24,21,17)**, darker than the raw art. The first version of this
+## constant did exactly that while its own comment claimed it was the fix.
+##
+## **`socket_glyph_*.png` is white (255,255,255)**, which is why the same trick works there and is why the
+## two were wrongly assumed to behave alike — white x tint = tint, black x tint = black.
+##
+## ⇒ **Components above 1.0.** The multiply happens before the framebuffer clamps, so >1 genuinely
+## brightens; `GATE_TAKE_TINT`'s own comment already relies on exactly this ("what produces the flare is
+## that the mid-tones do not clamp"). x7.88/8.17/7.73 lands the strokes at **(204,196,170)**, cream, against
+## a (13,14,22) panel.
+##
+## **This is not a shader case.** `monster_view._draw_outlines` records that modulate "never brightens" —
+## true for what *it* needs, which is a **flat** colour regardless of the source pixel. Scaling one dark
+## tone up is ordinary multiplication and needs no material and no child node.
+const CIRCLE_ART_TINT := Color(7.88, 8.17, 7.73)
+
+## ══ The donut fit — the rune sits **in** the ring's hole (the user: "도넛 모양으로 들어가는 것") ══
+##
+## **The seats were already right.** Measured: every band's `center` **is** its rune slot, for both the round
+## circle and the triangle — `circle_layout` puts them at the same point. Nothing had to move.
+## **What was wrong was the size**: the rune picture was drawn big enough that its own strokes ran under the
+## ring's teeth, which verify-look saw as the orange bead having its lower edge eaten.
+##
+## **Measured off the art itself**, by opaque-pixel fraction per radius band:
+##  · `ring_spread` ink runs r **0.30 → 0.70** of its half-size; `ring_blast`/`ring_dummy` start at **0.40**.
+##    ⇒ **the tightest hole is spread's, 0.30.**
+##  · `rune_fire` ink reaches **0.70** of its half-size (`rune_none` only 0.45 — fire is the binding one).
+##
+## At the triangle's real numbers (ring half 49.17, rune half 32.78) that gave ink **22.9** against a hole of
+## **14.8** — overlapping for every one of the three rings. Drawing the rune at **0.62** of its seat radius
+## gives ink **14.2** inside 14.8, and **12.9** inside 21.0 on the round circle.
+##
+## **This scales the picture only.** `rune_radius()` still sizes the click target, the empty-seat dead ring
+## and the procedural bead — shrinking those would move where the player has to press.
+const RUNE_ART_FRAC := 0.62
+
+## The two measurements above, named so the net can assert the relationship rather than the two rects.
+## **Re-measure both if the art is ever regenerated** — they are properties of the pictures, not choices.
+const RING_HOLE_FRAC := 0.30
+const RUNE_INK_FRAC := 0.70
 const GLYPH_TINT_MISSING := Color(1.0, 0.0, 1.0)
 
 ## **Rarity — a ring drawn around the glyph symbol, independent of `GLYPH_TINT`'s family color** (the design

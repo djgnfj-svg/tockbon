@@ -471,7 +471,10 @@ func _draw_rune_slot(area: Rect2, circle_id: int) -> void:
 			continue
 		# **The rune's own picture** (`Fx.RUNE_TEX`); the two beads stay as the fallback.
 		if _rune_tex.has(rune_id):
-			_paint_art(_rune_tex[rune_id], _square_at(slots[i], r), Fx.CIRCLE_ART_TINT)
+			# **`RUNE_ART_FRAC` — the picture sits inside the ring's hole** (that constant's own box carries
+			#  the pixel measurements). The seat and `r` are untouched: `r` still sizes the click target and
+			#  the empty-seat ring, and only the drawn picture shrinks.
+			_paint_art(_rune_tex[rune_id], _square_at(slots[i], r * Fx.RUNE_ART_FRAC), Fx.CIRCLE_ART_TINT)
 		else:
 			_draw_rune_symbol(slots[i], r, rune_id)
 
