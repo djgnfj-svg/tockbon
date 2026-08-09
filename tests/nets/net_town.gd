@@ -283,16 +283,29 @@ func _the_town_has_its_own_backdrop(t) -> void:
 	t.ok(Fx.BG_TOWN_FAR_TEXTURE != Fx.BG_FAR_TEXTURE,
 		"마을 먼 배경이 무대 것과 다른 그림이다 (같으면 갈아 끼우는 의미가 없다)")
 	t.ok(Fx.BG_TOWN_NEAR_TEXTURE != Fx.BG_NEAR_TEXTURE, "마을 가까운 배경도 다른 그림이다")
-	# **Measured in the source, because the backdrop it swapped to cannot be read back off the node** —
-	#  `sky_background` keeps the textures private and exposes no accessor. A source scan is weak (it measures
-	#  text, not what runs, CLAUDE.md), so it is paired with the runtime check in the wiring section below.
-	var f := FileAccess.open("res://src/stage/stage.gd", FileAccess.READ)
-	t.ok(f != null, "무대 소스를 연다 (전제)")
-	if f == null:
-		return
-	var src := f.get_as_text()
-	f.close()
-	t.ok(src.contains("BG_TOWN_FAR_TEXTURE"), "무대가 마을 배경을 실제로 이름 부른다")
+	# ══ Driven, not scanned — and the claim this replaced was wrong twice ══
+	#
+	# This used to open `stage.gd` and look for the literal `BG_TOWN_FAR_TEXTURE` in its source, on the
+	#  stated grounds that "the backdrop cannot be read back off the node — `sky_background` keeps the
+	#  textures private and exposes no accessor."
+	#  **Both halves were false.** `net_background._set_backdrop_stores_the_pair_it_is_given` has always read
+	#  them back with `get("_far")` and compared `resource_path`; and the shell no longer names the constant
+	#  at all — the backdrop comes out of the room table now, so a text scan would have been looking for a
+	#  string that is correctly absent.
+	# **A scan measures a file's text, never what it computes** (CLAUDE.md). Building the town and reading
+	#  what actually reached the node is the same question asked of the thing itself.
+	var bg_root := _wired_root(t)
+	t.ok(bg_root != null, "마을을 세운다 (전제)")
+	if bg_root != null:
+		var sky: Variant = bg_root.get("_sky")
+		var far: Texture2D = sky.get("_far")
+		var near: Texture2D = sky.get("_near")
+		t.ok(far != null and near != null, "마을을 지으면 배경 두 장이 실제로 실린다 (전제)")
+		if far != null and near != null:
+			t.eq(far.resource_path, Fx.BG_TOWN_FAR_TEXTURE,
+				"그리고 그게 마을 먼 배경이다 (무대 것이 아니라 — 방 표에서 나온 값이다)")
+			t.eq(near.resource_path, Fx.BG_TOWN_NEAR_TEXTURE, "가까운 배경도 마을 것이다")
+		bg_root.free()
 
 	# **And the room has to be somewhere the backdrop can be seen.** This is the check for the bug that
 	#  actually happened: the room was cut at tile rows 30-41, `sky_background` clamps the far picture at

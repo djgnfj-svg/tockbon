@@ -1,7 +1,7 @@
 extends SceneTree
 ## **Does authored-flat water sleep, and how does it compare to poured water.**
 ##
-## `docs/plans/1.ready/stage2-water.md` §6 rests its whole cost argument on one unmeasured claim —
+## `stage2-water.md` §6 rests its whole cost argument on one unmeasured claim —
 ## *"a perfectly uniform pool has a neighbour difference of 0 everywhere, `WATER_MIN_DIFF` is 4, so the
 ## chunks should sleep on the first tick"* — and that doc lists it first under "what this doc is least sure
 ## of". This tool is that measurement.
@@ -40,7 +40,7 @@ func _initialize() -> void:
 	_flat_walled(32, 4)
 	_flat_walled(128, 2)
 	_poured_walled(128, 32, 8)
-	# **`net_water._make_bowl(128, 900, 32, 8)`, replicated cell for cell.** `docs/design/water.md` records
+	# **`net_water._make_bowl(128, 900, 32, 8)`, replicated cell for cell.** `water.md` records
 	#  this bowl as *"still going at 4,000 ticks"* and `net_water._wide_bowl_settles_under_the_cap`'s header
 	#  repeats it. The row above disagrees, so the exact bowl is run too — otherwise the disagreement can be
 	#  waved away as "a different setup".
@@ -51,10 +51,17 @@ func _initialize() -> void:
 	#  That doc flags it as unexplained. Re-driving it is the cheapest way to find out whether the puzzle is
 	#  real or whether 2,798 is simply stale in the same way >4,000 was.
 	_poured_at(32, 750, 8, 6)
+	# **The *other* width-32 bowl in `net_water`** — `_water_lies_flat`'s, 8 cells deep rather than 6, so a
+	#  third more water in the same width. `water.md`'s "32 cells" row does not say which bowl it drove, and
+	#  `water-and-chunk-sleep.md` records that *"the tick count varies with the bowl's configuration"*.
+	#  ⇒ Driving both is the only way to tell "the sim drifted" from "the doc measured the other one".
+	_poured_at(32, 700, 8, 8)
 	_flat_walled(256, 3)
 	_flat_at_grid_edge(64, 3)
 	_flat_over_stepped_floor()
 	_flat_unwalled(64, 3)
+
+	_flat_spread_section()
 
 	print("")
 	print("[물] '0되는 틱' 이 -1 이면 %d틱(=%ds) 안에 안 멈췄다는 뜻이다." % [CAP, CAP / 20])
@@ -68,7 +75,7 @@ func _initialize() -> void:
 # ====================================================================
 
 ## Floor + two walls. The shape `net_water._make_bowl` uses, so the poured control below is comparable to
-##  the numbers already in `docs/design/water.md`.
+##  the numbers already in `water.md`.
 func _bowl(g: CellGrid, width: int, y_floor: int, wall_h: int) -> void:
 	g.apply(CellGrid.cmd_fill(X0 - 1, y_floor, X0 + width, y_floor, Mat.STONE))
 	g.apply(CellGrid.cmd_fill(X0 - 1, y_floor - wall_h, X0 - 1, y_floor, Mat.STONE))
@@ -157,6 +164,97 @@ func _flat_unwalled(width: int, depth: int) -> void:
 			if g.set_water(X0 + k, y_floor - 1 - d, Tuning.WATER_MAX):
 				placed += Tuning.WATER_MAX
 	_report("벽 없는 평면 %d폭" % width, g, placed, y_floor - 60, y_floor)
+
+
+# ====================================================================
+#  flat-floor spread — a different scenario from every bowl above
+# ====================================================================
+
+## **One water disc onto a flat wooden floor with no walls anywhere.**
+##
+## `water.md` records this as `424 cells @ t4,000, still growing`, with a **derived, never-driven** estimate
+##  of ~860 for the resting width. That row sat un-re-measured while the two bowl rows beside it both turned
+##  out stale, and its own box says so: *"Re-measure before building on either."*
+##
+## ⚠ **The scenario itself moved, and that is the first thing to know about the old number.** It was taken at
+##  **radius 16**; `sim_tuning.SIM_SIZES` row 0 now gives `water_r` = **6**. A disc's cell count goes as r²,
+##  so today's F press carries roughly **a seventh** of the water the old measurement poured.
+##  ⇒ **Both radii are driven here.** 16 isolates the sim's own drift by holding the input fixed; 6 is the
+##  only one that prices anything today. Reporting either alone would answer half the question.
+##
+## **A bowl and this are not the same question.** A bowl holds a fixed volume behind walls and must merely
+##  flatten; this has nowhere to stop, so "does it settle at all" is genuinely open — and the level-design
+##  rule *"at most one body of water in motion at a time"* rests on the answer.
+const SPREAD_CAP := 20000
+const SPREAD_MARKS := [500, 1000, 2000, 4000, 8000, 16000]
+const SPREAD_FLOOR_Y := 800
+const SPREAD_CX := 2048
+
+
+func _flat_spread_section() -> void:
+	print("")
+	print("[물] 평지 확산 — 벽 없는 나무 바닥에 물 원반 하나 (`water.md` 의 424@t4000 행)")
+	print("  반지름 | 놓은 양 |" + "".join(SPREAD_MARKS.map(func(m): return " t%-5d|" % m))
+		+ " 멈춘 틱 | 최종 폭 | 총량 보존")
+	print("  -------|---------|" + "--------|".repeat(SPREAD_MARKS.size()) + "----------|---------|----------")
+	_flat_spread(16)
+	_flat_spread(Tuning.water_r(0))
+
+
+func _flat_spread(r: int) -> void:
+	var g := CellGrid.new()
+	# A wooden floor across the whole grid — **wood, not stone, because that is what the original drove**
+	#  (the finding was "one F press fireproofs a forest"). Water does not care, but the scenario should match.
+	g.apply(CellGrid.cmd_fill(0, SPREAD_FLOOR_Y, CellGrid.W - 1, SPREAD_FLOOR_Y, Mat.WOOD))
+	# The disc's lowest row lands exactly on the floor's top, whatever the radius — so the two radii differ
+	#  in size only, not in how they sit. Solid cells are skipped by `_water_disc`.
+	g.apply(CellGrid.cmd_water(SPREAD_CX, SPREAD_FLOOR_Y - r, r, Tuning.WATER_MAX))
+	var placed := _spread_sum(g)
+
+	var widths: Array[int] = []
+	var mark_i := 0
+	var stopped := -1
+	var t := 0
+	while t < SPREAD_CAP:
+		g.step()
+		t += 1
+		while mark_i < SPREAD_MARKS.size() and t == int(SPREAD_MARKS[mark_i]):
+			widths.append(_spread_width(g))
+			mark_i += 1
+		if g.active_chunk_count() == 0:
+			stopped = t
+			break
+	# Marks past the stop are still filled in — a blank column would read as "not measured".
+	while widths.size() < SPREAD_MARKS.size():
+		widths.append(_spread_width(g))
+
+	var after := _spread_sum(g)
+	var line := "  %6d | %7d |" % [r, placed]
+	for w in widths:
+		line += " %-6d|" % w
+	line += " %8d | %7d | %s" % [stopped, _spread_width(g),
+		"예" if after == placed else "아니오 (%d -> %d)" % [placed, after]]
+	print(line)
+
+
+## Columns holding any water at all. **Counted over the whole grid width**, not a window around the pour —
+##  a window is a bound taken from the thing being measured, and this is precisely a "how far did it get" number.
+func _spread_width(g: CellGrid) -> int:
+	var n := 0
+	for x in range(0, CellGrid.W):
+		for y in range(SPREAD_FLOOR_Y - 60, SPREAD_FLOOR_Y):
+			if g.aux_at(x, y) > 0:
+				n += 1
+				break
+	return n
+
+
+func _spread_sum(g: CellGrid) -> int:
+	var n := 0
+	for y in range(SPREAD_FLOOR_Y - 60, SPREAD_FLOOR_Y):
+		for x in range(0, CellGrid.W):
+			n += g.aux_at(x, y)
+	return n
 
 
 # ====================================================================

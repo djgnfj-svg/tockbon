@@ -599,6 +599,13 @@ func _no_pushed_out_glyph_is_stashed_anywhere(t) -> void:
 		"res://src/actor/monster_placement.gd":
 			["_id_to_row", "_kind", "_monster_id", "_primed", "_spent", "_tx"],
 		"res://src/view/blast_fx.gd": ["_flashes"],
+		# **`ROWS` added here, deliberately, and it is the one entry that is a `static var` only because a
+		#  net needs it to be.** It is the room table — map content, the shelf `terrain_map_generated.gd`
+		#  and `stage1_monsters.gd` sit on, and every other table in that file is `const`. The chain between
+		#  stages can only be driven **into a second stage**, and the game has one; `net_stages` appends a
+		#  synthetic row, walks the chain into it, and pops it (that file's own header). Nothing in `src/`
+		#  writes it. Not a record of a glyph that left a spell layer, which is what this check exists to catch.
+		"res://src/stage/stage_defs.gd": ["ROWS"],
 		# **`_socket_glyph_tex` added here, deliberately** (`triangle-circle-to-game.md` step 6) — glyph id
 		#  -> loaded texture, the same shape `spell_view._bolt_tex`/`research_window._icons` already are.
 		#  Loaded art is not a glyph that left a spell layer, which is what this file's no-inventory check

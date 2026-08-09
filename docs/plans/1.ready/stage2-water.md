@@ -119,6 +119,13 @@ alone" as intended-with-fallback-text-TBD; stage 2 inherits that TBD unchanged.
 
 **There is no drowning** (`water-jump-and-escape`, "Decided"), no buoyancy, no drag. Underwater the current
 push is a real term (`body.water_flow()`, measured **45 px/s peak, 10–17% of walking**) and nothing else.
+
+> **⚠ That 45 px/s is on `water.md`'s suspect list and has not been re-measured.** It is **rate-valued**, and
+> the passage it comes from **never mentions `WATER_SUBSTEPS`** — the two-part tell that sorted three other
+> rows of that doc into "stale". **Suspect is not the same as wrong**: it means *taken the same way as three
+> numbers that turned out stale*, and **no replacement is invented here.**
+> This is the exact citation path that made the bowl row expensive — a number quoted out of `water.md` into a
+> plan and built on. **Re-measure before anything in stage 2 depends on the current being felt at all.**
 ⇒ **Deep water is a pure advantage.** A whole stage of pure advantage is flat, and this doc does not have a
 fix for it that costs nothing. **TBD** — the honest candidates are (a) accept it, water is the reward for
 solving the puzzle; (b) put the monsters in the water (§4); (c) build drowning, which is a new axis and was
@@ -268,7 +275,9 @@ with width** (7 → 16 → 18 across an 8× width increase).
 > ⚠ **Read that table for what it is: a bowl that was poured and is still flattening.**
 > ~~At these widths it never finishes~~ — **that was re-measured and is false.** The same 128-cell bowl
 > **settles at 1,032 ticks (~52 seconds)**, volume conserved (`water.md`'s own box, driven by
-> `tools/stage/measure_water_rest.gd` and reproduced by two agents). The 32-cell bowl's 2,798 ticks stands.
+> `tools/stage/measure_water_rest.gd` and reproduced by two agents). ~~The 32-cell bowl's 2,798 ticks stands.~~
+> **It does not — that row was re-driven too and is 115 ticks.** Both rows of that table had rotted; only the
+> one with a loud enough claim attached got checked the first time.
 > ⇒ **"18 awake" is a transient after all — but a 52-second one.** A wide poured pool holds ~18 chunks awake
 > at 1.5% of budget each **for the better part of a minute**, not forever.
 > **The design conclusion does not change**: a minute of that per pool, with several pools, is still the
@@ -423,7 +432,7 @@ routes `Mat.WATER` through `_write_water` at `WATER_MAX` instead of `_write_cell
 | **The player reaches the shaft with the water rune bought in town** | They open it immediately and skip the midboss. **GDD's design, not a bug** |
 | **A mob row sits over a flooded column** | It resolves onto the submerged floor. **What it then does is undecided** (§5) |
 | **A cave or overhang anywhere in the map** | **`resolve()`'s upward scan stops being exact, silently.** Either the map has no caves, or the scan needs a `ty` hint — which reopens `stage1_monsters`' *"`y` is never written down"* principle |
-| **A pool wide enough to never settle** | `water.md`: a 128-cell bowl **does not stop by 4,000 ticks**. Authored-flat water sidesteps this entirely; poured water does not |
+| ~~**A pool wide enough to never settle**~~ **A pool wide enough to settle slowly** | **Re-measured: a 128-cell bowl settles at 1,032 ticks (52s), a 32-cell one at 115** (`water.md`'s table, driven by `tools/stage/measure_water_rest.gd`). The old "does not stop by 4,000 ticks" was the stronger reading of a literally-true sentence and it travelled here. **The bound still bites** — 52 seconds of ~18 awake chunks per pour is the thing §6 exists to stop. Authored-flat water sidesteps it entirely; poured water does not |
 | **Fire in a stage with water** | Already correct and already surprising: only cells **touching** water resist, and fire **passes under** a water-topped wood body more than 1 cell thick. If stage 2 has wood, this is on screen |
 | **Zoom-out (`-`)** | Same as stage 1 — everything materialises on screen. **Do not couple any band to zoom** |
 
@@ -543,3 +552,225 @@ design; it is a reason not to count stage 2 as shipped when it is merged.
 **What that proves, which is exactly what stage 2 needs proven**: that the stage door works, that authored
 water works, and that **"height is the wall and water is the ladder" reads under someone's hands.**
 **Everything after it is content, and content is the user's call.**
+
+---
+
+## The smaller version, at coordinates — **a map somebody can paint and a table somebody can author**
+
+**This section takes the "smaller honest version" above from prose to ranges.** Format matches
+`stage1-map-layout` — `x`/`ty` ranges, not adjectives. **Height is 48 tiles and that is global**
+(`stage.build_map_into` refuses any other row count); only width is this stage's to choose.
+
+**Every number here is either read from code or computed below in the open. Nothing is estimated silently.**
+
+### The shape in one line
+
+**A corridor at one height with a well cut into it.** You walk east, you meet a pool that reminds you what
+water does, you keep walking, **the floor stops and you fall into a dry well you cannot climb out of.**
+The water rune fills it, the water carries you up, you step out east and take the gate.
+
+### The map — 64 tiles wide, 48 tall
+
+```
+                                        lip  the well
+  x2 ------------- pool ------------------ #  +--+ --------- gate --- x61
+  ty16-17                                  #  |  |
+  ty18 ############............############# #|  |###################
+  ty19-21          ~~~~~~~~~~~~               |  |
+  ty22             ############ (bedrock)     |  |
+                                              +--+ ty30 bedrock floor
+
+  the lip is x39 ty16-17 — 2 tiles = 64px, 63% of the 102px ceiling
+  auto step-up is 8px, so it cannot be walked over; it is a deliberate hop
+  jump it on purpose, drop 12 tiles, flood, ride up, step out east at ty18
+```
+
+| Range | What | Material |
+|---|---|---|
+| `x0-1`, `x62-63` | map shell, full height `ty0-47` | `BEDROCK` |
+| `ty47` (all x) | map floor | `BEDROCK` |
+| `x2-15 ty18` | arrival walkway. **Spawn tile `x4 ty17`** (standing on `ty18`) | `STONE` |
+| `x16-27 ty19-21` | **authored pool cavity**, 12 wide x 3 deep | `WATER` at `WATER_MAX` |
+| `x16-27 ty22` | pool floor | `BEDROCK` |
+| `x15 ty18`, `x28 ty18` | the pool's two rims — what holds the water in | `STONE` |
+| `x28-38 ty18` | dry approach to the well | `STONE` |
+| `x39 ty16-17` | **the entry lip** — 2 tiles, **64px**, jumped over deliberately. **You cannot fall in by walking** (auto step-up is 8px) | `STONE` |
+| `x39 ty18` | the lip's own footing | `STONE` |
+| `x39 ty19-30` | **the well's west face**, sheer | `BEDROCK` |
+| `x40-41 ty18-29` | **THE WELL** — open, dry, 2 wide x 12 deep | *empty* |
+| `x40-41 ty30` | well floor | `BEDROCK` |
+| `x42 ty19-30` | **the well's east face**, sheer | `BEDROCK` |
+| `x42-61 ty18` | upper walkway east of the well | `STONE` |
+| `x56` | **the gate seat** (`stage_gate.SEAT_TILE_X` for this stage), floor row `ty18` | — |
+| everything else `ty23-46` | solid fill under the corridor | `STONE`, `BEDROCK` under the pool |
+
+**Why the well is a hole in a flat corridor rather than a wall to climb**: water finds its level. A wall with
+open floor beside it drains sideways and never stacks. **A well is a container, and it is the only shape that
+holds a 12-tile column without authoring a tub the rune cannot possibly fill** (see the volume note below).
+
+### The shaft depth — computed, and here is the arithmetic
+
+| | |
+|---|---|
+| Measured jump ceiling, one jump | **102px** (`character.gd`'s hold-time table, 0.25s hold, driven headless) |
+| One tile | 32px |
+| => one jump | **3.19 tiles** |
+| Air jump, same `JUMP_VY_PX`, fired at apex | **+102px** |
+| => best case with the double jump bought | **204px = 6.375 tiles** |
+| Auto step-up at the lip (`STEP_CELLS` 2 x `CELL_PX` 4) | **+8px** |
+| => **absolute maximum reach** | **212px = 6.625 tiles** |
+
+**Minimum depth that is impassable at budget 1: 7 tiles (224px).** That clears 212px by **12px** — which is
+**a shaft the double jump nearly clears, and that reads as broken, not as a wall.**
+
+=> **Depth is 12 tiles (384px).** Margin over maximum reach: **172px = 5.4 tiles**, a ratio of **1.81x**.
+**At budget 0 it is 3.8x the single-jump ceiling.** Nothing about it is marginal in either direction.
+
+### Water — authored at `WATER_MAX`, and that is load-bearing
+
+**The pool is authored at 255, not at "some depth".** Anything less **never sleeps**: a cell at 32 over a
+cell at 32 has `space = 223`, `_water_fall` keeps moving it, and §6's box measures **22 chunks awake at tick 2
+and forever.** *"Author it flat"* is not the rule; ***"flat and full"*** is.
+
+**The pool is walled and bedrock-floored** so it cannot drain, cannot be blown out, and never moves.
+=> **The authored water in this stage is entirely still, by construction.** The only body that ever moves is
+the player's own rune water in the well — **one moving body, never two**, whatever §6's re-measurement returns.
+
+### The one thing this design does not solve — **the well is a soft lock**
+
+**Stated rather than hidden, because it is the sharpest thing in this section.**
+
+The player falls into the well. **If they do not have the water rune, they cannot get out** — the well has no
+enemies, so they cannot even die into the settlement screen. **`R` is the only exit**, and `R` is a debug key.
+
+**This is correct in the full design and wrong in the smaller one.** In the full stage the rune is a midboss
+key taken *before* the descent (`GDD.md`, *"a place you can't pass without it"*). In the smaller version the
+rune comes from the research bench or a debug key, so **a player can reach the lip without it.**
+
+**Decided: the entry lip, 2 tiles.** `x39 ty16-17` is solid — a **64px lip** the player must jump *over* to
+enter the well.
+
+**The reason it is 2 and not 3 is the whole point, so it is stated as the rule rather than as a value:**
+
+> **What blocks the accident is not the height. It is being taller than the 8px auto step-up.**
+> `STEP_CELLS` is 2 cells = **8px**, so **anything above that cannot be walked over** — a 2-tile lip refuses
+> a walking player exactly as completely as a 3-tile one.
+> ⇒ **Height beyond 8px buys nothing and costs feel.** 64px is **63% of the 102px ceiling**: a comfortable,
+> deliberate hop.
+
+⇒ **You cannot fall in by walking. Entering the well is a deliberate act.** Two tiles of paint.
+
+The other two were considered and rejected, with the reasons kept so they are not re-proposed:
+
+| Rejected | Why |
+|---|---|
+| **Accept the accidental fall** | A judge who walks in without the rune is stuck and **reads it as a crash**, not as a puzzle |
+| **A back-out stair inside the well** | Water fills the stair before the shaft, so the volume the rune must deliver **rises sharply** — and it stops being a well, which is the only shape that holds a column at all |
+| **A 3-tile lip (96px)** — **chosen first, then rejected on measurement** | **96 / 102 = 94% of the ceiling.** Clearing it needs a **0.25s full hold**, the very top of `JUMP_CUT_RATIO`'s measured table; a 0.10s press reaches **64px** and bounces off. ⇒ **"Sometimes I can't get in" is the same failure this doc rejected the 7-tile shaft for** — an axis you barely clear reads as a bug, not as a wall. **It was approved on "96 < 102" without asking how close.** Do not re-propose it on that arithmetic |
+
+### What the lip does **not** fix — the limitation, stated
+
+**A player who climbs down deliberately without the water rune is still stuck.** The well holds no monsters,
+so **there is nothing to die to** and the settlement screen never opens; **`R` is the only exit, and `R` is a
+debug key.**
+
+**That is acceptable for a verification stage and unacceptable for a shipped one.** This section builds the
+former: the point is to prove the stage door, authored water, and *"height is the wall, water is the ladder"*
+under someone's hands. **A stage that ships to a player must not contain this.**
+
+**The full design does not have the problem at all** — the rune is the **midboss key**, taken before the
+descent (`GDD.md`: *"a place you can't pass without it"*), so the player cannot arrive at the lip without it.
+⇒ **The limitation belongs to the small version only, and it disappears the moment the midboss exists.**
+
+### And the constraint underneath it, so nobody rediscovers it
+
+**The shape that makes water cheap traps the player, and the shape that does not trap costs more water than
+the rune can carry.**
+
+Water finds its level, so a column only stands inside a container — and a container the player is inside is a
+container the player cannot leave unaided. The escape-friendly alternative is a wide tub (24 x 12 tiles),
+which is **288 tiles = 18,432 cells** of water against the well's 24 tiles: **twelve times the volume**, far
+past anything the rune delivers.
+
+⇒ **This is a real constraint of this game's physics, not a design oversight.** Meet it stated.
+
+### How many rune hits fill it — **not computed, and deliberately not**
+
+The well is **2 x 12 tiles = 24 tiles = 1,536 cells**; at `WATER_MAX` that is 391,680 units.
+**Dividing by "one hit wets 113 cells ~= 28,800 units" gives ~14 hits and that number is wrong**, because
+`_write_water` **overwrites rather than adds** (this doc's own "least sure of" §3). Overlapping hits do not
+sum, so the true count depends on the firing pattern.
+
+=> **N is measured, not assumed** — which is what Acceptance 3 already says. **No number is invented here.**
+
+### The mob table — wolf only
+
+`stage2_monsters.gd`, same `(tx, kind)` schema as stage 1. **No `y`** — `monster_placement.resolve()` scans
+up from the map floor at wake time.
+
+```
+x4  x8  x12        (arrival, west of the pool)
+x30 x34            (between the pool and the well)
+x46 x50 x54        (east of the well)
+```
+
+**Eight rows, all `KIND_WOLF`.** Constraints honoured, each checked against the real numbers:
+
+- **The 3-tile authoring gap** — every pair above is 4 tiles apart, one clear of the minimum
+- **Full-width footing.** The wolf's box is **48px wide = 1.5 tiles**, so a row occupies **2 tiles**;
+  `resolve()` requires every cell solid at the resolved row and **a row straddling a seam is refused
+  permanently — spent for the whole run, silently.** Every `tx` above sits on flat `ty18` `STONE` with its
+  neighbour solid: `x4-5`, `x8-9`, `x12-13`, `x30-31`, `x34-35`, `x46-47`, `x50-51`, `x54-55`. **None
+  touches the pool rims (`x15`, `x28`) or either well face (`x39`, `x42`).**
+- **The boss-slot reserve is zero here** — it is derived from boss rows in the pushed table and there are
+  none. 8 rows against `MAX_MONSTERS` 20 leaves 12 free
+- **No row within 4 tiles of the well lip.** `x34-35` is the closest and sits 5 tiles west of `x39`.
+  **A wolf can still walk east and fall in. Nothing stops it, and a wolf in the well is unreachable.**
+  Not solved here — **TBD**, and the cheapest answer is probably the entry lip above
+
+### Where the stage ends — **the path that already ships, not a second one**
+
+**No new trigger.** This stage ends exactly as stage 1 does:
+
+`stage_gate.at(center)` is true at the seat -> `gate_view.tick_gate()` counts `GATE_TAKE_FRAMES` (24 frames,
+0.4s) -> `take_done()` -> `stage._sync_settlement()` opens the settlement panel with `cleared = true` ->
+the panel draws `SETTLEMENT_TITLE_CLEAR` and **`SETTLEMENT_NOTICE_1`/`_2`**.
+
+=> **The end-of-content notice needs no new plumbing at all.**
+
+> **⚠ But one constant ships wrong the day this lands, and it is the only one.**
+> `fx_tuning.SETTLEMENT_NOTICE_2` reads **"스테이지 2는 아직 없습니다"** — and the moment stage 2 exists,
+> **that sentence prints at the end of stage 2.** The game would be telling the player the thing they just
+> finished does not exist.
+> ⇒ **Change it in the same commit that lands the stage**, not afterwards. It is one string, it has no other
+> reader, and it is exactly the kind of line that survives three releases because everybody assumes somebody
+> else owns it. **Whoever builds this stage owns it.**
+
+**`stage_gate`'s two coordinate constants are stage 1's** (`SEAT_TILE_X` 270, `FLOOR_TILE_Y` 25). Stage 2's
+seat is `x56 ty18`. **That file has no notion of "which stage"** — making those two per-stage is Track D's
+shell work and is a prerequisite for this map, not part of it.
+
+### What painting this costs
+
+**64 x 48 = 3,072 tiles**, against stage 1's 300 x 48 = 14,400. **One sitting.**
+Most of it is solid fill below `ty23`; the hand-drawn part is the corridor line, the pool cavity and the well.
+
+### TBD in this section — **what would be guessing**
+
+- **Does the well read as a wall or as a bug.** The whole design rests on the player understanding *"I need
+  to fill this"* rather than *"I fell in a hole and the game broke"*. **Nobody has seen it. Only the user closes it**
+- **Does 12 tiles read as climbable-once-flooded** rather than as a long wait. Climbing water is 208 px/s,
+  so 384px is **1.85 seconds** of holding jump — computed, not felt.
+  **That 208 is *not* on `water.md`'s suspect list, and the reason is worth stating rather than assuming**:
+  it is a **character-physics** rate (`character.step()` at 60Hz against `JUMP_VY_PX`), and `WATER_SUBSTEPS`
+  governs how fast *water* moves, not how fast the player jumps. Water enters that number only as a
+  **threshold** (`standing_in_water`), never as a rate. ⇒ The discriminator does not apply to it
+- ~~**Whether the soft lock is acceptable at all**, and which of the options above takes it~~
+  **Decided — the entry lip.** The *accidental* fall is closed. **The deliberate descent without the rune is
+  still a dead end, and that is now a stated limitation of the small version rather than an open question**
+  (see "What the lip does not fix"). **It is not a TBD; it is a thing this version knowingly ships with,
+  and the full design does not have it**
+- **Whether a wolf falling into the well matters** in practice
+- **The pool's 3-tile depth.** Deep enough to submerge the 32px character with margin; **whether it reads as
+  a pool rather than a puddle is unseen**
+- **`x56` as the gate seat** — chosen as "5 tiles clear of the map's east shell". Not walked

@@ -33,7 +33,11 @@ extends RefCounted
 ## green would be to delete the history. **Comments are instructions to the next reader; docs are also a
 ## record.** The rule is about the first.
 
-const SCAN_DIRS: Array[String] = ["res://src", "res://tests"]
+## **`tools/` is in scope too, and it was not at first.** This net was built scoped to where the bug had
+## been found — and within hours a dead citation turned up in `tools/`, caught by hand because nothing was
+## watching there. **A rule enforced over two of the three folders that hold comments is a rule with a
+## documented hole.** The cost is nothing: the scan is text over ~90 files and runs in well under a second.
+const SCAN_DIRS: Array[String] = ["res://src", "res://tests", "res://tools"]
 const DOCS_DIR := "res://docs"
 
 ## ══ There is no ceiling constant any more. The answer is zero. ══

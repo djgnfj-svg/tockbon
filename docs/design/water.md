@@ -64,7 +64,7 @@ Water in a 2D cell game is usually one of two things.
 >
 > | Bowl width | Stops? |
 > |---|---|
-> | 32 cells | stops at 2,798 ticks (140s) |
+> | 32 cells | ~~stops at 2,798 ticks (140s)~~ → **stops at 115 ticks (5.8s)** |
 > | 128 cells | ~~**does not stop by 4,000 ticks**~~ → **stops at 1,032 ticks (52s)** |
 >
 > Halving is **diffusion**, so flattening takes time proportional to the square of the width.
@@ -75,10 +75,38 @@ Water in a 2D cell game is usually one of two things.
 > > driven headless by `tools/stage/measure_water_rest.gd` and reproduced independently by two agents.
 > > **The old figure was right when it was taken. Nobody knows when it stopped being right** — the behaviour
 > > changed at some point between then and now and no one noticed, for the reason in the box below.
-> > **Note it is 1,032 < 2,798**: the wider bowl now settles *faster* than the narrow one, which is the
-> > reverse of the diffusion argument above. **That is unexplained and nobody has explained it** — the two
-> > bowls differ in poured columns and depth as well as width, so it is not a clean width comparison.
-> > **Do not read a law out of two rows.**
+> > **And this row had already been disproved once, in this repo, and nobody propagated it back here.**
+> > `water-and-chunk-sleep.md` measured width 128 settling at **6,192 ticks** and wrote in as many words that
+> > *"wide water can never be stopped" is false up to width 256*. **"Does not stop by 4,000" was literally
+> > true for that bowl and was read as "never stops"** — the stronger reading is what travelled, into this
+> > table and from here into `stage2-water.md`.
+> >
+> > **Why the three numbers (1,032 · 4,047 · 6,192) do not contradict each other**: that doc records
+> > *"the tick count itself varies with the bowl's configuration"*. Those are all width-128 runs from
+> > different sources, so **the diffusion argument above must not be read off any two rows.** What is
+> > settled is the sign: **it settles.**
+> > **This reasoning does not extend to the width-32 row** — that escape was tested and closed; see the
+> > substeps box below.
+>
+> > **What changed, measured rather than guessed: `WATER_SUBSTEPS` accounts for exactly 3x, and no more.**
+> > Driven in an isolated copy of the repo with that constant forced back to 1, everything else identical
+> > (`tools/stage/measure_water_rest.gd`):
+> >
+> > | Bowl | `WATER_SUBSTEPS` 3 (today) | forced to 1 | ratio |
+> > |---|---|---|---|
+> > | 128 poured (y=900) | 1,032 | 3,096 | **3.00x** |
+> > | 128 poured (y=800) | 1,032 | 3,059 | 2.97x |
+> > | 32 poured | 115 | 337 | 2.93x |
+> >
+> > ⚠ **That closes the mechanism, not the arithmetic.** At substeps 1 the 32 bowl is **337**, still 8.3x
+> > faster than the recorded 2,798 — and substeps cannot touch that gap. ⇒ **Do not write "substeps explains
+> > it."** It explains a factor of three; the 32-cell row's remaining factor of eight is **still unaccounted
+> > for**, and unlike the 128 row it has no older measurement anywhere to reconcile against.
+> >
+> > **And the obvious escape — "it was a different bowl" — is ruled out, measured.** *Both* of `net_water`'s
+> > width-32 bowls were driven at substeps 1: **337 and 369.** Neither is anywhere near 2,798, and
+> > **the bowl parameters have never changed in git.** ⇒ **The factor of eight is unexplained.** Written down
+> > as unexplained rather than attributed, because an attributed-but-wrong cause is what stops people looking.
 >
 > > **Why nobody noticed the behaviour change: the only check watching it had gone blind.**
 > > Its observation window sat **entirely after the water had already stopped**, so it measured 0 movement and
@@ -263,17 +291,38 @@ The character wades ankle-deep — **it reads as a shallow sea, not a puddle.**
 2. **Touched cells don't burn** (no threshold, just "is there water")
 3. **A flat floor has no walls, so it spreads sideways forever** (`WATER_MIN_DIFF` is 4, so the tail is long)
 
-**The stopping width was not measured** — derived from the rest condition, the estimate is **about 860 cells.**
-Only "424 at 4,000 ticks and still growing" is measured.
+~~**The stopping width was not measured** — derived from the rest condition, the estimate is **about 860 cells.**
+Only "424 at 4,000 ticks and still growing" is measured.~~
+
+> **⚠ Measured. All three of those claims were wrong, and the third is the same mistake as the bowl row above.**
+>
+> | | t500 | t1000 | t2000 | t4000 | settles | rest width |
+> |---|---|---|---|---|---|---|
+> | what this doc said | 196 | 259 | 336 | **424** | *"still growing"* | **~860** (derived) |
+> | driven, substeps **1** | 197 | 259 | 336 | **424** | **6,089** | **473** |
+> | driven, substeps **3** (today) | 302 | 387 | 473 | 474 | **2,069** | **474** |
+>
+> 1. **It settles** — 2,069 ticks, **103 seconds**, at today's substeps
+> 2. **The rest width is 473–474, not ~860** — the derivation was **off by 1.8x**, and the doc admitted it was
+>    derived rather than driven
+> 3. **"424 at 4,000 and still growing" was literally true and read as forever** — **the identical failure as
+>    the bowl row, in the row directly beneath it.** Same phrasing, same misreading, same doc
+>
+> **And the scenario moved under the number.** The old row is one F press at **radius 16**; `SIM_SIZES` row 0
+> is **6** today, and disc cells go as **r²** — so **today's F press carries about a seventh of that water.**
+> Driven at radius 6: a **180-cell puddle that settles in 306 ticks (15s)**, volume conserved.
+> ⇒ **"One F press fireproofs 860 cells of forest" is 180 cells, and it stops.**
+> That is a design-facing correction, not a table fix: the three-decision argument below still holds in kind,
+> **but not at the scale this section was written about.**
 
 > **⚠ These two numbers are of unknown currency, and they have NOT been corrected.**
 > The bowl figure above (128 cells) was re-measured tonight and came back the opposite of what it said.
 > **This is a different scenario** — a bowl is walled and holds a fixed volume, this is open floor with no
 > walls at all — so **the bowl's 1,032 ticks does not replace anything here.** But both were taken in the
 > same era by the same methodology, and the bowl's turned out stale.
-> ⇒ **Nobody has re-measured the flat-floor spread.** `424 @ t4,000` and the ~860 estimate are left standing
-> **as the last measurement taken, not as current fact.** They are not silently patched with a number
-> nobody drove, and no replacement is invented here. **Re-measure before building on either.**
+> ⇒ **This block has now been re-measured** — see the box above. It was left standing as "last measured, not
+> current fact" for exactly one round, and that turned out to be the right call: the replacement numbers came
+> from a run, not from a guess.
 
 **Three candidate fixes** (**all user decisions. Each bites something different**):
 - **Consume water when extinguishing** ⇒ overturns decision 1. **A lake next to a burning forest wakes every tick**
@@ -622,3 +671,64 @@ Current is felt at **dams · waterfalls · near walls · the F-key puddle · sta
 - **The character must not push the water.** The character is float and host-authoritative (`src/actor/`);
   water is integer-deterministic (`src/sim/`). **Water → character is a read and safe; character → water crosses that boundary**
 - **Lightning rune** — water's counterpart. `TRACE_WET` grows then (`sim_tuning` comment)
+
+---
+
+## Which numbers in this doc to distrust — **an audit with a measured discriminator**
+
+**Three rows of this doc turned out stale in one night** (the 32-cell bowl, the 128-cell bowl, the flat-floor
+spread). That is enough that "which of the rest are also stale" stops being paranoia and becomes a question
+with an answer. **This section is that answer, and its discriminator is measured, not guessed.**
+
+### The discriminator — **substeps change the rate, not the resting shape**
+
+Driven with `WATER_SUBSTEPS` forced to 1 against today's 3, everything else identical:
+
+- **Settle time moved 3x** (2,069 → 6,089 ticks on the flat spread; 1,032 → 3,096 on the 128 bowl)
+- **Rest width did not move**: **473 vs 474.** One cell, across a 3x change in rate
+
+⇒ **A number describing *how fast* or *how long* is suspect. A number describing *what shape it ends in* or
+*how much there is* is not.** Total volume is conserved by construction, so totals are safe for the same reason.
+
+**A second, cheaper tell: does the surrounding prose know substeps exist.** The fall-speed section reasons
+about *"skips the remaining substeps"* — it is post-substeps and its numbers were taken with them.
+**The bowl rows and the flat-spread row never mention them**, and both turned out to be pre-substeps.
+⇒ **If a passage never says the word, assume its rates predate the change.**
+
+### Suspect — rate-valued, and the prose never mentions substeps
+
+**None of these has been re-measured.** They are **taken the same way as three rows that turned out stale** —
+that is the claim being made here, and it is not the same as saying they are wrong. **No replacements are
+invented below.**
+
+| What | Where |
+|---|---|
+| **Oscillation, "37 ticks"** | the catch/out box |
+| **The whole rise/fill block** — `0.44 cells/tick` · 13 tiles = `11.7s` · one cell 0→255 = `2.26 ticks` | "water rise" |
+| **The current figures** — median 19 ≈ **10 px/s**, and the **45 px/s** F-key peak | the current table |
+| **`water-jump-and-escape`'s "25%→5s · 95%→11s"** | that doc — and **it already self-flags** as taken at the old fall speed |
+
+**The 45 px/s figure is quoted onward into `stage2-water.md`**, which is exactly the propagation path that
+made the bowl row expensive. That citation is marked at the other end too.
+
+### Not suspect — shape-valued, total-valued, or post-substeps by their own text
+
+- **Grid geometry and memory** — structural, not temporal
+- **The resting sheet, "max 27 across 17 cells"** — a **rest shape**, which is precisely what the
+  discriminator shows substeps do not move
+- **The fall-speed block** — post-substeps by its own prose
+
+### Suspect for a different reason — the cap, not substeps
+
+**219% · 724% · 125% · 168%.** These were taken across a `MAX_CHUNKS_PER_TICK` change of **512 → 100**, they
+are **machine-dependent**, and this doc already records that **headless and the real game disagree and nobody
+knows why** (its own Accepted line: *"FPS itself was not measured — headless uses the dummy renderer"*).
+⇒ **Budget percentages here are the least portable numbers in the file.** Re-measure on the machine that
+matters before any of them decides anything.
+
+### The rule this audit is an instance of
+
+**A measurement is a claim about a moment.** This doc's habit of recording *how* a number was taken is what
+made the audit possible at all — the rows that could not be classified were the ones that recorded only a
+value. ⇒ **Keep writing the command down. It is what lets the next person sort your numbers without re-running
+all of them.**

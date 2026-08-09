@@ -57,6 +57,19 @@ A doc may be written *as well*, when the answer is worth keeping — **but the c
 **Never state the same thing twice.** GDD holds the face and points at the detail.
 A value counted in two places will diverge.
 
+**A refutation that lands in a different doc than the claim does not propagate.** `water.md` said a wide bowl
+never settles; `water-and-chunk-sleep.md` had **already measured it settling** and written "that conclusion
+is false up to width 256" — **in its own file.** `water.md` was never corrected, its stronger reading
+("never" rather than "not by tick 4,000") was inherited by `stage2-water.md`, and a stage's whole cost model
+was built on it. ⇒ **When a measurement refutes another doc, go and edit that doc.** Recording the refutation
+where you happen to be standing is how the same wrong number gets inherited twice.
+
+**And a correction pass only checks the row that makes a claim.** The same table held two rotted numbers: the
+loud one (a bowl that "never settles") was re-measured, and the quiet one beside it — 2,798 ticks, actually
+**115** — was waved through, with a correction box explicitly writing *"the 32-cell bowl's 2,798 stands."*
+It survived **because it was not making a dramatic claim.** ⇒ **Re-measure the whole table, not the row
+someone is arguing about.**
+
 **When a fork is taken, record the rejected branch in `docs/decisions/`** — what was dropped
 and why, nothing else. Format lives in that folder's README.
 
@@ -105,11 +118,12 @@ Nets scan the folders recursively — no hand-maintained registry.
   citations at once, and the fix is to name the section, not to renumber — renumbering breaks again on the
   next edit above it. **This leak was found four separate times in one night, each time by someone other than
   whoever caused it**, including twice by the person who had just fixed the same thing elsewhere.
-  ⇒ **A net must grep `src/` and `tests/` for `docs/plans/[0-9]` and fail. It does not exist yet** — and
-  this line briefly claimed it did, which is this file's own *"written down reads as exists"* failure
-  committed inside the warning about it. Until it is built the rule is honour-based, and **honour-based did
-  not hold**: two citations stayed dead through *four* separate hand sweeps in one night, and were found only
-  on the fifth. When it is built: grep is the right instrument here because the rule being enforced is itself
+  ⇒ **`net_citations` greps `src/`, `tests/` and `tools/` for `docs/plans/[0-9]` and fails.** It exists and
+  is committed — though this line briefly claimed it did **before** it was built, which is this file's own
+  *"written down reads as exists"* failure committed inside the warning about it. Honour-based did not hold
+  while it lasted: two citations stayed dead through *four* separate hand sweeps in one night, found only on
+  the fifth. **`tools/` was outside its reach at first and widening it immediately found two more** — a scan
+  scoped to where the bug was found is scoped too narrowly. Grep is the right instrument here because the rule being enforced is itself
   a text rule about comments, not a proxy for behaviour (contrast "a check that greps a file measures its
   text", below). **It must rejoin wrapped comment lines before matching, and confirm the cited name resolves
   to a real file.** A line-wise scan passed **three of eleven**, because the path wrapped across two `##`
@@ -148,6 +162,11 @@ When the label claims more than the check measures, that green is a false guaran
 **Invert every new check.** An uninverted check proves "it runs", not "it measures".
 **If the inversion doesn't bite, suspect the check last — first confirm the mutation actually landed.**
 String replacement has silently matched zero times, twice.
+
+**A truncated search is not a search.** `grep ... | head` on a term with many hits **silently drops the one
+that matters**, and an empty tail reads as an absence. That is how "there is no scan of this file" was
+asserted confidently about a scan that exists — the noisy match filled the window and hid the quiet one.
+⇒ **Count the hits before reading them**, and never conclude *absence* from a truncated result.
 
 **Invert the instrument, not only the subject.** Twice in one night a check was written to catch a defect and
 **shipped carrying that same defect**: a scanner for citations wrapped across comment lines joined only on

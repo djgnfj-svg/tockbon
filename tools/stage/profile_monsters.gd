@@ -43,7 +43,7 @@ func _initialize() -> void:
 		#  number that has never been measured is 20 at once (`monsters-bigger-boxes.md` §4 note 1), and
 		#  multiplying one monster by 20 is not that measurement. It is labelled as an estimate here.
 		var twenty := _measure(kind, Defs.MAX_MONSTERS, false) - empty
-		# `docs/plans/3.done/monster-placement-stage1.md` Stage D — the sleeping row team-lead asked for.
+		# `monster-placement-stage1.md` Stage D — the sleeping row team-lead asked for.
 		#  Same 20-at-once scene, every monster asleep instead of awake (`_one_run`'s own `sleeping` flag).
 		var twenty_asleep := _measure(kind, Defs.MAX_MONSTERS, true) - empty
 		print(("[profile] %s | %d | +%.0fus (%.1f%%) | 20마리 실측 +%.0fus (%.1f%% · " +
@@ -64,7 +64,7 @@ func _measure(kind: int, count: int, sleeping: bool) -> float:
 	return samples[samples.size() / 2]
 
 
-## `sleeping` — `docs/plans/3.done/monster-placement-stage1.md` Stage D. **Not a free parameter add** —
+## `sleeping` — `monster-placement-stage1.md` Stage D. **Not a free parameter add** —
 ## Stage D made every monster's `step()` distance-gated (`WorldStep`'s own `stays_active`/`WAKE_PX`/
 ## `SLEEP_PX`), and this tool's old placement (character 3200px to the right, monsters spread from x200)
 ## silently stopped measuring "walking" at all the moment that landed: every monster spawned already

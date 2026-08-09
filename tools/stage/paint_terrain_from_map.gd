@@ -39,15 +39,28 @@ const Baker := preload("res://tools/stage/terrain_baker.gd")
 const TILESET_PATH := "res://src/stage/terrain_tileset.tres"
 const SCENE_PATH := "res://src/stage/stage.tscn"
 const DATA_PREFIX := "tile_map_data = PackedByteArray(\""
+## The section header a `.tscn` writes before every node. The layer name is matched against this.
+const NODE_PREFIX := "[node name=\""
+
+## Stage 1's layer. **A default, not the contract** — the same two-argument treatment
+## `terrain_baker.bake()` already carries, and this was the half of the pipe that was missing.
+##
+## **The bake is the read direction; the paint is the write direction, and a stage is made in the write
+## direction.** `bake()` was parameterised and this was not, so the moment `stage.tscn` held a second
+## `TileMapLayer` this refused outright (`hits != 1`) and **there was no headless way to author a second
+## map at all.** That was the one hard blocker on adding a stage; the rest of the pipe was ready.
+const DEFAULT_LAYER := "Terrain"
 
 
 func _init() -> void:
 	var args := OS.get_cmdline_user_args()
 	if args.is_empty():
-		print("사용법: --script tools/stage/paint_terrain_from_map.gd -- <맵파일 | --from-generated>")
-		print("  인자 없이는 안 돈다 — 실수로 돌리면 그려 둔 Terrain을 덮는다.")
+		print("사용법: --script tools/stage/paint_terrain_from_map.gd -- <맵파일 | --from-generated> [레이어]")
+		print("  인자 없이는 안 돈다 — 실수로 돌리면 그려 둔 레이어를 덮는다.")
+		print("  레이어를 안 적으면 %s — 스테이지 2는 제 레이어 이름을 적어야 한다." % DEFAULT_LAYER)
 		quit(1)
 		return
+	var layer := DEFAULT_LAYER if args.size() < 2 else args[1]
 
 	var rows := _load_rows(args[0])
 	if rows.is_empty():
@@ -67,7 +80,7 @@ func _init() -> void:
 
 	# **Back up before overwriting.** What is in the scene right now is the only copy —
 	#  the baked text is from the last bake, so brush work since then is not in it.
-	if not _backup(tileset):
+	if not _backup(tileset, layer):
 		quit(1)
 		return
 
@@ -110,11 +123,12 @@ func _init() -> void:
 	var b64 := Marshalls.raw_to_base64(scratch.tile_map_data)
 	scratch.free()
 
-	if not _replace_data_line(b64):
+	if not _replace_data_line(b64, layer):
 		quit(1)
 		return
 
-	print("[paint_terrain_from_map] 타일 %d개 심음 (%d행), tile_map_data 교체됨" % [painted, rows.size()])
+	print("[paint_terrain_from_map] %s 에 타일 %d개 심음 (%d행), tile_map_data 교체됨"
+		% [layer, painted, rows.size()])
 	print("  아직 게임에 안 반영됐다 — bake_terrain.gd 로 구워야 한다.")
 	quit(0)
 
@@ -173,8 +187,39 @@ func _atlas_by_mat(tileset: TileSet) -> Dictionary:
 	return out
 
 
+## **The text surgery, pure and static — a net drives this with a synthetic two-layer scene and no
+## files at all.** The file reading and writing stay in `_replace_data_line` below; everything that can
+## be wrong lives here.
+##
+## Returns `{"text": String, "hits": int}`. **`hits` must be 1**; the caller is what refuses otherwise.
+##
+## **Section tracking is the whole idea.** A `.tscn` writes a `[node name=...]` header before each
+## node's properties, so which node a `tile_map_data` line belongs to is readable from the text alone —
+## no instantiating the scene, which this file's header forbids for its own reasons. Counting the
+## property across the whole file instead is what made a second `TileMapLayer` impossible.
+static func swap_layer_data(text: String, layer: String, b64: String) -> Dictionary:
+	var out := PackedStringArray()
+	var hits := 0
+	var in_target := false
+	for line in text.split("\n"):
+		if line.begins_with(NODE_PREFIX):
+			in_target = line.begins_with("%s%s\"" % [NODE_PREFIX, layer])
+		if in_target and line.begins_with(DATA_PREFIX):
+			out.append("%s%s\")" % [DATA_PREFIX, b64])
+			hits += 1
+			continue
+		out.append(line)
+	return {"text": "\n".join(out), "hits": hits}
+
+
 ## Swaps the one `tile_map_data` line in the scene text. **The rest of the scene is untouched** — see the header.
-func _replace_data_line(b64: String) -> bool:
+##
+## **It tracks which node section each line is inside**, rather than counting `tile_map_data` lines
+## across the whole file. That is the entire difference between "there may only ever be one
+## TileMapLayer" and "say which one". A `.tscn` writes `[node name=...]` before each node's
+## properties, so the section is readable from the text alone — no instantiating the scene, which is
+## what the header forbids.
+func _replace_data_line(b64: String, layer: String) -> bool:
 	var f := FileAccess.open(SCENE_PATH, FileAccess.READ)
 	if f == null:
 		push_error("could not read the scene - %s" % SCENE_PATH)
@@ -182,46 +227,42 @@ func _replace_data_line(b64: String) -> bool:
 	var text := f.get_as_text()
 	f.close()
 
-	var out := PackedStringArray()
-	var hits := 0
-	for line in text.split("\n"):
-		if line.begins_with(DATA_PREFIX):
-			out.append("%s%s\")" % [DATA_PREFIX, b64])
-			hits += 1
-			continue
-		out.append(line)
+	var swapped := swap_layer_data(text, layer, b64)
+	var hits := int(swapped["hits"])
 
-	# **Both 0 and 2 are failures.** 0 means Terrain does not exist yet or the save format changed, and
-	#  2 or more means there are two TileMapLayers, so **which one got painted is unknowable.**
-	#  Let either pass quietly and it only surfaces as "it says it planted but the screen didn't change".
+	# **Both 0 and 2 are still failures, and now they mean something narrower.** 0 means that layer has
+	#  no `tile_map_data` — a wrong name, or a layer with nothing drawn on it yet. 2 or more can only
+	#  happen if one node section carries the property twice, which is a corrupt scene.
+	#  Let either pass quietly and it surfaces only as "it says it planted but the screen didn't change".
 	if hits != 1:
-		push_error(("found %d tile_map_data lines in the scene (it must be 1) - " +
-			"either the Terrain node is missing or there are several TileMapLayers") % hits)
+		push_error(("found %d tile_map_data lines under node %s (it must be 1) - " +
+			"either that node is missing, is not a TileMapLayer, or has nothing drawn on it")
+			% [hits, layer])
 		return false
 
 	f = FileAccess.open(SCENE_PATH, FileAccess.WRITE)
 	if f == null:
 		push_error("could not open the scene for writing - %s" % SCENE_PATH)
 		return false
-	f.store_string("\n".join(out))
+	f.store_string(String(swapped["text"]))
 	f.close()
 	return true
 
 
 ## Dumps the current Terrain as text. It uses the same character table as baking, so **it can be planted straight back.**
 ## It reads by instantiating the scene — the cells inside the base64 cannot be read from the text alone.
-func _backup(tileset: TileSet) -> bool:
+func _backup(tileset: TileSet, layer: String) -> bool:
 	var packed: PackedScene = load(SCENE_PATH)
 	var root := packed.instantiate()
-	var terrain := root.get_node_or_null("Terrain") as TileMapLayer
+	var terrain := root.get_node_or_null(NodePath(layer)) as TileMapLayer
 	if terrain == null:
-		push_error("there is no Terrain(TileMapLayer) node - stand one up in stage.tscn first")
+		push_error("there is no %s(TileMapLayer) node - stand one up in stage.tscn first" % layer)
 		root.free()
 		return false
 
 	var rect := terrain.get_used_rect()
 	if rect.size.x <= 0 or rect.size.y <= 0:
-		print("[paint_terrain_from_map] 기존 Terrain이 비어 있다 — 백업 안 함")
+		print("[paint_terrain_from_map] 기존 %s이 비어 있다 — 백업 안 함" % layer)
 		root.free()
 		return true
 
@@ -240,12 +281,12 @@ func _backup(tileset: TileSet) -> bool:
 	root.free()
 
 	# `Time.` is used here — this is `tools/`, outside `src/sim/`'s integer determinism contract.
-	var path := "res://tools/stage/terrain_backup_%d.txt" % Time.get_unix_time_from_system()
+	var path := "res://tools/stage/terrain_backup_%s_%d.txt" % [layer, Time.get_unix_time_from_system()]
 	var f := FileAccess.open(path, FileAccess.WRITE)
 	if f == null:
 		push_error("could not open the backup file - %s. It does not overwrite without a backup" % path)
 		return false
 	f.store_string("\n".join(lines))
 	f.close()
-	print("[paint_terrain_from_map] 기존 Terrain %d×%d 백업: %s" % [rect.size.x, rect.size.y, path])
+	print("[paint_terrain_from_map] 기존 %s %d×%d 백업: %s" % [layer, rect.size.x, rect.size.y, path])
 	return true

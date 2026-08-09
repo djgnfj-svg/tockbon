@@ -424,10 +424,35 @@ func take(glyph_id: int) -> bool:
 	return true
 
 
+## **Walking from one stage into the next — the run does not end, so almost nothing here reverts.**
+## Called by `WorldStep.next_stage()`, the sibling of `reset()` below and the same "one call site" discipline.
+##
+## **This function is a list of what a stage owns, and it is deliberately two lines long.** A run is
+##  `town -> 1 -> 2 -> 3` (GDD's session loop), so **xp, level, money, `pending_picks`, `run_ticks`,
+##  `damage_dealt`, `gems`, `_unlocked`, `_owned_runes` and `_gems_at_run_start` all carry across.** Reaching
+##  for `reset()` here instead — which is the obvious thing to do, since the shell already had exactly one
+##  rebuild path — **strips every 원석 and every unlock earned in stage 1 the instant you walk into stage 2,
+##  with nothing barking.** That is the single most dangerous edit that could be made to this file.
+##
+## **`_reward_pending` is what a stage owns.** Presence as a key *is* "this boss has died" (its own box
+##  above), and `stage.gd`'s ending term and `gate_view`'s `visible` both read it — carried across, stage 2's
+##  arch would be lit and its east wall already down on the frame you arrive, and stepping on its seat would
+##  end the run instantly. **The rune the bull granted is not lost with it**: that lives in `_owned_runes`,
+##  which this does not touch, so the reward survives while the "who has died here" record does not.
+##
+## **`_drawn` is cleared, `pending_picks` is not.** The open draw belongs to the stage you are leaving (the
+##  shell closes every other window on a room build); the *unclaimed pick* is a reward and follows you.
+func next_stage() -> void:
+	_reward_pending.clear()
+	_drawn.clear()
+
+
 ## Called by `WorldStep.reset()` — **not by `stage.gd` directly**, the same discipline that keeps the queue
 ##  and the fire count reverting in one place (`world_step.gd`'s own `reset()` comment). A second call site
 ##  here would be the same trap: touch it in two places and the day only one gets fixed, R quietly stops
 ##  reverting progress.
+##
+## **`next_stage()` above is the other door and it is not this one.** A stage transition is inside a run.
 ## `_rng` is **not** reseeded — a stage reset is not a reason to make the next draw deterministic again.
 func reset() -> void:
 	xp = 0

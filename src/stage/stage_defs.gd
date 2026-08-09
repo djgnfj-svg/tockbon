@@ -15,9 +15,15 @@ extends RefCounted
 ##  `WorldStep.set_placement(rows, floor_cy)` is the model, and `StageGate.set_geometry()` (added for this
 ##  table) is the second one. The folder contract stays exactly as it was.
 ##
-## **`const`, not `static var`** — this is map content, the same shelf `terrain_map_generated.gd` and
-##  `stage1_monsters.gd` sit on, and being `const` is why `net_pick`'s no-inventory scan (anchored on
-##  column-0 `var`) never has to carry an exemption for it.
+## **`ROWS` is a `static var` and nothing in the game ever writes it.** It would be a `const` — it is map
+##  content, the same shelf `terrain_map_generated.gd` and `stage1_monsters.gd` sit on — but the chain
+##  (`stage.gd._enter_stage()`) can only be driven **into a second stage**, and there is exactly one stage.
+##  A `const` cannot be given a second row, so the check that matters most here ("add a stage 2 and a field
+##  left pointing at stage 1 must fail") could not be written at all.
+##  ⇒ `net_stages` appends a synthetic row, walks the whole chain into it, and pops it again. **That is the
+##  only writer in this repo**, and it lives in a net's own process (CLAUDE.md: one process per net file), so
+##  it cannot reach the game or another net. Every other table here stays `const`.
+##  **The price**: it needs an entry in `net_pick`'s no-inventory allowlist, which `const` would not have.
 
 const TownMap := preload("res://src/stage/town_map.gd")
 const TerrainMap := preload("res://src/stage/terrain_map_generated.gd")
@@ -55,6 +61,17 @@ const NO_MONSTERS: Array[Dictionary] = []
 ##  `is_empty()` and pushes nothing — see its own comment for what that leaves standing.
 const NO_GATE: Dictionary = {}
 
+## **"Nothing comes after this room."** The town's answer, and the last stage's answer.
+##
+## **`-1`, deliberately not `ROOM_TOWN`.** Zero is a real room id, so a table row saying `0` would read as
+##  "this stage chains into the town" — which is a thing the run already does by another door (the settlement
+##  screen's button) and would be a second, silent way to say it.
+##
+## **When a room answers this, the run ends there**: the settlement screen opens with that room's clear title
+##  and the end-of-content notice, exactly as it does today. That notice is a statement about the build, not
+##  about stage 1 — it stays until stage 2 actually exists.
+const NO_NEXT := -1
+
 ## **One row per room. Every key below is read by `stage.gd._apply_room()` and nowhere else.**
 ##
 ## | key | what it is |
@@ -65,6 +82,7 @@ const NO_GATE: Dictionary = {}
 ## | `monsters` | the `(tx, kind)` placement table (`stage1_monsters.gd`'s shape) |
 ## | `gate` | the six tile numbers of the stage's exit, or `NO_GATE` |
 ## | `title` | what the settlement screen is titled when this room is cleared |
+## | `bg_far` · `bg_near` | the two parallax backdrop pictures |
 ##
 ## **Adding a stage is adding a row.** If that ever stops being true — if one more file has to be touched —
 ##  that is the bug this table exists to prevent, and `net_stages` is where it gets caught: it drives
@@ -74,7 +92,7 @@ const NO_GATE: Dictionary = {}
 ##
 ## **The gate numbers still live in `stage_gate.gd` for stage 1 only**, referenced here rather than copied —
 ##  see that file's `STAGE1_*` block for why they could not simply move, and what it costs.
-const ROWS: Array[Dictionary] = [
+static var ROWS: Array[Dictionary] = [
 	{
 		"map": TownMap,
 		"chars": TownMap.MAP_CHARS,
@@ -84,6 +102,11 @@ const ROWS: Array[Dictionary] = [
 		# **The town is never "cleared"** — you walk back into it, you do not finish it. The settlement
 		#  screen cannot open here at all (`_sync_settlement`'s own `not _in_town` term).
 		"title": "",
+		"bg_far": Fx.BG_TOWN_FAR_TEXTURE,
+		"bg_near": Fx.BG_TOWN_NEAR_TEXTURE,
+		# **The town's exit is not a chain.** Which stage the departure gate leads to is `_leave_town()`'s
+		#  own constant — E at the gate is a choice the player walks to, not a room ending and handing on.
+		"next": NO_NEXT,
 	},
 	{
 		"map": TerrainMap,
@@ -103,12 +126,28 @@ const ROWS: Array[Dictionary] = [
 		#  is a property of the stage — `SETTLEMENT_NOTICE_2` deliberately stays out of this table, because
 		#  "stage 2 does not exist yet" is a statement about the build, not about stage 1.
 		"title": Fx.SETTLEMENT_TITLE_CLEAR,
+		# **The backdrop is the room's.** It was the last two-way `if _in_town else` the table did not
+		#  reach, so a second stage would silently have worn stage 1's sky.
+		#  **What kept it out was real and is now paid**: `net_town._the_town_has_its_own_backdrop` scanned
+		#  `stage.gd`'s *source text* for `BG_TOWN_FAR_TEXTURE`, so moving the line would have reddened a
+		#  check while nothing about the game changed. That scan is replaced by a driven read of the node —
+		#  the textures **are** readable back (`net_background` already reads `_far`/`_near`), which the old
+		#  comment there denied. ⇒ Strictly stronger, and the line was free to move.
+		"bg_far": Fx.BG_FAR_TEXTURE,
+		"bg_near": Fx.BG_NEAR_TEXTURE,
+		# **What comes after this stage — `NO_NEXT` today, and that is what makes stage 1's clear behave
+		#  exactly as it always has**: the settlement screen, the clear title, the end-of-content notice.
+		#  **Stage 2 is reached by writing `STAGE_2` here**, and by nothing else — the gate then walks you
+		#  straight in with the run intact (`stage.gd._enter_stage()`).
+		"next": NO_NEXT,
 	},
 ]
 
 ## Every key a row must carry. **Named here so a row that forgets one is caught by name** rather than by a
 ##  null deref three files away — `net_stages` walks this against every row.
-const REQUIRED_KEYS: Array[String] = ["map", "chars", "spawn", "monsters", "gate", "title"]
+const REQUIRED_KEYS: Array[String] = [
+	"map", "chars", "spawn", "monsters", "gate", "title", "next", "bg_far", "bg_near",
+]
 
 ## Every key a `gate` must carry when it is not `NO_GATE`.
 const GATE_KEYS: Array[String] = ["seat_tx", "floor_ty", "wall_tx0", "wall_tx1", "wall_ty0", "wall_ty1"]

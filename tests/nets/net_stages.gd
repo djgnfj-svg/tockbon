@@ -20,12 +20,15 @@ const TownMap := preload("res://src/stage/town_map.gd")
 const TerrainMap := preload("res://src/stage/terrain_map_generated.gd")
 const Stage1Monsters := preload("res://src/stage/stage1_monsters.gd")
 const MonsterDefs := preload("res://src/actor/monster_defs.gd")
+const UnlockDefs := preload("res://src/actor/unlock_defs.gd")
 const CellGrid := preload("res://src/sim/cell_grid.gd")
 const Mat := preload("res://src/sim/cell_materials.gd")
 const Tuning := preload("res://src/sim/sim_tuning.gd")
 const Fx := preload("res://src/view/fx_tuning.gd")
 const SettlementWindow := preload("res://src/view/settlement_window.gd")
 const Baker := preload("res://tools/stage/terrain_baker.gd")
+## The other half of the same pipe — the write direction (see the painter check at the bottom).
+const Painter := preload("res://tools/stage/paint_terrain_from_map.gd")
 
 const STAGE_SCENE := "res://src/stage/stage.tscn"
 
@@ -36,6 +39,11 @@ const PROBE_OUT := "user://net_stages_bake_probe.gd"
 ## ══ The synthetic room's numbers, all of them different from stage 1's and from the town's ══
 ##  Kept as named constants so the checks below read as "the value the row carried", not as bare literals
 ##  that happen to match.
+## **A pair matching neither real row** — the town's far picture with the farm's near one. Either real
+## pair would leave "it came from the row" and "it came from the old ternary" indistinguishable for one
+## of the two rooms.
+const SYN_BG_FAR := Fx.BG_TOWN_FAR_TEXTURE
+const SYN_BG_NEAR := Fx.BG_NEAR_TEXTURE
 const SYN_SPAWN := Vector2i(7, 3)
 const SYN_MONSTER_TX := 111
 const SYN_SEAT_TX := 100
@@ -91,8 +99,13 @@ func run(t) -> void:
 	await _apply_room_reads_every_field_out_of_the_row(t)
 	await _the_room_the_shell_builds_comes_from_the_stage_id(t)
 	await _the_panel_paints_the_title_the_room_carried(t)
+	_no_row_chains_into_itself_or_out_of_the_table(t)
+	await _with_no_next_the_run_ends_exactly_as_it_does_today(t)
+	await _the_chain_walks_into_the_next_stage_and_keeps_the_run(t)
+	await _a_self_chaining_row_barks_and_ends_the_run_instead(t)
 	_the_baker_writes_where_it_is_told(t)
 	_the_baker_reads_the_layer_it_is_told(t)
+	_the_painter_writes_only_the_layer_it_is_told(t)
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -105,14 +118,21 @@ func run(t) -> void:
 func _every_row_carries_every_field(t) -> void:
 	t.ok(StageDefs.ROWS.size() >= 2,
 		"방 표에 마을과 스테이지가 모두 있다 (%d행)" % StageDefs.ROWS.size())
-	t.eq(StageDefs.REQUIRED_KEYS.size(), 6, "필수 열쇠가 6개다 (전제 — 목록이 비면 아래 루프가 안 돈다)")
+	# **A floor, not an exact count.** The list grows as fields move into the table (the backdrop pair did),
+	#  and pinning the number would make every such move look like a failure. What the premise has to stop is
+	#  the loop below running zero times — the `checked` count at the end is the other half of that.
+	t.ok(StageDefs.REQUIRED_KEYS.size() >= 7,
+		"필수 열쇠가 최소 7개다 (전제 — 목록이 비면 아래 루프가 안 돈다) — %d개"
+			% StageDefs.REQUIRED_KEYS.size())
+	t.ok(StageDefs.REQUIRED_KEYS.has("next"), "그 목록에 '이어질 곳'이 들어 있다")
 	var checked := 0
 	for i in StageDefs.ROWS.size():
 		var row: Dictionary = StageDefs.ROWS[i]
 		for key: String in StageDefs.REQUIRED_KEYS:
 			t.ok(row.has(key), "%d번 방이 '%s' 를 들고 있다" % [i, key])
 			checked += 1
-	t.eq(checked, StageDefs.ROWS.size() * 6, "모든 행 × 모든 열쇠를 실제로 돌았다 (%d번)" % checked)
+	t.eq(checked, StageDefs.ROWS.size() * StageDefs.REQUIRED_KEYS.size(),
+		"모든 행 × 모든 열쇠를 실제로 돌았다 (%d번)" % checked)
 
 	# **A stage is not a town.** Every row from 1 up must be able to be cleared and to be left.
 	var stages := 0
@@ -268,6 +288,13 @@ func _apply_room_reads_every_field_out_of_the_row(t) -> void:
 			"wall_ty0": SYN_WALL_TY0, "wall_ty1": SYN_WALL_TY1,
 		},
 		"title": SYN_TITLE,
+		"bg_far": SYN_BG_FAR,
+		"bg_near": SYN_BG_NEAR,
+		# **`NO_NEXT`, because this check is about the fields and not the chain** — the chain has its own
+		#  three checks below. Omitting the key is not an option: `_apply_room()` reads every required key
+		#  unconditionally, and a missing one aborts the call **midway**, which reads here as the *spawn*
+		#  check failing at the town's tile. That is exactly how this row went red once.
+		"next": StageDefs.NO_NEXT,
 	}
 
 	# **Wiped first, so what is read back was written by this call and not left over from `_ready()`'s own
@@ -288,6 +315,23 @@ func _apply_room_reads_every_field_out_of_the_row(t) -> void:
 	#  check that separates "the map came from the row" from "the glyph table came from the row".
 	t.eq((grid as Object).call("mat_at", mid_cx, 4), Mat.WOOD,
 		"행이 들고 온 글자표를 썼다 (#을 돌이 아니라 나무로 읽었다)")
+
+	# ── the backdrop came from the row ──
+	# **The pair is deliberately mismatched** (`SYN_BG_FAR`/`SYN_BG_NEAR`: the town's far picture with the
+	#  farm's near one). Either real pair would leave "it came from the row" and "it came from the ternary
+	#  this line replaced" indistinguishable for one of the two rooms.
+	# **Read off the node, not scanned in the source.** `net_town` covers row -> node for the town; what is
+	#  missing without this is **per-row** coverage — a `_apply_room()` that pushed one fixed pair regardless
+	#  of the row would still satisfy that check and give stage 2 stage 1's sky.
+	var sky: Variant = root.get("_sky")
+	t.ok(sky != null, "셸이 하늘을 잡고 있다 (전제)")
+	if sky != null:
+		var far: Texture2D = (sky as Object).get("_far")
+		var near: Texture2D = (sky as Object).get("_near")
+		t.ok(far != null and near != null, "배경 두 장이 실렸다 (전제)")
+		if far != null and near != null:
+			t.eq(far.resource_path, SYN_BG_FAR, "행이 들고 온 먼 배경이 하늘에 닿았다")
+			t.eq(near.resource_path, SYN_BG_NEAR, "행이 들고 온 가까운 배경도 닿았다")
 
 	# ── the spawn came from the row ──
 	var tile_px := Tuning.TILE_CELLS * Tuning.CELL_PX
@@ -432,6 +476,237 @@ func _the_panel_paints_the_title_the_room_carried(t) -> void:
 
 
 # ══════════════════════════════════════════════════════════════════
+#  The chain — `town -> 1 -> 2 -> 3`
+# ══════════════════════════════════════════════════════════════════
+
+## **Static shape.** A row pointing at itself rebuilds the same stage once per frame forever, which on screen
+## is the game freezing at the gate; a row pointing outside the table barks on every later room build.
+## `_enter_stage()` refuses both at run time (driven below) — this is the same two questions asked of the
+## table itself, so a bad row is caught by reading it and not only by walking into it.
+func _no_row_chains_into_itself_or_out_of_the_table(t) -> void:
+	var checked := 0
+	for i in StageDefs.ROWS.size():
+		var nxt := int(StageDefs.ROWS[i]["next"])
+		checked += 1
+		if nxt == StageDefs.NO_NEXT:
+			continue
+		t.ok(nxt != i, "%d번 방이 자기 자신으로 이어지지 않는다" % i)
+		t.ok(nxt >= StageDefs.STAGE_1 and nxt < StageDefs.ROWS.size(),
+			"%d번 방이 이어지는 곳(%d)이 표 안의 스테이지다" % [i, nxt])
+	t.eq(checked, StageDefs.ROWS.size(), "모든 행의 이어짐을 실제로 봤다 (%d행)" % checked)
+	# **Today every room answers `NO_NEXT`, and that is the fact the whole "nothing changes" claim rests on.**
+	#  Written as a value so that the day stage 2 lands, this line is what says out loud that it did.
+	t.eq(int(StageDefs.ROWS[StageDefs.STAGE_1]["next"]), StageDefs.NO_NEXT,
+		"스테이지1 뒤에는 아직 아무것도 없다 (그래서 클리어가 오늘 그대로 정산 화면이다)")
+
+
+## **The negative half, and it is the one the brief cares about most: with `NO_NEXT`, nothing moved.**
+## A clear opens the settlement screen, with the clear title, and the shell stays on the same stage.
+##
+## **Measured, and written down because it is the weakest inversion in this file**: deleting the
+## `_next_stage_id != NO_NEXT` term from `_sync_settlement()`'s guard **turns no line here red.** The chain
+## is entered with `-1`, `_enter_stage()` refuses it as "not a stage in the table", and the fall-through
+## leaves `_stage_id` and the panel exactly as this function expects. What catches it is the **wrapper's
+## silence check** — the refusal's `push_error` is undeclared, so the round goes red with 153 green checks.
+## That is a real bite in this repo (only the final `[래퍼]` line decides) but it is second-hand: it depends
+## on `NO_NEXT` being an id the guard rejects. **Give `NO_NEXT` a value that happens to be a real stage and
+## nothing here would catch it at all** — which is the actual reason it is `-1` and not `ROOM_TOWN`.
+func _with_no_next_the_run_ends_exactly_as_it_does_today(t) -> void:
+	var root: Node = await _treed_stage(t)
+	if root == null:
+		return
+	var gate_view: Variant = root.get("_gate_view")
+	var settlement: Variant = root.get("_settlement")
+	if gate_view == null or settlement == null:
+		t.ok(false, "셸이 아치와 정산창을 잡고 있다 (전제)")
+		_drop_stage(t, root)
+		return
+	(root as Object).call("_leave_town")
+	t.eq(int((root as Object).get("_next_stage_id")), StageDefs.NO_NEXT,
+		"스테이지1에 서면 다음이 없다 (전제 — 표에서 읽은 값이다)")
+	for _i in Fx.GATE_TAKE_FRAMES:
+		(gate_view as Object).call("tick_gate", true)
+	(root as Object).call("_sync_settlement")
+	t.eq(int((root as Object).get("_stage_id")), StageDefs.STAGE_1,
+		"클리어해도 스테이지가 안 바뀐다 (이어질 곳이 없다)")
+	t.ok(bool((settlement as Object).call("is_showing")), "그대로 정산 화면이 열린다")
+	t.ok(bool((settlement as Object).get("_cleared")), "그리고 클리어로 열린다")
+	t.eq(String((settlement as Object).get("_clear_title")), Fx.SETTLEMENT_TITLE_CLEAR,
+		"제목도 스테이지1 클리어 그대로다")
+	_drop_stage(t, root)
+	_restore_stage1_gate()
+
+
+## **The whole chain, walked for real into a real second row.**
+##
+## **The row is appended to the table and popped again** — the chain can only be driven *into a stage*, and
+## the game has one (`stage_defs.gd`'s own box on why `ROWS` is a `static var`). Nothing here invents stage 2
+## content: the synthetic row is a flat stone room with one pig, and what is measured is the plumbing.
+##
+## **What this is really guarding**: `_enter_stage()` reaching for `reset_stage()` — the obvious thing to do,
+## since the shell had exactly one rebuild path — **wipes every 원석, every unlock, the level and the earned
+## rune the instant you walk into stage 2, and nothing barks.** Each of those is a separate check below so a
+## red line names which one was lost.
+func _the_chain_walks_into_the_next_stage_and_keeps_the_run(t) -> void:
+	var root: Node = await _treed_stage(t)
+	if root == null:
+		return
+	var gate_view: Variant = root.get("_gate_view")
+	var settlement: Variant = root.get("_settlement")
+	var world: Variant = root.get("_world")
+	var grid: Variant = root.get("_grid")
+	if gate_view == null or settlement == null or world == null or grid == null:
+		t.ok(false, "셸이 아치·정산창·세계·격자를 잡고 있다 (전제)")
+		_drop_stage(t, root)
+		return
+
+	var stage_2 := _push_synthetic_stage(StageDefs.NO_NEXT)
+	t.eq(stage_2, StageDefs.STAGE_1 + 1, "표에 두 번째 스테이지를 붙였다 (전제)")
+
+	# Out of the town, then stage 1's row with its `next` pointed at the row just appended.
+	(root as Object).call("_leave_town")
+	var chained := StageDefs.row(StageDefs.STAGE_1).duplicate()
+	chained["next"] = stage_2
+	(root as Object).call("_apply_room", chained)
+	t.eq(int((root as Object).get("_next_stage_id")), stage_2, "셸이 이어질 곳을 들었다 (전제)")
+
+	# ── the run, earned in stage 1 ──
+	var pr: Variant = (world as Object).call("progress")
+	(pr as Object).call("add_xp", 500)
+	(pr as Object).set("gems", 42)
+	(pr as Object).call("grant_rune", Tuning.ELEM_FIRE)
+	t.ok((pr as Object).call("buy", UnlockDefs.UNLOCK_DOUBLE_JUMP), "연구대에서 하나 샀다 (전제)")
+	(pr as Object).call("add_damage", 777)
+	# **Turned by hand** — this check drives `_sync_settlement()` directly rather than running physics, so
+	#  `run_ticks` would sit at 0 and "it survived" would be true after a `reset()` as well.
+	for _i in 40:
+		(pr as Object).call("advance_tick")
+	(pr as Object).call("set_boss_reward_pending", MonsterDefs.KIND_ROOSTER)
+	# **Snapshotted after the purchase, not before it** — `buy()` spends 원석, so a literal would be asserting
+	#  against a number the setup itself already changed.
+	var level_before := int((pr as Object).get("level"))
+	var gems_before := int((pr as Object).get("gems"))
+	var gems_run_before := int((pr as Object).call("gems_this_run"))
+	var picks_before := int((pr as Object).get("pending_picks"))
+	var ticks_before := int((pr as Object).get("run_ticks"))
+	t.ok(level_before > 0, "레벨이 올랐다 (전제 — %d)" % level_before)
+	# **Each premise is what keeps its own check from being vacuous.** `gems_this_run()` reading 0 here would
+	#  make "그대로다" below true after a `reset()` as well, and the check would guard nothing.
+	t.ok(gems_run_before > 0, "이번 런에 번 원석이 0이 아니다 (전제 — %d)" % gems_run_before)
+	t.ok(picks_before > 0, "안 뽑은 뽑기가 남아 있다 (전제 — %d)" % picks_before)
+
+	for _i in Fx.GATE_TAKE_FRAMES:
+		(gate_view as Object).call("tick_gate", true)
+	(root as Object).call("_sync_settlement")
+
+	# ── it walked in ──
+	t.eq(int((root as Object).get("_stage_id")), stage_2, "게이트가 다음 스테이지로 데려갔다")
+	t.ok(not bool((settlement as Object).call("is_showing")),
+		"정산 화면은 안 열린다 (런이 안 끝났다 — 스테이지가 이어진다)")
+	t.eq(String((root as Object).get("_stage_title")), SYN_TITLE,
+		"다음 스테이지의 클리어 제목을 들었다 (스테이지1 것이 아니다)")
+	t.eq((grid as Object).call("mat_at", PROBE_TX * Tuning.TILE_CELLS + 4, 5 * Tuning.TILE_CELLS + 4),
+		Mat.STONE, "그리고 다음 스테이지의 지도가 지어졌다")
+
+	# ── and the run came with it ──
+	t.eq(int((pr as Object).get("level")), level_before, "레벨이 그대로다")
+	# **This one alone would not catch a `reset()`** — `gems` deliberately survives `reset()` too (its own box
+	#  in `progress.gd`: the town's whole reason to exist). It is here so a red line can separate "the whole
+	#  object was replaced" from "the run was reset"; the three checks around it are what actually bite.
+	t.eq(int((pr as Object).get("gems")), gems_before, "원석이 그대로다")
+	t.eq(int((pr as Object).call("gems_this_run")), gems_run_before,
+		"이번 런에 번 원석도 그대로다 (_gems_at_run_start 를 다시 안 찍었다)")
+	t.eq(int((pr as Object).get("damage_dealt")), 777, "이번 런에 준 피해도 그대로다")
+	t.eq(int((pr as Object).get("pending_picks")), picks_before,
+		"안 뽑은 뽑기도 그대로다 (보상이지 스테이지 것이 아니다)")
+	t.eq(int((pr as Object).get("run_ticks")), ticks_before,
+		"런 시간도 이어진다 (정산 화면이 런 전체를 말해야 한다)")
+	t.ok(bool((pr as Object).call("is_unlocked", UnlockDefs.UNLOCK_DOUBLE_JUMP)), "산 해금이 그대로다")
+	t.ok(bool((pr as Object).call("owns_rune", Tuning.ELEM_FIRE)), "황소가 준 룬도 그대로다")
+
+	# ── but the stage's own record did not ──
+	# **Carried across, stage 2's arch is lit and its east wall already down on the frame you arrive**, and
+	#  stepping on its seat ends the run instantly. That is what makes this a stage's record, not a run's.
+	t.ok(not bool((pr as Object).call("boss_died", MonsterDefs.KIND_ROOSTER)),
+		"그런데 보스가 죽었다는 기록은 안 따라온다 (따라오면 다음 스테이지 문이 처음부터 열려 있다)")
+	t.ok(not bool((gate_view as Object).call("take_done")),
+		"문의 시계도 0으로 돌아갔다 (그래서 매 프레임 다시 넘어가지 않는다)")
+
+	_pop_synthetic_stage()
+	_drop_stage(t, root)
+	_restore_stage1_gate()
+
+
+## **A row that points at itself must bark, not loop.** Without the refusal `_enter_stage()` rebuilds the same
+## stage once per physics frame forever, which on screen is the game freezing on the seat with no error at all.
+##
+## **And the refusal falls through to the settlement screen** — a refusal that silently did nothing would
+## strand the player on the seat with no way on and no way out, which is worse than ending the run there.
+func _a_self_chaining_row_barks_and_ends_the_run_instead(t) -> void:
+	var root: Node = await _treed_stage(t)
+	if root == null:
+		return
+	var gate_view: Variant = root.get("_gate_view")
+	var settlement: Variant = root.get("_settlement")
+	if gate_view == null or settlement == null:
+		t.ok(false, "셸이 아치와 정산창을 잡고 있다 (전제)")
+		_drop_stage(t, root)
+		return
+	(root as Object).call("_leave_town")
+	var loops := StageDefs.row(StageDefs.STAGE_1).duplicate()
+	loops["next"] = StageDefs.STAGE_1
+	(root as Object).call("_apply_room", loops)
+	for _i in Fx.GATE_TAKE_FRAMES:
+		(gate_view as Object).call("tick_gate", true)
+	t.expect_error("stage %d chains into itself" % StageDefs.STAGE_1)
+	(root as Object).call("_sync_settlement")
+	t.eq(int((root as Object).get("_stage_id")), StageDefs.STAGE_1, "자기 자신으로 이어지면 안 넘어간다")
+	t.ok(bool((settlement as Object).call("is_showing")),
+		"대신 정산 화면이 열린다 (자리에 갇히지 않는다)")
+
+	# **Out of the table barks too** — a row pointing at a stage nobody wrote.
+	var outside := StageDefs.row(StageDefs.STAGE_1).duplicate()
+	outside["next"] = 99
+	(root as Object).call("_apply_room", outside)
+	(settlement as Object).call("close")
+	t.expect_error("chains into 99, which is not a stage in the table")
+	(root as Object).call("_sync_settlement")
+	t.eq(int((root as Object).get("_stage_id")), StageDefs.STAGE_1, "표 밖으로 이어져도 안 넘어간다")
+	t.ok(bool((settlement as Object).call("is_showing")), "여기서도 정산 화면이 열린다")
+
+	_drop_stage(t, root)
+	_restore_stage1_gate()
+
+
+## Appends a real second stage to the table and returns its id. **Flat stone, one pig, its own gate and its
+## own title** — plumbing, not content: nothing here is a guess about what stage 2 contains.
+func _push_synthetic_stage(next_id: int) -> int:
+	var monsters: Array[Dictionary] = [{"tx": SYN_MONSTER_TX, "kind": MonsterDefs.KIND_PIG}]
+	StageDefs.ROWS.append({
+		"map": _SyntheticMap,
+		"chars": {"S": Mat.STONE, "#": Mat.WOOD},
+		"spawn": SYN_SPAWN,
+		"monsters": monsters,
+		"gate": {
+			"seat_tx": SYN_SEAT_TX, "floor_ty": SYN_FLOOR_TY,
+			"wall_tx0": SYN_WALL_TX0, "wall_tx1": SYN_WALL_TX1,
+			"wall_ty0": SYN_WALL_TY0, "wall_ty1": SYN_WALL_TY1,
+		},
+		"title": SYN_TITLE,
+		"bg_far": SYN_BG_FAR,
+		"bg_near": SYN_BG_NEAR,
+		"next": next_id,
+	})
+	return StageDefs.ROWS.size() - 1
+
+
+## **Popped again in the same check that pushed it.** Checks in one file share one process (CLAUDE.md), and a
+## table left two rows long would make every later table check measure a stage nobody wrote.
+func _pop_synthetic_stage() -> void:
+	StageDefs.ROWS.resize(StageDefs.STAGE_1 + 1)
+
+
+# ══════════════════════════════════════════════════════════════════
 #  The baker's two arguments
 # ══════════════════════════════════════════════════════════════════
 
@@ -513,3 +788,47 @@ func _treed_stage(t) -> Node:
 func _drop_stage(t, root: Node) -> void:
 	t.root.remove_child(root)
 	root.queue_free()
+
+
+## ══ The painter — **the write direction, and it was the one hard blocker on a second stage** ══
+##
+## `terrain_baker.bake()` was given a source layer and an output path; `paint_terrain_from_map.gd` was not.
+## **The bake reads a layer into text; the paint writes text back into a layer, and a map is authored in the
+## write direction** — so a parameterised baker over a single-layer painter is half a pipe. It refused
+## outright (`hits != 1`) the moment `stage.tscn` held two `TileMapLayer`s, which is exactly what a second
+## stage is.
+##
+## **Driven on synthetic scene text, not on `stage.tscn`.** The real scene has one layer today, so it cannot
+## show the difference between "counts the property across the file" and "tracks which node it belongs to" —
+## and that difference *is* the fix. The second assert below is the one that fails against the old code.
+func _the_painter_writes_only_the_layer_it_is_told(t) -> void:
+	var scene := "\n".join([
+		"[node name=\"Terrain\" type=\"TileMapLayer\" parent=\".\"]",
+		"tile_map_data = PackedByteArray(\"AAAA\")",
+		"",
+		"[node name=\"Terrain2\" type=\"TileMapLayer\" parent=\".\"]",
+		"tile_map_data = PackedByteArray(\"BBBB\")",
+	])
+
+	# **The premise, and the negative half**: the whole file carries the property twice, so the old
+	#  file-wide count would have read 2 and refused. Without this the checks below prove nothing new.
+	var whole_file := scene.count(Painter.DATA_PREFIX)
+	t.eq(whole_file, 2, "전제 — 파일 전체로 세면 tile_map_data가 2개다 (예전 코드는 여기서 거절했다)")
+
+	var a := Painter.swap_layer_data(scene, "Terrain", "ZZZZ")
+	t.eq(int(a["hits"]), 1, "이름을 대면 그 레이어 하나만 바꾼다 (%d개)" % int(a["hits"]))
+	t.ok(String(a["text"]).contains("PackedByteArray(\"ZZZZ\")"), "지정한 레이어가 새 값으로 바뀐다")
+	t.ok(String(a["text"]).contains("PackedByteArray(\"BBBB\")"),
+		"그리고 다른 레이어는 손도 안 댄다 (스테이지 2를 칠하다 스테이지 1을 덮지 않는다)")
+	t.ok(not String(a["text"]).contains("PackedByteArray(\"AAAA\")"), "옛 값은 남지 않는다")
+
+	var b := Painter.swap_layer_data(scene, "Terrain2", "YYYY")
+	t.eq(int(b["hits"]), 1, "두 번째 레이어도 이름으로 정확히 집힌다")
+	t.ok(String(b["text"]).contains("PackedByteArray(\"AAAA\")"),
+		"이번엔 첫 번째 레이어가 그대로 남는다 (방향이 반대로도 성립한다)")
+	t.ok(String(b["text"]).contains("PackedByteArray(\"YYYY\")"), "두 번째가 바뀐다")
+
+	# **A name nobody drew must not silently paint something else.** 0 hits is what the caller refuses on.
+	var miss := Painter.swap_layer_data(scene, "NoSuchLayer", "QQQQ")
+	t.eq(int(miss["hits"]), 0, "없는 레이어 이름은 0개 — 조용히 엉뚱한 걸 칠하지 않는다")
+	t.eq(String(miss["text"]), scene, "그리고 원문이 그대로다")

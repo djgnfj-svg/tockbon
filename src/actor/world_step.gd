@@ -647,6 +647,27 @@ func bolt_kind(i: int) -> int:
 ## `_monsters.clear()` — the `monsters-minimum` doc's "screen" section pinned "the place that clears is
 ##  `world_step.reset()`". `_next_monster_id` is not reverted (its declaration above).
 func reset() -> void:
+	_clear_world()
+	# **Progress reverts here too, in this same one place** — not a separate call from `stage.gd`, or the day
+	#  comes when only one of the two reset paths gets touched and R quietly stops reverting it.
+	_progress.reset()
+
+
+## **Walking into the next stage of the same run.** Everything the world holds is cleared exactly as `reset()`
+## clears it — **only which `Progress` door is opened differs**, and that one line is the whole difference
+## between "a new run begins" and "the run continues in a new room".
+##
+## **The shared body is a function, not a copy.** Two copies of that list is how the day arrives when a new
+## counter is added to one path and not the other, and the symptom would be a stale bolt or a live monster
+## riding into the next stage with nothing barking.
+func next_stage() -> void:
+	_clear_world()
+	# **Not `reset()`** — see that function's own box in `progress.gd`. Calling `reset()` here strips every
+	#  원석 and every unlock earned in the stage you just cleared, silently.
+	_progress.next_stage()
+
+
+func _clear_world() -> void:
 	_queue.clear()
 	_fire_count = 0
 	_monsters.clear()
@@ -656,9 +677,6 @@ func reset() -> void:
 	# The bolts are cleared too — without it, every press of R leaves bolts from the dead experiment and they
 	#  contaminate the next acceptance (the same reason `monsters-minimum`'s "screen" pinned "revert every counter").
 	_bolts = MonsterBolts.new()
-	# **Progress reverts here too, in this same one place** — not a separate call from `stage.gd`, or the day
-	#  comes when only one of the two reset paths gets touched and R quietly stops reverting it.
-	_progress.reset()
 	# `monster-placement-stage1.md` Stage B — re-arms every row (dormant, unspent),
 	#  the same "revert every counter" reasoning as the bolts above. Does not touch which table is set
 	#  (`set_placement()`'s own comment) — R must not un-place the room it just rebuilt.

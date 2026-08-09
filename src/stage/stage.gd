@@ -288,6 +288,13 @@ var _in_town: bool:
 ##  shows is a property of the stage, and stage 2 must not have to edit the settlement window to be named.
 var _stage_title := ""
 
+## **Which room this one hands on to, or `NO_NEXT`** — read out of the room table by `_apply_room()`, the
+##  same door `_stage_title` comes through, and for the same reason: a net can drive a synthetic row and see
+##  the chain follow it.
+## **`NO_NEXT` is not a missing value, it is the answer "the run ends here"** — and it is what makes stage 1's
+##  clear behave exactly as it does today.
+var _next_stage_id := StageDefs.NO_NEXT
+
 ## The last thing a fixture said, shown on the HUD until another one speaks. **A string and not a window** —
 ##  the town's screens ("how the research and assembly screens are actually drawn") are explicitly outside
 ##  `town.md`'s own boundary, and building one now would be deciding by default what the user has not decided.
@@ -854,6 +861,26 @@ func _sync_settlement() -> void:
 	# **Increment first, then test.** `take_done()` below reads the counter this call just raised, so the first
 	#  frame inside the band counts as 1 and the panel opens on the `GATE_TAKE_FRAMES`-th frame of contact.
 	_gate_view.tick_gate(at_gate)
+	# **The chain — `town -> 1 -> 2 -> 3` (GDD's session loop), taken here and nowhere else.**
+	#
+	# **The settlement screen is the run's end, so a stage that hands on does not open it.** That window's own
+	#  header says it in its own words: "the run is over, so there is nothing left to watch". Walking from
+	#  stage 1 into stage 2 is not the run being over, so `_enter_stage()` runs instead and `want` below is
+	#  never reached this frame.
+	# **With `NO_NEXT` — every room in the table today — this branch is not taken and everything below is
+	#  byte-for-byte what it always was.**
+	#
+	# **It cannot re-fire.** `_enter_stage()` -> `_rebuild()` -> `_gate_view.reset_gate()` zeroes the take
+	#  clock in the same call, so `take_done()` is false again the moment the new stage stands up. The loop is
+	#  closed structurally, not by a latch that a later door could forget to clear.
+	# **`not _char.downed` is the same tie rule `want` below holds** — a downed body did not walk through the
+	#  arch, and dying on the seat must open the death panel, not carry you into the next stage.
+	if _next_stage_id != StageDefs.NO_NEXT and _gate_view.take_done() \
+			and not _char.downed and not _in_town:
+		# **A refusal falls through to the settlement screen deliberately** (`_enter_stage()`'s own comment):
+		#  stranded on the seat with nothing happening is the one outcome worse than ending the run here.
+		if _enter_stage(_next_stage_id):
+			return
 	# **`take_done()` *replaces* `at_gate` here — it is not `and`ed with it.** The take latches inside
 	#  `tick_gate()` (its own header), so by the time it completes the player may well have walked out of the
 	#  band; requiring `at_gate` again on the opening frame would undo the latch entirely and hand back exactly
@@ -963,6 +990,43 @@ func _process(dt: float) -> void:
 ## R. **Not decoration** — terrain marks are this stage's main evidence, and with holes left over from the
 ##  previous experiment two combinations cannot be compared. Without a reset, acceptance 1 and 2 do not hold.
 func reset_stage() -> void:
+	_rebuild(true)
+
+
+## **Into the next stage of the same run** — stage 1's gate walking you into stage 2, with the level, the
+##  원석, the unlocks and the earned rune intact (GDD's session loop: `town -> 1 -> 2 -> 3 -> clear`).
+##
+## **Everything about the world is torn down exactly as `R` tears it down. The one thing that is not is the
+##  run.** `_rebuild(false)` opens `WorldStep.next_stage()` instead of `WorldStep.reset()`, and that single
+##  line is the whole difference — see `progress.next_stage()`'s own box for what would be lost otherwise.
+##
+## **Two refusals, both barking rather than doing something plausible**, because the alternative to each is a
+##  thing that cannot be seen on screen:
+##  · **a row chaining into itself** would rebuild the same stage forever, one rebuild per frame, and read as
+##    the game freezing at the gate
+##  · **a row chaining outside the table** would set an id whose every later room build barks instead
+##
+## Returns false when it refused, and **the caller must then fall through to the settlement screen** — a
+##  refusal that silently did nothing would strand the player standing on a seat with no way on and no way out.
+func _enter_stage(stage_id: int) -> bool:
+	if stage_id == _stage_id:
+		push_error("stage %d chains into itself - refusing to rebuild it forever" % stage_id)
+		return false
+	if stage_id < StageDefs.STAGE_1 or stage_id >= StageDefs.ROWS.size():
+		push_error("stage %d chains into %d, which is not a stage in the table" % [_stage_id, stage_id])
+		return false
+	_stage_id = stage_id
+	_rebuild(false)
+	return true
+
+
+## **The one teardown list, and which `Progress` door it opens is the only argument.**
+##
+## **A flag rather than two functions, deliberately.** Copied, the two lists drift: a counter added to one
+##  path and not the other rides into the next stage as a live monster or a stale bolt, and nothing barks.
+##  Every line below is identical for `R`, for going home, for the departure gate and for the chain — the
+##  `if` is the entire difference between them.
+func _rebuild(end_the_run: bool) -> void:
 	_grid.apply(CellGrid.cmd_reset())
 	_spell.reset()
 	# The views are cleared with it. Without clearing, dead projectiles' trails and flashes pile up every time R is pressed.
@@ -976,12 +1040,19 @@ func reset_stage() -> void:
 	#  diagnosis above becomes false forever after a single R — R is this stage's main measuring instrument,
 	#  so that diagnosis is the eye.
 	#  The queue and the fire count are held by `_world` — touch them here as well and there are two places to reset.
-	_world.reset()
+	# **The one line that separates a new run from the next stage of this one.** `next_stage()` clears the
+	#  world identically and leaves `Progress` standing (that function's own comment).
+	if end_the_run:
+		_world.reset()
+	else:
+		_world.next_stage()
 	# **Ownership is the truth; the seat is not** (`rune-lock-and-receiving.md` — verify-run's own finding: a
 	#  reset revoked ownership but left possession, and the new run couldn't *pick* fire in the palette while
 	#  still *firing* it at full effect, measured on the map, not inferred). `_world.reset()` above already
 	#  reverted `Progress`'s owned set to the starting kit; this is the other half of the same invariant
 	#  ("seat ⊆ owned") from the door that actually breaks it — nothing else in this codebase revokes a rune.
+	# **On the chain it revokes nothing, and that is right**: `next_stage()` does not narrow the owned set, so
+	#  the fire the bull granted in stage 1 is still owned and stays in the seat walking into stage 2.
 	_revoke_unowned_rune()
 	# **`cancel_confirm()` too** — `_world.reset()` clears `Progress` (so a lingering `pending_picks`/`_drawn`
 	#  do not ride into the new run), but the confirmation afterglow does not live in `Progress` at all
@@ -1055,6 +1126,9 @@ func _apply_room(room: Dictionary) -> void:
 	# **The clear screen's title comes with the room**, read once here rather than at the open site — see
 	#  `_stage_title`'s own comment.
 	_stage_title = String(room["title"])
+	# **And so does what comes after it.** The chain is a field, not a branch — `_sync_settlement()` reads
+	#  this one value and never asks "which stage am I on".
+	_next_stage_id = int(room["next"])
 	# **The fixtures show exactly when the town does.** Derived from the latch every time a room is built,
 	#  never written at the two doors — that is the same "derive it, do not push it" rule `_update_hud`
 	#  applies to `_hud.visible`, and for the same reason: a door that forgot would strand the benches
@@ -1065,15 +1139,12 @@ func _apply_room(room: Dictionary) -> void:
 	#  pointing at them and no path to the screen, which is CLAUDE.md's own "is there a path for the thing you
 	#  want to see to reach the screen" in its purest form: the art was in, the constants were in, and the
 	#  town rendered as a black box.
-	# **This is the one per-room value that did NOT move into the table, and it is deliberate.**
-	#  `net_town._the_town_has_its_own_backdrop` scans *this file's source* for the literal name
-	#  `BG_TOWN_FAR_TEXTURE` — the backdrop cannot be read back off `sky_background`, so a text scan is the
-	#  only half of that check available to it. Moving the pair into `stage_defs.gd` turns that check red
-	#  while nothing about the game changes. **Stage 2 therefore still needs a line here**; that is the one
-	#  remaining piece of surgery, named rather than hidden.
-	_sky.set_backdrop(
-		Fx.BG_TOWN_FAR_TEXTURE if _in_town else Fx.BG_FAR_TEXTURE,
-		Fx.BG_TOWN_NEAR_TEXTURE if _in_town else Fx.BG_NEAR_TEXTURE)
+	# **From the row, not from `_in_town`** — this was the last two-way ternary left in the room build, and
+	#  it was left standing on a reason that has since been paid rather than on one that was wrong: a
+	#  source-text scan for the literal `BG_TOWN_FAR_TEXTURE` in this file. That scan is gone, replaced by a
+	#  driven read of the node's own textures. See the `bg_far` comment in `stage_defs.gd`.
+	#  ⇒ **Stage 2 no longer needs a line here.** Nothing in this function asks which room it is building.
+	_sky.set_backdrop(String(room["bg_far"]), String(room["bg_near"]))
 	# **Cleared with the room.** A bench's line surviving a departure would be the town talking over stage 1.
 	_town_message = ""
 	# **The window closes with the room.** Leaving it open would put the town's parchment panel over stage 1,
