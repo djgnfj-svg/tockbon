@@ -38,6 +38,10 @@ custom_bind_ip=""
 port_override_enabled=false
 port_override=6550
 
+[gui]
+
+theme/custom_font="res://assets/font/NotoSansKR-Regular.otf"
+
 [input]
 
 jump={
