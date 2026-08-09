@@ -215,6 +215,9 @@ No need to decide now, but **with no difference at all, clearing loses its weigh
 ## Screen
 
 - **One room. Bright** — contrast with the dungeon is half of "I'm home"
+- **What stands behind it is a broken village** (decided by the user) — daylight, but **ruined**: caved roofs,
+  a snapped windmill. **A warm workshop interior was generated and rejected** — "that isn't a town".
+  ⇒ "I'm home" here is **not cosiness; it is a place that survived.** Candidate picking lives in `background.md`
 - **Standing at a fixture shows a "press this" prompt** — one position-checking door is needed here (see "interaction")
 - Windows follow the same art discipline as the assembly window (`circle-art.md`)
 

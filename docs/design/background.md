@@ -5,7 +5,20 @@
 **Implemented**: partial — **the layer stands up.** Empty cells are punched to transparent (`empty_id` in
 `cell_grid.gdshader`) and `SkyBackground` sits **in front of** `CellRenderer` in `stage.tscn`.
 What it draws now is a **night-sky gradient + stars.** **There is no art yet** — no parallax, no layers.
-**Accepted**: unseen — **never confirmed on screen.**
+**Accepted**: **the direction is chosen, the layer is not.** The user saw the mockups and picked
+**stage 1 = a daylit green farm** (`farm3_01`, see "the night palette is reversed" below).
+**The town backdrop is chosen too**: **a burnt village** (`town_r7_burnt_01`) — blackened roof beams, thin smoke,
+a pale sky. Picked from six directions (rebuilding · overcast · sunset · overgrown · burnt · riverside).
+The warm workshop interior was rejected before that.
+
+**The rebuilding one was the runner-up and is deferred, not dropped** (decided by the user):
+"since it is split into layers, **the town visibly repairing itself** comes later". ⇒ **The scaffolding candidate
+(`town_r10_rebuild`) stays on disk** — when research unlocks should show on screen, that is the picture to reach for. **The art is in and wired — two layers per place**: far scenery (`bg_farm.png` · `bg_town.png`, mirrored
+1920x544) and a near strip standing on the ground line (`bg_near_farm.png` a fence line and bare trees ·
+`bg_near_town.png` a broken wall, chroma-green cut so the sky is transparent).
+`sky_background.gd` now tiles both with separate parallax ratios instead of drawing a gradient and stars.
+**Not seen on screen yet** — another session was mid-edit in `src/actor/world_step.gd`, so the project
+does not parse and the game cannot be launched. **Verify the horizon offset (`BG_Y_OFFSET`) the first time it runs.**
 
 **Three pieces are one set; drop one and nothing shows, silently:**
 1. `src/view/cell_grid.gdshader` — `mat_id == empty_id` ⇒ `COLOR = vec4(0.0)`
@@ -25,7 +38,8 @@ Night sky + stars is **placeholder**, not the stage-1 look: the theme is a farm 
 so what stands behind the grid is **fields, fences, a barn, a horizon.** ⇒ **What this doc is waiting for is art,
 not code** — the three-piece layer above already works and needs nothing further to show a farm.
 **The user explicitly deferred it**; do not start it because it reads as an obvious gap.
-**It is also the first thing that will need a second variant** — `town.md` needs a bright room.
+**It is also the first thing that will need a second variant** — `town.md` needs a second backdrop.
+**Not a bright room**: the user rejected the workshop interior and set the town's direction as **a broken village**.
 
 ---
 
@@ -102,6 +116,22 @@ bedrock `#232228` · pit `#0E0E13`) and **the player and monster sprites at real
 
 **Learned by measurement**: on a 960×540 screen, **a 32px character is very small.**
 Zoomed sheets don't convey it — the mockup does.
+
+---
+
+## ~~The night palette is forced~~ — **reversed. Stage 1 is daylight** (decided by the user)
+
+**The user rejected the night sky for stage 1** — "the stage should feel like a greener farm, not a night sky" —
+and picked **`farm3_01_seed487172200_960px.png`**: terraced green fields, distant blue hills, a windmill on the ridge.
+**Accepted**: the mockup was seen on screen and chosen out of eight.
+
+**The silhouette argument below did not hold in practice.** It predicted that a bright backdrop kills the character,
+but the terrain is `#5C574F` stone · `#232228` bedrock · `#6B4524` dirt — **all far darker than a daylit field**,
+so the mockup reads *better* than the night one, not worse. **What actually dies on a bright backdrop is nothing yet
+measured** — check the fire and the bolt sprites when they go on it, since those are bright.
+
+⇒ **`backdrop` is the night preset; `daylight` is the one now in use** (`tools/pixel/gen.py`).
+The paragraph below is kept as the record of why night was assumed in the first place.
 
 ---
 

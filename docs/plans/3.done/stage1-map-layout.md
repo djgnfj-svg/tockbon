@@ -1,7 +1,7 @@
 # Stage 1 map layout — a farm, three zones and a locked fourth
 
 **Status**: done — **the map is built.** 400×48 is baked and in the game
-**Why you'd reopen**: only when redrawing stage 1's terrain. Bosses are `1.ready/stage1-bosses.md`, the water escape is `2.active/water-jump-and-escape.md`.
+**Why you'd reopen**: only when redrawing stage 1's terrain. Bosses are `3.done/stage1-bosses.md`, the water escape is `2.active/water-jump-and-escape.md`.
 
 ##  왼쪽 절반이 다시 그려졌다 (2026-08-08 저녁, 사용자가 화면에서 보고 「이걸로 해줘 이게 맞아」)
 
@@ -41,7 +41,7 @@ net_water_rain: 물이 안 샌다 · 부은 양이 정확히 같다
 |---|---|
 | **판정 3·4 화면 재확인** — 배경이 섰고 ④·발판을 겹쳤는데 **그 뒤로 아무도 안 봤다** | 이 문서 「판정 현황」 |
 | **빨간 그물** `net_water: 활성 청크가 상한(100) 아래에 머문다 (최대 100)` |  **`2.active/water-jump-and-escape.md` 로 넘겼다** — 고치는 손잡이가 붓는 속도라 물 쪽 결정이다 |
-| **①·③이 빈 방** — 보스가 코드에 없다 | `1.ready/stage1-bosses.md` |
+| **①·③이 빈 방** — 보스가 코드에 없다 | `3.done/stage1-bosses.md` |
 
 **이 문서를 다시 열 이유는 「맵을 또 그릴 때」뿐이다.** 위 셋은 전부 남의 문서에서 끝난다.
 
@@ -90,7 +90,7 @@ net_water: 붓는 동안 활성 청크가 상한(100) 아래에 머문다 (최�
 ```
 
  **그리고 셋이 남아 있다:**
-- **①·③은 여전히 빈 방** — 보스 몬스터가 코드에 없다(→ `1.ready/stage1-bosses.md`)
+- **①·③은 여전히 빈 방** — 보스 몬스터가 코드에 없다(→ `3.done/stage1-bosses.md`)
 - **④가 안 보인 것은 배경이 없어서였다.**  배경 레이어가 2026-08-08에 섰다
   (`docs/design/background.md`) ⇒ **판정 3을 다시 봐야 한다**
 - **판정 4를 고치려고 ④와 발판을 가로로 겹쳤다** — 그 뒤로 화면 확인을 안 했다
@@ -218,7 +218,7 @@ net_water: 붓는 동안 활성 청크가 상한(100) 아래에 머문다 (최�
 
 ####  그런데 더 가까운 위험이 생겼다 — **중간보스 소가 불을 뿜는다** (2026-08-08)
 
-[stage1-bosses.md](../1.ready/stage1-bosses.md) 에서 사용자가 **「소의 불이 지형에 붙는다」**를 골랐다.
+[stage1-bosses.md](stage1-bosses.md) 에서 사용자가 **「소의 불이 지형에 붙는다」**를 골랐다.
 
 ⇒ **소의 불이 나무벽에 닿으면 플레이어가 불의 룬을 얻기 전에 벽이 저절로 탄다.**
 GDD가 못박은 **「중간보스 보상이 진행의 열쇠」가 통째로 무너진다.**
@@ -233,7 +233,7 @@ GDD가 못박은 **「중간보스 보상이 진행의 열쇠」가 통째로 �
 
 ### ①·③ —  기획이 생겼다. 코드는 아직 없다
 
- **2026-08-08에 보스 둘이 정해졌다** → [stage1-bosses.md](../1.ready/stage1-bosses.md)
+ **2026-08-08에 보스 둘이 정해졌다** → [stage1-bosses.md](stage1-bosses.md)
 **① = 소**(돌진+스턴 · 불 뿜기 · 돌진 파괴) · **③ = 거대 수탉**(뛰어올라 덮치고 착지). 둘 다 두 페이즈.
 
  **그래도 코드에는 없다.** 몬스터 표에 있는 것은 여전히 **돼지와 닭 둘뿐**이다(`monster_defs.DEFS`).

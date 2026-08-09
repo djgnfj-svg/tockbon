@@ -19,9 +19,11 @@ extends RefCounted
 const KIND_NONE := 0
 const KIND_PIG := 1
 const KIND_HEN := 2
+const KIND_BULL := 3
+const KIND_ROOSTER := 4
 
 ## Iteration goes **only through this explicit list**. It does not assume the values are contiguous.
-const ALL: Array[int] = [KIND_PIG, KIND_HEN]
+const ALL: Array[int] = [KIND_PIG, KIND_HEN, KIND_BULL, KIND_ROOSTER]
 
 ## 20 is a value decided by the user — not a value to measure and adjust.
 const MAX_MONSTERS := 20
@@ -41,8 +43,43 @@ const DEFS: Dictionary = {
 		"max_hp": 10, "speed_px": 220.0, "invuln_ticks": 2,
 		"xp": 6, "money": 3,
 	},
+	# **`w_px`/`h_px` are not free here** — `stage1-bosses.md` Risk 1: `net_monster_sprite` asserts the sheet
+	#  equals the box, and `net_monster._defs_preconditions` asserts the box is a `Tuning.CELL_PX`(4) multiple
+	#  (every other kind already satisfies both). `bull_body.png`'s art came out at 86x54 (4x → downscale,
+	#  the trash-mob pipeline), which fails the second contract — so the png was padded to 88x56, the original
+	#  86x54 pixels placed unmoved at (1, 2): 1px transparent margin left/right, 2px on top, **0px on the
+	#  bottom** (so the feet-on-the-last-row contract carries over, and 1px symmetric each side keeps
+	#  `minx+maxx == w-1`). No pixel resampled — this is not the "regenerate, don't scale" case.
+	#  `rooster_body.png` (72x80) already satisfied both contracts untouched.
+	# `max_hp`/`speed_px`/`xp`/`money` are provisional — `stage1-bosses.md`'s own TBD ("skeleton first, set on
+	#  screen"). `invuln_ticks` is carried over unexamined from the trash-mob table.
+	# `step_cells` = 3 for both — `net_monster._pig_and_hen_cross_the_ledge_differently` hardcodes a binary
+	#  contract ("pig is blocked at a 3-cell ledge, every other kind clears it"), so any kind added to `ALL`
+	#  inherits "clears a 3-cell ledge". A big body stepping a 3-cell ledge is fine fiction for the bull too.
+	KIND_BULL: {
+		"name": &"황소", "w_px": 88, "h_px": 56, "step_cells": 3,
+		"max_hp": 300, "speed_px": 140.0, "invuln_ticks": 2,
+		"xp": 200, "money": 100,
+	},
+	KIND_ROOSTER: {
+		"name": &"거대 수탉", "w_px": 72, "h_px": 80, "step_cells": 3,
+		"max_hp": 250, "speed_px": 200.0, "invuln_ticks": 2,
+		"xp": 250, "money": 120,
+	},
 }
 
+## **The first boss-box measurement** — `stage1-bosses.md`'s Cost section asked whoever builds Stage A to
+##  leave it here. Measured by verify-run: 600 frames warmed, 3 runs, one `world.frame()` call per frame —
+##
+##  | | box cells | extra µs over an empty world (81-93µs) | % of the 16,667µs 60Hz budget |
+##  |---|---|---|---|
+##  | pig | ~108 | +220 | ~1.3% |
+##  | 황소 (bull) | 308 (88x56) | +570 | ~3.4% |
+##  | 거대 수탉 (rooster) | 360 (72x80) | +1,010 | ~6.1% |
+##
+##  Both land inside the plan's predicted 330-1,060µs band. **One number is unexplained, not just unmeasured**:
+##  the rooster costs 1.6x the bull on only 17% more cells. Its 200 speed_px vs the bull's 140 (more sub-steps
+##  per frame in `Body.move_x`/`move_y`) is a plausible cause, not a confirmed one — nobody has isolated it.
 
 ## **Index `DEFS[kind][...]` directly.** Do not use `.get(..., default)` —
 ##  a kind missing from the table silently becomes a pig. `character_view._cell_rect` recorded the same discipline.

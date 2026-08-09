@@ -566,8 +566,17 @@ func _no_pushed_out_glyph_is_stashed_anywhere(t) -> void:
 	#  a glyph that left a layer). Not hand-audited from memory — this is the exact list `_scan_gd_files`
 	#  returns today; add a real field anywhere in `src/` and this test names the file, so the allowlist can
 	#  never silently grow to cover something that should have been questioned.
+	# **`_reward_pending` (`stage1-bosses.md` Stage I) added here, deliberately, not by widening a regex to
+	#  miss it.** It is boss-death bookkeeping (keyed by monster kind — which bosses have died and not yet had
+	#  their reward taken), the same shape `world_step.gd`'s own `_died_kind`/`_monsters` entries below already
+	#  are — not a record of a glyph that left a spell layer, so it is not what this file's own no-inventory
+	#  check exists to catch.
 	var allow: Dictionary = {
-		"res://src/actor/progress.gd": ["_drawn"],
+		# **`_owned_runes` (`rune-lock-and-receiving.md`, Stage A) added here, deliberately** — the same
+		#  discipline `_reward_pending`'s own comment names: a record of which runes have been granted, not a
+		#  glyph that left a spell layer, so it is not what this file's no-inventory check exists to catch
+		#  (`docs/decisions/no-inventory.md`'s own exception for exactly this field).
+		"res://src/actor/progress.gd": ["_drawn", "_owned_runes", "_reward_pending"],
 		"res://src/actor/spell_circle.gd": ["_layers", "_runes"],
 		"res://src/actor/world_step.gd": ["_died_kind", "_died_x", "_died_y", "_monsters", "_queue"],
 		"res://src/view/blast_fx.gd": ["_flashes"],

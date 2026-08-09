@@ -136,6 +136,11 @@ const MONSTER_FILL := Color(0.78, 0.22, 0.42, 1.0)
 const MONSTER_SHEETS: Dictionary = {
 	MonsterDefs.KIND_PIG: "res://assets/monster/pig_body.png",
 	MonsterDefs.KIND_HEN: "res://assets/monster/chicken_body.png",
+	# The standing pose only — the other bull/rooster sheets (frame counts vary by pattern, see
+	#  `stage1-bosses.md` "Screen") exist on disk but have no state->frame table yet
+	#  (`monsters.md` open question 16, `stage1-bosses.md` "Out of scope"). Idle stands in.
+	MonsterDefs.KIND_BULL: "res://assets/monster/bull_body.png",
+	MonsterDefs.KIND_ROOSTER: "res://assets/monster/rooster_body.png",
 }
 
 ## **The health bar above the head.** Width and position come from `monster_defs.w_px` (the box) — hardcode
@@ -247,6 +252,12 @@ const MONSTER_BOLT_R_PX := 4.0
 ## The core's radius ratio. Above 0.5 the glow is left as a border only and the two layers do not read.
 const MONSTER_BOLT_CORE_FRAC := 0.45
 
+## **The bull's fire breath (`stage1-bosses.md` Stage D) reuses `FIRE_LO`/`FIRE_HI` for its glow/core** —
+## no new colors declared. "It is burning in that fire" already connects the body-attached flame
+## (`MONSTER_BURN_*`, above) to ground fire through these same two constants; the bolt on its way there
+## uses the same pair so all three read as one material rather than three unrelated oranges. Same shapes
+## (`MONSTER_BOLT_R_PX`/`MONSTER_BOLT_CORE_FRAC`) as the hen's bolt — only the two colors swap per kind.
+
 ## The corpse afterimage — it stays briefly where the monster died, darker than the body color, then fades.
 ##  **The grid is untouched** (`monsters-minimum` "on death" — there is no corpse cell). `monster_view._corpses` ages it.
 ##
@@ -304,6 +315,77 @@ const MONSTER_BURN_PERIOD_FRAMES := 14.0
 ## Cluster the flames toward the **bottom of the box** (0 = top, 1 = bottom). Scattered evenly over the whole body
 ##  it looks not like "it is burning" but like "glitter got stuck on" — fire rises from below.
 const MONSTER_BURN_LOW_BIAS := 0.35
+
+## The attack prediction (`docs/design/attack-prediction.md`) — **replaces** the wind-up "!" text tell
+## (`stage1-bosses.md` Stage B, acceptance 3). The user's own words: the monster's attack should show
+## **in red, as a prediction** — a mark on the ground saying *where it lands*, not a symbol above the head
+## saying only *something is coming*. verify-look measured the old "!" at roughly one eighth of the bull's
+## height at 1.0 zoom against the stun ring's full-body strength; this is sized and drawn to match the ring,
+## not the symbol it replaces (`MONSTER_STUN_RING_*` below is the explicit model, unchanged).
+##
+## **Hue math, the same method `MONSTER_PHASE2_COLOR`'s own comment already used**: damage-number red sits at
+## ~8°, terrain/monster fire at ~15-40°, the old telegraph orange at ~42° (now retired), the stun ring's cyan
+## at ~185°, phase-2's indigo at ~230°, the reserved scream-magenta at 300°. **True red (~0-3°) is the one hue
+## the user asked for**, and it cannot be rotated away from the damage number's own 8° the way phase-2 was
+## free to pick 230° — the two are kept apart by **saturation and value instead**: the damage number is a
+## light, desaturated coral (`Color(1.0, 0.35, 0.25)`); this is a near-pure, fully saturated red
+## (`Color(0.95, 0.12, 0.12)`), and the two never share a vocabulary anyway (floating text vs. a ground mark).
+const ATTACK_PREDICT_COLOR := Color(0.95, 0.12, 0.12, 0.5)   ## fill
+const ATTACK_PREDICT_EDGE_COLOR := Color(0.95, 0.12, 0.12, 0.95)   ## outline — carries the pulse (below)
+const ATTACK_PREDICT_EDGE_PX := 3.0   ## same weight as the stun ring's own outline
+## FIRE's stream is drawn as a line this thick, centered on the bolt's own spawn height.
+const ATTACK_PREDICT_LINE_PX := 8.0
+## **Pulses, the same `sin()` shape `MONSTER_STUN_RING_*` already uses** — copied, not reinvented, so the two
+## read as the same family of "an active warning" rather than two different animation languages.
+## **Faster than the stun ring (30 frames)** — the shortest phase-2 windup is 0.4s (8 ticks), and a full pulse
+## cycle has to complete inside that or the player only ever sees one static-looking half-cycle.
+const ATTACK_PREDICT_PULSE_FRAMES := 12
+const ATTACK_PREDICT_MIN_ALPHA_FRAC := 0.55
+const ATTACK_PREDICT_MAX_ALPHA_FRAC := 1.0
+
+## The stun indicator - the hit-back window (acceptance 3's other half). **A ring around the box, the same
+## vocabulary `MONSTER_DEATH_POP_COLOR` already uses** for "a UI state, not a body" - a different color so
+## "just died" and "stunned, hit it now" are never confused on screen.
+const MONSTER_STUN_RING_COLOR := Color(0.3, 0.9, 1.0, 0.9)
+const MONSTER_STUN_RING_PX := 3.0
+## The ring pulses (grows/shrinks) so it reads as active feedback, not a fixed decal painted on the ground.
+const MONSTER_STUN_RING_PERIOD_FRAMES := 30
+const MONSTER_STUN_RING_MIN_FRAC := 0.85
+const MONSTER_STUN_RING_MAX_FRAC := 1.15
+
+## **Stage H's phase-2 tell** — `stage1-bosses.md`'s own open TBD ("phase transition presentation — what is
+## visible at half health"), picked here as a first provisional answer, not yet the user's decision.
+## **On the strong side of verify-look's own line, deliberately**: the old windup "!" text measured as a small
+## orange dot at 1.0 zoom (that tell is retired — `ATTACK_PREDICT_*` above replaced it, ground-mark-sized to
+## match this same strength); the stun ring measured well. This tell copies the stun ring's strength (a shape
+## around the whole box, not a small icon) and goes one step further — **no blink, no pulse, just thick and
+## always on** while the condition holds, so it cannot be missed the way a blinking or pulsing state can be
+## caught mid-off.
+## **Strong indigo/blue, ~230° hue** — measured in degrees against everything else already meaning something
+## on this screen, the same method `MONSTER_BOLT_COLOR`'s own comment documents: the (retired) telegraph
+## orange sat at ~42°, replaced by the attack prediction's true red at ~0-3°; damage-number red (~8°),
+## terrain/monster fire (~15-40°), the stun ring's cyan (~185°), the death pop's light orange (~44°), and the
+## reserved scream-magenta (300°, `ELEM_FX_MISSING`, "must not be used"). ~230° sits clear of all of them,
+## including a wide margin from the reserved 300° (the file's own header: "even 85° once got confused when
+## brightness/saturation were close") — **and clear of the new red too**, the same 230° margin it always had
+## from anything in the 0-40° band. **Verify-look confirmed this half works** — kept unchanged across the
+## shape fix below and across the telegraph's replacement.
+const MONSTER_PHASE2_COLOR := Color(0.35, 0.42, 1.0, 0.95)
+## Thicker than the stun ring's 3.0 — a hit-back window (stun) only needs to be noticed for its own duration;
+## a phase change needs to keep reading for the rest of the fight, so it earns the extra weight.
+const MONSTER_PHASE2_OUTLINE_PX := 4.0
+## Drawn outside the box, not flush with its edge — flush would sit directly on top of the outline shader
+## (`MONSTER_OUTLINE_COLOR`) already hugging every monster's silhouette, and the two would blur into one line.
+const MONSTER_PHASE2_MARGIN_PX := 3.0
+## **The shape half, corrected — verify-look's own words: "a square outline around a sprite is what an editor
+## draws when something is selected, so it carries no 'this thing got angrier' meaning".** A first version was
+## a full `draw_rect` outline; `monster_view.gd`'s own header already recorded this exact mistake once for body
+## fire ("an orange selection box", acceptance 13) — a second rectangle repeating it on the same screen was a
+## real, avoidable regression, not a new discovery. **Corner brackets instead** (four right-angle marks, like a
+## camera/target reticle) — not a rectangle (the middle of each edge is deliberately empty, which is exactly
+## what a UI selection box never leaves out) and not the stun ring's circle, so the two states cannot be
+## confused at a glance. This is the arm length of each bracket mark, drawn from the grown box's own corners.
+const MONSTER_PHASE2_BRACKET_ARM_PX := 12.0
 
 # --- HUD text -------------------------------------------------------
 ## **A constant that had to be pinned down at the 32px transition. Before, it did not exist at all.**
@@ -1105,21 +1187,72 @@ static func staff_tint(glyphs: int, element: int, can_fire: bool) -> Color:
 ##  **empty cells have to be pulled out as transparent** by `cell_grid.gdshader`'s `empty_id` before it becomes visible.
 ##  The three are one set — the shader · the injection in `cell_renderer` · the node order in `stage.tscn`.
 ##
-## **It forces a night palette.** The stage's empty cells are `#0E0E13` (nearly black), so a bright background
-##  kills every character and monster silhouette. => Keep both top and bottom dark and give **only a difference.**
+## ~~**It forces a night palette.**~~ **Reversed — stage 1 is daylight** (decided by the user, `background.md`).
+##  The prediction was that a bright background kills the silhouettes; measured on the mockup it does the opposite,
+##  because the terrain (`#5C574F` · `#232228` · `#6B4524`) is far darker than a daylit field.
 ## Measured (verify-look): bedrock `(35,34,40)` standing in front of empty `(14,14,19)` was
-##  **21 per channel apart and completely invisible to the eye.** The purpose of these values is for the
-##  background to fill that place.
+##  **21 per channel apart and completely invisible to the eye.** The purpose of the background is to fill that place —
+##  **that reason survives the palette flip**, and daylight separates them further, not less.
 
 const BG_Z_INDEX := -100          ## Clearly behind the grid (`CellRenderer`). Hung doubly with the scene order
-const BG_GRADIENT_STEPS := 24     ## The number of vertical bands. Too few and stair-stepping shows, too many and draw calls grow
-const BG_TOP := Color8(9, 9, 16)      ## Top — **darker** than empty (#0E0E13). The sky looks deeper going up
-const BG_BOTTOM := Color8(26, 24, 38) ## Bottom — slightly brighter toward the horizon (a purple-leaning navy)
 
-## Stars. **They are sampled from a world-coordinate grid** — sampled in screen coordinates they follow the camera and become "dots stuck to the window".
-const BG_STAR_CELL_PX := 96.0     ## At most one star per cell
-const BG_STAR_DENSITY := 0.22     ## The fraction of those that actually get a star
-const BG_STAR_PX := 2.0
-const BG_STAR_COLOR := Color8(190, 200, 230)
-const BG_STAR_ALPHA_MIN := 0.12   ## Too bright and it gets confused with bolts and sparks. A background **must not be read but felt**
-const BG_STAR_ALPHA_MAX := 0.45
+## The picture. **A mirrored pair (1920x544) — the right half is the left flipped**, so the left and right edges
+##  are the same column and tiling shows no seam. FLUX will not match seams; mirroring is what removes them.
+##  Built by `tools/pixel/bgmock.py`'s source images -> `assets/stage/bg_*.png`.
+## **Two layers.** Far is the scenery, near is the strip at the player's feet (a fence line · rubble).
+##  **The near one has a transparent sky** — cut from chroma green, so it lays over the far one.
+const BG_FAR_TEXTURE := "res://assets/stage/bg_farm.png"
+const BG_NEAR_TEXTURE := "res://assets/stage/bg_near_farm.png"
+## The town's pair. **The same node, a different picture** (`town.md`) — not a second scene.
+const BG_TOWN_FAR_TEXTURE := "res://assets/stage/bg_town.png"
+const BG_TOWN_NEAR_TEXTURE := "res://assets/stage/bg_near_town.png"
+
+## Parallax ratios. **0 = pinned to the window (infinitely far), 1 = nailed to the world (part of the terrain).**
+const BG_FAR_SCROLL_X := 0.25
+## **The vertical is much weaker than the horizontal on purpose.** The world is 4,032px tall against a 544px picture,
+##  so at the horizontal ratio the picture would leave the screen entirely within one fall.
+const BG_FAR_SCROLL_Y := 0.08
+const BG_NEAR_SCROLL_X := 0.65   ## Near enough to read as "just behind the terrain", not so near it competes with it
+const BG_NEAR_SCROLL_Y := 0.45
+
+## Where each layer sits when its ratio is 1 (world px). **+ is downward.**
+## The far one is the horizon — tuned by eye against the spawn point.
+const BG_FAR_ANCHOR_Y := 300.0
+## The near one is **the ground line the strip stands on**: the map's left half is flat at tile y 20,
+##  and 20 x `TILE_CELLS` 8 x `CELL_PX` 4 = 640. **The strip's bottom is placed there, so its own height is
+##  subtracted at draw time** — change the picture's height and it still stands on the ground.
+const BG_NEAR_GROUND_Y := 640.0
+
+## **Underground depth — `docs/design/underground-depth.md`.** Below the far picture (which now stops at
+##  the ground line, `sky_background._draw()`) the old fill was one flat color sampled from the far
+##  picture's own bottom row — measured `#7EB356`, a bright grass green standing in for bedrock. These
+##  bands replace it, darkening toward bedrock as depth grows.
+##
+## **The bottom of the range is derived, not guessed.** `CellGrid` is 4096x1008 cells but the map is only
+##  400x48 tiles (384 cells) seated at (0,0) — 62% of the grid's height is `EMPTY`, off the map entirely,
+##  and a range tuned against `CellGrid.H` lands at a third of what it was tuned for (measured in the doc).
+##  `TerrainMap.MAP_H` x `TILE_CELLS` x `CELL_PX` is the map's real floor in world px (48 x 8 x 4 = 1536).
+const TerrainMap := preload("res://src/stage/terrain_map_generated.gd")
+const BG_UNDER_TOP_Y := BG_NEAR_GROUND_Y   ## Reuses the ground line — not a second "where the ground is".
+const BG_UNDER_BOTTOM_Y := 1.0 * TerrainMap.MAP_H * Tuning.TILE_CELLS * Tuning.CELL_PX
+
+## **Hard bands, not a smooth gradient** — banding is the pixel-art-native answer the doc measured
+##  against three reference games (Motherload's strata), a gradient reads as photo, not tile.
+## Top to bottom, ending near bedrock's `#232228` (`cell_materials.gd`'s `BEDROCK` rgb — matched by eye
+##  here, not derived, since this is a screen-only fill and not a material the sim tracks).
+## **Provisional** — the doc's own open question is how many bands and where they break; not yet looked
+##  at on screen.
+const BG_UNDER_BANDS: Array[Color] = [
+	Color(0.290, 0.224, 0.157),  # #4A3928
+	Color(0.227, 0.180, 0.141),  # #3A2E24
+	Color(0.173, 0.153, 0.153),  # #2C2727
+	Color(0.137, 0.133, 0.157),  # #232228 — matches BEDROCK
+]
+
+## **The shader-side depth dim's own normalization** (`cell_grid.gdshader`'s `depth_span` uniform) — the
+##  `UV.y` fraction where the map's own floor sits, the same "derive it, don't use `CellGrid.H`" reasoning
+##  as `BG_UNDER_BOTTOM_Y` above, just expressed as a 0..1 fraction of the grid instead of world px.
+const CellGrid := preload("res://src/sim/cell_grid.gd")
+const CELL_DEPTH_SPAN := 1.0 * TerrainMap.MAP_H * Tuning.TILE_CELLS / CellGrid.H
+## How dark the deepest cells get (multiplied into rgb, 1.0 = no dim). Provisional, same as the bands above.
+const CELL_DEEP_DIM := 0.6

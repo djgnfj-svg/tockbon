@@ -7,6 +7,10 @@ Godot_v*.exe
 # 임시
 *.tmp
 
+# 내보낸 빌드 — 웹 하나가 39MB. 산출물이라 리포에 안 남긴다.
+# 프리셋(export_presets.cfg)은 커밋한다 — 그게 있어야 아무 데서나 같은 빌드가 나온다.
+build/
+
 # 도구가 쓰는 락 파일 — 로컬 상태라 리포에 안 남긴다.
 .claude/scheduled_tasks.lock
 

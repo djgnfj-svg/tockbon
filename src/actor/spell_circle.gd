@@ -47,7 +47,13 @@ const RUNE_EMPTY := -1
 ##  and then something like "a fresh launch is fire but pressing key 1 gives a different rune" appears
 ##  **with no error.**
 const DEFAULT_CIRCLE := CircleDefs.CIRCLE_ROUND
-const DEFAULT_RUNE := Tuning.ELEM_FIRE
+## **The lock** (`rune-lock-and-receiving.md`, Stage B) — `ELEM_NONE`, not `RUNE_EMPTY`. Booting with an empty
+##  rune reads as broken (this class's own `_init` comment, right below); the starting kit still fires, what it
+##  loses is fire. The other half of the lock is `Progress`'s own starting kit shrinking to `{ELEM_NONE}`
+##  (`progress.gd`'s `_starting_runes()`) — change only this constant and the palette still hands out fire
+##  unowned, and the lock is void with nothing barking (`palette_layout.items_of()`'s own header already named
+##  this gap: "earning things ... is outside this stage's scope" — that day is this plan).
+const DEFAULT_RUNE := Tuning.ELEM_NONE
 
 var _circle_id := CircleDefs.CIRCLE_NONE
 ## The innermost is index 0 (= layer 1). `GLYPH_NONE` = an empty layer.

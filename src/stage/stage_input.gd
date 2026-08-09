@@ -28,13 +28,15 @@ signal ignite_requested(world_px: Vector2)
 ##  `src/sim/water_source.gd` (not `stage.gd`'s share).
 ## **It is a toggle** — press again and it stops. Otherwise the only way to turn it off is resetting the whole stage with R.
 signal rain_requested(world_px: Vector2)
-## **M/N — stands a monster at the mouse position. Shell-only debug keys** (`monsters-minimum`).
+## **M/N/B/C — stands a monster at the mouse position. Shell-only debug keys** (`monsters-minimum`,
+##  B/C added by `stage1-bosses.md` stage A).
 ##  Placement is the map doc's share (that doc's "Boundary"), so the stage does not lay monsters down
 ##  automatically — these keys are "the path by which the thing to be seen reaches the screen".
 ##  **Exactly the same idiom as F (pouring water).**
 ## **Passes world coordinates** — the same reason as left click (it drifts while shaking).
 ## **`kind` is passed as an argument — M (pig) and N (hen) share one signal.** Split the signal in two and
 ##  `stage.gd`'s handler becomes two as well, and the day a third kind arrives that pair grows again.
+##  **B (bull) and C (rooster) prove the point** — `stage1-bosses.md` stage A, zero new signals.
 signal monster_requested(world_px: Vector2, kind: int)
 ## **Firing combinations alternately must be doable within seconds** — that is the only way to measure
 ##  acceptance 1 and 2.
@@ -47,6 +49,14 @@ signal assembly_toggled
 ##  debug-key dictionaries. **Whether it opens or declines is not decided here** — `Progress` knows its own
 ##  state, the same discipline as the assembly window.
 signal pick_toggled
+## **L — takes a pending boss reward. A shell-only debug key** (`stage1-bosses.md` Stage I).
+## **Stands in for a decision the user has explicitly left open** ("how the fire rune is received" — the
+## GDD's own open TBD) — the real reward (a rune card through the three-pick window) is milestone step 3, not
+## this stage's job; this key exists only to prove the gate works, the same way F stood in for the water rune
+## before it existed. **No mouse coordinates** — unlike F/T/G/K, there is nothing to aim; it clears whichever
+## boss reward(s) are pending, wherever they are.
+signal reward_taken_requested
+
 ## **`-` / `=` — camera zoom out / in. A shell-only debug key.**
 ##  The map is 400x48 tiles = 12800x1536 world px while the screen shows 960x540, so **1/13th of the map is
 ##  visible at once** and level design cannot be read while playing. This key is the only way to see the whole
@@ -69,6 +79,8 @@ const PRESET_KEYS: Dictionary = {
 const MonsterDefs := preload("res://src/actor/monster_defs.gd")
 const MONSTER_KEYS: Dictionary = {
 	KEY_M: MonsterDefs.KIND_PIG, KEY_N: MonsterDefs.KIND_HEN,
+	# **B/C, not R** — R is already `reset_requested`. `stage1-bosses.md` stage A.
+	KEY_B: MonsterDefs.KIND_BULL, KEY_C: MonsterDefs.KIND_ROOSTER,
 }
 
 
@@ -148,6 +160,8 @@ func _unhandled_input(event: InputEvent) -> void:
 				ignite_requested.emit(_to_world(get_viewport().get_mouse_position()))
 			KEY_K:
 				rain_requested.emit(_to_world(get_viewport().get_mouse_position()))
+			KEY_L:
+				reward_taken_requested.emit()
 			# **Both the main row and the numpad** — `-` on the main row is `KEY_MINUS` and the numpad's is a
 			#  different keycode entirely. Bind only one and it reads as "the key does nothing".
 			KEY_MINUS, KEY_KP_SUBTRACT:

@@ -26,6 +26,11 @@ extends RefCounted
 ##  one stripper (the same reason as `net_damage` and `net_render`). **It got burned when written without it** —
 ##  an inversion deleting `monster_requested.connect(` left the same string in the comment recording that fact,
 ##  and `.contains()` found that string in the comment, so **not one mutation bit** (measured).
+## **The helpers and constants below are intentional duplication across the four net_monster*.gd files**
+##  (harness-manager, stage1-bosses.md Stage E-I round) -- same idiom as net_water_rain.gd's own split into
+##  net_water_rain_cap.gd / net_water_rain_speed.gd. **If you fix one copy, fix the other three too.**
+##  Full split rationale: header comment of net_monster_charge.gd.
+
 const NetDeterminism := preload("res://tests/nets/net_determinism.gd")
 
 const CellGrid := preload("res://src/sim/cell_grid.gd")
@@ -41,6 +46,10 @@ const WorldStep := preload("res://src/actor/world_step.gd")
 const MonsterView := preload("res://src/view/monster_view.gd")
 const MonsterBolts := preload("res://src/actor/monster_bolts.gd")
 const Fx := preload("res://src/view/fx_tuning.gd")
+const BossAi := preload("res://src/actor/boss_ai.gd")
+## Stage G fix list ② — the real map, the same static door `net_water_rain.gd`/`net_tables.gd` already use
+## (`Stage.build_terrain_into`, no scene tree needed).
+const Stage := preload("res://src/stage/stage.gd")
 
 const DT := 1.0 / 60.0
 const FLOOR_CY := 100
@@ -57,15 +66,338 @@ const HIT_LEAD_PX := 36
 ## The firing origin (in cells) to slam a blast down from — well above the floor. The same idiom as `net_damage.BLAST_FROM_CY`.
 const BLAST_FROM_CY := FLOOR_CY - 20
 
-func _blast_cmd(cx: int) -> Dictionary:
-	var one: Array[int] = [Glyph.GLYPH_BLAST]
-	return SpellSim.cmd_fire(cx, BLAST_FROM_CY, 0, 10, Tuning.ELEM_NONE, Glyph.pack(one))
-
 ## **The floor is laid thin** (CLAUDE.md, "if the net is slow..."). The old floor (down to `CellGrid.H-1`) was
 ##  4096x908 = 3,719,168 cells, 2,719ms at a time — that is why this file ate 43 seconds.
 ##  Why it is safe: `cell_grid.mat_at()` returns `STONE` outside the grid, so there was never any reason for it
 ##  to be thick. Monsters only play within a few px of the surface. 32 cells (128px) is 4x the headroom of `carve_r` (8 cells).
 const FLOOR_DEPTH_CY := 32
+
+## **The floor is also laid narrow** (harness-manager, stage1-bosses.md Stage D round, measured). The width was
+##  `CellGrid.W` (4096 cells) unconditionally — every one of the ~104 grid-building calls in this file (`_floor_grid`,
+##  `_bare_grid`, `_new_world`, and everything that calls them) paid for a **full-width** fill even though almost
+##  every check plays within a few hundred px of `x=0`. Measured directly (`CellGrid.new()` + one fill, 20 reps,
+##  averaged): full-width×32-deep = **98.75ms**; 512-wide×32-deep = **15.33ms** — width alone is most of this
+##  file's cost, the same shape as the depth fix above.
+## **Why 2000 cells is still safe, not just faster — bisected, not guessed** (harness-manager, temporarily
+##  shrinking this same constant and re-running `run_nets.ps1 monster`, reverted after each step):
+##  150 cells -> **8 failures** (`_dummy_raises_hits_to_kill_a_pig`'s stand_x=600 spawns off the fill entirely,
+##  the carve-symmetry checks lose their wall). 300 cells -> **2 failures** (only the left/right carve-symmetry
+##  check, whose wall sits at cell 200-240 and spawns just past it). 600 cells -> **all 426 pass, 0 failures**,
+##  same as full width. So the real minimum sits in (300, 600] cells — **2000 is more than 3x that band, not a
+##  guess frozen on day one** (the same trap the tick-cap section above already names). It was tempting to reason
+##  this from `stand_x := 5000` (the two round-robin/direction boss checks, 1250 cells) plus the charge safety-cap
+##  distance (~214 cells) and land on ~1464 — **that estimate was wrong**: both checks stayed green even at width
+##  300, because neither one's assertions ever read whether the monster stayed grounded (only `m.pattern`/`m.x`,
+##  which keep moving whether or not the monster is airborne) — reasoning about what a check *should* need is not
+##  a substitute for the bisection above. **Positions past 600 cells** (`ch.place(5000/8000/20000, ...)`) are all
+##  the "bystander" idiom — a player parked far away only so a monster's own direction-toward-the-player picks a
+##  side; never read for x/y, never needs solid ground. If this narrowing is ever wrong for a future check, the
+##  thing that needed the missing floor falls through it and that check goes red, loudly — not a silent pass.
+const FLOOR_W_CX := 2000
+# -- 6-helper. monster collision width — measured with a vertical chimney, no horizontal movement --
+## **Looking only at the landing y (old check 6) leaves all 66 green even when `Monster` doesn't pass
+##  `w_px` to `Body` (fixed 20px)** (verifier measured) — with no horizontal movement the width is never once engaged.
+##  => **The width is engaged by falling alone**: a hen (24px) fits the 32px gap, a pig (44px) catches on top.
+const HOLE_CX := 50
+const HOLE_W_CELLS := 8   # 32px — wider than a hen, narrower than a pig
+## It is deeper than the thin floor (`FLOOR_DEPTH_CY`, 32 cells) — **left that way on purpose.** Below the
+##  chimney is outside the thin floor anyway and therefore open, so the hen keeps falling until it reaches
+##  outside the grid (automatically solid). The check below measures not an exact depth but only `y > FLOOR_TOP` (did it fall further), so it doesn't matter.
+const HOLE_DEPTH_CELLS := 40
+## **Not part of the file's own class hierarchy** — a subclass local to this net, only to observe which leaf
+## draw call ran without needing a real canvas (`_draw_attack_prediction`/`_draw_stun_ring` both draw onto
+## `self` directly, so recording in an override is the whole trick — no shader, no child layer, no scene needed).
+class _RecordingMonsterView extends MonsterView:
+	var drawn: Array[String] = []
+
+	## `docs/design/attack-prediction.md` replaced the "!" telegraph this override used to record as
+	## `"telegraph"` — renamed with it so an old string here does not outlive the function it named.
+	func _draw_attack_prediction(_m: Monster, _r: Rect2) -> void:
+		drawn.append("predict")
+
+	func _draw_stun_ring(_r: Rect2) -> void:
+		drawn.append("ring")
+
+	## Stage H — the phase-2 tell's own leaf. `_draw_phase2_tell`'s hp threshold is left un-overridden on
+	## purpose (see that test's own comment) so it runs for real; only the actual `draw_rect` call is replaced.
+	func _draw_phase2_ring(_r: Rect2) -> void:
+		drawn.append("phase2")
+
+
+
+
+func _blast_cmd(cx: int) -> Dictionary:
+	var one: Array[int] = [Glyph.GLYPH_BLAST]
+	return SpellSim.cmd_fire(cx, BLAST_FROM_CY, 0, 10, Tuning.ELEM_NONE, Glyph.pack(one))
+
+func _floor_grid() -> CellGrid:
+	var g := CellGrid.new()
+	g.apply(CellGrid.cmd_fill(0, FLOOR_CY, FLOOR_W_CX - 1, FLOOR_CY + FLOOR_DEPTH_CY - 1, Mat.STONE))
+	return g
+
+
+func _wall_grid() -> CellGrid:
+	var g := _floor_grid()
+	var wall_cx := 30
+	g.apply(CellGrid.cmd_fill(wall_cx, FLOOR_CY - 8, wall_cx + 3, FLOOR_CY - 1, Mat.STONE))
+	return g
+
+
+func _ledge_grid(cells: int) -> CellGrid:
+	var g := _floor_grid()
+	g.apply(CellGrid.cmd_fill(
+		LEDGE_CX, FLOOR_CY - cells, FLOOR_W_CX - 1, FLOOR_CY + FLOOR_DEPTH_CY - 1, Mat.STONE))
+	return g
+
+
+
+
+func _chimney_grid() -> CellGrid:
+	var g := _floor_grid()
+	g.apply(CellGrid.cmd_fill(
+		HOLE_CX, FLOOR_CY, HOLE_CX + HOLE_W_CELLS - 1, FLOOR_CY + HOLE_DEPTH_CELLS, Mat.EMPTY))
+	return g
+
+
+# -- 8. it moves only by going through frame() --------------------
+func _new_world() -> WorldStep:
+	var g := CellGrid.new()
+	# This is laid thin too — the same reason as `_floor_grid()` (the `FLOOR_DEPTH_CY` box above).
+	#  This is the spot that got missed: this function is called repeatedly by checks 6, 7, 8, 9, 10 and 11 while
+	#  the old fill was still sitting here, so `net_monster` only dropped 43s -> 25s and stayed the slowest net.
+	g.apply(CellGrid.cmd_fill(0, FLOOR_CY, FLOOR_W_CX - 1, FLOOR_CY + FLOOR_DEPTH_CY - 1, Mat.STONE))
+	var spell := SpellSim.new()
+	var ch := Character.new()
+	ch.place(160, FLOOR_TOP - Character.H_PX)
+	return WorldStep.new(g, spell, ch)
+
+
+# ==================================================================
+#  stage 2 — it walks
+# ==================================================================
+
+func _bare_grid() -> CellGrid:
+	var g := CellGrid.new()
+	g.apply(CellGrid.cmd_fill(0, FLOOR_CY, FLOOR_W_CX - 1, FLOOR_CY + FLOOR_DEPTH_CY - 1, Mat.STONE))
+	return g
+
+
+## **The trap the stage 3 damage checks fell into** — from stage 2 on the monster actually walks toward the
+##  player. If a damage or fire check puts the character far from the monster (e.g. x=160), the monster walks
+##  that way while the acceptance is being measured and **leaves the target spot (the fire, the blast)** — it
+##  showed up as "it was standing on fire and burning went false in 16 frames" (the monster had walked out
+##  of the fire). => **The character is placed at the same spot as the monster's spawn centre so that axis is
+##  pinned to 0** — used when walking is not what these checks care about.
+func _still_ch(stand_x: int, kind: int) -> Character:
+	var ch := Character.new()
+	var monster_center_x := float(stand_x) + Defs.w_px(kind) * 0.5
+	ch.place(roundi(monster_center_x - Character.W_PX * 0.5), FLOOR_TOP - Character.H_PX)
+	return ch
+
+
+## Stands three of them in a row. The three things that cannot be measured (count only / set only / position)
+##  are named by the doc and all measured together — **position** in particular is the only place that catches
+##  "removal during traversal" (an adjacent live one skipping that tick), which neither the count nor the id set catches.
+func _three_hens_world() -> Dictionary:
+	var g := _bare_grid()
+	var spell := SpellSim.new()
+	var ch := Character.new()
+	ch.place(160, FLOOR_TOP - Character.H_PX)
+	var world := WorldStep.new(g, spell, ch)
+	var kind := Defs.KIND_HEN
+	var gap := 200
+	var base_x := 500
+	var y := FLOOR_TOP - Defs.h_px(kind)
+	var xs: Array[int] = [base_x, base_x + gap, base_x + gap * 2]
+	var ids: Array[int] = []
+	for px in xs:
+		ids.append(world.spawn_monster(kind, px, y))
+	return {"world": world, "ids": ids, "xs": xs}
+
+
+## One charge, into a wall thick enough that the far side is never involved. Returns how many previously-
+## solid cells at `cy` (within `[cx0, cx1]`) turned non-stone. Shared by the left/right symmetry check and
+## the no-accumulation check below, so both read the wall through the same door.
+func _charge_cycle_eaten_cells(kind: int, g: CellGrid, stand_x: int, stand_y: int, player_x: int,
+		cx0: int, cx1: int, cy: int, t) -> int:
+	var before := _count_stone_in_row(g, cx0, cx1, cy)
+	var spell := SpellSim.new()
+	var ch := Character.new()
+	ch.place(player_x, FLOOR_TOP - Character.H_PX)
+	var world := WorldStep.new(g, spell, ch)
+	var mid := world.spawn_monster(kind, stand_x, stand_y)
+	t.ok(mid > 0, "황소 스폰됐다 (검사의 전제)")
+	var m: Monster = world.monster_at(0)
+	var ticks := 0
+	var max_ticks := 200
+	while ticks < max_ticks and m.pattern != BossAi.Pattern.STUN:
+		if world.frame(DT, 0.0, false, false):
+			ticks += 1
+	t.eq(m.pattern, BossAi.Pattern.STUN, "충전이 벽에 막혀 stun으로 갔다 (검사의 전제)")
+	return before - _count_stone_in_row(g, cx0, cx1, cy)
+
+
+func _count_stone_in_row(g: CellGrid, cx0: int, cx1: int, cy: int) -> int:
+	var n := 0
+	for cx in range(cx0, cx1 + 1):
+		if g.mat_at(cx, cy) == Mat.STONE:
+			n += 1
+	return n
+
+
+## `Color` has no `distance_to()` (measured on Godot 4 GDScript) — the RGB Euclidean distance is computed directly.
+func _rgb_dist(a: Color, b: Color) -> float:
+	return Vector3(a.r, a.g, a.b).distance_to(Vector3(b.r, b.g, b.b))
+
+
+## Hits twice with `gap` frames between and returns `[number count, the first number's value]`.
+## **The only difference between the two runs must be `gap`** — differing terrain, position or damage makes the control void.
+func _dmg_number_probe(t, gap: int) -> Array:
+	var kind := Defs.KIND_PIG   # the pig — a hen dies in one hit and can't take two
+	var stand_x := 600
+	var y := FLOOR_TOP - Defs.h_px(kind)
+	var world := WorldStep.new(_bare_grid(), SpellSim.new(), _still_ch(stand_x, kind))
+	t.ok(world.spawn_monster(kind, stand_x, y) > 0, "gap=%d — 스폰됐다 (전제)" % gap)
+
+	var view := MonsterView.new()
+	view.setup(world)
+	view.advance()   # snapshots the pre-hit hp
+
+	var cx := floori((stand_x + Defs.w_px(kind) * 0.5) / float(Tuning.CELL_PX))
+	var hp0: int = world.monster_at(0).hp
+	_blast_and_observe(world, view, cx)
+	t.ok(world.monster_at(0).hp < hp0, "gap=%d — 첫 방이 실제로 맞았다 (전제)" % gap)
+
+	for _i in gap:
+		view.advance()
+
+	# **It waits out the invulnerability** — without waiting, the second hit is swallowed and "they merged" passes for free.
+	var hp1: int = world.monster_at(0).hp
+	var tries := 0
+	while world.monster_at(0).hp == hp1 and tries < 20:
+		_blast_and_observe(world, view, cx)
+		tries += 1
+	t.ok(world.monster_at(0).hp < hp1, "gap=%d — 둘째 방도 실제로 맞았다 (전제)" % gap)
+
+	var out := [view.dmg_number_count(), view.dmg_number_amount(0)]
+	view.free()   # a `Node2D`, so not RefCounted (the same reason as the checks above)
+	return out
+
+
+## Feeds one blast and lets the view's frames flow along with it.
+## **Without flowing the view there is nobody to see the hp diff** — no number gets made at all.
+func _blast_and_observe(world: WorldStep, view: MonsterView, cx: int) -> void:
+	world.enqueue(_blast_cmd(cx))
+	for _i in Tuning.TICK_DIVIDER:
+		world.frame(DT, 0.0, false, false)
+	view.advance()
+
+
+## Extracts one function's body from the source (up to the next `func `).
+## Not found gives an empty string — **the caller asserts that.** Passing silently makes the check
+##  "disappear" the day the name changes (CLAUDE.md, "the check doesn't fail, it disappears").
+## Finds **receiverless** `draw_*(` calls in the body => the names it found.
+##
+## "Receiverless" = the character right before is neither a `.` nor a word character. So `canvas.draw_rect`
+##  passes and a bare `draw_rect` is caught. **A call to an own function like `_draw_flipped` doesn't start
+##  with `draw_`, so it isn't caught at all** — the leading underscore falls under the word-character rule.
+## **Comment lines are skipped** — going red because someone wrote `draw_rect` in a comment would mean nobody could write comments.
+func _bare_draw_calls(body: String) -> Array:
+	var out: Array = []
+	for line: String in body.split("\n"):
+		var code := line.strip_edges()
+		if code.begins_with("#"):
+			continue
+		var at := code.find("draw_")
+		while at >= 0:
+			var before := "" if at == 0 else code[at - 1]
+			var is_receiver := before == "." or before == "_" or _is_word(before)
+			# Checks it is a call — a word starting with `draw_` must be followed by an opening parenthesis.
+			var close := code.find("(", at)
+			if not is_receiver and close > at and not code.substr(at, close - at).contains(" "):
+				out.append(code.substr(at, close - at))
+			at = code.find("draw_", at + 1)
+	return out
+
+
+func _is_word(c: String) -> bool:
+	if c == "":
+		return false
+	var b := c.unicode_at(0)
+	return (b >= 65 and b <= 90) or (b >= 97 and b <= 122) or (b >= 48 and b <= 57)
+
+
+func _func_body(src: String, name: String) -> String:
+	var at := src.find("func " + name + "(")
+	if at < 0:
+		return ""
+	var end := src.find("\nfunc ", at + 1)
+	return src.substr(at, (end - at) if end > 0 else -1)
+
+
+## Fires repeated direct hits (`ELEM_NONE`, so no fire/blast side effects mix in) at a freshly spawned
+##  monster of `kind` until it dies. Returns the number of shots that connected.
+## **The origin is recomputed every shot from the monster's current position** — `_still_ch` keeps the target
+##  stationary so the pig has no reason to walk, but re-aiming costs nothing and removes the assumption entirely.
+## Spacing between shots is `invuln_ticks + 1` — one tick beyond invulnerability, the same margin
+##  `net_damage._invuln_lasts_four_ticks` uses for "the gap that guarantees a second hit lands".
+func _hits_to_kill(kind: int, glyphs: int) -> int:
+	var stand_x := 600
+	var stand_y := FLOOR_TOP - Defs.h_px(kind)
+	var g := _bare_grid()
+	var spell := SpellSim.new()
+	var ch := _still_ch(stand_x, kind)
+	var world := WorldStep.new(g, spell, ch)
+	var mid := world.spawn_monster(kind, stand_x, stand_y)
+	# **No `t` in scope here** — the caller asserts the premise. Returning -1 makes a spawn failure show up as
+	#  a comparison mismatch in the caller rather than disappearing silently.
+	if mid <= 0:
+		return -1
+	var m: Monster = world.monster_at(0)
+
+	var hits := 0
+	var safety := 0
+	while world.monster_count() > 0 and safety < 50:
+		var row_cy := floori((m.y + Defs.h_px(kind) * 0.5) / float(Tuning.CELL_PX))
+		var origin_cx := floori((m.x - HIT_LEAD_PX) / float(Tuning.CELL_PX))
+		world.enqueue(SpellSim.cmd_fire(origin_cx, row_cy, 10, 0, Tuning.ELEM_NONE, glyphs))
+		for _i in Tuning.TICK_DIVIDER * (Defs.invuln_ticks(kind) + 1):
+			world.frame(DT, 0.0, false, false)
+		hits += 1
+		safety += 1
+	return hits
+
+
+## **The same ratio, driven end to end through `Monster.on_tick`/`world.frame()`, not just the pure
+## `advance()` function above.** Two fresh monsters (not one reused across phases — reusing one would let
+## `move_choice`'s round-robin drift onto a different move with a different `windup_ticks` between the two
+## measurements, corrupting the ratio with a second variable). Run-length carries the usual `+1` fencepost
+## (the tick that *sets* the counter is itself the first tick spent in that state) — subtracted out before the
+## ratio comparison, the same discipline every earlier stage's own sequence tests already hold.
+func _measure_windup_run_length_at_hp(kind: int, hp: int) -> int:
+	var g := _bare_grid()
+	var stand_x := 5000
+	var spell := SpellSim.new()
+	var ch := Character.new()
+	ch.place(stand_x + 3000, FLOOR_TOP - Character.H_PX)
+	var world := WorldStep.new(g, spell, ch)
+	world.spawn_monster(kind, stand_x, FLOOR_TOP - Defs.h_px(kind))
+	var m: Monster = world.monster_at(0)
+	m.hp = hp
+	var run_length := 0
+	var in_windup := false
+	var ticks := 0
+	var max_ticks := 100
+	while ticks < max_ticks:
+		if world.frame(DT, 0.0, false, false):
+			ticks += 1
+			if m.pattern == BossAi.Pattern.WINDUP:
+				run_length += 1
+				in_windup = true
+			elif in_windup:
+				break
+	return run_length
+
 
 
 func run(t) -> void:
@@ -84,37 +416,37 @@ func run(t) -> void:
 	_ids_are_distinct_and_not_reused(t)
 	_view_box_comes_from_the_table(t)
 	_shell_hands_the_world_to_the_view(t)
-	# -- stage 2 — it walks ----------------------------------------
+	# -- stage 2 -- it walks ----------------------------------------
 	_walks_toward_the_player(t)
 	_walking_monster_blocked_by_wall(t)
-	# -- stage 3 — it gets hurt ------------------------------------
+	# -- stage 3 -- it gets hurt ------------------------------------
 	_monster_takes_blast_damage(t)
 	_monster_hit_by_a_leaping_segment(t)
 	_monster_burns_regardless_of_invuln(t)
 	_dead_monsters_leave_the_list_correctly(t)
-	# -- stage 4 — there are two of them ---------------------------
+	# -- stage 4 -- there are two of them ---------------------------
 	_pig_and_hen_cross_the_ledge_differently(t)
-	# -- stage 5 — the pig hits ------------------------------------
+	# -- stage 5 -- the pig hits ------------------------------------
 	_pig_contact_damages_the_player(t)
 	_pig_contact_respects_invulnerability(t)
-	# -- stage 6 — the hen shoots ----------------------------------
+	# -- stage 6 -- the hen shoots ----------------------------------
 	_hen_stops_at_bolt_range(t)
 	_hen_bolt_hits_only_the_player(t)
 	_hen_bolt_lifetime_axis(t)
 	_hen_bolt_blocked_by_terrain_and_does_not_carve(t)
 	_hen_bolt_step_stays_inside_the_player_box(t)
-	# -- stage 7 — four screen things + the corpse -----------------
+	# -- stage 7 -- four screen things + the corpse -----------------
 	_hp_bar_values_come_from_the_table(t)
 	_monster_bolt_color_differs_from_magic_bolts(t)
 	_hit_triggers_flash_and_a_damage_number_that_ages_out(t)
 	_death_notification_spawns_a_corpse_that_ages_out(t)
-	# -- stage 9 — effects from shapes to pictures (acceptance 13, second try) --
+	# -- stage 9 -- effects from shapes to pictures (acceptance 13, second try) --
 	_close_damage_numbers_merge_into_one(t)
 	_death_also_makes_a_pop_that_outlives_nothing(t)
 	_body_flames_stay_put_and_stay_inside(t)
 	_flash_layer_gets_its_shader_in_a_real_tree(t)
 	_layer_draws_go_through_the_canvas_argument(t)
-	# -- levelup-and-three-picks Stage A — acceptance 8, measured by value --
+	# -- levelup-and-three-picks Stage A -- acceptance 8, measured by value --
 	_dummy_raises_hits_to_kill_a_pig(t)
 
 
@@ -150,26 +482,34 @@ func _defs_accessors(t) -> void:
 	#  tautology, and only the pass count quietly drops (measured: 66 -> 49, 0 failures). 20 is a value the user
 	#  decided, so it is "not a value to measure and adjust" — this one value is baked in directly instead of derived from the table.
 	t.eq(Defs.MAX_MONSTERS, 20, "MAX_MONSTERS = 20 (사용자가 정한 값이다)")
-
-
-func _floor_grid() -> CellGrid:
-	var g := CellGrid.new()
-	g.apply(CellGrid.cmd_fill(0, FLOOR_CY, CellGrid.W - 1, FLOOR_CY + FLOOR_DEPTH_CY - 1, Mat.STONE))
-	return g
-
-
-func _wall_grid() -> CellGrid:
-	var g := _floor_grid()
-	var wall_cx := 30
-	g.apply(CellGrid.cmd_fill(wall_cx, FLOOR_CY - 8, wall_cx + 3, FLOOR_CY - 1, Mat.STONE))
-	return g
-
-
-func _ledge_grid(cells: int) -> CellGrid:
-	var g := _floor_grid()
-	g.apply(CellGrid.cmd_fill(
-		LEDGE_CX, FLOOR_CY - cells, CellGrid.W - 1, FLOOR_CY + FLOOR_DEPTH_CY - 1, Mat.STONE))
-	return g
+	# **stage1-bosses.md Stage A — the two boss rows had no pin at all.** Measured: dropping 황소's max_hp
+	#  300 -> 1 (or invuln_ticks, xp, money, name) left the full round green. Same idiom as pig/hen above —
+	#  every column, both the absolute value and "they differ" (checked against each other, not against the
+	#  trash mobs — a boss reading identical to a pig is the failure worth catching here).
+	t.eq(Defs.name_of(Defs.KIND_BULL), &"황소", "황소 name")
+	t.eq(Defs.w_px(Defs.KIND_BULL), 88, "황소 w_px = 88 (그림 86 + 좌우 패딩 1+1)")
+	t.eq(Defs.h_px(Defs.KIND_BULL), 56, "황소 h_px = 56 (그림 54 + 위 패딩 2)")
+	t.eq(Defs.step_cells(Defs.KIND_BULL), 3, "황소 step_cells = 3")
+	t.eq(Defs.max_hp(Defs.KIND_BULL), 300, "황소 max_hp = 300")
+	t.eq(Defs.speed_px(Defs.KIND_BULL), 140.0, "황소 speed_px = 140")
+	t.eq(Defs.invuln_ticks(Defs.KIND_BULL), 2, "황소 invuln_ticks = 2")
+	t.eq(Defs.xp_of(Defs.KIND_BULL), 200, "황소 xp = 200")
+	t.eq(Defs.money_of(Defs.KIND_BULL), 100, "황소 money = 100")
+	t.eq(Defs.name_of(Defs.KIND_ROOSTER), &"거대 수탉", "거대 수탉 name")
+	t.eq(Defs.w_px(Defs.KIND_ROOSTER), 72, "거대 수탉 w_px = 72")
+	t.eq(Defs.h_px(Defs.KIND_ROOSTER), 80, "거대 수탉 h_px = 80")
+	t.eq(Defs.step_cells(Defs.KIND_ROOSTER), 3, "거대 수탉 step_cells = 3")
+	t.eq(Defs.max_hp(Defs.KIND_ROOSTER), 250, "거대 수탉 max_hp = 250")
+	t.eq(Defs.speed_px(Defs.KIND_ROOSTER), 200.0, "거대 수탉 speed_px = 200")
+	t.eq(Defs.invuln_ticks(Defs.KIND_ROOSTER), 2, "거대 수탉 invuln_ticks = 2")
+	t.eq(Defs.xp_of(Defs.KIND_ROOSTER), 250, "거대 수탉 xp = 250")
+	t.eq(Defs.money_of(Defs.KIND_ROOSTER), 120, "거대 수탉 money = 120")
+	t.ok(Defs.w_px(Defs.KIND_BULL) != Defs.w_px(Defs.KIND_ROOSTER), "황소 ≠ 거대 수탉 (w_px)")
+	t.ok(Defs.h_px(Defs.KIND_BULL) != Defs.h_px(Defs.KIND_ROOSTER), "황소 ≠ 거대 수탉 (h_px)")
+	t.ok(Defs.max_hp(Defs.KIND_BULL) != Defs.max_hp(Defs.KIND_ROOSTER), "황소 ≠ 거대 수탉 (max_hp)")
+	t.ok(Defs.speed_px(Defs.KIND_BULL) != Defs.speed_px(Defs.KIND_ROOSTER), "황소 ≠ 거대 수탉 (speed_px)")
+	t.ok(Defs.xp_of(Defs.KIND_BULL) != Defs.xp_of(Defs.KIND_ROOSTER), "황소 ≠ 거대 수탉 (xp)")
+	t.ok(Defs.money_of(Defs.KIND_BULL) != Defs.money_of(Defs.KIND_ROOSTER), "황소 ≠ 거대 수탉 (money)")
 
 
 # -- 3. Body's width is a constructor argument --------------------
@@ -234,25 +574,6 @@ func _body_step_is_a_ctor_arg(t) -> void:
 	t.eq(tall_step.step_cells, 3, "step_cells 필드가 생성 인자(3)를 그대로 든다")
 
 
-# -- 6-helper. monster collision width — measured with a vertical chimney, no horizontal movement --
-## **Looking only at the landing y (old check 6) leaves all 66 green even when `Monster` doesn't pass
-##  `w_px` to `Body` (fixed 20px)** (verifier measured) — with no horizontal movement the width is never once engaged.
-##  => **The width is engaged by falling alone**: a hen (24px) fits the 32px gap, a pig (44px) catches on top.
-const HOLE_CX := 50
-const HOLE_W_CELLS := 8   # 32px — wider than a hen, narrower than a pig
-## It is deeper than the thin floor (`FLOOR_DEPTH_CY`, 32 cells) — **left that way on purpose.** Below the
-##  chimney is outside the thin floor anyway and therefore open, so the hen keeps falling until it reaches
-##  outside the grid (automatically solid). The check below measures not an exact depth but only `y > FLOOR_TOP` (did it fall further), so it doesn't matter.
-const HOLE_DEPTH_CELLS := 40
-
-
-func _chimney_grid() -> CellGrid:
-	var g := _floor_grid()
-	g.apply(CellGrid.cmd_fill(
-		HOLE_CX, FLOOR_CY, HOLE_CX + HOLE_W_CELLS - 1, FLOOR_CY + HOLE_DEPTH_CELLS, Mat.EMPTY))
-	return g
-
-
 ## **The left edge is aligned with the chimney's left edge — the centre is not taken from a table value.**
 ##  Taking the centre (= `hole_center - Defs.w_px(kind)/2`) makes the offset calculation itself read `Defs.w_px`
 ##  again, so even when `Monster` secretly passes a **different** width to `Body`, the left margin blocks the
@@ -283,14 +604,26 @@ func _monster_collision_width_gates_the_chimney(t) -> void:
 ## **It is written to go through `world.frame()` rather than calling `Monster.step()` directly** — otherwise
 ##  check 8 would be the only witness that "a monster lives inside the world loop", and that witness is thin:
 ##  it measures only "did it move at least 1px in one frame" (the verifier pointed it out).
+## **The loop cap was 300, unmeasured.** harness-manager measured the actual landing tick for all four
+##  kinds (a 200px fall) — 18-22. Cap 80 keeps 3.6x headroom over the slowest (황소, 20) while dropping
+##  ~93% of the dead frames after landing (this check alone: ~1,070ms -> well under half, `run_nets.ps1 monster`).
 func _monster_lands_exactly(t) -> void:
+	var cap := 80
 	for kind: int in Defs.ALL:
 		var world := _new_world()
 		var id := world.spawn_monster(kind, 160, FLOOR_TOP - 200)
 		t.ok(id > 0, "%s 스폰됐다 (검사의 전제)" % Defs.name_of(kind))
 		var m: Monster = world.monster_at(0)
-		for _i in 300:
+		var landed_at := -1
+		for i in cap:
 			world.frame(DT, 0.0, false, false)
+			if landed_at < 0 and m.y == FLOOR_TOP - Defs.h_px(kind):
+				landed_at = i
+		# **Assert the iteration count too** (CLAUDE.md) — without this, cutting the cap too close to the
+		#  real landing tick would silently start reading "still falling" as "landed exactly", the moment
+		#  headroom actually runs out. `< cap - 1` means it settled with at least one spare frame, not on the last one.
+		t.ok(landed_at >= 0 and landed_at < cap - 1,
+			"%s가 상한(%d틱) 안에 여유를 두고 착지했다 (%d틱)" % [Defs.name_of(kind), cap, landed_at])
 		t.eq(m.y, FLOOR_TOP - Defs.h_px(kind),
 			"%s 몬스터가 바닥 − h_px(%d)에 정확히 선다 (y=%d)" % [Defs.name_of(kind), Defs.h_px(kind), m.y])
 
@@ -314,19 +647,6 @@ func _monster_falls_through_the_air(t) -> void:
 	#  monster can't climb a single cell) leaves all 66 green (verifier measured). In stage 1 `_next_axis` is 0 so
 	#  the symptom is invisible, and when "the hen can't cross the ledge" hits in stage 2 the cause gets hunted in the wrong place.
 	t.ok(m.on_ground, "착지한 뒤 on_ground가 참이다")
-
-
-# -- 8. it moves only by going through frame() --------------------
-func _new_world() -> WorldStep:
-	var g := CellGrid.new()
-	# This is laid thin too — the same reason as `_floor_grid()` (the `FLOOR_DEPTH_CY` box above).
-	#  This is the spot that got missed: this function is called repeatedly by checks 6, 7, 8, 9, 10 and 11 while
-	#  the old fill was still sitting here, so `net_monster` only dropped 43s -> 25s and stayed the slowest net.
-	g.apply(CellGrid.cmd_fill(0, FLOOR_CY, CellGrid.W - 1, FLOOR_CY + FLOOR_DEPTH_CY - 1, Mat.STONE))
-	var spell := SpellSim.new()
-	var ch := Character.new()
-	ch.place(160, FLOOR_TOP - Character.H_PX)
-	return WorldStep.new(g, spell, ch)
 
 
 func _frame_is_required_to_move(t) -> void:
@@ -440,29 +760,6 @@ func _shell_hands_the_world_to_the_view(t) -> void:
 		"껍데기가 `monster_requested.connect(` 를 부른다 (M키 → 스폰 신호가 이어져 있다)")
 	t.ok(src.contains("_world.spawn_monster("),
 		"껍데기가 `_world.spawn_monster(` 를 부른다 (스폰 핸들러가 실제로 세상에 만든다)")
-
-
-# ==================================================================
-#  stage 2 — it walks
-# ==================================================================
-
-func _bare_grid() -> CellGrid:
-	var g := CellGrid.new()
-	g.apply(CellGrid.cmd_fill(0, FLOOR_CY, CellGrid.W - 1, FLOOR_CY + FLOOR_DEPTH_CY - 1, Mat.STONE))
-	return g
-
-
-## **The trap the stage 3 damage checks fell into** — from stage 2 on the monster actually walks toward the
-##  player. If a damage or fire check puts the character far from the monster (e.g. x=160), the monster walks
-##  that way while the acceptance is being measured and **leaves the target spot (the fire, the blast)** — it
-##  showed up as "it was standing on fire and burning went false in 16 frames" (the monster had walked out
-##  of the fire). => **The character is placed at the same spot as the monster's spawn centre so that axis is
-##  pinned to 0** — used when walking is not what these checks care about.
-func _still_ch(stand_x: int, kind: int) -> Character:
-	var ch := Character.new()
-	var monster_center_x := float(stand_x) + Defs.w_px(kind) * 0.5
-	ch.place(roundi(monster_center_x - Character.W_PX * 0.5), FLOOR_TOP - Character.H_PX)
-	return ch
 
 
 ## **What cannot be measured — looking only at the final position kills this acceptance** (CLAUDE.md, "a check
@@ -701,26 +998,6 @@ func _monster_burns_regardless_of_invuln(t) -> void:
 	t.eq(m.hp, after_out, "불이 꺼진 뒤에는 더 안 깎인다")
 
 
-## Stands three of them in a row. The three things that cannot be measured (count only / set only / position)
-##  are named by the doc and all measured together — **position** in particular is the only place that catches
-##  "removal during traversal" (an adjacent live one skipping that tick), which neither the count nor the id set catches.
-func _three_hens_world() -> Dictionary:
-	var g := _bare_grid()
-	var spell := SpellSim.new()
-	var ch := Character.new()
-	ch.place(160, FLOOR_TOP - Character.H_PX)
-	var world := WorldStep.new(g, spell, ch)
-	var kind := Defs.KIND_HEN
-	var gap := 200
-	var base_x := 500
-	var y := FLOOR_TOP - Defs.h_px(kind)
-	var xs: Array[int] = [base_x, base_x + gap, base_x + gap * 2]
-	var ids: Array[int] = []
-	for px in xs:
-		ids.append(world.spawn_monster(kind, px, y))
-	return {"world": world, "ids": ids, "xs": xs}
-
-
 func _dead_monsters_leave_the_list_correctly(t) -> void:
 	var frames_to_run := 40
 	var kind := Defs.KIND_HEN
@@ -805,10 +1082,19 @@ func _pig_and_hen_cross_the_ledge_differently(t) -> void:
 	var ledge_cx := 80
 	var g := _bare_grid()
 	g.apply(CellGrid.cmd_fill(
-		ledge_cx, FLOOR_CY - ledge_cells, CellGrid.W - 1, FLOOR_CY + FLOOR_DEPTH_CY - 1, Mat.STONE))
+		ledge_cx, FLOOR_CY - ledge_cells, FLOOR_W_CX - 1, FLOOR_CY + FLOOR_DEPTH_CY - 1, Mat.STONE))
 	var ledge_left_px := ledge_cx * Tuning.CELL_PX
 
+	var measured := 0
 	for kind in Defs.ALL:
+		# **Bosses are excluded, not silently mis-measured** (`stage1-bosses.md` Stage B) — a charging boss's
+		#  stepping is pattern-gated (`Body.move_x`'s `allow_step`), so "does this kind cross a 3-cell ledge"
+		#  stops being a pure `step_cells` property for them and depends on *when* it reaches the ledge
+		#  relative to its own windup/charge clock. That interaction is measured on its own, deterministically,
+		#  by `_charging_bull_does_not_step_a_3cell_ledge` below. This test stays about `step_cells` alone.
+		if BossAi.has_pattern(kind):
+			continue
+		measured += 1
 		var spell := SpellSim.new()
 		var ch := Character.new()
 		# The player is placed well to the right of the ledge — the monster walks from the left toward the ledge (right).
@@ -818,15 +1104,33 @@ func _pig_and_hen_cross_the_ledge_differently(t) -> void:
 		var mid := world.spawn_monster(kind, stand_x, FLOOR_TOP - Defs.h_px(kind))
 		t.ok(mid > 0, "%s 스폰됐다 (검사의 전제)" % Defs.name_of(kind))
 		var m: Monster = world.monster_at(0)
-		for _i in 300:
+		# **The cap was 300, unmeasured.** harness-manager measured all three kinds that reach this loop
+		#  (bull is excluded above): the blocked pig stops moving by tick 39, the crossing hen and rooster
+		#  both clear `ledge_left_px` by tick 45 (the hen's x keeps drifting after that — toward the far
+		#  player, not toward the ledge — up to tick 83). 150 keeps 1.8x headroom over the slowest of those
+		#  while cutting the loop in half.
+		for _i in 150:
 			world.frame(DT, 0.0, false, false)
 		if kind == Defs.KIND_PIG:
 			t.eq(m.x, ledge_left_px - Defs.w_px(kind),
 				"돼지(step=%d)는 %d셀 턱에 막혀 x가 안 는다 (x=%d)"
 					% [Defs.step_cells(kind), ledge_cells, m.x])
 		else:
+			# **Not hardcoded to "닭"** — this branch is every non-pig, non-boss kind in `Defs.ALL` (today
+			#  only the hen, but a hardcoded label would print a correct-looking hen line if a third trash
+			#  mob's failure landed here, sending the reader to the wrong row).
 			t.ok(m.x > ledge_left_px,
-				"닭(step=%d)은 %d셀 턱을 넘는다 (x=%d)" % [Defs.step_cells(kind), ledge_cells, m.x])
+				"%s(step=%d)은 %d셀 턱을 넘는다 (x=%d)"
+					% [Defs.name_of(kind), Defs.step_cells(kind), ledge_cells, m.x])
+
+	# **The `continue` above has no bark of its own** — a kind later getting a `MOVES` row would silently
+	#  drop out of this loop with nothing to notice. Pinning the count closes it (the same medicine
+	#  `net_tables._monster_defs_columns_are_complete`'s header already names for a sibling trap).
+	#  **2, not 3** — this comment predicted the drop before it happened: "only `KIND_BULL` has a `PATTERNS`
+	#  row today... this count drops to 3-1=2 the day Stage F gives [the rooster] one too, and that drop is
+	#  exactly what this assertion exists to catch." Stage F did, and the assertion caught it exactly as
+	#  written — updated from 3 to 2, not silently, this comment records both numbers.
+	t.eq(measured, 2, "이 검사가 실제로 잰 종류 수 (패턴 없는 종류들, 돼지·닭만) (%d개)" % measured)
 
 
 # ==================================================================
@@ -1100,11 +1404,6 @@ func _monster_bolt_color_differs_from_magic_bolts(t) -> void:
 			"닭 탄 색이 마법 탄(원소 %d) 색과 충분히 갈린다" % elem)
 
 
-## `Color` has no `distance_to()` (measured on Godot 4 GDScript) — the RGB Euclidean distance is computed directly.
-func _rgb_dist(a: Color, b: Color) -> float:
-	return Vector3(a.r, a.g, a.b).distance_to(Vector3(b.r, b.g, b.b))
-
-
 # -- the flash · the damage number — only as much as hp dropped, gone on schedule --
 ## **Disproving hardcoding** — baking the damage number in as a constant could still pass this value itself
 ##  (it happens to equal `Character.DAMAGE_HIT` right now), but **whether it reads the real hp change** cannot
@@ -1242,49 +1541,6 @@ func _close_damage_numbers_merge_into_one(t) -> void:
 	t.eq(far[0], 2, "창 밖으로 띄워 맞으면 숫자가 **둘**이다 (%d개)" % far[0])
 	t.eq(far[1], Character.DAMAGE_HIT,
 		"그 각각은 **한 방분**이다 (%d) — 합쳐진 게 아니다" % far[1])
-
-
-## Hits twice with `gap` frames between and returns `[number count, the first number's value]`.
-## **The only difference between the two runs must be `gap`** — differing terrain, position or damage makes the control void.
-func _dmg_number_probe(t, gap: int) -> Array:
-	var kind := Defs.KIND_PIG   # the pig — a hen dies in one hit and can't take two
-	var stand_x := 600
-	var y := FLOOR_TOP - Defs.h_px(kind)
-	var world := WorldStep.new(_bare_grid(), SpellSim.new(), _still_ch(stand_x, kind))
-	t.ok(world.spawn_monster(kind, stand_x, y) > 0, "gap=%d — 스폰됐다 (전제)" % gap)
-
-	var view := MonsterView.new()
-	view.setup(world)
-	view.advance()   # snapshots the pre-hit hp
-
-	var cx := floori((stand_x + Defs.w_px(kind) * 0.5) / float(Tuning.CELL_PX))
-	var hp0: int = world.monster_at(0).hp
-	_blast_and_observe(world, view, cx)
-	t.ok(world.monster_at(0).hp < hp0, "gap=%d — 첫 방이 실제로 맞았다 (전제)" % gap)
-
-	for _i in gap:
-		view.advance()
-
-	# **It waits out the invulnerability** — without waiting, the second hit is swallowed and "they merged" passes for free.
-	var hp1: int = world.monster_at(0).hp
-	var tries := 0
-	while world.monster_at(0).hp == hp1 and tries < 20:
-		_blast_and_observe(world, view, cx)
-		tries += 1
-	t.ok(world.monster_at(0).hp < hp1, "gap=%d — 둘째 방도 실제로 맞았다 (전제)" % gap)
-
-	var out := [view.dmg_number_count(), view.dmg_number_amount(0)]
-	view.free()   # a `Node2D`, so not RefCounted (the same reason as the checks above)
-	return out
-
-
-## Feeds one blast and lets the view's frames flow along with it.
-## **Without flowing the view there is nobody to see the hp diff** — no number gets made at all.
-func _blast_and_observe(world: WorldStep, view: MonsterView, cx: int) -> void:
-	world.enqueue(_blast_cmd(cx))
-	for _i in Tuning.TICK_DIVIDER:
-		world.frame(DT, 0.0, false, false)
-	view.advance()
 
 
 ## **It pops on death — that is the hen's only hit feedback** (decided by the user).
@@ -1504,48 +1760,6 @@ func _layer_draws_go_through_the_canvas_argument(t) -> void:
 		"`_Layer._draw()` 가 자기 자신을 넘긴다 (`fn.call(self)`)")
 
 
-## Extracts one function's body from the source (up to the next `func `).
-## Not found gives an empty string — **the caller asserts that.** Passing silently makes the check
-##  "disappear" the day the name changes (CLAUDE.md, "the check doesn't fail, it disappears").
-## Finds **receiverless** `draw_*(` calls in the body => the names it found.
-##
-## "Receiverless" = the character right before is neither a `.` nor a word character. So `canvas.draw_rect`
-##  passes and a bare `draw_rect` is caught. **A call to an own function like `_draw_flipped` doesn't start
-##  with `draw_`, so it isn't caught at all** — the leading underscore falls under the word-character rule.
-## **Comment lines are skipped** — going red because someone wrote `draw_rect` in a comment would mean nobody could write comments.
-func _bare_draw_calls(body: String) -> Array:
-	var out: Array = []
-	for line: String in body.split("\n"):
-		var code := line.strip_edges()
-		if code.begins_with("#"):
-			continue
-		var at := code.find("draw_")
-		while at >= 0:
-			var before := "" if at == 0 else code[at - 1]
-			var is_receiver := before == "." or before == "_" or _is_word(before)
-			# Checks it is a call — a word starting with `draw_` must be followed by an opening parenthesis.
-			var close := code.find("(", at)
-			if not is_receiver and close > at and not code.substr(at, close - at).contains(" "):
-				out.append(code.substr(at, close - at))
-			at = code.find("draw_", at + 1)
-	return out
-
-
-func _is_word(c: String) -> bool:
-	if c == "":
-		return false
-	var b := c.unicode_at(0)
-	return (b >= 65 and b <= 90) or (b >= 97 and b <= 122) or (b >= 48 and b <= 57)
-
-
-func _func_body(src: String, name: String) -> String:
-	var at := src.find("func " + name + "(")
-	if at < 0:
-		return ""
-	var end := src.find("\nfunc ", at + 1)
-	return src.substr(at, (end - at) if end > 0 else -1)
-
-
 # ══════════════════════════════════════════════════════════════════
 #  levelup-and-three-picks Stage A — acceptance 8, measured by value
 # ══════════════════════════════════════════════════════════════════
@@ -1575,34 +1789,3 @@ func _dummy_raises_hits_to_kill_a_pig(t) -> void:
 		boosted, common])
 
 
-## Fires repeated direct hits (`ELEM_NONE`, so no fire/blast side effects mix in) at a freshly spawned
-##  monster of `kind` until it dies. Returns the number of shots that connected.
-## **The origin is recomputed every shot from the monster's current position** — `_still_ch` keeps the target
-##  stationary so the pig has no reason to walk, but re-aiming costs nothing and removes the assumption entirely.
-## Spacing between shots is `invuln_ticks + 1` — one tick beyond invulnerability, the same margin
-##  `net_damage._invuln_lasts_four_ticks` uses for "the gap that guarantees a second hit lands".
-func _hits_to_kill(kind: int, glyphs: int) -> int:
-	var stand_x := 600
-	var stand_y := FLOOR_TOP - Defs.h_px(kind)
-	var g := _bare_grid()
-	var spell := SpellSim.new()
-	var ch := _still_ch(stand_x, kind)
-	var world := WorldStep.new(g, spell, ch)
-	var mid := world.spawn_monster(kind, stand_x, stand_y)
-	# **No `t` in scope here** — the caller asserts the premise. Returning -1 makes a spawn failure show up as
-	#  a comparison mismatch in the caller rather than disappearing silently.
-	if mid <= 0:
-		return -1
-	var m: Monster = world.monster_at(0)
-
-	var hits := 0
-	var safety := 0
-	while world.monster_count() > 0 and safety < 50:
-		var row_cy := floori((m.y + Defs.h_px(kind) * 0.5) / float(Tuning.CELL_PX))
-		var origin_cx := floori((m.x - HIT_LEAD_PX) / float(Tuning.CELL_PX))
-		world.enqueue(SpellSim.cmd_fire(origin_cx, row_cy, 10, 0, Tuning.ELEM_NONE, glyphs))
-		for _i in Tuning.TICK_DIVIDER * (Defs.invuln_ticks(kind) + 1):
-			world.frame(DT, 0.0, false, false)
-		hits += 1
-		safety += 1
-	return hits

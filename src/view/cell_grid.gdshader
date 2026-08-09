@@ -21,6 +21,13 @@ uniform float fire_hz;
 uniform int flag_shallow;
 uniform vec4 water_shallow;
 
+// Depth dim (`docs/design/underground-depth.md`). `UV.y` is already world depth — no new texture read,
+//  no CPU work. `depth_span` is the `UV.y` fraction where the map's own bedrock floor sits (**not** 1.0 —
+//  the drawn map is only 384 of the grid's 1008 cells tall, so normalizing straight against `UV.y` alone
+//  would land the effect at a third of what it was tuned for). `deep_dim` is how dark the deepest cells get.
+uniform float depth_span;
+uniform float deep_dim;
+
 // **Empty cells are pulled out as transparent — the only path by which the background reaches the screen.**
 //  Before, empty cells were painted **opaquely** with `palette`'s `#0E0E13` too. The grid sprite covers
 //   the whole world with no gaps, so **whatever was put behind it was 100% hidden** —
@@ -52,6 +59,15 @@ void fragment() {
 	int flags = l8_to_int(texture(flag_tex, UV));
 
 	vec4 c = palette[mat_id];
+
+	// **Depth dim — applied to the base palette color only, before the shallow-water and fire branches
+	//  below overwrite `c` wholesale.** Chosen deliberately, the same ordering trap this file already
+	//  works around for water-vs-fire (see the comment on the shallow-water branch): whichever branch
+	//  runs last wins the pixel. Placed here, **fire and shallow water are NOT dimmed by depth** — a
+	//  burning wall reads the same brightness at any depth, because the dim is about how deep the *rock*
+	//  is, not about which state a cell is currently in.
+	float depth = clamp(UV.y / depth_span, 0.0, 1.0);
+	c.rgb *= mix(1.0, deep_dim, depth);
 
 	// **Empty cells get alpha 0. They do not escape via `return`.**
 	//  It was once written as `if (…) { COLOR = vec4(0.0); return; }` and **`net_render` caught it** —

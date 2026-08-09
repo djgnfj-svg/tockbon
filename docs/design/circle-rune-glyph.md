@@ -190,6 +190,23 @@ all fall under the GDD's "natural law", and without that sim they are **bolts wi
 **"None" is already in code** — `sim_tuning.ELEM_NONE`, the starting rune, purple on screen (`fx_tuning.ELEM_FX`).
 It didn't join the list; **it got a name.**
 
+### How you come to have a rune (`rune-lock-and-receiving.md`)
+
+**The starting kit owns only none.** Fire, water and the other seven are all visible in the palette (they
+exist, the player can see them) but **veiled**: drawn, unpickable, until granted. A rune that simply vanished
+from the palette would say nothing; a rune the player can see but not yet take is legible as "the way forward"
+before it is earned. This is the actual lock — the seat itself defaults to none (`spell_circle.DEFAULT_RUNE`),
+but that alone does not stop the player from placing fire; the palette veiling it does.
+
+**Granting is a boss reward.** Killing the bull grants fire — the reward is the rune itself, not a stat or a
+consumable. Placing it still goes through the assembly window (`circle_window.gd`), the same door every rune
+already went through; receiving adds ownership, it does not add a second placement path.
+
+**This is one of three shapes that were open, and it is the one built** (`stage1-bosses.md`'s own TBD):
+auto-equip on kill, or the corpse burning so you pick the rune out of the wall, were the other two. **Both
+remain live** — nothing about the lock (which rune the palette will let you place) depends on which of the
+three grants it.
+
 ### Bolt-head art — spec and four colors (the user picked by eye)
 
 **Spec.** **Additive blending is the whole spec** — `spell_view._ready()` uses `BLEND_MODE_ADD`, so black pixels

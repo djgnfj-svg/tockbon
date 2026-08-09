@@ -36,6 +36,15 @@ func run(t) -> void:
 	_reset_clears_an_open_pick(t)
 	_dice_left_is_zero_and_inert(t)
 	_take_consumes_a_pending_pick_and_rejects_unknown_ids(t)
+	_reward_gate_starts_empty(t)
+	_boss_death_sets_the_reward_gate_trash_mob_death_does_not(t)
+	_clearing_the_reward_is_the_only_thing_that_un_pends_it(t)
+	_reset_clears_the_reward_gate(t)
+	_reward_gates_are_independent_per_kind(t)
+	_owned_runes_start_at_the_fixed_kit(t)
+	_grant_rune_is_the_only_door_in(t)
+	_ownership_survives_unrelated_progress_state(t)
+	_reset_reverts_ownership_to_the_starting_kit_not_to_empty(t)
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -383,6 +392,166 @@ func _measure_leveling(t, kinds: Array[int]) -> Array[int]:
 			last_level = pr.level
 	t.ok(cumulative_at_level.size() >= 3, "적어도 세 레벨은 올랐다 (%s — 기록)" % [cumulative_at_level])
 	return cumulative_at_level
+
+
+# ══════════════════════════════════════════════════════════════════
+#  Stage I (`stage1-bosses.md`) — the boss reward gate
+# ══════════════════════════════════════════════════════════════════
+
+## Before anything has died, both questions read false/false — not an error, not a crash, just "nothing to
+## report" (the same contract `is_pick_open()` holds before any level has ever happened).
+func _reward_gate_starts_empty(t) -> void:
+	var pr := Progress.new()
+	t.ok(not pr.boss_died(MonsterDefs.KIND_BULL), "아직 아무도 안 죽었으면 boss_died()는 거짓이다")
+	t.ok(not pr.is_reward_pending(MonsterDefs.KIND_BULL), "그리고 대기 상태도 아니다")
+	pr.clear_pending_boss_rewards()
+	t.ok(not pr.is_reward_pending(MonsterDefs.KIND_BULL), "아무것도 대기 중이 아닐 때 수령해도 아무 일도 안 난다")
+
+
+## **A boss's death sets the reward-pending flag; a trash mob's does not.** White-boxed straight to `hp = 0`
+## via `_kill()` — the mechanism under test is `world_step.gd`'s own death loop
+## (`if BossAi.has_pattern(dying.kind): _progress.set_boss_reward_pending(dying.kind)`), the exact same door
+## XP/money already go through for every kind (this file's own header), not a separate path reconstructed here.
+## **Both a boss and a trash mob die in the same tick** — the negative half (the pig) is measured in the same
+## pass as the positive half, not a separate, easier-to-satisfy setup, so a mutation that gated on "any death"
+## instead of "a boss's death" cannot pass by accident.
+func _boss_death_sets_the_reward_gate_trash_mob_death_does_not(t) -> void:
+	var world := _new_world()
+	var bull_mid := world.spawn_monster(MonsterDefs.KIND_BULL, 700,
+		FLOOR_TOP - MonsterDefs.h_px(MonsterDefs.KIND_BULL))
+	t.ok(bull_mid > 0, "황소 스폰됐다 (검사의 전제)")
+	var pig_mid := world.spawn_monster(MonsterDefs.KIND_PIG, 900,
+		FLOOR_TOP - MonsterDefs.h_px(MonsterDefs.KIND_PIG))
+	t.ok(pig_mid > 0, "돼지 스폰됐다 (검사의 전제)")
+	var pr := world.progress()
+	t.ok(not pr.boss_died(MonsterDefs.KIND_BULL), "죽기 전엔 황소가 안 죽은 상태다 (검사의 전제)")
+
+	# Both die on the same tick - `_kill()` itself only advances one monster's hp, so both are zeroed first
+	# and one shared tick processes the pair, the same "measured together" discipline this test's own header names.
+	world.monster_at(0).hp = 0
+	world.monster_at(1).hp = 0
+	_frames(world, Tuning.TICK_DIVIDER)
+
+	t.ok(pr.boss_died(MonsterDefs.KIND_BULL), "황소가 죽으면 boss_died()가 참이 된다")
+	t.ok(pr.is_reward_pending(MonsterDefs.KIND_BULL), "그리고 보상이 대기 상태가 된다")
+	t.ok(not pr.boss_died(MonsterDefs.KIND_PIG), "돼지가 죽어도 boss_died()는 안 참이다 (패턴이 없다)")
+	t.ok(not pr.is_reward_pending(MonsterDefs.KIND_PIG), "돼지 보상도 대기 상태가 아니다")
+
+
+## **The gate genuinely blocks something and the debug key's own method genuinely clears it — the full
+## sequence a real fight produces**, not the bookkeeping methods checked in isolation: die -> pending -> still
+## pending after a delay -> cleared -> not pending, but "died" itself never un-happens.
+func _clearing_the_reward_is_the_only_thing_that_un_pends_it(t) -> void:
+	var world := _new_world()
+	var bull_mid := world.spawn_monster(MonsterDefs.KIND_BULL, 700,
+		FLOOR_TOP - MonsterDefs.h_px(MonsterDefs.KIND_BULL))
+	t.ok(bull_mid > 0, "황소 스폰됐다 (검사의 전제)")
+	_kill(world, 0)
+	var pr := world.progress()
+	t.ok(pr.is_reward_pending(MonsterDefs.KIND_BULL), "죽자마자 대기 상태다 (검사의 전제)")
+
+	# Time passing alone does not clear it - only the explicit call does (acceptance 8b's own order: reward
+	#  first, wall/water second - nothing in this file's own door lets water start on a timer instead).
+	_frames(world, 200)
+	t.ok(pr.is_reward_pending(MonsterDefs.KIND_BULL), "시간이 지나도 저절로 안 풀린다")
+
+	pr.clear_pending_boss_rewards()
+	t.ok(not pr.is_reward_pending(MonsterDefs.KIND_BULL), "명시적으로 수령하면 그제서야 풀린다")
+	t.ok(pr.boss_died(MonsterDefs.KIND_BULL), "죽었다는 사실 자체는 남아 있다 (boss_died는 그대로 참)")
+
+
+## `reset()` reverts the gate along with everything else - leave it out and a stage reset (R) would let a
+## previous session's cleared/pending reward ride into the new one, the same class of bug `_reset_clears_an_
+## open_pick` already guards for the pick window.
+func _reset_clears_the_reward_gate(t) -> void:
+	var pr := Progress.new()
+	pr.set_boss_reward_pending(MonsterDefs.KIND_BULL)
+	t.ok(pr.boss_died(MonsterDefs.KIND_BULL) and pr.is_reward_pending(MonsterDefs.KIND_BULL),
+		"보상 대기 상태를 심었다 (검사의 전제)")
+	pr.reset()
+	t.ok(not pr.boss_died(MonsterDefs.KIND_BULL), "reset() 뒤엔 죽은 적도 없는 상태로 돌아간다")
+	t.ok(not pr.is_reward_pending(MonsterDefs.KIND_BULL), "당연히 대기 상태도 아니다")
+
+
+## **Independent per kind** - the bull's own room ① water and the rooster's own room ③ water must gate
+## separately (`_reward_pending`'s own header, `progress.gd`) - killing one boss and clearing its reward must
+## not touch the other's gate, in either direction.
+func _reward_gates_are_independent_per_kind(t) -> void:
+	var pr := Progress.new()
+	pr.set_boss_reward_pending(MonsterDefs.KIND_BULL)
+	t.ok(not pr.boss_died(MonsterDefs.KIND_ROOSTER), "황소만 죽였는데 거대 수탉이 죽은 걸로 뜨지 않는다")
+	pr.set_boss_reward_pending(MonsterDefs.KIND_ROOSTER)
+	pr.clear_pending_boss_rewards()
+	t.ok(not pr.is_reward_pending(MonsterDefs.KIND_BULL), "황소 보상도 수령 처리된다 (한 번에 전부 수령)")
+	t.ok(not pr.is_reward_pending(MonsterDefs.KIND_ROOSTER), "거대 수탉 보상도 마찬가지다")
+	t.ok(pr.boss_died(MonsterDefs.KIND_BULL) and pr.boss_died(MonsterDefs.KIND_ROOSTER),
+		"둘 다 죽었다는 사실은 각자 그대로 남는다")
+
+
+# ══════════════════════════════════════════════════════════════════
+#  Stage A (`rune-lock-and-receiving.md`) — rune ownership
+# ══════════════════════════════════════════════════════════════════
+
+## **A fresh `Progress` owns only none — not fire.** `_owned_runes` is not empty at boot (an owner with
+## nothing owned could not even carry the rune the starting seat holds), but **fire is not in it** — this is
+## Stage B's actual lock, and it is the line that would go from red to green if `_starting_runes()` were ever
+## quietly widened back to `{none, fire}`.
+func _owned_runes_start_at_the_fixed_kit(t) -> void:
+	var pr := Progress.new()
+	t.ok(pr.owns_rune(Tuning.ELEM_NONE), "시작할 때 이미 무속성 룬을 갖고 있다")
+	t.ok(not pr.owns_rune(Tuning.ELEM_FIRE), "시작할 때는 불 룬이 없다 (이것이 잠금이다)")
+	t.ok(not pr.owns_rune(Tuning.ELEM_WATER), "시작할 때 물 룬도 없다 (아무도 안 줬다)")
+
+
+## **`grant_rune()` is the only thing that moves `owns_rune()`.** A redundant grant (the bull's reward, taken
+## twice by a stray debug-key press) is a harmless no-op — the same Dictionary-assignment idiom
+## `set_boss_reward_pending` already holds for a repeated call — and granting one rune must not disturb any
+## other already-owned or still-unowned rune.
+func _grant_rune_is_the_only_door_in(t) -> void:
+	var pr := Progress.new()
+	t.ok(not pr.owns_rune(Tuning.ELEM_FIRE), "주기 전에는 불 룬이 없다 (전제)")
+	pr.grant_rune(Tuning.ELEM_FIRE)
+	t.ok(pr.owns_rune(Tuning.ELEM_FIRE), "grant_rune() 이후에는 불 룬을 갖고 있다")
+
+	pr.grant_rune(Tuning.ELEM_FIRE)
+	t.ok(pr.owns_rune(Tuning.ELEM_FIRE), "이미 가진 룬을 다시 줘도 조용히 그대로 갖고 있다 (중복 수령이 안전하다)")
+	t.ok(pr.owns_rune(Tuning.ELEM_NONE), "불을 줘도 원래 갖고 있던 무속성은 그대로다")
+	t.ok(not pr.owns_rune(Tuning.ELEM_WATER), "불을 줘도 관계없는 물은 여전히 안 갖고 있다")
+
+
+## **Ownership is not a side effect of anything else `Progress` does.** XP, money, level-ups and the
+## three-pick door all move through the same object — this measures that none of them silently touch
+## `_owned_runes`, the same "independent per kind" discipline `_reward_gates_are_independent_per_kind` above
+## already holds for the boss-reward gate.
+func _ownership_survives_unrelated_progress_state(t) -> void:
+	var pr := Progress.new()
+	pr.grant_rune(Tuning.ELEM_FIRE)
+	pr.add_xp(500)
+	pr.add_money(50)
+	pr.pending_picks = 1
+	t.ok(pr.open_pick([]), "다른 상태를 이것저것 움직여봤다 (전제)")
+	pr.decline()
+
+	t.ok(pr.owns_rune(Tuning.ELEM_FIRE), "불 룬 보유가 그대로다")
+	t.ok(pr.owns_rune(Tuning.ELEM_NONE), "시작 키트(무속성)도 그대로다 (xp·레벨·뽑기 어느 것도 룬 보유를 건드리지 않는다)")
+	t.ok(not pr.owns_rune(Tuning.ELEM_WATER), "안 준 물은 여전히 안 갖고 있다")
+
+
+## **`reset()` reverts to the starting kit, not to an empty set.** A stage reset (R) is a fresh run — a fresh
+## run boots owning only none, the same fixed kit the field default holds. Clearing to `{}` instead would
+## brick the reset run's own starting rune, a different flavor of the bricking `circle_window.gd`'s own header
+## already names ("the rune stays bright and pickable" — here the failure would run the other way: the seat's
+## own rune would come back veiled). And a rune earned mid-run (fire) must **not** survive — a reset is a
+## fresh run, not a checkpoint.
+func _reset_reverts_ownership_to_the_starting_kit_not_to_empty(t) -> void:
+	var pr := Progress.new()
+	pr.grant_rune(Tuning.ELEM_FIRE)
+	t.ok(pr.owns_rune(Tuning.ELEM_FIRE), "불 룬을 얻었다 (검사의 전제)")
+
+	pr.reset()
+	t.ok(not pr.owns_rune(Tuning.ELEM_FIRE), "reset은 얻은 룬(불)을 되돌린다")
+	t.ok(pr.owns_rune(Tuning.ELEM_NONE),
+		"그리고 시작 키트(무속성)는 reset 뒤에도 그대로 갖고 있다 (빈 사전으로 브릭되지 않는다)")
 
 
 # ══════════════════════════════════════════════════════════════════

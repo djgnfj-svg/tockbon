@@ -304,7 +304,7 @@ Over it, you see **"water flows slowly for a moment"** and it never stops or van
 **That value is written in the map doc (`stage1-map-layout`) but its grounds are here.**
 **If someone enlarges the room because "the boss fight is cramped", this scene dies.** The two docs meet here.
 
-**Two pressures come from the boss side** ([stage1-bosses.md](../1.ready/stage1-bosses.md)):
+**Two pressures come from the boss side** ([stage1-bosses.md](../3.done/stage1-bosses.md)):
 - **The rooster leaping and pouncing needs vertical room** — 12 tiles may be tight
 - **"Does the rooster break terrain on landing" is TBD.** If it does, **the room when water arrives is larger
   than 20×12** ⇒ decided that way, **the measurement must be redone at that larger size**

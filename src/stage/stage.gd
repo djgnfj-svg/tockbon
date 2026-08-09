@@ -234,6 +234,29 @@ var _blast_count := 0
 ##  here it knows only "is there one" and "call it every tick" (that file's header, "where to put it").
 var _water_source: WaterSource = null
 
+## **Room ①'s own water — Stage I (`stage1-bosses.md`).** Separate from `_water_source` above: that one
+##  starts and stops at the mouse position on a key press; this one starts itself, automatically, the instant
+##  the bull's reward is taken (acceptance 8b — reward first, water second) — sharing the one instance would
+##  mean K and the reward key fight over the same source, and pressing K after the bull dies would silently
+##  cancel the reward-gated pour.
+## **`null` = not started yet.** Never set back to `null` except on a full stage reset — once room ①'s water
+##  starts, it keeps pouring for the rest of the fight, the same "only R turns it off" contract `_water_source`
+##  already holds for K.
+var _room1_reward_water: WaterSource = null
+
+## **Reuses `WaterSource` as-is, not a second pour shape.** Its own shape is "rain across a width, falling
+##  from above" (`water_source.gd`'s header) — not literally "from the side" the way the design doc pictures
+##  the wall collapsing. `stage1-bosses.md`'s own words: "whether the two pours share one implementation is
+##  [water-jump-and-escape.md]'s call, not this one's" — reusing the one pour mechanism that exists is that
+##  deferral honored, not a decision made here. **The visual mismatch (rain, not a side breach) is a known,
+##  named gap**, not hidden — see that risk note in the plan doc.
+## **Placed well inside room ①'s own open interior** — `x` sits just past the room's left boundary (measured
+##  in `stage1-bosses.md` Risk 11: the real wall is at cx1840), `row` sits high enough in the room's air for
+##  the fall to read as a pour, not an instant puddle at the floor.
+const ROOM1_WATER_X0 := 1840
+const ROOM1_WATER_X1 := 1860
+const ROOM1_WATER_ROW := 200
+
 ## **Debug camera zoom (`-` / `=`).** 1.0 is the play scale; 0.075 fits all 400x48 tiles on the 960x540 screen.
 ##  The steps are held as a list rather than a multiply so that "the whole map" is **exactly reachable** —
 ##  with `zoom *= 0.5` the map-wide value falls between two steps and can never be landed on.
@@ -300,7 +323,9 @@ func _ready() -> void:
 	_char_view.setup(_char, _circle, _grid)
 	# The assembly window reads **the same thing** — give it a copy and "keys 4 and 5 flip the picture"
 	#  disappears, and that is the single source's (plan §1) only visible evidence.
-	_circle_window.setup(_circle)
+	# **`Progress` too, since Stage A of `rune-lock-and-receiving.md`** — the window's palette asks it
+	#  `owns_rune()` to gate the rune section; `_pick_window.setup()` below is the precedent, verbatim.
+	_circle_window.setup(_world.progress(), _circle)
 	# **`Progress` is owned by `_world`, not the shell** (`world_step.gd`'s own comment) — handed over as a
 	#  reference, the same reason `_circle_window` is handed `_circle` rather than a copy. **`_circle` too** —
 	#  Stage E's layer click calls `SpellCircle.place_glyph()` directly (the one door), so the pick window
@@ -309,13 +334,17 @@ func _ready() -> void:
 	_spell_view.setup(_spell)
 	# **This one path is how the view gets hold of monsters.** Monsters live inside `world_step`, and if the
 	#  shell holds a separate array there are two "worlds" (`monsters-minimum`, behavior (3)).
-	_monster_view.setup(_world)
+	# **`_char`/`_grid` too** (`docs/design/attack-prediction.md`) — the same precedent `_char_view.setup(_char,
+	#  _circle, _grid)` already set for handing a view more than one actor reference directly, since `_world`
+	#  exposes neither the character nor the grid to a caller outside `src/actor/`.
+	_monster_view.setup(_world, _char, _grid)
 	_input.fire_requested.connect(_fire_at)
 	_input.reset_requested.connect(reset_stage)
 	_input.water_requested.connect(_pour_water_at)
 	_input.wood_requested.connect(_paint_wood_at)
 	_input.ignite_requested.connect(_ignite_at)
 	_input.rain_requested.connect(_toggle_rain_at)
+	_input.reward_taken_requested.connect(_take_boss_reward)
 	_input.monster_requested.connect(_spawn_monster_at)
 	_input.loadout_requested.connect(_set_loadout)
 	# **The world is not stopped** — do not touch `get_tree().paused` here.
@@ -490,6 +519,62 @@ func _toggle_rain_at(world_px: Vector2) -> void:
 		Tuning.WATER_RAIN_PER_TICK)
 
 
+## **L — takes whichever boss reward(s) are pending. A shell-only debug door** (`stage1-bosses.md` Stage I).
+## **Only clears the gate** — it does not call `Progress.add_xp`/`add_money` (those already happen for every
+## kind, unconditionally, in `WorldStep`'s own death loop).
+##
+## **Granting a rune was milestone step 3's gap** (`stage1-bosses.md`'s own TBD) — closed now
+## (`rune-lock-and-receiving.md`, Stage C). The bull's reward *is* fire: `progress.grant_rune(Tuning.ELEM_FIRE)`
+## below unveils it in the assembly palette (`circle_window._slot_accepts`) — placing it is still the
+## player's own click, the same door every rune already goes through (no second placement path). **Provisional,
+## and the user's to overturn** — the plan's own TBD names auto-equip and a corpse pickup as the other two live
+## candidates; only this call site would move if either wins, nothing else in the lock.
+##
+## **Room ①'s water starts here, not at the moment of death** — acceptance 8b's own order: reward first, wall
+## collapse/water second. The rune grant is written **before** the water line below it because conceptually
+## the reward *is* the fire and the water is only its visible consequence — **but that statement order is
+## decorative, not what enforces the acceptance** (verify-read: swapping the two lines is measured green,
+## since both run in the same call on the same frame and the water only starts *pouring* on later ticks —
+## there is no observable moment between them). **The `boss_died(KIND_BULL)` guard is what actually enforces
+## it** — it is what makes "before the bull, nothing grants fire and no water starts" true, and it is gated on
+## the same `_room1_reward_water == null` (has the water not already started) that also guards against a
+## second L press re-triggering anything — pressing L before the bull has died, or again after the water
+## already started, does nothing further, and the grant does not re-fire either (harmless regardless —
+## `grant_rune` is idempotent — but this is the one moment the reward is actually taken). **Room ③'s own
+## reward is not wired to any water or rune here** — `_room1_reward_status()`'s own comment below has the full
+## account of that gap.
+##
+## **`not progress.is_reward_pending(...)` is deliberately not part of this condition** — verify-read's own
+## finding: `clear_pending_boss_rewards()` on the line above already makes that term true unconditionally by
+## the time it would be read, so it used to be a coupling to the line above, not a real check (deleting it
+## changed nothing; only reordering the two lines would have). `boss_died()` plus the `null` guard is the
+## whole of what actually decides this, named honestly instead of carrying a term that reads as protection
+## but is not.
+func _take_boss_reward() -> void:
+	var progress := _world.progress()
+	progress.clear_pending_boss_rewards()
+	if _room1_reward_water == null and progress.boss_died(MonsterDefs.KIND_BULL):
+		progress.grant_rune(Tuning.ELEM_FIRE)
+		_room1_reward_water = WaterSource.new(
+			ROOM1_WATER_X0, ROOM1_WATER_X1, ROOM1_WATER_ROW, Tuning.WATER_RAIN_PER_TICK)
+
+
+## The HUD line's own three states, named — "has the bull died", "is its reward still pending", "has the
+## water started" (`_take_boss_reward`'s own order). **Only the bull** — the rooster's own reward gate exists
+## in `Progress` (the mechanism is generic, keyed by kind) but no room ③ water is wired to it in this build
+## (`stage1-bosses.md`'s own recorded gap: `water-jump-and-escape.md` already owns a working pour, K, and this
+## stage does not reach into it).
+func _room1_reward_status() -> String:
+	var pr := _world.progress()
+	if not pr.boss_died(MonsterDefs.KIND_BULL):
+		return "황소 미처치"
+	if pr.is_reward_pending(MonsterDefs.KIND_BULL):
+		return "대기 중 (L로 수령)"
+	if _room1_reward_water != null:
+		return "수령함 · 물 누적 %d" % _room1_reward_water.poured()
+	return "수령함"
+
+
 ## **M/N — stands a monster at the mouse position. A shell-only debug door** (`monsters-minimum`).
 ##  Placement is the map doc's share (that doc's "Boundary"), so the stage does not lay monsters down
 ##  automatically — these keys are "the path by which the thing to be seen reaches the screen".
@@ -525,9 +610,31 @@ func _set_loadout(n: int) -> void:
 	#  => Since it places the circle too, **key 1 is an assembly reset.**
 	# The order (circle -> rune -> glyphs) is locked **inside** `apply_preset`. Unfold it into three lines
 	#  here and the day it gets flipped the glyphs quietly vanish.
-	# The table (`LOADOUTS`) was not widened — the circle and rune come from **the two default-issue constants.**
-	_circle.apply_preset(
-		SpellCircle.DEFAULT_CIRCLE, SpellCircle.DEFAULT_RUNE, Glyph.pack(list))
+	# The table (`LOADOUTS`) was not widened — the circle comes from **the one default-issue constant.**
+	#
+	# **The rune does not** (`rune-lock-and-receiving.md`, Stage D). Passing `SpellCircle.DEFAULT_RUNE`
+	#  unconditionally used to silently wipe an earned rune the moment any preset key was pressed — earn
+	#  fire, place it, press key 4, and it came back none with nothing barking. `apply_preset`'s own comment
+	#  already named this day: "the day there are several kinds of rune, the preset has to take a rune list" —
+	#  today there is exactly one slot, so **the rune to carry over** is read here instead.
+	# **Read before `apply_preset` runs, not after** — `set_circle` inside it resizes and refills every rune
+	#  slot the instant the circle id actually changes, so reading `rune_at(0)` afterward would already see
+	#  the wiped value, not the one to preserve.
+	# **Unfalsifiable today, and that is `CircleDefs.ALL == [CIRCLE_ROUND]`, not this line** — every preset
+	#  passes the same `SpellCircle.DEFAULT_CIRCLE`, so `set_circle` inside `apply_preset` either no-ops
+	#  (already that circle) or the circle was `CIRCLE_NONE` and `rune_at(0)` already reads `RUNE_EMPTY`
+	#  either side of the call. Moving this read after `apply_preset` is measured green right now for exactly
+	#  that reason (verify-read) — not because it is safe, but because both orders give the same value while
+	#  there is only one circle. This ordering is insurance for the day a second circle exists, the same
+	#  single-slot caveat `element()`'s own comment already carries for runes.
+	# **Falls back to `DEFAULT_RUNE`, never `RUNE_EMPTY`** — `rune_at(0)` returns `RUNE_EMPTY` when the circle
+	#  was removed (0 rune slots to read), the one case with nothing earned left to carry over.
+	#  `DEFAULT_RUNE` is the same "none, but still fires" state a fresh boot starts at — the same discipline
+	#  `circle_window`'s own click-to-clear fix holds: the seat is never left truly empty.
+	var current_rune := _circle.rune_at(0)
+	if current_rune == SpellCircle.RUNE_EMPTY:
+		current_rune = SpellCircle.DEFAULT_RUNE
+	_circle.apply_preset(SpellCircle.DEFAULT_CIRCLE, current_rune, Glyph.pack(list))
 
 
 ## **Do not push the world here.** The order is inside `world_step.frame()`, and the one thing this function
@@ -551,6 +658,8 @@ func _on_ticked() -> void:
 	#  faster (`water_source.tick()`'s header) — only while on, exactly once per tick.
 	if _water_source != null:
 		_water_source.tick(_grid)
+	if _room1_reward_water != null:
+		_room1_reward_water.tick(_grid)
 
 	# The trail must come **after** the sim has run, or it is one tick stale.
 	_spell_view.on_tick()
@@ -623,6 +732,12 @@ func reset_stage() -> void:
 	#  so that diagnosis is the eye.
 	#  The queue and the fire count are held by `_world` — touch them here as well and there are two places to reset.
 	_world.reset()
+	# **Ownership is the truth; the seat is not** (`rune-lock-and-receiving.md` — verify-run's own finding: a
+	#  reset revoked ownership but left possession, and the new run couldn't *pick* fire in the palette while
+	#  still *firing* it at full effect, measured on the map, not inferred). `_world.reset()` above already
+	#  reverted `Progress`'s owned set to the starting kit; this is the other half of the same invariant
+	#  ("seat ⊆ owned") from the door that actually breaks it — nothing else in this codebase revokes a rune.
+	_revoke_unowned_rune()
 	# **`cancel_confirm()` too** — `_world.reset()` clears `Progress` (so a lingering `pending_picks`/`_drawn`
 	#  do not ride into the new run), but the confirmation afterglow does not live in `Progress` at all
 	#  (`is_showing()`'s own comment) and nothing else would clear it. Left out, pressing R during the
@@ -631,10 +746,39 @@ func reset_stage() -> void:
 	_blast_count = 0
 	# Rain is a reset target too — leave it on and the old source keeps pouring from the moment terrain is rebuilt.
 	_water_source = null
+	# Room ①'s water reverts with everything else — `_world.reset()` above already clears `Progress.
+	#  reward_pending`, but the water instance itself is held here in the shell, not in `Progress`.
+	_room1_reward_water = null
 	build_terrain_into(_grid)
 	_char.place(
 		SPAWN_TILE.x * Tuning.TILE_CELLS * Tuning.CELL_PX,
 		SPAWN_TILE.y * Tuning.TILE_CELLS * Tuning.CELL_PX)
+
+
+## **The other half of the "seat ⊆ owned" invariant** — called only after something has just revoked
+## ownership (today, only `_world.reset()` inside `reset_stage()` does). If the rune currently in the seat
+## fell out of the owned set, it comes down to `Tuning.ELEM_NONE`, **never `RUNE_EMPTY`** — the same
+## un-emptiable-seat rule `circle_window`'s click-to-clear fix already holds, for the same reason: the circle
+## must keep firing.
+##
+## **Does not touch glyphs or the circle id.** R deliberately never resets the assembly at all
+## (`reset_stage`'s own comment above) — a placed glyph survives R, and that stays true. Glyphs carry no
+## ownership concept to enforce in the first place; this only narrows the one thing that does: *the seat may
+## not hold a rune the player does not own.*
+##
+## **`rune_at(0)` alone covers "no circle" too** — with the circle removed there are 0 rune slots and this
+## already reads back `RUNE_EMPTY`, which the guard below skips (nothing owned or unowned sits in a seat that
+## does not exist). The single hardcoded slot is the same "exactly one rune slot" assumption `element()`'s
+## own comment already names — it is not re-derived here.
+##
+## **Driven directly, not only through `reset_stage()`** — `net_render._revoke_unowned_rune_only_touches_
+## what_is_not_owned` calls this with the owned set at `{none, water}`, a state `Progress.reset()` itself can
+## never leave behind (it always narrows to exactly `{none}`). Proving "checks ownership" rather than "always
+## clears" needs that state — through `reset_stage()` alone the two are observationally identical.
+func _revoke_unowned_rune() -> void:
+	var rune := _circle.rune_at(0)
+	if rune != SpellCircle.RUNE_EMPTY and not _world.progress().owns_rune(rune):
+		_circle.set_rune(0, Tuning.ELEM_NONE)
 
 
 ## The world's size (world px). **It comes from the grid** — count it from `MAP` and the day the map shrinks only the camera fails to follow.
@@ -790,6 +934,10 @@ func _update_hud() -> void:
 		#  amount the user reads it as "it does not work".
 		"물비 %s" % (
 			"켜짐 · 누적 %d" % _water_source.poured() if _water_source != null else "꺼짐 (K로 토글)"),
+		# **Stage I — "has the reward been taken" is judged by this line alone**, the same discipline the rain
+		#  line above already holds for "did K work": order matters (acceptance 8b), so the HUD must show
+		#  which side of that order the fight is currently on, not just whether water happens to be flowing.
+		"방① 보상 %s" % _room1_reward_status(),
 		"FPS %d" % Engine.get_frames_per_second(),
 		"캐릭터 (%d,%d) %s" % [_char.x, _char.y, "접지" if _char.on_ground else "공중"],
 		"발사 %d · 비행중 %d · 자취 %d" % [

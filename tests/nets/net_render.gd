@@ -49,6 +49,11 @@ const INTERACTIVE: Array[String] = ["HUD/CircleWindow", "HUD/ThreePickWindow"]
 const Character := preload("res://src/actor/character.gd")
 const Stage := preload("res://src/stage/stage.gd")
 const Tuning := preload("res://src/sim/sim_tuning.gd")
+## Stage I (`stage1-bosses.md`) — the reward-taken debug key (L) and room ①'s own water pour.
+const MonsterDefs := preload("res://src/actor/monster_defs.gd")
+## Stage D (`rune-lock-and-receiving.md`) — the preset key must not wipe an earned rune.
+const CircleDefs := preload("res://src/sim/circle_defs.gd")
+const SpellCircle := preload("res://src/actor/spell_circle.gd")
 
 
 func run(t) -> void:
@@ -74,6 +79,14 @@ func run(t) -> void:
 	_tab_during_confirmation_afterglow_closes_it_first(t)
 	_physics_process_actually_ticks_confirm_before_the_hud_reacts(t)
 	_reset_stage_actually_cancels_the_confirmation_afterglow(t)
+	_reward_key_gates_room1_water(t)
+	_reward_key_before_any_death_does_nothing(t)
+	_reward_key_is_wired(t)
+	_a_preset_key_does_not_wipe_an_earned_rune(t)
+	_a_preset_key_still_works_with_the_circle_removed(t)
+	_reset_revokes_a_rune_from_the_seat_it_no_longer_owns(t)
+	_reset_does_not_touch_glyphs(t)
+	_revoke_unowned_rune_only_touches_what_is_not_owned(t)
 
 
 ## **Calling an action that is not in the input map makes the engine bark, and on screen it only looks like
@@ -965,6 +978,239 @@ func _reset_stage_actually_cancels_the_confirmation_afterglow(t) -> void:
 	root.free()
 
 
+## **Stage I (`stage1-bosses.md`) — the reward key and room ①'s water, driven through the real
+## `_physics_process()` loop, not a bare `WorldStep`.** This is what makes `_on_ticked()`'s own
+## `_room1_reward_water.tick(_grid)` call exercised for real — a bare `world.frame()` skips `_on_ticked()`
+## entirely (that call only happens inside `stage.gd`'s own `_physics_process`), so a version of this test
+## that drove the world directly would prove the gate but not that the water actually pours.
+## **Acceptance 8b's own order, measured as a sequence**: dead -> pending -> (water still absent) ->
+## taken -> (water starts) -> (water actually rises). Reversing any step is the named failure.
+##
+## **Stage C of `rune-lock-and-receiving.md` folded in, at the same sequence points** — a final-state check
+## alone cannot measure a grant (that plan's own risk table), so fire's ownership is asserted **before** L
+## (still unowned, same as the water being absent) and immediately **after** (owned, same tick the water
+## starts) — the transition, not just the end state.
+func _reward_key_gates_room1_water(t) -> void:
+	var root := _wired_stage_root(t)
+	if root == null:
+		return
+	var world: Variant = root.get("_world")
+	if world == null:
+		root.free()
+		return
+
+	var kind := MonsterDefs.KIND_BULL
+	var mid: int = world.spawn_monster(kind, 700, 700 - MonsterDefs.h_px(kind))
+	t.ok(mid > 0, "황소 스폰됐다 (검사의 전제)")
+	world.monster_at(0).hp = 0
+	for _i in Tuning.TICK_DIVIDER:
+		root.call("_physics_process", 1.0 / 60.0)
+
+	var pr: Variant = world.progress()
+	t.ok(pr.is_reward_pending(MonsterDefs.KIND_BULL), "황소가 죽으면 보상이 대기 상태다 (검사의 전제)")
+	t.eq(root.get("_room1_reward_water"), null, "보상을 수령하기 전엔 room ①의 물이 시작 안 한다")
+	t.ok(not pr.owns_rune(Tuning.ELEM_FIRE), "보상을 수령하기 전엔 불 룬도 없다 (검사의 전제)")
+
+	root.call("_take_boss_reward")
+	t.ok(not pr.is_reward_pending(MonsterDefs.KIND_BULL), "수령하면(L) 대기가 풀린다")
+	t.ok(root.get("_room1_reward_water") != null, "그리고 room ①의 물이 그제서야 시작된다")
+	t.ok(pr.owns_rune(Tuning.ELEM_FIRE), "그리고 같은 순간 불 룬도 실제로 지급된다")
+
+	for _i in Tuning.TICK_DIVIDER * 5:
+		root.call("_physics_process", 1.0 / 60.0)
+	var poured: int = root.get("_room1_reward_water").call("poured")
+	t.ok(poured > 0, "실제로 물이 차오른다 (누적 %d)" % poured)
+
+	# A second press changes nothing further - `_room1_reward_water` is not replaced, and nothing errors.
+	var same_source: Variant = root.get("_room1_reward_water")
+	root.call("_take_boss_reward")
+	t.eq(root.get("_room1_reward_water"), same_source, "다시 눌러도 물줄기가 새로 생기지 않는다 (같은 인스턴스)")
+
+	root.free()
+
+
+## **The negative control — pressing the key before any boss has died does nothing.** Without
+## `boss_died(KIND_BULL)` gating `_take_boss_reward`, this would either error (no reward to clear, harmless)
+## or — the actual risk — start room ①'s water regardless, which would make the wall/water order untestable
+## in principle (acceptance 8b needs a "before" state that is genuinely water-free).
+## **Fire stays ungranted too** (`rune-lock-and-receiving.md`, Stage C acceptance 6: "before the bull, nothing
+## grants fire — the reward key does nothing on its own") — the same `boss_died()` guard covers both.
+func _reward_key_before_any_death_does_nothing(t) -> void:
+	var root := _wired_stage_root(t)
+	if root == null:
+		return
+	var world: Variant = root.get("_world")
+	if world == null:
+		root.free()
+		return
+
+	t.ok(not world.progress().boss_died(MonsterDefs.KIND_BULL), "아직 아무도 안 죽었다 (검사의 전제)")
+	root.call("_take_boss_reward")
+	t.eq(root.get("_room1_reward_water"), null, "죽기 전에 눌러도 room ①의 물은 시작되지 않는다")
+	t.ok(not world.progress().owns_rune(Tuning.ELEM_FIRE), "죽기 전에 눌러도 불 룬은 지급되지 않는다")
+
+	root.free()
+
+
+## Screen wiring — text, the same idiom `_pattern_indicator_is_wired_to_the_screen` (`net_monster.gd`) already
+## holds for a different indicator: proves only "the key reaches the function", not that the function does the
+## right thing (the two driven tests above measure that by value).
+func _reward_key_is_wired(t) -> void:
+	var stage_src := _read(STAGE_SCRIPT)
+	t.ok(stage_src.length() > 0, "stage.gd를 읽었다 (검사의 전제)")
+	t.ok(stage_src.contains("_input.reward_taken_requested.connect(_take_boss_reward)"),
+		"stage.gd가 reward_taken_requested를 _take_boss_reward에 연결한다")
+
+	var input_src := _read(STAGE_INPUT_SCRIPT)
+	t.ok(input_src.length() > 0, "stage_input.gd를 읽었다 (검사의 전제)")
+	t.ok(input_src.contains("reward_taken_requested.emit()"),
+		"stage_input.gd에 reward_taken_requested.emit()이 있다 (L 키가 신호를 낸다)")
+
+
+## **Stage D (`rune-lock-and-receiving.md`) — a preset key must not wipe an earned rune.**
+## `_set_loadout()` used to pass `SpellCircle.DEFAULT_RUNE` into `apply_preset()` unconditionally — earn
+## fire, place it, press any preset key, and it silently came back none with nothing barking. **Driven
+## through `_set_loadout` itself, not `SpellCircle.apply_preset` in isolation** — the wipe lived in *which
+## rune `_set_loadout` passes*, and `net_circle.gd`'s own `_presets_still_work` only ever calls
+## `apply_preset` directly with a rune it chooses itself, so it could not see this class of bug at all.
+func _a_preset_key_does_not_wipe_an_earned_rune(t) -> void:
+	var root := _wired_stage_root(t)
+	if root == null:
+		return
+	var circle: Variant = root.get("_circle")
+	if circle == null:
+		root.free()
+		return
+
+	# Stand in for "the bull's reward was placed" without needing the click path — `grant_rune` +
+	#  placement is `net_circle.gd`'s own job (`_owns_rune_gates_can_pick_on_an_untreed_window`); this test's
+	#  only job is what a preset key does to a rune that is **already sitting in the seat**.
+	t.ok(circle.set_rune(0, Tuning.ELEM_FIRE), "불 룬을 자리에 놓는다 (전제 — 이미 얻어서 놓았다고 가정한다)")
+	t.eq(circle.rune_at(0), Tuning.ELEM_FIRE, "놓였다 (전제)")
+
+	var keys: Array = Stage.LOADOUTS.keys()
+	t.ok(keys.size() > 0, "프리셋 키가 있다 (검사의 전제)")
+	for n: int in keys:
+		circle.set_rune(0, Tuning.ELEM_FIRE)
+		root.call("_set_loadout", n)
+		t.eq(circle.rune_at(0), Tuning.ELEM_FIRE, "프리셋 키 %d를 눌러도 불 룬이 자리에 그대로 있다" % n)
+		t.ok(circle.can_fire(), "그리고 여전히 쏠 수 있다 (키 %d)" % n)
+
+	root.free()
+
+
+## **The fallback half — with no circle to read a rune from, a preset must still leave a working circle,**
+## not `RUNE_EMPTY` carried through by accident. This is the trap `circle_window.gd`'s own header names
+## ("remove the circle and the rune stays bright and pickable ... pressing anywhere did nothing") arriving
+## through a different door — `_set_loadout` reading `rune_at(0)` while there are 0 rune slots.
+func _a_preset_key_still_works_with_the_circle_removed(t) -> void:
+	var root := _wired_stage_root(t)
+	if root == null:
+		return
+	var circle: Variant = root.get("_circle")
+	if circle == null:
+		root.free()
+		return
+
+	circle.set_circle(CircleDefs.CIRCLE_NONE)
+	t.eq(circle.rune_count(), 0, "진을 빼면 룬 자리가 없다 (검사의 전제)")
+
+	var keys: Array = Stage.LOADOUTS.keys()
+	t.ok(keys.size() > 0, "프리셋 키가 있다 (검사의 전제)")
+	root.call("_set_loadout", keys[0])
+	t.ok(circle.can_fire(), "진이 없는 상태에서 프리셋을 눌러도 다시 쏠 수 있게 된다 (키 1이 조립 리셋이다)")
+	t.ok(circle.rune_at(0) != SpellCircle.RUNE_EMPTY,
+		"복구된 룬 자리가 RUNE_EMPTY로 남지 않는다 (자기 자신을 무장 해제하지 않는다)")
+
+	root.free()
+
+
+## **A reset revokes ownership but must not leave possession behind** — verify-run's own finding, driven
+## through the real map: after R, `owns_rune(FIRE)` went back to false (the starting kit) while the seat
+## still held `FIRE` and `element()` still read `FIRE`, so the new run could not even *pick* fire in the
+## palette while still *firing* it at full effect.
+## **The invariant itself is measured (seat's rune ⊆ owned set), not just "the seat is now none"** — a check
+## that only asserted the seat's final value could not tell "correctly revoked" from "coincidentally none
+## because `DEFAULT_RUNE` already is", so ownership is asserted in the same breath as the seat.
+func _reset_revokes_a_rune_from_the_seat_it_no_longer_owns(t) -> void:
+	var root := _wired_stage_root(t)
+	if root == null:
+		return
+	var world: Variant = root.get("_world")
+	var circle: Variant = root.get("_circle")
+	if world == null or circle == null:
+		root.free()
+		return
+
+	var pr = world.progress()
+	pr.grant_rune(Tuning.ELEM_FIRE)
+	t.ok(circle.set_rune(0, Tuning.ELEM_FIRE), "불 룬을 자리에 놓는다 (전제 — 얻어서 놓았다고 가정한다)")
+	t.eq(circle.rune_at(0), Tuning.ELEM_FIRE, "놓였다 (전제)")
+
+	root.call("reset_stage")
+	t.ok(not pr.owns_rune(Tuning.ELEM_FIRE), "리셋 후엔 불 룬 소유가 사라진다 (전제 — 시작 키트로 되돌아간다)")
+	t.eq(circle.rune_at(0), Tuning.ELEM_NONE,
+		"그리고 자리도 무속성으로 내려온다 (소유하지 않은 룬이 자리에 남지 않는다)")
+	t.ok(circle.can_fire(), "그래서 여전히 쏠 수 있다 (RUNE_EMPTY로 떨어지지 않는다)")
+
+	root.free()
+
+
+## **R still does not reset the assembly itself.** `reset_stage`'s own comment says a placed glyph survives
+## R, and that stays true — glyphs carry no ownership concept to enforce, so this fix must not have widened
+## into "R clears the circle".
+func _reset_does_not_touch_glyphs(t) -> void:
+	var root := _wired_stage_root(t)
+	if root == null:
+		return
+	var circle: Variant = root.get("_circle")
+	if circle == null:
+		root.free()
+		return
+
+	t.ok(circle.place_glyph(0, Glyph.GLYPH_BLAST), "1층에 폭발을 놓는다 (전제)")
+
+	root.call("reset_stage")
+	t.eq(circle.glyph_at(0), Glyph.GLYPH_BLAST, "리셋 후에도 놓아 둔 문양이 그대로다 (R은 조립을 안 건드린다)")
+
+	root.free()
+
+
+## **`_revoke_unowned_rune()` genuinely checks ownership — it does not just force the seat to none.**
+##
+## **Why this cannot be proven through `reset_stage()` alone**: `Progress.reset()` always narrows the owned
+## set to exactly `{none}`, so *every* rune the seat could hold right after a stage reset is either already
+## none (no-op either way) or unowned (forced to none either way) — "check ownership, then clear" and
+## "unconditionally clear" are **observationally identical** at that one call site (measured: hardcoding
+## `_revoke_unowned_rune()` to always `set_rune(0, ELEM_NONE)` passed every `reset_stage`-driven check in this
+## file). => The function is driven **directly**, in a state `reset_stage()` itself can never produce — water
+## granted without touching the fire-vs-none question at all, so the owned set is `{none, water}`, not `{none}`.
+func _revoke_unowned_rune_only_touches_what_is_not_owned(t) -> void:
+	var root := _wired_stage_root(t)
+	if root == null:
+		return
+	var world: Variant = root.get("_world")
+	var circle: Variant = root.get("_circle")
+	if world == null or circle == null:
+		root.free()
+		return
+
+	var pr = world.progress()
+	pr.grant_rune(Tuning.ELEM_WATER)
+	t.ok(circle.set_rune(0, Tuning.ELEM_WATER), "물 룬을 자리에 놓는다 (전제 — 방금 얻었다)")
+
+	root.call("_revoke_unowned_rune")
+	t.eq(circle.rune_at(0), Tuning.ELEM_WATER,
+		"소유한 룬(물)은 건드려지지 않는다 (그냥 무조건 무속성으로 미는 함수가 아니다)")
+
+	t.ok(circle.set_rune(0, Tuning.ELEM_FIRE), "이번엔 소유하지 않은 불 룬을 자리에 놓는다 (전제)")
+	t.ok(not pr.owns_rune(Tuning.ELEM_FIRE), "실제로 불은 소유하지 않았다 (전제)")
+	root.call("_revoke_unowned_rune")
+	t.eq(circle.rune_at(0), Tuning.ELEM_NONE, "소유하지 않은 룬(불)은 무속성으로 내려온다")
+
+	root.free()
+
+
 ## Left click helper, mirroring `net_pick.gd`'s own `_click` — kept separate rather than importing a net
 ## file's private helper for a single call, the same boundary `NetProgress`/`NetMonster` (borrowed for real
 ## reusable logic elsewhere in this suite) are not stretched to cover trivial one-liners.
@@ -1090,7 +1336,7 @@ func _wired_stage_root(t) -> Node:
 
 	for path: String in [paths["_hud"], paths["_progress_label"], paths["_levelup_label"], "HUD/Health",
 			"HUD/CircleWindow", "HUD/ThreePickWindow", "SpellView", "BlastFx", "StageInput", "Camera2D",
-			"MonsterView"]:
+			"MonsterView", "CellRenderer"]:
 		t.ok(root.get_node_or_null(path) != null, "씬에 %s 가 있다 (전제)" % path)
 
 	root.set("_hud", root.get_node(paths["_hud"]))
@@ -1113,6 +1359,12 @@ func _wired_stage_root(t) -> Node:
 	#  below used to be a text scan instead.
 	root.set("_camera", root.get_node("Camera2D"))
 	root.set("_monster_view", root.get_node("MonsterView"))
+	# **`_renderer`, so `_on_ticked()` can be driven for real too** — it calls `_renderer.refresh()` whenever
+	#  `_grid.consume_changed() > 0`, and any test that drives `_physics_process()` far enough to change the
+	#  grid (Stage I's own water pour is the first to do this through this helper) crashes on a null `_renderer`
+	#  otherwise. `setup(_grid)` is exactly what `_ready()` itself calls.
+	root.set("_renderer", root.get_node("CellRenderer"))
+	root.get_node("CellRenderer").call("setup", root.get("_grid"))
 	# **`setup()` is what `_ready()` would have called** — the pick window reads `_progress` itself in its own
 	#  `_process()`, and outside the tree that never runs automatically, so `_sync_pick_window(root)` below
 	#  drives it by hand wherever a check needs the window's own `visible` to actually reflect Progress.

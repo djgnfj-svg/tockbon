@@ -239,10 +239,13 @@ func _flip_is_at_tick_start(t) -> void:
 ##   `_dirty` and `_band_dirty` still left (1) below **green** — (1) runs `step()` before the reset, so dirty
 ##   was already empty, which made the label "dirty is empty too" wider than what it measured.
 ##   => It has to be reset **while still marked**, like (2), for that half to actually be measured (CLAUDE.md, "no fake nets").
+## **The fill is 128x128, not the old 512x512.** 8x8 = 64 chunks across 8 bands is still plenty to catch
+##  a `_band_awake`/`_band_dirty` array left un-cleared (that bug shows up the moment *any* touched band
+##  stays nonzero) — the old area bought no extra sensitivity, only 16x the paint cost.
 func _reset_clears_chunks(t) -> void:
 	# (1) the awake side — does a reset put already-awake chunks back to sleep.
 	var g := CellGrid.new()
-	g.apply(CellGrid.cmd_fill(0, 0, 511, 511, Mat.STONE))
+	g.apply(CellGrid.cmd_fill(0, 0, 127, 127, Mat.STONE))
 	g.step()
 	t.ok(g.active_chunk_count() > 0, "먼저 청크를 깨운다 (%d개)" % g.active_chunk_count())
 
@@ -258,7 +261,7 @@ func _reset_clears_chunks(t) -> void:
 	# (2) the dirty side — **reset while still marked.** Since a flip has never been passed, if the old dirty
 	#  survives, **the new stage wakes it straight up** on the tick after the reset.
 	var g2 := CellGrid.new()
-	g2.apply(CellGrid.cmd_fill(0, 0, 511, 511, Mat.STONE))
+	g2.apply(CellGrid.cmd_fill(0, 0, 127, 127, Mat.STONE))
 	t.eq(g2.active_chunk_count(), 0, "채우기 직후는 아직 안 깨어 있다 (flip 전이다 — 이 검사의 전제)")
 	g2.apply(CellGrid.cmd_reset())
 	g2.step()
@@ -1006,8 +1009,12 @@ func _left_right_has_no_bias(t) -> void:
 ##  Laying `cmd_fill` broadly makes `_write_cell` mark thousands of chunks (item R of the design's "risks").
 func _tick_cap_delays_but_never_drops(t) -> void:
 	var g := CellGrid.new()
-	# Lays terrain well past the cap (512).
-	g.apply(CellGrid.cmd_fill(0, 100, 2047, 500, Mat.STONE))
+	# **Only tall enough to clear the cap with margin, not "past 500 rows".** Width 2048 / `CHUNK_CELLS`(16)
+	#  = 128 chunk columns already exceeds `MAX_CHUNKS_PER_TICK`(100) on its own; 4 chunk-rows (64px) of height
+	#  gives 512 chunks touched — 5.12x the cap — instead of the 3,200 the old 401-row fill painted.
+	#  harness-manager measured: this alone was 810ms of `net_water`'s 13s (CellGrid painting is O(area) — the
+	#  same lesson as the `FLOOR_DEPTH_CY` thin-floor fix, just for a horizontal cap test instead of a vertical one).
+	g.apply(CellGrid.cmd_fill(0, 100, 2047, 163, Mat.STONE))
 	g.step()
 	# **Evidence the cap actually bit.** Without this, everything below measures nothing.
 	t.eq(g.active_chunk_count(), Tuning.MAX_CHUNKS_PER_TICK,

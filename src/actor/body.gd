@@ -75,7 +75,7 @@ func apply_gravity(dt: float, gravity_px: float, max_fall_px: float) -> void:
 	vy = minf(vy + gravity_px * dt, max_fall_px)
 
 
-## Horizontal. If blocked, try the **step offset**.
+## Horizontal. If blocked, try the **step offset** — unless `allow_step` is false.
 ## **If blocked, the remainder is discarded** — hold onto it and the remainder piles up while pressed against
 ##  a wall, then the body teleports a few px the moment the wall disappears.
 ## **Standing still discards the remainder too — otherwise a stopped body shivers 1px forever.**
@@ -86,24 +86,40 @@ func apply_gravity(dt: float, gravity_px: float, max_fall_px: float) -> void:
 ##  Found by the rooster's wind-up: "it does not move a single pixel while telegraphing" measured **87px of
 ##  movement** across a run. **The hen has been doing this since it learned to stop at range**, and the
 ##  character does it whenever the key is released.
-func move_x(grid: CellGrid, dx: float) -> void:
+##
+## **`allow_step` (`stage1-bosses.md` Stage B)** — a charging boss passes `false`. `step_cells` gates ordinary
+##  walking, not ramming: `net_tables._wood_clumps`-style reasoning aside, room ①'s own left boundary is only
+##  a 2-tile step (`stage1-bosses.md` Risk 3) and `step_cells`=3 for both bosses would let a charge silently
+##  climb straight over it — the "ramming stuns it" contract would never fire on that side, and the bull could
+##  charge itself out of the pit. A charge must ram flat into anything solid, no matter how short.
+##
+## **Returns true if blocked** — the caller sets whatever state that should trigger (`move_y` already carries
+##  this exact contract; a monster's charge reads it to know a wall was hit).
+## **The contract is really "tried to move and could not"** — `dx == 0.0` and the `n == 0` sub-pixel-remainder
+##  case both return `false` (not blocked) with nothing actually attempted, the same as a genuine collision
+##  free path. A charging boss never sits at exactly `dx == 0.0` (a charge always moves), so this distinction
+##  is unreachable from that caller today, but it is worth naming rather than leaving as an accident of the
+##  early returns above.
+func move_x(grid: CellGrid, dx: float, allow_step: bool = true) -> bool:
 	if dx == 0.0:
 		_rem_x = 0.0
-		return
+		return false
 	_rem_x += dx
 	var n := roundi(_rem_x)
 	_rem_x -= n
 	if n == 0:
-		return
+		return false
 	var sgn := signi(n)
 	# Push 1px at a time — pushing all at once and backing out loses "how far could it actually get" on thick walls.
 	for _i in absi(n):
 		if box_free(grid, x + sgn, y):
 			x += sgn
 			continue
-		if not _try_step_up(grid, sgn):
-			_rem_x = 0.0
-			return
+		if allow_step and _try_step_up(grid, sgn):
+			continue
+		_rem_x = 0.0
+		return true
+	return false
 
 
 ## **Not allowed in mid-air.** Otherwise, while pressed against a wall, it climbs the wall rather than a ledge.

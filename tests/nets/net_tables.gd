@@ -74,6 +74,12 @@ func _defs_and_all_agree(t) -> void:
 		["glyph_defs", Glyph.DEFS, Glyph.ALL],
 		["circle_defs", CircleDefs.DEFS, CircleDefs.ALL],
 		["sim_tuning(룬)", Tuning.ELEM_DEFS, Tuning.ELEM_ALL],
+		# **stage1-bosses.md Stage A — `net_monster_sprite`'s own count check is a tautology against this
+		#  exact mutation** (`sheets.size()` and `Defs.ALL.size()` are both derived from `ALL`, so dropping
+		#  `KIND_ROOSTER` from `ALL` alone moves nothing there; measured: 3558 -> 3536 pass, zero failures).
+		#  This check reads `DEFS` independently of `ALL`, so the row surviving in `DEFS` while `ALL` drops it
+		#  is exactly what it catches.
+		["monster_defs", MonsterDefs.DEFS, MonsterDefs.ALL],
 	]
 	# If the list is empty the code below never runs and **it goes green.**
 	t.ok(pairs.size() > 0, "표와 목록 짝이 %d개다" % pairs.size())

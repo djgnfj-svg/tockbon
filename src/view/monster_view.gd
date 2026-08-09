@@ -24,9 +24,20 @@ const WorldStep := preload("res://src/actor/world_step.gd")
 const Monster := preload("res://src/actor/monster.gd")
 const Defs := preload("res://src/actor/monster_defs.gd")
 const Fx := preload("res://src/view/fx_tuning.gd")
+## `stage1-bosses.md` Stage B's screen share - the wind-up/stun indicator reads `m.pattern`, whose values
+## live here (`BossAi.Pattern`). Same allowance as `MonsterDefs`/`SpellCircle` in `fx_tuning.gd`'s header.
+const BossAi := preload("res://src/actor/boss_ai.gd")
+## Stage D - only `KIND_FIRE` is read here, to pick the fire bolt's color.
+const MonsterBolts := preload("res://src/actor/monster_bolts.gd")
 ## **It is held for `CELL_PX` alone** — fire attached to a body has to snap to the cell grid for its vocabulary
 ##  to match the ground fire (the `_draw_body_flames` box). This is the only place the view reads a sim constant.
 const Tuning := preload("res://src/sim/sim_tuning.gd")
+## The attack prediction (`docs/design/attack-prediction.md`) needs the live player position (to track until
+## the windup lock, `_draw_attack_prediction`'s own header) and the grid (to find the wall a charge lane would
+## actually stop at). Neither was needed before this feature — `character.gd`'s `H_PX`/`W_PX`/`GRAVITY_PX` are
+## also read here now, for the same reason `cell_renderer.gd` reads one sim constant and no more.
+const Character := preload("res://src/actor/character.gd")
+const CellGrid := preload("res://src/sim/cell_grid.gd")
 
 ## The name the shader receives. **Kept as a constant** — pin the string and one wrong letter means
 ##  **nothing happens at all and there is no error** (`net_render`'s "false knob" section is that story).
@@ -41,6 +52,12 @@ const LAYER_FLASH := "Flash"
 const LAYER_NUMBER := "Number"
 
 var _world: WorldStep = null
+## **The live player and grid — `_draw_attack_prediction`'s own reason.** Both are null-tolerant at the call
+## site: the only door that reaches a drawing function with either unset is a net driving `_draw_pattern_
+## indicator`/`_draw_attack_prediction` directly with no `setup()` (`net_monster_charge.gd`'s dispatch test
+## does exactly this) — real play always calls `setup()` first, the same discipline `_world` above already holds.
+var _char: Character = null
+var _grid: CellGrid = null
 
 ## id -> previous frame's hp. `_scan_hp_changes()` fills and clears it (the header above).
 var _prev_hp: Dictionary = {}
@@ -147,8 +164,16 @@ func _make_layer(fn: Callable, nm: String) -> Node2D:
 	return n
 
 
-func setup(world: WorldStep) -> void:
+## **`char`/`grid` are new, and optional** (`docs/design/attack-prediction.md`) — the same door
+## `char_view.setup(_char, _circle, _grid)` already opened for a different reason (`stage.gd`'s own precedent
+## for handing a view more than one actor reference directly, rather than reaching through `world`, which
+## exposes neither). **Defaulting to `null` rather than becoming required** keeps every existing call site
+## that has no reason to care about the attack prediction (damage numbers, corpses, flashes) unchanged —
+## `_draw_attack_prediction`'s own header names this the same null-tolerant discipline `_world` already holds.
+func setup(world: WorldStep, char: Character = null, grid: CellGrid = null) -> void:
 	_world = world
+	_char = char
+	_grid = grid
 	queue_redraw()
 
 
@@ -324,15 +349,18 @@ func _draw() -> void:
 		_draw_corpse(c)
 	for i in _world.monster_count():
 		_draw_monster(_world.monster_at(i))
-	# Chicken bolts. `MonsterBolts` does not pass a direction (its public API is only `x(i)` and `y(i)`), so they
-	# are drawn as dots — acceptance 13's requirement ("a small dot / short line") is met with a dot.
-	# **It is two layers — the same grammar as a magic bolt (glow + core), a different color.** Changing only
-	#  the color did not split them: the old pink and the none purple were 85 degrees apart and still got
-	#  confused (the `fx_tuning.MONSTER_BOLT_COLOR` box).
+	# Monster bolts (chicken peck · Stage D's bull fire breath). `MonsterBolts` does not pass a direction (its
+	# public API is only `x(i)`/`y(i)`/`kind(i)`), so they are drawn as dots — acceptance 13's requirement
+	# ("a small dot / short line") is met with a dot.
+	# **It is two layers — the same grammar as a magic bolt (glow + core), a different color per kind.**
+	#  Changing only the color did not split the original two apart: the old pink and the hen purple were
+	#  85 degrees apart and still got confused (the `fx_tuning.MONSTER_BOLT_COLOR` box) — fire uses `FIRE_LO`/
+	#  `FIRE_HI` instead, already far from both on the wheel (that file's own comment on why it reuses them).
 	for i in _world.bolt_count():
 		var p := Vector2(_world.bolt_x(i), _world.bolt_y(i))
-		draw_circle(p, Fx.MONSTER_BOLT_R_PX, Fx.MONSTER_BOLT_COLOR)
-		draw_circle(p, Fx.MONSTER_BOLT_R_PX * Fx.MONSTER_BOLT_CORE_FRAC, Fx.MONSTER_BOLT_CORE)
+		var k := _world.bolt_kind(i)
+		draw_circle(p, Fx.MONSTER_BOLT_R_PX, bolt_glow(k))
+		draw_circle(p, Fx.MONSTER_BOLT_R_PX * Fx.MONSTER_BOLT_CORE_FRAC, bolt_core(k))
 	# The pop at the moment of death — **above corpses and monsters, below the flash.**
 	for p: Dictionary in _death_pops:
 		_draw_death_pop(p)
@@ -430,6 +458,8 @@ func _draw_monster(m: Monster) -> void:
 	if m.burning:
 		_draw_body_flames(self, r, m.id)
 	_draw_hp_bar(m.kind, m.x, m.y, m.hp)
+	_draw_pattern_indicator(m, r)
+	_draw_phase2_tell(m, r)
 
 
 ## **Fire attached to a body — in several places.** It was originally one box outline and read on screen as
@@ -531,6 +561,281 @@ func _draw_hp_bar(kind: int, x: int, y: int, hp: int) -> void:
 	draw_rect(fill, Fx.MONSTER_HP_BAR_FULL.lerp(Fx.MONSTER_HP_BAR_EMPTY, 1.0 - frac))
 
 
+## The wind-up/stun indicator (`stage1-bosses.md` Stage B, acceptance 3). **Reads `m.pattern` only** — a
+## trash mob's `pattern` never leaves `BossAi.Pattern.IDLE` (`boss_ai.gd`'s own header: `monster_defs`
+## carries no notion of patterns at all), so this draws nothing for a pig or a hen.
+## **Drawn directly on `self`, not through a child `_Layer`** — the same door `_draw_monster_body`/
+## `_draw_hp_bar` already use; no shader is hung on this, so there is no reason to split it onto its own node.
+func _draw_pattern_indicator(m: Monster, r: Rect2) -> void:
+	if m.pattern == BossAi.Pattern.WINDUP:
+		_draw_attack_prediction(m, r)
+	elif m.pattern == BossAi.Pattern.STUN:
+		_draw_stun_ring(r)
+
+
+# ══════════════════════════════════════════════════════════════════
+#  The attack prediction (`docs/design/attack-prediction.md`) — replaces the "!" text tell.
+#  The user's own words: the monster's attack should show **in red, as a prediction** — a mark on the ground
+#  saying where it lands, not a symbol saying only that something is coming. The stun ring above is the model
+#  for how strong this should read; nothing about the ring changed.
+# ══════════════════════════════════════════════════════════════════
+
+## The pattern clock's own rate — `boss_ai.gd`'s tick machine runs at 20Hz (60Hz physics / `Tuning.TICK_
+## DIVIDER`=3). Derived rather than a bare `0.05` literal, so the day the divisor or the physics rate changes,
+## the distance/time math below does not silently drift from the clock it is timing.
+const PATTERN_TICK_SEC := float(Tuning.TICK_DIVIDER) / 60.0
+
+## **Dispatches on the resolved move, then delegates to one shape per move** — `_draw_charge_predict` (also
+## covers gore, a substitution decided inside this function), `_draw_fire_predict`, `_draw_landing_predict`
+## (shared by the bull's slam and the rooster's leap, both `Pattern.LEAP` physics — `boss_ai.gd`'s own header:
+## "the physics is the rooster's own `Pattern.LEAP`, not a new state").
+##
+## **Tracks the player live, not the stale `pattern_dir`** — `boss_ai.gd`'s own header: direction (and, for
+## the bull's charge, whether gore substitutes for it) is only decided at the WINDUP -> active transition and
+## held from there; `pattern_dir`/`move_choice` read *during* WINDUP still carry the **previous** move's
+## values. A prediction drawn from those would be lying for however long WINDUP has left — at phase 2 that is
+## 0.4s of a wrong-side or wrong-shape mark, worse than no mark at all (the plan's own words). Recomputed
+## every frame from the live player position instead, using the exact same two rules `boss_ai.advance()`
+## itself applies at the lock instant (`signi` on the horizontal difference; `BossAi.gore_range_px` plus a
+## vertical-overlap check, mirrored in `_would_gore` below) — so the live guess and the eventual lock **agree
+## by construction** on the tick they meet, not by coincidence.
+##
+## **`_char == null` degrades to the stored `pattern_dir`/`move_choice`, never to gore** — the only door that
+## reaches this with no live player is a net driving `_draw_pattern_indicator` directly with no `setup()`
+## (`net_monster_charge.gd`'s own dispatch test); real play always calls `setup()` first, the same discipline
+## `_world` already holds elsewhere in this file.
+func _draw_attack_prediction(m: Monster, r: Rect2) -> void:
+	var dir := m.pattern_dir
+	var gore := false
+	if _char != null:
+		var tx := _char.center().x
+		var mx := m.center().x
+		if tx != mx:
+			dir = signi(int(tx - mx))
+		if m.kind == Defs.KIND_BULL and m.move_choice == BossAi.MoveChoice.CHARGE:
+			gore = _would_gore(m, tx, _char.center().y)
+
+	if m.kind == Defs.KIND_ROOSTER:
+		_draw_landing_predict(m, r, dir, false)
+		return
+	if m.move_choice == BossAi.MoveChoice.FIRE:
+		_draw_fire_predict(m, r, dir)
+		return
+	if m.move_choice == BossAi.MoveChoice.SLAM:
+		_draw_landing_predict(m, r, dir, true)
+		return
+	if gore:
+		_draw_gore_predict(m, r)
+	else:
+		_draw_charge_predict(m, r, dir)
+
+
+## **Mirrors `Monster._vertically_overlaps_target`/`BossAi.advance`'s own gore-substitution condition** —
+## that method is private to `Monster` and the sim only ever evaluates it once, at the lock instant, but this
+## has to re-evaluate the same question **every frame during WINDUP** so the live guess can track it. Kept to
+## exactly the same two conditions (`BossAi.gore_range_px` distance, then the vertical box overlap) rather
+## than reached for through a new public accessor on `Monster`, so there is one obvious place to check if the
+## two ever need to be compared side by side.
+func _would_gore(m: Monster, target_x: float, target_y: float) -> bool:
+	if absf(target_x - m.center().x) > BossAi.gore_range_px(m.kind):
+		return false
+	var half_h := Character.H_PX * 0.5
+	return float(m.y) < target_y + half_h and float(m.y + Defs.h_px(m.kind)) > target_y - half_h
+
+
+## CHARGE — the lane it will run down. A red band the monster's own height, from its leading edge to the
+## first wall it would actually hit or the safety-cap distance, whichever is shorter — **never longer than
+## the real charge could ever reach**, so this can undersell a charge (a steppable single-cell bump the real
+## collision would climb over, `Body.move_x`'s own `allow_step` — charges pass `false` for that, so this
+## approximation is closer than it sounds) but never oversell one.
+func _draw_charge_predict(m: Monster, r: Rect2, dir: int) -> void:
+	var max_px := _charge_max_px(m)
+	var stop := _wall_stop_x(m, dir, max_px)
+	var lead := r.position.x if dir < 0 else r.end.x
+	_draw_predict_rect(Rect2(minf(lead, stop), r.position.y, absf(stop - lead), r.size.y))
+
+
+## The farthest a charge could possibly travel — `BossAi.MOVE_CHARGE`'s own safety cap, scaled by phase 2 the
+## same way `boss_ai.advance()` itself scales it (`BossAi._phase_ticks`, not a second copy of the divide-by-2
+## rule), times the same speed `BossAi.speed_mult` gives `Monster.step`. **`+1` tick** — `boss_ai.gd`'s own
+## comment: the tick that sets a duration counter is itself already spent in that state, so `charge_max_ticks`
+## (60) actually holds `CHARGE` for 61 ticks, the exact number the plan's own message quoted.
+func _charge_max_px(m: Monster) -> float:
+	var phase2 := m.is_phase2()
+	var ticks := BossAi._phase_ticks(int(BossAi.MOVE_CHARGE["charge_max_ticks"]), phase2)
+	var speed := Defs.speed_px(m.kind) * BossAi.speed_mult(m.kind, BossAi.Pattern.CHARGE, phase2)
+	return float(ticks + 1) * PATTERN_TICK_SEC * speed
+
+
+## Where the charge actually stops — the first wall in its path, stepped in `Tuning.CELL_PX` increments (the
+## grid's own resolution, not a per-pixel scan) and checked with the same box-vs-cell rule `Body.box_free`
+## uses for the real collision (that function is private to `Body`; `_grid.is_solid` is public, so this reads
+## the same handful of cells through the door that exists rather than adding an accessor for one caller).
+## **`_grid == null` falls back to the capped straight line** — the same null-tolerant discipline
+## `_draw_attack_prediction`'s own header names.
+func _wall_stop_x(m: Monster, dir: int, max_px: float) -> float:
+	var w := Defs.w_px(m.kind)
+	var lead0 := m.x if dir < 0 else m.x + w
+	if _grid == null or dir == 0:
+		return float(lead0) + float(dir) * max_px
+	var h := Defs.h_px(m.kind)
+	var cell := Tuning.CELL_PX
+	var max_i := int(max_px)
+	var traveled := 0
+	while traveled < max_i:
+		var step := mini(cell, max_i - traveled)
+		if not _box_free(m.x + dir * (traveled + step), m.y, w, h):
+			break
+		traveled += step
+	return float(lead0) + float(dir) * float(traveled)
+
+
+## The same box-vs-cell check `Body.box_free` performs for real collision, re-read here because that method
+## is private to `Body` and `_grid.is_solid` (the door it is built on) is public.
+func _box_free(px: int, py: int, w: int, h: int) -> bool:
+	var cell := float(Tuning.CELL_PX)
+	var cx0 := floori(px / cell)
+	var cx1 := floori((px + w - 1) / cell)
+	var cy0 := floori(py / cell)
+	var cy1 := floori((py + h - 1) / cell)
+	for cy in range(cy0, cy1 + 1):
+		for cx in range(cx0, cx1 + 1):
+			if _grid.is_solid(cx, cy):
+				return false
+	return true
+
+
+## GORE — what it can actually reach, not the gate. `BossAi.gore_range_px` (120px) only decides *whether*
+## gore is chosen over a charge at the windup lock; the real hit is a plain box overlap
+## (`WorldStep._boxes_overlap`), which lands at `(this kind's own w_px + the player's W_PX) / 2` centre to
+## centre — 54px for the bull, not 120. **Symmetric, not directional** — box overlap does not care which side
+## the player is standing on, so this does not read `dir` at all.
+func _draw_gore_predict(m: Monster, r: Rect2) -> void:
+	var reach := (float(Defs.w_px(m.kind)) + Character.W_PX) * 0.5
+	_draw_predict_rect(Rect2(r.get_center().x - reach, r.position.y, reach * 2.0, r.size.y))
+
+
+## FIRE — the stream it will sweep. A horizontal line from the exact point a real bolt spawns from
+## (`WorldStep.frame()`: `_bolts.spawn(m.center().x, m.center().y, Vector2(pattern_dir, 0.0), ...)` for any
+## non-hen kind), `MonsterBolts.BOLT_RANGE_PX` long, no vertical component — the same `Vector2(dir, 0.0)` the
+## real bolt is given, not a re-aimed line.
+func _draw_fire_predict(m: Monster, r: Rect2, dir: int) -> void:
+	var c := m.center()
+	var x0 := c.x if dir >= 0 else c.x - MonsterBolts.BOLT_RANGE_PX
+	_draw_predict_rect(Rect2(x0, c.y - Fx.ATTACK_PREDICT_LINE_PX * 0.5,
+		MonsterBolts.BOLT_RANGE_PX, Fx.ATTACK_PREDICT_LINE_PX))
+
+
+## SLAM/LEAP — where it comes down. **Not exact** — the real landing is 60Hz discrete integration against
+## whatever terrain happens to be underneath, unmeasurable from this view without actually running the frame
+## (verify-run's seat, not this one). What this draws instead is the same **continuous** analytic estimate
+## `boss_ai.gd`'s own comments already compute and already name as an overshoot — `2*|vy_px|/GRAVITY_PX` for
+## the time aloft (symmetric flight: time up equals time down), times the horizontal speed the move actually
+## uses. `boss_ai.gd`'s own measured number for the rooster's leap (153px real vs. this formula's 167px) is
+## the only ground truth on record for how far off that overshoot runs for a *horizontal* distance — closer
+## than the ~30% the same comment records for the *apex* height, but still an estimate, not the real number.
+##
+## For the slam, the ignite ring (`BossAi.slam_ignite_r`/`_spread_cells`/`_points`) is drawn too — the fire
+## the landing actually throws, at the same radius `MOVE_SLAM`'s own comment derives (outer pair at
+## `spread_cells * (points / 2) + ignite_r` cells, ±56px for the bull's current numbers).
+func _draw_landing_predict(m: Monster, r: Rect2, dir: int, is_slam: bool) -> void:
+	var vy := absf(BossAi.leap_jump_vy_px(m.kind))
+	if vy <= 0.0:
+		return
+	var air_time := 2.0 * vy / Character.GRAVITY_PX
+	var move: Dictionary = BossAi.MOVE_SLAM if is_slam else BossAi.MOVE_LEAP
+	var h_speed := Defs.speed_px(m.kind) * float(move["leap_speed_mult"])
+	var landing_x := m.center().x + float(dir) * h_speed * air_time
+	var ground_y := r.end.y
+
+	_draw_predict_ring(Vector2(landing_x, ground_y), maxf(r.size.x, r.size.y) * 0.5)
+	if is_slam:
+		var outer_cells := BossAi.slam_ignite_spread_cells(m.kind) * (BossAi.slam_ignite_points(m.kind) / 2) \
+			+ BossAi.slam_ignite_r(m.kind)
+		_draw_predict_ring(Vector2(landing_x, ground_y), float(outer_cells * Tuning.CELL_PX))
+
+
+## The shared low-level draw calls — a filled band (charge/gore/fire) or a ring (the landing marker), both
+## pulsing the same `sin()` shape `_draw_stun_ring` already uses (that function's own comment: "reads as
+## active feedback, not a fixed decal"), copied rather than reinvented so the two families of tell read as
+## one visual language.
+func _draw_predict_rect(rect: Rect2) -> void:
+	var a := _predict_alpha()
+	var fill := Fx.ATTACK_PREDICT_COLOR
+	draw_rect(rect, Color(fill.r, fill.g, fill.b, fill.a * a), true)
+	var edge := Fx.ATTACK_PREDICT_EDGE_COLOR
+	draw_rect(rect, Color(edge.r, edge.g, edge.b, edge.a * a), false, Fx.ATTACK_PREDICT_EDGE_PX)
+
+
+func _draw_predict_ring(center: Vector2, radius: float) -> void:
+	var edge := Fx.ATTACK_PREDICT_EDGE_COLOR
+	var a := _predict_alpha()
+	draw_arc(center, radius, 0.0, TAU, 24, Color(edge.r, edge.g, edge.b, edge.a * a), Fx.ATTACK_PREDICT_EDGE_PX)
+
+
+func _predict_alpha() -> float:
+	var t := float(_frame % Fx.ATTACK_PREDICT_PULSE_FRAMES) / float(Fx.ATTACK_PREDICT_PULSE_FRAMES)
+	return lerpf(Fx.ATTACK_PREDICT_MIN_ALPHA_FRAC, Fx.ATTACK_PREDICT_MAX_ALPHA_FRAC, sin(t * TAU) * 0.5 + 0.5)
+
+
+## **Pulses** — the same `sin(_frame / period)` shape `_draw_body_flames`'s wobble already uses, so the ring
+## reads as "alive" rather than a fixed decal painted at the moment the stun began.
+func _draw_stun_ring(r: Rect2) -> void:
+	var t := float(_frame % Fx.MONSTER_STUN_RING_PERIOD_FRAMES) / float(Fx.MONSTER_STUN_RING_PERIOD_FRAMES)
+	var frac := lerpf(Fx.MONSTER_STUN_RING_MIN_FRAC, Fx.MONSTER_STUN_RING_MAX_FRAC, sin(t * TAU) * 0.5 + 0.5)
+	var radius := maxf(r.size.x, r.size.y) * 0.5 * frac
+	draw_arc(r.get_center(), radius, 0.0, TAU, 24, Fx.MONSTER_STUN_RING_COLOR, Fx.MONSTER_STUN_RING_PX)
+
+
+## **Stage H — "speeds up at half health," the screen half.** `stage1-bosses.md`'s own open TBD ("phase
+## transition presentation — what is visible at half health") is picked here, not decided by the user yet.
+## **Persistent, not pattern-gated** — composes with `_draw_pattern_indicator` rather than replacing it (a
+## boss can be mid-`WINDUP` and below half hp at the same instant; both tells must show at once, so this is
+## its own function called separately from `_draw_monster`, not folded into the `if`/`elif` above).
+## **Unblinking and thick, on purpose** — verify-look measured the windup "!" as a small orange dot at 1.0
+## zoom while the stun ring read well; the difference this function bets on is size and constancy, not a
+## cleverer shape, so there is no blink here the way `_draw_telegraph` has one.
+## **Calls `m.is_phase2()` rather than re-deriving the threshold** — the same rule already lives once, in
+## `Monster` (read by `BossAi.advance`/`BossAi.speed_mult` for behavior); reimplementing `hp * 2 <= max_hp`
+## here would make two copies of one rule, and the day the threshold changes only one of them would follow.
+## Called every frame, not cached — the same "re-decided every frame" discipline `is_phase2()` itself holds.
+## **The threshold check and the drawing are two functions, not one** — the same split
+## `_draw_pattern_indicator`/`_draw_telegraph`/`_draw_stun_ring` already holds. A net can drive this dispatch
+## for real (an untreed node tolerates the `if`, no canvas needed) while overriding only the leaf
+## (`_draw_phase2_ring`, below) to record instead of calling `draw_rect` on a node with nothing to draw onto —
+## folding the threshold into one function with the draw call would put the guard behind the same wall the
+## drawing itself sits behind, the trap `_draw_pattern_indicator`'s own split already avoids.
+func _draw_phase2_tell(m: Monster, r: Rect2) -> void:
+	if not m.is_phase2():
+		return
+	_draw_phase2_ring(r)
+
+
+## **Grown outward, not flush with the box** — flush would sit on top of the outline shader
+## (`Fx.MONSTER_OUTLINE_COLOR`) that already hugs every monster's silhouette, and the two would blur into one
+## line instead of reading as two separate things.
+##
+## **Four corner brackets, not a rectangle** — verify-look's own finding, and this repo's second time making
+## this exact mistake: a full outline around a sprite reads as an editor's selection box (`_draw_body_flames`'s
+## own comment above records the first time, "an orange selection box", acceptance 13). Each corner gets an
+## "L" of two short lines running along the box's own edges from that corner — the middle of every edge stays
+## empty on purpose, which a selection rectangle never does, and the shape is neither the stun ring's circle
+## nor the outline shader's own silhouette-hugging line, so none of the three can be mistaken for each other.
+func _draw_phase2_ring(r: Rect2) -> void:
+	var g := r.grow(Fx.MONSTER_PHASE2_MARGIN_PX)
+	var arm := Fx.MONSTER_PHASE2_BRACKET_ARM_PX
+	# Corners in order: top-left, top-right, bottom-right, bottom-left. Each entry's sign says which way its
+	# own two arms point (into the box's own edges, not out into open space) — top-left's arms run right and
+	# down, top-right's run left and down, and so on around the box.
+	var corners: Array[Vector2] = [g.position, Vector2(g.end.x, g.position.y), g.end, Vector2(g.position.x, g.end.y)]
+	var x_sign: Array[float] = [1.0, -1.0, -1.0, 1.0]
+	var y_sign: Array[float] = [1.0, 1.0, -1.0, -1.0]
+	for i in 4:
+		var c := corners[i]
+		draw_line(c, c + Vector2(arm * x_sign[i], 0.0), Fx.MONSTER_PHASE2_COLOR, Fx.MONSTER_PHASE2_OUTLINE_PX)
+		draw_line(c, c + Vector2(0.0, arm * y_sign[i]), Fx.MONSTER_PHASE2_COLOR, Fx.MONSTER_PHASE2_OUTLINE_PX)
+
+
 ## **A corpse is a body sprite too — laid down dark and faded** (acceptance 13 failed right here).
 ##  **It was originally a purple rectangle and read on screen as "is that a leftover UI fragment"** — bodies on
 ##   the same screen are sprites while only corpses were shapes, so **the value of having attached sprites was
@@ -605,6 +910,20 @@ static func box_rect(kind: int, x: int, y: int) -> Rect2:
 static func hp_bar_rect(kind: int, x: int, y: int) -> Rect2:
 	return Rect2(float(x), float(y) - Fx.MONSTER_HP_BAR_GAP_PX - Fx.MONSTER_HP_BAR_H_PX,
 		float(Defs.w_px(kind)), Fx.MONSTER_HP_BAR_H_PX)
+
+
+## **The bolt color decision (`stage1-bosses.md` Stage D), extracted so a net can call it directly** — the
+## same fix Stage B's own review already applied to the pattern indicator (`_pattern_indicator_draws_the_
+## right_thing_for_the_right_state`'s box), needed here for the same reason: a whole-file source grep for
+## `FIRE_LO`/`MonsterBolts.KIND_FIRE` stays green through a branch swap (fire drawn hen-purple, the hen drawn
+## fire-colored) — the strings are all still *somewhere* in the file. Pulling the decision into its own pure
+## function makes it callable with a bare kind int, no world, no tree.
+static func bolt_glow(kind: int) -> Color:
+	return Fx.FIRE_LO if kind == MonsterBolts.KIND_FIRE else Fx.MONSTER_BOLT_COLOR
+
+
+static func bolt_core(kind: int) -> Color:
+	return Fx.FIRE_HI if kind == MonsterBolts.KIND_FIRE else Fx.MONSTER_BOLT_CORE
 
 
 ## **The seat of one flame attached to a body. Pure static, so the nets call it directly.**

@@ -49,3 +49,19 @@ permutation axis), and it was dropped not for its effect but because **it must b
 
 **And a test line emerged** — **growing during a run is an inventory; visible only in town is a list.**
 The town assembly bench's unlock list does not fall under this prohibition.
+
+## Exception — rune ownership (`rune-lock-and-receiving.md`)
+
+`Progress._owned_runes` grows during a run (the bull's reward grants fire) and on its face fails the test
+line above. It is exempted, not silently let through:
+
+- A stash is **a menu you choose from.** With one rune seat and a fixed starting kit, the owned set after the
+  bull is `{none, fire}` — swapping back to none is not a build decision, it is undoing a reward
+- The rejected branch above ("stash it, equip from the assembly window") was rejected because it defers the
+  weight of a choice. **There is no weight here to defer** — fire strictly adds, nothing is traded off
+- What the field records is "what you have been granted", the same category as town's unlock list, just kept
+  run-scoped because there is no town yet
+
+**The bound**: this stops being exempt the day a rune seat count exceeds one. A second seat turns "which rune
+goes where" into a real build decision, and at that point ownership becomes exactly the stash this doc argues
+against.

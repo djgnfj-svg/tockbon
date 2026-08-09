@@ -21,9 +21,9 @@ The chain (GDD): `map → wood wall → pit ① → bull → fire rune → water
 | # | Do | Why here | Size |
 |---|---|---|---|
 | ~~0~~ | ~~Look at water on screen~~ | **Dropped by the user.** Water took too long ⇒ **unlimited jumping underwater is all that is needed now**, and the pour · current · escape **get pulled back out and looked at when that work reopens.** The price: steps 2–4 build on an unaccepted base, and **the water part of the chain (rising water in ① and at the end) is unproven until then** | — |
-| ~~1~~ | ~~Decide who pours pit ①'s water~~ | **Decided by the user — take the reward, then the side wall collapses and water comes in.** `1.ready/stage1-bosses` owns it now ("the way out of the pit"), and it lands as part of the bull. **Review item 3 is closed** | — |
-| **2** | **The two bosses** | `1.ready/stage1-bosses`. **Zero code — `monster_defs.ALL` is still `[PIG, HEN]`.** The largest remaining piece, and steps 3–4 have nothing to attach to without the bull | large |
-| **3** | **The lock pair — two changes, one landing** | see below. **Was three; the user dropped the ignition gate** | medium |
+| ~~1~~ | ~~Decide who pours pit ①'s water~~ | **Decided by the user — take the reward, then the side wall collapses and water comes in.** `3.done/stage1-bosses` owns it now ("the way out of the pit"), and it lands as part of the bull. **Review item 3 is closed** | — |
+| **2** | **The two bosses** | `3.done/stage1-bosses`. **Zero code — `monster_defs.ALL` is still `[PIG, HEN]`.** The largest remaining piece, and steps 3–4 have nothing to attach to without the bull | large |
+| **3** | **The lock pair — ~~two~~ **three** changes, one landing** | **Planned** → [rune-lock-and-receiving.md](../3.done/rune-lock-and-receiving.md). **The third is the palette** (`palette_layout.items_of(KIND_RUNE)` returns `ELEM_ALL` unconditionally, so locking `DEFAULT_RUNE` alone is void). **And "no receiving screen" was wrong** — `circle_window.gd:158-161` has always placed runes; what is missing is ownership. **Was three, then two after the user dropped the ignition gate, and is three again for a different reason** | medium |
 | **4** | **The gate (an ending)** | Place it behind the rooster and mark contact. **No doc owns it** | small |
 
 **Off the chain, after**: `1.ready/bolt-speed-and-visibility` · `1.ready/triangle-circle-to-game`.
@@ -58,8 +58,10 @@ the wood wall is beyond pit ①, the pit only opens with the water the bull brin
 shape, not on a rule.** Put a second route into ②, or hand the player a way out of the pit that isn't the
 bull, and **the wood wall stops being a lock the same day** — with nothing in code to complain.
 
-**Scope of the receiving screen**: the GDD already pinned it — **the minimum rune-receiving path, not the
-three-pick window.** That is a subset of `levelup-and-three-picks` Stage E; **the rest of E stays cut.**
+~~**Scope of the receiving screen**: the GDD already pinned it — the minimum rune-receiving path, not the
+three-pick window. That is a subset of `levelup-and-three-picks` Stage E; the rest of E stays cut.~~
+ **Void — there is no receiving screen to scope** (see the confirmed box below). The paragraph is kept
+only because the town/tutorial sentence under it is still live.
 
 **And it shrinks again** (decided by the user): **the starting kit is handed over in town**, and **usage is
 taught by a tutorial** ⇒ this screen covers **only the bull's fire rune.** Town is cut from this week, so
@@ -67,10 +69,18 @@ taught by a tutorial** ⇒ this screen covers **only the bull's fire rune.** Tow
 "the starting kit is handed over here"). **The tutorial has no doc and no owner** — it is now carrying the
 GDD's "the rule is taught in onboarding" as well.
 
-**And then it mostly stopped being work at all.** Stage E shipped: the pick window already **hands something
-over and makes you place it**, through `spell_circle`. ⇒ What remains for the fire rune is **a rune-shaped
-card in that same window**, not a new screen. **Confirm before building** that the window's card and placement
-path are not glyph-only in a way that a rune cannot pass through — that is the whole of the remaining risk.
+~~**And then it mostly stopped being work at all.** Stage E shipped: the pick window already hands something
+over and makes you place it. ⇒ What remains for the fire rune is a rune-shaped card in that same window.
+**Confirm before building** that the window's card and placement path are not glyph-only.~~
+
+ **Confirmed, and the answer changed the plan twice.** The three-pick window **is** glyph-only
+(`three_pick.draw()` draws from `Glyph.ALL` · `_draw_card` indexes `Glyph.DEFS` · `_gui_input_step2` calls
+`place_glyph`, and `ELEM_FIRE == 0 == GLYPH_NONE` makes a rune id indistinguishable from "no glyph").
+**But the rune card is not needed at all** — the premise "there is no screen to receive a rune" was wrong:
+**`circle_window.gd:158-161` has always placed runes** (pick from the palette → click the rune seat).
+⇒ **What is missing is not a screen but ownership**, and the palette is where the lock actually lives
+(`palette_layout.gd:73-74` offers `ELEM_ALL` unconditionally).
+**The whole of it is in** [rune-lock-and-receiving.md](../3.done/rune-lock-and-receiving.md).
 
 ---
 
@@ -105,7 +115,7 @@ GDD  "First milestone" ── the chain, and the only acceptance
  ├── 3.done/stage1-map-layout ──── terrain · wood wall · pit ① is a bedrock bowl
  │        ▲                        (acceptance 3·4 still unconfirmed on screen)
  │        │ three-way constraint, and the hole is in the middle
- ├── 1.ready/stage1-bosses ─────── bull in ① · rooster in ③   "there is no water in ①"
+ ├── 3.done/stage1-bosses ─────── bull in ① · rooster in ③   "there is no water in ①"
  │        │
  ├── 2.active/water-jump-and-escape ── "scope is right after boss ③"
  │                                     ⇒ nobody owns ①'s water  → step 1 above
@@ -129,7 +139,7 @@ the chain**; it is not, and step 3 is where that shows.
 ## TBD
 
 - ~~**Who pours pit ①'s water**~~ → **decided by the user.** Take the reward, then the side wall collapses.
-  `1.ready/stage1-bosses` owns it
+  `3.done/stage1-bosses` owns it
 - **Whether the lock pair stays in this milestone at all.** It is the honest alternative: ship the chain with
   fire from the start (the wall opens, nothing is locked), and lock it after the bosses land.
   **The GDD's acceptance ("start once and reach the end without getting stuck") passes either way** — what fails

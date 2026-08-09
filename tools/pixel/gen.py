@@ -205,6 +205,37 @@ PRESETS = {
                  "no characters, no animals, no text, no frame, no border, no ui",
         "lora": 0.0, "size": 1920, "down": 960, "steps": 28, "cfg": 5.0,
     },
+    # The daylight backdrop — **the same layer as `backdrop`, the opposite palette.** Used by **both** the town
+    #  and stage 1: `docs/design/town.md` calls for "one room. **Bright**", and **the user rejected the night sky
+    #  for stage 1 too** — "a greener farm feel, not a night sky".
+    #  => The night clause is dropped and daylight put in its place. **Everything else is kept identical**
+    #   (2x -> downscale, distant scenery only, no characters), because it hangs on the same `SkyBackground` node.
+    #
+    # **Bright does not mean saturated.** The character (`wizard_body.png`) is a dark purple silhouette, and on a
+    #  washed-out bright field it disappears just as it does at night. `muted` is kept for exactly that reason.
+    "daylight": {
+        "style": "pixel art side-scroller game background, distant scenery only, "
+                 "bright daylight palette, soft haze, "
+                 "muted low-saturation dusty colors, "
+                 "simple flat shapes with a clear horizon line, "
+                 "no characters, no animals, no text, no frame, no border, no ui",
+        "lora": 0.0, "size": 1920, "down": 960, "steps": 28, "cfg": 5.0,
+    },
+    # A material grain tile for the terrain (`docs/design/terrain-look.md` (3)). **It is multiplied into the
+    #  palette color, so what matters is the light-dark pattern, not the hue** — the color still comes from
+    #  `cell_materials.gd`, and a tile with its own strong color would fight it.
+    #
+    # **Seamlessness is not asked for in the prompt.** FLUX will not match edges however it is worded
+    #  (measured on the backdrops), so the tile is **mirrored into a 2x2 after generation** — the same trick.
+    #
+    # **A cell is 4 screen px.** A 128px tile spans 32 cells, so the grain only reads across a wall,
+    #  never inside one cell. Generating larger buys nothing.
+    "texture": {
+        "style": "seamless pixel art material texture, flat top down, even lighting, "
+                 "fine grain detail, muted low-saturation dusty colors, "
+                 "no text, no frame, no border, no objects",
+        "lora": 0.0, "size": 512, "down": 128, "steps": 28, "cfg": 5.0,
+    },
     # The assembly window — an open grimoire. Stretching it with 9-slice misaligns the corners (measured in the original PROMPTS.md).
     "ui": {
         "style": "pixel art RPG UI panel, 16-bit game interface, "

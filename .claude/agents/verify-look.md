@@ -68,6 +68,12 @@ A `--path` pointing at a worktree usually means it was yours.
 - **Something unintended is visible.** Magenta (undefined slot), flicker, half-cell misalignment, things happening off-screen.
 - **The tiers aren't distinguishable.** Strong/medium/weak that the eye can't separate is the same as no axis at all.
 
+### Observation traps — the screen lies about things that are fine
+
+- **Move `Camera2D.global_position` while frozen and screenshot without stepping a frame, and `SkyBackground` stays
+  behind** — dark-grey seams that read as broken terrain. Step one frame after moving the camera.
+  (Measured: two screenshots in one pass carried it; neither was a game fault.)
+
 ## Screenshot cost
 
 A captured frame stays in the conversation forever. So:

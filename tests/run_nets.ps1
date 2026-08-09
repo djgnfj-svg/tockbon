@@ -171,6 +171,28 @@ if ($Serial) {
 $maxParallel = [Math]::Max(2, [Math]::Min(8, [Environment]::ProcessorCount - 2))
 Write-Host "[그물] $($nets.Count)개를 병렬로 돈다 (동시 ${maxParallel}개)"
 
+# **Queue order decides the makespan, not just per-net speed.** The slot-filling loop below starts
+#  whatever is next in `$queue` the moment a slot frees — queued alphabetically, the two heaviest nets
+#  (`water`, `monster`) don't even start together, so a slot sits idle-of-the-heavy-work while a run of
+#  light nets finishes first. harness-manager measured: 21 nets' own Sec summed to 75.9s, the slowest
+#  single net was 12.2s, so the best possible makespan at 8-way parallel is max(12.2, 75.9/8) = 12.2s —
+#  and the alphabetical queue was landing at 15.2s, ~3s of pure scheduling waste, nothing to do with any
+#  net's own speed.
+#  **Longest-first (LPT) fixes it**: whatever took longest last time is launched first, so it runs
+#  alongside the fill of shorter nets instead of after them. The timing itself is measured, not guessed —
+#  read from the previous run's own Sec column, cached here. A net with no prior timing (new, or a
+#  filtered-out run) sorts first (treated as unknown-could-be-slow) rather than last (which would silently
+#  re-create the alphabetical straggler problem for every new net until its first recorded run).
+$timingFile = Join-Path $tmp "tockbon_net_timings.json"
+$timings = @{}
+if (Test-Path $timingFile) {
+    try {
+        $raw = Get-Content $timingFile -Raw -Encoding utf8 | ConvertFrom-Json
+        foreach ($p in $raw.PSObject.Properties) { $timings[$p.Name] = [double]$p.Value }
+    } catch {}
+}
+$nets = $nets | Sort-Object -Descending { if ($timings.ContainsKey($_)) { $timings[$_] } else { [double]::MaxValue } }
+
 $jobs = @()
 $queue = New-Object System.Collections.Queue
 foreach ($n in $nets) { $queue.Enqueue($n) | Out-Null }
@@ -249,6 +271,11 @@ foreach ($j in ($jobs | Sort-Object Net)) {
         $lines += [PSCustomObject]@{ Net = $j.Net; Pass = $pass; Bad = $false; Fails = @(); Noise = @(); Code = 0; Sec = $j.Sec; Out = $j.Out }
     }
 }
+
+# **Merge, not overwrite** — a filtered run (`-Filter monster`) only re-times the nets it ran; every other
+#  net's cached duration from a prior full run has to survive so the *next* full run still schedules them well.
+foreach ($l in $lines) { $timings[$l.Net] = $l.Sec }
+try { ($timings | ConvertTo-Json) | Out-File -FilePath $timingFile -Encoding utf8 -Force } catch {}
 
 Write-Host ""
 foreach ($l in ($lines | Sort-Object Sec -Descending)) {

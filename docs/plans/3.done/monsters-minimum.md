@@ -1,7 +1,7 @@
 # Monsters, minimum — walk, get blocked, burn, hit, die
 
 **Status**: done — **implementation finished.** Stages 0 through 9, all of them.
-**Why you'd reopen**: only when changing trash-mob behavior. Bosses are `1.ready/stage1-bosses.md`, AI is `design/monsters.md`.
+**Why you'd reopen**: only when changing trash-mob behavior. Bosses are `3.done/stage1-bosses.md`, AI is `design/monsters.md`.
 
  **「done」은 「구현이 끝났다」이지 「판정이 다 통과했다」가 아니다**(CLAUDE.md).
 판정 13은 **verify-look 기준 통과**이고 **사용자는 아직 안 봤다.**

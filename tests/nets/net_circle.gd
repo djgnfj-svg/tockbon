@@ -25,6 +25,8 @@ const Layout := preload("res://src/view/circle_layout.gd")
 const Book := preload("res://src/view/book_layout.gd")
 const Palette := preload("res://src/view/palette_layout.gd")
 const Fx := preload("res://src/view/fx_tuning.gd")
+const Progress := preload("res://src/actor/progress.gd")
+const CircleWindow := preload("res://src/view/circle_window.gd")
 
 ## The slack that comes from `Rect2` holding its values as **32-bit floats.** Used only when comparing a boundary
 ##  that "has to sit exactly flush" against 64-bit arithmetic — widen it and real overlaps get amnestied.
@@ -92,6 +94,8 @@ func run(t) -> void:
 	_circle_layout_does_not_know_pages(t)
 	_spawn_rays_are_not_horizontal(t)
 	_palette_is_kind_by_item(t)
+	_owns_rune_gates_can_pick_on_an_untreed_window(t)
+	_refusing_a_veiled_rune_then_clicking_the_seat_does_not_disarm(t)
 	_symbols_are_shared(t)
 	_hit_tests_match_the_drawing(t)
 	_palette_geometry_runs(t)
@@ -186,7 +190,10 @@ func _empty_rune_is_not_a_rune(t) -> void:
 	var c := SpellCircle.new()
 	t.expect_error("SpellCircle: unknown rune")
 	t.ok(not c.set_rune(0, 777), "모르는 룬은 짖고 안 놓인다")
-	t.eq(c.rune_at(0), Tuning.ELEM_FIRE, "거절된 룬이 자리를 안 건드린다")
+	# **`DEFAULT_RUNE`을 통해 참조한다, 값을 박지 않는다** — Stage B에서 이 값이 불에서 무속성으로 옮겨간 자리다.
+	#  값을 박아두면 그 이동 자체가 이 검사를 깨뜨리는데, 이 검사가 재는 것은 "거절되면 안 건드린다"이지
+	#  "시작 룬이 무엇인가"가 아니다.
+	t.eq(c.rune_at(0), SpellCircle.DEFAULT_RUNE, "거절된 룬이 자리를 안 건드린다")
 
 
 ## Remove the rune and you cannot fire. The design doc "extreme values" sentence "a circle plus a rune alone already
@@ -563,6 +570,113 @@ func _palette_is_kind_by_item(t) -> void:
 	# Barks at an unknown kind — add a kind without wiring the table and that cell **empties quietly.**
 	t.expect_error("PaletteLayout: unknown slot kind")
 	t.eq(Palette.items_of(9999).size(), 0, "모르는 종류는 짖고 항목이 0이다")
+
+
+## **`Progress.owns_rune()` drives `_can_pick()` on an untreed window** (`rune-lock-and-receiving.md`, Stages
+## A-B). `net_pick.gd` already proved the technique for the sibling window (`ThreePickWindow.new()`, `setup()`
+## called directly, no scene tree needed) — this is the same move for `CircleWindow`.
+##
+## **A final-state check alone cannot measure a grant** (this plan's own risk table) — "fire is pickable" is
+## true both before the lock lands and after the reward, so the transition itself is asserted: veiled ->
+## `grant_rune()` -> pickable, in one run, in that order.
+##
+## **Stage B's own lock, pinned by value**: the starting kit is `{none}` only — fire is veiled on a fresh boot
+## same as water, not merely absent from the seat. Water is the negative control throughout — nothing in this
+## file ever grants it, so it stays veiled from the first line to the last, undisturbed by the fire grant.
+func _owns_rune_gates_can_pick_on_an_untreed_window(t) -> void:
+	var pr := Progress.new()
+	var win := CircleWindow.new()
+	win.setup(pr, SpellCircle.new())
+
+	t.ok(pr.owns_rune(Tuning.ELEM_NONE), "시작 키트에 무속성이 있다 (전제)")
+	t.ok(not pr.owns_rune(Tuning.ELEM_FIRE), "시작 키트에 불은 없다 (전제 — 이것이 잠금이다)")
+	t.ok(not pr.owns_rune(Tuning.ELEM_WATER), "물도 아직 아무도 안 줬다 (전제)")
+
+	t.ok(win.call("_can_pick", Palette.KIND_RUNE, Tuning.ELEM_NONE),
+		"가진 무속성 룬은 팔레트에서 고를 수 있다")
+	t.ok(not (win.call("_can_pick", Palette.KIND_RUNE, Tuning.ELEM_FIRE) as bool),
+		"안 가진 불 룬은 못 고른다 (가려져 있다 — 잠금이 실제로 UI에 닿는다)")
+	t.ok(not (win.call("_can_pick", Palette.KIND_RUNE, Tuning.ELEM_WATER) as bool),
+		"안 가진 물 룬도 못 고른다 (가려져 있다)")
+
+	# **The grant, driven mid-run, on the same window instance** — not a fresh window built after the grant,
+	#  which would only prove `owns_rune()` in isolation, not that the window actually reads the live `Progress`
+	#  it was handed rather than a copy taken at `setup()` time.
+	pr.grant_rune(Tuning.ELEM_FIRE)
+	t.ok(win.call("_can_pick", Palette.KIND_RUNE, Tuning.ELEM_FIRE),
+		"불을 준 뒤에는 같은 창에서 바로 고를 수 있게 된다 (사본이 아니라 같은 Progress를 읽는다)")
+	# None (already owned) and water (never granted) are undisturbed by the fire grant.
+	t.ok(win.call("_can_pick", Palette.KIND_RUNE, Tuning.ELEM_NONE),
+		"불을 줘도 이미 가졌던 무속성은 그대로 고를 수 있다")
+	t.ok(not (win.call("_can_pick", Palette.KIND_RUNE, Tuning.ELEM_WATER) as bool),
+		"불을 줘도 관계없는 물은 여전히 못 고른다")
+
+	# **The circle axis is untouched by this stage** — the glyph and circle gates still answer exactly as
+	#  before, so a mutation that widened the rune gate into the other two kinds would show up here.
+	t.ok(win.call("_can_pick", Palette.KIND_CIRCLE, CircleDefs.CIRCLE_ROUND),
+		"진 칸은 룬 게이트와 무관하게 그대로 고를 수 있다")
+	win.free()
+
+
+## **The self-inflicted disarm verify-run found, fixed and driven through the real click path.**
+## Click a *veiled* rune in the palette (`_can_pick` refuses it, nothing gets picked), then click an *armed*
+## rune seat expecting nothing to happen — before the fix, `_place_or_clear`'s "nothing picked -> clear"
+## branch fired anyway with `SpellCircle.RUNE_EMPTY` as the clear value, and two harmless-looking clicks
+## dropped a working circle to `can_fire() == false`.
+##
+## **Real coordinates, not `_can_pick` shortcuts** — `_click_palette`/`_click_circle` are driven directly
+## (`net_pick.gd`'s technique, `.call()` on an untreed `Control`), because the bug lived in *which literal
+## `_click_circle` passes as the clear value*, and only driving that exact call site can catch it — a check
+## against `_can_pick`/`_slot_accepts` alone would not touch this code path at all.
+##
+## **The click point is provably safe, not guessed** — `Layout.rune_slots(id, area)[0]` is the exact rune
+## seat center, and `_hit_tests_match_the_drawing`'s own "measured across kinds" section already proves
+## `rune_c.distance_to(layer_slot) - layer_hit >= rune_draw > 0` for every layer, i.e. the seat's exact center
+## can never fall inside a layer's hit circle. This sidesteps the trap that same section names ("91 of the
+## rune-seat pixels are claimed by the layer branch first") without hardcoding a screen-specific pixel.
+func _refusing_a_veiled_rune_then_clicking_the_seat_does_not_disarm(t) -> void:
+	var pr := Progress.new()
+	var c := SpellCircle.new()
+	var win := CircleWindow.new()
+	win.setup(pr, c)
+	win.size = Fx.WINDOW_RECT.size
+
+	t.ok(not pr.owns_rune(Tuning.ELEM_FIRE), "불은 아직 못 가졌다 (전제)")
+	t.ok(c.can_fire(), "시작 상태는 쏠 수 있다 (전제 — 무속성 룬이 자리에 있다)")
+
+	var page := Book.circle_page(win.size)
+	var area := Layout.circle_area(page.size)
+	var id := c.circle_id()
+	var seat := Layout.rune_slots(id, area)[0]
+	t.eq(Layout.layer_at(id, area, seat), -1, "룬 자리 정중앙은 어느 층의 히트 영역도 아니다 (전제 — 안전한 좌표다)")
+	t.eq(Layout.rune_slot_at(id, area, seat), 0, "룬 자리 정중앙을 누르면 0번 룬 자리로 잡힌다 (전제)")
+
+	var pal := Book.palette_page(win.size)
+	var ki := Palette.KINDS.find(Palette.KIND_RUNE)
+	var sec := Palette.section(pal.size, ki)
+	var items := Palette.items_of(Palette.KIND_RUNE)
+	var fire_idx := items.find(Tuning.ELEM_FIRE)
+	t.ok(fire_idx >= 0, "팔레트의 룬 항목 목록에 불이 있다 (전제)")
+	var fire_pt := Palette.item_slot(sec, fire_idx, items.size()).get_center()
+
+	# -- pick the veiled fire rune: refused, nothing gets picked --
+	win.call("_click_palette", pal, fire_pt)
+	t.eq(win.get("_picked_kind"), -1, "가려진 불을 눌러도 아무것도 안 골린다")
+
+	# -- click the armed rune seat with nothing picked: must not empty it --
+	win.call("_click_circle", page, seat)
+	t.ok(c.rune_at(0) != SpellCircle.RUNE_EMPTY, "빈손으로 룬 자리를 눌러도 RUNE_EMPTY로 떨어지지 않는다")
+	t.eq(c.rune_at(0), Tuning.ELEM_NONE, "대신 무속성으로 남는다")
+	t.ok(c.can_fire(), "그래서 여전히 쏠 수 있다 (거절된 클릭 한 번으로 자기 자신을 무장 해제하지 않는다)")
+
+	# -- the real grant-then-place path still works end to end --
+	pr.grant_rune(Tuning.ELEM_FIRE)
+	win.call("_click_palette", pal, fire_pt)
+	t.eq(win.get("_picked_kind"), Palette.KIND_RUNE, "불을 받은 뒤에는 같은 자리를 눌러 실제로 골린다")
+	win.call("_click_circle", page, seat)
+	t.eq(c.rune_at(0), Tuning.ELEM_FIRE, "고른 불이 룬 자리에 실제로 놓인다")
+	t.ok(c.can_fire(), "불을 놓은 뒤에도 쏠 수 있다")
+	win.free()
 
 
 ## **Does the hit test use the same coordinates as the drawing — and does it actually land?**
@@ -1180,8 +1294,10 @@ func _presets_still_work(t) -> void:
 		t.ok(sim.fire(SpellSim.cmd_fire(10, 70, 100, 0, c.element(), c.packed_glyphs())),
 			"키 %d의 마법진이 발사된다" % n)
 
-	# The start state's rune is fire. Change this and the rune that gets fired changes quietly.
-	t.eq(SpellCircle.new().element(), Tuning.ELEM_FIRE, "새 진의 룬 자리에 불이 들어 있다")
+	# **The start state's rune is none, since Stage B of `rune-lock-and-receiving.md`** (the lock: fire has to
+	#  be earned from the bull, not sitting in the seat on a fresh boot). Change this and the rune that gets
+	#  fired changes quietly.
+	t.eq(SpellCircle.new().element(), Tuning.ELEM_NONE, "새 진의 룬 자리에 무속성이 들어 있다")
 
 	# **The start state and the presets come from the same two constants** (plan section 8). Written in two places,
 	#  "fire on a fresh boot but a different rune on key 1" appears **with no error.**

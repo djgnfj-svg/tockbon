@@ -21,6 +21,16 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 OUT = sys.argv[1] if len(sys.argv) > 1 else os.path.join(ROOT, "tools", "pixel", "out", "_bgmock")
 
 
+def terrain_town(im):
+    """The town floor. **All bedrock, flat** — `docs/design/town.md`, "all town terrain is bedrock".
+    No pit and no dirt: the town does not get dug, so a stage slice here would judge the wrong picture."""
+    d = ImageDraw.Draw(im)
+    ground = 420
+    d.rectangle([0, ground, W, H], fill=BEDROCK)
+    d.rectangle([0, ground, W, ground + 8], fill=STONE)   # a floor edge line, so the ground reads
+    return ground
+
+
 def terrain(im):
     """A rough slice of terrain. Drawn on the 4px cell grid."""
     d = ImageDraw.Draw(im)
@@ -35,14 +45,21 @@ def terrain(im):
     return ground
 
 
-def mock(bg_path, out, label):
+def mock(bg_path, out, label, town=False):
     bg = Image.open(bg_path).convert("RGBA").resize((W, H), Image.NEAREST)
     im = Image.new("RGBA", (W, H), EMPTY)
     im.alpha_composite(bg)
-    g = terrain(im)
-    for p, x in [("character/wizard_body.png", 240), ("monster/pig_body.png", 470),
-                 ("monster/chicken_body.png", 740)]:
+    g = terrain_town(im) if town else terrain(im)
+    # **No monsters in town** — standing a pig there judges a picture the town will never show.
+    stand = [("character/wizard_body.png", 240)] if town else [
+        ("character/wizard_body.png", 240), ("monster/pig_body.png", 470),
+        ("monster/chicken_body.png", 740)]
+    for p, x in stand:
         s = Image.open(os.path.join(ROOT, "assets", p)).convert("RGBA")
+        # **`wizard_body.png` is a 6-frame strip (192x32), not one sprite.** Pasting it whole lines up six
+        #  wizards and the mockup stops measuring "does one silhouette read". Square sheets take frame 0.
+        if s.width > s.height * 2:
+            s = s.crop((0, 0, s.height, s.height))
         im.alpha_composite(s, (x, g - s.height))
     d = ImageDraw.Draw(im)
     d.text((6, 4), label, fill=TXT)
@@ -53,10 +70,13 @@ def mock(bg_path, out, label):
 if __name__ == "__main__":
     os.makedirs(OUT, exist_ok=True)
     rows = []
-    for folder in ("bgA_sky", "bgB_farm", "bgC_forest", "bgD_moon"):
+    # Folders come from argv[2:]. A `town` in the name switches the floor to all-bedrock and drops the monsters.
+    folders = sys.argv[2:] or ["bgA_sky", "bgB_farm", "bgC_forest", "bgD_moon"]
+    for folder in folders:
         fs = sorted(glob.glob(os.path.join(ROOT, "tools", "pixel", "out", folder, "*960px.png")))
         for i, f in enumerate(fs):
-            rows.append(mock(f, f"{OUT}/bgmock_{folder}_{i}.png", f"{folder}  #{i}"))
+            rows.append(mock(f, f"{OUT}/bgmock_{folder}_{i}.png", f"{folder}  #{i}",
+                             town=folder.startswith("town")))
     cols = 2
     n = len(rows)
     sheet = Image.new("RGBA", (cols * (W + 8) + 8, ((n + cols - 1) // cols) * (H + 8) + 8), (0, 0, 0, 255))

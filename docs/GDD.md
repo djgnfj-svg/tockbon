@@ -517,7 +517,7 @@ Detail in `docs/plans/3.done/levelup-and-three-picks.md`.
 **Stage 1's actual terrain and bosses are settled** — **400×48 tiles, three zones + a locked fourth.**
 Trash section → ①**bull** (midboss, fire rune) → burn the wood wall → ②trash → ③**giant rooster** (boss)
 → **escape as water rises.** **Jumps are unlimited underwater** — that becomes stage 2's movement grammar.
-Detail in `3.done/stage1-map-layout` · `1.ready/stage1-bosses` · `2.active/water-jump-and-escape`
+Detail in `3.done/stage1-map-layout` · `3.done/stage1-bosses` · `2.active/water-jump-and-escape`
 — **do not duplicate it here.**
 
 **The GDD assumed 4 zones per stage; stage 1 has three.** The fourth slot is taken by a
@@ -683,17 +683,19 @@ map → blocked by the wood wall → pit → bull → fire rune → [water rises
 | Gap to fill | Now | Where |
 |---|---|---|
 | ~~**Map terrain**~~ | **Filled** — 400×48 baked and in. Acceptance 3·4 unconfirmed on screen | `docs/plans/3.done/stage1-map-layout.md` |
-| **Fire rune** | **Decided by the user — the run starts with the none rune equipped.** So the work is **not building fire but taking it away**: `spell_circle.DEFAULT_RUNE` goes to `ELEM_NONE` and the palette stops offering all of `ELEM_ALL`, or "get fire from the midboss" stays meaningless | No doc |
-| **Two bosses** | Designed, **zero code** | `docs/plans/1.ready/stage1-bosses.md` |
+| ~~**Fire rune**~~ | **Implemented, not accepted** — `spell_circle.DEFAULT_RUNE` is `ELEM_NONE`; the palette veils any rune not owned instead of offering all of `ELEM_ALL`; the bull's reward grants fire (`Progress.grant_rune`) | `docs/plans/3.done/rune-lock-and-receiving.md` |
+| ~~**Two bosses**~~ | **Implemented, not accepted** — bull and rooster both written and verified headless. Two screen fixes (the slam's fire ring, the phase-2 tell's shape) are unlooked-at, blocked by another session holding the editor bridge | `docs/plans/3.done/stage1-bosses.md` |
 | **Three of water's four** | Only pouring works | `docs/plans/2.active/water-jump-and-escape.md` |
-| **Water in pit ①** | **Owner settled** (decided by the user) — **take the bull's reward, then the side wall collapses and water comes in.** Zero code; it lands with the bull | `docs/plans/1.ready/stage1-bosses.md` |
+| ~~**Water in pit ①**~~ | **Built, not accepted — and this row's own promise doesn't hold on the real map.** Reward-then-water order is correct (take the bull's reward, then the wall/water), but **the water doesn't carry the player out** — 300s of pouring lifts them 0px, and an ordinary jump alone already clears the step in 1.6s. The map is `stage1-map-layout.md`'s call, not this row's | `docs/plans/3.done/stage1-bosses.md` |
 | ~~**The wood-wall lock is broken**~~ | **Not a problem — decided by the user.** A runeless blast does open the wall (`spell_sim.gd:633` ignites without `element`), but **the wall is on the far side of pit ①, and the only way out of the pit is the water the bull's death brings** ⇒ **you cannot stand in front of that wall without already holding fire.** **The lock is held by the map's shape, not by the ignition rule** | `3.done/stage1-map-layout.md` |
-| **The screen for receiving the fire rune** | With no inventory, **placement must be decided on receipt**, and the only receiving screen is the three-pick, **which was cut.** With one rune slot, the choice to push out none is unavoidable | Conflicts with "what was cut" below |
+| ~~**The screen for receiving the fire rune**~~ | **The premise was wrong — the screen already exists.** `circle_window.gd:158-161` has always placed runes (pick from the palette → click the rune seat), so nothing has to be broken out of the three-pick. **Ownership was the only thing actually missing, and it is filled too now** (same doc — see the "Fire rune" row above) | `docs/plans/3.done/rune-lock-and-receiving.md` |
 | **An ending** | None. Place a gate and mark it on contact | No doc |
 
 **What was cut**: leveling and the three-pick · wiring the triangle circle · bolt speed · the shop · **town.**
-**"All five are outside the chain" is no longer accurate** — "the screen for receiving the fire rune" above is tied to the three-pick.
-⇒ **Break out only the minimum path for receiving a rune** (not the whole three-pick window). The other four stay outside.
+~~**"All five are outside the chain" is no longer accurate** — "the screen for receiving the fire rune" is tied to the three-pick.~~
+⇒ **Void.** The receiving screen is **the assembly window, which already places runes** — nothing has to be
+broken out of the three-pick, and the three-pick shipped anyway (`3.done/levelup-and-three-picks.md`).
+The rune work is **the lock, not a screen** → `docs/plans/3.done/rune-lock-and-receiving.md`.
 
 **Cutting town has a price** — **there is nowhere to go when you die** (`docs/design/town.md`, "Why").
 ⇒ This week is patched with **restart in place on death**, and **town is next in order.**

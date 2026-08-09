@@ -4,12 +4,12 @@
 
 | | What | State |
 |---|---|---|
-| 1 | The fire rune already exists | **Fixed** — the milestone table went from "build" to "lock" |
+| 1 | The fire rune already exists | **Planned** → [rune-lock-and-receiving.md](../3.done/rune-lock-and-receiving.md). The milestone table went from "build" to "lock"; **the lock is three changes, and the palette is the one that carries it** |
 | 2 | The old "none every run" premise | **Fixed** — two places in the GDD, one in town |
-| 3 | Who owns pit ①'s water | **Closed by the user** — take the reward, then the side wall collapses and water comes in. **`1.ready/stage1-bosses` owns it** ("the way out of the pit") |
+| 3 | Who owns pit ①'s water | **Closed by the user** — take the reward, then the side wall collapses and water comes in. **`3.done/stage1-bosses` owns it** ("the way out of the pit") |
 | 4 | Water missing from the chain diagram | **Fixed** |
 | 5 | The wood-wall lock is broken | **Closed by the user — it stays broken and that is fine.** The wall sits beyond pit ①, and the pit only opens with the bull's water ⇒ **nobody reaches it without fire.** The lock is geometric |
-| 6 | The rune-receiving screen is on the cut side | **Open** — added to the table. Recorded as **break out only the minimum rune-receiving path** |
+| 6 | The rune-receiving screen is on the cut side | **The premise was wrong** — `circle_window.gd:158-161` has always placed runes, so nothing is on the cut side. What is missing is **ownership** → [rune-lock-and-receiving.md](../3.done/rune-lock-and-receiving.md) |
 | 7 | decisions' reopen condition | **Fixed** |
 | 8 | README ink | **Fixed** |
 | 9 | Town's "0 runes" | **Fixed** — it's the reverse. Three are open for free |
@@ -129,5 +129,6 @@ Only ten places in the GDD were fixed. "Home" remains in `levelup-and-three-pick
 
 1. **1 · 2** — delete the old premises and correct the milestone table. Everything else stands on this
 2. **3 · 4** — put the pit's water in the chain and assign an owner
-3. **5 · 6** — the wood-wall lock and the rune-receiving screen. **The milestone's scope may change**
+3. ~~**5 · 6** — the wood-wall lock and the rune-receiving screen~~ — **5 closed by the user** (geometric lock),
+   **6 planned** → [rune-lock-and-receiving.md](../3.done/rune-lock-and-receiving.md)
 4. **7–12** — doc cleanup. Cheap

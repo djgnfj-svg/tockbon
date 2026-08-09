@@ -67,6 +67,10 @@ func setup(grid: CellGrid) -> void:
 	#   Give it again here and the water color lives in two places, and the day comes when only one is fixed.
 	sm.set_shader_parameter("flag_shallow", Mat.FLAG_SHALLOW)
 	sm.set_shader_parameter("water_shallow", Fx.WATER_SHALLOW)
+	# Depth dim (`docs/design/underground-depth.md`) — both derived from the map's real floor, not
+	#  `CellGrid.H` (`Fx.CELL_DEPTH_SPAN`'s own comment).
+	sm.set_shader_parameter("depth_span", Fx.CELL_DEPTH_SPAN)
+	sm.set_shader_parameter("deep_dim", Fx.CELL_DEEP_DIM)
 
 	# **Empty cells are pulled out as transparent — the only path by which the background reaches the screen.**
 	#  The grid sprite covers the whole world, so without this **whatever is put behind is 100% hidden.**

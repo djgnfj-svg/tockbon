@@ -7,11 +7,91 @@ Stand · walk · die to bolts/blasts/fire · pig shoves with its body · chicken
 sprites · health bars · hit flash (shader) · damage numbers (they merge) · fire on the body · corpses · death burst · outline.
 **Not done**: **AI** (`_next_axis()` is one line — see "AI is deferred; the slot is left open") ·
 walk animation · per-species color.
-**The walk art now exists and the code still cannot play it** — `assets/monster/pig_walk.png` and
-`chicken_walk.png` (9 frames each, pixellab). `fx_tuning.MONSTER_SHEETS` holds **one image per kind** and
-`monster_view` fits that whole texture to the box, so handing it a 9-frame row draws the beast squashed.
+**The art now exists for every trash-mob state and the code still cannot play any of it.**
+`fx_tuning.MONSTER_SHEETS` holds **one image per kind** and `monster_view` fits that whole texture to the box,
+so handing it a multi-frame row draws the beast squashed.
 **Playing it means bringing the character's idiom over** (`CHAR_SHEET` + a state→frame table).
-⇒ "walk animation" above is now **a code gap, not an art gap.**
+⇒ **"animation" is entirely a code gap now. There is no art left to generate for the trash mobs.**
+
+| Kind | Sheets in `assets/monster/` |
+|---|---|
+| **Pig** (44x32) | `walk` 9f · **`idle` 4f · `shove` 8f · `hurt` 4f · `death` 8f** |
+| **Chicken** (24x28) | `walk` 9f · **`idle` 4f · `spit` 8f · `hurt` 4f · `death` 8f** |
+| Bull (boss) | body · walk · idle · charge · gore · slam · stun · fire · death |
+| Rooster (boss) | body · walk · idle · leap · land · death |
+
+**The user opened this with "the trash mobs are no fun"** — and the cause was in this table: **the bosses had
+nine sheets each and the trash mobs had one.** The shove and the spit are exactly the two behaviours this doc
+already names ("pig shoves with its body · chicken stops and shoots"); until now neither had a picture.
+
+### Color — **the axis that separates them is brightness, and one pair already collides**
+
+Measured off the actual sprites (the most common opaque pixel), against the terrain they stand on:
+
+| | Color | Note |
+|---|---|---|
+| Chicken | `#FFCB5B` | **Too saturated** — the only neon thing on screen. Being retoned toward cream |
+| Pig | `#884D41` | Red-brown |
+| Bull (midboss) | `#625A58` | **Collides with stone `#5C574F`** — 6·3·9 per channel apart. **A grey bull in front of a stone wall is invisible**, and this was found by measuring, not by looking |
+| Rooster (boss) | `#010101` | Black. Safe against everything, reads as a hole |
+| Dirt · wood | `#6B4524` | The pig is close but brighter |
+| Stone | `#5C574F` | See the bull |
+
+**The user set the rule**: "the wolf can't be grey — the midboss is a grey bull". ⇒ **Species are told apart by
+brightness first, hue second**, because hue alone dies against a brown-and-grey stage.
+
+⇒ **The wolf is tawny/chestnut** — brighter than the pig and warmer than the dirt.
+**The bull's collision is not fixed here** — it is a boss art problem and belongs to `stage1-bosses.md`.
+
+### Size — **the trash mobs are too small** (decided by the user)
+
+Chicken 24x28 and pig 44x32 read as tiny on a 960x540 screen. ⇒ **new trash-mob art targets ~48px**,
+and **the bosses go much larger than that** ("I'm going to make the bosses huge").
+
+### Making the art fit the box — **pad, never resample** (the user asked for this explicitly)
+
+Two contracts already bind every sprite, and both are measured by nets:
+
+1. **`net_monster_sprite`: the sheet's pixel size equals the box** (`w_px`/`h_px` in `monster_defs`)
+2. **`net_monster._defs_preconditions`: the box is a multiple of `Tuning.CELL_PX` (4)**
+
+A generator returns art trimmed to its own content — 46x25 for the wolf, 86x54 for the bull — which satisfies
+neither. **The fix is padding with transparency, not scaling.** The bull set the precedent
+(86x54 → 88x56, pixels placed unmoved) and the wolf followed it:
+
+- **Round each side up to the next multiple of 4**
+- **Bottom pad is 0** — the feet stay on the last row, or the beast floats above the terrain
+- **Left/right pad is symmetric**, so `minx + maxx == w - 1` holds (the flip idiom depends on it)
+
+⇒ **`wolf_body.png` is 48x28** (art 46x25, 1px each side, 3px on top, 0 below).
+**Nothing is resampled**, so the pixel grid stays exactly what the generator produced and the sprite survives
+whatever integer zoom the view applies later.
+
+⇒ **`hen_body.png` is 48x64**, **`wolf_body.png` is 48x28**. `chicken_body.png` (24x28) is left untouched —
+overwriting it would break contract 1 against the 24x28 box in `monster_defs`.
+
+**Do not upscale to reach a target size — regenerate at a larger `--down`.** The first pass of the chosen hen
+came out 26x34 because the beast fills only ~54% of the generation canvas. Doubling it to 52x68 would have made
+its pixels twice the size of every other mob's, which reads as two art styles on one screen.
+**Re-running the same prompt with the same `--seed` and `--down 88` returned the same bird at 48x63** —
+same composition, real pixels. **The seed decides composition, so size is free** (`gen.py`'s own note).
+
+**`monster_defs` is not edited here** — adding the wolf's row and enlarging the hen's box is code, and the user
+asked for art only this session. **Until those rows exist the wolf and the new hen are art on disk and nothing more.**
+
+### The chicken throws an egg (decided by the user)
+
+**The projectile art is an egg, not a bolt.** The user floated it, doubted it out loud ("is that weird?") and
+kept it — **"make it more like a game"**. It is the right call for a reason the doubt missed: this repo already
+has **bolts that belong to the player's spells**, and `monsters.md` above spent a section on chicken bolts
+having no owner. **An egg is unmistakably the chicken's** — nobody confuses it with their own spell.
+
+**It is a sprite swap, not a system.** `monster_bolts.gd` already flies a straight projectile that hits only
+the player; only the picture changes. Candidates: `tools/pixel/out/egg_shot/`.
+
+**Generated with pixellab `animate_image`** (a loose sprite, no registered character), 1 generation each.
+**The input was quantized to 12 colors** to survive MCP base64 truncation, so **frame 0 came back with a
+different palette than the generated frames and was dropped** — the sheets start at the first generated frame.
 
 **Accepted**: **partial pass (2026-08-08)** — **not seen by the user.** verify-look saw it in the editor.
 - Pass: spawns run end to end · they stand exactly on terrain · the three sizes separate ·
@@ -101,6 +181,12 @@ Pigs only and the game becomes a pit game; chickens only and there is no reason 
 `_box_free` · `_grounded` · `_standing_in_fire` sweep the covered cells **in GDScript**, and it went **25 → 81 cells**."
 ⇒ **One pig is 2.2× the player.** The cost of 20 comes out **higher** than the estimate under "Cost" below.
 **Build at this size anyway, then measure and adjust** (user decision: "do it once, and cut the count later if needed").
+
+**⇒ That adjustment is now on the table.** The user says the monsters read too small on screen.
+**[../plans/1.ready/monsters-bigger-boxes.md](../plans/1.ready/monsters-bigger-boxes.md)** costs 1.5× —
+the four target boxes, the regeneration path (**the seeds and prompts do not survive; four beasts get
+re-picked**), the projected 60Hz cost, and the one constant that silently stops working
+(`MOVE_SLAM.ignite_spread_cells`). **Nothing is decided yet.**
 
 ### Swallowing barely shows — the art-side rule
 
@@ -317,7 +403,7 @@ User decision: **"you can display it as excessively as you want".**
   ⇒ **Whether to reduce is the user's call** (one `quantize_to_palette` does it)
 - **How many chickens cluster** — how the 20 cap is divided
 - ~~**Midboss (a bull that swallowed the fire rune)** — role only~~ → **behavior decided**
-  → `docs/plans/1.ready/stage1-bosses.md`. **Charges and rams with a stun · breathes fire (it sticks to terrain) ·
+  → `docs/plans/3.done/stage1-bosses.md`. **Charges and rams with a stun · breathes fire (it sticks to terrain) ·
   digs terrain only while charging · speeds up at half health.** The stage boss is a **giant rooster**
   (leaps, pounces, lands).
   **Health, damage and size values, and "how the fire rune is granted", are still TBD.**

@@ -1,5 +1,6 @@
 extends RefCounted
-## The player's run-scoped progress — XP, level, money, and how many glyph three-picks are waiting to be opened.
+## The player's run-scoped progress — XP, level, money, how many glyph three-picks are waiting to be opened,
+## and (Stage I, `stage1-bosses.md`) which boss rewards are waiting to be taken.
 ##
 ## **`src/actor/`, not `src/sim/`.** The same argument `spell_circle.gd`'s header already makes for the
 ##  loadout: this is **host-authoritative run state**, not lockstep-deterministic sim state (GDD multiplayer
@@ -12,6 +13,7 @@ extends RefCounted
 ##  death loop; `stage.gd` only reads it to draw the HUD.
 
 const ThreePick := preload("res://src/actor/three_pick.gd")
+const Tuning := preload("res://src/sim/sim_tuning.gd")
 
 ## **The XP needed to advance past `level`.** Provisional, chosen while looking at nothing yet — a knob to
 ##  turn once the numbers are seen on screen (the plan's own "not by the user" table).
@@ -43,6 +45,40 @@ var pending_picks := 0
 ##  in miniature") — this stays visibly inert instead: a real field, read by the future dice button, moved by
 ##  nothing today.
 var dice_left := 0
+
+## **Stage I (`stage1-bosses.md`) — which bosses have died with their reward not yet taken.** Keyed by
+## `MonsterDefs` kind, not a bare bool — the bull's own room ① water and the rooster's own room ③ water gate
+## independently, and a shared flag would let one boss's reward-taking accidentally release the other's water
+## the moment both have died in the same session.
+##
+## **Presence as a key carries "has died at all"; the stored value carries "is it still pending."** One field
+## answers both questions — a boss that has never died has no key at all, told apart from one whose reward was
+## already taken (`false`, same as never-died, if the value alone were read) by `.has()` instead of `.get()`.
+## `boss_died()`/`is_reward_pending()` below are the two questions asked separately, so a caller never has to
+## re-derive this distinction by hand.
+## **Private, like `_drawn` below** — `net_pick._no_pushed_out_glyph_is_stashed_anywhere` scans every `.gd`
+## file for a top-level public `Array`/`Dictionary` field not on its own hardcoded allowlist (the no-inventory
+## decision, `docs/decisions/no-inventory.md`). The accessor methods below are the only door in or out, the
+## same discipline `_drawn`'s own `drawn()`/`is_pick_open()` pair already holds.
+var _reward_pending: Dictionary = {}
+
+## **Stage 3 (`rune-lock-and-receiving.md`) — which runes the player has been granted.** A set-shaped
+## `Dictionary`, the same idiom `_reward_pending` above already holds — presence as a key is the whole fact,
+## no separate bool to disagree with it.
+##
+## **Starts non-empty, at the fixed starting kit** (`_starting_runes()` below) — `Progress` is not the thing
+## that decides which rune sits in the seat (`spell_circle.DEFAULT_RUNE` does that), but the player boots
+## already owning the none rune, or the palette would veil the very rune the seat starts with.
+##
+## **This is the actual lock** (Stage B). Change only `spell_circle.DEFAULT_RUNE` and leave this at `{none,
+## fire}` and the player presses Tab, fire is unveiled (never locked), and it goes straight into the seat —
+## the lock is void and nothing barks (`spell_circle.DEFAULT_RUNE`'s own comment says the same from the other
+## side). Fire has to be **earned**, not merely absent from the seat.
+##
+## **Private, like `_reward_pending`** — `net_pick._no_pushed_out_glyph_is_stashed_anywhere` scans every `.gd`
+## file for a top-level `Array`/`Dictionary` field not on its own hardcoded allowlist (the no-inventory
+## decision, `docs/decisions/no-inventory.md`). `grant_rune()`/`owns_rune()` below are the only door in or out.
+var _owned_runes: Dictionary = _starting_runes()
 
 ## **Empty = no pick is open.** Not a separate bool — a bool and a list can disagree (open with nothing
 ##  drawn, or drawn but marked closed), and this repo has already been burned by exactly that shape of state
@@ -79,6 +115,61 @@ func add_xp(amount: int) -> void:
 
 func add_money(amount: int) -> void:
 	money += amount
+
+
+## **Stage I — called once, from `WorldStep`'s own death handling, the instant a boss's hp crosses 0.**
+## `stage1-bosses.md`'s own words: "boss death sets a reward-pending flag." **Only for kinds that actually
+## have a reward** (`BossAi.has_pattern(kind)` at the call site) — a trash mob calling this would put a key in
+## the dict that nothing would ever clear, since no debug key targets a kind that isn't a boss.
+func set_boss_reward_pending(kind: int) -> void:
+	_reward_pending[kind] = true
+
+
+## Is `kind`'s reward still pending. `false` for a kind that never died at all, same as one already cleared —
+## a caller gating water on "has died AND reward taken" needs `boss_died(kind)` too, below; this alone only
+## answers "would taking the reward right now do anything".
+func is_reward_pending(kind: int) -> bool:
+	return _reward_pending.get(kind, false)
+
+
+## Has `kind` ever died this session — the other half of "reward pending" (`is_reward_pending` alone cannot
+## tell "never died" from "died, reward taken long ago", both read `false`). Presence as a *key* in
+## `_reward_pending` carries this, not the stored value.
+func boss_died(kind: int) -> bool:
+	return _reward_pending.has(kind)
+
+
+## **The debug key's own door** (`stage1-bosses.md`: "the only thing that clears it in this build is a shell
+## debug key... standing in for a decision the user has explicitly left open"). Clears whichever boss rewards
+## are currently pending, all at once — the real game will only ever have at most one rune slot pending
+## regardless (the GDD's own "assembly window"), so there is no reason for the debug key to target one kind
+## over another. **A no-op if nothing is pending** — pressing it before any boss has died, or after the reward
+## was already taken, changes nothing.
+func clear_pending_boss_rewards() -> void:
+	for kind: int in _reward_pending.keys():
+		_reward_pending[kind] = false
+
+
+## **The fixed starting kit** (`rune-lock-and-receiving.md`, Stage B) — **none, and only none.** Independent of
+## whatever `spell_circle.DEFAULT_RUNE` currently is (that constant only says which rune sits in the seat, not
+## which the player is allowed to place there). Both `_owned_runes`'s field default and `reset()` call this
+## **one** function — write it as a literal in both places and a future retune of the kit only updates one of
+## them, and the day the field and `reset()` disagree, R would hand back a different kit than a fresh boot.
+static func _starting_runes() -> Dictionary:
+	return {Tuning.ELEM_NONE: true}
+
+
+## **Stage 3 — the bull's reward (Stage C) calls this.** Granting an already-owned rune is a harmless no-op,
+## the same Dictionary-assignment idiom `set_boss_reward_pending` already holds for a redundant call.
+func grant_rune(rune_id: int) -> void:
+	_owned_runes[rune_id] = true
+
+
+## Does the player own `rune_id`. **The palette asks this** (`circle_window._slot_accepts`) to veil a rune
+## nobody has been given yet — an unowned rune is drawn but not pickable, not filtered out of the palette
+## entirely (`rune-lock-and-receiving.md`: "veiled, not hidden").
+func owns_rune(rune_id: int) -> bool:
+	return _owned_runes.get(rune_id, false)
 
 
 func is_pick_open() -> bool:
@@ -146,3 +237,10 @@ func reset() -> void:
 	money = 0
 	pending_picks = 0
 	_drawn.clear()
+	_reward_pending.clear()
+	# **Reverts to the starting kit, not to empty** — a stage reset (R) is a fresh run, and a fresh run boots
+	#  owning only none (`_starting_runes()`'s own comment), the same fixed kit `_owned_runes`'s field default
+	#  holds. Clearing to `{}` would brick the reset run's own starting rune (risk 2, `circle_window`'s header:
+	#  "the rune stays bright and pickable" is the failure this avoids for a different reason here). Any rune
+	#  earned mid-run (fire, from the bull) does **not** survive — a reset is a fresh run, not a checkpoint.
+	_owned_runes = _starting_runes()

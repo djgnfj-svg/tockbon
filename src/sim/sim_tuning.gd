@@ -1,6 +1,11 @@
 extends RefCounted
 ## Sim knobs — **integers only.** Every value touching the grid and projectiles lives here.
 ##
+## **One named exception**: a boss pattern's carve/ignite radii (`src/actor/boss_ai.gd`'s `MOVE_CHARGE`,
+##  and Stage G's `MOVE_SLAM`) touch the grid too, but live there instead — `stage1-bosses.md`'s own Boundary
+##  put boss attacks in `src/actor/` ("bolts have no owner", the same reasoning `monster_bolts.gd` already sets
+##  precedent for). Silently breaking this file's opening sentence is worse than naming the one place it doesn't hold.
+##
 ## **Presentation constants are not here.** Those are `src/view/fx_tuning.gd`.
 ##  v1 kept both in one file split by `SIM-BLOCK-BEGIN/END` text markers, and that file's own comment said
 ##  "delete or add a marker and the net silently spins". => **Splitting by folder removed the markers entirely.**

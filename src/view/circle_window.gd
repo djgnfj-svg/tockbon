@@ -33,14 +33,21 @@ const Book := preload("res://src/view/book_layout.gd")
 const Palette := preload("res://src/view/palette_layout.gd")
 const Glyph := preload("res://src/sim/glyph_defs.gd")
 const SpellCircle := preload("res://src/actor/spell_circle.gd")
+const Progress := preload("res://src/actor/progress.gd")
 ## The value that **removes** a circle comes from here — pin `0` in the window and the reserved value lives
 ## in two places.
 const CircleDefs := preload("res://src/sim/circle_defs.gd")
+const Tuning := preload("res://src/sim/sim_tuning.gd")
 
 ## **A reference, not a copy** — it reads **the same thing** as the muzzle (the plan's section 1 single source).
 ##  Pressing debug keys 4 and 5 flipping the drawing is the evidence for that, and a copy would destroy it.
 ## **It only reads.** At this stage **nothing can be placed by clicking** (stage 4).
 var _circle: SpellCircle = null
+
+## **A reference too, the same reason `_circle` is one** — `rune-lock-and-receiving.md`, Stage A. The bull's
+## reward (Stage C) calls `grant_rune()` on the one live `Progress` the rest of the game reads; a copy here
+## would never see it, and the palette would keep veiling fire forever after the reward.
+var _progress: Progress = null
 
 ## The palette item currently picked. `_picked_kind < 0` means nothing is picked.
 ## **It holds the kind too** — circles, runes and glyphs are all pickable, so an item id alone does not say which.
@@ -49,7 +56,8 @@ var _picked_kind := -1
 var _picked_item := -1
 
 
-func setup(circle: SpellCircle) -> void:
+func setup(progress: Progress, circle: SpellCircle) -> void:
+	_progress = progress
 	_circle = circle
 	queue_redraw()
 
@@ -82,14 +90,16 @@ func toggle() -> void:
 # ══════════════════════════════════════════════════════════════════
 #  Clicking — **pick then place. Press what is placed and it is removed**
 #
-#  **The nets cannot call the functions below.** It is a `Control` outside the tree, so neither `_gui_input`
-#   nor `_draw` runs, and a net cannot stand one up either. The line is this:
-#     · **static coordinate functions** (`circle_layout` · `palette_layout` · `book_layout`) -> nets measure them
-#     · **`Control` methods** (`_gui_input` · `_click_*` · `_place_or_clear` · `_can_pick`) -> **not measured**
-#   => **verify-run and verify-look are the only detectors.** Edit here knowing that a green net guarantees
-#    nothing.
-#  That is why **judgment was pushed as far as possible into the coordinate functions and the model** —
-#   what is left here should be wiring only.
+#  **This claimed nets could not call the functions below — that was wrong, the same shape CLAUDE.md warns
+#   against ("'It can't be driven headless' was claimed three times and was wrong three times").**
+#   `net_pick.gd` already proves the sibling window: `ThreePickWindow.new()` untreed, `setup()` called
+#   directly, then `_gui_input()` driven with a hand-built `InputEventMouseButton` via `.call()`. Ordinary
+#   methods (`_can_pick` · `_slot_accepts` · `_gui_input` itself) do not need the tree — only `_draw()`
+#   genuinely resists, because `get_theme_default_font()` returns null untreed (no live font).
+#   `net_circle._owns_rune_gates_can_pick_on_an_untreed_window` drives `_can_pick` this same way.
+#  => **`_draw()` is still verify-run/verify-look's alone.** Everything else here is reachable headless —
+#   push judgment into the coordinate functions and the model where it's easy to reach, not because this
+#   layer is unreachable.
 # ══════════════════════════════════════════════════════════════════
 
 ## **Being `_gui_input`, the coordinates are already relative to the window's inside.** Take it through
@@ -142,7 +152,15 @@ func _click_palette(pal: Rect2, local: Vector2) -> void:
 
 ## Press a slot. With something picked it **places**, with nothing picked it **removes** (plan section 9-1).
 ##
-## **The three kinds follow the same rule.** Differ per kind and there are three things to learn.
+## **The three kinds follow the same rule** — except what "removes" leaves behind at the rune seat. Glyphs and
+##  the circle stay genuinely emptiable (`Glyph.GLYPH_NONE` · `CircleDefs.CIRCLE_NONE` — optional layers, and a
+##  frame you may legitimately want to pull). A rune seat clearing to `SpellCircle.RUNE_EMPTY` instead of
+##  `Tuning.ELEM_NONE` was a self-inflicted disarm (`rune-lock-and-receiving.md`, found by verify-run): click a
+##  **veiled, unowned** rune in the palette — `_can_pick` refuses it, nothing gets picked — then click the seat
+##  expecting nothing to happen, and `_place_or_clear`'s "nothing picked -> clear" branch fires anyway, dropping
+##  a working circle to `can_fire() == false`. **The rune seat cannot go fully empty through this window** —
+##  clearing it always leaves `ELEM_NONE`, never `RUNE_EMPTY`. `spell_circle`'s own model still can (`set_rune`,
+##  `set_circle`'s resize on a circle swap) — that is a different, already-tested door, not this one.
 ## **Look from the inside out** — the circle slot is the whole inside of the frame, so without checking the
 ##  layer and rune seats first it eats all of them.
 func _click_circle(page: Rect2, local: Vector2) -> void:
@@ -158,7 +176,7 @@ func _click_circle(page: Rect2, local: Vector2) -> void:
 	var slot := Layout.rune_slot_at(id, area, local)
 	if slot >= 0:
 		_place_or_clear(Palette.KIND_RUNE, func(v: int) -> void:
-			_circle.set_rune(slot, v), SpellCircle.RUNE_EMPTY)
+			_circle.set_rune(slot, v), Tuning.ELEM_NONE)
 		return
 
 	if Layout.frame_has_point(area, local):
@@ -219,13 +237,20 @@ func _slot_count(kind: int) -> int:
 	return 0
 
 
-## Does that slot take this item. **Only glyphs have a constraint** and that constraint comes from
-## `glyph_defs.DEFS`.
-##  It is **not written again here** (`can_place_glyph` is called) — write it and the rule has two copies
-##   and what `net_circle`'s bidirectional agreement was measuring becomes meaningless.
+## Does that slot take this item. **Glyphs and runes each have a constraint; circles do not.**
+## The glyph constraint comes from `glyph_defs.DEFS` and is **not written again here** (`can_place_glyph` is
+##  called) — write it and the rule has two copies and what `net_circle`'s bidirectional agreement was
+##  measuring becomes meaningless. The rune constraint is ownership (`rune-lock-and-receiving.md`, Stage A) —
+##  read from `Progress`, the same reason the glyph rule is read rather than re-derived.
 ## **Only empty layers count.** Overwriting layer 1 while spread is on layer 1 is allowed by the rules, but
 ##  allowing it looks like "spread is there and spread gets blocked". => Moving means removing first, as one rule.
 func _slot_accepts(kind: int, index: int, item_id: int) -> bool:
+	if kind == Palette.KIND_RUNE:
+		# **`rune-lock-and-receiving.md`, Stage A.** The gate lives here, not in `palette_layout.items_of()` —
+		#  an unowned rune must still be **drawn** (veiled, unpickable), not filtered out of the palette
+		#  entirely. Filtering it out would leave `net_circle:553`'s `items_of(KIND_RUNE) == ELEM_ALL` needing
+		#  an edit and the player unable to see that fire even exists before earning it.
+		return _progress.owns_rune(item_id)
 	if kind != Palette.KIND_GLYPH:
 		return true
 	return _circle.glyph_at(index) == Glyph.GLYPH_NONE \
@@ -317,6 +342,10 @@ func _draw_frame(area: Rect2) -> void:
 ## An empty rune is **the same grey** as a dead staff tip — same meaning, so the same color is what connects
 ##  the two screens at a glance.
 ##  Writing out "why can it not fire" in text is stage 5. This stage goes as far as **drawing the state honestly.**
+##
+## **`RUNE_EMPTY` no longer reaches here by clicking** (`_click_circle`'s own comment) — only by swapping the
+##  circle out and back (`spell_circle.set_circle()` resizes and fills every rune slot with `RUNE_EMPTY`). This
+##  branch stays for that path; it is not dead code.
 ##
 ## **The bark raised here is "every frame", not "once per event".**
 ##  `Layout.rune_slots()` barks on `rune_slots != 1` and this function is called **60 times a second** while

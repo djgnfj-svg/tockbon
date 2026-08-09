@@ -948,7 +948,8 @@ that silently does nothing. The shop is **not built at all** (stage transitions 
 ## Out of scope — say it or builder expands into it
 
 - **Acceptance 11 (the boss gives a three-pick + research material) cannot be closed by this doc.**
-  **There are no bosses in code** — `stage1-bosses.md` is still in `1.ready`. No slot is built for it either: a
+  **There are no bosses in code** — `stage1-bosses.md` is in `2.active` with a plan and no code yet. No slot is
+  built for it either: a
   `grant_pick(reason)` with no caller is a false knob. The day bosses land, they call the same `grant_pick()`
   stage B builds for the level-up path.
 - **The midboss fire-rune branch** ("already carrying fire, it gives a three-pick") — same reason.
