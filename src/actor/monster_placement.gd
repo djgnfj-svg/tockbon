@@ -36,8 +36,10 @@ const BossAi := preload("res://src/actor/boss_ai.gd")
 ##    asleep, before the player can see it. Materialising earlier costs nothing on the cap (§8).
 ##  · **`Monster.asleep`** — a *live* monster's behavioral sleep, updated by `world_step`'s tick branch
 ##    from the monster's actual current position. **This is what the player watches happen**, so its band
-##    sits **inside** the half-viewport: `STIR_ENTER_PX` 420 < 480. A band and not one threshold, or a
-##    monster sitting exactly on it flips state every tick.
+##    sits **inside the distance a mob becomes visible at** — `STIR_ENTER_PX` 300 < **552**, not < 480.
+##    **The 480 comparison is the wrong one** and the box below says why (the camera lead adds 72); it is
+##    written here in the corrected form so the header does not argue with itself two paragraphs later.
+##    A band and not one threshold, or a monster sitting exactly on it flips state every tick.
 ##
 ## **`STIR_ENTER_PX` is bounded from above by the shelf, not by taste** (§8b): `_dist_to_target` is
 ## horizontal only and a stirred hen walks until it is `MonsterBolts.BOLT_STOP_PX` (240) from the player,

@@ -607,7 +607,7 @@ last two were never the build's to close.
 | **The exact clump table** | A `tx14–29` **6 pig** · B `tx45–60` **4 pig 2 hen** · C `tx73–88` **1 pig 3 hen 2 wolf**. Shelf rows sit at offsets 6·9·12·15, ground rows at 0·3 | **Forced**, not chosen — §6's invariants leave exactly one legal table (see the ⚠ box in §6) |
 | **Exactly where each shelf sits** | `x20–30` · `x51–61` · `x79–89`, top row 18, 11 wide | Build. Constrained by §9 (nothing under `tx49–50`) and by the stairs at `x90` |
 | **Which awakening presentation** | **A + B** — dormant bodies dim, and a staggered ring pops at the stir | **Build, and this one is the user's to take back.** The doc says "the user picks" and they were asleep. A+B is what the doc itself calls composable; **C was not attempted** (a sheet per kind) |
-| **The three band values** | materialise **720** (`WAKE_PX` keeps that job) · stir enter **420** · stir exit **560**. `SLEEP_PX` 840 is gone | Build. 420 is bounded above by the shelf (§8b: 420 − 240 = 180px of walk against 288px of shelf) and below by needing to be on screen |
+| **The three band values** | materialise **720** (`WAKE_PX` keeps that job) · stir enter ~~420~~ → **300** · stir exit **560**. `SLEEP_PX` 840 is gone | Build, then **moved after verify-look**. The ceiling is the shelf (§8b: `stir − 240` px of walk against 288px of shelf ⇒ **528**). The floor is being seen: a mob becomes visible at **552px**, not 480 — the camera lead adds 72 — so the dormant tint and the wake mark are only watchable across `552 − stir`. **420 gave 0.51s; 300 gives 0.97s.** ⇒ **lowering widens the window, raising shrinks it**, which is the opposite of the obvious reading and is why this row moved |
 
 **Still open, and neither is the build's:**
 
