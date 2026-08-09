@@ -580,10 +580,22 @@ func _no_pushed_out_glyph_is_stashed_anywhere(t) -> void:
 		"res://src/actor/spell_circle.gd": ["_layers", "_runes"],
 		"res://src/actor/world_step.gd": ["_died_kind", "_died_x", "_died_y", "_monsters", "_queue"],
 		"res://src/view/blast_fx.gd": ["_flashes"],
+		# **The six animation fields added here, deliberately** — the same discipline `_reward_pending`'s own
+		#  comment names. `_anim`/`_prev_x`/`_prev_reload`/`_attack_left`/`_hurt_left` are all keyed by
+		#  **monster id** and hold a frame counter, and `_anim_sheets` is loaded art; none of them is a record
+		#  of a glyph that left a spell layer, which is what this file's no-inventory check exists to catch.
 		"res://src/view/monster_view.gd": [
-			"_corpses", "_death_pops", "_dmg_numbers", "_flash_left", "_prev_hp", "_sheets",
+			"_anim", "_anim_sheets", "_attack_left", "_corpses", "_death_pops", "_dmg_numbers",
+			"_flash_left", "_hurt_left", "_prev_hp", "_prev_reload", "_prev_x", "_sheets",
 		],
 		"res://src/view/spell_view.gd": ["_bolt_tex", "_trails"],
+		# **`_seats` added here, deliberately** — the town's three fixture positions, read once out of
+		#  `town_map.FIXTURE_TILES` (level content). A room's furniture is not a glyph that left a spell
+		#  layer, which is what this file's no-inventory check exists to catch.
+		"res://src/view/town_view.gd": ["_seats", "_sprites"],
+		# **`_icons` added here, deliberately** — five loaded ui textures keyed by name, the same shape
+		#  `_sprites` one line up already is. Loaded art is not a glyph that left a spell layer.
+		"res://src/view/research_window.gd": ["_icons"],
 	}
 
 	var files := NetProgress.new()._scan_gd_files("res://src")

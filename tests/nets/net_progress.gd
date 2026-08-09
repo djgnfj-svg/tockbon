@@ -45,6 +45,7 @@ func run(t) -> void:
 	_grant_rune_is_the_only_door_in(t)
 	_ownership_survives_unrelated_progress_state(t)
 	_reset_reverts_ownership_to_the_starting_kit_not_to_empty(t)
+	_material_is_the_one_thing_a_reset_does_not_take(t)
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -595,3 +596,59 @@ func _scan_gd_files(dir: String) -> Array[String]:
 	for sub: String in d.get_directories():
 		out.append_array(_scan_gd_files(dir.path_join(sub)))
 	return out
+
+
+## **Material survives `reset()`, and nothing else does.**
+##
+## `docs/design/town.md`'s whole reason to exist is that something outlives a run ("what is permanent is a
+## pool, not an object", GDD). `Progress.reset()` reverts every other field, and **the danger is that someone
+## tidies the list and adds this one** — it would look consistent and would quietly delete permanence, with
+## no other check in the suite noticing.
+##
+## **The negative half is measured in the same breath**: xp, level, money and pending picks must still be
+## cleared. Without it, a `reset()` that had become a no-op would pass this function.
+func _material_is_the_one_thing_a_reset_does_not_take(t) -> void:
+	var pr := Progress.new()
+	t.eq(pr.gems, 0, "원석은 0에서 시작한다")
+
+	# **The boss door — a roll, so the range is what is measured, not one number.**
+	var got := pr.add_boss_gems()
+	t.ok(got >= Progress.GEMS_PER_BOSS_MIN and got <= Progress.GEMS_PER_BOSS_MAX,
+		"보스가 %d~%d개를 준다 (%d개)" % [Progress.GEMS_PER_BOSS_MIN, Progress.GEMS_PER_BOSS_MAX, got])
+	t.eq(pr.gems, got, "준 만큼 들어왔다")
+	var got2 := pr.add_boss_gems()
+	t.eq(pr.gems, got + got2, "원석은 쌓인다 (덮어쓰지 않는다)")
+	# **Rolled many times, so "it always returns the minimum" cannot pass** — the range is the decision.
+	var seen: Dictionary = {}
+	for _i in 60:
+		seen[pr.add_boss_gems()] = true
+	for n: int in seen:
+		t.ok(n >= Progress.GEMS_PER_BOSS_MIN and n <= Progress.GEMS_PER_BOSS_MAX,
+			"예순 번 굴려도 %d개는 범위 안이다" % n)
+	t.eq(seen.size(), Progress.GEMS_PER_BOSS_MAX - Progress.GEMS_PER_BOSS_MIN + 1,
+		"범위 안의 값이 실제로 전부 나온다 (한 값에 고정돼 있지 않다)")
+
+	# **The level door.** A trash mob never pays out directly; it reaches 원석 only this way.
+	var lv := Progress.new()
+	t.eq(lv.gems, 0, "전제")
+	lv.add_xp(Progress.xp_for_level(0))
+	t.eq(lv.level, 1, "한 레벨 올랐다 (전제)")
+	t.eq(lv.gems, Progress.GEMS_PER_LEVEL, "레벨 하나에 원석 %d개" % Progress.GEMS_PER_LEVEL)
+	# **One award crossing two thresholds pays both** — the same loop `pending_picks` rides.
+	var big := Progress.new()
+	big.add_xp(Progress.xp_for_level(0) + Progress.xp_for_level(1))
+	t.eq(big.level, 2, "한 번에 두 레벨 올랐다 (전제)")
+	t.eq(big.gems, Progress.GEMS_PER_LEVEL * 2, "두 번 다 준다 (뽑기와 같은 수만큼)")
+	t.eq(big.gems, big.pending_picks * Progress.GEMS_PER_LEVEL, "원석 수와 대기 뽑기 수가 어긋나지 않는다")
+
+	pr.add_xp(500)
+	pr.add_money(40)
+	t.ok(pr.level > 0 and pr.money > 0 and pr.pending_picks > 0, "달리기 안의 것들도 쌓였다 (전제)")
+
+	var kept := pr.gems
+	pr.reset()
+	t.eq(pr.gems, kept, "리셋해도 원석은 그대로다 (달리기를 넘어 남는 유일한 것)")
+	t.eq(pr.level, 0, "레벨은 지워진다")
+	t.eq(pr.money, 0, "돈은 지워진다")
+	t.eq(pr.xp, 0, "경험치도 지워진다")
+	t.eq(pr.pending_picks, 0, "대기 중인 뽑기도 지워진다")

@@ -5,20 +5,23 @@
 **Implemented**: **full** — stages 0–9 all run (`docs/plans/3.done/monsters-minimum.md`).
 Stand · walk · die to bolts/blasts/fire · pig shoves with its body · chicken stops and shoots ·
 sprites · health bars · hit flash (shader) · damage numbers (they merge) · fire on the body · corpses · death burst · outline.
+**Animation runs** ([../plans/3.done/monster-animation.md](../plans/3.done/monster-animation.md)) — every sheet
+in the table below now has a state that draws it, from `fx_tuning.MONSTER_ANIM` (kind → state → sheet).
+Ten states, the boss patterns among them; walking's clock is the monster's own `x`, one-shots clamp on their
+last cell, and **a corpse is the death sheet played by its own age.**
 **Not done**: **AI** (`_next_axis()` is one line — see "AI is deferred; the slot is left open") ·
-walk animation · per-species color.
-**The art now exists for every trash-mob state and the code still cannot play any of it.**
-`fx_tuning.MONSTER_SHEETS` holds **one image per kind** and `monster_view` fits that whole texture to the box,
-so handing it a multi-frame row draws the beast squashed.
-**Playing it means bringing the character's idiom over** (`CHAR_SHEET` + a state→frame table).
-⇒ **"animation" is entirely a code gap now. There is no art left to generate for the trash mobs.**
+per-species color · **anyone judging whether the motion looks right** (every `hold` value is a first guess).
 
 | Kind | Sheets in `assets/monster/` |
 |---|---|
 | **Pig** (44x32) | `walk` 9f · **`idle` 4f · `shove` 8f · `hurt` 4f · `death` 8f** |
 | **Chicken** (24x28) | `walk` 9f · **`idle` 4f · `spit` 8f · `hurt` 4f · `death` 8f** |
-| Bull (boss) | body · walk · idle · charge · gore · slam · stun · fire · death |
-| Rooster (boss) | body · walk · idle · leap · land · death |
+| Bull (boss) | body · walk · idle · charge · gore · slam · stun · fire · death · roar |
+| Rooster (boss) | body · walk · idle · leap · land · death · roar |
+
+**The bull's sheets were 86x54 against an 88x56 box and were padded, never scaled** —
+`tools/pixel/pad_sheet.py`, following this doc's own rule below ("pad, never resample"). `bull_roar.png` was
+already the right size and was left alone.
 
 **The user opened this with "the trash mobs are no fun"** — and the cause was in this table: **the bosses had
 nine sheets each and the trash mobs had one.** The shove and the spit are exactly the two behaviours this doc

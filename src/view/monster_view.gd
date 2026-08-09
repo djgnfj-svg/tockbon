@@ -39,6 +39,10 @@ const Tuning := preload("res://src/sim/sim_tuning.gd")
 const Character := preload("res://src/actor/character.gd")
 const CellGrid := preload("res://src/sim/cell_grid.gd")
 
+## **Which kinds attack by touching, rather than by a pattern or a projectile.** Read by `_is_attacking`;
+##  its own header says why this is a list.
+const CONTACT_ATTACKERS: Array[int] = [Defs.KIND_PIG, Defs.KIND_WOLF]
+
 ## The name the shader receives. **Kept as a constant** — pin the string and one wrong letter means
 ##  **nothing happens at all and there is no error** (`net_render`'s "false knob" section is that story).
 const FLASH_COLOR_PARAM := "flash_color"
@@ -79,6 +83,33 @@ var _death_pops: Array[Dictionary] = []
 ##  breaks is fine, but monsters always have several kinds and the rest must still show when one breaks
 ##  (the `MONSTER_FILL` box above).
 var _sheets: Dictionary = _load_sheets()
+
+## kind -> state -> the sheet for that state. Built from `Fx.MONSTER_ANIM` — the same "no registry here"
+##  discipline as `_sheets` above, and the same substitute-do-not-bark rule (a missing row falls back through
+##  `anim_row`, a failed `load` falls back to `_sheets`).
+var _anim_sheets: Dictionary = _load_anim_sheets()
+
+## id -> {"state": int, "t": int}. **The single source of "which frame is this monster on".**
+##  Body, flash and outline are drawn onto three different canvases and must land on the **same** cell of the
+##  same sheet — computed once per frame here, read three times when drawing. Recompute it inside each
+##  drawing function and the day the three disagree, a hit pig's white silhouette is one frame behind its own
+##  body, which is visible on screen only (the exact shape of the bug `_draw_flipped` was gathered to prevent).
+var _anim: Dictionary = {}
+## id -> previous frame's x. "Is it walking" is asked of the previous frame, not of the monster —
+##  `monster.gd` has no such field and adding one would edit `src/actor/` from a file whose whole contract is
+##  "it touches the screen only" (the same reasoning, verbatim, as `character_view._prev_x`).
+var _prev_x: Dictionary = {}
+## id -> previous frame's `reload_left`. **The hen's shot has no notification** — the only trace it leaves is
+##  that field jumping back up to its reload value (`monster.consume_fire()`), so the view diffs it, exactly
+##  as it already diffs hp to find a hit. Rising means "it just fired".
+var _prev_reload: Dictionary = {}
+## id -> frames left of a latched one-shot. **A latch, not a live condition**: the hen fires on one tick and
+##  the spit sheet runs 8 frames, so asking "is it firing right now" would show a single frame of it.
+var _attack_left: Dictionary = {}
+## id -> frames left of the hurt animation. **Separate from `_flash_left`, deliberately.** The flash is 6
+##  frames (matched to invulnerability, `MONSTER_FLASH_FRAMES`'s own comment) and the hurt sheet is 12; driven
+##  off the flash, the animation would be cut at frame 2 of 4 and never once reach its last cell.
+var _hurt_left: Dictionary = {}
 
 ## Frame counter — the clock for the wobble of fire attached to a body.
 ## **`Time.` is not used.** This is `src/view/` so it is outside the determinism contract, but as a frame counter
@@ -121,6 +152,21 @@ static func _load_sheets() -> Dictionary:
 	var out: Dictionary = {}
 	for kind: int in Defs.ALL:
 		out[kind] = load(Fx.MONSTER_SHEETS[kind]) as Texture2D
+	return out
+
+
+## static — same reason as `_load_sheets`: `net_monster_sprite` measures the table before any node exists.
+## **Every path in `Fx.MONSTER_ANIM` is loaded once, at construction.** Loading per frame would re-open a
+##  sheet 60 times a second for every monster on screen; `load()` is cached by the engine, but relying on that
+##  cache is relying on something no net can see.
+static func _load_anim_sheets() -> Dictionary:
+	var out: Dictionary = {}
+	for kind: int in Defs.ALL:
+		var rows: Dictionary = Fx.MONSTER_ANIM.get(kind, {})
+		var per_state: Dictionary = {}
+		for state: int in rows:
+			per_state[state] = load(rows[state]["path"]) as Texture2D
+		out[kind] = per_state
 	return out
 
 
@@ -200,8 +246,14 @@ func advance() -> void:
 	_prune(_dmg_numbers, Fx.MONSTER_DMG_NUM_LIFE_FRAMES)
 	_prune(_corpses, Fx.MONSTER_CORPSE_LIFE_FRAMES)
 	_prune(_death_pops, Fx.MONSTER_DEATH_POP_FRAMES)
+	_decay(_attack_left)
+	_decay(_hurt_left)
 	if _world != null:
 		_scan_hp_changes()
+		# **After the hp scan, never before.** `_scan_hp_changes` is what sets `_hurt_left`, so running this
+		#  first would show the hurt pose one frame late — the same one-frame ordering bug the "aging comes
+		#  first" note above records, found the same way (by measurement).
+		_scan_anim()
 
 
 ## **Death notifications are read only here.** `stage.gd`'s `_on_ticked()` calls it — call it every frame and
@@ -236,6 +288,7 @@ func _scan_hp_changes() -> void:
 			var prev: int = _prev_hp[m.id]
 			if m.hp < prev:
 				_flash_left[m.id] = Fx.MONSTER_FLASH_FRAMES
+				_hurt_left[m.id] = oneshot_frames(m.kind, Fx.MON_HURT)
 				_add_dmg_number(m, prev - m.hp)
 		_prev_hp[m.id] = m.hp
 	# ids that no longer live are cleaned up — without erasing them, dead ids pile up in the dictionary forever
@@ -244,6 +297,70 @@ func _scan_hp_changes() -> void:
 		if not seen.has(id):
 			_prev_hp.erase(id)
 			_flash_left.erase(id)
+
+
+## One frame of every living monster's animation state. **Three questions and one clock.**
+##
+## **The state is re-decided every frame; only the clock is remembered.** `_anim[id]["t"]` restarts at 0 the
+##  frame the state changes and counts up otherwise — that is the whole machine, and it is what makes
+##  `loop: false` mean "play once and hold" without a second field saying whether it has finished.
+##
+## **Walking is diffed against the previous frame's x** (`_prev_x`), the same idiom and the same reason as
+##  `character_view._prev_x`. **The first frame a monster is seen counts as not moving** — `_prev_x` has no
+##  entry yet, and reading a missing entry as 0 would make every spawn walk for one frame from x=0 to its
+##  spawn seat, which is exactly the bug `character_view.setup()` aligns `_prev_x` to avoid.
+func _scan_anim() -> void:
+	var seen: Dictionary = {}
+	for i in _world.monster_count():
+		var m: Monster = _world.monster_at(i)
+		seen[m.id] = true
+		var moving := _prev_x.has(m.id) and int(_prev_x[m.id]) != m.x
+		_prev_x[m.id] = m.x
+		# **The hen's shot leaves no notification — only `reload_left` jumping up** (the field's own box above).
+		var prev_reload := int(_prev_reload.get(m.id, 0))
+		if m.reload_left > prev_reload:
+			_attack_left[m.id] = oneshot_frames(m.kind, Fx.MON_ATTACK)
+		_prev_reload[m.id] = m.reload_left
+		var state := resolve_state(m.kind, m.pattern, _hurt_left.has(m.id), _is_attacking(m), moving)
+		var cur: Dictionary = _anim.get(m.id, {})
+		if int(cur.get("state", -1)) != state:
+			_anim[m.id] = {"state": state, "t": 0}
+		else:
+			cur["t"] = int(cur["t"]) + 1
+	# Dead ids are dropped — the same cleanup, and the same reason, as `_prev_hp` above (ids are never reused,
+	#  so nothing here can be resurrected by a later monster; without erasing, these grow without bound).
+	for id in _anim.keys().duplicate():
+		if not seen.has(id):
+			_anim.erase(id)
+			_prev_x.erase(id)
+			_prev_reload.erase(id)
+			_attack_left.erase(id)
+			_hurt_left.erase(id)
+
+
+## **Is this monster hitting the player right now.**
+##
+## **Two different answers, because the two mobs leave two different traces.** The hen fires on one tick and
+##  the view latched it above (`_attack_left`). **The pig has nothing at all** — it damages by body contact
+##  (`world_step`'s own `_boxes_overlap` on every tick), so there is no event, only a condition, and the view
+##  asks the same question `MONSTER_SHOVE_REACH_PX` early.
+##
+## **`_char == null` means no shove, never a crash** — a net driving this node with no `setup()` is the only
+##  door that reaches here without a player, the same null-tolerant discipline `_world` holds.
+## **Bosses are excluded** — a bull's attacks are patterns, resolved before this is ever consulted
+##  (`resolve_state`'s own order), and a bull standing on top of the player is not goring it.
+## **The wolf is in the list with the pig** — it damages by contact the same way and has no lunge in the
+##  sim (`monster_defs.KIND_WOLF`'s own box). It is a **list and not `!= KIND_HEN`**, so the day a kind
+##  arrives that neither has patterns nor touches for damage, it does not silently start playing an
+##  attack it cannot make.
+func _is_attacking(m: Monster) -> bool:
+	if _attack_left.has(m.id):
+		return true
+	if not CONTACT_ATTACKERS.has(m.kind) or _char == null:
+		return false
+	var g := Fx.MONSTER_SHOVE_REACH_PX
+	return WorldStep._boxes_overlap(m.x - g, m.y - g, Defs.w_px(m.kind) + g * 2, Defs.h_px(m.kind) + g * 2,
+		_char.x, _char.y, Character.W_PX, Character.H_PX)
 
 
 ## **If there is a recent number for the same monster, add to it — do not make a new one** (decided by the user).
@@ -275,12 +392,19 @@ func _add_dmg_number(m: Monster, amount: int) -> void:
 
 
 func _decay_flashes() -> void:
-	for id in _flash_left.keys().duplicate():
-		var left := int(_flash_left[id]) - 1
+	_decay(_flash_left)
+
+
+## Counts every value in an id -> frames-left dictionary down by one and drops the ones that reach zero.
+## **`_decay_flashes` was this, written out.** The hurt and attack latches count exactly the same way, and
+##  three copies of a four-line countdown is three places for "it never expires" to hide.
+func _decay(left_by_id: Dictionary) -> void:
+	for id in left_by_id.keys().duplicate():
+		var left := int(left_by_id[id]) - 1
 		if left <= 0:
-			_flash_left.erase(id)
+			left_by_id.erase(id)
 		else:
-			_flash_left[id] = left
+			left_by_id[id] = left
 
 
 func _prune(list: Array[Dictionary], max_age: int) -> void:
@@ -300,6 +424,11 @@ func _prune(list: Array[Dictionary], max_age: int) -> void:
 func clear() -> void:
 	_prev_hp.clear()
 	_flash_left.clear()
+	_anim.clear()
+	_prev_x.clear()
+	_prev_reload.clear()
+	_attack_left.clear()
+	_hurt_left.clear()
 	_dmg_numbers.clear()
 	_corpses.clear()
 	_death_pops.clear()
@@ -318,8 +447,38 @@ func corpse_kind(i: int) -> int:
 	return _corpses[i]["kind"]
 
 
+## **Which cell of the death sheet this corpse is showing — read back out of the rect that gets drawn.**
+##  **It goes through `_corpse_art`, deliberately.** A query that recomputed `frame_index` itself would be a
+##  second calculation, and inversion proved that exact hole: freezing `_corpse_art` on cell 0 left every
+##  check green because the net was driving the arithmetic and not the drawing.
+## -1 means there is no texture at all (the flat-rectangle fallback).
+func corpse_frame(i: int) -> int:
+	var c: Dictionary = _corpses[i]
+	var art := _corpse_art(c["kind"], int(c["age"]))
+	if art[0] == null:
+		return -1
+	return int((art[1] as Rect2).position.x) / Defs.w_px(c["kind"])
+
+
 func is_flashing(id: int) -> bool:
 	return _flash_left.has(id)
+
+
+## **Which animation state this monster is on, or -1 if it has none yet** (nothing has driven `advance()`).
+##  The nets read the state through here rather than reaching into `_anim` — the same "queries only" door
+##  `corpse_kind`/`is_flashing` already are.
+func anim_state(id: int) -> int:
+	return int(_anim.get(id, {}).get("state", -1))
+
+
+## **Which cell of that state's sheet is on screen this frame.** Goes through the same `frame_index` the
+##  drawing does, so a net measuring this is measuring what is drawn and not a parallel calculation.
+func anim_frame(id: int, kind: int) -> int:
+	var a: Dictionary = _anim.get(id, {})
+	if a.is_empty():
+		return 0
+	var state := int(a["state"])
+	return frame_index(state, anim_row(kind, state), int(a["t"]), _anim_x(id))
 
 
 func death_pop_count() -> int:
@@ -398,7 +557,8 @@ func _draw_flashes(canvas: CanvasItem) -> void:
 		var r := box_rect(m.kind, m.x, m.y)
 		var frac := float(_flash_left[m.id]) / float(Fx.MONSTER_FLASH_FRAMES)
 		var a := Fx.MONSTER_FLASH_COLOR.a * frac
-		var tex: Texture2D = _sheets.get(m.kind)
+		var art := _art_of(m.id, m.kind)
+		var tex: Texture2D = art[0]
 		if tex == null:
 			# Fallback — even with the shader hung, `TEXTURE` is a white 1x1 so the result is
 			#  "white rectangle x strength" (the head of `monster_silhouette.gdshader`). That is
@@ -406,7 +566,7 @@ func _draw_flashes(canvas: CanvasItem) -> void:
 			var c := Fx.MONSTER_FLASH_COLOR
 			canvas.draw_rect(r, Color(c.r, c.g, c.b, a))
 			continue
-		_draw_flipped(canvas, tex, r, m.facing < 0, Color(1.0, 1.0, 1.0, a))
+		_draw_flipped(canvas, tex, art[1], r, m.facing < 0, Color(1.0, 1.0, 1.0, a))
 
 
 ## **The outline — the body sprite laid down in eight directions, with the body covering it on top.**
@@ -429,20 +589,24 @@ func _draw_outlines(canvas: CanvasItem) -> void:
 		var alpha := 1.0 - float(age) / float(Fx.MONSTER_CORPSE_LIFE_FRAMES)
 		# A corpse fades, so its outline has to fade with it — otherwise, after the body is gone,
 		#  **only a cream outline is left floating.**
-		_outline_one(canvas, c["kind"], c["x"], c["y"], false, alpha)
+		_outline_one(canvas, _corpse_art(c["kind"], int(c["age"])), c["kind"], c["x"], c["y"], false, alpha)
 	for i in _world.monster_count():
 		var m: Monster = _world.monster_at(i)
-		_outline_one(canvas, m.kind, m.x, m.y, m.facing < 0, 1.0)
+		_outline_one(canvas, _art_of(m.id, m.kind), m.kind, m.x, m.y, m.facing < 0, 1.0)
 
 
-func _outline_one(canvas: CanvasItem, kind: int, x: int, y: int, flip: bool, alpha: float) -> void:
-	var tex: Texture2D = _sheets.get(kind)
+## **`art` is passed in, not looked up here.** The outline is the body sprite laid down eight times, so it has
+##  to be **the same cell** the body is on — look it up again in this function and the day the two disagree,
+##  the outline traces the previous frame's pose and the beast wears a ghost of where it just was.
+func _outline_one(canvas: CanvasItem, art: Array, kind: int, x: int, y: int, flip: bool,
+		alpha: float) -> void:
+	var tex: Texture2D = art[0]
 	if tex == null:
 		return   # the fallback is a flat rectangle, so an outline would carry no meaning
 	var r := box_rect(kind, x, y)
 	var col := Color(1.0, 1.0, 1.0, alpha)
 	for d: Vector2 in Fx.MONSTER_OUTLINE_DIRS:
-		_draw_flipped(canvas, tex, Rect2(r.position + d * Fx.MONSTER_OUTLINE_PX, r.size), flip, col)
+		_draw_flipped(canvas, tex, art[1], Rect2(r.position + d * Fx.MONSTER_OUTLINE_PX, r.size), flip, col)
 
 
 ## **`canvas` must be passed down** — the `_draw_flashes` box above holds that story.
@@ -530,11 +694,12 @@ func _draw_death_pop(p: Dictionary) -> void:
 ##  without restoring, everything drawn afterwards (flash, burn outline, hp bar) is drawn in a flipped
 ##  coordinate system.
 func _draw_monster_body(m: Monster, r: Rect2) -> void:
-	var tex: Texture2D = _sheets.get(m.kind)
+	var art := _art_of(m.id, m.kind)
+	var tex: Texture2D = art[0]
 	if tex == null:
 		draw_rect(r, Fx.MONSTER_FILL)
 		return
-	_draw_flipped(self, tex, r, m.facing < 0, Color.WHITE)
+	_draw_flipped(self, tex, art[1], r, m.facing < 0, Color.WHITE)
 
 
 ## Draws the body sprite to fit the box. Flipped when facing left.
@@ -544,11 +709,47 @@ func _draw_monster_body(m: Monster, r: Rect2) -> void:
 ##   the flash and **the day the two diverge**, a hit pig's white silhouette alone stands the wrong way,
 ##   and that is visible on screen only.
 ## Why it takes `canvas`: the flash is drawn onto **a child node** (the shader is per node).
-func _draw_flipped(canvas: CanvasItem, tex: Texture2D, r: Rect2, flip: bool, modulate: Color) -> void:
+## **`src` is which cell of the sheet** — every sprite here is a strip of frames now, so there is no longer
+##  such a thing as "draw the whole texture". A single-frame fallback passes its own full rect (`_art_of`).
+func _draw_flipped(canvas: CanvasItem, tex: Texture2D, src: Rect2, r: Rect2, flip: bool,
+		modulate: Color) -> void:
 	canvas.draw_set_transform(Vector2(r.position.x + (r.size.x if flip else 0.0), r.position.y),
 		0.0, Vector2(-1.0 if flip else 1.0, 1.0))
-	canvas.draw_texture_rect(tex, Rect2(Vector2.ZERO, r.size), false, modulate)
+	canvas.draw_texture_rect_region(tex, Rect2(Vector2.ZERO, r.size), src, modulate)
 	canvas.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
+## **The texture and the cell this monster is on this frame — the one door body, flash and outline all use.**
+##  Returns `[Texture2D, Rect2]`, or `[null, …]` when nothing can be drawn (each caller substitutes its own
+##  fallback shape, the discipline this file holds for monsters).
+##
+## **The animation state is read, never computed** — `_scan_anim()` decided it once this frame
+##  (`_anim`'s own box). A monster with no entry (drawn before `advance()` ever ran, which is how the nets
+##  stand this node up) falls straight through to the single body sprite rather than inventing a state.
+func _art_of(id: int, kind: int) -> Array:
+	var a: Dictionary = _anim.get(id, {})
+	if not a.is_empty():
+		var state := int(a["state"])
+		var row := anim_row(kind, state)
+		var tex: Texture2D = _anim_sheets.get(kind, {}).get(state)
+		if tex != null and not row.is_empty():
+			return [tex, frame_src(kind, frame_index(state, row, int(a["t"]), _anim_x(id)))]
+	return _body_art(kind)
+
+
+## The walk clock's reading for this id. **It is the monster's own x**, kept by `_scan_anim` — the drawing
+##  side has no `Monster` in hand (a corpse has no id at all), so the value is looked up rather than passed.
+func _anim_x(id: int) -> int:
+	return int(_prev_x.get(id, 0))
+
+
+## The single body sprite, as a `[tex, src]` pair. **The fallback for everything** — a kind with no animation
+##  table, a sheet that failed to load, or a draw that happens before any state exists.
+func _body_art(kind: int) -> Array:
+	var tex: Texture2D = _sheets.get(kind)
+	if tex == null:
+		return [null, Rect2()]
+	return [tex, Rect2(0.0, 0.0, float(tex.get_width()), float(tex.get_height()))]
 
 
 func _draw_hp_bar(kind: int, x: int, y: int, hp: int) -> void:
@@ -853,14 +1054,32 @@ func _draw_corpse(c: Dictionary) -> void:
 	var r := box_rect(kind, c["x"], c["y"])
 	var age: int = c["age"]
 	var alpha := 1.0 - float(age) / float(Fx.MONSTER_CORPSE_LIFE_FRAMES)
-	var tex: Texture2D = _sheets.get(kind)
+	var art := _corpse_art(kind, age)
+	var tex: Texture2D = art[0]
 	if tex == null:
 		# Fallback — the same discipline as `_draw_monster_body` (substitute, do not bark).
 		var col := Fx.MONSTER_CORPSE_COLOR
 		draw_rect(r, Color(col.r, col.g, col.b, col.a * alpha))
 		return
 	var d := Fx.MONSTER_CORPSE_DIM
-	draw_texture_rect(tex, r, false, Color(d, d, d, alpha))
+	draw_texture_rect_region(tex, r, art[1], Color(d, d, d, alpha))
+
+
+## **The corpse is the death animation played by its own age** — the clock is the `age` the corpse already
+##  carries, so there is no second timer to fall out of step with the fade.
+##
+## **`MON_DEATH` never loops** (`Fx.MONSTER_ANIM`), so this clamps on the last cell and holds it while the
+##  fade finishes. That pause is why `MONSTER_CORPSE_LIFE_FRAMES` is longer than the animation.
+##
+## **`x` is 0, not the corpse's own x** — `frame_index` only reads x for `MON_WALK`, and a corpse is never
+##  walking. Passing the seat in would make it look like the clock, which is exactly the confusion the
+##  separate walk clock exists to avoid.
+func _corpse_art(kind: int, age: int) -> Array:
+	var row := anim_row(kind, Fx.MON_DEATH)
+	var tex: Texture2D = _anim_sheets.get(kind, {}).get(Fx.MON_DEATH)
+	if tex == null or row.is_empty():
+		return _body_art(kind)
+	return [tex, frame_src(kind, frame_index(Fx.MON_DEATH, row, age, 0))]
 
 
 ## **It is `canvas.draw_string` — not a bare `draw_string`.**
@@ -896,6 +1115,97 @@ func _draw_dmg_number(canvas: CanvasItem, n: Dictionary) -> void:
 # ══════════════════════════════════════════════════════════════════
 #  Pure static — the nets call these directly (the same idiom as `character_view.pick_state`)
 # ══════════════════════════════════════════════════════════════════
+
+## **Which animation state is on screen. Pure static, so the nets call it directly** — the same seat, and the
+##  same reason, as `character_view.pick_state`: a combination goes in and a state comes back with no scene,
+##  no world and no monster.
+##
+## **What a net can measure stops at "the code picks a different state".** Point every row of
+##  `Fx.MONSTER_ANIM` at one png and the nets stay green — "the sheet in that slot really is a different
+##  animation" is the eye's, in principle (`character_view.pick_state`'s own note, verbatim).
+##
+## The priority is a contract:
+##  (1) **A boss's pattern outranks everything.** `Pattern` is the sim's own state machine — a bull that
+##    flinched out of its charge because a bolt landed would be **the screen contradicting the sim**, which is
+##    this repo's signature fake. A boss has no hurt sheet for the same reason (`Fx.MONSTER_ANIM`'s box)
+##  (2) **Hurt outranks attacking** — being interrupted is the more urgent sentence, and a hen that keeps
+##    spitting while dying reads as "my hit did nothing"
+##  (3) Attacking, then walking, then standing
+## **`Pattern.IDLE` is not `MON_IDLE`** — a boss walks toward the player during `IDLE` (`Monster._boss_axis`),
+##  so it falls through to the same walk/stand question a trash mob answers.
+static func resolve_state(kind: int, pattern: int, hurt: bool, attacking: bool, moving: bool) -> int:
+	if BossAi.has_pattern(kind) and pattern != BossAi.Pattern.IDLE:
+		if pattern == BossAi.Pattern.WINDUP:
+			return Fx.MON_WINDUP
+		if pattern == BossAi.Pattern.CHARGE:
+			return Fx.MON_CHARGE
+		if pattern == BossAi.Pattern.GORE:
+			return Fx.MON_ATTACK
+		if pattern == BossAi.Pattern.FIRE:
+			return Fx.MON_FIRE
+		if pattern == BossAi.Pattern.LEAP:
+			return Fx.MON_LEAP
+		return Fx.MON_STUN
+	if hurt:
+		return Fx.MON_HURT
+	if attacking:
+		return Fx.MON_ATTACK
+	return Fx.MON_WALK if moving else Fx.MON_IDLE
+
+
+## The row for a state, **falling back to `MON_IDLE` when that kind has no such sheet** (`Fx.MONSTER_ANIM`'s
+##  own box — the bosses have no hurt sheet on purpose). Returns an empty dictionary when even idle is
+##  missing, and every caller reads that as "use the single body sprite" — the substitute-do-not-bark rule
+##  this file holds for monsters (`_load_sheets`'s box).
+static func anim_row(kind: int, state: int) -> Dictionary:
+	var rows: Dictionary = Fx.MONSTER_ANIM.get(kind, {})
+	if rows.has(state):
+		return rows[state]
+	return rows.get(Fx.MON_IDLE, {})
+
+
+## **How long a one-shot state runs, in view frames** — `frames * hold`, read off the same row that draws it.
+##  Written as a function rather than a second column so a latch (`_hurt_left`, `_attack_left`) can never
+##  disagree with the animation it is holding open. **0 when the kind has no such sheet**, which reads at the
+##  call site as "do not latch anything" — correct for a boss, which has no hurt pose to hold.
+static func oneshot_frames(kind: int, state: int) -> int:
+	var rows: Dictionary = Fx.MONSTER_ANIM.get(kind, {})
+	if not rows.has(state):
+		return 0
+	var row: Dictionary = rows[state]
+	return int(row["frames"]) * int(row["hold"])
+
+
+## **Which cell of the sheet. Pure static, so the nets call it directly.**
+##
+## **Walking has its own clock and it is the monster's `x`** — `Fx.MONSTER_WALK_PX_PER_FRAME`, exactly as the
+##  character's walk reads `character.x`. `t` (the view's frame counter) drives every other state.
+##  **Two clocks for one gait is the bug this splits to avoid**: count frames while walking and a monster
+##  stopped dead against a wall keeps moving its legs, which `character_view` records having been burned by.
+## **`absi` for the same reason that file gives** — walking left decreases x, and negative division truncating
+##  toward zero makes left and right run at different cadences.
+##
+## **`loop: false` clamps to the last cell instead of wrapping.** That is what makes a death animation stay
+##  dead. Wrapping would restart it, and on a corpse (which lives longer than its own animation) that reads as
+##  the beast twitching back to life.
+static func frame_index(state: int, row: Dictionary, t: int, x: int) -> int:
+	if row.is_empty():
+		return 0
+	var n := int(row["frames"])
+	if n <= 1:
+		return 0
+	var i := absi(x) / Fx.MONSTER_WALK_PX_PER_FRAME if state == Fx.MON_WALK else t / int(row["hold"])
+	if bool(row["loop"]):
+		return i % n
+	return mini(i, n - 1)
+
+
+## The cell to cut out of the sheet. **The frame width is the box width** (`Defs.w_px`) — sheets are laid out
+##  that way by `tools/pixel/anim_sheet.py` and `net_monster_sprite` measures it, so this never reads the
+##  texture's own pixel size (the same distrust `_draw_monster_body` already documents).
+static func frame_src(kind: int, idx: int) -> Rect2:
+	return Rect2(float(idx * Defs.w_px(kind)), 0.0, float(Defs.w_px(kind)), float(Defs.h_px(kind)))
+
 
 ## **Pure static, so the nets call it directly.** `_draw()` uses only this function, so the value the nets
 ## measure = the value actually drawn (`character_view.pick_state` and `spell_view`'s "queries" section).

@@ -3,8 +3,15 @@
 **One line**: one walkable room. Unlock permanent progress at the **research bench**, pick what you take with you
 at the **assembly bench**, and leave through the **departure gate**. Die or clear and you come back here.
 
-**Implemented**: **none** — not one line of code. No scene, no terrain
-**Accepted**: **unseen**
+**Implemented**: **partial** — **the room, the loop and the art all run** ([../plans/3.done/town-room-and-fixtures.md](../plans/3.done/town-room-and-fixtures.md)).
+One bedrock room · three fixtures with their own sprites · **the position-checking door** (E) · the gate
+builds stage 1 · dying sends you back · **the burnt-village backdrop** · **the research window** (panel,
+slot frames, the four unlock icons) · **원석 that survives a run**, from both doors (boss 3~4, level 1).
+**Not done**: the point budget · **any unlock, and therefore any way to spend 원석** · the assembly bench's
+own "choose what to equip" half (it opens the existing reorder window) · the run-end settlement screen
+([../plans/1.ready/run-end-settlement.md](../plans/1.ready/run-end-settlement.md) — today `E` while downed
+goes straight to the town, which that plan replaces)
+**Accepted**: **unseen** — walked end to end by an agent in the editor, never by the user
 
 **A concept stays alive and never changes folders.** The two header lines are only "how much runs now" —
 format per [README.md](README.md).
@@ -55,6 +62,11 @@ Same grid (4px cells) · same character · same movement · same terrain baking 
 existed in this repo — the window that exists (the assembly window) is **Tab from anywhere.**
 ⇒ **A door that checks position** is new. That is the town's only new machine.
 
+**It exists now** — `src/actor/fixtures.gd`, a seat table and one lookup. **x only, no y**, because the room
+is flat; the day a second storey arrives that is the line that changes. The reach is **48px**, widened from
+40 after walking to the gate on screen and finding a band where the character stood **on** the block with no
+prompt (`town-room-and-fixtures.md`).
+
 ### Can you cast in town — yes. Terrain doesn't dig
 
 The grid is the same, so **unblocked, the town gets dug up.** And it would need repair every run.
@@ -65,6 +77,16 @@ The grid is the same, so **unblocked, the town gets dug up.** And it would need 
 
 **Fire is different.** Bedrock has zero fuel and doesn't burn, but **wood placed as decoration does.**
 ⇒ **Put nothing burnable in town.** To place it anyway, "repair per run" must be decided — left TBD for now.
+**The map's character table has exactly one entry (`B`)**, so this is unwritable rather than merely undone.
+
+### The room sits on the surface, and it has to
+
+**The town's floor is `fx_tuning.BG_NEAR_GROUND_Y` exactly.** The room was first cut twelve tiles lower and
+**the town rendered as a black box with the right backdrop loaded and swapped in.** `sky_background` clamps
+the far picture at the ground line and fills everything below with the underground bands — a room below that
+line is *underground* by the background's own definition, so both town pictures were drawn and then covered
+by rock. **Nothing barked.** ⇒ Moving the room down again needs `background.md` to answer "what is behind a
+town below the ground line" first.
 
 ---
 
@@ -135,6 +157,17 @@ a glyph is **socketed into a layer the moment you receive it**, so there is noth
 | **Body** | Things like a double jump | **Always, from purchase** |
 | **Dice** | **Rerolling** a three-pick instead of taking it | Next run |
 
+### What runs today — the list, not the shop
+
+**The window is built** (`src/view/research_window.gd`): the four slots above, each with its icon and its
+state, and the material count. **The item row is the rune pool**, read live from `Progress`, so earning fire
+visibly moves it — which is this bench's whole stated purpose.
+
+**Nothing can be bought, and the window says so.** There is no price table (see the TBD list) and therefore
+no button; a button that took a material and returned nothing would be worse than an honest empty shelf.
+⇒ **Material accrues and cannot be spent.** That split is deliberate: the drop was already decided (the GDD's
+"Drops"), the price was not.
+
 **"Items" and "points" are a pair.** Opening items grows what there is to buy;
 raising points grows the vessel — **you need both for a build to widen.**
 ⇒ **Two unlock axes means "what do I buy first" comes up every time.** With one, there is no ordering.
@@ -159,14 +192,25 @@ Glyphs really are thin — **2** (spread · blast). Circles: **1**.
 
 ---
 
-## Materials — only bosses drop them, so one or two per run
+## 원석 — bosses and levels, so nine to eleven per full run
 
-The GDD's "Drops" already decided it. **Bosses give research material (permanent).** Trash mobs give XP and money,
-and **that dies with the run.**
+**The material has a name now: 원석**, and **two doors, not one** —
+**a boss gives 3~4, a level gives 1** ([../decisions/gems-from-bosses-and-levels.md](../decisions/gems-from-bosses-and-levels.md)).
+A trash-mob kill still gives nothing directly; it reaches 원석 only by way of XP and the level.
 
-⇒ **The doors through which material enters a run equal the boss count.** With only stage 1, **1–2 per run.**
+⇒ A full clear ≈ **9–11**. A death at level 2 ≈ **2** — **never 0**, which is what lets research start in a
+run that ends the normal way. **This replaced the old "1–2 per run"**: with the boss door alone, the
+settlement screen's count-up had two ticks to show.
 
-**That number is the pace of research.** Three materials per unlock means one unlock every three runs.
+**Implemented** — `Progress.gems`, both doors: `add_boss_gems()` rolls 3~4 on a boss's death, and the
+level-up loop adds 1 per level crossed (so one big XP award that crosses two thresholds pays both, exactly as
+`pending_picks` does). **It is the one field `Progress.reset()` does not clear**, and `net_progress` measures
+that — including that the roll really spans its range rather than pinning to the minimum.
+**On screen it is `원석 N` at the research bench; in code the field is `gems`.**
+
+**That number is the pace of research.** ~~Three materials per unlock means one unlock every three runs.~~
+**Void — that arithmetic was written against 1–2 per run.** At 9–11 a run, three 원석 an unlock would open
+three or four unlocks per run. **The price is TBD and must be re-derived from the new yield.**
 **There is one kind of material** (decided by the user). Splitting kinds would create "beat this boss to unlock that",
 giving each boss its own reason to be fought, **but with two bosses that axis is still thin** — nothing to split.
 Revisit as stages grow.
@@ -205,12 +249,76 @@ No tooltip, no fixture whose job is to teach — **that pressure goes to the tut
 is **the bull's fire rune only.** The *start* is not a receiving problem — **it is a town problem, and town is cut
 from this week** ⇒ until town exists, **code holds the fixed pair directly** (`spell_circle.DEFAULT_RUNE`).
 
-**End**: die or clear and you return to town.
+**End**: die or clear and **you go through the settlement screen first**, then return to town —
+[../plans/1.ready/run-end-settlement.md](../plans/1.ready/run-end-settlement.md). It opens the instant you
+go down, prints play time and damage dealt, and **counts 원석 up.** The button on it is what enters the town.
+**That doc names the currency this one calls "material": 원석.**
 
-**Whether death and clearing look different in town** is **TBD.**
-No need to decide now, but **with no difference at all, clearing loses its weight.**
+**Whether death and clearing look different** is still **TBD** — but it is now a question about **that
+screen**, not about this room. **With no difference at all, clearing loses its weight.**
 
 ---
+
+## Art — the three fixtures exist as pictures (nothing else)
+
+Picked by the user out of three candidates each, in `assets/town/`:
+
+| File | Size | What it is |
+|---|---|---|
+| `research_bench.png` | 36x36 | A stone bench with vials and a rune tablet |
+| `assembly_bench.png` | 44x32 | A wooden bench with an open spellbook |
+| `departure_gate.png` | 36x44 | A stone arch with glowing runes in the pillars |
+
+Sized against the player (32px) and padded to a multiple of `CELL_PX` 4 the same way the monsters are
+(`monsters.md`, "pad, never resample"). **The gate is taller than the player** — it has to read as walk-through.
+
+**TODO — the generator baked a cast shadow into each one.** It reads as a dark blob beside the fixture
+(**the user asked whether it was a cat**). **Still open, and confirmed not automatable**: the shadow is one
+connected opaque component with the fixture itself (measured — 590px, one blob, on the assembly bench), so
+there is nothing for a component cut to separate, and a darkness cut would eat the sprite's own linework.
+**It needs the hand pass this line already said it needs.** **No cat, and no animals or NPCs at all** —
+this doc's boundary already says "a home with no people".
+
+~~**TODO — nothing places these.**~~ **Placed.** `town_map.FIXTURE_TILES` seats them, `town_view` draws them
+at **2x** — at 1:1 a 36px bench barely clears the 32px player and reads as scenery rather than as something
+to walk up to. `net_town` measures that the table's sizes are the pngs' own sizes and that the zoom is an
+integer (a 1.5x upscale of pixel art gives some pixels twice the size of others).
+
+### The research window's art — **stone, not a spellbook** (decided by the user)
+
+Both tones were generated and compared. **The user picked stone**: *"a spellbook is something you carry around"* —
+⇒ **a fixture that stays in the room should not look like the thing in your hands.** The assembly window keeps
+its grimoire (`circle-art.md`); **the two windows differing is the point, not a mismatch.**
+Then: **"make it brighter"** — the first stone pass was a dark grey slab and the town is meant to read bright
+(this doc's "Screen").
+
+In `assets/ui/`:
+
+| File | What it is |
+|---|---|
+| `research_panel.png` | Pale sandstone frame, carved border, empty center (512x512) |
+| `slot_row.png` | A row of carved slots, one chained shut — **"locked" has a picture** (512x320) |
+| `icon_material.png` · `icon_point.png` · `icon_item.png` · `icon_body.png` · `icon_dice.png` | The four research slots plus the material, 24px |
+
+**The icons are pure white on transparency** (decided by the user: *"the material has to be more obvious —
+a white drawing would do"*). Solid white means **the UI tints them per state instead of storing a colored
+copy per state**; the dice's pips are holes punched through the silhouette, not painted dots.
+
+~~**TBD — how big the panel is on screen.**~~ **Settled by building it**: `Fx.RESEARCH_RECT` is
+**480x400**, centred. Smaller than the assembly window's 864x372 on purpose — that one is a workbench you
+arrange things on, this is a list you read, and four short lines across 864px is a field of parchment.
+
+**It does 9-slice, and it is clean.** ~~`circle-art.md` already measured that 9-slice misaligns the
+corners~~ — **that cross-reference was wrong; `circle-art.md` contains no such measurement.** The panel is
+cut into nine regions by `research_layout.nine()` with the four corners drawn 1:1 and never scaled;
+`net_town` measures that the nine destinations tile the window exactly (area, with each corner's position
+and size checked separately, because area alone cannot see a stretched corner), and it was looked at on
+screen.
+
+**The panel shipped with an opaque white background** and was drawn into the game wearing a white rectangle
+around its rounded frame. `tools/pixel/cut_white_bg.py` keys it out by flooding in from the border — safe
+here, and **not** safe for monsters, which is why `cutbg.py` uses chroma green instead (that file's own
+header records a white chicken on a white ground being walked straight through).
 
 ## Screen
 
@@ -247,8 +355,10 @@ No need to decide now, but **with no difference at all, clearing loses its weigh
   **It becoming not-a-wall later is intended** (GDD "the midboss's role changes per run").
   The only thing to preserve is that **it must be met as a wall once**
 - **How many dice per run** · do unlocks raise the count · are more found in the dungeon
-- **The price of one unlock** — how many materials. Tied to 1–2 arriving per run
-- **Do death and clearing look different**
+- **The price of one unlock** — how many 원석. **Re-derive against 9–11 per run**, not the old 1–2
+- **Do death and clearing look different** — moved onto the settlement screen (`../plans/1.ready/run-end-settlement.md`)
+- **Saving.** 원석 is permanent and **nothing in `src/` writes a file** — no `user://`, no `FileAccess`.
+  Research cannot outlive the process until this exists. No doc, no owner
 - **Leftover money** — left as vanishing, not final
 - **Do we put anything burnable (wood) in town** — doing so requires deciding "repair per run"
 - **Town in multiplayer** — the window stopping the world breaks there

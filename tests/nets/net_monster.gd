@@ -61,7 +61,14 @@ const STAGE_SCRIPT := "res://src/stage/stage.gd"
 ## The firing origin sits this far to the left of the box. The same value and the same reason as
 ##  `net_damage.HIT_LEAD_PX` — generation 0's first-tick leap (`Tuning.speed_cells(0) * Tuning.CELL_PX`) is
 ##  far larger than the box, so firing from this far ahead gives a "leaping placement" with **both ends of the segment outside the box**.
-const HIT_LEAD_PX := 36
+## **36 -> 24 when the hen's box grew to 48px.** The condition this value has to satisfy is asserted right
+##  where it is used (`_monster_hit_by_a_leaping_segment`): `lead + w_px < one tick's leap (80px)`, or the
+##  segment's far end lands *inside* the box and the placement stops being a leaping one — at 36 + 48 = 84 it
+##  did, and that assertion is what went red. 24 + 48 = 72 clears it with room.
+## **It is no longer the same number as `net_damage.HIT_LEAD_PX`**, and that is correct: that file leads a
+##  shot past the *player's* 20px box, this one past the widest monster box it fires at. The two were equal by
+##  coincidence, not by contract.
+const HIT_LEAD_PX := 24
 
 ## The firing origin (in cells) to slam a blast down from — well above the floor. The same idiom as `net_damage.BLAST_FROM_CY`.
 const BLAST_FROM_CY := FLOOR_CY - 20
@@ -97,9 +104,14 @@ const FLOOR_W_CX := 2000
 # -- 6-helper. monster collision width — measured with a vertical chimney, no horizontal movement --
 ## **Looking only at the landing y (old check 6) leaves all 66 green even when `Monster` doesn't pass
 ##  `w_px` to `Body` (fixed 20px)** (verifier measured) — with no horizontal movement the width is never once engaged.
-##  => **The width is engaged by falling alone**: a hen (24px) fits the 32px gap, a pig (44px) catches on top.
+##  => **The width is engaged by falling alone**: a pig (44px) fits the 48px gap, a bull (88px) catches on top.
 const HOLE_CX := 50
-const HOLE_W_CELLS := 8   # 32px — wider than a hen, narrower than a pig
+## **48px — wider than a pig (44), narrower than a bull (88).**
+## **It was 32px and the pair was hen/pig**, until the hen's art grew and its box went 24 -> 48
+##  (`monster_defs.KIND_HEN`'s own box). **Nothing in the table is narrower than the pig any more**, so the
+##  pair moved up a size rather than the check being weakened: what is measured is unchanged — that the width
+##  a monster hands `Body` is the width that decides whether it fits a gap.
+const HOLE_W_CELLS := 12
 ## It is deeper than the thin floor (`FLOOR_DEPTH_CY`, 32 cells) — **left that way on purpose.** Below the
 ##  chimney is outside the thin floor anyway and therefore open, so the hen keeps falling until it reaches
 ##  outside the grid (automatically solid). The check below measures not an exact depth but only `y > FLOOR_TOP` (did it fall further), so it doesn't matter.
@@ -448,6 +460,10 @@ func run(t) -> void:
 	_layer_draws_go_through_the_canvas_argument(t)
 	# -- levelup-and-three-picks Stage A -- acceptance 8, measured by value --
 	_dummy_raises_hits_to_kill_a_pig(t)
+	# -- animation (`monsters.md`, "animation is entirely a code gap") --
+	_a_walking_monster_reaches_the_walk_state(t)
+	_a_hit_puts_the_hurt_pose_up_for_its_whole_length(t)
+	_a_corpse_plays_its_death_sheet_through(t)
 
 
 # -- 1. premises --------------------------------------------------
@@ -470,8 +486,11 @@ func _defs_accessors(t) -> void:
 	t.eq(Defs.h_px(Defs.KIND_PIG), 32, "돼지 h_px = 32")
 	t.eq(Defs.step_cells(Defs.KIND_PIG), 1, "돼지 step_cells = 1")
 	t.eq(Defs.max_hp(Defs.KIND_PIG), 30, "돼지 max_hp = 30")
-	t.eq(Defs.w_px(Defs.KIND_HEN), 24, "닭 w_px = 24")
-	t.eq(Defs.h_px(Defs.KIND_HEN), 28, "닭 h_px = 28")
+	# **24x28 -> 48x64 when the enlarged art landed** (`monster_defs.KIND_HEN`'s own box). These two literals
+	#  are the point of this function — the box follows the png, so the day one moves without the other, the
+	#  size contract (`net_monster_sprite`) and this line disagree and one of them says so.
+	t.eq(Defs.w_px(Defs.KIND_HEN), 48, "닭 w_px = 48")
+	t.eq(Defs.h_px(Defs.KIND_HEN), 64, "닭 h_px = 64")
 	t.eq(Defs.step_cells(Defs.KIND_HEN), 3, "닭 step_cells = 3")
 	t.eq(Defs.max_hp(Defs.KIND_HEN), 10, "닭 max_hp = 10")
 	t.ok(Defs.w_px(Defs.KIND_PIG) != Defs.w_px(Defs.KIND_HEN), "돼지 ≠ 닭 (w_px)")
@@ -496,6 +515,15 @@ func _defs_accessors(t) -> void:
 	t.eq(Defs.xp_of(Defs.KIND_BULL), 200, "황소 xp = 200")
 	t.eq(Defs.money_of(Defs.KIND_BULL), 100, "황소 money = 100")
 	t.eq(Defs.name_of(Defs.KIND_ROOSTER), &"거대 수탉", "거대 수탉 name")
+	t.eq(Defs.w_px(Defs.KIND_WOLF), 48, "늑대 w_px = 48")
+	t.eq(Defs.h_px(Defs.KIND_WOLF), 28, "늑대 h_px = 28")
+	t.eq(Defs.max_hp(Defs.KIND_WOLF), 24, "늑대 max_hp = 24")
+	t.eq(Defs.speed_px(Defs.KIND_WOLF), 240.0, "늑대 speed_px = 240 (돼지보다 빠르다)")
+	# **The wolf is the same width as the hen and must not be the same beast.** Height is what separates them
+	#  (28 vs 64) — the user's own rule that species split by brightness first has a shape counterpart here.
+	t.ok(Defs.h_px(Defs.KIND_WOLF) != Defs.h_px(Defs.KIND_HEN), "늑대 ≠ 닭 (h_px — 폭은 같다)")
+	t.ok(Defs.speed_px(Defs.KIND_WOLF) > Defs.speed_px(Defs.KIND_PIG), "늑대가 돼지보다 빠르다")
+
 	t.eq(Defs.w_px(Defs.KIND_ROOSTER), 72, "거대 수탉 w_px = 72")
 	t.eq(Defs.h_px(Defs.KIND_ROOSTER), 80, "거대 수탉 h_px = 80")
 	t.eq(Defs.step_cells(Defs.KIND_ROOSTER), 3, "거대 수탉 step_cells = 3")
@@ -585,18 +613,27 @@ func _monster_collision_width_gates_the_chimney(t) -> void:
 
 	# From stage 2 on, `_next_axis` actually reads the target — the target is set equal to the centre of the
 	#  spawn position so axis is always 0 (pure falling only. Walking is another check's job).
-	var hen := Monster.new(1, Defs.KIND_HEN, hole_left, FLOOR_TOP - 200)
-	var hen_target_x := int(hen.center().x)
-	for _i in 600:
-		hen.step(g, DT, hen_target_x, 0)
-	t.ok(hen.y > FLOOR_TOP, "닭(24px < 32px 틈)이 굴뚝을 통과해 바닥 아래로 더 떨어진다 (y=%d)" % hen.y)
+	var hole_w := HOLE_W_CELLS * Tuning.CELL_PX
+	# **The premise is asserted, not assumed.** Both boxes moved once already; if the table shifts again so
+	#  that neither fits or both do, this line says so instead of the two checks below quietly agreeing.
+	t.ok(Defs.w_px(Defs.KIND_PIG) <= hole_w and Defs.w_px(Defs.KIND_BULL) > hole_w,
+		"돼지(%dpx)는 틈(%dpx)에 들어가고 황소(%dpx)는 못 들어간다 (전제)" % [
+			Defs.w_px(Defs.KIND_PIG), hole_w, Defs.w_px(Defs.KIND_BULL)])
 
-	var pig := Monster.new(2, Defs.KIND_PIG, hole_left, FLOOR_TOP - 200)
-	var pig_target_x := int(pig.center().x)
+	var narrow := Monster.new(1, Defs.KIND_PIG, hole_left, FLOOR_TOP - 200)
+	var narrow_target_x := int(narrow.center().x)
 	for _i in 600:
-		pig.step(g, DT, pig_target_x, 0)
-	t.eq(pig.y, FLOOR_TOP - Defs.h_px(Defs.KIND_PIG),
-		"돼지(44px > 32px 틈)는 굴뚝에 안 들어가고 바닥 위에 걸린다 (y=%d)" % pig.y)
+		narrow.step(g, DT, narrow_target_x, 0)
+	t.ok(narrow.y > FLOOR_TOP, "돼지(%dpx < %dpx 틈)가 굴뚝을 통과해 바닥 아래로 더 떨어진다 (y=%d)" % [
+		Defs.w_px(Defs.KIND_PIG), hole_w, narrow.y])
+
+	var wide := Monster.new(2, Defs.KIND_BULL, hole_left, FLOOR_TOP - 200)
+	var wide_target_x := int(wide.center().x)
+	for _i in 600:
+		wide.step(g, DT, wide_target_x, 0)
+	t.eq(wide.y, FLOOR_TOP - Defs.h_px(Defs.KIND_BULL),
+		"황소(%dpx > %dpx 틈)는 굴뚝에 안 들어가고 바닥 위에 걸린다 (y=%d)" % [
+			Defs.w_px(Defs.KIND_BULL), hole_w, wide.y])
 
 
 # -- 6. the monster falls and stands exactly on the surface -------
@@ -1126,11 +1163,12 @@ func _pig_and_hen_cross_the_ledge_differently(t) -> void:
 	# **The `continue` above has no bark of its own** — a kind later getting a `MOVES` row would silently
 	#  drop out of this loop with nothing to notice. Pinning the count closes it (the same medicine
 	#  `net_tables._monster_defs_columns_are_complete`'s header already names for a sibling trap).
-	#  **2, not 3** — this comment predicted the drop before it happened: "only `KIND_BULL` has a `PATTERNS`
-	#  row today... this count drops to 3-1=2 the day Stage F gives [the rooster] one too, and that drop is
-	#  exactly what this assertion exists to catch." Stage F did, and the assertion caught it exactly as
-	#  written — updated from 3 to 2, not silently, this comment records both numbers.
-	t.eq(measured, 2, "이 검사가 실제로 잰 종류 수 (패턴 없는 종류들, 돼지·닭만) (%d개)" % measured)
+	#  **The number's history is the point, so all three are recorded**: 3 when only the bull had a `PATTERNS`
+	#  row, **2** when Stage F gave the rooster one (this comment predicted that drop and the assertion caught
+	#  it), and **3 again** now that the wolf joined `ALL` with no pattern row of its own. Each move was a real
+	#  change to what this loop covers, and each was made here by hand rather than by deriving the count —
+	#  derived, it would follow any change silently, which is the whole thing this line exists to prevent.
+	t.eq(measured, 3, "이 검사가 실제로 잰 종류 수 (패턴 없는 종류들 — 돼지·닭·늑대) (%d개)" % measured)
 
 
 # ==================================================================
@@ -1789,3 +1827,140 @@ func _dummy_raises_hits_to_kill_a_pig(t) -> void:
 		boosted, common])
 
 
+
+
+# ══════════════════════════════════════════════════════════════════
+#  Animation — `docs/design/monsters.md`, "animation is entirely a code gap now"
+#
+#  **`net_monster_sprite` measures the table and the pure functions; this measures the wiring.**
+#   The two together are what stops "the table is right and nothing on screen reads it", which is exactly the
+#   state this repo was in before this feature (nine sheets on disk, one of them drawn).
+#  **What no net here can see is whether the sheet in a slot really is that animation** — the eye's, in
+#   principle (`character_view.pick_state`'s own note).
+# ══════════════════════════════════════════════════════════════════
+
+## Walking is diffed against the previous frame's x, inside the view. Measured by **letting the monster
+##  actually walk** — a pig with the player far to its right — rather than by poking `_prev_x`, because what
+##  can break here is the wiring between `advance()` and the world, not the arithmetic.
+##
+## **The standing half is measured first and from the same node**, so "it always returns WALK" cannot pass.
+func _a_walking_monster_reaches_the_walk_state(t) -> void:
+	var kind := Defs.KIND_PIG
+	var stand_x := 200
+	var g := _bare_grid()
+	var spell := SpellSim.new()
+	# The player is far to the right, so the pig walks toward it and never reaches contact (no shove pose).
+	var ch := Character.new()
+	ch.place(stand_x + 900, FLOOR_TOP - Character.H_PX)
+	var world := WorldStep.new(g, spell, ch)
+	var mid := world.spawn_monster(kind, stand_x, FLOOR_TOP - Defs.h_px(kind))
+	t.ok(mid > 0, "돼지가 섰다 (검사의 전제)")
+
+	var view := MonsterView.new()
+	view.setup(world, ch, g)
+	# The very first `advance()` has no previous x yet — that is the "a spawn must not walk for one frame"
+	#  discipline `character_view.setup()` records, and it is measured, not assumed.
+	view.advance()
+	t.eq(view.anim_state(mid), Fx.MON_IDLE, "본 첫 프레임은 서기다 (스폰이 한 프레임 걷지 않는다)")
+
+	var walked := false
+	var moved_px := 0
+	for _i in 30:
+		world.frame(DT, 0.0, false, false)
+		view.advance()
+		if view.anim_state(mid) == Fx.MON_WALK:
+			walked = true
+	moved_px = absi(world.monster_at(0).x - stand_x)
+	t.ok(moved_px > Fx.MONSTER_WALK_PX_PER_FRAME,
+		"돼지가 걸음 시계 한 칸(%dpx)보다 멀리 갔다 (%dpx — 검사의 전제)" % [Fx.MONSTER_WALK_PX_PER_FRAME, moved_px])
+	t.ok(walked, "움직이는 동안 걷기 상태에 들어갔다")
+	# **The cell actually advanced too** — the state alone would stay green with a frozen clock.
+	t.ok(MonsterView.frame_index(Fx.MON_WALK, MonsterView.anim_row(kind, Fx.MON_WALK), 0, moved_px) > 0,
+		"그만큼 걸었으면 걷기 칸도 0번을 지났다 (다리가 얼지 않는다)")
+	view.free()
+
+
+## **A hit puts the hurt pose up, and it stays up longer than the flash.** That gap is the whole reason
+##  `_hurt_left` exists as its own latch — driven off `_flash_left` (6 frames) the 12-frame hurt sheet would
+##  be cut at its second cell and never reach its last (`monster_view._hurt_left`'s own box).
+func _a_hit_puts_the_hurt_pose_up_for_its_whole_length(t) -> void:
+	var kind := Defs.KIND_PIG
+	var stand_x := 600
+	var g := _bare_grid()
+	var spell := SpellSim.new()
+	var ch := _still_ch(stand_x, kind)
+	var world := WorldStep.new(g, spell, ch)
+	var mid := world.spawn_monster(kind, stand_x, FLOOR_TOP - Defs.h_px(kind))
+	var view := MonsterView.new()
+	view.setup(world)
+	view.advance()
+
+	var hurt_len := MonsterView.oneshot_frames(kind, Fx.MON_HURT)
+	t.ok(hurt_len > Fx.MONSTER_FLASH_FRAMES,
+		"맞기 애니메이션(%d프레임)이 번쩍임(%d프레임)보다 길다 (전제 — 같으면 아래가 공회전한다)" % [
+			hurt_len, Fx.MONSTER_FLASH_FRAMES])
+
+	var center_cx := floori((stand_x + Defs.w_px(kind) * 0.5) / float(Tuning.CELL_PX))
+	world.enqueue(_blast_cmd(center_cx))
+	var hit := false
+	for _i in Tuning.TICK_DIVIDER * 3:
+		world.frame(DT, 0.0, false, false)
+		view.advance()
+		if view.anim_state(mid) == Fx.MON_HURT:
+			hit = true
+			break
+	t.ok(hit, "맞은 프레임에 맞기 자세가 올라왔다")
+	t.ok(world.monster_count() == 1, "아직 살아 있다 (검사의 전제 — 죽으면 상태가 사라진다)")
+
+	# It survives past the flash going out — the point of the separate latch.
+	for _i in Fx.MONSTER_FLASH_FRAMES:
+		view.advance()
+	t.ok(not view.is_flashing(mid), "번쩍임은 이미 꺼졌다 (전제)")
+	t.eq(view.anim_state(mid), Fx.MON_HURT, "번쩍임이 꺼진 뒤에도 맞기 자세가 남아 있다")
+	# And it does end — a latch that never expires would freeze the pose.
+	for _i in hurt_len:
+		view.advance()
+	t.ok(view.anim_state(mid) != Fx.MON_HURT, "%d프레임 뒤에는 맞기 자세가 끝난다" % hurt_len)
+	view.free()
+
+
+## **The corpse is the death sheet played by its own age.** Measured as "the cell advances and then stops" —
+##  a corpse that wrapped back to cell 0 would be the beast twitching back to life mid-fade.
+##
+## **It reads `view.corpse_frame()`, not `frame_index()`.** Found by inversion: an earlier version of this
+##  check drove the arithmetic directly, and freezing `_corpse_art` on cell 0 — which is the whole bug this
+##  exists to catch — left it green. The query goes through the same function that produces the drawn rect
+##  (that query's own box).
+func _a_corpse_plays_its_death_sheet_through(t) -> void:
+	var kind := Defs.KIND_HEN
+	var last := int((MonsterView.anim_row(kind, Fx.MON_DEATH) as Dictionary)["frames"]) - 1
+	t.ok(last > 0, "닭 죽기 시트가 두 칸 이상이다 (전제)")
+
+	var stand_x := 600
+	var g := _bare_grid()
+	var spell := SpellSim.new()
+	var world := WorldStep.new(g, spell, _still_ch(stand_x, kind))
+	world.spawn_monster(kind, stand_x, FLOOR_TOP - Defs.h_px(kind))
+	var view := MonsterView.new()
+	view.setup(world)
+
+	var center_cx := floori((stand_x + Defs.w_px(kind) * 0.5) / float(Tuning.CELL_PX))
+	world.enqueue(_blast_cmd(center_cx))
+	for _i in Tuning.TICK_DIVIDER * 3:
+		if world.frame(DT, 0.0, false, false) and world.died_count() > 0:
+			view.on_tick()
+			break
+	t.eq(view.corpse_count(), 1, "시체가 하나 생겼다 (검사의 전제)")
+	t.eq(view.corpse_frame(0), 0, "시체는 0번 칸에서 시작한다")
+
+	var seen: Array[int] = [0]
+	while view.corpse_count() > 0:
+		view.advance()
+		if view.corpse_count() == 0:
+			break
+		var i := view.corpse_frame(0)
+		if seen[-1] != i:
+			seen.append(i)
+	t.eq(seen[-1], last, "시체 수명이 다하기 전에 마지막 칸(%d번)까지 간다" % last)
+	t.eq(seen.size(), last + 1, "칸이 한 번씩 순서대로 지나간다 (되감기지 않는다 · %s)" % [seen])
+	view.free()

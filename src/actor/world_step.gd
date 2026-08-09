@@ -216,6 +216,13 @@ func frame(dt: float, axis: float, jump: bool, jump_held: bool) -> bool:
 			#  a rooster kill correctly flips `boss_died`/`is_reward_pending`, and nothing downstream acts on it.
 			if BossAi.has_pattern(dying.kind):
 				_progress.set_boss_reward_pending(dying.kind)
+				# **The permanent drop, on the same event and by the same gate**
+				#  (`docs/decisions/gems-from-bosses-and-levels.md`: a boss gives 3~4 원석). **The amount is
+				#  not decided here** — `Progress` owns both the numbers and the RNG stream that rolls them,
+				#  so this call site cannot drift from the decision doc.
+				# **The level door is not here**; it lives inside `Progress.add_xp`'s own level-up loop, which
+				#  is the only place a level is ever crossed.
+				_progress.add_boss_gems()
 			_monsters.remove_at(idx)
 		# (6) **Was the player hit by a monster or a bolt — it must be after **both** `_char.on_tick` and the
 		#  monster on_tick** (doc, "behavior (9)"). Put it earlier and a monster dying on that tick gets one

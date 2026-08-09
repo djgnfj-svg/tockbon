@@ -21,9 +21,17 @@ const KIND_PIG := 1
 const KIND_HEN := 2
 const KIND_BULL := 3
 const KIND_ROOSTER := 4
+## **The wolf** — `docs/design/monsters.md`'s own "the wolf is tawny/chestnut, brighter than the pig and
+##  warmer than the dirt" (the user's rule: species are told apart by brightness first). Its art landed with a
+##  full animation set and **the row it needed to exist at all is this one** — until now it was "art on disk
+##  and nothing more", that doc's own words.
+## **It is not assigned to a stage.** Stage 1's pair is pig + hen (that doc's "Stage 1's trash mobs — two"),
+##  and **placement is the map's share, not this table's**. Adding the row makes it spawnable and drawable;
+##  it does not put one on the ground anywhere.
+const KIND_WOLF := 5
 
 ## Iteration goes **only through this explicit list**. It does not assume the values are contiguous.
-const ALL: Array[int] = [KIND_PIG, KIND_HEN, KIND_BULL, KIND_ROOSTER]
+const ALL: Array[int] = [KIND_PIG, KIND_HEN, KIND_BULL, KIND_ROOSTER, KIND_WOLF]
 
 ## 20 is a value decided by the user — not a value to measure and adjust.
 const MAX_MONSTERS := 20
@@ -38,8 +46,19 @@ const DEFS: Dictionary = {
 		"max_hp": 30, "speed_px": 160.0, "invuln_ticks": 2,
 		"xp": 12, "money": 5,
 	},
+	# **24x28 -> 48x64 when the enlarged art landed** (`monsters.md`: "the trash mobs are too small", the
+	#  user's decision, and `hen_body.png` is 48x64). **The picture is what moved this, not a tuning pass** —
+	#  the box follows the art because `net_monster_sprite` asserts the two are equal.
+	#
+	# **A gameplay property was lost with it, and it is not a bug**: at 24px the hen fit through a 32px gap
+	#  and the pig did not, which was the narrow-mob-drops-through-a-hole behaviour `net_monster._monster_
+	#  collision_width_gates_the_chimney` measured. **At 48px nothing in the table is narrower than the pig**,
+	#  so that check now measures the pig against the bull instead. If "one mob slips through gaps" is wanted
+	#  back, it needs a *narrow* kind, not a smaller hen.
+	#
+	# **The cost is 4.6x, and it is measured, not assumed** — see the profile table below.
 	KIND_HEN: {
-		"name": &"닭", "w_px": 24, "h_px": 28, "step_cells": 3,
+		"name": &"닭", "w_px": 48, "h_px": 64, "step_cells": 3,
 		"max_hp": 10, "speed_px": 220.0, "invuln_ticks": 2,
 		"xp": 6, "money": 3,
 	},
@@ -66,20 +85,52 @@ const DEFS: Dictionary = {
 		"max_hp": 250, "speed_px": 200.0, "invuln_ticks": 2,
 		"xp": 250, "money": 120,
 	},
+	# **48x28 is the art's own size** (`wolf_body.png`), already a multiple of 4 on both sides — no padding,
+	#  unlike the bull. Long and low: wider than the pig and barely half its height.
+	# **Every number except the box is provisional and nobody has set them** — "skeleton first" (`monsters.md`
+	#  leaves health, damage and movement speed TBD for exactly this reason). The shape chosen: **faster than
+	#  the pig and thinner** (240 vs 160 px/s, 24 vs 30 hp), because the art is a lunging predator and the
+	#  pig's identity is already "a big body that falls into a pit".
+	# **It has no lunge in the sim.** `wolf_lunge.png` plays when it is in contact range, the same door the
+	#  pig's shove uses — the picture shows an attack when an attack happens, but the *dash* the art implies is
+	#  not a mechanic. `boss_ai` is where a real lunge would go, and it is not built.
+	KIND_WOLF: {
+		"name": &"늑대", "w_px": 48, "h_px": 28, "step_cells": 3,
+		"max_hp": 24, "speed_px": 240.0, "invuln_ticks": 2,
+		"xp": 15, "money": 6,
+	},
 }
 
-## **The first boss-box measurement** — `stage1-bosses.md`'s Cost section asked whoever builds Stage A to
-##  leave it here. Measured by verify-run: 600 frames warmed, 3 runs, one `world.frame()` call per frame —
+## **The cost table. Re-take it with `tools/stage/profile_monsters.gd`, do not edit it by hand.**
+##  `stage1-bosses.md`'s Cost section asked whoever builds Stage A to leave the numbers here; the hen's box
+##  then grew 4.6x and there was **no way to re-take them**, which is how a measured number becomes a stale
+##  one. There is a tool now. Same method as verify-run's original: 600 frames warmed, 3 runs (median), one
+##  `world.frame()` per frame, an empty world subtracted. 60Hz budget = 16,667µs.
 ##
-##  | | box cells | extra µs over an empty world (81-93µs) | % of the 16,667µs 60Hz budget |
-##  |---|---|---|---|
-##  | pig | ~108 | +220 | ~1.3% |
-##  | 황소 (bull) | 308 (88x56) | +570 | ~3.4% |
-##  | 거대 수탉 (rooster) | 360 (72x80) | +1,010 | ~6.1% |
+##  | | box cells | 1 alive | % of 60Hz | **20 alive (measured)** | % of 60Hz |
+##  |---|---|---|---|---|---|
+##  | 돼지 pig | 88 (44x32) | +192µs | 1.2% | **+3,416µs** | 20.5% |
+##  | 닭 hen | 192 (48x64) | +306µs | 1.8% | **+5,318µs** | 31.9% |
+##  | 황소 bull | 308 (88x56) | +556µs | 3.3% | +13,586µs | 81.5% |
+##  | 거대 수탉 rooster | 360 (72x80) | +662µs | 4.0% | +13,014µs | 78.1% |
+##  | 늑대 wolf | 84 (48x28) | +197µs | 1.2% | +4,004µs | 24.0% |
 ##
-##  Both land inside the plan's predicted 330-1,060µs band. **One number is unexplained, not just unmeasured**:
-##  the rooster costs 1.6x the bull on only 17% more cells. Its 200 speed_px vs the bull's 140 (more sub-steps
-##  per frame in `Body.move_x`/`move_y`) is a plausible cause, not a confirmed one — nobody has isolated it.
+##  **Empty world: 67µs.** The pig (+192 vs. the old +220) and the bull (+556 vs. +570) reproduce verify-run's
+##  original numbers; the rooster comes out lower (+662 vs. +1,010) — machine state, not a code change.
+##
+##  **Cost is sublinear in box cells, and the old projection assumed it was linear.**
+##  The hen has **2.2x the pig's cells and costs 1.6x** as much. `monsters-bigger-boxes.md` §4 built its whole
+##  estimate on cells-are-proportional and flagged it as an assumption; this is the measurement, and the
+##  assumption was pessimistic. **The enlarged hen was projected at ~250µs and lands at 306µs, and 20 of them
+##  at 31.9% of the frame — affordable.** The old "1.6x the bull on 17% more cells" rooster puzzle dissolves
+##  into the same shape: per-cell work is not what dominates.
+##
+##  **The 20-at-once column is measured, not multiplied** — 20 bulls is not a real scene, but the 20-pig and
+##  20-hen rows are exactly the scene `MAX_MONSTERS` describes and were the one thing nobody had ever run.
+##  Note they come in *under* 1-monster x 20 (3,416 vs 3,840): the per-frame fixed cost is paid once.
+##
+##  **What this still does not measure**: monsters *plus* fire plus water on one screen. `monsters.md`'s "the
+##  problem is not monsters alone but the overlap" is untouched, and water's acceptance 7 is still open.
 
 ## **Index `DEFS[kind][...]` directly.** Do not use `.get(..., default)` —
 ##  a kind missing from the table silently becomes a pig. `character_view._cell_rect` recorded the same discipline.

@@ -30,6 +30,11 @@ const MonsterView := preload("res://src/view/monster_view.gd")
 const MonsterDefs := preload("res://src/actor/monster_defs.gd")
 const Progress := preload("res://src/actor/progress.gd")
 const WaterSource := preload("res://src/sim/water_source.gd")
+## The town (`docs/design/town.md`) — the room, the seats, and the door that asks where you are standing.
+const TownMap := preload("res://src/stage/town_map.gd")
+const Fixtures := preload("res://src/actor/fixtures.gd")
+const TownView := preload("res://src/view/town_view.gd")
+const ResearchWindow := preload("res://src/view/research_window.gd")
 
 ## No longer a constant but a re-export of `terrain_map_generated.gd` — it follows the painted region's size verbatim.
 ##  It pairs with the re-export at the `MAP` declaration below.
@@ -194,6 +199,12 @@ var _cam_lead := 0.0
 ##  `Progress.open_pick()`/`decline()`; this node reads that state itself, every frame, in its own `_process()`.
 @onready var _pick_window: ThreePickWindow = $HUD/ThreePickWindow
 @onready var _monster_view: MonsterView = $MonsterView
+## **Hidden in the stage, shown in the town** — `_in_town` below is the single source, pushed to this
+##  node in `_build_room()` and nowhere else.
+@onready var _town_view: TownView = $TownView
+## The research bench's window. **Under `HUD`, like the other two** — that node is the `CanvasLayer`, so
+##  it does not ride the screen shake.
+@onready var _research_window: ResearchWindow = $HUD/ResearchWindow
 @onready var _char_view: CharacterView = $CharacterView
 @onready var _spell_view: SpellView = $SpellView
 @onready var _blast_fx: BlastFx = $BlastFx
@@ -228,6 +239,19 @@ var _world := WorldStep.new(_grid, _spell, _char)
 ##  The fire count is held by `_world` — that is where a command is actually accepted.
 ## **This number is the nets' proxy for acceptance 2** — spread->blast must be 8, blast->spread 1.
 ##  If they do not separate on screen while only this number is right, that is the signal this stage must stop.
+## **Am I in the town.** The one latch this feature adds to the shell.
+##  **Everything else derives from it** — which map gets built, where the character lands, whether the
+##  fixture view draws, and what E does. Hold a second copy of it anywhere (a view, the HUD) and the two
+##  diverge into "the town is drawn over stage 1", which is visible on screen only.
+## **A run ends by walking back here** (`town.md`, "die or clear and you come back here"). Only two doors
+##  write it, both below: the departure gate and being downed.
+var _in_town := true
+
+## The last thing a fixture said, shown on the HUD until another one speaks. **A string and not a window** —
+##  the town's screens ("how the research and assembly screens are actually drawn") are explicitly outside
+##  `town.md`'s own boundary, and building one now would be deciding by default what the user has not decided.
+var _town_message := ""
+
 var _blast_count := 0
 
 ## **The rain source toggled with K. `null` = off.** `water_source.gd` holds all of the state and counting —
@@ -338,6 +362,12 @@ func _ready() -> void:
 	#  _circle, _grid)` already set for handing a view more than one actor reference directly, since `_world`
 	#  exposes neither the character nor the grid to a caller outside `src/actor/`.
 	_monster_view.setup(_world, _char, _grid)
+	# The fixture prompt follows the player, so the view needs the character — the same one-reference door
+	#  `_char_view.setup` uses. It needs nothing else: the room is a constant and the seats come from it.
+	_town_view.setup(_char)
+	# **The same `Progress` the HUD and the other two windows read** — a copy would show a material count
+	#  that stopped moving the moment a boss died, and nothing would bark.
+	_research_window.setup(_world.progress())
 	_input.fire_requested.connect(_fire_at)
 	_input.reset_requested.connect(reset_stage)
 	_input.water_requested.connect(_pour_water_at)
@@ -347,6 +377,7 @@ func _ready() -> void:
 	_input.reward_taken_requested.connect(_take_boss_reward)
 	_input.monster_requested.connect(_spawn_monster_at)
 	_input.loadout_requested.connect(_set_loadout)
+	_input.interact_requested.connect(_interact)
 	# **The world is not stopped** — do not touch `get_tree().paused` here.
 	#  Walking, firing and fire spreading with the window open is the whole of design acceptance 4.
 	_input.assembly_toggled.connect(_toggle_assembly)
@@ -749,10 +780,131 @@ func reset_stage() -> void:
 	# Room ①'s water reverts with everything else — `_world.reset()` above already clears `Progress.
 	#  reward_pending`, but the water instance itself is held here in the shell, not in `Progress`.
 	_room1_reward_water = null
-	build_terrain_into(_grid)
+	_build_room()
+
+
+## **Builds whichever room `_in_town` says, and stands the character in it.** One function, two rooms —
+##  split into `_build_town()`/`_build_stage()` and the day one of them forgets to move the spawn, the
+##  character starts inside solid rock and the only symptom is "R does nothing".
+##  That is not hypothetical: `SPAWN_TILE`'s own comment records exactly that accident on the stage side.
+##
+## **The grid is not reset here.** Every caller (`reset_stage`, `enter_town`, `_leave_town`) resets first —
+##  resetting inside would mean the two doors that switch rooms could not also clear the views and counters
+##  in the same breath, which is what `reset_stage` exists to do.
+func _build_room() -> void:
+	if _in_town:
+		build_map_into(_grid, TownMap.rows(), TownMap.MAP_CHARS)
+	else:
+		build_terrain_into(_grid)
+	# **The fixtures show exactly when the town does.** Derived from the latch every time a room is built,
+	#  never written at the two doors — that is the same "derive it, do not push it" rule `_update_hud`
+	#  applies to `_hud.visible`, and for the same reason: a door that forgot would strand the benches
+	#  floating over stage 1.
+	_town_view.visible = _in_town
+	# **The backdrop swaps with the room.** `sky_background.set_backdrop()` was written for exactly this and
+	#  had never been called by anything — the town's two pictures sat in `assets/stage/` with constants
+	#  pointing at them and no path to the screen, which is CLAUDE.md's own "is there a path for the thing you
+	#  want to see to reach the screen" in its purest form: the art was in, the constants were in, and the
+	#  town rendered as a black box.
+	_sky.set_backdrop(
+		Fx.BG_TOWN_FAR_TEXTURE if _in_town else Fx.BG_FAR_TEXTURE,
+		Fx.BG_TOWN_NEAR_TEXTURE if _in_town else Fx.BG_NEAR_TEXTURE)
+	# **Cleared with the room.** A bench's line surviving a departure would be the town talking over stage 1.
+	_town_message = ""
+	# **The window closes with the room.** Leaving it open would put the town's parchment panel over stage 1,
+	#  and there is no fixture there to close it at.
+	if _research_window != null and _research_window.visible:
+		_research_window.toggle()
+	var spawn := TownMap.SPAWN_TILE if _in_town else SPAWN_TILE
 	_char.place(
-		SPAWN_TILE.x * Tuning.TILE_CELLS * Tuning.CELL_PX,
-		SPAWN_TILE.y * Tuning.TILE_CELLS * Tuning.CELL_PX)
+		spawn.x * Tuning.TILE_CELLS * Tuning.CELL_PX,
+		spawn.y * Tuning.TILE_CELLS * Tuning.CELL_PX)
+
+
+# ══════════════════════════════════════════════════════════════════
+#  The town — `docs/design/town.md`
+#
+#  **What is here is the room and the door, not the benches' contents.** The research bench's four unlock
+#   slots and the assembly bench's point budget are that doc's own TBDs and have no numbers yet; standing
+#   them up as buttons that spend nothing would be this repo's "reporting a stub as finished".
+#  ⇒ **Every fixture below does something real or says plainly that it does not.**
+# ══════════════════════════════════════════════════════════════════
+
+## E. **One key, and where you are standing decides what it does.**
+##
+## **The stage side is not "nothing" — it is the way back.** With no town there was nowhere to go when you
+##  died and R (rebuild the stage) was the only exit, which is the run never closing (`town.md`'s "Why").
+##  **Only while downed**, so E is not a free teleport out of a fight.
+##
+## **`_town_view.reachable()` is the single source of "which fixture".** The prompt on screen is drawn from
+##  that same call, so the label and the action cannot disagree — a prompt reading `[E] 조립대` while E opens
+##  the gate is exactly the screen/sim split this repo calls its signature fake.
+func _interact() -> void:
+	if not _in_town:
+		if _char.downed:
+			enter_town()
+		return
+	match _town_view.reachable():
+		Fixtures.KIND_GATE:
+			_leave_town()
+		Fixtures.KIND_ASSEMBLY:
+			# **The same window Tab opens, deliberately** (`town.md`: "it is the same window"). What the town
+			#  adds is *choosing what to equip within a budget*, and that needs the point table which does not
+			#  exist yet — so today the bench opens the reordering window and nothing is pretended.
+			_toggle_assembly()
+		Fixtures.KIND_RESEARCH:
+			_toggle_research()
+
+
+## **The research bench, as far as it honestly goes today: the rune pool, unlocked and locked in one list.**
+##
+## **That list is the design's own core requirement, not a placeholder** — "unlocked and locked sitting in one
+##  list is the best possible demonstration that the pool widened" (`town.md`), and it reads `Progress`, the
+##  same live ownership `circle_window`'s palette gates on. Nothing here is invented for display.
+##
+## **What it does not do is spend anything.** There is no material count in `Progress` and no price table
+##  (both are that doc's open TBDs), so **there is no buy button and the text says so.** A button that took
+##  nothing and gave nothing would be the fake; a list that is honestly only a list is not.
+func _toggle_research() -> void:
+	# **Opening one window closes the others** — the same rule `_toggle_assembly`/`_toggle_pick` already hold
+	#  between themselves, extended to a third. `HUD/Stats` is not the contested resource here (this window
+	#  has its own panel), but two open windows overlapping is its own kind of unreadable.
+	if not _research_window.visible:
+		if _circle_window.visible:
+			_circle_window.toggle()
+		_world.progress().decline()
+		_pick_window.cancel_confirm()
+	_research_window.toggle()
+	# The HUD line still says it, for the same reason the window's own footer does — the window can be closed
+	#  while the fact stays true, and `research_text` is what a net drives (its own header).
+	_town_message = research_text(_world.progress())
+
+
+## **Pure and static, so a net drives the list itself** — the same seat as `camera_center` and
+##  `MonsterView.resolve_state`. What matters here is *which runes read as locked*, and that is a value, not
+##  a screenshot: a bench that showed everything unlocked would be the pool looking already-widened on run one.
+static func research_text(pr: Progress) -> String:
+	var parts: Array[String] = []
+	for rune: int in Tuning.ELEM_ALL:
+		parts.append("%s%s" % [Fx.ELEM_NAMES.get(rune, "?"), "" if pr.owns_rune(rune) else " (잠김)"])
+	return "[연구대] 룬 %s — 재료로 푸는 해금은 아직 없다" % " · ".join(parts)
+
+
+## **Into the town.** Called when the player takes E while downed — the run is over, so the whole world is
+##  rebuilt, exactly as R does. **`reset_stage()` is reused rather than copied**: it is the one place that
+##  knows every counter, view and pending window that has to be cleared, and a second copy of that list would
+##  fall behind the first the next time something is added to it.
+func enter_town() -> void:
+	_in_town = true
+	reset_stage()
+
+
+## **Out through the departure gate, into stage 1.** The other half of `enter_town()` and the same shape —
+##  **the assembly you leave with is not reset**, because R never resets it either (`reset_stage`'s own
+##  comment) and "you leave carrying the build you chose" is the gate's entire meaning.
+func _leave_town() -> void:
+	_in_town = false
+	reset_stage()
 
 
 ## **The other half of the "seat ⊆ owned" invariant** — called only after something has just revoked
@@ -829,18 +981,32 @@ static func _axis_center(f: float, v: float, w: float) -> float:
 ## **Why static**: the nets stand up **this code and this map, the ones that actually run**, and measure them.
 ##  If a net held a copy of the map, it would not age along when the terrain changes.
 static func build_terrain_into(g: CellGrid) -> void:
-	if MAP.size() != MAP_H:
-		push_error("MAP has %d rows - it must be %d" % [MAP.size(), MAP_H])
+	build_map_into(g, MAP, MAP_CHARS)
+
+
+## **The same builder, told which map.** Split out when the town arrived (`town_map.gd`) — it is a second
+##  room made of the same tiles, and duplicating this loop would have made "runs are bundled into one command"
+##  a rule that holds in one place and not the other.
+##
+## **`build_terrain_into` above is kept as the stage's own door**, not replaced: `net_tables` and
+##  `net_water_rain` both call it by that name to stand up *the real stage 1*, and a net that had to pass the
+##  map in would be a net that could be handed a different one by mistake.
+##
+## **The two `push_error`s stay here and are matched by `t.expect_error` on the net side** — CLAUDE.md's rule
+##  that a bark and its forgiveness are one unit. Their text is not localized for that reason.
+static func build_map_into(g: CellGrid, map: Array[String], chars: Dictionary) -> void:
+	if map.size() != MAP_H:
+		push_error("MAP has %d rows - it must be %d" % [map.size(), MAP_H])
 		return
-	for ty in MAP.size():
-		var row := MAP[ty]
+	for ty in map.size():
+		var row := map[ty]
 		if row.length() != MAP_W:
 			push_error("MAP row %d is %d wide - it must be %d" % [ty, row.length(), MAP_W])
 			return
 		var tx := 0
 		while tx < MAP_W:
 			var ch := row[tx]
-			if not MAP_CHARS.has(ch):
+			if not chars.has(ch):
 				tx += 1
 				continue
 			# Runs of the same character are bundled into one command — calling per tile gives 2,304 commands.
@@ -851,7 +1017,7 @@ static func build_terrain_into(g: CellGrid) -> void:
 				tx * Tuning.TILE_CELLS, ty * Tuning.TILE_CELLS,
 				run * Tuning.TILE_CELLS + Tuning.TILE_CELLS - 1,
 				ty * Tuning.TILE_CELLS + Tuning.TILE_CELLS - 1,
-				int(MAP_CHARS[ch])))
+				int(chars[ch])))
 			tx = run + 1
 
 
@@ -888,13 +1054,20 @@ func _update_hud() -> void:
 	#  confirmation afterglow can hold the pick window on screen a few frames after the pick itself already
 	#  closed (`is_showing()`'s own comment), and `Progress` alone cannot see that. One expression still,
 	#  widened at its one call site rather than duplicated at a second.
-	_hud.visible = not _pick_window.is_showing() and not _circle_window.visible
+	_hud.visible = not _pick_window.is_showing() and not _circle_window.visible \
+		and not _research_window.visible
 	# **The single source of health is the character.** Count it separately in the shell and it becomes "it took damage but the number is unchanged".
 	# Downed is **derived from the same value** — hold a separate latch and "it is 0 but not downed" stays on screen.
 	#  The way to revive is written alongside. Being alone there is nobody to pick you up, so **R is the only
 	#   way**, and without writing it the user reads it as "the game froze".
+	# **Downed says "E, to the town" now, not "R"** (`docs/design/town.md` — a run ends by going home).
+	#  R still rebuilds the room and is still the debug instrument it always was; what changed is which one
+	#  the *player* is told about, because R restarting the same stage was the run never closing.
+	#  **Nothing is said in the town** — nothing there can hit you, and a standing instruction for a state
+	#  that cannot happen is noise.
 	_hp_label.text = "체력 %d / %d%s" % [
-		_char.hp, Character.MAX_HP, "   쓰러짐 — R로 다시" if _char.downed else "",
+		_char.hp, Character.MAX_HP,
+		"   쓰러짐 — E로 마을에 돌아간다" if _char.downed and not _in_town else "",
 	]
 	# **A different node from `Stats`, on purpose** (the `_progress_label` comment above) — this has to keep
 	#  showing while the assembly window is open, and `Stats` is the one node that hides for it.
@@ -912,7 +1085,13 @@ func _update_hud() -> void:
 	#  ("no window yet... it lets the rule be accepted before the picture is argued about" — that stage's own
 	#  words). Stage D built the real picture (`HUD/ThreePickWindow`), so the borrow ends here — showing the
 	#  same information in two places at once would just be confusing, not doubly correct.
-	_hud.text = "\n".join([
+	# **The town's own line goes first, so it is not lost under the debug counters.** The list is built and
+	#  then joined — appending an empty string instead would make the readout jump a line the moment you
+	#  walked into a bench.
+	var lines: Array[String] = []
+	if _in_town:
+		lines.append("[마을] E로 설비를 쓴다" if _town_message.is_empty() else _town_message)
+	_hud.text = "\n".join(lines + [
 		"틱 %d · %d Hz (분주기 %d)" % [
 			_grid.get_tick(), 60 / Tuning.TICK_DIVIDER, Tuning.TICK_DIVIDER,
 		],

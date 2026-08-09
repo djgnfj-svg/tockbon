@@ -35,6 +35,9 @@ Where it shakes if this reverses.
 |---|---|---|
 | [No inventory](no-inventory.md) | valid | Stash it and equip from the assembly window |
 | [Shot explosion is blocked by rule](shot-explosion-by-rule.md) | valid | Using the simultaneous-projectile cap as a knob |
+| [The town is a mode of the stage shell](town-is-a-mode-of-the-stage-shell.md) | valid | A `town.tscn` of its own · a smaller town map · painting it in the editor · real bench windows |
+| [The run-end screen is settlement only](run-end-is-settlement-only.md) | valid | A run summary (the circle you assembled) · a second screen · a cause-of-death shot |
+| [원석 comes from bosses and levels](gems-from-bosses-and-levels.md) | valid | Every kill drops it · trash mobs give a little · bosses only (the old GDD line) |
 
 ## Decisions not yet written down
 

@@ -82,10 +82,25 @@ func _water_scan(g: CellGrid, x0: int, y0: int, x1: int, y1: int) -> Array:
 #  `Tuning.WATER_RAIN_HALF_W`** — a width different from what K actually pours would mean this net measures
 #  something other than the game.
 
-## The pit's mouth row (cells). Tile 26 in `stage1-map-layout.md` = cell 208.
+## The pit's mouth row (cells). Tile row 26 of `stage1-map-layout.md` = cell 208.
 const _PIT_ROW := 208
-## The first cell inside the left wall (cells). Each check derives the right end itself as a width of `Tuning.WATER_RAIN_HALF_W * 2`.
-const _PIT_X0 := 1888
+## **The mouth's two ends (cells), inclusive** — tiles 214..259 of that row, the topmost fully enclosed span
+##  of the funnel that descends to the floor at tile row 32.
+##
+## **These three constants went stale once and the net went red for it — that is the system working, and the
+##  fix is to re-derive them, never to loosen the check.** The map was repainted (312x126 -> 400x48) and
+##  `_PIT_X0` 1888 kept pointing into open air; the two "there is a wall here" premises below are what said so.
+##  To re-derive after a repaint: read `src/stage/terrain_map_generated.gd` and find the topmost row whose
+##  open run is bounded by solid at both ends and has the floor below it. Multiply tiles by 8 for cells.
+const _MOUTH_X0 := 1712
+const _MOUTH_X1 := 2079
+
+## **The rain band is centred inside the mouth, not fitted to it.** It used to be assumed that the two were
+##  the same width — `_PIT_X0 + WATER_RAIN_HALF_W * 2 - 1` was asserted to have a wall immediately beyond it.
+##  **That was never a property of the game**, only of one hand-painted map: `WATER_RAIN_HALF_W` is what the
+##  staff pours (a player value) and the mouth is what the level happens to be, and nothing keeps them equal.
+##  ⇒ The band goes in the middle and the **mouth's own** ends are what carry the wall premise.
+const _PIT_X0 := _MOUTH_X0 + ((_MOUTH_X1 - _MOUTH_X0 + 1) - Tuning.WATER_RAIN_HALF_W * 2) / 2
 
 
 ## Stands up the real terrain and runs until it is fully asleep.
@@ -113,11 +128,14 @@ func _rain_conserves_water(t) -> void:
 	t.eq(g.active_chunk_count(), 0, "물을 붓기 전에 지형이 완전히 잠들었다 (전제)")
 
 	var x1 := _PIT_X0 + Tuning.WATER_RAIN_HALF_W * 2 - 1
-	# **The coordinates are not taken on trust.** If the map changes, this assertion goes red by value first.
-	t.ok(not g.is_solid(_PIT_X0, _PIT_ROW), "구덩이 입구 왼쪽 끝이 열려 있다 (전제)")
-	t.ok(not g.is_solid(x1, _PIT_ROW), "구덩이 입구 오른쪽 끝도 열려 있다 (전제)")
-	t.ok(g.is_solid(_PIT_X0 - 1, _PIT_ROW), "그 왼쪽은 벽이다 (전제)")
-	t.ok(g.is_solid(x1 + 1, _PIT_ROW), "그 오른쪽도 막혀 있다 (전제 — 램프가 입구부터 막는다)")
+	# **The coordinates are not taken on trust.** If the map changes, this assertion goes red by value first —
+	#  and it has, once (`_MOUTH_X0`'s own box).
+	t.ok(_PIT_X0 >= _MOUTH_X0 and x1 <= _MOUTH_X1,
+		"비 띠(%d..%d)가 입구(%d..%d) 안에 들어간다 (전제)" % [_PIT_X0, x1, _MOUTH_X0, _MOUTH_X1])
+	t.ok(not g.is_solid(_MOUTH_X0, _PIT_ROW), "구덩이 입구 왼쪽 끝이 열려 있다 (전제)")
+	t.ok(not g.is_solid(_MOUTH_X1, _PIT_ROW), "구덩이 입구 오른쪽 끝도 열려 있다 (전제)")
+	t.ok(g.is_solid(_MOUTH_X0 - 1, _PIT_ROW), "그 왼쪽은 벽이다 (전제)")
+	t.ok(g.is_solid(_MOUTH_X1 + 1, _PIT_ROW), "그 오른쪽도 막혀 있다 (전제 — 램프가 입구부터 막는다)")
 
 	var src := WaterSource.new(_PIT_X0, x1, _PIT_ROW, Tuning.WATER_RAIN_PER_TICK)
 	# **It stops at 100 ticks.** That is about 60% of this vessel's measured capacity (~13,312 cells x 255) —
@@ -128,7 +146,10 @@ func _rain_conserves_water(t) -> void:
 		g.step()
 
 	t.ok(src.poured() > 0, "소스가 실제로 물을 부었다 (전제)")
-	var scan := _water_scan(g, _PIT_X0 - 4, _PIT_ROW - 4, x1 + 4, _PIT_ROW + 150)
+	# **The rectangle is the whole mouth, not the band.** Water spreads sideways as it piles up, so a rectangle
+	#  that only covers what was poured reports its own edge as a leak. The margin is 8 cells on each side —
+	#  the walls are right there, so anything outside it really has escaped.
+	var scan := _water_scan(g, _MOUTH_X0 - 8, _PIT_ROW - 8, _MOUTH_X1 + 8, _PIT_ROW + 150)
 	t.eq(scan[0], src.poured(), "격자의 물 총량이 소스가 센 누적량과 정확히 같다 (안 샌다)")
 	t.ok(scan[2] <= Tuning.WATER_MAX, "어떤 칸도 최대량을 안 넘는다")
 

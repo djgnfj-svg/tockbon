@@ -448,10 +448,17 @@ combat abilities and traversal abilities are not separate systems.
 
 | Killing | Gives |
 |---|---|
-| Ordinary monsters | **XP · money** only. **Settled — permanent currency comes from bosses only** |
-| **Level up** | **A glyph — three appear, pick one** |
+| Ordinary monsters | **XP · money** only. **No kill pays permanent currency** |
+| **Level up** | **A glyph — three appear, pick one** + **1 원석** |
 | Midboss | **A progression key** (stage 1 = fire rune) |
-| Boss | **Research material** (permanent) + **a glyph three-pick** |
+| Boss | **3~4 원석** (permanent) + **a glyph three-pick** |
+
+**원석 is the permanent research currency, and it has two doors — a boss and a level.**
+**~~"Bosses only"~~ is void**: with the boss door alone a run yields 1–2 and a death yields 0, so most runs
+would start no permanent progress at all. **No *kill* pays out** — trash mobs reach 원석 only through XP and
+the level, the same single-door shape the three-pick already uses.
+Rejected branches: `docs/decisions/gems-from-bosses-and-levels.md`. Where it is handed over:
+`docs/plans/1.ready/run-end-settlement.md`.
 
 **Why ordinary monsters don't drop glyphs directly**: it would mean opening the assembly window constantly mid-fight,
 breaking head-on the pressure the GDD built toward "assembly is for safe moments".
@@ -689,7 +696,7 @@ map → blocked by the wood wall → pit → bull → fire rune → [water rises
 | ~~**Water in pit ①**~~ | **Built, not accepted — and this row's own promise doesn't hold on the real map.** Reward-then-water order is correct (take the bull's reward, then the wall/water), but **the water doesn't carry the player out** — 300s of pouring lifts them 0px, and an ordinary jump alone already clears the step in 1.6s. The map is `stage1-map-layout.md`'s call, not this row's | `docs/plans/3.done/stage1-bosses.md` |
 | ~~**The wood-wall lock is broken**~~ | **Not a problem — decided by the user.** A runeless blast does open the wall (`spell_sim.gd:633` ignites without `element`), but **the wall is on the far side of pit ①, and the only way out of the pit is the water the bull's death brings** ⇒ **you cannot stand in front of that wall without already holding fire.** **The lock is held by the map's shape, not by the ignition rule** | `3.done/stage1-map-layout.md` |
 | ~~**The screen for receiving the fire rune**~~ | **The premise was wrong — the screen already exists.** `circle_window.gd:158-161` has always placed runes (pick from the palette → click the rune seat), so nothing has to be broken out of the three-pick. **Ownership was the only thing actually missing, and it is filled too now** (same doc — see the "Fire rune" row above) | `docs/plans/3.done/rune-lock-and-receiving.md` |
-| **An ending** | None. Place a gate and mark it on contact | No doc |
+| **An ending** | **Still none in the map** — no gate, nothing marks a clear. **But what a run ends *on* is now designed**: the settlement screen, which death already reaches and a clear would share | `docs/plans/1.ready/run-end-settlement.md` |
 
 **What was cut**: leveling and the three-pick · wiring the triangle circle · bolt speed · the shop · **town.**
 ~~**"All five are outside the chain" is no longer accurate** — "the screen for receiving the fire rune" is tied to the three-pick.~~
@@ -697,9 +704,11 @@ map → blocked by the wood wall → pit → bull → fire rune → [water rises
 broken out of the three-pick, and the three-pick shipped anyway (`3.done/levelup-and-three-picks.md`).
 The rune work is **the lock, not a screen** → `docs/plans/3.done/rune-lock-and-receiving.md`.
 
-**Cutting town has a price** — **there is nowhere to go when you die** (`docs/design/town.md`, "Why").
-⇒ This week is patched with **restart in place on death**, and **town is next in order.**
-**Without town the roguelike doesn't close** — it is merely outside this week's acceptance, not a vanished problem.
+~~**Cutting town has a price** — **there is nowhere to go when you die.**~~
+⇒ **Paid.** The town's room and the loop are built (`docs/plans/3.done/town-room-and-fixtures.md`):
+you start there, the departure gate builds stage 1, and dying sends you back with E instead of restarting in
+place. **The loop closes.** What is still missing is what the town is *for* — points, materials, unlocks —
+so the benches list state and spend nothing (`docs/design/town.md` carries the split).
 
 ## Prices paid knowingly
 

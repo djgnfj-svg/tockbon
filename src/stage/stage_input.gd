@@ -57,6 +57,14 @@ signal pick_toggled
 ## boss reward(s) are pending, wherever they are.
 signal reward_taken_requested
 
+## **E — the town's one interaction** (`docs/design/town.md`, "stand in front of a fixture, press a key").
+##  **Which fixture, and whether there is one at all, is not decided here** — the same discipline as Tab and P:
+##  this file says a key was pressed and nothing else. `Fixtures.at()` answers "where am I standing".
+## **A raw keycode, not an input-map action.** Interaction *will* survive into the real game and by that rule
+##  belongs in `project.godot` — but adding an action there needs an editor restart, and the town is a
+##  skeleton being stood up right now. **Move it to the input map the day the town stops being a skeleton.**
+signal interact_requested
+
 ## **`-` / `=` — camera zoom out / in. A shell-only debug key.**
 ##  The map is 400x48 tiles = 12800x1536 world px while the screen shows 960x540, so **1/13th of the map is
 ##  visible at once** and level design cannot be read while playing. This key is the only way to see the whole
@@ -81,6 +89,9 @@ const MONSTER_KEYS: Dictionary = {
 	KEY_M: MonsterDefs.KIND_PIG, KEY_N: MonsterDefs.KIND_HEN,
 	# **B/C, not R** — R is already `reset_requested`. `stage1-bosses.md` stage A.
 	KEY_B: MonsterDefs.KIND_BULL, KEY_C: MonsterDefs.KIND_ROOSTER,
+	# **V, because the obvious letter is movement.** The wolf has no map placement, so this key is the
+	#  only way one ever reaches the screen (`monster_defs.KIND_WOLF`'s own box).
+	KEY_V: MonsterDefs.KIND_WOLF,
 }
 
 
@@ -162,6 +173,8 @@ func _unhandled_input(event: InputEvent) -> void:
 				rain_requested.emit(_to_world(get_viewport().get_mouse_position()))
 			KEY_L:
 				reward_taken_requested.emit()
+			KEY_E:
+				interact_requested.emit()
 			# **Both the main row and the numpad** — `-` on the main row is `KEY_MINUS` and the numpad's is a
 			#  different keycode entirely. Bind only one and it reads as "the key does nothing".
 			KEY_MINUS, KEY_KP_SUBTRACT:

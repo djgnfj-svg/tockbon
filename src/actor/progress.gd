@@ -46,6 +46,33 @@ var pending_picks := 0
 ##  nothing today.
 var dice_left := 0
 
+## **원석 — the research currency, and the only thing that survives a run.**
+##  `docs/decisions/gems-from-bosses-and-levels.md`: **two doors, a boss (3~4) and a level (1), and no kill
+##  ever pays out directly.** A trash mob reaches this only through XP → level, which is what keeps the GDD's
+##  "killing is a gain, walking past is also a gain" true — XP was safe to give per kill because it dies with
+##  the run, and a permanent currency is not.
+##
+## **It is deliberately *not* cleared by `reset()`.** Every other field here reverts, and this one must not —
+##  "what is permanent is a pool, not an object" (GDD) is unimplementable if the count restarts at 0 every
+##  time you die. `reset()`'s own body names this as its single exception.
+##
+## **Nothing spends it, and that is not an oversight.** The price of an unlock is one of `town.md`'s open
+##  TBDs and belongs to the user, and that doc's old "three per unlock" arithmetic was **voided** by this
+##  yield being 5x what it was written against. A counter that goes up with nothing to spend it on is honest;
+##  a buy button that took a number and gave nothing back would be the fake. **The research window says so on
+##  screen**, rather than leaving the player to infer it.
+##
+## **The name in code is `gems`, on screen 원석** — the same split every other identifier here holds
+##  (CLAUDE.md: code is English, what the player reads is Korean).
+var gems := 0
+
+## The two doors' yields. **A range for the boss, a flat 1 for the level** — the decision doc's own numbers.
+##  A full clear is 2 bosses + ~3 levels ≈ **9~11**; a death at level 2 ≈ **2**, and *never 0*, which is what
+##  makes the run-end settlement screen worth opening in an early run.
+const GEMS_PER_BOSS_MIN := 3
+const GEMS_PER_BOSS_MAX := 4
+const GEMS_PER_LEVEL := 1
+
 ## **Stage I (`stage1-bosses.md`) — which bosses have died with their reward not yet taken.** Keyed by
 ## `MonsterDefs` kind, not a bare bool — the bull's own room ① water and the rooster's own room ③ water gate
 ## independently, and a shared flag would let one boss's reward-taking accidentally release the other's water
@@ -111,6 +138,24 @@ func add_xp(amount: int) -> void:
 		xp -= need
 		level += 1
 		pending_picks += 1
+		# **The level door** (`docs/decisions/gems-from-bosses-and-levels.md`). It rides the same
+		#  loop as `pending_picks` on purpose: one crossing = one pick = one 원석, so a single big
+		#  award that crosses two thresholds pays both, and neither can drift from the other.
+		gems += GEMS_PER_LEVEL
+
+
+## **The boss door.** Called on a boss's death, the same place `set_boss_reward_pending()` is (`world_step`),
+##  because the GDD's "Drops" makes them the same event.
+##
+## **The roll happens here, not at the call site.** `_rng` is this object's own stream (its own comment: not
+##  the engine's shared global RNG), and a caller rolling for itself would either reach for `randi()` — which
+##  perturbs anything else in the process using it — or need a second generator whose seeding nobody owns.
+##  ⇒ The one place that holds the numbers is the one place that rolls them.
+## **Returns what it gave**, so a settlement screen can show the number without re-deriving it.
+func add_boss_gems() -> int:
+	var n := _rng.randi_range(GEMS_PER_BOSS_MIN, GEMS_PER_BOSS_MAX)
+	gems += n
+	return n
 
 
 func add_money(amount: int) -> void:
@@ -238,6 +283,9 @@ func reset() -> void:
 	pending_picks = 0
 	_drawn.clear()
 	_reward_pending.clear()
+	# **`gems` is not here, and its absence is the point.** It is the one permanent thing this object holds
+	#  (its own box above) — the town's whole reason to exist is that something survives the run.
+	#  `net_progress` measures that it survives, so deleting this comment and adding the line goes red.
 	# **Reverts to the starting kit, not to empty** — a stage reset (R) is a fresh run, and a fresh run boots
 	#  owning only none (`_starting_runes()`'s own comment), the same fixed kit `_owned_runes`'s field default
 	#  holds. Clearing to `{}` would brick the reset run's own starting rune (risk 2, `circle_window`'s header:

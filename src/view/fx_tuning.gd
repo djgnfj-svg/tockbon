@@ -125,9 +125,14 @@ const CHAR_WALK_PX_PER_FRAME := 24
 ##  **Per-kind colors are still untouched** — a team-lead instruction: that is the user's place to decide.
 const MONSTER_FILL := Color(0.78, 0.22, 0.42, 1.0)
 
-## **Body art — one image per kind.** Unlike the character (`CHAR_SHEET`) these are not per-state frames —
-##  monsters have no walk animation yet (open question 16, `character-sprite` is the precedent). Growing a new
-##  kind is one line here + one line in `monster_defs.gd`.
+## **Body art — one image per kind. The standing pose, and now the fallback.**
+##
+## **`MONSTER_ANIM` below is what actually gets drawn.** This table is what is left when that one cannot
+##  answer: a kind with no animation row, a sheet that failed to load, or a draw that happens before any
+##  animation state exists (which is how the nets stand `monster_view` up). **Do not delete it** for the same
+##  reason `MONSTER_FILL` above is kept — the layers of substitution are what keep one broken png from
+##  emptying the screen.
+## Growing a new kind is one line here + one line in `monster_defs.gd` (+ a row below to animate it).
 ##
 ## **The art size is the box size** (`monster_defs.w_px/h_px` — 44x32 · 24x28) — **not a coincidence.**
 ##  The pixel artist drew to the box. **Even so `monster_view` does not trust this art's actual pixel size** —
@@ -135,13 +140,126 @@ const MONSTER_FILL := Color(0.78, 0.22, 0.42, 1.0)
 ##  the box). `net_monster_sprite` measures "right now they are the same" by value, so the day they diverge it is caught at once.
 const MONSTER_SHEETS: Dictionary = {
 	MonsterDefs.KIND_PIG: "res://assets/monster/pig_body.png",
-	MonsterDefs.KIND_HEN: "res://assets/monster/chicken_body.png",
-	# The standing pose only — the other bull/rooster sheets (frame counts vary by pattern, see
-	#  `stage1-bosses.md` "Screen") exist on disk but have no state->frame table yet
-	#  (`monsters.md` open question 16, `stage1-bosses.md` "Out of scope"). Idle stands in.
+	# **`hen_*`, not `chicken_*`.** The design item is 닭 and the art is a hen — "the name follows the mob,
+	#  not the art" (`monsters.md`). The old 24x28 `chicken_*.png` set is left on disk and referenced by
+	#  nothing; it is the small art the enlargement replaced, kept rather than deleted because it is what the
+	#  user approved once and the size question could still swing back.
+	MonsterDefs.KIND_HEN: "res://assets/monster/hen_body.png",
 	MonsterDefs.KIND_BULL: "res://assets/monster/bull_body.png",
 	MonsterDefs.KIND_ROOSTER: "res://assets/monster/rooster_body.png",
+	MonsterDefs.KIND_WOLF: "res://assets/monster/wolf_body.png",
 }
+
+# --- monster animation ----------------------------------------------
+## **State ids — the same idiom as `CHAR_STAND`..`CHAR_DOWNED` above, and for the same reason.**
+##  These are **not** frame numbers and **not** `BossAi.Pattern` values. A pattern is what the sim is doing;
+##  a state here is what is on screen, and the two are deliberately not the same set — `Pattern.WINDUP`
+##  maps to a roar, `Pattern.GORE` and a pig's body shove both map to `MON_ATTACK`, and `MON_HURT` has no
+##  pattern behind it at all (it comes from the hp diff the view already keeps).
+##  **Reuse `Pattern` here and the table stops being able to hold a trash mob**, which has no patterns.
+const MON_IDLE := 0
+const MON_WALK := 1
+## The pig's body shove · the hen's spit · the bull's gore. **One state, three sheets** — they are the same
+##  sentence on screen ("it is hitting me right now"), so splitting them would only make the table wider.
+const MON_ATTACK := 2
+const MON_HURT := 3
+const MON_DEATH := 4
+## The boss telegraph — `Pattern.WINDUP`. Draws the roar sheet, **underneath** the red attack prediction
+##  (`ATTACK_PREDICT_COLOR`); the two say the same thing in two vocabularies and neither replaces the other.
+const MON_WINDUP := 5
+const MON_CHARGE := 6
+const MON_FIRE := 7
+## The bull's slam and the rooster's leap — both are `Pattern.LEAP` (`boss_ai.gd`'s own header: one physics,
+##  two moves), so they are one state here too, resolved to a different sheet by kind.
+const MON_LEAP := 8
+const MON_STUN := 9
+
+## **kind -> state -> one sheet.** A sheet is one horizontal row of equal frames, `Defs.w_px` wide each —
+##  the same layout as `CHAR_SHEET`, which is why `tools/pixel/anim_sheet.py` writes them this way.
+##
+## **`frames` is written down and not derived from the png width.** Deriving it would make a truncated or
+##  half-imported sheet silently play a shorter loop; written down, `net_monster_sprite` compares the two and
+##  the divergence goes red. That is the opposite call from `CHAR_FRAMES` (which lists frame *numbers*, so the
+##  count is implicit there) and the reason is the same one that file gives — the single source has to be
+##  somewhere a net can read it.
+##
+## **`hold` is view frames per animation frame.** 60Hz, so `hold: 4` is 15 animation fps.
+## **`loop: false` holds the last frame** instead of wrapping — that is what makes a death or a gore read as
+##  finished rather than as a stutter.
+##
+## **A missing state is not an error — it falls back to `MON_IDLE`** (`monster_view.resolve_state`).
+##  The bull and the rooster have no `hurt` sheet, and a boss that visibly flinched at every bolt would
+##  undercut exactly the thing `stage1-bosses.md` is trying to build. **Do not "fill the table in" for its
+##  own sake.**
+##
+## **The walk clock is not `hold`** — it is `MONSTER_WALK_PX_PER_FRAME` below, for `character_view`'s reason:
+##  two clocks means "it stopped but the legs keep moving".
+const MONSTER_ANIM: Dictionary = {
+	MonsterDefs.KIND_PIG: {
+		MON_IDLE: {"path": "res://assets/monster/pig_idle.png", "frames": 4, "hold": 8, "loop": true},
+		MON_WALK: {"path": "res://assets/monster/pig_walk.png", "frames": 9, "hold": 4, "loop": true},
+		MON_ATTACK: {"path": "res://assets/monster/pig_shove.png", "frames": 8, "hold": 4, "loop": true},
+		MON_HURT: {"path": "res://assets/monster/pig_hurt.png", "frames": 4, "hold": 3, "loop": false},
+		MON_DEATH: {"path": "res://assets/monster/pig_death.png", "frames": 8, "hold": 4, "loop": false},
+	},
+	# **`throw`, not `spit`** — `monsters.md`'s "the chicken throws an egg" (decided by the user), and the
+	#  enlarged set is drawn that way. The projectile itself is still the old dot; only the animation says egg.
+	MonsterDefs.KIND_HEN: {
+		MON_IDLE: {"path": "res://assets/monster/hen_idle.png", "frames": 4, "hold": 8, "loop": true},
+		MON_WALK: {"path": "res://assets/monster/hen_walk.png", "frames": 8, "hold": 4, "loop": true},
+		MON_ATTACK: {"path": "res://assets/monster/hen_throw.png", "frames": 8, "hold": 4, "loop": false},
+		MON_HURT: {"path": "res://assets/monster/hen_hurt.png", "frames": 4, "hold": 3, "loop": false},
+		MON_DEATH: {"path": "res://assets/monster/hen_death.png", "frames": 8, "hold": 4, "loop": false},
+	},
+	MonsterDefs.KIND_BULL: {
+		MON_IDLE: {"path": "res://assets/monster/bull_idle.png", "frames": 5, "hold": 8, "loop": true},
+		MON_WALK: {"path": "res://assets/monster/bull_walk.png", "frames": 9, "hold": 4, "loop": true},
+		MON_WINDUP: {"path": "res://assets/monster/bull_roar.png", "frames": 8, "hold": 4, "loop": false},
+		MON_CHARGE: {"path": "res://assets/monster/bull_charge.png", "frames": 9, "hold": 3, "loop": true},
+		MON_ATTACK: {"path": "res://assets/monster/bull_gore.png", "frames": 17, "hold": 3, "loop": false},
+		MON_FIRE: {"path": "res://assets/monster/bull_fire.png", "frames": 9, "hold": 4, "loop": true},
+		MON_LEAP: {"path": "res://assets/monster/bull_slam.png", "frames": 17, "hold": 3, "loop": false},
+		MON_STUN: {"path": "res://assets/monster/bull_stun.png", "frames": 7, "hold": 5, "loop": true},
+		MON_DEATH: {"path": "res://assets/monster/bull_death.png", "frames": 7, "hold": 5, "loop": false},
+	},
+	MonsterDefs.KIND_ROOSTER: {
+		MON_IDLE: {"path": "res://assets/monster/rooster_idle.png", "frames": 5, "hold": 8, "loop": true},
+		MON_WALK: {"path": "res://assets/monster/rooster_walk.png", "frames": 9, "hold": 4, "loop": true},
+		MON_WINDUP: {"path": "res://assets/monster/rooster_roar.png", "frames": 8, "hold": 4, "loop": false},
+		MON_LEAP: {"path": "res://assets/monster/rooster_leap.png", "frames": 9, "hold": 4, "loop": false},
+		# The landing recovery **is** `Pattern.STUN` (`boss_ai.gd`'s own header: one field is the window to
+		#  hit for both), so the land sheet goes in that slot rather than getting a state of its own.
+		MON_STUN: {"path": "res://assets/monster/rooster_land.png", "frames": 7, "hold": 5, "loop": false},
+		MON_DEATH: {"path": "res://assets/monster/rooster_death.png", "frames": 7, "hold": 5, "loop": false},
+	},
+	# **The lunge sits in `MON_ATTACK`, the same slot the pig's shove uses** — and it is driven by the same
+	#  contact condition, because the wolf has no lunge in the sim (`monster_defs.KIND_WOLF`'s own box).
+	MonsterDefs.KIND_WOLF: {
+		MON_IDLE: {"path": "res://assets/monster/wolf_idle.png", "frames": 4, "hold": 8, "loop": true},
+		MON_WALK: {"path": "res://assets/monster/wolf_walk.png", "frames": 8, "hold": 3, "loop": true},
+		MON_ATTACK: {"path": "res://assets/monster/wolf_lunge.png", "frames": 8, "hold": 3, "loop": false},
+		MON_HURT: {"path": "res://assets/monster/wolf_hurt.png", "frames": 4, "hold": 3, "loop": false},
+		MON_DEATH: {"path": "res://assets/monster/wolf_death.png", "frames": 8, "hold": 4, "loop": false},
+	},
+}
+
+## **The tick of the walk clock (px)** — the monster's own `x`, exactly as `CHAR_WALK_PX_PER_FRAME` uses the
+##  character's. One value for every kind on purpose: the kinds already move at different speeds
+##  (`monster_defs.speed_px` 140..220), so **the same px tick gives each of them a different cadence for free**,
+##  and a fast hen's legs blur while a heavy bull's do not. Add a per-kind column and that falls out of the
+##  speed table into a second place that can disagree with it.
+## 12px at the pig's 160px/s = 13 frames/s over a 9-frame loop = 1.5 gait cycles/s.
+## **Being shoved counts as walking** — the same knowing choice `CHAR_WALK_PX_PER_FRAME` records.
+const MONSTER_WALK_PX_PER_FRAME := 12
+
+## **How close the player has to be for a pig to play its shove** (px, added to both boxes before the overlap
+##  test). **The pig has no attack state in the sim** — it damages by body contact
+##  (`world_step._boxes_overlap`), so there is no notification to hang this on and the view asks the same
+##  question the damage code asks, one step early.
+## **Early on purpose**: at 0 the shove would start on the frame the hit already landed, so the animation
+##  would be a *report* rather than a *tell*. 8px at 160px/s is 0.05s of warning — not a dodge window, just
+##  enough that the picture and the hit are not the same frame.
+const MONSTER_SHOVE_REACH_PX := 8
 
 ## **The health bar above the head.** Width and position come from `monster_defs.w_px` (the box) — hardcode
 ##  a width here and it is exactly the "size in two places" trap above (`monster_view.hp_bar_rect` reads the box).
@@ -267,7 +385,12 @@ const MONSTER_BOLT_CORE_FRAC := 0.45
 ##  => Now the body art is laid down darkened by `MONSTER_CORPSE_DIM` and faded. This color is used
 ##   **only when there is no texture** (the same idiom as `MONSTER_FILL`).
 const MONSTER_CORPSE_COLOR := Color(0.35, 0.10, 0.19, 0.9)
-const MONSTER_CORPSE_LIFE_FRAMES := 30
+## **30 -> 60 when the death animation went in.** The corpse is now the `MON_DEATH` sheet played through, and
+##  the longest of those runs 35 view frames (pig, 8 frames x `hold` 4) — at 30 the beast was still mid-fall
+##  when the whole afterimage had already faded out, so **the animation could not be seen at all.**
+##  The remainder is the pause on the last frame that makes "it is dead" land before the fade takes it.
+##  **This value has to stay above every `MON_DEATH` row's `frames * hold`** — `net_monster_sprite` measures it.
+const MONSTER_CORPSE_LIFE_FRAMES := 60
 
 ## How dark to lay the corpse down (a brightness multiplied into the body art). **At 0 it is a silhouette so kinds
 ##  do not split, and at 1 it reads as "a living monster standing there translucent."** The spot chosen keeps the
@@ -1256,3 +1379,116 @@ const CellGrid := preload("res://src/sim/cell_grid.gd")
 const CELL_DEPTH_SPAN := 1.0 * TerrainMap.MAP_H * Tuning.TILE_CELLS / CellGrid.H
 ## How dark the deepest cells get (multiplied into rgb, 1.0 = no dim). Provisional, same as the bands above.
 const CELL_DEEP_DIM := 0.6
+
+# --- town (`docs/design/town.md`) ------------------------------------
+## **Kind -> its sprite and the size it is drawn at.** The art exists (`assets/town/`) and these are its own
+##  pixel sizes, **scaled up by `TOWN_FIXTURE_ZOOM`** — the pieces were generated small (36x36 · 44x32 · 36x44)
+##  and at 1:1 a bench is barely taller than the 32px character, which reads as scenery rather than as
+##  something to walk up to.
+##
+## **The size is written down and not read off the texture.** The same discipline `MONSTER_SHEETS` records:
+##  the drawing side asks this table, so a swapped png draws at the size the game expects and the mismatch is
+##  caught by `net_town` as a value, instead of the fixture silently changing size on screen.
+const FixturesDefs := preload("res://src/actor/fixtures.gd")
+const TOWN_FIXTURE_ZOOM := 2.0
+const TOWN_FIXTURES: Dictionary = {
+	FixturesDefs.KIND_RESEARCH: {"path": "res://assets/town/research_bench.png", "w": 36.0, "h": 36.0},
+	FixturesDefs.KIND_ASSEMBLY: {"path": "res://assets/town/assembly_bench.png", "w": 44.0, "h": 32.0},
+	FixturesDefs.KIND_GATE: {"path": "res://assets/town/departure_gate.png", "w": 36.0, "h": 44.0},
+}
+
+## **The fallback block, kept and not deleted.** It is drawn only when a sprite fails to load — the same
+##  substitute-do-not-bark rule `MONSTER_FILL` holds, and for the same reason: a fixture you cannot see is a
+##  fixture you cannot find, and a magenta box says "the art broke" where nothing says nothing.
+const TOWN_FIXTURE_FALLBACK := Color(0.78, 0.22, 0.42, 1.0)
+
+## The name plate above every fixture, and the prompt that appears only on the one you are standing at.
+## **Both are always drawn for every fixture except the prompt** — a name you can only read by walking into
+##  it makes the room unreadable from across it, which is the one thing a walkable room has over a menu.
+const TOWN_NAME_SIZE := 14
+const TOWN_NAME_COLOR := Color(0.85, 0.85, 0.88, 0.75)
+const TOWN_NAME_LIFT_PX := 10.0
+## **The prompt is brighter and sits above the name**, so "I can use this" is a different sentence from
+##  "this is a bench", not the same sentence louder.
+const TOWN_PROMPT_SIZE := 18
+const TOWN_PROMPT_COLOR := Color(1.0, 0.95, 0.72, 1.0)
+const TOWN_PROMPT_LIFT_PX := 30.0
+## **The key is written into the text, not left implicit.** The town does not explain anything
+##  (`town.md`, "the town does not explain anything") — but *which key* is not an explanation, it is a label,
+##  and with no tutorial in the game yet there is nowhere else for it to be said.
+const TOWN_PROMPT_FMT := "[E] %s"
+
+## **Rune names, in Korean, because the player reads them** (CLAUDE.md's language rule).
+##  **They live here and not in `sim_tuning`** for the same reason every other string does: `src/sim/` is the
+##  integer sim and knows nothing about what anything is called. Until now runes were only ever *drawn* (the
+##  palette tells them apart by colour), so no name existed anywhere — the town's research bench is the first
+##  place that has to say one out loud.
+const ELEM_NAMES: Dictionary = {
+	Tuning.ELEM_FIRE: "불",
+	Tuning.ELEM_NONE: "무",
+	Tuning.ELEM_WATER: "물",
+}
+
+# --- the research window (`docs/design/town.md`, "Research bench — two lists") ---
+## **The panel is a 9-slice.** `research_panel.png` is a 512x512 stone frame with a parchment middle; drawn
+##  at any other size by stretching, the corner stones smear. `draw_texture_rect` cannot 9-slice, so the
+##  window cuts nine regions itself (`research_layout.nine`) — the corners 1:1, the edges tiled along one
+##  axis, the middle tiled both ways.
+## **The border width is measured off the art**, not guessed: the frame's inner edge sits ~46px in.
+const RESEARCH_PANEL := "res://assets/ui/research_panel.png"
+const RESEARCH_PANEL_BORDER_PX := 46.0
+
+## **One slot frame, cut out of `slot_row.png`.** That png is a row of three slots at 512x320 — the **left**
+##  one wears a chain and padlock and the other two are empty, so the same image carries both states and the
+##  window cuts whichever it needs. A third of 512 is 170.67, so the cuts are 0..171 and 171..341: rounded,
+##  because a slot frame is decorative and a pixel of bevel either way is invisible, unlike the fixture
+##  sprites where the size is a contract.
+const RESEARCH_SLOT_SHEET := "res://assets/ui/slot_row.png"
+const RESEARCH_SLOT_LOCKED_SRC := Rect2(0.0, 0.0, 171.0, 320.0)
+const RESEARCH_SLOT_OPEN_SRC := Rect2(171.0, 0.0, 170.0, 320.0)
+## How big one slot is drawn. **Square, though the source is taller than wide** — the source's extra height is
+##  the stone course above and below the recess, and squaring it keeps the icon inside centred.
+const RESEARCH_SLOT_PX := 56.0
+
+## The four unlock axes' icons, and the material's. **White silhouettes**, so they are tinted at draw time
+##  (`RESEARCH_ICON_*` below) rather than existing twice in two colours.
+const RESEARCH_ICONS: Dictionary = {
+	"point": "res://assets/ui/icon_point.png",
+	"item": "res://assets/ui/icon_item.png",
+	"body": "res://assets/ui/icon_body.png",
+	"dice": "res://assets/ui/icon_dice.png",
+	"material": "res://assets/ui/icon_material.png",
+}
+## **The four rows, in the doc's own order** (`town.md`'s slot table: points · items · body · dice).
+##  Each is `[icon key, name, what it buys]` — the third column is the whole reason a locked list is worth
+##  showing at all ("unlocked and locked sitting in one list is the best possible demonstration that the pool
+##  widened"). **Nothing here is a knob**: no price column, because there is no price (that doc's own TBD).
+const RESEARCH_ROWS: Array = [
+	["point", "점수", "가져갈 수 있는 양"],
+	["item", "아이템", "고를 수 있는 진·룬·문양"],
+	["body", "신체", "2단 점프 같은 것"],
+	["dice", "주사위", "세 장 뽑기를 다시 굴린다"],
+]
+
+const RESEARCH_ICON_PX := 24.0
+## Dark, because the panel's parchment is bright — the same "far apart from what it sits on" rule every other
+##  colour in this file follows.
+const RESEARCH_ICON_COLOR := Color(0.24, 0.19, 0.14, 1.0)
+const RESEARCH_TITLE := "연구대"
+const RESEARCH_TITLE_SIZE := 22
+const RESEARCH_TEXT_SIZE := 15
+const RESEARCH_DIM_SIZE := 13
+const RESEARCH_INK := Color(0.24, 0.19, 0.14, 1.0)
+## The "not buyable yet" line and the locked labels — the same ink, faded, so they read as the same hand.
+const RESEARCH_INK_DIM := Color(0.24, 0.19, 0.14, 0.62)
+## **The footer says what the bench cannot do.** `town.md` says the town explains nothing, and this is not an
+##  explanation — it is the state of the bench, and leaving it unsaid would make an inert list look broken.
+const RESEARCH_FOOTER := "재료로 푸는 해금은 아직 없다 · [E] 닫기"
+const RESEARCH_LOCKED_TEXT := "잠김"
+## The currency line. **원석** — `docs/decisions/gems-from-bosses-and-levels.md` named it.
+const RESEARCH_GEMS_FMT := "원석 %d"
+
+## **The research window's rect. Smaller than `WINDOW_RECT`, deliberately.** The assembly window is 90% of
+##  the screen because it is a workbench you arrange things on; this is a list you read, and a list stretched
+##  across 864px puts four short lines in a field of parchment. Centred on the 960x540 viewport.
+const RESEARCH_RECT := Rect2(240, 70, 480, 400)

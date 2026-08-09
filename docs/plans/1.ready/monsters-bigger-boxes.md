@@ -10,7 +10,20 @@ and **one tuned constant silently stops working.**
 **Preceding doc**: [../3.done/stage1-bosses.md](../3.done/stage1-bosses.md) — where the bull's box, the
 padding trick and the first cost measurement came from.
 
-**Nothing here is implemented. `src/`, `tests/` and `assets/` are untouched.**
+**Status update — part of this is now done, and the fork it asks about is still open.**
+
+- **The hen was enlarged** (24x28 → **48x64**, not this doc's proposed 36x44) and **a wolf was added**,
+  because the user generated that art and it needed rows (`../3.done/monster-animation.md`). The pig, bull
+  and rooster are **untouched**
+- **§4's cost model is measured and was wrong in a useful direction.** `tools/stage/profile_monsters.gd`
+  exists now and `monster_defs.gd` carries real numbers: **cost is sublinear in box cells** (the enlarged hen
+  is 2.2x the cells for 1.6x the cost), and **20 pigs land at 20.5% of the 60Hz frame, not the 61% this doc
+  projected for a 1.5x pig.** ⇒ **The "20 pigs would exceed the budget at x2" line in §3 is no longer
+  trustworthy** — it was computed from the same linear assumption. Re-derive before rejecting x2 on cost
+- **§5's `MOVE_SLAM.ignite_spread_cells` casualty has not happened**, because the bull's box did not move
+- **§7's fork is still the user's**: regenerate the remaining three at 1.5x, double them, or raise the zoom
+
+**The rest of this doc is unimplemented. `src/`, `tests/` and `assets/` are otherwise untouched.**
 
 ---
 

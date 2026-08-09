@@ -717,7 +717,7 @@ func _progress_text_survives_the_assembly_window(t) -> void:
 		return
 	var root := scene.instantiate()
 	for path: String in [paths["_hud"], paths["_progress_label"], paths["_levelup_label"], "HUD/Health",
-			"HUD/CircleWindow", "HUD/ThreePickWindow", "SpellView", "BlastFx"]:
+			"HUD/CircleWindow", "HUD/ThreePickWindow", "HUD/ResearchWindow", "SpellView", "BlastFx"]:
 		t.ok(root.get_node_or_null(path) != null, "씬에 %s 가 있다 (전제)" % path)
 
 	root.set("_hud", root.get_node(paths["_hud"]))
@@ -731,6 +731,9 @@ func _progress_text_survives_the_assembly_window(t) -> void:
 	#  — wired here too, even though this function's own checks never touch the pick window's behavior,
 	#  because leaving it null makes *any* call to either function crash outright.
 	root.set("_pick_window", root.get_node("HUD/ThreePickWindow"))
+	# **And `_research_window`, for exactly the same reason one line up** — `_update_hud()` reads its
+	#  `visible` to decide whether `Stats` shows, so an unwired null crashes the call outright.
+	root.set("_research_window", root.get_node("HUD/ResearchWindow"))
 
 	# **Blanking `_progress_label.text` was also currently green** — this call is what proves it fills back in,
 	#  not merely that the node happens to hold leftover text from before.
@@ -1336,7 +1339,7 @@ func _wired_stage_root(t) -> Node:
 
 	for path: String in [paths["_hud"], paths["_progress_label"], paths["_levelup_label"], "HUD/Health",
 			"HUD/CircleWindow", "HUD/ThreePickWindow", "SpellView", "BlastFx", "StageInput", "Camera2D",
-			"MonsterView", "CellRenderer"]:
+			"MonsterView", "CellRenderer", "TownView", "SkyBackground", "HUD/ResearchWindow"]:
 		t.ok(root.get_node_or_null(path) != null, "씬에 %s 가 있다 (전제)" % path)
 
 	root.set("_hud", root.get_node(paths["_hud"]))
@@ -1359,6 +1362,18 @@ func _wired_stage_root(t) -> Node:
 	#  below used to be a text scan instead.
 	root.set("_camera", root.get_node("Camera2D"))
 	root.set("_monster_view", root.get_node("MonsterView"))
+	# **`_town_view` for the same reason, one feature later** — `reset_stage()` reaches `_build_room()`, which
+	#  writes `_town_view.visible`. Unwired, every reset check above dies on a null before it measures
+	#  anything, which is exactly how this line came to be added (the whole net went red at once).
+	root.set("_town_view", root.get_node("TownView"))
+	root.get_node("TownView").call("setup", root.get("_char"))
+	# **`_sky` for the same reason again** — `_build_room()` swaps the backdrop with the room, so `reset_stage()`
+	#  now reaches it too. `setup(camera)` is what `_ready()` itself calls.
+	root.set("_sky", root.get_node("SkyBackground"))
+	root.get_node("SkyBackground").call("setup", root.get_node("Camera2D"))
+	# **`_research_window` too** — `_update_hud()` reads its `visible` every frame to decide whether
+	#  `Stats` shows, so an unwired null crashes every check that drives the HUD.
+	root.set("_research_window", root.get_node("HUD/ResearchWindow"))
 	# **`_renderer`, so `_on_ticked()` can be driven for real too** — it calls `_renderer.refresh()` whenever
 	#  `_grid.consume_changed() > 0`, and any test that drives `_physics_process()` far enough to change the
 	#  grid (Stage I's own water pour is the first to do this through this helper) crashes on a null `_renderer`

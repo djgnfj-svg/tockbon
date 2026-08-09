@@ -18,9 +18,15 @@ const Tuning := preload("res://src/sim/sim_tuning.gd")
 const Stage := preload("res://src/stage/stage.gd")
 const WaterSource := preload("res://src/sim/water_source.gd")
 
-## Same as `net_water_rain.gd`.
+## **Same as `net_water_rain.gd`, and derived the same way — that file's own box holds the reason.**
+##  These sat at a hardcoded `_PIT_X0 := 1888` while the map was repainted underneath them. It happened to
+##  stay inside the mouth, so **these two nets kept measuring and kept passing** — the sibling net, which
+##  asserts the walls, is the only one that went red. **That is the shape of a fake net**: written down as
+##  "same as", it can drift without a single check noticing. Derived, it cannot.
 const _PIT_ROW := 208
-const _PIT_X0 := 1888
+const _MOUTH_X0 := 1712
+const _MOUTH_X1 := 2079
+const _PIT_X0 := _MOUTH_X0 + ((_MOUTH_X1 - _MOUTH_X0 + 1) - Tuning.WATER_RAIN_HALF_W * 2) / 2
 
 
 func run(t) -> void:
@@ -54,6 +60,10 @@ func _build_settled_pit() -> CellGrid:
 func _rain_stays_under_the_chunk_cap(t) -> void:
 	var g := _build_settled_pit()
 	var x1 := _PIT_X0 + Tuning.WATER_RAIN_HALF_W * 2 - 1
+	# **The premise this file did not have, and the drift it did not catch** (`_MOUTH_X0`'s own box).
+	t.ok(_PIT_X0 >= _MOUTH_X0 and x1 <= _MOUTH_X1 and g.is_solid(_MOUTH_X0 - 1, _PIT_ROW)
+		and g.is_solid(_MOUTH_X1 + 1, _PIT_ROW),
+		"비 띠가 구덩이 입구 안이고 그 양옆이 벽이다 (전제 — 맵을 다시 그리면 여기가 먼저 빨개진다)")
 	var src := WaterSource.new(_PIT_X0, x1, _PIT_ROW, Tuning.WATER_RAIN_PER_TICK)
 
 	var peak := 0
