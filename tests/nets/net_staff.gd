@@ -1,5 +1,5 @@
 extends RefCounted
-## The staff tip — `docs/plans/2.active/staff-and-fire-origin.md`.
+## The staff tip — `staff-and-fire-origin.md`.
 ##
 ## **This net exists because of one placement decision.** Had the function that computes the tip lived in
 ##  `src/view/`, a scene would be needed and headless has no pixels => "where does it carve when you fire

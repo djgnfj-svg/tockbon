@@ -83,7 +83,8 @@ const CHUNK_H := H / Tuning.CHUNK_CELLS      # 63  <- band count
 const CHUNK_COUNT := CHUNK_W * CHUNK_H       # 16,128
 
 # --- commands — the only door that changes the grid -----------------
-enum { CMD_FILL = 0, CMD_RESET = 1, CMD_BLAST = 2, CMD_IGNITE = 3, CMD_CARVE = 4, CMD_WATER = 5 }
+enum { CMD_FILL = 0, CMD_RESET = 1, CMD_BLAST = 2, CMD_IGNITE = 3, CMD_CARVE = 4, CMD_WATER = 5,
+	CMD_FILL_WATER = 6 }
 
 # --- state ----------------------------------------------------------
 var _mat := PackedByteArray()   # material id
@@ -304,9 +305,10 @@ func _touch_chunk(c: int, band: int) -> void:
 ## **The reverse direction is still `_write_cell`.** A blast erasing water is not setting the amount to 0
 ##  but **emptying the cell wholesale** — that is the boundary between the two doors.
 ##
-## **The caller guarantees "write only over EMPTY or WATER" — in four places.**
-##  `set_water` (explicit guard) · `_water_disc` (explicit guard) · `_water_fall` (checks the destination material) ·
-##  `_water_share` (checks the neighbor material). **Only two used to be listed here.**
+## **The caller guarantees "write only over EMPTY or WATER" — in five places.**
+##  `set_water` (explicit guard) · `_water_disc` (explicit guard) · `_fill_water_rect` (explicit guard) ·
+##  `_water_fall` (checks the destination material) · `_water_share` (checks the neighbor material).
+##  **This said two, then four, and is now five** — every time water got a new door it grew.
 ##  **A short list is itself the danger** — this function doesn't touch the front (`_burning`), so writing
 ##   over a burning cell leaves **a ghost claiming membership**, and then `_burn` **eats the water amount as fuel**
 ##   (measured 255 -> 250).
@@ -809,6 +811,28 @@ static func cmd_water(x: int, y: int, r: int, amount: int) -> Dictionary:
 	return {"kind": CMD_WATER, "x": x, "y": y, "r": r, "amount": amount}
 
 
+## **A rectangle of water — the door the map character `~` passes through.**
+##
+## **Why this is not `cmd_fill(…, Mat.WATER)`**: that command has no amount field, and `_valid_mat` refuses
+##  water there **on purpose** — inventing 255 inside a material fill would put "a fill is full water" in
+##  `cell_grid` while every other water rule lives in the command that carries the amount. That refusal is a
+##  contract with a net on it (`net_water._cmd_fill_refuses_water`), and this command exists **so the refusal
+##  can stay.** Driven before the split: a map with `~` baked **zero** water cells and barked once per
+##  horizontal run — a hole in the terrain drawn as a lake, which is worse than it sounds because the map
+##  file still reads as if the lake is there.
+##
+## **The rectangle mirrors `cmd_fill`'s, and the amount mirrors `cmd_water`'s** — deliberately, so a reader
+##  who knows either one already knows this. It is the water-side sibling of `cmd_fill` exactly as
+##  `_water_disc` is the water-side sibling of `_disc`.
+##
+## **It overwrites rather than fills** (plain `_write_water`, no `maxi`). That is the opposite of
+##  `_water_disc` and it is the right choice here: a map is **authored**, so the map is the authority on how
+##  deep the pool is, and `maxi` would make a second bake unable to lower a pool it had already raised.
+##  The rune wets what is there; a map *states* what is there.
+static func cmd_fill_water(x0: int, y0: int, x1: int, y1: int, amount: int) -> Dictionary:
+	return {"kind": CMD_FILL_WATER, "x0": x0, "y0": y0, "x1": x1, "y1": y1, "amount": amount}
+
+
 func apply(cmd: Dictionary) -> void:
 	match int(cmd.get("kind", -1)):
 		CMD_FILL:
@@ -835,6 +859,15 @@ func apply(cmd: Dictionary) -> void:
 				push_error("CellGrid.cmd_water: amount %d is outside 0..%d" % [amount, Tuning.WATER_MAX])
 			elif wr > 0 and amount > 0:
 				_water_disc(int(cmd["x"]), int(cmd["y"]), wr, amount)
+		CMD_FILL_WATER:
+			# **The range check is here for the same reason `CMD_WATER`'s is** — once at the command
+			#  boundary, never inside the rect loop. Past 255 `_aux` truncates to the low 8 bits with no
+			#  error, so a map asking for 256 would bake an **empty** lake.
+			var fa := int(cmd["amount"])
+			if fa < 0 or fa > Tuning.WATER_MAX:
+				push_error("CellGrid.cmd_fill_water: amount %d is outside 0..%d" % [fa, Tuning.WATER_MAX])
+			else:
+				_fill_water_rect(int(cmd["x0"]), int(cmd["y0"]), int(cmd["x1"]), int(cmd["y1"]), fa)
 		_:
 			push_error("CellGrid.apply: unknown command %s" % cmd)
 
@@ -853,7 +886,9 @@ func _valid_mat(mat: int) -> bool:
 	# **The amount is not invented here.** `cmd_fill` has no amount field, and putting 255 in would be
 	#  **inventing a rule that doesn't exist** ("a fill is full water"). Water's doors carry the amount
 	#  (`set_water` · stage 5's `CMD_WATER`) => here it **barks and discards.**
-	# The day water goes on the map, terrain baking hits this line. **That is the right signal** — the water command stands up then.
+	# **That day came and this line held.** A map with `~` in it baked **zero** water cells and barked once
+	#  per horizontal run — driven, not read. The answer was **`cmd_fill_water`**, a rectangle that carries
+	#  the amount, **not** loosening this refusal: the amount still never gets invented here.
 	if mat == Mat.WATER:
 		push_error("CellGrid: water cannot be placed with cmd_fill - with no amount it evaporates on the spot")
 		return false
@@ -874,6 +909,31 @@ func _fill_rect(x0: int, y0: int, x1: int, y1: int, mat: int) -> void:
 		var row := y << X_SHIFT
 		for x in range(ax, bx + 1):
 			_write_cell(row | x, mat)
+
+
+## **The water-side sibling of `_fill_rect`.** Clamping is copied from it deliberately — the two rectangles
+##  must mean the same thing, or `~` and `#` cover different tiles from the same map row.
+##
+## **Solids are skipped, and that is the fifth guarantee of `_write_water`'s contract** (see its comment).
+##  Writing water over stone is not "filling", it is destruction, and destruction is `_write_cell`'s job.
+##  Skipping also means **a map may paint `~` over a tile that a later run makes solid** without corrupting
+##  the burn front — which is the whole reason that contract exists.
+## **`amount` 0 is a legal erase**, not a no-op refused at the boundary: `_write_water(i, 0)` empties the
+##  cell and lowers the shallow bit together, which is exactly what "author no water here" should mean.
+##  It is not on any path today — the map char bakes `WATER_MAX` — and is written this way so that if it
+##  ever is, it does the coherent thing rather than half of it.
+func _fill_water_rect(x0: int, y0: int, x1: int, y1: int, amount: int) -> void:
+	var ax := maxi(0, mini(x0, x1))
+	var bx := mini(W - 1, maxi(x0, x1))
+	var ay := maxi(0, mini(y0, y1))
+	var by := mini(H - 1, maxi(y0, y1))
+	for y in range(ay, by + 1):
+		var row := y << X_SHIFT
+		for x in range(ax, bx + 1):
+			var i := row | x
+			if _mat[i] != Mat.EMPTY and _mat[i] != Mat.WATER:
+				continue
+			_write_water(i, amount)
 
 
 ## **An integer disc.** `dx*dx + dy*dy <= rd*rd` — `sqrt` never appears.

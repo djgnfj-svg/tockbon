@@ -91,7 +91,7 @@ func run(t) -> void:
 	await _draw_actually_runs_once_treed_and_pumped(t)
 	_the_draw_call_actually_paints_the_arch_texture_at_its_rect(t)
 	_the_arch_is_inside_the_camera_window_only_from_the_rooms_east_half(t)
-	# -- The clear sequence — the beats (`docs/plans/1.ready/stage-clear-sequence.md`) --
+	# -- The clear sequence — the beats (`stage-clear-sequence.md`) --
 	_the_wall_falling_kicks_the_camera_and_it_settles_back(t)
 	_the_tint_curve_walks_from_transparent_to_opaque_to_the_flare(t)
 	_the_drawn_tint_is_the_one_the_counters_decided(t)
@@ -780,6 +780,37 @@ func _the_wall_falling_kicks_the_camera_and_it_settles_back(t) -> void:
 
 	blast_fx.call("advance", Fx.GATE_WALL_SHAKE_SECS + 0.1)
 	t.eq(blast_fx.call("shake_offset"), Vector2i.ZERO, "그리고 제 시간이 지나면 스스로 멎는다 (계속 안 떤다)")
+
+	# **And it stays stopped — the kick fires once, measured instead of argued** (verify-read).
+	#  The plan's Bounds says "the shake fires once, off `_room3_gate_open`'s existing latch — a per-tick
+	#  re-kick is structurally impossible here." True today, and **nothing measured it**: moving `kick()`
+	#  out of that `if` block so it fires every physics frame leaves the camera shaking for the rest of the
+	#  run and **all 433 checks green.** The two asserts above cannot see it — they only ever `advance()`,
+	#  and `_wired_root` never trees the root, so no `_physics_process` runs between them. That is
+	#  CLAUDE.md's "a check that reads only final state cannot measure a repetition contract".
+	#  **`TICK_DIVIDER * 2` frames, not one — and the one-frame version of this check did not bite.**
+	#  `_on_ticked()` runs only when `_world.frame()` returns true, which is once every `TICK_DIVIDER`(3)
+	#  physics frames, so a single `_physics_process` crosses a tick boundary at most one time in three —
+	#  and in this check's phase, none. The re-kick mutation ran with **437 green** against the one-frame
+	#  version. This file's own line 274 already wrote the rule ("pump well past one to be sure a tick
+	#  actually ran"); it was not followed here the first time.
+	for _i in Tuning.TICK_DIVIDER * 2:
+		root.call("_physics_process", 1.0 / 60.0)
+	blast_fx.call("advance", 0.01)
+	t.eq(blast_fx.call("shake_offset"), Vector2i.ZERO,
+		"틱을 여러 번 더 돌려도 다시 안 흔들린다 (빗장 안이라 딱 한 번만 찬다 — 매 틱 다시 차면 영영 안 멎는다)")
+
+	# **The strength is held to its own stated reason, not just to "non-zero"** (verify-read).
+	#  `GATE_WALL_SHAKE_PX = 1` was fully green: the asserts above only ask whether it moved at all.
+	#  The constant's own comment is "larger than any blast in `FX_SIZES` — a twelve-tile stone wall, once",
+	#  so that is what is asked here, against the table it names rather than against a second literal.
+	var biggest_blast := 0
+	for row: Dictionary in Fx.FX_SIZES:
+		biggest_blast = maxi(biggest_blast, int(row["shake_px"]))
+	t.ok(biggest_blast > 0, "폭발 흔들림 표를 읽었다 (전제 — %d)" % biggest_blast)
+	t.ok(Fx.GATE_WALL_SHAKE_PX > biggest_blast,
+		"동벽이 무너지는 흔들림(%d)이 어떤 폭발(%d)보다도 크다 — 열두 타일짜리 돌벽은 볼트가 아니다"
+			% [Fx.GATE_WALL_SHAKE_PX, biggest_blast])
 	root.free()
 
 
@@ -817,6 +848,16 @@ func _the_panel_opens_on_exactly_the_take_frames_th_frame(t) -> void:
 	t.ok(Fx.GATE_TAKE_FRAMES >= 12,
 		"데려가기가 최소 12프레임(0.2초)은 된다 — 상수 자체가 1~2로 줄면 여기가 빨개진다 (얻은 값 %d)"
 			% Fx.GATE_TAKE_FRAMES)
+	# **The same floor for the fade, and it was missing** (verify-read, an adversarial pass by an agent that
+	#  did not build this feature). `GATE_ARCH_FADE_FRAMES = 2` was **fully green — 433 passed** — and beat 2
+	#  is then a 2-frame pop (0.033s), which is exactly the "pops from nothing to fully opaque in one frame"
+	#  the beat exists to remove.
+	#  **`= 1` does bite, but only by accident**, and the accident is worth naming so nobody reads it as
+	#  coverage: the curve check below probes `GATE_ARCH_FADE_FRAMES / 2`, which integer-divides to 0 at 1,
+	#  so its "the middle is a middle value" assert reads `tint(0, 0)` and fails. **The real hole was 2–11.**
+	t.ok(Fx.GATE_ARCH_FADE_FRAMES >= 12,
+		"떠오르기도 최소 12프레임은 된다 — 2~11이면 팝이고, 그 구간은 전부 초록이었다 (얻은 값 %d)"
+			% Fx.GATE_ARCH_FADE_FRAMES)
 
 	var root := _wired_root(t)
 	if root == null:

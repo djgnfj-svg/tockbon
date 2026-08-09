@@ -11,10 +11,15 @@ opening the doc):
 - Is the notice readable, and does it land as information rather than as an error message.
 - Is `스테이지 1 클리어` obviously not `런 종료` at a glance.
 
+**A sixth question used to be on this list and is not any more** — "do the two notice lines fit in their
+band" turned out to be arithmetic, and is a check now (see Acceptance → Screen).
+
 **And the arch's own first look is still owed** from `gate-ending-to-game.md` — it was never seen there
 either, so this doc sits on top of an unverified picture.
 
-**Mutation results were still being taken when this moved.** Nothing here is marked verified.
+**The mutations have since been run in full** — 21 of 21 bite, and **four holes were found green and are now
+checks** (see "Corrected during implementation"). ⇒ **The headless half is verified. The screen half above is
+not, and no amount of green touches it.**
 **One line**: the rooster's death kicks the camera, the arch fades up instead of popping, standing in it takes
 you over ~0.4s, and the settlement panel that opens says **스테이지 1 클리어** with two lines saying the build
 ends here — then the existing button sends you to the town.
@@ -488,6 +493,14 @@ when it lands.
 - **Is the notice readable and does it land as information rather than as an error message.**
 - Is `스테이지 1 클리어` obviously not `런 종료` at a glance.
 
+⚠ **One question was removed from this list — "do two 18px lines fit inside `NOTICE_H_PX` 64".**
+**It is a value, not a feel**, and filing it here meant nothing measured it. Font metrics are readable
+headless (`ThemeDB.fallback_font`, the same default theme font `settlement_window` itself falls back to), so
+it is now a check in `net_settlement`. **Measured: line height 26, two lines 52 against 64; widths 289 / 228
+against 864 — it fits, with 12px to spare.** Nothing was broken; what was missing was anything that says so
+**the day `SETTLEMENT_NOTICE_SIZE` is bumped or a line is lengthened**, both of which would clip in silence.
+⇒ **What stays here is only whether the notice *reads* as information. Whether it fits is arithmetic.**
+
 ---
 
 ## Collisions
@@ -618,8 +631,31 @@ that quietly fixes itself teaches nothing.**
 
 ### Corrected during implementation — recorded, not deleted
 
-**Three places this doc was wrong against the code.** The wrong reading is kept visible in each case, because
-it is the one an implementer would arrive at unaided.
+**Three places this doc was wrong against the code, and four places its nets were.** The wrong reading is
+kept visible in each case, because it is the one an implementer would arrive at unaided.
+
+#### The four holes the inversion pass found — **all four were green, all four are now checks**
+
+| Mutation | Was | Now |
+|---|---|---|
+| **`_draw()` hands `_draw_notice` a `Rect2()`** instead of `Layout.notice_rect(size)` | **320 green.** The notice draws at (0,0) with zero size — off the panel, invisible — and **the one sentence telling the player the build ends here silently does not appear** | `_CapturingSettlementWindow` captures the rect (it was named `_r` and discarded) and asserts it equals `notice_rect()` |
+| **`GATE_ARCH_FADE_FRAMES = 2`** | **433 green.** Beat 2 becomes a 2-frame pop — exactly the "pops from nothing to fully opaque" it exists to remove. `= 1` bites only by an integer-division accident in the curve probe, so **the real hole was 2–11** | a literal floor `>= 12`, symmetric with the one already on `GATE_TAKE_FRAMES` |
+| **`GATE_WALL_SHAKE_PX = 1`** | **green** — the shake check asked only `!= Vector2i.ZERO` | asserted against `FX_SIZES`' own `shake_px`, which is the constant's own stated reason ("larger than any blast") |
+| **`kick()` moved out of the `_room3_gate_open` latch**, firing every tick | **433 green.** The camera shakes for the rest of the run and nothing sees it | one more pass of physics frames after the settle assert, re-asserting `ZERO` |
+
+**The first one is the finding.** This doc closed the *identical* shape one file over, deliberately and with
+a comment explaining it — `_the_drawn_tint_is_the_one_the_counters_decided` exists because hardcoding
+`_paint_arch(_tex, rect(), Color.WHITE)` left the pure tint curve measured and the wiring unmeasured. The
+notice's layout is that same pure function, and **nothing asked whether `_draw()` used it.**
+⇒ **Measuring a pure layout function is never measuring the layout**, and the second instance was missed by
+the author who had just fixed the first.
+
+**The fourth row's own fix was written wrong the first time, and is recorded because it is the same class of
+mistake.** A single extra `_physics_process` did not bite: `_on_ticked()` runs only on a 20Hz tick, so one
+physics frame crosses a tick boundary at most one time in three — and in that check's phase, none. The
+mutation was confirmed to have landed *before* the check was suspected (CLAUDE.md's rule), and the fix is to
+pump `TICK_DIVIDER * 2`. **A check written to close a hole is exactly the kind that gets written wrong and
+looks right.**
 
 | Was written | Corrected to |
 |---|---|
@@ -627,8 +663,22 @@ it is the one an implementer would arrive at unaided.
 | Collisions: `_a_downed_body_on_the_seat_reads_as_a_death_not_a_clear` "must pump `GATE_TAKE_FRAMES + 1`" | **It must not pump at all.** `downed` opens the panel on frame 1 regardless of the take clock — that *is* the tie rule. Pumping past the take weakens it into measuring nothing |
 | "This plan adds nothing to `net_render.gd`, `net_town.gd`" | **Both need `["_gate_view", "GateView"]` wired.** And the failure shape was checks *disappearing*, not failing — see the section above Collisions' file list |
 
-**Still open and deliberately not closed here: none of the new checks has been inverted.** They are proven to
-run, not proven to measure — the inversion table above is verify-read's, in an isolated worktree.
+### ~~Still open: none of the new checks has been inverted~~ — **run in full, and it found four holes**
+
+**Closed.** An adversarial pass by an agent that **did not build this feature** ran every row of the
+inversion table above plus ten more. **21 mutations, 21 bite** — each on the check it names and nothing
+further out of place. That includes the three rows this doc marked as *reasoning, not measurement*, all
+three confirmed exactly as argued:
+
+| Deleted | Predicted here | Measured |
+|---|---|---|
+| `stage.tscn`'s `GateView` node | premise fails by name in three nets | ✓ red in `net_gate` · `net_settlement` · `net_town` |
+| `stage.gd`'s `@onready var _gate_view` | a parse error | ✓ `Parse Error: Identifier "_gate_view" not declared` |
+| `stage.gd`'s `_gate_view.setup(...)` | `net_settlement` only | ✓ 1 red there, and **`net_gate` stays fully green** — it really is the sole guard |
+
+Deleting `net_town`'s wire went **red *and* dropped the count 259 → 258**, both symptoms this doc predicted.
+
+**But four mutations stayed fully green, and one of them is this feature's own headline failure.**
 
 ### Closed by review — recorded, not deleted
 

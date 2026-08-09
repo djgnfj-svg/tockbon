@@ -64,3 +64,9 @@ const MAP: Array[String] = [
 ]
 
 const MAP_CHARS: Dictionary = {"#": Mat.STONE, "=": Mat.WOOD, "B": Mat.BEDROCK, "~": Mat.WATER}
+
+## The accessor `stage_defs.map_rows()` calls. Every map script has one, so the room table holds
+## the script and never a per-stage branch.
+static func rows() -> Array[String]:
+	return MAP
+

@@ -105,9 +105,15 @@ Nets scan the folders recursively — no hand-maintained registry.
   citations at once, and the fix is to name the section, not to renumber — renumbering breaks again on the
   next edit above it. **This leak was found four separate times in one night, each time by someone other than
   whoever caused it**, including twice by the person who had just fixed the same thing elsewhere.
-  ⇒ A net greps `src/` and `tests/` for `docs/plans/[0-9]` and fails. **That check is the only reason this
-  stopped** — grep is the right instrument here because the rule being enforced is itself a text rule about
-  comments, not a proxy for behaviour (contrast "a check that greps a file measures its text", below)
+  ⇒ **A net must grep `src/` and `tests/` for `docs/plans/[0-9]` and fail. It does not exist yet** — and
+  this line briefly claimed it did, which is this file's own *"written down reads as exists"* failure
+  committed inside the warning about it. Until it is built the rule is honour-based, and **honour-based did
+  not hold**: two citations stayed dead through *four* separate hand sweeps in one night, and were found only
+  on the fifth. When it is built: grep is the right instrument here because the rule being enforced is itself
+  a text rule about comments, not a proxy for behaviour (contrast "a check that greps a file measures its
+  text", below). **It must rejoin wrapped comment lines before matching, and confirm the cited name resolves
+  to a real file.** A line-wise scan passed **three of eleven**, because the path wrapped across two `##`
+  lines — coverage that looks like coverage and licenses everyone to stop sweeping
 
 ## No fake code
 
@@ -128,6 +134,13 @@ so the single frame it touches ground lands on the same tick phase every time an
 `_grounded_recently` are all the same passage: **latch the 60Hz fact, let the tick read and clear it.**
 Three times now. Reach for that shape before writing a fourth.
 
+**The fourth arrived, wearing the other face — the *check* was the victim, not the feature.** A check pumped
+**one** `_physics_process` to observe something `_on_ticked()` drives, and **one physics frame crosses a tick
+boundary at most one time in three — in that check's phase, none.** It passed while measuring nothing, and
+the mutation it was written to catch stayed green at 437. `net_gate.gd:274` had already written the rule
+down — *"pump well past one to be sure a tick actually ran"*. ⇒ **Observing anything tick-driven means
+pumping `TICK_DIVIDER * 2`, never one frame.**
+
 ## No fake nets
 
 When the label claims more than the check measures, that green is a false guarantee.
@@ -135,6 +148,14 @@ When the label claims more than the check measures, that green is a false guaran
 **Invert every new check.** An uninverted check proves "it runs", not "it measures".
 **If the inversion doesn't bite, suspect the check last — first confirm the mutation actually landed.**
 String replacement has silently matched zero times, twice.
+
+**Invert the instrument, not only the subject.** Twice in one night a check was written to catch a defect and
+**shipped carrying that same defect**: a scanner for citations wrapped across comment lines joined only on
+spaces, so the mid-token wrap — the shape it existed to find — stayed invisible, and every hand sweep that
+night miscounted 56 as 53; and a dim-check folded body and outline alpha into one array, so deleting the body
+dim outright stayed green because the outline's minimum held. **Neither was caught by inverting the code.
+Both were caught by inverting the check.** ⇒ A new check needs a case that fails *it*, not only one that
+fails what it points at.
 
 Failure shapes are listed in `verify-read.md`. Only these three live here — **they survive
 even after you confirm every mutation goes red**:

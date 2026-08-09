@@ -2,7 +2,10 @@ extends RefCounted
 ## The actual logic of terrain baking. Both `bake_terrain.gd` (headless) and `bake_terrain_editor.gd` (in-editor)
 ## call this one — copy the logic into two places and they diverge.
 ##
-## Reads the Terrain (TileMapLayer) of `stage.tscn` and rewrites `src/stage/terrain_map_generated.gd`.
+## Reads a `TileMapLayer` of `stage.tscn` and rewrites a generated map script. **Which layer and which file
+## are arguments now** (`bake()`'s two parameters, both defaulting to stage 1's) — a second stage is a second
+## layer in the same scene baked to its own artifact, and the room table (`src/stage/stage_defs.gd`) names
+## whichever one a stage uses. Stage 1's call is unchanged.
 ## `Stage.MAP` · `Stage.MAP_CHARS` · `Stage.MAP_W` · `Stage.MAP_H` · `Stage.build_terrain_into()` are
 ## left alone — they all re-export this artifact as is. Because `_wood_clumps` and `_stage_map` in `net_tables.gd`
 ## measure this directly, building a bake under a new name makes that net measure a dead side branch
@@ -53,18 +56,32 @@ const NAME_BY_MAT := {
 }
 
 
+## Stage 1's source layer and artifact. **Defaults, not the contract** — a second stage is a second
+## `TileMapLayer` in the same scene baked to its own file, and that is the whole of `bake()`'s two arguments.
+const DEFAULT_SOURCE_NODE := "Terrain"
+const DEFAULT_OUT_PATH := "res://src/stage/terrain_map_generated.gd"
+
+
 ## true on success. On failure it barks with `push_error` and returns false — the caller turns it into an exit code.
-static func bake() -> bool:
+##
+## **Both arguments default to stage 1's**, so `bake()` with no arguments is byte-for-byte the call the two
+## entry points (`bake_terrain.gd` headless, `bake_terrain_editor.gd` in-editor) already made.
+static func bake(source_node: String = DEFAULT_SOURCE_NODE,
+		out_path: String = DEFAULT_OUT_PATH) -> bool:
 	var packed: PackedScene = load("res://src/stage/stage.tscn")
 	var root := packed.instantiate()
-	var terrain := root.get_node_or_null("Terrain") as TileMapLayer
+	var terrain := root.get_node_or_null(NodePath(source_node)) as TileMapLayer
 	if terrain == null:
-		push_error("there is no Terrain(TileMapLayer) node - stand one up in stage.tscn first")
+		# **The node's name is in the message.** With it hardcoded to "Terrain", baking stage 2's layer and
+		#  misspelling it would bark about a node that is not the one being asked for.
+		push_error("there is no %s(TileMapLayer) node - stand one up in stage.tscn first" % source_node)
+		root.free()
 		return false
 
 	var rect := terrain.get_used_rect()
 	if rect.size.x <= 0 or rect.size.y <= 0:
-		push_error("no tiles are drawn on Terrain - draw before baking")
+		push_error("no tiles are drawn on %s - draw before baking" % source_node)
+		root.free()
 		return false
 
 	var map_w := rect.size.x
@@ -75,6 +92,7 @@ static func bake() -> bool:
 		push_error(
 			("the drawn region (%dx%d tiles) exceeds grid capacity (%dx%d tiles) - " +
 			"raise CellGrid.W/H/X_SHIFT and bake again") % [map_w, map_h, cap_w, cap_h])
+		root.free()
 		return false
 
 	var rows: Array[String] = []
@@ -90,13 +108,18 @@ static func bake() -> bool:
 			var mat: int = data.get_custom_data("material")
 			if not CHAR_BY_MAT.has(mat):
 				push_error("%s has no character for material id %d - extend CHAR_BY_MAT" % [cell, mat])
+				root.free()
 				return false
 			chars[tx] = CHAR_BY_MAT[mat]
 		rows.append("".join(chars))
+	# The scene has been read and nothing below touches it. **Freed rather than left behind** — a `Node` from
+	#  `instantiate()` is not reference counted, and a net that drives this would end its process with
+	#  "ObjectDB instances leaked at exit" on stderr, which the wrapper counts as a failed round.
+	root.free()
 
 	var out := "extends RefCounted\n"
 	out += "## Generated automatically - do not edit by hand.\n"
-	out += "## To change the terrain, redraw stage.tscn's Terrain(TileMapLayer) in the Godot editor and\n"
+	out += "## To change the terrain, redraw stage.tscn's %s(TileMapLayer) in the Godot editor and\n" % source_node
 	out += "## bake (open `bake_terrain_editor.gd` in the script editor and run it, or headless `bake_terrain.gd`).\n"
 	out += "## MAP_W and MAP_H are the drawn region's real size (`TileMapLayer.get_used_rect()`) - not matched by hand.\n"
 	# **The artifact's header goes stale too.** This used to point at "the table in `build_terrain_tileset.gd`",
@@ -125,15 +148,22 @@ static func bake() -> bool:
 			push_error("the constant name for material id %d is unknown - extend terrain_baker's NAME_BY_MAT" % mat)
 			return false
 		pairs.append("\"%s\": Mat.%s" % [CHAR_BY_MAT[mat], NAME_BY_MAT[mat]])
-	out += "const MAP_CHARS: Dictionary = {%s}\n" % ", ".join(pairs)
+	out += "const MAP_CHARS: Dictionary = {%s}\n\n" % ", ".join(pairs)
+	# **The accessor the room table calls** (`stage_defs.map_rows()`). Emitted here rather than written into
+	#  the artifact by hand — the artifact is overwritten on every bake, so a hand-added function lives
+	#  exactly until the next redraw and then the table's `map` field dies with nothing barking.
+	out += "## The accessor `stage_defs.map_rows()` calls. Every map script has one, so the room table holds\n"
+	out += "## the script and never a per-stage branch.\n"
+	out += "static func rows() -> Array[String]:\n"
+	out += "\treturn MAP\n"
 
-	var f := FileAccess.open("res://src/stage/terrain_map_generated.gd", FileAccess.WRITE)
+	var f := FileAccess.open(out_path, FileAccess.WRITE)
 	if f == null:
-		push_error("could not open the generated file - error code %d" % FileAccess.get_open_error())
+		push_error("could not open %s - error code %d" % [out_path, FileAccess.get_open_error()])
 		return false
 	f.store_string(out)
 	f.close()
 
-	print("[terrain_baker] terrain_map_generated.gd 다시 씀 (%d×%d타일, 원점 옮김 %s)" % [
-		map_w, map_h, -rect.position])
+	print("[terrain_baker] %s 다시 씀 (%d×%d타일, 원점 옮김 %s)" % [
+		out_path.get_file(), map_w, map_h, -rect.position])
 	return true

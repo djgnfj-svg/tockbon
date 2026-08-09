@@ -39,7 +39,7 @@ signal town_pressed
 ## `_showing`/`_seconds`/etc. names the same scan).
 var _gem_icon: Texture2D = load(Fx.RESEARCH_ICONS["material"])
 
-## **All five fields are plain `bool`/`int`** — no `Array`/`Dictionary` here, so this file needs no entry in
+## **Every field below is a plain `bool`/`int`/`String`** — no `Array`/`Dictionary` here, so this file needs no entry in
 ## `net_pick._no_pushed_out_glyph_is_stashed_anywhere`'s allowlist (that scan's own header: `const` is exempt,
 ## a `var` collection is not — this file simply has none).
 var _showing := false
@@ -49,6 +49,9 @@ var _gems := 0
 ## **Which title `_draw()` picks** (`gate-ending-to-game.md`, Stage D). Snapshotted the same way the other
 ##  three fields are — a live read would let the flag that decided it move out from under an open panel.
 var _cleared := false
+## **Which stage was cleared, as its own title string** — snapshotted beside `_cleared` for the same reason,
+## and pushed in by the shell from the room table rather than read from `Fx` here (`open()`'s own comment).
+var _clear_title := Fx.SETTLEMENT_TITLE_CLEAR
 ## Frames counted since the last `open()`, by `tick_countup()` — the count-up's only clock, and it lives here
 ## rather than in `Progress` because it is screen-only state, not sim state (the same split `three_pick_
 ## window._confirm_ticks` already holds for its own afterglow timer).
@@ -70,12 +73,21 @@ func _ready() -> void:
 ## `cell_grid.cmd_fill`/`character.take_hit`'s own signatures: a call site that forgets a load-bearing
 ## argument must not silently pick a behaviour). A caller that forgot this argument would draw a clear as a
 ## death, or the reverse — exactly the fake this repo bans, so GDScript refuses to compile the call instead.
-func open(seconds: int, damage: int, gems: int, cleared: bool) -> void:
+##
+## **`clear_title` does have a default, and that is the opposite decision from `cleared` one paragraph up —
+## on purpose.** It is not load-bearing in the same way: forgetting it cannot draw a clear as a death, it can
+## only name the wrong stage. The default is the one stage that exists, and the shell overrides it from the
+## room table (`stage_defs.ROWS[...]["title"]`), so the string a player reads is a property of the stage they
+## cleared rather than a constant this window reaches for. `net_stages` drives a title the constant does not
+## carry — that is what keeps the argument from being decorative.
+func open(seconds: int, damage: int, gems: int, cleared: bool,
+		clear_title: String = Fx.SETTLEMENT_TITLE_CLEAR) -> void:
 	_showing = true
 	_seconds = seconds
 	_damage = damage
 	_gems = gems
 	_cleared = cleared
+	_clear_title = clear_title
 	_frames = 0
 	# **The actual `Control` property, not only the internal flag** — `is_showing()` reading `_showing` alone
 	#  told the rest of the shell the truth while the node itself stayed invisible on screen. `visible` is what
@@ -145,7 +157,7 @@ func _draw() -> void:
 
 	# **The one line this Stage adds** (`gate-ending-to-game.md`, Stage D) — everything else about the panel
 	#  is unchanged: no extra row, no bonus, no second layout.
-	var title := Fx.SETTLEMENT_TITLE_CLEAR if _cleared else Fx.SETTLEMENT_TITLE
+	var title := _clear_title if _cleared else Fx.SETTLEMENT_TITLE
 	var title_w := font.get_string_size(title, HORIZONTAL_ALIGNMENT_LEFT, -1, Fx.SETTLEMENT_TITLE_SIZE).x
 	_draw_title(font, title, Vector2((size.x - title_w) * 0.5, Fx.SETTLEMENT_PAD_PX + float(Fx.SETTLEMENT_TITLE_SIZE)))
 

@@ -4,7 +4,7 @@ extends RefCounted
 ## **What lives here is stage 1 (chunk sleep) and stage 2 (it falls downward).**
 ##  There is no left-right sharing, no wetness, no water rune yet. This is why the design split the stages:
 ##  if the chunks stand wrong the water is wrong with them and **you cannot tell which of the two is the cause**
-##  (`docs/plans/2.active/water-and-chunk-sleep.md`, "build order").
+##  (`water-and-chunk-sleep.md`, "build order").
 ##
 ## **"It doesn't move" measures nothing.** In v1 the water looked stopped and was not stopping.
 ##  => Everything measured here is a **number** — `active_chunk_count()`, `chunk_awake_at()` and the like.
@@ -931,38 +931,89 @@ func _narrow_bowl_reaches_zero(t) -> void:
 	t.eq(_water_scan(g, 190, 700, 240, 755)[0], poured, "총량이 보존된다")
 
 
-## **Acceptance 1-b — wide water does not reach 0. Instead the active chunks lock into a single digit.**
+## ══ Acceptance 1-b — **and the acceptance itself was falsified, not just the check** ══
 ##
-## **This must not be read as a "failure".** The halving rule is diffusion, so lying flat takes time proportional
-##  to the square of the width, and **the total is conserved exactly — it is not leaking, it just doesn't finish.**
-## **There are only two failure cases**: the total leaking, or the active chunks **growing without bound**.
-##  => Those two are exactly what is measured here.
+## ~~"Wide water does not reach 0. Instead the active chunks lock into a single digit."~~ **False.**
+## Measured directly against this exact bowl (`_make_bowl(128, 900, 32, 8)`), total conserved and confirmed
+## still settled 200 ticks later: **it reaches 0 active chunks at tick 1,032**, peak 13.
+## `docs/design/water.md`'s standing claim that a 128-cell bowl *"does not stop by 4,000 ticks"* is stale with
+## it. **The cause has not been chased** — `WATER_SUBSTEPS` = 3 is a suspicion, not a finding.
+##
+## **The check that stood here was vacuous and green.** It ran 1,200 ticks and read `late` only over
+## `i >= 1100` — a window that now sits **entirely after the water stops moving**, so `late` was 0 and
+## `late <= 32` passed while measuring nothing at all.
+##
+## **That is the same shape as `net_gate`'s re-kick hole, wearing different clothes**: a window positioned
+## relative to an event that has since moved out from under it. Neither was wrong when written. **A check
+## that observes a fixed window rather than the event itself goes vacuous silently the day the timing moves**,
+## and reads green rather than flaky, because nothing about it is random.
+## ⇒ **So this asserts the settle tick itself**, which cannot drift out from under the check: if the bowl
+## gets faster or slower the number moves and the bounds bite, instead of the window quietly emptying.
+##
+## **Re-deriving after a water tuning change** (this will go red, and that is the system working — the same
+## contract `net_water_rain`'s constants carry): run the bowl to `_SETTLE_CAP` recording the first tick at
+## which `active_chunk_count()` is 0, and move the two bounds around the new value. **Do not widen them to
+## make red go away** without saying what changed.
+
+## Measured 1,032. **The bounds are wide on purpose and the floor is the load-bearing half**: a bowl that
+## settles at 200 has almost certainly lost water rather than levelled it, which is a far worse bug than
+## being slow, and no ceiling can catch it.
+const _WIDE_SETTLE_MIN := 500
+const _WIDE_SETTLE_MAX := 2000
+## Only reached when it never settles — i.e. when this check is already going red.
+const _SETTLE_CAP := 3000
+## Held at 0 for this long afterwards. **Being 0 for one tick is not equilibrium** (`_narrow_bowl_reaches_zero`
+## makes the same point for the narrow bowl, which is why the number is the same shape).
+const _WIDE_HOLD_TICKS := 150
+
+
 func _wide_bowl_settles_under_the_cap(t) -> void:
 	var made := _make_bowl(128, 900, 32, 8)
 	var g: CellGrid = made[0]
 	var poured: int = made[1]
 
 	g.step()
-	var late := 0
-	var peak := 0
-	for i in 1200:
+	var peak := g.active_chunk_count()
+	var settled_at := -1
+	var n := 1
+	while n < _SETTLE_CAP:
 		g.step()
+		n += 1
 		var a := g.active_chunk_count()
 		peak = maxi(peak, a)
-		if i >= 1100:
-			late = maxi(late, a)
+		if a == 0:
+			settled_at = n
+			break
 
-	t.ok(peak > 0, "넓은 물은 도는 내내 깨어 있다 (최대 %d청크)" % peak)
-	# **What is measured is not "does it grow" but "is it penned inside a bound".**
-	#  Butting the maxima of two adjacent windows against each other **reads noise as growth** — measured, it
-	#   oscillates between 9 and 10, and that is not growth but the surface band sloshing. Written that way, it went red.
-	#  The real failure is **growing without bound**, and that is caught by a fixed ceiling.
-	#   The design measured a maximum of 16-18 at width 128 => 32 gives twice the headroom.
-	t.ok(late <= 32, "1,100틱 뒤에도 활성 청크가 32 아래에 갇힌다 (최대 %d)" % late)
-	t.ok(peak < 64, "도는 내내도 64 아래다 (최대 %d, 상한 %d 훨씬 아래)" % [
+	t.ok(peak > 0, "넓은 물이 실제로 움직였다 (최대 %d청크 — 0이면 아무 일도 안 일어난 것이다)" % peak)
+	t.ok(settled_at > 0, "%d틱 안에 활성 청크가 0이 된다 (안 멎으면 여기가 빨개진다)" % _SETTLE_CAP)
+	# **Both bounds, and one bite does not prove the range** — proven at both ends against a real knob:
+	#  `WATER_MIN_DIFF` 4 -> 32 settles at **142** and trips the floor; 4 -> 1 settles at **2,074** and trips
+	#  the ceiling. The ceiling catches "it never finishes"; the floor catches "it finished far too early",
+	#  which is what losing water looks like from outside.
+	#
+	# **The wording carries `settled_at` = -1 too.** When it never settles the assert above is the one that
+	#  says so, and these two fire alongside it — a message reading "it settled too fast (-1)" would send the
+	#  next reader hunting a leak that is not there. **The count stays fixed rather than being made
+	#  conditional**, because a check count that changes shape between runs is its own signal to spend.
+	t.ok(settled_at > _WIDE_SETTLE_MIN,
+		"멎은 틱(%d)이 %d보다 크다 — 너무 빨리 멎으면 평평해진 게 아니라 샌 것이다 (-1은 '안 멎었다')"
+			% [settled_at, _WIDE_SETTLE_MIN])
+	t.ok(settled_at > 0 and settled_at < _WIDE_SETTLE_MAX,
+		"그리고 %d보다 작다 (%d틱 — 측정값 1,032에서 멀어지면 물 튜닝이 움직인 것이다)"
+			% [_WIDE_SETTLE_MAX, settled_at])
+	# **The cap is never approached on the way.** The real failure is growing without bound; a fixed ceiling
+	#  is what catches it, and the design measured a maximum of 16-18 at width 128.
+	t.ok(peak < 64, "도는 내내 64 아래다 (최대 %d, 상한 %d 훨씬 아래)" % [
 		peak, Tuning.MAX_CHUNKS_PER_TICK])
-	# **The total is the other half of this acceptance** — not stopping is fine, leaking is not.
-	t.eq(_water_scan(g, 190, 850, 340, 905)[0], poured, "1,200틱 뒤에도 총량이 정확히 같다")
+
+	# **And it stays 0.** One tick at zero is not equilibrium.
+	for _i in _WIDE_HOLD_TICKS:
+		g.step()
+	t.eq(g.active_chunk_count(), 0, "그 뒤 %d틱을 더 돌려도 0이다" % _WIDE_HOLD_TICKS)
+	# **The total is the other half of this acceptance** — settling is fine, leaking is not. **And this is
+	#  what makes the floor above meaningful**: the two together say it levelled rather than lost.
+	t.eq(_water_scan(g, 190, 850, 340, 905)[0], poured, "멎은 뒤에도 총량이 정확히 같다")
 
 
 ## **Left-right bias — does the dir flip actually run.** v1 had this net.

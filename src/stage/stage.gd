@@ -31,8 +31,8 @@ const MonsterView := preload("res://src/view/monster_view.gd")
 const MonsterDefs := preload("res://src/actor/monster_defs.gd")
 const Progress := preload("res://src/actor/progress.gd")
 const WaterSource := preload("res://src/sim/water_source.gd")
-## The town (`docs/design/town.md`) — the room, the seats, and the door that asks where you are standing.
-const TownMap := preload("res://src/stage/town_map.gd")
+## The town (`docs/design/town.md`) — **its map and spawn are the room table's row 0 now**, so this file no
+##  longer names `town_map.gd` at all. The door that asks where you are standing is still here (`_interact`).
 const Fixtures := preload("res://src/actor/fixtures.gd")
 const TownView := preload("res://src/view/town_view.gd")
 const ResearchWindow := preload("res://src/view/research_window.gd")
@@ -44,17 +44,15 @@ const GateView := preload("res://src/view/gate_view.gd")
 ## No longer a constant but a re-export of `terrain_map_generated.gd` — it follows the painted region's size verbatim.
 ##  It pairs with the re-export at the `MAP` declaration below.
 
-## The character's starting position (tiles). On the ground at the left end of the stage 1 map.
-##
-## **Redraw the map and this value must be fixed with it — nobody barks.**
-## It actually happened: the map was redrawn 312x126 -> 400x48 while this constant stayed `(3, 30)`, so
-##  **y30 fell below the ground surface (y20)** and the character started by **dropping onto the floor of a
-##  sealed underground cave (y44).** The reachable range confirmed by BFS was **a single row of cave floor**,
-##  and a 6-tile crust cannot be pierced with `carve_r` (2 cells).
-##  => **Launch the game and the surface is never seen at all. Not one line of error is raised.**
-## The nets can't catch it either — `net_tables._stage_map` measures only the map's **shape** and never looks
-##  at **where inside it the spawn sits.**
-const SPAWN_TILE := Vector2i(3, 19)
+## **The room table — one row per room this shell can build** (`src/stage/stage_defs.gd`). Every `if _in_town`
+##  that used to pick a map, a spawn, a monster table or a gate is a lookup in it now.
+const StageDefs := preload("res://src/stage/stage_defs.gd")
+
+## **A re-export of the room table's stage-1 row** — the value itself, and the account of the accident that
+##  makes it dangerous, live in `stage_defs.STAGE1_SPAWN_TILE`. Kept under this name because `net_tables`
+##  stands up *the real stage 1* through `Stage.SPAWN_TILE`, the same reason `MAP_W`/`MAP_H` below are
+##  re-exports rather than moves.
+const SPAWN_TILE: Vector2i = StageDefs.STAGE1_SPAWN_TILE
 
 ## Initial terrain. `#` stone · `=` wood · `.` empty. One tile = 8x8 cells = 32px.
 ##
@@ -135,9 +133,9 @@ const MAP_H: int = TerrainMap.MAP_H
 const MAP: Array[String] = TerrainMap.MAP
 const MAP_CHARS: Dictionary = TerrainMap.MAP_CHARS
 
-## `docs/plans/3.done/monster-placement-stage1.md` — the `(tx, kind)` table. Read here and pushed into
-## `_world` in `_build_room()` below; `src/actor/` never preloads this file (`net_layers`).
-const Stage1Monsters := preload("res://src/stage/stage1_monsters.gd")
+## `docs/plans/3.done/monster-placement-stage1.md` — the `(tx, kind)` table. **The room table names it now**;
+## this file reads it out of the row and pushes it into `_world` (`_apply_room()` below). `src/actor/` still
+## never preloads it (`net_layers`).
 
 ## **Debug loadouts — this stage's measuring instrument.** Firing combinations alternately must be doable
 ##  within seconds for acceptance 1 and 2 (the difference of adding and removing a glyph · the difference
@@ -263,13 +261,32 @@ var _world := WorldStep.new(_grid, _spell, _char)
 ##  The fire count is held by `_world` — that is where a command is actually accepted.
 ## **This number is the nets' proxy for acceptance 2** — spread->blast must be 8, blast->spread 1.
 ##  If they do not separate on screen while only this number is right, that is the signal this stage must stop.
-## **Am I in the town.** The one latch this feature adds to the shell.
-##  **Everything else derives from it** — which map gets built, where the character lands, whether the
-##  fixture view draws, and what E does. Hold a second copy of it anywhere (a view, the HUD) and the two
-##  diverge into "the town is drawn over stage 1", which is visible on screen only.
-## **A run ends by walking back here** (`town.md`, "die or clear and you come back here"). Only two doors
-##  write it, both below: the departure gate and being downed.
-var _in_town := true
+## **Which room the shell is standing in — an index into `StageDefs.ROWS`, not a bool.**
+##  **Everything else derives from it** — which map gets built, where the character lands, which monsters are
+##  placed, where the gate sits, what the clear screen is titled, whether the fixture view draws, and what E
+##  does. Hold a second copy of it anywhere (a view, the HUD) and the two diverge into "the town is drawn
+##  over stage 1", which is visible on screen only.
+## **A run ends by walking back to the town** (`town.md`, "die or clear and you come back here"). Only two
+##  doors write this, both below: the departure gate and the settlement screen's button.
+##
+## **It replaced `var _in_town := true`.** A bool can only ever pick between two rooms, and picking a third
+##  meant an `if` at every one of the six places above — which is exactly the surgery this index removes.
+var _stage_id := StageDefs.ROOM_TOWN
+
+## **Derived, never stored.** The town is a room like any other, but three things genuinely ask "is it *the
+##  town*" rather than "which room" — the fixture view, `_interact()`, and the settlement screen's own
+##  `not _in_town` term — and they read this. **A getter, not a second field**: written as a field it would
+##  be one more thing every room switch has to remember, and the day one door forgets, the town's benches
+##  float over stage 1 with nothing barking.
+## `Object.get("_in_town")` runs this getter, which is what several nets read the room through.
+var _in_town: bool:
+	get:
+		return _stage_id == StageDefs.ROOM_TOWN
+
+## **The clear screen's title for the room currently standing** — read from the room table by `_apply_room()`
+##  and handed to `_settlement.open()`. Not read from `Fx` at the open site: *which* stage's name the panel
+##  shows is a property of the stage, and stage 2 must not have to edit the settlement window to be named.
+var _stage_title := ""
 
 ## The last thing a fixture said, shown on the HUD until another one speaks. **A string and not a window** —
 ##  the town's screens ("how the research and assembly screens are actually drawn") are explicitly outside
@@ -849,8 +866,11 @@ func _sync_settlement() -> void:
 		var pr := _world.progress()
 		# **`take_done()` here too, for the same reason `want` uses it** — read `at_gate` on the opening frame
 		#  and a player who walked out of the band during the take gets the death title on a run they cleared.
+		# **The title comes from the room table, not from `Fx`** — `_stage_title` was set by `_apply_room()`
+		#  when this room was built. Left to the window's own default, adding stage 2 would show it "스테이지 1
+		#  클리어" with every check still green (`net_stages` drives a synthetic title for exactly that).
 		_settlement.open(pr.run_seconds(), pr.damage_dealt, pr.gems_this_run(),
-			_gate_view.take_done() and not _char.downed)
+			_gate_view.take_done() and not _char.downed, _stage_title)
 		# **The three-pick may be open when you go down** — the same reason `reset_stage()` already cancels
 		#  the confirm afterglow and `_toggle_assembly()`/`_toggle_research()` already decline a pending pick
 		#  before claiming the screen for themselves.
@@ -1001,17 +1021,40 @@ func reset_stage() -> void:
 ##  resetting inside would mean the two doors that switch rooms could not also clear the views and counters
 ##  in the same breath, which is what `reset_stage` exists to do.
 func _build_room() -> void:
-	if _in_town:
-		build_map_into(_grid, TownMap.rows(), TownMap.MAP_CHARS)
-	else:
-		build_terrain_into(_grid)
-	# `docs/plans/3.done/monster-placement-stage1.md` Stage C — the wiring line. **In `_build_room()`,
+	_apply_room(StageDefs.row(_stage_id))
+
+
+## **Builds one row of the room table into the world. Every per-room value this shell knows is read here and
+##  nowhere else** — that is the whole point of the split from `_build_room()` above.
+##
+## **Why it takes the row instead of reading `_stage_id` itself**: a net can hand it a **synthetic** row whose
+##  every field differs from stage 1's and then check that every one of them actually reached the world
+##  (`net_stages`). A field left reading a stage-1 constant does not follow the synthetic row and goes red —
+##  which is the only way to catch "stage 2 was added to the table and silently kept stage 1's gate" **before**
+##  stage 2 exists. Reading `_stage_id` inside would make that check impossible to write with one row.
+func _apply_room(room: Dictionary) -> void:
+	build_room_into(_grid, room)
+	# `docs/plans/3.done/monster-placement-stage1.md` Stage C — the wiring line. **In the room build,
 	#  not `_ready()`**: every room switch (`reset_stage()`/`enter_town()`/`_leave_town()`) routes through
 	#  here, and `net_gate._wired_root()` never runs `_ready()` at all, so a line there would be invisible
 	#  to every net in this repo and would strand the placement the moment R was first pressed (that
-	#  plan's own "the wiring line" section). `[]` in town — the table is stage 1's, not the town's.
-	_world.set_placement(
-		([] as Array[Dictionary]) if _in_town else Stage1Monsters.ROWS, Stage1Monsters.FLOOR_CY)
+	#  plan's own "the wiring line" section). The town's row carries an empty table; it is not a branch here.
+	# **`FLOOR_CY` is not a per-room field** — it derives from the map height, which is global at 48 tiles
+	#  (`stage_defs.gd`'s own header, and `build_map_into`'s guard below enforces it).
+	_world.set_placement(room["monsters"], StageDefs.FLOOR_CY)
+	# **The gate's geometry is pushed into `src/actor/`, never preloaded from there** — the same door
+	#  `set_placement()` above already is (`stage_gate.set_geometry()`'s own comment).
+	# **A room with no gate pushes nothing and leaves the last stage's numbers standing.** That is inert, and
+	#  the reason it is not cleared instead is measured, not assumed — see that function's own comment.
+	var gate: Dictionary = room["gate"]
+	if not gate.is_empty():
+		StageGate.set_geometry(
+			int(gate["seat_tx"]), int(gate["floor_ty"]),
+			int(gate["wall_tx0"]), int(gate["wall_tx1"]),
+			int(gate["wall_ty0"]), int(gate["wall_ty1"]))
+	# **The clear screen's title comes with the room**, read once here rather than at the open site — see
+	#  `_stage_title`'s own comment.
+	_stage_title = String(room["title"])
 	# **The fixtures show exactly when the town does.** Derived from the latch every time a room is built,
 	#  never written at the two doors — that is the same "derive it, do not push it" rule `_update_hud`
 	#  applies to `_hud.visible`, and for the same reason: a door that forgot would strand the benches
@@ -1022,6 +1065,12 @@ func _build_room() -> void:
 	#  pointing at them and no path to the screen, which is CLAUDE.md's own "is there a path for the thing you
 	#  want to see to reach the screen" in its purest form: the art was in, the constants were in, and the
 	#  town rendered as a black box.
+	# **This is the one per-room value that did NOT move into the table, and it is deliberate.**
+	#  `net_town._the_town_has_its_own_backdrop` scans *this file's source* for the literal name
+	#  `BG_TOWN_FAR_TEXTURE` — the backdrop cannot be read back off `sky_background`, so a text scan is the
+	#  only half of that check available to it. Moving the pair into `stage_defs.gd` turns that check red
+	#  while nothing about the game changes. **Stage 2 therefore still needs a line here**; that is the one
+	#  remaining piece of surgery, named rather than hidden.
 	_sky.set_backdrop(
 		Fx.BG_TOWN_FAR_TEXTURE if _in_town else Fx.BG_FAR_TEXTURE,
 		Fx.BG_TOWN_NEAR_TEXTURE if _in_town else Fx.BG_NEAR_TEXTURE)
@@ -1031,7 +1080,7 @@ func _build_room() -> void:
 	#  and there is no fixture there to close it at.
 	if _research_window != null and _research_window.visible:
 		_research_window.toggle()
-	var spawn := TownMap.SPAWN_TILE if _in_town else SPAWN_TILE
+	var spawn: Vector2i = room["spawn"]
 	_char.place(
 		spawn.x * Tuning.TILE_CELLS * Tuning.CELL_PX,
 		spawn.y * Tuning.TILE_CELLS * Tuning.CELL_PX)
@@ -1115,15 +1164,17 @@ static func research_text(pr: Progress) -> String:
 ##  knows every counter, view and pending window that has to be cleared, and a second copy of that list would
 ##  fall behind the first the next time something is added to it.
 func enter_town() -> void:
-	_in_town = true
+	_stage_id = StageDefs.ROOM_TOWN
 	reset_stage()
 
 
 ## **Out through the departure gate, into stage 1.** The other half of `enter_town()` and the same shape —
 ##  **the assembly you leave with is not reset**, because R never resets it either (`reset_stage`'s own
 ##  comment) and "you leave carrying the build you chose" is the gate's entire meaning.
+## **Which stage the gate leads to is one constant, and it is here.** There is one stage, so it is `STAGE_1`;
+##  the day there are several this becomes the town gate's own choice, not a second `bool`.
 func _leave_town() -> void:
-	_in_town = false
+	_stage_id = StageDefs.STAGE_1
 	reset_stage()
 
 
@@ -1203,8 +1254,18 @@ static func _axis_center(f: float, v: float, w: float) -> float:
 ##
 ## **Why static**: the nets stand up **this code and this map, the ones that actually run**, and measure them.
 ##  If a net held a copy of the map, it would not age along when the terrain changes.
-static func build_terrain_into(g: CellGrid) -> void:
-	build_map_into(g, MAP, MAP_CHARS)
+##
+## **It takes which stage now, defaulting to stage 1.** Every existing call (`Stage.build_terrain_into(g)`,
+##  in six nets) means exactly what it meant before; a second stage is a second argument, not a second door.
+static func build_terrain_into(g: CellGrid, stage_id: int = StageDefs.STAGE_1) -> void:
+	build_room_into(g, StageDefs.row(stage_id))
+
+
+## **The room table's row -> the grid.** The one place a row's `map` and `chars` are read together, so the
+##  game's own room build (`_apply_room()`) and the nets' stage-1 door above cannot drift apart into two
+##  builders — the accident `terrain_baker.gd`'s header describes for a second bake under a new name.
+static func build_room_into(g: CellGrid, room: Dictionary) -> void:
+	build_map_into(g, StageDefs.map_rows(room), room["chars"])
 
 
 ## **The same builder, told which map.** Split out when the town arrived (`town_map.gd`) — it is a second
@@ -1217,30 +1278,62 @@ static func build_terrain_into(g: CellGrid) -> void:
 ##
 ## **The two `push_error`s stay here and are matched by `t.expect_error` on the net side** — CLAUDE.md's rule
 ##  that a bark and its forgiveness are one unit. Their text is not localized for that reason.
+##
+## **The height guard enforces a decision, not an accident** (recorded here because this is where a future
+##  stage will run into it). **Map height is global at 48 tiles; width is what varies per stage.** It is
+##  global because the town's own room, `fx_tuning.BG_UNDER_BOTTOM_Y`/`CELL_DEPTH_SPAN` and the placement
+##  floor row (`stage_defs.FLOOR_CY`) all hang off `TerrainMap.MAP_H`, and 48 tiles is deep enough for a
+##  water stage. ⇒ **A room whose map is a different height is refused here on purpose.** Widening it means
+##  first answering what the background does below the ground line — `town_map.gd`'s `ROOM_Y0` comment
+##  records the last time that question was skipped, and the town rendered as a black box with nothing barking.
+## **The width is the map's own, not `MAP_W`.** It used to be compared against stage 1's re-export, which
+##  would have refused a stage 2 of any other width. Now the first row sets it, every other row must agree,
+##  and it must fit the grid — the same three questions `terrain_baker` already asks of a painted region.
+##  For stage 1 and the town (both 300 wide) this is byte-identical to the old comparison.
 static func build_map_into(g: CellGrid, map: Array[String], chars: Dictionary) -> void:
 	if map.size() != MAP_H:
 		push_error("MAP has %d rows - it must be %d" % [map.size(), MAP_H])
 		return
+	var map_w := map[0].length()
+	# **A map wider than the grid was silently clipped before** — every tile past `CellGrid.W` fell out of
+	#  `cmd_fill`'s own bounds with nothing said, which reads on screen as terrain full of holes. The baker
+	#  refuses to write such a map; this refuses to build one, so the two ends agree.
+	if map_w * Tuning.TILE_CELLS > CellGrid.W:
+		push_error("MAP is %d tiles wide - the grid holds %d" % [map_w, CellGrid.W / Tuning.TILE_CELLS])
+		return
 	for ty in map.size():
 		var row := map[ty]
-		if row.length() != MAP_W:
-			push_error("MAP row %d is %d wide - it must be %d" % [ty, row.length(), MAP_W])
+		if row.length() != map_w:
+			push_error("MAP row %d is %d wide - it must be %d" % [ty, row.length(), map_w])
 			return
 		var tx := 0
-		while tx < MAP_W:
+		while tx < map_w:
 			var ch := row[tx]
 			if not chars.has(ch):
 				tx += 1
 				continue
 			# Runs of the same character are bundled into one command — calling per tile gives 2,304 commands.
 			var run := tx
-			while run + 1 < MAP_W and row[run + 1] == ch:
+			while run + 1 < map_w and row[run + 1] == ch:
 				run += 1
-			g.apply(CellGrid.cmd_fill(
-				tx * Tuning.TILE_CELLS, ty * Tuning.TILE_CELLS,
-				run * Tuning.TILE_CELLS + Tuning.TILE_CELLS - 1,
-				ty * Tuning.TILE_CELLS + Tuning.TILE_CELLS - 1,
-				int(chars[ch])))
+			var x0 := tx * Tuning.TILE_CELLS
+			var y0 := ty * Tuning.TILE_CELLS
+			var x1 := run * Tuning.TILE_CELLS + Tuning.TILE_CELLS - 1
+			var y1 := ty * Tuning.TILE_CELLS + Tuning.TILE_CELLS - 1
+			var mat := int(chars[ch])
+			# **Water leaves through its own door.** `cmd_fill` refuses `Mat.WATER` at `_valid_mat` on
+			#  purpose — it carries no amount, and a material fill zeroes `_aux`. Sent there, a `~` map
+			#  baked **zero** water cells and barked once per run: a hole in the terrain drawn as a lake.
+			#  **Driven, not read** — the survey that predicted "water with amount 0" was wrong about the
+			#  mechanism, and the real failure is louder but the map lies either way.
+			# **`WATER_MAX` is the same value the water rune pours** (`spell_sim` -> `cmd_water`), so the
+			#  map and the rune cannot disagree, and a rune hit on an authored pool is a clean no-op
+			#  through `maxi`. Anything at or below `WATER_WET` would be drawn as water and **could not be
+			#  climbed** — which is the one mechanic stage 2 exists for (`stage2-water.md`).
+			if mat == Mat.WATER:
+				g.apply(CellGrid.cmd_fill_water(x0, y0, x1, y1, Tuning.WATER_MAX))
+			else:
+				g.apply(CellGrid.cmd_fill(x0, y0, x1, y1, mat))
 			tx = run + 1
 
 
