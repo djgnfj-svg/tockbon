@@ -302,18 +302,14 @@ var _town_message := ""
 
 var _blast_count := 0
 
-## **The rain source toggled with K. `null` = off.** `water_source.gd` holds all of the state and counting —
-##  here it knows only "is there one" and "call it every tick" (that file's header, "where to put it").
-var _water_source: WaterSource = null
-
-## **Room ①'s own water — Stage I (`stage1-bosses.md`).** Separate from `_water_source` above: that one
-##  starts and stops at the mouse position on a key press; this one starts itself, automatically, the instant
-##  the bull's reward is taken (acceptance 8b — reward first, water second) — sharing the one instance would
-##  mean K and the reward key fight over the same source, and pressing K after the bull dies would silently
-##  cancel the reward-gated pour.
+## **Room ①'s own water — Stage I (`stage1-bosses.md`).** It starts itself, automatically, the instant the
+##  bull's reward is taken (acceptance 8b — reward first, water second).
+## **It used to have a sibling driven by the K rain key, and that key is gone** (the user removed the debug
+##  water). The two were kept apart so K could not silently cancel a reward-gated pour; with K gone this is
+##  **the only water source the shell holds**, and the separation that argued for is now simply the absence
+##  of the other one.
 ## **`null` = not started yet.** Never set back to `null` except on a full stage reset — once room ①'s water
-##  starts, it keeps pouring for the rest of the fight, the same "only R turns it off" contract `_water_source`
-##  already holds for K.
+##  starts, it keeps pouring for the rest of the fight.
 var _room1_reward_water: WaterSource = null
 
 ## **Reuses `WaterSource` as-is, not a second pour shape.** Its own shape is "rain across a width, falling
@@ -346,10 +342,13 @@ var _room3_gate_open := false
 ##  view anywhere, and they are how most of this repo's headless findings get confirmed by eye. What was
 ##  wrong was booting into them.
 ##
-## **A plain `bool`, and `_update_hud()` derives `visible` from it every frame** — never written at the key
-##  itself. That is the same rule the line below already follows for the four windows, and its own comment
-##  records why: a visibility written at toggle time cannot see the paths that bypass the toggle.
-var _debug_hud := false
+## **The flag itself lives in `stage_input`, not here** — F3 now switches **developer mode**, which gates
+##  every debug key as well as this readout (`stage_input._debug_on`'s own header). This file used to keep a
+##  second `bool` that F3 flipped in parallel; two flags could drift into "the keys are live while the
+##  readout explaining them is hidden", so the copy was deleted and `_update_hud()` reads the one flag.
+## **`_update_hud()` derives `visible` from it every frame** — never written at the key itself. That is the
+##  same rule the line below already follows for the four windows, and its own comment records why: a
+##  visibility written at toggle time cannot see the paths that bypass the toggle.
 
 ## **Debug camera zoom (`-` / `=`).** 1.0 is the play scale; 0.075 shows 12,800px of world on the 960x540
 ##  screen. **The map is 300x48 = 9,600px wide since `left-run-clumps-and-platforms.md` cut 100 columns**,
@@ -450,10 +449,8 @@ func _ready() -> void:
 	_settlement.town_pressed.connect(enter_town)
 	_input.fire_requested.connect(_fire_at)
 	_input.reset_requested.connect(reset_stage)
-	_input.water_requested.connect(_pour_water_at)
 	_input.wood_requested.connect(_paint_wood_at)
 	_input.ignite_requested.connect(_ignite_at)
-	_input.rain_requested.connect(_toggle_rain_at)
 	_input.reward_taken_requested.connect(_take_boss_reward)
 	_input.monster_requested.connect(_spawn_monster_at)
 	_input.loadout_requested.connect(_set_loadout)
@@ -598,26 +595,6 @@ func _fire_at(world_px: Vector2) -> void:
 ##   into the real game, and the way water rides the network is stage 5's `CMD_WATER`. Make a command here
 ##   and **one more unused door stands up.**
 ##
-## **Amount and radius are values chosen by "is it noticeable".** Radius 16 cells = 128px across, and with a
-##  1920x1080 screen one press is clearly visible. **Leave it at a single drop and the user reads it as "the
-##  key doesn't work".**
-## It is `floori` — the same reason as `aim._to_cell`, and `int()` jumps one cell outside the grid's left and top.
-const WATER_BRUSH_R := 16
-
-func _pour_water_at(world_px: Vector2) -> void:
-	var cx := floori(world_px.x / Tuning.CELL_PX)
-	var cy := floori(world_px.y / Tuning.CELL_PX)
-	var r2 := WATER_BRUSH_R * WATER_BRUSH_R
-	# **An integer disc** — the same shape as `_disc`. Draw it differently here and it becomes "the blast is
-	#  round but the water is square", and that only shows on screen.
-	for dy in range(-WATER_BRUSH_R, WATER_BRUSH_R + 1):
-		for dx in range(-WATER_BRUSH_R, WATER_BRUSH_R + 1):
-			if dx * dx + dy * dy > r2:
-				continue
-			# `set_water` silently refuses stone and burning cells — pour into a vessel and it does not eat the walls.
-			_grid.set_water(cx + dx, cy + dy, Tuning.WATER_MAX)
-
-
 ## **T — lays a wooden floor at the mouse position. A shell-only debug door.**
 ##
 ## **Why it came about — there was no "path by which the thing to be seen reaches the screen"** (CLAUDE.md).
@@ -651,26 +628,6 @@ func _paint_wood_at(world_px: Vector2) -> void:
 ##  gather on one screen.
 func _ignite_at(world_px: Vector2) -> void:
 	_grid.ignite(floori(world_px.x / Tuning.CELL_PX), floori(world_px.y / Tuning.CELL_PX))
-
-
-## **K — toggles rain on the mouse row. A shell-only debug door.**
-##  It differs from F (a single-point pour, above) — F pours once and is done, while K keeps pouring only
-##  because `_on_ticked()` calls `tick()` **every tick.** That wiring is in `_on_ticked()` below.
-##
-## **It is a toggle.** If it is already on it turns off (without looking at the argument) — press again and
-##  it stops. Otherwise the only way to turn rain off is resetting the whole stage with R.
-## **The width is fixed at 176 cells (plus and minus 88)** — the `Tuning.WATER_RAIN_HALF_W` comment holds the
-##  grounds for that value (the measured table). The 176 cells are taken with the pressed spot at **the
-##  center.** `floori` is for the same reason as `WATER_BRUSH_R`.
-func _toggle_rain_at(world_px: Vector2) -> void:
-	if _water_source != null:
-		_water_source = null
-		return
-	var cx := floori(world_px.x / Tuning.CELL_PX)
-	var cy := floori(world_px.y / Tuning.CELL_PX)
-	_water_source = WaterSource.new(
-		cx - Tuning.WATER_RAIN_HALF_W, cx + Tuning.WATER_RAIN_HALF_W, cy,
-		Tuning.WATER_RAIN_PER_TICK)
 
 
 ## **L — takes whichever boss reward(s) are pending. A shell-only debug door** (`stage1-bosses.md` Stage I).
@@ -926,10 +883,8 @@ func _sync_settlement() -> void:
 ## Hits the screen only on frames where a tick ran.
 ## **Notifications are cleared by the next tick's `spell.step()`** — read after the character has walked, they are still alive.
 func _on_ticked() -> void:
-	# **This is rain's only heartbeat.** Call it from `_physics_process` and it pours `TICK_DIVIDER` (3) times
-	#  faster (`water_source.tick()`'s header) — only while on, exactly once per tick.
-	if _water_source != null:
-		_water_source.tick(_grid)
+	# **This is the pour's only heartbeat.** Call it from `_physics_process` and it pours `TICK_DIVIDER` (3)
+	#  times faster (`water_source.tick()`'s header) — exactly once per tick.
 	if _room1_reward_water != null:
 		_room1_reward_water.tick(_grid)
 
@@ -994,8 +949,10 @@ func _process(dt: float) -> void:
 	#  stops at the old margin and **half the screen fills with the void outside the map**, with no error.
 	var z: float = ZOOM_STEPS[_zoom_step]
 	_camera.zoom = Vector2(z, z)
-	_camera.position = camera_center(
-		_char.center() + Vector2(_cam_lead, 0.0), get_viewport_rect().size / z, world_size())
+	# **Snapped to the screen's pixel grid** — see `snap_camera_px`. Without it the whole world shivers
+	#  by a pixel every frame while walking, and it reads as the *character* stuttering, not the camera.
+	_camera.position = snap_camera_px(camera_center(
+		_char.center() + Vector2(_cam_lead, 0.0), get_viewport_rect().size / z, world_size()), z)
 	# Shake is **the camera's offset**. `stage_input._to_world` undoes the canvas transform, so aim does not
 	#  drift even while shaking — without undoing it, a click goes to the wrong cell with no error.
 	# The order of this node's `_process` and `blast_fx`'s `_process` is not guaranteed, so it **can be one
@@ -1086,8 +1043,6 @@ func _rebuild(end_the_run: bool) -> void:
 	#  would pop fully opaque on the second run instead of fading up, with every other check still green.
 	_gate_view.reset_gate()
 	_blast_count = 0
-	# Rain is a reset target too — leave it on and the old source keeps pouring from the moment terrain is rebuilt.
-	_water_source = null
 	# Room ①'s water reverts with everything else — `_world.reset()` above already clears `Progress.
 	#  reward_pending`, but the water instance itself is held here in the shell, not in `Progress`.
 	_room1_reward_water = null
@@ -1326,6 +1281,30 @@ static func camera_lead(lead: float, axis: float, dt: float) -> float:
 	return lead + (target - lead) * (1.0 - pow(Fx.CAM_LEAD_DECAY_PER_SEC, dt))
 
 
+## **The camera lands on whole screen pixels. This is what stops the walk from looking like it stutters.**
+##
+## Everything that stands on the ground is drawn at an **integer** world position — `body.gd` keeps `x`/`y`
+##  as ints with the fraction in `_rem_*`, so the character advances 4, 4, 5, 4 px on successive frames.
+##  The camera does not: `camera_lead` is an exponential decay and `camera_center` a `clampf`, both float.
+## ⇒ The character's position **on screen** is `int - float`, which lands on a different side of the pixel
+##  boundary from one frame to the next. With `default_texture_filter=0` (Nearest) that is not a blur but a
+##  **hard one-pixel jump, every frame, on every sprite at once** — and because the terrain jumps with it, the
+##  eye reads it as the character stuttering rather than as the camera moving.
+##  **Nothing barks and no net catches it**: every value involved is correct, and the defect exists only in
+##  the difference between two of them.
+##
+## **Multiplied by zoom before rounding, and divided back after.** The grid to snap to is the *screen's*, and
+##  at `zoom` 0.5 one screen pixel is two world px — rounding the world position alone would still leave the
+##  canvas on a half-pixel there. `ZOOM_STEPS` are all powers of two, so this division is exact.
+##
+## **Static and pure, like `camera_center` and `camera_lead` beside it** — the nets feed a position and a zoom
+##  and read the snapped value, with no scene and no camera.
+static func snap_camera_px(pos: Vector2, zoom: float) -> Vector2:
+	if zoom <= 0.0:
+		return pos
+	return (pos * zoom).round() / zoom
+
+
 static func camera_center(focus: Vector2, view: Vector2, world: Vector2) -> Vector2:
 	return Vector2(_axis_center(focus.x, view.x, world.x), _axis_center(focus.y, view.y, world.y))
 
@@ -1445,10 +1424,10 @@ func _refresh_hud_counts() -> void:
 	_water_cells = _grid.count_material(Mat.WATER)
 
 
-## **F3.** Flips the flag only — `_update_hud()` is what turns it into `visible`, on the next frame and
-## through the same derivation as every other term.
+## **F3.** `stage_input` already flipped its own flag before emitting; this only forces the derivation to
+## run now rather than waiting for the next frame's `_update_hud()`.
 func _toggle_debug_hud() -> void:
-	_debug_hud = not _debug_hud
+	_update_hud()
 
 
 func _update_hud() -> void:
@@ -1465,9 +1444,9 @@ func _update_hud() -> void:
 	#  widened at its one call site rather than duplicated at a second.
 	# **`_settlement.is_showing()` too** (`run-end-settlement.md`, Stage D) — otherwise this debug readout
 	#  prints straight over the settlement panel, and nothing barks.
-	# **`_debug_hud` first, and it is false at boot** — see its own declaration. The window terms below are
+	# **Developer mode first, and it is false at boot** — `stage_input._debug_on`. The window terms below are
 	#  unchanged: even switched on, the readout still yields to anything that claims the screen.
-	_hud.visible = _debug_hud and not _pick_window.is_showing() and not _circle_window.visible \
+	_hud.visible = _input.debug_on() and not _pick_window.is_showing() and not _circle_window.visible \
 		and not _research_window.visible and not _settlement.is_showing()
 	# **The single source of health is the character.** Count it separately in the shell and it becomes "it took damage but the number is unchanged".
 	# **Downed no longer says anything here** — the settlement screen is what tells the player the run is over
@@ -1496,7 +1475,7 @@ func _update_hud() -> void:
 	#  walked into a bench.
 	var lines: Array[String] = []
 	if _in_town:
-		lines.append("[마을] E로 설비를 쓴다" if _town_message.is_empty() else _town_message)
+		lines.append("[마을] F로 설비를 쓴다" if _town_message.is_empty() else _town_message)
 	_hud.text = "\n".join(lines + [
 		"틱 %d · %d Hz (분주기 %d)" % [
 			_grid.get_tick(), 60 / Tuning.TICK_DIVIDER, Tuning.TICK_DIVIDER,
@@ -1510,18 +1489,15 @@ func _update_hud() -> void:
 		#  is not a judgment — in v1 the water looked stopped while it was not, and lightning died there.
 		# What the user should watch is **it dropping and then locking to one figure.** 0 comes only in a
 		#  narrow vessel and the nets measure that headless — there is no reason to wait 140 seconds on screen.
-		# **The water cell count is not "the sum of amounts"** — the `WATER_HUD_TICKS` comment above. Pour with F.
-		"활성 청크 %d / %d · 물 %d칸 (F로 붓기)" % [
+		# **The water cell count is not "the sum of amounts"** — the `WATER_HUD_TICKS` comment above.
+		#  **The debug pour and the rain toggle are gone**, so every cell counted here came from the game
+		#  itself (room ①'s reward pour) — which makes this line a sharper reading than it was.
+		"활성 청크 %d / %d · 물 %d칸" % [
 			_grid.active_chunk_count(), CellGrid.CHUNK_COUNT, _water_cells,
 		],
-		# **"Did K work" is judged only here.** Unlike F, K does not change the screen the moment it is
-		#  pressed and the water level rises only a few ticks later — without on/off and the accumulated
-		#  amount the user reads it as "it does not work".
-		"물비 %s" % (
-			"켜짐 · 누적 %d" % _water_source.poured() if _water_source != null else "꺼짐 (K로 토글)"),
-		# **Stage I — "has the reward been taken" is judged by this line alone**, the same discipline the rain
-		#  line above already holds for "did K work": order matters (acceptance 8b), so the HUD must show
-		#  which side of that order the fight is currently on, not just whether water happens to be flowing.
+		# **Stage I — "has the reward been taken" is judged by this line alone.** Order matters
+		#  (acceptance 8b), so the HUD must show which side of that order the fight is currently on, not just
+		#  whether water happens to be flowing.
 		"방① 보상 %s" % _room1_reward_status(),
 		"FPS %d" % Engine.get_frames_per_second(),
 		"캐릭터 (%d,%d) %s" % [_char.x, _char.y, "접지" if _char.on_ground else "공중"],

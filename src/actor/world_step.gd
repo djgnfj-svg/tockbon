@@ -32,13 +32,12 @@ const MonsterPlacement := preload("res://src/actor/monster_placement.gd")
 ## header names as the whole of the order-independence argument.
 const MonsterSeparation := preload("res://src/actor/monster_separation.gd")
 
-## **Pig contact damage** (`monsters-minimum`, "behavior (6)"). The arithmetic: invulnerability 4 ticks => the
-##  real interval is 5 ticks (`character.on_tick` recorded "5-tick spacing = two hits") = 0.25s => 4 times per
-##  second is the ceiling. 8 x 4 = 32/s => stay attached and you lose 100 HP in 3.1 seconds. **A proposed value
-##  set by team-lead, and it has not had the user's acceptance.**
-const PIG_CONTACT_DAMAGE := 8
+## **The pig's damage moved to `monster_defs.MELEE` and this constant is gone.**
+##  It was "damage per tick of overlap"; there is no such thing any more — a trash mob swings on its own
+##  cooldown (`_char_hit_by_monsters`), and leaving the number here as well would be the same value in two
+##  places with only the screen to tell you which one the game used.
 
-## **The bull's contact-damage values** — all three live here, beside `PIG_CONTACT_DAMAGE`, because all go
+## **The bull's contact-damage values** — all three live here because all go
 ## through the same one-lump contact check `_char_hit_by_monsters` already holds, not because they touch the
 ## grid (they do not). **Unaccepted, provisional, same status as every other tuning number in this plan.**
 ## Gore is a dedicated melee attack (higher than the pig's always-on contact) and being run over by a
@@ -398,9 +397,30 @@ func frame(dt: float, axis: float, jump: bool, jump_held: bool) -> bool:
 func _char_hit_by_monsters() -> void:
 	for m: Monster in _monsters:
 		var dmg := 0
-		if m.kind == MonsterDefs.KIND_PIG:
-			dmg = PIG_CONTACT_DAMAGE
-		elif m.kind == MonsterDefs.KIND_BULL and m.pattern == BossAi.Pattern.GORE:
+		# **A trash mob swings; it no longer damages by being there.** `melee_cd` is the gate and the beat —
+		#  a mob in reach with the counter still running deals nothing at all, which is what turns "walk into
+		#  the player and stand there" into hit-wait-hit. The counter is set below, on the frame the swing
+		#  actually lands, and counted down by `Monster.on_tick`.
+		# **A sleeping mob does not swing** — `step()` skips its movement entirely, so without this it would
+		#  hit anyone who walked into it while it slept, which reads as an invisible trap.
+		if MonsterDefs.has_melee(m.kind):
+			if m.asleep or m.melee_cd > 0:
+				continue
+			# **The box is widened horizontally by the melee range** — the same question `_boxes_overlap`
+			#  already answers, asked of a slightly longer arm, so "can it reach me" has one definition
+			#  (`monster_defs.MELEE`'s own box). Widening vertically instead would let a mob standing on the
+			#  player's head swing down at them.
+			var reach := MonsterDefs.melee_range_px(m.kind)
+			if _boxes_overlap(m.x - int(reach), m.y,
+					MonsterDefs.w_px(m.kind) + int(reach) * 2, MonsterDefs.h_px(m.kind),
+					_char.x, _char.y, Character.W_PX, Character.H_PX):
+				# **The cooldown is set whether or not `take_hit` succeeds.** It is the mob's own swing clock,
+				#  not a record of damage — tie it to the return value and a mob swinging at an invulnerable
+				#  player would swing again every single tick until one landed.
+				m.melee_cd = MonsterDefs.melee_cd_ticks(m.kind)
+				_char.take_hit(MonsterDefs.melee_damage(m.kind), true)
+			continue
+		if m.kind == MonsterDefs.KIND_BULL and m.pattern == BossAi.Pattern.GORE:
 			dmg = BULL_GORE_DAMAGE
 		elif m.kind == MonsterDefs.KIND_BULL and m.pattern == BossAi.Pattern.CHARGE:
 			dmg = BULL_CHARGE_CONTACT_DAMAGE

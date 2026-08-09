@@ -69,6 +69,9 @@ var _socket_glyph_tex: Dictionary = {}
 ## The ring and rune art, loaded once beside the socket glyphs and for the same reason.
 var _ring_tex: Dictionary = {}
 var _rune_tex: Dictionary = {}
+## The palette card art (`Fx.ICON_TEX`), loaded the same way. **It is a third map and not a reuse of
+## `_ring_tex`** — that constant's own box carries why a ring cannot be a card.
+var _icon_tex: Dictionary = {}
 
 
 func setup(progress: Progress, circle: SpellCircle) -> void:
@@ -94,6 +97,7 @@ func _ready() -> void:
 	_socket_glyph_tex = load_socket_glyph_tex()
 	_ring_tex = _load_tex_map(Fx.RING_TEX)
 	_rune_tex = _load_tex_map(Fx.RUNE_TEX)
+	_icon_tex = _load_tex_map(Fx.ICON_TEX)
 
 
 ## **Pulled out of `_ready()` so a second `_draw()`-owning node can load the same art without a second copy
@@ -647,11 +651,7 @@ func _draw_glyph(at: Vector2, r: float, glyph_id: int) -> void:
 		push_error("CircleWindow: glyph %d is not in the table - cannot draw it" % glyph_id)
 		return
 	var tint: Color = Fx.GLYPH_TINT.get(glyph_id, Fx.GLYPH_TINT_MISSING)
-	# **A second, independent device — the same "two devices" idiom `_draw_ring` already uses for
-	#  "innermost first"** (layer number + brightness). Rarity sits **outside** the symbol's own radius so it
-	#  never fights `GLYPH_TINT`'s color for the same pixels.
-	var rarity_col: Color = Fx.RARITY_TINT.get(Glyph.rarity_of(glyph_id), Fx.GLYPH_TINT_MISSING)
-	draw_circle(at, r * Fx.RARITY_RING_RATIO, rarity_col, false, Fx.RARITY_RING_PX)
+	_draw_glyph_rarity_ring(at, r, glyph_id)
 
 	var kind := int(Glyph.DEFS[glyph_id]["kind"])
 	if kind == Glyph.KIND_SPAWN:
@@ -680,6 +680,21 @@ func _draw_glyph(at: Vector2, r: float, glyph_id: int) -> void:
 		return
 	# It barks on an unknown kind — grow the table's kinds without growing the drawing and it gets caught here.
 	push_error("CircleWindow: glyph kind %d has no drawing" % kind)
+
+
+## **A second, independent device — the same "two devices" idiom `_draw_ring` already uses for
+##  "innermost first"** (layer number + brightness). Rarity sits **outside** the symbol's own radius so it
+##  never fights `GLYPH_TINT`'s color for the same pixels.
+##
+## **It is its own function because the picture path needs it too.** A palette card drawn from `ICON_TEX`
+##  skips `_draw_glyph` entirely, and rarity is the one thing the art deliberately does not carry
+##  (`Fx.ICON_TEX`'s box) — inline this back into `_draw_glyph` and **every card loses its tier the day the
+##  icon loads**, with the model still holding it and nothing barking. Distinct from
+##  `_draw_socket_rarity_ring`, which strokes at `r` rather than `RARITY_RING_RATIO * r`: a socket band's
+##  radius is already the outer rim.
+func _draw_glyph_rarity_ring(at: Vector2, r: float, glyph_id: int) -> void:
+	var rarity_col: Color = Fx.RARITY_TINT.get(Glyph.rarity_of(glyph_id), Fx.GLYPH_TINT_MISSING)
+	draw_circle(at, r * Fx.RARITY_RING_RATIO, rarity_col, false, Fx.RARITY_RING_PX)
 
 
 ## Rune symbol — a glowing bead. **The palette and the slot use this same function.**
@@ -749,11 +764,30 @@ func _draw_palette_item(slot: Rect2, kind: int, item_id: int) -> void:
 	var r := Palette.item_symbol_radius(slot)
 
 	if kind == Palette.KIND_CIRCLE:
+		# **The one kind with no picture, and it is not an oversight** — `circle-art.md` records that circles
+		#  are drawn from coordinates and never generated, and there is no `assets/circle/circle_*.png` to
+		#  point at. The frame stroke stays until one exists.
 		_draw_circle_symbol(at, r)
 	elif kind == Palette.KIND_RUNE:
-		_draw_rune_symbol(at, r, item_id)
+		# **The same file the slot inside the circle draws** (`_draw_rune_slot`). Point the card at a
+		#  different picture and it becomes "the palette's fire is not the fire I placed", which is the exact
+		#  divergence `_draw_rune_symbol`'s own header was written against — the sharing moves from the
+		#  procedural bead to the art, it does not end.
+		#  **`RUNE_ART_FRAC` is deliberately absent here**: that fraction exists to fit the bead inside the
+		#  ring's hole, and a card has no ring around it.
+		if _rune_tex.has(item_id):
+			_paint_art(_rune_tex[item_id], _square_at(at, r), Fx.CIRCLE_ART_TINT)
+		else:
+			_draw_rune_symbol(at, r, item_id)
 	elif kind == Palette.KIND_GLYPH:
-		_draw_glyph(at, r, item_id)
+		# **The card gets `ICON_TEX`, never `RING_TEX`** — the ring belongs to the layer band and reads as
+		#  mush at this size (that constant's box). Rarity is stroked separately because the three tiers
+		#  share one picture on purpose.
+		if _icon_tex.has(item_id):
+			_paint_art(_icon_tex[item_id], _square_at(at, r * Fx.PALETTE_ICON_FRAC), Fx.CIRCLE_ART_TINT)
+			_draw_glyph_rarity_ring(at, r, item_id)
+		else:
+			_draw_glyph(at, r, item_id)
 	else:
 		push_error("CircleWindow: slot kind %d has no item drawing" % kind)
 		return

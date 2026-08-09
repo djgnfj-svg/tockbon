@@ -39,9 +39,6 @@ const Tuning := preload("res://src/sim/sim_tuning.gd")
 const Character := preload("res://src/actor/character.gd")
 const CellGrid := preload("res://src/sim/cell_grid.gd")
 
-## **Which kinds attack by touching, rather than by a pattern or a projectile.** Read by `_is_attacking`;
-##  its own header says why this is a list.
-const CONTACT_ATTACKERS: Array[int] = [Defs.KIND_PIG, Defs.KIND_WOLF]
 
 ## The name the shader receives. **Kept as a constant** — pin the string and one wrong letter means
 ##  **nothing happens at all and there is no error** (`net_render`'s "false knob" section is that story).
@@ -103,6 +100,25 @@ var _prev_x: Dictionary = {}
 ##  that field jumping back up to its reload value (`monster.consume_fire()`), so the view diffs it, exactly
 ##  as it already diffs hp to find a hit. Rising means "it just fired".
 var _prev_reload: Dictionary = {}
+
+## id -> previous frame's `melee_cd`. **A trash mob's swing has no notification either**, and it leaves
+## exactly the trace the hen's shot does: the counter jumps up on the tick it lands. Diffing it is the same
+## idiom one field over, deliberately — **and it is what stopped the picture from lying.**
+## The view used to decide "is it attacking" by **re-asking the proximity question itself**
+## (`MONSTER_SHOVE_REACH_PX`), which was honest while damage *was* proximity. It stopped being honest the day
+## the swing got a cooldown: a mob standing in reach through its whole recharge kept playing the attack
+## animation while dealing nothing, which is this repo's signature fake with the two halves swapped —
+## the screen attacking while the sim does not.
+var _prev_melee_cd: Dictionary = {}
+
+## id -> previous frame's `melee_cd`. **A trash mob's swing has no notification either**, and it leaves
+## exactly the trace the hen's shot does: the counter jumps up on the tick it lands. Diffing it is the same
+## idiom one field over, deliberately — **and it is what stopped the picture from lying.**
+## The view used to decide "is it attacking" by **re-asking the proximity question itself**
+## (`MONSTER_SHOVE_REACH_PX`), which was honest while damage *was* proximity. It stopped being honest the day
+## the swing got a cooldown: a mob standing in reach through its whole recharge kept playing the attack
+## animation while dealing nothing, which is this repo's signature fake with the two halves swapped —
+## the screen attacking while the sim does not.
 ## id -> frames left of a latched one-shot. **A latch, not a live condition**: the hen fires on one tick and
 ##  the spit sheet runs 8 frames, so asking "is it firing right now" would show a single frame of it.
 var _attack_left: Dictionary = {}
@@ -335,6 +351,11 @@ func _scan_anim() -> void:
 		if m.reload_left > prev_reload:
 			_attack_left[m.id] = oneshot_frames(m.kind, Fx.MON_ATTACK)
 		_prev_reload[m.id] = m.reload_left
+		# **The trash mob's swing, caught the same way** (`_prev_melee_cd`'s own box). One latch feeds both,
+		#  so a kind that somehow did both would still show one attack, not two competing ones.
+		if m.melee_cd > int(_prev_melee_cd.get(m.id, 0)):
+			_attack_left[m.id] = oneshot_frames(m.kind, Fx.MON_ATTACK)
+		_prev_melee_cd[m.id] = m.melee_cd
 		var state := resolve_state(m.kind, m.pattern, m.on_ground, _hurt_left.has(m.id), _is_attacking(m), moving)
 		var cur: Dictionary = _anim.get(m.id, {})
 		if int(cur.get("state", -1)) != state:
@@ -348,6 +369,7 @@ func _scan_anim() -> void:
 			_anim.erase(id)
 			_prev_x.erase(id)
 			_prev_reload.erase(id)
+			_prev_melee_cd.erase(id)
 			_attack_left.erase(id)
 			_hurt_left.erase(id)
 
@@ -382,27 +404,17 @@ func _scan_wake() -> void:
 
 ## **Is this monster hitting the player right now.**
 ##
-## **Two different answers, because the two mobs leave two different traces.** The hen fires on one tick and
-##  the view latched it above (`_attack_left`). **The pig has nothing at all** — it damages by body contact
-##  (`world_step`'s own `_boxes_overlap` on every tick), so there is no event, only a condition, and the view
-##  asks the same question `MONSTER_SHOVE_REACH_PX` early.
+## **One answer now, and it used to be two.** Every attacker leaves the same kind of trace — a counter
+##  jumping up on the tick the attack lands — so `_scan_anim` latches all of them into `_attack_left` and
+##  this function only reads that latch.
 ##
-## **`_char == null` means no shove, never a crash** — a net driving this node with no `setup()` is the only
-##  door that reaches here without a player, the same null-tolerant discipline `_world` holds.
-## **Bosses are excluded** — a bull's attacks are patterns, resolved before this is ever consulted
-##  (`resolve_state`'s own order), and a bull standing on top of the player is not goring it.
-## **The wolf is in the list with the pig** — it damages by contact the same way and has no lunge in the
-##  sim (`monster_defs.KIND_WOLF`'s own box). It is a **list and not `!= KIND_HEN`**, so the day a kind
-##  arrives that neither has patterns nor touches for damage, it does not silently start playing an
-##  attack it cannot make.
+## **What was deleted was the proximity branch**, and it had become a lie: it re-asked "are the boxes close"
+##  every frame, which matched the sim exactly while a pig damaged by contact, and matched nothing at all
+##  once the swing got a cooldown. A mob recharging in the player's face played a continuous attack
+##  animation while dealing zero damage.
+## **`CONTACT_ATTACKERS` went with it** — the list existed to name who that branch applied to.
 func _is_attacking(m: Monster) -> bool:
-	if _attack_left.has(m.id):
-		return true
-	if not CONTACT_ATTACKERS.has(m.kind) or _char == null:
-		return false
-	var g := Fx.MONSTER_SHOVE_REACH_PX
-	return WorldStep._boxes_overlap(m.x - g, m.y - g, Defs.w_px(m.kind) + g * 2, Defs.h_px(m.kind) + g * 2,
-		_char.x, _char.y, Character.W_PX, Character.H_PX)
+	return _attack_left.has(m.id)
 
 
 ## **If there is a recent number for the same monster, add to it — do not make a new one** (decided by the user).

@@ -189,6 +189,15 @@ const MON_AIRBORNE := 10
 ##  somewhere a net can read it.
 ##
 ## **`hold` is view frames per animation frame.** 60Hz, so `hold: 4` is 15 animation fps.
+##
+## **Idle is 20 and the one-shots are 3-5, and that gap is the point.** Idle ran at 8 and every standing
+##  monster cycled its whole loop **1.5 to 1.9 times a second** — the user's word for a screen holding several
+##  of them was 어지럽다. At 20 a 4-frame loop is 0.75/s and a 5-frame loop 0.6/s, which is breathing rather
+##  than twitching. A hit, a death or a gore is a **one-shot** and stays fast: it has to finish inside the
+##  window it reports on, and `oneshot_frames` (`frames * hold`) is what latches it open, so raising those
+##  holds would stretch invulnerability's own picture past invulnerability.
+##  **It is a feel value, so it is fixed by eye** — the grounds are written here so the next person does not
+##  quietly walk it back.
 ## **`loop: false` holds the last frame** instead of wrapping — that is what makes a death or a gore read as
 ##  finished rather than as a stutter.
 ##
@@ -201,7 +210,7 @@ const MON_AIRBORNE := 10
 ##  two clocks means "it stopped but the legs keep moving".
 const MONSTER_ANIM: Dictionary = {
 	MonsterDefs.KIND_PIG: {
-		MON_IDLE: {"path": "res://assets/monster/pig_idle.png", "frames": 4, "hold": 8, "loop": true},
+		MON_IDLE: {"path": "res://assets/monster/pig_idle.png", "frames": 4, "hold": 20, "loop": true},
 		MON_WALK: {"path": "res://assets/monster/pig_walk.png", "frames": 9, "hold": 4, "loop": true},
 		MON_ATTACK: {"path": "res://assets/monster/pig_shove.png", "frames": 8, "hold": 4, "loop": true},
 		MON_HURT: {"path": "res://assets/monster/pig_hurt.png", "frames": 4, "hold": 3, "loop": false},
@@ -215,7 +224,7 @@ const MONSTER_ANIM: Dictionary = {
 	# **`throw`, not `spit`** — `monsters.md`'s "the chicken throws an egg" (decided by the user), and the
 	#  enlarged set is drawn that way. The projectile itself is still the old dot; only the animation says egg.
 	MonsterDefs.KIND_HEN: {
-		MON_IDLE: {"path": "res://assets/monster/hen_idle.png", "frames": 4, "hold": 8, "loop": true},
+		MON_IDLE: {"path": "res://assets/monster/hen_idle.png", "frames": 4, "hold": 20, "loop": true},
 		MON_WALK: {"path": "res://assets/monster/hen_walk.png", "frames": 8, "hold": 4, "loop": true},
 		MON_ATTACK: {"path": "res://assets/monster/hen_throw.png", "frames": 8, "hold": 4, "loop": false},
 		MON_HURT: {"path": "res://assets/monster/hen_hurt.png", "frames": 4, "hold": 3, "loop": false},
@@ -223,7 +232,7 @@ const MONSTER_ANIM: Dictionary = {
 		MON_AIRBORNE: {"path": "res://assets/monster/hen_jump.png", "frames": 3, "hold": 4, "loop": false},
 	},
 	MonsterDefs.KIND_BULL: {
-		MON_IDLE: {"path": "res://assets/monster/bull_idle.png", "frames": 5, "hold": 8, "loop": true},
+		MON_IDLE: {"path": "res://assets/monster/bull_idle.png", "frames": 5, "hold": 20, "loop": true},
 		MON_WALK: {"path": "res://assets/monster/bull_walk.png", "frames": 9, "hold": 4, "loop": true},
 		MON_WINDUP: {"path": "res://assets/monster/bull_roar.png", "frames": 8, "hold": 4, "loop": false},
 		MON_CHARGE: {"path": "res://assets/monster/bull_charge.png", "frames": 9, "hold": 3, "loop": true},
@@ -234,7 +243,7 @@ const MONSTER_ANIM: Dictionary = {
 		MON_DEATH: {"path": "res://assets/monster/bull_death.png", "frames": 7, "hold": 5, "loop": false},
 	},
 	MonsterDefs.KIND_ROOSTER: {
-		MON_IDLE: {"path": "res://assets/monster/rooster_idle.png", "frames": 5, "hold": 8, "loop": true},
+		MON_IDLE: {"path": "res://assets/monster/rooster_idle.png", "frames": 5, "hold": 20, "loop": true},
 		MON_WALK: {"path": "res://assets/monster/rooster_walk.png", "frames": 9, "hold": 4, "loop": true},
 		MON_WINDUP: {"path": "res://assets/monster/rooster_roar.png", "frames": 8, "hold": 4, "loop": false},
 		MON_LEAP: {"path": "res://assets/monster/rooster_leap.png", "frames": 9, "hold": 4, "loop": false},
@@ -246,7 +255,7 @@ const MONSTER_ANIM: Dictionary = {
 	# **The lunge sits in `MON_ATTACK`, the same slot the pig's shove uses** — and it is driven by the same
 	#  contact condition, because the wolf has no lunge in the sim (`monster_defs.KIND_WOLF`'s own box).
 	MonsterDefs.KIND_WOLF: {
-		MON_IDLE: {"path": "res://assets/monster/wolf_idle.png", "frames": 4, "hold": 8, "loop": true},
+		MON_IDLE: {"path": "res://assets/monster/wolf_idle.png", "frames": 4, "hold": 20, "loop": true},
 		MON_WALK: {"path": "res://assets/monster/wolf_walk.png", "frames": 8, "hold": 3, "loop": true},
 		MON_ATTACK: {"path": "res://assets/monster/wolf_lunge.png", "frames": 8, "hold": 3, "loop": false},
 		MON_HURT: {"path": "res://assets/monster/wolf_hurt.png", "frames": 4, "hold": 3, "loop": false},
@@ -260,9 +269,13 @@ const MONSTER_ANIM: Dictionary = {
 ##  (`monster_defs.speed_px` 140..220), so **the same px tick gives each of them a different cadence for free**,
 ##  and a fast hen's legs blur while a heavy bull's do not. Add a per-kind column and that falls out of the
 ##  speed table into a second place that can disagree with it.
-## 12px at the pig's 160px/s = 13 frames/s over a 9-frame loop = 1.5 gait cycles/s.
+## 16px at the pig's 160px/s = 10 frames/s over a 9-frame loop = **1.1 gait cycles/s**, and at the wolf's
+##  240px/s = 15 frames/s over 8 frames = **1.9**. **It was 12**, which put the same span at 1.5 to 2.5 — the
+##  fast kinds were running, not walking, and it landed in the same complaint the idle hold above records.
+##  The whole table moves with one number **by design** (the paragraph above), so the wolf stays the fastest
+##  gait on screen; what changed is where the band sits.
 ## **Being shoved counts as walking** — the same knowing choice `CHAR_WALK_PX_PER_FRAME` records.
-const MONSTER_WALK_PX_PER_FRAME := 12
+const MONSTER_WALK_PX_PER_FRAME := 16
 
 ## **How close the player has to be for a pig to play its shove** (px, added to both boxes before the overlap
 ##  test). **The pig has no attack state in the sim** — it damages by body contact
@@ -806,6 +819,34 @@ const RING_TEX: Dictionary = {
 	Glyph.DUMMY_R: "res://assets/circle/ring_dummy.png",
 	Glyph.DUMMY_U: "res://assets/circle/ring_dummy.png",
 }
+
+## **The palette card's own picture, by glyph.** Same shape and same fall-through discipline as `RING_TEX`
+## above — three files carry nine ids, and an id with no entry drops back to the procedural symbol.
+##
+## **This is a separate map from `RING_TEX` and that is the whole reason it exists.** A ring is drawn at the
+## layer band's diameter; a palette card's symbol radius is `PALETTE_SYMBOL_RATIO` of a cell's short side —
+## **a ring shrunk to that size has no room to read as anything** (`circle-art.md`, "the icons exist because a
+## ring cannot be a palette card"). Point this at `ring_*.png` and the cards go back to being mush.
+##
+## **Rarity is not in these files and must not be.** Three rarities share one picture here exactly as they do
+## in `RING_TEX`; the tier is the ring `_draw_palette_rarity_ring` strokes outside the symbol.
+const ICON_TEX: Dictionary = {
+	Glyph.SPREAD_C: "res://assets/circle/icon_spread.png",
+	Glyph.SPREAD_R: "res://assets/circle/icon_spread.png",
+	Glyph.SPREAD_U: "res://assets/circle/icon_spread.png",
+	Glyph.BLAST_C: "res://assets/circle/icon_blast.png",
+	Glyph.BLAST_R: "res://assets/circle/icon_blast.png",
+	Glyph.BLAST_U: "res://assets/circle/icon_blast.png",
+	Glyph.DUMMY_C: "res://assets/circle/icon_dummy.png",
+	Glyph.DUMMY_R: "res://assets/circle/icon_dummy.png",
+	Glyph.DUMMY_U: "res://assets/circle/icon_dummy.png",
+}
+
+## **How much of the card's symbol radius the icon picture fills.** The same split `RUNE_ART_FRAC` records:
+## the radius keeps sizing the rarity ring and the procedural fallback, and only the drawn picture moves.
+## **Under 1.0 because the rarity ring sits at `RARITY_RING_RATIO` (1.3) of that radius** — draw the picture
+## out to the full radius and the ink runs into the ring instead of sitting inside it.
+const PALETTE_ICON_FRAC := 0.86
 
 ## **The rune bead's own picture, by element.** All three elements have art, so unlike the two maps around
 ## it this one has no fall-through case in practice — the procedural bead stays as the fallback anyway,

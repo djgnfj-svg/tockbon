@@ -10,24 +10,14 @@ extends Node
 ## Left click. Passes **world coordinates** — pass viewport coordinates as-is and aim drifts while shaking.
 signal fire_requested(world_px: Vector2)
 signal reset_requested
-## **F — pours water at the mouse position. A shell-only debug key.**
-##  The way water comes into being inside the game is **stage 5's water rune**, and until then this key is
-##  **the only way to see water on screen.** Once the rune stands up this key may stay or go — the stage
-##  won't survive into the real game.
-## **Passes world coordinates** — the same reason as left click (it drifts while shaking).
-signal water_requested(world_px: Vector2)
 ## **T and G — lay down a forest and set it alight. Shell only.**
-##  Together with F the three are one set — **wood, water and fire must gather on one screen** for
-##  "shallow water cannot put out fire" to be visible.
-##  Before that the map held only 91 cells of wood, so that rule **could not appear on screen in principle**
-##  (`stage.gd`'s T box).
+##  **They used to be a set of three with F (pour water) and K (rain), and those two are gone** (decided by
+##  the user: "물 이제 필요 없고 빼주고"). What went with them is the one screen where wood, water and fire
+##  met, which is how "shallow water cannot put out fire" was made visible — **that rule now has no debug
+##  path to the screen at all.** The water the *game* makes is untouched: room ①'s reward pour and room ③'s
+##  escape both still run (`stage.gd`'s `_room1_reward_water`).
 signal wood_requested(world_px: Vector2)
 signal ignite_requested(world_px: Vector2)
-## **K — toggles rain on the mouse row. A shell-only debug key.**
-##  Unlike F (a single-point pour) it pours **a little at a time across N ticks** — the state lives in
-##  `src/sim/water_source.gd` (not `stage.gd`'s share).
-## **It is a toggle** — press again and it stops. Otherwise the only way to turn it off is resetting the whole stage with R.
-signal rain_requested(world_px: Vector2)
 ## **M/N/B/C — stands a monster at the mouse position. Shell-only debug keys** (`monsters-minimum`,
 ##  B/C added by `stage1-bosses.md` stage A).
 ##  Placement is the map doc's share (that doc's "Boundary"), so the stage does not lay monsters down
@@ -70,7 +60,10 @@ signal debug_hud_toggled
 ## boss reward(s) are pending, wherever they are.
 signal reward_taken_requested
 
-## **E — the town's one interaction** (`docs/design/town.md`, "stand in front of a fixture, press a key").
+## **F — the town's one interaction** (`docs/design/town.md`, "stand in front of a fixture, press a key").
+##  **It was E and the user moved it to F.** F fell free the same day the debug water pour was removed above;
+##  E is now bound to nothing, deliberately — leaving both would put two keys in the town's own on-screen
+##  prompt, and a prompt naming two keys is how "which one is it" starts.
 ##  **Which fixture, and whether there is one at all, is not decided here** — the same discipline as Tab and P:
 ##  this file says a key was pressed and nothing else. `Fixtures.at()` answers "where am I standing".
 ## **A raw keycode, not an input-map action.** Interaction *will* survive into the real game and by that rule
@@ -129,6 +122,27 @@ func jump_held() -> bool:
 	return Input.is_action_pressed("jump")
 
 
+## **Is developer mode on. Off at boot, F3 toggles it** — and while it is off **every debug key below is
+##  dead**, not merely quiet: the spawns, the presets, the material brushes, the reward key, reset and zoom.
+##
+## **Why it exists: the submission build hands this game to a judge who has never seen it.** The keys were
+##  always reachable, and one stray `M` stands a bull on top of them, one stray `1` swaps their assembly, one
+##  stray `R` throws the run away. None of those look like a key that was pressed — **they look like the game
+##  broke.**
+##
+## **It is the same flag the debug readout already rode**, deliberately: two flags would let the keys be live
+##  while the readout that explains them is hidden, which is the worst of the four combinations. `stage.gd`
+##  **reads this** rather than keeping its own copy — that copy existed and was deleted in the same change.
+##
+## **F3 itself is never gated** (it would be a switch that cannot be switched back on), and neither is
+##  anything a player uses: movement, jump, fire, Tab, P, ESC and F.
+var _debug_on := false
+
+
+func debug_on() -> bool:
+	return _debug_on
+
+
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
@@ -167,6 +181,19 @@ func _unhandled_input(event: InputEvent) -> void:
 			cancel_requested.emit()
 			get_viewport().set_input_as_handled()
 			return
+		# **The town's interaction, and it is a player key** — it sits above the gate for that reason.
+		#  **It was E until the user moved it to F** (`interact_requested`'s own header).
+		if k.physical_keycode == KEY_F:
+			interact_requested.emit()
+			return
+		# **F3 is read before the gate** — gate it and developer mode could never be switched back on.
+		if k.physical_keycode == KEY_F3:
+			_debug_on = not _debug_on
+			debug_hud_toggled.emit()
+			return
+		# **The gate. Everything past this line is a developer key** (`_debug_on`'s own header).
+		if not _debug_on:
+			return
 		if PRESET_KEYS.has(k.physical_keycode):
 			loadout_requested.emit(int(PRESET_KEYS[k.physical_keycode]))
 			return
@@ -178,26 +205,15 @@ func _unhandled_input(event: InputEvent) -> void:
 		match k.physical_keycode:
 			KEY_R:
 				reset_requested.emit()
-			KEY_F:
-				# **A key event carries no mouse coordinates.** So the "right now" mouse is read from the
-				#  viewport and converted by the same `_to_world` — the two paths only stay together by
-				#  **going through the same door** as left click. Convert separately just here and, while
-				#  shaking, only the water lands on the wrong cell.
-				water_requested.emit(_to_world(get_viewport().get_mouse_position()))
-			# Goes through **the same door** as F — convert the three differently and, while the camera
-			#  shakes, only wood and fire land on the wrong cells (the `_to_world` box above).
+			# **A key event carries no mouse coordinates**, so the "right now" mouse is read from the viewport
+			#  and converted by the same `_to_world` left click goes through. Convert separately here and,
+			#  while the camera shakes, only wood and fire land on the wrong cells.
 			KEY_T:
 				wood_requested.emit(_to_world(get_viewport().get_mouse_position()))
 			KEY_G:
 				ignite_requested.emit(_to_world(get_viewport().get_mouse_position()))
-			KEY_K:
-				rain_requested.emit(_to_world(get_viewport().get_mouse_position()))
 			KEY_L:
 				reward_taken_requested.emit()
-			KEY_E:
-				interact_requested.emit()
-			KEY_F3:
-				debug_hud_toggled.emit()
 			# **Both the main row and the numpad** — `-` on the main row is `KEY_MINUS` and the numpad's is a
 			#  different keycode entirely. Bind only one and it reads as "the key does nothing".
 			KEY_MINUS, KEY_KP_SUBTRACT:

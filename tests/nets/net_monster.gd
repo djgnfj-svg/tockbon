@@ -508,6 +508,8 @@ func run(t) -> void:
 	# -- stage 5 -- the pig hits ------------------------------------
 	_pig_contact_damages_the_player(t)
 	_pig_contact_respects_invulnerability(t)
+	_every_melee_kind_actually_hits(t)
+	_a_melee_mob_backs_off_while_its_swing_recharges(t)
 	# -- stage 6 -- the hen shoots ----------------------------------
 	_hen_stops_at_bolt_range(t)
 	_hen_bolt_hits_only_the_player(t)
@@ -1864,7 +1866,7 @@ func _pig_and_hen_cross_the_ledge_differently(t) -> void:
 #  stage 5 — the pig hits
 # ==================================================================
 
-## Values (1) and (2) — the absolute value (`WorldStep.PIG_CONTACT_DAMAGE`) and the negative control (no overlap,
+## Values (1) and (2) — the absolute value (`monster_defs.MELEE`) and the negative control (no overlap,
 ##  no damage) are measured together. **Measuring only "it deals damage" passes 1 and 100 alike** — the absolute value is this acceptance's real body.
 func _pig_contact_damages_the_player(t) -> void:
 	var kind := Defs.KIND_PIG
@@ -1877,9 +1879,9 @@ func _pig_contact_damages_the_player(t) -> void:
 	t.ok(mid > 0, "스폰됐다 (검사의 전제)")
 	for _i in Tuning.TICK_DIVIDER:
 		world.frame(DT, 0.0, false, false)
-	t.eq(ch.hp, Character.MAX_HP - WorldStep.PIG_CONTACT_DAMAGE,
-		"겹치면 정확히 %d 깎인다" % WorldStep.PIG_CONTACT_DAMAGE)
-	t.ok(ch.invuln_left > 0, "무적이 켜졌다 (돼지 접촉도 기존 무적을 탄다)")
+	t.eq(ch.hp, Character.MAX_HP - Defs.melee_damage(kind),
+		"사거리 안이면 정확히 %d 깎인다" % Defs.melee_damage(kind))
+	t.ok(ch.invuln_left > 0, "무적이 켜졌다 (돼지 근접도 기존 무적을 탄다)")
 
 	# Negative control — stood far enough apart not to overlap. `_still_ch` is not used — that helper lines the
 	#  character's centre up with the monster's centre to make them "overlap", which is the exact opposite here.
@@ -1897,9 +1899,19 @@ func _pig_contact_damages_the_player(t) -> void:
 	t.eq(ch2.hp, Character.MAX_HP, "안 겹치면 안 준다 (음성 대조)")
 
 
-## Value (3) — it rides invulnerability. **Left overlapping continuously it is not shaved every tick but only
-##  once per 5-tick interval** (it uses the same clock `character.on_tick` already wrote down as "5-tick interval
-##  = two hits" — `invuln_left` only drops inside `_char.on_tick()`. Written as "4 ticks", this check goes red).
+## Value (3) — **the beat is the mob's own cooldown, and it is what replaced contact damage.**
+##
+## **The old contract measured here was "invulnerability caps it at 4 hits a second", and that contract is
+## dead.** A pig standing in the player dealt damage on every tick the boxes overlapped; the only thing
+## holding it back was the player's 4-tick invulnerability. The user's verdict on the result was
+## 비비비 비비니까 재미가 없고. **`melee_cd` is now the gate** — `MELEE[KIND_PIG].cd_ticks` (20 = one second)
+## — and it is five times longer than the invulnerability that used to do the limiting, so this check can no
+## longer pass by accident on the old clock.
+##
+## **The mob walks backwards while the cooldown runs** (`monster._next_axis`), so the second hit lands a few
+## ticks *after* the counter frees up — it has to close the gap it opened. That is why the window below is
+## generous rather than exact: the exact frame is a movement-speed fact, not a contract.
+## *Inversion: delete the `melee_cd > 0` gate in `_char_hit_by_monsters` and the middle assert goes red.*
 func _pig_contact_respects_invulnerability(t) -> void:
 	var kind := Defs.KIND_PIG
 	var stand_x := 400
@@ -1909,22 +1921,32 @@ func _pig_contact_respects_invulnerability(t) -> void:
 	var world := WorldStep.new(g, spell, ch)
 	var mid := world.spawn_monster(kind, stand_x, FLOOR_TOP - Defs.h_px(kind))
 	t.ok(mid > 0, "스폰됐다 (검사의 전제)")
+	var dmg := Defs.melee_damage(kind)
+	var cd := Defs.melee_cd_ticks(kind)
+	t.ok(cd > Character.INVULN_TICKS,
+		"쿨다운(%d틱)이 무적(%d틱)보다 길다 — 전제. 짧으면 아래가 옛 계약을 다시 재게 된다"
+			% [cd, Character.INVULN_TICKS])
 
 	for _i in Tuning.TICK_DIVIDER:
 		world.frame(DT, 0.0, false, false)
 	var after_first := ch.hp
-	t.eq(after_first, Character.MAX_HP - WorldStep.PIG_CONTACT_DAMAGE, "첫 접촉에 깎인다 (검사의 전제)")
+	t.eq(after_first, Character.MAX_HP - dmg, "첫 타에 깎인다 (검사의 전제)")
 
-	# 3 more ticks (the 4th cumulative) — still overlapping, but inside invulnerability, so nothing more is shaved.
-	for _i in Tuning.TICK_DIVIDER * 3:
+	# **Through the whole cooldown, nothing more** — including the ticks after invulnerability lifts, which
+	#  is exactly where the old behaviour would have shaved again.
+	for _i in Tuning.TICK_DIVIDER * (cd - 1):
 		world.frame(DT, 0.0, false, false)
-	t.eq(ch.hp, after_first, "무적이 도는 동안은 계속 붙어 있어도 더 안 깎인다")
+	t.eq(ch.hp, after_first, "쿨다운이 도는 동안은 붙어 있어도 더 안 깎인다 (%d틱)" % (cd - 1))
 
-	# 1 more tick (the 5th cumulative) — invulnerability lifts and it is shaved again.
-	for _i in Tuning.TICK_DIVIDER:
+	# **And it does come back** — a gate that never reopens is a mob that hits once and is harmless forever,
+	#  which this check would otherwise pass with flying colours.
+	# **A short window on purpose: exactly one more swing, not "at least one".** Run it a further `cd` ticks
+	#  and a third swing lands and the assert reads 76 — measured. The window is the walk-back (about 1.5
+	#  ticks: it retreats to `range + w_px` and has to close to `reach` again) plus slack, and it is well
+	#  inside the next cooldown, so "one more" is what it can observe.
+	for _i in Tuning.TICK_DIVIDER * 5:
 		world.frame(DT, 0.0, false, false)
-	t.eq(ch.hp, after_first - WorldStep.PIG_CONTACT_DAMAGE,
-		"5틱째에 다시 깎인다 (계속 붙어 있어도 초당 4회가 상한이다)")
+	t.eq(ch.hp, after_first - dmg, "쿨다운이 끝나면 다시 붙어서 한 번 더 때린다 (그리고 딱 한 번)")
 
 
 # ==================================================================
@@ -2714,3 +2736,85 @@ func _a_corpse_plays_its_death_sheet_through(t) -> void:
 	t.eq(seen[-1], last, "시체 수명이 다하기 전에 마지막 칸(%d번)까지 간다" % last)
 	t.eq(seen.size(), last + 1, "칸이 한 번씩 순서대로 지나간다 (되감기지 않는다 · %s)" % [seen])
 	view.free()
+
+
+## ══ **Every kind with a melee row actually deals its damage** ══
+##
+## **The wolf dealt nothing at all and shipped that way.** `_char_hit_by_monsters` branched on pig and bull
+## and had no wolf case, so `wolf_lunge.png` played, the animation looked like an attack, and the player took
+## zero — a decoration wearing a monster's costume. **Nothing barked**: every net asked about the pig.
+##
+## ⇒ **The loop is over `MELEE`'s own keys**, not a hand-written pair. Add a kind to that table without a
+## path to damage and this goes red the same day, which is the failure the wolf demonstrates.
+func _every_melee_kind_actually_hits(t) -> void:
+	# **The list is literal and that is the whole point.** Iterating `Defs.MELEE` was tried first and it is
+	#  worthless: **deleting the wolf's row left this green**, because the loop and its count both shrank with
+	#  the table (measured — the inversion did not bite). A check whose bounds come from the thing it checks
+	#  proves nothing, which CLAUDE.md already writes down for `wall_cells()`.
+	# ⇒ **These two kinds have a melee, stated here.** Adding a third means adding it here too, on purpose.
+	var expect: Array[int] = [Defs.KIND_PIG, Defs.KIND_WOLF]
+	t.eq(Defs.MELEE.size(), expect.size(),
+		"근접을 가진 종은 %d개다 (표가 늘거나 줄면 이 검사부터 고쳐라)" % expect.size())
+	var measured := 0
+	for kind: int in expect:
+		t.ok(Defs.has_melee(kind), "%s 는 근접 표에 있다" % Defs.name_of(kind))
+		var stand_x := 400
+		var g := _bare_grid()
+		var spell := SpellSim.new()
+		var ch := _still_ch(stand_x, kind)
+		var world := WorldStep.new(g, spell, ch)
+		t.ok(world.spawn_monster(kind, stand_x, FLOOR_TOP - Defs.h_px(kind)) > 0,
+			"%s 스폰됐다 (전제)" % Defs.name_of(kind))
+		for _i in Tuning.TICK_DIVIDER:
+			world.frame(DT, 0.0, false, false)
+		t.eq(ch.hp, Character.MAX_HP - Defs.melee_damage(kind),
+			"%s 가 자기 표의 %d 를 실제로 넣는다" % [Defs.name_of(kind), Defs.melee_damage(kind)])
+		measured += 1
+	t.eq(measured, expect.size(),
+		"%d종을 다 쟀다 (0이면 위 루프가 아무것도 안 돈 것)" % expect.size())
+
+
+## ══ **It walks back out while the swing recharges** ══
+##
+## **Without this the fix is only half of itself.** Gating the damage on a cooldown stops the health bar from
+## melting, but a mob that stands inside the player through its whole cooldown is **still the picture the
+## user complained about** — 비비비 — just a quieter one. The retreat is what makes the beat visible, and it
+## is the half no damage check can see.
+##
+## **Measured as distance, not as the axis** — `_next_axis` is private and returning the right sign proves
+## nothing about whether the body moved. *Inversion: return `0.0` instead of the negated axis in
+## `monster._next_axis` and the mob holds station, and this goes red.*
+func _a_melee_mob_backs_off_while_its_swing_recharges(t) -> void:
+	var kind := Defs.KIND_PIG
+	var stand_x := 400
+	var g := _bare_grid()
+	var spell := SpellSim.new()
+	var ch := _still_ch(stand_x, kind)
+	var world := WorldStep.new(g, spell, ch)
+	var mid := world.spawn_monster(kind, stand_x, FLOOR_TOP - Defs.h_px(kind))
+	t.ok(mid > 0, "스폰됐다 (전제)")
+
+	for _i in Tuning.TICK_DIVIDER:
+		world.frame(DT, 0.0, false, false)
+	var m: Monster = null
+	for i in world.monster_count():
+		if world.monster_at(i).id == mid:
+			m = world.monster_at(i)
+	t.ok(m != null and m.melee_cd > 0, "한 대 치고 쿨다운이 걸렸다 (전제)")
+	if m == null:
+		return
+	var at_swing := absf(float(m.x) + Defs.w_px(kind) * 0.5 - ch.center().x)
+
+	for _i in Tuning.TICK_DIVIDER * 4:
+		world.frame(DT, 0.0, false, false)
+	var after := absf(float(m.x) + Defs.w_px(kind) * 0.5 - ch.center().x)
+	t.ok(after > at_swing,
+		"쿨다운 동안 플레이어에게서 멀어진다 (%.1f → %.1f px)" % [at_swing, after])
+
+	# **And it stops backing off** — a retreat with no floor walks the mob off the screen and the fight ends.
+	#  The floor is its own reach (`range_px + w_px`), so this asserts a bound, not a direction.
+	for _i in Tuning.TICK_DIVIDER * 12:
+		world.frame(DT, 0.0, false, false)
+	var far := absf(float(m.x) + Defs.w_px(kind) * 0.5 - ch.center().x)
+	t.ok(far <= Defs.melee_range_px(kind) + float(Defs.w_px(kind)) + 8.0,
+		"물러나는 데 한계가 있다 (%.1f px — 없으면 화면 밖으로 걸어나간다)" % far)

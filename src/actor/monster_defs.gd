@@ -134,6 +134,54 @@ const DEFS: Dictionary = {
 	},
 }
 
+## **A trash mob's melee — how close it must get, how hard it hits, and how long it waits after.**
+##
+## **Why it is a separate table and not three columns in `DEFS`**: only two kinds have one. The hen and the
+##  rooster throw, the bull owns `boss_ai`'s patterns, and a `melee_range_px: 0` row on those would be a
+##  false knob — a value that reads live and does nothing. **A kind missing here has no melee**, which is
+##  what `has_melee` asks and what every caller branches on.
+##
+## **What it replaced was contact damage, and that is the whole point.** A pig used to damage the player on
+##  **every tick their boxes overlapped**, gated by nothing but invulnerability — so the fight was walking
+##  into the player and staying there. The user's word for it was 비비비 비비니까 재미가 없고.
+##  ⇒ **`cd_ticks` is the beat**: hit, wait, hit. At 20Hz a pig's 20 is one second between swings and a
+##  wolf's 14 is 0.7 — the wolf is the faster, lighter threat, exactly as its speed already says.
+##
+## **`range_px` is a horizontal widening of the mob's own box, not a radius** — measured centre to centre it
+##  would let a mob standing on the player's head swing at them. `world_step` widens the box and asks the same
+##  overlap question it already asks, so "can it reach me" keeps one definition.
+##
+## **The damage is the old contact value for the pig (8), unchanged deliberately** — it now lands once a
+##  second instead of continuously, which is the nerf; changing the number in the same edit would make the two
+##  effects impossible to tell apart on screen. **The wolf had no damage at all** (no branch existed in
+##  `world_step._char_hit_by_monsters`, so it was a harmless decoration) — 10 is a first value, unseen.
+##
+## **`net_monster` names these two kinds literally rather than iterating this table** — deleting a row here
+##  left a table-driven check green, measured. Growing this table means growing that list on purpose.
+const MELEE: Dictionary = {
+	KIND_PIG: {"range_px": 12.0, "damage": 8, "cd_ticks": 20},
+	KIND_WOLF: {"range_px": 16.0, "damage": 10, "cd_ticks": 14},
+}
+
+
+static func has_melee(kind: int) -> bool:
+	return MELEE.has(kind)
+
+
+## **0.0 when the kind has no melee**, which reads at the call site as "never in range" — the same
+## substitute-do-not-bark discipline `monster_view._load_sheets` holds for a missing sheet.
+static func melee_range_px(kind: int) -> float:
+	return float(MELEE.get(kind, {}).get("range_px", 0.0))
+
+
+static func melee_damage(kind: int) -> int:
+	return int(MELEE.get(kind, {}).get("damage", 0))
+
+
+static func melee_cd_ticks(kind: int) -> int:
+	return int(MELEE.get(kind, {}).get("cd_ticks", 0))
+
+
 ## **The cost table. Re-take it with `tools/stage/profile_monsters.gd`, do not edit it by hand.**
 ##  `stage1-bosses.md`'s Cost section asked whoever builds Stage A to leave the numbers here; the hen's box
 ##  then grew 4.6x and there was **no way to re-take them**, which is how a measured number becomes a stale

@@ -52,7 +52,8 @@ shove is a tell and not a report.
 
 ### Clocks
 
-**Walking's clock is the monster's own `x`** (`MONSTER_WALK_PX_PER_FRAME` = 12px per frame), exactly as the
+**Walking's clock is the monster's own `x`** (`MONSTER_WALK_PX_PER_FRAME`, **16px** per frame — it shipped at
+12 and was slowed by eye; the constant's own comment carries the cadences either side), exactly as the
 character's is. Everything else counts view frames from the moment the state changed. Two clocks for one gait
 is the bug this splits to avoid — `character_view` records having been burned by it ("it stopped but the legs
 keep moving"). One px value for every kind, on purpose: the kinds already move at different speeds, so the

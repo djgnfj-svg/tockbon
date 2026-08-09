@@ -174,6 +174,7 @@ const CIRCLE_DIAMETER_FLOOR_PX := 180.0
 
 func run(t) -> void:
 	await _the_ring_and_rune_art_actually_reaches_the_paint(t)
+	await _the_palette_cards_are_drawn_from_the_art(t)
 	_round_numbers_pinned_before_the_triangle_arrives(t)
 	_sizes_come_from_the_table(t)
 	_unknown_circle_barks(t)
@@ -2055,10 +2056,18 @@ func _read(path: String) -> String:
 ## matching assert below goes red.*
 class _CapturingCircleWindow extends CircleWindow:
 	var art: Array[Dictionary] = []
+	## Rarity rings, recorded separately. **The palette card's tier is the one thing its picture does not
+	## carry** (`Fx.ICON_TEX`), so once the icon path took over the drawing, "the tier is still on screen"
+	## stopped being anything `art` could see.
+	var rarity: Array[Dictionary] = []
 
 	func _paint_art(tex: Texture2D, r: Rect2, tint: Color) -> void:
 		art.append({"path": tex.resource_path, "rect": r, "tint": tint})
 		super(tex, r, tint)
+
+	func _draw_glyph_rarity_ring(at: Vector2, r: float, glyph_id: int) -> void:
+		rarity.append({"at": at, "r": r, "id": glyph_id})
+		super(at, r, glyph_id)
 
 
 ## **Both circles are driven, and that is not thoroughness — it is the difference between measuring the bug
@@ -2142,6 +2151,88 @@ func _art_reaches_the_paint_for(t, circle_id: int) -> void:
 			t.ok(ink < hole,
 				"룬 그림(%.1f)이 고리 구멍(%.1f) 안에 들어간다 — 톱니 밑에 깔리지 않는다" % [ink, hole])
 	t.ok(pairs > 0, "같은 중심에 놓인 고리·룬 쌍이 실제로 있다 (0이면 위 규칙이 아무것도 안 잰다)")
+
+	t.root.remove_child(win)
+	win.queue_free()
+
+
+## ══ The palette cards are pictures too — not the procedural symbol beside a real ring ══
+##
+## **The half fix this closes was visible and nobody's net saw it.** The circle side painted `ring_*.png` and
+## `rune_*.png` while the palette one page over kept drawing `draw_circle`/`draw_line` shapes, so the same
+## item was **two different pictures depending on where you looked** — worse than neither, and every check in
+## this file stayed green because they all drove the circle page.
+##
+## **The window is left empty on purpose.** With no rune seated and no glyph placed, the circle page paints
+## nothing at all, so **every recorded texture came from the palette** — no filtering by rectangle, and no way
+## for a circle-side picture to stand in for a card that never drew.
+## *Inversion: point `_draw_palette_item`'s glyph branch back at `_draw_glyph` and the icon assert goes red;
+## point it at `Fx.RING_TEX` instead of `ICON_TEX` and the "never a ring" assert goes red.*
+func _the_palette_cards_are_drawn_from_the_art(t) -> void:
+	var win := _CapturingCircleWindow.new()
+	var circle := SpellCircle.new()
+	circle.set_circle(CircleDefs.ALL[0])
+	win.setup(Progress.new(), circle)
+	t.root.add_child(win)
+	win.visible = true
+	win.queue_redraw()
+	await t.pump_frames(3)
+
+	var files: Array[String] = []
+	for a: Dictionary in win.art:
+		files.append(String(a["path"]).get_file())
+
+	# Every glyph in the table, not the three that happen to have their own file — nine ids share three
+	#  pictures, and a card left on the procedural symbol is exactly what this is here to catch.
+	for glyph_id: int in Glyph.ALL:
+		var want: String = String(Fx.ICON_TEX[glyph_id]).get_file()
+		t.ok(files.has(want), "문양 %d 칸에 %s 가 간다" % [glyph_id, want])
+	for elem: int in Tuning.ELEM_ALL:
+		var want_rune: String = String(Fx.RUNE_TEX[elem]).get_file()
+		t.ok(files.has(want_rune), "룬 %d 칸에 %s 가 간다" % [elem, want_rune])
+
+	# **A ring on a card is the failure mode, not a missing file.** `RING_TEX` and `ICON_TEX` hold the same
+	#  nine ids, so pointing the card at the wrong one loads fine, draws fine, and reads as mush.
+	for f: String in files:
+		t.ok(not f.begins_with("ring_"), "카드에 층 띠 고리가 오지 않는다 (%s)" % f)
+
+	# **The tier survived the swap.** The picture deliberately does not carry rarity, so if the icon path had
+	#  simply replaced `_draw_glyph`, every card would look identical across three tiers with nothing barking.
+	var ring_ids: Array[int] = []
+	for rr: Dictionary in win.rarity:
+		ring_ids.append(int(rr["id"]))
+	for glyph_id: int in Glyph.ALL:
+		t.ok(ring_ids.has(glyph_id), "문양 %d 카드에 등급 고리가 그려진다" % glyph_id)
+
+	# **The picture stays inside its own tier ring.** Both come off the same `r`, so this is the one
+	#  relationship that breaks the moment `PALETTE_ICON_FRAC` is raised past `RARITY_RING_RATIO`.
+	#
+	# **Counted by seat, not by record.** `pump_frames` redraws, so every card appears once per painted
+	#  frame — asserting on the record count measures how many frames ran, which is the engine and not the
+	#  drawing (it read 144 for nine cards, and it would have read nine had one frame happened to run).
+	var seats: Array[Vector2] = []
+	for rr: Dictionary in win.rarity:
+		var at: Vector2 = rr["at"]
+		var seen := false
+		for s: Vector2 in seats:
+			if s.is_equal_approx(at):
+				seen = true
+				break
+		if seen:
+			continue
+		seats.append(at)
+		var found := false
+		for a: Dictionary in win.art:
+			var r: Rect2 = a["rect"]
+			if not r.get_center().is_equal_approx(at):
+				continue
+			found = true
+			t.ok(r.size.x * 0.5 < float(rr["r"]) * Fx.RARITY_RING_RATIO,
+				"아이콘(%.1f)이 등급 고리(%.1f) 안에 들어간다"
+					% [r.size.x * 0.5, float(rr["r"]) * Fx.RARITY_RING_RATIO])
+		t.ok(found, "등급 고리 자리 %s 에 아이콘 그림이 실제로 온다" % at)
+	t.ok(seats.size() == Glyph.ALL.size(),
+		"등급 고리가 서로 다른 아홉 자리에 있다 (%d — 겹치면 카드 하나가 안 그려진 것)" % seats.size())
 
 	t.root.remove_child(win)
 	win.queue_free()

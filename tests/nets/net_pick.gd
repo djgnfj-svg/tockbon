@@ -610,10 +610,11 @@ func _no_pushed_out_glyph_is_stashed_anywhere(t) -> void:
 		#  -> loaded texture, the same shape `spell_view._bolt_tex`/`research_window._icons` already are.
 		#  Loaded art is not a glyph that left a spell layer, which is what this file's no-inventory check
 		#  exists to catch.
-		# **`_ring_tex`/`_rune_tex` here for the same reason as `_socket_glyph_tex`** — loaded art keyed by
-		#  glyph id and element id. Textures on a shelf, not a glyph that left a spell layer.
+		# **`_ring_tex`/`_rune_tex`/`_icon_tex` here for the same reason as `_socket_glyph_tex`** — loaded art
+		#  keyed by glyph id and element id. Textures on a shelf, not a glyph that left a spell layer.
 		#  **Sorted** — this check compares the two lists as sorted arrays.
-		"res://src/view/circle_window.gd": ["_ring_tex", "_rune_tex", "_socket_glyph_tex"],
+		"res://src/view/circle_window.gd":
+			["_icon_tex", "_ring_tex", "_rune_tex", "_socket_glyph_tex"],
 			# **`_socket_glyph_tex` added here too, deliberately** — the same cache, the same loader
 			#  (`CircleWindow.load_socket_glyph_tex()`), now also read by this window's own card picture
 			#  (`three_pick_window._draw_pick_card_glyph`). Loaded art, not a record of a glyph that left a
@@ -630,7 +631,8 @@ func _no_pushed_out_glyph_is_stashed_anywhere(t) -> void:
 			#  effects, the exact shape `_death_pops` is. Neither is a glyph that left a spell layer.
 			#  **Sorted** — this check compares the two lists as sorted arrays.
 			"_anim", "_anim_sheets", "_attack_left", "_corpses", "_death_pops", "_dmg_numbers",
-			"_flash_left", "_hurt_left", "_prev_asleep", "_prev_hp", "_prev_reload", "_prev_x",
+			"_flash_left", "_hurt_left", "_prev_asleep", "_prev_hp", "_prev_melee_cd", "_prev_reload",
+			"_prev_x",
 			"_sheets", "_wake_marks",
 		],
 		"res://src/view/spell_view.gd": ["_bolt_tex", "_trails"],

@@ -101,6 +101,8 @@ func run(t) -> void:
 	_reset_revokes_a_rune_from_the_seat_it_no_longer_owns(t)
 	_reset_does_not_touch_glyphs(t)
 	_revoke_unowned_rune_only_touches_what_is_not_owned(t)
+	_developer_keys_are_gated_behind_f3(t)
+	await _the_camera_sits_on_whole_screen_pixels(t)
 
 
 ## **Calling an action that is not in the input map makes the engine bark, and on screen it only looks like
@@ -742,6 +744,9 @@ func _progress_text_survives_the_assembly_window(t) -> void:
 			"SpellView", "BlastFx"]:
 		t.ok(root.get_node_or_null(path) != null, "씬에 %s 가 있다 (전제)" % path)
 
+	# **`_input` is wired too, since `_update_hud()` reads developer mode off it** (`stage_input.debug_on()`).
+	#  Left null it barks on every call — which is what happened the day the flag moved out of `stage.gd`.
+	root.set("_input", root.get_node("StageInput"))
 	root.set("_hud", root.get_node(paths["_hud"]))
 	root.set("_progress_label", root.get_node(paths["_progress_label"]))
 	root.set("_levelup_label", root.get_node(paths["_levelup_label"]))
@@ -787,9 +792,9 @@ func _progress_text_survives_the_assembly_window(t) -> void:
 		t.ok(progress_node.text != levelup_node.text,
 			"상태 글과 레벨업 글이 서로 다른 노드에, 서로 다른 내용으로 있다 (한쪽에 뭉치지 않는다)")
 
-	# **The readout is off at boot now** (`stage._debug_hud`), so a check about *window yielding* has to
+	# **The readout is off at boot now** (`stage_input._debug_on`), so a check about *window yielding* has to
 	#  switch it on first. What it measures is unchanged: Stats hides for a window and comes back.
-	root.set("_debug_hud", true)
+	root.get_node("StageInput").call("_unhandled_input", _key(KEY_F3))
 	root.call("_update_hud")
 	t.ok(root.get_node("HUD/Stats").visible, "조립창을 열기 전엔 Stats가 보인다 (전제)")
 	root.call("_toggle_assembly")
@@ -822,7 +827,7 @@ func _opening_one_window_closes_the_other(t) -> void:
 	var win := root.get_node("HUD/CircleWindow") as Control
 	var pick_win := root.get_node("HUD/ThreePickWindow") as Control
 	# Same reason as above — this check is about windows, not about the boot default.
-	root.set("_debug_hud", true)
+	root.get_node("StageInput").call("_unhandled_input", _key(KEY_F3))
 	root.call("_update_hud")
 	t.ok(stats.visible, "시작할 때 Stats가 보인다 (전제)")
 
@@ -1039,7 +1044,7 @@ func _physics_process_actually_ticks_confirm_before_the_hud_reacts(t) -> void:
 	#  (it sets the window's afterglow fields directly, bypassing `Progress` entirely). Skip this phase and
 	#  the mutation passes clean, as it first did.
 	# The readout is off at boot; this check is about the tick driving , not the default.
-	root.set("_debug_hud", true)
+	root.get_node("StageInput").call("_unhandled_input", _key(KEY_F3))
 	pr.pending_picks = 1
 	t.ok(pr.open_pick([] as Array[int]), "뽑기가 열렸다 (전제)")
 	stats.visible = true
@@ -1448,6 +1453,9 @@ func _wired_stage_root(t) -> Node:
 			"HUD/SettlementWindow"]:
 		t.ok(root.get_node_or_null(path) != null, "씬에 %s 가 있다 (전제)" % path)
 
+	# **`_input` is wired too, since `_update_hud()` reads developer mode off it** (`stage_input.debug_on()`).
+	#  Left null it barks on every call — which is what happened the day the flag moved out of `stage.gd`.
+	root.set("_input", root.get_node("StageInput"))
 	root.set("_hud", root.get_node(paths["_hud"]))
 	root.set("_progress_label", root.get_node(paths["_progress_label"]))
 	root.set("_levelup_label", root.get_node(paths["_levelup_label"]))
@@ -1521,29 +1529,139 @@ func _sync_pick_window(root: Node) -> void:
 ## opened it to read. **Every check above this one measures that Stats *yields to a window and comes back*,
 ## which stayed true the whole time.** None of them asked whether it should have been on to begin with.
 ##
-## *Inversion: default `_debug_hud` to `true` and the first assert goes red; delete the F3 wiring and the
+## *Inversion: default `_debug_on` to `true` and the first assert goes red; delete the F3 branch and the
 ## second does.*
+##
+## **F3 is driven as a key event, not by calling the handler** — since developer mode moved into
+## `stage_input`, the key branch *is* the flag's only writer, and calling `_toggle_debug_hud()` would skip it
+## entirely and measure a derivation with nothing driving it.
 func _the_debug_readout_is_off_at_boot_and_f3_turns_it_on(t) -> void:
 	var root := _wired_stage_root(t)
 	if root == null:
 		return
 	var stats: Label = root.get_node("HUD/Stats")
+	var si: Node = root.get_node("StageInput")
 
 	root.call("_update_hud")
 	t.ok(not stats.visible,
 		"게임을 켜면 디버그 readout이 안 보인다 (열다섯 줄이 연구창 위를 덮던 자리)")
-	t.ok(not bool(root.get("_debug_hud")), "그리고 그 플래그 자체가 꺼져 있다")
+	t.ok(not bool(si.call("debug_on")), "그리고 개발자 모드 자체가 꺼져 있다")
 
-	# **The handler, called directly — and what that does NOT measure is stated rather than implied.**
-	#  `_wired_stage_root` hand-wires fields and never runs `_ready()`, so `_input.debug_hud_toggled.connect(
-	#  _toggle_debug_hud)` does not exist in this harness and emitting the signal reaches nothing. ⇒ **the
-	#  connect line itself is unmeasured here**; deleting it would leave these three green while F3 did
-	#  nothing in the real game. `net_gate`'s treed root is where that class of line is reachable, and this
-	#  check is not worth converting a harness for.
-	root.call("_toggle_debug_hud")
+	si.call("_unhandled_input", _key(KEY_F3))
 	root.call("_update_hud")
+	t.ok(bool(si.call("debug_on")), "F3가 개발자 모드를 켠다")
 	t.ok(stats.visible, "켜면 실제로 보인다 (플래그가 visible까지 이어진다)")
-	root.call("_toggle_debug_hud")
+	si.call("_unhandled_input", _key(KEY_F3))
 	root.call("_update_hud")
 	t.ok(not stats.visible, "한 번 더 끄면 다시 사라진다")
 	root.free()
+
+
+## A pressed, non-echo key event. Physical keycode, because that is what the debug branches match on.
+func _key(code: int) -> InputEventKey:
+	var e := InputEventKey.new()
+	e.physical_keycode = code
+	e.pressed = true
+	return e
+
+
+## ══ **Developer keys are dead until F3, and player keys never are** ══
+##
+## **This is a submission check, not a feature check.** The build goes to a judge who has never seen the
+## game, and every debug key was reachable from the first frame: a stray `M` stands a bull on top of them, a
+## stray `1` swaps their assembly mid-fight, a stray `R` throws the run away. **None of those read as "I
+## pressed a key" — they read as the game breaking.**
+##
+## **Driven through `_unhandled_input` with real key events**, because the gate is one `return` in that
+## function and nothing else can observe it. Signals are counted rather than the flag, since the flag being
+## false proves nothing about whether the branches consult it.
+## *Inversion: delete the `if not _debug_on: return` line and the "off" half goes red.*
+func _developer_keys_are_gated_behind_f3(t) -> void:
+	var si: Node = load(STAGE_INPUT_SCRIPT).new()
+	var fired: Array[String] = []
+	for sig: String in ["monster_requested", "loadout_requested", "reset_requested",
+			"wood_requested", "reward_taken_requested", "zoom_requested", "interact_requested"]:
+		si.connect(sig, func(_a = null, _b = null): fired.append(sig))
+
+	# **M, 1, R, T, L and `-` — one from each door**: the spawn dictionary, the preset dictionary and the
+	#  `match`. All three are separate branches and a gate in front of only one would leave the others live.
+	#  **T and M are not driven while ON** — those branches read `get_viewport()`, which is null on an
+	#  untreed node; the off case is what this check is for and it never reaches that line.
+	for code: int in [KEY_M, KEY_1, KEY_R, KEY_T, KEY_L, KEY_MINUS]:
+		si.call("_unhandled_input", _key(code))
+	t.ok(fired.is_empty(), "개발자 모드가 꺼져 있으면 디버그 키가 아무 신호도 내지 않는다 (%s)" % [fired])
+
+	# **F is a player key and must work with the mode off** — it is the town's interaction, moved off E.
+	si.call("_unhandled_input", _key(KEY_F))
+	t.ok(fired.has("interact_requested"), "F(상호작용)는 개발자 모드와 무관하게 먹는다")
+
+	fired.clear()
+	si.call("_unhandled_input", _key(KEY_F3))
+	t.ok(bool(si.call("debug_on")), "F3는 게이트 앞에 있어서 언제나 먹는다 (전제 — 못 켜면 아래가 무의미)")
+	for code: int in [KEY_1, KEY_R, KEY_L, KEY_MINUS]:
+		si.call("_unhandled_input", _key(code))
+	for want: String in ["loadout_requested", "reset_requested", "reward_taken_requested", "zoom_requested"]:
+		t.ok(fired.has(want), "켜면 %s 가 다시 산다" % want)
+	si.free()
+
+
+## ══ The camera lands on whole screen pixels ══
+##
+## **The defect this exists for is a difference, not a value.** Everything on the ground is drawn at integer
+## world coordinates (`body.gd` keeps the fraction in `_rem_*`); the camera is float. Subtract one from the
+## other and every sprite on screen jumps a pixel back and forth while walking, with Nearest filtering making
+## it a hard step rather than a blur — the user's report was that the *character* stutters.
+## **Nothing barks and no existing check can see it**: `camera_center` and `camera_lead` are both correct.
+##
+## The pure function first, then the shell — **measuring `snap_camera_px` is not measuring that `_process`
+## calls it** (CLAUDE.md's `notice_rect` case, verbatim), so the second half drives the real scene treed and
+## reads the camera the frame loop actually wrote.
+func _the_camera_sits_on_whole_screen_pixels(t) -> void:
+	# Half-open rounding is not the point; landing on the grid is. Both directions, and a value already on it.
+	t.eq(Stage.snap_camera_px(Vector2(10.4, 20.6), 1.0), Vector2(10.0, 21.0), "줌 1에서 화면 픽셀로 붙는다")
+	t.eq(Stage.snap_camera_px(Vector2(10.0, 20.0), 1.0), Vector2(10.0, 20.0), "이미 격자 위면 움직이지 않는다")
+	# **At zoom 0.5 one screen pixel is two world px** — rounding the world position alone would leave the
+	#  canvas on a half pixel, which is the whole defect back again at half strength.
+	t.eq(Stage.snap_camera_px(Vector2(11.0, 20.0), 0.5), Vector2(12.0, 20.0), "줌 0.5에서는 2px 격자에 붙는다")
+	# Zoom 0 would divide by zero and take the camera to infinity — a guard, not a feature.
+	t.eq(Stage.snap_camera_px(Vector2(1.5, 2.5), 0.0), Vector2(1.5, 2.5), "줌 0이면 손대지 않는다")
+
+	var scene: PackedScene = load(STAGE_SCENE)
+	t.ok(scene != null and scene.can_instantiate(), "무대 씬을 세웠다 (전제)")
+	if scene == null or not scene.can_instantiate():
+		return
+	var root := scene.instantiate()
+	t.root.add_child(root)
+	await t.pump_frames(2)
+
+	# **Two things have to be arranged or this measures nothing, and the first attempt measured nothing.**
+	#  (1) **The camera must be off its clamp.** At spawn `camera_center` pins to `view * 0.5` — a whole
+	#    number whatever the focus is, so the snap changes nothing and *deleting it stayed green*. The
+	#    character is moved to the middle of the map to get the camera into its free range.
+	#  (2) **The lead must be fractional**, because `character.center()` is int + half a 20px box and so is
+	#    already whole. A lead is the only thing in the focus that is not.
+	# **`_process` is called directly with dt 0** rather than pumped: `camera_lead` decays toward its target,
+	#  and at dt 0 the decay term vanishes, so the lead the camera was written from is still readable
+	#  afterwards. Pumping instead leaves the field one frame ahead of the camera.
+	var ch = root.get("_char")
+	var cam: Camera2D = root.get_node_or_null("Camera2D")
+	t.ok(ch != null and cam != null, "무대에 캐릭터와 Camera2D가 있다 (전제)")
+	if ch != null and cam != null:
+		var world: Vector2 = root.call("world_size")
+		ch.place(int(world.x * 0.5), ch.y)
+		root.set("_cam_lead", 0.37)
+		root.call("_process", 0.0)
+
+		var z: float = cam.zoom.x
+		var view: Vector2 = root.get_viewport().get_visible_rect().size / z
+		var raw: Vector2 = Stage.camera_center(
+			ch.center() + Vector2(float(root.get("_cam_lead")), 0.0), view, world)
+		# **The premise, and it is the whole check.** Without it the assert below passes on a camera that was
+		#  already whole for reasons of its own — which is exactly how the first version of this passed with
+		#  the snap deleted.
+		t.ok(not (raw * z).is_equal_approx((raw * z).round()),
+			"스냅 없는 원래 값은 격자 밖이다 (%s · 전제 — 격자 위면 아래가 아무것도 안 잰다)" % raw)
+		t.ok((cam.position * z).is_equal_approx((cam.position * z).round()),
+			"프레임 루프가 쓴 카메라 위치가 화면 픽셀 격자에 앉는다 (%s · 줌 %.3f)" % [cam.position, z])
+	t.root.remove_child(root)
+	root.queue_free()

@@ -106,6 +106,16 @@ var _dealt_acc := 0
 ## raw distance for *every* monster broke `net_monster`'s own jump checks and every boss pattern net,
 ## none of which have the "36 rows under a cap of 20" crowding problem sleep exists to solve (§4).
 ## Starts `false` regardless of origin.
+## **Ticks left before this mob can swing again** (`monster_defs.MELEE`). 0 means "ready".
+##
+## **It is the beat of the whole trash-mob fight.** Contact damage had no clock at all — a pig that reached
+##  the player dealt damage every tick they overlapped, so the fight was *standing inside* the player. This
+##  counter is what turns that into hit-wait-hit, and `_next_axis` reads the same field to walk the mob
+##  **backwards** while it runs down, so the swing and the recoil cannot disagree about whether one happened.
+## **Counted down in `on_tick`, set in `world_step`** — the same split `reload_left` already uses: the tick
+##  owns the clock, the hit detection owns the moment.
+var melee_cd := 0
+
 var asleep := false
 ## x, y and on_ground use the same idiom as the character — **`_body` is exposed through properties**
 ##  (the view reads `m.x`).
@@ -296,7 +306,35 @@ func _next_axis(_grid: CellGrid, target_x: int, _target_y: int) -> float:
 	#  put it outside and "where do I go" lives in two places and only one gets swapped the day AI goes in.
 	if kind == Defs.KIND_HEN and _dist_to_target(target_x) <= MonsterBolts.BOLT_STOP_PX:
 		return 0.0
+	# **A melee mob stops when it is close enough to swing, and backs off while its swing recharges.**
+	#  This is the same seat and the same reason as the hen's line above: "where do I go" answers here or it
+	#  answers in two places.
+	#  **The retreat is what stops the mob from standing inside the player** — hold position through the
+	#   cooldown and the picture is still a pig pressed into the character's chest, just one that damages less
+	#   often. Walking out and back in is what makes the beat visible without any new art.
+	#  **The step-out distance is the range itself**, not a second constant: it walks away until it is out of
+	#   its own reach and then walks back, so the two halves of the cycle cannot drift apart.
+	if Defs.has_melee(kind):
+		var d := _dist_to_target(target_x)
+		if melee_cd > 0 and d <= Defs.melee_range_px(kind) + float(Defs.w_px(kind)):
+			# **Dead centre has no "away", and that is not a corner case here — it is the common one.**
+			#  `_toward_player_axis` returns 0 when the two centres line up exactly, which is precisely where a
+			#  mob that just walked into the player ends up. Negating 0 is 0, so the retreat silently did
+			#  nothing and the mob stood in the player through its whole cooldown — the picture this cycle
+			#  exists to remove. **`facing` is the tie-break**: it is the direction it walked in from, so its
+			#  opposite is out.
+			var away := -_toward_player_axis(target_x)
+			return away if away != 0.0 else float(-facing)
+		if melee_cd <= 0 and d <= _melee_reach_px():
+			return 0.0
 	return _toward_player_axis(target_x)
+
+
+## **How far this mob can reach, centre to centre.** Half its own box plus the melee range plus half the
+##  player's — the horizontal half of the same overlap `world_step` tests, written once here so "I stopped"
+##  and "I hit" cannot disagree. (`_dist_to_target` is centre to centre, so both halves belong in it.)
+func _melee_reach_px() -> float:
+	return float(Defs.w_px(kind)) * 0.5 + Defs.melee_range_px(kind) + float(Character.W_PX) * 0.5
 
 
 ## The pattern-driven axis (`stage1-bosses.md` Stage B, extended by Stages D-F). **Frozen during `WINDUP`/
@@ -385,6 +423,9 @@ func on_tick(spell: SpellSim, target_x: int, target_y: int) -> void:
 	#  for kinds that never fire it simply never moves off 0.
 	if reload_left > 0:
 		reload_left -= 1
+	# **The melee beat, on the same clock and for the same reason.** A kind with no melee never leaves 0.
+	if melee_cd > 0:
+		melee_cd -= 1
 	# **The pattern machine (`stage1-bosses.md` Stage B) advances here, unconditionally** — it is not gated
 	#  behind the invulnerability check below. `invuln_left` ("just got hit") and the boss's `STUN` ("just
 	#  rammed a wall or finished breathing") are two different clocks; letting one block the other would mean

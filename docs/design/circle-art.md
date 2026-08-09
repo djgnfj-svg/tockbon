@@ -10,10 +10,11 @@
 > **The user confirmed the ring is the intent** ("도넛으로 들어가는거지"), so it is the code that is behind,
 > not the doc — but anyone reading either one alone will build the wrong thing.
 > ⇒ **A glyph needs two pictures, not one**: the **ring** for the layer band, and a **compact icon** for the
-> palette card, where a ring has no room to read as anything. `_draw_palette_item` already calls the same
-> `_draw_glyph` as the circle does, and that is exactly the sharing that has to end when rings arrive.
+> palette card, where a ring has no room to read as anything. **Both are wired now** (the box below) — the
+> annulus this paragraph says is missing is still missing, but the *sharing* it warns about has ended:
+> `_draw_palette_item` takes `ICON_TEX`, the band takes `RING_TEX`.
 
-> ## ⚠ Half of this landed 2026-08-10, and the half that did not is the palette
+> ## The circle side and the palette both draw real art (2026-08-10)
 >
 > **The circle side now draws real art.** `RING_TEX` / `RUNE_TEX` load `assets/circle/ring_*.png` and
 > `rune_*.png`, and `_paint_art()` paints them — the equipped ring over its rim, the seated rune inside the
@@ -23,21 +24,25 @@
 > `CIRCLE_ART_TINT` is above 1.0 for that reason. And `RUNE_ART_FRAC` exists because the rune's ink reached
 > 0.70 of its half-size against a ring hole starting at 0.30, which is the bead being eaten by the teeth.
 >
-> **The palette still draws procedurally** — `_draw_circle_symbol`, the sharing this box's own paragraph
-> above says has to end. ⇒ **The same item is drawn two different ways depending on where you look**, which
-> is worse than either alone. **The user called it a half fix and deferred it** (2026-08-10): *"오른쪽
-> 팔레트에도 이미지로 보여야지 반쪽짜리 수정이네"*.
+> **The palette landed the same day, and the sharing this box's own paragraph above demanded has ended.**
+> `Fx.ICON_TEX` is a **third** map beside `RING_TEX`/`RUNE_TEX` — nine glyph ids over the three
+> `icon_*.png`, and `_draw_palette_item` paints those on the cards while the runes take `rune_*.png`
+> unchanged from the slot inside the circle. **Three files carry nine cards** the same way three ring files
+> carry nine bands; that is not a shortfall, it is the rarity rule below (the tier is drawn by code).
 >
-> **What is left is small and the pieces exist**: the textures are already loaded in `circle_window`, the
-> `_paint_art()` hook is already there, and the palette rects are already laid out. What is **not** solved is
-> this box's own point — **a ring drawn at palette-card size has no room to read**, so a compact icon per
-> glyph is a separate art job, not a wiring one. `assets/circle/icon_*.png` exists for three ids only.
+> **What did not become a picture is `KIND_CIRCLE`, and that is not an oversight either** — circles are
+> drawn from coordinates and never generated ("Circles are not AI-generated"), so there is no file to point
+> at. It keeps its frame stroke.
+>
+> **The one thing wiring had to add was the rarity ring**, because the art deliberately does not carry the
+> tier: `_draw_glyph_rarity_ring` was split out of `_draw_glyph` so the picture path can call it too.
+> Inlined, every card would have lost its tier the moment the icon loaded, with the model still holding it.
 >
 > **And three of nine glyph ids have no socket art at all** (`DUMMY_C/R/U`), so they fall through to a
 > featureless disc while an empty layer draws a `+` — **two different "nothing here" pictures, neither of
 > which says which.** Verify-look reads them as broken slots.
 
-**Implemented**: partial — the round circle's assembly-window art runs. **The triangle circle exists only as art
+**Implemented**: partial — the round circle's assembly-window art runs, **circle page and palette both**. **The triangle circle exists only as art
 and is not in code** (`circle_defs.ALL` holds only `CIRCLE_ROUND`) — the skeleton is drawn by `triangle()` in
 `tools/pixel/draw_circle.py`, and the two socket glyph rings are in `assets/circle/`
 (`docs/plans/3.done/triangle-circle-art.md`). Wiring it into the game is `docs/plans/3.done/triangle-circle-to-game.md`.
@@ -199,10 +204,12 @@ tier marker rather than as part of the drawing.
 **The common three are generated and unwired; the rims are not built.** And "are the six glyphs
 distinguishable" is still the harder unresolved question — it is about six *different* glyphs, not six tiers.
 
-### What is on disk now — **ten files, wired to nothing**
+### What is on disk now
 
-Generated with the `sigil` preset (runes, rings, icons) and `ui` (the window). **Not one of them is
-referenced by `src/`** — `circle_window` still draws every symbol with `draw_line`/`draw_circle`.
+Generated with the `sigil` preset (runes, rings, icons) and `ui` (the window).
+**This section used to read "wired to nothing" and that is dead** — rings, runes and icons are all painted
+now (`Fx.RING_TEX` · `RUNE_TEX` · `ICON_TEX`). `ring_accel`/`ring_home` and the window are still unreferenced,
+for the reason `RING_TEX`'s own comment gives: there is no accelerate or home glyph in code to hang them on.
 
 | File | Size | Seed | What it is |
 |---|---|---|---|

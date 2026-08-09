@@ -669,7 +669,8 @@ func _gore_and_contact_values_are_read(t) -> void:
 	t.eq(WorldStep.BULL_GORE_DAMAGE, 15, "gore 데미지 = 15")
 	t.eq(WorldStep.BULL_CHARGE_CONTACT_DAMAGE, 20, "돌진 접촉 데미지 = 20")
 	t.ok(WorldStep.BULL_GORE_DAMAGE != WorldStep.BULL_CHARGE_CONTACT_DAMAGE, "gore와 돌진 접촉 데미지가 다르다")
-	t.ok(WorldStep.BULL_GORE_DAMAGE != WorldStep.PIG_CONTACT_DAMAGE, "gore 데미지가 돼지 접촉과 다르다")
+	t.ok(WorldStep.BULL_GORE_DAMAGE != Defs.melee_damage(Defs.KIND_PIG),
+		"gore 데미지가 돼지 근접과 다르다")
 
 
 ## **verify-read's finding ① — a player on a ledge above the bull used to disable it completely.**
