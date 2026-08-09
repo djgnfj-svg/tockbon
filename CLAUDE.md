@@ -47,6 +47,7 @@ A doc may be written *as well*, when the answer is worth keeping — **but the c
 | Doc | Question it answers |
 |---|---|
 | `docs/GDD.md` | What is this game |
+| `docs/submission/` | **What we send to NAN 2026, and what is a lie if we send it today** |
 | `docs/design/` | What does this feature look like |
 | `docs/decisions/` | **Why was that not done** |
 | `docs/plans/` `1.ready` `2.active` `3.done` | What are we building now |
