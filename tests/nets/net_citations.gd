@@ -36,36 +36,33 @@ extends RefCounted
 const SCAN_DIRS: Array[String] = ["res://src", "res://tests"]
 const DOCS_DIR := "res://docs"
 
-## **How many `docs/plans/<folder>/<name>.md` citations are allowed to exist. A ratchet, and a deliberate
-## compromise — argued rather than assumed.**
+## ══ There is no ceiling constant any more. The answer is zero. ══
 ##
-## The rule says *never path it*, so by the letter every one of these is a violation and this net should
-## demand zero. **It does not, and here is the case for both sides:**
-##  · **For zero**: the rule has no exception, and a path that resolves today is a path that rots the day its
-##    doc moves. They are latent, not harmless.
-##  · **Against zero**: it would land **red on every one of them on day one**, and a net that is red on
-##    arrival is a net somebody deletes or weakens in the same hour. The five instances in one night were
-##    found *by hand* precisely because nothing automated existed; trading that for a net nobody keeps is a
-##    net loss.
-## ⇒ **The ceiling is what closes the gap**: every *new* path-form citation goes red immediately, while the
-## existing ones are grandfathered and burned down over time. **Lower this number by hand as they go** — it
-## must never rise.
+## **It began as a ratchet and it has been burned down.** The history is kept because the number moving is
+## the whole story:
 ##
-## **Its known weakness, stated rather than hidden**: deleting one path citation and adding another leaves
-## the count unchanged and this check green. That hole is covered by
-## `_every_path_form_citation_resolves_where_it_says` below, which is about the actual bug (a citation that
-## points at nothing) rather than about the style rule. **The ratchet governs the rule; the resolve check
-## governs the breakage.**
+##  · **It shipped at 56**, grandfathering every path-form citation that existed, because a net that lands
+##    red on 56 sites on day one is a net somebody deletes or weakens within the hour. Every *new* one went
+##    red immediately; the old ones were to be cleaned up over time.
+##  · **56 was itself a finding.** Every hand scan run the night it was written — including the one used to
+##    size the ceiling — reported **53**, because they all joined comment lines with a space and **three
+##    citations wrapped mid-token**. They were never dead, only invisible: the same blind spot that let two
+##    genuinely dead ones survive four sweeps. The count did not rise because anyone added a citation; it
+##    rose because the scanner stopped being blind.
+##  · **It fired on its first real day**, at 57 — on a citation that **resolved perfectly well**, written by
+##    a track that had no way to know the rule had changed. Not a dead link caught late: **a live one caught
+##    at the moment of writing**, which is the case honour never catches, because nothing is wrong with it
+##    yet. Three weeks later it would have been dead and swept for by hand a sixth time.
+##  · Then all 57 were rewritten as names, and the ceiling reached 0.
 ##
-## **56, and the number itself is a finding.** Every hand scan run the night this net was written — including
-## the one used to size this very ceiling — reported **53**, because they all joined comment lines with a
-## space and **three citations in this repo wrap mid-token**:
-## `monster.gd:91` · `settlement_layout.gd:2` · `net_pick.gd:594`.
-## All three resolve, so none was ever *dead* — but they were **invisible**, which is the same blind spot
-## that let two genuinely dead ones survive four sweeps. ⇒ **The count did not rise because anyone added a
-## citation. It rose because the scanner stopped being blind**, which is the best evidence available that
-## the two-join rule earns its cost.
-const PATH_FORM_CEILING := 56
+## **At zero the grandfathering clause and the rule say the same thing, so the constant is gone** — there is
+## no number left to maintain, and no way for the bound to drift away from reality unnoticed.
+##
+## ⚠ **The count check itself is NOT gone, and must not be deleted as bookkeeping.** It is the only thing
+## that catches a **new, perfectly valid** path-form citation. `_every_path_form_citation_resolves_where_it_says`
+## below cannot: that one only fires once the doc has *moved*, which is weeks after the mistake and after
+## somebody has already gone looking by hand. **The two checks answer different questions** — one asks "is
+## this citation broken yet", the other asks "was the rule followed". Today's catch was the second.
 
 
 func run(t) -> void:
@@ -73,7 +70,7 @@ func run(t) -> void:
 	_the_doc_index_found_the_docs(t)
 	_every_path_form_citation_resolves_where_it_says(t)
 	_every_bare_name_citation_resolves_to_a_real_doc(t)
-	_the_path_form_count_does_not_grow(t)
+	_there_are_no_path_form_citations_at_all(t)
 
 
 ## **The instrument, measured before anything it measures.** A line-wise scan passed three of eleven dead
@@ -163,20 +160,21 @@ func _every_bare_name_citation_resolves_to_a_real_doc(t) -> void:
 	t.eq(missing.size(), 0, "이름만 적은 인용이 전부 실재하는 문서다 (없는 것 %d개)" % missing.size())
 
 
-## **The ratchet** — see `PATH_FORM_CEILING`'s own box for why this is a ceiling and not a zero.
-func _the_path_form_count_does_not_grow(t) -> void:
+## **Was the rule followed** — the other half of this net, and the half that catches a mistake while it is
+## still only a mistake. See the header box for why this is now a flat zero rather than a ceiling, and why
+## deleting it would leave a new-but-valid path citation entirely unguarded.
+func _there_are_no_path_form_citations_at_all(t) -> void:
 	var n := 0
+	var where: Array[String] = []
 	for path: String in _scan_files():
 		for block: Dictionary in _comment_blocks(_read(path)):
-			n += _paths_of(block).size()
-	t.ok(n <= PATH_FORM_CEILING,
-		"경로형 인용이 %d개로, 상한 %d개를 안 넘는다 — 새로 하나 적으면 여기가 빨개진다 (이름만 적어라)"
-			% [n, PATH_FORM_CEILING])
-	# **The other direction is a reminder, not a failure**: cleaning them up must lower the ceiling by hand,
-	#  or the ratchet stops ratcheting and quietly allows one back in.
-	t.ok(n >= PATH_FORM_CEILING - 10,
-		"그리고 상한이 실제 개수(%d)에서 너무 멀어지지 않았다 — 정리했으면 상한도 손으로 내려라 (상한 %d)"
-			% [n, PATH_FORM_CEILING])
+			for hit: Dictionary in _paths_of(block):
+				n += 1
+				where.append("%s:%d — `%s`. 폴더를 빼고 이름만 적어라"
+					% [path, int(block["line"]), String(hit["doc"])])
+	for msg: String in where:
+		t.ok(false, "경로로 적은 인용: %s" % msg)
+	t.eq(n, 0, "경로형 인용이 하나도 없다 (문서는 이름으로만 부른다 — %d개 발견)" % n)
 
 
 # ══════════════════════════════════════════════════════════════════

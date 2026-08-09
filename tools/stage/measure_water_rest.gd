@@ -45,6 +45,12 @@ func _initialize() -> void:
 	#  repeats it. The row above disagrees, so the exact bowl is run too — otherwise the disagreement can be
 	#  waved away as "a different setup".
 	_poured_at(128, 900, 32, 8)
+	# **`net_water._make_bowl(32, 750, 8, 6)`, replicated cell for cell.** `water.md` records this one as
+	#  *"stops at 2,798 ticks"*, and that figure sitting **above** the 128 bowl's 1,032 makes the wider bowl
+	#  settle faster than the narrow one — the reverse of the diffusion argument the same table rests on.
+	#  That doc flags it as unexplained. Re-driving it is the cheapest way to find out whether the puzzle is
+	#  real or whether 2,798 is simply stale in the same way >4,000 was.
+	_poured_at(32, 750, 8, 6)
 	_flat_walled(256, 3)
 	_flat_at_grid_edge(64, 3)
 	_flat_over_stepped_floor()

@@ -643,7 +643,7 @@ func _hud_counts_are_throttled(t) -> void:
 ##  `_pick_window_leaves_the_stage_visible` (`_mouse_filter_contract`'s own block), against `Fx.PICK_RECT`
 ##  **by name** — `PICK_RECT := WINDOW_RECT` being an alias today does not mean either check can be skipped.
 ##
-## **`SettlementWindow` (`docs/plans/3.done/run-end-settlement.md`, Stage D) is the same shape of skip** — it
+## **`SettlementWindow` (`run-end-settlement.md`, Stage D) is the same shape of skip** — it
 ## sizes itself from `Fx.SETTLEMENT_RECT` in `_ready()` too. **No separate "does it leave the stage visible"
 ## check exists for it, and none is needed**: `SETTLEMENT_RECT` is defined as the whole canvas `(0, 0, 960,
 ## 540)` (that constant's own header — the doc's declared exception to every other window here leaving the
@@ -1470,7 +1470,7 @@ func _wired_stage_root(t) -> Node:
 	# **`_research_window` too** — `_update_hud()` reads its `visible` every frame to decide whether
 	#  `Stats` shows, so an unwired null crashes every check that drives the HUD.
 	root.set("_research_window", root.get_node("HUD/ResearchWindow"))
-	# **`_settlement`** (`docs/plans/3.done/run-end-settlement.md`, Stage D — that plan's own Risk 1, "the
+	# **`_settlement`** (`run-end-settlement.md`, Stage D — that plan's own Risk 1, "the
 	#  highest-probability break in this whole plan"). `_physics_process()` reads `_settlement.is_showing()`
 	#  before it will even call `_world.frame()`, and `_update_hud()`/`reset_stage()` both reach it too — an
 	#  unwired null crashes every check in this file that drives any of the three before it measures anything.

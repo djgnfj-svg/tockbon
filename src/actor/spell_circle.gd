@@ -179,7 +179,7 @@ func _with(layer: int, glyph_id: int) -> Array[int]:
 ## (`triangle-circle-to-game.md` step 5, risk table). `list` is built from **all of `_layers`**, not one
 ## socket's own layer — a triangle circle has three sockets but still only **one** `max_per_circle: 1` spread
 ## across the whole circle, the same "one spread per circle" `_layout_geometry_runs`'s sibling decision
-## (`docs/plans/3.done/triangle-circle-to-game.md`, decision B) already assumed. So the worst case is one
+## (`triangle-circle-to-game.md`, decision B) already assumed. So the worst case is one
 ## socket's spread (8 bolts) plus the other two sockets' single terminal glyphs (blast, 1 bolt each) = 10,
 ## nowhere near `Tuning.MAX_PROJECTILES` (32). **If "one spread per circle" is ever reversed to "per socket",
 ## re-measure this cap** — three spreads is 24, and going over the cap does not discard, the sim simply does

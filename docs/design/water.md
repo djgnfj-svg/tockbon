@@ -65,10 +65,27 @@ Water in a 2D cell game is usually one of two things.
 > | Bowl width | Stops? |
 > |---|---|
 > | 32 cells | stops at 2,798 ticks (140s) |
-> | 128 cells | **does not stop by 4,000 ticks** |
+> | 128 cells | ~~**does not stop by 4,000 ticks**~~ → **stops at 1,032 ticks (52s)** |
 >
 > Halving is **diffusion**, so flattening takes time proportional to the square of the width.
-> **Total volume was conserved exactly — it isn't leaking, it just doesn't finish.**
+> **Total volume was conserved exactly — it isn't leaking.**
+>
+> > **⚠ The 128-cell row was re-measured and is now the opposite of what it said.**
+> > The **same bowl** (`net_water._make_bowl(128, 900, 32, 8)`) settles at **1,032 ticks**, total conserved,
+> > driven headless by `tools/stage/measure_water_rest.gd` and reproduced independently by two agents.
+> > **The old figure was right when it was taken. Nobody knows when it stopped being right** — the behaviour
+> > changed at some point between then and now and no one noticed, for the reason in the box below.
+> > **Note it is 1,032 < 2,798**: the wider bowl now settles *faster* than the narrow one, which is the
+> > reverse of the diffusion argument above. **That is unexplained and nobody has explained it** — the two
+> > bowls differ in poured columns and depth as well as width, so it is not a clean width comparison.
+> > **Do not read a law out of two rows.**
+>
+> > **Why nobody noticed the behaviour change: the only check watching it had gone blind.**
+> > Its observation window sat **entirely after the water had already stopped**, so it measured 0 movement and
+> > passed — for the same reason it would have passed on an empty grid. **A check that samples the wrong
+> > interval does not fail loudly; it succeeds quietly and stops being a check.** It is fixed now.
+> > This is CLAUDE.md's *"a loop whose condition is false from the start never runs the check at all"*
+> > wearing a different face — here the loop ran, it just ran where nothing was happening.
 
 **But not finishing is cheap. That was the real reason.**
 
@@ -248,6 +265,15 @@ The character wades ankle-deep — **it reads as a shallow sea, not a puddle.**
 
 **The stopping width was not measured** — derived from the rest condition, the estimate is **about 860 cells.**
 Only "424 at 4,000 ticks and still growing" is measured.
+
+> **⚠ These two numbers are of unknown currency, and they have NOT been corrected.**
+> The bowl figure above (128 cells) was re-measured tonight and came back the opposite of what it said.
+> **This is a different scenario** — a bowl is walled and holds a fixed volume, this is open floor with no
+> walls at all — so **the bowl's 1,032 ticks does not replace anything here.** But both were taken in the
+> same era by the same methodology, and the bowl's turned out stale.
+> ⇒ **Nobody has re-measured the flat-floor spread.** `424 @ t4,000` and the ~860 estimate are left standing
+> **as the last measurement taken, not as current fact.** They are not silently patched with a number
+> nobody drove, and no replacement is invented here. **Re-measure before building on either.**
 
 **Three candidate fixes** (**all user decisions. Each bites something different**):
 - **Consume water when extinguishing** ⇒ overturns decision 1. **A lake next to a burning forest wakes every tick**

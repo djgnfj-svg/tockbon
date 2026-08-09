@@ -1,5 +1,5 @@
 extends RefCounted
-## Stage 1 monster placement, Stages A+B — `docs/plans/3.done/monster-placement-stage1.md`.
+## Stage 1 monster placement, Stages A+B — `monster-placement-stage1.md`.
 ## Two jobs in one file (the plan's own file count): **resolve** a `(tx, kind)` row to a ground position,
 ## and **run** the table — wake rows into real monsters, mark them spent on death, re-arm on `reset()`.
 ## Pure `RefCounted`, no scene tree, **no reference to `src/stage/`** (`net_layers` — the same isolation
@@ -91,7 +91,7 @@ var _boss_rows := 0
 ## **Pure and static** — a net can drive it with a synthetic grid and no `MonsterPlacement` instance at
 ## all, the same reason `pick_layout.gd`'s coordinate functions are static.
 ##
-## Ground search, precisely (`docs/plans/3.done/monster-placement-stage1.md` Stage A):
+## Ground search, precisely (`monster-placement-stage1.md` Stage A):
 ## 1. Start at `floor_cy` in the column `tx` covers. Not solid there => the column has no ground at all
 ##    => `push_error` (English, one text — the wrapper's silence check needs the bark and its
 ##    `t.expect_error` to move together, CLAUDE.md) and return "not ok".
@@ -249,7 +249,7 @@ func wake_scan(grid: CellGrid, target_x: int, spawn_fn: Callable) -> void:
 		_id_to_row[id] = i
 
 
-## **Sleep's own eligibility gate** (`docs/plans/3.done/monster-placement-stage1.md` Stage D) —
+## **Sleep's own eligibility gate** (`monster-placement-stage1.md` Stage D) —
 ## `world_step`'s per-tick sleep update calls this before ever touching `Monster.asleep`. **Only a
 ## monster this table actually placed may sleep.** Measured, not assumed: making sleep a bare function
 ## of "distance from the player" for *every* monster broke every unrelated net that stations a character

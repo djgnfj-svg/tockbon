@@ -7,7 +7,7 @@ extends RefCounted
 ##  "Damage taken 10" and "fire DPS 10/s" get no columns in the table —
 ##  `monsters-minimum`, "behavior (7)" pinned "use the player's constants verbatim. No axes are added".
 ##
-## **`jump_vy_px` is not one of those false knobs** (`docs/plans/3.done/monster-ai-jump-and-separation.md`,
+## **`jump_vy_px` is not one of those false knobs** (`monster-ai-jump-and-separation.md`,
 ##  Stage A) — it is mobility, read every frame `move_x` reports blocked, the same shape `speed_px` and
 ##  `step_cells` already are. **The bosses carry the same real value the trash mobs do, not an inert `0.0`**
 ##  (team-lead's own correction: a placeholder made the kind gate untestable — removing
@@ -34,7 +34,7 @@ const KIND_ROOSTER := 4
 ##  warmer than the dirt" (the user's rule: species are told apart by brightness first). Its art landed with a
 ##  full animation set and **the row it needed to exist at all is this one** — until now it was "art on disk
 ##  and nothing more", that doc's own words.
-## **It is assigned to stage 1 now** (`docs/plans/3.done/monster-placement-stage1.md`, the user's call —
+## **It is assigned to stage 1 now** (`monster-placement-stage1.md`, the user's call —
 ##  stage 1's trash roster is pig + hen + wolf, not the pair this comment used to name) —
 ##  **placement is still the map's share, not this table's**; `src/stage/stage1_monsters.gd` is that share.
 const KIND_WOLF := 5
@@ -47,7 +47,7 @@ const MAX_MONSTERS := 20
 
 ## `xp`/`money` are **per-kind by nature, not "how it attacks"** — the header above excludes damage-taken and
 ##  fire-DPS columns because those read as "this value is live" (a false knob), but a pig being worth more
-##  than a hen is a plain fact about the kind (`docs/plans/3.done/levelup-and-three-picks.md`, Stage B).
+##  than a hen is a plain fact about the kind (`levelup-and-three-picks.md`, Stage B).
 ##  Provisional values from that plan's own table — knobs to turn once XP is on screen, not by the user yet.
 const DEFS: Dictionary = {
 	KIND_PIG: {

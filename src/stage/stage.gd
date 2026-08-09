@@ -37,7 +37,7 @@ const Fixtures := preload("res://src/actor/fixtures.gd")
 const TownView := preload("res://src/view/town_view.gd")
 const ResearchWindow := preload("res://src/view/research_window.gd")
 const SettlementWindow := preload("res://src/view/settlement_window.gd")
-## The gate (ending) — `docs/plans/3.done/gate-ending-to-game.md`.
+## The gate (ending) — `gate-ending-to-game.md`.
 const StageGate := preload("res://src/actor/stage_gate.gd")
 const GateView := preload("res://src/view/gate_view.gd")
 
@@ -133,7 +133,7 @@ const MAP_H: int = TerrainMap.MAP_H
 const MAP: Array[String] = TerrainMap.MAP
 const MAP_CHARS: Dictionary = TerrainMap.MAP_CHARS
 
-## `docs/plans/3.done/monster-placement-stage1.md` — the `(tx, kind)` table. **The room table names it now**;
+## `monster-placement-stage1.md` — the `(tx, kind)` table. **The room table names it now**;
 ## this file reads it out of the row and pushes it into `_world` (`_apply_room()` below). `src/actor/` still
 ## never preloads it (`net_layers`).
 
@@ -216,14 +216,14 @@ var _cam_lead := 0.0
 ## **Hidden in the stage, shown in the town** — `_in_town` below is the single source, pushed to this
 ##  node in `_build_room()` and nowhere else.
 @onready var _town_view: TownView = $TownView
-## The gate's arch (`docs/plans/3.done/gate-ending-to-game.md`, Stage C). **Its own `visible` is derived
+## The gate's arch (`gate-ending-to-game.md`, Stage C). **Its own `visible` is derived
 ##  every frame from `Progress.boss_died()`** (`gate_view._process()`) — not pushed from here, the same
 ##  reason `_town_view.visible` is the one exception that *is* pushed (a latch `_in_town` already is).
 @onready var _gate_view: GateView = $GateView
 ## The research bench's window. **Under `HUD`, like the other two** — that node is the `CanvasLayer`, so
 ##  it does not ride the screen shake.
 @onready var _research_window: ResearchWindow = $HUD/ResearchWindow
-## The run-end settlement screen (`docs/plans/3.done/run-end-settlement.md`). **Under `HUD`, like every
+## The run-end settlement screen (`run-end-settlement.md`). **Under `HUD`, like every
 ##  other window** — the same reason as `_research_window` above. Unlike the other three it is **derived
 ##  open**, never toggled by a key (`_sync_settlement()` below) — there is no debug key for "the run is over".
 @onready var _settlement: SettlementWindow = $HUD/SettlementWindow
@@ -323,7 +323,7 @@ const ROOM1_WATER_X1 := 1060
 const ROOM1_WATER_ROW := 200
 
 ## **Room ③'s east wall — comes down once, on the rooster's death, and only once**
-##  (`docs/plans/3.done/gate-ending-to-game.md`, Stage B). `true` = already dropped this run.
+##  (`gate-ending-to-game.md`, Stage B). `true` = already dropped this run.
 ## **Safe as a latch where the settlement panel's latch is forbidden**: its only writer is `reset_stage()`,
 ##  which *always* rebuilds the terrain in the same call (`_build_room()` below), so the flag and the wall
 ##  cannot disagree — unlike a `mouse_filter` latch, nothing here can strand the game.
@@ -1034,7 +1034,7 @@ func _build_room() -> void:
 ##  stage 2 exists. Reading `_stage_id` inside would make that check impossible to write with one row.
 func _apply_room(room: Dictionary) -> void:
 	build_room_into(_grid, room)
-	# `docs/plans/3.done/monster-placement-stage1.md` Stage C — the wiring line. **In the room build,
+	# `monster-placement-stage1.md` Stage C — the wiring line. **In the room build,
 	#  not `_ready()`**: every room switch (`reset_stage()`/`enter_town()`/`_leave_town()`) routes through
 	#  here, and `net_gate._wired_root()` never runs `_ready()` at all, so a line there would be invisible
 	#  to every net in this repo and would strand the placement the moment R was first pressed (that

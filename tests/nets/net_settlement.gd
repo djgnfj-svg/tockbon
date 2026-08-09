@@ -1,6 +1,6 @@
 extends RefCounted
 ## `src/view/settlement_layout.gd` and `src/view/settlement_window.gd`
-## (`docs/plans/3.done/run-end-settlement.md`, Stages B and C).
+## (`run-end-settlement.md`, Stages B and C).
 ##
 ## **Stage B measures the pure functions** — `rows`/`button_rect` (do the panel's own shapes collide),
 ## `time_text` (the hour-safe form), `count_value` (the count-up curve itself, walked end to end).

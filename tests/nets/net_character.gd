@@ -450,7 +450,7 @@ func _airborne_never_climbs(t) -> void:
 
 
 # ══════════════════════════════════════════════════════════════════
-#  A. infinite jump underwater (`docs/plans/2.active/water-jump-and-escape.md` stage 1)
+#  A. infinite jump underwater (`water-jump-and-escape.md` stage 1)
 # ══════════════════════════════════════════════════════════════════
 #
 # Not `net_water` — what is measured is **the character's behavior**, not the water's (per the plan).
@@ -607,7 +607,7 @@ func _submerged_jump_includes_the_foot_row(t) -> void:
 
 
 # ══════════════════════════════════════════════════════════════════
-#  C. the water flow pushes the character (`docs/plans/2.active/water-jump-and-escape.md` stage 4)
+#  C. the water flow pushes the character (`water-jump-and-escape.md` stage 4)
 # ══════════════════════════════════════════════════════════════════
 #
 # **C-1 to C-4 measure `Body.water_flow()` directly** — the spot the plan pinned down as "measure the force

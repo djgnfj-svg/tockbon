@@ -1,7 +1,7 @@
 extends RefCounted
 ## **Authored water — a `~` on the map is full, and it is asleep.**
 ##
-## `docs/plans/1.ready/stage2-water.md` §6 names this "the cheapest net in this doc" and rests stage 2's
+## `stage2-water.md` §6 names this "the cheapest net in this doc" and rests stage 2's
 ## whole cost argument on the two halves measured here. **Both halves were broken when this was written**,
 ## in a way the survey described wrongly, so the shapes are worth writing down:
 ##

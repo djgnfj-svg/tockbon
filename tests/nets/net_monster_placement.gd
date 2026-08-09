@@ -1,6 +1,6 @@
 extends RefCounted
 ## `src/stage/stage1_monsters.gd` (the table) and `src/actor/monster_placement.gd` (the resolver + the
-## runner) — `docs/plans/3.done/monster-placement-stage1.md`, Stages A+B.
+## runner) — `monster-placement-stage1.md`, Stages A+B.
 ## Its own file, its own process — `net_monster*.gd` is already split several ways for exactly this
 ## reason (that file's own header), and this feature's own table/resolver share no code with any of them.
 

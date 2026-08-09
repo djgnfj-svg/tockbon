@@ -173,7 +173,7 @@ const MON_FIRE := 7
 ##  two moves), so they are one state here too, resolved to a different sheet by kind.
 const MON_LEAP := 8
 const MON_STUN := 9
-## **The trash-mob jump** (`docs/plans/3.done/monster-ai-jump-and-separation.md`, Stage B) — `on_ground ==
+## **The trash-mob jump** (`monster-ai-jump-and-separation.md`, Stage B) — `on_ground ==
 ##  false` for a pig/hen/wolf, resolved by `monster_view.resolve_state`. **No boss row exists or is planned**
 ##  (`bull_slam`/`rooster_leap` already cover the only airborne thing a boss does, through `MON_LEAP` above) —
 ##  see that function's own comment for what an idle boss falling actually draws instead.
@@ -962,7 +962,7 @@ const CIRCLE_RUNE_CORE_RATIO := 0.45
 ## **The triangle circle's geometry — integers on a 512 basis, not pre-divided ratios**
 ##  (`docs/design/circle-art.md` "the triangle circle's settled parameters", divided by 512 to land here;
 ##  the same numbers also live in `tools/pixel/draw_circle.py:128`, the asset side — see that file's own
-##  comment and `docs/plans/3.done/triangle-circle-to-game.md` "TBD" for why there are two copies).
+##  comment and `triangle-circle-to-game.md` "TBD" for why there are two copies).
 ## **Integers so the two equations stay readable and drivable**: `TRI_SOCKET_DIST + TRI_SOCKET_R == TRI_CANVAS_R`
 ##  and `TRI_SOCKET_R*2 == 288` (a ratio would hide that identity behind rounding).
 const TRI_CANVAS_R := 512
@@ -1613,7 +1613,7 @@ const RESEARCH_GEMS_FMT := "원석 %d"
 ##  across 864px puts four short lines in a field of parchment. Centred on the 960x540 viewport.
 const RESEARCH_RECT := Rect2(240, 70, 480, 400)
 
-# --- the run-end settlement screen (`docs/plans/3.done/run-end-settlement.md`) ---
+# --- the run-end settlement screen (`run-end-settlement.md`) ---
 ## **The whole 960x540 canvas, not a partial window.** Every other window in this file (`WINDOW_RECT`,
 ##  `PICK_RECT`, `RESEARCH_RECT`) leaves the world visible on purpose — this is the doc's own declared
 ##  exception: "the world is not visible behind it and the sim stops — the run is over, so there is nothing
@@ -1628,7 +1628,7 @@ const SETTLEMENT_EDGE_PX := 2.0
 const SETTLEMENT_PAD_PX := 48.0
 
 const SETTLEMENT_TITLE := "런 종료"
-## **The gate's own title** (`docs/plans/3.done/gate-ending-to-game.md`, Stage D) — a death and a clear must
+## **The gate's own title** (`gate-ending-to-game.md`, Stage D) — a death and a clear must
 ##  not read identically on the one screen this whole feature exists to produce. Nothing downstream reads the
 ##  string itself (`settlement_window._draw` only branches on the `cleared` bool), so it is this one constant.
 ##

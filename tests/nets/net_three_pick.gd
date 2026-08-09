@@ -1,5 +1,5 @@
 extends RefCounted
-## `src/actor/three_pick.gd` — the draw rule (`docs/plans/3.done/levelup-and-three-picks.md`, Stage C).
+## `src/actor/three_pick.gd` — the draw rule (`levelup-and-three-picks.md`, Stage C).
 
 const Glyph := preload("res://src/sim/glyph_defs.gd")
 const ThreePick := preload("res://src/actor/three_pick.gd")

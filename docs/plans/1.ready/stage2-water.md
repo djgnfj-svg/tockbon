@@ -265,12 +265,16 @@ while a pig or a hen in a flooded cistern reads as stage 1 leaking through the g
 and below, moves nothing and sleeps; **only the surface band stays awake, and that band does not grow much
 with width** (7 → 16 → 18 across an 8× width increase).
 
-> ⚠ **Read that table for what it is: a bowl that was poured and is still flattening — and at these widths it
-> never finishes.** `water.md` measured a 32-cell bowl stopping at 2,798 ticks and a **128-cell bowl still
-> going at 4,000 ticks (200 seconds)**, with volume conserved exactly. ⇒ **"18 awake" is not a transient. A
-> wide poured pool holds ~18 chunks awake indefinitely, at 1.5% of budget each, forever.**
-> **Ten such pools would be 15% of budget with nothing happening on screen**, and that is the shape of the
-> mistake this section exists to stop.
+> ⚠ **Read that table for what it is: a bowl that was poured and is still flattening.**
+> ~~At these widths it never finishes~~ — **that was re-measured and is false.** The same 128-cell bowl
+> **settles at 1,032 ticks (~52 seconds)**, volume conserved (`water.md`'s own box, driven by
+> `tools/stage/measure_water_rest.gd` and reproduced by two agents). The 32-cell bowl's 2,798 ticks stands.
+> ⇒ **"18 awake" is a transient after all — but a 52-second one.** A wide poured pool holds ~18 chunks awake
+> at 1.5% of budget each **for the better part of a minute**, not forever.
+> **The design conclusion does not change**: a minute of that per pool, with several pools, is still the
+> mistake this section exists to stop. **What changes is the argument** — it is "expensive for a long time",
+> not "never stops", and a doc that keeps the stronger claim after it was disproved is the thing this repo
+> treats as most expensive.
 
 ⇒ **The lake is not the problem — provided it never has to flatten.** That is the whole argument for
 authoring water flat (below), and **it is the single most load-bearing unmeasured claim in this doc**: a
@@ -318,26 +322,62 @@ Everything else must be **already at rest** when the player reaches it. Concrete
   budget. Nothing in the terrain competes with them
 - **Never two flood scenes in one room**
 
-### The prerequisite nobody has built — **`~` bakes water with zero water in it**
+### The prerequisite nobody has built — **`~` does not bake water at all: it bakes a hole, and it barks**
 
 `water.md` says water comes from **both** sources, and *"already on the map — lakes · rivers · groundwater,
 drawn together with the terrain"* is half of that. **The door exists and is wrong:**
 
 - `terrain_baker.CHAR_BY_MAT` maps `Mat.WATER → "~"` and `terrain_map_generated.gd:66` carries it in
   `MAP_CHARS`. **The character appears zero times in the map body** — it has never been used
-- `build_map_into` issues `cmd_fill` → `_fill_rect` → **`_write_cell`**, and `cell_grid.gd:930-932` sets
-  `_mat = WATER`, **`_flag = 0`, `_aux = 0`**
+- ~~`build_map_into` issues `cmd_fill` → `_fill_rect` → `_write_cell`, which sets `_mat = WATER`,
+  `_flag = 0`, `_aux = 0`~~
 
-⇒ **Paint a lake today and you get a lake with amount 0**: drawn as water, containing none. No jumping, no
-extinguishing, no flow — **and not one line of error.** `water.md` named this exact hazard from the other
-side (*"`_write_cell` zeroes `_flag` and `_aux` together ⇒ the water amount vanishes on the spot"*) and
-nobody has walked into it yet because nobody has painted a `~`.
+> **⚠ That mechanism is wrong. Corrected by driving it, not by reading it.**
+> The run **never reaches `_write_cell`**: `_valid_mat` refuses `Mat.WATER` at the **command boundary** and
+> **discards the whole run.**
+> ⇒ **You do not get water with amount 0. You get a hole** — the cells stay as they were (empty), so the
+> lake is simply absent from the terrain — **and it barks**, rather than failing silently.
+>
+> **Both halves of the old description were wrong in the same direction**: it said the failure was silent and
+> that the cells would be water. It is neither. The correction matters because **the fix is at a different
+> place** — the command boundary, not the cell writer — and because a bark is a much cheaper failure than the
+> silent one this section was written to warn about.
+
+⇒ **Paint a lake today and there is no lake**: a hole in the terrain where it should be, plus an error.
+`water.md` named a *related* hazard from the other side (*"`_write_cell` zeroes `_flag` and `_aux` together
+⇒ the water amount vanishes on the spot"*) — **that is a real property of `_write_cell`, but it is not what
+happens here, because control never gets that far.**
 
 ⇒ **[mine] This is stage 2's first build item, before a single tile is painted.** It is small — a fill that
 routes `Mat.WATER` through `_write_water` at `WATER_MAX` instead of `_write_cell` — and it is what makes the
-"authored at rest" rule above possible at all. **It is also the cheapest net in this doc**: build the map,
-`step()` once, assert `active_chunk_count() == 0` **and** `aux_at` at a pool cell is `WATER_MAX`.
-*Inversion: route it back through `_write_cell` and both go red.*
+"authored at rest" rule above possible at all. It is small — but **it is not the cheap net this doc claimed.**
+
+> **⚠ The check proposed here is passed by the bug it was written to catch. Measured.**
+>
+> The proposal was: build the map, `step()` once, assert `active_chunk_count() == 0` and `aux_at` is
+> `WATER_MAX`. **Two things break it:**
+>
+> 1. **`== 0` after one `step()` is impossible for any map.** Placing cells dirties chunks and `_chunk_flip`
+>    runs at **tick start**, so tick 1 is always awake. **The earliest honest assertion is after two**
+> 2. **The sleep half is green on a map holding no water at all.** Baking terrain wakes chunks too, and bare
+>    terrain also sleeps by tick 2 — so with `~` producing nothing (a hole, see above), *"it is asleep"* was
+>    satisfied by an empty map. **It was caught only by accident**: shrinking the test map from 300 tiles to
+>    64 flipped it from red to green, and that flip is what exposed it
+>
+> ⇒ **The `aux_at == WATER_MAX` half is the only half that measures anything**, and it is the half that
+> would have been dropped as redundant if the sleep assertion had looked convincing.
+> **A cheap check that measures the wrong thing is worse than no check** — it is the "coverage that looks
+> like coverage" CLAUDE.md keeps naming, and here it appeared in the very paragraph proposing it.
+>
+> *Inversion that does bite: route the fill back through `_write_cell` and `aux_at` goes red.*
+
+> **⚠ And `WATER_MAX` is load-bearing, not a tidy default. This changes the design above.**
+> **Authored water below 255 never sleeps at all.** A cell at 32 sitting over a cell at 32 has
+> `space = 223`, so `_water_fall` keeps moving it: **22 chunks awake at tick 2, and forever.**
+> ⇒ The *"pools are authored flat and full"* rule earlier reads as though **flat** were the operative word
+> and any uniform depth would do. **It would not.** *"Authored pools are free"* holds **only at
+> `WATER_MAX`** — author a uniform shallow pool and you have built exactly the permanently-awake chunk band
+> §6 exists to forbid, while it *looks* like it followed the rule.
 
 ### What it costs to build, in this repo's units
 
@@ -391,7 +431,11 @@ routes `Mat.WATER` through `_write_water` at `WATER_MAX` instead of `_write_cell
 
 ## Acceptance
 
-1. **A painted pool is full and asleep** — `aux_at` is `WATER_MAX`, `active_chunk_count()` is 0 after one `step()`
+1. **A painted pool is full and asleep** — `aux_at` is `WATER_MAX`, and `active_chunk_count()` is 0
+   **after two `step()`s, not one.** ~~after one `step()`~~ was impossible as worded: placing cells dirties
+   chunks and `_chunk_flip` runs at tick start, so **tick 1 is always awake for any map.**
+   **The `aux_at` half is the load-bearing one** — the sleep half passes on a map with no water in it
+   (see §6's box). Assert the amount, and treat the sleep count as a supporting check rather than the point.
 2. **The dry shaft cannot be climbed** — driven, at jump budget 0 **and** 1 (the double jump must not open it)
 3. **The water rune opens it** — driven: N hits, then a character climbs out. **N is measured, not assumed**
 4. **The stage rolls end to end** — spawn to gate with no soft lock, driven, the shape of `net_tables`' stage-1 reachability check
@@ -434,15 +478,32 @@ routes `Mat.WATER` through `_write_water` at `WATER_MAX` instead of `_write_cell
 
 Listed so it is flagged rather than found.
 
-1. **That authored-flat water sleeps.** §6. Reasoning from `WATER_MIN_DIFF`, not a measurement, and **the
-   whole cost argument rests on it.** Measure it first
+0. **The check this doc called its cheapest is passed by the bug it was written to catch.** Measured.
+   The `~` prerequisite's net asserts *"a painted pool is asleep"* — and **baking bare terrain also sleeps by
+   tick 2**, so with `~` producing a hole rather than water, the assertion was **green on a map holding no
+   water at all.** It surfaced only by accident: shrinking the test map 300 → 64 tiles flipped it red → green,
+   and that flip is what gave it away. ⇒ **A cheap check that measures the wrong thing is worse than no
+   check** — it buys the feeling of coverage and spends the attention that would have found the bug.
+   **This entry is first because it is about this doc's own judgement, not about water**: the paragraph that
+   proposed the check called it cheap *in the same breath*, and cheapness is exactly what stopped it being
+   examined.
+1. ~~**That authored-flat water sleeps.**~~ **Measured, and it is narrower than the doc assumed:**
+   it sleeps **only at `WATER_MAX`.** Authored water below 255 never sleeps — a cell at 32 over a cell at 32
+   has `space = 223`, `_water_fall` keeps moving it, **22 chunks awake at tick 2 and forever.**
+   ⇒ The cost argument survives, but **"author it flat" is not the rule — "author it flat *and full*" is**,
+   and a uniform shallow pool looks like it obeyed while doing the opposite. §6 is corrected
 2. **The 168%-of-budget figure.** Headless, and it disagrees with the real game's 60 FPS. `water.md` records
    the disagreement and nobody has explained it
 3. **"Six water-rune hits fill the shaft."** `_write_water` overwrites rather than adds, so the arithmetic's
    premise is wrong. Order of magnitude only
 4. **"Two pours exceed the cap."** Inference from disjoint chunk sets. Never run
 5. **The 18-awake-chunks table and its 41µs per chunk** are `water.md`'s, copied. **Not re-measured here**,
-   and the cap in force when they were taken is not recorded in that doc
+   and the cap in force when they were taken is not recorded in that doc.
+   **And copying from `water.md` is now demonstrably risky**: that doc's 128-cell bowl figure was re-measured
+   tonight and came back **the opposite** of what it said (never settles → settles at 1,032 ticks), because
+   the only check watching it had gone blind. **Its flat-floor spread numbers — `424 @ t4,000`, rest width
+   ~860 — are from the same era and have NOT been re-measured.** This doc quotes them in §6. Treat every
+   number inherited from `water.md` as *last measured*, not as *true*
 6. **Everything about how stage 2 *feels*.** Every claim about the shaft reading as a wall, or the climb
    reading as a beat, is design reasoning. **Only the user closes those**
 

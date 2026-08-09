@@ -1,7 +1,7 @@
 extends RefCounted
 ## Pairwise horizontal separation — pure, over plain values. **`BossAi.advance`'s own precedent, verbatim**:
 ## a pure function over plain values, not over `Monster`, so a net drives it with no world and the inversion
-## is trivial (`docs/plans/3.done/monster-ai-jump-and-separation.md`, Stage C).
+## is trivial (`monster-ai-jump-and-separation.md`, Stage C).
 ##
 ## **Horizontal only** — vertical separation fights gravity and grounding every frame, and mobs are not
 ## solid to each other in the first place, only *separated* (the plan's own Bounds).

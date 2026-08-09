@@ -97,7 +97,7 @@ const MONSTER_KEYS: Dictionary = {
 	# **B/C, not R** — R is already `reset_requested`. `stage1-bosses.md` stage A.
 	KEY_B: MonsterDefs.KIND_BULL, KEY_C: MonsterDefs.KIND_ROOSTER,
 	# **V, because the obvious letter is movement.** The wolf now has map placement too
-	#  (`docs/plans/3.done/monster-placement-stage1.md`) — this key stays only as the debug door every
+	#  (`monster-placement-stage1.md`) — this key stays only as the debug door every
 	#  other kind already has (`monsters-minimum`'s own reason for M/N), not the wolf's sole way on screen.
 	KEY_V: MonsterDefs.KIND_WOLF,
 }

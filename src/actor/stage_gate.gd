@@ -1,5 +1,5 @@
 extends RefCounted
-## The gate — stage 1's ending (`docs/design/gate-ending.md`, `docs/plans/3.done/gate-ending-to-game.md`).
+## The gate — stage 1's ending (`docs/design/gate-ending.md`, `gate-ending-to-game.md`).
 ## **Geometry and one predicate. No screen, no scene, no `Progress`.**
 ##
 ## **`src/actor/`, not `src/stage/`.** `net_layers.RULES` forbids `src/actor/` from reaching `src/view/` or

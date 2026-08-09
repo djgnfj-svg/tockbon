@@ -1,6 +1,6 @@
 extends RefCounted
 ## `src/actor/progress.gd` and its award integration in `world_step.gd`'s death loop
-## (`docs/plans/3.done/levelup-and-three-picks.md`, Stage B).
+## (`levelup-and-three-picks.md`, Stage B).
 ##
 ## **Everything here that touches `WorldStep` builds a bare pig kill by writing `hp = 0` directly and running
 ## one tick** — combat itself (does a bolt connect, does invulnerability hold) is already `net_damage`'s and
@@ -570,7 +570,7 @@ func _reset_reverts_ownership_to_the_starting_kit_not_to_empty(t) -> void:
 
 
 # ══════════════════════════════════════════════════════════════════
-#  `docs/plans/3.done/run-end-settlement.md`, Stage A — the settlement screen's three numbers
+#  `run-end-settlement.md`, Stage A — the settlement screen's three numbers
 # ══════════════════════════════════════════════════════════════════
 
 ## `run_ticks` must move at 20Hz (once per tick), not at 60Hz (once per frame) — the same "drive by frame

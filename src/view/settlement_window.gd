@@ -1,5 +1,5 @@
 extends Control
-## The run-end settlement screen — `docs/plans/3.done/run-end-settlement.md`. The one screen in this game
+## The run-end settlement screen — `run-end-settlement.md`. The one screen in this game
 ## allowed to stop the world: "the world is not visible behind it and the sim stops — the run is over, so
 ## there is nothing left to watch" (that doc's own Screen section). `circle_window.gd`'s own header narrows
 ## its repo-wide "no full-screen `Control` is laid down" claim to "while the run is live" for exactly this

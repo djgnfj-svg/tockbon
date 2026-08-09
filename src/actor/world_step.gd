@@ -24,7 +24,7 @@ const Progress := preload("res://src/actor/progress.gd")
 ## `stage1-bosses.md` Stage C - only `BossAi.carve_r` is read here (the charge impact's radius). The boss
 ## pattern machine itself stays owned by `monster.gd`/`boss_ai.gd`; this file only reacts to its outcome.
 const BossAi := preload("res://src/actor/boss_ai.gd")
-## `docs/plans/3.done/monster-placement-stage1.md`, Stages A+B. Resolves `(tx, kind)` rows to real
+## `monster-placement-stage1.md`, Stages A+B. Resolves `(tx, kind)` rows to real
 ## monsters as the player nears them. `src/actor/` only — the table itself lives in `src/stage/` and is
 ## handed down through `set_placement()`, never preloaded from here (`net_layers`).
 const MonsterPlacement := preload("res://src/actor/monster_placement.gd")
@@ -219,7 +219,7 @@ func frame(dt: float, axis: float, jump: bool, jump_held: bool) -> bool:
 			_died_x.append(dying.x)
 			_died_y.append(dying.y)
 			_died_kind.append(dying.kind)
-			# `docs/plans/3.done/monster-placement-stage1.md` Stage B — spends the row so a cleared
+			# `monster-placement-stage1.md` Stage B — spends the row so a cleared
 			#  stretch stays cleared. **Not every dead monster came from a row** (the debug-key spawns
 			#  have none) — `on_monster_died`'s own `Dictionary.has()` guard makes a miss silent.
 			_placement.on_monster_died(dying.id)
@@ -238,7 +238,7 @@ func frame(dt: float, axis: float, jump: bool, jump_held: bool) -> bool:
 			#  water is wired to it (`stage.gd._room1_reward_status()` has the full account of that gap), but
 			#  `boss_died(KIND_ROOSTER)` itself is no longer unread: `stage.gd`'s `_on_ticked()` wall latch,
 			#  `gate_view._process()`'s `visible`, and `_sync_settlement()`'s `at_gate` term all read it now
-			#  (`docs/plans/3.done/gate-ending-to-game.md`).
+			#  (`gate-ending-to-game.md`).
 			if BossAi.has_pattern(dying.kind):
 				_progress.set_boss_reward_pending(dying.kind)
 				# **The permanent drop, on the same event and by the same gate**
@@ -249,14 +249,14 @@ func frame(dt: float, axis: float, jump: bool, jump_held: bool) -> bool:
 				#  is the only place a level is ever crossed.
 				_progress.add_boss_gems()
 			_monsters.remove_at(idx)
-		# `docs/plans/3.done/monster-placement-stage1.md` Stage B — the wake scan. **After the death
+		# `monster-placement-stage1.md` Stage B — the wake scan. **After the death
 		#  removals above**, so a slot a death just freed can be reused by a row waking the same tick, and
 		#  **before `_char_hit_by_monsters()` below**, so a mob that wakes overlapping the player deals
 		#  contact damage on the same frame it appears (the doc's own Bounds: "a mob wakes inside the
 		#  player: contact damage on the wake frame"). **On the tick, not the 60Hz loop** — `boss_target_x`
 		#  above is this tick's own snapshot, the same one the pattern machine just used.
 		_placement.wake_scan(_grid, boss_target_x, Callable(self, &"spawn_monster"))
-		# `docs/plans/3.done/monster-placement-stage1.md` Stage D — every live monster's own sleep state,
+		# `monster-placement-stage1.md` Stage D — every live monster's own sleep state,
 		#  once per tick. **After `wake_scan`**, so a monster that just woke this tick gets classified too
 		#  the tick it is born. **It materialises at `MATERIALIZE_PX`(720), which is *outside*
 		#  `STIR_ENTER_PX`(420), so it reads `asleep = true` on that very first pass** — that is
@@ -349,7 +349,7 @@ func frame(dt: float, axis: float, jump: bool, jump_held: bool) -> bool:
 	#  `box_free`)** — the split `monster_separation.gd`'s own header names as the whole order-independence
 	#  argument: phase 2's refusal depends only on that one mob's own corrected box, never on any other mob
 	#  or on iteration order, so applying the phase-1 result in any order gives the same outcome.
-	# **Sleeping monsters are excluded, on both sides** (`docs/plans/3.done/monster-placement-stage1.md`
+	# **Sleeping monsters are excluded, on both sides** (`monster-placement-stage1.md`
 	#  Stage D — the judgment call the plan left to this builder). Separation is a form of movement, and
 	#  the sleep contract is "no movement while asleep" (`Monster.step()`'s own gate, above) — nudging a
 	#  sleeping mob's `x` here would be a second, uncontrolled way to move one, and would break "the pig
@@ -659,13 +659,13 @@ func reset() -> void:
 	# **Progress reverts here too, in this same one place** — not a separate call from `stage.gd`, or the day
 	#  comes when only one of the two reset paths gets touched and R quietly stops reverting it.
 	_progress.reset()
-	# `docs/plans/3.done/monster-placement-stage1.md` Stage B — re-arms every row (dormant, unspent),
+	# `monster-placement-stage1.md` Stage B — re-arms every row (dormant, unspent),
 	#  the same "revert every counter" reasoning as the bolts above. Does not touch which table is set
 	#  (`set_placement()`'s own comment) — R must not un-place the room it just rebuilt.
 	_placement.reset()
 
 
-## `docs/plans/3.done/monster-placement-stage1.md` Stage C's wiring line calls this — from
+## `monster-placement-stage1.md` Stage C's wiring line calls this — from
 ## `stage.gd._build_room()`, not `_ready()` (`net_gate._wired_root()` never runs `_ready()`, so a line
 ## there would be invisible to every net in this repo; that file's own comment names the trap).
 ## **Only ever answers "which room"** — re-arming rows to unspent is `reset()`'s job above, not this

@@ -475,7 +475,7 @@ func _the_gate_leaves_and_being_downed_comes_back(t) -> void:
 	root.call("_interact")
 	t.ok(not bool(root.get("_in_town")), "무대에서 멀쩡할 때 E는 아무 일도 안 한다")
 
-	# **Downed: the door moved** (`docs/plans/3.done/run-end-settlement.md`). E while downed no longer goes
+	# **Downed: the door moved** (`run-end-settlement.md`). E while downed no longer goes
 	#  home by itself — the settlement screen opens on its own instead, and now *its* button is what closes
 	#  the run. This is the only check in the suite that measures the whole loop actually closing end to end:
 	#  downed -> the panel opens -> the button -> the town.
@@ -532,7 +532,7 @@ func _wired_root(t) -> Node:
 			["_sky", "SkyBackground"],
 			# `_interact()` reaches the research window now, and `_build_room()` closes it.
 			["_research_window", "HUD/ResearchWindow"],
-			# **`_settlement`** (`docs/plans/3.done/run-end-settlement.md`, Stage D) — `reset_stage()`'s own
+			# **`_settlement`** (`run-end-settlement.md`, Stage D) — `reset_stage()`'s own
 			#  last line below now calls `_settlement.close()`, so every check in this file dies on a null
 			#  before measuring anything without this.
 			["_settlement", "HUD/SettlementWindow"],

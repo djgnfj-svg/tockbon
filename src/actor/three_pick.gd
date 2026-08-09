@@ -1,5 +1,5 @@
 extends RefCounted
-## The three-pick draw rule (`docs/plans/3.done/levelup-and-three-picks.md`, Stage C).
+## The three-pick draw rule (`levelup-and-three-picks.md`, Stage C).
 ##
 ## **A pure function, rng-injected** — the same idiom as `stage.camera_center` and `monster_view.hp_bar_rect`:
 ##  a value can be produced and checked with no scene and no character, so the nets call it directly, headless

@@ -36,7 +36,7 @@ var xp := 0
 var level := 0
 var money := 0
 
-## **The run-end settlement screen's three numbers** (`docs/plans/3.done/run-end-settlement.md`, Stage A).
+## **The run-end settlement screen's three numbers** (`run-end-settlement.md`, Stage A).
 ##  `run_ticks` moves once per 20Hz tick (`advance_tick()`, called from `WorldStep.frame()`'s tick branch —
 ##  not once per 60Hz frame, or play time would read 3x). `damage_dealt` is the sum of `Monster.take_dealt()`
 ##  across both hp-removal paths (direct hit/blast and `_burn`) — see that file's own header for why "one

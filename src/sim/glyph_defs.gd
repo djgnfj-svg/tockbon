@@ -25,7 +25,7 @@ const Tuning := preload("res://src/sim/sim_tuning.gd")
 const GLYPH_NONE := 0
 
 ## The three kinds of glyph. **This distinction is the entire pipeline** (GDD, "Glyph execution rules")
-##  plus the one addition Stage A opens (`docs/plans/3.done/levelup-and-three-picks.md`, "Cost").
+##  plus the one addition Stage A opens (`levelup-and-three-picks.md`, "Cost").
 ##  · SPAWN    creates bolts -> **hands the remaining list to the new bolts**
 ##  · TERMINAL ends in place -> no bolt is created, so **the next glyph continues at the same spot**
 ##  · MODIFY   **touches neither trajectory nor list — it only multiplies `power_pct` into the bolt carrying

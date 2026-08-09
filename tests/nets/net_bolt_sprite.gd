@@ -3,7 +3,7 @@ extends RefCounted
 ## `net_monster_sprite` (monster).
 ##
 ## **Why it only exists now — the plan wrote down "this could be written and was not" and moved on.**
-##  The section "the nets measure none of this change" in `docs/plans/3.done/bolt-head-sprite.md`
+##  The section "the nets measure none of this change" in `bolt-head-sprite.md`
 ##  **named all three checks and then ended with "none of the three are written yet".**
 ##  => Until now the bolt head sprite had only **one measurement taken by a throwaway script**, and that
 ##  does not stay in the repo.

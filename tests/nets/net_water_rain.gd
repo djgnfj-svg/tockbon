@@ -74,7 +74,7 @@ func _water_scan(g: CellGrid, x0: int, y0: int, x1: int, y1: int) -> Array:
 #
 # **From here on `water_source.gd` is run directly — it is not reimplemented here.**
 #  The reason that file lives in `src/sim/` was "the nets measure the very code that ships"
-#  (`docs/plans/2.active/water-jump-and-escape.md`, "where to put it"). If this net rewrote the pouring
+#  (`water-jump-and-escape.md`, "where to put it"). If this net rewrote the pouring
 #  arithmetic itself, that reason would be void, and green here would mean nobody measured the game's water speed.
 #
 # **The real stage 1 pit (1) is used.** `Stage.build_terrain_into()` stands up the real terrain

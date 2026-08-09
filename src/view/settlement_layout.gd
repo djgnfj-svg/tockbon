@@ -6,8 +6,8 @@ extends RefCounted
 ## reason this shape exists at all: `Control._draw()` cannot be measured headless, so judgment is pushed into
 ## a file the nets *can* call directly.
 ##
-## **`time_text` and `count_value` live here too, not in the window node** — `docs/plans/3.done/
-## run-end-settlement.md`'s own Stage B: "`count_value` is where the animation lives, not in the node — a pure
+## **`time_text` and `count_value` live here too, not in the window node** —
+## `run-end-settlement.md`'s own Stage B: "`count_value` is where the animation lives, not in the node — a pure
 ## `(total, frames) -> int` curve that a net can walk end to end." Both are ordinary `(int) -> ...` functions,
 ## nothing Control-shaped about either, so keeping them beside the rects rather than in `settlement_window.gd`
 ## means every acceptance about *what* the screen shows (not how it is drawn) is measurable without a scene.

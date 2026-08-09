@@ -1,5 +1,5 @@
 extends RefCounted
-## The character takes damage — `docs/plans/3.done/character-damage-minimum.md`.
+## The character takes damage — `character-damage-minimum.md`.
 ##
 ## **All six stages are in here** — tick order (0), health / direct hit / blast / invulnerability (2), fire over time (3),
 ##  recoil (5), knockdown (6). **Acceptance 4 (does a hit push me) was deleted along with the feature** — there is a marker in its place below.

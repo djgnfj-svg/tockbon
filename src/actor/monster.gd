@@ -88,13 +88,13 @@ var _grounded_recently := false
 ##  `character._burn_acc`.
 var _burn_acc := 0.0
 
-## **Hp actually removed since the last drain, summed across both write sites** (`docs/plans/3.done/
-##  run-end-settlement.md`, Stage A). Fed only by `_apply_damage()` below — the settlement screen's damage
+## **Hp actually removed since the last drain, summed across both write sites**
+##  (`run-end-settlement.md`, Stage A). Fed only by `_apply_damage()` below — the settlement screen's damage
 ##  figure needs "hp removed from a monster", and before this existed that summed only the direct-hit/blast
 ##  path (`on_tick`'s own write): a kill by fire alone, never landing a direct hit, read as 0 damage dealt.
 var _dealt_acc := 0
 
-## **Sleep** (`docs/plans/3.done/monster-placement-stage1.md`, Stage D) — far from the player, `step()`
+## **Sleep** (`monster-placement-stage1.md`, Stage D) — far from the player, `step()`
 ## below skips its own movement/collision block and runs only `_burn`. Updated **once per 20Hz tick** by
 ## `world_step` (`MonsterPlacement.stays_active`'s hysteresis, the `STIR_ENTER_PX`/`STIR_EXIT_PX` band — the wake
 ## scan already uses), never touched at 60Hz — the same clock discipline `pattern_left`/`invuln_left`

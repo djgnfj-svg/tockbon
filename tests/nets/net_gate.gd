@@ -1,6 +1,6 @@
 extends RefCounted
 ## The gate (ending) — `src/actor/stage_gate.gd`, `src/view/gate_view.gd`, and `stage.gd`'s wall latch and
-## ending term (`docs/plans/3.done/gate-ending-to-game.md`, Stages A-D).
+## ending term (`gate-ending-to-game.md`, Stages A-D).
 
 const StageGate := preload("res://src/actor/stage_gate.gd")
 const Stage := preload("res://src/stage/stage.gd")
@@ -17,7 +17,7 @@ const Progress := preload("res://src/actor/progress.gd")
 
 const STAGE_SCENE := "res://src/stage/stage.tscn"
 
-## Room ③'s interior column range (`docs/plans/3.done/gate-ending-to-game.md`'s own "Confirmed" table:
+## Room ③'s interior column range (`gate-ending-to-game.md`'s own "Confirmed" table:
 ## "Room ③ interior x347-366", **now x247-266**). Only used here, to place a character for the camera-window
 ## check below — `stage_gate.gd` itself knows nothing about the room's own bounds, only the seat and the wall.
 ##

@@ -1,6 +1,6 @@
 extends RefCounted
 ## `src/view/pick_layout.gd` — the three-pick window's coordinates
-## (`docs/plans/3.done/levelup-and-three-picks.md`, Stage D).
+## (`levelup-and-three-picks.md`, Stage D).
 ##
 ## **`circle_window.gd`'s own header pins the reason this file exists at all**: `_draw()` used to be
 ## unmeasurable headless — not because of a null font (checked directly, harness-manager: a bare `Control`
@@ -591,8 +591,8 @@ func _no_pushed_out_glyph_is_stashed_anywhere(t) -> void:
 		"res://src/actor/progress.gd": ["_drawn", "_owned_runes", "_reward_pending", "_unlocked"],
 		"res://src/actor/spell_circle.gd": ["_layers", "_runes"],
 		"res://src/actor/world_step.gd": ["_died_kind", "_died_x", "_died_y", "_monsters", "_queue"],
-		# **`monster_placement.gd` added here, deliberately** (`docs/plans/3.done/
-		#  monster-placement-stage1.md`, Stages A+B) — placement bookkeeping keyed by row index (which
+		# **`monster_placement.gd` added here, deliberately** (`monster-placement-stage1.md`,
+		#  Stages A+B) — placement bookkeeping keyed by row index (which
 		#  row is spent, which row's monster died, the wake hysteresis bit), the exact shape
 		#  `world_step.gd`'s own `_monsters`/`_died_kind` entries one line up already are. Not a record of
 		#  a glyph that left a spell layer, which is what this file's no-inventory check exists to catch.

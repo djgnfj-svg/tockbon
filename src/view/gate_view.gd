@@ -1,6 +1,6 @@
 extends Node2D
 ## The gate's arch on screen — stage 1's ending (`docs/design/gate-ending.md`,
-## `docs/plans/3.done/gate-ending-to-game.md`, Stage C).
+## `gate-ending-to-game.md`, Stage C).
 ##
 ## **It touches the screen only.** Whether the gate is open at all is `Progress.boss_died()`; whether the
 ##  player is standing at it is `StageGate.at()` — this file reads the first to decide `visible` and draws

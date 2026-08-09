@@ -49,6 +49,9 @@ const SYN_TITLE := "합성 스테이지 클리어"
 ## The column the grid is probed at — mid-map, so it is inside every room's own width.
 const PROBE_TX := 150
 
+## A width that is **not** stage 1's, for the "width is per-stage" check.
+const NARROW_W := 100
+
 
 ## **A map script that is not either real one.** `stage_defs.map_rows()` calls `rows()` on whatever the row's
 ## `map` field holds, so a synthetic stage needs nothing but this shape — which is itself the claim being
@@ -84,6 +87,7 @@ func run(t) -> void:
 	_stage_ones_row_is_the_stage_that_used_to_be_scattered(t)
 	_an_unknown_room_barks_and_falls_back_to_the_town(t)
 	_both_map_scripts_answer_the_same_accessor(t)
+	_a_maps_width_is_its_own_and_its_height_is_not(t)
 	await _apply_room_reads_every_field_out_of_the_row(t)
 	await _the_room_the_shell_builds_comes_from_the_stage_id(t)
 	await _the_panel_paints_the_title_the_room_carried(t)
@@ -175,6 +179,57 @@ func _both_map_scripts_answer_the_same_accessor(t) -> void:
 	t.eq(town.size(), TerrainMap.MAP_H, "마을 지도가 rows()로 나온다 (%d줄)" % town.size())
 	t.eq(town, TownMap.rows(), "그리고 그건 마을 지도가 스스로 만드는 바로 그 줄들이다")
 	t.eq(TerrainMap.rows(), TerrainMap.MAP, "구운 지도의 rows()는 MAP 그대로다")
+
+
+## **The one decision this feature was given, driven as a value: width is per-stage, height is global.**
+##
+## `build_map_into()` used to compare every row against `MAP_W` — stage 1's own re-export — so a stage 2 of
+## any other width would have been refused with nothing but a `push_error` to say why. It now takes the
+## width from the map it was handed. **The height guard is deliberately left alone**: 48 tiles is what the
+## town's room, the background's depth banding and the placement floor row all hang off, so a map of another
+## height is refused **on purpose**, and that refusal is measured here rather than assumed from reading it.
+func _a_maps_width_is_its_own_and_its_height_is_not(t) -> void:
+	var mid_cy := 4
+	var narrow: Array[String] = []
+	for _ty in TerrainMap.MAP_H:
+		narrow.append("S".repeat(NARROW_W))
+	var g := CellGrid.new()
+	Stage.build_map_into(g, narrow, {"S": Mat.STONE})
+	t.eq(g.mat_at((NARROW_W / 2) * Tuning.TILE_CELLS + 4, mid_cy), Mat.STONE,
+		"스테이지1보다 좁은 지도가 짖지 않고 그대로 지어진다 (너비는 스테이지마다 다르다)")
+	t.eq(g.mat_at((NARROW_W + 10) * Tuning.TILE_CELLS + 4, mid_cy), Mat.EMPTY,
+		"그리고 그 지도가 없는 열은 비어 있다 (스테이지1 너비까지 늘려 짓지 않는다)")
+
+	# **Ragged rows still bark** — the width became the map's own, not "whatever each row felt like".
+	var ragged := narrow.duplicate()
+	ragged[1] = "S".repeat(NARROW_W - 1)
+	t.expect_error("MAP row 1 is %d wide" % (NARROW_W - 1))
+	var g2 := CellGrid.new()
+	Stage.build_map_into(g2, ragged, {"S": Mat.STONE})
+	t.eq(g2.mat_at(4, 5 * Tuning.TILE_CELLS + 4), Mat.EMPTY,
+		"줄마다 너비가 다르면 짖고 거기서 멈춘다")
+
+	# **Wider than the grid barks too.** It used to be clipped in silence, which reads on screen as terrain
+	#  full of holes — the baker already refuses to write such a map, and now the builder refuses to build one.
+	var too_wide: Array[String] = []
+	var over_w := CellGrid.W / Tuning.TILE_CELLS + 1
+	for _ty in TerrainMap.MAP_H:
+		too_wide.append("S".repeat(over_w))
+	t.expect_error("MAP is %d tiles wide" % over_w)
+	var g3 := CellGrid.new()
+	Stage.build_map_into(g3, too_wide, {"S": Mat.STONE})
+	t.eq(g3.mat_at(4, mid_cy), Mat.EMPTY, "격자보다 넓은 지도는 짖고 한 칸도 안 짓는다")
+
+	# **The height is global and this is the refusal.** A stage of another height is not a thing this build
+	#  can hold — see `build_map_into`'s own comment for what has to be answered first.
+	var short_map: Array[String] = []
+	for _ty in TerrainMap.MAP_H - 1:
+		short_map.append("S".repeat(NARROW_W))
+	t.expect_error("MAP has %d rows" % (TerrainMap.MAP_H - 1))
+	var g4 := CellGrid.new()
+	Stage.build_map_into(g4, short_map, {"S": Mat.STONE})
+	t.eq(g4.mat_at(4, mid_cy), Mat.EMPTY,
+		"높이가 다른 지도는 짖고 한 칸도 안 짓는다 (높이는 방마다 다르지 않다 — 정해진 것이다)")
 
 
 # ══════════════════════════════════════════════════════════════════

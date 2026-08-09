@@ -1,5 +1,5 @@
 extends RefCounted
-## Stage 1's monster placement table — `docs/plans/3.done/monster-placement-stage1.md`, Stage A, re-authored
+## Stage 1's monster placement table — `monster-placement-stage1.md`, Stage A, re-authored
 ## for `left-run-clumps-and-platforms.md` (the left run cut by 100 columns, the even
 ## sprinkle replaced by 3 clumps).
 ## `(tx, kind)` rows only. **`y` is never written down** — `MonsterPlacement` (`src/actor/`) finds the

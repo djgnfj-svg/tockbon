@@ -13,7 +13,7 @@ extends Control
 ##  Being able to shoot from outside is the evidence for "the world does not stop" (design acceptance 4).
 ##   That is why **no full-screen `Control` is laid down while the run is live** — the moment the screen is
 ##   covered, `IGNORE` or `STOP` alike, that evidence disappears or firing dies.
-##  **The one declared exception is `settlement_window.gd`** (`docs/plans/3.done/run-end-settlement.md`) — it
+##  **The one declared exception is `settlement_window.gd`** (`run-end-settlement.md`) — it
 ##   covers the whole 960x540 canvas and stops the world outright, and it is safe only because it exists
 ##   solely once the run is already over: there is nothing left to shoot. This sentence used to claim no
 ##   exception existed at all; that claim is dead, and this doc is where it died.
