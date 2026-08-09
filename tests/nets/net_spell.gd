@@ -695,16 +695,33 @@ func _spread_makes_eight(t) -> void:
 	t.eq(spots.size(), alive, "살아남은 탄이 서로 다른 칸으로 흩어졌다")
 
 	# **The small ones are weak** — speed comes from the generation table (drag range splits right here).
-	# A newborn bolt **advances once on the very tick it is born** (`_spread_advances_on_birth_tick` below)
-	#  => the observed value has already taken drag once and is 2-11% below the table value. That is why it is measured as a band.
+	# A newborn bolt **advances once on the very tick it is born** (`_spread_advances_on_birth_tick` below),
+	#  so the observed value has already taken one tick of drag **and** one tick of gravity.
+	#
+	# **The band is derived from those two constants, not from a percentage.** It used to be
+	#  `got2 <= want2` above and `70%` of `want2` below, and **the upper half was exact by coincidence**:
+	#  one tick costs `speed_fp x (1 - DRAG)` and gravity adds a flat `GRAVITY_FP`, and those two are **equal at
+	#  exactly speed 8** (2048 x 1/16 = 128). At generation 1's old 8 the downward bolt landed on `want2` to the
+	#  unit; the moment `speed` went to 6 the same bolt came out **faster than its own table value** and this
+	#  check went red for a trajectory that was entirely correct — below terminal fall speed (8 cells/tick) a
+	#  falling bolt is supposed to accelerate. The percentage below was nearly as tight for the opposite reason:
+	#  gravity's contribution is **flat**, so its share grows as `speed` falls, and the upward bolt sat 14.6%
+	#  under the table value against a floor of 16.3%.
+	# => Both ends now say what the sim actually does, and they follow `speed` down on their own:
+	#      fastest  the downward bolt = `speed_fp` damped once, plus one tick of gravity
+	#      slowest  the upward bolt   = `speed_fp` damped once, minus one tick of gravity  (met **exactly**)
 	var want := Tuning.speed_cells(1) << SpellSim.FP_SHIFT
-	var want2 := want * want
+	var damped := want * Tuning.DRAG_NUM / Tuning.DRAG_DEN
+	var hi := damped + Tuning.GRAVITY_FP
+	var lo := damped - Tuning.GRAVITY_FP
 	var in_band := true
 	for i in alive:
 		var got2: int = vx[i] * vx[i] + vy[i] * vy[i]
-		if got2 > want2 or got2 * 100 < want2 * 70:
+		if got2 > hi * hi or got2 < lo * lo:
 			in_band = false
-	t.ok(in_band, "확산 탄의 속도가 세대 1 값(%d셀/틱)에서 나온다" % Tuning.speed_cells(1))
+	t.ok(in_band,
+		"확산 탄의 속도가 세대 1 값(%d셀/틱)에서 나온다 (한 틱 감쇠 %d에 중력 ±%d, 즉 %d~%d)"
+			% [Tuning.speed_cells(1), damped, Tuning.GRAVITY_FP, lo, hi])
 	t.ok(Tuning.speed_cells(1) < Tuning.speed_cells(0),
 		"세대 1이 세대 0보다 느리다 (%d < %d)" % [Tuning.speed_cells(1), Tuning.speed_cells(0)])
 

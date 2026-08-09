@@ -1270,6 +1270,16 @@ func _water_disc_fills_without_wiping(t) -> void:
 ## **Fire the water rune and water appears; fire another rune and it doesn't.**
 ##  **Measuring the other side is the point** — measuring only "water appears" also passes an implementation
 ##   where **every impact makes water**, and then the rune is no longer an axis.
+##
+## **The scan window is read off the impact, not written down.** It used to be the fixed rectangle
+##  `(380,180)-(420,220)`, and `speed` 20 -> 12 walked the impact point straight out of it: the bolt is fired
+##  horizontally across 100 cells, so **fewer cells per tick means more ticks in the air means a longer fall**,
+##  and the impact row drops well past `cy 220`. The main branch went red — but **look at which way the negative
+##  control would have gone.** Its `total == 0` would have stayed green while measuring nothing at all, because
+##  the window no longer contained the impact point at all. That is the exact shape CLAUDE.md names ("a loop
+##  whose condition is false from the start"), and a constant that has to be re-derived every time `speed` moves
+##  is the thing that produces it. => The window is now **the water disc's own bounding box, centred on the cell
+##  the impact was notified at**, which is what the label "at the impact point" says.
 func _water_rune_makes_water(t) -> void:
 	for element in Tuning.ELEM_ALL:
 		var g := CellGrid.new()
@@ -1279,14 +1289,27 @@ func _water_rune_makes_water(t) -> void:
 		t.ok(spell.fire(SpellSim.cmd_fire(300, 200, 1, 0, element, 0)),
 			"룬 %d 로 발사된다 (검사의 전제)" % element)
 		var hit := false
+		var hit_cx := -1
+		var hit_cy := -1
 		for _i in 60:
 			spell.step(g)
 			if spell.active_count() == 0:
+				# **This is the only moment the impact point can be read.** `_advance` ends a dying bolt's
+				#  segment notice at **the impact cell's centre** (not at `x1`), and `step()` clears every
+				#  notice at the top of the next tick — one tick later there is nothing left to read.
+				if spell.seg_count() > 0:
+					hit_cx = spell.get_seg_x1()[0] >> SpellSim.FP_SHIFT
+					hit_cy = spell.get_seg_y1()[0] >> SpellSim.FP_SHIFT
 				hit = true
 				break
 		t.ok(hit, "룬 %d 의 탄이 벽에 닿는다" % element)
+		# The impact point is **the empty cell just before the solid** (`spell_sim._walk`), and the wall is the
+		#  single column 400 — so this pins the window's origin by value. Without it a broken segment notice
+		#  would silently move the window somewhere harmless and both branches below would measure nothing.
+		t.eq(hit_cx, 399, "룬 %d 의 착탄점이 벽(400) 바로 앞 칸이다 (창의 기준점이다)" % element)
 
-		var total: int = _water_scan(g, 380, 180, 420, 220)[0]
+		var wr := Tuning.water_r(0)
+		var total: int = _water_scan(g, hit_cx - wr, hit_cy - wr, hit_cx + wr, hit_cy + wr)[0]
 		if element == Tuning.ELEM_WATER:
 			t.ok(total > 0, "물 룬은 착탄점에 물을 만든다 (합 %d)" % total)
 			# **The grid has to be stepped one tick to see it.** `spell.step()` does not run the grid's flip —

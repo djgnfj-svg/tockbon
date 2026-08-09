@@ -112,6 +112,13 @@ Code that pretends to work is worse than code that doesn't.
 
 If you can't do it, say you can't.
 
+**One trap that raises nothing and is not about honesty at all**: a 60Hz event whose period shares a factor with
+`TICK_DIVIDER` is **invisible to a 20Hz check.** A blocked pig's jump cycle is 27 frames, 27 is a multiple of 3,
+so the single frame it touches ground lands on the same tick phase every time and the tick never sees it —
+**the symptom is not a wrong value but a thing that never happens.** `_charge_blocked` · `_leaped_landed` ·
+`_grounded_recently` are all the same passage: **latch the 60Hz fact, let the tick read and clear it.**
+Three times now. Reach for that shape before writing a fourth.
+
 ## No fake nets
 
 When the label claims more than the check measures, that green is a false guarantee.
@@ -130,15 +137,37 @@ even after you confirm every mutation goes red**:
   **every one was evaded** — a decoy line, one added term (`PICK_RECT.position + Vector2(600,500)`), an `@export`
   moving the declaration off `^var`, the same write from another file, an early `return` between the two lines a
   scan compared. **Drive the value instead.** `_ready()` · `_gui_input()` · `_physics_process()` and ordinary
-  methods are all callable on an **untreed node** with enough wiring. Only `_draw()` truly resists — no live font.
-  **"It can't be driven headless" was claimed three times and was wrong three times; the last one cost three lines**
+  methods are all callable on an **untreed node** with enough wiring — **and `_draw()` too**, once the runner
+  pumps frames. **Nothing in this engine resists headless.**
+  **"It can't be driven headless" has been claimed four times and was wrong four times.** The fourth cost the most:
+  a settlement panel that **never set `visible`** shipped under 5,576 green checks, and the reason nobody caught it
+  was that the same file had written down "no font outside the tree" as if it were a fact
+- **"`_draw()` ran" is not "anything was drawn."** Counting the call — even through a `super()` that draws nothing —
+  measures the engine, not the picture. Three separate features shipped this way in one day: an arch, a title,
+  a whole magic circle, each erasable with 6,163 checks still green.
+  **Godot refuses to override a native draw call** (`draw_texture_rect`, `draw_string`) — it is a parse error.
+  ⇒ **Cut a `_paint(...)`-shaped hook out of `_draw()` and override that**, then assert the arguments.
+  And drive it **treed with `pump_frames`** — calling `_draw()` by hand barks "drawing outside NOTIFICATION_DRAW".
+- **Wiring a node by hand in the net hides the line that wires it in the shell.** `_wired_root` helpers pre-set
+  `@onready` fields, so deleting the real `setup()` call in `stage.gd` stays green while the game shows nothing.
+  **Null the field back out before calling `_ready()`**, or the shell's only wiring line is untested.
+- **A check whose bounds come from the thing it checks proves nothing.** A wall test read `wall_cells()` and
+  asserted inside it — shrink the rectangle and the test shrinks with it. **Pin literal coordinates.**
 
 ## Running the nets
 
-1. **"N passed" is not green.** `load()` returns non-null on a parse failure, so the count holds even with `src/` broken. Only the final `[wrapper]` line decides
+1. **"N passed" is not green.** `load()` returns non-null on a parse failure, so the count holds even with `src/` broken. Only the final `[wrapper]` line decides.
+   **A net that ran zero checks is now a failure** — the runner snapshots the counter around each net. It was added
+   the day a missing `await` made a net **vanish with exit code 0** instead of going red
 2. **If `[race]` prints, distrust the result — green included.** Running while someone edits reads half-written files
 3. **Each net runs in its own process, in parallel.** Not for speed — for honesty: amnesty stays inside its own net. Do not break this property
-4. **If a full round exceeds 10s, call `harness-manager`.** Slow means verification gets skipped, and then none of the above matters
+4. **A round is ~14s and `net_water` alone is 12.4s of it.** That one is **not a target** — its two slow checks
+   (waking every cell, the design doc's 1,200-tick settle) were measured and kept on purpose.
+   ⇒ **Call `harness-manager` when a round grows for any other reason.** Slow means verification gets skipped,
+   and then none of the above matters
+5. **`_draw()` is measurable headless.** The runner pumps real frames (`t.pump_frames(n)` after `t.root.add_child`).
+   "There is no font outside the tree" was **wrong twice over** — the default theme is there untreed too, and the
+   only real cause was `_initialize()` quitting before a single frame. **Only pixel appearance is verify-look's.**
 
 ## Agent models
 

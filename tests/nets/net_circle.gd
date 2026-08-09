@@ -27,6 +27,85 @@ const Palette := preload("res://src/view/palette_layout.gd")
 const Fx := preload("res://src/view/fx_tuning.gd")
 const Progress := preload("res://src/actor/progress.gd")
 const CircleWindow := preload("res://src/view/circle_window.gd")
+## Step 5's own consumers — driving `SpellCircle.shots()` all the way through `WorldStep`'s queue, not just
+##  reading the dictionaries it returns. A check that never steps a real `WorldStep` cannot tell "three shots
+##  queued with delays" from "three shots that actually land on the right ticks" (CLAUDE.md, ordering contracts).
+const WorldStep := preload("res://src/actor/world_step.gd")
+const Character := preload("res://src/actor/character.gd")
+
+## **Records which draw primitives actually ran and with what data** — the same technique
+## `net_attack_predict._GeometryRecordingView` already proved (override the primitives, record, still call
+## `super` so a real crash inside them is still caught the way it already was). This is what a bare
+## `t.ok(true, ...)` after `pump_frames` cannot be: that only proves `_draw()` was *reached*, not that its
+## loops ran (verify-read, mutation: deleting the three draw calls inside `_draw()` left every check in this
+## file green — `t.ok(true, ...)` is flagged in CLAUDE.md's own terms as "a label claiming more than the
+## check measures").
+class _RecordingCircleWindow extends CircleWindow:
+	var frame_calls := 0
+	var triangle_frame_calls := 0
+	var wrap_ring_calls: Array[float] = []
+	var link_calls: Array[Dictionary] = []
+	var ornament_calls: Array[Dictionary] = []
+	var rune_slot_calls := 0
+	var ring_calls := 0
+	var ring_edges: Array[Array] = []          # one entry per _draw_ring call: the edge radii it actually stroked
+	var glyph_draws: Array[int] = []           # glyph ids drawn procedurally (_draw_glyph)
+	var texture_draws: Array[Dictionary] = []  # {glyph_id, tex} for each socket-texture draw
+	var rarity_ring_calls: Array[int] = []     # glyph id passed to the socket's own rarity ring
+	var empty_slot_calls := 0
+
+	func _draw_frame(area: Rect2, circle_id: int) -> void:
+		frame_calls += 1
+		super._draw_frame(area, circle_id)
+
+	func _draw_triangle_frame(area: Rect2, f: Dictionary, circle_id: int) -> void:
+		triangle_frame_calls += 1
+		super._draw_triangle_frame(area, f, circle_id)
+
+	func _draw_triangle_wrap_ring(center: Vector2, r: float) -> void:
+		wrap_ring_calls.append(r)
+		super._draw_triangle_wrap_ring(center, r)
+
+	func _draw_triangle_links(centers: PackedVector2Array, width: float) -> void:
+		link_calls.append({"count": centers.size(), "width": width})
+		super._draw_triangle_links(centers, width)
+
+	func _draw_triangle_ornament(center: Vector2, outer_r: float, band: float) -> void:
+		ornament_calls.append({"outer_r": outer_r, "band": band})
+		super._draw_triangle_ornament(center, outer_r, band)
+
+	func _draw_rune_slot(area: Rect2, circle_id: int) -> void:
+		rune_slot_calls += 1
+		super._draw_rune_slot(area, circle_id)
+
+	func _draw_ring(area: Rect2, circle_id: int, layer: int, font: Font) -> void:
+		ring_calls += 1
+		# A new bucket **before** calling super — `_draw_ring_edge` below appends into whichever bucket is
+		#  last, so each `_draw_ring` call gets its own list of the radii it actually stroked (empty if the
+		#  call returns early, e.g. an out-of-range layer, which none of this file's scenarios exercise).
+		ring_edges.append([])
+		super._draw_ring(area, circle_id, layer, font)
+
+	func _draw_ring_edge(center: Vector2, r: float, col: Color) -> void:
+		if not ring_edges.is_empty():
+			(ring_edges[ring_edges.size() - 1] as Array).append(r)
+		super._draw_ring_edge(center, r, col)
+
+	func _draw_glyph(at: Vector2, r: float, glyph_id: int) -> void:
+		glyph_draws.append(glyph_id)
+		super._draw_glyph(at, r, glyph_id)
+
+	func _draw_socket_glyph_texture(at: Vector2, r: float, tex: Texture2D, glyph_id: int) -> void:
+		texture_draws.append({"glyph_id": glyph_id, "tex": tex})
+		super._draw_socket_glyph_texture(at, r, tex, glyph_id)
+
+	func _draw_socket_rarity_ring(at: Vector2, r: float, glyph_id: int) -> void:
+		rarity_ring_calls.append(glyph_id)
+		super._draw_socket_rarity_ring(at, r, glyph_id)
+
+	func _draw_empty_slot(at: Vector2, r: float) -> void:
+		empty_slot_calls += 1
+		super._draw_empty_slot(at, r)
 
 ## The slack that comes from `Rect2` holding its values as **32-bit floats.** Used only when comparing a boundary
 ##  that "has to sit exactly flush" against 64-bit arithmetic — widen it and real overlaps get amnestied.
@@ -41,7 +120,17 @@ const NetDeterminism := preload("res://tests/nets/net_determinism.gd")
 
 ## The accessors that have to read the table. When an accessor is added to `circle_defs`, add a line here —
 ##  without it, a new accessor returning a constant makes nobody bark.
-const ACCESSORS: Array[String] = ["layers", "rune_slots"]
+## **Feeds `_accessors_read_the_table` alone.** That check asks "does the body contain `DEFS[`", which is true
+##  of all four accessors including `seq_ticks` — `circle_layout` not calling `seq_ticks` (below) is a different
+##  question from whether `seq_ticks` itself reads the table.
+const ACCESSORS: Array[String] = ["layers", "rune_slots", "picture", "seq_ticks"]
+
+## **Feeds `_layout_reads_the_table` alone — a narrower list than `ACCESSORS` above, on purpose.**
+##  `circle_layout.gd` calls `layers`/`rune_slots`/`picture` to place seats and bands, but **not** `seq_ticks` —
+##  the firing interval is `spell_circle`'s question, not the layout's. Reusing `ACCESSORS` here would demand
+##  `circle_layout.gd` contain `CircleDefs.seq_ticks(`, which it correctly never will, and that check would go
+##  red for the wrong reason (a real, working split misread as a missing table read).
+const LAYOUT_ACCESSORS: Array[String] = ["layers", "rune_slots", "picture"]
 
 ## The paths used when looking for file references in the raw source. **Kept in one place** — scattered, the day a file
 ##  moves only one check goes stale, and the stale one passes as "absent" and goes quiet.
@@ -84,6 +173,7 @@ const CIRCLE_DIAMETER_FLOOR_PX := 180.0
 
 
 func run(t) -> void:
+	_round_numbers_pinned_before_the_triangle_arrives(t)
 	_sizes_come_from_the_table(t)
 	_unknown_circle_barks(t)
 	_empty_rune_is_not_a_rune(t)
@@ -97,7 +187,9 @@ func run(t) -> void:
 	_owns_rune_gates_can_pick_on_an_untreed_window(t)
 	_refusing_a_veiled_rune_then_clicking_the_seat_does_not_disarm(t)
 	_symbols_are_shared(t)
+	await _draw_actually_runs_headless(t)
 	_hit_tests_match_the_drawing(t)
+	_triangle_hit_shapes_stay_disjoint(t)
 	_palette_geometry_runs(t)
 	_layout_geometry_runs(t)
 	_axes_do_not_call_each_other(t)
@@ -109,6 +201,60 @@ func run(t) -> void:
 	_presets_still_work(t)
 	_preset_restores_everything(t)
 	_unknown_id_after_a_capped_glyph_does_not_crash_the_window(t)
+	_shots_geometry(t)
+	_shots_fire_across_the_right_ticks(t)
+	await _fire_at_loops_every_shot_not_just_the_first(t)
+	_socket_glyph_textures_load_and_are_288(t)
+	_socket_glyph_ids_are_real_glyphs(t)
+	_socket_glyph_families_do_not_cross(t)
+	_set_loadout_preserves_the_equipped_circle(t)
+	_revoke_unowned_rune_touches_every_socket(t)
+
+
+## **The round circle's exact geometry, pinned by literal value — measured on today's `Fx.WINDOW_RECT`
+##  once, right before step 4 adds `CIRCLE_TRIANGLE` to `ALL` and the round circle stops being the only
+##  entry (its own control group until then, per the relational checks elsewhere in this file).**
+##
+## Everywhere else in this file measures **relationships** (grows inside-out, stays inside the frame,
+##  does not overlap the rune) — true for infinitely many wrong values, not just today's right one. This is
+##  the one check that would catch, for instance, step 4's `CircleDefs.picture()` branch accidentally being
+##  taken by the round circle too, or a stray edit to `CIRCLE_RING_ZONE`/`CIRCLE_RUNE_RATIO` while wiring the
+##  triangle's own constants — changes that could easily still satisfy every relational check above.
+## Regenerate these numbers (`print()` from `Layout.frame/layer_bands/rune_radius/rune_slots` against
+##  `Layout.circle_area(Book.circle_page(Fx.WINDOW_RECT.size).size)`) only if `Fx.WINDOW_RECT` or one of the
+##  round circle's own ratios changes on purpose — never to make this check pass again after an accident.
+func _round_numbers_pinned_before_the_triangle_arrives(t) -> void:
+	var page := Book.circle_page(Fx.WINDOW_RECT.size)
+	var area := Layout.circle_area(page.size)
+	var id := CircleDefs.CIRCLE_ROUND
+
+	var f := Layout.frame(area)
+	t.ok(is_equal_approx(f["radius"], 140.06), "진 테두리 반지름이 못박은 값과 같다 (%.5f)" % (f["radius"] as float))
+	t.ok((f["center"] as Vector2).is_equal_approx(Vector2(207.5, 163.0)),
+		"진 중심이 못박은 값과 같다 (%s)" % f["center"])
+
+	var bands := Layout.layer_bands(id, area)
+	var want_edge0 := [56.024, 112.048]
+	var want_seat_y := [106.976, 50.952]
+	t.eq(bands.size(), want_edge0.size(), "밴드 수가 못박은 개수(%d)와 같다" % want_edge0.size())
+	for i in mini(bands.size(), want_edge0.size()):
+		var edges: PackedFloat32Array = bands[i]["edges"]
+		var seat: Vector2 = bands[i]["seat"]
+		var hit: Vector2 = bands[i]["hit"]
+		t.ok(is_equal_approx(edges[0], want_edge0[i]),
+			"%d번 밴드 바깥 모서리가 못박은 값과 같다 (%.5f)" % [i, edges[0]])
+		t.ok(seat.is_equal_approx(Vector2(207.5, want_seat_y[i])),
+			"%d번 밴드 자리가 못박은 값과 같다 (%s)" % [i, seat])
+		# Every layer shares one hit radius on `PIC_ROUND` (`glyph_radius(area)` does not vary per layer) —
+		#  pinned once and reused rather than repeated per band.
+		t.ok(is_equal_approx(hit.y, 28.99242) and is_equal_approx(hit.x, 0.0),
+			"%d번 밴드 히트 반경이 못박은 값과 같다 (%s)" % [i, hit])
+
+	t.ok(is_equal_approx(Layout.rune_radius(id, area), 23.8102),
+		"룬 반지름이 못박은 값과 같다 (%.5f)" % Layout.rune_radius(id, area))
+	var rs := Layout.rune_slots(id, area)
+	t.ok(rs.size() > 0 and rs[0].is_equal_approx(Vector2(207.5, 163.0)),
+		"룬 자리가 못박은 값과 같다 (%s)" % (rs[0] if rs.size() > 0 else "없음"))
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -132,6 +278,12 @@ func _sizes_come_from_the_table(t) -> void:
 		t.eq(c.layer_count(), CircleDefs.layers(id), "진 %s의 층 수가 표에서 나온다" % nm)
 		t.eq(c.rune_count(), CircleDefs.rune_slots(id), "진 %s의 룬 자리 수가 표에서 나온다" % nm)
 
+		# **Every row carries all four columns.** Without this, a row missing `picture`/`seq_ticks` only
+		#  surfaces the day something reads it — `DEFS[id]["picture"]` on a missing key raises at that call site,
+		#  not here, and by then the trail back to "the row was incomplete" is cold.
+		t.ok(CircleDefs.DEFS[id].has("picture"), "진 %s 행에 picture 열이 있다" % nm)
+		t.ok(CircleDefs.DEFS[id].has("seq_ticks"), "진 %s 행에 seq_ticks 열이 있다" % nm)
+
 		# Compares the accessors **directly against the table.** The two lines above only look at "does the model follow the accessors".
 		#  **These two lines cannot catch a `return 2` mutation** — the table's value happens to be 2, so
 		#   the constant and the table give the same answer. As long as there is only one circle, **the value cannot split them in principle.**
@@ -141,6 +293,10 @@ func _sizes_come_from_the_table(t) -> void:
 			"진 %s의 층 수 접근자가 표와 같은 값을 준다" % nm)
 		t.eq(CircleDefs.rune_slots(id), int(CircleDefs.DEFS[id]["rune_slots"]),
 			"진 %s의 룬 자리 접근자가 표와 같은 값을 준다" % nm)
+		t.eq(CircleDefs.picture(id), int(CircleDefs.DEFS[id]["picture"]),
+			"진 %s의 picture 접근자가 표와 같은 값을 준다" % nm)
+		t.eq(CircleDefs.seq_ticks(id), int(CircleDefs.DEFS[id]["seq_ticks"]),
+			"진 %s의 seq_ticks 접근자가 표와 같은 값을 준다" % nm)
 		# If the layers exceed the list cap, `pack` barks — grow only the table without looking here and
 		#  it becomes "fill every layer and firing dies".
 		t.ok(c.layer_count() <= Tuning.GLYPH_MAX_LAYERS,
@@ -155,6 +311,10 @@ func _sizes_come_from_the_table(t) -> void:
 	var round_id := CircleDefs.CIRCLE_ROUND
 	t.eq(CircleDefs.layers(round_id), 2, "동그라미 진은 2층이다 (GDD)")
 	t.eq(CircleDefs.rune_slots(round_id), 1, "동그라미 진은 룬 1자리다 (GDD)")
+	# **The round circle's one shot falls straight through `seq_ticks`** — pinned at 0 so a later circle's
+	#  nonzero value cannot quietly leak backward onto this one.
+	t.eq(CircleDefs.picture(round_id), CircleDefs.PIC_ROUND, "동그라미 진의 picture는 PIC_ROUND다")
+	t.eq(CircleDefs.seq_ticks(round_id), 0, "동그라미 진은 seq_ticks 0이다 (한 발이 한 틱에 나간다)")
 
 
 ## Barks at a circle that is not in the table — add a circle without adding it to the table and the wrapper's stderr check catches it for free.
@@ -163,6 +323,8 @@ func _sizes_come_from_the_table(t) -> void:
 func _unknown_circle_barks(t) -> void:
 	t.eq(CircleDefs.layers(CircleDefs.CIRCLE_NONE), 0, "진이 없으면 층이 0이다 (조용히)")
 	t.eq(CircleDefs.rune_slots(CircleDefs.CIRCLE_NONE), 0, "진이 없으면 룬 자리가 0이다 (조용히)")
+	t.eq(CircleDefs.picture(CircleDefs.CIRCLE_NONE), CircleDefs.PIC_ROUND, "진이 없으면 picture가 조용히 PIC_ROUND다")
+	t.eq(CircleDefs.seq_ticks(CircleDefs.CIRCLE_NONE), 0, "진이 없으면 seq_ticks가 0이다 (조용히)")
 
 	# The declaration carries the file name — an amnesty applies to **the whole run**, so writing it broadly
 	#  amnesties the same wording in other files too (see the comment around line 135).
@@ -322,16 +484,14 @@ func _resize_is_table_driven(t) -> void:
 ##  => Every place that reads the layer count or the rune slot count, **across both files**, has to go through the circle table.
 ##
 ## Two things are measured, and **which file each applies to differs:**
-##   (1) does the layout file **call** the two accessors — `circle_layout.gd` only. The drawing file looks at the model
-##      (`layer_count()`), so it has no reason to call the accessors
+##   (1) does the layout file **call** the accessors it owns (`LAYOUT_ACCESSORS`) — `circle_layout.gd` only.
+##      The drawing file looks at the model (`layer_count()`), so it has no reason to call the accessors.
+##      `seq_ticks` is deliberately not in that list — it is `spell_circle`'s question, not the layout's
 ##   (2) is there **no loop with a hardcoded count** — **both files.** A `for i in 2` in the drawing freezes the ring count too
 ##  **Do not write the label wider than the code.** Write "across both files" while sweeping only one and
 ##   that sentence becomes a false guarantee to the next person (it did, measured).
 func _layout_reads_the_table(t) -> void:
 	var layout := _stripped(t, "res://src/view/circle_layout.gd", "circle_layout")
-	for fname: String in ACCESSORS:
-		t.ok(layout.contains("CircleDefs.%s(" % fname),
-			"좌표가 `CircleDefs.%s()` 를 부른다" % fname)
 
 	# `range(2)` is the detour — look only for `for i in 2` and one character escapes it.
 	var re := RegEx.new()
@@ -343,6 +503,10 @@ func _layout_reads_the_table(t) -> void:
 	}
 	for nm: String in files.keys():
 		t.ok(re.search(files[nm]) == null, "%s 가 개수를 숫자로 박은 순회를 안 한다" % nm)
+
+	for fname: String in LAYOUT_ACCESSORS:
+		t.ok(layout.contains("CircleDefs.%s(" % fname),
+			"좌표가 `CircleDefs.%s()` 를 부른다" % fname)
 
 
 ## **Do the accessors themselves read the table?** `_sizes_come_from_the_table` above **cannot measure this in principle** —
@@ -679,6 +843,124 @@ func _refusing_a_veiled_rune_then_clicking_the_seat_does_not_disarm(t) -> void:
 	win.free()
 
 
+## **Actually runs `_draw()` — not a text scan of it.** `net_frame_runner.gd`'s own header corrects a belief
+##  this file's siblings (`net_render`/`net_pick`/`net_settlement`) held: `_draw()` was never unmeasurable
+##  headless, the old runner just quit before a single engine frame turned. The technique proved there:
+##  tree the node under `t.root`, `queue_redraw()`, `await t.pump_frames(n)`.
+##
+## **What this closes that no geometry check above can, in principle**: every check elsewhere in this file
+##  calls `Layout.layer_bands()`/`rune_radius()`/etc. directly — none of them drive `circle_window.gd`'s own
+##  *consumption* of those return values. Step 3's rewrite of `_draw_ring` (loop `edges`, read `band["seat"]`
+##  instead of a separately-fetched `layer_slots()` array) is exactly the kind of change a wrong index or a
+##  stale local variable breaks silently in a text scan and loudly the moment the function actually runs —
+##  measured directly while writing it: an earlier draft left a dangling reference to a deleted local and
+##  every check above still read green because none of them execute `_draw()`.
+##
+## **Every assertion here reads a recorded value, not `t.ok(true, ...)`** (verify-read: the original version
+## of this check asserted nothing, and a mutation deleting all three draw calls inside `_draw()` left it —
+## and every other check in this file — green. `_RecordingCircleWindow` above closes that: it overrides the
+## primitives `_draw()`'s loops call, still calls `super` so a real crash is still caught the way it already
+## was, and this function reads what actually got recorded).
+##
+## Two circles' worth of glyphs are placed first (round has 2 layers) so `_draw_ring` takes both its
+## "empty seat" and "filled seat" branches, not just one.
+func _draw_actually_runs_headless(t) -> void:
+	var pr := Progress.new()
+	var c := SpellCircle.new()
+	t.ok(c.place_glyph(0, Glyph.GLYPH_SPREAD), "그리기 전 1층에 확산을 놓는다 (전제)")
+	var win := _RecordingCircleWindow.new()
+	win.setup(pr, c)
+	win.size = Fx.WINDOW_RECT.size
+	win.visible = true
+	t.root.add_child(win)
+	win.queue_redraw()
+	await t.pump_frames(3)
+	t.ok(win.is_inside_tree(), "창을 트리에 넣었다 (전제)")
+
+	t.ok(win.frame_calls > 0, "_draw_frame이 실제로 불렸다 (%d회)" % win.frame_calls)
+	t.eq(win.triangle_frame_calls, 0, "원형 진은 삼각 테두리 경로를 안 탄다 (%d회)" % win.triangle_frame_calls)
+	t.ok(win.rune_slot_calls > 0, "_draw_rune_slot이 실제로 불렸다 (%d회)" % win.rune_slot_calls)
+	t.ok(win.ring_calls > 0 and win.ring_calls % c.layer_count() == 0,
+		"_draw_ring이 층 수(%d)의 배수만큼 불렸다 (%d회)" % [c.layer_count(), win.ring_calls])
+	# **Every recorded ring call stroked exactly one edge** — the round circle's own concentric shape
+	#  (`layer_bands`'s own header: `concentric: [outer]`). A mutation that only strokes `edges[0]` would
+	#  still pass *this* half (there is only one edge here to begin with) — the triangle block below is
+	#  where dropping an edge actually shows up as a count.
+	for edges: Array in win.ring_edges:
+		t.eq(edges.size(), 1, "원형 진의 밴드 하나당 모서리 하나를 긋는다 (%s)" % [edges])
+	t.ok(win.glyph_draws.has(Glyph.GLYPH_SPREAD), "채운 자리(확산)가 실제로 절차적으로 그려졌다 (%s)" % [win.glyph_draws])
+	t.ok(win.empty_slot_calls > 0, "빈 자리가 실제로 그려졌다 (%d회)" % win.empty_slot_calls)
+	t.eq(win.texture_draws.size(), 0, "원형 진은 소켓 텍스처 경로를 안 탄다 (%d회)" % win.texture_draws.size())
+
+	t.root.remove_child(win)
+	win.queue_free()
+
+	# **The triangle's own draw paths — untouched by the block above.** `PIC_ROUND`'s bands always have
+	#  `edges.size() == 1`, so `_draw_ring`'s socket-texture branch (step 6) and `_draw_triangle_frame`
+	#  (step 3) are never reached by driving the round circle alone. Socket 0 carries a glyph with art
+	#  (the texture branch), socket 1 a glyph with **no** art (the procedural fallback *inside* a socket
+	#  band — a different code path from the round circle's own fallback above, since it still tests
+	#  `edges.size() > 1` first), and socket 2 is left empty (the empty-seat draw inside a socket band).
+	var pr2 := Progress.new()
+	var tri := SpellCircle.new(CircleDefs.CIRCLE_TRIANGLE)
+	t.ok(tri.place_glyph(0, Glyph.GLYPH_SPREAD), "삼각 진 0번 소켓에 그림 있는 문양을 놓는다 (전제)")
+	t.ok(tri.place_glyph(1, Glyph.DUMMY_C), "삼각 진 1번 소켓에 그림 없는 문양을 놓는다 (전제 — 절차적 폴백 경로)")
+	var win2 := _RecordingCircleWindow.new()
+	win2.setup(pr2, tri)
+	win2.size = Fx.WINDOW_RECT.size
+	win2.visible = true
+	t.root.add_child(win2)
+	win2.queue_redraw()
+	await t.pump_frames(3)
+	t.ok(win2.is_inside_tree(), "삼각 진 창을 트리에 넣었다 (전제)")
+
+	# **The triangle frame — all three named pieces, with values traced back to the constants.**
+	#  `_draw_triangle_frame`가 조기 return해도 `triangle_frame_calls`는 그대로 늘어나므로(호출 자체는 됐으니),
+	#  실제로 안에서 셋을 다 그렸는지는 세 하위 함수가 각각 불렸는지로만 잡힌다.
+	t.ok(win2.triangle_frame_calls > 0, "_draw_triangle_frame이 실제로 불렸다 (%d회)" % win2.triangle_frame_calls)
+	t.ok(win2.wrap_ring_calls.size() > 0, "감싸는 링이 실제로 그려졌다 (%d회)" % win2.wrap_ring_calls.size())
+	# `_draw()`가 창 안에서 계산하는 것과 같은 식 — 리터럴을 박지 않고 같은 경로로 구한다.
+	var frame_r: float = Layout.frame(Layout.circle_area(Book.circle_page(Fx.WINDOW_RECT.size).size))["radius"]
+	var basis := frame_r / float(Fx.TRI_CANVAS_R)
+	for r: float in win2.wrap_ring_calls:
+		t.ok(is_equal_approx(r, float(Fx.TRI_RING) * basis),
+			"감싸는 링 반지름이 TRI_RING에서 나온다 (%.3f)" % r)
+	t.ok(win2.link_calls.size() > 0, "연결 띠가 실제로 그려졌다 (%d회)" % win2.link_calls.size())
+	for link: Dictionary in win2.link_calls:
+		t.eq(int(link["count"]), 3, "연결 띠가 소켓 3개를 잇는다 (%d)" % int(link["count"]))
+		t.ok(is_equal_approx(float(link["width"]), float(Fx.TRI_LINK_HALF) * basis * 2.0),
+			"연결 띠 두께가 TRI_LINK_HALF에서 나온다 (%.3f)" % float(link["width"]))
+	t.ok(win2.ornament_calls.size() > 0, "중심 장식이 실제로 그려졌다 (%d회)" % win2.ornament_calls.size())
+	for orn: Dictionary in win2.ornament_calls:
+		t.ok(is_equal_approx(float(orn["outer_r"]), float(Fx.TRI_CENTER_R) * basis),
+			"장식 바깥 반지름이 TRI_CENTER_R에서 나온다 (%.3f)" % float(orn["outer_r"]))
+		t.ok(is_equal_approx(float(orn["band"]), float(Fx.TRI_BAND) * basis),
+			"장식 띠 두께가 TRI_BAND에서 나온다 (%.3f)" % float(orn["band"]))
+
+	# **Every recorded socket ring call stroked exactly two edges** — this is what `for e in [edges[0]]`
+	#  (dropping the socket band's inner rim) would break, and the round-only block above cannot reach.
+	for edges: Array in win2.ring_edges:
+		t.eq(edges.size(), 2, "삼각 진의 소켓 밴드 하나당 모서리 두 개(바깥·안쪽)를 긋는다 (%s)" % [edges])
+
+	t.ok(win2.texture_draws.size() > 0, "텍스처 경로(_draw_socket_glyph_texture)가 실제로 불렸다 (%d회)" % win2.texture_draws.size())
+	var textured_ids: Array[int] = []
+	for d: Dictionary in win2.texture_draws:
+		textured_ids.append(int(d["glyph_id"]))
+	t.ok(textured_ids.has(Glyph.GLYPH_SPREAD), "그림 있는 문양(확산)이 텍스처 경로로 그려졌다 (%s)" % [textured_ids])
+	t.ok(win2.glyph_draws.has(Glyph.DUMMY_C), "그림 없는 문양(더미)이 절차적 폴백으로 그려졌다 (%s)" % [win2.glyph_draws])
+	t.ok(win2.empty_slot_calls > 0, "2번 소켓(빈 자리)이 실제로 그려졌다 (%d회)" % win2.empty_slot_calls)
+
+	# **The socket's own rarity ring — a real regression once, fixed** (verify-read: the first version of
+	#  the texture path drew no rarity ring at all, leaving every rarity of a family pixel-identical on a
+	#  socket, against the decided "rarity separates by color" rule). Measures that the ring is drawn **with
+	#  the placed glyph's own id** — not skipped, and not always reading rarity for a fixed id.
+	t.ok(win2.rarity_ring_calls.has(Glyph.GLYPH_SPREAD),
+		"텍스처로 그린 문양(확산)의 희귀도 링이 그 문양 자신의 id로 그려졌다 (%s)" % [win2.rarity_ring_calls])
+
+	t.root.remove_child(win2)
+	win2.queue_free()
+
+
 ## **Does the hit test use the same coordinates as the drawing — and does it actually land?**
 ##  With coordinates in two places it becomes "I clicked this and that got picked" and **no error shows** (risk 6).
 ## Here it is measured by **execution**, not text — the drawn positions are clicked directly.
@@ -711,7 +993,7 @@ func _hit_tests_match_the_drawing(t) -> void:
 	#  **This is not a demand to remove the overlap** — what overlaps is only the **empty band** between them, and
 	#   **it is safe as long as clicking a drawn thing grabs that thing.** That safety condition is pinned down.
 	var rune_c := Layout.rune_slots(id, area)[0]
-	var rune_draw := Layout.rune_radius(area)
+	var rune_draw := Layout.rune_radius(id, area)
 	var layer_hit := Layout.glyph_radius(area) * Fx.SLOT_HIT_RATIO
 	for i in slots.size():
 		var gap := rune_c.distance_to(slots[i]) - layer_hit
@@ -795,6 +1077,58 @@ func _symbols_are_shared(t) -> void:
 			t.ok(body != "", "`%s()` 를 찾았다" % caller)
 			t.ok(body.contains("%s(" % c[0]),
 				"`%s()` 가 심볼을 `%s()` 로 그린다 (따로 안 그린다)" % [caller, c[0]])
+
+
+## **The triangle's hit shapes — measured by clicking, not by reading the formula back** (the same discipline
+## `_hit_tests_match_the_drawing` already holds for the round circle). Two mutations verify-read found that
+## no existing check caught: `layer_bands`'s `hit` widened to `Vector2(0.0, outer)` (the layer band swallows
+## the rune sitting inside it) and `rune_slot_at`'s `PIC_TRIANGLE` guard on `SLOT_HIT_RATIO` deleted (the
+## rune's disc inflates past the socket's own rim). Both need a **real click test** — the plan's own risk
+## table already named the geometry (`0.3375 > 0.28125`), but nothing before this drove `layer_at`/
+## `rune_slot_at` with points inside/at the boundary of a real socket to prove it.
+func _triangle_hit_shapes_stay_disjoint(t) -> void:
+	var page := Book.circle_page(Fx.WINDOW_RECT.size)
+	var area := Layout.circle_area(page.size)
+	var id := CircleDefs.CIRCLE_TRIANGLE
+	var bands := Layout.layer_bands(id, area)
+	var seats := Layout.rune_slots(id, area)
+	t.eq(bands.size(), 3, "삼각 진 밴드가 셋이다 (전제)")
+	t.eq(seats.size(), 3, "삼각 진 소켓이 셋이다 (전제)")
+	if bands.size() != 3 or seats.size() != 3:
+		return
+
+	for i in bands.size():
+		var band: Dictionary = bands[i]
+		var edges: PackedFloat32Array = band["edges"]
+		t.eq(edges.size(), 2, "%d번 밴드에 모서리가 둘이다 (전제)" % i)
+		if edges.size() != 2:
+			continue
+		var outer: float = edges[0]
+		var inner: float = edges[edges.size() - 1]
+		var center: Vector2 = seats[i]
+
+		# Well inside the rune's own disc — the layer band must not claim it, and the rune must.
+		var rune_pt := center + Vector2(0.0, -inner * 0.5)
+		t.eq(Layout.layer_at(id, area, rune_pt), -1,
+			"%d번 소켓의 룬 영역 안쪽(거리 %.2f < 안쪽 모서리 %.2f)은 층 밴드가 아니다" % [i, inner * 0.5, inner])
+		t.eq(Layout.rune_slot_at(id, area, rune_pt), i,
+			"%d번 소켓의 룬 영역 안쪽은 그 소켓의 룬으로 잡힌다" % i)
+
+		# The middle of the band itself — the layer must claim it, and the rune must not.
+		var band_pt := center + Vector2(0.0, -(inner + outer) * 0.5)
+		t.eq(Layout.layer_at(id, area, band_pt), i,
+			"%d번 소켓 밴드 한가운데는 그 층으로 잡힌다" % i)
+		t.eq(Layout.rune_slot_at(id, area, band_pt), -1,
+			"%d번 소켓 밴드 한가운데는 룬으로 안 잡힌다 (`SLOT_HIT_RATIO`를 곱했다면 여기까지 넘쳤을 자리)" % i)
+
+		# Just past the socket's own outer rim — neither the layer nor the rune may claim it. This is
+		# exactly where a missing `PIC_TRIANGLE` guard on `SLOT_HIT_RATIO` (inflating the rune to
+		# `inner * 1.8`) spills past the socket's own boundary.
+		var outside_pt := center + Vector2(0.0, -(outer + 1.0))
+		t.eq(Layout.layer_at(id, area, outside_pt), -1,
+			"%d번 소켓 바로 바깥은 층으로 안 잡힌다" % i)
+		t.eq(Layout.rune_slot_at(id, area, outside_pt), -1,
+			"%d번 소켓 바로 바깥은 룬으로도 안 잡힌다 (룬이 소켓 밖으로 안 넘친다)" % i)
 
 
 ## Do the sections and item cells **come from one place and not overlap.** Overlap and it becomes "I clicked this
@@ -896,25 +1230,24 @@ func _layout_geometry_runs(t) -> void:
 
 	for id: int in CircleDefs.ALL:
 		var nm: StringName = CircleDefs.DEFS[id]["name"]
-		var rings := Layout.layer_rings(id, area)
-		t.eq(rings.size(), CircleDefs.layers(id), "진 %s의 고리 수가 층 수와 같다" % nm)
+		var bands := Layout.layer_bands(id, area)
+		t.eq(bands.size(), CircleDefs.layers(id), "진 %s의 밴드 수가 층 수와 같다" % nm)
 
-		# **It grows from the inside outward.** Reverse it and "the inside comes first" becomes false in the drawing.
-		var grows := rings.size() > 0
-		for i in rings.size():
-			if rings[i] <= 0.0 or (i > 0 and rings[i] <= rings[i - 1]):
-				grows = false
-		t.ok(grows, "진 %s의 고리가 안에서 밖으로 커진다 %s" % [nm, rings])
-		if rings.size() > 0:
-			t.ok(rings[rings.size() - 1] <= fr,
-				"진 %s의 바깥 고리가 테두리를 안 넘는다 (%.1f ≤ %.1f)" % [
-					nm, rings[rings.size() - 1], fr])
-			# The rune is dead center — if the first ring is inside the rune the two are drawn on top of each other.
-			t.ok(rings[0] > Layout.rune_radius(area),
-				"진 %s의 1층 고리가 룬 자리 바깥이다" % nm)
+		for b: Dictionary in bands:
+			var edges: PackedFloat32Array = b["edges"]
+			t.ok(edges.size() > 0, "진 %s의 밴드에 모서리가 있다" % nm)
+
+		# **Concentric-only vs. socket-only — the plan's own warning.** "Grows inside-out" is a `PIC_ROUND`
+		#  property (one shared center, bands nest); the triangle's three bands sit at three *different*
+		#  centers and are all the same size, so the same monotonic check would fail on a correct triangle
+		#  circle for the wrong reason. Each picture gets its own geometry, not a relaxed shared one.
+		if CircleDefs.picture(id) == CircleDefs.PIC_TRIANGLE:
+			_triangle_band_geometry(t, id, nm, area, f, fr, bands)
+		else:
+			_concentric_band_geometry(t, nm, fr, bands, Layout.rune_radius(id, area))
 
 		var slots := Layout.layer_slots(id, area)
-		t.eq(slots.size(), rings.size(), "진 %s의 문양 자리 수가 고리 수와 같다" % nm)
+		t.eq(slots.size(), bands.size(), "진 %s의 문양 자리 수가 밴드 수와 같다" % nm)
 		var inside := true
 		for p: Vector2 in slots:
 			if p.distance_to(f["center"]) > fr:
@@ -924,7 +1257,8 @@ func _layout_geometry_runs(t) -> void:
 		t.eq(Layout.rune_slots(id, area).size(), CircleDefs.rune_slots(id),
 			"진 %s의 룬 자리 수가 표와 같다" % nm)
 
-	t.ok(Layout.rune_radius(area) > 0.0, "룬 자리 반지름이 0이 아니다")
+		t.ok(Layout.rune_radius(id, area) > 0.0, "진 %s의 룬 자리 반지름이 0이 아니다" % nm)
+
 	t.ok(Layout.glyph_radius(area) > 0.0, "문양 심볼 반지름이 0이 아니다")
 
 	# **Does the layer number follow the radius.** Hardcode it and only the number freezes as the circle grows,
@@ -941,14 +1275,89 @@ func _layout_geometry_runs(t) -> void:
 	#  the circle turns the wrapper red. `expect_error` is **deliberately not written** — a bark is a failure as is.
 	t.eq(Layout.rune_slots(CircleDefs.CIRCLE_NONE, area).size(), 0,
 		"진이 없으면 룬 자리가 0개다 (조용히)")
-	t.eq(Layout.layer_rings(CircleDefs.CIRCLE_NONE, area).size(), 0,
-		"진이 없으면 고리가 0개다 (조용히)")
+	t.eq(Layout.layer_bands(CircleDefs.CIRCLE_NONE, area).size(), 0,
+		"진이 없으면 밴드가 0개다 (조용히)")
 
-	# The `rune_slots != 1` bark itself **cannot be reached by execution** while there is only one circle.
-	#  => Text only holds that it has not been deleted (the same reason as `_accessors_read_the_table` above).
+	# **The bark in `rune_slots()` moved, not disappeared** (step 4 of the plan). It used to fire on
+	#  `rune_slots != 1` for the round picture; now that `picture` decides the layout, the thing that
+	#  "cannot be derived" is an unrecognized picture id, so that is what it barks on now. Both `PIC_ROUND`
+	#  and `PIC_TRIANGLE` are handled, so **this bark still cannot be reached by execution today** — text is
+	#  the only thing that can confirm it was not deleted along with the check it replaced.
 	t.ok(_func_body(_stripped(t, "res://src/view/circle_layout.gd", "circle_layout"),
 		"rune_slots").contains("push_error"),
-		"룬 자리 배치가 안 정해진 진에 짖는 코드가 살아 있다")
+		"룬 배치가 안 되는 picture에 짖는 코드가 살아 있다 (n != 1 짖음의 후신)")
+
+
+## **`PIC_ROUND`'s geometry — concentric bands sharing one center.** Split out of `_layout_geometry_runs`
+## once the triangle circle made "one shared shape for every picture" false (this function's own header there).
+func _concentric_band_geometry(t, nm: StringName, fr: float, bands: Array[Dictionary], rune_r: float) -> void:
+	# **It grows from the inside outward.** Reverse it and "the inside comes first" becomes false in the drawing.
+	# **`edges[0]` is the outer edge** (`edges` is outer-first) — the value that must grow band to band.
+	var outers: Array[float] = []
+	for b: Dictionary in bands:
+		var edges: PackedFloat32Array = b["edges"]
+		outers.append(edges[0] if edges.size() > 0 else 0.0)
+	var grows := outers.size() > 0
+	for i in outers.size():
+		if outers[i] <= 0.0 or (i > 0 and outers[i] <= outers[i - 1]):
+			grows = false
+	t.ok(grows, "진 %s의 밴드 바깥 모서리가 안에서 밖으로 커진다 %s" % [nm, outers])
+	if outers.size() == 0:
+		return
+	t.ok(outers[outers.size() - 1] <= fr,
+		"진 %s의 바깥 밴드가 테두리를 안 넘는다 (%.1f ≤ %.1f)" % [nm, outers[outers.size() - 1], fr])
+	# The rune is dead center — if the first band is inside the rune the two are drawn on top of each other.
+	t.ok(outers[0] > rune_r, "진 %s의 1층 밴드가 룬 자리 바깥이다" % nm)
+
+
+## **`PIC_TRIANGLE`'s geometry — three independent socket bands, not one shared center.**
+## Measures exactly what the plan's step 4 named: seat 0 above center (the one clue the picture gives for
+## "goes first"), the three seats 120° apart, each socket fitting inside the frame, and — the triangle's own
+## version of "the layer doesn't sit on top of the rune" — the band's inner edge landing **exactly** on the
+## rune's own radius (`rune_radius`'s `PIC_TRIANGLE` branch and `layer_bands`' `TRI_SOCKET_R - TRI_BAND` are
+## the same subtraction; if the two ever drift apart this is where it is caught).
+func _triangle_band_geometry(t, id: int, nm: StringName, area: Rect2, f: Dictionary, fr: float, bands: Array[Dictionary]) -> void:
+	var center: Vector2 = f["center"]
+	var seats := Layout.rune_slots(id, area)
+	t.eq(seats.size(), bands.size(), "진 %s의 소켓 수가 밴드 수와 같다" % nm)
+	if seats.size() == 0:
+		return
+
+	var d0 := seats[0] - center
+	t.ok(is_equal_approx(d0.x, 0.0) and d0.y < 0.0,
+		"진 %s의 0번 소켓이 중심 정각 12시 방향이다 (오프셋 %s)" % [nm, d0])
+
+	var n := seats.size()
+	for i in n:
+		var j := (i + 1) % n
+		var ai := (seats[i] - center).angle()
+		var aj := (seats[j] - center).angle()
+		# **Signed, not `absf`.** An unsigned 120° step also passes with the winding reversed (seat 1 and 2
+		#  swapped) — measured: `absf` alone left this green with `TRI_SOCKET_DEG` reordered to
+		#  `[-90, 150, 30]`. `Vector2.angle()` is measured in this engine's y-down screen space, where a
+		#  **positive** step is clockwise — exactly the direction `docs/design/circle-rune-glyph.md`'s
+		#  "12 o'clock is #1" needs seat 1 and 2 to follow in.
+		var diff := wrapf(aj - ai, -PI, PI)
+		t.ok(is_equal_approx(diff, deg_to_rad(120.0)),
+			"진 %s의 소켓 %d-%d 사이가 시계 방향으로 120도다 (%.1f도)" % [nm, i, j, rad_to_deg(diff)])
+
+	var rune_r := Layout.rune_radius(id, area)
+	for i in n:
+		var dist := seats[i].distance_to(center)
+		var edges: PackedFloat32Array = bands[i]["edges"]
+		t.ok(edges.size() > 0, "진 %s의 %d번 소켓 밴드에 모서리가 있다" % [nm, i])
+		if edges.size() == 0:
+			continue
+		var socket_r := edges[0]
+		t.ok(dist + socket_r <= fr + RECT_EPS,
+			"진 %s의 %d번 소켓이 테두리 안에 들어간다 (거리 %.1f + 반경 %.1f ≤ %.1f)" % [
+				nm, i, dist, socket_r, fr])
+		# The band's inner edge (`edges` is outer-first, so the last element) is where the rune's own disc
+		#  ends — the two must meet exactly, or either a gap (dead space nobody can click) or an overlap
+		#  (the rune drawn on top of the band) appears with no error raised.
+		var inner := edges[edges.size() - 1]
+		t.ok(is_equal_approx(inner, rune_r),
+			"진 %s의 %d번 밴드 안쪽 모서리가 룬 반지름과 같다 (%.3f ≈ %.3f)" % [nm, i, inner, rune_r])
 
 
 ## **This is the single reason this stage existed** — what the design doc "boundary" demanded was **split the axes.**
@@ -960,7 +1369,7 @@ func _layout_geometry_runs(t) -> void:
 ##  => The layer drawing hangs off the circle axis and nobody barks.
 ##
 ## What is measured is **one direction only: the layer and rune axes do not call the circle axis (`frame`).**
-##  `layer_slots` calling `layer_rings` is **the same axis and so not coupling** — it must not be caught.
+##  `layer_slots` calling `layer_bands` is **the same axis and so not coupling** — it must not be caught.
 ##   That is why this was not widened into "no function calls any function".
 func _axes_do_not_call_each_other(t) -> void:
 	var layout := _stripped(t, "res://src/view/circle_layout.gd", "circle_layout")
@@ -968,11 +1377,15 @@ func _axes_do_not_call_each_other(t) -> void:
 
 	# [file, function, call that must not be present, label]
 	var cases: Array[Array] = [
-		[layout, "layer_rings", "frame(", "층 좌표"],
+		[layout, "layer_bands", "frame(", "층 좌표"],
 		[layout, "layer_slots", "frame(", "층 좌표(자리)"],
 		[layout, "rune_slots", "frame(", "룬 좌표"],
 		[window, "_draw_ring", "Layout.frame(", "층 그림"],
 		[window, "_draw_rune_slot", "Layout.frame(", "룬 그림"],
+		# **Step 3's own new coupling risk.** The triangle frame (링·연결 띠·중심 장식) reads socket centers —
+		#  it must read them from the shared helper, not from the rune axis's own `rune_slots()`, or the circle
+		#  axis ends up hanging off the rune axis (the same disease this whole check list watches for).
+		[window, "_draw_triangle_frame", "Layout.rune_slots(", "삼각 진 테두리"],
 	]
 	t.ok(cases.size() > 0, "축 결합을 재 볼 자리가 %d군데다" % cases.size())
 	for c: Array in cases:
@@ -983,8 +1396,8 @@ func _axes_do_not_call_each_other(t) -> void:
 
 	# The other side — calls within the same axis **have to stay alive.** Without this, nobody notices when the
 	#  checks above pass as "nobody calls anything".
-	t.ok(_func_body(layout, "layer_slots").contains("layer_rings("),
-		"층 자리는 층 반지름에서 나온다 (같은 축이라 결합이 아니다)")
+	t.ok(_func_body(layout, "layer_slots").contains("layer_bands("),
+		"층 자리는 층 밴드에서 나온다 (같은 축이라 결합이 아니다)")
 
 
 ## Source with comments and strings stripped. If a triple quote is present the stripper stops there, so **the rest
@@ -1308,6 +1721,74 @@ func _presets_still_work(t) -> void:
 		"디버그 키가 `apply_preset()` 으로 들어간다")
 
 
+## **`_set_loadout` used to pass `SpellCircle.DEFAULT_CIRCLE` unconditionally into `apply_preset()`**
+## (verify-read) — with a triangle circle equipped, every debug loadout key (1-5) silently swapped it back
+## to round, destroying sockets 1 and 2 and whatever runes/glyphs sat there. **Driven on a real `Stage`,
+## the same technique `net_render.gd` already proved for this exact function** (`root.call("_set_loadout",
+## n)`) — `_set_loadout` only touches `_circle` (a plain member, valid the instant `Stage.new()` runs, no
+## `_ready()`/scene tree needed), so a bare, untreed `Stage.new()` is enough here.
+func _set_loadout_preserves_the_equipped_circle(t) -> void:
+	var stage := Stage.new()
+	var circle: Variant = stage.get("_circle")
+	t.ok(circle != null, "무대의 _circle이 준비돼 있다 (전제)")
+	if circle == null:
+		stage.free()
+		return
+
+	circle.set_circle(CircleDefs.CIRCLE_TRIANGLE)
+	t.ok(circle.set_rune(1, Tuning.ELEM_WATER), "1번 소켓에 물을 놓는다 (전제)")
+	t.ok(circle.place_glyph(2, Glyph.GLYPH_BLAST), "2번 소켓에 폭발을 놓는다 (전제)")
+
+	var keys: Array = Stage.LOADOUTS.keys()
+	t.ok(keys.size() > 0, "프리셋 키가 있다 (전제)")
+	if keys.size() > 0:
+		stage.call("_set_loadout", keys[0])
+	t.eq(circle.circle_id(), CircleDefs.CIRCLE_TRIANGLE,
+		"프리셋 키를 눌러도 장착된 삼각 진이 그대로다 (조용히 동그라미로 안 돌아간다)")
+	t.eq(circle.rune_count(), 3, "룬 자리도 셋 그대로다 (진이 안 바뀌었다는 증거)")
+
+	# **A user who removed the circle is still unstuck** — the one case `DEFAULT_CIRCLE` still has to cover.
+	circle.set_circle(CircleDefs.CIRCLE_NONE)
+	if keys.size() > 0:
+		stage.call("_set_loadout", keys[0])
+	t.eq(circle.circle_id(), SpellCircle.DEFAULT_CIRCLE,
+		"진을 뺀 상태에서는 프리셋 키가 여전히 기본 지급 진을 되돌려준다")
+
+	stage.free()
+
+
+## **`_revoke_unowned_rune()` used to read/write only `rune_at(0)`** (verify-read) — reachable the moment a
+## second circle exists: earn a rune, place it in socket 1 or 2 of a triangle circle, press R. `shots()`
+## fires whatever sits there regardless of ownership, silently. **Socket 0 stays owned (none) on purpose** —
+## this measures whether the *other* sockets get checked, not whether socket 0 survives (that half was
+## already proven, `net_render._revoke_unowned_rune_only_touches_what_is_not_owned`).
+func _revoke_unowned_rune_touches_every_socket(t) -> void:
+	var stage := Stage.new()
+	var circle: Variant = stage.get("_circle")
+	var world: Variant = stage.get("_world")
+	t.ok(circle != null and world != null, "무대의 _circle·_world가 준비돼 있다 (전제)")
+	if circle == null or world == null:
+		stage.free()
+		return
+
+	circle.set_circle(CircleDefs.CIRCLE_TRIANGLE)
+	var pr = world.progress()
+	t.ok(not pr.owns_rune(Tuning.ELEM_FIRE), "불은 아직 소유하지 않았다 (전제)")
+	t.ok(circle.set_rune(1, Tuning.ELEM_FIRE), "1번 소켓에 소유 안 한 불을 놓는다 (전제)")
+	t.ok(circle.set_rune(2, Tuning.ELEM_FIRE), "2번 소켓에도 놓는다 (전제)")
+
+	stage.call("_revoke_unowned_rune")
+
+	# **Socket 0 was never set after `set_circle()`** (that call fills every socket with `RUNE_EMPTY`, not
+	#  `DEFAULT_RUNE` — only the constructor does that) — `RUNE_EMPTY` is not `!= RUNE_EMPTY`, so the guard
+	#  skips it, unlike `Tuning.ELEM_NONE` which the guard would actively revoke-to if it were unowned.
+	t.eq(circle.rune_at(0), SpellCircle.RUNE_EMPTY, "0번 소켓은 그대로 빈 자리다 (건드릴 것도 없었다)")
+	t.eq(circle.rune_at(1), Tuning.ELEM_NONE, "1번 소켓의 소유하지 않은 룬이 무속성으로 내려온다")
+	t.eq(circle.rune_at(2), Tuning.ELEM_NONE, "2번 소켓도 마찬가지다")
+
+	stage.free()
+
+
 ## **The preset's order contract — circle -> rune -> glyphs.**
 ##
 ## **With the circle unchanged, a reversed order is invisible** (`set_circle` is a no-op for the same circle, so it does not clear layers).
@@ -1338,6 +1819,199 @@ func _preset_restores_everything(t) -> void:
 	c.apply_preset(SpellCircle.DEFAULT_CIRCLE, SpellCircle.DEFAULT_RUNE, Glyph.GLYPH_NONE)
 	t.ok(c.can_fire(), "프리셋이 빈 룬을 되돌린다")
 	t.eq(c.glyph_list(), [] as Array[int], "빈 프리셋은 문양을 비운다")
+
+
+# ══════════════════════════════════════════════════════════════════
+#  shots() — step 5. One entry per bolt, and the triangle's three are sequenced, not simultaneous
+# ══════════════════════════════════════════════════════════════════
+
+## **Round: unchanged.** `shots()` still returns exactly the `element()`/`packed_glyphs()` pair
+##  `stage._fire_at` built by hand before this function existed — `PIC_TRIANGLE` never reaches the branch
+##  that would change that.
+## **Triangle: three entries, each carrying only its own socket's rune and glyph, delayed `i * seq_ticks`.**
+##  The three sockets are given **different runes** on purpose — if they all carried fire, entry `i`'s
+##  `element` matching `rune_at(i)` would also match every other socket's rune, and a bug that copied
+##  `rune_at(0)` into every entry would pass this check by accident.
+func _shots_geometry(t) -> void:
+	var round_c := SpellCircle.new(CircleDefs.CIRCLE_ROUND)
+	round_c.place_glyph(0, Glyph.GLYPH_SPREAD)
+	var round_shots := round_c.shots()
+	t.eq(round_shots.size(), 1, "동그라미 진은 발사가 한 발이다")
+	t.eq(int(round_shots[0]["element"]), round_c.element(), "동그라미 진 발사 원소가 element()와 같다")
+	t.eq(int(round_shots[0]["glyphs"]), round_c.packed_glyphs(), "동그라미 진 발사 문양이 packed_glyphs()와 같다")
+	t.eq(int(round_shots[0]["delay"]), 0, "동그라미 진은 지연이 0이다")
+
+	var tri := SpellCircle.new(CircleDefs.CIRCLE_TRIANGLE)
+	t.ok(tri.set_rune(0, Tuning.ELEM_FIRE), "0번 소켓에 불을 놓는다")
+	t.ok(tri.set_rune(1, Tuning.ELEM_WATER), "1번 소켓에 물을 놓는다")
+	# 2번 소켓은 무속성(생성 시 기본값)으로 남긴다 — 세 소켓의 룬이 서로 달라야
+	#  "제 소켓 것만 진다"가 값으로 갈린다 (전부 같은 룬이면 뒤바뀌어도 초록일 수 있다).
+	t.ok(tri.place_glyph(1, Glyph.GLYPH_BLAST), "1번 층(1번 소켓)에만 문양을 놓는다")
+
+	# **`element()`'s own contract, pinned directly** — the bark it used to carry ("exactly one rune slot")
+	#  is gone (step 5), but the *answer* is still meant to be socket 0 specifically (12 o'clock, the seat
+	#  the picture itself marks "goes first") — not "whichever socket happens to be last", which a
+	#  `_runes[0]` -> `_runes[size() - 1]` typo would still satisfy for a round circle (one slot, same
+	#  either way) and only a multi-socket circle with **distinct** runes per socket can catch.
+	t.eq(tri.element(), tri.rune_at(0), "element()가 정확히 0번 소켓의 룬을 답한다 (다른 소켓이 아니다)")
+
+	var shots := tri.shots()
+	t.eq(shots.size(), 3, "삼각 진은 발사가 세 발이다")
+	var seq := CircleDefs.seq_ticks(CircleDefs.CIRCLE_TRIANGLE)
+	t.ok(seq > 0, "삼각 진의 seq_ticks가 0보다 크다 (전제 — 아니면 지연 간격을 못 잰다)")
+	for i in shots.size():
+		t.eq(int(shots[i]["delay"]), i * seq, "%d번 발사의 지연이 %d다" % [i, i * seq])
+		t.eq(int(shots[i]["element"]), tri.rune_at(i), "%d번 발사가 제 소켓의 룬만 진다" % i)
+
+	# **Only its own socket's glyph — never the whole circle's list.** Socket 1 alone has a glyph;
+	#  sockets 0 and 2 must come out empty, and socket 1 must carry exactly that one glyph.
+	t.eq(int(shots[0]["glyphs"]), Glyph.GLYPH_NONE, "0번 발사는 문양이 없다 (제 소켓이 비어 있다)")
+	t.eq(int(shots[1]["glyphs"]), Glyph.pack([Glyph.GLYPH_BLAST]), "1번 발사가 제 소켓의 문양만 진다")
+	t.eq(int(shots[2]["glyphs"]), Glyph.GLYPH_NONE, "2번 발사는 문양이 없다 (제 소켓이 비어 있다)")
+
+
+## **The final count alone cannot tell a sequence from a burst** (CLAUDE.md, ordering contracts) — a bug
+##  that fires all three shots on the same tick and a correct one that spaces them `seq_ticks` apart both
+##  end at `fire_count() == 3`. So `fire_count()` is read **once per real tick**, not only at the end, and the
+##  whole step function (0 -> 1 -> 2 -> 3, each step landing on its own tick) is compared against what
+##  `enqueue()`'s `delay` promises.
+##
+## Drives the real door (`WorldStep.enqueue` + `frame()`), the same one `stage._fire_at` uses — not
+## `SpellSim.fire()` directly — so this also exercises `_drain_queue`'s `keep` branch actually holding a
+## delayed command across ticks instead of draining it early.
+func _shots_fire_across_the_right_ticks(t) -> void:
+	var tri := SpellCircle.new(CircleDefs.CIRCLE_TRIANGLE)
+	t.ok(tri.can_fire(), "갓 만든 삼각 진이 바로 쏠 수 있다 (전제)")
+	var shots := tri.shots()
+	var seq := CircleDefs.seq_ticks(CircleDefs.CIRCLE_TRIANGLE)
+	t.eq(shots.size(), 3, "삼각 진 발사가 세 발이다 (전제)")
+
+	var ch := Character.new()
+	ch.place(100, 100)
+	var w := WorldStep.new(_wall_grid(), SpellSim.new(), ch)
+	for shot: Dictionary in shots:
+		w.enqueue(SpellSim.cmd_fire(10, 70, 100, 0, int(shot["element"]), int(shot["glyphs"])),
+			int(shot["delay"]))
+
+	# One entry per **real tick** (not per 60Hz frame) — `fire_count()` after tick k, for k = 1..span.
+	var span := 1 + 2 * seq + 2
+	var per_tick: Array[int] = []
+	for _tick_i in span:
+		for _frame_i in Tuning.TICK_DIVIDER:
+			w.frame(1.0 / 60.0, 0.0, false, false)
+		per_tick.append(w.fire_count())
+
+	# Delay 0 fires on the first real tick (index 0 here, tick 1) — `enqueue`'s own contract
+	#  (`tick = grid.get_tick() + 1 + delay`, and the grid's tick is 0 before the first tick ever runs).
+	t.eq(per_tick[0], 1, "1번째 실제 틱에서 0번 발사가 나간다 (%s)" % [per_tick])
+	# Nothing more fires until socket 1's delay elapses — this is the line a burst-shaped bug cannot pass:
+	#  a bug that drains every shot on the first tick leaves `per_tick[seq - 1] == 3`, not 1.
+	if seq > 1:
+		t.eq(per_tick[seq - 1], 1, "%d번째 실제 틱까지 발사 수가 그대로 1이다 (%s)" % [seq, per_tick])
+	t.eq(per_tick[seq], 2, "%d번째 실제 틱(1+%d)에서 1번 발사가 나간다 (%s)" % [seq + 1, seq, per_tick])
+	if seq > 1:
+		t.eq(per_tick[2 * seq - 1], 2, "%d번째 실제 틱까지 발사 수가 그대로 2다 (%s)" % [2 * seq, per_tick])
+	t.eq(per_tick[2 * seq], 3, "%d번째 실제 틱(1+%d)에서 2번 발사가 나간다 (%s)" % [2 * seq + 1, 2 * seq, per_tick])
+	# And nothing more comes after — three shots, not a fourth.
+	t.eq(per_tick[per_tick.size() - 1], 3, "그 뒤로는 더 안 나간다 (%s)" % [per_tick])
+
+
+## **The shell itself, not just `WorldStep` — the check above builds `SpellSim.cmd_fire` by hand and calls
+## `WorldStep.enqueue` directly, so it never passes through `Aim.fire_cmd` or `stage._fire_at`'s own loop**
+## (verify-read: reducing `_fire_at` to `_circle.shots()[0]` alone with `delay 0` — the exact "screen shows
+## three sockets, one bolt leaves" signature fake this whole plan exists to close — left every net green,
+## because nothing drove `_fire_at` itself). **The full stage scene is treed** (`t.root.add_child`) so every
+## `@onready` field `_fire_at`'s own call chain touches (`_char_view.tip_px()`) resolves the normal way,
+## rather than hand-wiring each one — `net_render._wired_stage_root` proves the alternative works too, but
+## this file's own `_draw_actually_runs_headless` already established the simpler treed-and-pumped route.
+func _fire_at_loops_every_shot_not_just_the_first(t) -> void:
+	var scene: PackedScene = load("res://src/stage/stage.tscn")
+	t.ok(scene != null and scene.can_instantiate(), "무대 씬을 세울 수 있다 (전제)")
+	if scene == null or not scene.can_instantiate():
+		return
+	var stage_root := scene.instantiate()
+	t.root.add_child(stage_root)
+	await t.pump_frames(2)
+
+	var world: Variant = stage_root.get("_world")
+	t.ok(world != null, "무대의 _world가 준비돼 있다 (전제)")
+	if world == null:
+		t.root.remove_child(stage_root)
+		stage_root.free()
+		return
+
+	var tri := SpellCircle.new(CircleDefs.CIRCLE_TRIANGLE)
+	t.ok(tri.can_fire(), "새로 만든 삼각 진이 바로 쏠 수 있다 (전제 — 기본 룬이 채워져 있다)")
+	stage_root.set("_circle", tri)
+
+	var before: int = world.fire_count()
+	stage_root.call("_fire_at", Vector2(600.0, 500.0))
+	# `_fire_at` only enqueues — draining happens inside `frame()`'s tick branch.
+	var seq := CircleDefs.seq_ticks(CircleDefs.CIRCLE_TRIANGLE)
+	for _i in Tuning.TICK_DIVIDER * (2 * seq + 2):
+		world.frame(1.0 / 60.0, 0.0, false, false)
+	t.eq(int(world.fire_count()) - before, 3,
+		"stage._fire_at() 한 번이 삼각 진의 발사 세 발을 전부 큐에 넣는다 (shots()[0] 하나만이 아니다)")
+
+	t.root.remove_child(stage_root)
+	stage_root.free()
+
+
+# ══════════════════════════════════════════════════════════════════
+#  Socket glyph art — step 6. Only "does it load and is it the right size" — nothing about legibility,
+#  that is verify-look's alone (`triangle-circle-to-game.md` step 6's own "Nets" line).
+# ══════════════════════════════════════════════════════════════════
+
+func _socket_glyph_textures_load_and_are_288(t) -> void:
+	t.ok(Fx.SOCKET_GLYPH_TEX.size() > 0, "소켓 문양 그림 표에 항목이 %d개다" % Fx.SOCKET_GLYPH_TEX.size())
+	# **Distinct paths, not distinct entries** — six glyph ids map onto only two files (rarity shares art
+	#  with its family, `fx_tuning.SOCKET_GLYPH_TEX`'s own comment), so this loads each file once.
+	var paths := {}
+	for glyph_id: int in Fx.SOCKET_GLYPH_TEX:
+		paths[Fx.SOCKET_GLYPH_TEX[glyph_id]] = true
+	t.ok(paths.size() > 0, "실제 그림 파일이 %d개다" % paths.size())
+	for path: String in paths:
+		var tex: Texture2D = load(path)
+		t.ok(tex != null, "%s 가 로드된다" % path)
+		if tex == null:
+			continue
+		# **288 = 2 * `Fx.TRI_SOCKET_R`** — the socket's own diameter on the 512 basis, driven from the
+		#  constant rather than the literal repeated, so the two cannot quietly drift apart.
+		var want := Fx.TRI_SOCKET_R * 2
+		t.eq(tex.get_width(), want, "%s 의 너비가 소켓 지름(%d)과 같다 (%d)" % [path, want, tex.get_width()])
+		t.eq(tex.get_height(), want, "%s 의 높이가 소켓 지름(%d)과 같다 (%d)" % [path, want, tex.get_height()])
+
+
+## **Every id in the table actually maps to one of the loaded files above** — a typo'd path would still
+##  "load" as `null` (caught above), but an id pointing at a path outside `Fx.SOCKET_GLYPH_TEX`'s own two
+##  files would not be caught by that loop at all (it only walks the *values that exist*, not "does every
+##  key resolve to a value in range"). This walks the table from the id side instead.
+func _socket_glyph_ids_are_real_glyphs(t) -> void:
+	for glyph_id: int in Fx.SOCKET_GLYPH_TEX:
+		t.ok(Glyph.DEFS.has(glyph_id), "소켓 문양 표의 id %d가 실제 문양 표에 있다" % glyph_id)
+
+
+## **`_socket_glyph_textures_load_and_are_288` only walks *distinct paths* — it cannot see a family pointing
+## at the wrong file** (verify-read: `SPREAD_R` retargeted to `socket_glyph_blast.png` still passed every
+## check above, because the set of distinct paths stayed `{spread, blast}` regardless of which id points at
+## which). This walks the table from the **id** side instead, checking each family's three rarities agree
+## with each other and differ from the other family — the exact thing the path-side loop cannot see.
+func _socket_glyph_families_do_not_cross(t) -> void:
+	var spread_paths := {}
+	for id: int in [Glyph.SPREAD_C, Glyph.SPREAD_R, Glyph.SPREAD_U]:
+		t.ok(Fx.SOCKET_GLYPH_TEX.has(id), "확산 id %d가 소켓 문양 표에 있다 (전제)" % id)
+		spread_paths[Fx.SOCKET_GLYPH_TEX.get(id, "")] = true
+	t.eq(spread_paths.size(), 1, "확산 세 희귀도가 같은 그림 하나를 가리킨다 (%s)" % [spread_paths.keys()])
+
+	var blast_paths := {}
+	for id: int in [Glyph.BLAST_C, Glyph.BLAST_R, Glyph.BLAST_U]:
+		t.ok(Fx.SOCKET_GLYPH_TEX.has(id), "폭발 id %d가 소켓 문양 표에 있다 (전제)" % id)
+		blast_paths[Fx.SOCKET_GLYPH_TEX.get(id, "")] = true
+	t.eq(blast_paths.size(), 1, "폭발 세 희귀도가 같은 그림 하나를 가리킨다 (%s)" % [blast_paths.keys()])
+
+	if spread_paths.size() == 1 and blast_paths.size() == 1:
+		t.ok(spread_paths.keys()[0] != blast_paths.keys()[0],
+			"확산 그림과 폭발 그림이 서로 다른 파일이다 (%s ≠ %s)" % [spread_paths.keys()[0], blast_paths.keys()[0]])
 
 
 # ══════════════════════════════════════════════════════════════════

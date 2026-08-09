@@ -113,8 +113,15 @@ const AIM_DX := 10
 const FIRE_ORIGIN_FP := (FIRE_CX << SpellSim.FP_SHIFT) + SpellSim.FP_HALF
 
 ## How many cells right of the launch origin the gauntlet cell sits. It has to be **within the first tick's leap**
-##  (generation 0 speed 20 cells times drag => about 18 cells). Put it outside and the gauntlet is never crossed and the check spins idle.
-const GAUNTLET_DCX := 10
+##  (generation 0 speed times drag). **The margin shrank when speed went 20 -> 12** — the leap was about 18 cells
+##  and is now **11.25** (12 cells x 240/256 = 45px), so the bolt born in cell `FIRE_CX` ends the first tick in
+##  cell `FIRE_CX + 11`.
+## **10 was left with 1 cell to spare and that is too thin** — one more nudge to `speed` and the gauntlet stops
+##  being crossed, at which point `_run_gauntlet`'s main branch measures nothing. **8 leaves 3 cells.**
+##  Moving it nearer costs nothing: the control ("fire one tick early and it is blocked") does not read the
+##  distance, and `end_cx > wx` holds by a wider margin, not a narrower one.
+##  Put it **outside** the leap and the gauntlet is never crossed and the check spins idle.
+const GAUNTLET_DCX := 8
 
 # ─── The stage for acceptance 1 and 3 ──────────────────────────────
 # **Everything is measured with "no element plus no glyph"** (design doc). With a fire rune the impact burns the footing,
@@ -124,12 +131,20 @@ const GAUNTLET_DCX := 10
 ## A launch origin **at the same height, to the character's left.** This far left of the box.
 ## It has to be a position that crosses the box **on the first tick** — take two ticks and gravity gets involved,
 ##  "on which tick does it hit" wobbles, and acceptance 3-2's tick-interval control collapses entirely.
-##  (Generation 0 leaps 75px on the first tick => firing from 36px away clears the box (32px) entirely.)
+##
+## **36 -> 12 when `speed` went 20 -> 12.** The first-tick leap is `speed * CELL_PX * DRAG_NUM / DRAG_DEN`
+##  = 12 x 4 x 240/256 = **45px** (it was 75px at speed 20), and the character's box is `Character.W_PX` = 20px.
+##  => The born point has to land in the window **`(ch.x - 25, ch.x)`** — nearer than 25px or the far end stops
+##  short of the box's right side, and past `ch.x` the near end starts *inside* the box. At 36 the far end landed
+##  at `ch.x + 11`, **inside**, and that is the assertion in `_direct_hit_costs_hp` that went red.
+## The value is a lead in px but the origin is quantized to a **cell** (`floori(.../4)`), so what matters is the
+##  born point: at 12 it is `ch.x - 10`, leaving **10px** to the near end of the window and **15px** to the far
+##  end. Cell quantization moves it by at most 3px, so neither margin drops below 10px.
 ## **Derived from the character's x. Do not hardcode it** — if a shot after the character has moved silently misses,
 ##  the invulnerability check becomes meaningless because "the second bolt missed".
 ##  The occasion for this discipline (the character had been pushed sideways by knockback) **disappeared along with knockback.**
 ##   The discipline stays — recoil, gravity and input still move the character.
-const HIT_LEAD_PX := 36
+const HIT_LEAD_PX := 12
 const HIT_ORIGIN_CY := 194
 
 ## The launch origin for measuring recoil alone (**outside the box to the right**). Firing right from here, the bolt does not cross the box.
@@ -155,9 +170,27 @@ const BLAST_FROM_CY := 180
 const BLAST_NEAR_RATIO := 0.6
 const BLAST_FAR_RATIO := 1.5
 
-## A single stone cell **between** the launch origin and the box. It has to be a position that does not touch the box —
+## A stone column **between** the launch origin and the box. It has to be a position that does not touch the box —
 ##  if it touches, "blocked by the wall" and "hit the box" get mixed.
-const WALL_CX := 76
+##
+## **76 -> 78 when `HIT_LEAD_PX` went 36 -> 12.** The origin moved right with the lead (born point `ch.x - 10`,
+##  cell 77), so cell 76 ended up **behind the muzzle** — the bolt was born past the wall, flew the whole tick and
+##  hit the character. Two of the three assertions in `_wall_stops_the_segment` went red together, which is the
+##  shape that check was built to have. The origin cell (77) is not checked by `_walk` (it is the muzzle), so the
+##  wall has to sit strictly between 77 and the box's left edge (cell 80): **78 leaves a 4px gap to the box.**
+## **One cell, and that is measured, not assumed.** This comment briefly said two cells were needed, copying
+##  `_run_gauntlet`'s reasoning ("gravity drops the bolt a row inside the first tick, so a one-cell wall is
+##  missed underneath"). **That sentence is true there and false here**, and verify-read caught it by driving
+##  the path out:
+##
+##      this check   `[(78,196),(79,196),(80,196),(81,196),(82,196),(83,197),...]`
+##      _run_gauntlet   the y step lands on cell 86 and the gauntlet at 88 is crossed on row 101
+##
+##  The single y step Bresenham takes for `dx` 11 / `dy` 1 falls near the **middle** of the leap. The wall sits
+##  one cell past the muzzle, so it is met on the **first** step, always on the launch row; the gauntlet sits
+##  ten cells out, past the step, which is why **it** genuinely needs two. Reducing this one to one cell leaves
+##  every assertion green (measured). **Do not copy a rationale between the two — the distance decides it.**
+const WALL_CX := 78
 
 ## Vertical direct hit — straight down from **right above** the box. The only layout that goes through `_slab`'s axis-parallel branch.
 const VERT_CX := 80
@@ -685,6 +718,7 @@ func _wall_stops_the_segment(t) -> void:
 	var ch := _stander()
 	var w := WorldStep.new(g, spell, ch)
 	var row := _aim_row(ch)
+	# One row — see the `WALL_CX` comment for the driven path that says one is enough here.
 	g.apply(CellGrid.cmd_fill(WALL_CX, row, WALL_CX, row, Mat.STONE))
 	w.enqueue(_hit_cmd_at(ch))
 	_frames(w, Tuning.TICK_DIVIDER)

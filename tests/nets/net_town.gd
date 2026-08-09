@@ -475,15 +475,31 @@ func _the_gate_leaves_and_being_downed_comes_back(t) -> void:
 	root.call("_interact")
 	t.ok(not bool(root.get("_in_town")), "무대에서 멀쩡할 때 E는 아무 일도 안 한다")
 
-	# Downed: back to town.
+	# **Downed: the door moved** (`docs/plans/3.done/run-end-settlement.md`). E while downed no longer goes
+	#  home by itself — the settlement screen opens on its own instead, and now *its* button is what closes
+	#  the run. This is the only check in the suite that measures the whole loop actually closing end to end:
+	#  downed -> the panel opens -> the button -> the town.
 	ch.take_hit(Character.MAX_HP, false)
 	t.ok(bool(ch.downed), "쓰러졌다 (전제)")
 	root.call("_interact")
-	t.ok(bool(root.get("_in_town")), "쓰러진 채 E를 누르면 마을로 돌아온다")
+	t.ok(not bool(root.get("_in_town")), "쓰러진 채 E를 눌러도 더는 마을로 안 돌아간다 (그 문은 사라졌다)")
+
+	root.call("_physics_process", 1.0 / 60.0)
+	var settlement: Variant = root.get("_settlement")
+	t.ok(bool(settlement.call("is_showing")), "대신, 쓰러지고 한 프레임만 지나도 정산 화면이 저절로 열린다")
+
+	# **The signal's own connection lives in `_ready()`, which never runs outside the tree** (this file's own
+	#  wiring discipline, `_wired_root`'s header) — the same reason every other window here is driven by
+	#  calling its target function directly rather than emitting the input signal that would reach it in the
+	#  real game (`_toggle_pick`/`_toggle_assembly` above are called the same way). `enter_town` is exactly
+	#  what `stage.gd`'s own `_settlement.town_pressed.connect(enter_town)` would have run.
+	root.call("enter_town")
+	t.ok(bool(root.get("_in_town")), "정산 화면의 버튼이 하는 일(enter_town)을 실행하면 마을로 돌아온다")
 	t.eq(Vector2i(ch.x, ch.y),
 		Vector2i(TownMap.SPAWN_TILE.x * TILE_PX, TownMap.SPAWN_TILE.y * TILE_PX),
 		"마을의 출발 자리에 서 있다")
 	t.ok(not ch.downed, "그리고 다시 서 있다 (달리기가 닫히고 새로 시작한다)")
+	t.ok(not bool(settlement.call("is_showing")), "마을로 돌아오면서 정산 화면도 닫힌다 (reset_stage()가 닫는다)")
 
 	root.free()
 
@@ -515,7 +531,11 @@ func _wired_root(t) -> Node:
 			#  `_town_view` became required one feature earlier.
 			["_sky", "SkyBackground"],
 			# `_interact()` reaches the research window now, and `_build_room()` closes it.
-			["_research_window", "HUD/ResearchWindow"]]:
+			["_research_window", "HUD/ResearchWindow"],
+			# **`_settlement`** (`docs/plans/3.done/run-end-settlement.md`, Stage D) — `reset_stage()`'s own
+			#  last line below now calls `_settlement.close()`, so every check in this file dies on a null
+			#  before measuring anything without this.
+			["_settlement", "HUD/SettlementWindow"]]:
 		var n := root.get_node_or_null(NodePath(pair[1]))
 		t.ok(n != null, "씬에 %s 가 있다 (전제)" % pair[1])
 		if n == null:

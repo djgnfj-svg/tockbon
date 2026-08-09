@@ -13,6 +13,8 @@
 [ext_resource type="Script" path="res://src/view/three_pick_window.gd" id="11_pick"]
 [ext_resource type="Script" path="res://src/view/town_view.gd" id="12_town"]
 [ext_resource type="Script" path="res://src/view/research_window.gd" id="13_research"]
+[ext_resource type="Script" path="res://src/view/gate_view.gd" id="14_gate"]
+[ext_resource type="Script" path="res://src/view/settlement_window.gd" id="14_settlement"]
 
 [node name="Stage" type="Node2D" unique_id=630605066]
 script = ExtResource("1_stage")
@@ -27,6 +29,9 @@ script = ExtResource("2_cells")
 
 [node name="TownView" type="Node2D" parent="."]
 script = ExtResource("12_town")
+
+[node name="GateView" type="Node2D" parent="."]
+script = ExtResource("14_gate")
 
 [node name="MonsterView" type="Node2D" parent="."]
 script = ExtResource("9_monster")
@@ -94,6 +99,13 @@ mouse_filter = 2
 layout_mode = 3
 anchors_preset = 0
 script = ExtResource("13_research")
+
+[node name="SettlementWindow" type="Control" parent="HUD"]
+visible = false
+mouse_filter = 0
+layout_mode = 3
+anchors_preset = 0
+script = ExtResource("14_settlement")
 
 [node name="Terrain" type="TileMapLayer" parent="." unique_id=1198090814]
 position = Vector2(0, 1)

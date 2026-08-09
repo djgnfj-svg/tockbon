@@ -49,6 +49,13 @@ signal assembly_toggled
 ##  debug-key dictionaries. **Whether it opens or declines is not decided here** — `Progress` knows its own
 ##  state, the same discipline as the assembly window.
 signal pick_toggled
+## **ESC — closes whichever window E/Tab/P opened** (user request: "E 해서 뜬 게 ESC로 꺼져야 함. 모든 UI들은").
+##  **`ui_cancel`, one of Godot's own built-in default actions** — bound to Escape without needing an entry
+##  in `project.godot` (unlike the debug-key dictionaries below, this key survives into the real game, the
+##  same reason `toggle_assembly`/`pick_toggled` are actions and not raw keycodes).
+## **Which window closes, and whether closing one loses anything, is not decided here** — the same
+##  discipline every other toggle signal above already holds.
+signal cancel_requested
 ## **L — takes a pending boss reward. A shell-only debug key** (`stage1-bosses.md` Stage I).
 ## **Stands in for a decision the user has explicitly left open** ("how the fire rune is received" — the
 ## GDD's own open TBD) — the real reward (a rune card through the three-pick window) is milestone step 3, not
@@ -89,8 +96,9 @@ const MONSTER_KEYS: Dictionary = {
 	KEY_M: MonsterDefs.KIND_PIG, KEY_N: MonsterDefs.KIND_HEN,
 	# **B/C, not R** — R is already `reset_requested`. `stage1-bosses.md` stage A.
 	KEY_B: MonsterDefs.KIND_BULL, KEY_C: MonsterDefs.KIND_ROOSTER,
-	# **V, because the obvious letter is movement.** The wolf has no map placement, so this key is the
-	#  only way one ever reaches the screen (`monster_defs.KIND_WOLF`'s own box).
+	# **V, because the obvious letter is movement.** The wolf now has map placement too
+	#  (`docs/plans/3.done/monster-placement-stage1.md`) — this key stays only as the debug door every
+	#  other kind already has (`monsters-minimum`'s own reason for M/N), not the wolf's sole way on screen.
 	KEY_V: MonsterDefs.KIND_WOLF,
 }
 
@@ -144,6 +152,13 @@ func _unhandled_input(event: InputEvent) -> void:
 		#  there is no window yet to have stolen focus.
 		if k.is_action_pressed("open_pick"):
 			pick_toggled.emit()
+			get_viewport().set_input_as_handled()
+			return
+		# **Same "is the action known at all" risk as Tab/P above** — `ui_cancel` is built in, so there is no
+		#  project-settings edit to forget here, but a renamed/removed built-in action would fail the same
+		#  silent way. Checked directly rather than assumed (`net_...` reads `InputMap.has_action`).
+		if k.is_action_pressed("ui_cancel"):
+			cancel_requested.emit()
 			get_viewport().set_input_as_handled()
 			return
 		if PRESET_KEYS.has(k.physical_keycode):

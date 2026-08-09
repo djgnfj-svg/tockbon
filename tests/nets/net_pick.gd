@@ -2,10 +2,14 @@ extends RefCounted
 ## `src/view/pick_layout.gd` — the three-pick window's coordinates
 ## (`docs/plans/3.done/levelup-and-three-picks.md`, Stage D).
 ##
-## **`circle_window.gd`'s own header pins the reason this file exists at all**: `_draw()` cannot be measured
-## headless (it needs a live draw context; `get_theme_default_font()` returns null untreed), so judgment is
-## pushed into a static coordinate file the nets *can* call directly, and the drawing and the hit test both
-## read the *same* function instead of two copies.
+## **`circle_window.gd`'s own header pins the reason this file exists at all**: `_draw()` used to be
+## unmeasurable headless — not because of a null font (checked directly, harness-manager: a bare `Control`
+## and the real `CircleWindow`, both untreed, both return a non-null `get_theme_default_font()` — Godot
+## 4.7.1's default theme needs no tree at all), but because `run_nets.gd` itself never turned a single
+## engine frame before quitting (see that file's own header, and `net_frame_runner.gd` for the fix and the
+## proof). Judgment is still pushed into a static coordinate file the nets *can* call directly regardless —
+## that part of the design was never about what a net *can* run, only about the drawing and the hit test
+## reading the *same* function instead of two copies, and pixel-level "does it look right" staying verify-look's job.
 ##
 ## **`_gui_input()` is a different case — verify-read's own correction.** It needs no draw context: `size` is
 ## settable by hand, `Layout.*` is static, `Progress` is injectable, and `accept_event()` is harmless untreed.
@@ -63,6 +67,7 @@ func run(t) -> void:
 	_cancel_confirm_clears_it_without_touching_progress(t)
 	_no_pushed_out_glyph_is_stashed_anywhere(t)
 	_full_round_trip_pick_to_a_bigger_hit(t)
+	await _card_picture_draws_every_glyph_with_a_rarity_ring(t)
 
 
 ## **The three card rects do not overlap and sit inside the window.** Widening a card into its neighbor's
@@ -165,9 +170,11 @@ func _buttons_stay_inside_the_window_and_do_not_overlap_cards(t) -> void:
 ##
 ## **Outside the tree on purpose** — the same discipline the rest of this suite holds. `setup()` injects
 ## `Progress` directly, `size` is set by hand (`_ready()` never runs untreed), and `Layout.*` — the only thing
-## `_gui_input` actually consults for hit-testing — is static. `_draw()` is never called here; it needs a live
-## font (`get_theme_default_font()` returns null untreed), which is exactly why this window pushed rarity,
-## dummy-marking and effect-text judgment into `pick_layout.gd`/`fx_tuning.gd` instead of keeping it here.
+## `_gui_input` actually consults for hit-testing — is static. `_draw()` is not called here — untreed was
+## never the blocker on its own (this file's own header has the correction: the font is not null untreed,
+## measured directly), but a frame still has to actually turn for it to run, which is `net_frame_runner.gd`'s
+## job to prove, not this file's — so rarity, dummy-marking and effect-text judgment stay pushed into
+## `pick_layout.gd`/`fx_tuning.gd` instead of living here.
 func _gui_input_drives_the_real_window_state(t) -> void:
 	var pr := Progress.new()
 	pr.pending_picks = 1
@@ -219,7 +226,8 @@ func _click(win: Control, pos: Vector2) -> void:
 
 
 ## **`three_pick_window._card_rects()` — the rects `_draw()` actually paints, pulled out on purpose so a net
-## can call it directly.** `_draw()` cannot run headless (`get_theme_default_font()` is null untreed), and a
+## can call it directly.** This file's checks don't turn a frame, so `_draw()` itself doesn't run here (the
+## font is not the reason — see the header correction above), and a
 ## text-scan for `"Layout.cards(size, drawn.size())"` was tried first and **evaded**: adding an unused decoy
 ## call with the real expression next to a hardcoded `Layout.cards(size, 3)` satisfied the scan while the
 ## drawing still used the wrong count. Calling `_card_rects()` and reading its actual return value cannot be
@@ -579,7 +587,24 @@ func _no_pushed_out_glyph_is_stashed_anywhere(t) -> void:
 		"res://src/actor/progress.gd": ["_drawn", "_owned_runes", "_reward_pending"],
 		"res://src/actor/spell_circle.gd": ["_layers", "_runes"],
 		"res://src/actor/world_step.gd": ["_died_kind", "_died_x", "_died_y", "_monsters", "_queue"],
+		# **`monster_placement.gd` added here, deliberately** (`docs/plans/3.done/
+		#  monster-placement-stage1.md`, Stages A+B) — placement bookkeeping keyed by row index (which
+		#  row is spent, which row's monster died, the wake hysteresis bit), the exact shape
+		#  `world_step.gd`'s own `_monsters`/`_died_kind` entries one line up already are. Not a record of
+		#  a glyph that left a spell layer, which is what this file's no-inventory check exists to catch.
+		"res://src/actor/monster_placement.gd":
+			["_id_to_row", "_kind", "_monster_id", "_primed", "_spent", "_tx"],
 		"res://src/view/blast_fx.gd": ["_flashes"],
+		# **`_socket_glyph_tex` added here, deliberately** (`triangle-circle-to-game.md` step 6) — glyph id
+		#  -> loaded texture, the same shape `spell_view._bolt_tex`/`research_window._icons` already are.
+		#  Loaded art is not a glyph that left a spell layer, which is what this file's no-inventory check
+		#  exists to catch.
+		"res://src/view/circle_window.gd": ["_socket_glyph_tex"],
+			# **`_socket_glyph_tex` added here too, deliberately** — the same cache, the same loader
+			#  (`CircleWindow.load_socket_glyph_tex()`), now also read by this window's own card picture
+			#  (`three_pick_window._draw_pick_card_glyph`). Loaded art, not a record of a glyph that left a
+			#  spell layer — the same reasoning `circle_window.gd`'s own entry above already gives.
+			"res://src/view/three_pick_window.gd": ["_socket_glyph_tex"],
 		# **The six animation fields added here, deliberately** — the same discipline `_reward_pending`'s own
 		#  comment names. `_anim`/`_prev_x`/`_prev_reload`/`_attack_left`/`_hurt_left` are all keyed by
 		#  **monster id** and hold a frame counter, and `_anim_sheets` is loaded art; none of them is a record
@@ -726,3 +751,95 @@ func _full_round_trip_pick_to_a_bigger_hit(t) -> void:
 		"화면의 클릭으로 만든 packed_glyphs()로 쏘면 %d대에 죽는다 (한 대 %d — %d%%) — 절대값" % [
 			want_boosted, dmg_boosted, boost])
 	t.ok(boosted < common, "그리고 실제로 더 적은 대수다 (%d < %d)" % [boosted, common])
+
+
+# ══════════════════════════════════════════════════════════════════
+#  The card's own glyph picture — driven for real, not text-scanned
+# ══════════════════════════════════════════════════════════════════
+
+## **Records what `three_pick_window.gd`'s own drawing hooks actually did** — the same idiom
+## `net_circle._RecordingCircleWindow` already established for `circle_window.gd`'s equivalent functions
+## (that file's own header: a native `draw_texture_rect`/`draw_circle` call cannot be overridden directly,
+## only a named method, so the production code was split into small hooks for exactly this reuse).
+class _RecordingThreePickWindow extends ThreePickWindow:
+	var card_glyph_calls: Array[int] = []
+	var texture_draws: Array[Dictionary] = []      # {glyph_id, tex} for each card-picture texture draw
+	var rarity_ring_calls: Array[Dictionary] = []  # {glyph_id, r} for each card-picture rarity ring
+	var procedural_draws: Array[int] = []          # glyph ids drawn procedurally (_draw_pick_glyph_shape)
+
+	func _draw_pick_card_glyph(at: Vector2, r: float, glyph_id: int) -> void:
+		card_glyph_calls.append(glyph_id)
+		super._draw_pick_card_glyph(at, r, glyph_id)
+
+	func _draw_pick_card_texture(at: Vector2, r: float, tex: Texture2D, glyph_id: int) -> void:
+		texture_draws.append({"glyph_id": glyph_id, "tex": tex})
+		super._draw_pick_card_texture(at, r, tex, glyph_id)
+
+	func _draw_pick_card_rarity_ring(at: Vector2, r: float, glyph_id: int) -> void:
+		rarity_ring_calls.append({"glyph_id": glyph_id, "r": r})
+		super._draw_pick_card_rarity_ring(at, r, glyph_id)
+
+	func _draw_pick_glyph_shape(at: Vector2, r: float, glyph_id: int, alpha: float) -> void:
+		procedural_draws.append(glyph_id)
+		super._draw_pick_glyph_shape(at, r, glyph_id, alpha)
+
+
+## **Every one of the 9 ids, actually drawn — tree-and-pumped, the same technique `net_circle._draw_
+## actually_runs_headless` uses for `circle_window.gd`** (`net_frame_runner.gd`'s own correction: untreed was
+## never the blocker, zero frames turning was — `_draw()` needed a real frame, not a font, and this file's
+## own header already carried the old, wrong half of that belief).
+##
+## **Before this feature, a three-pick card drew name/rarity-word/effect-sentence and nothing pictorial** —
+## the user, looking at the real screen, asked for exactly the gap this check now closes: "문양링이나 이런
+## 게 떴을 때 이게 문양 모양이 같이 뜨게 해줘". An id silently skipped by either branch is this repo's
+## signature fake (CLAUDE.md: "screen changes but sim doesn't" — the model already holds this glyph in the
+## drawn list, the card must show *something* for it).
+##
+## **Split by branch on purpose**: the 6 ids with real art (`Fx.SOCKET_GLYPH_TEX`) must take the texture
+## path and never the procedural one; the 3 dummy ids (no art yet) must take the procedural fallback and
+## never the texture one — a card that quietly swapped the two for any id would still "draw something" and
+## pass a weaker check.
+## **The rarity ring is read by the id it was actually drawn with, not just counted** —
+## `net_circle._draw_actually_runs_headless`'s own regression (the socket rarity ring skipped once, three
+## rarities pixel-identical) is exactly the class of bug a call-count alone hides.
+func _card_picture_draws_every_glyph_with_a_rarity_ring(t) -> void:
+	for glyph_id: int in Glyph.ALL:
+		var pr := Progress.new()
+		pr.pending_picks = 1
+		pr.set("_drawn", [glyph_id] as Array[int])
+
+		var win := _RecordingThreePickWindow.new()
+		win.setup(pr, SpellCircle.new())
+		win.size = Fx.PICK_RECT.size
+		win.visible = true
+		t.root.add_child(win)
+		win.queue_redraw()
+		await t.pump_frames(3)
+		t.ok(win.is_inside_tree(), "문양 %d 카드 창을 트리에 넣었다 (전제)" % glyph_id)
+
+		t.ok(win.card_glyph_calls.has(glyph_id),
+			"문양 %d — 카드 그림 함수가 실제로 호출됐다 (%s)" % [glyph_id, win.card_glyph_calls])
+
+		var textured_ids: Array[int] = []
+		for d: Dictionary in win.texture_draws:
+			textured_ids.append(int(d["glyph_id"]))
+
+		if Fx.SOCKET_GLYPH_TEX.has(glyph_id):
+			t.ok(textured_ids.has(glyph_id),
+				"문양 %d — 그림이 있으니 텍스처 경로로 그려졌다 (%s)" % [glyph_id, textured_ids])
+			t.eq(win.procedural_draws.count(glyph_id), 0,
+				"문양 %d — 그림이 있는 id는 절차적 폴백을 안 탄다" % glyph_id)
+		else:
+			t.ok(win.procedural_draws.has(glyph_id),
+				"문양 %d — 그림이 없으니 절차적 폴백으로 그려졌다 (%s)" % [glyph_id, win.procedural_draws])
+			t.eq(textured_ids.count(glyph_id), 0,
+				"문양 %d — 그림 없는 id는 텍스처 경로를 안 탄다" % glyph_id)
+
+		var ring_ids: Array[int] = []
+		for d: Dictionary in win.rarity_ring_calls:
+			ring_ids.append(int(d["glyph_id"]))
+		t.ok(ring_ids.has(glyph_id),
+			"문양 %d — 희귀도 링이 그 문양 자신의 id로 그려졌다 (%s)" % [glyph_id, ring_ids])
+
+		t.root.remove_child(win)
+		win.queue_free()

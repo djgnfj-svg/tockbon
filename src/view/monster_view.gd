@@ -321,7 +321,7 @@ func _scan_anim() -> void:
 		if m.reload_left > prev_reload:
 			_attack_left[m.id] = oneshot_frames(m.kind, Fx.MON_ATTACK)
 		_prev_reload[m.id] = m.reload_left
-		var state := resolve_state(m.kind, m.pattern, _hurt_left.has(m.id), _is_attacking(m), moving)
+		var state := resolve_state(m.kind, m.pattern, m.on_ground, _hurt_left.has(m.id), _is_attacking(m), moving)
 		var cur: Dictionary = _anim.get(m.id, {})
 		if int(cur.get("state", -1)) != state:
 			_anim[m.id] = {"state": state, "t": 0}
@@ -1128,12 +1128,24 @@ func _draw_dmg_number(canvas: CanvasItem, n: Dictionary) -> void:
 ##  (1) **A boss's pattern outranks everything.** `Pattern` is the sim's own state machine — a bull that
 ##    flinched out of its charge because a bolt landed would be **the screen contradicting the sim**, which is
 ##    this repo's signature fake. A boss has no hurt sheet for the same reason (`Fx.MONSTER_ANIM`'s box)
-##  (2) **Hurt outranks attacking** — being interrupted is the more urgent sentence, and a hen that keeps
-##    spitting while dying reads as "my hit did nothing"
-##  (3) Attacking, then walking, then standing
+##  (2) **Hurt outranks everything below it** — being interrupted is the more urgent sentence, and a hen that
+##    keeps spitting (or jumping) while dying reads as "my hit did nothing"
+##  (3) **Airborne outranks attacking** (`monster-ai-jump-and-separation.md`, Stage B, team-lead's own
+##    recommendation) — `_is_attacking()`'s pig/wolf branch is a *proximity condition*, not an event
+##    (`_is_attacking`'s own header), so a pig jumping near the player would otherwise never show a jump
+##    frame at all — exactly the "it is trying to get out and cannot" picture the jump exists to draw
+##  (4) Attacking, then walking, then standing
 ## **`Pattern.IDLE` is not `MON_IDLE`** — a boss walks toward the player during `IDLE` (`Monster._boss_axis`),
-##  so it falls through to the same walk/stand question a trash mob answers.
-static func resolve_state(kind: int, pattern: int, hurt: bool, attacking: bool, moving: bool) -> int:
+##  so it falls through to the same airborne/walk/stand question a trash mob answers.
+##
+## **Correction, measured (Stage B's own named risk): no boss has a `MON_AIRBORNE` row, and this function does
+## not special-case that** — an idle boss with `on_ground == false` still resolves to `Fx.MON_AIRBORNE` here
+## (the pattern guard above only intercepts `pattern != IDLE`); `anim_row`'s own fallback then substitutes
+## `MON_IDLE`'s row for the missing state. **Left as-is, not fixed**: an idle boss falling off a ledge stops
+## playing its walk animation and plays its idle pose instead of a walk or a jump — small, real, and no boss
+## jump sheet exists or is planned (the plan's own Out of scope). `net_monster_sprite` drives and records this.
+static func resolve_state(kind: int, pattern: int, on_ground: bool, hurt: bool, attacking: bool,
+		moving: bool) -> int:
 	if BossAi.has_pattern(kind) and pattern != BossAi.Pattern.IDLE:
 		if pattern == BossAi.Pattern.WINDUP:
 			return Fx.MON_WINDUP
@@ -1148,6 +1160,8 @@ static func resolve_state(kind: int, pattern: int, hurt: bool, attacking: bool, 
 		return Fx.MON_STUN
 	if hurt:
 		return Fx.MON_HURT
+	if not on_ground:
+		return Fx.MON_AIRBORNE
 	if attacking:
 		return Fx.MON_ATTACK
 	return Fx.MON_WALK if moving else Fx.MON_IDLE

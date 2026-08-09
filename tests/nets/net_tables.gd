@@ -47,6 +47,7 @@ func run(t) -> void:
 	_defs_and_all_agree(t)
 	_view_follows_the_rune_axis(t)
 	_gen_tables(t)
+	_bolt_head_keeps_up(t)
 	_stage_map(t)
 	_wood_clumps(t)
 	_terrain_brush_follows_the_material_table(t)
@@ -429,6 +430,33 @@ func _gen_tables(t) -> void:
 	t.eq(Fx.bolt_px(last + 5), Fx.bolt_px(last), "연출도 같은 규칙으로 떨어진다")
 
 
+## **The only check holding the reason bolt speed was ever lowered.** Before it existed, `SIM_SIZES` could be
+##  put straight back to 20/12 and **every one of the 5,242 checks stayed green with stderr clean**
+##  (verify-read measured it) — the whole of `plans/3.done/bolt-speed-and-visibility.md` rested on nothing.
+##
+## The head is **art**, drawn `bolt_px(gen) * 2` px across (`bolt_px` is a radius), and `spell_view` interpolates
+##  the position every frame (`_head_px`/`_alpha`), so one tick's movement is spread across `TICK_DIVIDER` frames.
+##  **Advance further than your own body in one frame and consecutive frames never touch** — the art does not
+##  overlap itself and what the player sees is the code-drawn trail, not the sprite that was drawn for it.
+## **Per generation, because the floor is per generation.** Generation 1's head is half of generation 0's, so its
+##  floor is half too. That comparison had **never been made**: gen 1 sat at 10.67px/frame against an 8px head
+##  (ratio 1.33, still skipping) while the table was monotonic and this file was green. Its speed only ever moved
+##  because `_strictly_decreasing` forced it to, never because anyone looked at its own art.
+## **`<=`, not `<`, on purpose.** Both rows land exactly on 1.00 today; demanding strictly less would demand a
+##  value nobody chose, and demanding a margin would be a number invented right here.
+## **The premise this cannot see**: that `spell_view` still interpolates. Stop interpolating and the head jumps a
+##  whole tick (3x this) per frame while this stays green — that belongs to the view's own net, not to a table check.
+func _bolt_head_keeps_up(t) -> void:
+	t.ok(Tuning.SIM_SIZES.size() > 0, "세대 표가 비어 있지 않다 (검사가 한 번은 돈다)")
+	for gen in Tuning.SIM_SIZES.size():
+		# One tick moves `speed` cells; the view spreads that over `TICK_DIVIDER` frames.
+		var per_frame := Tuning.speed_cells(gen) * Tuning.CELL_PX / float(Tuning.TICK_DIVIDER)
+		var head_px := Fx.bolt_px(gen) * 2.0
+		t.ok(per_frame <= head_px,
+			"세대 %d의 머리가 한 프레임에 제 몸길이 안에서 움직인다 (프레임당 %.2fpx <= 그려지는 머리 %.1fpx)"
+				% [gen, per_frame, head_px])
+
+
 ## **Equal values are a failure.** Left equal, the net cannot distinguish "deliberately not decreased" from
 ## "forgot to decrease" — to turn an axis off, multiply by a constant on the consumer side.
 func _strictly_decreasing(t, rows: Array[Dictionary], nm: String, keys: Array) -> void:
@@ -756,7 +784,13 @@ func _monster_defs_columns_are_complete(t) -> void:
 		var d: Dictionary = MonsterDefs.DEFS[kind]
 		t.ok(d.has("name") and d.has("w_px") and d.has("h_px") and d.has("step_cells")
 				and d.has("max_hp") and d.has("speed_px") and d.has("invuln_ticks")
-				and d.has("xp") and d.has("money"),
-			"종류 %d 정의에 아홉 칸이 다 있다 (xp·money 포함)" % kind)
+				and d.has("xp") and d.has("money") and d.has("jump_vy_px"),
+			"종류 %d 정의에 열 칸이 다 있다 (xp·money·jump_vy_px 포함)" % kind)
 		t.ok(int(d.get("xp", -1)) >= 0, "종류 %d의 xp가 음수가 아니다" % kind)
 		t.ok(int(d.get("money", -1)) >= 0, "종류 %d의 money가 음수가 아니다" % kind)
+		# **Strictly negative — every row, bosses included** (team-lead's correction: a `0.0` boss placeholder
+		#  was a false handle, since it made the kind gate untestable no matter what removed it). Every kind
+		#  now carries a real launch value; `BossAi.has_pattern(kind)` in `monster.gd:step()` is the only
+		#  thing that keeps a boss from ever reading it.
+		t.ok(float(d.get("jump_vy_px", 1.0)) < 0.0,
+			"종류 %d의 jump_vy_px가 음수다 (위쪽 — 보스도 포함, 0.0 자리표시자는 더 이상 없다)" % kind)

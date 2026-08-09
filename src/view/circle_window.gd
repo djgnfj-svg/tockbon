@@ -11,8 +11,12 @@ extends Control
 ## ```
 ##
 ##  Being able to shoot from outside is the evidence for "the world does not stop" (design acceptance 4).
-##   That is why **no full-screen `Control` is laid down** — the moment the screen is covered, `IGNORE` or `STOP`
-##   alike, that evidence disappears or firing dies.
+##   That is why **no full-screen `Control` is laid down while the run is live** — the moment the screen is
+##   covered, `IGNORE` or `STOP` alike, that evidence disappears or firing dies.
+##  **The one declared exception is `settlement_window.gd`** (`docs/plans/3.done/run-end-settlement.md`) — it
+##   covers the whole 960x540 canvas and stops the world outright, and it is safe only because it exists
+##   solely once the run is already over: there is nothing left to shoot. This sentence used to claim no
+##   exception existed at all; that claim is dead, and this doc is where it died.
 ##  The value is written in `stage.tscn` and **is not overwritten at runtime here.** Overwrite it and the value
 ##   in the scene becomes a meaningless false knob, which quietly overturns it later when a modal does have to
 ##   block what is behind (the same comment in `stage.gd` — a v1 measurement).
@@ -55,6 +59,14 @@ var _progress: Progress = null
 var _picked_kind := -1
 var _picked_item := -1
 
+## **Socket glyph art, loaded once** — the same idiom as `spell_view._bolt_tex`: read every path in
+##  `Fx.SOCKET_GLYPH_TEX` here in `_ready()`, bark once per bad path and move on, rather than calling
+##  `load()` from `_draw()` every frame (that would both re-hit the cache 60 times a second and, on a bad
+##  path, bury the log at 60 lines a second). Only ids that actually loaded end up in here — a glyph id with
+##  no entry (nine ids total, six with art, three — `DUMMY_C`/`R`/`U` — without) is the normal case
+##  `_draw_ring` falls back on, not an error.
+var _socket_glyph_tex: Dictionary = {}
+
 
 func setup(progress: Progress, circle: SpellCircle) -> void:
 	_progress = progress
@@ -76,6 +88,24 @@ func _ready() -> void:
 	#  `fx_tuning` is the single source for the dimensions (write offsets in the scene and there are two places).
 	position = Fx.WINDOW_RECT.position
 	size = Fx.WINDOW_RECT.size
+	_socket_glyph_tex = load_socket_glyph_tex()
+
+
+## **Pulled out of `_ready()` so a second `_draw()`-owning node can load the same art without a second copy
+## of the loading loop** (`docs/design/...` three-pick card art — `three_pick_window.gd` calls this too, the
+## same "one shared loader, redrawn separately" split `monster_view._draw_flipped(canvas, ...)` already set
+## the precedent for: `CanvasItem.draw_*` only runs inside the calling node's own `_draw()`, so the *drawing*
+## cannot be shared, but the *art* and the *rule for which shape to draw* can).
+static func load_socket_glyph_tex() -> Dictionary:
+	var out: Dictionary = {}
+	for glyph_id: int in Fx.SOCKET_GLYPH_TEX:
+		var path: String = Fx.SOCKET_GLYPH_TEX[glyph_id]
+		var tex: Texture2D = load(path)
+		if tex == null:
+			push_error("CircleWindow: cannot read the socket glyph image - %s" % path)
+			continue
+		out[glyph_id] = tex
+	return out
 
 
 ## Tab. Only one door is kept so the shell does not touch `visible` directly — later, when opening and closing
@@ -94,12 +124,15 @@ func toggle() -> void:
 #   against ("'It can't be driven headless' was claimed three times and was wrong three times").**
 #   `net_pick.gd` already proves the sibling window: `ThreePickWindow.new()` untreed, `setup()` called
 #   directly, then `_gui_input()` driven with a hand-built `InputEventMouseButton` via `.call()`. Ordinary
-#   methods (`_can_pick` · `_slot_accepts` · `_gui_input` itself) do not need the tree — only `_draw()`
-#   genuinely resists, because `get_theme_default_font()` returns null untreed (no live font).
+#   methods (`_can_pick` · `_slot_accepts` · `_gui_input` itself) do not need the tree.
 #   `net_circle._owns_rune_gates_can_pick_on_an_untreed_window` drives `_can_pick` this same way.
-#  => **`_draw()` is still verify-run/verify-look's alone.** Everything else here is reachable headless —
-#   push judgment into the coordinate functions and the model where it's easy to reach, not because this
-#   layer is unreachable.
+#  **A second, later claim on this same line was also wrong**: "only `_draw()` resists, because
+#   `get_theme_default_font()` returns null untreed" — measured false (`net_frame_runner.gd`'s own header,
+#   harness-manager): the font is never null, even untreed. `_draw()`'s real requirement is a live draw
+#   context, which comes from being **treed and frame-pumped**, not from a font. `net_circle.
+#   _draw_actually_runs_headless` does exactly that (`t.root.add_child(win)` + `await t.pump_frames(n)`) and
+#   drives this file's `_draw()` for real. **Pixel-level appearance is still verify-look's alone** — a net can
+#   confirm the code runs without error, never that a ring looks right.
 # ══════════════════════════════════════════════════════════════════
 
 ## **Being `_gui_input`, the coordinates are already relative to the window's inside.** Take it through
@@ -301,11 +334,11 @@ func _draw() -> void:
 	#  different coordinates, and that goes to the wrong layer with no error.
 	var area := Layout.circle_area(page.size)
 	var id := _circle.circle_id()
-	_draw_frame(area)
+	_draw_frame(area, id)
 	_draw_rune_slot(area, id)
 	# **The layer count here comes from the model (`layer_count()`) while the ring radii inside `_draw_ring`
-	#  come from the table (`layer_rings()`) — there are two sources.** Today both derive from `circle_defs`
-	#  and give the same number, but the day they drift, `_draw_ring`'s `layer >= rings.size()` guard
+	#  come from the table (`layer_bands()`) — there are two sources.** Today both derive from `circle_defs`
+	#  and give the same number, but the day they drift, `_draw_ring`'s `layer >= bands.size()` guard
 	#  **draws less without barking** (if the model has more) or **loops less** (if the table has more).
 	#  On screen it only reads as "one layer is missing". If they are to be merged, merge toward **the table** —
 	#   the drawing must get its seats from the table, and the model only knows what is placed on those seats.
@@ -330,12 +363,74 @@ func _draw() -> void:
 
 ## Circle axis — the vessel's rim. Even with no circle **the seat is drawn.** That is what "an empty slot" is,
 ##  and it is why the magic circle visibly shrinking to a single slot is seen when the circle is removed (stage 5).
-func _draw_frame(area: Rect2) -> void:
+##
+## **`PIC_TRIANGLE` gets its own frame here — the wrapping ring, the link bands, the center ornament.**
+##  This is the one place `_draw_frame` is allowed to branch on picture (`circle_layout.layer_bands`'s own
+##  header exempts exactly this function: "the picture is decided at the circle axis, and only there").
+## `CircleDefs.picture(CircleDefs.CIRCLE_NONE)` answers `PIC_ROUND` quietly, so "no circle" still falls
+##  through to the plain vessel rim below — unchanged from before this branch existed.
+func _draw_frame(area: Rect2, circle_id: int) -> void:
 	var f := Layout.frame(area)
+	if CircleDefs.picture(circle_id) == CircleDefs.PIC_TRIANGLE:
+		_draw_triangle_frame(area, f, circle_id)
+		return
 	# **It uses the same function as the palette's circle.** Draw it separately here and the day the circle's
 	#  frame changes, **only the palette's circle fails to follow** — runes and glyphs already shared functions
 	#  and only the circle did not.
 	_draw_circle_symbol(f["center"], f["radius"])
+
+
+## **The triangle's own frame — belongs to the circle axis, not the rune axis.** It reads
+##  `Layout._socket_centers` directly, the same shared helper `rune_slots()`/`layer_bands()` both read —
+##  **not** `Layout.rune_slots()`. Reading the rune axis's own function here would hang the circle axis off
+##  the rune axis, exactly the coupling `circle_layout.gd`'s header argues against (one level up into this file).
+##
+## Three pieces, in the order `docs/design/circle-art.md`/`tools/pixel/draw_circle.py:123` describe them —
+##  split into their own named functions **so each is independently drivable** (verify-read: a mutation that
+##  made this whole function return before drawing anything left every net in this file green, because
+##  nothing here called it in a way that could observe "drew nothing" versus "drew the real thing" — counting
+##  calls to the three pieces below closes that).
+##  (1) the wrapping ring at `TRI_RING`/512 of the frame radius — **not the full radius**, the sockets punch
+##      through it (a user request recorded there)
+##  (2) the three link bands between socket centers, half-width `TRI_LINK_HALF`
+##  (3) the center ornament, two circles at `TRI_CENTER_R` and `TRI_CENTER_R - TRI_BAND`.
+##      **It is not a glyph seat** — nothing anchors a `+` or a symbol here, on purpose
+## Still the procedural line-and-circle vocabulary (`_draw_circle_symbol`'s own family) — the socket glyph
+##  art is step 6.
+##
+## **Invariant, not re-checked here**: `centers.size()` comes from `CircleDefs.rune_slots(circle_id)`, the
+##  same count `circle_layout.layer_bands()` independently uses to build `n` bands. The two agree today only
+##  because the triangle row's own `layers` and `rune_slots` columns are both 3 — if a future picture ever
+##  gave those two columns different values, this file's link topology and that file's band count would
+##  quietly draw a different number of sockets each, with nothing raising an index error unless one runs
+##  past the other's array length.
+func _draw_triangle_frame(area: Rect2, f: Dictionary, circle_id: int) -> void:
+	var radius: float = f["radius"]
+	var center: Vector2 = f["center"]
+	var basis := radius / float(Fx.TRI_CANVAS_R)
+
+	_draw_triangle_wrap_ring(center, float(Fx.TRI_RING) * basis)
+
+	var n := CircleDefs.rune_slots(circle_id)
+	var centers := Layout._socket_centers(area, n)
+	_draw_triangle_links(centers, float(Fx.TRI_LINK_HALF) * basis * 2.0)
+
+	_draw_triangle_ornament(center, float(Fx.TRI_CENTER_R) * basis, float(Fx.TRI_BAND) * basis)
+
+
+func _draw_triangle_wrap_ring(center: Vector2, r: float) -> void:
+	draw_circle(center, r, Fx.CIRCLE_FRAME, false, Fx.CIRCLE_FRAME_PX)
+
+
+func _draw_triangle_links(centers: PackedVector2Array, width: float) -> void:
+	for i in centers.size():
+		var j := (i + 1) % centers.size()
+		draw_line(centers[i], centers[j], Fx.CIRCLE_FRAME, width)
+
+
+func _draw_triangle_ornament(center: Vector2, outer_r: float, band: float) -> void:
+	draw_circle(center, outer_r, Fx.CIRCLE_FRAME, false, Fx.CIRCLE_FRAME_PX)
+	draw_circle(center, outer_r - band, Fx.CIRCLE_FRAME, false, Fx.CIRCLE_FRAME_PX)
 
 
 ## Rune axis — the rune seats. Both the **number** of seats and their **positions** come from the circle table.
@@ -355,7 +450,7 @@ func _draw_frame(area: Rect2) -> void:
 ##   frame **then** — `spell_sim._run_glyph`'s bark is once per impact, an entirely different cost.
 ##   The same goes for `_draw_glyph` below.
 func _draw_rune_slot(area: Rect2, circle_id: int) -> void:
-	var r := Layout.rune_radius(area)
+	var r := Layout.rune_radius(circle_id, area)
 	var slots := Layout.rune_slots(circle_id, area)
 	for i in slots.size():
 		var rune_id := _circle.rune_at(i)
@@ -379,41 +474,118 @@ func _draw_rune_slot(area: Rect2, circle_id: int) -> void:
 ##   (2) **A brightness difference** — bright inside, darker outward. It divides by the layer count, so a
 ##     3-layer circle is automatic
 ##  A concentric circle alone says only that an order **exists**, never **which side comes first.**
+## **No picture branch — that is the whole point of `edges`/`seat` on `layer_bands()`'s dict.** A concentric
+##  band's `edges` holds one radius and strokes one ring, exactly as before; a socket band's `edges` holds two
+##  and strokes the full annulus (outer and inner rim) at the **same** center. Whichever picture this circle
+##  is, this function never asks — a window with an `if picture ==` in it here would be the coupling
+##  `circle_layout.gd`'s header argues against, one level up (`_draw_frame`/`_draw_triangle_frame` above is
+##  the one place that split is allowed to live, because the frame genuinely differs shape to shape).
 func _draw_ring(area: Rect2, circle_id: int, layer: int, font: Font) -> void:
-	var rings := Layout.layer_rings(circle_id, area)
-	if layer < 0 or layer >= rings.size():
+	var bands := Layout.layer_bands(circle_id, area)
+	if layer < 0 or layer >= bands.size():
 		return
-	var n := rings.size()
+	var n := bands.size()
+	var band: Dictionary = bands[layer]
+	var center: Vector2 = band["center"]
+	var edges: PackedFloat32Array = band["edges"]
 	# With only 1 layer there is nothing to divide — dividing by 0 makes the drawing disappear wholesale.
 	var t := 0.0 if n <= 1 else float(layer) / float(n - 1)
-	# **`frame()` is not called.** The center is a shared value belonging to no axis, and calling the circle
-	#  axis here hangs the layer axis off it (the `circle_layout.center` comment).
-	var c := Layout.center(area)
-	draw_circle(c, rings[layer], Fx.CIRCLE_RING_INNER.lerp(Fx.CIRCLE_RING_OUTER, t),
-		false, Fx.CIRCLE_RING_PX)
+	var col := Fx.CIRCLE_RING_INNER.lerp(Fx.CIRCLE_RING_OUTER, t)
+	# **One call per edge, through a named seat** (verify-read: `for e in [edges[0]]` — dropping the inner
+	#  rim of a socket band — passed every net in this file, because nothing recorded which radii were
+	#  actually stroked). `_draw_ring_edge` exists so a test can override it and record.
+	for e in edges:
+		_draw_ring_edge(center, e, col)
 
+	# `edges[0]` is always the outer edge (`edges` is outer-first) — the one radius to hang the layer number
+	#  beside regardless of how many edges this band owns.
+	var outer: float = edges[0]
 	if font != null:
-		# The 9 o'clock direction. The glyph symbol sits at 12 o'clock, so writing it there overlaps.
+		# **Whether the socket number (1·2·3) belongs on the triangle picture is still an open user
+		#  question** (`triangle-circle-to-game.md`, decision C) — this is not a decision, just what falls
+		#  out of not special-casing it: `_draw_ring` already wrote the layer number for every band before
+		#  the triangle existed, and nothing here filters it back out. Judged on screen, not before.
+		# The 9 o'clock direction (relative to `center`). The glyph symbol sits at 12 o'clock (`seat`,
+		#  round) or dead center (`seat`, triangle), so writing the number there would overlap either way.
 		# Both the text size and the offset distance **derive from the radius** — grow only the size and keep
 		# the offset in px and the text sinks into the ring as it grows.
 		var num := Layout.layer_num_size(area)
-		draw_string(font, c + Vector2(
-				-rings[layer] + float(num) * Fx.CIRCLE_LAYER_NUM_INSET_FRAC,
+		draw_string(font, center + Vector2(
+				-outer + float(num) * Fx.CIRCLE_LAYER_NUM_INSET_FRAC,
 				-float(num) * Fx.CIRCLE_LAYER_NUM_LIFT_FRAC),
 			str(layer + 1),
 			HORIZONTAL_ALIGNMENT_LEFT, -1, num, Fx.CIRCLE_LAYER_NUM)
 
-	var slots := Layout.layer_slots(circle_id, area)
-	if layer >= slots.size():
-		return
+	var seat: Vector2 = band["seat"]
 	var glyph_id := _circle.glyph_at(layer)
 	# **Empty seats are drawn too — "you can place here" has to be in the picture.**
 	#  Without drawing it, "a blocked seat" and "an empty seat" look the same, and in stage 4b-2b where to press
 	#   is not on the screen (the first of the three slot states — the `fx_tuning.SLOT_EMPTY` comment).
 	if glyph_id == Glyph.GLYPH_NONE:
-		_draw_empty_slot(slots[layer], Layout.glyph_radius(area))
+		_draw_empty_slot(seat, Layout.glyph_radius(area))
 		return
-	_draw_glyph(slots[layer], Layout.glyph_radius(area), glyph_id)
+	# **A socket band's own glyph art (step 6) — reached only when the band owns more than one edge.**
+	#  A concentric band (`PIC_ROUND`, and any future picture built the same way) always has exactly one
+	#  edge (`layer_bands`' own header), so this line never fires for the round circle without asking
+	#  `CircleDefs.picture()` — `_draw_ring` stays picture-agnostic in code even though the two pictures end
+	#  up drawn differently. **A glyph missing from `Fx.SOCKET_GLYPH_TEX` (three of nine ids today —
+	#  `DUMMY_C`/`R`/`U`, that map's own header) falls straight through to the same procedural symbol the
+	#  round circle and the palette both use — it must not draw nothing**, that is this repo's signature fake
+	#  with the sim and screen roles swapped (the model already holds a real glyph here; drawing nothing
+	#  would be the screen quietly failing to say so).
+	if edges.size() > 1 and _socket_glyph_tex.has(glyph_id):
+		_draw_socket_glyph_texture(seat, edges[0], _socket_glyph_tex[glyph_id], glyph_id)
+		return
+	_draw_glyph(seat, Layout.glyph_radius(area), glyph_id)
+
+
+func _draw_ring_edge(center: Vector2, r: float, col: Color) -> void:
+	draw_circle(center, r, col, false, Fx.CIRCLE_RING_PX)
+
+
+## **Fills the socket's bounding square** — side length is the socket's own diameter (`edges[0]`, the outer
+##  radius, doubled). Whatever inner hole the art has (spread 72 · blast 75, `triangle-circle-art.md`) is
+##  **baked into the art itself**, so filling the full square does not mask it — cropping to a smaller rect
+##  here would.
+##
+## **A rarity ring is drawn here now** (`RARITY_TINT`, the one decided device for rarity — "Rarity must
+##  separate by color", `levelup-and-three-picks.md`) — verify-read found the first version skipped it
+##  entirely, leaving common/rare/unique of the same family **pixel-identical** on a socket band, a real
+##  regression against that decided rule (`_draw_glyph`'s own rarity ring already holds it for the round
+##  circle and the palette). **Placed at the socket's own outer radius (`r`), not `RARITY_RING_RATIO` beyond
+##  it** — that ratio sizes the round circle's small glyph symbol floating in open space, but a socket's
+##  outer edge is already the picture's own boundary, and pushing further out lands past `TRI_RING`, the
+##  wrapping ring the socket already punches through. **Unverified on screen**: whether the ring still reads
+##  against the art, or blurs into `_draw_ring_edge`'s own stroke at the same radius — a place for the eye.
+## **For verify-look: the procedural fallback and the empty-slot `+` draw on top of the rune bead, not
+## inside the band** (verify-read, measured on today's `Fx.WINDOW_RECT`; not fixed — a screen judgment, not
+## a bug this file can resolve): frame radius **140.06** · socket center distance from the circle's own
+## center **100.67** · socket outer radius **39.39** · this band's inner edge **26.26**, which is also
+## `rune_radius()`'s own answer — `_draw_rune_slot` draws its rune bead as a **filled** disc of that same
+## radius at the socket center, and `_draw_ring`'s `seat` for this band **is that same point**, so the
+## procedural symbol (radius `glyph_radius()` **16.11**, rarity ring to **20.9**) and the empty-slot `+`
+## both land centered *inside* the rune bead, not spread across the band the way a concentric round-circle
+## layer's own drawing is. **The texture path is the only one that actually fills the band** — and even it
+## does not clear the rune: the art's own inner hole (spread **~72**, blast **~75**, on the 512 basis
+## `triangle-circle-art.md` measured) scales to **~19.7** viewport px here, smaller than the rune bead's
+## **26.26**, so the art covers roughly **6.5px** of the rune — the "48 band intrudes on the rune's 96" risk
+## the plan's own art doc flagged, now visible for the first time with a real rune drawn underneath it.
+## **Tinted, not raw** — measured: the art is a transparent field with strokes at RGB(26,24,22), so drawn
+## untinted on this window's dark panel **nothing appears**. The socket showed a bare rarity ring and the
+## glyph read as absent while the model held it. Same `GLYPH_TINT` the palette and the procedural fallback
+## use, so the three drawing paths stay one color axis (`three_pick_window._draw_pick_card_texture` too).
+func _draw_socket_glyph_texture(at: Vector2, r: float, tex: Texture2D, glyph_id: int) -> void:
+	var tint: Color = Fx.GLYPH_TINT.get(glyph_id, Fx.GLYPH_TINT_MISSING)
+	draw_texture_rect(tex, Rect2(at - Vector2(r, r), Vector2(r, r) * 2.0), false, tint)
+	_draw_socket_rarity_ring(at, r, glyph_id)
+
+
+## Split out of `_draw_socket_glyph_texture` so a test can record which glyph id the rarity colour was
+## actually read for — a call-count on the parent function alone cannot tell "drew the right rarity" from
+## "drew common's colour for everything".
+func _draw_socket_rarity_ring(at: Vector2, r: float, glyph_id: int) -> void:
+	var rarity_col: Color = Fx.RARITY_TINT.get(Glyph.rarity_of(glyph_id), Fx.GLYPH_TINT_MISSING)
+	draw_circle(at, r, rarity_col, false, Fx.RARITY_RING_PX)
 
 
 ## **Shape from `kind`, color from the glyph id, rarity from a ring around it.** Give each glyph its own

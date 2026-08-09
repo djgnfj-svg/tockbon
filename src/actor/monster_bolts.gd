@@ -52,7 +52,15 @@ const BOLT_STOP_PX := 240.0
 ##  Shared by fire bolts too — no reason yet to give the breath its own range.
 const BOLT_RANGE_PX := 480.0
 ## Bolt speed (px/s). Slightly faster than the player (260px/s) — slower and it is dodged by walking so it is
-##  not a threat, and as fast as a magic bolt (1,600px/s) it cannot be dodged on sight. Shared by fire bolts.
+##  not a threat, and as fast as a magic bolt it cannot be dodged on sight. Shared by fire bolts.
+##
+## **The upper comparison moved and the margin shrank a lot.** It said 1,600px/s, which was generation 0 at
+##  `speed` 20. Today (`sim_tuning.SIM_SIZES`, lowered for head-sprite visibility) it is
+##  **gen 0 = 960px/s · gen 1 = 480px/s** (`speed x CELL_PX x 20Hz`). So this 320 went from **1/5 of a magic
+##  bolt to 1/3**, and it is now **slower than a spread bolt** as well, not just the original.
+##  **The value was not changed** — "slightly faster than the player" is the lower bound that actually set it,
+##  and that bound did not move. What changed is that "nowhere near magic speed" is no longer much of a margin:
+##  **if a boss bolt starts reading as undodgeable, this is the first line to look at.**
 const BOLT_SPEED_PX := 320.0
 ## Reload (ticks, 20Hz) = 2 seconds. If half of 20 monsters are hens, that is 5 shots per second — a screen budget.
 const RELOAD_TICKS := 40

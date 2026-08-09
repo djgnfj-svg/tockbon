@@ -408,8 +408,8 @@ const GLYPH_MAX_LAYERS := 7
 ##  **the carve erases the place water would go, rather than water filling what was carved.** Generation 1 has 1 cell of margin.
 ##  `net_tables` already measures that inequality for `rune_r`, and it must measure `water_r` too.
 const SIM_SIZES: Array[Dictionary] = [
-	{"speed": 20, "rd": 8, "ignite_r": 12, "rune_r": 6, "carve_r": 2, "water_r": 6},
-	{"speed": 12, "rd": 4, "ignite_r": 6, "rune_r": 2, "carve_r": 1, "water_r": 2},
+	{"speed": 12, "rd": 8, "ignite_r": 12, "rune_r": 6, "carve_r": 2, "water_r": 6},
+	{"speed": 6, "rd": 4, "ignite_r": 6, "rune_r": 2, "carve_r": 1, "water_r": 2},
 ]
 
 ## **Size floor — reach it and spread doesn't apply** (GDD, "size floor").
@@ -424,35 +424,91 @@ const SPREAD_COUNT := 8
 
 ## Launch speed lives in the table above (`speed_cells(gen)`). Generation 0's value gets **no separate name** —
 ##  give the table's first row two names and one day only one gets fixed.
-##  Measured: 20 ticks x 20 cells x 4px = 1,600px/s. In tiles that is **50 tiles/s**, the same as the 16px world.
+##  Measured: 20 ticks x 12 cells x 4px = 960px/s. In tiles that is **30 tiles/s**.
+##
+## **Lowered from 20/12 to 12/6 for one reason only: the head sprite skipped past itself**
+##  (`plans/3.done/bolt-speed-and-visibility.md`). Movement per frame = `speed x 4px x 20Hz / 60fps` = `speed x 1.33px`,
+##  and the head drawn on screen is `fx_tuning.bolt_px(gen) x 2` (that value is a **radius**).
+##
+## **The floor is per generation, not one number** — it is set by **that generation's own art size**:
+##
+## ```
+##             px/frame              drawn head            ratio
+##  gen 0   12 x 1.33 = 16.00      8.0 x 2 = 16.0px        1.00   <- exactly at the floor
+##  gen 1    6 x 1.33 =  8.00      4.0 x 2 =  8.0px        1.00   <- exactly at the floor
+##   (gen 1 was 8 = 10.67px/frame against the same 8px head => ratio 1.33, still skipping)
+## ```
+##
+## **Generation 1 was lowered a second time, 8 -> 6, and the reason is not the table's monotonicity.**
+##  The first pass moved it only because `net_tables._gen_tables` requires every column to decrease and gen 0
+##  landed on gen 1's old 12 — **it was never once compared against gen 1's own screen size**, and it was still
+##  skipping. `net_tables._bolt_head_keeps_up` now measures that comparison per generation, so this cannot
+##  silently recur.
+## **What it cost — driven, not derived** (a throwaway headless harness launched real bolts through
+##  `_launch`/`_advance`; flat ground, fired 4 cells up. The harness is gone, the numbers live here):
+##
+## ```
+##  gen 1     horizontal        45 degrees up     drag ceiling (driven)
+##   speed 8   22 cells 2.8t     58 cells 7.3t     118 cells 14.8t
+##   speed 6   16 cells 2.0t     38 cells 4.8t      88 cells 11.0t     <- today
+## ```
+##
+##  => **A spread bolt's 45-degree reach fell by a third.** `SPREAD_COUNT` is 8 bolts thrown from the impact,
+##   so this is what decides how wide a spread's mark reads. **If the screen says "spread doesn't go anywhere",
+##   this is the line to put back** — and then `bolt_px(1)` has to grow with it, or the skipping returns.
+## **The ratio between the rows is now 2:1** (it was 3:2 at 12/8).
 
 ## **Drag.** Every tick, `v * DRAG_NUM / DRAG_DEN`. 240/256 = 0.9375/tick.
 ##  **A ratio, so leave it alone** — range is set by `speed`.
-##  => Horizontal range ceiling = v0 / (1 - 0.9375) = 20 / 0.0625 = **320 cells = 40 tiles = 1,280px**.
 ##
-## **That 320 cells (40 tiles) is the "if there were no gravity" value. It doesn't actually fly that far.**
+## **Two different numbers get called "the range ceiling". Keep them apart.**
+##
+## ```
+##  speed   formula v0/(1-DRAG)      driven (verify-read, and re-driven here)
+##    20     320 cells 40 tiles       297 cells 37.1 tiles
+##    12     192 cells 24 tiles       177 cells 22.1 tiles   <- gen 0 today
+##     8     128 cells 16 tiles       118 cells 14.8 tiles
+##     6      96 cells 12 tiles        88 cells 11.0 tiles   <- gen 1 today
+## ```
+##
+##  **The formula overshoots by about 8%, at every speed.** `v0/(1-DRAG)` sums `v0 + v0*DRAG + ...` while the
+##   code multiplies by DRAG **before** it moves (`_advance`), so the first term is already damped — plus integer
+##   truncation ends the tail early. **This is not a new error**: the old "320 cells" carried exactly the same 8%,
+##   so nothing that was decided against it changes. What changes is that both numbers now have names.
+##  The driven column comes from launching a real bolt into a floorless grid and reading x where `vx` truncates
+##   to 0 (`_launch`/`_advance`, not arithmetic).
+##
+## **Either way it is the "if there were no gravity" value. It doesn't actually fly that far.**
 ##  **This used to say "40 tiles of range is 4/3 of the 30-tile screen width, so bolts fly off screen",
 ##   and that sentence migrated into a design doc as the grounds for "bolt speed must be reduced".**
 ##
-##  **Measured (headless, fired 4 cells above the ground)**:
+##  **Measured (headless, fired 4 cells above the ground).** The speed 20 and old-12 rows were measured before
+##   the drop and are kept as they were; the rows marked *re-driven* were taken after gen 1 went 8 -> 6:
 ##
 ## ```
-##            horizontal      45 degrees up
-##  gen0(20)   53 cells 6.6 tiles    193 cells 24.1 tiles
-##  gen1(12)   32 cells 4.0 tiles    102 cells 12.8 tiles
+##  speed      horizontal      45 degrees up
+##    20        53 cells 6.6 tiles    193 cells 24.1 tiles
+##    12        32 cells 4.0 tiles    102 cells 12.8 tiles   (re-driven: 34 cells 4.3 tiles · 102 cells)  <- gen 0 today
+##     8        22 cells 2.8 tiles     58 cells  7.3 tiles   re-driven
+##     6        16 cells 2.0 tiles     38 cells  4.8 tiles   re-driven   <- gen 1 today
 ## ```
 ##
-##  **Gravity plants the bolt before drag does.** Reaching the drag ceiling would require not falling across
-##   320 cells, and a ground-level shot **hits dirt in 4 ticks.** => **It doesn't exceed the 30-tile screen width even at 45 degrees.**
+##  The 12 row's two horizontal numbers differ by 2 cells because the two harnesses read the landing point
+##   differently (impact cell vs last cell crossed) — **not a behavior change**; both are left rather than
+##   silently reconciled.
+##
+##  **Gravity plants the bolt before drag does.** Reaching the drag ceiling would require not falling for the
+##   whole 91 ticks it takes `vx` to truncate to 0, and a ground-level shot **hits dirt in 4 ticks.**
+##   => **It doesn't exceed the 30-tile screen width even at 45 degrees.**
 ##  **Firing from a cliff goes farther** — by however long the fall lasts. The values above are **flat ground.**
 ##  **Horizontal range is linear in `speed`** (measured ratio 0.604 vs speed ratio 0.600).
 ##   45 degrees is non-linear (0.528) — initial vy shrinks too, shortening airtime.
-##  => **"Lower speed because of range" has no grounds.** If there is a reason to lower it, it is **visibility**
-##   (speed 20 = 26.6px per frame, so a 16px sprite skips without overlapping).
-##  **Don't change the value here.** Range is a spell's character, the magic-circle design's call, and
-##   the screen-side price is recorded in `stage.gd`'s `MAP` comment as "blasts can go off screen".
-##  Exponential decay means a small coefficient change swings range hard. 248/256 gives **2x (640 cells)**
-##   (1 - 248/256 = 1/32 => range = 32*v).
+##  => **"Lower speed because of range" never had grounds, and the value came down anyway** — for
+##   **visibility** (speed 20 = 26.6px per frame, so the 16px sprite skipped without overlapping).
+##  **Range is still not the reason to touch this.** It is a spell's character, the magic-circle design's call.
+##   What moved with the speed drop is written at `SIM_SIZES`.
+##  Exponential decay means a small coefficient change swings range hard. 248/256 gives **2x the formula value
+##   (384 cells at speed 12)** (1 - 248/256 = 1/32 => range = 32*v). **A formula figure — expect ~8% less driven.**
 ##
 ## **Integer division (`/`), not a shift (`>>`).** `>>` floors on negatives, so only left-flying bolts
 ##  decay 0.5/256 harder — left and right become subtly asymmetric, visible only as "shots to the left go

@@ -44,6 +44,7 @@ const Monster := preload("res://src/actor/monster.gd")
 const Defs := preload("res://src/actor/monster_defs.gd")
 const WorldStep := preload("res://src/actor/world_step.gd")
 const MonsterView := preload("res://src/view/monster_view.gd")
+const MonsterSeparation := preload("res://src/actor/monster_separation.gd")
 const MonsterBolts := preload("res://src/actor/monster_bolts.gd")
 const Fx := preload("res://src/view/fx_tuning.gd")
 const BossAi := preload("res://src/actor/boss_ai.gd")
@@ -58,17 +59,42 @@ const LEDGE_CX := 30
 const STAGE_SCRIPT := "res://src/stage/stage.gd"
 
 # --- stage 3 — bolt and blast placement constants -------------------
-## The firing origin sits this far to the left of the box. The same value and the same reason as
-##  `net_damage.HIT_LEAD_PX` — generation 0's first-tick leap (`Tuning.speed_cells(0) * Tuning.CELL_PX`) is
-##  far larger than the box, so firing from this far ahead gives a "leaping placement" with **both ends of the segment outside the box**.
-## **36 -> 24 when the hen's box grew to 48px.** The condition this value has to satisfy is asserted right
-##  where it is used (`_monster_hit_by_a_leaping_segment`): `lead + w_px < one tick's leap (80px)`, or the
-##  segment's far end lands *inside* the box and the placement stops being a leaping one — at 36 + 48 = 84 it
-##  did, and that assertion is what went red. 24 + 48 = 72 clears it with room.
-## **It is no longer the same number as `net_damage.HIT_LEAD_PX`**, and that is correct: that file leads a
-##  shot past the *player's* 20px box, this one past the widest monster box it fires at. The two were equal by
-##  coincidence, not by contract.
+## The firing origin sits this far to the left of the box. **A plain crossing placement — the shot has to land,
+##  nothing more.** Every user of this constant (`_hits_to_kill`, `_monster_burns_regardless_of_invuln`) only
+##  needs a bolt that hits; none of them reads where the segment's ends fall.
+## **This is the only live copy.** `net_monster_breath/charge/slam` carried the same constant and the same
+##  helper with **no caller at all** — deleted, with the evidence recorded at the top of each of those files.
+##
+## **This comment used to claim a "leaping placement" with both ends outside the box, and that claim is dead.**
+##  At `speed` 20 the first tick covered 80px and the claim was true; at 12 it covers **45px** and the narrowest
+##  box in `monster_defs` is the pig's **44px**, so there is no lead at all that puts the far end past the box.
+##  The disproof of tunnelling moved to a **corner-cut** placement instead — `CORNER_LEAD_X`/`CORNER_LEAD_Y`
+##  below and `_monster_hit_by_a_leaping_segment`. Leaving the old sentence here would have left a label
+##  claiming a property no check measures any more.
+## What this value must still satisfy is only `lead < one tick's leap` (45px) **minus enough to land inside the
+##  box**: at 24 the born point is 22px left of the box and the segment ends 23px *inside* it, clear of both
+##  edges by more than a cell.
 const HIT_LEAD_PX := 24
+
+## **The corner-cut placement** (`_monster_hit_by_a_leaping_segment`): how far **left of the box's right edge**
+##  and how far **above its top edge** the bolt is born, before it is fired down-right at 45 degrees.
+##
+## **Why a corner and not an axis.** An axis-aligned leaping placement needs the one-tick leap to exceed the
+##  whole box on that axis, and after `speed` 20 -> 12 nothing in the table is short enough (45px leap vs the
+##  pig's 44px width, the wolf's 28px height plus a lead). A **corner** has no such floor: the chord across it
+##  is as short as the placement chooses, so both ends can sit outside while the segment passes through — and
+##  that stays true whatever the leap length becomes.
+## The hen's box is 48x64 at [600,648]x[336,400]; one tick's displacement at 45 degrees is (+31.8, +33.8)px
+##  (`speed_fp` 3072 split by the integer normalization, then drag, plus gravity on y). With these two leads the
+##  bolt is born at (626, 326) — **10px above the box** — enters through the top edge 12.6px left of the right
+##  corner, leaves through the right edge 13.4px below it, and ends at (657.8, 359.8), **9.8px right of the box.**
+##  => Every one of the four margins is **larger than two cells**; the tightest is the 9.8px far end.
+##  Both leads land exactly on a cell centre at the hen's position, so `floori` costs nothing here.
+## **The placement is not asserted by arithmetic any more** — the check reads the real segment back and measures
+##  "both ends outside" and "crosses anyway" directly, so a future speed change moves these numbers and the
+##  check says which of the two broke instead of silently passing.
+const CORNER_LEAD_X := 22
+const CORNER_LEAD_Y := 10
 
 ## The firing origin (in cells) to slam a blast down from — well above the floor. The same idiom as `net_damage.BLAST_FROM_CY`.
 const BLAST_FROM_CY := FLOOR_CY - 20
@@ -116,6 +142,30 @@ const HOLE_W_CELLS := 12
 ##  chimney is outside the thin floor anyway and therefore open, so the hen keeps falling until it reaches
 ##  outside the grid (automatically solid). The check below measures not an exact depth but only `y > FLOOR_TOP` (did it fall further), so it doesn't matter.
 const HOLE_DEPTH_CELLS := 40
+
+# -- Stage A of `monster-ai-jump-and-separation.md` — pit depth --
+## **A notch cut into the top of the floor slab, not a chimney.** `_chimney_grid()` above has open sky below
+##  the hole (it measures a fall, not an escape); a pit needs walls the mob can be *blocked by* and a floor to
+##  land on, so the carved rectangle sits **inside** `_floor_grid()`'s own slab (`FLOOR_CY` down to
+##  `FLOOR_CY + depth_cells - 1`), leaving the rest of the slab (`FLOOR_CY + depth_cells` onward, still solid
+##  down to `FLOOR_CY + FLOOR_DEPTH_CY - 1`) as the pit's own floor. **`depth_cells * CELL_PX` is the pit's
+##  depth in px by construction** — an 8-cell pit is exactly the 32px ("1-tile") case, 16 cells is 64px
+##  ("2-tile"), matching the plan's own contract verbatim.
+const PIT_CX := 60
+## **16 cells (64px) — wide enough for the widest kind this Stage tests** (the plan's own instruction: "make
+##  it 16+ cells wide so a 48px hen fits too"). Width does not gate the jump itself (the mob rises pressed
+##  against one wall, it does not need lateral room to clear it) — it only has to fit the standing box without
+##  clipping both walls of the pit at once.
+const PIT_W_CELLS := 16
+const PIT_1TILE_CELLS := 8   # 32px — must NOT hold (acceptance 1's first half).
+const PIT_2TILE_CELLS := 16  # 64px — must hold (acceptance 1's second half).
+
+
+func _pit_grid(depth_cells: int) -> CellGrid:
+	var g := _floor_grid()
+	g.apply(CellGrid.cmd_fill(
+		PIT_CX, FLOOR_CY, PIT_CX + PIT_W_CELLS - 1, FLOOR_CY + depth_cells - 1, Mat.EMPTY))
+	return g
 ## **Not part of the file's own class hierarchy** — a subclass local to this net, only to observe which leaf
 ## draw call ran without needing a real canvas (`_draw_attack_prediction`/`_draw_stun_ring` both draw onto
 ## `self` directly, so recording in an override is the whole trick — no shader, no child layer, no scene needed).
@@ -431,8 +481,25 @@ func run(t) -> void:
 	# -- stage 2 -- it walks ----------------------------------------
 	_walks_toward_the_player(t)
 	_walking_monster_blocked_by_wall(t)
+	# -- monster-ai-jump-and-separation.md, Stage A -- the jump ------
+	_real_jump_apex_is_measured(t)
+	_the_airborne_sheet_fits_inside_the_real_airtime(t)
+	_a_one_tile_pit_does_not_hold_a_pig(t)
+	_a_two_tile_pit_holds_a_pig(t)
+	_a_hen_at_range_never_jumps(t)
+	_an_idle_boss_walled_off_never_leaves_the_ground(t)
+	# -- monster-ai-jump-and-separation.md, Stage C -- separation ----
+	_separation_process_strictly_decreases_overlap(t)
+	_separation_constants_are_pinned_by_exact_value(t)
+	_monster_separation_pure_function_edge_cases(t)
+	_monster_separation_stays_order_independent_in_a_dense_pack(t)
+	_separation_is_order_independent(t)
+	_separation_is_order_independent_with_uneven_spacing(t)
+	_separation_refuses_the_move_entirely_against_terrain(t)
+	_a_walled_off_pig_does_not_fall_asleep_mid_air(t)
 	# -- stage 3 -- it gets hurt ------------------------------------
 	_monster_takes_blast_damage(t)
+	_seg_crosses_box_is_measured_itself(t)
 	_monster_hit_by_a_leaping_segment(t)
 	_monster_burns_regardless_of_invuln(t)
 	_dead_monsters_leave_the_list_correctly(t)
@@ -462,6 +529,7 @@ func run(t) -> void:
 	_dummy_raises_hits_to_kill_a_pig(t)
 	# -- animation (`monsters.md`, "animation is entirely a code gap") --
 	_a_walking_monster_reaches_the_walk_state(t)
+	_a_jumping_monster_reaches_the_airborne_state_on_screen(t)
 	_a_hit_puts_the_hurt_pose_up_for_its_whole_length(t)
 	_a_corpse_plays_its_death_sheet_through(t)
 
@@ -855,31 +923,552 @@ func _walks_toward_the_player(t) -> void:
 	t.ok(not over_cap_left, "어느 프레임도 ceil(v×dt)(%dpx)를 안 넘는다 — 순간이동이 아니다" % step_cap)
 
 
-## **Inverting it — it must not be made to ignore `is_solid` entirely.** That falls through the floor and
-##  drops forever, going red regardless of "is horizontal blocked" (the shape acceptance 5 forbids by itself).
-##  => The only thing to invert is `Body.move_x`'s horizontal branch, and the **control** (the landing check)
-##  has to stay green for it to be a real inversion.
+## **Rewritten for the jump** (`monster-ai-jump-and-separation.md`, Stage A). This check used to stand a pig
+## against an 8-cell (32px) wall and assert `m.y == y` as "vertical is the control, only horizontal is
+## blocked" — measured, before this rewrite: both of that check's own assertions turned red the moment the
+## jump landed, because 32px is exactly the plan's own "1-tile" case that must now be cleared.
+##
+## **The check gets stronger, not weaker.** Two walls, not one: at the original 32px height the pig now
+## clears it — a process measurement (a jump sample is required, not just "it got past"). At a wall taller
+## than the jump's own theoretical ceiling (`vy²/(2·GRAVITY_PX)` = 56.3px at −520/2400 — 20 cells = 80px is
+## comfortably past it) it still cannot, and never advances past the wall's face for the whole run. "Blocked"
+## still means blocked; it is only shallow blocking that stopped meaning that.
 func _walking_monster_blocked_by_wall(t) -> void:
 	var wall_cx := 60
 	var wall_w_cells := 4
-	var g := _bare_grid()
-	g.apply(CellGrid.cmd_fill(wall_cx, FLOOR_CY - 8, wall_cx + wall_w_cells - 1, FLOOR_CY - 1, Mat.STONE))
-	var spell := SpellSim.new()
-	var ch := Character.new()
+	var kind := Defs.KIND_PIG
+	var wall_right_px := (wall_cx + wall_w_cells) * Tuning.CELL_PX
+	var y := FLOOR_TOP - Defs.h_px(kind)
+
+	# -- a wall shorter than the jump: now clears it --
+	var g_low := _bare_grid()
+	g_low.apply(CellGrid.cmd_fill(
+		wall_cx, FLOOR_CY - PIT_1TILE_CELLS, wall_cx + wall_w_cells - 1, FLOOR_CY - 1, Mat.STONE))
+	var ch_low := Character.new()
 	# The player is placed left of the wall — the monster spawns right of the wall, walks left (toward the
 	# player) and is blocked at the wall's **right face** (its box's left edge meets the wall's right edge).
+	ch_low.place(160, FLOOR_TOP - Character.H_PX)
+	var world_low := WorldStep.new(g_low, SpellSim.new(), ch_low)
+	var mid_low := world_low.spawn_monster(kind, wall_right_px + 200, y)
+	t.ok(mid_low > 0, "스폰됐다 (전제)")
+	var m_low: Monster = world_low.monster_at(0)
+	var jumped_low := 0
+	for _i in 300:
+		world_low.frame(DT, 0.0, false, false)
+		if m_low.vy < 0.0:
+			jumped_low += 1
+	t.ok(jumped_low > 0, "%d칸(%dpx) 벽에서 실제로 뛴 프레임이 있다 (%d회) — 나왔다는 사실만으론 뛰었다는 증거가 아니다"
+		% [PIT_1TILE_CELLS, PIT_1TILE_CELLS * Tuning.CELL_PX, jumped_low])
+	t.ok(m_low.x < wall_cx * Tuning.CELL_PX,
+		"%d칸 벽은 이제 완전히 넘어간다 (벽의 왼쪽 면까지 지나 x=%d)" % [PIT_1TILE_CELLS, m_low.x])
+
+	# -- a wall taller than the jump's ceiling: still blocked, forever --
+	var tall_cells := 20
+	var g_tall := _bare_grid()
+	g_tall.apply(CellGrid.cmd_fill(
+		wall_cx, FLOOR_CY - tall_cells, wall_cx + wall_w_cells - 1, FLOOR_CY - 1, Mat.STONE))
+	var ch_tall := Character.new()
+	ch_tall.place(160, FLOOR_TOP - Character.H_PX)
+	var world_tall := WorldStep.new(g_tall, SpellSim.new(), ch_tall)
+	var mid_tall := world_tall.spawn_monster(kind, wall_right_px + 200, y)
+	t.ok(mid_tall > 0, "스폰됐다 (전제)")
+	var m_tall: Monster = world_tall.monster_at(0)
+	var jumped_tall := 0
+	var min_x := m_tall.x
+	for _i in 300:
+		world_tall.frame(DT, 0.0, false, false)
+		if m_tall.vy < 0.0:
+			jumped_tall += 1
+		min_x = mini(min_x, m_tall.x)
+	t.ok(jumped_tall > 0, "%d칸(%dpx) 벽에서도 뛰긴 뛴다 (%d회 — 갇혔어도 시도하는 그림이 맞다)"
+		% [tall_cells, tall_cells * Tuning.CELL_PX, jumped_tall])
+	t.eq(min_x, wall_right_px,
+		"그런데 %d칸 벽은 300프레임 내내 한 번도 못 넘는다 (가장 멀리 간 지점도 벽 앞 그대로, x=%d)"
+			% [tall_cells, min_x])
+
+
+# ==================================================================
+#  monster-ai-jump-and-separation.md, Stage A — the jump
+# ==================================================================
+
+## **Acceptance 2 — the real apex, driven, not taken from the formula.** `vy²/(2·GRAVITY_PX)` computes
+## 56.3px at −520/2400; `body.gd`'s own header names why the integer-stepped real value comes in under that
+## (frame-boundary sampling, a body stops at the last free pixel) — this is that measurement, isolated
+## against a wall tall enough (60 cells) that the pig cannot possibly clear it, so one clean rise is all
+## that happens. **The plan's own recorded shortfalls (bull 9.5%, rooster 23%) do not transfer** — both were
+## launched from `on_tick`, before `step()`'s own `apply_gravity`; this jump launches *inside* `step()`,
+## *after* gravity, so it does not lose that frame. The number that comes out of `print()` below is what
+## belongs in `monster_defs.gd`'s comment once this plan is accepted — not shipped as a hardcoded literal
+## here, since the doc's own words are "verify-run measures the real apex; do not ship the formula's number
+## as the contract."
+func _real_jump_apex_is_measured(t) -> void:
+	var wall_cx := 60
+	var wall_w_cells := 4
+	var tall_cells := 60
+	var kind := Defs.KIND_PIG
+	var g := _bare_grid()
+	g.apply(CellGrid.cmd_fill(
+		wall_cx, FLOOR_CY - tall_cells, wall_cx + wall_w_cells - 1, FLOOR_CY - 1, Mat.STONE))
+	var ch := Character.new()
 	var wall_right_px := (wall_cx + wall_w_cells) * Tuning.CELL_PX
 	ch.place(160, FLOOR_TOP - Character.H_PX)
-	var world := WorldStep.new(g, spell, ch)
-	var kind := Defs.KIND_PIG
+	var world := WorldStep.new(g, SpellSim.new(), ch)
 	var y := FLOOR_TOP - Defs.h_px(kind)
 	var mid := world.spawn_monster(kind, wall_right_px + 200, y)
-	t.ok(mid > 0, "스폰됐다 (검사의 전제)")
+	t.ok(mid > 0, "스폰됐다 (전제)")
 	var m: Monster = world.monster_at(0)
+	var min_y := y
 	for _i in 300:
 		world.frame(DT, 0.0, false, false)
-	t.eq(m.x, wall_right_px, "벽을 사이에 두면 벽 앞(오른쪽 면)에서 멈추고 더 안 온다")
-	t.eq(m.y, y, "가로만 막힌다 — 세로(착지)는 그대로다 (대조군)")
+		min_y = mini(min_y, m.y)
+	var apex_px := y - min_y
+	print("[jump] pig real apex = %dpx (formula 56.3px, jump_vy_px=%.0f)" % [apex_px, Defs.jump_vy_px(kind)])
+	t.ok(apex_px > 0, "실제로 올라간 적이 있다 (측정된 정점 %dpx)" % apex_px)
+	t.ok(apex_px > PIT_1TILE_CELLS * Tuning.CELL_PX,
+		"실측 정점(%dpx)이 1타일(%dpx)보다 높다 (전제 — 1타일이 나와야 계약이 선다)" % [
+			apex_px, PIT_1TILE_CELLS * Tuning.CELL_PX])
+	t.ok(apex_px < PIT_2TILE_CELLS * Tuning.CELL_PX,
+		"실측 정점(%dpx)이 2타일(%dpx)보다 낮다 (전제 — 2타일이 갇혀야 계약이 선다)" % [
+			apex_px, PIT_2TILE_CELLS * Tuning.CELL_PX])
+	# **The margin itself, as a value — not just "it's lower"** (team-lead's instruction). 61px vs 64px is
+	#  a 3px margin, not the ~14px the doc's own "56 computed, ~50 real" estimate implied. `t.ok(apex < 64)`
+	#  alone would stay green all the way down to 63px — this line is what actually notices the day gravity
+	#  or `jump_vy_px` moves that margin toward zero (or past it, into the 2-tile pit escaping too).
+	#  **Correction (verify-read item 6): `hold` does not belong in that list.** It is
+	#  `MONSTER_ANIM`'s own view-side playback rate — it decides how many *frames* the sprite holds each
+	#  cell for, never how high the body actually rises. Measured: `hold` 4 -> 10 leaves this exact
+	#  assertion green and only `_the_airborne_sheet_fits_inside_the_real_airtime` (below) goes red instead,
+	#  because that is the check whose whole claim is about `hold`.
+	#  **This value has not been decided on screen** — the eye picks the real number (the plan's own TBD);
+	#  when it does, this assertion is what has to move with it, deliberately, not silently.
+	var margin_px := PIT_2TILE_CELLS * Tuning.CELL_PX - apex_px
+	t.eq(margin_px, 3, "2타일 감금의 여유가 정확히 3px이다 (얇다 — 바뀌면 이 줄이 반드시 짖는다)")
+
+
+## **`frames * hold` must fit inside the real airtime, per kind that has a jump sheet** (`monster-ai-jump-
+## and-separation.md`, Stage B — "the doc's own first guess does not name it" ceiling). Measured directly,
+## not estimated from the vy formula: blocked against a tall wall, the frames where `on_ground` reads false
+## are counted for the first arc only (the mob keeps re-jumping after landing, so counting stops at the
+## first landing). A one-shot longer than the real arc never reaches its last cell — the same failure
+## `monster_view._hurt_left` was split from `_flash_left` to avoid.
+func _the_airborne_sheet_fits_inside_the_real_airtime(t) -> void:
+	for kind: int in [Defs.KIND_PIG, Defs.KIND_HEN, Defs.KIND_WOLF]:
+		var wall_cx := 60
+		var wall_w_cells := 4
+		var tall_cells := 60
+		var g := _bare_grid()
+		g.apply(CellGrid.cmd_fill(
+			wall_cx, FLOOR_CY - tall_cells, wall_cx + wall_w_cells - 1, FLOOR_CY - 1, Mat.STONE))
+		var ch := Character.new()
+		var wall_right_px := (wall_cx + wall_w_cells) * Tuning.CELL_PX
+		# **Far enough that the hen never stops at range before reaching the wall** — `MonsterBolts.
+		#  BOLT_STOP_PX` (240px) measured from the *player*, not the wall. At `ch.x = 160` the hen would stop
+		#  240px short of the player, well short of the wall itself (measured: it never got blocked at all,
+		#  `airtime` stayed 0). Placed far enough left that the wall is reached long before the stop distance.
+		ch.place(-5000, FLOOR_TOP - Character.H_PX)
+		var world := WorldStep.new(g, SpellSim.new(), ch)
+		var y := FLOOR_TOP - Defs.h_px(kind)
+		var mid := world.spawn_monster(kind, wall_right_px + 200, y)
+		t.ok(mid > 0, "%s 스폰됐다 (전제)" % Defs.name_of(kind))
+		var m: Monster = world.monster_at(0)
+		var airtime := 0
+		var started := false
+		var ended := false
+		for _i in 300:
+			world.frame(DT, 0.0, false, false)
+			if not m.on_ground:
+				started = true
+				if not ended:
+					airtime += 1
+			elif started:
+				ended = true
+		t.ok(started, "%s가 실제로 떴다 (전제)" % Defs.name_of(kind))
+		var sheet_frames := MonsterView.oneshot_frames(kind, Fx.MON_AIRBORNE)
+		t.ok(sheet_frames > 0, "%s에 공중 그림 길이가 있다 (전제)" % Defs.name_of(kind))
+		t.ok(sheet_frames <= airtime,
+			"%s의 공중 그림(frames*hold=%d)이 실측 체공 시간(%d프레임) 안에 든다 (마지막 칸까지 닿는다)" % [
+				Defs.name_of(kind), sheet_frames, airtime])
+
+
+## **The contract itself** (the plan's "the number this creates", acceptance 1's first half). Dug as a real
+## notch in the floor (`_pit_grid`), not asserted from the formula — the pig spawns inside it and walks
+## toward a target far past the far wall, so it climbs out through the wall it is actually pressed against.
+## **The premise is asserted, not assumed**: `step_cells * CELL_PX < 32px` rules out a step-up in disguise.
+func _a_one_tile_pit_does_not_hold_a_pig(t) -> void:
+	var kind := Defs.KIND_PIG
+	t.ok(Defs.step_cells(kind) * Tuning.CELL_PX < PIT_1TILE_CELLS * Tuning.CELL_PX,
+		"돼지의 step_cells(%d)*4=%dpx < 32px (탈출이 계단 오르기로 위장되지 않는다, 전제)" % [
+			Defs.step_cells(kind), Defs.step_cells(kind) * Tuning.CELL_PX])
+	var g := _pit_grid(PIT_1TILE_CELLS)
+	var ch := Character.new()
+	var pit_right_px := (PIT_CX + PIT_W_CELLS) * Tuning.CELL_PX
+	ch.place(pit_right_px + 2000, FLOOR_TOP - Character.H_PX)  # far past the pit's far wall
+	var world := WorldStep.new(g, SpellSim.new(), ch)
+	var pit_floor_y := (FLOOR_CY + PIT_1TILE_CELLS) * Tuning.CELL_PX - Defs.h_px(kind)
+	var stand_x := PIT_CX * Tuning.CELL_PX + 4
+	var mid := world.spawn_monster(kind, stand_x, pit_floor_y)
+	t.ok(mid > 0, "스폰됐다 (전제)")
+	var m: Monster = world.monster_at(0)
+	var jumped := 0
+	for _i in 300:
+		world.frame(DT, 0.0, false, false)
+		if m.vy < 0.0:
+			jumped += 1
+	t.ok(jumped > 0, "실제로 뛴 프레임이 있다 (%d회) — 나왔다는 사실만으로는 뛰었다는 증거가 아니다" % jumped)
+	t.ok(m.y <= FLOOR_TOP - Defs.h_px(kind),
+		"1타일(32px) 구덩이는 나온다 (바깥 바닥 높이에 닿거나 넘는다, y=%d <= %d)" % [
+			m.y, FLOOR_TOP - Defs.h_px(kind)])
+
+
+## **The contract's other half.** Same shape, twice the depth — the pig must jump (it tries, forever) but
+## never once reach the outer floor's height, and settles back at the pit's own floor.
+func _a_two_tile_pit_holds_a_pig(t) -> void:
+	var kind := Defs.KIND_PIG
+	var g := _pit_grid(PIT_2TILE_CELLS)
+	var ch := Character.new()
+	var pit_right_px := (PIT_CX + PIT_W_CELLS) * Tuning.CELL_PX
+	ch.place(pit_right_px + 2000, FLOOR_TOP - Character.H_PX)
+	var world := WorldStep.new(g, SpellSim.new(), ch)
+	var pit_floor_y := (FLOOR_CY + PIT_2TILE_CELLS) * Tuning.CELL_PX - Defs.h_px(kind)
+	var stand_x := PIT_CX * Tuning.CELL_PX + 4
+	var mid := world.spawn_monster(kind, stand_x, pit_floor_y)
+	t.ok(mid > 0, "스폰됐다 (전제)")
+	var m: Monster = world.monster_at(0)
+	var jumped := 0
+	var min_y := pit_floor_y
+	for _i in 300:
+		world.frame(DT, 0.0, false, false)
+		if m.vy < 0.0:
+			jumped += 1
+		min_y = mini(min_y, m.y)
+	t.ok(jumped > 0, "2타일에서도 뛰긴 뛴다 (%d회 — 갇혔어도 시도하는 그림이 맞다)" % jumped)
+	t.ok(min_y > FLOOR_TOP - Defs.h_px(kind),
+		"2타일(64px) 구덩이는 못 나온다 (300프레임 동안 최고점 y=%d가 바깥 바닥(%d)에 안 닿는다)" % [
+			min_y, FLOOR_TOP - Defs.h_px(kind)])
+	# **Not a final-frame `m.y == pit_floor_y` equality** — the jump cycle repeats roughly every 25-30 frames
+	#  and 300 is not a multiple of it, so the pig can legitimately be caught mid-arc on the very last frame.
+	#  `min_y` above is the real invariant ("never got out"); this is only the same fact from the ground side.
+	t.ok(m.y <= pit_floor_y, "그리고 구덩이 바닥보다 아래로는 빠지지 않는다 (y=%d <= %d)" % [m.y, pit_floor_y])
+
+
+## **A hen stopped at throwing range never jumps** (Bounds table). `axis == 0` ⇒ `Body.move_x` returns
+## `false` with nothing attempted (`body.gd:96-102`) ⇒ `blocked` is never true ⇒ the jump condition never
+## fires — structural (`body.gd`'s own contract), but pinned here as a value across the whole approach-and-
+## stop run, not just at rest.
+func _a_hen_at_range_never_jumps(t) -> void:
+	var kind := Defs.KIND_HEN
+	var g := _bare_grid()
+	var ch := Character.new()
+	ch.place(2000, FLOOR_TOP - Character.H_PX)
+	var world := WorldStep.new(g, SpellSim.new(), ch)
+	var mid := world.spawn_monster(kind, 100, FLOOR_TOP - Defs.h_px(kind))
+	t.ok(mid > 0, "스폰됐다 (전제)")
+	var m: Monster = world.monster_at(0)
+	var airborne_frames := 0
+	for _i in 600:
+		world.frame(DT, 0.0, false, false)
+		if m.vy < 0.0 or not m.on_ground:
+			airborne_frames += 1
+	t.eq(airborne_frames, 0,
+		"사거리로 다가가 멈추는 전 구간(%d프레임) 동안 닭이 한 번도 뜨지 않는다" % 600)
+
+
+## **The sharpest edge in the plan** (team-lead's own words: "the bull hops out of room ① and the midboss
+## fight stops existing"). `Pattern.IDLE` walks brainlessly forward with no windup/stun freezing it
+## (`_boss_axis`'s own fallback) — exactly the boss state that would reach the trash-mob jump condition if
+## the gate were on pattern instead of kind.
+##
+## **Driven with `Monster.step()` directly, not `world.frame()`** — measured, not assumed: through
+## `world.frame()` the bull's own pattern machine advances every tick regardless of proximity
+## (`BossAi.advance`'s `IDLE` branch has no range gate at all), so within 300 frames it cycles
+## IDLE -> WINDUP -> CHARGE -> ... -> SLAM, and the slam's own `Pattern.LEAP` (`bull_slam`, a real, unrelated
+## airborne move) genuinely lifts it off the ground and over a 16px wall — a false failure of *this* gate,
+## caused by a different one entirely. Calling `step()` alone never touches `pattern` (only `on_tick()`
+## does, and `on_tick()` is never called here), so the bull stays `IDLE` for the whole run and this measures
+## exactly the one thing at risk: the trash-mob jump condition, with the kind gate as the only thing standing
+## between it and firing.
+## **Correction (team-lead): the boss row's `jump_vy_px` is now a real value (−520), not an inert `0.0`.**
+## The first version of this check could not tell "the gate holds" from "the value is neutered" apart —
+## removing only the `not BossAi.has_pattern(kind)` term left everything green, because 0.0 launches nothing
+## regardless. With a real value in the table, the kind gate is the **only** thing standing between this row
+## and a jump, so the same mutation now has something real to bite.
+func _an_idle_boss_walled_off_never_leaves_the_ground(t) -> void:
+	var wall_cx := 60
+	var wall_w_cells := 4
+	var short_cells := 4  # even a small wall would prove the gate broken, if it were broken
+	var kind := Defs.KIND_BULL
+	var g := _bare_grid()
+	g.apply(CellGrid.cmd_fill(
+		wall_cx, FLOOR_CY - short_cells, wall_cx + wall_w_cells - 1, FLOOR_CY - 1, Mat.STONE))
+	var wall_right_px := (wall_cx + wall_w_cells) * Tuning.CELL_PX
+	t.ok(BossAi.has_pattern(kind), "황소는 보스 패턴을 가진다 (전제)")
+	var y := FLOOR_TOP - Defs.h_px(kind)
+	var m := Monster.new(1, kind, wall_right_px + 200, y)
+	t.eq(m.pattern, BossAi.Pattern.IDLE, "갓 태어난 황소는 IDLE이다 (전제)")
+	var target_x := 160  # left of the wall — walks left, blocked at the wall's right face
+	var not_grounded := 0
+	for _i in 300:
+		m.step(g, DT, target_x, y)
+		if not m.on_ground:
+			not_grounded += 1
+	t.eq(not_grounded, 0,
+		"IDLE로 고정한 채 벽에 눌린 황소는 300프레임 내내 on_ground가 한 번도 거짓이 안 된다 (%d회)" % not_grounded)
+	t.eq(m.x, wall_right_px, "그리고 벽 앞에서 더 안 온다 (여전히 막힌다, x=%d)" % m.x)
+
+
+# ==================================================================
+#  monster-ai-jump-and-separation.md, Stage C — separation
+# ==================================================================
+
+func _overlap_px(x0: int, w0: int, x1: int, w1: int) -> int:
+	return mini(x0 + w0, x1 + w1) - maxi(x0, x1)
+
+
+## **The process, not "they end up apart"** (Stage C's own check 1 — "that is what walking does anyway; it
+## proves nothing"). Two pigs spawned at the exact same spot — full overlap, `d == w` — with the player
+## parked far away on the side both would walk toward anyway, so **both walk in lockstep and their relative
+## overlap cannot change from walking alone**; only separation can move them apart. One real frame is enough
+## to show it, and a correction is confirmed as a value (position actually changed), not inferred from the
+## overlap number alone.
+func _separation_process_strictly_decreases_overlap(t) -> void:
+	var kind := Defs.KIND_PIG
+	var g := _bare_grid()
+	var ch := Character.new()
+	ch.place(-5000, FLOOR_TOP - Character.H_PX)  # bystander — pulls both the same way, by the same amount
+	var world := WorldStep.new(g, SpellSim.new(), ch)
+	var y := FLOOR_TOP - Defs.h_px(kind)
+	var stand_x := 400
+	var id_a := world.spawn_monster(kind, stand_x, y)
+	var id_b := world.spawn_monster(kind, stand_x, y)
+	t.ok(id_a > 0 and id_b > 0, "둘 다 스폰됐다 (전제)")
+	var a: Monster = world.monster_at(0)
+	var b: Monster = world.monster_at(1)
+	var w := Defs.w_px(kind)
+	var overlap_before := _overlap_px(a.x, w, b.x, w)
+	t.eq(overlap_before, w, "처음엔 완전히 겹쳐 있다 (전제 — 겹침이 상자 폭과 같다, %dpx)" % overlap_before)
+
+	world.frame(DT, 0.0, false, false)
+	var overlap_after := _overlap_px(a.x, w, b.x, w)
+	t.ok(overlap_after < overlap_before,
+		"한 프레임 뒤 겹침이 실제로 줄어든다 (%d -> %d)" % [overlap_before, overlap_after])
+	# **Correction (verify-read item 6): the old label overclaimed.** `a.x != stand_x or b.x != stand_x`
+	#  stays green even with separation deleted entirely — both mobs are the same kind walking the same
+	#  direction at the same speed from the same start, so ordinary walking alone moves `x` for both. What
+	#  only separation can do is make them **differ from each other** — they started identical (`a.x == b.x
+	#  == stand_x`), and lockstep walking preserves that equality; only a pairwise push can break it.
+	t.ok(a.x != b.x, "그리고 둘의 자리가 서로 달라졌다 (전엔 같았다 — 걷기만으론 이럴 수 없고, 보정이 적용됐다)")
+
+
+## **The constants themselves — pinned by exact value, not just "it moved apart"** (verify-read item 2:
+## `OVERLAP_THRESHOLD_PX` 4->43 and `MAX_CORRECTION_PX` 8->1 both left every existing check here green,
+## because the only process check used a **degenerate full-overlap** spawn — two mobs at the exact same x.
+## At 43px the overlap (44px, full) barely exceeds a raised threshold and nothing else in this file's
+## checks used a value that would expose it; at a shrunk max-correction, "some movement happened" (the old
+## check's whole claim) is still true, just smaller. **A partial, exact overlap makes both constants
+## load-bearing**: 400 and 424 overlap by exactly 20px, comfortably above 4 but a value a raised threshold
+## (43) would swallow whole, and the resulting push is clamped by `MAX_CORRECTION_PX`(8) to less than half
+## of it — pinned as an exact final position, not an inequality.
+func _separation_constants_are_pinned_by_exact_value(t) -> void:
+	var kind := Defs.KIND_PIG
+	var g := _bare_grid()
+	var ch := Character.new()
+	ch.place(-5000, FLOOR_TOP - Character.H_PX)  # bystander — both walk left by the same amount
+	var world := WorldStep.new(g, SpellSim.new(), ch)
+	var y := FLOOR_TOP - Defs.h_px(kind)
+	var id_a := world.spawn_monster(kind, 400, y)
+	var id_b := world.spawn_monster(kind, 424, y)
+	t.ok(id_a > 0 and id_b > 0, "둘 다 스폰됐다 (전제)")
+	var w := Defs.w_px(kind)
+	var overlap0 := _overlap_px(400, w, 424, w)
+	t.eq(overlap0, 20, "처음 겹침이 정확히 20px다 (전제 — 4px 문턱보다 크고 43px보다는 훨씬 작다)")
+
+	world.frame(DT, 0.0, false, false)
+	var a: Monster = world.monster_at(0)
+	var b: Monster = world.monster_at(1)
+	# 20px 겹침의 절반(10px)을 MAX_CORRECTION_PX(8px)로 자른 값이 정확한 보정이다 — 걷기(둘 다 -3px, 같은
+	# 방향·같은 속도라 상대 위치는 그대로 둔다)에 이 보정만 더해지면 최종 자리가 정확히 나온다.
+	t.eq(a.x, 397 - 8, "왼쪽 몸이 정확히 그 자리다 (걷기 -3px + 분리 -8px, x=%d)" % a.x)
+	t.eq(b.x, 421 + 8, "오른쪽 몸이 정확히 그 자리다 (걷기 -3px + 분리 +8px, x=%d)" % b.x)
+
+
+## **`MonsterSeparation.corrections()`, driven directly — verify-read item 3.** The header advertises "a
+## net drives it with no world at all", and until now nothing did: every check went through `world_step`.
+## Edge cases a full-pipeline test cannot isolate cleanly — no partner, an exact tie, and the concrete pair
+## the pinned-value check above also drives, checked here with no walking, no gravity, no world at all.
+func _monster_separation_pure_function_edge_cases(t) -> void:
+	var empty_x: Array[int] = []
+	var empty_w: Array[int] = []
+	t.eq(MonsterSeparation.corrections(empty_x, empty_w), [] as Array[int], "빈 배열은 빈 배열을 낸다")
+
+	var one_x: Array[int] = [100]
+	var one_w: Array[int] = [44]
+	t.eq(MonsterSeparation.corrections(one_x, one_w), [0] as Array[int], "혼자면 상대가 없어 보정이 0이다")
+
+	# An exact tie (완전히 포개진 두 마리) — deterministic, not order-dependent: the same arbitrary answer
+	# regardless of which of the two the array happens to list first (`ci <= cj`'s own tie rule).
+	var tie_x: Array[int] = [100, 100]
+	var tie_w: Array[int] = [44, 44]
+	t.eq(MonsterSeparation.corrections(tie_x, tie_w), [-8, 8] as Array[int],
+		"완전히 포개진 동점은 정해진 방향으로 갈린다 (0번이 왼쪽, MAX_CORRECTION_PX로 잘린다)")
+
+	# The concrete pair the pinned-value process check above also drives — same arithmetic, no world at all.
+	var pair_x: Array[int] = [400, 424]
+	var pair_w: Array[int] = [44, 44]
+	t.eq(MonsterSeparation.corrections(pair_x, pair_w), [-8, 8] as Array[int],
+		"겹침 20px는 절반(10px)을 MAX_CORRECTION_PX(8px)로 자른 값을 낸다")
+
+
+## **Scaled to the plan's own named hazard** ("summing up to 19 partners' worth of correction as a `float`
+## is not associative") — the pair-level checks above use too few overlapping partners for float drift to
+## have anywhere to hide; 19 mobs packed 3px apart gives every one of them multiple overlapping neighbours
+## at once, the shape that actually stresses per-mob summation. **Compared by original index, not a sorted
+## set** — reversing the array and un-reversing the result checks that mob `k` gets the exact same
+## correction whether the array lists it first or last, which is a stronger claim than "the same positions
+## occur somewhere in the final set".
+func _monster_separation_stays_order_independent_in_a_dense_pack(t) -> void:
+	var n := 19
+	var xs: Array[int] = []
+	var ws: Array[int] = []
+	for i in n:
+		xs.append(400 + i * 3)
+		ws.append(44)
+	var forward := MonsterSeparation.corrections(xs, ws)
+
+	var xs_rev := xs.duplicate()
+	var ws_rev := ws.duplicate()
+	xs_rev.reverse()
+	ws_rev.reverse()
+	var reversed := MonsterSeparation.corrections(xs_rev, ws_rev)
+	reversed.reverse()  # undo the reversal — index k now means the same physical mob in both arrays
+
+	t.eq(forward, reversed,
+		"19마리가 3px 간격으로 빽빽하게 겹쳐도, 배열을 뒤집으면 원래 인덱스 기준 보정이 정확히 같다")
+
+
+## **Order-invariance — meaningful only next to the process check above** (Stage C's own reasoning:
+## invariance-under-reversal alone passes trivially if separation is deleted entirely, CLAUDE.md's "A/B
+## comparison catches 'diverged', never 'vanished'"). Four overlapping pigs, spawned in one order and then
+## the reverse, through the **real** `world_step` pipeline (not `MonsterSeparation.corrections()` called
+## directly) — this is what actually proves phase 2's wiring, not just the pure function, is order-
+## independent. **Compared as a sorted set**, not by id or array index — reversing spawn order also reverses
+## which id lands on which starting position, so identity is not what "the same result" means here; the
+## resulting set of x positions is.
+func _separation_is_order_independent(t) -> void:
+	var kind := Defs.KIND_PIG
+	var positions: Array[int] = [400, 420, 440, 460]
+	var forward := _run_separation_scene(kind, positions, false)
+	var reversed := _run_separation_scene(kind, positions, true)
+	forward.sort()
+	reversed.sort()
+	t.eq(forward, reversed,
+		"스폰 순서를 뒤집어도(배열 반전) 60프레임 뒤 위치 집합이 정확히 같다 (%s)" % [forward])
+
+
+## **A second, unevenly-spaced scene — verify-read item 4.** The evenly-spaced four above is measurably
+## blind to a real class of order bug: a "순차 완화(sequential relaxation)" mutation that lets each pair's
+## push read the correction *already* accumulated on `i`/`j` earlier in the same pass (a real, order-
+## dependent bug — checked by hand: with `xs=[100,110,118,125,130]` that mutation makes forward and reversed
+## land on different sets, `[92,102,117,126,138]` vs `[92,110,118,133,138]`) — but leaves the even, equally-
+## spaced `[400,420,440,460]` scene green, because every pair's overlap and push there happens to be
+## symmetric enough that accumulation order washes out. **Uneven spacing is what actually exercises it.**
+func _separation_is_order_independent_with_uneven_spacing(t) -> void:
+	var kind := Defs.KIND_PIG
+	var positions: Array[int] = [400, 410, 418, 425, 430]
+	var forward := _run_separation_scene(kind, positions, false)
+	var reversed := _run_separation_scene(kind, positions, true)
+	forward.sort()
+	reversed.sort()
+	t.eq(forward, reversed,
+		"불균등한 간격에서도 스폰 순서를 뒤집으면 위치 집합이 정확히 같다 (%s)" % [forward])
+
+
+func _run_separation_scene(kind: int, positions: Array[int], reversed: bool) -> Array[int]:
+	var g := _bare_grid()
+	var ch := Character.new()
+	ch.place(-5000, FLOOR_TOP - Character.H_PX)
+	var world := WorldStep.new(g, SpellSim.new(), ch)
+	var y := FLOOR_TOP - Defs.h_px(kind)
+	var order: Array[int] = positions.duplicate()
+	if reversed:
+		order.reverse()
+	for px: int in order:
+		world.spawn_monster(kind, px, y)
+	for _i in 60:
+		world.frame(DT, 0.0, false, false)
+	var out: Array[int] = []
+	for i in world.monster_count():
+		out.append(world.monster_at(i).x)
+	return out
+
+
+## **Terrain refuses whole, not "as far as it could"** (Stage C's own check 3 — a partial move is exactly
+## what re-triggers next frame and becomes the shudder). Driven directly on `Monster.try_shift_x()`, not
+## through the walking pipeline — a mob a few px off a wall, asked to move farther than the gap allows,
+## must not creep the little distance it *could* legally cover. A control alongside it (clear room ahead,
+## same correction) proves the refusal is about the wall specifically, not about `try_shift_x` doing nothing.
+func _separation_refuses_the_move_entirely_against_terrain(t) -> void:
+	var kind := Defs.KIND_PIG
+	var wall_cx := 60
+	var wall_w_cells := 4
+	var g := _bare_grid()
+	g.apply(CellGrid.cmd_fill(wall_cx, FLOOR_CY - 20, wall_cx + wall_w_cells - 1, FLOOR_CY - 1, Mat.STONE))
+	var wall_right_px := (wall_cx + wall_w_cells) * Tuning.CELL_PX
+	var y := FLOOR_TOP - Defs.h_px(kind)
+	var gap := 2  # room enough for a partial move, not enough for the correction below (-8px)
+
+	var cornered := Monster.new(1, kind, wall_right_px + gap, y)
+	var moved := cornered.try_shift_x(g, -8)
+	t.ok(not moved, "벽 안으로 들어가는 보정은 try_shift_x가 거절한다 (반환값이 거짓이다)")
+	t.eq(cornered.x, wall_right_px + gap,
+		"그리고 조금도 안 움직인다 (갈 수 있는 2px까지가 아니라 통째로 거절, x=%d)" % cornered.x)
+
+	# Control — same correction, clear room ahead: it actually moves the full amount.
+	var clear := Monster.new(2, kind, wall_right_px + gap + 100, y)
+	var moved2 := clear.try_shift_x(g, -8)
+	t.ok(moved2, "같은 보정이라도 갈 길이 있으면 실제로 옮긴다 (대조군)")
+	t.eq(clear.x, wall_right_px + gap + 100 - 8, "그리고 정확히 그 보정만큼 옮긴다")
+
+
+## **A fix, not just a note** (verify-read's item 5). A monster could fall asleep mid-jump —
+## `Monster.step()`'s own asleep-gate skips refreshing `on_ground` entirely (that skip is where most of
+## sleep's cost saving comes from), so a monster that crossed `MonsterPlacement.SLEEP_PX` mid-air would
+## freeze there forever: `on_ground` stuck `false`, the screen stuck on `MON_AIRBORNE`.
+## **Plausible, not exotic**: a walled-off pig jumps repeatedly forever by design (the plan's own Bounds —
+## "trapped, and visibly trying") and a player digging a pit trap and walking away to fight elsewhere is an
+## ordinary sequence, not a corner case. `world_step.gd`'s sleep decision now defers to the next tick the
+## monster is actually grounded — driven here through the real wake/sleep pipeline (`set_placement` +
+## `wake_scan`, not a bare `spawn_monster`), because `has_row_for` is what gates sleep eligibility at all.
+func _a_walled_off_pig_does_not_fall_asleep_mid_air(t) -> void:
+	var kind := Defs.KIND_PIG
+	var tx := 60
+	var wall_cx := tx + 6
+	var wall_w_cells := 4
+	var floor_cy := 200
+	var g := CellGrid.new()
+	g.apply(CellGrid.cmd_fill(0, floor_cy, 2000, floor_cy + 32, Mat.STONE))
+	g.apply(CellGrid.cmd_fill(wall_cx, floor_cy - 20, wall_cx + wall_w_cells - 1, floor_cy - 1, Mat.STONE))
+	var row_center_x := float(tx * Tuning.TILE_CELLS * Tuning.CELL_PX) + float(Defs.w_px(kind)) * 0.5
+	var ch := Character.new()
+	# Close enough to wake the row — standing right on top of it.
+	ch.place(int(row_center_x), (floor_cy - 4) * Tuning.CELL_PX - Character.H_PX)
+	var world := WorldStep.new(g, SpellSim.new(), ch)
+	world.set_placement([{"tx": tx, "kind": kind}], floor_cy)
+	for _i in 15:
+		world.frame(DT, 0.0, false, false)
+	t.ok(world.monster_count() > 0, "잠들어 있던 자리가 실제로 깨어난다 (전제)")
+	var m: Monster = world.monster_at(0)
+
+	# The player retreats far past the wall (and past SLEEP_PX) — the pig now walks toward that fixed
+	# point forever, hits the wall, and jumps repeatedly, exactly the "walled off" picture Stage A built.
+	ch.place(int(row_center_x) + 20000, ch.y)
+	var caught_asleep_mid_air := 0
+	for _i in 900:
+		world.frame(DT, 0.0, false, false)
+		if m.asleep and not m.on_ground:
+			caught_asleep_mid_air += 1
+	t.eq(caught_asleep_mid_air, 0, "900프레임 동안 공중에서 잠든 순간이 한 번도 없다")
+	t.ok(m.asleep, "그리고 결국은 잠든다 (착지한 틈을 잡아서 — 영영 못 자는 게 아니다)")
+	t.ok(m.on_ground, "잠들었을 때는 반드시 땅 위다 (공중에서 얼어붙지 않는다)")
 
 
 # ==================================================================
@@ -923,10 +1512,18 @@ func _monster_takes_blast_damage(t) -> void:
 	t.eq(m2.hp, Defs.max_hp(kind), "폭발 반경 밖이면 hp가 그대로다 (음성 대조)")
 
 
-## **Disproving tunnelling — measured with the hen (24px, the narrowest box).** Generation 0's first-tick leap
-##  is **read** from `Tuning.speed_cells(0) * Tuning.CELL_PX` (baking in 40px makes the disproof spin idle —
-##  the same discipline as acceptance 12). The hen's hp (10) == `DAMAGE_HIT` (10) so **it dies in one hit**, and
-##  what is observed is not "hp drops" but "it dies". It is not worked around by switching to the pig.
+## **Disproving tunnelling — a corner-cut placement, measured with the hen.** The shot goes down-right at 45
+##  degrees across the **top-right corner** of the box: both ends of the one-tick segment sit outside the box
+##  while the segment itself passes through it, so **a hit test written as a point check on the tick boundaries
+##  cannot catch it** and this check goes red. That is the whole contract `body._seg_hits_box` carries.
+##
+## **The placement is measured, not predicted.** The old version asserted the placement by arithmetic
+##  (`leap > box + lead`) and fired axis-aligned; `speed` 20 -> 12 made that inequality unsatisfiable for every
+##  box in the table (see `CORNER_LEAD_X`). What replaces it reads the segment back out of the sim and asserts
+##  the two properties directly — **both ends outside**, and **it crosses anyway** — so the day a constant moves,
+##  the failing label names which half broke instead of the check quietly measuring nothing.
+## The hen's hp (10) == `DAMAGE_HIT` (10) so **it dies in one hit**, and what is observed is not "hp drops" but
+##  "it dies". It is not worked around by switching to the pig.
 func _monster_hit_by_a_leaping_segment(t) -> void:
 	var kind := Defs.KIND_HEN
 	var stand_x := 600
@@ -940,32 +1537,105 @@ func _monster_hit_by_a_leaping_segment(t) -> void:
 	var m: Monster = world.monster_at(0)
 	t.eq(m.hp, Defs.max_hp(kind), "닭 시작 hp가 %d다 (DAMAGE_HIT과 같아 한 방에 죽는다)" % Defs.max_hp(kind))
 
-	var leap_px := Tuning.speed_cells(0) * Tuning.CELL_PX
-	t.ok(leap_px > Defs.w_px(kind) + HIT_LEAD_PX,
-		"한 틱 도약(%dpx)이 리드(%dpx)+상자(%dpx)보다 커서 도약 배치가 실제로 선다"
-			% [leap_px, HIT_LEAD_PX, Defs.w_px(kind)])
+	var lo_x := float(stand_x)
+	var hi_x := float(stand_x + Defs.w_px(kind))
+	var lo_y := float(stand_y)
+	var hi_y := float(stand_y + Defs.h_px(kind))
 
-	var row_cy := floori((stand_y + Defs.h_px(kind) * 0.5) / float(Tuning.CELL_PX))
-	var origin_cx := floori((stand_x - HIT_LEAD_PX) / float(Tuning.CELL_PX))
-	world.enqueue(SpellSim.cmd_fire(origin_cx, row_cy, 10, 0, Tuning.ELEM_NONE, Glyph.GLYPH_NONE))
+	# Born above the box's right end and fired down-right at 45 degrees — `10, 10` rather than `1, 1` only to
+	#  match how every other shot in this file spells an aim vector; `_launch` normalizes either the same way.
+	var origin_cx := floori((hi_x - CORNER_LEAD_X) / float(Tuning.CELL_PX))
+	var origin_cy := floori((lo_y - CORNER_LEAD_Y) / float(Tuning.CELL_PX))
+	world.enqueue(SpellSim.cmd_fire(origin_cx, origin_cy, 10, 10, Tuning.ELEM_NONE, Glyph.GLYPH_NONE))
 	for _i in Tuning.TICK_DIVIDER:
 		world.frame(DT, 0.0, false, false)
 
-	# Is the placement really a leaping placement — both ends of the segment must be outside the box.
+	# Is the placement really a corner cut — both ends outside the box, and the segment through it regardless.
 	t.eq(spell.seg_count(), 1, "이 틱에 구간이 하나다 (배치를 읽을 수 있다)")
 	if spell.seg_count() == 1:
 		var ax := Body._fp_px(spell.get_seg_x0()[0])
+		var ay := Body._fp_px(spell.get_seg_y0()[0])
 		var bx := Body._fp_px(spell.get_seg_x1()[0])
-		var box_lo := float(stand_x)
-		var box_hi := float(stand_x + Defs.w_px(kind))
-		t.ok(ax < box_lo or ax > box_hi, "구간 시작(%.1f)이 상자[%d,%d] 밖이다" % [ax, stand_x, stand_x + Defs.w_px(kind)])
-		t.ok(bx < box_lo or bx > box_hi,
-			"구간 끝(%.1f)도 상자 밖이다 (도약 배치다 — 점 검사면 여기서 못 잡는다)" % bx)
+		var by := Body._fp_px(spell.get_seg_y1()[0])
+		t.ok(_outside_box(ax, ay, lo_x, lo_y, hi_x, hi_y),
+			"구간 시작(%.1f,%.1f)이 상자[%d,%d]x[%d,%d] 밖이다"
+				% [ax, ay, stand_x, int(hi_x), stand_y, int(hi_y)])
+		t.ok(_outside_box(bx, by, lo_x, lo_y, hi_x, hi_y),
+			"구간 끝(%.1f,%.1f)도 상자 밖이다 (점 검사면 여기서 못 잡는다)" % [bx, by])
+		t.ok(_seg_crosses_box(ax, ay, bx, by, lo_x, lo_y, hi_x, hi_y),
+			"그런데도 구간은 상자를 관통한다 (모서리를 가로지르는 도약 배치다)")
 
 	t.eq(world.monster_count(), 0, "닭이 한 틱 만에 죽어 목록에서 빠진다 (터널링 없이 맞았다)")
 	t.eq(world.died_count(), 1, "죽음 통지가 하나 났다")
 	if world.died_count() == 1:
 		t.eq(world.died_kind(0), kind, "죽음 통지의 종류가 닭이다")
+
+
+## **The detector for the detector.** `_seg_crosses_box` decides whether the corner-cut placement stands, and
+##  with `return true` on its first line the whole net stayed green (verify-read measured it) — the placement
+##  assertion would have been a false green with nothing above it to catch that.
+## The box is [0,10]x[0,10] and every case below is **computed by hand**, on purpose: comparing against
+##  `body._seg_hits_box` would only prove the two copies of Liang-Barsky agree, not that either is right.
+func _seg_crosses_box_is_measured_itself(t) -> void:
+	# Crossing — including the shape the real placement uses (a diagonal through a corner).
+	t.ok(_crosses_unit(-5.0, 5.0, 15.0, 5.0), "가로로 관통하는 구간은 참이다")
+	t.ok(_crosses_unit(5.0, -5.0, 5.0, 15.0), "세로로 관통하는 구간은 참이다")
+	t.ok(_crosses_unit(-2.0, 8.0, 8.0, -2.0), "모서리를 가로지르는 대각 구간은 참이다 (배치가 쓰는 모양)")
+	t.ok(_crosses_unit(5.0, 5.0, 20.0, 20.0), "상자 안에서 시작하는 구간도 참이다")
+	# Not crossing — **`return true` dies on every one of these.**
+	t.ok(not _crosses_unit(-5.0, 12.0, 15.0, 14.0), "상자 아래를 지나가는 구간은 거짓이다")
+	t.ok(not _crosses_unit(-8.0, -1.0, -1.0, -8.0), "모서리 바깥을 스치는 대각 구간은 거짓이다")
+	# **It is a segment, not a line.** Drop the [0,1] clamp and this one goes green while nothing else moves.
+	t.ok(not _crosses_unit(-5.0, 5.0, -1.0, 5.0), "상자에 못 미치고 끝나는 구간은 거짓이다")
+	# The parallel-slab branch. **The real placement is diagonal and never enters it**, so this is the only
+	#  place it runs at all — both sides of it, so "always false" and "always true" both die here.
+	t.ok(not _crosses_unit(-5.0, 20.0, 5.0, 20.0), "축에 평행하고 상자 밖인 구간은 거짓이다 (평행 슬랩 갈래)")
+	t.ok(_crosses_unit(-5.0, 5.0, 5.0, 5.0), "축에 평행하고 상자를 무는 구간은 참이다 (같은 갈래의 반대편)")
+
+
+## The box every case above is measured against — small, square and at the origin so each case is checkable by eye.
+static func _crosses_unit(ax: float, ay: float, bx: float, by: float) -> bool:
+	return _seg_crosses_box(ax, ay, bx, by, 0.0, 0.0, 10.0, 10.0)
+
+
+## A point versus the box. **Outside on either axis is outside.** The x-only line this replaced could not
+##  express a corner cut, where one end clears the box vertically and the other horizontally.
+static func _outside_box(px: float, py: float,
+		lo_x: float, lo_y: float, hi_x: float, hi_y: float) -> bool:
+	return px < lo_x or px > hi_x or py < lo_y or py > hi_y
+
+
+## Segment versus box, **written without calling `body._seg_hits_box`.** Calling the sim's own test here would
+##  make the placement assertion circular — "the sim says it crosses" is exactly what the check downstream is
+##  measuring, so the placement has to be established without it.
+## **But do not read that as "an independent method".** It is **the same Liang-Barsky, written a second time** —
+##  the independence is only that a mutation to `body.gd` cannot reach this copy. A mistake in the *algorithm*
+##  would be made identically on both sides and neither would notice, which is why the cases in
+##  `_seg_crosses_box_is_measured_itself` are hand-computed rather than compared against the sim.
+## Clip the parameter range [0,1] against each axis' slab; a non-empty range left over is a crossing.
+static func _seg_crosses_box(ax: float, ay: float, bx: float, by: float,
+		lo_x: float, lo_y: float, hi_x: float, hi_y: float) -> bool:
+	var t0 := 0.0
+	var t1 := 1.0
+	for axis in 2:
+		var p: float = (bx - ax) if axis == 0 else (by - ay)
+		var q: float = ax if axis == 0 else ay
+		var lo: float = lo_x if axis == 0 else lo_y
+		var hi: float = hi_x if axis == 0 else hi_y
+		if absf(p) < 0.001:
+			# Parallel to this slab — it is either inside it for the whole segment or outside it for all of it.
+			if q < lo or q > hi:
+				return false
+			continue
+		var ta := (lo - q) / p
+		var tb := (hi - q) / p
+		if ta > tb:
+			var swap := ta
+			ta = tb
+			tb = swap
+		t0 = maxf(t0, ta)
+		t1 = minf(t1, tb)
+	return t0 <= t1
 
 
 ## Measured with the pig — the hen (hp 10) dies in one second at fire's 10 dps, giving only two or three points for "proportional".
@@ -1114,6 +1784,15 @@ func _dead_monsters_leave_the_list_correctly(t) -> void:
 
 ## **The ledge is stood at 2 or 3 cells** — at 1 cell both cross it, at 4 cells both are blocked.
 ##  3 was chosen: the pig (`step_cells`=1) is blocked and the hen (`step_cells`=3) crosses.
+## **Rewritten to measure the process, not "can it get past"** (`monster-ai-jump-and-separation.md`, Stage A —
+## the doc's own prediction). This used to be a binary "pig blocked / everyone else clears" — a 3-cell (12px)
+## ledge sits well under any kind's real jump apex, so a jump-equipped pig now clears it too, and the old
+## binary stopped meaning what it said. **What `step_cells` still decides is *how* each kind crosses**: the
+## hen and wolf (`step_cells`=3=12px, exactly the ledge height) cross by stepping up — `vy` never negative,
+## `on_ground` never false, the whole way. The pig (`step_cells`=1=4px, short of the 12px ledge) cannot step
+## it — it can only cross by going airborne at least once. **Bosses stay excluded** for the same reason as
+## before (a charging boss's stepping is pattern-gated, measured separately by
+## `_charging_bull_does_not_step_a_3cell_ledge`).
 func _pig_and_hen_cross_the_ledge_differently(t) -> void:
 	var ledge_cells := 3
 	var ledge_cx := 80
@@ -1145,20 +1824,30 @@ func _pig_and_hen_cross_the_ledge_differently(t) -> void:
 		#  (bull is excluded above): the blocked pig stops moving by tick 39, the crossing hen and rooster
 		#  both clear `ledge_left_px` by tick 45 (the hen's x keeps drifting after that — toward the far
 		#  player, not toward the ledge — up to tick 83). 150 keeps 1.8x headroom over the slowest of those
-		#  while cutting the loop in half.
+		#  while cutting the loop in half. **Widened for the jump**: the pig no longer merely stops, it now
+		#  needs frames enough to climb 12px and continue, so this loop is what the "eventually crosses"
+		#  premise below relies on.
+		var airborne_frames := 0
 		for _i in 150:
 			world.frame(DT, 0.0, false, false)
+			if m.vy < 0.0 or not m.on_ground:
+				airborne_frames += 1
+		t.ok(m.x > ledge_left_px,
+			"%s(step=%d)가 결국 %d셀 턱을 넘는다 (x=%d, 전제)"
+				% [Defs.name_of(kind), Defs.step_cells(kind), ledge_cells, m.x])
 		if kind == Defs.KIND_PIG:
-			t.eq(m.x, ledge_left_px - Defs.w_px(kind),
-				"돼지(step=%d)는 %d셀 턱에 막혀 x가 안 는다 (x=%d)"
-					% [Defs.step_cells(kind), ledge_cells, m.x])
+			t.ok(Defs.step_cells(kind) * Tuning.CELL_PX < ledge_cells * Tuning.CELL_PX,
+				"돼지의 계단 오르기 반경(%dpx)이 턱 높이(%dpx)보다 낮다 (전제 — 계단으로 위장될 수 없다)" % [
+					Defs.step_cells(kind) * Tuning.CELL_PX, ledge_cells * Tuning.CELL_PX])
+			t.ok(airborne_frames > 0,
+				"돼지는 오직 공중에 뜨는 것으로만 이 턱을 넘는다 (뜬 프레임 %d회)" % airborne_frames)
 		else:
 			# **Not hardcoded to "닭"** — this branch is every non-pig, non-boss kind in `Defs.ALL` (today
-			#  only the hen, but a hardcoded label would print a correct-looking hen line if a third trash
-			#  mob's failure landed here, sending the reader to the wrong row).
-			t.ok(m.x > ledge_left_px,
-				"%s(step=%d)은 %d셀 턱을 넘는다 (x=%d)"
-					% [Defs.name_of(kind), Defs.step_cells(kind), ledge_cells, m.x])
+			#  the hen and the wolf, but a hardcoded label would print a correct-looking hen line if a third
+			#  trash mob's failure landed here, sending the reader to the wrong row).
+			t.eq(airborne_frames, 0,
+				"%s(step=%d)는 %d셀 턱을 계단 오르기만으로 넘는다 (뜬 적이 한 번도 없다)"
+					% [Defs.name_of(kind), Defs.step_cells(kind), ledge_cells])
 
 	# **The `continue` above has no bark of its own** — a kind later getting a `MOVES` row would silently
 	#  drop out of this loop with nothing to notice. Pinning the count closes it (the same medicine
@@ -1858,8 +2547,18 @@ func _a_walking_monster_reaches_the_walk_state(t) -> void:
 
 	var view := MonsterView.new()
 	view.setup(world, ch, g)
+	# **One real `world.frame()` first** (correction, `monster-ai-jump-and-separation.md` Stage B) — a freshly
+	#  placed `Body` starts with `on_ground == false` (`body.gd:place()`'s own default; it is only ever
+	#  recomputed inside `step()`), and `resolve_state` now reads that value. In real play this untreed gap
+	#  never appears: a debug key's spawn runs during input, strictly before that same frame's
+	#  `_physics_process()` (`world.frame()`), so by the time `MonsterView._process()` (idle-rate) ever looks
+	#  at a monster, it has already been stepped at least once. Skipping this call is what let the very first
+	#  `advance()` see the pre-step default and misread a grounded spawn as falling (measured: `anim_state`
+	#  came back `MON_AIRBORNE`, not `MON_IDLE`) — this line is what makes the harness match that real order.
+	world.frame(DT, 0.0, false, false)
 	# The very first `advance()` has no previous x yet — that is the "a spawn must not walk for one frame"
-	#  discipline `character_view.setup()` records, and it is measured, not assumed.
+	#  discipline `character_view.setup()` records, and it is measured, not assumed. One `world.frame()` at
+	#  160px/s over 1/60s moves under a pixel, so `_prev_x` is still unset when `advance()` first runs.
 	view.advance()
 	t.eq(view.anim_state(mid), Fx.MON_IDLE, "본 첫 프레임은 서기다 (스폰이 한 프레임 걷지 않는다)")
 
@@ -1877,6 +2576,57 @@ func _a_walking_monster_reaches_the_walk_state(t) -> void:
 	# **The cell actually advanced too** — the state alone would stay green with a frozen clock.
 	t.ok(MonsterView.frame_index(Fx.MON_WALK, MonsterView.anim_row(kind, Fx.MON_WALK), 0, moved_px) > 0,
 		"그만큼 걸었으면 걷기 칸도 0번을 지났다 (다리가 얼지 않는다)")
+	view.free()
+
+
+## **The screen wiring, driven for real** (verify-read's own most serious finding, item 1). Hardcoding
+## `m.on_ground` to `true` inside `monster_view._scan_anim` left all 31 nets green, 7152 checks — no check
+## anywhere drove a real jump through `MonsterView.setup()/advance()/anim_state()`. Every existing check
+## either called `resolve_state` as a pure function with literal arguments (`net_monster_sprite.gd`) or
+## compared `oneshot_frames`' table value against the measured airtime (`net_monster`'s own apex check
+## above), and neither one ever asks what `_scan_anim()` itself reads off a real, live monster. **The exact
+## same shape `_a_walking_monster_reaches_the_walk_state` above already uses for WALK, one `Fx.MON_AIRBORNE`
+## away from there** — a mob genuinely walled off and jumping, driven through `world.frame()`, read back
+## through `view.anim_state()`, not through `resolve_state()` called directly.
+func _a_jumping_monster_reaches_the_airborne_state_on_screen(t) -> void:
+	var kind := Defs.KIND_PIG
+	var wall_cx := 60
+	var wall_w_cells := 4
+	var tall_cells := 20
+	var g := _bare_grid()
+	g.apply(CellGrid.cmd_fill(
+		wall_cx, FLOOR_CY - tall_cells, wall_cx + wall_w_cells - 1, FLOOR_CY - 1, Mat.STONE))
+	var wall_right_px := (wall_cx + wall_w_cells) * Tuning.CELL_PX
+	var ch := Character.new()
+	ch.place(160, FLOOR_TOP - Character.H_PX)  # left of the wall — the pig walks left into it
+	var world := WorldStep.new(g, SpellSim.new(), ch)
+	var y := FLOOR_TOP - Defs.h_px(kind)
+	var mid := world.spawn_monster(kind, wall_right_px + 200, y)
+	t.ok(mid > 0, "돼지가 섰다 (전제)")
+	# One real `world.frame()` before the first `advance()` — the same correction the WALK check above
+	#  already applies, for the same reason (a freshly placed `Body` starts `on_ground == false`).
+	world.frame(DT, 0.0, false, false)
+
+	var view := MonsterView.new()
+	view.setup(world, ch, g)
+	view.advance()
+	t.eq(view.anim_state(mid), Fx.MON_IDLE, "벽에 닿기 전엔 화면도 서기다 (전제)")
+
+	var m: Monster = world.monster_at(0)
+	var reached_airborne := false
+	var reached_walk_after := false
+	for _i in 300:
+		world.frame(DT, 0.0, false, false)
+		view.advance()
+		if not reached_airborne and view.anim_state(mid) == Fx.MON_AIRBORNE:
+			reached_airborne = true
+			# **The same instant, not a coincidence** — `anim_state` and `m.on_ground` must agree on this
+			#  exact frame, or the screen and the sim have already split (this repo's own signature fake).
+			t.ok(not m.on_ground, "화면이 AIRBORNE인 바로 그 프레임에 on_ground도 실제로 거짓이다")
+		elif reached_airborne and view.anim_state(mid) != Fx.MON_AIRBORNE:
+			reached_walk_after = true
+	t.ok(reached_airborne, "벽에 막혀 뛰면 화면 상태가 실제로 AIRBORNE에 닿는다 (resolve_state를 부르는 걸로는 안 된다)")
+	t.ok(reached_walk_after, "그리고 착지하면 화면이 AIRBORNE에서 벗어난다 (얼어붙지 않는다)")
 	view.free()
 
 

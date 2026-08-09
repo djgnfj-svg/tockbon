@@ -45,10 +45,14 @@ const LEDGE_CX := 30
 const STAGE_SCRIPT := "res://src/stage/stage.gd"
 
 # --- stage 3 — bolt and blast placement constants -------------------
-## The firing origin sits this far to the left of the box. The same value and the same reason as
-##  `net_damage.HIT_LEAD_PX` — generation 0's first-tick leap (`Tuning.speed_cells(0) * Tuning.CELL_PX`) is
-##  far larger than the box, so firing from this far ahead gives a "leaping placement" with **both ends of the segment outside the box**.
-const HIT_LEAD_PX := 36
+## **`_hits_to_kill` and `HIT_LEAD_PX` lived here and were deleted — they had no caller in this file.**
+##  This file is one of four copies split off `net_monster.gd` for parallel speed, and the split left the helper
+##  behind on every copy while only `net_monster` kept the check that calls it
+##  (`_dummy_raises_hits_to_kill_a_pig`). Proof it was dead rather than merely quiet: verify-read set this
+##  file's `HIT_LEAD_PX` to 300 (a guaranteed miss) and the net stayed **green**, and a `push_error` canary on
+##  the function's first line **never reached stderr**. A helper nobody calls carries a comment nobody can
+##  falsify, which is how it came to claim a property no check here measured.
+##  **If a check that needs it comes back, copy it from `net_monster.gd`** — that is where the live one is.
 
 ## The firing origin (in cells) to slam a blast down from — well above the floor. The same idiom as `net_damage.BLAST_FROM_CY`.
 const BLAST_FROM_CY := FLOOR_CY - 20
@@ -320,39 +324,6 @@ func _func_body(src: String, name: String) -> String:
 		return ""
 	var end := src.find("\nfunc ", at + 1)
 	return src.substr(at, (end - at) if end > 0 else -1)
-
-
-## Fires repeated direct hits (`ELEM_NONE`, so no fire/blast side effects mix in) at a freshly spawned
-##  monster of `kind` until it dies. Returns the number of shots that connected.
-## **The origin is recomputed every shot from the monster's current position** — `_still_ch` keeps the target
-##  stationary so the pig has no reason to walk, but re-aiming costs nothing and removes the assumption entirely.
-## Spacing between shots is `invuln_ticks + 1` — one tick beyond invulnerability, the same margin
-##  `net_damage._invuln_lasts_four_ticks` uses for "the gap that guarantees a second hit lands".
-func _hits_to_kill(kind: int, glyphs: int) -> int:
-	var stand_x := 600
-	var stand_y := FLOOR_TOP - Defs.h_px(kind)
-	var g := _bare_grid()
-	var spell := SpellSim.new()
-	var ch := _still_ch(stand_x, kind)
-	var world := WorldStep.new(g, spell, ch)
-	var mid := world.spawn_monster(kind, stand_x, stand_y)
-	# **No `t` in scope here** — the caller asserts the premise. Returning -1 makes a spawn failure show up as
-	#  a comparison mismatch in the caller rather than disappearing silently.
-	if mid <= 0:
-		return -1
-	var m: Monster = world.monster_at(0)
-
-	var hits := 0
-	var safety := 0
-	while world.monster_count() > 0 and safety < 50:
-		var row_cy := floori((m.y + Defs.h_px(kind) * 0.5) / float(Tuning.CELL_PX))
-		var origin_cx := floori((m.x - HIT_LEAD_PX) / float(Tuning.CELL_PX))
-		world.enqueue(SpellSim.cmd_fire(origin_cx, row_cy, 10, 0, Tuning.ELEM_NONE, glyphs))
-		for _i in Tuning.TICK_DIVIDER * (Defs.invuln_ticks(kind) + 1):
-			world.frame(DT, 0.0, false, false)
-		hits += 1
-		safety += 1
-	return hits
 
 
 ## **The same ratio, driven end to end through `Monster.on_tick`/`world.frame()`, not just the pure

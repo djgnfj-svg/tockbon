@@ -40,7 +40,7 @@ const HUD_PATH := "HUD"
 ##  **Keeping the list by hand is itself the contract.** Attach a new window without listing it and the net
 ##   barks first; list it and "this one eats clicks on purpose" stays in the repo. Work it out automatically
 ##   and that declaration disappears.
-const INTERACTIVE: Array[String] = ["HUD/CircleWindow", "HUD/ThreePickWindow"]
+const INTERACTIVE: Array[String] = ["HUD/CircleWindow", "HUD/ThreePickWindow", "HUD/SettlementWindow"]
 
 ## **The old `WINDOW_SCREEN_FRAC` (90% on each axis) was deleted.** The contract was never about size —
 ##  "the character and its surroundings are visible" is the contract, and 90% was the value that **deferred** it.
@@ -72,6 +72,7 @@ func run(t) -> void:
 	_hud_controls_are_inside_the_viewport(t)
 	_progress_text_survives_the_assembly_window(t)
 	_opening_one_window_closes_the_other(t)
+	_esc_closes_whichever_key_opened_window_is_open(t)
 	_pick_toggle_closes_from_the_open_state(t)
 	_pick_with_nothing_pending_does_not_touch_the_window(t)
 	_declining_a_pick_leaves_the_circle_byte_identical(t)
@@ -629,7 +630,14 @@ func _hud_counts_are_throttled(t) -> void:
 ##  comment warns about, reintroduced by its own sibling. Its real rect is checked by
 ##  `_pick_window_leaves_the_stage_visible` (`_mouse_filter_contract`'s own block), against `Fx.PICK_RECT`
 ##  **by name** — `PICK_RECT := WINDOW_RECT` being an alias today does not mean either check can be skipped.
-const OUT_OF_TREE_SIZE_ZERO: Array[String] = ["CircleWindow", "ThreePickWindow"]
+##
+## **`SettlementWindow` (`docs/plans/3.done/run-end-settlement.md`, Stage D) is the same shape of skip** — it
+## sizes itself from `Fx.SETTLEMENT_RECT` in `_ready()` too. **No separate "does it leave the stage visible"
+## check exists for it, and none is needed**: `SETTLEMENT_RECT` is defined as the whole canvas `(0, 0, 960,
+## 540)` (that constant's own header — the doc's declared exception to every other window here leaving the
+## world visible), so there is no off-canvas position left to mistype in the first place. Its real rect is
+## measured directly by `net_settlement._ready_seats_from_settlement_rect` instead.
+const OUT_OF_TREE_SIZE_ZERO: Array[String] = ["CircleWindow", "ThreePickWindow", "SettlementWindow"]
 
 func _hud_controls_are_inside_the_viewport(t) -> void:
 	var vw := float(ProjectSettings.get_setting("display/window/size/viewport_width"))
@@ -717,7 +725,8 @@ func _progress_text_survives_the_assembly_window(t) -> void:
 		return
 	var root := scene.instantiate()
 	for path: String in [paths["_hud"], paths["_progress_label"], paths["_levelup_label"], "HUD/Health",
-			"HUD/CircleWindow", "HUD/ThreePickWindow", "HUD/ResearchWindow", "SpellView", "BlastFx"]:
+			"HUD/CircleWindow", "HUD/ThreePickWindow", "HUD/ResearchWindow", "HUD/SettlementWindow",
+			"SpellView", "BlastFx"]:
 		t.ok(root.get_node_or_null(path) != null, "씬에 %s 가 있다 (전제)" % path)
 
 	root.set("_hud", root.get_node(paths["_hud"]))
@@ -734,6 +743,9 @@ func _progress_text_survives_the_assembly_window(t) -> void:
 	# **And `_research_window`, for exactly the same reason one line up** — `_update_hud()` reads its
 	#  `visible` to decide whether `Stats` shows, so an unwired null crashes the call outright.
 	root.set("_research_window", root.get_node("HUD/ResearchWindow"))
+	# **And `_settlement`, same reason again** (`run-end-settlement.md`, Stage D) — `_update_hud()` now reads
+	#  `_settlement.is_showing()` too, unconditionally, every call.
+	root.set("_settlement", root.get_node("HUD/SettlementWindow"))
 
 	# **Blanking `_progress_label.text` was also currently green** — this call is what proves it fills back in,
 	#  not merely that the node happens to hold leftover text from before.
@@ -859,6 +871,74 @@ func _opening_one_window_closes_the_other(t) -> void:
 	t.ok(not world.progress().is_pick_open(), "취소 버튼을 눌러도 뽑기가 실제로 닫힌다 (전제)")
 	root.call("_update_hud")
 	t.ok(stats.visible, "취소 '버튼'으로 닫아도 Stats가 돌아온다 (P가 아니라 버튼으로 — 이 검사의 핵심)")
+
+	root.free()
+
+
+## **ESC closes whichever of the three key-opened windows is open** (user request: "E 해서 뜬 게 ESC로 꺼져야
+## 함. 모든 UI들은"). Driven by calling `_handle_cancel()` directly — the same idiom every check above uses
+## for `_toggle_assembly()`/`_toggle_pick()` — since `stage_input.gd`'s own `ui_cancel` wiring is covered
+## separately by `_input_actions_exist`'s auto-scan (it already sweeps every `is_action*(...)` call in that
+## file, so `ui_cancel` needed no new entry there to be checked).
+##
+## **The three-pick: closing it must not lose the pick.** `Progress.decline()` (what `_toggle_pick()` calls)
+## clears only the three drawn cards — `pending_picks` is untouched (`three_pick_window.gd`'s own comment:
+## "declining does not consume the pick"). Verified here as a value, not assumed from reading the call chain:
+## `pending_picks` is compared before and after.
+##
+## **`_settlement` is deliberately excluded and this drives that, not just states it.** It opens by
+## derivation (`want`), so `_handle_cancel()` reaching for it and closing it would just have it reopen on the
+## very next `_sync_settlement()` call — the check below confirms `_handle_cancel()` does not even try.
+func _esc_closes_whichever_key_opened_window_is_open(t) -> void:
+	var root := _wired_stage_root(t)
+	if root == null:
+		return
+	var world: Variant = root.get("_world")
+	if world == null:
+		root.free()
+		return
+	var pr = world.progress()
+
+	# -- nothing open: ESC does nothing --
+	var win := root.get_node("HUD/CircleWindow") as Control
+	var research := root.get_node("HUD/ResearchWindow") as Control
+	t.ok(not win.visible and not research.visible and not pr.is_pick_open(),
+		"시작할 때 세 창 다 닫혀 있다 (전제)")
+	root.call("_handle_cancel")
+	t.ok(not win.visible and not research.visible and not pr.is_pick_open(),
+		"아무것도 안 열려 있으면 ESC는 아무 일도 안 한다")
+
+	# -- assembly open -> ESC closes it --
+	root.call("_toggle_assembly")
+	t.ok(win.visible, "조립창을 열었다 (전제)")
+	root.call("_handle_cancel")
+	t.ok(not win.visible, "ESC를 누르면 조립창이 닫힌다")
+
+	# -- research open -> ESC closes it --
+	root.call("_toggle_research")
+	t.ok(research.visible, "연구창을 열었다 (전제)")
+	root.call("_handle_cancel")
+	t.ok(not research.visible, "ESC를 누르면 연구창도 닫힌다")
+
+	# -- pick open -> ESC closes it, and the pick itself is not lost --
+	pr.pending_picks = 1
+	root.call("_toggle_pick")
+	t.ok(pr.is_pick_open(), "뽑기를 열었다 (전제)")
+	var pending_before: int = pr.pending_picks
+	root.call("_handle_cancel")
+	t.ok(not pr.is_pick_open(), "ESC를 누르면 뽑기 창도 닫힌다")
+	t.eq(pr.pending_picks, pending_before,
+		"그런데 대기 중인 픽 자체는 잃지 않는다 (%d -> %d, 취소 버튼과 같은 효과)" % [pending_before, pr.pending_picks])
+
+	# -- the settlement panel is untouched, even while showing --
+	var ch: Variant = root.get("_char")
+	root.call("_leave_town")
+	ch.take_hit(Character.MAX_HP, false)
+	root.call("_physics_process", 1.0 / 60.0)
+	var settlement: Variant = root.get("_settlement")
+	t.ok(bool(settlement.call("is_showing")), "정산 화면이 열렸다 (전제)")
+	root.call("_handle_cancel")
+	t.ok(bool(settlement.call("is_showing")), "ESC를 눌러도 정산 화면은 그대로 떠 있다 (버튼만이 문이다)")
 
 	root.free()
 
@@ -1339,7 +1419,8 @@ func _wired_stage_root(t) -> Node:
 
 	for path: String in [paths["_hud"], paths["_progress_label"], paths["_levelup_label"], "HUD/Health",
 			"HUD/CircleWindow", "HUD/ThreePickWindow", "SpellView", "BlastFx", "StageInput", "Camera2D",
-			"MonsterView", "CellRenderer", "TownView", "SkyBackground", "HUD/ResearchWindow"]:
+			"MonsterView", "CellRenderer", "TownView", "SkyBackground", "HUD/ResearchWindow",
+			"HUD/SettlementWindow"]:
 		t.ok(root.get_node_or_null(path) != null, "씬에 %s 가 있다 (전제)" % path)
 
 	root.set("_hud", root.get_node(paths["_hud"]))
@@ -1374,6 +1455,11 @@ func _wired_stage_root(t) -> Node:
 	# **`_research_window` too** — `_update_hud()` reads its `visible` every frame to decide whether
 	#  `Stats` shows, so an unwired null crashes every check that drives the HUD.
 	root.set("_research_window", root.get_node("HUD/ResearchWindow"))
+	# **`_settlement`** (`docs/plans/3.done/run-end-settlement.md`, Stage D — that plan's own Risk 1, "the
+	#  highest-probability break in this whole plan"). `_physics_process()` reads `_settlement.is_showing()`
+	#  before it will even call `_world.frame()`, and `_update_hud()`/`reset_stage()` both reach it too — an
+	#  unwired null crashes every check in this file that drives any of the three before it measures anything.
+	root.set("_settlement", root.get_node("HUD/SettlementWindow"))
 	# **`_renderer`, so `_on_ticked()` can be driven for real too** — it calls `_renderer.refresh()` whenever
 	#  `_grid.consume_changed() > 0`, and any test that drives `_physics_process()` far enough to change the
 	#  grid (Stage I's own water pour is the first to do this through this helper) crashes on a null `_renderer`

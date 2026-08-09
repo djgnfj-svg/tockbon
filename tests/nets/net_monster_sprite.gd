@@ -211,34 +211,56 @@ func _state_priority_holds(t) -> void:
 	var pig := Defs.KIND_PIG
 	var bull := Defs.KIND_BULL
 
-	t.eq(MonsterView.resolve_state(pig, BossAi.Pattern.IDLE, false, false, false), Fx.MON_IDLE,
+	t.eq(MonsterView.resolve_state(pig, BossAi.Pattern.IDLE, true, false, false, false), Fx.MON_IDLE,
 		"가만히 있으면 서기다")
-	t.eq(MonsterView.resolve_state(pig, BossAi.Pattern.IDLE, false, false, true), Fx.MON_WALK,
+	t.eq(MonsterView.resolve_state(pig, BossAi.Pattern.IDLE, true, false, false, true), Fx.MON_WALK,
 		"움직이면 걷기다")
-	t.eq(MonsterView.resolve_state(pig, BossAi.Pattern.IDLE, false, true, true), Fx.MON_ATTACK,
+	t.eq(MonsterView.resolve_state(pig, BossAi.Pattern.IDLE, true, false, true, true), Fx.MON_ATTACK,
 		"때리는 중이면 걷는 중이어도 때리기다 (걷기보다 위)")
-	t.eq(MonsterView.resolve_state(pig, BossAi.Pattern.IDLE, true, true, true), Fx.MON_HURT,
+	t.eq(MonsterView.resolve_state(pig, BossAi.Pattern.IDLE, true, true, true, true), Fx.MON_HURT,
 		"맞았으면 때리는 중이어도 맞기다 (때리기보다 위)")
 
 	# **A boss's pattern outranks even being hit** — the screen must not contradict the sim.
-	t.eq(MonsterView.resolve_state(bull, BossAi.Pattern.CHARGE, true, true, true), Fx.MON_CHARGE,
+	t.eq(MonsterView.resolve_state(bull, BossAi.Pattern.CHARGE, true, true, true, true), Fx.MON_CHARGE,
 		"돌진 중인 황소는 맞아도 돌진이다 (패턴이 맨 위)")
-	t.eq(MonsterView.resolve_state(bull, BossAi.Pattern.WINDUP, false, false, false), Fx.MON_WINDUP,
+	t.eq(MonsterView.resolve_state(bull, BossAi.Pattern.WINDUP, true, false, false, false), Fx.MON_WINDUP,
 		"준비 동작은 포효다")
-	t.eq(MonsterView.resolve_state(bull, BossAi.Pattern.GORE, false, false, false), Fx.MON_ATTACK,
+	t.eq(MonsterView.resolve_state(bull, BossAi.Pattern.GORE, true, false, false, false), Fx.MON_ATTACK,
 		"들이받기는 때리기다")
-	t.eq(MonsterView.resolve_state(bull, BossAi.Pattern.FIRE, false, false, false), Fx.MON_FIRE,
+	t.eq(MonsterView.resolve_state(bull, BossAi.Pattern.FIRE, true, false, false, false), Fx.MON_FIRE,
 		"불 뿜기는 불이다")
-	t.eq(MonsterView.resolve_state(bull, BossAi.Pattern.LEAP, false, false, false), Fx.MON_LEAP,
+	t.eq(MonsterView.resolve_state(bull, BossAi.Pattern.LEAP, true, false, false, false), Fx.MON_LEAP,
 		"뛰기는 뛰기다 (황소의 내리찍기와 수탉의 도약이 같은 패턴이다)")
-	t.eq(MonsterView.resolve_state(bull, BossAi.Pattern.STUN, false, false, false), Fx.MON_STUN,
+	t.eq(MonsterView.resolve_state(bull, BossAi.Pattern.STUN, true, false, false, false), Fx.MON_STUN,
 		"경직은 경직이다")
 	# **`Pattern.IDLE` is not `MON_IDLE`** — a boss walks toward the player during IDLE.
-	t.eq(MonsterView.resolve_state(bull, BossAi.Pattern.IDLE, false, false, true), Fx.MON_WALK,
+	t.eq(MonsterView.resolve_state(bull, BossAi.Pattern.IDLE, true, false, false, true), Fx.MON_WALK,
 		"패턴이 IDLE인 보스는 움직이면 걷는다 (패턴 IDLE = 상태 IDLE이 아니다)")
 	# A trash mob never has patterns, so a pattern value it could never hold must not steer it.
-	t.eq(MonsterView.resolve_state(pig, BossAi.Pattern.CHARGE, false, false, false), Fx.MON_IDLE,
+	t.eq(MonsterView.resolve_state(pig, BossAi.Pattern.CHARGE, true, false, false, false), Fx.MON_IDLE,
 		"돼지는 패턴 값이 들어와도 무시한다 (has_pattern이 거짓이다)")
+
+	# **Airborne (`monster-ai-jump-and-separation.md`, Stage B) — resolved after hurt, before attack/walk.**
+	# Each line measured against the *other* flag also true, the same "flipping one branch bites" discipline
+	# this function's own header names for hurt-over-attack above.
+	t.eq(MonsterView.resolve_state(pig, BossAi.Pattern.IDLE, false, false, false, false), Fx.MON_AIRBORNE,
+		"땅에서 떨어지면 뜨기다")
+	t.eq(MonsterView.resolve_state(pig, BossAi.Pattern.IDLE, false, false, true, true), Fx.MON_AIRBORNE,
+		"공중에서 때리는 중이든 걷는 중이든 뜨기가 이긴다 (때리기·걷기보다 위)")
+	t.eq(MonsterView.resolve_state(pig, BossAi.Pattern.IDLE, false, true, false, false), Fx.MON_HURT,
+		"그런데 맞은 것은 뜬 것보다 위다 (맞기 > 뜨기)")
+	# A boss's own pattern still outranks airborne — `Pattern.LEAP` (a real airborne move) must not be
+	# overridden by the generic `on_ground` check below it in the priority order.
+	t.eq(MonsterView.resolve_state(bull, BossAi.Pattern.LEAP, false, false, false, false), Fx.MON_LEAP,
+		"패턴이 있는 보스는 공중에 떠도 자기 패턴(LEAP)이 이긴다 (범용 AIRBORNE가 아니다)")
+
+	# **Two checks, because "the bosses fall through" is a claim, not a fact** (Stage B's own risk table).
+	t.eq(MonsterView.resolve_state(bull, BossAi.Pattern.IDLE, false, false, false, true), Fx.MON_AIRBORNE,
+		"IDLE 패턴에 on_ground가 거짓이면, 걷는 중이어도 상태는 AIRBORNE이다")
+	t.ok(not (Fx.MONSTER_ANIM[bull] as Dictionary).has(Fx.MON_AIRBORNE),
+		"황소에겐 공중 그림이 없다 (전제 — 없어야 아래 대체가 뜻이 있다)")
+	t.eq(MonsterView.anim_row(bull, Fx.MON_AIRBORNE), Fx.MONSTER_ANIM[bull][Fx.MON_IDLE],
+		"그래서 실제로 그려지는 건 서기 그림이다 (걷던 IDLE 황소가 떨어지면, 걷기가 아니라 서기로 보인다)")
 
 
 ## **Looping wraps, one-shot clamps.** The distinction that makes a death animation stay dead.

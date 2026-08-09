@@ -34,6 +34,22 @@ static func xp_for_level(level: int) -> int:
 var xp := 0
 var level := 0
 var money := 0
+
+## **The run-end settlement screen's three numbers** (`docs/plans/3.done/run-end-settlement.md`, Stage A).
+##  `run_ticks` moves once per 20Hz tick (`advance_tick()`, called from `WorldStep.frame()`'s tick branch —
+##  not once per 60Hz frame, or play time would read 3x). `damage_dealt` is the sum of `Monster.take_dealt()`
+##  across both hp-removal paths (direct hit/blast and `_burn`) — see that file's own header for why "one
+##  place" was wrong. Both revert to 0 in `reset()`, the same as `xp`/`level`/`money`.
+var run_ticks := 0
+var damage_dealt := 0
+
+## **Snapshot of `gems` at the moment this run began, taken inside `reset()`** — the one place that means
+##  "a run begins" (the gate, `R`, and going home all route through `WorldStep.reset()` -> this). `gems` itself
+##  survives `reset()` (its own comment below); this field is what lets `gems_this_run()` read only the
+##  current run's earnings instead of every previous run's total. Setting it anywhere else (e.g. the departure
+##  gate) would be a second place, and a mid-run `R` would then measure a delta across a run that no longer
+##  exists (`run-end-settlement.md`'s own reasoning for why this must live here).
+var _gems_at_run_start := 0
 ## **How many glyph three-picks are waiting to be opened.** Levelling twice before one is opened **stacks**
 ##  (the plan's own TBD, decided that way) — it is the only option that cannot silently eat a reward.
 var pending_picks := 0
@@ -162,6 +178,30 @@ func add_money(amount: int) -> void:
 	money += amount
 
 
+## Called once per 20Hz tick, from `WorldStep.frame()`'s tick branch — **not** from the 60Hz `step()` loop,
+##  the same distinction `Monster.on_tick`/`step()` already hold, or play time would read 3x actual.
+func advance_tick() -> void:
+	run_ticks += 1
+
+
+## `n` is hp actually removed from a monster, already summed across both removal paths by
+##  `Monster.take_dealt()` — this function only adds, it does not re-derive what counts as damage.
+func add_damage(n: int) -> void:
+	damage_dealt += n
+
+
+## **This run's earnings only** — `gems` itself holds every run's total (it survives `reset()`), so reading it
+##  raw here would count a previous run's pool too. `run-end-settlement.md`, acceptance 7.
+func gems_this_run() -> int:
+	return gems - _gems_at_run_start
+
+
+## Play time in whole seconds. `run_ticks` moves at 20Hz (`60 / Tuning.TICK_DIVIDER`, the same conversion
+##  `stage.gd`'s own HUD line uses) — dividing by the frame rate instead would read 3x too fast.
+func run_seconds() -> int:
+	return run_ticks / (60 / Tuning.TICK_DIVIDER)
+
+
 ## **Stage I — called once, from `WorldStep`'s own death handling, the instant a boss's hp crosses 0.**
 ## `stage1-bosses.md`'s own words: "boss death sets a reward-pending flag." **Only for kinds that actually
 ## have a reward** (`BossAi.has_pattern(kind)` at the call site) — a trash mob calling this would put a key in
@@ -281,11 +321,17 @@ func reset() -> void:
 	level = 0
 	money = 0
 	pending_picks = 0
+	run_ticks = 0
+	damage_dealt = 0
 	_drawn.clear()
 	_reward_pending.clear()
 	# **`gems` is not here, and its absence is the point.** It is the one permanent thing this object holds
 	#  (its own box above) — the town's whole reason to exist is that something survives the run.
 	#  `net_progress` measures that it survives, so deleting this comment and adding the line goes red.
+	# **`_gems_at_run_start` is re-snapshotted here, every time.** `reset()` is the one place that means "a
+	#  run begins" — a second reset call site added later that forgets this line would leave the settlement
+	#  screen's delta silently reading against a stale snapshot (`run-end-settlement.md`'s own Risk 5).
+	_gems_at_run_start = gems
 	# **Reverts to the starting kit, not to empty** — a stage reset (R) is a fresh run, and a fresh run boots
 	#  owning only none (`_starting_runes()`'s own comment), the same fixed kit `_owned_runes`'s field default
 	#  holds. Clearing to `{}` would brick the reset run's own starting rune (risk 2, `circle_window`'s header:

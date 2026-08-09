@@ -72,10 +72,41 @@ var _charge_blocked := false
 ## reason — the rooster's leap ends when it actually lands, not on a fixed tick count.
 var _leaped_landed := false
 
+## **Was the body on the ground at any point since this was last read** — the same 60Hz-reaches-20Hz channel
+## as `_charge_blocked`/`_leaped_landed` above, opened for the sleep decision
+## (`monster-ai-jump-and-separation.md`, verify-read item 5). **Why a channel and not a bare read of
+## `on_ground`**: measured directly — a pig walled off and jumping settles into a fixed-length cycle (27
+## frames here), and 27 being an exact multiple of `Tuning.TICK_DIVIDER`(3) means the single landing frame
+## lands on the *same* tick phase every cycle. `world_step`'s once-per-tick sleep check reads `on_ground` at
+## the top of that tick's frame — one frame *before* the landing frame's own end-of-step recompute — so it
+## always sees the still-airborne value and never once catches the true window, no matter how many ticks are
+## polled (measured: 120 straight frames, zero hits). Accumulating across all three 60Hz frames inside the
+## tick, the way `_charge_blocked` already does for a wall hit, closes exactly this gap.
+var _grounded_recently := false
+
 ## Fire damage that has not reached 1 yet. The device that keeps `hp` an integer — same reason as
 ##  `character._burn_acc`.
 var _burn_acc := 0.0
 
+## **Hp actually removed since the last drain, summed across both write sites** (`docs/plans/3.done/
+##  run-end-settlement.md`, Stage A). Fed only by `_apply_damage()` below — the settlement screen's damage
+##  figure needs "hp removed from a monster", and before this existed that summed only the direct-hit/blast
+##  path (`on_tick`'s own write): a kill by fire alone, never landing a direct hit, read as 0 damage dealt.
+var _dealt_acc := 0
+
+## **Sleep** (`docs/plans/3.done/monster-placement-stage1.md`, Stage D) — far from the player, `step()`
+## below skips its own movement/collision block and runs only `_burn`. Updated **once per 20Hz tick** by
+## `world_step` (`MonsterPlacement.stays_active`'s hysteresis, the same `WAKE_PX`/`SLEEP_PX` band the wake
+## scan already uses), never touched at 60Hz — the same clock discipline `pattern_left`/`invuln_left`
+## already hold.
+## **Only ever set for a monster `MonsterPlacement` actually placed, and never for a boss** — both gates
+## live in `world_step.gd`, not here (this field is a plain, origin-blind bool; `Monster` itself does not
+## know what a "row" is). A debug-key spawn (M/N/B/C/V) or anything created by calling `spawn_monster()`
+## directly never has this flipped — measured, not designed in from the start: making sleep a function of
+## raw distance for *every* monster broke `net_monster`'s own jump checks and every boss pattern net,
+## none of which have the "36 rows under a cap of 20" crowding problem sleep exists to solve (§4).
+## Starts `false` regardless of origin.
+var asleep := false
 ## x, y and on_ground use the same idiom as the character — **`_body` is exposed through properties**
 ##  (the view reads `m.x`).
 var _body: Body
@@ -95,6 +126,12 @@ var y: int:
 	get: return _body.y
 var on_ground: bool:
 	get: return _body.on_ground
+## **Read-only window onto the body's vertical velocity** — same idiom as the three above. `net_monster`'s
+## own jump checks (`monster-ai-jump-and-separation.md`, Stage A) read this to tell "jumped" (`vy < 0`,
+## the launch itself) apart from "merely falling" (`vy > 0`, gravity alone) — `on_ground` alone cannot
+## distinguish the two, and a check that only asked "did it get out" would not prove a jump happened at all.
+var vy: float:
+	get: return _body.vy
 
 
 func center() -> Vector2:
@@ -108,6 +145,26 @@ func charge_blocked_now() -> bool:
 	return _charge_blocked
 
 
+## **Separation's own door** (`monster-ai-jump-and-separation.md`, Stage C) — asks `box_free` for the whole
+## corrected position at once and moves there, or refuses the whole thing. **Never "as far as possible"** —
+## a partial move is exactly what re-triggers next frame and becomes the shudder the plan's own Bounds names
+## as the single most likely failure. `_body` stays private; this is the same read-only-window shape
+## `charge_blocked_now()` already holds, widened to a write that the caller cannot reach for directly.
+##
+## **`_rem_x` is deliberately untouched.** It carries the walk's own sub-pixel remainder — clearing it here
+## would silently slow the walk on the very next frame (`body.gd:79-88` records that exact family of bug).
+## **`on_ground` is also left stale for the rest of this frame** — refreshing it would cost a second
+## `grounded()` (a second `box_free` sweep) per shifted mob per frame, to fix one frame of cosmetics; named,
+## not fixed (the plan's own "two named consequences, neither worth code").
+func try_shift_x(grid: CellGrid, dx: int) -> bool:
+	if dx == 0:
+		return false
+	if not _body.box_free(grid, _body.x + dx, _body.y):
+		return false
+	_body.x += dx
+	return true
+
+
 ## **Read-only window onto `_leaped_landed`** — `stage1-bosses.md` Stage G's slam impact needs to know "did a
 ## real landing just end this leap" *before* `on_tick` consumes and clears the flag, the same door
 ## `charge_blocked_now()` already opened for the charge's carve (a safety-cap timeout also ends a leap, but
@@ -116,6 +173,16 @@ func charge_blocked_now() -> bool:
 ## `stage1-bosses.md`'s own open TBD on landing terrain damage).
 func leap_landed_now() -> bool:
 	return _leaped_landed
+
+
+## **Read-and-clear** — every call answers "was the body on the ground at any point since the last call",
+## then resets. `world_step`'s sleep decision is the one caller, once per tick; `_grounded_recently` is set
+## from every 60Hz `step()` in between (see that field's own comment for why a bare `on_ground` read is not
+## enough).
+func consume_grounded_recently() -> bool:
+	var v := _grounded_recently
+	_grounded_recently = false
+	return v
 
 
 ## **Stage H — "speeds up at half health."** Recomputed from `hp` on every call, never cached — the same
@@ -142,6 +209,18 @@ func is_phase2() -> bool:
 ##  and "fire DPS" (no axes are added). Make a monster gravity column and the undecided items grow to two places.
 ##  Consequence: pigs and hens have the same fall curve as the player. A big one does not fall heavily.
 func step(grid: CellGrid, dt: float, target_x: int, target_y: int) -> void:
+	if asleep:
+		# **Stage D — the sleep skip is scoped to movement, not to state** (the user's own decided
+		#  behavior: "자는 모습도 불에 탈 거고" — a sleeping mob you set alight still dies). Skips grounding,
+		#  the axis pick, gravity, the jump, `move_x`/`move_y` and the leap-landed check — the two
+		#  `grounded()` box sweeps below are exactly where most of the saving is
+		#  (`monster-placement-stage1.md`'s own spec finding), and skipping them is also why a sleeping mob
+		#  does not fall: gravity resumes on the frame it wakes, never retroactively.
+		#  `_burn` is the one thing that still runs — a sleeping mob standing in fire still takes damage and
+		#  can still die; `on_tick` (reload/invuln/pattern/hit-detection, 20Hz) is untouched by this flag
+		#  entirely, so the death path, XP and the corpse still work with nobody watching.
+		_burn(grid, dt)
+		return
 	_body.on_ground = _body.grounded(grid)
 	var axis := _next_axis(grid, target_x, target_y)
 	# A screen-only value — not used for behavior (the same place as the `facing` assignment in `character.step()`).
@@ -154,11 +233,33 @@ func step(grid: CellGrid, dt: float, target_x: int, target_y: int) -> void:
 	#  being only a 2-tile step, well inside `step_cells`=3's reach). Every other state/kind keeps the normal
 	#  step-up behavior (`allow_step` defaults true).
 	var dx := axis * Defs.speed_px(kind) * BossAi.speed_mult(kind, pattern, is_phase2()) * dt
-	if _body.move_x(grid, dx, not charging) and charging:
+	# **Captured, not called twice** (`monster-ai-jump-and-separation.md`'s own Risk row) — writing
+	#  `if _body.move_x(...) and charging` and a second `if _body.move_x(...) and on_ground` below would move
+	#  the body twice in one frame with nothing barking.
+	var blocked := _body.move_x(grid, dx, not charging)
+	if blocked and charging:
 		_charge_blocked = true
+	# **The trash-mob jump, Stage A of the plan above.** Fires the instant `move_x` reports blocked while
+	#  still on the ground — `_body.on_ground` here is the value written at the top of this function (line
+	#  151), the same one `_try_step_up` read a few lines earlier inside `move_x`. Reading the *later* write
+	#  (after `move_y`, below) would jump a mob on the frame it lands instead of the frame it hits a wall.
+	# **`axis != 0.0` is deliberately not added.** `Body.move_x`'s own contract already returns `false` with
+	#  nothing attempted when `dx == 0.0` (`body.gd:96-102`) — that is the hen's "never jumps while standing
+	#  and throwing" for free. Adding the term here would be a second, driftable copy of a rule `body.gd`
+	#  already owns.
+	# **Bosses are gated by kind, not by pattern.** `Pattern.IDLE` walks brainlessly forward too
+	#  (`_boss_axis`'s own fallback) — an idle bull pressed into a wall must not hop out of it.
+	#  `WINDUP`/`STUN`/`FIRE`/`GORE` already freeze the axis so `blocked` can never fire during them, and
+	#  `CHARGE`'s `allow_step=false` above is what makes "ramming stuns it" hold regardless of this gate — but
+	#  `IDLE` has no such protection of its own, so the gate has to be the kind, not the pattern.
+	if blocked and _body.on_ground and not BossAi.has_pattern(kind):
+		_body.vy = Defs.jump_vy_px(kind)
 	if _body.move_y(grid, _body.vy * dt):
 		_body.vy = 0.0
 	_body.on_ground = _body.grounded(grid)
+	# **The sleep decision's own channel** (`_grounded_recently`'s own comment) — OR'd, never overwritten,
+	#  so a grounded frame anywhere in this tick's three 60Hz calls survives until `world_step` reads it.
+	_grounded_recently = _grounded_recently or _body.on_ground
 	# **Stage F — latched only while actually leaping.** Read unconditionally (not gated on "was airborne
 	#  last frame") because there is nothing else to confuse it with: the moment `WINDUP` hands off to `LEAP`,
 	#  `on_tick` gives the body upward velocity in the same tick, so by the time this line runs on any frame
@@ -248,6 +349,29 @@ func _toward_player_axis(target_x: int) -> float:
 	return 0.0
 
 
+## **The one door for hp removal** (`run-end-settlement.md`, Stage A) — both `on_tick`'s direct-hit/blast
+##  write and `_burn`'s write go through here, nowhere else. Narrowing two write sites onto one function is
+##  what lets `take_dealt()` below see every removal instead of only one of the two paths.
+## **Records `mini(hp, n)` — hp actually removed, not the raw hit** (the doc's own overkill decision: the
+##  on-screen word is 준 피해, but the number counted is hp actually removed, `hp = maxi(0, hp - n)`'s own clamp).
+func _apply_damage(n: int) -> void:
+	if n <= 0:
+		return
+	_dealt_acc += mini(hp, n)
+	hp = maxi(0, hp - n)
+
+
+## **Drains and returns what accumulated since the last call.** Called once per tick, from `WorldStep.frame()`'s
+##  tick branch, right after `on_tick()` — **not** the 60Hz `step()` loop. A monster that dies is removed
+##  inside the tick branch and never reaches the 60Hz loop again, so draining anywhere else would lose the
+##  killing blow. **The bound this leaves**: up to one tick of burn on monsters still alive the instant the sim
+##  stops is never drained — named, not hidden (`run-end-settlement.md`, Stage A and Risk 6).
+func take_dealt() -> int:
+	var n := _dealt_acc
+	_dealt_acc = 0
+	return n
+
+
 ## **It runs only on ticks** — the same reason as `character.on_tick` (call it at 60Hz and one hit becomes three).
 ##  The entrance is inside `world_step.frame()`'s tick branch, **after** `_char.on_tick` (doc: "behavior (9)").
 ##
@@ -302,7 +426,7 @@ func on_tick(spell: SpellSim, target_x: int, target_y: int) -> void:
 	var pw := maxi(_body.hit_by_segment(spell), _body.hit_by_blast(spell))
 	if pw <= 0:
 		return
-	hp = maxi(0, hp - Character.DAMAGE_HIT * pw / 100)
+	_apply_damage(Character.DAMAGE_HIT * pw / 100)
 	invuln_left = Defs.invuln_ticks(kind)
 
 
@@ -344,4 +468,4 @@ func _burn(grid: CellGrid, dt: float) -> void:
 	if whole <= 0:
 		return
 	_burn_acc -= float(whole)
-	hp = maxi(0, hp - whole)
+	_apply_damage(whole)

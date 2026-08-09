@@ -13,9 +13,15 @@ const Tuning := preload("res://src/sim/sim_tuning.gd")
 const Character := preload("res://src/actor/character.gd")
 const SpellSim := preload("res://src/sim/spell_sim.gd")
 const MonsterDefs := preload("res://src/actor/monster_defs.gd")
+const Monster := preload("res://src/actor/monster.gd")
 const WorldStep := preload("res://src/actor/world_step.gd")
 const Progress := preload("res://src/actor/progress.gd")
 const ThreePick := preload("res://src/actor/three_pick.gd")
+const Glyph := preload("res://src/sim/glyph_defs.gd")
+
+## Same lead `net_monster.gd`'s own `HIT_LEAD_PX` uses, so a fired bolt registers as a segment hit on the
+## monster within a few ticks instead of tunnelling past or never reaching it.
+const HIT_LEAD_PX := 24
 
 const DT := 1.0 / 60.0
 const FLOOR_CY := 100
@@ -46,6 +52,14 @@ func run(t) -> void:
 	_ownership_survives_unrelated_progress_state(t)
 	_reset_reverts_ownership_to_the_starting_kit_not_to_empty(t)
 	_material_is_the_one_thing_a_reset_does_not_take(t)
+	# ── run-end-settlement, Stage A ──
+	_run_ticks_moves_once_per_tick_not_per_frame(t)
+	_burn_only_kill_moves_damage_dealt_with_no_spell_fired(t)
+	_overkill_records_hp_actually_removed_not_the_raw_hit(t)
+	_player_damage_does_not_move_damage_dealt(t)
+	_reset_zeroes_run_counters_and_gems_this_run_but_not_gems(t)
+	_two_runs_gems_this_run_is_only_the_second_roll(t)
+	_direct_hit_killing_blow_is_drained_even_though_the_monster_is_removed_this_same_tick(t)
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -556,6 +570,197 @@ func _reset_reverts_ownership_to_the_starting_kit_not_to_empty(t) -> void:
 
 
 # ══════════════════════════════════════════════════════════════════
+#  `docs/plans/3.done/run-end-settlement.md`, Stage A — the settlement screen's three numbers
+# ══════════════════════════════════════════════════════════════════
+
+## `run_ticks` must move at 20Hz (once per tick), not at 60Hz (once per frame) — the same "drive by frame
+## count, read by tick count" idiom `net_water`'s "exactly N cells per tick" already holds. Driving exactly
+## `TICK_DIVIDER * n` frames and reading `n` back is what a mutation moving `advance_tick()` outside the tick
+## branch (called every frame) cannot pass — it would read `TICK_DIVIDER * n`, not `n`.
+func _run_ticks_moves_once_per_tick_not_per_frame(t) -> void:
+	var world := _new_world()
+	var pr := world.progress()
+	t.eq(pr.run_ticks, 0, "시작할 때 0이다 (전제)")
+
+	var n := 7
+	_frames(world, Tuning.TICK_DIVIDER * n)
+	t.eq(pr.run_ticks, n, "틱 나누개만큼 프레임을 돌리면 정확히 그 틱 수만큼만 오른다 (프레임마다가 아니다)")
+
+	# One more lone frame lands inside the next tick's window without crossing it - run_ticks must not move.
+	_frames(world, 1)
+	t.eq(pr.run_ticks, n, "틱 경계 사이의 낱장 프레임 하나로는 틱이 늘지 않는다")
+
+
+## **Acceptance 4 — kill something with fire alone, never landing a direct hit, and the damage is still
+## non-zero.** This is the check the first draft would have failed (`monster.gd`'s own header: before
+## `_apply_damage()` existed, `_burn()` wrote `hp` directly on its own, and only the direct-hit/blast path fed
+## the sum, so a fire-only kill read 0 damage dealt).
+##
+## **No spell is ever fired** — `world.enqueue()` is never called here, so this cannot pass by accident through
+## the other path. The character is pinned at the hen's own spawn centre (the same `_still_ch` trap
+## `net_monster`'s own burn test names: put the character elsewhere and the hen walks toward it, off the
+## burning tile, and the fire that was supposed to kill it goes out from under its feet with nothing measured).
+func _burn_only_kill_moves_damage_dealt_with_no_spell_fired(t) -> void:
+	var kind := MonsterDefs.KIND_HEN
+	var g := _floor_grid()
+	var stand_x := 600
+	var stand_y := FLOOR_TOP - MonsterDefs.h_px(kind)
+	var cx0 := floori(stand_x / float(Tuning.CELL_PX))
+	var cx1 := floori((stand_x + MonsterDefs.w_px(kind) - 1) / float(Tuning.CELL_PX))
+	g.apply(CellGrid.cmd_fill(cx0 - 2, FLOOR_CY, cx1 + 2, FLOOR_CY, Mat.WOOD))
+
+	var spell := SpellSim.new()
+	var ch := _still_ch(stand_x, kind)
+	var world := WorldStep.new(g, spell, ch)
+	var mid := world.spawn_monster(kind, stand_x, stand_y)
+	t.ok(mid > 0, "닭이 스폰됐다 (전제)")
+	var pr := world.progress()
+	t.eq(pr.damage_dealt, 0, "불 붙기 전엔 준 피해가 0이다 (전제)")
+
+	var lit := 0
+	for cx in range(cx0, cx1 + 1):
+		if g.ignite(cx, FLOOR_CY):
+			lit += 1
+	t.ok(lit > 0, "발밑 나무에 불이 붙었다 (전제)")
+
+	# 닭 최대 체력 10, 불 DPS 10 => 1초(20틱)면 죽는다. 나무 연료는 40틱을 버티므로 넉넉하다.
+	_frames(world, Tuning.TICK_DIVIDER * 100)
+	t.eq(world.monster_count(), 0, "마법을 한 번도 안 쐈는데 불만으로 죽었다 (전제)")
+	t.eq(pr.damage_dealt, MonsterDefs.max_hp(kind),
+		"직격이 한 번도 없었는데 준 피해가 정확히 최대 체력만큼 찍힌다")
+
+
+## **Overkill, decided**: `_apply_damage` records `mini(hp, n)` — hp actually removed, not the raw hit. A
+## monster at 5 hp taking a 100-point hit must add exactly 5 to the drained total, not 100.
+## Driven directly at the `Monster` level (`_apply_damage`/`take_dealt` are this file's own subject here,
+## same as `net_monster`'s own direct pokes at `_burn_acc`) — combat itself (does a bolt connect) is not
+## re-derived, this file's own header names that as `net_damage`'s and `net_monster`'s job.
+func _overkill_records_hp_actually_removed_not_the_raw_hit(t) -> void:
+	var world := _new_world()
+	var kind := MonsterDefs.KIND_PIG
+	var mid := world.spawn_monster(kind, 600, FLOOR_TOP - MonsterDefs.h_px(kind))
+	t.ok(mid > 0, "스폰됐다 (전제)")
+	var m: Monster = world.monster_at(0)
+	m.hp = 5
+	m._apply_damage(100)
+	t.eq(m.hp, 0, "체력이 0에서 멈춘다 (전제 — 음수로 안 내려간다)")
+	t.eq(m.take_dealt(), 5, "100을 맞아도 실제로 깎인 건 5뿐이니 5만 기록된다 (과잉 타격이 그대로 새지 않는다)")
+
+
+## **Bounds — "damage dealt" counts damage to monsters only.** The GDD's "magic hits the player too" means the
+## player's own bolts can hurt the player, and that must never appear in this figure.
+func _player_damage_does_not_move_damage_dealt(t) -> void:
+	var ch := Character.new()
+	ch.place(600, FLOOR_TOP - Character.H_PX)
+	var world := WorldStep.new(_floor_grid(), SpellSim.new(), ch)
+	var pr := world.progress()
+	t.eq(pr.damage_dealt, 0, "전제")
+
+	ch.take_hit(50, true)
+	_frames(world, Tuning.TICK_DIVIDER)
+	t.eq(pr.damage_dealt, 0, "플레이어 자신이 입은 피해는 준 피해에 안 잡힌다 (몬스터에게 준 것만 센다)")
+
+
+## `reset()` zeroes the two new run counters and re-snapshots `_gems_at_run_start`, so `gems_this_run()` reads
+## 0 right after — while `gems` itself, the one permanent thing, survives untouched (the same "material is the
+## one thing a reset does not take" contract `_material_is_the_one_thing_a_reset_does_not_take` already holds,
+## extended to the delta that reads off of it).
+func _reset_zeroes_run_counters_and_gems_this_run_but_not_gems(t) -> void:
+	var pr := Progress.new()
+	pr.run_ticks = 50
+	pr.damage_dealt = 77
+	var got := pr.add_boss_gems()
+	t.ok(got > 0, "원석을 얻었다 (전제)")
+	t.eq(pr.gems_this_run(), got, "리셋 전엔 '이번 런' 몫이 얻은 만큼이다 (전제)")
+
+	pr.reset()
+	t.eq(pr.run_ticks, 0, "reset이 플레이 시간 카운터를 되돌린다")
+	t.eq(pr.damage_dealt, 0, "reset이 준 피해 카운터도 되돌린다")
+	t.eq(pr.gems, got, "원석 총량은 reset 뒤에도 그대로다 (달리기를 넘어 남는 유일한 것)")
+	t.eq(pr.gems_this_run(), 0, "하지만 '이번 런' 몫은 0이다 (스냅샷이 reset 안에서 다시 찍혔다)")
+
+
+## **Acceptance 7 — a second run's count-up shows only that run's earnings, not the running total.** Kill a
+## boss, reset (the gate home), kill a boss again in the same process - `gems_this_run()` must track only the
+## second roll, never the accumulated pool (`gems` itself, read raw, would start the count-up at the first
+## run's total and tick up from there instead of from 0).
+##
+## **The bull's own kill also crosses level thresholds** (200 xp against `xp_for_level`'s table) and each
+## crossing pays `GEMS_PER_LEVEL` too - the boss door and the level door are not the same roll, and both fire
+## off one kill. The expected range is computed from the table, not hardcoded to the boss roll alone, or a
+## future retune of either table would make this function read a range the code no longer produces.
+func _two_runs_gems_this_run_is_only_the_second_roll(t) -> void:
+	var kind := MonsterDefs.KIND_BULL
+	var level_gems := _levels_crossed_from_zero(MonsterDefs.xp_of(kind)) * Progress.GEMS_PER_LEVEL
+	var lo := Progress.GEMS_PER_BOSS_MIN + level_gems
+	var hi := Progress.GEMS_PER_BOSS_MAX + level_gems
+
+	var world := _new_world()
+	var pr := world.progress()
+	world.spawn_monster(kind, 700, FLOOR_TOP - MonsterDefs.h_px(kind))
+	_kill(world, 0)
+	var first_run := pr.gems_this_run()
+	t.ok(first_run >= lo and first_run <= hi,
+		"1차 런의 '이번 런' 몫이 (보스 굴림 + 레벨 보상) 범위 안이다 (%d, 범위 %d~%d)" % [first_run, lo, hi])
+	t.eq(pr.gems, first_run, "리셋 전이라 총량과 '이번 런' 몫이 같다 (전제)")
+
+	world.reset()
+	t.eq(pr.gems_this_run(), 0, "리셋 직후엔 '이번 런' 몫이 0이다 (전제)")
+	t.eq(pr.gems, first_run, "원석 총량은 리셋으로 안 지워진다 (전제)")
+
+	world.spawn_monster(kind, 700, FLOOR_TOP - MonsterDefs.h_px(kind))
+	_kill(world, 0)
+	var second_run := pr.gems_this_run()
+	t.ok(second_run >= lo and second_run <= hi,
+		"2차 런의 몫도 같은 범위 안이다 (%d, 범위 %d~%d)" % [second_run, lo, hi])
+	t.eq(pr.gems, first_run + second_run, "총량은 두 런의 합이다")
+	t.ok(pr.gems_this_run() < pr.gems,
+		"'이번 런' 몫이 누적 총량보다 작다 (총량을 그대로 읽었다면 두 런 합이 그대로 새는 자리다)")
+
+
+## How many times a fresh (`level == 0`) `Progress` would cross a level threshold on a single `xp_gained`
+## award - mirrors `add_xp`'s own loop exactly, read-only, so the two-run gem-range check above stays correct
+## even if `xp_for_level` or a kind's xp column is retuned later.
+static func _levels_crossed_from_zero(xp_gained: int) -> int:
+	var level := 0
+	var xp := xp_gained
+	while xp >= Progress.xp_for_level(level):
+		xp -= Progress.xp_for_level(level)
+		level += 1
+	return level
+
+
+## **The killing blow itself must be drained.** A monster killed by a direct hit is removed inside the tick
+## branch's own death loop, immediately after `on_tick()` runs and *before* the 60Hz `step()` loop runs this
+## same frame. If the drain moved to the 60Hz loop instead (this doc's own Risk 4 - "the signature fake for
+## this feature"), that loop would never see this monster again: the tick branch already removed it earlier in
+## this same `frame()` call, so the killing blow's damage would be lost outright, not merely delayed.
+##
+## **A burn-only kill cannot exercise this risk** - `_burn()` runs every 60Hz frame, so draining in the 60Hz
+## loop still catches it there before the next tick's removal. Only a direct-hit kill, where the damage and the
+## removal both live in the tick branch, actually depends on the drain sitting in that same branch.
+func _direct_hit_killing_blow_is_drained_even_though_the_monster_is_removed_this_same_tick(t) -> void:
+	var kind := MonsterDefs.KIND_HEN
+	var stand_x := 600
+	var stand_y := FLOOR_TOP - MonsterDefs.h_px(kind)
+	var world := _new_world()
+	var pr := world.progress()
+	var mid := world.spawn_monster(kind, stand_x, stand_y)
+	t.ok(mid > 0, "닭이 스폰됐다 (전제)")
+	var m: Monster = world.monster_at(0)
+	m.hp = Character.DAMAGE_HIT  # 정확히 한 방 분량 - 죽인 그 한 방이 곧 막타다
+
+	var row_cy := floori((stand_y + MonsterDefs.h_px(kind) * 0.5) / float(Tuning.CELL_PX))
+	var origin_cx := floori((stand_x - HIT_LEAD_PX) / float(Tuning.CELL_PX))
+	world.enqueue(SpellSim.cmd_fire(origin_cx, row_cy, 10, 0, Tuning.ELEM_NONE, Glyph.GLYPH_NONE))
+	_frames(world, Tuning.TICK_DIVIDER * 5)
+
+	t.eq(world.monster_count(), 0, "한 방에 죽어서 그 틱에 목록에서 빠졌다 (전제)")
+	t.eq(pr.damage_dealt, Character.DAMAGE_HIT,
+		"죽은 그 틱의 막타도 준 피해에 잡힌다 (몬스터가 사라지며 함께 새지 않는다)")
+
+
+# ══════════════════════════════════════════════════════════════════
 #  Tools
 # ══════════════════════════════════════════════════════════════════
 
@@ -565,6 +770,18 @@ func _new_world() -> WorldStep:
 	var ch := Character.new()
 	ch.place(600, FLOOR_TOP - Character.H_PX)
 	return WorldStep.new(g, spell, ch)
+
+
+## **The trap `net_monster`'s own burn test names** (`_still_ch`, duplicated here rather than imported - the
+## same per-file self-containment `net_town.gd`'s own duplicated `_wired_root` already justifies): from stage 2
+## on, every monster walks toward the player. Put the character away from the monster's spawn point and it
+## walks off the burning tile mid-measurement, and the fire that was supposed to kill it goes out from under
+## its feet with nothing measured. Placing the character at the monster's own centre pins the walk axis to 0.
+func _still_ch(stand_x: int, kind: int) -> Character:
+	var ch := Character.new()
+	var monster_center_x := float(stand_x) + MonsterDefs.w_px(kind) * 0.5
+	ch.place(roundi(monster_center_x - Character.W_PX * 0.5), FLOOR_TOP - Character.H_PX)
+	return ch
 
 
 ## Kills the monster at `index` by writing `hp = 0` directly and running one tick — see this file's header

@@ -23,6 +23,7 @@ const Character := preload("res://src/actor/character.gd")
 const WorldStep := preload("res://src/actor/world_step.gd")
 const Aim := preload("res://src/actor/aim.gd")
 const SpellCircle := preload("res://src/actor/spell_circle.gd")
+const CircleDefs := preload("res://src/sim/circle_defs.gd")
 const SpellSim := preload("res://src/sim/spell_sim.gd")
 const Glyph := preload("res://src/sim/glyph_defs.gd")
 const StageInput := preload("res://src/stage/stage_input.gd")
@@ -35,6 +36,10 @@ const TownMap := preload("res://src/stage/town_map.gd")
 const Fixtures := preload("res://src/actor/fixtures.gd")
 const TownView := preload("res://src/view/town_view.gd")
 const ResearchWindow := preload("res://src/view/research_window.gd")
+const SettlementWindow := preload("res://src/view/settlement_window.gd")
+## The gate (ending) — `docs/plans/3.done/gate-ending-to-game.md`.
+const StageGate := preload("res://src/actor/stage_gate.gd")
+const GateView := preload("res://src/view/gate_view.gd")
 
 ## No longer a constant but a re-export of `terrain_map_generated.gd` — it follows the painted region's size verbatim.
 ##  It pairs with the re-export at the `MAP` declaration below.
@@ -70,9 +75,16 @@ const SPAWN_TILE := Vector2i(3, 19)
 ##  The old contract was "the whole stage fits in one screen", and its reason was
 ##  "if the stage crosses into the margin, **some of the 8 spread bolts detonate where they can't be seen**
 ##  and the user reads it as 'it didn't go off' — v1 got burned exactly that way by its floor slab".
-##  => **That reason has not gone away. It simply can no longer be prevented** — a spread bolt's range
-##   (40 tiles) is longer than the visible width (30 tiles), so firing horizontally makes
-##   **off-screen impacts happen in principle.**
+##  => **That reason has not gone away, and the arithmetic behind it has been replaced.** It used to read
+##   "a spread bolt's range (40 tiles) is longer than the visible width (30 tiles), so firing horizontally makes
+##   off-screen impacts happen in principle". **The 40 tiles was the drag ceiling of a `speed` 20 generation-0
+##   bolt with gravity switched off**, and none of those three things is true any more.
+##  **Driven today** (`sim_tuning.DRAG_NUM`'s table, flat ground, fired 4 cells up):
+##   generation 0 reaches **4.3 tiles horizontally and 12.8 tiles at 45 degrees**; a spread bolt (generation 1)
+##   reaches **2.0 and 4.8**. Half the visible width is 15 tiles. => **One bolt cannot leave the screen.**
+##  **What can still leave it is the chain**: the 8 spread bolts are born **at generation 0's impact point**,
+##   so 12.8 + 4.8 = **~17.6 tiles** from the player, past the 15-tile half-width — and **firing from a cliff
+##   adds the whole fall.** So the price is real but it is now an **edge**, not the everyday case it was written as.
 ##  What is left is **"at least my surroundings are always visible"**, and `net_tables._stage_map` measures that.
 ##  If something reads as "it didn't go off" again, **this is the cause.** Zoom the camera out, shrink the
 ##   stage, or shorten the range — all three are decisions outside this file.
@@ -122,6 +134,10 @@ const MAP_W: int = TerrainMap.MAP_W
 const MAP_H: int = TerrainMap.MAP_H
 const MAP: Array[String] = TerrainMap.MAP
 const MAP_CHARS: Dictionary = TerrainMap.MAP_CHARS
+
+## `docs/plans/3.done/monster-placement-stage1.md` — the `(tx, kind)` table. Read here and pushed into
+## `_world` in `_build_room()` below; `src/actor/` never preloads this file (`net_layers`).
+const Stage1Monsters := preload("res://src/stage/stage1_monsters.gd")
 
 ## **Debug loadouts — this stage's measuring instrument.** Firing combinations alternately must be doable
 ##  within seconds for acceptance 1 and 2 (the difference of adding and removing a glyph · the difference
@@ -202,9 +218,17 @@ var _cam_lead := 0.0
 ## **Hidden in the stage, shown in the town** — `_in_town` below is the single source, pushed to this
 ##  node in `_build_room()` and nowhere else.
 @onready var _town_view: TownView = $TownView
+## The gate's arch (`docs/plans/3.done/gate-ending-to-game.md`, Stage C). **Its own `visible` is derived
+##  every frame from `Progress.boss_died()`** (`gate_view._process()`) — not pushed from here, the same
+##  reason `_town_view.visible` is the one exception that *is* pushed (a latch `_in_town` already is).
+@onready var _gate_view: GateView = $GateView
 ## The research bench's window. **Under `HUD`, like the other two** — that node is the `CanvasLayer`, so
 ##  it does not ride the screen shake.
 @onready var _research_window: ResearchWindow = $HUD/ResearchWindow
+## The run-end settlement screen (`docs/plans/3.done/run-end-settlement.md`). **Under `HUD`, like every
+##  other window** — the same reason as `_research_window` above. Unlike the other three it is **derived
+##  open**, never toggled by a key (`_sync_settlement()` below) — there is no debug key for "the run is over".
+@onready var _settlement: SettlementWindow = $HUD/SettlementWindow
 @onready var _char_view: CharacterView = $CharacterView
 @onready var _spell_view: SpellView = $SpellView
 @onready var _blast_fx: BlastFx = $BlastFx
@@ -280,6 +304,13 @@ var _room1_reward_water: WaterSource = null
 const ROOM1_WATER_X0 := 1840
 const ROOM1_WATER_X1 := 1860
 const ROOM1_WATER_ROW := 200
+
+## **Room ③'s east wall — comes down once, on the rooster's death, and only once**
+##  (`docs/plans/3.done/gate-ending-to-game.md`, Stage B). `true` = already dropped this run.
+## **Safe as a latch where the settlement panel's latch is forbidden**: its only writer is `reset_stage()`,
+##  which *always* rebuilds the terrain in the same call (`_build_room()` below), so the flag and the wall
+##  cannot disagree — unlike a `mouse_filter` latch, nothing here can strand the game.
+var _room3_gate_open := false
 
 ## **Debug camera zoom (`-` / `=`).** 1.0 is the play scale; 0.075 fits all 400x48 tiles on the 960x540 screen.
 ##  The steps are held as a list rather than a multiply so that "the whole map" is **exactly reachable** —
@@ -365,9 +396,16 @@ func _ready() -> void:
 	# The fixture prompt follows the player, so the view needs the character — the same one-reference door
 	#  `_char_view.setup` uses. It needs nothing else: the room is a constant and the seats come from it.
 	_town_view.setup(_char)
+	# **The same `Progress` every other window here reads** — a copy would show the arch staying hidden (or
+	#  shown) after the real flag moved, and nothing would bark (`_research_window.setup`'s own comment, same
+	#  reason).
+	_gate_view.setup(_world.progress())
 	# **The same `Progress` the HUD and the other two windows read** — a copy would show a material count
 	#  that stopped moving the moment a boss died, and nothing would bark.
 	_research_window.setup(_world.progress())
+	# **A signal, not a call into the shell** (`settlement_window.gd`'s own header — testability, not a
+	#  `net_layers` rule). The button's click is what actually closes the run.
+	_settlement.town_pressed.connect(enter_town)
 	_input.fire_requested.connect(_fire_at)
 	_input.reset_requested.connect(reset_stage)
 	_input.water_requested.connect(_pour_water_at)
@@ -382,6 +420,7 @@ func _ready() -> void:
 	#  Walking, firing and fire spreading with the window open is the whole of design acceptance 4.
 	_input.assembly_toggled.connect(_toggle_assembly)
 	_input.pick_toggled.connect(_toggle_pick)
+	_input.cancel_requested.connect(_handle_cancel)
 	_input.zoom_requested.connect(_step_zoom)
 	# The starting equipment is **the model's default** (`SpellCircle`'s constructor) — the line that pushed
 	#  a preset in once here was deleted. Push it in and "the starting state" is in two places, and the day
@@ -445,6 +484,36 @@ func _toggle_pick() -> void:
 	pr.open_pick(_circle.glyph_list())
 
 
+## ESC. **Closes whichever of the three key-opened windows is open, and only that one** (user request:
+##  "E 해서 뜬 게 ESC로 꺼져야 함. 모든 UI들은"). At most one is ever open at a time (each toggle site above
+##  already closes the other two), so the order here only matters in principle.
+##
+## **Reuses each window's own toggle/decline path rather than writing a second `visible = false`.**
+##  `_toggle_assembly()`/`_toggle_research()` already carry the "opening one closes the others" bookkeeping;
+##  a bare `_circle_window.visible = false` here would skip `_pick_window.cancel_confirm()` and `Progress.
+##  decline()`, and reopen this exact bug with a second door.
+##
+## **The three-pick: closing it does not lose the pick.** `Progress.decline()` — what `_toggle_pick()` calls
+##  when one is open — clears only `_drawn` (this draw's three cards); `pending_picks` is untouched (that
+##  function's own comment: "declining does not consume the pick"). Pressing P again draws a fresh three.
+##  ESC therefore reuses `_toggle_pick()` rather than being refused here — the button inside the window
+##  already does the identical thing.
+##
+## **`_settlement` is deliberately not here.** It opens by derivation, not by a key
+##  (`_sync_settlement()`'s own header) — closing it would just have `want` reopen it on the very next frame,
+##  reading as "ESC did nothing". Its button is the panel's only door by design (`run-end-settlement.md`):
+##  that screen states the run is over, it is not a window to dismiss.
+func _handle_cancel() -> void:
+	if _circle_window.visible:
+		_toggle_assembly()
+		return
+	if _research_window.visible:
+		_toggle_research()
+		return
+	if _world.progress().is_pick_open():
+		_toggle_pick()
+
+
 ## `-` / `=`. **Clamped, not wrapped** — wrapping would send "one more step out" from the widest view
 ##  straight back to the play scale, and that reads as the key having done nothing.
 func _step_zoom(dir: int) -> void:
@@ -455,6 +524,14 @@ func _step_zoom(dir: int) -> void:
 ## Both the rune and the glyphs **come out of the assembly state.** If the shell nails `ELEM_FIRE` in
 ##  separately, the rune slot becomes a false knob, and the day runes become changeable only firing quietly
 ##  fails to follow.
+##
+## **Loops `_circle.shots()`, not a single `element()`/`packed_glyphs()` pair** (`triangle-circle-to-game.md`
+##  step 5). A round circle's `shots()` still returns exactly one entry, so this is byte-identical to the old
+##  single-command build for every circle that exists before the triangle. A triangle circle's three entries
+##  each become their own command, aimed from the same tip and the same click — only `element`/`glyphs`/`delay`
+##  differ per socket. **Three shots means three recoils** (`_char.recoil` already hangs off `fire()`
+##  returning true inside `_drain_queue`, once per drained command) — that is a real, intended consequence of
+##  three bolts leaving, not a bug to suppress here.
 func _fire_at(world_px: Vector2) -> void:
 	# **If it can't fire, no command is made at all.** Make one and an empty rune trips `fire()`'s rune check
 	#  and barks, and since the wrapper counts stderr as failure **ordinary play turns the nets red.**
@@ -462,8 +539,11 @@ func _fire_at(world_px: Vector2) -> void:
 	#   "It can't fire" is said by the staff tip dying to gray (`character_view`).
 	if not _circle.can_fire():
 		return
-	_world.enqueue(Aim.fire_cmd(
-		_char_view.tip_px(), world_px, _circle.element(), _circle.packed_glyphs()))
+	var tip := _char_view.tip_px()
+	for shot: Dictionary in _circle.shots():
+		_world.enqueue(
+			Aim.fire_cmd(tip, world_px, int(shot["element"]), int(shot["glyphs"])),
+			int(shot["delay"]))
 
 
 ## **F — pours water at the mouse position. A shell-only debug door.**
@@ -651,13 +731,16 @@ func _set_loadout(n: int) -> void:
 	# **Read before `apply_preset` runs, not after** — `set_circle` inside it resizes and refills every rune
 	#  slot the instant the circle id actually changes, so reading `rune_at(0)` afterward would already see
 	#  the wiped value, not the one to preserve.
-	# **Unfalsifiable today, and that is `CircleDefs.ALL == [CIRCLE_ROUND]`, not this line** — every preset
-	#  passes the same `SpellCircle.DEFAULT_CIRCLE`, so `set_circle` inside `apply_preset` either no-ops
-	#  (already that circle) or the circle was `CIRCLE_NONE` and `rune_at(0)` already reads `RUNE_EMPTY`
-	#  either side of the call. Moving this read after `apply_preset` is measured green right now for exactly
-	#  that reason (verify-read) — not because it is safe, but because both orders give the same value while
-	#  there is only one circle. This ordering is insurance for the day a second circle exists, the same
-	#  single-slot caveat `element()`'s own comment already carries for runes.
+	# **That day arrived — `CircleDefs.ALL` is no longer `[CIRCLE_ROUND]` alone** (`triangle-circle-to-game.md`
+	#  step 4). The line below used to say this read's ordering was insurance nothing today could falsify;
+	#  verify-read found the falsifying case, and it was not this line but the one after it —
+	#  **unconditionally passing `SpellCircle.DEFAULT_CIRCLE` into `apply_preset` below.** With a triangle
+	#  circle equipped, every debug loadout key (1-5) silently swapped it back to round, destroying sockets 1
+	#  and 2 and whatever runes/glyphs sat there, with nothing on screen explaining why. Fixed just below —
+	#  **preserve whatever circle is already equipped**, and only fall back to `DEFAULT_CIRCLE` for the one
+	#  case that actually needs unsticking (`CIRCLE_NONE`, this function's own "key 1 is an assembly reset"
+	#  comment above). This read (`rune_at(0)`) is unaffected by that fix — it is read before either circle
+	#  choice is applied, so its own ordering argument still holds unchanged.
 	# **Falls back to `DEFAULT_RUNE`, never `RUNE_EMPTY`** — `rune_at(0)` returns `RUNE_EMPTY` when the circle
 	#  was removed (0 rune slots to read), the one case with nothing earned left to carry over.
 	#  `DEFAULT_RUNE` is the same "none, but still fires" state a fresh boot starts at — the same discipline
@@ -665,21 +748,83 @@ func _set_loadout(n: int) -> void:
 	var current_rune := _circle.rune_at(0)
 	if current_rune == SpellCircle.RUNE_EMPTY:
 		current_rune = SpellCircle.DEFAULT_RUNE
-	_circle.apply_preset(SpellCircle.DEFAULT_CIRCLE, current_rune, Glyph.pack(list))
+	# **Preserve the equipped circle — the fix.** `apply_preset` still takes exactly one rune value and fills
+	#  every socket with it (that function's own comment already names this as undone: "the day there are
+	#  several kinds of rune, the preset has to take a rune list"). Preserving the circle across presets means
+	#  that limitation is now reachable on a triangle circle too — pressing a loadout key **flattens sockets 1
+	#  and 2's runes to socket 0's value**, same as it always flattened glyphs into whichever layers the
+	#  2-glyph `LOADOUTS` table happens to fill. Not fixed here — writing a rune *list* through this door is a
+	#  larger change than the bug this line exists to close (the circle silently reverting), and out of this
+	#  plan's scope.
+	var target_circle := _circle.circle_id()
+	if target_circle == CircleDefs.CIRCLE_NONE:
+		target_circle = SpellCircle.DEFAULT_CIRCLE
+	_circle.apply_preset(target_circle, current_rune, Glyph.pack(list))
 
 
 ## **Do not push the world here.** The order is inside `world_step.frame()`, and the one thing this function
 ##  knows is **"did a tick run".** The moment it is copied, the order the nets measure and the game's order diverge.
+##
+## **The world is gated behind the settlement screen** (`run-end-settlement.md`, Stage D) — while it is
+## showing, the run is over and there is nothing left to watch, so `_world.frame()` is not called at all rather
+## than called and ignored. `net_settlement` measures this as a value (`_grid.get_tick()` does not move across
+## N calls), not assumed from reading the branch.
 func _physics_process(delta: float) -> void:
-	if _world.frame(delta, _input.move_axis(), _input.jump_pressed(), _input.jump_held()):
-		_on_ticked()
+	if not _settlement.is_showing():
+		if _world.frame(delta, _input.move_axis(), _input.jump_pressed(), _input.jump_held()):
+			_on_ticked()
 	# **Before `_update_hud()`, not after, and not left to the pick window's own `_process()`.**
 	#  `three_pick_window.tick_confirm()`'s own header: ticking the confirmation countdown here, in the same
 	#  synchronous call as `_update_hud()` (which reads `is_showing()`), closes the one-render-frame seam that
 	#  existed when the countdown lived on the idle clock instead — a frame where the window had already
 	#  gone invisible but the HUD had not yet been told.
 	_pick_window.tick_confirm()
+	_sync_settlement()
+	# **Same reason as `_pick_window.tick_confirm()` above** — the count-up's clock is screen-only state
+	#  (`settlement_window.gd`'s own header), ticked from here rather than the window's own idle-rate `_process()`.
+	_settlement.tick_countup()
 	_update_hud()
+
+
+## **Derived, not pushed.** `want` is recomputed every physics frame straight from `_char.downed`/`at_gate`/
+## `_in_town` — never latched — which is what makes "going down in the town must not open it" true **by
+## construction** (`want` is false there because `not _in_town` is false) and "standing at a gate that has
+## not opened does nothing" true the same way (`at_gate` reads `boss_died()` itself, no separate door).
+##
+## **Correction (verify-read, H4): "R closes it" is not this function's `elif` branch.** `reset_stage()`
+## calls `_settlement.close()` **directly** (its own line, not through here) — that is the actual close. What
+## `want` collapsing on the same reset actually buys is narrower: it keeps the very next `_sync_settlement()`
+## call from immediately reopening the panel `reset_stage()` just closed. **The `elif not want and is_showing():
+## close()` branch below is unreachable in today's build**, checked directly: `_world.frame()` is skipped
+## entirely while `is_showing()` is true (this function's own caller, `_physics_process`), so `_char.downed`,
+## `_char.center()` (hence `at_gate`) and `_in_town` are all frozen for as long as the panel is open — `want`
+## cannot flip from true to false while `is_showing()` stays true, because nothing that feeds it can change.
+## Left in rather than deleted: a future change that lets any of those three move while the panel is showing
+## would make this branch load-bearing again, and deleting it now would be a second, silent decision.
+##
+## **`at_gate` — the gate (`gate-ending-to-game.md`, Stage D), never a second door.** One more read of
+## `Progress.boss_died()` (`gate_view._process()` and `_on_ticked()`'s wall latch are the other two), not a
+## flag this file holds — the same "three reads of one accessor" the plan's own structure section names.
+##
+## **The tie rule, decided: a death wins.** If the player is downed *and* on the seat in the same frame, the
+## fourth argument below (`at_gate and not _char.downed`) is `false` and the death title shows — a downed
+## body did not walk through the arch.
+##
+## **`_settlement.is_showing()` stands in for "was it open last frame"** — the same "read the window's own
+## state instead of holding a second latch" idiom `_toggle_assembly()` already holds for `_circle_window.visible`.
+func _sync_settlement() -> void:
+	var at_gate := _world.progress().boss_died(MonsterDefs.KIND_ROOSTER) and StageGate.at(_char.center())
+	var want := (_char.downed or at_gate) and not _in_town
+	if want and not _settlement.is_showing():
+		var pr := _world.progress()
+		_settlement.open(pr.run_seconds(), pr.damage_dealt, pr.gems_this_run(), at_gate and not _char.downed)
+		# **The three-pick may be open when you go down** — the same reason `reset_stage()` already cancels
+		#  the confirm afterglow and `_toggle_assembly()`/`_toggle_research()` already decline a pending pick
+		#  before claiming the screen for themselves.
+		_world.progress().decline()
+		_pick_window.cancel_confirm()
+	elif not want and _settlement.is_showing():
+		_settlement.close()
 
 
 ## Hits the screen only on frames where a tick ran.
@@ -691,6 +836,17 @@ func _on_ticked() -> void:
 		_water_source.tick(_grid)
 	if _room1_reward_water != null:
 		_room1_reward_water.tick(_grid)
+
+	# **The east wall comes down the instant the rooster dies — before `consume_changed()` below**, or the
+	#  renderer would see the hole one tick late (`_grid.consume_changed()` is this function's own last line).
+	# **One rectangle, not a run of carves.** `cmd_fill` goes through `_write_cell`, which is what counts
+	#  `_changed` and wakes the neighbouring chunks — the same door the map builder uses. A loop of
+	#  `cmd_carve` would be 24 discs to erase a rectangle and would leave rounded corners in stone.
+	if not _room3_gate_open and _world.progress().boss_died(MonsterDefs.KIND_ROOSTER):
+		_room3_gate_open = true
+		var gate_wall := StageGate.wall_cells()
+		_grid.apply(CellGrid.cmd_fill(
+			gate_wall.position.x, gate_wall.position.y, gate_wall.end.x, gate_wall.end.y, Mat.EMPTY))
 
 	# The trail must come **after** the sim has run, or it is one tick stale.
 	_spell_view.on_tick()
@@ -774,12 +930,22 @@ func reset_stage() -> void:
 	#  (`is_showing()`'s own comment) and nothing else would clear it. Left out, pressing R during the
 	#  afterglow left it floating over a freshly reset world for up to 0.7s, `Stats` hidden the whole time.
 	_pick_window.cancel_confirm()
+	# **`_settlement.close()` too** (`run-end-settlement.md`, Stage D, acceptance 10) — the count-up clock does
+	#  not live in `Progress` any more than the pick window's own confirmation afterglow does (comment above),
+	#  so nothing else would clear it. Left out, pressing `R` while the panel is open would leave a settlement
+	#  screen reporting a run that no longer exists standing over a fresh stage.
+	_settlement.close()
 	_blast_count = 0
 	# Rain is a reset target too — leave it on and the old source keeps pouring from the moment terrain is rebuilt.
 	_water_source = null
 	# Room ①'s water reverts with everything else — `_world.reset()` above already clears `Progress.
 	#  reward_pending`, but the water instance itself is held here in the shell, not in `Progress`.
 	_room1_reward_water = null
+	# **Room ③'s wall latch too.** `_build_room()` below always rebuilds the terrain in this same call, so
+	#  the flag and the wall never disagree — the latch is safe here for exactly the reason `_room1_reward_water`
+	#  above is, and the reason `_settlement`'s own latch ban above it is not (that one strands a `mouse_filter`
+	#  over the whole viewport; this one strands nothing).
+	_room3_gate_open = false
 	_build_room()
 
 
@@ -796,6 +962,13 @@ func _build_room() -> void:
 		build_map_into(_grid, TownMap.rows(), TownMap.MAP_CHARS)
 	else:
 		build_terrain_into(_grid)
+	# `docs/plans/3.done/monster-placement-stage1.md` Stage C — the wiring line. **In `_build_room()`,
+	#  not `_ready()`**: every room switch (`reset_stage()`/`enter_town()`/`_leave_town()`) routes through
+	#  here, and `net_gate._wired_root()` never runs `_ready()` at all, so a line there would be invisible
+	#  to every net in this repo and would strand the placement the moment R was first pressed (that
+	#  plan's own "the wiring line" section). `[]` in town — the table is stage 1's, not the town's.
+	_world.set_placement(
+		([] as Array[Dictionary]) if _in_town else Stage1Monsters.ROWS, Stage1Monsters.FLOOR_CY)
 	# **The fixtures show exactly when the town does.** Derived from the latch every time a room is built,
 	#  never written at the two doors — that is the same "derive it, do not push it" rule `_update_hud`
 	#  applies to `_hud.visible`, and for the same reason: a door that forgot would strand the benches
@@ -832,17 +1005,17 @@ func _build_room() -> void:
 
 ## E. **One key, and where you are standing decides what it does.**
 ##
-## **The stage side is not "nothing" — it is the way back.** With no town there was nowhere to go when you
-##  died and R (rebuild the stage) was the only exit, which is the run never closing (`town.md`'s "Why").
-##  **Only while downed**, so E is not a free teleport out of a fight.
+## **The downed door moved.** It used to be E while downed in the stage; **the settlement screen is what tells
+##  you the run is over now** (`run-end-settlement.md` — `_sync_settlement()` opens it on its own the instant
+##  you go down, and its own button is the only way home). `_interact()` keeps only the `not _in_town` guard —
+##  E while downed in the stage does nothing here, because there is a full-screen panel over it doing the
+##  telling instead.
 ##
 ## **`_town_view.reachable()` is the single source of "which fixture".** The prompt on screen is drawn from
 ##  that same call, so the label and the action cannot disagree — a prompt reading `[E] 조립대` while E opens
 ##  the gate is exactly the screen/sim split this repo calls its signature fake.
 func _interact() -> void:
 	if not _in_town:
-		if _char.downed:
-			enter_town()
 		return
 	match _town_view.reachable():
 		Fixtures.KIND_GATE:
@@ -887,7 +1060,7 @@ static func research_text(pr: Progress) -> String:
 	var parts: Array[String] = []
 	for rune: int in Tuning.ELEM_ALL:
 		parts.append("%s%s" % [Fx.ELEM_NAMES.get(rune, "?"), "" if pr.owns_rune(rune) else " (잠김)"])
-	return "[연구대] 룬 %s — 재료로 푸는 해금은 아직 없다" % " · ".join(parts)
+	return "[연구대] 룬 %s — 원석으로 푸는 해금은 아직 없다" % " · ".join(parts)
 
 
 ## **Into the town.** Called when the player takes E while downed — the run is over, so the whole world is
@@ -918,19 +1091,22 @@ func _leave_town() -> void:
 ## ownership concept to enforce in the first place; this only narrows the one thing that does: *the seat may
 ## not hold a rune the player does not own.*
 ##
-## **`rune_at(0)` alone covers "no circle" too** — with the circle removed there are 0 rune slots and this
-## already reads back `RUNE_EMPTY`, which the guard below skips (nothing owned or unowned sits in a seat that
-## does not exist). The single hardcoded slot is the same "exactly one rune slot" assumption `element()`'s
-## own comment already names — it is not re-derived here.
+## **Every socket, not just seat 0** — verify-read found this hardcoded to the round circle's single seat
+## (`element()`'s own "exactly one rune slot" comment, which this used to lean on the same way). With a
+## triangle circle equipped, an unowned rune parked in socket 1 or 2 (reachable: earn a rune, place it there,
+## press R) survived untouched, and `SpellCircle.shots()` fires it anyway — silently, since nothing else
+## checks ownership per socket. **`rune_count()` covers "no circle" the same way `rune_at(0)`'s old
+## single-slot check did** — 0 slots, loop runs zero times, nothing to revoke.
 ##
 ## **Driven directly, not only through `reset_stage()`** — `net_render._revoke_unowned_rune_only_touches_
 ## what_is_not_owned` calls this with the owned set at `{none, water}`, a state `Progress.reset()` itself can
 ## never leave behind (it always narrows to exactly `{none}`). Proving "checks ownership" rather than "always
 ## clears" needs that state — through `reset_stage()` alone the two are observationally identical.
 func _revoke_unowned_rune() -> void:
-	var rune := _circle.rune_at(0)
-	if rune != SpellCircle.RUNE_EMPTY and not _world.progress().owns_rune(rune):
-		_circle.set_rune(0, Tuning.ELEM_NONE)
+	for i in _circle.rune_count():
+		var rune := _circle.rune_at(i)
+		if rune != SpellCircle.RUNE_EMPTY and not _world.progress().owns_rune(rune):
+			_circle.set_rune(i, Tuning.ELEM_NONE)
 
 
 ## The world's size (world px). **It comes from the grid** — count it from `MAP` and the day the map shrinks only the camera fails to follow.
@@ -1054,21 +1230,16 @@ func _update_hud() -> void:
 	#  confirmation afterglow can hold the pick window on screen a few frames after the pick itself already
 	#  closed (`is_showing()`'s own comment), and `Progress` alone cannot see that. One expression still,
 	#  widened at its one call site rather than duplicated at a second.
+	# **`_settlement.is_showing()` too** (`run-end-settlement.md`, Stage D) — otherwise this debug readout
+	#  prints straight over the settlement panel, and nothing barks.
 	_hud.visible = not _pick_window.is_showing() and not _circle_window.visible \
-		and not _research_window.visible
+		and not _research_window.visible and not _settlement.is_showing()
 	# **The single source of health is the character.** Count it separately in the shell and it becomes "it took damage but the number is unchanged".
-	# Downed is **derived from the same value** — hold a separate latch and "it is 0 but not downed" stays on screen.
-	#  The way to revive is written alongside. Being alone there is nobody to pick you up, so **R is the only
-	#   way**, and without writing it the user reads it as "the game froze".
-	# **Downed says "E, to the town" now, not "R"** (`docs/design/town.md` — a run ends by going home).
-	#  R still rebuilds the room and is still the debug instrument it always was; what changed is which one
-	#  the *player* is told about, because R restarting the same stage was the run never closing.
-	#  **Nothing is said in the town** — nothing there can hit you, and a standing instruction for a state
-	#  that cannot happen is noise.
-	_hp_label.text = "체력 %d / %d%s" % [
-		_char.hp, Character.MAX_HP,
-		"   쓰러짐 — E로 마을에 돌아간다" if _char.downed and not _in_town else "",
-	]
+	# **Downed no longer says anything here** — the settlement screen is what tells the player the run is over
+	#  now (`run-end-settlement.md`, replacing this line and the old E-while-downed door in `_interact()`).
+	#  Being alone there is nobody to pick you up, so the settlement screen's own button remains the only way
+	#  out; **nothing is said in the town** either, since nothing there can hit you.
+	_hp_label.text = "체력 %d / %d" % [_char.hp, Character.MAX_HP]
 	# **A different node from `Stats`, on purpose** (the `_progress_label` comment above) — this has to keep
 	#  showing while the assembly window is open, and `Stats` is the one node that hides for it.
 	var pr := _world.progress()

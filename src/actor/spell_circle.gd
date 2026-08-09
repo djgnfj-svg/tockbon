@@ -174,6 +174,16 @@ func _with(layer: int, glyph_id: int) -> Array[int]:
 ## **The point where the rule has one copy.** `can_place_glyph` and `set_from_packed` call **this same
 ##  function** — measure separately and you get placements that "go in via a preset but cannot be placed by clicking".
 ## The point is that not one rule is written here. Everything is read from `glyph_defs.DEFS`.
+##
+## **This is also the whole reason `shots()`'s explosion cap holds without one line of new code**
+## (`triangle-circle-to-game.md` step 5, risk table). `list` is built from **all of `_layers`**, not one
+## socket's own layer — a triangle circle has three sockets but still only **one** `max_per_circle: 1` spread
+## across the whole circle, the same "one spread per circle" `_layout_geometry_runs`'s sibling decision
+## (`docs/plans/3.done/triangle-circle-to-game.md`, decision B) already assumed. So the worst case is one
+## socket's spread (8 bolts) plus the other two sockets' single terminal glyphs (blast, 1 bolt each) = 10,
+## nowhere near `Tuning.MAX_PROJECTILES` (32). **If "one spread per circle" is ever reversed to "per socket",
+## re-measure this cap** — three spreads is 24, and going over the cap does not discard, the sim simply does
+## not spawn the extra bolts, so the visible symptom would be "some bolts just don't come out".
 static func _list_ok(list: Array[int]) -> bool:
 	if list.size() > Tuning.GLYPH_MAX_LAYERS:
 		return false
@@ -235,16 +245,53 @@ func can_fire() -> bool:
 	return true
 
 
-## The rune the fire command uses.
-## **It only has meaning when `can_fire()` is true** — with an empty slot the command is never made at all.
-## **The assumption that there is one rune slot lives only in this one place.** Grow the circles without
-##  settling how several runes combine (fusion, parallel, sequential) and you get caught for free by the
-##  wrapper's stderr check — the circle table does not even have a column for it yet.
+## **A representative rune only — not the firing answer any more** (`triangle-circle-to-game.md` step 5).
+## `shots()` below is the single source of what actually fires; this stays only for presentation that needs
+## one color to show before firing (`fx_tuning.staff_tint`'s staff-tip tint). For a multi-rune circle it
+## answers socket 0's rune, the same seat the picture itself marks as "goes first" (12 o'clock).
+##
+## **The `_runes.size() != 1` bark that used to live here is gone, not softened.** It fired on **every left
+## click** the moment a circle with more than one rune slot existed (`stage._fire_at` called this
+## unconditionally through `Aim.fire_cmd`) — a bark that fires on ordinary play is a false handle
+## (CLAUDE.md), and step 5 removes the only caller that ever reached it that way. `shots()` never calls this.
 func element() -> int:
-	if _runes.size() != 1:
-		push_error("SpellCircle: there are %d rune slots - firing still knows only one" % _runes.size())
+	if _runes.is_empty():
 		return Tuning.ELEM_FIRE
 	return _runes[0]
+
+
+# ══════════════════════════════════════════════════════════════════
+#  Firing — one entry per bolt that leaves this tick
+# ══════════════════════════════════════════════════════════════════
+
+## **The actual firing answer, replacing `element()`/`packed_glyphs()` as a pair.**
+## `[{element, glyphs, delay}]` — one dictionary per bolt `stage._fire_at` should enqueue.
+##
+## **Round**: exactly one entry, `element()`'s answer and `packed_glyphs()`, `delay` 0 — byte-identical to
+##  what `stage._fire_at` built by hand before this function existed (still true today: `PIC_ROUND` never
+##  reaches the branch below).
+##
+## **Triangle**: three entries. Entry `i` carries `rune_at(i)` and **only that socket's own glyph**
+##  (`Glyph.pack` over a one-or-zero-length list, never the whole `_layers` array) — that is what "one layer
+##  per rune" means (`docs/design/circle-rune-glyph.md`): each bolt is the spell of its own socket alone, not
+##  the whole circle's assembly. `delay` is `i * seq_ticks`, so socket 0 (12 o'clock, the one clue the
+##  picture gives for "goes first") leaves on this tick and the rest trail behind in clockwise order.
+func shots() -> Array[Dictionary]:
+	if CircleDefs.picture(_circle_id) != CircleDefs.PIC_TRIANGLE:
+		return [{"element": element(), "glyphs": packed_glyphs(), "delay": 0}]
+	var seq := CircleDefs.seq_ticks(_circle_id)
+	var out: Array[Dictionary] = []
+	for i in _runes.size():
+		var glyph_id: int = _layers[i]
+		var one: Array[int] = []
+		if glyph_id != Glyph.GLYPH_NONE:
+			one.append(glyph_id)
+		out.append({
+			"element": _runes[i],
+			"glyphs": Glyph.pack(one),
+			"delay": i * seq,
+		})
+	return out
 
 
 # ══════════════════════════════════════════════════════════════════

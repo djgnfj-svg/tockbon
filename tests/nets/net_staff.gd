@@ -59,6 +59,7 @@ func run(t) -> void:
 	_tip_reaches_full_length_in_the_open(t)
 	_tip_is_clamped_in_the_middle_by_a_wall(t)
 	_staff_tint_carries_the_loadout(t)
+	_staff_tint_uses_its_own_sockets_combo_not_a_splice(t)
 
 
 ## The premise of every arrangement below. The day `W_PX` · `H_PX` stop being multiples of the cell, this goes red first.
@@ -193,15 +194,15 @@ func _staff_tint_carries_the_loadout(t) -> void:
 
 ## Net 7b — **the ring colour survives the circle being taken out.**
 ##
-## **The bark this exists for**: `element()` has meaning only with exactly one rune slot and **`push_error`s
-##  otherwise**, and the assembly window can write `CIRCLE_NONE`, which takes the slots to 0. The view asked
-##  it unconditionally ⇒ **539 barks in one play session while every net stayed green** — the call lived in
-##  `_draw`, which nothing can invoke.
-##
-## **What goes red when inverted**: put `circle.element()` back in unconditionally. **This function asserts
-##  nothing about the bark** — it does not need to. The bark reaches stderr and **the wrapper fails the run**,
-##  which is the whole reason the wrapper exists (CLAUDE.md: anything on stderr is a failure).
-## **So the assertions below are about the colour**; the silence is measured by the harness around them.
+## **The bark this net was written for**: `element()` used to bark whenever `_runes.size() != 1`, and the
+##  assembly window can write `CIRCLE_NONE`, which takes the slots to 0. The view asked it unconditionally
+##  ⇒ **539 barks in one play session while every net stayed green** — the call lived in `_draw`, which
+##  nothing can invoke. **That bark is gone now, not just guarded** (`triangle-circle-to-game.md` step 5) —
+##  `element()` no longer barks on any rune count, it only ever returns a representative rune. So inverting
+##  by restoring the unconditional call **no longer reaches stderr either way**; what this net still measures
+##  and still catches a real regression on is `fx_tuning.staff_tint`'s own `can_fire` guard reading the right
+##  colour in both states, which is unrelated to whether `element()` itself can bark.
+## **So the assertions below are about the colour** — that half of the original reasoning still holds.
 func _ring_tint_never_barks_with_the_circle_removed(t) -> void:
 	var circle := SpellCircle.new()
 	t.ok(circle.can_fire(), "갓 만든 서클은 쏠 수 있다 (전제 — 기본 지급이 채워져 있다)")
@@ -216,6 +217,40 @@ func _ring_tint_never_barks_with_the_circle_removed(t) -> void:
 	circle.set_circle(SpellCircle.DEFAULT_CIRCLE)
 	circle.set_rune(0, SpellCircle.DEFAULT_RUNE)
 	t.ok(Fx.staff_ring_tint(circle) != Fx.DEAD_TINT, "서클을 되돌리면 다시 색이 산다")
+
+
+## **`staff_ring_tint` used to pair `element()` (socket 0's rune) with `packed_glyphs()` (the whole
+## circle's glyph list, densely packed from whichever socket has one first) — a real bug (verify-read):
+## on a triangle circle those can name two different sockets, so the tip showed the colour of a spell no
+## bolt actually fires. Socket 0 carries fire with **no** glyph; socket 1 carries water **with** blast.
+## The old pairing would show blast's colour (`packed_glyphs()` sees only socket 1's blast, `element()`
+## sees only socket 0's fire) — a fire+blast combination `shots()` never assembles (bolt 0 leaves fire
+## alone, bolt 1 leaves water+blast). The fix reads `shots()[0]` — socket 0's own, real combination.
+func _staff_tint_uses_its_own_sockets_combo_not_a_splice(t) -> void:
+	var circle := SpellCircle.new(CircleDefs.CIRCLE_TRIANGLE)
+	t.ok(circle.set_rune(0, Tuning.ELEM_FIRE), "0번 소켓에 불을 놓는다 (전제)")
+	t.ok(circle.set_rune(1, Tuning.ELEM_WATER), "1번 소켓에 물을 놓는다 (전제)")
+	t.ok(circle.place_glyph(1, Glyph.GLYPH_BLAST), "1번 소켓에만 폭발을 놓는다 (전제 — 0번은 문양이 없다)")
+	t.ok(circle.can_fire(), "삼각 진이 쏠 수 있다 (전제)")
+
+	var shots := circle.shots()
+	var want: Color = Fx.staff_tint(int(shots[0]["glyphs"]), int(shots[0]["element"]), true)
+	t.eq(Fx.staff_ring_tint(circle), want, "지팡이 끝 색이 0번 소켓 자신의 조합(불 · 문양 없음)과 같다")
+
+	# **The inversion — the exact splice the old code produced.** `GLYPH_TINT[BLAST]` is what
+	# `staff_tint(packed_glyphs(), element(), true)` would have returned (glyphs != NONE, so the glyph
+	# colour wins regardless of which socket the rune came from) — socket 1's colour leaking onto socket
+	# 0's rune.
+	t.ok(Fx.staff_ring_tint(circle) != Fx.GLYPH_TINT[Glyph.GLYPH_BLAST],
+		"지팡이 끝이 다른 소켓(1번)의 문양 색으로 새지 않는다")
+
+	# The round circle path must stay byte-identical — `shots()[0]` **is** `{element(), packed_glyphs()}`
+	# there, so this is the same value the pre-fix code always computed for it.
+	var round_c := SpellCircle.new()
+	t.ok(round_c.place_glyph(0, Glyph.GLYPH_SPREAD), "동그라미 진 1층에 확산을 놓는다 (전제)")
+	t.eq(Fx.staff_ring_tint(round_c),
+		Fx.staff_tint(round_c.packed_glyphs(), round_c.element(), true),
+		"동그라미 진은 element()·packed_glyphs() 조합과 여전히 같다 (안 바뀌었다)")
 
 
 # -- building the world --------------------------------------------

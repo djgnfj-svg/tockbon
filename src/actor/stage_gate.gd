@@ -1,0 +1,63 @@
+extends RefCounted
+## The gate — stage 1's ending (`docs/design/gate-ending.md`, `docs/plans/3.done/gate-ending-to-game.md`).
+## **Geometry and one predicate. No screen, no scene, no `Progress`.**
+##
+## **`src/actor/`, not `src/stage/`.** `net_layers.RULES` forbids `src/actor/` from reaching `src/view/` or
+## `src/stage/`, and a file in `src/stage/` that a view could preload would need to be a third pure file
+## alongside `town_map.gd`, for two constants. So the seat lives with the machine, not with the map — the
+## precedent `fixtures.gd:11-13` sets for the town is broken on purpose. **The price**: a map repaint moves a
+## constant that does not sit next to the map. `net_gate`'s first check pays it, driven against the real
+## baked terrain, the same accident `stage.gd`'s `SPAWN_TILE` comment records.
+
+const Tuning := preload("res://src/sim/sim_tuning.gd")  ## `src/sim` is allowed from `src/actor` (`net_layers.RULES`).
+const TILE_PX := Tuning.TILE_CELLS * Tuning.CELL_PX  ## 32 — one tile, in world px.
+
+const SEAT_TILE_X := 370      ## The arch's column.
+const FLOOR_TILE_Y := 25      ## The row it stands ON — its top edge is the ground line.
+const REACH_PX := 48          ## x half-band, +/- from the seat centre.
+const BAND_UP_PX := 96        ## y band, upward from the ground line (3 tiles).
+
+const WALL_TILE_X0 := 367     ## Room ③'s east wall — both stone columns.
+const WALL_TILE_X1 := 368
+const WALL_TILE_Y0 := 13
+const WALL_TILE_Y1 := 24
+
+
+## `(SEAT_TILE_X + 0.5) * TILE_PX`. **The `+ 0.5` is `town_map.fixture_seats()`'s own idiom**
+##  (`town_map.gd:86-94`) — off by half a tile and the arch reads as reached a step early.
+static func seat_px() -> float:
+	return (float(SEAT_TILE_X) + 0.5) * float(TILE_PX)
+
+
+## The row the seat stands ON, in world px. The arch's feet touch this line, not float below it.
+static func floor_y_px() -> float:
+	return float(FLOOR_TILE_Y) * float(TILE_PX)
+
+
+## **Is `center` standing at the gate.** x is a band around the seat; y is a band reaching up from the
+## ground line, never down through the floor.
+##
+## **Why a y band at all**: the x370 column is open from row 0 to row 24 (the room has no ceiling there), so
+## an x-only test would say "at the gate" while the player is still sailing over the roof.
+##
+## **Why not `on_ground` instead**: room ③'s escape is a water escape — a player floating at the gate is not
+## "on the ground", and requiring it would fail a run already won, the same reason the design refuses a
+## keypress. **The limit that buys**: water deeper than ~3 tiles at the seat lifts the player out of this
+## band. Named in the plan's Risk 6; `water-jump-and-escape.md`'s to answer, not this file's.
+static func at(center: Vector2) -> bool:
+	if absf(center.x - seat_px()) > REACH_PX:
+		return false
+	var floor_y := floor_y_px()
+	return center.y >= floor_y - BAND_UP_PX and center.y <= floor_y
+
+
+## The east wall's cells, as a `Rect2i` whose **`end` is the last inclusive cell** (not one past it, the way
+## `Rect2i.end` ordinarily reads) — `CellGrid.cmd_fill`'s own `x0,y0,x1,y1` are inclusive bounds, and this
+## shape lets the caller pass `r.position`/`r.end` straight through without an off-by-one correction.
+static func wall_cells() -> Rect2i:
+	var tc := Tuning.TILE_CELLS
+	var x0 := WALL_TILE_X0 * tc
+	var y0 := WALL_TILE_Y0 * tc
+	var x1 := (WALL_TILE_X1 + 1) * tc - 1
+	var y1 := (WALL_TILE_Y1 + 1) * tc - 1
+	return Rect2i(x0, y0, x1 - x0, y1 - y0)

@@ -34,6 +34,12 @@ const CircleLayout := preload("res://src/view/circle_layout.gd")
 const Glyph := preload("res://src/sim/glyph_defs.gd")
 const Progress := preload("res://src/actor/progress.gd")
 const SpellCircle := preload("res://src/actor/spell_circle.gd")
+## **Only for its static `load_socket_glyph_tex()`** — both files are `src/view/` (`net_layers.gd:29`'s scan
+## has no restriction inside that folder), and that function's own header already named this file as the
+## second `_draw()`-owning node it was pulled out of `_ready()` for. Loading is shared; the drawing itself is
+## not (`CanvasItem.draw_*` only runs inside the calling node's own `_draw()` — this file's own header, the
+## same reason `_draw_pick_glyph_shape` below redraws `circle_window._draw_glyph`'s shapes instead of calling it).
+const CircleWindow := preload("res://src/view/circle_window.gd")
 
 var _progress: Progress = null
 ## **A reference, not a copy** — the same reason `circle_window._circle` is a reference (the plan's single
@@ -70,6 +76,14 @@ var _confirm_glyph := Glyph.GLYPH_NONE  # GLYPH_NONE = no confirmation to show
 var _confirm_layer := -1
 var _confirm_ticks := 0
 
+## **Socket glyph art, loaded once — the exact same cache `circle_window._socket_glyph_tex` is, filled by the
+## exact same loader.** `net_pick.gd`'s own no-inventory check (`_no_pushed_out_glyph_is_stashed_anywhere`)
+## scans every top-level `var Array`/`Dictionary` under `src/` looking for a stray record of a glyph that left
+## a spell layer — this is loaded art, not that, and is named in that check's own `allow` list for the same
+## reason `circle_window.gd`'s entry there already is. A glyph missing here (the three dummy ids — nine ids
+## total, six with art) is the normal case `_draw_pick_card_glyph` falls back on, not an error.
+var _socket_glyph_tex: Dictionary = {}
+
 
 func setup(progress: Progress, circle: SpellCircle) -> void:
 	_progress = progress
@@ -79,6 +93,7 @@ func setup(progress: Progress, circle: SpellCircle) -> void:
 func _ready() -> void:
 	position = Fx.PICK_RECT.position
 	size = Fx.PICK_RECT.size
+	_socket_glyph_tex = CircleWindow.load_socket_glyph_tex()
 
 
 ## **Redraw every frame while open** — the same idiom `circle_window._process` already holds (there is no
@@ -399,28 +414,42 @@ func _draw_step2(font: Font) -> void:
 ## `font == null` guard does not need to duplicate here (rings and the frame need no font).
 func _draw_pick_circle(rect: Rect2, area: Rect2, circle_id: int, font: Font) -> void:
 	var frame := CircleLayout.frame(area)
-	var center: Vector2 = rect.position + (frame["center"] as Vector2)
-	draw_circle(center, frame["radius"], Fx.CIRCLE_FRAME, false, Fx.CIRCLE_FRAME_PX)
+	var frame_center: Vector2 = rect.position + (frame["center"] as Vector2)
+	draw_circle(frame_center, frame["radius"], Fx.CIRCLE_FRAME, false, Fx.CIRCLE_FRAME_PX)
 
-	var rings := CircleLayout.layer_rings(circle_id, area)
-	var n := rings.size()
+	# **No picture branch — mirrors `circle_window._draw_ring`** (this plan's step 3; that file's own
+	#  comment has the full reasoning). A concentric band's `edges` holds one radius and its `center` is the
+	#  frame's shared center, so this reduces to exactly what drew before this generalization. A socket
+	#  band's `edges` holds two and its own `center` is that socket's center, not `frame_center` above —
+	#  reading `band["center"]` per band rather than reusing `frame_center` is what makes that correct.
+	## **This window does not draw `_draw_frame`'s wrapping ring/link bands/center ornament** — this pick
+	##  screen only ever needed the rings and rune to preview a reject, and that boundary is unchanged here.
+	##  A triangle circle previewed in this window will show its socket bands but not its outer frame
+	##  ornament; closing that gap belongs to whoever extends this pick screen for the triangle, not this plan.
+	var bands := CircleLayout.layer_bands(circle_id, area)
+	var n := bands.size()
 	for layer in n:
+		var band: Dictionary = bands[layer]
+		var center: Vector2 = rect.position + (band["center"] as Vector2)
+		var edges: PackedFloat32Array = band["edges"]
 		var t := 0.0 if n <= 1 else float(layer) / float(n - 1)
-		draw_circle(center, rings[layer], Fx.CIRCLE_RING_INNER.lerp(Fx.CIRCLE_RING_OUTER, t),
-			false, Fx.CIRCLE_RING_PX)
+		var col := Fx.CIRCLE_RING_INNER.lerp(Fx.CIRCLE_RING_OUTER, t)
+		for e in edges:
+			draw_circle(center, e, col, false, Fx.CIRCLE_RING_PX)
 		if font == null:
 			continue
+		var outer: float = edges[0]
 		var num := CircleLayout.layer_num_size(area)
 		draw_string(font, center + Vector2(
-				-rings[layer] + float(num) * Fx.CIRCLE_LAYER_NUM_INSET_FRAC,
+				-outer + float(num) * Fx.CIRCLE_LAYER_NUM_INSET_FRAC,
 				-float(num) * Fx.CIRCLE_LAYER_NUM_LIFT_FRAC),
 			str(layer + 1), HORIZONTAL_ALIGNMENT_LEFT, -1, num, Fx.CIRCLE_LAYER_NUM)
 
 
 ## **The same three shapes `circle_window._draw_glyph` draws — not called, redrawn.** `CanvasItem.draw_*`
-## only runs inside the calling node's own `_draw()` (that file's own header, and `three_pick_window`'s own
-## dummy-diamond precedent in `_draw_card` above), so a second node showing the same glyph shapes redraws
-## them rather than sharing a function; what is shared is `Fx.GLYPH_TINT` and the shape constants, not code.
+## only runs inside the calling node's own `_draw()` (that file's own header), so a second node showing the
+## same glyph shapes redraws them rather than sharing a function; what is shared is `Fx.GLYPH_TINT` and the
+## shape constants, not code.
 ## **`alpha` scales the tint's own alpha** — the dim/full split `_draw_step2` needs, one column
 ## (`Fx.PICK_PUSHOUT_DIM_ALPHA`), not a second color table (the same "one column, every kind reads it in its
 ## own place" idiom `power_pct` already holds, one level up).
@@ -451,6 +480,42 @@ func _draw_pick_glyph_shape(at: Vector2, r: float, glyph_id: int, alpha: float) 
 	push_error("ThreePickWindow: glyph kind %d has no drawing" % kind)
 
 
+## **The step-1 card's own picture — texture where `circle_window.gd` already has art (spread/blast), the
+## same procedural shape `_draw_pick_glyph_shape` above draws otherwise (the three dummy ids), and the rarity
+## ring either way.** Split into the two hooks below on purpose — the same reason `circle_window._draw_ring`
+## calls `_draw_socket_glyph_texture`/`_draw_socket_rarity_ring` instead of drawing inline: a net cannot
+## override a native `draw_texture_rect`/`draw_circle` call directly, only a named method, and `net_pick.gd`'s
+## own header already leans on exactly that idiom for `circle_window`'s equivalent functions.
+func _draw_pick_card_glyph(at: Vector2, r: float, glyph_id: int) -> void:
+	if _socket_glyph_tex.has(glyph_id):
+		_draw_pick_card_texture(at, r, _socket_glyph_tex[glyph_id], glyph_id)
+		# **The ring sits at the texture's own outer radius** — `circle_window._draw_socket_rarity_ring`'s
+		#  own rule for a socket's art, which already fills its square out to this same edge.
+		_draw_pick_card_rarity_ring(at, r, glyph_id)
+		return
+	_draw_pick_glyph_shape(at, r, glyph_id, 1.0)
+	# **The ring sits outside the symbol** (`circle_window._draw_glyph`'s own `RARITY_RING_RATIO` rule) — the
+	#  procedural shapes have no baked-in edge to sit flush against the way the texture's square does above.
+	_draw_pick_card_rarity_ring(at, r * Fx.RARITY_RING_RATIO, glyph_id)
+
+
+## **The art is drawn tinted, not raw.** Measured: `socket_glyph_*.png` is a transparent field with strokes at
+## RGB(26,24,22) — near-black. Drawn untinted on `PICK_CARD_BG` it is **invisible**, and the card reads as an
+## empty rarity ring. That is this repo's signature fake with the roles swapped: the model holds a real glyph,
+## the screen quietly says nothing. The tint is `GLYPH_TINT` — **the same color axis the procedural fallback
+## and the assembly palette already use**, so texture and fallback cards read as one family.
+func _draw_pick_card_texture(at: Vector2, r: float, tex: Texture2D, glyph_id: int) -> void:
+	var tint: Color = Fx.GLYPH_TINT.get(glyph_id, Fx.GLYPH_TINT_MISSING)
+	draw_texture_rect(tex, Rect2(at - Vector2(r, r), Vector2(r, r) * 2.0), false, tint)
+
+
+## Split out so a test can record which glyph id the rarity color was actually read for — the same reason
+## `circle_window._draw_socket_rarity_ring` is its own function and not inlined (that file's own header).
+func _draw_pick_card_rarity_ring(at: Vector2, r: float, glyph_id: int) -> void:
+	var rarity_col: Color = Fx.RARITY_TINT.get(Glyph.rarity_of(glyph_id), Fx.GLYPH_TINT_MISSING)
+	draw_circle(at, r, rarity_col, false, Fx.RARITY_RING_PX)
+
+
 ## **The rects `_draw()` paints — pulled out on purpose, because `_draw()` itself can't be driven headless**
 ## (`get_theme_default_font()` returns null untreed, so calling `_draw()` directly from a net does nothing and
 ## proves nothing). This function touches no font at all — it is pure `Layout` math over `_progress`'s live
@@ -469,10 +534,11 @@ func _draw_buttons(font: Font) -> void:
 	_draw_button(Layout.dice_rect(size), Fx.PICK_DICE_TEXT, Fx.PICK_DICE_COLOR, font)
 
 
-## **Shape from `kind`, color from `rarity` — the card's whole "name · rarity · what it does · dummy
-## marking".** Rarity separates by the border color (`RARITY_TINT`, Stage A's own proof this reads on this
-## palette); the dummy diamond is the assembly window's `KIND_MODIFY` silhouette redrawn here — not a shared
-## function (`CanvasItem.draw_*` only runs inside the calling node's own `_draw()`), a shared shape and color.
+## **Shape from `kind`, color from `rarity` — the card's whole "name · rarity · what it does · picture".**
+## Rarity separates by the border color (`RARITY_TINT`, Stage A's own proof this reads on this palette) and
+## again by the ring around the picture (`_draw_pick_card_glyph`'s own comment) — not a shared function with
+## `circle_window.gd`'s equivalents (`CanvasItem.draw_*` only runs inside the calling node's own `_draw()`),
+## a shared shape, texture cache and color instead.
 func _draw_card(rect: Rect2, glyph_id: int, font: Font) -> void:
 	if not Glyph.DEFS.has(glyph_id):
 		push_error("ThreePickWindow: glyph %d is not in the table - cannot draw its card" % glyph_id)
@@ -499,17 +565,19 @@ func _draw_card(rect: Rect2, glyph_id: int, font: Font) -> void:
 	draw_string(font, Vector2(x, rect.end.y - pad), _effect_text(glyph_id, kind),
 		HORIZONTAL_ALIGNMENT_LEFT, text_w, Fx.PICK_EFFECT_SIZE, Fx.PICK_EFFECT_COLOR)
 
-	# **The dummy marking's screen half** — Stage A closed the name half ("더미" is already the id's own
-	#  `DEFS` name); this is the part that plan explicitly left for Stage D.
-	if kind == Glyph.KIND_MODIFY:
-		var c := rect.get_center()
-		var d := minf(rect.size.x, rect.size.y) * Fx.PICK_DUMMY_MARK_RATIO
-		var tint: Color = Fx.GLYPH_TINT.get(glyph_id, Fx.GLYPH_TINT_MISSING)
-		var pts: Array[Vector2] = [
-			c + Vector2(0.0, -d), c + Vector2(d, 0.0), c + Vector2(0.0, d), c + Vector2(-d, 0.0),
-		]
-		for k in pts.size():
-			draw_line(pts[k], pts[(k + 1) % pts.size()], tint, Fx.PICK_DUMMY_MARK_PX)
+	# **The card's own picture — the empty middle between the rarity line and the effect sentence**
+	#  (`Fx.PICK_CARD_GLYPH_R_PX`'s own comment: the user looking at the real screen asked for exactly this).
+	#  Replaces the old `KIND_MODIFY`-only diamond mark wholesale — every id gets a picture now, not just the
+	#  dummy family, so there is no longer a second, separately-tuned diamond to overlap the general one.
+	var glyph_top := rect.position.y + pad + float(Fx.PICK_NAME_SIZE) + float(Fx.PICK_RARITY_SIZE) + 4.0 + pad
+	var glyph_bottom := rect.end.y - pad - float(Fx.PICK_EFFECT_SIZE) - pad
+	# **Clamped to what the card actually has, not trusted at face value** — `RARITY_RING_RATIO` is the
+	#  procedural branch's own outer extent (`_draw_pick_card_glyph`'s comment), so dividing by it before
+	#  clamping is what keeps the ring itself inside the card on a narrower size, not just the symbol alone.
+	var glyph_max_r := minf(rect.size.x * 0.5 - pad, maxf((glyph_bottom - glyph_top) * 0.5, 0.0)) / Fx.RARITY_RING_RATIO
+	var glyph_r := clampf(Fx.PICK_CARD_GLYPH_R_PX, 0.0, maxf(glyph_max_r, 0.0))
+	if glyph_r > 0.0:
+		_draw_pick_card_glyph(Vector2(rect.get_center().x, (glyph_top + glyph_bottom) * 0.5), glyph_r, glyph_id)
 
 
 ## **"What it does" is a mechanical fact, not an invented name.** `docs/design/circle-rune-glyph.md`'s

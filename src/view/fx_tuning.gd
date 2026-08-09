@@ -173,6 +173,11 @@ const MON_FIRE := 7
 ##  two moves), so they are one state here too, resolved to a different sheet by kind.
 const MON_LEAP := 8
 const MON_STUN := 9
+## **The trash-mob jump** (`docs/plans/3.done/monster-ai-jump-and-separation.md`, Stage B) — `on_ground ==
+##  false` for a pig/hen/wolf, resolved by `monster_view.resolve_state`. **No boss row exists or is planned**
+##  (`bull_slam`/`rooster_leap` already cover the only airborne thing a boss does, through `MON_LEAP` above) —
+##  see that function's own comment for what an idle boss falling actually draws instead.
+const MON_AIRBORNE := 10
 
 ## **kind -> state -> one sheet.** A sheet is one horizontal row of equal frames, `Defs.w_px` wide each —
 ##  the same layout as `CHAR_SHEET`, which is why `tools/pixel/anim_sheet.py` writes them this way.
@@ -201,6 +206,11 @@ const MONSTER_ANIM: Dictionary = {
 		MON_ATTACK: {"path": "res://assets/monster/pig_shove.png", "frames": 8, "hold": 4, "loop": true},
 		MON_HURT: {"path": "res://assets/monster/pig_hurt.png", "frames": 4, "hold": 3, "loop": false},
 		MON_DEATH: {"path": "res://assets/monster/pig_death.png", "frames": 8, "hold": 4, "loop": false},
+		# **`hold` in [3, 8], start at 4** (`monster-ai-jump-and-separation.md`, Stage B) — `frames * hold`
+		#  (12) must fit inside the real airtime or the pose never reaches its last cell, the same failure
+		#  `_hurt_left` was split from `_flash_left` to avoid. `net_monster._the_airborne_sheet_fits_inside_
+		#  the_real_airtime` measures the real airtime driven, not estimated. **Not decided on screen yet.**
+		MON_AIRBORNE: {"path": "res://assets/monster/pig_jump.png", "frames": 3, "hold": 4, "loop": false},
 	},
 	# **`throw`, not `spit`** — `monsters.md`'s "the chicken throws an egg" (decided by the user), and the
 	#  enlarged set is drawn that way. The projectile itself is still the old dot; only the animation says egg.
@@ -210,6 +220,7 @@ const MONSTER_ANIM: Dictionary = {
 		MON_ATTACK: {"path": "res://assets/monster/hen_throw.png", "frames": 8, "hold": 4, "loop": false},
 		MON_HURT: {"path": "res://assets/monster/hen_hurt.png", "frames": 4, "hold": 3, "loop": false},
 		MON_DEATH: {"path": "res://assets/monster/hen_death.png", "frames": 8, "hold": 4, "loop": false},
+		MON_AIRBORNE: {"path": "res://assets/monster/hen_jump.png", "frames": 3, "hold": 4, "loop": false},
 	},
 	MonsterDefs.KIND_BULL: {
 		MON_IDLE: {"path": "res://assets/monster/bull_idle.png", "frames": 5, "hold": 8, "loop": true},
@@ -240,6 +251,7 @@ const MONSTER_ANIM: Dictionary = {
 		MON_ATTACK: {"path": "res://assets/monster/wolf_lunge.png", "frames": 8, "hold": 3, "loop": false},
 		MON_HURT: {"path": "res://assets/monster/wolf_hurt.png", "frames": 4, "hold": 3, "loop": false},
 		MON_DEATH: {"path": "res://assets/monster/wolf_death.png", "frames": 8, "hold": 4, "loop": false},
+		MON_AIRBORNE: {"path": "res://assets/monster/wolf_jump.png", "frames": 3, "hold": 4, "loop": false},
 	},
 }
 
@@ -671,6 +683,37 @@ const RARITY_TINT: Dictionary = {
 const RARITY_RING_RATIO := 1.3
 const RARITY_RING_PX := 1.5
 
+## **The socket glyph art** (`triangle-circle-to-game.md` step 6) — glyph id -> path, drawn only inside a
+##  **socket band** (`circle_window._draw_ring` only reaches this map when the band owns more than one
+##  edge — a concentric band, the round circle's own shape, never does). The palette and the round circle's
+##  own ring slot are untouched by this map; they keep drawing the procedural shape (`_draw_glyph`) —
+##  "the palette's blast must not look different from the placed blast" is an argument about the **round**
+##  circle's slot, and it still holds there. The socket band is a different seat, allowed to look different
+##  from the palette on purpose.
+##
+## **"2/17" (`circle-rune-glyph.md`'s own "Implemented" line: "glyphs 2/17 (spread · blast)") counts by
+##  family, not by id** — the 17 is that doc's whole planned glyph roster (`circle-art.md`: "with spread and
+##  blast to draw, that is four images [2 families x 2 circle-size sets]. Open all 17 and it is 34" — the
+##  multiplier there is circle-size, not rarity), and only two families are drawn. **One family = one image,
+##  shared across its three rarity rows** — checked, not assumed: `levelup-and-three-picks.md`'s own decision
+##  ("Rarity must separate by color") and this file's existing `GLYPH_TINT` (one color per family, all three
+##  rarities) and `RARITY_TINT` (the ring is the *only* rarity-carrying device) already hold this exact rule
+##  for the procedural shape; a texture per rarity would add a shape axis that rule was written to prevent.
+##  The two `.png` files themselves carry this too — `socket_glyph_spread.png`/`socket_glyph_blast.png`,
+##  named by family, no rarity suffix.
+## **A glyph missing here is not an error** — `_draw_ring` falls back to the procedural symbol, which is
+##  what keeps a socket circle drawable at all before the remaining families get art (`circle-art.md`,
+##  "Unresolved"). Falling back to nothing would be this repo's signature fake (CLAUDE.md: "screen changes
+##  but sim doesn't" — the model already knows a glyph sits there, and the screen would have to hide it).
+const SOCKET_GLYPH_TEX: Dictionary = {
+	Glyph.SPREAD_C: "res://assets/circle/socket_glyph_spread.png",
+	Glyph.SPREAD_R: "res://assets/circle/socket_glyph_spread.png",
+	Glyph.SPREAD_U: "res://assets/circle/socket_glyph_spread.png",
+	Glyph.BLAST_C: "res://assets/circle/socket_glyph_blast.png",
+	Glyph.BLAST_R: "res://assets/circle/socket_glyph_blast.png",
+	Glyph.BLAST_U: "res://assets/circle/socket_glyph_blast.png",
+}
+
 ## **The screen's share of "you cannot fire right now".** With the rune slot empty the staff tip **dies to gray.**
 ##  The staff tip is **the only place always visible without opening the assembly window**, so this is what stops
 ##  the user from **reading a left-click that does nothing as a breakage** (design "failing after firing reads as a breakage").
@@ -805,14 +848,17 @@ const RARITY_NAME: Dictionary = {
 	0: "일반", 1: "희귀", 2: "유니크",
 }
 
-## **The dummy marking's screen half** (Stage A closed the name half — `glyph_defs.DEFS`'s "더미" — and
-##  left this to Stage D). A small hollow diamond, the same silhouette `circle_window._draw_glyph` uses for
-##  `KIND_MODIFY` in the assembly window, so "this shape means dummy" reads the same on both screens.
-##  **Not a shared function** — `CanvasItem.draw_*` calls only work inside the calling node's own `_draw()`,
-##  so the two screens each draw their own copy of the same simple geometry; what is shared is the
-##  **silhouette and the color** (`GLYPH_TINT`'s dummy entry), not a function.
-const PICK_DUMMY_MARK_RATIO := 0.35
-const PICK_DUMMY_MARK_PX := 2.0
+## **The card's own glyph picture — the empty middle third of the card, between the rarity line and the
+##  effect sentence** (the user, looking at the real screen: "문양링이나 이런 게 떴을 때 이게 문양 모양이 같이
+##  뜨게 해줘, 일단"). Before this a card was name + rarity word + one sentence with nothing pictorial at all —
+##  the dummy's small hollow-diamond mark used to be the only shape any card ever drew, and only for `KIND_
+##  MODIFY`. That special case is gone now: every id gets the same picture (`three_pick_window._draw_pick_
+##  card_glyph` — texture where `SOCKET_GLYPH_TEX` has art, the same procedural shape `_draw_pick_glyph_
+##  shape`/`circle_window._draw_glyph` already draw otherwise) plus the rarity ring, so drawing two
+##  overlapping diamonds for a dummy card never happens.
+## **Not measured on screen** — sized for the real window (864x372, 3 cards ≈ 272x286 each, `Fx.PICK_RECT`);
+##  `_draw_card` clamps it down for a narrower card rather than trusting this number alone.
+const PICK_CARD_GLYPH_R_PX := 44.0
 
 ## Decline is always available — **`can_place_glyph`'s "removing is always allowed" idiom, one level up.**
 const PICK_DECLINE_TEXT := "취소"
@@ -869,7 +915,7 @@ const BOOK_FOLD := Color(0.03, 0.035, 0.055, 1.0)
 
 # --- the assembly window — the magic circle art ---------------------
 ## **They are all ratios.** Hardcode pixels and the day the window size changes the art goes outside the window.
-##  The layer ring radii come out **divided by the layer count** (`circle_layout.layer_rings`) — only the
+##  The layer ring radii come out **divided by the layer count** (`circle_layout.layer_bands`) — only the
 ##   **outer end** the rings occupy is here. Put a constant per ring and they overlap the day a 3-layer circle arrives.
 const CIRCLE_AREA_PAD_PX := 14.0
 const CIRCLE_DISC_RATIO := 0.94
@@ -879,6 +925,23 @@ const CIRCLE_GLYPH_RATIO := 0.115
 ## The rune slot's inner core. It is "a wick burning white", so it must be smaller than the outer glow
 ##  (the same idiom as the muzzle and the flash).
 const CIRCLE_RUNE_CORE_RATIO := 0.45
+
+## **The triangle circle's geometry — integers on a 512 basis, not pre-divided ratios**
+##  (`docs/design/circle-art.md` "the triangle circle's settled parameters", divided by 512 to land here;
+##  the same numbers also live in `tools/pixel/draw_circle.py:128`, the asset side — see that file's own
+##  comment and `docs/plans/3.done/triangle-circle-to-game.md` "TBD" for why there are two copies).
+## **Integers so the two equations stay readable and drivable**: `TRI_SOCKET_DIST + TRI_SOCKET_R == TRI_CANVAS_R`
+##  and `TRI_SOCKET_R*2 == 288` (a ratio would hide that identity behind rounding).
+const TRI_CANVAS_R := 512
+const TRI_SOCKET_DIST := 368   ## center -> socket center
+const TRI_SOCKET_R := 144      ## socket radius (diameter 288 — the socket glyph ring's own measured size)
+const TRI_BAND := 48           ## the socket's clickable/drawn band thickness (the layer axis's seat here)
+const TRI_RING := 420          ## the wrapping ring's radius — **not** the full frame; the sockets punch through it
+const TRI_CENTER_R := 112      ## the center ornament's outer radius. **Not a glyph seat** — see `circle_window.gd`
+const TRI_LINK_HALF := 26      ## half-width of the link band drawn between socket centers
+## 12 · 4 · 8 o'clock, straight out of `draw_circle.py:128`. **Seat 0 (12 o'clock) is the only clue the
+##  picture gives for "this one goes first"** (the design doc's clockwise-order question).
+const TRI_SOCKET_DEG: Array[float] = [-90.0, 30.0, 150.0]
 
 ## The circle's border — the rim of the vessel. It must be **darker and thicker** than the layer rings to read as "a frame".
 const CIRCLE_FRAME := Color(0.38, 0.45, 0.62, 0.85)
@@ -1222,11 +1285,19 @@ const ELEM_FX_MISSING: Dictionary = {
 ##  diverge and a rune appears with a color but no art, and that shows up as magenta (`spell_view` below).
 ##
 ## **The art has only the head. The tail is drawn by code** (`spell_view._draw_trail`).
-##  The grounds are speed — the bolt goes 1600px/s, so **26.7px per frame**, and the art's tail (16px) is
-##  shorter than that, so it is **entirely buried in the trail while moving.** And fire droops while the art's
-##  tail is straight, so **it diverges from the parabola.** The reference is "the bolt head art" in
-##  `docs/design/circle-rune-glyph.md`.
-##  **Drop `speed` below 12 and those grounds invert** — then the art's tail starts to be visible.
+##  **Half of the original grounds is now dead, and it is the half that used to be quoted.** It read: the bolt
+##  goes 1,600px/s = **26.7px per frame** while the art's tail is 16px, so the tail is entirely buried in the
+##  trail. Generation 0 is **960px/s = 16.0px per frame** today, and the head square is drawn `bolt_px x 2`
+##  = 16px (`spell_view._draw_head`), so a tail carried in the same sheet would be drawn 16px too — **exactly
+##  equal, not buried.** Generation 1 lands on the same 1.00 (8.0px/frame against an 8px square).
+##  **That equality is structural, not luck**: `net_tables._bolt_head_keeps_up` holds `px per frame <= head px`
+##  per generation, and both rows sit exactly on it, so **the "buried in the trail" argument can never come back
+##  while that check passes.** The old note here ("drop `speed` below 12 and the grounds invert") named a single
+##  number; the floor is **per generation**, scaled to that generation's own art, and gen 1 crossed it unnoticed
+##  at speed 8 (10.67px/frame against an 8px square).
+##  **What still holds is the other half**: fire droops while a painted tail is straight, so an art tail
+##  **diverges from the parabola** — speed-independent — and `trail_ticks` (12 ticks) is far longer than any
+##  tail that would fit in the sheet. The reference is "the bolt head art" in `docs/design/circle-rune-glyph.md`.
 ##
 ## **It is a png with no alpha. That is still right** — `spell_view` is additive so black pixels add to 0,
 ##  i.e. **the black background acts as transparency.** Turned around, **dark colors do not appear on screen** —
@@ -1286,13 +1357,24 @@ static func _gen_row(gen: int) -> int:
 ## ⇒ Now a net can build a circle with no circle socketed and call this, and **the wrapper's stderr check is
 ##  what fails** if the bark ever comes back. Nothing here needs to assert "it did not bark".
 ##
-## **`element()` is asked only when it can fire.** On the other branch `staff_tint` returns `DEAD_TINT` without
-##  ever reading the element, so passing `RUNE_EMPTY` there changes no colour — it just stops asking a question
-##  the circle has said it cannot answer.
+## **`element()`/`packed_glyphs()` is asked only when it can fire.** On the other branch `staff_tint` returns
+##  `DEAD_TINT` without ever reading either, so passing `GLYPH_NONE`/`RUNE_EMPTY` there changes no colour —
+##  it just stops asking a question the circle has said it cannot answer.
+##
+## **Reads `shots()[0]`, not `element()` paired with `packed_glyphs()`** (verify-read found the pairing was a
+## splice across sockets, not a real spell). `element()` answers socket 0's rune; `packed_glyphs()` answers
+## the **whole circle's** glyph list, densely packed from *whichever* socket has one first — on a triangle
+## circle those can be two different sockets (socket 0 fire with no glyph, socket 1 water with blast: the old
+## code showed **fire's rune paired with blast's colour**, a bolt no `shots()` entry ever actually fires;
+## bolt 0 goes out fire-alone, bolt 1 goes out water+blast). `shots()[0]` is always socket 0's **own**
+## element and glyph together — the same real, self-consistent combination that actually leaves first
+## (12 o'clock, `shots()`'s own header). For the round circle `shots()[0]` **is** `{element(), packed_glyphs()}`
+## unchanged (`PIC_TRIANGLE` never reaches the branch that would differ), so this is byte-identical there.
 static func staff_ring_tint(circle: SpellCircle) -> Color:
-	var can_fire := circle.can_fire()
-	return staff_tint(circle.packed_glyphs(),
-		circle.element() if can_fire else SpellCircle.RUNE_EMPTY, can_fire)
+	if not circle.can_fire():
+		return staff_tint(Glyph.GLYPH_NONE, SpellCircle.RUNE_EMPTY, false)
+	var first: Dictionary = circle.shots()[0]
+	return staff_tint(int(first["glyphs"]), int(first["element"]), true)
 
 
 static func staff_tint(glyphs: int, element: int, can_fire: bool) -> Color:
@@ -1483,7 +1565,7 @@ const RESEARCH_INK := Color(0.24, 0.19, 0.14, 1.0)
 const RESEARCH_INK_DIM := Color(0.24, 0.19, 0.14, 0.62)
 ## **The footer says what the bench cannot do.** `town.md` says the town explains nothing, and this is not an
 ##  explanation — it is the state of the bench, and leaving it unsaid would make an inert list look broken.
-const RESEARCH_FOOTER := "재료로 푸는 해금은 아직 없다 · [E] 닫기"
+const RESEARCH_FOOTER := "원석으로 푸는 해금은 아직 없다 · [E] 닫기"
 const RESEARCH_LOCKED_TEXT := "잠김"
 ## The currency line. **원석** — `docs/decisions/gems-from-bosses-and-levels.md` named it.
 const RESEARCH_GEMS_FMT := "원석 %d"
@@ -1492,3 +1574,57 @@ const RESEARCH_GEMS_FMT := "원석 %d"
 ##  the screen because it is a workbench you arrange things on; this is a list you read, and a list stretched
 ##  across 864px puts four short lines in a field of parchment. Centred on the 960x540 viewport.
 const RESEARCH_RECT := Rect2(240, 70, 480, 400)
+
+# --- the run-end settlement screen (`docs/plans/3.done/run-end-settlement.md`) ---
+## **The whole 960x540 canvas, not a partial window.** Every other window in this file (`WINDOW_RECT`,
+##  `PICK_RECT`, `RESEARCH_RECT`) leaves the world visible on purpose — this is the doc's own declared
+##  exception: "the world is not visible behind it and the sim stops — the run is over, so there is nothing
+##  left to watch". `circle_window.gd`'s own header names why no other screen may do this while a run is live.
+const SETTLEMENT_RECT := Rect2(0, 0, 960, 540)
+
+## Opaque, the same reasoning `WINDOW_BG`'s own comment gives for every other window here — and doubly so once
+##  the world genuinely is gone rather than merely covered.
+const SETTLEMENT_BG := Color(0.05, 0.055, 0.085, 1.0)
+const SETTLEMENT_EDGE := Color(0.62, 0.5, 0.35, 0.9)
+const SETTLEMENT_EDGE_PX := 2.0
+const SETTLEMENT_PAD_PX := 48.0
+
+const SETTLEMENT_TITLE := "런 종료"
+## **The gate's own title** (`docs/plans/3.done/gate-ending-to-game.md`, Stage D) — a death and a clear must
+##  not read identically on the one screen this whole feature exists to produce. **Provisional value, decided
+##  by the user to build with**: `"런 클리어"`. Changing it later is this one constant; nothing downstream
+##  reads the string itself (`settlement_window._draw` only branches on the `cleared` bool).
+const SETTLEMENT_TITLE_CLEAR := "런 클리어"
+const SETTLEMENT_TITLE_COLOR := Color(0.86, 0.90, 0.98)
+const SETTLEMENT_TITLE_SIZE := 30
+
+## **Only 원석 moves — the doc's own words.** Time and damage are printed once and never touched again;
+##  these two colors are shared by every row's label/value so a future row cannot quietly pick its own palette.
+const SETTLEMENT_ROW_LABEL_COLOR := Color(0.72, 0.76, 0.86)
+const SETTLEMENT_ROW_VALUE_COLOR := Color(0.92, 0.94, 1.0)
+const SETTLEMENT_ROW_SIZE := 20
+
+const SETTLEMENT_TIME_LABEL := "플레이 시간"
+const SETTLEMENT_DAMAGE_LABEL := "준 피해"
+const SETTLEMENT_GEMS_LABEL := "원석"
+
+## **The 원석 icon is `RESEARCH_ICONS["material"]` reused, not a sixth entry** — it was drawn white-on-
+##  transparent for exactly this reuse (`RESEARCH_ICONS`'s own header). Tinted light here, not the dark
+##  `RESEARCH_ICON_COLOR` — that tint was chosen against the research window's bright parchment; this screen's
+##  background is dark, the same reasoning `SETTLEMENT_ROW_VALUE_COLOR` above already follows.
+const SETTLEMENT_ICON_PX := 24.0
+const SETTLEMENT_ICON_COLOR := Color(0.92, 0.94, 1.0)
+
+const SETTLEMENT_BUTTON_TEXT := "마을로"
+## **A distinct warm fill, not `SETTLEMENT_BG` again** (verify-read's own finding — the button used to be told
+##  apart only by its 2px edge, against a background it was otherwise identical to). Warm against the panel's
+##  cool dark blue-black, the same "far apart from what it sits on" rule this file's other colors already
+##  follow (`RESEARCH_ICON_COLOR`'s own comment) — this is the one thing on the screen meant to be pressed.
+const SETTLEMENT_BUTTON_BG := Color(0.16, 0.13, 0.08, 1.0)
+const SETTLEMENT_BUTTON_EDGE := Color(0.85, 0.68, 0.35, 1.0)
+const SETTLEMENT_BUTTON_TEXT_COLOR := Color(0.92, 0.94, 1.0)
+
+## **The count-up's whole rate, in frames per point** — the doc's own "the count-up is the whole animation".
+##  Read only by `settlement_layout.count_value`, so this is the one place to slow or speed it once it is seen
+##  on screen (verify-look's own job — "does the count-up read as counting, the rate, not the endpoints").
+const SETTLEMENT_COUNT_FRAMES_PER_POINT := 3

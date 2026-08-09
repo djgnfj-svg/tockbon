@@ -24,6 +24,13 @@ const Progress := preload("res://src/actor/progress.gd")
 ## `stage1-bosses.md` Stage C - only `BossAi.carve_r` is read here (the charge impact's radius). The boss
 ## pattern machine itself stays owned by `monster.gd`/`boss_ai.gd`; this file only reacts to its outcome.
 const BossAi := preload("res://src/actor/boss_ai.gd")
+## `docs/plans/3.done/monster-placement-stage1.md`, Stages A+B. Resolves `(tx, kind)` rows to real
+## monsters as the player nears them. `src/actor/` only — the table itself lives in `src/stage/` and is
+## handed down through `set_placement()`, never preloaded from here (`net_layers`).
+const MonsterPlacement := preload("res://src/actor/monster_placement.gd")
+## `monster-ai-jump-and-separation.md`, Stage C — phase 1 (pure) of the two-phase split that function's own
+## header names as the whole of the order-independence argument.
+const MonsterSeparation := preload("res://src/actor/monster_separation.gd")
 
 ## **Pig contact damage** (`monsters-minimum`, "behavior (6)"). The arithmetic: invulnerability 4 ticks => the
 ##  real interval is 5 ticks (`character.on_tick` recorded "5-tick spacing = two hits") = 0.25s => 4 times per
@@ -63,6 +70,11 @@ var _monsters: Array[Monster] = []
 ## `reset()` does not revert this value — reuse an id and "number 37 died" stops being unique within the
 ##  session and the diagnostics get blurry. There is no reason to revert it (the view does not hold ids).
 var _next_monster_id := 1
+
+## **Owned here, not by the shell** — same reason as `_monsters` above. `set_placement()` is the shell's
+## only door into it (the "which room" table), and `wake_scan()`/`on_monster_died()` below are this
+## file's own doors, called from inside `frame()`'s tick branch and the death loop respectively.
+var _placement := MonsterPlacement.new()
 
 ## **The death notification — this is the view's only way to know "who died this time".** A dead monster is
 ##  removed from `_monsters` immediately (doc, "behavior (10)" — monsters disappear, they do not go down like
@@ -135,6 +147,9 @@ func frame(dt: float, axis: float, jump: bool, jump_held: bool) -> bool:
 	_phase += 1
 	if _phase >= Tuning.TICK_DIVIDER:
 		_phase = 0
+		# **The settlement screen's play-time clock** (`run-end-settlement.md`, Stage A) - once per 20Hz
+		#  tick, not once per 60Hz frame, or play time would read 3x actual.
+		_progress.advance_tick()
 		# The death notification is cleared at the start of the tick — the same place as the blast
 		#  notification (the start of `spell.step()`).
 		_died_x.clear()
@@ -188,6 +203,10 @@ func frame(dt: float, axis: float, jump: bool, jump_held: bool) -> bool:
 			#  the rooster's landing terrain effect is `stage1-bosses.md`'s own open TBD, not built here).
 			var was_leap_landed := m.leap_landed_now()
 			m.on_tick(_spell, boss_target_x, boss_target_y)
+			# **The settlement screen's damage figure** (`run-end-settlement.md`, Stage A) - drained here, once per
+			#  tick, right after on_tick(). A monster that dies is removed later this same pass and never reaches
+			#  the 60Hz step() loop again, so draining anywhere else would lose the killing blow.
+			_progress.add_damage(m.take_dealt())
 			if was_charging_blocked:
 				_carve_charge_impact(m)
 			if was_leap_landed and m.kind == MonsterDefs.KIND_BULL:
@@ -200,6 +219,10 @@ func frame(dt: float, axis: float, jump: bool, jump_held: bool) -> bool:
 			_died_x.append(dying.x)
 			_died_y.append(dying.y)
 			_died_kind.append(dying.kind)
+			# `docs/plans/3.done/monster-placement-stage1.md` Stage B — spends the row so a cleared
+			#  stretch stays cleared. **Not every dead monster came from a row** (the debug-key spawns
+			#  have none) — `on_monster_died`'s own `Dictionary.has()` guard makes a miss silent.
+			_placement.on_monster_died(dying.id)
 			# **Awarded in the same one place `_died_*` is built** — the plan's own instruction. `dead` holds
 			#  exactly the monsters that crossed `hp <= 0` *this* tick, and each is removed from `_monsters`
 			#  in this same pass, so this line runs **once per death, never once per tick a corpse sits at 0 hp.**
@@ -211,9 +234,11 @@ func frame(dt: float, axis: float, jump: bool, jump_held: bool) -> bool:
 			#  exact tick death happens, not a tick later. **Only bosses** (`BossAi.has_pattern`) — a trash mob
 			#  has no reward to gate anything on, and setting this for one would leave a dict entry nothing
 			#  would ever clear (no debug key targets a kind that isn't a boss).
-			# **This same gate fires for the rooster too** (`KIND_ROOSTER` also has a pattern) — but no water
-			#  is wired to it anywhere yet. `stage.gd._room1_reward_status()` has the full account of that gap;
-			#  a rooster kill correctly flips `boss_died`/`is_reward_pending`, and nothing downstream acts on it.
+			# **This same gate fires for the rooster too** (`KIND_ROOSTER` also has a pattern). No reward
+			#  water is wired to it (`stage.gd._room1_reward_status()` has the full account of that gap), but
+			#  `boss_died(KIND_ROOSTER)` itself is no longer unread: `stage.gd`'s `_on_ticked()` wall latch,
+			#  `gate_view._process()`'s `visible`, and `_sync_settlement()`'s `at_gate` term all read it now
+			#  (`docs/plans/3.done/gate-ending-to-game.md`).
 			if BossAi.has_pattern(dying.kind):
 				_progress.set_boss_reward_pending(dying.kind)
 				# **The permanent drop, on the same event and by the same gate**
@@ -224,6 +249,60 @@ func frame(dt: float, axis: float, jump: bool, jump_held: bool) -> bool:
 				#  is the only place a level is ever crossed.
 				_progress.add_boss_gems()
 			_monsters.remove_at(idx)
+		# `docs/plans/3.done/monster-placement-stage1.md` Stage B — the wake scan. **After the death
+		#  removals above**, so a slot a death just freed can be reused by a row waking the same tick, and
+		#  **before `_char_hit_by_monsters()` below**, so a mob that wakes overlapping the player deals
+		#  contact damage on the same frame it appears (the doc's own Bounds: "a mob wakes inside the
+		#  player: contact damage on the wake frame"). **On the tick, not the 60Hz loop** — `boss_target_x`
+		#  above is this tick's own snapshot, the same one the pattern machine just used.
+		_placement.wake_scan(_grid, boss_target_x, Callable(self, &"spawn_monster"))
+		# `docs/plans/3.done/monster-placement-stage1.md` Stage D — every live monster's own sleep state,
+		#  once per tick. **After `wake_scan`**, so a monster that just woke this tick gets classified too
+		#  (it was necessarily within `WAKE_PX`, so this immediately reads `asleep = false` — not a wasted
+		#  pass). **Distance from the monster's own current position**, not the placement row's rest `tx` —
+		#  it may have walked since spawning. `MonsterPlacement.stays_active` is the same hysteresis
+		#  `wake_scan`'s own `_primed` bit already uses — one band, two audiences, not two copies of the
+		#  arithmetic.
+		#
+		#  **Two exclusions, both measured as necessary, not assumed:**
+		#  · **Only a monster `_placement` actually placed** (`has_row_for`) — a debug-key spawn (M/N/B/C/V)
+		#    or anything created by calling `spawn_monster()` directly (every existing test/tool in this
+		#    repo, before this plan) has no "36 rows under a cap of 20" problem, which is the only reason
+		#    sleep exists (§4). Making sleep a bare function of distance for *every* monster broke every
+		#    net that stations a character far from such a monster for its own reasons — measured:
+		#    `net_monster`'s own jump checks (it never even started walking) and, before the next
+		#    exclusion was found, every boss pattern net too.
+		#  · **Bosses never sleep** (`BossAi.has_pattern`) — even a *placed* one. Room ①'s own floor is 30
+		#    tiles (960px) wide, past `SLEEP_PX`(840) end to end, so a mid-fight retreat to the far side of
+		#    its own room would otherwise freeze the pattern machine mid-charge or mid-leap — measured on
+		#    `net_monster_charge`/`_slam`/`_breath`, which deliberately park the character 3,000-5,000px
+		#    away for runway and went fully inert the moment sleep applied to bosses too. The cap already
+		#    holds a boss to one regardless (`stage1-bosses.md`'s own Cost section), so sleep buys nothing
+		#    there in exchange for that risk.
+		for m: Monster in _monsters:
+			if BossAi.has_pattern(m.kind) or not _placement.has_row_for(m.id):
+				continue
+			var dist := absf(float(boss_target_x) - m.center().x)
+			var should_sleep := not MonsterPlacement.stays_active(not m.asleep, dist)
+			# **A mob mid-jump does not fall asleep** (`monster-ai-jump-and-separation.md`, verify-read's
+			#  own finding, item 5). `Monster.step()`'s asleep-gate skips refreshing `on_ground` entirely —
+			#  that skip is where most of sleep's cost saving comes from — so a monster that crossed
+			#  `SLEEP_PX` mid-air would freeze there forever: `on_ground` stuck `false`, the screen stuck on
+			#  `MON_AIRBORNE` (`monster_view.resolve_state`). **Plausible, not exotic**: a walled-off pig
+			#  jumps repeatedly forever by design (the plan's own Bounds — "trapped, and visibly trying"),
+			#  and a player digging a pit trap and walking away to fight elsewhere is an ordinary sequence.
+			#
+			#  **`consume_grounded_recently()`, not a bare `m.on_ground` read** — measured, not assumed: a
+			#  walled-off pig's jump cycle here is 27 frames, an exact multiple of `Tuning.TICK_DIVIDER`(3),
+			#  so the single landing frame lands on the *same* tick phase every cycle, and this once-per-tick
+			#  read would see the still-airborne value forever — 120 straight frames, zero hits, no matter
+			#  how long polled. `consume_grounded_recently()` ORs every 60Hz frame's `on_ground` since the
+			#  last tick (`Monster._grounded_recently`'s own comment), closing exactly that aliasing gap.
+			#  **Costs nothing new** — no added `grounded()` sweep, only a boolean already being computed.
+			#  Delays sleep by at most a few ticks for a perpetually-jumping mob, never blocks it forever.
+			if should_sleep and not m.consume_grounded_recently():
+				continue
+			m.asleep = should_sleep
 		# (6) **Was the player hit by a monster or a bolt — it must be after **both** `_char.on_tick` and the
 		#  monster on_tick** (doc, "behavior (9)"). Put it earlier and a monster dying on that tick gets one
 		#  more hit in.
@@ -259,6 +338,36 @@ func frame(dt: float, axis: float, jump: bool, jump_held: bool) -> bool:
 				bolt_kind = MonsterBolts.KIND_FIRE
 			if _bolts.spawn(m.center().x, m.center().y, dir, bolt_kind):
 				m.consume_fire()
+	# **Stage C — separation** (`monster-ai-jump-and-separation.md`). 60Hz, right after the walking loop
+	#  above, not the 20Hz tick branch — an overlap created by *this frame's* walking is resolved the same
+	#  frame it appears, rather than leaving up to two frames of visible stacking (the plan's own reasoning:
+	#  "the symptom the user named"). **Phase 1 (pure, over a snapshot) then phase 2 (apply, per-mob
+	#  `box_free`)** — the split `monster_separation.gd`'s own header names as the whole order-independence
+	#  argument: phase 2's refusal depends only on that one mob's own corrected box, never on any other mob
+	#  or on iteration order, so applying the phase-1 result in any order gives the same outcome.
+	# **Sleeping monsters are excluded, on both sides** (`docs/plans/3.done/monster-placement-stage1.md`
+	#  Stage D — the judgment call the plan left to this builder). Separation is a form of movement, and
+	#  the sleep contract is "no movement while asleep" (`Monster.step()`'s own gate, above) — nudging a
+	#  sleeping mob's `x` here would be a second, uncontrolled way to move one, and would break "the pig
+	#  stays in the pit you dropped it into" the instant an awake mob wandered close enough to overlap it.
+	#  Not being a **push source** either is the same rule the other way — an awake mob should not get
+	#  shoved off a sleeping one's fixed position by a force that only exists because the sleeping mob
+	#  happens to still be standing where it fell.
+	if _monsters.size() > 1:
+		var awake_idx: Array[int] = []
+		var xs: Array[int] = []
+		var ws: Array[int] = []
+		for i in _monsters.size():
+			var m: Monster = _monsters[i]
+			if m.asleep:
+				continue
+			awake_idx.append(i)
+			xs.append(m.x)
+			ws.append(MonsterDefs.w_px(m.kind))
+		if xs.size() > 1:
+			var dxs := MonsterSeparation.corrections(xs, ws)
+			for k in awake_idx.size():
+				_monsters[awake_idx[k]].try_shift_x(_grid, dxs[k])
 	return ticked
 
 
@@ -373,20 +482,29 @@ func _ignite_slam_impact(m: Monster) -> void:
 		_grid.apply(CellGrid.cmd_ignite(center_cx + offset_cells, floor_cy, r))
 
 
-## Seats it as a command to be applied on the next tick. **The tick number comes from the grid** — let the
-##  caller count and there are two clocks, and then commands appear that "went in and never come out".
+## Seats it as a command to be applied on the next tick, or `delay` ticks further out. **The tick number
+##  comes from the grid** — let the caller count and there are two clocks, and then commands appear that
+##  "went in and never come out".
+##
+## **`delay`'s first caller is the triangle circle's sequential firing** (`triangle-circle-to-game.md` step 5,
+##  `SpellCircle.shots()`) — socket `i` enqueues with `delay = i * seq_ticks`, so later shots land on later
+##  ticks instead of all draining on the tick the click happened. `delay := 0` keeps every existing caller
+##  (the round circle, water, everything else that calls this) landing on `tick + 1` exactly as before.
 ##
 ## **It goes through the same door as `frame()`.** Leave only this one open and a broken world becomes "the
 ##  frame stops politely but only the left click explodes", and that is the rule having two copies.
-func enqueue(cmd: Dictionary) -> void:
+func enqueue(cmd: Dictionary, delay: int = 0) -> void:
 	if _broken:
 		return
-	_queue.append({"tick": _grid.get_tick() + 1, "cmd": cmd})
+	_queue.append({"tick": _grid.get_tick() + 1 + delay, "cmd": cmd})
 
 
-## **The `keep` branch has no consumer right now** — `enqueue` always attaches `tick + 1` and `target` is the
-##  same, so everything drains on this tick. It is a seam for multiplayer (where the server sends future-tick
-##  commands), and until then, read it knowing it is **a dead branch.**
+## **The `keep` branch's first consumer: the triangle circle's sequential shots** (`triangle-circle-to-game.md`
+##  step 5). Before `enqueue()` took a `delay`, every command landed on `tick + 1` and `target` was always
+##  that same tick, so nothing here was ever kept — it was a seam for multiplayer (future-tick commands from
+##  the server) with no one using it. A delayed shot's own `tick` now sits beyond `target` on the ticks
+##  before its turn, and this branch is what holds it there instead of draining all three shots at once
+##  on the tick the click happened.
 func _drain_queue() -> void:
 	if _queue.is_empty():
 		return
@@ -517,6 +635,19 @@ func reset() -> void:
 	# **Progress reverts here too, in this same one place** — not a separate call from `stage.gd`, or the day
 	#  comes when only one of the two reset paths gets touched and R quietly stops reverting it.
 	_progress.reset()
+	# `docs/plans/3.done/monster-placement-stage1.md` Stage B — re-arms every row (dormant, unspent),
+	#  the same "revert every counter" reasoning as the bolts above. Does not touch which table is set
+	#  (`set_placement()`'s own comment) — R must not un-place the room it just rebuilt.
+	_placement.reset()
+
+
+## `docs/plans/3.done/monster-placement-stage1.md` Stage C's wiring line calls this — from
+## `stage.gd._build_room()`, not `_ready()` (`net_gate._wired_root()` never runs `_ready()`, so a line
+## there would be invisible to every net in this repo; that file's own comment names the trap).
+## **Only ever answers "which room"** — re-arming rows to unspent is `reset()`'s job above, not this
+## one's, so calling this does not itself revert anything.
+func set_placement(rows: Array[Dictionary], floor_cy: int) -> void:
+	_placement.set_rows(rows, floor_cy)
 
 
 ## Read by the render interpolation. **The point is not making one more clock** — the moment the view
