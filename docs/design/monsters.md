@@ -9,15 +9,33 @@ sprites · health bars · hit flash (shader) · damage numbers (they merge) · f
 in the table below now has a state that draws it, from `fx_tuning.MONSTER_ANIM` (kind → state → sheet).
 Ten states, the boss patterns among them; walking's clock is the monster's own `x`, one-shots clamp on their
 last cell, and **a corpse is the death sheet played by its own age.**
-**Not done**: **AI** (`_next_axis()` is one line — see "AI is deferred; the slot is left open") ·
-per-species color · **anyone judging whether the motion looks right** (every `hold` value is a first guess).
+**They stand on the map now, and they react** — ~~AI is deferred~~ ~~placement belongs to the map side and is
+empty~~. **Trash mobs jump when blocked and push each other apart**
+([../plans/3.done/monster-ai-jump-and-separation.md](../plans/3.done/monster-ai-jump-and-separation.md)), and
+**stage 1's map carries a `(tile x, kind)` table, bosses included, asleep until you are near**
+([../plans/3.done/monster-placement-stage1.md](../plans/3.done/monster-placement-stage1.md)) ⇒ **launching the
+game and walking right now meets monsters, and reaches the ending, with no debug key.**
+**`_next_axis()` is still the one line** — the jump is a reaction to a move's result, not a choice of
+direction, so it lives in the movement half. See "AI is deferred; the slot is left open" for why that is not
+a violation.
+
+**Not done**: real pathing in that slot · per-species color · **anyone judging whether any of it looks
+right** — every `hold` value is a first guess, **and nothing above has been seen on screen.**
 
 | Kind | Sheets in `assets/monster/` |
 |---|---|
-| **Pig** (44x32) | `walk` 9f · **`idle` 4f · `shove` 8f · `hurt` 4f · `death` 8f** |
-| **Chicken** (24x28) | `walk` 9f · **`idle` 4f · `spit` 8f · `hurt` 4f · `death` 8f** |
+| **Pig** (44x32) | `walk` 9f · **`idle` 4f · `shove` 8f · `hurt` 4f · `death` 8f** · **`jump` 3f** |
+| **Chicken** (24x28) | `walk` 9f · **`idle` 4f · `spit` 8f · `hurt` 4f · `death` 8f** · **`jump` 3f** (on the 48x64 hen) |
+| **Wolf** (48x28) | `walk` 8f · `idle` 4f · `lunge` 8f · `hurt` 4f · `death` 8f · **`jump` 3f** |
 | Bull (boss) | body · walk · idle · charge · gore · slam · stun · fire · death · roar |
 | Rooster (boss) | body · walk · idle · leap · land · death · roar |
+
+**The three `jump` sheets are wired now** —
+[../plans/3.done/monster-ai-jump-and-separation.md](../plans/3.done/monster-ai-jump-and-separation.md) built
+the `MON_AIRBORNE` state that draws them, and **airborne outranks attacking** (the pigs' and wolves'
+"attacking" is a proximity condition, not an event, so ranking it higher would hide the jump entirely).
+~~art on disk wired to nothing~~ — **but still art nobody has watched move.** That plan
+records what `animate_image` refuses to do (lift feet off the bottom row) and the two-step workaround.
 
 **The bull's sheets were 86x54 against an 88x56 box and were padded, never scaled** —
 `tools/pixel/pad_sheet.py`, following this doc's own rule below ("pad, never resample"). `bull_roar.png` was
@@ -143,12 +161,24 @@ Stage 2 can have no flyer and a **burrower** (mole-like) instead.
 
 ---
 
-## Stage 1's trash mobs — two
+## Stage 1's trash mobs — **three** (the wolf was added by the user)
+
+**The user set stage 1's full roster in one line: 돼지 · 늑대 · 닭 as trash, 소 as midboss, 거대 수탉 as the
+stage boss.** ⇒ **The wolf is stage 1's**, closing the "it is not assigned to a stage" note that
+`monster_defs.KIND_WOLF` carries and the open question in
+[../plans/3.done/monster-placement-stage1.md](../plans/3.done/monster-placement-stage1.md)'s TBD.
+
+**The two-mob pairing below is still the reasoning that built the stage**, and the wolf does not replace
+either half of it — it is a third question (speed) on top of "terrain solves the pig, magic solves the hen".
+**Its values are all provisional and nobody has set them** (`monster_defs`' own note): 24 hp, 240px/s —
+faster and thinner than the pig, because the art is a lunging predator. **It has no lunge in the sim** —
+`wolf_lunge.png` plays on contact, the same door the pig's shove uses.
 
 | Mob | Role | How it comes | **What solves it** |
 |---|---|---|---|
 | **Pig** | Melee | Straight at the player. **Can't clear a ledge** | **Terrain** — dig a pit or raise a wall and it's trapped |
 | **Chicken** | **Ranged** (the user changed this) | Approaches, then **stops and shoots.** Hops a one- or two-cell ledge | **Magic** — it crosses and keeps distance, so you chase and clear it |
+| **Wolf** | **Fast melee** (added by the user) | Straight at the player, **1.5× the pig's speed and half its height** | **Reacting in time.** Thin and quick — the pig's answers work, but you get less of a moment to apply them |
 
 **What separates them is not "strength" but "the tool that solves them".**
 Pigs only and the game becomes a pit game; chickens only and there is no reason to dig terrain.
@@ -223,6 +253,14 @@ The user said "we'll probably need AI eventually, but leave it for later and cha
 > movement, gravity, terrain collision and damage are untouched.
 
 **Without this, adding AI later rewrites the monster code wholesale.**
+
+**The first trash-mob behaviour to arrive does not go in that slot, and that is not a violation. It has
+arrived** ([../plans/3.done/monster-ai-jump-and-separation.md](../plans/3.done/monster-ai-jump-and-separation.md)) —
+**jump when `move_x` reports blocked** is a *reaction to the result of moving*, so it cannot be computed
+before the move; it lives in the movement half of `step()`. `_next_axis()` stays the one line.
+**Its real product is a number, and that number now exists**: **1 tile lets a mob out, 2 tiles hold it**,
+with **3px of margin** measured. The user set the goal — "가두는 것도 조금 어렵게, 성공이 가능해야지" —
+and **whether 3px delivers it is a screen question nobody has answered.** The value lives in the plan.
 
 ### Making brainless mobs hard
 
@@ -315,6 +353,15 @@ This doc holds only **what a monster is and how it behaves.** **Actual placement
 ([terrain-baking.md](terrain-baking.md) — which currently contains not one instance of the word "monster".
 **A place for it must be made there**).
 
+**⇒ That place now exists and is built**:
+[../plans/3.done/monster-placement-stage1.md](../plans/3.done/monster-placement-stage1.md)
+— the `(tile x, kind)` table in `src/stage/stage1_monsters.gd`, the sleep model that lets its rows live under
+a cap of 20, and the XP arithmetic that has to produce a level-up before the bull. **The bosses are rows in
+that same table**, so the stage's ending is reachable by walking. Counts and coordinates live there; **do not
+copy them here.**
+**The wolf is assigned to stage 1** — decided by the user, so this doc's "Stage 1's trash mobs — two" is
+**three**: 돼지 · 늑대 · 닭.
+
 **This repo already knows what happens without that split.** The water design left exactly the same warning
 ("'where does water go on the map' is not this doc"), **and the accident happened anyway** —
 water was finished, the game launched, and not one cell of water appeared
@@ -323,6 +370,10 @@ water was finished, the game launched, and not one cell of water appeared
 **⇒ If monsters are implemented, the game launches and there isn't one, that is not a bug — it is the other side of this boundary being empty.**
 **The implementation plan must include "a path that stands at least one on the stage"** — `src/stage/` is the shell,
 outside the file-count contract, and `ignite` is the precedent.
+
+**That warning was earned twice.** The path exists now (`stage.gd._build_room()`), and building it the build
+**still found that deleting the wiring line left all 31 nets green** — the shell being outside the nets is the
+same hole in a different place. Detail in the plan.
 
 ---
 

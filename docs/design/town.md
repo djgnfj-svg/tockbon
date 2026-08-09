@@ -8,9 +8,10 @@ One bedrock room · three fixtures with their own sprites · **the position-chec
 builds stage 1 · dying sends you back · **the burnt-village backdrop** · **the research window** (panel,
 slot frames, the four unlock icons) · **원석 that survives a run**, from both doors (boss 3~4, level 1).
 **Not done**: the point budget · **any unlock, and therefore any way to spend 원석** · the assembly bench's
-own "choose what to equip" half (it opens the existing reorder window) · the run-end settlement screen
-([../plans/1.ready/run-end-settlement.md](../plans/1.ready/run-end-settlement.md) — today `E` while downed
-goes straight to the town, which that plan replaces)
+own "choose what to equip" half (it opens the existing reorder window)
+**Built since, screen unverified**: the run-end settlement screen
+([../plans/3.done/run-end-settlement.md](../plans/3.done/run-end-settlement.md)) — **`E` while downed no
+longer goes straight to the town**; the panel opens on its own and its button is the door. Nobody has looked at it
 **Accepted**: **unseen** — walked end to end by an agent in the editor, never by the user
 
 **A concept stays alive and never changes folders.** The two header lines are only "how much runs now" —
@@ -250,7 +251,7 @@ is **the bull's fire rune only.** The *start* is not a receiving problem — **i
 from this week** ⇒ until town exists, **code holds the fixed pair directly** (`spell_circle.DEFAULT_RUNE`).
 
 **End**: die or clear and **you go through the settlement screen first**, then return to town —
-[../plans/1.ready/run-end-settlement.md](../plans/1.ready/run-end-settlement.md). It opens the instant you
+[../plans/3.done/run-end-settlement.md](../plans/3.done/run-end-settlement.md). It opens the instant you
 go down, prints play time and damage dealt, and **counts 원석 up.** The button on it is what enters the town.
 **That doc names the currency this one calls "material": 원석.**
 
@@ -356,7 +357,7 @@ header records a white chicken on a white ground being walked straight through).
   The only thing to preserve is that **it must be met as a wall once**
 - **How many dice per run** · do unlocks raise the count · are more found in the dungeon
 - **The price of one unlock** — how many 원석. **Re-derive against 9–11 per run**, not the old 1–2
-- **Do death and clearing look different** — moved onto the settlement screen (`../plans/1.ready/run-end-settlement.md`)
+- **Do death and clearing look different** — moved onto the settlement screen (`../plans/3.done/run-end-settlement.md`)
 - **Saving.** 원석 is permanent and **nothing in `src/` writes a file** — no `user://`, no `FileAccess`.
   Research cannot outlive the process until this exists. No doc, no owner
 - **Leftover money** — left as vanishing, not final

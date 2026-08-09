@@ -1,6 +1,7 @@
 # Bolt speed — give the art time to be seen
 
-**Status**: ready
+**Status**: implemented · **screen unverified**. Code landed at **gen0 12 · gen1 6**; nobody has looked at it.
+Every item under "Acceptance" below is still open, because all of it is the screen.
 **One line**: bolts skip 26.6px per frame. A 16px sprite was drawn and **there is no chance to see it.**
 Lower the speed so the art shows — but how far is **decided on screen.**
 
@@ -79,14 +80,33 @@ candidate   gen0 12 · gen1 8       ratio 3:2, 16.0px · 10.6px per frame  ← e
 
 ---
 
-## Acceptance — what must be seen to call it done
+## What landed — **gen1 went to 6, not the 8 in the table above**
+
+**The candidate row `gen0 12 · gen1 8` was implemented and verification rejected the second half.**
+The rule this doc argued for is "movement per frame ≤ that generation's own head sprite width", and at speed 8
+gen1 still **crossed 1.33× its own body length** each frame. The sprites are not the same size per generation,
+so one ratio does not cover both. **⇒ gen0 20→12, gen1 12→6.** Both generations now sit at ratio 1.00.
+
+**The check that makes this measurable**: `_bolt_head_keeps_up` in `tests/nets/net_tables.gd`, which walks the
+inequality **per generation**. Before it existed, reverting the speeds to 20/12 left **all 5242 checks green** —
+the whole of this doc rested on nothing.
+
+Three nets had to be re-laid out because bolts now travel a shorter distance in the same time
+(`net_damage` · `net_monster` · `net_water`). `net_monster` went to a **diagonal-corner placement** — an x-axis
+crossing is now impossible in principle, and diagonal margin does not depend on box size, so growing the
+monsters later will not break it again. Dead code (`_hits_to_kill` in those three nets) was deleted, and five
+stale copies of the old numbers were corrected: `fx_tuning` (two), `monster_bolts.gd`, `stage.gd`, `GDD.md`.
+
+## Acceptance — **still open, none of it has been seen**
 
 **All of it is the screen. Nothing measurable headless remains in this doc.**
 
 1. **Is the bolt head's art visible in flight** — currently only the trail may be
 2. **Is it sluggish** — **directly at odds with #1.** Balancing those two is the whole of this work
 3. **Does the trajectory read as "an arc"** — it bends more. Reading as "no power" is a failure
-4. **Is the range frustrating** — at 45°, 24.1 → 12.8 tiles (at speed 12). Less than half the screen width
+4. **Is the range frustrating** — at 45°, 24.1 → 12.8 tiles (at speed 12). Less than half the screen width.
+   **And gen1 is at 6, half of what this line was written against** — the spread's 45° reach measured **4.8 tiles**
+   after the change. Whether that is a spell or a puff of air is the question nobody has answered
 5. **Is the shortened trail awkward**
 
 **#1 and #4 pull opposite ways, so one value may not satisfy both.**
@@ -110,7 +130,7 @@ And **none's saturation is 0.03**, so the problem of sharing a color axis with "
 
 ---
 
-## Why this doc hasn't opened yet — the screen couldn't be launched
+## Why the screen still hasn't been launched — twice tried, twice stopped
 
 **Tried twice, stopped twice. Both times because the user was using the computer.**
 

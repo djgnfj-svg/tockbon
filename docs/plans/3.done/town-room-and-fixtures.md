@@ -160,8 +160,8 @@ longer reading the pool · E never opening the window · the window surviving a 
   the shadow is one connected opaque component with the fixture (measured), so a component cut has nothing
   to separate and a darkness cut would eat the sprite's own linework. It needs a hand pass
 - **No research spending and no point budget** — see the table above. 원석 accrues and cannot be spent
-- **The run-end settlement screen** (`../1.ready/run-end-settlement.md`) — today `E` while downed goes
-  straight to the town and the run's 원석 is banked in silence. That plan replaces this door
+- ~~**The run-end settlement screen**~~ — **built** (`../3.done/run-end-settlement.md`). `E` while downed no
+  longer goes straight to the town; the panel opens on its own and its button is the door. **Screen unverified**
 - **No difference between dying and clearing** — `town.md`'s own TBD, and clearing does not exist yet
 - **E is a raw keycode, not an input-map action.** Interaction survives into the real game and by that rule
   belongs in `project.godot`; adding an action there needs an editor restart and the town is a skeleton being

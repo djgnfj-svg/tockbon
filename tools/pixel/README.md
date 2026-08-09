@@ -37,6 +37,18 @@ One `_sheet.png` comes out; pick from it and move the choice to `assets/`.
 exact-color match leaves a **green fringe**, and on the stage's `#0E0E13` that fringe is the brightest thing
 on screen. `cutbg.py` cuts by "green dominates" and then pulls the cast out of the surviving edge pixels.
 
+**`sigil` output takes a third path — `ink.py`.** A sigil is black line art on cream, and the shipped
+`assets/circle/socket_glyph_*.png` were measured to be **one flat colour `(26,24,22)` with the entire drawing
+in the alpha channel.** `ink.py` reproduces that: invert luminance into alpha, resample with LANCZOS (never
+k_centroid — the `sigil` preset carries `down: 0` because k_centroid's dominant-colour blocks eat thin lines).
+
+```powershell
+& $py tools\pixel\ink.py tools\pixel\out\ring2_spread_c\ring2_spread_c_02_seed920739551.png assets\circle\ring_spread.png 288
+```
+
+Neither `cutbg.py` (chroma green, monsters) nor `cut_white_bg.py` (flood from the border, UI panels) fits:
+a ring's **inner hole** is cream too and is not reachable from the border, so a flood leaves it opaque.
+
 ## Animation — **this is the one thing local cannot do**
 
 The original pipeline's walk LoRA is **for human characters**, so an animal walk cycle has no local path.
@@ -97,15 +109,24 @@ everything else is a shape drawn by code.
 
 | Bundle | What | Why now · what blocks it |
 |---|---|---|
-| **Blast** | 72x72 6-8 frames + 32x32 | `flash_px` 72/36 is **exactly 2x**, so **generating the small one and doubling it** covers both with one set. Downscaling breaks the pixels |
+| ~~**Blast**~~ | ~~72x72~~ | **Generated** — `assets/fx/blast_flash.png`, 72px, seed 1982300549. **Still one still frame, not the 6-8 the row asked for**: `blast_fx` already animates radius and alpha per frame, so a sheet needs a code change first |
 | **Impact / spread moment** | 64x64 4 frames | "8 blasts vs 1" has to read apart on screen (the GDD thesis) |
-| **Destruction debris / dust** | 16x16 4 frames | there is no presentation at all right now when a wall is punched through |
-| **Fire cell** | 16x16 4-6 frames | currently cell color plus a sine flicker |
-| **Backdrop layer** | 512x288 | behind a dug-out hole it is currently black |
-| **Floor pickups** (circle · rune · glyph scrolls) | 16x16 | the roguelike's "you gain something" is not on screen |
-| **Slot 1/2 frames · health bar frame** | — | the equip slots are not on screen at all |
+| ~~**Destruction debris / dust**~~ | ~~16x16~~ | **Generated** — `assets/fx/debris.png`, **32px** (a blast carves `rd` 2..8 cells x 4px, so 16 was too small), seed 1337920495 |
+| ~~**Fire cell**~~ | ~~16x16~~ | **Generated** — `assets/fx/fire_cell.png`, 16px, seed 885673263 |
+| ~~**Backdrop layer**~~ | ~~512x288~~ | **Shipped and wired** — `assets/stage/bg_*.png`, four of them (`docs/design/background.md`) |
+| ~~**Floor pickups**~~ | ~~16x16~~ | **Generated** — `assets/fx/pickup_scroll.png`, 16px, seed 854854407. **One scroll, not three**: circle/rune/glyph are told apart by what is drawn *on* the scroll, and those sigils now exist (`assets/circle/`) |
+| **Slot 1/2 frames · health bar frame** | — | `slot_row.png` already covers the slots, lock included. The bar frame is generated |
 | Extra character frames | being raised · wet · on fire | **the behavior does not exist yet** — there is no water sim and no co-op, so drawing them now has nowhere to go |
-| Monsters | — | the GDD left **kinds and behavior entirely undecided.** Generate now and it goes stale |
+| ~~Monsters~~ | — | **Done.** Five kinds, ten states each (`docs/design/monsters.md`) |
+
+**⚠ Everything in `assets/fx/` is generated and wired to nothing.** `blast_fx.gd` still draws additive circles,
+the fire cells are still `cell_grid.gdshader`'s colour-plus-sine, and **nothing in `src/` mentions debris or a
+pickup at all** — those two have no code to attach to, not even a wrong one. The art is ahead of the code on
+purpose (the user asked for it); **do not read the files' existence as a feature.**
+
+**They are `bolt`-preset assets, so they are additive-only.** Black is transparent for free and **dark colours
+do not appear at all** — that is why they look like glowing shapes on black rather than sprites. Draw them with
+`BLEND_MODE_ADD` or they arrive as black rectangles.
 
 **Terrain is not on this list, and it will never arrive as a "tileset".**
 Destruction happens **in 4px cell units**, so a hole dug by magic cuts across a 32px tile image => it must be

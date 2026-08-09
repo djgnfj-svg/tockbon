@@ -40,6 +40,11 @@ Confirmed by value only — **0 gaps** (was 11 cells) · fill time held at 12.0s
 2. **Current strength** — `WATER_PUSH_PX` 130 is **10–17% of walking.** Visible standing still, barely felt while walking
 3. **`g.step()` is 84ms/tick at the active-chunk cap** — **168% of budget (50ms).**
    It hasn't shown on screen yet (60 FPS) but **widening or speeding it up goes over.** Detail in `docs/design/water.md`, "Cost"
+4. **A pour in room ③ can make a cleared run impossible to end.** The gate landed while this doc sat
+   (`3.done/gate-ending-to-game.md`, its Risk 6): the ending seat's y band is 96px, **three tiles above the
+   floor line**. Fill the seat deeper than that and the player floats out of the band — the arch is there, the
+   clear is earned, and **nothing ends the run, with no error.** Room ③'s pour is this doc's, so the band is
+   a constraint on it. **The gate does not solve this and does not claim to**
 
 ### Why the current is 0 in the boss room — three candidates hit the same wall
 

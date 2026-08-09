@@ -1,8 +1,13 @@
 # Design-doc review — what runs first, and how the docs hold each other
 
 **Status**: ready — **review only, and the user has since closed every decision it was waiting on**
-**One line**: the milestone chain has **three gaps left** — the two bosses, the rune lock, an ending —
-and they must land in that order because **the lock cannot go in before the bull exists.**
+**One line**: ~~the milestone chain has **three gaps left** — the two bosses, the rune lock, an ending —
+and they must land in that order because **the lock cannot go in before the bull exists.**~~
+⇒ **All three landed in that order. The chain has no gap left in code — and it is now literally walkable**:
+`3.done/monster-placement-stage1.md` (written after this review) stands the mobs **and both bosses** on the
+map before you arrive, so nothing in the chain needs a debug key. What remains of the milestone is a
+playthrough (`docs/GDD.md` "First milestone"). **Landed is not accepted** — none of it has been seen on
+screen by the user. **This doc is now a record of the order, not a queue.**
 
 **Source**: `docs/GDD.md` "First milestone" (the chain and its gap table) ·
 [planning-review-fixes.md](planning-review-fixes.md) (items 3 · 5 · 6, still open).
@@ -22,11 +27,12 @@ The chain (GDD): `map → wood wall → pit ① → bull → fire rune → water
 |---|---|---|---|
 | ~~0~~ | ~~Look at water on screen~~ | **Dropped by the user.** Water took too long ⇒ **unlimited jumping underwater is all that is needed now**, and the pour · current · escape **get pulled back out and looked at when that work reopens.** The price: steps 2–4 build on an unaccepted base, and **the water part of the chain (rising water in ① and at the end) is unproven until then** | — |
 | ~~1~~ | ~~Decide who pours pit ①'s water~~ | **Decided by the user — take the reward, then the side wall collapses and water comes in.** `3.done/stage1-bosses` owns it now ("the way out of the pit"), and it lands as part of the bull. **Review item 3 is closed** | — |
-| **2** | **The two bosses** | `3.done/stage1-bosses`. **Zero code — `monster_defs.ALL` is still `[PIG, HEN]`.** The largest remaining piece, and steps 3–4 have nothing to attach to without the bull | large |
-| **3** | **The lock pair — ~~two~~ **three** changes, one landing** | **Planned** → [rune-lock-and-receiving.md](../3.done/rune-lock-and-receiving.md). **The third is the palette** (`palette_layout.items_of(KIND_RUNE)` returns `ELEM_ALL` unconditionally, so locking `DEFAULT_RUNE` alone is void). **And "no receiving screen" was wrong** — `circle_window.gd:158-161` has always placed runes; what is missing is ownership. **Was three, then two after the user dropped the ignition gate, and is three again for a different reason** | medium |
-| **4** | **The gate (an ending)** | Place it behind the rooster and mark contact. **No doc owns it** | small |
+| ~~**2**~~ | ~~**The two bosses**~~ | **Built, not accepted** → `3.done/stage1-bosses`. ~~Zero code — `monster_defs.ALL` is still `[PIG, HEN]`~~. It was the largest remaining piece and steps 3–4 had nothing to attach to without the bull; both now do | large |
+| ~~**3**~~ | ~~**The lock pair — ~~two~~ **three** changes, one landing**~~ | **Built, not accepted** → [rune-lock-and-receiving.md](../3.done/rune-lock-and-receiving.md). **The third is the palette** (`palette_layout.items_of(KIND_RUNE)` returns `ELEM_ALL` unconditionally, so locking `DEFAULT_RUNE` alone is void). **And "no receiving screen" was wrong** — `circle_window.gd:158-161` has always placed runes; what is missing is ownership. **Was three, then two after the user dropped the ignition gate, and is three again for a different reason** | medium |
+| ~~**4**~~ | ~~**The gate (an ending)**~~ | **Built — the chain's last square** → [`3.done/gate-ending-to-game.md`](../3.done/gate-ending-to-game.md), design [`design/gate-ending.md`](../../design/gate-ending.md). ~~No doc owns it~~. "Small" held: **one string, one argument, one branch** on top of the settlement screen it was waiting on (`3.done/run-end-settlement.md`). **Screen unverified — the arch and the clear title have not been looked at** | small |
 
-**Off the chain, after**: `1.ready/bolt-speed-and-visibility` · `1.ready/triangle-circle-to-game`.
+**Off the chain, and both landed while this review sat**: `3.done/bolt-speed-and-visibility` ·
+`3.done/triangle-circle-to-game`. **Implemented, screen unverified** — what is left of each is a look, not a build.
 
 **The three-pick is no longer one of them.** While this review was being written another session finished
 `levelup-and-three-picks` **A through E**, and the user accepted it ⇒ the doc is in `3.done/`.
@@ -125,8 +131,8 @@ GDD  "First milestone" ── the chain, and the only acceptance
           │
      1.ready/planning-review-fixes ── items 3 · 5 · 6 open, all three inside the chain
 
-off the chain: 1.ready/bolt-speed-and-visibility   (needs the screen, needs nothing else)
-               1.ready/triangle-circle-to-game     (art exists, code doesn't know)
+off the chain: 3.done/bolt-speed-and-visibility   (built — all that is left is the screen)
+               3.done/triangle-circle-to-game     (built — all that is left is the screen)
 ```
 
 **The one relationship worth remembering**: `stage1-bosses` and `levelup-and-three-picks` look unrelated —

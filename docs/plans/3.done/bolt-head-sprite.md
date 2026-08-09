@@ -1,11 +1,11 @@
 # Bolt head art — the circle becomes a sprite
 
 **Status**: done — **all five acceptance checks are measured**.
-**Why you'd reopen**: only when regenerating bolt head art. Bolt speed is `1.ready/bolt-speed-and-visibility.md`.
+**Why you'd reopen**: only when regenerating bolt head art. Bolt speed is `3.done/bolt-speed-and-visibility.md`.
 
 1·5 는 사용자가 눈으로, **2·3·4 는 헤드리스로 값으로** 봤다.
 
- **「탄 속도」는 이 문서에서 떼어냈다** → [../1.ready/bolt-speed-and-visibility.md](../1.ready/bolt-speed-and-visibility.md).
+ **「탄 속도」는 이 문서에서 떼어냈다** → [../3.done/bolt-speed-and-visibility.md](../3.done/bolt-speed-and-visibility.md).
 **화면을 봐야만 정해지는 유일한 항목**이라 여기 두면 이 문서가 영영 안 닫힌다.
 그리고 **그 작업의 근거가 이번에 바뀌었다** — 아래 「사거리 실측」.
 

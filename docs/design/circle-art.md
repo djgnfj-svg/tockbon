@@ -2,10 +2,21 @@
 
 **One line**: a glyph is a **ring that fills a layer**, a rune is **socketed into the circle's rim**, and code draws the rest.
 
+> **The code does not do this, and it never has.** `circle_window._draw_glyph(at, r, id)` draws **a symbol at
+> one point** — the band's `seat` — as rays, a filled disc or a hollow diamond, picked from the glyph's
+> `kind`. There is no annulus anywhere in `src/`. This doc's first line and `tools/pixel/README.md`'s "cut
+> away what falls outside the band" describe **art that was generated but never wired**
+> (`assets/circle/socket_glyph_*.png`, made for the triangle circle, referenced by no code).
+> **The user confirmed the ring is the intent** ("도넛으로 들어가는거지"), so it is the code that is behind,
+> not the doc — but anyone reading either one alone will build the wrong thing.
+> ⇒ **A glyph needs two pictures, not one**: the **ring** for the layer band, and a **compact icon** for the
+> palette card, where a ring has no room to read as anything. `_draw_palette_item` already calls the same
+> `_draw_glyph` as the circle does, and that is exactly the sharing that has to end when rings arrive.
+
 **Implemented**: partial — the round circle's assembly-window art runs. **The triangle circle exists only as art
 and is not in code** (`circle_defs.ALL` holds only `CIRCLE_ROUND`) — the skeleton is drawn by `triangle()` in
 `tools/pixel/draw_circle.py`, and the two socket glyph rings are in `assets/circle/`
-(`docs/plans/3.done/triangle-circle-art.md`). Wiring it into the game is `docs/plans/1.ready/triangle-circle-to-game.md`.
+(`docs/plans/3.done/triangle-circle-art.md`). Wiring it into the game is `docs/plans/3.done/triangle-circle-to-game.md`.
 **Accepted**: partial pass (2026-08-05) — style, size and layout were picked by the user from real candidates on screen.
 **Adopting the triangle circle is provisional with no user judgment** (the user delegated it: "you decide").
 **Band 48 collides with "the meaning is readable"** — must match the [README.md](README.md) table.
@@ -27,6 +38,13 @@ All of it was judged **by generating real candidates and looking at them.** None
 
 The reference was "white background · black geometric shapes", and the user chose
 **flipping the assembly window to bright paper.**
+
+> **The flip never happened in code, and that is a live trap.** `fx_tuning.WINDOW_BG` is
+> `(0.05, 0.055, 0.085)` and `BOOK_PAGE` is `(0.12, 0.13, 0.18)` — **a dark navy window**, exactly as before
+> the decision. Every sigil this repo generates comes off the `sigil` preset on **cream paper with black line
+> art**, so **laying today's art onto today's window paints black on near-black and nothing appears.**
+> ⇒ Whoever wires sigil art into `circle_window` **flips those two colors in the same change**, or the art is
+> invisible and the failure looks like "the texture did not load".
 
 **Record the price exactly: the color axis of `fx_tuning.GLYPH_TINT` dies.**
 `modulate` is multiplication, so **black × any color = black.** That table currently carries **glyph order**
@@ -111,6 +129,100 @@ meaningful pattern  a point splits / bursts           ⇒ this
 
 **At a circumference of 288, the repeat count must be low for meaning to read.** "One third the circumference,
 one third the repeats" (below) gains a second reason here — dense means **meaning disappears before mushing does.**
+
+#### Rarity rides the verb — **branch count, not colour and not repeat count**
+
+The user asked for one more thing of the same art: **"심플하고 기하학적이면 되고 등급을 표현할 수 있어야 함"**.
+`glyph_defs` has carried three tiers since Stage A (`RARITY_COMMON` · `RARITY_RARE` · `RARITY_UNIQUE`, folded
+into the id rather than sitting beside it), and **no picture has ever said which one you are looking at.**
+
+**Two obvious devices are already dead here, both for reasons this doc records above:**
+
+| Device | Why it cannot carry rarity |
+|---|---|
+| **Colour** | The style is black line art and `modulate` is multiplication, so **black × any colour = black.** That is the exact price recorded under "Style — black geometry on cream paper", and `GLYPH_TINT` already lost the order axis to it |
+| **Repeat count** | "Dense means meaning disappears before mushing does" — measured, directly above. Turning the tier up would turn the verb off |
+| **A ring around the symbol** (`RARITY_RING_RATIO`, in code today) | It works for a **point symbol** and has nowhere to go when the glyph *is* the band. Kept for the palette icon |
+
+**Branch count was tried first and it failed — measured, 24 images.** The idea was that tier and meaning would
+become one statement: a rarer spread splits further, which is what a rarer spread *does*. Three prompts per
+family asked for 2 / 3 / 4 branches on an otherwise identical motif.
+
+**The generator cannot count.** Asked for three branches it returned 5, 8 and 10; asked for four it returned
+sparser rings than the three-branch batch. The dummy tiers came back with rare **denser** than unique. Across
+all six sheets **no pair reads as "the same glyph, one tier up" — they read as different glyphs**, which is
+the one thing rarity art must not do.
+
+⇒ **Rarity is drawn by code, not generated.** The glyph art is **one ring per family**, and the tier is
+**how many thin rims the code strokes outside that ring**: common **0**, rare **1**, unique **2**.
+
+**This follows a line this doc already drew.** "Circles are not AI-generated. Code draws them" — four rounds
+of generation never produced "a few circles with no ornament", and `tools/pixel/draw_circle.py` solved it by
+treating a frame as coordinates. **A rarity marker is the same kind of object**: a count that must be exactly
+right, which is what a generator is worst at and a `draw_arc` is perfect at.
+
+What it buys:
+
+- **Nine ring images become three.** The tiers were 3 families x 3 rarities
+- **The count is exact and countable on screen** — the whole point of the marker
+- **A fourth tier costs nothing.** No regeneration, one more rim
+- `RARITY_RING_RATIO` / `RARITY_RING_PX` already exist in `fx_tuning` (drawn by `circle_window._draw_glyph`
+  around the point symbol). **The axis is already standing** — it moves from around a symbol to around a band
+
+**The repeat count stays at 6 and the motif never changes with tier.** That is what makes the rims read as a
+tier marker rather than as part of the drawing.
+
+**The common three are generated and unwired; the rims are not built.** And "are the six glyphs
+distinguishable" is still the harder unresolved question — it is about six *different* glyphs, not six tiers.
+
+### What is on disk now — **ten files, wired to nothing**
+
+Generated with the `sigil` preset (runes, rings, icons) and `ui` (the window). **Not one of them is
+referenced by `src/`** — `circle_window` still draws every symbol with `draw_line`/`draw_circle`.
+
+| File | Size | Seed | What it is |
+|---|---|---|---|
+| `assets/circle/ring_spread.png` | 288 | 920739551 | Layer band — a line splitting outward |
+| `assets/circle/ring_blast.png` | 288 | 1115184869 | Layer band — solid triangles under an arc |
+| `assets/circle/ring_dummy.png` | 288 | 473623256 | Layer band — nested chevrons |
+| `assets/circle/ring_home.png` | 288 | 1872325933 | Layer band — arrows curving inward |
+| `assets/circle/ring_accel.png` | 288 | 1402305408 | Layer band — bars of rising length. **See the collision below** |
+| `assets/circle/rune_fire.png` | 192 | 26135034 | Rune symbol |
+| `assets/circle/rune_water.png` | 192 | 1541712370 | Rune symbol |
+| `assets/circle/rune_none.png` | 192 | 1151264701 | Rune symbol |
+| `assets/circle/icon_spread.png` | 112 | 311500430 | **Palette card** — the compact form |
+| `assets/circle/icon_blast.png` | 112 | 714128543 | Palette card |
+| `assets/circle/icon_dummy.png` | 112 | 955575429 | Palette card |
+| `assets/ui/assembly_window.png` | 864x376 | 759337731 | The open grimoire |
+
+**288 / 192 / 112 come from the repo, not from taste**: the triangle circle's socket is `socket_r`=144 (×2 =
+288), the rune symbol space is the 192 in `192 + 48×2 = 288`, and 112 is the round circle's layer-1 size.
+
+**Every sigil is keyed to ink-on-alpha by `tools/pixel/ink.py`** — one flat colour `(26,24,22)` and the whole
+drawing in the alpha channel. That is not a new convention: the shipped `socket_glyph_*.png` were measured and
+they are built exactly that way. It is what lets the art sit on a window whose colour has not been decided
+yet (see the dark-navy trap at the top of this doc).
+
+**The icons exist because a ring cannot be a palette card.** `_draw_palette_item` currently calls the same
+`_draw_glyph` the circle does; when rings land, that sharing has to end — the ring goes in the band, the icon
+goes on the card.
+
+**Only `home` and `accelerate` were drawn beyond the three in code, and eleven glyphs were deliberately left
+blank.** `circle-rune-glyph.md`'s table marks those eleven "name only" — drawing a picture for a name makes the
+picture invent the meaning, which is exactly what `monsters.md` recorded going stale ("the GDD left kinds and
+behavior entirely undecided. Generate now and it goes stale"). These two have a documented behaviour and both
+are `modify`, so they have a shape to belong to.
+
+**⚠ `ring_accel` collides with `ring_spread` and it is not fixed.** Both read as "strokes reaching outward" —
+spread's split into branches and accel's are parallel bars of rising length, and **at a 48px band that
+difference is thinner than the one this doc calls the whole point.** It shipped anyway because accel has no
+code and nothing depends on telling them apart yet. **The day accel enters the pipeline, one of the two gets
+redrawn** — this is the "are the six glyphs distinguishable" question arriving early, on a pair.
+
+**Seeds are recorded here because `tools/pixel/out/` is gitignored.** `monsters-bigger-boxes.md` §2 wrote up
+what it costs when they are not: the four monster seeds survive only in filenames on one machine, and
+regenerating means the user re-picks art they already approved. **A seed still does not reproduce the same
+image at a different resolution** — these are all generated at 1024 and downsampled by `ink.py`.
 
 #### But this rule collides head-on with the socket band of 48 (measured)
 

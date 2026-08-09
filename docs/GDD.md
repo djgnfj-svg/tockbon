@@ -458,7 +458,7 @@ combat abilities and traversal abilities are not separate systems.
 would start no permanent progress at all. **No *kill* pays out** — trash mobs reach 원석 only through XP and
 the level, the same single-door shape the three-pick already uses.
 Rejected branches: `docs/decisions/gems-from-bosses-and-levels.md`. Where it is handed over:
-`docs/plans/1.ready/run-end-settlement.md`.
+`docs/plans/3.done/run-end-settlement.md`.
 
 **Why ordinary monsters don't drop glyphs directly**: it would mean opening the assembly window constantly mid-fight,
 breaking head-on the pressure the GDD built toward "assembly is for safe moments".
@@ -696,7 +696,16 @@ map → blocked by the wood wall → pit → bull → fire rune → [water rises
 | ~~**Water in pit ①**~~ | **Built, not accepted — and this row's own promise doesn't hold on the real map.** Reward-then-water order is correct (take the bull's reward, then the wall/water), but **the water doesn't carry the player out** — 300s of pouring lifts them 0px, and an ordinary jump alone already clears the step in 1.6s. The map is `stage1-map-layout.md`'s call, not this row's | `docs/plans/3.done/stage1-bosses.md` |
 | ~~**The wood-wall lock is broken**~~ | **Not a problem — decided by the user.** A runeless blast does open the wall (`spell_sim.gd:633` ignites without `element`), but **the wall is on the far side of pit ①, and the only way out of the pit is the water the bull's death brings** ⇒ **you cannot stand in front of that wall without already holding fire.** **The lock is held by the map's shape, not by the ignition rule** | `3.done/stage1-map-layout.md` |
 | ~~**The screen for receiving the fire rune**~~ | **The premise was wrong — the screen already exists.** `circle_window.gd:158-161` has always placed runes (pick from the palette → click the rune seat), so nothing has to be broken out of the three-pick. **Ownership was the only thing actually missing, and it is filled too now** (same doc — see the "Fire rune" row above) | `docs/plans/3.done/rune-lock-and-receiving.md` |
-| **An ending** | **Still none in the map** — no gate, nothing marks a clear. **But what a run ends *on* is now designed**: the settlement screen, which death already reaches and a clear would share | `docs/plans/1.ready/run-end-settlement.md` |
+| ~~**An ending**~~ | **Filled — the chain's last square. Implemented, not accepted.** The rooster's death drops room ③'s east wall and stands an arch beyond it; walking into the arch opens the settlement screen, **with a clear title instead of the death one.** No second screen. Neither the arch nor the clear title has been looked at on screen | `docs/plans/3.done/gate-ending-to-game.md`, `docs/plans/3.done/run-end-settlement.md` |
+
+**The chain has every square now — in code. Not one of them is accepted.**
+`map → wood wall → pit → bull → fire rune → water out of the pit → rooster → gate` runs end to end, and
+**the mobs and both bosses stand on it before you arrive** (`3.done/monster-placement-stage1.md`) ⇒ **the
+chain is walked, not debug-keyed.** **The one acceptance check this milestone has is "the user starts once
+and reaches the end without getting stuck" — which only the user can run.** The single row still open above
+is water's other three (`2.active`), whose pour in room ③ is also **a constraint on the ending** (that doc's
+own item 4) and **the reason zone ② is placed but unreachable.**
+⇒ **What is left of this milestone is a playthrough, not a build.**
 
 **What was cut**: leveling and the three-pick · wiring the triangle circle · bolt speed · the shop · **town.**
 ~~**"All five are outside the chain" is no longer accurate** — "the screen for receiving the fire rune" is tied to the three-pick.~~
@@ -732,8 +741,13 @@ Things chosen with the price known at design time. "We didn't know" must never h
 5. **Blasts can go off screen.** (from choosing camera follow)
    The old contract was "the whole stage fits on one screen", because **"detonating out of sight reads as 'it didn't detonate'"** —
    v1 got burned exactly that way.
-   **That reason hasn't gone away. It just can't be prevented now** — spread bolt range (40 tiles) exceeds the
-   visible width (30 tiles), so **firing horizontally lands off-screen in principle.**
+   **That reason hasn't gone away, but the number under it has been replaced.** It read "spread bolt range
+   (40 tiles) exceeds the visible width (30 tiles), so firing horizontally lands off-screen in principle" —
+   40 tiles was the **gravity-free drag ceiling of a `speed` 20 bolt**, and bolt speed has since come down for
+   head-sprite visibility. Driven today: a generation 0 bolt reaches **12.8 tiles at 45°**, a spread bolt
+   **4.8**, against a 15-tile half-screen. ⇒ **One bolt no longer leaves the screen; the spread chain
+   (impact + 4.8 tiles ≈ 17.6) and cliff shots still can.** The price stands, as an edge rather than the norm.
+   The live arithmetic lives at `src/sim/sim_tuning.gd`'s `DRAG_NUM`.
    What remains is **"at least my surroundings are always visible".**
    ⇒ If "it didn't detonate" comes back, **this is the cause.** It's one of zoom-out · shrink the stage · shorten the range,
    and **range is the magic-circle design's call** (a screen problem, not a GDScript performance one).
@@ -758,7 +772,11 @@ What is written here is **not yet decided.** Do not fill it in by pretending to 
   Combine as a multiplication chain and **commutativity kills order in the numbers** — this game's thesis quietly disappears there.
   Detail in `docs/design/circle-rune-glyph.md`, "multiplication kills order"
 - ~~**Monsters** — types, behavior, water interaction~~ → **stage 1's are decided** (by the user).
-  Two trash mobs (pig · chicken) · brainless movement · 20 at once · all natural laws apply — **source is `docs/design/monsters.md`**.
+  ~~Two trash mobs (pig · chicken)~~ **three — 돼지 · 늑대 · 닭** (the user assigned the wolf) · brainless
+  movement, **plus jumping when blocked and pushing each other apart** · 20 at once · all natural laws apply
+  — **source is `docs/design/monsters.md`**.
+  **They stand on the map before you arrive now**, bosses included, so the stage is walked rather than
+  debug-keyed (`docs/plans/3.done/monster-placement-stage1.md`).
   **Still TBD**: health and damage values · the midboss's (the bull that swallowed the fire rune) behavior · stages 2 and 3 monsters
 - ~~**Dungeon generation — rooms or continuous**~~ → **decided as a two-tier structure** (by the user):
   **within a stage (chapter), a "room" is not a scene-transition unit.** One stage = one continuous scene —

@@ -38,6 +38,7 @@ Where it shakes if this reverses.
 | [The town is a mode of the stage shell](town-is-a-mode-of-the-stage-shell.md) | valid | A `town.tscn` of its own · a smaller town map · painting it in the editor · real bench windows |
 | [The run-end screen is settlement only](run-end-is-settlement-only.md) | valid | A run summary (the circle you assembled) · a second screen · a cause-of-death shot |
 | [원석 comes from bosses and levels](gems-from-bosses-and-levels.md) | valid | Every kill drops it · trash mobs give a little · bosses only (the old GDD line) |
+| [Trash mobs lie on the map](mobs-lie-on-the-map-no-arena-room.md) | valid | A combat room before the midboss · trigger spawning · spawners · bunching into clumps |
 
 ## Decisions not yet written down
 

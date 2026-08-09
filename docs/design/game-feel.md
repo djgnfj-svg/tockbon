@@ -95,7 +95,7 @@ walk deceleration.
 | # | Lever | Where | Note |
 |---|---|---|---|
 | 6 | **Muzzle flash / firing pose** | `view/` | The bolt appears out of nothing. The staff tip is already a known point (`staff-and-fire-origin`) |
-| 7 | **Slow the bolt so the art exists** | sim | **Already written up** → `plans/1.ready/bolt-speed-and-visibility`. 26.6px/frame means the head sprite is **never seen.** The most "wasted work" item on the list |
+| 7 | ~~**Slow the bolt so the art exists**~~ | sim | **Done in code, unseen** → `plans/3.done/bolt-speed-and-visibility`. 26.6px/frame is now 16.0, so the head sprite *can* be seen — **whether it now feels sluggish is the open question**, and it is answered on the screen |
 | 8 | **Recoil the player can read** | `actor/` | `recoil_vx` is **15% of walk speed** and decays — measured to win against input. It is *felt* but **nothing on screen says it happened** |
 | 9 | **Fire rhythm** | `actor/` | There is no wind-up and no cooldown texture — click and it goes. The GDD already gave this axis an owner: **the staff** (gear). Not free: it changes balance, not just feel |
 

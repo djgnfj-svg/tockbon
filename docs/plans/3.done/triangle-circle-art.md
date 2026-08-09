@@ -1,14 +1,14 @@
 # Triangle circle art — generating the third circle's face
 
 **Status**: done — **all assets are out.** The circle skeleton + two socket glyph rings.
-**Why you'd reopen**: only when regenerating triangle circle art. Wiring it into the game is `1.ready/triangle-circle-to-game.md`.
+**Why you'd reopen**: only when regenerating triangle circle art. Wiring it into the game is `3.done/triangle-circle-to-game.md`.
 
  **「done」은 「그림이 나왔다」이지 「사용자가 통과시켰다」가 아니다.**
 채택은 **임시**고 사용자 판정을 안 받았다 — 골라 놓고 멈춘 게 아니라 사용자가
 **「니가 정해라, 나중에 다 변경할게, 여기에 병목걸리고 싶지 않음」** 으로 위임했다.
 ⇒ **다음에 여는 사람은 바꿀 수 있다.** 후보 40여 장이 `tools/pixel/out/` 에 그대로 있다.
 
- **못 끝낸 것은 다음 문서가 진다** → [../1.ready/triangle-circle-to-game.md](../1.ready/triangle-circle-to-game.md).
+ **못 끝낸 것은 다음 문서가 진다** → [../3.done/triangle-circle-to-game.md](../3.done/triangle-circle-to-game.md).
 **게임에 붙이기 · 시계방향 순서를 어떻게 가르치나 · 소켓 띠 48의 충돌**이 거기 있다.
 이 문서를 done 으로 내린 근거는 아래 「경계」다 — **「그림이 나오는 것이 이 작업의 끝」**이라고
 작업 시작 전에 스스로 잘라 뒀다.
@@ -247,7 +247,7 @@ band_gap  34 → 48        288 − 48×2 = 192  ⇒ 룬 심볼이 원형 진과 
 
  **판정 2가 이 작업이 못 끝낸 것이다.** 「12시가 1번」이 **그림이 아니라 규칙으로만** 존재한다 —
 GDD의 「순서가 화면에 안 보이면 플레이어는 규칙을 영영 못 배운다」가 정확히 이 자리다.
-⇒ 다음 문서([../1.ready/triangle-circle-to-game.md](../1.ready/triangle-circle-to-game.md))가 진다.
+⇒ 다음 문서([../3.done/triangle-circle-to-game.md](../3.done/triangle-circle-to-game.md))가 진다.
 
 ** 그리고 게임 크기에서도 쟀다** — 진 512 · 소켓 144 로 줄여 4배 확대해 봤다:
 
@@ -269,7 +269,7 @@ GDD의 「순서가 화면에 안 보이면 플레이어는 규칙을 영영 못
 ##  사용자가 정해야 할 것 — 2026-08-05 세션 끝 기준
 
 **①만 이 문서의 몫이었고 나머지 넷은 다음 문서로 넘겼다** (2026-08-08) →
-[../1.ready/triangle-circle-to-game.md](../1.ready/triangle-circle-to-game.md).
+[../3.done/triangle-circle-to-game.md](../3.done/triangle-circle-to-game.md).
  ③④⑤ 는 **그림이 아니라 게임 거동**이라 여기서 정할 수가 없었다.
 ②(일반진 · 융합진의 그림)는 그림이지만 **다른 진의 일**이라 `docs/design/circle-art.md` 가 든다.
 

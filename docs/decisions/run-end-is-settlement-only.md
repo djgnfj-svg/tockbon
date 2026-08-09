@@ -10,7 +10,7 @@ A run ends on **one screen**, and that screen does **one thing**: settle what th
 **No run summary of any kind on it** — not the magic circle you ended with, not a route, not a kill list.
 
 **Two figures are printed beside the settlement**: total play time and total damage dealt
-(`../plans/1.ready/run-end-settlement.md`). They are not a summary in the rejected sense — **the only thing
+(`../plans/3.done/run-end-settlement.md`). They are not a summary in the rejected sense — **the only thing
 that animates is the currency counting up**, and those two do not scroll, expand or break down.
 
 ## What wasn't chosen
