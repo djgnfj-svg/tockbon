@@ -1104,7 +1104,14 @@ func _process(dt: float) -> void:
 	# **Snapped to the screen's pixel grid** — see `snap_camera_px`. Without it the whole world shivers
 	#  by a pixel every frame while walking, and it reads as the *character* stuttering, not the camera.
 	var focus := entrance_focus(_char.center() + Vector2(_cam_lead, 0.0), _boss_focus(), _entrance_frames)
-	_camera.position = snap_camera_px(camera_center(focus, get_viewport_rect().size / z, world_size()), z)
+	var view := get_viewport_rect().size / z
+	# **Less ground, more sky — pulls the focus up, which pushes the character down on screen**
+	#  (`Fx.CAM_VERTICAL_OFFSET_FRAC`'s own comment). `y` grows downward in this world (`character.gd`'s
+	#  `JUMP_VY_PX` is negative), so subtracting moves the visible window's center toward smaller `y` —
+	#  toward the sky. **Folded into `focus.y` before `camera_center()`'s clamp, the same seat `_cam_lead`
+	#  already uses on `x`** — the map-edge clamp still applies with nothing extra written for it.
+	focus.y -= Fx.CAM_VERTICAL_OFFSET_FRAC * view.y
+	_camera.position = snap_camera_px(camera_center(focus, view, world_size()), z)
 	# Shake is **the camera's offset**. `stage_input._to_world` undoes the canvas transform, so aim does not
 	#  drift even while shaking — without undoing it, a click goes to the wrong cell with no error.
 	# The order of this node's `_process` and `blast_fx`'s `_process` is not guaranteed, so it **can be one
