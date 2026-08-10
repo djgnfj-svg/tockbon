@@ -26,12 +26,19 @@ const Layout := preload("res://src/view/onboard_layout.gd")
 ## this node and calls `_draw()` with no wiring reading exactly what it read before this field existed.
 var message := Fx.ONBOARD_TEXT
 
-## **Whether the Tab key cap and arrow draw alongside the sentence.** `true` for the walkthrough's own beat
-## (Stage 7's "point at Tab"); `false` for the departure gate's line (`stage._town_gate_locked()`), which
-## names an action the player already knows how to reach (open the window and place things) rather than a
-## key nobody has pressed yet. **One box, one extra bool** — a second `Control` for the gate's sentence would
-## duplicate the panel, the font size and the backing-plate reasoning above for one more line of text.
+## **Whether the key cap and arrow draw alongside the sentence.** `true` for the assembly walkthrough's own
+## beat (Stage 7's "point at Tab") and for the level-up walkthrough's own beat (point at P); `false` for the
+## departure gate's line (`stage._town_gate_locked()`), which names an action the player already knows how
+## to reach (open the window and place things) rather than a key nobody has pressed yet. **One box, one
+## extra bool** — a second `Control` for the gate's sentence would duplicate the panel, the font size and
+## the backing-plate reasoning above for one more line of text.
 var show_tab_hint := true
+
+## **Which key the cap and the arrow point at.** Defaults to `Fx.ONBOARD_KEY_TEXT` ("Tab") — the assembly
+## walkthrough's own key. **A field, not a second draw path** — the level-up walkthrough
+## (`stage._tick_onboard()`) points the same box at `Fx.LEVELUP_ONBOARD_KEY_TEXT` ("P") instead; a copy of
+## `_draw_onboard_key` for that beat would drift from this one's panel/font/edge the day either is retuned.
+var key_text := Fx.ONBOARD_KEY_TEXT
 
 
 func _ready() -> void:
@@ -80,10 +87,10 @@ func _draw_onboard_key(rect: Rect2, font: Font) -> void:
 	draw_rect(rect, Fx.ONBOARD_KEY_EDGE, false, Fx.ONBOARD_KEY_EDGE_PX)
 	if font == null:
 		return
-	var w := font.get_string_size(Fx.ONBOARD_KEY_TEXT, HORIZONTAL_ALIGNMENT_LEFT, -1,
+	var w := font.get_string_size(key_text, HORIZONTAL_ALIGNMENT_LEFT, -1,
 		Fx.ONBOARD_KEY_TEXT_SIZE).x
 	draw_string(font, rect.get_center() + Vector2(-w * 0.5, Fx.ONBOARD_KEY_TEXT_SIZE * 0.35),
-		Fx.ONBOARD_KEY_TEXT, HORIZONTAL_ALIGNMENT_LEFT, -1,
+		key_text, HORIZONTAL_ALIGNMENT_LEFT, -1,
 		Fx.ONBOARD_KEY_TEXT_SIZE, Fx.ONBOARD_KEY_TEXT_COLOR)
 
 

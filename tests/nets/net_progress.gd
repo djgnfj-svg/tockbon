@@ -64,6 +64,7 @@ func run(t) -> void:
 	# ── onboarding-and-palette-tabs, Stage 7 ──
 	_owns_circle_starts_at_the_fixed_kit(t)
 	_onboarding_seen_survives_reset_and_next_stage(t)
+	_pick_onboarding_seen_survives_reset_and_next_stage(t)
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -917,3 +918,23 @@ func _onboarding_seen_survives_reset_and_next_stage(t) -> void:
 	#  net drives in the same process) must not inherit the first one's history.
 	var fresh := Progress.new()
 	t.ok(not fresh.has_seen_onboarding(), "새 Progress 객체는 온보딩을 안 본 상태로 시작한다")
+
+
+## **The level-up hint's own sibling of the check above** (user decision: "마을 + 레벨업만"). Same shape,
+## same two doors, for `_pick_onboarding_seen` instead of `_onboarding_seen`.
+##
+## **What goes red when inverted**: add `_pick_onboarding_seen = false` to either `reset()` or `next_stage()`.
+func _pick_onboarding_seen_survives_reset_and_next_stage(t) -> void:
+	var pr := Progress.new()
+	t.ok(not pr.has_seen_pick_onboarding(), "시작할 때는 아직 P 안내를 안 봤다 (전제)")
+	pr.mark_pick_onboarding_seen()
+	t.ok(pr.has_seen_pick_onboarding(), "mark_pick_onboarding_seen() 이후에는 봤다고 기억한다")
+
+	pr.reset()
+	t.ok(pr.has_seen_pick_onboarding(), "reset(R) 뒤에도 봤다는 사실은 남는다 (그래서 또 안 뜬다)")
+
+	pr.next_stage()
+	t.ok(pr.has_seen_pick_onboarding(), "스테이지를 넘어가도 남는다")
+
+	var fresh := Progress.new()
+	t.ok(not fresh.has_seen_pick_onboarding(), "새 Progress 객체는 P 안내를 안 본 상태로 시작한다")

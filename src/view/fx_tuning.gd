@@ -2384,6 +2384,14 @@ const ONBOARD_TEXT_GAP_PX := 10.0
 ## nothing else about the box changes.
 const GATE_LOCKED_TEXT := "마법진을 먼저 조립하세요"
 
+## **The level-up walkthrough's own line, shown in the same box** (user: "온보딩은 마을 + 레벨업 했을 때만
+## 있으면 됨") — the first level-up hands the player `pending_picks` with nothing on screen naming the key
+## that opens it. Reuses every `ONBOARD_*` rect/color/size below it exactly as `GATE_LOCKED_TEXT` above
+## does; only the sentence and the key cap's text (`LEVELUP_ONBOARD_KEY_TEXT`, via `onboard_view.key_text`)
+## differ from the assembly walkthrough's own pair.
+const LEVELUP_ONBOARD_TEXT := "P를 눌러 문양을 고르세요"
+const LEVELUP_ONBOARD_KEY_TEXT := "P"
+
 ## The "Tab" key cap — a small rounded-looking chip with the key name inside. **Grown with the box** —
 ## 44x26 read as an afterthought at arm's length; this is the size a HUD label elsewhere in this file
 ## already uses for something meant to be read at a glance (`HUD_FONT_SIZE` 16, close to this chip's own
