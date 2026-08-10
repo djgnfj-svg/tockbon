@@ -453,19 +453,24 @@ func _the_gate_leaves_and_being_downed_comes_back(t) -> void:
 	root.call("_interact")
 	t.ok(bool(root.get("_in_town")), "설비 사이에서 E를 눌러도 마을에 남는다")
 
-	# The research bench speaks, and what it says is the rune list.
+	# **The research bench's door is closed** (`onboarding-and-palette-tabs.md` Stage 7) — E there now does
+	#  nothing at all; the bench itself is unchanged (`_toggle_research()`, `Progress.buy()`, `UnlockDefs`
+	#  all stay), only `_interact()`'s path to it is gone. `town_view.prompt_text()` is what carries the
+	#  visible "준비중" now (`net_town`'s own picture check, elsewhere in this file) — this function's job is
+	#  only the door.
 	_stand_at(ch, float(seats[Fixtures.KIND_RESEARCH]))
 	var window: Variant = root.get("_research_window")
 	t.ok(not bool(window.visible), "연구창은 닫힌 채로 시작한다 (전제)")
+	var before_msg := String(root.get("_town_message"))
 	root.call("_interact")
-	t.ok(String(root.get("_town_message")).contains("연구대"), "연구대 앞에서 E를 누르면 연구대가 말한다")
-	t.ok(bool(window.visible), "그리고 연구창이 열린다")
-	t.ok(bool(root.get("_in_town")), "마을에도 남는다")
-	root.call("_interact")
-	t.ok(not bool(window.visible), "한 번 더 누르면 닫힌다")
-	# Open it again, so the gate below has something to close.
-	root.call("_interact")
-	t.ok(bool(window.visible), "다시 열었다 (아래 검사의 전제)")
+	t.eq(String(root.get("_town_message")), before_msg, "연구대 앞에서 E를 눌러도 아무 말도 안 한다 (문이 닫혔다)")
+	t.ok(not bool(window.visible), "연구창도 안 열린다")
+	t.ok(bool(root.get("_in_town")), "마을에도 그대로 남는다")
+
+	# **Opened directly, through the window's own door** — so the gate-closing check below still has
+	#  something to close. `_interact()` no longer reaches this window; `_toggle_research()` still does.
+	root.call("_toggle_research")
+	t.ok(bool(window.visible), "직접 열면 여전히 열린다 (기능은 안 지웠다)")
 
 	# The gate leaves.
 	_stand_at(ch, float(seats[Fixtures.KIND_GATE]))
@@ -553,7 +558,10 @@ func _wired_root(t) -> Node:
 			#  every physics frame and `reset_stage()` calls `reset_gate()`, both unconditionally. Left out,
 			#  every check in this file that drives either one dies on a null mid-call and **disappears rather
 			#  than fails** — the shape this file's own `if root == null: return` discipline exists for.
-			["_gate_view", "GateView"]]:
+			["_gate_view", "GateView"],
+			# **`_onboard_view`** (`onboarding-and-palette-tabs.md` Stage 7) — `_physics_process()` reaches
+			#  `_tick_onboard()` unconditionally, which writes `_onboard_view.visible` every frame.
+			["_onboard_view", "HUD/OnboardView"]]:
 		var n := root.get_node_or_null(NodePath(pair[1]))
 		t.ok(n != null, "씬에 %s 가 있다 (전제)" % pair[1])
 		if n == null:

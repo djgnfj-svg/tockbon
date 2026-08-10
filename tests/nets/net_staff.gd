@@ -204,8 +204,11 @@ func _staff_tint_carries_the_loadout(t) -> void:
 ##  colour in both states, which is unrelated to whether `element()` itself can bark.
 ## **So the assertions below are about the colour** — that half of the original reasoning still holds.
 func _ring_tint_never_barks_with_the_circle_removed(t) -> void:
-	var circle := SpellCircle.new()
-	t.ok(circle.can_fire(), "갓 만든 서클은 쏠 수 있다 (전제 — 기본 지급이 채워져 있다)")
+	# **A round circle with a rune placed by hand** — the constructor no longer arms the rune
+	#  (`onboarding-and-palette-tabs.md` Stage 3), so the "already fireable" premise is built explicitly.
+	var circle := SpellCircle.new(CircleDefs.CIRCLE_ROUND)
+	circle.set_rune(0, SpellCircle.DEFAULT_RUNE)
+	t.ok(circle.can_fire(), "갓 만든 서클은 쏠 수 있다 (전제 — 손으로 채웠다)")
 
 	# The assembly window's own path (`circle_window.gd` writes this value), not a state invented here.
 	circle.set_circle(CircleDefs.CIRCLE_NONE)
@@ -230,6 +233,8 @@ func _staff_tint_uses_its_own_sockets_combo_not_a_splice(t) -> void:
 	var circle := SpellCircle.new(CircleDefs.CIRCLE_TRIANGLE)
 	t.ok(circle.set_rune(0, Tuning.ELEM_FIRE), "0번 소켓에 불을 놓는다 (전제)")
 	t.ok(circle.set_rune(1, Tuning.ELEM_WATER), "1번 소켓에 물을 놓는다 (전제)")
+	# **2번 소켓도 채운다** — 생성자가 더는 룬을 자동으로 채우지 않는다 (Stage 3), 세 소켓이 다 차야 쏠 수 있다.
+	t.ok(circle.set_rune(2, Tuning.ELEM_NONE), "2번 소켓에 무속성을 놓는다 (전제)")
 	t.ok(circle.place_glyph(1, Glyph.GLYPH_BLAST), "1번 소켓에만 폭발을 놓는다 (전제 — 0번은 문양이 없다)")
 	t.ok(circle.can_fire(), "삼각 진이 쏠 수 있다 (전제)")
 
@@ -246,7 +251,8 @@ func _staff_tint_uses_its_own_sockets_combo_not_a_splice(t) -> void:
 
 	# The round circle path must stay byte-identical — `shots()[0]` **is** `{element(), packed_glyphs()}`
 	# there, so this is the same value the pre-fix code always computed for it.
-	var round_c := SpellCircle.new()
+	var round_c := SpellCircle.new(CircleDefs.CIRCLE_ROUND)
+	t.ok(round_c.set_rune(0, Tuning.ELEM_NONE), "룬을 놓는다 (전제)")
 	t.ok(round_c.place_glyph(0, Glyph.GLYPH_SPREAD), "동그라미 진 1층에 확산을 놓는다 (전제)")
 	t.eq(Fx.staff_ring_tint(round_c),
 		Fx.staff_tint(round_c.packed_glyphs(), round_c.element(), true),

@@ -966,7 +966,11 @@ func _wired_root(t) -> Node:
 			#  on a null mid-call and disappears rather than fails — the exact risk `net_settlement.gd`'s own
 			#  `_wired_root` now names for the same node.
 			["_gate_view", "GateView"],
-			["_settlement", "HUD/SettlementWindow"]]:
+			["_settlement", "HUD/SettlementWindow"],
+			# **`_onboard_view`** (`onboarding-and-palette-tabs.md` Stage 7) — `_physics_process()` reaches
+			#  `_tick_onboard()` unconditionally, which writes `_onboard_view.visible` every frame. Every
+			#  `_physics_process` call in this file dies on a null without this.
+			["_onboard_view", "HUD/OnboardView"]]:
 		var n := root.get_node_or_null(NodePath(pair[1]))
 		t.ok(n != null, "씬에 %s 가 있다 (전제)" % pair[1])
 		if n == null:

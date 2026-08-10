@@ -24,6 +24,7 @@ const ThreePick := preload("res://src/actor/three_pick.gd")
 const ThreePickWindow := preload("res://src/view/three_pick_window.gd")
 const Glyph := preload("res://src/sim/glyph_defs.gd")
 const SpellCircle := preload("res://src/actor/spell_circle.gd")
+const CircleDefs := preload("res://src/sim/circle_defs.gd")
 const MonsterDefs := preload("res://src/actor/monster_defs.gd")
 const Character := preload("res://src/actor/character.gd")
 const NetDeterminism := preload("res://tests/nets/net_determinism.gd")
@@ -288,7 +289,8 @@ func _card_rects_reads_the_live_draw_size(t) -> void:
 ##    a real defect; a click doing nothing with no reason shown is the same disease)
 ##  · **placing over the *same* layer's own family replaces**, and `glyph_list().size()` does not grow
 func _layer_click_places_replaces_and_rejects_family_conflicts(t) -> void:
-	var circle := SpellCircle.new()
+	# **A round circle explicitly** — `SpellCircle.new()` alone is `CIRCLE_NONE` now (Stage 3's empty boot).
+	var circle := SpellCircle.new(CircleDefs.CIRCLE_ROUND)
 	t.eq(circle.layer_count(), 2, "기본 진은 2층이다 (전제)")
 	t.ok(circle.place_glyph(0, Glyph.SPREAD_C), "0층에 확산(일반)을 미리 놓았다 (전제)")
 	t.eq(circle.glyph_list().size(), 1, "목록에 하나 있다 (전제)")
@@ -376,7 +378,7 @@ func _picked_card_click_returns_to_step_1(t) -> void:
 ##    just vanishes" was the whole of the prior confirmation)
 ##  · **it expires on its own** after `CONFIRM_FRAMES` driven `_process()` ticks
 func _confirmation_shows_after_a_placement_and_expires(t) -> void:
-	var circle := SpellCircle.new()
+	var circle := SpellCircle.new(CircleDefs.CIRCLE_ROUND)
 	var pr := Progress.new()
 	pr.pending_picks = 1
 	pr.set("_drawn", [Glyph.DUMMY_U, Glyph.BLAST_C, Glyph.SPREAD_C] as Array[int])
@@ -413,7 +415,7 @@ func _confirmation_shows_after_a_placement_and_expires(t) -> void:
 
 ## A click during the confirmation afterglow dismisses it early — the timer is a floor, not a forced wait.
 func _confirmation_can_be_dismissed_early_by_a_click(t) -> void:
-	var circle := SpellCircle.new()
+	var circle := SpellCircle.new(CircleDefs.CIRCLE_ROUND)
 	var pr := Progress.new()
 	pr.pending_picks = 1
 	pr.set("_drawn", [Glyph.DUMMY_U, Glyph.BLAST_C, Glyph.SPREAD_C] as Array[int])
@@ -444,7 +446,7 @@ func _confirmation_can_be_dismissed_early_by_a_click(t) -> void:
 ## and reads the state directly — `_draw()` itself still can't run headless, but the state it would read is
 ## real and inspectable.
 func _a_fresh_pick_preempts_a_lingering_confirmation(t) -> void:
-	var circle := SpellCircle.new()
+	var circle := SpellCircle.new(CircleDefs.CIRCLE_ROUND)
 	var pr := Progress.new()
 	pr.pending_picks = 2
 	pr.set("_drawn", [Glyph.DUMMY_U, Glyph.BLAST_C, Glyph.SPREAD_C] as Array[int])
@@ -478,7 +480,7 @@ func _a_fresh_pick_preempts_a_lingering_confirmation(t) -> void:
 ## exists to prevent. **It must not touch `Progress`** — the pick already closed for real when `take()` ran;
 ## `cancel_confirm()` only clears this window's own after-the-fact display state.
 func _cancel_confirm_clears_it_without_touching_progress(t) -> void:
-	var circle := SpellCircle.new()
+	var circle := SpellCircle.new(CircleDefs.CIRCLE_ROUND)
 	var pr := Progress.new()
 	pr.pending_picks = 1
 	pr.set("_drawn", [Glyph.DUMMY_U, Glyph.BLAST_C, Glyph.SPREAD_C] as Array[int])
@@ -588,7 +590,12 @@ func _no_pushed_out_glyph_is_stashed_anywhere(t) -> void:
 		#  to miss it** — a set of what has been bought at the research bench, keyed by `UnlockDefs` id. The
 		#  same argument `_owned_runes` one line up already makes: it is a record of a purchase, not of a
 		#  glyph that left a spell layer, which is what this file's no-inventory check exists to catch.
-		"res://src/actor/progress.gd": ["_drawn", "_owned_runes", "_reward_pending", "_unlocked"],
+		# **`_owned_circles` (`onboarding-and-palette-tabs.md`, Stage 2) added here, deliberately, the same
+		#  shape and the same reason as `_owned_runes` above** — 삼각 is not owned at boot (user confirmed),
+		#  so the palette needs a record of which circles have been granted, not of a glyph that left a spell
+		#  layer, which is what this file's no-inventory check exists to catch.
+		"res://src/actor/progress.gd":
+			["_drawn", "_owned_circles", "_owned_runes", "_reward_pending", "_unlocked"],
 		"res://src/actor/spell_circle.gd": ["_layers", "_runes"],
 		"res://src/actor/world_step.gd": ["_died_kind", "_died_x", "_died_y", "_monsters", "_queue"],
 		# **`monster_placement.gd` added here, deliberately** (`monster-placement-stage1.md`,
@@ -700,7 +707,8 @@ func _full_round_trip_pick_to_a_bigger_hit(t) -> void:
 	var np := NetProgress.new()
 	var world: Variant = np._new_world()
 	var pr: Progress = world.progress()
-	var circle := SpellCircle.new()
+	# **A round circle explicitly** — `SpellCircle.new()` alone is `CIRCLE_NONE` now (Stage 3's empty boot).
+	var circle := SpellCircle.new(CircleDefs.CIRCLE_ROUND)
 	t.eq(circle.packed_glyphs(), Glyph.GLYPH_NONE, "놓기 전엔 빈 목록이다 (0 — 전제)")
 
 	# -- level up, for real, through the same award path Stage B measures --

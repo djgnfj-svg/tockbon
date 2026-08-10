@@ -1195,6 +1195,48 @@ const PALETTE_HEAD_SIZE := 14
 ##  the text sticks out **above** the section. At 1.0 it clings to the bottom of the band and collides with the items.
 const PALETTE_HEAD_BASELINE_FRAC := 0.7
 
+## ── tabs — 진 · 룬 · 문양, one open at a time (`onboarding-and-palette-tabs.md`) ──
+## **`Fx.PALETTE_*` only** — `net_circle` bars this file from `Fx.WINDOW_*` and `book_layout`
+##  (`palette_layout.gd`'s own header), so every new value the tab strip and the 완성 band need is prefixed
+##  the same way the rest of this section already is.
+## **Screen values below are defaults, not decisions** — put them in, look at them, move them
+##  (the plan's own "Screen values below are defaults").
+const PALETTE_TAB_BAND_PX := 26.0
+const PALETTE_TAB_GAP_PX := 4.0
+const PALETTE_TAB_SIZE := 14
+## Open vs. closed — background and text color both flip, so which tab is open reads even with the
+##  labels unread. The open tab reuses the picked-item gold family; closed tabs sit dim and low-contrast.
+const PALETTE_TAB_OPEN_BG := Color(0.20, 0.22, 0.30, 1.0)
+const PALETTE_TAB_CLOSED_BG := Color(0.09, 0.10, 0.145, 1.0)
+const PALETTE_TAB_OPEN_TEXT := Color(1.0, 0.92, 0.55, 1.0)
+const PALETTE_TAB_CLOSED_TEXT := Color(0.55, 0.58, 0.66, 0.85)
+const PALETTE_TAB_EDGE := Color(0.30, 0.36, 0.50, 0.8)
+const PALETTE_TAB_EDGE_PX := 1.0
+
+## The "마법진 완성" band at the bottom of the palette page — always present, in every tab
+##  (design §5: "it confirms, it does not apply").
+const PALETTE_DONE_BAND_PX := 40.0
+const PALETTE_DONE_TEXT := "마법진 완성"
+const PALETTE_DONE_SIZE := 14
+const PALETTE_DONE_BG := Color(0.16, 0.19, 0.26, 1.0)
+const PALETTE_DONE_EDGE := Color(0.40, 0.52, 0.70, 0.9)
+const PALETTE_DONE_EDGE_PX := 1.5
+const PALETTE_DONE_TEXT_COLOR := Color(0.85, 0.92, 1.0, 1.0)
+## The glow the moment 완성 is pressed (Stage 6) — one flash, not a held state.
+const PALETTE_DONE_GLOW_COLOR := Color(1.0, 0.95, 0.7, 0.5)
+const DONE_GLOW_FRAMES := 18
+
+## The 문양 tab's empty note — "문양이 하나도 없다" is a sentence, not a blank rectangle
+##  (design §3: an empty framed box reads as a drawing bug).
+const PALETTE_EMPTY_TEXT := "현재 문양이 없습니다"
+const PALETTE_EMPTY_SIZE := 14
+const PALETTE_EMPTY_COLOR := Color(0.60, 0.64, 0.74, 0.9)
+
+## 찰칵 — a click is motion here, not sound (this repo has none; see the plan's own Blockers).
+## How many frames the just-filled seat's ring holds its flash.
+const CLICK_FRAMES := 10
+const CLICK_COLOR := Color(1.0, 0.95, 0.7, 0.9)
+
 ## Where the SPAWN rays **start** (relative to the radius). At 0 they emanate from a single point and look like a clump, not a star.
 const GLYPH_SPAWN_INNER_RATIO := 0.3
 ## The TERMINAL disc's radius (relative to the symbol radius). At 1.0 it looks the same size as the ray symbol,
@@ -1722,6 +1764,11 @@ const TOWN_PROMPT_LIFT_PX := 30.0
 ##  (`town.md`, "the town does not explain anything") — but *which key* is not an explanation, it is a label,
 ##  and with no tutorial in the game yet there is nowhere else for it to be said.
 const TOWN_PROMPT_FMT := "[E] %s"
+## **연구대's own prompt — 「준비중」, not `TOWN_PROMPT_FMT`** (`onboarding-and-palette-tabs.md` Stage 7).
+##  This is the visible seat: `_town_message` sits behind F3 (`stage._update_hud`'s own gate), so a player
+##  who never opens the debug HUD would never see it there. The bench's real feature is not deleted —
+##  `Progress.buy()`/`UnlockDefs`/`research_window.gd` all stay reachable through code; only this door closes.
+const TOWN_RESEARCH_PROMPT := "준비중"
 
 ## **Rune names, in Korean, because the player reads them** (CLAUDE.md's language rule).
 ##  **They live here and not in `sim_tuning`** for the same reason every other string does: `src/sim/` is the
@@ -1935,3 +1982,30 @@ const GATE_TAKE_TINT := Color(1.7, 1.6, 1.25, 1.0)
 const AIR_JUMP_RING_R_PX := 13.0
 const AIR_JUMP_RING_PX := 2.0
 const AIR_JUMP_RING_COLOR := Color(1.0, 0.93, 0.72, 0.85)
+
+# --- onboarding (`onboarding-and-palette-tabs.md` Stage 7) ---
+## **Tab is a key, not a thing on screen** — the design's own named problem, and the reason this exists at
+## all: the HUD key line already says "Tab 조립창", but it sits behind F3 (`stage._update_hud`'s own gate),
+## so it is not a target a fresh player can ever see. `onboard_view` draws its own key cap instead.
+##
+## **Every value below is a starting value — nobody has judged any of them.** Seat: bottom-centre, above the
+## HUD band (the plan's own stated default). Small and off to the side on purpose — **not full-screen**
+## (CLAUDE.md risk: a full-screen `Control` while the run is live kills "you can shoot with the window open").
+const ONBOARD_RECT := Rect2(430.0, 430.0, 100.0, 80.0)
+
+## The "Tab" key cap — a small rounded-looking chip with the key name inside.
+const ONBOARD_KEY_W_PX := 44.0
+const ONBOARD_KEY_H_PX := 26.0
+const ONBOARD_KEY_BG := Color(0.14, 0.15, 0.20, 0.95)
+const ONBOARD_KEY_EDGE := Color(1.0, 0.92, 0.55, 0.95)
+const ONBOARD_KEY_EDGE_PX := 2.0
+const ONBOARD_KEY_TEXT := "Tab"
+const ONBOARD_KEY_TEXT_SIZE := 14
+const ONBOARD_KEY_TEXT_COLOR := Color(1.0, 0.95, 0.8, 1.0)
+
+## The arrow — directly above the key cap, pointing down at it. A filled triangle, the simplest shape that
+## reads as "there, specifically" without needing new art for a first slice.
+const ONBOARD_ARROW_W_PX := 22.0
+const ONBOARD_ARROW_H_PX := 26.0
+const ONBOARD_ARROW_GAP_PX := 6.0
+const ONBOARD_ARROW_COLOR := Color(1.0, 0.92, 0.55, 0.95)

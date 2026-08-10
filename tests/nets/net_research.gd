@@ -1151,6 +1151,10 @@ func _a_bought_rune_survives_the_departure_gate(t) -> void:
 	var pr: Variant = world.call("progress")
 	var circle: Variant = root.get("_circle")
 
+	# **A round circle first** — the shell's own `_circle` boots empty (`SpellCircle.CIRCLE_NONE`,
+	#  `onboarding-and-palette-tabs.md` Stage 3), which has 0 rune slots.
+	circle.call("set_circle", SpellCircle.DEFAULT_CIRCLE)
+
 	# -- bought: it comes through the gate --
 	pr.set("gems", Progress.GEMS_PER_UNLOCK)
 	t.ok(pr.call("buy", UnlockDefs.UNLOCK_RUNE_WATER), "마을에서 물 룬을 샀다 (전제)")
@@ -1183,8 +1187,14 @@ func _a_bought_rune_survives_the_departure_gate(t) -> void:
 ## The design asked for one added to `_update_hud()`. It is **dead code**: `HUD/Stats` (which draws
 ## `_town_message`) is hidden while the bench is open (`stage.gd:1239`), and `_toggle_research()` already
 ## rebuilds `_town_message` on **both** open and close (`stage.gd:1053`). So by the moment anyone can read
-## the line, it has already been rebuilt. What is measured here is that real property, driven through
-## `_interact()` — not the line that would have been added.
+## the line, it has already been rebuilt. What is measured here is that real property.
+##
+## **Driven through `_toggle_research()` directly, not `_interact()`** — `onboarding-and-palette-tabs.md`
+## Stage 7 closed `_interact()`'s door onto the research bench (E now does nothing there; `town_view`
+## draws 「준비중」 instead), and the plan's own words ("`net_research` stays untouched") turned out false
+## for this one check, which is the only one in this file that used `_interact()` as its entry rather than
+## calling the window's own toggle. `_toggle_research()`, `Progress.buy()`, `UnlockDefs` and
+## `research_window.gd` are all still exactly as they were — only the door this check walked through moved.
 func _closing_the_bench_refreshes_the_town_message(t) -> void:
 	var root: Node = await _treed_stage(t)
 	if root == null:
@@ -1195,7 +1205,7 @@ func _closing_the_bench_refreshes_the_town_message(t) -> void:
 	ch.call("place", int(float(seats[Fixtures.KIND_RESEARCH]) - Character.W_PX * 0.5),
 		TownMap.SPAWN_TILE.y * 16)
 
-	root.call("_interact")
+	root.call("_toggle_research")
 	t.ok(bool((root.get("_research_window") as Object).get("visible")), "연구창이 열렸다 (전제)")
 	var opened := String(root.get("_town_message"))
 	t.ok(opened.contains("연구대"), "연구대가 말했다 (전제 — %s)" % opened)
@@ -1213,7 +1223,7 @@ func _closing_the_bench_refreshes_the_town_message(t) -> void:
 	_click(win, Layout.unlock_chip_rects(row, _widths(ids, pr))[ids.find(UnlockDefs.UNLOCK_RUNE_WATER)].get_center())
 	t.ok(pr.call("is_unlocked", UnlockDefs.UNLOCK_RUNE_WATER), "창 안에서 클릭으로 물 룬을 샀다 (전제)")
 
-	root.call("_interact")
+	root.call("_toggle_research")
 	t.ok(not bool((root.get("_research_window") as Object).get("visible")), "한 번 더 눌러 닫았다 (전제)")
 	var closed := String(root.get("_town_message"))
 	t.ok(closed != opened,
