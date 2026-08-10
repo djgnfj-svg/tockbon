@@ -13,6 +13,12 @@ extends RefCounted
 ##  Written as one lump, the assembly window gets rebuilt wholesale — that one thing is what the design's
 ##  "Boundary" asked of this stage.
 ##
+## **One exception, taken deliberately** (`onboarding-and-palette-tabs.md`, "한 칸씩 바깥으로"):
+##  `layer_bands()`'s `PIC_ROUND` branch reads `rune_radius()` to find where the ring zone starts, because
+##  growing the rune with no offset on the layer side leaves the rings sitting on top of it. **Read-only and
+##  one-directional** — the rune axis still never reads the layer axis back, so a layer's own size cannot
+##  move the rune. The table above still holds for `PIC_TRIANGLE`, which never takes this branch.
+##
 ## **The three sharing one `_center` and `_radius` is not mixing the axes.** It is the opposite —
 ##  have each find its own center and **the center lives in three places**, and the day the window size changes
 ##  the three drift apart.
@@ -173,10 +179,17 @@ static func layer_bands(circle_id: int, area: Rect2) -> Array[Dictionary]:
 				"hit": Vector2(inner, outer),
 			})
 		return out
+	# **"한 칸씩 바깥으로" is one derived rule, not two tuned numbers** (`onboarding-and-palette-tabs.md`
+	#  Stage 5). The round rune sits dead center, so "move the rune outward" has no direction — what actually
+	#  needs to move is where the ring zone *starts*. `hole` pushes that start to just outside the rune's own
+	#  drawn edge (`CIRCLE_RING_GAP_FRAC` is the "one칸" gap), and both layers scale into the remaining band
+	#  out to `zone`. Grow the rune (`CIRCLE_RUNE_RATIO`) and every layer seat follows on its own — there is
+	#  no second offset to keep in step, which is the whole point of writing it this way.
 	var zone := _radius(area) * Fx.CIRCLE_RING_ZONE
+	var hole := rune_radius(circle_id, area) + _radius(area) * Fx.CIRCLE_RING_GAP_FRAC
 	var c := _center(area)
 	for i in n:
-		var outer := zone * float(i + 1) / float(n)
+		var outer := hole + (zone - hole) * float(i + 1) / float(n)
 		out.append({
 			"center": c,
 			"edges": PackedFloat32Array([outer]),

@@ -117,7 +117,19 @@ not keep its own list. A net can then drive ownership with no scene at all — t
 **`circle_window.setup()` gains a `Progress` argument** — one line there, one at `stage.gd:326`.
 `_pick_window.setup(_world.progress(), _circle)` (`stage.gd:331`) is the precedent, verbatim.
 
-### Veiled, not hidden — and this is why #2 gates at `_slot_accepts`, not at `items_of`
+### ~~Veiled, not hidden~~ — **reversed by the user. The unowned cell is now gone entirely**
+
+**Read this before trusting anything in this section.** The user looked at the palette and reversed it:
+**what you do not own has no cell at all** — not drawn, no seat in the row, nothing returned by the hit test.
+The grounds and the rejected branches are in
+[`docs/decisions/palette-hides-what-you-do-not-own.md`](../../decisions/palette-hides-what-you-do-not-own.md);
+the work is [`../1.ready/onboarding-and-palette-tabs.md`](../1.ready/onboarding-and-palette-tabs.md).
+
+⇒ **The table below is now a record of a rejected branch, not of the shipped behavior**, and its right-hand
+column inverts: **filtering `items_of` is what happens**, so `net_circle._palette_is_kind_by_item`'s
+`items_of(KIND_RUNE) == ELEM_ALL` — the check this section was written to keep green — **goes red on purpose.**
+**The veil itself survives** for the other question (`_can_pick`: "you own it, but nothing will take it right
+now"); what it stops meaning is "not yours".
 
 Two ways to gate, and they differ on screen and in the nets:
 
@@ -302,8 +314,10 @@ directly with the owned set at `{none, water}`, a state `reset_stage()` itself c
 
 1. **A fresh run starts with the none rune in the seat — and can still fire**
 2. **The staff tip reads none, not fire** — distinguishable by eye from a fire run
-3. **Fire is visible in the palette and cannot be picked** — veiled, not missing
-4. **Water is visible and cannot be picked either** — nothing in this game grants it yet
+3. ~~**Fire is visible in the palette and cannot be picked** — veiled, not missing~~
+   **Void — reversed by the user** (see "Veiled, not hidden" above). Fire is **missing**, not veiled
+4. ~~**Water is visible and cannot be picked either** — nothing in this game grants it yet~~ **Void, same
+   reversal.** Water is missing too, and for the same reason: nothing grants it
 5. **Kill the bull, take the reward → fire becomes pickable**, and placing it turns the staff tip fire
 6. **Before the bull, nothing grants fire** — the reward key does nothing on its own
 7. **A preset key does not wipe an earned rune**

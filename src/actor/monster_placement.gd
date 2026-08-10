@@ -36,8 +36,8 @@ const BossAi := preload("res://src/actor/boss_ai.gd")
 ##    asleep, before the player can see it. Materialising earlier costs nothing on the cap (§8).
 ##  · **`Monster.asleep`** — a *live* monster's behavioral sleep, updated by `world_step`'s tick branch
 ##    from the monster's actual current position. **This is what the player watches happen**, so its band
-##    sits **inside the distance a mob becomes visible at** — `STIR_ENTER_PX` 300 < **552**, not < 480.
-##    **The 480 comparison is the wrong one** and the box below says why (the camera lead adds 72); it is
+##    sits **inside the distance a mob becomes visible at** — `STIR_ENTER_PX` 300 < **512**, not < 480.
+##    **The 480 comparison is the wrong one** and the box below says why (the camera lead adds 32); it is
 ##    written here in the corrected form so the header does not argue with itself two paragraphs later.
 ##    A band and not one threshold, or a monster sitting exactly on it flips state every tick.
 ##
@@ -52,15 +52,19 @@ const BossAi := preload("res://src/actor/boss_ai.gd")
 ## | | |
 ## |---|---|
 ## | half the viewport at zoom 1.0 | 480px |
-## | `Fx.CAM_LEAD_PX`, leading toward travel | **+72px** |
-## | ⇒ **the distance a mob becomes visible at** | **552px** |
+## | `Fx.CAM_LEAD_PX`, leading toward travel | **+32px** |
+## | ⇒ **the distance a mob becomes visible at** | **512px** |
 ##
-## **The mob does not wake before it is visible — 300 < 552.** It is visible *and asleep* across
-## `552 - STIR_ENTER_PX`, so the pale dormant tint and the wake mark got **132px = 0.51s** at 260px/s.
-## ⇒ **Raising this SHRINKS the window** (at 520 it is 32px, 0.12s). **Lowering widens it**: 300 gives
-## **252px = 0.97s** of walking toward a clump you can see is asleep.
+## **The mob does not wake before it is visible — 300 < 512.** It is visible *and asleep* across
+## `512 - STIR_ENTER_PX`, so the pale dormant tint and the wake mark got **92px = 0.35s** at 260px/s.
+## ⇒ **Raising this SHRINKS the window** (at 480 it is 32px, 0.12s). **Lowering widens it**: 300 gives
+## **212px = 0.82s** of walking toward a clump you can see is asleep.
 ## **Do not "fix" this by raising it.** Two readers have now made that inference from "420 < 480", which is
-## the right comparison against the wrong number — the camera lead is what puts the edge at 552.
+## the right comparison against the wrong number — the camera lead is what puts the edge at 512.
+## **Correction (`boss-entrance-and-hp-bar.md`, Stage A) — `CAM_LEAD_PX` dropped from 72 to 32 after this
+## box was written and the box itself went uncorrected. Every number above is now the real 512px edge; it
+## does not change any behavior here (300 < 512 either way) but a boss's own trigger math must not copy
+## the old 552.
 const MATERIALIZE_PX := 720.0
 const STIR_ENTER_PX := 300.0
 const STIR_EXIT_PX := 560.0
@@ -92,10 +96,21 @@ var _spent: Array[bool] = []
 ## The materialise bit for a still-dormant row — see `MATERIALIZE_PX` above. Meaningless once
 ## `_monster_id[i] != 0` (the row is live and this scan skips it forever).
 var _primed: Array[bool] = []
+## **`boss-entrance-and-hp-bar.md` Stage A.** `-1` when the row has no `"trigger_tx"` column (30 of 32 rows
+## today) — those rows keep `MATERIALIZE_PX` byte-for-byte, below. `>= 0` is a boss row's own trigger tile:
+## it skips `_primed`/`stays_active` entirely and fires the first tick the player has crossed **east** of it
+## (one-directional, on purpose — both stage-1 bosses are entered from the west; a boss approached from the
+## east needs a second column that does not exist yet).
+var _trigger_tx: Array[int] = []
 ## Monster id -> row index, so the death loop (which only knows the dying id) can find its row without
 ## a linear search every death. Not a stash of anything that left a spell layer — the same bookkeeping
 ## shape `world_step.gd`'s own `_monsters`/`_died_kind` (keyed by id or by tick, not by a glyph) already are.
 var _id_to_row: Dictionary = {}
+
+## **The materialise notification — the shape `world_step._died_*` already is.** Cleared at the top of every
+## `wake_scan()`, set to the fresh monster's id when a row whose kind passes `BossAi.has_pattern` fires this
+## tick. Lives exactly one tick; `stage.gd._on_ticked()` is its one reader (`woke_boss_id()` below).
+var _woke_boss_id := 0
 
 var _floor_cy := 0
 ## **How many rows of the pushed table are boss kinds** — `spawn_monster`'s reserve
@@ -176,6 +191,7 @@ func set_rows(rows: Array[Dictionary], floor_cy: int) -> void:
 	_monster_id.clear()
 	_spent.clear()
 	_primed.clear()
+	_trigger_tx.clear()
 	_id_to_row.clear()
 	_floor_cy = floor_cy
 	_boss_rows = 0
@@ -185,6 +201,7 @@ func set_rows(rows: Array[Dictionary], floor_cy: int) -> void:
 		_monster_id.append(0)
 		_spent.append(false)
 		_primed.append(false)
+		_trigger_tx.append(int(row["trigger_tx"]) if row.has("trigger_tx") else -1)
 		if BossAi.has_pattern(int(row["kind"])):
 			_boss_rows += 1
 
@@ -200,6 +217,10 @@ func reset() -> void:
 		_spent[i] = false
 		_primed[i] = false
 	_id_to_row.clear()
+	# **Not load-bearing** — `wake_scan()` clears this itself before ever reading it, the same "lives one
+	#  tick" contract its own comment states. Zeroed here anyway so a reader between `reset()` and the next
+	#  `wake_scan()` cannot see a stale id from the run that just ended.
+	_woke_boss_id = 0
 
 
 func row_count() -> int:
@@ -231,6 +252,12 @@ func monster_id_at(i: int) -> int:
 	return _monster_id[i]
 
 
+## The boss row that materialised **this tick**, or 0. `WorldStep.woke_boss_id()` re-exports this verbatim —
+## see `_woke_boss_id`'s own comment for the "lives one tick" contract.
+func woke_boss_id() -> int:
+	return _woke_boss_id
+
+
 ## **Called once per 20Hz tick** (`world_step.frame()`'s tick branch), never once per 60Hz frame — 3x
 ## cheaper, and the granularity (13px of player travel at `MOVE_SPEED_PX` 260) is far finer than the
 ## 720px threshold, so nothing is lost by not checking every frame. Putting it on the same clock as
@@ -240,14 +267,27 @@ func monster_id_at(i: int) -> int:
 ## `spawn_fn` is `WorldStep.spawn_monster`, passed in rather than this file calling it by name — this
 ## file cannot `preload("res://src/actor/world_step.gd")` (that file already preloads this one; a cycle).
 func wake_scan(grid: CellGrid, target_x: int, spawn_fn: Callable) -> void:
+	# **Cleared every call, before any row is looked at** — the same "lives one tick" contract the death
+	#  notification (`world_step._died_*`) already holds. Set again below only if a boss row fires this call.
+	_woke_boss_id = 0
 	for i in _tx.size():
 		if _spent[i] or _monster_id[i] != 0:
 			continue
-		var half_w := float(MonsterDefs.w_px(_kind[i])) * 0.5
-		var center_x := float(_tx[i] * Tuning.TILE_CELLS * Tuning.CELL_PX) + half_w
-		var dist := absf(float(target_x) - center_x)
-		_primed[i] = stays_active(_primed[i], dist, MATERIALIZE_PX, MATERIALIZE_PX)
-		if not _primed[i]:
+		var ready: bool
+		if _trigger_tx[i] >= 0:
+			# **A boss row — position only, not the hysteresis band.** Fires the first tick the player's
+			#  centre has crossed east of the trigger tile; `_monster_id[i] != 0` above is what stops it
+			#  firing twice, the same guarantee every other row already leans on. One-directional on
+			#  purpose (`_trigger_tx`'s own comment) — both stage-1 bosses are approached from the west.
+			var trigger_px := float(_trigger_tx[i] * Tuning.TILE_CELLS * Tuning.CELL_PX)
+			ready = float(target_x) >= trigger_px
+		else:
+			var half_w := float(MonsterDefs.w_px(_kind[i])) * 0.5
+			var center_x := float(_tx[i] * Tuning.TILE_CELLS * Tuning.CELL_PX) + half_w
+			var dist := absf(float(target_x) - center_x)
+			_primed[i] = stays_active(_primed[i], dist, MATERIALIZE_PX, MATERIALIZE_PX)
+			ready = _primed[i]
+		if not ready:
 			continue
 		# Primed and still inside the band — knock on the one door every tick until it opens.
 		var res := resolve(grid, _tx[i], _kind[i], _floor_cy)
@@ -256,7 +296,10 @@ func wake_scan(grid: CellGrid, target_x: int, spawn_fn: Callable) -> void:
 			# transient refusal — spend it so it barks once, not every tick forever.
 			_spent[i] = true
 			continue
-		var id: int = spawn_fn.call(_kind[i], int(res["px"]), int(res["py"]))
+		# **`entrance := true`, every row, unconditionally** (`boss-entrance-and-hp-bar.md` Stage A). A no-op
+		#  for every trash-mob row — `spawn_monster`'s own guard is `BossAi.has_pattern(kind)`, which every
+		#  row here except the two boss rows fails — so this is not a second branch on `_trigger_tx[i]`.
+		var id: int = spawn_fn.call(_kind[i], int(res["px"]), int(res["py"]), true)
 		if id <= 0:
 			# Refused — the cap, or (impossible here since `resolve` already checked headroom and the
 			# table is authored inside the map) an out-of-grid box. **Never spend on refusal** — a full
@@ -265,6 +308,8 @@ func wake_scan(grid: CellGrid, target_x: int, spawn_fn: Callable) -> void:
 			continue
 		_monster_id[i] = id
 		_id_to_row[id] = i
+		if BossAi.has_pattern(_kind[i]):
+			_woke_boss_id = id
 
 
 ## **Sleep's own eligibility gate** (`monster-placement-stage1.md` Stage D) —

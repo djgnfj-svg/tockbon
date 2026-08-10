@@ -79,8 +79,17 @@ const DEFS: Dictionary = {
 	#
 	# **The price**: no wood anywhere on the map is dug by blasts. "Clear wood with a blast" play disappears.
 	#  That is the point — **only fire removes wood** must stand as a rule for the progression key to survive.
+	# **`rune_only` — only the fire rune's own ignition may light this material** (`burn-out-of-the-bull-room.md`
+	#  §0, the door-protection question). A wood-wide law, not a door-only one: the bull's own fire and a
+	#  runeless blast both pass **through the same command** the fire rune's trace does
+	#  (`CellGrid.cmd_ignite`), and nothing about the command tells them apart except the `src` argument
+	#  `_ignite_cell` now takes. **`docs/decisions/the-door-burns-only-from-the-fire-rune.md`** is the decision;
+	#  this row is where it is enforced.
+	# **Every material with `fuel > 0` must carry this column** — `net_tables` measures that pairing directly.
+	#  Without it, ordinary fire's ability to spread (`_burn`'s own unconditional `IGNITE_RUNE_FIRE` argument,
+	#  below) stops being provably safe the moment a second fuel-bearing material is added.
 	WOOD: {"name": &"나무", "behavior": BEHAVIOR_STATIC, "fuel": 200, "rgb": 0x6B4524,
-		"indestructible": true},
+		"indestructible": true, "rune_only": true},
 	BEDROCK: {"name": &"기반암", "behavior": BEHAVIOR_STATIC, "fuel": 0, "rgb": 0x232228,
 		"indestructible": true},
 	# **Two values derive the rules. Do not write separate blocking code.**
@@ -134,6 +143,17 @@ static func bake_indestructible() -> PackedByteArray:
 	out.resize(SLOT_COUNT)
 	for id: int in ALL:
 		out[id] = 1 if bool(DEFS[id].get("indestructible", false)) else 0
+	return out
+
+
+## **Mirrors `bake_indestructible()` exactly.** Missing materials are lightable by anything (default false) —
+##  omitting `"rune_only"` from `DEFS` for a new fuel-bearing material means **it is open to ordinary fire**,
+##  the same "breakable is the default" idiom that constant already holds for destruction.
+static func bake_rune_only() -> PackedByteArray:
+	var out := PackedByteArray()
+	out.resize(SLOT_COUNT)
+	for id: int in ALL:
+		out[id] = 1 if bool(DEFS[id].get("rune_only", false)) else 0
 	return out
 
 

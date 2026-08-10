@@ -46,6 +46,9 @@ static func _to_rgb(c: Color) -> int:
 func run(t) -> void:
 	_grid_constants(t)
 	_materials(t)
+	# -- burn-out-of-the-bull-room.md §0 --
+	_every_fuel_material_is_rune_only(t)
+	_wood_is_still_indestructible(t)
 	_glyphs(t)
 	_defs_and_all_agree(t)
 	_view_follows_the_rune_axis(t)
@@ -495,9 +498,10 @@ func _gen_tables(t) -> void:
 
 	# **Adding a column means adding its name to this list too.** Skip that and nobody measures it while the
 	#  pass count stays green — this file measured it with the `damage` column and wrote it down that way.
-	#  `water_r` was added when the water rune stood up.
+	#  `water_r` was added when the water rune stood up. `pillar_w`/`pillar_h` were added with condense
+	#  (`glyph-condense.md` §11.3, whose own comment records the same 1,038-green trap for anyone who forgets).
 	_strictly_decreasing(t, sim, "SIM_SIZES",
-		["speed", "rd", "ignite_r", "rune_r", "carve_r", "water_r"])
+		["speed", "rd", "ignite_r", "rune_r", "carve_r", "water_r", "pillar_w", "pillar_h"])
 	_strictly_decreasing(t, fx, "FX_SIZES", ["bolt_px", "trail_ticks", "flash_px", "shake_px"])
 
 	# The ignition radius must exceed the destruction radius for fire to catch — it must hold **per generation.**
@@ -626,6 +630,30 @@ func _materials(t) -> void:
 	# Stone does not burn. If this breaks, "does fire stop at stone" (acceptance 5) becomes meaningless entirely.
 	t.eq(int(Mat.DEFS[Mat.STONE]["fuel"]), 0, "돌은 연료가 0이다")
 	t.ok(int(Mat.DEFS[Mat.WOOD]["fuel"]) > 0, "나무는 연료가 있다")
+
+
+## **`burn-out-of-the-bull-room.md` §0 — every fuel-bearing material must be `rune_only`.**
+## The argument `cell_grid._burn`'s own comment leans on ("ordinary fire never gets a foothold in a
+## `rune_only` material, so spread cannot carry it in") only holds while this is true for **every** material
+## with fuel > 0, not just today's one (`WOOD`). The day a second flammable material is added without this
+## column, that argument silently stops holding — this is the check that catches it instead of a comment.
+func _every_fuel_material_is_rune_only(t) -> void:
+	var rune_only := Mat.bake_rune_only()
+	t.eq(rune_only.size(), Mat.SLOT_COUNT, "rune_only 테이블 길이가 SLOT_COUNT")
+	for id: int in Mat.ALL:
+		t.eq(rune_only[id], 1 if bool(Mat.DEFS[id].get("rune_only", false)) else 0,
+			"%s의 rune_only가 DEFS에서 나온다" % Mat.material_name(id))
+		if int(Mat.DEFS[id]["fuel"]) > 0:
+			t.ok(bool(Mat.DEFS[id].get("rune_only", false)),
+				"연료가 있는 재료(%s)는 rune_only다" % Mat.material_name(id))
+
+
+## **`WOOD` must stay `indestructible` too** (`burn-out-of-the-bull-room.md`'s own corrected Bounds row — the
+## bull's charge cannot dig the door because `WOOD` carries this, not because of distance). Pinning it here
+## means deleting the column goes red instead of only being noticed on screen the day it happens.
+func _wood_is_still_indestructible(t) -> void:
+	t.ok(bool(Mat.DEFS[Mat.WOOD].get("indestructible", false)), "나무가 여전히 indestructible이다")
+	t.eq(Mat.bake_indestructible()[Mat.WOOD], 1, "구운 배열에서도 나무가 indestructible이다")
 
 
 ## Adding one glyph = one row in DEFS + one row in ALL. If those diverge, that glyph becomes a ghost that is

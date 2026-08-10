@@ -4,6 +4,43 @@
 this doc's own record). **"Done" means implementation, not acceptance** (CLAUDE.md) — see the three lists
 right below before reading this as more settled than it is.
 
+> ## ⚠⚠ **The wood wall comes back *into* room ① — acceptance 5's protection is deleted** (decided by the user)
+>
+> **Room ①'s east wall becomes the wood door.** Kill the bull, take the fire rune, burn the wall you are
+> standing in front of. ⇒ [`2.active/burn-out-of-the-bull-room.md`](../2.active/burn-out-of-the-bull-room.md) (now building) ·
+> [`decisions/the-rune-is-used-where-it-is-won.md`](../../decisions/the-rune-is-used-where-it-is-won.md)
+>
+> **What in this doc stops being true:**
+>
+> - **"⇒ Move the wood wall outside room ①" (the Risk-4/Risk-8 fork, and the summary row "The wood wall is
+>   outside ①") is reversed.** The wall comes back in. **The fire sticking to terrain is untouched.**
+> - **Acceptance 5 ("that fire does not reach the wood wall") loses its grounds.** This doc already wrote why:
+>   it survives *"only because Stage C confines the bull to room ① and the wall sits far enough outside it …
+>   **If the map ever changes to put the bull within reach of that wall, this acceptance breaks with no code
+>   change at all.**"* **That map change is this one.** Measured here (before the fix): a bull next to the
+>   wood burned all 1,152 cells from either side; `BOLT_RANGE_PX` 480 = 15 tiles, and tx145 → x160 is
+>   **exactly 15**. ⇒ **A protection fork must land or the decision reverses** — the four forks are in the
+>   plan doc's Bounds. **Fork 1 landed** (`burn-out-of-the-bull-room.md` §0, built) — see the `rune_only`
+>   bullet below for the measurement re-taken after it.
+> - **Risk 4's "no fuel in room ①, so the sticking is unobservable there" ends, and so does the sticking
+>   itself.** There is wood in room ① now, but it is `rune_only`
+>   (`burn-out-of-the-bull-room.md` §0, built) — **the bull's own fire, and any blast that is not a fire
+>   circle, no longer ignites it at all.** This is stronger than "the map keeps them apart" (the fork this doc
+>   priced) — it is a rule, not a distance. **Acceptance 4's own measurement below ("the bull burned in its
+>   own fire on screen, 300 → 280") still holds** — that is a monster taking *segment/blast damage* from its
+>   own bolt, unrelated to whether the bolt's terrain-ignition can catch wood — but **"a bull next to the wood
+>   burned all 1,152 cells, from either side" (this box's own next bullet, and Risk 4's original measurement)
+>   is reversed: driven again after the fix, a bull built beside a `rune_only` wall left it fully intact,
+>   every time, from either side. `net_monster_breath`/`net_monster_slam` hold this now, inverted and
+>   confirmed red on the old behavior.**
+> - **Stage I's `_room1_reward_water` loses its job.** The escape it poured for is dropped; whether the pour
+>   itself is deleted is the plan doc's TBD. **The reward gate (`boss_died` → rune) is untouched.**
+> - **Risk 13's "zone ② is unreachable until the water escape lands"** — ② is deleted instead
+>   ([`decisions/no-trash-run-between-the-two-bosses.md`](../../decisions/no-trash-run-between-the-two-bosses.md)).
+> - **Room ③ may move down 7 rows** (the plan's geometry fork A). **Nobody has driven the rooster at `ty32`.**
+>
+> Everything else in this doc — both bosses' patterns, phases, and every measurement — is unaffected.
+
 **Not accepted.** Nothing in this doc has the user's own `Accepted` mark yet. Two screen fixes (Risk 11's fire
 ring, Risk 12's phase-2 tell shape) are **unlooked-at** — correct by the numbers, blocked from a screen
 re-check by another session holding the editor bridge, neither passed nor failed. The rooster's art (reads
@@ -28,6 +65,22 @@ leaps and pounces. Both **speed up at half health.**
 
 **Map placement** is in [stage1-map-layout.md](stage1-map-layout.md), **the water escape** in
 [water-jump-and-escape.md](../2.active/water-jump-and-escape.md). **The three constrain each other** — see "Interaction".
+
+> ## ⚠ **Two of this doc's own constraints are reversed by the map** (decided by the user)
+>
+> **Room ①'s east wall becomes wood** and the player burns out of the room with the rune they just won ⇒
+> [`../2.active/burn-out-of-the-bull-room.md`](../2.active/burn-out-of-the-bull-room.md) (now building) ·
+> [`decisions/the-rune-is-used-where-it-is-won.md`](../../decisions/the-rune-is-used-where-it-is-won.md)
+>
+> | This doc says | What happens |
+> |---|---|
+> | **"Move the wood wall outside room ①"** · **Boundary: "the wood wall is outside ①"** | **Reversed.** The wall comes back in, as the room's own east face |
+> | **Acceptance 5** — "that fire does not reach the wood wall", *the biggest risk in this doc* | ⚠ **It will reach it.** Bolt range is **480px = 15 tiles**; the room is 30 tiles and the bull starts 15 from the east wall **and walks toward the player.** This doc already measured the outcome: a bull next to the wood **burned all 1,152 cells, from either side** (Risk 4). **Which lever protects the door is unpicked** — that feature's own blocking TBD |
+> | **Acceptance 8b** — "the reward is taken, then water, and the water carries the player out" | **The escape half is dropped.** The **order** (reward, then the wall) is untouched; **whether the pour survives at all** is that feature's TBD, and this doc's own Risk 13-addendum already measured the escape as false (0px in 300s) |
+> | **Boundary: "water only after a boss dies — neither overlaps its fight"** | ⚠ **At risk.** With room ③ adjacent and the door burned, room ①'s water can flow into the rooster fight. That is the strongest argument for deleting the pour |
+>
+> **"No wood inside room ①" is not reversed by anything measured here** — it was written because *wood in the
+> room means the room burns and there is no fight.* **A door in the wall is still wood the bull can light.**
 
 **Source docs**: `docs/design/monsters.md` (trash-mob rules and the AI slot) ·
 `docs/GDD.md` "Inside a stage — the zone loop" (midboss reward = progression key)
@@ -684,6 +737,15 @@ brainless charging becomes its own weakness, and "the world reacts" should not c
 the monster that lit the fire. Unreachable in room ① (no fuel there by design); reachable the moment a bull
 meets wood anywhere else. **The bull's own default `IDLE` behavior is walking toward the player** — walking
 through its own leftover fire is its default behavior, not a bug to fix.
+
+> ⚠ **This whole "acceptances 4 and 6" analysis rests on two premises that `burn-out-of-the-bull-room.md`
+> both changed** (built, §0). First, **room ① now has wood** — rule 6's "no wood in room ①" is gone the day
+> the east wall becomes a door. Second, and the one that actually matters here: **`WOOD` is `rune_only`
+> now**, so "acceptance 4 is unobservable in room ① because there is no fuel" is replaced by a stronger fact
+> — **the bull's own fire bolt cannot ignite wood *anywhere*, fuel or not**, because its ignition source
+> (`IGNITE_ANY`) is never the fire rune's own. The burning-in-its-own-fire finding just above (300 → 287 hp)
+> is untouched — that is segment/blast damage from the bolt itself, not terrain ignition — but "a bull meets
+> wood anywhere else and it catches" no longer holds anywhere in the game, not only in room ①.
 
 **Acceptance 5 is protected by level design, not by any mechanism that forbids it.** verify-run debug-spawned
 a bull directly next to the wood wall and it burned — **all 1,152 cells, from either side.** Nothing in the

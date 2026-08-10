@@ -63,6 +63,16 @@ var _hit_flash_left := 0
 ##  edge, not an hp diff, is the signal.
 var _prev_invuln_left := 0
 
+## **Dust behind running feet** (`Fx.DUST_*`, decided by the user). Same idiom `blast_fx.gd` uses for
+##  flashes/pillars — a plain array of dictionaries, aged and drawn with no per-particle node
+##  (`blast_fx.gd`'s own header on why: `add_child` per particle reopens the physics-callback and
+##  `queue_free` traps this repo has already closed once).
+var _dust: Array[Dictionary] = []
+## Distance walked on the ground since the last puff — **the clock is `_ch.x`, not `delta`**, the same
+##  reason `_moving` above is read from position instead of an accumulator (`Fx.DUST_SPACING_PX`'s own
+##  comment).
+var _dust_travel_px := 0
+
 ## A child layer purely so the flash shader's material does not paint the staff and its ring too.
 ## **The same reason `monster_view._Layer` exists** (that file's own header: a `material` set on `self` applies
 ##  to every draw call this node makes during its own `_draw()`, so drawing the flashed body and the plain
@@ -86,6 +96,7 @@ func setup(ch: Character, circle: SpellCircle, grid: CellGrid, blast_fx: BlastFx
 	if _ch != null:
 		_prev_x = _ch.x
 		_prev_invuln_left = _ch.invuln_left
+	_dust_travel_px = 0
 	queue_redraw()
 
 
@@ -123,7 +134,7 @@ func clear() -> void:
 ## **Hit detection lives here, on the tick, not in `_process` on the frame.** `character.take_hit()` runs only
 ## inside `world_step`'s tick branch (`character.gd`'s own header: "call it at 60Hz and one hit becomes
 ## three") — watching `invuln_left` at 60Hz risks reading the same tick's write zero, one, two or three times
-## depending on phase, the exact 60Hz/20Hz seam `CLAUDE.md` already names three times over. `stage.gd`'s
+## depending on phase, the exact 60Hz/20Hz seam CLAUDE.md already names three times over. `stage.gd`'s
 ## `_on_ticked()` calls this once per tick, the same door `monster_view.on_tick()` and `blast_fx.on_blasts()`
 ## already use.
 ##
@@ -143,14 +154,17 @@ func on_tick() -> void:
 	_prev_invuln_left = _ch.invuln_left
 
 
-func _process(_dt: float) -> void:
+func _process(dt: float) -> void:
 	# **Do not build a separate walk clock.** Both "did it move" and "which frame of the cycle" come out of
 	#  `_ch.x` — accumulate `delta` and there are two clocks from that moment, giving **"it stopped but the legs
 	#  keep moving"**.
 	#  `_process` runs once per frame and `_draw` comes after it => this is the seat for the update.
 	if _ch != null:
-		_moving = _ch.x != _prev_x
+		var dx := _ch.x - _prev_x
+		_moving = dx != 0
 		_prev_x = _ch.x
+		_update_dust(dx)
+	_advance_dust(dt)
 	_hit_flash_left = maxi(0, _hit_flash_left - 1)
 	# The character moves every frame and the staff follows the mouse every frame => always redraw.
 	queue_redraw()
@@ -158,6 +172,52 @@ func _process(_dt: float) -> void:
 	#  names the identical trap ("the flash and the numbers freeze on the first frame").
 	if _flash_layer != null:
 		_flash_layer.queue_redraw()
+
+
+## **Ground-attached only** (`Fx.DUST_SPACING_PX`'s own comment) — airborne movement raises no dust.
+##  `dx` is signed, so which way the character actually moved this frame (not `_ch.facing`, which can point
+##  at the mouse while walking the other way) is what decides which side the puff trails on.
+func _update_dust(dx: int) -> void:
+	if _ch.on_ground and dx != 0:
+		_dust_travel_px += absi(dx)
+		while _dust_travel_px >= Fx.DUST_SPACING_PX:
+			_dust_travel_px -= Fx.DUST_SPACING_PX
+			_spawn_dust(signi(dx))
+	else:
+		# **Reset, not merely paused.** Leaving the counter to run means a jump lands with the counter already
+		#  most of the way to a puff, and the very first ground step after landing puffs early — a footfall
+		#  rhythm that skips a beat and then reads as broken instead of restarting clean.
+		_dust_travel_px = 0
+
+
+func _spawn_dust(dir: int) -> void:
+	var foot := Vector2(float(_ch.x) + Character.W_PX * 0.5, float(_ch.y + Character.H_PX))
+	var back := foot + Vector2(-float(dir) * Fx.DUST_BACK_PX, 0.0)
+	for i in Fx.DUST_COUNT:
+		var jitter := Vector2(
+			randf_range(-Fx.DUST_SPREAD_PX, Fx.DUST_SPREAD_PX),
+			randf_range(-Fx.DUST_SPREAD_PX * 0.5, 0.0))
+		_dust.append({
+			"pos": back + jitter, "t": 0.0,
+			"vel": Vector2(-float(dir) * Fx.DUST_DRIFT_PX_PER_SEC, -Fx.DUST_RISE_PX_PER_SEC),
+		})
+	# Discard the oldest first — the same rule `blast_fx._add`'s own comment gives for flashes: discarding the
+	#  new one instead would make the puff that just landed silently invisible.
+	while _dust.size() > Fx.DUST_MAX:
+		_dust.remove_at(0)
+
+
+func _advance_dust(dt: float) -> void:
+	var i := _dust.size() - 1
+	while i >= 0:
+		var e: Dictionary = _dust[i]
+		var t := float(e["t"]) + dt
+		if t >= Fx.DUST_LIFE_SEC:
+			_dust.remove_at(i)
+		else:
+			e["t"] = t
+			e["pos"] = Vector2(e["pos"]) + Vector2(e["vel"]) * dt
+		i -= 1
 
 
 ## Unit vector toward the mouse. If the mouse is exactly at the character's center it falls back to
@@ -281,6 +341,15 @@ func _draw_flash(canvas: CanvasItem) -> void:
 func _draw() -> void:
 	if _ch == null:
 		return
+	# **Drawn first, so it sits behind the body** — a puff kicked up from the ground reads wrong in front of
+	#  the legs that kicked it. It has no `dim`/invulnerability tie: it is ground dust, not part of the body.
+	for e in _dust:
+		var frac := 1.0 - clampf(float(e["t"]) / Fx.DUST_LIFE_SEC, 0.0, 1.0)
+		if frac <= 0.0:
+			continue
+		var c := Fx.DUST_COLOR
+		_paint_dust(e["pos"], Fx.DUST_R_PX, Color(c.r, c.g, c.b, c.a * frac))
+
 	# **The blink's clock is `invuln_left` itself.** It drops by one per tick, so watching only odd/even
 	#  blinks twice over 0.2 seconds — accumulate `delta` here and there are two clocks from that moment,
 	#  and it blinks after invulnerability has ended. **It only reads** (the first line of this file).
@@ -411,6 +480,14 @@ func _draw() -> void:
 ##  facing left, and **no error is raised** — the same trap the staff ring's own comment records.
 func _paint_air_jump_ring(center: Vector2, radius: float, color: Color) -> void:
 	draw_circle(center, radius, color, false, Fx.AIR_JUMP_RING_PX)
+
+
+## **Cut out of `_draw()` for the same reason `_paint_air_jump_ring` above already is** — a plain
+##  `draw_circle` call cannot be overridden, so this ordinary method is the seam a net uses to prove a grain
+##  actually reached the screen rather than merely that `_draw()` ran (CLAUDE.md's own warning on this exact
+##  shape of false-green).
+func _paint_dust(pos: Vector2, radius: float, color: Color) -> void:
+	draw_circle(pos, radius, color, true)
 
 
 func _draw_downed_tag() -> void:

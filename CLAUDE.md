@@ -155,6 +155,17 @@ the mutation it was written to catch stayed green at 437. `net_gate.gd:274` had 
 down — *"pump well past one to be sure a tick actually ran"*. ⇒ **Observing anything tick-driven means
 pumping `TICK_DIVIDER * 2`, never one frame.**
 
+**The fifth was the most expensive, because it froze a tuning value nobody suspected.** `monster_bolts.
+consume_hits` tests a bolt as a **point**, and it runs on the **tick** while the bolt moves on the **frame** —
+so it samples one position in three. A player walking into a bolt closes ~9px per frame against a 20px-wide
+box, and **a whole tick is 28px**: the two pass through each other with no sample in between.
+**The symptom was not "a bolt missed".** It was that `character.MOVE_SPEED_PX` could not be changed —
+260 hit, and **both 240 and 300 missed**, so a *slower* player dodged better than a faster one. That made the
+uneven 5,4,4 gait (260 ÷ 60 = 4.333) unfixable, and the gait is where the screen shake the user kept
+reporting comes from. **Two sessions read it as "too fast, it tunnels" and reverted the speed.**
+⇒ **A hit test that runs on the tick must sweep the tick, not the frame** — and when a value "cannot be
+changed without breaking something", suspect the sampling rate of whatever breaks.
+
 ## No fake nets
 
 When the label claims more than the check measures, that green is a false guarantee.

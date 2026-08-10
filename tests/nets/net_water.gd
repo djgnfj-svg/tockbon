@@ -114,7 +114,7 @@ func _blast_wakes_chunk(t) -> void:
 	t.ok(calm > 1 and calm < 200, "지형이 결국 다 잠든다 (%d틱 — 상한에 밀린 만큼 걸린다)" % calm)
 	t.eq(g.active_chunk_count(), 0, "완전히 잠들었다")
 
-	g.apply(CellGrid.cmd_blast(200, 200, Tuning.blast_rd(0), Tuning.blast_ignite_r(0)))
+	g.apply(CellGrid.cmd_blast(200, 200, Tuning.blast_rd(0), Tuning.blast_ignite_r(0), CellGrid.IGNITE_ANY))
 	g.step()
 	t.ok(g.chunk_awake_at(200, 200), "폭발 자리의 청크가 깨어난다")
 	t.ok(g.active_chunk_count() > 0, "활성 청크가 0이 아니다 (%d개)" % g.active_chunk_count())
@@ -1133,7 +1133,7 @@ func _run_scenario() -> CellGrid:
 	for i in 60:
 		g.step()
 		if i == 20:
-			g.apply(CellGrid.cmd_blast(250, 620, 6, 9))
+			g.apply(CellGrid.cmd_blast(250, 620, 6, 9, CellGrid.IGNITE_ANY))
 		if i == 40:
 			g.apply(CellGrid.cmd_carve(220, 618, 4))
 	return g

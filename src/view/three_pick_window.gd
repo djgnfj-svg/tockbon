@@ -80,8 +80,8 @@ var _confirm_ticks := 0
 ## exact same loader.** `net_pick.gd`'s own no-inventory check (`_no_pushed_out_glyph_is_stashed_anywhere`)
 ## scans every top-level `var Array`/`Dictionary` under `src/` looking for a stray record of a glyph that left
 ## a spell layer — this is loaded art, not that, and is named in that check's own `allow` list for the same
-## reason `circle_window.gd`'s entry there already is. A glyph missing here (the three dummy ids — nine ids
-## total, six with art) is the normal case `_draw_pick_card_glyph` falls back on, not an error.
+## reason `circle_window.gd`'s entry there already is. A glyph missing here (the dummy and condense families —
+## twelve ids total, six with art) is the normal case `_draw_pick_card_glyph` falls back on, not an error.
 var _socket_glyph_tex: Dictionary = {}
 
 
@@ -446,10 +446,13 @@ func _draw_pick_circle(rect: Rect2, area: Rect2, circle_id: int, font: Font) -> 
 			str(layer + 1), HORIZONTAL_ALIGNMENT_LEFT, -1, num, Fx.CIRCLE_LAYER_NUM)
 
 
-## **The same three shapes `circle_window._draw_glyph` draws — not called, redrawn.** `CanvasItem.draw_*`
+## **The same shapes `circle_window._draw_glyph` draws — not called, redrawn.** `CanvasItem.draw_*`
 ## only runs inside the calling node's own `_draw()` (that file's own header), so a second node showing the
-## same glyph shapes redraws them rather than sharing a function; what is shared is `Fx.GLYPH_TINT` and the
-## shape constants, not code.
+## same glyph shapes redraws them rather than sharing a function; what is shared is `Fx.GLYPH_TINT`/
+## `Fx.GLYPH_SYMBOL` and the shape constants, not code.
+## **By `family` (via `Fx.GLYPH_SYMBOL`), not by `kind`** — the same reason `circle_window._draw_glyph`
+## switched (`glyph-condense.md` §11.5): two families now share `KIND_TERMINAL`, and branching on `kind` alone
+## would draw a condense card as blast's exact disc.
 ## **`alpha` scales the tint's own alpha** — the dim/full split `_draw_step2` needs, one column
 ## (`Fx.PICK_PUSHOUT_DIM_ALPHA`), not a second color table (the same "one column, every kind reads it in its
 ## own place" idiom `power_pct` already holds, one level up).
@@ -459,17 +462,18 @@ func _draw_pick_glyph_shape(at: Vector2, r: float, glyph_id: int, alpha: float) 
 		return
 	var tint: Color = Fx.GLYPH_TINT.get(glyph_id, Fx.GLYPH_TINT_MISSING)
 	tint.a *= alpha
-	var kind := int(Glyph.DEFS[glyph_id]["kind"])
-	if kind == Glyph.KIND_SPAWN:
+	var family := Glyph.family_of(glyph_id)
+	var sym: int = Fx.GLYPH_SYMBOL.get(family, -1)
+	if sym == Fx.SYM_SPAWN_RAYS:
 		for k in Fx.GLYPH_SPAWN_RAYS:
 			var a := TAU * (float(k) + Fx.GLYPH_SPAWN_ANGLE_STEP_FRAC) / float(Fx.GLYPH_SPAWN_RAYS)
 			var d := Vector2(cos(a), sin(a))
 			draw_line(at + d * (r * Fx.GLYPH_SPAWN_INNER_RATIO), at + d * r, tint, Fx.GLYPH_SYMBOL_PX)
 		return
-	if kind == Glyph.KIND_TERMINAL:
+	if sym == Fx.SYM_TERMINAL_DISC:
 		draw_circle(at, r * Fx.GLYPH_TERMINAL_RATIO, tint, true)
 		return
-	if kind == Glyph.KIND_MODIFY:
+	if sym == Fx.SYM_MODIFY_DIAMOND:
 		var d := r * Fx.GLYPH_MODIFY_RATIO
 		var pts: Array[Vector2] = [
 			at + Vector2(0.0, -d), at + Vector2(d, 0.0), at + Vector2(0.0, d), at + Vector2(-d, 0.0),
@@ -477,7 +481,17 @@ func _draw_pick_glyph_shape(at: Vector2, r: float, glyph_id: int, alpha: float) 
 		for k in pts.size():
 			draw_line(pts[k], pts[(k + 1) % pts.size()], tint, Fx.GLYPH_MODIFY_PX)
 		return
-	push_error("ThreePickWindow: glyph kind %d has no drawing" % kind)
+	if sym == Fx.SYM_PILLAR_UP:
+		var half_w := r * Fx.GLYPH_PILLAR_WIDTH_RATIO
+		var base_y := r * Fx.GLYPH_PILLAR_BASE_RATIO
+		var tip_base_y := -r * Fx.GLYPH_PILLAR_TIP_RATIO
+		var pts: Array[Vector2] = [
+			at + Vector2(-half_w, base_y), at + Vector2(half_w, base_y),
+			at + Vector2(half_w, tip_base_y), at + Vector2(0.0, -r), at + Vector2(-half_w, tip_base_y),
+		]
+		draw_polygon(pts, [tint])
+		return
+	push_error("ThreePickWindow: glyph family %d has no symbol (glyph %d)" % [family, glyph_id])
 
 
 ## **The step-1 card's own picture — texture where `circle_window.gd` already has art (spread/blast), the
@@ -584,11 +598,17 @@ func _draw_card(rect: Rect2, glyph_id: int, font: Font) -> void:
 ## warning stands — 16 of the GDD's 17 glyphs are names only, and describing a rarity variant as if its
 ## behavior were decided would make the undecided read as decided. `power_pct` is not that: it is Stage A's
 ## own settled mechanic, so stating its value plainly is honest, not a naming decision.
+## **`KIND_TERMINAL` splits by `family`** (`glyph-condense.md` §11.5) — blast and condense share the kind but
+##  not the sentence: verify-run measured the un-split version producing the literal same string,
+##  `"그 자리에서 터진다 (위력 100%)"`, for both `BLAST_C` and `CONDENSE_C`. `SPAWN`/`MODIFY` still have only
+##  one family each today, so they stay branched by `kind` until a second one of either arrives.
 func _effect_text(glyph_id: int, kind: int) -> String:
 	var pct := Glyph.power_pct_of(glyph_id)
 	if kind == Glyph.KIND_SPAWN:
 		return "여덟 갈래로 흩어진다 (위력 %d%%)" % pct
 	if kind == Glyph.KIND_TERMINAL:
+		if Glyph.family_of(glyph_id) == Glyph.FAMILY_CONDENSE:
+			return "그 자리에서 기둥이 솟는다 (위력 %d%%)" % pct
 		return "그 자리에서 터진다 (위력 %d%%)" % pct
 	if kind == Glyph.KIND_MODIFY:
 		return "이 탄의 위력을 %d%%로 올린다" % pct

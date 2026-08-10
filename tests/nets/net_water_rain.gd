@@ -1,6 +1,13 @@
 extends RefCounted
 ## The rain source (K, `src/sim/water_source.gd`) B-1 · B-2 · B-6 — stage 7 of `net_water.gd` moved here.
 ##
+## **What this measures, honestly**: `water_source.gd`'s own pour, built fresh here and run in room ①'s real
+## vessel. **It is not the game's water** — `burn-out-of-the-bull-room.md` §4 deleted the game's only pour
+## (room ①'s reward water), so stage 1 pours nowhere at all right now. This net's coordinates did not move
+## with that change (the door it cut sits above and west of the vessel — the same doc's §4), so the rig is
+## still sound; only the label was wrong until this line. **`water-jump-and-escape.md` owes the re-point** —
+## the day room ③'s own pour exists, this vessel should measure that one instead.
+##
 ## **Why a separate file (harness-manager, measured)**: putting stage 7 on top of `net_water.gd` took that one
 ##  net from 21s to 48.5s. Measured per function, the five checks (B-1 · B-2 · B-6 · B-3/4 · B-5) alone were
 ##  35.7s and the remaining 39 checks were 11.2s — **in one file they run together.**

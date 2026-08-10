@@ -208,17 +208,19 @@ func _first_tx_of(kind: int) -> int:
 
 ## Pins the counts down (`stage1_monsters.gd`'s own header table), so a future edit to the table has to
 ## touch this number deliberately instead of drifting past it unnoticed.
+## **17/9/4/32 became 11/5/2/20 when zone ② was deleted** (`burn-out-of-the-bull-room.md`, built) — the
+## 12 zone-② rows (6 pig · 4 hen · 2 wolf) are gone, not moved.
 func _zone_totals(t) -> void:
 	var counts: Dictionary = {}
 	for row: Dictionary in Stage1Monsters.ROWS:
 		var k: int = row["kind"]
 		counts[k] = counts.get(k, 0) + 1
-	t.eq(counts.get(MonsterDefs.KIND_PIG, 0), 17, "돼지 총수가 17이다 (pre-① 11 + zone② 6)")
-	t.eq(counts.get(MonsterDefs.KIND_HEN, 0), 9, "닭 총수가 9다 (pre-① 5 + zone② 4)")
-	t.eq(counts.get(MonsterDefs.KIND_WOLF, 0), 4, "늑대 총수가 4다 (pre-① 2 + zone② 2)")
+	t.eq(counts.get(MonsterDefs.KIND_PIG, 0), 11, "돼지 총수가 11이다 (pre-①만, 존②는 삭제됐다)")
+	t.eq(counts.get(MonsterDefs.KIND_HEN, 0), 5, "닭 총수가 5다 (pre-①만)")
+	t.eq(counts.get(MonsterDefs.KIND_WOLF, 0), 2, "늑대 총수가 2다 (pre-①만)")
 	t.eq(counts.get(MonsterDefs.KIND_BULL, 0), 1, "황소가 정확히 하나다")
 	t.eq(counts.get(MonsterDefs.KIND_ROOSTER, 0), 1, "수탉이 정확히 하나다")
-	t.eq(Stage1Monsters.ROWS.size(), 32, "표 전체 행 수가 32다")
+	t.eq(Stage1Monsters.ROWS.size(), 20, "표 전체 행 수가 20이다 (존②가 빠졌다)")
 
 
 ## **§6's invariant, and it is per clump, not per run.** A clump is easier to skip than an even spread —
@@ -358,7 +360,11 @@ func _wake_scan_creates_a_monster_inside_the_activation_band_not_before(t) -> vo
 	var mp := MonsterPlacement.new()
 	mp.set_rows([{"tx": 100, "kind": MonsterDefs.KIND_PIG}], SYN_FLOOR_CY)
 	var spawned: Array[int] = []
-	var spy := func(_kind: int, px: int, _py: int) -> int:
+	# **A 4th parameter, `entrance`** (`boss-entrance-and-hp-bar.md` Stage A) — `wake_scan()` now calls
+	#  `spawn_fn` with it unconditionally (true, every row), so a 3-arg spy errors on every call and this
+	#  whole check silently measures nothing (`spawned` never grows). Unused here on purpose — this check is
+	#  about the activation band, not the entrance flag; `net_boss_entrance.gd` is where that flag is measured.
+	var spy := func(_kind: int, px: int, _py: int, _entrance: bool) -> int:
 		spawned.append(px)
 		return 1
 	var center_x := 100 * Tuning.TILE_CELLS * Tuning.CELL_PX
@@ -382,7 +388,8 @@ func _a_killed_row_never_comes_back(t) -> void:
 	#  on this exact trap); an `Array`'s captured value is a reference to the same object, so mutating its
 	#  contents (not reassigning the variable) reaches the same object this scope reads.
 	var next_id := [1]
-	var spy := func(_kind: int, _px: int, _py: int) -> int:
+	# **4-arg spy** — see the comment on the first `spy` above (`wake_scan()`'s own new `entrance` argument).
+	var spy := func(_kind: int, _px: int, _py: int, _entrance: bool) -> int:
 		var id: int = next_id[0]
 		next_id[0] += 1
 		return id
@@ -403,7 +410,9 @@ func _reset_rearms_every_row(t) -> void:
 	var g := _flat_grid()
 	var mp := MonsterPlacement.new()
 	mp.set_rows([{"tx": 50, "kind": MonsterDefs.KIND_PIG}], SYN_FLOOR_CY)
-	var spy := func(_kind: int, _px: int, _py: int) -> int:
+	# **4-arg spy** — see the comment on `_wake_scan_creates_a_monster_inside_the_activation_band_not_before`'s
+	#  own `spy` (`wake_scan()`'s new `entrance` argument).
+	var spy := func(_kind: int, _px: int, _py: int, _entrance: bool) -> int:
 		return 1
 	var center_x := 50 * Tuning.TILE_CELLS * Tuning.CELL_PX
 
@@ -423,7 +432,8 @@ func _a_capped_refusal_leaves_the_row_dormant_not_spent(t) -> void:
 	var g := _flat_grid()
 	var mp := MonsterPlacement.new()
 	mp.set_rows([{"tx": 50, "kind": MonsterDefs.KIND_PIG}], SYN_FLOOR_CY)
-	var refuse := func(_kind: int, _px: int, _py: int) -> int:
+	# **4-arg refuse** — see the comment on the first `spy` above (`wake_scan()`'s new `entrance` argument).
+	var refuse := func(_kind: int, _px: int, _py: int, _entrance: bool) -> int:
 		return 0  # the cap, simulated
 	var center_x := 50 * Tuning.TILE_CELLS * Tuning.CELL_PX
 
@@ -434,7 +444,8 @@ func _a_capped_refusal_leaves_the_row_dormant_not_spent(t) -> void:
 	#  (a spent row is skipped forever, so `accept` would never be reached).
 	t.ok(not mp.is_spent(0), "그리고 소진되지도 않는다 (다시 시도할 수 있다)")
 
-	var accept := func(_kind: int, _px: int, _py: int) -> int:
+	# **4-arg accept** — see the comment on the first `spy` above (`wake_scan()`'s new `entrance` argument).
+	var accept := func(_kind: int, _px: int, _py: int, _entrance: bool) -> int:
 		return 7
 	mp.wake_scan(g, center_x, accept)
 	t.ok(mp.is_live(0), "다음 틱에 문이 열리면 실제로 살아난다 (재시도가 실제로 동작한다)")
@@ -516,7 +527,8 @@ func _materialising_is_one_threshold_with_no_hysteresis(t) -> void:
 	var mp := MonsterPlacement.new()
 	var kind := MonsterDefs.KIND_PIG
 	mp.set_rows([{"tx": 50, "kind": kind}], SYN_FLOOR_CY)
-	var refuse := func(_kind: int, _px: int, _py: int) -> int:
+	# **4-arg refuse** — see the comment on the first `spy` above (`wake_scan()`'s new `entrance` argument).
+	var refuse := func(_kind: int, _px: int, _py: int, _entrance: bool) -> int:
 		return 0  # stays dormant regardless — isolates the `_primed` bit from the spawn outcome
 	# **Production measures distance to the row's centre**, not its left edge (verify-read's own finding
 	#  on the check this replaced) — `half_w` is added here so `d` below **is** the real `dist`.
@@ -789,11 +801,11 @@ func _the_wiring_line_actually_reaches_the_real_stage(t) -> void:
 ## (`_the_floating_platform_trap_...`) prove the *logic*; this pins `resolve()`'s real output on the real
 ## map at the two columns where up/down genuinely disagree (measured directly, not assumed):
 ##  · `tx49` — upward finds `ty20` (the real ground); downward finds `ty15` (the floating bedrock block)
-##  · `tx258` (the rooster's own row) — upward finds `ty25` (room ③'s real floor); downward finds `ty12`
-##    (its roof)
-## **Both columns are -100 from what they were** — `left-run-clumps-and-platforms.md` §1 cut map columns
-##  x2-101 and the bake re-origined; the slab and the room themselves did not move one tile relative to
-##  each other. The cell rows below (160, 200) are unchanged, which is the point: only x moved.
+##  · `tx181` (the rooster's own row) — upward finds `ty32` (room ③'s real floor, now level with room ①'s);
+##    downward finds `ty19` (its ceiling)
+## **`tx181`, `ty32`/`ty19` replace the old `tx258`, `ty25`/`ty12`** — `burn-out-of-the-bull-room.md` §1
+##  moved room ③ down 7 rows and left 83 columns onto room ①'s own floor line. `tx49`'s pair is untouched;
+##  nothing west of `x160` moved.
 ## Flipping the scan direction would move both of these, on the real map, not only in a hand-built grid.
 func _the_real_map_scan_direction_matters_not_just_synthetic_grids(t) -> void:
 	var g := CellGrid.new()
@@ -803,16 +815,16 @@ func _the_real_map_scan_direction_matters_not_just_synthetic_grids(t) -> void:
 	t.eq(int(res49["py"]) + MonsterDefs.h_px(MonsterDefs.KIND_PIG), 160 * Tuning.CELL_PX,
 		"tx49가 실제 지면(ty20, cy160)에 선다 — 위에 뜬 기반암(ty15)이 아니다")
 
-	var res258 := MonsterPlacement.resolve(g, 258, MonsterDefs.KIND_ROOSTER, Stage1Monsters.FLOOR_CY)
-	t.ok(res258.get("ok", false), "tx258가 실제 맵에서 착지한다 (전제)")
-	t.eq(int(res258["py"]) + MonsterDefs.h_px(MonsterDefs.KIND_ROOSTER), 200 * Tuning.CELL_PX,
-		"tx258가 방③의 실제 바닥(ty25, cy200)에 선다 — 지붕(ty12)이 아니다")
+	var res181 := MonsterPlacement.resolve(g, 181, MonsterDefs.KIND_ROOSTER, Stage1Monsters.FLOOR_CY)
+	t.ok(res181.get("ok", false), "tx181이 실제 맵에서 착지한다 (전제)")
+	t.eq(int(res181["py"]) + MonsterDefs.h_px(MonsterDefs.KIND_ROOSTER), 256 * Tuning.CELL_PX,
+		"tx181이 방③의 실제 바닥(ty32, cy256)에 선다 — 천장(ty19)이 아니다")
 
 
 ## **S3 — a boss placed outside its own room is undetectable by every other check here** (they only ask
 ## "does it land on solid ground", never "in the right room"). Room ① floor is `tx130-159`, measured
-## directly. Room ③'s **interior** floor is `tx245-266`** — `tx267`/`268` are the room's own right wall
-## (measured: `topmost_solid_cy` jumps from `200` to `96` there, the wall's own height, not the floor's).
+## directly. Room ③'s **interior** floor is `tx164-183`** — `tx184`/`185` are the room's own right wall
+## (`burn-out-of-the-bull-room.md` §1 moved the room down 7 rows and left 83 columns onto room ①'s floor line).
 func _bosses_are_placed_inside_their_own_room(t) -> void:
 	var bull_tx := _first_tx_of(MonsterDefs.KIND_BULL)
 	t.ok(bull_tx >= 0, "표에 황소가 있다 (전제)")
@@ -821,8 +833,8 @@ func _bosses_are_placed_inside_their_own_room(t) -> void:
 
 	var rooster_tx := _first_tx_of(MonsterDefs.KIND_ROOSTER)
 	t.ok(rooster_tx >= 0, "표에 수탉이 있다 (전제)")
-	t.ok(rooster_tx >= 245 and rooster_tx <= 266,
-		"수탉의 tx(%d)가 방③ 내부 바닥 범위(245-266) 안이다 (267-268은 오른쪽 벽)" % rooster_tx)
+	t.ok(rooster_tx >= 164 and rooster_tx <= 183,
+		"수탉의 tx(%d)가 방③ 내부 바닥 범위(164-183) 안이다 (184-185는 오른쪽 벽)" % rooster_tx)
 
 
 ## **S4 — `_zone_totals` pins numbers, not the invariant those numbers exist to protect.** Reverting

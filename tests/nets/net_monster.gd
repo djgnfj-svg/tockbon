@@ -244,6 +244,17 @@ func _bare_grid() -> CellGrid:
 	return g
 
 
+## **`_bare_grid()`'s own floor, only deeper.** `_blast_hits_to_kill` fires several `TERMINAL` blasts close to
+##  one column, and `_bare_grid`'s ordinary 32-cell slab is sized for a *single* shot — two or three landing
+##  near the same spot can carve all the way through it. **Measured, not guessed**: with the thin floor, bolts
+##  fell through into the open air below and never impacted, piling up unconsumed until `SpellSim._launch`'s
+##  own projectile-cap bark fired mid-sequence. 128 cells is a wide margin over the few hits a kill actually takes.
+func _deep_floor_grid() -> CellGrid:
+	var g := CellGrid.new()
+	g.apply(CellGrid.cmd_fill(0, FLOOR_CY, FLOOR_W_CX - 1, FLOOR_CY + 127, Mat.STONE))
+	return g
+
+
 ## **The trap the stage 3 damage checks fell into** — from stage 2 on the monster actually walks toward the
 ##  player. If a damage or fire check puts the character far from the monster (e.g. x=160), the monster walks
 ##  that way while the acceptance is being measured and **leaves the target spot (the fire, the blast)** — it
@@ -430,6 +441,96 @@ func _hits_to_kill(kind: int, glyphs: int) -> int:
 	return hits
 
 
+## **The blast-side twin of `_hits_to_kill` above.** A `TERMINAL` glyph's `power_pct` composes only onto the
+##  blast it makes at its own impact (`spell_sim._run_glyph`'s "power_pct" header) — it never reaches a
+##  direct segment hit, so a card like `BLAST_U` cannot be measured by firing straight at the monster the way
+##  `_hits_to_kill` does. Fires a **downward** blast onto the monster's own feet instead, repeated at the same
+##  invulnerability-timed spacing, and counts how many actually connect before it dies.
+## **`_deep_floor_grid`, not `_bare_grid` — measured, not guessed.** With the ordinary 32-cell floor, two or
+##  three blasts landing on the same column punched straight through it; the next bolt fell into the open air
+##  below and never impacted, piling up unconsumed until `SpellSim._launch`'s own projectile-cap bark fired
+##  mid-sequence. A deep floor keeps every shot in the sequence landing on solid ground.
+## **Why this exists, not a `glyphs` argument bolted onto `_hits_to_kill`**: `net_pick._full_round_trip_pick_
+##  to_a_bigger_hit`'s round trip lost its only pickable MODIFY card the day the dummy family left the
+##  three-pick pool (`glyph_defs.PICKABLE`) — every id a player can actually draw and place is `SPAWN` or
+##  `TERMINAL` now, so "the socketed glyph changes the spell" has to be shown through a blast, not a segment.
+func _blast_hits_to_kill(kind: int, glyphs: int) -> int:
+	var stand_x := 600
+	var stand_y := FLOOR_TOP - Defs.h_px(kind)
+	var g := _deep_floor_grid()
+	var spell := SpellSim.new()
+	var ch := _still_ch(stand_x, kind)
+	var world := WorldStep.new(g, spell, ch)
+	var mid := world.spawn_monster(kind, stand_x, stand_y)
+	if mid <= 0:
+		return -1
+	var m: Monster = world.monster_at(0)
+
+	# **Offset sideways, not straight above the monster's own center.** Firing straight down sends the
+	#  bolt's own segment through the monster's box a tick before the terrain impact — the segment always
+	#  carries the bolt's *base* power (a `TERMINAL` glyph never touches it, `spell_sim._launch`'s own header),
+	#  so it lands first, sets invulnerability, and the blast's own boosted power arrives too late to be read
+	#  at all. **Measured, not guessed**: firing straight down gave `BLAST_U` (150%) the exact same per-shot
+	#  damage as `GLYPH_BLAST` (100%) — the segment's fixed 100% was winning every time. A small fraction of
+	#  `blast_rd(0)` past the box's own edge keeps the bolt's flight path outside the box entirely (well inside
+	#  the blast's own radius still), so only the blast — the one thing this glyph's `power_pct` actually
+	#  reaches — is what connects.
+	var r_px := float(Tuning.blast_rd(0) * Tuning.CELL_PX)
+	var hits := 0
+	var safety := 0
+	# **Dropped from just 3 cells above the floor, not `BLAST_FROM_CY`'s 20.** A monster in melee range of the
+	#  player keeps shuffling (attack wind-up/recovery), several px per shot cycle — measured, enough to walk
+	#  a slower shot's landing point clean out of the blast radius by the time it actually lands. A near-instant
+	#  drop closes that window to well under one tick, so the position read right before firing is still valid
+	#  the moment the blast goes off.
+	var drop_cy := FLOOR_CY - 3
+	while world.monster_count() > 0 and safety < 50:
+		var edge_px := m.x + Defs.w_px(kind)
+		var cx := floori((edge_px + r_px * 0.2) / float(Tuning.CELL_PX))
+		world.enqueue(SpellSim.cmd_fire(cx, drop_cy, 0, 10, Tuning.ELEM_NONE, glyphs))
+		# **A few extra frames beyond the strict invulnerability window.** All they buy is settle time after
+		#  invulnerability has already lapsed — the monster keeps shuffling in melee range, and a shot landing
+		#  exactly on the boundary tick occasionally needed one more frame to actually connect (measured).
+		for _i in Tuning.TICK_DIVIDER * (Defs.invuln_ticks(kind) + 1) + 3:
+			world.frame(DT, 0.0, false, false)
+		hits += 1
+		safety += 1
+	return hits
+
+
+## **The pillar-side twin of `_blast_hits_to_kill` above** — `CONDENSE_*` is the same `KIND_TERMINAL` shape,
+##  so it inherits exactly the same trap: fired straight at the monster, the bolt's own segment (fixed base
+##  power) crosses the box a tick before the pillar's notice exists and wins the race for invulnerability.
+##  Offsetting the impact column past the box's edge keeps the segment out while the pillar — a rectangle
+##  `pillar_w(0)` cells wide, centered on that same column — still reaches in over it.
+func _pillar_hits_to_kill(kind: int, glyphs: int) -> int:
+	var stand_x := 600
+	var stand_y := FLOOR_TOP - Defs.h_px(kind)
+	var g := _deep_floor_grid()
+	var spell := SpellSim.new()
+	var ch := _still_ch(stand_x, kind)
+	var world := WorldStep.new(g, spell, ch)
+	var mid := world.spawn_monster(kind, stand_x, stand_y)
+	if mid <= 0:
+		return -1
+	var m: Monster = world.monster_at(0)
+
+	var drop_cy := FLOOR_CY - 3
+	var hits := 0
+	var safety := 0
+	while world.monster_count() > 0 and safety < 50:
+		# **One cell past the box's right edge** — the pillar's own half-width (`pillar_w(0)/2` = 4 cells)
+		#  reaches well back over the box from there, while the bolt's own column sits just outside it.
+		var edge_cx := floori(float(m.x + Defs.w_px(kind)) / float(Tuning.CELL_PX))
+		var cx := edge_cx + 1
+		world.enqueue(SpellSim.cmd_fire(cx, drop_cy, 0, 10, Tuning.ELEM_NONE, glyphs))
+		for _i in Tuning.TICK_DIVIDER * (Defs.invuln_ticks(kind) + 1) + 3:
+			world.frame(DT, 0.0, false, false)
+		hits += 1
+		safety += 1
+	return hits
+
+
 ## **The same ratio, driven end to end through `Monster.on_tick`/`world.frame()`, not just the pure
 ## `advance()` function above.** Two fresh monsters (not one reused across phases — reusing one would let
 ## `move_choice`'s round-robin drift onto a different move with a different `windup_ticks` between the two
@@ -530,6 +631,8 @@ func run(t) -> void:
 	_layer_draws_go_through_the_canvas_argument(t)
 	# -- levelup-and-three-picks Stage A -- acceptance 8, measured by value --
 	_dummy_raises_hits_to_kill_a_pig(t)
+	# -- glyph-condense §11.6 Step 2 -- the pillar's own acceptance 8 --
+	_condense_raises_hits_to_kill_a_pig(t)
 	# -- animation (`monsters.md`, "animation is entirely a code gap") --
 	_a_walking_monster_reaches_the_walk_state(t)
 	_a_jumping_monster_reaches_the_airborne_state_on_screen(t)
@@ -2537,6 +2640,30 @@ func _dummy_raises_hits_to_kill_a_pig(t) -> void:
 		"더미(상)을 실으면 %d대에 죽는다 (한 대 %d — %d%%)" % [want_boosted, dmg_boosted, boost])
 	t.ok(boosted < common, "그리고 실제로 더 적은 대수로 죽는다 (%d < %d) — 이것이 「소켓한 문양이 주문을 바꾼다」다" % [
 		boosted, common])
+
+
+## **The same shape, for condense** (`glyph-condense.md` §9's acceptance 8: "how many hits kill a pig at
+##  common vs at unique — both sides absolute"). `CONDENSE_C` vs `CONDENSE_U` through `_pillar_hits_to_kill`,
+##  not `_hits_to_kill` — the pillar is `KIND_TERMINAL`, so its `power_pct` composes onto the pillar's own
+##  notice, never onto a direct segment hit (`spell_sim._run_glyph`'s "power_pct" header).
+func _condense_raises_hits_to_kill_a_pig(t) -> void:
+	var kind := Defs.KIND_PIG
+	var boost := Glyph.power_pct_of(Glyph.CONDENSE_U)
+	t.ok(boost > 100, "응축(유니크)이 실제로 100%%보다 세다 (%d%% — 검사의 전제)" % boost)
+
+	var common := _pillar_hits_to_kill(kind, Glyph.pack([Glyph.CONDENSE_C]))
+	var boosted := _pillar_hits_to_kill(kind, Glyph.pack([Glyph.CONDENSE_U]))
+
+	var dmg_common := Character.DAMAGE_HIT * Glyph.power_pct_of(Glyph.CONDENSE_C) / 100
+	var want_common := ceili(float(Defs.max_hp(kind)) / float(dmg_common))
+	var dmg_boosted := Character.DAMAGE_HIT * boost / 100
+	var want_boosted := ceili(float(Defs.max_hp(kind)) / float(dmg_boosted))
+
+	t.eq(common, want_common,
+		"응축(일반)이면 돼지(hp %d)가 %d대에 죽는다 (한 대 %d)" % [Defs.max_hp(kind), want_common, dmg_common])
+	t.eq(boosted, want_boosted,
+		"응축(유니크)을 실으면 %d대에 죽는다 (한 대 %d — %d%%)" % [want_boosted, dmg_boosted, boost])
+	t.ok(boosted < common, "그리고 실제로 더 적은 대수로 죽는다 (%d < %d)" % [boosted, common])
 
 
 

@@ -7,19 +7,23 @@ extends RefCounted
 
 const Glyph := preload("res://src/sim/glyph_defs.gd")
 
-## **Candidates = `Glyph.ALL` minus every id already socketed.** That single `has()` *is* acceptance 5
+## **`Glyph.PICKABLE`, not `Glyph.ALL`** (`glyph-condense.md`'s own build note) — the dummy is a placeholder
+##  with no name of its own and must never be handed to a player choosing between spells, even though its
+##  ids and `KIND_MODIFY` row stay alive for everything else that walks `Glyph.ALL`.
+##
+## **Candidates = `Glyph.PICKABLE` minus every id already socketed.** That single `has()` *is* acceptance 5
 ##  ("the same rarity of something you already have never appears") — the id **is** the (family, rarity)
 ##  pair (Stage A's whole reason for folding rarity into the id rather than carrying it beside), so excluding
 ##  by exact id is already excluding by exact rarity. **Do not exclude by family** — that would also remove
 ##  every other rarity of an owned family, and acceptance 5 would read as "you never see spread again".
 ##
 ## **Picks 3 distinct at random. If fewer than 3 remain, takes what remains rather than repeating** — with
-##  9 ids today and at most `CircleDefs.layers(CIRCLE_ROUND)` (2) socketed at once, at least 7 always remain,
-##  so this branch is structurally unreachable through the real game (`net_three_pick` asserts that directly,
-##  then drives this function past it anyway, since `draw()` itself does not know it is unreachable).
+##  9 pickable ids today and at most `CircleDefs.layers(CIRCLE_ROUND)` (2) socketed at once, at least 7 always
+##  remain, so this branch is structurally unreachable through the real game (`net_three_pick` asserts that
+##  directly, then drives this function past it anyway, since `draw()` itself does not know it is unreachable).
 static func draw(owned: Array[int], rng: RandomNumberGenerator) -> Array[int]:
 	var pool: Array[int] = []
-	for id: int in Glyph.ALL:
+	for id: int in Glyph.PICKABLE:
 		if not owned.has(id):
 			pool.append(id)
 

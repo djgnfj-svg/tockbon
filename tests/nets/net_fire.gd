@@ -29,6 +29,8 @@ func run(t) -> void:
 	_front_has_no_ghosts(t)
 	_burn_slot_has_no_orphans(t)
 	_reset_clears_front(t)
+	# -- burn-out-of-the-bull-room §0 — rune_only --
+	_rune_only_refuses_ordinary_fire_but_spread_still_crosses_it(t)
 
 
 ## **The burn slot = the set of BURNING cells.** That equation is the whole of the burn slot data structure.
@@ -253,7 +255,9 @@ func _blast_lights_wood(t) -> void:
 
 	var g := CellGrid.new()
 	g.apply(CellGrid.cmd_fill(0, 0, 127, 63, Mat.WOOD))
-	g.apply(CellGrid.cmd_blast(64, 32, Tuning.blast_rd(0), Tuning.blast_ignite_r(0)))
+	# **`IGNITE_RUNE_FIRE`** — this is a blast from a fire circle (`burn-out-of-the-bull-room.md` §0); wood is
+	#  `rune_only` and a runeless blast's own refusal is `_wood_ignores_a_runeless_blast` below.
+	g.apply(CellGrid.cmd_blast(64, 32, Tuning.blast_rd(0), Tuning.blast_ignite_r(0), CellGrid.IGNITE_RUNE_FIRE))
 	t.ok(g.burning_count() > 0, "폭발이 나무에 불을 붙인다 (%d칸)" % g.burning_count())
 
 	# **There is no crater.** Wood is indestructible so the destruction pass erases nothing, the center is still
@@ -269,7 +273,7 @@ func _blast_lights_wood(t) -> void:
 
 	var stone := CellGrid.new()
 	stone.apply(CellGrid.cmd_fill(0, 0, 127, 63, Mat.STONE))
-	stone.apply(CellGrid.cmd_blast(64, 32, Tuning.blast_rd(0), Tuning.blast_ignite_r(0)))
+	stone.apply(CellGrid.cmd_blast(64, 32, Tuning.blast_rd(0), Tuning.blast_ignite_r(0), CellGrid.IGNITE_RUNE_FIRE))
 	t.eq(stone.burning_count(), 0, "돌방에서는 폭발해도 불이 안 난다 (지형이 곧 룬의 세기다)")
 	# The control — **stone is still carved.** It separates "wood is special-cased" from "the destruction pass is dead".
 	t.eq(stone.mat_at(64, 32), Mat.EMPTY, "그런데 돌은 파괴 패스로 지워진다 (재료를 가린다)")
@@ -290,3 +294,29 @@ func _reset_clears_front(t) -> void:
 	var before := g.count_material(Mat.WOOD)
 	g.step()
 	t.eq(g.count_material(Mat.WOOD), before, "리셋 뒤 새 지형이 옛 불에 안 깎인다")
+
+
+## **The rule at grid level** (`burn-out-of-the-bull-room.md` §0). `WOOD` is `rune_only`: `IGNITE_ANY` (the
+##  bull's own fire, a runeless blast) must not catch it, `IGNITE_RUNE_FIRE` (the fire rune, a fire-circle
+##  blast) must. And once it does catch, ordinary **spread** must still cross the whole block — the fuel-table
+##  invariant `_burn`'s own comment argues for (every burning cell already passed the rune check the moment it
+##  first caught, so `_burn`'s unconditional `IGNITE_RUNE_FIRE` on spread is not a loophole).
+func _rune_only_refuses_ordinary_fire_but_spread_still_crosses_it(t) -> void:
+	t.ok(bool(Mat.DEFS[Mat.WOOD].get("rune_only", false)), "나무가 rune_only다 (검사의 전제)")
+
+	var g := CellGrid.new()
+	g.apply(CellGrid.cmd_fill(0, 0, 63, 31, Mat.WOOD))
+	t.ok(not g.ignite(30, 15, CellGrid.IGNITE_ANY), "IGNITE_ANY로는 안 붙는다 (혼자 켜는 반환값)")
+	t.eq(g.burning_count(), 0, "실제로 안 붙었다 (타는 칸이 0)")
+
+	t.ok(g.ignite(30, 15, CellGrid.IGNITE_RUNE_FIRE), "IGNITE_RUNE_FIRE로는 붙는다")
+	t.ok(g.burning_count() > 0, "실제로 불이 났다")
+
+	# Spread crosses the whole 64x32 block once lit — the same cap `_always_goes_out` already uses.
+	var cap := 64 * Tuning.FIRE_SPREAD_TICKS + BURN_TICKS * 4
+	var ticks := 0
+	while g.count_material(Mat.WOOD) > 0 and ticks < cap:
+		g.step()
+		ticks += 1
+	t.eq(g.count_material(Mat.WOOD), 0,
+		"%d틱 안에 블록 전체가 탄다 (rune_only가 확산까지는 안 막는다, 실제 %d틱)" % [cap, ticks])

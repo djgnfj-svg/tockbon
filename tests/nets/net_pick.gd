@@ -24,6 +24,7 @@ const ThreePick := preload("res://src/actor/three_pick.gd")
 const ThreePickWindow := preload("res://src/view/three_pick_window.gd")
 const Glyph := preload("res://src/sim/glyph_defs.gd")
 const SpellCircle := preload("res://src/actor/spell_circle.gd")
+const CircleDefs := preload("res://src/sim/circle_defs.gd")
 const MonsterDefs := preload("res://src/actor/monster_defs.gd")
 const Character := preload("res://src/actor/character.gd")
 const NetDeterminism := preload("res://tests/nets/net_determinism.gd")
@@ -132,9 +133,11 @@ func _card_count_matches_a_real_drained_draw(t) -> void:
 
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 7
-	var owned: Array[int] = Glyph.ALL.duplicate()
+	# **`Glyph.PICKABLE`, not `Glyph.ALL`** — `draw()` reads the pickable pool (`glyph_defs.gd`'s own build
+	#  note); the dummy family sits outside it and owning-or-not never moves this test's count.
+	var owned: Array[int] = Glyph.PICKABLE.duplicate()
 	owned.remove_at(0)
-	t.eq(owned.size(), Glyph.ALL.size() - 1, "하나만 빼고 다 가진 상태를 만들었다 (전제)")
+	t.eq(owned.size(), Glyph.PICKABLE.size() - 1, "하나만 빼고 다 가진 상태를 만들었다 (전제)")
 	var drawn := ThreePick.draw(owned, rng)
 	t.eq(drawn.size(), 1, "서고가 거의 빈 상태에서는 실제로 한 장만 뽑힌다 (전제)")
 
@@ -254,7 +257,7 @@ func _card_rects_reads_the_live_draw_size(t) -> void:
 	#  (or inside `_draw()`, before this function existed to hold the count logic) would fail this line.
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 7
-	var owned: Array[int] = Glyph.ALL.duplicate()
+	var owned: Array[int] = Glyph.PICKABLE.duplicate()
 	owned.remove_at(0)
 	var drawn := ThreePick.draw(owned, rng)
 	t.eq(drawn.size(), 1, "서고가 거의 빈 상태에서는 실제로 한 장만 뽑힌다 (전제)")
@@ -288,7 +291,8 @@ func _card_rects_reads_the_live_draw_size(t) -> void:
 ##    a real defect; a click doing nothing with no reason shown is the same disease)
 ##  · **placing over the *same* layer's own family replaces**, and `glyph_list().size()` does not grow
 func _layer_click_places_replaces_and_rejects_family_conflicts(t) -> void:
-	var circle := SpellCircle.new()
+	# **A round circle explicitly** — `SpellCircle.new()` alone is `CIRCLE_NONE` now (Stage 3's empty boot).
+	var circle := SpellCircle.new(CircleDefs.CIRCLE_ROUND)
 	t.eq(circle.layer_count(), 2, "기본 진은 2층이다 (전제)")
 	t.ok(circle.place_glyph(0, Glyph.SPREAD_C), "0층에 확산(일반)을 미리 놓았다 (전제)")
 	t.eq(circle.glyph_list().size(), 1, "목록에 하나 있다 (전제)")
@@ -376,7 +380,7 @@ func _picked_card_click_returns_to_step_1(t) -> void:
 ##    just vanishes" was the whole of the prior confirmation)
 ##  · **it expires on its own** after `CONFIRM_FRAMES` driven `_process()` ticks
 func _confirmation_shows_after_a_placement_and_expires(t) -> void:
-	var circle := SpellCircle.new()
+	var circle := SpellCircle.new(CircleDefs.CIRCLE_ROUND)
 	var pr := Progress.new()
 	pr.pending_picks = 1
 	pr.set("_drawn", [Glyph.DUMMY_U, Glyph.BLAST_C, Glyph.SPREAD_C] as Array[int])
@@ -413,7 +417,7 @@ func _confirmation_shows_after_a_placement_and_expires(t) -> void:
 
 ## A click during the confirmation afterglow dismisses it early — the timer is a floor, not a forced wait.
 func _confirmation_can_be_dismissed_early_by_a_click(t) -> void:
-	var circle := SpellCircle.new()
+	var circle := SpellCircle.new(CircleDefs.CIRCLE_ROUND)
 	var pr := Progress.new()
 	pr.pending_picks = 1
 	pr.set("_drawn", [Glyph.DUMMY_U, Glyph.BLAST_C, Glyph.SPREAD_C] as Array[int])
@@ -444,7 +448,7 @@ func _confirmation_can_be_dismissed_early_by_a_click(t) -> void:
 ## and reads the state directly — `_draw()` itself still can't run headless, but the state it would read is
 ## real and inspectable.
 func _a_fresh_pick_preempts_a_lingering_confirmation(t) -> void:
-	var circle := SpellCircle.new()
+	var circle := SpellCircle.new(CircleDefs.CIRCLE_ROUND)
 	var pr := Progress.new()
 	pr.pending_picks = 2
 	pr.set("_drawn", [Glyph.DUMMY_U, Glyph.BLAST_C, Glyph.SPREAD_C] as Array[int])
@@ -478,7 +482,7 @@ func _a_fresh_pick_preempts_a_lingering_confirmation(t) -> void:
 ## exists to prevent. **It must not touch `Progress`** — the pick already closed for real when `take()` ran;
 ## `cancel_confirm()` only clears this window's own after-the-fact display state.
 func _cancel_confirm_clears_it_without_touching_progress(t) -> void:
-	var circle := SpellCircle.new()
+	var circle := SpellCircle.new(CircleDefs.CIRCLE_ROUND)
 	var pr := Progress.new()
 	pr.pending_picks = 1
 	pr.set("_drawn", [Glyph.DUMMY_U, Glyph.BLAST_C, Glyph.SPREAD_C] as Array[int])
@@ -588,7 +592,12 @@ func _no_pushed_out_glyph_is_stashed_anywhere(t) -> void:
 		#  to miss it** — a set of what has been bought at the research bench, keyed by `UnlockDefs` id. The
 		#  same argument `_owned_runes` one line up already makes: it is a record of a purchase, not of a
 		#  glyph that left a spell layer, which is what this file's no-inventory check exists to catch.
-		"res://src/actor/progress.gd": ["_drawn", "_owned_runes", "_reward_pending", "_unlocked"],
+		# **`_owned_circles` (`onboarding-and-palette-tabs.md`, Stage 2) added here, deliberately, the same
+		#  shape and the same reason as `_owned_runes` above** — 삼각 is not owned at boot (user confirmed),
+		#  so the palette needs a record of which circles have been granted, not of a glyph that left a spell
+		#  layer, which is what this file's no-inventory check exists to catch.
+		"res://src/actor/progress.gd":
+			["_drawn", "_owned_circles", "_owned_runes", "_reward_pending", "_unlocked"],
 		"res://src/actor/spell_circle.gd": ["_layers", "_runes"],
 		"res://src/actor/world_step.gd": ["_died_kind", "_died_x", "_died_y", "_monsters", "_queue"],
 		# **`monster_placement.gd` added here, deliberately** (`monster-placement-stage1.md`,
@@ -596,9 +605,17 @@ func _no_pushed_out_glyph_is_stashed_anywhere(t) -> void:
 		#  row is spent, which row's monster died, the wake hysteresis bit), the exact shape
 		#  `world_step.gd`'s own `_monsters`/`_died_kind` entries one line up already are. Not a record of
 		#  a glyph that left a spell layer, which is what this file's no-inventory check exists to catch.
+		# **`_trigger_tx` added here, deliberately** (`boss-entrance-and-hp-bar.md`, Stage A) — one more
+		#  parallel row-index array, the boss entrance trigger tile (`-1` when a row has none). The same
+		#  bookkeeping shape as `_tx`/`_kind` beside it, not a record of a glyph that left a spell layer.
 		"res://src/actor/monster_placement.gd":
-			["_id_to_row", "_kind", "_monster_id", "_primed", "_spent", "_tx"],
-		"res://src/view/blast_fx.gd": ["_flashes"],
+			["_id_to_row", "_kind", "_monster_id", "_primed", "_spent", "_trigger_tx", "_tx"],
+		"res://src/view/blast_fx.gd": ["_flashes", "_pillars"],
+		# **`_dust` added here, deliberately** (사용자 요청 — 「캐릭터가 움직일 때 뒤에 먼지」) — the same idiom
+		#  `blast_fx.gd`'s own `_flashes`/`_pillars` one line up already are: short-lived screen-only particles,
+		#  aged and drawn from a plain array with no per-particle node. Not a record of a glyph that left a
+		#  spell layer, which is what this file's no-inventory check exists to catch.
+		"res://src/view/character_view.gd": ["_dust"],
 		# **`ROWS` added here, deliberately, and it is the one entry that is a `static var` only because a
 		#  net needs it to be.** It is the room table — map content, the shelf `terrain_map_generated.gd`
 		#  and `stage1_monsters.gd` sit on, and every other table in that file is `const`. The chain between
@@ -687,12 +704,18 @@ func _no_pushed_out_glyph_is_stashed_anywhere(t) -> void:
 ## never a number pinned on either side — exactly the "A/B nets that only compare" risk this plan's own risk
 ## table names. This version drives the real award loop (`net_progress`'s own kill-until-level idiom) and the
 ## real, unseeded-by-hand draw (only the RNG's own **seed** is chosen, by searching for one whose draw
-## actually includes `DUMMY_U` — the draw *rule* stays `net_three_pick`'s job; nothing here reads `_drawn`
-## directly), then asserts absolute hit counts on both sides, read from the table the same way
+## actually includes the card under test — the draw *rule* stays `net_three_pick`'s job; nothing here reads
+## `_drawn` directly), then asserts absolute hit counts on both sides, read from the table the same way
 ## `net_monster._dummy_raises_hits_to_kill_a_pig` (Stage A's own home check) already does.
 ##
-## **Firing and the hit count are not re-derived here.** `net_monster._hits_to_kill` already proved that exact
-## chain for Stage A's acceptance 8; borrowed, not copied, the same device this file already uses for
+## **`BLAST_U`, not `DUMMY_U`** (`glyph-condense.md`'s build note on the three-pick pool) — the dummy left
+## `Glyph.PICKABLE` the day condense arrived, so the card a real draw can actually hand the player is never a
+## `MODIFY` any more. A `TERMINAL`'s `power_pct` composes only onto **the blast it makes**, never onto a
+## direct segment hit (`spell_sim._run_glyph`'s "power_pct" header), so the hit count below comes from
+## `net_monster._blast_hits_to_kill` — the blast-side twin of `_hits_to_kill`, written for exactly this.
+##
+## **Firing and the hit count are not re-derived here.** `net_monster._blast_hits_to_kill` already proves
+## that exact chain; borrowed, not copied, the same device this file already uses for
 ## `net_progress._scan_gd_files`. **What this check adds, and the only thing it adds**, is the path that
 ## *gets to* the packed value — through real kills, a real draw and the pick window's own `_gui_input`, never
 ## written by hand — and proves that value is the exact same one Stage A already trusts.
@@ -700,7 +723,8 @@ func _full_round_trip_pick_to_a_bigger_hit(t) -> void:
 	var np := NetProgress.new()
 	var world: Variant = np._new_world()
 	var pr: Progress = world.progress()
-	var circle := SpellCircle.new()
+	# **A round circle explicitly** — `SpellCircle.new()` alone is `CIRCLE_NONE` now (Stage 3's empty boot).
+	var circle := SpellCircle.new(CircleDefs.CIRCLE_ROUND)
 	t.eq(circle.packed_glyphs(), Glyph.GLYPH_NONE, "놓기 전엔 빈 목록이다 (0 — 전제)")
 
 	# -- level up, for real, through the same award path Stage B measures --
@@ -715,22 +739,22 @@ func _full_round_trip_pick_to_a_bigger_hit(t) -> void:
 	t.ok(pr.pending_picks >= 1, "대기 중인 뽑기가 생겼다 (전제)")
 	var pending_before := pr.pending_picks
 
-	# -- a real draw, not a hand-set one — only the RNG's own seed is chosen, so `DUMMY_U` is guaranteed to
+	# -- a real draw, not a hand-set one — only the RNG's own seed is chosen, so `BLAST_U` is guaranteed to
 	#  be somewhere in the three cards without touching `_drawn` or the draw rule itself.
 	var mirror := RandomNumberGenerator.new()
 	var seed := 0
 	while seed < 10000:
 		mirror.seed = seed
-		if ThreePick.draw(circle.glyph_list(), mirror).has(Glyph.DUMMY_U):
+		if ThreePick.draw(circle.glyph_list(), mirror).has(Glyph.BLAST_U):
 			break
 		seed += 1
-	t.ok(seed < 10000, "만 개 씨앗 안에서 더미(유니크)가 나오는 씨앗을 찾았다 (전제)")
+	t.ok(seed < 10000, "만 개 씨앗 안에서 폭발(유니크)이 나오는 씨앗을 찾았다 (전제)")
 	pr._rng.seed = seed
 
 	t.ok(pr.open_pick(circle.glyph_list()), "뽑기가 실제로 열렸다 (전제)")
 	var drawn := pr.drawn()
-	var idx := drawn.find(Glyph.DUMMY_U)
-	t.ok(idx >= 0, "더미(유니크)가 실제로 뽑힌 세 장 안에 있다 (%s — 전제)" % [drawn])
+	var idx := drawn.find(Glyph.BLAST_U)
+	t.ok(idx >= 0, "폭발(유니크)이 실제로 뽑힌 세 장 안에 있다 (%s — 전제)" % [drawn])
 
 	var win := ThreePickWindow.new()
 	win.setup(pr, circle)
@@ -738,7 +762,7 @@ func _full_round_trip_pick_to_a_bigger_hit(t) -> void:
 
 	var rects := Layout.cards(win.size, drawn.size())
 	_click(win, rects[idx].get_center())
-	t.eq(win.get("_picked_index"), idx, "더미(유니크) 카드를 골랐다 (전제)")
+	t.eq(win.get("_picked_index"), idx, "폭발(유니크) 카드를 골랐다 (전제)")
 
 	var circle_rect := Layout.circle_rect(win.size)
 	var area := CircleLayout.circle_area(circle_rect.size)
@@ -746,29 +770,30 @@ func _full_round_trip_pick_to_a_bigger_hit(t) -> void:
 	_click(win, circle_rect.position + slots[0])
 	win.free()
 
-	t.eq(circle.glyph_at(0), Glyph.DUMMY_U, "0층에 실제로 더미(유니크)가 놓였다 (클릭이 배치를 만들었다)")
+	t.eq(circle.glyph_at(0), Glyph.BLAST_U, "0층에 실제로 폭발(유니크)이 놓였다 (클릭이 배치를 만들었다)")
 	t.ok(not pr.is_pick_open(), "놓고 나면 뽑기가 닫힌다")
 	t.eq(pr.pending_picks, pending_before - 1,
 		"대기 수가 정확히 하나 줄었다 (%d -> %d)" % [pending_before, pr.pending_picks])
 
 	var packed: int = circle.packed_glyphs()
-	t.eq(packed, Glyph.pack([Glyph.DUMMY_U]),
-		"packed_glyphs()가 [더미(유니크)] 하나를 팩한 값과 정확히 같다 (0 -> %d)" % packed)
+	t.eq(packed, Glyph.pack([Glyph.BLAST_U]),
+		"packed_glyphs()가 [폭발(유니크)] 하나를 팩한 값과 정확히 같다 (0 -> %d)" % packed)
 
 	# -- fire, and measure absolute hit counts on both sides, read from the table (not only a difference) --
 	var nm := NetMonster.new()
 	var kind := MonsterDefs.KIND_PIG
-	var boost := Glyph.power_pct_of(Glyph.DUMMY_U)
-	var common: int = nm._hits_to_kill(kind, Glyph.GLYPH_NONE)
-	var boosted: int = nm._hits_to_kill(kind, packed)
+	var boost := Glyph.power_pct_of(Glyph.BLAST_U)
+	var common: int = nm._blast_hits_to_kill(kind, Glyph.pack([Glyph.GLYPH_BLAST]))
+	var boosted: int = nm._blast_hits_to_kill(kind, packed)
 
-	var want_common := ceili(float(MonsterDefs.max_hp(kind)) / float(Character.DAMAGE_HIT))
+	var dmg_common := Character.DAMAGE_HIT * Glyph.power_pct_of(Glyph.GLYPH_BLAST) / 100
+	var want_common := ceili(float(MonsterDefs.max_hp(kind)) / float(dmg_common))
 	var dmg_boosted := Character.DAMAGE_HIT * boost / 100
 	var want_boosted := ceili(float(MonsterDefs.max_hp(kind)) / float(dmg_boosted))
 
 	t.eq(common, want_common,
-		"기본 위력이면 돼지(hp %d)가 %d대에 죽는다 (한 대 %d) — 절대값" % [
-			MonsterDefs.max_hp(kind), want_common, Character.DAMAGE_HIT])
+		"기본 폭발이면 돼지(hp %d)가 %d대에 죽는다 (한 대 %d) — 절대값" % [
+			MonsterDefs.max_hp(kind), want_common, dmg_common])
 	t.eq(boosted, want_boosted,
 		"화면의 클릭으로 만든 packed_glyphs()로 쏘면 %d대에 죽는다 (한 대 %d — %d%%) — 절대값" % [
 			want_boosted, dmg_boosted, boost])
@@ -806,7 +831,7 @@ class _RecordingThreePickWindow extends ThreePickWindow:
 		super._draw_pick_glyph_shape(at, r, glyph_id, alpha)
 
 
-## **Every one of the 9 ids, actually drawn — tree-and-pumped, the same technique `net_circle._draw_
+## **Every id in `Glyph.ALL`, actually drawn — tree-and-pumped, the same technique `net_circle._draw_
 ## actually_runs_headless` uses for `circle_window.gd`** (`net_frame_runner.gd`'s own correction: untreed was
 ## never the blocker, zero frames turning was — `_draw()` needed a real frame, not a font, and this file's
 ## own header already carried the old, wrong half of that belief).
@@ -817,10 +842,10 @@ class _RecordingThreePickWindow extends ThreePickWindow:
 ## signature fake (CLAUDE.md: "screen changes but sim doesn't" — the model already holds this glyph in the
 ## drawn list, the card must show *something* for it).
 ##
-## **Split by branch on purpose**: the 6 ids with real art (`Fx.SOCKET_GLYPH_TEX`) must take the texture
-## path and never the procedural one; the 3 dummy ids (no art yet) must take the procedural fallback and
-## never the texture one — a card that quietly swapped the two for any id would still "draw something" and
-## pass a weaker check.
+## **Split by branch on purpose**: the ids with real art (`Fx.SOCKET_GLYPH_TEX`) must take the texture
+## path and never the procedural one; the ids with none yet (the dummy family, and now condense —
+## `glyph-condense.md`, "no art is added") must take the procedural fallback and never the texture one — a
+## card that quietly swapped the two for any id would still "draw something" and pass a weaker check.
 ## **The rarity ring is read by the id it was actually drawn with, not just counted** —
 ## `net_circle._draw_actually_runs_headless`'s own regression (the socket rarity ring skipped once, three
 ## rarities pixel-identical) is exactly the class of bug a call-count alone hides.

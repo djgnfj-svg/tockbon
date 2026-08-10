@@ -159,6 +159,21 @@ var _fx_g := PackedByteArray()
 ##  read anywhere but there.
 var _fx_pow := PackedInt32Array()
 
+## **Condense's pillars that went up this tick** — a second notice, same idiom and same lifetime as the
+##  blast notice above (`glyph-condense.md` §11.6, Step 2). Cleared at the start of `step()`, alongside it —
+##  `_clear_notices()`'s own comment now covers three, not two.
+## `x`/`y` are the impact cell (the pillar's foot); `w`/`h` are **what the sim actually hit**, read back from
+##  `pillar_w(gen)` and the height scan below — never `pillar_h(gen)` alone, since the scan can stop short at
+##  the first solid cell above. The screen must draw the height the sim hit, not a table ceiling it never reached.
+var _pillar_x := PackedInt32Array()
+var _pillar_y := PackedInt32Array()
+var _pillar_w := PackedInt32Array()
+var _pillar_h := PackedInt32Array()
+var _pillar_e := PackedByteArray()
+## **The pillar's own power percent** — the same role `_fx_pow` plays for a blast. `body.hit_by_pillar` reads
+##  this; nothing on screen needs it (a false knob otherwise, the same discipline `_fx_pow`'s own comment holds).
+var _pillar_pow := PackedInt32Array()
+
 ## **The spans a bolt crossed this tick** (fixed point). **The same idiom as the blast notice** —
 ##  cleared at the start of `step()`, and the sim **does not read it.** It only goes out.
 ##  Only the consumer differs: the blast notice is read by the screen and **this one is read by the actor**
@@ -550,7 +565,9 @@ func _carve(grid: CellGrid, x: int, y: int, gen: int) -> void:
 func _rune_trace(grid: CellGrid, x: int, y: int, element: int, gen: int) -> void:
 	var trace := int(Tuning.ELEM_DEFS[element]["trace"])
 	if trace == Tuning.TRACE_IGNITE:
-		grid.apply(CellGrid.cmd_ignite(x, y, Tuning.rune_r(gen)))
+		# **`IGNITE_RUNE_FIRE`** — this trace only ever runs for the fire rune (`ELEM_FIRE`'s own row in
+		#  `ELEM_DEFS`), so it is always the rune's own fire (`burn-out-of-the-bull-room.md` §0).
+		grid.apply(CellGrid.cmd_ignite(x, y, Tuning.rune_r(gen), CellGrid.IGNITE_RUNE_FIRE))
 		return
 	# **The water rune's trace — the exact mirror of fire.** Same place, same shape; only what it leaves differs.
 	#  **The amount is fixed at `WATER_MAX` and strength comes only from the radius.** "A different amount per
@@ -617,21 +634,43 @@ func _run_glyph(grid: CellGrid, x: int, y: int, id: int, rest: int,
 		element: int, gen: int, power: int) -> int:
 	var kind := int(Glyph.DEFS[id]["kind"])
 	if kind == Glyph.KIND_TERMINAL:
-		# **"the blast it makes"** — the terminal glyph's own `power_pct` composes onto the carried power
-		#  (this file's "power_pct" header section has the full rule and why it differs from SPAWN below).
-		#  **Not "nothing is born after a TERMINAL"** — `kind` only decides "no bolt is made *by this glyph*";
-		#  `[blast, spread]` (debug key 5) proves a TERMINAL is not the end of the list. The real reason this
-		#  composes rather than reseeds is narrower: a bolt detonates on terrain, so the monster is hit by the
-		#  blast itself, not by a fresh object this glyph created — there is no new bolt to hand a seed to.
-		# **`blast_power` is a local — it must never write back into `power`.** A chain of TERMINALs
+		# **"the effect it makes at the impact point"** — the terminal glyph's own `power_pct` composes onto
+		#  the carried power (this file's "power_pct" header section has the full rule and why it differs from
+		#  SPAWN below). **Not "nothing is born after a TERMINAL"** — `kind` only decides "no bolt is made *by
+		#  this glyph*"; `[blast, spread]` (debug key 5) proves a TERMINAL is not the end of the list. The real
+		#  reason this composes rather than reseeds is narrower: a bolt detonates on terrain, so the monster is
+		#  hit by the effect itself, not by a fresh object this glyph created — there is no new bolt to hand a
+		#  seed to.
+		# **`term_power` is a local — it must never write back into `power`.** A chain of TERMINALs
 		#  (`[BLAST_R, BLAST_R]`) has to compose from the same carried value each time (120, 120), not compound
-		#  onto the previous blast's result (144) — `_blast_power_does_not_leak_between_layers` pins this.
-		var blast_power := power * Glyph.power_pct_of(id) / 100
-		# The one door that changes the grid is `apply(cmd)` — touch `_mat` directly here and the side effects
-		#  added later (waking, ignition) are skipped wholesale and **nothing happens, with no error.**
-		var rd := Tuning.blast_rd(gen)
-		grid.apply(CellGrid.cmd_blast(x, y, rd, Tuning.blast_ignite_r(gen)))
-		_notify_blast(x, y, element, gen, blast_power)
+		#  onto the previous result (144) — `_blast_power_does_not_leak_between_layers` pins this, and
+		#  `[CONDENSE_R, CONDENSE_R]` is the same shape for a pillar.
+		var term_power := power * Glyph.power_pct_of(id) / 100
+		# **Two `TERMINAL` families now share this one branch** (`glyph-condense.md` §11.5) — still **by
+		#  `kind`, not by id** (`glyph_defs.gd`'s own header): every rarity of both families lands here, and
+		#  what differs between them is a nested split by `family`, the same axis `count_family`/`max_per_
+		#  circle` already read this table by.
+		if Glyph.family_of(id) == Glyph.FAMILY_CONDENSE:
+			# **A pillar writes no cell** — it neither cuts nor ignites (`glyph-condense.md` §11.1: "does it
+			#  cut terrain" — no; "does it ignite" — no). `cell_grid` needs no new command for this at all;
+			#  the only per-pillar cost is the height scan below (`SIM_SIZES.pillar_h(gen)` reads at most).
+			var w := Tuning.pillar_w(gen)
+			var h := _pillar_height(grid, x, y, gen)
+			_notify_pillar(x, y, w, h, element, term_power)
+		else:
+			# The one door that changes the grid is `apply(cmd)` — touch `_mat` directly here and the side
+			#  effects added later (waking, ignition) are skipped wholesale and **nothing happens, with no error.**
+			var rd := Tuning.blast_rd(gen)
+			# **The blast's own ignition source, derived from `element` — the runeless-blast fix**
+			#  (`burn-out-of-the-bull-room.md` §0). Before this, every blast ignited as `IGNITE_RUNE_FIRE`
+			#  regardless of rune, which is exactly the hole the GDD filed as "not a problem, the map's shape
+			#  holds it" — a hole this feature's own map change opens for real. A blast from a fire circle
+			#  reads `IGNITE_RUNE_FIRE` (the same source the fire rune's own trace carries); every other rune
+			#  reads `IGNITE_ANY`.
+			var src := CellGrid.IGNITE_RUNE_FIRE \
+				if int(Tuning.ELEM_DEFS[element]["trace"]) == Tuning.TRACE_IGNITE else CellGrid.IGNITE_ANY
+			grid.apply(CellGrid.cmd_blast(x, y, rd, Tuning.blast_ignite_r(gen), src))
+			_notify_blast(x, y, element, gen, term_power)
 	elif kind == Glyph.KIND_SPAWN:
 		# **"Blocked by the floor" and "no slot" must be told apart.** Both are "no bolt was made", but the former
 		#  is **a designed normal path** and must be quiet, and the latter is **a bug** and must bark.
@@ -739,6 +778,46 @@ func _notify_blast(x: int, y: int, element: int, gen: int, power: int) -> void:
 	_fx_pow.append(power)
 
 
+## **The pillar's height, walked once — the impact row is always in.** `_impact` puts `x, y` at the empty
+##  cell just before the solid that was hit, so the impact row itself already stands on the ground; climbing
+##  from there is what puts the pillar's foot on the floor (`glyph-condense.md` §2.2's "impact row included").
+## Climbs `y-1, y-2, …` while that column reads **not** `BEHAVIOR_STATIC`, stopping at the first solid cell
+##  above, **or** at the table's own ceiling (`pillar_h(gen)`), **or** the grid's top edge — whichever comes
+##  first. Returns how many rows were actually taken, so the caller can never draw a height the sim did not
+##  hit (§11.1, "stops at solid" — yes; §10's gap 4 on why this reads `_behavior` and never writes a cell).
+## **Reads `_behavior`, the same baked table `_walk` already tests terrain against** — a second copy of "is
+##  this solid" is exactly the trap `body.box_free`'s own comment refuses (one rule, one place to ask it).
+func _pillar_height(grid: CellGrid, x: int, y: int, gen: int) -> int:
+	var ceiling := Tuning.pillar_h(gen)
+	var h := 1
+	var k := y - 1
+	while h < ceiling and k >= 0 and _behavior[grid.mat_at(x, k)] != Mat.BEHAVIOR_STATIC:
+		h += 1
+		k -= 1
+	return h
+
+
+## **The pillar rectangle's own left edge, in cells — the one piece of "how an even width centers on one
+##  column" arithmetic, shared instead of restated.** `body.hit_by_pillar` and `blast_fx.on_pillars` both call
+##  this rather than each writing their own `x - w/2`; two copies of that line is exactly how a centering
+##  convention drifts the day only one of them is touched. **Static** — it is pure geometry, not sim state, so
+##  the screen (which is not sim code) can call it too without pulling in an instance.
+static func pillar_x0(x: int, w: int) -> int:
+	return x - w / 2
+
+
+## **The pillar's own notice — a second one, beside the blast's, at the same lifetime.** `x, y` is the impact
+##  cell (the foot); `w, h` are what the sim actually hit, never a table value read back a second time
+##  (the caller passes `Tuning.pillar_w(gen)` and `_pillar_height`'s own return, not the raw ceiling).
+func _notify_pillar(x: int, y: int, w: int, h: int, element: int, power: int) -> void:
+	_pillar_x.append(x)
+	_pillar_y.append(y)
+	_pillar_w.append(w)
+	_pillar_h.append(h)
+	_pillar_e.append(element)
+	_pillar_pow.append(power)
+
+
 ## Cell number -> the fixed point at **the middle** of that cell. Put the impact point at a cell corner and the
 ##  span comes up half a cell short.
 func _cell_center_fp(c: int) -> int:
@@ -753,14 +832,21 @@ func _notify_seg(x0: int, y0: int, x1: int, y1: int, power: int) -> void:
 	_seg_pow.append(power)
 
 
-## **Both notices are cleared in one place.** Clear them separately and the day comes when only one is cleared, and
-##  then that notice **lives forever** — the same flash keeps replaying, or a bolt long gone keeps hitting.
+## **All three notices are cleared in one place** (blast, pillar, segment — `glyph-condense.md` §11.6 added
+##  the second one). Clear them separately and the day comes when one is forgotten, and then that notice
+##  **lives forever** — the same flash keeps replaying, a pillar keeps standing, or a bolt long gone keeps hitting.
 func _clear_notices() -> void:
 	_fx_x.clear()
 	_fx_y.clear()
 	_fx_e.clear()
 	_fx_g.clear()
 	_fx_pow.clear()
+	_pillar_x.clear()
+	_pillar_y.clear()
+	_pillar_w.clear()
+	_pillar_h.clear()
+	_pillar_e.clear()
+	_pillar_pow.clear()
 	_seg_x0.clear()
 	_seg_y0.clear()
 	_seg_x1.clear()
@@ -891,6 +977,43 @@ func get_blast_power() -> PackedInt32Array:
 
 func get_blast_gen() -> PackedByteArray:
 	return _fx_g
+
+
+# --- pillars that went up this tick -------------------------------
+# **The same lifetime as the blast notice above** — the shell hands it to the screen right after `step()`,
+#  and the next `step()` clears it. `x, y` is the impact cell (the foot); `w, h` are cells, not px.
+
+func pillar_count() -> int:
+	return _pillar_x.size()
+
+
+func get_pillar_x() -> PackedInt32Array:
+	return _pillar_x
+
+
+func get_pillar_y() -> PackedInt32Array:
+	return _pillar_y
+
+
+## **What the sim actually hit** — `_pillar_height`'s own return, never `Tuning.pillar_h(gen)` read a second
+##  time. A ceiling under a low overhang stops the scan short; drawing the table value instead would paint a
+##  column through solid terrain the sim never touched.
+func get_pillar_w() -> PackedInt32Array:
+	return _pillar_w
+
+
+func get_pillar_h() -> PackedInt32Array:
+	return _pillar_h
+
+
+func get_pillar_element() -> PackedByteArray:
+	return _pillar_e
+
+
+## The pillar's own power percent — **not** the flying bolt's launch power, the same distinction
+##  `get_blast_power()`'s comment holds for a blast.
+func get_pillar_power() -> PackedInt32Array:
+	return _pillar_pow
 
 
 # --- spans a bolt crossed this tick ------------------------------

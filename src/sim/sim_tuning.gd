@@ -407,9 +407,23 @@ const GLYPH_MAX_LAYERS := 7
 ## **`carve_r < water_r` must hold too** — carving (1) precedes the trace (2), so equal or larger means
 ##  **the carve erases the place water would go, rather than water filling what was carved.** Generation 1 has 1 cell of margin.
 ##  `net_tables` already measures that inequality for `rune_r`, and it must measure `water_r` too.
+## **`pillar_w`/`pillar_h` — condense's own columns** (`glyph-condense.md` §11.3). Cells, not px — the same
+##  unit as every other column here, and the same "this big on screen" meaning as `rd`, so both fall under the
+##  `TILE_CELLS` doubling this file's header already claims for size columns.
+##  **Height (16 at gen 0) is 2 characters** (`character.H_PX` 32px = `TILE_CELLS` 8 cells, so 2 characters =
+##  16 cells — a user decision, `glyph-condense.md` §2.1). **Width (8 at gen 0) is one terrain tile** — the
+##  floor `glyph-condense.md` §7 measured: below 4 cells the pillar can be walked through with no tick sample
+##  landing inside it (`MOVE_SPEED_PX` covers 12px/tick; a `W` narrower than that is a coin flip, not a glyph).
+## **`[확산, 응축]` puts condense at generation 1 every time** — flat constants would leave a spread-launched
+##  pillar the same size as a direct one, breaking "small things are weak" for exactly this one glyph.
+## **`net_tables._gen_tables`'s `_strictly_decreasing` name list must carry both names in the same edit** —
+##  that function's own header records a non-monotonic column added once and 1,038 checks staying green
+##  without anyone naming it there.
 const SIM_SIZES: Array[Dictionary] = [
-	{"speed": 12, "rd": 8, "ignite_r": 12, "rune_r": 6, "carve_r": 2, "water_r": 6},
-	{"speed": 6, "rd": 4, "ignite_r": 6, "rune_r": 2, "carve_r": 1, "water_r": 2},
+	{"speed": 12, "rd": 8, "ignite_r": 12, "rune_r": 6, "carve_r": 2, "water_r": 6,
+		"pillar_w": 8, "pillar_h": 16},
+	{"speed": 6, "rd": 4, "ignite_r": 6, "rune_r": 2, "carve_r": 1, "water_r": 2,
+		"pillar_w": 4, "pillar_h": 8},
 ]
 
 ## **Size floor — reach it and spread doesn't apply** (GDD, "size floor").
@@ -647,6 +661,19 @@ static func carve_r(gen: int) -> int:
 ##  reach a neighbor and **nothing happens** — generation 1 is non-zero for exactly the same reason as `rune_r`.
 static func water_r(gen: int) -> int:
 	return int(SIM_SIZES[_gen_row(gen)]["water_r"])
+
+
+## **Condense's pillar width, in cells.** The rectangle's own axis — no radius, no rounding (`glyph-condense.md`
+##  §8: "a rectangle needs none" of `Vector2`/`sqrt`).
+static func pillar_w(gen: int) -> int:
+	return int(SIM_SIZES[_gen_row(gen)]["pillar_w"])
+
+
+## **Condense's pillar height, in cells — the ceiling a column may reach, not the height it always reaches.**
+##  `spell_sim`'s height scan stops early at the first `BEHAVIOR_STATIC` cell above the impact row
+##  (`glyph-condense.md` §11.1, "stops at solid" — yes); this is only the cap that scan walks up to.
+static func pillar_h(gen: int) -> int:
+	return int(SIM_SIZES[_gen_row(gen)]["pillar_h"])
 
 
 static func _gen_row(gen: int) -> int:

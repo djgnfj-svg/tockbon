@@ -370,7 +370,7 @@ func _submerged(amount: int) -> Array:
 ## `vy` on a frame in which the jump fired — one frame of gravity is already added inside `step()`, the same
 ##  reasoning `net_character`'s A-1 writes out.
 func _fired_vy() -> float:
-	return Character.JUMP_VY_PX + Character.GRAVITY_PX * DT
+	return Character.JUMP_VY_PX + Character.PLAYER_GRAVITY_PX * DT
 
 
 ## **Acceptance 10.** The budget is a function of the permanent set, so there is no moment at which it can be
@@ -431,7 +431,7 @@ func _with_no_unlock_the_jump_is_exactly_what_it_was(t) -> void:
 	_water_box(g3, WATER_CX0, WATER_CX1, WATER_CY0, WATER_CY1, 0)
 	var vy_before := ch3.vy
 	ch3.step(g3, DT, 0.0, true, true)
-	t.eq(ch3.vy, vy_before + Character.GRAVITY_PX * DT,
+	t.eq(ch3.vy, vy_before + Character.PLAYER_GRAVITY_PX * DT,
 		"A-3 그대로: 물이 사라진 바로 다음 프레임엔 안 먹는다 (중력만 더해진다)")
 
 	# A-4 — the foot row alone is enough.
@@ -484,7 +484,7 @@ func _the_bought_air_jump_fires_once_per_airtime(t) -> void:
 		ch.step(g, DT, 0.0, false, true)
 	var vy_before := ch.vy
 	ch.step(g, DT, 0.0, true, true)
-	t.eq(ch.vy, vy_before + Character.GRAVITY_PX * DT,
+	t.eq(ch.vy, vy_before + Character.PLAYER_GRAVITY_PX * DT,
 		"같은 체공에서 세 번째는 안 먹는다 (중력만 더해진다 — 예산이 하나뿐이다)")
 
 
@@ -590,7 +590,7 @@ func _leaving_the_water_gives_exactly_one_more_jump(t) -> void:
 
 	var vy_before := ch.vy
 	ch.step(g, DT, 0.0, true, true)
-	t.eq(ch.vy, vy_before + Character.GRAVITY_PX * DT,
+	t.eq(ch.vy, vy_before + Character.PLAYER_GRAVITY_PX * DT,
 		"그 다음은 막힌다 (물 밖에선 다시 제한된다 — 한 번 넓어졌을 뿐이다)")
 
 
@@ -1151,6 +1151,10 @@ func _a_bought_rune_survives_the_departure_gate(t) -> void:
 	var pr: Variant = world.call("progress")
 	var circle: Variant = root.get("_circle")
 
+	# **A round circle first** — the shell's own `_circle` boots empty (`SpellCircle.CIRCLE_NONE`,
+	#  `onboarding-and-palette-tabs.md` Stage 3), which has 0 rune slots.
+	circle.call("set_circle", SpellCircle.DEFAULT_CIRCLE)
+
 	# -- bought: it comes through the gate --
 	pr.set("gems", Progress.GEMS_PER_UNLOCK)
 	t.ok(pr.call("buy", UnlockDefs.UNLOCK_RUNE_WATER), "마을에서 물 룬을 샀다 (전제)")
@@ -1183,8 +1187,14 @@ func _a_bought_rune_survives_the_departure_gate(t) -> void:
 ## The design asked for one added to `_update_hud()`. It is **dead code**: `HUD/Stats` (which draws
 ## `_town_message`) is hidden while the bench is open (`stage.gd:1239`), and `_toggle_research()` already
 ## rebuilds `_town_message` on **both** open and close (`stage.gd:1053`). So by the moment anyone can read
-## the line, it has already been rebuilt. What is measured here is that real property, driven through
-## `_interact()` — not the line that would have been added.
+## the line, it has already been rebuilt. What is measured here is that real property.
+##
+## **Driven through `_toggle_research()` directly, not `_interact()`** — `onboarding-and-palette-tabs.md`
+## Stage 7 closed `_interact()`'s door onto the research bench (E now does nothing there; `town_view`
+## draws 「준비중」 instead), and the plan's own words ("`net_research` stays untouched") turned out false
+## for this one check, which is the only one in this file that used `_interact()` as its entry rather than
+## calling the window's own toggle. `_toggle_research()`, `Progress.buy()`, `UnlockDefs` and
+## `research_window.gd` are all still exactly as they were — only the door this check walked through moved.
 func _closing_the_bench_refreshes_the_town_message(t) -> void:
 	var root: Node = await _treed_stage(t)
 	if root == null:
@@ -1195,7 +1205,7 @@ func _closing_the_bench_refreshes_the_town_message(t) -> void:
 	ch.call("place", int(float(seats[Fixtures.KIND_RESEARCH]) - Character.W_PX * 0.5),
 		TownMap.SPAWN_TILE.y * 16)
 
-	root.call("_interact")
+	root.call("_toggle_research")
 	t.ok(bool((root.get("_research_window") as Object).get("visible")), "연구창이 열렸다 (전제)")
 	var opened := String(root.get("_town_message"))
 	t.ok(opened.contains("연구대"), "연구대가 말했다 (전제 — %s)" % opened)
@@ -1213,7 +1223,7 @@ func _closing_the_bench_refreshes_the_town_message(t) -> void:
 	_click(win, Layout.unlock_chip_rects(row, _widths(ids, pr))[ids.find(UnlockDefs.UNLOCK_RUNE_WATER)].get_center())
 	t.ok(pr.call("is_unlocked", UnlockDefs.UNLOCK_RUNE_WATER), "창 안에서 클릭으로 물 룬을 샀다 (전제)")
 
-	root.call("_interact")
+	root.call("_toggle_research")
 	t.ok(not bool((root.get("_research_window") as Object).get("visible")), "한 번 더 눌러 닫았다 (전제)")
 	var closed := String(root.get("_town_message"))
 	t.ok(closed != opened,
@@ -1304,7 +1314,12 @@ func _the_footer_states_the_price_instead_of_denying_one(t) -> void:
 	t.ok(foot.contains("%d" % Progress.GEMS_PER_UNLOCK), "바닥 줄이 실제 값(%d)을 말한다 (%s)" % [
 		Progress.GEMS_PER_UNLOCK, foot])
 	t.ok(not foot.contains("아직 없다"), "그리고 '해금은 아직 없다'고 더는 말하지 않는다")
-	t.ok(foot.contains("[E]"), "닫는 키 안내는 그대로 남아 있다")
+	# **This asserted `[E]` while nothing was bound to E** — the check was guarding the defect. The window
+	#  closes on `ui_cancel`, so the footer has to name ESC, and the open prompt has to name the interaction
+	#  key. Naming a key literally is still text, but a wrong literal is exactly what shipped.
+	t.ok(foot.contains("[ESC]"), "닫는 키 안내가 실제로 닫는 키를 말한다 (%s)" % foot)
+	t.ok(not foot.contains("[E]"), "그리고 아무 데도 안 묶인 E를 더는 시키지 않는다")
+	t.ok(Fx.TOWN_PROMPT_FMT.contains("[F]"), "설비 안내는 상호작용 키 F를 말한다 (%s)" % Fx.TOWN_PROMPT_FMT)
 	# **A format, not a finished sentence** — a literal with the number baked in would leave the printed price
 	#  behind the day `GEMS_PER_UNLOCK` moves, and nothing would bark.
 	t.ok(Fx.RESEARCH_FOOTER_FMT.contains("%d"), "바닥 줄은 값을 박아 넣은 문장이 아니라 서식이다")

@@ -2,6 +2,10 @@ extends RefCounted
 ## Rain source B-3 · B-4 — does it reach the target in proportion to the per-tick amount. Split further out
 ## of `net_water_rain.gd`.
 ##
+## **What this measures, honestly**: `water_source.gd`'s own pour, in room ①'s real vessel — not the game's
+## water. `burn-out-of-the-bull-room.md` §4 deleted the game's only pour; stage 1 pours nowhere until room
+## ③'s own pour is built (`water-jump-and-escape.md` owes that re-point). This net's coordinates are untouched.
+##
 ## **Why split again (harness-manager, measured)**: this one check was 13.2 seconds — when it sat in one file
 ##  with B-1 · B-2 · B-6 (11.6s) and B-5 (10.9s), that whole file was 37 seconds.
 ##  The full story is in the header comment of `net_water_rain.gd`. Split into three, the wall clock is not

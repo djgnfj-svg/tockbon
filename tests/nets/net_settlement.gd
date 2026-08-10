@@ -636,7 +636,13 @@ func _wired_root(t) -> Node:
 			#  unconditionally. Left out, `_ready_itself_connects_the_button_to_enter_town` below dies on a
 			#  null mid-call and its own checks disappear rather than fail (this file's own header risk).
 			"GateView",
-			"HUD/SettlementWindow"]:
+			# **`HUD/BossBar`** (`boss-entrance-and-hp-bar.md` Stage C) — `_rebuild()`/`_physics_process()`
+			#  both touch `_boss_bar` unconditionally now; left out, this file's own tests that call
+			#  `reset_stage()`/`enter_town()`/`_leave_town()` on this root crash on a null mid-call, the same
+			#  risk this file's own comment already names for `GateView` one line up.
+			"HUD/BossBar",
+			"HUD/SettlementWindow",
+			"HUD/SettlementWindow", "HUD/OnboardView", "CharacterView"]:
 		t.ok(root.get_node_or_null(path) != null, "씬에 %s 가 있다 (전제)" % path)
 
 	root.set("_hud", root.get_node(paths["_hud"]))
@@ -654,7 +660,11 @@ func _wired_root(t) -> Node:
 	root.set("_sky", root.get_node("SkyBackground"))
 	root.get_node("SkyBackground").call("setup", root.get_node("Camera2D"))
 	root.set("_research_window", root.get_node("HUD/ResearchWindow"))
+	root.set("_boss_bar", root.get_node("HUD/BossBar"))
 	root.set("_settlement", root.get_node("HUD/SettlementWindow"))
+	# **`_char_view`** (the hit-flash/shake feature) — `_rebuild()` now calls `_char_view.clear()`
+	#  unconditionally, the same risk this file's own `HUD/BossBar` box above already names for a different node.
+	root.set("_char_view", root.get_node("CharacterView"))
 	root.set("_renderer", root.get_node("CellRenderer"))
 	root.get_node("CellRenderer").call("setup", root.get("_grid"))
 	var world0: Variant = root.get("_world")
@@ -663,6 +673,10 @@ func _wired_root(t) -> Node:
 	root.set("_gate_view", root.get_node("GateView"))
 	if world0 != null:
 		root.get_node("GateView").call("setup", world0.progress())
+	# **`_onboard_view`** (`onboarding-and-palette-tabs.md` Stage 7) — `_physics_process()` reaches
+	#  `_tick_onboard()` unconditionally, which writes `_onboard_view.visible` every frame. Every
+	#  `_physics_process` call in this file dies on a null without this.
+	root.set("_onboard_view", root.get_node("HUD/OnboardView"))
 	return root
 
 

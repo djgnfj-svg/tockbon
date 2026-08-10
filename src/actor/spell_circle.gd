@@ -62,12 +62,26 @@ var _layers: Array[int] = []
 var _runes: Array[int] = []
 
 
-func _init(circle_id: int = DEFAULT_CIRCLE) -> void:
+## **The default argument moves from `DEFAULT_CIRCLE` to `CIRCLE_NONE`, and the rune is no longer
+## auto-filled at all** (`onboarding-and-palette-tabs.md` Stage 3, user confirmed: "시작하자마자 못 쏘는 게
+## 맞다"). The old comment here argued the opposite — "boot with an empty rune and the game starts in a
+## 'cannot fire' state, and that reads as a malfunction" — and that argument is why this used to fill both.
+## **The user has decided the opposite is what teaches the game**: the empty circle is the first thing the
+## player is asked to fix, not a bug to hide. Leaving that old sentence standing would have the next
+## session "fix" the boot state back — CLAUDE.md's own rule for exactly this shape of edit.
+##
+## **The parameter itself stays** — many call sites (`SpellCircle.new(CircleDefs.CIRCLE_TRIANGLE)`, tests
+## across `net_circle`/`net_staff`) use it as a direct constructor for a specific circle, not as "the
+## game's boot state"; only the *default* (no argument at all, which is what `stage.gd`'s real `_circle`
+## and a fresh `SpellCircle.new()` in a net both use) needs to mean "empty". Passing an explicit id still
+## builds that circle's layers and rune slots — it now simply leaves every rune slot genuinely empty
+## (`RUNE_EMPTY`) instead of auto-filling `DEFAULT_RUNE`, the same as `set_circle()` alone already does.
+##
+## `DEFAULT_CIRCLE`/`DEFAULT_RUNE` are **not deleted** — `apply_preset()` below still reads them, and the
+## debug keys (`stage.gd`, keys 1-6) are the one path back to a fireable circle from empty, the same reason
+## they existed when `_init` also called them.
+func _init(circle_id: int = CircleDefs.CIRCLE_NONE) -> void:
 	set_circle(circle_id)
-	# **The starting state has the circle and the rune filled in.** Boot with an empty rune and the game
-	#  starts in a "cannot fire" state, and that reads as a malfunction.
-	for slot in _runes.size():
-		set_rune(slot, DEFAULT_RUNE)
 
 
 func circle_id() -> int:
@@ -156,6 +170,34 @@ func place_glyph(layer: int, glyph_id: int) -> bool:
 	if not can_place_glyph(layer, glyph_id):
 		return false
 	_layers[layer] = glyph_id
+	return true
+
+
+## **Stage 8 (`onboarding-and-palette-tabs.md`) — reorders a seated glyph, and never removes it from the
+## circle.** A swap of two layers' contents, not a place-then-clear: the multiset of what is seated is
+## unchanged either way, only which layer holds what, so this can never violate `max_per_circle` and needs
+## no call into `can_place_glyph`/`_list_ok` the way `place_glyph`/`set_from_packed` do. This is the whole
+## reason a move exists as its own operation — the alternative (`place_glyph(to, glyph_at(from))`) either
+## duplicates an unlimited-family glyph (dummy) sitting on `from`, or is rejected outright the instant `to`
+## already holds another member of a capped family, because `can_place_glyph` sees the *old* copy on `from`
+## still present and counts it against the cap.
+##
+## **The same slot is a harmless no-op** — the same idiom `set_circle`'s "placing the same circle again
+## does nothing" already holds, for the same reason: an accidental re-click on the already-picked layer
+## must not do anything surprising.
+## **An out-of-range index barks and moves nothing** — the same "reject loudly, change nothing" shape
+## `set_rune`'s unknown-rune branch already holds; a hit test drifting to an impossible layer must not
+## silently scramble the assembly.
+func move_glyph(from: int, to: int) -> bool:
+	if from < 0 or from >= _layers.size() or to < 0 or to >= _layers.size():
+		push_error("SpellCircle: move_glyph(%d, %d) is out of range for a %d-layer circle" % [
+			from, to, _layers.size()])
+		return false
+	if from == to:
+		return true
+	var tmp := _layers[from]
+	_layers[from] = _layers[to]
+	_layers[to] = tmp
 	return true
 
 
@@ -314,6 +356,19 @@ func glyph_list() -> Array[int]:
 	for id: int in _layers:
 		if id != Glyph.GLYPH_NONE:
 			out.append(id)
+	return out
+
+
+## **The layer index behind each entry `glyph_list()` returns, in the same order** (`onboarding-and-
+## palette-tabs.md` Stage 8). `palette_layout.items_of(KIND_GLYPH)` reads `glyph_list()` for *what* is
+## seated; picking a card in the 문양 tab to move it needs *which layer* too, and a bare value cannot carry
+## that — two seated members of an unlimited family (dummy) share one id and are told apart only by
+## position.
+func seated_layers() -> Array[int]:
+	var out: Array[int] = []
+	for i in _layers.size():
+		if _layers[i] != Glyph.GLYPH_NONE:
+			out.append(i)
 	return out
 
 
