@@ -1285,18 +1285,22 @@ const SLOT_EMPTY_PX := 1.5
 ##  「링 문양이 있는데 위쪽 원 공간이 뭔지 모르겠음」. A solid empty ring and a *filled* layer's own solid ring
 ##  (`_draw_ring_edge`, `CIRCLE_RING_INNER`/`OUTER`) differ only by color and thickness — both easy to miss at
 ##  a glance, and exactly the case reported (the base circle has two layers; with one filled the other's plain
-##  ring reads as unlabeled UI, not "empty"). ⇒ **`circle_window._draw_slot_ring` draws it dashed now** —
-##  filled is solid, empty is dashed, a difference no color-blindness or a quick glance can miss.
-## The dash angles are pure (`circle_window.slot_dash_arcs`) so a net can drive the count with no window.
-const SLOT_EMPTY_DASH_COUNT := 10
-## The fraction of one dash's own arc left as the gap to the next — at 0 the dashes touch end to end and the
-##  ring is solid again (this exact regression). `net_circle`'s inversion (dropping `SLOT_EMPTY_DASH_COUNT`
-##  to 1, one long dash) is the case that has to go red for the same reason.
-const SLOT_EMPTY_DASH_GAP_FRAC := 0.35
-## `draw_arc`'s own smoothing resolution **per dash**, not the dash count above — low enough that ten short
-##  arcs stay cheap to draw every frame, high enough that one dash does not look faceted at this ring's
-##  radius (roughly 30-40px at the window's own size, `Layout.glyph_radius`).
-const SLOT_EMPTY_DASH_POINTS := 6
+##  ring reads as unlabeled UI, not "empty"). ⇒ a dashed ring (`SLOT_EMPTY_DASH_COUNT` etc.) shipped for this.
+##
+## **The dash itself is gone now — the user, a third time on this same ring: "점선이 있는 게 이상함."**
+## `circle_window.slot_dash_arcs`/`_paint_slot_dash` are deleted, not merely unused — the ambiguity the dash
+## existed to fix is answered a different way now: the assembly window was reversed to "select a layer, then
+## press a palette card" (the user, looking at the screen: "층을 먼저 고르고, 그 다음 팔레트에서 문양을
+## 누르면 그 층에 들어가면 좋겠다"), so an empty ring only ever needs to say **selectable** — plain and dim —
+## or **selected** — plain and bright. Neither state needs a texture; a color/thickness swap already reads
+## at a glance, which the dash's own history above shows a plain ring alone (before the dash existed) did not.
+const SLOT_SELECTED_COLOR := Color(1.0, 0.92, 0.55, 0.95)
+const SLOT_SELECTED_PX := 3.0
+## **How far outside a filled layer's own rarity ring (`RARITY_RING_RATIO` 1.3) the selection ring sits**
+## when the selected layer is occupied (`circle_window._draw_ring`'s own selection branch) — an empty
+## layer has no rarity ring to clear, so `_draw_empty_slot` uses the ring radius directly instead of this
+## ratio. One constant either way keeps "outside, never flush" a single number to move.
+const SLOT_SELECTED_RATIO := 1.5
 
 ## **The circle you press is bigger than the symbol.** Kept the same as the symbol you have to aim exactly at an
 ##  empty layer for it to click, and that becomes "I pressed it and nothing happened". Grown too far it eats the
@@ -1374,6 +1378,16 @@ const PALETTE_EMPTY_COLOR := Color(0.60, 0.64, 0.74, 0.9)
 ## How many frames the just-filled seat's ring holds its flash.
 const CLICK_FRAMES := 10
 const CLICK_COLOR := Color(1.0, 0.95, 0.7, 0.9)
+
+## **"층을 먼저 고르세요" — the select-then-place reversal's own edge case.** Pressing a 문양 card with no
+## layer selected and no single unambiguous empty layer must say something (`circle_window._click_glyph_card`)
+## rather than read as "I pressed it and nothing happened" (design's own standing rule for every blocked
+## press in this window). Frame-counted like `CLICK_FRAMES` above, not tick-counted — the window already
+## redraws every frame while open, the same reason `_glow_frames`/`_click_frames` are frame clocks too.
+const PICK_LAYER_HINT_TEXT := "층을 먼저 고르세요"
+const PICK_LAYER_HINT_FRAMES := 60
+const PICK_LAYER_HINT_COLOR := Color(1.0, 0.75, 0.55, 0.95)
+const PICK_LAYER_HINT_SIZE := 14
 
 ## Where the SPAWN rays **start** (relative to the radius). At 0 they emanate from a single point and look like a clump, not a star.
 const GLYPH_SPAWN_INNER_RATIO := 0.3

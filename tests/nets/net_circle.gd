@@ -53,7 +53,7 @@ class _RecordingCircleWindow extends CircleWindow:
 	var texture_draws: Array[Dictionary] = []  # {glyph_id, tex} for each socket-texture draw
 	var rarity_ring_calls: Array[int] = []     # glyph id passed to the socket's own rarity ring
 	var empty_slot_calls := 0
-	var slot_ring_calls: Array[Dictionary] = []  # {"at": Vector2, "r": float} per _draw_slot_ring call
+	var slot_ring_calls: Array[Dictionary] = []  # {"at","r","col","px"} per _draw_slot_ring call
 
 	func _draw_frame(area: Rect2, circle_id: int) -> void:
 		frame_calls += 1
@@ -104,27 +104,20 @@ class _RecordingCircleWindow extends CircleWindow:
 		rarity_ring_calls.append(glyph_id)
 		super._draw_socket_rarity_ring(at, r, glyph_id)
 
-	func _draw_empty_slot(at: Vector2, r: float) -> void:
+	func _draw_empty_slot(at: Vector2, r: float, selected: bool) -> void:
 		empty_slot_calls += 1
-		super._draw_empty_slot(at, r)
+		super._draw_empty_slot(at, r, selected)
 
 	## **Captures the ring's own arguments, not just that it ran** — the `notice_rect` lesson again: counting
 	##  `empty_slot_calls` alone would stay green even if `_draw_empty_slot` handed this a bare `Vector2()`
-	##  and `0.0`. `_draw_actually_runs_headless` below compares these to `circle_layout`'s own
-	##  `layer_bands()` seat and `glyph_radius()`.
-	func _draw_slot_ring(at: Vector2, r: float) -> void:
-		slot_ring_calls.append({"at": at, "r": r})
-		super._draw_slot_ring(at, r)
+	##  and `0.0`. `_draw_actually_runs_headless` below compares `at`/`r` to `circle_layout`'s own
+	##  `layer_bands()` seat and `glyph_radius()`; `_selecting_a_layer_brightens_its_ring_then_toggles_off`
+	##  reads `col`/`px` — the state the dash used to carry (`fx_tuning.SLOT_SELECTED_COLOR`'s own comment:
+	##  the dash is gone, and "selectable vs. selected" is the axis this ring paints instead).
+	func _draw_slot_ring(at: Vector2, r: float, col: Color, px: float) -> void:
+		slot_ring_calls.append({"at": at, "r": r, "col": col, "px": px})
+		super._draw_slot_ring(at, r, col, px)
 
-	## **One entry per dash, not per ring** — `_draw_slot_ring` now loops `slot_dash_arcs()` and calls this
-	##  once per arc (`circle_window.gd`'s own comment: `draw_arc` is native, this ordinary method is the
-	##  seam). Recording here, not only at `_draw_slot_ring` above, is what tells "drawn as one solid ring"
-	##  from "drawn as several dashes" apart — `slot_ring_calls` alone cannot, since it fires once either way.
-	var slot_dash_calls: Array[Dictionary] = []  # {"at", "r", "from", "to"} per _paint_slot_dash call
-
-	func _paint_slot_dash(at: Vector2, r: float, from_rad: float, to_rad: float) -> void:
-		slot_dash_calls.append({"at": at, "r": r, "from": from_rad, "to": to_rad})
-		super._paint_slot_dash(at, r, from_rad, to_rad)
 	# **Tabs and the 완성 band** (`onboarding-and-palette-tabs.md` Stage 1) — the same `settlement_layout.
 	#  notice_rect` lesson every other hook in this class already guards against: a pure function asserted
 	#  alone let `_draw()` hand it a bare `Rect2()` under 320 green checks.
@@ -248,6 +241,7 @@ func run(t) -> void:
 	await _done_glow_then_close_fires_identically_to_tab(t)
 	_symbols_are_shared(t)
 	await _draw_actually_runs_headless(t)
+	await _selecting_a_layer_brightens_its_ring_then_toggles_off(t)
 	await _palette_tabs_and_done_are_drawn_from_the_layout(t)
 	_hit_tests_match_the_drawing(t)
 	_triangle_hit_shapes_stay_disjoint(t)
@@ -259,6 +253,8 @@ func run(t) -> void:
 	_move_glyph_swaps_layers_and_never_duplicates(t)
 	_seated_layers_matches_glyph_list_position_for_position(t)
 	_the_glyph_tab_moves_a_seated_glyph_between_layers(t)
+	_pressing_a_card_with_no_selection_moves_to_the_sole_empty_layer(t)
+	_pressing_a_card_with_two_empty_layers_does_nothing_and_hints(t)
 	_duplicate_dummy_glyphs_are_told_apart_by_layer(t)
 	_round_trip(t)
 	_cap_blocks_before_placing(t)
@@ -1221,21 +1217,15 @@ func _draw_actually_runs_headless(t) -> void:
 		t.ok(is_equal_approx(call["r"], Layout.glyph_radius(area)),
 			"%d번째 빈 자리 링 반지름이 glyph_radius와 같다 (%.5f)" % [i, call["r"] as float])
 
-	# **The ring is drawn dashed, not as one solid circle** (`fx_tuning.SLOT_EMPTY_DASH_COUNT`'s own comment
-	#  — a solid empty ring reads the same as a filled layer's own solid ring). `slot_ring_calls` above fires
-	#  once per empty seat per frame regardless of how the ring is painted; `slot_dash_calls` is what actually
-	#  tells "several short arcs" from "one long one".
-	t.ok(win.slot_dash_calls.size() > 0, "빈 자리 링이 실제로 점선 호(arc) 훅을 통해 그려졌다 (%d회)" % win.slot_dash_calls.size())
-	var dashes_per_ring := win.slot_dash_calls.size() / maxi(win.slot_ring_calls.size(), 1)
-	# **A literal floor, not `Fx.SLOT_EMPTY_DASH_COUNT` read back** — reading the same constant this code
-	#  reads would make the bound come from the thing being checked (CLAUDE.md), passing even if the constant
-	#  were dropped to 1 (one long dash = a solid-looking ring again, the exact regression this exists to
-	#  catch). **Inverted by hand**: `SLOT_EMPTY_DASH_COUNT = 1` measured `dashes_per_ring == 1`, red here.
-	t.ok(dashes_per_ring >= 4,
-		"빈 자리 링 한 번이 조각 여러 개(>=4)로 그려진다 (링당 %d조각) — 1이면 실선과 구분이 안 된다" % dashes_per_ring)
-	for call: Dictionary in win.slot_dash_calls:
-		t.ok(is_equal_approx(call["r"] as float, Layout.glyph_radius(area)),
-			"점선 조각의 반지름도 glyph_radius와 같다 (%.5f)" % (call["r"] as float))
+	# **The color/width carry the state now, not a dash pattern** — the user found the dash itself
+	#  confusing ("점선이 있는 게 이상함") and it was replaced with a plain ring whose color/thickness
+	#  differ by whether that layer is selected (`fx_tuning.SLOT_SELECTED_COLOR`'s own comment). No layer
+	#  is selected in this scenario, so every recorded empty-ring call must be the dim, unselected paint.
+	for call: Dictionary in win.slot_ring_calls:
+		t.ok((call["col"] as Color).is_equal_approx(Fx.SLOT_EMPTY),
+			"고르지 않은 빈 자리는 SLOT_EMPTY 색으로 그려진다 (%s)" % [call["col"]])
+		t.ok(is_equal_approx(call["px"] as float, Fx.SLOT_EMPTY_PX),
+			"고르지 않은 빈 자리 선 두께가 SLOT_EMPTY_PX와 같다 (%.2f)" % (call["px"] as float))
 
 	t.root.remove_child(win)
 	win.queue_free()
@@ -1306,27 +1296,73 @@ func _draw_actually_runs_headless(t) -> void:
 	win2.queue_free()
 
 
-## **The dash geometry, pure** — no window, no circle. `CircleWindow.slot_dash_arcs()` is `_draw_slot_ring`'s
-## single source for what an empty ring looks like (that function's own comment: it is the *only* caller).
-func _slot_dash_arcs_read_as_dashed_not_solid(t) -> void:
-	var arcs := CircleWindow.slot_dash_arcs()
-	# **A literal floor, not `Fx.SLOT_EMPTY_DASH_COUNT` read back** — reading the same constant the code
-	#  under test reads would make this check's bound come from the thing it checks (CLAUDE.md), passing
-	#  even at `SLOT_EMPTY_DASH_COUNT = 1` (one long dash reads as a solid ring again — the user's own second
-	#  regression, `fx_tuning.SLOT_EMPTY_DASH_COUNT`'s own comment). **Inverted by hand before landing**:
-	#  dropping the constant to 1 measured `arcs.size() == 1`, red here.
-	t.ok(arcs.size() >= 4,
-		"빈 자리 링이 조각 여러 개(>=4)로 나뉜다 (%d조각) — 1이면 실선과 구분이 안 된다" % arcs.size())
-	var covered := 0.0
-	for a: Vector2 in arcs:
-		t.ok(a.y > a.x, "각 조각의 끝각이 시작각보다 크다 (%s)" % [a])
-		covered += a.y - a.x
-	# **Strictly less than one full turn — the gaps are what make it read as dashed, not the count alone.**
-	#  At `SLOT_EMPTY_DASH_GAP_FRAC = 0` the dashes touch end to end and this crosses back up to `>= TAU`,
-	#  so this line (not the count check above) is what actually catches *that* regression — many touching
-	#  dashes still pass a bare count check.
-	t.ok(covered < TAU - 0.001,
-		"조각들이 덮는 각도 합이 한 바퀴(TAU)보다 작다 — 틈이 실제로 있다 (%.3f / %.3f)" % [covered, TAU])
+## **The selection ring — the axis that replaced the dash.** Round circle, 2 layers, layer 0 filled and
+## layer 1 empty (the same setup `_draw_actually_runs_headless` already uses for its own unselected case).
+## Drives `_click_layer` directly (an ordinary method, no tree needed — this file's own header already
+## proved that shape for `_can_pick`/`_slot_accepts`) and reads the recorded `_draw_slot_ring` calls, so
+## this is the inverse of the unselected assertion inside `_draw_actually_runs_headless`: select nothing
+## there, select something here.
+func _selecting_a_layer_brightens_its_ring_then_toggles_off(t) -> void:
+	var pr := Progress.new()
+	var c := SpellCircle.new(CircleDefs.CIRCLE_ROUND)
+	t.ok(c.place_glyph(0, Glyph.GLYPH_SPREAD), "1층에 확산을 놓는다 (전제)")
+	var win := _RecordingCircleWindow.new()
+	win.setup(pr, c)
+	win.size = Fx.WINDOW_RECT.size
+	win.visible = true
+	t.root.add_child(win)
+
+	var page := Book.circle_page(win.size)
+	var area := Layout.circle_area(page.size)
+	var bands := Layout.layer_bands(c.circle_id(), area)
+
+	# -- select the empty layer (1) — its ring must switch to the bright, selected paint --
+	win.call("_click_layer", 1)
+	t.eq(win.get("_selected_layer"), 1, "1번 층을 골랐다")
+	win.slot_ring_calls.clear()
+	win.queue_redraw()
+	await t.pump_frames(3)
+	var got_selected_empty := false
+	for call: Dictionary in win.slot_ring_calls:
+		if (call["at"] as Vector2).is_equal_approx(bands[1]["seat"]):
+			got_selected_empty = true
+			t.ok((call["col"] as Color).is_equal_approx(Fx.SLOT_SELECTED_COLOR),
+				"고른 빈 층은 SLOT_SELECTED_COLOR로 그려진다 (%s)" % [call["col"]])
+			t.ok(is_equal_approx(call["px"] as float, Fx.SLOT_SELECTED_PX),
+				"고른 빈 층 선 두께가 SLOT_SELECTED_PX와 같다 (%.2f)" % (call["px"] as float))
+	t.ok(got_selected_empty, "1번 층(빈 자리) 링이 실제로 기록됐다 (전제)")
+
+	# -- pressing the same layer again drops the selection, and the ring falls back to the dim paint --
+	win.call("_click_layer", 1)
+	t.eq(win.get("_selected_layer"), -1, "같은 층을 다시 누르면 선택이 풀린다")
+	win.slot_ring_calls.clear()
+	win.queue_redraw()
+	await t.pump_frames(3)
+	for call: Dictionary in win.slot_ring_calls:
+		if (call["at"] as Vector2).is_equal_approx(bands[1]["seat"]):
+			t.ok((call["col"] as Color).is_equal_approx(Fx.SLOT_EMPTY),
+				"선택 해제 후엔 다시 SLOT_EMPTY 색이다 (%s)" % [call["col"]])
+
+	# -- selecting an occupied layer (0) also brightens, laid over the glyph's own picture --
+	win.call("_click_layer", 0)
+	t.eq(win.get("_selected_layer"), 0, "0번 층(문양 있음)을 골랐다")
+	win.slot_ring_calls.clear()
+	win.queue_redraw()
+	await t.pump_frames(3)
+	var got_selected_filled := false
+	for call: Dictionary in win.slot_ring_calls:
+		if (call["at"] as Vector2).is_equal_approx(bands[0]["seat"]):
+			got_selected_filled = true
+			t.ok((call["col"] as Color).is_equal_approx(Fx.SLOT_SELECTED_COLOR),
+				"고른, 문양 있는 층도 SLOT_SELECTED_COLOR 링을 얹는다 (%s)" % [call["col"]])
+			# **Outside the glyph's own rarity ring** (`RARITY_RING_RATIO` 1.3), not flush with it —
+			#  `circle_window._draw_ring`'s own comment: the two must never share pixels.
+			t.ok(call["r"] as float > Layout.glyph_radius(area) * Fx.RARITY_RING_RATIO,
+				"선택 링 반지름이 희귀도 링보다 바깥이다 (%.3f)" % (call["r"] as float))
+	t.ok(got_selected_filled, "0번 층(문양 있음) 링이 실제로 기록됐다 (전제)")
+
+	t.root.remove_child(win)
+	win.queue_free()
 
 
 ## **Tabs, the open section and the 완성 band are drawn from the exact rects `palette_layout` computes** —
@@ -2036,6 +2072,10 @@ func _seated_layers_matches_glyph_list_position_for_position(t) -> void:
 ## duplicate it (dummy, unlimited) or get silently rejected (a capped family already holding it elsewhere).
 ## Driven through the real click path on an untreed window, the same technique every other pick test in
 ## this file already uses.
+## **Reversed order — select the layer first, then press a card** (the user, looking at the screen:
+## "층을 먼저 고르고, 그 다음 팔레트에서 문양을 누르면 그 층에 들어가면 좋겠다"). The old flow drove
+## `_click_palette` (pick) then `_click_circle` (place); this drives `_click_circle` (select) then
+## `_click_palette` (move) — the same swap underneath (`move_glyph`), reached from the other side.
 func _the_glyph_tab_moves_a_seated_glyph_between_layers(t) -> void:
 	var pr := Progress.new()
 	var c := SpellCircle.new(CircleDefs.CIRCLE_ROUND)
@@ -2050,51 +2090,110 @@ func _the_glyph_tab_moves_a_seated_glyph_between_layers(t) -> void:
 	win.call("_click_palette", pal, Palette.tabs(pal.size)[glyph_ti].get_center())
 	t.eq(win.get("_open_tab"), glyph_ti, "문양 탭을 열었다 (전제)")
 
+	var page := Book.circle_page(win.size)
+	var area := Layout.circle_area(page.size)
+	var bands := Layout.layer_bands(c.circle_id(), area)
+
+	# -- select layer 1 first (via the circle side), then press the seated spread's card --
+	win.call("_click_circle", page, bands[1]["seat"])
+	t.eq(win.get("_selected_layer"), 1, "2층을 먼저 골랐다")
+
 	var sec := Palette.section(pal.size)
 	var items := Palette.items_of(Palette.KIND_GLYPH, pr, c)
 	t.eq(items, [Glyph.GLYPH_SPREAD, Glyph.GLYPH_BLAST] as Array[int], "문양 칸에 확산·폭발 순서로 있다 (전제)")
 	var spread_pt := Palette.item_slot(sec, 0, items.size()).get_center()
 
-	# -- pick the seated spread (layer 0), then click layer 1's own seat: a swap --
 	win.call("_click_palette", pal, spread_pt)
-	t.eq(win.get("_picked_kind"), Palette.KIND_GLYPH, "확산 카드를 골랐다")
-	t.eq(win.get("_picked_layer"), 0, "그 카드가 실제로 온 층은 0번이다 (전제)")
-
-	var page := Book.circle_page(win.size)
-	var area := Layout.circle_area(page.size)
-	var seat1: Vector2 = Layout.layer_bands(c.circle_id(), area)[1]["seat"]
-	win.call("_click_circle", page, seat1)
 	t.eq(c.glyph_at(0), Glyph.GLYPH_BLAST, "1층엔 이제 폭발이다 (확산이 빠지고 폭발이 왔다 — 복제가 아니다)")
-	t.eq(c.glyph_at(1), Glyph.GLYPH_SPREAD, "2층엔 이제 확산이다")
+	t.eq(c.glyph_at(1), Glyph.GLYPH_SPREAD, "2층엔 이제 확산이다 — 비우고 다시 놓는 두 번이 아니라 한 번의 클릭으로 교체됐다")
 	t.eq(c.glyph_list().size(), 2, "여전히 둘뿐이다 (늘지 않았다)")
-	t.eq(win.get("_picked_kind"), -1, "옮긴 뒤 손은 빈다")
-	t.eq(win.get("_picked_layer"), -1, "_picked_layer도 같이 비워진다")
+	t.eq(win.get("_selected_layer"), -1, "옮긴 뒤 선택은 풀린다")
 
-	# -- picking the same seated card again drops the pick (unchanged from before Stage 8) --
+	# -- pressing a card with nothing selected and no single empty layer to guess: nothing moves,
+	#     and the "고르세요" hint surfaces instead of the click reading as swallowed --
 	items = Palette.items_of(Palette.KIND_GLYPH, pr, c)
 	var blast_now_at_0 := Palette.item_slot(sec, 0, items.size()).get_center()
 	win.call("_click_palette", pal, blast_now_at_0)
-	t.eq(win.get("_picked_kind"), Palette.KIND_GLYPH, "폭발(지금 1층) 카드를 골랐다")
-	win.call("_click_palette", pal, blast_now_at_0)
-	t.eq(win.get("_picked_kind"), -1, "같은 카드를 다시 누르면 손을 놓는다")
+	t.eq(c.glyph_at(0), Glyph.GLYPH_BLAST, "선택 없이 눌러도 (빈 층이 없어 애매하므로) 아무것도 안 움직인다")
+	t.eq(c.glyph_at(1), Glyph.GLYPH_SPREAD, "2층도 그대로다")
+	t.ok(int(win.get("_hint_frames")) > 0, "대신 '층을 먼저 고르세요' 안내가 뜬다")
 
-	# -- moving to the same layer the pick came from: a harmless no-op through the real click path --
+	# -- selecting the layer a card already sits on is a harmless no-op (move_glyph(x, x)) --
+	win.call("_click_circle", page, bands[0]["seat"])
+	t.eq(win.get("_selected_layer"), 0, "폭발이 있는 1층을 골랐다")
 	win.call("_click_palette", pal, blast_now_at_0)
-	var seat0: Vector2 = Layout.layer_bands(c.circle_id(), area)[0]["seat"]
-	win.call("_click_circle", page, seat0)
 	t.eq(c.glyph_at(0), Glyph.GLYPH_BLAST, "제자리로 '옮겨도' 아무것도 안 바뀐다")
 	t.eq(c.glyph_at(1), Glyph.GLYPH_SPREAD, "2층도 그대로다")
+	t.eq(win.get("_selected_layer"), -1, "무동작이어도 이동 시도 후엔 선택이 풀린다")
+	win.free()
+
+
+## **The single-empty-layer shortcut** (design: "선택 없이 팔레트 문양을 누르면 — 빈 층이 하나뿐이면
+## 거기로"). No layer is selected and exactly one layer is empty, so the press does not need to ask.
+func _pressing_a_card_with_no_selection_moves_to_the_sole_empty_layer(t) -> void:
+	var pr := Progress.new()
+	var c := SpellCircle.new(CircleDefs.CIRCLE_ROUND)
+	t.ok(c.place_glyph(0, Glyph.GLYPH_SPREAD), "확산을 1층에 놓는다 (전제)")
+	t.eq(c.glyph_at(1), Glyph.GLYPH_NONE, "2층은 비어 있다 (전제 — 빈 층이 하나뿐이다)")
+	var win := CircleWindow.new()
+	win.setup(pr, c)
+	win.size = Fx.WINDOW_RECT.size
+
+	var pal := Book.palette_page(win.size)
+	var glyph_ti := Palette.KINDS.find(Palette.KIND_GLYPH)
+	win.call("_click_palette", pal, Palette.tabs(pal.size)[glyph_ti].get_center())
+
+	var sec := Palette.section(pal.size)
+	var items := Palette.items_of(Palette.KIND_GLYPH, pr, c)
+	t.eq(items, [Glyph.GLYPH_SPREAD] as Array[int], "문양 칸엔 확산 하나뿐이다 (전제)")
+	win.call("_click_palette", pal, Palette.item_slot(sec, 0, items.size()).get_center())
+
+	t.eq(c.glyph_at(0), Glyph.GLYPH_NONE, "1층은 비었다 (확산이 옮겨갔다)")
+	t.eq(c.glyph_at(1), Glyph.GLYPH_SPREAD, "확산이 유일한 빈 층(2층)으로 곧장 옮겨갔다")
+	t.eq(int(win.get("_hint_frames")), 0, "애매하지 않으므로 안내는 뜨지 않는다")
+	win.free()
+
+
+## **The ambiguous case** (design: "여럿이면 아무 일도 안 일어나되 '층을 고르세요'가 화면에 읽혀야 한다").
+## A triangle circle (3 layers) with only one seated glyph leaves *two* empty layers — guessing either one
+## could bump a glyph the player never asked to move, so nothing does.
+func _pressing_a_card_with_two_empty_layers_does_nothing_and_hints(t) -> void:
+	var pr := Progress.new()
+	var c := SpellCircle.new(CircleDefs.CIRCLE_TRIANGLE)
+	t.ok(c.place_glyph(0, Glyph.GLYPH_SPREAD), "0번 소켓에 확산을 놓는다 (전제)")
+	t.eq(c.glyph_at(1), Glyph.GLYPH_NONE, "1번 소켓은 비어 있다 (전제)")
+	t.eq(c.glyph_at(2), Glyph.GLYPH_NONE, "2번 소켓도 비어 있다 (전제 — 빈 층이 둘이라 애매하다)")
+	var win := CircleWindow.new()
+	win.setup(pr, c)
+	win.size = Fx.WINDOW_RECT.size
+
+	var pal := Book.palette_page(win.size)
+	var glyph_ti := Palette.KINDS.find(Palette.KIND_GLYPH)
+	win.call("_click_palette", pal, Palette.tabs(pal.size)[glyph_ti].get_center())
+
+	var sec := Palette.section(pal.size)
+	var items := Palette.items_of(Palette.KIND_GLYPH, pr, c)
+	t.eq(items, [Glyph.GLYPH_SPREAD] as Array[int], "문양 칸엔 확산 하나뿐이다 (전제)")
+	win.call("_click_palette", pal, Palette.item_slot(sec, 0, items.size()).get_center())
+
+	t.eq(c.glyph_at(0), Glyph.GLYPH_SPREAD, "빈 층이 둘이라 아무 데도 옮기지 않는다 (0번 그대로)")
+	t.eq(c.glyph_at(1), Glyph.GLYPH_NONE, "1번도 그대로 빈다")
+	t.eq(c.glyph_at(2), Glyph.GLYPH_NONE, "2번도 그대로 빈다")
+	t.ok(int(win.get("_hint_frames")) > 0, "'층을 먼저 고르세요' 안내가 뜬다")
 	win.free()
 
 
 ## **Duplicate values, told apart by position — the exact case a bare item id cannot resolve.** Dummy is
-## the one family with `max_per_circle: 0` (unlimited), so a round circle can legitimately seat the same
-## id on both layers.
+## the one family with `max_per_circle: 0` (unlimited), so a triangle circle can legitimately seat the
+## same id on two sockets while the third stays empty — the selected (empty) layer is the destination,
+## and pressing card index 1 must move **socket 1's own** dummy, not socket 0's, even though both cards
+## show the identical value.
 func _duplicate_dummy_glyphs_are_told_apart_by_layer(t) -> void:
 	var pr := Progress.new()
-	var c := SpellCircle.new(CircleDefs.CIRCLE_ROUND)
-	t.ok(c.place_glyph(0, Glyph.DUMMY_C), "더미를 1층에 놓는다 (전제)")
-	t.ok(c.place_glyph(1, Glyph.DUMMY_C), "같은 더미를 2층에도 놓는다 (전제 — 무제한 계열이라 허용된다)")
+	var c := SpellCircle.new(CircleDefs.CIRCLE_TRIANGLE)
+	t.ok(c.place_glyph(0, Glyph.DUMMY_C), "더미를 0번 소켓에 놓는다 (전제)")
+	t.ok(c.place_glyph(1, Glyph.DUMMY_C), "같은 더미를 1번 소켓에도 놓는다 (전제 — 무제한 계열이라 허용된다)")
+	t.eq(c.glyph_at(2), Glyph.GLYPH_NONE, "2번 소켓은 비어 있다 (전제 — 이동의 목적지)")
 	var win := CircleWindow.new()
 	win.setup(pr, c)
 	win.size = Fx.WINDOW_RECT.size
@@ -2106,14 +2205,26 @@ func _duplicate_dummy_glyphs_are_told_apart_by_layer(t) -> void:
 	var items := Palette.items_of(Palette.KIND_GLYPH, pr, c)
 	t.eq(items, [Glyph.DUMMY_C, Glyph.DUMMY_C] as Array[int], "두 칸 다 값은 같은 더미다 (전제 — 이 검사의 핵심)")
 
-	# Pick cell 0 (layer 0) — `_picked_layer` must read 0, never guess from the value alone.
-	win.call("_click_palette", pal, Palette.item_slot(sec, 0, items.size()).get_center())
-	t.eq(win.get("_picked_layer"), 0, "0번 칸을 고르면 0번 층에서 온 것으로 잡힌다")
+	# -- select the empty destination (socket 2), then press card index 1 (socket 1's own dummy) --
+	# **Not `bands[2]["seat"]`** — for a triangle band `seat` is the socket's own center, which sits
+	#  *inside* the rune's disc (`layer_bands`' own `hit` column has a nonzero inner radius exactly to
+	#  keep the layer band from also claiming that point — `_triangle_hit_shapes_stay_disjoint`'s own
+	#  "룬 영역 안쪽은 층 밴드가 아니다"). Clicking the seat hits the rune, not the layer, and `_click_circle`
+	#  checks layers first but still finds nothing there — the band's own midpoint is the point that lands
+	#  inside its annulus, the same point that check's own `band_pt` computes.
+	var page := Book.circle_page(win.size)
+	var area := Layout.circle_area(page.size)
+	var band2: Dictionary = Layout.layer_bands(c.circle_id(), area)[2]
+	var edges2: PackedFloat32Array = band2["edges"]
+	var center2: Vector2 = band2["center"]
+	var band2_pt := center2 + Vector2(0.0, -(edges2[0] + edges2[edges2.size() - 1]) * 0.5)
+	win.call("_click_circle", page, band2_pt)
+	t.eq(win.get("_selected_layer"), 2, "빈 2번 소켓을 목적지로 골랐다")
 
-	# Pressing cell 1 (same value, different position) switches the pick instead of dropping it.
 	win.call("_click_palette", pal, Palette.item_slot(sec, 1, items.size()).get_center())
-	t.eq(win.get("_picked_kind"), Palette.KIND_GLYPH, "값이 같아도 다른 자리를 누르면 손을 놓지 않는다")
-	t.eq(win.get("_picked_layer"), 1, "대신 1번 층으로 고른 자리가 바뀐다")
+	t.eq(c.glyph_at(0), Glyph.DUMMY_C, "0번 소켓은 손대지 않았다 (값이 같아도 자리로 구분됐다)")
+	t.eq(c.glyph_at(1), Glyph.GLYPH_NONE, "1번 소켓의 더미가 빠져나갔다")
+	t.eq(c.glyph_at(2), Glyph.DUMMY_C, "그 더미가 2번 소켓으로 옮겨왔다")
 	win.free()
 
 
