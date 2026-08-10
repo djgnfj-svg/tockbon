@@ -93,9 +93,11 @@ func run(t) -> void:
 	_tab_during_confirmation_afterglow_closes_it_first(t)
 	_physics_process_actually_ticks_confirm_before_the_hud_reacts(t)
 	_reset_stage_actually_cancels_the_confirmation_afterglow(t)
-	_reward_key_gates_room1_water(t)
+	_pressing_the_key_after_the_auto_grant_changes_nothing_further(t)
 	_reward_key_before_any_death_does_nothing(t)
 	_reward_key_is_wired(t)
+	_the_bull_reward_grants_itself_with_no_key_pressed(t)
+	_a_rooster_death_does_not_touch_the_bulls_reward_gate(t)
 	_a_preset_key_does_not_wipe_an_earned_rune(t)
 	_a_preset_key_still_works_with_the_circle_removed(t)
 	_reset_revokes_a_rune_from_the_seat_it_no_longer_owns(t)
@@ -1094,19 +1096,19 @@ func _reset_stage_actually_cancels_the_confirmation_afterglow(t) -> void:
 	root.free()
 
 
-## **Stage I (`stage1-bosses.md`) — the reward key and room ①'s water, driven through the real
-## `_physics_process()` loop, not a bare `WorldStep`.** This is what makes `_on_ticked()`'s own
-## `_room1_reward_water.tick(_grid)` call exercised for real — a bare `world.frame()` skips `_on_ticked()`
-## entirely (that call only happens inside `stage.gd`'s own `_physics_process`), so a version of this test
-## that drove the world directly would prove the gate but not that the water actually pours.
-## **Acceptance 8b's own order, measured as a sequence**: dead -> pending -> (water still absent) ->
-## taken -> (water starts) -> (water actually rises). Reversing any step is the named failure.
+## **Stage I (`stage1-bosses.md`) — room ①'s water, driven through the real `_physics_process()` loop, not a
+## bare `WorldStep`.** This is what makes `_on_ticked()`'s own `_room1_reward_water.tick(_grid)` call
+## exercised for real — a bare `world.frame()` skips `_on_ticked()` entirely (that call only happens inside
+## `stage.gd`'s own `_physics_process`), so a version of this test that drove the world directly would prove
+## the gate but not that the water actually pours.
 ##
-## **Stage C of `rune-lock-and-receiving.md` folded in, at the same sequence points** — a final-state check
-## alone cannot measure a grant (that plan's own risk table), so fire's ownership is asserted **before** L
-## (still unowned, same as the water being absent) and immediately **after** (owned, same tick the water
-## starts) — the transition, not just the end state.
-func _reward_key_gates_room1_water(t) -> void:
+## **Session correction — the reward now grants itself the tick the bull dies** (`_on_ticked()`'s own new
+## auto-grant), so "L gates it, and before L nothing has happened" is no longer true and is not asserted
+## here any more (`_the_bull_reward_grants_itself_with_no_key_pressed`, above, is the check for the
+## auto-grant transition itself). **What is still real and worth proving here**: the debug key L, pressed
+## *after* the auto-grant already ran, must be idempotent — it must not create a second water source or
+## disturb the rune already owned.
+func _pressing_the_key_after_the_auto_grant_changes_nothing_further(t) -> void:
 	var root := _wired_stage_root(t)
 	if root == null:
 		return
@@ -1117,30 +1119,28 @@ func _reward_key_gates_room1_water(t) -> void:
 
 	var kind := MonsterDefs.KIND_BULL
 	var mid: int = world.spawn_monster(kind, 700, 700 - MonsterDefs.h_px(kind))
-	t.ok(mid > 0, "황소 스폰됐다 (검사의 전제)")
+	t.ok(mid > 0, "황소 스폰됐다 (전제)")
 	world.monster_at(0).hp = 0
-	for _i in Tuning.TICK_DIVIDER:
+	# **`TICK_DIVIDER * 2`, never one** — the death and the auto-grant both happen on the tick.
+	for _i in Tuning.TICK_DIVIDER * 2:
 		root.call("_physics_process", 1.0 / 60.0)
 
 	var pr: Variant = world.progress()
-	t.ok(pr.is_reward_pending(MonsterDefs.KIND_BULL), "황소가 죽으면 보상이 대기 상태다 (검사의 전제)")
-	t.eq(root.get("_room1_reward_water"), null, "보상을 수령하기 전엔 room ①의 물이 시작 안 한다")
-	t.ok(not pr.owns_rune(Tuning.ELEM_FIRE), "보상을 수령하기 전엔 불 룬도 없다 (검사의 전제)")
-
-	root.call("_take_boss_reward")
-	t.ok(not pr.is_reward_pending(MonsterDefs.KIND_BULL), "수령하면(L) 대기가 풀린다")
-	t.ok(root.get("_room1_reward_water") != null, "그리고 room ①의 물이 그제서야 시작된다")
-	t.ok(pr.owns_rune(Tuning.ELEM_FIRE), "그리고 같은 순간 불 룬도 실제로 지급된다")
+	t.ok(root.get("_room1_reward_water") != null, "전제 — 자동 수령으로 이미 room ①의 물이 시작됐다")
+	t.ok(pr.owns_rune(Tuning.ELEM_FIRE), "전제 — 불 룬도 이미 자동으로 지급됐다")
+	t.ok(not pr.is_reward_pending(MonsterDefs.KIND_BULL), "전제 — 대기 상태도 이미 스스로 풀렸다")
 
 	for _i in Tuning.TICK_DIVIDER * 5:
 		root.call("_physics_process", 1.0 / 60.0)
 	var poured: int = root.get("_room1_reward_water").call("poured")
 	t.ok(poured > 0, "실제로 물이 차오른다 (누적 %d)" % poured)
 
-	# A second press changes nothing further - `_room1_reward_water` is not replaced, and nothing errors.
+	# L pressed after the fact changes nothing further - `_room1_reward_water` is not replaced, nothing errors.
 	var same_source: Variant = root.get("_room1_reward_water")
 	root.call("_take_boss_reward")
-	t.eq(root.get("_room1_reward_water"), same_source, "다시 눌러도 물줄기가 새로 생기지 않는다 (같은 인스턴스)")
+	t.eq(root.get("_room1_reward_water"), same_source,
+		"이미 자동으로 받은 뒤 L을 눌러도 물줄기가 새로 생기지 않는다 (같은 인스턴스)")
+	t.ok(pr.owns_rune(Tuning.ELEM_FIRE), "그리고 룬도 그대로다 (재지급으로 문제가 생기지 않는다)")
 
 	root.free()
 
@@ -1165,6 +1165,77 @@ func _reward_key_before_any_death_does_nothing(t) -> void:
 	t.eq(root.get("_room1_reward_water"), null, "죽기 전에 눌러도 room ①의 물은 시작되지 않는다")
 	t.ok(not world.progress().owns_rune(Tuning.ELEM_FIRE), "죽기 전에 눌러도 불 룬은 지급되지 않는다")
 
+	root.free()
+
+
+## **Session correction — the reward used to have exactly one door, the debug key L, so a player who never
+## opens the debug layer killed the bull and got nothing: no fire rune, no water, no way to burn the wood
+## wall, and the rooster/gate past it unreachable — the game ended at the bull with nothing explaining why.**
+## This drives the death and reads the grant with **no key press at all** — the whole point of the fix.
+## *Inversion, measured directly*: replacing `_on_ticked()`'s own new call site
+## (`if _world.progress().is_reward_pending(MonsterDefs.KIND_BULL): _take_boss_reward()`) with nothing turns
+## every assert below red while `_reward_key_gates_room1_water` above (which presses the key by hand) stays
+## green — proof this check measures the automatic door, not the debug one.
+func _the_bull_reward_grants_itself_with_no_key_pressed(t) -> void:
+	var root := _wired_stage_root(t)
+	if root == null:
+		return
+	var world: Variant = root.get("_world")
+	if world == null:
+		root.free()
+		return
+
+	var kind := MonsterDefs.KIND_BULL
+	var mid: int = world.spawn_monster(kind, 700, 700 - MonsterDefs.h_px(kind))
+	t.ok(mid > 0, "황소 스폰됐다 (전제)")
+	var pr: Variant = world.progress()
+	t.ok(not pr.owns_rune(Tuning.ELEM_FIRE), "죽기 전엔 불 룬이 없다 (전제)")
+
+	world.monster_at(0).hp = 0
+	# **`TICK_DIVIDER * 2`, never one** — the death and the auto-grant both happen on the tick.
+	for _i in Tuning.TICK_DIVIDER * 2:
+		root.call("_physics_process", 1.0 / 60.0)
+
+	t.ok(pr.owns_rune(Tuning.ELEM_FIRE),
+		"L을 한 번도 안 눌렀는데도 황소가 죽으면 불 룬이 자동으로 들어온다")
+	t.ok(root.get("_room1_reward_water") != null, "그리고 room ①의 물도 자동으로 시작된다")
+	t.ok(not pr.is_reward_pending(MonsterDefs.KIND_BULL), "그리고 대기 상태도 스스로 풀린다")
+
+	for _i in Tuning.TICK_DIVIDER * 5:
+		root.call("_physics_process", 1.0 / 60.0)
+	var poured: int = root.get("_room1_reward_water").call("poured")
+	t.ok(poured > 0, "실제로 물이 차오른다 (누적 %d)" % poured)
+	root.free()
+
+
+## **The rooster's own reward flag must survive the bull's auto-grant untouched.** `_take_boss_reward()`
+## calls `Progress.clear_pending_boss_rewards()`, which flips *every present* boss's pending flag to false,
+## not just the bull's (`progress.gd`'s own "presence as a key is the whole fact" idiom) — gating the new
+## call site on `is_reward_pending(KIND_BULL)` specifically, rather than "some boss has died", is what stops
+## that from leaking into a boss with no reward door built yet.
+## *Inversion*: calling `_take_boss_reward()` unconditionally every tick once *any* boss has died (the
+## mutation this check exists to catch) clears the rooster's flag the tick after this test kills it, and the
+## last assert below goes red.
+func _a_rooster_death_does_not_touch_the_bulls_reward_gate(t) -> void:
+	var root := _wired_stage_root(t)
+	if root == null:
+		return
+	var world: Variant = root.get("_world")
+	if world == null:
+		root.free()
+		return
+
+	var kind := MonsterDefs.KIND_ROOSTER
+	var mid: int = world.spawn_monster(kind, 700, 700 - MonsterDefs.h_px(kind))
+	t.ok(mid > 0, "수탉 스폰됐다 (전제)")
+	world.monster_at(0).hp = 0
+	for _i in Tuning.TICK_DIVIDER * 2:
+		root.call("_physics_process", 1.0 / 60.0)
+
+	var pr: Variant = world.progress()
+	t.ok(pr.boss_died(MonsterDefs.KIND_ROOSTER), "수탉이 죽었다 (전제)")
+	t.ok(pr.is_reward_pending(MonsterDefs.KIND_ROOSTER),
+		"황소가 죽은 적이 없어 자동 수령 분기가 불리지 않으므로, 수탉의 대기 플래그가 그대로 남아 있다")
 	root.free()
 
 
@@ -1453,7 +1524,7 @@ func _wired_stage_root(t) -> Node:
 	for path: String in [paths["_hud"], paths["_levelup_label"], "HUD/HpBar", "HUD/Money",
 			"HUD/CircleWindow", "HUD/ThreePickWindow", "SpellView", "BlastFx", "StageInput", "Camera2D",
 			"MonsterView", "CellRenderer", "TownView", "SkyBackground", "HUD/ResearchWindow",
-			"HUD/SettlementWindow"]:
+			"HUD/SettlementWindow", "HUD/BossBar"]:
 		t.ok(root.get_node_or_null(path) != null, "씬에 %s 가 있다 (전제)" % path)
 
 	# **`_input` is wired too, since `_update_hud()` reads developer mode off it** (`stage_input.debug_on()`).
@@ -1498,6 +1569,9 @@ func _wired_stage_root(t) -> Node:
 	# **`_gate_view`, and the same sentence applies** (`stage-clear-sequence.md`) — `_sync_settlement()` calls
 	#  `tick_gate()` on it every physics frame and `reset_stage()` calls `reset_gate()`, both unconditionally.
 	root.set("_gate_view", root.get_node("GateView"))
+	# **`_boss_bar`, the same sentence again** (`boss-entrance-and-hp-bar.md` Stage C) — `_rebuild()` calls
+	#  `clear_boss()` and `_physics_process()` calls `set_entrance_frames()`, both unconditionally now.
+	root.set("_boss_bar", root.get_node("HUD/BossBar"))
 	# **`_renderer`, so `_on_ticked()` can be driven for real too** — it calls `_renderer.refresh()` whenever
 	#  `_grid.consume_changed() > 0`, and any test that drives `_physics_process()` far enough to change the
 	#  grid (Stage I's own water pour is the first to do this through this helper) crashes on a null `_renderer`

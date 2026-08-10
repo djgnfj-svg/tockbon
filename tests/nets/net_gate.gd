@@ -966,6 +966,13 @@ func _wired_root(t) -> Node:
 			#  on a null mid-call and disappears rather than fails — the exact risk `net_settlement.gd`'s own
 			#  `_wired_root` now names for the same node.
 			["_gate_view", "GateView"],
+			# **`_boss_bar`** (`boss-entrance-and-hp-bar.md` Stage C) — `_rebuild()` and `_physics_process()`
+			#  both call it unconditionally now (`clear_boss()`/`set_entrance_frames()`). Left out, every
+			#  check in this file that calls `reset_stage()`/`_leave_town()`/`_physics_process` on this root
+			#  crashes on a null mid-call — measured directly (`Invalid call. Nonexistent function
+			#  'clear_boss' in base 'Nil'`), the exact risk this file's own header already names for
+			#  `_gate_view` one line up.
+			["_boss_bar", "HUD/BossBar"],
 			["_settlement", "HUD/SettlementWindow"]]:
 		var n := root.get_node_or_null(NodePath(pair[1]))
 		t.ok(n != null, "씬에 %s 가 있다 (전제)" % pair[1])

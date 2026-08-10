@@ -596,8 +596,11 @@ func _no_pushed_out_glyph_is_stashed_anywhere(t) -> void:
 		#  row is spent, which row's monster died, the wake hysteresis bit), the exact shape
 		#  `world_step.gd`'s own `_monsters`/`_died_kind` entries one line up already are. Not a record of
 		#  a glyph that left a spell layer, which is what this file's no-inventory check exists to catch.
+		# **`_trigger_tx` added here, deliberately** (`boss-entrance-and-hp-bar.md`, Stage A) — one more
+		#  parallel row-index array, the boss entrance trigger tile (`-1` when a row has none). The same
+		#  bookkeeping shape as `_tx`/`_kind` beside it, not a record of a glyph that left a spell layer.
 		"res://src/actor/monster_placement.gd":
-			["_id_to_row", "_kind", "_monster_id", "_primed", "_spent", "_tx"],
+			["_id_to_row", "_kind", "_monster_id", "_primed", "_spent", "_trigger_tx", "_tx"],
 		"res://src/view/blast_fx.gd": ["_flashes"],
 		# **`ROWS` added here, deliberately, and it is the one entry that is a `static var` only because a
 		#  net needs it to be.** It is the room table — map content, the shelf `terrain_map_generated.gd`

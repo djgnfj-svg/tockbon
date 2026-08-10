@@ -3,6 +3,7 @@
 [ext_resource type="Script" uid="uid://xn8o4osv1xf7" path="res://src/stage/stage.gd" id="1_stage"]
 [ext_resource type="Script" path="res://src/view/hp_view.gd" id="15_hp"]
 [ext_resource type="Script" path="res://src/view/money_view.gd" id="16_money"]
+[ext_resource type="Script" path="res://src/view/boss_bar_view.gd" id="17_bossbar"]
 [ext_resource type="Script" uid="uid://2px4aildwex2" path="res://src/view/cell_renderer.gd" id="2_cells"]
 [ext_resource type="Script" uid="uid://edvwi2hqulqb" path="res://src/stage/stage_input.gd" id="3_input"]
 [ext_resource type="Script" uid="uid://b6ish531ghqkd" path="res://src/view/character_view.gd" id="4_char"]
@@ -70,6 +71,12 @@ mouse_filter = 2
 layout_mode = 3
 anchors_preset = 0
 script = ExtResource("16_money")
+
+[node name="BossBar" type="Control" parent="HUD"]
+mouse_filter = 2
+layout_mode = 3
+anchors_preset = 0
+script = ExtResource("17_bossbar")
 
 [node name="LevelUp" type="Label" parent="HUD" unique_id=3157460882]
 mouse_filter = 2

@@ -77,9 +77,37 @@ const FLOOR_CY: int = TerrainMap.MAP_H * Tuning.TILE_CELLS - 1
 ## through ordinary play, not only the debug `C` key. Both are also what `spawn_monster`'s boss reserve
 ## counts (`world_step.gd`, §5) — **the reserve is the number of boss rows in this table, derived, so
 ## adding a boss row here needs no second edit anywhere.**
-##  · **bull, `tx145`** (was 245) — room ① is `x130–159`, floor `ty32`, flat. Mid-room, clear of the left
-##    2-tile step at `x129/130` and the right 6-tile rise at `x160`.
-##  · **rooster, `tx258`** (was 358) — room ③'s confirmed span is `x245–268`, under its own roof.
+##
+## **`tx140`/`trigger_tx159` (bull) and `tx258`/`trigger_tx250` (rooster) — `boss-entrance-and-hp-bar.md`
+## Stage A.** A boss row now materialises on its own `trigger_tx` (`MonsterPlacement.wake_scan()`) instead of
+## `MonsterPlacement.MATERIALIZE_PX`, so its `tx` (where it stands) and its trigger (when it wakes) are two
+## different numbers for the first time in this table. Arithmetic, not eyeballed:
+##
+## ```
+## room ①      x130-159 floor ty32 · east wall x160 (ty26-31 solid) · wood x164-166 above it
+## player      W_PX 20  =>  center at the wall = 160*32 - 10 = 5110
+## bull        w_px 88
+## trigger_tx  159  =>  fires at center_x 5088, ~1.3 tiles short of the wall face
+## visibility  half viewport 480 + Fx.CAM_LEAD_PX 32 = 512   (`monster_placement.gd`'s own corrected header)
+## bull tx145  center 4684  =>  5088 - 4684 = 404px  <  512   the bull would pop in ON SCREEN
+## bull tx140  center 4524  =>  5088 - 4524 = 564px  >  512   72px of margin, off screen
+##             box x140.0-142.75, ten tiles clear of room ①'s west step at x129/130
+## ```
+##
+## ⇒ **The bull moves west, `tx145 -> tx140`**, so "it walks out from behind you" is true instead of "it pops
+## in in front of you" — the whole picture the entrance trigger exists to buy. `trigger_tx159` fires the row
+## just before the player reaches the wall's own face, so the bull is already walking by the time you turn
+## around.
+##
+## **The rooster keeps its seat, `tx258`, and gets a trigger inside its own room instead of a walk-out.**
+## Room ③'s interior is `x247-266` — a trigger anywhere in it (`trigger_tx250` gives 292px) sits well inside
+## 512px, so **the rooster cannot materialise off screen on this map**; its entrance is the bar, the name and
+## the camera arriving, not a walk-out (the design doc's own TBD, resolved this way rather than moving room ③
+## to buy a walk-out nobody asked for). **`trigger_tx` earns its place on this row even without a walk-out**:
+## on the map `burn-out-of-the-bull-room.md` would cut, the rooster's seat sits 544px from the bull's own
+## door — past `MonsterPlacement.MATERIALIZE_PX`(720) — so without its own trigger it would wake while the
+## player is still fighting the bull, two live bosses against this feature's one bar. `trigger_tx250` closes
+## that regardless of which map ships (see that plan's own Bounds box for the two-branch arithmetic).
 ##
 ## **Totals**: pre-① 11 pigs · 5 hens · 2 wolves = 18 · ① 1 bull · ② (dormant) 6 pigs · 4 hens · 2 wolves
 ## = 12 · ③ 1 rooster. 32 rows. **Boss rows: 2** — that is `spawn_monster`'s reserve.
@@ -114,8 +142,8 @@ const ROWS: Array[Dictionary] = [
 	{"tx": 85, "kind": MonsterDefs.KIND_WOLF},
 	{"tx": 88, "kind": MonsterDefs.KIND_HEN},
 
-	# -- ① pit (130-159): the midboss. --
-	{"tx": 145, "kind": MonsterDefs.KIND_BULL},
+	# -- ① pit (130-159): the midboss. `trigger_tx` is the entrance trigger, not the seat — see the header. --
+	{"tx": 140, "kind": MonsterDefs.KIND_BULL, "trigger_tx": 159},
 
 	# -- ② combat zone (190-244, the usable range only — 245-255 is room ③'s roof). Dormant until the
 	#  water escape lands; see the header above. Every `tx` here is its old value minus 100.
@@ -144,6 +172,7 @@ const ROWS: Array[Dictionary] = [
 	{"tx": 241, "kind": MonsterDefs.KIND_PIG},
 	{"tx": 244, "kind": MonsterDefs.KIND_PIG},
 
-	# -- ③ boss room (confirmed span 245-268, under its own roof): the stage boss. --
-	{"tx": 258, "kind": MonsterDefs.KIND_ROOSTER},
+	# -- ③ boss room (confirmed span 245-268, under its own roof): the stage boss. `trigger_tx` sits inside
+	#  the room itself — see the header on why this row needs one even with no walk-out. --
+	{"tx": 258, "kind": MonsterDefs.KIND_ROOSTER, "trigger_tx": 250},
 ]
