@@ -2250,6 +2250,67 @@ const AIR_JUMP_RING_R_PX := 13.0
 const AIR_JUMP_RING_PX := 2.0
 const AIR_JUMP_RING_COLOR := Color(1.0, 0.93, 0.72, 0.85)
 
+# --- sound (`src/view/sfx_bank.gd`) ----------------------------------
+## **There is no audio asset in this repo yet — every clip is synthesized at boot.** This section is the
+##  first place `src/view/` produces sound rather than pixels, added on the user's own words ("전체적인
+##  사운드도 약하지만 넣어줘"). **Screen-only, like the rest of this file** — a client's own ear is not part
+##  of world state, the same seat `blast_fx.gd`'s screen shake already sits in.
+##
+## **One switch turns off every sound at once** — the user asked for it quiet, not silent, but "quiet" is a
+##  judgment made by ear, not by a net, so an escape hatch has to exist before the first playtest.
+const SFX_ENABLED := true
+
+## Every clip's ceiling (dB, negative = quieter — `AudioStreamPlayer.volume_db` is logarithmic). **Started
+##  low on purpose**: the user's own words were "약하지만", so the first impression must not be loud.
+const SFX_MASTER_DB := -14.0
+
+## Per-sound offsets from the master (dB, additive). **Fire sits quietest of the four** — it is the only one
+##  of the four that can repeat several times a second (every click), so at equal volume with the others it
+##  would be the one the ear tires of first.
+const SFX_FIRE_DB := -4.0
+const SFX_BLAST_DB := 0.0
+const SFX_JUMP_DB := -2.0
+const SFX_LAND_DB := -3.0
+const SFX_HIT_DB := -1.0
+
+## Sample rate for every generated clip. 22050 halves the byte count against 44100 with no audible loss for
+##  clips this short (under a quarter second, no music) — this only affects the PCM `sfx_bank.gd` writes once
+##  at boot, not anything in `src/sim/`.
+const SFX_SAMPLE_RATE := 22050
+
+## **How many `AudioStreamPlayer` voices the bank keeps warm.** A chain of generation-0 blasts can land
+##  several detonations on one tick (`blast_fx.on_blasts`'s own loop) — sized for that, not for "usually one",
+##  the same reasoning `Fx.FLASH_MAX` already applies to flashes.
+const SFX_VOICES := 6
+
+## Fire — a quick descending chirp (a "pew"). Short on purpose: it fires as often as the player clicks, and
+##  anything longer would smear into the next shot.
+const SFX_FIRE_SEC := 0.09
+const SFX_FIRE_FREQ_START := 900.0
+const SFX_FIRE_FREQ_END := 220.0
+
+## Blast — filtered noise with a fast attack and a slow decay (the shape of an impact, not a pitch). The only
+##  one of the four built from noise rather than a tone sweep, so it never reads as "one more chirp".
+const SFX_BLAST_SEC := 0.22
+const SFX_BLAST_DECAY_POW := 2.2
+
+## Jump — a short **rising** blip. Split from fire's falling one (and from landing's, below) so the ear tells
+##  them apart without looking at the screen.
+const SFX_JUMP_SEC := 0.07
+const SFX_JUMP_FREQ_START := 340.0
+const SFX_JUMP_FREQ_END := 640.0
+
+## Landing — a low, **falling** thump. Lower and shorter than the jump blip so "leaving the ground" and
+##  "arriving" read as two different sounds, not the same one played twice.
+const SFX_LAND_SEC := 0.08
+const SFX_LAND_FREQ_START := 160.0
+const SFX_LAND_FREQ_END := 90.0
+
+## Hit (the player took damage) — short noise, sharper and shorter than the blast so the two impacts do not
+##  get confused: a blast is something that happened to the world, this is something that happened to you.
+const SFX_HIT_SEC := 0.10
+const SFX_HIT_DECAY_POW := 3.2
+
 # --- onboarding (`onboarding-and-palette-tabs.md` Stage 7) ---
 ## **Tab is a key, not a thing on screen** — the design's own named problem, and the reason this exists at
 ## all: the HUD key line already says "Tab 조립창", but it sits behind F3 (`stage._update_hud`'s own gate),

@@ -21,6 +21,7 @@ const Fx := preload("res://src/view/fx_tuning.gd")
 const CharacterView := preload("res://src/view/character_view.gd")
 const SpellView := preload("res://src/view/spell_view.gd")
 const BlastFx := preload("res://src/view/blast_fx.gd")
+const SfxBank := preload("res://src/view/sfx_bank.gd")
 const CircleWindow := preload("res://src/view/circle_window.gd")
 const ThreePickWindow := preload("res://src/view/three_pick_window.gd")
 const Character := preload("res://src/actor/character.gd")
@@ -258,6 +259,17 @@ var _boss: Monster = null
 @onready var _char_view: CharacterView = $CharacterView
 @onready var _spell_view: SpellView = $SpellView
 @onready var _blast_fx: BlastFx = $BlastFx
+## **Not a scene node — there is nothing to place in the editor.** Built and `add_child`ed in `_ready()`
+##  (below), the same way `_world`/`_grid` are plain objects rather than nodes. It must be in the tree for
+##  its `AudioStreamPlayer` children to actually process, which is why this is not left as a bare `RefCounted`.
+var _sfx := SfxBank.new()
+## **Sampled once per tick, inside `_on_ticked()` — never polled from `_physics_process` at 60Hz.** Polling
+##  at 60Hz against a value that only changes on a tick (20Hz) is exactly the aliasing trap CLAUDE.md names
+##  three times over (`_charge_blocked`/`_leaped_landed`/`_grounded_recently`); sampling from inside the one
+##  place that only runs when a tick actually ran sidesteps it instead of reproducing it a fourth time.
+var _prev_on_ground := false
+## Same reasoning as `_prev_on_ground` above — `hp` only changes on a tick.
+var _prev_hp := 0
 ## **An editor-only original.** The terrain that actually runs is `MAP` (above, the re-export of
 ##  `terrain_map_generated.gd`) and the screen is drawn by `_renderer` (a `CellRenderer` reading the grid) —
 ##  leave this node visible and it paints over destroyed spots as if they were never pierced.
@@ -440,6 +452,9 @@ func _ready() -> void:
 	#  text changes per frame; the color is a standing property of this node.
 	_levelup_label.add_theme_color_override("font_color", Fx.LEVEL_UP_COLOR)
 	_terrain.visible = false
+	# **Must be in the tree before anything calls `play_*()`** — an `AudioStreamPlayer` outside the tree does
+	#  not process, so a sound triggered before this line would count (`play_count`) but never actually play.
+	add_child(_sfx)
 	_sky.setup(_camera)
 	_renderer.setup(_grid)
 	# The staff tip's color **reads** the assembly state. Push a copy in and, the moment one push is
@@ -642,6 +657,10 @@ func _fire_at(world_px: Vector2) -> void:
 	#   "It can't fire" is said by the staff tip dying to gray (`character_view`).
 	if not _circle.can_fire():
 		return
+	# **Once per click, not once per shot.** A triangle circle can queue three shots from one click
+	#  (`_circle.shots()`'s own loop below) — three overlapping "pew"s on one click would read as a
+	#  malfunction, not as three bolts, so this fires the same number of times the player pressed the mouse.
+	_sfx.play_fire()
 	var tip := _char_view.tip_px()
 	for shot: Dictionary in _circle.shots():
 		_world.enqueue(
@@ -826,8 +845,12 @@ func _physics_process(delta: float) -> void:
 	#  budget left stale across that freeze would be a latch by accident.
 	_char.air_jump_budget = _world.progress().air_jump_budget()
 	if not _settlement.is_showing():
-		if _world.frame(delta, _input.move_axis(), _input.jump_pressed(), _input.jump_held()):
-			_on_ticked()
+		# **Captured once, read twice.** `Input.is_action_just_pressed` is safe to call again in the same
+		#  frame (it does not consume), but sharing one value keeps `_world.frame()`'s argument and
+		#  `_on_ticked()`'s jump-sound decision from being able to read two different presses in principle.
+		var jump_press := _input.jump_pressed()
+		if _world.frame(delta, _input.move_axis(), jump_press, _input.jump_held()):
+			_on_ticked(jump_press)
 		# **The boss entrance clock — `boss-entrance-and-hp-bar.md` Stage C.** Physics frames, not `_process()`
 		#  — `gate_view`'s own header: `_process()` runs at the monitor refresh rate, so a 24-frame beat is
 		#  0.4s on a 60Hz panel and 0.167s on a 144Hz one, with nothing barking.
@@ -951,7 +974,24 @@ func _sync_settlement() -> void:
 
 ## Hits the screen only on frames where a tick ran.
 ## **Notifications are cleared by the next tick's `spell.step()`** — read after the character has walked, they are still alive.
-func _on_ticked() -> void:
+## **`jump_press` is the same value `_world.frame()` was just handed** (`_physics_process`'s own comment) —
+##  not re-read here, so the sound and the sim can never disagree about which frame the key went down on.
+func _on_ticked(jump_press: bool = false) -> void:
+	# **Sound reads from `_char` directly, the same fields `character_view`/`hp_view` already read** —
+	#  `on_ground`/`hp` only change on a tick, so sampling them here (once per tick) rather than from
+	#  `_physics_process` (60Hz) is what keeps this off the aliasing trap CLAUDE.md names repeatedly.
+	# **Jump before landing** — a character cannot do both in the same tick, but ordering it this way means a
+	#  press that happens to coincide with a landing frame is heard as a jump, not swallowed by the `elif`
+	#  shape a single combined branch would otherwise need.
+	if jump_press and not _char.downed:
+		_sfx.play_jump()
+	if not _prev_on_ground and _char.on_ground:
+		_sfx.play_land()
+	if _char.hp < _prev_hp:
+		_sfx.play_hit()
+	_prev_on_ground = _char.on_ground
+	_prev_hp = _char.hp
+
 	# **The bull's reward, automatic — session correction.** `_take_boss_reward()` used to have exactly one
 	#  caller, the debug key L (`_input.reward_taken_requested`), so a player who never opens the debug
 	#  layer kills the bull and gets nothing: no fire rune, no water, no way to burn the wood wall, and the
@@ -1002,6 +1042,11 @@ func _on_ticked() -> void:
 	#  Do not read it here and only the hole is left, with no flash and no shake, and **no error is raised.**
 	_blast_fx.on_blasts(_spell.get_blast_x(), _spell.get_blast_y(),
 		_spell.get_blast_element(), _spell.get_blast_gen())
+	# **Once per tick, not once per blast.** `blast_fx._kick`'s own rule ("the stronger one wins") exists
+	#  because eight detonations on one tick must not be felt as eight shakes — the same reasoning applies to
+	#  sound: eight overlapping copies of the same clip reads as a glitch, not as "a big chain went off".
+	if _spell.blast_count() > 0:
+		_sfx.play_blast()
 	_blast_count += _spell.blast_count()
 
 	# **A pillar notification is valid only within this tick too — the same place, the same reason.**
@@ -1171,6 +1216,12 @@ func _rebuild(end_the_run: bool) -> void:
 	#  is not (that one strands a `mouse_filter` over the whole viewport; this one strands nothing).
 	_room3_gate_open = false
 	_build_room()
+	# **Resynced after the spawn, not left at whatever the old character was doing.** Skip this and a
+	#  character who was airborne the instant before `R` was pressed spawns grounded next tick, and
+	#  `_on_ticked()` reads that as a landing that never happened — the same "false edge across a reset" shape
+	#  every latch in this function (`_room3_gate_open` above, `_gate_view.reset_gate()`) already guards.
+	_prev_on_ground = _char.on_ground
+	_prev_hp = _char.hp
 
 
 ## **Builds whichever room `_in_town` says, and stands the character in it.** One function, two rooms —
