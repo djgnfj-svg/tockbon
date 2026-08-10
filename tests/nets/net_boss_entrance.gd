@@ -401,6 +401,11 @@ func _wired_root(t) -> Node:
 			#  unwired null here does not fail a check, it barks on **every** physics frame this file drives,
 			#  and the wrapper counts stderr as failure while the count stays green.
 			["_onboard_view", "HUD/OnboardView"],
+			# **`_rune_grant_view`** (the fire-rune-obtained banner) — `_take_boss_reward()` calls
+			#  `.trigger()` on it unconditionally once the bull is confirmed dead. The same sentence as
+			#  `_boss_bar`/`_onboard_view` above: an unwired null here does not fail a check, it crashes the
+			#  reward path itself the first time this file's own boss-death drive reaches it.
+			["_rune_grant_view", "HUD/RuneGrantView"],
 			["_settlement", "HUD/SettlementWindow"],
 			# **`_char_view`** (the hit-flash/shake feature) — `reset_stage()` (via `_rebuild()`) now calls
 			#  `_char_view.clear()` unconditionally. The same sentence as `_boss_bar`/`_onboard_view` above:

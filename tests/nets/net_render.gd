@@ -1581,6 +1581,10 @@ func _wired_stage_root(t) -> Node:
 	#  here crashes every check in this file that drives a physics frame, the same shape every field above
 	#  already had to be added for.
 	root.set("_onboard_view", root.get_node("HUD/OnboardView"))
+	# **`_rune_grant_view`** (the fire-rune-obtained banner) — `_take_boss_reward()` calls `.trigger()` on
+	#  it unconditionally once the bull is confirmed dead. An unwired null here crashes the reward path the
+	#  moment any check in this file drives it, the same shape every field above already had to be added for.
+	root.set("_rune_grant_view", root.get_node("HUD/RuneGrantView"))
 	# **`_char_view`** (the hit-flash/shake feature) — `_rebuild()` calls `_char_view.clear()` and
 	#  `_on_ticked()` calls `_char_view.on_tick()`, both unconditionally now. An unwired null here crashes
 	#  every check in this file that drives a reset or a tick, the same shape every field above already had

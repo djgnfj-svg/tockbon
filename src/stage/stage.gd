@@ -47,6 +47,7 @@ const SettlementWindow := preload("res://src/view/settlement_window.gd")
 const StageGate := preload("res://src/actor/stage_gate.gd")
 const GateView := preload("res://src/view/gate_view.gd")
 const OnboardView := preload("res://src/view/onboard_view.gd")
+const RuneGrantView := preload("res://src/view/rune_grant_view.gd")
 
 ## No longer a constant but a re-export of `terrain_map_generated.gd` — it follows the painted region's size verbatim.
 ##  It pairs with the re-export at the `MAP` declaration below.
@@ -256,6 +257,9 @@ var _boss: Monster = null
 ## **Its own `visible` is pushed here, once a frame, from `_onboard_step`** — the same "derive, do not
 ## push a second latch" idiom `_town_view.visible = _in_town` already holds.
 @onready var _onboard_view: OnboardView = $HUD/OnboardView
+## The one flash announcing a rune ownership grant — `_take_boss_reward()` below is the only caller of
+## `trigger()`. Under `HUD`, same reason as `_onboard_view` above (must not ride the screen shake).
+@onready var _rune_grant_view: RuneGrantView = $HUD/RuneGrantView
 @onready var _char_view: CharacterView = $CharacterView
 @onready var _spell_view: SpellView = $SpellView
 @onready var _blast_fx: BlastFx = $BlastFx
@@ -759,11 +763,17 @@ func _ignite_at(world_px: Vector2) -> void:
 ## the time it would be read, so it used to be a coupling to the line above, not a real check (deleting it
 ## changed nothing; only reordering the two lines would have). `boss_died()` alone is the whole of what
 ## actually decides this.
+## **The screen half of the grant lands here too, at the same call site** — `Progress.grant_rune()` itself
+## is silent (`src/actor/`, no scene tree), and before this the only sign the reward existed was the
+## palette's fire cell quietly un-veiling next time the assembly window happened to open.
 func _take_boss_reward() -> void:
 	var progress := _world.progress()
 	progress.clear_pending_boss_rewards()
 	if progress.boss_died(MonsterDefs.KIND_BULL):
 		progress.grant_rune(Tuning.ELEM_FIRE)
+		_rune_grant_view.trigger(Tuning.ELEM_FIRE)
+		_sfx.play_fire()
+		_blast_fx.kick(Fx.RUNE_GRANT_SHAKE_PX, Fx.RUNE_GRANT_SHAKE_SECS)
 
 
 ## **M/N — stands a monster at the mouse position. A shell-only debug door** (`monsters-minimum`).
