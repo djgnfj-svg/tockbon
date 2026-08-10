@@ -10,7 +10,7 @@ Two steps, and the second is the reason this file exists rather than the .gd alo
    markdown would let the page break between them, and then the claim ("this circle makes
    that hole") is split across a page boundary with nothing tying the halves together.
 
-The parts are deleted afterwards. Only what `plan.md` names survives.
+The parts stay on disk (gitignored) so `--compose-only` can re-crop without re-running the engine.
 """
 
 import subprocess
@@ -29,10 +29,10 @@ ORDERS = ["spread-blast", "blast-spread"]
 # The assembly window's left pane, in the 1920x1080 capture. The circle is drawn centred in
 # it, so the crop is a square around the circle rather than the pane's own rectangle —
 # cropping the pane would carry its empty right half into a figure that is already wide.
-CIRCLE_CROP = (210, 110, 870, 770)
+CIRCLE_CROP = (120, 85, 940, 905)
 # The world half. **Its left edge is past x=430 deliberately** — the health gauge sits in the
 # bottom-left of every capture, and a gauge inside a figure about terrain is noise.
-FX_CROP = (760, 390, 1600, 950)
+FX_CROP = (560, 400, 1700, 960)
 
 GAP = 24
 BG = (22, 24, 29)
@@ -75,8 +75,8 @@ def compose(name: str) -> Path:
     dst = IMG / ("order-%s.png" % name)
     out.save(dst)
     print("[shots] %s  %dx%d" % (dst.name, out.width, out.height))
-    circle_src.unlink()
-    fx_src.unlink()
+    # **The parts are kept, not deleted.** Cropping is what actually gets iterated on, and
+    # deleting them made every crop tweak cost a full engine run. They are gitignored.
     return dst
 
 

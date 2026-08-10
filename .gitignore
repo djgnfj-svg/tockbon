@@ -42,3 +42,6 @@ tests/_*.gd.uid
 #  ⚠ 구운 텍스트는 마지막 굽기 시점 것이라 **그 뒤의 붓질이 안 들어 있다.**
 tools/stage/terrain_backup_*.txt
 image copy.png
+
+# Submission screenshot parts — inputs to tools/submission/shots.py, not deliverables
+docs/submission/img/part-*.png

@@ -1208,22 +1208,36 @@ func _draw_actually_runs_headless(t) -> void:
 	#  (Stage 6's own premise), so `_draw_slot_ring` fires once per empty layer **per frame drawn**, not once
 	#  total. Measured: 1 empty layer here, 4 recorded calls. The count is asserted as a multiple, the same
 	#  idiom `win.ring_calls % c.layer_count() == 0` above already uses for the same reason.
+	# **The band's own rim, not the 12-o'clock seat** — the user, three passes in: "TAP 했을떄 아직도 작은
+	#  원이 보이는데?" An empty layer on the round circle draws at the band centre with the band's own radius,
+	#  so what is pinned here is the centre and `edges[0]`. The old expectation (seat · `glyph_radius`) is what
+	#  a small mark at the top of the band looks like, which is the thing that had to go.
 	var area := Layout.circle_area(Book.circle_page(win.size).size)
 	var bands := Layout.layer_bands(c.circle_id(), area)
 	var want_ring_seats: Array[Vector2] = []
+	var want_ring_radii: Array[float] = []
 	for i in bands.size():
 		if c.glyph_at(i) == Glyph.GLYPH_NONE:
-			want_ring_seats.append(bands[i]["seat"])
+			var e: PackedFloat32Array = bands[i]["edges"]
+			t.eq(e.size(), 1, "원형 진의 빈 밴드는 모서리가 하나다 (전제, %d개)" % e.size())
+			want_ring_seats.append(bands[i]["center"])
+			want_ring_radii.append(e[0])
 	t.ok(want_ring_seats.size() > 0, "빈 층이 %d개다 (전제)" % want_ring_seats.size())
 	t.ok(win.slot_ring_calls.size() > 0 and win.slot_ring_calls.size() % want_ring_seats.size() == 0,
 		"빈 자리 링이 빈 층 수(%d)의 배수만큼 그려졌다 (%d회)" % [want_ring_seats.size(), win.slot_ring_calls.size()])
 	for i in win.slot_ring_calls.size():
 		var call: Dictionary = win.slot_ring_calls[i]
 		var want: Vector2 = want_ring_seats[i % want_ring_seats.size()]
+		var want_r: float = want_ring_radii[i % want_ring_radii.size()]
 		t.ok((call["at"] as Vector2).is_equal_approx(want),
-			"%d번째 빈 자리 링이 실제 밴드 자리에서 그려졌다 (%s)" % [i, call["at"]])
-		t.ok(is_equal_approx(call["r"], Layout.glyph_radius(area)),
-			"%d번째 빈 자리 링 반지름이 glyph_radius와 같다 (%.5f)" % [i, call["r"] as float])
+			"%d번째 빈 자리 링이 실제 밴드 중심에서 그려졌다 (%s)" % [i, call["at"]])
+		t.ok(is_equal_approx(call["r"], want_r),
+			"%d번째 빈 자리 링 반지름이 밴드 바깥 모서리와 같다 (%.5f)" % [i, call["r"] as float])
+		# **The mark the user asked to be gone is a small one** — pinning the radius alone would still pass if
+		#  `edges[0]` itself ever collapsed toward the glyph symbol's size. Any band's rim is several times it.
+		t.ok(call["r"] as float > Layout.glyph_radius(area) * 2.0,
+			"%d번째 빈 자리 링이 「작은 원」이 아니다 (%.1f > %.1f)"
+				% [i, call["r"] as float, Layout.glyph_radius(area) * 2.0])
 
 	# **The color/width carry the state now, not a dash pattern** — the user found the dash itself
 	#  confusing ("점선이 있는 게 이상함") and it was replaced with a plain ring whose color/thickness
@@ -1333,7 +1347,10 @@ func _selecting_a_layer_brightens_its_ring_then_toggles_off(t) -> void:
 	await t.pump_frames(3)
 	var got_selected_empty := false
 	for call: Dictionary in win.slot_ring_calls:
-		if (call["at"] as Vector2).is_equal_approx(bands[1]["seat"]):
+		# **The band's centre** — an empty layer on the round circle paints on the band's own rim now, not at
+		#  the 12-o'clock seat (`circle_window._draw_ring`'s empty branch). Matched by `seat` this loop found
+		#  nothing and the two colour assertions inside it ran zero times.
+		if (call["at"] as Vector2).is_equal_approx(bands[1]["center"]):
 			got_selected_empty = true
 			t.ok((call["col"] as Color).is_equal_approx(Fx.SLOT_SELECTED_COLOR),
 				"고른 빈 층은 SLOT_SELECTED_COLOR로 그려진다 (%s)" % [call["col"]])
@@ -2959,23 +2976,34 @@ func _art_reaches_the_paint_for(t, circle_id: int) -> void:
 	#  edge is eaten by the toothed pattern") are both about how the two sit *together*.
 	# **Pairs are matched by centre**, because that is what makes them a donut: `circle_layout` already puts
 	#  every band's centre on its own rune slot, which is why this was a size fix and not a layout one.
+	# **`motif_*`, not `ring_*`** — the outline circles were stripped out of these files (`Fx.RING_TEX`'s own
+	#  box) and the prefix went with them. Matching the dead prefix here found **zero pairs** and measured
+	#  nothing at all, which is why the count below is asserted.
+	# **Each file's own hole and each rune's own ink**, from `Fx.RING_ART_HOLE`/`RUNE_ART_INK` — one shared
+	#  fraction for three pictures is the bug those two tables were written to replace, and pinning one here
+	#  would put it straight back on the measuring side.
 	var pairs := 0
 	for ring: Dictionary in win.art:
-		if not String(ring["path"]).get_file().begins_with("ring_"):
+		var ring_path := String(ring["path"])
+		if not ring_path.get_file().begins_with("motif_"):
 			continue
+		var hole_frac: float = Fx.RING_ART_HOLE.get(ring_path, 0.0)
+		t.ok(hole_frac > 0.0, "%s 의 구멍이 측정돼 있다" % ring_path.get_file())
 		var rr: Rect2 = ring["rect"]
 		for rune: Dictionary in win.art:
-			if not String(rune["path"]).get_file().begins_with("rune_"):
+			var rune_path := String(rune["path"])
+			if not rune_path.get_file().begins_with("rune_"):
 				continue
 			var ur: Rect2 = rune["rect"]
 			if not rr.get_center().is_equal_approx(ur.get_center()):
 				continue
 			pairs += 1
-			var hole := rr.size.x * 0.5 * Fx.RING_HOLE_FRAC
-			var ink := ur.size.x * 0.5 * Fx.RUNE_INK_FRAC
+			var hole := rr.size.x * 0.5 * hole_frac
+			var ink: float = ur.size.x * 0.5 * float(Fx.RUNE_ART_INK.get(rune_path, 0.0))
 			t.ok(ink < hole,
-				"룬 그림(%.1f)이 고리 구멍(%.1f) 안에 들어간다 — 톱니 밑에 깔리지 않는다" % [ink, hole])
-	t.ok(pairs > 0, "같은 중심에 놓인 고리·룬 쌍이 실제로 있다 (0이면 위 규칙이 아무것도 안 잰다)")
+				"룬 그림(%.1f)이 %s 의 구멍(%.1f) 안에 들어간다"
+					% [ink, ring_path.get_file(), hole])
+	t.ok(pairs > 0, "같은 중심에 놓인 문양·룬 쌍이 실제로 있다 (0이면 위 규칙이 아무것도 안 잰다)")
 
 	t.root.remove_child(win)
 	win.queue_free()

@@ -171,7 +171,13 @@ static func item_slot(sec: Rect2, item_index: int, item_count: int) -> Rect2:
 	var top := sec.position.y + head
 	var h := maxf(sec.size.y - head, 0.0)
 	var w := sec.size.x / float(item_count)
-	return Rect2(sec.position.x + float(item_index) * w, top, w, h)
+	# **A square cell, capped** (`Fx.PALETTE_CELL_MAX_PX` carries the measurement). The column is still
+	#  `sec.size.x / count` wide — that is what keeps the cells evenly spread — but the cell drawn and
+	#  clicked inside it is a centred square, so a tab holding one item shows a card rather than a section-
+	#  sized ring. **Drawing and hit test both come from here**, so the two cannot drift apart.
+	var cell := minf(minf(w, h), Fx.PALETTE_CELL_MAX_PX)
+	return Rect2(sec.position.x + float(item_index) * w + (w - cell) * 0.5,
+		top + (h - cell) * 0.5, cell, cell)
 
 
 ## Radius of an item's symbol.

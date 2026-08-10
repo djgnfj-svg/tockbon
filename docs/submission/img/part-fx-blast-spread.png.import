@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://ca1udsqi4k4bw"
-path="res://.godot/imported/image copy.png-1e48d2c7cbbdf2ed6bb4d41428dcf6c2.ctex"
+uid="uid://bcqtwwbr3bya7"
+path="res://.godot/imported/part-fx-blast-spread.png-6cb099fb95aabeb4391c01b2ce7710fb.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://image copy.png"
-dest_files=["res://.godot/imported/image copy.png-1e48d2c7cbbdf2ed6bb4d41428dcf6c2.ctex"]
+source_file="res://docs/submission/img/part-fx-blast-spread.png"
+dest_files=["res://.godot/imported/part-fx-blast-spread.png-6cb099fb95aabeb4391c01b2ce7710fb.ctex"]
 
 [params]
 

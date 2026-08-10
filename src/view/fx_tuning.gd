@@ -1445,6 +1445,15 @@ const PALETTE_PAD_PX := 14.0
 const PALETTE_SECTION_GAP_PX := 10.0
 const PALETTE_HEAD_PX := 24.0
 const PALETTE_SYMBOL_RATIO := 0.52
+## **A cell never grows past this, however few items the tab holds.** `item_slot()` divides the section by
+##  the item count and `item_symbol_radius()` takes the cell's short side, and both of those were written
+##  when the section was wider than it was tall — the reasoning in that function's own box ("the section
+##  height is always the short side") stopped being true when the palette page got its tab strip and its
+##  done button. **Measured on the real window**: the 진 tab owns one item, so its cell was the whole
+##  400x300 section and the card drew at radius 78 — a single enormous ring where a card should be, which
+##  is exactly the misreading that box was written to prevent. Nine 문양 cells are 44 wide and are untouched
+##  by this cap; it only bites the one- and two-item tabs.
+const PALETTE_CELL_MAX_PX := 88.0
 
 ## Section border and ground. **Drawing sections is the answer to "an empty palette"** — with only four items
 ##  the page is largely empty, and with sections that emptiness reads as **"what is this a place for"**.
