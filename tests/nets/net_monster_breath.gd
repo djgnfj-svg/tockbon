@@ -809,7 +809,7 @@ func _gore_hits_the_player_with_its_own_damage(t) -> void:
 ##
 ## **verify-read's finding — one pass costs 40, not 20.** The combined half-widths (bull 88px + player 20px
 ## = 108px) at 280px/s charge speed cross in ~7.7 ticks (`108/280*20`); `Character`'s invulnerability
-## (4 ticks, effective 5-tick interval — the same arithmetic `PIG_CONTACT_DAMAGE`'s own comment already
+## (4 ticks, effective 5-tick interval — the same arithmetic `monster_defs.MELEE`'s own comment already
 ## walks through) fits **two** hits inside that window, not one. **Kept as the real behaviour** — a charge
 ## costing more than a graze is right, and the number is provisional either way. What had to change is the
 ## check: it used to `break` at the *first* hit and assert `hp0 - 20`, so its own label claimed "exactly the

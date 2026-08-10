@@ -181,7 +181,7 @@ const MOVES: Dictionary = {
 ## — nothing says a gore and a charge should recover at the same rate either).
 ##
 ## **The contact damage itself is not here** — `world_step.BULL_GORE_DAMAGE` lives beside
-## `PIG_CONTACT_DAMAGE`/`BULL_CHARGE_CONTACT_DAMAGE`, the same split every other damage value in this file
+## `monster_defs.MELEE`/`BULL_CHARGE_CONTACT_DAMAGE`, the same split every other damage value in this file
 ## already draws (bolt damage in `monster_bolts.gd`, contact damage in `world_step.gd` where the one
 ## contact-damage lump already lives).
 ##

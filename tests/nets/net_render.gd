@@ -696,7 +696,8 @@ func _hud_controls_are_inside_the_viewport(t) -> void:
 	root.free()
 
 
-## **The `HUD/Progress` counterpart to `_window_does_not_cover_the_health`.** That check reads a `.tscn`-set
+## **The `HUD/LevelUp` counterpart to `_window_does_not_cover_the_health`.** (It was `HUD/Progress`;
+## that label is gone — the level line was cut from the screen.) That check reads a `.tscn`-set
 ##  position — a pure scene fact, measurable without `_ready()` ever running. This one is about **script**
 ##  behavior (`_update_hud()` writing to the wrong node, `_toggle_assembly()` hiding the wrong one), which a
 ##  position-only check cannot see in principle.

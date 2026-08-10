@@ -584,9 +584,10 @@ const MONSTER_PHASE2_BRACKET_ARM_PX := 12.0
 ##  (`WINDOW_TITLE_SIZE` · `PALETTE_HEAD_SIZE` · the layer number derived from the radius).
 const HUD_FONT_SIZE := 16
 
-## **The level-up indicator's color — a call to action, not a status.** `HUD/Stats`·`Health`·`Progress` are all
-##  the engine's default white; a `Label` cannot mix colors within one string, so the indicator got its own
-##  node (`HUD/LevelUp`) instead of living appended to `HUD/Progress`'s status line, and this is that node's
+## **The level-up indicator's color — a call to action, not a status.** `HUD/Stats` is the engine's default
+##  white; a `Label` cannot mix colors within one string, so the indicator got its own node (`HUD/LevelUp`)
+##  instead of living appended to the old `HUD/Progress` status line — **and that line is now gone entirely**
+##  (「레벨은 안 보이게」), which leaves this node as the only text the player reads. This is that node's
 ##  distinct `font_color` override (verify-look's own finding — appended in the same color and weight, it read
 ##  as legible but never drew the eye, and the plan's own risk is "the player carries a three-pick until the
 ##  run ends").
@@ -926,7 +927,10 @@ const DEAD_RING_PX := 3.0
 ##  changes but sim doesn't" has a presentation-only cousin: **script state changes, the canvas doesn't**).
 ##  `net_render._hud_controls_are_inside_the_viewport` measures every `HUD` child against the real,
 ##  project-settings-read canvas size — the trap this comment describes is exactly what it catches.
-## `HUD/Progress` sits just above `Health`, at `(660,450)-(952,486)` — same reasoning, same margin.
+## **That pair of labels is gone.** `Health` became a drawn gauge (`hp_view`, bottom-**left** now, because
+## this very rectangle covers the top-left band) and `Progress` became `HUD/Money` in the bottom-right. The
+## reasoning above is unchanged and now applies to those two: `net_render` still asserts no window covers the
+## health readout, and that assert is what forced the move.
 const WINDOW_RECT := Rect2(48, 12, 864, 372)
 
 ## **It is opaque.** A user acceptance — "there should **be a background color**, like a particular window opening".

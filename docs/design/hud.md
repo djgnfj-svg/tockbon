@@ -71,6 +71,31 @@ fill retreats.
 **And no blink.** The character sprite already blinks on invulnerability (`character_view`'s
 `invuln_left & 1`); a second blinking thing on screen reads as a rendering fault, not as danger.
 
+## Next session's job — **the palette's visual language does not match the windows**
+
+**The user looked at it and asked directly** (「이번에 개선한 것들 다 통일성을 좀 갖게 됐나?」), then decided:
+**팔레트 부분만 바꾸고 싶은데 다음 세션에서 바꾸자.** So this is written down rather than done.
+
+There are **three** visual languages on screen at once:
+
+| Where | What it looks like |
+|---|---|
+| Assembly · three-pick · research windows | thin strokes, dark navy ground, **drawn from coordinates** |
+| The health frame | thick black border, **pixel art** (`assets/ui/hp_frame.png`) |
+| Palette glyphs · runes | cream ink, **generated art** (`assets/circle/icon_*.png`) |
+| Town · monsters · terrain | brown pixel art |
+
+**The health frame is the odd one beside the windows** — put them side by side (open the assembly window and
+look at the bar under it) and one is a hairline drawing and the other is a chunky sprite. The money icon is a
+white star, which is a fourth thing again.
+
+**The cheaper direction is to pull the windows toward the frame**, not the reverse: repaint the window
+borders as the same thick pixel border and move the ground from navy toward the dark browns the game world
+already uses. Going the other way makes `hp_frame.png` an unused asset again, which is the failure this repo
+keeps catching.
+
+**Not judged, and not started.**
+
 ## Unresolved
 
 - **Nobody has seen it at speed.** The check was done in a background browser tab at FPS 8
