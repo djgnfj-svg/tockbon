@@ -2213,24 +2213,50 @@ const AIR_JUMP_RING_COLOR := Color(1.0, 0.93, 0.72, 0.85)
 ## all: the HUD key line already says "Tab 조립창", but it sits behind F3 (`stage._update_hud`'s own gate),
 ## so it is not a target a fresh player can ever see. `onboard_view` draws its own key cap instead.
 ##
-## **Every value below is a starting value — nobody has judged any of them.** Seat: bottom-centre, above the
-## HUD band (the plan's own stated default). Small and off to the side on purpose — **not full-screen**
-## (CLAUDE.md risk: a full-screen `Control` while the run is live kills "you can shoot with the window open").
-const ONBOARD_RECT := Rect2(430.0, 430.0, 100.0, 80.0)
+## **Grown after the user's first look — 「온보딩이 잘 안 보이고」.** The first cut was a 100x80 box holding
+## only a 44x26 key chip and a 22x26 arrow, with no backing plate: against the sky layer's bright band the
+## warm-yellow arrow read close to the same brightness as the background behind it (`sky_background.gd`'s
+## `_top_fill` is sampled from the art, not fixed, so this box cannot assume a dark background the way a
+## window sitting on `Fx.WINDOW_BG` can). Two changes, not one: **a backing panel behind everything** (the
+## same idiom `ONBOARD_KEY_BG` already used for the key chip alone, now covering the whole widget so the
+## world behind it never sets the contrast), and **a line of words**, because an arrow pointing at an
+## invented key cap with no sentence never said what pressing it does. Seat: bottom-centre, above the HUD
+## band, unchanged from the plan's own stated default. Still **not full-screen** (CLAUDE.md risk: a
+## full-screen `Control` while the run is live kills "you can shoot with the window open") — `x` 330..630
+## of a 960-wide screen clears `HP_RECT` (16..208) and `MONEY_RECT` (768..944) on both sides, measured.
+const ONBOARD_RECT := Rect2(330.0, 340.0, 300.0, 140.0)
 
-## The "Tab" key cap — a small rounded-looking chip with the key name inside.
-const ONBOARD_KEY_W_PX := 44.0
-const ONBOARD_KEY_H_PX := 26.0
+## **The backing panel — drawn first, under everything else in this file's block.** Same tone as the
+## assembly window's own `WINDOW_BG`, but not fully opaque: this is a callout over the live world, not a
+## second window, and paying an alpha stops it from reading as one.
+const ONBOARD_PANEL_BG := Color(0.05, 0.055, 0.085, 0.90)
+const ONBOARD_PANEL_EDGE := Color(1.0, 0.92, 0.55, 0.85)
+const ONBOARD_PANEL_EDGE_PX := 2.0
+
+## **The instruction line — the sentence the box was missing.** Sits above the arrow, centred, same warm
+## key-cap color so the whole widget reads as one device. Names the actual action ("Tab을 눌러"), not just
+## the key, and the actual target ("마법진을 조립") rather than a bare "여세요" that says nothing about why.
+const ONBOARD_TEXT := "Tab을 눌러 마법진을 조립하세요"
+const ONBOARD_TEXT_SIZE := 18
+const ONBOARD_TEXT_COLOR := Color(1.0, 0.95, 0.8, 1.0)
+const ONBOARD_TEXT_GAP_PX := 10.0
+
+## The "Tab" key cap — a small rounded-looking chip with the key name inside. **Grown with the box** —
+## 44x26 read as an afterthought at arm's length; this is the size a HUD label elsewhere in this file
+## already uses for something meant to be read at a glance (`HUD_FONT_SIZE` 16, close to this chip's own
+## text below).
+const ONBOARD_KEY_W_PX := 60.0
+const ONBOARD_KEY_H_PX := 34.0
 const ONBOARD_KEY_BG := Color(0.14, 0.15, 0.20, 0.95)
 const ONBOARD_KEY_EDGE := Color(1.0, 0.92, 0.55, 0.95)
 const ONBOARD_KEY_EDGE_PX := 2.0
 const ONBOARD_KEY_TEXT := "Tab"
-const ONBOARD_KEY_TEXT_SIZE := 14
+const ONBOARD_KEY_TEXT_SIZE := 18
 const ONBOARD_KEY_TEXT_COLOR := Color(1.0, 0.95, 0.8, 1.0)
 
 ## The arrow — directly above the key cap, pointing down at it. A filled triangle, the simplest shape that
-## reads as "there, specifically" without needing new art for a first slice.
-const ONBOARD_ARROW_W_PX := 22.0
-const ONBOARD_ARROW_H_PX := 26.0
-const ONBOARD_ARROW_GAP_PX := 6.0
+## reads as "there, specifically" without needing new art for a first slice. **Grown with the box.**
+const ONBOARD_ARROW_W_PX := 30.0
+const ONBOARD_ARROW_H_PX := 32.0
+const ONBOARD_ARROW_GAP_PX := 8.0
 const ONBOARD_ARROW_COLOR := Color(1.0, 0.92, 0.55, 0.95)

@@ -30,6 +30,8 @@ const STAGE_SCENE := "res://src/stage/stage.tscn"
 class _RecordingOnboardView extends OnboardView:
 	var key_calls: Array[Rect2] = []
 	var arrow_calls: Array[Rect2] = []
+	var panel_calls: Array[Rect2] = []
+	var text_calls: Array[float] = []
 
 	func _draw_onboard_key(rect: Rect2, font: Font) -> void:
 		key_calls.append(rect)
@@ -38,6 +40,14 @@ class _RecordingOnboardView extends OnboardView:
 	func _draw_onboard_arrow(rect: Rect2) -> void:
 		arrow_calls.append(rect)
 		super._draw_onboard_arrow(rect)
+
+	func _draw_onboard_panel(rect: Rect2) -> void:
+		panel_calls.append(rect)
+		super._draw_onboard_panel(rect)
+
+	func _draw_onboard_text(y: float, font: Font) -> void:
+		text_calls.append(y)
+		super._draw_onboard_text(y, font)
 
 
 func run(t) -> void:
@@ -125,6 +135,20 @@ func _the_arrow_and_key_are_actually_painted_at_the_layouts_own_rects(t) -> void
 	if view.arrow_calls.size() > 0:
 		t.ok(view.arrow_calls[0].is_equal_approx(OnboardLayout.arrow_rect(view.size)),
 			"화살표 자리가 onboard_layout.arrow_rect()의 답과 같다")
+
+	# **Added with the panel and the sentence** — the same `notice_rect` shape as the two checks above,
+	#  for the two seats added after 「온보딩이 잘 안 보이고」. Without these, a `_draw()` that hands the
+	#  panel a bare `Rect2()` or the text a wrong `y` would still leave the key/arrow checks green.
+	t.ok(view.panel_calls.size() > 0, "배경판이 실제로 그려졌다 (%d회)" % view.panel_calls.size())
+	t.ok(view.text_calls.size() > 0, "안내 문장이 실제로 그려졌다 (%d회)" % view.text_calls.size())
+	if view.panel_calls.size() > 0:
+		t.ok(view.panel_calls[0].is_equal_approx(OnboardLayout.panel_rect(view.size)),
+			"배경판 자리가 onboard_layout.panel_rect()의 답과 같다")
+	if view.text_calls.size() > 0:
+		t.ok(is_equal_approx(view.text_calls[0], OnboardLayout.text_baseline_y(view.size)),
+			"안내 문장의 y가 onboard_layout.text_baseline_y()의 답과 같다")
+	t.ok(not Fx.ONBOARD_TEXT.is_empty() and Fx.ONBOARD_TEXT.contains("마법진"),
+		"안내 문장이 실제로 무엇을 하라는 말이다 (빈 문자열이나 키 이름만이 아니다)")
 
 	t.root.remove_child(view)
 	view.queue_free()
