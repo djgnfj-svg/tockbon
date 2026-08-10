@@ -16,6 +16,7 @@
 extends Node
 
 const StagePack := preload("res://src/stage/stage.tscn")
+const StageScript := preload("res://src/stage/stage.gd")
 const CellGrid := preload("res://src/sim/cell_grid.gd")
 const Mat := preload("res://src/sim/cell_materials.gd")
 const StageDefs := preload("res://src/stage/stage_defs.gd")
@@ -34,6 +35,21 @@ const ARENA_X1 := 700
 ##  it. Stone does not burn, so what the picture shows is only what was dug.
 const FLOOR_CY := 200
 const FLOOR_BOTTOM_CY := 300
+
+## The world shot's two halves, in cells: a wood floor to the left of the character, and a
+## hole to the right that water pours into.
+const WOOD_X0 := 120
+const WOOD_X1 := 190
+const HOLE_CX := 232
+
+## Frames to wait after firing before the shutter opens. **Different per order, and that is
+## the point** — `확산 → 폭발` has to fly, split into eight, and let those eight land, so its
+## moment is later than `폭발 → 확산`, whose big detonation is at first contact.
+## Tuned by eye against the saved frames; there is no way to derive it.
+const IMPACT_FRAMES := {
+	"spread-blast": 86,
+	"blast-spread": 22,
+}
 
 const STAND_PX := Vector2i(200 * Tuning.CELL_PX, FLOOR_CY * Tuning.CELL_PX - 32)
 ## Aimed into the floor ahead of the character. The crater is the picture.
@@ -54,6 +70,7 @@ func _ready() -> void:
 
 	await _shoot_pair(4, "spread-blast")
 	await _shoot_pair(5, "blast-spread")
+	await _shoot_world()
 
 	print("[shot] done")
 	get_tree().quit()
@@ -89,18 +106,44 @@ func _shoot_pair(loadout: int, name: String) -> void:
 	_stage._toggle_assembly()
 	await _wait(10)
 
-	# **Three shots into one spot, not one.** A single bolt leaves a scallop a few cells
-	#  wide, and at the printed size of a PDF figure the two orders read as the same smudge —
-	#  a caption claiming a difference the picture does not carry.
-	for _i in 3:
-		_stage._fire_at(AIM_PX)
-		await _wait(26)
-	await _wait(110)
+	# **The impact, not the aftermath.** Three shots into one hole left two brown smudges that
+	#  a caption had to explain — and the character fell into its own crater, so the two shots
+	#  were not even framed alike. What actually separates the two orders is the *instant*:
+	#  eight detonations spread across the floor, or one big one. So one shot, and the frame is
+	#  taken while it is going off.
+	_stage._fire_at(AIM_PX)
+	await _wait(IMPACT_FRAMES[name])
 	await _save("part-fx-" + name)
 
 
 ## The town's row carries no monster table, so entering it is how the arena gets a world with
 ## nothing walking around in it. The grid is then wiped and rebuilt from scratch.
+## The three natural laws in one frame: wood burning, a dug hole, water pouring into it.
+##
+## **Every one of them is the real sim.** The wood is laid and the water is poured through the
+##  same doors the shell's debug keys use; the hole is carved by actually firing at the floor.
+func _shoot_world() -> void:
+	await _build_arena()
+	# A wood floor on the left half — fire needs fuel, and stone has none.
+	_stage._grid.apply(CellGrid.cmd_fill(
+		WOOD_X0, FLOOR_CY - 10, WOOD_X1, FLOOR_CY - 1, Mat.WOOD))
+	await _wait(6)
+	# Dig the hole on the right by firing into it, not by filling EMPTY — a hole the sim
+	# carved is the claim the picture makes.
+	_stage._set_loadout(3)
+	await _wait(4)
+	for _i in 4:
+		_stage._fire_at(Vector2(HOLE_CX * Tuning.CELL_PX, FLOOR_CY * Tuning.CELL_PX + 20))
+		await _wait(22)
+	await _wait(40)
+	for x in range(HOLE_CX - 6, HOLE_CX + 7):
+		_stage._grid.set_water(x, FLOOR_CY - 14, 255)
+	_stage._grid.ignite(WOOD_X0 + 34, FLOOR_CY - 2)
+	_stage._grid.ignite(WOOD_X0 + 36, FLOOR_CY - 8)
+	await _wait(90)
+	await _save("world")
+
+
 func _build_arena() -> void:
 	_stage.enter_town()
 	await _wait(20)
@@ -116,6 +159,10 @@ func _build_arena() -> void:
 	_stage._sky.set_backdrop(stage1["bg_far"], stage1["bg_near"])
 	_seat_fire()
 	_stage._char.place(STAND_PX.x, STAND_PX.y)
+	# **The onboarding hint is derived from the step every frame, so hiding the node does
+	#  nothing** — it has to be stepped to the end. Left in, its panel sits across the middle
+	#  of every figure.
+	_stage._onboard_step = StageScript.ONBOARD_DONE
 	await _wait(25)
 
 

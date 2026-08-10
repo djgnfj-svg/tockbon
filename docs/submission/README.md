@@ -228,7 +228,7 @@ python tools\submission\md2pdf.py
   ⇒ **F3가 개발자 모드가 됐다** (`stage_input._debug_on`). 게이트 뒤: 1~6 · M/N/B/C/V · T · G · L · R · 줌.
   게이트 앞(플레이어 키): 이동 · 점프 · 발사 · Tab · P · ESC · **F(상호작용)**.
   `net_render._developer_keys_are_gated_behind_f3`가 실제 키 이벤트로 잰다
-- **사운드가 하나도 없다** — 영상에서 무음이 된다. 확인함: 오디오 파일 0개
+- ~~사운드가 하나도 없다~~ — **닫혔다.** 오디오 파일은 여전히 0개지만 효과음을 부팅 때 코드로 합성한다 (`src/view/sfx_bank.gd`)
 - **스테이지가 하나뿐이다.** GDD는 첫 빌드를 두 스테이지로 적고 있다.
   셸에 스테이지 식별자 자체가 없고 맵은 구운 상수 하나다 —
   구조 조사 결과는 Track D/E가 들고 있다

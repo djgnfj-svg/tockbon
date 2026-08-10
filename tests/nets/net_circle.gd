@@ -286,23 +286,26 @@ func run(t) -> void:
 ##  `Layout.circle_area(Book.circle_page(Fx.WINDOW_RECT.size).size)`) only if `Fx.WINDOW_RECT` or one of the
 ##  round circle's own ratios changes on purpose — never to make this check pass again after an accident.
 ##
-## **Regenerated for `onboarding-and-palette-tabs.md` Stage 5** (`CIRCLE_RUNE_RATIO` 0.17 -> 0.26,
-##  `CIRCLE_RING_ZONE` 0.80 -> 0.88, new `CIRCLE_RING_GAP_FRAC` 0.06). `f["radius"]` and the frame center are
-##  untouched — neither `CIRCLE_DISC_RATIO` nor the window/page rects moved — so only the rune radius and the
-##  two band numbers derived from it below actually changed.
+## **Regenerated for the rune-impact pass** (`룬이 너무 작아 · 임팩트가 없다` — the user, looking at the
+##  assembly window): `CIRCLE_RUNE_RATIO` 0.26 -> 0.36, `CIRCLE_GLYPH_RATIO` 0.115 -> 0.18,
+##  `CIRCLE_RING_GAP_FRAC` 0.06 -> 0.05, `CIRCLE_RING_ZONE` unchanged (0.88). `f["radius"]` and the frame
+##  center are untouched — neither `CIRCLE_DISC_RATIO` nor the window/page rects moved — so only the rune
+##  radius and the two band numbers derived from it below actually changed.
+## **`SLOT_HIT_RATIO` 1.8 -> 1.2 is the load-bearing change, not a stray value** — see that constant's own
+##  comment in `fx_tuning.gd`. Growing the rune without lowering it flips this check red (measured).
 func _round_numbers_pinned_before_the_triangle_arrives(t) -> void:
 	var page := Book.circle_page(Fx.WINDOW_RECT.size)
 	var area := Layout.circle_area(page.size)
 	var id := CircleDefs.CIRCLE_ROUND
 
 	var f := Layout.frame(area)
-	t.ok(is_equal_approx(f["radius"], 140.06), "진 테두리 반지름이 못박은 값과 같다 (%.5f)" % (f["radius"] as float))
-	t.ok((f["center"] as Vector2).is_equal_approx(Vector2(207.5, 163.0)),
+	t.ok(is_equal_approx(f["radius"], 167.32000), "진 테두리 반지름이 못박은 값과 같다 (%.5f)" % (f["radius"] as float))
+	t.ok((f["center"] as Vector2).is_equal_approx(Vector2(216.5, 192.0)),
 		"진 중심이 못박은 값과 같다 (%s)" % f["center"])
 
 	var bands := Layout.layer_bands(id, area)
-	var want_edge0 := [84.036, 123.2528]
-	var want_seat_y := [78.964, 39.7472]
+	var want_edge0 := [107.08480, 158.95399]
+	var want_seat_y := [84.9152, 33.0460]
 	t.eq(bands.size(), want_edge0.size(), "밴드 수가 못박은 개수(%d)와 같다" % want_edge0.size())
 	for i in mini(bands.size(), want_edge0.size()):
 		var edges: PackedFloat32Array = bands[i]["edges"]
@@ -310,17 +313,17 @@ func _round_numbers_pinned_before_the_triangle_arrives(t) -> void:
 		var hit: Vector2 = bands[i]["hit"]
 		t.ok(is_equal_approx(edges[0], want_edge0[i]),
 			"%d번 밴드 바깥 모서리가 못박은 값과 같다 (%.5f)" % [i, edges[0]])
-		t.ok(seat.is_equal_approx(Vector2(207.5, want_seat_y[i])),
+		t.ok(seat.is_equal_approx(Vector2(216.5, want_seat_y[i])),
 			"%d번 밴드 자리가 못박은 값과 같다 (%s)" % [i, seat])
 		# Every layer shares one hit radius on `PIC_ROUND` (`glyph_radius(area)` does not vary per layer) —
 		#  pinned once and reused rather than repeated per band.
-		t.ok(is_equal_approx(hit.y, 28.99242) and is_equal_approx(hit.x, 0.0),
+		t.ok(is_equal_approx(hit.y, 25.0980) and is_equal_approx(hit.x, 0.0),
 			"%d번 밴드 히트 반경이 못박은 값과 같다 (%s)" % [i, hit])
 
-	t.ok(is_equal_approx(Layout.rune_radius(id, area), 36.4156),
+	t.ok(is_equal_approx(Layout.rune_radius(id, area), 46.84960),
 		"룬 반지름이 못박은 값과 같다 (%.5f)" % Layout.rune_radius(id, area))
 	var rs := Layout.rune_slots(id, area)
-	t.ok(rs.size() > 0 and rs[0].is_equal_approx(Vector2(207.5, 163.0)),
+	t.ok(rs.size() > 0 and rs[0].is_equal_approx(Vector2(216.5, 192.0)),
 		"룬 자리가 못박은 값과 같다 (%s)" % (rs[0] if rs.size() > 0 else "없음"))
 
 

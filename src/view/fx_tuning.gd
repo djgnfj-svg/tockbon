@@ -851,7 +851,7 @@ const RARITY_TINT: Dictionary = {
 ##  Sitting **on** the symbol would fight `GLYPH_TINT`'s color for the same pixels — the same trap
 ##  `GLYPH_SPAWN_ANGLE_STEP_FRAC`'s comment already measured for the spawn rays and the ring line.
 const RARITY_RING_RATIO := 1.3
-const RARITY_RING_PX := 1.5
+const RARITY_RING_PX := 2.5
 
 ## **The socket glyph art** (`triangle-circle-to-game.md` step 6) — glyph id -> path, drawn only inside a
 ##  **socket band** (`circle_window._draw_ring` only reaches this map when the band owns more than one
@@ -1033,7 +1033,7 @@ const DEAD_RING_PX := 3.0
 ## this very rectangle covers the top-left band) and `Progress` became `HUD/Money` in the bottom-right. The
 ## reasoning above is unchanged and now applies to those two: `net_render` still asserts no window covers the
 ## health readout, and that assert is what forced the move.
-const WINDOW_RECT := Rect2(48, 12, 864, 372)
+const WINDOW_RECT := Rect2(30, 10, 900, 430)
 
 ## **It is opaque.** A user acceptance — "there should **be a background color**, like a particular window opening".
 ##  Stage 2 wrote "translucent" as the grounds for acceptance 4, but **that was the wrong grounds.** What was
@@ -1183,17 +1183,17 @@ const CIRCLE_DISC_RATIO := 0.94
 ##  own edge (`CIRCLE_RING_GAP_FRAC` below is the "one칸" gap) instead of at the frame center, so raising
 ##  `CIRCLE_RUNE_RATIO` moves both layer seats out with it — there is no second offset to hand-keep in step.
 ##  **Eye-tune this one number** (`onboarding-and-palette-tabs.md` names every value here TBD).
-const CIRCLE_RING_ZONE := 0.88
+const CIRCLE_RING_ZONE := 0.95
 ## **Grown — the user: "룬이 좀 더 커야 돼. 훨씬 더 크게 박혀야 돼."** `RUNE_ART_FRAC` (below) sizes only
 ##  the picture inside this radius; this ratio also sizes the click target and the empty-seat ring, so
 ##  growing it moves all three together. **Eye-tune this one number.**
-const CIRCLE_RUNE_RATIO := 0.26
+const CIRCLE_RUNE_RATIO := 0.28
 ## **The "one칸" gap between the rune's own edge and where the layer rings begin** (user: "룬 자리 · 1번
 ##  문양 자리 · 2번 문양 자리가 각각 한 칸씩 바깥으로") — a ratio of the frame radius, the same unit every
 ##  other value in this block already uses. See `CIRCLE_RING_ZONE`'s own comment for how this one number
 ##  moves both layer seats without a second constant to keep in step. **Eye-tune this one number.**
-const CIRCLE_RING_GAP_FRAC := 0.06
-const CIRCLE_GLYPH_RATIO := 0.115
+const CIRCLE_RING_GAP_FRAC := 0.05
+const CIRCLE_GLYPH_RATIO := 0.15
 ## The rune slot's inner core. It is "a wick burning white", so it must be smaller than the outer glow
 ##  (the same idiom as the muzzle and the flash).
 const CIRCLE_RUNE_CORE_RATIO := 0.45
@@ -1217,7 +1217,7 @@ const TRI_SOCKET_DEG: Array[float] = [-90.0, 30.0, 150.0]
 
 ## The circle's border — the rim of the vessel. It must be **darker and thicker** than the layer rings to read as "a frame".
 const CIRCLE_FRAME := Color(0.38, 0.45, 0.62, 0.85)
-const CIRCLE_FRAME_PX := 2.0
+const CIRCLE_FRAME_PX := 3.0
 
 ## **"Innermost first" is not entrusted to concentric circles alone** (design acceptance 3).
 ##  Concentric circles say only that an order **exists**, not **which side comes first**.
@@ -1226,7 +1226,7 @@ const CIRCLE_FRAME_PX := 2.0
 ## With only one color that device drops to one, and then acceptance 3 hangs on concentric circles alone.
 const CIRCLE_RING_INNER := Color(0.72, 0.86, 1.0, 0.95)
 const CIRCLE_RING_OUTER := Color(0.30, 0.40, 0.58, 0.95)
-const CIRCLE_RING_PX := 2.0
+const CIRCLE_RING_PX := 3.0
 
 ## Layer numbers. They are written to the **left** of the ring — the glyph symbol sits at 12 o'clock, so writing there overlaps.
 const CIRCLE_LAYER_NUM := Color(0.80, 0.86, 0.96)
@@ -1255,7 +1255,7 @@ const CIRCLE_LAYER_NUM_LIFT_FRAC := 0.25
 ##  SPAWN's ray count is **a presentation value.** It does not need to equal spread's 8 directions —
 ##   kept equal it misreads as "every glyph that makes bolts makes 8 of them".
 const GLYPH_SPAWN_RAYS := 6
-const GLYPH_SYMBOL_PX := 2.0
+const GLYPH_SYMBOL_PX := 3.0
 
 ## **One row per family, not per `kind`.** A missing family here must bark, not fall through to a shape that
 ##  belongs to someone else — that silent fallthrough is exactly the bug this map replaces
@@ -1330,7 +1330,13 @@ const SLOT_SELECTED_RATIO := 1.5
 ## **The circle you press is bigger than the symbol.** Kept the same as the symbol you have to aim exactly at an
 ##  empty layer for it to click, and that becomes "I pressed it and nothing happened". Grown too far it eats the
 ##  neighboring layer — it must be smaller than the ring spacing (half the radius). `net_circle` measures whether they overlap.
-const SLOT_HIT_RATIO := 1.8
+## **1.8에서 1.2로 내렸다 — 그림이 커진 만큼 배수를 줄여 클릭 영역의 절대 크기를 지킨다.**
+##  사용자가 「룬이 너무 작다」고 해서 `CIRCLE_RUNE_RATIO`를 0.26→0.36, `CIRCLE_GLYPH_RATIO`를
+##  0.115→0.18로 키웠는데, 이 값은 **반지름에 곱해지는 배수**라 그림을 키우면 클릭 영역이
+##  **함께 부푼다** — 룬 옆을 눌러도 룬이 잡히고, 1층과 2층의 판정이 서로 겹친다.
+##  **1.3까지만 내리면 못 버틴다** — 실측(`net_circle`)으로 확인: 1층 자리가 룬의 부푼 클릭
+##  반경(1.3×50.42+문양 반경)을 못 넘어서 판정이 도로 겹쳤다. 1.2에서 두 검사 모두 여유를 가진다.
+const SLOT_HIT_RATIO := 1.0
 
 ## The border of the picked item. **It is part of the behavior, not presentation** — if what you picked is invisible,
 ##  the first half of "pick, then place" is not on screen.
