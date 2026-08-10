@@ -88,8 +88,10 @@ func _draw() -> void:
 	if _near != null:
 		# **The strip's bottom sits on the ground line**, so its own height comes off the anchor.
 		#  Written this way, a picture of a different height still stands on the ground instead of floating.
+		# **`Fx.BG_VERTICAL_FOLLOW_FRAC` damps the vertical ratio here too** — same knob, same reason `_far_y` uses it.
 		var near_y := _layer_y(origin.y,
-			Fx.BG_NEAR_GROUND_Y - float(_near.get_height()), Fx.BG_NEAR_SCROLL_Y)
+			Fx.BG_NEAR_GROUND_Y - float(_near.get_height()),
+			Fx.BG_NEAR_SCROLL_Y * Fx.BG_VERTICAL_FOLLOW_FRAC)
 		_tile(_near, origin, near_y, Fx.BG_NEAR_SCROLL_X)
 
 
@@ -106,8 +108,10 @@ func _layer_y(screen_top: float, anchor_y: float, ratio: float) -> float:
 ##  showed sky. Past the clamp the picture scrolls off the top of the screen instead.
 ## **Pulled out of `_draw()`** so it can be driven directly at a deep camera position without needing
 ##  `_draw()`'s `NOTIFICATION_DRAW` context (`net_background._far_picture_stops_at_the_ground_line`).
+## **`Fx.BG_VERTICAL_FOLLOW_FRAC` damps the ratio here** — applied at the point of use, not baked into
+##  `BG_FAR_SCROLL_Y` itself, so the constant still reads as "today's ratio" on its own.
 func _far_y(screen_top: float, far_h: float) -> float:
-	var y := _layer_y(screen_top, Fx.BG_FAR_ANCHOR_Y, Fx.BG_FAR_SCROLL_Y)
+	var y := _layer_y(screen_top, Fx.BG_FAR_ANCHOR_Y, Fx.BG_FAR_SCROLL_Y * Fx.BG_VERTICAL_FOLLOW_FRAC)
 	return minf(y, Fx.BG_UNDER_TOP_Y - far_h)
 
 

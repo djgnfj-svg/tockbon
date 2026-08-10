@@ -43,6 +43,7 @@ func run(t) -> void:
 	_far_and_near_use_different_parallax_ratios(t)
 	_layer_y_actually_responds_to_the_ratio(t)
 	_horizon_anchor_is_pinned_by_value(t)
+	_vertical_follow_frac_actually_damps_both_layers(t)
 	_cell_renderer_derives_empty_id_from_the_material_table(t)
 	_shader_zeroes_alpha_on_the_empty_material(t)
 	_sky_background_sits_before_cell_renderer_in_the_scene(t)
@@ -206,6 +207,65 @@ func _horizon_anchor_is_pinned_by_value(t) -> void:
 		"수평선 위치(BG_FAR_ANCHOR_Y)가 300이다 — 화면에서 아직 확인되지 않은 값이고, 바뀌면 여기가 먼저 움직인다")
 
 
+## **`BG_VERTICAL_FOLLOW_FRAC` is pinned and, more importantly, driven** — pinning the constant alone would
+## stay green even if `_far_y`/`_draw` forgot to multiply by it (the exact "declared but unused" shape
+## CLAUDE.md's own "no fake nets" section warns about).
+##
+## **The quantity that matters is on-screen displacement, not distance from the world anchor.**
+## `_layer_y(screen_top, anchor, ratio) - screen_top` — the layer's position *relative to the screen*,
+## i.e. what the eye reads as "did it move when the camera moved" — reduces algebraically to
+## `ratio * (anchor - screen_top)`. The anchor cancels out of a *comparison between two camera positions*
+## entirely, so the same camera move at a smaller ratio must produce a strictly smaller on-screen shift,
+## independent of where the anchor sits. **That is "follows less."** A first version of this check compared
+## `abs(y - anchor)` instead (distance from the anchor) and a real run caught it backwards — at screen_top
+## 200 the damped ratio landed *farther* from `BG_FAR_ANCHOR_Y` than the raw one, because a smaller ratio
+## pulls the result toward `screen_top`, not toward the anchor. Direction only makes sense measured on
+## screen, never against the anchor.
+func _vertical_follow_frac_actually_damps_both_layers(t) -> void:
+	t.ok(Fx.BG_VERTICAL_FOLLOW_FRAC >= 0.0 and Fx.BG_VERTICAL_FOLLOW_FRAC <= 1.0,
+		"세로 시차 감쇠 계수가 0..1 사이다 (0=화면에서 전혀 안 움직인다, 1=오늘 비율 그대로 움직인다)")
+	if Fx.BG_VERTICAL_FOLLOW_FRAC >= 1.0:
+		return
+
+	var bg := SkyBackground.new()
+	# **Both under the ground-line clamp (`BG_UNDER_TOP_Y - fh` = 96).** A first version used 200/500 and
+	#  caught itself: at those depths the damped ratio's pre-clamp value already exceeds 96, so `_far_y`
+	#  returns the *same* clamped 96 at both points and the "shift" measured is really the clamp's own
+	#  constant output minus a moving `screen_top` — 300 vs the raw path's unclamped 24, backwards from
+	#  what the check means to prove. 0/80 keeps every pre-clamp value on this test below 96 for both the
+	#  damped and the raw ratio, so the comparison actually isolates the ratio.
+	var top_a := 0.0
+	var top_b := 80.0
+	var fh := 544.0
+
+	# **Far layer, through the real `_far_y()`.** Below the clamp threshold at both points (see above),
+	#  so the comparison measures the ratio, not the clamp.
+	var far_a: float = (bg.call("_far_y", top_a, fh) as float) - top_a
+	var far_b: float = (bg.call("_far_y", top_b, fh) as float) - top_b
+	var far_damped_shift := absf(far_a - far_b)
+	var far_raw_a: float = (bg.call("_layer_y", top_a, Fx.BG_FAR_ANCHOR_Y, Fx.BG_FAR_SCROLL_Y) as float) - top_a
+	var far_raw_b: float = (bg.call("_layer_y", top_b, Fx.BG_FAR_ANCHOR_Y, Fx.BG_FAR_SCROLL_Y) as float) - top_b
+	var far_raw_shift := absf(far_raw_a - far_raw_b)
+	t.ok(far_damped_shift < far_raw_shift,
+		"같은 카메라 이동에 대해 원경이 화면에서 실제로 덜 움직인다 (감쇠 %.2f vs 원래 %.2f)" % [far_damped_shift, far_raw_shift])
+
+	# **Near layer — `_layer_y()` directly with `_draw()`'s own anchor expression.** No pure wrapper exists
+	#  for the near call site (unlike `_far_y`), so this proves the *ratio's* effect on the formula, not
+	#  that `_draw()` still passes the damped ratio instead of the raw one — that half would need `_draw()`
+	#  driven treed with `pump_frames` to close, and is unmeasured here.
+	var near_anchor := Fx.BG_NEAR_GROUND_Y - 214.0   ## bg_near_farm's own height (measured above, 1920x214).
+	var near_ratio_damped := Fx.BG_NEAR_SCROLL_Y * Fx.BG_VERTICAL_FOLLOW_FRAC
+	var near_damped_a: float = (bg.call("_layer_y", top_a, near_anchor, near_ratio_damped) as float) - top_a
+	var near_damped_b: float = (bg.call("_layer_y", top_b, near_anchor, near_ratio_damped) as float) - top_b
+	var near_damped_shift := absf(near_damped_a - near_damped_b)
+	var near_raw_a: float = (bg.call("_layer_y", top_a, near_anchor, Fx.BG_NEAR_SCROLL_Y) as float) - top_a
+	var near_raw_b: float = (bg.call("_layer_y", top_b, near_anchor, Fx.BG_NEAR_SCROLL_Y) as float) - top_b
+	var near_raw_shift := absf(near_raw_a - near_raw_b)
+	t.ok(near_damped_shift < near_raw_shift,
+		"같은 카메라 이동에 대해 근경이 화면에서 실제로 덜 움직인다 (감쇠 %.2f vs 원래 %.2f)" % [near_damped_shift, near_raw_shift])
+	bg.free()
+
+
 # ══════════════════════════════════════════════════════════════════
 #  The three-piece contract (`background.md`) — "drop one and nothing shows, silently"
 # ══════════════════════════════════════════════════════════════════
@@ -336,14 +396,18 @@ func _far_picture_stops_at_the_ground_line(t) -> void:
 	var bg := SkyBackground.new()
 	var fh := 544.0
 
+	# `_far_y()` damps the ratio by `BG_VERTICAL_FOLLOW_FRAC` before calling `_layer_y()` — the comparison
+	#  has to apply the same damping, or this reads a divergence that was never a clamp at all.
 	var shallow := bg.call("_far_y", 0.0, fh) as float
-	var shallow_unclamped := bg.call("_layer_y", 0.0, Fx.BG_FAR_ANCHOR_Y, Fx.BG_FAR_SCROLL_Y) as float
+	var shallow_unclamped := bg.call(
+		"_layer_y", 0.0, Fx.BG_FAR_ANCHOR_Y, Fx.BG_FAR_SCROLL_Y * Fx.BG_VERTICAL_FOLLOW_FRAC) as float
 	t.eq(shallow, shallow_unclamped, "지면 근처에서는 clamp가 원래 계산값을 안 건드린다 (전제)")
 
-	# The doc's own measured example: screen_top 1000 puts the unclamped far picture at 944..1488,
-	#  still drawing sky over the map's bedrock floor (world y 1536).
+	# The doc's own measured example (`background.md`'s original, undamped 944) is kept as a bare `_layer_y`
+	#  reference of the formula itself — the raw ratio, not production's damped one — so it stays a fixed
+	#  algebra check independent of wherever `BG_VERTICAL_FOLLOW_FRAC` is tuned to.
 	var deep_unclamped := bg.call("_layer_y", 1000.0, Fx.BG_FAR_ANCHOR_Y, Fx.BG_FAR_SCROLL_Y) as float
-	t.eq(deep_unclamped, 944.0, "clamp 없는 계산값이 문서가 측정한 값과 같다 (944 — 이 검사의 전제)")
+	t.eq(deep_unclamped, 944.0, "clamp 없는 계산값(원래 비율 기준)이 문서가 측정한 값과 같다 (944 — 이 검사의 전제)")
 
 	var deep := bg.call("_far_y", 1000.0, fh) as float
 	t.ok(deep + fh <= Fx.BG_UNDER_TOP_Y + 0.001,

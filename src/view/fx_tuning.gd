@@ -1979,6 +1979,18 @@ const BG_FAR_SCROLL_Y := 0.08
 const BG_NEAR_SCROLL_X := 0.65   ## Near enough to read as "just behind the terrain", not so near it competes with it
 const BG_NEAR_SCROLL_Y := 0.45
 
+## **The vertical follow's own master knob** (user, watching the screen: 「이거 점프하면 2번째 레이어가
+##  같이 오른데 변경해줄래?」 — jumping moved a background layer up with the character). Multiplies
+##  `BG_FAR_SCROLL_Y`/`BG_NEAR_SCROLL_Y` **at the point they're read** (`sky_background._far_y`/`_draw`),
+##  not baked into either — so the far/near vertical split above (weak vs strong, tuned on its own reasons)
+##  stays intact and this one knob dials the vertical component down without touching horizontal at all
+##  (`BG_FAR_SCROLL_X`/`BG_NEAR_SCROLL_X` are untouched — walking still drifts the background sideways,
+##  which nobody complained about).
+## **0 = the ratio above is glued to the screen top regardless of camera movement (no vertical follow at
+##  all), 1 = today's ratios exactly.** Started close to 0 rather than at it — the user asked to cut the
+##  jump-bob, not to freeze the layers dead flat. One line to push either way.
+const BG_VERTICAL_FOLLOW_FRAC := 0.15
+
 ## Where each layer sits when its ratio is 1 (world px). **+ is downward.**
 ## The far one is the horizon — tuned by eye against the spawn point.
 const BG_FAR_ANCHOR_Y := 300.0
