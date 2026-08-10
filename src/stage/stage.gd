@@ -423,7 +423,10 @@ func _ready() -> void:
 	# **The grid is handed over too — the staff is blocked by terrain and shortens.** Do not hand it over and
 	#  the screen draws at the old spot while only firing goes to the new one, and **not one error is raised**
 	#  (`character_view._grid`).
-	_char_view.setup(_char, _circle, _grid)
+	# **`_blast_fx` too** — the hit flash's screen shake goes through the same `kick()` every other shake uses
+	#  (`character_view.gd`'s own header). Optional/defaulted on that side, the same door `char`/`grid` opened
+	#  on `monster_view.setup()`.
+	_char_view.setup(_char, _circle, _grid, _blast_fx)
 	# **The gauge takes the character and nothing else** — it reads `hp` every frame itself, the same
 	#  reference-not-copy rule `_char_view` above already holds.
 	_hp_view.setup(_char, _world.progress())
@@ -929,6 +932,10 @@ func _on_ticked() -> void:
 	#  exactly the same place as `blast_fx.on_blasts()` (`monster_view.on_tick()`).
 	_monster_view.on_tick()
 
+	# **The hit flash/shake — the same tick-not-frame door as the two calls above** (`character_view.on_tick()`'s
+	#  own header: watched at 60Hz, the same write could be read zero, one, two or three times depending on phase).
+	_char_view.on_tick()
+
 	# **The judgment is made from one value the grid counted.** If the shell holds a separate latch, changes
 	#  that **do not go through the command queue** — like a blast — quietly miss that latch and the hole
 	#  never appears on screen.
@@ -1019,6 +1026,9 @@ func _rebuild(end_the_run: bool) -> void:
 	# Without clearing, the dead session's hp dictionary, flashes, damage numbers and corpses briefly ride
 	#  into the new session (the same door as `spell_view.clear()` and `blast_fx.clear()` — `monster_view.gd`'s header).
 	_monster_view.clear()
+	# Without clearing, a hit taken the instant before pressing R paints its flash over the newly spawned
+	#  character for a few frames — the same door as `_spell_view.clear()`/`_blast_fx.clear()` above.
+	_char_view.clear()
 	_camera.offset = Vector2.ZERO
 	# **Every counter is reset.** Leave one behind and the "fire > impact = it left the grid and vanished"
 	#  diagnosis above becomes false forever after a single R — R is this stage's main measuring instrument,

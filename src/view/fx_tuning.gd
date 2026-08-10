@@ -601,6 +601,34 @@ const LEVEL_UP_COLOR := Color(1.0, 0.82, 0.25, 1.0)
 ## **It is not 0.** Erased completely it reads as "it vanished = did it die" — fading is what says "invulnerable".
 const INVULN_DIM_A := 0.35
 
+## **Getting hit had no action at all** (`docs/design/game-feel.md`, the user's own report — "맞았을 때 아무
+##  액션이 없어서"). The blink above says "you are safe right now"; nothing said "that was the moment it landed".
+##
+## **The same shader as the monster flash** (`MONSTER_FLASH_SHADER`) — "silhouette in a flat color, strength
+##  from vertex alpha" is the identical job for one sprite instead of several, and a second shader file would
+##  keep only the alpha in two places (that file's own header names this exact risk). One character on screen
+##  at a time is why a per-node uniform color is safe here the same way it is for a single monster.
+const CHAR_HIT_FLASH_COLOR := Color(1.0, 1.0, 1.0, 0.85)
+## **Literally the monster flash/outline shader file** — see the box above for why one file, not a new one.
+const CHAR_HIT_FLASH_SHADER := "res://src/view/monster_silhouette.gdshader"
+## The uniform name inside that shader (`monster_silhouette.gdshader`'s own `flash_color`). Written once here
+##  rather than as a bare string at the call site — the same reason `monster_view.FLASH_COLOR_PARAM` exists.
+const CHAR_HIT_FLASH_SHADER_PARAM := "flash_color"
+## **12 view frames = `character.INVULN_TICKS` (4) x `sim_tuning.TICK_DIVIDER` (3) = 0.2s** — the same idiom
+##  `MONSTER_FLASH_FRAMES`'s own comment uses (matched to invulnerability so "while it flashes, that hit is
+##  still in effect" holds without a second clock). **Written down, not computed** — the same call that file
+##  made, so a net can read the number without importing `character.gd` into `fx_tuning.gd` for one constant.
+const CHAR_HIT_FLASH_FRAMES := 12
+
+## **The screen shake on a hit — reuses `blast_fx`'s own device** (`stage.gd` already puts every shake through
+##  `_blast_fx.kick()`; a second shake path would fork the decay curve and the "stronger one wins" rule in two
+##  places). **Much weaker than any blast** (`FX_SIZES.shake_px` 5·2, `GATE_WALL_SHAKE_PX` 7) — being hit is
+##  frequent and the blast shake is already the strong end of the scale; matching it would make every ordinary
+##  hit read as loud as a detonation. 1px is the floor above 0 (`kick()` no-ops at 0).
+const CHAR_HIT_SHAKE_PX := 1
+## Shorter than `SHAKE_SEC` (0.20, a bolt's own blast) for the same "weaker" reason above.
+const CHAR_HIT_SHAKE_SECS := 0.10
+
 ## **Text that floats above the character when downed** (decided by the user).
 ##
 ## **Verifiers got stuck three times even though the HUD already has a line meaning the same thing** —

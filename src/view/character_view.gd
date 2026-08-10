@@ -13,8 +13,15 @@ const Character := preload("res://src/actor/character.gd")
 const Staff := preload("res://src/actor/staff.gd")
 const Fx := preload("res://src/view/fx_tuning.gd")
 const SpellCircle := preload("res://src/actor/spell_circle.gd")
+## **Same folder, so `net_layers` does not gate it** — `src/view/` files may reference one another. Used only
+##  to call `kick()`, the same door `stage.gd` already uses for every other shake (gate wall, blasts).
+const BlastFx := preload("res://src/view/blast_fx.gd")
 
 var _ch: Character = null
+
+## **The shake caller.** Optional and defaulting to null (the same idiom `monster_view.setup()`'s `char`/`grid`
+##  parameters already use) — a net standing this node up with no stage has no shake to kick and must not bark.
+var _blast_fx: BlastFx = null
 
 ## **The staff is shortened when blocked by terrain, so the screen holds the grid. It only reads.**
 ##  **Without taking this, the screen draws at the old seat while only firing goes to the new one** — the contract
@@ -46,16 +53,94 @@ var _staff_tex: Texture2D = load(Fx.STAFF_SHEET)
 var _prev_x := 0
 var _moving := false
 
+## **Hit-flash state — a child layer, not a material on `self`** (the box on `_flash_layer` below explains why).
+var _flash_layer: Node2D = null
+## View frames left of the hit flash. **Its clock is itself, the same one-field-one-clock rule `invuln_left`'s
+##  own comment already holds** — a `delta` accumulator here would be a second clock, and the flash would
+##  outlive or underlive the hit it reports on.
+var _hit_flash_left := 0
+## **`invuln_left`'s previous tick, so a rising edge can be read** — see `on_tick()` below for why the rising
+##  edge, not an hp diff, is the signal.
+var _prev_invuln_left := 0
 
-func setup(ch: Character, circle: SpellCircle, grid: CellGrid) -> void:
+## A child layer purely so the flash shader's material does not paint the staff and its ring too.
+## **The same reason `monster_view._Layer` exists** (that file's own header: a `material` set on `self` applies
+##  to every draw call this node makes during its own `_draw()`, so drawing the flashed body and the plain
+##  staff in one `_draw()` call would mean either both are shaded or neither is).
+class _FlashLayer extends Node2D:
+	var fn: Callable
+	func _draw() -> void:
+		if fn.is_valid():
+			fn.call(self)
+
+
+func setup(ch: Character, circle: SpellCircle, grid: CellGrid, blast_fx: BlastFx = null) -> void:
 	_ch = ch
 	_circle = circle
 	_grid = grid
-	# **`_prev_x` is aligned here.** Without aligning it, the first frame reads "0 -> spawn x" as movement
-	#  and a standing-still character walks for one frame.
+	_blast_fx = blast_fx
+	# **`_prev_x`/`_prev_invuln_left` are aligned here.** Without aligning `_prev_x`, the first frame reads
+	#  "0 -> spawn x" as movement and a standing-still character walks for one frame — `_prev_invuln_left`'s
+	#  own risk is the same shape: unaligned, a fresh spawn with `invuln_left` already above 0 would read as
+	#  "just hit" on the very first tick it is observed.
 	if _ch != null:
 		_prev_x = _ch.x
+		_prev_invuln_left = _ch.invuln_left
 	queue_redraw()
+
+
+func _ready() -> void:
+	# **With no shader it goes without a material** — the same "substitute, do not bark" idiom
+	#  `monster_view._paint`'s own comment records; the flash then simply never becomes visible.
+	var sh := load(Fx.CHAR_HIT_FLASH_SHADER) as Shader
+	_flash_layer = _make_layer(_draw_flash)
+	if sh != null:
+		var mat := ShaderMaterial.new()
+		mat.shader = sh
+		mat.set_shader_parameter(Fx.CHAR_HIT_FLASH_SHADER_PARAM, Fx.CHAR_HIT_FLASH_COLOR)
+		_flash_layer.material = mat
+
+
+func _make_layer(fn: Callable) -> Node2D:
+	var n := _FlashLayer.new()
+	n.fn = fn
+	n.name = "HitFlash"
+	add_child(n)
+	return n
+
+
+## **Clears the hit-flash state on a stage reset** — the same door `blast_fx.clear()`/`monster_view.clear()`
+##  already open (`stage.gd`'s `_rebuild()`, "without clearing, the dead session's ... briefly ride into the
+##  new session"). Without this, a hit taken the instant before pressing R paints a flash over the freshly
+##  spawned character for a few frames.
+func clear() -> void:
+	_hit_flash_left = 0
+	_prev_invuln_left = 0
+	if _flash_layer != null:
+		_flash_layer.queue_redraw()
+
+
+## **Hit detection lives here, on the tick, not in `_process` on the frame.** `character.take_hit()` runs only
+## inside `world_step`'s tick branch (`character.gd`'s own header: "call it at 60Hz and one hit becomes
+## three") — watching `invuln_left` at 60Hz risks reading the same tick's write zero, one, two or three times
+## depending on phase, the exact 60Hz/20Hz seam `CLAUDE.md` already names three times over. `stage.gd`'s
+## `_on_ticked()` calls this once per tick, the same door `monster_view.on_tick()` and `blast_fx.on_blasts()`
+## already use.
+##
+## **The rising edge of `invuln_left`, not an hp diff.** `take_hit` sets this field to `INVULN_TICKS` only on
+## the tick a hit that respects invulnerability actually lands (`tanks_invuln=true` — direct hits, blasts, pig
+## contact, hen bolts); fire's continuous damage passes `tanks_invuln=false` and never touches this field, so
+## standing in fire correctly does not trigger this flash (it already has its own tell, `CHAR_BURN`'s border).
+## Every other tick this field can only count down, so "it just went up" already means "I was just hit" with
+## no second array to diff.
+func on_tick() -> void:
+	if _ch == null:
+		return
+	if _ch.invuln_left > _prev_invuln_left:
+		_hit_flash_left = Fx.CHAR_HIT_FLASH_FRAMES
+		if _blast_fx != null:
+			_blast_fx.kick(Fx.CHAR_HIT_SHAKE_PX, Fx.CHAR_HIT_SHAKE_SECS)
+	_prev_invuln_left = _ch.invuln_left
 
 
 func _process(_dt: float) -> void:
@@ -66,8 +151,13 @@ func _process(_dt: float) -> void:
 	if _ch != null:
 		_moving = _ch.x != _prev_x
 		_prev_x = _ch.x
+	_hit_flash_left = maxi(0, _hit_flash_left - 1)
 	# The character moves every frame and the staff follows the mouse every frame => always redraw.
 	queue_redraw()
+	# **The child does not receive the parent's `queue_redraw()`** — `monster_view._process`'s own comment
+	#  names the identical trap ("the flash and the numbers freeze on the first frame").
+	if _flash_layer != null:
+		_flash_layer.queue_redraw()
 
 
 ## Unit vector toward the mouse. If the mouse is exactly at the character's center it falls back to
@@ -142,6 +232,52 @@ func _cell_rect(state: int) -> Rect2:
 	return Rect2(int(cells[idx]) * Fx.CHAR_CELL_PX, 0, Fx.CHAR_CELL_PX, Fx.CHAR_CELL_PX)
 
 
+## **The one place the body sprite's transform and cell are computed — `_draw()` and `_draw_flash()` both
+## call this, on `self` and on `_flash_layer` respectively** (the same "single source" reason `tip_px()`'s own
+## comment gives for not recomputing the staff tip). `canvas` is an argument, not implicit `self`, for the
+## exact reason `monster_view._draw_flashes`'s own comment records: called from inside a child layer's
+## `_draw()`, drawing onto implicit `self` would silently discard the command — damage numbers vanished
+## wholesale that way once, with every net green.
+##
+## **`modulate` is the only difference between the two callers** — the body's own dim/full color for `_draw()`,
+## white at the flash's current strength for `_draw_flash()`. Everything about *where* the sprite sits is
+## identical, which is the whole point of pulling this out.
+func _draw_body(canvas: CanvasItem, state: int, modulate: Color) -> void:
+	# **The sprite cell (32px) is wider than the collision box (20px) — draw it centered on the box.**
+	#  Draw it aligned to the top left and the character skews 6px left inside the box, and that only shows up
+	#  as "the body looks off to one side when walking". Both are even, so this division lands on an integer.
+	#  So **the sprite center and the box center are the same** — `Staff.pivot_px()` comes out of the box,
+	#   and even after narrowing the box that seat is the middle of the body sprite.
+	var pad := (Fx.CHAR_CELL_PX - Character.W_PX) / 2
+	var sprite_x := _ch.x - pad
+	# Why the origin goes at the right edge of the **sprite** when facing left: scale -1 sends local x leftward,
+	#  so starting there is what makes the sprite land exactly in the same seat. **It is the sprite edge, not
+	#  the box edge** — use the box and the character jumps by twice `pad` (12px) on every direction change.
+	#  And the condition on the art side is **`minx + maxx == CHAR_CELL_PX - 1`** — `net_sprite` measures it.
+	var flip := _ch.facing < 0
+	canvas.draw_set_transform(
+		Vector2(sprite_x + (Fx.CHAR_CELL_PX if flip else 0), _ch.y),
+		0.0, Vector2(-1.0 if flip else 1.0, 1.0))
+	canvas.draw_texture_rect_region(_body_tex,
+		Rect2(0.0, 0.0, Fx.CHAR_CELL_PX, Fx.CHAR_CELL_PX),
+		_cell_rect(state), modulate)
+	canvas.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
+## `_flash_layer` calls this. **The same coordinate system as this node** — a child inherits the parent's
+## transform, the same fact `monster_view._draw_flashes`'s own comment relies on.
+##
+## **State is recomputed here rather than cached from `_draw()`.** `pick_state()` is pure and cheap, and a
+## cached field would be a second place holding "what `_draw()` decided this frame" that could go stale the
+## moment the two calls stop happening in the same frame — recomputing keeps this function correct on its own.
+func _draw_flash(canvas: CanvasItem) -> void:
+	if _ch == null or _hit_flash_left <= 0:
+		return
+	var state := pick_state(_ch.downed, _ch.on_ground, _ch.vy, _moving)
+	var frac := float(_hit_flash_left) / float(Fx.CHAR_HIT_FLASH_FRAMES)
+	_draw_body(canvas, state, Color(1.0, 1.0, 1.0, Fx.CHAR_HIT_FLASH_COLOR.a * frac))
+
+
 func _draw() -> void:
 	if _ch == null:
 		return
@@ -165,25 +301,16 @@ func _draw() -> void:
 	#  so that means the combination readout dies, and **not one error is raised.**
 	#  **The nets cannot catch this** — at 16px, verify-read confirmed that deleting the restore line left
 	#   **everything green**. All that guards it is this comment and the eye.
-	# **The sprite cell (32px) is wider than the collision box (20px) — draw it centered on the box.**
-	#  Draw it aligned to the top left and the character skews 6px left inside the box, and that only shows up
-	#  as "the body looks off to one side when walking". Both are even, so this division lands on an integer.
-	#  So **the sprite center and the box center are the same** — `Staff.pivot_px()` comes out of the box,
-	#   and even after narrowing the box that seat is the middle of the body sprite.
-	var pad := (Fx.CHAR_CELL_PX - Character.W_PX) / 2
-	var sprite_x := _ch.x - pad
-	# Why the origin goes at the right edge of the **sprite** when facing left: scale -1 sends local x leftward,
-	#  so starting there is what makes the sprite land exactly in the same seat. **It is the sprite edge, not
-	#  the box edge** — use the box and the character jumps by twice `pad` (12px) on every direction change.
-	#  And the condition on the art side is **`minx + maxx == CHAR_CELL_PX - 1`** — `net_sprite` measures it.
-	var flip := _ch.facing < 0
-	draw_set_transform(
-		Vector2(sprite_x + (Fx.CHAR_CELL_PX if flip else 0), _ch.y),
-		0.0, Vector2(-1.0 if flip else 1.0, 1.0))
-	draw_texture_rect_region(_body_tex,
-		Rect2(0.0, 0.0, Fx.CHAR_CELL_PX, Fx.CHAR_CELL_PX),
-		_cell_rect(state), Color(1.0, 1.0, 1.0, dim))
-	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	# **Drawing the body is pulled out to `_draw_body()`** so `_draw_flash` (the hit flash, below) can draw the
+	#  identical sprite at the identical seat through a shader instead — a second, hand-copied transform would
+	#  drift from this one silently, and the drift would only show up as "the flash sits slightly off the body".
+	_draw_body(self, state, Color(1.0, 1.0, 1.0, dim))
+
+	# **If `_flash_layer` never got built (a net stood this node up with `new()`, no scene, `_ready()` never
+	#  ran), the flash is drawn here directly instead** — the identical fallback `monster_view._process`'s own
+	#  comment already uses ("otherwise two worlds appear, visible in the scene but absent in the net").
+	if _flash_layer == null:
+		_draw_flash(self)
 
 	# **The air-jump mark, and it is drawn before the downed branch below on purpose.** The ring says "that
 	#  second jump was real", and a jump that ended in going down is exactly the moment a player is most
