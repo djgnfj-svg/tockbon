@@ -19,6 +19,9 @@ const Fixtures := preload("res://src/actor/fixtures.gd")
 const CellGrid := preload("res://src/sim/cell_grid.gd")
 const Mat := preload("res://src/sim/cell_materials.gd")
 const Tuning := preload("res://src/sim/sim_tuning.gd")
+## **게이트가 조립 여부를 보게 되면서 필요해졌다** — 이 파일은 마을을 재지만, 마을을 떠나려면
+##  이제 마법진이 서 있어야 한다.
+const CircleDefs := preload("res://src/sim/circle_defs.gd")
 const Character := preload("res://src/actor/character.gd")
 const Progress := preload("res://src/actor/progress.gd")
 const SpellCircle := preload("res://src/actor/spell_circle.gd")
@@ -471,6 +474,16 @@ func _the_gate_leaves_and_being_downed_comes_back(t) -> void:
 	#  something to close. `_interact()` no longer reaches this window; `_toggle_research()` still does.
 	root.call("_toggle_research")
 	t.ok(bool(window.visible), "직접 열면 여전히 열린다 (기능은 안 지웠다)")
+
+	# **조립을 먼저 한다 — 게이트가 그것을 본다.** `stage._interact()`가 출발문에서
+	#  `_circle.can_fire()`와 `has_seen_onboarding()`을 읽고, 둘 다 아니면 **문을 안 연다**
+	#  (사용자 결정: 「온보딩 안 하면 안 넘어가게」). 이 검사는 문이 열린 *뒤*를 재는 것이므로,
+	#  전제를 갖춰 준다. **갖추지 않으면 여기부터 아래가 전부 「마을에 그대로 남았다」로 빨개지고,
+	#  그 빨강은 게이트가 제 일을 한다는 뜻이지 이 검사가 재려는 것이 깨졌다는 뜻이 아니다.**
+	var circle: Variant = root.get("_circle")
+	circle.set_circle(CircleDefs.CIRCLE_ROUND)
+	circle.set_rune(0, Tuning.ELEM_NONE)
+	t.ok(bool(circle.can_fire()), "전제 — 마법진이 조립됐다 (게이트가 이걸 본다)")
 
 	# The gate leaves.
 	_stand_at(ch, float(seats[Fixtures.KIND_GATE]))
