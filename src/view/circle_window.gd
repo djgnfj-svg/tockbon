@@ -67,11 +67,16 @@ var _progress: Progress = null
 ##  Why two integers rather than a dictionary: key typos are impossible in principle and there is no allocation.
 var _picked_kind := -1
 var _picked_item := -1
-## **Stage 8 — which layer a picked glyph actually came from.** `-1` for a circle/rune pick, or for a
-## glyph pick before the layer was resolved. Every glyph in the palette is a *seated* one (there is no
-## stash), so picking one always means picking a layer to move, and this is the one piece of information
-## `_picked_item` (a value, ambiguous between duplicate dummies) cannot carry.
-var _picked_layer := -1
+
+## **Which layer is selected for a 문양 move — reversed from pick-then-place** (user, looking at the
+## screen: "층을 먼저 고르고, 그 다음 팔레트에서 문양을 누르면 그 층에 들어가면 좋겠다"). `-1` means
+## nothing is selected. Set only by clicking a layer on the circle (`_click_layer`); pressing a 문양 card
+## then reads this to know where to move the glyph it names (`_click_glyph_card`). **Layer-based, not
+## value-based** — unlike `_picked_kind`/`_picked_item` this lives on the circle side of the interaction,
+## which is exactly the reversal asked for. Replaces the old `_picked_layer` (the source-side counterpart
+## the pre-reversal flow needed) — that variable is gone, not renamed, because the new flow never defers a
+## card press into a held pick; `_click_glyph_card` resolves the source layer and acts in the same click.
+var _selected_layer := -1
 
 ## **Which tab is open — an index into `Palette.KINDS`.** `palette_layout` stays stateless and takes this
 ## as an argument (the same discipline `circle_layout` holds for not knowing its own page); this window is
@@ -89,6 +94,11 @@ var _open_tab := 0
 var _click_frames := 0
 var _click_seat := Vector2.ZERO
 var _click_radius := 0.0
+
+## **"층을 먼저 고르세요" — counts down the same way `_click_frames` does** (design §5's own last rule:
+## pressing a 문양 card with no layer selected and no single unambiguous empty layer must not read as
+## "nothing happened"). Set by `_show_pick_layer_hint`, read only by `_draw_pick_layer_hint`.
+var _hint_frames := 0
 
 ## **완성 — one glow, then the window closes** (design §5). `_process` closes the window itself once this
 ## reaches 0, so `toggle()` has exactly one caller for both "pressed 완성" and "pressed Tab" — firing must
@@ -139,6 +149,8 @@ func _process(_dt: float) -> void:
 		return
 	if _click_frames > 0:
 		_click_frames -= 1
+	if _hint_frames > 0:
+		_hint_frames -= 1
 	if _glow_frames > 0:
 		_glow_frames -= 1
 		if _glow_frames == 0:
@@ -192,6 +204,7 @@ func toggle() -> void:
 	# A stale flash or glow from the session just closed must not carry into the next open.
 	_click_frames = 0
 	_glow_frames = 0
+	_hint_frames = 0
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -248,6 +261,10 @@ func _gui_input(event: InputEvent) -> void:
 ##  Both the tab strip and the 완성 band eat vertical space out of the same page `Palette.section()` also
 ##  occupies, so checking them first is what keeps a click on the strip from also being read as a click
 ##  on whatever cell used to sit at that pixel.
+##
+## **문양 branches off before the pick-then-place logic below even runs** — it never holds a pick at all
+## any more (`_click_glyph_card`'s own header). 진/룬 are untouched: one seat still inserts on the spot,
+## several seats still fall to the `_picked_kind`/`_picked_item` toggle exactly as before.
 func _click_palette(pal: Rect2, local: Vector2) -> void:
 	var tab := Palette.tab_at(pal.size, local)
 	if tab >= 0:
@@ -275,6 +292,11 @@ func _click_palette(pal: Rect2, local: Vector2) -> void:
 	#  refuse it and it becomes "I pressed it and nothing happened", which reads as a malfunction (design).
 	if not _can_pick(kind, item):
 		return
+
+	if kind == Palette.KIND_GLYPH:
+		_click_glyph_card(int(hit["index"]))
+		return
+
 	# **One click inserts, when there is only one seat** (design §4). The rule is "how many seats does
 	#  this kind have", read from `_slot_count(kind)` — write it as "which kind is it" instead and 삼각's
 	#  three rune sockets silently collapse to socket 0 with sockets 1 and 2 unreachable.
@@ -285,35 +307,22 @@ func _click_palette(pal: Rect2, local: Vector2) -> void:
 		_clear_pick()
 		return
 
-	# **Stage 8 — every 문양 card is a seated glyph, never an unseated one** (there is no stash;
-	#  `items_of(KIND_GLYPH)` reads `_circle.glyph_list()` directly). Picking one is picking *which layer to
-	#  move*, not *which value to place* — two seated dummies (the one family with no cap) share one id and
-	#  are only told apart by which cell was actually clicked (`hit["index"]`, mapped through
-	#  `_circle.seated_layers()` into a real layer index).
-	var from_layer := -1
-	if kind == Palette.KIND_GLYPH:
-		var layers := _circle.seated_layers()
-		var idx := int(hit["index"])
-		from_layer = layers[idx] if idx >= 0 and idx < layers.size() else -1
-
 	if _picked_kind == kind and _picked_item == item:
-		# **Clicking the same value does not always mean the same instance** — with duplicate dummies,
-		#  pressing the *other* one switches the pick to that layer instead of dropping it.
-		if kind == Palette.KIND_GLYPH and from_layer != _picked_layer:
-			_picked_layer = from_layer
-			return
 		_clear_pick()
 		return
 	_picked_kind = kind
 	_picked_item = item
-	_picked_layer = from_layer
 
 
 ## Press a slot. With something picked it **places**, with nothing picked it **removes** (plan section 9-1).
 ##
-## **The three kinds follow the same rule** — except what "removes" leaves behind at the rune seat. Glyphs and
-##  the circle stay genuinely emptiable (`Glyph.GLYPH_NONE` · `CircleDefs.CIRCLE_NONE` — optional layers, and a
-##  frame you may legitimately want to pull). A rune seat clearing to `SpellCircle.RUNE_EMPTY` instead of
+## **문양 no longer routes through here** — `_click_layer`/`_click_glyph_card` own that kind now (the
+## reversal). Only 진/룬 still follow the rule below, so "the three kinds" in this comment's own history is
+## down to two; the shape is kept as one function anyway because 진 and 룬 still share it exactly.
+##
+## **The two kinds follow the same rule** — except what "removes" leaves behind at the rune seat. The
+##  circle stays genuinely emptiable (`CircleDefs.CIRCLE_NONE` — a frame you may legitimately want to
+##  pull). A rune seat clearing to `SpellCircle.RUNE_EMPTY` instead of
 ##  `Tuning.ELEM_NONE` was a self-inflicted disarm (`rune-lock-and-receiving.md`, found by verify-run): click a
 ##  **veiled, unowned** rune in the palette — `_can_pick` refuses it, nothing gets picked — then click the seat
 ##  expecting nothing to happen, and `_place_or_clear`'s "nothing picked -> clear" branch fires anyway, dropping
@@ -328,16 +337,9 @@ func _click_circle(page: Rect2, local: Vector2) -> void:
 
 	var layer := Layout.layer_at(id, area, local)
 	if layer >= 0:
-		# **Stage 8 — a move, not a place.** `place_glyph` here would either duplicate the glyph (an
-		#  unlimited family, e.g. dummy) or be rejected outright (a capped family already holding it on a
-		#  different layer) — `move_glyph` swaps the two layers' contents instead, so the multiset seated
-		#  never changes and neither failure mode is reachable.
-		if _picked_kind == Palette.KIND_GLYPH and _picked_layer >= 0:
-			_circle.move_glyph(_picked_layer, layer)
-			_click_fx(Palette.KIND_GLYPH, layer)
-			_clear_pick()
-			return
-		_place_or_clear(Palette.KIND_GLYPH, layer, Glyph.GLYPH_NONE)
+		# **Select, not place or clear — reversed from pick-then-place** (user, looking at the screen:
+		#  "층을 먼저 고르고, 그 다음 팔레트에서 문양을 누르면 그 층에 들어가면 좋겠다"). See `_click_layer`.
+		_click_layer(layer)
 		return
 
 	var slot := Layout.rune_slot_at(id, area, local)
@@ -350,6 +352,70 @@ func _click_circle(page: Rect2, local: Vector2) -> void:
 		#  the same slot `_slot_count(KIND_CIRCLE)` always answers `1` for (one-click insertion's own
 		#  premise in `_click_palette`).
 		_place_or_clear(Palette.KIND_CIRCLE, 0, CircleDefs.CIRCLE_NONE)
+
+
+## **The reversal's circle-side half.** Clicking a layer no longer places or clears anything by itself —
+## it only marks which layer the next 문양 card press targets (`_click_glyph_card`). The same layer again
+## drops the selection, the same toggle idiom `_click_palette`'s old pick-cancel already used.
+##
+## **A glyph can no longer be erased through this window.** The old "click an occupied layer with nothing
+## picked -> clear it" path (`_place_or_clear(Palette.KIND_GLYPH, layer, Glyph.GLYPH_NONE)`) is gone with
+## it — 문양 has no stash (`docs/decisions/the-glyph-tab-shows-the-circle.md`), so nothing seated should be
+## droppable in the first place; `move_glyph`'s own header already says a seated glyph is only ever
+## relocated, never removed, and this closes the one door that still contradicted that.
+func _click_layer(layer: int) -> void:
+	if _selected_layer == layer:
+		_selected_layer = -1
+		return
+	_selected_layer = layer
+
+
+## **The palette-side half of the reversal.** `index` is the card's position within the open 문양 tab —
+## the same index `Palette.item_at` already resolves through `_circle.seated_layers()` (Stage 8's own
+## reason: two seated dummies share one value and are told apart only by which cell was actually clicked).
+##
+## With a layer already selected, this is the whole of "select then place" in one line: `move_glyph` swaps
+## whatever the two layers held, so pressing a *different* card than what is already seated there reads as
+## a **replace** in a single click (user: "이미 있는 층을 선택하고 다른 문양을 누르면 교체되게 하라 —
+## 지금은 비우고 다시 놓기라 두 번 걸린다"), with no separate "empty it first" step.
+##
+## With no layer selected, guessing a target is only safe when exactly one empty layer exists — two (or
+## zero) makes "which one did you mean" unanswerable from a card alone, so nothing moves and the hint
+## surfaces instead (`_show_pick_layer_hint`) rather than the click reading as swallowed.
+func _click_glyph_card(index: int) -> void:
+	var layers := _circle.seated_layers()
+	if index < 0 or index >= layers.size():
+		return
+	var from_layer: int = layers[index]
+
+	if _selected_layer >= 0:
+		_circle.move_glyph(from_layer, _selected_layer)
+		_click_fx(Palette.KIND_GLYPH, _selected_layer)
+		_clear_pick()
+		return
+
+	var target := _sole_empty_layer()
+	if target < 0:
+		_show_pick_layer_hint()
+		return
+	_circle.move_glyph(from_layer, target)
+	_click_fx(Palette.KIND_GLYPH, target)
+
+
+## **-1 unless exactly one layer is empty right now.** Two empty layers (or zero) cannot be told apart
+## from a card press alone — the caller falls back to asking (`_show_pick_layer_hint`) rather than guessing.
+func _sole_empty_layer() -> int:
+	var found := -1
+	for i in _circle.layer_count():
+		if _circle.glyph_at(i) == Glyph.GLYPH_NONE:
+			if found >= 0:
+				return -1
+			found = i
+	return found
+
+
+func _show_pick_layer_hint() -> void:
+	_hint_frames = Fx.PICK_LAYER_HINT_FRAMES
 
 
 ## **The rule for placing and removing lives here in one place.** Write it per kind and there are three copies,
@@ -442,7 +508,10 @@ func _seat_of(kind: int, slot: int) -> Dictionary:
 func _clear_pick() -> void:
 	_picked_kind = -1
 	_picked_item = -1
-	_picked_layer = -1
+	_selected_layer = -1
+	# A stale hint from a press that could not resolve a target must not linger past whatever the player
+	#  does next — a tab switch, a successful move, any of `_clear_pick`'s other callers all mean "moved on".
+	_hint_frames = 0
 
 
 ## **All three pass through the same question: "is there even one slot that would take this item".**
@@ -763,7 +832,7 @@ func _draw_ring(area: Rect2, circle_id: int, layer: int, font: Font) -> void:
 	#  Without drawing it, "a blocked seat" and "an empty seat" look the same, and in stage 4b-2b where to press
 	#   is not on the screen (the first of the three slot states — the `fx_tuning.SLOT_EMPTY` comment).
 	if glyph_id == Glyph.GLYPH_NONE:
-		_draw_empty_slot(seat, Layout.glyph_radius(area))
+		_draw_empty_slot(seat, Layout.glyph_radius(area), layer == _selected_layer)
 		return
 	# **A socket band's own glyph art (step 6) — reached only when the band owns more than one edge.**
 	#  A concentric band (`PIC_ROUND`, and any future picture built the same way) always has exactly one
@@ -776,8 +845,17 @@ func _draw_ring(area: Rect2, circle_id: int, layer: int, font: Font) -> void:
 	#  would be the screen quietly failing to say so).
 	if edges.size() > 1 and _socket_glyph_tex.has(glyph_id):
 		_draw_socket_glyph_texture(seat, edges[0], _socket_glyph_tex[glyph_id], glyph_id)
-		return
-	_draw_glyph(seat, Layout.glyph_radius(area), glyph_id)
+	else:
+		_draw_glyph(seat, Layout.glyph_radius(area), glyph_id)
+
+	# **The occupied half of the same "selectable seat" device `_draw_empty_slot` carries above** — an
+	#  extra ring laid over the already-drawn picture, not a replacement for it, so the glyph itself stays
+	#  fully readable while selected. Outside the rarity ring (`RARITY_RING_RATIO` 1.3 · the socket's own
+	#  rarity ring sits flush at `r`) so the two never share pixels — the same "outside, not flush" reasoning
+	#  `MONSTER_PHASE2_MARGIN_PX` already documents for a different silhouette.
+	if layer == _selected_layer:
+		var sel_r := edges[0] if edges.size() > 1 else Layout.glyph_radius(area) * Fx.SLOT_SELECTED_RATIO
+		_draw_slot_ring(seat, sel_r, Fx.SLOT_SELECTED_COLOR, Fx.SLOT_SELECTED_PX)
 
 
 func _draw_ring_edge(center: Vector2, r: float, col: Color) -> void:
@@ -951,48 +1029,32 @@ func _draw_circle_symbol(at: Vector2, r: float) -> void:
 ##  frame — a donut stack, not a lone circle — so the ring alone reads as "you can put something here"
 ##  with no mark drawn inside it.
 ##  Fill it and it is confused with the TERMINAL disc — being empty is part of the meaning.
-func _draw_empty_slot(at: Vector2, r: float) -> void:
-	_draw_slot_ring(at, r)
-
-
-## **Split out of `_draw_empty_slot` so a recording subclass can assert the ring itself painted, with the
-##  arguments it was actually given** — the `notice_rect` lesson (CLAUDE.md): asserting a pure geometry
-##  function alone lets `_draw()` hand it something else entirely, and 320 checks stayed green over exactly
-##  that hole once already. `net_circle` captures this call's `at`/`r` and compares them to
-##  `circle_layout.layer_bands()`'s own `seat` and `Layout.glyph_radius(area)`.
 ##
-## **Dashed, not a solid circle — decided by the user, a second time** (`fx_tuning.SLOT_EMPTY_DASH_COUNT`'s
-## own comment: a solid empty ring reads the same as a *filled* layer's own solid ring, differing only by
-## color/thickness). The angles come from `slot_dash_arcs()` below (pure, so a net drives the count and gap
-## with no window) — this function's own job shrinks to "paint whatever that answers".
-func _draw_slot_ring(at: Vector2, r: float) -> void:
-	for arc in slot_dash_arcs():
-		_paint_slot_dash(at, r, arc.x, arc.y)
+## **Solid again, not dashed — the user, a third time on this same ring: "점선이 있는 게 이상함."**
+## The dash (`fx_tuning.SLOT_EMPTY_DASH_COUNT`'s own comment) existed to split an empty ring from a
+## *filled* layer's own solid ring; the reversal (`_click_layer`) needs a state this ring did not carry at
+## all — "selected" — so that is the axis it now carries instead of the dash. `selected` picks which color
+## and thickness `_draw_slot_ring` paints; the shape is a plain circle either way.
+func _draw_empty_slot(at: Vector2, r: float, selected: bool) -> void:
+	if selected:
+		_draw_slot_ring(at, r, Fx.SLOT_SELECTED_COLOR, Fx.SLOT_SELECTED_PX)
+		return
+	_draw_slot_ring(at, r, Fx.SLOT_EMPTY, Fx.SLOT_EMPTY_PX)
 
 
-## **Pure and static** — the same seat `stage.camera_center`/`entrance_zoom` already hold in `stage.gd`: a
-## net calls this directly with no window and no circle, and `_draw_slot_ring` above is the *only* caller so
-## the drawn ring can never quietly diverge from what this returns.
-## Each `Vector2` is one dash's `(start_rad, end_rad)`. `n <= 0` answers no dashes at all rather than
-## dividing by zero — an empty ring config draws nothing sooner than it crashes.
-static func slot_dash_arcs() -> Array[Vector2]:
-	var arcs: Array[Vector2] = []
-	var n := Fx.SLOT_EMPTY_DASH_COUNT
-	if n <= 0:
-		return arcs
-	var step := TAU / float(n)
-	var dash := step * (1.0 - Fx.SLOT_EMPTY_DASH_GAP_FRAC)
-	for i in n:
-		var start := step * float(i)
-		arcs.append(Vector2(start, start + dash))
-	return arcs
-
-
-## **The hook a net overrides to prove a dash actually reached the screen** — the same reason
-## `_paint_pillar`/`_paint_dust` already exist: `draw_arc` is native, Godot refuses to let a script override
-## it, so an ordinary method is the only seam available (CLAUDE.md's own warning on this exact shape).
-func _paint_slot_dash(at: Vector2, r: float, from_rad: float, to_rad: float) -> void:
-	draw_arc(at, r, from_rad, to_rad, Fx.SLOT_EMPTY_DASH_POINTS, Fx.SLOT_EMPTY, Fx.SLOT_EMPTY_PX)
+## **Split out so a recording subclass can assert the ring itself painted, with the arguments it was
+## actually given** — the `notice_rect` lesson (CLAUDE.md): asserting a pure geometry function alone lets
+## `_draw()` hand it something else entirely, and 320 checks stayed green over exactly that hole once
+## already. `net_circle` captures this call's `at`/`r`/`col`/`px` and compares them to
+## `circle_layout.layer_bands()`'s own `seat` and `Layout.glyph_radius(area)`.
+##
+## **One shared paint for every ring this window draws over a seat** — an empty layer (dim), a selected
+## empty layer (bright), and a selected *occupied* layer (`_draw_ring`'s own call, over the glyph's own
+## picture) all pass through here with an explicit color and width rather than three near-duplicate
+## `draw_circle` calls, so a net asserting "a ring painted" cannot pass without checking which one it
+## actually got (CLAUDE.md's own inversion lesson — the prior dash tests fell into exactly this hole once).
+func _draw_slot_ring(at: Vector2, r: float, col: Color, px: float) -> void:
+	draw_circle(at, r, col, false, px)
 
 
 ## 찰칵 — a ring that widens and fades as `t` falls from 1 to 0. Named so a net can record the argument
@@ -1040,6 +1102,11 @@ func _draw_palette(page: Rect2, font: Font) -> void:
 	for ii in items.size():
 		var slot := Palette.item_slot(sec, ii, items.size())
 		_draw_palette_item(slot, kind, items[ii])
+	# **"층을 먼저 고르세요" — only ever raised from a 문양 press** (`_click_glyph_card`'s own header), so
+	#  it only ever needs to draw while that tab is open; a tab switch already zeroes `_hint_frames`
+	#  (`_clear_pick`), so this guard is a second, redundant safety, not the only one.
+	if _hint_frames > 0 and kind == Palette.KIND_GLYPH:
+		_draw_pick_layer_hint(sec, font)
 
 	_draw_palette_done(Palette.done_rect(page.size), font)
 
@@ -1079,6 +1146,19 @@ func _draw_palette_empty_note(rect: Rect2, font: Font) -> void:
 	draw_string(font,
 		rect.position + Vector2(Fx.PALETTE_PAD_PX, rect.size.y * 0.5),
 		Fx.PALETTE_EMPTY_TEXT, HORIZONTAL_ALIGNMENT_LEFT, -1, Fx.PALETTE_EMPTY_SIZE, Fx.PALETTE_EMPTY_COLOR)
+
+
+## **"pick a layer first" — shown only when a 문양 press could not resolve an unambiguous target**
+## (`_click_glyph_card`'s own comment: two empty layers, or none, cannot be guessed from a card alone).
+## Drawn over the open section, the same seat `_draw_palette_empty_note` above uses for its own sentence —
+## "the click was swallowed" is exactly the malfunction reading CLAUDE.md warns a silent no-op produces.
+func _draw_pick_layer_hint(sec: Rect2, font: Font) -> void:
+	if font == null:
+		return
+	draw_string(font,
+		sec.position + Vector2(Fx.PALETTE_PAD_PX, sec.size.y * 0.5),
+		Fx.PICK_LAYER_HINT_TEXT, HORIZONTAL_ALIGNMENT_LEFT, -1,
+		Fx.PICK_LAYER_HINT_SIZE, Fx.PICK_LAYER_HINT_COLOR)
 
 
 ## A section — **it makes the empty space read as "a seat for what is coming".** With only four items the page
