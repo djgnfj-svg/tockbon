@@ -636,6 +636,11 @@ func _wired_root(t) -> Node:
 			#  unconditionally. Left out, `_ready_itself_connects_the_button_to_enter_town` below dies on a
 			#  null mid-call and its own checks disappear rather than fail (this file's own header risk).
 			"GateView",
+			# **`HUD/BossBar`** (`boss-entrance-and-hp-bar.md` Stage C) — `_rebuild()`/`_physics_process()`
+			#  both touch `_boss_bar` unconditionally now; left out, this file's own tests that call
+			#  `reset_stage()`/`enter_town()`/`_leave_town()` on this root crash on a null mid-call, the same
+			#  risk this file's own comment already names for `GateView` one line up.
+			"HUD/BossBar",
 			"HUD/SettlementWindow"]:
 		t.ok(root.get_node_or_null(path) != null, "씬에 %s 가 있다 (전제)" % path)
 
@@ -654,6 +659,7 @@ func _wired_root(t) -> Node:
 	root.set("_sky", root.get_node("SkyBackground"))
 	root.get_node("SkyBackground").call("setup", root.get_node("Camera2D"))
 	root.set("_research_window", root.get_node("HUD/ResearchWindow"))
+	root.set("_boss_bar", root.get_node("HUD/BossBar"))
 	root.set("_settlement", root.get_node("HUD/SettlementWindow"))
 	root.set("_renderer", root.get_node("CellRenderer"))
 	root.get_node("CellRenderer").call("setup", root.get("_grid"))

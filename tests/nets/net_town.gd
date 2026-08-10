@@ -553,7 +553,12 @@ func _wired_root(t) -> Node:
 			#  every physics frame and `reset_stage()` calls `reset_gate()`, both unconditionally. Left out,
 			#  every check in this file that drives either one dies on a null mid-call and **disappears rather
 			#  than fails** — the shape this file's own `if root == null: return` discipline exists for.
-			["_gate_view", "GateView"]]:
+			["_gate_view", "GateView"],
+			# **`_boss_bar`** (`boss-entrance-and-hp-bar.md` Stage C) — `reset_stage()` (via `_rebuild()`)
+			#  and `_physics_process()` both touch it unconditionally now (`clear_boss()`/
+			#  `set_entrance_frames()`). Left out, `root.call("reset_stage")` a few lines below crashes on a
+			#  null mid-call, the same risk this file's own comment already names for `_gate_view` one line up.
+			["_boss_bar", "HUD/BossBar"]]:
 		var n := root.get_node_or_null(NodePath(pair[1]))
 		t.ok(n != null, "씬에 %s 가 있다 (전제)" % pair[1])
 		if n == null:

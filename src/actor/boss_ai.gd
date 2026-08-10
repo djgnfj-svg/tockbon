@@ -237,6 +237,18 @@ const MOVE_LEAP: Dictionary = {
 ## every kind with moves today shares it; split it out the day a kind needs its own.
 const IDLE_TICKS := 20  # 21 ticks = 1.050s
 
+## **`boss-entrance-and-hp-bar.md` Stage A/D — the entrance idle window.** Applied to the fresh monster's
+## `pattern_left` only when `WorldStep.spawn_monster` is called with `entrance := true` **and** the kind has a
+## pattern (`world_step.gd`'s own comment on why that gate, not `Monster._init`, is where this belongs) — so
+## the boss walks a beat before its first `WINDUP`/roar instead of committing on the exact frame it appears.
+## **Not `IDLE_TICKS`** — that value already has a job (the ordinary round-robin's own idle beat between
+## moves) and is read every time `advance()` returns to `Pattern.STUN -> IDLE`; a shared constant would mean
+## retuning the ordinary idle beat silently retunes the entrance too, and the reverse.
+## **The cross-clock constraint** (`fx_tuning.gd`'s own comment on `BOSS_ENTRANCE_ZOOM_IN_FRAMES`/
+## `BOSS_ENTRANCE_HOLD_FRAMES`): `ENTRANCE_IDLE_TICKS * Tuning.TICK_DIVIDER` must land strictly inside the
+## camera's hold window, or the roar fires while the camera has already left the boss.
+const ENTRANCE_IDLE_TICKS := 14  # 14 * TICK_DIVIDER(3) = 42 - inside the entrance camera's hold window
+
 ## **Stage H — "pattern durations... scale by integer ratios" at half health** (`stage1-bosses.md`'s own
 ## words, Order table row H). Applied at the single point every duration flows through on its way into
 ## `pattern_left` (`_phase_ticks`, below) — not baked into a second phase-2 row on each `MOVE_*` dict. A boss

@@ -89,6 +89,16 @@ const FLOOR_CY: int = TerrainMap.MAP_H * Tuning.TILE_CELLS - 1
 ##    does not stir until the player is through it). Room ③'s east wall is `x184`, leaving 3 tiles of
 ##    clearance for the boss box.
 ##
+## **`tx140` + `trigger_tx159` (bull) — `boss-entrance-and-hp-bar.md` Stage A.** A boss row now
+## materialises on its own `trigger_tx` instead of `MonsterPlacement.MATERIALIZE_PX`, so where it stands
+## and when it wakes are two different numbers for the first time. Arithmetic, not eyeballed:
+## visibility is half viewport 480 + `Fx.CAM_LEAD_PX` 32 = **512**; `tx145` puts the bull 404px from the
+## trigger (**it would pop in on screen**), `tx140` puts it 564px away — 72px of margin, off screen.
+## ⇒ the bull moves west so that **it walks out from behind you** instead of appearing in front of you.
+##
+## Both boss rows are also what `spawn_monster`'s boss reserve counts (`world_step.gd`) — the reserve is
+## the number of boss rows in this table, derived, so adding one here needs no second edit.
+##
 ## **Totals**: pre-① 11 pigs · 5 hens · 2 wolves = 18 · ① 1 bull · ③ 1 rooster. 20 rows.
 ## **Boss rows: 2** — that is `spawn_monster`'s reserve.
 const ROWS: Array[Dictionary] = [
@@ -122,10 +132,15 @@ const ROWS: Array[Dictionary] = [
 	{"tx": 85, "kind": MonsterDefs.KIND_WOLF},
 	{"tx": 88, "kind": MonsterDefs.KIND_HEN},
 
-	# -- ① pit (130-159): the midboss. --
-	{"tx": 145, "kind": MonsterDefs.KIND_BULL},
+	# -- ① pit (130-159): the midboss. `trigger_tx` is the entrance trigger, not the seat — see the header. --
+	{"tx": 140, "kind": MonsterDefs.KIND_BULL, "trigger_tx": 159},
 
 	# -- ③ boss room (interior 164-183, floor ty32, ceiling ty19 — moved onto room ①'s own floor line):
 	#  the stage boss. `tx181`, not the room's middle — see the header above for why. --
-	{"tx": 181, "kind": MonsterDefs.KIND_ROOSTER},
+	#  **`trigger_tx170`** (`boss-entrance-and-hp-bar.md` Stage A): the rooster wakes when the player is
+#  already through the burnt door, not while the bull is still alive. The old `trigger_tx250` was the
+#  pre-cut map's number; room ③'s interior is now `164-183`, so the trigger moved with the room.
+#  **No walk-out** — the whole room sits inside 512px of the door, so the rooster cannot materialise
+#  off screen. Its entrance is the bar, the name and the camera arriving.
+	{"tx": 181, "kind": MonsterDefs.KIND_ROOSTER, "trigger_tx": 170},
 ]

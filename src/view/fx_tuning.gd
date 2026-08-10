@@ -1467,6 +1467,76 @@ const HP_TEXT_LOW := Color(1.0, 1.0, 1.0, 1.0)
 const XP_BAR := Color(0.38, 0.72, 0.95, 1.0)
 const XP_BAR_BG := Color(0.10, 0.14, 0.20, 1.0)
 
+# --- the boss bar (`boss_bar_view.gd`) --------------------------------
+## `boss-entrance-and-hp-bar.md` — **both stage-1 bosses get one bar, big, across the top of the screen,
+##  with the boss's own name over it.** Modeled on `hp_view.gd`'s shape above (frame first, fill on top, a
+##  pure `fill_frac`/`bar_rect` a net can call with no node) — **not** the mob vocabulary's 4px head bar
+##  (`MONSTER_HP_BAR_*`), which this must not be mistaken for.
+##
+## **The rect sits inside `WINDOW_RECT` (48,12)-(912,384) on purpose** — "you are not assembling while a
+##  boss is arriving" (the design doc's own premise, with its own named exception: the tutorial's one
+##  guaranteed assembly moment can happen under a live boss bar, that doc's Risk 2). **If the overlap reads
+##  badly on screen, the bar moves down, not the window** (`WINDOW_RECT` is claimed ground — that doc's
+##  Out-of-scope list).
+const BOSS_BAR_RECT := Rect2(288.0, 12.0, 384.0, 140.0)  # name band 44px, frame 96px under it
+
+## **384 wide, not "big" — `hp_frame.png` is 384x96 and this draws it at exactly 1.0** (`net_town`'s standing
+##  rule: a pixel-art sprite is upscaled by an integer, never stretched). **Wider means new art (a 9-patch or
+##  a 2x row), not a bigger rect** — say so rather than ship a 1.25x0.46 stretch (the design doc's own words).
+const BOSS_BAR_FRAME_H_PX := 96.0    # hp_frame.png's own height, drawn 1:1
+
+## How far inside the frame the fill sits. **`HP_FRAME_INSET_PX` (6) was measured at the player bar's 0.5
+##  scale** — this bar draws the same art at 1.0, so the inset doubles with it.
+const BOSS_BAR_INSET_PX := 12.0
+
+const BOSS_NAME_SIZE := 28
+const BOSS_NAME_COLOR := Color(0.98, 0.90, 0.70, 1.0)
+## **Not `HP_FULL`** — that is *your* health's colour, and a boss's bar sharing it would read as the same
+##  gauge as the player's own.
+const BOSS_BAR_FULL := Color(0.75, 0.20, 0.55, 1.0)
+const BOSS_BAR_BG := Color(0.12, 0.05, 0.10, 1.0)
+
+## Fade-in length (physics frames) once the bar appears (beat 3). **Floored, not just given a value** —
+## `GATE_ARCH_FADE_FRAMES`'s own header: a floor on one end alone let 2-11 collapse a fade into a pop while
+## every other check stayed green.
+const BOSS_BAR_FADE_FRAMES := 24
+
+## ══ The entrance clock (`stage.gd._entrance_frames`, physics frames) ══
+## Beats 3-5 of the entrance (`boss-entrance-and-hp-bar.md` §2): the camera closes on the boss, holds while
+## it walks and roars, then returns. **The one cross-clock constraint this file carries**: the roar
+## (`BossAi.ENTRANCE_IDLE_TICKS * Tuning.TICK_DIVIDER` real frames) must land strictly inside
+## `[BOSS_ENTRANCE_ZOOM_IN_FRAMES, BOSS_ENTRANCE_ZOOM_IN_FRAMES + BOSS_ENTRANCE_HOLD_FRAMES]` — retune any of
+## the three and the symptom is not a wrong number, it is *the player never sees the roar*
+## (CLAUDE.md's "a thing that never happens"). `14 * 3 = 42`, inside `[24, 60]` today —
+## `net_boss_entrance` asserts this inequality directly, not just that each constant looks reasonable alone.
+const BOSS_ENTRANCE_ZOOM_IN_FRAMES := 24
+const BOSS_ENTRANCE_HOLD_FRAMES := 36
+const BOSS_ENTRANCE_OUT_FRAMES := 24
+## Multiplies `ZOOM_STEPS[_zoom_step]`, not a set value — the debug `-`/`=` keys keep working underneath it
+## (`stage.gd`'s own two camera lines fold this in rather than replacing them).
+const BOSS_ENTRANCE_ZOOM_MULT := 1.6
+
+## **The whole entrance's length, derived — never a fourth literal beside the three above.** Read by
+## `stage.gd` to know when `_entrance_frames` should stop climbing, and by `entrance_zoom`/`entrance_focus`
+## to know where the out-phase ends and the identity value takes back over.
+static func boss_entrance_total_frames() -> int:
+	return BOSS_ENTRANCE_ZOOM_IN_FRAMES + BOSS_ENTRANCE_HOLD_FRAMES + BOSS_ENTRANCE_OUT_FRAMES
+
+## **The boss titles — drawn above the bar, large.** Not `MonsterDefs.name_of()` (황소/거대 수탉, the kind) —
+##  this is the title the world gave it (`GDD.md`'s World table: "a bull that swallowed the fire rune").
+##  **황소's is the user's own words, verbatim.** ⇒ one line here per new boss (the plan's own "three-file
+##  contract": a row here, a row in `stage1_monsters.ROWS`, a row in `BossAi.MOVES`).
+##
+##  **`KIND_ROOSTER`'s row was left blank while the user had not named it — session correction: the in-game
+##  kind name (`MonsterDefs.name_of(KIND_ROOSTER)` = "거대 수탉") is used here as the title too, until a real
+##  one is decided.** The user has once called this boss "문을 지키는 석상" in conversation — unconfirmed as
+##  of this edit — so this is a placeholder the user may still overturn, not a final name invented to fill
+##  the gap. **One line changes it** when the user decides: this constant, nowhere else.
+const BOSS_TITLES: Dictionary = {
+	MonsterDefs.KIND_BULL: "불의 룬을 삼킨 소",
+	MonsterDefs.KIND_ROOSTER: "거대 수탉",
+}
+
 # --- money, bottom-right (`money_view.gd`) ----------------------------
 ## **The one number the user asked to keep on screen besides health** (「돈도 오른쪽 구석에 표시해 주고」).
 ##  Level was dropped in the same breath — 「레벨은 안 보이게」.

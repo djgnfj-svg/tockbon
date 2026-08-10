@@ -360,7 +360,11 @@ func _wake_scan_creates_a_monster_inside_the_activation_band_not_before(t) -> vo
 	var mp := MonsterPlacement.new()
 	mp.set_rows([{"tx": 100, "kind": MonsterDefs.KIND_PIG}], SYN_FLOOR_CY)
 	var spawned: Array[int] = []
-	var spy := func(_kind: int, px: int, _py: int) -> int:
+	# **A 4th parameter, `entrance`** (`boss-entrance-and-hp-bar.md` Stage A) — `wake_scan()` now calls
+	#  `spawn_fn` with it unconditionally (true, every row), so a 3-arg spy errors on every call and this
+	#  whole check silently measures nothing (`spawned` never grows). Unused here on purpose — this check is
+	#  about the activation band, not the entrance flag; `net_boss_entrance.gd` is where that flag is measured.
+	var spy := func(_kind: int, px: int, _py: int, _entrance: bool) -> int:
 		spawned.append(px)
 		return 1
 	var center_x := 100 * Tuning.TILE_CELLS * Tuning.CELL_PX
@@ -384,7 +388,8 @@ func _a_killed_row_never_comes_back(t) -> void:
 	#  on this exact trap); an `Array`'s captured value is a reference to the same object, so mutating its
 	#  contents (not reassigning the variable) reaches the same object this scope reads.
 	var next_id := [1]
-	var spy := func(_kind: int, _px: int, _py: int) -> int:
+	# **4-arg spy** — see the comment on the first `spy` above (`wake_scan()`'s own new `entrance` argument).
+	var spy := func(_kind: int, _px: int, _py: int, _entrance: bool) -> int:
 		var id: int = next_id[0]
 		next_id[0] += 1
 		return id
@@ -405,7 +410,9 @@ func _reset_rearms_every_row(t) -> void:
 	var g := _flat_grid()
 	var mp := MonsterPlacement.new()
 	mp.set_rows([{"tx": 50, "kind": MonsterDefs.KIND_PIG}], SYN_FLOOR_CY)
-	var spy := func(_kind: int, _px: int, _py: int) -> int:
+	# **4-arg spy** — see the comment on `_wake_scan_creates_a_monster_inside_the_activation_band_not_before`'s
+	#  own `spy` (`wake_scan()`'s new `entrance` argument).
+	var spy := func(_kind: int, _px: int, _py: int, _entrance: bool) -> int:
 		return 1
 	var center_x := 50 * Tuning.TILE_CELLS * Tuning.CELL_PX
 
@@ -425,7 +432,8 @@ func _a_capped_refusal_leaves_the_row_dormant_not_spent(t) -> void:
 	var g := _flat_grid()
 	var mp := MonsterPlacement.new()
 	mp.set_rows([{"tx": 50, "kind": MonsterDefs.KIND_PIG}], SYN_FLOOR_CY)
-	var refuse := func(_kind: int, _px: int, _py: int) -> int:
+	# **4-arg refuse** — see the comment on the first `spy` above (`wake_scan()`'s new `entrance` argument).
+	var refuse := func(_kind: int, _px: int, _py: int, _entrance: bool) -> int:
 		return 0  # the cap, simulated
 	var center_x := 50 * Tuning.TILE_CELLS * Tuning.CELL_PX
 
@@ -436,7 +444,8 @@ func _a_capped_refusal_leaves_the_row_dormant_not_spent(t) -> void:
 	#  (a spent row is skipped forever, so `accept` would never be reached).
 	t.ok(not mp.is_spent(0), "그리고 소진되지도 않는다 (다시 시도할 수 있다)")
 
-	var accept := func(_kind: int, _px: int, _py: int) -> int:
+	# **4-arg accept** — see the comment on the first `spy` above (`wake_scan()`'s new `entrance` argument).
+	var accept := func(_kind: int, _px: int, _py: int, _entrance: bool) -> int:
 		return 7
 	mp.wake_scan(g, center_x, accept)
 	t.ok(mp.is_live(0), "다음 틱에 문이 열리면 실제로 살아난다 (재시도가 실제로 동작한다)")
@@ -518,7 +527,8 @@ func _materialising_is_one_threshold_with_no_hysteresis(t) -> void:
 	var mp := MonsterPlacement.new()
 	var kind := MonsterDefs.KIND_PIG
 	mp.set_rows([{"tx": 50, "kind": kind}], SYN_FLOOR_CY)
-	var refuse := func(_kind: int, _px: int, _py: int) -> int:
+	# **4-arg refuse** — see the comment on the first `spy` above (`wake_scan()`'s new `entrance` argument).
+	var refuse := func(_kind: int, _px: int, _py: int, _entrance: bool) -> int:
 		return 0  # stays dormant regardless — isolates the `_primed` bit from the spawn outcome
 	# **Production measures distance to the row's centre**, not its left edge (verify-read's own finding
 	#  on the check this replaced) — `half_w` is added here so `d` below **is** the real `dist`.

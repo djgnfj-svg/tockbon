@@ -15,6 +15,8 @@ const CellRenderer := preload("res://src/view/cell_renderer.gd")
 const SkyBackground := preload("res://src/view/sky_background.gd")
 const HpView := preload("res://src/view/hp_view.gd")
 const MoneyView := preload("res://src/view/money_view.gd")
+## `boss-entrance-and-hp-bar.md`, Stage C.
+const BossBarView := preload("res://src/view/boss_bar_view.gd")
 const Fx := preload("res://src/view/fx_tuning.gd")
 const CharacterView := preload("res://src/view/character_view.gd")
 const SpellView := preload("res://src/view/spell_view.gd")
@@ -31,6 +33,8 @@ const Glyph := preload("res://src/sim/glyph_defs.gd")
 const StageInput := preload("res://src/stage/stage_input.gd")
 const MonsterView := preload("res://src/view/monster_view.gd")
 const MonsterDefs := preload("res://src/actor/monster_defs.gd")
+## `boss-entrance-and-hp-bar.md`, Stage C — `_boss` below is typed with this.
+const Monster := preload("res://src/actor/monster.gd")
 const Progress := preload("res://src/actor/progress.gd")
 ## The town (`docs/design/town.md`) — **its map and spawn are the room table's row 0 now**, so this file no
 ##  longer names `town_map.gd` at all. The door that asks where you are standing is still here (`_interact`).
@@ -191,6 +195,10 @@ const LOADOUTS: Dictionary = {
 ##  (「레벨은 안 보이게」), XP into `hp_view`'s hairline, money into the corner. A `Label` cannot put an icon
 ##  beside its text, so this is a drawn `Control` (`money_view.gd`) rather than the old label moved.
 @onready var _money_view: MoneyView = $HUD/Money
+## The boss bar and name (`boss-entrance-and-hp-bar.md`, Stage B/C). **Under `HUD`, like `_hp_view`** — a
+## `CanvasLayer` child, so it does not ride the screen shake. Fed a live `Monster` reference through
+## `show_boss()`/`clear_boss()`, never a copy — the same rule `_hp_view.setup()` already holds.
+@onready var _boss_bar: BossBarView = $HUD/BossBar
 ## **Its own node, not a line appended to something else.** A `Label` cannot mix colors within one
 ##  string, and the indicator has to draw the eye in a way the status line must not (verify-look: appended in
 ##  the same color and weight, nobody looked). `Fx.LEVEL_UP_COLOR` is pushed in once, in `_ready()`, the same
@@ -209,6 +217,16 @@ const LOADOUTS: Dictionary = {
 ## It is state, so it cannot live in the static function — **the function stays pure and the net measures it
 ##  directly**, the same split `camera_center` already uses.
 var _cam_lead := 0.0
+
+## **The boss entrance, `boss-entrance-and-hp-bar.md` Stage C. `-1` means "no entrance running"**, so `0` can
+## be the first frame — the same `-1`/`0` idiom `_hud_count_tick` below already uses for the same reason.
+## **One counter, two consumers** (`_process()`'s camera lines and `_boss_bar.set_entrance_frames()`) — a
+## second counter is how the bar's own fade finishes while the camera is still on the boss, or the reverse.
+var _entrance_frames := -1
+## **A reference, not a copy** — the same rule `_char`/`_grid` are handed to views by. Stays alive after the
+## boss dies (`RefCounted`) so `_boss_focus()` below never reads a null mid-entrance; `_rebuild()` is the only
+## place that nulls it back out (`gate_view._lit` is the precedent this follows for "revert every counter").
+var _boss: Monster = null
 ## The assembly window sits under `HUD` (a `CanvasLayer`) — put it under `Node2D` and it shakes along with the screen shake.
 ##  **The shell only tells it to open and close.** The window knows its own state and uses its own coordinates.
 @onready var _circle_window: CircleWindow = $HUD/CircleWindow
@@ -620,7 +638,10 @@ func _ignite_at(world_px: Vector2) -> void:
 	_grid.ignite(floori(world_px.x / Tuning.CELL_PX), floori(world_px.y / Tuning.CELL_PX))
 
 
-## **L — takes whichever boss reward(s) are pending. A shell-only debug door** (`stage1-bosses.md` Stage I).
+## **Takes whichever boss reward(s) are pending — two callers now, one body.** `_on_ticked()`'s own auto-grant
+## (session correction: the bull's reward used to have exactly one door, the debug key L, so a player who
+## never opens the debug layer got nothing) and the debug key L (`stage1-bosses.md` Stage I) both call this
+## same function; neither copies its body, or the day this logic changes only one of the two paths follows.
 ## **Only clears the gate** — it does not call `Progress.add_xp`/`add_money` (those already happen for every
 ## kind, unconditionally, in `WorldStep`'s own death loop).
 ##
@@ -749,6 +770,14 @@ func _physics_process(delta: float) -> void:
 	if not _settlement.is_showing():
 		if _world.frame(delta, _input.move_axis(), _input.jump_pressed(), _input.jump_held()):
 			_on_ticked()
+		# **The boss entrance clock — `boss-entrance-and-hp-bar.md` Stage C.** Physics frames, not `_process()`
+		#  — `gate_view`'s own header: `_process()` runs at the monitor refresh rate, so a 24-frame beat is
+		#  0.4s on a 60Hz panel and 0.167s on a 144Hz one, with nothing barking.
+		#  **Inside the `not is_showing()` guard, on purpose** — the settlement panel freezes the world, and
+		#  an entrance that kept counting under it would be a latch by accident (Risk 7).
+		if _entrance_frames >= 0 and _entrance_frames < Fx.boss_entrance_total_frames():
+			_entrance_frames += 1
+		_boss_bar.set_entrance_frames(_entrance_frames)
 	# **Before `_update_hud()`, not after, and not left to the pick window's own `_process()`.**
 	#  `three_pick_window.tick_confirm()`'s own header: ticking the confirmation countdown here, in the same
 	#  synchronous call as `_update_hud()` (which reads `is_showing()`), closes the one-render-frame seam that
@@ -846,6 +875,33 @@ func _sync_settlement() -> void:
 ## Hits the screen only on frames where a tick ran.
 ## **Notifications are cleared by the next tick's `spell.step()`** — read after the character has walked, they are still alive.
 func _on_ticked() -> void:
+	# **The bull's reward, automatic — session correction.** `_take_boss_reward()` used to have exactly one
+	#  caller, the debug key L (`_input.reward_taken_requested`), so a player who never opens the debug
+	#  layer kills the bull and gets nothing: no fire rune, no water, no way to burn the wood wall, and the
+	#  rooster/gate are unreachable — the game ends at the bull with nothing telling the player why.
+	# **Gated on `is_reward_pending`, not called every tick once any boss has died.** `_take_boss_reward()`
+	#  itself calls `Progress.clear_pending_boss_rewards()`, which flips *every* present boss's pending flag
+	#  to false, not just the bull's (`progress.gd`'s own "presence as a key is the whole fact" idiom). Calling
+	#  it unconditionally every tick once the bull is dead would, the tick the rooster later dies, silently
+	#  clear the rooster's own still-unbuilt reward flag too — nothing granted for it, and nothing left
+	#  pending to show on the HUD either. Reading `is_reward_pending(KIND_BULL)` first means this only ever
+	#  fires the one tick the bull's own reward is actually waiting, and never touches the rooster's flag.
+	# **The debug key L is untouched and calls the same function** — copying the body into a second place is
+	#  exactly how "only one of the two paths gets fixed" happens the next time this logic changes.
+	if _world.progress().is_reward_pending(MonsterDefs.KIND_BULL):
+		_take_boss_reward()
+
+
+	# **The boss entrance — `boss-entrance-and-hp-bar.md` Stage C.** `woke_boss_id()` lives exactly one tick
+	#  (`MonsterPlacement._woke_boss_id`'s own comment), so this has to be read here, in `_on_ticked()`, and
+	#  nowhere else — the same reason the death notifications a few lines below are read inside this same
+	#  branch. `monster_by_id()` is a live reference, not a copy (`_boss`'s own comment).
+	var woke_id := _world.woke_boss_id()
+	if woke_id != 0:
+		_boss = _world.monster_by_id(woke_id)
+		_boss_bar.show_boss(_boss)
+		_entrance_frames = 0
+
 	# **The east wall comes down the instant the rooster dies — before `consume_changed()` below**, or the
 	#  renderer would see the hole one tick late (`_grid.consume_changed()` is this function's own last line).
 	# **One rectangle, not a run of carves.** `cmd_fill` goes through `_write_cell`, which is what counts
@@ -911,12 +967,15 @@ func _process(dt: float) -> void:
 	# **Zoom is applied to the clamp too.** `Camera2D.zoom` 0.5 makes the visible world **twice** as wide, and
 	#  feeding the raw viewport size to `camera_center` keeps clamping at the play scale — the camera then
 	#  stops at the old margin and **half the screen fills with the void outside the map**, with no error.
-	var z: float = ZOOM_STEPS[_zoom_step]
+	# **The boss entrance folds into these same two lines** (`boss-entrance-and-hp-bar.md` Stage C) — anything
+	#  written to `_camera.zoom`/`.position` from anywhere else is overwritten the very next frame, the same
+	#  reason `_cam_lead` above already lives here instead of in its own `_process()`.
+	var z: float = ZOOM_STEPS[_zoom_step] * entrance_zoom(_entrance_frames)
 	_camera.zoom = Vector2(z, z)
 	# **Snapped to the screen's pixel grid** — see `snap_camera_px`. Without it the whole world shivers
 	#  by a pixel every frame while walking, and it reads as the *character* stuttering, not the camera.
-	_camera.position = snap_camera_px(camera_center(
-		_char.center() + Vector2(_cam_lead, 0.0), get_viewport_rect().size / z, world_size()), z)
+	var focus := entrance_focus(_char.center() + Vector2(_cam_lead, 0.0), _boss_focus(), _entrance_frames)
+	_camera.position = snap_camera_px(camera_center(focus, get_viewport_rect().size / z, world_size()), z)
 	# Shake is **the camera's offset**. `stage_input._to_world` undoes the canvas transform, so aim does not
 	#  drift even while shaking — without undoing it, a click goes to the wrong cell with no error.
 	# The order of this node's `_process` and `blast_fx`'s `_process` is not guaranteed, so it **can be one
@@ -1006,6 +1065,13 @@ func _rebuild(end_the_run: bool) -> void:
 	#  `Progress`, so `_world.reset()` does not reach them. **`_lit` surviving is not cosmetic** — the arch
 	#  would pop fully opaque on the second run instead of fading up, with every other check still green.
 	_gate_view.reset_gate()
+	# **The boss entrance clears with everything else** (`boss-entrance-and-hp-bar.md` Stage C) — the same
+	#  "revert every counter" reasoning `_gate_view.reset_gate()` right above already states for `_lit`. Left
+	#  out, the bar would ride a fresh run showing a boss from the last one, and the camera's own
+	#  `_boss_focus()` would read a corpse from a stage that no longer exists.
+	_entrance_frames = -1
+	_boss = null
+	_boss_bar.clear_boss()
 	_blast_count = 0
 	# **Room ③'s wall latch.** `_build_room()` below always rebuilds the terrain in this same call, so
 	#  the flag and the wall never disagree — safe here for the reason `_settlement`'s own latch ban above it
@@ -1273,6 +1339,59 @@ static func _axis_center(f: float, v: float, w: float) -> float:
 	if w <= v:
 		return w * 0.5
 	return clampf(f, v * 0.5, w - v * 0.5)
+
+
+## **The boss entrance's zoom, pure and static** (`boss-entrance-and-hp-bar.md` Stage C) — the same seat
+## `camera_lead`/`snap_camera_px` already hold: a net feeds a frame count and reads the value, with no scene
+## and no camera. **This is the only reason any of it is measurable** — today's debug zoom (`ZOOM_STEPS`) is
+## a key with nothing measuring it, that constant's own comment says so.
+##
+## A multiplier on `ZOOM_STEPS[_zoom_step]`, not a set value — the debug `-`/`=` keys keep working underneath
+## it and this function never has to learn which step is selected. **Identity (`1.0`) outside the entrance
+## and at its very last frame** — that identity, not "it looked back to normal", is what acceptance 6/7 turn
+## into a value a net can assert.
+static func entrance_zoom(frames: int) -> float:
+	var zoom_in := Fx.BOSS_ENTRANCE_ZOOM_IN_FRAMES
+	var hold := Fx.BOSS_ENTRANCE_HOLD_FRAMES
+	var total := Fx.boss_entrance_total_frames()
+	if frames < 0 or frames >= total:
+		return 1.0
+	if frames < zoom_in:
+		return lerpf(1.0, Fx.BOSS_ENTRANCE_ZOOM_MULT, float(frames) / float(maxi(zoom_in, 1)))
+	if frames < zoom_in + hold:
+		return Fx.BOSS_ENTRANCE_ZOOM_MULT
+	var out_t := float(frames - zoom_in - hold) / float(maxi(Fx.BOSS_ENTRANCE_OUT_FRAMES, 1))
+	return lerpf(Fx.BOSS_ENTRANCE_ZOOM_MULT, 1.0, out_t)
+
+
+## **The boss entrance's focus, pure and static, the same seat as `entrance_zoom` beside it.** Lerps from the
+## player's own led focus to the boss and back — `player`/`boss` are both already-computed world points, not
+## `Character`/`Monster` references, so a net drives it with two bare `Vector2`s and no scene at all.
+## **Goes through `camera_center()` at the call site, not here** — so the clamp still applies and the camera
+## still refuses to show the void outside the map while it is looking at the boss.
+static func entrance_focus(player: Vector2, boss: Vector2, frames: int) -> Vector2:
+	var zoom_in := Fx.BOSS_ENTRANCE_ZOOM_IN_FRAMES
+	var hold := Fx.BOSS_ENTRANCE_HOLD_FRAMES
+	var total := Fx.boss_entrance_total_frames()
+	if frames < 0 or frames >= total:
+		return player
+	if frames < zoom_in:
+		return player.lerp(boss, float(frames) / float(maxi(zoom_in, 1)))
+	if frames < zoom_in + hold:
+		return boss
+	var out_t := float(frames - zoom_in - hold) / float(maxi(Fx.BOSS_ENTRANCE_OUT_FRAMES, 1))
+	return boss.lerp(player, out_t)
+
+
+## **A reference read, not a pure function** — `_boss` is instance state (`_process()`'s own doc on why),
+## so this cannot live beside `entrance_zoom`/`entrance_focus` above. **Only guards against `null`** — a boss
+## that died mid-entrance stays a valid (if now-corpsed) reference (`_boss`'s own comment: `RefCounted`, never
+## freed by death), so this never has to fall back to the player mid-lerp; it only exists so a fresh run with
+## no boss yet never dereferences a null.
+func _boss_focus() -> Vector2:
+	if _boss != null:
+		return _boss.center()
+	return _char.center() + Vector2(_cam_lead, 0.0)
 
 
 ## ASCII map -> commands. Terrain goes through `apply()` too — if an external event bypasses the command

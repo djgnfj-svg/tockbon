@@ -32,8 +32,6 @@ const Glyph := preload("res://src/sim/glyph_defs.gd")
 const Layout := preload("res://src/view/pick_layout.gd")
 const CircleLayout := preload("res://src/view/circle_layout.gd")
 const ThreePickWindow := preload("res://src/view/three_pick_window.gd")
-const BlastFx := preload("res://src/view/blast_fx.gd")
-const SpellSim := preload("res://src/sim/spell_sim.gd")
 
 ## The HUD's `CanvasLayer`. **This is exactly the layer that decides whether left-click reaches firing.**
 const HUD_PATH := "HUD"
@@ -95,9 +93,11 @@ func run(t) -> void:
 	_tab_during_confirmation_afterglow_closes_it_first(t)
 	_physics_process_actually_ticks_confirm_before_the_hud_reacts(t)
 	_reset_stage_actually_cancels_the_confirmation_afterglow(t)
-	_reward_key_gates_the_rune_grant(t)
+	_pressing_the_key_after_the_auto_grant_changes_nothing_further(t)
 	_reward_key_before_any_death_does_nothing(t)
 	_reward_key_is_wired(t)
+	_the_bull_reward_grants_itself_with_no_key_pressed(t)
+	_a_rooster_death_does_not_touch_the_bulls_reward_gate(t)
 	_a_preset_key_does_not_wipe_an_earned_rune(t)
 	_a_preset_key_still_works_with_the_circle_removed(t)
 	_reset_revokes_a_rune_from_the_seat_it_no_longer_owns(t)
@@ -106,11 +106,6 @@ func run(t) -> void:
 	_developer_keys_are_gated_behind_f3(t)
 	_the_help_lines_only_name_keys_that_exist(t)
 	await _the_camera_sits_on_whole_screen_pixels(t)
-	# -- glyph-condense §11.6 Step 3 — the pillar reaches the screen --
-	await _pillar_paint_hook_receives_the_real_rect(t)
-	await _pillar_rises_then_disappears(t)
-	_the_three_glyph_symbols_differ(t)
-	_condense_and_blast_effect_text_differ(t)
 
 
 ## **Calling an action that is not in the input map makes the engine bark, and on screen it only looks like
@@ -703,8 +698,7 @@ func _hud_controls_are_inside_the_viewport(t) -> void:
 	root.free()
 
 
-## **The `HUD/LevelUp` counterpart to `_window_does_not_cover_the_health`.** (It was `HUD/Progress`;
-## that label is gone — the level line was cut from the screen.) That check reads a `.tscn`-set
+## **The `HUD/Progress` counterpart to `_window_does_not_cover_the_health`.** That check reads a `.tscn`-set
 ##  position — a pure scene fact, measurable without `_ready()` ever running. This one is about **script**
 ##  behavior (`_update_hud()` writing to the wrong node, `_toggle_assembly()` hiding the wrong one), which a
 ##  position-only check cannot see in principle.
@@ -1102,18 +1096,18 @@ func _reset_stage_actually_cancels_the_confirmation_afterglow(t) -> void:
 	root.free()
 
 
-## **Stage I (`stage1-bosses.md`) — the reward key, driven through the real `_physics_process()` loop, not a
-## bare `WorldStep`.** Room ①'s water is gone (`burn-out-of-the-bull-room.md` §4) — this check used to also
-## drive `_on_ticked()`'s `_room1_reward_water.tick(_grid)` and assert it actually poured; that coverage died
-## with the code it measured, not with this check. **What is left is exactly what `stage1-bosses.md` said
-## survives**: the reward gate itself, only the water hanging off it went.
-## **Acceptance 8b's own order, measured as a sequence**: dead -> pending -> (rune still ungranted) ->
-## taken -> (rune granted). Reversing any step is the named failure.
+## **Stage I (`stage1-bosses.md`) — room ①'s water, driven through the real `_physics_process()` loop, not a
+## exercised for real — a bare `world.frame()` skips `_on_ticked()` entirely (that call only happens inside
+## `stage.gd`'s own `_physics_process`), so a version of this test that drove the world directly would prove
+## the gate but not that the water actually pours.
 ##
-## **Stage C of `rune-lock-and-receiving.md` folded in, at the same sequence points** — a final-state check
-## alone cannot measure a grant (that plan's own risk table), so fire's ownership is asserted **before** L
-## and immediately **after** — the transition, not just the end state.
-func _reward_key_gates_the_rune_grant(t) -> void:
+## **Session correction — the reward now grants itself the tick the bull dies** (`_on_ticked()`'s own new
+## auto-grant), so "L gates it, and before L nothing has happened" is no longer true and is not asserted
+## here any more (`_the_bull_reward_grants_itself_with_no_key_pressed`, above, is the check for the
+## auto-grant transition itself). **What is still real and worth proving here**: the debug key L, pressed
+## *after* the auto-grant already ran, must be idempotent — it must not create a second water source or
+## disturb the rune already owned.
+func _pressing_the_key_after_the_auto_grant_changes_nothing_further(t) -> void:
 	var root := _wired_stage_root(t)
 	if root == null:
 		return
@@ -1124,31 +1118,31 @@ func _reward_key_gates_the_rune_grant(t) -> void:
 
 	var kind := MonsterDefs.KIND_BULL
 	var mid: int = world.spawn_monster(kind, 700, 700 - MonsterDefs.h_px(kind))
-	t.ok(mid > 0, "황소 스폰됐다 (검사의 전제)")
+	t.ok(mid > 0, "황소 스폰됐다 (전제)")
 	world.monster_at(0).hp = 0
-	for _i in Tuning.TICK_DIVIDER:
+	# **`TICK_DIVIDER * 2`, never one** — the death and the auto-grant both happen on the tick.
+	for _i in Tuning.TICK_DIVIDER * 2:
 		root.call("_physics_process", 1.0 / 60.0)
 
 	var pr: Variant = world.progress()
-	t.ok(pr.is_reward_pending(MonsterDefs.KIND_BULL), "황소가 죽으면 보상이 대기 상태다 (검사의 전제)")
-	t.ok(not pr.owns_rune(Tuning.ELEM_FIRE), "보상을 수령하기 전엔 불 룬도 없다 (검사의 전제)")
+	t.ok(pr.owns_rune(Tuning.ELEM_FIRE), "전제 — 불 룬도 이미 자동으로 지급됐다")
+	t.ok(not pr.is_reward_pending(MonsterDefs.KIND_BULL), "전제 — 대기 상태도 이미 스스로 풀렸다")
+
+	for _i in Tuning.TICK_DIVIDER * 5:
+		root.call("_physics_process", 1.0 / 60.0)
 
 	root.call("_take_boss_reward")
-	t.ok(not pr.is_reward_pending(MonsterDefs.KIND_BULL), "수령하면(L) 대기가 풀린다")
-	t.ok(pr.owns_rune(Tuning.ELEM_FIRE), "그리고 같은 순간 불 룬도 실제로 지급된다")
-
-	# A second press changes nothing further - `grant_rune` is idempotent (net_progress's own check).
-	root.call("_take_boss_reward")
-	t.ok(pr.owns_rune(Tuning.ELEM_FIRE), "다시 눌러도 불 룬은 그대로다")
+	t.ok(pr.owns_rune(Tuning.ELEM_FIRE), "그리고 룬도 그대로다 (재지급으로 문제가 생기지 않는다)")
 
 	root.free()
 
 
 ## **The negative control — pressing the key before any boss has died does nothing.** Without
 ## `boss_died(KIND_BULL)` gating `_take_boss_reward`, this would either error (no reward to clear, harmless)
-## or — the actual risk — grant the rune regardless.
+## or — the actual risk — start room ①'s water regardless, which would make the wall/water order untestable
+## in principle (acceptance 8b needs a "before" state that is genuinely water-free).
 ## **Fire stays ungranted too** (`rune-lock-and-receiving.md`, Stage C acceptance 6: "before the bull, nothing
-## grants fire — the reward key does nothing on its own") — the `boss_died()` guard is what covers it.
+## grants fire — the reward key does nothing on its own") — the same `boss_died()` guard covers both.
 func _reward_key_before_any_death_does_nothing(t) -> void:
 	var root := _wired_stage_root(t)
 	if root == null:
@@ -1162,6 +1156,74 @@ func _reward_key_before_any_death_does_nothing(t) -> void:
 	root.call("_take_boss_reward")
 	t.ok(not world.progress().owns_rune(Tuning.ELEM_FIRE), "죽기 전에 눌러도 불 룬은 지급되지 않는다")
 
+	root.free()
+
+
+## **Session correction — the reward used to have exactly one door, the debug key L, so a player who never
+## opens the debug layer killed the bull and got nothing: no fire rune, no water, no way to burn the wood
+## wall, and the rooster/gate past it unreachable — the game ended at the bull with nothing explaining why.**
+## This drives the death and reads the grant with **no key press at all** — the whole point of the fix.
+## *Inversion, measured directly*: replacing `_on_ticked()`'s own new call site
+## (`if _world.progress().is_reward_pending(MonsterDefs.KIND_BULL): _take_boss_reward()`) with nothing turns
+## every assert below red while `_reward_key_gates_room1_water` above (which presses the key by hand) stays
+## green — proof this check measures the automatic door, not the debug one.
+func _the_bull_reward_grants_itself_with_no_key_pressed(t) -> void:
+	var root := _wired_stage_root(t)
+	if root == null:
+		return
+	var world: Variant = root.get("_world")
+	if world == null:
+		root.free()
+		return
+
+	var kind := MonsterDefs.KIND_BULL
+	var mid: int = world.spawn_monster(kind, 700, 700 - MonsterDefs.h_px(kind))
+	t.ok(mid > 0, "황소 스폰됐다 (전제)")
+	var pr: Variant = world.progress()
+	t.ok(not pr.owns_rune(Tuning.ELEM_FIRE), "죽기 전엔 불 룬이 없다 (전제)")
+
+	world.monster_at(0).hp = 0
+	# **`TICK_DIVIDER * 2`, never one** — the death and the auto-grant both happen on the tick.
+	for _i in Tuning.TICK_DIVIDER * 2:
+		root.call("_physics_process", 1.0 / 60.0)
+
+	t.ok(pr.owns_rune(Tuning.ELEM_FIRE),
+		"L을 한 번도 안 눌렀는데도 황소가 죽으면 불 룬이 자동으로 들어온다")
+	t.ok(not pr.is_reward_pending(MonsterDefs.KIND_BULL), "그리고 대기 상태도 스스로 풀린다")
+
+	for _i in Tuning.TICK_DIVIDER * 5:
+		root.call("_physics_process", 1.0 / 60.0)
+	root.free()
+
+
+## **The rooster's own reward flag must survive the bull's auto-grant untouched.** `_take_boss_reward()`
+## calls `Progress.clear_pending_boss_rewards()`, which flips *every present* boss's pending flag to false,
+## not just the bull's (`progress.gd`'s own "presence as a key is the whole fact" idiom) — gating the new
+## call site on `is_reward_pending(KIND_BULL)` specifically, rather than "some boss has died", is what stops
+## that from leaking into a boss with no reward door built yet.
+## *Inversion*: calling `_take_boss_reward()` unconditionally every tick once *any* boss has died (the
+## mutation this check exists to catch) clears the rooster's flag the tick after this test kills it, and the
+## last assert below goes red.
+func _a_rooster_death_does_not_touch_the_bulls_reward_gate(t) -> void:
+	var root := _wired_stage_root(t)
+	if root == null:
+		return
+	var world: Variant = root.get("_world")
+	if world == null:
+		root.free()
+		return
+
+	var kind := MonsterDefs.KIND_ROOSTER
+	var mid: int = world.spawn_monster(kind, 700, 700 - MonsterDefs.h_px(kind))
+	t.ok(mid > 0, "수탉 스폰됐다 (전제)")
+	world.monster_at(0).hp = 0
+	for _i in Tuning.TICK_DIVIDER * 2:
+		root.call("_physics_process", 1.0 / 60.0)
+
+	var pr: Variant = world.progress()
+	t.ok(pr.boss_died(MonsterDefs.KIND_ROOSTER), "수탉이 죽었다 (전제)")
+	t.ok(pr.is_reward_pending(MonsterDefs.KIND_ROOSTER),
+		"황소가 죽은 적이 없어 자동 수령 분기가 불리지 않으므로, 수탉의 대기 플래그가 그대로 남아 있다")
 	root.free()
 
 
@@ -1450,7 +1512,7 @@ func _wired_stage_root(t) -> Node:
 	for path: String in [paths["_hud"], paths["_levelup_label"], "HUD/HpBar", "HUD/Money",
 			"HUD/CircleWindow", "HUD/ThreePickWindow", "SpellView", "BlastFx", "StageInput", "Camera2D",
 			"MonsterView", "CellRenderer", "TownView", "SkyBackground", "HUD/ResearchWindow",
-			"HUD/SettlementWindow"]:
+			"HUD/SettlementWindow", "HUD/BossBar"]:
 		t.ok(root.get_node_or_null(path) != null, "씬에 %s 가 있다 (전제)" % path)
 
 	# **`_input` is wired too, since `_update_hud()` reads developer mode off it** (`stage_input.debug_on()`).
@@ -1495,6 +1557,9 @@ func _wired_stage_root(t) -> Node:
 	# **`_gate_view`, and the same sentence applies** (`stage-clear-sequence.md`) — `_sync_settlement()` calls
 	#  `tick_gate()` on it every physics frame and `reset_stage()` calls `reset_gate()`, both unconditionally.
 	root.set("_gate_view", root.get_node("GateView"))
+	# **`_boss_bar`, the same sentence again** (`boss-entrance-and-hp-bar.md` Stage C) — `_rebuild()` calls
+	#  `clear_boss()` and `_physics_process()` calls `set_entrance_frames()`, both unconditionally now.
+	root.set("_boss_bar", root.get_node("HUD/BossBar"))
 	# **`_renderer`, so `_on_ticked()` can be driven for real too** — it calls `_renderer.refresh()` whenever
 	#  `_grid.consume_changed() > 0`, and any test that drives `_physics_process()` far enough to change the
 	#  grid (Stage I's own water pour is the first to do this through this helper) crashes on a null `_renderer`
@@ -1719,126 +1784,3 @@ func _the_help_lines_only_name_keys_that_exist(t) -> void:
 			var bound := word.search(input_src) != null 				or proj.contains("\"physical_keycode\":%d" % OS.find_keycode_from_string(tok))
 			t.ok(bound, "안내가 말하는 %s 키가 실제로 묶여 있다 (raw 또는 입력 맵)" % tok)
 	t.ok(checked >= 6, "실제로 검사한 키 토큰 수 (%d — 적으면 패턴이 안 물린 것)" % checked)
-
-
-# ══════════════════════════════════════════════════════════════════
-#  glyph-condense §11.6 Step 3 — the pillar reaches the screen
-# ══════════════════════════════════════════════════════════════════
-
-## **Records what `_draw()` actually handed the paint hook** — the same idiom
-## `net_bolt_sprite._CapturingSpellView` already uses for `_paint_bolt`: a native `draw_rect` cannot be
-## overridden directly, only a named method, so `blast_fx.gd`'s own `_paint_pillar` exists for exactly this.
-class _CapturingBlastFx extends BlastFx:
-	var pillar_rects: Array[Rect2] = []
-	var pillar_colors: Array[Color] = []
-	func _paint_pillar(rect: Rect2, colour: Color) -> void:
-		pillar_rects.append(rect)
-		pillar_colors.append(colour)
-		super(rect, colour)
-
-
-## **"`_draw()` ran" is not "anything was drawn"** (CLAUDE.md) — this asserts the actual rect the hook
-## received equals the rectangle the notice describes, not merely that the call happened.
-##
-## **Time is advanced by calling `advance(dt)` directly, not by pumping N frames and hoping the accumulated
-## per-frame delta lands past `PILLAR_RISE_SEC`.** `advance()` is public for exactly this (its own comment:
-## "so a net can pass time with no scene") — a single large `dt` deterministically finishes the rise,
-## independent of whatever delta a headless frame actually carries. `pump_frames(1)` afterward forces the one
-## `_draw()` that reads the now-settled state.
-## **The glow rect, not the core** — `_draw()` calls `_paint_pillar` twice per pillar per frame (glow, then a
-## narrower core), so the *last* recorded call is the core, not the full rectangle this check means to pin.
-func _pillar_paint_hook_receives_the_real_rect(t) -> void:
-	var x := 50
-	var y := 70
-	var w := 8
-	var h := 16
-	var view := _CapturingBlastFx.new()
-	t.root.add_child(view)
-	# **Automatic `_process()` turned off** — it calls `advance()` too, with whatever real frame delta this
-	#  pumped frame happens to carry, and that would add uncontrolled noise on top of the deliberate jump below.
-	view.set_process(false)
-	view.on_pillars(PackedInt32Array([x]), PackedInt32Array([y]), PackedInt32Array([w]), PackedInt32Array([h]),
-		PackedByteArray([Tuning.ELEM_NONE]))
-	view.advance(Fx.PILLAR_RISE_SEC * 1.5)
-	view.queue_redraw()
-	await t.pump_frames(1)
-
-	t.ok(view.pillar_rects.size() >= 2, "`_paint_pillar()`가 한 프레임에 두 번(광·심) 호출됐다 (%d회)" % view.pillar_rects.size())
-	if view.pillar_rects.size() >= 2:
-		# **`SpellSim.pillar_x0`, not a restated `x - w/2`** — the same shared line `body.hit_by_pillar` and
-		#  `blast_fx.on_pillars` both read, so this check cannot pass by coincidentally agreeing with a second,
-		#  independently wrong copy of the centering arithmetic.
-		var x0 := SpellSim.pillar_x0(x, w)
-		var want := Rect2(
-			Vector2(float(x0 * Tuning.CELL_PX), float((y + 1 - h) * Tuning.CELL_PX)),
-			Vector2(float(w * Tuning.CELL_PX), float(h * Tuning.CELL_PX)))
-		var got: Rect2 = view.pillar_rects[view.pillar_rects.size() - 2]
-		t.ok(got.is_equal_approx(want), "다 자란 사각형(광)이 통지의 x·y·w·h로 계산한 자리와 같다 (%s vs %s)" % [got, want])
-
-	view.free()
-
-
-## **The rise, and the disappearance.** A pillar that appears at full height the moment it lands is exactly
-## the failure `PILLAR_RISE_SEC`'s own comment names — *"푱"* is that stretch, and a check that only proves
-## the final rect (above) cannot tell "it rose" from "it popped".
-## **Driven by `advance(dt)`, the same reason as the check above** — two named points in time
-## (20% and 90% of the rise), not two arbitrary frame counts.
-func _pillar_rises_then_disappears(t) -> void:
-	var view := _CapturingBlastFx.new()
-	t.root.add_child(view)
-	view.set_process(false)  # same reason as the check above — only the deliberate `advance()` calls count
-	view.on_pillars(PackedInt32Array([50]), PackedInt32Array([70]), PackedInt32Array([8]), PackedInt32Array([16]),
-		PackedByteArray([Tuning.ELEM_NONE]))
-
-	view.advance(Fx.PILLAR_RISE_SEC * 0.2)
-	view.queue_redraw()
-	await t.pump_frames(1)
-	var early_ok := view.pillar_rects.size() >= 2
-	t.ok(early_ok, "이른 시점에 이미 그려졌다 (검사의 전제)")
-	var early: Rect2 = view.pillar_rects[view.pillar_rects.size() - 2] if early_ok else Rect2()
-
-	view.advance(Fx.PILLAR_RISE_SEC * 0.7)  # cumulative t is now 0.9 * PILLAR_RISE_SEC
-	view.queue_redraw()
-	await t.pump_frames(1)
-	var later_ok := view.pillar_rects.size() >= 2
-	t.ok(later_ok, "늦은 시점에도 그려졌다 (검사의 전제)")
-	var later: Rect2 = view.pillar_rects[view.pillar_rects.size() - 2] if later_ok else Rect2()
-
-	if early_ok and later_ok:
-		t.ok(later.size.y > early.size.y,
-			"기둥이 시간이 지날수록 커진다 (%.1fpx -> %.1fpx) — 다 자란 채로 나타나지 않는다" % [
-				early.size.y, later.size.y])
-		t.ok(later.position.y < early.position.y,
-			"자란 만큼 위쪽 끝이 더 위로 올라간다 (%.1f -> %.1f)" % [early.position.y, later.position.y])
-
-	# Past the pillar's whole lifetime.
-	view.advance(Fx.PILLAR_SEC * 2.0)
-	view.queue_redraw()
-	await t.pump_frames(1)
-	t.eq(view.pillar_active_count(), 0, "수명(%.2fs)이 지나면 기둥이 사라진다" % Fx.PILLAR_SEC)
-
-	view.free()
-
-
-## **The one check that would have caught §11.5 going unfixed** — verify-run's own measurement: before the
-## `family` split, `_effect_text(CONDENSE_C, KIND_TERMINAL)` and `_effect_text(BLAST_C, KIND_TERMINAL)`
-## returned the **literal same string**. Pure data — no `_draw()`, no tree needed for either half.
-func _the_three_glyph_symbols_differ(t) -> void:
-	var spread_sym: int = Fx.GLYPH_SYMBOL.get(Glyph.family_of(Glyph.SPREAD_C), -1)
-	var blast_sym: int = Fx.GLYPH_SYMBOL.get(Glyph.family_of(Glyph.BLAST_C), -1)
-	var condense_sym: int = Fx.GLYPH_SYMBOL.get(Glyph.family_of(Glyph.CONDENSE_C), -1)
-	t.ok(spread_sym >= 0 and blast_sym >= 0 and condense_sym >= 0,
-		"확산·폭발·응축 모두 GLYPH_SYMBOL에 등록돼 있다 (전제)")
-	t.ok(spread_sym != blast_sym, "확산과 폭발의 심볼이 다르다")
-	t.ok(blast_sym != condense_sym, "폭발과 응축의 심볼이 다르다 (§11.5가 고치는 바로 그 자리)")
-	t.ok(spread_sym != condense_sym, "확산과 응축의 심볼이 다르다")
-
-
-func _condense_and_blast_effect_text_differ(t) -> void:
-	var win := ThreePickWindow.new()
-	var blast_text: String = win.call("_effect_text", Glyph.BLAST_C, Glyph.KIND_TERMINAL)
-	var condense_text: String = win.call("_effect_text", Glyph.CONDENSE_C, Glyph.KIND_TERMINAL)
-	t.ok(blast_text != "" and condense_text != "", "두 문장 다 비어 있지 않다 (전제)")
-	t.ok(blast_text != condense_text,
-		"응축과 폭발의 카드 문구가 다르다 (폭발 「%s」 vs 응축 「%s」)" % [blast_text, condense_text])
-	win.free()

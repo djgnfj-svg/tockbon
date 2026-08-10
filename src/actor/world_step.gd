@@ -580,7 +580,16 @@ func _drain_queue() -> void:
 ##  check above), so putting it in the shell means the nets cannot measure it headless (`stage.gd` needs a scene
 ##  to run) and future callers (server spawning and so on) would each have to write it again. Placing it beside
 ##  `_broken` and the cap check gathers "the three conditions for making a monster" in one place.
-func spawn_monster(kind: int, px: int, py: int) -> int:
+## **`entrance` — the fourth argument, defaulted `false`** (`boss-entrance-and-hp-bar.md` Stage A). When true
+##  **and** the kind has a pattern, the fresh monster's `pattern_left` is set to `BossAi.ENTRANCE_IDLE_TICKS`
+##  so a boss walks a beat before it ever winds up, instead of roaring on the exact frame it appears.
+##  **The default is the whole point, not an incidental value.** Setting this in `Monster._init` instead would
+##  shift the first `WINDUP` of *every* bull and rooster this repo stands up — `net_monster`,
+##  `net_monster_charge`, `net_monster_breath` and `net_monster_slam` all spawn one directly and measure its
+##  pattern clock from frame zero, so a global idle would turn four nets red for a presentation beat that only
+##  an entrance should carry. `MonsterPlacement.wake_scan()` is the only caller that passes `true`; every debug
+##  key, every net and every other caller of this function keeps the old behavior byte-for-byte.
+func spawn_monster(kind: int, px: int, py: int, entrance: bool = false) -> int:
 	# The same door as `enqueue` (above) — if the array grew and the HUD number rose in a broken world, it
 	#  would be "the frame stops politely but only M keeps growing", and that is the rule having two copies.
 	if _broken:
@@ -617,7 +626,10 @@ func spawn_monster(kind: int, px: int, py: int) -> int:
 		return 0
 	var id := _next_monster_id
 	_next_monster_id += 1
-	_monsters.append(Monster.new(id, kind, px, py))
+	var m := Monster.new(id, kind, px, py)
+	if entrance and boss:
+		m.pattern_left = BossAi.ENTRANCE_IDLE_TICKS
+	_monsters.append(m)
 	return id
 
 
@@ -646,6 +658,23 @@ func died_y(i: int) -> int:
 
 func died_kind(i: int) -> int:
 	return _died_kind[i]
+
+
+## **Re-export, verbatim** (`boss-entrance-and-hp-bar.md` Stage A) — `_placement` is owned here, not by the
+## shell, the same reason `monster_count()`/`monster_at()` above are doors rather than a second copy of the
+## array. Lives exactly one tick; `stage.gd._on_ticked()` is its one reader.
+func woke_boss_id() -> int:
+	return _placement.woke_boss_id()
+
+
+## **Linear over `_monsters` (<= `MonsterDefs.MAX_MONSTERS`, 20)** — called once per entrance, from
+## `_on_ticked()`, never per frame. `null` if the id is not (or no longer) live, so a boss that died the same
+## tick it woke (impossible at 300 hp, but not asserted away) collapses to "no boss" rather than a crash.
+func monster_by_id(id: int) -> Monster:
+	for m: Monster in _monsters:
+		if m.id == id:
+			return m
+	return null
 
 
 ## Read-only queries — the view sees the hen's/bull's bolts only through these (stage 7, `bolt_kind`
