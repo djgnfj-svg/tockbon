@@ -48,7 +48,11 @@ const MASK := (1 << Tuning.GLYPH_BITS) - 1
 const FAMILY_SPREAD := 0
 const FAMILY_BLAST := 1
 const FAMILY_DUMMY := 2
-const FAMILY_ALL: Array[int] = [FAMILY_SPREAD, FAMILY_BLAST, FAMILY_DUMMY]
+## **The fourth family** (`glyph-condense.md`) — a `TERMINAL` glyph, the same `kind` as blast, but a pillar
+##  rather than a disc. Two `TERMINAL` families sharing one `kind` is exactly why the screen's dispatch moved
+##  from `kind` to `GLYPH_SYMBOL`/family (`spell_sim._run_glyph`'s own header, below, has the sim side of this).
+const FAMILY_CONDENSE := 3
+const FAMILY_ALL: Array[int] = [FAMILY_SPREAD, FAMILY_BLAST, FAMILY_DUMMY, FAMILY_CONDENSE]
 
 const RARITY_COMMON := 0
 const RARITY_RARE := 1
@@ -58,8 +62,10 @@ const RARITY_ALL: Array[int] = [RARITY_COMMON, RARITY_RARE, RARITY_UNIQUE]
 # --- glyph ids -----------------------------------------------------
 # ids are int and **iteration goes only through the explicit `ALL` list** — never assume contiguity.
 ## **The nibble ceiling is real from here on.** `GLYPH_BITS` is 4 -> 15 ids -> **5 families, not 15 glyphs.**
-##  Nine are used below, six spare. The day a 6th family arrives, `Tuning.GLYPH_BITS` goes 4 -> 6 and
-##  `GLYPH_MAX_LAYERS` goes 7 -> 5 (written down in the plan so it is not rediscovered then) — **not done here.**
+##  Twelve are used below, three spare (`glyph-condense.md`'s own arithmetic — condense is the fourth family
+##  and spends none of the accel/home seats; the dummy retiring is what would free the other three). The day
+##  a 5th family arrives after this one, `Tuning.GLYPH_BITS` goes 4 -> 6 and `GLYPH_MAX_LAYERS` goes 7 -> 5
+##  (written down in the plan so it is not rediscovered then) — **not done here.**
 const SPREAD_C := 1
 const SPREAD_R := 2
 const SPREAD_U := 3
@@ -69,6 +75,9 @@ const BLAST_U := 6
 const DUMMY_C := 7
 const DUMMY_R := 8
 const DUMMY_U := 9
+const CONDENSE_C := 10
+const CONDENSE_R := 11
+const CONDENSE_U := 12
 
 ## **Backward-compat aliases.** Every debug preset, screen table and net written before Stage A names the
 ##  glyph this way — `GLYPH_SPREAD`/`GLYPH_BLAST` **are** the common-rarity id, not a separate thing.
@@ -77,7 +86,8 @@ const DUMMY_U := 9
 const GLYPH_SPREAD := SPREAD_C
 const GLYPH_BLAST := BLAST_C
 
-## **One glyph = one row here + one branch in `spell_sim._run_glyph` (by `kind`, not by id — see that file)
+## **One glyph = one row here + one branch in `spell_sim._run_glyph` (by `kind` — and, where two families share
+##  one `kind`, a nested split by `family` inside that branch, still never by id — see that file's header)
 ##  + (if the presentation differs) one row in `fx_tuning`. A fourth place appearing means the structure is wrong.**
 ##
 ##   kind            SPAWN creates bolts and hands over the list · TERMINAL continues at the same spot ·
@@ -146,10 +156,46 @@ const DEFS: Dictionary = {
 		"max_per_circle": 0, "tick_budget": 0,
 		"family": FAMILY_DUMMY, "rarity": RARITY_UNIQUE, "power_pct": 200,
 	},
+	# **응축 — the pillar** (`glyph-condense.md` §11). `TERMINAL`, the same `kind` as blast: it ends in place
+	#  and creates no bolt, so the pipeline continues at the same spot. `max_per_circle: 1` is the false-knob
+	#  argument, not the explosion one — condense makes no bolt, so two of it cannot compound into more bolts
+	#  the way two spreads would; two pillars at one cell are just one pillar, and that is the knob it blocks.
+	#  `tick_budget: 0` — a pillar writes no cell (it neither cuts nor ignites), so there is no per-tick cost to
+	#  cap (`glyph-condense.md` §6.3's own correction box: "zero writes").
+	CONDENSE_C: {
+		"name": &"응축", "kind": KIND_TERMINAL,
+		"max_per_circle": 1, "tick_budget": 0,
+		"family": FAMILY_CONDENSE, "rarity": RARITY_COMMON, "power_pct": 100,
+	},
+	CONDENSE_R: {
+		"name": &"응축", "kind": KIND_TERMINAL,
+		"max_per_circle": 1, "tick_budget": 0,
+		"family": FAMILY_CONDENSE, "rarity": RARITY_RARE, "power_pct": 120,
+	},
+	CONDENSE_U: {
+		"name": &"응축", "kind": KIND_TERMINAL,
+		"max_per_circle": 1, "tick_budget": 0,
+		"family": FAMILY_CONDENSE, "rarity": RARITY_UNIQUE, "power_pct": 150,
+	},
 }
 
 ## Iteration goes **only through this explicit list**.
-const ALL: Array[int] = [SPREAD_C, SPREAD_R, SPREAD_U, BLAST_C, BLAST_R, BLAST_U, DUMMY_C, DUMMY_R, DUMMY_U]
+const ALL: Array[int] = [
+	SPREAD_C, SPREAD_R, SPREAD_U, BLAST_C, BLAST_R, BLAST_U, DUMMY_C, DUMMY_R, DUMMY_U,
+	CONDENSE_C, CONDENSE_R, CONDENSE_U,
+]
+
+## **The three-pick's own pool — `ALL` minus the dummy family.** The dummy is not a real glyph
+##  (`glyph_defs.gd`'s own words on `DUMMY_*`: "a dummy is called a dummy. It gets a name the day the real
+##  glyph is decided") and must never be offered to a player choosing between spells, but its ids, its
+##  `KIND_MODIFY` row and every check that walks `DEFS`/`ALL` stay alive — retiring the dummy family entirely
+##  is a separate, larger change (`glyph-condense.md` §5.3/§11.7) that this list does not make.
+## **An explicit list, the same discipline `ALL` itself holds** — no filter expression computed at draw time,
+##  so the pool a player can actually see is one line a person can read, not a derived side effect of `ALL`
+##  minus whichever family currently happens to be a placeholder.
+const PICKABLE: Array[int] = [
+	SPREAD_C, SPREAD_R, SPREAD_U, BLAST_C, BLAST_R, BLAST_U, CONDENSE_C, CONDENSE_R, CONDENSE_U,
+]
 
 
 ## Flat table of tick budgets. Once at boot — a dictionary lookup per impact stacks VM calls on its own.

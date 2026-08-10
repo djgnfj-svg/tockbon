@@ -693,8 +693,8 @@ const STAFF_RING_PX := 2.0
 ## **Rarity does not get its own color here** — every rarity of one family shares its family's color
 ##  (`RARITY_TINT` below carries rarity as a separate device, the same "two independent devices" idiom
 ##  `CIRCLE_RING_INNER`/`OUTER` already uses for "innermost first"). Splitting color by rarity too would mean
-##  the staff tip alone has to carry **two** axes (which family · which rarity) in one hue, and nine ids would
-##  need nine distinguishable colors instead of three.
+##  the staff tip alone has to carry **two** axes (which family · which rarity) in one hue, and twelve ids
+##  would need twelve distinguishable colors instead of four.
 const GLYPH_TINT: Dictionary = {
 	# Spread and blast must be **far apart on the color wheel** so the staff tip for key 4 (spread->blast) and
 	#  key 5 (blast->spread) split at a glance. The layer counts are the same, so **only the color carries the order.**
@@ -710,6 +710,16 @@ const GLYPH_TINT: Dictionary = {
 	Glyph.DUMMY_C: Color(0.72, 0.66, 0.56),
 	Glyph.DUMMY_R: Color(0.72, 0.66, 0.56),
 	Glyph.DUMMY_U: Color(0.72, 0.66, 0.56),
+	# **Condense — a jade green, measured against everything else already meaning something on this screen**
+	#  (`glyph-condense.md` §11.6, the same by-hue-distance method `MONSTER_BOLT_COLOR`'s own comment uses).
+	#  Spread's cyan sits at ~195°, blast's orange at ~15°, the dummy's neutral tan at ~35°; the rune trio
+	#  (fire 30° · water 190° · none 258°) and the rarity ring (common ~220° · rare ~275° · unique ~40°) crowd
+	#  the rest of the wheel. **~135° is the clearest gap** — 60° from spread, 100°+ from blast/dummy/unique,
+	#  and far enough from the monster bolt's acid lime (~90°) that a staff tip is never confused for an
+	#  enemy projectile. Reads as "grown, solid" — the opposite picture from spread's scatter and blast's burn.
+	Glyph.CONDENSE_C: Color(0.32, 0.82, 0.42),
+	Glyph.CONDENSE_R: Color(0.32, 0.82, 0.42),
+	Glyph.CONDENSE_U: Color(0.32, 0.82, 0.42),
 }
 
 ## The color of a glyph with no definition. **Deliberately magenta** — grow the glyphs without growing this
@@ -806,9 +816,11 @@ const RARITY_RING_PX := 1.5
 ## falls through to the procedural stroke rather than drawing nothing.
 ##
 ## **`ring_accel.png` and `ring_home.png` are on disk and are deliberately not here** — `glyph_defs` has
-## nine ids (spread · blast · dummy, three rarities each) and **there is no accelerate or home glyph in
-## code**. Wiring them to a family they do not belong to would be worse than leaving them unused; they are
-## waiting for the glyph, not the other way round.
+## twelve ids now (spread · blast · dummy · condense, three rarities each) and **there is no accelerate or
+## home glyph in code**. Wiring them to a family they do not belong to would be worse than leaving them
+## unused; they are waiting for the glyph, not the other way round. **Condense has no row here either** —
+## unlike accel/home, its glyph exists; only its art does not (`glyph-condense.md` — "no art is added, code
+## lands first"), so it falls through to the procedural symbol the same as any other missing entry would.
 const RING_TEX: Dictionary = {
 	Glyph.SPREAD_C: "res://assets/circle/ring_spread.png",
 	Glyph.SPREAD_R: "res://assets/circle/ring_spread.png",
@@ -822,7 +834,8 @@ const RING_TEX: Dictionary = {
 }
 
 ## **The palette card's own picture, by glyph.** Same shape and same fall-through discipline as `RING_TEX`
-## above — three files carry nine ids, and an id with no entry drops back to the procedural symbol.
+## above — this table (like that one) carries nine of the game's twelve ids, and an id with no entry
+## (condense's three, today) drops back to the procedural symbol.
 ##
 ## **This is a separate map from `RING_TEX` and that is the whole reason it exists.** A ring is drawn at the
 ## layer band's diameter; a palette card's symbol radius is `PALETTE_SYMBOL_RATIO` of a cell's short side —
@@ -1130,13 +1143,36 @@ const CIRCLE_LAYER_NUM_MIN := 10
 const CIRCLE_LAYER_NUM_INSET_FRAC := 0.25
 const CIRCLE_LAYER_NUM_LIFT_FRAC := 0.25
 
-## **The shape of a glyph symbol is decided by `kind`** (`glyph_defs.DEFS`) — drawing per glyph would make that
-##  "a fourth place to fix when adding a glyph". The color is `GLYPH_TINT`, so it is **the same color as the staff tip**,
-##  and that is why the window and the staff read as the same magic.
+## **The shape of a glyph symbol is decided by `family`, not by `kind`** (`glyph-condense.md` §11.5) —
+##  drawing per glyph would make that "a fourth place to fix when adding a glyph", and `kind` alone stopped
+##  being enough the day a second `TERMINAL` family (condense) arrived: two families sharing one `kind` would
+##  have shared one shape too, and a condense card drew blast's exact disc and said blast's exact sentence
+##  until this map split them. The color is `GLYPH_TINT`, so it is **the same color as the staff tip**, and
+##  that is why the window and the staff read as the same magic.
 ##  SPAWN's ray count is **a presentation value.** It does not need to equal spread's 8 directions —
 ##   kept equal it misreads as "every glyph that makes bolts makes 8 of them".
 const GLYPH_SPAWN_RAYS := 6
 const GLYPH_SYMBOL_PX := 2.0
+
+## **One row per family, not per `kind`.** A missing family here must bark, not fall through to a shape that
+##  belongs to someone else — that silent fallthrough is exactly the bug this map replaces
+##  (`circle_window._draw_glyph`/`three_pick_window._draw_pick_glyph_shape` both read this, never `kind`,
+##  for the shape; the effect sentence in `three_pick_window._effect_text` reads `family` the same way).
+const SYM_SPAWN_RAYS := 0
+const SYM_TERMINAL_DISC := 1
+const SYM_MODIFY_DIAMOND := 2
+## **A narrow tall bar with a point at the top — condense's own shape** (`glyph-condense.md` §11.5). It must
+##  read as *up*, and it must not read as `SYM_SPAWN_RAYS`: `circle-art.md` already measured `ring_accel` and
+##  `ring_spread` colliding as "strokes reaching outward", and a single upward spike is a third member of that
+##  same family of pictures if it is drawn as radiating lines instead of one solid shape — **filled, not
+##  outlined**, the opposite silhouette from `SYM_MODIFY_DIAMOND`'s hollow outline.
+const SYM_PILLAR_UP := 3
+const GLYPH_SYMBOL: Dictionary = {
+	Glyph.FAMILY_SPREAD: SYM_SPAWN_RAYS,
+	Glyph.FAMILY_BLAST: SYM_TERMINAL_DISC,
+	Glyph.FAMILY_DUMMY: SYM_MODIFY_DIAMOND,
+	Glyph.FAMILY_CONDENSE: SYM_PILLAR_UP,
+}
 
 ## **Rotate the rays by half a step.** Without it the 0° and 180° rays are **horizontal**, and since the symbol sits
 ##  at 12 o'clock on the ring the tangent at that point is horizontal too, so **the two rays fold onto the ring's line and vanish** —
@@ -1211,6 +1247,15 @@ const GLYPH_TERMINAL_RATIO := 0.8
 ##  "it spreads" or "it ends here" and is not mistaken for a stronger version of either.
 const GLYPH_MODIFY_RATIO := 0.75
 const GLYPH_MODIFY_PX := 2.0
+
+## **`SYM_PILLAR_UP`'s own shape — a filled spike, base to apex.** `GLYPH_PILLAR_BASE_RATIO`/`_TIP_RATIO` are
+##  where (relative to the symbol radius, measured from center, +down) the bar's foot and the point where the
+##  tip begins sit; `GLYPH_PILLAR_WIDTH_RATIO` is the bar's half-width. The apex itself is always at `-r`
+##  (the symbol's own top), the same edge `GLYPH_TERMINAL_RATIO`'s disc and `GLYPH_MODIFY_RATIO`'s diamond
+##  both reach — every family's symbol fills the same circle, so none reads as "weaker" for taking less room.
+const GLYPH_PILLAR_WIDTH_RATIO := 0.28
+const GLYPH_PILLAR_BASE_RATIO := 0.85
+const GLYPH_PILLAR_TIP_RATIO := 0.35
 
 # --- **the spread generation table — the screen's half** -------------
 ## It must have **the same length and the same direction** as `sim_tuning.SIM_SIZES` (both decrease per generation).
@@ -1349,6 +1394,25 @@ const FLASH_MAX := 16
 const SHAKE_SEC := 0.20
 ## The decay curve. 1 = linear · larger means **strong early and dying fast** (the impact is front-loaded).
 const SHAKE_DECAY_POW := 1.6
+
+# --- condense's pillar -----------------------------------------------
+## **The pillar's own lifetime — two phases, the same shape `FLASH_SEC`/`FLASH_START` gives a blast, adapted
+##  for *up* instead of *out*.** It rises for `PILLAR_RISE_SEC`, holds at full height for whatever is left of
+##  `PILLAR_SEC`, then fades. **`푱`** — the user's own word for it (`glyph-condense.md` §11.6) — is that first
+##  stretch; without a visible rise the pillar simply appears whole and the one verb this glyph exists for
+##  ("솟는다") is gone, the same trap `GATE_ARCH_FADE_FRAMES`'s own comment already names for a fade collapsed
+##  into a pop. **Sized by feel, not measured against a blast** — a pillar has no radius to inherit a ratio
+##  from, and this is a place for the eye (verify-look's acceptance, `glyph-condense.md` §11.10).
+const PILLAR_SEC := 0.35
+const PILLAR_RISE_SEC := 0.12
+## The core's width, as a fraction of the pillar's own drawn width — the same "a wick burning white" idiom
+##  `FLASH_CORE_RATIO` uses, narrower here because the shape is already narrow.
+const PILLAR_CORE_RATIO := 0.5
+const PILLAR_GLOW_A := 0.55
+
+## The cap on simultaneous pillars — the same idiom as `FLASH_MAX`, and the same headroom: eight spread
+##  bolts landing in one glyph (`[확산, 응축]`) never hits it.
+const PILLAR_MAX := 16
 
 # --- the health / XP readout (`hp_view.gd`) ---------------------------
 ## **Bottom-left, and top-left was tried first and does not fit.** `WINDOW_RECT` is `(48, 12, 864, 372)` —
@@ -1725,7 +1789,10 @@ const TOWN_PROMPT_LIFT_PX := 30.0
 ## **The key is written into the text, not left implicit.** The town does not explain anything
 ##  (`town.md`, "the town does not explain anything") — but *which key* is not an explanation, it is a label,
 ##  and with no tutorial in the game yet there is nowhere else for it to be said.
-const TOWN_PROMPT_FMT := "[E] %s"
+## **It says F because F is what opens it.** It read `[E]` for as long as E was the interaction key, and
+##  stayed `[E]` after the user moved interaction to F — the prompt kept naming a key bound to nothing, and
+##  a judge doing what the screen says gets no response. `net_research` was guarding the `[E]` at the time.
+const TOWN_PROMPT_FMT := "[F] %s"
 
 ## **Rune names, in Korean, because the player reads them** (CLAUDE.md's language rule).
 ##  **They live here and not in `sim_tuning`** for the same reason every other string does: `src/sim/` is the
@@ -1797,7 +1864,10 @@ const RESEARCH_INK_DIM := Color(0.24, 0.19, 0.14, 0.62)
 ## **A format, not a sentence, so the price is printed from `progress.GEMS_PER_UNLOCK` rather than typed
 ##  here.** Typed as a literal, retuning the price would move the number the player is charged and leave the
 ##  number the player reads behind, with nothing barking.
-const RESEARCH_FOOTER_FMT := "해금 하나에 원석 %d · [E] 닫기"
+## **The closing key is ESC, and it was never E.** The window opens on the interaction key and closes on
+##  `ui_cancel`; this line named E through the whole time E opened it and after F replaced E, so it has
+##  never once named the key that actually closes the window.
+const RESEARCH_FOOTER_FMT := "해금 하나에 원석 %d · [ESC] 닫기"
 const RESEARCH_LOCKED_TEXT := "잠김"
 ## The currency line. **원석** — `docs/decisions/gems-from-bosses-and-levels.md` named it.
 const RESEARCH_GEMS_FMT := "원석 %d"

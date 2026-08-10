@@ -37,6 +37,7 @@ Genre convention agrees (Dead Cells · Skul · Isaac · Noita). But the game-sid
 | `plans/3.done/levelup-and-three-picks.md` | Why the three-pick window must be two-step (choose → place in a layer) |
 | The assembly window, `circle_window.gd` | No stash UI is built |
 | Gear | Step on it and decide there whether to wear it. Same discipline |
+| The 문양 tab (`the-glyph-tab-shows-the-circle.md`) | Reads the circle's placed glyphs directly — no held-glyph field, same test line applied |
 
 ## Conditions to reopen
 

@@ -86,6 +86,14 @@ const CHUNK_COUNT := CHUNK_W * CHUNK_H       # 16,128
 enum { CMD_FILL = 0, CMD_RESET = 1, CMD_BLAST = 2, CMD_IGNITE = 3, CMD_CARVE = 4, CMD_WATER = 5,
 	CMD_FILL_WATER = 6 }
 
+# --- who lit it — `burn-out-of-the-bull-room.md` §0 ------------------
+## **The bull's own fire, a monster bolt, and a blast from a non-fire circle.** Everything that is not the
+##  fire rune's own trace.
+const IGNITE_ANY := 0
+## **The fire rune's trace, and a blast from a fire circle.** The only source a `rune_only` material
+##  (`cell_materials.WOOD`) may catch from.
+const IGNITE_RUNE_FIRE := 1
+
 # --- state ----------------------------------------------------------
 var _mat := PackedByteArray()   # material id
 var _flag := PackedByteArray()  # state bits (low 4 only)
@@ -95,6 +103,9 @@ var _aux := PackedByteArray()   # meaning is in `cell_materials.gd`'s `_aux` sec
 var _behavior := PackedByteArray()
 var _indestructible := PackedByteArray()
 var _fuel := PackedByteArray()
+## **Mirrors `_indestructible` exactly** (`cell_materials.bake_rune_only()`'s own comment) — which materials
+##  may only be lit by the fire rune, not by ordinary fire or a runeless blast.
+var _rune_only := PackedByteArray()
 
 ## **Fire's burn-slot list — the indices of currently burning cells.** It does not sweep the grid.
 ##  This is the GDD's "state runs on burn-slot lists", and being **independent of chunk sleep**,
@@ -160,6 +171,7 @@ func _init() -> void:
 	_behavior = Mat.bake_behavior()
 	_fuel = Mat.bake_fuel()
 	_indestructible = Mat.bake_indestructible()
+	_rune_only = Mat.bake_rune_only()
 	# A place that goes wrong silently, so it barks at boot — with indexing wholly wrong,
 	# the symptom is only "the grid looks strange".
 	if (1 << X_SHIFT) != W:
@@ -666,10 +678,17 @@ func _burn() -> void:
 		_aux[idx] = fuel
 		if spread:
 			# **Four directions.** Opening diagonals leaks through 1-cell gaps and blurs "it stops at stone".
-			_ignite_cell(x - 1, y)
-			_ignite_cell(x + 1, y)
-			_ignite_cell(x, y - 1)
-			_ignite_cell(x, y + 1)
+			# **`IGNITE_RUNE_FIRE`, unconditionally — and that is safe, not a loophole.**
+			#  `cell_materials.DEFS` has exactly one material with `fuel > 0` (`WOOD`), and it is the only
+			#  material `rune_only` protects — so every burning cell already passed the rune check the moment
+			#  it first caught. Ordinary fire never gets a foothold in a `rune_only` material to spread *from*
+			#  in the first place. **This argument dies the day a second fuel-bearing material without
+			#  `rune_only` is added** — `net_tables` holds it as a check, not only a comment
+			#  (`burn-out-of-the-bull-room.md` §0: "every material with fuel > 0 has rune_only").
+			_ignite_cell(x - 1, y, IGNITE_RUNE_FIRE)
+			_ignite_cell(x + 1, y, IGNITE_RUNE_FIRE)
+			_ignite_cell(x, y - 1, IGNITE_RUNE_FIRE)
+			_ignite_cell(x, y + 1, IGNITE_RUNE_FIRE)
 		i -= 1
 
 
@@ -719,7 +738,11 @@ func _deep_water(i: int) -> bool:
 ## Ignite one cell. Returns true if it caught.
 ## **"Only where there is fuel" is these three lines** (GDD). Stone has 0 fuel and stops here, and
 ##  empty has 0 fuel too, so **fire cannot cross open air.**
-func _ignite_cell(x: int, y: int) -> bool:
+##
+## **`src` — who is trying to light it** (`burn-out-of-the-bull-room.md` §0). `IGNITE_RUNE_FIRE` for the fire
+##  rune's own trace and a blast from a fire circle; `IGNITE_ANY` for everything else (monster fire, a blast
+##  from any other circle). A `rune_only` material refuses every source but the rune's.
+func _ignite_cell(x: int, y: int, src: int) -> bool:
 	if x < 0 or x >= W or y < 0 or y >= H:
 		return false
 	var i := (y << X_SHIFT) | x
@@ -732,6 +755,11 @@ func _ignite_cell(x: int, y: int) -> bool:
 		return false
 	# A safety net. If this starts biting, look not at the value but at **how much wood was placed.**
 	if _burning.size() >= Tuning.MAX_BURNING:
+		return false
+	# **The lock, before the water check** (the shape `burn-out-of-the-bull-room.md` §0 pins). A `rune_only`
+	#  material (`WOOD`) refuses any source but the fire rune's own — the bull's fire and a runeless blast
+	#  both stop here, with no error, the same "quiet refusal" idiom the fuel check above already uses.
+	if _rune_only[_mat[i]] == 1 and src != IGNITE_RUNE_FIRE:
 		return false
 	# **It never catches beside wet ground in the first place. Extinguishing in `_burn` alone is not enough.**
 	#  With only extinguishing: a neighbor's fire spreads and catches -> it goes out next tick -> the neighbor
@@ -771,18 +799,21 @@ static func cmd_reset() -> Dictionary:
 ##  with equal radii **it erases its own fuel first.** Fire cannot catch in principle while
 ##  no error is raised — `net_fire` measures that inequality as a contract.
 ## Why the arguments have no defaults: a call site that omits them silently becomes "a blast with no fire".
+##  **`src` joins that same list** (`burn-out-of-the-bull-room.md` §0) — a call site that omits it would
+##  silently become "a blast that can't light a `rune_only` door", the exact opposite failure from a missing
+##  `ignite_r`, and just as silent.
 ##
-## **Being a command makes bandwidth free** — send four integers and every client erases the same circle and
+## **Being a command makes bandwidth free** — send five integers and every client erases the same circle and
 ##  burns the same ring. However large the blast, network cost doesn't grow (GDD, multiplayer).
-static func cmd_blast(x: int, y: int, rd: int, ignite_r: int) -> Dictionary:
-	return {"kind": CMD_BLAST, "x": x, "y": y, "rd": rd, "ignite_r": ignite_r}
+static func cmd_blast(x: int, y: int, rd: int, ignite_r: int, src: int) -> Dictionary:
+	return {"kind": CMD_BLAST, "x": x, "y": y, "rd": rd, "ignite_r": ignite_r, "src": src}
 
 
 ## **Ignite only.** It breaks not one cell of terrain — the door the rune trace passes through.
-##  `cmd_blast(x, y, 0, r)` would do the same thing but **it gets its own name.**
+##  `cmd_blast(x, y, 0, r, src)` would do the same thing but **it gets its own name.**
 ##   "A blast with radius 0" lies to the reader, and command names persist in logs and on the network.
-static func cmd_ignite(x: int, y: int, r: int) -> Dictionary:
-	return {"kind": CMD_IGNITE, "x": x, "y": y, "r": r}
+static func cmd_ignite(x: int, y: int, r: int, src: int) -> Dictionary:
+	return {"kind": CMD_IGNITE, "x": x, "y": y, "r": r, "src": src}
 
 
 ## **Carve only.** It lights not one cell — the door every impact passes through (step (1) of `spell_sim._impact`).
@@ -841,15 +872,18 @@ func apply(cmd: Dictionary) -> void:
 		CMD_RESET:
 			_reset()
 		CMD_BLAST:
-			_blast(int(cmd["x"]), int(cmd["y"]), int(cmd["rd"]), int(cmd["ignite_r"]))
+			_blast(int(cmd["x"]), int(cmd["y"]), int(cmd["rd"]), int(cmd["ignite_r"]), int(cmd["src"]))
 		CMD_IGNITE:
 			var r := int(cmd["r"])
 			if r > 0:
-				_disc(int(cmd["x"]), int(cmd["y"]), r, false)
+				_disc(int(cmd["x"]), int(cmd["y"]), r, false, int(cmd["src"]))
 		CMD_CARVE:
 			var cr := int(cmd["r"])
 			if cr > 0:
-				_disc(int(cmd["x"]), int(cmd["y"]), cr, true)
+				# **`IGNITE_ANY` — a placeholder, not a decision.** The `destroy` branch never reads `src` at
+				#  all (`_disc`'s own comment); this command never ignites anything, so there is no ignition
+				#  source to name here.
+				_disc(int(cmd["x"]), int(cmd["y"]), cr, true, IGNITE_ANY)
 		CMD_WATER:
 			var wr := int(cmd["r"])
 			var amount := int(cmd["amount"])
@@ -944,17 +978,20 @@ func _fill_water_rect(x0: int, y0: int, x1: int, y1: int, amount: int) -> void:
 ##  "carving only half" is the right picture, and without the range check `_mat[i]` throws an engine error per cell.
 ## rd <= 0 quietly does nothing — "a blast with radius 0" isn't valid input but isn't worth barking about
 ##  (with a spread floor added, 0 can actually occur).
-func _blast(cx: int, cy: int, rd: int, ignite_r: int) -> void:
+func _blast(cx: int, cy: int, rd: int, ignite_r: int, src: int) -> void:
 	# **Destruction first.** Reversed, it erases the fire it just lit.
 	if rd > 0:
-		_disc(cx, cy, rd, true)
+		_disc(cx, cy, rd, true, src)
 	if ignite_r > 0:
-		_disc(cx, cy, ignite_r, false)
+		_disc(cx, cy, ignite_r, false, src)
 
 
 ## Sweep an integer disc. `destroy` erases; otherwise it ignites.
 ## The point is that both passes share one sweep — written separately, the day comes when one is a circle and the other a square.
-func _disc(cx: int, cy: int, rd: int, destroy: bool) -> void:
+## **`src` is read only by the ignite branch** — the destroy branch erases materials regardless of who is
+##  swinging, so a caller with nothing to ignite (`cmd_carve`) passes a placeholder (`IGNITE_ANY`) that this
+##  function never looks at.
+func _disc(cx: int, cy: int, rd: int, destroy: bool, src: int) -> void:
 	var r2 := rd * rd
 	var ax := maxi(0, cx - rd)
 	var bx := mini(W - 1, cx + rd)
@@ -974,7 +1011,7 @@ func _disc(cx: int, cy: int, rd: int, destroy: bool) -> void:
 					continue
 				_write_cell(row | x, Mat.EMPTY)
 			else:
-				_ignite_cell(x, y)
+				_ignite_cell(x, y, src)
 
 
 ## Writing a material clears `_flag` and `_aux` too — otherwise filling burned ground with new wood makes it
@@ -1157,8 +1194,11 @@ func fuel_at(x: int, y: int) -> int:
 
 
 ## Ignite directly. **A net and stage door** — in-game ignition is done by `cmd_blast`'s `ignite_r`.
-func ignite(x: int, y: int) -> bool:
-	return _ignite_cell(x, y)
+## **`src` defaults to `IGNITE_RUNE_FIRE`** — every net that calls this bare wants "does fire ever catch here"
+##  answered, not "does the rune specifically catch here", and the ~40 existing call sites all read that way.
+##  The rule is measured through `world_step` and `spell_sim`, never through this door.
+func ignite(x: int, y: int, src: int = IGNITE_RUNE_FIRE) -> bool:
+	return _ignite_cell(x, y, src)
 
 
 ## Place water directly. **A net and stage door** — exactly the same place as `ignite`.

@@ -32,7 +32,6 @@ const StageInput := preload("res://src/stage/stage_input.gd")
 const MonsterView := preload("res://src/view/monster_view.gd")
 const MonsterDefs := preload("res://src/actor/monster_defs.gd")
 const Progress := preload("res://src/actor/progress.gd")
-const WaterSource := preload("res://src/sim/water_source.gd")
 ## The town (`docs/design/town.md`) — **its map and spawn are the room table's row 0 now**, so this file no
 ##  longer names `town_map.gd` at all. The door that asks where you are standing is still here (`_interact`).
 const Fixtures := preload("res://src/actor/fixtures.gd")
@@ -306,29 +305,6 @@ var _next_stage_id := StageDefs.NO_NEXT
 var _town_message := ""
 
 var _blast_count := 0
-
-## **Room ①'s own water — Stage I (`stage1-bosses.md`).** It starts itself, automatically, the instant the
-##  bull's reward is taken (acceptance 8b — reward first, water second).
-## **It used to have a sibling driven by the K rain key, and that key is gone** (the user removed the debug
-##  water). The two were kept apart so K could not silently cancel a reward-gated pour; with K gone this is
-##  **the only water source the shell holds**, and the separation that argued for is now simply the absence
-##  of the other one.
-## **`null` = not started yet.** Never set back to `null` except on a full stage reset — once room ①'s water
-##  starts, it keeps pouring for the rest of the fight.
-var _room1_reward_water: WaterSource = null
-
-## **Reuses `WaterSource` as-is, not a second pour shape.** Its own shape is "rain across a width, falling
-##  from above" (`water_source.gd`'s header) — not literally "from the side" the way the design doc pictures
-##  the wall collapsing. `stage1-bosses.md`'s own words: "whether the two pours share one implementation is
-##  [water-jump-and-escape.md]'s call, not this one's" — reusing the one pour mechanism that exists is that
-##  deferral honored, not a decision made here. **The visual mismatch (rain, not a side breach) is a known,
-##  named gap**, not hidden — see that risk note in the plan doc.
-## **Placed well inside room ①'s own open interior** — `x` sits just past the room's left boundary (measured
-##  in `stage1-bosses.md` Risk 11: the real wall is at cx1040 after the left run was cut), `row` sits high enough in the room's air for
-##  the fall to read as a pour, not an instant puddle at the floor.
-const ROOM1_WATER_X0 := 1040
-const ROOM1_WATER_X1 := 1060
-const ROOM1_WATER_ROW := 200
 
 ## **Room ③'s east wall — comes down once, on the rooster's death, and only once**
 ##  (`gate-ending-to-game.md`, Stage B). `true` = already dropped this run.
@@ -637,6 +613,9 @@ func _paint_wood_at(world_px: Vector2) -> void:
 ##  lit right here" is impossible.**
 ##  It pairs with T above — lay a forest (T), pour water (F) and set it alight (G), and the three materials
 ##  gather on one screen.
+## **Passes no explicit `src`** (`burn-out-of-the-bull-room.md` §0) — `CellGrid.ignite()`'s own default is
+##  `IGNITE_RUNE_FIRE`, so this debug door stands in for the rune, and a `rune_only` wall (the future door) is
+##  still lightable from here for testing.
 func _ignite_at(world_px: Vector2) -> void:
 	_grid.ignite(floori(world_px.x / Tuning.CELL_PX), floori(world_px.y / Tuning.CELL_PX))
 
@@ -652,49 +631,22 @@ func _ignite_at(world_px: Vector2) -> void:
 ## and the user's to overturn** — the plan's own TBD names auto-equip and a corpse pickup as the other two live
 ## candidates; only this call site would move if either wins, nothing else in the lock.
 ##
-## **Room ①'s water starts here, not at the moment of death** — acceptance 8b's own order: reward first, wall
-## collapse/water second. The rune grant is written **before** the water line below it because conceptually
-## the reward *is* the fire and the water is only its visible consequence — **but that statement order is
-## decorative, not what enforces the acceptance** (verify-read: swapping the two lines is measured green,
-## since both run in the same call on the same frame and the water only starts *pouring* on later ticks —
-## there is no observable moment between them). **The `boss_died(KIND_BULL)` guard is what actually enforces
-## it** — it is what makes "before the bull, nothing grants fire and no water starts" true, and it is gated on
-## the same `_room1_reward_water == null` (has the water not already started) that also guards against a
-## second L press re-triggering anything — pressing L before the bull has died, or again after the water
-## already started, does nothing further, and the grant does not re-fire either (harmless regardless —
-## `grant_rune` is idempotent — but this is the one moment the reward is actually taken). **Room ③'s own
-## reward is not wired to any water or rune here** — `_room1_reward_status()`'s own comment below has the full
-## account of that gap.
+## **Room ①'s water is gone** (`burn-out-of-the-bull-room.md` §4) — only the reward gate below survives.
+## `grant_rune` fires the instant the bull is confirmed dead, on the same L press that clears the pending
+## flag. **The `boss_died(KIND_BULL)` guard is what makes "before the bull, nothing grants fire" true** —
+## `grant_rune` is idempotent on its own (`net_progress`'s own check), so nothing further needs to guard a
+## second press.
 ##
 ## **`not progress.is_reward_pending(...)` is deliberately not part of this condition** — verify-read's own
 ## finding: `clear_pending_boss_rewards()` on the line above already makes that term true unconditionally by
 ## the time it would be read, so it used to be a coupling to the line above, not a real check (deleting it
-## changed nothing; only reordering the two lines would have). `boss_died()` plus the `null` guard is the
-## whole of what actually decides this, named honestly instead of carrying a term that reads as protection
-## but is not.
+## changed nothing; only reordering the two lines would have). `boss_died()` alone is the whole of what
+## actually decides this.
 func _take_boss_reward() -> void:
 	var progress := _world.progress()
 	progress.clear_pending_boss_rewards()
-	if _room1_reward_water == null and progress.boss_died(MonsterDefs.KIND_BULL):
+	if progress.boss_died(MonsterDefs.KIND_BULL):
 		progress.grant_rune(Tuning.ELEM_FIRE)
-		_room1_reward_water = WaterSource.new(
-			ROOM1_WATER_X0, ROOM1_WATER_X1, ROOM1_WATER_ROW, Tuning.WATER_RAIN_PER_TICK)
-
-
-## The HUD line's own three states, named — "has the bull died", "is its reward still pending", "has the
-## water started" (`_take_boss_reward`'s own order). **Only the bull** — the rooster's own reward gate exists
-## in `Progress` (the mechanism is generic, keyed by kind) but no room ③ water is wired to it in this build
-## (`stage1-bosses.md`'s own recorded gap: `water-jump-and-escape.md` already owns a working pour, K, and this
-## stage does not reach into it).
-func _room1_reward_status() -> String:
-	var pr := _world.progress()
-	if not pr.boss_died(MonsterDefs.KIND_BULL):
-		return "황소 미처치"
-	if pr.is_reward_pending(MonsterDefs.KIND_BULL):
-		return "대기 중 (L로 수령)"
-	if _room1_reward_water != null:
-		return "수령함 · 물 누적 %d" % _room1_reward_water.poured()
-	return "수령함"
 
 
 ## **M/N — stands a monster at the mouse position. A shell-only debug door** (`monsters-minimum`).
@@ -894,11 +846,6 @@ func _sync_settlement() -> void:
 ## Hits the screen only on frames where a tick ran.
 ## **Notifications are cleared by the next tick's `spell.step()`** — read after the character has walked, they are still alive.
 func _on_ticked() -> void:
-	# **This is the pour's only heartbeat.** Call it from `_physics_process` and it pours `TICK_DIVIDER` (3)
-	#  times faster (`water_source.tick()`'s header) — exactly once per tick.
-	if _room1_reward_water != null:
-		_room1_reward_water.tick(_grid)
-
 	# **The east wall comes down the instant the rooster dies — before `consume_changed()` below**, or the
 	#  renderer would see the hole one tick late (`_grid.consume_changed()` is this function's own last line).
 	# **One rectangle, not a run of carves.** `cmd_fill` goes through `_write_cell`, which is what counts
@@ -923,6 +870,12 @@ func _on_ticked() -> void:
 	_blast_fx.on_blasts(_spell.get_blast_x(), _spell.get_blast_y(),
 		_spell.get_blast_element(), _spell.get_blast_gen())
 	_blast_count += _spell.blast_count()
+
+	# **A pillar notification is valid only within this tick too — the same place, the same reason.**
+	#  Miss this and a condense glyph carves no cell, so with no pillar drawn either it is a pure signature
+	#  fake: the model raised a pillar and the screen shows nothing (`glyph-condense.md` §11.6, Step 3).
+	_blast_fx.on_pillars(_spell.get_pillar_x(), _spell.get_pillar_y(),
+		_spell.get_pillar_w(), _spell.get_pillar_h(), _spell.get_pillar_element())
 
 	# **A death notification is valid only within this tick** — the tick branch of the next `frame()` clears
 	#  it (`world_step.gd`'s header). Do not read it here and the corpse afterimage cannot appear in principle —
@@ -1054,13 +1007,9 @@ func _rebuild(end_the_run: bool) -> void:
 	#  would pop fully opaque on the second run instead of fading up, with every other check still green.
 	_gate_view.reset_gate()
 	_blast_count = 0
-	# Room ①'s water reverts with everything else — `_world.reset()` above already clears `Progress.
-	#  reward_pending`, but the water instance itself is held here in the shell, not in `Progress`.
-	_room1_reward_water = null
-	# **Room ③'s wall latch too.** `_build_room()` below always rebuilds the terrain in this same call, so
-	#  the flag and the wall never disagree — the latch is safe here for exactly the reason `_room1_reward_water`
-	#  above is, and the reason `_settlement`'s own latch ban above it is not (that one strands a `mouse_filter`
-	#  over the whole viewport; this one strands nothing).
+	# **Room ③'s wall latch.** `_build_room()` below always rebuilds the terrain in this same call, so
+	#  the flag and the wall never disagree — safe here for the reason `_settlement`'s own latch ban above it
+	#  is not (that one strands a `mouse_filter` over the whole viewport; this one strands nothing).
 	_room3_gate_open = false
 	_build_room()
 
@@ -1495,15 +1444,12 @@ func _update_hud() -> void:
 		# What the user should watch is **it dropping and then locking to one figure.** 0 comes only in a
 		#  narrow vessel and the nets measure that headless — there is no reason to wait 140 seconds on screen.
 		# **The water cell count is not "the sum of amounts"** — the `WATER_HUD_TICKS` comment above.
-		#  **The debug pour and the rain toggle are gone**, so every cell counted here came from the game
-		#  itself (room ①'s reward pour) — which makes this line a sharper reading than it was.
+		# **Room ①'s reward pour is gone** (`burn-out-of-the-bull-room.md` §4) — stage 1 pours nowhere now, so
+		#  this line reads 0 for the whole run until room ③'s own pour exists. Kept for the `F` debug pour and
+		#  for that future pour, not deleted with the reward water.
 		"활성 청크 %d / %d · 물 %d칸" % [
 			_grid.active_chunk_count(), CellGrid.CHUNK_COUNT, _water_cells,
 		],
-		# **Stage I — "has the reward been taken" is judged by this line alone.** Order matters
-		#  (acceptance 8b), so the HUD must show which side of that order the fight is currently on, not just
-		#  whether water happens to be flowing.
-		"방① 보상 %s" % _room1_reward_status(),
 		"FPS %d" % Engine.get_frames_per_second(),
 		"캐릭터 (%d,%d) %s" % [_char.x, _char.y, "접지" if _char.on_ground else "공중"],
 		"발사 %d · 비행중 %d · 자취 %d" % [

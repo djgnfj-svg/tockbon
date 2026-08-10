@@ -546,7 +546,14 @@ Stages 2 and 3's four slots are **TBD.** **Water is stage 2** (decided by the us
 **Re-pinned by the user: you leave with the none rune and the basic circle. That is fixed.**
 The points system does not make the *first* departure negotiable — **there is nothing else unlocked to spend on.**
 ⇒ Whoever builds the starting kit **builds the fixed pair first**; points are the shape it grows into, not a
-step-one feature. (`spell_circle.DEFAULT_RUNE` is still `ELEM_FIRE` — that is the gap, see "First milestone".)
+step-one feature. (~~`spell_circle.DEFAULT_RUNE` is still `ELEM_FIRE` — that is the gap~~ — **void, it is
+`Tuning.ELEM_NONE` in code**; the lock landed in `plans/3.done/rune-lock-and-receiving.md`.)
+
+⚠ **And the fixed pair stops being *seated* at boot.** `plans/1.ready/onboarding-and-palette-tabs.md` starts
+the run with an **empty circle that cannot fire** — the none rune and the basic circle are **owned and in the
+palette**, and assembling them is the first thing the game asks for. **"one spread" above is not in that
+plan's starting kit** (its 문양 tab opens on 「현재 문양이 없습니다」); whether the player still owns spread
+at boot is **that doc's open TBD**, not a settled line here.
 
 ### So **the midboss's role changes per run** (decided by the user)
 
@@ -681,9 +688,13 @@ The user named that **"the absence of a goal"** — not even where you get stuck
 **It is one chain. One gap and everything after it is invisible:**
 
 ```
-map → blocked by the wood wall → pit → bull → fire rune → [water rises, escape the pit]
-→ burn the wood wall → rooster → [water rises, escape the stage] → gate
+map → pit → bull → fire rune → burn the pit's own back wall → rooster
+→ [water rises, escape the stage] → gate
 ```
+
+**The chain lost two links** (decided by the user): the wood wall moved **into** room ①'s east wall, so the
+rune is used where it is won, and **the pit's water escape and zone ②'s trash run both go.**
+⇒ `docs/plans/2.active/burn-out-of-the-bull-room.md`, now building
 
 ⇒ **This week the work is linking the chain, not depth.**
 
@@ -693,8 +704,9 @@ map → blocked by the wood wall → pit → bull → fire rune → [water rises
 | ~~**Fire rune**~~ | **Implemented, not accepted** — `spell_circle.DEFAULT_RUNE` is `ELEM_NONE`; the palette veils any rune not owned instead of offering all of `ELEM_ALL`; the bull's reward grants fire (`Progress.grant_rune`) | `docs/plans/3.done/rune-lock-and-receiving.md` |
 | ~~**Two bosses**~~ | **Implemented, not accepted** — bull and rooster both written and verified headless. Two screen fixes (the slam's fire ring, the phase-2 tell's shape) are unlooked-at, blocked by another session holding the editor bridge | `docs/plans/3.done/stage1-bosses.md` |
 | **Three of water's four** | Only pouring works | `docs/plans/2.active/water-jump-and-escape.md` |
-| ~~**Water in pit ①**~~ | **Built, not accepted — and this row's own promise doesn't hold on the real map.** Reward-then-water order is correct (take the bull's reward, then the wall/water), but **the water doesn't carry the player out** — 300s of pouring lifts them 0px, and an ordinary jump alone already clears the step in 1.6s. The map is `stage1-map-layout.md`'s call, not this row's | `docs/plans/3.done/stage1-bosses.md` |
+| ~~**Water in pit ①**~~ | **Built, not accepted — and this row's own promise doesn't hold on the real map.** Reward-then-water order is correct (take the bull's reward, then the wall/water), but **the water doesn't carry the player out** — 300s of pouring lifts them 0px, and an ordinary jump alone already clears the step in 1.6s. The map is `stage1-map-layout.md`'s call, not this row's. ⚠ **The call was made — the escape is dropped and this row leaves the chain** (`2.active/burn-out-of-the-bull-room.md`, now building) | `docs/plans/3.done/stage1-bosses.md` |
 | ~~**The wood-wall lock is broken**~~ | **Not a problem — decided by the user.** A runeless blast does open the wall (`spell_sim.gd:633` ignites without `element`), but **the wall is on the far side of pit ①, and the only way out of the pit is the water the bull's death brings** ⇒ **you cannot stand in front of that wall without already holding fire.** **The lock is held by the map's shape, not by the ignition rule** | `3.done/stage1-map-layout.md` |
+| ~~**…and that shape is being deleted**~~ | **Closed, and built.** Moving the wall into room ①'s east face puts it **on the near side of the pit**, reachable the moment you walk in — the bull's own fire (bolt range 480px vs. 15 tiles of room) and a runeless blast would both open it. **The fix**: `WOOD` is `rune_only` now (`burn-out-of-the-bull-room.md` §0) — only the fire rune's own trace or a fire-circle blast ignites it, never monster fire or an elementless blast. The lock moved from map shape to a rule, wood-wide, not door-only | `docs/decisions/the-door-burns-only-from-the-fire-rune.md` |
 | ~~**The screen for receiving the fire rune**~~ | **The premise was wrong — the screen already exists.** `circle_window.gd:158-161` has always placed runes (pick from the palette → click the rune seat), so nothing has to be broken out of the three-pick. **Ownership was the only thing actually missing, and it is filled too now** (same doc — see the "Fire rune" row above) | `docs/plans/3.done/rune-lock-and-receiving.md` |
 | ~~**An ending**~~ | **Filled — the chain's last square. Implemented, not accepted.** The rooster's death drops room ③'s east wall and stands an arch beyond it; walking into the arch opens the settlement screen, **with a clear title instead of the death one.** No second screen. Neither the arch nor the clear title has been looked at on screen | `docs/plans/3.done/gate-ending-to-game.md`, `docs/plans/3.done/run-end-settlement.md` |
 

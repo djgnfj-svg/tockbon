@@ -566,13 +566,15 @@ func on_tick(spell: SpellSim) -> void:
 	if invuln_left > 0:
 		invuln_left -= 1
 		return
-	# (2)(3) Segment (direct hit) and blast. **One hit and that is the end of it** —
+	# (2)(3)(4) Segment (direct hit), blast and pillar. **One hit and that is the end of it** —
 	#  that is acceptance 3-(1) (taking two blasts on the same tick is still one hit).
-	# **`hit_by_segment`/`hit_by_blast` return a power percent, 0 = not hit — `max`, not `or`.**
+	# **`hit_by_segment`/`hit_by_blast`/`hit_by_pillar` return a power percent, 0 = not hit — `max`, not `or`.**
 	#  `if a() or b()` short-circuits, so whichever the array order finds first would silently decide the
 	#  damage the moment the two ever disagree (`body.gd`'s "why max" comment). Base 100 keeps this identical
 	#  to the pre-Stage-A flat `DAMAGE_HIT` for every combination that existed before.
-	var pw := maxi(_body.hit_by_segment(spell), _body.hit_by_blast(spell))
+	# **`hit_by_pillar` must land here too, or the pillar hits monsters and not the player with no error raised**
+	#  (`glyph-condense.md` §11.8's own risk list — "only one of `character.gd`/`monster.gd` updated").
+	var pw := maxi(maxi(_body.hit_by_segment(spell), _body.hit_by_blast(spell)), _body.hit_by_pillar(spell))
 	if pw <= 0:
 		return
 	# (4) HP does not go below 0 (plan section 4) — `take_hit` does the floor and the invulnerability set together.

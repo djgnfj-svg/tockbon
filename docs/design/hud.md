@@ -3,8 +3,8 @@
 **One line**: health is a **big red number with a thin gauge under it**, bottom-left; everything else is a
 small line above it; the debug readout is a separate thing behind F3.
 
-**Implemented**: health · level line · level-up line. **Accepted**: unseen at full frame rate — the browser
-tab it was checked in ran at FPS 8.
+**Implemented**: health · level line · level-up line. **The boss bar is designed and not built** — see below.
+**Accepted**: unseen at full frame rate — the browser tab it was checked in ran at FPS 8.
 
 **A concept stays alive and never changes folders.** The two header lines are only "how much runs now" —
 format per [README.md](README.md).
@@ -70,6 +70,26 @@ fill retreats.
 
 **And no blink.** The character sprite already blinks on invulnerability (`character_view`'s
 `invuln_left & 1`); a second blinking thing on screen reads as a rendering fault, not as danger.
+
+## The boss bar — **the top band, and it is the only thing allowed up there**
+
+**Not built.** → [../plans/1.ready/boss-entrance-and-hp-bar.md](../plans/1.ready/boss-entrance-and-hp-bar.md).
+
+A boss gets **a wide bar across the top of the screen with its name over it, large** — 황소 is
+**「불의 룬을 삼킨 소」** (the user's own words; the rooster's name is undecided). Both stage-1 bosses.
+
+**It is the opposite corner from the player's own readout, and that is the point.** Health is bottom-left
+because the assembly window owns the top-left; the boss bar takes the top **anyway**, because you are not
+assembling while a boss is arriving. If that turns out to be false on screen, **the bar moves down, not the
+window** — the standing rule that no window may cover the health readout is about *your* health.
+⚠ **That premise has a known counter-case, and it is the tutorial's own beat** — the plan doc's Bounds box
+carries it. **Do not settle this overlap before reading it.**
+
+**It is not the mob bar.** A monster's 4px strip above its head (`MONSTER_HP_BAR_*`) stays exactly as it is;
+the boss bar borrows **the player's** vocabulary instead — `hp_frame.png`, fill inside the frame, text on
+top. Two bars in the mob vocabulary would make "this fight has a length" read as "this pig is large".
+
+**Every pixel value is undecided**, and so is whether the fill carries a number the way the player's does.
 
 ## Next session's job — **the palette's visual language does not match the windows**
 

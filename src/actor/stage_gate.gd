@@ -32,12 +32,14 @@ const BAND_UP_PX := 96        ## y band, upward from the ground line (3 tiles). 
 ##  the pushed geometry below, and the table names them.
 ## **The price, stated**: stage 2's gate numbers will be literals in its own row while stage 1's are here.
 ##  The day that asymmetry is worth removing, `net_gate` has to gain a `set_geometry()` line first.
-const STAGE1_SEAT_TILE_X := 270      ## The arch's column.
-const STAGE1_FLOOR_TILE_Y := 25      ## The row it stands ON — its top edge is the ground line.
-const STAGE1_WALL_TILE_X0 := 267     ## Room ③'s east wall — both stone columns.
-const STAGE1_WALL_TILE_X1 := 268
-const STAGE1_WALL_TILE_Y0 := 13
-const STAGE1_WALL_TILE_Y1 := 24
+## **All six moved with room ③** (`burn-out-of-the-bull-room.md` §1/§3) — the room shifted down 7 rows and
+##  left 83 columns onto room ①'s own floor line, so the gate that stands at its east wall moved with it.
+const STAGE1_SEAT_TILE_X := 187      ## The arch's column.
+const STAGE1_FLOOR_TILE_Y := 32      ## The row it stands ON — its top edge is the ground line.
+const STAGE1_WALL_TILE_X0 := 184     ## Room ③'s east wall — both stone columns.
+const STAGE1_WALL_TILE_X1 := 185
+const STAGE1_WALL_TILE_Y0 := 20
+const STAGE1_WALL_TILE_Y1 := 31
 
 ## **Which stage's gate this is, right now — pushed in by the shell, never read from `src/stage/`.**
 ##  `WorldStep.set_placement()` is the precedent this copies verbatim: the shell owns the room table and

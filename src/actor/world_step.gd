@@ -173,7 +173,11 @@ func frame(dt: float, axis: float, jump: bool, jump_held: bool) -> bool:
 		#  grid_step` moves this block earlier and reads `aux_at` (remaining fuel) to catch it: applying
 		#  ignition before `_grid.step()` lets that same tick's step already shave the freshly-lit cell once.
 		for i in _bolts.ignite_count():
-			_grid.apply(CellGrid.cmd_ignite(_bolts.ignite_cx(i), _bolts.ignite_cy(i), MonsterBolts.FIRE_IGNITE_R))
+			# **`IGNITE_ANY`** — a monster's bolt, never the fire rune (`burn-out-of-the-bull-room.md` §0).
+			#  A `rune_only` material (`WOOD`) refuses this source, exactly the lock the hen's fire and the
+			#  bull's own bolts must respect.
+			_grid.apply(CellGrid.cmd_ignite(_bolts.ignite_cx(i), _bolts.ignite_cy(i), MonsterBolts.FIRE_IGNITE_R,
+				CellGrid.IGNITE_ANY))
 		_bolts.clear_ignitions()
 		# (5) Monster on_tick — did magic hit a monster, and (`stage1-bosses.md` Stage B) advance any
 		#  boss's pattern clock. **Being after `_char.on_tick` is a contract** (doc, "behavior (9)").
@@ -234,7 +238,8 @@ func frame(dt: float, axis: float, jump: bool, jump_held: bool) -> bool:
 			#  has no reward to gate anything on, and setting this for one would leave a dict entry nothing
 			#  would ever clear (no debug key targets a kind that isn't a boss).
 			# **This same gate fires for the rooster too** (`KIND_ROOSTER` also has a pattern). No reward
-			#  water is wired to it (`stage.gd._room1_reward_status()` has the full account of that gap), but
+			#  water is wired to it — room ①'s own reward water is gone too, and stage 1 pours nowhere until
+			#  room ③'s pour is built (`burn-out-of-the-bull-room.md` §4) — but
 			#  `boss_died(KIND_ROOSTER)` itself is no longer unread: `stage.gd`'s `_on_ticked()` wall latch,
 			#  `gate_view._process()`'s `visible`, and `_sync_settlement()`'s `at_gate` term all read it now
 			#  (`gate-ending-to-game.md`).
@@ -503,7 +508,9 @@ func _ignite_slam_impact(m: Monster) -> void:
 	var half := (points - 1) / 2
 	for i in points:
 		var offset_cells := (i - half) * spread_cells
-		_grid.apply(CellGrid.cmd_ignite(center_cx + offset_cells, floor_cy, r))
+		# **`IGNITE_ANY`** — the slam's own ground fire, never the fire rune (`burn-out-of-the-bull-room.md`
+		#  §0). The same lock that stops a boss's fire from ever lighting a `rune_only` door.
+		_grid.apply(CellGrid.cmd_ignite(center_cx + offset_cells, floor_cy, r, CellGrid.IGNITE_ANY))
 
 
 ## Seats it as a command to be applied on the next tick, or `delay` ticks further out. **The tick number

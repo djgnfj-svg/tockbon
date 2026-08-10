@@ -99,6 +99,18 @@ func run(t) -> void:
 	_notice_power_arrays_clear_with_the_rest(t)
 	_power_clamp_actually_fires(t)
 	_unknown_id_after_a_capped_glyph_barks_not_crashes(t)
+	# -- burn-out-of-the-bull-room.md §0 — the runeless-blast fix --
+	_blast_ignites_wood_only_from_the_fire_rune(t)
+	# -- glyph-condense §11.6 Step 2 — the pillar's own pipeline --
+	_condense_notice_is_literal(t)
+	_condense_climbs_up_and_stops_at_the_first_solid(t)
+	_condense_leaves_no_material(t)
+	_condense_and_blast_both_run_in_either_order(t)
+	_spread_condense_raises_eight_pillars(t)
+	_condense_height_follows_gen(t)
+	_condense_power_does_not_leak_between_layers(t)
+	_condense_runs_for_every_rune(t)
+	_condense_never_defers(t)
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -477,8 +489,9 @@ func _blast_command(t) -> void:
 	var cy := 70
 	var g := _solid_grid()
 	var before := g.count_material(Mat.STONE)
-	# Ignition is not measured here (that is `net_fire`'s share) — the grid is all stone so there is nothing to catch.
-	g.apply(CellGrid.cmd_blast(cx, cy, rd, 0))
+	# Ignition is not measured here (that is `net_fire`'s share) — the grid is all stone so there is nothing to
+	#  catch, and `ignite_r` 0 means `src` is never read either way.
+	g.apply(CellGrid.cmd_blast(cx, cy, rd, 0, CellGrid.IGNITE_ANY))
 
 	t.eq(g.mat_at(cx, cy), Mat.EMPTY, "폭발 한가운데가 비었다")
 	t.eq(g.mat_at(cx + rd, cy), Mat.EMPTY, "반경 끝(정확히 rd)이 비었다")
@@ -494,14 +507,14 @@ func _blast_command(t) -> void:
 	# Outside the grid is **clamped.** Without the range check, `_mat[i]` raises an engine error per cell,
 	#  and that is a silent death the `SCRIPT ERROR` grep does not catch.
 	var edge := _solid_grid()
-	edge.apply(CellGrid.cmd_blast(0, 0, rd, 0))
+	edge.apply(CellGrid.cmd_blast(0, 0, rd, 0, CellGrid.IGNITE_ANY))
 	t.eq(edge.mat_at(0, 0), Mat.EMPTY, "격자 모서리에서 터져도 지워진다")
 	t.eq(edge.mat_at(rd + 1, 0), Mat.STONE, "모서리 폭발이 반경만큼만 지운다")
 
 	# Radius 0 silently does nothing — once a spread floor is added, 0 can actually come out.
 	var zero := _solid_grid()
 	zero.consume_changed()
-	zero.apply(CellGrid.cmd_blast(50, 50, 0, 0))
+	zero.apply(CellGrid.cmd_blast(50, 50, 0, 0, CellGrid.IGNITE_ANY))
 	t.eq(zero.consume_changed(), 0, "반경 0 폭발은 한 칸도 안 건드린다")
 
 
@@ -513,7 +526,7 @@ func _changed_counter(t) -> void:
 	g.apply(CellGrid.cmd_fill(0, 0, 3, 3, Mat.STONE))
 	t.eq(g.consume_changed(), 16, "채운 칸 수를 센다")
 	t.eq(g.consume_changed(), 0, "읽으면 0으로 돌아간다")
-	g.apply(CellGrid.cmd_blast(100, 70, Tuning.blast_rd(0), 0))
+	g.apply(CellGrid.cmd_blast(100, 70, Tuning.blast_rd(0), 0, CellGrid.IGNITE_ANY))
 	t.ok(g.consume_changed() > 0, "폭발도 센다 (커맨드 큐를 안 지나는 변경이다)")
 
 
@@ -1718,6 +1731,285 @@ func _unknown_id_after_a_capped_glyph_barks_not_crashes(t) -> void:
 
 
 # ══════════════════════════════════════════════════════════════════
+#  burn-out-of-the-bull-room.md §0 — the runeless-blast fix
+# ══════════════════════════════════════════════════════════════════
+
+## **Driven through `SpellSim`, not through `CellGrid.ignite()`/`cmd_blast()` directly** — this is the check
+## that proves `_run_glyph`'s TERMINAL branch actually derives `src` from the fired rune's own element, not
+## only that the grid-level rule (`net_fire`'s own check) works in isolation. A none-element blast must leave
+## a `rune_only` wall standing; a fire-element blast must ignite it.
+func _blast_ignites_wood_only_from_the_fire_rune(t) -> void:
+	var one: Array[int] = [Glyph.GLYPH_BLAST]
+	var packed := Glyph.pack(one)
+
+	var g_none := _wood_wall_grid()
+	var sim_none := SpellSim.new()
+	t.ok(sim_none.fire(SpellSim.cmd_fire(10, 70, 100, 0, Tuning.ELEM_NONE, packed)),
+		"무속성 룬으로 폭발 문양을 쏜다")
+	var fired_none := false
+	for _i in 12:
+		sim_none.step(g_none)
+		if sim_none.blast_count() > 0:
+			fired_none = true
+	t.ok(fired_none, "폭발이 실제로 났다 (검사의 전제)")
+	t.eq(g_none.burning_count(), 0, "무속성 폭발은 문(나무)에 불을 못 붙인다 (룬이 없다)")
+	t.ok(g_none.count_material(Mat.WOOD) > 0, "나무는 그대로 서 있다 (부서지지도 않는다 — indestructible)")
+
+	var g_fire := _wood_wall_grid()
+	var sim_fire := SpellSim.new()
+	t.ok(sim_fire.fire(SpellSim.cmd_fire(10, 70, 100, 0, Tuning.ELEM_FIRE, packed)),
+		"불 룬으로 같은 폭발 문양을 쏜다")
+	var fired_fire := false
+	for _i in 12:
+		sim_fire.step(g_fire)
+		if sim_fire.blast_count() > 0:
+			fired_fire = true
+	t.ok(fired_fire, "폭발이 실제로 났다 (검사의 전제)")
+	t.ok(g_fire.burning_count() > 0, "불 룬의 폭발은 문에 불을 붙인다")
+
+
+# ══════════════════════════════════════════════════════════════════
+#  glyph-condense §11.6 Step 2 — the pillar
+# ══════════════════════════════════════════════════════════════════
+
+## **A pillar notice exists where the bolt landed. Literal `w`/`h`** — never read back from `Tuning.pillar_w/
+##  pillar_h`, or the check would only ever prove the table agrees with itself (`glyph-condense.md` §9's own
+##  warning, "pin literal coordinates").
+## Fired into `_wall_grid()` from the side (`WALL_X0` is 40) — the impact cell is one column short of it, and
+##  that column is otherwise empty all the way up, so nothing but the table's own ceiling limits the climb.
+func _condense_notice_is_literal(t) -> void:
+	var g := _wall_grid()
+	var sim := SpellSim.new()
+	# **Fired from 5 cells out, not 30** — close enough that the wall is reached inside one tick, so gravity
+	#  gets only one tick's worth of pull before impact and the row does not drift off the fired one.
+	t.ok(_fire(sim, WALL_X0 - 5, 70, 100, 0, Glyph.pack([Glyph.CONDENSE_C])), "응축 문양을 실은 탄이 나간다")
+	var seen := false
+	for _i in 12:
+		sim.step(g)
+		if sim.pillar_count() > 0:
+			seen = true
+			t.eq(sim.pillar_count(), 1, "기둥이 한 번 통지된다")
+			t.eq(sim.get_pillar_x()[0], WALL_X0 - 1, "기둥이 착탄 칸(벽 바로 앞, %d)에서 선다" % (WALL_X0 - 1))
+			t.eq(sim.get_pillar_y()[0], 70, "기둥의 발판이 착탄 행(70)이다")
+			t.eq(sim.get_pillar_w()[0], 8, "너비가 8칸이다")
+			t.eq(sim.get_pillar_h()[0], 16, "위가 트여 있으면 높이가 16칸까지 닿는다")
+			break
+	t.ok(seen, "기둥이 실제로 섰다")
+
+
+## **It goes up, not down or sideways, and it stops at the first solid cell above.** A ceiling 5 cells above
+##  the impact row (in the *same* column the pillar climbs) caps the height at exactly 5 — not 16.
+## A solid cell placed **below** the impact row (the opposite direction) is left untouched by this check on
+##  purpose: if the climb ever went the wrong way, it would hit *that* cell first and read `h == 1`, so this
+##  one scenario catches both "the sign was flipped" and "the `BEHAVIOR_STATIC` test was deleted".
+func _condense_climbs_up_and_stops_at_the_first_solid(t) -> void:
+	var g := _wall_grid()
+	var impact_x := WALL_X0 - 1
+	var impact_y := 70
+	g.apply(CellGrid.cmd_fill(impact_x, impact_y - 5, impact_x, impact_y - 5, Mat.STONE))
+	g.apply(CellGrid.cmd_fill(impact_x, impact_y + 1, impact_x, impact_y + 1, Mat.STONE))
+	var sim := SpellSim.new()
+	# **Fired from 5 cells out** — the same reason `_condense_notice_is_literal` above fires close: gravity
+	#  gets only one tick to pull before impact, so the bolt lands on `impact_y`, the exact row the ceiling
+	#  and the floor cell above were placed against.
+	t.ok(_fire(sim, WALL_X0 - 5, impact_y, 100, 0, Glyph.pack([Glyph.CONDENSE_C])), "응축 탄이 나간다")
+	var seen := false
+	for _i in 12:
+		sim.step(g)
+		if sim.pillar_count() > 0:
+			seen = true
+			t.eq(sim.get_pillar_y()[0], impact_y, "발판 행이 착탄 행이다 (검사의 전제)")
+			t.eq(sim.get_pillar_h()[0], 5, "5칸 위 천장에서 멈춘다 (표 상한 16까지 안 간다)")
+			break
+	t.ok(seen, "기둥이 실제로 섰다 (검사의 전제)")
+
+
+## **"응축은 물질을 남기지 않는다" is a statement about the column, not the impact** (`glyph-condense.md`
+##  §2.4). Compares the grid after `[응축]` against a bare impact with the same rune, **and** asserts the
+##  pillar notice actually fired — grid equality alone is *"A/B catches diverged, never vanished"* (CLAUDE.md);
+##  the notice assertion is the half that catches "the glyph silently did nothing at all".
+func _condense_leaves_no_material(t) -> void:
+	var g_bare := _wall_grid()
+	var s_bare := SpellSim.new()
+	t.ok(s_bare.fire(SpellSim.cmd_fire(10, 70, 100, 0, Tuning.ELEM_NONE, Glyph.GLYPH_NONE)),
+		"문양 없이 쏜다 (대조군)")
+	for _i in 12:
+		s_bare.step(g_bare)
+
+	var g_cond := _wall_grid()
+	var s_cond := SpellSim.new()
+	t.ok(s_cond.fire(SpellSim.cmd_fire(10, 70, 100, 0, Tuning.ELEM_NONE, Glyph.pack([Glyph.CONDENSE_C]))),
+		"응축을 쏜다")
+	var fired := false
+	for _i in 12:
+		s_cond.step(g_cond)
+		if s_cond.pillar_count() > 0:
+			fired = true
+	t.ok(fired, "기둥 통지가 실제로 났다 (A/B만으론 못 잡는 절반)")
+
+	var same := true
+	for cx in range(0, 60):
+		for cy in range(40, 100):
+			if g_bare.mat_at(cx, cy) != g_cond.mat_at(cx, cy):
+				same = false
+	t.ok(same, "응축이 서 있어도 격자가 착탄 단독과 바이트 단위로 같다 (물질을 안 남긴다)")
+
+
+## **TERMINAL means "the next glyph continues at the same spot"** — `[응축, 폭발]`과 `[폭발, 응축]` 둘 다
+##  두 문양이 실제로 실행됐는지를 잰다 (기둥과 폭발 각각 정확히 1회).
+##
+## **The grid is not compared here, and that is not an oversight.** Condense writes no cell in either order
+##  (§11.1 — it neither cuts nor ignites), so the *terrain* is identical whichever order the two run in; only
+##  the blast's own hole differs from a bare blast, and that is already `_blast_glyph`'s check. What order
+##  actually changes here is the **picture** (`glyph-condense.md` §3's own worked table: the pillar rises
+##  before or after the hole exists) — a screen fact, not a grid fact, and outside what this net can measure.
+func _condense_and_blast_both_run_in_either_order(t) -> void:
+	var g_a := _wall_grid()
+	var sim_a := SpellSim.new()
+	t.ok(_fire(sim_a, 10, 70, 100, 0, Glyph.pack([Glyph.CONDENSE_C, Glyph.GLYPH_BLAST])),
+		"[응축, 폭발]을 쏜다")
+	var a_pillars := 0
+	var a_blasts := 0
+	for _i in 12:
+		sim_a.step(g_a)
+		a_pillars += sim_a.pillar_count()
+		a_blasts += sim_a.blast_count()
+	t.eq(a_pillars, 1, "[응축, 폭발]에서 기둥이 한 번 선다")
+	t.eq(a_blasts, 1, "[응축, 폭발]에서 폭발도 한 번 난다")
+
+	var g_b := _wall_grid()
+	var sim_b := SpellSim.new()
+	t.ok(_fire(sim_b, 10, 70, 100, 0, Glyph.pack([Glyph.GLYPH_BLAST, Glyph.CONDENSE_C])),
+		"[폭발, 응축]을 쏜다")
+	var b_pillars := 0
+	var b_blasts := 0
+	for _i in 12:
+		sim_b.step(g_b)
+		b_pillars += sim_b.pillar_count()
+		b_blasts += sim_b.blast_count()
+	t.eq(b_pillars, 1, "[폭발, 응축]에서도 기둥이 한 번 선다")
+	t.eq(b_blasts, 1, "[폭발, 응축]에서도 폭발이 한 번 난다")
+
+
+## **`[확산, 응축]`이 착탄점마다 기둥을 하나씩, 정확히 8개 세운다.** *"a loop whose condition is false from
+##  the start never runs the check at all"* — count, not `> 0`.
+## **Height is not asserted per child here.** Eight children scatter in eight directions and some fly steeply
+##  upward before falling back — measured, one of them rose far enough that even a 65-cell-tall test room
+##  could not give it 8 clear cells above its own landing point without the room becoming implausibly large.
+##  "Does a gen-1 pillar actually read the gen-1 table row" is exactly `_condense_height_follows_gen` below,
+##  fired once, in a straight line, with no ballistic arc to fight.
+func _spread_condense_raises_eight_pillars(t) -> void:
+	var g := _cave_grid()
+	var sim := SpellSim.new()
+	t.ok(_fire(sim, 22, 70, 100, 0, Glyph.pack([Glyph.GLYPH_SPREAD, Glyph.CONDENSE_C])),
+		"[확산, 응축]을 쏜다")
+	var total := 0
+	for _i in 90:
+		sim.step(g)
+		total += sim.pillar_count()
+	t.eq(total, Tuning.SPREAD_COUNT, "확산 → 응축이 기둥을 정확히 %d개 세운다" % Tuning.SPREAD_COUNT)
+
+
+## **A gen-1 pillar reads the gen-1 table row (`SIM_SIZES[1].pillar_h` = 8), fired directly at that
+##  generation rather than through spread's own ballistics** — the companion to the test above, which proves
+##  the count but cannot pin the height without fighting an 8-way scatter's real trajectories.
+func _condense_height_follows_gen(t) -> void:
+	var g := _wall_grid()
+	var sim := SpellSim.new()
+	var ox_fp := ((WALL_X0 - 5) << SpellSim.FP_SHIFT) + SpellSim.FP_HALF
+	var oy_fp := (70 << SpellSim.FP_SHIFT) + SpellSim.FP_HALF
+	t.ok(sim._launch(ox_fp, oy_fp, 100, 0, Glyph.pack([Glyph.CONDENSE_C]), Tuning.ELEM_NONE, 1, Tuning.POWER_BASE),
+		"세대 1 응축을 직접 발사한다")
+	var seen := false
+	for _i in 12:
+		sim.step(g)
+		if sim.pillar_count() > 0:
+			seen = true
+			t.eq(sim.get_pillar_w()[0], 4, "세대 1 너비가 표값(4)이다")
+			t.eq(sim.get_pillar_h()[0], 8, "위가 트여 있으면 세대 1 높이가 표값(8)까지 닿는다")
+			break
+	t.ok(seen, "기둥이 실제로 섰다")
+
+
+## **`[CONDENSE_R, CONDENSE_R]`이 120과 120을 준다 — 144가 아니다.** TERMINAL이 같은 자리에서 이어 실행되므로
+##  둘째 기둥도 **같은** 실려 온 위력을 읽어야 한다 — `_blast_power_does_not_leak_between_layers`가 폭발에
+##  대해 이미 고정한 것과 같은 모양.
+##
+## **`sim._launch(...)` directly, not `fire()`.** Condense's `max_per_circle` is 1 (`glyph_defs.gd`'s own
+##  false-knob argument — two pillars at one cell are one pillar), so `fire()` itself would reject two
+##  condense layers before this ever ran (`_family_cap_blocks_mixed_rarity`'s own note: only `fire()`
+##  enforces the cap, not `_launch`/`_resume`). The pipeline contract under test here — a local, never
+##  written back into `power` — has to hold regardless of whether the real UI can ever assemble this list.
+func _condense_power_does_not_leak_between_layers(t) -> void:
+	var g := _wall_grid()
+	var sim := SpellSim.new()
+	var packed := Glyph.pack([Glyph.CONDENSE_R, Glyph.CONDENSE_R])
+	var ox_fp := (10 << SpellSim.FP_SHIFT) + SpellSim.FP_HALF
+	var oy_fp := (70 << SpellSim.FP_SHIFT) + SpellSim.FP_HALF
+	t.ok(sim._launch(ox_fp, oy_fp, 100, 0, packed, Tuning.ELEM_NONE, 0, Tuning.POWER_BASE),
+		"[응축(레어), 응축(레어)]를 직접 발사한다 (fire()의 한도를 건너뛴다)")
+	var want := Tuning.POWER_BASE * Glyph.power_pct_of(Glyph.CONDENSE_R) / 100
+	var pp := PackedInt32Array()
+	for _i in 12:
+		sim.step(g)
+		if sim.pillar_count() > 0 and pp.is_empty():
+			pp = sim.get_pillar_power().duplicate()
+	t.eq(pp.size(), 2, "TERMINAL이 같은 자리에서 두 번 이어 실행된다 (검사의 전제)")
+	if pp.size() == 2:
+		t.eq(pp[0], want, "첫 기둥 위력이 %d다 (144가 아니다)" % want)
+		t.eq(pp[1], want, "둘째 기둥도 똑같이 %d다 — power에 다시 안 쓰인다" % want)
+
+
+## **The wrapper's stderr check catches "a rune with no implementation" for free** — condense is rune-blind
+##  (`glyph-condense.md` §2.3's ⚠ box), so every rune in `ELEM_ALL` must fire it with no `push_error`.
+func _condense_runs_for_every_rune(t) -> void:
+	for elem: int in Tuning.ELEM_ALL:
+		var g := _wall_grid()
+		var sim := SpellSim.new()
+		t.ok(sim.fire(SpellSim.cmd_fire(10, 70, 100, 0, elem, Glyph.pack([Glyph.CONDENSE_C]))),
+			"룬 %d로 응축을 쏜다" % elem)
+		var seen := false
+		for _i in 12:
+			sim.step(g)
+			if sim.pillar_count() > 0:
+				seen = true
+		t.ok(seen, "룬 %d에서도 기둥이 선다 (짖지 않는다)" % elem)
+
+
+## **`tick_budget: 0` — the positive form of §6.3's overturned budget.** A pillar writes no cell, so there is
+##  nothing to cap; eight of them landing on one tick must all fire on that tick, not defer.
+##
+## **Real regression, found by verify-run**: reading `pending_count()` only after the whole 12-tick loop
+## caught nothing — set `CONDENSE_C`'s `tick_budget` to 1 and the whole suite stayed green, because a budget
+## of 1 spreads the eight across eight ticks and by tick 12 every one of them has already drained. What a
+## real budget actually does is defer **within the landing tick itself** (`_resume`'s own per-glyph counter),
+## so `pending_count()` has to be read **every tick**, not once at the end.
+func _condense_never_defers(t) -> void:
+	var g := _wall_grid()
+	var sim := SpellSim.new()
+	var packed := Glyph.pack([Glyph.CONDENSE_C])
+	var n := 8
+	var gap := 4
+	var fired := 0
+	for k in n:
+		if _fire(sim, 10, 8 + k * gap, 100, 0, packed):
+			fired += 1
+	t.eq(fired, n, "%d발이 같은 틱에 착탄하도록 같이 난다" % n)
+	var total := 0
+	var landing_tick_count := 0
+	var max_pending := 0
+	for _i in 12:
+		sim.step(g)
+		if sim.pillar_count() > 0:
+			landing_tick_count = sim.pillar_count()
+		total += sim.pillar_count()
+		max_pending = maxi(max_pending, sim.pending_count())
+	t.eq(total, n, "%d개 기둥이 전부 선다 (하나도 안 밀린다)" % n)
+	t.eq(landing_tick_count, n, "%d개가 착탄한 그 틱에 전부 같이 선다 (일부만 서고 나머지가 다음 틱으로 밀리지 않는다)" % n)
+	t.eq(max_pending, 0, "예산이 0(무제한)이라 어느 틱에도 밀린 적이 없다 (틱마다 잰다 — 끝나고 한 번만 재면 못 잡는다)")
+
+
+# ══════════════════════════════════════════════════════════════════
 #  Tools
 # ══════════════════════════════════════════════════════════════════
 
@@ -1773,6 +2065,14 @@ func _run_ticks(sim: SpellSim, grid: CellGrid, ticks: int) -> int:
 func _wall_grid() -> CellGrid:
 	var g := CellGrid.new()
 	g.apply(CellGrid.cmd_fill(WALL_X0, 0, WALL_X1, CellGrid.H - 1, Mat.STONE))
+	return g
+
+
+## **The wood-side twin of `_wall_grid()`** — full-height, so the exact row the bolt happens to drift to
+## (gravity) does not matter; the whole column is `WOOD` either way.
+func _wood_wall_grid() -> CellGrid:
+	var g := CellGrid.new()
+	g.apply(CellGrid.cmd_fill(WALL_X0, 0, WALL_X1, CellGrid.H - 1, Mat.WOOD))
 	return g
 
 

@@ -462,9 +462,11 @@ func on_tick(spell: SpellSim, target_x: int, target_y: int) -> void:
 	if invuln_left > 0:
 		invuln_left -= 1
 		return
-	# **`hit_by_segment`/`hit_by_blast` return a power percent, 0 = not hit — `max`, not `or`**
+	# **`hit_by_segment`/`hit_by_blast`/`hit_by_pillar` return a power percent, 0 = not hit — `max`, not `or`**
 	#  (the same reasoning as `character.on_tick`, so the two do not read the notice differently).
-	var pw := maxi(_body.hit_by_segment(spell), _body.hit_by_blast(spell))
+	# **Must mirror `character.gd`'s own three-way max** — drop this side and a pillar hits the player but not
+	#  monsters, with nothing barking (`glyph-condense.md` §11.8's own risk list).
+	var pw := maxi(maxi(_body.hit_by_segment(spell), _body.hit_by_blast(spell)), _body.hit_by_pillar(spell))
 	if pw <= 0:
 		return
 	_apply_damage(Character.DAMAGE_HIT * pw / 100)

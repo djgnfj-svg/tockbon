@@ -350,7 +350,7 @@ func _measure_windup_run_length_at_hp(kind: int, hp: int) -> int:
 func run(t) -> void:
 	# -- stage1-bosses.md Stage D -- the fire breath --
 	_fire_move_values_are_read(t)
-	_fire_bolt_hits_wood_and_wood_burns(t)
+	_fire_bolt_does_not_ignite_wood(t)
 	_fire_ignite_reaches_exactly_its_radius(t)
 	_ignite_settles_after_this_ticks_grid_step(t)
 	_fire_bolt_vanishes_at_its_range(t)
@@ -394,15 +394,17 @@ func _fire_move_values_are_read(t) -> void:
 		"fire 데미지가 닭의 것과 다르다 (%d ≠ %d)" % [MonsterBolts.FIRE_DAMAGE, MonsterBolts.BOLT_DAMAGE])
 
 
-## **Acceptance 4's positive half, and Risk 4's own escape hatch — measured on a wooded scene, not room ①**
-## (`_ignite_cell` refuses at zero fuel, and room ① has none by design, Risk 4). The bolt is made directly
+## **Acceptance 4's own reversal** (`burn-out-of-the-bull-room.md` §0/§6 — decided by the user, recorded in
+## `stage1-bosses.md`'s own acceptance-4 row). `WOOD` is now `rune_only`, and a monster's fire bolt is
+## `IGNITE_ANY` (`world_step`'s own terrain-impact line) — the exact opposite source. **This used to be named
+## `_fire_bolt_hits_wood_and_wood_burns` and asserted the reverse**; the bolt is made directly
 ## (`world._bolts.spawn`, the same idiom `_hen_bolt_hits_only_the_player` already uses) — the pattern cycle
 ## that would naturally fire one is measured on its own, further down.
 ##
 ## `world_step`'s tick branch turns a fire bolt's terrain impact into `cmd_ignite` **one tick after** the
 ## impact frame (that file's own comment on why — the same door the charge's carve uses), so the loop below
 ## must run at least one full tick past the collision, not stop the instant the bolt disappears.
-func _fire_bolt_hits_wood_and_wood_burns(t) -> void:
+func _fire_bolt_does_not_ignite_wood(t) -> void:
 	var g := _bare_grid()
 	var wood_cx := 100
 	var wood_cy := FLOOR_CY - 10
@@ -420,15 +422,18 @@ func _fire_bolt_hits_wood_and_wood_burns(t) -> void:
 	for _i in 90:
 		world.frame(DT, 0.0, false, false)
 
-	t.ok(g.is_burning(wood_cx, wood_cy), "나무가 실제로 붙었다 (%d,%d)" % [wood_cx, wood_cy])
+	t.ok(not g.is_burning(wood_cx, wood_cy),
+		"괴물의 불은 나무에 안 붙는다 (rune_only, %d,%d)" % [wood_cx, wood_cy])
+	t.eq(g.mat_at(wood_cx, wood_cy), Mat.WOOD, "나무 그대로 남는다")
 
 
-## **verify-read's finding ② — the ignite radius was never measured.** Leaving `FIRE_IGNITE_R` at 2 in the
-## table while hardcoding the consumer to a different number was green (the `carve_r` hole from Stage C,
-## verbatim). Wood is placed **only to the right** of the impact column, so the bolt (approaching from the
-## left) hits the *first* solid cell it reaches and that cell's own x becomes the disc's known centre — cells
-## further right than `FIRE_IGNITE_R` must stay unlit, not just "the far face of some wall" (Stage C's
-## `_single_charge_does_not_breach_a_16cell_boundary` pattern, applied to the door `_disc` shares with carve).
+## **verify-read's finding ② was "the ignite radius was never measured" — now moot for a monster bolt, and
+## said so plainly rather than silently deleted.** `FIRE_IGNITE_R`'s own disc sweep is the same `_disc(…,
+## false, src)` code `net_fire._blast_lights_wood` already drives to its radius boundary (with
+## `IGNITE_RUNE_FIRE`, the source that can actually pass) — that coverage did not go away, it moved to the one
+## source that can still reach it. What this check verifies now is the **new** contract: with `WOOD` gained
+## `rune_only`, not one cell in the bolt's swept disc catches, at any distance from the impact point,
+## including the point itself.
 func _fire_ignite_reaches_exactly_its_radius(t) -> void:
 	var g := _bare_grid()
 	var impact_cx := 100
@@ -444,35 +449,21 @@ func _fire_ignite_reaches_exactly_its_radius(t) -> void:
 	t.ok(bolts.spawn(origin_x, row_y, Vector2(1.0, 0.0), MonsterBolts.KIND_FIRE),
 		"fire 탄을 직접 쐈다 (검사의 전제)")
 
-	# **Stop the instant ignition first shows, not one tick later** — contiguous wood lets fire *spread*
-	#  (`cell_grid._burn`'s own spread pass, a completely different mechanism from the disc `_ignite_cell`
-	#  reaches in one shot at ignition time) one more cell per tick it keeps running. Measured: running 90
-	#  frames (30 ticks) here let spread alone carry it out to +5, well past `FIRE_IGNITE_R`=2, and read as
-	#  "the radius is bigger than it is." The disc's own reach is what this test measures, so it must read
-	#  the board before `_burn()` gets a second tick to touch it.
-	var ticks := 0
-	var max_ticks := 60
-	while ticks < max_ticks and not g.is_burning(impact_cx, wood_cy):
-		if world.frame(DT, 0.0, false, false):
-			ticks += 1
-	t.ok(g.is_burning(impact_cx, wood_cy), "충돌점이 실제로 붙었다 (검사의 전제)")
+	for _i in 90:
+		world.frame(DT, 0.0, false, false)
 
 	var r := MonsterBolts.FIRE_IGNITE_R
-	for d in range(0, r + 1):
-		t.ok(g.is_burning(impact_cx + d, wood_cy), "충돌점에서 %d칸까지는 붙는다 (%d,%d)" % [d, impact_cx + d, wood_cy])
-	for d in [r + 1, r + 2, r + 3]:
+	for d in range(0, r + 4):
 		t.ok(not g.is_burning(impact_cx + d, wood_cy),
-			"충돌점에서 %d칸(반경 %d 밖)은 안 붙는다 (아직 퍼질 틱이 없었다, %d,%d)" % [d, r, impact_cx + d, wood_cy])
+			"충돌점에서 %d칸도 안 붙는다 (rune_only, %d,%d)" % [d, impact_cx + d, wood_cy])
 
 
-## **verify-read's finding ③ — the "settles one tick after `_grid.step()`" contract was a comment, not a
-## check.** Measured through `aux_at` (remaining fuel, `cell_grid._ignite_cell` writes the material's full,
-## untouched fuel there) rather than `is_burning` alone, because `is_burning` cannot tell "just lit, zero
-## `_burn()` passes applied" from "lit one tick ago, one pass already applied" — both read `true`. Wood's
-## fuel is 200 (`cell_materials.gd`) and `_burn()` shaves `Tuning.FIRE_BURN_PER_TICK`(5) per tick a cell was
-## *already* burning when that tick's pass started. **If the ignite-drain moved to before `_grid.step()`**
-## (the mutation this guards against), the same tick's own `_grid.step()` would already process the
-## newly-lit cell once, and `aux_at` would read 195, not 200, on the very tick it first shows `is_burning`.
+## **verify-read's finding ③ was a tick-settling contract on `is_burning`/`aux_at` — also moot for a monster
+## bolt now.** With ignition refused outright, there is no fuel value to settle. **What still has real
+## regression value here**: the bolt's own terrain-impact record (`ignite_count`/`ignite_cx`/`ignite_cy`)
+## keeps firing exactly once per impact and `world_step` keeps draining it exactly one tick later — the
+## mechanism `_bolts.step()`/`world_step`'s tick branch share is unrelated to whether the target material can
+## catch, and a regression there (the notification never firing, or firing twice) would be silent otherwise.
 func _ignite_settles_after_this_ticks_grid_step(t) -> void:
 	var g := _bare_grid()
 	var wood_cx := 100
@@ -488,23 +479,22 @@ func _ignite_settles_after_this_ticks_grid_step(t) -> void:
 	t.ok(bolts.spawn(origin_x, row_y, Vector2(1.0, 0.0), MonsterBolts.KIND_FIRE),
 		"fire 탄을 직접 쐈다 (검사의 전제)")
 
-	var lit_tick := -1
+	var impact_tick := -1
 	var ticks := 0
 	var max_ticks := 60
-	while ticks < max_ticks and lit_tick < 0:
+	while ticks < max_ticks and impact_tick < 0:
 		if world.frame(DT, 0.0, false, false):
 			ticks += 1
-			if g.is_burning(wood_cx, wood_cy):
-				lit_tick = ticks
-	t.ok(lit_tick > 0, "나무가 실제로 붙었다 (검사의 전제)")
-	t.eq(g.aux_at(wood_cx, wood_cy), 200,
-		"막 붙은 바로 그 틱엔 연료가 그대로 200이다 (이 틱의 grid.step()이 이미 지나간 뒤에 붙었다는 뜻)")
+			if bolts.count() == 0:
+				impact_tick = ticks
+	t.ok(impact_tick > 0, "탄이 실제로 충돌해서 사라졌다 (검사의 전제)")
+	t.ok(not g.is_burning(wood_cx, wood_cy), "충돌한 그 틱에도 나무는 안 붙는다 (rune_only)")
 
 	world.frame(DT, 0.0, false, false)
 	world.frame(DT, 0.0, false, false)
 	world.frame(DT, 0.0, false, false)  # exactly one more tick (TICK_DIVIDER frames)
-	t.eq(g.aux_at(wood_cx, wood_cy), 200 - Tuning.FIRE_BURN_PER_TICK,
-		"한 틱 지나면 정확히 %d만큼 준다 (%d)" % [Tuning.FIRE_BURN_PER_TICK, 200 - Tuning.FIRE_BURN_PER_TICK])
+	t.ok(not g.is_burning(wood_cx, wood_cy), "한 틱 더 지나도 안 붙는다")
+	t.eq(g.mat_at(wood_cx, wood_cy), Mat.WOOD, "나무 그대로다 (지워지지도, 붙지도 않는다)")
 
 
 ## **verify-read's finding ② — fire's own range was never measured**, only inherited from `BOLT_STOP_PX`/

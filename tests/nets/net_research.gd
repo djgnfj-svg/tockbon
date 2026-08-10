@@ -1304,7 +1304,12 @@ func _the_footer_states_the_price_instead_of_denying_one(t) -> void:
 	t.ok(foot.contains("%d" % Progress.GEMS_PER_UNLOCK), "바닥 줄이 실제 값(%d)을 말한다 (%s)" % [
 		Progress.GEMS_PER_UNLOCK, foot])
 	t.ok(not foot.contains("아직 없다"), "그리고 '해금은 아직 없다'고 더는 말하지 않는다")
-	t.ok(foot.contains("[E]"), "닫는 키 안내는 그대로 남아 있다")
+	# **This asserted `[E]` while nothing was bound to E** — the check was guarding the defect. The window
+	#  closes on `ui_cancel`, so the footer has to name ESC, and the open prompt has to name the interaction
+	#  key. Naming a key literally is still text, but a wrong literal is exactly what shipped.
+	t.ok(foot.contains("[ESC]"), "닫는 키 안내가 실제로 닫는 키를 말한다 (%s)" % foot)
+	t.ok(not foot.contains("[E]"), "그리고 아무 데도 안 묶인 E를 더는 시키지 않는다")
+	t.ok(Fx.TOWN_PROMPT_FMT.contains("[F]"), "설비 안내는 상호작용 키 F를 말한다 (%s)" % Fx.TOWN_PROMPT_FMT)
 	# **A format, not a finished sentence** — a literal with the number baked in would leave the printed price
 	#  behind the day `GEMS_PER_UNLOCK` moves, and nothing would bark.
 	t.ok(Fx.RESEARCH_FOOTER_FMT.contains("%d"), "바닥 줄은 값을 박아 넣은 문장이 아니라 서식이다")

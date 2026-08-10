@@ -1,7 +1,8 @@
 # Accelerate and home — the last two family seats
 
 **One line**: two `MODIFY` glyphs that change **how a bolt flies**, not what it does on landing — and they are the
-**fourth and fifth families**, which fills the nibble exactly.
+**fourth and fifth families, which fills the nibble exactly — once the dummy's three ids retire** (condense
+took the fourth seat first, built and real; see "The nibble ceiling" below).
 
 **Implemented**: none — **two `.png` files exist and no code knows them**
 (`assets/circle/ring_accel.png` · `ring_home.png`). That is the stage before this repo's signature fake, and
@@ -272,11 +273,34 @@ barking.**
 ## The nibble ceiling — this doc spends the last two seats
 
 `Tuning.GLYPH_BITS` is **4** ⇒ ids `1..15` (0 is reserved as "end of list") ⇒ **15 ids = 5 families × 3
-rarities.** Nine are used. Accelerate and home take the remaining six.
+rarities.** **This paragraph was written when nine were used and condense was still a name** — twelve are used
+today (spread · blast · dummy · condense, `glyph-condense.md`, built), leaving **three** spare, not six. The
+box right below this one is where that got corrected; read it before trusting the "six" above.
+Accelerate and home take those remaining three ids **only once the dummy's three retire** — see that box.
 
-**⇒ After this, `GLYPH_BITS` is exactly full and no bit change is needed.** The ceiling is *reached*, not
-*exceeded*. **The widening belongs to the sixth family, not to this doc** — and this doc is the last one that
-can be written without paying for it.
+**⇒ After this, `GLYPH_BITS` is exactly full and no bit change is needed** — once the dummy is gone. The
+ceiling is *reached*, not *exceeded*. **The widening belongs to the sixth family, not to this doc** — and this
+doc is the last one that can be written without paying for it.
+
+**⚠ That arithmetic silently assumes the dummy family stays, and a third glyph has now landed** — this is no
+longer the hypothetical it was written as; `glyph-condense.md` is `3.done/` (headless-verified, screen unseen).
+`glyph-condense.md` (응축, **built**) takes three ids as a family of its own:
+
+```
+dummy kept     9 + 3 (condense) + 3 (accel) + 3 (home) = 18 ids · 6 families   ✗ past both ceilings
+dummy deleted  6 + 3             + 3         + 3       = 15 ids · 5 families   ✓ exactly full
+```
+
+⇒ **Condense does not spend accel's or home's seat. The dummy does.** The dummy was always the placeholder
+(`glyph_defs.gd`: "a dummy is called a dummy. It gets a name the day the real glyph is decided"), so the bill
+is for it arriving, not for condense. **But the sentence above is only true once those three rows are gone**,
+and *how* the dummy retires — deleted, benched, or kept until these two land — is open in that doc, because
+deleting it removes the only `KIND_MODIFY` glyph in the game **and the nets that measure the MODIFY path.**
+
+**⇒ Condense's build (its §11) did *not* retire the dummy.** It shipped as the **fourth** family:
+**12 ids, 3 spare, 4 of 5 family seats — real today, not projected.** So the day accel and home arrive, **the
+15/5 line above holds only if the dummy has gone by then** — that deletion is 66 references across 10 files,
+counted in that doc's §11.7, and it is **still nobody's**.
 
 ### What the sixth family costs — and the option `glyph_defs.gd` did not consider
 

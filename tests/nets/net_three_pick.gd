@@ -88,32 +88,39 @@ func _every_id_is_reachable(t) -> void:
 		rng.seed = s
 		for id: int in ThreePick.draw([], rng):
 			seen[id] = true
-	t.eq(seen.size(), Glyph.ALL.size(),
-		"%d번 뽑는 동안 %d개 문양이 전부 최소 한 번은 나왔다" % [SEEDS, Glyph.ALL.size()])
-	for id: int in Glyph.ALL:
+	# **`Glyph.PICKABLE`, not `Glyph.ALL`** — `draw()` reads the pickable pool (`glyph_defs.gd`'s own build
+	#  note), so an `ALL` id the dummy family owns must never appear here; this is the check that would catch
+	#  the dummy sneaking back into a player's three-pick if `draw()` were ever pointed at `ALL` again.
+	t.eq(seen.size(), Glyph.PICKABLE.size(),
+		"%d번 뽑는 동안 %d개 문양이 전부 최소 한 번은 나왔다" % [SEEDS, Glyph.PICKABLE.size()])
+	for id: int in Glyph.PICKABLE:
 		t.ok(seen.has(id), "문양 %d가 최소 한 번은 뽑혔다" % id)
+	for id: int in Glyph.ALL:
+		if not Glyph.PICKABLE.has(id):
+			t.ok(not seen.has(id), "뽑을 수 없는 문양 %d는 %d번 뽑는 동안 한 번도 안 나왔다 (더미)" % [id, SEEDS])
 
 
 ## **A biased-but-passing shuffle survives every check above.** Replacing the partial Fisher-Yates index
 ## (`i + randi_range(0, pool.size()-i-1)`) with the naive `randi_range(0, pool.size()-1)` keeps every draw a
 ## valid permutation with no duplicates and every id still individually reachable — the two properties
-## every check above measures — so none of them see it. Only *how often* each id appears differs: measured,
-## the naive form skews as high as 47.6% for `SPREAD_U` against an ideal 33.33% (id 9, the last position in
-## `Glyph.ALL` — the bias comes from index, not content), a 42.76% relative deviation driven by nothing but
-## where an id happens to sit in the list.
+## every check above measures — so none of them see it. Only *how often* each id appears differs: measured
+## (against the pool of the time), the naive form skewed as high as 47.6% against an ideal 33.33% for the id
+## sitting in the pool's last position — the bias comes from index, not content — a 42.76% relative deviation
+## driven by nothing but where an id happens to sit in the list.
+## **`Glyph.PICKABLE`, not `Glyph.ALL`** — the same reason as `_every_id_is_reachable` above.
 func _every_id_appears_at_a_uniform_frequency(t) -> void:
 	var rng := RandomNumberGenerator.new()
 	var counts: Dictionary = {}
-	for id: int in Glyph.ALL:
+	for id: int in Glyph.PICKABLE:
 		counts[id] = 0
 	for s in FREQ_SEEDS:
 		rng.seed = 500000 + s
 		for id: int in ThreePick.draw([], rng):
 			counts[id] = int(counts[id]) + 1
 
-	var want := 3.0 / float(Glyph.ALL.size())
+	var want := 3.0 / float(Glyph.PICKABLE.size())
 	var worst := 0.0
-	for id: int in Glyph.ALL:
+	for id: int in Glyph.PICKABLE:
 		var freq := float(counts[id]) / float(FREQ_SEEDS)
 		var dev := absf(freq - want)
 		worst = maxf(worst, dev)
@@ -142,7 +149,7 @@ func _full_layers_still_yield_three(t) -> void:
 ## least 7 always remain, comfortably above 3.
 func _fallback_branch_is_unreachable_today(t) -> void:
 	var max_owned := CircleDefs.layers(CircleDefs.CIRCLE_ROUND)
-	var remaining := Glyph.ALL.size() - max_owned
+	var remaining := Glyph.PICKABLE.size() - max_owned
 	t.ok(remaining >= 3,
 		"오늘 최대로 채워도(%d칸) 최소 %d개가 남는다 (3보다 적게 남는 경우가 없다)" % [max_owned, remaining])
 
@@ -153,15 +160,15 @@ func _fallback_branch_is_unreachable_today(t) -> void:
 func _fallback_takes_what_remains_without_repeating(t) -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 7
-	var owned: Array[int] = Glyph.ALL.duplicate()
+	var owned: Array[int] = Glyph.PICKABLE.duplicate()
 	owned.remove_at(0)
-	t.eq(owned.size(), Glyph.ALL.size() - 1, "전부 하나만 빼고 가졌다 (전제)")
+	t.eq(owned.size(), Glyph.PICKABLE.size() - 1, "전부 하나만 빼고 가졌다 (전제)")
 	var drawn := ThreePick.draw(owned, rng)
 	t.eq(drawn.size(), 1, "남은 게 하나뿐이면 하나만 준다 (반복해서 채우지 않는다)")
 	if drawn.size() == 1:
-		t.eq(drawn[0], Glyph.ALL[0], "그 하나가 실제로 안 가진 문양이다")
+		t.eq(drawn[0], Glyph.PICKABLE[0], "그 하나가 실제로 안 가진 문양이다")
 
 	# Zero remaining — draw() must not crash or wrap around to owned ids.
-	var owned_all: Array[int] = Glyph.ALL.duplicate()
+	var owned_all: Array[int] = Glyph.PICKABLE.duplicate()
 	var drawn_none := ThreePick.draw(owned_all, rng)
 	t.eq(drawn_none.size(), 0, "남은 게 하나도 없으면 빈 목록을 준다 (죽지 않는다)")

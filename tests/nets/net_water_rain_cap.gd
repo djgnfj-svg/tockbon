@@ -1,6 +1,10 @@
 extends RefCounted
 ## Rain source B-5 — do active chunks stay under the cap while pouring. Split further out of `net_water_rain.gd`.
 ##
+## **What this measures, honestly**: `water_source.gd`'s own pour, in room ①'s real vessel — not the game's
+## water. `burn-out-of-the-bull-room.md` §4 deleted the game's only pour; stage 1 pours nowhere until room
+## ③'s own pour is built (`water-jump-and-escape.md` owes that re-point). This net's coordinates are untouched.
+##
 ## **Why split again**: the same circumstances as the header comment of `net_water_rain.gd`
 ##  (three groups of 11.6 · 13.2 · 10.9 seconds). This file alone is 10.9 seconds.
 ##

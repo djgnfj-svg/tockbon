@@ -2,9 +2,12 @@
 
 **One line**: the circle owns the moment of firing, the rune owns what happens after it leaves, the glyph owns what is added on top.
 
-**Implemented**: partial — circles **1/3** (round only) · runes **3** (fire · none · water) · glyphs **2/17** (spread · blast)
+**Implemented**: partial — circles **1/3** (round only) · runes **3** (fire · none · water) · glyphs **3/17**
+(spread · blast · condense)
 **Accepted**: partial — the user confirmed on screen that **order changes the kind of result** (spread ↔ blast).
-The rest (fusion · parallel · sequential · per-rune behavior · the remaining glyphs) **has no implementation, so there is nothing to judge.**
+**Condense is unseen** — headless-verified (`glyph-condense.md`, 8,638 checks) but nobody has looked at the
+screen yet. The rest (fusion · parallel · sequential · per-rune behavior · the remaining glyphs) **has no
+implementation, so there is nothing to judge.**
 
 **A concept stays alive and never changes folders.** The two header lines are only "how much runs now" —
 format per [README.md](README.md).
@@ -362,7 +365,7 @@ and a "split into 3 shots" glyph makes circles unnecessary.
 |---|---|---|---|
 | 1 | **spread** | spawn | ✅ in code (`glyph_defs`) |
 | 2 | **blast** | finish | ✅ in code |
-| 3 | **condense** | ❓ | Name only |
+| 3 | **condense** | finish | ✅ in code (`glyph_defs.CONDENSE_C/R/U`) — a pillar that shoots **up** from the impact point, two characters tall, leaving no material (**and writing no cells at all** — it neither cuts nor ignites). **Screen unseen** → `glyph-condense.md` |
 | 4 | **accelerate** | modify | Example in docs only |
 | 5 | **home** | modify | Example in docs only |
 | 6 | **spin** | modify | Name only — **the integer-rotation cost is unresolved** (below) |
@@ -523,7 +526,9 @@ Candidates: circles with many rune slots can't take spread / pin a total shot ca
   **additive blending means faint really does look faint** (`spell_view._ready()`).
 
 **Glyph**
-- **Definitions of condense · deploy** — names only. Start with which of the three (modify/spawn/finish) they belong to
+- ~~**Definition of condense**~~ → **answered** (`glyph-condense.md`): **finish**, a column upward, no residue.
+  **Width, damage and duration are still open there.** **deploy** is still a name only — start with which of the
+  three (modify/spawn/finish) it belongs to
 - **Spin's integer cost** — `sin` and `cos` are forbidden, so vectors can't be rotated.
   90°/45° snapping is free but coarse (one revolution in 8 ticks); integer rational approximate rotation works but
   **the length drifts** (it speeds up or dies while spinning). ⇒ Whether spin becomes a glyph at all depends on this cost

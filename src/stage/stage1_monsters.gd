@@ -65,24 +65,32 @@ const FLOOR_CY: int = TerrainMap.MAP_H * Tuning.TILE_CELLS - 1
 ## **No clump on the stairs** (§7) and **no shelf under the floating bedrock slab at `tx49–50`** (§9) —
 ##  clump B's shelf starts at `x51`, one tile clear of it, which is why the two quiet gaps came out uneven.
 ##
-## ══ East of the cut: every `tx` shifted **-100** and nothing else changed ══
+## ══ East of the cut: zone ② is gone, room ③ sits on room ①'s own floor line ══
+## (`burn-out-of-the-bull-room.md`, built) — the wall between room ① and the old zone ② became the wood
+## door, zone ②'s 78 columns of trash-mob ground were deleted outright (not moved — the user cut the
+## segment, not the mobs, `decisions/no-trash-run-between-the-two-bosses.md`), and room ③ moved down 7 rows
+## and left 83 columns onto the same floor line as room ①.
 ##
-## **Zone ② (usable range 190–244 after the cut — 245–255 sits under room ③'s roof, `ty12`, not on ②'s own
-## floor) stays dormant in this build.** The step from ①'s pit floor (`ty32`) to ②'s shelf (`ty26`) is 6
-## tiles against a 3.375-tile jump (`character.gd:91-92`) — not walkable in a normal run until
-## `water-jump-and-escape.md` lands. **Placed anyway, per the user's call**
-## ("user decision 3" in the same plan doc): the rows simply start waking the day a player can reach them.
+## **The 12 zone-② rows that used to sit here are deleted, not relocated.** They were "placed anyway, per
+## the user's call" while the step to reach them (6 tiles against a 3.375-tile jump) made them unreachable
+## in a normal run — that whole justification left with the zone itself. **`spawn_monster`'s boss reserve
+## needs no edit**: it is the count of boss rows in this table, derived, so losing 12 trash rows changes
+## nothing about it.
 ##
 ## **Bosses ride this same table** — the user's call ("user decision 2"): the rooster has to be reachable
-## through ordinary play, not only the debug `C` key. Both are also what `spawn_monster`'s boss reserve
-## counts (`world_step.gd`, §5) — **the reserve is the number of boss rows in this table, derived, so
-## adding a boss row here needs no second edit anywhere.**
-##  · **bull, `tx145`** (was 245) — room ① is `x130–159`, floor `ty32`, flat. Mid-room, clear of the left
+## through ordinary play, not only the debug `C` key.
+##  · **bull, `tx145`** — room ① is `x130–159`, floor `ty32`, flat. Mid-room, clear of the left
 ##    2-tile step at `x129/130` and the right 6-tile rise at `x160`.
-##  · **rooster, `tx258`** (was 358) — room ③'s confirmed span is `x245–268`, under its own roof.
+##  · **rooster, `tx181`** (was `tx258`, then `tx175` by the mechanical shift alone) — **`tx181`, not `tx175`,
+##    is deliberate** (`burn-out-of-the-bull-room.md` §1): measured against the camera, `tx175` sits close
+##    enough (506px) that the rooster is drawn on screen, standing inside the wall, while the player still
+##    fights the bull. `tx181` (698px) is outside `MATERIALIZE_PX + CAM_LEAD_PX` (552px, never drawn from
+##    room ①) and inside `STIR_ENTER_PX`'s materialise range (720px, so it exists before the door opens but
+##    does not stir until the player is through it). Room ③'s east wall is `x184`, leaving 3 tiles of
+##    clearance for the boss box.
 ##
-## **Totals**: pre-① 11 pigs · 5 hens · 2 wolves = 18 · ① 1 bull · ② (dormant) 6 pigs · 4 hens · 2 wolves
-## = 12 · ③ 1 rooster. 32 rows. **Boss rows: 2** — that is `spawn_monster`'s reserve.
+## **Totals**: pre-① 11 pigs · 5 hens · 2 wolves = 18 · ① 1 bull · ③ 1 rooster. 20 rows.
+## **Boss rows: 2** — that is `spawn_monster`'s reserve.
 const ROWS: Array[Dictionary] = [
 	# ══ Clump A (tx14-29, shelf x20-30): pig alone. The first mobs the player ever meets. ══
 	#  Two on the approach ground, four on the shelf — the shelf four walk west and drop off it, which is
@@ -117,33 +125,7 @@ const ROWS: Array[Dictionary] = [
 	# -- ① pit (130-159): the midboss. --
 	{"tx": 145, "kind": MonsterDefs.KIND_BULL},
 
-	# -- ② combat zone (190-244, the usable range only — 245-255 is room ③'s roof). Dormant until the
-	#  water escape lands; see the header above. Every `tx` here is its old value minus 100.
-	#  **`tx194`, not `tx190`** — measured directly (net_monster_placement, the real map): `185-192` sits
-	#  at `ty26` and `193-212` rises to `ty24`, a real 2-tile step at the `192/193` seam. A row resolved
-	#  from `192`'s own (lower) column spills its right edge into `193`'s already-solid, higher ground —
-	#  `box_free` correctly refuses it as "no headroom". Starting the row inside the higher segment
-	#  (`194`, two tiles clear of the seam) avoids straddling it; the whole box then sits in one
-	#  uniform-height stretch instead of two. --
-	{"tx": 194, "kind": MonsterDefs.KIND_PIG},
-	{"tx": 197, "kind": MonsterDefs.KIND_HEN},
-	{"tx": 202, "kind": MonsterDefs.KIND_PIG},
-	{"tx": 207, "kind": MonsterDefs.KIND_WOLF},
-	# **`tx211`, not `tx212`** — verify-read's own finding, measured against the real map with
-	#  `resolve()`'s full-width footing check (added because of this exact row): `193-212` sits at `ty24`
-	#  and `213-230` drops to `ty27`, a real 3-tile fall at the `212/213` seam. The hen (48px = 1.5 tiles)
-	#  placed at `tx212` had its right edge hanging over `213`'s lower ground — 4 of its 12 footprint
-	#  cells with nothing solid under them. `tx211` keeps the whole box inside `193-212`'s own uniform
-	#  stretch, one tile clear of the seam.
-	{"tx": 211, "kind": MonsterDefs.KIND_HEN},
-	{"tx": 217, "kind": MonsterDefs.KIND_PIG},
-	{"tx": 222, "kind": MonsterDefs.KIND_HEN},
-	{"tx": 227, "kind": MonsterDefs.KIND_PIG},
-	{"tx": 232, "kind": MonsterDefs.KIND_WOLF},
-	{"tx": 237, "kind": MonsterDefs.KIND_HEN},
-	{"tx": 241, "kind": MonsterDefs.KIND_PIG},
-	{"tx": 244, "kind": MonsterDefs.KIND_PIG},
-
-	# -- ③ boss room (confirmed span 245-268, under its own roof): the stage boss. --
-	{"tx": 258, "kind": MonsterDefs.KIND_ROOSTER},
+	# -- ③ boss room (interior 164-183, floor ty32, ceiling ty19 — moved onto room ①'s own floor line):
+	#  the stage boss. `tx181`, not the room's middle — see the header above for why. --
+	{"tx": 181, "kind": MonsterDefs.KIND_ROOSTER},
 ]

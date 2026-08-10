@@ -63,8 +63,8 @@ var _picked_item := -1
 ##  `Fx.SOCKET_GLYPH_TEX` here in `_ready()`, bark once per bad path and move on, rather than calling
 ##  `load()` from `_draw()` every frame (that would both re-hit the cache 60 times a second and, on a bad
 ##  path, bury the log at 60 lines a second). Only ids that actually loaded end up in here — a glyph id with
-##  no entry (nine ids total, six with art, three — `DUMMY_C`/`R`/`U` — without) is the normal case
-##  `_draw_ring` falls back on, not an error.
+##  no entry (twelve ids total, six with art, six — the dummy and condense families — without) is the normal
+##  case `_draw_ring` falls back on, not an error.
 var _socket_glyph_tex: Dictionary = {}
 ## The ring and rune art, loaded once beside the socket glyphs and for the same reason.
 var _ring_tex: Dictionary = {}
@@ -553,9 +553,9 @@ func _draw_ring(area: Rect2, circle_id: int, layer: int, font: Font) -> void:
 	#  A concentric band (`PIC_ROUND`, and any future picture built the same way) always has exactly one
 	#  edge (`layer_bands`' own header), so this line never fires for the round circle without asking
 	#  `CircleDefs.picture()` — `_draw_ring` stays picture-agnostic in code even though the two pictures end
-	#  up drawn differently. **A glyph missing from `Fx.SOCKET_GLYPH_TEX` (three of nine ids today —
-	#  `DUMMY_C`/`R`/`U`, that map's own header) falls straight through to the same procedural symbol the
-	#  round circle and the palette both use — it must not draw nothing**, that is this repo's signature fake
+	#  up drawn differently. **A glyph missing from `Fx.SOCKET_GLYPH_TEX` (six of twelve ids today —
+	#  `DUMMY_C`/`R`/`U` and `CONDENSE_C`/`R`/`U`, that map's own header) falls straight through to the same
+	#  procedural symbol the round circle and the palette both use — it must not draw nothing**, that is this repo's signature fake
 	#  with the sim and screen roles swapped (the model already holds a real glyph here; drawing nothing
 	#  would be the screen quietly failing to say so).
 	if edges.size() > 1 and _socket_glyph_tex.has(glyph_id):
@@ -641,11 +641,14 @@ func _draw_socket_rarity_ring(at: Vector2, r: float, glyph_id: int) -> void:
 	draw_circle(at, r, rarity_col, false, Fx.RARITY_RING_PX)
 
 
-## **Shape from `kind`, color from the glyph id, rarity from a ring around it.** Give each glyph its own
-##  drawing and that becomes **a fourth place to fix**, and `glyph_defs.gd` itself wrote "if a fourth place
-##  appears the structure is wrong, so stop".
-##  => A new glyph gets its shape **for free.** The day "swap" arrives, kinds become three and shapes become three.
-## And that axis is **the whole of the pipeline** (design doc), so **the drawing teaches the rule.**
+## **Shape from `family` (via `Fx.GLYPH_SYMBOL`), color from the glyph id, rarity from a ring around it.**
+##  Give each glyph its own drawing and that becomes **a fourth place to fix**, and `glyph_defs.gd` itself
+##  wrote "if a fourth place appears the structure is wrong, so stop".
+##  => A new family gets its shape **for free**, by adding one row to `GLYPH_SYMBOL`.
+## **By `family`, not by `kind`** (`glyph-condense.md` §11.5) — two families (blast, condense) share
+##  `KIND_TERMINAL` now, and dispatching on `kind` alone would draw them identically: a condense card showed
+##  blast's exact filled disc until this line changed. `family` is **the whole of the pipeline** for `kind`
+##  (design doc) and now for the picture too, so **the drawing still teaches the rule.**
 func _draw_glyph(at: Vector2, r: float, glyph_id: int) -> void:
 	if not Glyph.DEFS.has(glyph_id):
 		push_error("CircleWindow: glyph %d is not in the table - cannot draw it" % glyph_id)
@@ -653,8 +656,9 @@ func _draw_glyph(at: Vector2, r: float, glyph_id: int) -> void:
 	var tint: Color = Fx.GLYPH_TINT.get(glyph_id, Fx.GLYPH_TINT_MISSING)
 	_draw_glyph_rarity_ring(at, r, glyph_id)
 
-	var kind := int(Glyph.DEFS[glyph_id]["kind"])
-	if kind == Glyph.KIND_SPAWN:
+	var family := Glyph.family_of(glyph_id)
+	var sym: int = Fx.GLYPH_SYMBOL.get(family, -1)
+	if sym == Fx.SYM_SPAWN_RAYS:
 		# Branches reaching outward — "it makes new bolts" is in the shape.
 		for k in Fx.GLYPH_SPAWN_RAYS:
 			# Rotated by half a step — without rotating, the horizontal rays lie on top of the ring line and
@@ -664,11 +668,11 @@ func _draw_glyph(at: Vector2, r: float, glyph_id: int) -> void:
 			draw_line(at + d * (r * Fx.GLYPH_SPAWN_INNER_RATIO), at + d * r,
 				tint, Fx.GLYPH_SYMBOL_PX)
 		return
-	if kind == Glyph.KIND_TERMINAL:
+	if sym == Fx.SYM_TERMINAL_DISC:
 		# A filled disc — "it ends right there" is in the shape.
 		draw_circle(at, r * Fx.GLYPH_TERMINAL_RATIO, tint, true)
 		return
-	if kind == Glyph.KIND_MODIFY:
+	if sym == Fx.SYM_MODIFY_DIAMOND:
 		# A hollow diamond — outline only, so "touches neither trajectory nor list" does not read as either
 		#  of the other two shapes (`fx_tuning.GLYPH_MODIFY_RATIO`'s comment).
 		var d := r * Fx.GLYPH_MODIFY_RATIO
@@ -678,8 +682,20 @@ func _draw_glyph(at: Vector2, r: float, glyph_id: int) -> void:
 		for k in pts.size():
 			draw_line(pts[k], pts[(k + 1) % pts.size()], tint, Fx.GLYPH_MODIFY_PX)
 		return
-	# It barks on an unknown kind — grow the table's kinds without growing the drawing and it gets caught here.
-	push_error("CircleWindow: glyph kind %d has no drawing" % kind)
+	if sym == Fx.SYM_PILLAR_UP:
+		# **A filled spike — "it rises" is in the shape.** Base to apex, the apex always at the symbol's own
+		#  top edge (`fx_tuning.GLYPH_PILLAR_*`'s own comment: every family's symbol fills the same circle).
+		var half_w := r * Fx.GLYPH_PILLAR_WIDTH_RATIO
+		var base_y := r * Fx.GLYPH_PILLAR_BASE_RATIO
+		var tip_base_y := -r * Fx.GLYPH_PILLAR_TIP_RATIO
+		var pts: Array[Vector2] = [
+			at + Vector2(-half_w, base_y), at + Vector2(half_w, base_y),
+			at + Vector2(half_w, tip_base_y), at + Vector2(0.0, -r), at + Vector2(-half_w, tip_base_y),
+		]
+		draw_polygon(pts, [tint])
+		return
+	# It barks on an unknown symbol — grow the family table without growing this map and it gets caught here.
+	push_error("CircleWindow: glyph family %d has no symbol (glyph %d)" % [family, glyph_id])
 
 
 ## **A second, independent device — the same "two devices" idiom `_draw_ring` already uses for

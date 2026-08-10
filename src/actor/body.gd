@@ -301,6 +301,44 @@ func hit_by_blast(spell: SpellSim) -> int:
 	return best
 
 
+## **The pillar's own rectangle, versus the box.** `x, y, w, h` are already plain cells (not fixed-point —
+##  the impact point `_run_glyph` hands the notice came straight off `_hit_cx`/`_hit_cy`, no `_launch`
+##  quantization involved), so this converts to px directly instead of going through `_cell_px`.
+## **A rectangle needs no radius test** (`glyph-condense.md` §8) — integers only, no `Vector2`, no `sqrt`,
+##  matching this file's own float-is-fine-in-`src/actor/` contract while the shape itself stays as simple as
+##  the sim's own (`spell_sim.gd`'s determinism header, "the rectangle needs none of them").
+##
+## Returns the **power percent** of the hit, `0` meaning not hit — same contract and same "max, not first
+##  found" reasoning as `hit_by_segment`/`hit_by_blast` above.
+func hit_by_pillar(spell: SpellSim) -> int:
+	var xs := spell.get_pillar_x()
+	var ys := spell.get_pillar_y()
+	var ws := spell.get_pillar_w()
+	var hs := spell.get_pillar_h()
+	var powv := spell.get_pillar_power()
+	var best := 0
+	for i in spell.pillar_count():
+		# **`SpellSim.pillar_x0`, not a restated `x - w/2`** — the same centering line `blast_fx.on_pillars`
+		#  reads for the drawn rectangle, so the hit box and the picture can never drift apart.
+		var cell_x0 := SpellSim.pillar_x0(xs[i], ws[i])
+		var rx0 := float(cell_x0 * Tuning.CELL_PX)
+		var rx1 := float((cell_x0 + ws[i]) * Tuning.CELL_PX)
+		# **The impact row is the pillar's foot** (`glyph-condense.md` §2.2/§11.1 — the impact row is
+		#  included), so the rectangle's bottom edge is the row just past `y`, and it climbs `h` rows from there.
+		var ry1 := float((ys[i] + 1) * Tuning.CELL_PX)
+		var ry0 := ry1 - float(hs[i] * Tuning.CELL_PX)
+		if _rect_hits_box(rx0, ry0, rx1, ry1):
+			best = maxi(best, powv[i])
+	return best
+
+
+## Axis-aligned rectangle versus the box. **Half-open on both**, the same convention a cell itself uses
+##  (`[x*CELL_PX, x*CELL_PX + CELL_PX)`) — cells that only share an edge do not overlap, so a player standing
+##  exactly `pillar_w` cells to the side is not hit (`glyph-condense.md` acceptance 9's own inversion).
+func _rect_hits_box(rx0: float, ry0: float, rx1: float, ry1: float) -> bool:
+	return rx0 < float(x + w_px) and rx1 > float(x) and ry0 < float(y + h_px) and ry1 > float(y)
+
+
 ## **Coordinate conversion is this one function.** The notification is cell fixed-point and the body is px —
 ##  convert in two places and the day comes when only one gets fixed, and that mismatch only ever looks like
 ##  "sometimes it does not connect".
