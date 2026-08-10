@@ -53,6 +53,7 @@ class _RecordingCircleWindow extends CircleWindow:
 	var texture_draws: Array[Dictionary] = []  # {glyph_id, tex} for each socket-texture draw
 	var rarity_ring_calls: Array[int] = []     # glyph id passed to the socket's own rarity ring
 	var empty_slot_calls := 0
+	var slot_ring_calls: Array[Dictionary] = []  # {"at": Vector2, "r": float} per _draw_slot_ring call
 
 	func _draw_frame(area: Rect2, circle_id: int) -> void:
 		frame_calls += 1
@@ -106,6 +107,14 @@ class _RecordingCircleWindow extends CircleWindow:
 	func _draw_empty_slot(at: Vector2, r: float) -> void:
 		empty_slot_calls += 1
 		super._draw_empty_slot(at, r)
+
+	## **Captures the ring's own arguments, not just that it ran** — the `notice_rect` lesson again: counting
+	##  `empty_slot_calls` alone would stay green even if `_draw_empty_slot` handed this a bare `Vector2()`
+	##  and `0.0`. `_draw_actually_runs_headless` below compares these to `circle_layout`'s own
+	##  `layer_bands()` seat and `glyph_radius()`.
+	func _draw_slot_ring(at: Vector2, r: float) -> void:
+		slot_ring_calls.append({"at": at, "r": r})
+		super._draw_slot_ring(at, r)
 
 ## The slack that comes from `Rect2` holding its values as **32-bit floats.** Used only when comparing a boundary
 ##  that "has to sit exactly flush" against 64-bit arithmetic — widen it and real overlaps get amnestied.
@@ -225,6 +234,11 @@ func run(t) -> void:
 ## Regenerate these numbers (`print()` from `Layout.frame/layer_bands/rune_radius/rune_slots` against
 ##  `Layout.circle_area(Book.circle_page(Fx.WINDOW_RECT.size).size)`) only if `Fx.WINDOW_RECT` or one of the
 ##  round circle's own ratios changes on purpose — never to make this check pass again after an accident.
+##
+## **Regenerated for `onboarding-and-palette-tabs.md` Stage 5** (`CIRCLE_RUNE_RATIO` 0.17 -> 0.26,
+##  `CIRCLE_RING_ZONE` 0.80 -> 0.88, new `CIRCLE_RING_GAP_FRAC` 0.06). `f["radius"]` and the frame center are
+##  untouched — neither `CIRCLE_DISC_RATIO` nor the window/page rects moved — so only the rune radius and the
+##  two band numbers derived from it below actually changed.
 func _round_numbers_pinned_before_the_triangle_arrives(t) -> void:
 	var page := Book.circle_page(Fx.WINDOW_RECT.size)
 	var area := Layout.circle_area(page.size)
@@ -236,8 +250,8 @@ func _round_numbers_pinned_before_the_triangle_arrives(t) -> void:
 		"진 중심이 못박은 값과 같다 (%s)" % f["center"])
 
 	var bands := Layout.layer_bands(id, area)
-	var want_edge0 := [56.024, 112.048]
-	var want_seat_y := [106.976, 50.952]
+	var want_edge0 := [84.036, 123.2528]
+	var want_seat_y := [78.964, 39.7472]
 	t.eq(bands.size(), want_edge0.size(), "밴드 수가 못박은 개수(%d)와 같다" % want_edge0.size())
 	for i in mini(bands.size(), want_edge0.size()):
 		var edges: PackedFloat32Array = bands[i]["edges"]
@@ -252,7 +266,7 @@ func _round_numbers_pinned_before_the_triangle_arrives(t) -> void:
 		t.ok(is_equal_approx(hit.y, 28.99242) and is_equal_approx(hit.x, 0.0),
 			"%d번 밴드 히트 반경이 못박은 값과 같다 (%s)" % [i, hit])
 
-	t.ok(is_equal_approx(Layout.rune_radius(id, area), 23.8102),
+	t.ok(is_equal_approx(Layout.rune_radius(id, area), 36.4156),
 		"룬 반지름이 못박은 값과 같다 (%.5f)" % Layout.rune_radius(id, area))
 	var rs := Layout.rune_slots(id, area)
 	t.ok(rs.size() > 0 and rs[0].is_equal_approx(Vector2(207.5, 163.0)),
@@ -894,6 +908,31 @@ func _draw_actually_runs_headless(t) -> void:
 	t.ok(win.empty_slot_calls > 0, "빈 자리가 실제로 그려졌다 (%d회)" % win.empty_slot_calls)
 	t.eq(win.texture_draws.size(), 0, "원형 진은 소켓 텍스처 경로를 안 탄다 (%d회)" % win.texture_draws.size())
 
+	# **The empty seat still paints — at the same coordinates the layout answers with, not merely "some ring
+	#  got drawn somewhere".** Stage 5 deleted the plus mark and left only `_draw_slot_ring`; a count alone
+	#  (`empty_slot_calls` above) would stay green even if `_draw_empty_slot` handed it a bare `Vector2()` and
+	#  `0.0` — the `notice_rect` hole (CLAUDE.md). Compared against `circle_layout`'s own answer, not a literal.
+	# **`pump_frames(3)` draws more than once** — the window `queue_redraw()`s every frame while visible
+	#  (Stage 6's own premise), so `_draw_slot_ring` fires once per empty layer **per frame drawn**, not once
+	#  total. Measured: 1 empty layer here, 4 recorded calls. The count is asserted as a multiple, the same
+	#  idiom `win.ring_calls % c.layer_count() == 0` above already uses for the same reason.
+	var area := Layout.circle_area(Book.circle_page(win.size).size)
+	var bands := Layout.layer_bands(c.circle_id(), area)
+	var want_ring_seats: Array[Vector2] = []
+	for i in bands.size():
+		if c.glyph_at(i) == Glyph.GLYPH_NONE:
+			want_ring_seats.append(bands[i]["seat"])
+	t.ok(want_ring_seats.size() > 0, "빈 층이 %d개다 (전제)" % want_ring_seats.size())
+	t.ok(win.slot_ring_calls.size() > 0 and win.slot_ring_calls.size() % want_ring_seats.size() == 0,
+		"빈 자리 링이 빈 층 수(%d)의 배수만큼 그려졌다 (%d회)" % [want_ring_seats.size(), win.slot_ring_calls.size()])
+	for i in win.slot_ring_calls.size():
+		var call: Dictionary = win.slot_ring_calls[i]
+		var want: Vector2 = want_ring_seats[i % want_ring_seats.size()]
+		t.ok((call["at"] as Vector2).is_equal_approx(want),
+			"%d번째 빈 자리 링이 실제 밴드 자리에서 그려졌다 (%s)" % [i, call["at"]])
+		t.ok(is_equal_approx(call["r"], Layout.glyph_radius(area)),
+			"%d번째 빈 자리 링 반지름이 glyph_radius와 같다 (%.5f)" % [i, call["r"] as float])
+
 	t.root.remove_child(win)
 	win.queue_free()
 
@@ -991,9 +1030,11 @@ func _hit_tests_match_the_drawing(t) -> void:
 		"룬 자리를 누르면 0번이다")
 
 	# ══ **Measured across kinds** — until now only layer against layer ══════
-	# Measured (verify-read): the layer 1 hit circle (37.7) and the rune hit circle (55.7) **overlap by 20.5px** (distance 72.8).
-	#  **This is not a demand to remove the overlap** — what overlaps is only the **empty band** between them, and
-	#   **it is safe as long as clicking a drawn thing grabs that thing.** That safety condition is pinned down.
+	# **Re-measured for `onboarding-and-palette-tabs.md` Stage 5** — growing the rune (`CIRCLE_RUNE_RATIO`
+	#  0.17 -> 0.26) and starting the ring zone outside it (`CIRCLE_RING_GAP_FRAC`) pushed the layer seats far
+	#  enough out that the loop below now finds a **positive gap** for every layer instead of an overlap.
+	#  **This was never a demand to remove the overlap** — the only thing pinned down is that clicking a
+	#  drawn thing grabs that thing, which still holds; do not read the sign flip as a bug to revert.
 	var rune_c := Layout.rune_slots(id, area)[0]
 	var rune_draw := Layout.rune_radius(id, area)
 	var layer_hit := Layout.glyph_radius(area) * Fx.SLOT_HIT_RATIO
@@ -1003,15 +1044,19 @@ func _hit_tests_match_the_drawing(t) -> void:
 			"그려진 룬 원반(%.1f)이 %d층 히트 영역 밖이다 (여유 %.1f)" % [
 				rune_draw, i, gap - rune_draw])
 
-	# **The other direction is held by "order", not by geometry.**
-	#  The drawn glyph symbols sit **inside** the rune hit circle, so unless `_click_circle` looks at layers **first**,
-	#  glyphs cannot be clicked at all. => **The priority is the contract.**
+	# **This premise flipped with Stage 5, and the flip is the point, not a regression.**
+	#  Before the rune grew, the drawn glyph symbols sat **inside** the rune's hit circle, so unless
+	#  `_click_circle` looked at layers **first**, glyphs could not be clicked at all — geometry alone did not
+	#  keep the two apart, only click order did. **Re-measured, not assumed** (CLAUDE.md: do not force the old
+	#  sentence true again by adjusting a ratio) — the grown rune and the outward-pushed seats now clear the
+	#  rune's hit circle on their own. The order check right below is kept anyway: it is still correct, still
+	#  cheap, and nothing here demands geometry alone carry this contract forever.
 	var rune_hit := rune_draw * Fx.SLOT_HIT_RATIO
-	var inside := false
+	var clears_the_rune := true
 	for i in slots.size():
 		if rune_c.distance_to(slots[i]) <= rune_hit + Layout.glyph_radius(area):
-			inside = true
-	t.ok(inside, "문양 심볼이 룬 히트 영역에 걸친다 (그래서 순서가 계약이다)")
+			clears_the_rune = false
+	t.ok(clears_the_rune, "커진 룬 덕에 문양 심볼이 이제 룬 히트 영역 밖이다 (전에는 겹쳐서 순서만이 계약이었다)")
 	var click := _func_body(_stripped(t, WINDOW_PATH, "circle_window"), "_click_circle")
 	t.ok(click != "", "`_click_circle()` 를 찾았다")
 	var i_layer := click.find("layer_at")
