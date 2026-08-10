@@ -96,24 +96,31 @@ const STEP_PX := STEP_CELLS * Tuning.CELL_PX
 ##  Reachable height is `v^2/2g`, so doubling only `v` gives **4x** and doubling only `g` gives **half**.
 ##  **No error is raised.** The stage's pillar and wall heights are all designed around these values, so
 ##  getting it wrong only looks like "I cannot clear the pillar".
-## **240, and the last digit is the whole reason: it is exactly 4px per 60Hz frame.**
+## **180, and the last digit is the whole reason: it is exactly 3px per 60Hz frame.**
 ##
 ## `body.x` is an integer (the fraction lives in `_rem_*`), so a speed that does not divide 60 makes the
 ##  character advance unevenly — at 260 it was **5, 4, 4, 5, 4, 4** (measured, driven at 60Hz). The camera
 ##  follows, so on screen the character is nearly still and **the world scrolls in that rhythm**. That is
 ##  the 부르르 떨림 the user reported, and it survived `stage.snap_camera_px` because that fix is about the
-##  camera and this is the gait.
+##  camera and this is the gait. **240 (exactly 4px/frame) already held this property once** — moving to 180
+##  is a feel change (user, looking at the screen: 「전체적으로 지금 너무 빠름」), not a second attempt at the
+##  same stutter fix, and 180/3 keeps the identical integer-division guarantee 240/4 gave.
 ##
-## **This value could not be changed until the bolt hit test was fixed, and that is why it moved today.**
-##  `monster_bolts.consume_hits` tested the bolt's **point**, so at 240 (and at 300) the player and the bolt
-##  closed fast enough to straddle the box between samples and **never collide** — a slower player dodged
-##  better than a faster one. That function now tests the bolt's **swept segment**, which is what made this
-##  line editable.
+## **This value could not move at all until the bolt hit test was fixed, and both edits (240, then 180)
+##  ride on that same fix.** `monster_bolts.consume_hits` used to test the bolt's **point**, so at 240 (and at
+##  300) the player and the bolt closed fast enough to straddle the box between samples and **never
+##  collide** — a slower player dodged better than a faster one. That function now tests the bolt's **swept
+##  segment** (its own comment), which does not care which integer this constant holds, only that it stays
+##  one — so this second move (240 -> 180) needed no further check on that function, only confirmation the
+##  segment sweep itself was still in place.
 ##
-## **The price: this is exactly the wolf's `speed_px`, so a wolf can no longer be outrun on foot.** Kept
-##  knowingly — the wolf backs off after each swing (`monster_defs.MELEE`), so the gap opens anyway, and
-##  being tailed by the fast mob reads as pressure rather than as a dead end.
-const MOVE_SPEED_PX := 240.0
+## **The wolf's `speed_px` (`monster_defs.gd`) is dropped to 180 in the same edit, not left at 240.** The
+##  paragraph this replaced said "this is exactly the wolf's `speed_px`, so a wolf can no longer be outrun on
+##  foot" **as a deliberate design choice**, not an accident — the wolf backs off after each swing
+##  (`monster_defs.MELEE`), so the gap still opens on its own and being tailed by the fastest mob reads as
+##  pressure rather than a dead end. Moving only this side would silently hand the player a wolf they now
+##  outrun, undoing that design rather than just re-tuning speed.
+const MOVE_SPEED_PX := 180.0
 ## **The world's shared gravity — every monster and boss (`monster.gd:240`, cross-class), not the player.**
 ##  See the box above for why the player does **not** read this anymore.
 const GRAVITY_PX := 2400.0

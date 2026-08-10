@@ -1726,16 +1726,49 @@ const CAM_LEAD_PX := 32.0
 ## 0.02 = 98% of the way there in one second, so it reads as **"it drifts", not "it snaps"**.
 const CAM_LEAD_DECAY_PER_SEC := 0.02
 
-## **The base play zoom — decided by eye** (user: 「좀 더 확대」). `ZOOM_STEPS[0]` (`stage.gd`) stays 1.0
-## on purpose — that is the debug ladder's own baseline and the `-`/`=` keys walk it from there, so this is
-## a second, independent multiplier rather than a change to that table's first entry.
+## **Pushes the character below screen center so more sky and less ground shows** (user, looking at the
+## screen right after a run starts: 「지금 시작하면 땅이 너무 많이 보임. 땅 좀 내려줘」).
+##
+## **A fraction of the current view height, not a raw world-px offset like `CAM_LEAD_PX` above.** That
+## constant's own comment argues it belongs to the viewport bucket while still storing a fixed world-px
+## number — fine there because the lead only has to be *noticeable*, not hold an exact ratio. This value's
+## whole job **is** a ratio ("how much of the screen is sky vs ground"), and a fixed world-px number would
+## silently drift off that ratio at every zoom step (debug `-`/`=`, the boss entrance zoom, and this file's
+## own `PLAY_ZOOM_MULT`) — half the screen at one zoom, a sliver at another. Multiplying the *current* view
+## height at the call site keeps the on-screen ratio identical regardless of which zoom is active.
+##
+## **Composes with the map-edge clamp — verified, not assumed.** It is folded into `focus.y` before
+## `camera_center()`'s own clamp runs (`stage.gd._process`), the exact seat `_cam_lead` already occupies on
+## the x-axis, so nothing new was written for the top-of-map edge. The world is 1008 cells tall
+## (`cell_grid.H`) x 4px = 4032 world-px (`sim_tuning.CELL_PX`); at play zoom 1.5 the view height is
+## `540/1.5 = 360`, so the clamp's own floor (`view*0.5 = 180`) only starts trimming this offset once the
+## character is within `180 + 0.15*360 = 234` world-px (7.3 tiles) of the map's top edge — everywhere else
+## the full offset applies untouched.
+const CAM_VERTICAL_OFFSET_FRAC := 0.15
+
+## **The base play zoom — decided by eye** (user: 「좀 더 확대」, later 「전체적으로 지금 너무 빠름... 오도도도」
+## on the same 1.15). `ZOOM_STEPS[0]` (`stage.gd`) stays 1.0 on purpose — that is the debug ladder's own
+## baseline and the `-`/`=` keys walk it from there, so this is a second, independent multiplier rather than
+## a change to that table's first entry.
 ## **Composes, does not collide, with the boss entrance zoom** (`BOSS_ENTRANCE_ZOOM_MULT` below) —
 ## `stage.gd`'s one zoom line multiplies `ZOOM_STEPS[_zoom_step] * PLAY_ZOOM_MULT * entrance_zoom(...)`, so
 ## the entrance always zooms in *from* whatever this constant already set, the same way it already zooms in
 ## from whichever debug step is selected. Raising this value never doubles the entrance's own zoom-in.
-## 1.15 is "a bit more" — the GDD's off-screen-explosion cost (`docs/GDD.md`) grows with any zoom-in, so this
-## is deliberately small.
-const PLAY_ZOOM_MULT := 1.15
+##
+## **1.15 -> 1.5.** At 1.15 the character rendered at roughly 32px(art) x 2(integer window stretch) x 1.15
+## ≈ 74px against a 960x540 logical viewport — small enough that the user read ordinary movement as
+## "오도도도" (something small darting). At 1.5 the character is ~96px on the same viewport.
+## **The price is the GDD's own off-screen-explosion cost (`docs/GDD.md` "Prices paid knowingly" §5)**: the
+## visible half-width shrinks with any zoom-in. At the viewport's **logical** size (960x540,
+## `project.godot` — the window's 1920x1080 is a display stretch on top, uninvolved here), half-width is
+## `(960/z)/2`: **417.4 world-px (13.04 tiles) at the old 1.15**, now **320 world-px (10 tiles) at 1.5** —
+## narrower than the GDD's own "15-tile half-screen" reference point.
+## **That GDD entry's own numbers no longer hold at this zoom**: it measured a generation-0 bolt reaching
+## 12.8 tiles at 45° against a 15-tile half-screen and concluded "one bolt no longer leaves the screen" —
+## 12.8 now exceeds the new 10-tile half-screen, so that specific conclusion needs re-checking against the
+## GDD's own text, not silently left standing here. Flagged, not corrected here — this file only owns
+## presentation constants, not the GDD's tradeoff table.
+const PLAY_ZOOM_MULT := 1.5
 
 # --- fire -----------------------------------------------------------
 ## **Burning cells overwrite the material color.** Laid lightly over the wood color (0x6B4524) it looks like

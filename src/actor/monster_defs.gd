@@ -121,14 +121,20 @@ const DEFS: Dictionary = {
 	#  unlike the bull. Long and low: wider than the pig and barely half its height.
 	# **Every number except the box is provisional and nobody has set them** — "skeleton first" (`monsters.md`
 	#  leaves health, damage and movement speed TBD for exactly this reason). The shape chosen: **faster than
-	#  the pig and thinner** (240 vs 160 px/s, 24 vs 30 hp), because the art is a lunging predator and the
+	#  the pig and thinner** (180 vs 160 px/s, 24 vs 30 hp), because the art is a lunging predator and the
 	#  pig's identity is already "a big body that falls into a pit".
+	# **Kept equal to the player's own `character.MOVE_SPEED_PX`, deliberately, not just close.** That
+	#  file's own comment on the constant says so directly — "this is exactly the wolf's `speed_px`, so a
+	#  wolf can no longer be outrun on foot", kept knowingly because it backs off after every swing so the
+	#  gap opens on its own regardless. When the player's speed moved 240 -> 180 (user: 「전체적으로 지금
+	#  너무 빠름」) this moved with it in the same edit — dropping only one side would silently let the
+	#  player outrun a wolf on foot, undoing that chase design instead of just re-tuning speed.
 	# **It has no lunge in the sim.** `wolf_lunge.png` plays when it is in contact range, the same door the
 	#  pig's shove uses — the picture shows an attack when an attack happens, but the *dash* the art implies is
 	#  not a mechanic. `boss_ai` is where a real lunge would go, and it is not built.
 	KIND_WOLF: {
 		"name": &"늑대", "w_px": 48, "h_px": 28, "step_cells": 3,
-		"max_hp": 24, "speed_px": 240.0, "invuln_ticks": 2,
+		"max_hp": 24, "speed_px": 180.0, "invuln_ticks": 2,
 		"xp": 15, "money": 6,
 		"jump_vy_px": -520.0,
 	},
