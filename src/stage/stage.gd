@@ -259,10 +259,28 @@ var _boss: Monster = null
 @onready var _char_view: CharacterView = $CharacterView
 @onready var _spell_view: SpellView = $SpellView
 @onready var _blast_fx: BlastFx = $BlastFx
-## **Not a scene node — there is nothing to place in the editor.** Built and `add_child`ed in `_ready()`
+## **Not a scene node — there is nothing to place in the editor.** Built and `add_child`ed in `_init()`
 ##  (below), the same way `_world`/`_grid` are plain objects rather than nodes. It must be in the tree for
 ##  its `AudioStreamPlayer` children to actually process, which is why this is not left as a bare `RefCounted`.
-var _sfx := SfxBank.new()
+## **Constructed and parented in the same breath, not two steps apart.** A member initializer builds this
+##  node the instant `Stage`'s script instance exists, but `add_child` used to wait for `_ready()` — a real
+##  gap in which `_sfx` was a live `Node` with no parent. `tests/nets/net_gate.gd`'s own `_wired_root` (and
+##  `net_boss_entrance.gd`/`net_settlement.gd`/`net_town.gd`'s copies) instantiate this scene and `.free()`
+##  it **without ever calling `_ready()`** — deliberately, to probe fields without running gameplay
+##  (`_wired_root`'s own header). `_ready()` never ran, `add_child(_sfx)` never ran, and `root.free()` only
+##  recurses over actual children — `_sfx` sat unparented and unreachable, leaked at process exit. Measured:
+##  10 unrelated nets (`net_gate`/`net_render`/`net_town`/etc., none about audio) went red on stderr the
+##  moment this file's sound landed. `_init()` runs even for an untreed instance, so building and parenting
+##  `_sfx` there closes the gap outright — confirmed against a standalone add_child-in-`_init()` probe,
+##  `free()`d without ever entering a tree, zero leaked.
+var _sfx: SfxBank
+
+
+func _init() -> void:
+	_sfx = SfxBank.new()
+	add_child(_sfx)
+
+
 ## **Sampled once per tick, inside `_on_ticked()` — never polled from `_physics_process` at 60Hz.** Polling
 ##  at 60Hz against a value that only changes on a tick (20Hz) is exactly the aliasing trap CLAUDE.md names
 ##  three times over (`_charge_blocked`/`_leaped_landed`/`_grounded_recently`); sampling from inside the one
@@ -452,9 +470,10 @@ func _ready() -> void:
 	#  text changes per frame; the color is a standing property of this node.
 	_levelup_label.add_theme_color_override("font_color", Fx.LEVEL_UP_COLOR)
 	_terrain.visible = false
-	# **Must be in the tree before anything calls `play_*()`** — an `AudioStreamPlayer` outside the tree does
-	#  not process, so a sound triggered before this line would count (`play_count`) but never actually play.
-	add_child(_sfx)
+	# **`_sfx` is already a child by the time `_ready()` runs** — `_init()` (above) parents it the instant
+	#  it is built, not here. `AudioStreamPlayer` still only actually processes once the whole chain is
+	#  inside a live tree, so a sound triggered before this frame would still count (`play_count`) but not
+	#  yet sound — that half of the old comment still holds, only the "must add_child here" half moved.
 	_sky.setup(_camera)
 	_renderer.setup(_grid)
 	# The staff tip's color **reads** the assembly state. Push a copy in and, the moment one push is
