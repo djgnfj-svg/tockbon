@@ -393,8 +393,14 @@ func _levelup_hint_shows_once_and_only_once(t) -> void:
 	pr.pending_picks = 1
 	root.call("_physics_process", 1.0 / 60.0)
 	t.ok(onboard_view.visible, "픽이 하나 쌓이면 안내가 뜬다")
-	t.eq(String(onboard_view.get("message")), Fx.LEVELUP_ONBOARD_TEXT, "P를 누르라는 문구다")
+	t.eq(String(onboard_view.get("message")), Fx.LEVELUP_ONBOARD_TEXT, "문양을 고르라는 문구다")
 	t.eq(String(onboard_view.get("key_text")), Fx.LEVELUP_ONBOARD_KEY_TEXT, "키 캡이 V를 가리킨다")
+	# **The sentence and the key cap must name the same letter.** Both were pinned against their own
+	#  constant, so moving the binding off P left the cap reading V beside a sentence still reading
+	#  "P를 눌러" — two checks green, one screen contradicting itself. Found by the user, on the screen.
+	t.ok(Fx.LEVELUP_ONBOARD_TEXT.begins_with(Fx.LEVELUP_ONBOARD_KEY_TEXT),
+		"문구와 키 캡이 같은 글자를 말한다 (%s / %s)"
+			% [Fx.LEVELUP_ONBOARD_TEXT, Fx.LEVELUP_ONBOARD_KEY_TEXT])
 
 	# -- P actually opens it: the hint disappears and is marked seen in the same call --
 	root.call("_toggle_pick")

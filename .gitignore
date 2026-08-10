@@ -43,5 +43,8 @@ tests/_*.gd.uid
 tools/stage/terrain_backup_*.txt
 image copy.png
 
-# Submission screenshot parts — inputs to tools/submission/shots.py, not deliverables
+# Submission screenshot parts — inputs to tools/submission/shots.py, not deliverables.
+# **The `.import` sidecars too** — ignoring only the png left the sidecars tracked, and they were
+#  committed twice before anyone noticed. The engine regenerates them on the next import.
 docs/submission/img/part-*.png
+docs/submission/img/part-*.png.import
