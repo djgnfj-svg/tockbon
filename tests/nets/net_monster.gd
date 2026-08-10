@@ -692,7 +692,14 @@ func _defs_accessors(t) -> void:
 	t.eq(Defs.w_px(Defs.KIND_WOLF), 48, "늑대 w_px = 48")
 	t.eq(Defs.h_px(Defs.KIND_WOLF), 28, "늑대 h_px = 28")
 	t.eq(Defs.max_hp(Defs.KIND_WOLF), 24, "늑대 max_hp = 24")
-	t.eq(Defs.speed_px(Defs.KIND_WOLF), 240.0, "늑대 speed_px = 240 (돼지보다 빠르다)")
+	# **180, 내려온 값이다** — 플레이어의 `MOVE_SPEED_PX`가 240에서 180으로 내려가면서 같이 왔다.
+	#  그 파일이 「늑대는 플레이어와 동속이라 따돌릴 수 없고, 그건 알고 한 선택」이라고 적어 뒀으므로
+	#  **한쪽만 움직이면 그 설계가 조용히 뒤집힌다** — 늑대가 영원히 더 빠르거나, 영원히 뒤처진다.
+	#  ⇒ 여기서 두 값이 같다는 것까지 재서, 다음에 한쪽만 바뀌면 이 줄이 짖는다.
+	t.eq(Defs.speed_px(Defs.KIND_WOLF), 180.0, "늑대 speed_px = 180 (돼지보다 빠르다)")
+	t.eq(Defs.speed_px(Defs.KIND_WOLF), Character.MOVE_SPEED_PX,
+		"그리고 플레이어와 여전히 동속이다 (%.0f) — 한쪽만 내리면 따돌리기 설계가 뒤집힌다"
+			% Character.MOVE_SPEED_PX)
 	# **The wolf is the same width as the hen and must not be the same beast.** Height is what separates them
 	#  (28 vs 64) — the user's own rule that species split by brightness first has a shape counterpart here.
 	t.ok(Defs.h_px(Defs.KIND_WOLF) != Defs.h_px(Defs.KIND_HEN), "늑대 ≠ 닭 (h_px — 폭은 같다)")
