@@ -935,6 +935,31 @@ const RUNE_TEX: Dictionary = {
 	Tuning.ELEM_WATER: "res://assets/circle/rune_water.png",
 }
 
+# --- rune grant banner (`rune_grant_view.gd`) ---
+## **The one moment a rune ownership grant reaches the screen.** `Progress.grant_rune()` is silent
+## (`src/actor/`, no scene tree) — before this the only sign a reward landed was the palette's fire cell
+## quietly un-veiling, visible only once the assembly window (Tab) is opened. `stage._take_boss_reward()`
+## now also calls `rune_grant_view.trigger(rune_id)` at the one call site where a grant actually happens.
+## Reuses `RUNE_TEX` above for the icon — no new art.
+const RUNE_GRANT_RECT := Rect2(350.0, 190.0, 260.0, 160.0)
+const RUNE_GRANT_DURATION_SECS := 1.6
+
+const RUNE_GRANT_PANEL_BG := Color(0.05, 0.055, 0.085, 0.90)
+const RUNE_GRANT_PANEL_EDGE := Color(1.0, 0.55, 0.2, 0.9)
+const RUNE_GRANT_PANEL_EDGE_PX := 2.0
+
+const RUNE_GRANT_ICON_PX := 72.0
+
+const RUNE_GRANT_TEXT := "불의 룬을 얻었다"
+const RUNE_GRANT_TEXT_SIZE := 20
+const RUNE_GRANT_TEXT_COLOR := Color(1.0, 0.75, 0.4, 1.0)
+const RUNE_GRANT_TEXT_GAP_PX := 14.0
+
+## **Weaker than the gate wall's shake (7px), stronger than a hit (1px)** — a reward landing is not an
+## impact on the player, so it does not need to compete with either.
+const RUNE_GRANT_SHAKE_PX := 3
+const RUNE_GRANT_SHAKE_SECS := 0.2
+
 const SOCKET_GLYPH_TEX: Dictionary = {
 	Glyph.SPREAD_C: "res://assets/circle/socket_glyph_spread.png",
 	Glyph.SPREAD_R: "res://assets/circle/socket_glyph_spread.png",
