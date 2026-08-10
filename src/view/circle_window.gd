@@ -43,6 +43,15 @@ const Progress := preload("res://src/actor/progress.gd")
 const CircleDefs := preload("res://src/sim/circle_defs.gd")
 const Tuning := preload("res://src/sim/sim_tuning.gd")
 
+## **Onboarding's own two events** (`onboarding-and-palette-tabs.md` Stage 7) — emitted only while
+## `_onboarding` is true, so `stage.gd`'s listeners never have to re-check that flag themselves.
+## `onboard_inserted` fires once per successful placement (the same hook `_click_fx` already has, whether
+## the click landed via one-click insertion or pick-then-place); `onboard_confirmed` fires once, the
+## instant 완성 is pressed. **The window advances the shell's step, not the reverse** — this window is the
+## one object that actually sees the clicks.
+signal onboard_inserted
+signal onboard_confirmed
+
 ## **A reference, not a copy** — it reads **the same thing** as the muzzle (the plan's section 1 single source).
 ##  Pressing debug keys 4 and 5 flipping the drawing is the evidence for that, and a copy would destroy it.
 ## **It only reads.** At this stage **nothing can be placed by clicking** (stage 4).
@@ -58,6 +67,47 @@ var _progress: Progress = null
 ##  Why two integers rather than a dictionary: key typos are impossible in principle and there is no allocation.
 var _picked_kind := -1
 var _picked_item := -1
+## **Stage 8 — which layer a picked glyph actually came from.** `-1` for a circle/rune pick, or for a
+## glyph pick before the layer was resolved. Every glyph in the palette is a *seated* one (there is no
+## stash), so picking one always means picking a layer to move, and this is the one piece of information
+## `_picked_item` (a value, ambiguous between duplicate dummies) cannot carry.
+var _picked_layer := -1
+
+## **Which tab is open — an index into `Palette.KINDS`.** `palette_layout` stays stateless and takes this
+## as an argument (the same discipline `circle_layout` holds for not knowing its own page); this window is
+## the one object with a reason to remember it across frames. **Starts on 진** (design §1: "처음엔 진 탭"),
+## and `toggle()` resets it back there on every close — the tab does not survive a close, the same rule
+## `_clear_pick()` already holds for the picked item.
+var _open_tab := 0
+
+## **찰칵 — motion, not sound** (this repo has none; `onboarding-and-palette-tabs.md`'s own Blockers).
+## Counts down from `Fx.CLICK_FRAMES`, ticked once per **frame** in `_process` — the window already redraws
+## every frame while visible, so this is frame-counted like the glow below, not tick-counted (the 60Hz/20Hz
+## trap does not reach either counter). `_click_seat`/`_click_radius` are captured once, at the moment of
+## insertion (`_seat_of`) — recomputing them lazily in `_draw()` from `_click_kind`/`_click_slot` would also
+## work, but a stored seat is what a net can assert against without re-deriving the geometry itself.
+var _click_frames := 0
+var _click_seat := Vector2.ZERO
+var _click_radius := 0.0
+
+## **완성 — one glow, then the window closes** (design §5). `_process` closes the window itself once this
+## reaches 0, so `toggle()` has exactly one caller for both "pressed 완성" and "pressed Tab" — firing must
+## read identically either way, and there being one close path is what keeps that true by construction.
+var _glow_frames := 0
+
+## **Onboarding-only auto-advance** (design §8: "Auto-advance is onboarding-only. Outside it, pressing
+## 일반진 seats it and the 진 tab stays open."). Set by the shell (`stage.gd`), read only here — the window
+## does not decide *when* onboarding runs, only *what happens to the tab* while it does.
+var _onboarding := false
+
+
+## **The shell's one door onto this window's onboarding behavior.** While `true`, every successful
+## placement (`_click_fx`'s own hook) both advances the open tab and emits `onboard_inserted`; while
+## `false`, placing something seats it and the tab stays exactly where it was — the ordinary, permanent
+## behavior this whole feature ships as its baseline.
+func set_onboarding(active: bool) -> void:
+	_onboarding = active
+
 
 ## **Socket glyph art, loaded once** — the same idiom as `spell_view._bolt_tex`: read every path in
 ##  `Fx.SOCKET_GLYPH_TEX` here in `_ready()`, bark once per bad path and move on, rather than calling
@@ -85,8 +135,19 @@ func setup(progress: Progress, circle: SpellCircle) -> void:
 ##  => Redraw every frame while it is open. The same way `character_view` does it for the muzzle.
 ##  It does nothing while closed — the window is closed most of the time.
 func _process(_dt: float) -> void:
-	if visible:
-		queue_redraw()
+	if not visible:
+		return
+	if _click_frames > 0:
+		_click_frames -= 1
+	if _glow_frames > 0:
+		_glow_frames -= 1
+		if _glow_frames == 0:
+			# **Closes after the glow, not during it** (the plan's own TBD, decided that way — "after" is
+			#  the one where the glow is actually visible at all). `toggle()` is the window's one door onto
+			#  `visible`, the same discipline `stage.gd`'s own comment holds for not touching it directly.
+			toggle()
+			return
+	queue_redraw()
 
 
 func _ready() -> void:
@@ -124,6 +185,13 @@ func toggle() -> void:
 	# Drop the pick when closing — without it, reopening looks like **nobody has picked anything** while
 	#  the next slot click places the old item.
 	_clear_pick()
+	# **The tab does not survive a close either** (design's own TBD, decided in the plan: "no — `toggle()`
+	#  resets it to 진"). `Palette.KINDS.find(...)` rather than a bare `0` so this line still says what it
+	#  means if `KINDS`' order ever changes.
+	_open_tab = Palette.KINDS.find(Palette.KIND_CIRCLE)
+	# A stale flash or glow from the session just closed must not carry into the next open.
+	_click_frames = 0
+	_glow_frames = 0
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -175,8 +243,30 @@ func _gui_input(event: InputEvent) -> void:
 
 
 ## Pick from the palette. Pressing the same one again drops the pick.
+##
+## **Order: tab strip, then the 완성 band, then an item cell** (`onboarding-and-palette-tabs.md` Stage 1).
+##  Both the tab strip and the 완성 band eat vertical space out of the same page `Palette.section()` also
+##  occupies, so checking them first is what keeps a click on the strip from also being read as a click
+##  on whatever cell used to sit at that pixel.
 func _click_palette(pal: Rect2, local: Vector2) -> void:
-	var hit := Palette.item_at(pal.size, local)
+	var tab := Palette.tab_at(pal.size, local)
+	if tab >= 0:
+		_open_tab = tab
+		# A tab switch is not a pick — carrying the old pick across kinds could let a rune get "placed"
+		#  through a glyph seat the moment the tabs change under it.
+		_clear_pick()
+		return
+	if Palette.done_rect(pal.size).has_point(local):
+		# **It confirms, it does not apply** (design §5) — every click already wrote into the live
+		#  `SpellCircle`. The circle glows once and **then** the window closes — `_process` counts
+		#  `_glow_frames` down and calls `toggle()` itself the instant it reaches 0, so there is exactly
+		#  one door onto `visible` regardless of how the window ends up closing.
+		_glow_frames = Fx.DONE_GLOW_FRAMES
+		if _onboarding:
+			onboard_confirmed.emit()
+		return
+
+	var hit := Palette.item_at(pal.size, local, _open_tab, _progress, _circle)
 	if hit.is_empty():
 		return
 	var kind := int(hit["kind"])
@@ -185,11 +275,38 @@ func _click_palette(pal: Rect2, local: Vector2) -> void:
 	#  refuse it and it becomes "I pressed it and nothing happened", which reads as a malfunction (design).
 	if not _can_pick(kind, item):
 		return
+	# **One click inserts, when there is only one seat** (design §4). The rule is "how many seats does
+	#  this kind have", read from `_slot_count(kind)` — write it as "which kind is it" instead and 삼각's
+	#  three rune sockets silently collapse to socket 0 with sockets 1 and 2 unreachable.
+	#  진 always has exactly one seat (the frame, slot 0); 룬 has one on 동그라미 and three on 삼각.
+	if _slot_count(kind) == 1:
+		_put(kind, 0, item)
+		_click_fx(kind, 0)
+		_clear_pick()
+		return
+
+	# **Stage 8 — every 문양 card is a seated glyph, never an unseated one** (there is no stash;
+	#  `items_of(KIND_GLYPH)` reads `_circle.glyph_list()` directly). Picking one is picking *which layer to
+	#  move*, not *which value to place* — two seated dummies (the one family with no cap) share one id and
+	#  are only told apart by which cell was actually clicked (`hit["index"]`, mapped through
+	#  `_circle.seated_layers()` into a real layer index).
+	var from_layer := -1
+	if kind == Palette.KIND_GLYPH:
+		var layers := _circle.seated_layers()
+		var idx := int(hit["index"])
+		from_layer = layers[idx] if idx >= 0 and idx < layers.size() else -1
+
 	if _picked_kind == kind and _picked_item == item:
+		# **Clicking the same value does not always mean the same instance** — with duplicate dummies,
+		#  pressing the *other* one switches the pick to that layer instead of dropping it.
+		if kind == Palette.KIND_GLYPH and from_layer != _picked_layer:
+			_picked_layer = from_layer
+			return
 		_clear_pick()
 		return
 	_picked_kind = kind
 	_picked_item = item
+	_picked_layer = from_layer
 
 
 ## Press a slot. With something picked it **places**, with nothing picked it **removes** (plan section 9-1).
@@ -211,39 +328,121 @@ func _click_circle(page: Rect2, local: Vector2) -> void:
 
 	var layer := Layout.layer_at(id, area, local)
 	if layer >= 0:
-		_place_or_clear(Palette.KIND_GLYPH, func(v: int) -> void:
-			_circle.place_glyph(layer, v), Glyph.GLYPH_NONE)
+		# **Stage 8 — a move, not a place.** `place_glyph` here would either duplicate the glyph (an
+		#  unlimited family, e.g. dummy) or be rejected outright (a capped family already holding it on a
+		#  different layer) — `move_glyph` swaps the two layers' contents instead, so the multiset seated
+		#  never changes and neither failure mode is reachable.
+		if _picked_kind == Palette.KIND_GLYPH and _picked_layer >= 0:
+			_circle.move_glyph(_picked_layer, layer)
+			_click_fx(Palette.KIND_GLYPH, layer)
+			_clear_pick()
+			return
+		_place_or_clear(Palette.KIND_GLYPH, layer, Glyph.GLYPH_NONE)
 		return
 
 	var slot := Layout.rune_slot_at(id, area, local)
 	if slot >= 0:
-		_place_or_clear(Palette.KIND_RUNE, func(v: int) -> void:
-			_circle.set_rune(slot, v), Tuning.ELEM_NONE)
+		_place_or_clear(Palette.KIND_RUNE, slot, Tuning.ELEM_NONE)
 		return
 
 	if Layout.frame_has_point(area, local):
-		_place_or_clear(Palette.KIND_CIRCLE, func(v: int) -> void:
-			_circle.set_circle(v), CircleDefs.CIRCLE_NONE)
+		# The circle slot has no index of its own — it is the single frame seat, so it is written at 0,
+		#  the same slot `_slot_count(KIND_CIRCLE)` always answers `1` for (one-click insertion's own
+		#  premise in `_click_palette`).
+		_place_or_clear(Palette.KIND_CIRCLE, 0, CircleDefs.CIRCLE_NONE)
 
 
 ## **The rule for placing and removing lives here in one place.** Write it per kind and there are three copies,
 ##  and the day only one is fixed you get "glyphs come out but runes do not".
 ##  If what is picked is a **different kind**, nothing happens — picking a rune and placing it on a layer
 ##  has no meaning.
-func _place_or_clear(kind: int, put: Callable, empty: int) -> void:
+## **찰칵 fires only on the placing branch, never the clearing one** — `empty` (`Tuning.ELEM_NONE` for
+##  runes) is itself a legitimate rune, so `_put` alone cannot tell "placed 무속성" from "cleared back to
+##  무속성" apart; only this function, which already knows which branch it took, can.
+func _place_or_clear(kind: int, slot: int, empty: int) -> void:
 	if _picked_kind < 0:
-		put.call(empty)
+		_put(kind, slot, empty)
 		return
 	if _picked_kind != kind:
 		return
-	put.call(_picked_item)
+	_put(kind, slot, _picked_item)
+	_click_fx(kind, slot)
 	# Pick then place is one action. Once placed, the hand is emptied.
 	_clear_pick()
+
+
+## **What placing means, in one place** (`onboarding-and-palette-tabs.md` Stage 4). `_click_circle`'s
+## pick-then-place and `_click_palette`'s one-click insertion both write through here — two copies is how
+## `set_circle`-clears-the-layers stops happening on one path only (a mis-click through the copy that
+## forgot the order would silently keep stale glyphs after a circle swap).
+func _put(kind: int, slot: int, value: int) -> void:
+	if kind == Palette.KIND_GLYPH:
+		_circle.place_glyph(slot, value)
+	elif kind == Palette.KIND_RUNE:
+		_circle.set_rune(slot, value)
+	elif kind == Palette.KIND_CIRCLE:
+		_circle.set_circle(value)
+	else:
+		push_error("CircleWindow: unknown slot kind %d - not placing it" % kind)
+
+
+## **Starts the 찰칵 flash at the item's own seat on the circle page** — captured once, here, rather than
+## re-derived every frame in `_draw()`. **The same seat regardless of which page the click landed on**:
+## pick-then-place clicks the circle page directly, but one-click insertion (Stage 4) clicks a palette
+## cell on the *other* page — without resolving the seat explicitly, a naive "flash where the click
+## happened" would flash the palette cell instead of the circle the item actually landed on.
+func _click_fx(kind: int, slot: int) -> void:
+	var seat := _seat_of(kind, slot)
+	if seat.is_empty():
+		return
+	_click_seat = seat["at"]
+	_click_radius = float(seat["r"])
+	_click_frames = Fx.CLICK_FRAMES
+	# **Onboarding-only** (design §8) — outside a walkthrough, placing 일반진 seats it and the 진 tab
+	#  stays open. `_advance_onboard_tab()` only ever moves forward one kind at a time, so it does nothing
+	#  once the 문양 tab (the last one) is already open.
+	if _onboarding:
+		_advance_onboard_tab()
+		onboard_inserted.emit()
+
+
+## Moves the open tab one kind forward — 진 → 룬 → 문양 — and drops whatever was picked, the same reason a
+## tab switch always clears the pick (`_click_palette`'s own comment: carrying a pick across kinds could
+## let a rune get "placed" through a glyph seat). Does nothing once the last kind is already open.
+func _advance_onboard_tab() -> void:
+	var next := _open_tab + 1
+	if next < Palette.KINDS.size():
+		_open_tab = next
+		_clear_pick()
+
+
+## Where slot `slot` of kind `kind` actually sits on the circle page, right now. **Read after the
+## placement**, not before — for `KIND_CIRCLE` the frame's own center/radius do not move with which
+## circle is equipped, but for `KIND_RUNE`/`KIND_GLYPH` the seat comes from the *now-current* `_circle`.
+func _seat_of(kind: int, slot: int) -> Dictionary:
+	var page := Book.circle_page(size)
+	var area := Layout.circle_area(page.size)
+	var id := _circle.circle_id()
+	if kind == Palette.KIND_CIRCLE:
+		var f := Layout.frame(area)
+		return {"at": f["center"], "r": f["radius"]}
+	if kind == Palette.KIND_RUNE:
+		var slots := Layout.rune_slots(id, area)
+		if slot < 0 or slot >= slots.size():
+			return {}
+		return {"at": slots[slot], "r": Layout.rune_radius(id, area)}
+	if kind == Palette.KIND_GLYPH:
+		var bands := Layout.layer_bands(id, area)
+		if slot < 0 or slot >= bands.size():
+			return {}
+		return {"at": bands[slot]["seat"], "r": Layout.glyph_radius(area)}
+	return {}
 
 
 func _clear_pick() -> void:
 	_picked_kind = -1
 	_picked_item = -1
+	_picked_layer = -1
 
 
 ## **All three pass through the same question: "is there even one slot that would take this item".**
@@ -279,24 +478,30 @@ func _slot_count(kind: int) -> int:
 	return 0
 
 
-## Does that slot take this item. **Glyphs and runes each have a constraint; circles do not.**
+## Does that slot take this item. **Only glyphs have a constraint; circles and runes do not.**
 ## The glyph constraint comes from `glyph_defs.DEFS` and is **not written again here** (`can_place_glyph` is
 ##  called) — write it and the rule has two copies and what `net_circle`'s bidirectional agreement was
-##  measuring becomes meaningless. The rune constraint is ownership (`rune-lock-and-receiving.md`, Stage A) —
-##  read from `Progress`, the same reason the glyph rule is read rather than re-derived.
+##  measuring becomes meaningless.
 ## **Only empty layers count.** Overwriting layer 1 while spread is on layer 1 is allowed by the rules, but
 ##  allowing it looks like "spread is there and spread gets blocked". => Moving means removing first, as one rule.
+##
+## **Rune ownership is not asked here any more** (`onboarding-and-palette-tabs.md` §2, reversing
+##  `rune-lock-and-receiving.md`'s "the gate lives here, not in `palette_layout.items_of()`"). An unowned
+##  rune now has no cell at all — `Palette.items_of()` filters it out before this function is ever reached
+##  through a real click, so asking `_progress.owns_rune()` again here would be a second copy of a question
+##  that is already answered by the item simply not existing. This function's only remaining job is "can it
+##  be placed right now", which for a circle or a rune is unconditionally yes.
 func _slot_accepts(kind: int, index: int, item_id: int) -> bool:
-	if kind == Palette.KIND_RUNE:
-		# **`rune-lock-and-receiving.md`, Stage A.** The gate lives here, not in `palette_layout.items_of()` —
-		#  an unowned rune must still be **drawn** (veiled, unpickable), not filtered out of the palette
-		#  entirely. Filtering it out would leave `net_circle:553`'s `items_of(KIND_RUNE) == ELEM_ALL` needing
-		#  an edit and the player unable to see that fire even exists before earning it.
-		return _progress.owns_rune(item_id)
 	if kind != Palette.KIND_GLYPH:
 		return true
-	return _circle.glyph_at(index) == Glyph.GLYPH_NONE \
-		and _circle.can_place_glyph(index, item_id)
+	# **Stage 8** (`onboarding-and-palette-tabs.md`) — every 문양 card is a *seated* glyph now (there is no
+	#  stash to place a fresh one from), so picking one is always picking a layer to *move*, never a value
+	#  to place. A move is a swap between two layers' contents, which can never violate `max_per_circle`
+	#  (the multiset seated is unchanged, only the order) — the only real question left is whether another
+	#  layer even exists to swap with. `item_id`/`index` are unused here on purpose: the question "can this
+	#  be picked at all" no longer depends on which value or which specific layer, only on there being more
+	#  than one.
+	return _circle.layer_count() > 1
 
 
 func _draw() -> void:
@@ -353,6 +558,17 @@ func _draw() -> void:
 	#   the drawing must get its seats from the table, and the model only knows what is placed on those seats.
 	for i in _circle.layer_count():
 		_draw_ring(area, id, i, font)
+
+	# **찰칵 — falling `t`, drawn at the seat captured when the click landed** (`_click_fx`), not
+	#  recomputed here. `t` reaches 0 exactly when `_click_frames` does, so the flash and the counter
+	#  agree by construction.
+	if _click_frames > 0:
+		_draw_click_fx(_click_seat, _click_radius, float(_click_frames) / float(Fx.CLICK_FRAMES))
+
+	# **완성's glow — one flash over the circle**, the same falling-`t` shape as the click above.
+	if _glow_frames > 0:
+		var f := Layout.frame(area)
+		_draw_done_glow(f["center"], f["radius"], float(_glow_frames) / float(Fx.DONE_GLOW_FRAMES))
 
 	# **It must be restored.** Without restoring, everything drawn afterwards is shifted by the page —
 	#  and the palette below is exactly that "everything drawn afterwards".
@@ -748,22 +964,90 @@ func _draw_slot_ring(at: Vector2, r: float) -> void:
 	draw_circle(at, r, Fx.SLOT_EMPTY, false, Fx.SLOT_EMPTY_PX)
 
 
+## 찰칵 — a ring that widens and fades as `t` falls from 1 to 0. Named so a net can record the argument
+## at the hook (`settlement_layout.notice_rect`'s own lesson: a pure counter asserted alone is the hole —
+## the seat and the falling value both have to be captured at the call, not re-derived).
+func _draw_click_fx(at: Vector2, r: float, t: float) -> void:
+	var col := Fx.CLICK_COLOR
+	col.a *= t
+	draw_circle(at, r * (1.0 + (1.0 - t) * 0.4), col, false, Fx.CIRCLE_FRAME_PX * 1.5)
+
+
+## 완성's glow — one flash filling the circle's own frame, fading as `t` falls from 1 to 0.
+func _draw_done_glow(at: Vector2, r: float, t: float) -> void:
+	var col := Fx.PALETTE_DONE_GLOW_COLOR
+	col.a *= t
+	draw_circle(at, r, col, true)
+
+
 # ══════════════════════════════════════════════════════════════════
-#  Palette — **"slot kind x item".** Not glyph-only
+#  Palette — **"slot kind x item".** Not glyph-only. One tab open at a time
 # ══════════════════════════════════════════════════════════════════
 
-## **This stage goes as far as drawing.** Picking and placing by click is 4b-2b.
 ## Every coordinate comes from `palette_layout` — the hit test must be able to call **the same functions.**
+## **Three named seats below the tab strip and the open section** — `_draw_palette_tab`/`_draw_palette_done`/
+##  `_draw_palette_empty_note` exist so a net can override them and record what actually reached the
+##  screen (`settlement_layout.notice_rect`'s own lesson: a pure function asserted alone let `_draw()` hand
+##  it a bare `Rect2()` under 320 green checks).
 func _draw_palette(page: Rect2, font: Font) -> void:
-	for ki in Palette.KINDS.size():
-		var kind: int = Palette.KINDS[ki]
-		var sec := Palette.section(page.size, ki)
-		_draw_palette_section(sec, kind, font)
-		# Items come from **iterating the table** — write them by hand and the table grows while the palette does not.
-		var items := Palette.items_of(kind)
-		for ii in items.size():
-			var slot := Palette.item_slot(sec, ii, items.size())
-			_draw_palette_item(slot, kind, items[ii])
+	var tab_rects := Palette.tabs(page.size)
+	for i in tab_rects.size():
+		_draw_palette_tab(tab_rects[i], Palette.KINDS[i], i == _open_tab)
+
+	var sec := Palette.section(page.size)
+	var kind: int = Palette.KINDS[_open_tab]
+	_draw_palette_section(sec, kind, font)
+	# Items come from **iterating the table, filtered by ownership** — write them by hand and the table
+	#  grows while the palette does not; fold ownership into `_can_pick` instead of `items_of` and a placed
+	#  glyph vanishes from its own tab the instant it lands (design §2's worked example).
+	var items := Palette.items_of(kind, _progress, _circle)
+	if items.is_empty() and kind == Palette.KIND_GLYPH:
+		# **문양 starts empty, and says so** (design §3) — a line of text where the row of cells would be,
+		#  not a blank rectangle (the same reason `_draw_palette_section` always draws a frame and a title:
+		#  an empty box with neither reads as unfinished, not as "there is nothing here yet").
+		_draw_palette_empty_note(sec, font)
+	for ii in items.size():
+		var slot := Palette.item_slot(sec, ii, items.size())
+		_draw_palette_item(slot, kind, items[ii])
+
+	_draw_palette_done(Palette.done_rect(page.size), font)
+
+
+## One tab. **Background and text color both flip on open/closed** — which tab is open reads even before
+##  the label is read.
+func _draw_palette_tab(rect: Rect2, kind: int, is_open: bool) -> void:
+	draw_rect(rect, Fx.PALETTE_TAB_OPEN_BG if is_open else Fx.PALETTE_TAB_CLOSED_BG, true)
+	draw_rect(rect, Fx.PALETTE_TAB_EDGE, false, Fx.PALETTE_TAB_EDGE_PX)
+	var font := get_theme_default_font()
+	if font == null or not Palette.KIND_DEFS.has(kind):
+		return
+	var nm: StringName = Palette.KIND_DEFS[kind]["name"]
+	draw_string(font,
+		rect.position + Vector2(0.0, rect.size.y * Fx.PALETTE_HEAD_BASELINE_FRAC),
+		String(nm), HORIZONTAL_ALIGNMENT_CENTER, rect.size.x, Fx.PALETTE_TAB_SIZE,
+		Fx.PALETTE_TAB_OPEN_TEXT if is_open else Fx.PALETTE_TAB_CLOSED_TEXT)
+
+
+## The "마법진 완성" band — always present, in every tab (design §5: it confirms, it does not apply).
+func _draw_palette_done(rect: Rect2, font: Font) -> void:
+	draw_rect(rect, Fx.PALETTE_DONE_BG, true)
+	draw_rect(rect, Fx.PALETTE_DONE_EDGE, false, Fx.PALETTE_DONE_EDGE_PX)
+	if font == null:
+		return
+	draw_string(font,
+		rect.position + Vector2(0.0, rect.size.y * Fx.PALETTE_HEAD_BASELINE_FRAC),
+		Fx.PALETTE_DONE_TEXT, HORIZONTAL_ALIGNMENT_CENTER, rect.size.x, Fx.PALETTE_DONE_SIZE,
+		Fx.PALETTE_DONE_TEXT_COLOR)
+
+
+## The 문양 tab's empty note. **Only when there are no seated glyphs** — `_draw_palette` guards the call,
+##  this function only draws.
+func _draw_palette_empty_note(rect: Rect2, font: Font) -> void:
+	if font == null:
+		return
+	draw_string(font,
+		rect.position + Vector2(Fx.PALETTE_PAD_PX, rect.size.y * 0.5),
+		Fx.PALETTE_EMPTY_TEXT, HORIZONTAL_ALIGNMENT_LEFT, -1, Fx.PALETTE_EMPTY_SIZE, Fx.PALETTE_EMPTY_COLOR)
 
 
 ## A section — **it makes the empty space read as "a seat for what is coming".** With only four items the page

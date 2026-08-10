@@ -18,6 +18,7 @@ const WorldStep := preload("res://src/actor/world_step.gd")
 const Progress := preload("res://src/actor/progress.gd")
 const ThreePick := preload("res://src/actor/three_pick.gd")
 const Glyph := preload("res://src/sim/glyph_defs.gd")
+const CircleDefs := preload("res://src/sim/circle_defs.gd")
 
 ## Same lead `net_monster.gd`'s own `HIT_LEAD_PX` uses, so a fired bolt registers as a segment hit on the
 ## monster within a few ticks instead of tunnelling past or never reaching it.
@@ -60,6 +61,9 @@ func run(t) -> void:
 	_reset_zeroes_run_counters_and_gems_this_run_but_not_gems(t)
 	_two_runs_gems_this_run_is_only_the_second_roll(t)
 	_direct_hit_killing_blow_is_drained_even_though_the_monster_is_removed_this_same_tick(t)
+	# ── onboarding-and-palette-tabs, Stage 7 ──
+	_owns_circle_starts_at_the_fixed_kit(t)
+	_onboarding_seen_survives_reset_and_next_stage(t)
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -869,3 +873,47 @@ func _material_is_the_one_thing_a_reset_does_not_take(t) -> void:
 	t.eq(pr.money, 0, "돈은 지워진다")
 	t.eq(pr.xp, 0, "경험치도 지워진다")
 	t.eq(pr.pending_picks, 0, "대기 중인 뽑기도 지워진다")
+
+
+# ══════════════════════════════════════════════════════════════════
+#  onboarding-and-palette-tabs.md, Stage 2/7
+# ══════════════════════════════════════════════════════════════════
+
+## **삼각 is not owned at boot — the user confirmed it explicitly** ("삼각진은 일단 안 가지고 있어야 되고").
+## The same `_owned_runes_start_at_the_fixed_kit` shape, one axis over.
+func _owns_circle_starts_at_the_fixed_kit(t) -> void:
+	var pr := Progress.new()
+	t.ok(pr.owns_circle(CircleDefs.CIRCLE_ROUND), "시작할 때 이미 동그라미 진을 갖고 있다")
+	t.ok(not pr.owns_circle(CircleDefs.CIRCLE_TRIANGLE), "시작할 때는 삼각 진이 없다 (사용자가 명시적으로 확인했다)")
+
+	pr.grant_circle(CircleDefs.CIRCLE_TRIANGLE)
+	t.ok(pr.owns_circle(CircleDefs.CIRCLE_TRIANGLE), "grant_circle() 이후에는 삼각을 갖고 있다")
+	t.ok(pr.owns_circle(CircleDefs.CIRCLE_ROUND), "삼각을 줘도 원래 갖고 있던 동그라미는 그대로다")
+
+	pr.reset()
+	t.ok(not pr.owns_circle(CircleDefs.CIRCLE_TRIANGLE), "reset은 얻은 삼각을 되돌린다")
+	t.ok(pr.owns_circle(CircleDefs.CIRCLE_ROUND),
+		"그리고 시작 키트(동그라미)는 reset 뒤에도 그대로 갖고 있다 (빈 사전으로 브릭되지 않는다)")
+
+
+## **The single fact that makes the walkthrough run once ever, not once per reset.** `reset()` (R, going
+## home) and `next_stage()` (the departure gate mid-run) both must leave it untouched — the same "survives
+## a reset" contract `_unlocked`/`gems` already hold one level up, now for a `bool` instead of a set.
+##
+## **What goes red when inverted**: add `_onboarding_seen = false` to either `reset()` or `next_stage()`.
+func _onboarding_seen_survives_reset_and_next_stage(t) -> void:
+	var pr := Progress.new()
+	t.ok(not pr.has_seen_onboarding(), "시작할 때는 아직 온보딩을 안 봤다 (전제)")
+	pr.mark_onboarding_seen()
+	t.ok(pr.has_seen_onboarding(), "mark_onboarding_seen() 이후에는 봤다고 기억한다")
+
+	pr.reset()
+	t.ok(pr.has_seen_onboarding(), "reset(R) 뒤에도 온보딩을 봤다는 사실은 남는다 (그래서 또 안 뜬다)")
+
+	pr.next_stage()
+	t.ok(pr.has_seen_onboarding(), "스테이지를 넘어가도 남는다")
+
+	# **A fresh `Progress` starts unseen** — the flag is not a global, and a second instance (a second run
+	#  net drives in the same process) must not inherit the first one's history.
+	var fresh := Progress.new()
+	t.ok(not fresh.has_seen_onboarding(), "새 Progress 객체는 온보딩을 안 본 상태로 시작한다")

@@ -45,6 +45,7 @@ const SettlementWindow := preload("res://src/view/settlement_window.gd")
 ## The gate (ending) — `gate-ending-to-game.md`.
 const StageGate := preload("res://src/actor/stage_gate.gd")
 const GateView := preload("res://src/view/gate_view.gd")
+const OnboardView := preload("res://src/view/onboard_view.gd")
 
 ## No longer a constant but a re-export of `terrain_map_generated.gd` — it follows the painted region's size verbatim.
 ##  It pairs with the re-export at the `MAP` declaration below.
@@ -249,6 +250,11 @@ var _boss: Monster = null
 ##  other window** — the same reason as `_research_window` above. Unlike the other three it is **derived
 ##  open**, never toggled by a key (`_sync_settlement()` below) — there is no debug key for "the run is over".
 @onready var _settlement: SettlementWindow = $HUD/SettlementWindow
+## The onboarding arrow + key cap (`onboarding-and-palette-tabs.md` Stage 7). **Under `HUD`, like every
+## other window** — the same reason as `_research_window` above (it must not ride the screen shake).
+## **Its own `visible` is pushed here, once a frame, from `_onboard_step`** — the same "derive, do not
+## push a second latch" idiom `_town_view.visible = _in_town` already holds.
+@onready var _onboard_view: OnboardView = $HUD/OnboardView
 @onready var _char_view: CharacterView = $CharacterView
 @onready var _spell_view: SpellView = $SpellView
 @onready var _blast_fx: BlastFx = $BlastFx
@@ -321,6 +327,30 @@ var _next_stage_id := StageDefs.NO_NEXT
 ##  the town's screens ("how the research and assembly screens are actually drawn") are explicitly outside
 ##  `town.md`'s own boundary, and building one now would be deciding by default what the user has not decided.
 var _town_message := ""
+
+## **Onboarding's step machine** (`onboarding-and-palette-tabs.md` Stage 7). **Lives in the shell, dies on
+## R** — `_rebuild()` resets it to `ONBOARD_OFF` unconditionally on every teardown (R, going home, and the
+## chain), the same "one teardown list" `_rebuild`'s own header already describes. What makes the
+## walkthrough run **once ever**, not once per reset, is `Progress._onboarding_seen` — a separate,
+## persistent fact `_leave_town()` reads before deciding whether to start `ONBOARD_ARROW` again.
+##
+## ```
+## ARROW   -- Tab pressed -->        CIRCLE
+## CIRCLE  -- 일반진 placed -->       RUNE      (circle_window.onboard_inserted)
+## RUNE    -- 무속성 룬 placed -->    GLYPH     (circle_window.onboard_inserted)
+## GLYPH   -- 완성 pressed -->        DONE      (circle_window.onboard_confirmed)
+## DONE    -- window closes -->      OFF       (marks Progress.mark_onboarding_seen())
+## ```
+## **Advanced by the window, not polled from it** — `circle_window` is the one object that sees the clicks;
+## a poll here would need to re-derive "was that insert the onboarding-relevant one" from the same state
+## the window already holds, which is the two-copies trap this repo keeps finding under `SpellCircle`.
+const ONBOARD_ARROW := 0
+const ONBOARD_CIRCLE := 1
+const ONBOARD_RUNE := 2
+const ONBOARD_GLYPH := 3
+const ONBOARD_DONE := 4
+const ONBOARD_OFF := 5
+var _onboard_step := ONBOARD_OFF
 
 var _blast_count := 0
 
@@ -467,6 +497,10 @@ func _ready() -> void:
 	_input.debug_hud_toggled.connect(_toggle_debug_hud)
 	_input.cancel_requested.connect(_handle_cancel)
 	_input.zoom_requested.connect(_step_zoom)
+	# **Onboarding is advanced by the window, not polled from it** (`_onboard_step`'s own header) —
+	#  `circle_window` is the one object that sees the clicks that move the walkthrough forward.
+	_circle_window.onboard_inserted.connect(_advance_onboard)
+	_circle_window.onboard_confirmed.connect(_finish_onboard_confirm)
 	# The starting equipment is **the model's default** (`SpellCircle`'s constructor) — the line that pushed
 	#  a preset in once here was deleted. Push it in and "the starting state" is in two places, and the day
 	#  comes when only one of them gets fixed.
@@ -504,6 +538,27 @@ func _toggle_assembly() -> void:
 	#  exists to prevent.
 	_pick_window.cancel_confirm()
 	_circle_window.toggle()
+	# **Beat 1's own transition — the arrow is for Tab, and Tab just opened the window.** Onboarding-only:
+	#  outside `ONBOARD_ARROW` this does nothing, the same "outside onboarding, nothing auto-advances" rule
+	#  `circle_window.set_onboarding`'s own header holds for the tab.
+	if _onboard_step == ONBOARD_ARROW and _circle_window.visible:
+		_onboard_step = ONBOARD_CIRCLE
+
+
+## **The window's own signal, driven by an actual insert** (`circle_window.onboard_inserted`) — only while
+## `ONBOARD_CIRCLE` or `ONBOARD_RUNE` (진 then 룬) does this move the step; a stray emission at any other
+## time (there should not be one, since the window itself only emits while `_onboarding` is true) does
+## nothing rather than corrupting a later state.
+func _advance_onboard() -> void:
+	if _onboard_step == ONBOARD_CIRCLE or _onboard_step == ONBOARD_RUNE:
+		_onboard_step += 1
+
+
+## **완성 pressed while onboarding — the glow beat.** The window closes itself a few frames later
+## (`circle_window._process`); `_physics_process` below is what notices that and finishes the walkthrough.
+func _finish_onboard_confirm() -> void:
+	if _onboard_step == ONBOARD_GLYPH:
+		_onboard_step = ONBOARD_DONE
 
 
 ## P. **The three-pick's Stage-C door** — text only, no window yet (that is Stage D). Mirrors
@@ -788,7 +843,26 @@ func _physics_process(delta: float) -> void:
 	# **Same reason as `_pick_window.tick_confirm()` above** — the count-up's clock is screen-only state
 	#  (`settlement_window.gd`'s own header), ticked from here rather than the window's own idle-rate `_process()`.
 	_settlement.tick_countup()
+	_tick_onboard()
 	_update_hud()
+
+
+## **Notices the window closing and finishes (or abandons) the walkthrough.** `circle_window`'s own
+## `_process()` calls `toggle()` itself the instant the 완성 glow ends — there is no signal for "the window
+## just closed" the way there is one for an insert or a confirm-press, so this is read the same way
+## `_toggle_assembly()` reads `_circle_window.visible` rather than holding a second latch: once a frame,
+## here.
+## **Only marked "seen" if it actually reached `ONBOARD_DONE` first.** Closing early (Tab, ESC) at
+## `ONBOARD_CIRCLE`/`RUNE`/`GLYPH` turns onboarding off without marking it complete — the walkthrough is not
+## skippable by a stray key today (an open TBD in the design doc), but it must not be able to check itself
+## off by accident either.
+func _tick_onboard() -> void:
+	_onboard_view.visible = _onboard_step == ONBOARD_ARROW
+	if _onboard_step > ONBOARD_ARROW and _onboard_step < ONBOARD_OFF and not _circle_window.visible:
+		if _onboard_step == ONBOARD_DONE:
+			_world.progress().mark_onboarding_seen()
+		_onboard_step = ONBOARD_OFF
+		_circle_window.set_onboarding(false)
 
 
 ## **Derived, not pushed.** `want` is recomputed every physics frame straight from `_char.downed`/`at_gate`/
@@ -1072,6 +1146,12 @@ func _rebuild(end_the_run: bool) -> void:
 	_entrance_frames = -1
 	_boss = null
 	_boss_bar.clear_boss()
+	# **Onboarding dies on every rebuild** — R, going home and the chain all route through here, and this is
+	#  the one call site all three share (`_onboard_step`'s own header). `_leave_town()` is the only place
+	#  that restarts it, and it does so *after* calling `reset_stage()` (which reaches this function), so the
+	#  order here does not race that decision.
+	_onboard_step = ONBOARD_OFF
+	_circle_window.set_onboarding(false)
 	_blast_count = 0
 	# **Room ③'s wall latch.** `_build_room()` below always rebuilds the terrain in this same call, so
 	#  the flag and the wall never disagree — safe here for the reason `_settlement`'s own latch ban above it
@@ -1185,8 +1265,12 @@ func _interact() -> void:
 			#  adds is *choosing what to equip within a budget*, and that needs the point table which does not
 			#  exist yet — so today the bench opens the reordering window and nothing is pretended.
 			_toggle_assembly()
-		Fixtures.KIND_RESEARCH:
-			_toggle_research()
+		# **연구대's door is closed, not removed** (`onboarding-and-palette-tabs.md` Stage 7 — the plan's own
+		#  "the door closes; nothing is deleted"). `_toggle_research()`, `Progress.buy()`, `UnlockDefs` and
+		#  `research_window.gd` all stay reachable through code — only this call stops happening, so E at the
+		#  bench does nothing and the player walks past it, matching the 「준비중」 prompt `town_view` now
+		#  draws there. `net_research` must stay green with no edit — if it goes red, the door was not the
+		#  only thing that moved.
 
 
 ## **The research bench's HUD line — the rune pool, unlocked and locked in one list, and what an unlock costs.**
@@ -1244,6 +1328,12 @@ func enter_town() -> void:
 func _leave_town() -> void:
 	_stage_id = StageDefs.STAGE_1
 	reset_stage()
+	# **The stage-1 entry moment — onboarding starts here, once.** `reset_stage()` above already zeroed
+	#  `_onboard_step` back to `ONBOARD_OFF` (the same `_rebuild()` call `R` itself makes); this is the one
+	#  place that restarts it, and only when `Progress._onboarding_seen` says it has never finished.
+	if not _world.progress().has_seen_onboarding():
+		_onboard_step = ONBOARD_ARROW
+		_circle_window.set_onboarding(true)
 
 
 ## **The other half of the "seat ⊆ owned" invariant** — called only after something has just revoked

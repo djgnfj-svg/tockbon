@@ -641,7 +641,8 @@ func _wired_root(t) -> Node:
 			#  `reset_stage()`/`enter_town()`/`_leave_town()` on this root crash on a null mid-call, the same
 			#  risk this file's own comment already names for `GateView` one line up.
 			"HUD/BossBar",
-			"HUD/SettlementWindow"]:
+			"HUD/SettlementWindow",
+			"HUD/SettlementWindow", "HUD/OnboardView"]:
 		t.ok(root.get_node_or_null(path) != null, "씬에 %s 가 있다 (전제)" % path)
 
 	root.set("_hud", root.get_node(paths["_hud"]))
@@ -669,6 +670,10 @@ func _wired_root(t) -> Node:
 	root.set("_gate_view", root.get_node("GateView"))
 	if world0 != null:
 		root.get_node("GateView").call("setup", world0.progress())
+	# **`_onboard_view`** (`onboarding-and-palette-tabs.md` Stage 7) — `_physics_process()` reaches
+	#  `_tick_onboard()` unconditionally, which writes `_onboard_view.visible` every frame. Every
+	#  `_physics_process` call in this file dies on a null without this.
+	root.set("_onboard_view", root.get_node("HUD/OnboardView"))
 	return root
 
 

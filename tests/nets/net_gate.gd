@@ -981,7 +981,12 @@ func _wired_root(t) -> Node:
 			#  'clear_boss' in base 'Nil'`), the exact risk this file's own header already names for
 			#  `_gate_view` one line up.
 			["_boss_bar", "HUD/BossBar"],
-			["_settlement", "HUD/SettlementWindow"]]:
+			["_settlement", "HUD/SettlementWindow"],
+			["_settlement", "HUD/SettlementWindow"],
+			# **`_onboard_view`** (`onboarding-and-palette-tabs.md` Stage 7) — `_physics_process()` reaches
+			#  `_tick_onboard()` unconditionally, which writes `_onboard_view.visible` every frame. Every
+			#  `_physics_process` call in this file dies on a null without this.
+			["_onboard_view", "HUD/OnboardView"]]:
 		var n := root.get_node_or_null(NodePath(pair[1]))
 		t.ok(n != null, "씬에 %s 가 있다 (전제)" % pair[1])
 		if n == null:

@@ -115,6 +115,42 @@ class _RecordingCircleWindow extends CircleWindow:
 	func _draw_slot_ring(at: Vector2, r: float) -> void:
 		slot_ring_calls.append({"at": at, "r": r})
 		super._draw_slot_ring(at, r)
+	# **Tabs and the 완성 band** (`onboarding-and-palette-tabs.md` Stage 1) — the same `settlement_layout.
+	#  notice_rect` lesson every other hook in this class already guards against: a pure function asserted
+	#  alone let `_draw()` hand it a bare `Rect2()` under 320 green checks.
+	var tab_draws: Array[Dictionary] = []       # {rect, kind, is_open}, one per _draw_palette_tab call
+	var done_draws: Array[Rect2] = []
+	var section_draws: Array[Dictionary] = []   # {rect, kind}, the open tab's own body
+	var empty_note_draws: Array[Rect2] = []
+
+	func _draw_palette_tab(rect: Rect2, kind: int, is_open: bool) -> void:
+		tab_draws.append({"rect": rect, "kind": kind, "is_open": is_open})
+		super._draw_palette_tab(rect, kind, is_open)
+
+	func _draw_palette_done(rect: Rect2, font: Font) -> void:
+		done_draws.append(rect)
+		super._draw_palette_done(rect, font)
+
+	func _draw_palette_section(sec: Rect2, kind: int, font: Font) -> void:
+		section_draws.append({"rect": sec, "kind": kind})
+		super._draw_palette_section(sec, kind, font)
+
+	func _draw_palette_empty_note(rect: Rect2, font: Font) -> void:
+		empty_note_draws.append(rect)
+		super._draw_palette_empty_note(rect, font)
+
+	# **찰칵 and the 완성 glow** (Stage 6) — the seat/rect and the falling `t`, captured at the hook rather
+	#  than re-derived, the same reason every hook above exists.
+	var click_fx_calls: Array[Dictionary] = []   # {at, r, t}
+	var done_glow_calls: Array[Dictionary] = []  # {at, r, t}
+
+	func _draw_click_fx(at: Vector2, r: float, t: float) -> void:
+		click_fx_calls.append({"at": at, "r": r, "t": t})
+		super._draw_click_fx(at, r, t)
+
+	func _draw_done_glow(at: Vector2, r: float, t: float) -> void:
+		done_glow_calls.append({"at": at, "r": r, "t": t})
+		super._draw_done_glow(at, r, t)
 
 ## The slack that comes from `Rect2` holding its values as **32-bit floats.** Used only when comparing a boundary
 ##  that "has to sit exactly flush" against 64-bit arithmetic — widen it and real overlaps get amnestied.
@@ -197,8 +233,12 @@ func run(t) -> void:
 	_palette_is_kind_by_item(t)
 	_owns_rune_gates_can_pick_on_an_untreed_window(t)
 	_refusing_a_veiled_rune_then_clicking_the_seat_does_not_disarm(t)
+	_one_click_inserts_when_there_is_only_one_seat(t)
+	await _click_fx_flashes_at_the_seat_and_falls_to_zero(t)
+	await _done_glow_then_close_fires_identically_to_tab(t)
 	_symbols_are_shared(t)
 	await _draw_actually_runs_headless(t)
+	await _palette_tabs_and_done_are_drawn_from_the_layout(t)
 	_hit_tests_match_the_drawing(t)
 	_triangle_hit_shapes_stay_disjoint(t)
 	_palette_geometry_runs(t)
@@ -206,6 +246,10 @@ func run(t) -> void:
 	_axes_do_not_call_each_other(t)
 	_cannot_fire_without_a_rune(t)
 	_empty_layer_is_skipped(t)
+	_move_glyph_swaps_layers_and_never_duplicates(t)
+	_seated_layers_matches_glyph_list_position_for_position(t)
+	_the_glyph_tab_moves_a_seated_glyph_between_layers(t)
+	_duplicate_dummy_glyphs_are_told_apart_by_layer(t)
 	_round_trip(t)
 	_cap_blocks_before_placing(t)
 	_both_ways_agree(t)
@@ -215,6 +259,7 @@ func run(t) -> void:
 	_shots_geometry(t)
 	_shots_fire_across_the_right_ticks(t)
 	await _fire_at_loops_every_shot_not_just_the_first(t)
+	await _fire_at_on_a_fresh_empty_circle_does_nothing(t)
 	_socket_glyph_textures_load_and_are_288(t)
 	_socket_glyph_ids_are_real_glyphs(t)
 	_socket_glyph_families_do_not_cross(t)
@@ -289,6 +334,11 @@ func _sizes_come_from_the_table(t) -> void:
 
 	for id: int in CircleDefs.ALL:
 		var c := SpellCircle.new(id)
+		# **The constructor no longer auto-fills runes** (`onboarding-and-palette-tabs.md` Stage 3) — this
+		#  loop is a table-driven check, not the boot-state check, so the rune is filled by hand to keep
+		#  `can_fire()` below meaningful for every circle in the table.
+		for slot in c.rune_count():
+			c.set_rune(slot, Tuning.ELEM_NONE)
 		var nm: StringName = CircleDefs.DEFS[id]["name"]
 		t.eq(c.circle_id(), id, "진 %s가 자기 id를 기억한다" % nm)
 		t.eq(c.layer_count(), CircleDefs.layers(id), "진 %s의 층 수가 표에서 나온다" % nm)
@@ -365,19 +415,23 @@ func _empty_rune_is_not_a_rune(t) -> void:
 	t.eq(Tuning.ELEM_FIRE, 0, "불 룬이 0이다 (그래서 0을 빈 값으로 못 쓴다)")
 
 	# An unknown rune is not accepted — accept it and `can_fire()` lets it through and `fire()` barks at the command boundary.
-	var c := SpellCircle.new()
+	# **A round circle explicitly, not the bare constructor** (`onboarding-and-palette-tabs.md` Stage 3 —
+	#  `SpellCircle.new()` alone is now `CIRCLE_NONE`, 0 rune slots, and `rune_at(0)` would be a bogus read).
+	var c := SpellCircle.new(CircleDefs.CIRCLE_ROUND)
+	t.ok(c.set_rune(0, Tuning.ELEM_FIRE), "확인용으로 불을 놓아 둔다 (전제)")
 	t.expect_error("SpellCircle: unknown rune")
 	t.ok(not c.set_rune(0, 777), "모르는 룬은 짖고 안 놓인다")
-	# **`DEFAULT_RUNE`을 통해 참조한다, 값을 박지 않는다** — Stage B에서 이 값이 불에서 무속성으로 옮겨간 자리다.
-	#  값을 박아두면 그 이동 자체가 이 검사를 깨뜨리는데, 이 검사가 재는 것은 "거절되면 안 건드린다"이지
-	#  "시작 룬이 무엇인가"가 아니다.
-	t.eq(c.rune_at(0), SpellCircle.DEFAULT_RUNE, "거절된 룬이 자리를 안 건드린다")
+	t.eq(c.rune_at(0), Tuning.ELEM_FIRE, "거절된 룬이 자리를 안 건드린다 (놓아 둔 불이 그대로다)")
 
 
 ## Remove the rune and you cannot fire. The design doc "extreme values" sentence "a circle plus a rune alone already
 ##  makes a spell" already carries **glyphs are optional and a rune is required.**
 func _cannot_fire_without_a_rune(t) -> void:
-	var c := SpellCircle.new()
+	# **A round circle with a rune placed by hand** — `SpellCircle.new()` alone is now `CIRCLE_NONE` with
+	#  no rune slots at all (Stage 3's empty boot). This function's own concern is the rune, not the boot
+	#  state, so the circle and its rune are set up explicitly.
+	var c := SpellCircle.new(CircleDefs.CIRCLE_ROUND)
+	t.ok(c.set_rune(0, Tuning.ELEM_FIRE), "룬을 놓는다 (전제)")
 	t.ok(c.can_fire(), "룬이 있으면 쏠 수 있다")
 
 	t.ok(c.set_rune(0, SpellCircle.RUNE_EMPTY), "룬을 뺀다")
@@ -388,13 +442,13 @@ func _cannot_fire_without_a_rune(t) -> void:
 	t.ok(c.can_fire(), "다시 넣으면 쏠 수 있다")
 
 	# It fires with no glyph — the point is that the rules for runes and glyphs differ.
-	var bare := SpellCircle.new()
+	var bare := SpellCircle.new(CircleDefs.CIRCLE_ROUND)
+	t.ok(bare.set_rune(0, Tuning.ELEM_NONE), "룬을 놓는다 (전제)")
 	t.eq(bare.packed_glyphs(), Glyph.GLYPH_NONE, "문양이 하나도 없다")
 	t.ok(bare.can_fire(), "문양이 없어도 쏠 수 있다 (진 + 룬만)")
 
-	# With no circle you cannot fire.
+	# With no circle you cannot fire — the actual empty-boot state now, no explicit `set_circle` needed.
 	var gone := SpellCircle.new()
-	gone.set_circle(CircleDefs.CIRCLE_NONE)
 	t.ok(not gone.can_fire(), "진이 없으면 못 쏜다")
 
 	# An empty rune has to take the path of **not building a command at all** — build one and `fire()` barks.
@@ -418,7 +472,10 @@ func _cannot_fire_without_a_rune(t) -> void:
 ## Every circle has a different layer count, so `layers[]` **changes length at runtime.** With only one circle it does not
 ##  show today, but if the model cannot express it, the day a second circle arrives the model gets rebuilt.
 func _swapping_the_circle_resizes(t) -> void:
-	var c := SpellCircle.new()
+	# **A round circle explicitly** — `SpellCircle.new()` alone is now `CIRCLE_NONE` (Stage 3), which has
+	#  0 layers, so `place_glyph` below would refuse on an empty boot circle.
+	var c := SpellCircle.new(CircleDefs.CIRCLE_ROUND)
+	t.ok(c.set_rune(0, Tuning.ELEM_NONE), "룬을 놓는다 (전제)")
 	t.ok(c.place_glyph(0, Glyph.GLYPH_SPREAD), "1층에 확산을 놓는다")
 	t.ok(c.place_glyph(1, Glyph.GLYPH_BLAST), "2층에 폭발을 놓는다")
 
@@ -664,10 +721,11 @@ func _circle_layout_does_not_know_pages(t) -> void:
 	# **The palette has the same contract and had no pin.** Adding an `origin` parameter to `section()` still passed
 	#  (measured). Pin only one side of two contracts of the same nature and **the unpinned side breaks quietly.**
 	var pal_src := _stripped(t, PALETTE_PATH, "palette_layout")
-	t.ok(pal_src.contains("func section(page_size: Vector2, kind_index: int) -> Rect2"),
-		"팔레트 구획 함수가 **크기만** 받는다 (자리를 안 받는다)")
-	t.ok(pal_src.contains("func item_at(page_size: Vector2, p: Vector2) -> Dictionary"),
-		"팔레트 히트테스트가 **크기와 점만** 받는다")
+	t.ok(pal_src.contains("func section(page_size: Vector2) -> Rect2"),
+		"팔레트 구획 함수가 **크기만** 받는다 (탭 색인도 자리도 안 받는다 — 열린 탭과 무관하게 하나뿐이다)")
+	t.ok(pal_src.contains(
+			"func item_at(page_size: Vector2, p: Vector2, open_tab: int, pr: Progress, circle: SpellCircle) -> Dictionary"),
+		"팔레트 히트테스트가 **크기·점·열린 탭·소유 상태**를 받는다 (자리는 안 받는다)")
 	t.ok(not pal_src.contains("Fx.WINDOW_"), "팔레트가 창 상수를 안 읽는다")
 	t.ok(not _read(PALETTE_PATH).contains(BOOK_PATH), "팔레트가 창 축 파일을 안 부른다")
 
@@ -731,25 +789,50 @@ func _palette_is_kind_by_item(t) -> void:
 	t.ok(Palette.KINDS.has(Palette.KIND_RUNE), "룬 칸이 있다")
 	t.ok(Palette.KINDS.has(Palette.KIND_GLYPH), "문양 칸이 있다")
 
-	# **The items follow the table exactly.**
-	#  The values match today, but **this is not a tautology** — if someone writes `[1, 2]` by hand,
-	#   this goes red the day the table grows. That is when this check earns its keep.
-	# **Measuring only the count lets a hand-written list pass** — written as `[GLYPH_SPREAD, GLYPH_BLAST]`
-	#  the count is still 2 and it was green (measured). => **The values are compared too.**
-	var want := {
-		Palette.KIND_CIRCLE: CircleDefs.ALL,
-		Palette.KIND_RUNE: Tuning.ELEM_ALL,
-		Palette.KIND_GLYPH: Glyph.ALL,
-	}
-	for kind: int in Palette.KINDS:
-		var nm: StringName = Palette.KIND_DEFS[kind]["name"]
-		var items := Palette.items_of(kind)
-		t.ok(items.size() > 0, "%s 칸에 항목이 있다 (%d개)" % [nm, items.size()])
-		t.eq(Array(items), Array(want[kind] as Array), "%s 항목이 표와 **값까지** 같다" % nm)
+	# **What you do not have has no cell** (`onboarding-and-palette-tabs.md` §2, reversing
+	#  `rune-lock-and-receiving.md`'s "veiled, not hidden"). A fresh `Progress`/`SpellCircle` owns only
+	#  동그라미 and 무속성, and starts with no glyph seated — **measured by value, not by count**: a
+	#  hand-written `[CIRCLE_ROUND]` would pass a count check just as well, so the exact array is compared.
+	var pr := Progress.new()
+	# **A round circle explicitly** — `SpellCircle.new()` alone is `CIRCLE_NONE` (Stage 3's empty boot),
+	#  which has 0 layers, and `place_glyph` below needs a real seat.
+	var c := SpellCircle.new(CircleDefs.CIRCLE_ROUND)
+	t.eq(Array(Palette.items_of(Palette.KIND_CIRCLE, pr, c)), [CircleDefs.CIRCLE_ROUND],
+		"진 칸은 처음에 동그라미 하나뿐이다 (삼각은 아직 없다)")
+	t.eq(Array(Palette.items_of(Palette.KIND_RUNE, pr, c)), [Tuning.ELEM_NONE],
+		"룬 칸은 처음에 무속성 하나뿐이다 (불·물은 아직 없다)")
+	t.eq(Array(Palette.items_of(Palette.KIND_GLYPH, pr, c)), [],
+		"문양 칸은 처음에 비어 있다 (낀 문양이 없다 — 보유 목록이 아니라 마법진의 보기다)")
+
+	# **The transition, on one instance** — a grant adds a cell with no restart, the same shape
+	#  `_owns_rune_gates_can_pick_on_an_untreed_window` already drives for placeability.
+	pr.grant_circle(CircleDefs.CIRCLE_TRIANGLE)
+	t.eq(Array(Palette.items_of(Palette.KIND_CIRCLE, pr, c)),
+		[CircleDefs.CIRCLE_ROUND, CircleDefs.CIRCLE_TRIANGLE],
+		"삼각을 준 뒤에는 진 칸에 둘 다 있다 (같은 Progress를 그대로 읽는다)")
+	pr.grant_rune(Tuning.ELEM_FIRE)
+	# **Order follows `Tuning.ELEM_ALL`'s own table order** (fire, none, water) — `items_of` filters that
+	#  list, it does not re-sort it.
+	t.eq(Array(Palette.items_of(Palette.KIND_RUNE, pr, c)), [Tuning.ELEM_FIRE, Tuning.ELEM_NONE],
+		"불을 준 뒤에는 룬 칸에 둘 다 있다")
+
+	# **Placed and absent are not the same question, and folding them into one gate breaks a different
+	#  thing than it used to** (design §2's own worked example, now read through Stage 8's move semantics):
+	#  ownership deciding *existence* would make a just-placed glyph vanish from its own tab the instant it
+	#  lands; here the card stays, and — since Stage 8 — it stays **pickable**, because every 문양 card is
+	#  a seated glyph and picking one now means picking a layer to move, not a value to place again.
+	t.ok(c.place_glyph(0, Glyph.GLYPH_SPREAD), "확산을 1층에 놓는다 (전제)")
+	t.eq(Array(Palette.items_of(Palette.KIND_GLYPH, pr, c)), [Glyph.GLYPH_SPREAD],
+		"확산을 놓은 뒤에는 문양 칸에 그것이 보인다")
+	var win := CircleWindow.new()
+	win.setup(pr, c)
+	t.ok(win.call("_can_pick", Palette.KIND_GLYPH, Glyph.GLYPH_SPREAD),
+		"놓인 확산은 여전히 고를 수 있다 (Stage 8 — 다른 층으로 옮기는 것이지 새로 놓는 것이 아니다)")
+	win.free()
 
 	# Barks at an unknown kind — add a kind without wiring the table and that cell **empties quietly.**
 	t.expect_error("PaletteLayout: unknown slot kind")
-	t.eq(Palette.items_of(9999).size(), 0, "모르는 종류는 짖고 항목이 0이다")
+	t.eq(Palette.items_of(9999, pr, c).size(), 0, "모르는 종류는 짖고 항목이 0이다")
 
 
 ## **`Progress.owns_rune()` drives `_can_pick()` on an untreed window** (`rune-lock-and-receiving.md`, Stages
@@ -765,34 +848,39 @@ func _palette_is_kind_by_item(t) -> void:
 ## file ever grants it, so it stays veiled from the first line to the last, undisturbed by the fire grant.
 func _owns_rune_gates_can_pick_on_an_untreed_window(t) -> void:
 	var pr := Progress.new()
+	# **A round circle** — `_can_pick(KIND_RUNE, ...)` asks `_slot_count(KIND_RUNE)` (`c.rune_count()`),
+	#  which is 0 on the empty boot circle (Stage 3); a real rune seat is needed to test placeability at all.
+	var c := SpellCircle.new(CircleDefs.CIRCLE_ROUND)
 	var win := CircleWindow.new()
-	win.setup(pr, SpellCircle.new())
+	win.setup(pr, c)
 
 	t.ok(pr.owns_rune(Tuning.ELEM_NONE), "시작 키트에 무속성이 있다 (전제)")
 	t.ok(not pr.owns_rune(Tuning.ELEM_FIRE), "시작 키트에 불은 없다 (전제 — 이것이 잠금이다)")
 	t.ok(not pr.owns_rune(Tuning.ELEM_WATER), "물도 아직 아무도 안 줬다 (전제)")
 
-	t.ok(win.call("_can_pick", Palette.KIND_RUNE, Tuning.ELEM_NONE),
-		"가진 무속성 룬은 팔레트에서 고를 수 있다")
-	t.ok(not (win.call("_can_pick", Palette.KIND_RUNE, Tuning.ELEM_FIRE) as bool),
-		"안 가진 불 룬은 못 고른다 (가려져 있다 — 잠금이 실제로 UI에 닿는다)")
-	t.ok(not (win.call("_can_pick", Palette.KIND_RUNE, Tuning.ELEM_WATER) as bool),
-		"안 가진 물 룬도 못 고른다 (가려져 있다)")
+	# **"veiled" became "absent"** (`onboarding-and-palette-tabs.md` §2, reversing "veiled, not hidden") —
+	#  an unowned rune has no cell in the palette's item list at all, not merely a dimmed one.
+	var items := Palette.items_of(Palette.KIND_RUNE, pr, c)
+	t.ok(items.has(Tuning.ELEM_NONE), "가진 무속성은 룬 칸에 있다")
+	t.ok(not items.has(Tuning.ELEM_FIRE), "안 가진 불은 룬 칸에 없다 (가려진 게 아니라 칸이 없다)")
+	t.ok(not items.has(Tuning.ELEM_WATER), "안 가진 물도 룬 칸에 없다")
 
-	# **The grant, driven mid-run, on the same window instance** — not a fresh window built after the grant,
-	#  which would only prove `owns_rune()` in isolation, not that the window actually reads the live `Progress`
-	#  it was handed rather than a copy taken at `setup()` time.
+	# **The grant, driven mid-run, on the same live objects** — not a fresh `Progress` built after the grant,
+	#  which would only prove `owns_rune()` in isolation, not that the palette reads the live object the
+	#  window was handed rather than a copy taken at `setup()` time.
 	pr.grant_rune(Tuning.ELEM_FIRE)
-	t.ok(win.call("_can_pick", Palette.KIND_RUNE, Tuning.ELEM_FIRE),
-		"불을 준 뒤에는 같은 창에서 바로 고를 수 있게 된다 (사본이 아니라 같은 Progress를 읽는다)")
-	# None (already owned) and water (never granted) are undisturbed by the fire grant.
-	t.ok(win.call("_can_pick", Palette.KIND_RUNE, Tuning.ELEM_NONE),
-		"불을 줘도 이미 가졌던 무속성은 그대로 고를 수 있다")
-	t.ok(not (win.call("_can_pick", Palette.KIND_RUNE, Tuning.ELEM_WATER) as bool),
-		"불을 줘도 관계없는 물은 여전히 못 고른다")
+	items = Palette.items_of(Palette.KIND_RUNE, pr, c)
+	t.ok(items.has(Tuning.ELEM_FIRE), "불을 준 뒤에는 같은 Progress를 읽는 룬 칸에 불이 나타난다 (사본이 아니다)")
+	t.ok(items.has(Tuning.ELEM_NONE), "불을 줘도 이미 가졌던 무속성은 그대로 있다")
+	t.ok(not items.has(Tuning.ELEM_WATER), "불을 줘도 관계없는 물은 여전히 없다")
 
-	# **The circle axis is untouched by this stage** — the glyph and circle gates still answer exactly as
-	#  before, so a mutation that widened the rune gate into the other two kinds would show up here.
+	# **Presence and placeability are two different questions** — the ownership gate moved out of
+	#  `_can_pick`/`_slot_accepts` entirely (into `items_of`, measured above), so once a rune has a cell it
+	#  is unconditionally placeable; there is nothing left in `_can_pick` to refuse it with.
+	t.ok(win.call("_can_pick", Palette.KIND_RUNE, Tuning.ELEM_FIRE), "칸에 나타난 불은 실제로 고를 수 있다")
+
+	# **The circle axis is untouched by the rune gate** — a fresh window still starts owning only
+	#  동그라미 (`Progress._starting_circles()`), so this only proves the two axes read their own tables.
 	t.ok(win.call("_can_pick", Palette.KIND_CIRCLE, CircleDefs.CIRCLE_ROUND),
 		"진 칸은 룬 게이트와 무관하게 그대로 고를 수 있다")
 	win.free()
@@ -816,7 +904,10 @@ func _owns_rune_gates_can_pick_on_an_untreed_window(t) -> void:
 ## rune-seat pixels are claimed by the layer branch first") without hardcoding a screen-specific pixel.
 func _refusing_a_veiled_rune_then_clicking_the_seat_does_not_disarm(t) -> void:
 	var pr := Progress.new()
-	var c := SpellCircle.new()
+	# **A round circle, armed by hand** — `SpellCircle.new()` alone starts empty (Stage 3), and this
+	#  function's whole point is the disarm path on an *already-fireable* circle.
+	var c := SpellCircle.new(CircleDefs.CIRCLE_ROUND)
+	t.ok(c.set_rune(0, Tuning.ELEM_NONE), "무속성 룬을 놓아 시작 상태를 만든다 (전제)")
 	var win := CircleWindow.new()
 	win.setup(pr, c)
 	win.size = Fx.WINDOW_RECT.size
@@ -833,15 +924,18 @@ func _refusing_a_veiled_rune_then_clicking_the_seat_does_not_disarm(t) -> void:
 
 	var pal := Book.palette_page(win.size)
 	var ki := Palette.KINDS.find(Palette.KIND_RUNE)
-	var sec := Palette.section(pal.size, ki)
-	var items := Palette.items_of(Palette.KIND_RUNE)
-	var fire_idx := items.find(Tuning.ELEM_FIRE)
-	t.ok(fire_idx >= 0, "팔레트의 룬 항목 목록에 불이 있다 (전제)")
-	var fire_pt := Palette.item_slot(sec, fire_idx, items.size()).get_center()
 
-	# -- pick the veiled fire rune: refused, nothing gets picked --
-	win.call("_click_palette", pal, fire_pt)
-	t.eq(win.get("_picked_kind"), -1, "가려진 불을 눌러도 아무것도 안 골린다")
+	# **The premise changed** (`onboarding-and-palette-tabs.md` §2, reversing "veiled, not hidden") — a rune
+	#  nobody owns has no cell at all, so there is no "veiled fire" coordinate left to click. What is
+	#  measured instead is the same shape one level up: open the 룬 tab, click a point that has no item
+	#  (above the single owned cell's row, inside the section but above `item_slot`'s top), and confirm
+	#  nothing gets picked — the same premise, driven through the real click path.
+	win.call("_click_palette", pal, Palette.tabs(pal.size)[ki].get_center())
+	t.eq(win.get("_open_tab"), ki, "룬 탭을 열었다 (전제)")
+	var sec := Palette.section(pal.size)
+	var empty_pt := sec.position + Vector2(5.0, Fx.PALETTE_HEAD_PX * 0.5)
+	win.call("_click_palette", pal, empty_pt)
+	t.eq(win.get("_picked_kind"), -1, "항목이 없는 자리를 눌러도 아무것도 안 골린다")
 
 	# -- click the armed rune seat with nothing picked: must not empty it --
 	win.call("_click_circle", page, seat)
@@ -850,13 +944,196 @@ func _refusing_a_veiled_rune_then_clicking_the_seat_does_not_disarm(t) -> void:
 	t.ok(c.can_fire(), "그래서 여전히 쏠 수 있다 (거절된 클릭 한 번으로 자기 자신을 무장 해제하지 않는다)")
 
 	# -- the real grant-then-place path still works end to end --
+	# **One click inserts now** (`onboarding-and-palette-tabs.md` Stage 4) — 동그라미 has exactly one rune
+	#  seat, so pressing the palette cell places it immediately; there is no intermediate "picked" state
+	#  to click the seat afterward for.
 	pr.grant_rune(Tuning.ELEM_FIRE)
+	var items := Palette.items_of(Palette.KIND_RUNE, pr, c)
+	var fire_idx := items.find(Tuning.ELEM_FIRE)
+	t.ok(fire_idx >= 0, "불을 준 뒤에는 룬 칸에 불이 있다 (전제)")
+	var fire_pt := Palette.item_slot(sec, fire_idx, items.size()).get_center()
 	win.call("_click_palette", pal, fire_pt)
-	t.eq(win.get("_picked_kind"), Palette.KIND_RUNE, "불을 받은 뒤에는 같은 자리를 눌러 실제로 골린다")
-	win.call("_click_circle", page, seat)
-	t.eq(c.rune_at(0), Tuning.ELEM_FIRE, "고른 불이 룬 자리에 실제로 놓인다")
+	t.eq(win.get("_picked_kind"), -1, "한 자리뿐이라 클릭 한 번으로 바로 놓이고 손은 빈다")
+	t.eq(c.rune_at(0), Tuning.ELEM_FIRE, "누른 불이 룬 자리에 실제로 놓인다")
 	t.ok(c.can_fire(), "불을 놓은 뒤에도 쏠 수 있다")
 	win.free()
+
+
+## **Stage 4 — one click inserts, when there is only one seat** (`onboarding-and-palette-tabs.md`). The
+## rule is "how many seats does this kind have" (`_slot_count`), never "which kind is it" — write it as a
+## kind check and 삼각's three rune sockets silently collapse to socket 0. **The negative control is the
+## whole point of driving 삼각 here**: `_slot_count` is 3 for it, so the same click that inserts on
+## 동그라미 must still only *pick* on 삼각.
+func _one_click_inserts_when_there_is_only_one_seat(t) -> void:
+	var pr := Progress.new()
+	var c := SpellCircle.new(CircleDefs.CIRCLE_ROUND)
+	var win := CircleWindow.new()
+	win.setup(pr, c)
+	win.size = Fx.WINDOW_RECT.size
+	var pal := Book.palette_page(win.size)
+	var sec := Palette.section(pal.size)
+
+	# -- 진: always one seat, even without one equipped — one click inserts --
+	var circle_ti := Palette.KINDS.find(Palette.KIND_CIRCLE)
+	win.call("_click_palette", pal, Palette.tabs(pal.size)[circle_ti].get_center())
+	var circle_items := Palette.items_of(Palette.KIND_CIRCLE, pr, c)
+	var round_idx := circle_items.find(CircleDefs.CIRCLE_ROUND)
+	t.ok(round_idx >= 0, "동그라미가 진 칸에 있다 (전제)")
+	c.set_circle(CircleDefs.CIRCLE_NONE)
+	win.call("_click_palette", pal, Palette.item_slot(sec, round_idx, circle_items.size()).get_center())
+	t.eq(c.circle_id(), CircleDefs.CIRCLE_ROUND, "진은 한 번 눌러 바로 끼워진다 (두 번째 클릭이 없다)")
+	t.eq(win.get("_picked_kind"), -1, "끼운 뒤 손은 빈다 (골라 든 채로 남지 않는다)")
+
+	# -- 룬 on 동그라미: one seat — one click inserts --
+	var rune_ti := Palette.KINDS.find(Palette.KIND_RUNE)
+	win.call("_click_palette", pal, Palette.tabs(pal.size)[rune_ti].get_center())
+	var rune_items := Palette.items_of(Palette.KIND_RUNE, pr, c)
+	var none_idx := rune_items.find(Tuning.ELEM_NONE)
+	t.ok(none_idx >= 0, "무속성이 룬 칸에 있다 (전제)")
+	win.call("_click_palette", pal, Palette.item_slot(sec, none_idx, rune_items.size()).get_center())
+	t.eq(c.rune_at(0), Tuning.ELEM_NONE, "룬도 한 번 눌러 자리 가운데 바로 끼워진다")
+	t.eq(win.get("_picked_kind"), -1, "끼운 뒤 손은 빈다")
+
+	# -- 삼각 negative control: three seats — the same click only picks, never inserts --
+	c.set_circle(CircleDefs.CIRCLE_TRIANGLE)
+	pr.grant_circle(CircleDefs.CIRCLE_TRIANGLE)
+	win.call("_click_palette", pal, Palette.tabs(pal.size)[rune_ti].get_center())
+	var tri_items := Palette.items_of(Palette.KIND_RUNE, pr, c)
+	var tri_idx := tri_items.find(Tuning.ELEM_NONE)
+	t.eq(_slot_count_of(win, Palette.KIND_RUNE), 3, "삼각은 룬 자리가 셋이다 (전제 — 이 검사가 재는 대상)")
+	win.call("_click_palette", pal, Palette.item_slot(sec, tri_idx, tri_items.size()).get_center())
+	t.eq(win.get("_picked_kind"), Palette.KIND_RUNE, "삼각은 세 자리라 한 번 눌러선 안 골리기만 하고 안 끼워진다")
+	t.eq(c.rune_at(0), SpellCircle.RUNE_EMPTY, "그래서 0번 소켓엔 아직 안 놓였다")
+
+	# The pick still places through the socket click — pick-then-place survives untouched for 삼각.
+	var page := Book.circle_page(win.size)
+	var area := Layout.circle_area(page.size)
+	var socket0 := Layout.rune_slots(c.circle_id(), area)[0]
+	win.call("_click_circle", page, socket0)
+	t.eq(c.rune_at(0), Tuning.ELEM_NONE, "소켓을 직접 눌러야 실제로 놓인다 (삼각은 여전히 고르고-놓기다)")
+	t.eq(win.get("_picked_kind"), -1, "놓인 뒤 손은 빈다")
+
+	win.free()
+
+
+## `_slot_count` is a private method — called through `.call()` the same way every other net in this file
+## reaches a `Control`'s methods on an untreed window.
+func _slot_count_of(win: CircleWindow, kind: int) -> int:
+	return int(win.call("_slot_count", kind))
+
+
+## **Stage 6 — 찰칵 flashes at the item's own seat and falls to zero.** Driven treed (`_draw()` needs a live
+## draw context), inserting through the real one-click path (Stage 4) so the seat captured is the seat a
+## real placement actually produces, not a hand-picked coordinate.
+func _click_fx_flashes_at_the_seat_and_falls_to_zero(t) -> void:
+	var pr := Progress.new()
+	var c := SpellCircle.new(CircleDefs.CIRCLE_ROUND)
+	var win := _RecordingCircleWindow.new()
+	win.setup(pr, c)
+	win.size = Fx.WINDOW_RECT.size
+	win.visible = true
+	t.root.add_child(win)
+	await t.pump_frames(2)
+
+	var pal := Book.palette_page(win.size)
+	var sec := Palette.section(pal.size)
+	var circle_ti := Palette.KINDS.find(Palette.KIND_CIRCLE)
+	win.call("_click_palette", pal, Palette.tabs(pal.size)[circle_ti].get_center())
+	var items := Palette.items_of(Palette.KIND_CIRCLE, pr, c)
+	var round_idx := items.find(CircleDefs.CIRCLE_ROUND)
+	# **Place a different circle than what is already equipped** — placing the *same* circle is a no-op
+	#  in `SpellCircle.set_circle()`, and this check would then be unable to tell "a click fired" from
+	#  "nothing changed and nothing should have flashed".
+	c.set_circle(CircleDefs.CIRCLE_NONE)
+	win.call("_click_palette", pal, Palette.item_slot(sec, round_idx, items.size()).get_center())
+	t.eq(c.circle_id(), CircleDefs.CIRCLE_ROUND, "실제로 놓였다 (전제)")
+	win.queue_redraw()
+	await t.pump_frames(2)
+
+	# **The captured seat matches the frame's own, independently-computed centre/radius** — not a
+	#  hand-picked value, so a `_click_fx` call that resolved the wrong kind's seat would be caught.
+	var page := Book.circle_page(win.size)
+	var area := Layout.circle_area(page.size)
+	var frame := Layout.frame(area)
+	t.ok(win.click_fx_calls.size() > 0, "찰칵이 실제로 그려졌다 (%d회)" % win.click_fx_calls.size())
+	if win.click_fx_calls.is_empty():
+		t.root.remove_child(win)
+		win.queue_free()
+		return
+	var first: Dictionary = win.click_fx_calls[0]
+	t.ok((first["at"] as Vector2).is_equal_approx(frame["center"]),
+		"찰칵 자리가 진 테두리 중심과 같다 (%s)" % [first["at"]])
+	t.ok(is_equal_approx(float(first["r"]), float(frame["radius"])),
+		"찰칵 반지름이 진 테두리 반지름과 같다 (%.2f)" % float(first["r"]))
+	t.ok(float(first["t"]) > 0.0 and float(first["t"]) <= 1.0,
+		"막 놓인 뒤의 t가 (0, 1] 안이다 (%.2f)" % float(first["t"]))
+
+	# **`t` falls, and it stops** — pumped well past `CLICK_FRAMES` (CLAUDE.md: pump past one to be sure).
+	win.queue_redraw()
+	await t.pump_frames(Fx.CLICK_FRAMES * 2)
+	var last: Dictionary = win.click_fx_calls[win.click_fx_calls.size() - 1]
+	t.ok(float(last["t"]) < float(first["t"]), "t가 실제로 떨어졌다 (%.2f -> %.2f)" % [
+		float(first["t"]), float(last["t"])])
+	var before := win.click_fx_calls.size()
+	win.queue_redraw()
+	await t.pump_frames(3)
+	t.eq(win.click_fx_calls.size(), before,
+		"CLICK_FRAMES가 지나면 더는 안 그려진다 (%d -> %d)" % [before, win.click_fx_calls.size()])
+
+	t.root.remove_child(win)
+	win.queue_free()
+
+
+## **Stage 6 — 완성 glows once, then closes; firing is identical whether it was pressed or Tab closed the
+## window instead.** The plan's own words: "that is a value check (`can_fire()` and `shots()`), not a
+## look." Two independently-assembled circles, one closed each way, compared by value.
+func _done_glow_then_close_fires_identically_to_tab(t) -> void:
+	var pr := Progress.new()
+	var c := SpellCircle.new(CircleDefs.CIRCLE_ROUND)
+	c.set_rune(0, Tuning.ELEM_NONE)
+	c.place_glyph(0, Glyph.GLYPH_SPREAD)
+	var win := _RecordingCircleWindow.new()
+	win.setup(pr, c)
+	win.size = Fx.WINDOW_RECT.size
+	win.visible = true
+	t.root.add_child(win)
+	await t.pump_frames(2)
+
+	var pal := Book.palette_page(win.size)
+	win.call("_click_palette", pal, Palette.done_rect(pal.size).get_center())
+	t.ok(win.visible, "완성을 눌러도 글로우가 도는 동안은 창이 계속 보인다 (그래서 계속 클릭을 먹는다)")
+	win.queue_redraw()
+	await t.pump_frames(2)
+	t.ok(win.done_glow_calls.size() > 0, "완성 글로우가 실제로 그려졌다 (%d회)" % win.done_glow_calls.size())
+	if win.done_glow_calls.size() > 0:
+		var g: Dictionary = win.done_glow_calls[0]
+		var page := Book.circle_page(win.size)
+		var area := Layout.circle_area(page.size)
+		var frame := Layout.frame(area)
+		t.ok((g["at"] as Vector2).is_equal_approx(frame["center"]), "글로우 자리가 진 테두리 중심과 같다")
+		t.ok(float(g["t"]) > 0.0 and float(g["t"]) <= 1.0, "글로우 t가 (0, 1] 안이다 (%.2f)" % float(g["t"]))
+
+	# **Pumped well past `DONE_GLOW_FRAMES`** — the window must close on its own, without a second `toggle()`.
+	win.queue_redraw()
+	await t.pump_frames(Fx.DONE_GLOW_FRAMES * 2)
+	t.ok(not win.visible, "글로우가 끝나면 창이 저절로 닫힌다")
+
+	# -- the same assembly, closed with Tab instead — must fire byte-identically --
+	var c2 := SpellCircle.new(CircleDefs.CIRCLE_ROUND)
+	c2.set_rune(0, Tuning.ELEM_NONE)
+	c2.place_glyph(0, Glyph.GLYPH_SPREAD)
+	var win2 := CircleWindow.new()
+	win2.setup(pr, c2)
+	win2.visible = true
+	win2.call("toggle")  # the Tab door
+	t.ok(not win2.visible, "Tab으로 닫아도 창은 닫힌다 (전제)")
+
+	t.eq(c.can_fire(), c2.can_fire(), "완성으로 닫은 진과 Tab으로 닫은 진이 똑같이 쏠 수 있다")
+	t.eq(c.shots(), c2.shots(), "발사 내용도 완전히 같다 (완성이 조립을 바꾸지 않는다)")
+
+	t.root.remove_child(win)
+	win.queue_free()
+	win2.free()
 
 
 ## **Actually runs `_draw()` — not a text scan of it.** `net_frame_runner.gd`'s own header corrects a belief
@@ -882,7 +1159,8 @@ func _refusing_a_veiled_rune_then_clicking_the_seat_does_not_disarm(t) -> void:
 ## "empty seat" and "filled seat" branches, not just one.
 func _draw_actually_runs_headless(t) -> void:
 	var pr := Progress.new()
-	var c := SpellCircle.new()
+	# **A round circle** — `SpellCircle.new()` alone starts empty (Stage 3, 0 layers).
+	var c := SpellCircle.new(CircleDefs.CIRCLE_ROUND)
 	t.ok(c.place_glyph(0, Glyph.GLYPH_SPREAD), "그리기 전 1층에 확산을 놓는다 (전제)")
 	var win := _RecordingCircleWindow.new()
 	win.setup(pr, c)
@@ -1002,6 +1280,77 @@ func _draw_actually_runs_headless(t) -> void:
 	win2.queue_free()
 
 
+## **Tabs, the open section and the 완성 band are drawn from the exact rects `palette_layout` computes** —
+## the `settlement_layout.notice_rect` lesson: a pure function asserted alone let `_draw()` hand it a bare
+## `Rect2()` under 320 green checks. `_RecordingCircleWindow` captures the argument at each hook.
+func _palette_tabs_and_done_are_drawn_from_the_layout(t) -> void:
+	var pr := Progress.new()
+	# **A round circle** — the empty-note-disappears phase below places a glyph, which needs a real layer
+	#  (`SpellCircle.new()` alone is `CIRCLE_NONE`, Stage 3's empty boot, with 0 layers).
+	var c := SpellCircle.new(CircleDefs.CIRCLE_ROUND)
+	var win := _RecordingCircleWindow.new()
+	win.setup(pr, c)
+	win.size = Fx.WINDOW_RECT.size
+	win.visible = true
+	t.root.add_child(win)
+	win.queue_redraw()
+	await t.pump_frames(3)
+	t.ok(win.is_inside_tree(), "창을 트리에 넣었다 (전제)")
+
+	# **`_process` redraws every frame while visible, so several `_draw()` passes accumulate** across the
+	#  three pumped frames (the same reason `_draw_actually_runs_headless` asserts ring calls as a
+	#  *multiple* of the layer count rather than an exact count). Every pass draws the identical layout, so
+	#  only the size-is-a-multiple-of-n check and the tail slice are asserted, not a raw count.
+	var pal := Book.palette_page(win.size)
+	var want_tabs := Palette.tabs(pal.size)
+	var n := Palette.KINDS.size()
+	t.ok(win.tab_draws.size() > 0 and win.tab_draws.size() % n == 0,
+		"탭이 종류 수(%d)의 배수만큼 그려졌다 (%d회)" % [n, win.tab_draws.size()])
+	var last_tabs := win.tab_draws.slice(win.tab_draws.size() - n, win.tab_draws.size())
+	var open_count := 0
+	for i in n:
+		var d: Dictionary = last_tabs[i]
+		t.ok((d["rect"] as Rect2).is_equal_approx(want_tabs[i]),
+			"%d번 탭의 그려진 자리가 palette_layout.tabs()의 답과 같다" % i)
+		t.eq(int(d["kind"]), Palette.KINDS[i], "%d번 탭에 맞는 종류가 그려졌다" % i)
+		if bool(d["is_open"]):
+			open_count += 1
+	t.eq(open_count, 1, "열린 탭은 정확히 하나다 (%d개)" % open_count)
+
+	t.ok(win.section_draws.size() > 0, "구획이 실제로 그려졌다 (%d회)" % win.section_draws.size())
+	var last_sec: Dictionary = win.section_draws[win.section_draws.size() - 1]
+	t.ok((last_sec["rect"] as Rect2).is_equal_approx(Palette.section(pal.size)),
+		"그려진 구획이 palette_layout.section()의 답과 같다")
+	t.eq(int(last_sec["kind"]), Palette.KINDS[int(win.get("_open_tab"))], "그려진 구획이 열린 탭의 종류다")
+
+	t.ok(win.done_draws.size() > 0, "완성 띠가 실제로 그려졌다 (%d회)" % win.done_draws.size())
+	t.ok((win.done_draws[win.done_draws.size() - 1] as Rect2).is_equal_approx(Palette.done_rect(pal.size)),
+		"그려진 완성 띠가 palette_layout.done_rect()의 답과 같다")
+
+	# **문양 tab starts empty, and says so** (design §3) — switch to it and the note must actually paint,
+	#  not merely be computable. The recording arrays are cleared first so this phase is not muddied by
+	#  the accumulated draws from the phase above.
+	var glyph_ti := Palette.KINDS.find(Palette.KIND_GLYPH)
+	win.call("_click_palette", pal, want_tabs[glyph_ti].get_center())
+	win.empty_note_draws.clear()
+	win.queue_redraw()
+	await t.pump_frames(3)
+	t.ok(win.empty_note_draws.size() > 0,
+		"문양 칸이 비어 있을 때 빈 문구가 실제로 그려졌다 (%d회)" % win.empty_note_draws.size())
+	t.ok((win.empty_note_draws[0] as Rect2).is_equal_approx(Palette.section(pal.size)),
+		"빈 문구가 palette_layout.section()의 답 안에서 그려졌다")
+
+	# **The empty note must not paint once a glyph is seated** — the other branch of the same guard.
+	c.place_glyph(0, Glyph.GLYPH_SPREAD)
+	win.empty_note_draws.clear()
+	win.queue_redraw()
+	await t.pump_frames(3)
+	t.eq(win.empty_note_draws.size(), 0, "문양이 생기면 빈 문구가 그려지지 않는다 (%d회)" % win.empty_note_draws.size())
+
+	t.root.remove_child(win)
+	win.queue_free()
+
+
 ## **Does the hit test use the same coordinates as the drawing — and does it actually land?**
 ##  With coordinates in two places it becomes "I clicked this and that got picked" and **no error shows** (risk 6).
 ## Here it is measured by **execution**, not text — the drawn positions are clicked directly.
@@ -1081,24 +1430,53 @@ func _hit_tests_match_the_drawing(t) -> void:
 		"「고를 수 있나」가 슬롯 수와 받는 조건으로만 갈린다")
 
 	# ── palette ──
+	# **A fuller kit** — 삼각 granted, 불 granted, spread seated — so every tab has more than one cell and
+	#  the hidden-tab test below actually exercises a real "same coordinates, different kind" collision.
 	var pal := Book.palette_page(Fx.WINDOW_RECT.size)
+	var ppr := Progress.new()
+	ppr.grant_circle(CircleDefs.CIRCLE_TRIANGLE)
+	ppr.grant_rune(Tuning.ELEM_FIRE)
+	# **A round circle** — `place_glyph` below needs a real layer (`SpellCircle.new()` alone is empty,
+	#  Stage 3's boot state).
+	var pc := SpellCircle.new(CircleDefs.CIRCLE_ROUND)
+	pc.place_glyph(0, Glyph.GLYPH_SPREAD)
+	var sec := Palette.section(pal.size)
 	var found := 0
 	for ki in Palette.KINDS.size():
-		var sec := Palette.section(pal.size, ki)
 		var kind: int = Palette.KINDS[ki]
-		var items := Palette.items_of(kind)
+		var items := Palette.items_of(kind, ppr, pc)
 		for ii in items.size():
 			var slot := Palette.item_slot(sec, ii, items.size())
-			var hit := Palette.item_at(pal.size, slot.get_center())
-			t.ok(not hit.is_empty(), "팔레트 항목 %d/%d을 누르면 뭔가 잡힌다" % [ki, ii])
+			var center := slot.get_center()
+			var hit := Palette.item_at(pal.size, center, ki, ppr, pc)
+			t.ok(not hit.is_empty(), "%s 탭이 열려 있을 때 항목 %d을 누르면 뭔가 잡힌다" % [
+				Palette.KIND_DEFS[kind]["name"], ii])
 			if hit.is_empty():
 				continue
 			found += 1
 			t.eq(int(hit["kind"]), kind, "누른 칸의 종류가 맞다")
 			t.eq(int(hit["item"]), items[ii], "누른 칸의 항목이 맞다")
+			# **The hidden-tab hit test, both directions** (`onboarding-and-palette-tabs.md` Stage 1's own
+			#  named risk): with any other tab open, the exact same coordinates must never resolve to
+			#  *this* (closed) kind's item — a closed tab's former cells are not merely undrawn, the hit
+			#  test forgets them too. **Not asserted as "returns nothing"** — two tabs with the same item
+			#  count divide the section identically, so the same point can legitimately belong to the
+			#  *open* tab's own cell (e.g. 진 and 룬 both owning exactly one item makes their single cells
+			#  coincide exactly). What must never happen, regardless of geometry, is the closed kind's own
+			#  id leaking through — which is exactly what a mutation ignoring `open_tab` (falling back to
+			#  scanning every kind, the pre-Stage-1 behavior) would do.
+			for other in Palette.KINDS.size():
+				if other == ki:
+					continue
+				var other_hit := Palette.item_at(pal.size, center, other, ppr, pc)
+				t.ok(other_hit.is_empty() or int(other_hit["kind"]) != kind,
+					"%s 탭이 열려 있을 때 %s의 항목은 절대 안 잡힌다" % [
+						Palette.KIND_DEFS[Palette.KINDS[other]]["name"], Palette.KIND_DEFS[kind]["name"]])
 	t.ok(found > 0, "팔레트에서 실제로 누른 항목이 %d개다" % found)
-	# Outside a section (the top margin) is nothing.
-	t.ok(Palette.item_at(pal.size, Vector2.ZERO).is_empty(), "여백을 누르면 아무것도 아니다")
+	# Outside the open tab's items — inside the section, above the item row — is nothing.
+	t.ok(Palette.item_at(pal.size, sec.position, 0, ppr, pc).is_empty(), "제목 띠 자리를 누르면 아무것도 아니다")
+	# A tab index outside `KINDS` (nothing open) never resolves to any kind's cells.
+	t.ok(Palette.item_at(pal.size, sec.get_center(), -1, ppr, pc).is_empty(), "열린 탭이 없으면 아무것도 안 잡힌다")
 
 
 ## **Do the palette and the slots use the same symbol function?**
@@ -1180,23 +1558,47 @@ func _triangle_hit_shapes_stay_disjoint(t) -> void:
 
 ## Do the sections and item cells **come from one place and not overlap.** Overlap and it becomes "I clicked this
 ##  and that got picked" with **no error** (the palette's face of risk 6).
+## **Rewritten for tabs** (`onboarding-and-palette-tabs.md` Stage 1) — `section()` no longer varies by kind
+## (there is exactly one open body, regardless of which tab), so what moved into this check is the tab
+## strip and the 완성 band, both new geometry eating vertical budget out of the same page.
 func _palette_geometry_runs(t) -> void:
 	var page := Book.palette_page(Fx.WINDOW_RECT.size)
 	t.ok(page.size.x > 0.0 and page.size.y > 0.0, "팔레트 페이지에 크기가 있다 (%dx%d)" % [
 		int(page.size.x), int(page.size.y)])
-
 	var page_box := Rect2(Vector2.ZERO, page.size)
-	var secs: Array[Rect2] = []
-	for ki in Palette.KINDS.size():
-		var sec := Palette.section(page.size, ki)
-		var nm: StringName = Palette.KIND_DEFS[Palette.KINDS[ki]]["name"]
-		t.ok(sec.size.x > 0.0 and sec.size.y > 0.0, "%s 구획에 크기가 있다" % nm)
-		t.ok(page_box.encloses(sec), "%s 구획이 페이지 안에 들어간다" % nm)
-		for other: Rect2 in secs:
-			t.ok(not sec.intersects(other), "%s 구획이 앞 구획과 안 겹친다" % nm)
-		secs.append(sec)
 
-		var items := Palette.items_of(Palette.KINDS[ki])
+	var tab_rects := Palette.tabs(page.size)
+	t.eq(tab_rects.size(), Palette.KINDS.size(), "탭이 종류 수(%d)만큼이다" % Palette.KINDS.size())
+	for i in tab_rects.size():
+		t.ok(tab_rects[i].size.x > 0.0 and tab_rects[i].size.y > 0.0, "%d번 탭에 크기가 있다" % i)
+		t.ok(page_box.encloses(tab_rects[i]), "%d번 탭이 페이지 안에 들어간다" % i)
+		for j in range(i + 1, tab_rects.size()):
+			t.ok(not tab_rects[i].intersects(tab_rects[j]), "%d·%d번 탭이 안 겹친다" % [i, j])
+
+	var sec := Palette.section(page.size)
+	t.ok(sec.size.x > 0.0 and sec.size.y > 0.0, "열린 구획에 크기가 있다")
+	t.ok(page_box.encloses(sec), "열린 구획이 페이지 안에 들어간다")
+	for i in tab_rects.size():
+		t.ok(not sec.intersects(tab_rects[i]), "열린 구획이 탭 띠와 안 겹친다")
+
+	var done := Palette.done_rect(page.size)
+	t.ok(done.size.x > 0.0 and done.size.y > 0.0, "완성 띠에 크기가 있다")
+	t.ok(page_box.encloses(done), "완성 띠가 페이지 안에 들어간다")
+	t.ok(not sec.intersects(done), "열린 구획이 완성 띠와 안 겹친다")
+	for i in tab_rects.size():
+		t.ok(not done.intersects(tab_rects[i]), "완성 띠가 탭 띠와 안 겹친다")
+
+	# **Item cells, for every kind the palette can ever open on.** A fuller kit (삼각·불·확산 granted/seated)
+	#  so a multi-cell row is measured too, not only the one-cell starting row.
+	var pr := Progress.new()
+	# **A round circle** — `place_glyph` below needs a real layer.
+	var c := SpellCircle.new(CircleDefs.CIRCLE_ROUND)
+	pr.grant_circle(CircleDefs.CIRCLE_TRIANGLE)
+	pr.grant_rune(Tuning.ELEM_FIRE)
+	c.place_glyph(0, Glyph.GLYPH_SPREAD)
+	for kind: int in Palette.KINDS:
+		var nm: StringName = Palette.KIND_DEFS[kind]["name"]
+		var items := Palette.items_of(kind, pr, c)
 		var slots: Array[Rect2] = []
 		for ii in items.size():
 			var slot := Palette.item_slot(sec, ii, items.size())
@@ -1205,8 +1607,6 @@ func _palette_geometry_runs(t) -> void:
 			# **A grain of slack is left.** An item's top edge is **exactly** the title band's end, and `Rect2`
 			#  holds its values as **32-bit floats** while this comparison is 64-bit => depending on window size the last
 			#  bit rolls downward and **the same value reads as "it intruded".**
-			#  Measured (the day the window shrank 486 -> 372): the section height became 92.666...,
-			#   and two rune items went red that way. **The layout was not wrong; the comparison was.**
 			t.ok(slot.position.y >= sec.position.y + Fx.PALETTE_HEAD_PX - RECT_EPS,
 				"%s 항목 %d이 제목 띠 아래에 있다" % [nm, ii])
 			# **The symbol fits inside the cell.** Look only at `> 0` and switching to the long side still passes —
@@ -1224,9 +1624,9 @@ func _palette_geometry_runs(t) -> void:
 	# **The palette does not intrude on the spell circle page.** Intrude and the two pages lose their meaning.
 	#  The palette is **relative to its own page origin**, so it has to be moved into window coordinates to be measured.
 	var circle_page := Book.circle_page(Fx.WINDOW_RECT.size)
-	for sec: Rect2 in secs:
-		t.ok(not Rect2(page.position + sec.position, sec.size).intersects(circle_page),
-			"팔레트 구획이 마법진 페이지를 안 침범한다")
+	for r: Rect2 in tab_rects + [sec, done]:
+		t.ok(not Rect2(page.position + r.position, r.size).intersects(circle_page),
+			"팔레트 요소가 마법진 페이지를 안 침범한다")
 
 
 ## **Nothing was holding what the eye had found.**
@@ -1488,7 +1888,11 @@ func _func_body(src: String, fname: String) -> String:
 ## ```
 ## => The blast disappears. **With not one error.**
 func _empty_layer_is_skipped(t) -> void:
-	var c := SpellCircle.new()
+	# **A round circle with a rune placed by hand** — `SpellCircle.new()` alone starts empty (Stage 3),
+	#  and `sim.fire()` below needs a real, filled rune (`c.element()` on an empty rune slot is
+	#  `RUNE_EMPTY`, not a real element).
+	var c := SpellCircle.new(CircleDefs.CIRCLE_ROUND)
+	t.ok(c.set_rune(0, Tuning.ELEM_NONE), "룬을 놓는다 (전제)")
 	t.ok(c.place_glyph(1, Glyph.GLYPH_BLAST), "2층에만 폭발을 놓는다")
 	t.eq(c.glyph_at(0), Glyph.GLYPH_NONE, "1층은 비어 있다")
 	t.eq(c.glyph_at(1), Glyph.GLYPH_BLAST, "2층에 폭발이 있다")
@@ -1513,7 +1917,8 @@ func _empty_layer_is_skipped(t) -> void:
 	t.eq(_run_ticks(sim, grid, 12), 1, "그 폭발이 실제로 터진다 (증발하지 않는다)")
 
 	# Control — empty both layers and there is no blast. Without it, the green above could be "the bolt detonates anyway".
-	var empty := SpellCircle.new()
+	var empty := SpellCircle.new(CircleDefs.CIRCLE_ROUND)
+	t.ok(empty.set_rune(0, Tuning.ELEM_NONE), "룬을 놓는다 (전제)")
 	t.eq(empty.packed_glyphs(), Glyph.GLYPH_NONE, "두 층을 다 비우면 빈 목록이다")
 	var grid2 := _wall_grid()
 	var sim2 := SpellSim.new()
@@ -1521,6 +1926,146 @@ func _empty_layer_is_skipped(t) -> void:
 	t.ok(sim2.fire(SpellSim.cmd_fire(10, 70, 100, 0, empty.element(), empty.packed_glyphs())),
 		"층을 다 비워도 쏴진다 (진 + 룬만)")
 	t.eq(_run_ticks(sim2, grid2, 12), 0, "문양이 없으면 폭발이 없다")
+
+
+# ══════════════════════════════════════════════════════════════════
+#  Stage 8 — move_glyph() reorders a seated glyph, never removes it
+# ══════════════════════════════════════════════════════════════════
+
+## **The swap itself, at the model level.** Three shapes: moving into an empty layer, swapping two occupied
+## layers, and the two guard rails (same-slot no-op, out-of-range bark).
+func _move_glyph_swaps_layers_and_never_duplicates(t) -> void:
+	# -- into an empty layer: the source empties, the destination gets it, nothing is duplicated --
+	var c := SpellCircle.new(CircleDefs.CIRCLE_ROUND)
+	t.ok(c.place_glyph(0, Glyph.GLYPH_SPREAD), "확산을 1층에 놓는다 (전제)")
+	t.eq(c.glyph_at(1), Glyph.GLYPH_NONE, "2층은 비어 있다 (전제)")
+	t.ok(c.move_glyph(0, 1), "1층의 확산을 2층으로 옮긴다")
+	t.eq(c.glyph_at(0), Glyph.GLYPH_NONE, "1층은 비었다 (그대로 남지 않는다 — 복제가 아니다)")
+	t.eq(c.glyph_at(1), Glyph.GLYPH_SPREAD, "2층에 확산이 있다")
+	t.eq(c.glyph_list().size(), 1, "문양 목록 크기는 하나 그대로다 (늘지 않았다)")
+
+	# -- swapping two occupied layers: both move, neither vanishes --
+	var c2 := SpellCircle.new(CircleDefs.CIRCLE_ROUND)
+	t.ok(c2.place_glyph(0, Glyph.GLYPH_SPREAD), "확산을 1층에 놓는다 (전제)")
+	t.ok(c2.place_glyph(1, Glyph.GLYPH_BLAST), "폭발을 2층에 놓는다 (전제)")
+	t.ok(c2.move_glyph(0, 1), "1층과 2층을 맞바꾼다")
+	t.eq(c2.glyph_at(0), Glyph.GLYPH_BLAST, "1층엔 이제 폭발이다")
+	t.eq(c2.glyph_at(1), Glyph.GLYPH_SPREAD, "2층엔 이제 확산이다")
+	t.eq(c2.glyph_list().size(), 2, "둘 다 살아있다 (하나도 안 사라졌다)")
+
+	# -- same slot: a harmless no-op --
+	var before := c2.glyph_list()
+	t.ok(c2.move_glyph(0, 0), "같은 층으로 '옮겨도' 성공을 answer한다 (무해한 무동작)")
+	t.eq(c2.glyph_list(), before, "아무것도 안 바뀌었다")
+
+	# -- out of range: barks, and moves nothing --
+	var before2 := c2.glyph_list()
+	t.expect_error("SpellCircle: move_glyph")
+	t.ok(not c2.move_glyph(-1, 0), "범위 밖 인덱스는 짖고 실패한다")
+	t.eq(c2.glyph_list(), before2, "짖은 뒤에도 배치는 그대로다 (아무것도 안 움직였다)")
+	t.expect_error("SpellCircle: move_glyph")
+	t.ok(not c2.move_glyph(0, c2.layer_count()), "층 수를 넘는 목적지도 짖고 실패한다")
+	t.eq(c2.glyph_list(), before2, "역시 아무것도 안 움직였다")
+
+
+## **`seated_layers()` — the layer index behind each `glyph_list()` entry, in the same order.** With a
+## triangle circle (3 layers, one per family — no two entries can share a family, but nothing stops the
+## same *value* twice across circles) this proves it is a real per-instance index, not merely `glyph_list()`
+## re-derived.
+func _seated_layers_matches_glyph_list_position_for_position(t) -> void:
+	var c := SpellCircle.new(CircleDefs.CIRCLE_ROUND)
+	t.eq(c.seated_layers(), [] as Array[int], "빈 진은 앉은 층도 없다")
+	t.ok(c.place_glyph(1, Glyph.GLYPH_BLAST), "2층에만 폭발을 놓는다 (전제 — 1층은 빈다)")
+	t.eq(c.seated_layers(), [1] as Array[int], "앉은 층 목록이 [1]이다 (1층이 아니라 2층에 앉았다)")
+	t.ok(c.place_glyph(0, Glyph.GLYPH_SPREAD), "1층에도 확산을 놓는다")
+	t.eq(c.seated_layers(), [0, 1] as Array[int], "이제 [0, 1] — glyph_list()와 자리가 정확히 대응한다")
+	t.eq(c.glyph_list(), [Glyph.GLYPH_SPREAD, Glyph.GLYPH_BLAST] as Array[int], "전제 — 값 목록도 그 순서다")
+
+
+## **The palette-to-circle move, end to end** (`onboarding-and-palette-tabs.md` Stage 8) — the exact bug
+## the plan's own "finding 2" named: picking a seated glyph and clicking a *different* layer used to either
+## duplicate it (dummy, unlimited) or get silently rejected (a capped family already holding it elsewhere).
+## Driven through the real click path on an untreed window, the same technique every other pick test in
+## this file already uses.
+func _the_glyph_tab_moves_a_seated_glyph_between_layers(t) -> void:
+	var pr := Progress.new()
+	var c := SpellCircle.new(CircleDefs.CIRCLE_ROUND)
+	t.ok(c.place_glyph(0, Glyph.GLYPH_SPREAD), "확산을 1층에 놓는다 (전제)")
+	t.ok(c.place_glyph(1, Glyph.GLYPH_BLAST), "폭발을 2층에 놓는다 (전제)")
+	var win := CircleWindow.new()
+	win.setup(pr, c)
+	win.size = Fx.WINDOW_RECT.size
+
+	var pal := Book.palette_page(win.size)
+	var glyph_ti := Palette.KINDS.find(Palette.KIND_GLYPH)
+	win.call("_click_palette", pal, Palette.tabs(pal.size)[glyph_ti].get_center())
+	t.eq(win.get("_open_tab"), glyph_ti, "문양 탭을 열었다 (전제)")
+
+	var sec := Palette.section(pal.size)
+	var items := Palette.items_of(Palette.KIND_GLYPH, pr, c)
+	t.eq(items, [Glyph.GLYPH_SPREAD, Glyph.GLYPH_BLAST] as Array[int], "문양 칸에 확산·폭발 순서로 있다 (전제)")
+	var spread_pt := Palette.item_slot(sec, 0, items.size()).get_center()
+
+	# -- pick the seated spread (layer 0), then click layer 1's own seat: a swap --
+	win.call("_click_palette", pal, spread_pt)
+	t.eq(win.get("_picked_kind"), Palette.KIND_GLYPH, "확산 카드를 골랐다")
+	t.eq(win.get("_picked_layer"), 0, "그 카드가 실제로 온 층은 0번이다 (전제)")
+
+	var page := Book.circle_page(win.size)
+	var area := Layout.circle_area(page.size)
+	var seat1: Vector2 = Layout.layer_bands(c.circle_id(), area)[1]["seat"]
+	win.call("_click_circle", page, seat1)
+	t.eq(c.glyph_at(0), Glyph.GLYPH_BLAST, "1층엔 이제 폭발이다 (확산이 빠지고 폭발이 왔다 — 복제가 아니다)")
+	t.eq(c.glyph_at(1), Glyph.GLYPH_SPREAD, "2층엔 이제 확산이다")
+	t.eq(c.glyph_list().size(), 2, "여전히 둘뿐이다 (늘지 않았다)")
+	t.eq(win.get("_picked_kind"), -1, "옮긴 뒤 손은 빈다")
+	t.eq(win.get("_picked_layer"), -1, "_picked_layer도 같이 비워진다")
+
+	# -- picking the same seated card again drops the pick (unchanged from before Stage 8) --
+	items = Palette.items_of(Palette.KIND_GLYPH, pr, c)
+	var blast_now_at_0 := Palette.item_slot(sec, 0, items.size()).get_center()
+	win.call("_click_palette", pal, blast_now_at_0)
+	t.eq(win.get("_picked_kind"), Palette.KIND_GLYPH, "폭발(지금 1층) 카드를 골랐다")
+	win.call("_click_palette", pal, blast_now_at_0)
+	t.eq(win.get("_picked_kind"), -1, "같은 카드를 다시 누르면 손을 놓는다")
+
+	# -- moving to the same layer the pick came from: a harmless no-op through the real click path --
+	win.call("_click_palette", pal, blast_now_at_0)
+	var seat0: Vector2 = Layout.layer_bands(c.circle_id(), area)[0]["seat"]
+	win.call("_click_circle", page, seat0)
+	t.eq(c.glyph_at(0), Glyph.GLYPH_BLAST, "제자리로 '옮겨도' 아무것도 안 바뀐다")
+	t.eq(c.glyph_at(1), Glyph.GLYPH_SPREAD, "2층도 그대로다")
+	win.free()
+
+
+## **Duplicate values, told apart by position — the exact case a bare item id cannot resolve.** Dummy is
+## the one family with `max_per_circle: 0` (unlimited), so a round circle can legitimately seat the same
+## id on both layers.
+func _duplicate_dummy_glyphs_are_told_apart_by_layer(t) -> void:
+	var pr := Progress.new()
+	var c := SpellCircle.new(CircleDefs.CIRCLE_ROUND)
+	t.ok(c.place_glyph(0, Glyph.DUMMY_C), "더미를 1층에 놓는다 (전제)")
+	t.ok(c.place_glyph(1, Glyph.DUMMY_C), "같은 더미를 2층에도 놓는다 (전제 — 무제한 계열이라 허용된다)")
+	var win := CircleWindow.new()
+	win.setup(pr, c)
+	win.size = Fx.WINDOW_RECT.size
+
+	var pal := Book.palette_page(win.size)
+	var glyph_ti := Palette.KINDS.find(Palette.KIND_GLYPH)
+	win.call("_click_palette", pal, Palette.tabs(pal.size)[glyph_ti].get_center())
+	var sec := Palette.section(pal.size)
+	var items := Palette.items_of(Palette.KIND_GLYPH, pr, c)
+	t.eq(items, [Glyph.DUMMY_C, Glyph.DUMMY_C] as Array[int], "두 칸 다 값은 같은 더미다 (전제 — 이 검사의 핵심)")
+
+	# Pick cell 0 (layer 0) — `_picked_layer` must read 0, never guess from the value alone.
+	win.call("_click_palette", pal, Palette.item_slot(sec, 0, items.size()).get_center())
+	t.eq(win.get("_picked_layer"), 0, "0번 칸을 고르면 0번 층에서 온 것으로 잡힌다")
+
+	# Pressing cell 1 (same value, different position) switches the pick instead of dropping it.
+	win.call("_click_palette", pal, Palette.item_slot(sec, 1, items.size()).get_center())
+	t.eq(win.get("_picked_kind"), Palette.KIND_GLYPH, "값이 같아도 다른 자리를 누르면 손을 놓지 않는다")
+	t.eq(win.get("_picked_layer"), 1, "대신 1번 층으로 고른 자리가 바뀐다")
+	win.free()
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -1542,14 +2087,18 @@ func _round_trip(t) -> void:
 		var typed: Array[int] = []
 		typed.assign(list)
 		var packed := Glyph.pack(typed)
-		var c := SpellCircle.new()
+		# **A round circle** — `set_from_packed` needs real layers to fill.
+		var c := SpellCircle.new(CircleDefs.CIRCLE_ROUND)
 		t.ok(c.set_from_packed(packed), "목록 %s가 진에 들어간다" % [typed])
 		t.eq(c.packed_glyphs(), packed, "목록 %s가 왕복한다" % [typed])
 		t.eq(c.glyph_list(), typed, "목록 %s의 층 순서가 살아남는다" % [typed])
 
 	# **Filled from the front layer.** With one blast it is blast in layer 1 and an empty layer 2.
 	var one: Array[int] = [Glyph.GLYPH_BLAST]
-	var c1 := SpellCircle.new()
+	# **The rune is placed by hand before the preset, so "the preset does not touch it" is actually
+	#  measured** — `SpellCircle.new()` alone no longer arms the rune (Stage 3).
+	var c1 := SpellCircle.new(CircleDefs.CIRCLE_ROUND)
+	t.ok(c1.set_rune(0, Tuning.ELEM_NONE), "룬을 놓는다 (전제)")
 	c1.set_from_packed(Glyph.pack(one))
 	t.eq(c1.glyph_at(0), Glyph.GLYPH_BLAST, "문양 하나는 안쪽 층(1층)에 앉는다")
 	t.eq(c1.glyph_at(1), Glyph.GLYPH_NONE, "2층은 빈다")
@@ -1560,7 +2109,7 @@ func _round_trip(t) -> void:
 	# **No previous state may survive an overwrite.** Without clearing, pressing key 3 (one layer) after key 4 (two layers)
 	#  leaves the previous glyph in layer 2 and it becomes "I removed it and it did not come out" — acceptance 1 dies there.
 	var two: Array[int] = [Glyph.GLYPH_SPREAD, Glyph.GLYPH_BLAST]
-	var c2 := SpellCircle.new()
+	var c2 := SpellCircle.new(CircleDefs.CIRCLE_ROUND)
 	c2.set_from_packed(Glyph.pack(two))
 	c2.set_from_packed(Glyph.pack(one))
 	t.eq(c2.glyph_list(), one, "두 층 뒤에 한 층을 넣으면 뒤 층이 비워진다")
@@ -1595,7 +2144,8 @@ func _cap_blocks_before_placing(t) -> void:
 		"확산은 한 마법진에 하나까지다 (GDD)")
 	t.eq(int(Glyph.DEFS[Glyph.GLYPH_BLAST]["max_per_circle"]), 0, "폭발은 무제한이다 (0)")
 
-	var c := SpellCircle.new()
+	# **A round circle** — `SpellCircle.new()` alone has 0 layers (Stage 3's empty boot).
+	var c := SpellCircle.new(CircleDefs.CIRCLE_ROUND)
 	t.ok(c.can_place_glyph(0, Glyph.GLYPH_SPREAD), "빈 진의 1층에 확산을 놓을 수 있다")
 	t.ok(c.place_glyph(0, Glyph.GLYPH_SPREAD), "확산을 놓는다")
 	t.ok(not c.can_place_glyph(1, Glyph.GLYPH_SPREAD), "두 번째 확산은 **놓기 전에** 막힌다")
@@ -1608,7 +2158,7 @@ func _cap_blocks_before_placing(t) -> void:
 	t.ok(c.can_place_glyph(0, Glyph.GLYPH_BLAST), "확산이 있는 층을 폭발로 바꿀 수 있다")
 
 	# Blast is unlimited, so two layers have to pass — a constraint that catches **every glyph** is a different bug.
-	var b := SpellCircle.new()
+	var b := SpellCircle.new(CircleDefs.CIRCLE_ROUND)
 	t.ok(b.place_glyph(0, Glyph.GLYPH_BLAST), "1층에 폭발")
 	t.ok(b.place_glyph(1, Glyph.GLYPH_BLAST), "2층에도 폭발 (무제한이다)")
 
@@ -1638,7 +2188,7 @@ func _cap_blocks_before_placing(t) -> void:
 ##  unknown id silently coerces into matching `FAMILY_SPREAD`, so the guardless version counts **2**, not 1,
 ##  for this exact list — that is the value this check pins.
 func _unknown_id_after_a_capped_glyph_does_not_crash_the_window(t) -> void:
-	var c := SpellCircle.new()
+	var c := SpellCircle.new(CircleDefs.CIRCLE_ROUND)
 	t.ok(c.place_glyph(0, Glyph.SPREAD_C), "1층에 확산을 놓는다 (전제)")
 	t.ok(not Glyph.DEFS.has(Glyph.MASK), "MASK 자체는 정의되지 않은 id다 (검사의 전제)")
 
@@ -1665,7 +2215,7 @@ func _unknown_id_after_a_capped_glyph_does_not_crash_the_window(t) -> void:
 func _both_ways_agree(t) -> void:
 	var options: Array[int] = [Glyph.GLYPH_NONE]
 	options.append_array(Glyph.ALL)
-	var slots := SpellCircle.new().layer_count()
+	var slots := SpellCircle.new(CircleDefs.CIRCLE_ROUND).layer_count()
 	var cases := _all_arrangements(options, slots)
 	t.ok(cases.size() > 1, "돌아 볼 배치가 %d가지다 (문양 %d종 · %d층)" % [
 		cases.size(), Glyph.ALL.size(), slots])
@@ -1678,7 +2228,7 @@ func _both_ways_agree(t) -> void:
 	var agree := true
 	var packs_agree := true
 	for arrangement: Array in cases:
-		var c := SpellCircle.new()
+		var c := SpellCircle.new(CircleDefs.CIRCLE_ROUND)
 		var allowed := true
 		for i in arrangement.size():
 			if not c.place_glyph(i, arrangement[i]):
@@ -1745,7 +2295,11 @@ func _presets_still_work(t) -> void:
 		var list: Array[int] = []
 		list.assign(Stage.LOADOUTS[n])
 		var packed := Glyph.pack(list)
-		var c := SpellCircle.new()
+		# **A round circle with a rune placed by hand** — `set_from_packed` only ever touches glyphs
+		#  (its own contract), so the rune has to be armed separately now that the constructor no longer
+		#  arms it (Stage 3's empty boot).
+		var c := SpellCircle.new(CircleDefs.CIRCLE_ROUND)
+		t.ok(c.set_rune(0, Tuning.ELEM_NONE), "룬을 놓는다 (전제)")
 		t.ok(c.set_from_packed(packed), "키 %d의 프리셋이 진에 들어간다" % n)
 		t.eq(c.glyph_list(), list, "키 %d가 같은 목록을 같은 순서로 내놓는다" % n)
 		t.eq(c.packed_glyphs(), packed, "키 %d가 같은 정수로 팩된다" % n)
@@ -1754,15 +2308,27 @@ func _presets_still_work(t) -> void:
 		t.ok(sim.fire(SpellSim.cmd_fire(10, 70, 100, 0, c.element(), c.packed_glyphs())),
 			"키 %d의 마법진이 발사된다" % n)
 
-	# **The start state's rune is none, since Stage B of `rune-lock-and-receiving.md`** (the lock: fire has to
-	#  be earned from the bull, not sitting in the seat on a fresh boot). Change this and the rune that gets
-	#  fired changes quietly.
-	t.eq(SpellCircle.new().element(), Tuning.ELEM_NONE, "새 진의 룬 자리에 무속성이 들어 있다")
+	# **Inverted from what this line used to pin** (`onboarding-and-palette-tabs.md` Stage 3, user
+	#  confirmed: "시작하자마자 못 쏘는 게 맞다") — a fresh `SpellCircle` used to be `DEFAULT_CIRCLE` with
+	#  `DEFAULT_RUNE` already in the seat; now it is genuinely empty, and firing on it must not be possible.
+	#  `DEFAULT_CIRCLE`/`DEFAULT_RUNE` are not gone — they still feed `apply_preset()` below, the debug
+	#  keys' own door back to a fireable circle from empty.
+	var fresh := SpellCircle.new()
+	t.eq(fresh.circle_id(), CircleDefs.CIRCLE_NONE, "새 진은 CIRCLE_NONE이다 (아무것도 안 채워진다)")
+	t.eq(fresh.layer_count(), 0, "새 진은 층이 0이다")
+	t.eq(fresh.rune_count(), 0, "새 진은 룬 자리가 0이다")
+	t.ok(not fresh.can_fire(), "새 진은 쏠 수 없다 (시작하자마자 못 쏘는 게 맞다 — 사용자 확정)")
 
-	# **The start state and the presets come from the same two constants** (plan section 8). Written in two places,
-	#  "fire on a fresh boot but a different rune on key 1" appears **with no error.**
-	t.eq(SpellCircle.new().circle_id(), SpellCircle.DEFAULT_CIRCLE, "시작 진이 기본 지급이다")
-	t.eq(SpellCircle.new().rune_at(0), SpellCircle.DEFAULT_RUNE, "시작 룬이 기본 지급이다")
+	# **The debug keys still restore a fireable circle from empty** — the one thing `apply_preset`'s own
+	#  comment says `DEFAULT_CIRCLE`/`DEFAULT_RUNE` exist for. Driven through the actual door, not asserted
+	#  as a property of the constants alone.
+	var n0: int = keys[0]
+	var list0: Array[int] = []
+	list0.assign(Stage.LOADOUTS[n0])
+	t.ok(fresh.apply_preset(SpellCircle.DEFAULT_CIRCLE, SpellCircle.DEFAULT_RUNE, Glyph.pack(list0)),
+		"빈 진에서 프리셋을 눌러도 받아들여진다")
+	t.ok(fresh.can_fire(), "빈 진에서 눌러도 다시 쏠 수 있게 된다 (디버그 키가 갇히지 않게 하는 유일한 길)")
+
 	# Does the shell apply the preset through **one function** — unrolled into three lines, the order gets decided again there.
 	t.ok(_read("res://src/stage/stage.gd").contains("apply_preset("),
 		"디버그 키가 `apply_preset()` 으로 들어간다")
@@ -1928,6 +2494,10 @@ func _shots_geometry(t) -> void:
 ## delayed command across ticks instead of draining it early.
 func _shots_fire_across_the_right_ticks(t) -> void:
 	var tri := SpellCircle.new(CircleDefs.CIRCLE_TRIANGLE)
+	# **Every socket armed by hand** — the constructor no longer auto-fills runes (Stage 3's empty boot),
+	#  so a freshly-built triangle circle has three genuinely empty rune slots until this.
+	for slot in tri.rune_count():
+		t.ok(tri.set_rune(slot, Tuning.ELEM_NONE), "%d번 소켓에 룬을 놓는다 (전제)" % slot)
 	t.ok(tri.can_fire(), "갓 만든 삼각 진이 바로 쏠 수 있다 (전제)")
 	var shots := tri.shots()
 	var seq := CircleDefs.seq_ticks(CircleDefs.CIRCLE_TRIANGLE)
@@ -1988,7 +2558,10 @@ func _fire_at_loops_every_shot_not_just_the_first(t) -> void:
 		return
 
 	var tri := SpellCircle.new(CircleDefs.CIRCLE_TRIANGLE)
-	t.ok(tri.can_fire(), "새로 만든 삼각 진이 바로 쏠 수 있다 (전제 — 기본 룬이 채워져 있다)")
+	# **Every socket armed by hand** — the constructor no longer auto-fills runes (Stage 3's empty boot).
+	for slot in tri.rune_count():
+		tri.set_rune(slot, Tuning.ELEM_NONE)
+	t.ok(tri.can_fire(), "새로 만든 삼각 진이 바로 쏠 수 있다 (전제 — 손으로 룬을 채웠다)")
 	stage_root.set("_circle", tri)
 
 	var before: int = world.fire_count()
@@ -1999,6 +2572,42 @@ func _fire_at_loops_every_shot_not_just_the_first(t) -> void:
 		world.frame(1.0 / 60.0, 0.0, false, false)
 	t.eq(int(world.fire_count()) - before, 3,
 		"stage._fire_at() 한 번이 삼각 진의 발사 세 발을 전부 큐에 넣는다 (shots()[0] 하나만이 아니다)")
+
+	t.root.remove_child(stage_root)
+	stage_root.free()
+
+
+## **Stage 3's own risk — a left click on a genuinely empty, fresh circle must not crash and must not
+## enqueue anything.** `stage._fire_at`'s own guard (`if not _circle.can_fire(): return`) is read by
+## every other check in this file only through `can_fire()`'s own boolean; this drives the real path
+## (`_fire_at` on a treed `Stage`, never touched) to confirm the guard is what actually runs before
+## `shots()` is ever reached — the plan's own words: "confirm that last link by driving a left click on
+## an empty circle, do not assume it."
+func _fire_at_on_a_fresh_empty_circle_does_nothing(t) -> void:
+	var scene: PackedScene = load("res://src/stage/stage.tscn")
+	t.ok(scene != null and scene.can_instantiate(), "무대 씬을 세울 수 있다 (전제)")
+	if scene == null or not scene.can_instantiate():
+		return
+	var stage_root := scene.instantiate()
+	t.root.add_child(stage_root)
+	await t.pump_frames(2)
+
+	var world: Variant = stage_root.get("_world")
+	var circle: Variant = stage_root.get("_circle")
+	t.ok(world != null and circle != null, "무대의 _world·_circle이 준비돼 있다 (전제)")
+	if world == null or circle == null:
+		t.root.remove_child(stage_root)
+		stage_root.free()
+		return
+
+	t.eq(circle.circle_id(), CircleDefs.CIRCLE_NONE, "새 무대의 진은 손대지 않은 CIRCLE_NONE이다 (전제)")
+	t.ok(not circle.can_fire(), "그래서 쏠 수 없다 (전제)")
+
+	var before: int = world.fire_count()
+	stage_root.call("_fire_at", Vector2(600.0, 500.0))
+	for _i in Tuning.TICK_DIVIDER * 2:
+		world.frame(1.0 / 60.0, 0.0, false, false)
+	t.eq(int(world.fire_count()), before, "빈 진에 좌클릭해도 발사가 하나도 안 나간다 (죽지도 않는다)")
 
 	t.root.remove_child(stage_root)
 	stage_root.free()
@@ -2208,18 +2817,34 @@ func _art_reaches_the_paint_for(t, circle_id: int) -> void:
 ## item was **two different pictures depending on where you looked** — worse than neither, and every check in
 ## this file stayed green because they all drove the circle page.
 ##
-## **The window is left empty on purpose.** With no rune seated and no glyph placed, the circle page paints
-## nothing at all, so **every recorded texture came from the palette** — no filtering by rectangle, and no way
-## for a circle-side picture to stand in for a card that never drew.
+## **The window is left empty on purpose** on the circle page. With no rune seated and no glyph placed,
+## the circle page paints nothing at all, so **every recorded texture came from the palette** — no
+## filtering by rectangle, and no way for a circle-side picture to stand in for a card that never drew.
 ## *Inversion: point `_draw_palette_item`'s glyph branch back at `_draw_glyph` and the icon assert goes red;
 ## point it at `Fx.RING_TEX` instead of `ICON_TEX` and the "never a ring" assert goes red.*
+##
+## **Rewritten for ownership** (`onboarding-and-palette-tabs.md` §2) — the palette only shows what is owned
+## (룬) or seated (문양), so "every card in one pass" no longer holds for either axis the way it did when
+## `items_of()` returned every table row unconditionally:
+##  · **runes** are independent of any circle, so granting every element at once and opening the 룬 tab
+##    still shows all of them together in one window
+##  · **glyphs are capped by layer count** (`Tuning.GLYPH_MAX_LAYERS`) and are **the seated glyphs, not a
+##    stash** (`docs/decisions/the-glyph-tab-shows-the-circle.md`) — nine ids can never be seated at once,
+##    so each is checked in its own circle, seated alone
 func _the_palette_cards_are_drawn_from_the_art(t) -> void:
-	var win := _CapturingCircleWindow.new()
+	# ── runes: every element granted at once, one window, the 룬 tab open ──
+	var pr := Progress.new()
+	for elem: int in Tuning.ELEM_ALL:
+		pr.grant_rune(elem)
 	var circle := SpellCircle.new()
 	circle.set_circle(CircleDefs.ALL[0])
-	win.setup(Progress.new(), circle)
+	var win := _CapturingCircleWindow.new()
+	win.setup(pr, circle)
 	t.root.add_child(win)
 	win.visible = true
+	var pal := Book.palette_page(win.size)
+	win.call("_click_palette", pal,
+		Palette.tabs(pal.size)[Palette.KINDS.find(Palette.KIND_RUNE)].get_center())
 	win.queue_redraw()
 	await t.pump_frames(3)
 
@@ -2308,3 +2933,79 @@ func _the_palette_cards_are_drawn_from_the_art(t) -> void:
 
 	t.root.remove_child(win)
 	win.queue_free()
+
+	# ── glyphs: three at a time, one per family — `max_per_circle` caps same-family duplicates in one
+	#     circle, so all nine ids can never be seated together. Batched by tier (C/R/U) on a triangle circle
+	#     (3 layers) instead: one window per batch, three cells checked at once.
+	#
+	# **A triangle circle's own board also paints a ring texture for a seated glyph** (`_draw_ring` paints
+	#  `RING_TEX` unconditionally, before the socket-texture branch) — so `gwin.art` mixes real circle-board
+	#  ring pictures with real palette card pictures. Filtering by **the palette's own known cell centres**
+	#  (computed from `palette_layout` directly, not from what was actually drawn) is what tells the two
+	#  apart, rather than scanning every recorded texture regardless of where on screen it landed.
+	var batches: Array[Array] = [
+		[Glyph.SPREAD_C, Glyph.BLAST_C, Glyph.DUMMY_C],
+		[Glyph.SPREAD_R, Glyph.BLAST_R, Glyph.DUMMY_R],
+		[Glyph.SPREAD_U, Glyph.BLAST_U, Glyph.DUMMY_U],
+	]
+	var checked := 0
+	for batch: Array in batches:
+		var gc := SpellCircle.new(CircleDefs.CIRCLE_TRIANGLE)
+		for i in batch.size():
+			t.ok(gc.place_glyph(i, batch[i]), "문양 %d을 %d층에 놓는다 (전제)" % [int(batch[i]), i])
+		var gwin := _CapturingCircleWindow.new()
+		gwin.setup(Progress.new(), gc)
+		t.root.add_child(gwin)
+		gwin.visible = true
+		var gpal := Book.palette_page(gwin.size)
+		gwin.call("_click_palette", gpal,
+			Palette.tabs(gpal.size)[Palette.KINDS.find(Palette.KIND_GLYPH)].get_center())
+		gwin.queue_redraw()
+		await t.pump_frames(3)
+
+		# **The palette's own cell centres, from the layout alone.** `items_of(KIND_GLYPH)` returns
+		#  `circle.glyph_list()` in layer order, the same order `batch` was placed in, so cell `i` is
+		#  `batch[i]`'s own seat.
+		var gsec := Palette.section(gpal.size)
+		var cell_centers: Array[Vector2] = []
+		for i in batch.size():
+			cell_centers.append(Palette.item_slot(gsec, i, batch.size()).get_center())
+
+		for i in batch.size():
+			var glyph_id: int = batch[i]
+			var want: String = String(Fx.ICON_TEX[glyph_id]).get_file()
+			checked += 1
+
+			# **The tier survived the swap.** The picture deliberately does not carry rarity, so if the
+			#  icon path had simply replaced `_draw_glyph`, every card in a batch would look identical.
+			var found_ring := false
+			var ring_r := 0.0
+			for rr: Dictionary in gwin.rarity:
+				if (rr["at"] as Vector2).is_equal_approx(cell_centers[i]) and int(rr["id"]) == glyph_id:
+					found_ring = true
+					ring_r = float(rr["r"])
+			t.ok(found_ring, "문양 %d 카드에 등급 고리가 그려진다" % glyph_id)
+
+			# **The picture is at this cell's own centre, is the right file, and is not a ring** — all
+			#  three read off the one entry whose rect sits at this cell, so a card that painted the wrong
+			#  file (or the ring texture) at the right spot cannot slip through by matching only the file.
+			var found_card := false
+			for a: Dictionary in gwin.art:
+				var r: Rect2 = a["rect"]
+				if not r.get_center().is_equal_approx(cell_centers[i]):
+					continue
+				var fname := String(a["path"]).get_file()
+				if fname.begins_with("ring_"):
+					continue  # the circle board's own ring, not this palette cell — keep looking
+				found_card = true
+				t.eq(fname, want, "문양 %d 칸에 %s 가 간다 (%s)" % [glyph_id, want, fname])
+				t.ok(r.size.x * 0.5 < ring_r * Fx.RARITY_RING_RATIO,
+					"아이콘(%.1f)이 등급 고리(%.1f) 안에 들어간다"
+						% [r.size.x * 0.5, ring_r * Fx.RARITY_RING_RATIO])
+				break
+			t.ok(found_card, "%d번 칸에 카드 그림이 실제로 온다 (문양 %d)" % [i, glyph_id])
+
+		t.root.remove_child(gwin)
+		gwin.queue_free()
+
+	t.eq(checked, Glyph.ALL.size(), "아홉 문양 전부를 (묶음 셋으로) 검사했다 (%d개)" % checked)

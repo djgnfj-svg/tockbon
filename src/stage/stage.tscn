@@ -18,6 +18,7 @@
 [ext_resource type="Script" path="res://src/view/research_window.gd" id="13_research"]
 [ext_resource type="Script" path="res://src/view/gate_view.gd" id="14_gate"]
 [ext_resource type="Script" path="res://src/view/settlement_window.gd" id="14_settlement"]
+[ext_resource type="Script" path="res://src/view/onboard_view.gd" id="17_onboard"]
 
 [node name="Stage" type="Node2D" unique_id=630605066]
 script = ExtResource("1_stage")
@@ -85,6 +86,13 @@ offset_top = 392.0
 offset_right = 500.0
 offset_bottom = 420.0
 text = "…"
+
+[node name="OnboardView" type="Control" parent="HUD"]
+visible = false
+mouse_filter = 2
+layout_mode = 3
+anchors_preset = 0
+script = ExtResource("17_onboard")
 
 [node name="CircleWindow" type="Control" parent="HUD" unique_id=2120730422]
 visible = false

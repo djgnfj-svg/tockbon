@@ -990,6 +990,9 @@ func _tab_during_confirmation_afterglow_closes_it_first(t) -> void:
 	if world == null or circle == null:
 		root.free()
 		return
+	# **A round circle first** — the shell's own `_circle` boots `CIRCLE_NONE` now (Stage 3's empty start),
+	#  which has 0 layers, and `layer_slots` below needs a real seat.
+	circle.set_circle(CircleDefs.CIRCLE_ROUND)
 	var pr = world.progress()
 	pr.pending_picks = 1
 	pr.set("_drawn", [Glyph.DUMMY_U, Glyph.BLAST_C, Glyph.SPREAD_C] as Array[int])
@@ -1257,6 +1260,9 @@ func _a_preset_key_does_not_wipe_an_earned_rune(t) -> void:
 		root.free()
 		return
 
+	# **A round circle first** — the shell's own `_circle` boots `CIRCLE_NONE` now (Stage 3's empty start),
+	#  which has 0 rune slots.
+	circle.set_circle(CircleDefs.CIRCLE_ROUND)
 	# Stand in for "the bull's reward was placed" without needing the click path — `grant_rune` +
 	#  placement is `net_circle.gd`'s own job (`_owns_rune_gates_can_pick_on_an_untreed_window`); this test's
 	#  only job is what a preset key does to a rune that is **already sitting in the seat**.
@@ -1317,6 +1323,8 @@ func _reset_revokes_a_rune_from_the_seat_it_no_longer_owns(t) -> void:
 		root.free()
 		return
 
+	# **A round circle first** — the shell's own `_circle` boots `CIRCLE_NONE` now (Stage 3's empty start).
+	circle.set_circle(CircleDefs.CIRCLE_ROUND)
 	var pr = world.progress()
 	pr.grant_rune(Tuning.ELEM_FIRE)
 	t.ok(circle.set_rune(0, Tuning.ELEM_FIRE), "불 룬을 자리에 놓는다 (전제 — 얻어서 놓았다고 가정한다)")
@@ -1343,6 +1351,9 @@ func _reset_does_not_touch_glyphs(t) -> void:
 		root.free()
 		return
 
+	# **A round circle first** — the shell's own `_circle` boots `CIRCLE_NONE` now (Stage 3's empty start),
+	#  which has 0 layers.
+	circle.set_circle(CircleDefs.CIRCLE_ROUND)
 	t.ok(circle.place_glyph(0, Glyph.GLYPH_BLAST), "1층에 폭발을 놓는다 (전제)")
 
 	root.call("reset_stage")
@@ -1370,6 +1381,8 @@ func _revoke_unowned_rune_only_touches_what_is_not_owned(t) -> void:
 		root.free()
 		return
 
+	# **A round circle first** — the shell's own `_circle` boots `CIRCLE_NONE` now (Stage 3's empty start).
+	circle.set_circle(CircleDefs.CIRCLE_ROUND)
 	var pr = world.progress()
 	pr.grant_rune(Tuning.ELEM_WATER)
 	t.ok(circle.set_rune(0, Tuning.ELEM_WATER), "물 룬을 자리에 놓는다 (전제 — 방금 얻었다)")
@@ -1468,6 +1481,9 @@ func _declining_a_pick_leaves_the_circle_byte_identical(t) -> void:
 		root.free()
 		return
 
+	# **A round circle first** — the shell's own `_circle` boots `CIRCLE_NONE` now (Stage 3's empty start),
+	#  which has 0 layers.
+	circle.set_circle(CircleDefs.CIRCLE_ROUND)
 	t.ok(circle.place_glyph(0, Glyph.SPREAD_C), "0층에 확산(일반)을 놓았다 (전제)")
 	var before: int = circle.packed_glyphs()
 	t.ok(before != 0, "놓은 뒤 packed_glyphs()가 빈 값이 아니다 (검사가 실제로 뭔가를 재는지 확인 — 전제)")
@@ -1513,6 +1529,7 @@ func _wired_stage_root(t) -> Node:
 			"HUD/CircleWindow", "HUD/ThreePickWindow", "SpellView", "BlastFx", "StageInput", "Camera2D",
 			"MonsterView", "CellRenderer", "TownView", "SkyBackground", "HUD/ResearchWindow",
 			"HUD/SettlementWindow", "HUD/BossBar"]:
+			"HUD/SettlementWindow", "HUD/OnboardView"]:
 		t.ok(root.get_node_or_null(path) != null, "씬에 %s 가 있다 (전제)" % path)
 
 	# **`_input` is wired too, since `_update_hud()` reads developer mode off it** (`stage_input.debug_on()`).
@@ -1560,6 +1577,11 @@ func _wired_stage_root(t) -> Node:
 	# **`_boss_bar`, the same sentence again** (`boss-entrance-and-hp-bar.md` Stage C) — `_rebuild()` calls
 	#  `clear_boss()` and `_physics_process()` calls `set_entrance_frames()`, both unconditionally now.
 	root.set("_boss_bar", root.get_node("HUD/BossBar"))
+	# **`_onboard_view`** (`onboarding-and-palette-tabs.md` Stage 7) — `_physics_process()` reaches
+	#  `_tick_onboard()` unconditionally, which writes `_onboard_view.visible` every frame. An unwired null
+	#  here crashes every check in this file that drives a physics frame, the same shape every field above
+	#  already had to be added for.
+	root.set("_onboard_view", root.get_node("HUD/OnboardView"))
 	# **`_renderer`, so `_on_ticked()` can be driven for real too** — it calls `_renderer.refresh()` whenever
 	#  `_grid.consume_changed() > 0`, and any test that drives `_physics_process()` far enough to change the
 	#  grid (Stage I's own water pour is the first to do this through this helper) crashes on a null `_renderer`
