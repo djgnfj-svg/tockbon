@@ -643,6 +643,13 @@ func _no_pushed_out_glyph_is_stashed_anywhere(t) -> void:
 		# **`_icons` added here, deliberately** — five loaded ui textures keyed by name, the same shape
 		#  `_sprites` one line up already is. Loaded art is not a glyph that left a spell layer.
 		"res://src/view/research_window.gd": ["_icons"],
+		# **`_play_counts`/`_players` added here, deliberately** (the "약하지만" sound pass). Neither is a
+		#  record of a glyph that left a spell layer, which is what this file's no-inventory check exists to
+		#  catch: `_players` is a fixed pool of `AudioStreamPlayer` node references (the same shape
+		#  `circle_window._icon_tex` above is — a shelf of engine objects, not game state), and `_play_counts`
+		#  is a running tally of how many times each sound name was asked to play (headless-measurable
+		#  "did it ring", `sfx_bank.gd`'s own header) — a counter, not an inventory.
+		"res://src/view/sfx_bank.gd": ["_play_counts", "_players"],
 	}
 
 	var files := NetProgress.new()._scan_gd_files("res://src")
