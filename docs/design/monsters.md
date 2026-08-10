@@ -170,15 +170,18 @@ stage boss.** ⇒ **The wolf is stage 1's**, closing the "it is not assigned to 
 
 **The two-mob pairing below is still the reasoning that built the stage**, and the wolf does not replace
 either half of it — it is a third question (speed) on top of "terrain solves the pig, magic solves the hen".
-**Its values are all provisional and nobody has set them** (`monster_defs`' own note): 24 hp, 240px/s —
-faster and thinner than the pig, because the art is a lunging predator. **It has no lunge in the sim** —
+**Its values are all provisional and nobody has set them** (`monster_defs`' own note): 24 hp, 180px/s —
+faster and thinner than the pig, because the art is a lunging predator. **180 is kept equal to the player's
+own `MOVE_SPEED_PX` on purpose** — when the player's speed moved 240 → 180 this session ("전체적으로 지금
+너무 빠름"), the wolf's moved with it in the same edit, so it still cannot be outrun on foot. **It has no
+lunge in the sim** —
 `wolf_lunge.png` plays on contact, the same door the pig's shove uses.
 
 | Mob | Role | How it comes | **What solves it** |
 |---|---|---|---|
 | **Pig** | Melee | Straight at the player. **Can't clear a ledge** | **Terrain** — dig a pit or raise a wall and it's trapped |
 | **Chicken** | **Ranged** (the user changed this) | Approaches, then **stops and shoots.** Hops a one- or two-cell ledge | **Magic** — it crosses and keeps distance, so you chase and clear it |
-| **Wolf** | **Fast melee** (added by the user) | Straight at the player, **1.5× the pig's speed and half its height** | **Reacting in time.** Thin and quick — the pig's answers work, but you get less of a moment to apply them |
+| **Wolf** | **Fast melee** (added by the user) | Straight at the player, **faster than the pig (180 vs 160px/s) and thinner (28 vs 32px tall)** | **Reacting in time.** Thin and quick — the pig's answers work, but you get less of a moment to apply them |
 
 **What separates them is not "strength" but "the tool that solves them".**
 Pigs only and the game becomes a pit game; chickens only and there is no reason to dig terrain.

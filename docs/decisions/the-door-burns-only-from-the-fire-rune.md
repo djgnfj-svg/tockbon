@@ -27,7 +27,7 @@ whichever the builder picks.
 
 ## What's tied to it
 
-- `docs/plans/2.active/burn-out-of-the-bull-room.md` — the Bounds section this closes
+- `docs/plans/3.done/burn-out-of-the-bull-room.md` — the Bounds section this closes
 - `docs/plans/3.done/stage1-map-layout.md`'s "나무벽 — 진행 열쇠가 자연법칙인 자리": its buffer-zone and
   wall-outside-the-room protections are superseded — the lock no longer depends on distance
 - `docs/GDD.md`'s First milestone table, "…and that shape is being deleted" row — closed by this

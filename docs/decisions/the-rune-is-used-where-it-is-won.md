@@ -11,7 +11,7 @@ front of, walk through. The user's reason: 「그래야 바로 직관적으로 �
 pit's whole shape was built for — **is gone.** Stage 1 keeps **one** water escape (after the rooster) where
 it had two.
 
-Design doc: [`plans/2.active/burn-out-of-the-bull-room.md`](../plans/2.active/burn-out-of-the-bull-room.md).
+Design doc: [`plans/3.done/burn-out-of-the-bull-room.md`](../plans/3.done/burn-out-of-the-bull-room.md).
 
 ## What wasn't chosen
 

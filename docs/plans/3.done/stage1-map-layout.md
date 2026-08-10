@@ -9,7 +9,7 @@ columns were cut — `3.done/left-run-clumps-and-platforms.md`)
 **황소를 잡고 불의 룬을 얻으면 그 자리에서 뒤쪽 벽을 태우고 나간다. 건너편이 바로 닭 보스다.**
 사용자 말: 「그냥 황소 맵에 뒤쪽이 그냥 나무인 거고 거기 가면 바로 보스인 거야. 황소 잡고, 잡몹도 없이,
 넘어가면 불 룬으로 부시고 넘어가면 바로 보스가 있어.」
-⇒ [`../2.active/burn-out-of-the-bull-room.md`](../2.active/burn-out-of-the-bull-room.md) (now building) ·
+⇒ [`burn-out-of-the-bull-room.md`](burn-out-of-the-bull-room.md) (built) ·
 [`../../decisions/the-rune-is-used-where-it-is-won.md`](../../decisions/the-rune-is-used-where-it-is-won.md)
 
 | 이 문서에서 죽는 것 | 무엇으로 |
@@ -89,7 +89,7 @@ net_water_rain: 물이 안 샌다 · 부은 양이 정확히 같다
 ```
 
  **사용자가 순서를 다시 정했다** — 머리의 상자 참조.
-[`../2.active/burn-out-of-the-bull-room.md`](../2.active/burn-out-of-the-bull-room.md) (now building).
+[`burn-out-of-the-bull-room.md`](burn-out-of-the-bull-room.md) (built, `3.done`).
 
 **전에는 구덩이에 「임시 경사로」를 넣어 걸어 나오게 했었다.** 그러면 **물이 차오를 이유가
 없어지고** 위 흐름이 통째로 죽는다. ⇒ **뺐다.**

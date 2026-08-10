@@ -123,7 +123,7 @@ not keep its own list. A net can then drive ownership with no scene at all — t
 **what you do not own has no cell at all** — not drawn, no seat in the row, nothing returned by the hit test.
 The grounds and the rejected branches are in
 [`docs/decisions/palette-hides-what-you-do-not-own.md`](../../decisions/palette-hides-what-you-do-not-own.md);
-the work is [`../1.ready/onboarding-and-palette-tabs.md`](../1.ready/onboarding-and-palette-tabs.md).
+the work is [`onboarding-and-palette-tabs.md`](onboarding-and-palette-tabs.md), built.
 
 ⇒ **The table below is now a record of a rejected branch, not of the shipped behavior**, and its right-hand
 column inverts: **filtering `items_of` is what happens**, so `net_circle._palette_is_kind_by_item`'s

@@ -1,6 +1,8 @@
 ﻿# Burn out of the bull room — the back wall is the door, and zone ② goes
 
-**Status**: active — building against `## Implementation plan` (bottom), §5's order.
+**Status**: done
+**Seen on screen, repeatedly, by the user — with fixes made each time.** Fork A shipped: the wood door
+in room ①'s back wall, zone ② gone, the rooster reachable straight through.
 The user decided the beat and fork A; the plan proposes the geometry, the door's size, the `src/sim/` shape
 and what happens to the water.
 
@@ -14,11 +16,11 @@ and the pit's water escape both disappear**, and stage 1 keeps one water escape 
 
 **The onboarding beat hangs off this** — get the rune, be told to slot it, slot it in the assembly window,
 fire, the wood goes. **That is not this doc's** → [`design/tutorial.md`](../../design/tutorial.md) and its
-first slice, [`1.ready/onboarding-and-palette-tabs.md`](onboarding-and-palette-tabs.md).
+first slice, [`onboarding-and-palette-tabs.md`](onboarding-and-palette-tabs.md).
 
-**Constrains and is constrained by**: [stage1-map-layout.md](../3.done/stage1-map-layout.md) ·
-[stage1-bosses.md](../3.done/stage1-bosses.md) · [water-jump-and-escape.md](../2.active/water-jump-and-escape.md) ·
-[left-run-clumps-and-platforms.md](../3.done/left-run-clumps-and-platforms.md) ·
+**Constrains and is constrained by**: [stage1-map-layout.md](stage1-map-layout.md) ·
+[stage1-bosses.md](stage1-bosses.md) · [water-jump-and-escape.md](../2.active/water-jump-and-escape.md) ·
+[left-run-clumps-and-platforms.md](left-run-clumps-and-platforms.md) ·
 `docs/design/terrain-baking.md` (how the map is changed at all)
 
 ---
@@ -358,8 +360,8 @@ would have to invent an answer, and inventing is how a design gets decided by wh
   rooster is a placed row woken by distance (`WAKE_PX` 720 = 22.5 tiles). With the rooms adjacent it may
   already be awake and walking at the doorway before the wood finishes burning — **unmeasured**
 - **The onboarding beat has a seat but no text**, and this feature is where it lands. ~~no owner~~ —
-  `design/tutorial.md` owns the concept (its rule #3) and `1.ready/onboarding-and-palette-tabs.md` defers the
-  beat on purpose. **Nobody has written the line 「불 룬을 껴 보세요」 or said when it fires**
+  `design/tutorial.md` owns the concept (its rule #3) and `onboarding-and-palette-tabs.md` (built, `3.done`)
+  deferred the beat on purpose. **Nobody has written the line 「불 룬을 껴 보세요」 or said when it fires**
 
 ### What this doc is least sure of
 
@@ -516,9 +518,8 @@ At **tx181** that distance is **698px** — outside 552 (never drawn from room �
 early, which costs nothing: it does not stir until 300px, i.e. not until the player is through the door).
 **Room ③'s east wall is x184, so tx181 leaves 3 tiles of clearance for the boss box.**
 
-**The rooster materialising during the bull fight is new, and it is `boss-entrance-and-hp-bar.md`'s problem
-too** — that doc is still `1.ready`, so nothing today shows a bar, but **whoever builds it must not key the
-entrance beat off materialisation.** Say so in that doc.
+**The rooster materialising during the bull fight is new, and it was `boss-entrance-and-hp-bar.md`'s problem
+too** — that doc has since shipped (`3.done`); confirm it did not key the entrance beat off materialisation.
 
 ---
 
@@ -709,8 +710,8 @@ itself pass a source the game never passes there, and confirm the check goes red
 - **The onboarding line 「불 룬을 껴 보세요」 and its timing.** `design/tutorial.md` owns it
 - **The side wall's collapse beat.** A screen call, still open in TBD
 - **`world_size()` deriving from `MAP_W`.** Found here, recorded above, not fixed here
-- **The boss entrance beat / HP bar.** `boss-entrance-and-hp-bar.md`, still `1.ready` — this feature only
-  hands it the new fact that the rooster materialises during the bull fight
+- **The boss entrance beat / HP bar.** `boss-entrance-and-hp-bar.md` (built, `3.done`) — this feature only
+  handed it the new fact that the rooster materialises during the bull fight
 - **Making the door 3 tiles tall.** A one-row edit if verify-look asks; not decided in advance
 
 ---

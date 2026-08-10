@@ -53,7 +53,8 @@ func _process(_dt: float) -> void:
 ## **One call, both clocks** — called once per physics frame from `stage._sync_settlement()`, with the same
 ##  `at_gate` term that function already computes. Two call sites would be two clocks to keep in step.
 ##
-## **`_take` latches once begun.** `MOVE_SPEED_PX` is 260 and the band is `REACH_PX * 2` = 96px, so a running
+## **`_take` latches once begun.** `MOVE_SPEED_PX` is 180 (was 260, then 240 — it came down twice this
+##  session for feel) and the band is `REACH_PX * 2` = 96px, so a running
 ##  player crosses it in ~22 physics frames — a hold that resets when you leave is outrunnable, and then the
 ##  ending is a thing that never happens (CLAUDE.md's own named failure). Once one frame inside the band has
 ##  been counted, the count runs to completion wherever the player goes. It strands nothing: the only state it

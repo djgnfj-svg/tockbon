@@ -3,8 +3,10 @@
 **One line**: health is a **big red number with a thin gauge under it**, bottom-left; everything else is a
 small line above it; the debug readout is a separate thing behind F3.
 
-**Implemented**: health · level line · level-up line. **The boss bar is designed and not built** — see below.
-**Accepted**: unseen at full frame rate — the browser tab it was checked in ran at FPS 8.
+**Implemented**: health · level line · level-up line · **the boss bar and entrance** (name, bar, walk-out,
+roar, camera zoom) — see below.
+**Accepted**: the boss bar and entrance were **seen on screen, repeatedly, by the user, with fixes made each
+time.** The rest is still unseen at full frame rate — the browser tab it was checked in ran at FPS 8.
 
 **A concept stays alive and never changes folders.** The two header lines are only "how much runs now" —
 format per [README.md](README.md).
@@ -73,7 +75,7 @@ fill retreats.
 
 ## The boss bar — **the top band, and it is the only thing allowed up there**
 
-**Not built.** → [../plans/1.ready/boss-entrance-and-hp-bar.md](../plans/1.ready/boss-entrance-and-hp-bar.md).
+**Built.** → [../plans/3.done/boss-entrance-and-hp-bar.md](../plans/3.done/boss-entrance-and-hp-bar.md).
 
 A boss gets **a wide bar across the top of the screen with its name over it, large** — 황소 is
 **「불의 룬을 삼킨 소」** (the user's own words; the rooster's name is undecided). Both stage-1 bosses.

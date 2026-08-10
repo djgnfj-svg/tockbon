@@ -3,10 +3,16 @@
 **One line**: every lever that could make this game feel tighter, **with what it costs and where it is allowed to live.**
 Nothing here is chosen — **the user asked for the list, not for the work.**
 
-**Implemented**: partial — the blast side (screen shake + flash, `view/blast_fx.gd`) · damage numbers · hit flash,
-**plus coyote time and the jump buffer** (`character.gd`, `net_character` F-1–F-5). **Everything else is absent**
-**Accepted**: unseen — the shake and flash have never been judged as *feel*, only as "it appears",
-and **the two jump windows have not been felt by the user yet**
+**Implemented**: partial — the blast side (screen shake + flash, `view/blast_fx.gd`) · damage numbers ·
+**hit reaction** (white flash + a weak screen shake on taking damage) · **coyote time and the jump buffer**
+(`character.gd`, `net_character` F-1–F-5) · **footfall dust** · **sound** (`sfx_bank.gd`, procedural synthesis —
+fire, impact, jump, land, hit; `Fx.SFX_ENABLED` turns it off) · **camera 1.5× zoom with a vertical offset** and
+a damped vertical parallax on the background (`BG_VERTICAL_FOLLOW_FRAC` 0.15) · **player airtime raised**
+0.6s → 0.75s (`PLAYER_GRAVITY_PX`, split from the shared `GRAVITY_PX` so bosses keep the old value — their
+jump trajectories are tuned against it). **"No sound anywhere" is no longer true.**
+**Accepted**: the user has launched and looked at the game repeatedly this session, with fixes made each
+time — **but no single item above was separately called out and judged as "does this feel right"**, and none
+has a net measuring the *feel*, only that the code path runs. Treat all of it as seen-but-not-judged
 
 **This doc is a menu, not a plan.** When one of these is picked it gets its own `docs/plans/` doc.
 
@@ -45,13 +51,13 @@ This is the one item on the doc where the current behaviour might be correct; **
 | Cause | Measured | State |
 |---|---|---|
 | **No coyote time, no jump buffer** | Neither existed in `character.gd` | **Fixed. 0.1s each** (`COYOTE_SEC` · `JUMP_BUFFER_SEC`), five nets in `net_character` F-1–F-5, every one confirmed to bite under mutation. **Not looked at on screen yet** |
-| **0.6s of airtime feels floaty** | `GRAVITY_PX` 2400 · `JUMP_VY_PX` -720 ⇒ 3.4 tiles, 0.6s | **Open, and deliberately not touched** — see the warning below |
+| **0.6s of airtime feels floaty** | `GRAVITY_PX` 2400 · `JUMP_VY_PX` -720 ⇒ 3.4 tiles, 0.6s | **Addressed, in the opposite direction from the fix sketched below.** The player's fall now runs on its own `PLAYER_GRAVITY_PX` (1536, paired with a re-tuned `JUMP_VY_PX`) and airtime went **0.6s → 0.75s** — floatier, not snappier. Bosses keep the shared `GRAVITY_PX` 2400 unchanged, because their jump trajectories are tuned against it. **Not separately judged as feel** |
 | ~~**Ground state is 20Hz**~~ | **Wrong, and it was mine.** `on_ground` is read at the top of `step()`, which runs every `_physics_process` — **60Hz.** The 20Hz warning at `character.gd:313` is about `in_water`, and it is the reason that value is **not** put in `on_tick()` | No defect. Nothing to fix |
 
-**Raising falling gravity changes the level, not just the feel.** Airtime sets **jump distance**: 1.4× fall
-takes a jump from about 4.9 tiles of reach to 4.5 (−8%), and **stage 1's map was drawn by hand and by eye
-against the current number.** A gap that was crossable becomes a gap that is not, **with nothing in code to
-complain.** ⇒ Change it **only with the map on screen**, never headless.
+**Raising falling gravity changes the level, not just the feel** — and the direction actually taken lowered it
+instead (see the table above), which widens jump reach rather than shrinking it. **Stage 1's map was drawn by
+hand and by eye against the old number**, so a gap that used to be a real check is now easier, **with nothing
+in code to complain.** Re-walk the map's jump-only gaps before trusting any of them are still meaningful.
 
 **Order for what is left**: camera dead zone + smoothing → falling gravity (on screen, with the map) →
 walk deceleration.
@@ -86,7 +92,7 @@ walk deceleration.
 |---|---|---|---|
 | 1 | **Monsters recoil when hit** | `actor/` | **The single biggest gap.** `monster.gd` only subtracts `hp` — a pig takes a bolt and **keeps walking at the same speed.** The player's own knockback was deleted on purpose; **the monster's was never built.** No art needed |
 | 2 | **Hitstop, revisited** | `view/` | Dropped once, replaced by flash duration (`decisions/README`). **The reason was co-op, and it still holds** ⇒ if revived, it must be **per-target** (that one monster freezes, the world doesn't) |
-| 3 | **Flash that scales with the hit** | `view/` | Flash exists but is one shape. Damage already carries `power_pct` (rarity), so **a 20 could flash longer and whiter than a 10** and the rarity axis becomes visible in combat, not just in the palette |
+| 3 | **Flash that scales with the hit** | `view/` | **A flash (white) + a weak screen shake now fire on every hit taken.** Still one shape — it does not yet scale with `power_pct`, so a 20 and a 10 read identically |
 | 4 | **Damage numbers that pop** | `view/` | They exist as text. Scale-up-then-settle, drift, colour by size |
 | 5 | **Death is currently instant disappearance** | `view/` | No pop, no gib, no fade. **A monster vanishing mid-step is the cheapest thing on this list to fix and one of the most felt** |
 
@@ -107,27 +113,29 @@ walk deceleration.
 | 11 | **Walk has no acceleration** | `actor/` | `move * MOVE_SPEED_PX` — full speed in one frame, dead stop in one frame. **Deceleration only** is the shape to try. Reported by the user — above |
 | 11b | **Falling gravity · apex hang** | `actor/` | 0.6s of airtime. **Raise the fall, never the rise** — the jump height is a designed value. Reported by the user — above |
 | ~~11c~~ | ~~Grounding is sampled at 20Hz~~ | — | **It is 60Hz. The claim was wrong** — see the diagnosis above. Kept here so it is not "found" again |
-| 12 | **Land squash · dust · run dust** | `view/` | Weight comes almost entirely from the landing frame |
+| 12 | **Land squash · dust · run dust** | `view/` | **Footfall dust is in.** Land squash is not |
 | 13 | **Falling has no acceleration in water** | sim | The user already called this **"cheap"** (`water.md`). Constant 7.5 tiles/s. It is on the water doc's list, not a new item |
 
 ## D. The screen as a whole
 
 | # | Lever | Where | Note |
 |---|---|---|---|
-| 13b | **Camera dead zone · smoothing · look-ahead** | `stage/` | **Reported by the user, and the top suspect** — the camera is locked to the character (diagnosis above). The one item here that is a *defect* rather than an addition |
+| 13b | **Camera dead zone · smoothing · look-ahead** | `stage/` | **Reported by the user, and the top suspect** — the camera is locked to the character (diagnosis above). **A 1.5× zoom with a vertical offset landed this session, plus a damped vertical parallax on the background** (`BG_VERTICAL_FOLLOW_FRAC` 0.15) — neither is the dead-zone/smoothing/look-ahead fix sketched above; the lock itself is still there |
 | 14 | **Shake that separates the causes** | `view/` | Shake exists **only for blasts**, keyed to generation. A bull's charge into a wall and a landing should not borrow the blast's curve |
 | 15 | **Light from a blast** | `view/` | A flash of light on the terrain around a detonation. **Watch the price** — the terrain is a TileMapLayer, not lit geometry |
 | 16 | **XP and money that fly to you** | `actor/` | Stage B put `xp`/`money` in the tables with **no object on screen at all.** Pickups that arc out and home in are, in this genre, one of the strongest per-kill rewards — and **the arc is `actor/`, so it costs the sim nothing** |
 | 17 | **Low-health screen edge** | `view/` | Health exists (`character-damage-minimum`); the screen never says so except through numbers |
 
-## E. **Sound — there is none. Not one line** (`AudioStream` appears nowhere in `src/`)
+## E. **Sound — landed this session.** `sfx_bank.gd`, procedural synthesis, no audio files on disk
 
-**This is the largest single hole in "feel" in the whole project** and it is deliberately last, because it is
-also the one that **cannot be judged by reading anything.** Firing, impact, the wood wall catching, water pouring,
-a pig dying — every item above lands roughly twice as hard with 200ms of audio attached, and **none of the
-determinism or budget arguments apply**: audio is view-side and never re-enters the sim.
+**"There is none" is no longer true.** Fire, impact, jump, land and hit each get a synthesized cue through
+`sfx_bank.gd`; `Fx.SFX_ENABLED` turns the whole axis off. **Headless nets can only count that a cue fired,
+never judge how it sounds** — that half of "feel" still needs eyes (ears), and it still needs its own doc for
+anything beyond what shipped: which other moments get a cue, mixing, volume, buses.
 
-**It needs its own doc.** Do not fold it into a lever above.
+Firing, impact, the wood wall catching, water pouring, a pig dying — coverage of *which* of these has a cue
+and which don't is unaudited; go through this list against `sfx_bank.gd` before assuming more landed than the
+five named above.
 
 ---
 
@@ -136,13 +144,14 @@ determinism or budget arguments apply**: audio is view-side and never re-enters 
 **Not chosen. This is what the list looks like sorted by (felt / cost).**
 **The user's own three come first — they are reported defects, not improvements** (13b · 10 · 11b · 11c · 11).
 
-0. **13b** camera dead zone + smoothing — the only one the user pointed at twice
+0. **13b** camera dead zone + smoothing — the only one the user pointed at twice. **Zoom + vertical offset
+   landed instead; the lock itself is still open**
 1. ~~**10** coyote time + jump buffer~~ — **done, unseen**
-2. **1** monster recoil on hit — hours, no art, every kill in the game gets it
+2. **1** monster recoil on hit — hours, no art, every kill in the game gets it. **Still not built**
 3. **5** death pop — one view effect
 4. **16** XP/money pickups — the reward loop currently has no object
 5. **7** bolt speed — a doc already exists and is waiting on the screen
-6. **E** sound — largest effect, largest job, own doc
+6. ~~**E** sound~~ — **landed** (procedural, five cues). Coverage and mixing are still open
 
 ---
 

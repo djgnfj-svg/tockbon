@@ -8,7 +8,7 @@
 rows with them.** The user's words: 「황소 잡고, **잡몹도 없이**, 넘어가면 불 룬으로 부시고 넘어가면 바로
 보스가 있어.」
 
-Design doc: [`plans/2.active/burn-out-of-the-bull-room.md`](../plans/2.active/burn-out-of-the-bull-room.md).
+Design doc: [`plans/3.done/burn-out-of-the-bull-room.md`](../plans/3.done/burn-out-of-the-bull-room.md).
 
 **Nothing that ever ran is being deleted.** `stage1_monsters.gd`'s own header records zone ②'s rows as
 **dormant** — the step from ①'s floor (`ty32`) to ②'s shelf (`ty26`) is 6 tiles against a 3.375-tile jump, so

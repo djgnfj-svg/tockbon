@@ -21,7 +21,7 @@ muzzle and fire command already read.
 
 ## What's tied to it
 
-- `docs/plans/1.ready/onboarding-and-palette-tabs.md`, Behavior §2 and its TBD section — this closes the
+- `docs/plans/3.done/onboarding-and-palette-tabs.md`, Behavior §2 and its TBD section — this closes the
   "what does the 문양 tab list" question that doc left open
 - `no-inventory.md` — this decision extends its line ("growing during a run is an inventory; visible only
   in town is a list") to glyphs: there is nothing here that grows *behind* the screen, only what is already

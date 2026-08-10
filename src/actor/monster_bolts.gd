@@ -207,7 +207,9 @@ func consume_hits(ch: Character) -> int:
 		# **The bolt's whole frame of travel, not the point it landed on.**
 		#  A bolt moves `BOLT_SPEED_PX / 60` = 5.3px per frame and the player moves up to 4.3 the other way,
 		#  so the two close by ~10px while the player's box is 20 wide — **a point test misses whenever the
-		#  sampling happens to straddle the box.** Measured through `character.MOVE_SPEED_PX`: 260 hit, and
+		#  sampling happens to straddle the box.** **This paragraph is a record of the era before the sweep
+		#  landed — the speed is 180 today and moves freely, which is the whole point of the fix.**
+		#  Measured through `character.MOVE_SPEED_PX` back then: 260 hit, and
 		#  **both 240 and 300 missed entirely**, which is how a *slower* player could dodge better than a
 		#  faster one. That made the movement speed unchangeable, and the movement speed is what the screen
 		#  shake comes from (`character.gd`'s own box).

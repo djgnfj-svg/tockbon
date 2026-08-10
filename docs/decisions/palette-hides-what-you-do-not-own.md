@@ -36,7 +36,7 @@ vanishes from the palette the instant it lands.
   picked — veiled, not missing") become false the day this ships
 - **Circles and glyphs have no ownership field anywhere**, so this decision cannot be fully applied to them
   until one exists — and for glyphs that argues with `no-inventory.md`. Held open in
-  `plans/1.ready/onboarding-and-palette-tabs.md`'s TBD
+  `plans/3.done/onboarding-and-palette-tabs.md`'s TBD
 
 ## Conditions to reopen
 

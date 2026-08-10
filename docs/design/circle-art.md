@@ -570,8 +570,12 @@ the user read it as **"the rune has a glyph in it".**
 
 ## Sizes — measured, headless
 
+**The window grew this session: 864×372 → 900×430** (`Fx.WINDOW_RECT`), alongside the palette tabs
+(`plans/3.done/onboarding-and-palette-tabs.md`). The table below still reads the old numbers and needs a
+re-measure against the new rect — treat every value here as stale until someone re-derives it.
+
 ```
-window 864×372 (viewport)  →  screen 1728×744   ※ 2× scale
+window 864×372 (viewport)  →  screen 1728×744   ※ 2× scale   ⚠ now 900×430, not re-measured
 circle page 415×326        →  circle diameter 280
 ```
 

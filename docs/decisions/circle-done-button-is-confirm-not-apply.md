@@ -27,7 +27,7 @@ window any other way (Tab, ESC) leaves exactly the same circle behind.
 - **The glow is presentation only.** If it ever gates anything — a state that is "confirmed" versus "not" —
   this decision has been reversed without anyone saying so
 - **Acceptance carries it**: firing must work identically whether 완성 was pressed or the window was closed
-  with Tab (`plans/1.ready/onboarding-and-palette-tabs.md`, acceptance 11)
+  with Tab (`plans/3.done/onboarding-and-palette-tabs.md`, acceptance 11)
 
 ## Conditions to reopen
 

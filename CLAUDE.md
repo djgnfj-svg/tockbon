@@ -91,6 +91,13 @@ design doc's `Accepted` section immediately.
 The spawner writes; the verifier only reports. Afterwards `git worktree remove --force` + `prune`
 (automatic cleanup almost never fires — 700MB in one night, measured).
 
+**A fresh worktree has no `.godot` import cache, and every net goes red for it** — not a code failure.
+Four agents hit this the same night. Run the engine headless once in the new worktree first (any
+`--headless --script` invocation re-imports) before trusting a red round to mean anything.
+**A worktree also freezes at the commit it branched from** — two agents built a full session's worth of
+work against a base that did not know the day's other changes had landed. Re-branch from `main` right
+before starting, not from whatever commit happened to be current earlier.
+
 **Skeleton first, flesh later.** Do not demand every `TBD` in a design doc be filled before implementing.
 
 ## Folders are contracts

@@ -52,6 +52,8 @@ Where it shakes if this reverses.
 | [No trash run between the two bosses](no-trash-run-between-the-two-bosses.md) | valid | A trash run between midboss and boss · redistributing ②'s 12 rows · waking ② by landing the water escape |
 | [The door burns only from the fire rune](the-door-burns-only-from-the-fire-rune.md) | valid | A sill above the fire's reach · accepting the room opening mid-fight · the bull's fire no longer sticking |
 | [The 문양 tab shows the circle](the-glyph-tab-shows-the-circle.md) | valid | A held-glyph stash in `Progress` · everything that exists, undimmed |
+| [The click radius does not scale with the bigger art](click-radius-does-not-scale-with-the-bigger-art.md) | valid | Leaving `SLOT_HIT_RATIO` at 1.8 · 1.3 (measured insufficient) |
+| [Player gravity is split from the shared constant](player-gravity-split-from-the-shared-constant.md) | valid | Lowering the shared `GRAVITY_PX` itself · leaving the player unpatched |
 
 ## Decisions not yet written down
 

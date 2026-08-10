@@ -7,7 +7,7 @@ right below before reading this as more settled than it is.
 > ## ⚠⚠ **The wood wall comes back *into* room ① — acceptance 5's protection is deleted** (decided by the user)
 >
 > **Room ①'s east wall becomes the wood door.** Kill the bull, take the fire rune, burn the wall you are
-> standing in front of. ⇒ [`2.active/burn-out-of-the-bull-room.md`](../2.active/burn-out-of-the-bull-room.md) (now building) ·
+> standing in front of. ⇒ [`burn-out-of-the-bull-room.md`](burn-out-of-the-bull-room.md) (built) ·
 > [`decisions/the-rune-is-used-where-it-is-won.md`](../../decisions/the-rune-is-used-where-it-is-won.md)
 >
 > **What in this doc stops being true:**
@@ -69,7 +69,7 @@ leaps and pounces. Both **speed up at half health.**
 > ## ⚠ **Two of this doc's own constraints are reversed by the map** (decided by the user)
 >
 > **Room ①'s east wall becomes wood** and the player burns out of the room with the rune they just won ⇒
-> [`../2.active/burn-out-of-the-bull-room.md`](../2.active/burn-out-of-the-bull-room.md) (now building) ·
+> [`burn-out-of-the-bull-room.md`](burn-out-of-the-bull-room.md) (built) ·
 > [`decisions/the-rune-is-used-where-it-is-won.md`](../../decisions/the-rune-is-used-where-it-is-won.md)
 >
 > | This doc says | What happens |

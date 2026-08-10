@@ -1,13 +1,16 @@
 # The palette gets tabs, and the game starts with an empty circle
 
-**Status**: active
+**Status**: done
+**Seen on screen, repeatedly, by the user — with fixes made each time.** The tab strip, one-click insert,
+empty start, 완성 and the onboarding arrow are confirmed working. **The 찰칵/완성 feedback's exact look was
+not separately called out and has no net either** — treat it as unconfirmed until someone looks again.
 **One line**: the right page becomes **three tabs — 진 · 룬 · 문양 — one open at a time**, **what you do not
 have has no cell at all**, the circle **starts empty** (so the first thing the game asks you to do is assemble
 one), and a short onboarding walks you through it once: an arrow at **Tab**, 진 → 룬 → 문양, then
 **「마법진 완성」**.
 
 **Design doc**: [../../design/tutorial.md](../../design/tutorial.md) — this is the first slice of it.
-**Reversed by this doc**: [../3.done/rune-lock-and-receiving.md](../3.done/rune-lock-and-receiving.md)'s
+**Reversed by this doc**: [rune-lock-and-receiving.md](rune-lock-and-receiving.md)'s
 "veiled, not hidden" (`docs/decisions/palette-hides-what-you-do-not-own.md`).
 
 **Read the TBD section before estimating.** **Every pixel value** in this doc is genuinely undecided.

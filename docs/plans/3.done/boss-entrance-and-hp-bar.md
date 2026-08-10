@@ -1,6 +1,8 @@
 # A boss arrives with a name and a bar
 
-**Status**: ready
+**Status**: done
+**Seen on screen, repeatedly, by the user — with fixes made each time.** The name, the bar and the
+walk-out/roar/camera-zoom entrance are confirmed working for the bull.
 **One line**: both stage-1 bosses get **a big bar across the top of the screen with the boss's name over it**
 (「불의 룬을 삼킨 소」), and the bull **walks out behind you** when you reach the wood wall and roars while
 **the camera zooms in on it and back out.**
@@ -9,14 +11,13 @@
 section is where the top band gets claimed.
 **Decision**: [../../decisions/the-back-door-does-not-close.md](../../decisions/the-back-door-does-not-close.md)
 — why nothing closes behind you.
-**Preceding**: [../3.done/stage1-bosses.md](../3.done/stage1-bosses.md) (the patterns) ·
-[../3.done/monster-placement-stage1.md](../3.done/monster-placement-stage1.md) (the bosses are rows in the
+**Preceding**: [stage1-bosses.md](stage1-bosses.md) (the patterns) ·
+[monster-placement-stage1.md](monster-placement-stage1.md) (the bosses are rows in the
 placement table, and that is what this doc reuses).
 **Precedent for changing the world as a beat**:
-[../3.done/gate-ending-to-game.md](../3.done/gate-ending-to-game.md) and `gate_view.gd` — a counter in
+[gate-ending-to-game.md](gate-ending-to-game.md) and `gate_view.gd` — a counter in
 physics frames, a pure `tint()` a net can call, and a `_paint_*` hook.
-**Depends on**: [../2.active/burn-out-of-the-bull-room.md](../2.active/burn-out-of-the-bull-room.md) — now
-`2.active`, building.
+**Depended on**: [burn-out-of-the-bull-room.md](burn-out-of-the-bull-room.md) — built, in `3.done`.
 Today's wood wall is `x164-166` at `ty20-25`, standing on the plateau **above** room ①, whose floor is `ty32`
 — **6 tiles of face against a 102px jump ceiling.** ⇒ **"the player reaches *the wood*" is unreachable on the
 map that exists now.**

@@ -4,11 +4,12 @@
 only thing the game asks for is that you open the assembly window and build one — so **assembling is taught
 by being the first thing that happens**, not by a page of text.
 
-**Implemented**: **none** — not one line of code. `grep` for `튜토리얼`/`onboarding`/`tutorial` across `src/`
-and `tests/` returns **one** hit, and it is a comment in `fx_tuning.gd` noting that no tutorial exists.
-The first slice is specified in
-[../plans/1.ready/onboarding-and-palette-tabs.md](../plans/1.ready/onboarding-and-palette-tabs.md).
-**Accepted**: **unseen**
+**Implemented**: **rule #1, the assembly window.** The run starts empty, an arrow points at Tab, and the
+palette walks 진 → 룬 → 문양 once, then closes on 「마법진 완성」 — built in
+[../plans/3.done/onboarding-and-palette-tabs.md](../plans/3.done/onboarding-and-palette-tabs.md).
+**Rules #2 and #3 (layer order, the bull's fire rune) are still unowned.**
+**Accepted**: **seen on screen, repeatedly, by the user — with fixes made each time.** The 찰칵/완성
+feedback's exact look was not separately called out and has no net; treat it as unconfirmed.
 
 **A concept stays alive and never changes folders.** The two header lines are only "how much runs now" —
 format per [README.md](README.md).
@@ -52,12 +53,12 @@ The GDD names two rules that "are taught in onboarding". They are not taught at 
 
 | # | Rule | When | Owner |
 |---|---|---|---|
-| 1 | **The assembly window exists and this is how you fill it** | entering stage 1, before the first monster | [../plans/1.ready/onboarding-and-palette-tabs.md](../plans/1.ready/onboarding-and-palette-tabs.md) |
+| 1 | **The assembly window exists and this is how you fill it** | entering stage 1, before the first monster | [../plans/3.done/onboarding-and-palette-tabs.md](../plans/3.done/onboarding-and-palette-tabs.md) — **built** |
 | 2 | **A glyph goes on a layer, and the inner layer runs first** | the first level-up's three-pick | **no owner** |
 | 3 | **A rune is a thing you can be given, and it changes what fires** | the bull's fire rune | **no owner** |
 
-**Only #1 is specified.** #2 and #3 are named in that plan as one line each precisely so nobody derives their
-detail from a doc that has not thought about them.
+**#1 is built. #2 and #3 are still only named**, in that plan, as one line each precisely so nobody derives
+their detail from a doc that has not thought about them.
 
 **Layer order has two devices on screen already** and they are not new work: the layer number written beside
 each ring, and a brightness ramp from inner to outer (`circle_window._draw_ring` — "A concentric circle alone
@@ -94,8 +95,10 @@ more. **The feature is closed off, not deleted.** Whether that is permanent is o
 
 ## Accepted
 
-**Write what the user confirmed by eye here, the moment they say it** (CLAUDE.md). Nothing yet — not one
-line of this is built.
+**Write what the user confirmed by eye here, the moment they say it** (CLAUDE.md).
+
+Rule #1 (the assembly window, the empty start, the arrow, the tab walk) was **seen on screen repeatedly**,
+with fixes made each time it was looked at. Rules #2 and #3 are still unbuilt.
 
 ---
 

@@ -6,7 +6,7 @@
 >
 > **Room ①'s east wall becomes wood.** Kill the bull, take the fire rune, **burn the wall you are standing in
 > front of.** No flood, no climb. The user's reason: 「그래야 바로 직관적으로 나갈 수 있어.」
-> ⇒ [`burn-out-of-the-bull-room.md`](./burn-out-of-the-bull-room.md) (now building) ·
+> ⇒ [`burn-out-of-the-bull-room.md`](../3.done/burn-out-of-the-bull-room.md) (built) ·
 > [`decisions/the-rune-is-used-where-it-is-won.md`](../../decisions/the-rune-is-used-where-it-is-won.md)
 >
 > **What dies in this doc**, and it is a whole scene, not a paragraph:

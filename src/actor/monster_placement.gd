@@ -259,7 +259,8 @@ func woke_boss_id() -> int:
 
 
 ## **Called once per 20Hz tick** (`world_step.frame()`'s tick branch), never once per 60Hz frame — 3x
-## cheaper, and the granularity (13px of player travel at `MOVE_SPEED_PX` 260) is far finer than the
+## cheaper, and the granularity (3px of player travel per frame at `MOVE_SPEED_PX` 180 — it was 260 when
+## this line was written) is far finer than the
 ## 720px threshold, so nothing is lost by not checking every frame. Putting it on the same clock as
 ## `on_tick` also means a row that wakes this tick gets its first `step()` the same frame (the 60Hz loop
 ## runs after the tick branch, `world_step.frame()`'s own order).

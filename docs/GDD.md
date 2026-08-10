@@ -549,7 +549,7 @@ The points system does not make the *first* departure negotiable — **there is 
 step-one feature. (~~`spell_circle.DEFAULT_RUNE` is still `ELEM_FIRE` — that is the gap~~ — **void, it is
 `Tuning.ELEM_NONE` in code**; the lock landed in `plans/3.done/rune-lock-and-receiving.md`.)
 
-⚠ **And the fixed pair stops being *seated* at boot.** `plans/1.ready/onboarding-and-palette-tabs.md` starts
+⚠ **And the fixed pair stops being *seated* at boot.** `plans/3.done/onboarding-and-palette-tabs.md` (built) starts
 the run with an **empty circle that cannot fire** — the none rune and the basic circle are **owned and in the
 palette**, and assembling them is the first thing the game asks for. **"one spread" above is not in that
 plan's starting kit** (its 문양 tab opens on 「현재 문양이 없습니다」); whether the player still owns spread
@@ -694,7 +694,7 @@ map → pit → bull → fire rune → burn the pit's own back wall → rooster
 
 **The chain lost two links** (decided by the user): the wood wall moved **into** room ①'s east wall, so the
 rune is used where it is won, and **the pit's water escape and zone ②'s trash run both go.**
-⇒ `docs/plans/2.active/burn-out-of-the-bull-room.md`, now building
+⇒ `docs/plans/3.done/burn-out-of-the-bull-room.md`, built
 
 ⇒ **This week the work is linking the chain, not depth.**
 
@@ -704,7 +704,7 @@ rune is used where it is won, and **the pit's water escape and zone ②'s trash 
 | ~~**Fire rune**~~ | **Implemented, not accepted** — `spell_circle.DEFAULT_RUNE` is `ELEM_NONE`; the palette veils any rune not owned instead of offering all of `ELEM_ALL`; the bull's reward grants fire (`Progress.grant_rune`) | `docs/plans/3.done/rune-lock-and-receiving.md` |
 | ~~**Two bosses**~~ | **Implemented, not accepted** — bull and rooster both written and verified headless. Two screen fixes (the slam's fire ring, the phase-2 tell's shape) are unlooked-at, blocked by another session holding the editor bridge | `docs/plans/3.done/stage1-bosses.md` |
 | **Three of water's four** | Only pouring works | `docs/plans/2.active/water-jump-and-escape.md` |
-| ~~**Water in pit ①**~~ | **Built, not accepted — and this row's own promise doesn't hold on the real map.** Reward-then-water order is correct (take the bull's reward, then the wall/water), but **the water doesn't carry the player out** — 300s of pouring lifts them 0px, and an ordinary jump alone already clears the step in 1.6s. The map is `stage1-map-layout.md`'s call, not this row's. ⚠ **The call was made — the escape is dropped and this row leaves the chain** (`2.active/burn-out-of-the-bull-room.md`, now building) | `docs/plans/3.done/stage1-bosses.md` |
+| ~~**Water in pit ①**~~ | **The row itself is gone — closed by the user's decision, seen on screen.** Reward-then-water order was correct (take the bull's reward, then the wall/water), but **the water never carried the player out** — 300s of pouring lifts them 0px, and an ordinary jump alone already cleared the step in 1.6s. ⚠ **The call was made — the escape is dropped and this row leaves the chain** (`3.done/burn-out-of-the-bull-room.md`, built) | `docs/plans/3.done/stage1-bosses.md` |
 | ~~**The wood-wall lock is broken**~~ | **Not a problem — decided by the user.** A runeless blast does open the wall (`spell_sim.gd:633` ignites without `element`), but **the wall is on the far side of pit ①, and the only way out of the pit is the water the bull's death brings** ⇒ **you cannot stand in front of that wall without already holding fire.** **The lock is held by the map's shape, not by the ignition rule** | `3.done/stage1-map-layout.md` |
 | ~~**…and that shape is being deleted**~~ | **Closed, and built.** Moving the wall into room ①'s east face puts it **on the near side of the pit**, reachable the moment you walk in — the bull's own fire (bolt range 480px vs. 15 tiles of room) and a runeless blast would both open it. **The fix**: `WOOD` is `rune_only` now (`burn-out-of-the-bull-room.md` §0) — only the fire rune's own trace or a fire-circle blast ignites it, never monster fire or an elementless blast. The lock moved from map shape to a rule, wood-wide, not door-only | `docs/decisions/the-door-burns-only-from-the-fire-rune.md` |
 | ~~**The screen for receiving the fire rune**~~ | **The premise was wrong — the screen already exists.** `circle_window.gd:158-161` has always placed runes (pick from the palette → click the rune seat), so nothing has to be broken out of the three-pick. **Ownership was the only thing actually missing, and it is filled too now** (same doc — see the "Fire rune" row above) | `docs/plans/3.done/rune-lock-and-receiving.md` |
@@ -721,9 +721,12 @@ taking the fire rune and everything behind it with it, with no error anywhere. I
 this paragraph claimed the chain ran. The door now reserves the boss slots
 (`3.done/left-run-clumps-and-platforms`) — **the fix is in the spawn door, not in the boss docs**, and it is
 driven headless. ⇒ **The claim holds now; it is worth remembering it read as true for a while before it was.** **The one acceptance check this milestone has is "the user starts once
-and reaches the end without getting stuck" — which only the user can run.** The single row still open above
-is water's other three (`2.active`), whose pour in room ③ is also **a constraint on the ending** (that doc's
-own item 4) and **the reason zone ② is placed but unreachable.**
+and reaches the end without getting stuck" — which only the user can run.** ~~The single row still open above
+is water's other three (`2.active`)... and the reason zone ② is placed but unreachable~~ — **void.** Zone ②
+is deleted, not merely unreachable (`3.done/burn-out-of-the-bull-room.md`), and stage 1 now has **no water
+pour at all** — the pit's reward pour was removed with it, and room ③'s own pour (water's remaining three
+axes, `2.active/water-jump-and-escape.md`) is still unbuilt, so it is no longer "a constraint on the ending",
+just an open axis with nothing built against it yet.
 ⇒ **What is left of this milestone is a playthrough, not a build.**
 
 **What was cut**: leveling and the three-pick · wiring the triangle circle · bolt speed · the shop · **town.**
