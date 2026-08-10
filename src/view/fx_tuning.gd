@@ -1071,8 +1071,22 @@ const BOOK_FOLD := Color(0.03, 0.035, 0.055, 1.0)
 ##   **outer end** the rings occupy is here. Put a constant per ring and they overlap the day a 3-layer circle arrives.
 const CIRCLE_AREA_PAD_PX := 14.0
 const CIRCLE_DISC_RATIO := 0.94
-const CIRCLE_RING_ZONE := 0.80
-const CIRCLE_RUNE_RATIO := 0.17
+## **"한 칸씩 바깥으로" (user) is one derived rule, not a second tuned number** — the round rune sits dead
+##  center, so growing it has no direction to move in; what has to move is where the ring zone *starts*.
+##  `circle_layout.layer_bands()`'s `PIC_ROUND` branch now begins this zone just outside the grown rune's
+##  own edge (`CIRCLE_RING_GAP_FRAC` below is the "one칸" gap) instead of at the frame center, so raising
+##  `CIRCLE_RUNE_RATIO` moves both layer seats out with it — there is no second offset to hand-keep in step.
+##  **Eye-tune this one number** (`onboarding-and-palette-tabs.md` names every value here TBD).
+const CIRCLE_RING_ZONE := 0.88
+## **Grown — the user: "룬이 좀 더 커야 돼. 훨씬 더 크게 박혀야 돼."** `RUNE_ART_FRAC` (below) sizes only
+##  the picture inside this radius; this ratio also sizes the click target and the empty-seat ring, so
+##  growing it moves all three together. **Eye-tune this one number.**
+const CIRCLE_RUNE_RATIO := 0.26
+## **The "one칸" gap between the rune's own edge and where the layer rings begin** (user: "룬 자리 · 1번
+##  문양 자리 · 2번 문양 자리가 각각 한 칸씩 바깥으로") — a ratio of the frame radius, the same unit every
+##  other value in this block already uses. See `CIRCLE_RING_ZONE`'s own comment for how this one number
+##  moves both layer seats without a second constant to keep in step. **Eye-tune this one number.**
+const CIRCLE_RING_GAP_FRAC := 0.06
 const CIRCLE_GLYPH_RATIO := 0.115
 ## The rune slot's inner core. It is "a wick burning white", so it must be smaller than the outer glow
 ##  (the same idiom as the muzzle and the flash).
@@ -1156,9 +1170,12 @@ const GLYPH_SPAWN_ANGLE_STEP_FRAC := 0.5
 ##  **Keep the color and the shape different** — the same and the two meanings mix.
 const SLOT_EMPTY := Color(0.55, 0.62, 0.78, 0.55)
 const SLOT_EMPTY_PX := 1.5
-## The **plus mark** drawn in an empty slot. Without the cross it is just a faint circle and reads only as "a place".
-const SLOT_PLUS_RATIO := 0.5
-const SLOT_PLUS_PX := 1.5
+## **The plus mark is gone — the user: "문양이 도넛 모양으로 껴져야 되는데 위쪽에 플러스 표시가 왜 있는지
+##  잘 모르겠어."** This overturns the reasoning that used to live here (a lone ring reads only as "a place",
+##  not "you can put something here") — with the rune grown and the two layer rings pushed outward around it
+##  (`CIRCLE_RING_GAP_FRAC`), an empty layer's ring now nests against the rune's own disc and the frame, so the
+##  stack itself reads as a donut without a mark drawn inside it. **Deleted, not left unused** —
+##  `SLOT_PLUS_RATIO`/`SLOT_PLUS_PX` no longer exist so nothing can quietly wire the cross back in.
 
 ## **The circle you press is bigger than the symbol.** Kept the same as the symbol you have to aim exactly at an
 ##  empty layer for it to click, and that becomes "I pressed it and nothing happened". Grown too far it eats the

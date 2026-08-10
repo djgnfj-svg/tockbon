@@ -712,14 +712,24 @@ func _draw_circle_symbol(at: Vector2, r: float) -> void:
 
 
 ## **An empty seat — "you can place here".**
-##  A faint ring plus a **plus sign.** Draw only the ring and it reads as "a seat" and "you can place here"
-##  does not read.
+##  **The plus is gone — the user: "문양이 도넛 모양으로 껴져야 되는데 위쪽에 플러스 표시가 왜 있는지
+##  잘 모르겠어."** This overturns what this function used to argue (a ring alone reads only as "a seat",
+##  not as an invitation to place). With the rune grown and the two layer rings pushed outward around it
+##  (`Fx.CIRCLE_RING_GAP_FRAC`), an empty layer's ring now sits nested against the rune's own disc and the
+##  frame — a donut stack, not a lone circle — so the ring alone reads as "you can put something here"
+##  with no mark drawn inside it.
 ##  Fill it and it is confused with the TERMINAL disc — being empty is part of the meaning.
 func _draw_empty_slot(at: Vector2, r: float) -> void:
+	_draw_slot_ring(at, r)
+
+
+## **Split out of `_draw_empty_slot` so a recording subclass can assert the ring itself painted, with the
+##  arguments it was actually given** — the `notice_rect` lesson (CLAUDE.md): asserting a pure geometry
+##  function alone lets `_draw()` hand it something else entirely, and 320 checks stayed green over exactly
+##  that hole once already. `net_circle` captures this call's `at`/`r` and compares them to
+##  `circle_layout.layer_bands()`'s own `seat` and `Layout.glyph_radius(area)`.
+func _draw_slot_ring(at: Vector2, r: float) -> void:
 	draw_circle(at, r, Fx.SLOT_EMPTY, false, Fx.SLOT_EMPTY_PX)
-	var a := r * Fx.SLOT_PLUS_RATIO
-	draw_line(at - Vector2(a, 0.0), at + Vector2(a, 0.0), Fx.SLOT_EMPTY, Fx.SLOT_PLUS_PX)
-	draw_line(at - Vector2(0.0, a), at + Vector2(0.0, a), Fx.SLOT_EMPTY, Fx.SLOT_PLUS_PX)
 
 
 # ══════════════════════════════════════════════════════════════════
