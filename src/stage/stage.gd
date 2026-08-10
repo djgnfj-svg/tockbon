@@ -989,11 +989,6 @@ func _on_ticked(jump_press: bool = false) -> void:
 	_prev_on_ground = _char.on_ground
 	_prev_hp = _char.hp
 
-	# **This is the pour's only heartbeat.** Call it from `_physics_process` and it pours `TICK_DIVIDER` (3)
-	#  times faster (`water_source.tick()`'s header) — exactly once per tick.
-	if _room1_reward_water != null:
-		_room1_reward_water.tick(_grid)
-
 	# **The bull's reward, automatic — session correction.** `_take_boss_reward()` used to have exactly one
 	#  caller, the debug key L (`_input.reward_taken_requested`), so a player who never opens the debug
 	#  layer kills the bull and gets nothing: no fire rune, no water, no way to burn the wood wall, and the
