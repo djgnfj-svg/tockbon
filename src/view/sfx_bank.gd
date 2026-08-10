@@ -14,6 +14,17 @@ extends Node
 ## the one thing a headless net can read — CLAUDE.md's own line for this feature is "whether it rang" is
 ## measurable, "does it sound good" is not. Counting before the switch check means a net can tell "the call
 ## arrived" from "the switch ate it", instead of both cases reading as zero.
+##
+## **`--headless` skips the real `AudioStreamPlayer.play()` call too, not just counting it — measured, not
+## guessed.** The dummy driver `--headless` boots with never advances its mix step far enough for a played
+## clip to finish inside one net's lifetime (a net quits within a second of triggering it), so every
+## `AudioStreamPlaybackWAV` `.play()` creates stayed alive with no owner to release it — `net_sfx` alone
+## leaked 36 `ObjectDB` instances this way, and the same wiring inside `stage.gd`'s real fire/blast/jump/
+## land/hit hooks dirtied a dozen unrelated integration nets that simply happen to drive the whole `Stage`
+## (`net_gate`/`net_render`/`net_town`/etc. — none of them mention audio, all of them fire or move a
+## character). `DisplayServer.get_name() == "headless"` is the engine's own signal for exactly this case,
+## the same one a real dedicated-server build would need — not a test-only branch, a "is there a screen (and
+## therefore speakers) at all" question, which is the right question for `src/view/` to ask on its own.
 
 const Fx := preload("res://src/view/fx_tuning.gd")
 
@@ -25,6 +36,9 @@ const NAME_HIT := "hit"
 
 var _players: Array[AudioStreamPlayer] = []
 var _next_voice := 0
+## **Cached once, not re-queried per call** — `DisplayServer.get_name()` does not change mid-run, and
+##  `_play()` is a hot path (`play_fire()` fires on every click, this repo's own header for that path).
+var _headless := false
 
 var _stream_fire: AudioStreamWAV
 var _stream_blast: AudioStreamWAV
@@ -40,6 +54,7 @@ var _play_counts: Dictionary = {
 
 
 func _ready() -> void:
+	_headless = DisplayServer.get_name() == "headless"
 	_stream_fire = _make_tone(Fx.SFX_FIRE_SEC, Fx.SFX_FIRE_FREQ_START, Fx.SFX_FIRE_FREQ_END)
 	_stream_blast = _make_noise(Fx.SFX_BLAST_SEC, Fx.SFX_BLAST_DECAY_POW)
 	_stream_jump = _make_tone(Fx.SFX_JUMP_SEC, Fx.SFX_JUMP_FREQ_START, Fx.SFX_JUMP_FREQ_END)
@@ -86,7 +101,11 @@ func _play(name: String, stream: AudioStreamWAV, volume_db: float) -> void:
 	# **Counted above this line, silenced below it.** A net flips this constant off and on to prove the two
 	#  halves are actually separate — leave the counter after the guard and "the switch ate it" and "the call
 	#  never came" both read as the same zero.
-	if not Fx.SFX_ENABLED or stream == null or _players.is_empty():
+	# **`_headless` is the same shape as the `SFX_ENABLED` guard, and deliberately not folded into it** —
+	#  the user's own switch and the engine's own "is there a screen" fact are two different reasons to skip
+	#  playback, and a net must be able to flip one without the other (`net_sfx`'s own inversion of
+	#  `SFX_ENABLED` would prove nothing if this line silently depended on it too).
+	if not Fx.SFX_ENABLED or _headless or stream == null or _players.is_empty():
 		return
 	# **Round-robin, not "find an idle one".** Scanning for an idle voice is a search on every call; this is
 	#  one index and a modulo. The failure mode — cutting the oldest voice's tail one call early — is
