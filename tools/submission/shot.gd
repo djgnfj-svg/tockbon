@@ -23,6 +23,7 @@ const StageDefs := preload("res://src/stage/stage_defs.gd")
 const Tuning := preload("res://src/sim/sim_tuning.gd")
 const Glyph := preload("res://src/sim/glyph_defs.gd")
 const SpellCircle := preload("res://src/actor/spell_circle.gd")
+const Palette := preload("res://src/view/palette_layout.gd")
 
 const OUT := "res://docs/submission/img/"
 
@@ -45,11 +46,19 @@ const HOLE_CX := 232
 ## Frames to wait after firing before the shutter opens. **Different per order, and that is
 ## the point** — `확산 → 폭발` has to fly, split into eight, and let those eight land, so its
 ## moment is later than `폭발 → 확산`, whose big detonation is at first contact.
-## Tuned by eye against the saved frames; there is no way to derive it.
+## Tuned by eye against a sweep (`SWEEP` below), 30/45/60/75/90; there is no way to derive it.
+##
+## **Waiting for the eight to detonate does not give a picture** — measured. Each fragment flies its own
+##  arc and lands at its own time, so by frame 90 the two that have gone off are at opposite edges of the
+##  frame with the rest still in the air, and one of them has hit the character (90/100 on the gauge).
+##  The moment that shows the order is the **fan itself**, at 45.
 const IMPACT_FRAMES := {
-	"spread-blast": 86,
-	"blast-spread": 22,
+	"spread-blast": 45,
+	"blast-spread": 30,
 }
+
+## Temporary sweep: non-empty means every listed frame is saved instead of the tuned one. Empty in commits.
+const SWEEP: Array[int] = []
 
 const STAND_PX := Vector2i(200 * Tuning.CELL_PX, FLOOR_CY * Tuning.CELL_PX - 32)
 ## Aimed into the floor ahead of the character. The crater is the picture.
@@ -86,6 +95,11 @@ func _shoot_real_map_window() -> void:
 		Glyph.pack([Glyph.SPREAD_C, Glyph.BLAST_C]))
 	await _wait(4)
 	_stage._toggle_assembly()
+	# **Opened on 문양, not on the 진 tab it resets to.** The overview figure's caption calls the right pane
+	#  "the palette you pick 진·룬·문양 from", and the 진 tab holds a single ring on an otherwise empty page —
+	#  the picture said "there is nothing to choose". This is the same state a click on that tab reaches
+	#  (`_click_palette` writes `_open_tab`); nothing here is drawn that play cannot reach.
+	_stage._circle_window._open_tab = Palette.KINDS.find(Palette.KIND_GLYPH)
 	await _wait(30)
 	await _save("circle-window")
 	_stage._toggle_assembly()
@@ -98,6 +112,11 @@ func _shoot_real_map_window() -> void:
 func _shoot_pair(loadout: int, name: String) -> void:
 	await _build_arena()
 	_stage._set_loadout(loadout)
+	# **Seated again after the preset, not only in `_build_arena`.** The arena is entered through the town,
+	#  and the town's own settling steps land during the 25 frames that follow the first seating — the two
+	#  order figures came back with the **none** rune (a nail, not a flame) while `rune_at(0)` read fire in a
+	#  headless probe of the same calls. Seating last is what the picture actually shows.
+	_seat_fire()
 	await _wait(4)
 
 	_stage._toggle_assembly()
@@ -112,8 +131,16 @@ func _shoot_pair(loadout: int, name: String) -> void:
 	#  eight detonations spread across the floor, or one big one. So one shot, and the frame is
 	#  taken while it is going off.
 	_stage._fire_at(AIM_PX)
-	await _wait(IMPACT_FRAMES[name])
-	await _save("part-fx-" + name)
+	if SWEEP.is_empty():
+		await _wait(IMPACT_FRAMES[name])
+		await _save("part-fx-" + name)
+		return
+	# Temporary: one firing, many shutters, so `IMPACT_FRAMES` can be picked by eye instead of guessed.
+	var at := 0
+	for f: int in SWEEP:
+		await _wait(f - at)
+		at = f
+		await _save("sweep-%s-%d" % [name, f])
 
 
 ## The town's row carries no monster table, so entering it is how the arena gets a world with
@@ -155,8 +182,11 @@ func _build_arena() -> void:
 	_stage._town_view.visible = false
 	# **The room is the town's; the sky should not be.** The figure sits beside the overview's
 	#  farm screenshot, and the town's dusk ruins behind it read as a different game.
-	var stage1: Dictionary = StageDefs.row(StageDefs.STAGE_1)
-	_stage._sky.set_backdrop(stage1["bg_far"], stage1["bg_near"])
+	# **One layer, one argument.** The near layer was deleted along with its constant, and this call kept
+	#  passing two — the error was raised inside `_wait`'s await, so the run carried on and both order
+	#  figures shipped with the **town's** dusk sky behind them. `--headless` would not have shown it either;
+	#  the engine's exit code did, at 255, after the pictures were already on disk.
+	_stage._sky.set_backdrop(StageDefs.row(StageDefs.STAGE_1)["bg_far"])
 	_seat_fire()
 	_stage._char.place(STAND_PX.x, STAND_PX.y)
 	# **The onboarding hint is derived from the step every frame, so hiding the node does

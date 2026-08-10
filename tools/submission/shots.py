@@ -29,7 +29,7 @@ ORDERS = ["spread-blast", "blast-spread"]
 # The assembly window's left pane, in the 1920x1080 capture. The circle is drawn centred in
 # it, so the crop is a square around the circle rather than the pane's own rectangle —
 # cropping the pane would carry its empty right half into a figure that is already wide.
-CIRCLE_CROP = (120, 85, 940, 905)
+CIRCLE_CROP = (125, 80, 905, 860)
 # The world half. **Its left edge is past x=430 deliberately** — the health gauge sits in the
 # bottom-left of every capture, and a gauge inside a figure about terrain is noise.
 FX_CROP = (560, 400, 1700, 960)

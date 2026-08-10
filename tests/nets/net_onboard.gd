@@ -394,7 +394,7 @@ func _levelup_hint_shows_once_and_only_once(t) -> void:
 	root.call("_physics_process", 1.0 / 60.0)
 	t.ok(onboard_view.visible, "픽이 하나 쌓이면 안내가 뜬다")
 	t.eq(String(onboard_view.get("message")), Fx.LEVELUP_ONBOARD_TEXT, "P를 누르라는 문구다")
-	t.eq(String(onboard_view.get("key_text")), Fx.LEVELUP_ONBOARD_KEY_TEXT, "키 캡이 P를 가리킨다")
+	t.eq(String(onboard_view.get("key_text")), Fx.LEVELUP_ONBOARD_KEY_TEXT, "키 캡이 V를 가리킨다")
 
 	# -- P actually opens it: the hint disappears and is marked seen in the same call --
 	root.call("_toggle_pick")

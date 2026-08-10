@@ -36,7 +36,7 @@ var show_tab_hint := true
 
 ## **Which key the cap and the arrow point at.** Defaults to `Fx.ONBOARD_KEY_TEXT` ("Tab") — the assembly
 ## walkthrough's own key. **A field, not a second draw path** — the level-up walkthrough
-## (`stage._tick_onboard()`) points the same box at `Fx.LEVELUP_ONBOARD_KEY_TEXT` ("P") instead; a copy of
+## (`stage._tick_onboard()`) points the same box at `Fx.LEVELUP_ONBOARD_KEY_TEXT` ("V") instead; a copy of
 ## `_draw_onboard_key` for that beat would drift from this one's panel/font/edge the day either is retuned.
 var key_text := Fx.ONBOARD_KEY_TEXT
 

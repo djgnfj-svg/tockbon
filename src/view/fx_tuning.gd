@@ -2530,7 +2530,7 @@ const GATE_LOCKED_TEXT := "마법진을 먼저 조립하세요"
 ## does; only the sentence and the key cap's text (`LEVELUP_ONBOARD_KEY_TEXT`, via `onboard_view.key_text`)
 ## differ from the assembly walkthrough's own pair.
 const LEVELUP_ONBOARD_TEXT := "P를 눌러 문양을 고르세요"
-const LEVELUP_ONBOARD_KEY_TEXT := "P"
+const LEVELUP_ONBOARD_KEY_TEXT := "V"
 
 ## The "Tab" key cap — a small rounded-looking chip with the key name inside. **Grown with the box** —
 ## 44x26 read as an afterthought at arm's length; this is the size a HUD label elsewhere in this file
