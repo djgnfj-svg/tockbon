@@ -59,6 +59,7 @@ func run(t) -> void:
 	await _the_walkthrough_runs_once_end_to_end(t)
 	await _research_door_is_closed_and_prompts_prep(t)
 	await _gate_stays_shut_until_the_circle_can_fire(t)
+	await _levelup_hint_shows_once_and_only_once(t)
 
 
 ## **The inversion of the whole feature** (design §8: "Auto-advance is onboarding-only. Outside it,
@@ -176,7 +177,9 @@ func _onboard_view_is_really_wired_by_the_shell(t) -> void:
 	root.queue_free()
 
 
-## **The whole walkthrough, driven end to end on a real, treed `Stage`.** Arrow shows before Tab; Tab opens
+## **The whole walkthrough, driven end to end on a real, treed `Stage`.** Runs entirely **in the town now**
+## (user decision: 「온보딩은 마을 + 레벨업 했을 때만 있으면 됨」 — moved off `_leave_town()`, onto town
+## entry, `stage._rebuild()`'s own header). Arrow shows the instant the town is built, before Tab; Tab opens
 ## the window on 진 and hides the arrow; placing 일반진 advances to 룬; placing 무속성 advances to 문양;
 ## pressing 완성 glows and, once the glow ends, closes the window and marks onboarding seen. Acceptance
 ## 12/13 in one pass.
@@ -191,14 +194,17 @@ func _the_walkthrough_runs_once_end_to_end(t) -> void:
 
 	var pr: Progress = (root.get("_world") as Object).call("progress")
 	t.ok(not pr.has_seen_onboarding(), "전제 — 아직 온보딩을 안 봤다")
+	t.ok(bool(root.get("_in_town")), "전제 — 게임은 마을에서 시작한다")
 
-	root.call("_leave_town")
+	# **`_onboard_step` is already ARROW the instant the town is built** — `_ready()`'s own `reset_stage()`
+	#  call reaches `_rebuild()`'s town-entry check before this net ever touches the root, so there is no
+	#  `_leave_town()` call here any more to *start* it (the old contract this net used to pin).
 	# **`_onboard_view.visible` is set by `_tick_onboard()`, called from `_physics_process()`** — `pump_frames`
 	#  only advances the *idle* frame (`await process_frame`), so a state whose only visible effect lives in
 	#  a physics-only function needs `_physics_process` driven directly, the same established idiom
 	#  `net_gate.gd`'s own `_wired_root` checks use throughout.
 	root.call("_physics_process", 1.0 / 60.0)
-	t.eq(int(root.get("_onboard_step")), 0, "떠나자마자 ARROW 단계다 (전제 — ONBOARD_ARROW == 0)")
+	t.eq(int(root.get("_onboard_step")), 0, "마을에 들어오자마자 ARROW 단계다 (전제 — ONBOARD_ARROW == 0)")
 	var onboard_view: Control = root.get("_onboard_view")
 	t.ok(onboard_view.visible, "화살표가 보인다 (아직 Tab을 안 눌렀다)")
 	var circle_window: CircleWindow = root.get("_circle_window")
@@ -256,6 +262,7 @@ func _the_walkthrough_runs_once_end_to_end(t) -> void:
 	root.call("_physics_process", 1.0 / 60.0)
 	t.eq(int(root.get("_onboard_step")), 5, "OFF로 떨어졌다 (ONBOARD_OFF == 5)")
 	t.ok(pr.has_seen_onboarding(), "온보딩을 봤다고 기록됐다")
+	t.ok(bool(root.get("_in_town")), "전 과정이 마을을 떠나지 않고 끝났다 (스테이지 진입이 더는 필요 없다)")
 
 	# **Outside onboarding, nothing auto-advances any more** (acceptance 13, the other direction from the
 	#  untreed check above — this time end to end on the real shell). Opening the window again and placing
@@ -271,6 +278,15 @@ func _the_walkthrough_runs_once_end_to_end(t) -> void:
 	t.eq(circle.circle_id(), CircleDefs.CIRCLE_ROUND, "온보딩이 끝난 뒤에도 클릭은 여전히 놓는다")
 	t.eq(int(circle_window.get("_open_tab")), Palette.KINDS.find(Palette.KIND_CIRCLE),
 		"하지만 탭은 진에 그대로 머문다 (자동 전환이 다시는 안 일어난다)")
+
+	# **`_leave_town()` no longer touches `_onboard_step` at all** (its own header, moved to `_rebuild()`'s
+	#  town-entry check) — leaving now that the walkthrough is already marked seen must not restart it, and
+	#  must not leave the arrow/key painted over stage 1.
+	root.call("_leave_town")
+	root.call("_physics_process", 1.0 / 60.0)
+	t.ok(not bool(root.get("_in_town")), "떠난 뒤에는 정말 스테이지 1에 있다")
+	t.eq(int(root.get("_onboard_step")), 5, "떠나도 OFF 그대로다 (ONBOARD_OFF == 5, 다시 켜지지 않는다)")
+	t.ok(not onboard_view.visible, "스테이지 1에서는 화살표도 안 뜬다")
 
 	t.root.remove_child(root)
 	root.queue_free()
@@ -341,6 +357,58 @@ func _gate_stays_shut_until_the_circle_can_fire(t) -> void:
 	root.call("_interact")
 	t.eq(int(root.get("_stage_id")), StageDefs.STAGE_1,
 		"조립하고 나면 같은 자리 같은 E가 스테이지 1을 연다")
+
+	t.root.remove_child(root)
+	root.queue_free()
+
+
+## **The level-up beat, `stage._levelup_hint_showing()`** (user decision: "온보딩은 마을 + 레벨업 했을
+## 때만 있으면 됨"). A pending pick with nothing opened yet shows the box pointed at P; opening one (however
+## it closes afterward) marks it seen and it never shows again, even with another pick still pending.
+##
+## **Driven on the same `_onboard_view` node the assembly walkthrough uses** — one box, and this is the
+## proof the two beats do not paint over each other: the walkthrough only ever runs in town (this net's own
+## other checks), this one only ever reads true outside it.
+func _levelup_hint_shows_once_and_only_once(t) -> void:
+	var scene: PackedScene = load(STAGE_SCENE)
+	t.ok(scene != null and scene.can_instantiate(), "무대 씬을 세울 수 있다 (전제)")
+	if scene == null or not scene.can_instantiate():
+		return
+	var root := scene.instantiate()
+	t.root.add_child(root)
+	await t.pump_frames(2)
+
+	var pr: Progress = (root.get("_world") as Object).call("progress")
+	# **Leaves town without going through the assembly walkthrough** — this check is about the *other*
+	#  onboarding beat, and calling `_leave_town()` directly (the same door `_gate_stays_shut...` and the
+	#  walkthrough check itself use to reach stage 1) sidesteps a dependency on that one finishing first.
+	root.call("_leave_town")
+	root.call("_physics_process", 1.0 / 60.0)
+	t.ok(not bool(root.get("_in_town")), "전제 — 스테이지 1에 있다")
+
+	var onboard_view: Control = root.get("_onboard_view")
+	t.ok(not onboard_view.visible, "전제 — 레벨업 전에는 아무 안내도 안 뜬다")
+	t.ok(not pr.has_seen_pick_onboarding(), "전제 — 아직 한 번도 픽을 연 적이 없다")
+
+	pr.pending_picks = 1
+	root.call("_physics_process", 1.0 / 60.0)
+	t.ok(onboard_view.visible, "픽이 하나 쌓이면 안내가 뜬다")
+	t.eq(String(onboard_view.get("message")), Fx.LEVELUP_ONBOARD_TEXT, "P를 누르라는 문구다")
+	t.eq(String(onboard_view.get("key_text")), Fx.LEVELUP_ONBOARD_KEY_TEXT, "키 캡이 P를 가리킨다")
+
+	# -- P actually opens it: the hint disappears and is marked seen in the same call --
+	root.call("_toggle_pick")
+	root.call("_physics_process", 1.0 / 60.0)
+	t.ok(pr.is_pick_open(), "전제 — P가 실제로 픽을 열었다")
+	t.ok(pr.has_seen_pick_onboarding(), "P를 누르면 봤다고 기록된다")
+	t.ok(not onboard_view.visible, "픽 창이 열린 순간 안내는 사라진다")
+
+	# -- closing without taking one leaves the pick pending (`decline()` untouches `pending_picks`), and the
+	#  hint stays gone --
+	pr.decline()
+	t.eq(pr.pending_picks, 1, "전제 — 취소해도 픽은 여전히 대기 중이다")
+	root.call("_physics_process", 1.0 / 60.0)
+	t.ok(not onboard_view.visible, "픽이 다시 쌓여 있어도, 한 번 봤으니 다시는 안 뜬다")
 
 	t.root.remove_child(root)
 	root.queue_free()

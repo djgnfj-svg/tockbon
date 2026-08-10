@@ -622,7 +622,12 @@ func _toggle_pick() -> void:
 		_circle_window.toggle()
 	# **`owned` comes from the circle, not from `Progress`** — `Progress` knows nothing about circles
 	#  (that file's own comment), the same boundary it holds against monsters and glyphs elsewhere.
-	pr.open_pick(_circle.glyph_list())
+	# **The level-up hint's own "seen" door** — marked only when a pick actually opened (`open_pick()`'s
+	#  return, not assumed from the guards above passing), the same "read the real result, not the guard"
+	#  discipline as `_take_boss_reward()`'s own `boss_died()` check. Idempotent past the first press
+	#  (`mark_pick_onboarding_seen()`'s own header), so no guard is needed here against calling it twice.
+	if pr.open_pick(_circle.glyph_list()):
+		pr.mark_pick_onboarding_seen()
 
 
 ## ESC. **Closes whichever of the three key-opened windows is open, and only that one** (user request:
@@ -929,11 +934,31 @@ func _town_gate_locked() -> bool:
 		and not _circle.can_fire() and not _world.progress().has_seen_onboarding()
 
 
+## **The level-up beat, in the same box** (user decision: 「온보딩은 마을 + 레벨업 했을 때만 있으면 됨」).
+## **A bare condition, not a step machine** — unlike the assembly walkthrough above there is nothing to
+## advance through, only "a pick is waiting, nobody has opened one yet, and nothing else already claims the
+## box". `not pr.is_pick_open()` hides it the instant P is actually pressed (`_toggle_pick()` below marks
+## `has_seen_pick_onboarding()` in that same call), and `not _circle_window.visible` keeps it from painting
+## under the assembly window if that is open with a pick also pending.
+## **Cannot collide with the arrow/locked beats above** — this only ever reads true outside the town
+## (`pending_picks` is always 0 in town; `Progress.reset()` zeroes it on every way back in), and the arrow
+## and the gate-locked line only ever read true inside it.
+func _levelup_hint_showing() -> bool:
+	var pr := _world.progress()
+	return pr.pending_picks > 0 and not pr.has_seen_pick_onboarding() and not pr.is_pick_open() \
+		and not _circle_window.visible
+
+
 func _tick_onboard() -> void:
 	var locked := _town_gate_locked()
-	_onboard_view.visible = _onboard_step == ONBOARD_ARROW or locked
-	_onboard_view.show_tab_hint = _onboard_step == ONBOARD_ARROW
-	_onboard_view.message = Fx.GATE_LOCKED_TEXT if locked else Fx.ONBOARD_TEXT
+	var levelup_hint := _levelup_hint_showing()
+	_onboard_view.visible = _onboard_step == ONBOARD_ARROW or locked or levelup_hint
+	_onboard_view.show_tab_hint = _onboard_step == ONBOARD_ARROW or levelup_hint
+	_onboard_view.key_text = Fx.LEVELUP_ONBOARD_KEY_TEXT if levelup_hint else Fx.ONBOARD_KEY_TEXT
+	if levelup_hint:
+		_onboard_view.message = Fx.LEVELUP_ONBOARD_TEXT
+	else:
+		_onboard_view.message = Fx.GATE_LOCKED_TEXT if locked else Fx.ONBOARD_TEXT
 	if _onboard_step > ONBOARD_ARROW and _onboard_step < ONBOARD_OFF and not _circle_window.visible:
 		if _onboard_step == ONBOARD_DONE:
 			_world.progress().mark_onboarding_seen()
@@ -1262,9 +1287,8 @@ func _rebuild(end_the_run: bool) -> void:
 	_boss = null
 	_boss_bar.clear_boss()
 	# **Onboarding dies on every rebuild** — R, going home and the chain all route through here, and this is
-	#  the one call site all three share (`_onboard_step`'s own header). `_leave_town()` is the only place
-	#  that restarts it, and it does so *after* calling `reset_stage()` (which reaches this function), so the
-	#  order here does not race that decision.
+	#  the one call site all three share (`_onboard_step`'s own header). The town-entry check right after
+	#  `_build_room()` below is the only place that restarts it, so the order here does not race that decision.
 	_onboard_step = ONBOARD_OFF
 	_circle_window.set_onboarding(false)
 	_blast_count = 0
@@ -1273,6 +1297,17 @@ func _rebuild(end_the_run: bool) -> void:
 	#  is not (that one strands a `mouse_filter` over the whole viewport; this one strands nothing).
 	_room3_gate_open = false
 	_build_room()
+	# **The town-entry moment — onboarding starts here now, not at the departure gate** (user decision:
+	#  「온보딩은 마을 + 레벨업 했을 때만 있으면 됨」). Every door back to the town — boot's own initial
+	#  `reset_stage()` call, `enter_town()`, and `R` while already standing here — routes through this one
+	#  `_rebuild()`, so this single check covers all three; a copy at each door would be the exact
+	#  "adding one thing means editing several places" shape CLAUDE.md warns against.
+	#  **`has_seen_onboarding()`, not a second flag** — the same single source `_town_gate_locked()` below
+	#  already reads, so "has the walkthrough run" cannot read differently at the door that starts it than at
+	#  the door that blocks leaving without it.
+	if _in_town and not _world.progress().has_seen_onboarding():
+		_onboard_step = ONBOARD_ARROW
+		_circle_window.set_onboarding(true)
 	# **Resynced after the spawn, not left at whatever the old character was doing.** Skip this and a
 	#  character who was airborne the instant before `R` was pressed spawns grounded next tick, and
 	#  `_on_ticked()` reads that as a landing that never happened — the same "false edge across a reset" shape
@@ -1447,15 +1482,13 @@ func enter_town() -> void:
 ##  comment) and "you leave carrying the build you chose" is the gate's entire meaning.
 ## **Which stage the gate leads to is one constant, and it is here.** There is one stage, so it is `STAGE_1`;
 ##  the day there are several this becomes the town gate's own choice, not a second `bool`.
+## **No longer where onboarding starts** (user decision: 「마을 + 레벨업만」) — `_rebuild()`'s own
+## town-entry check (its header) is the one place that starts it now, and by the time this door is
+## reachable at all `_town_gate_locked()` already required either the walkthrough finished or the circle
+## can fire on its own, so nothing here needs to touch `_onboard_step`.
 func _leave_town() -> void:
 	_stage_id = StageDefs.STAGE_1
 	reset_stage()
-	# **The stage-1 entry moment — onboarding starts here, once.** `reset_stage()` above already zeroed
-	#  `_onboard_step` back to `ONBOARD_OFF` (the same `_rebuild()` call `R` itself makes); this is the one
-	#  place that restarts it, and only when `Progress._onboarding_seen` says it has never finished.
-	if not _world.progress().has_seen_onboarding():
-		_onboard_step = ONBOARD_ARROW
-		_circle_window.set_onboarding(true)
 
 
 ## **The other half of the "seat ⊆ owned" invariant** — called only after something has just revoked

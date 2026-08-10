@@ -210,6 +210,24 @@ func mark_onboarding_seen() -> void:
 	_onboarding_seen = true
 
 
+## **The other onboarding beat — "마을 + 레벨업 했을 때만 있으면 됨" (user decision).** The assembly
+## walkthrough above teaches the circle; this one teaches the door into `pending_picks` (P), which a first
+## level-up otherwise hands the player with no indication of how to open it. Same shape as
+## `_onboarding_seen` right above it for the same reason: **a bare `bool`, not a step machine** — there is
+## nothing to advance through, only "has P been pressed with a pick waiting, ever" — and it **survives
+## `reset()` and `next_stage()` both**, deliberately, the same discipline that keeps `_onboarding_seen` from
+## replaying on every `R` (`reset()`'s own comment on that field).
+var _pick_onboarding_seen := false
+
+
+func has_seen_pick_onboarding() -> bool:
+	return _pick_onboarding_seen
+
+
+func mark_pick_onboarding_seen() -> void:
+	_pick_onboarding_seen = true
+
+
 ## **A loop, not a single comparison** — one XP award can cross more than one threshold at once (a big kill,
 ##  or several kills landing in the same tick), and each crossing must raise `pending_picks` by one. The
 ##  remainder always carries over: this never rounds `xp` down to 0 at a level-up, only subtracts exactly
@@ -486,8 +504,8 @@ func take(glyph_id: int) -> bool:
 ##
 ## **This function is a list of what a stage owns, and it is deliberately two lines long.** A run is
 ##  `town -> 1 -> 2 -> 3` (GDD's session loop), so **xp, level, money, `pending_picks`, `run_ticks`,
-##  `damage_dealt`, `gems`, `_unlocked`, `_owned_runes`, `_owned_circles`, `_onboarding_seen` and
-##  `_gems_at_run_start` all carry across.** Reaching
+##  `damage_dealt`, `gems`, `_unlocked`, `_owned_runes`, `_owned_circles`, `_onboarding_seen`,
+##  `_pick_onboarding_seen` and `_gems_at_run_start` all carry across.** Reaching
 ##  for `reset()` here instead — which is the obvious thing to do, since the shell already had exactly one
 ##  rebuild path — **strips every 원석 and every unlock earned in stage 1 the instant you walk into stage 2,
 ##  with nothing barking.** That is the single most dangerous edit that could be made to this file.
@@ -551,3 +569,6 @@ func reset() -> void:
 	#  give above, one level down to a single fact instead of a pool. Clearing it on every `R` would show the
 	#  onboarding walkthrough again on every reset, which reads as the tutorial being broken, not as a fresh
 	#  run. `net_progress` measures that it survives `reset()` and `next_stage()` both, by value.
+	# **`_pick_onboarding_seen` is not here either, for the identical reason** — the level-up hint's own
+	#  header states it survives both doors; clearing it here would be the same tutorial-looks-broken bug
+	#  one field over.
