@@ -1377,7 +1377,7 @@ func _apply_room(room: Dictionary) -> void:
 	#  source-text scan for the literal `BG_TOWN_FAR_TEXTURE` in this file. That scan is gone, replaced by a
 	#  driven read of the node's own textures. See the `bg_far` comment in `stage_defs.gd`.
 	#  ⇒ **Stage 2 no longer needs a line here.** Nothing in this function asks which room it is building.
-	_sky.set_backdrop(String(room["bg_far"]), String(room["bg_near"]))
+	_sky.set_backdrop(String(room["bg_far"]))
 	# **Cleared with the room.** A bench's line surviving a departure would be the town talking over stage 1.
 	_town_message = ""
 	# **The window closes with the room.** Leaving it open would put the town's parchment panel over stage 1,

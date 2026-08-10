@@ -84,6 +84,22 @@ var _confirm_ticks := 0
 ## twelve ids total, six with art) is the normal case `_draw_pick_card_glyph` falls back on, not an error.
 var _socket_glyph_tex: Dictionary = {}
 
+## **The layer ring art, the same map `circle_window._ring_tex` holds** — the user: "3택하는 화면에서
+## 골랐을때 옆에 이미지에서 바로바로 적용된 모습이 보였으면 좋겠어." The preview drew the small procedural
+## symbol at the 12-o'clock seat while the assembly window draws the ring picture filling the band, so the
+## two screens disagreed about what a placed glyph even looks like. Loaded through the same shared static
+## loader `_socket_glyph_tex` already uses, for the same reason.
+var _ring_tex: Dictionary = {}
+
+## **Which card the cursor is over, and where the cursor is** — `-1` / anywhere means no hover.
+## Two fields rather than one because `_draw_card` is called for the *picked* card in step 2 as well, at a
+## rect `card_at()` knows nothing about; testing the point against the rect being drawn is what keeps the
+## corner card from lighting up just because a step-1 index was left set. Cleared whenever the pointer
+## leaves the window (`NOTIFICATION_MOUSE_EXIT`) — without that the last-hovered card stays lit forever,
+## which reads as "that one is already chosen".
+var _hover_index := -1
+var _hover_at := Vector2(-1.0, -1.0)
+
 
 func setup(progress: Progress, circle: SpellCircle) -> void:
 	_progress = progress
@@ -94,6 +110,15 @@ func _ready() -> void:
 	position = Fx.PICK_RECT.position
 	size = Fx.PICK_RECT.size
 	_socket_glyph_tex = CircleWindow.load_socket_glyph_tex()
+	_ring_tex = CircleWindow._load_tex_map(Fx.RING_TEX)
+	# **`_gui_input` never sees the pointer leave** — it only fires while the cursor is inside. Without this
+	#  the last card the mouse touched stays lit after the pointer walks off the window.
+	mouse_exited.connect(_clear_hover)
+
+
+func _clear_hover() -> void:
+	_hover_index = -1
+	_hover_at = Vector2(-1.0, -1.0)
 
 
 ## **Redraw every frame while open** — the same idiom `circle_window._process` already holds (there is no
@@ -167,6 +192,13 @@ func cancel_confirm() -> void:
 ## takes clicks this way rather than through `_unhandled_input` (risk 22's answer, one level up: draw and
 ## click must read the *same* rects, and `Layout.cards()`/`card_at()` already share that by construction).
 func _gui_input(event: InputEvent) -> void:
+	if event is InputEventMouseMotion:
+		# **Motion is recorded, never accepted.** Swallowing it here would stop the aim from following the
+		#  mouse the instant the pick window opened, and the window deliberately does not stop the world.
+		_hover_at = (event as InputEventMouseMotion).position
+		var n := 0 if _progress == null else _progress.drawn().size()
+		_hover_index = Layout.card_at(size, n, _hover_at)
+		return
 	if not (event is InputEventMouseButton):
 		return
 	var mb := event as InputEventMouseButton
@@ -322,12 +354,13 @@ func _draw_confirm(font: Font) -> void:
 		var area := CircleLayout.circle_area(rect.size)
 		var circle_id := _circle.circle_id()
 		_draw_pick_circle(rect, area, circle_id, font)
+		var bands := CircleLayout.layer_bands(circle_id, area)
 		var slots := CircleLayout.layer_slots(circle_id, area)
 		var r := CircleLayout.glyph_radius(area)
 		for layer in slots.size():
 			var g := _circle.glyph_at(layer)
 			if g != Glyph.GLYPH_NONE:
-				_draw_pick_glyph_shape(rect.position + slots[layer], r, g, 1.0)
+				_draw_layer_result(rect, bands[layer], rect.position + slots[layer], r, g, 1.0)
 
 	# **Under the circle** (verify-look's own suggested placement, one level up) — naming what just happened
 	#  in the same terms the reject message and every card already use: name and layer, not a symbol alone.
@@ -365,6 +398,7 @@ func _draw_step2(font: Font) -> void:
 	#  file already gives.
 	_draw_pick_circle(rect, area, circle_id, font)
 
+	var bands := CircleLayout.layer_bands(circle_id, area)
 	var slots := CircleLayout.layer_slots(circle_id, area)
 	var r := CircleLayout.glyph_radius(area)
 	for layer in slots.size():
@@ -388,9 +422,11 @@ func _draw_step2(font: Font) -> void:
 			else:
 				# **This layer will not change** — its occupant draws plainly, not dimmed. Dimming it would
 				#  falsely promise a replacement `can_place_glyph` has already refused.
-				_draw_pick_glyph_shape(at, r, existing, 1.0)
+				_draw_layer_result(rect, bands[layer], at, r, existing, 1.0)
 		if can_place:
-			_draw_pick_glyph_shape(at, r, glyph_id, 1.0)
+			# **The result, drawn the way the assembly window will draw it** — the ring picture filling the
+			#  band, not the small seat symbol. That is the whole of "적용된 모습이 바로 보인다".
+			_draw_layer_result(rect, bands[layer], at, r, glyph_id, 1.0)
 		elif existing == Glyph.GLYPH_NONE:
 			# **Blocked and empty — no `+` invite.** `circle_window._draw_empty_slot`'s plus sign means "you
 			#  can place here"; this slot cannot take this glyph today, so it gets a plain dim ring instead,
@@ -444,6 +480,32 @@ func _draw_pick_circle(rect: Rect2, area: Rect2, circle_id: int, font: Font) -> 
 				-outer + float(num) * Fx.CIRCLE_LAYER_NUM_INSET_FRAC,
 				-float(num) * Fx.CIRCLE_LAYER_NUM_LIFT_FRAC),
 			str(layer + 1), HORIZONTAL_ALIGNMENT_LEFT, -1, num, Fx.CIRCLE_LAYER_NUM)
+
+
+## **What a glyph sitting on a layer looks like — the ring picture on the band, exactly as
+## `circle_window._draw_ring` paints it.** Falls through to the procedural seat symbol for the ids with no
+## ring art (the dummy and condense families), the same fall-through discipline `Fx.RING_TEX`'s own header
+## states — drawing nothing there would be this repo's signature fake with the model holding a real glyph.
+## `alpha` scales the tint on both paths so the caller does not have to know which one it got.
+func _draw_layer_result(rect: Rect2, band: Dictionary, at: Vector2, r: float,
+		glyph_id: int, alpha: float) -> void:
+	if not _ring_tex.has(glyph_id):
+		_draw_pick_glyph_shape(at, r, glyph_id, alpha)
+		return
+	var edges: PackedFloat32Array = band["edges"]
+	var c: Vector2 = rect.position + (band["center"] as Vector2)
+	# Scaled by this motif's own measured ink reach (`Fx.RING_ART_INK`'s own box) — the same call
+	#  `circle_window._draw_ring` makes, so the preview and the real circle cannot land at different sizes.
+	var rr: float = edges[0] * Fx.ring_art_fill(glyph_id)
+	var tint: Color = Fx.CIRCLE_ART_TINT
+	tint.a *= alpha
+	_paint_ring_art(_ring_tex[glyph_id], Rect2(c - Vector2(rr, rr), Vector2(rr, rr) * 2.0), tint)
+
+
+## **A named seat so a net can record the texture and the rect** — the same reason
+## `circle_window._paint_art` exists rather than a bare `draw_texture_rect` at the call site.
+func _paint_ring_art(tex: Texture2D, r: Rect2, tint: Color) -> void:
+	draw_texture_rect(tex, r, false, tint)
 
 
 ## **The same shapes `circle_window._draw_glyph` draws — not called, redrawn.** `CanvasItem.draw_*`
@@ -501,6 +563,16 @@ func _draw_pick_glyph_shape(at: Vector2, r: float, glyph_id: int, alpha: float) 
 ## override a native `draw_texture_rect`/`draw_circle` call directly, only a named method, and `net_pick.gd`'s
 ## own header already leans on exactly that idiom for `circle_window`'s equivalent functions.
 func _draw_pick_card_glyph(at: Vector2, r: float, glyph_id: int) -> void:
+	# **The ring picture first — the user: "3택 때 뜨는 이미지가 문양하고 다른데 맞춰줘."** The card used to
+	#  show `socket_glyph_*.png` while the layer it lands on shows `ring_*.png`, so the thing you chose and the
+	#  thing that appeared were two different drawings of the same glyph. **This overturns `Fx.ICON_TEX`'s own
+	#  reasoning** ("a ring shrunk to a card has no room to read as anything") — the user looked at both and
+	#  chose matching over legible. **Scaled by the motif's own ink reach, the same as on the circle** — the
+	#  rarity ring stays at `r`, which is now exactly where the motif's outer marks land.
+	if _ring_tex.has(glyph_id):
+		_draw_pick_card_texture(at, r * Fx.ring_art_fill(glyph_id), _ring_tex[glyph_id], glyph_id)
+		_draw_pick_card_rarity_ring(at, r, glyph_id)
+		return
 	if _socket_glyph_tex.has(glyph_id):
 		_draw_pick_card_texture(at, r, _socket_glyph_tex[glyph_id], glyph_id)
 		# **The ring sits at the texture's own outer radius** — `circle_window._draw_socket_rarity_ring`'s
@@ -559,8 +631,14 @@ func _draw_card(rect: Rect2, glyph_id: int, font: Font) -> void:
 		return
 	var rarity := Glyph.rarity_of(glyph_id)
 	var edge: Color = Fx.RARITY_TINT.get(rarity, Fx.GLYPH_TINT_MISSING)
-	draw_rect(rect, Fx.PICK_CARD_BG, true)
-	draw_rect(rect, edge, false, Fx.PICK_CARD_EDGE_PX)
+	# **Hover — a lit ground and a heavier border, no lift.** The user asked for "호버 액션"; a card that
+	#  *moves* under the cursor would draw somewhere `Layout.card_at()` does not test, which is the
+	#  draw-here-click-there divergence this window's own `_gui_input_step2` spends a paragraph on. Both
+	#  changes stay inside the card's own rect, so the click target is untouched.
+	var hovered := _hover_index >= 0 and rect.has_point(_hover_at)
+	draw_rect(rect, Fx.PICK_CARD_BG_HOVER if hovered else Fx.PICK_CARD_BG, true)
+	draw_rect(rect, edge, false,
+		Fx.PICK_CARD_EDGE_HOVER_PX if hovered else Fx.PICK_CARD_EDGE_PX)
 
 	var pad := Fx.PICK_PAD_PX * 0.5
 	var x := rect.position.x + pad

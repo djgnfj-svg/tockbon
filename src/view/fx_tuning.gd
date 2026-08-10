@@ -831,7 +831,36 @@ const CIRCLE_ART_TINT := Color(7.88, 8.17, 7.73)
 ##
 ## **This scales the picture only.** `rune_radius()` still sizes the click target, the empty-seat dead ring
 ## and the procedural bead — shrinking those would move where the player has to press.
-const RUNE_ART_FRAC := 0.62
+## **One fraction for three pictures was the bug.** Measured ink reach, as a fraction of each file's own
+##  half-width: `rune_fire` **0.7554** · `rune_water` **0.5052** · `rune_none` **0.4970**. A single 0.62
+##  therefore drew fire 22% too big and water 24% too small **against the same seat** — the "수치가 다름"
+##  the user was looking at. `rune_art_fill()` below divides by each file's own number instead, so every
+##  rune's ink lands exactly on `rune_radius()`.
+## **This scales the picture only.** `rune_radius()` still sizes the click target, the empty-seat dead ring
+## and the procedural bead — shrinking those would move where the player has to press.
+const RUNE_ART_INK: Dictionary = {
+	"res://assets/circle/rune_fire.png": 0.7554,
+	"res://assets/circle/rune_water.png": 0.5052,
+	"res://assets/circle/rune_none.png": 0.4970,
+}
+
+
+## Multiply the seat radius by this to get the square that puts a rune picture's ink **inside** the innermost
+## motif's hole (`rune_hole_fit()` — the seat radius itself is where the motif's own strokes begin).
+## An unmeasured path falls back to 1.0 — the picture is drawn at the seat, never at zero size.
+static func rune_art_fill(rune_id: int) -> float:
+	return _art_fill(RUNE_ART_INK, RUNE_TEX, rune_id) * rune_hole_fit()
+
+
+## The shared "path -> measured ink -> scale" step. **`ink <= 0.0` returns 1.0, not `1.0 / ink`** — an id
+## with no measurement must draw at its plain seat size, and a divide by zero here would put an `inf`-sized
+## rect into `draw_texture_rect` and paint nothing at all, silently.
+static func _art_fill(ink_map: Dictionary, tex_map: Dictionary, id: int) -> float:
+	var path: String = tex_map.get(id, "")
+	var ink: float = ink_map.get(path, 0.0)
+	if ink <= 0.0:
+		return 1.0
+	return 1.0 / ink
 
 ## The two measurements above, named so the net can assert the relationship rather than the two rects.
 ## **Re-measure both if the art is ever regenerated** — they are properties of the pictures, not choices.
@@ -885,17 +914,73 @@ const RARITY_RING_PX := 2.5
 ## unused; they are waiting for the glyph, not the other way round. **Condense has no row here either** —
 ## unlike accel/home, its glyph exists; only its art does not (`glyph-condense.md` — "no art is added, code
 ## lands first"), so it falls through to the procedural symbol the same as any other missing entry would.
+## **`motif_*.png`, not `ring_*.png` — the user: "왜 문양에 링이 같이 있니? 그냥 문양만 도넛모양으로
+##  있어야지."** Every `ring_*.png` has its own two outline circles drawn into it, and the window already
+##  strokes each band's rim (`circle_window._draw_ring_edge`), so the screen carried **two** sets of rings
+##  per layer and neither sat on the other. The `motif_*` files are those same pictures with the outline
+##  circles removed and the marks kept — stripped by angular coverage per connected component (an outline
+##  wraps the full 360°, a mark spans a few dozen), which is why the antialiased rims went with them.
+##  **The `ring_*.png` originals stay on disk unreferenced** — regenerating a motif means re-stripping one,
+##  and throwing the source away would make that impossible.
 const RING_TEX: Dictionary = {
-	Glyph.SPREAD_C: "res://assets/circle/ring_spread.png",
-	Glyph.SPREAD_R: "res://assets/circle/ring_spread.png",
-	Glyph.SPREAD_U: "res://assets/circle/ring_spread.png",
-	Glyph.BLAST_C: "res://assets/circle/ring_blast.png",
-	Glyph.BLAST_R: "res://assets/circle/ring_blast.png",
-	Glyph.BLAST_U: "res://assets/circle/ring_blast.png",
-	Glyph.DUMMY_C: "res://assets/circle/ring_dummy.png",
-	Glyph.DUMMY_R: "res://assets/circle/ring_dummy.png",
-	Glyph.DUMMY_U: "res://assets/circle/ring_dummy.png",
+	Glyph.SPREAD_C: "res://assets/circle/motif_spread.png",
+	Glyph.SPREAD_R: "res://assets/circle/motif_spread.png",
+	Glyph.SPREAD_U: "res://assets/circle/motif_spread.png",
+	Glyph.BLAST_C: "res://assets/circle/motif_blast.png",
+	Glyph.BLAST_R: "res://assets/circle/motif_blast.png",
+	Glyph.BLAST_U: "res://assets/circle/motif_blast.png",
+	Glyph.DUMMY_C: "res://assets/circle/motif_dummy.png",
+	Glyph.DUMMY_R: "res://assets/circle/motif_dummy.png",
+	Glyph.DUMMY_U: "res://assets/circle/motif_dummy.png",
 }
+
+## **Measured ink reach of each motif, as a fraction of its own image half-width** — and they are **not the
+##  same number**: spread **0.7508** · blast **0.7272** · dummy **0.6927**. That spread is the whole of
+##  "수치가 다름": one shared constant put three pictures at three different distances from the rim they
+##  were all supposed to touch. Each is divided by its own value instead (`ring_art_fill()`).
+## **Re-measure whenever a motif is regenerated** — these are properties of the files, not choices.
+const RING_ART_INK: Dictionary = {
+	"res://assets/circle/motif_spread.png": 0.7508,
+	"res://assets/circle/motif_blast.png": 0.7272,
+	"res://assets/circle/motif_dummy.png": 0.6927,
+}
+
+## Each motif's **hole** — where its ink starts, as a fraction of its own image half-width. This is what
+##  `CIRCLE_RING_NEST` is averaged from, **and it is a table rather than a line of prose because a number that
+##  lives only in a comment cannot be read by a check** — the rune has to fit inside the tightest of these and
+##  nothing could measure that while they were prose.
+const RING_ART_HOLE: Dictionary = {
+	"res://assets/circle/motif_spread.png": 0.4327,
+	"res://assets/circle/motif_blast.png": 0.5362,
+	"res://assets/circle/motif_dummy.png": 0.5138,
+}
+
+## **`CIRCLE_RING_NEST` is the mean of the three holes, so the tightest motif's hole falls *inside* the band's
+##  inner rim — and the rune is that rim.** Drawn at its full seat radius the rune's own ink therefore runs
+##  under `motif_spread`'s innermost strokes (measured on the round circle: ink 69.6 against a hole of 59.0,
+##  a 10.6px overlap), which is the exact defect "도넛 모양으로 들어가는 것" was asked for twice.
+## Averaging is still right for the **bands** — a stack tiled to the tightest hole would leave blast and dummy
+##  floating well inside their rims. The rune is the one thing that must clear *every* motif, so it takes the
+##  minimum rather than the mean, and `RUNE_HOLE_CLEAR` keeps a hair of gap so the two are not flush.
+const RUNE_HOLE_CLEAR := 0.97
+
+
+## How much of its seat radius a rune picture may fill before the innermost motif eats its edge.
+## Derived from the art, not tuned: the smallest `hole / ink` ratio, undone by the nesting the bands use.
+static func rune_hole_fit() -> float:
+	var tightest := 1.0
+	for path: String in RING_ART_HOLE:
+		var ink: float = RING_ART_INK.get(path, 0.0)
+		if ink <= 0.0:
+			continue
+		tightest = minf(tightest, float(RING_ART_HOLE[path]) / ink)
+	return tightest / CIRCLE_RING_NEST * RUNE_HOLE_CLEAR
+
+
+## Multiply the band's outer radius by this to get the square that puts the motif's ink **on** that rim.
+## **The square grows, not the band** — `edges[0]` still sizes the stroked rim and the hit test.
+static func ring_art_fill(glyph_id: int) -> float:
+	return _art_fill(RING_ART_INK, RING_TEX, glyph_id)
 
 ## **The palette card's own picture, by glyph.** Same shape and same fall-through discipline as `RING_TEX`
 ## above — this table (like that one) carries nine of the game's twelve ids, and an id with no entry
@@ -920,7 +1005,7 @@ const ICON_TEX: Dictionary = {
 	Glyph.DUMMY_U: "res://assets/circle/icon_dummy.png",
 }
 
-## **How much of the card's symbol radius the icon picture fills.** The same split `RUNE_ART_FRAC` records:
+## **How much of the card's symbol radius the icon picture fills.** The same split `RUNE_ART_INK` records:
 ## the radius keeps sizing the rarity ring and the procedural fallback, and only the drawn picture moves.
 ## **Under 1.0 because the rarity ring sits at `RARITY_RING_RATIO` (1.3) of that radius** — draw the picture
 ## out to the full radius and the ink runs into the ring instead of sitting inside it.
@@ -1093,6 +1178,12 @@ const PICK_CARD_BG := Color(0.10, 0.11, 0.15, 1.0)
 ##  color on the card". Stage A already proved these three read on this dark palette, magnified and at
 ##  native size (verify-look).
 const PICK_CARD_EDGE_PX := 3.0
+## **Hover — two devices, the same "one device is not enough" rule the layer order already follows.** Ground
+##  and border both move, because the border alone is the rarity colour's own channel (`RARITY_TINT`) and a
+##  hovered common card would otherwise read as a rarer one. Lifting the card was rejected: it would draw
+##  outside the rect `pick_layout.card_at()` tests.
+const PICK_CARD_BG_HOVER := Color(0.17, 0.19, 0.25, 1.0)
+const PICK_CARD_EDGE_HOVER_PX := 5.0
 
 const PICK_NAME_COLOR := Color(0.92, 0.92, 0.90)
 const PICK_NAME_SIZE := 16
@@ -1177,23 +1268,22 @@ const BOOK_FOLD := Color(0.03, 0.035, 0.055, 1.0)
 ##   **outer end** the rings occupy is here. Put a constant per ring and they overlap the day a 3-layer circle arrives.
 const CIRCLE_AREA_PAD_PX := 14.0
 const CIRCLE_DISC_RATIO := 0.94
-## **"한 칸씩 바깥으로" (user) is one derived rule, not a second tuned number** — the round rune sits dead
-##  center, so growing it has no direction to move in; what has to move is where the ring zone *starts*.
-##  `circle_layout.layer_bands()`'s `PIC_ROUND` branch now begins this zone just outside the grown rune's
-##  own edge (`CIRCLE_RING_GAP_FRAC` below is the "one칸" gap) instead of at the frame center, so raising
-##  `CIRCLE_RUNE_RATIO` moves both layer seats out with it — there is no second offset to hand-keep in step.
-##  **Eye-tune this one number** (`onboarding-and-palette-tabs.md` names every value here TBD).
-const CIRCLE_RING_ZONE := 0.95
-## **Grown — the user: "룬이 좀 더 커야 돼. 훨씬 더 크게 박혀야 돼."** `RUNE_ART_FRAC` (below) sizes only
-##  the picture inside this radius; this ratio also sizes the click target and the empty-seat ring, so
-##  growing it moves all three together. **Eye-tune this one number.**
-const CIRCLE_RUNE_RATIO := 0.28
-## **The "one칸" gap between the rune's own edge and where the layer rings begin** (user: "룬 자리 · 1번
-##  문양 자리 · 2번 문양 자리가 각각 한 칸씩 바깥으로") — a ratio of the frame radius, the same unit every
-##  other value in this block already uses. See `CIRCLE_RING_ZONE`'s own comment for how this one number
-##  moves both layer seats without a second constant to keep in step. **Eye-tune this one number.**
-const CIRCLE_RING_GAP_FRAC := 0.05
-const CIRCLE_GLYPH_RATIO := 0.15
+## Where the outermost layer's rim sits, as a fraction of the frame radius. **0.90, leaving 0.90 → 1.00
+##  as the circle slot's own clickable rim** — the layer bands claim their full annulus now
+##  (`circle_layout.layer_bands`' `hit`), so without a real gap here the frame seat would shrink to a
+##  couple of pixels and the vessel would stop being swappable, with nothing barking.
+const CIRCLE_RING_ZONE := 0.90
+## **The band radii are nested, not evenly spaced — and the ratio comes off the art.** Each motif is a
+##  donut whose own hole is spread **0.4327** · blast **0.5362** · dummy **0.5138** of its outer ink; a band
+##  stack that tiles *linearly* can never sit under all three, which is exactly what "좀 안맞는데?" was
+##  looking at. Layer `i` of `n` gets `zone * NEST^(n-1-i)`, so consecutive rims hold this ratio and the
+##  motifs nest into each other the way the pictures were drawn. **0.68 is the mean of the three**, not a
+##  tuned number — regenerate a motif, re-measure, re-average.
+const CIRCLE_RING_NEST := 0.68
+## **0.15 -> 0.12 — forced by the geometry, not an eye-tune.** `CIRCLE_GLYPH_RATIO` only sizes the
+##  procedural fallback symbol and the layer number's own scale now; the layer *hit* is the band annulus.
+##  Kept small so a fallback symbol sits inside the thinnest band (`zone*NEST^n` at n=2 is 0.416 wide).
+const CIRCLE_GLYPH_RATIO := 0.12
 ## The rune slot's inner core. It is "a wick burning white", so it must be smaller than the outer glow
 ##  (the same idiom as the muzzle and the flash).
 const CIRCLE_RUNE_CORE_RATIO := 0.45
@@ -1994,29 +2084,27 @@ const BG_Z_INDEX := -100          ## Clearly behind the grid (`CellRenderer`). H
 ## The picture. **A mirrored pair (1920x544) — the right half is the left flipped**, so the left and right edges
 ##  are the same column and tiling shows no seam. FLUX will not match seams; mirroring is what removes them.
 ##  Built by `tools/pixel/bgmock.py`'s source images -> `assets/stage/bg_*.png`.
-## **Two layers.** Far is the scenery, near is the strip at the player's feet (a fence line · rubble).
-##  **The near one has a transparent sky** — cut from chroma green, so it lays over the far one.
+## **One layer.** There used to be a second, near strip standing at the player's feet (a fence line ·
+##  rubble). **The user cut it** — "하늘 그림 유지하고 그거말고 다른 배경 삭제, 뭔가 길에 있을법한 레이어".
+##  `bg_near_farm.png`/`bg_near_town.png` stay on disk unreferenced; the constants are gone so nothing can
+##  half-wire them back (a path constant with no reader is how the town's own pair sat unused and unnoticed
+##  — `net_town.gd`'s own finding).
 const BG_FAR_TEXTURE := "res://assets/stage/bg_farm.png"
-const BG_NEAR_TEXTURE := "res://assets/stage/bg_near_farm.png"
-## The town's pair. **The same node, a different picture** (`town.md`) — not a second scene.
+## The town's picture. **The same node, a different picture** (`town.md`) — not a second scene.
 const BG_TOWN_FAR_TEXTURE := "res://assets/stage/bg_town.png"
-const BG_TOWN_NEAR_TEXTURE := "res://assets/stage/bg_near_town.png"
 
 ## Parallax ratios. **0 = pinned to the window (infinitely far), 1 = nailed to the world (part of the terrain).**
 const BG_FAR_SCROLL_X := 0.25
 ## **The vertical is much weaker than the horizontal on purpose.** The world is 4,032px tall against a 544px picture,
 ##  so at the horizontal ratio the picture would leave the screen entirely within one fall.
 const BG_FAR_SCROLL_Y := 0.08
-const BG_NEAR_SCROLL_X := 0.65   ## Near enough to read as "just behind the terrain", not so near it competes with it
-const BG_NEAR_SCROLL_Y := 0.45
 
 ## **The vertical follow's own master knob** (user, watching the screen: 「이거 점프하면 2번째 레이어가
 ##  같이 오른데 변경해줄래?」 — jumping moved a background layer up with the character). Multiplies
-##  `BG_FAR_SCROLL_Y`/`BG_NEAR_SCROLL_Y` **at the point they're read** (`sky_background._far_y`/`_draw`),
-##  not baked into either — so the far/near vertical split above (weak vs strong, tuned on its own reasons)
-##  stays intact and this one knob dials the vertical component down without touching horizontal at all
-##  (`BG_FAR_SCROLL_X`/`BG_NEAR_SCROLL_X` are untouched — walking still drifts the background sideways,
-##  which nobody complained about).
+##  `BG_FAR_SCROLL_Y` **at the point it is read** (`sky_background._far_y`), not baked into it — so the
+##  ratio above stays tuned on its own reasons and this one knob dials the vertical component down without
+##  touching horizontal at all (`BG_FAR_SCROLL_X` is untouched — walking still drifts the background
+##  sideways, which nobody complained about).
 ## **0 = the ratio above is glued to the screen top regardless of camera movement (no vertical follow at
 ##  all), 1 = today's ratios exactly.** Started close to 0 rather than at it — the user asked to cut the
 ##  jump-bob, not to freeze the layers dead flat. One line to push either way.
@@ -2025,9 +2113,9 @@ const BG_VERTICAL_FOLLOW_FRAC := 0.15
 ## Where each layer sits when its ratio is 1 (world px). **+ is downward.**
 ## The far one is the horizon — tuned by eye against the spawn point.
 const BG_FAR_ANCHOR_Y := 300.0
-## The near one is **the ground line the strip stands on**: the map's left half is flat at tile y 20,
-##  and 20 x `TILE_CELLS` 8 x `CELL_PX` 4 = 640. **The strip's bottom is placed there, so its own height is
-##  subtracted at draw time** — change the picture's height and it still stands on the ground.
+## **The ground line**: the map's left half is flat at tile y 20, and 20 x `TILE_CELLS` 8 x `CELL_PX` 4 = 640.
+##  It kept its name through the near strip's deletion because `BG_UNDER_TOP_Y` and `town_map.gd` both read
+##  it as *the ground*, which is what it always measured — the strip merely stood on it.
 const BG_NEAR_GROUND_Y := 640.0
 
 ## **Underground depth — `docs/design/underground-depth.md`.** Below the far picture (which now stops at

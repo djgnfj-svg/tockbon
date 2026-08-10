@@ -281,17 +281,16 @@ func _the_fixture_art_is_loaded_at_its_own_size(t) -> void:
 ##  `sky_background._ready` hardcoded the farm pair, so the town rendered black. This measures both halves:
 ##  the pictures load, and the shell names them.
 func _the_town_has_its_own_backdrop(t) -> void:
-	for path: String in [Fx.BG_TOWN_FAR_TEXTURE, Fx.BG_TOWN_NEAR_TEXTURE]:
+	for path: String in [Fx.BG_TOWN_FAR_TEXTURE]:
 		t.ok(load(path) != null, "마을 배경 그림을 읽는다 (%s)" % path)
 	t.ok(Fx.BG_TOWN_FAR_TEXTURE != Fx.BG_FAR_TEXTURE,
 		"마을 먼 배경이 무대 것과 다른 그림이다 (같으면 갈아 끼우는 의미가 없다)")
-	t.ok(Fx.BG_TOWN_NEAR_TEXTURE != Fx.BG_NEAR_TEXTURE, "마을 가까운 배경도 다른 그림이다")
 	# ══ Driven, not scanned — and the claim this replaced was wrong twice ══
 	#
 	# This used to open `stage.gd` and look for the literal `BG_TOWN_FAR_TEXTURE` in its source, on the
 	#  stated grounds that "the backdrop cannot be read back off the node — `sky_background` keeps the
 	#  textures private and exposes no accessor."
-	#  **Both halves were false.** `net_background._set_backdrop_stores_the_pair_it_is_given` has always read
+	#  **Both halves were false.** `net_background._set_backdrop_stores_the_picture_it_is_given` has always read
 	#  them back with `get("_far")` and compared `resource_path`; and the shell no longer names the constant
 	#  at all — the backdrop comes out of the room table now, so a text scan would have been looking for a
 	#  string that is correctly absent.
@@ -302,12 +301,10 @@ func _the_town_has_its_own_backdrop(t) -> void:
 	if bg_root != null:
 		var sky: Variant = bg_root.get("_sky")
 		var far: Texture2D = sky.get("_far")
-		var near: Texture2D = sky.get("_near")
-		t.ok(far != null and near != null, "마을을 지으면 배경 두 장이 실제로 실린다 (전제)")
-		if far != null and near != null:
+		t.ok(far != null, "마을을 지으면 배경이 실제로 실린다 (전제)")
+		if far != null:
 			t.eq(far.resource_path, Fx.BG_TOWN_FAR_TEXTURE,
-				"그리고 그게 마을 먼 배경이다 (무대 것이 아니라 — 방 표에서 나온 값이다)")
-			t.eq(near.resource_path, Fx.BG_TOWN_NEAR_TEXTURE, "가까운 배경도 마을 것이다")
+				"그리고 그게 마을 배경이다 (무대 것이 아니라 — 방 표에서 나온 값이다)")
 		bg_root.free()
 
 	# **And the room has to be somewhere the backdrop can be seen.** This is the check for the bug that

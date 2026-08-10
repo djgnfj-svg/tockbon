@@ -760,10 +760,11 @@ func _draw_rune_slot(area: Rect2, circle_id: int) -> void:
 			continue
 		# **The rune's own picture** (`Fx.RUNE_TEX`); the two beads stay as the fallback.
 		if _rune_tex.has(rune_id):
-			# **`RUNE_ART_FRAC` — the picture sits inside the ring's hole** (that constant's own box carries
+			# **`Fx.rune_art_fill()` — each rune picture is scaled by its own measured ink** (`RUNE_ART_INK`'s box carries
 			#  the pixel measurements). The seat and `r` are untouched: `r` still sizes the click target and
 			#  the empty-seat ring, and only the drawn picture shrinks.
-			_paint_art(_rune_tex[rune_id], _square_at(slots[i], r * Fx.RUNE_ART_FRAC), Fx.CIRCLE_ART_TINT)
+			_paint_art(_rune_tex[rune_id], _square_at(slots[i], r * Fx.rune_art_fill(rune_id)),
+				Fx.CIRCLE_ART_TINT)
 		else:
 			_draw_rune_symbol(slots[i], r, rune_id)
 
@@ -804,8 +805,12 @@ func _draw_ring(area: Rect2, circle_id: int, layer: int, font: Font) -> void:
 	#  to draw a picture. ⇒ The rim keeps its contract, and the art sits on it.
 	#  A layer with no glyph, or a glyph with no art, is byte-for-byte what it was before.
 	var ring_glyph := _circle.glyph_at(layer)
-	if _ring_tex.has(ring_glyph):
-		_paint_art(_ring_tex[ring_glyph], _square_at(center, edges[0]), Fx.CIRCLE_ART_TINT)
+	# **Scaled by that motif's own measured ink reach** (`Fx.ring_art_fill` — the three files do not agree,
+	#  which is what put three pictures at three distances from the rim they all had to touch).
+	var painted_ring := _ring_tex.has(ring_glyph)
+	if painted_ring:
+		_paint_art(_ring_tex[ring_glyph],
+			_square_at(center, edges[0] * Fx.ring_art_fill(ring_glyph)), Fx.CIRCLE_ART_TINT)
 
 	# `edges[0]` is always the outer edge (`edges` is outer-first) — the one radius to hang the layer number
 	#  beside regardless of how many edges this band owns.
@@ -832,7 +837,13 @@ func _draw_ring(area: Rect2, circle_id: int, layer: int, font: Font) -> void:
 	#  Without drawing it, "a blocked seat" and "an empty seat" look the same, and in stage 4b-2b where to press
 	#   is not on the screen (the first of the three slot states — the `fx_tuning.SLOT_EMPTY` comment).
 	if glyph_id == Glyph.GLYPH_NONE:
-		_draw_empty_slot(seat, Layout.glyph_radius(area), layer == _selected_layer)
+		# **On the band's rim, not a small circle at the 12-o'clock seat** — the user, on the third pass:
+		#  "TAP 했을떄 아직도 작은 원이 보이는데?" An empty layer is the last thing that was still drawing a
+		#  seat-sized mark. **The click region moved with it** (`circle_layout.layer_bands`' `hit` is the
+		#  band's annulus now) — moving only the drawing would be this file's own risk 22 in reverse.
+		var empty_at: Vector2 = center if edges.size() == 1 else seat
+		var empty_r: float = edges[0] if edges.size() == 1 else Layout.glyph_radius(area)
+		_draw_empty_slot(empty_at, empty_r, layer == _selected_layer)
 		return
 	# **A socket band's own glyph art (step 6) — reached only when the band owns more than one edge.**
 	#  A concentric band (`PIC_ROUND`, and any future picture built the same way) always has exactly one
@@ -845,6 +856,16 @@ func _draw_ring(area: Rect2, circle_id: int, layer: int, font: Font) -> void:
 	#  would be the screen quietly failing to say so).
 	if edges.size() > 1 and _socket_glyph_tex.has(glyph_id):
 		_draw_socket_glyph_texture(seat, edges[0], _socket_glyph_tex[glyph_id], glyph_id)
+	elif painted_ring:
+		# **The small symbol at the 12-o'clock seat is not drawn once the ring art carries the glyph** —
+		#  the user, looking at it: "왜 문양에 링모양을 넣었는데 저런 표시까지 남는거지?" The bead and the
+		#  rays were `_draw_glyph`'s procedural shape sitting on top of the picture that already says the
+		#  same thing, so it read as a leftover mark rather than as a second device.
+		#  **Rarity still has to be said, and `_draw_glyph` was the only one saying it on this path**
+		#  (`_draw_glyph_rarity_ring`) — dropping the symbol without this line would make common · rare ·
+		#  unique of one family pixel-identical, the exact regression verify-read caught once on the socket
+		#  band. It strokes on the band's own rim, where the picture's boundary already is.
+		_draw_socket_rarity_ring(center, edges[0], glyph_id)
 	else:
 		_draw_glyph(seat, Layout.glyph_radius(area), glyph_id)
 
@@ -854,8 +875,13 @@ func _draw_ring(area: Rect2, circle_id: int, layer: int, font: Font) -> void:
 	#  rarity ring sits flush at `r`) so the two never share pixels — the same "outside, not flush" reasoning
 	#  `MONSTER_PHASE2_MARGIN_PX` already documents for a different silhouette.
 	if layer == _selected_layer:
-		var sel_r := edges[0] if edges.size() > 1 else Layout.glyph_radius(area) * Fx.SLOT_SELECTED_RATIO
-		_draw_slot_ring(seat, sel_r, Fx.SLOT_SELECTED_COLOR, Fx.SLOT_SELECTED_PX)
+		# **On the band's own rim once the art carries the layer, never a small circle at the 12-o'clock
+		#  seat** — the seat mark is exactly the leftover the user asked to be gone, and a selection ring
+		#  drawn there would put it straight back under a different name.
+		var on_rim := edges.size() > 1 or painted_ring
+		var sel_at: Vector2 = center if on_rim else seat
+		var sel_r: float = edges[0] if on_rim else Layout.glyph_radius(area) * Fx.SLOT_SELECTED_RATIO
+		_draw_slot_ring(sel_at, sel_r, Fx.SLOT_SELECTED_COLOR, Fx.SLOT_SELECTED_PX)
 
 
 func _draw_ring_edge(center: Vector2, r: float, col: Color) -> void:
@@ -1194,7 +1220,7 @@ func _draw_palette_item(slot: Rect2, kind: int, item_id: int) -> void:
 		#  different picture and it becomes "the palette's fire is not the fire I placed", which is the exact
 		#  divergence `_draw_rune_symbol`'s own header was written against — the sharing moves from the
 		#  procedural bead to the art, it does not end.
-		#  **`RUNE_ART_FRAC` is deliberately absent here**: that fraction exists to fit the bead inside the
+		#  **`rune_art_fill()` is deliberately absent here**: that scale exists to fit the bead inside the
 		#  ring's hole, and a card has no ring around it.
 		if _rune_tex.has(item_id):
 			_paint_art(_rune_tex[item_id], _square_at(at, r), Fx.CIRCLE_ART_TINT)

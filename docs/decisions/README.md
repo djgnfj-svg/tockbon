@@ -69,3 +69,4 @@ Where it shakes if this reverses.
 | Hitstop was dropped — replaced by flash duration | Code comments only |
 | The rooster lands (it doesn't stay airborne) | `plans/3.done/stage1-bosses.md` |
 | Pit ①'s water comes from the bull — reward first, then the wall collapses | Same doc. ⚠ **The escape it served is dropped** — see [the rune is used where it is won](the-rune-is-used-where-it-is-won.md); whether the pour itself is deleted is that design doc's TBD |
+| Boss room floors are bedrock, not stone | [boss room floors are bedrock](boss-room-floors-are-bedrock.md) |

@@ -636,7 +636,9 @@ func _no_pushed_out_glyph_is_stashed_anywhere(t) -> void:
 			#  (`CircleWindow.load_socket_glyph_tex()`), now also read by this window's own card picture
 			#  (`three_pick_window._draw_pick_card_glyph`). Loaded art, not a record of a glyph that left a
 			#  spell layer — the same reasoning `circle_window.gd`'s own entry above already gives.
-			"res://src/view/three_pick_window.gd": ["_socket_glyph_tex"],
+			# **`_ring_tex` added here too, deliberately** — the same ring-art cache `circle_window.gd`'s own
+			#  entry above already lists, loaded by the same window base class. Loaded art, not a stash.
+			"res://src/view/three_pick_window.gd": ["_ring_tex", "_socket_glyph_tex"],
 		# **The six animation fields added here, deliberately** — the same discipline `_reward_pending`'s own
 		#  comment names. `_anim`/`_prev_x`/`_prev_reload`/`_attack_left`/`_hurt_left` are all keyed by
 		#  **monster id** and hold a frame counter, and `_anim_sheets` is loaded art; none of them is a record
@@ -878,7 +880,11 @@ func _card_picture_draws_every_glyph_with_a_rarity_ring(t) -> void:
 		for d: Dictionary in win.texture_draws:
 			textured_ids.append(int(d["glyph_id"]))
 
-		if Fx.SOCKET_GLYPH_TEX.has(glyph_id):
+		# **`_draw_pick_card_glyph` checks `Fx.RING_TEX` before `Fx.SOCKET_GLYPH_TEX`** (`three_pick_window.
+		#  gd`'s own comment — the card now matches the layer's own ring picture) — the dummy family has
+		#  ring art (`ring_dummy.png`) but no socket-card art, so `SOCKET_GLYPH_TEX` alone under-counts which
+		#  ids take the texture path.
+		if Fx.RING_TEX.has(glyph_id) or Fx.SOCKET_GLYPH_TEX.has(glyph_id):
 			t.ok(textured_ids.has(glyph_id),
 				"문양 %d — 그림이 있으니 텍스처 경로로 그려졌다 (%s)" % [glyph_id, textured_ids])
 			t.eq(win.procedural_draws.count(glyph_id), 0,

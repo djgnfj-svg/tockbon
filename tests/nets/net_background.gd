@@ -36,14 +36,14 @@ const SHADER_PATH := "res://src/view/cell_grid.gdshader"
 
 
 func run(t) -> void:
-	_all_four_textures_load(t)
+	_both_far_textures_load(t)
 	_far_textures_are_1920x544_and_mirrored(t)
-	_setup_wires_the_farm_pair_by_default(t)
-	_set_backdrop_stores_the_pair_it_is_given(t)
-	_far_and_near_use_different_parallax_ratios(t)
+	_setup_wires_the_farm_picture_by_default(t)
+	_set_backdrop_stores_the_picture_it_is_given(t)
+	_far_parallax_ratios_are_pinned(t)
 	_layer_y_actually_responds_to_the_ratio(t)
 	_horizon_anchor_is_pinned_by_value(t)
-	_vertical_follow_frac_actually_damps_both_layers(t)
+	_vertical_follow_frac_actually_damps_the_far_layer(t)
 	_cell_renderer_derives_empty_id_from_the_material_table(t)
 	_shader_zeroes_alpha_on_the_empty_material(t)
 	_sky_background_sits_before_cell_renderer_in_the_scene(t)
@@ -59,15 +59,14 @@ func run(t) -> void:
 #  The art loads and is the right shape
 # ══════════════════════════════════════════════════════════════════
 
-## **All four textures load.** `net_monster_sprite`'s own precedent: a wrong path makes exactly that entry
+## **Both textures load.** `net_monster_sprite`'s own precedent: a wrong path makes exactly that entry
 ## null, nothing else — proven by inversion (mutation-tested by hand, not encoded as a scenario here; the
 ## table these paths are read from is small enough that breaking one and rerunning is the direct check).
-func _all_four_textures_load(t) -> void:
+## **It was four until the near strip was deleted** (the user: "뭔가 길에 있을법한 레이어, 그거 지워줘").
+func _both_far_textures_load(t) -> void:
 	var paths := {
 		"농장 원경(bg_farm)": Fx.BG_FAR_TEXTURE,
-		"농장 근경(bg_near_farm)": Fx.BG_NEAR_TEXTURE,
 		"마을 원경(bg_town)": Fx.BG_TOWN_FAR_TEXTURE,
-		"마을 근경(bg_near_town)": Fx.BG_TOWN_NEAR_TEXTURE,
 	}
 	for label: String in paths:
 		var path: String = paths[label]
@@ -75,12 +74,10 @@ func _all_four_textures_load(t) -> void:
 		t.ok(tex != null, "%s 그림을 읽었다 (%s)" % [label, path])
 
 
-## **The far pair is 1920x544, mirrored** (`background.md`: "far scenery ... mirrored 1920x544"). **The near
-## pair carries no such contract** — its own words are "a strip standing on the ground line", and
-## `sky_background._draw()` reads the near picture's own size at draw time rather than assuming one
-## (`BG_NEAR_GROUND_Y`'s own comment: "the strip's bottom is placed there, so its own height is subtracted at
-## draw time"). Measured before writing this check, not assumed: `bg_near_town.png` is 960x136, `bg_near_farm.png`
-## is 1920x214 — the two near pictures do not even match **each other**, let alone the far pair's contract.
+## **The far pair is 1920x544, mirrored** (`background.md`: "far scenery ... mirrored 1920x544"). It is the
+## only pair left — the near strip that used to sit in front of it was deleted at the user's word, and it
+## never carried this contract anyway (its two files were 960x136 and 1920x214, matching neither the far
+## pair nor each other).
 ##
 ## **The raw png is opened, bypassing the import** — `net_monster_sprite`'s own reason: fix the art without
 ## rerunning the import and the game draws the stale `.ctex` while a check against the import alone stays green.
@@ -130,35 +127,31 @@ func _far_textures_are_1920x544_and_mirrored(t) -> void:
 ## and this goes red. `resource_path` is compared, not the `Texture2D` reference — `load()` caches by path, so
 ## a reference-equality check would pass even if `set_backdrop`'s own internals silently substituted a
 ## different-but-cached resource; the path is the one thing that actually says "this is the file that was asked for".
-func _setup_wires_the_farm_pair_by_default(t) -> void:
+func _setup_wires_the_farm_picture_by_default(t) -> void:
 	var bg := SkyBackground.new()
 	var cam := Camera2D.new()
 	bg.setup(cam)
 	var far: Texture2D = bg.get("_far")
-	var near: Texture2D = bg.get("_near")
-	t.ok(far != null and near != null, "setup() 뒤에 두 그림 다 실렸다 (전제)")
+	t.ok(far != null, "setup() 뒤에 원경이 실렸다 (전제)")
 	if far != null:
 		t.eq(far.resource_path, Fx.BG_FAR_TEXTURE, "setup()이 기본으로 농장 원경을 쓴다")
-	if near != null:
-		t.eq(near.resource_path, Fx.BG_NEAR_TEXTURE, "setup()이 기본으로 농장 근경을 쓴다")
+	t.ok(not bg.get_property_list().any(func(d): return d["name"] == "_near"),
+		"근경 필드 자체가 사라졌다 (레이어를 끈 게 아니라 지웠다)")
 	bg.free()
 	cam.free()
 
 
 ## **`set_backdrop()` actually stores what it is given, driven directly** — handing it the town pair (not the
-## default farm pair `setup()` always passes) and reading `_far`/`_near` back is what would catch an internal
-## swap (`_far`/`_near` assigned to the wrong argument) that testing `setup()`'s own hardcoded call alone
-## could never distinguish.
-func _set_backdrop_stores_the_pair_it_is_given(t) -> void:
+## default farm picture `setup()` always passes) and reading `_far` back is what would catch `set_backdrop`
+## storing something other than what it was handed — testing `setup()`'s own hardcoded call alone could
+## never distinguish that.
+func _set_backdrop_stores_the_picture_it_is_given(t) -> void:
 	var bg := SkyBackground.new()
-	bg.set_backdrop(Fx.BG_TOWN_FAR_TEXTURE, Fx.BG_TOWN_NEAR_TEXTURE)
+	bg.set_backdrop(Fx.BG_TOWN_FAR_TEXTURE)
 	var far: Texture2D = bg.get("_far")
-	var near: Texture2D = bg.get("_near")
-	t.ok(far != null and near != null, "set_backdrop() 뒤에 두 그림 다 실렸다 (전제)")
+	t.ok(far != null, "set_backdrop() 뒤에 원경이 실렸다 (전제)")
 	if far != null:
-		t.eq(far.resource_path, Fx.BG_TOWN_FAR_TEXTURE, "원경 자리에 준 그림이 그대로 들어간다 (자리가 안 바뀐다)")
-	if near != null:
-		t.eq(near.resource_path, Fx.BG_TOWN_NEAR_TEXTURE, "근경 자리에 준 그림이 그대로 들어간다 (자리가 안 바뀐다)")
+		t.eq(far.resource_path, Fx.BG_TOWN_FAR_TEXTURE, "준 그림이 그대로 들어간다")
 	bg.free()
 
 
@@ -168,15 +161,11 @@ func _set_backdrop_stores_the_pair_it_is_given(t) -> void:
 
 ## **Pinned by value, not only compared against each other** — an A/B comparison catches "diverged", never
 ## "both vanished" (CLAUDE.md: fold two paths into one and `scan == scan`, all green).
-func _far_and_near_use_different_parallax_ratios(t) -> void:
+func _far_parallax_ratios_are_pinned(t) -> void:
 	t.eq(Fx.BG_FAR_SCROLL_X, 0.25, "원경 가로 시차 비율이 고정값이다 (0.25)")
 	t.eq(Fx.BG_FAR_SCROLL_Y, 0.08, "원경 세로 시차 비율이 고정값이다 (0.08)")
-	t.eq(Fx.BG_NEAR_SCROLL_X, 0.65, "근경 가로 시차 비율이 고정값이다 (0.65)")
-	t.eq(Fx.BG_NEAR_SCROLL_Y, 0.45, "근경 세로 시차 비율이 고정값이다 (0.45)")
-	t.ok(Fx.BG_FAR_SCROLL_X != Fx.BG_NEAR_SCROLL_X,
-		"원경과 근경의 가로 비율이 실제로 다르다 (같으면 시차가 없다)")
-	t.ok(Fx.BG_FAR_SCROLL_Y != Fx.BG_NEAR_SCROLL_Y,
-		"원경과 근경의 세로 비율이 실제로 다르다")
+	t.ok(Fx.BG_FAR_SCROLL_Y < Fx.BG_FAR_SCROLL_X,
+		"세로가 가로보다 약하다 — 한 번 떨어지는 사이에 그림이 화면을 벗어나지 않는 이유다")
 
 
 ## **`_layer_y()` is the function that actually consumes the ratio, driven directly on an untreed node** — the
@@ -187,10 +176,10 @@ func _far_and_near_use_different_parallax_ratios(t) -> void:
 func _layer_y_actually_responds_to_the_ratio(t) -> void:
 	var bg := SkyBackground.new()
 	var screen_top := 1000.0
-	var far_y: float = bg.call("_layer_y", screen_top, Fx.BG_FAR_ANCHOR_Y, Fx.BG_FAR_SCROLL_Y)
-	var near_y: float = bg.call("_layer_y", screen_top, Fx.BG_FAR_ANCHOR_Y, Fx.BG_NEAR_SCROLL_Y)
-	t.ok(far_y != near_y,
-		"같은 화면 위치·같은 기준점이어도 원경 비율과 근경 비율은 서로 다른 y를 낸다 (%.2f vs %.2f)" % [far_y, near_y])
+	var a_y: float = bg.call("_layer_y", screen_top, Fx.BG_FAR_ANCHOR_Y, Fx.BG_FAR_SCROLL_Y)
+	var b_y: float = bg.call("_layer_y", screen_top, Fx.BG_FAR_ANCHOR_Y, Fx.BG_FAR_SCROLL_Y * 2.0)
+	t.ok(a_y != b_y,
+		"같은 화면 위치·같은 기준점이어도 비율이 다르면 다른 y가 나온다 (%.2f vs %.2f)" % [a_y, b_y])
 	t.eq(bg.call("_layer_y", screen_top, 500.0, 1.0), 500.0,
 		"비율이 1이면 기준점에 완전히 고정된다 (공식 자체의 전제)")
 	t.eq(bg.call("_layer_y", screen_top, 500.0, 0.0), screen_top,
@@ -221,7 +210,7 @@ func _horizon_anchor_is_pinned_by_value(t) -> void:
 ## 200 the damped ratio landed *farther* from `BG_FAR_ANCHOR_Y` than the raw one, because a smaller ratio
 ## pulls the result toward `screen_top`, not toward the anchor. Direction only makes sense measured on
 ## screen, never against the anchor.
-func _vertical_follow_frac_actually_damps_both_layers(t) -> void:
+func _vertical_follow_frac_actually_damps_the_far_layer(t) -> void:
 	t.ok(Fx.BG_VERTICAL_FOLLOW_FRAC >= 0.0 and Fx.BG_VERTICAL_FOLLOW_FRAC <= 1.0,
 		"세로 시차 감쇠 계수가 0..1 사이다 (0=화면에서 전혀 안 움직인다, 1=오늘 비율 그대로 움직인다)")
 	if Fx.BG_VERTICAL_FOLLOW_FRAC >= 1.0:
@@ -249,20 +238,6 @@ func _vertical_follow_frac_actually_damps_both_layers(t) -> void:
 	t.ok(far_damped_shift < far_raw_shift,
 		"같은 카메라 이동에 대해 원경이 화면에서 실제로 덜 움직인다 (감쇠 %.2f vs 원래 %.2f)" % [far_damped_shift, far_raw_shift])
 
-	# **Near layer — `_layer_y()` directly with `_draw()`'s own anchor expression.** No pure wrapper exists
-	#  for the near call site (unlike `_far_y`), so this proves the *ratio's* effect on the formula, not
-	#  that `_draw()` still passes the damped ratio instead of the raw one — that half would need `_draw()`
-	#  driven treed with `pump_frames` to close, and is unmeasured here.
-	var near_anchor := Fx.BG_NEAR_GROUND_Y - 214.0   ## bg_near_farm's own height (measured above, 1920x214).
-	var near_ratio_damped := Fx.BG_NEAR_SCROLL_Y * Fx.BG_VERTICAL_FOLLOW_FRAC
-	var near_damped_a: float = (bg.call("_layer_y", top_a, near_anchor, near_ratio_damped) as float) - top_a
-	var near_damped_b: float = (bg.call("_layer_y", top_b, near_anchor, near_ratio_damped) as float) - top_b
-	var near_damped_shift := absf(near_damped_a - near_damped_b)
-	var near_raw_a: float = (bg.call("_layer_y", top_a, near_anchor, Fx.BG_NEAR_SCROLL_Y) as float) - top_a
-	var near_raw_b: float = (bg.call("_layer_y", top_b, near_anchor, Fx.BG_NEAR_SCROLL_Y) as float) - top_b
-	var near_raw_shift := absf(near_raw_a - near_raw_b)
-	t.ok(near_damped_shift < near_raw_shift,
-		"같은 카메라 이동에 대해 근경이 화면에서 실제로 덜 움직인다 (감쇠 %.2f vs 원래 %.2f)" % [near_damped_shift, near_raw_shift])
 	bg.free()
 
 
@@ -377,7 +352,7 @@ func _ready_actually_calls_setup(t) -> void:
 ## the *result* here means a wrong multiplier or a swapped operand still shows up as a moved number.
 func _underground_depth_constants_are_pinned(t) -> void:
 	t.eq(Fx.BG_UNDER_TOP_Y, Fx.BG_NEAR_GROUND_Y,
-		"지하 채움의 위쪽 경계가 근경 지면선과 같다 (땅이 어디인지를 두 번째로 정의하지 않는다)")
+		"지하 채움의 위쪽 경계가 지면선과 같다 (땅이 어디인지를 두 번째로 정의하지 않는다)")
 	t.eq(Fx.BG_UNDER_BOTTOM_Y, 1536.0,
 		"지하 채움의 바닥이 맵의 실제 바닥이다 (48 x 8 x 4 = 1536 — `CellGrid.H` 1008이 아니다)")
 	t.eq(Fx.BG_UNDER_BANDS.size(), 4, "지하 밴드가 4단이다")

@@ -114,7 +114,18 @@ static func rune_slots(circle_id: int, area: Rect2) -> PackedVector2Array:
 static func rune_radius(circle_id: int, area: Rect2) -> float:
 	if CircleDefs.picture(circle_id) == CircleDefs.PIC_TRIANGLE:
 		return _radius(area) * float(Fx.TRI_SOCKET_R - Fx.TRI_BAND) / float(Fx.TRI_CANVAS_R)
-	return _radius(area) * Fx.CIRCLE_RUNE_RATIO
+	# **The round rune is the innermost band's hole — derived, not a tuned ratio of its own.** The layer
+	#  bands nest by `CIRCLE_RING_NEST` down from `CIRCLE_RING_ZONE`, so the space left in the middle is
+	#  exactly `zone * NEST^layers`, and the rune is that space. Tuning it separately is what let the rune's
+	#  own disc poke through layer 1's motif hole; there is no second number to keep in step now.
+	#  **This is the one place the rune axis reads the layer table**, and it reverses the one-directional
+	#  exception this file's header records — `layer_bands()` no longer calls back, so there is no cycle.
+	var layers := CircleDefs.layers(circle_id)
+	if layers <= 0:
+		# No circle: nothing draws a rune seat anyway (`rune_slots()` returns none). `pow(x, 0) == 1` would
+		#  hand back the whole ring zone, which is a nonsense radius to leak to any future caller.
+		return 0.0
+	return _radius(area) * Fx.CIRCLE_RING_ZONE * pow(Fx.CIRCLE_RING_NEST, float(layers))
 
 
 # --- layer axis ---------------------------------------------------
@@ -179,23 +190,27 @@ static func layer_bands(circle_id: int, area: Rect2) -> Array[Dictionary]:
 				"hit": Vector2(inner, outer),
 			})
 		return out
-	# **"한 칸씩 바깥으로" is one derived rule, not two tuned numbers** (`onboarding-and-palette-tabs.md`
-	#  Stage 5). The round rune sits dead center, so "move the rune outward" has no direction — what actually
-	#  needs to move is where the ring zone *starts*. `hole` pushes that start to just outside the rune's own
-	#  drawn edge (`CIRCLE_RING_GAP_FRAC` is the "one칸" gap), and both layers scale into the remaining band
-	#  out to `zone`. Grow the rune (`CIRCLE_RUNE_RATIO`) and every layer seat follows on its own — there is
-	#  no second offset to keep in step, which is the whole point of writing it this way.
+	# **Nested by `CIRCLE_RING_NEST`, not evenly spaced** — that constant's own box carries the measurement
+	#  (each motif is a donut with its own hole/outer ratio, and a linear stack sits under none of them).
+	#  Band `i` of `n` runs `zone * NEST^(n-i)` to `zone * NEST^(n-1-i)`, so layer `n-1` ends at `zone` and
+	#  every rim is `NEST` times the one outside it. **This no longer reads `rune_radius()`** — the traffic
+	#  reversed: the rune is now the hole this stack leaves behind (see that function).
 	var zone := _radius(area) * Fx.CIRCLE_RING_ZONE
-	var hole := rune_radius(circle_id, area) + _radius(area) * Fx.CIRCLE_RING_GAP_FRAC
 	var c := _center(area)
 	for i in n:
-		var outer := hole + (zone - hole) * float(i + 1) / float(n)
+		var inner := zone * pow(Fx.CIRCLE_RING_NEST, float(n - i))
+		var outer := zone * pow(Fx.CIRCLE_RING_NEST, float(n - 1 - i))
 		out.append({
 			"center": c,
 			"edges": PackedFloat32Array([outer]),
 			# The 12 o'clock direction. Scatter the angle per layer and "which ring's glyph is this" stops reading.
 			"seat": c + Vector2(0.0, -outer),
-			"hit": Vector2(0.0, glyph_radius(area) * Fx.SLOT_HIT_RATIO),
+			# **The whole band, not a small disc at the seat** — the user, twice: "작은 원" has to go, and the
+			#  ring art now fills the band. A hit disc left at the seat while the picture spans the band is
+			#  exactly the "draw here, click there" divergence this file's own header calls silent.
+			#  **Measured from `center`, which is why `layer_at` reads `center` and not `seat`** — the socket
+			#  picture has `seat == center` so nothing about it changes.
+			"hit": Vector2(inner, outer),
 		})
 	return out
 
@@ -225,7 +240,9 @@ static func glyph_radius(area: Rect2) -> float:
 static func layer_at(circle_id: int, area: Rect2, p: Vector2) -> int:
 	var bands := layer_bands(circle_id, area)
 	for i in bands.size():
-		var seat: Vector2 = bands[i]["seat"]
+		# **`center`, not `seat`** — `hit` is the band's own annulus now (`layer_bands`' own comment).
+		#  For the socket picture the two points are the same, so only the round circle moves.
+		var seat: Vector2 = bands[i]["center"]
 		var hit: Vector2 = bands[i]["hit"]
 		var d := p.distance_to(seat)
 		if d >= hit.x and d <= hit.y:

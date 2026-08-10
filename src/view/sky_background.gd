@@ -7,11 +7,14 @@ extends Node2D
 ##
 ## **It must sit before (above) `CellRenderer` in `stage.tscn`.** Scene order is drawing order.
 ##
-## **Two layers, both tiled horizontally**: far scenery and a near strip at the player's feet.
-##  One picture cannot cover the world (16,384 x 4,032px against a 960x540 screen), so
-##  **the far layer's own top row color fills the sky above it** — sampled, not hard-coded, so swapping
-##  the art needs no constant edited. The near layer fills nothing: it is a strip standing on the ground
-##  line with transparency everywhere else.
+## **One layer, tiled horizontally**: the far scenery. One picture cannot cover the world
+##  (16,384 x 4,032px against a 960x540 screen), so **the far layer's own top row color fills the sky
+##  above it** — sampled, not hard-coded, so swapping the art needs no constant edited.
+##
+## **There was a second, near strip standing on the ground line, and the user cut it**
+##  ("하늘 그림 유지하고 그거말고 다른 배경 삭제, 뭔가 길에 있을법한 레이어"). It is deleted, not switched
+##  off — the same treatment the rejected night sky got, and for the same reason: a layer kept behind a
+##  disabled flag is a layer nobody can tell is gone.
 ##
 ## **Below the far picture there is no more sky.** The picture is clamped so it stops following the
 ##  camera at the ground line (`_far_y()`), and everything under it is `_draw_depth_fill()` — banded
@@ -31,7 +34,6 @@ const Fx := preload("res://src/view/fx_tuning.gd")
 var _cam: Camera2D = null
 var _view: Vector2 = Vector2.ZERO
 var _far: Texture2D = null
-var _near: Texture2D = null
 ## The far picture's own top row color. **It fills the sky above the picture** — the world is seven
 ##  screens tall and the picture is one, so without this the area above it is transparent and the black
 ##  `EMPTY` shows through as a hard band. There is no `_bottom_fill` counterpart any more — below the
@@ -45,17 +47,18 @@ func setup(cam: Camera2D) -> void:
 		float(ProjectSettings.get_setting("display/window/size/viewport_width")),
 		float(ProjectSettings.get_setting("display/window/size/viewport_height")))
 	z_index = Fx.BG_Z_INDEX
-	set_backdrop(Fx.BG_FAR_TEXTURE, Fx.BG_NEAR_TEXTURE)
+	set_backdrop(Fx.BG_FAR_TEXTURE)
 
 
-## Swaps both pictures. **The town is a second backdrop on this same node** (`town.md`) — not a second scene.
-func set_backdrop(far_path: String, near_path: String) -> void:
+## Swaps the picture. **The town is a second backdrop on this same node** (`town.md`) — not a second scene.
+## **One argument, not two.** The near strip's path used to ride along here; deleting the layer but keeping
+##  the parameter would have left every caller passing a value nothing reads, which is exactly the
+##  half-wired shape `net_town.gd` caught once already.
+func set_backdrop(far_path: String) -> void:
 	_far = load(far_path) as Texture2D
-	_near = load(near_path) as Texture2D
 	if _far == null:
 		push_error("배경 그림을 못 읽었다: %s" % far_path)
 		return
-	# **The near layer is allowed to be missing** (a stage may have no near strip) — the far one is not.
 	var img := _far.get_image()
 	_top_fill = img.get_pixel(0, 0)
 	queue_redraw()
@@ -84,15 +87,6 @@ func _draw() -> void:
 	_draw_depth_fill(origin, maxf(below, origin.y), origin.y + _view.y)
 
 	_tile(_far, origin, far_y, Fx.BG_FAR_SCROLL_X)
-
-	if _near != null:
-		# **The strip's bottom sits on the ground line**, so its own height comes off the anchor.
-		#  Written this way, a picture of a different height still stands on the ground instead of floating.
-		# **`Fx.BG_VERTICAL_FOLLOW_FRAC` damps the vertical ratio here too** — same knob, same reason `_far_y` uses it.
-		var near_y := _layer_y(origin.y,
-			Fx.BG_NEAR_GROUND_Y - float(_near.get_height()),
-			Fx.BG_NEAR_SCROLL_Y * Fx.BG_VERTICAL_FOLLOW_FRAC)
-		_tile(_near, origin, near_y, Fx.BG_NEAR_SCROLL_X)
 
 
 ## Where a layer lands vertically. **ratio 1 = the anchor exactly (nailed to the world),

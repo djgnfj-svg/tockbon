@@ -43,7 +43,6 @@ const PROBE_OUT := "user://net_stages_bake_probe.gd"
 ## pair would leave "it came from the row" and "it came from the old ternary" indistinguishable for one
 ## of the two rooms.
 const SYN_BG_FAR := Fx.BG_TOWN_FAR_TEXTURE
-const SYN_BG_NEAR := Fx.BG_NEAR_TEXTURE
 const SYN_SPAWN := Vector2i(7, 3)
 const SYN_MONSTER_TX := 111
 const SYN_SEAT_TX := 100
@@ -289,7 +288,6 @@ func _apply_room_reads_every_field_out_of_the_row(t) -> void:
 		},
 		"title": SYN_TITLE,
 		"bg_far": SYN_BG_FAR,
-		"bg_near": SYN_BG_NEAR,
 		# **`NO_NEXT`, because this check is about the fields and not the chain** — the chain has its own
 		#  three checks below. Omitting the key is not an option: `_apply_room()` reads every required key
 		#  unconditionally, and a missing one aborts the call **midway**, which reads here as the *spawn*
@@ -317,12 +315,11 @@ func _apply_room_reads_every_field_out_of_the_row(t) -> void:
 		"행이 들고 온 글자표를 썼다 (#을 돌이 아니라 나무로 읽었다)")
 
 	# ── the backdrop came from the row ──
-	# **The pair is deliberately mismatched** (`SYN_BG_FAR`/`SYN_BG_NEAR`: the town's far picture with the
-	#  farm's near one). Either real pair would leave "it came from the row" and "it came from the ternary
-	#  this line replaced" indistinguishable for one of the two rooms.
-	#  **Measured: only one of the two lines below bites per hardcode**, and which one names the culprit —
-	#  push the farm pair and the *far* check goes red, push the town pair and the *near* one does. Neither
-	#  half alone covers both; the mismatch is what makes the pair cover them.
+	# **`SYN_BG_FAR` is the *town's* picture handed to a synthetic stage row on purpose** — the farm's own
+	#  picture would leave "it came from the row" and "it came from a hardcoded stage-1 default"
+	#  indistinguishable. **The near half of this check went with the near layer** (the user deleted it);
+	#  what it used to add was a second, differently-valued path through the same read, so losing it costs
+	#  coverage of "the two arguments got swapped" — a swap that is no longer expressible with one argument.
 	# **Read off the node, not scanned in the source.** `net_town` covers row -> node for the town; what is
 	#  missing without this is **per-row** coverage — a `_apply_room()` that pushed one fixed pair regardless
 	#  of the row would still satisfy that check and give stage 2 stage 1's sky.
@@ -330,11 +327,9 @@ func _apply_room_reads_every_field_out_of_the_row(t) -> void:
 	t.ok(sky != null, "셸이 하늘을 잡고 있다 (전제)")
 	if sky != null:
 		var far: Texture2D = (sky as Object).get("_far")
-		var near: Texture2D = (sky as Object).get("_near")
-		t.ok(far != null and near != null, "배경 두 장이 실렸다 (전제)")
-		if far != null and near != null:
-			t.eq(far.resource_path, SYN_BG_FAR, "행이 들고 온 먼 배경이 하늘에 닿았다")
-			t.eq(near.resource_path, SYN_BG_NEAR, "행이 들고 온 가까운 배경도 닿았다")
+		t.ok(far != null, "배경이 실렸다 (전제)")
+		if far != null:
+			t.eq(far.resource_path, SYN_BG_FAR, "행이 들고 온 배경이 하늘에 닿았다")
 
 	# ── the spawn came from the row ──
 	var tile_px := Tuning.TILE_CELLS * Tuning.CELL_PX
@@ -697,7 +692,6 @@ func _push_synthetic_stage(next_id: int) -> int:
 		},
 		"title": SYN_TITLE,
 		"bg_far": SYN_BG_FAR,
-		"bg_near": SYN_BG_NEAR,
 		"next": next_id,
 	})
 	return StageDefs.ROWS.size() - 1

@@ -304,8 +304,12 @@ func _round_numbers_pinned_before_the_triangle_arrives(t) -> void:
 		"진 중심이 못박은 값과 같다 (%s)" % f["center"])
 
 	var bands := Layout.layer_bands(id, area)
-	var want_edge0 := [107.08480, 158.95399]
-	var want_seat_y := [84.9152, 33.0460]
+	var want_edge0 := [102.39984, 150.58800]
+	var want_seat_y := [89.60016, 41.41200]
+	# **The band's own annulus, band by band** — this used to be one shared disc at the 12-o'clock seat, and
+	#  pinning it once for every layer is what let "draw on the rim, click at the seat" pass. Each band's
+	#  `hit.x` is the rim of the band inside it, so the two rows below also pin that the stack is contiguous.
+	var want_hit := [Vector2(69.63189, 102.39984), Vector2(102.39984, 150.58800)]
 	t.eq(bands.size(), want_edge0.size(), "밴드 수가 못박은 개수(%d)와 같다" % want_edge0.size())
 	for i in mini(bands.size(), want_edge0.size()):
 		var edges: PackedFloat32Array = bands[i]["edges"]
@@ -315,12 +319,10 @@ func _round_numbers_pinned_before_the_triangle_arrives(t) -> void:
 			"%d번 밴드 바깥 모서리가 못박은 값과 같다 (%.5f)" % [i, edges[0]])
 		t.ok(seat.is_equal_approx(Vector2(216.5, want_seat_y[i])),
 			"%d번 밴드 자리가 못박은 값과 같다 (%s)" % [i, seat])
-		# Every layer shares one hit radius on `PIC_ROUND` (`glyph_radius(area)` does not vary per layer) —
-		#  pinned once and reused rather than repeated per band.
-		t.ok(is_equal_approx(hit.y, 25.0980) and is_equal_approx(hit.x, 0.0),
+		t.ok(hit.is_equal_approx(want_hit[i]),
 			"%d번 밴드 히트 반경이 못박은 값과 같다 (%s)" % [i, hit])
 
-	t.ok(is_equal_approx(Layout.rune_radius(id, area), 46.84960),
+	t.ok(is_equal_approx(Layout.rune_radius(id, area), 69.63189),
 		"룬 반지름이 못박은 값과 같다 (%.5f)" % Layout.rune_radius(id, area))
 	var rs := Layout.rune_slots(id, area)
 	t.ok(rs.size() > 0 and rs[0].is_equal_approx(Vector2(216.5, 192.0)),
@@ -1191,7 +1193,10 @@ func _draw_actually_runs_headless(t) -> void:
 	#  where dropping an edge actually shows up as a count.
 	for edges: Array in win.ring_edges:
 		t.eq(edges.size(), 1, "원형 진의 밴드 하나당 모서리 하나를 긋는다 (%s)" % [edges])
-	t.ok(win.glyph_draws.has(Glyph.GLYPH_SPREAD), "채운 자리(확산)가 실제로 절차적으로 그려졌다 (%s)" % [win.glyph_draws])
+	# **GLYPH_SPREAD now carries ring art (`Fx.RING_TEX`)** — `_draw_ring`'s `painted_ring` branch takes
+	#  over for it, so the filled seat draws the socket rarity ring instead of the procedural symbol.
+	t.ok(win.rarity_ring_calls.has(Glyph.GLYPH_SPREAD),
+		"채운 자리(확산)에 고리 그림이 있어 절차적 문양 대신 희귀도 링이 그려진다 (%s)" % [win.rarity_ring_calls])
 	t.ok(win.empty_slot_calls > 0, "빈 자리가 실제로 그려졌다 (%d회)" % win.empty_slot_calls)
 	t.eq(win.texture_draws.size(), 0, "원형 진은 소켓 텍스처 경로를 안 탄다 (%d회)" % win.texture_draws.size())
 
@@ -1236,13 +1241,14 @@ func _draw_actually_runs_headless(t) -> void:
 	# **The triangle's own draw paths — untouched by the block above.** `PIC_ROUND`'s bands always have
 	#  `edges.size() == 1`, so `_draw_ring`'s socket-texture branch (step 6) and `_draw_triangle_frame`
 	#  (step 3) are never reached by driving the round circle alone. Socket 0 carries a glyph with art
-	#  (the texture branch), socket 1 a glyph with **no** art (the procedural fallback *inside* a socket
-	#  band — a different code path from the round circle's own fallback above, since it still tests
-	#  `edges.size() > 1` first), and socket 2 is left empty (the empty-seat draw inside a socket band).
+	#  (the texture branch), socket 1 a glyph with **no** art at all — `CONDENSE_C`, not `DUMMY_C`, since
+	#  `Fx.RING_TEX` now also covers the dummy family (`ring_dummy.png`), which would take the ring-art
+	#  branch instead of the procedural fallback this line means to exercise — and socket 2 is left empty
+	#  (the empty-seat draw inside a socket band).
 	var pr2 := Progress.new()
 	var tri := SpellCircle.new(CircleDefs.CIRCLE_TRIANGLE)
 	t.ok(tri.place_glyph(0, Glyph.GLYPH_SPREAD), "삼각 진 0번 소켓에 그림 있는 문양을 놓는다 (전제)")
-	t.ok(tri.place_glyph(1, Glyph.DUMMY_C), "삼각 진 1번 소켓에 그림 없는 문양을 놓는다 (전제 — 절차적 폴백 경로)")
+	t.ok(tri.place_glyph(1, Glyph.CONDENSE_C), "삼각 진 1번 소켓에 그림 없는 문양을 놓는다 (전제 — 절차적 폴백 경로)")
 	var win2 := _RecordingCircleWindow.new()
 	win2.setup(pr2, tri)
 	win2.size = Fx.WINDOW_RECT.size
@@ -1285,7 +1291,7 @@ func _draw_actually_runs_headless(t) -> void:
 	for d: Dictionary in win2.texture_draws:
 		textured_ids.append(int(d["glyph_id"]))
 	t.ok(textured_ids.has(Glyph.GLYPH_SPREAD), "그림 있는 문양(확산)이 텍스처 경로로 그려졌다 (%s)" % [textured_ids])
-	t.ok(win2.glyph_draws.has(Glyph.DUMMY_C), "그림 없는 문양(더미)이 절차적 폴백으로 그려졌다 (%s)" % [win2.glyph_draws])
+	t.ok(win2.glyph_draws.has(Glyph.CONDENSE_C), "그림 없는 문양(압축)이 절차적 폴백으로 그려졌다 (%s)" % [win2.glyph_draws])
 	t.ok(win2.empty_slot_calls > 0, "2번 소켓(빈 자리)이 실제로 그려졌다 (%d회)" % win2.empty_slot_calls)
 
 	# **The socket's own rarity ring — a real regression once, fixed** (verify-read: the first version of
@@ -1353,15 +1359,17 @@ func _selecting_a_layer_brightens_its_ring_then_toggles_off(t) -> void:
 	win.queue_redraw()
 	await t.pump_frames(3)
 	var got_selected_filled := false
+	# **GLYPH_SPREAD carries ring art now** (`Fx.RING_TEX`) — `_draw_ring`'s own `on_rim` test makes this
+	#  layer's selection ring sit at the band's center/outer edge, not at the small seat mark the ring art
+	#  replaced (`on_rim`'s own comment: no small circle at the seat once the art carries the layer).
+	var band0_edges: PackedFloat32Array = bands[0]["edges"]
+	var want_at: Vector2 = bands[0]["center"]
+	var want_r: float = band0_edges[0]
 	for call: Dictionary in win.slot_ring_calls:
-		if (call["at"] as Vector2).is_equal_approx(bands[0]["seat"]):
+		if (call["at"] as Vector2).is_equal_approx(want_at) and is_equal_approx(call["r"] as float, want_r):
 			got_selected_filled = true
 			t.ok((call["col"] as Color).is_equal_approx(Fx.SLOT_SELECTED_COLOR),
 				"고른, 문양 있는 층도 SLOT_SELECTED_COLOR 링을 얹는다 (%s)" % [call["col"]])
-			# **Outside the glyph's own rarity ring** (`RARITY_RING_RATIO` 1.3), not flush with it —
-			#  `circle_window._draw_ring`'s own comment: the two must never share pixels.
-			t.ok(call["r"] as float > Layout.glyph_radius(area) * Fx.RARITY_RING_RATIO,
-				"선택 링 반지름이 희귀도 링보다 바깥이다 (%.3f)" % (call["r"] as float))
 	t.ok(got_selected_filled, "0번 층(문양 있음) 링이 실제로 기록됐다 (전제)")
 
 	t.root.remove_child(win)

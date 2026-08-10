@@ -82,7 +82,7 @@ const NO_NEXT := -1
 ## | `monsters` | the `(tx, kind)` placement table (`stage1_monsters.gd`'s shape) |
 ## | `gate` | the six tile numbers of the stage's exit, or `NO_GATE` |
 ## | `title` | what the settlement screen is titled when this room is cleared |
-## | `bg_far` · `bg_near` | the two parallax backdrop pictures |
+## | `bg_far` | the backdrop picture (there is one layer — `sky_background.gd`'s own header) |
 ##
 ## **Adding a stage is adding a row.** If that ever stops being true — if one more file has to be touched —
 ##  that is the bug this table exists to prevent, and `net_stages` is where it gets caught: it drives
@@ -103,7 +103,6 @@ static var ROWS: Array[Dictionary] = [
 		#  screen cannot open here at all (`_sync_settlement`'s own `not _in_town` term).
 		"title": "",
 		"bg_far": Fx.BG_TOWN_FAR_TEXTURE,
-		"bg_near": Fx.BG_TOWN_NEAR_TEXTURE,
 		# **The town's exit is not a chain.** Which stage the departure gate leads to is `_leave_town()`'s
 		#  own constant — E at the gate is a choice the player walks to, not a room ending and handing on.
 		"next": NO_NEXT,
@@ -134,7 +133,6 @@ static var ROWS: Array[Dictionary] = [
 		#  the textures **are** readable back (`net_background` already reads `_far`/`_near`), which the old
 		#  comment there denied. ⇒ Strictly stronger, and the line was free to move.
 		"bg_far": Fx.BG_FAR_TEXTURE,
-		"bg_near": Fx.BG_NEAR_TEXTURE,
 		# **What comes after this stage — `NO_NEXT` today, and that is what makes stage 1's clear behave
 		#  exactly as it always has**: the settlement screen, the clear title, the end-of-content notice.
 		#  **Stage 2 is reached by writing `STAGE_2` here**, and by nothing else — the gate then walks you
@@ -146,7 +144,7 @@ static var ROWS: Array[Dictionary] = [
 ## Every key a row must carry. **Named here so a row that forgets one is caught by name** rather than by a
 ##  null deref three files away — `net_stages` walks this against every row.
 const REQUIRED_KEYS: Array[String] = [
-	"map", "chars", "spawn", "monsters", "gate", "title", "next", "bg_far", "bg_near",
+	"map", "chars", "spawn", "monsters", "gate", "title", "next", "bg_far",
 ]
 
 ## Every key a `gate` must carry when it is not `NO_GATE`.
