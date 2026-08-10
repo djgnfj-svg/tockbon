@@ -21,6 +21,18 @@ extends Control
 const Fx := preload("res://src/view/fx_tuning.gd")
 const Layout := preload("res://src/view/onboard_layout.gd")
 
+## **The sentence this box shows right now — `stage.gd` overwrites it every frame**, the same "derive, do not
+## push" idiom `visible` above already documents. Defaulting to `Fx.ONBOARD_TEXT` keeps every net that builds
+## this node and calls `_draw()` with no wiring reading exactly what it read before this field existed.
+var message := Fx.ONBOARD_TEXT
+
+## **Whether the Tab key cap and arrow draw alongside the sentence.** `true` for the walkthrough's own beat
+## (Stage 7's "point at Tab"); `false` for the departure gate's line (`stage._town_gate_locked()`), which
+## names an action the player already knows how to reach (open the window and place things) rather than a
+## key nobody has pressed yet. **One box, one extra bool** — a second `Control` for the gate's sentence would
+## duplicate the panel, the font size and the backing-plate reasoning above for one more line of text.
+var show_tab_hint := true
+
 
 func _ready() -> void:
 	position = Fx.ONBOARD_RECT.position
@@ -36,8 +48,9 @@ func _draw() -> void:
 	var font := get_theme_default_font()
 	_draw_onboard_panel(Layout.panel_rect(size))
 	_draw_onboard_text(Layout.text_baseline_y(size), font)
-	_draw_onboard_key(Layout.key_rect(size), font)
-	_draw_onboard_arrow(Layout.arrow_rect(size))
+	if show_tab_hint:
+		_draw_onboard_key(Layout.key_rect(size), font)
+		_draw_onboard_arrow(Layout.arrow_rect(size))
 
 
 ## The backing panel, drawn under everything else — see `onboard_layout.panel_rect`'s own comment for why
@@ -53,9 +66,9 @@ func _draw_onboard_panel(rect: Rect2) -> void:
 func _draw_onboard_text(y: float, font: Font) -> void:
 	if font == null:
 		return
-	var w := font.get_string_size(Fx.ONBOARD_TEXT, HORIZONTAL_ALIGNMENT_LEFT, -1,
+	var w := font.get_string_size(message, HORIZONTAL_ALIGNMENT_LEFT, -1,
 		Fx.ONBOARD_TEXT_SIZE).x
-	draw_string(font, Vector2(size.x * 0.5 - w * 0.5, y), Fx.ONBOARD_TEXT,
+	draw_string(font, Vector2(size.x * 0.5 - w * 0.5, y), message,
 		HORIZONTAL_ALIGNMENT_LEFT, -1, Fx.ONBOARD_TEXT_SIZE, Fx.ONBOARD_TEXT_COLOR)
 
 

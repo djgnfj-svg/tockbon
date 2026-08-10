@@ -21,6 +21,7 @@ const OnboardLayout := preload("res://src/view/onboard_layout.gd")
 const Fixtures := preload("res://src/actor/fixtures.gd")
 const TownMap := preload("res://src/stage/town_map.gd")
 const TownView := preload("res://src/view/town_view.gd")
+const StageDefs := preload("res://src/stage/stage_defs.gd")
 
 const STAGE_SCENE := "res://src/stage/stage.tscn"
 
@@ -57,6 +58,7 @@ func run(t) -> void:
 	await _onboard_view_is_really_wired_by_the_shell(t)
 	await _the_walkthrough_runs_once_end_to_end(t)
 	await _research_door_is_closed_and_prompts_prep(t)
+	await _gate_stays_shut_until_the_circle_can_fire(t)
 
 
 ## **The inversion of the whole feature** (design §8: "Auto-advance is onboarding-only. Outside it,
@@ -298,6 +300,47 @@ func _research_door_is_closed_and_prompts_prep(t) -> void:
 	await t.pump_frames(2)
 	var win: Variant = root.get("_research_window")
 	t.ok(not bool((win as Object).get("visible")), "연구대 앞에서 E를 눌러도 연구창이 안 열린다")
+
+	t.root.remove_child(root)
+	root.queue_free()
+
+
+## **The departure gate itself — blocked while the circle cannot fire, open the instant it can.**
+## (user: "온보딩 안 하면 안 넘어가게 해주고"). **Two directions, not four** — each half is the other's
+## inversion: the first proves the same E on the same seat does nothing while the circle is empty, the
+## second proves it works once the circle is assembled. Missing either half would only prove "E runs
+## there", not "E is gated on `can_fire()`".
+func _gate_stays_shut_until_the_circle_can_fire(t) -> void:
+	var scene: PackedScene = load(STAGE_SCENE)
+	t.ok(scene != null and scene.can_instantiate(), "무대 씬을 세울 수 있다 (전제)")
+	if scene == null or not scene.can_instantiate():
+		return
+	var root := scene.instantiate()
+	t.root.add_child(root)
+	await t.pump_frames(2)
+
+	var circle: SpellCircle = root.get("_circle")
+	t.ok(not circle.can_fire(), "새 런의 마법진은 못 쏜다 (전제 — 빈 시작)")
+
+	var ch: Variant = root.get("_char")
+	var seats := TownMap.fixture_seats()
+	ch.call("place", int(float(seats[Fixtures.KIND_GATE])), TownMap.SPAWN_TILE.y * 16)
+	root.call("_interact")
+	root.call("_physics_process", 1.0 / 60.0)
+	t.eq(int(root.get("_stage_id")), StageDefs.ROOM_TOWN,
+		"못 쏘는 채로 게이트에서 E를 눌러도 마을에 그대로 있다")
+	var onboard_view: Control = root.get("_onboard_view")
+	t.ok(onboard_view.visible, "막히면 안내 문구가 화면에 뜬다")
+	t.eq(String(onboard_view.get("message")), Fx.GATE_LOCKED_TEXT,
+		"그 문구는 먼저 조립하라는 말이다")
+
+	# -- the inversion: assemble a working circle on the same seat and the same E now opens it --
+	circle.set_circle(CircleDefs.CIRCLE_ROUND)
+	circle.set_rune(0, Tuning.ELEM_NONE)
+	t.ok(circle.can_fire(), "동그라미 + 무속성이면 쏠 수 있다 (전제)")
+	root.call("_interact")
+	t.eq(int(root.get("_stage_id")), StageDefs.STAGE_1,
+		"조립하고 나면 같은 자리 같은 E가 스테이지 1을 연다")
 
 	t.root.remove_child(root)
 	root.queue_free()
