@@ -358,7 +358,7 @@ func run(t) -> void:
 	_slam_landing_hurts_the_player(t)
 	_touching_a_bull_mid_windup_before_a_slam_does_not_hurt(t)
 	_rooster_leaping_onto_the_player_does_not_hurt_them(t)
-	_slam_lands_and_ignites_a_symmetric_ring(t)
+	_slam_does_not_ignite_wood_at_any_ring_point(t)
 	_slam_over_stone_ignites_nothing(t)
 	_slam_safety_cap_timeout_ignites_nothing(t)
 	_bull_slam_does_not_leave_room1_on_the_real_map(t)
@@ -381,7 +381,7 @@ func run(t) -> void:
 ## The table values, by themselves. **Learned from Stage F's own postmortem** (a table-read-only check
 ## cannot catch a wrong value landing in the table it re-reads) — this function exists only to prove the
 ## accessors are wired to `MOVE_SLAM` at all; every number that actually matters for gameplay is pinned
-## independently, against fixed expectations, further down (`_slam_lands_and_ignites_a_symmetric_ring`).
+## independently, against fixed expectations, further down (`_slam_does_not_ignite_wood_at_any_ring_point`).
 func _slam_values_are_read(t) -> void:
 	t.eq(BossAi.leap_jump_vy_px(Defs.KIND_BULL), -450.0, "황소 slam 상승 속도 = -450px/s (acceptance 8 수정 후)")
 	t.eq(BossAi.slam_ignite_r(Defs.KIND_BULL), 2, "황소 slam 점화 반경 = 2")
@@ -545,7 +545,7 @@ func _third_cycle_is_slam_and_it_leaps(t) -> void:
 ## first tick, `was_leap` reads true immediately, `vy` never leaves 0, the body never leaves the ground, and
 ## `on_ground` (already true) is read as "just landed" on the very same tick — `LEAP` collapses to zero real
 ## duration before `_char_hit_by_monsters` (which runs after `on_tick` in the same frame) ever observes it.
-## Going through `WINDUP` with `pattern_left = 0` (the same idiom `_slam_lands_and_ignites_a_symmetric_ring`
+## Going through `WINDUP` with `pattern_left = 0` (the same idiom `_slam_does_not_ignite_wood_at_any_ring_point`
 ## already uses) launches the jump for real.
 func _slam_landing_hurts_the_player(t) -> void:
 	var kind := Defs.KIND_BULL
@@ -655,7 +655,12 @@ func _rooster_leaping_onto_the_player_does_not_hurt_them(t) -> void:
 ## first version on screen: the outer pair (±8 cells = ±32px) sat inside the bull's own 44px half-width, so
 ## the ring read as a small fire under the body, not fire thrown outward past it. `ignite_spread_cells` moved
 ## 3 -> 6 to fix it (`boss_ai.gd`'s own comment on `MOVE_SLAM` has the exact arithmetic).
-func _slam_lands_and_ignites_a_symmetric_ring(t) -> void:
+## **Reversed by `burn-out-of-the-bull-room.md` §0/§6** (decided by the user, recorded in
+## `stage1-bosses.md`'s own acceptance-4 row). `WOOD` is now `rune_only` and the slam's own ground fire is
+## `IGNITE_ANY` (`world_step._ignite_slam_impact`) — the wrong source, on purpose. **This used to be named
+## `_slam_lands_and_ignites_a_symmetric_ring` and asserted the reverse**; the geometry (five points, ±14 cells
+## outermost) is unchanged and still exercised — only the outcome at each point flips.
+func _slam_does_not_ignite_wood_at_any_ring_point(t) -> void:
 	var kind := Defs.KIND_BULL
 	var g := _bare_grid()
 	var wood_cx0 := 50
@@ -687,13 +692,10 @@ func _slam_lands_and_ignites_a_symmetric_ring(t) -> void:
 	t.eq(m.pattern, BossAi.Pattern.STUN, "착지해서 stun에 들어갔다 (검사의 전제)")
 
 	var center_cx := floori(float(m.x + Defs.w_px(kind) / 2) / float(Tuning.CELL_PX))
-	t.ok(g.is_burning(center_cx, FLOOR_CY), "착지 중심이 실제로 붙었다 (%d,%d)" % [center_cx, FLOOR_CY])
-	t.ok(g.is_burning(center_cx + 14, FLOOR_CY), "가장 바깥 점화점(중심+14칸)도 붙었다 - 몸 절반너비(11칸)를 벗어난다")
-	t.ok(g.is_burning(center_cx - 14, FLOOR_CY), "가장 바깥 점화점(중심-14칸)도 붙었다")
-	t.ok(not g.is_burning(center_cx + 15, FLOOR_CY),
-		"점화 범위 바로 밖(중심+15칸)은 아직 안 붙었다 (퍼질 틱이 없었다 - 반경/간격/개수 중 하나가 커지면 여기서 걸린다)")
-	t.ok(not g.is_burning(center_cx - 15, FLOOR_CY),
-		"점화 범위 바로 밖(중심-15칸)도 아직 안 붙었다")
+	for d in [0, 14, -14, 15, -15]:
+		t.ok(not g.is_burning(center_cx + d, FLOOR_CY),
+			"착지 지점(중심에서 %d칸)에 나무가 있어도 안 붙는다 (rune_only, %d,%d)" % [d, center_cx + d, FLOOR_CY])
+	t.eq(g.mat_at(center_cx, FLOOR_CY), Mat.WOOD, "나무 그대로 남는다")
 
 
 ## **The negative control — no wood, no fire.** Mirrors Stage D's own

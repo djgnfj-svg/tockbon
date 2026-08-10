@@ -15,6 +15,7 @@ extends RefCounted
 const ThreePick := preload("res://src/actor/three_pick.gd")
 const UnlockDefs := preload("res://src/actor/unlock_defs.gd")
 const Tuning := preload("res://src/sim/sim_tuning.gd")
+const CircleDefs := preload("res://src/sim/circle_defs.gd")
 
 ## **The XP needed to advance past `level`.** Provisional, chosen while looking at nothing yet — a knob to
 ##  turn once the numbers are seen on screen (the plan's own "not by the user" table).
@@ -141,6 +142,20 @@ var _reward_pending: Dictionary = {}
 ## decision, `docs/decisions/no-inventory.md`). `grant_rune()`/`owns_rune()` below are the only door in or out.
 var _owned_runes: Dictionary = _starting_runes()
 
+## **Stage 2 (`onboarding-and-palette-tabs.md`) — which circles the player has been granted.** The same
+## set-shaped `Dictionary` idiom as `_owned_runes` above, for the same reason: presence as a key is the
+## whole fact. **삼각 is not owned at boot — the user confirmed it explicitly.** Only 동그라미 sits in the
+## starting kit (`_starting_circles()` below), so the 진 tab shows one cell until a circle is granted by
+## some future door (none exists yet — this stage only has to stop hiding the question, the same
+## "skeleton first" `docs/design/` already allows for a TBD reward path).
+##
+## **Private, like `_owned_runes`** — `net_pick._no_pushed_out_glyph_is_stashed_anywhere` scans every
+## `.gd` file under `src/` for a class-level `Array`/`Dictionary` not on its own allowlist
+## (`docs/decisions/no-inventory.md`). This field is on that allowlist deliberately, the same argument
+## `_owned_runes`'s own entry there makes: it is a record of what has been granted, not a glyph that left
+## a spell layer. `grant_circle()`/`owns_circle()` are the only doors in or out.
+var _owned_circles: Dictionary = _starting_circles()
+
 ## **What has been bought at the research bench — permanent, and the second thing here that survives
 ##  `reset()`** (`research-bench-unlocks.md`). Set-shaped, keyed by `UnlockDefs` id, the
 ##  same idiom `_reward_pending` and `_owned_runes` above already hold.
@@ -172,6 +187,27 @@ var _drawn: Array[int] = []
 ##  lockstep), but the global RNG's stream is shared with anything else in the process that calls it, so a
 ##  net seeding it for one check could quietly perturb another. Each `Progress` owns its own stream instead.
 var _rng := RandomNumberGenerator.new()
+
+## **Stage 7 (`onboarding-and-palette-tabs.md`) — has the player already been walked through the tab strip
+## once.** `stage.gd` reads this to decide whether `_leave_town()` starts the onboarding step machine.
+## **Survives `reset()` and `next_stage()` both, deliberately** — the same discipline `gems`/`_unlocked`
+## already hold one level up (a pool instead of a single fact): clearing it on `R` would show the
+## walkthrough again on every reset, which reads as a broken tutorial, not a fresh run.
+##
+## **A bare `bool`, not a set-shaped `Dictionary`.** There is nothing here to enumerate and no way for this
+## single fact to grow into a stash, so `net_pick._no_pushed_out_glyph_is_stashed_anywhere` (which scans
+## only `Array`/`Dictionary` fields) does not need an allowlist entry for it — a scalar cannot hide a glyph
+## the way a collection could. `mark_onboarding_seen()`/`has_seen_onboarding()` are still the only doors,
+## the same paired-accessor shape `_owned_runes` holds, so nothing outside this file pokes the field raw.
+var _onboarding_seen := false
+
+
+func has_seen_onboarding() -> bool:
+	return _onboarding_seen
+
+
+func mark_onboarding_seen() -> void:
+	_onboarding_seen = true
 
 
 ## **A loop, not a single comparison** — one XP award can cross more than one threshold at once (a big kill,
@@ -289,6 +325,14 @@ static func _starting_runes() -> Dictionary:
 	return {Tuning.ELEM_NONE: true}
 
 
+## **The fixed starting kit for circles — 동그라미 only** (`onboarding-and-palette-tabs.md`, the user's own
+## "삼각진은 안 가지고 있다"). The same shape as `_starting_runes()` above, for the same reason: written as
+## a literal here rather than derived from `CircleDefs.ALL`, so a future circle added to that table does
+## not appear owned by accident the day it lands.
+static func _starting_circles() -> Dictionary:
+	return {CircleDefs.CIRCLE_ROUND: true}
+
+
 ## **Stage 3 — the bull's reward (Stage C) calls this.** Granting an already-owned rune is a harmless no-op,
 ## the same Dictionary-assignment idiom `set_boss_reward_pending` already holds for a redundant call.
 func grant_rune(rune_id: int) -> void:
@@ -300,6 +344,19 @@ func grant_rune(rune_id: int) -> void:
 ## entirely (`rune-lock-and-receiving.md`: "veiled, not hidden").
 func owns_rune(rune_id: int) -> bool:
 	return _owned_runes.get(rune_id, false)
+
+
+## **Stage 2 — the same door as `grant_rune()` above, for circles.** Granting an already-owned circle is
+## a harmless no-op, the same `Dictionary`-assignment idiom.
+func grant_circle(circle_id: int) -> void:
+	_owned_circles[circle_id] = true
+
+
+## Does the player own `circle_id`. **The palette asks this** (`palette_layout.items_of`) to leave an
+## ungranted circle out of the 진 tab entirely — the reversed rule from runes' "veiled, not hidden"
+## (`docs/decisions/palette-hides-what-you-do-not-own.md`): what you do not have has no cell at all.
+func owns_circle(circle_id: int) -> bool:
+	return _owned_circles.get(circle_id, false)
 
 
 ## **Is this unlock buyable at all — asked of the catalogue and of what is already bought, never of
@@ -429,7 +486,8 @@ func take(glyph_id: int) -> bool:
 ##
 ## **This function is a list of what a stage owns, and it is deliberately two lines long.** A run is
 ##  `town -> 1 -> 2 -> 3` (GDD's session loop), so **xp, level, money, `pending_picks`, `run_ticks`,
-##  `damage_dealt`, `gems`, `_unlocked`, `_owned_runes` and `_gems_at_run_start` all carry across.** Reaching
+##  `damage_dealt`, `gems`, `_unlocked`, `_owned_runes`, `_owned_circles`, `_onboarding_seen` and
+##  `_gems_at_run_start` all carry across.** Reaching
 ##  for `reset()` here instead — which is the obvious thing to do, since the shell already had exactly one
 ##  rebuild path — **strips every 원석 and every unlock earned in stage 1 the instant you walk into stage 2,
 ##  with nothing barking.** That is the single most dangerous edit that could be made to this file.
@@ -484,3 +542,12 @@ func reset() -> void:
 	#  folded in. Write `_starting_runes()` here instead and every rune the player paid 10 원석 for is stripped
 	#  out on the way through the departure gate, with nothing barking.
 	_owned_runes = _run_start_runes()
+	# **Reverts to the starting kit, the same as `_owned_runes` above** — there is no purchase axis for
+	#  circles yet (no `UnlockDefs` row grants one), so there is no permanent set to fold in and no
+	#  `_run_start_circles()` pair to write. The day a circle can be bought or earned permanently, this line
+	#  needs the same split `_owned_runes`/`_run_start_runes()` already draws.
+	_owned_circles = _starting_circles()
+	# **`_onboarding_seen` is not here, and its absence is the point** — the same reasoning `gems`/`_unlocked`
+	#  give above, one level down to a single fact instead of a pool. Clearing it on every `R` would show the
+	#  onboarding walkthrough again on every reset, which reads as the tutorial being broken, not as a fresh
+	#  run. `net_progress` measures that it survives `reset()` and `next_stage()` both, by value.

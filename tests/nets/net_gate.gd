@@ -18,15 +18,16 @@ const Progress := preload("res://src/actor/progress.gd")
 const STAGE_SCENE := "res://src/stage/stage.tscn"
 
 ## Room ③'s interior column range (`gate-ending-to-game.md`'s own "Confirmed" table:
-## "Room ③ interior x347-366", **now x247-266**). Only used here, to place a character for the camera-window
-## check below — `stage_gate.gd` itself knows nothing about the room's own bounds, only the seat and the wall.
+## "Room ③ interior x347-366", then x247-266, **now x164-183**). Only used here, to place a character for
+## the camera-window check below — `stage_gate.gd` itself knows nothing about the room's own bounds, only
+## the seat and the wall.
 ##
-## **Every literal tile number in this file is -100 from what it was** — `left-run-clumps-and-platforms.md`
-##  §1 deleted map columns x2-101, so `get_used_rect()` re-origined the bake and room ③ moved with it.
-##  **They stay literals on purpose** (verify-read, H5, below): a number read back out of `stage_gate.gd`
-##  shrinks with whatever it is supposed to be catching.
-const ROOM3_INTERIOR_X0 := 247
-const ROOM3_INTERIOR_X1 := 266
+## **Every literal tile number in this file moved -83, +7 rows** (`burn-out-of-the-bull-room.md` §1/§3) —
+##  room ③ moved down 7 rows and left 83 columns onto room ①'s own floor line. **They stay literals on
+##  purpose** (verify-read, H5, below): a number read back out of `stage_gate.gd` shrinks with whatever it
+##  is supposed to be catching.
+const ROOM3_INTERIOR_X0 := 164
+const ROOM3_INTERIOR_X1 := 183
 
 ## A `GateView` that counts its own `_draw()` calls — `net_frame_runner.gd`'s own `_CountingBox` technique,
 ## applied to the real production class instead of a stand-in, by subclassing and calling `super()`.
@@ -121,13 +122,17 @@ func run(t) -> void:
 ## the town's spawn tile.
 ##
 ## **Measured inversion — this check alone does not pin the seat's *column*.** `SEAT_TILE_X` mutated to
-## 284 (still inside the same flat, open floor) leaves this check green: x284 is standing ground too, so
-## "is it standing ground" cannot tell "the right tile" from "a tile on the same floor", and
+## a nearby column still inside the same flat, open floor leaves this check green: that column is standing
+## ground too, so "is it standing ground" cannot tell "the right tile" from "a tile on the same floor", and
 ## `_the_walk_from_the_room_to_the_seat_has_no_drop` below does not catch it either (its tile numbers are
 ## hardcoded, not read from `SEAT_TILE_X`). **What does catch it, measured**:
-## `_the_arch_is_inside_the_camera_window_only_from_the_rooms_east_half` (Stage C, below) — a seat at 284
-## sits 308px outside the camera's own window while 270 sits inside it. Pinning the exact column was
-## verify-look's job before that check existed; now it is a value this suite measures too.
+## `_the_arch_is_inside_the_camera_window_only_from_the_rooms_east_half` (Stage C, below) — the original
+## measurement (pre-`burn-out-of-the-bull-room.md`, seat at the old x270) found a seat 14 tiles east sitting
+## 308px outside the camera's own window while the real seat sat inside it. **Not re-measured at the new
+## coordinates** (seat now x187) — the relationship this pins (a seat 14 tiles off is outside the window
+## while the real one is inside it) is a camera-geometry fact, unaffected by where room ③ itself sits, but
+## the exact 308px figure was taken on the old map and is not re-asserted here as still exact. Pinning the
+## exact column was verify-look's job before that check existed; now it is a value this suite measures too.
 func _the_seat_is_standing_ground_on_the_real_map(t) -> void:
 	var g := CellGrid.new()
 	Stage.build_terrain_into(g)
@@ -168,28 +173,28 @@ func _the_east_wall_is_stone_not_bedrock(t) -> void:
 ## the rows that fall outside the new (wrong) rect are never looked at. Measured: `WALL_TILE_Y0` mutated 13
 ## -> 21 left eight full rows (13-20) of stone floating over the doorway with nothing red anywhere, because
 ## both the check above and Stage B's own drop-check read the same shrunken rect. This one hardcodes the
-## design doc's own confirmed numbers (267/268, rows 13-24) so a shrunk rect has nothing left to hide behind.
+## design doc's own confirmed numbers (now 184/185, rows 20-31) so a shrunk rect has nothing left to hide behind.
 func _the_wall_tiles_are_stone_by_literal_tile_number(t) -> void:
 	var g := CellGrid.new()
 	Stage.build_terrain_into(g)
 	var tc := Tuning.TILE_CELLS
 	var not_stone := 0
-	for ty in range(13, 25):  # rows 13..24 inclusive
-		for tx in [267, 268]:
+	for ty in range(20, 32):  # rows 20..31 inclusive
+		for tx in [184, 185]:
 			for dy in tc:
 				for dx in tc:
 					if g.mat_at(tx * tc + dx, ty * tc + dy) != Mat.STONE:
 						not_stone += 1
 	t.eq(not_stone, 0,
-		"동벽 타일 267·268의 13~24번 줄 전체가 돌이다 (리터럴 타일 번호로 잰다 — 어긋난 칸 %d개)" % not_stone)
+		"동벽 타일 184·185의 20~31번 줄 전체가 돌이다 (리터럴 타일 번호로 잰다 — 어긋난 칸 %d개)" % not_stone)
 
 
-## The ground either side of the (still-standing) wall has no drop — row 25 solid, row 24 clear — so that
+## The ground either side of the (still-standing) wall has no drop — row 32 solid, row 31 clear — so that
 ## once Stage B takes the wall down, the walk from the room out to the seat is flat with nothing else to fix.
 ##
-## **x267/268 (the wall's own columns) are deliberately not in this range.** They are solid stone through row
-## 24 right now (check 2, above) — asserting "row 24 clear" there as well would contradict check 2, not
-## extend it. That fact belongs to Stage B's own check (`_the_walk_out_is_flat_after_the_drop`, x266..x270,
+## **x184/185 (the wall's own columns) are deliberately not in this range.** They are solid stone through row
+## 31 right now (check 2, above) — asserting "row 31 clear" there as well would contradict check 2, not
+## extend it. That fact belongs to Stage B's own check (`_the_walk_out_is_flat_after_the_drop`, x183..x187,
 ## measured *after* a real death opens the wall) — this check is the premise that everything **outside** the
 ## wall was already flat before that.
 func _the_walk_from_the_room_to_the_seat_has_no_drop(t) -> void:
@@ -197,14 +202,14 @@ func _the_walk_from_the_room_to_the_seat_has_no_drop(t) -> void:
 	Stage.build_terrain_into(g)
 	var tc := Tuning.TILE_CELLS
 	var drop := 0
-	for tx: int in [266, 269, 270]:
+	for tx: int in [183, 186, 187]:
 		var cx := tx * tc + tc / 2
-		if not g.is_solid(cx, 25 * tc + tc / 2):
+		if not g.is_solid(cx, 32 * tc + tc / 2):
 			drop += 1
-		if g.is_solid(cx, 24 * tc + tc / 2):
+		if g.is_solid(cx, 31 * tc + tc / 2):
 			drop += 1
 	t.eq(drop, 0,
-		"방 안쪽 끝(266)과 벽 너머 땅(269-270)에 턱이 없다 (25번 줄 바닥·24번 줄 빈칸, 어긋난 타일 %d개)" % drop)
+		"방 안쪽 끝(183)과 벽 너머 땅(186-187)에 턱이 없다 (32번 줄 바닥·31번 줄 빈칸, 어긋난 타일 %d개)" % drop)
 
 
 ## `at()` must fire exactly at the seat and refuse everywhere else that matters: past the reach band, above
@@ -219,7 +224,7 @@ func _at_fires_only_at_the_seat_and_nowhere_else(t) -> void:
 		"위 밴드 끝까지는 게이트다")
 	t.ok(not StageGate.at(Vector2(StageGate.seat_px(), StageGate.floor_y_px() - StageGate.BAND_UP_PX - 1.0)),
 		"위 밴드를 한 칸 넘으면 아니다")
-	# **The roof case.** x270은 0~24번 줄이 통째로 뚫려 있으므로, y밴드가 없으면 지붕 위에 떠 있어도 참이 된다.
+	# **The roof case.** x187(아치 칸)은 0~31번 줄이 통째로 뚫려 있으므로, y밴드가 없으면 지붕 위에 떠 있어도 참이 된다.
 	t.ok(not StageGate.at(Vector2(StageGate.seat_px(), 5.0 * StageGate.TILE_PX)),
 		"같은 x라도 지붕 위(5번 줄)에서는 게이트가 아니다 (y밴드가 하는 일)")
 	# The town's own departure-gate seat — a wholly different x, on the same predicate.
@@ -290,7 +295,7 @@ func _a_real_rooster_death_opens_the_wall(t) -> void:
 ## **Literal tile numbers, not `wall_cells()`** (verify-read, H5 — the companion to the pre-drop literal
 ## check above). The production drop code (`stage.gd`'s `_on_ticked()`) also reads `wall_cells()`, so a
 ## shrunk `WALL_TILE_Y0`/`Y1` shrinks the carved rectangle *and* every check built on the same rect together —
-## rows left outside a wrong rect stay solid and nothing sees it. This hardcodes 267/268, rows 13-24 instead.
+## rows left outside a wrong rect stay solid and nothing sees it. This hardcodes 184/185, rows 20-31 instead.
 func _the_wall_tiles_are_open_by_literal_tile_number_after_the_kill(t) -> void:
 	var root := _wired_root(t)
 	if root == null:
@@ -304,12 +309,12 @@ func _the_wall_tiles_are_open_by_literal_tile_number_after_the_kill(t) -> void:
 	var g: Variant = root.get("_grid")
 	var tc := Tuning.TILE_CELLS
 	var still_solid := 0
-	for ty in range(13, 25):
-		for tx in [267, 268]:
+	for ty in range(20, 32):
+		for tx in [184, 185]:
 			if g.is_solid(tx * tc + tc / 2, ty * tc + tc / 2):
 				still_solid += 1
 	t.eq(still_solid, 0,
-		"동벽 타일 267·268의 13~24번 줄 전체가 뚫렸다 (리터럴 타일 번호로 잰다 — 여전히 막힌 타일 %d개)" % still_solid)
+		"동벽 타일 184·185의 20~31번 줄 전체가 뚫렸다 (리터럴 타일 번호로 잰다 — 여전히 막힌 타일 %d개)" % still_solid)
 	root.free()
 
 
@@ -328,11 +333,11 @@ func _the_walk_out_is_flat_after_the_drop(t) -> void:
 	var g: Variant = root.get("_grid")
 	var tc := Tuning.TILE_CELLS
 	var drop := 0
-	for tx in range(266, 271):
+	for tx in range(183, 188):
 		var cx := tx * tc + tc / 2
-		if not g.is_solid(cx, 25 * tc + tc / 2):
+		if not g.is_solid(cx, 32 * tc + tc / 2):
 			drop += 1
-		if g.is_solid(cx, 24 * tc + tc / 2):
+		if g.is_solid(cx, 31 * tc + tc / 2):
 			drop += 1
 	t.eq(drop, 0, "벽이 뚫린 뒤 room3에서 자리까지 걸어 나가는 길이 평평하다 (어긋난 타일 %d개)" % drop)
 	root.free()
@@ -418,11 +423,13 @@ func _the_arch_is_invisible_before_the_kill_and_visible_after(t) -> void:
 
 
 ## `GateView.rect()` pinned to the exact number the design doc derives by hand (`seat_px() - w/2`,
-## `floor_y_px() - h`, `w/h` from the town's own fixture table x2 zoom) — 72x88 at (8620, 712).
-## **-3200px from what it was** — the seat moved 100 tiles west with the cut (the header's own note).
+## `floor_y_px() - h`, `w/h` from the town's own fixture table x2 zoom) — 72x88 at (5964, 936).
+## **Moved with the seat and the floor** (`burn-out-of-the-bull-room.md` §1/§3): seat tile 270 -> 187 puts
+## `seat_px()` at 6000, minus half the 72px width = 5964; floor tile 25 -> 32 puts `floor_y_px()` at 1024,
+## minus the 88px height = 936.
 func _the_drawn_rect_is_where_the_arch_belongs(t) -> void:
 	var r := GateView.rect()
-	t.eq(r, Rect2(8620.0, 712.0, 72.0, 88.0), "아치 사각형이 정확히 그 자리다 (72x88 at 8620,712)")
+	t.eq(r, Rect2(5964.0, 936.0, 72.0, 88.0), "아치 사각형이 정확히 그 자리다 (72x88 at 5964,936)")
 	t.eq(r.end.y, StageGate.floor_y_px(), "아치의 밑변이 바닥선과 정확히 같다 (뜨지도 파묻히지도 않는다)")
 
 
@@ -536,10 +543,11 @@ func _the_drawn_tint_is_the_one_the_counters_decided(t) -> void:
 ## read from `ProjectSettings`, the same source `stage.gd._process` itself reads at runtime — a resized
 ## window is what this avoids silently going stale against.
 ##
-## **Measured, not assumed: this is what makes `SEAT_TILE_X` actually matter.** Mutating it to 284 (still
-## inside the plan's own "check 1 alone is not enough" example) was tried by hand against this exact check —
-## the arch at 284 sits 308px outside the window computed below while 270 sits inside it, confirming the
-## camera table (not the standing-ground check) is what would catch a seat moved elsewhere on the same floor.
+## **Measured, not assumed: this is what makes `SEAT_TILE_X` actually matter.** Mutating it to a column 14
+## tiles east (still inside the plan's own "check 1 alone is not enough" example) was tried by hand against
+## this exact check, on the map as it stood then (`burn-out-of-the-bull-room.md` has since moved room ③) —
+## the arch there sat 308px outside the window computed below while the real seat sat inside it, confirming
+## the camera table (not the standing-ground check) is what would catch a seat moved elsewhere on the same floor.
 ##
 ## **Not "visible from anywhere in the room" — that claim is false and is not made here.** Room ③'s interior
 ## (640px) is wider than the half-screen (480px), so the arch only enters the window from the room's own east
@@ -966,7 +974,19 @@ func _wired_root(t) -> Node:
 			#  on a null mid-call and disappears rather than fails — the exact risk `net_settlement.gd`'s own
 			#  `_wired_root` now names for the same node.
 			["_gate_view", "GateView"],
-			["_settlement", "HUD/SettlementWindow"]]:
+			# **`_boss_bar`** (`boss-entrance-and-hp-bar.md` Stage C) — `_rebuild()` and `_physics_process()`
+			#  both call it unconditionally now (`clear_boss()`/`set_entrance_frames()`). Left out, every
+			#  check in this file that calls `reset_stage()`/`_leave_town()`/`_physics_process` on this root
+			#  crashes on a null mid-call — measured directly (`Invalid call. Nonexistent function
+			#  'clear_boss' in base 'Nil'`), the exact risk this file's own header already names for
+			#  `_gate_view` one line up.
+			["_boss_bar", "HUD/BossBar"],
+			["_settlement", "HUD/SettlementWindow"],
+			["_settlement", "HUD/SettlementWindow"],
+			# **`_onboard_view`** (`onboarding-and-palette-tabs.md` Stage 7) — `_physics_process()` reaches
+			#  `_tick_onboard()` unconditionally, which writes `_onboard_view.visible` every frame. Every
+			#  `_physics_process` call in this file dies on a null without this.
+			["_onboard_view", "HUD/OnboardView"]]:
 		var n := root.get_node_or_null(NodePath(pair[1]))
 		t.ok(n != null, "씬에 %s 가 있다 (전제)" % pair[1])
 		if n == null:

@@ -14,8 +14,8 @@ signal reset_requested
 ##  **They used to be a set of three with F (pour water) and K (rain), and those two are gone** (decided by
 ##  the user: "물 이제 필요 없고 빼주고"). What went with them is the one screen where wood, water and fire
 ##  met, which is how "shallow water cannot put out fire" was made visible — **that rule now has no debug
-##  path to the screen at all.** The water the *game* makes is untouched: room ①'s reward pour and room ③'s
-##  escape both still run (`stage.gd`'s `_room1_reward_water`).
+##  path to the screen at all.** **Room ①'s reward pour is gone too** (`burn-out-of-the-bull-room.md` §4) —
+##  the game itself pours no water anywhere in stage 1 until room ③'s own pour is built.
 signal wood_requested(world_px: Vector2)
 signal ignite_requested(world_px: Vector2)
 ## **M/N/B/C — stands a monster at the mouse position. Shell-only debug keys** (`monsters-minimum`,

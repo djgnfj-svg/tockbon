@@ -96,8 +96,18 @@ func _draw() -> void:
 		_centered(font, String(Fixtures.name_of(kind)), seat, r.position.y - Fx.TOWN_NAME_LIFT_PX,
 			Fx.TOWN_NAME_SIZE, Fx.TOWN_NAME_COLOR)
 		if kind == here:
-			_centered(font, Fx.TOWN_PROMPT_FMT % String(Fixtures.name_of(kind)),
+			_centered(font, prompt_text(kind),
 				seat, r.position.y - Fx.TOWN_PROMPT_LIFT_PX, Fx.TOWN_PROMPT_SIZE, Fx.TOWN_PROMPT_COLOR)
+
+
+## **The prompt line's own text — pure, so a net can drive `_draw()` and check the string it captured**
+## (`onboarding-and-palette-tabs.md` Stage 7). 연구대 reads 「준비중」 here instead of `TOWN_PROMPT_FMT` —
+## this is the visible seat for that closed door: `stage._town_message` sits behind F3, so the player would
+## never see it there. Every other fixture is unaffected.
+static func prompt_text(kind: int) -> String:
+	if kind == Fixtures.KIND_RESEARCH:
+		return Fx.TOWN_RESEARCH_PROMPT
+	return Fx.TOWN_PROMPT_FMT % String(Fixtures.name_of(kind))
 
 
 ## Centred text. **The same idiom as `monster_view._draw_dmg_number`** — everything in this repo's

@@ -2,6 +2,50 @@
 
 **Status**: active — **the code is finished. The user deferred the screen check** (decided by the user).
 
+> ## ⚠⚠ **Pit ①'s water escape is dropped — the scene, not the mechanism** (decided by the user)
+>
+> **Room ①'s east wall becomes wood.** Kill the bull, take the fire rune, **burn the wall you are standing in
+> front of.** No flood, no climb. The user's reason: 「그래야 바로 직관적으로 나갈 수 있어.」
+> ⇒ [`burn-out-of-the-bull-room.md`](./burn-out-of-the-bull-room.md) (now building) ·
+> [`decisions/the-rune-is-used-where-it-is-won.md`](../../decisions/the-rune-is-used-where-it-is-won.md)
+>
+> **What dies in this doc**, and it is a whole scene, not a paragraph:
+>
+> - **"③ 이후만 예외" is now literally true** — stage 1 has **one** water escape, after the rooster, not two.
+> - **Everything below written about pouring *into pit ①* is a rig, not the game.** `stage.gd`'s
+>   `_room1_reward_water` loses its job, and **it is the only live `WaterSource` in the game** (`K` is gone,
+>   and **room ③'s pour was never wired** — `stage1-bosses.md`, Risk 13). ⇒ **After that feature lands, stage
+>   1 contains no water at all until this doc's room-③ pour is built.**
+> - **`net_water_rain` · `_cap` · `_speed` build the real pit and pour into it.** They stay green and stop
+>   measuring anything the game does. **Re-point them at room ③ or re-label them** — leaving them is
+>   CLAUDE.md's "the label claims more than the check measures". `net_render`'s six `_room1_reward_water`
+>   checks die with the code.
+> - **Open item 1 below is void**, not answered: acceptance 5's "it comes in from the side" was about the
+>   pour the bull's death brings. That pour is the one going away.
+>
+> **What is untouched**: unlimited jumping underwater, fall acceleration, the current, and **`water_source.gd`
+> itself.** Room ③'s escape is unchanged in design and **still unbuilt** — ⇒ **it stops being optional.**
+> It is now stage 1's only water and the milestone chain's last unbuilt square.
+>
+> **And the grounds that killed the ramp are void too.** "The only exit is water, so reverting the ramp kills
+> the design" (below, "One net is red") **was already false on the baked map** — room ①'s west boundary is a
+> **2-tile step (64px)** against a **102px** jump ceiling, so the player has always been able to jump out.
+> `stage1-bosses.md`'s own Risk 13-addendum measured the other half: **300s of pouring lifts the player 0px.**
+
+> ## ⚠ The K key this doc is built on was removed (2026-08-10)
+>
+> **The user cut the debug water** (「물 이제 필요 없고 빼주고」), and what went with it is
+> **`rain_requested` + `KEY_K` + `stage.gd`'s `_water_source` / `_toggle_rain_at`** — every line this doc's
+> "What actually landed" block lists under those names. `src/sim/water_source.gd` itself is **untouched and
+> still runs**: room ①'s reward pour holds the only instance now (`stage.gd`'s `_room1_reward_water`).
+>
+> ⇒ **What is dead is the way a developer could pour water on demand**, which is exactly how this doc's
+> screen check was going to be performed. **The deferred check now has no path to the screen** unless the
+> bull is killed first, or K is put back for the day.
+>
+> **Room ③'s water escape — this doc's actual subject — is not affected**; it was never on the K key.
+> `F` is now the town interaction, so **K is free and F is not**, if the key ever comes back.
+
 **Deferred, not passed.** Water took long enough that the user cut it back to **"unlimited jumping underwater is
 enough for now"**; the pour, the current and the escape **come back out and get looked at when that work reopens.**
 ⇒ **Nothing below is accepted**, and this doc does not move to `3.done/` on that decision.
@@ -64,8 +108,11 @@ net_water: active chunks stay below the cap (100) while pouring (max 100)
 FPS doesn't die — **water gets delayed.** The cap is a safety net.
 
 ⇒ **Two knobs, both on this doc's side**: lower the pour rate (`WATER_RAIN_PER_TICK` 20,000) or
-step the pit floor. **Re-baking the map is the last resort** — removing the ramp is the grounds for
-"the only exit is water", so reverting kills the design.
+step the pit floor. ~~**Re-baking the map is the last resort** — removing the ramp is the grounds for
+"the only exit is water", so reverting kills the design.~~
+⚠ **Void twice over.** The "only exit is water" premise was **false on the baked map** (a 64px west step
+against a 102px jump), and the pit escape is **dropped entirely** — see the box at the top of this doc.
+**This red net is now measuring a pour the game does not perform.**
 
 ###  그 그물은 통과했다. 대신 다른 셋이 빨개졌다 — **구덩이가 없어졌다** (2026-08-08 저녁)
 

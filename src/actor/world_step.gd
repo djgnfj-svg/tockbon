@@ -173,7 +173,11 @@ func frame(dt: float, axis: float, jump: bool, jump_held: bool) -> bool:
 		#  grid_step` moves this block earlier and reads `aux_at` (remaining fuel) to catch it: applying
 		#  ignition before `_grid.step()` lets that same tick's step already shave the freshly-lit cell once.
 		for i in _bolts.ignite_count():
-			_grid.apply(CellGrid.cmd_ignite(_bolts.ignite_cx(i), _bolts.ignite_cy(i), MonsterBolts.FIRE_IGNITE_R))
+			# **`IGNITE_ANY`** — a monster's bolt, never the fire rune (`burn-out-of-the-bull-room.md` §0).
+			#  A `rune_only` material (`WOOD`) refuses this source, exactly the lock the hen's fire and the
+			#  bull's own bolts must respect.
+			_grid.apply(CellGrid.cmd_ignite(_bolts.ignite_cx(i), _bolts.ignite_cy(i), MonsterBolts.FIRE_IGNITE_R,
+				CellGrid.IGNITE_ANY))
 		_bolts.clear_ignitions()
 		# (5) Monster on_tick — did magic hit a monster, and (`stage1-bosses.md` Stage B) advance any
 		#  boss's pattern clock. **Being after `_char.on_tick` is a contract** (doc, "behavior (9)").
@@ -234,7 +238,8 @@ func frame(dt: float, axis: float, jump: bool, jump_held: bool) -> bool:
 			#  has no reward to gate anything on, and setting this for one would leave a dict entry nothing
 			#  would ever clear (no debug key targets a kind that isn't a boss).
 			# **This same gate fires for the rooster too** (`KIND_ROOSTER` also has a pattern). No reward
-			#  water is wired to it (`stage.gd._room1_reward_status()` has the full account of that gap), but
+			#  water is wired to it — room ①'s own reward water is gone too, and stage 1 pours nowhere until
+			#  room ③'s pour is built (`burn-out-of-the-bull-room.md` §4) — but
 			#  `boss_died(KIND_ROOSTER)` itself is no longer unread: `stage.gd`'s `_on_ticked()` wall latch,
 			#  `gate_view._process()`'s `visible`, and `_sync_settlement()`'s `at_gate` term all read it now
 			#  (`gate-ending-to-game.md`).
@@ -503,7 +508,9 @@ func _ignite_slam_impact(m: Monster) -> void:
 	var half := (points - 1) / 2
 	for i in points:
 		var offset_cells := (i - half) * spread_cells
-		_grid.apply(CellGrid.cmd_ignite(center_cx + offset_cells, floor_cy, r))
+		# **`IGNITE_ANY`** — the slam's own ground fire, never the fire rune (`burn-out-of-the-bull-room.md`
+		#  §0). The same lock that stops a boss's fire from ever lighting a `rune_only` door.
+		_grid.apply(CellGrid.cmd_ignite(center_cx + offset_cells, floor_cy, r, CellGrid.IGNITE_ANY))
 
 
 ## Seats it as a command to be applied on the next tick, or `delay` ticks further out. **The tick number
@@ -573,7 +580,16 @@ func _drain_queue() -> void:
 ##  check above), so putting it in the shell means the nets cannot measure it headless (`stage.gd` needs a scene
 ##  to run) and future callers (server spawning and so on) would each have to write it again. Placing it beside
 ##  `_broken` and the cap check gathers "the three conditions for making a monster" in one place.
-func spawn_monster(kind: int, px: int, py: int) -> int:
+## **`entrance` — the fourth argument, defaulted `false`** (`boss-entrance-and-hp-bar.md` Stage A). When true
+##  **and** the kind has a pattern, the fresh monster's `pattern_left` is set to `BossAi.ENTRANCE_IDLE_TICKS`
+##  so a boss walks a beat before it ever winds up, instead of roaring on the exact frame it appears.
+##  **The default is the whole point, not an incidental value.** Setting this in `Monster._init` instead would
+##  shift the first `WINDUP` of *every* bull and rooster this repo stands up — `net_monster`,
+##  `net_monster_charge`, `net_monster_breath` and `net_monster_slam` all spawn one directly and measure its
+##  pattern clock from frame zero, so a global idle would turn four nets red for a presentation beat that only
+##  an entrance should carry. `MonsterPlacement.wake_scan()` is the only caller that passes `true`; every debug
+##  key, every net and every other caller of this function keeps the old behavior byte-for-byte.
+func spawn_monster(kind: int, px: int, py: int, entrance: bool = false) -> int:
 	# The same door as `enqueue` (above) — if the array grew and the HUD number rose in a broken world, it
 	#  would be "the frame stops politely but only M keeps growing", and that is the rule having two copies.
 	if _broken:
@@ -610,7 +626,10 @@ func spawn_monster(kind: int, px: int, py: int) -> int:
 		return 0
 	var id := _next_monster_id
 	_next_monster_id += 1
-	_monsters.append(Monster.new(id, kind, px, py))
+	var m := Monster.new(id, kind, px, py)
+	if entrance and boss:
+		m.pattern_left = BossAi.ENTRANCE_IDLE_TICKS
+	_monsters.append(m)
 	return id
 
 
@@ -639,6 +658,23 @@ func died_y(i: int) -> int:
 
 func died_kind(i: int) -> int:
 	return _died_kind[i]
+
+
+## **Re-export, verbatim** (`boss-entrance-and-hp-bar.md` Stage A) — `_placement` is owned here, not by the
+## shell, the same reason `monster_count()`/`monster_at()` above are doors rather than a second copy of the
+## array. Lives exactly one tick; `stage.gd._on_ticked()` is its one reader.
+func woke_boss_id() -> int:
+	return _placement.woke_boss_id()
+
+
+## **Linear over `_monsters` (<= `MonsterDefs.MAX_MONSTERS`, 20)** — called once per entrance, from
+## `_on_ticked()`, never per frame. `null` if the id is not (or no longer) live, so a boss that died the same
+## tick it woke (impossible at 300 hp, but not asserted away) collapses to "no boss" rather than a crash.
+func monster_by_id(id: int) -> Monster:
+	for m: Monster in _monsters:
+		if m.id == id:
+			return m
+	return null
 
 
 ## Read-only queries — the view sees the hen's/bull's bolts only through these (stage 7, `bolt_kind`

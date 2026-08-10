@@ -252,6 +252,9 @@ func run(t) -> void:
 	_place_revives(t)
 	_blast_hit_costs_hp(t)
 	_same_tick_two_blasts_cost_one(t)
+	# -- glyph-condense §11.6 Step 2 — the pillar is a rectangle, not a circle --
+	_pillar_hit_is_rectangular(t)
+	_pillar_does_not_hit_above_its_own_top(t)
 	_invuln_ticks_down_once_per_tick(t)
 	_invuln_lasts_four_ticks(t)
 	_spread_hit_count_is_recorded(t)
@@ -412,7 +415,7 @@ func _queue_lands_before_the_grid_lives(t) -> void:
 	g.apply(CellGrid.cmd_fill(wx, wy, wx, wy, Mat.WOOD))
 	var w := _world(g)
 
-	w.enqueue(CellGrid.cmd_ignite(wx, wy, 1))
+	w.enqueue(CellGrid.cmd_ignite(wx, wy, 1, CellGrid.IGNITE_RUNE_FIRE))
 	t.eq(g.burning_count(), 0, "큐에 넣은 것만으로는 불이 안 붙는다")
 
 	_frames(w, Tuning.TICK_DIVIDER)
@@ -813,6 +816,93 @@ func _same_tick_two_blasts_cost_one(t) -> void:
 	t.ok(twin_tick, "한 틱에 폭발이 둘 난 틱이 실제로 있었다 (배치의 전제)")
 	t.eq(ch.hp, Character.MAX_HP - Character.DAMAGE_HIT,
 		"같은 틱에 폭발 둘을 맞아도 한 대만 깎인다")
+
+
+## **The check that would have caught reusing the circular blast test for a rectangular pillar**
+##  (`glyph-condense.md` §9's acceptance 9) — **and, measured, the check that did not.**
+##
+## **Real regression, found by verify-run**: the first version fired straight down onto the character's own
+## column. The bolt's own segment then crossed the box a tick before the pillar existed, landed at the
+## bolt's *base* 100% (a `TERMINAL` never touches it — `spell_sim._launch`'s own header), and since that
+## version used `CONDENSE_C` (also 100%), the two values were indistinguishable — `body.hit_by_pillar`
+## returning a flat `0`, or dropping the `maxi` term in `character.gd` entirely, still left this check green
+## (`net_monster._blast_hits_to_kill`'s own header already named this exact trap; it had only been fixed on
+## the monster side).
+##
+## **`CONDENSE_U` (150%), fired beside the box, not through it** — the same offset idiom
+## `net_monster._pillar_hits_to_kill` uses, so the segment never crosses the box and the only power that can
+## possibly land is the pillar's own. Positions are **measured, not derived**: one cell past the box's own
+## right edge connects at exactly `DAMAGE_HIT * 150 / 100`; four cells past it does not connect at all.
+func _pillar_hit_is_rectangular(t) -> void:
+	var drop_cy := FLOOR_CY - 10
+	var edge_cx := floori(float(STAND_X + Character.W_PX) / float(Tuning.CELL_PX))
+	var packed := Glyph.pack([Glyph.CONDENSE_U])
+
+	var g := _floor_grid()
+	var spell := SpellSim.new()
+	var ch := _stander()
+	var w := WorldStep.new(g, spell, ch)
+	w.enqueue(SpellSim.cmd_fire(edge_cx + 1, drop_cy, 0, 10, Tuning.ELEM_NONE, packed))
+	var pillars := 0
+	for _i in 12:
+		_frames(w, Tuning.TICK_DIVIDER)
+		pillars += spell.pillar_count()
+	t.eq(pillars, 1, "기둥이 한 번 선다 (검사의 전제)")
+	var want := Character.DAMAGE_HIT * Glyph.power_pct_of(Glyph.CONDENSE_U) / 100
+	t.eq(ch.hp, Character.MAX_HP - want,
+		"몸 오른쪽 끝 바로 한 칸 밖에서도 응축(유니크)의 위력(%d%%, 한 대 %d)이 그대로 맞는다 — 세그먼트의 기본 100%%가 아니다" % [
+			Glyph.power_pct_of(Glyph.CONDENSE_U), want])
+
+	# **Four cells past the edge — measured, not a circle-radius argument.** Still within what a same-radius
+	#  circle (`Tuning.blast_rd(0)` == `Tuning.pillar_w(0)`, both 8 at generation 0) would have caught.
+	var g2 := _floor_grid()
+	var spell2 := SpellSim.new()
+	var ch2 := _stander()
+	var w2 := WorldStep.new(g2, spell2, ch2)
+	w2.enqueue(SpellSim.cmd_fire(edge_cx + 4, drop_cy, 0, 10, Tuning.ELEM_NONE, packed))
+	var pillars2 := 0
+	for _i in 12:
+		_frames(w2, Tuning.TICK_DIVIDER)
+		pillars2 += spell2.pillar_count()
+	t.eq(pillars2, 1, "그 자리에서도 기둥이 한 번 선다 (검사의 전제)")
+	t.eq(ch2.hp, Character.MAX_HP, "네 칸 밖은 기둥 폭 바깥이라 안 맞는다 (원이었다면 맞았을 거리)")
+
+
+## **The height must bound the rect, not just the drawing** (`glyph-condense.md` §9's acceptance list). A body
+##  whose whole box sits above the pillar's own measured top (read back from the notice itself, not assumed
+##  from the table — an open ceiling might not reach `pillar_h(0)`) is not hit.
+func _pillar_does_not_hit_above_its_own_top(t) -> void:
+	var drop_cy := FLOOR_CY - 10
+	var cx := floori((STAND_X + Character.W_PX * 0.5) / float(Tuning.CELL_PX))
+
+	var g := _floor_grid()
+	var spell := SpellSim.new()
+	var ch := _stander()
+	var w := WorldStep.new(g, spell, ch)
+	w.enqueue(SpellSim.cmd_fire(cx, drop_cy, 0, 10, Tuning.ELEM_NONE, Glyph.pack([Glyph.CONDENSE_C])))
+	var h := 0
+	for _i in 6:
+		_frames(w, Tuning.TICK_DIVIDER)
+		if spell.pillar_count() > 0:
+			h = spell.get_pillar_h()[0]
+	t.ok(h > 0, "기둥 높이를 읽었다 (검사의 전제)")
+
+	# A fresh body placed one whole cell above the pillar's own measured top, watched for only a few ticks —
+	#  long enough for the (already-airborne) bolt to land, short enough that this body's own fall from a
+	#  standing start cannot have dropped it into the rectangle yet.
+	var g2 := _floor_grid()
+	var spell2 := SpellSim.new()
+	var ch2 := Character.new()
+	var above_y := FLOOR_TOP - h * Tuning.CELL_PX - Character.H_PX - Tuning.CELL_PX
+	ch2.place(STAND_X, above_y)
+	var w2 := WorldStep.new(g2, spell2, ch2)
+	w2.enqueue(SpellSim.cmd_fire(cx, drop_cy, 0, 10, Tuning.ELEM_NONE, Glyph.pack([Glyph.CONDENSE_C])))
+	var pillars2 := 0
+	for _i in 4:
+		_frames(w2, Tuning.TICK_DIVIDER)
+		pillars2 += spell2.pillar_count()
+	t.eq(pillars2, 1, "그 자리에서도 기둥이 한 번 선다 (검사의 전제)")
+	t.eq(ch2.hp, Character.MAX_HP, "기둥 꼭대기보다 위에 있으면 안 맞는다")
 
 
 ## **Invulnerability ticks down "one per tick"** — the check that **directly bites** plan section 6, risk 1
@@ -1252,9 +1342,16 @@ func _downed_cannot_fire(t) -> void:
 	#   It used to say "just rewrite it with a downward-firing command", and **that path is gone** —
 	#   the behavior to be measured disappeared; the check did not get lazy.
 	#  The old expected expression (`vy + GRAVITY_PX*DT`) was **a value that happened to match the rounding phase**:
-	#   with gravity doubled, 1px is actually consumed every frame so `_move_y` blocks each time and zeroes vy.
-	#  What is measured now stops at **"grounded and did not rise".**
-	t.eq(ch.vy, 0.0, "접지 상태의 세로 속도 0 그대로다 (위로 안 떴다)")
+	#   with the old (larger) gravity, 1px was consumed every single frame so `_move_y` blocked and zeroed vy
+	#   every time. **This exact equality is itself the same trap, just one gravity value away from biting again** —
+	#   the player's own gravity (split into `PLAYER_GRAVITY_PX`, 2400 -> 1536, `docs/design/game-feel.md` "11b")
+	#   already moved it: one frame's worth of gravity (`PLAYER_GRAVITY_PX * DT` = 25.6px/s) now rounds `move_y`'s
+	#   sub-pixel remainder to 0 on some frames, so `vy` is not
+	#   reset on every single frame anymore — only whenever the accumulated remainder finally rounds to 1px and
+	#   the ground blocks it. **Bounding it instead of pinning an exact value is what survives the next gravity
+	#   retune too.**
+	t.ok(ch.on_ground and ch.vy <= Character.PLAYER_GRAVITY_PX * DT + 0.01,
+		"접지 상태의 세로 속도가 중력 한 프레임치를 넘지 않는다 (위로 안 떴다 — vy=%.1f)" % ch.vy)
 
 	# **Inversion — if it is not downed, the same command goes out.** Without it, this is indistinguishable
 	#  from "the command was wrong to begin with".

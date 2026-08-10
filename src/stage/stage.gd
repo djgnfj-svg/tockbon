@@ -15,6 +15,8 @@ const CellRenderer := preload("res://src/view/cell_renderer.gd")
 const SkyBackground := preload("res://src/view/sky_background.gd")
 const HpView := preload("res://src/view/hp_view.gd")
 const MoneyView := preload("res://src/view/money_view.gd")
+## `boss-entrance-and-hp-bar.md`, Stage C.
+const BossBarView := preload("res://src/view/boss_bar_view.gd")
 const Fx := preload("res://src/view/fx_tuning.gd")
 const CharacterView := preload("res://src/view/character_view.gd")
 const SpellView := preload("res://src/view/spell_view.gd")
@@ -32,8 +34,9 @@ const Glyph := preload("res://src/sim/glyph_defs.gd")
 const StageInput := preload("res://src/stage/stage_input.gd")
 const MonsterView := preload("res://src/view/monster_view.gd")
 const MonsterDefs := preload("res://src/actor/monster_defs.gd")
+## `boss-entrance-and-hp-bar.md`, Stage C — `_boss` below is typed with this.
+const Monster := preload("res://src/actor/monster.gd")
 const Progress := preload("res://src/actor/progress.gd")
-const WaterSource := preload("res://src/sim/water_source.gd")
 ## The town (`docs/design/town.md`) — **its map and spawn are the room table's row 0 now**, so this file no
 ##  longer names `town_map.gd` at all. The door that asks where you are standing is still here (`_interact`).
 const Fixtures := preload("res://src/actor/fixtures.gd")
@@ -43,6 +46,7 @@ const SettlementWindow := preload("res://src/view/settlement_window.gd")
 ## The gate (ending) — `gate-ending-to-game.md`.
 const StageGate := preload("res://src/actor/stage_gate.gd")
 const GateView := preload("res://src/view/gate_view.gd")
+const OnboardView := preload("res://src/view/onboard_view.gd")
 
 ## No longer a constant but a re-export of `terrain_map_generated.gd` — it follows the painted region's size verbatim.
 ##  It pairs with the re-export at the `MAP` declaration below.
@@ -193,6 +197,10 @@ const LOADOUTS: Dictionary = {
 ##  (「레벨은 안 보이게」), XP into `hp_view`'s hairline, money into the corner. A `Label` cannot put an icon
 ##  beside its text, so this is a drawn `Control` (`money_view.gd`) rather than the old label moved.
 @onready var _money_view: MoneyView = $HUD/Money
+## The boss bar and name (`boss-entrance-and-hp-bar.md`, Stage B/C). **Under `HUD`, like `_hp_view`** — a
+## `CanvasLayer` child, so it does not ride the screen shake. Fed a live `Monster` reference through
+## `show_boss()`/`clear_boss()`, never a copy — the same rule `_hp_view.setup()` already holds.
+@onready var _boss_bar: BossBarView = $HUD/BossBar
 ## **Its own node, not a line appended to something else.** A `Label` cannot mix colors within one
 ##  string, and the indicator has to draw the eye in a way the status line must not (verify-look: appended in
 ##  the same color and weight, nobody looked). `Fx.LEVEL_UP_COLOR` is pushed in once, in `_ready()`, the same
@@ -211,6 +219,16 @@ const LOADOUTS: Dictionary = {
 ## It is state, so it cannot live in the static function — **the function stays pure and the net measures it
 ##  directly**, the same split `camera_center` already uses.
 var _cam_lead := 0.0
+
+## **The boss entrance, `boss-entrance-and-hp-bar.md` Stage C. `-1` means "no entrance running"**, so `0` can
+## be the first frame — the same `-1`/`0` idiom `_hud_count_tick` below already uses for the same reason.
+## **One counter, two consumers** (`_process()`'s camera lines and `_boss_bar.set_entrance_frames()`) — a
+## second counter is how the bar's own fade finishes while the camera is still on the boss, or the reverse.
+var _entrance_frames := -1
+## **A reference, not a copy** — the same rule `_char`/`_grid` are handed to views by. Stays alive after the
+## boss dies (`RefCounted`) so `_boss_focus()` below never reads a null mid-entrance; `_rebuild()` is the only
+## place that nulls it back out (`gate_view._lit` is the precedent this follows for "revert every counter").
+var _boss: Monster = null
 ## The assembly window sits under `HUD` (a `CanvasLayer`) — put it under `Node2D` and it shakes along with the screen shake.
 ##  **The shell only tells it to open and close.** The window knows its own state and uses its own coordinates.
 @onready var _circle_window: CircleWindow = $HUD/CircleWindow
@@ -233,6 +251,11 @@ var _cam_lead := 0.0
 ##  other window** — the same reason as `_research_window` above. Unlike the other three it is **derived
 ##  open**, never toggled by a key (`_sync_settlement()` below) — there is no debug key for "the run is over".
 @onready var _settlement: SettlementWindow = $HUD/SettlementWindow
+## The onboarding arrow + key cap (`onboarding-and-palette-tabs.md` Stage 7). **Under `HUD`, like every
+## other window** — the same reason as `_research_window` above (it must not ride the screen shake).
+## **Its own `visible` is pushed here, once a frame, from `_onboard_step`** — the same "derive, do not
+## push a second latch" idiom `_town_view.visible = _in_town` already holds.
+@onready var _onboard_view: OnboardView = $HUD/OnboardView
 @onready var _char_view: CharacterView = $CharacterView
 @onready var _spell_view: SpellView = $SpellView
 @onready var _blast_fx: BlastFx = $BlastFx
@@ -317,30 +340,31 @@ var _next_stage_id := StageDefs.NO_NEXT
 ##  `town.md`'s own boundary, and building one now would be deciding by default what the user has not decided.
 var _town_message := ""
 
+## **Onboarding's step machine** (`onboarding-and-palette-tabs.md` Stage 7). **Lives in the shell, dies on
+## R** — `_rebuild()` resets it to `ONBOARD_OFF` unconditionally on every teardown (R, going home, and the
+## chain), the same "one teardown list" `_rebuild`'s own header already describes. What makes the
+## walkthrough run **once ever**, not once per reset, is `Progress._onboarding_seen` — a separate,
+## persistent fact `_leave_town()` reads before deciding whether to start `ONBOARD_ARROW` again.
+##
+## ```
+## ARROW   -- Tab pressed -->        CIRCLE
+## CIRCLE  -- 일반진 placed -->       RUNE      (circle_window.onboard_inserted)
+## RUNE    -- 무속성 룬 placed -->    GLYPH     (circle_window.onboard_inserted)
+## GLYPH   -- 완성 pressed -->        DONE      (circle_window.onboard_confirmed)
+## DONE    -- window closes -->      OFF       (marks Progress.mark_onboarding_seen())
+## ```
+## **Advanced by the window, not polled from it** — `circle_window` is the one object that sees the clicks;
+## a poll here would need to re-derive "was that insert the onboarding-relevant one" from the same state
+## the window already holds, which is the two-copies trap this repo keeps finding under `SpellCircle`.
+const ONBOARD_ARROW := 0
+const ONBOARD_CIRCLE := 1
+const ONBOARD_RUNE := 2
+const ONBOARD_GLYPH := 3
+const ONBOARD_DONE := 4
+const ONBOARD_OFF := 5
+var _onboard_step := ONBOARD_OFF
+
 var _blast_count := 0
-
-## **Room ①'s own water — Stage I (`stage1-bosses.md`).** It starts itself, automatically, the instant the
-##  bull's reward is taken (acceptance 8b — reward first, water second).
-## **It used to have a sibling driven by the K rain key, and that key is gone** (the user removed the debug
-##  water). The two were kept apart so K could not silently cancel a reward-gated pour; with K gone this is
-##  **the only water source the shell holds**, and the separation that argued for is now simply the absence
-##  of the other one.
-## **`null` = not started yet.** Never set back to `null` except on a full stage reset — once room ①'s water
-##  starts, it keeps pouring for the rest of the fight.
-var _room1_reward_water: WaterSource = null
-
-## **Reuses `WaterSource` as-is, not a second pour shape.** Its own shape is "rain across a width, falling
-##  from above" (`water_source.gd`'s header) — not literally "from the side" the way the design doc pictures
-##  the wall collapsing. `stage1-bosses.md`'s own words: "whether the two pours share one implementation is
-##  [water-jump-and-escape.md]'s call, not this one's" — reusing the one pour mechanism that exists is that
-##  deferral honored, not a decision made here. **The visual mismatch (rain, not a side breach) is a known,
-##  named gap**, not hidden — see that risk note in the plan doc.
-## **Placed well inside room ①'s own open interior** — `x` sits just past the room's left boundary (measured
-##  in `stage1-bosses.md` Risk 11: the real wall is at cx1040 after the left run was cut), `row` sits high enough in the room's air for
-##  the fall to read as a pour, not an instant puddle at the floor.
-const ROOM1_WATER_X0 := 1040
-const ROOM1_WATER_X1 := 1060
-const ROOM1_WATER_ROW := 200
 
 ## **Room ③'s east wall — comes down once, on the rooster's death, and only once**
 ##  (`gate-ending-to-game.md`, Stage B). `true` = already dropped this run.
@@ -488,6 +512,10 @@ func _ready() -> void:
 	_input.debug_hud_toggled.connect(_toggle_debug_hud)
 	_input.cancel_requested.connect(_handle_cancel)
 	_input.zoom_requested.connect(_step_zoom)
+	# **Onboarding is advanced by the window, not polled from it** (`_onboard_step`'s own header) —
+	#  `circle_window` is the one object that sees the clicks that move the walkthrough forward.
+	_circle_window.onboard_inserted.connect(_advance_onboard)
+	_circle_window.onboard_confirmed.connect(_finish_onboard_confirm)
 	# The starting equipment is **the model's default** (`SpellCircle`'s constructor) — the line that pushed
 	#  a preset in once here was deleted. Push it in and "the starting state" is in two places, and the day
 	#  comes when only one of them gets fixed.
@@ -525,6 +553,27 @@ func _toggle_assembly() -> void:
 	#  exists to prevent.
 	_pick_window.cancel_confirm()
 	_circle_window.toggle()
+	# **Beat 1's own transition — the arrow is for Tab, and Tab just opened the window.** Onboarding-only:
+	#  outside `ONBOARD_ARROW` this does nothing, the same "outside onboarding, nothing auto-advances" rule
+	#  `circle_window.set_onboarding`'s own header holds for the tab.
+	if _onboard_step == ONBOARD_ARROW and _circle_window.visible:
+		_onboard_step = ONBOARD_CIRCLE
+
+
+## **The window's own signal, driven by an actual insert** (`circle_window.onboard_inserted`) — only while
+## `ONBOARD_CIRCLE` or `ONBOARD_RUNE` (진 then 룬) does this move the step; a stray emission at any other
+## time (there should not be one, since the window itself only emits while `_onboarding` is true) does
+## nothing rather than corrupting a later state.
+func _advance_onboard() -> void:
+	if _onboard_step == ONBOARD_CIRCLE or _onboard_step == ONBOARD_RUNE:
+		_onboard_step += 1
+
+
+## **완성 pressed while onboarding — the glow beat.** The window closes itself a few frames later
+## (`circle_window._process`); `_physics_process` below is what notices that and finishes the walkthrough.
+func _finish_onboard_confirm() -> void:
+	if _onboard_step == ONBOARD_GLYPH:
+		_onboard_step = ONBOARD_DONE
 
 
 ## P. **The three-pick's Stage-C door** — text only, no window yet (that is Stage D). Mirrors
@@ -656,11 +705,17 @@ func _paint_wood_at(world_px: Vector2) -> void:
 ##  lit right here" is impossible.**
 ##  It pairs with T above — lay a forest (T), pour water (F) and set it alight (G), and the three materials
 ##  gather on one screen.
+## **Passes no explicit `src`** (`burn-out-of-the-bull-room.md` §0) — `CellGrid.ignite()`'s own default is
+##  `IGNITE_RUNE_FIRE`, so this debug door stands in for the rune, and a `rune_only` wall (the future door) is
+##  still lightable from here for testing.
 func _ignite_at(world_px: Vector2) -> void:
 	_grid.ignite(floori(world_px.x / Tuning.CELL_PX), floori(world_px.y / Tuning.CELL_PX))
 
 
-## **L — takes whichever boss reward(s) are pending. A shell-only debug door** (`stage1-bosses.md` Stage I).
+## **Takes whichever boss reward(s) are pending — two callers now, one body.** `_on_ticked()`'s own auto-grant
+## (session correction: the bull's reward used to have exactly one door, the debug key L, so a player who
+## never opens the debug layer got nothing) and the debug key L (`stage1-bosses.md` Stage I) both call this
+## same function; neither copies its body, or the day this logic changes only one of the two paths follows.
 ## **Only clears the gate** — it does not call `Progress.add_xp`/`add_money` (those already happen for every
 ## kind, unconditionally, in `WorldStep`'s own death loop).
 ##
@@ -671,49 +726,22 @@ func _ignite_at(world_px: Vector2) -> void:
 ## and the user's to overturn** — the plan's own TBD names auto-equip and a corpse pickup as the other two live
 ## candidates; only this call site would move if either wins, nothing else in the lock.
 ##
-## **Room ①'s water starts here, not at the moment of death** — acceptance 8b's own order: reward first, wall
-## collapse/water second. The rune grant is written **before** the water line below it because conceptually
-## the reward *is* the fire and the water is only its visible consequence — **but that statement order is
-## decorative, not what enforces the acceptance** (verify-read: swapping the two lines is measured green,
-## since both run in the same call on the same frame and the water only starts *pouring* on later ticks —
-## there is no observable moment between them). **The `boss_died(KIND_BULL)` guard is what actually enforces
-## it** — it is what makes "before the bull, nothing grants fire and no water starts" true, and it is gated on
-## the same `_room1_reward_water == null` (has the water not already started) that also guards against a
-## second L press re-triggering anything — pressing L before the bull has died, or again after the water
-## already started, does nothing further, and the grant does not re-fire either (harmless regardless —
-## `grant_rune` is idempotent — but this is the one moment the reward is actually taken). **Room ③'s own
-## reward is not wired to any water or rune here** — `_room1_reward_status()`'s own comment below has the full
-## account of that gap.
+## **Room ①'s water is gone** (`burn-out-of-the-bull-room.md` §4) — only the reward gate below survives.
+## `grant_rune` fires the instant the bull is confirmed dead, on the same L press that clears the pending
+## flag. **The `boss_died(KIND_BULL)` guard is what makes "before the bull, nothing grants fire" true** —
+## `grant_rune` is idempotent on its own (`net_progress`'s own check), so nothing further needs to guard a
+## second press.
 ##
 ## **`not progress.is_reward_pending(...)` is deliberately not part of this condition** — verify-read's own
 ## finding: `clear_pending_boss_rewards()` on the line above already makes that term true unconditionally by
 ## the time it would be read, so it used to be a coupling to the line above, not a real check (deleting it
-## changed nothing; only reordering the two lines would have). `boss_died()` plus the `null` guard is the
-## whole of what actually decides this, named honestly instead of carrying a term that reads as protection
-## but is not.
+## changed nothing; only reordering the two lines would have). `boss_died()` alone is the whole of what
+## actually decides this.
 func _take_boss_reward() -> void:
 	var progress := _world.progress()
 	progress.clear_pending_boss_rewards()
-	if _room1_reward_water == null and progress.boss_died(MonsterDefs.KIND_BULL):
+	if progress.boss_died(MonsterDefs.KIND_BULL):
 		progress.grant_rune(Tuning.ELEM_FIRE)
-		_room1_reward_water = WaterSource.new(
-			ROOM1_WATER_X0, ROOM1_WATER_X1, ROOM1_WATER_ROW, Tuning.WATER_RAIN_PER_TICK)
-
-
-## The HUD line's own three states, named — "has the bull died", "is its reward still pending", "has the
-## water started" (`_take_boss_reward`'s own order). **Only the bull** — the rooster's own reward gate exists
-## in `Progress` (the mechanism is generic, keyed by kind) but no room ③ water is wired to it in this build
-## (`stage1-bosses.md`'s own recorded gap: `water-jump-and-escape.md` already owns a working pour, K, and this
-## stage does not reach into it).
-func _room1_reward_status() -> String:
-	var pr := _world.progress()
-	if not pr.boss_died(MonsterDefs.KIND_BULL):
-		return "황소 미처치"
-	if pr.is_reward_pending(MonsterDefs.KIND_BULL):
-		return "대기 중 (L로 수령)"
-	if _room1_reward_water != null:
-		return "수령함 · 물 누적 %d" % _room1_reward_water.poured()
-	return "수령함"
 
 
 ## **M/N — stands a monster at the mouse position. A shell-only debug door** (`monsters-minimum`).
@@ -820,6 +848,14 @@ func _physics_process(delta: float) -> void:
 		var jump_press := _input.jump_pressed()
 		if _world.frame(delta, _input.move_axis(), jump_press, _input.jump_held()):
 			_on_ticked(jump_press)
+		# **The boss entrance clock — `boss-entrance-and-hp-bar.md` Stage C.** Physics frames, not `_process()`
+		#  — `gate_view`'s own header: `_process()` runs at the monitor refresh rate, so a 24-frame beat is
+		#  0.4s on a 60Hz panel and 0.167s on a 144Hz one, with nothing barking.
+		#  **Inside the `not is_showing()` guard, on purpose** — the settlement panel freezes the world, and
+		#  an entrance that kept counting under it would be a latch by accident (Risk 7).
+		if _entrance_frames >= 0 and _entrance_frames < Fx.boss_entrance_total_frames():
+			_entrance_frames += 1
+		_boss_bar.set_entrance_frames(_entrance_frames)
 	# **Before `_update_hud()`, not after, and not left to the pick window's own `_process()`.**
 	#  `three_pick_window.tick_confirm()`'s own header: ticking the confirmation countdown here, in the same
 	#  synchronous call as `_update_hud()` (which reads `is_showing()`), closes the one-render-frame seam that
@@ -830,7 +866,26 @@ func _physics_process(delta: float) -> void:
 	# **Same reason as `_pick_window.tick_confirm()` above** — the count-up's clock is screen-only state
 	#  (`settlement_window.gd`'s own header), ticked from here rather than the window's own idle-rate `_process()`.
 	_settlement.tick_countup()
+	_tick_onboard()
 	_update_hud()
+
+
+## **Notices the window closing and finishes (or abandons) the walkthrough.** `circle_window`'s own
+## `_process()` calls `toggle()` itself the instant the 완성 glow ends — there is no signal for "the window
+## just closed" the way there is one for an insert or a confirm-press, so this is read the same way
+## `_toggle_assembly()` reads `_circle_window.visible` rather than holding a second latch: once a frame,
+## here.
+## **Only marked "seen" if it actually reached `ONBOARD_DONE` first.** Closing early (Tab, ESC) at
+## `ONBOARD_CIRCLE`/`RUNE`/`GLYPH` turns onboarding off without marking it complete — the walkthrough is not
+## skippable by a stray key today (an open TBD in the design doc), but it must not be able to check itself
+## off by accident either.
+func _tick_onboard() -> void:
+	_onboard_view.visible = _onboard_step == ONBOARD_ARROW
+	if _onboard_step > ONBOARD_ARROW and _onboard_step < ONBOARD_OFF and not _circle_window.visible:
+		if _onboard_step == ONBOARD_DONE:
+			_world.progress().mark_onboarding_seen()
+		_onboard_step = ONBOARD_OFF
+		_circle_window.set_onboarding(false)
 
 
 ## **Derived, not pushed.** `want` is recomputed every physics frame straight from `_char.downed`/`at_gate`/
@@ -939,6 +994,33 @@ func _on_ticked(jump_press: bool = false) -> void:
 	if _room1_reward_water != null:
 		_room1_reward_water.tick(_grid)
 
+	# **The bull's reward, automatic — session correction.** `_take_boss_reward()` used to have exactly one
+	#  caller, the debug key L (`_input.reward_taken_requested`), so a player who never opens the debug
+	#  layer kills the bull and gets nothing: no fire rune, no water, no way to burn the wood wall, and the
+	#  rooster/gate are unreachable — the game ends at the bull with nothing telling the player why.
+	# **Gated on `is_reward_pending`, not called every tick once any boss has died.** `_take_boss_reward()`
+	#  itself calls `Progress.clear_pending_boss_rewards()`, which flips *every* present boss's pending flag
+	#  to false, not just the bull's (`progress.gd`'s own "presence as a key is the whole fact" idiom). Calling
+	#  it unconditionally every tick once the bull is dead would, the tick the rooster later dies, silently
+	#  clear the rooster's own still-unbuilt reward flag too — nothing granted for it, and nothing left
+	#  pending to show on the HUD either. Reading `is_reward_pending(KIND_BULL)` first means this only ever
+	#  fires the one tick the bull's own reward is actually waiting, and never touches the rooster's flag.
+	# **The debug key L is untouched and calls the same function** — copying the body into a second place is
+	#  exactly how "only one of the two paths gets fixed" happens the next time this logic changes.
+	if _world.progress().is_reward_pending(MonsterDefs.KIND_BULL):
+		_take_boss_reward()
+
+
+	# **The boss entrance — `boss-entrance-and-hp-bar.md` Stage C.** `woke_boss_id()` lives exactly one tick
+	#  (`MonsterPlacement._woke_boss_id`'s own comment), so this has to be read here, in `_on_ticked()`, and
+	#  nowhere else — the same reason the death notifications a few lines below are read inside this same
+	#  branch. `monster_by_id()` is a live reference, not a copy (`_boss`'s own comment).
+	var woke_id := _world.woke_boss_id()
+	if woke_id != 0:
+		_boss = _world.monster_by_id(woke_id)
+		_boss_bar.show_boss(_boss)
+		_entrance_frames = 0
+
 	# **The east wall comes down the instant the rooster dies — before `consume_changed()` below**, or the
 	#  renderer would see the hole one tick late (`_grid.consume_changed()` is this function's own last line).
 	# **One rectangle, not a run of carves.** `cmd_fill` goes through `_write_cell`, which is what counts
@@ -968,6 +1050,12 @@ func _on_ticked(jump_press: bool = false) -> void:
 	if _spell.blast_count() > 0:
 		_sfx.play_blast()
 	_blast_count += _spell.blast_count()
+
+	# **A pillar notification is valid only within this tick too — the same place, the same reason.**
+	#  Miss this and a condense glyph carves no cell, so with no pillar drawn either it is a pure signature
+	#  fake: the model raised a pillar and the screen shows nothing (`glyph-condense.md` §11.6, Step 3).
+	_blast_fx.on_pillars(_spell.get_pillar_x(), _spell.get_pillar_y(),
+		_spell.get_pillar_w(), _spell.get_pillar_h(), _spell.get_pillar_element())
 
 	# **A death notification is valid only within this tick** — the tick branch of the next `frame()` clears
 	#  it (`world_step.gd`'s header). Do not read it here and the corpse afterimage cannot appear in principle —
@@ -1003,12 +1091,18 @@ func _process(dt: float) -> void:
 	# **Zoom is applied to the clamp too.** `Camera2D.zoom` 0.5 makes the visible world **twice** as wide, and
 	#  feeding the raw viewport size to `camera_center` keeps clamping at the play scale — the camera then
 	#  stops at the old margin and **half the screen fills with the void outside the map**, with no error.
-	var z: float = ZOOM_STEPS[_zoom_step]
+	# **The boss entrance folds into these same two lines** (`boss-entrance-and-hp-bar.md` Stage C) — anything
+	#  written to `_camera.zoom`/`.position` from anywhere else is overwritten the very next frame, the same
+	#  reason `_cam_lead` above already lives here instead of in its own `_process()`.
+	# **`Fx.PLAY_ZOOM_MULT` is a third, independent factor** — it composes the same way the debug ladder
+	#  (`ZOOM_STEPS[_zoom_step]`) already composes with `entrance_zoom()`, so the entrance zooms in from
+	#  whatever this already set rather than doubling on top of it (`Fx.PLAY_ZOOM_MULT`'s own comment).
+	var z: float = ZOOM_STEPS[_zoom_step] * Fx.PLAY_ZOOM_MULT * entrance_zoom(_entrance_frames)
 	_camera.zoom = Vector2(z, z)
 	# **Snapped to the screen's pixel grid** — see `snap_camera_px`. Without it the whole world shivers
 	#  by a pixel every frame while walking, and it reads as the *character* stuttering, not the camera.
-	_camera.position = snap_camera_px(camera_center(
-		_char.center() + Vector2(_cam_lead, 0.0), get_viewport_rect().size / z, world_size()), z)
+	var focus := entrance_focus(_char.center() + Vector2(_cam_lead, 0.0), _boss_focus(), _entrance_frames)
+	_camera.position = snap_camera_px(camera_center(focus, get_viewport_rect().size / z, world_size()), z)
 	# Shake is **the camera's offset**. `stage_input._to_world` undoes the canvas transform, so aim does not
 	#  drift even while shaking — without undoing it, a click goes to the wrong cell with no error.
 	# The order of this node's `_process` and `blast_fx`'s `_process` is not guaranteed, so it **can be one
@@ -1098,14 +1192,23 @@ func _rebuild(end_the_run: bool) -> void:
 	#  `Progress`, so `_world.reset()` does not reach them. **`_lit` surviving is not cosmetic** — the arch
 	#  would pop fully opaque on the second run instead of fading up, with every other check still green.
 	_gate_view.reset_gate()
+	# **The boss entrance clears with everything else** (`boss-entrance-and-hp-bar.md` Stage C) — the same
+	#  "revert every counter" reasoning `_gate_view.reset_gate()` right above already states for `_lit`. Left
+	#  out, the bar would ride a fresh run showing a boss from the last one, and the camera's own
+	#  `_boss_focus()` would read a corpse from a stage that no longer exists.
+	_entrance_frames = -1
+	_boss = null
+	_boss_bar.clear_boss()
+	# **Onboarding dies on every rebuild** — R, going home and the chain all route through here, and this is
+	#  the one call site all three share (`_onboard_step`'s own header). `_leave_town()` is the only place
+	#  that restarts it, and it does so *after* calling `reset_stage()` (which reaches this function), so the
+	#  order here does not race that decision.
+	_onboard_step = ONBOARD_OFF
+	_circle_window.set_onboarding(false)
 	_blast_count = 0
-	# Room ①'s water reverts with everything else — `_world.reset()` above already clears `Progress.
-	#  reward_pending`, but the water instance itself is held here in the shell, not in `Progress`.
-	_room1_reward_water = null
-	# **Room ③'s wall latch too.** `_build_room()` below always rebuilds the terrain in this same call, so
-	#  the flag and the wall never disagree — the latch is safe here for exactly the reason `_room1_reward_water`
-	#  above is, and the reason `_settlement`'s own latch ban above it is not (that one strands a `mouse_filter`
-	#  over the whole viewport; this one strands nothing).
+	# **Room ③'s wall latch.** `_build_room()` below always rebuilds the terrain in this same call, so
+	#  the flag and the wall never disagree — safe here for the reason `_settlement`'s own latch ban above it
+	#  is not (that one strands a `mouse_filter` over the whole viewport; this one strands nothing).
 	_room3_gate_open = false
 	_build_room()
 	# **Resynced after the spawn, not left at whatever the old character was doing.** Skip this and a
@@ -1221,8 +1324,12 @@ func _interact() -> void:
 			#  adds is *choosing what to equip within a budget*, and that needs the point table which does not
 			#  exist yet — so today the bench opens the reordering window and nothing is pretended.
 			_toggle_assembly()
-		Fixtures.KIND_RESEARCH:
-			_toggle_research()
+		# **연구대's door is closed, not removed** (`onboarding-and-palette-tabs.md` Stage 7 — the plan's own
+		#  "the door closes; nothing is deleted"). `_toggle_research()`, `Progress.buy()`, `UnlockDefs` and
+		#  `research_window.gd` all stay reachable through code — only this call stops happening, so E at the
+		#  bench does nothing and the player walks past it, matching the 「준비중」 prompt `town_view` now
+		#  draws there. `net_research` must stay green with no edit — if it goes red, the door was not the
+		#  only thing that moved.
 
 
 ## **The research bench's HUD line — the rune pool, unlocked and locked in one list, and what an unlock costs.**
@@ -1280,6 +1387,12 @@ func enter_town() -> void:
 func _leave_town() -> void:
 	_stage_id = StageDefs.STAGE_1
 	reset_stage()
+	# **The stage-1 entry moment — onboarding starts here, once.** `reset_stage()` above already zeroed
+	#  `_onboard_step` back to `ONBOARD_OFF` (the same `_rebuild()` call `R` itself makes); this is the one
+	#  place that restarts it, and only when `Progress._onboarding_seen` says it has never finished.
+	if not _world.progress().has_seen_onboarding():
+		_onboard_step = ONBOARD_ARROW
+		_circle_window.set_onboarding(true)
 
 
 ## **The other half of the "seat ⊆ owned" invariant** — called only after something has just revoked
@@ -1375,6 +1488,59 @@ static func _axis_center(f: float, v: float, w: float) -> float:
 	if w <= v:
 		return w * 0.5
 	return clampf(f, v * 0.5, w - v * 0.5)
+
+
+## **The boss entrance's zoom, pure and static** (`boss-entrance-and-hp-bar.md` Stage C) — the same seat
+## `camera_lead`/`snap_camera_px` already hold: a net feeds a frame count and reads the value, with no scene
+## and no camera. **This is the only reason any of it is measurable** — today's debug zoom (`ZOOM_STEPS`) is
+## a key with nothing measuring it, that constant's own comment says so.
+##
+## A multiplier on `ZOOM_STEPS[_zoom_step]`, not a set value — the debug `-`/`=` keys keep working underneath
+## it and this function never has to learn which step is selected. **Identity (`1.0`) outside the entrance
+## and at its very last frame** — that identity, not "it looked back to normal", is what acceptance 6/7 turn
+## into a value a net can assert.
+static func entrance_zoom(frames: int) -> float:
+	var zoom_in := Fx.BOSS_ENTRANCE_ZOOM_IN_FRAMES
+	var hold := Fx.BOSS_ENTRANCE_HOLD_FRAMES
+	var total := Fx.boss_entrance_total_frames()
+	if frames < 0 or frames >= total:
+		return 1.0
+	if frames < zoom_in:
+		return lerpf(1.0, Fx.BOSS_ENTRANCE_ZOOM_MULT, float(frames) / float(maxi(zoom_in, 1)))
+	if frames < zoom_in + hold:
+		return Fx.BOSS_ENTRANCE_ZOOM_MULT
+	var out_t := float(frames - zoom_in - hold) / float(maxi(Fx.BOSS_ENTRANCE_OUT_FRAMES, 1))
+	return lerpf(Fx.BOSS_ENTRANCE_ZOOM_MULT, 1.0, out_t)
+
+
+## **The boss entrance's focus, pure and static, the same seat as `entrance_zoom` beside it.** Lerps from the
+## player's own led focus to the boss and back — `player`/`boss` are both already-computed world points, not
+## `Character`/`Monster` references, so a net drives it with two bare `Vector2`s and no scene at all.
+## **Goes through `camera_center()` at the call site, not here** — so the clamp still applies and the camera
+## still refuses to show the void outside the map while it is looking at the boss.
+static func entrance_focus(player: Vector2, boss: Vector2, frames: int) -> Vector2:
+	var zoom_in := Fx.BOSS_ENTRANCE_ZOOM_IN_FRAMES
+	var hold := Fx.BOSS_ENTRANCE_HOLD_FRAMES
+	var total := Fx.boss_entrance_total_frames()
+	if frames < 0 or frames >= total:
+		return player
+	if frames < zoom_in:
+		return player.lerp(boss, float(frames) / float(maxi(zoom_in, 1)))
+	if frames < zoom_in + hold:
+		return boss
+	var out_t := float(frames - zoom_in - hold) / float(maxi(Fx.BOSS_ENTRANCE_OUT_FRAMES, 1))
+	return boss.lerp(player, out_t)
+
+
+## **A reference read, not a pure function** — `_boss` is instance state (`_process()`'s own doc on why),
+## so this cannot live beside `entrance_zoom`/`entrance_focus` above. **Only guards against `null`** — a boss
+## that died mid-entrance stays a valid (if now-corpsed) reference (`_boss`'s own comment: `RefCounted`, never
+## freed by death), so this never has to fall back to the player mid-lerp; it only exists so a fresh run with
+## no boss yet never dereferences a null.
+func _boss_focus() -> Vector2:
+	if _boss != null:
+		return _boss.center()
+	return _char.center() + Vector2(_cam_lead, 0.0)
 
 
 ## ASCII map -> commands. Terrain goes through `apply()` too — if an external event bypasses the command
@@ -1546,15 +1712,12 @@ func _update_hud() -> void:
 		# What the user should watch is **it dropping and then locking to one figure.** 0 comes only in a
 		#  narrow vessel and the nets measure that headless — there is no reason to wait 140 seconds on screen.
 		# **The water cell count is not "the sum of amounts"** — the `WATER_HUD_TICKS` comment above.
-		#  **The debug pour and the rain toggle are gone**, so every cell counted here came from the game
-		#  itself (room ①'s reward pour) — which makes this line a sharper reading than it was.
+		# **Room ①'s reward pour is gone** (`burn-out-of-the-bull-room.md` §4) — stage 1 pours nowhere now, so
+		#  this line reads 0 for the whole run until room ③'s own pour exists. Kept for the `F` debug pour and
+		#  for that future pour, not deleted with the reward water.
 		"활성 청크 %d / %d · 물 %d칸" % [
 			_grid.active_chunk_count(), CellGrid.CHUNK_COUNT, _water_cells,
 		],
-		# **Stage I — "has the reward been taken" is judged by this line alone.** Order matters
-		#  (acceptance 8b), so the HUD must show which side of that order the fight is currently on, not just
-		#  whether water happens to be flowing.
-		"방① 보상 %s" % _room1_reward_status(),
 		"FPS %d" % Engine.get_frames_per_second(),
 		"캐릭터 (%d,%d) %s" % [_char.x, _char.y, "접지" if _char.on_ground else "공중"],
 		"발사 %d · 비행중 %d · 자취 %d" % [

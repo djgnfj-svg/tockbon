@@ -113,18 +113,25 @@ func _fall_and_land(t) -> void:
 
 
 ## **Jump apex height — this is where plan risk 1 is closed.**
-##  Doubling **only one** of `GRAVITY_PX` and `JUMP_VY_PX` makes the apex 4x or half, and
+##  Doubling **only one** of `PLAYER_GRAVITY_PX` and `JUMP_VY_PX` makes the apex 4x or half, and
 ##  **not one error is raised.** Measured: with `JUMP_VY` alone not raised, **all 1288 nets were green.**
 ##  => The two below are the only automatic detectors that bite that.
 ##
 ## **Behavior and the constant are measured separately. The two numbers differ, so do not mix them into one line:**
-##  · behavior **102px** — the value from actually jumping. Movement pushed 1px at a time means
+##  · behavior **103px** — the value from actually jumping. Movement pushed 1px at a time means
 ##    **integer truncation shaves it.**
 ##    Putting the analytic 108 here makes it **red forever.** Truncation is not a bug but a property of this
 ##    movement scheme
 ##  · constant **3.375 tiles** — the analytic `v^2/2g` = 108px / tile 32px. **Read in tiles** so this line does
 ##    not go stale with it the day the scale changes again
-const JUMP_PEAK_PX := 102
+##
+## **`103`, not the old `102` — `character.gd`'s `PLAYER_GRAVITY_PX`/`JUMP_VY_PX` moved (2400/-720 -> 1536/-576,
+##  "game feels sped up") while the analytic 108/3.375 was deliberately held fixed** (the pair was chosen from
+##  the `v0=36k, g=6k^2` family, which keeps `v0^2/2g` exactly 108 for every `k`). The truncated value still
+##  shifts because *which* frame the discrete rise crosses zero velocity changed (old: exactly frame 18, landing
+##  on an integer cumulative sum by luck; new: frame 23, landing mid-remainder) — this is the same "truncation
+##  is a property, not a bug" the box above already names, just recomputed for the new pair.
+const JUMP_PEAK_PX := 103
 const JUMP_PEAK_TILES := 3.375
 
 const LEDGE_CX := 30
@@ -157,7 +164,7 @@ func _jump_height(t) -> void:
 	# **The constant side — how many tiles the analytic value is.** Measuring behavior only would miss the case
 	#  where both constants are changed wrongly **by the same ratio** (both x3, say), leaving the apex unchanged.
 	#  This line bites that branch.
-	var peak := Character.JUMP_VY_PX * Character.JUMP_VY_PX / (2.0 * Character.GRAVITY_PX)
+	var peak := Character.JUMP_VY_PX * Character.JUMP_VY_PX / (2.0 * Character.PLAYER_GRAVITY_PX)
 	var tile := float(Tuning.TILE_CELLS * Tuning.CELL_PX)
 	t.eq(snappedf(peak / tile, 0.001), JUMP_PEAK_TILES,
 		"해석식 도달 높이가 %s타일이다 (v²/2g = %.0fpx ÷ 타일 %.0fpx)" % [
@@ -249,7 +256,7 @@ func _standing_then_cut_loose() -> Array:
 ## `vy` for a frame in which the jump fired, one frame of gravity already added — A-1's reasoning, and the
 ## reason this file measures that sum rather than `JUMP_VY_PX` itself.
 func _fired_vy() -> float:
-	return Character.JUMP_VY_PX + Character.GRAVITY_PX * DT
+	return Character.JUMP_VY_PX + Character.PLAYER_GRAVITY_PX * DT
 
 
 ## **F-1 — pressed after the ground is gone, and it still jumps.**
@@ -284,7 +291,7 @@ func _coyote_expires(t) -> void:
 		ch.step(g, DT, 0.0, false, false)
 	var vy_before := ch.vy
 	ch.step(g, DT, 0.0, true, true)
-	t.eq(ch.vy, vy_before + Character.GRAVITY_PX * DT,
+	t.eq(ch.vy, vy_before + Character.PLAYER_GRAVITY_PX * DT,
 		"%d프레임이 지나면 코요테가 닫힌다 (중력만 더해진 vy=%.1f)" % [COYOTE_OUT_FRAMES, ch.vy])
 
 
@@ -307,7 +314,7 @@ func _coyote_is_spent_by_the_jump_it_paid_for(t) -> void:
 		ch.step(g, DT, 0.0, false, true)
 	var vy_before := ch.vy
 	ch.step(g, DT, 0.0, true, true)
-	t.eq(ch.vy, vy_before + Character.GRAVITY_PX * DT,
+	t.eq(ch.vy, vy_before + Character.PLAYER_GRAVITY_PX * DT,
 		"뛴 직후 다시 눌러도 두 번은 안 뛴다 (중력만 더해진 vy=%.1f)" % ch.vy)
 
 
@@ -318,7 +325,8 @@ func _buffer_peak(press_at: int) -> int:
 	var g := _floor_grid()
 	var ch := Character.new()
 	# **Dropped from a height, so it is never grounded before the press** — that keeps the coyote window empty
-	#  and makes this a measurement of the buffer alone. 100px is 17 frames of falling.
+	#  and makes this a measurement of the buffer alone. 100px is **22** frames of falling
+	#  (was 17 — `GRAVITY_PX` 2400 -> 1536, `docs/design/game-feel.md` "11b": weaker gravity falls slower too).
 	ch.place(160, REST_Y - 100)
 	var landed := false
 	var top := REST_Y
@@ -336,7 +344,7 @@ func _buffer_peak(press_at: int) -> int:
 ## **What goes red when inverted**: judge the raw `jump` argument instead of `_jump_buffer_left` — the press
 ##  happened in the air with nothing to jump from, so it is eaten and the character just lands (peak 0).
 func _buffered_press_fires_on_landing(t) -> void:
-	var peak := _buffer_peak(14)   # 17 frames of falling, so this is 3 frames before touching down
+	var peak := _buffer_peak(19)   # 22 frames of falling, so this is 3 frames before touching down
 	t.ok(peak > 50, "착지 3프레임 전에 누른 점프가 착지 순간 발사된다 (%dpx 떴다)" % peak)
 
 
@@ -494,9 +502,9 @@ func _submerged(amount: int) -> Array:
 ##
 ## **"vy == JUMP_VY_PX" is not measured literally — it is written differently from the plan's wording.**
 ##  `character.step()` adds gravity **within the very frame** the jump is assigned
-##  (`_body.apply_gravity`: `vy = minf(vy + GRAVITY_PX*dt, ...)`, the line right after the jump assignment).
+##  (`_body.apply_gravity`: `vy = minf(vy + PLAYER_GRAVITY_PX*dt, ...)`, the line right after the jump assignment).
 ##  A ground jump goes through the same thing, so this is not a problem water created — which is why `vy` right
-##  after each jump is exactly `JUMP_VY_PX + GRAVITY_PX*DT` (one frame of gravity). **That deterministic value**
+##  after each jump is exactly `JUMP_VY_PX + PLAYER_GRAVITY_PX*DT` (one frame of gravity). **That deterministic value**
 ##  is what measures "the jump actually fired". It is the same reason the other checks in `net_character` measure
 ##  `y` rather than `vy` directly.
 func _submerged_jump_fires_repeatedly(t) -> void:
@@ -507,7 +515,7 @@ func _submerged_jump_fires_repeatedly(t) -> void:
 	ch.step(g, DT, 0.0, false, false)
 	t.ok(not ch.on_ground, "물기둥엔 바닥이 없어 시작이 공중이다 (전제)")
 
-	var expected := Character.JUMP_VY_PX + Character.GRAVITY_PX * DT
+	var expected := Character.JUMP_VY_PX + Character.PLAYER_GRAVITY_PX * DT
 	for i in 3:
 		ch.step(g, DT, 0.0, true, true)
 		t.eq(ch.vy, expected, "%d번째 공중 점프가 물속에서 발사된다 (vy=%.1f)" % [i + 1, ch.vy])
@@ -519,7 +527,7 @@ func _submerged_jump_fires_repeatedly(t) -> void:
 ## **Measuring only at 0 would pass even with the threshold changed to 200** (the trap the plan named —
 ##  "the value matches by accident"). So the values just above and below the threshold are measured **together**.
 func _submerged_jump_boundary(t) -> void:
-	var expected := Character.JUMP_VY_PX + Character.GRAVITY_PX * DT
+	var expected := Character.JUMP_VY_PX + Character.PLAYER_GRAVITY_PX * DT
 
 	var shallow := _submerged(Tuning.WATER_WET)
 	var g0: CellGrid = shallow[0]
@@ -550,7 +558,7 @@ func _leaving_water_blocks_the_very_next_frame(t) -> void:
 	var ch: Character = made[1]
 
 	ch.step(g, DT, 0.0, false, false)
-	var expected := Character.JUMP_VY_PX + Character.GRAVITY_PX * DT
+	var expected := Character.JUMP_VY_PX + Character.PLAYER_GRAVITY_PX * DT
 	ch.step(g, DT, 0.0, true, true)
 	t.eq(ch.vy, expected, "물속에서 점프가 먹는다 (전제)")
 
@@ -562,7 +570,7 @@ func _leaving_water_blocks_the_very_next_frame(t) -> void:
 	#  so this frame's `vy` is the value with only gravity added, not one reset to `JUMP_VY_PX`.
 	var vy_before := ch.vy
 	ch.step(g, DT, 0.0, true, true)
-	t.eq(ch.vy, vy_before + Character.GRAVITY_PX * DT,
+	t.eq(ch.vy, vy_before + Character.PLAYER_GRAVITY_PX * DT,
 		"물 밖으로 나온 바로 다음 프레임에 점프가 안 먹는다 (중력만 더해진 vy=%.1f)" % ch.vy)
 
 
@@ -599,7 +607,7 @@ func _submerged_jump_includes_the_foot_row(t) -> void:
 	for x in range(cx0, cx1 + 1):
 		g.set_water(x, cy1, Tuning.WATER_MAX)
 
-	var expected := Character.JUMP_VY_PX + Character.GRAVITY_PX * DT
+	var expected := Character.JUMP_VY_PX + Character.PLAYER_GRAVITY_PX * DT
 	ch.step(g, DT, 0.0, true, true)
 	t.ok(not ch.on_ground, "공중이다 (전제 — 바닥이 없다)")
 	t.eq(ch.vy, expected,

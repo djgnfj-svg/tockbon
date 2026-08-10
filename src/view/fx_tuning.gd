@@ -112,6 +112,42 @@ const CHAR_UPRIGHT: Array[int] = [CHAR_STAND, CHAR_WALK]
 ## Being pushed also looks like walking. **Chosen knowingly** — it beats sliding while standing still.
 const CHAR_WALK_PX_PER_FRAME := 24
 
+## **Dust behind running feet — decided by the user** (「캐릭터가 움직일 때 뒤에 먼지가 나면 좋겠다」).
+## **Ground-attached only** — `character_view` gates spawning on `_ch.on_ground`, so a jump or a fall raises
+##  no dust; the ground is what a puff is kicked up from, and nothing is kicked up off the ground.
+## **The clock is distance traveled, not real time** — the same idiom `CHAR_WALK_PX_PER_FRAME` above already
+##  uses for the walk cycle, for the same reason: a puff per fixed number of steps reads as a footfall
+##  rhythm, while a puff per fixed *second* would puff at the same rate whether standing still and being
+##  pushed slowly or sprinting, and the two would read identically on screen.
+const DUST_SPACING_PX := 14
+## How many grains one spawn lays down. Few and small — this is a whisper of motion, not an explosion, so it
+##  is sized nothing like `FLASH_MAX`/`PILLAR_MAX` below (those answer for eight simultaneous blasts).
+const DUST_COUNT := 3
+## Sideways scatter around the spawn point (px) — a single point moving in a straight line reads as a
+##  bullet trail, not a kicked-up puff.
+const DUST_SPREAD_PX := 3.0
+## How far behind the foot, opposite the direction of travel, the puff starts (px).
+const DUST_BACK_PX := 6.0
+## Each grain's own radius (px).
+const DUST_R_PX := 2.0
+## How long one grain lives (sec) — short, so a puff behind a running character never trails more than a
+##  step or two back.
+const DUST_LIFE_SEC := 0.28
+## Drift while alive (px/sec) — a small backward-and-up float is what reads as "a light puff of ground",
+##  not a spark (which is a shape this game's screen already reserves — `blast_fx.gd`'s own header: "there
+##  are no sparks").
+const DUST_DRIFT_PX_PER_SEC := 18.0
+const DUST_RISE_PX_PER_SEC := 10.0
+## The cap on live grains — the same headroom idiom as `FLASH_MAX`/`PILLAR_MAX` below, sized for one running
+##  character rather than for eight simultaneous blasts.
+const DUST_MAX := 24
+## A pale, terrain-neutral tan — close in brightness to the two ground materials it is kicked up from
+##  (stone 0x5C574F, wood 0x6B4524) while still reading against the sky's near-black
+##  (verify-look's own measurement, bedrock 35,34,40 against sky 14,14,19 — recorded on
+##  `MONSTER_ASLEEP_ALPHA` above). The alpha here is the grain's alpha **at spawn**; it fades to 0 over
+##  `DUST_LIFE_SEC` (`character_view._draw_dust`), it is not the alpha drawn for the grain's whole life.
+const DUST_COLOR := Color(0.62, 0.58, 0.50, 0.55)
+
 # --- monsters -------------------------------------------------------
 ## **A fallback color — the default is a sprite now** (`MONSTER_SHEETS` below).
 ##  **Do not delete it.** If texture loading fails, `monster_view` draws a rectangle of this color instead —
@@ -584,9 +620,10 @@ const MONSTER_PHASE2_BRACKET_ARM_PX := 12.0
 ##  (`WINDOW_TITLE_SIZE` · `PALETTE_HEAD_SIZE` · the layer number derived from the radius).
 const HUD_FONT_SIZE := 16
 
-## **The level-up indicator's color — a call to action, not a status.** `HUD/Stats`·`Health`·`Progress` are all
-##  the engine's default white; a `Label` cannot mix colors within one string, so the indicator got its own
-##  node (`HUD/LevelUp`) instead of living appended to `HUD/Progress`'s status line, and this is that node's
+## **The level-up indicator's color — a call to action, not a status.** `HUD/Stats` is the engine's default
+##  white; a `Label` cannot mix colors within one string, so the indicator got its own node (`HUD/LevelUp`)
+##  instead of living appended to the old `HUD/Progress` status line — **and that line is now gone entirely**
+##  (「레벨은 안 보이게」), which leaves this node as the only text the player reads. This is that node's
 ##  distinct `font_color` override (verify-look's own finding — appended in the same color and weight, it read
 ##  as legible but never drew the eye, and the plan's own risk is "the player carries a three-pick until the
 ##  run ends").
@@ -692,8 +729,8 @@ const STAFF_RING_PX := 2.0
 ## **Rarity does not get its own color here** — every rarity of one family shares its family's color
 ##  (`RARITY_TINT` below carries rarity as a separate device, the same "two independent devices" idiom
 ##  `CIRCLE_RING_INNER`/`OUTER` already uses for "innermost first"). Splitting color by rarity too would mean
-##  the staff tip alone has to carry **two** axes (which family · which rarity) in one hue, and nine ids would
-##  need nine distinguishable colors instead of three.
+##  the staff tip alone has to carry **two** axes (which family · which rarity) in one hue, and twelve ids
+##  would need twelve distinguishable colors instead of four.
 const GLYPH_TINT: Dictionary = {
 	# Spread and blast must be **far apart on the color wheel** so the staff tip for key 4 (spread->blast) and
 	#  key 5 (blast->spread) split at a glance. The layer counts are the same, so **only the color carries the order.**
@@ -709,6 +746,16 @@ const GLYPH_TINT: Dictionary = {
 	Glyph.DUMMY_C: Color(0.72, 0.66, 0.56),
 	Glyph.DUMMY_R: Color(0.72, 0.66, 0.56),
 	Glyph.DUMMY_U: Color(0.72, 0.66, 0.56),
+	# **Condense — a jade green, measured against everything else already meaning something on this screen**
+	#  (`glyph-condense.md` §11.6, the same by-hue-distance method `MONSTER_BOLT_COLOR`'s own comment uses).
+	#  Spread's cyan sits at ~195°, blast's orange at ~15°, the dummy's neutral tan at ~35°; the rune trio
+	#  (fire 30° · water 190° · none 258°) and the rarity ring (common ~220° · rare ~275° · unique ~40°) crowd
+	#  the rest of the wheel. **~135° is the clearest gap** — 60° from spread, 100°+ from blast/dummy/unique,
+	#  and far enough from the monster bolt's acid lime (~90°) that a staff tip is never confused for an
+	#  enemy projectile. Reads as "grown, solid" — the opposite picture from spread's scatter and blast's burn.
+	Glyph.CONDENSE_C: Color(0.32, 0.82, 0.42),
+	Glyph.CONDENSE_R: Color(0.32, 0.82, 0.42),
+	Glyph.CONDENSE_U: Color(0.32, 0.82, 0.42),
 }
 
 ## The color of a glyph with no definition. **Deliberately magenta** — grow the glyphs without growing this
@@ -805,9 +852,11 @@ const RARITY_RING_PX := 1.5
 ## falls through to the procedural stroke rather than drawing nothing.
 ##
 ## **`ring_accel.png` and `ring_home.png` are on disk and are deliberately not here** — `glyph_defs` has
-## nine ids (spread · blast · dummy, three rarities each) and **there is no accelerate or home glyph in
-## code**. Wiring them to a family they do not belong to would be worse than leaving them unused; they are
-## waiting for the glyph, not the other way round.
+## twelve ids now (spread · blast · dummy · condense, three rarities each) and **there is no accelerate or
+## home glyph in code**. Wiring them to a family they do not belong to would be worse than leaving them
+## unused; they are waiting for the glyph, not the other way round. **Condense has no row here either** —
+## unlike accel/home, its glyph exists; only its art does not (`glyph-condense.md` — "no art is added, code
+## lands first"), so it falls through to the procedural symbol the same as any other missing entry would.
 const RING_TEX: Dictionary = {
 	Glyph.SPREAD_C: "res://assets/circle/ring_spread.png",
 	Glyph.SPREAD_R: "res://assets/circle/ring_spread.png",
@@ -821,7 +870,8 @@ const RING_TEX: Dictionary = {
 }
 
 ## **The palette card's own picture, by glyph.** Same shape and same fall-through discipline as `RING_TEX`
-## above — three files carry nine ids, and an id with no entry drops back to the procedural symbol.
+## above — this table (like that one) carries nine of the game's twelve ids, and an id with no entry
+## (condense's three, today) drops back to the procedural symbol.
 ##
 ## **This is a separate map from `RING_TEX` and that is the whole reason it exists.** A ring is drawn at the
 ## layer band's diameter; a palette card's symbol radius is `PALETTE_SYMBOL_RATIO` of a cell's short side —
@@ -926,7 +976,10 @@ const DEAD_RING_PX := 3.0
 ##  changes but sim doesn't" has a presentation-only cousin: **script state changes, the canvas doesn't**).
 ##  `net_render._hud_controls_are_inside_the_viewport` measures every `HUD` child against the real,
 ##  project-settings-read canvas size — the trap this comment describes is exactly what it catches.
-## `HUD/Progress` sits just above `Health`, at `(660,450)-(952,486)` — same reasoning, same margin.
+## **That pair of labels is gone.** `Health` became a drawn gauge (`hp_view`, bottom-**left** now, because
+## this very rectangle covers the top-left band) and `Progress` became `HUD/Money` in the bottom-right. The
+## reasoning above is unchanged and now applies to those two: `net_render` still asserts no window covers the
+## health readout, and that assert is what forced the move.
 const WINDOW_RECT := Rect2(48, 12, 864, 372)
 
 ## **It is opaque.** A user acceptance — "there should **be a background color**, like a particular window opening".
@@ -1071,8 +1124,22 @@ const BOOK_FOLD := Color(0.03, 0.035, 0.055, 1.0)
 ##   **outer end** the rings occupy is here. Put a constant per ring and they overlap the day a 3-layer circle arrives.
 const CIRCLE_AREA_PAD_PX := 14.0
 const CIRCLE_DISC_RATIO := 0.94
-const CIRCLE_RING_ZONE := 0.80
-const CIRCLE_RUNE_RATIO := 0.17
+## **"한 칸씩 바깥으로" (user) is one derived rule, not a second tuned number** — the round rune sits dead
+##  center, so growing it has no direction to move in; what has to move is where the ring zone *starts*.
+##  `circle_layout.layer_bands()`'s `PIC_ROUND` branch now begins this zone just outside the grown rune's
+##  own edge (`CIRCLE_RING_GAP_FRAC` below is the "one칸" gap) instead of at the frame center, so raising
+##  `CIRCLE_RUNE_RATIO` moves both layer seats out with it — there is no second offset to hand-keep in step.
+##  **Eye-tune this one number** (`onboarding-and-palette-tabs.md` names every value here TBD).
+const CIRCLE_RING_ZONE := 0.88
+## **Grown — the user: "룬이 좀 더 커야 돼. 훨씬 더 크게 박혀야 돼."** `RUNE_ART_FRAC` (below) sizes only
+##  the picture inside this radius; this ratio also sizes the click target and the empty-seat ring, so
+##  growing it moves all three together. **Eye-tune this one number.**
+const CIRCLE_RUNE_RATIO := 0.26
+## **The "one칸" gap between the rune's own edge and where the layer rings begin** (user: "룬 자리 · 1번
+##  문양 자리 · 2번 문양 자리가 각각 한 칸씩 바깥으로") — a ratio of the frame radius, the same unit every
+##  other value in this block already uses. See `CIRCLE_RING_ZONE`'s own comment for how this one number
+##  moves both layer seats without a second constant to keep in step. **Eye-tune this one number.**
+const CIRCLE_RING_GAP_FRAC := 0.06
 const CIRCLE_GLYPH_RATIO := 0.115
 ## The rune slot's inner core. It is "a wick burning white", so it must be smaller than the outer glow
 ##  (the same idiom as the muzzle and the flash).
@@ -1126,13 +1193,36 @@ const CIRCLE_LAYER_NUM_MIN := 10
 const CIRCLE_LAYER_NUM_INSET_FRAC := 0.25
 const CIRCLE_LAYER_NUM_LIFT_FRAC := 0.25
 
-## **The shape of a glyph symbol is decided by `kind`** (`glyph_defs.DEFS`) — drawing per glyph would make that
-##  "a fourth place to fix when adding a glyph". The color is `GLYPH_TINT`, so it is **the same color as the staff tip**,
-##  and that is why the window and the staff read as the same magic.
+## **The shape of a glyph symbol is decided by `family`, not by `kind`** (`glyph-condense.md` §11.5) —
+##  drawing per glyph would make that "a fourth place to fix when adding a glyph", and `kind` alone stopped
+##  being enough the day a second `TERMINAL` family (condense) arrived: two families sharing one `kind` would
+##  have shared one shape too, and a condense card drew blast's exact disc and said blast's exact sentence
+##  until this map split them. The color is `GLYPH_TINT`, so it is **the same color as the staff tip**, and
+##  that is why the window and the staff read as the same magic.
 ##  SPAWN's ray count is **a presentation value.** It does not need to equal spread's 8 directions —
 ##   kept equal it misreads as "every glyph that makes bolts makes 8 of them".
 const GLYPH_SPAWN_RAYS := 6
 const GLYPH_SYMBOL_PX := 2.0
+
+## **One row per family, not per `kind`.** A missing family here must bark, not fall through to a shape that
+##  belongs to someone else — that silent fallthrough is exactly the bug this map replaces
+##  (`circle_window._draw_glyph`/`three_pick_window._draw_pick_glyph_shape` both read this, never `kind`,
+##  for the shape; the effect sentence in `three_pick_window._effect_text` reads `family` the same way).
+const SYM_SPAWN_RAYS := 0
+const SYM_TERMINAL_DISC := 1
+const SYM_MODIFY_DIAMOND := 2
+## **A narrow tall bar with a point at the top — condense's own shape** (`glyph-condense.md` §11.5). It must
+##  read as *up*, and it must not read as `SYM_SPAWN_RAYS`: `circle-art.md` already measured `ring_accel` and
+##  `ring_spread` colliding as "strokes reaching outward", and a single upward spike is a third member of that
+##  same family of pictures if it is drawn as radiating lines instead of one solid shape — **filled, not
+##  outlined**, the opposite silhouette from `SYM_MODIFY_DIAMOND`'s hollow outline.
+const SYM_PILLAR_UP := 3
+const GLYPH_SYMBOL: Dictionary = {
+	Glyph.FAMILY_SPREAD: SYM_SPAWN_RAYS,
+	Glyph.FAMILY_BLAST: SYM_TERMINAL_DISC,
+	Glyph.FAMILY_DUMMY: SYM_MODIFY_DIAMOND,
+	Glyph.FAMILY_CONDENSE: SYM_PILLAR_UP,
+}
 
 ## **Rotate the rays by half a step.** Without it the 0° and 180° rays are **horizontal**, and since the symbol sits
 ##  at 12 o'clock on the ring the tangent at that point is horizontal too, so **the two rays fold onto the ring's line and vanish** —
@@ -1156,9 +1246,29 @@ const GLYPH_SPAWN_ANGLE_STEP_FRAC := 0.5
 ##  **Keep the color and the shape different** — the same and the two meanings mix.
 const SLOT_EMPTY := Color(0.55, 0.62, 0.78, 0.55)
 const SLOT_EMPTY_PX := 1.5
-## The **plus mark** drawn in an empty slot. Without the cross it is just a faint circle and reads only as "a place".
-const SLOT_PLUS_RATIO := 0.5
-const SLOT_PLUS_PX := 1.5
+## **The plus mark is gone — the user: "문양이 도넛 모양으로 껴져야 되는데 위쪽에 플러스 표시가 왜 있는지
+##  잘 모르겠어."** This overturns the reasoning that used to live here (a lone ring reads only as "a place",
+##  not "you can put something here") — with the rune grown and the two layer rings pushed outward around it
+##  (`CIRCLE_RING_GAP_FRAC`), an empty layer's ring now nests against the rune's own disc and the frame, so the
+##  stack itself reads as a donut without a mark drawn inside it. **Deleted, not left unused** —
+##  `SLOT_PLUS_RATIO`/`SLOT_PLUS_PX` no longer exist so nothing can quietly wire the cross back in.
+##
+## **That donut-nesting-alone reasoning did not hold on its own — the user again, a second time**:
+##  「링 문양이 있는데 위쪽 원 공간이 뭔지 모르겠음」. A solid empty ring and a *filled* layer's own solid ring
+##  (`_draw_ring_edge`, `CIRCLE_RING_INNER`/`OUTER`) differ only by color and thickness — both easy to miss at
+##  a glance, and exactly the case reported (the base circle has two layers; with one filled the other's plain
+##  ring reads as unlabeled UI, not "empty"). ⇒ **`circle_window._draw_slot_ring` draws it dashed now** —
+##  filled is solid, empty is dashed, a difference no color-blindness or a quick glance can miss.
+## The dash angles are pure (`circle_window.slot_dash_arcs`) so a net can drive the count with no window.
+const SLOT_EMPTY_DASH_COUNT := 10
+## The fraction of one dash's own arc left as the gap to the next — at 0 the dashes touch end to end and the
+##  ring is solid again (this exact regression). `net_circle`'s inversion (dropping `SLOT_EMPTY_DASH_COUNT`
+##  to 1, one long dash) is the case that has to go red for the same reason.
+const SLOT_EMPTY_DASH_GAP_FRAC := 0.35
+## `draw_arc`'s own smoothing resolution **per dash**, not the dash count above — low enough that ten short
+##  arcs stay cheap to draw every frame, high enough that one dash does not look faceted at this ring's
+##  radius (roughly 30-40px at the window's own size, `Layout.glyph_radius`).
+const SLOT_EMPTY_DASH_POINTS := 6
 
 ## **The circle you press is bigger than the symbol.** Kept the same as the symbol you have to aim exactly at an
 ##  empty layer for it to click, and that becomes "I pressed it and nothing happened". Grown too far it eats the
@@ -1195,6 +1305,48 @@ const PALETTE_HEAD_SIZE := 14
 ##  the text sticks out **above** the section. At 1.0 it clings to the bottom of the band and collides with the items.
 const PALETTE_HEAD_BASELINE_FRAC := 0.7
 
+## ── tabs — 진 · 룬 · 문양, one open at a time (`onboarding-and-palette-tabs.md`) ──
+## **`Fx.PALETTE_*` only** — `net_circle` bars this file from `Fx.WINDOW_*` and `book_layout`
+##  (`palette_layout.gd`'s own header), so every new value the tab strip and the 완성 band need is prefixed
+##  the same way the rest of this section already is.
+## **Screen values below are defaults, not decisions** — put them in, look at them, move them
+##  (the plan's own "Screen values below are defaults").
+const PALETTE_TAB_BAND_PX := 26.0
+const PALETTE_TAB_GAP_PX := 4.0
+const PALETTE_TAB_SIZE := 14
+## Open vs. closed — background and text color both flip, so which tab is open reads even with the
+##  labels unread. The open tab reuses the picked-item gold family; closed tabs sit dim and low-contrast.
+const PALETTE_TAB_OPEN_BG := Color(0.20, 0.22, 0.30, 1.0)
+const PALETTE_TAB_CLOSED_BG := Color(0.09, 0.10, 0.145, 1.0)
+const PALETTE_TAB_OPEN_TEXT := Color(1.0, 0.92, 0.55, 1.0)
+const PALETTE_TAB_CLOSED_TEXT := Color(0.55, 0.58, 0.66, 0.85)
+const PALETTE_TAB_EDGE := Color(0.30, 0.36, 0.50, 0.8)
+const PALETTE_TAB_EDGE_PX := 1.0
+
+## The "마법진 완성" band at the bottom of the palette page — always present, in every tab
+##  (design §5: "it confirms, it does not apply").
+const PALETTE_DONE_BAND_PX := 40.0
+const PALETTE_DONE_TEXT := "마법진 완성"
+const PALETTE_DONE_SIZE := 14
+const PALETTE_DONE_BG := Color(0.16, 0.19, 0.26, 1.0)
+const PALETTE_DONE_EDGE := Color(0.40, 0.52, 0.70, 0.9)
+const PALETTE_DONE_EDGE_PX := 1.5
+const PALETTE_DONE_TEXT_COLOR := Color(0.85, 0.92, 1.0, 1.0)
+## The glow the moment 완성 is pressed (Stage 6) — one flash, not a held state.
+const PALETTE_DONE_GLOW_COLOR := Color(1.0, 0.95, 0.7, 0.5)
+const DONE_GLOW_FRAMES := 18
+
+## The 문양 tab's empty note — "문양이 하나도 없다" is a sentence, not a blank rectangle
+##  (design §3: an empty framed box reads as a drawing bug).
+const PALETTE_EMPTY_TEXT := "현재 문양이 없습니다"
+const PALETTE_EMPTY_SIZE := 14
+const PALETTE_EMPTY_COLOR := Color(0.60, 0.64, 0.74, 0.9)
+
+## 찰칵 — a click is motion here, not sound (this repo has none; see the plan's own Blockers).
+## How many frames the just-filled seat's ring holds its flash.
+const CLICK_FRAMES := 10
+const CLICK_COLOR := Color(1.0, 0.95, 0.7, 0.9)
+
 ## Where the SPAWN rays **start** (relative to the radius). At 0 they emanate from a single point and look like a clump, not a star.
 const GLYPH_SPAWN_INNER_RATIO := 0.3
 ## The TERMINAL disc's radius (relative to the symbol radius). At 1.0 it looks the same size as the ray symbol,
@@ -1207,6 +1359,15 @@ const GLYPH_TERMINAL_RATIO := 0.8
 ##  "it spreads" or "it ends here" and is not mistaken for a stronger version of either.
 const GLYPH_MODIFY_RATIO := 0.75
 const GLYPH_MODIFY_PX := 2.0
+
+## **`SYM_PILLAR_UP`'s own shape — a filled spike, base to apex.** `GLYPH_PILLAR_BASE_RATIO`/`_TIP_RATIO` are
+##  where (relative to the symbol radius, measured from center, +down) the bar's foot and the point where the
+##  tip begins sit; `GLYPH_PILLAR_WIDTH_RATIO` is the bar's half-width. The apex itself is always at `-r`
+##  (the symbol's own top), the same edge `GLYPH_TERMINAL_RATIO`'s disc and `GLYPH_MODIFY_RATIO`'s diamond
+##  both reach — every family's symbol fills the same circle, so none reads as "weaker" for taking less room.
+const GLYPH_PILLAR_WIDTH_RATIO := 0.28
+const GLYPH_PILLAR_BASE_RATIO := 0.85
+const GLYPH_PILLAR_TIP_RATIO := 0.35
 
 # --- **the spread generation table — the screen's half** -------------
 ## It must have **the same length and the same direction** as `sim_tuning.SIM_SIZES` (both decrease per generation).
@@ -1346,6 +1507,25 @@ const SHAKE_SEC := 0.20
 ## The decay curve. 1 = linear · larger means **strong early and dying fast** (the impact is front-loaded).
 const SHAKE_DECAY_POW := 1.6
 
+# --- condense's pillar -----------------------------------------------
+## **The pillar's own lifetime — two phases, the same shape `FLASH_SEC`/`FLASH_START` gives a blast, adapted
+##  for *up* instead of *out*.** It rises for `PILLAR_RISE_SEC`, holds at full height for whatever is left of
+##  `PILLAR_SEC`, then fades. **`푱`** — the user's own word for it (`glyph-condense.md` §11.6) — is that first
+##  stretch; without a visible rise the pillar simply appears whole and the one verb this glyph exists for
+##  ("솟는다") is gone, the same trap `GATE_ARCH_FADE_FRAMES`'s own comment already names for a fade collapsed
+##  into a pop. **Sized by feel, not measured against a blast** — a pillar has no radius to inherit a ratio
+##  from, and this is a place for the eye (verify-look's acceptance, `glyph-condense.md` §11.10).
+const PILLAR_SEC := 0.35
+const PILLAR_RISE_SEC := 0.12
+## The core's width, as a fraction of the pillar's own drawn width — the same "a wick burning white" idiom
+##  `FLASH_CORE_RATIO` uses, narrower here because the shape is already narrow.
+const PILLAR_CORE_RATIO := 0.5
+const PILLAR_GLOW_A := 0.55
+
+## The cap on simultaneous pillars — the same idiom as `FLASH_MAX`, and the same headroom: eight spread
+##  bolts landing in one glyph (`[확산, 응축]`) never hits it.
+const PILLAR_MAX := 16
+
 # --- the health / XP readout (`hp_view.gd`) ---------------------------
 ## **Bottom-left, and top-left was tried first and does not fit.** `WINDOW_RECT` is `(48, 12, 864, 372)` —
 ##  the assembly and three-pick windows run to y 384, so **anything in the top left is under them**, and
@@ -1399,6 +1579,76 @@ const HP_TEXT_LOW := Color(1.0, 1.0, 1.0, 1.0)
 const XP_BAR := Color(0.38, 0.72, 0.95, 1.0)
 const XP_BAR_BG := Color(0.10, 0.14, 0.20, 1.0)
 
+# --- the boss bar (`boss_bar_view.gd`) --------------------------------
+## `boss-entrance-and-hp-bar.md` — **both stage-1 bosses get one bar, big, across the top of the screen,
+##  with the boss's own name over it.** Modeled on `hp_view.gd`'s shape above (frame first, fill on top, a
+##  pure `fill_frac`/`bar_rect` a net can call with no node) — **not** the mob vocabulary's 4px head bar
+##  (`MONSTER_HP_BAR_*`), which this must not be mistaken for.
+##
+## **The rect sits inside `WINDOW_RECT` (48,12)-(912,384) on purpose** — "you are not assembling while a
+##  boss is arriving" (the design doc's own premise, with its own named exception: the tutorial's one
+##  guaranteed assembly moment can happen under a live boss bar, that doc's Risk 2). **If the overlap reads
+##  badly on screen, the bar moves down, not the window** (`WINDOW_RECT` is claimed ground — that doc's
+##  Out-of-scope list).
+const BOSS_BAR_RECT := Rect2(288.0, 12.0, 384.0, 140.0)  # name band 44px, frame 96px under it
+
+## **384 wide, not "big" — `hp_frame.png` is 384x96 and this draws it at exactly 1.0** (`net_town`'s standing
+##  rule: a pixel-art sprite is upscaled by an integer, never stretched). **Wider means new art (a 9-patch or
+##  a 2x row), not a bigger rect** — say so rather than ship a 1.25x0.46 stretch (the design doc's own words).
+const BOSS_BAR_FRAME_H_PX := 96.0    # hp_frame.png's own height, drawn 1:1
+
+## How far inside the frame the fill sits. **`HP_FRAME_INSET_PX` (6) was measured at the player bar's 0.5
+##  scale** — this bar draws the same art at 1.0, so the inset doubles with it.
+const BOSS_BAR_INSET_PX := 12.0
+
+const BOSS_NAME_SIZE := 28
+const BOSS_NAME_COLOR := Color(0.98, 0.90, 0.70, 1.0)
+## **Not `HP_FULL`** — that is *your* health's colour, and a boss's bar sharing it would read as the same
+##  gauge as the player's own.
+const BOSS_BAR_FULL := Color(0.75, 0.20, 0.55, 1.0)
+const BOSS_BAR_BG := Color(0.12, 0.05, 0.10, 1.0)
+
+## Fade-in length (physics frames) once the bar appears (beat 3). **Floored, not just given a value** —
+## `GATE_ARCH_FADE_FRAMES`'s own header: a floor on one end alone let 2-11 collapse a fade into a pop while
+## every other check stayed green.
+const BOSS_BAR_FADE_FRAMES := 24
+
+## ══ The entrance clock (`stage.gd._entrance_frames`, physics frames) ══
+## Beats 3-5 of the entrance (`boss-entrance-and-hp-bar.md` §2): the camera closes on the boss, holds while
+## it walks and roars, then returns. **The one cross-clock constraint this file carries**: the roar
+## (`BossAi.ENTRANCE_IDLE_TICKS * Tuning.TICK_DIVIDER` real frames) must land strictly inside
+## `[BOSS_ENTRANCE_ZOOM_IN_FRAMES, BOSS_ENTRANCE_ZOOM_IN_FRAMES + BOSS_ENTRANCE_HOLD_FRAMES]` — retune any of
+## the three and the symptom is not a wrong number, it is *the player never sees the roar*
+## (CLAUDE.md's "a thing that never happens"). `14 * 3 = 42`, inside `[24, 60]` today —
+## `net_boss_entrance` asserts this inequality directly, not just that each constant looks reasonable alone.
+const BOSS_ENTRANCE_ZOOM_IN_FRAMES := 24
+const BOSS_ENTRANCE_HOLD_FRAMES := 36
+const BOSS_ENTRANCE_OUT_FRAMES := 24
+## Multiplies `ZOOM_STEPS[_zoom_step]`, not a set value — the debug `-`/`=` keys keep working underneath it
+## (`stage.gd`'s own two camera lines fold this in rather than replacing them).
+const BOSS_ENTRANCE_ZOOM_MULT := 1.6
+
+## **The whole entrance's length, derived — never a fourth literal beside the three above.** Read by
+## `stage.gd` to know when `_entrance_frames` should stop climbing, and by `entrance_zoom`/`entrance_focus`
+## to know where the out-phase ends and the identity value takes back over.
+static func boss_entrance_total_frames() -> int:
+	return BOSS_ENTRANCE_ZOOM_IN_FRAMES + BOSS_ENTRANCE_HOLD_FRAMES + BOSS_ENTRANCE_OUT_FRAMES
+
+## **The boss titles — drawn above the bar, large.** Not `MonsterDefs.name_of()` (황소/거대 수탉, the kind) —
+##  this is the title the world gave it (`GDD.md`'s World table: "a bull that swallowed the fire rune").
+##  **황소's is the user's own words, verbatim.** ⇒ one line here per new boss (the plan's own "three-file
+##  contract": a row here, a row in `stage1_monsters.ROWS`, a row in `BossAi.MOVES`).
+##
+##  **`KIND_ROOSTER`'s row was left blank while the user had not named it — session correction: the in-game
+##  kind name (`MonsterDefs.name_of(KIND_ROOSTER)` = "거대 수탉") is used here as the title too, until a real
+##  one is decided.** The user has once called this boss "문을 지키는 석상" in conversation — unconfirmed as
+##  of this edit — so this is a placeholder the user may still overturn, not a final name invented to fill
+##  the gap. **One line changes it** when the user decides: this constant, nowhere else.
+const BOSS_TITLES: Dictionary = {
+	MonsterDefs.KIND_BULL: "불의 룬을 삼킨 소",
+	MonsterDefs.KIND_ROOSTER: "거대 수탉",
+}
+
 # --- money, bottom-right (`money_view.gd`) ----------------------------
 ## **The one number the user asked to keep on screen besides health** (「돈도 오른쪽 구석에 표시해 주고」).
 ##  Level was dropped in the same breath — 「레벨은 안 보이게」.
@@ -1433,6 +1683,17 @@ const CAM_LEAD_PX := 32.0
 ##  **frame-rate independent**, whereas a per-frame lerp constant silently changes the feel with the frame rate.
 ## 0.02 = 98% of the way there in one second, so it reads as **"it drifts", not "it snaps"**.
 const CAM_LEAD_DECAY_PER_SEC := 0.02
+
+## **The base play zoom — decided by eye** (user: 「좀 더 확대」). `ZOOM_STEPS[0]` (`stage.gd`) stays 1.0
+## on purpose — that is the debug ladder's own baseline and the `-`/`=` keys walk it from there, so this is
+## a second, independent multiplier rather than a change to that table's first entry.
+## **Composes, does not collide, with the boss entrance zoom** (`BOSS_ENTRANCE_ZOOM_MULT` below) —
+## `stage.gd`'s one zoom line multiplies `ZOOM_STEPS[_zoom_step] * PLAY_ZOOM_MULT * entrance_zoom(...)`, so
+## the entrance always zooms in *from* whatever this constant already set, the same way it already zooms in
+## from whichever debug step is selected. Raising this value never doubles the entrance's own zoom-in.
+## 1.15 is "a bit more" — the GDD's off-screen-explosion cost (`docs/GDD.md`) grows with any zoom-in, so this
+## is deliberately small.
+const PLAY_ZOOM_MULT := 1.15
 
 # --- fire -----------------------------------------------------------
 ## **Burning cells overwrite the material color.** Laid lightly over the wood color (0x6B4524) it looks like
@@ -1721,7 +1982,15 @@ const TOWN_PROMPT_LIFT_PX := 30.0
 ## **The key is written into the text, not left implicit.** The town does not explain anything
 ##  (`town.md`, "the town does not explain anything") — but *which key* is not an explanation, it is a label,
 ##  and with no tutorial in the game yet there is nowhere else for it to be said.
-const TOWN_PROMPT_FMT := "[E] %s"
+## **It says F because F is what opens it.** It read `[E]` for as long as E was the interaction key, and
+##  stayed `[E]` after the user moved interaction to F — the prompt kept naming a key bound to nothing, and
+##  a judge doing what the screen says gets no response. `net_research` was guarding the `[E]` at the time.
+const TOWN_PROMPT_FMT := "[F] %s"
+## **연구대's own prompt — 「준비중」, not `TOWN_PROMPT_FMT`** (`onboarding-and-palette-tabs.md` Stage 7).
+##  This is the visible seat: `_town_message` sits behind F3 (`stage._update_hud`'s own gate), so a player
+##  who never opens the debug HUD would never see it there. The bench's real feature is not deleted —
+##  `Progress.buy()`/`UnlockDefs`/`research_window.gd` all stay reachable through code; only this door closes.
+const TOWN_RESEARCH_PROMPT := "준비중"
 
 ## **Rune names, in Korean, because the player reads them** (CLAUDE.md's language rule).
 ##  **They live here and not in `sim_tuning`** for the same reason every other string does: `src/sim/` is the
@@ -1793,7 +2062,10 @@ const RESEARCH_INK_DIM := Color(0.24, 0.19, 0.14, 0.62)
 ## **A format, not a sentence, so the price is printed from `progress.GEMS_PER_UNLOCK` rather than typed
 ##  here.** Typed as a literal, retuning the price would move the number the player is charged and leave the
 ##  number the player reads behind, with nothing barking.
-const RESEARCH_FOOTER_FMT := "해금 하나에 원석 %d · [E] 닫기"
+## **The closing key is ESC, and it was never E.** The window opens on the interaction key and closes on
+##  `ui_cancel`; this line named E through the whole time E opened it and after F replaced E, so it has
+##  never once named the key that actually closes the window.
+const RESEARCH_FOOTER_FMT := "해금 하나에 원석 %d · [ESC] 닫기"
 const RESEARCH_LOCKED_TEXT := "잠김"
 ## The currency line. **원석** — `docs/decisions/gems-from-bosses-and-levels.md` named it.
 const RESEARCH_GEMS_FMT := "원석 %d"
@@ -1996,3 +2268,56 @@ const SFX_LAND_FREQ_END := 90.0
 ##  get confused: a blast is something that happened to the world, this is something that happened to you.
 const SFX_HIT_SEC := 0.10
 const SFX_HIT_DECAY_POW := 3.2
+
+# --- onboarding (`onboarding-and-palette-tabs.md` Stage 7) ---
+## **Tab is a key, not a thing on screen** — the design's own named problem, and the reason this exists at
+## all: the HUD key line already says "Tab 조립창", but it sits behind F3 (`stage._update_hud`'s own gate),
+## so it is not a target a fresh player can ever see. `onboard_view` draws its own key cap instead.
+##
+## **Grown after the user's first look — 「온보딩이 잘 안 보이고」.** The first cut was a 100x80 box holding
+## only a 44x26 key chip and a 22x26 arrow, with no backing plate: against the sky layer's bright band the
+## warm-yellow arrow read close to the same brightness as the background behind it (`sky_background.gd`'s
+## `_top_fill` is sampled from the art, not fixed, so this box cannot assume a dark background the way a
+## window sitting on `Fx.WINDOW_BG` can). Two changes, not one: **a backing panel behind everything** (the
+## same idiom `ONBOARD_KEY_BG` already used for the key chip alone, now covering the whole widget so the
+## world behind it never sets the contrast), and **a line of words**, because an arrow pointing at an
+## invented key cap with no sentence never said what pressing it does. Seat: bottom-centre, above the HUD
+## band, unchanged from the plan's own stated default. Still **not full-screen** (CLAUDE.md risk: a
+## full-screen `Control` while the run is live kills "you can shoot with the window open") — `x` 330..630
+## of a 960-wide screen clears `HP_RECT` (16..208) and `MONEY_RECT` (768..944) on both sides, measured.
+const ONBOARD_RECT := Rect2(330.0, 340.0, 300.0, 140.0)
+
+## **The backing panel — drawn first, under everything else in this file's block.** Same tone as the
+## assembly window's own `WINDOW_BG`, but not fully opaque: this is a callout over the live world, not a
+## second window, and paying an alpha stops it from reading as one.
+const ONBOARD_PANEL_BG := Color(0.05, 0.055, 0.085, 0.90)
+const ONBOARD_PANEL_EDGE := Color(1.0, 0.92, 0.55, 0.85)
+const ONBOARD_PANEL_EDGE_PX := 2.0
+
+## **The instruction line — the sentence the box was missing.** Sits above the arrow, centred, same warm
+## key-cap color so the whole widget reads as one device. Names the actual action ("Tab을 눌러"), not just
+## the key, and the actual target ("마법진을 조립") rather than a bare "여세요" that says nothing about why.
+const ONBOARD_TEXT := "Tab을 눌러 마법진을 조립하세요"
+const ONBOARD_TEXT_SIZE := 18
+const ONBOARD_TEXT_COLOR := Color(1.0, 0.95, 0.8, 1.0)
+const ONBOARD_TEXT_GAP_PX := 10.0
+
+## The "Tab" key cap — a small rounded-looking chip with the key name inside. **Grown with the box** —
+## 44x26 read as an afterthought at arm's length; this is the size a HUD label elsewhere in this file
+## already uses for something meant to be read at a glance (`HUD_FONT_SIZE` 16, close to this chip's own
+## text below).
+const ONBOARD_KEY_W_PX := 60.0
+const ONBOARD_KEY_H_PX := 34.0
+const ONBOARD_KEY_BG := Color(0.14, 0.15, 0.20, 0.95)
+const ONBOARD_KEY_EDGE := Color(1.0, 0.92, 0.55, 0.95)
+const ONBOARD_KEY_EDGE_PX := 2.0
+const ONBOARD_KEY_TEXT := "Tab"
+const ONBOARD_KEY_TEXT_SIZE := 18
+const ONBOARD_KEY_TEXT_COLOR := Color(1.0, 0.95, 0.8, 1.0)
+
+## The arrow — directly above the key cap, pointing down at it. A filled triangle, the simplest shape that
+## reads as "there, specifically" without needing new art for a first slice. **Grown with the box.**
+const ONBOARD_ARROW_W_PX := 30.0
+const ONBOARD_ARROW_H_PX := 32.0
+const ONBOARD_ARROW_GAP_PX := 8.0
+const ONBOARD_ARROW_COLOR := Color(1.0, 0.92, 0.55, 0.95)

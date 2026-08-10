@@ -181,7 +181,7 @@ const MOVES: Dictionary = {
 ## — nothing says a gore and a charge should recover at the same rate either).
 ##
 ## **The contact damage itself is not here** — `world_step.BULL_GORE_DAMAGE` lives beside
-## `PIG_CONTACT_DAMAGE`/`BULL_CHARGE_CONTACT_DAMAGE`, the same split every other damage value in this file
+## `monster_defs.MELEE`/`BULL_CHARGE_CONTACT_DAMAGE`, the same split every other damage value in this file
 ## already draws (bolt damage in `monster_bolts.gd`, contact damage in `world_step.gd` where the one
 ## contact-damage lump already lives).
 ##
@@ -203,8 +203,19 @@ const GORE_MOVES: Dictionary = {
 
 ## The rooster's leap (`stage1-bosses.md` Stage F). Unlike every move above, `LEAP` is not a fixed-tick
 ## "stand still and do a thing" state — it is a real jump: `Monster.on_tick` gives the body an upward
-## velocity (`jump_vy_px`) the instant `WINDUP` ends, gravity (`Character.GRAVITY_PX`, shared — no second
-## physics axis is made for one kind) does the rest, and `Monster._boss_axis` returns the locked horizontal
+## velocity (`jump_vy_px`) the instant `WINDUP` ends, gravity (`Character.GRAVITY_PX`, shared across every
+## monster and boss — no second physics axis is made per kind) does the rest, and `Monster._boss_axis` returns
+## the locked horizontal direction (the same idiom the charge already uses) so it arcs forward, not just up.
+##
+## **This *was* "shared, full stop" — it no longer is.** The player got a second constant,
+## `Character.PLAYER_GRAVITY_PX` (`character.gd`, "game feels sped up" — the user, looking at the screen).
+## Lowering `GRAVITY_PX` itself for that would have stretched every reading in this file's own numbers below
+## (52px continuous, 40px measured, 153px across) along with it, and the landing-marker prediction
+## (`monster_view.gd`'s `air_time := 2.0 * vy / Character.GRAVITY_PX`) too — a boss feel change nobody asked
+## for, riding in on a player feel change. So the constant here **stayed at 2400**, and only the player's own
+## jump reads a lower, separate value. If the rooster/bull still read as too fast once the player's fix is
+## judged on screen, *this* is the constant to lower next — and every number in this file's own comments below
+## has to be re-measured when that day comes, not assumed to scale.
 ## direction (the same idiom the charge already uses) so it arcs forward, not just up. **It ends when it
 ## actually lands** (`Body.grounded`, read by `Monster.step` into a latch — the same "60Hz collision reaches
 ## the 20Hz clock" channel `_charge_blocked` already opened for the charge), not a fixed duration —
@@ -218,8 +229,9 @@ const GORE_MOVES: Dictionary = {
 ## built here.** `LEAP` carries no `carve_r`.
 ##
 ## **Every number is a guess, not a measurement** — the same status as `MOVE_CHARGE`'s own values when they
-## first shipped. `jump_vy_px`=-500 reaches **52px by the continuous formula** (`vy²/(2·GRAVITY_PX)`, the same
-## one `body.gd`'s header cites for the player's own jump) — **but measured in-game it is 40px, 0.400s
+## first shipped. `jump_vy_px`=-500 reaches **52px by the continuous formula** (`vy²/(2·GRAVITY_PX)` — this
+## file's own gravity, 2400, kept apart from `body.gd`'s header, which now cites `PLAYER_GRAVITY_PX` for the
+## player's own jump instead — see the box above) — **but measured in-game it is 40px, 0.400s
 ## airtime, 153px across** (verify-run-b, `stage1-bosses.md` Stage F fix list). The gap is 60Hz Euler
 ## integration plus `move_y`'s integer-pixel rounding, not a bug — the continuous formula is an upper bound,
 ## not the real number. **The rooster's own box is 80px tall, so it leaps roughly half its own height** — the
@@ -236,6 +248,18 @@ const MOVE_LEAP: Dictionary = {
 ## to approach before committing" belongs to any one move). One shared constant, not a per-kind dict, because
 ## every kind with moves today shares it; split it out the day a kind needs its own.
 const IDLE_TICKS := 20  # 21 ticks = 1.050s
+
+## **`boss-entrance-and-hp-bar.md` Stage A/D — the entrance idle window.** Applied to the fresh monster's
+## `pattern_left` only when `WorldStep.spawn_monster` is called with `entrance := true` **and** the kind has a
+## pattern (`world_step.gd`'s own comment on why that gate, not `Monster._init`, is where this belongs) — so
+## the boss walks a beat before its first `WINDUP`/roar instead of committing on the exact frame it appears.
+## **Not `IDLE_TICKS`** — that value already has a job (the ordinary round-robin's own idle beat between
+## moves) and is read every time `advance()` returns to `Pattern.STUN -> IDLE`; a shared constant would mean
+## retuning the ordinary idle beat silently retunes the entrance too, and the reverse.
+## **The cross-clock constraint** (`fx_tuning.gd`'s own comment on `BOSS_ENTRANCE_ZOOM_IN_FRAMES`/
+## `BOSS_ENTRANCE_HOLD_FRAMES`): `ENTRANCE_IDLE_TICKS * Tuning.TICK_DIVIDER` must land strictly inside the
+## camera's hold window, or the roar fires while the camera has already left the boss.
+const ENTRANCE_IDLE_TICKS := 14  # 14 * TICK_DIVIDER(3) = 42 - inside the entrance camera's hold window
 
 ## **Stage H — "pattern durations... scale by integer ratios" at half health** (`stage1-bosses.md`'s own
 ## words, Order table row H). Applied at the single point every duration flows through on its way into
