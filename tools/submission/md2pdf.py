@@ -31,9 +31,14 @@ REPO = "https://github.com/djgnfj-svg/tockbon"
 # Point every one of them at the public repo instead — the file is genuinely there.
 BLOB = REPO + "/blob/main/"
 
+# (source, PDF title, submitted file name). **The third field is what the judge sees in their
+#  download folder** — `plan.pdf` beside forty other `plan.pdf`s says nothing about whose it is
+#  or which of the two required documents it answers.
 DOCS = [
-    ("plan.md", "Tockbon — 게임 소개 및 설명 문서 (NAN 2026 예선)"),
-    ("ai-tech.md", "Tockbon — AI 활용 기술 문서 (NAN 2026 예선)"),
+    ("plan.md", "Tockbon — 게임 소개 및 설명 문서 (NAN 2026 예선)",
+     "NAN2026_탁본_게임소개및설명문서.pdf"),
+    ("ai-tech.md", "Tockbon — AI 활용 기술 문서 (NAN 2026 예선)",
+     "NAN2026_탁본_AI활용기술문서.pdf"),
 ]
 
 CHROME_CANDIDATES = [
@@ -212,8 +217,8 @@ def find_chrome() -> Path:
     sys.exit(1)
 
 
-def to_pdf(chrome: Path, html_path: Path) -> Path:
-    pdf = html_path.with_suffix(".pdf")
+def to_pdf(chrome: Path, html_path: Path, pdf_name: str) -> Path:
+    pdf = html_path.with_name(pdf_name)
     if pdf.exists():
         pdf.unlink()
     cmd = [
@@ -243,12 +248,12 @@ def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     chrome = find_chrome()
     print("[md2pdf] engine: %s" % chrome.name)
-    for name, title in DOCS:
+    for name, title, pdf_name in DOCS:
         src = SRC / name
         if not src.exists():
             print("[md2pdf] missing %s" % src, file=sys.stderr)
             sys.exit(1)
-        pdf = to_pdf(chrome, render(src, title))
+        pdf = to_pdf(chrome, render(src, title), pdf_name)
         print("[md2pdf] %-12s -> %s  (%.2f MB)"
               % (name, pdf.name, pdf.stat().st_size / 1048576))
     print("[md2pdf] out: %s" % OUT)

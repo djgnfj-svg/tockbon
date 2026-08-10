@@ -48,3 +48,6 @@ image copy.png
 #  committed twice before anyone noticed. The engine regenerates them on the next import.
 docs/submission/img/part-*.png
 docs/submission/img/part-*.png.import
+
+# 촬영 원본 — 45MB. 유튜브에 올라가는 산출물이라 리포에 안 남긴다.
+*.mp4
