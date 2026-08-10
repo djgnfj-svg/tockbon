@@ -69,6 +69,14 @@ static func xp_frac(progress: Progress) -> float:
 	return clampf(float(progress.xp) / float(need), 0.0, 1.0)
 
 
+## **Current and maximum, separated by a slash** (the user's ask: 「최대 체력하고 현재 체력을 다 보이게
+## 슬래시로 그 차이로 보이게」). The bar already says *what fraction* is left; the pair says **how much of
+## what** — 40/100 and 40/200 fill the bar differently but read the same without the denominator.
+## **Static and pure so a net can call it with no node** — the same door `fill_frac` is.
+static func hp_text(hp: int) -> String:
+	return "%d / %d" % [hp, Character.MAX_HP]
+
+
 ## The number's colour — **it sits on the red fill now, so it is not red itself.** The previous version put
 ## a red number on the background; inside a red bar that would be invisible at full health and only appear as
 ## the bar drained, which reads as the number breaking rather than as health dropping.
@@ -86,7 +94,7 @@ func _draw() -> void:
 	_paint_fill(inner, fill_frac(_ch.hp))
 	var font: Font = ThemeDB.fallback_font
 	if font != null:
-		_paint_number(font, inner, _ch.hp, number_color(_ch.hp))
+		_paint_number(font, inner, hp_text(_ch.hp), number_color(_ch.hp))
 	_paint_xp(Fx.hp_xp_rect(size), xp_frac(_progress))
 
 
@@ -109,8 +117,7 @@ func _paint_fill(r: Rect2, frac: float) -> void:
 
 ## The number, **centred inside the bar** (the user's ask). Measured and shifted by half, the same idiom
 ## `monster_view._draw_dmg_number` uses — a left-aligned number would drift as the digit count changes.
-func _paint_number(font: Font, bar: Rect2, hp: int, color: Color) -> void:
-	var text := str(hp)
+func _paint_number(font: Font, bar: Rect2, text: String, color: Color) -> void:
 	var w := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, Fx.HP_NUMBER_SIZE).x
 	draw_string(font,
 		Vector2(bar.get_center().x - w * 0.5,

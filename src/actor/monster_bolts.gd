@@ -85,6 +85,11 @@ var _x := PackedFloat32Array()
 var _y := PackedFloat32Array()
 var _dx := PackedFloat32Array()
 var _dy := PackedFloat32Array()
+## **Where the bolt was when the hit test last ran** — which is a *tick* ago, not a frame ago. `consume_hits` tests the **segment** from here to the
+## current position, not the point — see that function's own box. Kept in step with `_x`/`_y` by every
+## `spawn`/`step`/`_remove_at`; drift between them would make the hit test read a stale segment.
+var _px := PackedFloat32Array()
+var _py := PackedFloat32Array()
 var _traveled := PackedFloat32Array()
 var _kind := PackedInt32Array()
 
@@ -123,6 +128,11 @@ func spawn(ox: float, oy: float, dir: Vector2, bolt_kind: int = KIND_PLAIN) -> b
 		return false
 	_x.append(ox)
 	_y.append(oy)
+	# **Seeded to the spawn point, not to zero** — a fresh bolt's segment is a single point, so its first
+	#  frame tests exactly what the old point test did. Zero would stretch the segment back to the origin of
+	#  the world and hit anything on that line.
+	_px.append(ox)
+	_py.append(oy)
 	_dx.append(dir.x)
 	_dy.append(dir.y)
 	_traveled.append(0.0)
@@ -194,9 +204,26 @@ func consume_hits(ch: Character) -> int:
 	var dmg := 0
 	var i := _x.size() - 1
 	while i >= 0:
-		if _x[i] >= lo_x and _x[i] <= hi_x and _y[i] >= lo_y and _y[i] <= hi_y:
+		# **The bolt's whole frame of travel, not the point it landed on.**
+		#  A bolt moves `BOLT_SPEED_PX / 60` = 5.3px per frame and the player moves up to 4.3 the other way,
+		#  so the two close by ~10px while the player's box is 20 wide — **a point test misses whenever the
+		#  sampling happens to straddle the box.** Measured through `character.MOVE_SPEED_PX`: 260 hit, and
+		#  **both 240 and 300 missed entirely**, which is how a *slower* player could dodge better than a
+		#  faster one. That made the movement speed unchangeable, and the movement speed is what the screen
+		#  shake comes from (`character.gd`'s own box).
+		#  **The segment's bounding box, not an exact segment-AABB clip.** Bolts travel in a straight line at
+		#  a fixed speed, so the box is the segment itself for a horizontal shot and only slightly generous
+		#  for a diagonal one — generous in the player's disfavour by at most a few px, on a projectile that
+		#  is already meant to be dodged by moving, not by sub-pixel luck.
+		if maxf(_px[i], _x[i]) >= lo_x and minf(_px[i], _x[i]) <= hi_x 				and maxf(_py[i], _y[i]) >= lo_y and minf(_py[i], _y[i]) <= hi_y:
 			dmg = maxi(dmg, FIRE_DAMAGE if _kind[i] == KIND_FIRE else BOLT_DAMAGE)
 			_remove_at(i)
+		else:
+			# **The segment restarts here, not in `step()`** — this function runs once per **tick** while
+			#  `step()` runs three times (`TICK_DIVIDER`). Resetting per frame would leave a 5px segment
+			#  standing in for 16px of travel, which is the gap that let a bolt pass clean through.
+			_px[i] = _x[i]
+			_py[i] = _y[i]
 		i -= 1
 	return dmg
 
@@ -204,6 +231,8 @@ func consume_hits(ch: Character) -> int:
 func _remove_at(i: int) -> void:
 	_x.remove_at(i)
 	_y.remove_at(i)
+	_px.remove_at(i)
+	_py.remove_at(i)
 	_dx.remove_at(i)
 	_dy.remove_at(i)
 	_traveled.remove_at(i)

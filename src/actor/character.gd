@@ -87,30 +87,24 @@ const STEP_PX := STEP_CELLS * Tuning.CELL_PX
 ##  Reachable height is `v^2/2g`, so doubling only `v` gives **4x** and doubling only `g` gives **half**.
 ##  **No error is raised.** The stage's pillar and wall heights are all designed around these values, so
 ##  getting it wrong only looks like "I cannot clear the pillar".
-## **260 does not divide 60, and it is left that way on purpose. Read this before changing it.**
+## **240, and the last digit is the whole reason: it is exactly 4px per 60Hz frame.**
 ##
-## `body.x` is an integer (the fraction lives in `_rem_*`), so 260/60 = 4.333 makes the character advance in
-##  an uneven **4, 4, 5** pattern. The camera follows, so on screen the character is nearly still and **the
-##  world scrolls in that rhythm** — a candidate cause for the 부르르 떨림 the user reports, and one that
-##  survives `stage.snap_camera_px` because that fix is about the camera, not the gait.
+## `body.x` is an integer (the fraction lives in `_rem_*`), so a speed that does not divide 60 makes the
+##  character advance unevenly — at 260 it was **5, 4, 4, 5, 4, 4** (measured, driven at 60Hz). The camera
+##  follows, so on screen the character is nearly still and **the world scrolls in that rhythm**. That is
+##  the 부르르 떨림 the user reported, and it survived `stage.snap_camera_px` because that fix is about the
+##  camera and this is the gait.
 ##
-## **Both divisible neighbours were tried and both broke the hen's bolt** (measured, same day):
+## **This value could not be changed until the bolt hit test was fixed, and that is why it moved today.**
+##  `monster_bolts.consume_hits` tested the bolt's **point**, so at 240 (and at 300) the player and the bolt
+##  closed fast enough to straddle the box between samples and **never collide** — a slower player dodged
+##  better than a faster one. That function now tests the bolt's **swept segment**, which is what made this
+##  line editable.
 ##
-## ```
-## 300 (5px/frame)   closing speed vs a bolt 620px/s = 10.3px/frame   -> tunnels through, never hit
-## 240 (4px/frame)   closing speed 560px/s = 9.3px/frame              -> also never hit
-## 260 (4.33)        closing speed 580px/s = 9.7px/frame              -> hit
-## ```
-##
-## The middle row is the interesting one: **240 is *slower* than 260 and still misses**, so this is not a
-##  simple speed ceiling. The hit test is an instantaneous box overlap, and an exactly-4px step keeps landing
-##  the character on the same side of the bolt every frame; 260's uneven step happens to sample both sides.
-##  `net_monster._hen_bolt_lifetime_axis` is what catches it — "다가오면 더 빨리 맞는다" goes red.
-##
-## ⇒ **The real fix is a swept hit test in `monster_bolts`, not a speed value**, and that is not a
-##  deadline-day change. Until it exists, moving this number breaks bolts in a way that looks like
-##  "the egg went through me".
-const MOVE_SPEED_PX := 260.0
+## **The price: this is exactly the wolf's `speed_px`, so a wolf can no longer be outrun on foot.** Kept
+##  knowingly — the wolf backs off after each swing (`monster_defs.MELEE`), so the gap opens anyway, and
+##  being tailed by the fast mob reads as pressure rather than as a dead end.
+const MOVE_SPEED_PX := 240.0
 const GRAVITY_PX := 2400.0
 const JUMP_VY_PX := -720.0
 const MAX_FALL_PX := 1800.0

@@ -36,7 +36,7 @@ Dropping it would leave a pick waiting with nothing on screen saying so.
                                     ← WINDOW_RECT (48,12)-(912,384): assembly · three-pick
    ⬆ 레벨업! P키로 뽑기               y 392
    ┌──────────────┐                  y 448, hp_frame.png at half scale
-   │      87      │                  the number lives INSIDE the bar
+   │   87 / 100   │                  현재 / 최대, both inside the bar
    └──────────────┘
    ▬▬▬▬▬▬▬▬                          y 501, 5px XP hairline
                           ★ 24       y 452, right-aligned in the corner
@@ -56,6 +56,7 @@ that corner is the first thing to fall outside the picture when a browser window
 |---|---|
 | `HP_FULL` `(0.80, 0.16, 0.18)` | the bar's fill |
 | `HP_TEXT` → `HP_TEXT_LOW` | the number, cream → white as it drains |
+| — | the string is `현재 / 최대` (「최대 체력하고 현재 체력을 다 보이게 슬래시로」). The bar says *what fraction*; the pair says **how much of what** — 40/100 and 40/200 fill it identically |
 | `XP_BAR` `(0.38, 0.72, 0.95)` | the hairline — **cool on purpose** |
 
 **The number is not red, and that is a consequence of putting it inside the bar.** A red number on red fill

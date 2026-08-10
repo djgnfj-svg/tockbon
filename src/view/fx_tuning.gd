@@ -1380,7 +1380,9 @@ static func hp_xp_rect(panel: Vector2) -> Rect2:
 ## The number's size, and where its baseline sits relative to the bar's centre. **`draw_string` takes a
 ##  baseline, not a top**, so centring vertically means pushing down by roughly a third of the size — measured
 ##  by eye against this font, not derived.
-const HP_NUMBER_SIZE := 26
+## **22, down from 26 — the string grew.** It was `87`; it is `87 / 100` now (the user asked for both
+##  numbers), which is roughly three times as wide and overran the 180px bar at the old size.
+const HP_NUMBER_SIZE := 22
 const HP_NUMBER_BASELINE_FRAC := 0.36
 
 ## **The fill is red; the number on top of it is not.** A red number inside a red bar is invisible at full

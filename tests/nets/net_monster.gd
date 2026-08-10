@@ -509,6 +509,7 @@ func run(t) -> void:
 	_pig_contact_damages_the_player(t)
 	_pig_contact_respects_invulnerability(t)
 	_every_melee_kind_actually_hits(t)
+	_a_bolt_hits_across_a_whole_tick_but_not_across_its_whole_flight(t)
 	_a_melee_mob_backs_off_while_its_swing_recharges(t)
 	# -- stage 6 -- the hen shoots ----------------------------------
 	_hen_stops_at_bolt_range(t)
@@ -2818,3 +2819,62 @@ func _a_melee_mob_backs_off_while_its_swing_recharges(t) -> void:
 	var far := absf(float(m.x) + Defs.w_px(kind) * 0.5 - ch.center().x)
 	t.ok(far <= Defs.melee_range_px(kind) + float(Defs.w_px(kind)) + 8.0,
 		"물러나는 데 한계가 있다 (%.1f px — 없으면 화면 밖으로 걸어나간다)" % far)
+
+
+## ══ **The bolt's hit test sweeps one tick of travel — not a point, and not its whole flight** ══
+##
+## **The point test is what made the player's movement speed unchangeable.** `consume_hits` ran on the
+## **tick** (20Hz) while the bolt moved on the **frame** (60Hz), so it sampled one position in three and a
+## bolt closing at ~9px/frame could pass clean through a 20px-wide player. Measured: at
+## `MOVE_SPEED_PX` 260 the approach case hit, and at **both 240 and 300 it missed entirely** — a slower
+## player dodging better than a faster one. That is why 260 could not be moved to a value that divides 60,
+## and the uneven 5,4,4 gait is where the screen shake comes from.
+##
+## **And the fix has an obvious wrong version that stays green**: resetting the segment inside `step()`
+## (per frame) instead of inside `consume_hits` (per tick) leaves a 5px segment standing in for 16px of
+## travel. *Measured: deleting the reset entirely also stayed green* — because that makes the segment
+## **longer**, which is the failure this second check exists for.
+func _a_bolt_hits_across_a_whole_tick_but_not_across_its_whole_flight(t) -> void:
+	# ── (1) It reaches across the tick: a player walking into a bolt is hit.
+	var g := _bare_grid()
+	var spell := SpellSim.new()
+	var ch := Character.new()
+	ch.place(400, FLOOR_TOP - Character.H_PX)
+	var world := WorldStep.new(g, spell, ch)
+	var bolts: MonsterBolts = world.get("_bolts")
+	bolts.spawn(100.0, float(ch.y) + Character.H_PX * 0.5, Vector2(1.0, 0.0))
+	var hit := -1
+	for i in 200:
+		world.frame(DT, -1.0, false, false)
+		if ch.hp < Character.MAX_HP:
+			hit = i
+			break
+	t.ok(hit >= 0, "마주 걸어오는 플레이어를 탄이 관통하지 않는다 (%d프레임에 맞음)" % hit)
+
+	# ── (2) It does not reach back to where it came from. **The bolt is flown well past a spot, and only
+	#  then is a player put there.** With the segment never reset it stretches from the spawn point to the
+	#  bolt's current position, so this player — standing 200px behind it, never touched — takes damage.
+	var g2 := _bare_grid()
+	var spell2 := SpellSim.new()
+	var ch2 := Character.new()
+	# Parked far to the right, out of the way, while the bolt travels.
+	ch2.place(900, FLOOR_TOP - Character.H_PX)
+	var world2 := WorldStep.new(g2, spell2, ch2)
+	var bolts2: MonsterBolts = world2.get("_bolts")
+	var row := float(ch2.y) + Character.H_PX * 0.5
+	bolts2.spawn(100.0, row, Vector2(1.0, 0.0))
+	for _i in Tuning.TICK_DIVIDER * 4:
+		world2.frame(DT, 0.0, false, false)
+	t.ok(bolts2.count() > 0, "탄이 아직 살아 있다 (전제)")
+	var bolt_x := bolts2.x(0)
+	t.ok(bolt_x > 150.0, "탄이 실제로 날아갔다 (%.0fpx — 전제)" % bolt_x)
+	# Now drop the player onto the ground the bolt already crossed, well behind it.
+	ch2.place(120, FLOOR_TOP - Character.H_PX)
+	var hp_before := ch2.hp
+	# **A whole tick, not one frame** — `consume_hits` runs on the tick (20Hz) and `frame()` is 60Hz, so a
+	#  single call lands on a tick only one time in three. Driven with one frame this assert passed with the
+	#  segment reset deleted — measured, and it was measuring nothing.
+	for _i in Tuning.TICK_DIVIDER * 2:
+		world2.frame(DT, 0.0, false, false)
+	t.eq(ch2.hp, hp_before,
+		"이미 지나간 자리에 선 플레이어는 안 맞는다 (탄 x=%.0f · 플레이어 x=120)" % bolt_x)
