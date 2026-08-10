@@ -2344,6 +2344,13 @@ const ONBOARD_TEXT_SIZE := 18
 const ONBOARD_TEXT_COLOR := Color(1.0, 0.95, 0.8, 1.0)
 const ONBOARD_TEXT_GAP_PX := 10.0
 
+## **The departure gate's own line, shown in the same box** (user: "온보딩 안 하면 안 넘어가게 해주고" —
+## the walkthrough gained a door, and a blocked door that says nothing reads as broken, not as closed). Reuses
+## every other `ONBOARD_*` rect/color/size below it — this is a second sentence in the one widget, not a
+## second widget, so `stage._town_gate_locked()` can drive it with `onboard_view.show_tab_hint = false` and
+## nothing else about the box changes.
+const GATE_LOCKED_TEXT := "마법진을 먼저 조립하세요"
+
 ## The "Tab" key cap — a small rounded-looking chip with the key name inside. **Grown with the box** —
 ## 44x26 read as an afterthought at arm's length; this is the size a HUD label elsewhere in this file
 ## already uses for something meant to be read at a glance (`HUD_FONT_SIZE` 16, close to this chip's own

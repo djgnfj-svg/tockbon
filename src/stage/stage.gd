@@ -882,8 +882,29 @@ func _physics_process(delta: float) -> void:
 ## `ONBOARD_CIRCLE`/`RUNE`/`GLYPH` turns onboarding off without marking it complete — the walkthrough is not
 ## skippable by a stray key today (an open TBD in the design doc), but it must not be able to check itself
 ## off by accident either.
+## **The departure gate itself — blocked until the circle can actually fire, or the walkthrough has already
+## run once.** Before this line nothing stopped E at `Fixtures.KIND_GATE` with an empty circle
+## (`onboarding-and-palette-tabs.md` Stage 3 starts every run empty), which walked straight into stage 1
+## unable to fire.
+## **`can_fire()`, not "완성 was pressed"** — the state machine above only reaches `ONBOARD_DONE` after CIRCLE
+## and RUNE are both placed, but that is an artifact of the walkthrough's own order, not a rule this should
+## lean on: a player who opens the window outside onboarding and presses 완성 on an empty circle must not
+## slip through. Reading `_circle.can_fire()` directly is the one door a click sequence cannot fool.
+## **`or has_seen_onboarding()`, never `and`** — once the walkthrough has completed once, a returning player
+## (after `R`, or a later run) must never be blocked again, even if the circle they currently hold cannot
+## fire. Blocking a second time is exactly what "이미 온보딩을 본 플레이어는 그냥 지나가야 한다" rules out.
+## **Town-only, and reads `_town_view.reachable()`** — the same single door `_interact()` already reads, so
+## the message drawn and the door that actually opens can never disagree.
+func _town_gate_locked() -> bool:
+	return _in_town and _town_view.reachable() == Fixtures.KIND_GATE \
+		and not _circle.can_fire() and not _world.progress().has_seen_onboarding()
+
+
 func _tick_onboard() -> void:
-	_onboard_view.visible = _onboard_step == ONBOARD_ARROW
+	var locked := _town_gate_locked()
+	_onboard_view.visible = _onboard_step == ONBOARD_ARROW or locked
+	_onboard_view.show_tab_hint = _onboard_step == ONBOARD_ARROW
+	_onboard_view.message = Fx.GATE_LOCKED_TEXT if locked else Fx.ONBOARD_TEXT
 	if _onboard_step > ONBOARD_ARROW and _onboard_step < ONBOARD_OFF and not _circle_window.visible:
 		if _onboard_step == ONBOARD_DONE:
 			_world.progress().mark_onboarding_seen()
@@ -1323,7 +1344,8 @@ func _interact() -> void:
 		return
 	match _town_view.reachable():
 		Fixtures.KIND_GATE:
-			_leave_town()
+			if not _town_gate_locked():
+				_leave_town()
 		Fixtures.KIND_ASSEMBLY:
 			# **The same window Tab opens, deliberately** (`town.md`: "it is the same window"). What the town
 			#  adds is *choosing what to equip within a budget*, and that needs the point table which does not
