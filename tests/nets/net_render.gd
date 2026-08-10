@@ -1528,8 +1528,7 @@ func _wired_stage_root(t) -> Node:
 	for path: String in [paths["_hud"], paths["_levelup_label"], "HUD/HpBar", "HUD/Money",
 			"HUD/CircleWindow", "HUD/ThreePickWindow", "SpellView", "BlastFx", "StageInput", "Camera2D",
 			"MonsterView", "CellRenderer", "TownView", "SkyBackground", "HUD/ResearchWindow",
-			"HUD/SettlementWindow", "HUD/BossBar"]:
-			"HUD/SettlementWindow", "HUD/OnboardView"]:
+			"HUD/SettlementWindow", "HUD/BossBar", "HUD/OnboardView"]:
 		t.ok(root.get_node_or_null(path) != null, "씬에 %s 가 있다 (전제)" % path)
 
 	# **`_input` is wired too, since `_update_hud()` reads developer mode off it** (`stage_input.debug_on()`).

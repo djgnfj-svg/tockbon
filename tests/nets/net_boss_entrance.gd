@@ -395,6 +395,12 @@ func _wired_root(t) -> Node:
 			#  null mid-call and disappears rather than fails — `net_gate.gd`'s own comment names this exact
 			#  risk for `_gate_view`.
 			["_boss_bar", "HUD/BossBar"],
+			# **`_onboard_view`** (`onboarding-and-palette-tabs.md` Stage 7) — `_physics_process()` reaches
+			#  `_tick_onboard()` unconditionally, which writes `_onboard_view.visible` every frame. The same
+			#  sentence as `_boss_bar` right above, from the other feature that landed the same day: an
+			#  unwired null here does not fail a check, it barks on **every** physics frame this file drives,
+			#  and the wrapper counts stderr as failure while the count stays green.
+			["_onboard_view", "HUD/OnboardView"],
 			["_settlement", "HUD/SettlementWindow"]]:
 		var n := root.get_node_or_null(NodePath(pair[1]))
 		t.ok(n != null, "씬에 %s 가 있다 (전제)" % pair[1])

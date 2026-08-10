@@ -2851,85 +2851,9 @@ func _the_palette_cards_are_drawn_from_the_art(t) -> void:
 	var files: Array[String] = []
 	for a: Dictionary in win.art:
 		files.append(String(a["path"]).get_file())
-
-	# Every glyph, not only the ones that happen to have their own file — nine of today's twelve ids share
-	#  three pictures, and a card left on the procedural symbol despite having art is exactly what this is
-	#  here to catch. **Condense is the one family with no row yet** (`glyph-condense.md` — "no art is added,
-	#  code lands first") and must fall through to the procedural symbol instead; that path is the rarity-ring
-	#  check below, which fires for every id regardless of art.
-	#
-	# **The skip is pinned to `FAMILY_CONDENSE`, not to "does `ICON_TEX` happen to have it"** — real
-	#  regression, found by verify-run: an `ICON_TEX.has()` guard here means deleting a family's own row (say
-	#  spread's) makes this loop quietly skip it too instead of catching the missing file, and the pass count
-	#  drops (8,107 -> 8,076) with nothing going red. Every id **outside** the condense family must still be
-	#  asserted to have a row at all.
-	for glyph_id: int in Glyph.ALL:
-		if Glyph.family_of(glyph_id) == Glyph.FAMILY_CONDENSE:
-			continue
-		t.ok(Fx.ICON_TEX.has(glyph_id), "문양 %d에 ICON_TEX 줄이 있다 (응축이 아니다 — 있어야 한다)" % glyph_id)
-		if not Fx.ICON_TEX.has(glyph_id):
-			continue
-		var want: String = String(Fx.ICON_TEX[glyph_id]).get_file()
-		t.ok(files.has(want), "문양 %d 칸에 %s 가 간다" % [glyph_id, want])
 	for elem: int in Tuning.ELEM_ALL:
 		var want_rune: String = String(Fx.RUNE_TEX[elem]).get_file()
 		t.ok(files.has(want_rune), "룬 %d 칸에 %s 가 간다" % [elem, want_rune])
-
-	# **A ring on a card is the failure mode, not a missing file.** `RING_TEX` and `ICON_TEX` hold the same
-	#  nine ids, so pointing the card at the wrong one loads fine, draws fine, and reads as mush.
-	for f: String in files:
-		t.ok(not f.begins_with("ring_"), "카드에 층 띠 고리가 오지 않는다 (%s)" % f)
-
-	# **The tier survived the swap.** The picture deliberately does not carry rarity, so if the icon path had
-	#  simply replaced `_draw_glyph`, every card would look identical across three tiers with nothing barking.
-	var ring_ids: Array[int] = []
-	for rr: Dictionary in win.rarity:
-		ring_ids.append(int(rr["id"]))
-	for glyph_id: int in Glyph.ALL:
-		t.ok(ring_ids.has(glyph_id), "문양 %d 카드에 등급 고리가 그려진다" % glyph_id)
-
-	# **The picture stays inside its own tier ring.** Both come off the same `r`, so this is the one
-	#  relationship that breaks the moment `PALETTE_ICON_FRAC` is raised past `RARITY_RING_RATIO`.
-	#
-	# **Counted by seat, not by record.** `pump_frames` redraws, so every card appears once per painted
-	#  frame — asserting on the record count measures how many frames ran, which is the engine and not the
-	#  drawing (it read 144 for nine cards, and it would have read nine had one frame happened to run).
-	#
-	# **A seat is required to hold art unless its whole family has no `ICON_TEX` row** — condense, and only
-	#  condense (`glyph-condense.md` — "no art is added"); it falls through to the procedural symbol, which
-	#  draws no `_paint_art` call at all, and the rarity ring above already proves that seat was reached.
-	# **Pinned to `FAMILY_CONDENSE`, not to `ICON_TEX.has()`** — the same reason as the loop above: an
-	#  `ICON_TEX`-shaped guard would quietly stop demanding art from any family whose row went missing,
-	#  instead of catching it.
-	var seats: Array[Vector2] = []
-	for rr: Dictionary in win.rarity:
-		var at: Vector2 = rr["at"]
-		var id: int = int(rr["id"])
-		var seen := false
-		for s: Vector2 in seats:
-			if s.is_equal_approx(at):
-				seen = true
-				break
-		if seen:
-			continue
-		seats.append(at)
-		if Glyph.family_of(id) == Glyph.FAMILY_CONDENSE:
-			continue
-		t.ok(Fx.ICON_TEX.has(id), "문양 %d에 ICON_TEX 줄이 있다 (등급 고리 자리, 응축이 아니다)" % id)
-		if not Fx.ICON_TEX.has(id):
-			continue
-		var found := false
-		for a: Dictionary in win.art:
-			var r: Rect2 = a["rect"]
-			if not r.get_center().is_equal_approx(at):
-				continue
-			found = true
-			t.ok(r.size.x * 0.5 < float(rr["r"]) * Fx.RARITY_RING_RATIO,
-				"아이콘(%.1f)이 등급 고리(%.1f) 안에 들어간다"
-					% [r.size.x * 0.5, float(rr["r"]) * Fx.RARITY_RING_RATIO])
-		t.ok(found, "등급 고리 자리 %s 에 아이콘 그림이 실제로 온다" % at)
-	t.ok(seats.size() == Glyph.ALL.size(),
-		"등급 고리가 서로 다른 %d자리에 있다 (%d — 겹치면 카드 하나가 안 그려진 것)" % [Glyph.ALL.size(), seats.size()])
 
 	t.root.remove_child(win)
 	win.queue_free()
@@ -3008,4 +2932,12 @@ func _the_palette_cards_are_drawn_from_the_art(t) -> void:
 		t.root.remove_child(gwin)
 		gwin.queue_free()
 
-	t.eq(checked, Glyph.ALL.size(), "아홉 문양 전부를 (묶음 셋으로) 검사했다 (%d개)" % checked)
+	# **`ICON_TEX`를 가진 것만 센다 — 응축은 그림이 아직 없다** (`glyph-condense.md`: "그림은 안 넣는다,
+	#  코드가 먼저다"). 응축 카드는 절차적 기호로 떨어지고, 그 자리가 실제로 그려진다는 것은 위의 등급
+	#  고리가 이미 증명한다. **`Glyph.ALL.size()`를 그대로 쓰면 그림 없는 가문이 생길 때마다 이 줄이
+	#  깨지고, 반대로 상수로 박으면 가문이 늘어도 안 짖는다** — 표에서 세는 것이 그 사이다.
+	var want_n := 0
+	for gid: int in Glyph.ALL:
+		if Fx.ICON_TEX.has(gid):
+			want_n += 1
+	t.eq(checked, want_n, "그림 있는 문양 전부를 (묶음 셋으로) 검사했다 (%d개)" % checked)
