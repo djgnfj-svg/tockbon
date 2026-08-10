@@ -5,7 +5,7 @@
 | **게임 제목** | **탁본 (Tockbon)** |
 | **한 줄 소개** | 마법진을 직접 조립해 나만의 마법을 만드는 2D 횡스크롤 로그라이크 |
 | **플레이 링크** | https://djgnfj-svg.github.io/tockbon/ — 설치 없이 브라우저에서 바로 실행 |
-| **플레이 영상** | `(업로드 후 기입)` |
+| **플레이 영상** | https://www.youtube.com/watch?v=fbQDCyPYMOw |
 | **소스 코드** | https://github.com/djgnfj-svg/tockbon |
 
 탁본은 새겨진 것을 종이에 떠내는 일이다. 이 게임은 마법진을 새기고, 그것이 세계에 찍히는 것을 보는 게임이다.

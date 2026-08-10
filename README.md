@@ -3,6 +3,7 @@
 마법진을 직접 조립해 나만의 마법을 만드는 2D 횡스크롤 로그라이크.
 
 **[▶ 브라우저에서 바로 플레이](https://djgnfj-svg.github.io/tockbon/)** — 설치 없이 열린다.
+**[▶ 플레이 영상 (1분)](https://www.youtube.com/watch?v=fbQDCyPYMOw)**
 
 ![조립창](docs/submission/img/circle-window.png)
 
