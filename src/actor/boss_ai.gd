@@ -203,8 +203,19 @@ const GORE_MOVES: Dictionary = {
 
 ## The rooster's leap (`stage1-bosses.md` Stage F). Unlike every move above, `LEAP` is not a fixed-tick
 ## "stand still and do a thing" state — it is a real jump: `Monster.on_tick` gives the body an upward
-## velocity (`jump_vy_px`) the instant `WINDUP` ends, gravity (`Character.GRAVITY_PX`, shared — no second
-## physics axis is made for one kind) does the rest, and `Monster._boss_axis` returns the locked horizontal
+## velocity (`jump_vy_px`) the instant `WINDUP` ends, gravity (`Character.GRAVITY_PX`, shared across every
+## monster and boss — no second physics axis is made per kind) does the rest, and `Monster._boss_axis` returns
+## the locked horizontal direction (the same idiom the charge already uses) so it arcs forward, not just up.
+##
+## **This *was* "shared, full stop" — it no longer is.** The player got a second constant,
+## `Character.PLAYER_GRAVITY_PX` (`character.gd`, "game feels sped up" — the user, looking at the screen).
+## Lowering `GRAVITY_PX` itself for that would have stretched every reading in this file's own numbers below
+## (52px continuous, 40px measured, 153px across) along with it, and the landing-marker prediction
+## (`monster_view.gd`'s `air_time := 2.0 * vy / Character.GRAVITY_PX`) too — a boss feel change nobody asked
+## for, riding in on a player feel change. So the constant here **stayed at 2400**, and only the player's own
+## jump reads a lower, separate value. If the rooster/bull still read as too fast once the player's fix is
+## judged on screen, *this* is the constant to lower next — and every number in this file's own comments below
+## has to be re-measured when that day comes, not assumed to scale.
 ## direction (the same idiom the charge already uses) so it arcs forward, not just up. **It ends when it
 ## actually lands** (`Body.grounded`, read by `Monster.step` into a latch — the same "60Hz collision reaches
 ## the 20Hz clock" channel `_charge_blocked` already opened for the charge), not a fixed duration —
@@ -218,8 +229,9 @@ const GORE_MOVES: Dictionary = {
 ## built here.** `LEAP` carries no `carve_r`.
 ##
 ## **Every number is a guess, not a measurement** — the same status as `MOVE_CHARGE`'s own values when they
-## first shipped. `jump_vy_px`=-500 reaches **52px by the continuous formula** (`vy²/(2·GRAVITY_PX)`, the same
-## one `body.gd`'s header cites for the player's own jump) — **but measured in-game it is 40px, 0.400s
+## first shipped. `jump_vy_px`=-500 reaches **52px by the continuous formula** (`vy²/(2·GRAVITY_PX)` — this
+## file's own gravity, 2400, kept apart from `body.gd`'s header, which now cites `PLAYER_GRAVITY_PX` for the
+## player's own jump instead — see the box above) — **but measured in-game it is 40px, 0.400s
 ## airtime, 153px across** (verify-run-b, `stage1-bosses.md` Stage F fix list). The gap is 60Hz Euler
 ## integration plus `move_y`'s integer-pixel rounding, not a bug — the continuous formula is an upper bound,
 ## not the real number. **The rooster's own box is 80px tall, so it leaps roughly half its own height** — the

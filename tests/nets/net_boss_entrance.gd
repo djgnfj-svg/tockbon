@@ -528,7 +528,11 @@ func _the_zoom_comes_back_and_is_a_multiplier_on_the_debug_step(t) -> void:
 	for _i in Fx.boss_entrance_total_frames() + Tuning.TICK_DIVIDER * 2:
 		root.call("_physics_process", 1.0 / 60.0)
 	root.call("_process", 0.0)
-	var expect_zoom: float = Stage.ZOOM_STEPS[zoom_step]
+	# **`Fx.PLAY_ZOOM_MULT` folds in here too** (user request, 「좀 더 확대」) — `stage.gd`'s one zoom line now
+	#  multiplies the debug step by it before `entrance_zoom()`, so "back to identity" means the debug step
+	#  times that constant, not the bare step. `Stage.ZOOM_STEPS[zoom_step]` alone would be exactly the value
+	#  it was before that constant existed — this line has to track the same formula `stage.gd._process` does.
+	var expect_zoom: float = Stage.ZOOM_STEPS[zoom_step] * Fx.PLAY_ZOOM_MULT
 	var cam: Camera2D = root.get_node("Camera2D")
 	t.eq(cam.zoom, Vector2(expect_zoom, expect_zoom),
 		"등장이 끝나면 줌이 선택된 디버그 단계(%.3fx)로 정확히 돌아온다 — 1.0이 아니다" % expect_zoom)

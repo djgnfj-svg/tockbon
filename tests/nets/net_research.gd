@@ -370,7 +370,7 @@ func _submerged(amount: int) -> Array:
 ## `vy` on a frame in which the jump fired — one frame of gravity is already added inside `step()`, the same
 ##  reasoning `net_character`'s A-1 writes out.
 func _fired_vy() -> float:
-	return Character.JUMP_VY_PX + Character.GRAVITY_PX * DT
+	return Character.JUMP_VY_PX + Character.PLAYER_GRAVITY_PX * DT
 
 
 ## **Acceptance 10.** The budget is a function of the permanent set, so there is no moment at which it can be
@@ -431,7 +431,7 @@ func _with_no_unlock_the_jump_is_exactly_what_it_was(t) -> void:
 	_water_box(g3, WATER_CX0, WATER_CX1, WATER_CY0, WATER_CY1, 0)
 	var vy_before := ch3.vy
 	ch3.step(g3, DT, 0.0, true, true)
-	t.eq(ch3.vy, vy_before + Character.GRAVITY_PX * DT,
+	t.eq(ch3.vy, vy_before + Character.PLAYER_GRAVITY_PX * DT,
 		"A-3 그대로: 물이 사라진 바로 다음 프레임엔 안 먹는다 (중력만 더해진다)")
 
 	# A-4 — the foot row alone is enough.
@@ -484,7 +484,7 @@ func _the_bought_air_jump_fires_once_per_airtime(t) -> void:
 		ch.step(g, DT, 0.0, false, true)
 	var vy_before := ch.vy
 	ch.step(g, DT, 0.0, true, true)
-	t.eq(ch.vy, vy_before + Character.GRAVITY_PX * DT,
+	t.eq(ch.vy, vy_before + Character.PLAYER_GRAVITY_PX * DT,
 		"같은 체공에서 세 번째는 안 먹는다 (중력만 더해진다 — 예산이 하나뿐이다)")
 
 
@@ -590,7 +590,7 @@ func _leaving_the_water_gives_exactly_one_more_jump(t) -> void:
 
 	var vy_before := ch.vy
 	ch.step(g, DT, 0.0, true, true)
-	t.eq(ch.vy, vy_before + Character.GRAVITY_PX * DT,
+	t.eq(ch.vy, vy_before + Character.PLAYER_GRAVITY_PX * DT,
 		"그 다음은 막힌다 (물 밖에선 다시 제한된다 — 한 번 넓어졌을 뿐이다)")
 
 

@@ -611,6 +611,11 @@ func _no_pushed_out_glyph_is_stashed_anywhere(t) -> void:
 		"res://src/actor/monster_placement.gd":
 			["_id_to_row", "_kind", "_monster_id", "_primed", "_spent", "_trigger_tx", "_tx"],
 		"res://src/view/blast_fx.gd": ["_flashes", "_pillars"],
+		# **`_dust` added here, deliberately** (사용자 요청 — 「캐릭터가 움직일 때 뒤에 먼지」) — the same idiom
+		#  `blast_fx.gd`'s own `_flashes`/`_pillars` one line up already are: short-lived screen-only particles,
+		#  aged and drawn from a plain array with no per-particle node. Not a record of a glyph that left a
+		#  spell layer, which is what this file's no-inventory check exists to catch.
+		"res://src/view/character_view.gd": ["_dust"],
 		# **`ROWS` added here, deliberately, and it is the one entry that is a `static var` only because a
 		#  net needs it to be.** It is the room table — map content, the shelf `terrain_map_generated.gd`
 		#  and `stage1_monsters.gd` sit on, and every other table in that file is `const`. The chain between

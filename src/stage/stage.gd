@@ -1044,7 +1044,10 @@ func _process(dt: float) -> void:
 	# **The boss entrance folds into these same two lines** (`boss-entrance-and-hp-bar.md` Stage C) — anything
 	#  written to `_camera.zoom`/`.position` from anywhere else is overwritten the very next frame, the same
 	#  reason `_cam_lead` above already lives here instead of in its own `_process()`.
-	var z: float = ZOOM_STEPS[_zoom_step] * entrance_zoom(_entrance_frames)
+	# **`Fx.PLAY_ZOOM_MULT` is a third, independent factor** — it composes the same way the debug ladder
+	#  (`ZOOM_STEPS[_zoom_step]`) already composes with `entrance_zoom()`, so the entrance zooms in from
+	#  whatever this already set rather than doubling on top of it (`Fx.PLAY_ZOOM_MULT`'s own comment).
+	var z: float = ZOOM_STEPS[_zoom_step] * Fx.PLAY_ZOOM_MULT * entrance_zoom(_entrance_frames)
 	_camera.zoom = Vector2(z, z)
 	# **Snapped to the screen's pixel grid** — see `snap_camera_px`. Without it the whole world shivers
 	#  by a pixel every frame while walking, and it reads as the *character* stuttering, not the camera.

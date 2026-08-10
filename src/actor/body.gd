@@ -68,9 +68,10 @@ func center() -> Vector2:
 
 ## Gravity is taken as an argument too. Do not put a `GRAVITY_PX` constant here — it is exactly the same trap
 ##  as `W_PX`. `net_character` reads
-##  `Character.JUMP_VY_PX * Character.JUMP_VY_PX / (2.0 * Character.GRAVITY_PX)` **statically** — that is the
-##  only automatic detector biting "double just one of `GRAVITY` and `JUMP_VY` and the reachable height becomes
-##  4x or half, with no error raised".
+##  `Character.JUMP_VY_PX * Character.JUMP_VY_PX / (2.0 * Character.PLAYER_GRAVITY_PX)` **statically** — that is
+##  the only automatic detector biting "double just one of `PLAYER_GRAVITY_PX` and `JUMP_VY` and the reachable
+##  height becomes 4x or half, with no error raised". (`PLAYER_GRAVITY_PX`, not `GRAVITY_PX` — the player's own
+##  fall was split from the monsters'/bosses' shared gravity; `character.gd`'s own box on that constant has why.)
 func apply_gravity(dt: float, gravity_px: float, max_fall_px: float) -> void:
 	vy = minf(vy + gravity_px * dt, max_fall_px)
 

@@ -1342,9 +1342,16 @@ func _downed_cannot_fire(t) -> void:
 	#   It used to say "just rewrite it with a downward-firing command", and **that path is gone** —
 	#   the behavior to be measured disappeared; the check did not get lazy.
 	#  The old expected expression (`vy + GRAVITY_PX*DT`) was **a value that happened to match the rounding phase**:
-	#   with gravity doubled, 1px is actually consumed every frame so `_move_y` blocks each time and zeroes vy.
-	#  What is measured now stops at **"grounded and did not rise".**
-	t.eq(ch.vy, 0.0, "접지 상태의 세로 속도 0 그대로다 (위로 안 떴다)")
+	#   with the old (larger) gravity, 1px was consumed every single frame so `_move_y` blocked and zeroed vy
+	#   every time. **This exact equality is itself the same trap, just one gravity value away from biting again** —
+	#   the player's own gravity (split into `PLAYER_GRAVITY_PX`, 2400 -> 1536, `docs/design/game-feel.md` "11b")
+	#   already moved it: one frame's worth of gravity (`PLAYER_GRAVITY_PX * DT` = 25.6px/s) now rounds `move_y`'s
+	#   sub-pixel remainder to 0 on some frames, so `vy` is not
+	#   reset on every single frame anymore — only whenever the accumulated remainder finally rounds to 1px and
+	#   the ground blocks it. **Bounding it instead of pinning an exact value is what survives the next gravity
+	#   retune too.**
+	t.ok(ch.on_ground and ch.vy <= Character.PLAYER_GRAVITY_PX * DT + 0.01,
+		"접지 상태의 세로 속도가 중력 한 프레임치를 넘지 않는다 (위로 안 떴다 — vy=%.1f)" % ch.vy)
 
 	# **Inversion — if it is not downed, the same command goes out.** Without it, this is indistinguishable
 	#  from "the command was wrong to begin with".

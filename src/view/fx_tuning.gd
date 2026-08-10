@@ -112,6 +112,42 @@ const CHAR_UPRIGHT: Array[int] = [CHAR_STAND, CHAR_WALK]
 ## Being pushed also looks like walking. **Chosen knowingly** — it beats sliding while standing still.
 const CHAR_WALK_PX_PER_FRAME := 24
 
+## **Dust behind running feet — decided by the user** (「캐릭터가 움직일 때 뒤에 먼지가 나면 좋겠다」).
+## **Ground-attached only** — `character_view` gates spawning on `_ch.on_ground`, so a jump or a fall raises
+##  no dust; the ground is what a puff is kicked up from, and nothing is kicked up off the ground.
+## **The clock is distance traveled, not real time** — the same idiom `CHAR_WALK_PX_PER_FRAME` above already
+##  uses for the walk cycle, for the same reason: a puff per fixed number of steps reads as a footfall
+##  rhythm, while a puff per fixed *second* would puff at the same rate whether standing still and being
+##  pushed slowly or sprinting, and the two would read identically on screen.
+const DUST_SPACING_PX := 14
+## How many grains one spawn lays down. Few and small — this is a whisper of motion, not an explosion, so it
+##  is sized nothing like `FLASH_MAX`/`PILLAR_MAX` below (those answer for eight simultaneous blasts).
+const DUST_COUNT := 3
+## Sideways scatter around the spawn point (px) — a single point moving in a straight line reads as a
+##  bullet trail, not a kicked-up puff.
+const DUST_SPREAD_PX := 3.0
+## How far behind the foot, opposite the direction of travel, the puff starts (px).
+const DUST_BACK_PX := 6.0
+## Each grain's own radius (px).
+const DUST_R_PX := 2.0
+## How long one grain lives (sec) — short, so a puff behind a running character never trails more than a
+##  step or two back.
+const DUST_LIFE_SEC := 0.28
+## Drift while alive (px/sec) — a small backward-and-up float is what reads as "a light puff of ground",
+##  not a spark (which is a shape this game's screen already reserves — `blast_fx.gd`'s own header: "there
+##  are no sparks").
+const DUST_DRIFT_PX_PER_SEC := 18.0
+const DUST_RISE_PX_PER_SEC := 10.0
+## The cap on live grains — the same headroom idiom as `FLASH_MAX`/`PILLAR_MAX` below, sized for one running
+##  character rather than for eight simultaneous blasts.
+const DUST_MAX := 24
+## A pale, terrain-neutral tan — close in brightness to the two ground materials it is kicked up from
+##  (stone 0x5C574F, wood 0x6B4524) while still reading against the sky's near-black
+##  (verify-look's own measurement, bedrock 35,34,40 against sky 14,14,19 — recorded on
+##  `MONSTER_ASLEEP_ALPHA` above). The alpha here is the grain's alpha **at spawn**; it fades to 0 over
+##  `DUST_LIFE_SEC` (`character_view._draw_dust`), it is not the alpha drawn for the grain's whole life.
+const DUST_COLOR := Color(0.62, 0.58, 0.50, 0.55)
+
 # --- monsters -------------------------------------------------------
 ## **A fallback color — the default is a sprite now** (`MONSTER_SHEETS` below).
 ##  **Do not delete it.** If texture loading fails, `monster_view` draws a rectangle of this color instead —
@@ -1216,6 +1252,23 @@ const SLOT_EMPTY_PX := 1.5
 ##  (`CIRCLE_RING_GAP_FRAC`), an empty layer's ring now nests against the rune's own disc and the frame, so the
 ##  stack itself reads as a donut without a mark drawn inside it. **Deleted, not left unused** —
 ##  `SLOT_PLUS_RATIO`/`SLOT_PLUS_PX` no longer exist so nothing can quietly wire the cross back in.
+##
+## **That donut-nesting-alone reasoning did not hold on its own — the user again, a second time**:
+##  「링 문양이 있는데 위쪽 원 공간이 뭔지 모르겠음」. A solid empty ring and a *filled* layer's own solid ring
+##  (`_draw_ring_edge`, `CIRCLE_RING_INNER`/`OUTER`) differ only by color and thickness — both easy to miss at
+##  a glance, and exactly the case reported (the base circle has two layers; with one filled the other's plain
+##  ring reads as unlabeled UI, not "empty"). ⇒ **`circle_window._draw_slot_ring` draws it dashed now** —
+##  filled is solid, empty is dashed, a difference no color-blindness or a quick glance can miss.
+## The dash angles are pure (`circle_window.slot_dash_arcs`) so a net can drive the count with no window.
+const SLOT_EMPTY_DASH_COUNT := 10
+## The fraction of one dash's own arc left as the gap to the next — at 0 the dashes touch end to end and the
+##  ring is solid again (this exact regression). `net_circle`'s inversion (dropping `SLOT_EMPTY_DASH_COUNT`
+##  to 1, one long dash) is the case that has to go red for the same reason.
+const SLOT_EMPTY_DASH_GAP_FRAC := 0.35
+## `draw_arc`'s own smoothing resolution **per dash**, not the dash count above — low enough that ten short
+##  arcs stay cheap to draw every frame, high enough that one dash does not look faceted at this ring's
+##  radius (roughly 30-40px at the window's own size, `Layout.glyph_radius`).
+const SLOT_EMPTY_DASH_POINTS := 6
 
 ## **The circle you press is bigger than the symbol.** Kept the same as the symbol you have to aim exactly at an
 ##  empty layer for it to click, and that becomes "I pressed it and nothing happened". Grown too far it eats the
@@ -1630,6 +1683,17 @@ const CAM_LEAD_PX := 32.0
 ##  **frame-rate independent**, whereas a per-frame lerp constant silently changes the feel with the frame rate.
 ## 0.02 = 98% of the way there in one second, so it reads as **"it drifts", not "it snaps"**.
 const CAM_LEAD_DECAY_PER_SEC := 0.02
+
+## **The base play zoom — decided by eye** (user: 「좀 더 확대」). `ZOOM_STEPS[0]` (`stage.gd`) stays 1.0
+## on purpose — that is the debug ladder's own baseline and the `-`/`=` keys walk it from there, so this is
+## a second, independent multiplier rather than a change to that table's first entry.
+## **Composes, does not collide, with the boss entrance zoom** (`BOSS_ENTRANCE_ZOOM_MULT` below) —
+## `stage.gd`'s one zoom line multiplies `ZOOM_STEPS[_zoom_step] * PLAY_ZOOM_MULT * entrance_zoom(...)`, so
+## the entrance always zooms in *from* whatever this constant already set, the same way it already zooms in
+## from whichever debug step is selected. Raising this value never doubles the entrance's own zoom-in.
+## 1.15 is "a bit more" — the GDD's off-screen-explosion cost (`docs/GDD.md`) grows with any zoom-in, so this
+## is deliberately small.
+const PLAY_ZOOM_MULT := 1.15
 
 # --- fire -----------------------------------------------------------
 ## **Burning cells overwrite the material color.** Laid lightly over the wood color (0x6B4524) it looks like

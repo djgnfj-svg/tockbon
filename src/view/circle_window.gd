@@ -960,8 +960,39 @@ func _draw_empty_slot(at: Vector2, r: float) -> void:
 ##  function alone lets `_draw()` hand it something else entirely, and 320 checks stayed green over exactly
 ##  that hole once already. `net_circle` captures this call's `at`/`r` and compares them to
 ##  `circle_layout.layer_bands()`'s own `seat` and `Layout.glyph_radius(area)`.
+##
+## **Dashed, not a solid circle — decided by the user, a second time** (`fx_tuning.SLOT_EMPTY_DASH_COUNT`'s
+## own comment: a solid empty ring reads the same as a *filled* layer's own solid ring, differing only by
+## color/thickness). The angles come from `slot_dash_arcs()` below (pure, so a net drives the count and gap
+## with no window) — this function's own job shrinks to "paint whatever that answers".
 func _draw_slot_ring(at: Vector2, r: float) -> void:
-	draw_circle(at, r, Fx.SLOT_EMPTY, false, Fx.SLOT_EMPTY_PX)
+	for arc in slot_dash_arcs():
+		_paint_slot_dash(at, r, arc.x, arc.y)
+
+
+## **Pure and static** — the same seat `stage.camera_center`/`entrance_zoom` already hold in `stage.gd`: a
+## net calls this directly with no window and no circle, and `_draw_slot_ring` above is the *only* caller so
+## the drawn ring can never quietly diverge from what this returns.
+## Each `Vector2` is one dash's `(start_rad, end_rad)`. `n <= 0` answers no dashes at all rather than
+## dividing by zero — an empty ring config draws nothing sooner than it crashes.
+static func slot_dash_arcs() -> Array[Vector2]:
+	var arcs: Array[Vector2] = []
+	var n := Fx.SLOT_EMPTY_DASH_COUNT
+	if n <= 0:
+		return arcs
+	var step := TAU / float(n)
+	var dash := step * (1.0 - Fx.SLOT_EMPTY_DASH_GAP_FRAC)
+	for i in n:
+		var start := step * float(i)
+		arcs.append(Vector2(start, start + dash))
+	return arcs
+
+
+## **The hook a net overrides to prove a dash actually reached the screen** — the same reason
+## `_paint_pillar`/`_paint_dust` already exist: `draw_arc` is native, Godot refuses to let a script override
+## it, so an ordinary method is the only seam available (CLAUDE.md's own warning on this exact shape).
+func _paint_slot_dash(at: Vector2, r: float, from_rad: float, to_rad: float) -> void:
+	draw_arc(at, r, from_rad, to_rad, Fx.SLOT_EMPTY_DASH_POINTS, Fx.SLOT_EMPTY, Fx.SLOT_EMPTY_PX)
 
 
 ## 찰칵 — a ring that widens and fades as `t` falls from 1 to 0. Named so a net can record the argument

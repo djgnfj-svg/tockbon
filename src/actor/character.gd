@@ -83,7 +83,16 @@ const STEP_PX := STEP_CELLS * Tuning.CELL_PX
 ##    3 tiles = three characters stacked, so "I can jump up there" is gaugeable by eye
 ##  · The 1800px/s fall cap is 30px per frame, **smaller than the box height (32px)** — it does not pass through walls
 ##
-## **Double just one of `GRAVITY_PX` and `JUMP_VY_PX` and it silently goes wrong.**
+## **`GRAVITY_PX` no longer drives the player's own fall — `PLAYER_GRAVITY_PX` below does.** It stays here,
+##  unchanged at 2400, only because **`monster.gd` and `boss_ai.gd`'s jump/leap/slam arcs read this exact
+##  constant** (`monster.gd:240`, cross-class, deliberately — one shared "world gravity" for everything that
+##  hasn't opted out). The split happened, not a rename, because lowering it for player feel silently moved
+##  every boss's leap apex, leap distance and landing-marker prediction too — 4 nets went red
+##  (`net_monster`, `net_monster_slam`, `net_monster_breath`, `net_attack_predict`) measuring **bosses**, not
+##  the player, the moment this one number changed. **Read `boss_ai.gd`'s own note on why it needed a second
+##  constant after all** — this file is not where that reasoning is kept, so it does not get repeated here.
+##
+## **Double just one of `PLAYER_GRAVITY_PX` and `JUMP_VY_PX` and it silently goes wrong.**
 ##  Reachable height is `v^2/2g`, so doubling only `v` gives **4x** and doubling only `g` gives **half**.
 ##  **No error is raised.** The stage's pillar and wall heights are all designed around these values, so
 ##  getting it wrong only looks like "I cannot clear the pillar".
@@ -105,8 +114,19 @@ const STEP_PX := STEP_CELLS * Tuning.CELL_PX
 ##  knowingly — the wolf backs off after each swing (`monster_defs.MELEE`), so the gap opens anyway, and
 ##  being tailed by the fast mob reads as pressure rather than as a dead end.
 const MOVE_SPEED_PX := 240.0
+## **The world's shared gravity — every monster and boss (`monster.gd:240`, cross-class), not the player.**
+##  See the box above for why the player does **not** read this anymore.
 const GRAVITY_PX := 2400.0
-const JUMP_VY_PX := -720.0
+## **The player's own fall, split out from `GRAVITY_PX` above** ("game feels sped up", the user, looking at the
+##  screen; `docs/design/game-feel.md` "11b"). Paired with `JUMP_VY_PX` below from the `v0=36k, g=6k^2` family
+##  (`k=16`) so reachable height stays **exactly** 108px (3.4 tiles, unchanged) while airtime goes 0.6s -> 0.75s.
+##  `k=15` is the old pair (540/1350 — not used); `k=17` (612/1734) was the hand-computed value that first
+##  prompted this and was rejected only for giving an uglier airtime fraction (12/17s vs 12/16=0.75s exactly).
+const PLAYER_GRAVITY_PX := 1536.0
+## **The player's own launch speed.** Paired 1:1 with `PLAYER_GRAVITY_PX` above — see that constant's box.
+##  Never shared with monsters (`monster_defs.gd` gives every jumping/leaping kind its own `jump_vy_px`), so
+##  this one needed no split.
+const JUMP_VY_PX := -576.0
 const MAX_FALL_PX := 1800.0
 
 ## **Variable jump — "how long you held it" sets the height** (user request).
@@ -119,19 +139,26 @@ const MAX_FALL_PX := 1800.0
 ##   separated well.
 ##   **Measure with input a human cannot produce and you get "it works" while the game does not.**
 ##
-## **Height is the square of speed (`v^2/2g`) — do not read the ratio directly as height.** Measured (headless):
+## **Height is the square of speed (`v^2/2g`) — do not read the ratio directly as height.**
+## **Recomputed for the `PLAYER_GRAVITY_PX`/`JUMP_VY_PX` pair above (2400/-720 -> 1536/-576, "game feels sped
+##  up", `docs/design/game-feel.md` "11b") — the old table's px values were for the old pair and went stale the
+##  moment the constants above moved. Analytic, from the same `height(t) = v0*t - g*t^2/2 + cut_vy^2/(2g)`
+##  formula the old table's own numbers came from, not re-simulated frame-by-frame this time:
 ## ```
-##   hold time    at 0.55          at 0.2 (now)
-##   0.05s (3F)   68px  67%    ->  38px  37%   <- the shortest a hand can produce
-##   0.10s (6F)   94px  92%    ->  64px  63%   = 2.0 tiles (tree height)
-##   0.17s (10F) 102px 100%    ->  89px  87%
-##   0.25s (15F) 102px 100%    -> 102px 100%   = 3.2 tiles (pillar height)
+##   hold time    at 0.2 (now, v0=576 g=1536)
+##   0.05s (3F)   31px  29%   <- the shortest a hand can produce
+##   0.10s (6F)   54px  50%
+##   0.17s (10F)  79px  73%
+##   0.25s (15F) 100px  93%   <- was already 100% at the old pair (14.4-frame stretch); now still inside it
 ## ```
-##  => On the stage, "a tap for the tree (2 tiles), a press for the pillar (3 tiles)" **being graspable in the
-##   hand is thanks to this value.**
+##  => Every row dropped in both px *and* percent — the same hold now buys a smaller share of a *taller*
+##   time-budget, because the stretch where the cut bites also widened (below). **Not yet felt against the
+##   stage's tree/pillar landmarks** — the old table's "2.0 tiles (tree)" / "3.2 tiles (pillar)" readings were
+##   tied to the old numbers and are not re-asserted here; that is a screen judgment, not this edit's to make.
 ##
-## **The stretch where the control bites = `18 * (1 - ratio)` frames.** After that gravity has already shaved
-##  the rising speed below the cut, so **releasing does nothing.** 0.55 was 8 frames (0.13s); 0.2 is 14 frames (0.24s).
+## **The stretch where the control bites = `(v0 / (g * DT)) * (1 - ratio)` frames** — `18` was that formula's
+##  value for the *old* pair only (`720 / (2400/60) = 18`), not a constant of its own; the new pair gives
+##  `576 / (1536/60) = 22.5`. At ratio 0.2 that stretch is now **18 frames (0.3s)**, up from 14 (0.24s).
 ##  If you want to raise the ratio, first compute whether that stretch **covers a human's tap time (0.05-0.2s).**
 ##
 ## **The point is that the clipping is a "clamp", not a "multiply".**
@@ -460,7 +487,7 @@ func step(grid: CellGrid, dt: float, axis: float, jump: bool, jump_held: bool) -
 		if not ground_jump and not in_water:
 			_air_jumps_left -= 1
 			air_jump_flash_left = AIR_JUMP_FLASH_TICKS
-	_body.apply_gravity(dt, GRAVITY_PX, MAX_FALL_PX)
+	_body.apply_gravity(dt, PLAYER_GRAVITY_PX, MAX_FALL_PX)
 
 	# **Variable jump — if the key was released and it is still rising, clip the rise** (`JUMP_CUT_*` above).
 	#  **It checks `vy < JUMP_CUT_VY_PX`, not `vy < 0`.** Measure it as "is it rising" and you end up touching

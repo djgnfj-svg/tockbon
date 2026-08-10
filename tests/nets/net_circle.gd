@@ -115,6 +115,16 @@ class _RecordingCircleWindow extends CircleWindow:
 	func _draw_slot_ring(at: Vector2, r: float) -> void:
 		slot_ring_calls.append({"at": at, "r": r})
 		super._draw_slot_ring(at, r)
+
+	## **One entry per dash, not per ring** — `_draw_slot_ring` now loops `slot_dash_arcs()` and calls this
+	##  once per arc (`circle_window.gd`'s own comment: `draw_arc` is native, this ordinary method is the
+	##  seam). Recording here, not only at `_draw_slot_ring` above, is what tells "drawn as one solid ring"
+	##  from "drawn as several dashes" apart — `slot_ring_calls` alone cannot, since it fires once either way.
+	var slot_dash_calls: Array[Dictionary] = []  # {"at", "r", "from", "to"} per _paint_slot_dash call
+
+	func _paint_slot_dash(at: Vector2, r: float, from_rad: float, to_rad: float) -> void:
+		slot_dash_calls.append({"at": at, "r": r, "from": from_rad, "to": to_rad})
+		super._paint_slot_dash(at, r, from_rad, to_rad)
 	# **Tabs and the 완성 band** (`onboarding-and-palette-tabs.md` Stage 1) — the same `settlement_layout.
 	#  notice_rect` lesson every other hook in this class already guards against: a pure function asserted
 	#  alone let `_draw()` hand it a bare `Rect2()` under 320 green checks.
@@ -1211,6 +1221,22 @@ func _draw_actually_runs_headless(t) -> void:
 		t.ok(is_equal_approx(call["r"], Layout.glyph_radius(area)),
 			"%d번째 빈 자리 링 반지름이 glyph_radius와 같다 (%.5f)" % [i, call["r"] as float])
 
+	# **The ring is drawn dashed, not as one solid circle** (`fx_tuning.SLOT_EMPTY_DASH_COUNT`'s own comment
+	#  — a solid empty ring reads the same as a filled layer's own solid ring). `slot_ring_calls` above fires
+	#  once per empty seat per frame regardless of how the ring is painted; `slot_dash_calls` is what actually
+	#  tells "several short arcs" from "one long one".
+	t.ok(win.slot_dash_calls.size() > 0, "빈 자리 링이 실제로 점선 호(arc) 훅을 통해 그려졌다 (%d회)" % win.slot_dash_calls.size())
+	var dashes_per_ring := win.slot_dash_calls.size() / maxi(win.slot_ring_calls.size(), 1)
+	# **A literal floor, not `Fx.SLOT_EMPTY_DASH_COUNT` read back** — reading the same constant this code
+	#  reads would make the bound come from the thing being checked (CLAUDE.md), passing even if the constant
+	#  were dropped to 1 (one long dash = a solid-looking ring again, the exact regression this exists to
+	#  catch). **Inverted by hand**: `SLOT_EMPTY_DASH_COUNT = 1` measured `dashes_per_ring == 1`, red here.
+	t.ok(dashes_per_ring >= 4,
+		"빈 자리 링 한 번이 조각 여러 개(>=4)로 그려진다 (링당 %d조각) — 1이면 실선과 구분이 안 된다" % dashes_per_ring)
+	for call: Dictionary in win.slot_dash_calls:
+		t.ok(is_equal_approx(call["r"] as float, Layout.glyph_radius(area)),
+			"점선 조각의 반지름도 glyph_radius와 같다 (%.5f)" % (call["r"] as float))
+
 	t.root.remove_child(win)
 	win.queue_free()
 
@@ -1278,6 +1304,29 @@ func _draw_actually_runs_headless(t) -> void:
 
 	t.root.remove_child(win2)
 	win2.queue_free()
+
+
+## **The dash geometry, pure** — no window, no circle. `CircleWindow.slot_dash_arcs()` is `_draw_slot_ring`'s
+## single source for what an empty ring looks like (that function's own comment: it is the *only* caller).
+func _slot_dash_arcs_read_as_dashed_not_solid(t) -> void:
+	var arcs := CircleWindow.slot_dash_arcs()
+	# **A literal floor, not `Fx.SLOT_EMPTY_DASH_COUNT` read back** — reading the same constant the code
+	#  under test reads would make this check's bound come from the thing it checks (CLAUDE.md), passing
+	#  even at `SLOT_EMPTY_DASH_COUNT = 1` (one long dash reads as a solid ring again — the user's own second
+	#  regression, `fx_tuning.SLOT_EMPTY_DASH_COUNT`'s own comment). **Inverted by hand before landing**:
+	#  dropping the constant to 1 measured `arcs.size() == 1`, red here.
+	t.ok(arcs.size() >= 4,
+		"빈 자리 링이 조각 여러 개(>=4)로 나뉜다 (%d조각) — 1이면 실선과 구분이 안 된다" % arcs.size())
+	var covered := 0.0
+	for a: Vector2 in arcs:
+		t.ok(a.y > a.x, "각 조각의 끝각이 시작각보다 크다 (%s)" % [a])
+		covered += a.y - a.x
+	# **Strictly less than one full turn — the gaps are what make it read as dashed, not the count alone.**
+	#  At `SLOT_EMPTY_DASH_GAP_FRAC = 0` the dashes touch end to end and this crosses back up to `>= TAU`,
+	#  so this line (not the count check above) is what actually catches *that* regression — many touching
+	#  dashes still pass a bare count check.
+	t.ok(covered < TAU - 0.001,
+		"조각들이 덮는 각도 합이 한 바퀴(TAU)보다 작다 — 틈이 실제로 있다 (%.3f / %.3f)" % [covered, TAU])
 
 
 ## **Tabs, the open section and the 완성 band are drawn from the exact rects `palette_layout` computes** —
