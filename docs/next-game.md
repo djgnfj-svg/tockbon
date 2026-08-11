@@ -119,7 +119,6 @@ simulation → survivors-like → spellblade → melee → auto-attack → defen
 places the user reported their own taste** (they like melee; they refunded Noita), not any argument about
 what would sell.
 
-**The rejected branches, with why, belong in `docs/decisions/`** once that folder is rebuilt. The ones worth
-keeping: side-view floor-based defense (dropped — the floors, not the circle, would have been the novelty,
-and a circle's shape wants angles rather than storeys), and the spellblade with a weapon list
-(dropped — a weapon roster competes with the circle for the same job).
+**The rejected branches are in `docs/decisions/`** — three docs covering the simulation, multiplayer, and the
+side-view/top-down fork with the four alternatives that lost to it. **Do not re-argue them from here**; that
+folder holds the reasons, and this one holds only what is being built.

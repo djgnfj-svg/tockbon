@@ -19,15 +19,13 @@ Instead, **show how game development generally handles that axis, as a list, and
 
 Before laying out options, **always find out what already exists.** Skip it and you propose what's already there.
 
+- **`docs/next-game.md` first** — what the game is, and what was already thrown away deciding it.
+  Proposing something that document rejected is the fastest way to waste a round
 - `docs/plans/` `3.done` · `2.active` — already designed or built
-- The related code. Folders are contracts, so **the question decides where to look**:
-
-| Folder | What | Constants |
-|---|---|---|
-| `src/sim/` | Grid · projectiles · glyphs · fire. **Integer determinism** | `sim_tuning.gd` |
-| `src/actor/` | Character · aim. float allowed | — |
-| `src/view/` | Everything on screen | **`fx_tuning.gd` — every presentation knob is here** |
-| `src/stage/` | Shell (tick loop · input · HUD · stage map). Won't survive into the real game | — |
+- The related code. **Folders are contracts here**, so the question decides where to look —
+  read `CLAUDE.md`'s folder section for what the contracts currently are.
+  **It is empty right now: the game was deleted on 2026-08-12 and `src/` does not exist**, so
+  every answer this round is "missing" until the new game grows folders
 
 Tag every item with a state: **exists (with its current value) / missing / impossible (a prerequisite is absent)**
 
@@ -52,17 +50,18 @@ User: *"맞았을 때 타격감이 있었으면 좋겠다"*
 **This**
 > 타격감은 보통 이 7가지로 만듭니다.
 >
-> - **사운드** — 체감 1위. 이 게임엔 지금 하나도 없음
-> - **히트스톱** (몇 프레임 정지) — 무게감이 제일 큼. 이 게임은 의도적으로 뺐고 섬광 지속으로 대신하는 중
-> - **화면 흔들림** — 이미 있음. 위력 단마다 진폭·지속이 다름
-> - **파티클·스파크** — 이미 있음. 단마다 개수·비거리가 다름
+> - **사운드** — 체감 1위. 지금 하나도 없음
+> - **히트스톱** (몇 프레임 정지) — 무게감이 제일 큼. 멀티를 넣으면 못 씀
+> - **화면 흔들림** — 있음. 다만 폭발에만 걸려 있고 착지·충돌엔 없음
+> - **파티클·스파크** — 있음. 위력 단마다 개수·비거리가 다름
 > - **히트 플래시** — 없음. 셰이더 필요
-> - **넉백** — 엔티티가 없어서 지금은 불가
-> - **슬로모션** — 20Hz 정수 틱이라 주의 필요
+> - **넉백** — 없음. 맞은 쪽이 속도 그대로 계속 걸어옴
+> - **슬로모션** — 고정 타임스텝이면 주의 필요
 >
 > 뭘 쓸까요? 추천은 사운드입니다. 없는 것 중 체감이 제일 큽니다.
 
-(The user reads this, so it stays Korean.)
+(The user reads this, so it stays Korean. **The values above are an example of the shape, not of this
+repo** — every one of them has to be re-read out of today's code before it goes in a reply.)
 
 Recommend **after** showing the whole list. Recommend first and they choose without knowing the rest existed.
 
@@ -80,24 +79,26 @@ Recommend **after** showing the whole list. Recommend first and they choose with
 | Why | Where the fun comes from | Always |
 | Visible | What does the user see that tells them it happened | Always |
 | Bounds | What doesn't work. At extremes | Always |
-| Mixing | When it meets water · lightning · explosions · terrain | As needed |
+| Mixing | When it meets the other systems already built | As needed |
 | Cost | The checklist below | As needed |
 | Failure | What does it look like built wrong | As needed |
 | Measure | What do you look at to judge it worked | As needed |
 
-## Cost checklist
+## Cost checklist — **empty, and that is the current state**
 
-These traps are specific to this game — unasked at design time, they blow up during implementation.
-All of them are measurements from code comments.
+This section held six traps measured out of the deleted game's code — chunk sleep, tick budget, palette
+bits. **Every one of them died with the simulation** and none of them is true of the new game.
+
+⇒ **Fill it back in from measurements, one row at a time, as the new game gets expensive.** A row belongs
+here only once someone has profiled the thing it warns about. **Do not seed it with plausible-sounding
+costs** — an unmeasured warning reads exactly like a measured one and quietly vetoes designs for free.
+
+The one trap that survived the reset, because it is about the shape of a game loop rather than about any
+particular game:
 
 | When the design says | What actually happens |
 |---|---|
-| "dries up / disappears over time" | That cell updates every tick → the chunk never sleeps → performance budget collapses |
-| "lasting effect / buff" | A timed state keeps that region awake the whole time. A permanent state is free |
-| "moves smoothly" | Sim is 20Hz integer. float · sqrt · sin kills multiplayer |
-| "several big explosions" | 4 shots per tick is already 54% of budget |
-| "full-screen effect" | Render cost can't be measured headless. Only visible as FPS |
-| "add a material / element" | 16 palette slots. Only the low 4 state bits are safe |
+| "and it happens every frame / it lingers" | A per-frame or timed state keeps that region **awake**. A permanent state is free. Whatever the new game's version of "awake" turns out to be, this is where the bill lands |
 
 Do not reject something because it's on this list. **State the price and let the user choose.**
 
