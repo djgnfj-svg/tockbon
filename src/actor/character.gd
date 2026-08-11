@@ -85,7 +85,7 @@ const STEP_PX := STEP_CELLS * Tuning.CELL_PX
 ##
 ## **`GRAVITY_PX` no longer drives the player's own fall — `PLAYER_GRAVITY_PX` below does.** It stays here,
 ##  unchanged at 2400, only because **`monster.gd` and `boss_ai.gd`'s jump/leap/slam arcs read this exact
-##  constant** (`monster.gd:240`, cross-class, deliberately — one shared "world gravity" for everything that
+##  constant** (`monster.gd`'s `step()`, cross-class, deliberately — one shared "world gravity" for everything that
 ##  hasn't opted out). The split happened, not a rename, because lowering it for player feel silently moved
 ##  every boss's leap apex, leap distance and landing-marker prediction too — 4 nets went red
 ##  (`net_monster`, `net_monster_slam`, `net_monster_breath`, `net_attack_predict`) measuring **bosses**, not
@@ -121,7 +121,7 @@ const STEP_PX := STEP_CELLS * Tuning.CELL_PX
 ##  pressure rather than a dead end. Moving only this side would silently hand the player a wolf they now
 ##  outrun, undoing that design rather than just re-tuning speed.
 const MOVE_SPEED_PX := 180.0
-## **The world's shared gravity — every monster and boss (`monster.gd:240`, cross-class), not the player.**
+## **The world's shared gravity — every monster and boss (`monster.gd`'s `step()`, cross-class), not the player.**
 ##  See the box above for why the player does **not** read this anymore.
 const GRAVITY_PX := 2400.0
 ## **The player's own fall, split out from `GRAVITY_PX` above** ("game feels sped up", the user, looking at the

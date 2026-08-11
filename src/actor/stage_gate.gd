@@ -5,7 +5,7 @@ extends RefCounted
 ## **`src/actor/`, not `src/stage/`.** `net_layers.RULES` forbids `src/actor/` from reaching `src/view/` or
 ## `src/stage/`, and a file in `src/stage/` that a view could preload would need to be a third pure file
 ## alongside `town_map.gd`, for two constants. So the seat lives with the machine, not with the map — the
-## precedent `fixtures.gd:11-13` sets for the town is broken on purpose. **The price**: a map repaint moves a
+## precedent `fixtures.gd`'s header sets for the town is broken on purpose. **The price**: a map repaint moves a
 ## constant that does not sit next to the map. `net_gate`'s first check pays it, driven against the real
 ## baked terrain, the same accident `stage_defs.gd`'s `STAGE1_SPAWN_TILE` comment records.
 ##

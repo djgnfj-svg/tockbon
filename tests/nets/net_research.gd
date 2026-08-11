@@ -1064,7 +1064,7 @@ func _the_padlock_is_on_the_two_rows_that_have_a_price(t) -> void:
 #  The shell path — the half a pure-function check cannot see
 # ══════════════════════════════════════════════════════════════════
 
-## **`stage.gd:408`'s `_research_window.setup(_world.progress())` is the shell's only wiring line, and a net
+## **`stage.gd`'s `_research_window.setup(_world.progress())` is the shell's only wiring line, and a net
 ##  that wires the window by hand cannot see it** — CLAUDE.md names exactly this: `_wired_root` helpers
 ##  pre-set the `@onready` fields, so deleting the real `setup()` call stays green while the game shows an
 ##  empty bench.
@@ -1185,8 +1185,8 @@ func _a_bought_rune_survives_the_departure_gate(t) -> void:
 ## **The HUD line is not stale — and it needs no refresh line to say so.**
 ##
 ## The design asked for one added to `_update_hud()`. It is **dead code**: `HUD/Stats` (which draws
-## `_town_message`) is hidden while the bench is open (`stage.gd:1239`), and `_toggle_research()` already
-## rebuilds `_town_message` on **both** open and close (`stage.gd:1053`). So by the moment anyone can read
+## `_town_message`) is hidden while the bench is open (`stage.gd`'s `_update_hud`), and `_toggle_research()` already
+## rebuilds `_town_message` on **both** open and close (`stage.gd`'s `_toggle_research`). So by the moment anyone can read
 ## the line, it has already been rebuilt. What is measured here is that real property.
 ##
 ## **Driven through `_toggle_research()` directly, not `_interact()`** — `onboarding-and-palette-tabs.md`

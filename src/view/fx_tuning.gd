@@ -1290,7 +1290,7 @@ const CIRCLE_RUNE_CORE_RATIO := 0.45
 
 ## **The triangle circle's geometry — integers on a 512 basis, not pre-divided ratios**
 ##  (`docs/design/circle-art.md` "the triangle circle's settled parameters", divided by 512 to land here;
-##  the same numbers also live in `tools/pixel/draw_circle.py:128`, the asset side — see that file's own
+##  the same numbers also live in `draw_circle.triangle()`'s defaults, the asset side — see that file's own
 ##  comment and `triangle-circle-to-game.md` "TBD" for why there are two copies).
 ## **Integers so the two equations stay readable and drivable**: `TRI_SOCKET_DIST + TRI_SOCKET_R == TRI_CANVAS_R`
 ##  and `TRI_SOCKET_R*2 == 288` (a ratio would hide that identity behind rounding).
@@ -1301,7 +1301,7 @@ const TRI_BAND := 48           ## the socket's clickable/drawn band thickness (t
 const TRI_RING := 420          ## the wrapping ring's radius — **not** the full frame; the sockets punch through it
 const TRI_CENTER_R := 112      ## the center ornament's outer radius. **Not a glyph seat** — see `circle_window.gd`
 const TRI_LINK_HALF := 26      ## half-width of the link band drawn between socket centers
-## 12 · 4 · 8 o'clock, straight out of `draw_circle.py:128`. **Seat 0 (12 o'clock) is the only clue the
+## 12 · 4 · 8 o'clock, straight out of `draw_circle.triangle()`. **Seat 0 (12 o'clock) is the only clue the
 ##  picture gives for "this one goes first"** (the design doc's clockwise-order question).
 const TRI_SOCKET_DEG: Array[float] = [-90.0, 30.0, 150.0]
 

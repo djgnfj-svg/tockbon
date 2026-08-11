@@ -162,7 +162,7 @@ func charge_blocked_now() -> bool:
 ## `charge_blocked_now()` already holds, widened to a write that the caller cannot reach for directly.
 ##
 ## **`_rem_x` is deliberately untouched.** It carries the walk's own sub-pixel remainder — clearing it here
-## would silently slow the walk on the very next frame (`body.gd:79-88` records that exact family of bug).
+## would silently slow the walk on the very next frame (`body.gd`'s `move_x` header records that exact family of bug).
 ## **`on_ground` is also left stale for the rest of this frame** — refreshing it would cost a second
 ## `grounded()` (a second `box_free` sweep) per shifted mob per frame, to fix one frame of cosmetics; named,
 ## not fixed (the plan's own "two named consequences, neither worth code").
@@ -254,7 +254,7 @@ func step(grid: CellGrid, dt: float, target_x: int, target_y: int) -> void:
 	#  151), the same one `_try_step_up` read a few lines earlier inside `move_x`. Reading the *later* write
 	#  (after `move_y`, below) would jump a mob on the frame it lands instead of the frame it hits a wall.
 	# **`axis != 0.0` is deliberately not added.** `Body.move_x`'s own contract already returns `false` with
-	#  nothing attempted when `dx == 0.0` (`body.gd:96-102`) — that is the hen's "never jumps while standing
+	#  nothing attempted when `dx == 0.0` (`body.gd`'s `move_x`, "tried to move and could not") — that is the hen's "never jumps while standing
 	#  and throwing" for free. Adding the term here would be a second, driftable copy of a rule `body.gd`
 	#  already owns.
 	# **Bosses are gated by kind, not by pattern.** `Pattern.IDLE` walks brainlessly forward too

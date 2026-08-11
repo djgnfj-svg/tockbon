@@ -118,7 +118,7 @@ func run(t) -> void:
 
 ## **The accident this guards against is on the record**: `stage.SPAWN_TILE`'s own comment describes a map
 ## repaint leaving a constant behind, sealing the character inside rock with nothing barking. This is that
-## same check, copied in shape (not in value) from `net_town.gd:129-150`, run against the seat instead of
+## same check, copied in shape (not in value) from `net_town._you_land_inside_the_room_and_on_its_floor`, run against the seat instead of
 ## the town's spawn tile.
 ##
 ## **Measured inversion — this check alone does not pin the seat's *column*.** `SEAT_TILE_X` mutated to
@@ -235,7 +235,7 @@ func _at_fires_only_at_the_seat_and_nowhere_else(t) -> void:
 			"마을 출발문 자리는 무대 게이트가 아니다")
 
 
-## **The band is a feel value, not derived from the art** (`fixtures.gd:37-47`'s own arrangement, copied) —
+## **The band is a feel value, not derived from the art** (`fixtures.REACH_PX`'s own box, copied) —
 ## so what is measured is the *relation*: the band must cover the drawn arch and then some, read from the
 ## town's own fixture table (`stage_gate.gd` itself may not read `Fx` — only the net may).
 func _the_band_covers_the_drawn_arch(t) -> void:
@@ -809,7 +809,7 @@ func _the_wall_falling_kicks_the_camera_and_it_settles_back(t) -> void:
 	#  `_on_ticked()` runs only when `_world.frame()` returns true, which is once every `TICK_DIVIDER`(3)
 	#  physics frames, so a single `_physics_process` crosses a tick boundary at most one time in three —
 	#  and in this check's phase, none. The re-kick mutation ran with **437 green** against the one-frame
-	#  version. This file's own line 274 already wrote the rule ("pump well past one to be sure a tick
+	#  version. This file's own `TICK_DIVIDER` comment already wrote the rule ("pump well past one to be sure a tick
 	#  actually ran"); it was not followed here the first time.
 	for _i in Tuning.TICK_DIVIDER * 2:
 		root.call("_physics_process", 1.0 / 60.0)
@@ -952,7 +952,7 @@ func _one_frame_on_the_seat_is_enough_the_take_latches(t) -> void:
 ## turns that one line into a parse error, and every check in the file that runs *after* the failed
 ## `_wired_root()` call in source order is skipped — the run reported "267 passed, 0 failed" for a file that
 ## should have run 305. The `[래퍼]`'s stderr rule caught it that time (a parse error prints to stderr), so it
-## did not slip through — but `run_nets.gd:98-103`'s own "0 checks ran" guard only catches a net that runs
+## did not slip through — but `run_nets.gd`'s own "0 checks ran" guard only catches a net that runs
 ## *nothing at all*, not one that quietly runs fewer checks than it should. This is not a bug to fix here —
 ## it is the reason every `_wired_root(t)` call in this file is followed by `if root == null: return`
 ## immediately, and the reason a check count dropping between runs (not just going red) is itself a signal.

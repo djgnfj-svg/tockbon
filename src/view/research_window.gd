@@ -36,7 +36,7 @@ const UnlockDefs := preload("res://src/actor/unlock_defs.gd")
 ##  bought) look identical on purpose — from the player's side "it is mine" is one fact, not two.
 ##
 ## **A `CHIP_SHORT` chip pressed does nothing and says nothing, and that is the repo's own answer**: the
-##  palette refuses to even pick a veiled rune, and `circle_window.gd:175-177` says why a message is the wrong
+##  palette refuses to even pick a veiled rune, and `circle_window.load_socket_glyph_tex`'s header says why a message is the wrong
 ##  fix — "get it picked and then have the slot refuse it and it becomes *I pressed it and nothing happened*".
 ##  The dim ink, the printed price, and the 원석 count directly above are the affordance.
 const CHIP_FIXED := 0

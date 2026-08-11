@@ -135,6 +135,12 @@ Nets scan the folders recursively — no hand-maintained registry.
   text", below). **It must rejoin wrapped comment lines before matching, and confirm the cited name resolves
   to a real file.** A line-wise scan passed **three of eleven**, because the path wrapped across two `##`
   lines — coverage that looks like coverage and licenses everyone to stop sweeping
+- **The line-number half was honour-based for weeks longer, and it rotted the whole time.** The net grepped
+  doc *folders* only, so `name.gd:NNN` went unwatched: **seventeen existed, six were already dead** and
+  pointed at unrelated statements while reading as precise — **one of the six was cited by this file**, in
+  the paragraph above that forbids the shape. ⇒ **`net_citations` now fails on any backticked
+  file-and-line reference**, and the moment it ran it found **five more that the hand sweep had just
+  missed.** Name the symbol: a function or constant name survives edits above it
 
 ## No fake code
 
@@ -158,7 +164,7 @@ Three times now. Reach for that shape before writing a fourth.
 **The fourth arrived, wearing the other face — the *check* was the victim, not the feature.** A check pumped
 **one** `_physics_process` to observe something `_on_ticked()` drives, and **one physics frame crosses a tick
 boundary at most one time in three — in that check's phase, none.** It passed while measuring nothing, and
-the mutation it was written to catch stayed green at 437. `net_gate.gd:274` had already written the rule
+the mutation it was written to catch stayed green at 437. `net_gate.gd`'s `TICK_DIVIDER` comment had already written the rule
 down — *"pump well past one to be sure a tick actually ran"*. ⇒ **Observing anything tick-driven means
 pumping `TICK_DIVIDER * 2`, never one frame.**
 

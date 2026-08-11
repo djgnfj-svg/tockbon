@@ -1265,7 +1265,7 @@ func _a_two_tile_pit_holds_a_pig(t) -> void:
 
 
 ## **A hen stopped at throwing range never jumps** (Bounds table). `axis == 0` ⇒ `Body.move_x` returns
-## `false` with nothing attempted (`body.gd:96-102`) ⇒ `blocked` is never true ⇒ the jump condition never
+## `false` with nothing attempted (`body.gd`'s `move_x`, "tried to move and could not") ⇒ `blocked` is never true ⇒ the jump condition never
 ## fires — structural (`body.gd`'s own contract), but pinned here as a value across the whole approach-and-
 ## stop run, not just at rest.
 func _a_hen_at_range_never_jumps(t) -> void:

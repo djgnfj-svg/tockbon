@@ -449,7 +449,7 @@ func _visible_is_false_before_the_trigger_true_after_and_false_once_dead(t) -> v
 	var ch: Variant = root.get("_char")
 	ch.place(trigger_px, stand_y)
 	# **`TICK_DIVIDER * 2`, never one** — `wake_scan` is on the tick, and one physics frame crosses a tick
-	#  boundary at most one time in three (CLAUDE.md, the `net_gate.gd:274` rule this file's header repeats).
+	#  boundary at most one time in three (CLAUDE.md, the `net_gate.gd`'s "pump well past one" rule this file's header repeats).
 	for _i in Tuning.TICK_DIVIDER * 2:
 		root.call("_physics_process", 1.0 / 60.0)
 	boss_bar.call("_process", 0.0)

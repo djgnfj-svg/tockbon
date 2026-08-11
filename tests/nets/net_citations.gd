@@ -71,10 +71,12 @@ const DOCS_DIR := "res://docs"
 
 func run(t) -> void:
 	_the_scanner_rejoins_wrapped_comment_lines(t)
+	_the_scanner_sees_a_line_number_citation(t)
 	_the_doc_index_found_the_docs(t)
 	_every_path_form_citation_resolves_where_it_says(t)
 	_every_bare_name_citation_resolves_to_a_real_doc(t)
 	_there_are_no_path_form_citations_at_all(t)
+	_there_are_no_line_number_citations(t)
 
 
 ## **The instrument, measured before anything it measures.** A line-wise scan passed three of eleven dead
@@ -164,6 +166,59 @@ func _every_bare_name_citation_resolves_to_a_real_doc(t) -> void:
 	t.eq(missing.size(), 0, "이름만 적은 인용이 전부 실재하는 문서다 (없는 것 %d개)" % missing.size())
 
 
+## **The same rule, one level down: a line number is a path into a file.** CLAUDE.md says so in the same
+## breath as the folder rule, and it rotted exactly the same way — silently, and in favour of whoever added
+## four lines above the cited one.
+##
+## **Seventeen citations of the form name-colon-number were swept by hand and six of them were already
+## dead**, landing on an unrelated statement while reading as precise. **One of the six was cited by
+## CLAUDE.md itself**, in the paragraph that forbids the shape. Nothing barked, because a stale line number
+## is still valid text — it just describes a different line now.
+##
+## ⇒ **Name the symbol.** A function or constant name survives every edit above it, and when it is renamed
+## the reader is at least reading about a thing that exists.
+##
+## **Scoped to backticked citations**, the same filter `_bare_names_in` uses: an error message that formats
+## a path and a line for a human to click is not a citation and must keep working.
+func _there_are_no_line_number_citations(t) -> void:
+	var n := 0
+	var where: Array[String] = []
+	for path: String in _scan_files():
+		for block: Dictionary in _comment_blocks(_read(path)):
+			for hit: String in _line_refs_of(block):
+				n += 1
+				where.append("%s:%d — `%s`. 줄 대신 심볼 이름을 적어라"
+					% [path, int(block["line"]), hit])
+	for msg: String in where:
+		t.ok(false, "줄번호로 적은 인용: %s" % msg)
+	t.eq(n, 0, "줄번호를 박은 인용이 하나도 없다 (줄은 위에 네 줄만 끼면 죽는다 — %d개 발견)" % n)
+
+
+## **The instrument, inverted before the thing it measures** — the lesson CLAUDE.md draws twice: a scanner
+## written to catch a defect and shipped carrying that same defect stays green forever.
+##
+## Driven on a synthetic block, because the repo is clean now and a clean repo cannot tell a working scan
+## from a dead regex. **The negative half is what makes it a measurement**: a bare mention with no backticks
+## and a formatted click-target must both stay unflagged, or the first error message somebody writes turns
+## this net red for doing its job.
+##
+## *Inversion: drop the digits group from the regex in `_line_refs_in`, or widen it past the backticks, and
+## one half or the other goes red.*
+func _the_scanner_sees_a_line_number_citation(t) -> void:
+	var block := {"text": "## see `stage.gd:408` and `body.gd:79-88` for the rest", "tight": "", "line": 1}
+	var found := _line_refs_of(block)
+	t.eq(found.size(), 2, "한 덩어리 안의 줄번호 인용 둘을 다 본다 (%d개)" % found.size())
+	if found.size() == 2:
+		t.eq(found[0], "stage.gd:408", "단일 줄 형태를 그대로 뽑는다")
+		t.eq(found[1], "body.gd:79-88", "구간 형태도 뽑는다")
+
+	# **The negative half.** Neither of these is a citation, and flagging them would make the net unusable.
+	var prose := {"text": "## the runner prints stage.gd:408 when a script fails to parse", "tight": "", "line": 1}
+	t.eq(_line_refs_of(prose).size(), 0, "백틱이 없으면 인용이 아니다 (러너 출력을 설명한 산문)")
+	var fmt := {"text": "## the message reads `%s:%d — 무엇이 틀렸는지`", "tight": "", "line": 1}
+	t.eq(_line_refs_of(fmt).size(), 0, "사람이 눌러 여는 좌표 포맷은 인용이 아니다")
+
+
 ## **Was the rule followed** — the other half of this net, and the half that catches a mistake while it is
 ## still only a mistake. See the header box for why this is now a flat zero rather than a ceiling, and why
 ## deleting it would leave a new-but-valid path citation entirely unguarded.
@@ -238,6 +293,32 @@ func _paths_of(block: Dictionary) -> Array[Dictionary]:
 				continue
 			seen[key] = true
 			out.append(hit)
+	return out
+
+
+## Both joins, deduplicated — same door as `_paths_of`, same reason.
+func _line_refs_of(block: Dictionary) -> Array[String]:
+	var out: Array[String] = []
+	for text: String in [String(block["text"]), String(block["tight"])]:
+		for hit: String in _line_refs_in(text):
+			if not out.has(hit):
+				out.append(hit)
+	return out
+
+
+## Backticked file-and-line references. **The backticks carry the same load they do for bare names**: an
+## error message that formats a coordinate for a human to click is not a citation, and it has a percent
+## sign where a citation has digits.
+##
+## **Every extension that holds comments, not just the one the leak was found in.** Scoping a scan to where
+## the bug turned up is the mistake this net's own header records `tools/` being left out for — and a doc
+## cited with a line number rots the same way a script does.
+func _line_refs_in(text: String) -> Array[String]:
+	var out: Array[String] = []
+	var re := RegEx.create_from_string(
+		"`([A-Za-z0-9_/\\.\\-]+\\.(?:gd|md|py|ps1|tscn|tres|gdshader):[0-9]+(?:-[0-9]+)?)`")
+	for m: RegExMatch in re.search_all(text):
+		out.append(m.get_string(1))
 	return out
 
 

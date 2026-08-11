@@ -34,7 +34,7 @@ const CircleLayout := preload("res://src/view/circle_layout.gd")
 const Glyph := preload("res://src/sim/glyph_defs.gd")
 const Progress := preload("res://src/actor/progress.gd")
 const SpellCircle := preload("res://src/actor/spell_circle.gd")
-## **Only for its static `load_socket_glyph_tex()`** — both files are `src/view/` (`net_layers.gd:29`'s scan
+## **Only for its static `load_socket_glyph_tex()`** — both files are `src/view/` (`net_layers.RULES`'s scan
 ## has no restriction inside that folder), and that function's own header already named this file as the
 ## second `_draw()`-owning node it was pulled out of `_ready()` for. Loading is shared; the drawing itself is
 ## not (`CanvasItem.draw_*` only runs inside the calling node's own `_draw()` — this file's own header, the

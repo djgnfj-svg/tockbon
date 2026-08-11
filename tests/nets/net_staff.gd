@@ -14,7 +14,7 @@ extends RefCounted
 ## **What this net cannot measure in principle — do not widen the label this far:**
 ##  · **Is the sprite tip the same as the firing spot** — the structure guarantees the code calls the same
 ##    function, but **the drawn pixels are the eye's**
-##  · **The `draw_set_transform` restore** — measured at `character_view.gd:131`: deleting it left everything green
+##  · **The `draw_set_transform` restore** — measured at `character_view.gd`'s staff-transform restore: deleting it left everything green
 ##  · **Does it read as the staff leaving the hand · are up and down awkward** — the eye's
 
 const CellGrid := preload("res://src/sim/cell_grid.gd")

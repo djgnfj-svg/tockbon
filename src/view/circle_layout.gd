@@ -305,7 +305,7 @@ static func _radius(area: Rect2) -> float:
 ##  `_center`/`_radius`: separating axes means separating **who decides what**, not "do not share a value".
 ##
 ## `Fx.TRI_SOCKET_DEG` is written as degrees measured against `Fx.TRI_CANVAS_R` (512) — scale the distance by
-##  the real frame radius and it lands at the same angles the asset was drawn at (`draw_circle.py:128`).
+##  the real frame radius and it lands at the same angles the asset was drawn at (`draw_circle.triangle()`).
 ## `n` is a parameter rather than reading `Fx.TRI_SOCKET_DEG.size()` directly so a future picture with a
 ##  different socket count is not silently handed extra or missing seats.
 static func _socket_centers(area: Rect2, n: int) -> PackedVector2Array:

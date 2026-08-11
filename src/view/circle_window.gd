@@ -679,7 +679,7 @@ func _draw_frame(area: Rect2, circle_id: int) -> void:
 ##  **not** `Layout.rune_slots()`. Reading the rune axis's own function here would hang the circle axis off
 ##  the rune axis, exactly the coupling `circle_layout.gd`'s header argues against (one level up into this file).
 ##
-## Three pieces, in the order `docs/design/circle-art.md`/`tools/pixel/draw_circle.py:123` describe them —
+## Three pieces, in the order `docs/design/circle-art.md`/`draw_circle.triangle()` describe them —
 ##  split into their own named functions **so each is independently drivable** (verify-read: a mutation that
 ##  made this whole function return before drawing anything left every net in this file green, because
 ##  nothing here called it in a way that could observe "drew nothing" versus "drew the real thing" — counting

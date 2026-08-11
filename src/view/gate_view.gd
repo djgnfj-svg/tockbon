@@ -128,7 +128,7 @@ func _draw() -> void:
 ## subclass overrides this one hook and catches exactly the texture, rect **and modulate** `_draw()` decided
 ## to use — the modulate being the entire visible result of beats 2 and 3.
 ##
-## **Named `_paint_arch`, not `_paint`.** `monster_view.gd:196` already owns `_paint` with a different
+## **Named `_paint_arch`, not `_paint`.** `monster_view.gd` already owns `_paint` with a different
 ##  signature; two hooks sharing a name across a signature change is one rename away from a silent mismatch.
 ##
 ## **`false` for `tile`** — the same reason `town_view._draw` gives: this is an integer upscale of a

@@ -95,7 +95,7 @@ const GEMS_PER_LEVEL := 1
 ##  rather than by opening two. At 9~11 원석 a full run this is **about one unlock per run**, the shape the
 ##  user picked ("한 번 갔다 오면 하나 열린다"). `town.md`'s 원석 section — its old "three per unlock"
 ##  arithmetic is void, having been written when a run yielded 1~2.
-##  **Named, not line-numbered.** This read `town.md:212` and landed on the wrong paragraph the moment that
+##  **Named, not line-numbered.** This cited a line number in town.md and landed on the wrong paragraph the moment that
 ##  file's header grew by four lines: **a line number is a path into a file**, and it rots exactly the way
 ##  the GDD's "name docs, don't path them" rule (`GDD.md`, "Natural law") says a folder path does.
 ## **The whole sink is three purchases (30).** After that the counter climbs with nothing to spend on again;

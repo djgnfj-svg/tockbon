@@ -729,7 +729,7 @@ func _slam_over_stone_ignites_nothing(t) -> void:
 
 
 ## **No grid-based "fires once, not every tick" test exists here — the grid channel genuinely cannot see it,
-## and that half of the finding stands.** `CellGrid._ignite_cell` (`cell_grid.gd:726`) guards
+## and that half of the finding stands.** `CellGrid._ignite_cell` guards
 ## `if _burn_slot[i] >= 0: return false` **before it ever reaches a write** — re-igniting an already-burning
 ## cell is rejected at that early return, so `_changed`/`aux_at` never move. A mutation that called
 ## `_ignite_slam_impact` every tick during `STUN` instead of once is unobservable by any grid measurement.
