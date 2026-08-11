@@ -79,12 +79,10 @@ func run(t) -> void:
 	_at_fires_only_at_the_seat_and_nowhere_else(t)
 	_the_band_covers_the_drawn_arch(t)
 	# -- Stage B — the wall comes down through a real rooster death --
-	_the_wall_is_solid_before_anything_dies(t)
-	_a_real_rooster_death_opens_the_wall(t)
-	_the_wall_tiles_are_open_by_literal_tile_number_after_the_kill(t)
-	_the_walk_out_is_flat_after_the_drop(t)
-	_r_restores_the_wall_and_the_latch(t)
-	_the_wall_does_not_refill_every_tick(t)
+	# **One merged check, not six** (harness-manager) — all six shared one `_wired_root()` + kill + pump
+	# prefix; see `_stage_b_the_wall_comes_down_on_a_real_rooster_death`'s own header for the measured
+	# cost and why the order inside it is not arbitrary.
+	_stage_b_the_wall_comes_down_on_a_real_rooster_death(t)
 	# -- Stage C — the arch on screen --
 	_the_arch_is_invisible_before_the_kill_and_visible_after(t)
 	_the_drawn_rect_is_where_the_arch_belongs(t)
@@ -252,26 +250,39 @@ func _the_band_covers_the_drawn_arch(t) -> void:
 #  Stage B — the east wall comes down on a real rooster's death
 # ══════════════════════════════════════════════════════════════════
 
-## The premise, driven rather than assumed: before anything dies, the wall really is there.
-func _the_wall_is_solid_before_anything_dies(t) -> void:
+## **All six of Stage B's checks share one `_wired_root()`, one rooster kill, one 10-frame pump —
+## measured, not guessed** (harness-manager). `_wired_root()` calls `reset_stage()`, which rebuilds the
+## real stage-1 terrain (`build_room_into` -> `_fill_rect` -> `_write_cell` per cell, the same per-cell
+## GDScript loop `net_monster`'s own "floor fill" warning names) at ~495ms measured per call — six
+## separate functions each doing their own `_wired_root()` + kill + 10-frame pump summed to ~5.5s of
+## `net_gate`'s ~18.8s total, almost a third of the whole net, for six checks that (aside from the last
+## two, which mutate further) only *read* the identical post-kill state six different ways.
+##
+## **Order matters and is preserved exactly, not just the assertions.** The six original functions run
+## in the same relative sequence they always did: solid-before-anything-dies first (needs the wall
+## untouched), then kill+pump once, then the three pure reads (any order among themselves — none of them
+## write), then the refill check (patches one wall cell back to stone + pumps 60 more frames — must run
+## *before* R, or R's own full rebuild would erase the hand-set cell before the refill check ever saw
+## it), then R-restore last (its `reset_stage()` call is the one legitimate second terrain rebuild here —
+## it is what "R restores the wall" *means*, not waste to cut).
+##
+## **Every `t.ok`/`t.eq` from all six original functions is still here, unchanged, with its own label** —
+## the pass count this net reports does not move. Only the six `_wired_root()`/kill/pump calls collapse
+## into one each.
+func _stage_b_the_wall_comes_down_on_a_real_rooster_death(t) -> void:
 	var root := _wired_root(t)
 	if root == null:
 		return
 	root.call("_leave_town")
+
+	# -- was `_the_wall_is_solid_before_anything_dies` — the premise, before anything dies. --
 	var g: Variant = root.get("_grid")
 	var r := StageGate.wall_cells()
 	t.ok(g.is_solid(r.position.x, r.position.y) and g.is_solid(r.end.x, r.end.y),
 		"무엇도 죽기 전엔 동벽이 막혀 있다 (전제)")
-	root.free()
 
-
-## **The path that proves it, not a hand-set flag**: a real rooster is spawned, brought to 0 hp, and the
-## world is pumped until the death loop's own tick actually runs (`world_step.gd`'s dead-monster pass).
-func _a_real_rooster_death_opens_the_wall(t) -> void:
-	var root := _wired_root(t)
-	if root == null:
-		return
-	root.call("_leave_town")
+	# -- the shared kill: a real rooster, spawned and brought to 0 hp, the world pumped until the death
+	#  loop's own tick actually runs (`world_step.gd`'s dead-monster pass). --
 	var world: Variant = root.get("_world")
 	world.spawn_monster(MonsterDefs.KIND_ROOSTER, 400, 600)
 	t.ok(world.monster_count() > 0, "수탉을 세웠다 (전제)")
@@ -281,57 +292,31 @@ func _a_real_rooster_death_opens_the_wall(t) -> void:
 		root.call("_physics_process", 1.0 / 60.0)
 	var pr: Variant = world.call("progress")
 	t.ok(bool(pr.boss_died(MonsterDefs.KIND_ROOSTER)), "수탉이 실제로 죽었다 (Progress가 안다)")
-	var g: Variant = root.get("_grid")
-	var r := StageGate.wall_cells()
+
+	# -- was `_a_real_rooster_death_opens_the_wall` --
+	g = root.get("_grid")
 	var still_solid := 0
 	for cy in range(r.position.y, r.end.y + 1, 8):
 		for cx in range(r.position.x, r.end.x + 1, 8):
 			if g.is_solid(cx, cy):
 				still_solid += 1
 	t.eq(still_solid, 0, "수탉이 죽자 동벽이 뚫렸다 (여전히 막힌 칸 %d개)" % still_solid)
-	root.free()
 
-
-## **Literal tile numbers, not `wall_cells()`** (verify-read, H5 — the companion to the pre-drop literal
-## check above). The production drop code (`stage.gd`'s `_on_ticked()`) also reads `wall_cells()`, so a
-## shrunk `WALL_TILE_Y0`/`Y1` shrinks the carved rectangle *and* every check built on the same rect together —
-## rows left outside a wrong rect stay solid and nothing sees it. This hardcodes 184/185, rows 20-31 instead.
-func _the_wall_tiles_are_open_by_literal_tile_number_after_the_kill(t) -> void:
-	var root := _wired_root(t)
-	if root == null:
-		return
-	root.call("_leave_town")
-	var world: Variant = root.get("_world")
-	world.spawn_monster(MonsterDefs.KIND_ROOSTER, 400, 600)
-	world.monster_at(0).hp = 0
-	for _i in 10:
-		root.call("_physics_process", 1.0 / 60.0)
-	var g: Variant = root.get("_grid")
+	# -- was `_the_wall_tiles_are_open_by_literal_tile_number_after_the_kill`. **Literal tile numbers, not
+	#  `wall_cells()`** (verify-read, H5) — the production drop code (`stage.gd`'s `_on_ticked()`) also
+	#  reads `wall_cells()`, so a shrunk `WALL_TILE_Y0`/`Y1` would shrink the carved rectangle *and* every
+	#  check built on the same rect together. This hardcodes 184/185, rows 20-31 instead. --
 	var tc := Tuning.TILE_CELLS
-	var still_solid := 0
+	still_solid = 0
 	for ty in range(20, 32):
 		for tx in [184, 185]:
 			if g.is_solid(tx * tc + tc / 2, ty * tc + tc / 2):
 				still_solid += 1
 	t.eq(still_solid, 0,
 		"동벽 타일 184·185의 20~31번 줄 전체가 뚫렸다 (리터럴 타일 번호로 잰다 — 여전히 막힌 타일 %d개)" % still_solid)
-	root.free()
 
-
-## After the drop, the walk from the room to the seat is flat — the same shape as Stage A's own check 3,
-## driven through the wired scene instead of a bare grid.
-func _the_walk_out_is_flat_after_the_drop(t) -> void:
-	var root := _wired_root(t)
-	if root == null:
-		return
-	root.call("_leave_town")
-	var world: Variant = root.get("_world")
-	world.spawn_monster(MonsterDefs.KIND_ROOSTER, 400, 600)
-	world.monster_at(0).hp = 0
-	for _i in 10:
-		root.call("_physics_process", 1.0 / 60.0)
-	var g: Variant = root.get("_grid")
-	var tc := Tuning.TILE_CELLS
+	# -- was `_the_walk_out_is_flat_after_the_drop` — the same shape as Stage A's own check 3, driven
+	#  through the wired scene instead of a bare grid. --
 	var drop := 0
 	for tx in range(183, 188):
 		var cx := tx * tc + tc / 2
@@ -340,25 +325,30 @@ func _the_walk_out_is_flat_after_the_drop(t) -> void:
 		if g.is_solid(cx, 31 * tc + tc / 2):
 			drop += 1
 	t.eq(drop, 0, "벽이 뚫린 뒤 room3에서 자리까지 걸어 나가는 길이 평평하다 (어긋난 타일 %d개)" % drop)
-	root.free()
 
-
-## **R restores both** — the wall's own material and the latch. Only `reset_stage()` writes the latch, and
-## it always rebuilds the terrain in the same call, so the two cannot disagree.
-func _r_restores_the_wall_and_the_latch(t) -> void:
-	var root := _wired_root(t)
-	if root == null:
-		return
-	root.call("_leave_town")
-	var world: Variant = root.get("_world")
-	world.spawn_monster(MonsterDefs.KIND_ROOSTER, 400, 600)
-	world.monster_at(0).hp = 0
-	for _i in 10:
-		root.call("_physics_process", 1.0 / 60.0)
-	var g: Variant = root.get("_grid")
-	var r := StageGate.wall_cells()
+	# -- was `_the_wall_does_not_refill_every_tick`. **A process measurement, not a final-state one** —
+	#  CLAUDE.md's own warning that a settle loop or a per-tick refill cannot be seen by looking only at
+	#  the end. One wall cell is put back by hand, and 60 more frames (20 ticks) are pumped: a block
+	#  without the `_room3_gate_open` guard would erase it again on the very next tick, and only watching
+	#  the process catches that. **Run before R below** — R's own rebuild would overwrite the hand-set cell. --
 	t.ok(not g.is_solid(r.position.x, r.position.y), "벽이 뚫린 상태다 (전제)")
+	g.apply(CellGrid.cmd_fill(r.position.x, r.position.y, r.position.x, r.position.y, Mat.STONE))
+	t.eq(g.mat_at(r.position.x, r.position.y), Mat.STONE, "한 칸을 손으로 돌려놨다 (전제)")
+	for _i in 60:
+		root.call("_physics_process", 1.0 / 60.0)
+	t.eq(g.mat_at(r.position.x, r.position.y), Mat.STONE,
+		"걸쇠 없이 매 틱 다시 부수는 블록이었다면 이 칸이 다시 빈칸이 됐을 것이다 — 여전히 돌이다")
 
+	# -- was `_r_restores_the_wall_and_the_latch`, run last on purpose. **R restores both** — the wall's
+	#  own material and the latch. Only `reset_stage()` writes the latch, and it always rebuilds the
+	#  terrain in the same call, so the two cannot disagree. This is the one place in this function that
+	#  pays for a second real terrain rebuild — that rebuild *is* what "R restores the wall" means, not
+	#  redundant work, which is why it is not folded away like the other five setups were.
+	#  **The premise reads the far corner (`r.end`), not `r.position`** — the refill check right above just
+	#  hand-patched `r.position` back to stone, so re-reading it here would read true whether R does
+	#  anything or not, and would silently be a no-op assertion. `r.end` was never touched, so "still open
+	#  right up until R" is a real premise again, not one contaminated by the check that ran before it. --
+	t.ok(not g.is_solid(r.end.x, r.end.y), "벽이 뚫린 상태다 (전제)")
 	root.call("reset_stage")
 	t.ok(not bool(root.get("_room3_gate_open")), "R을 누르면 걸쇠가 풀린다")
 	g = root.get("_grid")
@@ -368,34 +358,6 @@ func _r_restores_the_wall_and_the_latch(t) -> void:
 			if g.mat_at(cx, cy) != Mat.STONE:
 				not_stone += 1
 	t.eq(not_stone, 0, "R을 누르면 동벽이 다시 돌로 막힌다 (어긋난 칸 %d개)" % not_stone)
-	root.free()
-
-
-## **A process measurement, not a final-state one** — CLAUDE.md's own warning that a settle loop or a
-## per-tick refill cannot be seen by looking only at the end. One wall cell is put back by hand after the
-## drop, and 60 more frames (20 ticks) are pumped: a block without the `_room3_gate_open` guard would erase
-## it again on the very next tick, and only watching the process catches that.
-func _the_wall_does_not_refill_every_tick(t) -> void:
-	var root := _wired_root(t)
-	if root == null:
-		return
-	root.call("_leave_town")
-	var world: Variant = root.get("_world")
-	world.spawn_monster(MonsterDefs.KIND_ROOSTER, 400, 600)
-	world.monster_at(0).hp = 0
-	for _i in 10:
-		root.call("_physics_process", 1.0 / 60.0)
-
-	var g: Variant = root.get("_grid")
-	var r := StageGate.wall_cells()
-	t.ok(not g.is_solid(r.position.x, r.position.y), "벽이 뚫린 상태다 (전제)")
-	g.apply(CellGrid.cmd_fill(r.position.x, r.position.y, r.position.x, r.position.y, Mat.STONE))
-	t.eq(g.mat_at(r.position.x, r.position.y), Mat.STONE, "한 칸을 손으로 돌려놨다 (전제)")
-
-	for _i in 60:
-		root.call("_physics_process", 1.0 / 60.0)
-	t.eq(g.mat_at(r.position.x, r.position.y), Mat.STONE,
-		"걸쇠 없이 매 틱 다시 부수는 블록이었다면 이 칸이 다시 빈칸이 됐을 것이다 — 여전히 돌이다")
 	root.free()
 
 

@@ -1,8 +1,13 @@
 # archive — closed work, kept as it stood
 
-**Read, don't update.** Everything here is a record of a moment that has passed. Its claims were true
-on the day they were written and the code has moved since; correcting them would destroy the record
-and would not help anyone.
+**You do not need to open this folder** (decided by the user: 「공모전 관련은 한곳에 넣어서 안 볼 거임」).
+Everything here is a record of a moment that has passed. Its claims were true on the day they were written
+and the code has moved since; correcting them would destroy the record and would not help anyone.
+
+**Nothing outside this folder depends on anything inside it.** The living docs and the code used to cite
+the submission README for reasons — "the build goes to a judge", "the risk list says so" — and **every one
+of those was rewritten to carry its own reason**, because a reason that only makes sense with a closed
+contest in mind stops being readable the moment you stop thinking about the contest.
 
 ⇒ **Nothing here is a source of truth about the game.** `docs/GDD.md`, `docs/design/` and
 `docs/plans/` are. If a doc here contradicts one of those, the other one is right.

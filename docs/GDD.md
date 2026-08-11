@@ -711,16 +711,14 @@ element carried no `TRACE_IGNITE`), but **the wall is on the far side of pit ①
 | ~~**The screen for receiving the fire rune**~~ | **The premise was wrong — the screen already exists.** `circle_window`'s seat click has always placed runes (pick from the palette → click the rune seat), so nothing has to be broken out of the three-pick. **Ownership was the only thing actually missing, and it is filled too now** (same doc — see the "Fire rune" row above) | `docs/plans/3.done/rune-lock-and-receiving.md` |
 | ~~**An ending**~~ | **Filled — the chain's last square. Implemented, not accepted.** The rooster's death drops room ③'s east wall and stands an arch beyond it; walking into the arch opens the settlement screen, **with a clear title instead of the death one.** No second screen. Neither the arch nor the clear title has been looked at on screen | `docs/plans/3.done/gate-ending-to-game.md`, `docs/plans/3.done/run-end-settlement.md` |
 
-**The chain has every square now — in code, and the milestone's one acceptance check has been run.**
+**The chain has every square now — in code. Not one of them is accepted.**
+**The one acceptance check this milestone has is "the user starts once and reaches the end without getting
+stuck" — which only the user can run**, and no one has recorded them running it.
 
-> **The user played a run and shot 60 seconds of it for the NAN 2026 submission.** That is the check this
-> milestone was written around — *"the user starts once and reaches the end without getting stuck"* — and
-> **there would be no footage if the chain had a gap in it.** ⇒ **The milestone is met.**
->
-> **What is still not accepted is every individual beat.** Running end to end is not the same as any one of
-> the wall · arch · panel · boss fights reading right, and **the docs stay at `unseen` until the user says
-> so beat by beat** (`design/README.md`, "What the video shoot verified"). Meeting the milestone closed the
-> *chain* question, not the *quality* question.
+> **This paragraph claimed the milestone was met, on the strength of a play video existing.** That is an
+> inference, not a report: **footage is not a judgment**, and nobody wrote down that the user played it.
+> ⇒ **Reverted.** The rule this repo runs on is that acceptance is written down *when it happens*, by
+> whoever heard it — **and reasoning backwards from an artifact is how a doc starts lying.**
 
 `map → wood wall → pit → bull → fire rune → water out of the pit → rooster → gate` runs end to end, and
 **the mobs and both bosses stand on it before you arrive** (`3.done/monster-placement-stage1.md`) ⇒ **the

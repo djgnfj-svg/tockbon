@@ -1618,8 +1618,8 @@ func _sync_pick_window(root: Node) -> void:
 
 ## **The debug readout is off when the game boots, and F3 is what turns it on.**
 ##
-## **Found on screen, not headless**: it is fifteen lines of black text — not the two the archived NAN 2026 submission README
-## records — and it lands straight on the research window's bright parchment, covering the prices the player
+## **Found on screen, not headless**: it is fifteen lines of black text — **not the two it was believed to
+## be, and that miscount stood in writing** — and it lands straight on the research window's bright parchment, covering the prices the player
 ## opened it to read. **Every check above this one measures that Stats *yields to a window and comes back*,
 ## which stayed true the whole time.** None of them asked whether it should have been on to begin with.
 ##
@@ -1661,8 +1661,9 @@ func _key(code: int) -> InputEventKey:
 
 ## ══ **Developer keys are dead until F3, and player keys never are** ══
 ##
-## **This is a submission check, not a feature check.** The build goes to a judge who has never seen the
-## game, and every debug key was reachable from the first frame: a stray `M` stands a bull on top of them, a
+## **This guards the build, not a feature.** It was written for a build going to someone who had never seen
+## the game — **and that case recurs every time anyone new opens it.** Every debug key was reachable from the
+## first frame: a stray `M` stands a bull on top of them, a
 ## stray `1` swaps their assembly mid-fight, a stray `R` throws the run away. **None of those read as "I
 ## pressed a key" — they read as the game breaking.**
 ##

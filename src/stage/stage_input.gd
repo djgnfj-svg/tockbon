@@ -95,8 +95,8 @@ const MONSTER_KEYS: Dictionary = {
 	KEY_M: MonsterDefs.KIND_PIG, KEY_N: MonsterDefs.KIND_HEN,
 	# **B/C, not R** — R is already `reset_requested`. `stage1-bosses.md` stage A.
 	KEY_B: MonsterDefs.KIND_BULL, KEY_C: MonsterDefs.KIND_ROOSTER,
-	# **K — V went to the player.** The level-up pick moved off P onto V (user's call, the day of
-	#  submission), and a developer key sharing a letter with a player key is one F3 press away from
+	# **K — V went to the player.** The level-up pick moved off P onto V (user's call), and a
+	#  developer key sharing a letter with a player key is one F3 press away from
 	#  spawning a wolf while the player means to open their pick. The wolf now has map placement too
 	#  (`monster-placement-stage1.md`) — this key stays only as the debug door every
 	#  other kind already has (`monsters-minimum`'s own reason for M/N), not the wolf's sole way on screen.
@@ -127,10 +127,11 @@ func jump_held() -> bool:
 ## **Is developer mode on. Off at boot, F3 toggles it** — and while it is off **every debug key below is
 ##  dead**, not merely quiet: the spawns, the presets, the material brushes, the reward key, reset and zoom.
 ##
-## **Why it exists: the submission build hands this game to a judge who has never seen it.** The keys were
-##  always reachable, and one stray `M` stands a bull on top of them, one stray `1` swaps their assembly, one
-##  stray `R` throws the run away. None of those look like a key that was pressed — **they look like the game
-##  broke.**
+## **Why it exists: a build handed to someone who has never seen this game.** The keys were always
+##  reachable, and one stray `M` stands a bull on top of them, one stray `1` swaps their assembly, one stray
+##  `R` throws the run away. None of those look like a key that was pressed — **they look like the game
+##  broke.** It was written for a submission build and the reason outlives that: **any first-time player is
+##  the same case.**
 ##
 ## **It is the same flag the debug readout already rode**, deliberately: two flags would let the keys be live
 ##  while the readout that explains them is hidden, which is the worst of the four combinations. `stage.gd`

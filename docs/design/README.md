@@ -73,27 +73,19 @@ is waiting on work.**
 or a different piece of work to land first — and **that is worth knowing before someone opens `1.ready/`
 looking for something to do.**
 
-## What the video shoot verified — **and what is still waiting on one sentence from the user**
+## The acceptance record — **five docs are waiting on one sentence each**
 
-**The 60-second play video was shot and uploaded** (NAN 2026 submission, item 2). That closes the single
-largest hole in this folder's acceptance record, because **the shoot was the first time the game ran at
-normal speed in front of the user.** Every browser check before it happened in a **background tab**, which
-Chrome throttles to 8 FPS.
+**Nothing in this repo records the user judging these on screen.** They are built, the nets are green, and
+the `Accepted` axis has never moved. That is a normal state, not a failure — but it is the largest gap in
+this folder, and it does not close by itself.
 
-**What is certain**, and no longer needs asking:
+⚠ **It does not close by inference either.** A build existing, a video existing, an agent having walked
+through it in the editor — **none of those is the user saying it read right**, and this section was briefly
+written as if one of them were. Acceptance is written down when it is heard.
 
-- **The game runs at normal frame rate and the user has seen it.** The "nobody has seen this at normal
-  framerate" risk, carried by three docs, is closed
-- **A run goes from the town through both bosses to the gate**, or there would have been no footage
-
-**What is not certain, and this folder must not guess at**: the video is 60 seconds and edited. **Which beats
-actually appeared on screen, and whether the user judged them good, is one sentence away and cannot be
-inferred from the fact that footage exists.** The docs below stay at `unseen` until that sentence arrives —
-**writing `pass` on the strength of "there was a video" is exactly the fake this repo keeps catching.**
-
-| Doc | The question the user's one sentence would answer |
+| Doc | The sentence that would close it |
 |---|---|
-| [gate-ending.md](gate-ending.md) | Did the collapsing wall · the rising arch · the `스테이지 1 클리어` panel appear, and did they read right |
+| [gate-ending.md](gate-ending.md) | Did the collapsing wall · the rising arch · the `스테이지 1 클리어` panel read right |
 | [monsters.md](monsters.md) | Did the bull and rooster fights read as fights — **nobody has judged the motion** |
 | [town.md](town.md) | Was the town walked end to end by the user, not by an agent |
 | [attack-prediction.md](attack-prediction.md) | Did the red ground marks read as "it is about to hit there" |
