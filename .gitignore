@@ -49,5 +49,10 @@ image copy.png
 docs/archive/nan2026/img/part-*.png
 docs/archive/nan2026/img/part-*.png.import
 
+# 제출 산출물 — 마크다운에서 구운 PDF와 유튜브에 올린 영상 원본(47MB).
+# **로컬에만 있고 지우면 끝이다.** 소스(마크다운)와 링크(유튜브)는 둘 다 남아 있으므로
+#  리포에는 안 넣는다. 다시 구우려면 tools/md2pdf.py.
+docs/archive/nan2026/out/
+
 # 촬영 원본 — 45MB. 유튜브에 올라가는 산출물이라 리포에 안 남긴다.
 *.mp4

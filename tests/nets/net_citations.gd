@@ -37,7 +37,14 @@ extends RefCounted
 ## been found — and within hours a dead citation turned up in `tools/`, caught by hand because nothing was
 ## watching there. **A rule enforced over two of the three folders that hold comments is a rule with a
 ## documented hole.** The cost is nothing: the scan is text over ~90 files and runs in well under a second.
-const SCAN_DIRS: Array[String] = ["res://src", "res://tests", "res://tools"]
+## **And the same hole opened a second time, the day the submission tools moved.** They went from `tools/`
+## into `docs/archive/nan2026/tools/`, and `docs/` is excluded on purpose (the box above) — so a folder of
+## live `.gd` walked out of scope in a `git mv` with nothing barking. **The exclusion is about docs being a
+## record, not about the string `docs/`**: comments in a script are instructions to the next reader wherever
+## the script sits. ⇒ **scan by what the file is, not by where it lives.**
+const SCAN_DIRS: Array[String] = [
+	"res://src", "res://tests", "res://tools", "res://docs/archive/nan2026/tools",
+]
 const DOCS_DIR := "res://docs"
 
 ## ══ There is no ceiling constant any more. The answer is zero. ══

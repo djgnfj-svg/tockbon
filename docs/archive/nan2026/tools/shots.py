@@ -1,6 +1,6 @@
 """Takes the submission screenshots, then composes the paired figures.
 
-    python tools/submission/shots.py
+    python docs/archive/nan2026/tools/shots.py
 
 Two steps, and the second is the reason this file exists rather than the .gd alone:
 
@@ -23,10 +23,11 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw
 
-ROOT = Path(__file__).resolve().parents[2]
-IMG = ROOT / "docs" / "archive" / "nan2026" / "img"
+HERE = Path(__file__).resolve().parent
+ROOT = HERE.parents[3]
+IMG = HERE.parent / "img"
 GODOT = ROOT / "Godot_v4.7.1-stable_win64.exe"
-SCENE = "res://tools/submission/shot.tscn"
+SCENE = "res://docs/archive/nan2026/tools/shot.tscn"
 
 ORDERS = ["spread-blast", "blast-spread"]
 

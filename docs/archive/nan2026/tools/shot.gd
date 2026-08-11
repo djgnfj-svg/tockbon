@@ -1,6 +1,6 @@
 ## Captures the screenshots `plan.md` prints into the judged PDF.
 ##
-## **Do not run this directly. Run `python tools/submission/shots.py`** — it drives this
+## **Do not run this directly. Run `python docs/archive/nan2026/tools/shots.py`** — it drives this
 ##  scene and then composes the paired figures. The parts written here are inputs to that.
 ##
 ## ⚠ **`OUT` now points into a sealed folder.** The preliminary round is over and its images

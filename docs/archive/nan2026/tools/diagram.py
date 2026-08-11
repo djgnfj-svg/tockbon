@@ -1,6 +1,6 @@
 """Labels the magic-circle diagram that `plan.md` prints.
 
-    python tools/submission/diagram.py
+    python docs/archive/nan2026/tools/diagram.py
 
 `circle-diagram-base.png` is AI generated and carries **no text** — image models write
 Korean as decoration-shaped garbage, and a judged document cannot ship a label that is not
@@ -23,8 +23,9 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
-ROOT = Path(__file__).resolve().parents[2]
-IMG = ROOT / "docs" / "archive" / "nan2026" / "img"
+HERE = Path(__file__).resolve().parent
+ROOT = HERE.parents[3]
+IMG = HERE.parent / "img"
 BASE = IMG / "circle-diagram-base.png"
 DST = IMG / "circle-diagram.png"
 FONT = ROOT / "assets" / "font" / "NotoSansKR-Regular.otf"

@@ -7,9 +7,9 @@ build. Chrome is already on this machine, prints from the OS font stack, and hon
 `@page`, so it is the whole PDF engine here.
 
 Run:
-    python tools/submission/md2pdf.py
+    python docs/archive/nan2026/tools/md2pdf.py
 
-Output lands in build/submission/. That folder is not committed.
+Output lands in the sibling out/ folder. It is not committed.
 
 **The preliminary round is over and its source folder is sealed** (docs/archive/README.md).
 Running this again only re-bakes what was already submitted — harmless, but pointless.
@@ -28,9 +28,10 @@ from pathlib import Path
 
 import markdown
 
-ROOT = Path(__file__).resolve().parents[2]
-SRC = ROOT / "docs" / "archive" / "nan2026"
-OUT = ROOT / "build" / "submission"
+HERE = Path(__file__).resolve().parent
+ROOT = HERE.parents[3]
+SRC = HERE.parent
+OUT = HERE.parent / "out"
 REPO = "https://github.com/djgnfj-svg/tockbon"
 
 # The judge reads a PDF, so a relative `[review.md](review.md)` would be a dead link.

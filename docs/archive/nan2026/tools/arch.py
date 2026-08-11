@@ -1,6 +1,6 @@
 """Draws the AI architecture figure that opens `ai-tech.md`.
 
-    python tools/submission/arch.py
+    python docs/archive/nan2026/tools/arch.py
 
 Drawn in code rather than generated: an image model cannot render Korean, and an
 architecture diagram is exactly the picture where a wrong label is worse than no picture.
@@ -16,8 +16,9 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
-ROOT = Path(__file__).resolve().parents[2]
-DST = ROOT / "docs" / "archive" / "nan2026" / "img" / "ai-arch.png"
+HERE = Path(__file__).resolve().parent
+ROOT = HERE.parents[3]
+DST = HERE.parent / "img" / "ai-arch.png"
 FONT = ROOT / "assets" / "font" / "NotoSansKR-Regular.otf"
 
 W, H = 1740, 1190
