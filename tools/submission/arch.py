@@ -5,7 +5,7 @@
 Drawn in code rather than generated: an image model cannot render Korean, and an
 architecture diagram is exactly the picture where a wrong label is worse than no picture.
 
-Output: `docs/submission/img/ai-arch.png`.
+Output: `docs/archive/nan2026/img/ai-arch.png`.
 """
 
 from pathlib import Path
@@ -13,7 +13,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parents[2]
-DST = ROOT / "docs" / "submission" / "img" / "ai-arch.png"
+DST = ROOT / "docs" / "archive" / "nan2026" / "img" / "ai-arch.png"
 FONT = ROOT / "assets" / "font" / "NotoSansKR-Regular.otf"
 
 W, H = 1740, 1190

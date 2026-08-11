@@ -1,6 +1,8 @@
 # Unlimited jumping underwater and the escape — water touches the character for the first time
 
-**Status**: active — **the code is finished. The user deferred the screen check** (decided by the user).
+**Status**: done — **the code is finished. The screen check was deferred by the user and never happened.**
+`3.done` means implementation finished, not accepted. **Room ③'s pour is still unbuilt** and is named as owed
+by half a dozen docs; it moved to `stage2-water.md`, which is where water reopens.
 
 > ## ⚠⚠ **Pit ①'s water escape is dropped — the scene, not the mechanism** (decided by the user)
 >

@@ -20,7 +20,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parents[2]
-IMG = ROOT / "docs" / "submission" / "img"
+IMG = ROOT / "docs" / "archive" / "nan2026" / "img"
 BASE = IMG / "circle-diagram-base.png"
 DST = IMG / "circle-diagram.png"
 FONT = ROOT / "assets" / "font" / "NotoSansKR-Regular.otf"

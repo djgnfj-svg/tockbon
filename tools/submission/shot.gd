@@ -1,4 +1,4 @@
-## Captures the screenshots `docs/submission/plan.md` prints into the judged PDF.
+## Captures the screenshots `docs/archive/nan2026/plan.md` prints into the judged PDF.
 ##
 ## **Do not run this directly. Run `python tools/submission/shots.py`** — it drives this
 ##  scene and then composes the paired figures. The parts written here are inputs to that.
@@ -25,7 +25,7 @@ const Glyph := preload("res://src/sim/glyph_defs.gd")
 const SpellCircle := preload("res://src/actor/spell_circle.gd")
 const Palette := preload("res://src/view/palette_layout.gd")
 
-const OUT := "res://docs/submission/img/"
+const OUT := "res://docs/archive/nan2026/img/"
 
 ## The arena, in cells. Wide enough that the camera never reaches an edge of it.
 const ARENA_X0 := 0

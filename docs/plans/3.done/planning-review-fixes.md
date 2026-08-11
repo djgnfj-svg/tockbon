@@ -1,6 +1,7 @@
 # Fixing design-doc contradictions — 12 found by adversarial review
 
-**Status**: ready — **the 8 doc-side items are applied. The remaining three are design decisions and can't be closed by docs**
+**Status**: done — **the 8 doc-side items are applied and the user has since closed the other three.**
+A record of what was found, not a queue.
 
 | | What | State |
 |---|---|---|

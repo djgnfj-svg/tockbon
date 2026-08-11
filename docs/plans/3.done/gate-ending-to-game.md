@@ -382,7 +382,7 @@ door the player never touches, and this repo's own `_take_boss_reward` (L) is al
 5. **The wall latch diverging from the flag** — only `reset_stage()` writes it, and it always rebuilds the
    terrain in the same call. Check 9.
 6. **Water deeper than ~3 tiles at the seat lifts the player out of the y band** — the run then cannot end.
-   Not solved here; room ③'s pour is `2.active/water-jump-and-escape.md`'s. **Recorded there when this lands.**
+   Not solved here; room ③'s pour is `3.done/water-jump-and-escape.md`'s. **Recorded there when this lands.**
 7. **`open()`'s signature change** — deliberate and unforgiving (no default). Two call sites in
    `net_settlement.gd`; nothing else calls it.
 8. **`t.ok(true, …)` and file-grepping checks are banned here.** Every check above drives a value. In
@@ -457,7 +457,7 @@ actually run and shown to bite. **Done: 6191 passed, 0 failed.**
 
 | | |
 |---|---|
-| **Room ③'s water** | `2.active/water-jump-and-escape.md`. Nothing here starts a pour |
+| **Room ③'s water** | `3.done/water-jump-and-escape.md`. Nothing here starts a pour |
 | **Placing the rooster on the map** | `3.done/monster-placement-stage1.md` — **built since; it is a row in that table now** |
 | **A gate sprite of its own** | Design TBD. The town's arch is reused, from the town's own table |
 | **A clear paying more than a death** | A reward decision, counted elsewhere. **The title changes; nothing else does** |

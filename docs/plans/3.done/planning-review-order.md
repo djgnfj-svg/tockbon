@@ -1,6 +1,7 @@
 # Design-doc review — what runs first, and how the docs hold each other
 
-**Status**: ready — **review only, and the user has since closed every decision it was waiting on**
+**Status**: done — **review only, and the user has since closed every decision it was waiting on.**
+A record of the order the chain landed in, not a queue.
 **One line**: ~~the milestone chain has **three gaps left** — the two bosses, the rune lock, an ending —
 and they must land in that order because **the lock cannot go in before the bull exists.**~~
 ⇒ **All three landed in that order. The chain has no gap left in code — and it is now literally walkable**:
@@ -123,13 +124,13 @@ GDD  "First milestone" ── the chain, and the only acceptance
  │        │ three-way constraint, and the hole is in the middle
  ├── 3.done/stage1-bosses ─────── bull in ① · rooster in ③   "there is no water in ①"
  │        │
- ├── 2.active/water-jump-and-escape ── "scope is right after boss ③"
+ ├── 3.done/water-jump-and-escape ── "scope is right after boss ③"
  │                                     ⇒ nobody owns ①'s water  → step 1 above
  │
  └── 3.done/levelup-and-three-picks ── Stage E is the repo's ONLY receiving screen — **and it is built**
           ▲                              ⇒ the fire rune reuses it instead of needing one
           │
-     1.ready/planning-review-fixes ── items 3 · 5 · 6 open, all three inside the chain
+     3.done/planning-review-fixes ── items 3 · 5 · 6 open, all three inside the chain
 
 off the chain: 3.done/bolt-speed-and-visibility   (built — all that is left is the screen)
                3.done/triangle-circle-to-game     (built — all that is left is the screen)

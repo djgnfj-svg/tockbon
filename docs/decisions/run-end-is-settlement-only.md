@@ -21,7 +21,7 @@ that animates is the currency counting up**, and those two do not scroll, expand
 | A second screen (settle, then summary) | **One screen.** Two screens make the end of a run a sequence of menus |
 | A cause-of-death shot (Spelunky/Noita) | Death and clearing share this screen; a death-only picture doesn't fit it |
 | Settling inside the town instead (a shelf, a board) | Would remove the screen entirely — the fork above is about what the screen holds, not whether it exists |
-| **The end-of-content notice in the town instead** (added later — the "지금은 여기까지" lines a cleared stage must say) | The town's only text channel is `_town_message`, a debug HUD line `docs/submission/README.md` already lists as a risk. Putting the one message that must not be missed on the surface already flagged as noise is the worst option — **and the moment has passed**, the player has pressed the button and walked into another room. Its own beat between the panel and the town was refused by the "second screen" row above |
+| **The end-of-content notice in the town instead** (added later — the "지금은 여기까지" lines a cleared stage must say) | The town's only text channel is `_town_message`, a debug HUD line the NAN 2026 submission README already lists as a risk. Putting the one message that must not be missed on the surface already flagged as noise is the worst option — **and the moment has passed**, the player has pressed the button and walked into another room. Its own beat between the panel and the town was refused by the "second screen" row above |
 
 ## What's tied to it
 

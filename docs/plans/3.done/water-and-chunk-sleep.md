@@ -1,7 +1,7 @@
 # Water and chunk sleep — it flows, it pools, and it stops
 
 **Status**: done — **implementation finished.** All six stages + three user decisions applied.
-**Why you'd reopen**: only when changing water flow or chunk sleep. The character and water is `2.active/water-jump-and-escape.md`.
+**Why you'd reopen**: only when changing water flow or chunk sleep. The character and water is `3.done/water-jump-and-escape.md`.
 
  **「done」은 「구현이 끝났다」이지 「판정이 다 통과했다」가 아니다**(CLAUDE.md).
 **판정 7(FPS)은 「절벽이 사라졌다」까지 값으로 확인했다**(「결과 (7)」) — 헤드리스라 FPS 자체는 못 쟀다.

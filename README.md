@@ -5,7 +5,7 @@
 **[▶ 브라우저에서 바로 플레이](https://djgnfj-svg.github.io/tockbon/)** — 설치 없이 열린다.
 **[▶ 플레이 영상 (1분)](https://www.youtube.com/watch?v=fbQDCyPYMOw)**
 
-![조립창](docs/submission/img/circle-window.png)
+![조립창](docs/archive/nan2026/img/circle-window.png)
 
 ## 무엇이 다른가
 
@@ -33,8 +33,8 @@
 
 | | |
 |---|---|
-| [게임 소개 및 설명](docs/submission/plan.md) | 무엇을 만들었고 무엇이 아직 아닌가 |
-| [AI 활용 기술 문서](docs/submission/ai-tech.md) | 이 게임을 만든 AI 작업 구조 전부 |
+| [게임 소개 및 설명](docs/archive/nan2026/plan.md) | 무엇을 만들었고 무엇이 아직 아닌가 |
+| [AI 활용 기술 문서](docs/archive/nan2026/ai-tech.md) | 이 게임을 만든 AI 작업 구조 전부 |
 | [GDD](docs/GDD.md) | 게임 전체 설계 |
 
 `docs/design/`은 기능별 설계, `docs/decisions/`는 **하지 않기로 한 것과 그 이유**,

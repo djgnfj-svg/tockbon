@@ -23,7 +23,7 @@ from pathlib import Path
 import markdown
 
 ROOT = Path(__file__).resolve().parents[2]
-SRC = ROOT / "docs" / "submission"
+SRC = ROOT / "docs" / "archive" / "nan2026"
 OUT = ROOT / "build" / "submission"
 REPO = "https://github.com/djgnfj-svg/tockbon"
 
@@ -125,7 +125,7 @@ def _rewrite_links(text: str) -> str:
     """Relative `.md` links die in a PDF. Send them to the public repo."""
     return re.sub(
         r"\]\((?!https?://|#)([A-Za-z0-9_./-]+\.md)\)",
-        lambda m: "](%sdocs/submission/%s)" % (BLOB, m.group(1))
+        lambda m: "](%sdocs/archive/nan2026/%s)" % (BLOB, m.group(1))
         if "/" not in m.group(1)
         else "](%s%s)" % (BLOB, m.group(1)),
         text,

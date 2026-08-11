@@ -2,7 +2,7 @@
 
 **Status**: done — **the map is built.** 300×48 is baked and in the game (was 400×48; the left run's 100 flat
 columns were cut — `3.done/left-run-clumps-and-platforms.md`)
-**Why you'd reopen**: only when redrawing stage 1's terrain. Bosses are `3.done/stage1-bosses.md`, the water escape is `2.active/water-jump-and-escape.md`.
+**Why you'd reopen**: only when redrawing stage 1's terrain. Bosses are `3.done/stage1-bosses.md`, the water escape is `3.done/water-jump-and-escape.md`.
 
 ##  구역 배치가 다시 바뀐다 — **황소 방의 동쪽 벽이 나무가 되고 ②가 없어진다** (사용자가 정했다)
 
@@ -62,7 +62,7 @@ net_water_rain: 물이 안 샌다 · 부은 양이 정확히 같다
 **계단이라 열려 있다** ⇒ 물이 왼쪽 계단으로 넘어간다. **`net_water_rain_cap`(전부터 빨갰다)은 반대로 통과했다** —
 바닥이 계단지면서 물이 한 번에 넓게 안 떨어진다.
 
- **고치는 자리는 이 문서가 아니다** → [water-jump-and-escape.md](../2.active/water-jump-and-escape.md).
+ **고치는 자리는 이 문서가 아니다** → [water-jump-and-escape.md](water-jump-and-escape.md).
 「① 에서 물을 타고 올라온다」가 **계단으로 걸어 나오는 지형 위에서 성립하는지**가 먼저다.
 
  **done은 「구현이 끝났다」이지 「판정이 통과했다」가 아니다**(CLAUDE.md). **열린 것이 셋이다:**
@@ -70,7 +70,7 @@ net_water_rain: 물이 안 샌다 · 부은 양이 정확히 같다
 | 열린 것 | 어디로 갔나 |
 |---|---|
 | **판정 3·4 화면 재확인** — 배경이 섰고 ④·발판을 겹쳤는데 **그 뒤로 아무도 안 봤다** | 이 문서 「판정 현황」 |
-| **빨간 그물** `net_water: 활성 청크가 상한(100) 아래에 머문다 (최대 100)` |  **`2.active/water-jump-and-escape.md` 로 넘겼다** — 고치는 손잡이가 붓는 속도라 물 쪽 결정이다 |
+| **빨간 그물** `net_water: 활성 청크가 상한(100) 아래에 머문다 (최대 100)` |  **`3.done/water-jump-and-escape.md` 로 넘겼다** — 고치는 손잡이가 붓는 속도라 물 쪽 결정이다 |
 | **①·③이 빈 방** — 보스가 코드에 없다 | `3.done/stage1-bosses.md` |
 
 **이 문서를 다시 열 이유는 「맵을 또 그릴 때」뿐이다.** 위 셋은 전부 남의 문서에서 끝난다.
@@ -138,7 +138,7 @@ net_water: 붓는 동안 활성 청크가 상한(100) 아래에 머문다 (최�
 나무벽 태우기 → 잡몹 → 보스. 머리 위에 **다음 런에나 갈 수 있는 넷째 구역**이 보인다.
 
 **이것은 맵 배치 문서다.** 물 탈출 장면(③ 이후)의 메커니즘은 별 문서다 →
-[water-jump-and-escape.md](../2.active/water-jump-and-escape.md)
+[water-jump-and-escape.md](water-jump-and-escape.md)
 
  **기준 문서**: `docs/GDD.md` 「스테이지의 틀」·「스테이지 안 — 구역 루프」 ·
 `docs/design/terrain-baking.md`(그리는 방법) · `docs/design/monsters.md`(잡몹 값)
@@ -295,12 +295,12 @@ GDD가 못박은 **「중간보스 보상이 진행의 열쇠」가 통째로 �
 
 **물과 어떻게 만나나가 미정이다** — 보스를 깨면 옆벽이 무너져 **물이 차오르는데**
 문이 방 뒤(옆)에 있다.  **물이 문을 잠그나, 물이 차기 전에 나가야 하나, 문이 높이 있나** —
-[water-jump-and-escape.md](../2.active/water-jump-and-escape.md) 와 같이 정해야 한다.
+[water-jump-and-escape.md](water-jump-and-escape.md) 와 같이 정해야 한다.
 
  **③ 보스방은 20×12타일로 확정됐다** — 임의의 값이 아니라
 **물 탈출 장면의 성능이 이 크기에서 정해진다**(15,360셀). **2026-08-08에 FPS 절벽은 사라졌고**
 (상한 100), 지금 남은 위험은 **「물이 밀려서 천천히 차오른다」**다.
-**키우면 물 장면이 위험해진다.** 세부는 [water-jump-and-escape.md](../2.active/water-jump-and-escape.md) 「비용」.
+**키우면 물 장면이 위험해진다.** 세부는 [water-jump-and-escape.md](water-jump-and-escape.md) 「비용」.
 
 ---
 
@@ -318,7 +318,7 @@ GDD가 못박은 **「중간보스 보상이 진행의 열쇠」가 통째로 �
 
 | | |
 |---|---|
-| **물이 없다** | 스테이지1은 마른 농장이다(2026-08-08, 사용자가 정했다). 물은 스테이지2 ⇒ **성능 절벽을 원리적으로 안 건드린다.** **예외가 하나 — ③ 보스를 깬 뒤**([water-jump-and-escape.md](../2.active/water-jump-and-escape.md)) |
+| **물이 없다** | 스테이지1은 마른 농장이다(2026-08-08, 사용자가 정했다). 물은 스테이지2 ⇒ **성능 절벽을 원리적으로 안 건드린다.** **예외가 하나 — ③ 보스를 깬 뒤**([water-jump-and-escape.md](water-jump-and-escape.md)) |
 | **몬스터 동시 20마리** | 맵 전체에 한 번에 못 깐다 |
 | **지형을 팔 수 있다** | 잠금은 **기반암**으로만 성립한다. 돌 벽은 잠금이 아니다 |
 | **불이 번진다** | 나무 덩어리 사이를 벌려야 한다 |

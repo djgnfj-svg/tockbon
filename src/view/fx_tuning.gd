@@ -2355,7 +2355,7 @@ const SETTLEMENT_COUNT_FRAMES_PER_POINT := 3
 ##  40-character sentence is a layout problem for text that gets deleted the day stage 2 exists.
 ##
 ## **Neither line apologises, thanks anybody, or promises anything.** They are the user's own words shortened
-##  by one clause, in the same plain voice `docs/submission/README.md`'s risk list is written in.
+##  by one clause, in the same plain voice the NAN 2026 submission README's risk list is written in.
 const SETTLEMENT_NOTICE_1 := "지금은 여기까지만 개발돼 있습니다."
 const SETTLEMENT_NOTICE_2 := "스테이지 2는 아직 없습니다."
 ## Dimmer and warmer than `SETTLEMENT_ROW_VALUE_COLOR` — it is an aside about the build, not a figure from

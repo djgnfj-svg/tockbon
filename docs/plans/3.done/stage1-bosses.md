@@ -64,7 +64,7 @@ gore's own real reach (54px), a ~66px dead band a fresh bull can whiff into (Ris
 leaps and pounces. Both **speed up at half health.**
 
 **Map placement** is in [stage1-map-layout.md](stage1-map-layout.md), **the water escape** in
-[water-jump-and-escape.md](../2.active/water-jump-and-escape.md). **The three constrain each other** — see "Interaction".
+[water-jump-and-escape.md](water-jump-and-escape.md). **The three constrain each other** — see "Interaction".
 
 > ## ⚠ **Two of this doc's own constraints are reversed by the map** (decided by the user)
 >
@@ -151,7 +151,7 @@ as possible on these two. The others sit at 5–9.
 
 **The pit is a bedrock bowl whose only exit is rising water** (`3.done/stage1-map-layout`), and until this
 decision **no doc owned the water** — the map asserted it, this doc said "there is no water in ①", and
-`2.active/water-jump-and-escape` scoped only the pour after the rooster. **It came out of the F key.**
+`3.done/water-jump-and-escape` scoped only the pour after the rooster. **It came out of the F key.**
 
 **The same shape as the rooster's**: the wall collapses and water pours in from the side.
 **One thing differs and it is load-bearing — the order.** Death alone does not open it;
@@ -219,7 +219,7 @@ With **not one cell of wood** between room ① and the wood wall, no amount of f
 | **Leaps** | **Leaps with its wings and pounces.** **It lands — it does not stay airborne** |
 | **Pounce telegraph** | A wind-up before leaping is required (it must be dodgeable) |
 | **Phases** | **Speeds up at half health** |
-| **On death** | **The side wall collapses and water comes in** → [water-jump-and-escape.md](../2.active/water-jump-and-escape.md) |
+| **On death** | **The side wall collapses and water comes in** → [water-jump-and-escape.md](water-jump-and-escape.md) |
 
 **Why not "permanently airborne"**: `docs/design/monsters.md` **deliberately dropped flyers** —
 only 2/17 glyphs run and **there is no homing, so only manual aiming exists.** Permanently airborne makes

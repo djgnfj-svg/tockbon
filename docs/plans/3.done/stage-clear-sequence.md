@@ -72,12 +72,12 @@ Verified by opening each file, not from the plans.
 - **Nothing marks the two moments that matter** (the wall falling, the arch taking you). Both are single-frame
   state flips.
 - **The player is never told the game ends here.** They clear stage 1, land in the town, and the only thing
-  to do is walk back through the departure gate into the same stage. `docs/submission/README.md` sends judges
+  to do is walk back through the departure gate into the same stage. the NAN 2026 submission README sends judges
   to a public build with this exact ending; a judge who clears it is left guessing whether it broke.
 
 ### Why the third one is not softenable
 
-This is a demo submitted to NAN 2026 (`docs/submission/`). The submission README's own risk list is written
+This is a demo submitted to NAN 2026 (`docs/archive/nan2026/`). The submission README's own risk list is written
 in the same voice — say what is missing plainly. **A player who finishes the only content there is must be
 told that, in Korean, on the screen that ends the run**, not left to infer it from an empty town.
 
@@ -355,7 +355,7 @@ both are ordinary script methods because GDScript refuses to override `draw_text
 - **A player who reaches the seat over the roof** — `StageGate.at()`'s y band already refuses it; the take
   never starts. Unchanged.
 - **Water deeper than ~3 tiles at the seat lifts the player out of the band** — `gate-ending-to-game.md`
-  Risk 6, `2.active/water-jump-and-escape.md`'s to answer. **This plan makes it strictly less bad**: with the
+  Risk 6, `3.done/water-jump-and-escape.md`'s to answer. **This plan makes it strictly less bad**: with the
   latch, one frame inside the band is now enough, where today the panel needed the frame the panel opened on.
 - **The shake fires once**, off `_room3_gate_open`'s existing latch — it is inside that `if` block, so a
   per-tick re-kick is structurally impossible.
@@ -395,7 +395,7 @@ The two alternatives were weighed and both lose:
 | Placement | Why not |
 |---|---|
 | **Its own beat** (a screen between the panel and the town) | **A second screen — refused by name.** Would be a reversal to record, for a two-line message |
-| **The town side after returning** | The town's only text channel is `_town_message`, a debug HUD line (`stage.gd:1264`) that `docs/submission/README.md` already lists as a risk ("개발용 안내 두 줄이... 심사자에게 개발 콘솔을 보여주는 셈"). Adding the one message that must not be missed to the one surface already flagged as noise is the worst of the three. **And the moment has passed** — the player has pressed the button and walked into another room |
+| **The town side after returning** | The town's only text channel is `_town_message`, a debug HUD line (`stage.gd:1264`) that the NAN 2026 submission README already lists as a risk ("개발용 안내 두 줄이... 심사자에게 개발 콘솔을 보여주는 셈"). Adding the one message that must not be missed to the one surface already flagged as noise is the worst of the three. **And the moment has passed** — the player has pressed the button and walked into another room |
 
 ⇒ **The settlement screen, on a clear only.** `town.md`'s standing TBD *"do death and clearing look
 different"* — which that decision already moved onto this screen — is answered by this doc and can be closed
@@ -440,7 +440,7 @@ when it lands.
 - **`net_pick`'s collection scan**: both new `gate_view` fields are `int`. No allowlist entry needed.
 - **`net_render`**: no node added to `stage.tscn`, so `INTERACTIVE` / `OUT_OF_TREE_SIZE_ZERO` /
   `_wired_stage_root` are all untouched.
-- **`docs/submission/README.md`'s risk list** ("클리어 판정이 없다") is already stale — the gate landed. Not
+- **the NAN 2026 submission README's risk list** ("클리어 판정이 없다") is already stale — the gate landed. Not
   this doc's edit, but whoever closes the submission should re-read that list.
 
 ---

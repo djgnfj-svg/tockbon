@@ -19,7 +19,7 @@ fire, the wood goes. **That is not this doc's** → [`design/tutorial.md`](../..
 first slice, [`onboarding-and-palette-tabs.md`](onboarding-and-palette-tabs.md).
 
 **Constrains and is constrained by**: [stage1-map-layout.md](stage1-map-layout.md) ·
-[stage1-bosses.md](stage1-bosses.md) · [water-jump-and-escape.md](../2.active/water-jump-and-escape.md) ·
+[stage1-bosses.md](stage1-bosses.md) · [water-jump-and-escape.md](water-jump-and-escape.md) ·
 [left-run-clumps-and-platforms.md](left-run-clumps-and-platforms.md) ·
 `docs/design/terrain-baking.md` (how the map is changed at all)
 

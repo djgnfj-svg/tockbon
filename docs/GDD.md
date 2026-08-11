@@ -524,7 +524,7 @@ Detail in `docs/plans/3.done/levelup-and-three-picks.md`.
 **Stage 1's actual terrain and bosses are settled** — **300×48 tiles, three zones + a locked fourth.**
 Trash section → ①**bull** (midboss, fire rune) → burn the wood wall → ②trash → ③**giant rooster** (boss)
 → **escape as water rises.** **Jumps are unlimited underwater** — that becomes stage 2's movement grammar.
-Detail in `3.done/stage1-map-layout` · `3.done/stage1-bosses` · `2.active/water-jump-and-escape`
+Detail in `3.done/stage1-map-layout` · `3.done/stage1-bosses` · `3.done/water-jump-and-escape`
 — **do not duplicate it here.**
 
 **The GDD assumed 4 zones per stage; stage 1 has three.** The fourth slot is taken by a
@@ -703,7 +703,7 @@ rune is used where it is won, and **the pit's water escape and zone ②'s trash 
 | ~~**Map terrain**~~ | **Filled** — **300×48** baked and in (was 400×48; the left run's 100 flat columns were cut). Acceptance 3·4 still unconfirmed on screen, and the cut's own screen half is unlooked-at too | `docs/plans/3.done/stage1-map-layout.md`, `3.done/left-run-clumps-and-platforms.md` |
 | ~~**Fire rune**~~ | **Implemented, not accepted** — `spell_circle.DEFAULT_RUNE` is `ELEM_NONE`; the palette veils any rune not owned instead of offering all of `ELEM_ALL`; the bull's reward grants fire (`Progress.grant_rune`) | `docs/plans/3.done/rune-lock-and-receiving.md` |
 | ~~**Two bosses**~~ | **Implemented, not accepted** — bull and rooster both written and verified headless. Two screen fixes (the slam's fire ring, the phase-2 tell's shape) are unlooked-at, blocked by another session holding the editor bridge | `docs/plans/3.done/stage1-bosses.md` |
-| **Three of water's four** | Only pouring works | `docs/plans/2.active/water-jump-and-escape.md` |
+| **Three of water's four** | Only pouring works | `docs/plans/3.done/water-jump-and-escape.md` |
 | ~~**Water in pit ①**~~ | **The row itself is gone — closed by the user's decision, seen on screen.** Reward-then-water order was correct (take the bull's reward, then the wall/water), but **the water never carried the player out** — 300s of pouring lifts them 0px, and an ordinary jump alone already cleared the step in 1.6s. ⚠ **The call was made — the escape is dropped and this row leaves the chain** (`3.done/burn-out-of-the-bull-room.md`, built) | `docs/plans/3.done/stage1-bosses.md` |
 | ~~**The wood-wall lock is broken**~~ | **Not a problem — decided by the user.** A runeless blast does open the wall (`spell_sim.gd:633` ignites without `element`), but **the wall is on the far side of pit ①, and the only way out of the pit is the water the bull's death brings** ⇒ **you cannot stand in front of that wall without already holding fire.** **The lock is held by the map's shape, not by the ignition rule** | `3.done/stage1-map-layout.md` |
 | ~~**…and that shape is being deleted**~~ | **Closed, and built.** Moving the wall into room ①'s east face puts it **on the near side of the pit**, reachable the moment you walk in — the bull's own fire (bolt range 480px vs. 15 tiles of room) and a runeless blast would both open it. **The fix**: `WOOD` is `rune_only` now (`burn-out-of-the-bull-room.md` §0) — only the fire rune's own trace or a fire-circle blast ignites it, never monster fire or an elementless blast. The lock moved from map shape to a rule, wood-wide, not door-only | `docs/decisions/the-door-burns-only-from-the-fire-rune.md` |
@@ -725,7 +725,7 @@ and reaches the end without getting stuck" — which only the user can run.** ~~
 is water's other three (`2.active`)... and the reason zone ② is placed but unreachable~~ — **void.** Zone ②
 is deleted, not merely unreachable (`3.done/burn-out-of-the-bull-room.md`), and stage 1 now has **no water
 pour at all** — the pit's reward pour was removed with it, and room ③'s own pour (water's remaining three
-axes, `2.active/water-jump-and-escape.md`) is still unbuilt, so it is no longer "a constraint on the ending",
+axes, `3.done/water-jump-and-escape.md`) is still unbuilt, so it is no longer "a constraint on the ending",
 just an open axis with nothing built against it yet.
 ⇒ **What is left of this milestone is a playthrough, not a build.**
 

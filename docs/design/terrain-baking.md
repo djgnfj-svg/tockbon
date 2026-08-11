@@ -293,11 +293,11 @@ at 65,677 cells the 512 cap is **724%** of budget while 100 is **a flat 219%.** 
 **⇒ Do not read the table above as "this much water freezes the game". Those are cap-512 numbers.**
 Overflow now delays **water, not FPS** — on screen it reads as **"water flows slowly".**
 **That does not mean it's free** — in a scene where the presentation needs water to arrive fast, that delay is the malfunction
-(`docs/plans/2.active/water-jump-and-escape.md`, "Cost").
+(`docs/plans/3.done/water-jump-and-escape.md`, "Cost").
 
 **Stage 1 gets no water** (decided by the user; water is stage 2).
 **One exception — the room filling with water after the stage-1 boss dies** —
-and it lands squarely on what this section warns about → `docs/plans/2.active/water-jump-and-escape.md`, "Cost".
+and it lands squarely on what this section warns about → `docs/plans/3.done/water-jump-and-escape.md`, "Cost".
 
 **Render and upload are not the bottleneck** — long unknown (headless can't measure it), but at 71% of budget in sim
 it hit 229 FPS. **The bottleneck is entirely sim.**

@@ -170,7 +170,7 @@ some players will arrive at ① with far less.
 ② adds another **126 XP** (6·12 + 4·6 + 2·15 — ~~114~~, this line's own arithmetic was wrong), which is
 roughly one more level before the rooster. **② is placed but dormant in this build** — the step from ①'s pit
 floor to ②'s shelf is 6 tiles against a 3.375-tile jump, so nothing reaches it until
-`2.active/water-jump-and-escape.md` lands.
+`3.done/water-jump-and-escape.md` lands.
 
 ---
 
@@ -340,7 +340,7 @@ was read from.** Where this plan and the Behavior section disagree, the disagree
 3. **② is not walkable in a normal run today.** Read off the baked map: the pit floor is ty 32 (tx 230–259)
    and the shelf east of it is ty 26 (tx 260–292) — **a 6-tile step against a 3.375-tile jump**
    (`character.gd:91-92`, 720²/(2·2400) = 108px). The only way up is the water escape, which is still
-   `2.active/water-jump-and-escape.md`. ②'s 12 rows are correct to author now and will simply stay dormant.
+   `3.done/water-jump-and-escape.md`. ②'s 12 rows are correct to author now and will simply stay dormant.
    **The user decides whether ② is worth placing before that lands.**
 
 ## What was measured, and where the design doc is wrong

@@ -4,7 +4,7 @@
 
 Two steps, and the second is the reason this file exists rather than the .gd alone:
 
-1. `shot.tscn` runs the real game in a window and writes parts into docs/submission/img/.
+1. `shot.tscn` runs the real game in a window and writes parts into docs/archive/nan2026/img/.
 2. Each order gets **one** figure — the magic circle that was assembled on the left, what
    that circle did to the world on the right. Two separate pictures side by side in the
    markdown would let the page break between them, and then the claim ("this circle makes
@@ -20,7 +20,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 
 ROOT = Path(__file__).resolve().parents[2]
-IMG = ROOT / "docs" / "submission" / "img"
+IMG = ROOT / "docs" / "archive" / "nan2026" / "img"
 GODOT = ROOT / "Godot_v4.7.1-stable_win64.exe"
 SCENE = "res://tools/submission/shot.tscn"
 

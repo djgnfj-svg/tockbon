@@ -21,8 +21,8 @@ been given, and **the bull's reward is what grants fire.** Three changes, one la
 - **Room ③'s reward remains unwired to any water or rune** — the gap `stage1-bosses.md` already recorded,
   untouched here
 
-**This is step 3 of the milestone chain** ([planning-review-order.md](../1.ready/planning-review-order.md)) and it
-closes **review items 1 and 6** ([planning-review-fixes.md](../1.ready/planning-review-fixes.md)).
+**This is step 3 of the milestone chain** ([planning-review-order.md](planning-review-order.md)) and it
+closes **review items 1 and 6** ([planning-review-fixes.md](planning-review-fixes.md)).
 **Step 2 (the bull) is done** — [stage1-bosses.md](stage1-bosses.md) built the seam this picks up.
 
 **Source docs**: `docs/design/circle-rune-glyph.md` (what a rune is) · `docs/GDD.md` "First milestone" ·

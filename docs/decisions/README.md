@@ -61,7 +61,7 @@ Where it shakes if this reverses.
 |---|---|
 | The three circles are not a ladder — more runes means fewer layers | `GDD.md`, Circle |
 | The bull's fire sticks to terrain → move the wood wall outside ① | `plans/3.done/stage1-bosses.md`. ⚠ **The second half is reversed** — the wall comes back *into* room ① ([the rune is used where it is won](the-rune-is-used-where-it-is-won.md)); the fire sticking is untouched |
-| Unlimited jumping underwater — neither buoyancy nor swimming | `plans/2.active/water-jump-and-escape.md` |
+| Unlimited jumping underwater — neither buoyancy nor swimming | `plans/3.done/water-jump-and-escape.md` |
 | The map is fixed (dungeons are not generated) | `design/terrain-baking.md` |
 | The shop is at the stage transition (not inside the map) | `plans/3.done/levelup-and-three-picks.md` |
 | Permanent currency comes from bosses only | Same doc |

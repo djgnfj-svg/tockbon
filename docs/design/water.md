@@ -570,7 +570,7 @@ sweeps the grid, so **fire reaches the character.** Only water doesn't.
 
 **"The current pushes you" is still TBD separately.** Only the upward axis is closed.
 
-**Details and performance measurements** in `docs/plans/2.active/water-jump-and-escape.md`.
+**Details and performance measurements** in `docs/plans/3.done/water-jump-and-escape.md`.
 
 **Why this was missing** — **nobody thought of it.** It is not "we decided against it".
 The GDD, this doc, and the implementation spec had **not one line about buoyancy, drag or swimming** (confirmed by grep).

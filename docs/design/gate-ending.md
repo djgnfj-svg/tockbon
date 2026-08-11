@@ -18,7 +18,7 @@ format per [README.md](README.md).
 ## Why — the chain has no last square
 
 `docs/GDD.md` "First milestone" is one chain, and its own gap table calls this row **"An ending — still none
-in the map"**. [../plans/1.ready/planning-review-order.md](../plans/1.ready/planning-review-order.md) makes it
+in the map"**. [../plans/3.done/planning-review-order.md](../plans/3.done/planning-review-order.md) makes it
 step 4 of four. This doc owns it.
 
 **Everything before it landed and the run still cannot end.** The bull, the rooster, the fire rune and the
@@ -197,7 +197,7 @@ nobody would find and nobody could climb back from. ⇒ **A cleared run would ha
 
 **What made it decidable is that the conflict this doc first reported does not exist.**
 ~~"The wall that pours the water cannot be the wall that opens."~~ **Void**:
-[../plans/2.active/water-jump-and-escape.md](../plans/2.active/water-jump-and-escape.md) shipped pour
+[../plans/3.done/water-jump-and-escape.md](../plans/3.done/water-jump-and-escape.md) shipped pour
 **approach A — rain across the full width from above** — and states in its own Out-of-scope table that
 **"wall collapse is a picture, not a water path."** Room ③'s water does not come from a wall.
 (That doc's TBD line still saying "water also comes from the side wall" is a stale leftover of the old
@@ -263,7 +263,7 @@ be run before it lands.
 | | |
 |---|---|
 | **The settlement screen** | [../plans/3.done/run-end-settlement.md](../plans/3.done/run-end-settlement.md) — **built since** (`3.done`, screen unverified). ⇒ **The precondition this doc was waiting on is met**: the panel it would open into exists, and only the death path reaches it. `planning-review-order`'s "small" is the size of *this* piece, not of the pair |
-| **Room ③'s water** | [../plans/2.active/water-jump-and-escape.md](../plans/2.active/water-jump-and-escape.md). No pour is wired to the rooster today |
+| **Room ③'s water** | [../plans/3.done/water-jump-and-escape.md](../plans/3.done/water-jump-and-escape.md). No pour is wired to the rooster today |
 | **Redrawing the map** | `stage1-map-layout.md`. The band and the wall are read from the bake, not asked for |
 | **Stage 2, and the shop between stages** | Zero code. **The gate is where the shop will sit** — a pointer, not a plan |
 | **Saving** | 원석 outliving the process has no doc and no owner ([town.md](town.md) TBD). A cleared run makes the loss louder; it does not cause it |
