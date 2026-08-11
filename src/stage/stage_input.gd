@@ -130,8 +130,8 @@ func jump_held() -> bool:
 ## **Why it exists: a build handed to someone who has never seen this game.** The keys were always
 ##  reachable, and one stray `M` stands a bull on top of them, one stray `1` swaps their assembly, one stray
 ##  `R` throws the run away. None of those look like a key that was pressed — **they look like the game
-##  broke.** It was written for a submission build and the reason outlives that: **any first-time player is
-##  the same case.**
+##  broke.** It was written for one build going out to a stranger, and **every first-time player is that
+##  same case** — which is why it stays after that build stopped mattering.
 ##
 ## **It is the same flag the debug readout already rode**, deliberately: two flags would let the keys be live
 ##  while the readout that explains them is hidden, which is the worst of the four combinations. `stage.gd`

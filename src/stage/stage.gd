@@ -397,9 +397,9 @@ var _room3_gate_open := false
 
 ## **Is the debug readout showing. Off at boot, F3 toggles it** (`stage_input.debug_hud_toggled`).
 ##
-## **It is fifteen lines, not two.** `docs/archive/nan2026/` has been describing it as two, which is wrong and is
-##  worth correcting there separately. Fifteen lines of black text land on top of the research window's
-##  bright parchment and cover the prices the player opened it to read — found on screen, not reasoned.
+## **It is fifteen lines, not two.** It was written down as two for a long time and nobody recounted.
+##  Fifteen lines of black text land on top of the research window's bright parchment and cover the prices
+##  the player opened it to read — found on screen, not reasoned.
 ##
 ## **Not deleted, defaulted off.** Tick number, chunk counts, monster counts and the pick state have no other
 ##  view anywhere, and they are how most of this repo's headless findings get confirmed by eye. What was
