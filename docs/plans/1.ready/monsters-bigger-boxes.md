@@ -1,6 +1,9 @@
 # Bigger monsters — what 1.5× actually costs
 
-**Status**: ready
+**Status**: ready — **but not as a build order.** Part of it landed by another route (the hen, the wolf), its
+cost model has since been measured and **came out wrong in a direction that favours the change**, and what
+remains is **one fork only the user can take** (§7). Handing this to a builder as-is would build the version
+this doc no longer believes.
 **One line**: the user says monsters read too small. The box can grow, but **the art has to be regenerated
 from scratch** (the seeds cannot reproduce the same beast at a new size), the 60Hz cost roughly doubles,
 and **one tuned constant silently stops working.**
@@ -191,14 +194,14 @@ impact threw fire outward". 6 puts them at ±14 cells = **±56px**, clearing 44p
 
 ⇒ raise to **`ignite_spread_cells` = 8** (outer pair at ±(2·8 + 2) = ±18 cells = **±72px**, clearing 66px
 with the same kind of margin 6 gave 44px). Three edits in one change:
-`boss_ai.gd`'s constant, its comment's arithmetic, and **`net_monster_slam.gd:718-719`** — that check
+`boss_ai.gd`'s constant, its comment's arithmetic, and **`net_monster_slam._slam_over_stone_ignites_nothing`** — that check
 hardcodes `center_cx ± 14` and labels it "몸 절반너비(11칸)를 벗어난다". At the new box the half-width is
 16.5 cells, so **the check would stay green while its label became false** — a fake net by CLAUDE.md's own
 definition. The literals and the label move together.
 
 ### ✓ Strengthens — charge confinement
 
-`boss_ai.gd:79-84`: `carve_r`=3 digs a hole `2r+1` = **7 cells** tall; the bull needs all **14** rows of a
+`boss_ai.Defs`: `carve_r`=3 digs a hole `2r+1` = **7 cells** tall; the bull needs all **14** rows of a
 column clear to advance into it, so it can never enter what it just carved. At `h_px`=84 that is **21 rows**
 vs the same 7. Confinement gets *more* structural, not less.
 ⇒ **Comment only** — "the bull's own box (`h_px`=56 = 14 cells)" becomes 84 = 21 cells.

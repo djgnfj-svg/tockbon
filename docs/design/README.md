@@ -47,15 +47,57 @@ For `partial`, **always attach what works and what doesn't, briefly.** "Partial"
 | [terrain-baking.md](terrain-baking.md) | **full** | pass (2026-08-06) | Drawn as an image, baked as text. The map is fixed |
 | [monsters.md](monsters.md) | **full** | partial pass (2026-08-08) | Farm animals that swallowed runes. **Five kinds** — pig · hen (enlarged to 48x64) · bull · rooster · **wolf** (new). **Every sheet animates** — 10 states, boss patterns among them (`3.done/monster-animation.md`). **Cost re-measured and sublinear in cells** (`tools/stage/profile_monsters.gd`; 20 hens = 32% of the 60Hz frame). **No AI** · the wolf has no lunge in the sim · **nobody has judged the motion** |
 | [town.md](town.md) | **partial** | unseen | Where a run closes. **The room, the loop and the art all run** (`3.done/town-room-and-fixtures.md`) — one bedrock room · three fixture sprites · **a door that checks position** (E) · gate → stage 1 · dying → town · the burnt-village backdrop · **the research window** · **원석 from bosses and levels, surviving a reset**. **원석 now buys three unlocks** — the 물/불 runes and the double jump (`3.done/research-bench-unlocks.md`). **Still no point budget**, and 점수/주사위 stay deferred (`decisions/unlocks-are-runes-and-the-double-jump.md`) |
-| [game-feel.md](game-feel.md) | **partial** | **fail (2026-08-08)** | **A menu of every juice lever, with its cost.** **The user reports moving · the camera · jumping as unpleasant.** **Coyote time and the jump buffer are now in** (unseen); **the camera is still locked to the character** and airtime is still 0.6s. **No sound anywhere** |
+| [game-feel.md](game-feel.md) | **partial** | **fail (2026-08-08)** | **A menu of every juice lever, with its cost.** **The user reports moving · the camera · jumping as unpleasant.** **Coyote time and the jump buffer are now in** (unseen); **the camera is still locked to the character** and airtime is still 0.6s. **Sound landed** (`sfx_bank.gd`, synthesized at boot) |
 | [background.md](background.md) | **partial** | unseen | Two layers per place, tiled and parallaxed. **The art landed and the night sky was reversed** — stage 1 is a daylit farm, the town a burnt village. Not confirmed on screen |
 | [underground-depth.md](underground-depth.md) | **none** | unseen | **Behind and below** the terrain. **Measured: the far picture is 92% glued to the window, so blue sky is drawn behind the bedrock floor** and every dug hole shows it. Four options — a depth fill in `sky_background.gd` · a `UV.y` dim in the shader · a Terraria background wall baked from the map · a `DIRT` material |
 | [terrain-look.md](terrain-look.md) | **none** | unseen | Stone and wood are one flat color each. **A lit face computed from the neighbours** · a per-cell mottle · a material texture — **all in `cell_grid.gdshader`, nothing in `src/sim/`** |
 | [gate-ending.md](gate-ending.md) | **full** | unseen | **The last square of the milestone chain.** The rooster's death drops room ③'s east wall and stands an arch behind it; standing at it ends the run, into **the settlement screen, not a second one**. **The seat is pinned by the camera, not by taste**. ⚠ **All six stage-1 constants moved with room ③** — `3.done/burn-out-of-the-bull-room.md` put the boss room next to room ① |
 | [glyph-accel-and-home.md](glyph-accel-and-home.md) | **none** | unseen | Two `MODIFY` glyphs — **가속 · 유도**. **Two `.png` exist and no code knows them.** Accelerate touches **drag, not launch speed** (`_bolt_head_keeps_up` has zero headroom **and would stay green while the art skips**); homing needs monster positions, which makes a lockstep trajectory depend on host-authoritative state. **These are the last two family seats.** **응축 already landed and spent the fourth** (`glyph-condense.md`, built) — the nibble fills exactly **only once the dummy's three rows are also deleted**, and that deletion is the one thing still blocking these two |
-| [attack-rhythm.md](attack-rhythm.md) | **none** | unseen | **Raised by the user ("펑 펑 펑"), deferred in the same breath.** Firing has **no cadence at all today** — one click, one shot, gated only by `can_fire()`. **The one rhythm that exists is the triangle circle's `seq_ticks 6`** (3 bolts at 0/300/600ms), which nobody has fired. Six axes with costs — cooldown · burst · charge · recoil · circle structure · **sound, of which there is none**. **A three-beat cadence is exactly what the 60Hz/20Hz trap eats** |
+| [attack-rhythm.md](attack-rhythm.md) | **none** | unseen | **Raised by the user ("펑 펑 펑"), deferred in the same breath.** Firing has **no cadence at all today** — one click, one shot, gated only by `can_fire()`. **The one rhythm that exists is the triangle circle's `seq_ticks 6`** (3 bolts at 0/300/600ms), which nobody has fired. Six axes with costs — cooldown · burst · charge · recoil · circle structure · sound (**which now exists** — `sfx_bank.gd`; what is missing is a cue tied to *cadence* rather than to each shot). **A three-beat cadence is exactly what the 60Hz/20Hz trap eats** |
 | [tutorial.md](tutorial.md) | **partial — rule 1 built** | rule 1 seen on screen repeatedly, fixed each time | **The first minutes — and the only thing the game teaches is the magic circle.** The method is **removal, not explanation**: the run starts with an **empty circle that cannot fire**, so the window is the only affordance left. The town deliberately teaches nothing, so the lesson is in stage 1. **Rule 1 (the window) is built** (`plans/3.done/onboarding-and-palette-tabs.md`); **rules 2 (layer order) and 3 (a rune is given) are named and unowned** |
 | [attack-prediction.md](attack-prediction.md) | **full** | unseen | The wind-up "!" is retired. **A red, pulsing ground mark shaped to the move** — a lane (charge) · a stream (fire) · a 54px reach band (gore, not the 120px gate) · a landing ring (slam/leap, +ignite ring for the slam). **Tracks the player live during wind-up**, converging on the real answer at the lock instant instead of holding the stale direction |
+
+## The four docs at `Implemented: none` — **what is actually blocking each**
+
+`none` on its own does not say whether a doc is a plan or a ghost. **These four differ, and only one of them
+is waiting on work.**
+
+| Doc | Blocked on | Whose call |
+|---|---|---|
+| [attack-rhythm.md](attack-rhythm.md) | **Nothing technical. The user deferred it in the same breath they raised it** ("그건 나중에 해야 될 일이고"). The doc's own cheapest experiment — put a triangle circle in the user's hands and ask if `seq_ticks 6` is the 펑 펑 펑 they meant — **has never been run** | the user |
+| [terrain-look.md](terrain-look.md) | **Nothing. The order is already settled by a mockup** — grain first, lit face second, per-cell mottle dropped. It is `cell_grid.gdshader` only, nothing in `src/sim/` | ready to build |
+| [underground-depth.md](underground-depth.md) | **A fork nobody has taken** — four options (a depth fill in `sky_background` · a `UV.y` dim in the shader · a baked background wall · a `DIRT` material) with no decision between them | needs a decision first |
+| [glyph-accel-and-home.md](glyph-accel-and-home.md) | **A deletion, not a feature.** The dummy glyph still holds the family seat these two need, and retiring it is its own change (66 references). **Two `.png` already exist and no code knows them** | blocked by other work |
+
+⇒ **Only `terrain-look.md` can be handed to a builder as-is.** The other three need a sentence from the user
+or a different piece of work to land first — and **that is worth knowing before someone opens `1.ready/`
+looking for something to do.**
+
+## What the video shoot verified — **and what is still waiting on one sentence from the user**
+
+**The 60-second play video was shot and uploaded** (NAN 2026 submission, item 2). That closes the single
+largest hole in this folder's acceptance record, because **the shoot was the first time the game ran at
+normal speed in front of the user.** Every browser check before it happened in a **background tab**, which
+Chrome throttles to 8 FPS.
+
+**What is certain**, and no longer needs asking:
+
+- **The game runs at normal frame rate and the user has seen it.** The "nobody has seen this at normal
+  framerate" risk, carried by three docs, is closed
+- **A run goes from the town through both bosses to the gate**, or there would have been no footage
+
+**What is not certain, and this folder must not guess at**: the video is 60 seconds and edited. **Which beats
+actually appeared on screen, and whether the user judged them good, is one sentence away and cannot be
+inferred from the fact that footage exists.** The docs below stay at `unseen` until that sentence arrives —
+**writing `pass` on the strength of "there was a video" is exactly the fake this repo keeps catching.**
+
+| Doc | The question the user's one sentence would answer |
+|---|---|
+| [gate-ending.md](gate-ending.md) | Did the collapsing wall · the rising arch · the `스테이지 1 클리어` panel appear, and did they read right |
+| [monsters.md](monsters.md) | Did the bull and rooster fights read as fights — **nobody has judged the motion** |
+| [town.md](town.md) | Was the town walked end to end by the user, not by an agent |
+| [attack-prediction.md](attack-prediction.md) | Did the red ground marks read as "it is about to hit there" |
+| [background.md](background.md) | Did the farm daylight and the burnt village read as intended |
 
 ## Features with no doc yet
 

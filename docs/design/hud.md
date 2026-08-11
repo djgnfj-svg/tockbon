@@ -6,7 +6,8 @@ small line above it; the debug readout is a separate thing behind F3.
 **Implemented**: health · level line · level-up line · **the boss bar and entrance** (name, bar, walk-out,
 roar, camera zoom) — see below.
 **Accepted**: the boss bar and entrance were **seen on screen, repeatedly, by the user, with fixes made each
-time.** The rest is still unseen at full frame rate — the browser tab it was checked in ran at FPS 8.
+time.** The rest was seen at full frame rate during the video shoot — **seen, not judged** (`README.md`,
+"What the video shoot verified"). Before that the only browser check ran in a background tab at FPS 8.
 
 **A concept stays alive and never changes folders.** The two header lines are only "how much runs now" —
 format per [README.md](README.md).
@@ -120,7 +121,9 @@ keeps catching.
 
 ## Unresolved
 
-- **Nobody has seen it at speed.** The check was done in a background browser tab at FPS 8
+- ~~**Nobody has seen it at speed.**~~ **Closed by the video shoot** — the game ran at normal frame rate in
+  front of the user for the first time there. The earlier check was a background browser tab at FPS 8.
+  **What is still open is judgment, not exposure**: the HUD was on screen and nobody said whether it read
 - **The gauge has no ticks.** At 100 max hp one pixel is not one point, so "how much is that" is only
   readable from the number — which is the division the user asked for, but it has not been judged on screen
 - **The money icon is `icon_point.png`, a star.** It was the closest thing on disk to 「그 점 그 표시」 and

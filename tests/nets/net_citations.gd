@@ -84,6 +84,7 @@ func run(t) -> void:
 	_every_bare_name_citation_resolves_to_a_real_doc(t)
 	_there_are_no_path_form_citations_at_all(t)
 	_there_are_no_line_number_citations(t)
+	_the_living_docs_carry_no_line_numbers_either(t)
 
 
 ## **The instrument, measured before anything it measures.** A line-wise scan passed three of eleven dead
@@ -199,6 +200,47 @@ func _there_are_no_line_number_citations(t) -> void:
 	for msg: String in where:
 		t.ok(false, "줄번호로 적은 인용: %s" % msg)
 	t.eq(n, 0, "줄번호를 박은 인용이 하나도 없다 (줄은 위에 네 줄만 끼면 죽는다 — %d개 발견)" % n)
+
+
+## **`docs/` is excluded as a record — but not every doc is one.** The header box argues that docs quote dead
+## paths on purpose, and that is true of `3.done/` and `archive/`, which describe a moment that has passed.
+## **It is not true of the docs that are read to decide what to build**: the GDD, `design/`, `decisions/` and
+## `1.ready/`/`2.active/` make claims about the code **as it is now**, and a line number in one of those is a
+## claim that rots.
+##
+## **This split was found by sweeping them by hand, and the sweep is why it exists.** Forty-nine line-number
+## citations lived in the living docs; spot-checking eight of them found **eight dead**, pointing at unrelated
+## statements. Worse, following them turned up **three stale values** riding along: `MAP_W` 300 (really 217),
+## `MOVE_SPEED_PX` 260 (really 180) in two docs, and "this game has no sound at all" — which `game-feel.md`
+## had already corrected in its own file without the correction ever walking next door. **One of them inverted
+## a design premise**: `stage2-water.md` argued that climbing is slower than walking, and at 208 vs 180 it is
+## faster. ⇒ **Honour did not hold here either, and the damage was not the citations — it was the numbers
+## they were standing next to.**
+##
+## `3.done/` and `archive/` stay out. **They are allowed to be wrong; that is what a record is.**
+func _the_living_docs_carry_no_line_numbers_either(t) -> void:
+	var files := _living_docs()
+	t.ok(files.size() > 15, "살아 있는 문서를 %d개 훑는다 (전제 — 목록이 비면 아래가 공짜로 초록이 된다)"
+		% files.size())
+	var n := 0
+	for path: String in files:
+		var block := {"text": _read(path), "tight": "", "line": 0}
+		for hit: String in _line_refs_of(block):
+			n += 1
+			t.ok(false, "살아 있는 문서의 줄번호 인용: %s — `%s`. 심볼 이름을 적어라" % [path, hit])
+	t.eq(n, 0, "GDD·design·decisions·1.ready 에 줄번호 인용이 없다 (%d개 발견)" % n)
+
+
+## **Everything under `docs/` except the two folders that are records.** Written as an exclusion, not as a
+## list of included folders: a new living folder must be caught by default, and the day someone adds one, an
+## include-list would silently leave it unguarded — the same shape as `tools/` being outside the scan.
+func _living_docs() -> Array[String]:
+	var out: Array[String] = []
+	for path: String in _walk(DOCS_DIR, ".md"):
+		if path.begins_with("res://docs/plans/3.done") or path.begins_with("res://docs/archive"):
+			continue
+		out.append(path)
+	return out
 
 
 ## **The instrument, inverted before the thing it measures** — the lesson CLAUDE.md draws twice: a scanner

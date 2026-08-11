@@ -521,9 +521,9 @@ Detail in `docs/plans/3.done/levelup-and-three-picks.md`.
 | **Midboss reward** (= progression key) | **Fire rune** — burn wood to open a path |
 | **Boss reward** | Permanent material (gear enchanting came up, unconfirmed) |
 
-**Stage 1's actual terrain and bosses are settled** — **300×48 tiles, three zones + a locked fourth.**
-Trash section → ①**bull** (midboss, fire rune) → burn the wood wall → ②trash → ③**giant rooster** (boss)
-→ **escape as water rises.** **Jumps are unlimited underwater** — that becomes stage 2's movement grammar.
+**Stage 1's actual terrain and bosses are settled** — **217×48 tiles, two zones + a locked third.**
+Trash section → ①**bull** (midboss, fire rune) → **burn room ①'s own east wall** → ③**giant rooster** (boss)
+→ **walk out through the gate.** **Jumps are unlimited underwater** — that becomes stage 2's movement grammar.
 Detail in `3.done/stage1-map-layout` · `3.done/stage1-bosses` · `3.done/water-jump-and-escape`
 — **do not duplicate it here.**
 
@@ -700,17 +700,28 @@ rune is used where it is won, and **the pit's water escape and zone ②'s trash 
 
 | Gap to fill | Now | Where |
 |---|---|---|
-| ~~**Map terrain**~~ | **Filled** — **300×48** baked and in (was 400×48; the left run's 100 flat columns were cut). Acceptance 3·4 still unconfirmed on screen, and the cut's own screen half is unlooked-at too | `docs/plans/3.done/stage1-map-layout.md`, `3.done/left-run-clumps-and-platforms.md` |
+| ~~**Map terrain**~~ | **Filled** — **217×48** baked and in (400×48 → 300 when the left run's 100 flat columns were cut, → 217 when zone ② was deleted and room ③ slid 83 columns west, `3.done/burn-out-of-the-bull-room.md`). Acceptance 3·4 still unconfirmed on screen, and the cut's own screen half is unlooked-at too | `docs/plans/3.done/stage1-map-layout.md`, `3.done/left-run-clumps-and-platforms.md` |
 | ~~**Fire rune**~~ | **Implemented, not accepted** — `spell_circle.DEFAULT_RUNE` is `ELEM_NONE`; the palette veils any rune not owned instead of offering all of `ELEM_ALL`; the bull's reward grants fire (`Progress.grant_rune`) | `docs/plans/3.done/rune-lock-and-receiving.md` |
 | ~~**Two bosses**~~ | **Implemented, not accepted** — bull and rooster both written and verified headless. Two screen fixes (the slam's fire ring, the phase-2 tell's shape) are unlooked-at, blocked by another session holding the editor bridge | `docs/plans/3.done/stage1-bosses.md` |
 | **Three of water's four** | Only pouring works | `docs/plans/3.done/water-jump-and-escape.md` |
 | ~~**Water in pit ①**~~ | **The row itself is gone — closed by the user's decision, seen on screen.** Reward-then-water order was correct (take the bull's reward, then the wall/water), but **the water never carried the player out** — 300s of pouring lifts them 0px, and an ordinary jump alone already cleared the step in 1.6s. ⚠ **The call was made — the escape is dropped and this row leaves the chain** (`3.done/burn-out-of-the-bull-room.md`, built) | `docs/plans/3.done/stage1-bosses.md` |
-| ~~**The wood-wall lock is broken**~~ | **Not a problem — decided by the user.** A runeless blast does open the wall (`spell_sim.gd:633` ignites without `element`), but **the wall is on the far side of pit ①, and the only way out of the pit is the water the bull's death brings** ⇒ **you cannot stand in front of that wall without already holding fire.** **The lock is held by the map's shape, not by the ignition rule** | `3.done/stage1-map-layout.md` |
+| ~~**The wood-wall lock is broken**~~ | **Not a problem — decided by the user.** A runeless blast does open the wall (`spell_sim`'s ignite path fell through to `IGNITE_ANY` when the
+element carried no `TRACE_IGNITE`), but **the wall is on the far side of pit ①, and the only way out of the pit is the water the bull's death brings** ⇒ **you cannot stand in front of that wall without already holding fire.** **The lock is held by the map's shape, not by the ignition rule** | `3.done/stage1-map-layout.md` |
 | ~~**…and that shape is being deleted**~~ | **Closed, and built.** Moving the wall into room ①'s east face puts it **on the near side of the pit**, reachable the moment you walk in — the bull's own fire (bolt range 480px vs. 15 tiles of room) and a runeless blast would both open it. **The fix**: `WOOD` is `rune_only` now (`burn-out-of-the-bull-room.md` §0) — only the fire rune's own trace or a fire-circle blast ignites it, never monster fire or an elementless blast. The lock moved from map shape to a rule, wood-wide, not door-only | `docs/decisions/the-door-burns-only-from-the-fire-rune.md` |
-| ~~**The screen for receiving the fire rune**~~ | **The premise was wrong — the screen already exists.** `circle_window.gd:158-161` has always placed runes (pick from the palette → click the rune seat), so nothing has to be broken out of the three-pick. **Ownership was the only thing actually missing, and it is filled too now** (same doc — see the "Fire rune" row above) | `docs/plans/3.done/rune-lock-and-receiving.md` |
+| ~~**The screen for receiving the fire rune**~~ | **The premise was wrong — the screen already exists.** `circle_window`'s seat click has always placed runes (pick from the palette → click the rune seat), so nothing has to be broken out of the three-pick. **Ownership was the only thing actually missing, and it is filled too now** (same doc — see the "Fire rune" row above) | `docs/plans/3.done/rune-lock-and-receiving.md` |
 | ~~**An ending**~~ | **Filled — the chain's last square. Implemented, not accepted.** The rooster's death drops room ③'s east wall and stands an arch beyond it; walking into the arch opens the settlement screen, **with a clear title instead of the death one.** No second screen. Neither the arch nor the clear title has been looked at on screen | `docs/plans/3.done/gate-ending-to-game.md`, `docs/plans/3.done/run-end-settlement.md` |
 
-**The chain has every square now — in code. Not one of them is accepted.**
+**The chain has every square now — in code, and the milestone's one acceptance check has been run.**
+
+> **The user played a run and shot 60 seconds of it for the NAN 2026 submission.** That is the check this
+> milestone was written around — *"the user starts once and reaches the end without getting stuck"* — and
+> **there would be no footage if the chain had a gap in it.** ⇒ **The milestone is met.**
+>
+> **What is still not accepted is every individual beat.** Running end to end is not the same as any one of
+> the wall · arch · panel · boss fights reading right, and **the docs stay at `unseen` until the user says
+> so beat by beat** (`design/README.md`, "What the video shoot verified"). Meeting the milestone closed the
+> *chain* question, not the *quality* question.
+
 `map → wood wall → pit → bull → fire rune → water out of the pit → rooster → gate` runs end to end, and
 **the mobs and both bosses stand on it before you arrive** (`3.done/monster-placement-stage1.md`) ⇒ **the
 chain is walked, not debug-keyed.**
@@ -720,8 +731,7 @@ so **a player who killed nothing on the left run filled the cap with trash and t
 taking the fire rune and everything behind it with it, with no error anywhere. It was live in the build while
 this paragraph claimed the chain ran. The door now reserves the boss slots
 (`3.done/left-run-clumps-and-platforms`) — **the fix is in the spawn door, not in the boss docs**, and it is
-driven headless. ⇒ **The claim holds now; it is worth remembering it read as true for a while before it was.** **The one acceptance check this milestone has is "the user starts once
-and reaches the end without getting stuck" — which only the user can run.** ~~The single row still open above
+driven headless. ⇒ **The claim holds now; it is worth remembering it read as true for a while before it was.** ~~The single row still open above
 is water's other three (`2.active`)... and the reason zone ② is placed but unreachable~~ — **void.** Zone ②
 is deleted, not merely unreachable (`3.done/burn-out-of-the-bull-room.md`), and stage 1 now has **no water
 pour at all** — the pit's reward pour was removed with it, and room ③'s own pour (water's remaining three
@@ -814,11 +824,13 @@ What is written here is **not yet decided.** Do not fill it in by pretending to 
   (one dominant per zone vs evenly).
 
 - ~~**Seed distribution · procedural generation**~~ → **Not doing it. The map is fixed** (decided by the user).
-  **The map the user designed and drew is used as-is.** Stage 1 is already drawn — **300×48 tiles**
-  (`terrain_map_generated.gd`, `MAP_W`/`MAP_H`). **This line has now been wrong twice** — it read 312×126,
-  then 400×48 — because the size is counted in one place only, and that place is the baked file, not here.
-  **It shrank because the left run was cut**: 100 columns of uniform flat deleted from the map itself, so
-  the walk to the midboss stops being 30 seconds of unchanging ground (`left-run-clumps-and-platforms`).
+  **The map the user designed and drew is used as-is.** Stage 1 is already drawn — **217×48 tiles**
+  (`terrain_map_generated.gd`, `MAP_W`/`MAP_H`). **This line has now been wrong three times** — 312×126,
+  then 400×48, then 300×48 — because the size is counted in one place only, and that place is the baked
+  file, not here. **Each shrink had its own cause and neither propagated on its own**: 400→300 cut 100
+  columns of uniform flat so the walk to the midboss stopped being 30 seconds of unchanging ground
+  (`left-run-clumps-and-platforms`), and 300→217 deleted zone ② outright and slid room ③ 83 columns west
+  (`burn-out-of-the-bull-room`). ⇒ **Read `MAP_W`. Do not read this sentence.**
   ⇒ **No seeds, no room composition.** The same terrain every run.
 
   **So the variation per run comes only from what you bring** — assembly (circle · rune · glyph) ·

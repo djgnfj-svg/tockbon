@@ -26,7 +26,7 @@ stage's map doc looks like) · `left-run-clumps-and-platforms` (everything stage
 | **The movement grammar** | Unlimited jumps while in water at or above `WATER_WET` (32). `character.gd`, measured: **climbs 42–45px per 200ms jump cycle, 208 px/s sustained** (`water-jump-and-escape`, acceptance 4·7) |
 | **Stage 1's last scene is stage 2's tutorial** | `GDD.md` and `water.md` both say it. **The player has already climbed water once before arriving** |
 | **The midboss reward is a key, not a power-up** | `GDD.md`, "Inside a stage — the zone loop": *"a place you can't pass without it"* |
-| **Map height is 48 tiles, globally** | `stage.gd:1221` refuses any map whose row count is not `MAP_H`; `town_map.gd:28` and `fx_tuning.gd:1475`/`:1494` (background depth banding) both derive from it. **Width is per-stage.** ⇒ **A stage 2 deeper than 48 tiles is out of scope** |
+| **Map height is 48 tiles, globally** | `stage._enter_stage` refuses any map whose row count is not `MAP_H`; `town_map.MAP_H` and `fx_tuning`'s background depth banding both derive from it. **Width is per-stage.** ⇒ **A stage 2 deeper than 48 tiles is out of scope** |
 | **The gate is generic** | `gate-ending.md`: *"the day stage 2 exists, what changes is where it leads, not what it is."* `stage_gate.gd` is geometry plus one predicate — **nothing about it is stage-1-specific except its two coordinate constants** |
 | **20 live monsters, boss slots reserved** | `monster_defs.MAX_MONSTERS` = 20; the reserve is derived from boss rows in the pushed table (`boss-slots-are-reserved-in-the-spawn-door`) |
 | **Mob rows are `(tx, kind)` — no `y`** | `stage1_monsters.gd`; `monster_placement.resolve()` scans **up** from the map floor at wake time |
@@ -55,17 +55,27 @@ enter (from stage 1's gate) → ① flooded approach → the dry shaft (blocked)
 
 ### How long
 
-**The unit is stage 1, measured**: `MAP_W` = 300 tiles (`terrain_map_generated.gd:12`), `MOVE_SPEED_PX` = 260
-⇒ **9,600px / 260 = 36.9 seconds of pure walking**, end to end, before a single fight. Spawn→midboss is
-142 tiles ≈ 17.5s *computed* — and `left-run-clumps-and-platforms` §1 flags that number as **wrong and never
+**The unit is stage 1, measured**: `MAP_W` = **217** tiles (`terrain_map_generated`), `MOVE_SPEED_PX` = **180**
+⇒ **6,944px / 180 = 38.6 seconds of pure walking**, end to end, before a single fight. Spawn→midboss is
+142 tiles ≈ 25.2s *computed* — and `left-run-clumps-and-platforms` §1 flags that number as **wrong and never
 driven**, because three shelves stand across the corridor and the arithmetic contains no hops.
 
-⇒ **Stage 2 is sized at 200–300 tiles**, i.e. **25–37 seconds of walking.** **TBD: the exact width.** It is
-the one number that costs painting labour directly (§5), so it is the user's to set against how much of the
-night exists.
+> ⚠ **Both inputs were stale and the conclusion below moved. Corrected 2026-08-11.** This read `MAP_W` = 300
+> and `MOVE_SPEED_PX` = 260. The map lost zone ② (`burn-out-of-the-bull-room`, 300→217) and the walk was
+> lowered to 180 — **and the two errors nearly cancelled**, so the headline "about 37 seconds" looked right
+> while every number under it was wrong. **A plausible total is how a stale table survives a reading.**
 
-**Vertical travel is slower than horizontal and that is the point.** Climbing water is 208 px/s against
-walking's 260 — so a 10-tile shaft (320px) is **1.5s of climbing** and reads as a beat, not a wait.
+⇒ **Stage 2 at 200–300 tiles is 35–53 seconds of walking**, not the 25–37 this doc used to claim. **TBD: the
+exact width** — and the budget it is set against just grew by half. It is the one number that costs painting
+labour directly (§5), so it is the user's to set against how much of the night exists.
+
+> ⚠⚠ **The premise of the next paragraph inverted.** Climbing water is **208 px/s** (measured) against
+> walking's **180** — **climbing is now the faster axis.** It was written when walking was 260.
+
+**Vertical travel is *faster* than horizontal, and that breaks the beat this doc wanted.** A 10-tile shaft
+(320px) is **1.5s of climbing** — but the same 10 tiles walked is **1.8s**, so a water shaft is no longer a
+held beat between rooms; it is a shortcut. ⇒ **Either the shaft carries something other than travel time
+(a fight, a choice, a tell), or `WATER_JUMP` climb rate is the knob.** **TBD, and it is a design call.**
 
 ### Theme — **TBD, and it is not cosmetic**
 
@@ -140,10 +150,9 @@ deliberately not built. **(a) and (b) are free; (c) is not.**
 **Stage 1**: fire rune → burn the wood wall. **Stage 2**: water rune → **make your own water** → climb it.
 
 **Why this and not something invented**: the water rune already exists end to end.
-`sim_tuning.ELEM_WATER` = 2 with `{"trace": TRACE_WET}`; `spell_sim.gd:561` turns that trace into
+`sim_tuning.ELEM_WATER` = 2 with `{"trace": TRACE_WET}`; `spell_sim._carve` turns that trace into
 `cmd_water(x, y, water_r(gen), WATER_MAX)`; `cell_grid` applies it through `_write_water`, not `_write_cell`,
-so the amount survives. **Bolt art exists** (`fx_tuning.gd:1344`). **The Korean name exists**
-(`fx_tuning.gd:1544`). ⇒ **Zero new sim, zero new art, zero new rune.**
+so the amount survives. **Bolt art exists** and **the Korean name exists** (`fx_tuning`, the water rune's rows). ⇒ **Zero new sim, zero new art, zero new rune.**
 
 **The wall**: a dry bedrock shaft, 10+ tiles, bedrock floor, no ramp. With the rune you fill it and climb it.
 **This is the GDD's requirement literally** — *natural law becoming the means of progression* — and it is the
@@ -163,7 +172,7 @@ wets an integer disc of **113 cells at `WATER_MAX` 255 ≈ 28,800 units**. A 1-t
 
 ### The collision with the town, and why it is not a defect
 
-**The water rune is already for sale** — `unlock_defs.gd:56`, `UNLOCK_RUNE_WATER`, `for_sale: true`, at
+**The water rune is already for sale** — `unlock_defs.DEFS`, `UNLOCK_RUNE_WATER`, `for_sale: true`, at
 `progress.GEMS_PER_UNLOCK` = 10 원석. So a player who bought it walks past stage 2's midboss.
 
 **That is the GDD's design, not an accident**: *"the midboss's role changes per run… dropping from 'key' to
@@ -296,8 +305,8 @@ terrain is painted** — if authored water does not sleep, the stage's whole pre
 
 | Measured | Value | Where |
 |---|---|---|
-| `MAX_CHUNKS_PER_TICK` | **100** | `sim_tuning.gd:202` |
-| `WATER_SUBSTEPS` | **3** ⇒ effective width **≈33 chunks** | `sim_tuning.gd:127` |
+| `MAX_CHUNKS_PER_TICK` | **100** | `sim_tuning` |
+| `WATER_SUBSTEPS` | **3** ⇒ effective width **≈33 chunks** | `sim_tuning` |
 | `g.step()` **while pinned at the cap** | **84ms/tick against a 50ms budget = 168%** | `water.md`, "Cost" |
 | Stage 1's room-① pour (`WATER_RAIN_PER_TICK` 20,000 over 176 cells) | active chunks **76–100, frequently at the cap** | `water-jump-and-escape`, verify-look in the real game |
 
@@ -336,7 +345,7 @@ Everything else must be **already at rest** when the player reaches it. Concrete
 `water.md` says water comes from **both** sources, and *"already on the map — lakes · rivers · groundwater,
 drawn together with the terrain"* is half of that. **The door exists and is wrong:**
 
-- `terrain_baker.CHAR_BY_MAT` maps `Mat.WATER → "~"` and `terrain_map_generated.gd:66` carries it in
+- `terrain_baker.CHAR_BY_MAT` maps `Mat.WATER → "~"` and `terrain_map_generated.MAP_CHARS` carries it in
   `MAP_CHARS`. **The character appears zero times in the map body** — it has never been used
 - ~~`build_map_into` issues `cmd_fill` → `_fill_rect` → `_write_cell`, which sets `_mat = WATER`,
   `_flag = 0`, `_aux = 0`~~
@@ -469,7 +478,7 @@ routes `Mat.WATER` through `_write_water` at `WATER_MAX` instead of `_write_cell
 
 **Also open:**
 
-- **Map width** (200–300 tiles) — the number that sets the painting labour
+- **Map width** (200–300 tiles = **35–53s** of walking at the current 180 px/s) — the number that sets the painting labour
 - **Whether stage 2 has a locked fourth zone at all**, and what is in it. Stage 1's ④ reward is still TBD
 - **The monster roster.** `monsters.md` offers a burrower; "no insects" and "no flyer" are hard walls
 - **What a submerged monster does** — wash away, sink, drown, or nothing (§5)

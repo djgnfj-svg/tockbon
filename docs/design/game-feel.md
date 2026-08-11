@@ -25,12 +25,12 @@ Everything below was read out of the code, not guessed.
 
 ### 1. The camera is glued to the character — **the most likely culprit**
 
-`stage.gd:556` sets `_camera.position` to the character's centre **every frame.** No smoothing, no dead zone,
+`stage._process` sets `_camera.position` to the character's centre **every frame.** No smoothing, no dead zone,
 no look-ahead. And `project.godot` has `snap_2d_transforms_to_pixel=true` ⇒ **the character is nailed to one
 screen pixel and the entire world slides past in 1px steps.**
 
 **That is the picture the eye reads as unpleasant**: nothing on screen ever moves *except* the background,
-in stair-steps. It is not a bug — following was chosen deliberately (`stage.gd:175`, and the price is GDD #5) —
+in stair-steps. It is not a bug — following was chosen deliberately (`stage.gd`'s camera box, and the price is GDD #5) —
 **but "follow" was implemented as "lock", and those are different things.**
 
 ⇒ **A dead zone (roughly ±40px horizontally) plus 0.1–0.15s of smoothing**, and **look-ahead in the direction
@@ -39,7 +39,7 @@ of travel.** The character gets to move *within* the screen, which is the whole 
 
 ### 2. Left/right has no acceleration and no friction
 
-`character.gd:356` — `move * MOVE_SPEED_PX` (260) straight into the position. **Full speed in one frame,
+`character.gd`'s `recoil_vx` block — `move * MOVE_SPEED_PX` (180) straight into the position. **Full speed in one frame,
 dead stop in one frame.**
 
 **Instant start is probably right** — this is an aiming game and input latency is the enemy.
@@ -52,7 +52,7 @@ This is the one item on the doc where the current behaviour might be correct; **
 |---|---|---|
 | **No coyote time, no jump buffer** | Neither existed in `character.gd` | **Fixed. 0.1s each** (`COYOTE_SEC` · `JUMP_BUFFER_SEC`), five nets in `net_character` F-1–F-5, every one confirmed to bite under mutation. **Not looked at on screen yet** |
 | **0.6s of airtime feels floaty** | `GRAVITY_PX` 2400 · `JUMP_VY_PX` -720 ⇒ 3.4 tiles, 0.6s | **Addressed, in the opposite direction from the fix sketched below.** The player's fall now runs on its own `PLAYER_GRAVITY_PX` (1536, paired with a re-tuned `JUMP_VY_PX`) and airtime went **0.6s → 0.75s** — floatier, not snappier. Bosses keep the shared `GRAVITY_PX` 2400 unchanged, because their jump trajectories are tuned against it. **Not separately judged as feel** |
-| ~~**Ground state is 20Hz**~~ | **Wrong, and it was mine.** `on_ground` is read at the top of `step()`, which runs every `_physics_process` — **60Hz.** The 20Hz warning at `character.gd:313` is about `in_water`, and it is the reason that value is **not** put in `on_tick()` | No defect. Nothing to fix |
+| ~~**Ground state is 20Hz**~~ | **Wrong, and it was mine.** `on_ground` is read at the top of `step()`, which runs every `_physics_process` — **60Hz.** The 20Hz warning on `character.on_ground` is about `in_water`, and it is the reason that value is **not** put in `on_tick()` | No defect. Nothing to fix |
 
 **Raising falling gravity changes the level, not just the feel** — and the direction actually taken lowered it
 instead (see the table above), which widens jump reach rather than shrinking it. **Stage 1's map was drawn by

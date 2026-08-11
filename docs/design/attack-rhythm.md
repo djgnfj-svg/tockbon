@@ -22,11 +22,11 @@ at the staff. That row stays the one-line entry; this doc is the space behind it
 
 | Step | Where | What it does |
 |---|---|---|
-| Left mouse **press** | `src/stage/stage_input.gd:130` | `fire_requested.emit()`. **`mb.pressed` only** — no hold-repeat, no auto-fire |
-| Gate | `src/stage/stage.gd:540` | `_circle.can_fire()` — a circle exists and no rune slot is empty (`src/actor/spell_circle.gd:239`). **That is the only gate** |
-| Shot list | `src/actor/spell_circle.gd:279` | `shots()` → `[{element, glyphs, delay}]` |
-| Queue | `src/actor/world_step.gd:496` | `enqueue(cmd, delay)` seats it at `tick + 1 + delay` |
-| Drain → fire → push | `src/actor/world_step.gd:530-534` | `_spell.fire(cmd)`; **on true only**, `_char.recoil(adx, ady)` |
+| Left mouse **press** | `stage_input`'s `fire_requested` emit | **`mb.pressed` only** — no hold-repeat, no auto-fire |
+| Gate | `stage._fire_at` | `_circle.can_fire()` — a circle exists and no rune slot is empty (`spell_circle.can_fire`). **That is the only gate** |
+| Shot list | `spell_circle.shots()` | `[{element, glyphs, delay}]` |
+| Queue | `world_step.enqueue` | seats the cmd at `tick + 1 + delay` |
+| Drain → fire → push | `world_step._drain_queue` | `_spell.fire(cmd)`; **on true only**, `_char.recoil(adx, ady)` |
 
 **There is no cooldown, no wind-up, no rate limit, and no shot budget per second anywhere in that path.**
 Searched: nothing in `src/` counts ticks between shots for the player. Click twice in one frame's worth of
@@ -37,7 +37,7 @@ human speed and both go.
 ### The one rhythm that already exists — `seq_ticks`
 
 A **triangle** circle's `shots()` returns three entries with `delay = i * seq_ticks`, and
-`seq_ticks = 6` (`src/sim/circle_defs.gd:52`). At `TICK_DIVIDER = 3` (`src/sim/sim_tuning.gd:252`, 20Hz) that is
+`seq_ticks = 6` (`circle_defs.DEFS`, the triangle row). At `TICK_DIVIDER = 3` (`sim_tuning`, 20Hz) that is
 
 ```
 bolt 0   tick +0     0 ms
@@ -46,22 +46,27 @@ bolt 2   tick +12  600 ms
 ```
 
 **That is literally 펑 · 펑 · 펑, in code, today.** Three separated detonations from one press, each with its
-own recoil (`stage.gd:532` says so explicitly — three shots means three recoils).
+own recoil (`stage._fire_at`'s own comment says so explicitly — three shots means three recoils).
 
 Two things keep it from being the answer:
 
 - **It belongs to one circle, not to attacking.** Own the round circle and there is no rhythm at all
-- **6 is provisional and no one has looked at it.** `circle_defs.gd:51` — "the default from the doc's
-  'To decide' table — reversible, one integer, until the user judges it on screen"
+- **6 is provisional and no one has looked at it.** `circle_defs.DEFS`'s own comment — "the default from the
+  doc's 'To decide' table — reversible, one integer, until the user judges it on screen"
 
 ⇒ **The cheapest experiment in this whole doc is to put a triangle circle in the user's hands and ask whether
 that is the 펑 펑 펑 they meant.** No new mechanism, one integer to tune. **TBD: has the user ever fired one.**
 
 ### Recoil, the other half that already exists
 
-`RECOIL_SPEED_PX = 40.0`, `RECOIL_DECAY_PER_SEC = 0.02` (`src/actor/character.gd:200-201`) against
-`MOVE_SPEED_PX = 260.0` (`:90`) — **15% of walk speed**, horizontal only (the vertical line was deleted;
-`character.gd:491` records why, and `_firing_down_does_not_lift_me` asserts it stays deleted).
+`RECOIL_SPEED_PX = 40.0`, `RECOIL_DECAY_PER_SEC = 0.02` (`character.gd`, the recoil block) against
+`MOVE_SPEED_PX = 180.0` — **22% of walk speed**, horizontal only (the vertical line was deleted;
+`character.step` records why, and `_firing_down_does_not_lift_me` asserts it stays deleted).
+
+> **Corrected 2026-08-11.** This read "260.0 — 15%" and both halves were stale: the walk was **lowered to
+> 180** and nobody came back here. **Recoil is half again as large a share of the walk as this doc claimed**,
+> which matters for row D below, where the whole proposal is to raise it. Found by sweeping line-number
+> citations, not by anyone reading the paragraph.
 
 **Rhythm is already being pushed into the body and nothing on screen says so** — [game-feel.md](game-feel.md) #8.
 
@@ -79,7 +84,7 @@ A minimum tick gap between shots; clicking faster does nothing.
   deterministic for free
 - **Collides with**: **it is a nerf before it is a feel change.** Today's DPS ceiling is the mouse hand; a cap
   lowers it, and `game-feel.md` #9 already flags "it changes balance, not just feel"
-- **Collides with**: the GDD gives **rate** to the **staff** slot (`docs/GDD.md:626`) — so the number is gear's,
+- **Collides with**: the GDD gives **rate** to the **staff** slot (`GDD.md`, "Not settled — a direction that came out of conversation") — so the number is gear's,
   and hardcoding it in `character.gd` today plants a constant that gear later has to fight
 - **Note**: a cooldown alone is not "펑 펑 펑". It is "펑 ... 펑 ... 펑" — even, not grouped
 
@@ -91,14 +96,14 @@ Exactly what the user's onomatopoeia describes.
   `delay` ladder driven by something other than the circle's picture
 - **Cost**: **three bolts per press instead of one.** `MAX_BLASTS_PER_TICK = 4` and four large blasts measured
   **8,940us = 54% of budget** in v1, **1,291us re-measured on this machine at `rd` 12**
-  (`src/sim/sim_tuning.gd:549-556`). Overflow **defers to the next tick** rather than discarding, so a burst
+  (`sim_tuning.MAX_BLASTS_PER_TICK`'s own box). Overflow **defers to the next tick** rather than discarding, so a burst
   does not vanish — it **smears**, which is itself a rhythm change nobody chose
 - **Collides, hard**: [../decisions/shot-explosion-by-rule.md](../decisions/shot-explosion-by-rule.md) —
   the simultaneous cap was **explicitly rejected as a design knob**, because "a bolt that fails to fire because
   of a cap reads as a malfunction". **A burst tuned against that cap reopens a closed decision.** The rule that
   doc set is: constrain the **glyph**, at assembly time. Burst × spread (8 bolts) is 24 detonations from one
   press and must be answered by a glyph constraint, not by a cap
-- **Collides**: three recoils per press. At 15% of walk each, a burst is a noticeable shove backward —
+- **Collides**: three recoils per press. At 22% of walk each, a burst is a noticeable shove backward —
   that may be the feature (see D) or may make aiming unpleasant. **TBD, and only the screen answers it**
 
 ### C. Charge and release
@@ -110,12 +115,12 @@ Hold to wind up, release to fire; longer hold, bigger 펑.
 - **Collides**: it makes the first shot *slower*, which is the opposite of "펑 펑 펑". Charge gives
   **one big 펑**, not three
 - **Collides**: multiplayer — a charge level is player state, and the player is host-authoritative
-  (`docs/GDD.md:388`), while the bolt it produces is deterministic. **That is a widening of exactly the
-  boundary the GDD says to keep narrow** (`GDD.md:400`)
+  (`GDD.md`, "Multiplayer"), while the bolt it produces is deterministic. **That is a widening of exactly the
+  boundary the GDD says to keep narrow** — that section's own closing instruction
 
 ### D. Rhythm from recoil and repositioning — **the gun is not the metronome, the body is**
 
-Firing already pushes the player (`character.gd:501`). Raise it and each shot costs a step back; the loop
+Firing already pushes the player (`character.step`). Raise it and each shot costs a step back; the loop
 becomes fire · fire · reposition · fire, and the cadence is **emergent** rather than enforced.
 
 - **Cost**: **one constant.** `RECOIL_SPEED_PX` is already there, already decays frame-rate-independently
@@ -126,7 +131,7 @@ becomes fire · fire · reposition · fire, and the cadence is **emergent** rath
 - **Collides**: the user has already called movement and the camera unpleasant (`game-feel.md`,
   **fail 2026-08-08**). **Adding motion the player did not ask for, on top of a movement feel already
   rejected, is the highest-risk row here** — and it is also the cheapest to try and revert
-- **Note**: the deleted vertical recoil (rocket jump, `character.gd:491`) is the extreme form of this row.
+- **Note**: the deleted vertical recoil (rocket jump, `character.step`'s own note) is the extreme form of this row.
   Reviving it takes more than one line, and a net currently **asserts it stays dead**
 
 ### E. Rhythm from the circle's own structure
@@ -138,7 +143,7 @@ becomes fire · fire · reposition · fire, and the cadence is **emergent** rath
   no new rule
 - **Collides**: it is **not available to everyone.** The starting round circle is `seq_ticks: 0`, so a new
   player's attack still has no rhythm — this row improves the late build, not the first minute
-- **Collides**: `shots()` splits a triangle's glyphs one-per-socket (`spell_circle.gd:274`), so its three
+- **Collides**: `shots()` splits a triangle's glyphs one-per-socket (`spell_circle.shots`'s header), so its three
   bolts are already *different spells*. That is a **melody**, not a drum — whether that reads as rhythm or as
   chaos is unknown. **TBD**
 
@@ -146,12 +151,15 @@ becomes fire · fire · reposition · fire, and the cadence is **emergent** rath
 
 The beat is *heard and seen*, the sim is untouched.
 
-- **Finding worth stating on its own: this game has no sound at all.** `AudioStream` / `AudioServer` appear
-  **zero times** in `src/` (grepped; `game-feel.md:123` said the same). **"펑 펑 펑" is an onomatopoeia — the
-  user described the rhythm with a sound, and the game cannot make one.**
+- ⚠ **This row said "this game has no sound at all" and that has been false for some time.** `sfx_bank.gd`
+  synthesizes fire · impact · jump · land · hit at boot, with no audio files on disk, and `Fx.SFX_ENABLED`
+  turns the axis off. **`game-feel.md` had already been corrected** — its section E is titled "Sound —
+  landed this session" — **and the correction never walked over here.** That is CLAUDE.md's own named
+  failure: *a refutation that lands in a different doc than the claim does not propagate.*
+  ⇒ **"펑 펑 펑" can be made audible today.** The user described the rhythm with a sound and the game can
+  now make one; what is missing is a cue tied to *cadence* rather than to each individual shot.
 - **Cost**: audio is view-side and **never re-enters the sim** — none of the determinism or budget arguments
-  apply (`game-feel.md:128`). But it is the largest job in the project's feel backlog and `game-feel.md:130`
-  says it **needs its own doc**, which does not exist yet
+  apply (`game-feel.md`, section E). It still **needs its own doc**, which does not exist yet
 - **Visual half is cheap**: shake exists **only for blasts, keyed to generation** (`game-feel.md` #14), and
   there is **no muzzle flash** (#6) — the bolt appears out of nothing, from a staff tip that is already a
   known point (`src/actor/staff.gd`)
@@ -162,7 +170,7 @@ The beat is *heard and seen*, the sim is untouched.
 
 ## 3. The 60Hz / 20Hz trap, applied to cadence
 
-`TICK_DIVIDER = 3` (`src/sim/sim_tuning.gd:252`). CLAUDE.md's trap: **a 60Hz event whose period shares a factor
+`TICK_DIVIDER = 3` (`sim_tuning`). CLAUDE.md's trap: **a 60Hz event whose period shares a factor
 with 3 lands on the same tick phase every time and the tick never sees it** — the symptom is not a wrong value
 but **a thing that never happens.**
 
@@ -182,8 +190,8 @@ Reach for that shape before inventing a fourth. Note that the name `_charge_bloc
 player charge — the *pattern* is what transfers, not the field.
 
 **Multiplayer is the second reason.** Host-authoritative co-op with a deterministic grid and deterministic
-projectiles (`docs/GDD.md:388`). **Anything frame-timed rather than tick-timed is a desync**, and the GDD's
-own instruction is to keep the boundary between the two sides narrow (`GDD.md:400`).
+projectiles (`GDD.md`, "Multiplayer"). **Anything frame-timed rather than tick-timed is a desync**, and the
+GDD's own instruction is to keep the boundary between the two sides narrow — same section.
 
 ---
 

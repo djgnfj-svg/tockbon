@@ -469,7 +469,7 @@ A 100-cell column descends one cell as a unit, so **the longer the column, the m
 
 ⇒ **Scan up to K consecutive empty cells below and drop that far at once.** Airborne water is "falling" anyway,
 so **one constant K sets the fall speed.** Integers only, and **vertical traversal is bottom→top so there is no cascade**
-(the destination is a place already passed this step — `cell_grid.gd:511` records that property).
+(the destination is a place already passed this step — `cell_grid._water_fall` records that property).
 
 **K = 4 went in.**
 **The final value is the user's, decided on screen** — 4 is a measurable starting point, not the answer.
@@ -547,7 +547,7 @@ Scope: **eye only.** No screenshot.
 water is `BEHAVIOR_NONE`, so `is_solid()` is false and **to the character it is identical to empty.**
 No buoyancy, no drag, no sinking.
 
-**Asymmetric with fire** — `character.gd:302` calls `_body.standing_in_fire()` and `body.gd:155-164`
+**Asymmetric with fire** — `character.step` calls `_body.standing_in_fire()` and `body.standing_in_fire`
 sweeps the grid, so **fire reaches the character.** Only water doesn't.
 
 **What the user wants:**
@@ -558,7 +558,7 @@ sweeps the grid, so **fire reaches the character.** Only water doesn't.
 
 **In water, jumps are unlimited.** The water doesn't push the character up — **the character climbs on their own.**
 
-**Nearly free.** The jump condition at `character.gd:262` is **only `on_ground`**, so adding `or in_water` does it.
+**Nearly free.** The jump condition in `character.step` was **only `on_ground`**, so adding `or in_water` does it.
 **No new physics axis appears.**
 
 **And the progression language lines up** — stage 1's locked zone ④ opens with a **double jump**, so
@@ -582,7 +582,7 @@ and that was written down.
 **1. Current data is not stored in the grid. The character reads neighbor cells directly.**
 
 Not close. Storing it means:
-- **1 byte per cell × 4,128,768 cells = 4.1MB** (`cell_grid.gd:53-54`)
+- **1 byte per cell × 4,128,768 cells = 4.1MB** (`cell_grid.CELL_COUNT`)
 - Writes added to the hottest loop (`_water_share`)
 - **"Decay the residual every tick" becomes a new axis** — without it, **force remains after the water stops**
 - All 39 premises of `net_water` move
@@ -605,7 +605,7 @@ _body.move_x(grid, (move * MOVE_SPEED_PX + recoil_vx) * dt)
 **One difference from recoil — current does not decay.** Recoil is an **impulse** that dies down;
 current is **a field re-read every frame.** **Adding decay counts it twice.**
 
-**And `_try_step_up` (`body.gd:96`) may let current push the character up a stair** — not looked at yet.
+**And `body._try_step_up` may let current push the character up a stair** — not looked at yet.
 
 #### Measured — **approach A (raining) produces almost no current** (right after implementation)
 

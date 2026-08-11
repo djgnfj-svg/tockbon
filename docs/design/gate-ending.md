@@ -49,7 +49,7 @@ arches" a grammar the player already knows by the time they get here. A picture 
 ### It appears when the rooster dies — one flag, drawn and acted on from the same read
 
 `Progress` already holds this fact, keyed by kind and generic: `boss_died(MonsterDefs.KIND_ROOSTER)`. Room ①'s
-water is gated on exactly this shape for the bull (`stage.gd:587`), and
+water is gated on exactly this shape for the bull (`stage._take_boss_reward`'s `boss_died()` check), and
 [../plans/3.done/stage1-bosses.md](../plans/3.done/stage1-bosses.md) records that **the rooster's own gate
 exists in `Progress` and nothing is wired to it.** This is its first consumer.
 
@@ -66,13 +66,13 @@ otherwise walk into the ending with the boss alive. **The lock is the flag.**
 The town's position-checking door looks like the obvious fit and is not, for two reasons that are both written
 in the files themselves:
 
-- **`fixtures.gd:15-18` says it: "x only. There is no y."** The town is one flat room. **The stage is not** —
+- **`fixtures.gd`'s header says it: "x only. There is no y."** The town is one flat room. **The stage is not** —
   the gate's column is open from row 0 to row 24, so an x-only test reads "standing at the gate" while the
   player is falling past it, jumping over it, or standing on rubble above it. **A y band is needed in the
   first line of this code, not later.**
-- **A fourth `Fixtures` kind turns `net_town` red immediately.** `net_town.gd:151-157` asserts, for **every**
+- **A fourth `Fixtures` kind turns `net_town` red immediately.** `net_town._the_fixtures_stand_in_the_room_and_do_not_overlap` asserts, for **every**
   kind in `Fixtures.NAMES`, a seat inside the *town* room, and `:264` counts sprites against the same table.
-  **Reusing `KIND_GATE` is worse**: `fixtures.gd:31` fixes its name as **출발문** and `town_view.gd:96-99`
+  **Reusing `KIND_GATE` is worse**: `fixtures.NAMES` fixes its name as **출발문** and `town_view._draw`
   draws that name plus `[E] 출발문` over every fixture unconditionally — **the key prompt this doc rules out
   below arrives attached to the reuse.**
 
@@ -100,7 +100,7 @@ looks reached a step before it is.
 
 Viewport **960x540** (`project.godot:23-24`), play zoom **1.0** (`stage.gd` `ZOOM_STEPS[0]`) ⇒ half-width
 **480px**. The camera centres on the player plus a lead of up to **±72px** (`fx_tuning.CAM_LEAD_PX`, folded
-into the focus at `stage.gd:741`), and the world clamp is far away (grid 4096 cells = 16384px), so it never
+into the focus at `stage._process`), and the world clamp is far away (grid 4096 cells = 16384px), so it never
 bites here.
 
 | Player stands | Screen's right edge (lead 0 / +72) | **Arch at x370** (11820–11892) | ~~x384~~ (12268–12340) |
@@ -161,7 +161,7 @@ want := (_char.downed or (boss_died(KIND_ROOSTER) and standing_at_gate)) and not
 
 **The new term collapses by itself, which is the whole reason this is safe.** The button runs
 `enter_town()` → `reset_stage()` → `_world.reset()` → `Progress.reset()`, whose `_reward_pending.clear()`
-(`progress.gd:285`) makes `boss_died()` false again — the same self-collapse `_char.place()` restoring hp
+(in `Progress.reset`) makes `boss_died()` false again — the same self-collapse `_char.place()` restoring hp
 already gives `downed`. **Neither term can strand the panel open.**
 
 **And it hands back the "exactly once" property for free.** Standing on the seat for two hundred frames is one
@@ -177,10 +177,15 @@ pressed while swimming is a way to fail a run you have already won.** The town s
 fallback is a prompt — **and it is not the one line the first draft claimed**, since the town's prompt comes
 welded to `Fixtures.NAMES` and `town_view` (above).
 
-### Sound — there is none, anywhere
+### Sound — it exists now, and the gate still does not get a cue
 
-`docs/design/game-feel.md` records **no sound in the repo at all**. The gate does not get the first one. The
-settlement's count-up tick (**「띠리리링」**) is that doc's.
+This section read "there is none, anywhere" and cited `game-feel.md` for it. **That stopped being true when
+`sfx_bank.gd` landed** (fire · impact · jump · land · hit, synthesized at boot), and `game-feel.md` corrected
+itself without the correction reaching here — the third doc in this repo to inherit that same dead sentence.
+
+**The conclusion is unchanged**: the gate does not get a cue of its own, and the settlement's count-up tick
+(**「띠리리링」**) is `game-feel.md`'s to place. What changed is the reason — **not "the axis does not exist"
+but "the axis exists and nothing has been written for this beat."**
 
 ### Returning to town
 
@@ -275,7 +280,7 @@ be run before it lands.
 | What | How |
 |---|---|
 | `Progress.boss_died(KIND_ROOSTER)` | **Already there, already generic, wired to nothing.** Drives the wall, the drawing and the standing test — one read |
-| `Progress.reset()` | `_reward_pending.clear()` (`progress.gd:285`) is what makes the settlement's new term collapse on the way back to town |
+| `Progress.reset()` | its `_reward_pending.clear()` is what makes the settlement's new term collapse on the way back to town |
 | The settlement's derived `want` | The gate is a term in it, **never a second door** — that plan's Risk 3 forbids the latch |
 | `Fixtures` / `TownView` | **Not extended.** Both are welded to the town's own table and to `net_town` (above) |
 | `stage.enter_town()` | Unchanged |
