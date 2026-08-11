@@ -1,63 +1,35 @@
 # 탁본 (Tockbon)
 
-마법진을 직접 조립해 나만의 마법을 만드는 2D 횡스크롤 로그라이크.
+**다시 짓는 중이다.** 2026-08-12에 게임을 전부 지웠고, 지금 이 저장소에는 게임이 없다 —
+개발에 쓰는 AI 하네스와 그림 뽑는 도구만 있다.
 
-**[▶ 브라우저에서 바로 플레이](https://djgnfj-svg.github.io/tockbon/)** — 설치 없이 열린다.
-**[▶ 플레이 영상 (1분)](https://www.youtube.com/watch?v=fbQDCyPYMOw)**
+## 지금 만드는 것
 
-![조립창](docs/archive/nan2026/img/circle-window.png)
+**마법진을 조립해 세우는 탑다운 코어 디펜스.** 가운데 코어를 지키고, 몬스터는 사방에서 오고,
+일부는 원거리로 쏜다. 마법진은 깔아두면 세고 그 자리만 지키며, 들고 다니면 약하고 나를 따라온다.
 
-## 무엇이 다른가
+설계와 그 근거는 [docs/next-game.md](docs/next-game.md)에 있다.
+**하지 않기로 한 것과 이유**는 [docs/decisions/](docs/decisions/)에 있다 —
+시뮬레이션을 왜 버렸는지, 멀티를 왜 미뤘는지, 사이드뷰를 왜 접었는지.
 
-마법진은 **진 · 룬 · 문양** 셋으로 이루어진다. 진은 틀, 룬은 가운데에 꽂아 속성을 정하고,
-문양은 층에 올려 맞았을 때 무엇을 할지를 정한다.
+## 지웠던 것 — 2D 횡스크롤 마법 로그라이크
 
-**안쪽 층부터 바깥으로 해석하기 때문에 조합이 아니라 순열이다.**
-확산 다음 폭발이면 여덟 갈래로 흩어진 뒤 각각 터지고, 폭발 다음 확산이면 크게 터진 뒤 흩어진다.
-같은 두 장으로 다른 마법이 나온다.
+여덟 달치였다. 마법진을 조립해 순열로 마법을 만들고, 지형이 셀 단위로 파이고, 불이 번지고
+물이 흐르는 게임. **[▶ 브라우저에서 플레이](https://djgnfj-svg.github.io/tockbon/)** ·
+**[▶ 영상 (1분)](https://www.youtube.com/watch?v=fbQDCyPYMOw)**
 
-지형은 셀 단위로 파이고, 불은 연료가 있는 곳에만 번지고, 물은 파인 구멍으로 흘러 들어간다.
+지운 이유는 하나로 줄여 말할 수 있다 — **여덟 달 동안 재미있는 순간이 한 번도 없었고,
+그 게임은 만든 사람이 좋아하는 종류가 아니었다.** 근거는 `docs/next-game.md`에 있다.
 
-## 조작
+소스는 태그 `v1-sim`에 그대로 있다.
 
-| 키 | 동작 |
-|---|---|
-| A / D · Space | 이동 · 점프 |
-| 마우스 좌클릭 | 발사 |
-| Tab | 조립 창 |
-| V | 레벨업 3택 창 |
-| F | 마을 설비 사용 |
-| R · ESC | 판 리셋 · 창 닫기 |
-
-## 문서
+## 남긴 것
 
 | | |
 |---|---|
-| [게임 소개 및 설명](docs/archive/nan2026/plan.md) | 무엇을 만들었고 무엇이 아직 아닌가 |
-| [AI 활용 기술 문서](docs/archive/nan2026/ai-tech.md) | 이 게임을 만든 AI 작업 구조 전부 |
-| [GDD](docs/GDD.md) | 게임 전체 설계 |
+| `CLAUDE.md` · `.claude/` | AI 하네스 — 에이전트 정의, 스킬, 세션 규칙 |
+| `tests/run_nets.ps1` | 검증 러너. 그물은 게임과 함께 지웠고 러너만 남았다 |
+| `tools/pixel/` | 로컬 ComfyUI 픽셀아트 생성. 크레딧이 안 든다 |
 
-`docs/design/`은 기능별 설계, `docs/decisions/`는 **하지 않기로 한 것과 그 이유**,
-`docs/plans/`는 진행 상태별 구현 계획이다.
-
-## 직접 빌드하려면
-
-Godot **4.7.1**로 저장소를 열고 `Web` 프리셋으로 내보낸다. 엔진 바이너리는 커밋하지 않는다.
-
-```powershell
-.\Godot_v4.7.1-stable_win64.exe --headless --export-release "Web" build\web\index.html
-```
-
-검증은 `tests/run_nets.ps1` 하나로 돈다 — 38개 그물, 8,485개 검사, 약 24초.
-
-```powershell
-powershell -ExecutionPolicy Bypass -File tests\run_nets.ps1
-```
-
-## 만든 것
-
-1인 개발. 그림은 전량 자체 생성(로컬 ComfyUI, 일부 애니메이션만 PixelLab)이고,
-**효과음은 파일이 아니라 부팅 때 코드가 합성한다** — 저장소에 오디오 파일이 하나도 없다.
 외부 에셋은 폰트 하나뿐이다: Noto Sans KR (SIL OFL 1.1, `assets/font/OFL.txt` 동봉).
-
-엔진은 Godot Engine (MIT).
+엔진은 Godot Engine 4.7.1 (MIT).

@@ -26,8 +26,11 @@ Local commits keep piling up as normal — only the remote is frozen. `gh-pages`
 The NAN 2026 submission links must stay exactly as judged. **`wrap-up` stops at the commit.**
 Delete this section once the date passes.
 
-⚠ **`README.md` still describes the deleted game**, and that is deliberate — it is what the judges saw.
-Rewrite it only after the freeze lifts.
+⚠ **The submission itself is safe from anything done locally.** What the judges see is `origin/main` and
+`gh-pages`, and neither moves while the freeze holds — the local `README.md` and `docs/` have already been
+rewritten past them, and that only reaches the remote after 2026-08-22.
+**`docs/archive/` was deleted locally on 2026-08-12**; the submission files still sit on `origin/main` under
+their original name (`docs/submission/`), and the sources are also at the tag `v1-sim`.
 
 ## Language — answer the user in Korean, always
 
