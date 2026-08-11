@@ -1,7 +1,12 @@
-## Captures the screenshots `docs/archive/nan2026/plan.md` prints into the judged PDF.
+## Captures the screenshots `plan.md` prints into the judged PDF.
 ##
 ## **Do not run this directly. Run `python tools/submission/shots.py`** — it drives this
 ##  scene and then composes the paired figures. The parts written here are inputs to that.
+##
+## ⚠ **`OUT` now points into a sealed folder.** The preliminary round is over and its images
+##  are the record of what was submitted; running this overwrites them with today's game,
+##  which is not the game that was judged. **Re-point `OUT` before running it for the final
+##  round** — the capture logic below is round-agnostic and is why this file is kept.
 ##
 ## A real window opens: `--headless` draws no frame and captures nothing.
 ##

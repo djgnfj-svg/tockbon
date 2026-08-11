@@ -11,6 +11,10 @@ Two steps, and the second is the reason this file exists rather than the .gd alo
    that hole") is split across a page boundary with nothing tying the halves together.
 
 The parts stay on disk (gitignored) so `--compose-only` can re-crop without re-running the engine.
+
+**The preliminary round is over and `docs/archive/nan2026/` is sealed** (its README).
+Running this overwrites the record of what was submitted. **Re-point the output before
+running it for the final round** — the drawing itself is round-agnostic, which is why it is kept.
 """
 
 import subprocess

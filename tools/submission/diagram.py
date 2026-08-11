@@ -12,6 +12,10 @@ land on top of the rings — measured, unreadable. Gutters are cheaper than lead
 cross the thing they point at.
 
 Output: `circle-diagram.png`.
+
+**The preliminary round is over and `docs/archive/nan2026/` is sealed** (its README).
+Running this overwrites the record of what was submitted. **Re-point the output before
+running it for the final round** — the drawing itself is round-agnostic, which is why it is kept.
 """
 
 import sys

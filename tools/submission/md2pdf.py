@@ -10,6 +10,12 @@ Run:
     python tools/submission/md2pdf.py
 
 Output lands in build/submission/. That folder is not committed.
+
+**The preliminary round is over and its source folder is sealed** (docs/archive/README.md).
+Running this again only re-bakes what was already submitted — harmless, but pointless.
+**It is kept for the final round**: point SRC and DOCS at the new folder rather than
+writing a second converter, because the two defects this one fixes (tables dropped,
+Korean rendered as tofu) are properties of the renderer, not of the round.
 """
 
 import base64

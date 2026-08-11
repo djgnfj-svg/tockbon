@@ -1618,7 +1618,7 @@ func _sync_pick_window(root: Node) -> void:
 
 ## **The debug readout is off when the game boots, and F3 is what turns it on.**
 ##
-## **Found on screen, not headless**: it is fifteen lines of black text — not the two the NAN 2026 submission README
+## **Found on screen, not headless**: it is fifteen lines of black text — not the two the archived NAN 2026 submission README
 ## records — and it lands straight on the research window's bright parchment, covering the prices the player
 ## opened it to read. **Every check above this one measures that Stats *yields to a window and comes back*,
 ## which stayed true the whole time.** None of them asked whether it should have been on to begin with.

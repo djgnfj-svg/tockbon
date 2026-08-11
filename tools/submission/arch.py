@@ -6,6 +6,10 @@ Drawn in code rather than generated: an image model cannot render Korean, and an
 architecture diagram is exactly the picture where a wrong label is worse than no picture.
 
 Output: `docs/archive/nan2026/img/ai-arch.png`.
+
+**The preliminary round is over and `docs/archive/nan2026/` is sealed** (its README).
+Running this overwrites the record of what was submitted. **Re-point the output before
+running it for the final round** — the drawing itself is round-agnostic, which is why it is kept.
 """
 
 from pathlib import Path
