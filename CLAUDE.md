@@ -2,6 +2,12 @@
 
 Loaded into every session and every agent. **Keep only what applies to everyone.**
 
+## No `git push` until 2026-08-22 (decided by the user)
+
+Local commits keep piling up as normal — only the remote is frozen. `gh-pages` redeploy counts as a push.
+The NAN 2026 submission links must stay exactly as judged. **`wrap-up` stops at the commit.**
+Delete this section once the date passes.
+
 ## Language — answer the user in Korean, always
 
 **Every reply to the user is in 한국어.** Even when they write in English — they cannot read English.
