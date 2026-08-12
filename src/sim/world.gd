@@ -10,9 +10,14 @@ extends RefCounted
 var swarm := Swarm.new()
 var food := Food.new()
 
-## Predators are a flat array too, for the same reason the swarm is: nothing here needs to be a Node.
-var pred_pos := PackedVector2Array()
-var pred_count := 0
+## Critters are a flat array too, for the same reason the swarm is: nothing here needs to be a Node.
+## `threat` decides which way the chase runs — see `Rules.SWARM_PER_THREAT`.
+var critter_pos := PackedVector2Array()
+var critter_threat := PackedInt32Array()
+var critter_dir := PackedVector2Array()
+var critter_count := 0
+
+var critters_eaten := 0
 
 var elapsed := 0.0
 var host_hp := Rules.HOST_HP
@@ -30,7 +35,7 @@ var pending_levels := 0
 var offer := PackedInt32Array()
 
 var _split_paid := 0.0
-var _next_predator := Rules.PREDATOR_INTERVAL
+var _next_critter := Rules.CRITTER_INTERVAL
 var _rng := RandomNumberGenerator.new()
 
 
@@ -41,10 +46,12 @@ func setup(run_seed: int = 1) -> void:
 	for _i in Rules.START_CLONES:
 		swarm.add_clone()
 	peak_swarm = swarm.count - 1
-	pred_pos.resize(Rules.PREDATOR_MAX)
-	pred_count = 0
-	for _i in Rules.PREDATOR_START:
-		_spawn_predator()
+	critter_pos.resize(Rules.CRITTER_MAX)
+	critter_threat.resize(Rules.CRITTER_MAX)
+	critter_dir.resize(Rules.CRITTER_MAX)
+	critter_count = 0
+	for _i in Rules.CRITTER_START:
+		_spawn_critter()
 
 
 func step(dt: float) -> void:
@@ -53,55 +60,97 @@ func step(dt: float) -> void:
 	elapsed += dt
 	swarm.step(dt, food)
 	food.step(dt)
-	_step_predators(dt)
+	_step_critters(dt)
 	_grow()
 	if host_grace > 0.0:
 		host_grace -= dt
 	peak_swarm = maxi(peak_swarm, swarm.count - 1)
-	_next_predator -= dt
-	if _next_predator <= 0.0:
-		_next_predator = Rules.PREDATOR_INTERVAL
-		_spawn_predator()
+	_next_critter -= dt
+	if _next_critter <= 0.0:
+		_next_critter = Rules.CRITTER_INTERVAL
+		_spawn_critter()
 	if elapsed >= Rules.RUN_LENGTH or host_hp <= 0:
 		over = true
 
 
-## Predators walk at the nearest body, host or clone alike, and understand nothing else. They are slower
-## than the host and faster than a scattered clone — that ordering is the entire threat model.
-func _step_predators(dt: float) -> void:
-	for k in pred_count:
-		var p := pred_pos[k]
+## Critters wander until something comes within `CRITTER_SENSE`, and then the comparison decides which of
+## the two is the meal. **Nothing crosses the map to reach the player** — walking at you from the far edge
+## on a timer is what the user rejected, and an ecosystem is exactly the thing that does not do that.
+func _step_critters(dt: float) -> void:
+	# Backwards: `_remove_critter` swaps the last row down into `k`, and a forward walk would then skip it.
+	for k in range(critter_count - 1, -1, -1):
+		var p := critter_pos[k]
 		var target := -1
-		var best := INF
+		var best := Rules.CRITTER_SENSE * Rules.CRITTER_SENSE
 		for i in swarm.count:
 			var d: float = p.distance_squared_to(swarm.pos[i])
 			if d < best:
 				best = d
 				target = i
-		if target < 0:
-			continue
-		var to: Vector2 = swarm.pos[target] - p
-		if to.length() > 0.001:
-			p += to.normalized() * Rules.PREDATOR_SPEED * dt
-			pred_pos[k] = p
-		_bite(p)
+
+		var dir := critter_dir[k]
+		if target >= 0:
+			var away: Vector2 = (p - swarm.pos[target])
+			var toward: Vector2 = -away
+			# Outgrown: it runs. Still bigger than the swarm: it comes. One comparison, both directions.
+			dir = away.normalized() if is_hunter_of(k) else toward.normalized()
+		elif _rng.randf() < dt * 0.6:
+			var a := _rng.randf() * TAU
+			dir = Vector2(cos(a), sin(a))
+		critter_dir[k] = dir
+
+		p += dir * Rules.CRITTER_SPEED * dt
+		p = Vector2(clampf(p.x, 0.0, Rules.FIELD.x), clampf(p.y, 0.0, Rules.FIELD.y))
+		critter_pos[k] = p
+		_contact(k, p)
 
 
-func _bite(p: Vector2) -> void:
-	if p.distance_to(swarm.pos[0]) <= Rules.PREDATOR_RADIUS:
+## Has the swarm outgrown critter `k`. **The reversal the whole design is about, as one comparison.**
+func is_hunter_of(k: int) -> bool:
+	return float(swarm.count - 1) >= float(critter_threat[k]) * Rules.SWARM_PER_THREAT
+
+
+func critter_radius(k: int) -> float:
+	return Rules.CRITTER_RADIUS_BASE + float(critter_threat[k]) * Rules.CRITTER_RADIUS_PER_THREAT
+
+
+## Returns true when the critter itself died, so the caller stops touching index `k`.
+func _contact(k: int, p: Vector2) -> bool:
+	var reach := critter_radius(k)
+	if is_hunter_of(k):
+		# The swarm eats it. Any body in the swarm counts — this is the payoff for having grown.
+		for i in swarm.count:
+			if p.distance_to(swarm.pos[i]) <= reach:
+				swarm.banked += float(critter_threat[k]) * Rules.CRITTER_MEAT
+				critters_eaten += 1
+				_remove_critter(k)
+				return true
+		return false
+
+	if p.distance_to(swarm.pos[0]) <= reach:
 		if host_grace <= 0.0:
 			host_hp -= 1
 			host_grace = Rules.HOST_HIT_GRACE
-		return
+		return false
 	# Backwards, because `remove_at` swaps the last row into `i` — walking forwards would skip whatever
 	# landed there. Every flat-array removal in this build has the same shape.
 	for i in range(swarm.count - 1, 0, -1):
-		if p.distance_to(swarm.pos[i]) > Rules.PREDATOR_RADIUS:
+		if p.distance_to(swarm.pos[i]) > reach:
 			continue
 		cargo_lost += swarm.carried[i]
 		clones_lost += 1
 		swarm.remove_at(i)
-		return
+		return false
+	return false
+
+
+func _remove_critter(k: int) -> void:
+	var last := critter_count - 1
+	if k != last:
+		critter_pos[k] = critter_pos[last]
+		critter_threat[k] = critter_threat[last]
+		critter_dir[k] = critter_dir[last]
+	critter_count -= 1
 
 
 ## One level per SPLIT_PER_BANKED banked. The level does not spend the bank and does not grow the swarm on
@@ -143,16 +192,19 @@ func take_card(card: int) -> bool:
 	return true
 
 
-func _spawn_predator() -> void:
-	if pred_count >= Rules.PREDATOR_MAX:
+func _spawn_critter() -> void:
+	if critter_count >= Rules.CRITTER_MAX:
 		return
-	# Off-camera, never on top of the player: a predator materialising in your lap reads as a bug, and it
+	# Off-camera, never on top of the player: something materialising in your lap reads as a bug, and it
 	# is not what this build is measuring.
 	var host: Vector2 = swarm.pos[0]
 	var p := host
 	for _try in 12:
 		p = Vector2(_rng.randf_range(0.0, Rules.FIELD.x), _rng.randf_range(0.0, Rules.FIELD.y))
-		if p.distance_to(host) >= Rules.PREDATOR_SPAWN_MIN_DIST:
+		if p.distance_to(host) >= Rules.CRITTER_SPAWN_MIN_DIST:
 			break
-	pred_pos[pred_count] = p
-	pred_count += 1
+	critter_pos[critter_count] = p
+	critter_threat[critter_count] = _rng.randi_range(Rules.CRITTER_THREAT_MIN, Rules.CRITTER_THREAT_MAX)
+	var a := _rng.randf() * TAU
+	critter_dir[critter_count] = Vector2(cos(a), sin(a))
+	critter_count += 1

@@ -32,6 +32,7 @@ func run(t) -> void:
 		w.food.pos[i] = host + Vector2(40.0 + i * 20.0, 0.0)
 		w.food.alive[i] = 1
 	w.food.alive_count = 3
+	w.swarm.count = 1
 	for i in 4:
 		var k := w.swarm.add_clone()
 		w.swarm.pos[k] = host + Vector2(-60.0 - i * 25.0, 30.0)
@@ -46,7 +47,7 @@ func run(t) -> void:
 	spy.seen.clear()
 	await t.pump_frames(1)
 
-	var expect := 1 + w.swarm.count - 1 + w.food.alive_count + w.pred_count
+	var expect := 1 + w.swarm.count - 1 + w.food.alive_count + w.critter_count
 	t.eq(spy.seen.size(), expect, "호스트·분신·먹이·포식자가 전부 그려졌다")
 
 	# The captured position must EQUAL the simulation's, not merely be non-zero: passing Vector2.ZERO for

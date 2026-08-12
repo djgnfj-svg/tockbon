@@ -64,11 +64,14 @@ func _paint(c: CanvasItem) -> void:
 		var col: Color = Look.CLONE_COLOR.lerp(Look.CLONE_LOADED_COLOR, load_t)
 		_paint_cell(c, p, r, col, _squash(sw.vel[i], Rules.CLONE_SPEED_FOLLOW), _heading(sw.vel[i]))
 
-	for k in world.pred_count:
-		var p := world.pred_pos[k]
+	for k in world.critter_count:
+		var p := world.critter_pos[k]
 		if not view_rect.has_point(p):
 			continue
-		_paint_cell(c, p, Look.PREDATOR_RADIUS, Look.PREDATOR_COLOR, Vector2.ONE)
+		var prey := world.is_hunter_of(k)
+		_paint_cell(c, p, world.critter_radius(k),
+				Look.CRITTER_PREY_COLOR if prey else Look.CRITTER_COLOR,
+				Vector2.ONE, _heading(world.critter_dir[k] * Rules.CRITTER_SPEED))
 
 	var host_col: Color = Look.HOST_COLOR if world.host_grace <= 0.0 else Look.HOST_HURT_COLOR
 	var host_r: float = Look.HOST_RADIUS * (1.0 + _absorb_pop * 0.35)
@@ -81,14 +84,27 @@ func _paint_cell(c: CanvasItem, p: Vector2, r: float, col: Color, squash: Vector
 	# The shadow does not rotate with the body — it lies on the ground, and rotating it is the tell that
 	# turns a squashed blob back into a spinning sprite.
 	c.draw_set_transform(p + Vector2(0.0, r * 0.62), 0.0, Vector2(squash.x, squash.y * 0.42))
-	c.draw_circle(Vector2.ZERO, r, SHADOW)
+	c.draw_colored_polygon(_blob(r), SHADOW)
 	c.draw_set_transform(p, rot, squash)
-	c.draw_circle(Vector2.ZERO, r, col)
+	c.draw_colored_polygon(_blob(r), col)
 	# Drawn unrotated, so the light stays overhead however the body is stretched. Lit from one direction
 	# for every body in the scene — the GDD's one hard art rule, and it starts here.
 	c.draw_set_transform(p, 0.0, Vector2.ONE)
-	c.draw_circle(Vector2(0.0, -r * 0.3), r * 0.5, col.lightened(0.3))
+	c.draw_colored_polygon(_blob(r * 0.52, Vector2(0.0, -r * 0.3)), col.lightened(0.28))
 	c.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
+## **A square with its corners knocked off** — the shape the GDD asked for and the user asked for again
+## after seeing circles. Eight points, built per call: cheaper than it looks against `draw_circle`, which
+## tessellates a great many more.
+func _blob(r: float, at: Vector2 = Vector2.ZERO) -> PackedVector2Array:
+	var k := r * Look.CORNER
+	return PackedVector2Array([
+		at + Vector2(-r + k, -r), at + Vector2(r - k, -r),
+		at + Vector2(r, -r + k), at + Vector2(r, r - k),
+		at + Vector2(r - k, r), at + Vector2(-r + k, r),
+		at + Vector2(-r, r - k), at + Vector2(-r, -r + k),
+	])
 
 
 func _paint_ring(c: CanvasItem, p: Vector2, r: float, col: Color) -> void:

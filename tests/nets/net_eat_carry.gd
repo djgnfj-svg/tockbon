@@ -62,7 +62,11 @@ func run(t) -> void:
 	w.swarm.carried[k] = 9.0
 	var banked_before: float = w.swarm.banked
 	var count_before: int = w.swarm.count
-	w.pred_pos[0] = Vector2(500.0, 500.0)
+	# One clone against a threat-5 critter: nowhere near `SWARM_PER_THREAT`, so the critter is the hunter.
+	w.critter_count = 1
+	w.critter_pos[0] = Vector2(500.0, 500.0)
+	w.critter_threat[0] = 5
+	w.critter_dir[0] = Vector2.ZERO
 	w.step(DT)
 
 	t.eq(w.swarm.count, count_before - 1, "물린 분신은 사라진다")

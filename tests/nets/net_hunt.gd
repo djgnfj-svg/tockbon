@@ -1,21 +1,22 @@
 extends RefCounted
-## The host, the dash, and the three speeds.
+## The host, the dash, and the ecosystem.
 ##
-## **The speed ordering is what the design calls the whole tension** — host > predator > scattered clone,
-## so the host always escapes and an abandoned clone never does. It was untested: a verifier dropped
-## `PREDATOR_SPEED` to 20 and raised `CLONE_SPEED_SCATTER` to 500 and every net stayed green, because the
-## one net that touches predators parks one **on top of** a clone, where speed never runs.
+## **The speed ordering is what the design calls the whole tension** — host > critter > scattered clone,
+## so the host always escapes and an abandoned clone never does. It was untested: dropping
+## `CRITTER_SPEED` to 20 and raising `CLONE_SPEED_SCATTER` to 500 left every net green, because the one
+## net that touched them parked a critter **on top of** a clone, where speed never runs.
 ##
-## `host_input` and `try_dash()` appeared in no net at all. `HOST_SPEED = 0` was green.
+## **And critters are not predators.** Six things walking at the player from the first second was the
+## user's first complaint; a critter now wanders until something enters `CRITTER_SENSE`, and then the
+## swarm's size against its threat decides which of the two is the meal. Both directions are asserted
+## here, because the reversal — what you ran from becoming what you eat — is the point of the design.
 
 const DT := 1.0 / 60.0
 
 
 func run(t) -> void:
-	# The ordering, as a statement. Cheap, and it fails the moment someone tunes one of the three without
-	# looking at the other two.
-	t.ok(Rules.HOST_SPEED > Rules.PREDATOR_SPEED, "호스트가 포식자보다 빠르다")
-	t.ok(Rules.PREDATOR_SPEED > Rules.CLONE_SPEED_SCATTER, "포식자가 흩어진 분신보다 빠르다")
+	t.ok(Rules.HOST_SPEED > Rules.CRITTER_SPEED, "호스트가 생물보다 빠르다")
+	t.ok(Rules.CRITTER_SPEED > Rules.CLONE_SPEED_SCATTER, "생물이 흩어진 분신보다 빠르다")
 
 	# -- the host actually moves -------------------------------------
 	var sw := Swarm.new()
@@ -23,9 +24,9 @@ func run(t) -> void:
 	sw.host_input = Vector2.RIGHT
 	sw.step(DT, null)
 	var walk := sw.pos[0].distance_to(Vector2(1000.0, 1000.0))
-	# 5.33 is pinned: read through `Rules.HOST_SPEED` this check scales with the constant and stays green
+	# 3.33 is pinned: read through `Rules.HOST_SPEED` this check scales with the constant and stays green
 	# when the speed is set to zero.
-	t.ok(absf(walk - 5.33) < 0.02, "한 스텝에 320px/s 만큼 걸었다 (%.3f)" % walk)
+	t.ok(absf(walk - 3.33) < 0.02, "한 스텝에 200px/s 만큼 걸었다 (%.3f)" % walk)
 
 	# -- and the dash is a different thing ---------------------------
 	t.ok(sw.try_dash(), "대시가 나간다")
@@ -35,61 +36,104 @@ func run(t) -> void:
 	var dash_step := sw.pos[0].distance_to(before)
 	t.ok(dash_step > walk * 2.0, "대시 한 스텝이 걷기보다 훨씬 멀다 (%.1f > %.1f)" % [dash_step, walk])
 
-	# -- a predator closes on a clone --------------------------------
+	# -- nothing crosses the map to reach you ------------------------
+	# The complaint that started this: a thing that walks at you from the far edge is an ambush, not an
+	# ecosystem. Outside its senses it must wander, and wandering does not close distance on purpose.
+	var far := World.new()
+	far.setup(41)
+	_silence_food(far)
+	_lone_host(far)
+	far.critter_count = 1
+	far.critter_pos[0] = far.swarm.pos[0] + Vector2(1600.0, 0.0)
+	far.critter_threat[0] = 5
+	far.critter_dir[0] = Vector2.RIGHT
+	var far0: float = far.critter_pos[0].distance_to(far.swarm.pos[0])
+	for _s in 120:
+		far.step(DT)
+	t.ok(far.critter_pos[0].distance_to(far.swarm.pos[0]) > far0 - 60.0,
+			"감지 범위 밖 생물은 나를 향해 오지 않는다")
+
+	# -- inside its senses, and bigger than the swarm, it comes ------
 	var w := World.new()
 	w.setup(31)
 	_silence_food(w)
 	_lone_host(w)
-	w.pred_count = 0
+	w.critter_count = 0
 	var c := w.swarm.add_clone()
 	w.swarm.pos[c] = Vector2(1000.0, 1000.0)
 	w.swarm.command_scatter()
 	w.swarm.pos[c] = Vector2(1000.0, 1000.0)
 	w.swarm.pos[0] = Vector2(3000.0, 1000.0)
-	w.pred_pos[0] = Vector2(1000.0, 1200.0)
-	w.pred_count = 1
-	var gap0: float = w.pred_pos[0].distance_to(w.swarm.pos[c])
-	for _s in 60:
+	w.critter_count = 1
+	w.critter_pos[0] = Vector2(1000.0, 1300.0)
+	w.critter_threat[0] = 5
+	w.critter_dir[0] = Vector2.ZERO
+	t.ok(not w.is_hunter_of(0), "분신 하나로는 위협 5짜리를 못 잡는다")
+	var gap0: float = w.critter_pos[0].distance_to(w.swarm.pos[c])
+	for _s in 90:
 		if w.swarm.count < 2:
 			break
 		w.step(DT)
-	t.ok(w.swarm.count < 2 or w.pred_pos[0].distance_to(w.swarm.pos[1]) < gap0,
-			"포식자가 흩어진 분신에게 붙는다")
+	t.ok(w.swarm.count < 2 or w.critter_pos[0].distance_to(w.swarm.pos[1]) < gap0,
+			"약한 무리에게는 생물이 붙는다")
 
-	# -- and loses ground against the host ---------------------------
+	# -- outgrow it and the chase runs the other way -----------------
+	var big := World.new()
+	big.setup(36)
+	_silence_food(big)
+	_lone_host(big)
+	for _i in 20:
+		big.swarm.add_clone()
+	big.critter_count = 1
+	big.critter_pos[0] = big.swarm.pos[0] + Vector2(300.0, 0.0)
+	big.critter_threat[0] = 2
+	big.critter_dir[0] = Vector2.ZERO
+	t.ok(big.is_hunter_of(0), "무리가 스무 마리면 위협 2짜리는 먹이다")
+	var flee0: float = big.critter_pos[0].distance_to(big.swarm.pos[0])
+	var banked0: float = big.swarm.banked
+	for _s in 30:
+		big.step(DT)
+	if big.critter_count == 0:
+		t.ok(big.swarm.banked > banked0, "따라잡으면 잡아먹고 은행이 늘어난다")
+	else:
+		t.ok(big.critter_pos[0].distance_to(big.swarm.pos[0]) > flee0,
+				"먹이가 된 생물은 도망친다 (%.0f → %.0f)" % [flee0, big.critter_pos[0].distance_to(big.swarm.pos[0])])
+	t.eq(big.host_hp, Rules.HOST_HP, "내가 사냥자일 때는 맞지 않는다")
+
+	# -- a fleeing host outruns it -----------------------------------
 	var w2 := World.new()
 	w2.setup(32)
 	_silence_food(w2)
 	_lone_host(w2)
-	w2.pred_count = 0
 	w2.swarm.pos[0] = Vector2(1000.0, 1000.0)
-	w2.pred_pos[0] = Vector2(700.0, 1000.0)
-	w2.pred_count = 1
+	w2.critter_count = 1
+	w2.critter_pos[0] = Vector2(700.0, 1000.0)
+	w2.critter_threat[0] = 5
+	w2.critter_dir[0] = Vector2.ZERO
 	w2.swarm.host_input = Vector2.RIGHT
-	var gap_before: float = w2.pred_pos[0].distance_to(w2.swarm.pos[0])
+	var gap_before: float = w2.critter_pos[0].distance_to(w2.swarm.pos[0])
 	for _s in 120:
 		w2.step(DT)
-	var gap_after: float = w2.pred_pos[0].distance_to(w2.swarm.pos[0])
-	t.ok(gap_after > gap_before + 50.0,
-			"도망치는 호스트에게서 포식자가 뒤처진다 (%.0f → %.0f)" % [gap_before, gap_after])
+	var gap_after: float = w2.critter_pos[0].distance_to(w2.swarm.pos[0])
+	t.ok(gap_after > gap_before + 30.0,
+			"도망치는 호스트에게서 생물이 뒤처진다 (%.0f → %.0f)" % [gap_before, gap_after])
 
 	# -- contact costs one hit, and only one inside the grace --------
 	var w3 := World.new()
 	w3.setup(33)
 	_silence_food(w3)
 	_lone_host(w3)
-	w3.pred_count = 0
-	w3.pred_pos[0] = w3.swarm.pos[0]
-	w3.pred_count = 1
+	w3.critter_count = 1
+	w3.critter_pos[0] = w3.swarm.pos[0]
+	w3.critter_threat[0] = 5
+	w3.critter_dir[0] = Vector2.ZERO
 	w3.step(DT)
-	t.eq(w3.host_hp, Rules.HOST_HP - 1, "포식자에 닿으면 한 대 맞는다")
+	t.eq(w3.host_hp, Rules.HOST_HP - 1, "생물에 닿으면 한 대 맞는다")
 	for _s in 30:
 		w3.step(DT)
 	t.eq(w3.host_hp, Rules.HOST_HP - 1, "무적 시간 안에는 두 번 맞지 않는다")
 
 	# -- the run ends by itself --------------------------------------
-	# Deleting the run-length condition was green: the run never finishes, the result screen never fires,
-	# and the four numbers the whole build exists to produce never reach a person.
 	var w5 := World.new()
 	w5.setup(35)
 	w5.elapsed = Rules.RUN_LENGTH - 0.05
@@ -99,19 +143,19 @@ func run(t) -> void:
 		w5.step(DT)
 	t.ok(w5.over, "시간이 다 되면 런이 끝난다")
 
-	# -- predators never materialise in your lap ---------------------
+	# -- and nothing spawns in your lap ------------------------------
 	# Six spawns per run, each with roughly a 31% chance of landing inside the exclusion zone by luck —
 	# one seed would have let a missing retry loop through about one time in nine. Ten seeds instead.
 	var worst := INF
 	for s in 10:
 		var w4 := World.new()
 		w4.setup(300 + s)
-		for k in w4.pred_count:
-			worst = minf(worst, w4.pred_pos[k].distance_to(w4.swarm.pos[0]))
+		for k in w4.critter_count:
+			worst = minf(worst, w4.critter_pos[k].distance_to(w4.swarm.pos[0]))
 	t.ok(worst >= 900.0, "열 판을 돌려도 스폰은 화면 밖에서 일어난다 (%.0f)" % worst)
 
 
-## A run now opens with `START_CLONES` in the swarm, and every check below wants a swarm it placed itself.
+## A run now opens with `START_CLONES` in the swarm, and every check here wants a swarm it placed itself.
 ## Cutting `count` back to 1 is safe by construction: the arrays are a dense prefix and row 0 is the host.
 func _lone_host(w: World) -> void:
 	w.swarm.count = 1

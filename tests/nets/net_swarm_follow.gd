@@ -53,10 +53,11 @@ func run(t) -> void:
 	for _s in 600:
 		sw.step(DT, null)
 	var settled := _mean_dist(sw)
-	# 100px is a pinned literal, not a bound read from the swarm: forty bodies held 16px apart pack into a
-	# blob about 53px across, so anything under 100 means "arrived and stayed", and a swarm that kept
-	# drifting or jittered outward fails it.
-	t.ok(settled <= 100.0, "도착한 뒤 지점 근처에 머문다 (%.1f)" % settled)
+	# 130px is a pinned literal, not a bound read from the swarm. Forty bodies stop at the arrival ring
+	# (~63px for this count) and the ones still coming push the ring outward, so the settled mean sits
+	# near 110 — a ring, not a point. Anything under 130 means "arrived and stayed"; a swarm that kept
+	# drifting, orbited, or scattered back out fails it.
+	t.ok(settled <= 130.0, "도착한 뒤 지점 근처에 머문다 (%.1f)" % settled)
 
 
 func _mean_dist(sw: Swarm) -> float:

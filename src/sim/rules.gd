@@ -19,12 +19,15 @@ const FIELD := Vector2(3840.0, 2160.0)
 const POOL := 128
 const CLONE_CAP := 40
 
-const HOST_SPEED := 320.0
-const CLONE_SPEED_FOLLOW := 340.0
-const CLONE_SPEED_SCATTER := 200.0
-const PREDATOR_SPEED := 260.0
+## **Everything was 60% faster than this and the user's first word for it was "too fast".** The ordering is
+## what matters, not the magnitudes — host > critter > scattered clone — so all four came down together
+## and the tension is untouched.
+const HOST_SPEED := 200.0
+const CLONE_SPEED_FOLLOW := 215.0
+const CLONE_SPEED_SCATTER := 125.0
+const CRITTER_SPEED := 165.0
 
-const DASH_SPEED := 900.0
+const DASH_SPEED := 560.0
 const DASH_TIME := 0.16
 const DASH_COOLDOWN := 0.8
 
@@ -80,16 +83,36 @@ const FOOD_SPOTS := 500
 const FOOD_SPOT_COOLDOWN := 12.0
 const FOOD_RESPAWN_PER_SEC := 6.0
 
-# -- predators -----------------------------------------------------
-const PREDATOR_START := 6
-const PREDATOR_INTERVAL := 60.0
-const PREDATOR_MAX := 24
-const PREDATOR_RADIUS := 18.0
+# -- critters ------------------------------------------------------
+## **They are not predators any more, they are the ecosystem.** Six things walked straight at the player
+## from the first second and the user's read was immediate: *this should be something you grow into being
+## able to eat*, not something that hunts you on a timer.
+##
+## So each critter carries a `threat`, and the comparison runs both ways: a swarm smaller than the threat
+## is prey and gets chased, a swarm that has outgrown it becomes the hunter and the critter flees. **What
+## you ran from ten levels ago is food now** — the GDD's tier reversal, in one number and one comparison,
+## with no tiers.
+const CRITTER_START := 6
+const CRITTER_INTERVAL := 45.0
+const CRITTER_MAX := 24
+const CRITTER_THREAT_MIN := 1
+const CRITTER_THREAT_MAX := 5
+## Clones needed per point of threat before the swarm flips from prey to hunter.
+const SWARM_PER_THREAT := 5.0
+## Body radius scales with threat, so a dangerous one is visibly bigger before it is close.
+const CRITTER_RADIUS_BASE := 13.0
+const CRITTER_RADIUS_PER_THREAT := 4.0
+## How far a critter notices anything. **Nothing crosses the map to reach you** — outside this it wanders,
+## which is the whole difference between an ecosystem and an ambush.
+const CRITTER_SENSE := 520.0
+## Eating one pays this much per point of threat. The reward for growing into a hunter.
+const CRITTER_MEAT := 6.0
+
 ## Contact costs the host one hit; one mistake must not be the run.
 const HOST_HP := 3
 const HOST_HIT_GRACE := 1.0
-## Predators enter from outside the camera, never on top of the player.
-const PREDATOR_SPAWN_MIN_DIST := 900.0
+## Critters enter from outside the camera, never on top of the player.
+const CRITTER_SPAWN_MIN_DIST := 900.0
 
 # -- growth --------------------------------------------------------
 ## +1 clone per this much banked, automatic, spending nothing. A timed split would make the swarm's size
