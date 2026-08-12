@@ -38,11 +38,16 @@ For `partial`, **always attach what works and what doesn't, briefly.** "Partial"
 
 ## Index
 
-**Empty.** The concepts that lived here belonged to the deleted game (`../next-game.md`) and went with it.
+| Concept | Implemented | Accepted |
+|---|---|---|
+| [Circle · rune · glyph](circle-rune-glyph.md) — the three axes, cut along time | none | the split itself |
 
-**A concept never changes folder, so this folder normally only grows** — it being empty means the new game
-has not had its first design conversation yet, not that anything was demoted.
+**Recovered from `v1-sim`, not written for the current game.** Its axes survive the genre change; its
+numbers and timings do not. Read the warning box in its header before trusting a line of it.
 
-⇒ **The first row appears the moment a feature is discussed with the user.** `CLAUDE.md`: when a feature
-comes up in conversation, it gets a doc here and a row in this table, headed by `Implemented` and `Accepted`
-on separate lines — **without both, "written down" reads as "exists".**
+The summon/build/fit defense structure that briefly lived here was **shelved whole** on 2026-08-12 and is
+preserved in [Core defense is off](../decisions/defense-shelved.md).
+
+**A concept never changes folder, so this folder only grows.** `CLAUDE.md`: when a feature comes up in
+conversation, it gets a doc here and a row in this table, headed by `Implemented` and `Accepted` on separate
+lines — **without both, "written down" reads as "exists".**

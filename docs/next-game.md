@@ -1,10 +1,27 @@
-# The next game — top-down magic-circle core defense
+# The next game
+
+**Status**: **cells that divide and multiply.** Everything is Crab crossed with a roguelike, on minimal art.
+**Target: end of August 2026** — a finished thing, not a shippable product. **Nothing about it is designed
+yet**; the design conversation is the next session's job.
+
+**Why cells**: almost no art is needed, one circle is a cell, and **the hands never stop** because you are
+steering a growing mass. The user picked it on that basis.
+
+> ⚠ **Everything below is void.** On 2026-08-12 the direction changed five times — core defense → one-noun
+> circles → summon+build+fit → magic-circle survivors-like → cells — and **the magic circle was dropped
+> entirely** ([why](decisions/magic-circle-dropped.md)); the defense structure is shelved intact
+> ([why](decisions/defense-shelved.md)).
+>
+> **What survives**: why the old game was thrown away, the `tools/pixel/` notes, and above all
+> **[the planning principles](planning-principles-ko.md)** — the eight judgments that came out of the day
+> and outlive any direction. **December is replaced by end of August.**
+
+---
+
+## Void — the dropped framing, kept for context
 
 **One line**: hold a core at the centre while monsters come from every direction, and **draw magic circles
 as the turrets that hold them off.**
-
-**Status**: direction settled in conversation on 2026-08-12. **Not a spec.** The build order and the numbers
-are still open — what is fixed is the shape and what was thrown away.
 
 > **This document survives the reset.** Everything else in `src/`, `tests/net_*` and the rest of `docs/` is
 > being deleted; the AI harness (`CLAUDE.md`, `.claude/`, the net runner, `tools/pixel/`) and this file carry over.
@@ -17,42 +34,31 @@ are still open — what is fixed is the shape and what was thrown away.
 |---|---|
 | View | **Top-down.** Two-direction sprites are enough — Vampire Survivors and Brotato ship that way |
 | Structure | **Defend a core at the centre.** Monsters arrive from every direction and **some attack at range** |
-| The core loop | **Draw magic circles, place them as turrets, upgrade the castle.** That is the fun, not the swordplay |
+| The core loop | **Summon soldiers from a circle, build towers, fit circles into them** — see [Core defense is off](decisions/defense-shelved.md) |
 | Map | **One map.** The variety budget goes into monsters instead |
 | Genre | Roguelike — a run's identity is which circle you took in |
 | Art | **2D.** The `tools/pixel/` ComfyUI pipeline is the one proven asset from the old project |
 
 ### The one mechanic that makes it a game, not a tower-defense clone
 
-**A circle can be planted or carried.**
+**The circle is fitted into the tower and the bullet changes.** Soldiers come out of a summoning circle on
+their own; towers are built; **what a tower fires is decided by the circle in it.** Full doc:
+[Core defense is off](decisions/defense-shelved.md).
 
-- **Planted** — strong, but it holds one spot only
-- **Carried** — weak, but it follows you
+**There is no preparation phase.** The level-up is the only pause, and fitting happens in it.
 
-That is a live choice every time a circle is assembled, and it gives the same glyph two different values
-depending on where it ends up.
-
-### Why ranged monsters are load-bearing, not flavour
-
-Melee-only attackers are solved by walking backwards. **Ranged ones break that** — and specifically,
-**a ranged monster shooting a planted circle forces the player to leave the centre and go kill it.**
-
-```
-plant a strong circle  →  ranged monster shoots it from outside its reach
-                       →  go out and kill it, or lose the circle
-                       →  "where should I be standing right now" is the question every second
-```
-
-⇒ **This is where close-quarters combat earns its place.** It is not bolted on for feel; the structure asks
-for it. The user's own taste (they like melee) and the defense structure meet here rather than fighting.
+> Three mechanics previously stood here — *planted vs carried*, *ranged monsters forcing the player out*,
+> and *one noun for the whole game* — and all three are gone. They are in
+> [`decisions/`](decisions/README.md) with the reasons.
 
 ### What follows and is not yet decided
 
-- Planted circles need **durability**, or nothing is at stake when a ranged monster shoots one
-- Whether a planted circle can be **picked back up** — recoverable means flexible, permanent means each
-  placement is heavy
-- **How many can be planted at once.** This is the resource constraint, and the user named the principle:
+- **What the player's body does during a wave.** The last unfilled hole
+- **What the circles are, and how many.** The run's identity is which ones you took in
+- **How many towers can stand at once.** This is the resource constraint, and the user named the principle:
   **"you can't open everything"**
+- Whether a circle appears instantly or **has to be drawn by someone who walks there** — raised and
+  unresolved; it collides with the build-time question in `idea-log-ko.md`
 
 ---
 

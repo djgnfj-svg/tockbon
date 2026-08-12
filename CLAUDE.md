@@ -8,9 +8,14 @@ Loaded into every session and every agent. **Keep only what applies to everyone.
 thrown away in one decision, and **what is left is the harness that built it** — this file, `.claude/`,
 the net runner, `tools/pixel/`, and the Korean font.
 
-**The new direction is in `docs/next-game.md`** — top-down magic-circle core defense, shipping December 2026.
-**Read it before proposing anything.** It also records why the old game died, so the same call is not
-re-litigated from scratch.
+**The new direction is in `docs/next-game.md`** — **cells that divide and multiply**, finished by the end of
+August 2026. **Read it before proposing anything.** It also records why the old game died, so the same call
+is not re-litigated from scratch.
+
+⚠ **The direction changed five times on 2026-08-12 alone**, and the magic circle was dropped at the end of
+it. **`docs/planning-principles-ko.md` is what came out of that day** — eight one-line judgments that hold
+whatever the game turns out to be. **Open it before any planning conversation.** The first of them:
+**the hands must never be idle**; the second: **planning cannot decide whether something is fun.**
 
 **Everything the old game measured is recoverable at the tag `v1-sim`.** Nothing was lost, only unloaded.
 **Do not restore code from it** — it was written against constraints (integer determinism, a 20Hz sim tick)
@@ -63,6 +68,21 @@ When the user asks a question — "what is this", "list the options", "how does 
 **Filing the answer in a doc and replying with the filename is the failure this exception exists to stop.**
 A doc may be written *as well*, when the answer is worth keeping — **but the chat still carries the answer.**
 
+#### The exception has a ceiling — **10 lines** (decided by the user)
+
+It buys an answer, not an essay. A design conversation ran five rounds where **every reply was a list of
+options plus reasoning plus a recommendation plus the next question**, and the user stopped the conversation
+to say the brevity rule had apparently been deleted. **It had not — the exception was being read as a
+licence.**
+
+- **One axis per reply.** Not the axis and its consequence and the axis after that
+- **Options are one line each.** The reason goes on the same line or is cut
+- **One line of recommendation.** Not three reasons for it
+- **The next question is one line, at the end** — or it waits for the next reply
+- **Do not restate what the user just said back to them.** They know what they said
+
+**Rule of thumb: if the reply has more than one bold heading's worth of thought in it, it is two replies.**
+
 ### And **do not close a conversation the user is still having**
 
 Ending three replies in a row with "shall I start?" reads as being shut down, and it was — **the user said so
@@ -74,6 +94,7 @@ opens up, and stop** — the user will say when they are done thinking.
 | Doc | Question it answers |
 |---|---|
 | `docs/next-game.md` | **What is being built now, and why the last one was thrown away** |
+| `docs/planning-principles-ko.md` | **How to judge a direction.** Survives every direction change — read it first |
 | `docs/archive/` | **Closed work. Don't read it, don't update it** — nothing there is true about today |
 
 `design/`, `decisions/` and `plans/` **do not exist yet.** They come back with the first feature.

@@ -36,6 +36,11 @@ Where it shakes if this reverses.
 | [No pixel simulation](no-pixel-simulation.md) | valid | Keeping water/fire cells · keeping only fire · keeping the grid for destructible terrain |
 | [No multiplayer before launch](no-multiplayer-before-launch.md) | valid | Lockstep determinism · host-authoritative co-op at launch |
 | [Top-down, not side-view floors](top-down-not-side-view-floors.md) | valid | A side-view floor-section tower · survivors-like with manual aim · the spellblade with a weapon roster |
+| [No leaving the core to fight](no-leaving-the-core-to-fight.md) | valid | Player melee combat · "where should I be standing" as the core question |
+| [The circle modifies the tower, it doesn't fire](circle-modifies-the-tower-not-fires.md) | valid | The circle as the turret · planted vs carried · placement as the core decision |
+| [Not everything is a magic circle](one-noun-for-everything.md) | valid | One noun for the whole game · turrets and buildings as circles · soldier population simulation · an NPC (deferred) |
+| [Core defense is off](defense-shelved.md) | valid | **The whole defense game** — soldiers · towers · workers · fitted circles · reward-marked wave forks. Shelved intact, not disproved |
+| [The magic circle is dropped](magic-circle-dropped.md) | valid | **The magic circle itself** — as identity, as a survivors-like, as anything. The designer could not picture it |
 
 **The old game's decisions went with it** and are at the tag `v1-sim`. They are not recovered here because
 every one of them answered "why not do X in *that* game" — the question does not transfer.
