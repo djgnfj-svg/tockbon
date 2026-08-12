@@ -24,7 +24,9 @@ var _bar_shown := 0.0
 
 
 func _ready() -> void:
-	set_anchors_preset(Control.PRESET_FULL_RECT)
+	# Offsets, not just anchors — see the same note in `card_panel.gd`. Every readout here is placed from
+	# `size`, so a zero-sized Control puts the clock and the hearts on top of the bank.
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 

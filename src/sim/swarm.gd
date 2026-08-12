@@ -280,7 +280,8 @@ func _try_eat(i: int, dt: float, food: Food) -> void:
 	var target := _target_food[i] if i > 0 else _nearest_food(pos[i], food)
 	if target < 0 or food.alive[target] == 0:
 		return
-	if pos[i].distance_to(food.pos[target]) > Rules.EAT_RADIUS:
+	var reach := Rules.EAT_RADIUS_HOST if i == 0 else Rules.EAT_RADIUS_CLONE
+	if pos[i].distance_to(food.pos[target]) > reach:
 		return
 	if not food.consume(target):
 		return

@@ -26,7 +26,11 @@ var _hover := -1
 
 
 func _ready() -> void:
-	set_anchors_preset(Control.PRESET_FULL_RECT)
+	# **`set_anchors_preset` sets anchors and leaves the offsets alone**, so a Control added to a bare
+	# CanvasLayer keeps `size == (0, 0)` and every layout below — all of which is computed from `size` —
+	# collapses into the top-left corner. Reported by the user on the first play: the cards came up in the
+	# wrong place. `_and_offsets_` is the one that actually resizes.
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	visible = false
 

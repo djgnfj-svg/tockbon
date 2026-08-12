@@ -23,6 +23,8 @@ func run(t) -> void:
 	for i in w.food.alive.size():
 		w.food.alive[i] = 0
 	w.food.alive_count = 0
+	# A run opens with clones now; this check places its own swarm, so cut back to the host first.
+	w.swarm.count = 1
 	for i in 5:
 		var k := w.swarm.add_clone()
 		w.swarm.carried[k] = float(i)

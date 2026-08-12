@@ -39,6 +39,7 @@ func run(t) -> void:
 	var w := World.new()
 	w.setup(31)
 	_silence_food(w)
+	_lone_host(w)
 	w.pred_count = 0
 	var c := w.swarm.add_clone()
 	w.swarm.pos[c] = Vector2(1000.0, 1000.0)
@@ -59,6 +60,7 @@ func run(t) -> void:
 	var w2 := World.new()
 	w2.setup(32)
 	_silence_food(w2)
+	_lone_host(w2)
 	w2.pred_count = 0
 	w2.swarm.pos[0] = Vector2(1000.0, 1000.0)
 	w2.pred_pos[0] = Vector2(700.0, 1000.0)
@@ -75,6 +77,7 @@ func run(t) -> void:
 	var w3 := World.new()
 	w3.setup(33)
 	_silence_food(w3)
+	_lone_host(w3)
 	w3.pred_count = 0
 	w3.pred_pos[0] = w3.swarm.pos[0]
 	w3.pred_count = 1
@@ -106,6 +109,12 @@ func run(t) -> void:
 		for k in w4.pred_count:
 			worst = minf(worst, w4.pred_pos[k].distance_to(w4.swarm.pos[0]))
 	t.ok(worst >= 900.0, "열 판을 돌려도 스폰은 화면 밖에서 일어난다 (%.0f)" % worst)
+
+
+## A run now opens with `START_CLONES` in the swarm, and every check below wants a swarm it placed itself.
+## Cutting `count` back to 1 is safe by construction: the arrays are a dense prefix and row 0 is the host.
+func _lone_host(w: World) -> void:
+	w.swarm.count = 1
 
 
 func _silence_food(w: World) -> void:

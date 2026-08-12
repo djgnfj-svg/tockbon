@@ -21,13 +21,13 @@ func run(t) -> void:
 	# turn a failing distance into a passing one.
 	sw.command_rally(sw.pos[c])
 
-	var far := _one_food(Vector2(1000.0 + Rules.EAT_RADIUS + 1.0, 1000.0))
+	var far := _one_food(Vector2(1000.0 + Rules.EAT_RADIUS_CLONE + 1.0, 1000.0))
 	sw.step(DT, far)
 	t.eq(far.alive_count, 1, "먹기 반경 밖 먹이는 안 먹힌다")
 	t.eq(sw.carried[c], 0.0, "반경 밖이면 아무것도 싣지 않는다")
 
 	# -- and from inside --------------------------------------------
-	var near := _one_food(Vector2(1000.0 + Rules.EAT_RADIUS - 1.0, 1000.0))
+	var near := _one_food(Vector2(1000.0 + Rules.EAT_RADIUS_CLONE - 1.0, 1000.0))
 	sw.eat_cd[c] = 0.0
 	sw.step(DT, near)
 	t.eq(near.alive_count, 0, "반경 안 먹이는 먹힌다")

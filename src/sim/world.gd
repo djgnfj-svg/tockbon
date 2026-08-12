@@ -38,6 +38,9 @@ func setup(run_seed: int = 1) -> void:
 	_rng.seed = run_seed
 	swarm.setup(run_seed)
 	food.setup(Rules.FIELD, Rules.FOOD_SPOTS, _rng)
+	for _i in Rules.START_CLONES:
+		swarm.add_clone()
+	peak_swarm = swarm.count - 1
 	pred_pos.resize(Rules.PREDATOR_MAX)
 	pred_count = 0
 	for _i in Rules.PREDATOR_START:

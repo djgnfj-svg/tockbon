@@ -113,6 +113,17 @@ func run(t) -> void:
 	t.ok(main.cards.visible, "레벨업하면 카드 창이 화면에 뜬다")
 	t.eq(main.cards.offer.size(), 3, "패널이 든 카드도 셋이다")
 
+	# **`visible` was not enough.** The panel came up in the top-left corner on the first play, because a
+	# Control added to a bare CanvasLayer keeps `size == (0, 0)` unless the preset sets offsets too — and
+	# every card rectangle is computed from `size`. Visible, wired, and in the wrong place.
+	var screen: Vector2 = main.get_viewport().get_visible_rect().size
+	t.eq(main.cards.size, screen, "카드 패널이 화면 전체 크기를 갖는다")
+	t.ok(main.hud.size == screen, "HUD 도 화면 전체 크기를 갖는다")
+	var first: Rect2 = main.cards._rect_of(0)
+	var last: Rect2 = main.cards._rect_of(2)
+	t.ok(first.position.x > 0.0 and last.end.x < screen.x, "카드 셋이 화면 안에 들어 있다")
+	t.ok(absf((first.position.x + last.end.x) * 0.5 - screen.x * 0.5) < 1.0, "카드가 가운데 놓인다")
+
 	var shell_before: int = main.world.swarm.count
 	var shell_pick: int = main.world.offer[0]
 	main.cards.picked.emit(shell_pick)

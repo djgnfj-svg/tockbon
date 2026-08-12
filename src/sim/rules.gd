@@ -56,7 +56,16 @@ const SENSE_RADIUS := 240.0
 const SENSE_CAP := 12
 
 # -- eating --------------------------------------------------------
-const EAT_RADIUS := 12.0
+## Eating is automatic on proximity, so the reach has to clear the BODY — at 12px, smaller than the host's
+## own 14px radius, food had to be run over dead centre and hunting read as broken. Reported by the user
+## on the first play, which is the only instrument that could have found it.
+const EAT_RADIUS_HOST := 26.0
+const EAT_RADIUS_CLONE := 16.0
+
+## The swarm the run opens with. **Zero was wrong**: the two swarm commands are the entire experiment and
+## with no clones to obey them the first minute is one square eating alone, so nothing under test is even
+## on screen. Six is enough to see a scatter and a rendezvous immediately.
+const START_CLONES := 6
 ## The host's mouth is worth ~2.5× a clone's. This is the ENTIRE reason the host stays in front, and it
 ## replaces the GDD's 50% tax with a speed — nothing to tune, nothing to explain in the UI.
 const EAT_PERIOD_HOST := 0.6
