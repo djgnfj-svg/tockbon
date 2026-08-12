@@ -1,6 +1,14 @@
 # The run is a climb up the food chain, not a survival timer
 
-**Status**: valid
+**Status**: **partly reversed (2026-08-13)** by
+[A stage is a habitat you clear by swallowing its apex](ladder-of-habitats-not-tiers.md)
+
+⚠ **What survives**: the run is a climb, not a survival timer, and enemies are chimeras built from the
+player's own slots. **What is dead**: the five-minute boss cadence, the tier abstraction, and the
+animals → humans → space ladder. A stage is now a **habitat**, cleared by swallowing its apex, and the
+ladder is beasts by habitat → dinosaurs → a final boss on its own stage. **The rejected-branch table below
+is still the record of why region conquest lost the first time** — it lost to "territory needs a map
+system", and that objection died when the map became one habitat-sized field per stage.
 
 ## What was decided
 

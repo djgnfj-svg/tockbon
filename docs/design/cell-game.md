@@ -9,6 +9,11 @@ slots, species currencies, chimeras, bosses, tiers, biomes, meta unlocks, the `3
 **Accepted**: **the core loop passed** — the user played the prototype and confirmed the fun. Everything
 above that is unbuilt is still `unseen`, and the parts economy is the largest unlooked-at piece.
 
+⚠ **A planning conversation on 2026-08-13 changed this document again.** Card prices are gone, evolution
+replaces the parts economy's gate, force and disposition are two axes, and tiers are habitats.
+**`stages-and-evolution` holds all of it** — the sections below are edited where they were made false, and
+that doc is newer wherever the two still disagree.
+
 ⚠ **The prototype already changed this document once, and will again.** Predators became critters carrying
 a `threat`, and the swarm's size against that number decides which of the two is the meal — **that is this
 doc's tier reversal, with no tiers and no boss.** What tiers are still for is open; see the tail of the
@@ -109,21 +114,20 @@ Three things are tracked and they never collapse into each other.
 |---|---|---|
 | **Level gauge** | one bar. Fills from **any** food regardless of species, and is **never spent** | Level-ups |
 | **Species total** | per species. **Only ever rises** | Which species show up on the cards |
-| **Species balance** | per species. **Drops when a part is bought** | Paying for a card |
+| ~~**Species balance**~~ | ~~per species, drops when a part is bought~~ | **Deleted 2026-08-13** — nothing spends it any more |
 
 **A level-up does exactly two things**: **+1 clone, automatically** — the card alone once the pool is full —
 and **three cards appear.**
 
-Each card reads `species · slot · price` — `crocodile · head · 12`. Taking one deducts from that species'
-**balance**, and **there is no way to pay for it with anything else.** Short on crocodile, the crocodile
-card is simply not affordable this level. Go eat another crocodile.
+⚠ **Cards have no price.** Each reads `species · slot`, and taking one costs nothing.
+The rule that charged the species' balance is dead and the reason is one sentence — the pool is *already*
+rolled from what you ate, so the price was a second lock on the same door. See
+[Card price removed](../decisions/card-price-removed.md); what replaced it as the reason to go deep on one
+species is the **species trait** in `stages-and-evolution`.
 
-**Every level-up produces at least one affordable card.** If no roll is affordable, the cheapest is
-discounted to the current balance — a level-up never hands the player nothing.
-
-**A part bought into an occupied slot replaces it, and the replaced part refunds half its species
-balance.** Slots are the only scarce thing on the body, and this is where the order parts arrive in
-becomes a decision instead of addition.
+**A part bought into an occupied slot replaces it.** Slots are the only scarce thing on the body. With the
+balance gone there is no half-refund, and the order parts arrive in becomes a decision through **traits**
+instead: filling slots from one species buys its trait, and breaking the set for a better part gives it up.
 
 **Which species a card shows is rolled from the totals, weighted by experience amount rather than kill
 count** — a big crocodile is not one rabbit. Three crocodiles' worth against one rabbit's makes each card
@@ -150,7 +154,10 @@ trickle; it arrives when the swarm does.
 Other ratios exist (gut rates, candidate weights, the rising chance on a miss) and **none of them has been
 picked.**
 
-### Parts — eight slots
+### Parts — twelve slots
+
+⚠ **Was eight until 2026-08-13.** Six external plus **six** internal now — the reasoning and the internal
+list are in `stages-and-evolution`. The rest of this section is unchanged.
 
 Species experience is a currency, and what it buys is **that species' body parts.**
 
@@ -166,7 +173,7 @@ bird gives wings and eyes. **That is what makes hunting selective.**
 Parts are **not bought on demand**. Three locks stack:
 
 - A part **appears among the candidates by chance**, and the strong ones are rare
-- If it appears, it still **costs** — a cheetah's legs cost many times a rabbit's ears
+- ~~If it appears, it still **costs**~~ — **deleted 2026-08-13 with the price.** Two locks remain, not three
 - **Missing it raises its chance next time**, so hunting cheetahs repeatedly is a strategy rather than a
   prayer
 
@@ -175,6 +182,11 @@ Parts are **not bought on demand**. Three locks stack:
 ### Left · right · space
 
 A part is a passive by being equipped, and **an active by being bound**. There is no separate skill list.
+
+**Not every part carries an active** (confirmed by the user, 2026-08-13). A part is one of three shapes:
+stats only, an active only, or both. Legs raise move speed *and* replace what `space` does; crocodile jaws
+bring `bite` in as a new left-click. **That is why force has to be derived from the stats rather than being
+a stat of its own** — see `stages-and-evolution`.
 
 - **Left / right click** — any part with an active
 - **Space** — movement only, and only from **hindlimbs or back**. **It has exactly one implementation**: an
@@ -232,6 +244,14 @@ once.
 **The host dies, the run ends.** Immediately, with no succession.
 
 ### The run — climbing the food chain
+
+⚠ **This whole section was replaced on 2026-08-13.** A stage is a **habitat** cleared by swallowing its
+apex; the ladder is beasts by habitat → dinosaurs → a final boss on its own stage; insects and human
+civilisation are both out, the second because **a machine is not something you eat**. Every stage carries
+special individuals — a fantastical beast, a chimera, a mutant — rolled per run.
+**`stages-and-evolution` holds it**, and
+[A stage is a habitat](../decisions/ladder-of-habitats-not-tiers.md) holds what lost. The paragraphs below
+are the dead version, kept only so the change is visible.
 
 **It starts at animals.** Small animals → large animals → **humans and their war machines** → space, and
 the escalation is meant to be faintly ridiculous. **What you fled from last stage is food in the next

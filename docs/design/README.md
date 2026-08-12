@@ -41,6 +41,7 @@ For `partial`, **always attach what works and what doesn't, briefly.** "Partial"
 | Concept | Implemented | Accepted |
 |---|---|---|
 | [Cell game](cell-game.md) — **the current game.** Split, harvest, buy animal parts, climb the food chain | partial — swarm · commands · rendezvous · carrying · level-up pick · ecosystem run. Parts, species, bosses, tiers do not | **the core loop passed**; everything unbuilt is unseen |
+| [Stages and evolution](stages-and-evolution.md) — **newer than the GDD where they disagree.** Habitats, evolution instead of card prices, force vs disposition, special individuals | none | none — one conversation, nothing played |
 | [Circle · rune · glyph](circle-rune-glyph.md) — the three axes, cut along time | none | the split itself |
 
 **Recovered from `v1-sim`, not written for the current game.** Its axes survive the genre change; its

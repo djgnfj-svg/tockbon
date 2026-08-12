@@ -10,10 +10,15 @@ Korean font — and on top of it now sits **`src/`, a working prototype of the c
 
 **Read `docs/next-game.md` and the cell GDD before proposing anything.** They also record why the old game
 died, so the same call is not re-litigated from scratch.
+⚠ **And read `stages-and-evolution` in the same breath — it is newer than the GDD wherever they disagree.**
+A planning conversation on 2026-08-13 deleted card prices and species currencies, replaced tiers with
+habitats, split force from disposition, and opened the body to twelve slots. **Stage 1 is grassland and the
+August build is that one stage played to a finished build.**
 
 **What runs**: one host you drive, a swarm that scatters and rallies, clones that carry what they ate until
 they touch you, an ecosystem of critters that chase or flee depending on how big the swarm has got, and a
-level-up card pick. **What does not**: parts, slots, species currencies, chimeras, bosses, tiers, meta.
+level-up card pick. **What does not**: parts, slots, traits, chimeras, habitats, meta.
+**Species currencies and tiers are not merely unbuilt — they were cut from the design.**
 
 ⇒ **The user played it and confirmed the fun.** Read the acceptance section of `proto-round-trip` before
 designing anything on top of it. **Four things that three rounds of adversarial

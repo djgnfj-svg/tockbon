@@ -46,7 +46,10 @@ Where it shakes if this reverses.
 | [A part is the skill](parts-are-the-skills.md) | valid | A separate ability roster · species-fixed skills · everything usable at once |
 | [Parts appear by chance](parts-drop-by-chance.md) | valid | Deterministic purchase · pure per-kill drops · price as the only gate |
 | [Meta unlocks, never stat boosts](meta-unlocks-not-stat-boosts.md) | valid | Permanent rate upgrades · a research tree · no meta layer |
-| [The run climbs a food chain](food-chain-not-a-timer.md) | valid | Survival timer · region conquest · wave defense · purpose-built monsters |
+| [The run climbs a food chain](food-chain-not-a-timer.md) | **partly reversed** by the habitat ladder | Survival timer · region conquest · wave defense · purpose-built monsters |
+| [A stage is a habitat you clear by swallowing its apex](ladder-of-habitats-not-tiers.md) | valid | Five-minute boss cadence · tiers · insects as the opener · human civilisation at the top · ordinary beasts · one continuous map |
+| [A level-up card has no price](card-price-removed.md) | valid | Price paid from the species balance · a shared currency · a gate-free card |
+| [Disposition and force are two axes](force-and-disposition-are-separate.md) | valid | The prototype's flee-when-outgrown rule · headcount as the comparison · three force-derived bands · colour-coded disposition · force in a UI panel |
 | [One level gauge, two numbers per species](one-level-gauge-two-species-numbers.md) | valid | One combined level · species XP alone · per-species level-ups · no levels at all · biomass · one number doing both jobs |
 | [One open field with biomes](open-field-with-biomes.md) | valid | Rooms and corridors · a flat field with no biomes |
 | [Clones are stupid by default](clones-are-stupid-by-default.md) | valid | Self-preserving clones · clones fleeing home · AI as a permanent upgrade |

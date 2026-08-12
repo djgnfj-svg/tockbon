@@ -9,9 +9,13 @@ ecosystem that chases or flees depending on how big the swarm has got, and a lev
 **The user played it and confirmed the fun** — the record of that play, and the four things it caught that
 the whole verification harness did not, is in `proto-round-trip`.
 
-**Still unbuilt**: parts, slots, species currencies, chimeras, bosses, tiers, biomes, meta unlocks.
-That is where the design work goes next, and the first open question is what tiers are still for now that
-the reversal — what you fled from becoming what you eat — works without them.
+**Still unbuilt**: parts, slots, chimeras, bosses, habitats, meta unlocks. **Species currencies are gone** —
+card prices were deleted on 2026-08-13.
+
+⇒ **The tier question is answered: there are no tiers.** A stage is a **habitat**, cleared by swallowing its
+apex, and the ladder runs beasts by habitat → dinosaurs → a final boss. Evolution replaced the card price,
+and force and disposition became two axes instead of one number.
+**All of it is in `stages-and-evolution`, which is newer than the GDD wherever they disagree.**
 
 **Why cells**: almost no art is needed, one circle is a cell, and **the hands never stop** because you are
 steering a growing mass. The user picked it on that basis.
