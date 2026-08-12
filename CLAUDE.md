@@ -2,15 +2,24 @@
 
 Loaded into every session and every agent. **Keep only what applies to everyone.**
 
-## The game was deleted on 2026-08-12. This repo is a harness with no game in it yet
+## The old game was deleted on 2026-08-12. A new one started the same day and **its first loop is playable**
 
-**`src/` does not exist.** Eight months of side-view magic action plus a pixel water/fire simulation were
-thrown away in one decision, and **what is left is the harness that built it** — this file, `.claude/`,
-the net runner, `tools/pixel/`, and the Korean font.
+Eight months of side-view magic action plus a pixel water/fire simulation were thrown away in one decision.
+**What survived is the harness that built it** — this file, `.claude/`, the net runner, `tools/pixel/`, the
+Korean font — and on top of it now sits **`src/`, a working prototype of the cell game.**
 
-**The new direction is in `docs/next-game.md`** — **cells that divide and multiply**, finished by the end of
-August 2026. **Read it before proposing anything.** It also records why the old game died, so the same call
-is not re-litigated from scratch.
+**Read `docs/next-game.md` and the cell GDD before proposing anything.** They also record why the old game
+died, so the same call is not re-litigated from scratch.
+
+**What runs**: one host you drive, a swarm that scatters and rallies, clones that carry what they ate until
+they touch you, an ecosystem of critters that chase or flee depending on how big the swarm has got, and a
+level-up card pick. **What does not**: parts, slots, species currencies, chimeras, bosses, tiers, meta.
+
+⇒ **The user played it and confirmed the fun.** Read the acceptance section of `proto-round-trip` before
+designing anything on top of it. **Four things that three rounds of adversarial
+verification and 102 green checks did not catch were found in five minutes of play**: a swarm that started
+at zero, an eat radius smaller than the body, a Control laid out from a zero size, and a threat model that
+was simply the wrong design. **Play is an instrument the harness does not contain.**
 
 ⚠ **The direction changed five times on 2026-08-12 alone**, and the magic circle was dropped at the end of
 it. **`docs/planning-principles-ko.md` is what came out of that day** — eight one-line judgments that hold
@@ -159,18 +168,27 @@ before starting, not from whatever commit happened to be current earlier.
 
 **Skeleton first, flesh later.** Do not demand every `TBD` in a design doc be filled before implementing.
 
-## Folders are contracts — **and the new game has none yet**
+## Folders are contracts
 
-The deleted game split `src/` into four folders with enforced rules, and a net scanned them recursively.
-**That device worked and is worth rebuilding** — but its contents were specific to a deterministic
-simulation, so **copying them forward would import constraints the new game does not have.**
+| Path | The rule it obeys |
+|---|---|
+| `src/sim/` | **Never touches the tree.** No `Node`, no `_draw`, no `Input`, no `get_node`, no `$`. Every file here is constructible and drivable by a net with `.new()` and nothing else |
+| `src/view/` | **Reads `sim`, never writes it.** Everything that is a Node or draws lives here, and **each drawing file exposes a hook** (`_paint_cell`, `_paint_text`) so a net can assert the arguments |
+| `src/shell/` | **The only place that reads `Input`**, and the only place that wires `sim` to `view`. It builds its children in code, so a net calling `_ready()` exercises the real wiring |
+| `src/look.gd` | **Every presentation constant, in exactly one file.** `src/sim/rules.gd` holds every constant that changes what happens |
 
-⇒ **When the new game's first folders appear, write their contract here and build the scan that enforces
-it.** Until then this section is deliberately empty.
+**The scan that enforces this is not written yet** — with a handful of files it would be a check that
+cannot fail. Write it when a folder has enough in it to drift: grep `src/sim/` for `extends Node` · `_draw`
+· `Input.` · `get_node` · `$`, grep `src/view/` for writes to `sim.`, grep outside `look.gd` for colour and
+pixel literals.
 
-**One rule from the old set survives on its own merit**: presentation constants live in exactly one file.
-Scattering them was measured — the power doubled and **zero things changed on screen**, because the numbers
-that would have shown it were in six places and only one moved.
+**The one-file rule for presentation constants is inherited and was measured**: scattering them meant the
+power doubled and **zero things changed on screen**, because the numbers that would have shown it were in
+six places and only one moved.
+
+**The flat-array swarm is a correctness contract, not a performance one.** 300 `Node2D`s cost 0.065ms here
+— the engine was never the wall. `carried[i]` living in a `PackedFloat32Array` is what makes "a clone
+killed far from home loses its cargo" **structurally true**, with no code that has to remember to drop it.
 
 ## Comments
 
@@ -196,8 +214,9 @@ that would have shown it were in six places and only one moved.
   covered it, it found **five more that the hand sweep had just missed.** Name the symbol: a function or
   constant name survives edits above it
 
-**`net_citations` was deleted with the rest of the nets. It is the first one worth rebuilding** — it needs
-no game, only text.
+**`net_citations` is rebuilt and running.** It joins wrapped comment lines **two ways** — space-joined and
+tight-joined — because a space-join alone cannot see a mid-token wrap, which is the shape it exists to
+find, and it carries two synthetic cases that fail the scanner itself rather than the tree.
 
 ## No fake code
 
@@ -276,14 +295,19 @@ These survive **even after you confirm every mutation goes red**:
   function returns.** The builder had closed this exact hole one file over and left it open here; a verifier
   who had not built it found it. **This is the case for the verifier never being the builder** — measured,
   not assumed
+- **`visible` is not "on screen", and neither is being wired.** `set_anchors_preset` sets anchors and
+  **leaves the offsets alone**, so a `Control` added to a bare `CanvasLayer` keeps `size == (0, 0)` — and
+  a panel that lays itself out from `size` then piles into the top-left corner while every check about it
+  passes. Assert the size against the viewport and assert the laid-out rectangles land inside it
 - **A tuning constant with a floor on one end and none on the other is half-measured.** One frame-count
   constant carried `>= 12`; its twin did not, so **2 through 11 were green** and the fade collapsed to a pop —
   the very thing the beat existed to remove. **One bite does not prove the range**
 
 ## Running the nets
 
-**There are no nets right now.** `tests/nets/` was deleted with the game; `tests/run_nets.gd` and
-`run_nets.ps1` survive and work as-is. The rules below are the runner's, not any net's.
+**Ten nets, 111 checks, about one second.** A net is `tests/nets/net_*.gd` with one method, `func run(t)`,
+and `t` gives you `ok` · `eq` · `pump_frames` · `expect_error` · `root`. **The wrapper reds below five
+nets** — that is the scan-broken detector, so nets land in groups, never one at a time.
 
 1. **"N passed" is not green.** `load()` returns non-null on a parse failure, so the count holds even with
    `src/` broken. Only the final `[wrapper]` line decides.

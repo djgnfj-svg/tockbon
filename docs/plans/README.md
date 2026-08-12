@@ -19,10 +19,17 @@ all three folders. **Links leak every single time** — `net_citations` catches 
 ---
 ## What is open right now
 
-**Nothing. All three folders are empty.**
+| Folder | Contents |
+|---|---|
+| `1.ready` | empty |
+| `2.active` | empty |
+| `3.done` | **The round trip** — the first prototype. Built, played, and the fun confirmed |
 
-The game was deleted on 2026-08-12 (`../next-game.md`) and every plan went with it — thirty-four docs, all
-of them describing a game that no longer exists. **They are recoverable at the tag `v1-sim` and should not
-be recovered**: each one was written against folder contracts and a tick rate the new game does not have.
+The old game was deleted on 2026-08-12 (`../next-game.md`) and every plan went with it — thirty-four docs
+describing a game that no longer exists. **They are recoverable at the tag `v1-sim` and should not be
+recovered**: each was written against folder contracts and a tick rate the new game does not have.
 
-⇒ **The first doc that lands here comes out of `game-planning`, not out of the archive.**
+⇒ **The one doc here is the exception to this folder's own rule about acceptance.** It sits in `3.done`
+*and* carries a passed acceptance, because the user played it and said so — normally that half lives in a
+`design/` header, and it is written in both places on purpose: this doc is the record of what the play
+session changed.

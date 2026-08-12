@@ -3,8 +3,16 @@
 **One line**: One square cell splits into a swarm, eats whatever it can catch, and spends what it digested
 on **real animals' body parts** — until it stands at the top of the food chain.
 
-**Implemented**: none — `src/` does not exist
-**Accepted**: unseen — every line below was settled in conversation and **nothing has been on a screen**
+**Implemented**: partial — the swarm and its two commands, the rendezvous, carrying and absorption, the
+level-up pick, automatic eating and the ecosystem all run — see `proto-round-trip`. **Not built**: parts,
+slots, species currencies, chimeras, bosses, tiers, biomes, meta unlocks, the `3 attack that` command.
+**Accepted**: **the core loop passed** — the user played the prototype and confirmed the fun. Everything
+above that is unbuilt is still `unseen`, and the parts economy is the largest unlooked-at piece.
+
+⚠ **The prototype already changed this document once, and will again.** Predators became critters carrying
+a `threat`, and the swarm's size against that number decides which of the two is the meal — **that is this
+doc's tier reversal, with no tiers and no boss.** What tiers are still for is open; see the tail of the
+prototype doc.
 
 **View: top-down.** Carried over unchanged from the previous direction. Nothing in this design needs
 gravity, and `scatter` spreading in every direction needs the opposite of a side view.

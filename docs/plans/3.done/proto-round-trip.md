@@ -1,8 +1,13 @@
 # Prototype — the round trip
 
-**Status**: built, unplayed.
-**Implemented**: all of it — `src/sim/`, `src/view/`, `src/shell/`, seven nets, 60 checks green in 0.7s
-**Accepted**: unseen. **Nobody has played it**, and a build existing is not acceptance
+**Status**: done. Built, played, and **the question it was built to answer came back yes.**
+**Implemented**: all of it — `src/sim/`, `src/view/`, `src/shell/`, ten nets, 111 checks green in 1.0s
+**Accepted**: **the user played it and said the fun is confirmed** — "나쁘지 않아, 일단 재미는 확인했고".
+Written down the moment it was said, per `CLAUDE.md`; conversations are lost and the repo is kept.
+
+⚠ **What is accepted is the loop, not the numbers.** The greedy-versus-cautious comparison below was never
+run — acceptance came from playing, which is the stronger instrument, but it means the 1.4× bar is still
+an open measurement rather than a passed one.
 
 **The one question**: **is scattering and calling home a decision, or a chore?**
 Everything else in the cell GDD is built on that round trip. If it is a chore, no amount of parts repairs it.
@@ -202,7 +207,31 @@ regardless of load** (measured); a performance net must loop `step()` synchronou
 - **Every clone dies far from home** — the run must be recoverable, not over
 - **Zero food left in a region** — depletion must read as "move", not as a bug
 
-## Acceptance
+## Acceptance — passed, and what play changed on the way
 
-**The user plays two runs and reads the four numbers.** Nothing here is accepted until they say the round trip
-felt like a choice — a build existing is not acceptance, and this doc does not close by inference.
+**The user played it and confirmed the fun.** Four things came out of three plays that 102 green checks had
+not caught, all of them the "runs correctly, invisible to a person" kind:
+
+- **The swarm started at zero.** The two commands are the whole experiment and nothing was there to obey
+  them. Six clones now
+- **Eating reached 12px while the host's body is 14px wide** — food had to be run over dead centre, and
+  hunting read as broken
+- **`set_anchors_preset` sets anchors and not offsets**, so the cards and the HUD were laid out from a
+  zero size and piled into the top-left corner. Visible, wired, in the wrong place
+- **Everything was 40% too fast**, and six predators walked at the player from the first second. That
+  second one was not a bug — it was the design being wrong, and it is what produced the ecosystem rule
+  below
+
+⇒ **The prototype's real output was not the four numbers. It was these four.** None of them is reachable
+by reading code, and the harness that found the rest could not have found any of them.
+
+## What the prototype changed in the design
+
+**Predators became an ecosystem, and it should propagate into the GDD.** Each critter carries a `threat`;
+the swarm's size against that number decides which of the two is the meal, and the critter flees once it
+has been outgrown. **That is the GDD's tier reversal — "what you fled from is food in the next stage" —
+with no tiers, no stages and no boss.** It is one number and one comparison, it was built in an afternoon,
+and it reads on screen as a colour flip.
+
+The open question it hands to design: **if the reversal already works without tiers, what are the tiers
+for?**

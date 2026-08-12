@@ -3,9 +3,15 @@
 **Status**: **cells that divide and multiply.** Everything is Crab crossed with a roguelike, on minimal art.
 **Target: end of August 2026** — a finished thing, not a shippable product.
 
-⇒ **The design now lives in [the cell game GDD](design/cell-game.md).** It was settled in one conversation
-and **nothing in it has been on a screen**; its `TBD` section is the honest list of what is still open,
-starting with how splitting is even triggered.
+⇒ **The design lives in [the cell game GDD](design/cell-game.md), and its core loop is now playable.**
+One host, a swarm that scatters and rallies, clones that carry what they ate until they touch you, an
+ecosystem that chases or flees depending on how big the swarm has got, and a level-up card pick.
+**The user played it and confirmed the fun** — the record of that play, and the four things it caught that
+the whole verification harness did not, is in `proto-round-trip`.
+
+**Still unbuilt**: parts, slots, species currencies, chimeras, bosses, tiers, biomes, meta unlocks.
+That is where the design work goes next, and the first open question is what tiers are still for now that
+the reversal — what you fled from becoming what you eat — works without them.
 
 **Why cells**: almost no art is needed, one circle is a cell, and **the hands never stop** because you are
 steering a growing mass. The user picked it on that basis.
