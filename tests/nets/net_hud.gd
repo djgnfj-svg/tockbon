@@ -37,19 +37,22 @@ func run(t) -> void:
 
 	t.ok(_has(spy.lines, "137"), "은행 숫자가 화면에 그대로 나온다 %s" % str(spy.lines))
 	t.ok(_has(spy.lines, "무리 5"), "무리 수가 나온다")
-	t.ok(_has(spy.lines, "10"), "무리가 지고 있는 것의 합(0+1+2+3+4)이 나온다")
+	t.ok(_has(spy.lines, "지고 있는 것 10"), "무리가 지고 있는 것의 합(0+1+2+3+4)이 나온다")
 
-	# The four end-of-run numbers, pinned to values a mutation cannot coincide with.
-	w.clones_lost = 7
+	# The four end-of-run numbers. **Matched with their labels, and pinned to values that are not
+	# substrings of each other.** A bare number match was measured worthless: swapping the clones-lost and
+	# peak-swarm rows stayed green, and deleting the clones-lost row outright stayed green too, because
+	# `"7"` was satisfied by the banked `"137"`. A player would read the swarm peak under "clones lost".
+	w.clones_lost = 42
 	w.cargo_lost = 23.0
 	w.peak_swarm = 19
 	w.over = true
 	spy.lines.clear()
 	await t.pump_frames(1)
-	t.ok(_has(spy.lines, "137"), "결과에 모은 것이 나온다 %s" % str(spy.lines))
-	t.ok(_has(spy.lines, "7"), "결과에 잃은 분신이 나온다")
-	t.ok(_has(spy.lines, "23"), "결과에 같이 날아간 화물이 나온다")
-	t.ok(_has(spy.lines, "19"), "결과에 가장 컸을 때가 나온다")
+	t.ok(_has(spy.lines, "모은 것 137"), "결과에 모은 것이 나온다 %s" % str(spy.lines))
+	t.ok(_has(spy.lines, "잃은 분신 42"), "결과에 잃은 분신이 제 이름표를 달고 나온다")
+	t.ok(_has(spy.lines, "같이 날아간 것 23"), "결과에 같이 날아간 화물이 나온다")
+	t.ok(_has(spy.lines, "가장 컸을 때 19"), "결과에 가장 컸을 때가 나온다")
 
 	t.root.remove_child(spy)
 	spy.queue_free()

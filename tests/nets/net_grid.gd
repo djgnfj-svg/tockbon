@@ -31,8 +31,9 @@ func run(t) -> void:
 	# and threw the pair ~80,000px to opposite corners of the field — and this net was green, because a
 	# blow-up satisfies "at least 16 apart" better than the correct answer does. Sweeping the separation
 	# strength from 0.45 down to 0.02 stayed green too, so the strength was entirely unmeasured.
-	# Travel is the check that pins both: a correction can never move a body more than the overlap it is
-	# resolving, on top of the speed it was already allowed.
+	# Travel is the ceiling — a correction can never move a body further than the overlap it is resolving,
+	# on top of the speed it was already allowed. **It is only half the pin**: a WEAKENED correction makes
+	# travel smaller, so the gap check above is what catches that direction. Two checks, two sides.
 	var travel := maxf(sw.pos[a].distance_to(Vector2(100.0, 100.0)), sw.pos[b].distance_to(Vector2(100.0, 100.0)))
 	t.ok(travel <= Rules.CLONE_SPEED_FOLLOW * DT + Rules.SEPARATION_MIN,
 			"겹침을 푸는 이동이 겹친 만큼을 넘지 않는다 (%.2f)" % travel)
@@ -70,6 +71,20 @@ func run(t) -> void:
 	# the cell to the whole field lands exactly there and goes red.
 	t.ok(tests <= placed * 20,
 			"후보 검사 수가 상한 안이다 — 격자가 실제로 가지를 친다 (%d ≤ %d)" % [tests, placed * 20])
+
+	# **The state the whole design turns on, and it was broken while every check was green.** Separation
+	# was only ever measured on TWO clones, and scatter's spacing check runs on a swarm that is spreading
+	# out. Forty bodies rallied onto one point is the case both this file and `_separate` name as the one
+	# that matters — measured there, the closest pair was 2.15px after twenty seconds and 58 pairs
+	# overlapped, because a fixed 24px arrival disc cannot hold forty bodies wanting 16px each.
+	# 15.0 is the same pinned literal `net_swarm_scatter` uses.
+	for _s in 20 * 60:
+		big.step(DT, null)
+	var closest := INF
+	for i in range(1, big.count):
+		for j in range(i + 1, big.count):
+			closest = minf(closest, big.pos[i].distance_to(big.pos[j]))
+	t.ok(closest >= 15.0, "집결 지점에 40마리가 모여도 서로 겹치지 않는다 (%.2f)" % closest)
 
 	# Timing anything through pumped frames measures nothing — headless pacing is pinned at 6.9ms whatever
 	# the load. A synchronous loop against the microsecond clock is the only honest way to catch a

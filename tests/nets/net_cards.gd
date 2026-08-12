@@ -52,6 +52,42 @@ func run(t) -> void:
 	w.step(DT)
 	t.ok(w.elapsed > frozen, "고른 뒤에는 다시 흐른다")
 
+	# -- and the multipliers actually reach behaviour ----------------
+	# **Asserting that `take_card` moved a field is not asserting that the field does anything.** Measured:
+	# every one of the five `* mul` factors could be deleted from `swarm.gd` with all 91 checks green —
+	# six of the eight cards would have been silently inert.
+	var m := Swarm.new()
+	m.setup(51, Vector2(1000.0, 1000.0))
+	m.host_input = Vector2.RIGHT
+	m.step(DT)
+	var base_walk := m.pos[0].x - 1000.0
+	m.host_speed_mul = 2.0
+	var mark := m.pos[0].x
+	m.step(DT)
+	var fast_walk := m.pos[0].x - mark
+	t.ok(fast_walk > base_walk * 1.9, "속도 카드가 실제 이동에 반영된다 (%.2f > %.2f)" % [fast_walk, base_walk])
+
+	t.ok(m.try_dash(), "첫 대시")
+	m.dash_left = 0.0
+	m.dash_cd_mul = 0.0
+	m.dash_cd = 0.0
+	t.ok(m.try_dash(), "쿨다운 배율이 0이면 곧바로 또 나간다 — 배율이 죽어 있으면 여기서 걸린다")
+
+	var e := Swarm.new()
+	e.setup(52, Vector2(1000.0, 1000.0))
+	e.host_eat_mul = 0.5
+	var f := Food.new()
+	f.pos = PackedVector2Array([Vector2(1004.0, 1000.0), Vector2(1006.0, 1000.0)])
+	f.alive = PackedInt32Array([1, 1])
+	f.timer = PackedFloat32Array([0.0, 0.0])
+	f.alive_count = 2
+	e.step(DT, f)
+	t.eq(e.banked, 1.0, "한 입 먹었다")
+	# Half the base period, so the second mouthful lands inside a window the unmultiplied rate cannot hit.
+	for _s in int(Rules.EAT_PERIOD_HOST * 0.75 * 60.0):
+		e.step(DT, f)
+	t.eq(e.banked, 2.0, "먹는 속도 카드가 실제 섭취 주기를 줄인다")
+
 	# -- and now through the shell that has to show it --------------
 	var main: Node = load("res://src/shell/main.gd").new()
 	t.root.add_child(main)
@@ -59,6 +95,18 @@ func run(t) -> void:
 
 	t.ok(main.cards != null and main.cards.is_inside_tree(), "셸이 카드 패널을 실제로 붙였다")
 	t.ok(not main.cards.visible, "레벨이 없을 때는 떠 있지 않다")
+
+	# **The camera and the culling rectangle, which nothing measured.** Blank out `_camera_rect()` and
+	# every food spot, clone and predator fails `view_rect.has_point()` and stops being drawn — only the
+	# host survives, drawn unconditionally — while the camera sits at the spawn point forever. 91 checks
+	# stayed green through exactly that.
+	t.ok(main.view.view_rect.has_point(main.world.swarm.pos[0]),
+			"카메라가 보는 사각형이 호스트를 담고 있다 — 비면 화면에서 전부 사라진다")
+	var cam_start: Vector2 = main.cam.position
+	main.world.swarm.pos[0] += Vector2(600.0, 0.0)
+	await t.pump_frames(6)
+	t.ok(main.cam.position.x > cam_start.x + 5.0, "카메라가 호스트를 따라간다")
+	t.ok(main.view.view_rect.has_point(main.world.swarm.pos[0]), "따라간 뒤에도 호스트를 담는다")
 
 	main.world.swarm.banked = 30.0
 	await t.pump_frames(3)

@@ -23,7 +23,9 @@ func run(t) -> void:
 	sw.host_input = Vector2.RIGHT
 	sw.step(DT, null)
 	var walk := sw.pos[0].distance_to(Vector2(1000.0, 1000.0))
-	t.ok(absf(walk - Rules.HOST_SPEED * DT) < 0.01, "한 스텝에 속도×dt 만큼 걸었다 (%.3f)" % walk)
+	# 5.33 is pinned: read through `Rules.HOST_SPEED` this check scales with the constant and stays green
+	# when the speed is set to zero.
+	t.ok(absf(walk - 5.33) < 0.02, "한 스텝에 320px/s 만큼 걸었다 (%.3f)" % walk)
 
 	# -- and the dash is a different thing ---------------------------
 	t.ok(sw.try_dash(), "대시가 나간다")
@@ -82,13 +84,28 @@ func run(t) -> void:
 		w3.step(DT)
 	t.eq(w3.host_hp, Rules.HOST_HP - 1, "무적 시간 안에는 두 번 맞지 않는다")
 
+	# -- the run ends by itself --------------------------------------
+	# Deleting the run-length condition was green: the run never finishes, the result screen never fires,
+	# and the four numbers the whole build exists to produce never reach a person.
+	var w5 := World.new()
+	w5.setup(35)
+	w5.elapsed = Rules.RUN_LENGTH - 0.05
+	w5.step(DT)
+	t.ok(not w5.over, "시간이 남아 있으면 안 끝난다")
+	for _s in 5:
+		w5.step(DT)
+	t.ok(w5.over, "시간이 다 되면 런이 끝난다")
+
 	# -- predators never materialise in your lap ---------------------
-	var w4 := World.new()
-	w4.setup(34)
+	# Six spawns per run, each with roughly a 31% chance of landing inside the exclusion zone by luck —
+	# one seed would have let a missing retry loop through about one time in nine. Ten seeds instead.
 	var worst := INF
-	for k in w4.pred_count:
-		worst = minf(worst, w4.pred_pos[k].distance_to(w4.swarm.pos[0]))
-	t.ok(worst >= 900.0, "스폰은 화면 밖에서 일어난다 (%.0f)" % worst)
+	for s in 10:
+		var w4 := World.new()
+		w4.setup(300 + s)
+		for k in w4.pred_count:
+			worst = minf(worst, w4.pred_pos[k].distance_to(w4.swarm.pos[0]))
+	t.ok(worst >= 900.0, "열 판을 돌려도 스폰은 화면 밖에서 일어난다 (%.0f)" % worst)
 
 
 func _silence_food(w: World) -> void:

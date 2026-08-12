@@ -141,6 +141,17 @@ func try_dash() -> bool:
 	return true
 
 
+## How close to the rendezvous counts as arrived. **It has to grow with the swarm.** A fixed 24px disc
+## cannot hold forty bodies that each want 16px of clearance — that needs a disc about 55px across — so
+## every clone kept steering inward while separation pushed outward, and the swarm ground itself into a
+## single dot: closest pair 2.15px after twenty seconds, 58 pairs overlapping. Measured, and it was the
+## exact state both the cap comment and the separation header name as the case that matters.
+##
+## The clones-fill-a-disc form: area per body is `SEPARATION_MIN²`, so the radius goes as `sqrt(n)`.
+func rally_radius() -> float:
+	return maxf(Rules.ARRIVE_RADIUS, Rules.SEPARATION_MIN * sqrt(float(maxi(1, count - 1))) * 0.62)
+
+
 func total_carried() -> float:
 	var sum := 0.0
 	for i in range(1, count):
@@ -201,7 +212,7 @@ func _move_clone(i: int, dt: float, food: Food) -> void:
 
 	if state[i] == FOLLOW:
 		var to := rally - p
-		if to.length() > Rules.ARRIVE_RADIUS:
+		if to.length() > rally_radius():
 			desired = to.normalized() * speed
 	else:
 		var off := p - scatter_anchor
