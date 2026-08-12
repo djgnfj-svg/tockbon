@@ -1,8 +1,11 @@
 # The next game
 
 **Status**: **cells that divide and multiply.** Everything is Crab crossed with a roguelike, on minimal art.
-**Target: end of August 2026** — a finished thing, not a shippable product. **Nothing about it is designed
-yet**; the design conversation is the next session's job.
+**Target: end of August 2026** — a finished thing, not a shippable product.
+
+⇒ **The design now lives in [the cell game GDD](design/cell-game.md).** It was settled in one conversation
+and **nothing in it has been on a screen**; its `TBD` section is the honest list of what is still open,
+starting with how splitting is even triggered.
 
 **Why cells**: almost no art is needed, one circle is a cell, and **the hands never stop** because you are
 steering a growing mass. The user picked it on that basis.

@@ -40,6 +40,7 @@ For `partial`, **always attach what works and what doesn't, briefly.** "Partial"
 
 | Concept | Implemented | Accepted |
 |---|---|---|
+| [Cell game](cell-game.md) — **the current game.** Split, harvest, buy animal parts, climb the food chain | none | unseen |
 | [Circle · rune · glyph](circle-rune-glyph.md) — the three axes, cut along time | none | the split itself |
 
 **Recovered from `v1-sim`, not written for the current game.** Its axes survive the genre change; its

@@ -41,6 +41,15 @@ Where it shakes if this reverses.
 | [Not everything is a magic circle](one-noun-for-everything.md) | valid | One noun for the whole game · turrets and buildings as circles · soldier population simulation · an NPC (deferred) |
 | [Core defense is off](defense-shelved.md) | valid | **The whole defense game** — soldiers · towers · workers · fitted circles · reward-marked wave forks. Shelved intact, not disproved |
 | [The magic circle is dropped](magic-circle-dropped.md) | valid | **The magic circle itself** — as identity, as a survivors-like, as anything. The designer could not picture it |
+| [The swarm takes commands, not selection](swarm-obeys-commands-not-selection.md) | valid | Individual RTS control · control groups · a density slider alone · orderless boids |
+| [The swarm is a mixture](cells-differ-individually.md) | valid | Host-only evolution · one uniform swarm trait · host as a non-fighting queen |
+| [A part is the skill](parts-are-the-skills.md) | valid | A separate ability roster · species-fixed skills · everything usable at once |
+| [Parts appear by chance](parts-drop-by-chance.md) | valid | Deterministic purchase · pure per-kill drops · price as the only gate |
+| [Meta unlocks, never stat boosts](meta-unlocks-not-stat-boosts.md) | valid | Permanent rate upgrades · a research tree · no meta layer |
+| [The run climbs a food chain](food-chain-not-a-timer.md) | valid | Survival timer · region conquest · wave defense · purpose-built monsters |
+| [One level gauge, two numbers per species](one-level-gauge-two-species-numbers.md) | valid | One combined level · species XP alone · per-species level-ups · no levels at all · biomass · one number doing both jobs |
+| [One open field with biomes](open-field-with-biomes.md) | valid | Rooms and corridors · a flat field with no biomes |
+| [Clones are stupid by default](clones-are-stupid-by-default.md) | valid | Self-preserving clones · clones fleeing home · AI as a permanent upgrade |
 
 **The old game's decisions went with it** and are at the tag `v1-sim`. They are not recovered here because
 every one of them answered "why not do X in *that* game" — the question does not transfer.
