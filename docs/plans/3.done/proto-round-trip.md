@@ -38,10 +38,15 @@ back into a fetch chore:
 4. **Local depletion.** A spot that was just eaten does not respawn for `FOOD_SPOT_COOLDOWN`. Without it, a
    tight ball beats a wide scatter and the width axis dies
 
-**And `1 follow` gathers clones at the point where the key was pressed**, not at the host — they walk there
+~~**And `1 follow` gathers clones at the point where the key was pressed**, not at the host — they walk there
 and wait; absorption still needs contact with the host. Gathering *at the host* lets the player park in
 cleared ground while the clones take every step of the risk, which is backwards from what the design claims.
-The press is a **placed rendezvous**: the host has to walk into ground it chose while the swarm was still out.
+The press is a **placed rendezvous**: the host has to walk into ground it chose while the swarm was still out.~~
+
+⚠ **Dead 2026-08-14** — [`1` calls the swarm to the host](../../decisions/rally-is-to-the-host.md).
+This paragraph is the *argument*, not a record of what was built, and it was the last live copy of it
+after the other three were struck. **Kept struck rather than deleted**: the risk it names is real and is
+what the host's own force answers.
 
 ---
 

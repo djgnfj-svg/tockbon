@@ -2,6 +2,12 @@
 
 **Status**: `1.ready`. Part of [the grassland index](grassland-whole-loop.md). Build after
 [hands and commands](hands-and-commands.md).
+⚠ **Not yet corrected for [the 2026-08-14 adversarial review](../../adversarial-review-2026-08-14-ko.md).**
+Its own findings: the HP formula reads a **`HP` column the parts table does not have** · `fire()` has
+nowhere to keep a cooldown · `force_bonus()` re-derives the force this project settled as stored, and
+digesting a part never subtracts it · `Parts.Species` is missing `BOSS` · the "two files break" count is
+three (`net_paint`) · net 12 compares arguments A/B, so five internal slots can change nothing on screen and
+stay green · **`BITE` is a narrow forward cone** ([why](../../decisions/hit-shape-comes-from-the-part.md)).
 
 **What it closes**: **the body changes.** Slots, a part table, cards that give nothing but parts, and the
 horse's three parts actually worn and actually firing. After this plan a level-up alters what the hands can

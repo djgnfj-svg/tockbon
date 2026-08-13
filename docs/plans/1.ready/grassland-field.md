@@ -1,6 +1,20 @@
 # Plan 4 — the grassland field
 
-**Status**: `1.ready`. Part of [the grassland index](grassland-whole-loop.md). Build last.
+**Status**: `1.ready` — ⚠ **judged NOT BUILDABLE** by
+[the 2026-08-14 adversarial review](../../adversarial-review-2026-08-14-ko.md), and **the design moved
+underneath it the same day**. Part of [the grassland index](grassland-whole-loop.md). Build last.
+
+> **Empty where it matters**: no crow:horse ratio · nothing says whether `_spawn_critter` can roll the boss ·
+> no crow speed · no `critter_hp` initialisation · **no function, signature or rule for what an active hits** ·
+> `EAT_RADIUS` names a constant that does not exist · `_spawn_critter` and a corpse-removal swap are both
+> missing from the flat-array maintenance list this plan wrote the warning for · nets 12 and 20 are mutually
+> exclusive.
+>
+> **And superseded by [Hunting and the boss](../../design/hunting-and-the-boss-ko.md)**: every force ×10
+> (crow 10 · horse 30–40 · boss **120**) · size is per species with a 1.5× cap, not `13 + force × 4` ·
+> **the horse is not catchable by the swarm — it is herded** · the crow stands still and counters ·
+> the boss comes to you and cannot be escaped, closing an arena that summons the swarm · **rocks and water
+> ship**.
 
 **What it closes**: **the place.** Two species, a food layer that gives no parts, a boss that walks the field
 from the first second, force and disposition as two separate axes on every individual, the number under every

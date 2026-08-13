@@ -1,6 +1,10 @@
 # Top-down with monsters from every direction, not a side-view floor tower
 
-**Status**: valid
+**Status**: valid **in its conclusion only** — ⚠ **decided for the deleted magic-circle defense game
+(2026-08-12).** Top-down survived the genre change. **The core at the centre and the magic circles holding
+monsters off did not** — see [Core defense is off](defense-shelved.md) and
+[The magic circle is dropped](magic-circle-dropped.md). Everything below describes a game that no longer
+exists; only the camera angle carries.
 
 ## What was decided
 

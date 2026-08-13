@@ -16,8 +16,15 @@ navigation graph.
 
 ## What's tied to it
 
-Clone movement is steering, not navigation. If the map ever gains walls, every clone needs a path and the
-"no cap on clones" claim goes with it.
+Clone movement is steering, not navigation. **If the map ever gains walls, every clone needs a path.**
+
+⚠ **Both halves of this have since moved.** The clone count was never uncapped — `rules.gd` ships
+`POOL = 128` and `CLONE_CAP = 40`, and the "no cap on clones" claim this sentence used to carry was struck
+in [The swarm takes commands](swarm-obeys-commands-not-selection.md). **And the map does now gain walls**:
+rocks and water ship ([why](everything-goes-in-for-august.md)), because
+[herding the horse](the-horse-is-herded-not-outrun.md) needs something to corner it against.
+⇒ **Steering versus navigation is a live question again**, and this is the doc that gets edited when it
+is answered.
 
 ## Conditions to reopen
 

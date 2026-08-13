@@ -1,6 +1,11 @@
 # Plan 1 — the run shell
 
 **Status**: `1.ready`. Part of [the grassland index](grassland-whole-loop.md). Build this first.
+⚠ **Not yet corrected for [the 2026-08-14 adversarial review](../../adversarial-review-2026-08-14-ko.md).**
+Its own findings against this plan: `cells_eaten` is double-counted and nets 6 and 7 contradict each other ·
+nothing rebinds `view.world`/`hud.world` after `restart()` · the camera zoom breaks `_camera_rect()` culling ·
+`cargo_lost` is promised in prose and missing from both the struct and the ending table · the "four files"
+fallout count is five · say **경험치**, not cells.
 
 **What it closes**: **a run starts and it ends.** Today the game opens straight into the field and stops on a
 300-second timer with no screen of any kind. After this plan there is a title page, a run, and an ending page

@@ -6,17 +6,19 @@
 **Accepted**: **the three-axis split itself is confirmed** — the user saw on screen that **order changes the
 kind of result** (spread ↔ blast). Nothing else here has been looked at
 
-> ⚠ **Recovered from the tag `v1-sim` on 2026-08-12, deliberately.** The user asked for it by name: the
-> three-axis split is the one piece of the old design worth keeping, and **it survives the genre change** —
-> a magic-circle Vampire-Survivors still has to answer *how many go out*, *how they fly*, and *what happens
-> on impact*.
+> ⚠ **The magic circle was dropped entirely** ([why](../decisions/magic-circle-dropped.md)) — including
+> "a magic-circle Vampire-Survivors", which this box used to name as the reason to keep the file. **That
+> reason died later the same day it was written.**
 >
-> **What to distrust in the text below**: it was written against the deleted game — a side view, a 20Hz
-> simulation tick, integer determinism, water and fire cells, a manual aim, and a `docs/GDD.md` that no
-> longer exists. **Every number, every timing and every reference to those is dead.** The axes are what was
-> recovered; the values were not.
+> **Exactly one sentence survives into the current game: order changes the kind of result** — the user saw
+> it on screen (spread ↔ blast), and it is the live evidence behind planning principle 8.
+> **Everything else below is the deleted game's rule set**: seventeen glyphs, a side view, a 20Hz tick,
+> integer determinism, water and fire cells, manual aim, and a `docs/GDD.md` that no longer exists.
+> There is no circle, no rune and no glyph in what is being built.
 >
-> The new direction is in `../next-game.md`. Fire is now **auto-fired**, not aimed.
+> **Read it as evidence for one principle and for nothing else.** The current game is in
+> [Cell game](cell-game.md), [Stages and evolution](stages-and-evolution.md) and
+> [Hunting and the boss](hunting-and-the-boss-ko.md).
 
 ---
 

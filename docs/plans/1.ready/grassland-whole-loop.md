@@ -1,6 +1,16 @@
 # Grassland, the whole loop — the index
 
-**Status**: `1.ready` — split into four buildable plans on 2026-08-14. Nothing built.
+**Status**: `1.ready` — split into four plans on 2026-08-14. Nothing built.
+
+> ⚠ **These four plans have not absorbed the second review or the design conversation that followed it
+> (both 2026-08-14, later the same day).** Read before building:
+> - **[The adversarial review](../../adversarial-review-2026-08-14-ko.md)** — 74 findings from five
+>   independent reviewers. **Plan 4 is judged NOT BUILDABLE**; the other three are buildable only with
+>   guesses. The findings are ordered by how many reviewers found them independently
+> - **[Hunting and the boss](../../design/hunting-and-the-boss-ko.md)** — force ×10, size per species, the
+>   crow's counter-attack, herding the horse, the arena, terrain. **It is newer than every number below**
+>
+> **Nothing here has been rewritten yet.** Where a plan and either of those disagree, the plan is wrong.
 
 **The instruction that shapes every doc under it** (from the user): **build the biggest loop first, then dig
 inward, and leave the details for last.** Not parts assembled upward. The last game's loop never ran end to

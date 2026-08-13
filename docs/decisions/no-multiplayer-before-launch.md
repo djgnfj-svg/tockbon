@@ -1,6 +1,8 @@
 # Multiplayer is cut from the December build
 
-**Status**: valid
+**Status**: valid — ⚠ **decided for the deleted magic-circle game (2026-08-12 or earlier).**
+**December is now August** ([why](magic-circle-dropped.md)), so read "the December build" as "the first
+build". The reasoning about netcode cost transfers; the date and the game it names do not.
 
 ## What was decided
 

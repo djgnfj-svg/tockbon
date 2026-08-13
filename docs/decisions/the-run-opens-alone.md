@@ -2,11 +2,14 @@
 
 **Status**: valid — decided by the user 2026-08-14. **Reverses a number the prototype measured**, and the
 reason it can be reversed is that the thing it was protecting moved.
+⚠ **Partly reversed the same day** by [The host starts at force 10](force-starts-at-ten.md): `START_CLONES`
+is still 0, but the opening body **can** split, so the onboarding is the first `F` press and not the first
+level-up.
 
 ## What was decided
 
-**`START_CLONES` goes from 6 to 0.** The run opens with one body, force 1, which cannot split — so the first
-level-up is what opens `F`, and that is the onboarding.
+**`START_CLONES` goes from 6 to 0.** The run opens with one body. ~~force 1, which cannot split — so the first
+level-up is what opens `F`, and that is the onboarding.~~ **It opens at force 10 and splits immediately.**
 
 **And the field does not shrink.** The user's complaint after playing was that the map felt small; the answer
 is **the camera**, which starts tight on the host and pulls back as the swarm grows. Close, one body reads as

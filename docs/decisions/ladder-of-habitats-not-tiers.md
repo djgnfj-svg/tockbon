@@ -27,7 +27,12 @@ The ladder starts at **beasts by habitat** (swamp, jungle, snow, deep sea, caves
 ## What's tied to it
 
 The reversal — what hunted you last stage is trash in this one — now rides on habitats instead of tiers.
-The art budget: one board per habitat, paid up front, and a species added later is a whole board.
+
+~~The art budget: one board per habitat, paid up front, and a species added later is a whole board.~~
+⚠ **Dead, same day as the line at the top of this file** — the body is drawn by code in the host's own
+colour ([why](the-body-is-a-line-drawn-by-code.md)), so a species costs no board at all. **This line
+survived the correction pass because it was not the row anyone was arguing about**, and
+`stages-and-evolution` was already using it as live grounds for rejecting part merging.
 
 A six-stage run is sixty minutes in a die-and-restart structure. **Nothing verifies that is bearable.**
 

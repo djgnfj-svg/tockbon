@@ -1,6 +1,10 @@
 # The player does not leave the core to fight — melee is cut as a feature
 
-**Status**: valid
+**Status**: **reversed** by [Core defense is off](defense-shelved.md) (2026-08-12) — ⚠ **and the reversal
+was recorded only in that file for two days.** There is no core to leave, and the player's hands doing the
+killing is now the whole game: left click holds an active, `BITE` is a forward cone, and the boss fight is
+moving and attacking at once. Kept because the reason melee was cut — it competes with the thing the game
+is actually about — is the grounds for whatever narrows it next.
 
 ## What was decided
 

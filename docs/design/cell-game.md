@@ -49,11 +49,15 @@ Scored against the planning principles — **including the ones it does not pass
 - **7, art doesn't block — passes with a bill.** A square plus part sprites, and the same system draws the
   enemies. But the sprites come off one generation board per species, so **a species added later is a whole
   board**, not one picture
-- **4, two systems — over budget.** Six nouns are live: host · clone · species experience · parts ·
-  chimera · tier. The defence is that they collapse into two verbs — hunt with the swarm, spend what it
-  brings home. If play says otherwise, **species experience is the first noun out**
-- **8, order changes the outcome — weakest score here.** One rule carries it: a part bought into an
-  occupied slot replaces it and refunds half. Everything else is order-free addition
+- **4, two systems — over budget.** ~~Six nouns are live: host · clone · species experience · parts ·
+  chimera · tier.~~ **Five: host · clone · experience · parts · chimera.** Tiers were cut for habitats
+  ([why](../decisions/ladder-of-habitats-not-tiers.md)); "species experience" is just experience now
+  ([why](../decisions/force-starts-at-ten.md)). The defence is that they collapse into two verbs — hunt
+  with the swarm, spend what it brings home
+- **8, order changes the outcome — weakest score here.** ~~One rule carries it: a part bought into an
+  occupied slot replaces it and refunds half.~~ **There is no half-refund** — the price went with the
+  currency ([why](../decisions/card-price-removed.md)). What carries it now is **traits**: going deep on one
+  species buys one, breaking the set gives it up. See *Order changes the outcome* in `stages-and-evolution`
 
 ---
 
@@ -65,9 +69,10 @@ Scored against the planning principles — **including the ones it does not pass
 - ⚠ **Splitting is a button after all — `F` held.** It was a level-up reward until 2026-08-13, and the rule
   now lives in *Splitting and absorbing* in `stages-and-evolution`. You still never select a clone
   individually
-- **The swarm is a fixed pool of 128.** A hard bound the renderer and the nets are built against, not a
-  target to reach. ⚠ **Its design grounds are gone** — headcount comes from force since 2026-08-13, not
-  from level — but it stands as an allocation bound until something measures otherwise
+- **The swarm array is 128 long; the live cap is `CLONE_CAP` at 40.** 128 is an allocation bound, not a
+  reachable headcount — **a net written against 128 tests a state the game cannot produce.** ⚠ Its design
+  grounds are gone — headcount comes from force since 2026-08-13, not from level — but the allocation
+  stands until something measures otherwise
 - Clones obey **commands on the number keys** — ⚠ **`1` gathers them at the host** (changed 2026-08-14) ·
   `2 scatter` · `3` sends them at the mouse point and they stay and fight there. They are pressed like
   abilities, not chosen from a menu, and **`3` requires you to point**: no auto-targeting, or the game
@@ -214,14 +219,18 @@ A part is a passive by being equipped, and **an active by being bound**. There i
 
 **Not every part carries an active** (confirmed by the user, 2026-08-13). A part is one of three shapes:
 stats only, an active only, or both. Legs raise move speed *and* replace what `space` does; crocodile jaws
-bring `bite` in as a new left-click. **That is why force has to be derived from the stats rather than being
-a stat of its own** — see `stages-and-evolution`.
+bring `bite` in as a new left-click. ~~**That is why force has to be derived from the stats rather than being
+a stat of its own.**~~ ⚠ **Dead — and it cited the doc that refutes it.** **Force is STORED**; parts add to
+it when worn and subtract when digested. Recomputed, halving is undone on the next frame and `F` becomes
+free. See *Splitting and absorbing* in `stages-and-evolution`.
 
 - **Left / right click** — any part with an active
-- **Space** — movement only, and only from **hindlimbs or back**. **It has exactly one implementation**: an
-  impulse along the facing, with a duration, an ignore-collision flag and a distance. A cheetah's dash, a
-  bird's glide and a frog's leap are three parameter sets of it, **never three controllers**
-- **At the start**: left click is `bite`. Right click and space are **empty**
+- **Space** — movement only, and only from **hindlimbs or back**. ~~**It has exactly one implementation**: an
+  impulse along the facing~~ — ⚠ **dead**: what a key does is written on the part, not on the key
+  ([why](../decisions/hit-shape-comes-from-the-part.md)). The horse's gallop is sustained acceleration while
+  held, which is not an impulse. **The parameters still belong to the part**; what varies is more than
+  their values
+- **At the start**: left click is `BITE`, **a narrow forward cone**. Right click and space are **empty**
 - ⚠ **All three are squares, and `bite` is only the active you are handed first** (user, 2026-08-14, said
   three times). There is no fixed basic attack: **the player binds any active to any of the three keys**,
   left click included, and binding over `bite` throws it away. `space` is the one square with a rule — it
@@ -409,8 +418,9 @@ the ladder is content that does not fit in the time.
 
 > ~~The August build ships two tiers and one boss.~~ Superseded by the line above.
 
-**The clone pool is 128, allocated once.** Also a cut: it is the number the nets test against, chosen so a
-regression is catchable rather than because play asked for it.
+**The clone pool is 128, allocated once — and `CLONE_CAP` 40 is what the game can actually reach.**
+Also a cut: 128 is the allocation, chosen so a regression is catchable rather than because play asked for
+it. **Nets bound-test at 40.**
 
 **Between runs is built last**, if at all.
 
@@ -418,10 +428,12 @@ regression is catchable rather than because play asked for it.
 
 ## Bounds
 
-- **Zero clones** — the host alone must not crash. ⚠ **It is not the opening state**: the prototype measured
-  that zero left nothing under test on screen for a minute, and `START_CLONES` is 6
-- **128 clones** — the pool cap. No per-unit orders exist, so input cost does not grow; drawing and
-  separation do, and neither is measured
+- **Zero clones** — the host alone must not crash, ~~and it is not the opening state~~ — ⚠ **it is exactly
+  the opening state now.** `START_CLONES` is **0** ([why](../decisions/the-run-opens-alone.md)), and the
+  minute of nothing the prototype measured is answered by the host opening at **force 10** so the first `F`
+  is immediate ([why](../decisions/force-starts-at-ten.md))
+- **40 clones** — `CLONE_CAP`, the reachable maximum. **128 is the array, not a state.** No per-unit orders
+  exist, so input cost does not grow; drawing and separation do, and neither is measured
 - **A slot with no part** — starting state. Empty right click and space must not read as broken
 - **Every clone dies far from home** — the run must be recoverable, not over
 

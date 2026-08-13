@@ -35,6 +35,23 @@ force both ways) · **the run opens alone** (`START_CLONES` 0) · **the camera p
 which is the answer to the field feeling small. **The prototype in `src/` is a reference, not a base** — the
 user's call is to write it again properly.
 
+⇒ **A second, larger review the same day found 74 more, and the four plans are NOT corrected for it.**
+Five independent reviewers; **the ranking that mattered was how many of them found the same thing alone.**
+**Plan 4 is NOT BUILDABLE** — the field's composition and the rule for what an attack hits are both absent.
+Read **`adversarial-review-2026-08-14-ko`** before building any plan. Its three loudest: `cells_eaten` is
+double-counted and two of its own nets contradict each other · nothing rebinds the view after `restart()` ·
+`EAT_RADIUS` names a constant that does not exist, which is **the bug the user caught on the first play**.
+
+⇒ **Then the design moved again, and it moved the numbers.** **`docs/design/hunting-and-the-boss-ko.md` is
+newer than the GDD, than `stages-and-evolution`, and than all four plans.** The host opens at **force 10**
+so splitting is the tutorial, and **every monster went ×10** with it (crow 10 · horse 30–40 · boss 120).
+**Size comes from the species**, force adds at most 1.5× — a strong crow is never a horse. **Say 경험치, not
+cells.** The three species are three different hands: **the crow stands still and counters** (walk up and
+hit it), **the horse out-runs even the swarm and is HERDED** into clones, rocks or the edge, and **the boss
+cannot be escaped** — it comes to you, closes an arena, and the scattered swarm is summoned into it.
+**Clones attack on contact**, so a swarm spread wide pays for it. **Rocks and water both ship and nothing
+was deferred** — the user was offered the cut twice and refused; the schedule takes it instead.
+
 **What runs**: one host you drive, a swarm that scatters and rallies, clones that carry what they ate until
 they touch you, an ecosystem of critters that chase or flee depending on how big the swarm has got, and a
 level-up card pick. **What does not**: parts, slots, traits, chimeras, habitats, meta.
@@ -129,15 +146,14 @@ opens up, and stop** — the user will say when they are done thinking.
 |---|---|
 | `docs/next-game.md` | **What is being built now, and why the last one was thrown away** |
 | `docs/planning-principles-ko.md` | **How to judge a direction.** Survives every direction change — read it first |
-| `docs/archive/` | **Closed work. Don't read it, don't update it** — nothing there is true about today |
+| `docs/design/` | **What a feature looks like.** Read its README first — the newest doc wins where they disagree |
+| `docs/decisions/` | **Why something was *not* done.** The rejected branch and the reason, nothing else |
+| `docs/plans/` `1.ready` `2.active` `3.done` | **The only folder that moves.** The folder a doc sits in is its status |
+| `docs/adversarial-review-2026-08-14-ko.md` | **What is wrong with the four plans**, from five independent reviewers. **Read it before building any of them** |
 
-`design/`, `decisions/` and `plans/` **do not exist yet.** They come back with the first feature.
-The structure they had, which is worth restoring unchanged:
-
-- `design/` — what a feature looks like. **A concept never changes folder**; its header carries
-  `Implemented` and `Accepted` as two separate axes
-- `decisions/` — **why something was *not* done.** The rejected branch and the reason, nothing else
-- `plans/` `1.ready` `2.active` `3.done` — **the only folder that moves.** The folder a doc sits in is its status
+**All three exist and hold ~50 docs.** `docs/archive/` does **not** exist — it was deleted on 2026-08-12,
+and this table claimed the opposite of the truth on both counts for two days. **A concept never changes
+folder**; its header carries `Implemented` and `Accepted` as two separate axes.
 
 **Never state the same thing twice.** A value counted in two places will diverge.
 

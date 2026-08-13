@@ -195,8 +195,10 @@ answer to the open "how does a build go higher" problem, without inventing genes
 
 - **A new part in an occupied slot replaces the old one, and the old one is digested.** It is not stored, not
   listed, not recoverable. The only trace is a small push on the level gauge
-- **Merging two parts was rejected on art.** Crocodile jaws plus hippo jaws would need a sprite per
-  species × species pair, and species art comes off **one board per habitat** — the pairing explodes it
+- **Merging two parts was rejected on the slot budget.** Crocodile jaws plus hippo jaws is a third thing
+  that has to live somewhere, and eleven slots are already spoken for. ⚠ **Its original grounds were art —
+  "species art comes off one board per habitat" — and that cost no longer exists**: the body is drawn by
+  code in the host's own colour ([why](../decisions/the-body-is-a-line-drawn-by-code.md))
 - **Levelling only happens on the same species' same part.** `crocodile jaws Lv2` comes from another
   crocodile; a hippo jaw is a replacement, not a level
 - **A multi-slot part is evicted whole the moment any one of its slots is claimed**, and the slots it also
@@ -453,13 +455,13 @@ numbers is not an implementation, and because planning principle 2 says only pla
 
 | Value | First number | Why this one |
 |---|---|---|
-| host's starting force | **1** | 1 cannot be split, so the first level-up is what opens `F` |
-| base force per level | **+1** | reaching level 4 means force 5 — three presses of `F` and the swarm is real |
-| small animals · herd · horse · cheetah · lion · elephant | **1 · 2 · 3 · 3 · 5 · 8** | small integers, so the number under a body can be compared at a glance. Horse and cheetah tie — they differ by how they move, not by who wins. ⚠ **These are per-SPECIES centres for the whole ladder. Force varies per individual**, and the August build's actual ranges are in [the grassland field plan](../plans/1.ready/grassland-field.md) — crow 1–2, horse 3–4 |
-| the boss chimera | **12** | above a level-8 host, so it cannot be walked into early |
+| host's starting force | **10** | ~~1 cannot be split, so the first level-up is what opens `F`~~ — **splitting is the tutorial** ([why](../decisions/force-starts-at-ten.md)). The whole ladder was multiplied by ten with it |
+| base force per level | **+1** | ⚠ **not re-cut for the ×10 scale yet.** The user's call is to set the curve sensibly and tune it in play |
+| small animals · herd · horse · cheetah · lion · elephant | **10 · 20 · 30 · 30 · 50 · 80** | ⚠ **per-SPECIES centres. Force varies per individual**, and the August ranges are in [the grassland field plan](../plans/1.ready/grassland-field.md) — crow **10**, horse **30–40**. Horse and cheetah tie: they differ by how they move, not by who wins |
+| the boss chimera | **120** | ~~above a level-8 host, so it cannot be walked into early~~ — ⚠ **that was a gate, and [nothing gates the boss](../decisions/the-boss-is-not-gated.md).** 120 is simply large: damage is the attacker's force both ways, so contact ends the run as arithmetic, not as a rule |
 | a part's force | **1**, strong ones **2-3** | parts add on top of the base; no part is worth a whole species |
 | ~~the clone tax~~ | **deleted** | ⚠ **It was never built and it is not the mechanism.** The host's mouth is worth ~2.5× a clone's because `EAT_PERIOD_HOST` is 0.6s against 1.5s — a speed, with no constant to tune and nothing to explain in the UI. This row said "inherited from the GDD unchanged" while the GDD said the opposite |
-| a corpse's cells | **force × 6** | a corpse pays what the individual was worth (user, 2026-08-14). Levels arrive every 10 cells, so this one number is the level curve |
+| a corpse's experience | **force × 6** | a corpse pays what the individual was worth (user, 2026-08-14). ⚠ **Say 경험치, not "cells"** — one quantity was reading as two. And ⚠ **the "every 10" threshold does not survive the ×10 scale**: one crow would be six levels. The requirement **rises per level**; the numbers are set in build and tuned in play |
 | damage, either direction | **the attacker's force** | [nothing gates the boss](../decisions/the-boss-is-not-gated.md) — a 12 hitting a 3-HP host ends the run |
 | starting swarm | **0** | [the run opens alone](../decisions/the-run-opens-alone.md) |
 | gut, at its best | **90%** | it closes the gap and never inverts it |
