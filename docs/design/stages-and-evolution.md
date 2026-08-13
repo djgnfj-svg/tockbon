@@ -20,9 +20,10 @@ Where the two disagree, this one is newer. The GDD has been edited at those poin
 rhythm.
 
 **Session loop — a round trip, tens of seconds**
-`2` scatter → clones farm on their own → `1` places a rendezvous → the host walks in and absorbs → level-up.
-Absorption **empties a clone without killing it**, so the swarm never shrinks on a harvest and the same
-wheel keeps turning.
+`F` split → `2` scatter → clones farm on their own → `1` places a rendezvous → the host walks in and
+presses `V` → level-up.
+⚠ **Absorption kills the clone and takes its force back** — see *Splitting and absorbing* below. The
+GDD's old rule that a harvest never shrinks the swarm is dead; `F` is what refills it, by hand.
 
 **Main loop — one habitat, ~10 minutes**
 
@@ -35,6 +36,37 @@ wheel keeps turning.
 7. Next habitat. The old apex is now common trash, the build carries over → 1
 
 **Step 4 is the heart.** The other six make it or follow from it.
+
+## Splitting and absorbing — `F` and `V`
+
+**Settled 2026-08-13.** This closes what the Open list called the largest hole: with cards turned
+parts-only, nothing grew the swarm any more. **The player grows it, by hand.**
+
+- **`F` held — split.** The host **and every clone** halve at once, so the swarm doubles: 1 → 2 → 4 → 8.
+  **You cannot split yourself alone**; the user left the door open to changing that later
+- **`V` — absorb everything inside a radius, in one press.** The clones in it die, and what they carried
+  plus their force returns to the host
+- **Eating is still automatic.** Ground food and corpses go in on contact — only clones need a key
+
+**`force` is the material, and the split is exact.** Halving conserves the total, so splitting buys nothing
+by itself. **What it costs is concentration**: a scattered 10 cannot be spent at one point, and the lion is
+a fight that only a thick body wins. That is the reason not to press it, and it needs no refund rule.
+
+⇒ **The real risk is death, not the split.** A clone killed out there takes its share of force with it
+permanently, so the total only survives if the swarm comes home. **Splitting wide is how force is lost.**
+
+⇒ **The two keys are a pair in the hand** — `F` thins, `V` thickens — and `1` already decides where the
+thickening happens. `G` was tried and dropped: the finger travels too far.
+
+**Force is no longer parts-only.** The body carries a base force that rises with level; otherwise a bare
+host has nothing to halve. Parts still add on top.
+
+**Starting force is 1, and 1 cannot be split** — so the first level-up is what opens `F`. The onboarding is
+the rule, not a tutorial line.
+
+**Open here**: whether the 128 pool cap still means anything now that headcount comes from force · what a
+clone's worn part does when it is absorbed. **Odd force and the absorb radius have placeholder answers** —
+see *First numbers*.
 
 ## Evolution replaced the card price
 
@@ -67,7 +99,7 @@ budget** (all from the user, 2026-08-13):
 |---|---|
 | **Part level** | eating the same part again levels it — `crocodile jaws Lv2`. A running total, not a replacement |
 | **Class stacks** | parts from the same family combo — "amphibian ×3" fires a set effect. The family, not only the exact species |
-| **The twelve slots** | the hard budget everything above competes for |
+| **The ten slots** | the hard budget everything above competes for |
 
 **The payout must change how the game is played, not raise a number.** The user's own example: frog legs
 *and* frog thighs together turn `space` into **three chained jumps**. Each part added is another thing the
@@ -77,22 +109,40 @@ claimed and never had a mechanism for.
 ⇒ **This is where planning principle 8 finally lands.** Two parts producing an effect neither has alone is
 a combination, not addition, and the slot budget is what makes taking one mean giving up another.
 
-### Twelve slots — five external, seven internal
+### Ten slots — six external, four internal
 
-Six slots ran out too fast to build in. **The budget opened to twelve on 2026-08-13**, and it opened on the
-cheap side on purpose:
+Six ran out too fast to build in; twelve was too many to hold in the head; nine had no chest.
+**Ten, settled 2026-08-13** after three moves in one day, all of them before anything was built on it.
 
-- **External slots are expensive.** Each one is a sprite per species, and species art comes off one board
-  per habitat. **Five**: head · back · forelimbs · hindlimbs · tail
-- **Internal slots are free.** They were never drawn. **Seven**: eyes · brain · gut · lungs · heart · bone ·
-  hide-or-fur. **Eyes moved inside** — what they do is notice things, and that is a number, not a sprite
+- **External slots are the ones that show.** ⚠ **They were "expensive" until 2026-08-13** — one sprite per
+  species per slot — and that bill is gone: the body is drawn as a line and a worn part takes the host's
+  colour, so nothing has to match anything. **What still caps them is the body**: six things sticking out of
+  one small square is already as much as reads. **Six**: head · **torso** · back · forelimbs · hindlimbs · tail
+- **Internal slots are free.** They were never drawn. **Four**: eyes · gut · bone · hide-or-fur.
+  **Eyes moved inside** — what they do is notice things, and that is a number, not a sprite
 
-**Seven internal is deliberately one too many.** The user listed all seven to hold the space and expects to
-cut one later; nothing is designed around exactly seven.
+**Torso is the one thing that was added back.** Without it the body was head, back, limbs and tail — and a
+gorilla's chest, a lion's mane and a bison's hump had nowhere to attach. It is **not** the same square as
+`back`: wings and shells go on the back, bulk goes on the front.
+
+**The three internal cuts were all duplicates.** Brain does what eyes do; lungs do what heart does; heart
+does what hindlimbs already do. The four that remain **do not overlap at all** — one each for the swarm, the
+economy, the fight and survival:
+
+| Internal | What it moves |
+|---|---|
+| **eyes** | how smart a clone is — whether it notices what is about to eat it |
+| **gut** | how much a clone brings home |
+| **bone** | the body's base force — the thing `F` halves |
+| **hide / fur** | defence, and the body's colour |
+
+⚠ **Hide and torso split one job on purpose.** Torso is the **visible** bulk; hide is thickness that is only
+a number. Folding hide into torso was the way to keep the count at nine and it was rejected — being seen and
+being thick are two different things.
 
 **Invisible was the only objection, and the body itself answers it.** The cell is a rounded square, so an
 internal part changes **the drawing values rather than adding a picture**: muscle thickens the body, fur
-puts an outline on it, hide deepens the colour, bone sharpens the corners. All twelve slots read on screen
+puts an outline on it, hide deepens the colour, bone sharpens the corners. All ten slots read on screen
 and the art bill does not move — which is exactly the shape planning principle 7 asks for.
 
 ### The threshold is per set, and a part can take more than one slot
@@ -104,7 +154,7 @@ shape of the budget:
   part can be a set of one** — catching that one thing is the whole combination
 - **A part can occupy several slots.** The big ones cost more than their place: one part, three squares
 
-⇒ **That is what turns twelve slots into a real budget rather than a bigger number.** Strong parts eat the
+⇒ **That is what turns ten slots into a real budget rather than a bigger number.** Strong parts eat the
 room the rest of the build needed, so **saving slots is itself a way to raise a build** — which is half an
 answer to the open "how does a build go higher" problem, without inventing genes for it.
 
@@ -124,7 +174,7 @@ answer to the open "how does a build go higher" problem, without inventing genes
   held are left **empty**. Wearing a head+eyes part and buying a head part digests the whole thing and
   leaves the eye slot bare
 - **Which slots a part takes is written on the part, not derived from a rule.** An adjacency graph over the
-  twelve slots was raised and dropped as too complicated for what it buys — **each part carries its own
+  ten slots was raised and dropped as too complicated for what it buys — **each part carries its own
   list of squares**, decided when that part is authored. One square or several, and the author picks which
 
 ⇒ **A small part can cost a big one.** That is the point of the complication, and the user chose to keep it:
@@ -185,8 +235,9 @@ what makes a fight worth taking; without it every encounter is already resolved 
 
 ## Stages
 
-**A stage is one habitat**, and a habitat is one art board. Species added later cost a whole board
-(`CLAUDE.md` measured this), so the habitat is chosen first and its species are generated in one pass.
+**A stage is one habitat.** ⚠ **It used to also be one art board** — species added later cost a whole board,
+so a habitat was chosen first and generated in one pass. **That stopped being true on 2026-08-13**: parts
+are drawn in the host's own line, so a species can be added whenever the design wants one.
 
 - **Clearing a stage = swallowing that habitat's apex.** Not a timer, not a five-minute boss cadence
 - **The apex is the only source of that habitat's final part**, so clearing and building are the same act
@@ -279,7 +330,24 @@ disposition × force table on its own**:
 | | weak | strong |
 |---|---|---|
 | **attacks** | — | **lion**: the first time a scattered swarm gets shredded |
-| **flees / ignores** | **herds** (the first food) · **cheetah** (fast, has to be chased) | **elephant**: the apex, untouchable until the swarm is grown |
+| **flees / ignores** | **herds** (the first food) · **cheetah** and **horse** (fast, have to be chased) | **elephant**: strong and slow, the wall before the apex |
+
+### The apex is a chimera, not the elephant
+
+**Settled 2026-08-13.** The elephant was the apex until the user asked whether the boss could be something
+new. It is now **a strong ordinary species**, and the thing that closes the stage is built out of the
+habitat's own parts:
+
+**An elephant's bulk, a lion's head, wings, and a rhino's horn.**
+
+⇒ **This costs no new system.** The GDD already says enemies are chimeras built from the same slots as the
+player, so the apex is a part list, not a boss class. It reads on sight as *everything in this habitat at
+once*, which is exactly what the player has spent the stage assembling.
+
+⇒ It also puts **the rhino's horn in the habitat without giving the rhino a board** — the horn exists only
+on the apex.
+
+**Patterns are open.** A boss having attack patterns is expected and none is designed.
 
 Two more things live there, and both were the user's:
 
@@ -291,25 +359,95 @@ Two more things live there, and both were the user's:
 Swamp is not dead; it keeps the frog's chained `space` jump and the crocodile bite, and it is a candidate
 for a later stage.
 
+### Two layers of species, and only one of them costs art
+
+**A habitat should be crowded, and crowding is cheap** — as long as most of what lives there gives no part.
+The user asked for many species and a real food chain; the bill only lands on the half that drops parts.
+
+- **Species that give parts** — ⚠ **the ceiling of five or six was an art bill, and the bill is gone**
+  (2026-08-13, see the GDD's *Screen*). A worn part is drawn in the host's own line, so no board has to
+  match another. **What limits them now is how many the player can tell apart**, which play decides
+- **Everything else** — grass, ground plants, small animals, corpses. **Food only, no part, one picture
+  each.** This layer can grow as long as you like, and it is what makes the field look alive
+- **They eat each other too.** Force and disposition are already per-individual, so a lion hunting a herd
+  needs no new machinery — and walking into that fight is a picture the design gets for free
+
+⇒ **The only line that has to be drawn is which five or six give parts.** Everything else is a name in a
+table.
+
+### The grassland parts — candidates, nothing settled
+
+Written down so the next session starts from something. **None of it is chosen**, and no part has a force
+number.
+
+**Six species give parts** — small animals · herd · **horse** · cheetah · lion · elephant. **This is no
+longer a ceiling, only where the list stands**; more can be added when there is a reason.
+
+| Slot | Grassland candidates |
+|---|---|
+| **head** | horns (herd) · jaws (lion) · trunk (elephant) |
+| **torso** | mane (lion) · hump (bison) · bulk (elephant) · **horse mane** |
+| **back** | crow wings — **the only one in the habitat** |
+| **forelimbs** | claws (lion) · rodent paws |
+| **hindlimbs** | dash (cheetah) · **gallop (horse)** · herd legs |
+| **tail** | cheetah tail · **horse tail** |
+| **eyes** | crow · cheetah |
+| **gut** | rodent |
+| **bone** | bison · elephant · horse |
+| **hide/fur** | lion · cheetah · elephant |
+
+⇒ **Only the back comes from one species**, so the crow is the one thing that has to be hunted on purpose.
+⇒ **Three heads compete for left-click**, which is where the habitat's build decision sits.
+⇒ **Cheetah and horse both bid for `space`, and they are not the same movement** — a dash is short and
+explosive, a gallop is sustained. Two ways to move is what makes the slot a choice rather than a pickup.
+
+**What a horse's legs look like on the body**: the first generation put them **radiating out of the rounded
+square in every direction, four to eight of them** — the cell does not grow a horse, it sprouts horse legs.
+Boards are in `tools/pixel/out/cell_horselegs/`. **Leg count is not controllable from the prompt**, which is
+the reminder that a part ships as **one sprite bound to an anchor**, never as a whole redrawn body.
+
+### First numbers — placeholders, so the build has something to run
+
+**Nothing here is balanced and none of it was measured.** They exist because an implementation with no
+numbers is not an implementation, and because planning principle 2 says only play can judge them.
+**Expect every one of these to move on the first session.**
+
+| Value | First number | Why this one |
+|---|---|---|
+| host's starting force | **1** | 1 cannot be split, so the first level-up is what opens `F` |
+| base force per level | **+1** | reaching level 4 means force 5 — three presses of `F` and the swarm is real |
+| small animals · herd · horse · cheetah · lion · elephant | **1 · 2 · 3 · 3 · 5 · 8** | small integers, so the number under a body can be compared at a glance. Horse and cheetah tie — they differ by how they move, not by who wins |
+| the apex chimera | **12** | above a level-8 host, so it cannot be walked into early |
+| a part's force | **1**, strong ones **2-3** | parts add on top of the base; no part is worth a whole species |
+| the clone tax | **50%** | inherited from the GDD unchanged — the host's own bite is worth double |
+| gut, at its best | **90%** | it closes the gap and never inverts it |
+| absorb radius | **4x the host's body** | wide enough that a rallied swarm goes in one press, tight enough to miss stragglers |
+
+**Force is an integer and splitting is exact, so odd numbers need a rule: the host keeps the larger half.**
+5 becomes 3 and 2. The total is conserved, and the host — which fights in front — is the one that keeps the
+odd point.
+
+⇒ **The reason they are all small**: the number is drawn under the body, and two digits stop being
+comparable at a glance. If play needs finer resolution, the fix is more slots, not bigger numbers.
+
 ## Open
 
 Everything on this list came up in the same conversation and none of it was closed.
 
-- **What each of the seven internal slots does.** Only the gut is written; eyes, brain, lungs, heart, bone
-  and hide/fur are names with nothing behind them
-- ⚠ **How the swarm multiplies at all.** The GDD gave +1 clone per level-up and the prototype guaranteed one
-  of the three cards grew the swarm. **Cards are parts-only now, so the growth card is gone** and nothing
-  replaced it. Linear growth on level-up is the obvious patch; doubling is not — the pool cap is reached in
-  a handful of levels and every level-up after that stops growing the swarm. **This is the largest hole
-  open.**
+- **What the four internal slots actually give in numbers.** Each has a job now — cutting the duplicates is
+  what gave them one — but not one of them has a value
+- ~~**How the swarm multiplies at all.**~~ **Closed 2026-08-13** — `F` splits, `V` absorbs. See
+  *Splitting and absorbing*. The level-up no longer grows the swarm at all
 - **How high a build can go, and by what.** Genes were named and deferred; nothing replaces them yet
 - **Whether part level is capped**, and whether a levelled part still counts once toward a class stack
 - **What a species trait actually gives.** The name exists, the content does not
-- **What each part's force contribution is.** The rule is settled — **force is carried on the equipped parts
-  and every part carries a different amount** — but no part has a number yet
+- **What each part's force contribution is.** Parts each carry a different amount and no part has a number
+  yet. **The parts-only half of that rule is gone** — the body has a base force too, or `F` has nothing to
+  halve at level 1
 - **When a clone fires its active.** They all fire (below); on cooldown with no aiming is the shape that
   fits "clones are stupid", but it is not written down as a rule yet
-- **Whether the host's own evolution counts toward force**, or force is the swarm's sum alone
+- ~~**Whether the host's own evolution counts toward force.**~~ **Closed** — the host holds force of its own,
+  or there is nothing for `F` to halve. What is still open is how much of it comes from parts
 - **What a chimera drops when eaten.** It wears several species, so one part does not cover it
 - **What a mutant gives.** The phrase used was "a special cost" and it was not pinned down
 - **What separates a fantastical beast from a strong ordinary one** beyond "a special part"
@@ -327,7 +465,7 @@ Everything on this list came up in the same conversation and none of it was clos
 
 ## Where the pictures are
 
-`cell-loops.html`, next to this file — the loops, the 2×2, the under-the-body readout, the twelve-slot body
+`cell-loops.html`, next to this file — the loops, the 2×2, the under-the-body readout, the slot body
 and the stage table, drawn. It was published as an artifact for the user on 2026-08-13 and the copy in this
 folder is the source it is published from.
 

@@ -53,6 +53,9 @@ Where it shakes if this reverses.
 | [One level gauge, two numbers per species](one-level-gauge-two-species-numbers.md) | valid | One combined level · species XP alone · per-species level-ups · no levels at all · biomass · one number doing both jobs |
 | [One open field with biomes](open-field-with-biomes.md) | valid | Rooms and corridors · a flat field with no biomes |
 | [Clones are stupid by default](clones-are-stupid-by-default.md) | valid | Self-preserving clones · clones fleeing home · AI as a permanent upgrade |
+| [The swarm grows by a key, not by levelling](swarm-grows-by-a-key-not-a-level.md) | valid | +1 clone per level-up · doubling on level-up · a one-way split · contact-automatic absorption · one clone per press · `G` · absorb as a swarm command · a force refund |
+| [Ten slots, and no internal slot duplicates another](ten-slots-no-duplicates.md) | valid | Eight slots · twelve slots · nine without a torso · `back` widened to mean the torso · folding hide into the torso · brain · lungs · heart |
+| [The body is an outline drawn by code](the-body-is-a-line-drawn-by-code.md) | valid | Two eyes · no dot · a filled body · body sprites · generating whole creatures · every part as a sprite · parts keeping the prey's colours |
 
 **The old game's decisions went with it** and are at the tag `v1-sim`. They are not recovered here because
 every one of them answered "why not do X in *that* game" — the question does not transfer.

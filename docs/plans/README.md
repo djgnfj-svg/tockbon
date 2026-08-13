@@ -21,7 +21,7 @@ all three folders. **Links leak every single time** — `net_citations` catches 
 
 | Folder | Contents |
 |---|---|
-| `1.ready` | empty |
+| `1.ready` | **[Grassland, the whole loop](1.ready/grassland-whole-loop.md)** — one stage entered bare and left with a finished body. Built thin everywhere on purpose |
 | `2.active` | empty |
 | `3.done` | **The round trip** — the first prototype. Built, played, and the fun confirmed |
 

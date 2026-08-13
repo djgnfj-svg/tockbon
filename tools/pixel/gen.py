@@ -221,6 +221,42 @@ PRESETS = {
                  "no characters, no animals, no text, no frame, no border, no ui",
         "lora": 0.0, "size": 1920, "down": 960, "steps": 28, "cfg": 5.0,
     },
+    # The cell — **the new game's one body.** Everything in the cell game is this shape: the host, a clone,
+    #  and every animal that walks the habitat. The cell GDD's *Screen* calls it a rounded square blob.
+    #
+    # **It is kept apart from `monster` for one reason: that preset says `side view`.** The old game was
+    #  side-on and this one is top-down (the decision *Top-down, not side-view floors*), so reusing it
+    #  yields a beast standing in profile with nowhere to put the six part anchors.
+    #
+    # What is **inherited from `monster` deliberately**, because both were paid for in measurement there:
+    #  - **chroma green ground, never white.** A white animal generated on white gets punched through by the
+    #    fill bleeding in from the edge (measured on a chicken). Cut with `cutbg.py`, which cuts by hue.
+    #  - **generate at 4x the target, not 8x or 16x.** Larger factors do not fill the box and thin things
+    #    vanish, because k_centroid takes a block's dominant colour.
+    #  - **no outline in the prompt.** Four attempts left nothing at 44px in the old game. If it matters once
+    #    two sprites sit side by side, reopen it then.
+    #
+    # ⚠ **The cell game decided against images for the body on 2026-08-13** — it is an outline and a dot,
+    #  drawn by code (the decision *The body is an outline drawn by code*). **This preset is kept for the
+    #  parts that survive being cut off a body** — jaws, horns, wings — and for looking at candidates before
+    #  committing. A leg generated on its own is a brown stick; that was measured here.
+    #
+    # **`down` 64 is a guess.** Nothing in `src/` draws from an image, so there is no measured box to match.
+    #  Regenerate, do not rescale, when a number is chosen.
+    #
+    # **The style says nothing about which animal.** One preset has to carry the host, the clones and every
+    #  species in the habitat, or they cannot stand in the same picture — parts drawn from different presets
+    #  can never be made to match however the prompt is tuned (`CLAUDE.md`, measured).
+    #  => **The prompt speaks the creature. The preset holds only the texture.**
+    "cell": {
+        "style": "pixel art game sprite, flat top-down view seen from directly above, "
+                 "a single small creature with a rounded square body, "
+                 "bold readable silhouette, flat cel shading, chunky simple shapes, "
+                 "muted low-saturation colors, "
+                 "on a plain solid bright chroma green background, "
+                 "no text, no frame, no border, no shadow, no ui",
+        "lora": 0.0, "size": 256, "down": 64, "steps": 28, "cfg": 5.0,
+    },
     # A material grain tile for the terrain (`docs/design/terrain-look.md` (3)). **It is multiplied into the
     #  palette color, so what matters is the light-dark pattern, not the hue** — the color still comes from
     #  `cell_materials.gd`, and a tile with its own strong color would fight it.

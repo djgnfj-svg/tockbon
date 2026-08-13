@@ -52,10 +52,12 @@ Scored against the planning principles — **including the ones it does not pass
 ### The body and the swarm
 
 - You control **one cell — the host**. It moves, it eats, it uses the three bound actions
-- **Splitting is a level-up reward, not a button.** The count comes from the level — the rule is in
-  *The economy*. You never select a clone individually
+- ⚠ **Splitting is a button after all — `F` held.** It was a level-up reward until 2026-08-13, and the rule
+  now lives in *Splitting and absorbing* in `stages-and-evolution`. You still never select a clone
+  individually
 - **The swarm is a fixed pool of 128.** A hard bound the renderer and the nets are built against, not a
-  target to reach
+  target to reach. ⚠ **Its design grounds are gone** — headcount comes from force since 2026-08-13, not
+  from level — but it stands as an allocation bound until something measures otherwise
 - Clones obey **commands on the number keys** — `1 follow` · `2 scatter` · `3 attack that`. They are pressed
   like abilities, not chosen from a menu, and **`3` requires you to point at something**: no auto-targeting,
   or the game fights on its own
@@ -91,10 +93,11 @@ were made this dumb.
 **A clone's experience is not yours until it comes home.**
 
 1. Scattered clones eat and accumulate species experience privately
-2. **`1 follow` gathers the swarm at the point where the key was pressed**, and they wait there.
-   Absorption still requires touching the host
-3. A clone the host touches is **absorbed**: it hands over what it carried and **returns to the pool**
-4. A clone killed before it is absorbed **takes everything it carried with it**
+2. **`1 follow` gathers the swarm at the point where the key was pressed**, and they wait there
+3. ⚠ **`V` absorbs every clone inside a radius in one press** (2026-08-13). It is not contact-automatic and
+   it is not one clone at a time — forty clones would be forty presses. **The absorbed clones die**, and
+   their force comes back to the host
+4. A clone killed before it is absorbed **takes everything it carried with it** — its force included
 
 ⇒ **The press is a placed rendezvous**, not a recall to wherever the host happens to be. The host must
 walk into ground it chose while the swarm was still out. Recalling to the host instead lets it park in
@@ -102,9 +105,11 @@ cleared ground while the clones bear the whole return trip — the exact inverse
 
 ⇒ Scattering wide earns more and risks more. **Density is the combat axis and the economy axis at once.**
 
-⚠ **Absorption does not shrink the swarm.** It spends what a clone carried, not the clone. The swarm's
-size is set by level and **refills to its full count over the next few seconds** — otherwise the
-forty-blob picture dies at every harvest, which is the one picture this game sells.
+⚠ **This rule is dead as of 2026-08-13**: absorption *does* shrink the swarm, and nothing refills it on its
+own. **`F` refills it**, at the price of halving everyone — so the forty-blob picture is something the
+player rebuilds by hand each round trip rather than something the game hands back.
+The old text read: *absorption spends what a clone carried, not the clone; the swarm's size is set by level
+and refills over the next few seconds.*
 
 ### The economy — one gauge, two numbers per species
 
@@ -116,8 +121,9 @@ Three things are tracked and they never collapse into each other.
 | **Species total** | per species. **Only ever rises** | Which species show up on the cards |
 | ~~**Species balance**~~ | ~~per species, drops when a part is bought~~ | **Deleted 2026-08-13** — nothing spends it any more |
 
-**A level-up does exactly two things**: **+1 clone, automatically** — the card alone once the pool is full —
-and **three cards appear.**
+⚠ **A level-up now does one thing: three cards appear.** The **+1 clone** half died on 2026-08-13 — the
+swarm is grown with `F`, never by levelling. What the level does raise is the host's **base force**, which
+is what `F` has to halve.
 
 ⚠ **Cards have no price.** Each reads `species · slot`, and taking one costs nothing.
 The rule that charged the species' balance is dead and the reason is one sentence — the pool is *already*
@@ -140,8 +146,8 @@ crocodiles appearing.
 double what a clone brings home, which is the whole reason the host stays in front.
 
 **The gut raises what a clone brings home, and nothing else.** The host's own bite is always 100% and the
-gut can never exceed it — it closes the gap, it never inverts it. It also spends one of the two internal
-slots, so **gut is bought against hide.**
+gut can never exceed it — it closes the gap, it never inverts it. It also spends one of the **four** internal
+slots, so **gut is bought against eyes, bone and hide.**
 
 > **Cross-species conversion was cut.** It read as a tax on mixing species — the thing the game is selling —
 > and on inspection it was never a tax at all, only a bailout nobody had to take. Removing it takes a
@@ -154,18 +160,18 @@ trickle; it arrives when the swarm does.
 Other ratios exist (gut rates, candidate weights, the rising chance on a miss) and **none of them has been
 picked.**
 
-### Parts — twelve slots
+### Parts — ten slots
 
-⚠ **Was eight until 2026-08-13.** Six external plus **six** internal now — the reasoning and the internal
-list are in `stages-and-evolution`. The rest of this section is unchanged.
+⚠ **Was eight, then twelve, then nine, and settled at ten on 2026-08-13.** The reasoning and the four
+internal jobs are in `stages-and-evolution`.
 
 Species experience is a currency, and what it buys is **that species' body parts.**
 
-**External 6 — visible on the body**: head (jaws · beak · horns) · eyes · back (wings · shell) ·
-forelimbs · hindlimbs · tail
+**External 6 — visible on the body**: head (jaws · beak · horns) · **torso** (chest · mane · hump) ·
+back (wings · shell) · forelimbs · hindlimbs · tail
 
-**Internal 2 — numbers only**: gut · hide (defence · camouflage). What the gut does, and what it costs to
-take, is in *The economy*
+**Internal 4 — numbers only**: eyes · gut · bone · hide-or-fur. ⚠ **Eyes moved inside** — noticing things
+is a number, not a sprite. What the gut does, and what it costs to take, is in *The economy*
 
 Every species offers only some slots. Rabbit gives ears and hindlimbs; crocodile gives jaws, tail and hide;
 bird gives wings and eyes. **That is what makes hunting selective.**
@@ -209,6 +215,8 @@ as parts are bought, so the same three keys do something different by the end.
 | right click | a part's active |
 | space | a movement part |
 | `1` `2` `3` | swarm commands, `3` pointed at a target |
+| **`F` held** | **split** — the host and every clone halve at once |
+| **`V`** | **absorb** — every clone inside a radius, in one press |
 
 **Right hand fights, left hand commands**, and neither rests while the swarm is scattered.
 
@@ -234,7 +242,7 @@ that clone** — no menu, no choice. The cards are the host's; the swarm's compo
 been hunting.
 
 **A clone carries at most one part, at one anchor**, and a later kill replaces it. **The host keeps all
-eight slots.** A hundred cells wearing eight parts each is neither readable on screen nor renderable at
+ten slots.** A hundred cells wearing ten parts each is neither readable on screen nor renderable at
 once.
 
 ⇒ Two build paths that do not look alike: the host is **chosen**, the swarm is **grown**.
@@ -268,7 +276,7 @@ to the field permanently and re-weights the spawns; **the field carries exactly 
 one before it**, and the tier before that falls out. That is the rule that makes what you fled from into
 food, and it caps the live spawn table at two tiers of art.
 
-Enemies are **chimeras built from the same eight slots as the player** — a boss is "the thing with three
+Enemies are **chimeras built from the same ten slots as the player** — a boss is "the thing with three
 parts bolted on". No separate enemy system, no separate art pipeline.
 
 **A chimera pays into every species it visibly wears**, split evenly by part count: three crocodile parts
@@ -289,25 +297,62 @@ those force the first run to be deliberately weak.
 
 ## Screen
 
-**The cell is a rounded square blob** — cute, nearly featureless, and it reads at any size. Depth comes from
-**an ellipse shadow underneath and a lighter top edge**, not from shaded spheres; the juice comes from
-**squash, stretch and overshoot** in the movement, not from the art.
+⚠ **The whole of this section was decided on 2026-08-13 by generating candidates and looking at them.**
+`tools/pixel/out/cell_*` and `tools/pixel/out/gl_*` hold the boards it was decided from.
+
+**The cell is an outline, not a fill.** A rounded square **drawn as a line**, one dot at the centre, and
+**everything between them is empty** — the ground shows through. The juice comes from **squash, stretch and
+overshoot** in the movement, not from the art.
+
+- **Two eyes were tried and rejected.** They made it a face, and a face has a front, which fights a top-down
+  body that parts attach to on all six sides. A centred dot reads as a nucleus and stays centred under
+  rotation
+- **Featureless with no dot did not read as alive** — it came out as a plain square
+- **A filled white body was the step before this one.** The user cut the fill: outline and dot, nothing else
+- **Colour is undecided**, including whether the line is white. What is decided is line, not fill
+
+⇒ **Being empty inside is worth more than it costs.** Forty overlapping clones do not blend into one mass,
+because each one is a line and you see through it. The known cost is that the ground shows through the
+body; the cells are small enough at first that the user chose to accept it.
+
+### It is drawn by code, and images can replace it later
+
+**Nothing above needs a sprite.** A rounded outline, a dot, and a part's line are radius · thickness ·
+length — numbers, and squash and stretch are free on numbers and destructive on pixels.
+
+⇒ **This is a stage, not a verdict.** The user's call: build it as drawing code now and swap in images later
+if it wants them. That only stays cheap if **every drawing call goes through one place** — see
+`src/look.gd`'s rule in `CLAUDE.md`.
+
+⇒ **A part is worn in the host's own colour, not the prey's.** Eating a cheetah's legs does not paste
+cheetah onto the body — the cell digested it. **So a part carries no colour of its own**, and the whole
+"every species-slot sprite must come off one board or the tones fight" problem — the biggest art constraint
+in this project — **does not apply to this game.** What was eaten is read from **shape alone**.
+
+⇒ **Generated boards showed which parts could ever be images**: jaws, horns and wings survive being cut off
+a body and still read. **A leg does not** — detached, it is a brown stick (`tools/pixel/out/part_horse_leg`).
 
 **How parts attach**: **six anchors around the body** — one per external slot — with the parts drawn
 **behind** the blob so they read as silhouette: a jaw juts forward, wings spread behind, legs show
-underneath. **The two internal slots are not drawn at all; they change the body's colour.**
+underneath. **The four internal slots are not drawn at all; they change the body's drawing values** — fur
+outlines it, hide deepens the colour, bone sharpens the corners.
 
-**A part is a sprite, an anchor index and a facing flip.** No rotation, no per-part z-sort, no scaling.
-A boss is drawn with **bigger part sprites**, never a scaled rig.
+**A part is a shape, an anchor index and a facing flip.** No rotation, no per-part z-sort, no scaling.
+A boss is drawn **bigger**, never as a scaled rig.
 
-⚠ **Every species × slot sprite is generated in one board on one preset.** Parts drawn from different
-presets can never be made to match however the prompt is tuned — `CLAUDE.md` measured it. So art is cheap
-**once**: one board per species, paid up front, and **a species added later costs a whole board.**
+⚠ **The board-per-species rule is lifted for this game** (2026-08-13). It said every species × slot sprite
+had to come off one board on one preset or the tones could never be made to match, and it was the single
+biggest constraint here — it is what capped a habitat at five or six species that give parts.
+**It does not bind, because a worn part has no colour of its own**: the host draws it in the host's own
+line. Tones cannot fight when there is only one tone.
+⇒ **The cap on how many species give parts is gone.** What still limits them is how many the player can
+tell apart, which is a design question, not a bill.
 
 - A square host with parts protruding from its sides, surrounded by smaller squares
-- `scatter` visibly spreads them out; `follow` gathers them **at the spot the key was pressed**, and each
-  one **pops as the host touches it** — that pop is the harvest, and it must be readable without a number.
-  The swarm visibly grows back afterwards
+- `scatter` visibly spreads them out; `follow` gathers them **at the spot the key was pressed**, and **`V`
+  pops the whole ring of them at once** — that is the harvest, and it must be readable without a number.
+  ⚠ **The swarm does not grow back on its own**; the next `F` is what refills it, and the body visibly
+  thins as it does
 - One level bar, always visible, filling from every mouthful
 - The level-up pause shows **the cards, each `species · slot · price`**, and the balance each would draw
   from. A card you cannot afford is visibly out of reach — there is no second way to pay for it

@@ -11,9 +11,11 @@ Korean font — and on top of it now sits **`src/`, a working prototype of the c
 **Read `docs/next-game.md` and the cell GDD before proposing anything.** They also record why the old game
 died, so the same call is not re-litigated from scratch.
 ⚠ **And read `stages-and-evolution` in the same breath — it is newer than the GDD wherever they disagree.**
-A planning conversation on 2026-08-13 deleted card prices and species currencies, replaced tiers with
-habitats, split force from disposition, and opened the body to twelve slots. **Stage 1 is grassland and the
-August build is that one stage played to a finished build.**
+Two planning conversations on 2026-08-13 deleted card prices and species currencies, replaced tiers with
+habitats, split force from disposition, settled the body at **ten slots**, and put swarm growth **on a key**
+(`F` splits everything in half, `V` absorbs a radius) — **the level-up no longer grows the swarm at all.**
+**Stage 1 is grassland and the August build is that one stage played to a finished build**, and the plan for
+it is `grassland-whole-loop`.
 
 **What runs**: one host you drive, a swarm that scatters and rallies, clones that carry what they ate until
 they touch you, an ecosystem of critters that chase or flee depending on how big the swarm has got, and a
@@ -398,4 +400,18 @@ Two things it measured that outlive the old game:
   896 was judged "low pixel", and generating at 896 directly fixed it
 - **Texture comes from the preset, not the seed.** Six seeds on one preset gave six compositions with
   identical texture; five prompts on one seed gave five pictures that matched. Parts drawn from *different*
-  presets can never be made to match, however the prompt is tuned
+  presets can never be made to match, however the prompt is tuned.
+  ⚠ **This is the constraint the cell game escaped, and it is worth knowing how**: a part is worn **in the
+  host's own colour**, so there is only ever one tone and nothing has to match. **It bought back the cap on
+  how many species a habitat can have** — see [the body is a line](docs/decisions/the-body-is-a-line-drawn-by-code.md).
+  The rule still binds anything that keeps its own colours
+
+**And three things measured on 2026-08-13, generating for the cell game:**
+
+- **Naming an animal overrides the view.** Six species asked for top-down came out in front view. Forcing
+  the view back made the animal leave — a top-down lion is an orange square, because **a mane is surface and
+  surface does not show from above.** ⇒ On a top-down body, **only what sticks out reads**
+- **A part generates well only if it survives being cut off a body.** Jaws do. **A leg does not** — detached
+  it is a brown stick
+- **Do not generate what is a shape.** An outline, a dot and a limb are a radius, a thickness and a length;
+  code draws them, squash and stretch are free on numbers and destructive on pixels
