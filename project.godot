@@ -25,7 +25,7 @@ window/size/viewport_height=720
 window/size/window_width_override=1920
 window/size/window_height_override=1080
 window/stretch/mode="canvas_items"
-window/stretch/scale_mode="integer"
+window/stretch/scale_mode="fractional"
 
 [editor_plugins]
 
@@ -103,4 +103,4 @@ renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
 2d/snap/snap_2d_transforms_to_pixel=true
 2d/snap/snap_2d_vertices_to_pixel=true
-rendering/environment/defaults/default_clear_color=Color(0.09, 0.06, 0.05, 1)
+environment/defaults/default_clear_color=Color(0.09, 0.06, 0.05, 1)

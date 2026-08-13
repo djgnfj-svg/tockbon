@@ -6,11 +6,23 @@ extends RefCounted
 ## every check still green. So a loaded clone is actually killed and the bank is asserted unchanged.
 ##
 ## Both eat boundaries are pinned one pixel either side, so an off-by-one in the radius comparison bites.
+##
+## **The pins are LITERALS and that is deliberate.** They read `Rules.EAT_RADIUS_CLONE` until the second
+## adversarial review found that a bound taken from the thing it measures shrinks with it: the radius could
+## be dropped to 5.0 and both checks stayed green. The two constant-against-constant checks below are the
+## other half — a reach smaller than the body it belongs to is the bug the user caught on the first play,
+## and it is the one failure this file cannot afford to let back in.
 
 const DT := 1.0 / 60.0
 
 
 func run(t) -> void:
+	# -- the reach has to clear the body it belongs to --------------
+	# Constant against constant, so it holds however either is tuned. `rules.gd` records why: at 12px against
+	# a 14px host, food had to be run over dead centre and hunting read as broken.
+	t.ok(Rules.EAT_RADIUS_HOST > Look.HOST_RADIUS, "호스트의 먹는 거리는 제 몸보다 넓다")
+	t.ok(Rules.EAT_RADIUS_CLONE > Look.CLONE_RADIUS, "분신의 먹는 거리는 제 몸보다 넓다")
+
 	# -- the boundary, from outside ---------------------------------
 	var sw := Swarm.new()
 	sw.setup(2, Vector2(500.0, 500.0))
@@ -21,13 +33,15 @@ func run(t) -> void:
 	# turn a failing distance into a passing one.
 	sw.command_rally(sw.pos[c])
 
-	var far := _one_food(Vector2(1000.0 + Rules.EAT_RADIUS_CLONE + 1.0, 1000.0))
+	# 17.0 and 15.0 are literals around EAT_RADIUS_CLONE's 16.0. Shrink the constant and this goes red on
+	# purpose — the value moving is the thing that has to be seen.
+	var far := _one_food(Vector2(1017.0, 1000.0))
 	sw.step(DT, far)
 	t.eq(far.alive_count, 1, "먹기 반경 밖 먹이는 안 먹힌다")
 	t.eq(sw.carried[c], 0.0, "반경 밖이면 아무것도 싣지 않는다")
 
 	# -- and from inside --------------------------------------------
-	var near := _one_food(Vector2(1000.0 + Rules.EAT_RADIUS_CLONE - 1.0, 1000.0))
+	var near := _one_food(Vector2(1015.0, 1000.0))
 	sw.eat_cd[c] = 0.0
 	sw.step(DT, near)
 	t.eq(near.alive_count, 0, "반경 안 먹이는 먹힌다")

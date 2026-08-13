@@ -201,8 +201,14 @@ The spawner writes; the verifier only reports. Afterwards `git worktree remove -
 (automatic cleanup almost never fires — 700MB in one night, measured).
 
 **A fresh worktree has no `.godot` import cache, and every net goes red for it** — not a code failure.
-Four agents hit this the same night. Run the engine headless once in the new worktree first (any
-`--headless --script` invocation re-imports) before trusting a red round to mean anything.
+Four agents hit this the same night. Run `--headless --path <root> --import` in the new worktree first,
+before trusting a red round to mean anything.
+⚠ **`--headless --script` does NOT re-import, and this file said it did for two days.** Measured twice on
+4.7.1: a brand-new `class_name` file is **invisible** to `--script` until an explicit `--import` pass —
+the net that references it dies with `Parse error` / `Nonexistent function 'new' in base 'GDScript'`, one
+`--import` fixes it. **This is not only a worktree problem**: it bites in the main tree every time a plan
+adds a `class_name` file, which is most of them. `run_nets.ps1` now runs the import itself when it sees a
+`.gd` with no `.uid` beside it, so the hand-run is only needed when that guard is bypassed.
 **A worktree also freezes at the commit it branched from** — two agents built a full session's worth of
 work against a base that did not know the day's other changes had landed. Re-branch from `main` right
 before starting, not from whatever commit happened to be current earlier.
@@ -218,10 +224,16 @@ before starting, not from whatever commit happened to be current earlier.
 | `src/shell/` | **The only place that reads `Input`**, and the only place that wires `sim` to `view`. It builds its children in code, so a net calling `_ready()` exercises the real wiring |
 | `src/look.gd` | **Every presentation constant, in exactly one file.** `src/sim/rules.gd` holds every constant that changes what happens |
 
-**The scan that enforces this is not written yet** — with a handful of files it would be a check that
-cannot fail. Write it when a folder has enough in it to drift: grep `src/sim/` for `extends Node` · `_draw`
-· `Input.` · `get_node` · `$`, grep `src/view/` for writes to `sim.`, grep outside `look.gd` for colour and
-pixel literals.
+**The first of these scans now exists, and it covers two files out of five.** `net_draw_leaf` asserts that
+**`title_screen.gd` and `ending_screen.gd` each hold at most two `c.draw_` call sites**, so every pixel goes
+through `_paint_rect` or `_paint_text` and a net can assert what was drawn. It was written the day a hook
+that threw its own drawing away passed 54 checks out of 54.
+⚠ **`hud.gd`, `card_panel.gd` and `field_view.gd` are NOT in it** — each calls `draw_*` in 5–9 places and
+retrofitting them was outside that plan's scope. **Do not read the scan as covering `src/view/`.** It counts
+lines rather than calls, too: two draws separated by `;` on one line count as one.
+**The rest are still unwritten**: grep `src/sim/` for `extends Node` · `_draw` · `Input.` · `get_node` · `$`,
+grep `src/view/` for writes to `sim.`, grep outside `look.gd` for colour and pixel literals. Write each when
+its folder has enough in it to drift.
 
 **The one-file rule for presentation constants is inherited and was measured**: scattering them meant the
 power doubled and **zero things changed on screen**, because the numbers that would have shown it were in

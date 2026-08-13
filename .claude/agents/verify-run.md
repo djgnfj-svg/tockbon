@@ -27,17 +27,25 @@ Failure in this repo is usually silent. So "no error" is not grounds for a pass.
 **No `godot_*` MCP tools** — reason is in `CLAUDE.md` under "godot MCP". Launch the game directly with
 `Godot_*.exe --headless --script` (same as `tests/run_nets.ps1`). That script prints the values.
 
-### Measuring a click headless requires `in_local_coords = true`
+### Measuring a click headless: drive `root.push_input`, never `_gui_input`
 
-`root.push_input(ev)` **does not go through the GUI pipeline.** The headless window is 64×64 while
-`visible_rect` is 960×960, so the non-local path mangles coordinates — `_gui_input` runs 0 times and
-`gui_get_hovered_control()` is always null.
+**The rule that holds**: calling a Control's `_gui_input(...)` by hand **skips `mouse_filter` entirely**, so a
+Control silently set to `IGNORE` — one that no real click could ever reach — still passes every check.
+`root.push_input(ev, true)` goes through the engine's own hit test. `Input.parse_input_event(ev)` skips the GUI
+and is not a substitute.
 
-**Then every click leaks through to firing and reads as "the window doesn't block clicks".** That misreading
-happened. Only a positive control (click inside a `STOP` Control I built) plus a negative control (click where
-no Control exists) exposed it as a harness problem — both leaked identically.
+**Measured on this project, 2026-08-14** — a positive control (`mouse_filter = STOP`: the click fires once and
+`gui_get_hovered_control()` returns a real Control) against a negative control (`IGNORE`: fires zero times,
+hovered is null). **Always attach both.** "The window blocked it" and "the GUI is dead entirely" observe
+identically, and that misreading has happened here.
 
-`root.push_input(ev, true)` is the right call. `Input.parse_input_event(ev)` also skips the GUI.
+⚠ **This section used to claim `in_local_coords = true` is *required*, because the headless window is smaller
+than `visible_rect` and the non-local path mangles coordinates. That does not hold in this project** — the
+headless viewport is 1280×720 and `visible_rect` agrees, so `push_input(ev, false)` fires the identical signal
+from the identical point. The mangling case came from the deleted game's 64×64-against-960×960 harness and was
+inherited unchecked. **Keep passing `true`** — it costs nothing and is the honest form — but **do not go hunting
+for a coordinate bug that is not here, and do not cite the mangling as a reason anywhere else.** A wrong reason
+propagates faster than a wrong number.
 
 **Measure a click as "did the command queue grow within that frame".** Independent of tick timing, so repeats don't wobble.
 
@@ -77,7 +85,7 @@ A half-written file referencing a constant that doesn't exist yet throws a parse
 **Pass count up by 3 per file is the evidence** — it's not your change, someone else is mid-work.
 
 - **Do not take screenshots.** How it looks is verify-look's job. Numbers only.
-- **You cannot measure aspect ratio.** Headless `visible_rect` is 960×960, a different ratio from the real window (960×540). "How much of the stage the window covers" is verify-look's.
+- **Aspect ratio IS measurable here, and this line used to say the opposite.** Headless `visible_rect` reports **1280×720**, which is `project.godot`'s viewport, and the real window override is 1920×1080 — **the same 16:9**. The old text (960×960 against 960×540) was measured on the deleted game and inherited unchecked; verify-run caught it on 2026-08-14 by reporting its own measurement against this file. **Read the value, do not trust this sentence** — and if it disagrees with what you measure, fix the sentence. What stays verify-look's is how much of the stage the window *covers* and whether that reads right.
 - **Render cost (FPS) is impossible to measure headless, in principle.** Not yours — report that you couldn't and hand it to verify-look.
 - **Never take the user's mouse or keyboard.** Focusing a window or injecting keys is forbidden. The user is on the same machine.
 

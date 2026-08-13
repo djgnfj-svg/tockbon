@@ -17,7 +17,6 @@ const BAR_FILL := Color(0.95, 0.85, 0.45)
 const CARRY_COLOR := Color(0.98, 0.92, 0.35)
 const HP_COLOR := Color(0.85, 0.35, 0.32)
 const HP_LOST := Color(0.3, 0.22, 0.2)
-const OVER_DIM := Color(0.04, 0.03, 0.03, 0.86)
 
 var world: World = null
 var _bar_shown := 0.0
@@ -55,9 +54,6 @@ func _paint(c: CanvasItem) -> void:
 	_paint_text(c, Vector2(24.0, 112.0),
 			"무리 %d · 지고 있는 것 %d" % [sw.count - 1, int(sw.total_carried())], 20, CARRY_COLOR)
 
-	var left := maxf(0.0, Rules.RUN_LENGTH - world.elapsed)
-	_paint_text(c, Vector2(size.x - 128.0, 84.0), "%d:%02d" % [int(left) / 60, int(left) % 60], 32, TEXT)
-
 	for i in maxi(world.host_hp, Rules.HOST_HP):
 		c.draw_circle(Vector2(34.0 + i * 26.0, size.y - 34.0), 9.0,
 				HP_COLOR if i < world.host_hp else HP_LOST)
@@ -65,9 +61,6 @@ func _paint(c: CanvasItem) -> void:
 	if world.elapsed < 12.0:
 		_paint_text(c, Vector2(24.0, size.y - 68.0),
 				"WASD 이동 · Space 대시 · 1 모이기(커서) · 2 흩어지기", 20, DIM_TEXT)
-
-	if world.over:
-		_paint_result(c)
 
 
 ## The hook. `draw_string` is a native call and Godot refuses to override it — a parse error — so every
@@ -77,24 +70,6 @@ func _paint(c: CanvasItem) -> void:
 ## entirely unmeasured file.
 func _paint_text(c: CanvasItem, p: Vector2, text: String, font_size: int, col: Color) -> void:
 	c.draw_string(get_theme_default_font(), p, text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, col)
-
-
-## The experiment's output. Two runs, these four numbers, and the comparison is the verdict — greedy must
-## bank at least 1.4× cautious or the round trip is not a decision.
-func _paint_result(c: CanvasItem) -> void:
-	c.draw_rect(Rect2(Vector2.ZERO, size), OVER_DIM)
-	var x := size.x * 0.5 - 200.0
-	var y := size.y * 0.5 - 120.0
-	_paint_text(c, Vector2(x, y), "끝" if world.host_hp > 0 else "먹혔다", 40, TEXT)
-	var rows := [
-		"모은 것 %d" % int(world.swarm.banked),
-		"잃은 분신 %d" % world.clones_lost,
-		"같이 날아간 것 %d" % int(world.cargo_lost),
-		"가장 컸을 때 %d" % world.peak_swarm,
-	]
-	for i in rows.size():
-		_paint_text(c, Vector2(x, y + 62.0 + i * 40.0), str(rows[i]), 28, TEXT)
-	_paint_text(c, Vector2(x, y + 62.0 + rows.size() * 40.0 + 24.0), "R 다시", 20, DIM_TEXT)
 
 
 func _level_t() -> float:

@@ -22,7 +22,14 @@ var critters_eaten := 0
 var elapsed := 0.0
 var host_hp := Rules.HOST_HP
 var host_grace := 0.0
-var over := false
+
+## Placeholder end condition: set the frame a critter at CRITTER_THREAT_MAX is eaten. Plan 4 replaces the
+## condition with the real boss check, not the plumbing that reads it — see `_contact()`.
+var stage_cleared := false
+
+## Ids of species eaten at least once, first-eaten order. Nothing in this plan appends to it — plan 4 is
+## what puts anything in it; until then the ending prints 없음.
+var species_eaten := PackedInt32Array()
 
 var clones_lost := 0
 var cargo_lost := 0.0
@@ -33,6 +40,17 @@ var peak_swarm := 1
 var level := 0
 var pending_levels := 0
 var offer := PackedInt32Array()
+
+## True while the great absorption beat runs. `Run._begin_clear()` sets this and nothing else touches it
+## — a fresh `World` always starts `false`, and a `World` that ever sets it is already headed to ENDING,
+## so it never needs to be cleared within one `World`'s life.
+##
+## Two effects, one flag, on purpose — both are "must not advance during the beat", the same class of
+## problem, and a second flag for the second one would just be two names for one moment in time:
+##  · `_grow()` refuses to hand out a level while this holds — one earned by eating the boss would open
+##    three cards on top of the ending screen
+##  · `_step_critters()` does not run while this holds — see the note at its call site in `step()` for why
+var beat_frozen := false
 
 var _split_paid := 0.0
 var _next_critter := Rules.CRITTER_INTERVAL
@@ -54,13 +72,23 @@ func setup(run_seed: int = 1) -> void:
 		_spawn_critter()
 
 
+## A run no longer ends on a clock — `Run.step()` is what detects the end (death or the placeholder
+## clear) and flips the phase. This method only ever refuses to advance on an unspent level.
 func step(dt: float) -> void:
-	if over or pending_levels > 0:
+	if pending_levels > 0:
 		return
 	elapsed += dt
 	swarm.step(dt, food)
 	food.step(dt)
-	_step_critters(dt)
+	# Frozen for the same reason `_grow()` is, below: `is_hunter_of()` reads `swarm.count`, which is
+	# falling every frame of the beat as bodies arrive and are absorbed — left running, a critter that
+	# read as prey a moment ago flips back to hunter mid-victory and can cost the host a heart while it
+	# is swallowing the boss. The outcome is latched (a hit mid-beat cannot turn a win into a death), but
+	# the picture would still show the world turning hostile at the exact moment it was won.
+	# ⚠ `is_hunter_of()` and `critter_threat` are deleted by plan 4 — this freeze is about WHEN the
+	# ecosystem steps, not about who is hunting whom, and must survive that deletion unchanged.
+	if not beat_frozen:
+		_step_critters(dt)
 	_grow()
 	if host_grace > 0.0:
 		host_grace -= dt
@@ -69,8 +97,6 @@ func step(dt: float) -> void:
 	if _next_critter <= 0.0:
 		_next_critter = Rules.CRITTER_INTERVAL
 		_spawn_critter()
-	if elapsed >= Rules.RUN_LENGTH or host_hp <= 0:
-		over = true
 
 
 ## Critters wander until something comes within `CRITTER_SENSE`, and then the comparison decides which of
@@ -121,8 +147,11 @@ func _contact(k: int, p: Vector2) -> bool:
 		# The swarm eats it. Any body in the swarm counts — this is the payoff for having grown.
 		for i in swarm.count:
 			if p.distance_to(swarm.pos[i]) <= reach:
-				swarm.banked += float(critter_threat[k]) * Rules.CRITTER_MEAT
+				swarm.eat(0, float(critter_threat[k]) * Rules.CRITTER_MEAT)
 				critters_eaten += 1
+				if critter_threat[k] == Rules.CRITTER_THREAT_MAX:
+					# Placeholder end condition — plan 4 rewrites the condition, not the plumbing.
+					stage_cleared = true
 				_remove_critter(k)
 				return true
 		return false
@@ -156,6 +185,8 @@ func _remove_critter(k: int) -> void:
 ## One level per SPLIT_PER_BANKED banked. The level does not spend the bank and does not grow the swarm on
 ## its own — it hands the player a pick, and `take_card` is what actually pays out.
 func _grow() -> void:
+	if beat_frozen:
+		return
 	while swarm.banked - _split_paid >= Rules.SPLIT_PER_BANKED:
 		_split_paid += Rules.SPLIT_PER_BANKED
 		level += 1

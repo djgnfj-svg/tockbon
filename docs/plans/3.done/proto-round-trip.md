@@ -103,7 +103,7 @@ someone is arguing about. **`rules.gd` is the live value in every case; the midd
 | `PREDATOR_SPEED` | 260 px/s | **gone** — it is `CRITTER_SPEED` = 165.0 |
 | `EAT_RADIUS` | 12 px | **split in two**: `EAT_RADIUS_HOST` 26.0, `EAT_RADIUS_CLONE` 16.0 |
 | `PREDATOR_START` / `PREDATOR_INTERVAL` | 6 / 60 s | `CRITTER_START` 6 / `CRITTER_INTERVAL` **45.0** |
-| `RUN_LENGTH` | 5:00 hard stop | **being deleted** — a run ends on the boss or on death ([plan 1](../1.ready/run-shell.md)) |
+| `RUN_LENGTH` | 5:00 hard stop | **being deleted** — a run ends on the boss or on death ([plan 1](../3.done/run-shell.md)) |
 | `SPLIT_PER_BANKED` | 10 | 10 — ⚠ **but it was tuned when a level gave a clone.** A level now gives `+1 force`, so at this rate force passes the boss's 12 in about two minutes. **Expect it to move** |
 
 **The rows below were not disturbed and are still live.**

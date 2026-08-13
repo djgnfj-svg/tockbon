@@ -119,4 +119,8 @@ const CRITTER_SPAWN_MIN_DIST := 900.0
 ## independent of play, and then recall discipline has no consequence — which is the thing under test.
 const SPLIT_PER_BANKED := 10.0
 
-const RUN_LENGTH := 300.0
+# -- the great absorption --------------------------------------------
+## On clearing, the whole swarm is pulled home and absorbed — the one time that happens. See
+## `Swarm.clear_pull` and `Run._begin_clear()` / `Run._finish_clear()`.
+const CLEAR_ABSORB_TIME := 1.2
+const CLEAR_ABSORB_PULL := 900.0

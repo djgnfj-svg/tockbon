@@ -474,7 +474,7 @@ the record is `proto-round-trip`. **That is the only thing accepted.**
   worth double is not felt, the rule is one deletion away
 - ~~**What the ending is.**~~ **Closed 2026-08-14.** A run ends **the moment the boss is eaten or the host
   dies** — never on a clock — and both land on **one ending screen** that reads out time, cells eaten,
-  species eaten and the finished body. See [the run shell](../plans/1.ready/run-shell.md). What comes
+  species eaten and the finished body. See [the run shell](../plans/3.done/run-shell.md). What comes
   *after* grassland is still undefined and stays that way
 - ~~**The tier list** beyond the two that ship.~~ **Void** — there are no tiers, and the August scope is one
   stage, not two. How many habitats there eventually are is open; nothing about it is being decided now

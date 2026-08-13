@@ -31,6 +31,15 @@ var count := 0
 var banked := 0.0
 var absorbed_events := 0
 
+## Monotonic. Every mouthful this run, host and clones together, never decremented — `eat()` is the only
+## place it moves. This is what the ending reports as 경험치: `banked` alone loses everything a dying
+## clone was carrying, and the ending must report what the run ATE, not what it happened to bank.
+var eaten := 0.0
+
+## Set by `Run._begin_clear()` for the great absorption's duration. While true, `step()` steers every
+## clone straight at the host and skips `_separate()` entirely — see both call sites below.
+var clear_pull := false
+
 ## Where `1` was pressed. **Not the host's position** — clones walk to the point the player named and wait
 ## there. Gathering at the host lets the player park in cleared ground while the clones take every step of
 ## the risk, which is backwards from the tension this build exists to measure.
@@ -169,8 +178,12 @@ func step(dt: float, food: Food = null) -> void:
 	_move_host(dt)
 	for i in range(1, count):
 		_move_clone(i, dt, food)
-	for i in range(1, count):
-		_separate(i)
+	if not clear_pull:
+		# Separation pushes bodies 16px apart every frame; run it during the great absorption and forty
+		# clones sit in a ring not moving while the sim says they are being pulled home — screen and sim
+		# disagreeing, which CLAUDE.md names as the signature fake.
+		for i in range(1, count):
+			_separate(i)
 	for i in count:
 		_try_eat(i, dt, food)
 	_absorb()
@@ -207,10 +220,26 @@ func _move_host(dt: float) -> void:
 func _move_clone(i: int, dt: float, food: Food) -> void:
 	var p := pos[i]
 	var speed := Rules.CLONE_SPEED_FOLLOW if state[i] == FOLLOW else Rules.CLONE_SPEED_SCATTER
+	if clear_pull:
+		speed = Rules.CLEAR_ABSORB_PULL
 	var desired := Vector2.ZERO
 	_target_food[i] = _nearest_food(p, food)
 
-	if state[i] == FOLLOW:
+	if clear_pull:
+		# The great absorption: every clone is steered straight at the host, replacing FOLLOW/SCATTER
+		# entirely for the beat's duration. See Run._begin_clear().
+		#
+		# `to.limit_length(speed * dt) / dt`, not `to.normalized() * speed`: nothing else in this
+		# function decelerates on arrival, and at 900px/s a clone within one frame's travel of the host
+		# overshoots every frame it is that close and oscillates there for the rest of the beat. The
+		# numbers stay correct either way (ABSORB_RADIUS clears the overshoot, `eaten` doesn't move) —
+		# it is the picture that breaks, and this beat IS the "you won" moment. Capping `desired` at
+		# exactly what closes the remaining distance this frame lands the clone on the host and stops it,
+		# with no separate arrive-radius to tune.
+		var to := pos[0] - p
+		if to.length() > 0.001:
+			desired = to.limit_length(speed * dt) / dt
+	elif state[i] == FOLLOW:
 		var to := rally - p
 		if to.length() > rally_radius():
 			desired = to.normalized() * speed
@@ -288,26 +317,54 @@ func _try_eat(i: int, dt: float, food: Food) -> void:
 	if i == 0:
 		# The host banks instantly. A clone's mouthful is at risk until it walks home — that difference IS
 		# the tax the GDD wanted, expressed as a speed, with no constant to tune and nothing to explain.
-		banked += 1.0
+		eat(0, 1.0)
 		eat_cd[0] = Rules.EAT_PERIOD_HOST * host_eat_mul
 	else:
-		carried[i] += 1.0
+		eat(i, 1.0)
 		eat_cd[i] = Rules.EAT_PERIOD_CLONE * clone_eat_mul
 	_target_food[i] = -1
 
 
-## Touching the host hands the cargo over. **The clone empties; it does not die** — the swarm's size is
-## set by level, and a harvest that deleted clones would erase the forty-blobs screenshot every time the
-## player collected anything.
+## THE ONLY PLACE `banked` OR `carried[i]` GROWS BY NEW MATERIAL. Moving cargo between two bodies is not
+## eating and must not call this — `_absorb()` and `Run._finish_clear()` both assign directly, and that
+## asymmetry is the whole point: cargo arriving home was already counted here when it was picked up.
+func eat(i: int, amount: float) -> void:
+	eaten += amount
+	if i == 0:
+		banked += amount
+	else:
+		carried[i] += amount
+
+
+## Ordinary play: touching the host hands the cargo over. **The clone empties; it does not die** — the
+## swarm's size is set by level, and a harvest that deleted clones would erase the forty-blobs screenshot
+## every time the player collected anything.
+##
+## **During the great absorption (`clear_pull`), arrival removes the whole body**, cargo or none. This is
+## the one exception to "the clone does not die" above, and it exists because the ordinary rule — only a
+## LOADED clone does anything on arrival — left every empty clone sitting motionless on the host for
+## whatever was left of the beat once it got there: measured, most of a 40-body swarm converges well
+## inside `CLEAR_ABSORB_TIME`, and the beat was a still frame for the remainder — screen and sim
+## disagreeing, `CLAUDE.md`'s own name for it. Removing on arrival instead of waiting for the beat's own
+## end also means `banked` rises once per arriving body rather than once in a single lump at
+## `Run._finish_clear()` — which is what makes `FieldView`'s absorb-pop animation fire per body instead
+## of not at all.
+##
+## Backwards, because `remove_at()` swaps the last row down and a forward walk would skip whatever landed
+## in `i` — the same reason every other flat-array removal in this build walks backwards.
 func _absorb() -> void:
-	for i in range(1, count):
-		if carried[i] <= 0.0:
-			continue
+	for i in range(count - 1, 0, -1):
 		if pos[i].distance_to(pos[0]) > Rules.ABSORB_RADIUS:
 			continue
-		banked += carried[i]
-		carried[i] = 0.0
-		absorbed_events += 1
+		if clear_pull:
+			banked += carried[i]
+			carried[i] = 0.0
+			remove_at(i)
+			absorbed_events += 1
+		elif carried[i] > 0.0:
+			banked += carried[i]
+			carried[i] = 0.0
+			absorbed_events += 1
 
 
 func _nearest_food(p: Vector2, food: Food) -> int:

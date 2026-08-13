@@ -133,16 +133,6 @@ func run(t) -> void:
 		w3.step(DT)
 	t.eq(w3.host_hp, Rules.HOST_HP - 1, "무적 시간 안에는 두 번 맞지 않는다")
 
-	# -- the run ends by itself --------------------------------------
-	var w5 := World.new()
-	w5.setup(35)
-	w5.elapsed = Rules.RUN_LENGTH - 0.05
-	w5.step(DT)
-	t.ok(not w5.over, "시간이 남아 있으면 안 끝난다")
-	for _s in 5:
-		w5.step(DT)
-	t.ok(w5.over, "시간이 다 되면 런이 끝난다")
-
 	# -- and nothing spawns in your lap ------------------------------
 	# Six spawns per run, each with roughly a 31% chance of landing inside the exclusion zone by luck —
 	# one seed would have let a missing retry loop through about one time in nine. Ten seeds instead.

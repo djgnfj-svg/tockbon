@@ -96,46 +96,65 @@ func run(t) -> void:
 	t.ok(main.cards != null and main.cards.is_inside_tree(), "셸이 카드 패널을 실제로 붙였다")
 	t.ok(not main.cards.visible, "레벨이 없을 때는 떠 있지 않다")
 
-	# **The camera and the culling rectangle, which nothing measured.** Blank out `_camera_rect()` and
-	# every food spot, clone and predator fails `view_rect.has_point()` and stops being drawn — only the
-	# host survives, drawn unconditionally — while the camera sits at the spawn point forever. 91 checks
-	# stayed green through exactly that.
-	t.ok(main.view.view_rect.has_point(main.world.swarm.pos[0]),
-			"카메라가 보는 사각형이 호스트를 담고 있다 — 비면 화면에서 전부 사라진다")
-	var cam_start: Vector2 = main.cam.position
-	main.world.swarm.pos[0] += Vector2(600.0, 0.0)
-	await t.pump_frames(6)
-	t.ok(main.cam.position.x > cam_start.x + 5.0, "카메라가 호스트를 따라간다")
-	t.ok(main.view.view_rect.has_point(main.world.swarm.pos[0]), "따라간 뒤에도 호스트를 담는다")
+	# Opened through the real path — the shell's own start_pressed → _start() → Run.start() chain, not a
+	# private starter called directly. Calling something else would hide the shell's own `connect()` line,
+	# the same failure this file's own header is written about.
+	main.title.start_pressed.emit()
+	await t.pump_frames(1)
+	t.eq(main.run.phase, Run.Phase.PLAY, "start_pressed로 실제 PLAY에 들어갔다")
 
-	main.world.swarm.banked = 30.0
-	await t.pump_frames(3)
-	t.ok(main.cards.visible, "레벨업하면 카드 창이 화면에 뜬다")
-	t.eq(main.cards.offer.size(), 3, "패널이 든 카드도 셋이다")
+	# Guarded, not just asserted: without it, the phase check above can fail and every line after it still
+	# runs and crashes on `main.run.world` being null — the failure is real either way, but the crash
+	# buries the ONE assertion that actually named the problem under a wall of stderr, and truncates
+	# every check below it instead of letting them report their own (unrelated) state honestly.
+	if main.run.phase == Run.Phase.PLAY:
+		# **The camera and the culling rectangle, which nothing measured.** Blank out `_camera_rect()` and
+		# every food spot, clone and predator fails `view_rect.has_point()` and stops being drawn — only
+		# the host survives, drawn unconditionally — while the camera sits at the spawn point forever. 91
+		# checks stayed green through exactly that.
+		t.ok(main.view.view_rect.has_point(main.run.world.swarm.pos[0]),
+				"카메라가 보는 사각형이 호스트를 담고 있다 — 비면 화면에서 전부 사라진다")
+		var cam_start: Vector2 = main.cam.position
+		main.run.world.swarm.pos[0] += Vector2(600.0, 0.0)
+		# **Fixed simulated steps, not `pump_frames`.** `_follow_camera`'s lerp reads real wall-clock
+		# `delta` from whatever the engine measured between pumped frames, and `_camera_rect()`'s half-rect
+		# is shrinking through the same delta via `_apply_zoom` at the same time — measured across 8 trials,
+		# the margin between "caught up enough" and "still outside" was 30-48px on a ~485px quantity, under
+		# 10%, and a busier machine crosses it. Calling `_process()` directly with a known `1/60` each time
+		# makes the outcome depend only on the maths, never on how fast this machine happened to run.
+		for _s in 40:
+			main._process(1.0 / 60.0)
+		t.ok(main.cam.position.x > cam_start.x + 5.0, "카메라가 호스트를 따라간다")
+		t.ok(main.view.view_rect.has_point(main.run.world.swarm.pos[0]), "따라간 뒤에도 호스트를 담는다")
 
-	# **`visible` was not enough.** The panel came up in the top-left corner on the first play, because a
-	# Control added to a bare CanvasLayer keeps `size == (0, 0)` unless the preset sets offsets too — and
-	# every card rectangle is computed from `size`. Visible, wired, and in the wrong place.
-	var screen: Vector2 = main.get_viewport().get_visible_rect().size
-	t.eq(main.cards.size, screen, "카드 패널이 화면 전체 크기를 갖는다")
-	t.ok(main.hud.size == screen, "HUD 도 화면 전체 크기를 갖는다")
-	var first: Rect2 = main.cards._rect_of(0)
-	var last: Rect2 = main.cards._rect_of(2)
-	t.ok(first.position.x > 0.0 and last.end.x < screen.x, "카드 셋이 화면 안에 들어 있다")
-	t.ok(absf((first.position.x + last.end.x) * 0.5 - screen.x * 0.5) < 1.0, "카드가 가운데 놓인다")
+		main.run.world.swarm.banked = 30.0
+		await t.pump_frames(3)
+		t.ok(main.cards.visible, "레벨업하면 카드 창이 화면에 뜬다")
+		t.eq(main.cards.offer.size(), 3, "패널이 든 카드도 셋이다")
 
-	var shell_before: int = main.world.swarm.count
-	var shell_pick: int = main.world.offer[0]
-	main.cards.picked.emit(shell_pick)
-	await t.pump_frames(2)
-	t.ok(main.world.swarm.count > shell_before, "패널에서 고른 것이 실제 무리를 늘렸다")
-	t.ok(main.cards.visible, "남은 레벨이 있으면 창은 계속 떠 있다")
+		# **`visible` was not enough.** The panel came up in the top-left corner on the first play, because
+		# a Control added to a bare CanvasLayer keeps `size == (0, 0)` unless the preset sets offsets too —
+		# and every card rectangle is computed from `size`. Visible, wired, and in the wrong place.
+		var screen: Vector2 = main.get_viewport().get_visible_rect().size
+		t.eq(main.cards.size, screen, "카드 패널이 화면 전체 크기를 갖는다")
+		t.ok(main.hud.size == screen, "HUD 도 화면 전체 크기를 갖는다")
+		var first: Rect2 = main.cards._rect_of(0)
+		var last: Rect2 = main.cards._rect_of(2)
+		t.ok(first.position.x > 0.0 and last.end.x < screen.x, "카드 셋이 화면 안에 들어 있다")
+		t.ok(absf((first.position.x + last.end.x) * 0.5 - screen.x * 0.5) < 1.0, "카드가 가운데 놓인다")
 
-	while main.world.pending_levels > 0:
-		main.cards.picked.emit(main.world.offer[0])
-		await t.pump_frames(1)
-	await t.pump_frames(2)
-	t.ok(not main.cards.visible, "다 고르면 창이 닫힌다")
+		var shell_before: int = main.run.world.swarm.count
+		var shell_pick: int = main.run.world.offer[0]
+		main.cards.picked.emit(shell_pick)
+		await t.pump_frames(2)
+		t.ok(main.run.world.swarm.count > shell_before, "패널에서 고른 것이 실제 무리를 늘렸다")
+		t.ok(main.cards.visible, "남은 레벨이 있으면 창은 계속 떠 있다")
+
+		while main.run.world.pending_levels > 0:
+			main.cards.picked.emit(main.run.world.offer[0])
+			await t.pump_frames(1)
+		await t.pump_frames(2)
+		t.ok(not main.cards.visible, "다 고르면 창이 닫힌다")
 
 	t.root.remove_child(main)
 	main.queue_free()

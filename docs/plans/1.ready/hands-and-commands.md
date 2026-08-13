@@ -1,7 +1,7 @@
 # Plan 2 — hands and commands
 
 **Status**: `1.ready`. Part of [the grassland index](grassland-whole-loop.md). Build after
-[the run shell](run-shell.md).
+[the run shell](../3.done/run-shell.md).
 ⚠ **Not yet corrected for [the 2026-08-14 adversarial review](../../adversarial-review-2026-08-14-ko.md).**
 Its own findings: **`FORCE_START` is 10, not 0/1** ([why](../../decisions/force-starts-at-ten.md)) ·
 `add_clone()` needs a default parent or thirteen nets stop parsing · `command_rally` has seven call sites,

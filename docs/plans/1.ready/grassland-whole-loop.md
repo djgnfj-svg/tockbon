@@ -1,8 +1,9 @@
 # Grassland, the whole loop — the index
 
-**Status**: `1.ready` — split into four plans on 2026-08-14. Nothing built.
+**Status**: `1.ready` — split into four plans on 2026-08-14. **Plan 1 is built and in `3.done`**; plans 2, 3
+and 4 are unbuilt. **Plan 2 is next.**
 
-> ⚠ **These four plans have not absorbed the second review or the design conversation that followed it
+> ⚠ **Plans 2, 3 and 4 have not absorbed the second review or the design conversation that followed it
 > (both 2026-08-14, later the same day).** Read before building:
 > - **[The adversarial review](../../adversarial-review-2026-08-14-ko.md)** — 74 findings from five
 >   independent reviewers. **Plan 4 is judged NOT BUILDABLE**; the other three are buildable only with
@@ -10,7 +11,9 @@
 > - **[Hunting and the boss](../../design/hunting-and-the-boss-ko.md)** — force ×10, size per species, the
 >   crow's counter-attack, herding the horse, the arena, terrain. **It is newer than every number below**
 >
-> **Nothing here has been rewritten yet.** Where a plan and either of those disagree, the plan is wrong.
+> **Plan 1 has been rewritten for both (2026-08-14). Plans 2, 3 and 4 have not** — each is corrected in the
+> commit that starts building it, not before, because the correction wants the previous plan's real code in
+> front of it. Where an uncorrected plan and either of those disagree, **the plan is wrong.**
 
 **The instruction that shapes every doc under it** (from the user): **build the biggest loop first, then dig
 inward, and leave the details for last.** Not parts assembled upward. The last game's loop never ran end to
@@ -27,13 +30,38 @@ the bottom of this file — **and nothing in that list blocks a build.**
 
 | # | Plan | What it closes | Depends on |
 |---|---|---|---|
-| 1 | [The run shell](run-shell.md) | title → play → ending → title. **A run starts and ends** | nothing |
+| 1 | [The run shell](../3.done/run-shell.md) **✅ `3.done`** — 293 checks, **unplayed** | title → play → ending → title. **A run starts and ends** | nothing |
 | 2 | [Hands and commands](hands-and-commands.md) | `F` `V` `1` `2` `3`, three active slots, `Tab` | 1 |
 | 3 | [The body and its parts](body-and-parts.md) | eleven slots, horse parts, cards that only give parts | 2 |
 | 4 | [The grassland field](grassland-field.md) | crow · horse · boss chimera, force on every body, minimap | 3 |
 
 **Build them in this order.** Each one leaves a playable build behind, and the user plays after 1 and again
 after 4. Planning principle 2: planning cannot judge whether this is fun.
+
+### What plan 1 cost, so plans 2–4 do not pay it again
+
+**The code was small and it was right every round. The nets were what took the time.** Four new files plus a
+rewritten `main.gd`; **checks went 113 → 293.** Stage 2 alone bounced **four times**, and on every bounce the
+implementation was correct and the checks were shallow. **The plan named 22 checks and the build needed 293.**
+The second adversarial review predicted this in as many words — *"planned checks that do not measure what
+their label claims"* — and it was still under-read.
+
+⇒ **Write each remaining plan's checks against these four questions before the builder sees them.** Every
+single hole in plan 1 was one of the four:
+- **Does the bound come from the thing it measures?** `t.eq(slots.size(), SLOT_COUNT)` moves both sides.
+  Pin literals — the viewport is 1280×720 and the coordinates are known
+- **Does it read only final state where an ordering was promised?** A beat that never pulls still ends with
+  count 1
+- **Does the spy assert everything it captures?** A captured-and-unread field reads exactly like coverage.
+  Four buttons with blank labels passed because only `rect` was ever read
+- **Can the behaviour VANISH rather than diverge?** A/B catches "changed", never "gone". A hook that threw
+  its own drawing away passed 54 of 54 — the fix was cutting the terminal draw into a leaf hook so nothing
+  above it can put a pixel on screen unwatched, and `net_draw_leaf` now holds that shape in place
+
+⇒ **And book a `verify-look` pass into every plan that changes the screen.** With 279 checks green, one look
+found three defects in minutes: no floor colour at all, a victory beat that was a still frame for 62% of its
+length, and the game filling 44% of the window. **Numbers cannot see a picture** — this repo has now measured
+that four separate times.
 
 ## What the August build is, after the 2026-08-14 narrowing
 

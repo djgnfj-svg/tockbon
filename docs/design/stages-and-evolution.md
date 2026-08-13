@@ -509,7 +509,7 @@ Everything on this list came up in the same conversation and none of it was clos
   carries its number, clones included, and a packed group draws one summed number instead.** The sum is the
   figure that actually decides the fight, so the readable form and the useful form are the same form
 - ~~**What the ending is.**~~ **Closed 2026-08-14** — boss eaten or host dead, one ending screen, both
-  routes back. Never a clock. See [the run shell](../plans/1.ready/run-shell.md)
+  routes back. Never a clock. See [the run shell](../plans/3.done/run-shell.md)
 - **Colour, entirely.** No species colour, no field palette, nothing. This is decided by generating real
   candidates and pointing at one, never by discussion (`CLAUDE.md`, `tools/pixel/`)
 

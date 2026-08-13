@@ -21,9 +21,9 @@ all three folders. **Links leak every single time** — `net_citations` catches 
 
 | Folder | Contents |
 |---|---|
-| `1.ready` | **[Grassland, the whole loop](1.ready/grassland-whole-loop.md)** — the index, and **four plans under it, built in order**: [the run shell](1.ready/run-shell.md) → [hands and commands](1.ready/hands-and-commands.md) → [the body and its parts](1.ready/body-and-parts.md) → [the grassland field](1.ready/grassland-field.md) |
+| `1.ready` | **[Grassland, the whole loop](1.ready/grassland-whole-loop.md)** — the index, and **three plans still under it, built in order**: [hands and commands](1.ready/hands-and-commands.md) → [the body and its parts](1.ready/body-and-parts.md) → [the grassland field](1.ready/grassland-field.md) |
 | `2.active` | empty |
-| `3.done` | **The round trip** — the first prototype. Built, played, and the fun confirmed |
+| `3.done` | **[The round trip](3.done/proto-round-trip.md)** — the first prototype. Built, played, and the fun confirmed · **[The run shell](3.done/run-shell.md)** — plan 1, built in three stages. 14 nets · 293 checks. ⚠ **Nobody has played it** |
 
 The old game was deleted on 2026-08-12 (`../next-game.md`) and every plan went with it — thirty-four docs
 describing a game that no longer exists. **They are recoverable at the tag `v1-sim` and should not be

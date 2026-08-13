@@ -52,6 +52,37 @@ if ($null -eq $godot) {
 #   independently and pointed at the same cause.
 $tmp = [System.IO.Path]::GetTempPath()
 
+# **A brand-new `class_name` file is invisible to `--headless --script`.** Measured twice on 4.7.1: the net
+#  that references it dies with `Parse error` and `Nonexistent function 'new' in base 'GDScript'` — and that
+#  shape does NOT reach the runner's zero-check detector, because the net never gets as far as `run()`.
+#  Only the stderr verdict below turns it red, so the round goes red for a reason that reads like broken code
+#  and is actually a missing import.
+#  **`--script` does not re-import on its own** (CLAUDE.md said it did, for two days, and four agents lost a
+#  round to it). Every plan that adds a class file walks into this, so the guard lives here rather than in
+#  someone's memory.
+#  A `.gd` with no `.uid` beside it is exactly "the engine has not seen this file yet", so the check is one
+#  directory walk and the import only runs on the rounds that would have gone red anyway.
+$unimported = 0
+foreach ($d in @("src", "tests")) {
+    $p = Join-Path $root $d
+    if (-not (Test-Path $p)) { continue }
+    foreach ($f in (Get-ChildItem -Path $p -Recurse -File -Filter "*.gd")) {
+        if (-not (Test-Path ($f.FullName + ".uid"))) { $unimported++ }
+    }
+}
+if ($unimported -gt 0) {
+    Write-Host "[그물] 임포트 안 된 .gd 가 ${unimported}개다. --import 를 한 번 먼저 돈다."
+    $impOut = Join-Path $tmp "tockbon_import_out_$PID.txt"
+    $impErr = Join-Path $tmp "tockbon_import_err_$PID.txt"
+    $imp = Start-Process -FilePath $godot.FullName -NoNewWindow -Wait -PassThru `
+        -ArgumentList @("--headless", "--path", $root, "--import") `
+        -RedirectStandardOutput $impOut -RedirectStandardError $impErr
+    if ($imp.ExitCode -ne 0) {
+        Write-Host "[그물] --import 가 실패했다 (종료 코드 $($imp.ExitCode)). 전문: $impErr" -ForegroundColor Red
+        exit 1
+    }
+}
+
 # The stderr verdict. It receives **the output of one net only** — that is the device that narrows the amnesty.
 # The verdict is per block, not per line. One Godot error is 1 header line plus roughly 8 backtrace lines.
 # Amnestying per line lets the declaration erase only the header while the rest remains and it is still red.
@@ -241,8 +272,18 @@ foreach ($j in ($jobs | Sort-Object Net)) {
     if ($null -eq $stdout) { $stdout = "" }
     if ($null -eq $stderr) { $stderr = "" }
 
+    # **The runner prints two different shapes and this used to match only one.** `[net] N passed` on a clean
+    #  net, `[net] N failed / M` when anything failed — so a net with ONE failed assertion out of 31 displayed
+    #  as `통과 0`, which is the vanish signature CLAUDE.md teaches people to read as "it never loaded".
+    #  The round total dropped by that whole net's worth (279 -> 248) for a single bad assert. Measured by
+    #  verify-run, 2026-08-14: the per-net output said `[net] 1 failed / 31` while this column said 0.
+    #  Both shapes are matched now, and the pass count is M - N on the failing shape.
     $pass = 0
-    if ($stdout -match '\[net\]\s+(\d+)\s+passed') { $pass = [int]$Matches[1] }
+    if ($stdout -match '\[net\]\s+(\d+)\s+passed') {
+        $pass = [int]$Matches[1]
+    } elseif ($stdout -match '\[net\]\s+(\d+)\s+failed\s*/\s*(\d+)') {
+        $pass = [int]$Matches[2] - [int]$Matches[1]
+    }
     $fail = 0
     foreach ($l in ($stdout -split "`r?`n")) { if ($l -match '^x\s') { $fail++ } }
     foreach ($l in ($stderr -split "`r?`n")) { if ($l.Trim() -match '^x\s') { $fail++ } }
