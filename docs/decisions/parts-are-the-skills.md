@@ -1,6 +1,9 @@
 # A body part *is* the skill; two of them get bound to the mouse
 
-**Status**: valid
+**Status**: valid — ⚠ **the slot count in this doc is eight and the count is now eleven**
+([why](lung-gets-its-own-slot.md)). Read every "eight" below as "eleven"; the argument does not depend on
+the number. **And "the eat-only starting state" is gone** — slot 0 starts holding `BITE`
+([why](every-key-is-a-square.md)).
 
 ## What was decided
 

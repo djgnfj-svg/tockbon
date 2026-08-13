@@ -4,7 +4,7 @@ This folder holds **concepts**. Unlike `docs/plans/`, **nothing moves between fo
 But **every doc carries "how much of this is built" in its header.**
 
 **Why carry status**: without it, **being written reads as being present.**
-The GDD lists seventeen glyphs; two of them run. If that gap is recorded nowhere,
+The magic-circle doc lists seventeen glyphs and **zero of them run** — the whole direction was dropped. If that gap is recorded nowhere,
 the next person (and the next session) **plans on top of something that doesn't exist.**
 
 ## Two separate axes — `Implemented` and `Accepted`
@@ -40,9 +40,11 @@ For `partial`, **always attach what works and what doesn't, briefly.** "Partial"
 
 | Concept | Implemented | Accepted |
 |---|---|---|
-| [Cell game](cell-game.md) — **the current game.** Split, harvest, buy animal parts, climb the food chain | partial — swarm · commands · rendezvous · carrying · level-up pick · ecosystem run. Parts, species, bosses, tiers do not | **the core loop passed**; everything unbuilt is unseen |
-| [Stages and evolution](stages-and-evolution.md) — **newer than the GDD where they disagree.** Habitats, evolution instead of card prices, force vs disposition, special individuals, **`F` splits and `V` absorbs** | none | none — two conversations, nothing played |
-| [Circle · rune · glyph](circle-rune-glyph.md) — the three axes, cut along time | none | the split itself |
+| [Cell game](cell-game.md) — **the current game.** Split, harvest, buy animal parts, climb the food chain | partial — swarm · commands · rendezvous · carrying · level-up pick · ecosystem run. Parts, slots, bosses, the corpse beat do not. **Tiers and species currencies are not unbuilt — they were cut** | **the core loop passed**; everything unbuilt is unseen |
+| [Stages and evolution](stages-and-evolution.md) — **newer than the GDD where they disagree.** Habitats, evolution instead of card prices, force vs disposition, special individuals, **`F` splits and `V` absorbs**, **eleven slots**, **a kill leaves a corpse** | none | none — three conversations, nothing played |
+| [Circle · rune · glyph](circle-rune-glyph.md) — the three axes, cut along time. **Belongs to the dropped magic-circle direction** | none | the split itself |
+| [Cell game review (ko)](cell-game-review-ko.md) — a read of the GDD from 2026-08-13 | none | none — ⚠ **most of what it calls settled was reversed within a day.** Read it as a snapshot, never as a rule |
+| [The loops, drawn](cell-loops.html) — a rendered view of `stages-and-evolution` | none | none — ⚠ **stale since 2026-08-13** |
 
 **Recovered from `v1-sim`, not written for the current game.** Its axes survive the genre change; its
 numbers and timings do not. Read the warning box in its header before trusting a line of it.

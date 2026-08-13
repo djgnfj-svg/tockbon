@@ -1,11 +1,11 @@
-# A stage is a habitat you clear by swallowing its apex
+# A stage is a habitat you clear by swallowing its boss
 
 **Status**: valid (2026-08-13). Supersedes the boss cadence in
 [The run climbs a food chain](food-chain-not-a-timer.md)
 
 ## What was decided
 
-**One stage = one habitat = one art board.** It ends when the habitat's apex is swallowed, and that apex is
+~~**One stage = one habitat = one art board.**~~ ⚠ **Dead 2026-08-13** — a worn part is drawn in the host's own line, so no board has to match another ([why](the-body-is-a-line-drawn-by-code.md)). **The art bill this doc was priced against no longer exists**, and leaving it here is how a phantom cost gets re-calculated the next time someone asks for another species. It ends when the habitat's boss is swallowed, and that boss is
 the only source of the habitat's final part — so clearing and building are one act. The whole swarm is
 absorbed on the way out and the next habitat starts with the host alone.
 
@@ -16,8 +16,8 @@ The ladder starts at **beasts by habitat** (swamp, jungle, snow, deep sea, caves
 
 | Rejected | Why |
 |---|---|
-| **A boss every five minutes opening the next tier** | The clock and the kill were two things. Making the apex itself the door removes the timer, and stage length becomes "how long the apex takes to catch" |
-| **Tiers as an abstraction over species** | The prototype showed the reversal working off one per-individual number. With habitats there is nothing left for a tier to do — the field carries the habitat and the last one's apex as trash |
+| **A boss every five minutes opening the next tier** | The clock and the kill were two things. Making the boss itself the door removes the timer, and stage length becomes "how long the boss takes to catch" |
+| **Tiers as an abstraction over species** | The prototype showed the reversal working off one per-individual number. With habitats there is nothing left for a tier to do — the field carries the habitat and the last one's boss as trash |
 | **Insects as the opening tier** | The user does not like them. Beasts by habitat start instead, and the swamp's frog leap and crocodile bite land on `space` and left-click immediately |
 | **Insects → beasts → human civilisation as the ladder** | **A machine is not something you eat.** The game's one unbroken rule would break at the last stage. Cannons and tracks remain the best picture in the idea, so this is on hold, not refused — it needs an answer to that sentence first |
 | **Ordinary beasts** (deer, wolves) | On minimal art their silhouettes are the same shape. The selection rule is now **strange silhouette** — anglerfish, jellyfish, crustaceans, moles |

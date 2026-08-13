@@ -1,7 +1,7 @@
 # Stages and evolution
 
-**One line**: One cell eats its way through a habitat, **evolves into what it ate**, swallows the strongest
-thing living there, and walks into the next habitat carrying the body it built.
+**One line**: One cell eats its way through a habitat, **evolves into what it ate**, swallows the boss living
+there, and walks into the next habitat carrying the body it built.
 
 **Implemented**: none — not one line of this is in `src/`. The prototype (`proto-round-trip`) holds the
 session loop and an ecosystem rule that **this doc partly replaces**
@@ -9,8 +9,22 @@ session loop and an ecosystem rule that **this doc partly replaces**
 has been played**, and planning principle 2 says planning cannot judge fun
 
 ⚠ **This doc supersedes parts of the GDD** (`cell-game.md`): the card **price** is deleted, the
-five-minute boss cadence is replaced by "swallow the apex", and tiers are replaced by habitats.
+five-minute boss cadence is replaced by "swallow the boss", and tiers are replaced by habitats.
 Where the two disagree, this one is newer. The GDD has been edited at those points rather than left to rot.
+
+⚠ **And a planning session on 2026-08-14 edited this doc in turn — twice.** First six changes, then six more
+after four adversarial reviews of the plans. All from the user, all written into the sections below rather
+than appended here. The first six: **slots are eleven** · **`1` gathers at the
+host** · **`3` sends the swarm at the mouse point** · **every one of the three keys is an overwritable
+square** · **eating a kill takes time and leaves a corpse** · **the August scope is two species**.
+**And the word "apex" is dropped — it did not survive contact with the user. Say boss.**
+
+The second six, from the review: **an active's reach is written on the part**, not on combat · **the host's
+parts come from cards only** · **a corpse pays its own force in cells** · **nothing gates the boss —
+damage is the attacker's force both ways** · **the run opens alone** · **the camera pulls back as the swarm
+grows**, which is the answer to the field feeling small.
+**The buildable form of all of it is [the grassland plans](../plans/1.ready/grassland-whole-loop.md), and
+where this doc and a plan disagree about an August number, the plan is newer.**
 
 ---
 
@@ -20,8 +34,9 @@ Where the two disagree, this one is newer. The GDD has been edited at those poin
 rhythm.
 
 **Session loop — a round trip, tens of seconds**
-`F` split → `2` scatter → clones farm on their own → `1` places a rendezvous → the host walks in and
-presses `V` → level-up.
+`F` split → `2` scatter → clones farm on their own → ⚠ **`1` calls them to the host** (changed 2026-08-14;
+it used to place a rendezvous on the ground) → `V` → level-up. **`3` is the other half of the pair**: it
+sends the swarm into ground the host is not standing in, and it is the key that gets clones killed.
 ⚠ **Absorption kills the clone and takes its force back** — see *Splitting and absorbing* below. The
 GDD's old rule that a harvest never shrinks the swarm is dead; `F` is what refills it, by hand.
 
@@ -30,10 +45,10 @@ GDD's old rule that a harvest never shrinks the swarm is dead; `F` is what refil
 1. Enter. Host alone, swarm 0
 2. Grow the swarm — the session loop spins here
 3. Level-up cards attach parts; evolution accumulates
-4. **Force passes the apex's force — what hunted you becomes what you hunt**
-5. Hunt the apex. It is the only thing that drops that habitat's final part
+4. **Force passes the boss's force — what hunted you becomes what you hunt**
+5. Hunt the boss. It is the only thing that drops that habitat's final part
 6. **Absorb the entire swarm** — the great harvest, and the one time the bodies are eaten too
-7. Next habitat. The old apex is now common trash, the build carries over → 1
+7. Next habitat. The old boss is now common trash, the build carries over → 1
 
 **Step 4 is the heart.** The other six make it or follow from it.
 
@@ -46,7 +61,10 @@ parts-only, nothing grew the swarm any more. **The player grows it, by hand.**
   **You cannot split yourself alone**; the user left the door open to changing that later
 - **`V` — absorb everything inside a radius, in one press.** The clones in it die, and what they carried
   plus their force returns to the host
-- **Eating is still automatic.** Ground food and corpses go in on contact — only clones need a key
+- ⚠ **Only ground food is automatic** (changed 2026-08-14). **A kill leaves a corpse and eating it takes
+  time** — the body stands there, interruptible, progress kept if it walks away and comes back. The user
+  asked for this in the word 쫀득, and it is a rule in `sim/` before it is an animation. See
+  [Eating a kill takes time](../decisions/eating-a-kill-takes-time.md)
 
 **`force` is the material, and the split is exact.** Halving conserves the total, so splitting buys nothing
 by itself. **What it costs is concentration**: a scattered 10 cannot be spent at one point, and the lion is
@@ -67,6 +85,11 @@ the rule, not a tutorial line.
 **Open here**: whether the 128 pool cap still means anything now that headcount comes from force · what a
 clone's worn part does when it is absorbed. **Odd force and the absorb radius have placeholder answers** —
 see *First numbers*.
+
+⚠ **Force is a STORED number, not one recomputed from level and parts** (settled 2026-08-14 after review).
+Recomputed, halving is undone on the next frame and **`F` becomes free** — the swarm doubles at no cost and
+the conservation this whole section rests on is a fiction. Levelling and wearing a part **add** to the stored
+value; splitting, absorbing and dying are the only other writers.
 
 ## Evolution replaced the card price
 
@@ -99,7 +122,7 @@ budget** (all from the user, 2026-08-13):
 |---|---|
 | **Part level** | eating the same part again levels it — `crocodile jaws Lv2`. A running total, not a replacement |
 | **Class stacks** | parts from the same family combo — "amphibian ×3" fires a set effect. The family, not only the exact species |
-| **The ten slots** | the hard budget everything above competes for |
+| **The eleven slots** | the hard budget everything above competes for |
 
 **The payout must change how the game is played, not raise a number.** The user's own example: frog legs
 *and* frog thighs together turn `space` into **three chained jumps**. Each part added is another thing the
@@ -109,25 +132,30 @@ claimed and never had a mechanism for.
 ⇒ **This is where planning principle 8 finally lands.** Two parts producing an effect neither has alone is
 a combination, not addition, and the slot budget is what makes taking one mean giving up another.
 
-### Ten slots — six external, four internal
+### Eleven slots — six external, five internal
 
-Six ran out too fast to build in; twelve was too many to hold in the head; nine had no chest.
-**Ten, settled 2026-08-13** after three moves in one day, all of them before anything was built on it.
+Six ran out too fast to build in; twelve was too many to hold in the head; nine had no chest; ten had no
+breath. **Eleven, settled 2026-08-14** after four moves in two days, all of them before anything was built
+on it.
 
 - **External slots are the ones that show.** ⚠ **They were "expensive" until 2026-08-13** — one sprite per
   species per slot — and that bill is gone: the body is drawn as a line and a worn part takes the host's
   colour, so nothing has to match anything. **What still caps them is the body**: six things sticking out of
   one small square is already as much as reads. **Six**: head · **torso** · back · forelimbs · hindlimbs · tail
-- **Internal slots are free.** They were never drawn. **Four**: eyes · gut · bone · hide-or-fur.
-  **Eyes moved inside** — what they do is notice things, and that is a number, not a sprite
+- **Internal slots are free.** They were never drawn. **Five**: eyes · gut · bone · hide-or-fur · **lung**.
+  **Eyes moved inside** — what they do is notice things, and that is a number, not a sprite.
+  ⚠ **Lung was added on 2026-08-14** for the horse's breath, and the cheap alternative — folding it into
+  `gut` — **was put to the user and refused: eyes and gut both keep their own jobs.**
+  ⇒ **The count is a budget, not a shape.** It moved five times without anything being built on it, which is
+  the argument for never writing it into more than one place
 
 **Torso is the one thing that was added back.** Without it the body was head, back, limbs and tail — and a
 gorilla's chest, a lion's mane and a bison's hump had nowhere to attach. It is **not** the same square as
 `back`: wings and shells go on the back, bulk goes on the front.
 
 **The three internal cuts were all duplicates.** Brain does what eyes do; lungs do what heart does; heart
-does what hindlimbs already do. The four that remain **do not overlap at all** — one each for the swarm, the
-economy, the fight and survival:
+does what hindlimbs already do. The five that remain **do not overlap at all** — one each for the swarm, the
+economy, the fight, survival and breath:
 
 | Internal | What it moves |
 |---|---|
@@ -135,6 +163,7 @@ economy, the fight and survival:
 | **gut** | how much a clone brings home |
 | **bone** | the body's base force — the thing `F` halves |
 | **hide / fur** | defence, and the body's colour |
+| **lung** | **breath** — how long a movement active sustains before it drops back to base speed |
 
 ⚠ **Hide and torso split one job on purpose.** Torso is the **visible** bulk; hide is thickness that is only
 a number. Folding hide into torso was the way to keep the count at nine and it was rejected — being seen and
@@ -142,7 +171,7 @@ being thick are two different things.
 
 **Invisible was the only objection, and the body itself answers it.** The cell is a rounded square, so an
 internal part changes **the drawing values rather than adding a picture**: muscle thickens the body, fur
-puts an outline on it, hide deepens the colour, bone sharpens the corners. All ten slots read on screen
+puts an outline on it, hide deepens the colour, bone sharpens the corners. All eleven slots read on screen
 and the art bill does not move — which is exactly the shape planning principle 7 asks for.
 
 ### The threshold is per set, and a part can take more than one slot
@@ -154,7 +183,7 @@ shape of the budget:
   part can be a set of one** — catching that one thing is the whole combination
 - **A part can occupy several slots.** The big ones cost more than their place: one part, three squares
 
-⇒ **That is what turns ten slots into a real budget rather than a bigger number.** Strong parts eat the
+⇒ **That is what turns eleven slots into a real budget rather than a bigger number.** Strong parts eat the
 room the rest of the build needed, so **saving slots is itself a way to raise a build** — which is half an
 answer to the open "how does a build go higher" problem, without inventing genes for it.
 
@@ -174,7 +203,7 @@ answer to the open "how does a build go higher" problem, without inventing genes
   held are left **empty**. Wearing a head+eyes part and buying a head part digests the whole thing and
   leaves the eye slot bare
 - **Which slots a part takes is written on the part, not derived from a rule.** An adjacency graph over the
-  ten slots was raised and dropped as too complicated for what it buys — **each part carries its own
+  eleven slots was raised and dropped as too complicated for what it buys — **each part carries its own
   list of squares**, decided when that part is authored. One square or several, and the author picks which
 
 ⇒ **A small part can cost a big one.** That is the point of the complication, and the user chose to keep it:
@@ -217,7 +246,7 @@ The four combinations are four different problems, and folding the axes together
 | | weak | strong |
 |---|---|---|
 | **attacks** | free food — it walks into your mouth | the real threat — a scattered swarm gets shredded |
-| **flees** | annoying — you have to chase it down | **the apex** — grow before you can catch it |
+| **flees** | annoying — you have to chase it down | **the boss** — grow before you can catch it |
 
 **When force is roughly even, left-click and right-click decide it.** A band the numbers do not settle is
 what makes a fight worth taking; without it every encounter is already resolved before it starts.
@@ -239,14 +268,14 @@ what makes a fight worth taking; without it every encounter is already resolved 
 so a habitat was chosen first and generated in one pass. **That stopped being true on 2026-08-13**: parts
 are drawn in the host's own line, so a species can be added whenever the design wants one.
 
-- **Clearing a stage = swallowing that habitat's apex.** Not a timer, not a five-minute boss cadence
-- **The apex is the only source of that habitat's final part**, so clearing and building are the same act
+- **Clearing a stage = swallowing that habitat's boss.** Not a timer, not a five-minute boss cadence
+- **The boss is the only source of that habitat's final part**, so clearing and building are the same act
 - **On clearing, the whole swarm is absorbed** — bodies included, this once — and the next habitat starts
   with the host alone
-- **The previous apex is laid out as common trash in the next habitat.** It did not get weaker; it now
+- **The previous boss is laid out as common trash in the next habitat.** It did not get weaker; it now
   arrives in numbers. That is the reversal the GDD was built around, with no tier machinery
 - **~10 minutes a stage, 4 to 6 stages.** Half-settled. Stage length is not a timer that can be set — it is
-  how long the apex takes to catch, so it falls out of how fast force accumulates
+  how long the boss takes to catch, so it falls out of how fast force accumulates
 
 ### The ladder
 
@@ -317,6 +346,14 @@ power:
 **Scope, decided 2026-08-13**: **stage 1 only, played end to end until the build is finished.** Not two
 stages, not a ladder — one habitat, entered bare and left with a complete body.
 
+⚠ **Narrowed much further on 2026-08-14, and this is the scope that is being built**: **two species — crow
+and horse — plus the boss**, and **three parts**, all horse: 말 다리 · 말 갈기 · 말 폐활량. **The crow gives
+no part**; it exists because catching a horse at level 1 is too hard, and the opening needs something to eat.
+Small animals · herd · cheetah · lion · elephant are **not in the August build.**
+⇒ **The four squares of the disposition × force table are still all filled**, because disposition is rolled
+per individual: a crow that decided to attack is free food, a horse that decided to attack is a real fight.
+**Two species is not two behaviours.** See [the grassland plans](../plans/1.ready/grassland-whole-loop.md).
+
 That pulls the art in with it: **everything stage 1 needs is made** — the monsters, the body, the parts, the
 colours, the style. Nothing beyond stage 1 is drawn.
 
@@ -330,22 +367,22 @@ disposition × force table on its own**:
 | | weak | strong |
 |---|---|---|
 | **attacks** | — | **lion**: the first time a scattered swarm gets shredded |
-| **flees / ignores** | **herds** (the first food) · **cheetah** and **horse** (fast, have to be chased) | **elephant**: strong and slow, the wall before the apex |
+| **flees / ignores** | **herds** (the first food) · **cheetah** and **horse** (fast, have to be chased) | **elephant**: strong and slow, the wall before the boss |
 
-### The apex is a chimera, not the elephant
+### The boss is a chimera, not the elephant
 
-**Settled 2026-08-13.** The elephant was the apex until the user asked whether the boss could be something
+**Settled 2026-08-13.** The elephant was the boss until the user asked whether the boss could be something
 new. It is now **a strong ordinary species**, and the thing that closes the stage is built out of the
 habitat's own parts:
 
 **An elephant's bulk, a lion's head, wings, and a rhino's horn.**
 
 ⇒ **This costs no new system.** The GDD already says enemies are chimeras built from the same slots as the
-player, so the apex is a part list, not a boss class. It reads on sight as *everything in this habitat at
+player, so the boss is a part list, not a boss class. It reads on sight as *everything in this habitat at
 once*, which is exactly what the player has spent the stage assembling.
 
 ⇒ It also puts **the rhino's horn in the habitat without giving the rhino a board** — the horn exists only
-on the apex.
+on the boss.
 
 **Patterns are open.** A boss having attack patterns is expected and none is designed.
 
@@ -382,6 +419,8 @@ number.
 
 **Six species give parts** — small animals · herd · **horse** · cheetah · lion · elephant. **This is no
 longer a ceiling, only where the list stands**; more can be added when there is a reason.
+⚠ **The August build ships one of them: the horse.** The table below is the habitat's eventual shape, not
+the build's; read it as a list to draw from, and take the three horse rows.
 
 | Slot | Grassland candidates |
 |---|---|
@@ -416,10 +455,13 @@ numbers is not an implementation, and because planning principle 2 says only pla
 |---|---|---|
 | host's starting force | **1** | 1 cannot be split, so the first level-up is what opens `F` |
 | base force per level | **+1** | reaching level 4 means force 5 — three presses of `F` and the swarm is real |
-| small animals · herd · horse · cheetah · lion · elephant | **1 · 2 · 3 · 3 · 5 · 8** | small integers, so the number under a body can be compared at a glance. Horse and cheetah tie — they differ by how they move, not by who wins |
-| the apex chimera | **12** | above a level-8 host, so it cannot be walked into early |
+| small animals · herd · horse · cheetah · lion · elephant | **1 · 2 · 3 · 3 · 5 · 8** | small integers, so the number under a body can be compared at a glance. Horse and cheetah tie — they differ by how they move, not by who wins. ⚠ **These are per-SPECIES centres for the whole ladder. Force varies per individual**, and the August build's actual ranges are in [the grassland field plan](../plans/1.ready/grassland-field.md) — crow 1–2, horse 3–4 |
+| the boss chimera | **12** | above a level-8 host, so it cannot be walked into early |
 | a part's force | **1**, strong ones **2-3** | parts add on top of the base; no part is worth a whole species |
-| the clone tax | **50%** | inherited from the GDD unchanged — the host's own bite is worth double |
+| ~~the clone tax~~ | **deleted** | ⚠ **It was never built and it is not the mechanism.** The host's mouth is worth ~2.5× a clone's because `EAT_PERIOD_HOST` is 0.6s against 1.5s — a speed, with no constant to tune and nothing to explain in the UI. This row said "inherited from the GDD unchanged" while the GDD said the opposite |
+| a corpse's cells | **force × 6** | a corpse pays what the individual was worth (user, 2026-08-14). Levels arrive every 10 cells, so this one number is the level curve |
+| damage, either direction | **the attacker's force** | [nothing gates the boss](../decisions/the-boss-is-not-gated.md) — a 12 hitting a 3-HP host ends the run |
+| starting swarm | **0** | [the run opens alone](../decisions/the-run-opens-alone.md) |
 | gut, at its best | **90%** | it closes the gap and never inverts it |
 | absorb radius | **4x the host's body** | wide enough that a rallied swarm goes in one press, tight enough to miss stragglers |
 
@@ -434,15 +476,17 @@ comparable at a glance. If play needs finer resolution, the fix is more slots, n
 
 Everything on this list came up in the same conversation and none of it was closed.
 
-- **What the four internal slots actually give in numbers.** Each has a job now — cutting the duplicates is
+- **What the five internal slots actually give in numbers.** Each has a job now — cutting the duplicates is
   what gave them one — but not one of them has a value
 - ~~**How the swarm multiplies at all.**~~ **Closed 2026-08-13** — `F` splits, `V` absorbs. See
   *Splitting and absorbing*. The level-up no longer grows the swarm at all
 - **How high a build can go, and by what.** Genes were named and deferred; nothing replaces them yet
 - **Whether part level is capped**, and whether a levelled part still counts once toward a class stack
-- **What a species trait actually gives.** The name exists, the content does not
-- **What each part's force contribution is.** Parts each carry a different amount and no part has a number
-  yet. **The parts-only half of that rule is gone** — the body has a base force too, or `F` has nothing to
+- **What a species trait actually gives.** The name exists, the content does not. ⚠ **The August build
+  ships one placeholder trait** — three horse parts and a gallop stops draining breath — because a trait
+  nobody can reach cannot be judged, and the user asked for traits in the August build (2026-08-14)
+- **What each part's force contribution is.** Parts each carry a different amount and, outside the three
+  horse parts numbered on 2026-08-14, no part has one. **The parts-only half of that rule is gone** — the body has a base force too, or `F` has nothing to
   halve at level 1
 - **When a clone fires its active.** They all fire (below); on cooldown with no aiming is the shape that
   fits "clones are stupid", but it is not written down as a rule yet
@@ -456,12 +500,16 @@ Everything on this list came up in the same conversation and none of it was clos
   the game's one rule at the very end
 - **Where the ladder stops.** Dinosaurs, or machines with the eating rule solved
 - **Six stages is a 60-minute run.** In a die-and-restart structure that may be too long to bear. Play decides
+- ~~**Field size, and therefore whether a minimap is needed.**~~ **Closed 2026-08-14** — the field stays
+  **3840x2160 and there is a minimap.** The swarm leaves the screen, which is exactly the condition that
+  requires one
+- ~~**Force numbers under forty clones would be a field of digits.**~~ **Closed 2026-08-14** — **every body
+  carries its number, clones included, and a packed group draws one summed number instead.** The sum is the
+  figure that actually decides the fight, so the readable form and the useful form are the same form
+- ~~**What the ending is.**~~ **Closed 2026-08-14** — boss eaten or host dead, one ending screen, both
+  routes back. Never a clock. See [the run shell](../plans/1.ready/run-shell.md)
 - **Colour, entirely.** No species colour, no field palette, nothing. This is decided by generating real
   candidates and pointing at one, never by discussion (`CLAUDE.md`, `tools/pixel/`)
-- **Field size**, and therefore whether a minimap is needed at all — a minimap is required exactly when the
-  swarm leaves the screen, and that has not been chosen
-- **Force numbers under forty clones would be a field of digits.** Whether clones are excluded, or reduced
-  to a mark, is unresolved
 
 ## Where the pictures are
 

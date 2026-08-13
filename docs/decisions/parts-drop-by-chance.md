@@ -1,6 +1,8 @@
 # Parts appear by chance, not by purchase
 
-**Status**: valid
+**Status**: valid — ⚠ **"cost is a second lock" is dead.** The price was deleted
+([why](card-price-removed.md)), so **two locks remain, not three**: a part appears by chance, and it can
+only appear once its species has been eaten.
 
 ## What was decided
 

@@ -12,9 +12,10 @@ an open measurement rather than a passed one.
 **The one question**: **is scattering and calling home a decision, or a chore?**
 Everything else in the cell GDD is built on that round trip. If it is a chore, no amount of parts repairs it.
 
-**Deliberately not in this build**: parts, slots, species currencies, chimeras, bosses, tiers, biomes,
-meta unlocks, the 50% tax, clone-specific parts, and the `3 attack that` command. The GDD keeps all of
-them; this build must not.
+**Deliberately not in this build**: parts, slots, chimeras, bosses, biomes, meta unlocks, clone-specific
+parts, and the `3` command. ⚠ **Four of the things this line listed as "the GDD keeps them" are now dead
+rather than deferred** — species currencies, tiers, the 50% tax and the placed rendezvous were all **cut
+from the design** on 2026-08-13/14. Do not read this list as a to-do.
 
 **The level-up pick stayed in** — decided by the user, and it earns its place: splitting automatically
 makes the level-up a notification, and watching a notification is planning principle 1's failure mode.
@@ -83,7 +84,24 @@ feels good. `space` dash exists here **only** to contest the hands. Fun here doe
 - Predators spawn off-screen and one more arrives every `PREDATOR_INTERVAL`, so the run ends under pressure
   rather than at a clock
 
-## Numbers — committed, not TBD
+## Numbers — what was DECIDED, and what the code now says
+
+⚠ **Re-measured 2026-08-14 against `src/sim/rules.gd`, and six rows were rotten.** This doc already recorded
+*"everything was 40% too fast"* and *"eating reached 12px against a 14px body"* elsewhere in its own text —
+**and the table was never touched.** That is `CLAUDE.md`'s own failure mode: a correction pass checks the row
+someone is arguing about. **`rules.gd` is the live value in every case; the middle column is history.**
+
+| Constant | Decided at | **Live in `rules.gd`** |
+|---|---|---|
+| `HOST_SPEED` | 320 px/s | **200.0** |
+| `CLONE_SPEED_FOLLOW` / `_SCATTER` | 340 / 200 | **215.0 / 125.0** |
+| `PREDATOR_SPEED` | 260 px/s | **gone** — it is `CRITTER_SPEED` = 165.0 |
+| `EAT_RADIUS` | 12 px | **split in two**: `EAT_RADIUS_HOST` 26.0, `EAT_RADIUS_CLONE` 16.0 |
+| `PREDATOR_START` / `PREDATOR_INTERVAL` | 6 / 60 s | `CRITTER_START` 6 / `CRITTER_INTERVAL` **45.0** |
+| `RUN_LENGTH` | 5:00 hard stop | **being deleted** — a run ends on the boss or on death ([plan 1](../1.ready/run-shell.md)) |
+| `SPLIT_PER_BANKED` | 10 | 10 — ⚠ **but it was tuned when a level gave a clone.** A level now gives `+1 force`, so at this rate force passes the boss's 12 in about two minutes. **Expect it to move** |
+
+**The rows below were not disturbed and are still live.**
 
 | Constant | Value | Why |
 |---|---|---|
@@ -91,18 +109,11 @@ feels good. `space` dash exists here **only** to contest the hands. Fun here doe
 | `FIELD` | 3840×2160 | 3×3 screens; on one screen a recall costs no travel and scatter is free |
 | `FOOD_MAX` / `FOOD_RESPAWN` | 500 / 6 per second | feeds ~40 mouths for five minutes |
 | `FOOD_SPOT_COOLDOWN` | 12 s | local depletion — rule 4 above |
-| `EAT_RADIUS` | 12 px | |
 | `CLONE_CAP` | 40 (pool array sized 128) | a cap is required before any performance net can exist |
-| `SPLIT_PER_BANKED` | 10 | full swarm near the 5-minute mark, so the cap is actually reached |
-| `HOST_SPEED` | 320 px/s | crosses a screen in 4 s — hunting personally competes with herding |
-| `PREDATOR_SPEED` | 260 px/s | below the host, above a scattered clone |
-| `CLONE_SPEED_FOLLOW` / `_SCATTER` | 340 / 200 px/s | catches up when called; cannot escape when abandoned |
 | `SCATTER_RADIUS` | 900 px | past the 640 px screen half-width, so scattered clones go off-screen |
 | `EAT_PERIOD` host / clone | 0.6 s / 1.5 s | the host's mouth is worth ~2.5×, expressed as a speed, not a tax |
-| `PREDATOR_START` / `PREDATOR_INTERVAL` | 6 / 60 s | |
 | `DASH_COOLDOWN` | 0.8 s | |
 | `HOST_HP` | 3 | one mistake is not the run |
-| `RUN_LENGTH` | 5:00 hard stop | two opposing runs fit in fifteen minutes |
 | `SEPARATION_MIN` | 16 px | |
 | `NEIGHBOUR_CAP` | 8 | see below |
 
@@ -202,7 +213,8 @@ regardless of load** (measured); a performance net must loop `step()` synchronou
 
 ## Bounds
 
-- **Zero clones** — the opening state of every run, and it must be playable
+- **Zero clones** — ⚠ **measured wrong and reversed inside this same doc**: `START_CLONES` is 6, because at
+  zero the first minute has nothing under test on screen. The host alone must still not crash
 - **`CLONE_CAP` clones all inside one rendezvous** — the grid's worst case, on the game's most-pressed key
 - **Every clone dies far from home** — the run must be recoverable, not over
 - **Zero food left in a region** — depletion must read as "move", not as a bug

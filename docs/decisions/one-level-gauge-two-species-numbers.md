@@ -1,6 +1,11 @@
 # One shared level gauge, and two numbers per species
 
-**Status**: valid
+**Status**: **twice reversed in part.** The level's **+1 clone** died with
+[the swarm grows by a key](swarm-grows-by-a-key-not-a-level.md); the **spendable balance** died with
+[the card price](card-price-removed.md). ⚠ **Both refutations were written only in the docs that made
+them**, and this one kept saying `valid` for a day — the exact leak `CLAUDE.md` warns about.
+**What still stands**: one gauge that fills from any food and is never spent, and a per-species total that
+only rises and decides which cards appear.
 
 ## What was decided
 

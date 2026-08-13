@@ -12,10 +12,28 @@ Korean font — and on top of it now sits **`src/`, a working prototype of the c
 died, so the same call is not re-litigated from scratch.
 ⚠ **And read `stages-and-evolution` in the same breath — it is newer than the GDD wherever they disagree.**
 Two planning conversations on 2026-08-13 deleted card prices and species currencies, replaced tiers with
-habitats, split force from disposition, settled the body at **ten slots**, and put swarm growth **on a key**
-(`F` splits everything in half, `V` absorbs a radius) — **the level-up no longer grows the swarm at all.**
-**Stage 1 is grassland and the August build is that one stage played to a finished build**, and the plan for
-it is `grassland-whole-loop`.
+habitats, split force from disposition, and put swarm growth **on a key** (`F` splits everything in half,
+`V` absorbs a radius) — **the level-up no longer grows the swarm at all.**
+
+⇒ **A third one on 2026-08-14 turned that into something buildable, and changed six things doing it.**
+The body is **eleven slots**, not ten (breath got its own). **`1` gathers at the host** and **`3` sends the
+swarm at the mouse point**. **All three keys — left click included — are empty squares the player binds an
+active into**; there is no fixed basic attack. **A kill leaves a corpse and eating it takes time**, standing
+still, interruptible. The August scope is **one stage, two species (crow · horse), one boss, three parts**.
+**And the word "apex" is dead — say boss**; it did not survive contact with the user.
+⇒ **`grassland-whole-loop` is now an index over four plans built in order** — the run shell, hands and
+commands, the body and its parts, the grassland field. **Godot was re-examined the same day and stands.**
+
+⇒ **Four adversarial reviews then found sixty-odd problems in those plans, and the pattern is worth keeping:
+the plans were dense and their JOINTS were empty.** A deletion counted in one file that lived in four · a
+net that vanishes instead of going red when a file stops parsing · a new column on a flat table with no
+matching line in `setup`, `add_clone` and the hand-written swap · a value that reads as derived making the
+mechanic it belongs to free · a check that measures a table's shape rather than a behaviour.
+**Six more answers came out of it**: an active's reach is written on the part · the host's parts come from
+cards only · a corpse pays its own force in cells · **nothing gates the boss** (damage is the attacker's
+force both ways) · **the run opens alone** (`START_CLONES` 0) · **the camera pulls back as the swarm grows**,
+which is the answer to the field feeling small. **The prototype in `src/` is a reference, not a base** — the
+user's call is to write it again properly.
 
 **What runs**: one host you drive, a swarm that scatters and rallies, clones that carry what they ate until
 they touch you, an ecosystem of critters that chase or flee depending on how big the swarm has got, and a

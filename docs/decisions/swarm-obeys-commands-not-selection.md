@@ -1,6 +1,9 @@
 # The swarm takes three commands; you never select a unit
 
-**Status**: valid
+**Status**: valid — ⚠ **except the "no cap on clones" claim, which is false.**
+`rules.gd` ships `POOL = 128` and `CLONE_CAP = 40`. The argument that survives is that **command-driven
+control does not make headcount an input cost**; the cap exists for allocation and rendering, not for
+input. [Open field with biomes](open-field-with-biomes.md) re-cites the dead half — do not inherit it.
 
 ## What was decided
 

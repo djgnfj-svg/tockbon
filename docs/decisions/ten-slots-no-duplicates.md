@@ -1,11 +1,16 @@
 # Ten slots, and no internal slot duplicates another
 
-**Status**: valid
+**Status**: **partly reversed** by [Breath gets its own slot](lung-gets-its-own-slot.md) — **the count is
+eleven and lungs are back in.** Everything else here still stands: the six external slots, the torso, and
+the cuts of brain and heart.
 
 ## What was decided
 
 **Six external · four internal.** External: head · torso · back · forelimbs · hindlimbs · tail.
-Internal: eyes · gut · bone · hide-or-fur. The rule is in *Ten slots* in `stages-and-evolution`.
+Internal: eyes · gut · bone · hide-or-fur.
+⚠ **Five internal since 2026-08-14** — `lung` was added ([why](lung-gets-its-own-slot.md)). The live rule is
+*Eleven slots* in `stages-and-evolution`; **this doc keeps the number it was decided at**, because what it
+records is which slots lost and why.
 
 It moved three times in one day — eight, then twelve, then nine, then ten — and **only the last step added
 anything back.** Torso went in because the body had no chest at all: a gorilla's chest, a lion's mane and a
@@ -21,10 +26,10 @@ bison's hump had nowhere to attach.
 | **Widening `back` to mean the torso** | One square would then hold wings, shells, manes and humps at once. Cheaper, and the user rejected it — a gorilla's chest is not its back |
 | **Nine, by folding `hide` into the torso** | The way to keep the count. The user kept hide instead: **what is visible and what is thick are two different things** |
 | **Brain** | Does what eyes do. Both were "the cell notices things" |
-| **Lungs** | Does what heart does. Both were stamina under another name |
+| ~~**Lungs**~~ | ~~Does what heart does. Both were stamina under another name.~~ **Reversed 2026-08-14** — the horse's parts needed breath, and the user refused to fold it into `gut`. The cut was right about *heart*; it was wrong that breath had no job of its own |
 | **Heart** | Does what hindlimbs already do, and hindlimbs are visible while heart is not |
 
-⇒ **Every internal cut was a duplicate.** Nothing was cut for being weak — the four that remain are the four
+⇒ **Every internal cut was a duplicate.** Nothing was cut for being weak — the four that remained were the four
 that did not overlap: the swarm, the economy, the fight, survival.
 
 ⇒ **External was "where the money is" — one sprite per species per slot — and that stopped being true the
@@ -38,12 +43,12 @@ six things sticking out of one small square is already as much as reads.
   — see [The swarm grows by a key](swarm-grows-by-a-key-not-a-level.md)
 - **Torso and hide split one job in two**: torso is the visible bulk, hide is the thickness that is only a
   number. Merge them again and the reason hide survived is gone
-- **A multi-slot part hurts less at ten than at nine.** Three squares is under a third of the body now —
+- **A multi-slot part hurts less at eleven than at nine.** Three squares is under a third of the body now —
   the budget got looser, and that is the price of the chest
 - **Eyes being internal** is what lets a clone get smarter without a sprite —
   [Clones are stupid by default](clones-are-stupid-by-default.md) calls eyes the thing you buy to fix it
 
 ## Conditions to reopen
 
-A habitat whose species have nothing to give four internal slots — at which point the shortage is species,
+A habitat whose species have nothing to give the internal slots — at which point the shortage is species,
 not slots.

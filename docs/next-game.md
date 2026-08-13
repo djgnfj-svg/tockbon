@@ -13,9 +13,16 @@ the whole verification harness did not, is in `proto-round-trip`.
 card prices were deleted on 2026-08-13.
 
 ⇒ **The tier question is answered: there are no tiers.** A stage is a **habitat**, cleared by swallowing its
-apex, and the ladder runs beasts by habitat → dinosaurs → a final boss. Evolution replaced the card price,
+**boss**, and the ladder runs beasts by habitat → dinosaurs → a final boss. Evolution replaced the card price,
 and force and disposition became two axes instead of one number.
 **All of it is in `stages-and-evolution`, which is newer than the GDD wherever they disagree.**
+
+⇒ **And on 2026-08-14 the August build was cut down to something a team can start on.** **One stage, two
+species (crow and horse), one boss, three parts** — plus a title page, an ending page, eleven slots, three
+bindable keys and a kill that leaves a corpse you have to stand over. **Four plans in `plans/1.ready/`,
+built in order**, indexed by `grassland-whole-loop`. The engine question was reopened the same day and
+**Godot stands**: the prototype runs on it, the whole net harness is built around it, and 300 `Node2D`s cost
+0.065ms — the engine was never the wall.
 
 **Why cells**: almost no art is needed, one circle is a cell, and **the hands never stop** because you are
 steering a growing mass. The user picked it on that basis.

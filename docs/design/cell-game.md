@@ -5,7 +5,9 @@ on **real animals' body parts** — until it stands at the top of the food chain
 
 **Implemented**: partial — the swarm and its two commands, the rendezvous, carrying and absorption, the
 level-up pick, automatic eating and the ecosystem all run — see `proto-round-trip`. **Not built**: parts,
-slots, species currencies, chimeras, bosses, tiers, biomes, meta unlocks, the `3 attack that` command.
+slots, chimeras, bosses, biomes, meta unlocks, the `3` command. ⚠ **Species currencies and tiers are not
+unbuilt — they were CUT from the design** (2026-08-13). Listing them as unbuilt is how a later session goes
+and builds them.
 **Accepted**: **the core loop passed** — the user played the prototype and confirmed the fun. Everything
 above that is unbuilt is still `unseen`, and the parts economy is the largest unlooked-at piece.
 
@@ -13,6 +15,14 @@ above that is unbuilt is still `unseen`, and the parts economy is the largest un
 replaces the parts economy's gate, force and disposition are two axes, and tiers are habitats.
 **`stages-and-evolution` holds all of it** — the sections below are edited where they were made false, and
 that doc is newer wherever the two still disagree.
+
+⚠ **And a second one on 2026-08-14 changed it once more.** **Slots are eleven, not ten** (lungs got a
+square); **`1` gathers the swarm at the host**, not at a placed point; **every one of the three keys is an
+overwritable square**, `bite` included; **eating a kill takes time and leaves a corpse**, it is not
+automatic; and **the word "apex" is dead — say boss.** The August scope came down to **one stage, two
+species and one boss**. All of it is in
+[the grassland plans](../plans/1.ready/grassland-whole-loop.md), and the paragraphs below are edited where
+they were made false rather than left to rot.
 
 ⚠ **The prototype already changed this document once, and will again.** Predators became critters carrying
 a `threat`, and the swarm's size against that number decides which of the two is the meal — **that is this
@@ -58,9 +68,10 @@ Scored against the planning principles — **including the ones it does not pass
 - **The swarm is a fixed pool of 128.** A hard bound the renderer and the nets are built against, not a
   target to reach. ⚠ **Its design grounds are gone** — headcount comes from force since 2026-08-13, not
   from level — but it stands as an allocation bound until something measures otherwise
-- Clones obey **commands on the number keys** — `1 follow` · `2 scatter` · `3 attack that`. They are pressed
-  like abilities, not chosen from a menu, and **`3` requires you to point at something**: no auto-targeting,
-  or the game fights on its own
+- Clones obey **commands on the number keys** — ⚠ **`1` gathers them at the host** (changed 2026-08-14) ·
+  `2 scatter` · `3` sends them at the mouse point and they stay and fight there. They are pressed like
+  abilities, not chosen from a menu, and **`3` requires you to point**: no auto-targeting, or the game
+  fights on its own
 - **The command list is expected to grow** ("gather here", and others) as play shows what is missing. Three
   is the floor, not the design
 - A scattered clone **feeds itself automatically** and carries what it ate **in its own body**
@@ -93,15 +104,22 @@ were made this dumb.
 **A clone's experience is not yours until it comes home.**
 
 1. Scattered clones eat and accumulate species experience privately
-2. **`1 follow` gathers the swarm at the point where the key was pressed**, and they wait there
+2. ⚠ **`1` gathers the swarm at the host, and the point moves as the host moves** (user, 2026-08-14). The
+   rule below it — a rendezvous placed on the ground — **lost**, and the reasoning that argued for it is
+   kept struck through so the same case is not re-argued
 3. ⚠ **`V` absorbs every clone inside a radius in one press** (2026-08-13). It is not contact-automatic and
    it is not one clone at a time — forty clones would be forty presses. **The absorbed clones die**, and
    their force comes back to the host
 4. A clone killed before it is absorbed **takes everything it carried with it** — its force included
 
-⇒ **The press is a placed rendezvous**, not a recall to wherever the host happens to be. The host must
-walk into ground it chose while the swarm was still out. Recalling to the host instead lets it park in
-cleared ground while the clones bear the whole return trip — the exact inverse of the tension here.
+> ~~**The press is a placed rendezvous**, not a recall to wherever the host happens to be. The host must
+> walk into ground it chose while the swarm was still out. Recalling to the host instead lets it park in
+> cleared ground while the clones bear the whole return trip — the exact inverse of the tension here.~~
+>
+> **Dead 2026-08-14.** The user wants `1` to mean *come to me* and gave `3` the job of *go there*. The
+> tension the struck paragraph protected is not lost: **`3` is the key that sends the swarm into ground the
+> host is not standing in**, and it is the one that gets clones killed. See
+> [Rally is to the host](../decisions/rally-is-to-the-host.md).
 
 ⇒ Scattering wide earns more and risks more. **Density is the combat axis and the economy axis at once.**
 
@@ -142,12 +160,14 @@ count** — a big crocodile is not one rabbit. Three crocodiles' worth against o
 ⇒ **Totals and balances are separate on purpose.** Merge them and buying crocodile parts is what stops
 crocodiles appearing.
 
-**There is exactly one tax: a clone hands over 50% of what it carried.** What the host bit itself is worth
-double what a clone brings home, which is the whole reason the host stays in front.
+⚠ **The 50% tax was never built and is not the mechanism.** The prototype expressed it as a **speed**
+instead — the host's mouth is worth ~2.5× a clone's because `EAT_PERIOD_HOST` is 0.6s against the clone's
+1.5s — with no constant to tune and nothing to explain in the UI. `rules.gd` is where that lives.
+**What keeps the host in front is its bite rate, not a percentage.**
 
 **The gut raises what a clone brings home, and nothing else.** The host's own bite is always 100% and the
-gut can never exceed it — it closes the gap, it never inverts it. It also spends one of the **four** internal
-slots, so **gut is bought against eyes, bone and hide.**
+gut can never exceed it — it closes the gap, it never inverts it. It also spends one of the **five** internal
+slots, so **gut is bought against eyes, bone, hide and lung.**
 
 > **Cross-species conversion was cut.** It read as a tax on mixing species — the thing the game is selling —
 > and on inspection it was never a tax at all, only a bailout nobody had to take. Removing it takes a
@@ -160,18 +180,21 @@ trickle; it arrives when the swarm does.
 Other ratios exist (gut rates, candidate weights, the rising chance on a miss) and **none of them has been
 picked.**
 
-### Parts — ten slots
+### Parts — eleven slots
 
-⚠ **Was eight, then twelve, then nine, and settled at ten on 2026-08-13.** The reasoning and the four
-internal jobs are in `stages-and-evolution`.
+⚠ **Was eight, then twelve, then nine, then ten, and **eleven since 2026-08-14** — the horse's lungs needed
+a square and the user ruled that eyes and gut both keep theirs. The reasoning and the five internal jobs are
+in `stages-and-evolution`.
 
 Species experience is a currency, and what it buys is **that species' body parts.**
 
 **External 6 — visible on the body**: head (jaws · beak · horns) · **torso** (chest · mane · hump) ·
 back (wings · shell) · forelimbs · hindlimbs · tail
 
-**Internal 4 — numbers only**: eyes · gut · bone · hide-or-fur. ⚠ **Eyes moved inside** — noticing things
-is a number, not a sprite. What the gut does, and what it costs to take, is in *The economy*
+**Internal 5 — numbers only**: eyes · gut · bone · hide-or-fur · **lung**. ⚠ **Eyes moved inside** —
+noticing things is a number, not a sprite. **Lung is breath** — how long a movement active sustains — and it
+was added on 2026-08-14 rather than folded into gut, because gut has a job of its own. What the gut does,
+and what it costs to take, is in *The economy*
 
 Every species offers only some slots. Rabbit gives ears and hindlimbs; crocodile gives jaws, tail and hide;
 bird gives wings and eyes. **That is what makes hunting selective.**
@@ -199,8 +222,10 @@ a stat of its own** — see `stages-and-evolution`.
   impulse along the facing, with a duration, an ignore-collision flag and a distance. A cheetah's dash, a
   bird's glide and a frog's leap are three parameter sets of it, **never three controllers**
 - **At the start**: left click is `bite`. Right click and space are **empty**
-- **`bite` is overwritable.** A part bought into the head slot replaces it. Nothing is lost by doing so —
-  eating is not on a button (below)
+- ⚠ **All three are squares, and `bite` is only the active you are handed first** (user, 2026-08-14, said
+  three times). There is no fixed basic attack: **the player binds any active to any of the three keys**,
+  left click included, and binding over `bite` throws it away. `space` is the one square with a rule — it
+  takes movement actives only
 
 Movement is what the player feels most, which makes the space slot the strongest reason to go hunt a
 specific animal.
@@ -211,7 +236,7 @@ as parts are bought, so the same three keys do something different by the end.
 | Input | What it is |
 |---|---|
 | move | the host's own movement |
-| left click | basic attack — `bite` at first, whatever is bound later |
+| left click | **an active square** — `bite` is only what is in it at the start |
 | right click | a part's active |
 | space | a movement part |
 | `1` `2` `3` | swarm commands, `3` pointed at a target |
@@ -227,10 +252,12 @@ as parts are bought, so the same three keys do something different by the end.
 
 - **Contact is combat.** Anything hostile in contact trades damage on its own — the host, the clones and
   the enemy alike. **Clones fight without being told**, and the player fights by hand on top of that
-- **Eating is automatic.** Walk near food and it goes in. There is no eat button, which is why `bite` can
-  be overwritten
-- **Two kinds of food**: what is lying on the ground, and **the corpse an enemy leaves.** Killing and eating
-  are separate acts — the kill makes the meal
+- **Ground food is automatic.** Walk near grass and it goes in. There is no eat button
+- ⚠ **A kill is NOT automatic** (user, 2026-08-14). It leaves a **corpse**, and eating the corpse **takes
+  time** — the body stands there while something else can walk up to it. **Progress is kept if you leave and
+  come back.** The user's word for what this is for was 쫀득: the meal is the beat that makes a kill land
+- **Two kinds of food**: what is lying on the ground, and the corpse an enemy leaves. Killing and eating
+  are separate acts — the kill makes the meal, and **now the meal costs something too**
 
 ### Individuals differ — and a clone builds itself by killing
 
@@ -242,7 +269,7 @@ that clone** — no menu, no choice. The cards are the host's; the swarm's compo
 been hunting.
 
 **A clone carries at most one part, at one anchor**, and a later kill replaces it. **The host keeps all
-ten slots.** A hundred cells wearing ten parts each is neither readable on screen nor renderable at
+eleven slots.** A hundred cells wearing eleven parts each is neither readable on screen nor renderable at
 once.
 
 ⇒ Two build paths that do not look alike: the host is **chosen**, the swarm is **grown**.
@@ -254,12 +281,17 @@ once.
 ### The run — climbing the food chain
 
 ⚠ **This whole section was replaced on 2026-08-13.** A stage is a **habitat** cleared by swallowing its
-apex; the ladder is beasts by habitat → dinosaurs → a final boss on its own stage; insects and human
+**boss**; the ladder is beasts by habitat → dinosaurs → a final boss on its own stage; insects and human
 civilisation are both out, the second because **a machine is not something you eat**. Every stage carries
 special individuals — a fantastical beast, a chimera, a mutant — rolled per run.
 **`stages-and-evolution` holds it**, and
-[A stage is a habitat](../decisions/ladder-of-habitats-not-tiers.md) holds what lost. The paragraphs below
-are the dead version, kept only so the change is visible.
+[A stage is a habitat](../decisions/ladder-of-habitats-not-tiers.md) holds what lost.
+
+⚠ **Three rules below are NOT dead and the blanket "the paragraphs below are the dead version" hid them** —
+`stages-and-evolution` even cites one of them while it sits under a tombstone. **These three stand**:
+enemies are chimeras built from the same slots as the player · a chimera pays into every species it wears ·
+the map is one open field with biomes. **Everything else below is the dead tier version**, kept only so the
+change is visible.
 
 **It starts at animals.** Small animals → large animals → **humans and their war machines** → space, and
 the escalation is meant to be faintly ridiculous. **What you fled from last stage is food in the next
@@ -276,7 +308,7 @@ to the field permanently and re-weights the spawns; **the field carries exactly 
 one before it**, and the tier before that falls out. That is the rule that makes what you fled from into
 food, and it caps the live spawn table at two tiers of art.
 
-Enemies are **chimeras built from the same ten slots as the player** — a boss is "the thing with three
+Enemies are **chimeras built from the same eleven slots as the player** — a boss is "the thing with three
 parts bolted on". No separate enemy system, no separate art pipeline.
 
 **A chimera pays into every species it visibly wears**, split evenly by part count: three crocodile parts
@@ -334,8 +366,8 @@ a body and still read. **A leg does not** — detached, it is a brown stick (`to
 
 **How parts attach**: **six anchors around the body** — one per external slot — with the parts drawn
 **behind** the blob so they read as silhouette: a jaw juts forward, wings spread behind, legs show
-underneath. **The four internal slots are not drawn at all; they change the body's drawing values** — fur
-outlines it, hide deepens the colour, bone sharpens the corners.
+underneath. **The five internal slots are not drawn at all; they change the body's drawing values** — fur
+outlines it, hide deepens the colour, bone sharpens the corners, lung is read from how long a gallop holds.
 
 **A part is a shape, an anchor index and a facing flip.** No rotation, no per-part z-sort, no scaling.
 A boss is drawn **bigger**, never as a scaled rig.
@@ -349,13 +381,18 @@ line. Tones cannot fight when there is only one tone.
 tell apart, which is a design question, not a bill.
 
 - A square host with parts protruding from its sides, surrounded by smaller squares
-- `scatter` visibly spreads them out; `follow` gathers them **at the spot the key was pressed**, and **`V`
-  pops the whole ring of them at once** — that is the harvest, and it must be readable without a number.
+- `scatter` visibly spreads them out; ⚠ **`1` gathers them at the host and the ring follows the host as it
+  moves** (changed 2026-08-14 — this line still said *at the spot the key was pressed* after the rest of the
+  doc had been corrected, which is how one file came to say both). **`V` pops the whole ring at once** — that is the harvest, and it must be readable without a number.
   ⚠ **The swarm does not grow back on its own**; the next `F` is what refills it, and the body visibly
   thins as it does
 - One level bar, always visible, filling from every mouthful
-- The level-up pause shows **the cards, each `species · slot · price`**, and the balance each would draw
-  from. A card you cannot afford is visibly out of reach — there is no second way to pay for it
+- ⚠ The level-up pause shows **three cards, each `species · slot`** — **no price, no balance** (the price
+  died on 2026-08-13 and this line was the last place still claiming otherwise). A card for a part already
+  worn reads as a level-up of it
+- **The force number sits under every body** — the host's, every clone's, every creature's — and a packed
+  group draws **one summed number** instead of forty digits (user, 2026-08-14)
+- **A minimap**, because the field is 3840×2160 and the swarm leaves the screen (user, 2026-08-14)
 - A clone being swallowed on `follow` shoves the gauge forward. **A dozen arriving at once should read as a
   cascade**, not as twelve small increments
 - A boss is visibly a chimera: parts you recognise, on something far bigger
@@ -364,8 +401,13 @@ tell apart, which is a design question, not a bill.
 
 ## The August cut
 
-**The August build ships two tiers and one boss.** That is a cut, not a detail — the ladder above is the
-shape of the run, and the rest of it is content that does not fit in the time.
+⚠ **Narrowed again on 2026-08-14, and much further than "two tiers".** The August build is **one stage
+(grassland), two species (crow and horse), one boss**, and **three parts** — horse legs, horse mane, horse
+lungs. The crow gives no part; it is what you eat while the horse is still uncatchable. Everything else in
+the ladder is content that does not fit in the time.
+[The grassland plans](../plans/1.ready/grassland-whole-loop.md) are the buildable form of that cut.
+
+> ~~The August build ships two tiers and one boss.~~ Superseded by the line above.
 
 **The clone pool is 128, allocated once.** Also a cut: it is the number the nets test against, chosen so a
 regression is catchable rather than because play asked for it.
@@ -376,7 +418,8 @@ regression is catchable rather than because play asked for it.
 
 ## Bounds
 
-- **Zero clones** — the host alone must still be playable. This is the opening state of every run
+- **Zero clones** — the host alone must not crash. ⚠ **It is not the opening state**: the prototype measured
+  that zero left nothing under test on screen for a minute, and `START_CLONES` is 6
 - **128 clones** — the pool cap. No per-unit orders exist, so input cost does not grow; drawing and
   separation do, and neither is measured
 - **A slot with no part** — starting state. Empty right click and space must not read as broken
@@ -386,7 +429,9 @@ regression is catchable rather than because play asked for it.
 
 ## Cost
 
-Nothing is measured. `src/` does not exist and no number here has been profiled.
+⚠ **`src/` exists and two of the three costs below are measured.** The uniform grid: 300 items 0.42ms
+against a naive 3.01ms, 600 items 1.03ms against 12.19ms (`sim_grid.gd`). 300 `Node2D`s: 0.065ms
+(`proto-round-trip`). **The per-clone decision is the one still unmeasured.**
 
 The one structural trap from `CLAUDE.md` applies: **128 independently-feeding clones are 128 awake
 agents.** Being rows in an array rather than nodes takes the scene-tree cost out; it does not take out the
@@ -396,10 +441,14 @@ per-clone decision, the separation query or the draw. Measure before any of the 
 
 ## Acceptance
 
-Nothing is accepted. The first thing to put in front of the user:
+⚠ **This section said "Nothing is accepted" while the header three hundred lines above said the core loop
+passed.** The header is right and this was left to rot.
 
-**One square that moves, eats, and splits.** If steering a growing mass is not fun with zero parts and zero
-species, no amount of the rest fixes it.
+**Passed**: *one square that moves, eats, and splits.* The user played the prototype and confirmed the fun —
+the record is `proto-round-trip`. **That is the only thing accepted.**
+
+**Not accepted, and next in front of the user**: a run that starts at a title and ends at an ending screen
+(plan 1), and then the whole grassland loop (plan 4). Everything between is unlooked-at.
 
 ---
 
@@ -411,9 +460,12 @@ species, no amount of the rest fixes it.
   only play decides this one, and it stays the largest open risk
 - **Whether the clone tax earns its keep.** *The economy* carries the number. If the host's bite being
   worth double is not felt, the rule is one deletion away
-- **What the ending is, and what happens after the apex tier.** No finish line is defined and none is being
-  defined now — the August build stops far short of it. **Deferred on purpose**
-- **The tier list** beyond the two that ship — how many stages, and what lives in each
+- ~~**What the ending is.**~~ **Closed 2026-08-14.** A run ends **the moment the boss is eaten or the host
+  dies** — never on a clock — and both land on **one ending screen** that reads out time, cells eaten,
+  species eaten and the finished body. See [the run shell](../plans/1.ready/run-shell.md). What comes
+  *after* grassland is still undefined and stays that way
+- ~~**The tier list** beyond the two that ship.~~ **Void** — there are no tiers, and the August scope is one
+  stage, not two. How many habitats there eventually are is open; nothing about it is being decided now
 - **Whether the host visibly grows in size across tiers.** Raised, wanted, deferred
 - **Whether commands end up as press-and-drag** rather than a plain keypress. Raised, deferred
 - **Meta unlocks diluting the card pool.** A wider pool makes the part you want rarer, and the pity rule
