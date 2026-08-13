@@ -5,6 +5,32 @@ description: Implements one design doc with a team. Use when the user says "이�
 
 # Running the feature team
 
+## Step 0 — ask how it should be run, BEFORE spawning anything
+
+**Ask the user one question and wait**: sequential team, or `ultracode` / a workflow?
+
+**You may not decide this yourself.** Parallel orchestration spends heavily and the permission to do it is
+the user's alone — but *not asking* is how a build silently takes six hours. **One line, at the start:**
+
+> 순차 팀으로 갈까요, 아니면 `ultracode`(멀티 워크플로우)로 갈까요? 뮤테이션 구간이 5~10배 빨라집니다.
+
+**Recommend the workflow whenever the plan carries more than ~20 checks.** Measured on plan 1, 2026-08-14:
+
+| | sequential | why |
+|---|---|---|
+| net round | **1.2s** | never the bottleneck |
+| one mutation | **1–2 min** | open file · break it · run nets · restore · judge |
+| a stage's mutation sweep | **20–40 min** | 20-odd mutations, one at a time |
+| whole plan | **~24 agent round-trips** | three stages, four bounces on stage 2 alone |
+
+**The nets cost 30 seconds of that. Everything else was agents reading and writing.** Mutations are the
+single most parallelisable part of the job and they were run in single file — that is the thing the workflow
+fixes.
+
+If the user says workflow, follow *Running the mutation sweep as a workflow* below. If they say sequential,
+run the flow as written and **keep the round-trips down** — batch findings, do not send one finding per
+message, and do not spawn all three verifiers on a stage that changed nothing on screen.
+
 ## The most important rule
 
 **Do not recreate an agent. Talk to it.**
@@ -51,14 +77,74 @@ Skip it and builder finishes the whole implementation with no report reaching me
 ## Flow
 
 ```
+0. Scale           ask: sequential or workflow. WAIT for the answer
 1. Pick design     choose a doc in 1.ready/
 2. spec            plan → move to 2.active/
                    stuck → question to main → I ask the user
 3. builder         implement per plan
-4. Three verifiers verify-run · verify-look · verify-read, together
-5. Judgment        all pass → 3.done/
-                   any fail → SendMessage the details to builder (back to 4)
+4. Verifiers       verify-read · verify-run always
+                   verify-look THE MOMENT the stage puts anything on screen — not at the end
+5. Mutation sweep  sequential: the verifiers do it inline
+                   workflow: fan out, one worktree per mutation (below)
+6. Judgment        all pass → 3.done/
+                   any fail → batch the findings into ONE message to builder (back to 4)
 ```
+
+## Running the mutation sweep as a workflow
+
+**Mutations are perfectly parallel and were the biggest cost.** Each one is: break one thing, run the nets,
+read the colour, restore. **They are mechanical — no judgement — and they only ran in single file because two
+agents breaking the same file at once invalidates both** (the user's own note: parallel mutators need isolated
+copies).
+
+⇒ **`isolation: 'worktree'` is the answer**, and it works here now: a fresh worktree has no `.godot` import
+cache, which used to red every net in it, and `run_nets.ps1` now runs `--import` itself when it sees a `.gd`
+with no `.uid`. **Re-branch from `main` right before starting** — a worktree freezes at the commit it branched
+from, and two agents have already built against a stale base here.
+
+**Split the work by what needs judgement:**
+
+| Stage | Who | Model |
+|---|---|---|
+| Produce the mutation list — what to break, and which check must redden | verify-read | opus |
+| Apply each mutation, run the round, report the colour and the failing labels | fan-out | haiku/sonnet |
+| Interpret: which survived, is it a new layer or the same one, what closes it | verify-read | opus |
+
+**The middle stage is the only one that fans out.** It is `break → 1.2s → restore`, and the whole point is
+that thirty of them cost the same wall-clock as one.
+
+```js
+export const meta = {
+  name: 'mutation-sweep',
+  description: 'Apply each mutation in its own worktree, report which stayed green',
+  phases: [{ title: 'Sweep' }],
+}
+// args = [{ id, file, find, replace, expect }] — produced by verify-read, not invented here
+const VERDICT = { type: 'object', required: ['id', 'went_red', 'labels'], properties: {
+  id: { type: 'string' }, went_red: { type: 'boolean' },
+  labels: { type: 'array', items: { type: 'string' } },
+  landed: { type: 'boolean' } } }
+
+const results = await parallel(args.map(m => () => agent(
+  `In this worktree: edit ${m.file}, replacing exactly:\n${m.find}\nwith:\n${m.replace}\n` +
+  `CONFIRM THE REPLACEMENT LANDED before running anything — string replacement has silently matched ` +
+  `zero times twice in this repo, and a mutation that never applied reads as a check that passed.\n` +
+  `Then run: powershell -NoProfile -ExecutionPolicy Bypass -File tests/run_nets.ps1\n` +
+  `Report went_red, the exact failing check labels, and landed. Do NOT restore — the worktree is thrown away.`,
+  { label: `mut:${m.id}`, phase: 'Sweep', schema: VERDICT, isolation: 'worktree', effort: 'low' })))
+
+return { survivors: results.filter(Boolean).filter(r => r.landed && !r.went_red), all: results }
+```
+
+**Three things this must not lose**, all of them measured failures in this repo:
+- **`landed` is not optional.** A mutation that did not apply is green for the wrong reason, and that has
+  happened twice. The agent confirms the edit before it trusts the colour
+- **Invert the instrument, not only the subject.** The sweep proves checks bite; it cannot prove a *check* is
+  honest. Keep sending the shapes verify-read hunts by hand — a bound read out of the thing it measures, a
+  spy that captures and never asserts, a hook that throws its own drawing away
+- **No worktree writes docs.** Its edits live only in the copy. The sweep reports; the spawner writes.
+  Afterwards `git worktree remove --force` + `prune` — automatic cleanup almost never fires (700MB in one
+  night, measured)
 
 ## Verify **per stage**, not after the implementation ends
 
@@ -87,13 +173,44 @@ Spawn and wait. When spec sends a question to main, relay it verbatim to the use
 
 When the plan lands, **show it to the user once and get confirmation.** Wrong here and everything after it spins.
 
+### Make spec write the checks against these four questions
+
+**Plan 1's plan named 22 checks and the build needed 293.** The code was right every round; the checks were
+shallow, and stage 2 bounced **four times** closing holes one layer deeper each time. Every single hole was
+one of these four, so they go into the plan before the builder sees it:
+
+- **Does the bound come from the thing it measures?** `t.eq(slots.size(), SLOT_COUNT)` moves both sides and
+  passes at 10 or 12. Pin literals
+- **Does it read only final state where an ordering was promised?** A beat that never pulls still ends with
+  count 1
+- **Does the spy assert everything it captures?** A captured-and-unread field reads exactly like coverage —
+  four buttons with blank labels passed because only `rect` was ever read
+- **Can the behaviour VANISH rather than diverge?** A/B catches "changed", never "gone". A hook that threw
+  its own drawing away passed 54 of 54; the fix was cutting the terminal draw into a leaf hook so nothing
+  above it can put a pixel on screen unwatched
+
+**And require a named mutation per check, in the plan.** "Invert every check" as a sentence produced nothing;
+the plans that named the mutation got them run.
+
 **3. builder**
 
 Hand over the plan. Remember where builder said "unsure". Tell the verifiers those spots.
 
-**4. Three verifiers**
+**4. The verifiers**
 
-Spawn all three **at once.** They look at different things, so there is no order.
+Spawn them **at once.** They look at different things, so there is no order.
+
+⚠ **verify-look goes in the FIRST round that puts anything on screen — not at the end.** On plan 1 it was
+held until the last stage, and with **279 checks green** it found three defects in minutes: the field had no
+floor colour at all (`Look.BG` read in zero places, and `project.godot`'s key was nested inside its own
+section so nobody read it), the victory beat was **a still frame for 62% of its length** while the HUD still
+read `무리 39`, and the game filled **44% of the window**. Five of the previous round's seven surviving
+mutations were the same family — a headline in the wrong band, labels 10,000px off, six rows past the left
+edge. **All green. Numbers cannot see a picture**, and this repo has now measured that four separate times.
+
+⇒ **Conversely, do not spawn it on a stage that draws nothing.** Plan 1's stages 1 and 2 changed no pixel the
+player could reach; verify-read and verify-run were the whole job there. Spawning three verifiers on a stage
+with nothing to see is a third of the round-trips for nothing.
 
 Hand each:
 - All three: design doc path, what builder wrote where
