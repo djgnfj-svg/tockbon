@@ -35,12 +35,13 @@ force both ways) · **the run opens alone** (`START_CLONES` 0) · **the camera p
 which is the answer to the field feeling small. **The prototype in `src/` is a reference, not a base** — the
 user's call is to write it again properly.
 
-⇒ **A second, larger review the same day found 74 more, and the four plans are NOT corrected for it.**
+⇒ **A second, larger review the same day found 74 more. All four plans are now corrected for it.**
 Five independent reviewers; **the ranking that mattered was how many of them found the same thing alone.**
-**Plan 4 is NOT BUILDABLE** — the field's composition and the rule for what an attack hits are both absent.
-Read **`adversarial-review-2026-08-14-ko`** before building any plan. Its three loudest: `cells_eaten` is
-double-counted and two of its own nets contradict each other · nothing rebinds the view after `restart()` ·
-`EAT_RADIUS` names a constant that does not exist, which is **the bug the user caught on the first play**.
+Read **`adversarial-review-2026-08-14-ko`** anyway — not for its verdicts, which are answered, but for the
+shapes: a count claimed "across the whole repo" that was wrong three times · two nets that contradict each
+other · `EAT_RADIUS` naming a constant that does not exist, which is **the bug the user caught on the first
+play**. ⚠ **One of its fixes is superseded**: it slowed the horse so the swarm could catch it, and the design
+then made the horse uncatchable on purpose. **The plans are newer than the review.**
 
 ⇒ **Then the design moved again, and it moved the numbers.** **`docs/design/hunting-and-the-boss-ko.md` is
 newer than the GDD, than `stages-and-evolution`, and than all four plans.** The host opens at **force 10**
@@ -149,7 +150,7 @@ opens up, and stop** — the user will say when they are done thinking.
 | `docs/design/` | **What a feature looks like.** Read its README first — the newest doc wins where they disagree |
 | `docs/decisions/` | **Why something was *not* done.** The rejected branch and the reason, nothing else |
 | `docs/plans/` `1.ready` `2.active` `3.done` | **The only folder that moves.** The folder a doc sits in is its status |
-| `docs/adversarial-review-2026-08-14-ko.md` | **What is wrong with the four plans**, from five independent reviewers. **Read it before building any of them** |
+| `docs/adversarial-review-2026-08-14-ko.md` | **How four dense plans leaked at their joints**, from five independent reviewers. Its findings are answered in the plans; **it is kept for the shapes, not the verdicts** |
 
 **All three exist and hold ~50 docs.** `docs/archive/` does **not** exist — it was deleted on 2026-08-12,
 and this table claimed the opposite of the truth on both counts for two days. **A concept never changes
@@ -358,7 +359,7 @@ These survive **even after you confirm every mutation goes red**:
 
 ## Running the nets
 
-**Ten nets, 111 checks, about one second.** A net is `tests/nets/net_*.gd` with one method, `func run(t)`,
+**Fourteen nets, 293 checks, 1.3 seconds** (measured 2026-08-14). A net is `tests/nets/net_*.gd` with one method, `func run(t)`,
 and `t` gives you `ok` · `eq` · `pump_frames` · `expect_error` · `root`. **The wrapper reds below five
 nets** — that is the scan-broken detector, so nets land in groups, never one at a time.
 

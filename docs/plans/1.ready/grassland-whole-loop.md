@@ -3,17 +3,17 @@
 **Status**: `1.ready` — split into four plans on 2026-08-14. **Plan 1 is built and in `3.done`**; plans 2, 3
 and 4 are unbuilt. **Plan 2 is next.**
 
-> ⚠ **Plans 2, 3 and 4 have not absorbed the second review or the design conversation that followed it
-> (both 2026-08-14, later the same day).** Read before building:
+> ✅ **All four plans have now absorbed the second review and the design conversation that followed it**
+> (both 2026-08-14, later the same day). Read them anyway before building:
 > - **[The adversarial review](../../adversarial-review-2026-08-14-ko.md)** — 74 findings from five
->   independent reviewers. **Plan 4 is judged NOT BUILDABLE**; the other three are buildable only with
->   guesses. The findings are ordered by how many reviewers found them independently
+>   independent reviewers. **Its NOT BUILDABLE verdict on plan 4 is answered**, not still open; the findings
+>   are ordered by how many reviewers found them independently, and that ordering is the part worth re-reading
 > - **[Hunting and the boss](../../design/hunting-and-the-boss-ko.md)** — force ×10, size per species, the
 >   crow's counter-attack, herding the horse, the arena, terrain. **It is newer than every number below**
 >
-> **Plan 1 has been rewritten for both (2026-08-14). Plans 2, 3 and 4 have not** — each is corrected in the
-> commit that starts building it, not before, because the correction wants the previous plan's real code in
-> front of it. Where an uncorrected plan and either of those disagree, **the plan is wrong.**
+> ⚠ **On one point the plans are newer than the review**: it told plan 4 to slow the horse to 1.05× so the
+> swarm could catch it, and the design then said the opposite — **the horse is not caught, it is herded.**
+> The plan keeps 1.15× and guards the ordering with literal checks instead.
 
 **The instruction that shapes every doc under it** (from the user): **build the biggest loop first, then dig
 inward, and leave the details for last.** Not parts assembled upward. The last game's loop never ran end to
@@ -96,14 +96,16 @@ colour · the final boss. **Do not stop to fill these.** `CLAUDE.md`: skeleton f
    binds whichever active to whichever key
 2. **Where parts come from** — **the host's come from level-up cards only.** A finished corpse does not hand
    the host a part. **A clone still wears what it kills**, which is a different path on purpose
-3. **What a corpse is worth** — **proportional to that individual's force.** `force × CELLS_PER_FORCE`,
-   starting at 6
+3. **What a corpse is worth** — **proportional to that individual's force.** `force × EXP_PER_FORCE`, and at
+   the ×10 scale that factor is **1.0**: one crow is one level. ⚠ **Say 경험치, not 세포**
 4. **What stops the boss** — **nothing does, and that is allowed.** A low-level host *can* kill it by
    kiting. What it costs is that **damage equals the attacker's force in both directions**, so a level-1
    host is one touch from dead and the boss is hard to disengage from. **The wall is consequence, not a
    threshold**
-5. **Alone or with six** — **alone.** `START_CLONES` goes to 0. The first level-up opens `F`, and that is
-   the onboarding
+5. **Alone or with six** — **alone.** `START_CLONES` is deleted outright. ⚠ **And the onboarding moved
+   after this list was written**: the host opens at **force 10**, so `F` works on the first second and
+   splitting *is* the tutorial ([why](../../decisions/force-starts-at-ten.md)). "The first level-up opens
+   `F`" was true only while force started at 1
 6. **The map felt small** — **the field stays 3840×2160**, and the **camera starts tight on the host and
    pulls back as the swarm grows.** Early on the body reads big because you are close to it; the field opens
    up as there is more to see. Adjust by feel after the first play
@@ -115,7 +117,8 @@ loop was played and confirmed — but **the files in `src/` are not carried forw
 
 **What survives**: the folder contracts, the flat-array discipline, the uniform grid, the separation
 correction, and every measurement written into `rules.gd`'s comments. **What does not**: the eight stat
-cards, the dash, `threat`, contact-absorb, the six starting clones, the run clock.
+cards, `threat`, contact-absorb, the six starting clones, the run clock. ⚠ **The dash is not on that list any
+more** — plan 3 keeps it as a *part* bound to `space`, because deleting it left a key empty for a whole plan.
 
 ## Still open — none of it blocks a build
 

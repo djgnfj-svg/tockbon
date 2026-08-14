@@ -72,6 +72,8 @@ Where it shakes if this reverses.
 | [The boss cannot be out-run](the-boss-cannot-be-outrun.md) | valid — ⚠ **half of it is deliberately undecided** | Indefinite escape · escape at the cost of hunting time · a boss that grows while avoided · timed or cleared-triggered spawning · an arena that opens · carrying on in a clone · leaving the swarm scattered |
 | [The hit shape comes from the part](hit-shape-comes-from-the-part.md) | valid | One hit rule for the key · `BITE` hitting everything touching · `BITE` auto-targeting |
 | [Everything goes in for August](everything-goes-in-for-august.md) | valid — **a date decision, not a design one** | Dropping water · dropping parts and cards · water that only slows · water clones cannot cross |
+| [Force is stored, not derived](force-is-stored-not-derived.md) | valid | Recomputing from level and parts · a stored base plus a derived bonus · recomputing for the host only |
+| [The level counts what came home](level-counts-what-came-home.md) | valid | Levelling from `eaten` · two gauges · reporting `banked` at the ending |
 
 **The old game's decisions went with it** and are at the tag `v1-sim`. They are not recovered here because
 every one of them answered "why not do X in *that* game" — the question does not transfer.
