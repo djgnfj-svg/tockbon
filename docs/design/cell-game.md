@@ -3,13 +3,16 @@
 **One line**: One square cell splits into a swarm, eats whatever it can catch, and spends what it digested
 on **real animals' body parts** — until it stands at the top of the food chain.
 
-**Implemented**: partial — the swarm and its two commands, the rendezvous, carrying and absorption, the
-level-up pick, automatic eating and the ecosystem all run — see `proto-round-trip`. **Not built**: parts,
-slots, chimeras, bosses, biomes, meta unlocks, the `3` command. ⚠ **Species currencies and tiers are not
+**Implemented**: partial — the swarm and its three commands, the rendezvous, carrying and absorption,
+automatic eating and the ecosystem run (`proto-round-trip`); the run shell and every key run (plans 1–2);
+and since plan 3, **the parts economy runs**: eleven slots, a part table, cards that give nothing but parts,
+irreversible wearing, a placeholder trait, and a host drawn from what it wears. **Not built**: the crow and
+the horse themselves, chimeras, bosses, biomes, meta unlocks. ⚠ **Species currencies and tiers are not
 unbuilt — they were CUT from the design** (2026-08-13). Listing them as unbuilt is how a later session goes
 and builds them.
-**Accepted**: **the core loop passed** — the user played the prototype and confirmed the fun. Everything
-above that is unbuilt is still `unseen`, and the parts economy is the largest unlooked-at piece.
+**Accepted**: **the core loop passed** — the user played the prototype and confirmed the fun. ⚠ **The parts
+economy is built and has never been looked at** — no play, and no `verify-look`. It is now the largest
+unseen piece rather than the largest unbuilt one, and that is a different risk with the same name.
 
 ⚠ **A planning conversation on 2026-08-13 changed this document again.** Card prices are gone, evolution
 replaces the parts economy's gate, force and disposition are two axes, and tiers are habitats.

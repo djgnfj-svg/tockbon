@@ -19,6 +19,9 @@ const SHADOW := Color(0.0, 0.0, 0.0, 0.22)
 const RING_SEGMENTS := 28
 const RING_WIDTH := 2.0
 const CONE_SEGMENTS := 12
+## Limb pairs and eye dots are drawn once per side. **Only one side's offset is written in `look.gd`** —
+## the sign is derived, so a pair cannot be tuned into asymmetry by editing one of two constants.
+const MIRROR := [1.0, -1.0]
 
 var world: World = null
 ## What the camera can see, in world coordinates, padded. Everything outside is skipped — 500 food spots
@@ -94,16 +97,22 @@ func _paint(c: CanvasItem) -> void:
 
 	# Under the host, so the body stays the thing being read. `bite_show` counts UP from the moment a bite
 	# landed and opens at INF, so a run that has never bitten draws nothing without a second flag to keep
-	# in sync. Shape comes from the two `Rules` constants `_bite()` itself tested with — a cone tuned here
-	# to look right would be a picture of a hit that did not happen.
+	# in sync. **Shape comes off the swarm, which stored what `bite()` itself tested with** — a cone tuned
+	# here to look right would be a picture of a hit that did not happen, and a constant would be one part's
+	# cone drawn over another part's hit now that range and arc belong to the part that fired.
 	if sw.bite_show < Look.BITE_SHOW_TIME:
-		_paint_cone(c, sw.pos[0], sw.bite_aim, Rules.BITE_RANGE, Rules.BITE_ARC, Look.BITE_COLOR)
+		_paint_cone(c, sw.pos[0], sw.bite_aim, sw.bite_range, sw.bite_arc, Look.BITE_COLOR)
 
 	var host_col: Color = Look.HOST_COLOR if world.host_grace <= 0.0 else Look.HOST_HURT_COLOR
 	# The radius is a `Rules` constant, not a `Look` one: it decides who `V` absorbs. Drawing it from
 	# anywhere else is how the picture stops being the simulation.
 	var host_r: float = Rules.BODY_RADIUS * (1.0 + _absorb_pop * 0.35)
-	_paint_cell(c, sw.pos[0], host_r, host_col, _squash(sw.vel[0], Rules.HOST_SPEED), _heading(sw.vel[0]))
+	# **The host, and only the host, goes through `_paint_body`.** A clone has no `Body` — it carries one
+	# part index (plan 4) — so it keeps the bare `_paint_cell` above.
+	var b := world.body
+	_paint_body(c, sw.pos[0], host_r, host_col, _squash(sw.vel[0], Rules.HOST_SPEED), _heading(sw.vel[0]),
+			_body_corner(b), _body_outline_width(b), _body_colour_depth(b), _body_dot_radius(b),
+			b.slot_part)
 
 	# The `F` wind-up, over the host. 0.45 seconds with nothing on screen is a key that reads as broken,
 	# and the arc is the only feedback the hold has. Starts at the top and sweeps clockwise.
@@ -122,27 +131,161 @@ func _striking(sw: Swarm) -> bool:
 	return false
 
 
+# -- what the internal slots are worth, in pixels ----------------------
+## **Four pure functions of `Body`, and every one of them is keyed on `slot_level`, not on which part sits
+## there.** An internal slot's job is to change a drawing value, so the value has to move with the level as
+## well as with the part — a function that only asked "is something worn" would make a Lv3 hide identical
+## to a Lv1 one, which is the same shape as a level that does nothing.
+##
+## ⚠ **No part in the August table occupies `BONE`, `EYES` or `HIDE`**, so all three are at their bare-body
+## value for the whole of this plan. They are still driven — a net can put a part in the slot by hand — but
+## nothing a player does reaches them, and `GUT` and `LUNG` have no drawing value at all (see `look.gd`).
+
+## Bone SHARPENS: it takes the corner cut DOWN, floored so the body never becomes a plain square. A bare
+## body is `Look.CORNER` exactly, which is the number every body in the game drew with before this plan.
+func _body_corner(b: Body) -> float:
+	var lv := b.slot_level[Parts.Slot.BONE]
+	return maxf(Look.CORNER_MIN, Look.CORNER - float(lv) * Look.CORNER_PER_BONE)
+
+
+## Hide/fur: an outline that thickens per level. Zero on a bare body, and `_paint_body` draws nothing at
+## zero rather than a hairline nobody asked for.
+func _body_outline_width(b: Body) -> float:
+	var lv := b.slot_level[Parts.Slot.HIDE]
+	return 0.0 if lv <= 0 else Look.HIDE_OUTLINE_WIDTH * float(lv)
+
+
+## Hide/fur again, the other half: how much darker the whole body reads. One slot, two values, because the
+## design names both ("outline and colour depth") and a single one of them is half the slot.
+func _body_colour_depth(b: Body) -> float:
+	return float(b.slot_level[Parts.Slot.HIDE]) * Look.HIDE_COLOR_DEPTH
+
+
+## Eyes: the dot radius, as a multiple of the body's radius. **Zero means no eyes and nothing is drawn** —
+## a bare body has no dots, which is exactly the picture today, so this slot adds marks instead of moving
+## them.
+func _body_dot_radius(b: Body) -> float:
+	var lv := b.slot_level[Parts.Slot.EYES]
+	return 0.0 if lv <= 0 else Look.EYE_DOT_RADIUS + float(lv - 1) * Look.EYE_DOT_PER_LEVEL
+
+
+## **The host's body, with what it is wearing on it.** The hook the net asserts, and it takes the internal
+## slots' effects as SEPARATE, EXPLICIT arguments rather than reading them back off `Body` — a net has to
+## be able to pin a bare body's corner radius and a bone-wearing body's corner radius as literals. "The
+## arguments differ" is the A/B comparison that lets five internal slots change nothing on screen and stay
+## green, which is how a doubled power once moved zero pixels.
+##
+## It goes on to call `_paint_cell` for the base blob, so a spy that finds the host by its radius through
+## that hook still finds it. Everything a part adds is drawn on top, **in the host's own colour lifted by
+## `Look.PART_COLOR_LIFT`** — one tone on the whole body is what escaped the "texture comes from the
+## preset" constraint, so a part is a shape and a lift, never a picture.
+func _paint_body(c: CanvasItem, p: Vector2, r: float, col: Color, squash: Vector2, rot: float,
+		corner: float, outline_width: float, colour_depth: float, dot_radius: float,
+		slot_part: PackedInt32Array) -> void:
+	# Hide/fur deepens the whole body before anything is drawn on it — an internal slot changes a VALUE, and
+	# this is the value it changes.
+	var body_col := col.darkened(colour_depth)
+	_paint_cell(c, p, r, body_col, squash, rot, corner)
+	if outline_width > 0.0:
+		_paint_outline(c, p, r, corner, body_col.darkened(Look.HIDE_OUTLINE_DARKEN), outline_width)
+
+	var part_col := body_col.lightened(Look.PART_COLOR_LIFT)
+	# The body's own frame: `fwd` along the facing, `side` across it. Limb pairs mirror on `side`, so only
+	# one sign is written anywhere and the other is derived — see `look.gd`.
+	var fwd := Vector2(cos(rot), sin(rot))
+	var side := Vector2(-sin(rot), cos(rot))
+
+	if _has(slot_part, Parts.Slot.HEAD):
+		_paint_part_shape(c, p + fwd * (r * Look.PART_HEAD_ANCHOR), r * Look.PART_HEAD_SIZE, corner,
+				part_col)
+	if _has(slot_part, Parts.Slot.TORSO):
+		_paint_part_shape(c, p + fwd * (r * Look.PART_TORSO_ANCHOR), r * Look.PART_TORSO_BULGE, corner,
+				part_col)
+	if _has(slot_part, Parts.Slot.BACK):
+		_paint_part_shape(c, p + fwd * (r * Look.PART_BACK_ANCHOR), r * Look.PART_BACK_SIZE, corner,
+				part_col)
+	if _has(slot_part, Parts.Slot.FORELIMBS):
+		_paint_limb_pair(c, p, r, fwd, side, Look.PART_FORELIMB_ANCHOR, part_col)
+	if _has(slot_part, Parts.Slot.HINDLIMBS):
+		_paint_limb_pair(c, p, r, fwd, side, Look.PART_HINDLIMB_ANCHOR, part_col)
+	if _has(slot_part, Parts.Slot.TAIL):
+		var root := p + fwd * (r * Look.PART_TAIL_ANCHOR)
+		_paint_part_line(c, root, root - fwd * (r * Look.PART_TAIL_LENGTH), Look.PART_TAIL_WIDTH, part_col)
+
+	# Eyes are the one internal slot that adds marks rather than changing a number, and the number IS the
+	# radius: 0 means no eyes and nothing is drawn, which is exactly a bare body's picture today.
+	if dot_radius > 0.0:
+		var eye := Look.EYE_DOT_OFFSET
+		for s: float in MIRROR:
+			_paint_dot(c, p + fwd * (r * eye.x) + side * (r * eye.y * s), r * dot_radius,
+					Look.EYE_DOT_COLOR)
+
+
+func _has(slot_part: PackedInt32Array, slot: int) -> bool:
+	return slot < slot_part.size() and slot_part[slot] >= 0
+
+
+func _paint_limb_pair(c: CanvasItem, p: Vector2, r: float, fwd: Vector2, side: Vector2,
+		anchor: Vector2, col: Color) -> void:
+	for s: float in MIRROR:
+		var root := p + fwd * (r * anchor.x) + side * (r * anchor.y * s)
+		_paint_part_line(c, root, root + side * (r * Look.PART_LIMB_LENGTH * s), Look.PART_LIMB_WIDTH, col)
+
+
+## An external part that is a lump: the same knocked-off square as a body, smaller, at its anchor. The
+## only place `draw_colored_polygon` is called for a part.
+func _paint_part_shape(c: CanvasItem, p: Vector2, r: float, corner: float, col: Color) -> void:
+	c.draw_colored_polygon(_blob(r, p, corner), col)
+
+
+## An external part that is a line: a limb or a tail. Width is absolute px on purpose — a limb that thins
+## with the body disappears rather than scaling.
+func _paint_part_line(c: CanvasItem, a: Vector2, b: Vector2, width: float, col: Color) -> void:
+	c.draw_line(a, b, col, width)
+
+
+## Hide/fur's outline, traced around the body's own silhouette so it cannot drift from it.
+func _paint_outline(c: CanvasItem, p: Vector2, r: float, corner: float, col: Color,
+		width: float) -> void:
+	var pts := _blob(r, p, corner)
+	pts.append(pts[0])
+	c.draw_polyline(pts, col, width)
+
+
+## The eye dots. The only place `draw_circle` is called in this file.
+func _paint_dot(c: CanvasItem, p: Vector2, r: float, col: Color) -> void:
+	c.draw_circle(p, r, col)
+
+
 ## One body: a shadow ellipse under it, the body, and a lighter top edge. Depth comes from those three
 ## and from the squash, never from shaded art — the GDD's whole art claim rests on that being enough.
-func _paint_cell(c: CanvasItem, p: Vector2, r: float, col: Color, squash: Vector2, rot: float = 0.0) -> void:
+##
+## `corner` defaults to `Look.CORNER` because a clone, a crumb and a critter have no `Body` and no bone
+## slot; only the host's corner ever moves.
+func _paint_cell(c: CanvasItem, p: Vector2, r: float, col: Color, squash: Vector2, rot: float = 0.0,
+		corner: float = Look.CORNER) -> void:
 	# The shadow does not rotate with the body — it lies on the ground, and rotating it is the tell that
 	# turns a squashed blob back into a spinning sprite.
 	c.draw_set_transform(p + Vector2(0.0, r * 0.62), 0.0, Vector2(squash.x, squash.y * 0.42))
-	c.draw_colored_polygon(_blob(r), SHADOW)
+	c.draw_colored_polygon(_blob(r, Vector2.ZERO, corner), SHADOW)
 	c.draw_set_transform(p, rot, squash)
-	c.draw_colored_polygon(_blob(r), col)
+	c.draw_colored_polygon(_blob(r, Vector2.ZERO, corner), col)
 	# Drawn unrotated, so the light stays overhead however the body is stretched. Lit from one direction
 	# for every body in the scene — the GDD's one hard art rule, and it starts here.
 	c.draw_set_transform(p, 0.0, Vector2.ONE)
-	c.draw_colored_polygon(_blob(r * 0.52, Vector2(0.0, -r * 0.3)), col.lightened(0.28))
+	c.draw_colored_polygon(_blob(r * 0.52, Vector2(0.0, -r * 0.3), corner), col.lightened(0.28))
 	c.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
 ## **A square with its corners knocked off** — the shape the GDD asked for and the user asked for again
 ## after seeing circles. Eight points, built per call: cheaper than it looks against `draw_circle`, which
 ## tessellates a great many more.
-func _blob(r: float, at: Vector2 = Vector2.ZERO) -> PackedVector2Array:
-	var k := r * Look.CORNER
+##
+## ⚠ **`corner` is an ARGUMENT, not `Look.CORNER` read in here.** Bone sharpens the host's corners, so it
+## is a per-body value; read internally, a net could not pin a bare body's corner against a bone-wearing
+## body's and the whole bone slot could change nothing with every check green.
+func _blob(r: float, at: Vector2 = Vector2.ZERO, corner: float = Look.CORNER) -> PackedVector2Array:
+	var k := r * corner
 	return PackedVector2Array([
 		at + Vector2(-r + k, -r), at + Vector2(r - k, -r),
 		at + Vector2(r, -r + k), at + Vector2(r, r - k),

@@ -8,10 +8,12 @@ extends RefCounted
 ## that only shows on the second run, which is the run nobody tests.
 ##
 ## **`paused` is the only pause in the game.** `step()` skips `world.step()` while it is set; the shell
-## sets it and keeps no copy of its own. `World::step`'s `pending_levels` guard is a different sentence —
-## the sim refusing to advance past an unspent level, not "a panel is open". **`Tab` is its one setter**:
-## one flag with one owner is what stops a second early return appearing in `World::step()`, where a panel
-## opening and a panel closing would then have to agree across two files.
+## sets it and keeps no copy of its own. `World::step`'s guard is a different sentence — the sim refusing
+## to advance while three cards are actually on screen, not "a panel is open". ⚠ **That guard is
+## `pending_levels > 0 AND the offer is non-empty`**: a level with nothing to offer banks and the world
+## keeps turning, so an unspent level is no longer a reason the sim stops. **`Tab` is `paused`'s one
+## setter**: one flag with one owner is what stops a second early return appearing in `World::step()`,
+## where a panel opening and a panel closing would then have to agree across two files.
 
 enum Phase { TITLE, PLAY, ENDING }
 enum Outcome { NONE, CLEARED, DIED }
@@ -85,9 +87,11 @@ func _end(o: int) -> void:
 	_snapshot()
 
 
-## Starts the great absorption. Levels stop being granted the instant this runs — a level earned by
-## eating the boss would open three cards on top of the ending, since `World::step()` freezes on
-## `pending_levels > 0`. Whatever is pending is dropped.
+## Starts the great absorption. Levels stop being granted the instant this runs, and whatever is pending
+## is dropped — a level earned by eating the boss would otherwise open three cards **on top of the ending
+## screen**, which is the reason, and it is not the one this comment used to give. It said `World::step()`
+## freezes on `pending_levels > 0`; that freeze is now conditioned on there being an offer, so the line
+## below survives on the ending's account alone.
 func _begin_clear() -> void:
 	outcome = Outcome.CLEARED
 	absorb_beat = Rules.CLEAR_ABSORB_TIME
@@ -125,4 +129,14 @@ func _snapshot() -> void:
 	result.cargo_lost = roundi(world.cargo_lost)
 	result.peak_swarm = world.peak_swarm
 	result.clones_lost = world.clones_lost
-	# species and body_slots stay at RunResult's empty defaults — plan 4 and plan 3 are what fill them.
+	# ELEVEN entries, always, "" for an empty square. **Both callers of `_snapshot()` run this** — `_end()`
+	# on death and `_begin_clear()` on the clear — and filling only the death path leaves the WON run, the
+	# one the player actually looks at, showing eleven blanks with every check green.
+	result.body_slots = PackedStringArray()
+	result.body_slots.resize(world.body.slot_part.size())
+	for k in world.body.slot_part.size():
+		var p := world.body.slot_part[k]
+		# `>= 0` first. `-1` is a legal index in GDScript and `Parts.NAME[-1]` returns the LAST row, so an
+		# empty square would read 말 폐활량 on the ending screen — no error, nothing red.
+		result.body_slots[k] = Parts.NAME[p] if p >= 0 else ""
+	# species stays at RunResult's empty default — plan 4 is what fills it.

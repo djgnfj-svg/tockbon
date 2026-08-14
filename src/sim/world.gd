@@ -9,6 +9,10 @@ extends RefCounted
 
 var swarm := Swarm.new()
 var food := Food.new()
+## The host's slots, its bindings and its breath. **Constructed at the declaration, not in `setup()`** —
+## `hud.gd` reads `world.body.hp_max()` inside `_draw()`, and a `World` whose body is null crashes there
+## rather than drawing nothing. A clone gets no `Body`; it carries one part index (plan 4).
+var body := Body.new()
 
 ## Critters are a flat array too, for the same reason the swarm is: nothing here needs to be a Node.
 ## `threat` decides which way the chase runs — see `Rules.FORCE_PER_THREAT`.
@@ -27,8 +31,10 @@ var host_grace := 0.0
 ## condition with the real boss check, not the plumbing that reads it — see `_contact()`.
 var stage_cleared := false
 
-## Ids of species eaten at least once, first-eaten order. Nothing in this plan appends to it — plan 4 is
-## what puts anything in it; until then the ending prints 없음.
+## Ids of species eaten at least once, first-eaten order. **`Cards.roll()` reads it as the card pool's
+## only lock** — a horse part cannot be offered before a horse has been eaten. Nothing in this plan
+## appends to it either: plan 4's corpses are what put anything in it, so through plan 3 the pool is empty,
+## every level BANKS, and the ending prints 없음.
 var species_eaten := PackedInt32Array()
 
 var clones_lost := 0
@@ -37,8 +43,11 @@ var cargo_lost := 0.0
 ## counts came out of an `F`.
 var peak_swarm := 0
 
-## Levels earned but not yet spent. The shell holds the game still while this is non-zero and shows the
-## three cards; `step()` refuses to advance, so a level-up cannot be ignored by walking away from it.
+## Levels earned but not yet spent. The shell holds the game still while there are CARDS ON SCREEN and
+## shows them; `step()` refuses to advance only then, so a level-up cannot be ignored by walking away
+## from it. **A level with nothing to offer BANKS and the world keeps running** — the card pool is empty
+## until the first horse is eaten, which is long after the first level, and a guard on `pending_levels`
+## alone freezes the whole game there. Loud in play, completely silent in every check.
 var level := 0
 var pending_levels := 0
 var offer := PackedInt32Array()
@@ -64,6 +73,12 @@ var _rng := RandomNumberGenerator.new()
 func setup(run_seed: int = 1) -> void:
 	_rng.seed = run_seed
 	swarm.setup(run_seed)
+	body.setup()
+	# **The one wire between them.** `Body` reaches the world through the swarm and nothing else: wearing a
+	# part moves `swarm.force[0]`, biting eats a crumb the swarm was stepped with, and a gallop writes the
+	# swarm's speed multiplier. Miss this line and every one of those silently does nothing — `Body`'s own
+	# methods all null-check, so there is no error to see.
+	body.swarm = swarm
 	food.setup(Rules.FIELD, Rules.FOOD_SPOTS, _rng)
 	# No opening clones. The host starts at `FORCE_START` and the first body is one the player split off,
 	# which is what makes the first `F` the tutorial instead of a key nothing needed.
@@ -77,11 +92,20 @@ func setup(run_seed: int = 1) -> void:
 
 
 ## A run no longer ends on a clock — `Run.step()` is what detects the end (death or the placeholder
-## clear) and flips the phase. This method only ever refuses to advance on an unspent level.
+## clear) and flips the phase. This method only ever refuses to advance while CARDS ARE ON SCREEN.
 func step(dt: float) -> void:
-	if pending_levels > 0:
+	# ⚠ **`not offer.is_empty()` is the whole of the banking rule and it is one condition.** Written as
+	# `pending_levels > 0` alone it also freezes `swarm.step()`, `food.step()`, `_step_critters()`,
+	# `_grow()`, `host_grace` and the critter spawn timer — six behaviours, not one — and it does so from
+	# the first level of every run, because the pool is empty until a horse is eaten. The ecosystem being
+	# LIVE while a stack of cards waits is the other half of this rule and it is deliberate: the cards
+	# arrive as a cascade the moment the pool opens, which is the rhythm the GDD asks for.
+	if pending_levels > 0 and not offer.is_empty():
 		return
 	elapsed += dt
+	# Before the swarm, always. `Body.step()` writes `swarm.active_speed_mul`, which `_move_host()` reads
+	# this same frame; after, the host spends every frame at the previous frame's speed.
+	body.step(dt)
 	swarm.step(dt, food)
 	food.step(dt)
 	# Frozen for the same reason `_grow()` is, below: the great absorption is the "you won" moment and
@@ -217,7 +241,12 @@ func level_progress() -> float:
 ## out clones, so force is the only thing a level makes. Bodies come from `F`.
 ##
 ## It is paid out of `banked`, never `eaten`: a clone that dies far from home costs you the level it was
-## carrying. The pick that follows is a separate thing — `take_card` moves multipliers, not the swarm.
+## carrying. The pick that follows is a separate thing — `take_card` hands over a PART, not a multiplier.
+##
+## A level also raises current HP by `HP_PER_LEVEL`, because raising the maximum raises the current by the
+## same amount and **there is no other source of healing in this plan.** Without this line `hp_max()`
+## climbs with every level while the row of hearts stays as full as it was, which reads as the maximum
+## being decoration.
 func _grow() -> void:
 	if beat_frozen:
 		return
@@ -230,33 +259,41 @@ func _grow() -> void:
 		level += 1
 		pending_levels += 1
 		swarm.force[0] += Rules.FORCE_PER_LEVEL
-	if pending_levels > 0 and offer.is_empty():
-		offer = Cards.roll(_rng)
+		host_hp += Rules.HP_PER_LEVEL
+	# ⚠ **`offer.is_empty()` is no longer a "needs a roll" sentinel.** With banking, "levels pending and no
+	# offer" is the normal state for minutes, so this line ran `roll()` every single frame; `species_eaten`
+	# is what says the pool can actually produce something.
+	if pending_levels > 0 and offer.is_empty() and not species_eaten.is_empty():
+		offer = Cards.roll(_rng, species_eaten)
 
 
-## Applying a card is the only place the run's numbers move outside of play. Returns false when the pick
-## was not actually available, so a stray click cannot conjure a level.
+## Applying a card is the only place the run's numbers move outside of play. **`card` is a `Parts` id.**
+## Returns false when the pick was not actually available, so a stray click cannot conjure a level.
+##
+## **There is no `match` here any more and there must never be one again.** Every branch it used to have
+## moved a `Swarm` multiplier or the host's HP; a card is now one call to `Body.wear()`, and everything a
+## card can do is a column in the parts table. A branch here is the sentence "this table is the content of
+## the game" dying.
 ##
 ## **No branch here calls `add_clone()`.** The two that did were the split cards; bodies now come from `F`
 ## alone, and a card that made one would create force out of nothing.
 func take_card(card: int) -> bool:
 	if pending_levels <= 0 or not offer.has(card):
 		return false
-	match card:
-		Cards.HOST_SPEED:
-			swarm.host_speed_mul *= 1.12
-		Cards.HOST_BITE:
-			swarm.host_eat_mul *= 0.82
-		Cards.CLONE_BITE:
-			swarm.clone_eat_mul *= 0.82
-		Cards.SENSE:
-			swarm.sense_mul *= 1.25
-		Cards.DASH:
-			swarm.dash_cd_mul *= 0.8
-		Cards.TOUGH:
-			host_hp += 1
+	# Current HP follows the maximum. `Body` may not hold a `World` — `World` already holds `Body`, and a
+	# RefCounted cycle never frees — so the difference is taken here rather than inside `wear()`. It is a
+	# difference of `hp_max()`, which is a pure function of what is worn, NOT a second copy of the force
+	# rule: force is stored per body because `F` halves it, and this is not.
+	var hp_before := body.hp_max(level)
+	body.wear(card)
+	var delta := body.hp_max(level) - hp_before
+	# ⚠ **Floored at 1: taking a card may not end the run.** Digesting a 말 갈기 costs a heart, and a
+	# one-heart host would flip to ENDING·DIED on the very next frame — killed by a level-up, from a screen
+	# with no way to decline. The plan gives HP no floor anywhere and `_contact()` is meant to be the only
+	# thing that can reach zero.
+	host_hp = maxi(1, host_hp + delta)
 	pending_levels -= 1
-	offer = Cards.roll(_rng) if pending_levels > 0 else PackedInt32Array()
+	offer = Cards.roll(_rng, species_eaten) if pending_levels > 0 else PackedInt32Array()
 	return true
 
 

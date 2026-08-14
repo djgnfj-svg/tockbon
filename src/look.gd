@@ -48,6 +48,61 @@ const CRITTER_PREY_COLOR := Color(0.42, 0.62, 0.86)
 ## each cut takes.
 const CORNER := 0.34
 
+# -- the body's parts, drawn on the host -------------------------------
+## **A part is worn in the host's OWN colour.** That is what escaped the "texture comes from the preset"
+## constraint that binds every generated asset: with one tone on the whole body there is nothing to match,
+## which is what bought back the cap on how many species a habitat can hold — see the decision
+## `the-body-is-a-line-drawn-by-code`. So a part is a SHAPE and a lift, never a picture.
+##
+## ⚠ **Every anchor and length here is a MULTIPLE of `Rules.BODY_RADIUS`, never an absolute pixel count.**
+## The body's size is a rule (it decides who `V` absorbs); a part pinned in pixels sits right at radius 14
+## and slides off the body the day that number is retuned, with nothing red. Same discipline as
+## `SPLIT_CHARGE_RING`. Line WIDTHS are the exception and are absolute — a limb that thins with the body
+## disappears rather than scaling.
+##
+## Limb pairs mirror across the facing, so only one side's offset is written: the sign is derived.
+const PART_COLOR_LIFT := 0.22
+const PART_HEAD_ANCHOR := 0.95
+const PART_HEAD_SIZE := 0.42
+const PART_TORSO_ANCHOR := 0.12
+const PART_TORSO_BULGE := 0.74
+const PART_BACK_ANCHOR := -0.95
+const PART_BACK_SIZE := 0.38
+## `x` is along the facing, `y` out to one side. The pair is drawn at ±y.
+const PART_FORELIMB_ANCHOR := Vector2(0.4, 0.8)
+const PART_HINDLIMB_ANCHOR := Vector2(-0.4, 0.8)
+const PART_LIMB_LENGTH := 0.8
+const PART_LIMB_WIDTH := 3.0
+const PART_TAIL_ANCHOR := -1.0
+const PART_TAIL_LENGTH := 1.25
+const PART_TAIL_WIDTH := 3.0
+
+## **Internal slots change drawing VALUES; they never add a shape.** That is the whole reason eleven slots
+## cost no art. Each of the three below is passed to `FieldView._paint_body()` as its own argument so a net
+## can pin the number per configuration — "the arguments differ" is the A/B comparison that lets five
+## internal slots change nothing on screen and stay green, which is how a doubled power once moved zero
+## pixels.
+##
+## ⚠ **Two of the five internal slots have no value here: `GUT` and `LUNG`.** The plan names four drawing
+## values (corner, outline, colour depth, dot size) for five slots and claims all eleven read on screen;
+## nine do. 말 폐활량 is one of the three August parts and wearing it changes nothing visible. Inventing a
+## fifth value here would be building outside the plan, so it is reported instead of guessed.
+##
+## Bone SHARPENS: it takes off the corner cut, so the number goes DOWN with level, floored so the body
+## never becomes a plain square.
+const CORNER_PER_BONE := 0.06
+const CORNER_MIN := 0.06
+## Hide/fur: an outline in px, and how much darker the whole body reads. Both rise per level.
+const HIDE_OUTLINE_WIDTH := 2.0
+const HIDE_OUTLINE_DARKEN := 0.45
+const HIDE_COLOR_DEPTH := 0.1
+## Eyes: two dots, in body radii like every other anchor here. Radius 0 means no eyes and nothing is drawn
+## — a bare body has no dots, which is exactly today's picture.
+const EYE_DOT_RADIUS := 0.17
+const EYE_DOT_PER_LEVEL := 0.05
+const EYE_DOT_OFFSET := Vector2(0.38, 0.36)
+const EYE_DOT_COLOR := Color(0.16, 0.12, 0.1)
+
 ## The marker on the point `3` was pressed. It was the rally ring until rally became "at the host", at
 ## which point its own draw guard (`rally != pos[0]`) would have been false forever and the feature would
 ## have vanished with every net still green.
@@ -67,8 +122,12 @@ const SPLIT_CHARGE_RING := 1.6
 ## and this file owns only how long it is shown — `src/sim/` may not read this file, and the view may not
 ## hold state the sim does not know about, so the split falls exactly here.
 const BITE_SHOW_TIME := 0.12
-## The cone's fill. Its shape is `Rules.BITE_RANGE` and `Rules.BITE_ARC` — the same two numbers the sim
-## tested with, never a second pair tuned to look right, or the picture stops being the hit.
+## The cone's fill. Its shape is `Swarm.bite_range` and `Swarm.bite_arc` — the two numbers the sim actually
+## tested with on the last bite, never a second pair tuned to look right, or the picture stops being the
+## hit. **They are read off the swarm rather than off a constant on purpose**: they used to be
+## `Rules.BITE_RANGE`/`BITE_ARC`, and since the parts table landed the range and arc belong to whichever
+## part fired — three keys can hold three different ARC parts at three different levels, and a constant
+## here would draw one part's cone over another part's hit.
 const BITE_COLOR := Color(1.0, 0.86, 0.55, 0.28)
 
 # -- the camera pulls back as the swarm grows -----------------------
@@ -119,7 +178,10 @@ const ROW_GAP := 34.0
 ## The ending's two buttons, measured up from the screen's bottom edge.
 const BUTTON_BOTTOM_MARGIN := 120.0
 
-## The eleven body slots. Drawn empty this plan — plan 3 fills `RunResult.body_slots`.
+## The eleven body slots **on the ending screen** — a summary strip, one row, a name and nothing else.
+## The `Tab` panel's slots are a different size (`BODY_SLOT_SIZE` below) because they are clickable and
+## carry a level as well as a name; sharing one size would have meant either an unreadable summary or an
+## unclickable panel. Filled from `RunResult.body_slots`.
 const SLOT_SIZE := Vector2(38.0, 38.0)
 const SLOT_GAP := 8.0
 const SLOT_EMPTY := Color(0.2, 0.18, 0.17)
@@ -134,6 +196,30 @@ const SLOT_BOTTOM_MARGIN := 220.0
 ## two independent columns because the user flagged that one key may be carrying too much — splitting it
 ## onto a second key later has to be a re-parent, not a rewrite.
 const BODY_DIM := Color(0.04, 0.03, 0.03, 0.82)
+
+## The panel's own slot squares. **Wider and shorter than the ending screen's**: 말 폐활량 is five glyphs
+## and every `_paint_text` in this repo passes `-1` as the wrap width, so a name that does not fit does not
+## clip — it runs out over the next square. Measured against the widest name in the August table, at
+## `FONT_SLOT_NAME`, with the level on a second line.
+const BODY_SLOT_SIZE := Vector2(84.0, 52.0)
+const BODY_SLOT_GAP := 8.0
+## The six external slots sit above the five internal ones. **Two groups, because they are two different
+## kinds of thing** — externals put a shape on the body, internals change a drawing value — and one row of
+## eleven says they are the same. The count of each comes from `Parts.Slot`'s order (`EYES` is the first
+## internal), never from a literal here.
+##
+## The gap has to hold the second group's heading: at `FONT_GROUP` lifted by `BODY_GROUP_LIFT` the label's
+## top sits ~18px above its baseline, so a gap of 18 put 속 straight through the bottom of the external
+## row's squares. Nothing errors when two strings overlap — it just becomes unreadable.
+const BODY_SLOT_ROW_GAP := 40.0
+## Where a slot's part name sits, and its level below that, both inset from the square's top-left.
+const BODY_SLOT_NAME_INSET := Vector2(8.0, 22.0)
+const BODY_SLOT_LEVEL_INSET := Vector2(8.0, 42.0)
+## A worn square reads differently from an empty one before the name is even read.
+const BODY_SLOT_FILLED := Color(0.26, 0.23, 0.17)
+## The heading over each of the two slot groups, lifted off the group's first square.
+const BODY_GROUP_LIFT := 16.0
+
 const BODY_ROW_SIZE := Vector2(300.0, 52.0)
 const BODY_ROW_GAP := 14.0
 const BODY_ROW_BG := Color(0.16, 0.14, 0.13)
@@ -155,4 +241,11 @@ const BODY_REFUSAL_COLOR := Color(1.0, 0.55, 0.45)
 const FONT_HEADLINE := 40
 const FONT_BUTTON := 28
 const FONT_ROW := 24
+## The ending screen's summary strip.
 const FONT_SLOT := 12
+## The `Tab` panel's squares — a name on one line, `Lv2` under it. Two sizes because the two screens hold
+## different amounts in a square; see `BODY_SLOT_SIZE`.
+const FONT_SLOT_NAME := 16
+const FONT_SLOT_LEVEL := 14
+## The group headings over the panel's two slot rows (겉 / 속).
+const FONT_GROUP := 18

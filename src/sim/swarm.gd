@@ -16,11 +16,6 @@ extends RefCounted
 
 enum { FOLLOW = 0, SCATTER = 1, STRIKE = 2 }
 
-## The three active slots, in the order the shell fires them: left click, right click, `space`.
-const SLOT_COUNT := 3
-## `space`. The one slot that refuses a non-movement active — see `bind()`.
-const SLOT_MOVEMENT := 2
-
 var pos := PackedVector2Array()
 var vel := PackedVector2Array()
 var carried := PackedFloat32Array()
@@ -71,40 +66,44 @@ var split_charge := 0.0
 ## different values. Cleared only by `split_release()`, which is also what a panel opening calls.
 var _hold_fired := false
 
-## What is in each of the three slots, and each one's cooldown. `bound_cd[SLOT_MOVEMENT]` stays 0 forever:
-## the dash keeps `dash_cd`, and two cooldowns for one act is two numbers that can disagree.
-var bound := PackedInt32Array()
-var bound_cd := PackedFloat32Array()
-
 ## Seconds since the last bite landed, counted UP in `step()`. The view draws the cone while this is under
 ## `Look.BITE_SHOW_TIME` and the sim never reads `look.gd` — counting up rather than down is what lets the
 ## duration stay a presentation constant without breaking the folder contract, and the sim still owns the
 ## clock so the view holds no state the sim does not know about. Opens at INF: a run does not start
 ## mid-bite.
+##
+## ⚠ **These four stayed on `Swarm` while `bound`/`fire()` moved to `Body`**, and they had to: the view
+## reads them off the swarm it already draws, and moving them without repointing `field_view.gd` leaves
+## `bite_show` at INF forever — the cone simply never draws again, with no error and nothing red.
 var bite_show := INF
 ## Which way the last bite pointed, so the cone the view draws is the cone the sim tested.
 var bite_aim := Vector2.RIGHT
+## And how big it was. **The shape is per part now, not a pair of `Rules` constants**, so three keys can
+## each hold a different ARC part at a different level; the view has no other way to tell which one made
+## this cone. Written by `bite()` on success alongside the two above.
+var bite_range := 0.0
+var bite_arc := 0.0
 
 var host_input := Vector2.ZERO
 var host_facing := Vector2.RIGHT
-var dash_left := 0.0
-var dash_cd := 0.0
 
-## What the level-up cards move. Multipliers rather than replaced constants, so `rules.gd` stays the one
-## place a base value is written and a card is always readable as "×1.15 of the number in that file".
-var host_speed_mul := 1.0
-var host_eat_mul := 1.0
-var clone_eat_mul := 1.0
-var sense_mul := 1.0
-var dash_cd_mul := 1.0
+## A SELF burst: how long it has left and how fast it goes. **`dash_cd` is gone** — `Body.bound_cd[key]` is
+## the one cooldown, so the two numbers that plan 2's comment warned could disagree about whether the hand
+## is free are now one number.
+var dash_left := 0.0
+var dash_speed := 0.0
+## Written by `Body.step()` every frame, read by `_move_host()`. 1.0 when no sustained active is running.
+## It is a multiplier and not a speed because the parts table stores `SELF_MUL`, so retuning `HOST_SPEED`
+## retunes what a gallop is worth rather than leaving an absolute behind to drift.
+var active_speed_mul := 1.0
 
 var clone_grid := SimGrid.new()
 var food_grid := SimGrid.new()
 var field := Rules.FIELD
 
-## The food the last `step()` was handed. `fire()` takes an aim and nothing else — the shell presses a key,
-## it does not hand the simulation its own world back — so a bite reads whatever the frame it happens in
-## was stepped with. Null before the first `step()`, and a bite then simply misses.
+## The food the last `step()` was handed. `bite()` takes an aim and a shape and nothing else — the shell
+## presses a key, it does not hand the simulation its own world back — so a bite reads whatever the frame
+## it happens in was stepped with. Null before the first `step()`, and a bite then simply misses.
 var _food: Food = null
 
 var _rng := RandomNumberGenerator.new()
@@ -128,19 +127,23 @@ func setup(rng_seed: int = 1, start: Vector2 = Rules.FIELD * 0.5) -> void:
 	state[0] = FOLLOW
 	eat_cd[0] = 0.0
 	_target_food[0] = -1
-	# The one place the host's force is written from nothing. After this only splitting, absorbing and the
-	# level move it — and the run opens with the host alone, so no body exists that did not come from a
-	# split. There is no START_CLONES: with the constant still present, `count == 1 + START_CLONES` passes
-	# at every value, including the zero that shipped once.
+	# The one place the host's force is written from nothing. After this only splitting, absorbing, the
+	# level and WEARING A PART move it — `Body.wear()` is the fourth writer and it both adds and subtracts,
+	# in the same call, because a digested part that keeps paying is ghost force and `F` multiplies it.
+	# The run opens with the host alone, so no body exists that did not come from a split. There is no
+	# START_CLONES: with the constant still present, `count == 1 + START_CLONES` passes at every value,
+	# including the zero that shipped once.
 	force[0] = Rules.FORCE_START
 	strike_point = start
 	scatter_anchor = start
 	split_charge = 0.0
 	_hold_fired = false
 	bite_show = INF
-	bound = PackedInt32Array([Actives.BITE, Actives.NONE, Actives.DASH])
-	bound_cd = PackedFloat32Array()
-	bound_cd.resize(SLOT_COUNT)
+	bite_range = 0.0
+	bite_arc = 0.0
+	dash_left = 0.0
+	dash_speed = 0.0
+	active_speed_mul = 1.0
 	clone_grid.configure(field, Rules.GRID_CELL)
 	food_grid.configure(field, Rules.FOOD_GRID_CELL)
 
@@ -218,11 +221,15 @@ func command_scatter() -> void:
 		_wander_cd[i] = Rules.WANDER_PERIOD
 
 
-func try_dash() -> bool:
-	if dash_cd > 0.0 or dash_left > 0.0:
+## A SELF burst, driven by `Body.fire()`. **The cooldown is NOT here** — `Body.bound_cd[key]` owns it, and
+## that is what `fire()` refuses on. Plan 2's `try_dash()` kept its own `dash_cd` and read three deleted
+## `Rules.DASH_*` constants; the burst's numbers are `SELF_MUL` and `SELF_TIME` on the part's row now, so
+## a second SELF part is a row rather than a branch.
+func begin_dash(mul: float, time: float) -> bool:
+	if time <= 0.0:
 		return false
-	dash_left = Rules.DASH_TIME
-	dash_cd = Rules.DASH_COOLDOWN * dash_cd_mul
+	dash_left = time
+	dash_speed = Rules.HOST_SPEED * mul
 	return true
 
 
@@ -331,48 +338,26 @@ func absorb() -> int:
 	return taken
 
 
-# -- the three slots -----------------------------------------------
-
-## **The only entry point for the three keys.** False when the slot is empty, on cooldown, or the active
-## itself refused. A key that does its own thing instead of coming through here is a fourth code path the
-## panel's input gate would have to know about separately.
-func fire(slot: int, aim: Vector2) -> bool:
-	if slot < 0 or slot >= bound.size():
-		return false
-	if bound_cd[slot] > 0.0:
-		return false
-	match bound[slot]:
-		Actives.BITE:
-			return _bite(slot, aim)
-		Actives.DASH:
-			# The dash keeps `dash_cd`. `bound_cd[slot]` is deliberately left alone so the two cooldowns
-			# cannot disagree about whether the hand is free.
-			return try_dash()
-	return false
-
-
-## False when `space` is handed something that is not a movement active. It is a real refusal the panel
-## reports in a line of Korean — silently ignoring the click is how a player concludes the panel is broken.
-func bind(slot: int, active: int) -> bool:
-	if slot < 0 or slot >= bound.size():
-		return false
-	if slot == SLOT_MOVEMENT and not Actives.MOVEMENT.has(active):
-		return false
-	bound[slot] = active
-	return true
-
+# -- what the actives do to the world ------------------------------
 
 ## A front cone toward `aim`, and it eats the NEAREST food inside it. **A real function, not an
-## animation** — a click that only draws is the idle hand this plan exists to remove. Plan 4 replaces what
-## it hits, not the key.
-func _bite(slot: int, aim: Vector2) -> bool:
+## animation** — a click that only draws is the idle hand plan 2 exists to remove. Plan 4 replaces what it
+## hits, not the key.
+##
+## ⚠ **The range and the arc are ARGUMENTS, not `Rules` constants.** They come off the firing part's row
+## (`Parts.RANGE` / `Parts.ARC`), which is what lets a second ARC part exist as a row rather than as a
+## branch here. This function does not know which part called it and does not need to.
+##
+## ⚠ **It does not touch a cooldown.** `Body.fire()` owns that, so the cooldown that refuses the second
+## click and the cooldown that ticks down are the same number.
+func bite(range_px: float, arc: float, aim: Vector2) -> bool:
 	if _food == null:
 		return false
 	var origin := pos[0]
 	var dir := aim - origin
 	dir = host_facing if dir.length_squared() < 0.0001 else dir.normalized()
-	var half_arc := Rules.BITE_ARC * 0.5
-	var ids := food_grid.neighbours(origin, Rules.BITE_RANGE, Rules.SENSE_CAP)
+	var half_arc := arc * 0.5
+	var ids := food_grid.neighbours(origin, range_px, Rules.SENSE_CAP)
 	var best := -1
 	var best_d := INF
 	for id in ids:
@@ -381,7 +366,7 @@ func _bite(slot: int, aim: Vector2) -> bool:
 			continue
 		var to: Vector2 = _food.pos[j] - origin
 		var d := to.length()
-		if d > Rules.BITE_RANGE or d >= best_d:
+		if d > range_px or d >= best_d:
 			continue
 		# The angle is the skill. Range alone and the cone is a circle with a picture drawn on it.
 		if d > 0.0001 and absf(dir.angle_to(to)) > half_arc:
@@ -393,9 +378,12 @@ func _bite(slot: int, aim: Vector2) -> bool:
 	if not _food.consume(best):
 		return false
 	eat(0, 1.0)
-	bound_cd[slot] = Rules.BITE_COOLDOWN
 	bite_show = 0.0
 	bite_aim = dir
+	# The cone the view draws is the cone the sim tested, including its size — pinned here rather than
+	# re-derived in `field_view` from a part id it would have to be told separately.
+	bite_range = range_px
+	bite_arc = arc
 	return true
 
 
@@ -407,8 +395,7 @@ func _bite(slot: int, aim: Vector2) -> bool:
 ## exists to prevent.
 func step(dt: float, food: Food = null) -> void:
 	_food = food
-	for s in bound_cd.size():
-		bound_cd[s] = maxf(0.0, bound_cd[s] - dt)
+	# Cooldowns and breath are `Body.step()`'s, and `World.step()` calls it just before this one.
 	bite_show += dt
 	_rebuild_grids(food)
 	_move_host(dt)
@@ -440,16 +427,17 @@ func _rebuild_grids(food: Food) -> void:
 
 
 func _move_host(dt: float) -> void:
-	if dash_cd > 0.0:
-		dash_cd -= dt
 	var dir := host_input
 	if dir.length_squared() > 0.0001:
 		host_facing = dir.normalized()
-	var speed := Rules.HOST_SPEED * host_speed_mul
+	# A sustained active multiplies the walk; a burst REPLACES it and locks the facing. They cannot both
+	# apply — the burst is already relative to `HOST_SPEED`, so multiplying it again would make a gallop
+	# into a dash into a gallop-dash, a stacking rule nobody chose.
+	var speed := Rules.HOST_SPEED * active_speed_mul
 	if dash_left > 0.0:
 		dash_left -= dt
 		dir = host_facing
-		speed = Rules.DASH_SPEED
+		speed = dash_speed
 	vel[0] = dir.limit_length(1.0) * speed
 	pos[0] = _clamp_field(pos[0] + vel[0] * dt)
 
@@ -563,10 +551,13 @@ func _try_eat(i: int, dt: float, food: Food) -> void:
 		# The host banks instantly. A clone's mouthful is at risk until it walks home — that difference IS
 		# the tax the GDD wanted, expressed as a speed, with no constant to tune and nothing to explain.
 		eat(0, 1.0)
-		eat_cd[0] = Rules.EAT_PERIOD_HOST * host_eat_mul
+		# Bare constants. The `host_eat_mul` / `clone_eat_mul` that used to scale these were level-up
+		# cards, and cards give parts now — no August part fills the GUT slot, so nothing replaces the
+		# factor and eating speed is fixed for this plan.
+		eat_cd[0] = Rules.EAT_PERIOD_HOST
 	else:
 		eat(i, 1.0)
-		eat_cd[i] = Rules.EAT_PERIOD_CLONE * clone_eat_mul
+		eat_cd[i] = Rules.EAT_PERIOD_CLONE
 	_target_food[i] = -1
 
 
@@ -617,7 +608,9 @@ func _clear_arrivals() -> void:
 func _nearest_food(p: Vector2, food: Food) -> int:
 	if food == null:
 		return -1
-	var ids := food_grid.neighbours(p, Rules.SENSE_RADIUS * sense_mul, Rules.SENSE_CAP)
+	# Bare `SENSE_RADIUS` — `sense_mul` went with the cards. The EYES slot is what tunes this from now on
+	# and no August part fills it, so a clone's intelligence is fixed for this plan.
+	var ids := food_grid.neighbours(p, Rules.SENSE_RADIUS, Rules.SENSE_CAP)
 	var best := -1
 	var best_d := INF
 	for id in ids:

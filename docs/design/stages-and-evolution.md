@@ -3,8 +3,9 @@
 **One line**: One cell eats its way through a habitat, **evolves into what it ate**, swallows the boss living
 there, and walks into the next habitat carrying the body it built.
 
-**Implemented**: none — not one line of this is in `src/`. The prototype (`proto-round-trip`) holds the
-session loop and an ecosystem rule that **this doc partly replaces**
+**Implemented**: partial — plan 3 built **the eleven slots, the part table, wearing and digesting, and the
+species trait** (`body-and-parts`). Habitats, evolution across stages, chimeras and the boss are still none
+of them in `src/`
 **Accepted**: none. Every line below came out of one planning conversation on 2026-08-13. **Nothing here
 has been played**, and planning principle 2 says planning cannot judge fun
 

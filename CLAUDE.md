@@ -59,7 +59,13 @@ every key the game will ever have.** Force is a stored number per body; `F` held
 once, `V` absorbs a radius back into the host, `1` rallies at the host, `3` sends the swarm at a point, three
 active slots hang off left click · right click · `space`, and `Tab` opens the body panel and pauses.
 **A level now pays force, not clones** — the two split cards are gone.
-**What does not**: parts (the eleven slots open empty), traits, chimeras, habitats, meta, animation.
+
+⇒ **And since plan 3 landed the body changes.** Eleven slots, a five-row part table that IS the content,
+cards that give nothing but parts, and the host drawn from what it wears — a limb pair, an outline, two eye
+dots, a corner radius. Wearing is irreversible and it can cost you a bigger part; **force is written on
+`wear()` and subtracted on digestion in the same call**; 갤럽 is **held**, not fired, and drains breath.
+**What does not**: chimeras, habitats, meta, animation, and the crow and horse themselves — plan 4 is what
+puts a horse on the field for the card pool to unlock. **The trait is a deliberate placeholder.**
 **Species currencies and tiers are not merely unbuilt — they were cut from the design.**
 
 ⚠ **Plan 2's keys are accepted; its picture is not** — the user played it and said the detail falls well
@@ -253,6 +259,13 @@ its folder has enough in it to drift.
 power doubled and **zero things changed on screen**, because the numbers that would have shown it were in
 six places and only one moved.
 
+⚠ **A `const` packed array does not parse. Measured twice on 4.7.1**: `const X := PackedInt32Array([1,2,3])`
+is a **parse error** — *"Assigned value for constant isn't a constant expression"* — while a plain `const X
+:= [1,2,3]` is fine, nests fine, and folds a `deg_to_rad()` call inside it. Plan 3's part table was written
+in the packed form and did not compile as written. A `const` Array is read-only in 4.x so immutability
+survives; **element typing does not**, which is why every read of `Parts.*` casts (`int(...)`, `float(...)`).
+**Every flat table this repo writes from here walks into it.**
+
 **The flat-array swarm is a correctness contract, not a performance one.** 300 `Node2D`s cost 0.065ms here
 — the engine was never the wall. `carried[i]` living in a `PackedFloat32Array` is what makes "a clone
 killed far from home loses its cargo" **structurally true**, with no code that has to remember to drop it.
@@ -344,6 +357,19 @@ These survive **even after you confirm every mutation goes red**:
   **"It can't be driven headless" has been claimed four times and was wrong four times.** The fourth cost
   the most: a panel that **never set `visible`** shipped under 5,576 green checks, because the same file had
   written down "no font outside the tree" as if it were a fact
+- **A spy on a hook sees the HOOK, never the native call inside it.** Measured on plan 3: with the whole
+  argument chain closed — a literal pinned at `_paint_body`'s call site and read back off the spy —
+  **emptying `_paint_dot`'s and `_paint_outline`'s bodies left the round green.** There are no pixels to
+  read back headless, so the last inch has to be pinned **structurally**: `net_draw_leaf` now counts
+  `draw_*` calls **per function** in `field_view.gd` (each leaf exactly 1, `_paint_cell` 7) and carries
+  four cases that fail the *scanner*. ⇒ **Argument capture proves a value was computed and handed on. It
+  never proves the value was used.** Chase it to a leaf, then pin the leaf by counting
+- **The plan's own fix gets applied to one value and not to its siblings.** Plan 3 predicted in writing
+  that five internal slots could change nothing on screen and stay green; the builder closed **corner**
+  through `_blob` and left `outline_width`, `colour_depth` and `dot_radius` open one line over — and all
+  six *external* slots could stop drawing at once. Four read-only passes found ten of these on an
+  already-green round of 811, each confirmed by a mutation. ⇒ **Re-measure the whole table, not the row
+  someone is arguing about** — this file's older sentence, re-earned
 - **"`_draw()` ran" is not "anything was drawn."** Counting the call — even through a `super()` that draws
   nothing — measures the engine, not the picture. Three separate features shipped this way in one day, each
   erasable with 6,163 checks still green. **Godot refuses to override a native draw call**
@@ -372,7 +398,8 @@ These survive **even after you confirm every mutation goes red**:
 
 ## Running the nets
 
-**Sixteen nets, 514 checks, 1.5 seconds** (measured 2026-08-14, after plan 2). A net is `tests/nets/net_*.gd` with one method, `func run(t)`,
+**Eighteen nets, 889 checks, 1.7 seconds** (measured 2026-08-15, after plan 3 — it was 16/514 after plan 2).
+A net is `tests/nets/net_*.gd` with one method, `func run(t)`,
 and `t` gives you `ok` · `eq` · `pump_frames` · `expect_error` · `root`. **The wrapper reds below five
 nets** — that is the scan-broken detector, so nets land in groups, never one at a time.
 

@@ -28,9 +28,10 @@ const CLONE_SPEED_FOLLOW := 215.0
 const CLONE_SPEED_SCATTER := 125.0
 const CRITTER_SPEED := 165.0
 
-const DASH_SPEED := 560.0
-const DASH_TIME := 0.16
-const DASH_COOLDOWN := 0.8
+## **The dash's three constants are gone from this file**, into `Parts.SELF_MUL` / `SELF_TIME` /
+## `COOLDOWN` at row `DASH`. They are properties of a part, and a part's numbers living here is the same
+## value in two places — which is also why `SELF_MUL` is 2.8 rather than the 560 that used to be here:
+## 560 / HOST_SPEED 200. See that array's own note.
 
 ## How close to the rendezvous point counts as arrived. Below this a clone stops, so the whole swarm does
 ## not jitter forever on top of one coordinate.
@@ -103,12 +104,28 @@ const SPLIT_HOLD_TIME := 0.45
 ## tight enough to leave stragglers behind. Written as a multiple so retuning the body retunes the reach.
 const ABSORB_RADIUS_BODIES := 4.0
 
-# -- actives -------------------------------------------------------
-## The bite is a real front cone, not an animation: five body-widths ahead, and the ANGLE is the skill.
-## Two bites a second — faster and the click reads as a stream rather than a hit.
-const BITE_RANGE := 70.0
-const BITE_ARC := deg_to_rad(70.0)
-const BITE_COOLDOWN := 0.5
+# -- the body and its parts ----------------------------------------
+## **The bite's three constants moved into the parts table too** — `Parts.RANGE` / `ARC` / `COOLDOWN` at
+## row `BITE`, carrying 70.0, deg_to_rad(70) and 0.5 unchanged. The reasoning that used to live here is
+## still worth keeping and now lives beside them: five body-widths ahead, the ANGLE is the skill, two
+## bites a second, faster and the click reads as a stream rather than a hit.
+
+## HP rises with levels and with parts, and `HOST_HP` above is the FLOOR of that sum rather than the
+## whole of it: `Body.hp_max(level) = HOST_HP + level * HP_PER_LEVEL + the HP column of what is worn`.
+## Small, so a part's +1 still reads as an event.
+const HP_PER_LEVEL := 1
+## How long a sustained movement active runs with no lungs on. Short enough to want lungs.
+const BREATH_MAX := 2.0
+## Per second, and only while no sustained key is held — see `Body.step()` for why holding past empty
+## must not recover.
+const BREATH_REGEN := 1.0
+## How many parts of one species buy that species' trait. Three is the whole August horse table, so the
+## trait is reachable; a fourth horse part makes it cheap and this number has to move with it.
+const HORSE_TRAIT_COUNT := 3
+## What one level of a part is worth. Five is half a part at the ×10 force scale.
+const PART_LEVEL_FORCE := 5
+## Ten percent off the cooldown per level, compounding.
+const PART_LEVEL_COOLDOWN := 0.9
 
 # -- food ----------------------------------------------------------
 ## Spots are fixed for the run. Eating one starts its cooldown, so a region actually empties out —
@@ -153,7 +170,10 @@ const CRITTER_SENSE := 520.0
 ## Eating one pays this much per point of threat. The reward for growing into a hunter.
 const CRITTER_MEAT := 6.0
 
-## Contact costs the host one hit; one mistake must not be the run.
+## Contact costs the host one hit; one mistake must not be the run. **This is the FLOOR of the host's
+## maximum, not the maximum** — levels and worn parts add to it, and `Body.hp_max()` is the one place the
+## sum is written. `hud.gd` read the CURRENT hp as the ceiling, which was accidentally right only while
+## the deleted 질긴 껍질 card was the sole thing that ever raised it.
 const HOST_HP := 3
 const HOST_HIT_GRACE := 1.0
 ## Critters enter from outside the camera, never on top of the player.

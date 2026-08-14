@@ -59,9 +59,14 @@ func _paint(c: CanvasItem) -> void:
 	_paint_text(c, Vector2(24.0, 112.0),
 			"무리 %d · 지고 있는 것 %d" % [sw.count - 1, int(sw.total_carried())], 20, CARRY_COLOR)
 
-	for i in maxi(world.host_hp, Rules.HOST_HP):
-		c.draw_circle(Vector2(34.0 + i * 26.0, size.y - 34.0), 9.0,
-				HP_COLOR if i < world.host_hp else HP_LOST)
+	# ⚠ **The CEILING, not the current value.** `maxi(world.host_hp, Rules.HOST_HP)` was accidentally right
+	# only while the single source of HP above 3 (`Cards.TOUGH`) moved current and maximum together. Plan 3
+	# deletes that card and lets the maximum grow on its own — with the old line a damaged host with a mane
+	# loses a heart off the ROW rather than showing it empty, so the row gets shorter and what remains reads
+	# as full health. `hp_max()` is a pure function of level and what is worn, and `world.body` is
+	# constructed at `World`'s declaration, so this is reachable on the very first frame.
+	for i in world.body.hp_max(world.level):
+		_paint_heart(c, Vector2(34.0 + i * 26.0, size.y - 34.0), 9.0, i < world.host_hp)
 
 	# **The only instruction the player ever gets.** Every clause of the old line became false in one plan —
 	# the dash moved off its own key into an active slot, rally stopped taking a cursor point, and three
@@ -79,3 +84,16 @@ func _paint(c: CanvasItem) -> void:
 ## entirely unmeasured file.
 func _paint_text(c: CanvasItem, p: Vector2, text: String, font_size: int, col: Color) -> void:
 	c.draw_string(get_theme_default_font(), p, text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, col)
+
+
+## The second hook, and it exists for the same reason as the first: `draw_circle` is a native call and
+## Godot refuses to override it. Without it the hearts were the one readout in this file a net could not
+## see — a spy on `_paint` learns only that `_paint` ran, and `_paint_text` never sees a circle. The row's
+## LENGTH is the thing worth asserting now that the maximum grows, and `filled` is what separates a heart
+## the host still has from one it lost.
+##
+## ⚠ **Nothing bounds the row.** `hp_max()` rises one heart per level with no cap, so at level ~20 the
+## hearts walk off the left panel and across the carry readout. It is not this plan's to fix — the plan
+## states the formula and gives it no ceiling — but it is real and it is silent.
+func _paint_heart(c: CanvasItem, p: Vector2, r: float, filled: bool) -> void:
+	c.draw_circle(p, r, HP_COLOR if filled else HP_LOST)

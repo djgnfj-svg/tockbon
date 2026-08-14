@@ -27,9 +27,9 @@ class HudSpy extends Hud:
 		super._paint_text(c, p, text, font_size, col)
 
 
-## **Both leaves, not just the rectangles.** `_paint_text` was unspied, so `Actives.TITLE[bound[slot]]`
-## could be replaced with a constant and every row would name the wrong active while the layout checks
-## stayed green — a body screen that lies about what is bound, laid out perfectly inside 1280x720.
+## **Both leaves, not just the rectangles.** `_paint_text` was unspied, so `Parts.NAME[bound[key]]` could
+## be replaced with a constant and every row would name the wrong part while the layout checks stayed
+## green — a body screen that lies about what is bound, laid out perfectly inside 1280x720.
 class PanelSpy extends BodyPanel:
 	var rects: Array = []
 	var texts: Array = []
@@ -75,6 +75,7 @@ func run(t) -> void:
 	await _c26_c30_c31_panel(t)
 	await _c27_panel_rects(t)
 	await _c28_c29_gate(t)
+	await _c_sustain_through_the_shell(t)
 	await _c32_legend(t)
 
 
@@ -185,78 +186,91 @@ func _c20_c21_strike(t) -> void:
 	t.eq(fb.alive_count, 0, "대조: 흩어진 분신은 같은 먹이를 실제로 먹는다 (닿을 수 없는 자리가 아니다)")
 
 
-# -- 22..25: the three slots ----------------------------------------------------------------------------
+# -- 22..25: the three keys -----------------------------------------------------------------------------
+## **The keys live on `Body` now.** `bound`, `bound_cd`, `fire()` and `bind()` moved off `Swarm` with the
+## parts table, `src/sim/actives.gd` is deleted, and the ids in `bound` are PART ids — `Parts.BITE` is 0,
+## so the empty square is `-1` and can never be 0 again.
 func _c22_c25_slots(t) -> void:
 	# 22: inside the cone, exactly one dies. `fire()` reads the food the last `step()` was handed, so the
 	# step comes first — and every crumb sits past EAT_RADIUS_HOST so ordinary eating cannot be what moved.
 	#
 	# ⚠ **The extra crumb pins the cone's ANGLE, which had no bound at all.** The only out-of-cone crumb
-	# used to sit at 180°, so the whole arc assertion said was "not directly behind": widen `BITE_ARC` from
+	# used to sit at 180°, so the whole arc assertion said was "not directly behind": widen the arc from
 	# 70° to 350° and the bite becomes a near-circle with every check here green. (1025, 1043) is 50px out
 	# and 60° off the aim axis — inside the range, outside the 35° half-arc. A literal, because written as
-	# `Rules.BITE_RANGE * something` it would scale with the very constant it exists to pin.
-	var sw := Swarm.new()
-	sw.setup(22, Vector2(1000.0, 1000.0))
+	# `Parts.RANGE[BITE] * something` it would scale with the very number it exists to pin.
+	var rig := _rig(22)
+	var sw: Swarm = rig[0]
+	var b: Body = rig[1]
 	var wide_angle := Vector2(1025.0, 1043.0)
 	var f := _food_at([Vector2(1050.0, 1000.0), Vector2(1058.0, 1006.0), Vector2(1064.0, 994.0),
 			wide_angle])
 	sw.step(DT, f)
 	t.eq(f.alive_count, 4, "설정: 그냥 밟고 지나가서 먹히는 거리가 아니다")
-	t.ok(sw.fire(0, Vector2(1400.0, 1000.0)), "좌클릭이 앞쪽 원뿔 안 먹이를 문다")
+	t.ok(b.fire(0, Vector2(1400.0, 1000.0)), "좌클릭이 앞쪽 원뿔 안 먹이를 문다")
 	t.eq(f.alive_count, 3, "한 입에 정확히 하나만 사라진다")
 	t.ok(_alive_at(f, wide_angle), "각이 벗어난 50px 먹이는 살아남는다 — 부채꼴은 원이 아니다")
 
 	# ⚠ **The RANGE needs its own fixture, and the first attempt at it was inert.** A far crumb added
-	# alongside near ones proves nothing: `_bite` takes the NEAREST candidate, so raising `BITE_RANGE` from
+	# alongside near ones proves nothing: `bite()` takes the NEAREST candidate, so raising the reach from
 	# 70 to 700 eats the same near crumb and the far one survives either way — measured, green. The only
 	# crumb here is the far one, so a widened range has nothing else to reach for.
-	var far := Swarm.new()
-	far.setup(222, Vector2(1000.0, 1000.0))
+	var rig_far := _rig(222)
+	var far: Swarm = rig_far[0]
+	var far_b: Body = rig_far[1]
 	var h := _food_at([Vector2(1100.0, 1000.0)])
 	far.step(DT, h)
 	t.eq(h.alive_count, 1, "설정: 100px 앞 먹이가 아직 살아 있다")
-	t.ok(not far.fire(0, Vector2(1400.0, 1000.0)),
+	t.ok(not far_b.fire(0, Vector2(1400.0, 1000.0)),
 			"정면 한가운데라도 100px는 물리지 않는다 — 사거리는 70px다")
 	t.eq(h.alive_count, 1, "그리고 실제로 죽지도 않는다")
 
-	var behind := Swarm.new()
-	behind.setup(221, Vector2(1000.0, 1000.0))
+	var rig_behind := _rig(221)
+	var behind: Swarm = rig_behind[0]
+	var behind_b: Body = rig_behind[1]
 	var g := _food_at([Vector2(950.0, 1000.0)])
 	behind.step(DT, g)
 	t.eq(g.alive_count, 1, "설정: 등 뒤 먹이가 아직 살아 있다")
-	t.ok(not behind.fire(0, Vector2(1400.0, 1000.0)),
+	t.ok(not behind_b.fire(0, Vector2(1400.0, 1000.0)),
 			"같은 거리라도 등 뒤 먹이는 물리지 않는다 — 각도가 실력이다")
 	t.eq(g.alive_count, 1, "그리고 실제로 죽지도 않는다")
 
-	# 23: the cooldown is a real refusal, and it expires.
-	t.ok(not sw.fire(0, Vector2(1400.0, 1000.0)), "쿨다운 안의 두 번째 물기는 거부된다")
+	# 23: the cooldown is a real refusal, and it expires. **`Body.step()` is what ticks it now** — left to
+	# `Swarm.step()` the number never comes down and the second bite below never lands. 32 frames is
+	# 0.533s, past 물기's own 0.5; a literal, because `Parts.COOLDOWN[BITE] / DT` scales with the value it
+	# is meant to pin.
+	t.ok(not b.fire(0, Vector2(1400.0, 1000.0)), "쿨다운 안의 두 번째 물기는 거부된다")
 	t.eq(f.alive_count, 3, "거부당한 물기로는 먹이가 죽지 않는다")
-	for _s in int(Rules.BITE_COOLDOWN / DT) + 2:
+	for _s in 32:
+		b.step(DT)
 		sw.step(DT, f)
-	t.ok(sw.fire(0, Vector2(1400.0, 1000.0)), "쿨다운이 지나면 다시 문다")
+	t.ok(b.fire(0, Vector2(1400.0, 1000.0)), "쿨다운이 지나면 다시 문다")
 	t.eq(f.alive_count, 2, "그때 하나가 더 사라진다")
 
-	# 24: `space` takes movement actives only, and the refusal leaves the slot alone.
-	var d := Swarm.new()
-	d.setup(24, Vector2(1000.0, 1000.0))
-	t.eq(d.bound[Swarm.SLOT_MOVEMENT], Actives.DASH, "설정: 스페이스는 대시를 들고 열린다")
-	t.ok(d.fire(Swarm.SLOT_MOVEMENT, Vector2(1400.0, 1000.0)), "스페이스가 대시를 낸다")
-	t.ok(d.dash_left > 0.0, "실제로 대시 상태가 됐다")
-	t.ok(not d.bind(Swarm.SLOT_MOVEMENT, Actives.BITE), "스페이스는 움직이지 않는 것을 거부한다")
-	t.eq(d.bound[Swarm.SLOT_MOVEMENT], Actives.DASH, "거부당한 뒤에도 스페이스에는 대시가 그대로다")
+	# 24: `space` takes movement parts only, and the refusal leaves the key alone.
+	var rig_d := _rig(24)
+	var sw_d: Swarm = rig_d[0]
+	var d: Body = rig_d[1]
+	t.eq(d.bound[Body.KEY_MOVEMENT], Parts.DASH, "설정: 스페이스는 짧은 숨을 들고 열린다")
+	t.ok(d.fire(Body.KEY_MOVEMENT, Vector2(1400.0, 1000.0)), "스페이스가 대시를 낸다")
+	t.ok(sw_d.dash_left > 0.0, "실제로 대시 상태가 됐다")
+	t.ok(not d.bind(Parts.BITE, Body.KEY_MOVEMENT), "스페이스는 움직이지 않는 것을 거부한다")
+	t.eq(d.bound[Body.KEY_MOVEMENT], Parts.DASH, "거부당한 뒤에도 스페이스에는 짧은 숨이 그대로다")
 
 	# 25: **binding has to reach behaviour.** Asserting that `bound[1]` changed is asserting that a field
-	# moved; the empty slot is fired before and after so the bind is what the food died of.
-	var e := Swarm.new()
-	e.setup(25, Vector2(1000.0, 1000.0))
+	# moved; the empty key is fired before and after so the bind is what the food died of.
+	var rig_e := _rig(25)
+	var sw_e: Swarm = rig_e[0]
+	var e: Body = rig_e[1]
 	var fe := _food_at([Vector2(1050.0, 1000.0)])
-	e.step(DT, fe)
-	t.eq(e.bound[1], Actives.NONE, "설정: 우클릭은 빈 칸으로 열린다")
+	sw_e.step(DT, fe)
+	t.eq(e.bound[1], -1, "설정: 우클릭은 빈 칸으로 열린다 — 0이 아니라 -1이다 (0은 물기다)")
 	t.ok(not e.fire(1, Vector2(1400.0, 1000.0)), "빈 칸은 아무 일도 하지 않는다")
 	t.eq(fe.alive_count, 1, "빈 칸이 먹이를 죽이지도 않는다")
-	t.ok(e.bind(1, Actives.BITE), "우클릭에 물기를 넣는다")
+	t.ok(e.bind(Parts.BITE, 1), "우클릭에 물기를 넣는다")
 	t.ok(e.fire(1, Vector2(1400.0, 1000.0)), "묶은 뒤에는 우클릭이 실제로 문다")
 	t.eq(fe.alive_count, 0, "묶기가 행동까지 닿는다 — 필드만 옮긴 것이 아니다")
+	t.eq(e.bound[0], Parts.BITE, "좌클릭은 제 것을 그대로 갖고 있다 — 묶기는 옮기기가 아니라 복사다")
 
 
 # -- 25b: the panel actually binds, through the real click path -----------------------------------------
@@ -279,39 +293,74 @@ func _c25b_bind_driven(t) -> void:
 	# Guarded — see the note in the panel group below.
 	if m.run.phase == Run.Phase.PLAY:
 		_quiet(m)
-		var sw: Swarm = m.run.world.swarm
+		var w: World = m.run.world
+		var bd: Body = w.body
+		# `main.gd`'s own `body` field is the PANEL and `World.body` is the `Body` — the same word for two
+		# things, on purpose. Missing the shell's `body.world = run.world` line leaves the panel drawing
+		# literally nothing on every `Tab` while the pause and toggle checks all stay green.
+		t.ok(m.body.world == w, "설정: 몸 창이 이 런의 세상을 가리킨다 (같은 인스턴스)")
+		bd.wear(Parts.HORSE_LEGS)
 		m.body.open()
 		await t.pump_frames(2)
 		t.eq(m.body.size, Vector2(1280.0, 720.0),
 				"설정: 몸 창이 화면 전체를 덮는다 — 아래 클릭 좌표가 이것을 전제한다")
-		t.eq(sw.bound[1], Actives.NONE, "설정: 우클릭 줄은 빈 칸으로 열린다")
+		t.eq(bd.bound[1], -1, "설정: 우클릭 줄은 빈 칸으로 열린다")
 
-		# An EMPTY row hands out nothing and must not light up as picked up. Latched unconditionally, the
-		# empty 우클릭 row highlighted with nothing in hand and the player's next click TOOK from the row
-		# they meant to drop onto — two clicks, no bind, no refusal, and the panel looking like it worked.
+		# An EMPTY square and an EMPTY row both hand out nothing and must not light up as picked up.
+		# Latched unconditionally, the empty 우클릭 row highlighted with nothing in hand and the player's
+		# next click TOOK from the row they meant to drop onto — two clicks, no bind, no refusal, and the
+		# panel looking like it worked. **Plan 3 creates eleven of the empty case, so it is driven too.**
+		t.root.push_input(_click_at(m.body._slot_rect_of(Parts.Slot.HEAD).get_center()), true)
+		await t.pump_frames(1)
+		t.eq(m.body._held, -1, "빈 칸을 눌러도 손에 들리는 것은 없다")
+		t.eq(m.body._held_slot, -1, "그리고 그 칸이 '집었다'로 켜지지도 않는다")
 		t.root.push_input(_click_at(m.body._row_rect_of(1).get_center()), true)
 		await t.pump_frames(1)
-		t.eq(m.body._held, Actives.NONE, "빈 줄을 눌러도 손에 들리는 것은 없다")
-		t.eq(m.body._held_row, -1, "그리고 그 줄이 '집었다'로 켜지지도 않는다")
+		t.eq(m.body._held, -1, "빈 줄을 눌러도 손에 들리는 것은 없다")
+		t.eq(m.body._held_row, -1, "그리고 그 줄이 켜지지도 않는다")
 
-		# 스페이스 줄에서 집어 우클릭 줄에 놓는다 — 두 번의 진짜 클릭.
-		t.root.push_input(_click_at(m.body._row_rect_of(Swarm.SLOT_MOVEMENT).get_center()), true)
+		# (a) **plan 3's model: a worn square is the source.** 뒷다리 칸을 누르고, 우클릭 줄에 놓는다.
+		t.root.push_input(_click_at(m.body._slot_rect_of(Parts.Slot.HINDLIMBS).get_center()), true)
 		await t.pump_frames(1)
+		t.eq(m.body._held, Parts.HORSE_LEGS, "입은 부품이 든 칸을 누르면 그것이 손에 들린다")
+		t.eq(m.body._held_slot, Parts.Slot.HINDLIMBS, "그리고 그 칸이 집힌 것으로 켜진다")
 		t.root.push_input(_click_at(m.body._row_rect_of(1).get_center()), true)
 		await t.pump_frames(1)
-		t.eq(sw.bound[1], Actives.DASH, "줄 둘을 실제로 눌러 우클릭에 짧은 숨이 들어간다")
-		# The same standard as check 25: a bind that only moved a field is not a bind.
-		t.ok(sw.fire(1, Vector2(1400.0, 1000.0)), "묶은 뒤 우클릭이 실제로 대시를 낸다")
-		t.ok(sw.dash_left > 0.0, "그리고 진짜 대시 상태가 됐다")
-		t.eq(sw.bound[Swarm.SLOT_MOVEMENT], Actives.DASH,
-				"집어온 줄은 제 것을 그대로 갖고 있다 — 묶기는 옮기기가 아니라 복사다")
+		t.eq(bd.bound[1], Parts.HORSE_LEGS, "칸 하나와 줄 하나를 실제로 눌러 우클릭에 말 다리가 들어간다")
+		t.eq(bd.slot_part[Parts.Slot.HINDLIMBS], Parts.HORSE_LEGS,
+				"집어온 칸은 제 것을 그대로 갖고 있다 — 묶기는 옮기기가 아니라 복사다")
+		# The same standard as check 25: a bind that only moved a field is not a bind. 갤럽 is HELD, not
+		# fired, so the key is held for one frame and the host's speed multiplier is what answers.
+		bd.held[1] = 1
+		bd.step(DT)
+		t.ok(absf(w.swarm.active_speed_mul - 1.8) < 0.001,
+				"묶은 뒤 우클릭을 누르고 있으면 실제로 갤럽이 돈다 (%.3f)" % w.swarm.active_speed_mul)
+		bd.held[1] = 0
+
+		# (b) a key row is still a source too — plan 2's model, unchanged.
+		t.root.push_input(_click_at(m.body._row_rect_of(Body.KEY_MOVEMENT).get_center()), true)
+		await t.pump_frames(1)
+		t.eq(m.body._held, Parts.DASH, "스페이스 줄을 누르면 짧은 숨이 손에 들린다")
+		t.root.push_input(_click_at(m.body._row_rect_of(1).get_center()), true)
+		await t.pump_frames(1)
+		t.eq(bd.bound[1], Parts.DASH, "줄 둘을 실제로 눌러 우클릭에 짧은 숨이 들어간다")
+		t.ok(bd.fire(1, Vector2(1400.0, 1000.0)), "묶은 뒤 우클릭이 실제로 대시를 낸다")
+		t.ok(w.swarm.dash_left > 0.0, "그리고 진짜 대시 상태가 됐다")
+		t.eq(bd.bound[Body.KEY_MOVEMENT], Parts.DASH, "집어온 줄도 제 것을 그대로 갖고 있다")
+
+		# A PASSIVE square must not be picked up at all — the panel asks `Body.can_bind()` before it will
+		# hand anything out, so a part `space` would refuse can never even be dropped on it.
+		bd.wear(Parts.HORSE_MANE)
+		t.root.push_input(_click_at(m.body._slot_rect_of(Parts.Slot.TORSO).get_center()), true)
+		await t.pump_frames(1)
+		t.eq(m.body._held, -1, "패시브가 든 칸은 집히지 않는다 — 패널이 sim에게 먼저 묻는다")
 
 		# The negative control comes BEFORE the refusal, on purpose: the refusal line survives on screen
 		# until something clears it, so "no refusal was drawn" after one would measure nothing.
 		m.panel_spy.texts.clear()
 		t.root.push_input(_click_at(Vector2(640.0, 40.0)), true)
 		await t.pump_frames(2)
-		t.eq(sw.bound[1], Actives.DASH, "부정 대조: 빈 자리를 눌러도 묶인 것이 바뀌지 않는다")
+		t.eq(bd.bound[1], Parts.DASH, "부정 대조: 빈 자리를 눌러도 묶인 것이 바뀌지 않는다")
 		t.ok(not _has_line(m.panel_spy.texts, BodyPanel.REFUSAL),
 				"부정 대조: 아무 줄도 안 눌렀으면 거부 문구도 없다")
 
@@ -319,9 +368,10 @@ func _c25b_bind_driven(t) -> void:
 		m.panel_spy.texts.clear()
 		t.root.push_input(_click_at(m.body._row_rect_of(0).get_center()), true)
 		await t.pump_frames(1)
-		t.root.push_input(_click_at(m.body._row_rect_of(Swarm.SLOT_MOVEMENT).get_center()), true)
+		t.eq(m.body._held, Parts.BITE, "설정: 좌클릭 줄에서 물기를 집었다")
+		t.root.push_input(_click_at(m.body._row_rect_of(Body.KEY_MOVEMENT).get_center()), true)
 		await t.pump_frames(2)
-		t.eq(sw.bound[Swarm.SLOT_MOVEMENT], Actives.DASH,
+		t.eq(bd.bound[Body.KEY_MOVEMENT], Parts.DASH,
 				"스페이스는 물기를 거부하고 짧은 숨을 그대로 지킨다")
 		t.ok(_has_line(m.panel_spy.texts, BodyPanel.REFUSAL),
 				"거부는 화면에 한 줄로 나온다 %s" % str(m.panel_spy.texts))
@@ -417,8 +467,9 @@ func _c27_panel_rects(t) -> void:
 		t.eq(m.body.size, screen, "몸 창이 화면 전체 크기를 갖는다 (0 크기면 전부 왼쪽 위로 몰린다)")
 
 		var rects: Array = m.panel_spy.rects
-		# One backdrop + eleven slots (fill + edge) + three rows (fill + edge) = 29 at the least.
-		t.ok(rects.size() >= 29, "패널이 실제로 사각형들을 그렸다 (%d개)" % rects.size())
+		# One backdrop + eleven slots (fill + edge) + three rows (fill + edge) = 29, EXACTLY. A floor of
+		# ">= 29" stops bounding anything the moment the slots start drawing what is in them.
+		t.eq(rects.size(), 29, "패널이 그리는 사각형은 정확히 29개다 (바탕 1 + 칸 11×2 + 줄 3×2)")
 		var empty := 0
 		var outside := 0
 		for r: Rect2 in rects:
@@ -434,35 +485,54 @@ func _c27_panel_rects(t) -> void:
 		#
 		# ⚠ **Picked out of what was CAPTURED, never out of `_slot_rect_of`/`_row_rect_of`.** Measuring a
 		# pure layout function is not measuring that anything calls it: `_paint`'s slot loop rewritten to
-		# `_paint_slot(c, _row_rect_of(k % Swarm.SLOT_COUNT))` leaves both functions returning a left and a
-		# right column, every drawn rect non-empty and inside 1280x720, and the count unchanged — eleven
-		# slots stacked on top of three key rows, reported as two halves.
-		var slot_right := INF
+		# `_paint_slot(c, _row_rect_of(k % 3))` leaves both functions returning a left and a right column,
+		# every drawn rect non-empty and inside 1280x720, and the count unchanged — eleven slots stacked on
+		# top of three key rows, reported as two halves.
+		#
+		# ⚠ **And the MATCH COUNTS are asserted first.** With `slot_right` starting at `INF`, zero matches
+		# made `row_left > 640` pass and `slot_right < 640` fail — the half that catches a regression and
+		# the half that hides one sat on consecutive lines. The size to classify by is `BODY_SLOT_SIZE`,
+		# the panel's own square; `Look.SLOT_SIZE` is the ending screen's summary strip and matches nothing
+		# here.
+		var slot_right := -INF
+		var slots_seen := 0
 		var row_left := INF
+		var rows_seen := 0
 		for r: Rect2 in rects:
-			if r.size == Look.SLOT_SIZE:
-				slot_right = minf(slot_right, r.end.x)
+			if r.size == Look.BODY_SLOT_SIZE:
+				slots_seen += 1
+				slot_right = maxf(slot_right, r.end.x)
 			elif r.size == Look.BODY_ROW_SIZE:
+				rows_seen += 1
 				row_left = minf(row_left, r.position.x)
-		t.ok(slot_right < screen.x * 0.5, "그려진 몸의 칸들이 왼쪽 절반에 있다 (%.0f)" % slot_right)
+		t.eq(slots_seen, 22, "칸 열하나가 배경·테두리 두 번씩 그려졌다")
+		t.eq(rows_seen, 6, "줄 셋이 배경·테두리 두 번씩 그려졌다")
+		t.ok(slot_right < screen.x * 0.5, "가장 오른쪽 칸까지도 왼쪽 절반 안에 있다 (%.0f)" % slot_right)
 		t.ok(row_left > screen.x * 0.5, "그려진 손의 줄들이 오른쪽 절반에 있다 (%.0f)" % row_left)
 
 		# **The panel's TEXT, from the same driven capture.** Only its rectangles were read here, so
-		# `Actives.TITLE[swarm.bound[slot]]` could be replaced with a constant and every row would name the
-		# wrong active with check 27 green. Read through `Actives.TITLE`, not as re-typed Korean literals —
-		# the one owner stays one owner.
+		# `Parts.NAME[body.bound[key]]` could be replaced with a constant and every row would name the
+		# wrong part with check 27 green. Read through the table's own owner, not as re-typed Korean.
 		var texts: Array = m.panel_spy.texts
-		t.ok(texts.has(Actives.TITLE[Actives.BITE]), "좌클릭 줄이 물기를 이름으로 적는다 %s" % str(texts))
-		t.ok(texts.has(Actives.TITLE[Actives.NONE]), "우클릭 줄이 빈 칸이라고 적는다")
-		t.ok(texts.has(Actives.TITLE[Actives.DASH]), "스페이스 줄이 짧은 숨을 적는다")
-		t.ok(texts.has(BodyPanel.KEY_LABELS[Swarm.SLOT_MOVEMENT]), "키 이름표도 그려진다 (스페이스)")
+		t.eq(texts.size(), 11, "빈 몸이 적는 글자는 열하나다 (몸·겉·속·숫자줄·손 + 줄 셋의 키 이름과 부품 이름)")
+		t.ok(texts.has(str(Parts.NAME[Parts.BITE])), "좌클릭 줄이 물기를 이름으로 적는다 %s" % str(texts))
+		t.ok(texts.has(BodyPanel.EMPTY_LABEL), "우클릭 줄이 빈 칸이라고 적는다")
+		# ⚠ `-1` is a LEGAL index in GDScript and counts from the END, so a bare `Parts.NAME[bound[key]]`
+		# would print the last row — 말 폐활량 — on the empty key, with no error and nothing red.
+		t.ok(not texts.has(str(Parts.NAME[Parts.HORSE_LUNG])),
+				"그 자리에 표의 마지막 행(말 폐활량)이 나오지 않는다 — -1을 뒤에서 세지 않았다")
+		t.ok(texts.has(str(Parts.NAME[Parts.DASH])), "스페이스 줄이 짧은 숨을 적는다")
+		t.ok(texts.has(BodyPanel.KEY_LABELS[Body.KEY_MOVEMENT]), "키 이름표도 그려진다 (스페이스)")
+		t.ok(texts.has(BodyPanel.GROUP_LABELS[0]) and texts.has(BodyPanel.GROUP_LABELS[1]),
+				"겉과 속이 두 무리의 머리말로 나온다 — 열한 칸이 한 줄로 붙어 있지 않다")
 
-		# **The only place force reaches the screen.** `_grow()`'s `force[0] += FORCE_PER_LEVEL` is a
-		# level's WHOLE payout and `F` halves every row — neither was drawn anywhere, which is the
-		# signature fake inverted (the simulation moves, the picture does not). Two different literals, so
-		# a panel printing one number twice cannot pass.
+		# **The only place force and HP reach the screen.** `_grow()`'s `force[0] += FORCE_PER_LEVEL` is a
+		# level's WHOLE payout, `F` halves every row, and the hearts' ceiling grows with parts — none of it
+		# was drawn anywhere, which is the signature fake inverted (the simulation moves, the picture does
+		# not). Three different literals, so a panel printing one number three times cannot pass.
 		m.run.world.swarm.force[0] = 37
 		m.run.world.swarm.add_clone(0, 5)
+		m.run.world.host_hp = 2
 		m.panel_spy.texts.clear()
 		m.body.queue_redraw()
 		await t.pump_frames(1)
@@ -472,6 +542,42 @@ func _c27_panel_rects(t) -> void:
 				force_line = l
 		t.ok(force_line.contains("37"), "몸 창이 호스트의 힘을 적는다 — %s" % force_line)
 		t.ok(force_line.contains("42"), "무리 전체의 힘(37+5)도 함께 적는다 — %s" % force_line)
+		t.ok(force_line.contains("2/3"), "현재/최대 체력도 그 줄에 함께 적힌다 — %s" % force_line)
+		t.ok(not force_line.contains("방어"),
+				"방어라는 별도의 숫자는 없다 — '접촉 한 번 더'와 '최대 체력 +1'은 같은 문장이다")
+
+		# **A worn square shows what is in it, and its level.** Eleven empty squares was plan 2's picture;
+		# this is the one thing plan 3 puts on this screen.
+		m.run.world.body.wear(Parts.HORSE_LEGS)
+		m.run.world.body.wear(Parts.HORSE_LEGS)
+		m.run.world.body.wear(Parts.HORSE_MANE)
+		m.panel_spy.rects.clear()
+		m.panel_spy.texts.clear()
+		m.body.queue_redraw()
+		await t.pump_frames(1)
+		t.ok(m.panel_spy.texts.has(str(Parts.NAME[Parts.HORSE_LEGS])),
+				"입은 부품의 이름이 제 칸에 적힌다 %s" % str(m.panel_spy.texts))
+		t.ok(m.panel_spy.texts.has("Lv2"), "그리고 Lv2가 그 칸에 함께 적힌다")
+		t.ok(not m.panel_spy.texts.has("Lv1"),
+				"Lv1은 적지 않는다 — 모든 칸에 아무 말도 아닌 숫자를 붙이지 않는다")
+		t.eq(m.panel_spy.rects.size(), 29, "칸이 채워져도 사각형 수는 그대로 29개다")
+
+		# ⚠ **The HP CEILING, driven above its floor.** `2/3` above is taken at `level == 0` on an empty
+		# body, where `hp_max(0)` is exactly `Rules.HOST_HP` — so both things plan 3 added to the ceiling (a
+		# level, and 말 갈기's +1) are absent at that moment and the panel could print a constant 3 forever.
+		# Measured: `b.hp_max(world.level)` replaced with `Rules.HOST_HP` left 811 checks green, and a maned,
+		# levelled host would read 5/3 here while the HUD row beside it draws seven hearts. 말 갈기 is worn
+		# twenty lines above; only the level is new, and 3 + 2 + 1 is a literal.
+		m.run.world.level = 2
+		m.panel_spy.texts.clear()
+		m.body.queue_redraw()
+		await t.pump_frames(1)
+		var hp_line := ""
+		for l: String in m.panel_spy.texts:
+			if l.contains("체력"):
+				hp_line = l
+		t.ok(hp_line.contains("2/6"),
+				"레벨 둘에 갈기 하나면 몸 창의 체력은 2/6이다 (3 + 2 + 1, 리터럴) — %s" % hp_line)
 
 	t.root.remove_child(m)
 	m.queue_free()
@@ -492,17 +598,22 @@ func _c28_c29_gate(t) -> void:
 	# Guarded — see the note in the panel group above.
 	if m.run.phase == Run.Phase.PLAY:
 		_quiet(m)
-		var sw: Swarm = m.run.world.swarm
+		var w: World = m.run.world
+		var sw: Swarm = w.swarm
 		for _i in 3:
 			sw.add_clone(0, 2)
-		# ⚠ **The two mouse buttons were the two this check could not see.** `fire_1` opens on `NONE` and
-		# does nothing by construction, and with every food spot silenced a leaked `fire_0` finds no
-		# candidate and returns false without touching one field in `_snapshot` — so narrowing the gate to
-		# let both mouse buttons through stayed green, and the mouse is exactly what a player clicks while
-		# a panel is up. Bound and fed, both are now observable.
-		sw.bind(1, Actives.BITE)
+		# ⚠ **The two mouse buttons were the two this check could not see.** `fire_1` opens empty and does
+		# nothing by construction, and with every food spot silenced a leaked `fire_0` finds no candidate
+		# and returns false without touching one field in `_snapshot` — so narrowing the gate to let both
+		# mouse buttons through stayed green, and the mouse is exactly what a player clicks while a panel
+		# is up. Bound and fed, both are now observable.
+		w.body.bind(Parts.BITE, 1)
 		_ring_food(m)
-		await t.pump_frames(2)   ## one real world step, so `_bite` has a `_food` and a food grid to read
+		await t.pump_frames(2)   ## one real world step, so `bite()` has a `_food` and a food grid to read
+		# **The card pool has to be opened by hand.** Nothing in plan 3 writes `species_eaten` — corpses
+		# are plan 4's — so a real run banks every level forever and the cards half of this gate would
+		# never open at all.
+		w.species_eaten = PackedInt32Array([Parts.Species.HORSE])
 		sw.banked = Rules.LEVEL_COST_BASE
 		await t.pump_frames(3)
 		t.ok(m.cards.visible, "설정: 레벨이 올라 카드가 실제로 떠 있다")
@@ -519,9 +630,18 @@ func _c28_c29_gate(t) -> void:
 		t.ok(not m.body.visible, "카드가 떠 있는 동안에는 Tab이 몸 창을 열지 않는다")
 		t.ok(m.cards.visible, "그리고 카드는 그대로 떠 있다")
 
-		while m.run.world.pending_levels > 0:
+		# ⚠ **Bounded, and it breaks on an empty offer.** Written as a bare `while pending_levels > 0`,
+		# an empty pool makes `offer[0]` an out-of-bounds read, `take_card` returns false, and the level
+		# never decrements — the net does not go red, it SPINS FOREVER, and neither the runner nor the
+		# wrapper has a per-net timeout.
+		var guard := 0
+		while m.run.world.pending_levels > 0 and guard < 20:
+			guard += 1
+			if m.run.world.offer.is_empty():
+				break
 			m.cards.picked.emit(m.run.world.offer[0])
 			await t.pump_frames(1)
+		t.ok(guard < 20, "카드를 스무 번 안에 다 골랐다 — 빈 제시로 영원히 돌지 않는다 (%d)" % guard)
 		await t.pump_frames(2)
 		t.ok(not m.cards.visible, "설정: 카드를 다 골라 창이 닫혔다")
 
@@ -545,7 +665,11 @@ func _c28_c29_gate(t) -> void:
 		var ring_before := _ring_alive(m)
 		await _press_all(t)
 		t.ok(sw.strike_point != strike_before, "대조: 아무 창도 없으면 3이 실제로 지점을 옮긴다")
-		t.ok(sw.dash_cd > 0.0 or sw.dash_left > 0.0, "대조: 스페이스가 실제로 대시를 낸다")
+		# `dash_cd` is gone — `Body.bound_cd[key]` is the ONE cooldown now, so the two numbers that could
+		# disagree about whether the hand is free are one number. The burst itself is 0.16s and the presses
+		# below it take longer than that, so the cooldown is what is still standing when this is read.
+		t.ok(sw.dash_left > 0.0 or w.body.bound_cd[Body.KEY_MOVEMENT] > 0.0,
+				"대조: 스페이스가 실제로 대시를 낸다")
 		t.ok(sw.count < count_before, "대조: V가 실제로 곁의 분신을 거둬들인다 (%d → %d)"
 				% [count_before, sw.count])
 		# Counted over the ring's own twelve indices, never `food.alive_count`: respawn revives other dead
@@ -553,6 +677,67 @@ func _c28_c29_gate(t) -> void:
 		# 12-second cooldown, so none of these twelve can come back inside the test.
 		t.ok(_ring_alive(m) < ring_before,
 				"대조: 좌·우클릭이 실제로 원뿔 안 먹이를 문다 (%d → %d)" % [ring_before, _ring_alive(m)])
+
+	t.root.remove_child(m)
+	m.queue_free()
+
+
+# -- the HOLD, driven through the real keyboard ---------------------------------------------------------
+## ⚠ **The one line that connects a key to a SUSTAINED active had no caller anywhere in `tests/`.**
+## `Body.fire()` returns false for a sustained part by construction, so `held` is 갤럽's ONLY path into the
+## sim — and every `held` write in the round was by hand (eight sites in `net_body`, one in `_c25b` above).
+## `_c28_c29_gate` presses `fire_2` for real, but `space` there holds 짧은 숨, whose `SUSTAINED` is 0, so no
+## shell-driven path could ever reach `Body.step()`'s sustain branch. Measured: `main.gd`'s
+## `b.held[key] = 1 if Input.is_action_pressed(action) else 0` replaced with `b.held[key] = 0` left 811
+## checks green while 말 다리 — this plan's headline mechanic — was a dead key in the real game.
+##
+## **The second half is the panel-open drop**, `run.world.body.held.fill(0)`, which had the same problem
+## for the same reason: with nothing sustained ever bound through the shell, a gallop latched across a menu
+## was invisible too. Its own comment calls it "the third poll, and it is the one plan 3 added".
+func _c_sustain_through_the_shell(t) -> void:
+	var m: Node = load("res://src/shell/main.gd").new()
+	t.root.add_child(m)
+	await t.pump_frames(2)
+	m.title.start_pressed.emit()
+	await t.pump_frames(1)
+	t.eq(m.run.phase, Run.Phase.PLAY, "설정: start_pressed로 PLAY에 들어갔다")
+
+	# Guarded — see the note in the panel group above.
+	if m.run.phase == Run.Phase.PLAY:
+		_quiet(m)
+		var w: World = m.run.world
+		var bd: Body = w.body
+		bd.wear(Parts.HORSE_LEGS)
+		t.ok(bd.bind(Parts.HORSE_LEGS, Body.KEY_MOVEMENT), "설정: 말 다리를 스페이스에 묶었다")
+		await t.pump_frames(2)
+		t.eq(bd.held[Body.KEY_MOVEMENT], 0, "설정: 아무 키도 안 눌린 동안에는 0이다")
+		t.eq(w.swarm.active_speed_mul, 1.0, "설정: 그래서 아직 갤럽이 돌지 않는다")
+		var breath0: float = bd.breath
+
+		Input.action_press("fire_2")
+		await t.pump_frames(3)
+		t.eq(bd.held[Body.KEY_MOVEMENT], 1, "누르고 있으면 셸이 그것을 몸에 적는다")
+		t.ok(absf(w.swarm.active_speed_mul - 1.8) < 0.001,
+				"그래서 실제 게임에서 갤럽이 돈다 (%.3f)" % w.swarm.active_speed_mul)
+		t.ok(bd.breath < breath0, "그리고 숨이 실제로 닳는다 (%.3f → %.3f)" % [breath0, bd.breath])
+
+		# The panel-open drop, with the key still physically down. A poll left alone keeps its last value,
+		# so the gallop would sit latched behind the pause and be running again the frame the panel closes.
+		m._unhandled_key_input(_key(KEY_TAB))
+		await t.pump_frames(2)
+		t.ok(m.body.visible, "설정: 누른 채로 몸 창을 열었다")
+		t.eq(bd.held[Body.KEY_MOVEMENT], 0,
+				"창이 열리면 누르고 있던 것도 버려진다 — 메뉴 너머로 갤럽이 걸려 있지 않다")
+		m._unhandled_key_input(_key(KEY_TAB))
+		await t.pump_frames(2)
+		t.ok(not m.body.visible, "설정: 창을 다시 닫았다")
+		t.eq(bd.held[Body.KEY_MOVEMENT], 1, "닫으면 여전히 눌려 있던 키가 다시 읽힌다")
+
+		# And releasing is what stops it — "held" has to be a poll, not a latch of its own.
+		Input.action_release("fire_2")
+		await t.pump_frames(3)
+		t.eq(bd.held[Body.KEY_MOVEMENT], 0, "손을 떼면 0으로 돌아온다")
+		t.eq(w.swarm.active_speed_mul, 1.0, "그리고 갤럽이 실제로 멈춘다")
 
 	t.root.remove_child(m)
 	m.queue_free()
@@ -587,23 +772,41 @@ func _c32_legend(t) -> void:
 
 # -- helpers --------------------------------------------------------------------------------------------
 
+## A host wired exactly the way `World.setup()` wires it — `body.setup()` then `body.swarm = swarm`, in
+## that order. Building a whole `World` for a check about one key would drag five hundred food spots and
+## six critters in with it. **`net_body` carries the check that `World.setup()` really makes this wire**,
+## so this helper cannot be hiding a missing line in the shell.
+func _rig(seed_value: int, at: Vector2 = Vector2(1000.0, 1000.0)) -> Array:
+	var sw := Swarm.new()
+	sw.setup(seed_value, at)
+	var b := Body.new()
+	b.setup()
+	b.swarm = sw
+	return [sw, b]
+
+
 ## Everything the eight keys can reach, in one comparable value. Read as a whole so a key that moves any
 ## one of them while a panel is up is caught, not only the one somebody thought to assert.
 ##
 ## ⚠ **`bound_cd` is in here because the two MOUSE buttons were the two the gate could not see.** Nothing
 ## else in this array moves for a leaked `fire_0`/`fire_1` when the food is silenced, and the mouse is
 ## what a player is most likely to be clicking while a panel is up — the exact failure the gate exists to
-## prevent. A successful bite is the only thing that sets a slot's cooldown.
+## prevent. **It now covers `space` too**: `Body.bound_cd[key]` is the one cooldown in the game, so a
+## leaked burst sets it exactly as a leaked bite does, and `dash_cd` no longer exists to disagree with it.
+##
+## `breath` and `active_speed_mul` are in here for the THIRD key's other shape: 갤럽 is held rather than
+## fired, and it moves neither the cooldown nor `dash_left`.
 func _snapshot(m: Node) -> Array:
-	var sw: Swarm = m.run.world.swarm
+	var w: World = m.run.world
+	var sw: Swarm = w.swarm
 	var states: Array = []
 	for i in sw.count:
 		states.append(sw.state[i])
 	var cds: Array = []
-	for s in sw.bound_cd.size():
-		cds.append(sw.bound_cd[s])
-	return [sw.count, sw.strike_point, sw.split_charge, sw.dash_left, sw.dash_cd,
-			sw.banked, sw.total_force(), m.run.world.food.alive_count, states, cds]
+	for s in w.body.bound_cd.size():
+		cds.append(w.body.bound_cd[s])
+	return [sw.count, sw.strike_point, sw.split_charge, sw.dash_left, sw.active_speed_mul,
+			w.body.breath, sw.banked, sw.total_force(), w.food.alive_count, states, cds]
 
 
 ## Presses each action for real and lets the shell's own `_process` see it. Process-local state on the
@@ -630,10 +833,10 @@ func _esc() -> InputEventKey:
 	return _key(KEY_ESCAPE)
 
 
-## Twelve crumbs in a ring 60px out from the host — inside `BITE_RANGE` (70), outside `EAT_RADIUS_HOST`
-## (26), and further than `EAT_RADIUS_CLONE` from any clone parked at the rendezvous ring. Spaced 30°
-## apart, so the 70° cone contains at least one of them whichever way the headless mouse points and a
-## leaked bite has something to kill.
+## Twelve crumbs in a ring 60px out from the host — inside 물기's own reach (the `RANGE` cell of its row in
+## the parts table, 70), outside `EAT_RADIUS_HOST` (26), and further than `EAT_RADIUS_CLONE` from any clone
+## parked at the rendezvous ring. Spaced 30° apart, so the 70° cone contains at least one of them whichever
+## way the headless mouse points and a leaked bite has something to kill.
 func _ring_food(m: Node) -> void:
 	var w: World = m.run.world
 	var host: Vector2 = w.swarm.pos[0]

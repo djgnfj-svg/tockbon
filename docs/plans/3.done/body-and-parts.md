@@ -1,13 +1,15 @@
 # Plan 3 — the body and its parts
 
-**Status**: `1.ready`. Part of [the grassland index](grassland-whole-loop.md). Build after
-[hands and commands](../3.done/hands-and-commands.md).
+**Status**: `3.done` — built 2026-08-15, **18 nets · 889 checks**, every mutation red. **Not accepted, and
+`verify-look` has not run.** Part of [the grassland index](../1.ready/grassland-whole-loop.md); it followed
+[hands and commands](hands-and-commands.md) and [the grassland field](../1.ready/grassland-field.md)
+follows it.
 
 ✅ **Corrected for [the 2026-08-14 adversarial review](../../adversarial-review-2026-08-14-ko.md) and for
 [hunting and the boss](../../design/hunting-and-the-boss-ko.md)** — `force_bonus()` is gone, the parts table
 grew the four columns that were being read out of thin air (`HP`, `SELF_MUL`, `SELF_TIME`, `SUSTAINED`),
 `Parts.Species` has `BOSS`, the dash survives **as a part** so no key goes empty, and every number is at the
-×10 force scale. **This plan now inherits [plan 2 as corrected](../3.done/hands-and-commands.md)** — read that first;
+×10 force scale. **This plan now inherits [plan 2 as corrected](hands-and-commands.md)** — read that first;
 what it built is what this one moves.
 
 **What it closes**: **the body changes.** Slots, a part table, cards that give nothing but parts, and the
@@ -64,34 +66,44 @@ enum Kind { PASSIVE, ACTIVE }
 enum Species { NONE = -1, CROW = 0, HORSE = 1, BOSS = 2 }   ## plan 4 reads this; it does not redeclare it
 enum { BITE = 0, DASH = 1, HORSE_LEGS = 2, HORSE_MANE = 3, HORSE_LUNG = 4 }
 
-## GDScript requires a const to be assigned. Rows are indexed by the enum above and every array is the
-## same length; a net asserts that, because a short row here is an index error at a level-up.
+## ⚠ **Plain `Array`, not the packed forms this block was first written in.** Measured on 4.7.1:
+## `const X := PackedInt32Array([1, 2, 3])` is a **parse error** — "Assigned value for constant isn't a
+## constant expression" — and a plain array literal is fine, nests fine, and folds `deg_to_rad()` inside
+## it. A `const` Array is read-only in 4.x, so immutability survives; element typing does not, which is
+## why every read site casts. Rows are indexed by the enum above and every array is the same length; a net
+## asserts that against the literal 5, because a short row here is an index error at a level-up.
 const NAME := ["물기", "짧은 숨", "말 다리", "말 갈기", "말 폐활량"]
-const SPECIES := PackedInt32Array([-1, -1, 1, 1, 1])
-const SLOTS := [PackedInt32Array([]),                       ## BITE and DASH occupy nothing — see below
-    PackedInt32Array([]),
-    PackedInt32Array([Slot.HINDLIMBS]),
-    PackedInt32Array([Slot.TORSO]),
-    PackedInt32Array([Slot.LUNG])]
-const KIND := PackedInt32Array([Kind.ACTIVE, Kind.ACTIVE, Kind.ACTIVE, Kind.PASSIVE, Kind.PASSIVE])
-const FORCE := PackedInt32Array([0, 0, 5, 5, 0])            ## ×10 scale — a +1 part is invisible now
-const HP := PackedInt32Array([0, 0, 0, 1, 0])               ## the mane's whole effect. **Read by Body**
-const MOVEMENT := PackedInt32Array([0, 1, 1, 0, 0])         ## what `space` will accept
-const COOLDOWN := PackedFloat32Array([0.5, 0.8, 0.0, 0.0, 0.0])
-const BREATH := PackedFloat32Array([0.0, 0.0, 0.0, 0.0, 2.5])  ## added to BREATH_MAX while worn
+const SPECIES := [-1, -1, 1, 1, 1]
+const SLOTS := [[],                                         ## BITE and DASH occupy nothing — see below
+    [],
+    [Slot.HINDLIMBS],
+    [Slot.TORSO],
+    [Slot.LUNG]]
+const KIND := [Kind.ACTIVE, Kind.ACTIVE, Kind.ACTIVE, Kind.PASSIVE, Kind.PASSIVE]
+const FORCE := [0, 0, 5, 5, 0]                              ## ×10 scale — a +1 part is invisible now
+const HP := [0, 0, 0, 1, 0]                                 ## the mane's whole effect. **Read by Body**
+const MOVEMENT := [0, 1, 1, 0, 0]                           ## what `space` will accept
+const COOLDOWN := [0.5, 0.8, 0.0, 0.0, 0.0]
+const BREATH := [0.0, 0.0, 0.0, 0.0, 2.5]                   ## added to BREATH_MAX while worn
 
 ## HOW AN ACTIVE REACHES SOMETHING IS PER PART (user, 2026-08-14). There is no single combat verb to
 ## design; each active carries its own shape, and the player binds whichever one to whichever key.
 enum Shape { NONE, ARC, SELF }   ## ARC: a swing in the facing. SELF: changes the wearer, hits nothing
-const SHAPE := PackedInt32Array([Shape.ARC, Shape.SELF, Shape.SELF, Shape.NONE, Shape.NONE])
-const RANGE := PackedFloat32Array([70.0, 0.0, 0.0, 0.0, 0.0])   ## px from the body's CENTRE, not its edge
-const ARC := PackedFloat32Array([1.22, 0.0, 0.0, 0.0, 0.0])     ## radians, centred on the facing (70°)
+const SHAPE := [Shape.ARC, Shape.SELF, Shape.SELF, Shape.NONE, Shape.NONE]
+const RANGE := [70.0, 0.0, 0.0, 0.0, 0.0]                  ## px from the body's CENTRE, not its edge
+## ⚠ `deg_to_rad(70.0)`, NOT the `1.22` this line carried. Rounding plan 2's shipped arc down to two
+## decimals is a silent retune wearing a refactor's clothes — both sides of the sim read whatever is
+## written here, so nothing in the round can see it and only plan 2's tested value can.
+const ARC := [deg_to_rad(70.0), 0.0, 0.0, 0.0, 0.0]
 
 ## SELF actives, both of them: a speed multiplier and how long it lasts. `SUSTAINED` means "while held,
 ## draining breath" — otherwise `SELF_TIME` is a one-shot burst on its own cooldown.
-const SELF_MUL := PackedFloat32Array([0.0, 2.8, 1.8, 0.0, 0.0])
-const SELF_TIME := PackedFloat32Array([0.0, 0.16, 0.0, 0.0, 0.0])
-const SUSTAINED := PackedInt32Array([0, 0, 1, 0, 0])
+## ⚠ `SELF_MUL[DASH]` 2.8 is the deleted `Rules.DASH_SPEED` 560 ÷ `HOST_SPEED` 200. The move turns an
+## ABSOLUTE speed into a relative one, so retuning `HOST_SPEED` now retunes the dash with it. Intended —
+## a burst is "much faster than I walk" — but it is a behaviour change and nobody wrote the division down.
+const SELF_MUL := [0.0, 2.8, 1.8, 0.0, 0.0]
+const SELF_TIME := [0.0, 0.16, 0.0, 0.0, 0.0]
+const SUSTAINED := [0, 0, 1, 0, 0]
 ```
 
 ⚠ **`RANGE` is measured from the body's centre and the number carries plan 2's value unchanged.** Plan 2
@@ -348,7 +360,84 @@ New `tests/nets/net_body.gd` and `tests/nets/net_parts.gd`; `net_cards.gd` is re
     *Mutation: leave `_snapshot()` alone*
 17. Every array in `Parts` is the same length as `NAME`. A short row is an index error at a level-up
 
+---
+
+## Built 2026-08-15 — 18 nets · 889 checks · 1.7s
+
+**The plan named 17 checks and the build needed 889** (baseline before it: 514). That is plan 1's ratio
+again, and the index predicted it in writing. All 17 are in and every one of them reddens under the
+mutation it names.
+
+### Six things the build measured that this plan had wrong
+
+1. **`const PackedInt32Array([...])` does not parse on 4.7.1.** The part table above is written in the
+   packed form and it is a parse error — "isn't a constant expression". Corrected in place. A `const`
+   Array is read-only either way; what is lost is element typing, so every read site casts.
+2. **`ARC` was written `1.22` and plan 2 shipped `deg_to_rad(70)`.** Corrected in place. This is the exact
+   shape the plan's own ⚠ warns about, one column over from where it was looking.
+3. **`Body` cannot reach the world.** `wear()` writes `swarm.force[0]` and `fire()`'s ARC branch needs the
+   food grid, the host's position and `eat()` — all on `Swarm`, none on `Body`. `World.setup()` wires
+   `body.swarm`. There is deliberately **no back-pointer to `World`**: `World` holds `Body`, so one would
+   be a RefCounted cycle that never frees.
+4. **A sustained active has no input path through `fire()`.** The shell polls the just-pressed edge, and
+   갤럽 is "while held" — wired to the edge it is a one-frame gallop, which reads as a dead key. `Body`
+   gains `held`, three entries the shell writes every frame from `is_action_pressed`, and `fire()` returns
+   **false** for a SUSTAINED part on purpose. See [the sustain is held, not fired](../../decisions/the-sustain-is-held-not-fired.md).
+5. **The sentinel could not stay 0.** Plan 2's `Actives.NONE` was 0; `Parts.BITE` is 0. Carried across
+   unchanged, "holding 물기" reads as "holding nothing" — and it compiles. `-1` instead, which is also a
+   **legal GDScript index**: `Parts.NAME[-1]` returns 말 폐활량 rather than erroring, so every read tests
+   `>= 0` first.
+6. **Removing `World::step()`'s guard is six behaviours, not one.** The guard is the first two lines of
+   `step()`, so an unspent level also froze the food, the ecosystem, `host_grace` and the spawn timer.
+   Banking means the ecosystem is **live** while a stack of cards waits. And `_grow()`'s
+   `offer.is_empty()` stopped being a sentinel and became a per-frame re-roll — it reads `species_eaten`
+   now.
+
+### Two more the plan simply did not decide, and the build did
+
+- **`BITE` and `DASH` are not in the card pool.** They are the actives you are handed, not things offered.
+  The filter is `SPECIES >= 0`, so there is no second list to maintain — and it is what makes the opening
+  pool genuinely empty, which is the state check 14 exists for.
+  ([why](../../decisions/the-given-actives-are-not-offered.md))
+- **Exactly one sustain runs at a time, the fastest one held.** Two movement parts on two keys is a state
+  the player can reach; summing or multiplying is a stacking rule nobody chose, and taking the first held
+  key makes the answer depend on key order.
+
+### Ten fake greens, found after the round was already green
+
+Four read-only adversarial passes ran against a green round of 811 and found **ten holes that a mutation
+confirmed**. Every one is now closed and the round is 889. The pattern is one sentence long: **the plan's
+own fix was applied to one value and not to its siblings.**
+
+- `_paint_body`'s four internal values were pinned as **arguments**. Only `corner` was chased through to a
+  pixel. Emptying `_paint_outline`, `_paint_dot` or `col.darkened(colour_depth)` left the round green —
+  the hide slot and the eyes slot moving zero pixels with every literal in check 13 passing.
+- **All six external slots** could stop drawing at once (`_has()` → `false`, green). Check 13 asserted that
+  the slot array *arrived*, never that anything was drawn from it. This is the plan's own acceptance
+  question — *did the body visibly become a horse* — sitting outside every assertion in the round.
+- **`main.gd`'s one line writing `Body.held`** was unmeasured, because every net supplied `held` by hand.
+  갤럽 could be deleted out of the real game, green. `CLAUDE.md`'s "wiring a node by hand in the net hides
+  the line that wires it in the shell", applied to a **poll** instead of a node.
+- **`breath_max()` was measured as a pure function** and had exactly one behavioural consumer (the regen
+  cap). Capping at `Rules.BREATH_MAX` instead left 말 폐활량 a no-op card, green.
+- **"There is no healing" was stated twice and measured nowhere** — every check that read `host_hp` after a
+  level did it from full health, so a full heal was arithmetically indistinguishable.
+- **The body panel's HP ceiling** was only ever read at level 0 with an empty body, where `hp_max(0)` is
+  exactly `HOST_HP`. It could print a constant 3 forever. The identical defect this plan fixed in
+  `hud.gd`, one file over.
+- **`hp_max()`'s multi-slot guard** was unreachable, and so were `breath_max()`'s and
+  `_recompute_traits()`'s — found only by re-measuring the whole table rather than the row under argument.
+
+⇒ **A spy on a hook sees the hook, never the native call inside it.** Emptying `_paint_dot` with the whole
+argument chain closed was still green. `net_draw_leaf` now scans `field_view.gd` **per function** with a
+call-count per name, and carries four cases that fail the scanner itself.
+
 ## Acceptance
 
 **The user plays and reports whether a card feels like a decision** — whether refusing a good part because of
 what it would evict ever happened, and whether the body visibly became a horse.
+
+⚠ **Nothing here is accepted, and `verify-look` has not run.** The round is green and every mutation bites;
+**numbers cannot see a picture**, and this repo has measured that four separate times. The body is drawn by
+code for the first time in this plan — anchors, limb pairs, an outline, two eye dots — and no eye has been
+on it.

@@ -20,9 +20,14 @@ extends Control
 signal restart_pressed
 signal title_pressed
 
-## `body-and-parts.md`'s slot table, and nowhere else — not `result.body_slots.size()`, which is
-## legitimately shorter than eleven until plan 3 fills it. Drawn empty in this plan regardless.
-const SLOT_COUNT := 11
+## **`Parts.Slot` and nowhere else.** This was the literal 11 with a comment pointing at the plan's slot
+## table, and `body_panel.gd` read it back off this file — two view files drawing the same body from a
+## number the table did not own. `Run._snapshot()` fills `result.body_slots` from the same enum, so the
+## day a twelfth slot lands all three move together instead of two screens quietly drawing eleven squares.
+## Deliberately not `result.body_slots.size()`: a snapshot that failed to fill it would then draw nothing
+## at all rather than eleven empties.
+func _slot_count() -> int:
+	return Parts.Slot.size()
 
 var result: RunResult = null
 
@@ -61,7 +66,7 @@ func _paint(c: CanvasItem) -> void:
 		_paint_text(c, Vector2(x, y + Look.ROW_START_Y + i * Look.ROW_GAP), rows[i], Look.FONT_ROW,
 				Look.SCREEN_TEXT)
 
-	for k in SLOT_COUNT:
+	for k in _slot_count():
 		var filled := result.body_slots[k] if k < result.body_slots.size() else ""
 		_paint_slot(c, _slot_rect_of(k), filled)
 
@@ -116,6 +121,8 @@ func _rect_of(k: int) -> Rect2:
 
 
 func _slot_rect_of(k: int) -> Rect2:
-	var total := Look.SLOT_SIZE.x * SLOT_COUNT + Look.SLOT_GAP * (SLOT_COUNT - 1)
+	var n := _slot_count()
+	var total := Look.SLOT_SIZE.x * n + Look.SLOT_GAP * (n - 1)
 	var x := size.x * 0.5 - total * 0.5 + k * (Look.SLOT_SIZE.x + Look.SLOT_GAP)
 	return Rect2(Vector2(x, size.y - Look.SLOT_BOTTOM_MARGIN), Look.SLOT_SIZE)
+

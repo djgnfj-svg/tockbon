@@ -14,12 +14,16 @@ extends RefCounted
 const DT := 1.0 / 60.0
 
 
+## ⚠ **`corner` is the seventh argument now.** Bone sharpens the host's corners, so it is a per-body value
+## and `_blob()` may not read `Look.CORNER` internally; Godot rejects an override whose signature does not
+## match the parent, which is why this had to move with it.
 class FieldSpy extends FieldView:
 	var seen: Array = []
 
-	func _paint_cell(c: CanvasItem, p: Vector2, r: float, col: Color, squash: Vector2, rot: float = 0.0) -> void:
+	func _paint_cell(c: CanvasItem, p: Vector2, r: float, col: Color, squash: Vector2, rot: float = 0.0,
+			corner: float = Look.CORNER) -> void:
 		seen.append({"p": p, "r": r, "col": col})
-		super._paint_cell(c, p, r, col, squash, rot)
+		super._paint_cell(c, p, r, col, squash, rot, corner)
 
 
 ## Real wiring runs unmodified — `super._ready()` is `main.gd`'s own `_ready()`, building the real
@@ -234,8 +238,9 @@ func run(t) -> void:
 
 		# A positive control, same MainSpy, one frame later. Without it, "the far point is absent from
 		# `seen`" is satisfied just as well by nothing being drawn at all as by real culling — the host
-		# alone (always drawn, unconditionally, in FieldView._paint) kept `seen` non-empty and hid that
-		# gap. This clone sits well inside the ZOOM_NEAR rect (x:[1440,2400], y:[810,1350]) and must
+		# alone (always drawn, unconditionally, in FieldView._paint, and since plan 3 by way of
+		# `_paint_body`, which still calls `_paint_cell` for the base blob) kept `seen` non-empty and hid
+		# that gap. This clone sits well inside the ZOOM_NEAR rect (x:[1440,2400], y:[810,1350]) and must
 		# actually reach `_paint_cell`. The strike point is re-pinned to ITS position, not `far_clone`'s —
 		# one shared `strike_point` cannot freeze two clones at two different places in the same capture,
 		# so this runs as its own capture instead. `add_clone()` inherits row 0's state, which is FOLLOW,

@@ -74,6 +74,8 @@ Where it shakes if this reverses.
 | [Everything goes in for August](everything-goes-in-for-august.md) | valid — **a date decision, not a design one** | Dropping water · dropping parts and cards · water that only slows · water clones cannot cross |
 | [Force is stored, not derived](force-is-stored-not-derived.md) | valid | Recomputing from level and parts · a stored base plus a derived bonus · recomputing for the host only |
 | [The level counts what came home](level-counts-what-came-home.md) | valid | Levelling from `eaten` · two gauges · reporting `banked` at the ending |
+| [A sustained active is held, not fired](the-sustain-is-held-not-fired.md) | valid — **found by building plan 3**, which named the column and gave it no input | Firing on the just-pressed edge · a re-triggered burst · stacking two held sustains · regenerating breath while the key is down |
+| [물기 and 짧은 숨 are given, never offered](the-given-actives-are-not-offered.md) | valid — same build | Both in the card pool · a second starter list · always rolling three |
 
 **The old game's decisions went with it** and are at the tag `v1-sim`. They are not recovered here because
 every one of them answered "why not do X in *that* game" — the question does not transfer.

@@ -6,7 +6,7 @@
 BUILDABLE verdict and for [hunting and the boss](../../design/hunting-and-the-boss-ko.md).** The two things
 the review found missing are now here in full: **what the field is made of** (*The field, at `t = 0`*) and
 **what an attack hits** (*Hitting*). Everything is at the ×10 force scale, **the word is 경험치 and never
-세포**, and this plan inherits [plan 2](../3.done/hands-and-commands.md) and [plan 3](body-and-parts.md) as corrected —
+세포**, and this plan inherits [plan 2](../3.done/hands-and-commands.md) and [plan 3](../3.done/body-and-parts.md) as corrected —
 read both first.
 
 ⚠ **Where this file and the review disagree, this file is newer and it is deliberate.** The review's fix for

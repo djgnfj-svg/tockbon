@@ -15,6 +15,6 @@ var species: PackedStringArray = [] ## names of species eaten at least once, in 
 var peak_swarm: int = 0
 var clones_lost: int = 0
 
-## ELEVEN entries, "" for empty. The count is `body-and-parts.md`'s slot table and nowhere else. Plan 3
-## fills it; this plan ships it empty.
+## ELEVEN entries, "" for empty, written by `Run._snapshot()` from `Body.slot_part`. The count is
+## `Parts.Slot` and nowhere else — the two view files that each held the literal read it from there.
 var body_slots: PackedStringArray = []

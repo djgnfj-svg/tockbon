@@ -29,12 +29,23 @@ func run(t) -> void:
 	t.ok(absf(walk - 3.33) < 0.02, "한 스텝에 200px/s 만큼 걸었다 (%.3f)" % walk)
 
 	# -- and the dash is a different thing ---------------------------
-	t.ok(sw.try_dash(), "대시가 나간다")
-	t.ok(not sw.try_dash(), "쿨다운 중에는 두 번째 대시가 없다")
+	# **The burst is a PART on a key now, not a method on the swarm.** `try_dash()` and its three
+	# `Rules.DASH_*` constants are gone; `짧은 숨` is a row in the parts table and `space` is the square it
+	# opens in. The wiring below is `World.setup()`'s two lines — `net_body` is what holds that shell line
+	# honest, so this cannot be hiding it.
+	var body := Body.new()
+	body.setup()
+	body.swarm = sw
+	t.eq(body.bound[Body.KEY_MOVEMENT], Parts.DASH, "설정: 스페이스는 짧은 숨을 들고 열린다")
+	t.ok(body.fire(Body.KEY_MOVEMENT, Vector2(2000.0, 1000.0)), "대시가 나간다")
+	t.ok(not body.fire(Body.KEY_MOVEMENT, Vector2(2000.0, 1000.0)), "쿨다운 중에는 두 번째 대시가 없다")
 	var before: Vector2 = sw.pos[0]
 	sw.step(DT, null)
 	var dash_step := sw.pos[0].distance_to(before)
 	t.ok(dash_step > walk * 2.0, "대시 한 스텝이 걷기보다 훨씬 멀다 (%.1f > %.1f)" % [dash_step, walk])
+	# 9.33 pinned, the same way `walk` is: `HOST_SPEED 200 × SELF_MUL 2.8 / 60`, which is plan 2's absolute
+	# `DASH_SPEED` of 560px/s carried across unchanged. Read through the table this passes at every value.
+	t.ok(absf(dash_step - 9.33) < 0.02, "한 스텝에 560px/s 만큼 튀었다 (%.3f)" % dash_step)
 
 	# -- nothing crosses the map to reach you ------------------------
 	# The complaint that started this: a thing that walks at you from the far edge is an ambush, not an

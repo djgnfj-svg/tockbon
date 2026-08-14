@@ -1,46 +1,41 @@
 class_name Cards
 extends RefCounted
-## The level-up pick. In the full GDD a card is `species · slot · price` and buys a body part; here there
-## are no species and no parts, so a card moves one multiplier.
+## The level-up pick. **A card names a part and does nothing else.** There is no price, no skip and no
+## description table: the id IS a `Parts` row, its face is `Parts.NAME[p]`, and taking it calls
+## `Body.wear()`. Everything a card can do to the run is a column in that table.
 ##
-## **The pick exists in the prototype on purpose.** A level-up with nothing to press is a notification, and
-## a notification is something you watch happen — planning principle 1. Pressing a card is the smallest
-## thing that makes a level an act.
+## **The pick exists on purpose.** A level-up with nothing to press is a notification, and a notification
+## is something you watch happen — planning principle 1.
 ##
-## **No card grows the swarm any more.** The level pays force into the host and `F` is what turns force
-## into bodies; a card that handed out clones would make bodies out of nothing, with no force to halve —
-## see the decision named `swarm-grows-by-a-key-not-a-level`.
-
-enum { HOST_SPEED, HOST_BITE, CLONE_BITE, SENSE, DASH, TOUGH }
-
-const REST := [HOST_SPEED, HOST_BITE, CLONE_BITE, SENSE, DASH, TOUGH]
-
-## Korean, because it is in-game text — the user reads this one, unlike the comments around it.
-const TITLE := {
-	HOST_SPEED: "빠른 몸",
-	HOST_BITE: "큰 입",
-	CLONE_BITE: "굶주린 무리",
-	SENSE: "먼 눈",
-	DASH: "짧은 숨",
-	TOUGH: "질긴 껍질",
-}
-
-const DESC := {
-	HOST_SPEED: "내 이동 속도 +12%",
-	HOST_BITE: "내가 먹는 속도 +18%",
-	CLONE_BITE: "분신이 먹는 속도 +18%",
-	SENSE: "분신이 먹이를 보는 거리 +25%",
-	DASH: "대시 재사용 -20%",
-	TOUGH: "체력 +1",
-}
+## **No card grows the swarm and no card moves a multiplier.** The level pays force into the host and `F`
+## is what turns force into bodies; the five `*_mul` fields the old cards moved are deleted from `Swarm`
+## outright, because a card that nudges a number is the level-up this plan replaced.
 
 
-## Three distinct cards. `REST` has six entries, so three distinct is always possible — drawing without
-## replacement is what makes an offer of three the same card impossible rather than merely unlikely.
-static func roll(rng: RandomNumberGenerator) -> PackedInt32Array:
+## Up to three DISTINCT parts, drawn without replacement from what the run has actually eaten.
+##
+## ⚠ **The pool starts EMPTY and stays empty until the first horse is eaten**, and that is the design:
+## a horse part cannot appear before a horse has. So this returns fewer than three when the pool is
+## smaller and an empty array when nothing is unlocked — it may never assume three are available. The old
+## implementation was `rng.randi() % pool.size()` against a fixed six-entry table; unchanged, the first
+## level of every run divides by zero.
+##
+## ⚠ **An empty offer is a legal, long-lived state, not a "needs a roll" sentinel.** `World._grow()` used
+## `offer.is_empty()` as exactly that, which becomes a roll every single frame once banking lands; it
+## checks `species_eaten` too now.
+##
+## `BITE` and `DASH` are not in the pool. They are the actives you are handed, not things offered — they
+## are `SPECIES = NONE` and this filter is what keeps them out with no second list to maintain.
+static func roll(rng: RandomNumberGenerator, species_eaten: PackedInt32Array) -> PackedInt32Array:
+	var pool: Array = []
+	for p in Parts.NAME.size():
+		if Parts.SPECIES[p] < 0:
+			continue
+		if not species_eaten.has(Parts.SPECIES[p]):
+			continue
+		pool.append(p)
 	var out := PackedInt32Array()
-	var pool: Array = REST.duplicate()
-	for _i in 3:
+	for _i in mini(3, pool.size()):
 		var k := rng.randi() % pool.size()
 		out.append(pool[k])
 		pool.remove_at(k)

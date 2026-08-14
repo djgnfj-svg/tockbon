@@ -77,6 +77,11 @@ func _process(delta: float) -> void:
 			# nobody made.
 			run.world.swarm.host_input = Vector2.ZERO
 			run.world.swarm.split_release()
+			# **The third poll, and it is the one plan 3 added.** A SUSTAINED active runs off `held`, not
+			# off an edge, so leaving the array alone keeps whatever `is_action_pressed` last saw — a
+			# gallop latched on across a menu, invisible while `run.paused` holds it, and still running the
+			# frame the panel closes. Same sentence as the `F` wind-up on the line above.
+			run.world.body.held.fill(0)
 		else:
 			_read_input(delta)     ## Input is read in PLAY with no panel open, and nowhere else
 		# Derived every frame from the one panel that pauses, so the shell keeps no copy of its own — see
@@ -119,7 +124,13 @@ func _bind_world() -> void:
 	# `FieldView.reset_pop()`.
 	view.reset_pop()
 	hud.world = run.world
-	body.swarm = run.world.swarm if run.world != null else null
+	# ⚠ **The panel holds the whole `World` now, and `cards` holds the `Body`.** `main.gd`'s own `body`
+	# field is the PANEL and `World.body` is the `Body` — the same word for two things, on purpose, so
+	# `body.world` reads as "the panel's world" and `run.world.body` as "the world's body". Miss either
+	# line and the panel draws nothing on every `Tab` while the pause and toggle checks all stay green.
+	body.world = run.world
+	# The card face says `말 다리 → Lv2` when the part is already worn, and the level comes from here.
+	cards.body = run.world.body if run.world != null else null
 	if run.world != null:
 		cam.position = run.world.swarm.pos[0]
 		_zoom = Look.ZOOM_NEAR      ## snap, never lerp: a restart opens alone and must open tight
@@ -173,13 +184,21 @@ func _read_input(delta: float) -> void:
 	# reason the host is not faster on the diagonal.
 	sw.host_input = Input.get_vector("mv_left", "mv_right", "mv_up", "mv_down")
 
-	# All three slots go through `fire()`. A key that reaches into the simulation on its own would be a
+	# All three keys go through `Body.fire()`. A key that reaches into the simulation on its own would be a
 	# fourth code path the gate above has to know about separately. Left and right on the same frame both
-	# fire — the slots are independent and share no cooldown.
+	# fire — the keys are independent and share no cooldown.
+	#
+	# ⚠ **Both the edge and the hold, every frame.** `fire()` is the one-shot; `held` is what a SUSTAINED
+	# active runs off, and 갤럽 is "while held, draining breath". Wired to `just_pressed` alone it is a
+	# one-frame gallop, which reads exactly like a dead key. `is_action_pressed` is also true on the frame
+	# `just_pressed` fires, so a burst and a sustain never need different keys.
 	var aim := get_global_mouse_position()
-	for slot in Swarm.SLOT_COUNT:
-		if Input.is_action_just_pressed("fire_%d" % slot):
-			sw.fire(slot, aim)
+	var b := run.world.body
+	for key in Body.KEY_COUNT:
+		var action := "fire_%d" % key
+		if Input.is_action_just_pressed(action):
+			b.fire(key, aim)
+		b.held[key] = 1 if Input.is_action_pressed(action) else 0
 
 	# Held, not tapped: the wind-up is what makes the split read as an act. `split_release()` also runs in
 	# the panel-open branch above, which is how the charge gets dropped rather than paused.
@@ -252,10 +271,14 @@ func _on_card_picked(card: int) -> void:
 	_sync_cards()
 
 
-## The panel asks, the sim decides, the panel reports. `Swarm.bind()` owns the rule that `space` takes
-## movement actives only — the panel greying the row out in advance would be a second copy of it.
-func _on_bind_requested(slot: int, active: int) -> void:
+## The panel asks, the sim decides, the panel reports. `Body.can_bind()` owns the rule that `space` takes
+## movement parts only — the panel greying the row out in advance would be a second copy of it.
+##
+## ⚠ **`(part, key)`, matching `Body.bind()`.** Plan 2's signal and call were `(slot, active)` — both ints,
+## both orders compile, and the wrong one binds backwards with nothing to catch it. The parameter names
+## here are the only place the order is written down on this side of the signal.
+func _on_bind_requested(part: int, key: int) -> void:
 	if run.world == null:
 		return
-	if not run.world.swarm.bind(slot, active):
+	if not run.world.body.bind(part, key):
 		body.refuse()

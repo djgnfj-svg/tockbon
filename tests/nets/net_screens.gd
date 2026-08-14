@@ -246,19 +246,26 @@ func run(t) -> void:
 		t.ok(head_cleared["col"] != head_died["col"], "헤드라인 색도 승패에 따라 다르다")
 
 	# -- a filled slot actually draws its label ------------------------------------------------------
+	# ⚠ **A PART name in the square a part actually takes.** This fixture said `까마귀` in slot 0 — a
+	# SPECIES name in the head square — and `Run._snapshot()` fills `body_slots` from `Parts.NAME`, so it
+	# was asserting a string no run could ever produce. 말 다리 in the hindlimb square is one a real run
+	# does: 391 + 4×46 = 575, plus `SLOT_LABEL_INSET` (4, 30).
 	var r_slot := RunResult.new()
 	r_slot.outcome = Run.Outcome.CLEARED
 	var slots := PackedStringArray()
 	slots.resize(11)
-	slots[0] = "까마귀"
+	slots[Parts.Slot.HINDLIMBS] = "말 다리"
 	r_slot.body_slots = slots
 	ending.result = r_slot
 	ending.texts.clear()
 	ending.queue_redraw()
 	await t.pump_frames(1)
-	var slot_label: Variant = _find_text(ending.texts, Vector2(395.0, 530.0))
-	t.ok(slot_label != null and slot_label["text"] == "까마귀" and slot_label["font_size"] == 12,
-			"칸이 채워지면 그 이름이 그 위치, 그 글꼴 크기로 그려진다")
+	var slot_label: Variant = _find_text(ending.texts, Vector2(579.0, 530.0))
+	t.ok(slot_label != null and slot_label["text"] == "말 다리" and slot_label["font_size"] == 12,
+			"칸이 채워지면 그 이름이 그 위치, 그 글꼴 크기로 그려진다 %s" % [_dump(ending.texts)])
+	# The other ten squares stay label-less: a screen that prints the same name in every square would pass
+	# the line above on its own.
+	t.eq(ending.texts.size(), 10, "채워진 칸 하나만 이름을 적는다 (헤드라인 1 + 줄 6 + 버튼 2 + 칸 1)")
 
 	# -- restart_pressed / title_pressed, through the real hit test, and never swapped --------------
 	# Each assertion checks the RIGHT signal fired AND the WRONG one did not — a swap (다시 하기 emitting

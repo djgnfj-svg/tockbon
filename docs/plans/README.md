@@ -21,9 +21,9 @@ all three folders. **Links leak every single time** — `net_citations` catches 
 
 | Folder | Contents |
 |---|---|
-| `1.ready` | **[Grassland, the whole loop](1.ready/grassland-whole-loop.md)** — the index, and **two plans still under it, built in order**: [the body and its parts](1.ready/body-and-parts.md) → [the grassland field](1.ready/grassland-field.md). **Plan 3 is next** |
+| `1.ready` | **[Grassland, the whole loop](1.ready/grassland-whole-loop.md)** — the index, and **[the grassland field](1.ready/grassland-field.md)**, plan 4. **Plan 4 is next; every plan under the index is built** |
 | `2.active` | empty |
-| `3.done` | **[The round trip](3.done/proto-round-trip.md)** — the first prototype. Built, played, and the fun confirmed · **[The run shell](3.done/run-shell.md)** — plan 1, built in three stages. ⚠ **Nobody has played it on its own** · **[Hands and commands](3.done/hands-and-commands.md)** — plan 2. 16 nets · 514 checks. **Played: the keys are accepted, the picture is not, and the three questions that decide the plan are still unheard** |
+| `3.done` | **[The round trip](3.done/proto-round-trip.md)** — the first prototype. Built, played, and the fun confirmed · **[The run shell](3.done/run-shell.md)** — plan 1, built in three stages. ⚠ **Nobody has played it on its own** · **[Hands and commands](3.done/hands-and-commands.md)** — plan 2. 16 nets · 514 checks. **Played: the keys are accepted, the picture is not, and the three questions that decide the plan are still unheard** · **[The body and its parts](3.done/body-and-parts.md)** — plan 3. 18 nets · 889 checks, every mutation red. ⚠ **Unplayed, and `verify-look` has not run** — this is the plan that first draws the body from code |
 
 The old game was deleted on 2026-08-12 (`../next-game.md`) and every plan went with it — thirty-four docs
 describing a game that no longer exists. **They are recoverable at the tag `v1-sim` and should not be
