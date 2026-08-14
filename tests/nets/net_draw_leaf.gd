@@ -11,12 +11,16 @@ extends RefCounted
 ## section names exactly this: "Retrofitting hud.gd / card_panel.gd / field_view.gd's ... colours into
 ## look.gd"). Scanning them here would be inventing a rule they never agreed to and turning the round red
 ## over work nobody asked for this round. `SCOPED_FILES` is the list; a file joins it the day its own
-## header states the same two-leaf contract these two do.
+## header states the same two-leaf contract these two do — **`body_panel.gd` states it verbatim and was
+## left out anyway.** That is how plan 3, filling the eleven slots, would have put a third bare
+## `c.draw_*` straight into `_paint_slot`, where the panel's own spy cannot see it and every rectangle
+## check about it stays green.
 ##
 ## **Comment lines are excluded before counting** — a header sentence describing the contract (this file's
 ## own, or either screen's) freely writes `c.draw_rect` in prose, and that must not count as a violation.
 
-const SCOPED_FILES := ["res://src/view/title_screen.gd", "res://src/view/ending_screen.gd"]
+const SCOPED_FILES := ["res://src/view/title_screen.gd", "res://src/view/ending_screen.gd",
+		"res://src/view/body_panel.gd"]
 const MAX_CALLS := 2
 
 var _draw_call := RegEx.new()
@@ -25,10 +29,12 @@ var _draw_call := RegEx.new()
 func run(t) -> void:
 	_draw_call.compile("draw_[A-Za-z_]+\\s*\\(")
 
-	# The literal 2, not `SCOPED_FILES.size()` read back — `checked == SCOPED_FILES.size()` is `0 == 0`
+	# The literal 3, not `SCOPED_FILES.size()` read back — `checked == SCOPED_FILES.size()` is `0 == 0`
 	# if the list is ever emptied, and the two synthetic self-checks below still run either way, so the
 	# runner's own zero-check detector never fires. A bound taken from the list it is meant to guard.
-	t.eq(SCOPED_FILES.size(), 2, "감시 대상 목록이 비어 있지 않다 (title_screen.gd, ending_screen.gd)")
+	# **Hand-written on purpose: it has to move with the list, every time.**
+	t.eq(SCOPED_FILES.size(), 3,
+			"감시 대상 목록이 비어 있지 않다 (title_screen.gd, ending_screen.gd, body_panel.gd)")
 
 	var checked := 0
 	for path: String in SCOPED_FILES:

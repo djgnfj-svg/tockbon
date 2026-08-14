@@ -4,7 +4,7 @@ extends Control
 ##
 ## Reads a `RunResult` snapshot, never `World`: `Run.to_title()` drops the world, and this screen would
 ## then be holding a dead reference. **`세포` appears nowhere here** — the unit is 경험치
-## (`docs/design/hunting-and-the-boss-ko.md`, newer than the old word and the GDD that used it).
+## (`hunting-and-the-boss`, newer than the old word and the GDD that used it).
 ##
 ## **Every actual draw call is a leaf** — `_paint_rect` and `_paint_text` are the only two places
 ## `draw_rect`/`draw_string` are called anywhere in this file. See `title_screen.gd`'s header for why:

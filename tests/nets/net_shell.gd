@@ -195,11 +195,12 @@ func run(t) -> void:
 		e.cam.zoom = Vector2(Look.ZOOM_FAR, Look.ZOOM_FAR)
 		var edge_clone := e.run.world.swarm.add_clone()
 		e.run.world.swarm.pos[edge_clone] = Vector2(2705.0, 1080.0)
-		# One `run.step()` runs before the paint capture — a FOLLOW clone walks toward `rally` every
-		# frame, and left at the host's rally point the edge clone drifts a few px off the literal before
-		# it is ever drawn, failing an exact-position check for a reason that is not culling. Rally pinned
-		# to the same point freezes it: `to.length() == 0 <= rally_radius()`, so `desired` stays zero.
-		e.run.world.swarm.rally = Vector2(2705.0, 1080.0)
+		# One `run.step()` runs before the paint capture — a FOLLOW clone walks at the host every frame,
+		# and the edge clone would drift a few px off the literal before it is ever drawn, failing an
+		# exact-position check for a reason that is not culling. `3` is the freeze now that `1` gathers at
+		# the host: a STRIKE clone standing ON its strike point is already arrived
+		# (`to.length() == 0 <= rally_radius()`), so `desired` stays zero and the position is exact.
+		e.run.world.swarm.command_strike(Vector2(2705.0, 1080.0))
 		e.field_spy.seen.clear()
 		await t.pump_frames(1)
 		t.ok(_painted_at(e.field_spy.seen, Vector2(2705.0, 1080.0)),
@@ -225,7 +226,7 @@ func run(t) -> void:
 		f.cam.zoom = Vector2(Look.ZOOM_NEAR, Look.ZOOM_NEAR)
 		var far_clone := f.run.world.swarm.add_clone()
 		f.run.world.swarm.pos[far_clone] = Vector2(2520.0, 1080.0)
-		f.run.world.swarm.rally = Vector2(2520.0, 1080.0)   ## frozen too — see the note above check 21b
+		f.run.world.swarm.command_strike(Vector2(2520.0, 1080.0))   ## frozen too — see the note above
 		f.field_spy.seen.clear()
 		await t.pump_frames(1)
 		t.ok(not _painted_at(f.field_spy.seen, Vector2(2520.0, 1080.0)),
@@ -235,12 +236,13 @@ func run(t) -> void:
 		# `seen`" is satisfied just as well by nothing being drawn at all as by real culling — the host
 		# alone (always drawn, unconditionally, in FieldView._paint) kept `seen` non-empty and hid that
 		# gap. This clone sits well inside the ZOOM_NEAR rect (x:[1440,2400], y:[810,1350]) and must
-		# actually reach `_paint_cell`. `rally` is re-pinned to ITS position, not `far_clone`'s — one
-		# shared `rally` field cannot freeze two clones at two different points in the same capture, so
-		# this runs as its own capture instead.
+		# actually reach `_paint_cell`. The strike point is re-pinned to ITS position, not `far_clone`'s —
+		# one shared `strike_point` cannot freeze two clones at two different places in the same capture,
+		# so this runs as its own capture instead. `add_clone()` inherits row 0's state, which is FOLLOW,
+		# so the command has to come after it or this clone walks at the host on the very frame captured.
 		var near_clone := f.run.world.swarm.add_clone()
 		f.run.world.swarm.pos[near_clone] = Vector2(2000.0, 1080.0)
-		f.run.world.swarm.rally = Vector2(2000.0, 1080.0)
+		f.run.world.swarm.command_strike(Vector2(2000.0, 1080.0))
 		f.field_spy.seen.clear()
 		await t.pump_frames(1)
 		t.ok(_painted_at(f.field_spy.seen, Vector2(2000.0, 1080.0)),
@@ -248,6 +250,42 @@ func run(t) -> void:
 
 	t.root.remove_child(f)
 	f.queue_free()
+
+	# -- the harvest pop survives 다시 하기 --------------------------------------------------------------
+	# `FieldView` is built once in `_ready()` and only re-pointed, and its `_last_banked` is a HIGH-WATER
+	# MARK of the bank. Left standing across `_bind_world()`, `banked > _last_banked` is false for the
+	# whole of run two and the host stops scaling on eating — the file's own header calls that the only
+	# readability requirement in the build. Nothing errors and the HUD bar still moves, so the screen does
+	# not even look dead. **The second run banks far LESS than the first**, which is the only shape that
+	# tells a reset apart from a mark that simply got passed again.
+	var g := MainSpy.new()
+	t.root.add_child(g)
+	await t.pump_frames(2)
+	g.title.start_pressed.emit()
+	await t.pump_frames(1)
+	t.eq(g.run.phase, Run.Phase.PLAY, "설정: start_pressed로 PLAY에 들어갔다")
+
+	# Guarded — see group `a`'s note.
+	if g.run.phase == Run.Phase.PLAY:
+		g.run.world.swarm.banked = 300.0
+		await t.pump_frames(2)
+		t.ok(g.view._absorb_pop > 0.0,
+				"설정: 첫 런에서 수확 반응이 실제로 일어났다 (%.3f)" % g.view._absorb_pop)
+
+		g.run.world.host_hp = 0
+		await t.pump_frames(1)
+		g.ending.restart_pressed.emit()
+		await t.pump_frames(2)
+		t.eq(g.run.phase, Run.Phase.PLAY, "설정: 다시 하기로 두 번째 런이 열렸다")
+		g.view._absorb_pop = 0.0
+		g.run.world.swarm.banked = 20.0   ## 첫 런의 300보다 한참 적다
+		await t.pump_frames(2)
+		t.ok(g.view._absorb_pop > 0.0,
+				"두 번째 런에서도 수확이 화면에 뜬다 — 첫 런의 최고치를 넘길 필요가 없다 (%.3f)"
+						% g.view._absorb_pop)
+
+	t.root.remove_child(g)
+	g.queue_free()
 
 
 func _painted_at(seen: Array, p: Vector2) -> bool:

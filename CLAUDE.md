@@ -54,9 +54,18 @@ cannot be escaped** — it comes to you, closes an arena, and the scattered swar
 was deferred** — the user was offered the cut twice and refused; the schedule takes it instead.
 
 **What runs**: one host you drive, a swarm that scatters and rallies, clones that carry what they ate until
-they touch you, an ecosystem of critters that chase or flee depending on how big the swarm has got, and a
-level-up card pick. **What does not**: parts, slots, traits, chimeras, habitats, meta.
+you take it, an ecosystem of critters that chase or flee, a level-up card pick — **and, since plan 2 landed,
+every key the game will ever have.** Force is a stored number per body; `F` held halves the whole swarm at
+once, `V` absorbs a radius back into the host, `1` rallies at the host, `3` sends the swarm at a point, three
+active slots hang off left click · right click · `space`, and `Tab` opens the body panel and pauses.
+**A level now pays force, not clones** — the two split cards are gone.
+**What does not**: parts (the eleven slots open empty), traits, chimeras, habitats, meta, animation.
 **Species currencies and tiers are not merely unbuilt — they were cut from the design.**
+
+⚠ **Plan 2's keys are accepted; its picture is not** — the user played it and said the detail falls well
+short while the keys land fine. **The three questions that actually decide that plan are still unheard**
+(does the hold read as an act · does losing a fat clone hurt · is force 10 a busy opening), and
+`Rules.FORCE_PER_THREAT` — which decides whether a critter is prey — **is an unplayed guess.**
 
 ⇒ **The user played it and confirmed the fun.** Read the acceptance section of `proto-round-trip` before
 designing anything on top of it. **Four things that three rounds of adversarial
@@ -225,13 +234,17 @@ before starting, not from whatever commit happened to be current earlier.
 | `src/shell/` | **The only place that reads `Input`**, and the only place that wires `sim` to `view`. It builds its children in code, so a net calling `_ready()` exercises the real wiring |
 | `src/look.gd` | **Every presentation constant, in exactly one file.** `src/sim/rules.gd` holds every constant that changes what happens |
 
-**The first of these scans now exists, and it covers two files out of five.** `net_draw_leaf` asserts that
-**`title_screen.gd` and `ending_screen.gd` each hold at most two `c.draw_` call sites**, so every pixel goes
-through `_paint_rect` or `_paint_text` and a net can assert what was drawn. It was written the day a hook
-that threw its own drawing away passed 54 checks out of 54.
+**The first of these scans now exists, and it covers three files out of six.** `net_draw_leaf` asserts that
+**`title_screen.gd`, `ending_screen.gd` and `body_panel.gd` each hold at most two `c.draw_` call sites**, so
+every pixel goes through `_paint_rect` or `_paint_text` and a net can assert what was drawn. It was written
+the day a hook that threw its own drawing away passed 54 checks out of 54; `body_panel.gd` joined it as it
+was born, which is the only cheap moment to join.
 ⚠ **`hud.gd`, `card_panel.gd` and `field_view.gd` are NOT in it** — each calls `draw_*` in 5–9 places and
 retrofitting them was outside that plan's scope. **Do not read the scan as covering `src/view/`.** It counts
 lines rather than calls, too: two draws separated by `;` on one line count as one.
+⚠ **`field_view.gd` is the one that now hurts**: it draws the charge arc, the bite cone and the strike marker,
+and all three reached the screen unmeasured until a verifier built `net_paint::ArcSpy` over `_paint_arc` and
+`_paint_cone`. The hooks exist and are asserted; **the scan still does not stop the next bare `c.draw_`.**
 **The rest are still unwritten**: grep `src/sim/` for `extends Node` · `_draw` · `Input.` · `get_node` · `$`,
 grep `src/view/` for writes to `sim.`, grep outside `look.gd` for colour and pixel literals. Write each when
 its folder has enough in it to drift.
@@ -359,7 +372,7 @@ These survive **even after you confirm every mutation goes red**:
 
 ## Running the nets
 
-**Fourteen nets, 293 checks, 1.3 seconds** (measured 2026-08-14). A net is `tests/nets/net_*.gd` with one method, `func run(t)`,
+**Sixteen nets, 514 checks, 1.5 seconds** (measured 2026-08-14, after plan 2). A net is `tests/nets/net_*.gd` with one method, `func run(t)`,
 and `t` gives you `ok` · `eq` · `pump_frames` · `expect_error` · `root`. **The wrapper reds below five
 nets** — that is the scan-broken detector, so nets land in groups, never one at a time.
 
@@ -368,7 +381,16 @@ nets** — that is the scan-broken detector, so nets land in groups, never one a
    **A net that ran zero checks is a failure** — the runner snapshots the counter around each net. It was
    added the day a missing `await` made a net **vanish with exit code 0** instead of going red
 2. **If `[race]` prints, distrust the result — green included.** Running while someone edits reads
-   half-written files
+   half-written files.
+   ⚠ **`[race]` catches an edit *during* the round, never one *between* rounds** — and comparing two rounds is
+   the whole of mutation testing. So the runner now prints **`[지문]`, a fingerprint of every scanned file**:
+   **two rounds with different fingerprints did not measure the same tree.** It was added the night five agents
+   shared one tree and a mutation verifier had its edit silently reverted between the `Edit` and the run, plus
+   two rounds poisoned by someone else's edit landing in the same file. **A mutation whose PRE and POST
+   fingerprints differ from each other only by that mutation is the only one that proves anything.**
+   ⇒ **When the tree is contested, do the edit and the run in ONE command**, and hash either side of it.
+   Nothing weaker held. **`git status --porcelain` is deliberately NOT a red** — an uncommitted tree is the
+   normal state of every builder round, so it would red everything
 3. **Each net runs in its own process, in parallel.** Not for speed — for honesty: amnesty stays inside its
    own net. Do not break this property
 4. **Call `harness-manager` when a round grows.** The old game's round was ~28s and **one net was 24.3s of

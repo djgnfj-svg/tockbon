@@ -11,7 +11,7 @@ var swarm := Swarm.new()
 var food := Food.new()
 
 ## Critters are a flat array too, for the same reason the swarm is: nothing here needs to be a Node.
-## `threat` decides which way the chase runs — see `Rules.SWARM_PER_THREAT`.
+## `threat` decides which way the chase runs — see `Rules.FORCE_PER_THREAT`.
 var critter_pos := PackedVector2Array()
 var critter_threat := PackedInt32Array()
 var critter_dir := PackedVector2Array()
@@ -33,7 +33,9 @@ var species_eaten := PackedInt32Array()
 
 var clones_lost := 0
 var cargo_lost := 0.0
-var peak_swarm := 1
+## Clones only, host excluded. **The run opens alone**, so this opens at zero and every body it ever
+## counts came out of an `F`.
+var peak_swarm := 0
 
 ## Levels earned but not yet spent. The shell holds the game still while this is non-zero and shows the
 ## three cards; `step()` refuses to advance, so a level-up cannot be ignored by walking away from it.
@@ -52,7 +54,9 @@ var offer := PackedInt32Array()
 ##  · `_step_critters()` does not run while this holds — see the note at its call site in `step()` for why
 var beat_frozen := false
 
-var _split_paid := 0.0
+## Running total of bank already charged for levels. Not a level count and not a high-water mark of
+## `banked` — the cost rises, so the two stopped being the same number the day `LEVEL_COST_GROWTH` landed.
+var _level_paid := 0.0
 var _next_critter := Rules.CRITTER_INTERVAL
 var _rng := RandomNumberGenerator.new()
 
@@ -61,8 +65,8 @@ func setup(run_seed: int = 1) -> void:
 	_rng.seed = run_seed
 	swarm.setup(run_seed)
 	food.setup(Rules.FIELD, Rules.FOOD_SPOTS, _rng)
-	for _i in Rules.START_CLONES:
-		swarm.add_clone()
+	# No opening clones. The host starts at `FORCE_START` and the first body is one the player split off,
+	# which is what makes the first `F` the tutorial instead of a key nothing needed.
 	peak_swarm = swarm.count - 1
 	critter_pos.resize(Rules.CRITTER_MAX)
 	critter_threat.resize(Rules.CRITTER_MAX)
@@ -80,11 +84,11 @@ func step(dt: float) -> void:
 	elapsed += dt
 	swarm.step(dt, food)
 	food.step(dt)
-	# Frozen for the same reason `_grow()` is, below: `is_hunter_of()` reads `swarm.count`, which is
-	# falling every frame of the beat as bodies arrive and are absorbed — left running, a critter that
-	# read as prey a moment ago flips back to hunter mid-victory and can cost the host a heart while it
-	# is swallowing the boss. The outcome is latched (a hit mid-beat cannot turn a win into a death), but
-	# the picture would still show the world turning hostile at the exact moment it was won.
+	# Frozen for the same reason `_grow()` is, below: the great absorption is the "you won" moment and
+	# nothing in the ecosystem may act during it. Left running, critters keep chasing and fleeing while the
+	# swarm is being swallowed, and one that is still a hunter costs the host a heart mid-victory. The
+	# outcome is latched (a hit mid-beat cannot turn a win into a death), but the picture would still show
+	# the world turning hostile at the exact moment it was won.
 	# ⚠ `is_hunter_of()` and `critter_threat` are deleted by plan 4 — this freeze is about WHEN the
 	# ecosystem steps, not about who is hunting whom, and must survive that deletion unchanged.
 	if not beat_frozen:
@@ -132,8 +136,13 @@ func _step_critters(dt: float) -> void:
 
 
 ## Has the swarm outgrown critter `k`. **The reversal the whole design is about, as one comparison.**
+##
+## ⚠ **It reads FORCE, never `swarm.count`.** Counted in bodies this comparison hands `F` a free
+## power-up: a split conserves the total and multiplies the rows, so holding the key turns one force-10
+## host into ten bodies and flips a threat-1 critter from hunter to prey having earned nothing. Force is
+## the number the game compares — see `Rules.FORCE_PER_THREAT` for the measurement.
 func is_hunter_of(k: int) -> bool:
-	return float(swarm.count - 1) >= float(critter_threat[k]) * Rules.SWARM_PER_THREAT
+	return float(swarm.total_force()) >= float(critter_threat[k]) * Rules.FORCE_PER_THREAT
 
 
 func critter_radius(k: int) -> float:
@@ -145,9 +154,15 @@ func _contact(k: int, p: Vector2) -> bool:
 	var reach := critter_radius(k)
 	if is_hunter_of(k):
 		# The swarm eats it. Any body in the swarm counts — this is the payoff for having grown.
+		#
+		# ⚠ **`eat(i, ...)`, never `eat(0, ...)`.** `eat()` routes row 0 to `banked` and every other row to
+		# `carried[i]`, so paying index 0 whatever body actually made contact would drop a clone's kill
+		# straight into the bank from anywhere on the map — the single largest income in the game, with no
+		# walk home and nothing to lose by dying out there. The recall tax has to be structural or it is
+		# not a tax; see `Swarm.eat()`'s own header.
 		for i in swarm.count:
 			if p.distance_to(swarm.pos[i]) <= reach:
-				swarm.eat(0, float(critter_threat[k]) * Rules.CRITTER_MEAT)
+				swarm.eat(i, float(critter_threat[k]) * Rules.CRITTER_MEAT)
 				critters_eaten += 1
 				if critter_threat[k] == Rules.CRITTER_THREAT_MAX:
 					# Placeholder end condition — plan 4 rewrites the condition, not the plumbing.
@@ -182,30 +197,52 @@ func _remove_critter(k: int) -> void:
 	critter_count -= 1
 
 
-## One level per SPLIT_PER_BANKED banked. The level does not spend the bank and does not grow the swarm on
-## its own — it hands the player a pick, and `take_card` is what actually pays out.
+## What the *next* level costs, in banked. The cost rises: a flat one at the ×10 force scale hands out a
+## level every few seconds by the midgame. `n` is how many levels have already been granted, so the first
+## level costs `LEVEL_COST_BASE` exactly.
+##
+## **Public because the HUD's progress bar needs it.** The bar used to restate the formula in `hud.gd`,
+## which held while the cost was flat and would have started lying the moment it was not.
+func level_cost(n: int) -> float:
+	return Rules.LEVEL_COST_BASE * pow(Rules.LEVEL_COST_GROWTH, float(n))
+
+
+## How far the bank has come toward the next level, 0..1. The one place the fraction is computed.
+func level_progress() -> float:
+	var cost := level_cost(level)
+	return clampf((swarm.banked - _level_paid) / cost, 0.0, 1.0)
+
+
+## A level pays `FORCE_PER_LEVEL` into the host and that is its WHOLE payout — the cards no longer hand
+## out clones, so force is the only thing a level makes. Bodies come from `F`.
+##
+## It is paid out of `banked`, never `eaten`: a clone that dies far from home costs you the level it was
+## carrying. The pick that follows is a separate thing — `take_card` moves multipliers, not the swarm.
 func _grow() -> void:
 	if beat_frozen:
 		return
-	while swarm.banked - _split_paid >= Rules.SPLIT_PER_BANKED:
-		_split_paid += Rules.SPLIT_PER_BANKED
+	while true:
+		# Cost read before `level` moves, because it is a function OF `level`.
+		var cost := level_cost(level)
+		if swarm.banked - _level_paid < cost:
+			break
+		_level_paid += cost
 		level += 1
 		pending_levels += 1
+		swarm.force[0] += Rules.FORCE_PER_LEVEL
 	if pending_levels > 0 and offer.is_empty():
 		offer = Cards.roll(_rng)
 
 
 ## Applying a card is the only place the run's numbers move outside of play. Returns false when the pick
 ## was not actually available, so a stray click cannot conjure a level.
+##
+## **No branch here calls `add_clone()`.** The two that did were the split cards; bodies now come from `F`
+## alone, and a card that made one would create force out of nothing.
 func take_card(card: int) -> bool:
 	if pending_levels <= 0 or not offer.has(card):
 		return false
 	match card:
-		Cards.SPLIT_1:
-			swarm.add_clone()
-		Cards.SPLIT_3:
-			for _i in 3:
-				swarm.add_clone()
 		Cards.HOST_SPEED:
 			swarm.host_speed_mul *= 1.12
 		Cards.HOST_BITE:

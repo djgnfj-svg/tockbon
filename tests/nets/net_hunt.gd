@@ -42,7 +42,6 @@ func run(t) -> void:
 	var far := World.new()
 	far.setup(41)
 	_silence_food(far)
-	_lone_host(far)
 	far.critter_count = 1
 	far.critter_pos[0] = far.swarm.pos[0] + Vector2(1600.0, 0.0)
 	far.critter_threat[0] = 5
@@ -57,7 +56,6 @@ func run(t) -> void:
 	var w := World.new()
 	w.setup(31)
 	_silence_food(w)
-	_lone_host(w)
 	w.critter_count = 0
 	var c := w.swarm.add_clone()
 	w.swarm.pos[c] = Vector2(1000.0, 1000.0)
@@ -68,7 +66,7 @@ func run(t) -> void:
 	w.critter_pos[0] = Vector2(1000.0, 1300.0)
 	w.critter_threat[0] = 5
 	w.critter_dir[0] = Vector2.ZERO
-	t.ok(not w.is_hunter_of(0), "분신 하나로는 위협 5짜리를 못 잡는다")
+	t.ok(not w.is_hunter_of(0), "시작 힘으로는 위협 5짜리를 못 잡는다")
 	var gap0: float = w.critter_pos[0].distance_to(w.swarm.pos[c])
 	for _s in 90:
 		if w.swarm.count < 2:
@@ -81,14 +79,16 @@ func run(t) -> void:
 	var big := World.new()
 	big.setup(36)
 	_silence_food(big)
-	_lone_host(big)
+	# ⚠ **The clones carry force, and that is the point.** The comparison reads `total_force()`, not the
+	# row count — twenty force-0 bodies made by nothing outrank nothing, which is exactly what stops `F`
+	# from buying the reversal for free. 20 × 2 + the host's 10 = 50, over threat 2's 40.
 	for _i in 20:
-		big.swarm.add_clone()
+		big.swarm.add_clone(0, 2)
 	big.critter_count = 1
 	big.critter_pos[0] = big.swarm.pos[0] + Vector2(300.0, 0.0)
 	big.critter_threat[0] = 2
 	big.critter_dir[0] = Vector2.ZERO
-	t.ok(big.is_hunter_of(0), "무리가 스무 마리면 위협 2짜리는 먹이다")
+	t.ok(big.is_hunter_of(0), "무리의 힘이 50이면 위협 2짜리는 먹이다")
 	var flee0: float = big.critter_pos[0].distance_to(big.swarm.pos[0])
 	var banked0: float = big.swarm.banked
 	for _s in 30:
@@ -104,7 +104,6 @@ func run(t) -> void:
 	var w2 := World.new()
 	w2.setup(32)
 	_silence_food(w2)
-	_lone_host(w2)
 	w2.swarm.pos[0] = Vector2(1000.0, 1000.0)
 	w2.critter_count = 1
 	w2.critter_pos[0] = Vector2(700.0, 1000.0)
@@ -122,7 +121,6 @@ func run(t) -> void:
 	var w3 := World.new()
 	w3.setup(33)
 	_silence_food(w3)
-	_lone_host(w3)
 	w3.critter_count = 1
 	w3.critter_pos[0] = w3.swarm.pos[0]
 	w3.critter_threat[0] = 5
@@ -143,12 +141,6 @@ func run(t) -> void:
 		for k in w4.critter_count:
 			worst = minf(worst, w4.critter_pos[k].distance_to(w4.swarm.pos[0]))
 	t.ok(worst >= 900.0, "열 판을 돌려도 스폰은 화면 밖에서 일어난다 (%.0f)" % worst)
-
-
-## A run now opens with `START_CLONES` in the swarm, and every check here wants a swarm it placed itself.
-## Cutting `count` back to 1 is safe by construction: the arrays are a dense prefix and row 0 is the host.
-func _lone_host(w: World) -> void:
-	w.swarm.count = 1
 
 
 func _silence_food(w: World) -> void:

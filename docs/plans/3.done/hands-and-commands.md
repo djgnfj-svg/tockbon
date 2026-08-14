@@ -1,7 +1,9 @@
 # Plan 2 — hands and commands
 
-**Status**: `1.ready`. Part of [the grassland index](grassland-whole-loop.md). Build after
-[the run shell](../3.done/run-shell.md).
+**Status**: `3.done` — **built, and the keys are accepted; the picture is not.** Part of
+[the grassland index](../1.ready/grassland-whole-loop.md). Built after [the run shell](run-shell.md).
+⚠ **`3.done` means implementation finished, not acceptance passed** — see *Acceptance* at the foot of this
+file for what was heard and the three questions still open.
 
 ✅ **Corrected for [the 2026-08-14 adversarial review](../../adversarial-review-2026-08-14-ko.md) and for
 [hunting and the boss](../../design/hunting-and-the-boss-ko.md)** — force ×10, `FORCE_START` 10, the level
@@ -69,10 +71,15 @@ So, precisely:
   still present, `t.eq(count, 1 + Rules.START_CLONES)` passes at every value, and *"the swarm started at
   zero"* is a bug that already walked through 102 green checks once
 - **A clone made by splitting takes the smaller half**, and after that earns force only by killing (plan 4)
-- **`Swarm.total_force()`** sums every row. ⚠ **Nothing in the August build reads it in production** — the
-  boss is not gated on a comparison (see [the boss is not gated](../../decisions/the-boss-is-not-gated.md)).
-  **It ships anyway, and only because the conservation nets are its caller**: the checks below assert a total
-  across a split, and a hand-rolled sum inside every net is the second copy `CLAUDE.md` forbids
+- **`Swarm.total_force()`** sums every row. **The `boss` is still not gated on a comparison** (see
+  [the boss is not gated](../../decisions/the-boss-is-not-gated.md)) — but ⚠ **this plan's own build gave it a
+  production caller after all**, and the sentence that said it had none is corrected here rather than left to
+  be inherited. `World::is_hunter_of()` compared `swarm.count` against `SWARM_PER_THREAT`, which made `F` a
+  free power-up: four holds turn force 10 into ten force-1 bodies, the total is unchanged, and every threat-1
+  critter flips to prey for nothing. **It reads `total_force()` against `Rules.FORCE_PER_THREAT` (20.0)
+  instead**, which is what makes *"splitting buys nothing by itself"* below true rather than merely stated.
+  ⚠ **`FORCE_PER_THREAT`'s value is a guess with a real balance consequence** — clearing the stage now wants
+  total force ~100 rather than 25 bodies, and nobody has played it
 
 ⚠ **`force` is an `int` and the split is exact.** Halving conserves the total, so splitting buys nothing by
 itself — what it costs is concentration. **There is no refund rule and none is needed.**
@@ -504,3 +511,22 @@ hold reads as an act, whether losing a fat clone out in the field hurts, and whe
 thirty seconds busy rather than empty.
 
 **Nothing in this plan is accepted until that is heard.** `3.done` means built.
+
+### Heard so far — the hands, yes; the picture, no (user, 2026-08-14)
+
+The user played the build and said, in their own words: **"디테일은 많이 떨어지지만 키들은 괜찮게 들어가있음"**
+— *the detail falls well short, but the keys are in there fine.*
+
+- ✅ **The key map is accepted.** Every key in the table above reads as landing where it should. Planning
+  principle 1 — the hands must never be idle — **holds for this build.** That is what this plan set out to
+  close and it is closed
+- ❌ **Presentation is not.** "Detail falls well short" is about what reaches the screen, and it is the half
+  this plan deliberately built thin: the charge arc, the bite cone, the strike marker and the body panel are
+  each the smallest thing that could carry the mechanic
+- ⏳ **Still unheard, and the three that actually decide this plan**: whether the hold reads as an *act*,
+  whether losing a fat clone out in the field *hurts*, and whether force 10 makes the opening busy.
+  ⚠ **Do not read "the keys are fine" as any of them.** A key landing is not a decision feeling like one —
+  and this repo's own history is thirty-four features shipped against five open acceptance checks
+
+⚠ **`FORCE_PER_THREAT` (20.0) was still unplayed when this was heard**, so nothing above is evidence about
+the stage's difficulty either way.

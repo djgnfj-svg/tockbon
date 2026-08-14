@@ -20,14 +20,17 @@ const BG := Color(0.09, 0.06, 0.05)
 
 const HOST_COLOR := Color(0.96, 0.88, 0.52)
 const HOST_HURT_COLOR := Color(1.0, 0.45, 0.35)
-const HOST_RADIUS := 14.0
+
+## **Both body radii live in `rules.gd` (`BODY_RADIUS`, `CLONE_BODY_RADIUS`) and NOT here.** They decide
+## who `V` absorbs and what reaches what, so they change what happens; this file may only hold constants
+## that do not. Drawing reads them from there — a copy here is exactly the divergence this file exists to
+## prevent, and the day the two disagree the picture stops being the simulation.
 
 ## **The clone is the same creature as the host, smaller.** It was drawn green against a yellow host and
 ## the user's read was that the swarm was a different animal — which is exactly wrong for a game about
 ## one cell dividing. Same hue, one step darker, and the loaded tint stays as the readability signal.
 const CLONE_COLOR := Color(0.82, 0.74, 0.42)
 const CLONE_LOADED_COLOR := Color(1.0, 0.95, 0.42)
-const CLONE_RADIUS := 8.0
 ## A loaded clone is visibly bigger. **The only readability requirement in this build**: telling a loaded
 ## clone from an empty one across the screen is what makes an abandoned harvest legible as a loss.
 const CLONE_LOAD_GROWTH := 1.6
@@ -45,8 +48,28 @@ const CRITTER_PREY_COLOR := Color(0.42, 0.62, 0.86)
 ## each cut takes.
 const CORNER := 0.34
 
-const RALLY_COLOR := Color(1.0, 1.0, 1.0, 0.35)
-const RALLY_RADIUS := 22.0
+## The marker on the point `3` was pressed. It was the rally ring until rally became "at the host", at
+## which point its own draw guard (`rally != pos[0]`) would have been false forever and the feature would
+## have vanished with every net still green.
+const STRIKE_COLOR := Color(1.0, 1.0, 1.0, 0.35)
+const STRIKE_RADIUS := 22.0
+
+## The `F` charge, drawn as a ring arc on the host at `split_charge / Rules.SPLIT_HOLD_TIME`. Without it
+## the 0.45s hold has no feedback at all and reads as a broken key.
+const SPLIT_CHARGE_WIDTH := 3.0
+const SPLIT_CHARGE_COLOR := Color(1.0, 0.96, 0.72, 0.9)
+## A multiple of `Rules.BODY_RADIUS`, not an absolute radius: the arc has to sit just outside whatever the
+## body is, and the body's size is a rule. Written as a scale, the two cannot drift apart.
+const SPLIT_CHARGE_RING := 1.6
+
+## How long the bite cone stays on screen after a bite lands. Long enough to read at 60fps, short enough
+## not to lie about the cooldown. **The sim owns the clock** (`Swarm.bite_show` counts up from the bite)
+## and this file owns only how long it is shown — `src/sim/` may not read this file, and the view may not
+## hold state the sim does not know about, so the split falls exactly here.
+const BITE_SHOW_TIME := 0.12
+## The cone's fill. Its shape is `Rules.BITE_RANGE` and `Rules.BITE_ARC` — the same two numbers the sim
+## tested with, never a second pair tuned to look right, or the picture stops being the hit.
+const BITE_COLOR := Color(1.0, 0.86, 0.55, 0.28)
 
 # -- the camera pulls back as the swarm grows -----------------------
 ## `Camera2D.zoom`: larger is closer in. Measured against `swarm.count` (bodies, host included), not
@@ -105,6 +128,29 @@ const SLOT_EDGE_WIDTH := 1.0
 const SLOT_LABEL_INSET := Vector2(4.0, 30.0)
 ## The eleven slots, measured up from the screen's bottom edge.
 const SLOT_BOTTOM_MARGIN := 220.0
+
+# -- the body panel (Tab) ---------------------------------------------
+## Two halves, laid out from `size`: the body's slots on the left, the three keys on the right. Kept as
+## two independent columns because the user flagged that one key may be carrying too much — splitting it
+## onto a second key later has to be a re-parent, not a rewrite.
+const BODY_DIM := Color(0.04, 0.03, 0.03, 0.82)
+const BODY_ROW_SIZE := Vector2(300.0, 52.0)
+const BODY_ROW_GAP := 14.0
+const BODY_ROW_BG := Color(0.16, 0.14, 0.13)
+## The row whose active has been picked up and is waiting for a destination. Without it the two-click bind
+## has no state on screen and the first click reads as having done nothing.
+const BODY_ROW_PICKED := Color(0.30, 0.27, 0.18)
+## Where a row's key name sits inside its rect, and how far right of that the bound active's title starts.
+const BODY_ROW_INSET := Vector2(18.0, 34.0)
+const BODY_ROW_TITLE_X := 128.0
+## Distance from a column's first rectangle up to that column's heading.
+const BODY_HEAD_LIFT := 34.0
+## The host's numbers, measured down from the bottom of the slot row. This is the only place force reaches
+## the screen — without it a level's whole payout and every `F` are invisible.
+const BODY_NUMBERS_DROP := 42.0
+## The refusal line, measured down from the bottom of the last key row.
+const BODY_REFUSAL_DROP := 38.0
+const BODY_REFUSAL_COLOR := Color(1.0, 0.55, 0.45)
 
 const FONT_HEADLINE := 40
 const FONT_BUTTON := 28

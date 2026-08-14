@@ -1,13 +1,13 @@
 # Plan 3 — the body and its parts
 
 **Status**: `1.ready`. Part of [the grassland index](grassland-whole-loop.md). Build after
-[hands and commands](hands-and-commands.md).
+[hands and commands](../3.done/hands-and-commands.md).
 
 ✅ **Corrected for [the 2026-08-14 adversarial review](../../adversarial-review-2026-08-14-ko.md) and for
 [hunting and the boss](../../design/hunting-and-the-boss-ko.md)** — `force_bonus()` is gone, the parts table
 grew the four columns that were being read out of thin air (`HP`, `SELF_MUL`, `SELF_TIME`, `SUSTAINED`),
 `Parts.Species` has `BOSS`, the dash survives **as a part** so no key goes empty, and every number is at the
-×10 force scale. **This plan now inherits [plan 2 as corrected](hands-and-commands.md)** — read that first;
+×10 force scale. **This plan now inherits [plan 2 as corrected](../3.done/hands-and-commands.md)** — read that first;
 what it built is what this one moves.
 
 **What it closes**: **the body changes.** Slots, a part table, cards that give nothing but parts, and the

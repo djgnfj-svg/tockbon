@@ -9,6 +9,10 @@ extends RefCounted
 ##
 ## **The end-of-run panel (`_paint_result`) is gone from `hud.gd`** — the run shell plan replaced it with
 ## `EndingScreen`, whose own net (`net_screens.gd`) is where those four numbers are checked now.
+##
+## **The key legend is not asserted here.** It is one string with one owner, and `net_hands` — which owns
+## every key it names — is where it is read back off `_paint_text`. Two files asserting one string is the
+## second copy that diverges.
 
 
 class Spy extends Hud:
@@ -25,8 +29,8 @@ func run(t) -> void:
 	for i in w.food.alive.size():
 		w.food.alive[i] = 0
 	w.food.alive_count = 0
-	# A run opens with clones now; this check places its own swarm, so cut back to the host first.
-	w.swarm.count = 1
+	# A run opens with the host alone, so the swarm below is entirely this check's own. Nothing has to be
+	# cut back first — that line existed while `START_CLONES` did.
 	for i in 5:
 		var k := w.swarm.add_clone()
 		w.swarm.carried[k] = float(i)

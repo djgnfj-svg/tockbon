@@ -22,7 +22,12 @@ func run(t) -> void:
 	var b := sw.add_clone()
 	sw.pos[a] = Vector2(100.0, 100.0)
 	sw.pos[b] = Vector2(100.0, 100.0)
-	sw.command_rally(Vector2(100.0, 100.0))
+	# Frozen: `1` gathers at the HOST now, so the host is what gets parked on the pair. At distance 0 the
+	# FOLLOW branch is already inside `rally_radius()` and steers nowhere, and `_separate` skips `j <= 0`,
+	# so the host neither moves the pair nor is moved by it. Without the freeze the two clones also WALK
+	# during this step and `travel` below stops measuring the correction.
+	sw.pos[0] = Vector2(100.0, 100.0)
+	sw.command_rally()
 	sw.step(DT, null)
 	var gap := sw.pos[a].distance_to(sw.pos[b])
 	t.ok(gap >= 15.9, "완전히 겹친 두 마리가 한 스텝에 떨어졌다 (%.2f)" % gap)
@@ -45,7 +50,8 @@ func run(t) -> void:
 	var b2 := sw2.add_clone()
 	sw2.pos[a2] = Vector2(100.0, 100.0)
 	sw2.pos[b2] = Vector2(100.0, 100.0)
-	sw2.command_rally(Vector2(100.0, 100.0))
+	sw2.pos[0] = Vector2(100.0, 100.0)
+	sw2.command_rally()
 	sw2.step(DT, null)
 	t.eq(sw2.pos[a2], sw.pos[a], "같은 겹침은 같은 방향으로 풀린다")
 
@@ -61,7 +67,9 @@ func run(t) -> void:
 		placed += 1
 	t.ok(placed >= 39, "풀 상한까지 채웠다 (%d)" % placed)
 
-	big.command_rally(Vector2(640.0, 360.0))
+	# The host already stands at (640, 360) — `setup()` put it there — and the rendezvous is the host now,
+	# so the command carries no point.
+	big.command_rally()
 	big.step(DT, null)
 	var tests: int = big.clone_grid.pair_tests
 	t.ok(tests > 0, "격자를 실제로 조회했다 — 0이면 루프가 아예 안 돈 것이다 (%d)" % tests)

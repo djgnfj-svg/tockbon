@@ -14,7 +14,12 @@ extends RefCounted
 ##
 ## Nothing here touches the tree: no Node, no `_draw`, no `Input`. A net drives all of it with `.new()`.
 
-enum { FOLLOW = 0, SCATTER = 1 }
+enum { FOLLOW = 0, SCATTER = 1, STRIKE = 2 }
+
+## The three active slots, in the order the shell fires them: left click, right click, `space`.
+const SLOT_COUNT := 3
+## `space`. The one slot that refuses a non-movement active — see `bind()`.
+const SLOT_MOVEMENT := 2
 
 var pos := PackedVector2Array()
 var vel := PackedVector2Array()
@@ -24,12 +29,20 @@ var eat_cd := PackedFloat32Array()
 var wander := PackedVector2Array()
 var _wander_cd := PackedFloat32Array()
 var _target_food := PackedInt32Array()
+## **STORED, never recomputed.** Derived from anything, halving a body costs nothing — the next frame
+## recomputes it back to full, the total is not conserved, and `F` buys a free double in silence. That is
+## the whole reason splitting is a decision, so the number has to be the thing that moves.
+##
+## It is the ninth packed array, and three functions hand-maintain the row set: `setup()`'s resize block,
+## `add_clone()`, and `remove_at()`'s swap. Miss the swap and a dead clone's force lands on a survivor —
+## no error, nothing on screen. **The net for it has to kill a clone that is NOT the last row**, or the
+## swap branch never runs and the missing line stays green.
+var force := PackedInt32Array()
 var count := 0
 
 ## Banked at the host: what the host bit itself, plus what returning clones handed over. This is the
 ## number the whole experiment reports.
 var banked := 0.0
-var absorbed_events := 0
 
 ## Monotonic. Every mouthful this run, host and clones together, never decremented — `eat()` is the only
 ## place it moves. This is what the ending reports as 경험치: `banked` alone loses everything a dying
@@ -40,11 +53,37 @@ var eaten := 0.0
 ## clone straight at the host and skips `_separate()` entirely — see both call sites below.
 var clear_pull := false
 
-## Where `1` was pressed. **Not the host's position** — clones walk to the point the player named and wait
-## there. Gathering at the host lets the player park in cleared ground while the clones take every step of
-## the risk, which is backwards from the tension this build exists to measure.
-var rally := Vector2.ZERO
+## Where `3` was pressed: clones walk here and STAY. **`1` has no field** — rallying is at the host and
+## `_move_clone()` reads `pos[0]` live every frame, so there is nothing to keep in sync. A `rally` field
+## holding a per-frame copy of the host's position would be a second source of truth for something the
+## swarm can already read, which is why it was deleted rather than repointed.
+var strike_point := Vector2.ZERO
 var scatter_anchor := Vector2.ZERO
+
+## How far into the `F` hold we are, in seconds. The view draws it; it is the only feedback the wind-up
+## has. Resets to zero on firing AND on release — on firing so the arc empties the instant the split lands.
+var split_charge := 0.0
+
+## True from the moment a hold fires until the key comes up. **Zeroing `split_charge` is not enough to stop
+## the ratchet**, and the reasoning that it was is what shipped once: at zero the charge simply winds again
+## and fires every `SPLIT_HOLD_TIME` the finger stays down — measured, four fires in one hold, count 1 → 8.
+## "Charged to zero" and "charged to zero having already fired" are two different states, so they need two
+## different values. Cleared only by `split_release()`, which is also what a panel opening calls.
+var _hold_fired := false
+
+## What is in each of the three slots, and each one's cooldown. `bound_cd[SLOT_MOVEMENT]` stays 0 forever:
+## the dash keeps `dash_cd`, and two cooldowns for one act is two numbers that can disagree.
+var bound := PackedInt32Array()
+var bound_cd := PackedFloat32Array()
+
+## Seconds since the last bite landed, counted UP in `step()`. The view draws the cone while this is under
+## `Look.BITE_SHOW_TIME` and the sim never reads `look.gd` — counting up rather than down is what lets the
+## duration stay a presentation constant without breaking the folder contract, and the sim still owns the
+## clock so the view holds no state the sim does not know about. Opens at INF: a run does not start
+## mid-bite.
+var bite_show := INF
+## Which way the last bite pointed, so the cone the view draws is the cone the sim tested.
+var bite_aim := Vector2.RIGHT
 
 var host_input := Vector2.ZERO
 var host_facing := Vector2.RIGHT
@@ -63,6 +102,11 @@ var clone_grid := SimGrid.new()
 var food_grid := SimGrid.new()
 var field := Rules.FIELD
 
+## The food the last `step()` was handed. `fire()` takes an aim and nothing else — the shell presses a key,
+## it does not hand the simulation its own world back — so a bite reads whatever the frame it happens in
+## was stepped with. Null before the first `step()`, and a bite then simply misses.
+var _food: Food = null
+
 var _rng := RandomNumberGenerator.new()
 
 
@@ -76,6 +120,7 @@ func setup(rng_seed: int = 1, start: Vector2 = Rules.FIELD * 0.5) -> void:
 	wander.resize(Rules.POOL)
 	_wander_cd.resize(Rules.POOL)
 	_target_food.resize(Rules.POOL)
+	force.resize(Rules.POOL)
 	count = 1
 	pos[0] = start
 	vel[0] = Vector2.ZERO
@@ -83,25 +128,43 @@ func setup(rng_seed: int = 1, start: Vector2 = Rules.FIELD * 0.5) -> void:
 	state[0] = FOLLOW
 	eat_cd[0] = 0.0
 	_target_food[0] = -1
-	rally = start
+	# The one place the host's force is written from nothing. After this only splitting, absorbing and the
+	# level move it — and the run opens with the host alone, so no body exists that did not come from a
+	# split. There is no START_CLONES: with the constant still present, `count == 1 + START_CLONES` passes
+	# at every value, including the zero that shipped once.
+	force[0] = Rules.FORCE_START
+	strike_point = start
 	scatter_anchor = start
+	split_charge = 0.0
+	_hold_fired = false
+	bite_show = INF
+	bound = PackedInt32Array([Actives.BITE, Actives.NONE, Actives.DASH])
+	bound_cd = PackedFloat32Array()
+	bound_cd.resize(SLOT_COUNT)
 	clone_grid.configure(field, Rules.GRID_CELL)
 	food_grid.configure(field, Rules.FOOD_GRID_CELL)
 
 
-## -1 when the pool is full. The cap is a real refusal, not a silently ignored request — a level past the
-## cap has to be able to pay out something else, and that only works if the caller can see it happened.
-func add_clone() -> int:
+## -1 when the pool is full. The cap is a real refusal, not a silently ignored request — a split past the
+## cap has to leave the body that could not divide holding its force whole, and that only works if the
+## caller can see it happened.
+##
+## **`parent` is not decoration.** The old signature spawned from `pos[0]` with `state[0]`, and reusing it
+## unchanged makes every child of every clone appear on the host — with every net in plan 2 still passing,
+## because they all split the host. The defaults exist for the nets that measure movement and do not care
+## about force; no production caller uses either.
+func add_clone(parent: int = 0, force_value: int = 0) -> int:
 	# The cap counts clones, not rows: the host is row 0 and is not one of the forty.
 	if count - 1 >= Rules.CLONE_CAP:
 		return -1
 	var i := count
 	count += 1
 	var a := _rng.randf() * TAU
-	pos[i] = pos[0] + Vector2(cos(a), sin(a)) * Rules.ABSORB_RADIUS
+	pos[i] = pos[parent] + Vector2(cos(a), sin(a)) * Rules.CLONE_SPAWN_RING
 	vel[i] = Vector2.ZERO
 	carried[i] = 0.0
-	state[i] = state[0]
+	force[i] = force_value
+	state[i] = state[parent]
 	eat_cd[i] = Rules.EAT_PERIOD_CLONE
 	wander[i] = Vector2(cos(a), sin(a))
 	_wander_cd[i] = Rules.WANDER_PERIOD
@@ -109,8 +172,8 @@ func add_clone() -> int:
 	return i
 
 
-## Swap with the last row. **The cargo goes with it and nothing has to remember to drop it** — see the
-## file header. Index 0 is the host and is never removable.
+## Swap with the last row. **The cargo AND the force go with it and nothing has to remember to drop
+## them** — see the file header. Index 0 is the host and is never removable.
 func remove_at(i: int) -> void:
 	if i <= 0 or i >= count:
 		return
@@ -124,13 +187,26 @@ func remove_at(i: int) -> void:
 		wander[i] = wander[last]
 		_wander_cd[i] = _wander_cd[last]
 		_target_food[i] = _target_food[last]
+		force[i] = force[last]
 	count -= 1
 
 
-func command_rally(point: Vector2) -> void:
-	rally = point
+## `1`. **No argument: the swarm comes to the host**, and `_move_clone()` reads `pos[0]` live rather than
+## a stored point. The argument used to be the mouse and this comment used to argue for it — that
+## gathering at the host lets the player park in cleared ground while the clones take the risk. **That
+## argument lost** (user, 2026-08-14): a command that sends the swarm somewhere is `3`, and one key that
+## means "come here" is what the hand actually reaches for.
+func command_rally() -> void:
 	for i in range(1, count):
 		state[i] = FOLLOW
+
+
+## `3`. Clones walk to the point and STAY there rather than drifting back, and they do not steer at food
+## on the way — that is the whole difference between sending the swarm and letting it wander.
+func command_strike(point: Vector2) -> void:
+	strike_point = point
+	for i in range(1, count):
+		state[i] = STRIKE
 
 
 func command_scatter() -> void:
@@ -168,12 +244,172 @@ func total_carried() -> float:
 	return sum
 
 
+## Every row's force, host included. **`World.is_hunter_of()` is its production caller** and that is the
+## whole reason it has to exist: the prey/hunter comparison read `count` once, and a split multiplies rows
+## while conserving force, so `F` bought the reversal for free. The conservation checks are its other
+## caller — a hand-rolled sum inside every net would be the second copy `CLAUDE.md` forbids.
+func total_force() -> int:
+	var sum := 0
+	for i in count:
+		sum += force[i]
+	return sum
+
+
+# -- F, the split --------------------------------------------------
+
+## Called every frame `F` is down. Fires once the charge reaches `SPLIT_HOLD_TIME` — hold it four times as
+## long without letting go and the count goes up once, because `_hold_fired` stays set until the key is
+## released. See that field for why the reset alone does not do it.
+func split_hold(dt: float) -> void:
+	if _hold_fired:
+		return
+	split_charge += dt
+	if split_charge < Rules.SPLIT_HOLD_TIME:
+		return
+	split_charge = 0.0
+	_hold_fired = true
+	_split_fire()
+
+
+## `F` came up, or a panel opened. An incomplete charge is DROPPED, not paused — resuming a wind-up across
+## a menu is a decision the player did not make. This is also the only place the one-split-per-hold latch
+## clears: releasing the key is what makes the next split a second decision.
+func split_release() -> void:
+	split_charge = 0.0
+	_hold_fired = false
+
+
+## **Every body with force >= 2 halves at once**, not the host alone. The parent keeps the LARGER half
+## (`5 → 3 + 2`): it fights in front, so it keeps the odd point.
+##
+## ⚠ `carried` is NOT divided — the parent keeps all of it. Cargo is something a body is holding, not a
+## substance it is made of, and halving it hands a stranger half a harvest it never walked home.
+##
+## ⚠ **The loop bound must never be read live, so this must never become a `while i < count`.** Measured
+## on 4.7.1: `for i in <int>` evaluates its bound ONCE, so `for i in count` with `add_clone()` appending
+## inside is already safe and `snapshot` is the bound written down rather than a guard against the
+## language. A `while i < count` rewritten in for readability is the shape that actually bites — one press
+## then walks the whole swarm down to force 1, because the `2` that came out of a `5` is split again
+## inside the same press (measured: forces end `3,2,1,1` instead of `3,2,2,1`).
+##
+## Over the cap, bodies split in index order, lowest first, until `add_clone()` refuses; the rest keep
+## their force whole. A body at force 1 does not split and that is not an error.
+func _split_fire() -> void:
+	var snapshot := count
+	for i in snapshot:
+		if force[i] < 2:
+			continue
+		# Integer division floors, so the child takes the smaller half and the parent the remainder.
+		var child := force[i] / 2
+		var j := add_clone(i, child)
+		if j < 0:
+			return
+		force[i] -= child
+
+
+# -- V, the absorb -------------------------------------------------
+
+## Every clone within reach of the host **dies**, and its force and its cargo go to the host. Returns how
+## many were taken, so a press that reached nothing is visible to the caller as 0.
+##
+## ⚠ Cargo arriving this way is BANKED, never routed through `eat()` — it was counted into `eaten` the
+## moment it was picked up, and paying it again would make walking a clone home worth double.
+##
+## Backwards, because `remove_at()` swaps the last row down and a forward walk would skip whatever landed
+## in `i`.
+func absorb() -> int:
+	var reach := Rules.ABSORB_RADIUS_BODIES * Rules.BODY_RADIUS
+	var taken := 0
+	for i in range(count - 1, 0, -1):
+		if pos[i].distance_to(pos[0]) > reach:
+			continue
+		force[0] += force[i]
+		banked += carried[i]
+		carried[i] = 0.0
+		remove_at(i)
+		taken += 1
+	return taken
+
+
+# -- the three slots -----------------------------------------------
+
+## **The only entry point for the three keys.** False when the slot is empty, on cooldown, or the active
+## itself refused. A key that does its own thing instead of coming through here is a fourth code path the
+## panel's input gate would have to know about separately.
+func fire(slot: int, aim: Vector2) -> bool:
+	if slot < 0 or slot >= bound.size():
+		return false
+	if bound_cd[slot] > 0.0:
+		return false
+	match bound[slot]:
+		Actives.BITE:
+			return _bite(slot, aim)
+		Actives.DASH:
+			# The dash keeps `dash_cd`. `bound_cd[slot]` is deliberately left alone so the two cooldowns
+			# cannot disagree about whether the hand is free.
+			return try_dash()
+	return false
+
+
+## False when `space` is handed something that is not a movement active. It is a real refusal the panel
+## reports in a line of Korean — silently ignoring the click is how a player concludes the panel is broken.
+func bind(slot: int, active: int) -> bool:
+	if slot < 0 or slot >= bound.size():
+		return false
+	if slot == SLOT_MOVEMENT and not Actives.MOVEMENT.has(active):
+		return false
+	bound[slot] = active
+	return true
+
+
+## A front cone toward `aim`, and it eats the NEAREST food inside it. **A real function, not an
+## animation** — a click that only draws is the idle hand this plan exists to remove. Plan 4 replaces what
+## it hits, not the key.
+func _bite(slot: int, aim: Vector2) -> bool:
+	if _food == null:
+		return false
+	var origin := pos[0]
+	var dir := aim - origin
+	dir = host_facing if dir.length_squared() < 0.0001 else dir.normalized()
+	var half_arc := Rules.BITE_ARC * 0.5
+	var ids := food_grid.neighbours(origin, Rules.BITE_RANGE, Rules.SENSE_CAP)
+	var best := -1
+	var best_d := INF
+	for id in ids:
+		var j := id >> 1
+		if j < 0 or j >= _food.alive.size() or _food.alive[j] == 0:
+			continue
+		var to: Vector2 = _food.pos[j] - origin
+		var d := to.length()
+		if d > Rules.BITE_RANGE or d >= best_d:
+			continue
+		# The angle is the skill. Range alone and the cone is a circle with a picture drawn on it.
+		if d > 0.0001 and absf(dir.angle_to(to)) > half_arc:
+			continue
+		best_d = d
+		best = j
+	if best < 0:
+		return false
+	if not _food.consume(best):
+		return false
+	eat(0, 1.0)
+	bound_cd[slot] = Rules.BITE_COOLDOWN
+	bite_show = 0.0
+	bite_aim = dir
+	return true
+
+
 ## One frame. `food` may be null — a net that only measures steering passes nothing and pays for nothing.
 ##
-## Order is load-bearing and is itself measurable: move, then separate, then eat, then absorb. Separating
+## Order is load-bearing and is itself measurable: move, then separate, then eat, then — during the great
+## absorption only — take whatever arrived at the host. Nothing happens on ordinary contact. Separating
 ## before moving lets two clones end the frame on top of each other, which is the one thing separation
 ## exists to prevent.
 func step(dt: float, food: Food = null) -> void:
+	_food = food
+	for s in bound_cd.size():
+		bound_cd[s] = maxf(0.0, bound_cd[s] - dt)
+	bite_show += dt
 	_rebuild_grids(food)
 	_move_host(dt)
 	for i in range(1, count):
@@ -186,7 +422,8 @@ func step(dt: float, food: Food = null) -> void:
 			_separate(i)
 	for i in count:
 		_try_eat(i, dt, food)
-	_absorb()
+	if clear_pull:
+		_clear_arrivals()
 
 
 func _rebuild_grids(food: Food) -> void:
@@ -219,7 +456,8 @@ func _move_host(dt: float) -> void:
 
 func _move_clone(i: int, dt: float, food: Food) -> void:
 	var p := pos[i]
-	var speed := Rules.CLONE_SPEED_FOLLOW if state[i] == FOLLOW else Rules.CLONE_SPEED_SCATTER
+	# STRIKE walks at the FOLLOW speed: it is the swarm being sent somewhere on purpose, not wandering.
+	var speed := Rules.CLONE_SPEED_SCATTER if state[i] == SCATTER else Rules.CLONE_SPEED_FOLLOW
 	if clear_pull:
 		speed = Rules.CLEAR_ABSORB_PULL
 	var desired := Vector2.ZERO
@@ -240,7 +478,14 @@ func _move_clone(i: int, dt: float, food: Food) -> void:
 		if to.length() > 0.001:
 			desired = to.limit_length(speed * dt) / dt
 	elif state[i] == FOLLOW:
-		var to := rally - p
+		# `pos[0]` read live every frame, not a stored rally point — that is the whole of `1`.
+		var to := pos[0] - p
+		if to.length() > rally_radius():
+			desired = to.normalized() * speed
+	elif state[i] == STRIKE:
+		# Arrive and STAY. No food seeking: the swarm was sent here, and a clone that peels off after a
+		# crumb is the swarm not obeying the one command that aims it.
+		var to := strike_point - p
 		if to.length() > rally_radius():
 			desired = to.normalized() * speed
 	else:
@@ -326,8 +571,9 @@ func _try_eat(i: int, dt: float, food: Food) -> void:
 
 
 ## THE ONLY PLACE `banked` OR `carried[i]` GROWS BY NEW MATERIAL. Moving cargo between two bodies is not
-## eating and must not call this — `_absorb()` and `Run._finish_clear()` both assign directly, and that
-## asymmetry is the whole point: cargo arriving home was already counted here when it was picked up.
+## eating and must not call this — `absorb()`, `_clear_arrivals()` and `Run._finish_clear()` all assign
+## directly, and that asymmetry is the whole point: cargo arriving home was already counted here when it
+## was picked up.
 func eat(i: int, amount: float) -> void:
 	eaten += amount
 	if i == 0:
@@ -336,35 +582,36 @@ func eat(i: int, amount: float) -> void:
 		carried[i] += amount
 
 
-## Ordinary play: touching the host hands the cargo over. **The clone empties; it does not die** — the
-## swarm's size is set by level, and a harvest that deleted clones would erase the forty-blobs screenshot
-## every time the player collected anything.
+## **The great absorption only**, and it is called from `step()` behind `clear_pull`. Arrival removes the
+## whole body, cargo or none.
 ##
-## **During the great absorption (`clear_pull`), arrival removes the whole body**, cargo or none. This is
-## the one exception to "the clone does not die" above, and it exists because the ordinary rule — only a
-## LOADED clone does anything on arrival — left every empty clone sitting motionless on the host for
-## whatever was left of the beat once it got there: measured, most of a 40-body swarm converges well
-## inside `CLEAR_ABSORB_TIME`, and the beat was a still frame for the remainder — screen and sim
-## disagreeing, `CLAUDE.md`'s own name for it. Removing on arrival instead of waiting for the beat's own
-## end also means `banked` rises once per arriving body rather than once in a single lump at
-## `Run._finish_clear()` — which is what makes `FieldView`'s absorb-pop animation fire per body instead
-## of not at all.
+## This function used to do a second, unrelated job: on ordinary contact a loaded clone emptied into the
+## host and stayed alive. **That branch is gone** — cargo comes home because the player pressed `V`, or
+## because the run cleared, and nothing else. Automatic handover made recall discipline free, which is the
+## thing the build measures.
+##
+## ⚠ **Do not fold this away with it.** `Run::step()` waits on `swarm.count <= 1`, and removing a body on
+## arrival is the only thing that ever makes that true; delete it and every cleared run hangs for the full
+## `CLEAR_ABSORB_TIME` and limps out through `Run._finish_clear()`'s fallback loop, with the `FieldView`
+## absorb-pop firing once in a lump instead of once per body. Removing on arrival rather than waiting for
+## the beat's end is also why the beat is not a still frame: measured, most of a 40-body swarm converges
+## well inside `CLEAR_ABSORB_TIME`, and the ordinary rule left every empty clone sitting motionless on the
+## host for the remainder — screen and sim disagreeing, `CLAUDE.md`'s own name for it.
 ##
 ## Backwards, because `remove_at()` swaps the last row down and a forward walk would skip whatever landed
 ## in `i` — the same reason every other flat-array removal in this build walks backwards.
-func _absorb() -> void:
+func _clear_arrivals() -> void:
 	for i in range(count - 1, 0, -1):
 		if pos[i].distance_to(pos[0]) > Rules.ABSORB_RADIUS:
 			continue
-		if clear_pull:
-			banked += carried[i]
-			carried[i] = 0.0
-			remove_at(i)
-			absorbed_events += 1
-		elif carried[i] > 0.0:
-			banked += carried[i]
-			carried[i] = 0.0
-			absorbed_events += 1
+		# Force comes home with the body, exactly as `absorb()` does it. Three functions bring a body home
+		# — this one, `absorb()`, and `Run._finish_clear()` — and for a while only `absorb()` moved force,
+		# so the total was silently not conserved across the great absorption while `V` preserved it. Two
+		# implementations of one rule, already forked; `net_force`'s clear-beat check pins all three.
+		force[0] += force[i]
+		banked += carried[i]
+		carried[i] = 0.0
+		remove_at(i)
 
 
 func _nearest_food(p: Vector2, food: Food) -> int:

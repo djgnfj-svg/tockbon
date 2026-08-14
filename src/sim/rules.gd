@@ -7,9 +7,10 @@ extends RefCounted
 ## before-and-after. The reasoning for each is in the prototype plan doc (`proto-round-trip`), not here —
 ## repeating it would be the second copy this file exists to prevent.
 ##
-## The three speeds below are the whole tension of the build and their ORDER is load-bearing:
-## HOST_SPEED > PREDATOR_SPEED > CLONE_SPEED_SCATTER. The host always escapes; an abandoned clone never
+## The four speeds below are the whole tension of the build and their ORDER is load-bearing:
+## HOST_SPEED > CRITTER_SPEED > CLONE_SPEED_SCATTER. The host always escapes; an abandoned clone never
 ## does. Break the ordering and scattering costs nothing, which is the one thing this prototype measures.
+## (The name in this sentence was `PREDATOR_SPEED` for two days after the constant became `CRITTER_SPEED`.)
 
 const FIELD := Vector2(3840.0, 2160.0)
 
@@ -20,8 +21,8 @@ const POOL := 128
 const CLONE_CAP := 40
 
 ## **Everything was 60% faster than this and the user's first word for it was "too fast".** The ordering is
-## what matters, not the magnitudes — host > critter > scattered clone — so all four came down together
-## and the tension is untouched.
+## what matters, not the magnitudes — the one stated in the file header, not restated here — so all four
+## came down together and the tension is untouched.
 const HOST_SPEED := 200.0
 const CLONE_SPEED_FOLLOW := 215.0
 const CLONE_SPEED_SCATTER := 125.0
@@ -42,7 +43,6 @@ const WANDER_PERIOD := 1.2
 ## Clones do not collide. This is a rendering requirement — sixty bodies at one point read as one dot and
 ## the screenshot the whole pitch rests on disappears.
 const SEPARATION_MIN := 16.0
-const SEPARATION_PUSH := 8.0
 ## A hard iteration cap, not a time budget. The uniform grid degenerates to O(n²) in exactly one
 ## situation — the rendezvous, when the entire swarm piles onto one point — and that is the game's
 ## most-pressed key. Bucket order is stable, so which 8 neighbours are seen is deterministic.
@@ -58,23 +58,57 @@ const FOOD_GRID_CELL := 256.0
 const SENSE_RADIUS := 240.0
 const SENSE_CAP := 12
 
+# -- bodies --------------------------------------------------------
+## **These are sim constants, not `look.gd` ones**, and they moved out of `look.gd` for one reason: the
+## radius decides who gets absorbed by `V` and what reaches what, so it changes what happens. `src/sim/`
+## may not read `look.gd`, and a radius owned there would have had to be copied here to be usable.
+## `look.gd` keeps no second copy of either.
+const BODY_RADIUS := 14.0
+const CLONE_BODY_RADIUS := 8.0
+## Where a body made by splitting appears, measured from its PARENT. This was `ABSORB_RADIUS`'s second,
+## unrelated job; retuning the great absorption's arrival distance silently moved where every new body
+## spawned, with nothing to catch it.
+const CLONE_SPAWN_RING := 20.0
+
 # -- eating --------------------------------------------------------
-## Eating is automatic on proximity, so the reach has to clear the BODY — at 12px, smaller than the host's
-## own 14px radius, food had to be run over dead centre and hunting read as broken. Reported by the user
-## on the first play, which is the only instrument that could have found it.
+## Eating is automatic on proximity, so the reach has to clear the BODY — at 12px, smaller than
+## BODY_RADIUS, food had to be run over dead centre and hunting read as broken. Reported by the user on
+## the first play, which is the only instrument that could have found it. Both of these must stay above
+## the matching body radius above; `net_force` asserts the pair.
 const EAT_RADIUS_HOST := 26.0
 const EAT_RADIUS_CLONE := 16.0
 
-## The swarm the run opens with. **Zero was wrong**: the two swarm commands are the entire experiment and
-## with no clones to obey them the first minute is one square eating alone, so nothing under test is even
-## on screen. Six is enough to see a scatter and a rendezvous immediately.
-const START_CLONES := 6
 ## The host's mouth is worth ~2.5× a clone's. This is the ENTIRE reason the host stays in front, and it
 ## replaces the GDD's 50% tax with a speed — nothing to tune, nothing to explain in the UI.
 const EAT_PERIOD_HOST := 0.6
 const EAT_PERIOD_CLONE := 1.5
-## Touching the host hands the cargo over. The clone empties; it does not die.
+## **The great absorption's arrival distance, and nothing else.** Ordinary contact no longer moves cargo —
+## `V` does, at its own radius — so this is read by `Swarm._clear_arrivals()` alone.
 const ABSORB_RADIUS := 20.0
+
+# -- force ---------------------------------------------------------
+## Force is per body and it is THE number the game compares. `Swarm.force[i]` is STORED, never recomputed:
+## derived, halving the host costs nothing because the next frame recomputes it back, the total is not
+## conserved, and splitting buys the swarm a free double. Silently.
+##
+## Ten rather than one because **splitting is the tutorial** — at force 1 the first `F` was a level-up
+## away and the opening minute had no act in it.
+const FORCE_START := 10
+## The whole payout of a level. Cards no longer hand out clones; the swarm grows because `F` was held.
+const FORCE_PER_LEVEL := 10
+## Held, not tapped, so the split reads as an act rather than a keystroke. Long enough to be one, short
+## enough to spam in a fight.
+const SPLIT_HOLD_TIME := 0.45
+## `V`'s reach, in body radii — 4 × BODY_RADIUS. Wide enough that a rallied swarm goes home in one press,
+## tight enough to leave stragglers behind. Written as a multiple so retuning the body retunes the reach.
+const ABSORB_RADIUS_BODIES := 4.0
+
+# -- actives -------------------------------------------------------
+## The bite is a real front cone, not an animation: five body-widths ahead, and the ANGLE is the skill.
+## Two bites a second — faster and the click reads as a stream rather than a hit.
+const BITE_RANGE := 70.0
+const BITE_ARC := deg_to_rad(70.0)
+const BITE_COOLDOWN := 0.5
 
 # -- food ----------------------------------------------------------
 ## Spots are fixed for the run. Eating one starts its cooldown, so a region actually empties out —
@@ -97,8 +131,19 @@ const CRITTER_INTERVAL := 45.0
 const CRITTER_MAX := 24
 const CRITTER_THREAT_MIN := 1
 const CRITTER_THREAT_MAX := 5
-## Clones needed per point of threat before the swarm flips from prey to hunter.
-const SWARM_PER_THREAT := 5.0
+## Force needed per point of threat before the swarm flips from prey to hunter.
+##
+## ⚠ **Force, not body count, and the difference is the whole of `F`.** Counted in bodies, holding `F`
+## four times walks one force-10 host into ten force-1 bodies in about two seconds — the total is
+## conserved, nothing was earned, and every threat-1 critter flips from hunter to prey for free. That
+## contradicts the one sentence the split economy rests on (*splitting buys nothing by itself; what it
+## costs is concentration*), and it is invisible to any check that only asserts conservation across a
+## split. Read as force, splitting is genuinely neutral.
+##
+## 20 rather than the 5-per-threat this was in bodies: force opens at `FORCE_START` and a level pays
+## `FORCE_PER_LEVEL`, so a point of threat costs two levels' worth and the opening host outranks nothing.
+## A guess, expected to move on the first session.
+const FORCE_PER_THREAT := 20.0
 ## Body radius scales with threat, so a dangerous one is visibly bigger before it is close.
 const CRITTER_RADIUS_BASE := 13.0
 const CRITTER_RADIUS_PER_THREAT := 4.0
@@ -115,9 +160,14 @@ const HOST_HIT_GRACE := 1.0
 const CRITTER_SPAWN_MIN_DIST := 900.0
 
 # -- growth --------------------------------------------------------
-## +1 clone per this much banked, automatic, spending nothing. A timed split would make the swarm's size
-## independent of play, and then recall discipline has no consequence — which is the thing under test.
-const SPLIT_PER_BANKED := 10.0
+## A level per this much banked, and the cost RISES: level n costs `LEVEL_COST_BASE * pow(GROWTH, n)`. A
+## flat cost at the ×10 force scale hands out a level every few seconds by the midgame. The level pays
+## FORCE_PER_LEVEL into the host and nothing else — it does not grow the swarm, `F` does.
+##
+## It is paid from `banked`, never from `eaten`: a clone that dies far from home costs you the level it
+## was carrying, and that is the rule the prototype's confirmed fun rests on.
+const LEVEL_COST_BASE := 10.0
+const LEVEL_COST_GROWTH := 1.35
 
 # -- the great absorption --------------------------------------------
 ## On clearing, the whole swarm is pulled home and absorbed — the one time that happens. See

@@ -165,6 +165,33 @@ function Get-SrcStamp([string]$r) {
 }
 $stampBefore = Get-SrcStamp $root
 
+# **The stamp above only sees a change that happens DURING the round, and that is not the dangerous case.**
+#  A file another agent broke BEFORE the round started and restored AFTER it ended never moves it, so a
+#  contaminated result — red OR green — prints with exactly the same confidence as a clean one. Measured
+#  three times in one session: rounds came back red in nets nobody had touched, no [경합] warning, and a
+#  re-run 30 seconds later was fully green. Three mutation measurements were lost to it.
+#  **A single round cannot detect this from the inside.** What it can do is make two rounds COMPARABLE:
+#  every scanned file's path, size and mtime, hashed, printed every time. Two rounds carrying the same
+#  fingerprint measured the same tree; two that differ did not, and that difference has to be explained
+#  before either result is believed.
+#  ⚠ Deliberately NOT a `git status --porcelain` comparison: an uncommitted working tree is the normal
+#  state of every builder round, so reddening the wrapper on it would red every round in the repo.
+function Get-SrcFingerprint([string]$r) {
+    $sb = New-Object System.Text.StringBuilder
+    foreach ($d in @("src", "tests")) {
+        $p = Join-Path $r $d
+        if (-not (Test-Path $p)) { continue }
+        $files = Get-ChildItem -Path $p -Recurse -File -Include "*.gd", "*.tscn", "*.tres" | Sort-Object FullName
+        foreach ($f in $files) {
+            [void]$sb.Append($f.FullName).Append('|').Append($f.Length).Append('|').Append($f.LastWriteTimeUtc.Ticks).Append("`n")
+        }
+    }
+    $md5 = [System.Security.Cryptography.MD5]::Create()
+    $bytes = $md5.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($sb.ToString()))
+    return ([System.BitConverter]::ToString($bytes) -replace '-', '').Substring(0, 12)
+}
+$fingerprint = Get-SrcFingerprint $root
+
 $sw = [System.Diagnostics.Stopwatch]::StartNew()
 
 # -- Serial: the old behavior. Everything in one process.
@@ -189,6 +216,7 @@ if ($Serial) {
         $exitCode = 1
     }
     $sw.Stop()
+    Write-Host ("[지문] src·tests {0} — 두 라운드의 지문이 다르면 같은 나무를 잰 것이 아니다" -f $fingerprint)
     if ($exitCode -eq 0) {
         Write-Host ("[래퍼] 통과. stderr 깨끗함. ({0:N1}s, 직렬)" -f $sw.Elapsed.TotalSeconds) -ForegroundColor Green
     } else {
@@ -344,6 +372,7 @@ foreach ($l in $lines) {
 
 Write-Host ""
 Write-Host ("[그물] 통과 {0}개 · 실패 {1}개 · {2}개 그물 · {3:N1}s" -f $totalPass, $totalFail, $nets.Count, $sw.Elapsed.TotalSeconds)
+Write-Host ("[지문] src·tests {0} — 두 라운드의 지문이 다르면 같은 나무를 잰 것이 아니다" -f $fingerprint)
 
 # If the source changed while it was running, **do not trust the result.** The why is in the comment on the function above.
 $stampAfter = Get-SrcStamp $root

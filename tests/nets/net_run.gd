@@ -18,9 +18,11 @@ func run(t) -> void:
 	r.start(1)
 	t.eq(r.phase, Run.Phase.PLAY, "start()는 PLAY로 넘어간다")
 	t.ok(r.world != null, "start() 후 world가 생긴다")
-	# The literal 7, not `1 + Rules.START_CLONES` — a bound read out of the thing it measures passes at
-	# any value, and "the swarm started at zero" is the bug that walked through 102 green checks once.
-	t.eq(r.world.swarm.count, 7, "무리는 호스트+6으로 시작한다")
+	# The literal 1. It used to be 7 with a `START_CLONES` constant behind it — and the reason the number
+	# is written out rather than derived has not changed: a bound read out of the thing it measures passes
+	# at any value, and "the swarm started at zero" is the bug that walked through 102 green checks once.
+	# The run opens with the host alone now, on purpose: no body exists that did not come from an `F`.
+	t.eq(r.world.swarm.count, 1, "런은 호스트 하나로 시작한다")
 
 	# -- 3: start() twice makes two different Worlds ------------------
 	var w1 := r.world
@@ -38,11 +40,13 @@ func run(t) -> void:
 	# -- 5: clearing does not flip the phase until the beat finishes --
 	var r5 := Run.new()
 	r5.start(4)
-	# The beat now ends the instant every body has arrived (Swarm._absorb() removes each on arrival,
+	# The beat ends the instant every body has arrived (Swarm._clear_arrivals() removes each on arrival,
 	# Run.step() checks swarm.count<=1), not at a fixed CLEAR_ABSORB_TIME — so "still PLAY at half the
-	# beat" needs a swarm that genuinely takes that long to converge. Left at their spawn positions (each
-	# exactly ABSORB_RADIUS from the host), the six default clones arrive within a frame or two and this
+	# beat" needs a swarm that genuinely takes that long to converge. A run opens with the host alone, so
+	# the bodies are placed here; left anywhere near the host they arrive within a frame or two and this
 	# check would read ENDING at the half-beat mark for a reason that is not the phase machine.
+	for _i in 6:
+		r5.world.swarm.add_clone()
 	for i in range(1, r5.world.swarm.count):
 		r5.world.swarm.pos[i] = r5.world.swarm.pos[0] + Vector2(700.0, 0.0)
 	r5.world.stage_cleared = true
@@ -67,6 +71,8 @@ func run(t) -> void:
 	# in a handful of frames must not still be waiting out the full 72-frame timer.
 	var r5b := Run.new()
 	r5b.start(26)
+	for _i in 6:
+		r5b.world.swarm.add_clone()
 	for i in range(1, r5b.world.swarm.count):
 		r5b.world.swarm.pos[i] = r5b.world.swarm.pos[0] + Vector2(100.0, 0.0)   ## arrives in ~7 frames
 	r5b.world.stage_cleared = true
@@ -83,11 +89,11 @@ func run(t) -> void:
 	r6.start(5)
 	_silence_food(r6.world)
 	r6.world.critter_count = 0
-	var c6 := r6.world.swarm.add_clone()
+	var c6 := r6.world.swarm.add_clone(0, 7)
 	r6.world.swarm.carried[c6] = 9.0
 	# Far enough that CLEAR_ABSORB_PULL never closes the gap inside CLEAR_ABSORB_TIME (900 * 1.2 = 1080px):
 	# the clone must still be carrying its 9.0 when the beat ends, or _finish_clear()'s forced bank never
-	# actually runs on it — the natural in-flight _absorb() would have already zeroed it, and the mutation
+	# actually runs on it — an in-flight arrival (`_clear_arrivals()`) would have already zeroed it, and the mutation
 	# this check exists to catch has nothing left to act on.
 	r6.world.swarm.pos[c6] = r6.world.swarm.pos[0] + Vector2(1500.0, 0.0)
 	var eaten_before6: float = r6.world.swarm.eaten
@@ -110,6 +116,13 @@ func run(t) -> void:
 	# "On clearing, the whole swarm is absorbed — bodies included" (design). Not just c6: every clone,
 	# loaded or not, is removed. Only the host (row 0) survives.
 	t.eq(r6.world.swarm.count, 1, "박동이 끝나면 무리 전체가 실제로 제거된다 (흡수는 숫자만이 아니다)")
+	# **This clone never arrives** — it is 1500px out and the pull cannot close that inside the beat — so
+	# it is `Run._finish_clear()`'s forced sweep, not `Swarm._clear_arrivals()`, that takes it. That is the
+	# third of the three paths bringing a body home, and it was the one that dropped force on the floor
+	# while `V` kept it: 10 + 7 with nothing to catch the difference. `net_force`'s clear-beat check pins
+	# the arrival path; this pins the fallback.
+	t.eq(r6.world.swarm.total_force(), 17,
+			"끝까지 못 온 몸의 힘도 호스트에 남는다 (호스트 10 + 분신 7)")
 
 	# -- 7: a clone that dies in the field still counted what it ate --
 	var r7 := Run.new()
@@ -130,7 +143,10 @@ func run(t) -> void:
 	t.eq(r7.result.experience, 5, "밖에서 죽은 분신이 먹은 것도 경험치에 남는다")
 	t.eq(r7.world.swarm.banked, 0.0, "그 경험치는 은행에는 들어오지 않았다")
 
-	# -- 8: _absorb() never raises eaten -------------------------------
+	# -- 8: cargo comes home on `V`, and `V` never raises eaten ---------
+	# Two halves, and the first is the one that stopped being true this plan: standing on the host used to
+	# empty a clone automatically. It does not any more — recall is a key the player presses, and the
+	# whole tension of the build is that it can be forgotten.
 	var r8 := Run.new()
 	r8.start(7)
 	_silence_food(r8.world)
@@ -138,12 +154,17 @@ func run(t) -> void:
 	var c8 := r8.world.swarm.add_clone()
 	r8.world.swarm.carried[c8] = 4.0
 	r8.world.swarm.pos[c8] = r8.world.swarm.pos[0] + Vector2(Rules.ABSORB_RADIUS - 2.0, 0.0)
-	r8.world.swarm.command_rally(r8.world.swarm.pos[0])
+	r8.world.swarm.command_rally()
 	var eaten_before8: float = r8.world.swarm.eaten
 	var banked_before8: float = r8.world.swarm.banked
-	r8.world.step(DT)
-	t.ok(r8.world.swarm.banked > banked_before8, "몸으로 돌아온 화물은 은행에 들어온다")
-	t.eq(r8.world.swarm.eaten, eaten_before8, "_absorb()는 먹은 총량을 올리지 않는다")
+	for _s in 30:
+		r8.world.step(DT)
+	t.eq(r8.world.swarm.banked, banked_before8, "몸에 닿아 있어도 저절로 넘어오지 않는다")
+	# Cargo was counted into `eaten` when it was picked up. Routed through `eat()` here it would be paid a
+	# second time and walking a clone home would be worth double.
+	t.eq(r8.world.swarm.absorb(), 1, "설정: V가 실제로 하나를 거둬들였다")
+	t.ok(r8.world.swarm.banked > banked_before8, "V로 거둔 화물은 은행에 들어온다")
+	t.eq(r8.world.swarm.eaten, eaten_before8, "V는 먹은 총량을 올리지 않는다")
 
 	# -- 9: to_title() drops the world, keeps the result ---------------
 	var r9 := Run.new()
@@ -181,29 +202,33 @@ func run(t) -> void:
 	for i in range(1, sw16.count):
 		var a := float(i) * 0.31
 		sw16.pos[i] = sw16.pos[0] + Vector2(cos(a), sin(a)) * (400.0 + float(i) * 18.0)
-	# `rally` defaults to the host's own start position, so with it untouched the pull branch and
-	# ordinary FOLLOW steer at the exact same point — deleting the whole `if clear_pull:` branch in
-	# _move_clone survives this check unless `rally` is somewhere else. Sending it 1200px off host makes
-	# the two branches produce opposite motion: FOLLOW would walk the pack AWAY from the host, not toward
-	# it, so a dead pull branch is now visible as the mean distance rising instead of falling.
-	sw16.command_rally(sw16.pos[0] + Vector2(1200.0, 0.0))
+	# **The trick this check used to rest on is gone.** It sent `rally` 1200px off host so that a deleted
+	# `if clear_pull:` branch showed up as the mean distance RISING — ordinary FOLLOW would have walked the
+	# pack the other way. Rallying is at the host now, so both branches steer at the same point and a dead
+	# pull branch is invisible to any check that only asks which way the pack moved.
+	#
+	# **What separates them is the SPEED, so that is what is pinned.** The pull closes
+	# `CLEAR_ABSORB_PULL * DT` = 15px a frame; FOLLOW manages `CLONE_SPEED_FOLLOW * DT` = 3.58px. 10.0 is
+	# a literal between the two — read through either constant this check would scale with the very thing
+	# it is separating. It also measures the PROCESS rather than the endpoint: a teleport home would leave
+	# the same final distance.
 	sw16.clear_pull = true
 	var start16 := _mean_dist_to_host(sw16)
 	var prev16 := start16
 	var non_increasing16 := true
-	var after10_16 := 0.0
-	# 400 / CLEAR_ABSORB_PULL = 0.444s to the nearest clone's arrival. 18 frames stays well inside that.
-	for frame16 in range(1, 19):
+	# 400 / CLEAR_ABSORB_PULL = 0.444s to the nearest clone's arrival. 18 frames stays well inside that,
+	# so nothing decelerates on arrival and every frame is the pull at full speed.
+	for _frame16 in 18:
 		sw16.step(DT, null)
 		var cur16 := _mean_dist_to_host(sw16)
 		if cur16 > prev16 + 0.5:
 			non_increasing16 = false
 		prev16 = cur16
-		if frame16 == 10:
-			after10_16 = cur16
 	t.ok(non_increasing16, "흡수 박동 동안 평균 거리가 매 프레임 늘어나지 않는다")
-	t.ok(start16 - after10_16 > 100.0,
-			"흡수 당김이 900px/s에 맞는 속도로 줄어든다 (%.1f)" % (start16 - after10_16))
+	var per_frame16 := (start16 - prev16) / 18.0
+	t.ok(per_frame16 > 10.0,
+			"당김이 FOLLOW가 아니라 900px/s 쪽 속도로 좁힌다 (프레임당 %.2fpx)" % per_frame16)
+	t.eq(sw16.count, 21, "설정: 18프레임 안에는 아무도 도착하지 않았다 — 감속이 섞이지 않았다")
 
 	# -- 16a2: the picture keeps changing for the whole beat, not one jump to 1 -------------------------
 	# A still frame followed by a single collapse to 1 satisfies "the beat ends eventually" while looking
@@ -243,7 +268,7 @@ func run(t) -> void:
 	var arrived16b := false
 	for _f in int(Rules.CLEAR_ABSORB_TIME / DT):
 		if sw16b.count <= 1:
-			# Arrival now removes the body outright (see Swarm._absorb()'s header) — reading `pos[only16b]`
+			# Arrival now removes the body outright (see Swarm._clear_arrivals()'s header) — reading `pos[only16b]`
 			# after that would read whatever `remove_at()` swapped into that row, not "the clone stopped
 			# here". Stop measuring the instant there is nothing left to measure.
 			arrived16b = true
@@ -305,11 +330,15 @@ func run(t) -> void:
 	var r19 := Run.new()
 	r19.start(15)
 	_silence_food(r19.world)
-	for _i in 20:
-		r19.world.swarm.add_clone()   # count 27, clears is_hunter_of's 25-clone threshold
-	r19.world.swarm.banked = Rules.SPLIT_PER_BANKED - 1.0   # (a): one bite from a level, not there yet
+	# 24 clones at force 4 plus the host's 10 = 106, over `CRITTER_THREAT_MAX * FORCE_PER_THREAT` (100), so
+	# `is_hunter_of()` reads true and the host can eat the max-threat critter. **The force is not
+	# decoration**: the comparison reads `total_force()`, and force-0 bodies made out of nothing outrank
+	# nothing however many of them there are. The run opens alone, so every one of them is placed here.
+	for _i in 24:
+		r19.world.swarm.add_clone(0, 4)
+	r19.world.swarm.banked = Rules.LEVEL_COST_BASE - 1.0   # (a): one bite from a level, not there yet
 	var c19 := r19.world.swarm.add_clone()   # (b): its cargo crosses a FURTHER threshold once absorbed
-	r19.world.swarm.carried[c19] = Rules.SPLIT_PER_BANKED + 5.0
+	r19.world.swarm.carried[c19] = Rules.LEVEL_COST_BASE + 5.0
 	r19.world.swarm.pos[c19] = r19.world.swarm.pos[0] + Vector2(400.0, 0.0)   ## absorbed mid-beat, not at detection
 	r19.world.critter_count = 1
 	r19.world.critter_pos[0] = r19.world.swarm.pos[0]
@@ -393,7 +422,7 @@ func run(t) -> void:
 		r24.world.swarm.add_clone()
 	r24.world.step(DT)   ## lets World's own peak_swarm bookkeeping register the new high-water mark
 	var peak_before24: int = r24.world.peak_swarm
-	t.eq(peak_before24, 11, "설정: 최대 무리가 실제로 갱신됐다 (host+11)")
+	t.eq(peak_before24, 5, "설정: 최대 무리가 실제로 갱신됐다 (분신 5)")
 	var cc24 := r24.world.swarm.add_clone()
 	r24.world.swarm.carried[cc24] = 7.0
 	r24.world.swarm.pos[cc24] = r24.world.swarm.pos[0] + Vector2(600.0, 0.0)
@@ -401,7 +430,7 @@ func run(t) -> void:
 	r24.world.critter_pos[0] = r24.world.swarm.pos[cc24]
 	r24.world.critter_threat[0] = 5
 	r24.world.critter_dir[0] = Vector2.ZERO
-	r24.world.step(DT)   ## a threat-5 critter against a 12-clone swarm still hunts (12 < 5*5); kills cc24
+	r24.world.step(DT)   ## the swarm's force is still the host's 10, under threat 5's 100; the critter hunts
 	t.eq(r24.world.clones_lost, 1, "설정: 분신 하나를 잃었다")
 	t.eq(roundi(r24.world.cargo_lost), 7, "설정: 화물 7을 함께 잃었다")
 	r24.world.host_hp = 0
@@ -420,14 +449,17 @@ func run(t) -> void:
 	var w25a := World.new()
 	w25a.setup(22)
 	_silence_food(w25a)
-	for _i in 20:
-		w25a.swarm.add_clone()
+	# Force 110 (25 × 4 + the host's 10), so the swarm has outgrown EVERY threat including the maximum's
+	# 100 — the same swarm faces both critters below and only the critter's threat changes between them.
+	# The comparison reads force, so the per-clone value is what carries this, not the row count.
+	for _i in 25:
+		w25a.swarm.add_clone(0, 4)
 	w25a.critter_count = 1
 	w25a.critter_pos[0] = w25a.swarm.pos[0]
 	w25a.critter_threat[0] = Rules.CRITTER_THREAT_MAX - 1
 	w25a.critter_dir[0] = Vector2.ZERO
 	w25a.step(DT)
-	# Without this, the check passes vacuously if the critter was never eaten at all (SWARM_PER_THREAT
+	# Without this, the check passes vacuously if the critter was never eaten at all (FORCE_PER_THREAT
 	# raised so is_hunter_of() is false, say) — "nothing happened" and "it happened but didn't clear" both
 	# read as `not stage_cleared`. Confirming the eat actually landed is what tells them apart.
 	t.eq(w25a.critters_eaten, 1, "설정: 최댓값보다 낮은 위협도 실제로 잡아먹었다")
@@ -436,8 +468,8 @@ func run(t) -> void:
 	var w25b := World.new()
 	w25b.setup(23)
 	_silence_food(w25b)
-	for _i in 20:
-		w25b.swarm.add_clone()
+	for _i in 25:
+		w25b.swarm.add_clone(0, 4)
 	w25b.critter_count = 1
 	w25b.critter_pos[0] = w25b.swarm.pos[0]
 	w25b.critter_threat[0] = Rules.CRITTER_THREAT_MAX
@@ -493,12 +525,16 @@ func run(t) -> void:
 	var rf := Run.new()
 	rf.start(27)
 	_silence_food(rf.world)
-	# Scattered, so the beat actually takes more than a couple of frames — see check 5's identical note.
+	# Six bodies placed far out, so the beat actually takes more than a couple of frames — see check 5's
+	# identical note. Six is also what keeps the critter below a hunter.
+	for _i in 6:
+		rf.world.swarm.add_clone()
 	for i in range(1, rf.world.swarm.count):
 		rf.world.swarm.pos[i] = rf.world.swarm.pos[0] + Vector2(700.0, 0.0)
 	# Placed close enough, and at max threat, that an unfrozen critter would land a hit on the very
-	# first step: `swarm.count - 1` (6) is nowhere near `CRITTER_THREAT_MAX * SWARM_PER_THREAT` (25), so
-	# is_hunter_of() reads false and this critter is the hunter, not the prey.
+	# first step: the swarm's total force (the host's 10, six force-0 clones) is nowhere near
+	# `CRITTER_THREAT_MAX * FORCE_PER_THREAT` (100), so is_hunter_of() reads false and this critter is the
+	# hunter, not the prey.
 	rf.world.critter_count = 1
 	rf.world.critter_pos[0] = rf.world.swarm.pos[0] + Vector2(30.0, 0.0)
 	rf.world.critter_threat[0] = Rules.CRITTER_THREAT_MAX

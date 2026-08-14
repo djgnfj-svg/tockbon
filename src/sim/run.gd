@@ -9,8 +9,9 @@ extends RefCounted
 ##
 ## **`paused` is the only pause in the game.** `step()` skips `world.step()` while it is set; the shell
 ## sets it and keeps no copy of its own. `World::step`'s `pending_levels` guard is a different sentence —
-## the sim refusing to advance past an unspent level, not "a panel is open". Nothing in this plan sets
-## `paused` — plan 2's `Tab` is its first setter.
+## the sim refusing to advance past an unspent level, not "a panel is open". **`Tab` is its one setter**:
+## one flag with one owner is what stops a second early return appearing in `World::step()`, where a panel
+## opening and a panel closing would then have to agree across two files.
 
 enum Phase { TITLE, PLAY, ENDING }
 enum Outcome { NONE, CLEARED, DIED }
@@ -51,9 +52,9 @@ func step(dt: float) -> void:
 		# hit mid-beat cannot rewrite a clear into a death.
 		absorb_beat -= dt
 		world.step(dt)
-		# `swarm.count <= 1` is the swarm actually finishing early, now that Swarm._absorb() removes each
-		# body the moment it arrives instead of waiting for the beat's own clock — a scattered swarm was
-		# converging well inside CLEAR_ABSORB_TIME and then sitting still for whatever was left of it.
+		# `swarm.count <= 1` is the swarm actually finishing early, because `Swarm._clear_arrivals()`
+		# removes each body the moment it arrives instead of waiting for the beat's own clock — a scattered
+		# swarm was converging well inside CLEAR_ABSORB_TIME and then sitting still for what was left of it.
 		# `absorb_beat <= 0.0` stays as the cap for the rare straggler `_finish_clear()`'s own fallback
 		# loop still exists for (a clone the pull never quite closed the gap on in time).
 		if world.swarm.count <= 1 or absorb_beat <= 0.0:
@@ -73,8 +74,8 @@ func _open(run_seed: int) -> void:
 	phase = Phase.PLAY
 	outcome = Outcome.NONE
 	absorb_beat = 0.0
-	# Harmless today — nothing in plan 1 ever sets `paused`. It starts mattering the moment plan 2 wires
-	# `Tab` to it: without this line, ending a paused run and hitting 다시 하기 opens the new run frozen.
+	# `Tab` sets `paused` and the shell does not close the panel on the run ending. Without this line,
+	# ending a run with the body panel open and hitting 다시 하기 opens the new run frozen.
 	paused = false
 
 
@@ -104,6 +105,10 @@ func _begin_clear() -> void:
 func _finish_clear() -> void:
 	# Backwards: remove_at() swaps the last row down, and a forward walk would skip whatever landed there.
 	for i in range(world.swarm.count - 1, 0, -1):
+		# Force comes home too — the same line `Swarm.absorb()` and `Swarm._clear_arrivals()` carry. This
+		# is the third of the three paths that bring a body home, and for a while it was one of the two
+		# that dropped force on the floor while `V` kept it.
+		world.swarm.force[0] += world.swarm.force[i]
 		world.swarm.banked += world.swarm.carried[i]
 		world.swarm.carried[i] = 0.0
 		world.swarm.remove_at(i)

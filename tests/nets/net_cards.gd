@@ -19,18 +19,42 @@ func run(t) -> void:
 	w.setup(6)
 	t.eq(w.pending_levels, 0, "시작할 때는 고를 게 없다")
 
-	# A pinned literal, not `Rules.SPLIT_PER_BANKED`: reading the constant through the thing it gates makes
-	# the check scale with it, and the threshold could be moved to 1000 with this net still green.
+	# A pinned literal, not `Rules.LEVEL_COST_BASE`: reading the constant through the thing it gates makes
+	# the check scale with it, and the threshold could be moved to 1000 with this net still green. The
+	# FIRST level costs the base exactly (`pow(GROWTH, 0)` is 1), which is what keeps this literal honest
+	# now that the cost rises.
 	w.swarm.banked = 10.0
+	var force_before: int = w.swarm.force[0]
 	w.step(DT)
 	t.eq(w.pending_levels, 1, "은행이 한 칸 차면 레벨이 하나 생긴다")
 	t.eq(w.offer.size(), 3, "카드는 셋이다")
 
-	var splits := 0
+	# **The whole payout of a level**, and the literal 10 is the check: read through
+	# `Rules.FORCE_PER_LEVEL` this passes at every value, 0 included — a level that pays nothing.
+	t.eq(w.swarm.force[0], force_before + 10, "레벨은 호스트의 힘을 10 올린다")
+	t.eq(w.swarm.count, 1, "레벨이 무리를 늘리지는 않는다 — 몸은 F로만 늘어난다")
+
+	# The two split cards are deleted, so `roll()` now draws three from one pool and the only guarantee
+	# left is that they are three DIFFERENT cards.
+	var distinct := {}
 	for card in w.offer:
-		if card == Cards.SPLIT_1 or card == Cards.SPLIT_3:
-			splits += 1
-	t.ok(splits >= 1, "셋 중 하나는 반드시 무리를 늘린다 — 안 그러면 실험의 변수가 사라진다")
+		distinct[card] = true
+	t.eq(distinct.size(), 3, "제시된 카드 셋은 서로 다르다")
+
+	# **The cost RISES, and nothing measured that.** `LEVEL_COST_GROWTH` set to 1.0, or the `pow(...)`
+	# factor deleted from `level_cost()`, left every check in the round green — the first level costs the
+	# base at any growth value (`pow(g, 0)` is 1), and the later `pending_before >= 2` below is a floor
+	# that 2 and 3 both satisfy. A flat cost at the ×10 force scale hands out a level every few seconds by
+	# the midgame, and the HUD's progress bar divides by it. Literals, not `pow` restated here.
+	t.ok(absf(w.level_cost(0) - 10.0) < 0.01, "첫 레벨은 10이다 (%.3f)" % w.level_cost(0))
+	t.ok(absf(w.level_cost(1) - 13.5) < 0.01, "둘째 레벨은 13.5로 오른다 (%.3f)" % w.level_cost(1))
+	t.ok(absf(w.level_cost(2) - 18.225) < 0.01, "셋째 레벨은 18.225다 (%.3f)" % w.level_cost(2))
+	# The one divisor the bar reads. Level 1 is granted and 10 is already charged, so 6.75 of the next
+	# 13.5 is exactly half.
+	w.swarm.banked = 10.0 + 6.75
+	t.ok(absf(w.level_progress() - 0.5) < 0.001,
+			"진행 막대의 분모가 오른 비용이다 — 반쯤 찼다 (%.3f)" % w.level_progress())
+	w.swarm.banked = 10.0
 
 	var frozen := w.elapsed
 	w.step(DT)
@@ -44,10 +68,7 @@ func run(t) -> void:
 	var picked: int = w.offer[0]
 	t.ok(w.take_card(picked), "제시된 카드는 골라진다")
 	t.eq(w.pending_levels, 0, "고르면 대기 레벨이 줄어든다")
-	if picked == Cards.SPLIT_1:
-		t.eq(w.swarm.count, before + 1, "분열 카드는 분신을 하나 늘린다")
-	else:
-		t.eq(w.swarm.count, before + 3, "삼중 분열 카드는 셋을 늘린다")
+	t.eq(w.swarm.count, before, "어떤 카드도 분신을 만들어내지 않는다 — 그건 없는 데서 힘을 찍어내는 것이다")
 
 	w.step(DT)
 	t.ok(w.elapsed > frozen, "고른 뒤에는 다시 흐른다")
@@ -143,11 +164,16 @@ func run(t) -> void:
 		t.ok(first.position.x > 0.0 and last.end.x < screen.x, "카드 셋이 화면 안에 들어 있다")
 		t.ok(absf((first.position.x + last.end.x) * 0.5 - screen.x * 0.5) < 1.0, "카드가 가운데 놓인다")
 
-		var shell_before: int = main.run.world.swarm.count
-		var shell_pick: int = main.run.world.offer[0]
-		main.cards.picked.emit(shell_pick)
+		# **The shell half.** No card grows the swarm any more, so what proves
+		# `picked` → `_on_card_picked` → `take_card` reaches the simulation is the level being spent.
+		# Left unasserted, the signal could be disconnected outright and every check above — all of them
+		# driving `World` directly — would stay green.
+		var pending_before: int = main.run.world.pending_levels
+		t.ok(pending_before >= 2, "설정: 아직 고를 레벨이 둘 이상 남아 있다 (%d)" % pending_before)
+		main.cards.picked.emit(main.run.world.offer[0])
 		await t.pump_frames(2)
-		t.ok(main.run.world.swarm.count > shell_before, "패널에서 고른 것이 실제 무리를 늘렸다")
+		t.eq(main.run.world.pending_levels, pending_before - 1,
+				"패널에서 고른 것이 실제 시뮬레이션의 레벨을 하나 썼다")
 		t.ok(main.cards.visible, "남은 레벨이 있으면 창은 계속 떠 있다")
 
 		while main.run.world.pending_levels > 0:

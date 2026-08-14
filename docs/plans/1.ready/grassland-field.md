@@ -6,7 +6,7 @@
 BUILDABLE verdict and for [hunting and the boss](../../design/hunting-and-the-boss-ko.md).** The two things
 the review found missing are now here in full: **what the field is made of** (*The field, at `t = 0`*) and
 **what an attack hits** (*Hitting*). Everything is at the ×10 force scale, **the word is 경험치 and never
-세포**, and this plan inherits [plan 2](hands-and-commands.md) and [plan 3](body-and-parts.md) as corrected —
+세포**, and this plan inherits [plan 2](../3.done/hands-and-commands.md) and [plan 3](body-and-parts.md) as corrected —
 read both first.
 
 ⚠ **Where this file and the review disagree, this file is newer and it is deliberate.** The review's fix for
@@ -31,8 +31,10 @@ model** ([why](../../decisions/force-and-disposition-are-separate.md)).
 | **Disposition** | attacks, or flees | **the individual** — rolled at spawn, not derived from anything |
 | **Force** | who wins if they meet | **the individual**, and it varies inside one species |
 
-⚠ **`Rules.SWARM_PER_THREAT` and `World::is_hunter_of()` are deleted.** Nothing derives behaviour from a
-comparison any more.
+⚠ **`Rules.FORCE_PER_THREAT` and `World::is_hunter_of()` are deleted.** Nothing derives behaviour from a
+comparison any more. (**The constant was `SWARM_PER_THREAT` when this plan was written**; plan 2 renamed it
+and repointed the comparison at `Swarm.total_force()`, because counting bodies made `F` a free power-up.
+It is the same deletion — only the name to grep for changed.)
 
 ⚠ **And `src/view/field_view.gd` is built on both of them**, which the first draft missed. It picks a
 creature's colour from `is_hunter_of(k)` and its radius from `critter_radius(k)`, which reads
@@ -384,7 +386,7 @@ and watch net 7's seed loop and net 17's forty-clone beat, which are the two slo
 27. **The arena closes and summons**: with a clone 3000px away, close the boss to `ARENA_RADIUS` and assert
     the clone is inside the arena on that frame, and that the host cannot leave it
 28. Eating the boss sets `stage_cleared`; eating anything else never does
-29. `Rules` no longer carries `SWARM_PER_THREAT`; `World` no longer has `is_hunter_of` or `critter_threat`
+29. `Rules` no longer carries `FORCE_PER_THREAT`; `World` no longer has `is_hunter_of` or `critter_threat`
 30. **Size never inverts**: max crow radius `<` min horse radius `<` min boss radius, from the constants
 31. **Cluster labels, driven, and the two checks agree**: 40 clones on one point plus the host draw
     **exactly two** labels — one of the summed clone force, one of the host's — and the sum is **not** 8.

@@ -4,8 +4,7 @@ extends RefCounted
 ## reads this, never `World` — `Run.to_title()` drops the world, and the screen would then be holding a
 ## dead reference.
 ##
-## The unit is 경험치, never 세포 (`docs/design/hunting-and-the-boss-ko.md`, newer than the word and the
-## GDD that used it).
+## The unit is 경험치, never 세포 (`hunting-and-the-boss`, newer than the word and the GDD that used it).
 
 var outcome: int = Run.Outcome.NONE
 var elapsed: float = 0.0

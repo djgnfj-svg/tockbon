@@ -34,7 +34,12 @@ func _process(delta: float) -> void:
 		return
 	# The bar chases the real value instead of snapping to it, so a dozen absorptions in a row read as one
 	# surge rather than as twelve invisible increments.
-	_bar_shown = lerpf(_bar_shown, _level_t(), 1.0 - pow(0.001, delta))
+	#
+	# The fraction comes from `World::level_progress()` and is not computed here. This file used to restate
+	# the formula, which agreed with the sim only while the level cost was flat; the day the cost started
+	# rising the bar would have divided by a base the sim no longer charged — parsing fine, every net green,
+	# and the only readout of progress in the game quietly wrong.
+	_bar_shown = lerpf(_bar_shown, world.level_progress(), 1.0 - pow(0.001, delta))
 	queue_redraw()
 
 
@@ -58,9 +63,13 @@ func _paint(c: CanvasItem) -> void:
 		c.draw_circle(Vector2(34.0 + i * 26.0, size.y - 34.0), 9.0,
 				HP_COLOR if i < world.host_hp else HP_LOST)
 
+	# **The only instruction the player ever gets.** Every clause of the old line became false in one plan —
+	# the dash moved off its own key into an active slot, rally stopped taking a cursor point, and three
+	# keys appeared. It goes through `_paint_text` so a net reads what a player would read; grepping this
+	# file for the string would measure its text and not what reached the screen.
 	if world.elapsed < 12.0:
 		_paint_text(c, Vector2(24.0, size.y - 68.0),
-				"WASD 이동 · Space 대시 · 1 모이기(커서) · 2 흩어지기", 20, DIM_TEXT)
+				"WASD 이동 · F 나누기 · V 모으기 · 1 집결 · 2 흩어지기 · 3 보내기 · Tab 몸", 20, DIM_TEXT)
 
 
 ## The hook. `draw_string` is a native call and Godot refuses to override it — a parse error — so every
@@ -70,8 +79,3 @@ func _paint(c: CanvasItem) -> void:
 ## entirely unmeasured file.
 func _paint_text(c: CanvasItem, p: Vector2, text: String, font_size: int, col: Color) -> void:
 	c.draw_string(get_theme_default_font(), p, text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, col)
-
-
-func _level_t() -> float:
-	var into: float = world.swarm.banked - float(world.level) * Rules.SPLIT_PER_BANKED
-	return clampf(into / Rules.SPLIT_PER_BANKED, 0.0, 1.0)

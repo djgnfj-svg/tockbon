@@ -1,9 +1,14 @@
 extends RefCounted
-## Eating, carrying, handing over — and losing it all.
+## Eating, carrying — and losing it all.
 ##
 ## **The last rule is the one this file exists for.** "A clone killed far from home takes everything it
 ## carried with it" is the entire brake on scattering, and held as a reference it would fail silently with
 ## every check still green. So a loaded clone is actually killed and the bank is asserted unchanged.
+##
+## **Handing over on contact is gone**, and its absence is asserted here rather than left to be noticed.
+## A loaded clone standing on the host used to empty into it automatically, which made recall discipline
+## free — the one thing this build measures. Cargo comes home because the player pressed `V`, or because
+## the run cleared, and nothing else.
 ##
 ## Both eat boundaries are pinned one pixel either side, so an off-by-one in the radius comparison bites.
 ##
@@ -18,10 +23,10 @@ const DT := 1.0 / 60.0
 
 func run(t) -> void:
 	# -- the reach has to clear the body it belongs to --------------
-	# Constant against constant, so it holds however either is tuned. `rules.gd` records why: at 12px against
-	# a 14px host, food had to be run over dead centre and hunting read as broken.
-	t.ok(Rules.EAT_RADIUS_HOST > Look.HOST_RADIUS, "호스트의 먹는 거리는 제 몸보다 넓다")
-	t.ok(Rules.EAT_RADIUS_CLONE > Look.CLONE_RADIUS, "분신의 먹는 거리는 제 몸보다 넓다")
+	# Constant against constant, so it holds however either is tuned. Both radii live in `rules.gd` now,
+	# not `look.gd`: they decide who `V` absorbs, so they change what happens.
+	t.ok(Rules.EAT_RADIUS_HOST > Rules.BODY_RADIUS, "호스트의 먹는 거리는 제 몸보다 넓다")
+	t.ok(Rules.EAT_RADIUS_CLONE > Rules.CLONE_BODY_RADIUS, "분신의 먹는 거리는 제 몸보다 넓다")
 
 	# -- the boundary, from outside ---------------------------------
 	var sw := Swarm.new()
@@ -29,12 +34,16 @@ func run(t) -> void:
 	var c := sw.add_clone()
 	sw.pos[c] = Vector2(1000.0, 1000.0)
 	sw.eat_cd[c] = 0.0
-	# Held still: FOLLOW with the rendezvous under its feet, so the clone cannot walk the last pixel and
-	# turn a failing distance into a passing one.
-	sw.command_rally(sw.pos[c])
+	# **Held still**, and the freeze is the whole reason the pins below mean anything: without it the clone
+	# walks the last pixel and turns a failing distance into a passing one. `1` gathers at the host now, so
+	# the way to park a clone is to park the HOST — 20px away, inside `rally_radius()`'s 24px floor, so the
+	# clone is already arrived and `desired` stays zero. 20 also clears `SEPARATION_MIN`, so nothing pushes.
+	sw.pos[0] = sw.pos[c] + Vector2(-20.0, 0.0)
+	sw.command_rally()
 
 	# 17.0 and 15.0 are literals around EAT_RADIUS_CLONE's 16.0. Shrink the constant and this goes red on
-	# purpose — the value moving is the thing that has to be seen.
+	# purpose — the value moving is the thing that has to be seen. 37px from the host, so the host's own
+	# 26px reach cannot be what moved either.
 	var far := _one_food(Vector2(1017.0, 1000.0))
 	sw.step(DT, far)
 	t.eq(far.alive_count, 1, "먹기 반경 밖 먹이는 안 먹힌다")
@@ -49,21 +58,30 @@ func run(t) -> void:
 	t.eq(sw.banked, 0.0, "분신이 먹은 것은 아직 내 것이 아니다")
 
 	# -- the host banks instantly -----------------------------------
-	var host_food := _one_food(sw.pos[0] + Vector2(4.0, 0.0))
+	# Placed on the far side of the host (26px from the clone, which is still on its 1.5s eat cooldown
+	# anyway) so there is no question which mouth this went into.
+	var host_food := _one_food(sw.pos[0] + Vector2(-6.0, 0.0))
 	sw.eat_cd[0] = 0.0
 	sw.step(DT, host_food)
 	t.eq(sw.banked, 1.0, "내가 문 것은 즉시 내 것이다")
 
-	# -- absorption empties the clone, it does not delete it --------
+	# -- touching the host does NOT hand anything over ---------------
+	# The branch that did this is deleted, and this is what asserts it stays deleted. Standing on the host
+	# for half a second must move nothing: recall is a key the player presses, not something that happens
+	# because a clone drifted home.
 	var before_count := sw.count
+	var banked_before := sw.banked
 	sw.pos[c] = sw.pos[0] + Vector2(Rules.ABSORB_RADIUS - 2.0, 0.0)
-	# The rendezvous moves onto the host too: left where it was, the clone walks AWAY during the same step
-	# and leaves absorb range before the check runs — which would fail for a reason that is not the rule.
-	sw.command_rally(sw.pos[0])
-	sw.step(DT, null)
-	t.eq(sw.banked, 2.0, "돌아온 분신이 실은 것을 넘겼다")
-	t.eq(sw.carried[c], 0.0, "넘긴 분신은 빈 몸이 된다")
-	t.eq(sw.count, before_count, "흡수해도 무리는 줄지 않는다 — 40마리 그림이 수확마다 사라지면 안 된다")
+	for _s in 30:
+		sw.step(DT, null)
+	t.eq(sw.banked, banked_before, "몸에 닿기만 해서는 화물이 넘어오지 않는다")
+	t.eq(sw.carried[c], 1.0, "닿아 있어도 분신은 실은 것을 그대로 지고 있다")
+	t.eq(sw.count, before_count, "닿았다고 분신이 사라지지도 않는다 — 40마리 그림이 저절로 없어지면 안 된다")
+
+	# -- and `V` is what moves it ------------------------------------
+	t.eq(sw.absorb(), 1, "V를 누르면 그제야 거둬들여진다")
+	t.eq(sw.banked, banked_before + 1.0, "그때 화물이 은행에 들어온다")
+	t.eq(sw.count, before_count - 1, "거둬들인 몸은 사라진다")
 
 	# -- killed loaded, and it is gone ------------------------------
 	var w := World.new()
@@ -74,9 +92,9 @@ func run(t) -> void:
 	var k := w.swarm.add_clone()
 	w.swarm.pos[k] = Vector2(500.0, 500.0)
 	w.swarm.carried[k] = 9.0
-	var banked_before: float = w.swarm.banked
+	var banked_before2: float = w.swarm.banked
 	var count_before: int = w.swarm.count
-	# One clone against a threat-5 critter: nowhere near `SWARM_PER_THREAT`, so the critter is the hunter.
+	# One clone against a threat-5 critter: nowhere near `FORCE_PER_THREAT`, so the critter is the hunter.
 	w.critter_count = 1
 	w.critter_pos[0] = Vector2(500.0, 500.0)
 	w.critter_threat[0] = 5
@@ -86,7 +104,7 @@ func run(t) -> void:
 	t.eq(w.swarm.count, count_before - 1, "물린 분신은 사라진다")
 	t.eq(w.clones_lost, 1, "잃은 분신으로 세어진다")
 	t.eq(w.cargo_lost, 9.0, "싣고 있던 것이 잃은 것으로 세어진다")
-	t.eq(w.swarm.banked, banked_before, "죽은 분신이 싣고 있던 것은 은행에 들어오지 않는다")
+	t.eq(w.swarm.banked, banked_before2, "죽은 분신이 싣고 있던 것은 은행에 들어오지 않는다")
 	t.eq(w.swarm.total_carried(), 0.0, "무리 어디에도 그 화물이 남아 있지 않다")
 
 
