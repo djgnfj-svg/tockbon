@@ -166,6 +166,7 @@ opens up, and stop** — the user will say when they are done thinking.
 | `docs/decisions/` | **Why something was *not* done.** The rejected branch and the reason, nothing else |
 | `docs/plans/` `1.ready` `2.active` `3.done` | **The only folder that moves.** The folder a doc sits in is its status |
 | `docs/adversarial-review-2026-08-14-ko.md` | **How four dense plans leaked at their joints**, from five independent reviewers. Its findings are answered in the plans; **it is kept for the shapes, not the verdicts** |
+| `docs/adversarial-review-2026-08-14-round3-ko.md` | ⚠ **A THIRD review, 101 findings, and this table did not list it for a day.** Plan 3 was built without it being read — its finding **H** (the card pool is empty forever, so a run offers zero cards) shipped exactly as written. **Most of the 101 are aimed at plan 4. Read it before plan 4** |
 
 **All three exist and hold ~50 docs.** `docs/archive/` does **not** exist — it was deleted on 2026-08-12,
 and this table claimed the opposite of the truth on both counts for two days. **A concept never changes

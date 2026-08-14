@@ -32,7 +32,7 @@ the bottom of this file — **and nothing in that list blocks a build.**
 |---|---|---|---|
 | 1 | [The run shell](../3.done/run-shell.md) **✅ `3.done`** — **unplayed on its own** | title → play → ending → title. **A run starts and ends** | nothing |
 | 2 | [Hands and commands](../3.done/hands-and-commands.md) **✅ `3.done`** — 16 nets · 514 checks, **played: keys accepted, picture not** | `F` `V` `1` `2` `3`, three active slots, `Tab` | 1 |
-| 3 | [The body and its parts](../3.done/body-and-parts.md) **✅ `3.done`** — 18 nets · 889 checks, **unplayed, and unlooked-at** | eleven slots, horse parts, cards that only give parts | 2 |
+| 3 | [The body and its parts](../3.done/body-and-parts.md) **✅ `3.done`** — 18 nets · 889 checks, **looked at, unplayed. Its acceptance needs plan 4** (no horse ⇒ no cards) | eleven slots, horse parts, cards that only give parts | 2 |
 | 4 | [The grassland field](grassland-field.md) | crow · horse · boss chimera, force on every body, minimap | 3 |
 
 **Build them in this order.** Each one leaves a playable build behind, and the user plays after 1 and again

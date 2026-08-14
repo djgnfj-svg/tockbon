@@ -17,13 +17,24 @@ the user has ever looked at the result is a separate axis, kept in `design/` hea
 all three folders. **Links leak every single time** — `net_citations` catches the path form, not a stale claim.
 
 ---
-## What is open right now
+## What happens next (decided by the user, 2026-08-15)
+
+**Plan 4, then regroup.** Nothing is re-planned, re-designed or re-scoped before the grassland field is
+built — the loop gets closed first and the whole thing is reviewed after it, once there is a run to play.
+
+⚠ **Read `adversarial-review-2026-08-14-round3-ko` before starting plan 4.** Most of its 101 findings are
+aimed at that plan, and it was already missed once: plan 3 was built without it and shipped its finding H.
+
+**Art is on the regroup side of that line, not the plan-4 side.** The user raised it and it is theirs to
+decide; the state today is that **`src/` loads zero images** and every body is drawn by `field_view.gd`.
+Swapping to pictures is a rewrite of that one file plus a column in `Parts` plus two nets — contained, but
+not a file swap. Plan 4 keeps drawing by code.
 
 | Folder | Contents |
 |---|---|
 | `1.ready` | **[Grassland, the whole loop](1.ready/grassland-whole-loop.md)** — the index, and **[the grassland field](1.ready/grassland-field.md)**, plan 4. **Plan 4 is next; every plan under the index is built** |
 | `2.active` | empty |
-| `3.done` | **[The round trip](3.done/proto-round-trip.md)** — the first prototype. Built, played, and the fun confirmed · **[The run shell](3.done/run-shell.md)** — plan 1, built in three stages. ⚠ **Nobody has played it on its own** · **[Hands and commands](3.done/hands-and-commands.md)** — plan 2. 16 nets · 514 checks. **Played: the keys are accepted, the picture is not, and the three questions that decide the plan are still unheard** · **[The body and its parts](3.done/body-and-parts.md)** — plan 3. 18 nets · 889 checks, every mutation red. ⚠ **Unplayed, and `verify-look` has not run** — this is the plan that first draws the body from code |
+| `3.done` | **[The round trip](3.done/proto-round-trip.md)** — the first prototype. Built, played, and the fun confirmed · **[The run shell](3.done/run-shell.md)** — plan 1, built in three stages. ⚠ **Nobody has played it on its own** · **[Hands and commands](3.done/hands-and-commands.md)** — plan 2. 16 nets · 514 checks. **Played: the keys are accepted, the picture is not, and the three questions that decide the plan are still unheard** · **[The body and its parts](3.done/body-and-parts.md)** — plan 3. 18 nets · 889 checks, every mutation red. **Looked at (six defects, in the doc); unplayed.** ⚠ **And its acceptance cannot be run yet**: nothing appends to `World.species_eaten` until plan 4 ships the horse, so a real run today offers **zero cards** |
 
 The old game was deleted on 2026-08-12 (`../next-game.md`) and every plan went with it — thirty-four docs
 describing a game that no longer exists. **They are recoverable at the tag `v1-sim` and should not be

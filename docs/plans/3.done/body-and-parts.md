@@ -482,6 +482,21 @@ are the most legible thing the whole system adds** and no card can grant them.
   candidates, never by discussion.
 - Whether the body, wearing everything August has, "visibly became a horse."
 
+## ⚠ The acceptance above cannot be run until plan 4
+
+**A real run today offers zero cards.** The pool is locked on `World.species_eaten` and **nothing in the
+tree ever appends to it** — plan 4 is what puts a horse on the field and a corpse under it. So levels bank
+forever, the card panel never opens, and *"does a card feel like a decision"* is unanswerable.
+
+⇒ **This was already written down and was not read.** `adversarial-review-2026-08-14-round3-ko` names it as
+finding **H**, a blocker found independently by two reviewers, and this plan's header only ever claimed
+correction for the *round 2* review. Round 3's other plan-3 items came out better by luck than by reading:
+`Array[-1]` returning the last row (2.9) was caught during the build, and the empty-pool freeze (2.8's
+sibling) was check 14. **Read round 3 before plan 4** — most of its 101 findings are aimed there.
+
+Round 3's own suggested fix is a design change and therefore not this plan's to make: give the crow a part
+so a card lands in the first thirty seconds.
+
 ### What passed
 
 The `Tab` panel reads correctly — 겉 six and 속 five, filled squares named, `힘 20 · 무리의 힘 80 · 체력 3/4`,
