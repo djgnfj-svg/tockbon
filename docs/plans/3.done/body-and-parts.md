@@ -437,7 +437,54 @@ call-count per name, and carries four cases that fail the scanner itself.
 **The user plays and reports whether a card feels like a decision** — whether refusing a good part because of
 what it would evict ever happened, and whether the body visibly became a horse.
 
-⚠ **Nothing here is accepted, and `verify-look` has not run.** The round is green and every mutation bites;
-**numbers cannot see a picture**, and this repo has measured that four separate times. The body is drawn by
-code for the first time in this plan — anchors, limb pairs, an outline, two eye dots — and no eye has been
-on it.
+⚠ **Nothing here is accepted.** Looking has now happened — below — but that is an agent looking, not the
+user playing, and the two questions above are still unheard.
+
+## What looking found, 2026-08-15 — six defects the 889 checks did not see
+
+**There was no godot-mcp bridge in this session** (zero `godot` node processes), so the game was made to
+screenshot itself: `tools/look/capture.gd`, seven frames, windowed, quitting on its own. That tool is the
+bridge-less half `CLAUDE.md` names in one line and nothing had implemented.
+
+⇒ **The first pass photographed the wrong thing and said nothing.** `cam.zoom` was set from outside and
+`_apply_zoom()` rewrote it from its own `_zoom` before the shot, so the "close-up" came back at play scale —
+the one picture that cannot answer the acceptance question. Silent, and it reads as the zoom simply having
+no effect. **The instrument needed inverting before the subject did**, one more time.
+
+1. **말 갈기 draws nothing the eye can find, and it deletes the light doing it.** `PART_TORSO_ANCHOR` 0.12
+   with `PART_TORSO_BULGE` 0.74 puts it **entirely inside the body's silhouette**, in the body's own colour
+   lifted 0.22 — and it paints over `_paint_cell`'s overhead highlight, **the GDD's one hard art rule**
+   ("lit from one direction for every body in the scene"). It becomes legible only when the HIDE slot
+   darkens the body around it, and **no card in the August table can fill HIDE**. So one of the two
+   external parts that exist draws, in practice, nothing.
+   ⇒ `CLAUDE.md`'s own measurement, re-earned: **on a top-down body, only what sticks out reads.**
+2. **The ending's eleven slot labels overflow their squares.** `FONT_SLOT` 12 against `SLOT_SIZE` 38 —
+   말 폐활량 runs clear past its border. Four Korean glyphs do not fit and nothing clips them.
+3. **The heart row has no cap and no wrap.** `hp_max` rises one per level forever; at banked 400 it drew
+   about thirteen hearts marching toward the middle of the screen. It runs off the edge, not off a row.
+4. **Breath reaches the screen nowhere.** Not in the HUD, not in the `Tab` panel. 갤럽 is gated on a
+   resource the player cannot see, and **말 폐활량's entire effect is invisible** — a card whose face says
+   nothing and whose effect shows nothing. The plan asked the panel for force and HP and got exactly that;
+   this is the plan being complete and the screen still being wrong.
+5. **A card is a name on a large empty rectangle.** `Cards.DESC` was deleted and nothing replaced it, so
+   `말 다리 → Lv2` fills the top eighth of a 260×300 card and says nothing about what changes. **The
+   acceptance question is "does a card feel like a decision"** and the card carries nothing to decide on.
+6. **The limb pair paints over the hide outline**, cutting the silhouette that outline exists to draw.
+
+⇒ **And three of the five internal slots — BONE, HIDE, EYES — have no part in the August table at all**, so
+their drawing is unreachable in play and only a net has ever driven it. Forced on by hand, **the eye dots
+are the most legible thing the whole system adds** and no card can grant them.
+
+### What is the user's call, not a defect
+
+- Two bars perpendicular to the facing, from 0.8r to 1.6r out, are what 말 다리 looks like. They read as
+  **pegs**, not legs. Whether that is enough is an art judgement, and this repo decides those by looking at
+  candidates, never by discussion.
+- Whether the body, wearing everything August has, "visibly became a horse."
+
+### What passed
+
+The `Tab` panel reads correctly — 겉 six and 속 five, filled squares named, `힘 20 · 무리의 힘 80 · 체력 3/4`,
+and the three key rows naming 물기 · 빈 칸 · 짧은 숨. The ending's eleven squares carry the right names in the
+right indices (TORSO 1, HINDLIMBS 4, LUNG 10). The card panel offers exactly three, centred, all reading
+`→ Lv2` when the part is already worn. Nothing was magenta, nothing flickered, nothing drew at zero size.

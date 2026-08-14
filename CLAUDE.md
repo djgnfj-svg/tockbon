@@ -460,8 +460,16 @@ Check three things before launching:
 
 **If you can't grab the bridge, stop and report.** Killing someone else's idle `godot-mcp` is not the answer —
 it once killed this session's server too and the tools vanished entirely.
-Without the bridge the game can `save_png()` itself. `--headless` cannot capture.
 **Close any editor you launched when the session ends.**
+
+⇒ **Without the bridge the game screenshots itself, and that is now built: `tools/look/`.** Windowed, seven
+frames, quits on its own, every input through `root.push_input()` so nothing is taken from the user.
+**`--headless` cannot capture** — no swapchain, `root.get_texture()` comes back blank, and every PNG is a
+black rectangle **with no error anywhere.** (Headless still turns real frames and really runs `_draw()`;
+what it cannot do is hand back pixels.) Read that folder's README before writing another one: its first
+close-up came back **at play scale** because `_apply_zoom()` rewrote the camera before the shot, silently —
+**a capture harness is an instrument, so take one frame you already know the answer to before trusting any
+of the others.**
 
 ### Closing the editor is not enough — `godot-mcp` (node) survives
 
