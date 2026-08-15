@@ -59,7 +59,7 @@ Where it shakes if this reverses.
 | [`1` calls the swarm to the host](rally-is-to-the-host.md) | valid | The placed rendezvous the prototype shipped · one key with a modifier · keeping both the placed rendezvous and `3` |
 | [A kill leaves a corpse, and eating it takes time](eating-a-kill-takes-time.md) | valid | Contact-automatic eating · an animation over an instant grant · slow ground food · a press-to-eat key |
 | [All three keys are empty squares](every-key-is-a-square.md) | valid | A permanent basic attack on left click · the slot deciding the key · a separate skill list · drag-to-bind |
-| [The August build is two species](august-scope-two-species.md) | valid | Six species giving parts · the crow's wings · starting with the lion · one species and the boss |
+| [The August build is two species](august-scope-two-species.md) | **partly reversed** by [the crow gives three parts](the-crow-gives-three-parts.md) — the species survive, the part distribution does not | Six species giving parts · ~~the crow's wings~~ · starting with the lion · one species and the boss |
 | [The run opens alone](the-run-opens-alone.md) | valid — **reverses `START_CLONES = 6` by changed premise** | Six starting clones · giving them a starting force · shrinking the field · a fixed camera zoom |
 | [Nothing gates the boss](the-boss-is-not-gated.md) | valid | A force threshold · flat 1-HP contact · gating by level or swarm size · spawning the boss late |
 | [Host parts come from cards only](host-parts-come-from-cards-only.md) | valid | The host rolling parts off corpses · cards for clones · corpses paying nothing |
@@ -76,6 +76,9 @@ Where it shakes if this reverses.
 | [The level counts what came home](level-counts-what-came-home.md) | valid | Levelling from `eaten` · two gauges · reporting `banked` at the ending |
 | [A sustained active is held, not fired](the-sustain-is-held-not-fired.md) | valid — **found by building plan 3**, which named the column and gave it no input | Firing on the just-pressed edge · a re-triggered burst · stacking two held sustains · regenerating breath while the key is down |
 | [물기 and 짧은 숨 are given, never offered](the-given-actives-are-not-offered.md) | valid — same build | Both in the card pool · a second starter list · always rolling three |
+| [A clone has hit points](the-clone-has-hp.md) | valid — **reverses plan 4's own "one touch kills a clone"** | One-touch death · recomputing both halves to full at the split · deriving hp from force · a second host health number on the swarm |
+| [The crow gives three parts and the horse gives one](the-crow-gives-three-parts.md) | valid — **partly reverses [the August scope](august-scope-two-species.md)** | A multi-slot part · deleting 말 갈기 and 말 폐활량 · one crow part · lowering `HORSE_TRAIT_COUNT` to keep the trait reachable |
+| [The boss's speed is left for the first play](the-boss-speed-is-deferred.md) | valid — ⚠ **a DEFERRAL, not a chosen number.** The arena may never close on its own | Raising it above the host now · gating the ending on a timer or a kill count · cutting the arena until the speed is settled |
 
 **The old game's decisions went with it** and are at the tag `v1-sim`. They are not recovered here because
 every one of them answered "why not do X in *that* game" — the question does not transfer.

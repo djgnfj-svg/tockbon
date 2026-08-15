@@ -68,6 +68,7 @@ class MainSpy extends "res://src/shell/main.gd":
 
 
 func run(t) -> void:
+	_c_walk_and_dash(t)
 	_c19_rally(t)
 	_c20_c21_strike(t)
 	_c22_c25_slots(t)
@@ -77,6 +78,39 @@ func run(t) -> void:
 	await _c28_c29_gate(t)
 	await _c_sustain_through_the_shell(t)
 	await _c32_legend(t)
+	await _s1_click_reaches_the_world(t)
+	await _s2_hud_camera_rect(t)
+
+
+# -- the walk and the burst, per step -------------------------------------------------------------------
+## ⚠ **These six moved here from `net_hunt` with plan 4.** They contain no creature at all — they are two
+## keys and the distance a body covers in one frame — and they were the last thing holding that file to its
+## old subject. Nothing about them changed in the move.
+##
+## Both magnitudes are pinned as literals. Read through `Rules.HOST_SPEED` or `Parts.SELF_MUL[DASH]` these
+## checks scale with the constant and stay green at every value, including zero.
+func _c_walk_and_dash(t) -> void:
+	var sw := Swarm.new()
+	sw.setup(21, Vector2(1000.0, 1000.0))
+	sw.host_input = Vector2.RIGHT
+	sw.step(DT, null)
+	var walk := sw.pos[0].distance_to(Vector2(1000.0, 1000.0))
+	t.ok(absf(walk - 3.33) < 0.02, "한 스텝에 200px/s 만큼 걸었다 (%.3f)" % walk)
+
+	# **The burst is a PART on a key**, not a method on the swarm: `try_dash()` and its three `Rules.DASH_*`
+	# constants are gone, and 짧은 숨 is a row in the parts table that `space` opens holding.
+	var body := Body.new()
+	body.setup()
+	body.swarm = sw
+	t.eq(body.bound[Body.KEY_MOVEMENT], Parts.DASH, "설정: 스페이스는 짧은 숨을 들고 열린다")
+	t.ok(body.fire(Body.KEY_MOVEMENT, Vector2(2000.0, 1000.0)), "대시가 나간다")
+	t.ok(not body.fire(Body.KEY_MOVEMENT, Vector2(2000.0, 1000.0)), "쿨다운 중에는 두 번째 대시가 없다")
+	var before: Vector2 = sw.pos[0]
+	sw.step(DT, null)
+	var dash_step := sw.pos[0].distance_to(before)
+	t.ok(dash_step > walk * 2.0, "대시 한 스텝이 걷기보다 훨씬 멀다 (%.1f > %.1f)" % [dash_step, walk])
+	# 9.33 = `HOST_SPEED 200 × SELF_MUL 2.8 / 60`, which is plan 2's absolute 560px/s carried across.
+	t.ok(absf(dash_step - 9.33) < 0.02, "한 스텝에 560px/s 만큼 튀었다 (%.3f)" % dash_step)
 
 
 # -- 19: `1` puts the swarm back into FOLLOW, and steers at the host LIVE -------------------------------
@@ -221,9 +255,13 @@ func _c22_c25_slots(t) -> void:
 	var h := _food_at([Vector2(1100.0, 1000.0)])
 	far.step(DT, h)
 	t.eq(h.alive_count, 1, "설정: 100px 앞 먹이가 아직 살아 있다")
-	t.ok(not far_b.fire(0, Vector2(1400.0, 1000.0)),
-			"정면 한가운데라도 100px는 물리지 않는다 — 사거리는 70px다")
-	t.eq(h.alive_count, 1, "그리고 실제로 죽지도 않는다")
+	# ⚠ **이 두 검사는 주장이 바뀌었다.** 물기는 이제 빈 원뿔에도 반드시 휘두른다(`Swarm.bite`가 무조건
+	# true), 그래서 `not fire(...)`로는 사거리를 잴 수 없다. 재는 것은 그대로 사거리이고, 재는 방법이
+	# **먹이가 살아남았다**로 바뀌었다. 헛스윙이 쿨다운을 무는지도 같이 못 박는다 — 그게 없으면 "휘두르긴
+	# 했다"가 아무것도 하지 않은 것과 구별되지 않는다.
+	t.ok(far_b.fire(0, Vector2(1400.0, 1000.0)), "설정: 빈 원뿔에도 좌클릭은 헛스윙으로 나간다")
+	t.ok(far_b.bound_cd[0] > 0.0, "헛스윙도 쿨다운을 낸다 — 빈 원뿔은 죽은 키가 아니다")
+	t.eq(h.alive_count, 1, "정면 한가운데라도 100px는 물리지 않는다 — 사거리는 70px다")
 
 	var rig_behind := _rig(221)
 	var behind: Swarm = rig_behind[0]
@@ -231,9 +269,9 @@ func _c22_c25_slots(t) -> void:
 	var g := _food_at([Vector2(950.0, 1000.0)])
 	behind.step(DT, g)
 	t.eq(g.alive_count, 1, "설정: 등 뒤 먹이가 아직 살아 있다")
-	t.ok(not behind_b.fire(0, Vector2(1400.0, 1000.0)),
-			"같은 거리라도 등 뒤 먹이는 물리지 않는다 — 각도가 실력이다")
-	t.eq(g.alive_count, 1, "그리고 실제로 죽지도 않는다")
+	t.ok(behind_b.fire(0, Vector2(1400.0, 1000.0)), "설정: 등 뒤여도 좌클릭은 헛스윙으로 나간다")
+	t.ok(behind_b.bound_cd[0] > 0.0, "그 헛스윙도 쿨다운을 낸다")
+	t.eq(g.alive_count, 1, "같은 거리라도 등 뒤 먹이는 물리지 않는다 — 각도가 실력이다")
 
 	# 23: the cooldown is a real refusal, and it expires. **`Body.step()` is what ticks it now** — left to
 	# `Swarm.step()` the number never comes down and the second bite below never lands. 32 frames is
@@ -333,7 +371,7 @@ func _c25b_bind_driven(t) -> void:
 		# fired, so the key is held for one frame and the host's speed multiplier is what answers.
 		bd.held[1] = 1
 		bd.step(DT)
-		t.ok(absf(w.swarm.active_speed_mul - 1.8) < 0.001,
+		t.ok(absf(w.swarm.active_speed_mul - 1.1) < 0.001,
 				"묶은 뒤 우클릭을 누르고 있으면 실제로 갤럽이 돈다 (%.3f)" % w.swarm.active_speed_mul)
 		bd.held[1] = 0
 
@@ -527,7 +565,7 @@ func _c27_panel_rects(t) -> void:
 				"겉과 속이 두 무리의 머리말로 나온다 — 열한 칸이 한 줄로 붙어 있지 않다")
 
 		# **The only place force and HP reach the screen.** `_grow()`'s `force[0] += FORCE_PER_LEVEL` is a
-		# level's WHOLE payout, `F` halves every row, and the hearts' ceiling grows with parts — none of it
+		# level's WHOLE payout, `F` halves every row, and `hp_max()`'s ceiling grows with parts — none of it
 		# was drawn anywhere, which is the signature fake inverted (the simulation moves, the picture does
 		# not). Three different literals, so a panel printing one number three times cannot pass.
 		m.run.world.swarm.force[0] = 37
@@ -542,7 +580,7 @@ func _c27_panel_rects(t) -> void:
 				force_line = l
 		t.ok(force_line.contains("37"), "몸 창이 호스트의 힘을 적는다 — %s" % force_line)
 		t.ok(force_line.contains("42"), "무리 전체의 힘(37+5)도 함께 적는다 — %s" % force_line)
-		t.ok(force_line.contains("2/3"), "현재/최대 체력도 그 줄에 함께 적힌다 — %s" % force_line)
+		t.ok(force_line.contains("2/30"), "현재/최대 체력도 그 줄에 함께 적힌다 — %s" % force_line)
 		t.ok(not force_line.contains("방어"),
 				"방어라는 별도의 숫자는 없다 — '접촉 한 번 더'와 '최대 체력 +1'은 같은 문장이다")
 
@@ -562,12 +600,12 @@ func _c27_panel_rects(t) -> void:
 				"Lv1은 적지 않는다 — 모든 칸에 아무 말도 아닌 숫자를 붙이지 않는다")
 		t.eq(m.panel_spy.rects.size(), 29, "칸이 채워져도 사각형 수는 그대로 29개다")
 
-		# ⚠ **The HP CEILING, driven above its floor.** `2/3` above is taken at `level == 0` on an empty
-		# body, where `hp_max(0)` is exactly `Rules.HOST_HP` — so both things plan 3 added to the ceiling (a
-		# level, and 말 갈기's +1) are absent at that moment and the panel could print a constant 3 forever.
+		# ⚠ **The HP CEILING, driven above its floor.** `2/30` above is taken at `level == 0` on an empty
+		# body, where `hp_max(0)` is exactly `Rules.HOST_HP` — so both things that add to the ceiling (a
+		# level, and 말 갈기's HP) are absent at that moment and the panel could print a constant 30 forever.
 		# Measured: `b.hp_max(world.level)` replaced with `Rules.HOST_HP` left 811 checks green, and a maned,
-		# levelled host would read 5/3 here while the HUD row beside it draws seven hearts. 말 갈기 is worn
-		# twenty lines above; only the level is new, and 3 + 2 + 1 is a literal.
+		# levelled host would read 5/30 here while the HUD prints a different ceiling beside it. 말 갈기 is
+		# worn twenty lines above; only the level is new, and 30 + 2×3 + 5 is a literal.
 		m.run.world.level = 2
 		m.panel_spy.texts.clear()
 		m.body.queue_redraw()
@@ -576,8 +614,8 @@ func _c27_panel_rects(t) -> void:
 		for l: String in m.panel_spy.texts:
 			if l.contains("체력"):
 				hp_line = l
-		t.ok(hp_line.contains("2/6"),
-				"레벨 둘에 갈기 하나면 몸 창의 체력은 2/6이다 (3 + 2 + 1, 리터럴) — %s" % hp_line)
+		t.ok(hp_line.contains("2/41"),
+				"레벨 둘에 갈기 하나면 몸 창의 체력은 2/41이다 (30 + 6 + 5, 리터럴) — %s" % hp_line)
 
 	t.root.remove_child(m)
 	m.queue_free()
@@ -717,7 +755,7 @@ func _c_sustain_through_the_shell(t) -> void:
 		Input.action_press("fire_2")
 		await t.pump_frames(3)
 		t.eq(bd.held[Body.KEY_MOVEMENT], 1, "누르고 있으면 셸이 그것을 몸에 적는다")
-		t.ok(absf(w.swarm.active_speed_mul - 1.8) < 0.001,
+		t.ok(absf(w.swarm.active_speed_mul - 1.1) < 0.001,
 				"그래서 실제 게임에서 갤럽이 돈다 (%.3f)" % w.swarm.active_speed_mul)
 		t.ok(bd.breath < breath0, "그리고 숨이 실제로 닳는다 (%.3f → %.3f)" % [breath0, bd.breath])
 
@@ -770,7 +808,133 @@ func _c32_legend(t) -> void:
 	spy.queue_free()
 
 
+# -- S1: the shell's click reaches `World.fire`, not `Body.fire` ---------------------------------------
+## ⚠ **`main.gd`'s one key line could say `body.fire(key, aim)` and nothing anywhere would notice.** Both
+## calls return a bool, both put the key on its cooldown, both make the cone appear on screen; only
+## `World.fire()` goes on to dispatch `strike()`, which is the entire damage path for every key a player
+## will ever press. Measured on this build: the shell was rewired to the `World` and the round stayed at
+## **1032 checks, unmoved** — not one net drove a key into a creature, so left click drawing a cone that
+## hurts nothing was a bug no amount of green could see. This is the five-minutes-of-play class.
+##
+## The key is pressed for real through `Input` and the assertion is the creature's own hp. Nothing here
+## calls `fire()` by hand: a check that does is measuring `World`, which `net_force` already does, and not
+## the line in the shell.
+func _s1_click_reaches_the_world(t) -> void:
+	var m: Node = load("res://src/shell/main.gd").new()
+	t.root.add_child(m)
+	await t.pump_frames(2)
+	m.title.start_pressed.emit()
+	await t.pump_frames(1)
+	t.eq(m.run.phase, Run.Phase.PLAY, "설정: start_pressed로 PLAY에 들어갔다")
+
+	# Guarded — see the note in the panel group above. `m.run.world` is dereferenced immediately below.
+	if m.run.phase == Run.Phase.PLAY:
+		_quiet(m)
+		var w: World = m.run.world
+		_clear_terrain(w)
+		# `_quiet` empties the creature table and leaves `boss_index` pointing into it; the arrays are
+		# preallocated, so the arena step would read a stranger's position rather than fail.
+		w.boss_index = -1
+		# The camera is parked on the host so the world point under the (headless, never-moved) mouse
+		# stops drifting between the frame the crow is placed and the frame the key is read.
+		m.cam.position = w.swarm.pos[0]
+		await t.pump_frames(1)
+
+		t.eq(w.body.bound[0], Parts.BITE, "설정: 좌클릭에 물기가 묶여 있다")
+		# The aim the shell really passes is `get_global_mouse_position()`, so the crow is put on THAT ray
+		# instead of on a heading picked here — a check that pins its own heading is measuring the mouse.
+		var host: Vector2 = w.swarm.pos[0]
+		var to_aim: Vector2 = m.get_global_mouse_position() - host
+		var dir := Vector2.RIGHT if to_aim.length_squared() < 0.0001 else to_aim.normalized()
+		w.critter_count = 1
+		# 40px: inside `Parts.RANGE[Parts.BITE]` (70) and outside contact reach (crow 15 + BODY_RADIUS 14),
+		# so the only thing that can move this crow's hp is the click.
+		w.critter_pos[0] = host + dir * 40.0
+		w.critter_dir[0] = Vector2.RIGHT
+		w.critter_species[0] = Parts.Species.CROW
+		w.critter_force[0] = 10
+		w.critter_hp[0] = 30
+		w.critter_flees[0] = 0
+		w.critter_atk_cd[0] = 0.0
+		w.critter_counter[0] = 0.0
+		# A number no default produces. A bite deals the ATTACKER's force, so 30 - 7 = 23 pins that too, on
+		# the path a player's finger actually takes — `FORCE_START` 10 would leave 20 and 20 is also what
+		# two levels or a stray part would land on.
+		w.swarm.force[0] = 7
+
+		Input.action_press("fire_0")
+		await t.pump_frames(2)
+		Input.action_release("fire_0")
+		# The two failures are told apart on purpose: a key that never reached the sim at all and a key
+		# that reached it and dealt nothing look identical from the creature's hp alone.
+		t.ok(w.body.bound_cd[0] > 0.0, "설정: 좌클릭이 실제로 나갔다 (쿨다운이 걸렸다)")
+		t.eq(w.critter_hp[0], 23, "셸의 좌클릭이 앞에 선 까마귀를 실제로 깎는다 (30 - 호스트 힘 7)")
+
+	t.root.remove_child(m)
+	m.queue_free()
+
+
+# -- S2: the HUD's camera rectangle is the TRUE one, and it is cleared with the world -------------------
+## ⚠ **The padded rect and the true rect are one assignment apart and the screen never says which it got.**
+## `_camera_rect()` is 20% larger so `FieldView` keeps drawing a body about to walk on screen; anything
+## that draws a camera box from it draws one a fifth too big in both axes, which reads as "roughly right"
+## rather than as a bug. So the size is asserted against the viewport over the zoom, **and against
+## `view.view_rect` as the padded control** — without the second half a check could pass on a rect that
+## happens to be near enough.
+##
+## The second claim is the reset. `_process` writes this field only inside the PLAY branch, so a run that
+## goes back to TITLE without the `_bind_world()` line keeps drawing the dead run's camera box, and every
+## visibility check in the round stays green through it.
+func _s2_hud_camera_rect(t) -> void:
+	var m: Node = load("res://src/shell/main.gd").new()
+	t.root.add_child(m)
+	await t.pump_frames(2)
+	m.title.start_pressed.emit()
+	await t.pump_frames(2)
+	t.eq(m.run.phase, Run.Phase.PLAY, "설정: start_pressed로 PLAY에 들어갔다")
+
+	# Guarded — see the note in the panel group above.
+	if m.run.phase == Run.Phase.PLAY:
+		t.eq(m.get_viewport().get_visible_rect().size, Vector2(1280.0, 720.0), "설정: 화면이 1280x720이다")
+		# Read AFTER the frame, in the same order `_process` writes them: `_apply_zoom` sets `cam.zoom`
+		# and `_follow_camera` sets `cam.position` before the rect is built, so this is that frame's pair
+		# and not the previous frame's.
+		var vp: Vector2 = m.get_viewport_rect().size / m.cam.zoom.x
+		t.ok(vp.x > 0.0, "설정: 줌이 실제로 걸려 있다 (%.1f)" % m.cam.zoom.x)
+		t.ok(m.hud.camera_rect.size.is_equal_approx(vp),
+				"HUD가 받는 사각형은 화면 그대로다 — 20%% 여유가 붙지 않았다 %s vs %s"
+						% [str(m.hud.camera_rect.size), str(vp)])
+		t.ok(m.hud.camera_rect.position.is_equal_approx(m.cam.position - vp * 0.5),
+				"그 사각형은 카메라를 한가운데 두고 있다 %s" % str(m.hud.camera_rect.position))
+		# The padded one, as the control. Both are written in the same `_process`, so if the HUD were
+		# handed `_camera_rect()` these two would be identical instead of 1.2 apart.
+		t.ok(m.view.view_rect.size.is_equal_approx(vp * 1.2),
+				"설정: 컬링용 사각형은 여전히 1.2배다 %s" % str(m.view.view_rect.size))
+		t.ok(m.hud.camera_rect != m.view.view_rect, "그래서 둘은 같은 사각형이 아니다")
+
+		m.ending.title_pressed.emit()
+		await t.pump_frames(2)
+		t.eq(m.run.phase, Run.Phase.TITLE, "설정: 제목으로 돌아왔다")
+		# TITLE never enters the PLAY branch, so a missing reset is not merely one stale frame — it is the
+		# dead run's camera box standing on the title screen and on the next run's first frame.
+		t.eq(m.hud.camera_rect, Rect2(), "제목으로 돌아가면 카메라 사각형도 world와 함께 비워진다")
+
+	t.root.remove_child(m)
+	m.queue_free()
+
+
 # -- helpers --------------------------------------------------------------------------------------------
+
+## ⚠ **Any check here that pins a body or a creature at a LITERAL coordinate needs this.** `Swarm.place()`
+## and `_step_critters` both push out of rocks, and the shell rolls a **fresh seed** on every `start()`, so
+## a hand-placed row lands where it was put on the runs where no rock is there and a few px off on the
+## runs where one is. `net_shell` measured that as one round red and the next green with nothing but the
+## ground changing.
+func _clear_terrain(w: World) -> void:
+	w.terrain.rock_pos.clear()
+	w.terrain.rock_radius.clear()
+	w.terrain.water_pos.clear()
+	w.terrain.water_radius.clear()
 
 ## A host wired exactly the way `World.setup()` wires it — `body.setup()` then `body.swarm = swarm`, in
 ## that order. Building a whole `World` for a check about one key would drag five hundred food spots and

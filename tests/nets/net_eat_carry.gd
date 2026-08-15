@@ -89,15 +89,31 @@ func run(t) -> void:
 	for i in w.food.alive.size():
 		w.food.alive[i] = 0
 	w.food.alive_count = 0
+	# Forty rocks now sit wherever a fixture writes a coordinate, and `push_out` would move both of these off
+	# one another. A check that is not about the ground removes the ground first.
+	w.terrain.rock_pos.clear()
+	w.terrain.rock_radius.clear()
+	w.terrain.water_pos.clear()
+	w.terrain.water_radius.clear()
+	# `add_clone()` with no arguments is a force-0 body, so `Rules.BODY_HP_MIN` is its whole health and one
+	# crow hit finishes it. That is what this check wants: it is about what a DEATH costs, not about how
+	# many hits it takes to get there.
 	var k := w.swarm.add_clone()
 	w.swarm.pos[k] = Vector2(500.0, 500.0)
 	w.swarm.carried[k] = 9.0
 	var banked_before2: float = w.swarm.banked
 	var count_before: int = w.swarm.count
-	# One clone against a threat-5 critter: nowhere near `FORCE_PER_THREAT`, so the critter is the hunter.
+	# ⚠ **An explicit species row, and the force is PINNED.** The threat model is gone: a creature's damage
+	# is its own force, and a crow rolls 8–12, so a fixture that read the roll would pass or fail by seed.
 	w.critter_count = 1
+	w.boss_index = -1
 	w.critter_pos[0] = Vector2(500.0, 500.0)
-	w.critter_threat[0] = 5
+	w.critter_species[0] = Parts.Species.CROW
+	w.critter_force[0] = 10
+	w.critter_hp[0] = 30
+	w.critter_flees[0] = 0
+	w.critter_atk_cd[0] = 0.0
+	w.critter_counter[0] = 0.0
 	w.critter_dir[0] = Vector2.ZERO
 	w.step(DT)
 

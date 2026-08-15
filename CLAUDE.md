@@ -19,7 +19,10 @@ habitats, split force from disposition, and put swarm growth **on a key** (`F` s
 The body is **eleven slots**, not ten (breath got its own). **`1` gathers at the host** and **`3` sends the
 swarm at the mouse point**. **All three keys — left click included — are empty squares the player binds an
 active into**; there is no fixed basic attack. **A kill leaves a corpse and eating it takes time**, standing
-still, interruptible. The August scope is **one stage, two species (crow · horse), one boss, three parts**.
+still, interruptible. The August scope was **one stage, two species (crow · horse), one boss** — ⚠ **the
+field is seven species since 2026-08-15; the PART pools are still the two**, see the plan-4 paragraph — and it was
+**three parts** until the crow was given its own three — the table is **eight rows and four of them drop**
+(말 다리 · 까마귀 날개 · 까마귀 부리 · 까마귀 발). 말 갈기 and 말 폐활량 are rows and nothing else.
 **And the word "apex" is dead — say boss**; it did not survive contact with the user.
 ⇒ **`grassland-whole-loop` is now an index over four plans built in order** — the run shell, hands and
 commands, the body and its parts, the grassland field. **Godot was re-examined the same day and stands.**
@@ -30,7 +33,7 @@ net that vanishes instead of going red when a file stops parsing · a new column
 matching line in `setup`, `add_clone` and the hand-written swap · a value that reads as derived making the
 mechanic it belongs to free · a check that measures a table's shape rather than a behaviour.
 **Six more answers came out of it**: an active's reach is written on the part · the host's parts come from
-cards only · a corpse pays its own force in cells · **nothing gates the boss** (damage is the attacker's
+cards only · a corpse pays its own force in 경험치 · **nothing gates the boss** (damage is the attacker's
 force both ways) · **the run opens alone** (`START_CLONES` 0) · **the camera pulls back as the swarm grows**,
 which is the answer to the field feeling small. **The prototype in `src/` is a reference, not a base** — the
 user's call is to write it again properly.
@@ -60,18 +63,51 @@ once, `V` absorbs a radius back into the host, `1` rallies at the host, `3` send
 active slots hang off left click · right click · `space`, and `Tab` opens the body panel and pauses.
 **A level now pays force, not clones** — the two split cards are gone.
 
-⇒ **And since plan 3 landed the body changes.** Eleven slots, a five-row part table that IS the content,
-cards that give nothing but parts, and the host drawn from what it wears — a limb pair, an outline, two eye
-dots, a corner radius. Wearing is irreversible and it can cost you a bigger part; **force is written on
-`wear()` and subtracted on digestion in the same call**; 갤럽 is **held**, not fired, and drains breath.
-**What does not**: chimeras, habitats, meta, animation, and the crow and horse themselves — plan 4 is what
-puts a horse on the field for the card pool to unlock. **The trait is a deliberate placeholder.**
-**Species currencies and tiers are not merely unbuilt — they were cut from the design.**
+⇒ **And since plan 3 landed the body changes.** Eleven slots, a part table that IS the content, cards that
+give nothing but parts, and the host drawn from what it wears — a limb pair, an outline, two eye dots, a
+corner radius. Wearing is irreversible and it can cost you a bigger part; **force is written on `wear()` and
+subtracted on digestion in the same call**; 갤럽 is **held**, not fired, and drains breath. **The trait is a
+deliberate placeholder.** **Species currencies and tiers are not merely unbuilt — they were cut.**
+
+⇒ **And since plan 4 landed there is a field to use it on, and all four plans are in `3.done`.** Three
+species with three different hands, a corpse you stand over, forty rocks and twelve ponds, a boss that
+wanders for 150 seconds and then comes, an arena, and a minimap. **What does not run**: chimeras, further
+habitats, meta, animation, and the horse's other two parts (`Parts.DROPS` keeps 말 갈기 and 말 폐활량 out of
+both pools on purpose, so the horse trait is unreachable this build).
+⚠ **The arena is not drawn at all** — the circle closes, the host is pinned inside it, the swarm is
+teleported in, and there is nothing on screen to say so. **Plan 4's own acceptance question cannot be
+answered until something draws it.**
+
+⇒ **The user played it on 2026-08-15 and the field is now SEVEN species.** 다람쥐 · 코끼리 · 치타 · 사자
+joined the crow, the horse and the boss, and **none of the four gives a part** — `Parts.DROPS` is untouched.
+The read was that the floor was a carpet (`FOOD_SPOTS` 500 → **180**) and the field was scenery. Three new
+columns carry the behaviour: **`SPECIES_WANDER`** (only the crow stands still), **`SPECIES_HUNTS`** (only the
+lion, and it is under `HOST_SPEED` so walking away always works), **`SPECIES_HERD`** (one spawn call, N
+bodies at one spot — a herd is born together and nothing holds it together afterwards, so a straggler is a
+thing that happens). `SPAWN_CROW_CHANCE` and `CRITTER_START_*` are **deleted** for `SPECIES_SPAWN_WEIGHT` and
+`SPECIES_START`, which counts HERDS and not heads. **The minimap draws the ponds** at their real size,
+ungated by `MINIMAP_SHOW_DIST`, because a pond is terrain and not a body.
+⇒ **[The condition for this was written down before it happened](docs/decisions/august-scope-two-species.md)**
+— *"play says the field is empty; more species that give no part is the cheap fix"* — and it fired verbatim.
+**Splitting "is on the field" from "drops a part" is what made it cheap.**
+
+⚠ **And the play session found what four rounds of review did not: the game has almost no 연출.** Nothing on
+screen says you were hit, that you hit anything, that a clone died, that a level happened, that `F` fired, or
+that the boss started hunting. **[The audit](docs/design/presentation-audit-ko.md) counts nine that exist
+against twelve that do not, and the pattern is that every existing one is "something I did"** — the missing
+ones are all "something that happened to me" and "something that happened over there".
+⇒ **[Plan 5](docs/plans/1.ready/presentation-pass.md) is that, and it is what unblocks three older acceptance
+questions** — plan 4's arena, and plan 2's *does losing a fat clone hurt* / *does the hold read as an act* —
+all three unanswerable because the thing was never drawn. **One rule change rides in it** (a corpse takes
+several bites; quitting keeps what you ate) and it is marked as such.
 
 ⚠ **Plan 2's keys are accepted; its picture is not** — the user played it and said the detail falls well
 short while the keys land fine. **The three questions that actually decide that plan are still unheard**
-(does the hold read as an act · does losing a fat clone hurt · is force 10 a busy opening), and
-`Rules.FORCE_PER_THREAT` — which decides whether a critter is prey — **is an unplayed guess.**
+(does the hold read as an act · does losing a fat clone hurt · is force 10 a busy opening).
+⚠ **`Rules.FORCE_PER_THREAT` is DELETED, not merely unplayed** — the whole threat model went with it when the
+user's read was that comparing swarm force against a creature's threat was simply the wrong design. A
+creature's disposition comes from its species now and its damage is its own force in both directions.
+`net_field`'s `_c29_instruments` names every constant that went and asserts each is absent.
 
 ⇒ **The user played it and confirmed the fun.** Read the acceptance section of `proto-round-trip` before
 designing anything on top of it. **Four things that three rounds of adversarial
@@ -156,6 +192,27 @@ Ending three replies in a row with "shall I start?" reads as being shut down, an
 in those words.** A design conversation is not a task waiting for a green light. **Answer, add what the answer
 opens up, and stop** — the user will say when they are done thinking.
 
+### A recommendation without a source is not a recommendation (decided by the user)
+
+**The user is new to making games and said so in as many words**: *"I have no data, so whatever you say
+feels like it must be right."* That is not agreement — **it is the absence of anything to disagree with**,
+and a recommendation that wins that way has not been chosen, only accepted.
+
+- **When you recommend a way of working, name who actually works that way.** Studios, games, people —
+  **several, disagreeing with each other**, so there is a spread to pick from. The user picks; you do not
+  get approval
+- **The source has to be checkable** — a link, or a document with an author and a date. *"Usually in the
+  industry…"* is not a source, and neither is this file
+- **Look it up rather than remembering it.** A studio named from memory that turns out wrong is worse than
+  no example at all, because it cannot be checked and it will be repeated
+- **Give the case against your own recommendation too.** Every method has a study or a postmortem arguing
+  the other way; leaving it out turns a choice into a pitch
+- **This binds technical choices as well** — engines, libraries, tooling, verification. Not just design
+
+⇒ The first one written this way is [how studios schedule art](docs/how-studios-schedule-art-ko.md) —
+Valve · Nintendo · Cuphead · Vampire Survivors · Balatro · Unity's own playtest research, **and the answer
+turned out to be neither of the two options that had been on the table.** That is what the sources bought.
+
 ## Where things live
 
 | Doc | Question it answers |
@@ -167,6 +224,8 @@ opens up, and stop** — the user will say when they are done thinking.
 | `docs/plans/` `1.ready` `2.active` `3.done` | **The only folder that moves.** The folder a doc sits in is its status |
 | `docs/adversarial-review-2026-08-14-ko.md` | **How four dense plans leaked at their joints**, from five independent reviewers. Its findings are answered in the plans; **it is kept for the shapes, not the verdicts** |
 | `docs/adversarial-review-2026-08-14-round3-ko.md` | ⚠ **A THIRD review, 101 findings, and this table did not list it for a day.** Plan 3 was built without it being read — its finding **H** (the card pool is empty forever, so a run offers zero cards) shipped exactly as written. **Most of the 101 are aimed at plan 4. Read it before plan 4** |
+| `docs/gap-check-2026-08-15-ko.md` | **What is left AFTER plan 4**, checked while it was being built. Five holes are open: no herding hand · nothing kills a scattered clone · the trait is unreachable · grass still beats meat · **sound appears zero times in the whole repo** |
+| `docs/how-studios-schedule-art-ko.md` | **When other studios attach the art**, with sources. Written because the user has no data of their own and said so — see the reply rule about recommendations |
 
 **All three exist and hold ~50 docs.** `docs/archive/` does **not** exist — it was deleted on 2026-08-12,
 and this table claimed the opposite of the truth on both counts for two days. **A concept never changes
@@ -241,20 +300,36 @@ before starting, not from whatever commit happened to be current earlier.
 | `src/shell/` | **The only place that reads `Input`**, and the only place that wires `sim` to `view`. It builds its children in code, so a net calling `_ready()` exercises the real wiring |
 | `src/look.gd` | **Every presentation constant, in exactly one file.** `src/sim/rules.gd` holds every constant that changes what happens |
 
-**The first of these scans now exists, and it covers three files out of six.** `net_draw_leaf` asserts that
-**`title_screen.gd`, `ending_screen.gd` and `body_panel.gd` each hold at most two `c.draw_` call sites**, so
+**The first of these scans now exists, and it reaches all six files under `src/view/`.** `net_draw_leaf`
+asserts that **`title_screen.gd`, `ending_screen.gd`, `body_panel.gd` and `card_panel.gd` each hold at most
+two `c.draw_` call sites**, so
 every pixel goes through `_paint_rect` or `_paint_text` and a net can assert what was drawn. It was written
 the day a hook that threw its own drawing away passed 54 checks out of 54; `body_panel.gd` joined it as it
 was born, which is the only cheap moment to join.
-⚠ **`hud.gd`, `card_panel.gd` and `field_view.gd` are NOT in it** — each calls `draw_*` in 5–9 places and
-retrofitting them was outside that plan's scope. **Do not read the scan as covering `src/view/`.** It counts
-lines rather than calls, too: two draws separated by `;` on one line count as one.
-⚠ **`field_view.gd` is the one that now hurts**: it draws the charge arc, the bite cone and the strike marker,
-and all three reached the screen unmeasured until a verifier built `net_paint::ArcSpy` over `_paint_arc` and
-`_paint_cone`. The hooks exist and are asserted; **the scan still does not stop the next bare `c.draw_`.**
+⇒ **`card_panel.gd` joined that list on plan 3, and `field_view.gd` and `hud.gd` are covered by the OTHER
+shape of the same scan**: a per-function table (`FIELD_LEAF_CALLS`, `HUD_LEAF_CALLS`) pinning each function's
+`draw_*` count exactly, leaves at 1 and composers at 0. Neither can live under a file-wide bound of two.
+⚠ **A per-function table scans the functions it NAMES and nothing else, and that leaked twice — the second
+time out of the fix for the first.** For a day `FIELD_LEAF_CALLS` held nine leaves and no composers, so a
+bare `c.draw_circle(...)` at the top of `FieldView._paint` reached the screen every frame with 1414 checks
+green while the net's own header claimed the property held generally. Eight composers then got a `: 0` —
+**and that named seventeen of the file's twenty-eight functions, so eleven stayed outside.** The same circle
+at the top of `_striking()` and of `_cluster()`, both called from `_paint` every frame, was green at 1889
+checks with stderr clean. ⇒ **Adding names fixes the day it is done and nothing after it**, so the class is
+closed instead: `_every_function_is_in_the_table()` walks each file's own `func` lines and reddens on any
+name the table does not hold, in the direction the table-walk cannot see. **A function written tomorrow is
+red until it is listed.** The scan counts lines rather than calls, though: two draws separated by `;` on one
+line count as one.
+⇒ **`net_draw_leaf` also holds two scans that are not about draw counts.** One asserts that **every
+parameter a leaf is handed is still used in its body** — the count says the draw call is there and says
+nothing about what reached it, and `c.draw_circle(p, 0.0, col)` inside `_paint_disc` turned forty rocks and
+twelve ponds invisible with the round green. The other is the **colour half of the one-file rule**: not one
+`Color(` or `Color.RED` outside `look.gd`, across all eighteen other files under `src/`. It was written the
+day `hud.gd` held six of its own, `card_panel.gd` six more and `field_view.gd` one.
+⚠ **The PIXEL half is still unwritten** — `card_panel.gd` lays its cards out from literals — so a green
+there is not "no presentation constant is loose".
 **The rest are still unwritten**: grep `src/sim/` for `extends Node` · `_draw` · `Input.` · `get_node` · `$`,
-grep `src/view/` for writes to `sim.`, grep outside `look.gd` for colour and pixel literals. Write each when
-its folder has enough in it to drift.
+and grep `src/view/` for writes to `sim.`. Write each when its folder has enough in it to drift.
 
 **The one-file rule for presentation constants is inherited and was measured**: scattering them meant the
 power doubled and **zero things changed on screen**, because the numbers that would have shown it were in
@@ -399,7 +474,9 @@ These survive **even after you confirm every mutation goes red**:
 
 ## Running the nets
 
-**Eighteen nets, 889 checks, 1.7 seconds** (measured 2026-08-15, after plan 3 — it was 16/514 after plan 2).
+**Twenty-two nets, 2015 checks, 2.2 seconds** (measured after the seven-species field landed — 22/1973 after
+plan 4's leftovers were closed, 22/1889 after
+its repairs, 18/889 after plan 3, 16/514 after plan 2).
 A net is `tests/nets/net_*.gd` with one method, `func run(t)`,
 and `t` gives you `ok` · `eq` · `pump_frames` · `expect_error` · `root`. **The wrapper reds below five
 nets** — that is the scan-broken detector, so nets land in groups, never one at a time.
@@ -416,9 +493,21 @@ nets** — that is the scan-broken detector, so nets land in groups, never one a
    shared one tree and a mutation verifier had its edit silently reverted between the `Edit` and the run, plus
    two rounds poisoned by someone else's edit landing in the same file. **A mutation whose PRE and POST
    fingerprints differ from each other only by that mutation is the only one that proves anything.**
-   ⇒ **When the tree is contested, do the edit and the run in ONE command**, and hash either side of it.
-   Nothing weaker held. **`git status --porcelain` is deliberately NOT a red** — an uncommitted tree is the
-   normal state of every builder round, so it would red everything
+   ⚠ **For two plans it hashed `path|length|mtime` and NOT the bytes**, so a byte-identical revert moved it
+   and the protocol above could not be executed literally — three separate repairs reported this in one
+   night and each worked around it by doing the edit and the run in one command. **It hashes the content
+   now**; an mtime-only touch leaves the fingerprint where it was, measured.
+   ⚠ **And it covers `docs/` and `CLAUDE.md` too, since `net_citations` reads them** — a `src`+`tests` digest
+   printed identically while a doc edit changed what the round measured, which is the one claim the print
+   exists to make. `.gitattributes` normalises `*.md` for the same reason.
+   ⇒ **When the tree is contested, do the edit and the run in ONE command** anyway. **`git status
+   --porcelain` is deliberately NOT a red** — an uncommitted tree is the normal state of every builder round,
+   so it would red everything
+   ⚠ **A hung net is not a slow net, and for two plans the round could not tell them apart.** Zeroing one
+   increment made `net_eating` spin for 148.7s with no verdict printed at all — not red, not green — which
+   silently disarms mutation testing on the whole net. `run_nets.ps1` now kills any net past
+   `$NetTimeoutSec` (120s), reports it red, and **zeroes its pass count** so a partial flush cannot read as
+   progress. Proved with a deliberately hanging net
 3. **Each net runs in its own process, in parallel.** Not for speed — for honesty: amnesty stays inside its
    own net. Do not break this property
 4. **Call `harness-manager` when a round grows.** The old game's round was ~28s and **one net was 24.3s of

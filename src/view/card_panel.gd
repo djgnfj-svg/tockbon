@@ -21,12 +21,8 @@ signal picked(card: int)
 
 const CARD_SIZE := Vector2(260.0, 300.0)
 const CARD_GAP := 28.0
-const DIM := Color(0.04, 0.03, 0.03, 0.72)
-const CARD_BG := Color(0.16, 0.14, 0.13)
-const CARD_EDGE := Color(0.95, 0.85, 0.45)
-const CARD_HOVER := Color(0.24, 0.22, 0.18)
-const TITLE_COLOR := Color(0.98, 0.93, 0.72)
-const KEY_COLOR := Color(0.62, 0.58, 0.52)
+## **No colour of its own.** All six moved to `look.gd` as `Look.CARD_*` — the one-file rule, which
+## `net_draw_leaf` now scans for. The pixel literals below and in `_paint()` have NOT moved.
 
 ## Part ids, not card ids. Three at most, and **legitimately fewer** — `Cards.roll()` draws from what has
 ## been eaten, so the pool can hold one or two. Every rectangle here is laid out from `offer.size()`.
@@ -98,18 +94,18 @@ func _draw() -> void:
 func _paint(c: CanvasItem) -> void:
 	if offer.is_empty():
 		return
-	_paint_rect(c, Rect2(Vector2.ZERO, size), DIM, true, -1.0)
-	_paint_text(c, Vector2(size.x * 0.5 - 60.0, _top() - 46.0), "레벨 업", 34, TITLE_COLOR)
+	_paint_rect(c, Rect2(Vector2.ZERO, size), Look.CARD_DIM, true, -1.0)
+	_paint_text(c, Vector2(size.x * 0.5 - 60.0, _top() - 46.0), "레벨 업", 34, Look.CARD_TITLE_COLOR)
 	for k in offer.size():
 		_paint_card(c, k, _rect_of(k), offer[k], k == _hover)
 
 
 ## One card. Forwards to the two leaves and draws nothing itself.
 func _paint_card(c: CanvasItem, slot: int, r: Rect2, part: int, hot: bool) -> void:
-	_paint_rect(c, r, CARD_HOVER if hot else CARD_BG, true, -1.0)
-	_paint_rect(c, r, CARD_EDGE, false, 3.0 if hot else 1.0)
-	_paint_text(c, r.position + Vector2(22.0, 74.0), face_of(part), 30, TITLE_COLOR)
-	_paint_text(c, r.position + Vector2(22.0, r.size.y - 24.0), "[%d]" % (slot + 1), 20, KEY_COLOR)
+	_paint_rect(c, r, Look.CARD_HOVER if hot else Look.CARD_BG, true, -1.0)
+	_paint_rect(c, r, Look.CARD_EDGE, false, 3.0 if hot else 1.0)
+	_paint_text(c, r.position + Vector2(22.0, 74.0), face_of(part), 30, Look.CARD_TITLE_COLOR)
+	_paint_text(c, r.position + Vector2(22.0, r.size.y - 24.0), "[%d]" % (slot + 1), 20, Look.CARD_KEY_COLOR)
 
 
 ## What the card reads. **Public because it is the one thing about this panel worth asserting by value** —

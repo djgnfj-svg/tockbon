@@ -4,8 +4,9 @@
 there, and walks into the next habitat carrying the body it built.
 
 **Implemented**: partial — plan 3 built **the eleven slots, the part table, wearing and digesting, and the
-species trait** (`body-and-parts`). Habitats, evolution across stages, chimeras and the boss are still none
-of them in `src/`
+species trait** (`body-and-parts`), and **plan 4 built the field they live in**: three species, the corpse
+beat, the ground, the boss and its arena all run (`grassland-field`). Habitats, evolution across stages and
+chimeras are still none of them in `src/`
 **Accepted**: none. Every line below came out of one planning conversation on 2026-08-13. **Nothing here
 has been played**, and planning principle 2 says planning cannot judge fun
 
@@ -47,7 +48,8 @@ GDD's old rule that a harvest never shrinks the swarm is dead; `F` is what refil
 2. Grow the swarm — the session loop spins here
 3. Level-up cards attach parts; evolution accumulates
 4. **Force passes the boss's force — what hunted you becomes what you hunt**
-5. Hunt the boss. It is the only thing that drops that habitat's final part
+5. Hunt the boss. ~~It is the only thing that drops that habitat's final part~~ — ⚠ **superseded by the
+   grassland field plan: the boss gives 경험치 and the run's end, and no part at all.** See *Stages* below
 6. **Absorb the entire swarm** — the great harvest, and the one time the bodies are eaten too
 7. Next habitat. The old boss is now common trash, the build carries over → 1
 
@@ -272,7 +274,12 @@ so a habitat was chosen first and generated in one pass. **That stopped being tr
 are drawn in the host's own line, so a species can be added whenever the design wants one.
 
 - **Clearing a stage = swallowing that habitat's boss.** Not a timer, not a five-minute boss cadence
-- **The boss is the only source of that habitat's final part**, so clearing and building are the same act
+- ~~**The boss is the only source of that habitat's final part**, so clearing and building are the same act~~
+  ⚠ **Struck.** [The grassland field](../plans/3.done/grassland-field.md) is newer and it gives the boss
+  **no part**: it pays 경험치 like any other corpse and it ends the run. Parts come from the species you eat
+  along the way, and the host's come from cards
+  ([why](../decisions/host-parts-come-from-cards-only.md)). **Clearing and building stopped being the same
+  act** — building happens on the way to the boss, not off it
 - **On clearing, the whole swarm is absorbed** — bodies included, this once — and the next habitat starts
   with the host alone
 - **The previous boss is laid out as common trash in the next habitat.** It did not get weaker; it now
@@ -350,9 +357,12 @@ power:
 stages, not a ladder — one habitat, entered bare and left with a complete body.
 
 ⚠ **Narrowed much further on 2026-08-14, and this is the scope that is being built**: **two species — crow
-and horse — plus the boss**, and **three parts**, all horse: 말 다리 · 말 갈기 · 말 폐활량. **The crow gives
-no part**; it exists because catching a horse at level 1 is too hard, and the opening needs something to eat.
-Small animals · herd · cheetah · lion · elephant are **not in the August build.**
+and horse — plus the boss.** Small animals · herd · cheetah · lion · elephant are **not in the August build.**
+⚠ ~~**three parts**, all horse: 말 다리 · 말 갈기 · 말 폐활량. **The crow gives no part**~~ — **reversed
+2026-08-15** ([why](../decisions/the-crow-gives-three-parts.md)): **the crow gives three** — 까마귀 날개 ·
+부리 · 발 — **and the horse gives 다리 only.** 말 갈기 and 말 폐활량 stay in the table and out of both pools.
+The crow still is the opening's food; that turned out to be the argument *for* it carrying the pool, not
+against.
 ⇒ **The four squares of the disposition × force table are still all filled**, because disposition is rolled
 per individual: a crow that decided to attack is free food, a horse that decided to attack is a real fight.
 **Two species is not two behaviours.** See [the grassland plans](../plans/1.ready/grassland-whole-loop.md).
@@ -457,13 +467,13 @@ numbers is not an implementation, and because planning principle 2 says only pla
 | Value | First number | Why this one |
 |---|---|---|
 | host's starting force | **10** | ~~1 cannot be split, so the first level-up is what opens `F`~~ — **splitting is the tutorial** ([why](../decisions/force-starts-at-ten.md)). The whole ladder was multiplied by ten with it |
-| base force per level | **+1** | ⚠ **not re-cut for the ×10 scale yet.** The user's call is to set the curve sensibly and tune it in play |
-| small animals · herd · horse · cheetah · lion · elephant | **10 · 20 · 30 · 30 · 50 · 80** | ⚠ **per-SPECIES centres. Force varies per individual**, and the August ranges are in [the grassland field plan](../plans/1.ready/grassland-field.md) — crow **10**, horse **30–40**. Horse and cheetah tie: they differ by how they move, not by who wins |
+| base force per level | ~~**+1**~~ **`Rules.FORCE_PER_LEVEL`** | ⚠ **It was re-cut for the ×10 scale in `rules.gd` and this row was not.** The constant is the number; the curve is still the user's call and still tunes in play |
+| small animals · herd · horse · cheetah · lion · elephant | **10 · 20 · 30 · 30 · 50 · 80** | ⚠ **per-SPECIES centres. Force varies per individual**, and the August ranges are in [the grassland field plan](../plans/3.done/grassland-field.md) — crow **10**, horse **30–40**. Horse and cheetah tie: they differ by how they move, not by who wins |
 | the boss chimera | **120** | ~~above a level-8 host, so it cannot be walked into early~~ — ⚠ **that was a gate, and [nothing gates the boss](../decisions/the-boss-is-not-gated.md).** 120 is simply large: damage is the attacker's force both ways, so contact ends the run as arithmetic, not as a rule |
-| a part's force | **1**, strong ones **2-3** | parts add on top of the base; no part is worth a whole species |
+| a part's force | ~~**1**, strong ones **2-3**~~ **`Parts.FORCE`, one cell per row** | parts add on top of the base and no part is worth a whole species — ⚠ **but these were pre-×10 numbers and a +1 part is invisible now.** The table is the content; read the column |
 | ~~the clone tax~~ | **deleted** | ⚠ **It was never built and it is not the mechanism.** The host's mouth is worth ~2.5× a clone's because `EAT_PERIOD_HOST` is 0.6s against 1.5s — a speed, with no constant to tune and nothing to explain in the UI. This row said "inherited from the GDD unchanged" while the GDD said the opposite |
-| a corpse's experience | **force × 6** | a corpse pays what the individual was worth (user, 2026-08-14). ⚠ **Say 경험치, not "cells"** — one quantity was reading as two. And ⚠ **the "every 10" threshold does not survive the ×10 scale**: one crow would be six levels. The requirement **rises per level**; the numbers are set in build and tuned in play |
-| damage, either direction | **the attacker's force** | [nothing gates the boss](../decisions/the-boss-is-not-gated.md) — a 12 hitting a 3-HP host ends the run |
+| a corpse's experience | ~~**force × 6**~~ **`Rules.EXP_PER_FORCE`** | a corpse pays what the individual was worth (user, 2026-08-14). ⚠ **The multiplier is in `rules.gd` and 6 is not it** — it is set against what grass pays, which this row never looked at. ⚠ **Say 경험치, not "cells"** — one quantity was reading as two. And ⚠ **the "every 10" threshold does not survive the ×10 scale**. The requirement **rises per level**; the numbers are set in build and tuned in play |
+| damage, either direction | **the attacker's force** | [nothing gates the boss](../decisions/the-boss-is-not-gated.md) — one touch from something large ends the run, as arithmetic. ⚠ **The host's HP is `Rules.HOST_HP` and the ~~3~~ this row used to name went with the ×10 scale**; read the constant |
 | starting swarm | **0** | [the run opens alone](../decisions/the-run-opens-alone.md) |
 | gut, at its best | **90%** | it closes the gap and never inverts it |
 | absorb radius | **4x the host's body** | wide enough that a rallied swarm goes in one press, tight enough to miss stragglers |

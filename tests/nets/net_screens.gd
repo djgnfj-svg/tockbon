@@ -321,8 +321,52 @@ func run(t) -> void:
 	await t.pump_frames(1)
 	t.ok(_has(ending.texts, "먹은 종 없음"), "먹은 종이 비어 있으면 없음이라고 나온다")
 
+	# -- 15c: the same line, off a REAL run instead of a hand-built result ------------------------------
+	# ⚠ **Everything above feeds this screen a `RunResult` written by hand**, so the path
+	# `World.species_eaten → Run._snapshot() → RunResult.species → this string` was cut in the middle: the
+	# snapshot's own loop is driven in `net_run`, and the screen is driven here, and nothing joined them.
+	#
+	# **Horse first on purpose.** The expected order is NOT the enum's own (CROW is 0), so a snapshot that
+	# read `Parts.SPECIES_NAME` straight through instead of walking `species_eaten` would come back
+	# "까마귀, 말" and look perfectly right.
+	var real := Run.new()
+	real.start(35)
+	for i in real.world.food.alive.size():
+		real.world.food.alive[i] = 0
+	real.world.food.alive_count = 0
+	real.world.critter_count = 0
+	real.world.boss_index = -1
+	_finish_corpse(real, Parts.Species.HORSE, 35)
+	# A finished horse pays 105 경험치, which banks a level, which rolls an offer — and `World.step()`
+	# refuses to advance while cards are on screen. Cleared by hand or the second meal never starts.
+	real.world.pending_levels = 0
+	real.world.offer = PackedInt32Array()
+	_finish_corpse(real, Parts.Species.CROW, 10)
+	t.eq(real.world.species_eaten.size(), 2, "설정: 말과 까마귀를 그 순서로 실제로 다 먹었다")
+	real.world.host_hp = 0
+	real.step(1.0 / 60.0)
+	t.eq(real.phase, Run.Phase.ENDING, "설정: 그 런이 실제로 끝났다")
+	ending.result = real.result
+	ending.texts.clear()
+	ending.queue_redraw()
+	await t.pump_frames(1)
+	t.ok(_has(ending.texts, "먹은 종 말, 까마귀"),
+			"진짜 런에서 먹은 종이 먹은 순서 그대로 화면에 나온다 %s" % [_dump(ending.texts)])
+
 	t.root.remove_child(ending)
 	ending.queue_free()
+
+
+## Seed one corpse under the host and step the run once. 0.999, never 0.99: a meal is
+## `corpse_force × EAT_TIME_PER_FORCE`, so a horse is 1.75s and one frame at 0.99 adds 0.019 and finishes
+## nothing at all — the check would then measure an empty list and read as a bug in the snapshot.
+func _finish_corpse(r: Run, species: int, force_value: int) -> void:
+	r.world.corpse_count = 1
+	r.world.corpse_pos[0] = r.world.swarm.pos[0]
+	r.world.corpse_species[0] = species
+	r.world.corpse_force[0] = force_value
+	r.world.corpse_progress[0] = 0.999
+	r.step(1.0 / 60.0)
 
 
 func _click_at(p: Vector2) -> InputEventMouseButton:

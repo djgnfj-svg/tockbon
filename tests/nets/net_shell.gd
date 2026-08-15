@@ -190,6 +190,7 @@ func run(t) -> void:
 	# Guarded — see group `a`'s note.
 	if e.run.phase == Run.Phase.PLAY:
 		_silence_food(e.run.world)
+		_clear_terrain(e.run.world)
 		e.run.world.critter_count = 0
 		e.run.world.swarm.pos[0] = Vector2(1920.0, 1080.0)
 		e.cam.position = Vector2(1920.0, 1080.0)
@@ -223,6 +224,7 @@ func run(t) -> void:
 	# Guarded — see group `a`'s note.
 	if f.run.phase == Run.Phase.PLAY:
 		_silence_food(f.run.world)
+		_clear_terrain(f.run.world)
 		f.run.world.critter_count = 0
 		f.run.world.swarm.pos[0] = Vector2(1920.0, 1080.0)
 		f.cam.position = Vector2(1920.0, 1080.0)
@@ -304,3 +306,15 @@ func _silence_food(w: World) -> void:
 	for i in w.food.alive.size():
 		w.food.alive[i] = 0
 	w.food.alive_count = 0
+
+
+## ⚠ **Every check below that pins a body at a LITERAL coordinate needs this, and it is not optional here.**
+## `Swarm.place()` pushes a body out of any rock it overlaps, and the shell rolls a **fresh seed** on every
+## `start()` — so a hand-placed clone lands a few px off its literal on the runs where a rock happens to be
+## there and stays exact on the runs where one does not. Measured: this file went red on one round and
+## green on the next with nothing but the ground under it changing.
+func _clear_terrain(w: World) -> void:
+	w.terrain.rock_pos.clear()
+	w.terrain.rock_radius.clear()
+	w.terrain.water_pos.clear()
+	w.terrain.water_radius.clear()

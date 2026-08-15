@@ -7,13 +7,13 @@ extends Node2D
 ## read back as identity, colours as black, `multimesh_get_buffer()` size 0, **and no error is raised**),
 ## and the full game needs clones that do not look alike.
 ##
-## `_draw()` does nothing except call `_paint()`, and `_paint()` does nothing except call `_paint_cell()`
-## per body. **That is not decoration — it is the only way a net can assert what was drawn.** Counting
+## `_draw()` does nothing except call `_paint()`, and `_paint()` does nothing except call a `_paint_*`
+## leaf — a cell per body, a disc per rock, a label per cluster, an arc, a cone. **Every pixel goes through
+## one of them, and that is not decoration — it is the only way a net can assert what was drawn.** Counting
 ## that `_draw()` ran measures the engine; `CLAUDE.md` records three features shipped that way in one day,
 ## each erasable with thousands of checks still green. A native call like `draw_circle` cannot be
 ## overridden (parse error), so the hook has to be a method of ours that takes the values as arguments.
 
-const SHADOW := Color(0.0, 0.0, 0.0, 0.22)
 ## Tessellation, not appearance — the same class of number as `_blob()`'s eight points, and it stays here
 ## with them rather than in `look.gd`, which holds what a thing looks like and not how finely it is cut.
 const RING_SEGMENTS := 28
@@ -22,6 +22,16 @@ const CONE_SEGMENTS := 12
 ## Limb pairs and eye dots are drawn once per side. **Only one side's offset is written in `look.gd`** —
 ## the sign is derived, so a pair cannot be tuned into asymmetry by editing one of two constants.
 const MIRROR := [1.0, -1.0]
+
+## Which colour goes with which species, in `Parts.Species`' own order. **A presentation LOOKUP, not a
+## presentation constant**: the three colours themselves live in `look.gd` and this table only says which
+## one a species gets, so the one-file rule is not broken by it.
+##
+## ⚠ **`Hud` reads this table too, for the minimap's marks.** One table with two readers, deliberately: a
+## second copy in the HUD is the divergence the one-file rule exists to stop, and a minimap drawing a horse
+## in the crow's colour is a picture nobody would ever check.
+const SPECIES_COLOR := [Look.CROW_COLOR, Look.HORSE_COLOR, Look.BOSS_COLOR,
+	Look.SQUIRREL_COLOR, Look.ELEPHANT_COLOR, Look.CHEETAH_COLOR, Look.LION_COLOR]
 
 var world: World = null
 ## What the camera can see, in world coordinates, padded. Everything outside is skipped — 500 food spots
@@ -61,6 +71,35 @@ func _draw() -> void:
 func _paint(c: CanvasItem) -> void:
 	if world == null:
 		return
+	# **The ground first, and through `_paint_disc` rather than `_paint_cell`.** All three of `Terrain`'s
+	# predicates are `distance < radius`, so rock and water are CIRCLES in the sim; `_paint_cell` draws a
+	# rounded square whose corners stick ~26px past a 90px rock's collision circle, and you would walk
+	# through visible rock. Water goes down first because it is a floor and rock is a wall on it.
+	#
+	# ⚠ **Not culled against `view_rect`, and that is deliberate.** A body is culled on its centre, which is
+	# right for a 14px body and wrong for a 180px water circle: the centre leaves the padded rect while
+	# most of the disc is still on camera, and the floor would pop out from under the host. Fifty-two
+	# circles is not a budget worth a bug.
+	var ground := world.terrain
+	for j in ground.water_pos.size():
+		_paint_disc(c, ground.water_pos[j], ground.water_radius[j], Look.WATER_COLOR)
+	for j in ground.rock_pos.size():
+		_paint_disc(c, ground.rock_pos[j], ground.rock_radius[j], Look.ROCK_COLOR)
+
+	# A corpse is the ground too — drawn under every body, so a swarm standing on one still reads as bodies.
+	# The ring is the SWARM eating, in the host's own yellow, and it is the only thing on screen that says a
+	# six-second boss meal is running at all.
+	for i in world.corpse_count:
+		var cp := world.corpse_pos[i]
+		if not view_rect.has_point(cp):
+			continue
+		var cr := world.corpse_radius(i)
+		_paint_cell(c, cp, cr, Look.CORPSE_COLOR, Vector2.ONE)
+		var done := world.corpse_progress[i]
+		if done > 0.0:
+			_paint_arc(c, cp, cr * Look.CORPSE_PROGRESS_RING, -PI * 0.5, -PI * 0.5 + TAU * done,
+					Look.CORPSE_PROGRESS_COLOR, Look.CORPSE_PROGRESS_WIDTH)
+
 	var food := world.food
 	for i in food.pos.size():
 		if food.alive[i] == 0:
@@ -86,14 +125,21 @@ func _paint(c: CanvasItem) -> void:
 		var col: Color = Look.CLONE_COLOR.lerp(Look.CLONE_LOADED_COLOR, load_t)
 		_paint_cell(c, p, r, col, _squash(sw.vel[i], Rules.CLONE_SPEED_FOLLOW), _heading(sw.vel[i]))
 
+	# **Colour comes from the species and size comes from the species**, and both used to come from
+	# `threat` — one number the design deleted. Red-for-hunter/blue-for-prey was a comparison against the
+	# swarm's total force; nothing derives behaviour from a comparison any more, so nothing draws from one.
+	#
+	# ⚠ **`_heading` needs `length_squared > 1.0`.** `critter_dir` is a UNIT vector, so handing it over bare
+	# draws every creature at rotation 0 — the whole field facing east, with no error and nothing red. It is
+	# scaled to the speed that direction actually walks at, which is the same number `_step_critters` uses.
 	for k in world.critter_count:
 		var p := world.critter_pos[k]
 		if not view_rect.has_point(p):
 			continue
-		var prey := world.is_hunter_of(k)
-		_paint_cell(c, p, world.critter_radius(k),
-				Look.CRITTER_PREY_COLOR if prey else Look.CRITTER_COLOR,
-				Vector2.ONE, _heading(world.critter_dir[k] * Rules.CRITTER_SPEED))
+		var s := world.critter_species[k]
+		var species_col: Color = SPECIES_COLOR[s]
+		_paint_cell(c, p, world.critter_radius(k), species_col, Vector2.ONE,
+				_heading(world.critter_dir[k] * float(Rules.SPECIES_SPEED_MUL[s]) * Rules.HOST_SPEED))
 
 	# Under the host, so the body stays the thing being read. `bite_show` counts UP from the moment a bite
 	# landed and opens at INF, so a run that has never bitten draws nothing without a second flag to keep
@@ -120,6 +166,109 @@ func _paint(c: CanvasItem) -> void:
 		var t := clampf(sw.split_charge / Rules.SPLIT_HOLD_TIME, 0.0, 1.0)
 		_paint_arc(c, sw.pos[0], Rules.BODY_RADIUS * Look.SPLIT_CHARGE_RING,
 				-PI * 0.5, -PI * 0.5 + TAU * t, Look.SPLIT_CHARGE_COLOR, Look.SPLIT_CHARGE_WIDTH)
+
+	# **The numbers, last, so nothing is drawn over them.** The comparison the whole stage is about — is
+	# that thing bigger than me — happens without moving your eyes to a panel.
+	for e: Dictionary in _force_labels():
+		_paint_label(c, e["p"], e["text"], Look.FORCE_LABEL_COLOR)
+
+
+# -- the number under every body -------------------------------------------------------------------------
+## One entry per label, `{"p": Vector2, "text": String}`, where `p` is the DRAW ORIGIN — the cluster's
+## centroid, minus half the measured string width, plus `Look.FORCE_LABEL_OFFSET` in y.
+##
+## **Pure, so a net can compare the hook's arguments to it** — and a net that only calls this proves the
+## arithmetic and not the picture, which is why the leaf takes the same values as arguments.
+##
+## Four rules, and every one of them would destroy the readout on its own:
+## 1. **The host is always its own label.** Never absorbed into a cluster, however tight the swarm is.
+## 2. **Mine and theirs never share a cluster**, and neither do two different species: a swarm of 8 among
+##    crows of 3 must not read 11, and a boss of 120 beside a crow of 10 must not read 130 — whose `?`
+##    lookup would then have no species to ask about.
+## 3. **A species never eaten reads `?`**, so the number under a body is knowledge you earned. The boss is
+##    the exception and shows its 120 from `t = 0`: by the rule it would read `?` for the whole run, and
+##    seeing the number you cannot yet reach is the arc.
+## 4. **A mine-side label carries hp too** (`힘·체력`); theirs stays one number. Their hp is not a number
+##    you manage, and four numbers on forty creatures is the debug overlay the HUD's own header records.
+func _force_labels() -> Array:
+	var out := []
+	if world == null:
+		return out
+	var sw := world.swarm
+
+	# Rule 1. ⚠ **The host's hp is `World.host_hp`, never `swarm.hp[0]`** — row 0 of that column is the -1
+	# sentinel the swarm's own doc defines, and printing it puts `-1` under the host on the opening frame.
+	out.append(_label(sw.pos[0], "%d·%d" % [sw.force[0], world.host_hp]))
+
+	# Rule 2, half one: clones cluster only with clones.
+	var cp := PackedVector2Array()
+	var cf := PackedInt32Array()
+	var ch := PackedInt32Array()
+	for i in range(1, sw.count):
+		if not view_rect.has_point(sw.pos[i]):
+			continue
+		cp.append(sw.pos[i])
+		cf.append(sw.force[i])
+		ch.append(sw.hp[i])
+	for cl: Dictionary in _cluster(cp, cf, ch):
+		out.append(_label(cl["c"], "%d·%d" % [cl["f"], cl["h"]]))
+
+	# Rule 2, half two: creatures cluster only with creatures of the same species — one pass per species,
+	# which is what makes sharing structurally impossible rather than a distance test that happens to fail.
+	for s in SPECIES_COLOR.size():
+		var kp := PackedVector2Array()
+		var kf := PackedInt32Array()
+		var kh := PackedInt32Array()
+		for k in world.critter_count:
+			if world.critter_species[k] != s or not view_rect.has_point(world.critter_pos[k]):
+				continue
+			kp.append(world.critter_pos[k])
+			kf.append(world.critter_force[k])
+			kh.append(world.critter_hp[k])
+		if kp.is_empty():
+			continue
+		# Rules 3 and 4.
+		var known := s == Parts.Species.BOSS or world.species_eaten.has(s)
+		for cl: Dictionary in _cluster(kp, kf, kh):
+			out.append(_label(cl["c"], ("%d" % cl["f"]) if known else "?"))
+	return out
+
+
+## Greedy: walk the list, join the first cluster whose RUNNING centroid is within
+## `Look.FORCE_CLUSTER_RADIUS`, else open a new one.
+##
+## ⚠ **Not `SimGrid.neighbours()`, and that is the whole reason this loop is written out.** The grid
+## truncates at `NEIGHBOUR_CAP` by design, so a pile of forty would sum to eight — silently capped at
+## exactly the moment `1` and `V` make a pile of forty, which is the moment the number matters most.
+func _cluster(pts: PackedVector2Array, forces: PackedInt32Array, hps: PackedInt32Array) -> Array:
+	var out := []
+	for i in pts.size():
+		var joined := false
+		for cl: Dictionary in out:
+			var centre: Vector2 = cl["c"]
+			if centre.distance_to(pts[i]) > Look.FORCE_CLUSTER_RADIUS:
+				continue
+			var n := int(cl["n"]) + 1
+			cl["n"] = n
+			cl["c"] = centre + (pts[i] - centre) / float(n)
+			cl["f"] = int(cl["f"]) + forces[i]
+			cl["h"] = int(cl["h"]) + hps[i]
+			joined = true
+			break
+		if not joined:
+			out.append({"c": pts[i], "n": 1, "f": forces[i], "h": hps[i]})
+	return out
+
+
+## Centring, done HERE and not by the alignment argument. ⚠ **Godot 4 ignores
+## `HORIZONTAL_ALIGNMENT_CENTER` when `width` is negative**, so passing it does nothing at all and every
+## label sits half its own width to the right of the centroid it documents — invisible headless, because
+## there are no pixels and the spy captures a `p` that is correct for what it was told. Measured here, the
+## offset is an argument a net can read back.
+func _label(centre: Vector2, text: String) -> Dictionary:
+	var w := ThemeDB.fallback_font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1,
+			Look.FORCE_LABEL_SIZE).x
+	return {"p": Vector2(centre.x - w * 0.5, centre.y + Look.FORCE_LABEL_OFFSET), "text": text}
 
 
 ## Is anybody on their way to the strike point. Asked of the swarm rather than remembered here — the view
@@ -252,8 +401,21 @@ func _paint_outline(c: CanvasItem, p: Vector2, r: float, corner: float, col: Col
 	c.draw_polyline(pts, col, width)
 
 
-## The eye dots. The only place `draw_circle` is called in this file.
+## The eye dots. **One of the two places `draw_circle` is called in this file**, and the other one is
+## `_paint_disc` — kept apart on purpose, see that leaf's own note.
 func _paint_dot(c: CanvasItem, p: Vector2, r: float, col: Color) -> void:
+	c.draw_circle(p, r, col)
+
+
+## A filled circle at world scale, and the only thing in this file that draws one. It exists because
+## `Terrain`'s three predicates are all `distance < radius`: a rock drawn as a blob is walkable at its
+## corners and solid a few pixels in from its edge, which is screen and sim disagreeing in the one feature
+## herding rests on.
+##
+## ⚠ **Not `_paint_dot`** — that leaf is the eyes and a net spies it; folding forty rocks into the same spy
+## makes every eye assertion unreadable. ⚠ **Not `_paint_arc`** either: `draw_arc` strokes an outline, so a
+## 90px rock would come back hollow.
+func _paint_disc(c: CanvasItem, p: Vector2, r: float, col: Color) -> void:
 	c.draw_circle(p, r, col)
 
 
@@ -267,7 +429,7 @@ func _paint_cell(c: CanvasItem, p: Vector2, r: float, col: Color, squash: Vector
 	# The shadow does not rotate with the body — it lies on the ground, and rotating it is the tell that
 	# turns a squashed blob back into a spinning sprite.
 	c.draw_set_transform(p + Vector2(0.0, r * 0.62), 0.0, Vector2(squash.x, squash.y * 0.42))
-	c.draw_colored_polygon(_blob(r, Vector2.ZERO, corner), SHADOW)
+	c.draw_colored_polygon(_blob(r, Vector2.ZERO, corner), Look.CELL_SHADOW)
 	c.draw_set_transform(p, rot, squash)
 	c.draw_colored_polygon(_blob(r, Vector2.ZERO, corner), col)
 	# Drawn unrotated, so the light stays overhead however the body is stretched. Lit from one direction
@@ -319,6 +481,20 @@ func _paint_cone(c: CanvasItem, p: Vector2, dir: Vector2, range_px: float, arc: 
 		var a := a0 + arc * (float(k) / float(CONE_SEGMENTS))
 		pts.append(p + Vector2(cos(a), sin(a)) * range_px)
 	c.draw_colored_polygon(pts, col)
+
+
+## The only text this file has ever drawn. `draw_string` is native and Godot refuses to override it (parse
+## error), so the leaf has to be ours and take the values as arguments.
+##
+## ⚠ **`ThemeDB.fallback_font`, not `get_theme_default_font()`** — this is a `Node2D` and that method is a
+## `Control`'s. The fallback font tofus Korean, which is safe here and only here: every label this file
+## draws is digits, a middle dot, or `?`.
+##
+## ⚠ **`p` arrives ALREADY CENTRED and the alignment is LEFT** — see `_label` for why passing CENTER here
+## would silently do nothing.
+func _paint_label(c: CanvasItem, p: Vector2, text: String, col: Color) -> void:
+	c.draw_string(ThemeDB.fallback_font, p, text, HORIZONTAL_ALIGNMENT_LEFT, -1,
+			Look.FORCE_LABEL_SIZE, col)
 
 
 ## Stretch along travel, squash across it. Cheap, and it is the entire difference between "squares slide"

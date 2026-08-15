@@ -392,7 +392,7 @@ func _panel_open() -> bool:
     return cards.visible or body.visible
 ```
 
-The `pending_levels == 0` condition at `main.gd:66` is replaced by it — that condition was already the same
+`main.gd`'s `pending_levels == 0` condition is replaced by it — that condition was already the same
 idea, written narrowly. `Tab` itself is read in `_unhandled_key_input`, which is where `Esc` already lives.
 
 ### 9. `run.gd` — one comment

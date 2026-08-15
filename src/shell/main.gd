@@ -96,6 +96,12 @@ func _process(delta: float) -> void:
 		_follow_camera(delta)
 		_apply_zoom(delta)
 		view.view_rect = _camera_rect()
+		# **Two rects, two callers, and they are deliberately different.** `_camera_rect()` is padded 20%
+		# so a body just off screen keeps being drawn while it walks back on; the HUD's copy is what a
+		# minimap paints a camera box from, and a padded box is a box a fifth too big — wrong in a way the
+		# screen never announces. Assigned AFTER `_apply_zoom`, so both rects are this frame's zoom and not
+		# the previous one's.
+		hud.camera_rect = _true_camera_rect()
 	_apply_phase()
 
 
@@ -124,6 +130,10 @@ func _bind_world() -> void:
 	# `FieldView.reset_pop()`.
 	view.reset_pop()
 	hud.world = run.world
+	# Cleared with the world it describes. `_process` only writes it inside the PLAY branch, so a rect left
+	# standing from the previous run is what the HUD would draw on TITLE and ENDING and on the first frame
+	# of the next run — the same stale-reference shape the line above exists to prevent, one field over.
+	hud.camera_rect = Rect2()
 	# ⚠ **The panel holds the whole `World` now, and `cards` holds the `Body`.** `main.gd`'s own `body`
 	# field is the PANEL and `World.body` is the `Body` — the same word for two things, on purpose, so
 	# `body.world` reads as "the panel's world" and `run.world.body` as "the world's body". Miss either
@@ -184,9 +194,17 @@ func _read_input(delta: float) -> void:
 	# reason the host is not faster on the diagonal.
 	sw.host_input = Input.get_vector("mv_left", "mv_right", "mv_up", "mv_down")
 
-	# All three keys go through `Body.fire()`. A key that reaches into the simulation on its own would be a
+	# All three keys go through `World.fire()`. A key that reaches into the simulation on its own would be a
 	# fourth code path the gate above has to know about separately. Left and right on the same frame both
 	# fire — the keys are independent and share no cooldown.
+	#
+	# ⚠ **`World.fire()`, not `Body.fire()`, and the difference is invisible from here.** Both return a
+	# bool, both put the key on cooldown, both make the bite arc appear on screen; what only the `World`
+	# one does is dispatch the ARC branch's `strike()`, which is the entire damage path for every key the
+	# player will ever press. Written as `body.fire(key, aim)` the game draws a cone that hurts nothing and
+	# no check about keys, cooldowns or drawing notices — `Body` may not hold a `World` (see body.gd's own
+	# doc), so the delegation has to happen on this side. `held` still goes to the `Body` because a
+	# SUSTAINED active never reaches `fire()` at all.
 	#
 	# ⚠ **Both the edge and the hold, every frame.** `fire()` is the one-shot; `held` is what a SUSTAINED
 	# active runs off, and 갤럽 is "while held, draining breath". Wired to `just_pressed` alone it is a
@@ -197,7 +215,7 @@ func _read_input(delta: float) -> void:
 	for key in Body.KEY_COUNT:
 		var action := "fire_%d" % key
 		if Input.is_action_just_pressed(action):
-			b.fire(key, aim)
+			run.world.fire(key, aim)
 		b.held[key] = 1 if Input.is_action_pressed(action) else 0
 
 	# Held, not tapped: the wind-up is what makes the split read as an act. `split_release()` also runs in
@@ -264,6 +282,18 @@ func _apply_zoom(delta: float) -> void:
 func _camera_rect() -> Rect2:
 	var vp := get_viewport_rect().size / cam.zoom.x
 	return Rect2(cam.position - vp * 0.5 - vp * 0.1, vp * 1.2)
+
+
+## **The same rectangle without the culling pad** — exactly what the player can see, for `Hud.camera_rect`.
+##
+## ⚠ **It is a second function and not an argument to the one above.** `_camera_rect()`'s 1.2 exists so
+## `FieldView` keeps drawing a body that is about to walk on screen; a camera box on a minimap drawn from
+## it is 20% too large in both axes, which reads as "the map is roughly right" rather than as a bug. One
+## function with a flag would put the two rects one boolean apart and nothing would say which caller
+## wanted which.
+func _true_camera_rect() -> Rect2:
+	var vp := get_viewport_rect().size / cam.zoom.x
+	return Rect2(cam.position - vp * 0.5, vp)
 
 
 func _on_card_picked(card: int) -> void:

@@ -104,7 +104,9 @@ class ArcSpy extends FieldView:
 
 	func _paint_arc(c: CanvasItem, p: Vector2, r: float, from: float, to: float, col: Color,
 			width: float) -> void:
-		arcs.append({"p": p, "r": r, "from": from, "to": to, "width": width})
+		# `col_a` rather than `col`: an assertion that the captured colour equals the constant it came from
+		# moves both sides when the constant moves, which is how `Color(0, 0, 0, 0)` stayed green.
+		arcs.append({"p": p, "r": r, "from": from, "to": to, "width": width, "col_a": col.a})
 		super._paint_arc(c, p, r, from, to, col, width)
 
 	func _paint_cone(c: CanvasItem, p: Vector2, dir: Vector2, range_px: float, arc: float,
@@ -113,22 +115,93 @@ class ArcSpy extends FieldView:
 		super._paint_cone(c, p, dir, range_px, arc, col)
 
 
+## The ground, and it is its own leaf on purpose: `_paint_dot` is the eyes and a spy already watches it, so
+## folding forty rocks into the same capture would make every eye assertion unreadable.
+class DiscSpy extends FieldView:
+	var discs: Array = []
+
+	func _paint_disc(c: CanvasItem, p: Vector2, r: float, col: Color) -> void:
+		discs.append({"p": p, "r": r, "col": col})
+		super._paint_disc(c, p, r, col)
+
+
+## The number under every body. `draw_string` is native and Godot refuses to override it, so the leaf takes
+## the values as arguments and this captures them — including the `p` the centring produced, which is the
+## only way an alignment argument that silently does nothing can be seen headless.
+class LabelSpy extends FieldView:
+	var labels: Array = []
+
+	func _paint_label(c: CanvasItem, p: Vector2, text: String, col: Color) -> void:
+		labels.append({"p": p, "text": text, "col": col})
+		super._paint_label(c, p, text, col)
+
+
+## The minimap's own hook, on the HUD rather than the field: this one is SCREEN space on a `Control` and the
+## field's leaves are world space on a `Node2D`. `frame` and `marks` are both captured, because where the
+## map IS is a separate defect from what is inside it.
+## ⚠ **The two leaves are captured as well, and for a measured reason.** Spying `_paint_minimap` alone
+## sees the composer being CALLED and nothing it did: with `maps` as the only capture, `_to_map` rewritten
+## to `return frame.position` (host, forty clones and the boss all on one pixel), every mark radius zeroed,
+## the whole `for m in marks:` loop emptied and all six minimap constants set to zero at once were **each
+## green** — a blank rectangle with the round passing. `frame` and `marks` are captured too because where
+## the map IS is a separate defect from what is inside it.
+class MapSpy extends Hud:
+	var maps: Array = []
+	## Background, edge and camera box — the three rectangles inside the map, plus the level bar's two.
+	## Classified by colour below, which is what tells the five apart.
+	var rects: Array = []
+	## What each mark leaf was actually handed: position, radius and colour.
+	var marks: Array = []
+
+	func _paint_minimap(c: CanvasItem, frame: Rect2, camera: Rect2, marks_in: Array) -> void:
+		maps.append({"frame": frame, "camera": camera, "marks": marks_in.duplicate()})
+		super._paint_minimap(c, frame, camera, marks_in)
+
+	func _paint_rect(c: CanvasItem, r: Rect2, col: Color) -> void:
+		rects.append({"r": r, "col": col})
+		super._paint_rect(c, r, col)
+
+	func _paint_mark(c: CanvasItem, p: Vector2, r: float, col: Color) -> void:
+		marks.append({"p": p, "r": r, "col": col})
+		super._paint_mark(c, p, r, col)
+
+	func forget() -> void:
+		maps.clear()
+		rects.clear()
+		marks.clear()
+
+
 func run(t) -> void:
 	await _c_cells(t)
 	await _c_strike_marker(t)
 	await _c_bite_cone(t)
 	await _c13_body_values(t)
+	await _p2_creatures_are_drawn_by_species(t)
+	await _p1_the_eating_ring(t)
+	await _t6_the_drawn_ground_is_the_sim_s(t)
+	await _c31_c32_c33_labels(t)
+	await _p3_the_label_is_centred(t)
+	await _u16c_the_cluster_centroid_is_the_mean(t)
+	await _c35_minimap(t)
+	await _c35b_what_is_on_the_map(t)
+	await _c35c_the_camera_box_is_clipped(t)
+	await _c35d_water_is_on_the_map(t)
 
 
+## ⚠ **Every term of `expect` is a literal and the world is built to make that possible.** It used to read
+## `1 + swarm.count - 1 + food.alive_count + critter_count` — a bound taken straight off the thing under
+## test, which shrinks with whatever it is checking.
+##
+## ⚠ **Rocks and water are NOT in this count.** They go through `_paint_disc`, which the cell spy never
+## sees; T6 carries its own. Corpses ARE, because a corpse is drawn as a cell.
 func _c_cells(t) -> void:
 	var w := World.new()
 	w.setup(9)
-	for i in w.food.alive.size():
-		w.food.alive[i] = 0
-	w.food.alive_count = 0
+	_silence(w)
+	_clear_terrain(w)
+	var host: Vector2 = w.swarm.pos[0]
 	# Three food at pinned coordinates near the host, so the expected draw count is a number and not a
 	# function of the spawner's randomness.
-	var host: Vector2 = w.swarm.pos[0]
 	for i in 3:
 		w.food.pos[i] = host + Vector2(40.0 + i * 20.0, 0.0)
 		w.food.alive[i] = 1
@@ -137,6 +210,24 @@ func _c_cells(t) -> void:
 	for i in 4:
 		var k := w.swarm.add_clone()
 		w.swarm.pos[k] = host + Vector2(-60.0 - i * 25.0, 30.0)
+	# Two creatures and one corpse, written by hand over the twelve `setup()` placed.
+	w.critter_count = 0
+	w.boss_index = -1
+	w._write_critter(Parts.Species.CROW, host + Vector2(200.0, 0.0), 10)
+	w._write_critter(Parts.Species.HORSE, host + Vector2(300.0, 0.0), 30)
+	w.corpse_count = 1
+	w.corpse_pos[0] = host + Vector2(0.0, 200.0)
+	w.corpse_species[0] = Parts.Species.CROW
+	w.corpse_force[0] = 10
+	w.corpse_progress[0] = 0.0
+	# Two rocks and one water circle, at literal coordinates: `Terrain.setup()`'s rejection sampler makes
+	# `rock_pos.size()` seed-dependent, so nothing here may read the generated ground.
+	w.terrain.rock_pos.append(host + Vector2(-400.0, 0.0))
+	w.terrain.rock_radius.append(90.0)
+	w.terrain.rock_pos.append(host + Vector2(-600.0, 0.0))
+	w.terrain.rock_radius.append(50.0)
+	w.terrain.water_pos.append(host + Vector2(0.0, -400.0))
+	w.terrain.water_radius.append(150.0)
 
 	var spy := Spy.new()
 	spy.world = w
@@ -148,8 +239,8 @@ func _c_cells(t) -> void:
 	spy.seen.clear()
 	await t.pump_frames(1)
 
-	var expect := 1 + w.swarm.count - 1 + w.food.alive_count + w.critter_count
-	t.eq(spy.seen.size(), expect, "호스트·분신·먹이·포식자가 전부 그려졌다")
+	# 1 호스트 + 4 분신 + 3 먹이 + 2 생물 + 1 시체. Every term a literal.
+	t.eq(spy.seen.size(), 11, "호스트·분신 넷·먹이 셋·생물 둘·시체 하나가 전부 그려졌다 (1+4+3+2+1)")
 
 	# The captured position must EQUAL the simulation's, not merely be non-zero: passing Vector2.ZERO for
 	# every body is the exact mutation this check exists to catch, and a count-only assertion survives it.
@@ -292,7 +383,10 @@ func _c_bite_cone(t) -> void:
 	await t.pump_frames(1)
 	t.eq(spy.cones.size(), 0, "설정: 한 번도 물지 않은 런은 원뿔을 그리지 않는다 (bite_show가 INF로 열린다)")
 
-	t.ok(w.body.fire(0, host + Vector2(400.0, 0.0)), "설정: 좌클릭이 실제로 먹이를 물었다")
+	t.ok(w.body.fire(0, host + Vector2(400.0, 0.0)), "설정: 좌클릭이 나갔다")
+	# `fire()`는 이제 빈 원뿔에도 true를 돌려준다 — 위 한 줄만으로는 "키가 쿨다운이 아니었다"밖에 재지
+	# 못한다. 먹이가 실제로 사라졌는지는 따로 못 박아야 라벨이 재는 것과 같아진다.
+	t.eq(w.food.alive[0], 0, "설정: 그리고 먹이가 실제로 사라졌다")
 	t.eq(w.swarm.bite_show, 0.0, "문 순간 원뿔 시계가 0에서 다시 시작한다")
 	spy.cones.clear()
 	await t.pump_frames(1)
@@ -609,6 +703,691 @@ func _cell_col(spy: BodySpy, at: Vector2, radius: float) -> Color:
 		if _near(e["p"], at) and absf(float(e["r"]) - radius) < 0.001:
 			return e["col"]
 	return Color(0.0, 0.0, 0.0, 0.0)
+
+
+# -- P2: a creature's COLOUR and RADIUS both come from its species ---------------------------------------
+## ⚠ **Nothing in the round had ever asserted a creature's drawn colour or its drawn radius.** Both used to
+## come from `threat` — one number the design deleted — and the loop that replaced them could have drawn the
+## whole field in one tone with every other check green.
+func _p2_creatures_are_drawn_by_species(t) -> void:
+	var w := World.new()
+	w.setup(94)
+	_silence(w)
+	_clear_terrain(w)
+	var host: Vector2 = w.swarm.pos[0]
+	w.critter_count = 0
+	w.boss_index = -1
+	w._write_critter(Parts.Species.CROW, host + Vector2(200.0, 0.0), 10)
+	w._write_critter(Parts.Species.HORSE, host + Vector2(400.0, 0.0), 30)
+	w._write_critter(Parts.Species.BOSS, host + Vector2(600.0, 0.0), 120)
+
+	var spy := Spy.new()
+	spy.world = w
+	spy.view_rect = Rect2(Vector2.ZERO, Rules.FIELD)
+	t.root.add_child(spy)
+	await t.pump_frames(2)
+	spy.seen.clear()
+	await t.pump_frames(1)
+
+	# Radii are the literals check 30 pins through `_radius_of`: crow at force 10 is 15, the weakest horse is
+	# 22, the boss is 48.
+	t.ok(_cell_is(spy, host + Vector2(200.0, 0.0), 15.0, Look.CROW_COLOR),
+			"까마귀는 제 종의 색으로, 제 종의 15px로 그려진다 %s" % str(spy.seen))
+	t.ok(_cell_is(spy, host + Vector2(400.0, 0.0), 22.0, Look.HORSE_COLOR),
+			"말은 말의 색으로 22px로 그려진다")
+	t.ok(_cell_is(spy, host + Vector2(600.0, 0.0), 48.0, Look.BOSS_COLOR),
+			"보스는 보스의 색으로 48px로 그려진다 — 세 종이 한 색으로 뭉개지지 않는다")
+	t.ok(Look.CROW_COLOR != Look.HORSE_COLOR and Look.HORSE_COLOR != Look.BOSS_COLOR
+			and Look.CROW_COLOR != Look.BOSS_COLOR,
+			"설정: 세 색은 서로 다른 색이다 — 같은 색이면 위의 셋은 아무것도 구분하지 않는다")
+
+	t.root.remove_child(spy)
+	spy.queue_free()
+
+
+# -- P1: the eating ring ---------------------------------------------------------------------------------
+## A six-second boss meal with nothing on screen is the beat happening invisibly. The sweep AND the radius
+## are both pinned: a bare radius passed to `_paint_arc` draws a ring that says nothing about the corpse.
+func _p1_the_eating_ring(t) -> void:
+	var w := World.new()
+	w.setup(95)
+	_silence(w)
+	_clear_terrain(w)
+	w.critter_count = 0
+	w.boss_index = -1
+	var at: Vector2 = w.swarm.pos[0] + Vector2(300.0, 0.0)
+	w.corpse_count = 1
+	w.corpse_pos[0] = at
+	w.corpse_species[0] = Parts.Species.CROW
+	w.corpse_force[0] = 10
+	w.corpse_progress[0] = 0.5
+
+	var spy := ArcSpy.new()
+	spy.world = w
+	spy.view_rect = Rect2(Vector2.ZERO, Rules.FIELD)
+	t.root.add_child(spy)
+	await t.pump_frames(2)
+	spy.arcs.clear()
+	await t.pump_frames(1)
+	# Nobody is in STRIKE and the `F` charge is zero, so the eating ring is the only arc on screen.
+	t.eq(spy.arcs.size(), 1, "반쯤 먹은 시체 위에 호가 하나 그려진다 %s" % str(spy.arcs))
+	if spy.arcs.size() == 1:
+		var a: Dictionary = spy.arcs[0]
+		t.eq(a["p"], at, "그 호는 시체 자리에 있다")
+		t.ok(absf(float(a["to"]) - float(a["from"]) - TAU * 0.5) < 0.001,
+				"쓸고 간 각이 진행도의 절반과 같다 (%.4f)" % (float(a["to"]) - float(a["from"])))
+		# 18.0 = corpse_radius 12 × CORPSE_PROGRESS_RING 1.5, by hand.
+		t.ok(absf(float(a["r"]) - 18.0) < 0.01,
+				"반지름은 그 시체의 크기의 배수다 — 12 × 1.5 = 18px (리터럴) (%.3f)" % float(a["r"]))
+		# ⚠ **The WIDTH reaching the leaf, as a literal.** `CORPSE_PROGRESS_WIDTH` had zero hits in all of
+		# `tests/` — a zero-width arc is a ring that is computed correctly and drawn as nothing.
+		t.ok(absf(float(a["width"]) - 3.0) < 0.01,
+				"그리고 굵기 3px로 그려진다 — 0이면 계산은 맞고 화면에는 아무것도 없다 (%.3f)"
+						% float(a["width"]))
+		t.ok(float(a["col_a"]) > 0.5,
+				"그 호는 실제로 보이는 알파로 그려진다 (%.2f) — 색을 상수끼리 비교하면 0도 통과한다"
+						% float(a["col_a"]))
+
+	w.corpse_progress[0] = 0.0
+	spy.arcs.clear()
+	await t.pump_frames(1)
+	t.eq(spy.arcs.size(), 0, "부정 대조: 아무도 안 먹은 시체에는 호가 없다")
+
+	t.root.remove_child(spy)
+	spy.queue_free()
+
+
+# -- T6: the DRAWN rock is the sim's rock ----------------------------------------------------------------
+## ⚠ **`_paint_disc`, not `_paint_cell`.** All three of `Terrain`'s predicates are `distance < radius`, and
+## `_paint_cell` draws a rounded square whose corners stick ~26px past a 90px rock's collision circle — you
+## would walk through visible rock, which is screen and sim disagreeing in the feature herding rests on.
+func _t6_the_drawn_ground_is_the_sim_s(t) -> void:
+	var w := World.new()
+	w.setup(96)
+	_silence(w)
+	_clear_terrain(w)
+	w.critter_count = 0
+	w.boss_index = -1
+	var rock := Vector2(1200.0, 900.0)
+	var water := Vector2(1600.0, 1200.0)
+	w.terrain.rock_pos.append(rock)
+	w.terrain.rock_radius.append(90.0)
+	w.terrain.water_pos.append(water)
+	w.terrain.water_radius.append(150.0)
+
+	var spy := DiscSpy.new()
+	spy.world = w
+	spy.view_rect = Rect2(Vector2.ZERO, Rules.FIELD)
+	t.root.add_child(spy)
+	await t.pump_frames(2)
+	spy.discs.clear()
+	await t.pump_frames(1)
+
+	t.eq(spy.discs.size(), 2, "바위 하나와 물 하나, 원 두 개가 그려진다 %s" % str(spy.discs))
+	t.ok(_disc_is(spy, rock, 90.0, Look.ROCK_COLOR),
+			"바위는 sim이 부딪히는 그 중심에 그 반지름으로 그려진다 (1200,900 · 90px)")
+	t.ok(_disc_is(spy, water, 150.0, Look.WATER_COLOR),
+			"물도 마찬가지다 (1600,1200 · 150px) — 그리고 바위와 다른 색이다")
+
+	t.root.remove_child(spy)
+	spy.queue_free()
+
+
+# -- 31 / 32 / 33: the number under every body -----------------------------------------------------------
+## Three rules in one treed fixture, because each of them passes against the others' bug.
+func _c31_c32_c33_labels(t) -> void:
+	var w := World.new()
+	w.setup(97)
+	_silence(w)
+	_clear_terrain(w)
+	w.critter_count = 0
+	w.boss_index = -1
+	var host: Vector2 = w.swarm.pos[0]
+	var pile := host + Vector2(400.0, 0.0)
+	for _i in 40:
+		var k := w.swarm.add_clone(0, 5)
+		w.swarm.pos[k] = pile
+	t.eq(w.swarm.count, 41, "설정: 힘 5짜리 분신 마흔을 한 점에 세웠다")
+
+	var spy := LabelSpy.new()
+	spy.world = w
+	spy.view_rect = Rect2(Vector2.ZERO, Rules.FIELD)
+	t.root.add_child(spy)
+	await t.pump_frames(2)
+	spy.labels.clear()
+	await t.pump_frames(1)
+
+	t.eq(spy.labels.size(), 2, "뭉친 마흔과 호스트는 라벨 두 개다 %s" % str(_texts(spy)))
+	# 200·600 = 40 × force 5 and 40 × hp 15. **Not 8**: `SimGrid.neighbours()` truncates at NEIGHBOUR_CAP,
+	# so a pile of forty summed through it would read 40.
+	t.ok(_has_text(spy, "200·600"),
+			"뭉친 쪽은 합해서 200·600으로 읽힌다 — 8이 아니다 %s" % str(_texts(spy)))
+	# The host's hp comes from `World.host_hp`, never `swarm.hp[0]` — row 0 of that column is the -1
+	# sentinel and printing it puts `-1` under the host on the opening frame.
+	t.ok(_has_text(spy, "10·30"), "호스트는 언제나 제 라벨을 따로 갖는다 — 10·30 %s" % str(_texts(spy)))
+
+	# Spread past `FORCE_CLUSTER_RADIUS` and every one of them is its own label again.
+	# ⚠ **A grid, not a line.** Forty bodies 100px apart in a row run off the east edge of the field, and
+	# `_force_labels()` culls against `view_rect` — the count came back 18 and read like a clustering bug.
+	for i in range(1, w.swarm.count):
+		var j := i - 1
+		w.swarm.pos[i] = Vector2(200.0 + float(j % 8) * 300.0, 200.0 + float(j / 8) * 300.0)
+	spy.labels.clear()
+	await t.pump_frames(1)
+	t.eq(spy.labels.size(), 41, "떨어뜨려 놓으면 마흔한 개가 된다 — 뭉치는 것은 거리 규칙이다")
+
+	# 32(a): mine and theirs never share a cluster, and the two SHAPES differ.
+	var w2 := World.new()
+	w2.setup(98)
+	_silence(w2)
+	_clear_terrain(w2)
+	w2.critter_count = 0
+	w2.boss_index = -1
+	var host2: Vector2 = w2.swarm.pos[0]
+	var spot := host2 + Vector2(500.0, 0.0)
+	var c := w2.swarm.add_clone(0, 5)
+	w2.swarm.pos[c] = spot
+	w2._write_critter(Parts.Species.CROW, spot + Vector2(10.0, 0.0), 10)
+	w2.species_eaten = PackedInt32Array([int(Parts.Species.CROW)])
+	spy.world = w2
+	spy.labels.clear()
+	await t.pump_frames(1)
+	t.eq(spy.labels.size(), 3, "겹쳐 선 까마귀와 분신은 라벨 둘이다 (호스트까지 셋) %s" % str(_texts(spy)))
+	t.ok(_has_text(spy, "5·15") and _has_text(spy, "10"),
+			"내 쪽은 힘·체력, 저쪽은 숫자 하나 — 합쳐 15로 읽히지 않는다 %s" % str(_texts(spy)))
+
+	# 32(b): two different SPECIES never share one either. A boss of 120 beside a crow of 10 reading 130
+	# would leave the `?` lookup with no species to ask about.
+	var w3 := World.new()
+	w3.setup(99)
+	_silence(w3)
+	_clear_terrain(w3)
+	w3.critter_count = 0
+	w3.boss_index = -1
+	var spot3: Vector2 = w3.swarm.pos[0] + Vector2(500.0, 0.0)
+	w3._write_critter(Parts.Species.CROW, spot3, 10)
+	w3._write_critter(Parts.Species.BOSS, spot3 + Vector2(10.0, 0.0), 120)
+	w3.boss_index = 1
+	spy.world = w3
+	spy.labels.clear()
+	await t.pump_frames(1)
+	t.eq(spy.labels.size(), 3, "겹쳐 선 까마귀와 보스도 라벨 둘이다 (호스트까지 셋) %s" % str(_texts(spy)))
+	# 33: never eaten reads `?`, and the BOSS is the exception — it shows its 120 from t = 0.
+	t.ok(_has_text(spy, "?"), "아직 안 먹어 본 까마귀는 ?로 읽힌다 %s" % str(_texts(spy)))
+	t.ok(_has_text(spy, "120"), "보스만은 t=0부터 제 숫자를 보여준다 — 못 닿는 숫자를 보는 것이 그 호다")
+	t.ok(not _has_text(spy, "130"), "그리고 둘이 합쳐 130으로 읽히는 일은 없다")
+
+	# 33, the other half: eat one and the `?` becomes the number, exactly `"10"` with no separator — a
+	# creature's label never carries hp, or forty of them turn the field into a debug overlay.
+	w3.species_eaten = PackedInt32Array([int(Parts.Species.CROW)])
+	spy.labels.clear()
+	await t.pump_frames(1)
+	t.ok(not _has_text(spy, "?"), "한 번 먹고 나면 물음표가 사라지고")
+	t.ok(_has_text(spy, "10"), "그 자리에 숫자가 나온다 — 몸 밑의 숫자는 벌어 온 지식이다 %s" % str(_texts(spy)))
+
+	t.root.remove_child(spy)
+	spy.queue_free()
+
+
+# -- P3: the label's origin is CENTRED -------------------------------------------------------------------
+## ⚠ **Godot 4 ignores `HORIZONTAL_ALIGNMENT_CENTER` when `width` is negative**, so passing it does nothing
+## at all and every label sits half its own width to the right of the centroid it documents — invisible
+## headless, because there are no pixels and a spy captures a `p` that is correct for what it was told.
+## The centring is done in `_label()` for exactly that reason, which makes the offset an argument.
+func _p3_the_label_is_centred(t) -> void:
+	var w := World.new()
+	w.setup(100)
+	_silence(w)
+	_clear_terrain(w)
+	w.critter_count = 0
+	w.boss_index = -1
+	var host: Vector2 = w.swarm.pos[0]
+	var mine := host + Vector2(600.0, 0.0)
+	var theirs := host + Vector2(1200.0, 0.0)
+	var c := w.swarm.add_clone(0, 5)
+	w.swarm.pos[c] = mine
+	w._write_critter(Parts.Species.CROW, theirs, 10)
+	w.species_eaten = PackedInt32Array([int(Parts.Species.CROW)])
+
+	var spy := LabelSpy.new()
+	spy.world = w
+	spy.view_rect = Rect2(Vector2.ZERO, Rules.FIELD)
+	t.root.add_child(spy)
+	await t.pump_frames(2)
+	spy.labels.clear()
+	await t.pump_frames(1)
+
+	var long_p := _label_p(spy, "5·15")
+	var short_p := _label_p(spy, "10")
+	t.ok(long_p != Vector2.INF and short_p != Vector2.INF,
+			"설정: 긴 라벨과 짧은 라벨을 둘 다 잡았다 %s" % str(_texts(spy)))
+	var long_w := ThemeDB.fallback_font.get_string_size("5·15", HORIZONTAL_ALIGNMENT_LEFT, -1,
+			Look.FORCE_LABEL_SIZE).x
+	var short_w := ThemeDB.fallback_font.get_string_size("10", HORIZONTAL_ALIGNMENT_LEFT, -1,
+			Look.FORCE_LABEL_SIZE).x
+	t.ok(long_w > short_w + 1.0,
+			"설정: 「5·15」는 「10」보다 실제로 넓다 (%.1f > %.1f)" % [long_w, short_w])
+	t.ok(absf((mine.x - long_p.x) - long_w * 0.5) < 0.01,
+			"긴 라벨은 제 폭의 절반만큼 왼쪽에서 시작한다 (%.2f)" % (mine.x - long_p.x))
+	t.ok(absf((theirs.x - short_p.x) - short_w * 0.5) < 0.01,
+			"짧은 라벨도 제 폭의 절반만큼이다 — 두 값이 다르다는 것이 가운데 맞춤의 증거다 (%.2f)"
+					% (theirs.x - short_p.x))
+	t.ok(absf(mine.x - long_p.x) > absf(theirs.x - short_p.x) + 0.5,
+			"그래서 긴 쪽이 더 많이 밀린다 — 원점을 그대로 넘겼다면 둘 다 0이다")
+	t.ok(absf(long_p.y - (mine.y + Look.FORCE_LABEL_OFFSET)) < 0.01,
+			"그리고 라벨은 몸 아래 FORCE_LABEL_OFFSET만큼에 놓인다")
+
+	t.root.remove_child(spy)
+	spy.queue_free()
+
+
+# -- U16c: the cluster's centroid is the MEAN, not the first body --------------------------------------
+## **Every fixture in this file puts its bodies at one IDENTICAL point**, so `centre + (pts[i] - centre) / n`
+## always equals `pts[i]` and never updating the running centroid at all is green — the summed number would
+## then be drawn under whichever body happened to be first in the table instead of in the middle of the pile.
+##
+## Three distinct points, all inside `FORCE_CLUSTER_RADIUS` (48), and the expected centroid is hand-computed:
+## (1000+1030+1000)/3 = 1010 and (1000+1000+1030)/3 = 1010. The greedy join is what makes the running mean
+## equal the true mean — the second body joins at 30px from A, the third at 33.5px from the pair's midpoint.
+func _u16c_the_cluster_centroid_is_the_mean(t) -> void:
+	var w := World.new()
+	w.setup(102)
+	_silence(w)
+	_clear_terrain(w)
+	w.critter_count = 0
+	w.boss_index = -1
+	# The host is 800px away, so it can never be pulled into the clones' cluster and its own label cannot be
+	# mistaken for theirs.
+	w.swarm.pos[0] = Vector2(200.0, 1000.0)
+	var pts := [Vector2(1000.0, 1000.0), Vector2(1030.0, 1000.0), Vector2(1000.0, 1030.0)]
+	for p: Vector2 in pts:
+		var k := w.swarm.add_clone(0, 5)
+		w.swarm.pos[k] = p
+	t.eq(w.swarm.count, 4, "설정: 힘 5짜리 분신 셋과 호스트")
+	t.ok(pts[0].distance_to(pts[1]) < Look.FORCE_CLUSTER_RADIUS,
+			"설정: 셋은 서로 뭉치는 거리 안이다 (30px)")
+
+	var spy := LabelSpy.new()
+	spy.world = w
+	spy.view_rect = Rect2(Vector2.ZERO, Rules.FIELD)
+	t.root.add_child(spy)
+	await t.pump_frames(2)
+	spy.labels.clear()
+	await t.pump_frames(1)
+
+	t.eq(spy.labels.size(), 2, "라벨은 둘이다 — 뭉친 셋과 호스트 %s" % str(_texts(spy)))
+	var p := _label_p(spy, "15·45")
+	t.ok(p != Vector2.INF, "뭉친 셋은 15·45로 읽힌다 %s" % str(_texts(spy)))
+	if p != Vector2.INF:
+		var wide := ThemeDB.fallback_font.get_string_size("15·45", HORIZONTAL_ALIGNMENT_LEFT, -1,
+				Look.FORCE_LABEL_SIZE).x
+		# The centroid, undone through `_label`'s own two offsets: half the string width in x, 18 in y.
+		var centre := Vector2(p.x + wide * 0.5, p.y - 18.0)
+		t.ok(absf(centre.x - 1010.0) < 0.01,
+				"그 숫자는 셋의 평균 x 1010에 놓인다 — 첫 몸의 1000이 아니다 (%.3f)" % centre.x)
+		t.ok(absf(centre.y - 1010.0) < 0.01,
+				"평균 y도 1010이다 — 굴러가는 무게중심을 안 갱신해도 초록이었다 (%.3f)" % centre.y)
+		t.ok(centre != pts[0], "그리고 그 자리는 어느 한 몸의 자리도 아니다")
+
+	t.root.remove_child(spy)
+	spy.queue_free()
+
+
+# -- 35: the minimap, and WHERE the map itself is --------------------------------------------------------
+## ⚠ **`set_anchors_preset` leaves the offsets alone**, so a `Control` on a bare `CanvasLayer` can sit at
+## `size == (0, 0)` and pile the map into the top-left corner with every mark assertion still passing. The
+## frame's own position and extent are asserted for that reason, and so is `size` against the viewport.
+func _c35_minimap(t) -> void:
+	var w := World.new()
+	w.setup(101)
+	_silence(w)
+	_clear_terrain(w)
+	var host := Vector2(400.0, 400.0)
+	w.swarm.pos[0] = host
+	w.critter_count = 0
+	w.boss_index = -1
+	# The boss is placed FAR past `MINIMAP_SHOW_DIST`, so "always shown" is the only thing that can put it
+	# on the map; the crow sits just past the same line.
+	w._write_critter(Parts.Species.CROW, host + Vector2(Look.MINIMAP_SHOW_DIST + 100.0, 0.0), 10)
+	w._write_critter(Parts.Species.BOSS, host + Vector2(0.0, Look.MINIMAP_SHOW_DIST + 500.0), 120)
+	w.boss_index = 1
+
+	var spy := MapSpy.new()
+	spy.world = w
+	t.root.add_child(spy)
+	await t.pump_frames(2)
+	spy.maps.clear()
+	await t.pump_frames(1)
+
+	t.eq(spy.maps.size(), 1, "한 프레임에 미니맵이 한 번 그려진다")
+	if spy.maps.size() != 1:
+		t.root.remove_child(spy)
+		spy.queue_free()
+		return
+	var m: Dictionary = spy.maps[0]
+	var frame: Rect2 = m["frame"]
+	t.eq(spy.size, spy.get_viewport_rect().size, "설정: HUD는 뷰포트 크기로 펼쳐져 있다 (%s)" % str(spy.size))
+	t.eq(frame.size, Look.MINIMAP_SIZE, "지도의 크기는 MINIMAP_SIZE 그대로다")
+	t.ok(frame.position.x > spy.size.x * 0.5 and frame.position.y > spy.size.y * 0.5,
+			"지도는 오른쪽 아래에 있다 — 0 크기 Control이 만드는 왼쪽 위 구석이 아니다 (%s)"
+					% str(frame.position))
+	t.ok(frame.end.x <= spy.size.x and frame.end.y <= spy.size.y, "그리고 화면 안에 다 들어와 있다")
+
+	var marks: Array = m["marks"]
+	var boss_marks := 0
+	var crow_marks := 0
+	for e: Dictionary in marks:
+		if e["col"] == Look.BOSS_COLOR:
+			boss_marks += 1
+		if e["col"] == Look.CROW_COLOR:
+			crow_marks += 1
+	t.eq(boss_marks, 1, "2100px 떨어진 보스는 언제나 지도에 있다 — 걸어갈 곳이 처음부터 보인다")
+	t.eq(crow_marks, 0, "1700px 떨어진 까마귀는 지도에 없다 — 지도는 방향이지 정보가 아니다")
+
+	# The negative control: the same crow inside the line DOES appear, or "never shown" passes just as well
+	# as the rule does.
+	w.critter_pos[0] = host + Vector2(Look.MINIMAP_SHOW_DIST - 100.0, 0.0)
+	spy.maps.clear()
+	await t.pump_frames(1)
+	var near := 0
+	for e: Dictionary in (spy.maps[0]["marks"] as Array):
+		if e["col"] == Look.CROW_COLOR:
+			near += 1
+	t.eq(near, 1, "대조: 같은 까마귀가 선 안으로 들어오면 지도에 뜬다")
+
+	t.root.remove_child(spy)
+	spy.queue_free()
+
+
+# -- 35b: WHERE every mark sits, and how big it is -------------------------------------------------------
+## **The largest unmeasured surface in this build, and five of seven verifiers found it separately.** 35
+## above classifies marks by `col` and throws `p` and `r` away, builds its spy with `camera_rect` at its
+## `Rect2()` default (so the camera-box branch never executed once in the whole round) and runs a swarm of
+## `count == 1` (so the clone loop never ran). Measured green against that: `_to_map` → `return
+## frame.position`, every mark radius → 0, the mark loop emptied, all six minimap constants zeroed.
+##
+## ⚠ **Every expected number here is arithmetic on hand-written coordinates**, never `_to_map` re-run.
+## The field is 3840×2160 and the map is 240×135, so the mapping is exactly ×0.0625 — a body at the field's
+## centre is at the map's centre and a body at a quarter across is a quarter across. The radii are the
+## three `Look` constants written out as literals (3.0 / 1.5 / 2.0); read back symbolically they move on
+## both sides of the assertion and zeroing them stays green, which is what happened.
+func _c35b_what_is_on_the_map(t) -> void:
+	var w := World.new()
+	w.setup(102)
+	_silence(w)
+	_clear_terrain(w)
+
+	# The host at the field's exact centre, two clones at a quarter and three quarters across.
+	var host := Vector2(1920.0, 1080.0)
+	w.swarm.pos[0] = host
+	var c1 := w.swarm.add_clone()
+	var c2 := w.swarm.add_clone()
+	w.swarm.pos[c1] = Vector2(960.0, 540.0)
+	w.swarm.pos[c2] = Vector2(2880.0, 1620.0)
+
+	w.critter_count = 0
+	w.boss_index = -1
+	# 1500px from the host — inside `MINIMAP_SHOW_DIST`, so it is on the map.
+	w._write_critter(Parts.Species.CROW, Vector2(3420.0, 1080.0), 10)
+	# ~1930px away and it is on the map anyway, because it is the boss.
+	w._write_critter(Parts.Species.BOSS, Vector2(240.0, 216.0), 120)
+	w.boss_index = 1
+	# ~2140px away and not the boss: off the map. Without it "everything is shown" passes too.
+	w._write_critter(Parts.Species.HORSE, Vector2(3800.0, 2100.0), 30)
+
+	var spy := MapSpy.new()
+	spy.world = w
+	# The camera, as a real rectangle: a quarter in from the top-left, half the field wide.
+	spy.camera_rect = Rect2(960.0, 540.0, 1920.0, 1080.0)
+	t.root.add_child(spy)
+	await t.pump_frames(2)
+	spy.forget()
+	await t.pump_frames(1)
+
+	t.eq(spy.maps.size(), 1, "설정: 한 프레임에 미니맵이 한 번 그려진다")
+	if spy.maps.size() != 1:
+		t.root.remove_child(spy)
+		spy.queue_free()
+		return
+	var frame: Rect2 = spy.maps[0]["frame"]
+	var at: Vector2 = frame.position
+
+	# **The frame's own numbers as literals.** 35 asserts `frame.size == Look.MINIMAP_SIZE`, which is the
+	# constant read back against itself: shrink it to 9×4 and that assertion still passes.
+	t.eq(frame.size, Vector2(240.0, 135.0), "지도는 240×135다 (리터럴)")
+	t.eq(at, spy.size - Vector2(240.0, 135.0) - Vector2(16.0, 16.0),
+			"그리고 오른쪽 아래 구석에서 16만큼 안쪽이다 (%s)" % str(at))
+
+	# -- the marks -------------------------------------------------------
+	t.eq(spy.marks.size(), 5, "찍힌 점은 다섯이다 — 분신 둘, 가까운 까마귀, 보스, 호스트 %s"
+			% str(spy.marks.size()))
+	t.ok(_mark_at(spy, at + Vector2(120.0, 67.5), 3.0, Look.HOST_COLOR),
+			"호스트는 필드 한가운데에 있으니 지도 한가운데 반지름 3.0으로 찍힌다")
+	t.ok(_mark_at(spy, at + Vector2(60.0, 33.75), 1.5, Look.CLONE_COLOR),
+			"1/4 지점의 분신은 지도의 1/4 지점에 반지름 1.5로 찍힌다")
+	t.ok(_mark_at(spy, at + Vector2(180.0, 101.25), 1.5, Look.CLONE_COLOR),
+			"3/4 지점의 분신도 제자리에 찍힌다 — 두 점이 한 점에 겹치지 않는다")
+	t.ok(_mark_at(spy, at + Vector2(213.75, 67.5), 2.0, Look.CROW_COLOR),
+			"1500px 떨어진 까마귀는 지도 오른쪽에 반지름 2.0으로 찍힌다")
+	t.ok(_mark_at(spy, at + Vector2(15.0, 13.5), 2.0, Look.BOSS_COLOR),
+			"보스는 1900px 밖이어도 지도 왼쪽 위에 찍힌다")
+	t.eq(_marks_col(spy, Look.HORSE_COLOR), 0, "1600px 밖의 말은 찍히지 않는다")
+
+	# **Every mark inside the frame.** A mapping that overflows draws over the play area, and nothing
+	# about the five positions above would say so on its own.
+	for e: Dictionary in spy.marks:
+		t.ok(frame.has_point(e["p"]), "점 %s는 지도 안에 있다" % str(e["p"]))
+
+	# -- the three rectangles --------------------------------------------
+	t.eq(_rects_col(spy, Look.MINIMAP_FRAME), 1, "테두리는 한 장이다")
+	t.eq(_rect_col(spy, Look.MINIMAP_FRAME), Rect2(at - Vector2(2.0, 2.0), Vector2(244.0, 139.0)),
+			"테두리는 지도보다 사방 2만큼 크다")
+	t.eq(_rect_col(spy, Look.MINIMAP_BG), frame, "바탕은 지도 그대로다")
+	# The camera box: a quarter in, half wide. `_c35` left `camera_rect` at its default, so this branch
+	# never ran once in the whole round.
+	t.ok(_rect_near(_rect_col(spy, Look.MINIMAP_CAMERA_COLOR),
+			Rect2(at + Vector2(60.0, 33.75), Vector2(120.0, 67.5))),
+			"카메라 상자는 화면이 보고 있는 만큼만 차지한다 (%s)"
+					% str(_rect_col(spy, Look.MINIMAP_CAMERA_COLOR)))
+
+	# The negative control for the `camera.size.x > 0.0` guard: an empty rect is what `_bind_world()`
+	# leaves behind between runs, and drawing it would put a dot in the map's corner.
+	spy.camera_rect = Rect2()
+	spy.forget()
+	await t.pump_frames(1)
+	t.eq(_rects_col(spy, Look.MINIMAP_CAMERA_COLOR), 0, "대조: 카메라 사각형이 비어 있으면 상자는 안 그린다")
+	t.eq(_rects_col(spy, Look.MINIMAP_BG), 1, "그래도 지도 자체는 그대로 그려진다")
+
+	t.root.remove_child(spy)
+	spy.queue_free()
+
+
+# -- 35c: the camera box may not leave the map ----------------------------------------------------------
+## The box is the camera's rectangle mapped into map space, and **the camera routinely hangs off the
+## field**: the host against the west edge at `Look.ZOOM_FAR` on a 1280-wide viewport puts
+## `camera_rect.position.x` at −786, which maps ~49px LEFT of a 240px map — a bright bar drawn across the
+## play area, every frame, with nothing else on this `Control` drawing outside its own rectangle.
+##
+## *Mutation: drop the `.intersection(frame)`.*
+func _c35c_the_camera_box_is_clipped(t) -> void:
+	var w := World.new()
+	w.setup(103)
+	_silence(w)
+	_clear_terrain(w)
+	w.critter_count = 0
+	w.boss_index = -1
+
+	var spy := MapSpy.new()
+	spy.world = w
+	# 768px off the west edge, 108px down: the left fifth of the box is outside the field entirely.
+	spy.camera_rect = Rect2(-768.0, 108.0, 1920.0, 1080.0)
+	t.root.add_child(spy)
+	await t.pump_frames(2)
+	spy.forget()
+	await t.pump_frames(1)
+
+	var frame: Rect2 = spy.maps[0]["frame"]
+	var at: Vector2 = frame.position
+	var box: Rect2 = _rect_col(spy, Look.MINIMAP_CAMERA_COLOR)
+	# −768 maps to −48 and 1920 maps to 120, so the unclipped box would run from at.x−48 to at.x+72.
+	t.ok(_rect_near(box, Rect2(at + Vector2(0.0, 6.75), Vector2(72.0, 67.5))),
+			"필드 밖으로 나간 카메라 상자는 지도 가장자리에서 잘린다 (%s)" % str(box))
+	t.ok(frame.encloses(box), "그래서 상자는 지도 안에 온전히 들어 있다 — 플레이 화면 위로 삐져나오지 않는다")
+
+	t.root.remove_child(spy)
+	spy.queue_free()
+
+
+# -- label / disc / cell helpers ------------------------------------------------------------------------
+## A mark drawn at `p` with radius `r` in `col`. All three, or the check reads one column of the three the
+## leaf was handed — which is exactly how the whole map could render blank.
+func _mark_at(spy, p: Vector2, r: float, col: Color) -> bool:
+	for e: Dictionary in spy.marks:
+		if _near(e["p"], p) and absf(float(e["r"]) - r) < 0.01 and e["col"] == col:
+			return true
+	return false
+
+
+func _marks_col(spy, col: Color) -> int:
+	var n := 0
+	for e: Dictionary in spy.marks:
+		if e["col"] == col:
+			n += 1
+	return n
+
+
+func _rect_col(spy, col: Color) -> Rect2:
+	for e: Dictionary in spy.rects:
+		if e["col"] == col:
+			return e["r"]
+	return Rect2()
+
+
+func _rects_col(spy, col: Color) -> int:
+	var n := 0
+	for e: Dictionary in spy.rects:
+		if e["col"] == col:
+			n += 1
+	return n
+
+
+func _rect_near(a: Rect2, b: Rect2) -> bool:
+	return _near(a.position, b.position) and _near(a.size, b.size)
+
+
+
+func _texts(spy) -> Array:
+	var out := []
+	for e: Dictionary in spy.labels:
+		out.append(e["text"])
+	return out
+
+
+func _has_text(spy, needle: String) -> bool:
+	for e: Dictionary in spy.labels:
+		if String(e["text"]) == needle:
+			return true
+	return false
+
+
+func _label_p(spy, needle: String) -> Vector2:
+	for e: Dictionary in spy.labels:
+		if String(e["text"]) == needle:
+			return e["p"]
+	return Vector2.INF
+
+
+func _disc_is(spy, at: Vector2, r: float, col: Color) -> bool:
+	for e: Dictionary in spy.discs:
+		if _near(e["p"], at) and absf(float(e["r"]) - r) < 0.01 and e["col"] == col:
+			return true
+	return false
+
+
+func _cell_is(spy, at: Vector2, r: float, col: Color) -> bool:
+	for e: Dictionary in spy.seen:
+		if _near(e["p"], at) and absf(float(e["r"]) - r) < 0.01 and e["col"] == col:
+			return true
+	return false
+
+
+# -- 35d: the ponds are on the map ------------------------------------------------------------------------
+## **Every other mark on this map is a body; a pond is terrain**, and the two differences that come with
+## that are what this check pins: it is not gated by `MINIMAP_SHOW_DIST`, and its radius is the real one
+## scaled rather than a fixed dot. Both are erasable independently — a pond drawn at `MINIMAP_CREATURE_R`
+## looks like a creature, and a pond hidden past 1600px makes the map answer a question nobody asked it.
+##
+## ⚠ **Every expected number is arithmetic on hand-written coordinates, never `_to_map` re-run.** 3840×2160
+## onto 240×135 is exactly ×0.0625, so a pond of radius 160 is 10.0px on the map — read back symbolically
+## it would move on both sides of the assertion and zeroing the scale would stay green, which is measured
+## on this file's neighbour.
+##
+## ⚠ **And water goes in FIRST**, under every body. Asserted by index, because "both are in the array" is
+## satisfied by an order that draws a pond over the host dot you are looking for.
+func _c35d_water_is_on_the_map(t) -> void:
+	var w := World.new()
+	w.setup(103)
+	_silence(w)
+	_clear_terrain(w)
+
+	var host := Vector2(1920.0, 1080.0)
+	w.swarm.pos[0] = host
+	w.critter_count = 0
+	w.boss_index = -1
+	# Two ponds: one beside the host, one in the far corner — **3060px away**, which is nearly twice
+	# `MINIMAP_SHOW_DIST`. If water were gated like a creature the second one would be missing.
+	w.terrain.water_pos.append(Vector2(1920.0, 1440.0))
+	w.terrain.water_radius.append(160.0)
+	w.terrain.water_pos.append(Vector2(3600.0, 1920.0))
+	w.terrain.water_radius.append(96.0)
+
+	var spy := MapSpy.new()
+	spy.world = w
+	t.root.add_child(spy)
+	await t.pump_frames(2)
+	spy.forget()
+	await t.pump_frames(1)
+
+	var marks: Array = spy.marks
+	var water := []
+	for e: Dictionary in marks:
+		if e["col"] == Look.MINIMAP_WATER_COLOR:
+			water.append(e)
+	t.eq(water.size(), 2, "웅덩이 둘이 다 지도에 있다 — 하나는 1600px 밖이고 그래도 그려진다")
+	if water.size() != 2:
+		t.root.remove_child(spy)
+		spy.queue_free()
+		return
+
+	# The map's own rectangle, computed the same way the layout does — the marks below are absolute screen
+	# coordinates and a map that piled into the corner would otherwise pass every offset assertion.
+	var origin: Vector2 = spy.size - Look.MINIMAP_SIZE - Vector2.ONE * Look.MINIMAP_MARGIN
+	var near: Dictionary = water[0]
+	var far: Dictionary = water[1]
+	t.ok((near["p"] as Vector2).distance_to(origin + Vector2(120.0, 90.0)) < 0.01,
+			"가까운 웅덩이는 지도의 가로 한가운데, 세로 3분의 2 지점이다 (%s)" % str(near["p"]))
+	t.ok(absf(float(near["r"]) - 10.0) < 0.001,
+			"그리고 반지름 160px는 지도에서 10px다 — 고정된 점이 아니라 실제 크기다 (%.3f)" % float(near["r"]))
+	t.ok((far["p"] as Vector2).distance_to(origin + Vector2(225.0, 120.0)) < 0.01,
+			"먼 웅덩이도 제자리에 있다 (%s)" % str(far["p"]))
+	t.ok(absf(float(far["r"]) - 6.0) < 0.001,
+			"그 96px는 6px다 — 둘의 반지름이 서로 다르다 (%.3f)" % float(far["r"]))
+	t.ok(float(near["r"]) != Look.MINIMAP_CREATURE_R and float(far["r"]) != Look.MINIMAP_CREATURE_R,
+			"대조: 어느 쪽도 생물 점 크기가 아니다 — 웅덩이는 몸이 아니다")
+
+	# The host is the LAST mark and both ponds are before it: drawing order is the array's order.
+	t.eq(marks[marks.size() - 1]["col"], Look.HOST_COLOR, "설정: 호스트는 여전히 맨 나중에 그려진다")
+	t.eq(marks[0]["col"], Look.MINIMAP_WATER_COLOR, "그리고 물은 맨 처음에 — 모든 몸이 그 위에 얹힌다")
+
+	t.root.remove_child(spy)
+	spy.queue_free()
+
+
+func _clear_terrain(w: World) -> void:
+	w.terrain.rock_pos.clear()
+	w.terrain.rock_radius.clear()
+	w.terrain.water_pos.clear()
+	w.terrain.water_radius.clear()
 
 
 func _silence(w: World) -> void:

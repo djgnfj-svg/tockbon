@@ -8,8 +8,8 @@ extends RefCounted
 ## hand-wired net stays green while the player sees nothing.
 ##
 ## ⚠ **The freeze is now conditional and that is check 14.** A level with nothing to offer BANKS and the
-## world keeps turning — the card pool is empty until the first horse is eaten, which is long after the
-## first level, and a guard on `pending_levels` alone freezes six behaviours from the first level of every
+## world keeps turning — the card pool is empty until the first creature is eaten, which is after the first
+## level, and a guard on `pending_levels` alone freezes six behaviours from the first level of every
 ## run. **That failure is a frozen game, and it is completely silent in every other check in the round.**
 ## The freeze that survives is the one with cards actually on screen: a level-up that does not stop the
 ## world is a notification, and a notification is something you watch happen.
@@ -64,7 +64,51 @@ func run(t) -> void:
 	_c_cost(t)
 	_c10_take(t)
 	_c9_only_parts(t)
+	_c_crow_opens_the_pool(t)
 	await _shell(t)
+
+
+# -- the pool opens off the CROW, driven from a real corpse ----------------------------------------------
+## ⚠ **This is the check round 3's finding H exists for**, and every other pool check in this file writes
+## `species_eaten` by hand. Revision 1's whole pool was horse parts; the horse is uncatchable at `t = 0` and
+## arrives about once every 150s, so a player who never cornered one saw **zero cards for the whole run**.
+## The crow is what a run is guaranteed to meet — standing still, killable in the first minute — and this
+## drives that path rather than assuming it.
+##
+## *Mutation: drop `_step_corpses`' `species_eaten.append` (the pool is empty for the whole run, which is
+## finding H shipping a second time); or set `Parts.DROPS[CROW_*]` back to 0 (the crow is eaten and offers
+## nothing).*
+func _c_crow_opens_the_pool(t) -> void:
+	var w := World.new()
+	w.setup(67)
+	_silence(w)
+	w.critter_count = 0
+	w.boss_index = -1
+	t.ok(w.species_eaten.is_empty(), "설정: 아직 아무 종도 먹지 않았다")
+	# A crow corpse at the host's own feet, finished for real rather than written into `species_eaten`.
+	w.corpse_count = 1
+	w.corpse_pos[0] = w.swarm.pos[0]
+	w.corpse_species[0] = Parts.Species.CROW
+	w.corpse_force[0] = 10
+	w.corpse_progress[0] = 0.0
+	var frames := 0
+	while w.corpse_count > 0 and frames < 300:
+		w._step_corpses(DT)
+		frames += 1
+	t.ok(frames > 1, "설정: 그 시체를 한 프레임이 아니라 실제로 씹어 먹었다 (%d프레임)" % frames)
+	t.eq(w.species_eaten.size(), 1, "다 먹은 시체 하나가 풀을 연다")
+	t.eq(int(w.species_eaten[0]), int(Parts.Species.CROW), "그리고 그 종은 까마귀다")
+
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 671
+	var offer := Cards.roll(rng, w.species_eaten)
+	t.eq(offer.size(), 3, "까마귀만 먹어도 카드가 셋 나온다 — 런이 카드를 한 장도 못 보는 일은 없다")
+	var set := {}
+	for p in offer:
+		set[p] = true
+	t.eq(set.size(), 3, "셋은 서로 다른 부품이다")
+	t.ok(set.has(Parts.CROW_WING) and set.has(Parts.CROW_BEAK) and set.has(Parts.CROW_FOOT),
+			"그 셋은 날개·부리·발이다 — 까마귀의 줄 세 개가 전부 나온다")
 
 
 # -- 14: a level with nothing to offer BANKS, and the world keeps running -------------------------------
@@ -77,7 +121,7 @@ func _c14_levels_bank(t) -> void:
 	_silence(w)
 	t.eq(w.pending_levels, 0, "시작할 때는 고를 게 없다")
 	t.ok(w.species_eaten.is_empty(), "설정: 아직 아무 종도 먹지 않았다 — 카드 풀은 비어 있다")
-	t.eq(w.host_hp, 3, "설정: 체력은 3으로 연다")
+	t.eq(w.host_hp, 30, "설정: 체력은 30으로 연다")
 
 	# 45 covers three levels exactly: 10 + 13.5 + 18.225 = 41.725, and the fourth costs 24.6 more.
 	w.swarm.banked = 45.0
@@ -88,16 +132,20 @@ func _c14_levels_bank(t) -> void:
 	t.ok(w.offer.is_empty(), "그동안 카드는 한 장도 뜨지 않는다")
 	t.ok(absf(w.elapsed - (e0 + 60.0 * DT)) < 0.001,
 			"그리고 세상은 60프레임 내내 멈추지 않고 흘렀다 (%.4f / 1.0000)" % w.elapsed)
-	# A level raises the CURRENT hearts too — `질긴 껍질` was the only thing that ever did, and it is gone.
-	# Without this line `hp_max()` climbs while the row stays as full as it was, which reads as decoration.
-	t.eq(w.host_hp, 6, "레벨 셋이 현재 체력도 셋 올린다 (3 → 6)")
-	t.eq(w.body.hp_max(w.level), 6, "그리고 최대 체력도 6이다 — 둘이 같이 움직인다")
+	# A level raises the CURRENT hp too — `질긴 껍질` was the only thing that ever did, and it is gone.
+	# Without this line `hp_max()` climbs while the number the HUD prints on the left of `현재/최대` stays
+	# where it was, which reads as decoration.
+	t.eq(w.host_hp, 39, "레벨 셋이 현재 체력도 아홉 올린다 (30 → 39, 레벨당 3)")
+	t.eq(w.body.hp_max(w.level), 39, "그리고 최대 체력도 39다 — 둘이 같이 움직인다")
 
 	# The moment the pool opens, the whole stack arrives at once. That cascade is the rhythm, and it is
 	# also what proves the banking above was not simply a level that got lost.
-	w.species_eaten = PackedInt32Array([Parts.Species.HORSE])
+	# **The crow, not the horse.** It is what a run actually eats first — three parts, and the pool opens on
+	# the common creature. A horse would open a pool of exactly one (말 다리) and this cascade would be a
+	# single card.
+	w.species_eaten = PackedInt32Array([Parts.Species.CROW])
 	w.step(DT)
-	t.eq(w.offer.size(), 3, "말을 먹은 순간 밀려 있던 카드가 한꺼번에 깔린다")
+	t.eq(w.offer.size(), 3, "까마귀를 먹은 순간 밀려 있던 카드가 한꺼번에 깔린다")
 	t.eq(w.pending_levels, 3, "쌓인 레벨은 그대로 셋이다 — 못 쓴 레벨이 사라지지 않았다")
 
 	# And NOW the world stops, because there is something on screen to answer.
@@ -113,58 +161,65 @@ func _c14_levels_bank(t) -> void:
 ## that reads `host_hp` after a level or a card grants it from FULL health — `_c14_levels_bank` levels a
 ## 3/3 host and `_c10_take` runs at 6/6 — so `host_hp += HP_PER_LEVEL` replaced by `host_hp =
 ## hp_max(level)` is arithmetically indistinguishable, and both sites measured green at 811. In play a
-## host at one heart crosses a level threshold and is silently restored to full: the entire cost of taking
-## a hit evaporates. **So the host is damaged first, which is the only state that can tell them apart.**
+## host down to its last few points crosses a level threshold and is silently restored to full: the cost of
+## taking a hit evaporates. **So the host is damaged first, the only state that can tell them apart.**
 func _c_no_healing(t) -> void:
 	var w := World.new()
 	w.setup(66)
 	_silence(w)
 	w.species_eaten = PackedInt32Array([Parts.Species.HORSE])
-	w.host_hp = 1                       ## one heart left, and it stays lost
+	w.host_hp = 1                       ## one point left, and it stays lost
 	w.swarm.banked = 45.0               ## three levels' worth: 10 + 13.5 + 18.225
 	w.step(DT)
 	t.eq(w.pending_levels, 3, "설정: 레벨 셋이 한꺼번에 올랐다")
-	t.eq(w.body.hp_max(w.level), 6, "설정: 그래서 최대 체력은 6이다")
-	t.eq(w.host_hp, 4, "다친 몸은 레벨만큼만 오른다 — 1에서 정확히 셋 올라 4다 (6으로 채워지지 않는다)")
+	t.eq(w.body.hp_max(w.level), 39, "설정: 그래서 최대 체력은 39다")
+	t.eq(w.host_hp, 10, "다친 몸은 레벨만큼만 오른다 — 1에서 정확히 아홉 올라 10이다 (39로 채워지지 않는다)")
 
-	# The other site: `take_card` moves the current hearts by the DIFFERENCE in `hp_max()`, not to it.
+	# The other site: `take_card` moves the current HP by the DIFFERENCE in `hp_max()`, not to it.
 	w.offer = PackedInt32Array([Parts.HORSE_MANE])
 	t.ok(w.take_card(Parts.HORSE_MANE), "설정: 말 갈기를 골랐다")
-	t.eq(w.body.hp_max(w.level), 7, "설정: 갈기가 최대를 7로 올렸다")
-	t.eq(w.host_hp, 5, "카드도 차이만큼만 올린다 — 4에서 하나 올라 5다 (7로 채워지지 않는다)")
+	t.eq(w.body.hp_max(w.level), 44, "설정: 갈기가 최대를 44로 올렸다")
+	t.eq(w.host_hp, 15, "카드도 차이만큼만 올린다 — 10에서 다섯 올라 15다 (44로 채워지지 않는다)")
 
 	# And a card worth no HP moves nothing at all, which is what says the line above is a difference and
 	# not "any card heals a bit".
 	w.offer = PackedInt32Array([Parts.HORSE_LUNG])
 	t.ok(w.take_card(Parts.HORSE_LUNG), "설정: 체력을 안 주는 부품도 골랐다")
-	t.eq(w.host_hp, 5, "체력을 안 주는 카드는 현재 체력도 건드리지 않는다 — 여전히 5다")
+	t.eq(w.host_hp, 15, "체력을 안 주는 카드는 현재 체력도 건드리지 않는다 — 여전히 15다")
 
 
 # -- 8: the pool is what has been eaten -----------------------------------------------------------------
-## *Mutation: roll from the whole table regardless of what was eaten.*
+## *Mutation: roll from the whole table regardless of what was eaten.* And the second lock, which is a
+## column rather than a species: *drop the `Parts.DROPS` filter* and 말 갈기 · 말 폐활량 walk back into the
+## offer, which the both-species block below is the only thing in the round that would see.
 func _c8_pool(t) -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 8
 	var none := Cards.roll(rng, PackedInt32Array())
 	t.eq(none.size(), 0, "아무것도 안 먹었으면 카드는 한 장도 없다 — 0으로 나누지도 않는다")
 
-	# Eating the WRONG species is the half that separates "the pool is locked" from "the pool is empty
-	# until something, anything, is eaten". No crow part exists in the August table.
+	# **The pool opens off the CROW, the common creature.** While every droppable row was a horse part, a
+	# player who never cornered a horse — which nothing sustained can catch — saw zero cards for a whole
+	# run. Eating one species and not the other is what separates "the pool is locked by WHAT you ate" from
+	# "the pool opens on anything at all".
 	var crow := Cards.roll(rng, PackedInt32Array([Parts.Species.CROW]))
-	t.eq(crow.size(), 0, "까마귀만 먹었으면 아직 낼 부품이 없다 — 자물쇠는 '무엇을' 먹었느냐다")
+	t.eq(crow.size(), 3, "까마귀만 먹어도 카드가 셋 나온다 — 풀은 흔한 쪽에서 열린다")
+	for card in crow:
+		t.eq(int(Parts.SPECIES[card]), Parts.Species.CROW, "뜬 카드가 까마귀의 부품이다 (%s)"
+				% str(Parts.NAME[card]))
 
 	var horse := Cards.roll(rng, PackedInt32Array([Parts.Species.HORSE]))
-	t.eq(horse.size(), 3, "말을 먹었으면 셋이 나온다")
+	t.eq(horse.size(), 1, "말을 먹으면 한 장 나온다 — 이번 빌드의 말 부품은 다리 하나다")
 	var distinct := {}
 	for card in horse:
 		distinct[card] = true
 		t.eq(int(Parts.SPECIES[card]), Parts.Species.HORSE, "뜬 카드가 말의 부품이다 (%s)"
 				% str(Parts.NAME[card]))
-	t.eq(distinct.size(), 3, "제시된 카드 셋은 서로 다르다 — 같은 것을 두 번 뽑지 않는다")
+	t.eq(distinct.size(), 1, "제시된 카드는 서로 다르다 — 같은 것을 두 번 뽑지 않는다")
 	t.ok(not horse.has(Parts.BITE) and not horse.has(Parts.DASH),
 			"손에 쥐여준 둘(물기·짧은 숨)은 카드로 나오지 않는다")
 
-	# Ten rolls, because "three distinct" from a pool of exactly three is satisfied by any implementation
+	# Ten rolls, because "distinct" from a pool the size of the offer is satisfied by any implementation
 	# that returns the whole pool; what this pins is that it never reaches outside it, whatever the RNG did.
 	var drawn := 0
 	var off_species := 0
@@ -174,8 +229,34 @@ func _c8_pool(t) -> void:
 			drawn += 1
 			if int(Parts.SPECIES[card]) != Parts.Species.HORSE:
 				off_species += 1
-	t.eq(drawn, 30, "열 번을 굴리면 서른 장이 나온다 (한 번도 안 굴린 채 통과하지 않는다)")
-	t.eq(off_species, 0, "그 서른 장 중 말의 것이 아닌 카드는 하나도 없다")
+	t.eq(drawn, 10, "열 번을 굴리면 열 장이 나온다 (한 번도 안 굴린 채 통과하지 않는다)")
+	t.eq(off_species, 0, "그 열 장 중 말의 것이 아닌 카드는 하나도 없다")
+
+	# **Both species eaten is the only case that reaches `mini(3, pool.size())`'s cap.** Four in the pool,
+	# three offered, and over ten seeds every one of the four has to turn up at least once — otherwise a
+	# roll that always returns the same three is indistinguishable from one that draws.
+	# *Mutation: return the whole pool (four cards, and the panel draws three squares); or drop the
+	# without-replacement `remove_at` (duplicates).*
+	var both := PackedInt32Array([Parts.Species.CROW, Parts.Species.HORSE])
+	var seen := {}
+	var both_rolls := 0
+	for s in 10:
+		rng.seed = 8800 + s
+		var offer := Cards.roll(rng, both)
+		both_rolls += 1
+		t.eq(offer.size(), 3, "둘 다 먹었으면 넷 중 셋이 깔린다 (%d번째)" % both_rolls)
+		var seen_here := {}
+		for card in offer:
+			seen[card] = true
+			seen_here[card] = true
+		t.eq(seen_here.size(), 3, "그 셋도 서로 다르다 — 풀이 넷일 때도 같은 것을 두 번 뽑지 않는다")
+	t.eq(both_rolls, 10, "설정: 열 번을 실제로 굴렸다")
+	t.eq(seen.size(), 4, "열 번 안에 네 부품이 전부 한 번씩은 나온다 %s" % str(seen.keys()))
+
+	# **The check 결정 5 exists for, and the only one in the round that sees `Parts.DROPS` through `roll`.**
+	# *Mutation: drop the `DROPS` filter from `Cards.roll`.*
+	t.ok(not seen.has(Parts.HORSE_MANE) and not seen.has(Parts.HORSE_LUNG),
+			"설정: 말도 까마귀도 먹었는데 말 갈기·말 폐활량은 열 번 내내 한 장도 안 나온다")
 
 
 # -- the cost rises, and the bar divides by the risen one ----------------------------------------------
@@ -185,7 +266,7 @@ func _c_cost(t) -> void:
 	var w := World.new()
 	w.setup(61)
 	_silence(w)
-	w.species_eaten = PackedInt32Array([Parts.Species.HORSE])
+	w.species_eaten = PackedInt32Array([Parts.Species.CROW])
 	var force_before: int = w.swarm.force[0]
 	w.swarm.banked = 10.0
 	w.step(DT)
@@ -243,11 +324,11 @@ func _c10_take(t) -> void:
 	t.eq(w.swarm.force[0], force_mid, "그리고 힘은 한 톨도 움직이지 않는다")
 	t.eq(w.pending_levels, 1, "그래도 레벨은 하나 쓰였다")
 
-	# The mane raises the ceiling, so the current hearts follow it up.
+	# The mane raises the ceiling, so the current hp follows it up.
 	w.offer = PackedInt32Array([Parts.HORSE_MANE])
 	var hp_mid: int = w.host_hp
 	t.ok(w.take_card(Parts.HORSE_MANE), "말 갈기를 고른다")
-	t.eq(w.host_hp, hp_mid + 1, "최대가 오르면 현재 체력도 같이 오른다 (치유는 이 계획에 없다)")
+	t.eq(w.host_hp, hp_mid + 5, "최대가 오르면 현재 체력도 갈기의 5만큼 같이 오른다 (치유는 이 계획에 없다)")
 	t.eq(w.pending_levels, 0, "마지막 레벨까지 다 썼다")
 	t.ok(w.offer.is_empty(), "다 고르면 제시가 비워진다")
 
@@ -331,10 +412,11 @@ func _shell(t) -> void:
 		t.ok(main.cam.position.x > cam_start.x + 5.0, "카메라가 호스트를 따라간다")
 		t.ok(main.view.view_rect.has_point(main.run.world.swarm.pos[0]), "따라간 뒤에도 호스트를 담는다")
 
-		# **The pool has to be opened by hand: nothing in plan 3 writes `species_eaten`.** Corpses are
-		# plan 4's, so through this whole plan a real run banks levels forever and no card ever appears.
-		# That is reported, not worked around — but the panel still has to be proven to open.
-		main.run.world.species_eaten = PackedInt32Array([Parts.Species.HORSE])
+		# The pool is opened by hand HERE because this check is about the panel, not about what fills the
+		# array: a real crow corpse would need a clone parked on it for half a second inside a shell that is
+		# also being driven for its camera. **What fills it for real is a finished corpse**, and
+		# `_c_crow_opens_the_pool` below drives that path end to end.
+		main.run.world.species_eaten = PackedInt32Array([Parts.Species.CROW])
 		main.run.world.swarm.banked = 30.0
 		await t.pump_frames(3)
 		t.ok(main.cards.visible, "레벨업하면 카드 창이 화면에 뜬다")

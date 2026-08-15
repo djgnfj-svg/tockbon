@@ -139,4 +139,23 @@ func _snapshot() -> void:
 		# `>= 0` first. `-1` is a legal index in GDScript and `Parts.NAME[-1]` returns the LAST row, so an
 		# empty square would read 말 폐활량 on the ending screen — no error, nothing red.
 		result.body_slots[k] = Parts.NAME[p] if p >= 0 else ""
-	# species stays at RunResult's empty default — plan 4 is what fills it.
+	# Species names, in `World.species_eaten`'s own first-eaten ORDER — the ending screen joins them with
+	# commas and an order that came back as a set would read as a different run. A corpse being FINISHED is
+	# what appends there, so this list is the meals, never the kills.
+	#
+	# **A cleared run always ends with 보스 last.** The same finished corpse that appends the species is the
+	# one that sets `stage_cleared`, and the append runs first — so the win is never snapshotted with the
+	# thing that ended it missing from the list.
+	#
+	# The reset is redundant today and stays for the same reason `body_slots`' is — `result` is rebuilt one
+	# line above, so a fresh `PackedStringArray` is already there. Measured: deleting it leaves the round
+	# green. It is what stops this loop appending onto a previous run's list the day `_snapshot()` stops
+	# rebuilding `result`.
+	result.species = PackedStringArray()
+	for s in world.species_eaten:
+		# `>= 0` first, and it is the same trap `body_slots` names two lines up: `-1` is a legal index in
+		# GDScript and `Parts.SPECIES_NAME[-1]` returns the LAST row, so a bad id would print 보스 on the
+		# ending screen with nothing red anywhere. The upper half guards the day a fourth `Parts.Species`
+		# member lands without a fourth name beside it.
+		var named: bool = s >= 0 and s < Parts.SPECIES_NAME.size()
+		result.species.append(String(Parts.SPECIES_NAME[s]) if named else "?")

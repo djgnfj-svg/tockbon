@@ -14,8 +14,30 @@ extends RefCounted
 ## of this scan passed **three of eleven** cases.
 ##
 ## The forbidden patterns are assembled from pieces below so that this file does not fail its own scan.
-
+##
+## ⇒ **`docs/` and `CLAUDE.md` are scanned too, for the line-number form only, and until this net was
+## widened they were outside its reach entirely.** Four `name.gd:NNN` citations were live in the docs and
+## **two of them were the ones the rule itself is written about** — the same "a scan scoped to where the
+## bug was found is scoped too narrowly" note this repo already records about `tools/`.
+##
+## ⚠ **Only the line-number form.** A doc PATH is legitimate in a doc — `plans/README.md` and the design
+## index exist to link to files, and CLAUDE.md's own table names them. What is never legitimate anywhere is
+## a line number, because a line number is a path into a file and four lines added to a header kill ten at
+## once. The dated review files are skipped: they quote the offending citations verbatim as findings, so
+## scanning them would red the round for reporting the bug correctly.
 const ROOTS := ["res://src", "res://tests", "res://tools"]
+const DOC_ROOTS := ["res://docs"]
+const LOOSE_DOCS := ["res://CLAUDE.md", "res://README.md"]
+## Substrings of a filename that take it out of the docs scan. Hand-written and hand-counted: a skip list
+## that quietly grows is a hole in the scan rather than an exception to it.
+##
+## ⚠ **`gap-check-` was in this list for a day and it bought nothing.** The justification below is true of
+## the dated adversarial reviews, which quote offending citations verbatim as findings — and false of
+## `gap-check-2026-08-15-ko.md`, which holds **zero** `.gd:NNN` citations and no line ending in `.gd` for
+## the tight-join path to reach either. An exemption that covers a doc with nothing to exempt is not an
+## exception to the scan, it is a hole in it — and it was granted to the newest doc in the tree, the one a
+## plan-5 conversation opens first. **Narrowing the instrument, not the subject.**
+const DOC_SKIP := ["adversarial-review-"]
 
 # Assembled, never written whole: a literal here would make this file its own first offender.
 const PLANS := "docs/pl" + "ans/"
@@ -76,6 +98,96 @@ func run(t) -> void:
 		if line_re.search(joined) != null:
 			hit_line = true
 	t.ok(hit_line, "줄번호 인용이 두 줄에 걸쳐 있어도 잡는다")
+
+	_docs_carry_no_line_numbers(t, line_re)
+
+
+# -- the docs half ---------------------------------------------------------------------------------------
+## See the header. Prose, not comments, so the whole file is scanned and consecutive non-blank lines are
+## joined the same two ways — a citation wrapped across a line break in Markdown is the same shape.
+func _docs_carry_no_line_numbers(t, line_re: RegEx) -> void:
+	var docs := _md_files()
+	# The literal, not `docs.size()` read back: a walk that found nothing would report a perfectly clean
+	# docs tree and every assertion below would simply stop running.
+	t.ok(docs.size() >= 40, "스캔할 문서를 찾았다 (%d개, 최소 40)" % docs.size())
+	t.eq(DOC_SKIP.size(), 1, "문서 스캔에서 빼는 것은 날짜 붙은 검토 파일 하나뿐이다 — 면제는 자라면 구멍이 된다")
+	var bad: Array[String] = []
+	var skipped := 0
+	for f: String in docs:
+		var skip := false
+		for needle: String in DOC_SKIP:
+			if f.contains(needle):
+				skip = true
+		if skip:
+			skipped += 1
+			continue
+		for joined: String in _join_prose(_read(f)):
+			if line_re.search(joined) != null:
+				bad.append(f)
+	t.eq(bad.size(), 0, "문서에도 파일:줄번호 인용이 없다 — 이름을 부르지 줄을 세지 않는다 %s" % str(bad))
+	t.ok(skipped >= 2, "그리고 날짜 붙은 리뷰 파일은 실제로 건너뛰었다 (%d개)" % skipped)
+
+	# **Invert the instrument.** A prose joiner that never matched would read identical to a clean tree, and
+	# the skip list has to be a hole in exactly one direction.
+	var hit := false
+	for joined: String in _join_prose("the fix is in world\n.gd:206, the peak line\n"):
+		if line_re.search(joined) != null:
+			hit = true
+	t.ok(hit, "산문에서 두 줄에 걸친 줄번호도 잡는다 (스캐너 자가 점검)")
+	var plain := false
+	for joined: String in _join_prose("see `rules.gd:68-71` for the measurement\n"):
+		if line_re.search(joined) != null:
+			plain = true
+	t.ok(plain, "한 줄짜리 줄번호도 잡는다 (스캐너 자가 점검)")
+	var clean := false
+	for joined: String in _join_prose("see `rules.gd`'s `FORCE_START` for the measurement\n"):
+		if line_re.search(joined) != null:
+			clean = true
+	t.ok(not clean, "이름만 부른 인용은 안 잡는다 — 전부 빨개지는 스캐너가 아니다 (스캐너 자가 점검)")
+
+
+## Every consecutive run of non-blank lines, space-joined AND tight-joined. Markdown has no comment marker,
+## so `_join_comments`'s `#` test would read a heading as the only prose in the file.
+func _join_prose(text: String) -> Array[String]:
+	var out: Array[String] = []
+	var space_join := ""
+	var tight_join := ""
+	for raw: String in text.split("\n"):
+		var line := raw.strip_edges()
+		if line != "":
+			space_join += (" " if space_join != "" else "") + line
+			tight_join += line
+			continue
+		if space_join != "":
+			out.append(space_join)
+			out.append(tight_join)
+			space_join = ""
+			tight_join = ""
+	if space_join != "":
+		out.append(space_join)
+		out.append(tight_join)
+	return out
+
+
+func _md_files() -> Array[String]:
+	var out: Array[String] = []
+	for root: String in DOC_ROOTS:
+		_walk_md(root, out)
+	for f: String in LOOSE_DOCS:
+		if FileAccess.file_exists(f):
+			out.append(f)
+	return out
+
+
+func _walk_md(dir_path: String, out: Array[String]) -> void:
+	var d := DirAccess.open(dir_path)
+	if d == null:
+		return
+	for f: String in d.get_files():
+		if f.ends_with(".md"):
+			out.append(dir_path.path_join(f))
+	for sub: String in d.get_directories():
+		_walk_md(dir_path.path_join(sub), out)
 
 
 ## Every consecutive run of comment lines, returned BOTH space-joined and tight-joined. Two strings per

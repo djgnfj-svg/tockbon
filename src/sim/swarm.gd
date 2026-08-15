@@ -32,7 +32,32 @@ var _target_food := PackedInt32Array()
 ## `add_clone()`, and `remove_at()`'s swap. Miss the swap and a dead clone's force lands on a survivor —
 ## no error, nothing on screen. **The net for it has to kill a clone that is NOT the last row**, or the
 ## swap branch never runs and the missing line stays green.
+##
+## ⚠ **There are four hand-maintained columns now, not one** — `force`, `worn`, `atk_cd` and `hp`. Three
+## of them share exactly those three points. `hp` has a **fourth**, `_split_fire()`, and it is the only one
+## whose value at the split is not a constant: the split changes `force[i]` after `add_clone()` has already
+## returned, so the parent's health has nowhere else to be corrected.
 var force := PackedInt32Array()
+
+## One part id per body, -1 = none. **Index 0 (the host) is always -1**: the host's parts live in `Body`'s
+## eleven slots and come from cards only. ⚠ `resize()` zero-fills and `0 == Parts.BITE`, so a missed
+## `worn[0] = -1` is a host silently wearing 물기 — the same -1-is-a-legal-index trap `Body.bound` names.
+var worn := PackedInt32Array()
+
+## Contact-attack cooldown per body. `eat_cd` is the FOOD clock and is already spoken for; a clone that
+## attacks whatever it touches needs its own, or the two rates fight over one number.
+var atk_cd := PackedFloat32Array()
+
+## Hit points per body, and it is **STORED, never derived** — the same rule `force` obeys one column up and
+## for the same reason: `F` halves force, and a derived ceiling would halve or restore a body's health on
+## the tutorial keystroke. Written at birth from that body's own force × `Rules.HP_PER_FORCE`.
+##
+## ⚠ **Row 0 is the sentinel -1 and nothing reads it.** The host's health is `World.host_hp` and it stays
+## there. Writing the host's real health here too is "a value counted in two places will diverge" breaking
+## on the one number a run ends on, so `damage()` refuses index 0 outright — a caller that reaches for it
+## gets a refusal rather than a second, quietly wrong, health bar.
+var hp := PackedInt32Array()
+
 var count := 0
 
 ## Banked at the host: what the host bit itself, plus what returning clones handed over. This is the
@@ -101,6 +126,10 @@ var clone_grid := SimGrid.new()
 var food_grid := SimGrid.new()
 var field := Rules.FIELD
 
+## Set by `World.setup()` right after `setup()`, exactly the way `body.swarm` is set. **Null in a net that
+## only measures steering** — a `Swarm` net must not need a `World` — so every use is guarded.
+var terrain: Terrain = null
+
 ## The food the last `step()` was handed. `bite()` takes an aim and a shape and nothing else — the shell
 ## presses a key, it does not hand the simulation its own world back — so a bite reads whatever the frame
 ## it happens in was stepped with. Null before the first `step()`, and a bite then simply misses.
@@ -120,6 +149,9 @@ func setup(rng_seed: int = 1, start: Vector2 = Rules.FIELD * 0.5) -> void:
 	_wander_cd.resize(Rules.POOL)
 	_target_food.resize(Rules.POOL)
 	force.resize(Rules.POOL)
+	worn.resize(Rules.POOL)
+	atk_cd.resize(Rules.POOL)
+	hp.resize(Rules.POOL)
 	count = 1
 	pos[0] = start
 	vel[0] = Vector2.ZERO
@@ -127,6 +159,13 @@ func setup(rng_seed: int = 1, start: Vector2 = Rules.FIELD * 0.5) -> void:
 	state[0] = FOLLOW
 	eat_cd[0] = 0.0
 	_target_food[0] = -1
+	# `resize()` zero-fills, and 0 is a legal part id — see `worn`'s own comment for what a missed -1 here
+	# looks like on screen (nothing) and in the sim (a host wearing 물기 it never earned).
+	worn[0] = -1
+	atk_cd[0] = 0.0
+	# The sentinel. `World.host_hp` is the host's health; this row exists only so the column has the same
+	# length as every other one.
+	hp[0] = -1
 	# The one place the host's force is written from nothing. After this only splitting, absorbing, the
 	# level and WEARING A PART move it — `Body.wear()` is the fourth writer and it both adds and subtracts,
 	# in the same call, because a digested part that keeps paying is ghost force and `F` multiplies it.
@@ -163,7 +202,9 @@ func add_clone(parent: int = 0, force_value: int = 0) -> int:
 	var i := count
 	count += 1
 	var a := _rng.randf() * TAU
-	pos[i] = pos[parent] + Vector2(cos(a), sin(a)) * Rules.CLONE_SPAWN_RING
+	# Through `place()`, not a bare write: splitting with your back against a rock or the field edge
+	# otherwise spawns the child inside it, and nothing else ever pushes a body that never moved.
+	pos[i] = place(pos[parent] + Vector2(cos(a), sin(a)) * Rules.CLONE_SPAWN_RING, Rules.CLONE_BODY_RADIUS)
 	vel[i] = Vector2.ZERO
 	carried[i] = 0.0
 	force[i] = force_value
@@ -172,11 +213,26 @@ func add_clone(parent: int = 0, force_value: int = 0) -> int:
 	wander[i] = Vector2(cos(a), sin(a))
 	_wander_cd[i] = Rules.WANDER_PERIOD
 	_target_food[i] = -1
+	# A clone is born wearing nothing. Parts reach a clone through the corpse roll and never through birth,
+	# which is why this is a constant rather than a parameter — a `worn` argument here would make the split
+	# a fourth maintenance point for the column and the split has no opinion about parts.
+	worn[i] = -1
+	# **Every body and every creature opens READY.** Three tables start an attack clock — this one,
+	# `setup()`'s row-0 block and `World._spawn_at()` — and if one of them opened at `CLONE_ATTACK_PERIOD`
+	# instead, a clone born touching a creature would wait a whole period before its first hit while the
+	# other two did not, and no check comparing hit counts across bodies could be satisfied.
+	atk_cd[i] = 0.0
+	# The floor is not decoration: `force_value` defaults to 0 and every steering net in the round calls
+	# this with no arguments. Without it those bodies are born at 0 hp — alive, drawn, and dead to the first
+	# touch, with nothing red anywhere.
+	hp[i] = maxi(Rules.BODY_HP_MIN, force_value * Rules.HP_PER_FORCE)
 	return i
 
 
-## Swap with the last row. **The cargo AND the force go with it and nothing has to remember to drop
-## them** — see the file header. Index 0 is the host and is never removable.
+## Swap with the last row. **The cargo, the force AND the worn part go with it, and nothing has to
+## remember to drop them** — see the file header. That is also the whole of what a clone loses when it
+## dies: `damage()` is four lines because this function is where the loss actually happens.
+## Index 0 is the host and is never removable.
 func remove_at(i: int) -> void:
 	if i <= 0 or i >= count:
 		return
@@ -191,7 +247,25 @@ func remove_at(i: int) -> void:
 		_wander_cd[i] = _wander_cd[last]
 		_target_food[i] = _target_food[last]
 		force[i] = force[last]
+		worn[i] = worn[last]
+		atk_cd[i] = atk_cd[last]
+		hp[i] = hp[last]
 	count -= 1
+
+
+## Field clamp, then rocks, then the arena — **in that order, and this is the ONLY place a body's position
+## is finalised.** Clamping to the field after pushing out of a rock can put the body back inside one;
+## clamping to the arena first lets the rock push carry it back out through the rim.
+##
+## **Public**, and for a measured reason: `World`'s arena summon needs it too. Written by hand there it
+## becomes a sixth call site that knows nothing about rocks, and a summoned clone lands inside one with
+## every check about the summon green.
+func place(p: Vector2, r: float) -> Vector2:
+	p = _clamp_field(p)
+	if terrain != null:
+		p = terrain.push_out(p, r)
+		p = terrain.clamp_to_arena(p, r)
+	return p
 
 
 ## `1`. **No argument: the swarm comes to the host**, and `_move_clone()` reads `pos[0]` live rather than
@@ -199,6 +273,9 @@ func remove_at(i: int) -> void:
 ## gathering at the host lets the player park in cleared ground while the clones take the risk. **That
 ## argument lost** (user, 2026-08-14): a command that sends the swarm somewhere is `3`, and one key that
 ## means "come here" is what the hand actually reaches for.
+##
+## ⚠ **This block spent a plan sitting above `place()`**, which was inserted between it and its own
+## function — so a reader of the only place a position is finalised was first told it is the `1` key.
 func command_rally() -> void:
 	for i in range(1, count):
 		state[i] = FOLLOW
@@ -251,10 +328,15 @@ func total_carried() -> float:
 	return sum
 
 
-## Every row's force, host included. **`World.is_hunter_of()` is its production caller** and that is the
-## whole reason it has to exist: the prey/hunter comparison read `count` once, and a split multiplies rows
-## while conserving force, so `F` bought the reversal for free. The conservation checks are its other
-## caller — a hand-rolled sum inside every net would be the second copy `CLAUDE.md` forbids.
+## Every row's force, host included. **`body_panel.gd`'s 무리의 힘 readout is its production caller** — the
+## panel is where a player reads what the whole swarm is worth, and the number has to come from one place or
+## the panel and the checks drift. Its other caller is the conservation checks; a hand-rolled sum inside
+## every net would be the second copy `CLAUDE.md` forbids.
+##
+## ⚠ **It sums FORCE, never `count`, and that is why it survived the threat model that once read it.** The
+## deleted prey/hunter comparison counted bodies for one build, and a split multiplies rows while conserving
+## force — so `F` bought the reversal for free. Any future comparison of "how big is the swarm" belongs here
+## and not on `count`.
 func total_force() -> int:
 	var sum := 0
 	for i in count:
@@ -301,17 +383,42 @@ func split_release() -> void:
 ##
 ## Over the cap, bodies split in index order, lowest first, until `add_clone()` refuses; the rest keep
 ## their force whole. A body at force 1 does not split and that is not an error.
+##
+## ⚠ **This is `hp`'s fourth maintenance point, and the only one whose value is not a constant.** Health is
+## CONSERVED across the split exactly as force is: the child takes the floor half of what the parent had,
+## the parent keeps the remainder, and the two always sum to what the parent had before.
+## The rejected alternative was recomputing both halves to `force × HP_PER_FORCE`. It reads tidier and it
+## makes `F` a **heal button** — a clone one hit from death presses one key and comes back whole. Splitting
+## is not a power-up is the rule this whole column exists for, and a free heal is a power-up whatever the
+## force column does.
+##
+## ⚠ **Both the hp refusal and the hp conservation are CLONE-ONLY, and the `i > 0` guard on each is
+## load-bearing.** Row 0 carries the -1 sentinel because `World.host_hp` is the host's health. Written
+## without the guard, `hp[0] < 2` is true of -1 and **the host never splits at all** — the tutorial
+## keystroke, deleted; and `was / 2` off -1 is 0, so the host's first child is born at 0 hp, alive and dead
+## to the first touch. The host's child keeps the full-for-its-force number `add_clone()` already wrote.
 func _split_fire() -> void:
 	var snapshot := count
 	for i in snapshot:
 		if force[i] < 2:
 			continue
+		# The same guard as `force[i] < 2`, for the same reason: a thing that cannot be halved without
+		# producing nothing is not halved. At hp 1 the child takes 0 and the parent keeps 1 — or, with the
+		# halves the other way round, a 0-hp parent that is ALIVE, because hp only kills at the moment
+		# damage is applied and a zombie never dies of its own accord. No existing split check moved for
+		# it: every clone the steering and force nets build is born at full hp and never damaged.
+		if i > 0 and hp[i] < 2:
+			continue
+		var was := hp[i]
 		# Integer division floors, so the child takes the smaller half and the parent the remainder.
 		var child := force[i] / 2
 		var j := add_clone(i, child)
 		if j < 0:
 			return
 		force[i] -= child
+		if i > 0:
+			hp[j] = was / 2
+			hp[i] = was - hp[j]
 
 
 # -- V, the absorb -------------------------------------------------
@@ -338,11 +445,39 @@ func absorb() -> int:
 	return taken
 
 
+# -- taking damage -------------------------------------------------
+
+## Damage one body. Returns true when it **died and its row is GONE** — the caller must stop touching `i`.
+##
+## Everything a dying clone loses is lost by `remove_at()` swapping the last row over it: cargo, force and
+## the worn part go structurally, with no code that has to remember to drop them. That is the whole reason
+## the swarm is flat, and it is why this function is four lines.
+##
+## ⚠ **Index 0 is refused.** The host's health is `World.host_hp`; a caller that damaged row 0 here would
+## write a number nothing reads, and the run would never end.
+##
+## ⚠ **`maxi(0, amount)` is not defensive tidying.** Negative force is reachable — the corpse part roll
+## subtracts a bigger part's force from a body that has since been halved — and negative damage HEALS.
+func damage(i: int, amount: int) -> bool:
+	if i <= 0 or i >= count:
+		return false
+	hp[i] = maxi(0, hp[i] - maxi(0, amount))
+	if hp[i] > 0:
+		return false
+	remove_at(i)
+	return true
+
+
 # -- what the actives do to the world ------------------------------
 
-## A front cone toward `aim`, and it eats the NEAREST food inside it. **A real function, not an
-## animation** — a click that only draws is the idle hand plan 2 exists to remove. Plan 4 replaces what it
-## hits, not the key.
+## A front cone toward `aim`. **It always swings**: the cone is shown, the cooldown is paid, and
+## `World.fire()` dispatches the damage off it.
+##
+## ⚠ **Eating a crumb is a SIDE EFFECT of the swing, not its purpose, and this is the change plan 4 cannot
+## work without.** Returning false on an empty cone made a click aimed at a creature standing on bare
+## ground a dead key — no cooldown, no cone, no damage — because `Body.fire()` stops on the refusal and
+## never reaches the strike. Three checks that read `not fire(...)` as "the reach is 70px" now read the
+## food surviving instead; the reach is still what they measure.
 ##
 ## ⚠ **The range and the arc are ARGUMENTS, not `Rules` constants.** They come off the firing part's row
 ## (`Parts.RANGE` / `Parts.ARC`), which is what lets a second ARC part exist as a row rather than as a
@@ -351,39 +486,36 @@ func absorb() -> int:
 ## ⚠ **It does not touch a cooldown.** `Body.fire()` owns that, so the cooldown that refuses the second
 ## click and the cooldown that ticks down are the same number.
 func bite(range_px: float, arc: float, aim: Vector2) -> bool:
-	if _food == null:
-		return false
 	var origin := pos[0]
 	var dir := aim - origin
 	dir = host_facing if dir.length_squared() < 0.0001 else dir.normalized()
-	var half_arc := arc * 0.5
-	var ids := food_grid.neighbours(origin, range_px, Rules.SENSE_CAP)
-	var best := -1
-	var best_d := INF
-	for id in ids:
-		var j := id >> 1
-		if j < 0 or j >= _food.alive.size() or _food.alive[j] == 0:
-			continue
-		var to: Vector2 = _food.pos[j] - origin
-		var d := to.length()
-		if d > range_px or d >= best_d:
-			continue
-		# The angle is the skill. Range alone and the cone is a circle with a picture drawn on it.
-		if d > 0.0001 and absf(dir.angle_to(to)) > half_arc:
-			continue
-		best_d = d
-		best = j
-	if best < 0:
-		return false
-	if not _food.consume(best):
-		return false
-	eat(0, 1.0)
+	# Written FIRST and unconditionally: the swing happened, so the cone the view draws is the cone the sim
+	# tested — including its size, pinned here rather than re-derived in the view from a part id it would
+	# have to be told separately.
 	bite_show = 0.0
 	bite_aim = dir
-	# The cone the view draws is the cone the sim tested, including its size — pinned here rather than
-	# re-derived in `field_view` from a part id it would have to be told separately.
 	bite_range = range_px
 	bite_arc = arc
+	if _food != null:
+		var half_arc := arc * 0.5
+		var ids := food_grid.neighbours(origin, range_px, Rules.SENSE_CAP)
+		var best := -1
+		var best_d := INF
+		for id in ids:
+			var j := id >> 1
+			if j < 0 or j >= _food.alive.size() or _food.alive[j] == 0:
+				continue
+			var to: Vector2 = _food.pos[j] - origin
+			var d := to.length()
+			if d > range_px or d >= best_d:
+				continue
+			# The angle is the skill. Range alone and the cone is a circle with a picture drawn on it.
+			if d > 0.0001 and absf(dir.angle_to(to)) > half_arc:
+				continue
+			best_d = d
+			best = j
+		if best >= 0 and _food.consume(best):
+			eat(0, 1.0)
 	return true
 
 
@@ -397,6 +529,11 @@ func step(dt: float, food: Food = null) -> void:
 	_food = food
 	# Cooldowns and breath are `Body.step()`'s, and `World.step()` calls it just before this one.
 	bite_show += dt
+	# The contact-attack clock, ticked here for the same reason `bite_show` is: the sim owns every clock a
+	# body has. Row 0 rides along harmlessly — the host attacks through a key, not by touching.
+	for i in count:
+		if atk_cd[i] > 0.0:
+			atk_cd[i] = maxf(0.0, atk_cd[i] - dt)
 	_rebuild_grids(food)
 	_move_host(dt)
 	for i in range(1, count):
@@ -438,8 +575,13 @@ func _move_host(dt: float) -> void:
 		dash_left -= dt
 		dir = host_facing
 		speed = dash_speed
+	# ⚠ **After the dash branch, never before it.** The burst REPLACES `speed`, so a multiply above would be
+	# thrown away and a dash would cross water at full speed — water stops being a wall exactly when the
+	# player most wants it to be one.
+	if terrain != null:
+		speed *= terrain.speed_mul(pos[0])
 	vel[0] = dir.limit_length(1.0) * speed
-	pos[0] = _clamp_field(pos[0] + vel[0] * dt)
+	pos[0] = place(pos[0] + vel[0] * dt, Rules.BODY_RADIUS)
 
 
 func _move_clone(i: int, dt: float, food: Food) -> void:
@@ -448,6 +590,9 @@ func _move_clone(i: int, dt: float, food: Food) -> void:
 	var speed := Rules.CLONE_SPEED_SCATTER if state[i] == SCATTER else Rules.CLONE_SPEED_FOLLOW
 	if clear_pull:
 		speed = Rules.CLEAR_ABSORB_PULL
+	# The end of the speed selection, so nothing below can overwrite it. Same rule as the host's.
+	if terrain != null:
+		speed *= terrain.speed_mul(p)
 	var desired := Vector2.ZERO
 	_target_food[i] = _nearest_food(p, food)
 
@@ -494,7 +639,7 @@ func _move_clone(i: int, dt: float, food: Food) -> void:
 			desired = wander[i] * speed
 
 	vel[i] = desired.limit_length(speed)
-	pos[i] = _clamp_field(p + vel[i] * dt)
+	pos[i] = place(p + vel[i] * dt, Rules.CLONE_BODY_RADIUS)
 
 
 ## Position correction, not a force. Separation is a rendering requirement — sixty bodies on one point
@@ -529,8 +674,11 @@ func _separate(i: int) -> void:
 		if l >= Rules.SEPARATION_MIN:
 			continue
 		var half := dir * (Rules.SEPARATION_MIN - l) * 0.5
-		pos[i] = _clamp_field(pos[i] + half)
-		pos[j] = _clamp_field(pos[j] - half)
+		# ⚠ **Both writes go through `place()`, not the bare field clamp.** Separation runs AFTER movement,
+		# so it is free to shove a body straight back into a rock that `push_out` had already cleared this
+		# frame — and nothing runs after it to undo that.
+		pos[i] = place(pos[i] + half, Rules.CLONE_BODY_RADIUS)
+		pos[j] = place(pos[j] - half, Rules.CLONE_BODY_RADIUS)
 
 
 func _try_eat(i: int, dt: float, food: Food) -> void:

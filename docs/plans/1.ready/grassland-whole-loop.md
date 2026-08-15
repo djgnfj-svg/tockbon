@@ -1,7 +1,8 @@
 # Grassland, the whole loop — the index
 
-**Status**: `1.ready` — split into four plans on 2026-08-14. **Plans 1, 2 and 3 are built and in `3.done`**;
-plan 4 is unbuilt and is next. ⚠ **Only plan 2 has been played, and nothing has been accepted.**
+**Status**: `1.ready` — split into four plans on 2026-08-14. **All four are built and in `3.done`.**
+⚠ **Only plan 2 has been played, and nothing has been accepted.** This doc stays in `1.ready` because it is
+the index over them, not a plan anyone builds.
 
 > ✅ **All four plans have now absorbed the second review and the design conversation that followed it**
 > (both 2026-08-14, later the same day). Read them anyway before building:
@@ -32,8 +33,8 @@ the bottom of this file — **and nothing in that list blocks a build.**
 |---|---|---|---|
 | 1 | [The run shell](../3.done/run-shell.md) **✅ `3.done`** — **unplayed on its own** | title → play → ending → title. **A run starts and ends** | nothing |
 | 2 | [Hands and commands](../3.done/hands-and-commands.md) **✅ `3.done`** — 16 nets · 514 checks, **played: keys accepted, picture not** | `F` `V` `1` `2` `3`, three active slots, `Tab` | 1 |
-| 3 | [The body and its parts](../3.done/body-and-parts.md) **✅ `3.done`** — 18 nets · 889 checks, **looked at, unplayed. Its acceptance needs plan 4** (no horse ⇒ no cards) | eleven slots, horse parts, cards that only give parts | 2 |
-| 4 | [The grassland field](grassland-field.md) | crow · horse · boss chimera, force on every body, minimap | 3 |
+| 3 | [The body and its parts](../3.done/body-and-parts.md) **✅ `3.done`** — 18 nets · 889 checks, **looked at, unplayed.** Plan 4 unblocked its acceptance: a corpse now fills the card pool | eleven slots, horse parts, cards that only give parts | 2 |
+| 4 | [The grassland field](../3.done/grassland-field.md) **✅ `3.done`** — 22 nets · 1889 checks, **unplayed, and the arena has no view at all** | crow · horse · boss, force on every body, the ground, the minimap | 3 |
 
 **Build them in this order.** Each one leaves a playable build behind, and the user plays after 1 and again
 after 4. Planning principle 2: planning cannot judge whether this is fun.
@@ -68,9 +69,12 @@ that four separate times.
 **One stage, entered bare, left with a finished body.** The scope came down hard in that session and the cut
 is deliberate:
 
-- **Two species, not six.** **Crow** (early food) and **horse** (the one species that gives parts), plus the
-  **boss**. Small animals · herd · cheetah · lion · elephant are **not in the August build**
-- **Horse gives three parts** — legs, mane, lungs. That is the whole part table for now
+- **Two species, not six.** **Crow** and **horse**, plus the **boss**. Small animals · herd · cheetah · lion ·
+  elephant are **not in the August build**
+- ~~**Horse gives three parts** — legs, mane, lungs. That is the whole part table for now~~ ⚠ **Reversed
+  2026-08-15** ([why](../../decisions/the-crow-gives-three-parts.md)): **the crow gives three** (날개 · 부리 ·
+  발) and **the horse gives 다리 only.** 말 갈기 and 말 폐활량 stay as rows and leave both pools. The pool now
+  opens off the **common** creature, so a run cannot show zero cards
 - **The boss is a chimera and it walks the field from the first second.** Eating it ends the run
 - **A food layer that gives no parts** — grass, plants, corpses — is in, because the opening minutes need
   something to eat
@@ -96,8 +100,12 @@ colour · the final boss. **Do not stop to fill these.** `CLAUDE.md`: skeleton f
    binds whichever active to whichever key
 2. **Where parts come from** — **the host's come from level-up cards only.** A finished corpse does not hand
    the host a part. **A clone still wears what it kills**, which is a different path on purpose
-3. **What a corpse is worth** — **proportional to that individual's force.** `force × EXP_PER_FORCE`, and at
-   the ×10 scale that factor is **1.0**: one crow is one level. ⚠ **Say 경험치, not 세포**
+3. **What a corpse is worth** — **proportional to that individual's force.** `force × EXP_PER_FORCE`.
+   ⚠ **That factor is 3.0, not the 1.0 written here first.** Step 0 struck the 1.0 in `stages-and-evolution`
+   and in the grassland field plan and never touched this index — the same divergence re-created one folder
+   over, which is the failure this file's own header is about. At 1.0 a crumb of grass pays 1.0 and there are
+   500 of them respawning, so the optimal run is split-and-graze and hunting is a hobby.
+   ⚠ **Say 경험치, not 세포**
 4. **What stops the boss** — **nothing does, and that is allowed.** A low-level host *can* kill it by
    kiting. What it costs is that **damage equals the attacker's force in both directions**, so a level-1
    host is one touch from dead and the boss is hard to disengage from. **The wall is consequence, not a
@@ -122,8 +130,11 @@ more** — plan 3 keeps it as a *part* bound to `space`, because deleting it lef
 
 ## Still open — none of it blocks a build
 
-- **Whether the crow gives the back part (wings).** The design doc has crow wings as grassland's only back
-  part; the user named the crow only as early food. **Plan 4 ships the crow with no part**
+- ~~**Whether the crow gives the back part (wings).**~~ **Answered, and this line said the opposite for a
+  day.** The crow gives **three** parts — 까마귀 날개 (`BACK`), 까마귀 부리 (`HEAD`) and 까마귀 발
+  (`HINDLIMBS`), all three with `DROPS 1` ([why](../../decisions/the-crow-gives-three-parts.md)). The strike
+  55 lines above this one already recorded the reversal; this line did not, and it is the line a next session
+  opens first
 - **Round length.** 5 minutes now, possibly 15. Nothing is a timer any more — the boss ends the run — so
   this is an outcome, not a setting
 - **Colour, entirely** — species, field, title background. `CLAUDE.md`: decided by generating candidates and

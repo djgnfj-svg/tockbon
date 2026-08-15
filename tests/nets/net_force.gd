@@ -28,7 +28,17 @@ func run(t) -> void:
 	_c15b_clone_kill_is_carried(t)
 	_c17_constants(t)
 	_c18_clear_beat(t)
-	_c19f_split_is_not_power(t)
+	_c22_wearing_a_second_part(t)
+	_c23_worn_survives_the_swap(t)
+	_f1_splitting_is_not_power_through_damage(t)
+	_f4_absorbing_is_not_wearing(t)
+	_f5_a_clone_fires_what_it_wears(t)
+	_f6_nothing_goes_negative(t)
+	_f7_hp_is_conserved_across_the_split(t)
+	_f8_a_body_at_one_hp_does_not_split(t)
+	_f9_the_hp_column_is_maintained(t)
+	_f10_hp_moves_with_the_part(t)
+	_u16b_the_peak_is_a_high_water_mark(t)
 
 
 # -- 1: the run opens alone, at force 10 ---------------------------------------------------------------
@@ -260,10 +270,15 @@ func _c15_c16_death(t) -> void:
 	w.swarm.carried[k] = 9.0
 	var banked_before: float = w.swarm.banked
 	var force0_before: int = w.swarm.force[0]
+	_clear_terrain(w)
 	w.critter_count = 1
 	w.critter_pos[0] = Vector2(500.0, 500.0)
-	w.critter_threat[0] = Rules.CRITTER_THREAT_MAX
+	_crow_row(w, 0, 10)
 	w.critter_dir[0] = Vector2.ZERO
+	# 결정: a clone has hp, so a body dies when it is brought to zero and not when it is touched. Written
+	# down to five so one force-10 crow hit finishes it — this check is about what a DEATH costs, and
+	# spending three attack periods getting there would only make it flakier.
+	w.swarm.hp[k] = 5
 	w.step(DT)
 	t.eq(w.swarm.count, 1, "설정: 물린 분신이 실제로 사라졌다")
 	t.eq(w.swarm.banked, banked_before, "밖에서 죽은 분신의 화물은 은행에 들어오지 않는다")
@@ -289,19 +304,22 @@ func _c15_c16_death(t) -> void:
 	t.eq(sw.total_force(), 10 + 7 + 5, "사라진 몸의 힘 3만 총합에서 빠졌다")
 
 
-# -- 15b: a clone's kill is CARRIED home, never banked from where it stands -------------------------------
-## ⚠ `World._contact()`'s hunter branch loops over every body and used to pay `swarm.eat(0, ...)` whatever
-## body actually made contact — so a clone sent across the map with `3` dropped `threat × CRITTER_MEAT`
-## straight into the bank, unrisked and unwalked. That is the largest single income in the game and it was
-## the only one with no recall discipline attached, which is the rule the whole build rests on. Every
-## existing check drove the branch where the CRITTER is the hunter; none drove this one.
+# -- 15b: a clone attacks what it touches, and its KILL is carried home, never banked ---------------------
+## ⚠ **This check's old subject was deleted with the threat model and its claim is now back on a different
+## mechanism.** It used to drive `World._contact()`'s hunter branch, where the swarm ate a creature on
+## contact and `eat(0, ...)` would have banked a clone's kill from anywhere on the map. Contact pays
+## nothing at all now; **the corpse pays**, and `_step_corpses()` calls `eat(eater, ...)` — so the payout is
+## where the one-character mutation lives, and this is the check that sees it.
+##
+## Two halves, one fixture, and neither covers the other: a clone damages what it touches with **its own
+## force**, and when it finishes the corpse the 경험치 lands in `carried` 1000px from home, where losing
+## the clone on the way back still costs it.
 func _c15b_clone_kill_is_carried(t) -> void:
 	var w := World.new()
 	w.setup(151)
 	_silence_food(w)
-	# All the force on the host, so the swarm is a hunter while the clone doing the killing is a 1.
-	w.swarm.force[0] = 100
-	var c := w.swarm.add_clone(0, 1)
+	_clear_terrain(w)
+	var c := w.swarm.add_clone(0, 7)
 	var out := Vector2(500.0, 500.0)
 	w.swarm.pos[c] = out
 	# STRIKE standing on its own strike point: `desired` is zero, so the clone is exactly where it was put
@@ -309,17 +327,48 @@ func _c15b_clone_kill_is_carried(t) -> void:
 	w.swarm.command_strike(out)
 	w.critter_count = 1
 	w.critter_pos[0] = out
-	w.critter_threat[0] = 1
+	_crow_row(w, 0, 10)
 	w.critter_dir[0] = Vector2.ZERO
-	t.ok(w.is_hunter_of(0), "설정: 무리가 이 생물을 잡아먹을 만큼 크다")
 	t.ok(w.swarm.pos[0].distance_to(out) > 1000.0, "설정: 호스트는 1000px 넘게 떨어져 있다")
+	t.eq(w.critter_hp[0], 30, "설정: 힘 10짜리 까마귀는 체력 30으로 선다")
 	var banked_before: float = w.swarm.banked
 	var eaten_before: float = w.swarm.eaten
 	w.step(DT)
-	t.eq(w.critters_eaten, 1, "설정: 실제로 한 마리가 잡아먹혔다")
-	t.eq(w.swarm.banked, banked_before, "밖에서 분신이 잡은 고기는 은행에 바로 들어오지 않는다")
-	t.ok(w.swarm.carried[c] > 0.0, "잡은 그 분신이 그것을 지고 있다 (%.1f)" % w.swarm.carried[c])
-	t.ok(w.swarm.eaten > eaten_before, "대조: 먹은 총량은 실제로 늘었다 — 아무 일도 없던 것이 아니다")
+	# 7, not the host's 10 and not a constant: the damage a body deals is the force written on THAT row.
+	t.eq(w.critter_hp[0], 23, "닿은 분신이 제 힘 7만큼 깎았다")
+	t.eq(w.swarm.banked, banked_before, "접촉만으로는 은행에 아무것도 들어오지 않는다")
+	t.eq(w.swarm.eaten, eaten_before, "먹은 총량도 움직이지 않는다 — 값은 시체를 다 먹어야 나온다")
+
+	# The other half: the same clone, still 1000px from home, finishes a corpse. The corpse is written by
+	# hand rather than killed for, so the force it pays on is a literal and not the 8–12 roll.
+	t.eq(w.swarm.carried[c], 0.0, "설정: 분신은 아직 아무것도 싣고 있지 않다")
+	w.corpse_count = 1
+	w.corpse_pos[0] = out
+	w.corpse_species[0] = Parts.Species.CROW
+	w.corpse_force[0] = 10
+	# One frame short of done, so the step that follows is the one that pays: at force 10 a meal is 0.5s and
+	# a frame is 1/30th of it.
+	w.corpse_progress[0] = 0.999
+	w.step(DT)
+	t.eq(w.corpse_count, 0, "설정: 시체를 실제로 다 먹었다")
+	# 30 = 힘 10 × EXP_PER_FORCE 3. Literal, because reading it back off `corpse_force` passes at any rate.
+	t.eq(w.swarm.carried[c], 30.0, "분신이 다 먹은 값은 그 분신이 싣는다 (10 × 3)")
+	t.eq(w.swarm.banked, banked_before, "멀리 있는 분신의 값은 은행에 바로 들어오지 않는다")
+	t.eq(w.swarm.eaten, eaten_before + 30.0, "먹은 총량은 시체를 다 먹은 그때 딱 한 번 움직인다")
+
+	# And the link the two halves above both stand on: a kill leaves a corpse, **where it died**, carrying
+	# copies of what it was. Written with the death position pinned by hand — the crow has been walking
+	# since it was struck, and the mutation this catches (writing `swarm.pos[0]` as the corpse's position)
+	# is only visible against a coordinate the host is nowhere near.
+	# ⚠ This is the ONLY thing in the round that reads `_add_corpse` at all until `net_eating` exists.
+	w.critter_pos[0] = Vector2(700.0, 300.0)
+	w._damage_critter(0, 999)
+	t.eq(w.critter_count, 0, "설정: 까마귀가 실제로 죽었다")
+	t.eq(w.corpse_count, 1, "죽으면 시체가 하나 남는다")
+	t.eq(w.corpse_pos[0], Vector2(700.0, 300.0), "시체는 쓰러진 그 자리에 남는다")
+	t.eq(w.corpse_species[0], int(Parts.Species.CROW), "시체는 제 종을 그대로 들고 있다")
+	t.eq(w.corpse_force[0], 10, "시체는 제 힘을 그대로 들고 있다 — 죽은 줄을 다시 읽지 않는다")
+	t.eq(w.corpse_progress[0], 0.0, "새 시체는 아무도 안 먹은 상태로 시작한다")
 
 
 # -- 17: constants against constants --------------------------------------------------------------------
@@ -391,39 +440,485 @@ func _c18_clear_beat(t) -> void:
 			"돌아온 몸의 힘이 호스트에 남는다 — 박동을 건너며 총합이 새지 않는다")
 
 
-# -- 19f: splitting is not a power-up ---------------------------------------------------------------------
-## ⚠ **This is the check the whole force system exists for and it was missing.** `F` conserves the total
-## and multiplies the rows, so the only strength comparison in the build — `World.is_hunter_of()` — flipped
-## for free the moment it read `swarm.count`: four holds, about two seconds, no eating and no risk, and
-## every threat-1 critter turned from hunter into prey. Every conservation check in this file stayed green
-## through it, because the total really was conserved. **The comparison has to read the number that did
-## not move.**
+# -- 19f: DELETED with the threat model, and its claim moved rather than vanished ------------------------
+## ⚠ **Do not write this check again.** It drove `World.is_hunter_of()`: `F` conserves the total and
+## multiplies the rows, so the build's one strength comparison flipped for free the moment it read
+## `swarm.count`, and every conservation check in this file stayed green through it because the total
+## really was conserved. The comparison itself is now deleted — nothing in the sim compares two strengths —
+## so the check has no subject left to drive, and a port that read `swarm.count` somewhere else would be
+## measuring a rule the design threw away.
 ##
-## Both directions, or "never a hunter" passes just as well as the rule does.
-func _c19f_split_is_not_power(t) -> void:
-	var w := World.new()
-	w.setup(19)
-	_silence_food(w)
-	w.critter_count = 1
-	w.critter_pos[0] = Vector2(100.0, 100.0)
-	w.critter_threat[0] = 1
-	w.critter_dir[0] = Vector2.ZERO
-	t.ok(not w.is_hunter_of(0), "설정: 시작 힘 10으로는 위협 1짜리도 아직 사냥감이 아니다")
+## **The claim survives in `_f1_splitting_is_not_power_through_damage`**, on the mechanism that replaced
+## it: two halves deal the same total damage as the unsplit body. Splitting is still not a power-up; what
+## measures it is damage rather than a comparison.
 
-	var before: int = w.swarm.total_force()
+
+# -- 22: a second part SUBTRACTS the first before it adds itself -----------------------------------------
+## The written-never-derived rule, on a clone. Ghost force from a digested part is force `F` then multiplies,
+## and it is invisible to every conservation check in this file because the total really is conserved — the
+## row simply carries a number nothing paid for.
+func _c22_wearing_a_second_part(t) -> void:
+	var w := World.new()
+	w.setup(220)
+	_silence_food(w)
+	var c := w.swarm.add_clone(0, 6)
+	# A clone at force 6 already wearing 까마귀 부리 (FORCE 4): 6 + 4 = 10, written by hand so the numbers
+	# below are literals rather than whatever a first roll happened to produce.
+	w.swarm.worn[c] = Parts.CROW_BEAK
+	w.swarm.force[c] = 10
+	t.eq(int(Parts.FORCE[Parts.CROW_BEAK]), 4, "설정: 까마귀 부리의 힘은 4다 (리터럴)")
+	t.eq(int(Parts.FORCE[Parts.HORSE_LEGS]), 5, "설정: 말 다리의 힘은 5다 (리터럴)")
+	# ⚠ `_roll_until_keeping`, not `_roll_until`: the second helper clears `worn` between attempts, which is
+	# exactly the precondition this check is about, and it made the check read 15 instead of 11.
+	t.ok(_roll_until_keeping(w, c, int(Parts.Species.HORSE), Parts.HORSE_LEGS),
+			"설정: 말 시체에서 말 다리가 실제로 나왔다")
+	t.eq(int(w.swarm.force[c]), 11,
+			"두 번째 부품은 첫 번째의 힘을 먼저 빼고 제 힘을 더한다 — 10 − 4 + 5 = 11 (리터럴)")
+	t.eq(w.swarm.worn[c], Parts.HORSE_LEGS, "그리고 걸치고 있는 것은 새 부품 하나다")
+
+
+# -- 23: `worn` survives the swap, and a split child wears -1 --------------------------------------------
+func _c23_worn_survives_the_swap(t) -> void:
+	var sw := Swarm.new()
+	sw.setup(230, Vector2(1000.0, 1000.0))
+	var a := sw.add_clone(0, 4)
+	var b := sw.add_clone(0, 4)
+	var c := sw.add_clone(0, 4)
+	sw.worn[a] = Parts.CROW_WING
+	sw.worn[b] = Parts.CROW_BEAK
+	sw.worn[c] = Parts.HORSE_LEGS
+	t.eq(sw.count, 4, "설정: 서로 다른 부품을 걸친 분신 셋을 세웠다")
+	# ⚠ The row removed is NOT the last one — `remove_at` only enters its swap branch then.
+	sw.remove_at(b)
+	t.eq(sw.count, 3, "가운데 하나가 사라졌다")
+	t.eq(sw.worn[1], Parts.CROW_WING, "건드리지 않은 줄은 제 부품 그대로다")
+	t.eq(sw.worn[2], Parts.HORSE_LEGS, "내려온 줄도 제 부품을 들고 왔다 — 죽은 놈의 것을 물려받지 않는다")
+	t.eq(sw.worn[0], -1, "호스트는 언제나 -1이다 — 호스트의 부품은 Body의 열한 칸에 있다")
+
+	# The split writes nothing into `worn`: `add_clone()` hardcodes -1, which is exactly why the split is not
+	# a fourth maintenance point for this column.
+	var child := sw.add_clone(2, 5)
+	t.eq(sw.worn[child], -1, "나눠서 태어난 아이는 부모의 부품을 물려받지 않는다")
+
+
+# -- F1: splitting is not a power-up, measured through DAMAGE --------------------------------------------
+## ⚠ **This replaces `_c19f`'s measurement, not its claim.** The old one watched the build's one strength
+## comparison; there is no comparison left. What is left is that two halves hit for what one whole hit for.
+##
+## ⚠ **`_contact()` is driven directly and both clocks are zeroed by hand.** A split child cannot attack for
+## a full `CLONE_ATTACK_PERIOD` otherwise, and over that period the crow's own counter fires and moves it.
+func _f1_splitting_is_not_power_through_damage(t) -> void:
+	var at := Vector2(500.0, 500.0)
+	var whole := World.new()
+	whole.setup(240)
+	_silence_food(whole)
+	_clear_terrain(whole)
+	whole.critter_count = 0
+	whole.boss_index = -1
+	whole._write_critter(Parts.Species.CROW, at, 10)
+	whole.critter_hp[0] = 900
+	whole.critter_atk_cd[0] = 99.0
+	var c := whole.swarm.add_clone(0, 10)
+	whole.swarm.pos[c] = at
+	whole.swarm.atk_cd[c] = 0.0
+	var hp0: int = int(whole.critter_hp[0])
+	whole._contact(0, at)
+	var one_hit := hp0 - int(whole.critter_hp[0])
+	t.eq(one_hit, 10, "설정: 힘 10짜리 분신 하나가 한 번에 10을 깎는다")
+
+	var split := World.new()
+	split.setup(241)
+	_silence_food(split)
+	_clear_terrain(split)
+	split.critter_count = 0
+	split.boss_index = -1
+	split._write_critter(Parts.Species.CROW, at, 10)
+	split.critter_hp[0] = 900
+	split.critter_atk_cd[0] = 99.0
+	var c2 := split.swarm.add_clone(0, 10)
+	split.swarm.pos[c2] = at
+	# The host is left at force 1 so `F` divides the clone and nothing else — one subject per fixture.
+	split.swarm.force[0] = 1
+	split.swarm.split_hold(Rules.SPLIT_HOLD_TIME)
+	t.eq(split.swarm.count, 3, "설정: 그 분신이 실제로 둘로 나뉘었다")
+	for i in range(1, split.swarm.count):
+		split.swarm.pos[i] = at
+		split.swarm.atk_cd[i] = 0.0
+	t.eq(split.swarm.force[1] + split.swarm.force[2], 10, "설정: 두 쪽의 힘 합은 그대로 10이다")
+	var hp1: int = int(split.critter_hp[0])
+	split._contact(0, at)
+	t.eq(hp1 - int(split.critter_hp[0]), one_hit,
+			"나눈 뒤 두 쪽이 함께 깎는 양은 나누기 전 하나가 깎던 양과 같다 — 분열은 힘을 만들지 않는다")
+
+
+# -- F4: `V` takes force and cargo, NOT the part ---------------------------------------------------------
+## ⚠ **This one has NO writable mutation and that is a property of the design, not a hole in the check.**
+## `absorb()` lives on `Swarm`, and `Swarm` holds no `Body` — the folder contract forbids the reference, so
+## "route `worn` into `Body.wear()` on absorb" cannot be written as a one-line edit at all. What is asserted
+## is the two halves that DO move (force and cargo) plus the one that must never start moving, and it is a
+## guard for the day someone gives `Swarm` a way to reach the host's slots. Said out loud rather than
+## claimed as a mutation that was tried.
+func _f4_absorbing_is_not_wearing(t) -> void:
+	var w := World.new()
+	w.setup(242)
+	_silence_food(w)
+	var c := w.swarm.add_clone(0, 6)
+	w.swarm.pos[c] = w.swarm.pos[0]
+	w.swarm.carried[c] = 12.0
+	w.swarm.worn[c] = Parts.HORSE_MANE
+	var force_before: int = w.swarm.force[0]
+	var banked_before: float = w.swarm.banked
+	t.ok(not w.body.is_worn(Parts.HORSE_MANE), "설정: 호스트는 아직 갈기를 걸치지 않았다")
+	t.eq(w.swarm.absorb(), 1, "설정: V가 그 분신을 실제로 삼켰다")
+	t.eq(w.swarm.force[0], force_before + 6, "삼킨 분신의 힘은 호스트에게 온다")
+	t.eq(w.swarm.banked, banked_before + 12.0, "그 화물도 은행에 들어온다")
+	t.ok(not w.body.is_worn(Parts.HORSE_MANE),
+			"하지만 그 부품은 오지 않는다 — 삼키는 것은 입는 것이 아니고, 호스트의 칸은 카드가 채운다")
+
+
+# -- F5: a clone FIRES what it wears, and the roll never leaves the crow's rows ---------------------------
+## ⚠ **Two halves, because the crow's roll is a uniform pick over THREE parts** and a check that waits for
+## one of them by name is a seed lottery. (a) asserts a PROPERTY of what came out over twenty seeds; (b)
+## pins the arithmetic with the part written by hand.
+func _f5_a_clone_fires_what_it_wears(t) -> void:
+	var arcs := 0
+	var rolls := 0
+	var stray := 0
+	for n in 20:
+		var w := World.new()
+		w.setup(243 + n)
+		_silence_food(w)
+		_clear_terrain(w)
+		w.critter_count = 0
+		w.boss_index = -1
+		var at := Vector2(600.0, 600.0)
+		var c := w.swarm.add_clone(0, 4)
+		w.swarm.pos[c] = at
+		w.corpse_count = 1
+		w.corpse_pos[0] = at
+		w.corpse_species[0] = Parts.Species.CROW
+		w.corpse_force[0] = 10
+		w.corpse_progress[0] = 0.999
+		w._step_corpses(DT)
+		var worn: int = w.swarm.worn[c]
+		if worn < 0:
+			continue
+		rolls += 1
+		if worn != Parts.CROW_WING and worn != Parts.CROW_BEAK and worn != Parts.CROW_FOOT:
+			stray += 1
+		if int(Parts.SHAPE[worn]) == int(Parts.Shape.ARC):
+			arcs += 1
+	t.ok(rolls > 0, "설정: 스무 판 중 실제로 부품이 나온 판이 있다 (%d)" % rolls)
+	t.eq(stray, 0, "까마귀 시체에서 나온 것은 전부 까마귀의 줄이다 — 말 부품은 한 번도 안 나온다")
+	t.ok(arcs > 0,
+			"그중 적어도 하나는 ARC다 — 접촉 공격의 ARC 갈래가 실제 플레이에서 닿는다 (%d/%d)" % [arcs, rolls])
+
+	# (b) The ARC branch itself, with the part pinned by hand so the arithmetic is a literal.
+	var w2 := World.new()
+	w2.setup(263)
+	_silence_food(w2)
+	_clear_terrain(w2)
+	var at2 := Vector2(700.0, 700.0)
+	w2.critter_count = 0
+	w2.boss_index = -1
+	w2._write_critter(Parts.Species.CROW, at2, 10)
+	w2.critter_atk_cd[0] = 99.0
+	# ⚠ **20px off the crow, not dead centre on it.** A clone standing exactly on its target hands
+	# `strike()` a zero-length aim, which is the ONE case that has no cone at all — the swing this check is
+	# about would then be measured through the full-circle bug rather than through the wing's 100°.
+	var c2 := w2.swarm.add_clone(0, 4)
+	w2.swarm.pos[c2] = at2 - Vector2(20.0, 0.0)
+	w2.swarm.worn[c2] = Parts.CROW_WING
+	w2.swarm.atk_cd[c2] = 0.0
+	t.eq(int(Parts.SHAPE[Parts.CROW_WING]), int(Parts.Shape.ARC), "설정: 까마귀 날개는 ARC다")
+	w2._contact(0, at2)
+	t.eq(int(w2.critter_hp[0]), 26, "걸친 날개로 제 힘 4만큼 휘두른다 (30 → 26)")
+
+	# And the death half: `strike()` returns a HIT COUNT, never "row k died", so a kill through the ARC
+	# branch leaves `_contact` reading a stranger's row unless the count is compared.
+	var w3 := World.new()
+	w3.setup(264)
+	_silence_food(w3)
+	_clear_terrain(w3)
+	w3.critter_count = 0
+	w3.boss_index = -1
+	w3._write_critter(Parts.Species.CROW, at2, 10)
+	w3.critter_atk_cd[0] = 99.0
+	# 20px off, for the reason (b) is: dead centre there is no aim and therefore no swing.
+	var c3 := w3.swarm.add_clone(0, 30)
+	w3.swarm.pos[c3] = at2 - Vector2(20.0, 0.0)
+	w3.swarm.worn[c3] = Parts.CROW_WING
+	w3.swarm.atk_cd[c3] = 0.0
+	t.eq(int(w3.critter_hp[0]), 30, "설정: 그 까마귀는 체력 30이다")
+	t.ok(w3._contact(0, at2), "힘 30짜리 분신의 날개 한 번이 죽인다 — 그리고 _contact이 죽었다고 답한다")
+	t.eq(w3.critter_count, 0, "생물 표에서 실제로 빠졌다")
+	t.eq(w3.corpse_count, 1, "그리고 시체가 남았다")
+
+
+# -- F6: nothing goes negative, in FOUR places -----------------------------------------------------------
+## ⚠ **Negative damage HEALS**, and negative force is genuinely reachable: `F` halves a body's force but not
+## the FORCE column of what it wears, so a swap to a smaller part can drive the row under zero.
+func _f6_nothing_goes_negative(t) -> void:
+	var w := World.new()
+	w.setup(270)
+	_silence_food(w)
+	var c := w.swarm.add_clone(0, 2)
+	t.ok(_roll_until(w, c, int(Parts.Species.HORSE), Parts.HORSE_LEGS, 2, 6),
+			"설정: 힘 2짜리 분신이 말 다리(힘 5)를 걸쳤다")
+	t.eq(int(w.swarm.force[c]), 7, "설정: 그래서 힘 7이 됐다")
+	w.swarm.force[0] = 1
+	w.swarm.split_hold(Rules.SPLIT_HOLD_TIME)
+	t.eq(int(w.swarm.force[c]), 4, "설정: F가 그 줄을 반으로 갈라 4가 됐다 — 걸친 부품의 5는 안 줄었다")
+	t.eq(w.swarm.worn[c], Parts.HORSE_LEGS, "설정: 부품은 부모 쪽에 남아 있다")
+	# 까마귀 발 (FORCE 2), not 말 폐활량: the only FORCE-0 droppable left both pools, so the reachable case
+	# is a SMALLER part rather than a free one.
+	t.ok(_roll_until_keeping(w, c, int(Parts.Species.CROW), Parts.CROW_FOOT),
+			"설정: 그 다음 까마귀 시체에서 까마귀 발(힘 2)이 나왔다")
+	t.eq(int(w.swarm.force[c]), 2,
+			"4 − 5는 0에서 멈추고 거기에 2가 더해진다 — 힘은 음수가 되지 않는다 (리터럴 2, 안 막으면 1)")
+
+	# The other two `maxi(0, amount)` pairs. Negative damage on either side heals, and healing is invisible
+	# to every check that only ever passes a positive number.
+	var w2 := World.new()
+	w2.setup(271)
+	w2.critter_count = 0
+	w2.boss_index = -1
+	w2._write_critter(Parts.Species.CROW, Vector2(100.0, 100.0), 10)
+	t.ok(not w2._damage_critter(0, -5), "설정: 음수 피해로는 생물이 죽지 않는다")
+	t.eq(int(w2.critter_hp[0]), 30, "음수 피해는 생물의 체력을 올리지 않는다")
+	var sw := Swarm.new()
+	sw.setup(272, Vector2(500.0, 500.0))
+	var k := sw.add_clone(0, 10)
+	t.ok(not sw.damage(k, -5), "설정: 음수 피해로는 분신도 죽지 않는다")
+	t.eq(int(sw.hp[k]), 30, "그리고 분신의 체력도 올라가지 않는다")
+
+	# The FOURTH place, and the only one on the HOST: `Body.wear()`'s digestion loop. The clone's identical
+	# path is `World::_roll_part`, which carries the floor and is pinned above; the host's had neither. The
+	# host reaches it from a level-up card, which cannot be declined, so a negative here is permanent.
+	#
+	# ⚠ **까마귀 발 and 말 다리 share `Slot.HINDLIMBS`** — the one square two parts share. That displacement
+	# is the whole of 결정 5, and it is also the only path in the game that digests a part off the host.
+	var w4 := World.new()
+	w4.setup(273)
+	_silence_food(w4)
+	_clear_terrain(w4)
+	t.eq(int(w4.swarm.force[0]), 10, "설정: 호스트는 힘 10으로 연다")
+	w4.body.wear(Parts.HORSE_LEGS)
+	t.eq(int(w4.swarm.force[0]), 15, "설정: 말 다리(힘 5)를 입어 10 → 15")
+	# Four `F` holds take 15 down to 1. Written straight in: the split itself is pinned by F2..F6 above and
+	# re-driving it here would measure the halving rather than the floor.
+	w4.swarm.force[0] = 1
+	var digested: Array = w4.body.wear(Parts.CROW_FOOT)
+	t.eq(digested.size(), 1, "설정: 까마귀 발이 같은 칸의 말 다리를 소화시켰다")
+	t.eq(int(w4.swarm.force[0]), 2,
+			"1 − 5는 0에서 멈추고 거기에 2가 더해진다 — 호스트의 힘도 음수가 되지 않는다 (리터럴 2, 안 막으면 -2)")
+	t.eq(w4.swarm.total_force(), 2, "무리의 힘도 2다 — 몸 패널이 음수를 읽지 않는다")
+
+	# And the consequence, driven rather than reasoned: `strike()` hands `swarm.force[0]` to
+	# `_damage_critter`, whose own `maxi(0, amount)` turns a negative into a **zero**. Without the floor the
+	# host's bite does nothing at all, for the rest of the run, and every arithmetic check above stays green.
+	w4.swarm.pos[0] = Vector2(1000.0, 1000.0)
+	w4.critter_count = 0
+	w4.boss_index = -1
+	w4._write_critter(Parts.Species.CROW, Vector2(1040.0, 1000.0), 10)
+	t.eq(int(w4.critter_hp[0]), 30, "설정: 40px 앞의 까마귀는 체력 30이다")
+	t.eq(w4.body.bound[0], Parts.BITE, "설정: 왼쪽 클릭은 아직 물기다")
+	t.ok(w4.fire(0, Vector2(1100.0, 1000.0)), "설정: 물기가 나갔다")
+	t.eq(int(w4.critter_hp[0]), 28, "그 물기는 2만큼 깎는다 — 힘이 음수면 0이 되어 아무 일도 안 난다 (30 → 28)")
+
+
+# -- F7: hp is CONSERVED across `F`, never recomputed ----------------------------------------------------
+## ⚠ **The undamaged case alone cannot see the mutation.** A body at hp 30 splits into 15 + 15 under both
+## implementations; a body written down to 7 splits into 3 + 4 under conservation and into 15 + 15 under a
+## recompute, and the recompute is `F` as a heal button.
+func _f7_hp_is_conserved_across_the_split(t) -> void:
+	var sw := Swarm.new()
+	sw.setup(280, Vector2(1000.0, 1000.0))
+	var c := sw.add_clone(0, 10)
+	sw.hp[c] = 7
+	# The host is left under 2 so `F` divides the clone and nothing else.
+	sw.force[0] = 1
+	sw.split_hold(Rules.SPLIT_HOLD_TIME)
+	t.eq(sw.count, 3, "설정: 다친 분신이 실제로 둘로 나뉘었다")
+	t.eq(int(sw.hp[c]), 4, "부모는 나머지 4를 갖는다")
+	t.eq(int(sw.hp[2]), 3, "아이는 바닥 쪽 절반 3을 갖는다")
+	t.eq(int(sw.hp[c]) + int(sw.hp[2]), 7,
+			"둘의 합은 나누기 전의 7 그대로다 — F는 회복 버튼이 아니다")
+
+	var sw2 := Swarm.new()
+	sw2.setup(281, Vector2(1000.0, 1000.0))
+	var d := sw2.add_clone(0, 10)
+	sw2.force[0] = 1
+	sw2.split_hold(Rules.SPLIT_HOLD_TIME)
+	t.eq(int(sw2.hp[d]), 15, "대조: 안 다친 몸은 15와")
+	t.eq(int(sw2.hp[2]), 15, "15로 갈린다 — 이쪽만으로는 위의 변이를 볼 수 없다")
+
+
+# -- F8: a body that cannot be halved is not halved ------------------------------------------------------
+## Without the refusal a body at 1 hp splits into a 1-hp child and a **0-hp parent that is alive**: hp only
+## kills at the moment damage is applied, so a zombie never dies of its own accord.
+func _f8_a_body_at_one_hp_does_not_split(t) -> void:
+	var sw := Swarm.new()
+	sw.setup(282, Vector2(1000.0, 1000.0))
+	var c := sw.add_clone(0, 10)
+	sw.hp[c] = 1
+	sw.force[0] = 1
+	sw.split_hold(Rules.SPLIT_HOLD_TIME)
+	t.eq(sw.count, 2, "체력 1짜리 몸은 나뉘지 않는다 — 반으로 갈라 아무것도 안 남는 것은 가르지 않는다")
+	t.eq(int(sw.force[c]), 10, "그 힘도 건드려지지 않는다")
+	t.eq(int(sw.hp[c]), 1, "그 체력도 그대로다")
+
+	var sw2 := Swarm.new()
+	sw2.setup(283, Vector2(1000.0, 1000.0))
+	var d := sw2.add_clone(0, 10)
+	sw2.hp[d] = 2
+	sw2.force[0] = 1
+	sw2.split_hold(Rules.SPLIT_HOLD_TIME)
+	t.eq(sw2.count, 3, "대조: 체력 2면 나뉜다 — 아무것도 못 나누는 검사가 아니다")
+	t.eq(int(sw2.hp[d]) + int(sw2.hp[2]), 2, "그리고 그 2도 보존된다")
+
+	# ⚠ **The host must still split at hp -1.** Row 0 carries the sentinel, so a refusal written without its
+	# `i > 0` guard reads `-1 < 2` and deletes the tutorial keystroke outright.
+	var sw3 := Swarm.new()
+	sw3.setup(284, Vector2(1000.0, 1000.0))
+	t.eq(int(sw3.hp[0]), -1, "설정: 호스트의 체력 칸은 -1 표식이다")
+	sw3.split_hold(Rules.SPLIT_HOLD_TIME)
+	t.eq(sw3.count, 2, "호스트는 그 표식에도 불구하고 나뉜다 — 첫 키가 사라지지 않는다")
+
+
+# -- F9: the two maintenance points nothing else reaches -------------------------------------------------
+func _f9_the_hp_column_is_maintained(t) -> void:
+	var sw := Swarm.new()
+	sw.setup(285, Vector2(1000.0, 1000.0))
+	var a := sw.add_clone(0, 4)
+	var b := sw.add_clone(0, 10)
+	var c := sw.add_clone(0, 30)
+	t.eq(int(sw.hp[a]), 12, "설정: 체력 12 · 30 · 90짜리 분신 셋을 세웠다")
+	t.eq(int(sw.hp[b]), 30, "설정: 가운데는 30이다")
+	t.eq(int(sw.hp[c]), 90, "설정: 마지막은 90이다")
+	sw.remove_at(b)
+	t.eq(int(sw.hp[1]), 12, "건드리지 않은 줄의 체력은 그대로다")
+	t.eq(int(sw.hp[2]), 90, "내려온 줄은 제 체력을 들고 왔다 — 죽은 놈의 것을 물려받지 않는다")
+
+	# ⚠ **`add_clone()` with no arguments** is what every steering net in the round calls. Without the floor
+	# each of those builds bodies at 0 hp: alive, drawn, and dead to the first touch, with nothing red.
+	var sw2 := Swarm.new()
+	sw2.setup(286, Vector2(1000.0, 1000.0))
+	var d := sw2.add_clone()
+	t.eq(int(sw2.force[d]), 0, "설정: 인자 없는 add_clone()은 힘 0짜리 몸을 만든다")
+	t.eq(int(sw2.hp[d]), Rules.BODY_HP_MIN, "그래도 체력은 바닥값 아래로 내려가지 않는다")
+	t.eq(Rules.BODY_HP_MIN, 1, "그 바닥값은 1이다 (리터럴)")
+
+
+# -- F10: hp moves with the part exactly as force does ---------------------------------------------------
+func _f10_hp_moves_with_the_part(t) -> void:
+	var w := World.new()
+	w.setup(287)
+	_silence_food(w)
+	var c := w.swarm.add_clone(0, 4)
+	t.eq(int(Parts.FORCE[Parts.CROW_FOOT]), 2, "설정: 까마귀 발은 힘 2에")
+	t.eq(int(Parts.HP[Parts.CROW_FOOT]), 3, "설정: 체력 3짜리 부품이다 (리터럴)")
+	t.ok(_roll_until(w, c, int(Parts.Species.CROW), Parts.CROW_FOOT, 4, 12),
+			"설정: 까마귀 시체에서 까마귀 발이 나왔다")
+	t.eq(int(w.swarm.force[c]), 6, "걸친 만큼 힘이 오른다 (4 + 2)")
+	t.eq(int(w.swarm.hp[c]), 15, "그리고 체력도 오른다 (12 + 3) — HP 열이 분신에게도 실제로 쓰인다")
+
+	t.eq(int(Parts.HP[Parts.HORSE_LEGS]), 0, "설정: 말 다리는 체력을 주지 않는다 (리터럴 0)")
+	t.ok(_roll_until_keeping(w, c, int(Parts.Species.HORSE), Parts.HORSE_LEGS),
+			"설정: 다음 시체에서 말 다리로 갈아탔다")
+	t.eq(int(w.swarm.force[c]), 9, "발의 2를 먼저 빼고 다리의 5를 더한다 (6 − 2 + 5)")
+	t.eq(int(w.swarm.hp[c]), 12, "체력도 발의 3을 먼저 뺀다 (15 − 3 + 0) — 유령 체력은 남지 않는다")
+
+
+## Roll `species`' corpse pool onto `eater` until `want` comes out, resetting the row to its base before
+## every attempt. **The crow's pool is three parts and the roll is uniform**, so a check that named a part
+## and stepped once would be a lottery; this leaves exactly one successful roll applied to a known base.
+func _roll_until(w: World, eater: int, species: int, want: int, base_force: int, base_hp: int) -> bool:
+	for _n in 400:
+		w.swarm.worn[eater] = -1
+		w.swarm.force[eater] = base_force
+		w.swarm.hp[eater] = base_hp
+		w._roll_part(eater, species)
+		if w.swarm.worn[eater] == want:
+			return true
+	return false
+
+
+## The same, for a SECOND part: the row is left exactly as it is between attempts, so the subtract-then-add
+## the check is about really runs off whatever the body is already wearing.
+func _roll_until_keeping(w: World, eater: int, species: int, want: int) -> bool:
+	var had: int = w.swarm.worn[eater]
+	var force_was: int = w.swarm.force[eater]
+	var hp_was: int = w.swarm.hp[eater]
+	for _n in 400:
+		w.swarm.worn[eater] = had
+		w.swarm.force[eater] = force_was
+		w.swarm.hp[eater] = hp_was
+		w._roll_part(eater, species)
+		if w.swarm.worn[eater] == want:
+			return true
+	return false
+
+
+# -- U16b: the peak swarm is a HIGH-WATER MARK -----------------------------------------------------------
+## `maxi(peak_swarm, ...)` → a plain assignment is green, because `net_run`'s check reads `peak_before24`
+## **off the world under test** — a bound taken from the thing it is checking, CLAUDE.md's named trap. The
+## ending screen then reports the swarm size at death, which is usually near zero: the run's one number for
+## how big you ever got, replaced by how small you were when it ended.
+func _u16b_the_peak_is_a_high_water_mark(t) -> void:
+	var w := World.new()
+	w.setup(470)
+	_silence_food(w)
+	_clear_terrain(w)
+	t.eq(w.peak_swarm, 0, "설정: 최대 무리는 0에서 시작한다")
+
+	# Force 10 → three full holds is 8 bodies, so 7 clones. Every one lands on the spawn ring inside `V`'s
+	# reach (`ABSORB_RADIUS_BODIES` 4 × `BODY_RADIUS` 14 = 56 > `CLONE_SPAWN_RING` 20).
+	for _h in 3:
+		w.swarm.split_hold(Rules.SPLIT_HOLD_TIME)
+		w.swarm.split_release()
+	t.eq(w.swarm.count, 8, "설정: 세 번 나눠서 몸이 여덟이 됐다")
+	w.step(DT)
+	t.eq(w.peak_swarm, 7, "그 순간의 최대 무리는 분신 일곱이다")
+
+	# Every clone home again. The LIVE count falls back to zero and the peak must not follow it.
+	var taken := w.swarm.absorb()
+	t.eq(taken, 7, "설정: V 한 번에 일곱을 다 거뒀다")
+	t.eq(w.swarm.count, 1, "설정: 몸은 다시 호스트 하나다")
+	w.step(DT)
+	t.eq(w.peak_swarm, 7,
+			"그래도 최대 무리는 일곱으로 남는다 — 그냥 대입이면 여기서 0이 되고 엔딩은 죽을 때의 크기를 적는다")
+
+	# And it still RISES. A high-water mark that froze at its first value is the other half of the same bug.
 	for _h in 4:
 		w.swarm.split_hold(Rules.SPLIT_HOLD_TIME)
 		w.swarm.split_release()
-	t.ok(w.swarm.count >= 8, "설정: 네 번 눌러 몸이 여덟 이상이 됐다 (%d개)" % w.swarm.count)
-	t.eq(w.swarm.total_force(), before, "설정: 그동안 힘의 총합은 한 점도 늘지 않았다")
-	t.ok(not w.is_hunter_of(0),
-			"나누기만으로는 사냥자가 되지 않는다 — 기준은 몸의 수가 아니라 힘이다 (%d몸)" % w.swarm.count)
-
-	w.swarm.force[0] += 20
-	t.ok(w.is_hunter_of(0), "대조: 힘이 실제로 오르면 사냥자가 된다 — 아무것도 못 잡는 검사가 아니다")
+	w.step(DT)
+	t.ok(w.peak_swarm > 7, "그리고 더 커지면 따라 올라간다 — 얼어붙은 것이 아니다 (%d)" % w.peak_swarm)
 
 
 func _silence_food(w: World) -> void:
 	for i in w.food.alive.size():
 		w.food.alive[i] = 0
 	w.food.alive_count = 0
+
+
+## Forty rocks now sit between the host and wherever a fixture writes a coordinate, and `push_out` moves a
+## hand-placed body or creature off it by up to a rock's radius. **A check that is not about the ground has
+## to remove the ground**, or its two fixtures drift apart by seed and the failure reads as a contact bug.
+func _clear_terrain(w: World) -> void:
+	w.terrain.rock_pos.clear()
+	w.terrain.rock_radius.clear()
+	w.terrain.water_pos.clear()
+	w.terrain.water_radius.clear()
+
+
+## One creature row, every column written by hand. **`critter_force` is pinned rather than rolled**: a crow
+## spawns anywhere in 8–12, so a check reading damage off it would pass or fail by seed.
+func _crow_row(w: World, k: int, force_value: int) -> void:
+	w.critter_species[k] = Parts.Species.CROW
+	w.critter_force[k] = force_value
+	w.critter_hp[k] = force_value * Rules.HP_PER_FORCE
+	w.critter_flees[k] = 0
+	w.critter_atk_cd[k] = 0.0
+	w.critter_counter[k] = 0.0

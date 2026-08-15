@@ -27,7 +27,7 @@ moved keys; it was not deleted.** If play shows it did get lost, this is the doc
 
 ⚠ **The first version of this doc claimed `swarm.gd::command_rally` and `cell-game.md` "were both edited".
 They were not, and an adversarial review found it the same day.** The paragraph in `cell-game.md`'s *Harvest*
-was edited; **the one in its *Screen* section and the comment in `swarm.gd:34-36` were not.**
+was edited; **the one in its *Screen* section and `swarm.gd`'s `command_rally()` doc block were not.**
 ⇒ **A decision doc asserting a code edit is the same failure as asserting acceptance** — it reads as done and
 nobody opens the file. **The code comment is plan 2's job** (`hands-and-commands`, *`1` — rally to the host*)
 and is not done until that plan is built. This doc records the decision; it does not record the work.

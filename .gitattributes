@@ -1,0 +1,15 @@
+# **One line ending inside the code, and it is not cosmetic.** `world.gd`, `terrain.gd` and `swarm.gd` were
+# CRLF while `field_view.gd`, `hud.gd`, `look.gd` and `rules.gd` were LF, so any scripted multi-line edit or
+# scan silently matched ZERO times in half the tree — three MATCH-FAIL rounds, measured, and CLAUDE.md
+# already records that string replacement has silently matched nothing twice. This is the cause.
+#
+# ⚠ **`*.md` was left out of this list and it is not a cosmetic omission either.** `net_citations` scans
+# `docs/` and `CLAUDE.md` now, and the round's fingerprint hashes their BYTES — so a doc round-tripping
+# through `autocrlf` moves the fingerprint without anybody editing it, which is the one thing the
+# fingerprint exists to rule out. Same failure as above, one file type over.
+*.gd    text eol=lf
+*.gdshader text eol=lf
+*.md    text eol=lf
+*.ps1   text eol=lf
+*.tscn  text eol=lf
+*.tres  text eol=lf

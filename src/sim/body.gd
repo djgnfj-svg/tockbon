@@ -138,7 +138,7 @@ func hp_max(level: int) -> int:
 	for s in slot_part.size():
 		var p := slot_part[s]
 		# Guarded on the FIRST slot so a multi-slot part is counted once. Summed over every square it
-		# holds, a two-slot mane would be worth two hearts and nothing in the table would say so.
+		# holds, a two-slot mane would be worth twice its `Parts.HP` and nothing in the table would say so.
 		if p >= 0 and int(Parts.SLOTS[p][0]) == s:
 			sum += int(Parts.HP[p])
 	return sum
@@ -197,7 +197,14 @@ func wear(part: int) -> Array:
 				slot_part[s] = -1
 				slot_level[s] = 0
 		if swarm != null:
-			swarm.force[0] -= old_force
+			# **`maxi(0, ...)` is load-bearing, and it is the same floor `World::_roll_part` carries for a
+			# clone** — see that function for why a row can go under. `F` halves a body's force but not the
+			# `Parts.FORCE` column of what it wears, so a host split down to 1 that then takes a card sharing
+			# a slot with a bigger part subtracts more than it has. Negative force is not a small wrong
+			# number: `_damage_critter`'s own `maxi(0, amount)` turns every attack the host makes into a
+			# **zero**, `F` refuses to split below 2, and there is no way back — the card that did it could
+			# not be declined.
+			swarm.force[0] = maxi(0, swarm.force[0] - old_force)
 		# A binding pointing at a part that is no longer worn is the same dangling index one key over: the
 		# panel shows a name, the key fires nothing, and reading the array in a net never sees it.
 		for k in bound.size():

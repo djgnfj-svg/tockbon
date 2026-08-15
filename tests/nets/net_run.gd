@@ -134,9 +134,8 @@ func run(t) -> void:
 	r7.world.swarm.pos[c7] = r7.world.swarm.pos[0] + Vector2(600.0, 0.0)
 	r7.world.critter_count = 1
 	r7.world.critter_pos[0] = r7.world.swarm.pos[c7]
-	r7.world.critter_threat[0] = 5
 	r7.world.critter_dir[0] = Vector2.ZERO
-	r7.world.step(DT)   ## the critter kills the loaded clone; too small a swarm to have outgrown threat 5
+	r7.world.step(DT)   ## a creature is standing on the loaded clone
 	r7.world.host_hp = 0
 	r7.step(DT)
 	t.eq(r7.phase, Run.Phase.ENDING, "죽음으로 런이 끝난다")
@@ -315,11 +314,12 @@ func run(t) -> void:
 	# -- 19: a level earned during the beat opens no cards ----------------------------------------
 	# Two different mechanisms, and each needs its own bait or the mutation it belongs to has nothing to
 	# act on (the same trap check 6 and check 8's setups fell into):
-	#  (a) a level already PENDING the instant _begin_clear() runs. Setting stage_cleared directly and
-	#      stepping once (as checks 5/6/18 do) never produces that on its own. The real shape is a
-	#      max-threat critter eaten by the host: World::_contact() banks it and sets stage_cleared in the
-	#      same world.step(), and _grow() (still unfrozen — Run has not seen stage_cleared yet) queues the
-	#      level before Run gets a turn. `pending_levels = 0` is what drops it.
+	#  (a) a level already PENDING the instant _begin_clear() runs. ⚠ **The critter that used to produce it
+	#      is gone**: contact no longer pays, so nothing in a single step both banks a level and clears the
+	#      stage until the boss's corpse does. `banked` is written to exactly one level's cost with
+	#      `stage_cleared` already up instead — _grow() (still unfrozen, Run has not had its turn) queues
+	#      the level inside the same world.step() the beat starts on, which is the shape that matters.
+	#      `pending_levels = 0` is what drops it.
 	#      ⚠ This is NOT about the beat hanging — `Run.step()` decrements `absorb_beat` unconditionally
 	#      every frame, so the beat always ends on schedule whether or not `World::step()`'s own
 	#      `pending_levels > 0` guard is stuck. Skipping the zero just leaves a stale pending_levels
@@ -330,22 +330,19 @@ func run(t) -> void:
 	var r19 := Run.new()
 	r19.start(15)
 	_silence_food(r19.world)
-	# 24 clones at force 4 plus the host's 10 = 106, over `CRITTER_THREAT_MAX * FORCE_PER_THREAT` (100), so
-	# `is_hunter_of()` reads true and the host can eat the max-threat critter. **The force is not
-	# decoration**: the comparison reads `total_force()`, and force-0 bodies made out of nothing outrank
-	# nothing however many of them there are. The run opens alone, so every one of them is placed here.
+	# The clones are the swarm the beat has to absorb; the run opens alone, so every one of them is placed
+	# here. Their force is what (b)'s cargo rides home on top of.
 	for _i in 24:
 		r19.world.swarm.add_clone(0, 4)
-	r19.world.swarm.banked = Rules.LEVEL_COST_BASE - 1.0   # (a): one bite from a level, not there yet
+	r19.world.critter_count = 0
+	r19.world.swarm.banked = Rules.LEVEL_COST_BASE   # (a): exactly one level's cost, crossed this step
 	var c19 := r19.world.swarm.add_clone()   # (b): its cargo crosses a FURTHER threshold once absorbed
 	r19.world.swarm.carried[c19] = Rules.LEVEL_COST_BASE + 5.0
 	r19.world.swarm.pos[c19] = r19.world.swarm.pos[0] + Vector2(400.0, 0.0)   ## absorbed mid-beat, not at detection
-	r19.world.critter_count = 1
-	r19.world.critter_pos[0] = r19.world.swarm.pos[0]
-	r19.world.critter_threat[0] = Rules.CRITTER_THREAT_MAX
-	r19.world.critter_dir[0] = Vector2.ZERO
-	r19.step(DT)   # host eats it: banked crosses a level AND stage_cleared flips, same world.step()
-	t.ok(r19.world.stage_cleared, "이 스텝에서 클리어가 감지됐다 (설정이 의도대로 맞았는지)")
+	r19.world.stage_cleared = true
+	r19.step(DT)   # _grow() queues the level, and Run sees the clear, inside the same world.step()
+	t.ok(r19.world.pending_levels > 0 or r19.world.level > 0,
+			"설정: 감지되는 그 스텝에 레벨이 실제로 하나 올랐다")
 	var ticks19 := 0
 	while r19.phase == Run.Phase.PLAY and ticks19 < 300:
 		r19.step(DT)
@@ -426,11 +423,22 @@ func run(t) -> void:
 	var cc24 := r24.world.swarm.add_clone()
 	r24.world.swarm.carried[cc24] = 7.0
 	r24.world.swarm.pos[cc24] = r24.world.swarm.pos[0] + Vector2(600.0, 0.0)
+	# ⚠ **The ground is removed first.** `push_out` shoves a hand-placed creature off a rock by up to that
+	# rock's radius, and at seed 21 there is one right here — the crow landed 48px from the clone it was
+	# put on top of and never reached it, with this check reading as a bookkeeping bug.
+	_clear_terrain(r24.world)
 	r24.world.critter_count = 1
 	r24.world.critter_pos[0] = r24.world.swarm.pos[cc24]
-	r24.world.critter_threat[0] = 5
+	# A clone born with no force has `Rules.BODY_HP_MIN`, so one crow hit is the whole of its life. The
+	# force is pinned rather than rolled for the same reason every other creature fixture pins it.
+	r24.world.critter_species[0] = Parts.Species.CROW
+	r24.world.critter_force[0] = 10
+	r24.world.critter_hp[0] = 30
+	r24.world.critter_flees[0] = 0
+	r24.world.critter_atk_cd[0] = 0.0
+	r24.world.critter_counter[0] = 0.0
 	r24.world.critter_dir[0] = Vector2.ZERO
-	r24.world.step(DT)   ## the swarm's force is still the host's 10, under threat 5's 100; the critter hunts
+	r24.world.step(DT)   ## the crow hits the clone for 10 against its 1 hp: it dies and its cargo with it
 	t.eq(r24.world.clones_lost, 1, "설정: 분신 하나를 잃었다")
 	t.eq(roundi(r24.world.cargo_lost), 7, "설정: 화물 7을 함께 잃었다")
 	r24.world.host_hp = 0
@@ -441,41 +449,147 @@ func run(t) -> void:
 	t.eq(r24.result.clones_lost, 1, "result에 잃은 분신 수가 담긴다")
 	t.eq(r24.result.cargo_lost, 7, "result에 잃은 화물이 담긴다")
 
-	# -- 25: stage_cleared fires only at the maximum threat, never below --------------------------------
-	# World::_contact()'s `if critter_threat[k] == Rules.CRITTER_THREAT_MAX` could be widened to
-	# `>= Rules.CRITTER_THREAT_MIN` and every check above stays green — none of them ever eat a
-	# below-maximum critter. Both directions have to be driven: a hunter swarm large enough for ANY
-	# threat, fed a critter one below the max, then fed one exactly at the max.
+	# -- 25: the stage is cleared by the BOSS's corpse, and by nothing else ------------------------------
+	# Restored onto the mechanism that took the job over. Its old subject was the deleted threat model's
+	# fiercest-critter comparison inside `World._contact()`, driven from both sides — one below the maximum
+	# must not clear, one at the maximum must. That model is gone and contact pays nothing; **finishing a
+	# corpse is what pays now**, and the flag hangs off that corpse's SPECIES.
+	#
+	# **Both halves, because each catches a different one-word mutation**: keying the flag off any finished
+	# corpse (the crow half goes red) and keying it off the boss's DEATH rather than its meal (the boss half
+	# never fires, since the corpse is what `_step_corpses` finishes). Every other check in this file sets
+	# `stage_cleared` by hand and therefore cannot see either.
+	#
+	# The corpse sits on the host and is written one frame short of done, so a single `world.step()` is the
+	# whole drive. `corpse_force` is a literal both times — a boss meal is six seconds and a crow's is half
+	# of one, so the two need different openings and reading either off the table would hide that.
 	var w25a := World.new()
-	w25a.setup(22)
+	w25a.setup(31)
 	_silence_food(w25a)
-	# Force 110 (25 × 4 + the host's 10), so the swarm has outgrown EVERY threat including the maximum's
-	# 100 — the same swarm faces both critters below and only the critter's threat changes between them.
-	# The comparison reads force, so the per-clone value is what carries this, not the row count.
-	for _i in 25:
-		w25a.swarm.add_clone(0, 4)
-	w25a.critter_count = 1
-	w25a.critter_pos[0] = w25a.swarm.pos[0]
-	w25a.critter_threat[0] = Rules.CRITTER_THREAT_MAX - 1
-	w25a.critter_dir[0] = Vector2.ZERO
+	w25a.critter_count = 0
+	w25a.corpse_count = 1
+	w25a.corpse_pos[0] = w25a.swarm.pos[0]
+	w25a.corpse_species[0] = Parts.Species.CROW
+	w25a.corpse_force[0] = 10
+	w25a.corpse_progress[0] = 0.999
 	w25a.step(DT)
-	# Without this, the check passes vacuously if the critter was never eaten at all (FORCE_PER_THREAT
-	# raised so is_hunter_of() is false, say) — "nothing happened" and "it happened but didn't clear" both
-	# read as `not stage_cleared`. Confirming the eat actually landed is what tells them apart.
-	t.eq(w25a.critters_eaten, 1, "설정: 최댓값보다 낮은 위협도 실제로 잡아먹었다")
-	t.ok(not w25a.stage_cleared, "최댓값보다 낮은 위협을 잡아도 클리어로 세지 않는다")
+	t.eq(w25a.corpse_count, 0, "설정: 까마귀 시체를 실제로 다 먹었다")
+	t.ok(not w25a.stage_cleared, "까마귀를 다 먹어도 스테이지는 끝나지 않는다")
+	# The same finish is what writes `species_eaten`, and that array is the card pool's only lock — so this
+	# is the line that makes "한 런에 카드가 한 장도 안 나온다" impossible rather than merely unlikely.
+	# **Order, not membership**, and a second crow must NOT append: the ending screen prints this list.
+	t.eq(w25a.species_eaten.size(), 1, "시체를 다 먹으면 그 종이 먹은 목록에 들어간다")
+	# Read through a guard, not straight off the array: the mutation this check exists for empties the list,
+	# and an out-of-range index aborts the whole net — which loses the 15 checks below it instead of
+	# reddening one. A net that dies is a net that stopped measuring.
+	var first25: int = w25a.species_eaten[0] if w25a.species_eaten.size() > 0 else -1
+	t.eq(first25, int(Parts.Species.CROW), "먹은 목록에 들어간 것은 그 시체의 종이다")
+	# ⚠ **And this is the whole answer to "한 런에 카드가 한 장도 안 나온다".** The pool used to be locked
+	# behind the horse, which is uncatchable and arrives about once every 150s; it now opens off the crow,
+	# the creature standing still on the first minute. Driven, not assumed: one crow meal banked enough for
+	# a level and `_grow()` rolled an offer in the same step. Every card in it is a 까마귀 row.
+	t.ok(not w25a.offer.is_empty(), "까마귀 한 마리를 다 먹은 것만으로 카드 풀이 열린다")
+	var crow_only := true
+	for card in w25a.offer:
+		if int(Parts.SPECIES[card]) != int(Parts.Species.CROW):
+			crow_only = false
+	t.ok(crow_only, "그때 나오는 카드는 전부 까마귀 부품이다 — 먹지 않은 종은 못 나온다")
+	# The world is frozen while cards are on screen, which is the banking rule doing its job — cleared by
+	# hand here so the second corpse can be stepped at all.
+	w25a.pending_levels = 0
+	w25a.offer = PackedInt32Array()
+	w25a.corpse_count = 1
+	w25a.corpse_pos[0] = w25a.swarm.pos[0]
+	w25a.corpse_species[0] = Parts.Species.CROW
+	w25a.corpse_force[0] = 10
+	w25a.corpse_progress[0] = 0.999
+	w25a.step(DT)
+	t.eq(w25a.corpse_count, 0, "설정: 까마귀를 한 마리 더 다 먹었다")
+	t.eq(w25a.species_eaten.size(), 1, "같은 종을 또 먹어도 목록은 늘지 않는다")
 
 	var w25b := World.new()
-	w25b.setup(23)
+	w25b.setup(32)
 	_silence_food(w25b)
-	for _i in 25:
-		w25b.swarm.add_clone(0, 4)
-	w25b.critter_count = 1
-	w25b.critter_pos[0] = w25b.swarm.pos[0]
-	w25b.critter_threat[0] = Rules.CRITTER_THREAT_MAX
-	w25b.critter_dir[0] = Vector2.ZERO
+	w25b.critter_count = 0
+	w25b.corpse_count = 1
+	w25b.corpse_pos[0] = w25b.swarm.pos[0]
+	w25b.corpse_species[0] = Parts.Species.BOSS
+	w25b.corpse_force[0] = 120
+	w25b.corpse_progress[0] = 0.999
+	t.ok(not w25b.stage_cleared, "설정: 먹기 전에는 스테이지가 열려 있다")
 	w25b.step(DT)
-	t.ok(w25b.stage_cleared, "최댓값 위협을 잡으면 클리어로 센다")
+	t.eq(w25b.corpse_count, 0, "설정: 보스 시체를 실제로 다 먹었다")
+	t.ok(w25b.stage_cleared, "보스 시체를 다 먹으면 스테이지가 끝난다")
+
+	# -- RunResult.species — the ending screen's 먹은 종 line, driven from real meals -------------------
+	# `_snapshot()` filled every other field and left this one at its empty default for three plans; the
+	# ending screen's own net feeds it a HAND-BUILT RunResult, so the line that fills it from
+	# `World.species_eaten` could be deleted outright with the whole round green. Measured, not assumed.
+	#
+	# **Two meals of different species, in a fixed order, because the claim is the ORDER.** A snapshot that
+	# copied the list as a set, or sorted it, or walked it backwards, satisfies every membership assertion.
+	# The horse eats first so that the expected order is NOT the enum's own order (CROW is 0) — read
+	# straight off `Parts.SPECIES_NAME` instead of off `species_eaten`, the answer would come back
+	# ["까마귀","말"] and look right.
+	var r26 := Run.new()
+	r26.start(33)
+	_silence_food(r26.world)
+	r26.world.critter_count = 0
+	r26.world.corpse_count = 1
+	r26.world.corpse_pos[0] = r26.world.swarm.pos[0]
+	r26.world.corpse_species[0] = Parts.Species.HORSE
+	r26.world.corpse_force[0] = 35
+	# 0.999, not 0.99: a meal is `corpse_force × EAT_TIME_PER_FORCE`, so a horse is 1.75s and one frame at
+	# 0.99 adds 0.019 and finishes nothing. The check would then measure an empty list and read as a bug in
+	# the snapshot.
+	r26.world.corpse_progress[0] = 0.999
+	r26.step(DT)
+	# A finished horse pays 105 경험치, which banks a level, which rolls an offer — and `World.step()`
+	# refuses to advance while cards are on screen. Cleared by hand or the second meal never starts.
+	r26.world.pending_levels = 0
+	r26.world.offer = PackedInt32Array()
+	r26.world.corpse_count = 1
+	r26.world.corpse_pos[0] = r26.world.swarm.pos[0]
+	r26.world.corpse_species[0] = Parts.Species.CROW
+	r26.world.corpse_force[0] = 10
+	r26.world.corpse_progress[0] = 0.999
+	r26.step(DT)
+	t.eq(r26.world.species_eaten.size(), 2, "설정: 말과 까마귀를 그 순서로 실제로 다 먹었다")
+	r26.world.pending_levels = 0
+	r26.world.offer = PackedInt32Array()
+	r26.world.host_hp = 0
+	r26.step(DT)
+	t.eq(r26.phase, Run.Phase.ENDING, "설정: 런이 실제로 끝났다")
+	t.eq(r26.result.species.size(), 2, "result에 먹은 종이 담긴다 — 기본값 빈 배열이 아니다")
+	# Guarded reads. The mutation this block exists for empties the list, and an out-of-range index aborts
+	# the whole net — which loses every check below it instead of reddening one.
+	var sp26_0: String = r26.result.species[0] if r26.result.species.size() > 0 else ""
+	var sp26_1: String = r26.result.species[1] if r26.result.species.size() > 1 else ""
+	t.eq(sp26_0, "말", "먹은 종은 먹은 순서로 담긴다 — 첫 번째는 말이다")
+	t.eq(sp26_1, "까마귀", "두 번째는 까마귀다 — 집합도 아니고 표의 순서도 아니다")
+
+	# The `>= 0` guard, and it is synthetic on purpose: nothing in play writes a bad id into
+	# `species_eaten`, but `Parts.SPECIES_NAME[-1]` returns the LAST row rather than erroring, so without
+	# the guard a bad id prints 보스 on the ending screen and nothing anywhere goes red. This is the same
+	# trap `body_slots`' own `>= 0` names one line above it in `_snapshot()`.
+	# **Both halves of the guard, and they fail differently on purpose.** `-1` is the SILENT one — it reads
+	# a real row and prints 보스, with nothing barked anywhere. An id past the end is the LOUD one: it
+	# barks AND drops the entry (`append(null)` onto a PackedStringArray is refused), so both assertions
+	# below move. Measured: dropping `s >= 0` reddens one label; dropping `s < SPECIES_NAME.size()` reddens
+	# the other two and prints an engine error beside them. Neither half is carried by the wrapper's
+	# stderr check alone.
+	var r26b := Run.new()
+	r26b.start(34)
+	_silence_food(r26b.world)
+	r26b.world.critter_count = 0
+	r26b.world.species_eaten = PackedInt32Array([-1, Parts.SPECIES_NAME.size()])
+	r26b.world.host_hp = 0
+	r26b.step(DT)
+	var sp26b: String = r26b.result.species[0] if r26b.result.species.size() > 0 else ""
+	var sp26b_hi: String = r26b.result.species[1] if r26b.result.species.size() > 1 else ""
+	t.eq(r26b.result.species.size(), 2, "설정: 이름 없는 종도 한 칸씩 차지한다")
+	t.eq(sp26b, "?", "이름 없는 종은 ?로 나온다 — 표의 마지막 줄을 읽지 않는다")
+	t.eq(sp26b_hi, "?", "표 밖의 종도 ?로 나온다 — 종이 하나 늘고 이름이 안 늘어난 날의 답")
 
 	# -- 14: a run does not end on a clock, driven -----------------------------------------------------
 	# Not "Rules has no RUN_LENGTH" — that measures a name's absence and passes against a hardcoded
@@ -513,31 +627,34 @@ func run(t) -> void:
 			"critter 타이머도 그만큼 줄었다 — elapsed 한 줄만이 아니라 몸통 전체가 돌았다 (%.1f)" % r14.world._next_critter)
 
 	# -- the ecosystem freezes for the whole beat, not just at its edges --------------------------------
-	# Without World::_step_critters() gated on beat_frozen, is_hunter_of() flips as swarm.count falls
-	# every frame of the beat — a critter that read as prey a moment ago turns hunter again mid-victory
-	# and can cost the host a heart while it is swallowing the boss. The outcome is latched (a hit
-	# mid-beat cannot turn CLEARED into DIED), but the picture would still show the world going hostile
-	# at the exact moment it was won.
+	# The great absorption is the "you won" moment and nothing in the ecosystem may act during it. Left
+	# running, a creature keeps walking at the host while the swarm is being swallowed and can cost it
+	# health mid-victory. The outcome is latched (a hit mid-beat cannot turn CLEARED into DIED), but the
+	# picture would still show the world going hostile at the exact moment it was won.
 	#
-	# Measured as a PROCESS, not a final comparison: the critter's position and `host_hp` are asserted
-	# unchanged on EVERY frame of the beat. A before/after-only check would pass even if the critter
-	# chased, hit the host, and wandered back to exactly where it started by the time the beat ended.
+	# Measured as a PROCESS, not a final comparison: the creature's position and `host_hp` are asserted
+	# unchanged on EVERY frame of the beat. A before/after-only check would pass even if it chased, hit the
+	# host, and wandered back to exactly where it started by the time the beat ended.
+	#
+	# ⚠ **A crow with its counter armed, and that is what makes the check mean anything.** Under plan 4 a
+	# crow does not move AT ALL unless it has been damaged, so the obvious fixture would have frozen a
+	# creature that was never going to move — and the positive control below is what says so out loud.
 	var rf := Run.new()
 	rf.start(27)
 	_silence_food(rf.world)
+	_clear_terrain(rf.world)
 	# Six bodies placed far out, so the beat actually takes more than a couple of frames — see check 5's
-	# identical note. Six is also what keeps the critter below a hunter.
+	# identical note.
 	for _i in 6:
 		rf.world.swarm.add_clone()
 	for i in range(1, rf.world.swarm.count):
 		rf.world.swarm.pos[i] = rf.world.swarm.pos[0] + Vector2(700.0, 0.0)
-	# Placed close enough, and at max threat, that an unfrozen critter would land a hit on the very
-	# first step: the swarm's total force (the host's 10, six force-0 clones) is nowhere near
-	# `CRITTER_THREAT_MAX * FORCE_PER_THREAT` (100), so is_hunter_of() reads false and this critter is the
-	# hunter, not the prey.
 	rf.world.critter_count = 1
+	rf.world.boss_index = -1
 	rf.world.critter_pos[0] = rf.world.swarm.pos[0] + Vector2(30.0, 0.0)
-	rf.world.critter_threat[0] = Rules.CRITTER_THREAT_MAX
+	_crow_row(rf.world, 0, 10)
+	# Armed far past `CROW_COUNTER_TIME`, so it cannot simply expire during the beat and look frozen.
+	rf.world.critter_counter[0] = 99.0
 	rf.world.critter_dir[0] = Vector2.ZERO
 	rf.world.stage_cleared = true
 	rf.step(DT)
@@ -554,11 +671,285 @@ func run(t) -> void:
 	t.ok(ticksf > 5, "설정: 박동이 몇 프레임 만에 끝나지 않고 실제로 걸렸다 (%d틱)" % ticksf)
 	t.ok(frozen_ok, "박동 내내 생물이 얼어붙어 있다 (위치·호스트 체력이 매 프레임 그대로다)")
 
+	# **The positive control, and without it the check above passes against a creature that was never going
+	# to move.** The same crow, the same armed counter, the same number of frames — and `beat_frozen` off.
+	var rc := World.new()
+	rc.setup(271)
+	_silence_food(rc)
+	_clear_terrain(rc)
+	rc.critter_count = 1
+	rc.boss_index = -1
+	rc.critter_pos[0] = rc.swarm.pos[0] + Vector2(300.0, 0.0)
+	_crow_row(rc, 0, 10)
+	rc.critter_counter[0] = 99.0
+	rc.critter_dir[0] = Vector2.ZERO
+	var moved_from: Vector2 = rc.critter_pos[0]
+	for _s in 60:
+		rc.step(DT)
+	t.ok(rc.critter_pos[0].distance_to(moved_from) > 50.0,
+			"대조: 얼리지 않으면 같은 까마귀가 실제로 걸어온다 (%.0fpx) — 안 움직일 놈을 얼린 것이 아니다"
+					% rc.critter_pos[0].distance_to(moved_from))
+
+	# **The second control, and it is a different subject.** `_step_corpses` and `_step_arena` moved inside
+	# the same guard, and nothing else in the round measures that: a corpse finishing mid-absorption pays
+	# 경험치, which `_grow()` turns into a level, which opens three cards on top of the ending screen.
+	var rz := World.new()
+	rz.setup(272)
+	_silence_food(rz)
+	_clear_terrain(rz)
+	rz.critter_count = 0
+	rz.boss_index = -1
+	rz.corpse_count = 1
+	rz.corpse_pos[0] = rz.swarm.pos[0]
+	rz.corpse_species[0] = Parts.Species.CROW
+	rz.corpse_force[0] = 10
+	rz.corpse_progress[0] = 0.9
+	# ⚠ **And the spawn timer is the third thing in that block.** It sat BELOW the freeze, so a crow walked
+	# onto the field mid-"you won" — the one thing the beat exists to keep the field clear of. Wound to
+	# 0.01s so the arrival lands on the very first frame either way.
+	rz._next_critter = 0.01
+	rz.beat_frozen = true
+	for _s in 120:
+		rz.step(DT)
+	t.eq(rz.corpse_count, 1, "박동 중에는 시체도 익지 않는다 — 2초를 서 있어도 그대로다")
+	t.ok(absf(rz.corpse_progress[0] - 0.9) < 0.0001, "진행도도 한 점 안 움직였다")
+	t.eq(rz.critter_count, 0, "박동 중에는 생물도 태어나지 않는다 — 「이겼다」 위로 까마귀가 걸어 들어오지 않는다")
+	rz.beat_frozen = false
+	for _s in 120:
+		rz.step(DT)
+	t.eq(rz.corpse_count, 0, "대조: 박동이 끝나면 같은 시체가 곧바로 익는다")
+	# An arrival is a HERD, so the count is "at least one" — pinned at 1 this reds for four of the six
+	# species that can be rolled, for a reason that is not the freeze this check is about.
+	t.ok(rz.critter_count >= 1,
+			"대조: 그리고 멈춰 있던 그 시계가 곧바로 무리 하나를 내놓는다 (%d마리)" % rz.critter_count)
+
+	# -- 15: the arena closes on the boss, summons the swarm, and holds the host in ---------------------
+	# ⚠ **The boss is DRIVEN to `Rules.ARENA_RADIUS` by hand and never waited for.** It ships slower than the
+	# host, so a run where the player keeps walking may never close the arena at all — that number is a
+	# deferral to the first play session, not a promise this build makes, and a check that stepped until the
+	# arena closed by itself would either hang or pass on luck.
+	#
+	# These live here rather than in the terrain net because the arena is the RUN's last act and this file is
+	# where `World` is driven through whole frames. They are the only thing measuring `World::_step_arena`.
+	var wa := World.new()
+	wa.setup(31)
+	_silence_food(wa)
+	_clear_terrain(wa)
+	t.ok(wa.boss_index >= 0, "설정: 보스가 한 마리 놓였다")
+	# Every other creature removed, so nothing else can walk into the host or the clone mid-check. Backwards,
+	# because `_remove_critter` swaps the last row down.
+	for k in range(wa.critter_count - 1, -1, -1):
+		if k != wa.boss_index:
+			wa._remove_critter(k)
+	t.eq(wa.critter_count, 1, "설정: 보스만 남았다")
+	# Past `BOSS_HUNT_AT`, so the boss walks AT the host instead of wandering. From exactly `ARENA_RADIUS` a
+	# wandering boss steps 2.5px in a random direction and half of those put it back outside the ring: the
+	# hunt is what makes this one frame deterministic rather than a coin flip on the seed.
+	wa.elapsed = Rules.BOSS_HUNT_AT
+	var host_a: Vector2 = wa.swarm.pos[0]
+	wa.critter_pos[wa.boss_index] = host_a + Vector2(Rules.ARENA_RADIUS, 0.0)
+	wa.swarm.add_clone()
+	wa.swarm.pos[1] = host_a + Vector2(3000.0, 0.0)
+	t.ok(not wa.terrain.arena_closed, "설정: 보스가 닿기 전에는 아레나가 열려 있다")
+	wa.step(DT)
+	t.ok(wa.terrain.arena_closed, "보스가 ARENA_RADIUS 안에 들어오면 아레나가 닫힌다")
+	t.eq(wa.terrain.arena_radius, Rules.ARENA_RADIUS, "닫힌 아레나의 반지름은 ARENA_RADIUS다")
+	# The midpoint of the two, written as a literal: the boss walked 150 × DT = 2.5px in before the arena
+	# read its position, so the centre sits (900 - 2.5) / 2 = 448.75px along +x from where the host stands.
+	t.ok(wa.terrain.arena_centre.distance_to(host_a + Vector2(448.75, 0.0)) < 1.0,
+			"아레나 중심은 호스트와 보스의 중간이다 (%.1f, %.1f)"
+			% [wa.terrain.arena_centre.x - host_a.x, wa.terrain.arena_centre.y - host_a.y])
+	# 3000px out on the frame it closed, `ARENA_SUMMON_RING` away on the same frame. **Not clamped to the
+	# rim** — a clamp would leave it 900px from the host somewhere on the circle and satisfy "inside the
+	# arena" while handing nothing back.
+	t.ok(absf(wa.swarm.pos[1].distance_to(wa.swarm.pos[0]) - Rules.ARENA_SUMMON_RING) < 1.0,
+			"3000px 밖의 분신이 닫히는 그 프레임에 호스트 300px 안으로 소환된다 (%.1f)"
+			% wa.swarm.pos[1].distance_to(wa.swarm.pos[0]))
+	t.ok(wa.swarm.pos[1].distance_to(wa.terrain.arena_centre) <= Rules.ARENA_RADIUS,
+			"소환된 분신은 아레나 안에 있다")
+	# The host cannot leave. Walked straight out from the centre for 5s and measured every frame — a
+	# before/after pair would pass on a host that left and came back.
+	wa.swarm.host_input = (host_a - wa.terrain.arena_centre).normalized()
+	var out_a := false
+	var ticks_a := 0
+	while ticks_a < 300:
+		wa.step(DT)
+		if wa.swarm.pos[0].distance_to(wa.terrain.arena_centre) > Rules.ARENA_RADIUS:
+			out_a = true
+		ticks_a += 1
+	t.ok(wa.swarm.pos[0].distance_to(wa.terrain.arena_centre) > 800.0,
+			"설정: 호스트가 실제로 가장자리까지 걸어갔다 (%.1f)"
+			% wa.swarm.pos[0].distance_to(wa.terrain.arena_centre))
+	t.ok(not out_a, "아레나가 닫힌 뒤 호스트는 5초를 걸어 나가도 원 밖으로 못 나간다")
+
+	# -- 16: it never re-opens -------------------------------------------------------------------------
+	# Two instruments, because the property is guarded twice and one mutation reaches only one of them:
+	# `Terrain::close_arena`'s early return, and `World::_step_arena`'s `arena_closed` guard.
+	var centre_a: Vector2 = wa.terrain.arena_centre
+	wa.terrain.close_arena(Vector2(1.0, 2.0))
+	t.eq(wa.terrain.arena_centre, centre_a, "이미 닫힌 아레나는 close_arena를 다시 불러도 중심이 안 움직인다")
+	# The clone is parked 700px out INSIDE the arena for the same step: closing twice would summon it back
+	# to the 300px ring, and the centre never moving is not enough to see that — `close_arena`'s early return
+	# would hide a summon loop firing every single frame for the rest of the fight.
+	wa.swarm.pos[1] = wa.swarm.pos[0] + Vector2(700.0, 0.0)
+	wa.critter_pos[wa.boss_index] = wa.swarm.pos[0] + Vector2(0.0, 100.0)
+	wa.step(DT)
+	t.eq(wa.terrain.arena_centre, centre_a, "보스가 다른 자리에서 다시 가까워져도 아레나는 다시 안 닫힌다")
+	t.eq(wa.terrain.arena_radius, Rules.ARENA_RADIUS, "반지름도 그대로다")
+	t.ok(wa.swarm.pos[1].distance_to(wa.swarm.pos[0]) > 600.0,
+			"닫힌 뒤에는 분신이 매 프레임 다시 불려오지 않는다 (%.1f)"
+			% wa.swarm.pos[1].distance_to(wa.swarm.pos[0]))
+
+	# -- 17: the summon goes through `Swarm.place()`, so a clone never lands inside a rock --------------
+	var wr := World.new()
+	wr.setup(32)
+	_silence_food(wr)
+	_clear_terrain(wr)
+	for k in range(wr.critter_count - 1, -1, -1):
+		if k != wr.boss_index:
+			wr._remove_critter(k)
+	wr.elapsed = Rules.BOSS_HUNT_AT
+	var host_r: Vector2 = wr.swarm.pos[0]
+	# One rock, hand-placed exactly where the summon ring would drop this clone, so the check does not ride
+	# on where seed 32 happened to scatter forty of them.
+	var rock_r := host_r + Vector2(Rules.ARENA_SUMMON_RING, 0.0)
+	wr.terrain.rock_pos.append(rock_r)
+	wr.terrain.rock_radius.append(90.0)
+	wr.critter_pos[wr.boss_index] = host_r + Vector2(Rules.ARENA_RADIUS, 0.0)
+	wr.swarm.add_clone()
+	wr.swarm.pos[1] = host_r + Vector2(3000.0, 0.0)
+	wr.step(DT)
+	t.ok(wr.terrain.arena_closed, "설정: 아레나가 닫혔다")
+	# ⚠ Without this line the check below passes on a clone that was never summoned at all: 3000px from the
+	# host is also 2700px from the rock. Measured — the summon loop can be deleted outright and only check
+	# 15 goes red.
+	t.ok(wr.swarm.pos[1].distance_to(host_r) < 500.0,
+			"설정: 분신이 실제로 소환됐다 (%.1f)" % wr.swarm.pos[1].distance_to(host_r))
+	# 90 + 8, as literals. A bare `pos[i] = pos[0] + offset` drops it dead centre in the rock at distance 0.
+	t.ok(wr.swarm.pos[1].distance_to(rock_r) > 90.0 + Rules.CLONE_BODY_RADIUS - 0.5,
+			"소환된 분신은 바위 안이 아니라 바위 밖에 놓인다 (%.1f)" % wr.swarm.pos[1].distance_to(rock_r))
+
+	# -- 18: a DEAD boss cannot close the arena --------------------------------------------------------
+	# `boss_index` is -1 once the boss dies, and `critter_pos[-1]` is a legal read in GDScript: it returns
+	# the LAST row of a table resized to `CRITTER_MAX`, which is zero-filled — a phantom boss standing at
+	# the field's origin. So the host is parked next to that origin here, where a missing guard closes the
+	# arena around a creature that does not exist. Anywhere else on the field the bug is silent.
+	var wd := World.new()
+	wd.setup(33)
+	_silence_food(wd)
+	_clear_terrain(wd)
+	t.ok(wd.boss_index >= 0, "설정: 보스가 놓였다")
+	for k in range(wd.critter_count - 1, -1, -1):
+		if k != wd.boss_index:
+			wd._remove_critter(k)
+	# Killed for real, so the repair inside `_remove_critter` is what produces the -1 rather than the net.
+	wd._damage_critter(wd.boss_index, 400)
+	t.eq(wd.boss_index, -1, "설정: 보스를 실제로 죽였고 boss_index가 -1이 됐다")
+	t.eq(wd.critter_count, 0, "설정: 필드에 생물이 남지 않았다")
+	wd.swarm.pos[0] = Vector2(5.0, 5.0)
+	# ⚠ **Past `BOSS_HUNT_AT`, or this measures check 20's guard instead of this one.** `_step_arena` now
+	# returns before it ever reads `boss_index` while the hunt has not started, and at `elapsed = 0` the
+	# phantom-boss branch below is unreachable — the check would pass with its own subject deleted.
+	wd.elapsed = Rules.BOSS_HUNT_AT
+	wd.step(DT)
+	t.ok(not wd.terrain.arena_closed, "보스가 죽은 뒤에는 아레나가 닫히지 않는다")
+
+	# -- 19: the arena cannot close during the great absorption -----------------------------------------
+	# `_step_arena` sits inside `step()`'s `beat_frozen` guard with the critters and the corpses, and for a
+	# sharper reason than either: closing teleports every clone at once while the beat is walking those same
+	# clones home one by one. Nothing else in the round would notice the call moving one line down.
+	var rb := Run.new()
+	rb.start(34)
+	_silence_food(rb.world)
+	_clear_terrain(rb.world)
+	for k in range(rb.world.critter_count - 1, -1, -1):
+		if k != rb.world.boss_index:
+			rb.world._remove_critter(k)
+	rb.world.elapsed = Rules.BOSS_HUNT_AT
+	for _i in 6:
+		rb.world.swarm.add_clone()
+	for i in range(1, rb.world.swarm.count):
+		rb.world.swarm.pos[i] = rb.world.swarm.pos[0] + Vector2(700.0, 0.0)
+	rb.world.stage_cleared = true
+	rb.step(DT)
+	t.ok(rb.world.beat_frozen, "설정: 대흡수 박동이 시작됐다")
+	# The boss put right on top of the host, well inside the ring, for the whole beat.
+	rb.world.critter_pos[rb.world.boss_index] = rb.world.swarm.pos[0] + Vector2(50.0, 0.0)
+	var ticks_b := 0
+	var closed_b := false
+	while rb.phase == Run.Phase.PLAY and ticks_b < 300:
+		rb.step(DT)
+		if rb.world.terrain.arena_closed:
+			closed_b = true
+		ticks_b += 1
+	t.ok(ticks_b > 5, "설정: 박동이 실제로 여러 프레임 걸렸다 (%d틱)" % ticks_b)
+	t.ok(not closed_b, "박동 내내 아레나는 한 프레임도 닫히지 않는다")
+
+	# -- 20: the arena is the LAST act, so nothing closes it before the hunt starts ---------------------
+	# ⚠ **`_step_arena` fired on distance alone.** Before `BOSS_HUNT_AT` the boss random-walks ~250px
+	# segments at 150px/s from 1800px out, and RMS displacement over 150 seconds is larger than the field:
+	# drifting once inside `ARENA_RADIUS` closed the arena permanently at t = 20, caged the host in a 900px
+	# circle with no view of any kind to explain it, and then walked back out — because the boss was never
+	# clamped to the circle it had closed. Two guards, one fixture, and a control on each.
+	var wg := World.new()
+	wg.setup(35)
+	_silence_food(wg)
+	_clear_terrain(wg)
+	for k in range(wg.critter_count - 1, -1, -1):
+		if k != wg.boss_index:
+			wg._remove_critter(k)
+	t.eq(wg.critter_count, 1, "설정: 보스만 남았다")
+	var host_g: Vector2 = wg.swarm.pos[0]
+	wg.critter_pos[wg.boss_index] = host_g + Vector2(800.0, 0.0)
+	t.ok(800.0 < Rules.ARENA_RADIUS, "설정: 800px는 아레나 반지름 안이다 — 거리만 보면 닫힐 자리다")
+	wg.elapsed = 0.0
+	wg._step_arena()
+	t.ok(not wg.terrain.arena_closed,
+			"BOSS_HUNT_AT 전에는 아레나가 닫히지 않는다 — 떠돌던 보스가 스쳐도 t=20에 갇히지 않는다")
+	wg.elapsed = Rules.BOSS_HUNT_AT
+	wg._step_arena()
+	t.ok(wg.terrain.arena_closed, "대조: 사냥이 시작된 뒤 같은 자리의 같은 보스는 아레나를 닫는다")
+
+	# And the boss cannot walk back out of it. 852 = `ARENA_RADIUS` 900 − the boss's own 48, by hand.
+	var centre_g: Vector2 = wg.terrain.arena_centre
+	wg.swarm.pos[0] = centre_g
+	wg.critter_pos[wg.boss_index] = centre_g + Vector2(1500.0, 0.0)
+	# A crow the same 1500px out, as the control: creatures are NOT clamped, only the boss is.
+	var kc := wg._write_critter(Parts.Species.CROW, centre_g + Vector2(1500.0, 200.0), 10)
+	_crow_row(wg, kc, 10)
+	wg._step_critters(DT)
+	t.ok(wg.critter_pos[wg.boss_index].distance_to(centre_g) <= 852.0 + 0.01,
+			"닫힌 아레나 밖의 보스는 그 안으로 끌려 들어온다 (%.1f <= 852)"
+					% wg.critter_pos[wg.boss_index].distance_to(centre_g))
+	t.ok(wg.critter_pos[kc].distance_to(centre_g) > 1400.0,
+			"대조: 같은 자리의 까마귀는 끌려오지 않는다 — 갇히는 것은 보스뿐이다 (%.1f)"
+					% wg.critter_pos[kc].distance_to(centre_g))
+
 
 func _silence_food(w: World) -> void:
 	for i in w.food.alive.size():
 		w.food.alive[i] = 0
 	w.food.alive_count = 0
+
+
+## Forty rocks now sit wherever a fixture writes a coordinate, and `push_out` moves a hand-placed creature
+## off one by up to that rock's radius. A check that is not about the ground removes the ground first.
+func _clear_terrain(w: World) -> void:
+	w.terrain.rock_pos.clear()
+	w.terrain.rock_radius.clear()
+	w.terrain.water_pos.clear()
+	w.terrain.water_radius.clear()
+
+
+## One creature row, every column by hand, with the force PINNED — a crow spawns anywhere in 8–12 and a
+## check that reads damage off the roll passes or fails by seed.
+func _crow_row(w: World, k: int, force_value: int) -> void:
+	w.critter_species[k] = Parts.Species.CROW
+	w.critter_force[k] = force_value
+	w.critter_hp[k] = force_value * Rules.HP_PER_FORCE
+	w.critter_flees[k] = 0
+	w.critter_atk_cd[k] = 0.0
+	w.critter_counter[k] = 0.0
 
 
 func _mean_dist_to_host(sw: Swarm) -> float:

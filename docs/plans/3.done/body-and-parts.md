@@ -2,7 +2,7 @@
 
 **Status**: `3.done` — built 2026-08-15, **18 nets · 889 checks**, every mutation red. **Not accepted, and
 `verify-look` has not run.** Part of [the grassland index](../1.ready/grassland-whole-loop.md); it followed
-[hands and commands](hands-and-commands.md) and [the grassland field](../1.ready/grassland-field.md)
+[hands and commands](hands-and-commands.md) and [the grassland field](grassland-field.md)
 follows it.
 
 ✅ **Corrected for [the 2026-08-14 adversarial review](../../adversarial-review-2026-08-14-ko.md) and for
@@ -220,7 +220,7 @@ five multipliers they moved go with them.
 ⚠ **The multipliers live in more files than the card table.** `swarm.gd` reads `host_speed_mul`,
 `host_eat_mul`, `clone_eat_mul`, `sense_mul` and `dash_cd_mul` across **ten lines** — the deletion list in the
 first draft named `cards.gd` and `world.gd` and missed the file that actually uses them. Also
-`net_cards.gd:60-74`, which exists precisely to prove those multipliers reach behaviour.
+`net_cards.gd`'s multiplier block, which exists precisely to prove those multipliers reach behaviour.
 
 - **Three cards, as today.** Each names a part
 - **A card for a part already worn is a level-up of that part** and says so on the face: `말 다리 → Lv2`.
@@ -462,6 +462,9 @@ no effect. **The instrument needed inverting before the subject did**, one more 
    말 폐활량 runs clear past its border. Four Korean glyphs do not fit and nothing clips them.
 3. **The heart row has no cap and no wrap.** `hp_max` rises one per level forever; at banked 400 it drew
    about thirteen hearts marching toward the middle of the screen. It runs off the edge, not off a row.
+   ⇒ **Answered by [the grassland field](grassland-field.md), by deletion** (user decided,
+   2026-08-15): there is no row and no heart. The HUD prints `현재/최대` as one string, whose width does not
+   grow with the maximum. `_paint_heart`, `HP_LOST` and the row's whole layout go with it.
 4. **Breath reaches the screen nowhere.** Not in the HUD, not in the `Tab` panel. 갤럽 is gated on a
    resource the player cannot see, and **말 폐활량's entire effect is invisible** — a card whose face says
    nothing and whose effect shows nothing. The plan asked the panel for force and HP and got exactly that;

@@ -176,8 +176,11 @@ func _paint(c: CanvasItem) -> void:
 	# **The only place force and HP reach the screen.** A level's whole payout is `force[0] +=
 	# FORCE_PER_LEVEL`, `F` halves every row, and a worn part moves both — all of it was invisible, which is
 	# `CLAUDE.md`'s signature fake inverted (the simulation moves and the picture does not). Both force
-	# numbers are read off the swarm and both HP numbers off the sim: the host's own row, the sum the
-	# ecosystem is compared against (`World.is_hunter_of`), the current hearts and the ceiling parts raise.
+	# numbers are read off the swarm and both HP numbers off the sim: the host's own row, the swarm's total,
+	# the current HP and the ceiling parts raise. ⚠ **The sentence here used to say the total was what the
+	# ecosystem is compared against.** No such comparison exists any more — disposition comes from the
+	# species and damage is the attacker's force — so this panel is the only place the swarm's total force
+	# is read for anything a player sees.
 	#
 	# ⚠ **Force and HP, and nothing else.** There is no separate defence number — "one extra contact" and
 	# "+1 max HP" are the same sentence, and an earlier draft counted the mane's effect twice by printing

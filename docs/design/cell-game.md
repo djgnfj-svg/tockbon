@@ -6,8 +6,9 @@ on **real animals' body parts** — until it stands at the top of the food chain
 **Implemented**: partial — the swarm and its three commands, the rendezvous, carrying and absorption,
 automatic eating and the ecosystem run (`proto-round-trip`); the run shell and every key run (plans 1–2);
 and since plan 3, **the parts economy runs**: eleven slots, a part table, cards that give nothing but parts,
-irreversible wearing, a placeholder trait, and a host drawn from what it wears. **Not built**: the crow and
-the horse themselves, chimeras, bosses, biomes, meta unlocks. ⚠ **Species currencies and tiers are not
+irreversible wearing, a placeholder trait, and a host drawn from what it wears. **And since plan 4 the
+grassland field runs**: the crow, the horse, the boss, the corpse beat, rock and water, and the arena.
+**Not built**: chimeras, further biomes, meta unlocks. ⚠ **Species currencies and tiers are not
 unbuilt — they were CUT from the design** (2026-08-13). Listing them as unbuilt is how a later session goes
 and builds them.
 **Accepted**: **the core loop passed** — the user played the prototype and confirmed the fun. ⚠ **The parts
@@ -414,10 +415,14 @@ tell apart, which is a design question, not a bill.
 ## The August cut
 
 ⚠ **Narrowed again on 2026-08-14, and much further than "two tiers".** The August build is **one stage
-(grassland), two species (crow and horse), one boss**, and **three parts** — horse legs, horse mane, horse
-lungs. The crow gives no part; it is what you eat while the horse is still uncatchable. Everything else in
-the ladder is content that does not fit in the time.
-[The grassland plans](../plans/1.ready/grassland-whole-loop.md) are the buildable form of that cut.
+(grassland), two species (crow and horse), one boss**. Everything else in the ladder is content that does
+not fit in the time. [The grassland plans](../plans/1.ready/grassland-whole-loop.md) are the buildable form
+of that cut, and **all four of them are built**.
+
+⚠ **The cut said three parts — horse legs, mane and lungs — and "the crow gives no part". Both halves are
+reversed** ([why](../decisions/the-crow-gives-three-parts.md)). The table is **eight rows and four of them
+drop**: 말 다리, plus the crow's 날개 · 부리 · 발. 말 갈기 and 말 폐활량 are rows with `DROPS 0` — kept
+rather than deleted, so the horse's trait is deliberately unreachable this build.
 
 > ~~The August build ships two tiers and one boss.~~ Superseded by the line above.
 

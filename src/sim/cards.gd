@@ -14,11 +14,16 @@ extends RefCounted
 
 ## Up to three DISTINCT parts, drawn without replacement from what the run has actually eaten.
 ##
-## ⚠ **The pool starts EMPTY and stays empty until the first horse is eaten**, and that is the design:
-## a horse part cannot appear before a horse has. So this returns fewer than three when the pool is
-## smaller and an empty array when nothing is unlocked — it may never assume three are available. The old
-## implementation was `rng.randi() % pool.size()` against a fixed six-entry table; unchanged, the first
-## level of every run divides by zero.
+## ⚠ **The pool starts EMPTY and opens on the first CREATURE EATEN**, and that is the design: a crow part
+## cannot appear before a crow has. So this returns fewer than three when the pool is smaller and an empty
+## array when nothing is unlocked — it may never assume three are available. The old implementation was
+## `rng.randi() % pool.size()` against a fixed six-entry table; unchanged, the first level of every run
+## divides by zero.
+##
+## **The crow is what opens it, and that is load-bearing.** While every droppable row was a horse part, a
+## player who never cornered a horse — which no sustained speed can catch, and which arrives about once
+## every `Rules.CRITTER_INTERVAL` — saw zero cards for a whole run. The crow stands still and dies in the
+## first minute.
 ##
 ## ⚠ **An empty offer is a legal, long-lived state, not a "needs a roll" sentinel.** `World._grow()` used
 ## `offer.is_empty()` as exactly that, which becomes a roll every single frame once banking lands; it
@@ -30,6 +35,12 @@ static func roll(rng: RandomNumberGenerator, species_eaten: PackedInt32Array) ->
 	var pool: Array = []
 	for p in Parts.NAME.size():
 		if Parts.SPECIES[p] < 0:
+			continue
+		# **The other half of the same lock, and it is a column rather than a list here.** A row with
+		# `DROPS` 0 is a row and nothing else: 말 갈기 and 말 폐활량 exist in the table and are out of both
+		# pools (user), so eating a horse offers 말 다리 alone. Written as a second array of ids it would
+		# diverge from the table the day a row is added.
+		if int(Parts.DROPS[p]) == 0:
 			continue
 		if not species_eaten.has(Parts.SPECIES[p]):
 			continue

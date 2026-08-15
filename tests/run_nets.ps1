@@ -171,22 +171,39 @@ $stampBefore = Get-SrcStamp $root
 #  three times in one session: rounds came back red in nets nobody had touched, no [경합] warning, and a
 #  re-run 30 seconds later was fully green. Three mutation measurements were lost to it.
 #  **A single round cannot detect this from the inside.** What it can do is make two rounds COMPARABLE:
-#  every scanned file's path, size and mtime, hashed, printed every time. Two rounds carrying the same
+#  every scanned file's path and CONTENT hash, digested, printed every time. Two rounds carrying the same
 #  fingerprint measured the same tree; two that differ did not, and that difference has to be explained
 #  before either result is believed.
 #  ⚠ Deliberately NOT a `git status --porcelain` comparison: an uncommitted working tree is the normal
 #  state of every builder round, so reddening the wrapper on it would red every round in the repo.
+#  ⚠ **It hashes the CONTENT, and for two rounds it did not.** The digest used to be path|length|mtime, so
+#  every apply/revert pair moved it even when the bytes came back identical — three separate repairs in one
+#  night reported that the protocol this print exists to serve ("a mutation whose PRE and POST fingerprints
+#  differ only by that mutation") could not be executed literally, and each worked around it by doing the
+#  edit and the run in one command. A metadata digest answers "was anything touched"; the question is
+#  "is this the same tree", and only the bytes answer that.
+#  ⚠ **It covers what the round READS, and `docs/` joined that list.** `net_citations` scans `docs/` and
+#  `CLAUDE.md` for the line-number citation form, so a doc edited between two rounds changes what the round
+#  measured while a `src`+`tests`-only digest prints identically — the exact "two rounds carrying the same
+#  fingerprint measured the same tree" claim, quietly false for one net. Measured: a `.gd:NNN` citation put
+#  into a doc reddens the round and does not move a digest that stops at `tests/`.
 function Get-SrcFingerprint([string]$r) {
     $sb = New-Object System.Text.StringBuilder
-    foreach ($d in @("src", "tests")) {
+    $md5 = [System.Security.Cryptography.MD5]::Create()
+    foreach ($d in @("src", "tests", "docs")) {
         $p = Join-Path $r $d
         if (-not (Test-Path $p)) { continue }
-        $files = Get-ChildItem -Path $p -Recurse -File -Include "*.gd", "*.tscn", "*.tres" | Sort-Object FullName
+        $files = Get-ChildItem -Path $p -Recurse -File -Include "*.gd", "*.tscn", "*.tres", "*.md" | Sort-Object FullName
         foreach ($f in $files) {
-            [void]$sb.Append($f.FullName).Append('|').Append($f.Length).Append('|').Append($f.LastWriteTimeUtc.Ticks).Append("`n")
+            $h = [System.BitConverter]::ToString($md5.ComputeHash([System.IO.File]::ReadAllBytes($f.FullName))) -replace '-', ''
+            [void]$sb.Append($f.FullName).Append('|').Append($h).Append("`n")
         }
     }
-    $md5 = [System.Security.Cryptography.MD5]::Create()
+    $claude = Join-Path $r "CLAUDE.md"
+    if (Test-Path $claude) {
+        $h = [System.BitConverter]::ToString($md5.ComputeHash([System.IO.File]::ReadAllBytes($claude))) -replace '-', ''
+        [void]$sb.Append($claude).Append('|').Append($h).Append("`n")
+    }
     $bytes = $md5.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($sb.ToString()))
     return ([System.BitConverter]::ToString($bytes) -replace '-', '').Substring(0, 12)
 }
@@ -216,7 +233,7 @@ if ($Serial) {
         $exitCode = 1
     }
     $sw.Stop()
-    Write-Host ("[지문] src·tests {0} — 두 라운드의 지문이 다르면 같은 나무를 잰 것이 아니다" -f $fingerprint)
+    Write-Host ("[지문] src·tests·docs {0} — 두 라운드의 지문이 다르면 같은 나무를 잰 것이 아니다" -f $fingerprint)
     if ($exitCode -eq 0) {
         Write-Host ("[래퍼] 통과. stderr 깨끗함. ({0:N1}s, 직렬)" -f $sw.Elapsed.TotalSeconds) -ForegroundColor Green
     } else {
@@ -224,6 +241,20 @@ if ($Serial) {
     }
     exit $exitCode
 }
+
+# **A hung net is indistinguishable from a slow one, and that disarms mutation testing on the whole net.**
+#  Measured: zeroing the `corpse_progress` increment in `World::_step_corpses` made `net_eating` spin
+#  forever instead of going red. It was killed by hand at 148.7 seconds with 0 checks reported and the
+#  wrapper never printed a verdict at all — not red, not green, nothing. Every check downstream of that
+#  point in that net is unverifiable by mutation while this is true, which is the whole point of having them.
+#  The loops themselves were bounded afterwards, so nothing hangs *today*; this is the backstop that turns
+#  the NEXT runaway into a red instead of a blocked round, and it is the half that was left open.
+#
+#  **The value is named rather than inline** so raising it is a decision someone makes on purpose. 120s is
+#  ~57x the whole round (2.1s) and ~66x the slowest single net (1.8s), so it can only fire on something
+#  that is not working — a net that legitimately grows past two minutes is a `harness-manager` problem
+#  long before it is a timeout problem.
+$NetTimeoutSec = 120.0
 
 # -- Parallel. The number of processes alive at once is limited.
 #  One grid is 4.12M cells x four arrays, so each process eats memory. It is bounded by the core count.
@@ -281,6 +312,17 @@ while ($queue.Count -gt 0 -or $running.Count -gt 0) {
         if ($r.Proc.HasExited) {
             $r | Add-Member -NotePropertyName Sec -NotePropertyValue ($sw.Elapsed.TotalSeconds - $r.Started) -Force
             $jobs += $r
+        } elseif (($sw.Elapsed.TotalSeconds - $r.Started) -gt $NetTimeoutSec) {
+            # **Killed, and carried as its own flag.** The exit code of a killed process is not a reliable
+            #  red on its own, and the net's stdout is whatever it managed to flush before the hang — which
+            #  can be a perfectly clean `[net] N passed` from a net that then spun in a later loop. So the
+            #  verdict does not come from the exit code or the output; it comes from the fact that we killed it.
+            try { $r.Proc.Kill() } catch {}
+            try { $r.Proc.WaitForExit(5000) | Out-Null } catch {}
+            $r | Add-Member -NotePropertyName Sec -NotePropertyValue ($sw.Elapsed.TotalSeconds - $r.Started) -Force
+            $r | Add-Member -NotePropertyName TimedOut -NotePropertyValue $true -Force
+            Write-Host ("[시간초과] net_{0} 가 {1:N0}초를 넘겨서 죽였다. 멈춘 것은 느린 것이 아니라 실패다." -f $r.Net, $NetTimeoutSec) -ForegroundColor Red
+            $jobs += $r
         } else { $still += $r }
     }
     $running = $still
@@ -317,7 +359,16 @@ foreach ($j in ($jobs | Sort-Object Net)) {
     foreach ($l in ($stderr -split "`r?`n")) { if ($l.Trim() -match '^x\s') { $fail++ } }
 
     $noise = Get-Noise $stdout $stderr
-    $bad = ($j.Proc.ExitCode -ne 0) -or ($noise.Count -gt 0)
+    # `$j.TimedOut` is read FIRST and on its own: a killed process's exit code is not dependable, and its
+    #  stdout can carry a clean `[net] N passed` flushed before whatever loop it later hung in.
+    $timedOut = [bool]$j.PSObject.Properties['TimedOut'] -and $j.TimedOut
+    $bad = $timedOut -or ($j.Proc.ExitCode -ne 0) -or ($noise.Count -gt 0)
+    if ($timedOut) {
+        # A hung net's own count is meaningless — it reports whatever it reached before it stopped. Counting
+        #  it into the round total would let a hang *raise* the number and read as progress.
+        $pass = 0
+        $fail = 1
+    }
 
     $totalPass += $pass
     $totalFail += $fail
@@ -332,6 +383,11 @@ foreach ($j in ($jobs | Sort-Object Net)) {
         if ($l.Trim() -match '^x\s') { $failLines += $l.Trim() }
     }
     $failLines = @($failLines | Select-Object -Unique)
+    if ($timedOut) {
+        # Put the reason at the TOP. A hung net that flushed some output first would otherwise print its
+        #  partial failures and nothing saying the round never let it finish.
+        $failLines = @(("x net_{0}: [시간초과] {1:N0}초 안에 안 끝났다 — 죽여서 빨강으로 만들었다. 멈춘 그물은 느린 그물이 아니다" -f $j.Net, $NetTimeoutSec)) + $failLines
+    }
 
     if ($bad) {
         $exitCode = 1
@@ -372,7 +428,7 @@ foreach ($l in $lines) {
 
 Write-Host ""
 Write-Host ("[그물] 통과 {0}개 · 실패 {1}개 · {2}개 그물 · {3:N1}s" -f $totalPass, $totalFail, $nets.Count, $sw.Elapsed.TotalSeconds)
-Write-Host ("[지문] src·tests {0} — 두 라운드의 지문이 다르면 같은 나무를 잰 것이 아니다" -f $fingerprint)
+Write-Host ("[지문] src·tests·docs {0} — 두 라운드의 지문이 다르면 같은 나무를 잰 것이 아니다" -f $fingerprint)
 
 # If the source changed while it was running, **do not trust the result.** The why is in the comment on the function above.
 $stampAfter = Get-SrcStamp $root

@@ -39,14 +39,137 @@ const CLONE_LOAD_FULL := 8.0
 const FOOD_COLOR := Color(0.45, 0.65, 0.85)
 const FOOD_RADIUS := 3.0
 
-## Red while it can eat you, cold blue once the swarm has outgrown it and it is running. **The flip has to
-## be visible from across the screen** — it is the moment the game is about.
-const CRITTER_COLOR := Color(0.78, 0.28, 0.3)
-const CRITTER_PREY_COLOR := Color(0.42, 0.62, 0.86)
+# -- the three species -------------------------------------------------
+## Flat placeholders, one per `Parts.Species`. ⚠ **Colour is the user's call, not the builder's** — art in
+## this repo is decided by generating candidates and pointing at one, never by discussion. These are picked
+## only to clear the legibility floor, which is the one thing a placeholder still has to do.
+##
+## Measured against `BG` (relative luminance 0.0056, WCAG): every colour in this block and the ground block
+## below was computed against it. **The floor is `CROW_COLOR` itself at 3.99:1** — the red carried over
+## unchanged from the one critter colour this build had before there were species, which is the dimmest
+## thing already accepted on screen. ⚠ **This paragraph said "none sits under 4.0:1" for a plan and the crow
+## is 0.005 under it**; the claim went unmeasured until `net_numbers` computed every ratio in the file, and
+## the floor written there is 3.9 so the check and this sentence agree. They must also separate from the
+## host's and the clones' yellow (mine vs theirs) and from food's blue.
+const CROW_COLOR := Color(0.78, 0.28, 0.30)
+const HORSE_COLOR := Color(0.45, 0.78, 0.42)
+const BOSS_COLOR := Color(0.85, 0.35, 0.85)
+## The four species added after the first three. Ratios against `BG` computed the same way, and each one
+## clears the 3.9 floor the block above states: 다람쥐 7.1:1 · 코끼리 7.9:1 · 치타 9.8:1 · 사자 6.5:1.
+##
+## ⚠ **다람쥐 and 사자 are the pair at risk here, not any of them against the background** — both are warm
+## oranges, and the thing that separates them on screen is that the squirrel is the smallest body in the
+## game (7px) and the lion is the second largest (26px). They are deliberately far apart in lightness too.
+const SQUIRREL_COLOR := Color(0.80, 0.58, 0.35)
+const ELEPHANT_COLOR := Color(0.62, 0.66, 0.72)
+const CHEETAH_COLOR := Color(0.35, 0.80, 0.78)
+const LION_COLOR := Color(0.92, 0.48, 0.12)
+
+# -- the ground: rock, water, and what a kill leaves -------------------
+## **A wall you walk into, so it must read before you touch it** — 4.22:1. Warm grey rather than any
+## species' hue. Forty rocks of radius 40–90 on a dark floor at 1.4:1 is the "dark placeholder on a dark
+## floor" defect verify-look already caught once on this build.
+const ROCK_COLOR := Color(0.50, 0.46, 0.43)
+## 4.17:1. Separated from food's blue by being darker and very much larger.
+const WATER_COLOR := Color(0.28, 0.48, 0.66)
+## 4.51:1 (re-measured here rather than inherited). **A corpse is the ground, not a creature** —
+## desaturated, so it must not read as something that can still hurt you, while staying findable.
+const CORPSE_COLOR := Color(0.55, 0.47, 0.42)
+## The host's own yellow: the arc is **the swarm eating**, not the corpse doing something.
+const CORPSE_PROGRESS_COLOR := Color(0.96, 0.88, 0.52, 0.9)
+const CORPSE_PROGRESS_WIDTH := 3.0
+## × the corpse's own radius, the same shape `SPLIT_CHARGE_RING` has. Left unstated, the arc's radius
+## becomes a literal inside `field_view.gd` and this file stops being the one place a size lives.
+const CORPSE_PROGRESS_RING := 1.5
+
+# -- the force and hp numbers on the field ------------------------------
+## Bodies within this of a cluster's centroid draw one summed number. **A readout rule, not a rule about
+## what happens** — nothing in `src/sim/` may read it.
+const FORCE_CLUSTER_RADIUS := 48.0
+const FORCE_LABEL_SIZE := 14
+## Below the body, so the body stays the thing being read.
+const FORCE_LABEL_OFFSET := 18.0
+## 16.0:1, and deliberately **not any body's colour** — a number that matches a body reads as part of it.
+const FORCE_LABEL_COLOR := Color(0.93, 0.93, 0.88)
+
+# -- the HUD ------------------------------------------------------------
+## **These nine colours and thirteen numbers lived in `hud.gd` and that broke the one-file rule.** Every
+## other presentation constant this build added was routed here; `HP_COLOR` was the one exception, and
+## `net_body`'s hp check then asserted against `Hud.HP_COLOR` — reading the constant out of the very file it
+## was supposed to be guarding. Moving them is a pure relocation: `net_hud` hand-writes every one of these
+## numbers independently, so a mistake in the move is red rather than silent.
+const HUD_TEXT := Color(0.95, 0.92, 0.86)
+const HUD_DIM_TEXT := Color(0.66, 0.62, 0.58)
+const HUD_BAR_BG := Color(0.18, 0.16, 0.15, 0.85)
+const HUD_BAR_FILL := Color(0.95, 0.85, 0.45)
+const HUD_CARRY_COLOR := Color(0.98, 0.92, 0.35)
+## The HP readout's colour. **There is no second HP colour** — the row of empty circles that needed one is
+## gone (user: 하트 개념 말고 숫자로 바로 표시), and a number has nothing to draw dim.
+const HUD_HP_COLOR := Color(0.85, 0.35, 0.32)
+
+## The level bar: its top-left corner, its height, and the pair of side insets subtracted from the
+## `Control`'s own width. Laid out from `size`, so a zero-sized Control piles it into the corner — see
+## `hud.gd::_ready`.
+const HUD_BAR_AT := Vector2(24.0, 22.0)
+const HUD_BAR_HEIGHT := 14.0
+const HUD_BAR_INSETS := 48.0
+## The four readouts. The last two are measured UP from the bottom edge, which is why their `y` is
+## subtracted rather than added — a positive number here that reads as a drop would put both on the top row.
+const HUD_BANK_AT := Vector2(24.0, 84.0)
+const HUD_CARRY_AT := Vector2(24.0, 112.0)
+const HUD_HP_AT_UP := Vector2(34.0, 28.0)
+const HUD_LEGEND_AT_UP := Vector2(24.0, 68.0)
+const FONT_HUD_BANK := 44
+const FONT_HUD_ROW := 20
+const FONT_HUD_HP := 26
+## How long the one instruction in the game stays on screen.
+const HUD_LEGEND_TIME := 12.0
+## How fast the level bar chases the real value: the fraction of the gap still left after one second, so
+## **lower is faster** and 0.0 would snap. It is the whole of "a dozen clones swallowed in a row reads as
+## one surge rather than twelve invisible increments" — a presentation number if there ever was one, and
+## it sat inline in `hud.gd::_process` while that file's header claimed it held no constant of its own.
+const HUD_BAR_CHASE := 0.001
+
+# -- the minimap --------------------------------------------------------
+## 16:9 like the field, so the map never distorts. Bottom-right, laid out from the `Control`'s own `size`.
+const MINIMAP_SIZE := Vector2(240.0, 135.0)
+const MINIMAP_MARGIN := 16.0
+const MINIMAP_BG := Color(0.0, 0.0, 0.0, 0.45)
+const MINIMAP_FRAME := Color(0.75, 0.72, 0.62, 0.7)
+const MINIMAP_CAMERA_COLOR := Color(0.96, 0.88, 0.52, 0.5)
+const MINIMAP_HOST_R := 3.0
+const MINIMAP_CLONE_R := 1.5
+const MINIMAP_CREATURE_R := 2.0
+## Other creatures appear only within this of the host; the boss always. **The map is orientation, not
+## intelligence.** It decides what is DRAWN and nothing else, which is why it is here and not in `rules.gd`.
+const MINIMAP_SHOW_DIST := 1600.0
+## Water on the map, and it is the one thing there that is NOT gated by `MINIMAP_SHOW_DIST`. A pond is
+## terrain — it does not move, it is why you took a route, and hiding it until you are 1600px away makes
+## the map answer "what is near me" when what it is for is "where am I going". Twelve ponds of radius
+## 90–180 land at 5.6–11.3px on a 240px map, so they read without a scale of their own.
+##
+## Dimmer than the field's `WATER_COLOR` and drawn under every mark: the map's own background is 45% black,
+## so a pond at full strength competes with the host dot for the eye.
+const MINIMAP_WATER_COLOR := Color(0.28, 0.48, 0.66, 0.75)
 
 ## The body is a square with the corners knocked off, not a circle. `CORNER` is how much of the half-width
 ## each cut takes.
 const CORNER := 0.34
+
+## Under every body, and it is a colour rather than tessellation — `field_view.gd` keeps `RING_SEGMENTS`
+## and its siblings because those are how finely a shape is cut, not what it looks like.
+const CELL_SHADOW := Color(0.0, 0.0, 0.0, 0.22)
+
+# -- the level-up cards -------------------------------------------------
+## Six colours that lived in `card_panel.gd`. Its own pixel literals are still there and are named in the
+## scan's note — moving those is a bigger job than the one-file rule's colour half, which is what
+## `net_draw_leaf` now enforces.
+const CARD_DIM := Color(0.04, 0.03, 0.03, 0.72)
+const CARD_BG := Color(0.16, 0.14, 0.13)
+const CARD_EDGE := Color(0.95, 0.85, 0.45)
+const CARD_HOVER := Color(0.24, 0.22, 0.18)
+const CARD_TITLE_COLOR := Color(0.98, 0.93, 0.72)
+const CARD_KEY_COLOR := Color(0.62, 0.58, 0.52)
 
 # -- the body's parts, drawn on the host -------------------------------
 ## **A part is worn in the host's OWN colour.** That is what escaped the "texture comes from the preset"

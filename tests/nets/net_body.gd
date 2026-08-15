@@ -7,14 +7,12 @@ extends RefCounted
 ## a check that only asserts the slot changed stays green while every overwritten part leaves ghost force
 ## behind for `F` to multiply.
 ##
-## ⚠ **The August table has no two parts in one slot, and no multi-slot part at all.** `말 다리` is
-## hindlimbs, `말 갈기` is torso, `말 폐활량` is lung — three parts, three squares. So plan 3's checks 2, 3,
-## 4 and 5's replacement half have NOTHING in the shipped table to drive them: nothing can ever evict
-## anything, and the plan's own acceptance question ("did you ever refuse a good part because of what it
-## would evict") cannot occur in play either. Rather than skip four checks, `RigBody` below supplies the
-## slot layout the net needs and everything else runs unchanged — the eviction code is what is measured,
-## and plan 4's table will reach it for real. **This is reported, not hidden: one table row
-## (`말 다리` → hindlimbs AND lung) would make all four drivable by the real thing.**
+## ⚠ **Two parts now share one square, and no part takes two.** `말 다리` and `까마귀 발` are both
+## hindlimbs, so eviction — the plan's own acceptance question, "did you ever refuse a good part because of
+## what it would push out" — is reachable in play at last, and it needed no new sim code. **What is still
+## unreachable is the MULTI-slot part**: that fork was closed deliberately (user), so checks 3 and the
+## guards it exercises have nothing in the shipped table to drive them. `RigBody` below supplies that
+## layout and everything else runs unchanged. It is reported, not hidden.
 ##
 ## Nothing here reads a `COOLDOWN` to check a cooldown. Check 6 times three bodies at three levels against
 ## the same frame counts — 0.5 / 0.45 / 0.405 — which is the only shape that tells compounding apart from
@@ -22,9 +20,11 @@ extends RefCounted
 
 const DT := 1.0 / 60.0
 
-## A body at gallop travels this far in one frame: `HOST_SPEED 200 × SELF_MUL 1.8 / 60`. A literal, because
-## read through the two constants it passes at every value including 1.0.
-const GALLOP_STEP := 6.0
+## A body at gallop travels this far in one frame: `HOST_SPEED 200 × SELF_MUL[HORSE_LEGS] 1.1 / 60`. A
+## literal, because read through the two constants it passes at every value including 1.0. It was 6.0 while
+## the multiplier was 1.8, which put a galloping host above the horse and deleted the herding the stage is
+## built on — the gap to `WALK_STEP` is smaller now and every tolerance below is 0.01, well inside it.
+const GALLOP_STEP := 3.6666667
 ## And at a plain walk: `HOST_SPEED 200 / 60`.
 const WALK_STEP := 3.3333333
 
@@ -55,15 +55,25 @@ class RigBody extends Body:
 		return super.part_level(part)
 
 
-## The hearts are the one readout in `hud.gd` a text spy cannot see — `draw_circle` is native and Godot
-## refuses to override it, so the row goes through `_paint_heart` and this captures it. Check 12's HUD half
-## lives here rather than in `net_hud` because what it measures is `Body.hp_max()`, not the HUD's numbers.
-class HeartSpy extends Hud:
-	var hearts: Array = []
+## The HP readout, captured off the one leaf it goes through. ⚠ **This replaced a `HeartSpy` over a
+## `_paint_heart` hook that no longer exists**: the row of circles was deleted (user: 하트 개념 말고 숫자로
+## 바로 표시), so there is nothing native left to override and `_paint_text` is the whole readout. Check
+## 12's HUD half lives here rather than in `net_hud` because what it measures is `Body.hp_max()`, not the
+## HUD's own numbers. The position and the colour are captured too — a string is not a readout if it lands
+## outside the Control, and `Look.HUD_HP_COLOR` would otherwise be a constant nothing reads.
+class HpSpy extends Hud:
+	var lines: Array = []
 
-	func _paint_heart(c: CanvasItem, p: Vector2, r: float, filled: bool) -> void:
-		hearts.append({"p": p, "r": r, "filled": filled})
-		super._paint_heart(c, p, r, filled)
+	func _paint_text(c: CanvasItem, p: Vector2, text: String, font_size: int, col: Color) -> void:
+		lines.append({"p": p, "text": text, "col": col})
+		super._paint_text(c, p, text, font_size, col)
+
+
+	func _find(needle: String) -> Dictionary:
+		for e: Dictionary in lines:
+			if str(e["text"]) == needle:
+				return e
+		return {}
 
 
 func run(t) -> void:
@@ -112,8 +122,8 @@ func _c_setup(t) -> void:
 	t.ok(not b.fire(-1, Vector2.RIGHT) and not b.fire(9, Vector2.RIGHT), "없는 키는 거부된다")
 	t.ok(not b.can_bind(-1, 0), "빈 칸(-1)은 어느 키에도 묶이지 않는다")
 
-	t.eq(b.hp_max(0), 3, "아무것도 없는 몸의 최대 체력은 3이다 (리터럴)")
-	t.eq(b.hp_max(3), 6, "레벨 셋이면 6이다 — 레벨당 1")
+	t.eq(b.hp_max(0), 30, "아무것도 없는 몸의 최대 체력은 30이다 (리터럴)")
+	t.eq(b.hp_max(3), 39, "레벨 셋이면 39다 — 레벨당 3")
 	t.eq(b.breath_max(), 2.0, "허파가 없으면 숨의 최대는 2.0이다")
 
 
@@ -142,9 +152,10 @@ func _c_world_wiring(t) -> void:
 	var from: Vector2 = w.swarm.pos[0]
 	w.step(DT)
 	var travel := w.swarm.pos[0].distance_to(from)
-	# 6.0, not 3.33: `Body.step()` writes `swarm.active_speed_mul` and `_move_host()` reads it the SAME
-	# frame. Called after the swarm instead, the very first frame of every gallop runs at a walk — and the
-	# final position after a long hold is identical either way, so only this one frame can see it.
+	# `GALLOP_STEP`, not `WALK_STEP`: `Body.step()` writes `swarm.active_speed_mul` and `_move_host()` reads
+	# it the SAME frame. Called after the swarm instead, the very first frame of every gallop runs at a walk
+	# — and the final position after a long hold is identical either way, so only this one frame can see it.
+	# The two differ by 0.333px against a 0.01 tolerance.
 	t.ok(absf(travel - GALLOP_STEP) < 0.01,
 			"첫 프레임부터 갤럽 속도다 — Body.step이 Swarm.step보다 먼저 돈다 (%.3f)" % travel)
 
@@ -167,7 +178,7 @@ func _c1_wear_into_empty(t) -> void:
 	b.wear(Parts.HORSE_MANE)
 	t.eq(b.slot_part[Parts.Slot.TORSO], Parts.HORSE_MANE, "몸통 칸이 말 갈기를 든다")
 	t.eq(sw.force[0], 20, "갈기로 다시 5가 올라 20이 된다")
-	t.eq(b.hp_max(0), 4, "갈기가 최대 체력을 1 올린다 (3 → 4)")
+	t.eq(b.hp_max(0), 35, "갈기가 최대 체력을 5 올린다 (30 → 35)")
 
 	b.wear(Parts.HORSE_LUNG)
 	t.eq(b.slot_part[Parts.Slot.LUNG], Parts.HORSE_LUNG, "허파 칸이 말 폐활량을 든다")
@@ -188,8 +199,10 @@ func _c1_wear_into_empty(t) -> void:
 ## *Mutation: drop the `swarm.force[0] -= part_force(victim)` half — the ghost-force bug, which `F` then
 ## multiplies.* A check that only asserts the slot changed stays green through all of it.
 ##
-## ⚠ Synthetic layout — see the file header. `말 갈기` is put in the hindlimb square so that something can
-## actually be evicted; nothing in the August table ever can.
+## ⚠ Synthetic layout — see the file header. `말 갈기` is put in the hindlimb square so that the eviction
+## can be driven at a known force (5 in, 5 out) rather than at 까마귀 발's, which shares that square for
+## real. The real pair is what makes the mechanic reachable in play; this rig is what keeps the arithmetic
+## a literal.
 func _c2_wear_over_occupied(t) -> void:
 	var rig := _rig(2)
 	var sw: Swarm = rig[0]
@@ -262,7 +275,7 @@ func _c4_digest_clears_the_binding(t) -> void:
 	t.ok(b.bind(Parts.HORSE_LEGS, Body.KEY_MOVEMENT), "설정: 말 다리를 스페이스에 묶었다")
 	b.held[Body.KEY_MOVEMENT] = 1
 	b.step(DT)
-	t.ok(absf(sw.active_speed_mul - 1.8) < 0.001,
+	t.ok(absf(sw.active_speed_mul - 1.1) < 0.001,
 			"설정: 그 키가 실제로 갤럽을 돌린다 (%.3f)" % sw.active_speed_mul)
 
 	b.wear(Parts.HORSE_MANE)   ## digests 말 다리
@@ -386,7 +399,7 @@ func _c7_space_gate(t) -> void:
 	# But the key is not dead — it holds a different KIND of movement now.
 	b3.held[Body.KEY_MOVEMENT] = 1
 	b3.step(DT)
-	t.ok(absf(sw3.active_speed_mul - 1.8) < 0.001,
+	t.ok(absf(sw3.active_speed_mul - 1.1) < 0.001,
 			"대신 그 키는 누르고 있는 갤럽이 된다 (%.3f)" % sw3.active_speed_mul)
 
 
@@ -421,7 +434,7 @@ func _c11_trait(t) -> void:
 	# **Not just the flag: the gallop has to still be running at the end of those three seconds.**
 	var travelled := sw_t.pos[0].distance_to(from)
 	t.ok(absf(travelled - 180.0 * GALLOP_STEP) < 1.0,
-			"그리고 3초 내내 갤럽 속도로 달렸다 (%.1f / 1080)" % travelled)
+			"그리고 3초 내내 갤럽 속도로 달렸다 (%.1f / 660)" % travelled)
 
 	# The control: the same hold without the trait drains on the clock, so "숨이 안 닳는다" cannot be the
 	# state of a body that was never galloping in the first place.
@@ -441,44 +454,58 @@ func _c11_trait(t) -> void:
 			"대조: 특성이 없으면 1초에 숨 1.0이 닳는다 (2.0 → %.3f)" % b_c.breath)
 
 
-# -- 12: HP grows with levels and parts, and the HUD draws the ceiling ----------------------------------
-## *Mutation: `hp_max` returns `HOST_HP + level` and ignores `Parts.HP`; or `hud.gd` keeps
-## `maxi(world.host_hp, Rules.HOST_HP)`.* The second is the quiet one — it reads the CURRENT value as the
-## ceiling, so a damaged host loses a heart off the ROW and what is left reads as full health.
+# -- 12: HP grows with levels and parts, and the HUD prints the ceiling ---------------------------------
+## *Mutation: `hp_max` returns `HOST_HP + level` and ignores `Parts.HP`; or `hud.gd` prints `host_hp`
+## alone; or it prints `Rules.HOST_HP` in place of `hp_max(level)`.* The last is the quiet one — the
+## ceiling then never moves and a levelled, maned host reads as being over full health.
+##
+## ⚠ **No check here may assert the readout's WIDTH or its PITCH.** The row's length was the heart row's
+## claim and it is exactly what the user deleted; re-deriving it from the string puts the same defect back
+## wearing a different hook.
 func _c12_hp(t) -> void:
 	var w := World.new()
 	w.setup(12)
 	_silence(w)
-	t.eq(w.body.hp_max(3), 6, "설정: 갈기 없이 레벨 셋이면 6이다")
+	t.eq(w.body.hp_max(3), 39, "설정: 갈기 없이 레벨 셋이면 39다")
 	w.body.wear(Parts.HORSE_MANE)
-	t.eq(w.body.hp_max(3), 7, "레벨 셋에 말 갈기 하나면 최대 체력은 7이다 (리터럴)")
+	t.eq(w.body.hp_max(3), 44, "레벨 셋에 말 갈기 하나면 최대 체력은 44다 (리터럴)")
 
 	w.level = 3
-	w.host_hp = 5
+	w.host_hp = 25
 
-	var spy := HeartSpy.new()
+	var spy := HpSpy.new()
 	spy.world = w
 	t.root.add_child(spy)
 	await t.pump_frames(2)
-	spy.hearts.clear()
+	spy.lines.clear()
 	await t.pump_frames(1)
 
-	t.eq(spy.hearts.size(), 7, "HUD가 하트를 일곱 개 그린다 — 줄의 길이가 최대 체력이다")
-	var lit := 0
-	for e: Dictionary in spy.hearts:
-		if e["filled"]:
-			lit += 1
-	t.eq(lit, 5, "그중 다섯이 차 있고 둘은 비어 있다 — 줄이 짧아지는 것이 아니라 빈 칸으로 남는다")
+	# **One string, both numbers.** "25" alone says nothing without the 44 beside it.
+	var hp_line: Dictionary = spy._find("25/44")
+	t.ok(not hp_line.is_empty(), "HUD가 체력을 25/44로 적는다 — 현재와 최대가 한 줄이다 %s" % str(spy.lines))
 
-	# Positions per index, as literals: a row drawn at one point seven times is seven hearts too.
-	var placed := 0
-	for i in 7:
-		var want := Vector2(34.0 + float(i) * 26.0, 720.0 - 34.0)
-		for e: Dictionary in spy.hearts:
-			if e["p"] == want and absf(float(e["r"]) - 9.0) < 0.001:
-				placed += 1
-				break
-	t.eq(placed, 7, "일곱 개가 34px에서 26px 간격으로 한 줄에 놓인다 %s" % str(spy.hearts))
+	# **`visible` is not "on screen", and neither is being wired.** `set_anchors_preset` leaves offsets
+	# alone, so a Control on a bare layer keeps `size == (0, 0)` and lays every readout out from zero. The
+	# bound comes from the viewport, never from the Control being checked.
+	var screen: Vector2 = spy.get_viewport_rect().size
+	t.eq(spy.size, screen, "HUD가 화면 전체 크기를 갖는다 — 0×0에서 좌상단에 쌓이지 않는다 (%s)" % str(spy.size))
+	if not hp_line.is_empty():
+		var p: Vector2 = hp_line["p"]
+		t.ok(p.x >= 0.0 and p.x < screen.x, "그 줄이 화면의 가로 안에 떨어진다 (%.1f)" % p.x)
+		t.ok(p.y >= 0.0 and p.y < screen.y, "세로도 화면 안이다 (%.1f)" % p.y)
+		# *Mutation: draw it in `TEXT` like every other line.* Without this the one HP constant that
+		# survived the heart row's deletion is read by nothing.
+		t.eq(hp_line["col"], Look.HUD_HP_COLOR, "그리고 체력만의 색으로 적힌다 — 다른 줄과 같은 흰색이 아니다")
+
+	# ⚠ **The ceiling half needs its own case or the operand swap survives.** A check that only ever sees a
+	# damaged host cannot tell `%d/%d` from its reverse, and that is the same shape as the
+	# `maxi(world.host_hp, Rules.HOST_HP)` bug this function was written for.
+	w.host_hp = 44
+	spy.lines.clear()
+	spy.queue_redraw()
+	await t.pump_frames(1)
+	t.ok(not spy._find("44/44").is_empty(),
+			"가득 찬 몸은 44/44로 적힌다 — 두 숫자의 자리가 바뀌어 있지 않다 %s" % str(spy.lines))
 
 	t.root.remove_child(spy)
 	spy.queue_free()
@@ -580,8 +607,10 @@ func _c15b_lungs_raise_the_ceiling(t) -> void:
 ## `Parts.SLOTS[p][0]` directly instead of going through the overridable `slots_of()` that `wear()` uses —
 ## so `RigBody`, the only multi-slot layout that exists anywhere, cannot reach any of the three. The rule
 ## is stated in a comment above each of them and was measured by nothing: dropping the guard from
-## `hp_max()` left 811 checks green. No row in the August table takes two squares, so nothing is wrong
-## today; it goes wrong silently, and in the player's favour, the first time plan 4 lands one.
+## `hp_max()` left 811 checks green. No row in the August table takes two squares — the multi-slot fork was
+## closed deliberately (user), so this stays synthetic coverage and is NOT answered. It goes wrong
+## silently, and in the player's favour, the first time any plan lands one; `net_parts`'s
+## `이번 빌드에 두 칸짜리 부품은 없다` is what reddens on the day that happens.
 func _c_multi_slot_counted_once(t) -> void:
 	var b := Body.new()
 	b.setup()
@@ -589,8 +618,8 @@ func _c_multi_slot_counted_once(t) -> void:
 	b.slot_level[Parts.Slot.TORSO] = 1
 	b.slot_part[Parts.Slot.TAIL] = Parts.HORSE_MANE      ## a second square the same part holds
 	b.slot_level[Parts.Slot.TAIL] = 1
-	t.eq(b.hp_max(0), 4, "두 칸에 걸친 부품의 체력은 한 번만 센다 — 5가 아니라 4다 (리터럴)")
-	t.eq(b.hp_max(3), 7, "레벨이 붙어도 마찬가지다 — 8이 아니라 7이다 (리터럴)")
+	t.eq(b.hp_max(0), 35, "두 칸에 걸친 부품의 체력은 한 번만 센다 — 40이 아니라 35다 (리터럴)")
+	t.eq(b.hp_max(3), 44, "레벨이 붙어도 마찬가지다 — 49가 아니라 44다 (리터럴)")
 
 	var b2 := Body.new()
 	b2.setup()

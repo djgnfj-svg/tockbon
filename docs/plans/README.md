@@ -19,11 +19,14 @@ all three folders. **Links leak every single time** — `net_citations` catches 
 ---
 ## What happens next (decided by the user, 2026-08-15)
 
-**Plan 4, then regroup.** Nothing is re-planned, re-designed or re-scoped before the grassland field is
-built — the loop gets closed first and the whole thing is reviewed after it, once there is a run to play.
+**Plan 4, then regroup.** That was the call, and **plan 4 is now built and green** — so what is left of it is
+the regroup: nothing was re-planned, re-designed or re-scoped before the grassland field landed, and the
+whole thing is reviewed now that there is a run to play.
 
-⚠ **Read `adversarial-review-2026-08-14-round3-ko` before starting plan 4.** Most of its 101 findings are
-aimed at that plan, and it was already missed once: plan 3 was built without it and shipped its finding H.
+⚠ **Nobody has played it.** Seven verifiers found eight defects, sixteen unmeasured surfaces and fifteen
+doc/code disagreements after the build reported green; all eight defects are fixed and every unmeasured
+surface named there is now measured. **None of that is acceptance**: a green round is not a user saying it
+read right, and this folder's `3.done` means implementation finished and nothing more.
 
 **Art is on the regroup side of that line, not the plan-4 side.** The user raised it and it is theirs to
 decide; the state today is that **`src/` loads zero images** and every body is drawn by `field_view.gd`.
@@ -32,9 +35,9 @@ not a file swap. Plan 4 keeps drawing by code.
 
 | Folder | Contents |
 |---|---|
-| `1.ready` | **[Grassland, the whole loop](1.ready/grassland-whole-loop.md)** — the index, and **[the grassland field](1.ready/grassland-field.md)**, plan 4. **Plan 4 is next; every plan under the index is built** |
-| `2.active` | empty |
-| `3.done` | **[The round trip](3.done/proto-round-trip.md)** — the first prototype. Built, played, and the fun confirmed · **[The run shell](3.done/run-shell.md)** — plan 1, built in three stages. ⚠ **Nobody has played it on its own** · **[Hands and commands](3.done/hands-and-commands.md)** — plan 2. 16 nets · 514 checks. **Played: the keys are accepted, the picture is not, and the three questions that decide the plan are still unheard** · **[The body and its parts](3.done/body-and-parts.md)** — plan 3. 18 nets · 889 checks, every mutation red. **Looked at (six defects, in the doc); unplayed.** ⚠ **And its acceptance cannot be run yet**: nothing appends to `World.species_eaten` until plan 4 ships the horse, so a real run today offers **zero cards** |
+| `1.ready` | **[Grassland, the whole loop](1.ready/grassland-whole-loop.md)** — the index. **All four plans under it are built** · **[연출 한 판](1.ready/presentation-pass.md)** — plan 5, from [the presentation audit](../design/presentation-audit-ko.md). Nothing on screen says you were hit, that you hit anything, that a clone died, that the boss started hunting, or that an arena closed. **One rule change rides in it** (a corpse takes several bites and quitting keeps what you ate) and it is marked as such. ⇒ **It is what unblocks three older acceptance questions** — plan 4's arena, and plan 2's *does losing a fat clone hurt* and *does the hold read as an act* — all three unanswerable because the thing was never drawn |
+| `2.active` | **empty** — nothing is being built right now |
+| `3.done` | **[The grassland field](3.done/grassland-field.md)** — plan 4. 22 nets · 1889 checks. **Unplayed, and the arena has no view at all** — its own acceptance question (*does the arena closing read as the run's last act*) cannot be answered by this build, because there is nothing on screen to read · **[The round trip](3.done/proto-round-trip.md)** — the first prototype. Built, played, and the fun confirmed · **[The run shell](3.done/run-shell.md)** — plan 1, built in three stages. ⚠ **Nobody has played it on its own** · **[Hands and commands](3.done/hands-and-commands.md)** — plan 2. 16 nets · 514 checks. **Played: the keys are accepted, the picture is not, and the three questions that decide the plan are still unheard** · **[The body and its parts](3.done/body-and-parts.md)** — plan 3. 18 nets · 889 checks, every mutation red. **Looked at (six defects, in the doc); unplayed.** ⇒ **Plan 4 unblocked its acceptance**: the corpse beat now appends to `World.species_eaten`, off the CROW rather than the horse ([why](../decisions/the-crow-gives-three-parts.md)) — the common creature, standing still on the opening minute — so a run offers cards. Whether the body visibly becomes a horse is still unasked |
 
 The old game was deleted on 2026-08-12 (`../next-game.md`) and every plan went with it — thirty-four docs
 describing a game that no longer exists. **They are recoverable at the tag `v1-sim` and should not be
@@ -46,7 +49,7 @@ that **implementers keep coming back with questions**, and the cause was that
 ⇒ **A plan carries data shapes, function names, key bindings, literal numbers and per-piece acceptance**, and
 what is genuinely undecided is listed in one place where it can be seen not to block the build.
 
-⇒ **The one doc in `3.done` is the exception to this folder's own rule about acceptance.** It sits in `3.done`
+⇒ **`proto-round-trip` is the one exception to this folder's own rule about acceptance.** It sits in `3.done`
 *and* carries a passed acceptance, because the user played it and said so — normally that half lives in a
 `design/` header, and it is written in both places on purpose: this doc is the record of what the play
 session changed.
