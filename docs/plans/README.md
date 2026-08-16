@@ -17,39 +17,35 @@ the user has ever looked at the result is a separate axis, kept in `design/` hea
 all three folders. **Links leak every single time** — `net_citations` catches the path form, not a stale claim.
 
 ---
-## What happens next (decided by the user, 2026-08-15)
 
-**Plan 4, then regroup.** That was the call, and **plan 4 is now built and green** — so what is left of it is
-the regroup: nothing was re-planned, re-designed or re-scoped before the grassland field landed, and the
-whole thing is reviewed now that there is a run to play.
-
-⚠ **Nobody has played it.** Seven verifiers found eight defects, sixteen unmeasured surfaces and fifteen
-doc/code disagreements after the build reported green; all eight defects are fixed and every unmeasured
-surface named there is now measured. **None of that is acceptance**: a green round is not a user saying it
-read right, and this folder's `3.done` means implementation finished and nothing more.
-
-**Art is on the regroup side of that line, not the plan-4 side.** The user raised it and it is theirs to
-decide; the state today is that **`src/` loads zero images** and every body is drawn by `field_view.gd`.
-Swapping to pictures is a rewrite of that one file plus a column in `Parts` plus two nets — contained, but
-not a file swap. Plan 4 keeps drawing by code.
+## The state today — **all three folders are empty**
 
 | Folder | Contents |
 |---|---|
-| `1.ready` | **empty.** ⚠ **Everything in `3.done` is VOID** — `src/` was emptied on 2026-08-16 when the game became an autobattler. Those plans are kept for their shapes, never as a spec; the live design is `cell-army-gdd-ko` |
-| `2.active` | **empty** — nothing is being built right now |
-| `3.done` | **[연출 한 판](3.done/presentation-pass.md)** — plan 5, from [the presentation audit](../design/presentation-audit-ko.md). 22 nets · 2420 checks. Twelve things that were happening and were not on screen now are; **one rule change rode in it** (a corpse takes several bites and quitting keeps what you ate). ⚠ **Built and unlooked-at** — every one of its eight acceptance questions is an eye, including the three older ones it exists to unblock (plan 4's arena, plan 2's *does losing a fat clone hurt* and *does the hold read as an act*). **A second review found 29 problems in the built code and 20 were repaired**; what changed from the plan text is in the doc's 「지어진 뒤」 · **[The grassland field](3.done/grassland-field.md)** — plan 4. 22 nets · 1889 checks. **Unplayed, and the arena has no view at all** — its own acceptance question (*does the arena closing read as the run's last act*) cannot be answered by this build, because there is nothing on screen to read · **[The round trip](3.done/proto-round-trip.md)** — the first prototype. Built, played, and the fun confirmed · **[The run shell](3.done/run-shell.md)** — plan 1, built in three stages. ⚠ **Nobody has played it on its own** · **[Hands and commands](3.done/hands-and-commands.md)** — plan 2. 16 nets · 514 checks. **Played: the keys are accepted, the picture is not, and the three questions that decide the plan are still unheard** · **[The body and its parts](3.done/body-and-parts.md)** — plan 3. 18 nets · 889 checks, every mutation red. **Looked at (six defects, in the doc); unplayed.** ⇒ **Plan 4 unblocked its acceptance**: the corpse beat now appends to `World.species_eaten`, off the CROW rather than the horse ([why](../decisions/the-crow-gives-three-parts.md)) — the common creature, standing still on the opening minute — so a run offers cards. Whether the body visibly becomes a horse is still unasked |
+| `1.ready` | **empty** |
+| `2.active` | **empty** |
+| `3.done` | **empty** |
 
-The old game was deleted on 2026-08-12 (`../next-game.md`) and every plan went with it — thirty-four docs
-describing a game that no longer exists. **They are recoverable at the tag `v1-sim` and should not be
-recovered**: each was written against folder contracts and a tick rate the new game does not have.
+**Every plan this repo ever had was deleted on 2026-08-17**, together with the design docs describing the two
+games those plans built. Nothing was lost that mattered: what the plans *measured* is distilled into
+[what two dead games left behind](../lessons-from-two-dead-games.md), and the plan text itself is recoverable
+at the tags `v1-sim` and `v2-openfield`.
 
-⚠ **The four plans were written on 2026-08-14 to a standard the last one did not meet.** The user's report was
-that **implementers keep coming back with questions**, and the cause was that
-`grassland-whole-loop` was a table of pointers into design docs whose own *Open* lists were twenty items long.
-⇒ **A plan carries data shapes, function names, key bindings, literal numbers and per-piece acceptance**, and
-what is genuinely undecided is listed in one place where it can be seen not to block the build.
+⚠ **Do not recover a plan from either tag.** `v1-sim`'s plans were written against integer determinism and a
+20Hz tick; `v2-openfield`'s were written against a host, an open field, and a swarm the player steers. The
+current game — a cell autobattler — has none of those, so a recovered plan quietly re-imports constraints
+that no longer exist.
 
-⇒ **`proto-round-trip` is the one exception to this folder's own rule about acceptance.** It sits in `3.done`
-*and* carries a passed acceptance, because the user played it and said so — normally that half lives in a
-`design/` header, and it is written in both places on purpose: this doc is the record of what the play
-session changed.
+---
+
+## What a plan has to carry
+
+**Written down because the last set failed this test.** The user's report was that
+**implementers keep coming back with questions**, and the cause was a plan that was a table of pointers into
+design docs whose own *Open* lists were twenty items long.
+
+⇒ **A plan carries data shapes, function names, key bindings, literal numbers, and per-piece acceptance.**
+What is genuinely undecided goes in one place, where it can be seen not to block the build.
+
+**The live design is [the cell army GDD](../design/cell-army-gdd.md)** (Korean: `cell-army-gdd-ko`).
+The next plan comes from there.

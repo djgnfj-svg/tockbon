@@ -10,34 +10,31 @@ scatters, five plans over four days — was deleted on **2026-08-16**, tag `v2-o
 **Both times the harness survived**: this file, `.claude/`, the net runner, `tools/pixel/`, the Korean
 font, and `docs/`. **Nothing else is in the tree right now.**
 
-**Read `cell-army-gdd-ko` before proposing anything.** Its one line is **「먹을 것을 고르러 간다」** —
-an **autobattler**: a node map of islands (상자 · 전투 · 엘리트 · 보스, and **only 상자 has no fight**),
-a squad of square cells, and **the island's 특산물 bolted onto the soldiers that survived it.**
-**There is no host.** `F` and `V` are gone. Soldiers carry across islands and **a dead one is dead for
-good.** The two reference points are pinned in that doc and **the user asked that they never be dropped**:
-**Bad North** (2 people, ~790k copies, you place the squads yourself) and **Despot's Game** (100k+, the
-units are not controlled at all). **They answered the same question in opposite directions and both
-worked** — that is why both are there.
+**Read `cell-army-gdd-ko` before proposing anything** (English twin: `cell-army-gdd`). Its one line is
+**「먹을 것을 고르러 간다」** — an **autobattler**: a node map of islands (상자 · 전투 · 엘리트 · 보스, and
+**only 상자 has no fight**), a squad of square cells landed **by boat on the coastline**, and **the island's
+특산물 bolted onto the soldiers that survived it.**
+**There is no host.** `F` and `V` are gone. Soldiers carry across islands, **HP included**, and **a dead one
+is dead for good.** Combat is real time, summoned with the **1~5 hotkeys**; the loss condition is a
+**time limit**. The two reference points are pinned in that doc and **the user asked that they never be
+dropped**: **Bad North** (2 people, ~790k copies) and **Despot's Game** (100k+, units not controlled at all).
+**They answered the same question in opposite directions and both worked** — that is why both are there.
+⚠ **Bad North is NOT "place and watch"** — the developer says he lowered the *granularity* of control, not
+removed it. Never cite it as grounds for this game having none.
 
-### Why the second game died, and every step of it is a doc
+### Why the second game died — **one sentence, and it is the most reusable thing here**
 
-The user played it: *"그냥 재미가 없다… 왜 이 지랄 하는지 모르겠다."* One conversation went six rounds
-finding out, and the rounds are worth more than the verdict:
+The user played it: *"그냥 재미가 없다… 왜 이 지랄 하는지 모르겠다."*
+The diagnosis inverted: not *"the swarm has no merit"* but **"the swarm has no cost."** Splitting conserved
+force, HP **and** damage while a damage cap meant a body died in three hits whatever its size — so splitting
+multiplied the hits an enemy needed, and absorbing undid it for free.
 
-- **`why-multiply-ko`** — the diagnosis inverted. Not *"the swarm has no merit"* but **"the swarm has no
-  cost."** `F` conserved force, HP **and** damage, while `MAX_HIT_FRACTION` meant a body always died in
-  three hits **whatever its size** — so splitting multiplied the hits an enemy needed and `V` undid it for
-  free. ⇒ **An advantage with no cost is not a decision, and a mechanic that is not a decision is not fun.**
-  The optimal play was "split to the cap and stay bunched", learnable once and then over
-- **`play-notes-2026-08-16-ko`** — four problems in one paragraph. The only bar on screen was **경험치, not
-  HP**; every species column said *where it walks* and none said *how it hits*; the boss out-reached your
-  bite by 14px so there was no safe place to stand; **and nobody had ever measured the boss fight** —
-  `probe_run.gd` stopped at `BOSS_HUNT_AT`, one line before the only fight that ends a run
-- **`round-by-round-soldiers-ko`** — why an open field was the wrong container. The measured failure
-  (**dead air 61% against a 25% bar**) **cannot exist** in a round: an island starts with the enemy on it.
-  Time gates, spawn weights, the no-spawn radius, the opening pocket, the minimap and the zoom curve all
-  stop being problems because they stop existing
-- **`cell-army-gdd-ko`** — the GDD that replaces `cell-game.md`
+⇒ **An advantage with no cost is not a decision, and a mechanic that is not a decision is not fun.**
+The optimal play was "split to the cap and stay bunched" — learnable once, and then over.
+
+**This test has already caught three more designs in this repo since**, each time by working the arithmetic
+rather than arguing: the whole record is in **`lessons-from-two-dead-games`** (Korean: `-ko`).
+⚠ **Nothing in that file is a spec.** It holds measured numbers and repeating failure shapes only.
 
 ⚠ **The conversation circled six times and the reason is worth keeping.** The problem was one sentence
 (*"분신이 왜 있는지 모르겠다"*) and **every answer offered was a new system** — 병종, 부대 지정, 합체,
@@ -48,15 +45,15 @@ but he had *Luck Be a Landlord*. **Without one game to point at, every question 
 
 ### Three measurement lessons that outlive both games
 
-- **A constant is not what reaches the screen.** `CLONE_BODY_RADIUS` 8 was cited in chat as "8px", and the
-  truth was **38px** — 8 is a *radius*, the camera multiplies by `ZOOM_NEAR` 1.6, and a 1280 viewport is
-  stretched into a 1920 window for another 1.5×. **A design argument was built on a number off by 4.8×.**
-  The same shape had already bitten twice: a half-diagonal of 1377 where the truth was 918
+- **A constant is not what reaches the screen.** A body radius of 8 was cited in chat as "8px", and the
+  truth was **38px** — 8 is a *radius*, the camera multiplied by 1.6, and a 1280 viewport was stretched into
+  a 1920 window for another 1.5×. **A design argument was built on a number off by 4.8×**, and the same
+  shape bit **four separate times**
 - **A design complaint can become a number, and that is the instrument to reach for when the answer is
   "it isn't fun".** *"도저히 진행이 안 돼"* became **83% dead air, 150s between kills** by writing a bot that
   played a whole run headless. **The probe is deleted with the game; the move is not**
 - ⚠ **And that probe graded itself in its owner's favour twice** — it modelled one-shot as `force >= hp`
-  after a cap made that false, and never read `SPECIES_FLEES`. **A probe that grades its own step must be
+  after a cap made that false, and never read the flee table. **A probe that grades its own step must be
   inverted like any other check**
 
 ### Play is an instrument the harness does not contain
@@ -75,10 +72,21 @@ line — **planning cannot decide whether something is fun** — is why this sec
   so. **That is correct behaviour, not a break.** It goes green again when the new game's nets land in a
   group of five or more
 - `tools/look/` — only its `README.md`. Both probes and all three capture scripts drove the deleted shell
+- `docs/` — **60-odd docs were deleted on 2026-08-17** because they described the two dead games and a fresh
+  session reads them as constraints. **What they measured was distilled into `lessons-from-two-dead-games`
+  first.** What is left is small on purpose, and every index lists exactly what is live
 - **Everything measured in either game is recoverable at `v1-sim` and `v2-openfield`.**
-  **Do not restore code from either.** `v1-sim` was written against integer determinism and a 20Hz tick;
-  `v2-openfield` was written against a host, an open field and a swarm you steer. Both would quietly
+  **Do not restore code OR docs from either.** `v1-sim` was written against integer determinism and a 20Hz
+  tick; `v2-openfield` was written against a host, an open field and a swarm you steer. Both would quietly
   re-import a whole set of constraints the current design does not have
+
+### Korean and English are two files, and they diverge if edited apart
+
+**The user cannot read English; agents read English better.** So the live design docs exist twice —
+`foo-ko.md` and `foo.md`, same facts, neither a word-for-word translation of the other.
+⚠ **Editing one and not the other is the failure mode.** A fact changed in Korean and not in English means
+the next agent builds the old design. **Change both in the same edit**, the way a `push_error` and its
+`t.expect_error` are one unit.
 
 ## No `git push` until 2026-08-22 (decided by the user)
 
@@ -167,22 +175,24 @@ turned out to be neither of the two options that had been on the table.** That i
 
 ## Where things live
 
+**`docs/` is small on purpose. This table is the whole of it** — if a file is not listed here or in one of
+the three README indexes, it does not exist.
+
 | Doc | Question it answers |
 |---|---|
-| `docs/design/cell-army-gdd-ko.md` | **The GDD. What is being built.** One line, both loops, what is decided, six things that are not, and the two reference games |
+| `cell-army-gdd` · `-ko` | **The GDD. What is being built.** One line, three loops, what is decided, what is not, and the two reference games. ⚠ **It carries several refutation boxes where an earlier claim in the same file is disproved by arithmetic** — those are the most valuable paragraphs in it |
+| `what-makes-placement-a-decision` · `-ko` | **Nine shipped games and the rule each used to make position a real choice**, split by whether they need unit control after commitment. With the case against each |
+| `lessons-from-two-dead-games` · `-ko` | **What two deleted games measured.** Numbers and repeating failure shapes. ⚠ **Nothing in it is a spec** |
 | `docs/planning-principles-ko.md` | **How to judge a direction.** Survived both resets on purpose — read it first |
-| `docs/design/` | **What a feature looks like.** Read its README first — the newest doc wins where they disagree |
-| `docs/decisions/` | **Why something was *not* done.** The rejected branch and the reason, nothing else |
-| `docs/plans/` `1.ready` `2.active` `3.done` | **The only folder that moves.** The folder a doc sits in is its status |
-| `docs/harness-todo-ko.md` | **Work on the tools, not the game.** Top item is the user's: **parallelise the build.** Says what is already parallel, what is only serial by habit, and why worktree isolation is the price |
+| `docs/decisions/` | **Why something was *not* done.** Three docs; **two are reversed and kept for that reason** |
+| `docs/plans/` `1.ready` `2.active` `3.done` | **The only folder that moves.** All three are empty right now |
+| `docs/harness-todo-ko.md` | **Work on the tools, not the game.** Top item is the user's: **parallelise the build** |
 | `docs/how-studios-schedule-art-ko.md` | **When other studios attach the art**, with sources. Written because the user has no data of their own and said so — see the reply rule about recommendations |
+| `docs/next-game.md` | The two resets, what carried across, and why nothing is restored from a tag |
 
-⚠ **Most of `docs/` now describes a deleted game**, and that is deliberate — the reasoning is worth more
-than the code was. **`docs/design/README.md`'s index says which docs are live.** `docs/next-game.md`, the
-three adversarial reviews, `gap-check-2026-08-15-ko`, `level-curve-ko` and everything in `docs/plans/3.done/`
-are all about `v2-openfield`. **Read them for shapes, never as a spec.**
-`docs/archive/` does **not** exist — deleted on 2026-08-12. **A concept never changes folder**; its header
-carries `Implemented` and `Accepted` as two separate axes.
+**A concept never changes folder**; its header carries `Implemented` and `Accepted` as two separate axes.
+`docs/archive/` does **not** exist and must not be recreated — **a doc about a dead game gets distilled and
+deleted, not archived in place.** Archiving in place is what produced 60 stale docs by 2026-08-17.
 
 **Never state the same thing twice.** A value counted in two places will diverge.
 

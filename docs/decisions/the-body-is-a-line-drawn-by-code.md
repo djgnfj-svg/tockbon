@@ -32,8 +32,8 @@ Decided by generating candidates and looking at them: `tools/pixel/out/cell_*` �
   parts from different presets can never be made to match — and it is void here because **a worn part has no
   colour of its own.** Two things were resting on it and both are released:
   **the cap of five or six part-giving species per habitat**, and **half the reason external slots were kept
-  to six.** Slots stay at six because six things sticking out of one small square is all that reads —
-  see [Ten slots](ten-slots-no-duplicates.md)
+  to six.** ⚠ **Slot counts belonged to the deleted game and do not bind this one** — what survives is the
+  reason: **six things sticking out of one small square is all that reads**
 - **Being empty inside is why an overlapping swarm still reads.** Forty filled bodies blend into one mass;
   forty outlines do not. **The known cost is that the ground shows through**, and the user accepted it on
   the grounds that the cells are small
