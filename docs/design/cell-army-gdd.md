@@ -222,9 +222,10 @@ unexecutable** — you can name who gets the part but you cannot name who ships 
 > One line of rule settles it and leaves room to add manual picking later.
 
 **2. The range numbers have no unit, and the island's size is not in "What is decided".**
-(The pulling section states a 40-tile island width once, but **that is an assumption inside one calculation, not a rule.**) "Range 0 · 3 · 30"
-is written down, but **if 30 is tiles it crosses the island, and one constant then deletes docks, tiers,
-ramps and pulling all at once.** If it is pixels, 3 is nothing.
+(The pulling section does state a 40-tile island width once while writing out its model, but **that is an
+assumption inside one calculation, not a rule.**) "Range 0 · 3 · 30" is written down, but **if 30 is tiles
+it crosses the island, and one constant then deletes docks, tiers, ramps and pulling all at once.**
+If it is pixels, 3 is nothing.
 ⚠ It is exactly the shape of **"a constant is not what reaches the screen"** (the 4.8× error) in
 [Lessons from two dead games](../lessons-from-two-dead-games.md).
 > Candidate: **pin the unit of range and area to "tiles", and put the island's tile count in the
