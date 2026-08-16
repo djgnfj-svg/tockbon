@@ -1,6 +1,7 @@
-class_name Hud
+﻿class_name Hud
 extends Control
-## Four numbers, a bar and a map. Nothing else.
+## Four numbers, a bar and a map — plus, while the boss is hunting, the two things §D adds: a directional
+## arrow off the edge while it is out of sight, and a screen-wide announcement the instant it starts.
 ##
 ## **The last game drowned in debug overlays** — the user's own report is that the screen became unreadable
 ## because every session added one more readout. So this file has no debug mode and no toggle: what is here
@@ -75,6 +76,16 @@ func _paint(c: CanvasItem) -> void:
 	_paint_rect(c, Rect2(Look.HUD_BAR_AT, Vector2(wide * _bar_shown, Look.HUD_BAR_HEIGHT)),
 			Look.HUD_BAR_FILL)
 
+	# §F-9: the level's own kick, over the whole groove and independent of `_bar_shown`'s chase — the chase
+	# alone reads as draining over time, not as a MOMENT the way this flash does. Then the short phrase,
+	# both timed off `World.level_show` rather than a diff of `level` held here (§0-2).
+	if world.level_show < Look.LEVEL_BAR_FLASH_TIME:
+		var flash: Color = Look.LEVEL_BAR_FLASH_COLOR
+		flash.a *= (1.0 - world.level_show / Look.LEVEL_BAR_FLASH_TIME)
+		_paint_rect(c, Rect2(Look.HUD_BAR_AT, Vector2(wide, Look.HUD_BAR_HEIGHT)), flash)
+	if world.level_show < Look.LEVEL_TEXT_TIME:
+		_paint_text(c, Look.LEVEL_TEXT_AT, "레벨업!", Look.FONT_LEVEL_TEXT, Look.LEVEL_POP_COLOR)
+
 	_paint_text(c, Look.HUD_BANK_AT, "%d" % int(sw.banked), Look.FONT_HUD_BANK, Look.HUD_TEXT)
 	_paint_text(c, Look.HUD_CARRY_AT,
 			"무리 %d · 지고 있는 것 %d" % [sw.count - 1, int(sw.total_carried())], Look.FONT_HUD_ROW,
@@ -103,6 +114,61 @@ func _paint(c: CanvasItem) -> void:
 				Look.FONT_HUD_ROW, Look.HUD_DIM_TEXT)
 
 	_paint_minimap(c, _minimap_frame(), camera_rect, _minimap_marks())
+
+	# **The boss's own direction, off the edge of the screen — screen space, so it lives here and not on
+	# `field_view` (§D-2).** Empty while there is no boss, while it is already inside the camera, before the
+	# hunt has started, or before the camera box has ever been set (the same `Rect2()` guard `_paint_minimap`'s
+	# own camera box uses, for the same reason — `_bind_world()` leaves it empty between runs).
+	if world.boss_hunting() and world.boss_index >= 0 and camera_rect.size.x > 0.0 \
+			and camera_rect.size.y > 0.0:
+		var boss_p: Vector2 = world.critter_pos[world.boss_index]
+		if not camera_rect.has_point(boss_p):
+			var centre := camera_rect.get_center()
+			var to_boss := boss_p - centre
+			if to_boss.length_squared() > 1.0:
+				var dir := to_boss.normalized()
+				# The standard "project to a box's edge" trick: whichever axis's scale is SMALLER is the one
+				# that actually reaches an edge first, so the point lands on the nearer wall or the nearer
+				# floor/ceiling and never past a corner.
+				var half := size * 0.5 - Vector2.ONE * Look.BOSS_ARROW_MARGIN
+				var scale := INF
+				if absf(dir.x) > 0.0001:
+					scale = minf(scale, half.x / absf(dir.x))
+				if absf(dir.y) > 0.0001:
+					scale = minf(scale, half.y / absf(dir.y))
+				_paint_tri(c, size * 0.5 + dir * scale, dir, Look.BOSS_ARROW_SIZE, Look.BOSS_ARROW_COLOR)
+
+	# The hurt vignette, last, so it sits over everything else. `host_grace` already counts DOWN from
+	# `Rules.HOST_HIT_GRACE` for `HOST_HURT_COLOR`'s own window — reusing it here is what keeps this owning
+	# no clock of its own. Four bands rather than a border stroke, through `_paint_rect` alone.
+	if world.host_grace > 0.0:
+		var vignette := Look.HURT_VIGNETTE
+		vignette.a *= clampf(world.host_grace / Rules.HOST_HIT_GRACE, 0.0, 1.0)
+		var band := Look.HURT_VIGNETTE_WIDTH
+		_paint_rect(c, Rect2(Vector2.ZERO, Vector2(size.x, band)), vignette)
+		_paint_rect(c, Rect2(Vector2(0.0, size.y - band), Vector2(size.x, band)), vignette)
+		_paint_rect(c, Rect2(Vector2.ZERO, Vector2(band, size.y)), vignette)
+		_paint_rect(c, Rect2(Vector2(size.x - band, 0.0), Vector2(band, size.y)), vignette)
+
+	# **The boss-hunt announcement, over everything — even the vignette.** A pure function of
+	# `world.elapsed - Rules.BOSS_HUNT_AT`, gated by `World.boss_hunting()` so this does not restate the
+	# threshold comparison itself (see that function for why it is derived and not latched). The wash
+	# mixes its alpha toward zero rather than snapping off, so its own last frame does not read as a flicker.
+	if world.boss_hunting():
+		var since := world.elapsed - Rules.BOSS_HUNT_AT
+		if since < Look.BOSS_HUNT_FLASH_TIME:
+			var wash: Color = Look.BOSS_HUNT_FLASH
+			wash.a *= clampf(1.0 - since / Look.BOSS_HUNT_FLASH_TIME, 0.0, 1.0)
+			_paint_rect(c, Rect2(Vector2.ZERO, size), wash)
+		if since < Look.BOSS_HUNT_TEXT_TIME:
+			# **Korean, because it is in-game text.** Measured and centred the same way `field_view.gd`'s
+			# `_label()` centres a force number, but through `get_theme_default_font()` rather than
+			# `ThemeDB.fallback_font` — that is the one that renders Korean, see `_paint_text`'s own note.
+			var line := "그것이 온다"
+			var font := get_theme_default_font()
+			var text_sz := font.get_string_size(line, HORIZONTAL_ALIGNMENT_LEFT, -1, Look.FONT_BOSS_HUNT_TEXT)
+			var text_p := size * 0.5 - text_sz * 0.5
+			_paint_text(c, text_p, line, Look.FONT_BOSS_HUNT_TEXT, Look.HUD_TEXT)
 
 
 # -- the minimap -----------------------------------------------------------------------------------------
@@ -148,7 +214,15 @@ func _minimap_marks() -> Array:
 		if k != world.boss_index and host.distance_to(p) > Look.MINIMAP_SHOW_DIST:
 			continue
 		var col: Color = FieldView.SPECIES_COLOR[world.critter_species[k]]
-		out.append({"p": _to_map(p, frame), "r": Look.MINIMAP_CREATURE_R, "col": col})
+		var r := Look.MINIMAP_CREATURE_R
+		# **While the hunt is on**, the boss's own dot pulses between its ordinary size and
+		# `MINIMAP_BOSS_PULSE_MUL` times it — a pure function of `elapsed`, so this holds no timer of its
+		# own (§0-2). Every other mark on the map is a fixed radius; this is the one that moves, and it
+		# moves for exactly as long as the boss is actually coming.
+		if k == world.boss_index and world.boss_hunting():
+			var phase := (sin(world.elapsed * Look.MINIMAP_BOSS_PULSE_FREQ) + 1.0) * 0.5
+			r = lerpf(Look.MINIMAP_CREATURE_R, Look.MINIMAP_CREATURE_R * Look.MINIMAP_BOSS_PULSE_MUL, phase)
+		out.append({"p": _to_map(p, frame), "r": r, "col": col})
 	# The host goes on last so nothing is drawn over the one mark you are looking for.
 	out.append({"p": _to_map(host, frame), "r": Look.MINIMAP_HOST_R, "col": Look.HOST_COLOR})
 	return out
@@ -202,6 +276,17 @@ func _paint_rect(c: CanvasItem, r: Rect2, col: Color) -> void:
 ## from the boss.
 func _paint_mark(c: CanvasItem, p: Vector2, r: float, col: Color) -> void:
 	c.draw_circle(p, r, col)
+
+## §D-2's edge arrow: a triangle pointing along `dir`, centred at `p`. Its own leaf — `_paint_rect` draws a
+## rectangle and `_paint_mark` a circle, and neither can be an arrow.
+## ⚠ **The two shape ratios are `Look.BOSS_ARROW_BACK`/`_HALF_WIDTH`, not bare `0.5`s.** This file declares
+## no constant of its own (see its header) and the pixel half of that rule is enforced by hand — the colour
+## scan cannot see a number.
+func _paint_tri(c: CanvasItem, p: Vector2, dir: Vector2, size_px: float, col: Color) -> void:
+	var side := Vector2(-dir.y, dir.x)
+	var back := p - dir * (size_px * Look.BOSS_ARROW_BACK)
+	var half := side * (size_px * Look.BOSS_ARROW_HALF_WIDTH)
+	c.draw_colored_polygon(PackedVector2Array([p + dir * size_px, back + half, back - half]), col)
 
 ## **`_paint_heart` is gone and nothing replaced it.** The HP readout is one `_paint_text` call now, so
 ## there is no third leaf for it. Nothing bounded the row's length, and the fix the user chose was to stop

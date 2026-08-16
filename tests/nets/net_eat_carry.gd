@@ -35,11 +35,17 @@ func run(t) -> void:
 	sw.pos[c] = Vector2(1000.0, 1000.0)
 	sw.eat_cd[c] = 0.0
 	# **Held still**, and the freeze is the whole reason the pins below mean anything: without it the clone
-	# walks the last pixel and turns a failing distance into a passing one. `1` gathers at the host now, so
-	# the way to park a clone is to park the HOST — 20px away, inside `rally_radius()`'s 24px floor, so the
-	# clone is already arrived and `desired` stays zero. 20 also clears `SEPARATION_MIN`, so nothing pushes.
-	sw.pos[0] = sw.pos[c] + Vector2(-20.0, 0.0)
-	sw.command_rally()
+	# walks the last pixel and turns a failing distance into a passing one.
+	#
+	# ⚠ **The freeze used to be "park the HOST 20px away", and clone↔host separation deleted that window.**
+	# Parking on the host needs the distance to be under `rally_radius()`'s 24px floor (or the clone walks)
+	# and over `BODY_RADIUS + CLONE_BODY_RADIUS` = 22 (or separation shoves the clone toward the food) — a
+	# two-pixel window that would go red on any retune of either constant, and at 20 it silently moved the
+	# clone 2px closer to the 17px pin below. So the clone is frozen by `3` at its OWN coordinate instead,
+	# which holds however the radii are tuned, and the host stands 200px off where it cannot be mistaken for
+	# the mouth that ate anything.
+	sw.pos[0] = sw.pos[c] + Vector2(-200.0, 0.0)
+	sw.command_strike(sw.pos[c])
 
 	# 17.0 and 15.0 are literals around EAT_RADIUS_CLONE's 16.0. Shrink the constant and this goes red on
 	# purpose — the value moving is the thing that has to be seen. 37px from the host, so the host's own
@@ -58,12 +64,30 @@ func run(t) -> void:
 	t.eq(sw.banked, 0.0, "분신이 먹은 것은 아직 내 것이 아니다")
 
 	# -- the host banks instantly -----------------------------------
-	# Placed on the far side of the host (26px from the clone, which is still on its 1.5s eat cooldown
+	# Placed on the far side of the host (206px from the clone, which is still on its 1.5s eat cooldown
 	# anyway) so there is no question which mouth this went into.
 	var host_food := _one_food(sw.pos[0] + Vector2(-6.0, 0.0))
 	sw.eat_cd[0] = 0.0
+	var host_food_pos: Vector2 = host_food.pos[0]
+	# **A new frame starts here, exactly as the shell starts one.** `step()` no longer clears the event lists
+	# — see `Swarm.begin_frame()` — so the clone's mouthful two steps back would still be sitting in
+	# `food_eaten_this_frame` and the §F-7 assertion below would be reading two entries.
+	sw.begin_frame()
 	sw.step(DT, host_food)
 	t.eq(sw.banked, 1.0, "내가 문 것은 즉시 내 것이다")
+
+	# -- §F-7: the sim records what was eaten and toward whom -------
+	# **The clone `c` cannot also eat this frame** — its cooldown from the earlier mouthful is still running,
+	# so this list holds exactly the host's bite and nobody else's.
+	t.eq(sw.food_eaten_this_frame.size(), 1, "그 한 입이 목록에 하나로 남는다 %s" % str(sw.food_eaten_this_frame))
+	if sw.food_eaten_this_frame.size() == 1:
+		var fe: Dictionary = sw.food_eaten_this_frame[0]
+		t.eq(fe["pos"], host_food_pos, "먹힌 자리는 그 먹이의 원래 자리다")
+		t.eq(fe["to"], sw.pos[0], "간 곳은 먹은 몸(호스트)의 자리다")
+	sw.step(DT, null)
+	sw.begin_frame()
+	t.eq(sw.food_eaten_this_frame.size(), 0,
+			"프레임이 새로 시작하면(begin_frame) 비워진다 — view가 지우지 않아도 sim이 스스로 비운다")
 
 	# -- touching the host does NOT hand anything over ---------------
 	# The branch that did this is deleted, and this is what asserts it stays deleted. Standing on the host
@@ -72,6 +96,11 @@ func run(t) -> void:
 	var before_count := sw.count
 	var banked_before := sw.banked
 	sw.pos[c] = sw.pos[0] + Vector2(Rules.ABSORB_RADIUS - 2.0, 0.0)
+	# Back to `1`: the clone was frozen at a `3` point 200px away and would walk back to it over these thirty
+	# steps, out of `absorb()`'s reach before the press below. Rallied it is already inside `rally_radius()`
+	# and stays put — clone↔host separation lifts it from 18px to 22px on the first step and no further,
+	# still well inside both that floor and `ABSORB_RADIUS_BODIES × BODY_RADIUS`.
+	sw.command_rally()
 	for _s in 30:
 		sw.step(DT, null)
 	t.eq(sw.banked, banked_before, "몸에 닿기만 해서는 화물이 넘어오지 않는다")

@@ -38,6 +38,10 @@ func run(t) -> void:
 	_f8_a_body_at_one_hp_does_not_split(t)
 	_f9_the_hp_column_is_maintained(t)
 	_f10_hp_moves_with_the_part(t)
+	_f11_damage_writes_the_hit_and_knocks_back(t)
+	_f12_level_fires_a_display_clock(t)
+	_f13_split_shove_matches_the_formula(t)
+	_f14_split_shove_survives_a_rock(t)
 	_u16b_the_peak_is_a_high_water_mark(t)
 
 
@@ -78,9 +82,21 @@ func _c2_to_c6_split(t) -> void:
 	var sw4 := Swarm.new()
 	sw4.setup(4, Vector2(1000.0, 1000.0))
 	sw4.carried[0] = 6.0
+	sw4.hit_show[0] = 0.0
+	sw4.hit_dir[0] = Vector2(1.0, 0.0)
+	sw4.swing_show[0] = 0.0
+	sw4.swing_dir[0] = Vector2(0.0, 1.0)
 	sw4.split_hold(Rules.SPLIT_HOLD_TIME)
 	t.eq(sw4.carried[0], 6.0, "나눠도 싣고 있던 것은 부모가 전부 갖는다")
 	t.eq(sw4.carried[1], 0.0, "아이는 빈 몸으로 나온다")
+	# ⚠ **`add_clone()`이 상수를 무조건 쓰는 것이 `_split_fire()`를 네 번째 유지 지점으로 만들지 않는 이유다.**
+	# 부모는 방금 맞은 채로(0.0) 갈라지는데, 갓 태어난 아이는 `INF`다 — 「갓 태어난 몸은 안 맞았다」가 기억이
+	# 아니라 구조로 참이다.
+	t.eq(sw4.hit_show[0], 0.0, "부모의 피격 시계는 그대로다")
+	t.eq(sw4.hit_show[1], INF, "아이는 INF로 열린다 — 부모의 방금 맞은 시계를 물려받지 않는다")
+	t.eq(sw4.hit_dir[1], Vector2.ZERO, "아이의 피격 방향도 물려받지 않는다")
+	t.eq(sw4.swing_show[1], INF, "휘두름 시계도 마찬가지다")
+	t.eq(sw4.swing_dir[1], Vector2.ZERO, "휘두른 방향도 물려받지 않는다 — 갓 태어난 몸은 휘두른 적이 없다")
 
 	# 5: the split is simultaneous across EVERY body, not the host alone. Looping over index 0 only leaves
 	# the clone's 3 whole and the total at 9.
@@ -204,8 +220,12 @@ func _c11_child_of_a_clone(t) -> void:
 	sw.split_hold(Rules.SPLIT_HOLD_TIME)
 	t.eq(sw.count, 3, "설정: 분신 하나만 갈라졌다")
 	var child := 2
-	t.ok(sw.pos[child].distance_to(sw.pos[p]) <= Rules.CLONE_SPAWN_RING + 0.01,
-			"아이는 제 부모 곁에 나온다 (%.1f)" % sw.pos[child].distance_to(sw.pos[p]))
+	# §F-10: 갈라진 두 몸은 그 자리에서 서로 반대로 한 번 더 밀린다 — `CLONE_SPAWN_RING`만이 아니라 그 위에
+	# `2 × 아이의 힘 × KNOCKBACK_PER_FORCE`가 더 벌어진다 (부모가 뒤로, 아이가 앞으로, 같은 축을 따라).
+	var shove := 2.0 * float(sw.force[child]) * Rules.KNOCKBACK_PER_FORCE
+	t.ok(sw.pos[child].distance_to(sw.pos[p]) <= Rules.CLONE_SPAWN_RING + shove + 0.01,
+			"아이는 제 부모 곁에 나온다 — 밀림까지 합쳐 (%.1f, 기대 상한 %.1f)"
+					% [sw.pos[child].distance_to(sw.pos[p]), Rules.CLONE_SPAWN_RING + shove])
 	t.ok(sw.pos[child].distance_to(sw.pos[0]) > 800.0, "호스트 위에 나오지 않는다")
 	t.eq(sw.state[child], Swarm.SCATTER, "아이는 부모의 상태를 물려받는다")
 
@@ -341,25 +361,40 @@ func _c15b_clone_kill_is_carried(t) -> void:
 
 	# The other half: the same clone, still 1000px from home, finishes a corpse. The corpse is written by
 	# hand rather than killed for, so the force it pays on is a literal and not the 8–12 roll.
+	#
+	# ⚠ **The crow is walked off the spot first, and that is not tidying.** `World._separate_from_critters()`
+	# pushes a body out of a LIVE creature every frame, and the crow this fixture just struck is countering —
+	# it follows the clone, so the clone is driven off the coordinate the corpse is written at and the meal
+	# stalls at one bite. The half being measured here is a CORPSE, which the pass deliberately does not
+	# touch; a live creature standing on it is a different rule and belongs to whoever measures that one.
+	w.critter_pos[0] = Vector2(700.0, 300.0)
+	w.critter_counter[0] = 0.0
 	t.eq(w.swarm.carried[c], 0.0, "설정: 분신은 아직 아무것도 싣고 있지 않다")
 	w.corpse_count = 1
 	w.corpse_pos[0] = out
 	w.corpse_species[0] = Parts.Species.CROW
 	w.corpse_force[0] = 10
-	# One frame short of done, so the step that follows is the one that pays: at force 10 a meal is 0.5s and
-	# a frame is 1/30th of it.
+	w.corpse_bites_left[0] = w._bites_for(10)
+	# One frame short of the FIRST bite, so the step that follows starts paying immediately. §C floors a
+	# force-10 crow at three bites (`CORPSE_BITES_MIN`) regardless of `corpse_progress`, so finishing the
+	# whole corpse now takes a short loop (30 frames total, measured) rather than the single frame it used
+	# to take when one crossing of 1.0 finished the meal outright.
 	w.corpse_progress[0] = 0.999
-	w.step(DT)
-	t.eq(w.corpse_count, 0, "설정: 시체를 실제로 다 먹었다")
+	var meal_frames := 0
+	while w.corpse_count > 0 and meal_frames < 60:
+		w.step(DT)
+		meal_frames += 1
+	t.eq(w.corpse_count, 0, "설정: 시체를 실제로 다 먹었다 (%d프레임)" % meal_frames)
 	# 30 = 힘 10 × EXP_PER_FORCE 3. Literal, because reading it back off `corpse_force` passes at any rate.
+	# **세 입의 합**이다 — 한 입에 10씩, 셋을 다 넘겨야 30이다.
 	t.eq(w.swarm.carried[c], 30.0, "분신이 다 먹은 값은 그 분신이 싣는다 (10 × 3)")
 	t.eq(w.swarm.banked, banked_before, "멀리 있는 분신의 값은 은행에 바로 들어오지 않는다")
-	t.eq(w.swarm.eaten, eaten_before + 30.0, "먹은 총량은 시체를 다 먹은 그때 딱 한 번 움직인다")
+	t.eq(w.swarm.eaten, eaten_before + 30.0, "먹은 총량은 시체를 다 먹은 그때까지 세 입의 합으로 딱 30만큼 움직인다")
 
 	# And the link the two halves above both stand on: a kill leaves a corpse, **where it died**, carrying
-	# copies of what it was. Written with the death position pinned by hand — the crow has been walking
-	# since it was struck, and the mutation this catches (writing `swarm.pos[0]` as the corpse's position)
-	# is only visible against a coordinate the host is nowhere near.
+	# copies of what it was. The death position is pinned by hand — the mutation this catches (writing
+	# `swarm.pos[0]` as the corpse's position) is only visible against a coordinate the host is nowhere near,
+	# and the same coordinate has to be re-stated here because the crow is free to walk between the two.
 	# ⚠ This is the ONLY thing in the round that reads `_add_corpse` at all until `net_eating` exists.
 	w.critter_pos[0] = Vector2(700.0, 300.0)
 	w._damage_critter(0, 999)
@@ -487,6 +522,20 @@ func _c23_worn_survives_the_swap(t) -> void:
 	sw.worn[a] = Parts.CROW_WING
 	sw.worn[b] = Parts.CROW_BEAK
 	sw.worn[c] = Parts.HORSE_LEGS
+	# `hit_show`/`hit_dir`/`swing_show`는 셋 다 `INF`/`ZERO`로 태어나므로, 같은 값이면 스왑이 없어도 초록이다
+	# — `flees`의 주석이 이미 이름 붙인 함정이다. 세 줄 모두 서로 다른, 유한한 값을 손으로 써서 구분한다.
+	sw.hit_show[a] = 1.0
+	sw.hit_dir[a] = Vector2(1.0, 0.0)
+	sw.swing_show[a] = 1.5
+	sw.swing_dir[a] = Vector2(1.0, 1.0).normalized()
+	sw.hit_show[b] = 2.0
+	sw.hit_dir[b] = Vector2(0.0, 1.0)
+	sw.swing_show[b] = 2.5
+	sw.swing_dir[b] = Vector2(-1.0, 1.0).normalized()
+	sw.hit_show[c] = 3.0
+	sw.hit_dir[c] = Vector2(-1.0, 0.0)
+	sw.swing_show[c] = 3.5
+	sw.swing_dir[c] = Vector2(1.0, -1.0).normalized()
 	t.eq(sw.count, 4, "설정: 서로 다른 부품을 걸친 분신 셋을 세웠다")
 	# ⚠ The row removed is NOT the last one — `remove_at` only enters its swap branch then.
 	sw.remove_at(b)
@@ -494,6 +543,13 @@ func _c23_worn_survives_the_swap(t) -> void:
 	t.eq(sw.worn[1], Parts.CROW_WING, "건드리지 않은 줄은 제 부품 그대로다")
 	t.eq(sw.worn[2], Parts.HORSE_LEGS, "내려온 줄도 제 부품을 들고 왔다 — 죽은 놈의 것을 물려받지 않는다")
 	t.eq(sw.worn[0], -1, "호스트는 언제나 -1이다 — 호스트의 부품은 Body의 열한 칸에 있다")
+	t.eq(sw.hit_show[1], 1.0, "건드리지 않은 줄의 피격 시계도 제 것이다")
+	t.eq(sw.hit_show[2], 3.0, "내려온 줄은 제 피격 시계를 들고 왔다 — 죽은 놈의 2.0이 아니다")
+	t.eq(sw.hit_dir[2], Vector2(-1.0, 0.0), "피격 방향도 제 것을 들고 왔다")
+	t.eq(sw.swing_show[2], 3.5, "휘두름 시계도 제 것을 들고 왔다")
+	t.eq(sw.swing_dir[1], Vector2(1.0, 1.0).normalized(), "건드리지 않은 줄의 휘두른 방향도 제 것이다")
+	t.eq(sw.swing_dir[2], Vector2(1.0, -1.0).normalized(),
+			"내려온 줄은 휘두른 방향도 제 것을 들고 왔다 — 죽은 놈의 것이 아니다")
 
 	# The split writes nothing into `worn`: `add_clone()` hardcodes -1, which is exactly why the split is not
 	# a fourth maintenance point for this column.
@@ -598,8 +654,14 @@ func _f5_a_clone_fires_what_it_wears(t) -> void:
 		w.corpse_pos[0] = at
 		w.corpse_species[0] = Parts.Species.CROW
 		w.corpse_force[0] = 10
+		w.corpse_bites_left[0] = w._bites_for(10)
+		# §C floors a force-10 crow at three bites regardless of `corpse_progress`, so one call no longer
+		# finishes the corpse — loop to completion instead (30 frames, measured).
 		w.corpse_progress[0] = 0.999
-		w._step_corpses(DT)
+		var m := 0
+		while w.corpse_count > 0 and m < 60:
+			w._step_corpses(DT)
+			m += 1
 		var worn: int = w.swarm.worn[c]
 		if worn < 0:
 			continue
@@ -830,6 +892,84 @@ func _f10_hp_moves_with_the_part(t) -> void:
 	t.eq(int(w.swarm.hp[c]), 12, "체력도 발의 3을 먼저 뺀다 (15 − 3 + 0) — 유령 체력은 남지 않는다")
 
 
+# -- F11: `damage()` writes the hit clock, the direction, and knocks the body back through `place()` -------
+## ⚠ **`hp` alone cannot see any of the three.** A `damage()` that only ever subtracted hp would leave this
+## file's other checks untouched and this column silently dead — the shape `_c15_c16_death` already names
+## for `force`.
+func _f11_damage_writes_the_hit_and_knocks_back(t) -> void:
+	var w := World.new()
+	w.setup(290)
+	_silence_food(w)
+	_clear_terrain(w)
+	var c := w.swarm.add_clone(0, 20)
+	w.swarm.pos[c] = Vector2(1000.0, 1000.0)
+	t.eq(w.swarm.hit_show[c], INF, "설정: 아직 안 맞은 분신은 INF다")
+	var before: Vector2 = w.swarm.pos[c]
+	var died := w.swarm.damage(c, 10, Vector2(0.0, 1.0))
+	t.ok(not died, "설정: 체력 60짜리가 10을 맞아도 죽지는 않는다")
+	t.eq(w.swarm.hit_show[c], 0.0, "맞은 순간 시계가 0으로 열린다")
+	t.eq(w.swarm.hit_dir[c], Vector2(0.0, 1.0), "맞은 방향도 그대로 남는다")
+	var moved: float = w.swarm.pos[c].distance_to(before)
+	t.ok(absf(moved - 10.0 * Rules.KNOCKBACK_PER_FORCE) < 0.01,
+			"그리고 그 힘 × KNOCKBACK_PER_FORCE만큼 밀린다 (%.2f, 기대 %.2f)"
+					% [moved, 10.0 * Rules.KNOCKBACK_PER_FORCE])
+
+	# push_out survival: a rock sits directly in the knockback's path.
+	var w2 := World.new()
+	w2.setup(291)
+	_silence_food(w2)
+	_clear_terrain(w2)
+	var c2 := w2.swarm.add_clone(0, 20)
+	var at := Vector2(1000.0, 1000.0)
+	w2.swarm.pos[c2] = at
+	var rock_r := 30.0
+	w2.terrain.rock_pos.append(at + Vector2(8.0 + rock_r * 0.5, 0.0))
+	w2.terrain.rock_radius.append(rock_r)
+	t.ok(w2.terrain.push_out(at + Vector2(8.0, 0.0), Rules.CLONE_BODY_RADIUS) != at + Vector2(8.0, 0.0),
+			"설정: 바위를 실제로 그 밀리는 자리에 놓았다")
+	w2.swarm.damage(c2, 10, Vector2(1.0, 0.0))
+	var final_pos: Vector2 = w2.swarm.pos[c2]
+	t.ok(final_pos.distance_to(w2.terrain.rock_pos[0]) >= rock_r - 0.01,
+			"밀린 분신도 바위 밖에 선다 — place()를 거치지 않으면 바위 속으로 순간이동한다 (%.2f, 반지름 %.2f)"
+					% [final_pos.distance_to(w2.terrain.rock_pos[0]), rock_r])
+
+	# 죽는 순간에도 순서가 맞다: `hit_show`/`hit_dir`는 `remove_at()`이 남의 것을 이 줄에 옮겨 쓰기 전에
+	# 이미 쓰여 있어야 한다 — `_damage_critter`와 같은 함정이다.
+	var w3 := World.new()
+	w3.setup(292)
+	_silence_food(w3)
+	_clear_terrain(w3)
+	var weak := w3.swarm.add_clone(0, 2)
+	var strong := w3.swarm.add_clone(0, 20)
+	# 구분되는 값 — `INF`는 두 줄 다 이미 들고 있어서 스왑이 빠져도 같아 보인다.
+	w3.swarm.hit_show[strong] = 7.0
+	w3.swarm.hit_dir[strong] = Vector2(0.0, -1.0)
+	# §B-3: `died_this_frame`도 같은 함정이다 — `pos`/`carried`를 죽는 바로 그 줄에서, `remove_at()`이 옮겨
+	# 쓰기 전에 읽어야 한다. 구분되는 화물을 손으로 실어 둔다.
+	w3.swarm.carried[weak] = 4.5
+	var weak_pos: Vector2 = w3.swarm.pos[weak]
+	t.eq(w3.swarm.died_this_frame.size(), 0, "설정: 아직 아무도 죽지 않았다")
+	t.eq(w3.swarm.count, 3, "설정: 약한 분신과 강한 분신을 세웠다")
+	t.ok(w3.swarm.damage(weak, 999, Vector2(1.0, 0.0)), "약한 분신이 죽는다 — swap branch가 이 죽음으로 열린다")
+	t.eq(w3.swarm.count, 2, "설정: 실제로 하나가 사라졌다")
+	t.eq(w3.swarm.hit_show[weak], 7.0, "죽은 자리에는 마지막 줄의 피격 시계가 내려왔다")
+	t.eq(w3.swarm.hit_dir[weak], Vector2(0.0, -1.0), "피격 방향도 마지막 줄의 것이 내려왔다")
+	t.eq(w3.swarm.died_this_frame.size(), 1, "그리고 died_this_frame에 죽음이 하나 기록된다")
+	if w3.swarm.died_this_frame.size() == 1:
+		var d: Dictionary = w3.swarm.died_this_frame[0]
+		# 밀림이 먼저 자리를 옮긴 뒤 죽는다 — 기록된 자리는 죽기 직전(맞기 전)이 아니라 밀린 뒤, 죽는 바로 그
+		# 줄의 최종 자리다. `(1.0, 0.0)` 방향으로 999 × KNOCKBACK_PER_FORCE만큼 밀린 지점.
+		var expect_pos := weak_pos + Vector2(1.0, 0.0) * (999.0 * Rules.KNOCKBACK_PER_FORCE)
+		t.eq(d["pos"], expect_pos,
+				"기록된 자리는 밀려서 죽은 바로 그 자리다 — 살아남은 줄의 자리가 아니다 (%s)" % str(expect_pos))
+		t.eq(d["carried"], 4.5, "실려 있던 화물도 죽기 직전의 제 값이다 (%.1f)" % float(d["carried"]))
+	# `begin_frame()`이 비운다 — `step()`의 맨 앞이 아니다. 이유는 `Swarm.begin_frame()`에 적혀 있다.
+	w3.swarm.step(1.0 / 60.0)
+	t.eq(w3.swarm.died_this_frame.size(), 1, "step()은 이 목록을 비우지 않는다")
+	w3.swarm.begin_frame()
+	t.eq(w3.swarm.died_this_frame.size(), 0, "프레임이 새로 시작하면(begin_frame) 목록은 비어 있다")
+
+
 ## Roll `species`' corpse pool onto `eater` until `want` comes out, resetting the row to its base before
 ## every attempt. **The crow's pool is three parts and the roll is uniform**, so a check that named a part
 ## and stepped once would be a lottery; this leaves exactly one successful roll applied to a known base.
@@ -860,6 +1000,125 @@ func _roll_until_keeping(w: World, eater: int, species: int, want: int) -> bool:
 	return false
 
 
+# -- F12: `World.level_show` is a sim-owned up-counting clock, the same shape `bite_show` already uses -----
+func _f12_level_fires_a_display_clock(t) -> void:
+	var w := World.new()
+	w.setup(293)
+	_silence_food(w)
+	w.critter_count = 0
+	w.boss_index = -1
+	t.eq(w.level_show, INF, "설정: 아직 레벨업이 없었다 — 표시 시계는 INF로 연다")
+
+	w.swarm.banked = w.level_cost(0) + 1.0
+	w.step(DT)
+	t.eq(w.level, 1, "설정: 실제로 레벨이 하나 올랐다")
+	t.ok(w.species_eaten.is_empty(),
+			"설정: 카드 풀이 아직 안 열려 있다 — offer가 안 차야 step()이 다음 걸음에서도 진행한다")
+	t.eq(w.level_show, 0.0, "레벨이 오른 바로 그 프레임엔 0으로 열린다")
+
+	w.step(DT)
+	t.ok(absf(w.level_show - DT) < 0.0001, "다음 프레임엔 dt만큼 올라간다 (%.4f)" % w.level_show)
+
+	# ⚠ **And it keeps counting while the CARDS are up, which is the only level that ever shows cards.**
+	# `_grow()` writes `level_show = 0.0` and rolls the offer in the same call, and `World.step()` returns
+	# early while an offer is on screen — so this clock froze at 0.0 for as long as the player deliberated.
+	# `field_view` reads it as `1 - level_show / LEVEL_POP_TIME`, `hud` as two `<` windows: the host sat at
+	# full `LEVEL_POP_STRENGTH`, fully tinted, with the bar white and the phrase up, until a card was picked.
+	# A pop that does not pass is a state. It is the one line above the guard for exactly this reason.
+	var wc := World.new()
+	wc.setup(295)
+	_silence_food(wc)
+	wc.critter_count = 0
+	wc.boss_index = -1
+	# The pool has to be open, or the offer stays empty and the guard this is about never engages.
+	wc.species_eaten.append(int(Parts.Species.CROW))
+	wc.swarm.banked = wc.level_cost(0) + 1.0
+	wc.step(DT)
+	t.eq(wc.level_show, 0.0, "설정: 레벨이 올라 표시 시계가 0으로 열렸다")
+	t.ok(wc.pending_levels > 0 and not wc.offer.is_empty(),
+			"설정: 그 레벨이 실제로 카드를 띄웠다 — step()이 여기서부터 일찍 돌아간다")
+	var frozen := wc.elapsed
+	for _f in 10:
+		wc.step(DT)
+	t.eq(wc.elapsed, frozen, "설정: 카드가 떠 있는 동안 세상은 실제로 멈춰 있다 — elapsed는 안 움직인다")
+	t.ok(absf(wc.level_show - DT * 10.0) < 0.0001,
+			"그래도 레벨 팝의 시계는 흘러간다 — 카드를 고르는 내내 몸이 부풀어 있지 않는다 (%.4f)"
+					% wc.level_show)
+	t.ok(wc.level_show > Look.LEVEL_POP_TIME * 0.0,
+			"설정: 그 시계는 0보다 크다 — 얼어 있으면 팝은 최대 세기에 고정된다")
+
+
+# -- F13: `F`'s two halves shove apart, through the exact §A-3 formula ------------------------------------
+func _f13_split_shove_matches_the_formula(t) -> void:
+	var sw := Swarm.new()
+	sw.setup(294, Vector2(1000.0, 1000.0))
+	sw.force[0] = 1   ## the host cannot split — isolate the one clone's split
+	var c := sw.add_clone(0, 20)
+	var parent_pos_before: Vector2 = sw.pos[c]
+	t.eq(sw.split_this_frame.size(), 0, "설정: 아직 아무도 갈라지지 않았다")
+
+	sw.split_hold(Rules.SPLIT_HOLD_TIME)
+	t.eq(sw.count, 3, "설정: 그 분신 하나만 갈라졌다")
+	var child := 2
+	t.eq(sw.force[c], 10, "설정: 짝수라 부모도 반")
+	t.eq(sw.force[child], 10, "설정: 아이도 반")
+
+	# §F-10: 두 몸은 그 자리에서 서로 반대로 한 번 더 밀린다 — `CLONE_SPAWN_RING` 위에
+	# `2 × (아이의 힘 × KNOCKBACK_PER_FORCE)`가 더 벌어진다 (부모가 뒤로, 아이가 앞으로, 같은 축을 따라).
+	var sep := sw.pos[child].distance_to(sw.pos[c])
+	var expect_sep := Rules.CLONE_SPAWN_RING + 2.0 * 10.0 * Rules.KNOCKBACK_PER_FORCE
+	t.ok(absf(sep - expect_sep) < 0.5,
+			"갈라진 두 몸의 간격은 CLONE_SPAWN_RING + 2×(아이의 힘×KNOCKBACK_PER_FORCE)다 (%.2f, 기대 %.2f)"
+					% [sep, expect_sep])
+	t.ok(sw.pos[c].distance_to(parent_pos_before) > 0.5, "부모도 밀려서 원래 자리에 그대로 남지 않는다")
+
+	t.eq(sw.split_this_frame.size(), 1, "갈라진 자리가 목록에 하나 남는다")
+	if sw.split_this_frame.size() == 1:
+		t.eq(sw.split_this_frame[0]["pos"], parent_pos_before,
+				"기록된 자리는 갈라지기 전, 부모의 원래 자리다 — 밀린 뒤 자리가 아니다")
+
+	# ⚠ **`begin_frame()` clears it, and `step()` explicitly does NOT** (§0-2 still holds: `view` never does).
+	# `F` is a KEY — the shell fills this list from `split_hold()` in its input phase, BEFORE `step()` — so a
+	# clear at `step()`'s top erased the ring on the very frame it was written, every time, in the real game.
+	# This check drove `split_hold()` and read the list back with no `step()` between, which is exactly why it
+	# was green through all of it; the frame the shell actually runs is asserted in `net_shell`.
+	sw.step(0.0, null)
+	t.eq(sw.split_this_frame.size(), 1, "step()은 이 목록을 비우지 않는다 — 비우면 F 링이 그 프레임에 사라진다")
+	sw.begin_frame()
+	t.eq(sw.split_this_frame.size(), 0, "프레임이 새로 시작하면(begin_frame) 비워진다")
+
+
+# -- F14: the shove goes through `place()`, the same funnel §A-3's knockback uses --------------------------
+## A rock centred exactly where the clone stood, big enough to swallow BOTH halves however the split's
+## random axis lands — worst-case travel from that point is `CLONE_SPAWN_RING + 2×(10×KNOCKBACK_PER_FORCE)`
+## ≈ 36px either side, so a 90px rock guarantees interference regardless of direction. This is what forces
+## the PARENT's shoved position specifically through `push_out`: it starts the split already AT the rock's
+## centre and is shoved only a few px from there, deep inside a 90px rock, unless `place()` actually runs.
+func _f14_split_shove_survives_a_rock(t) -> void:
+	var w := World.new()
+	w.setup(295)
+	_silence_food(w)
+	_clear_terrain(w)
+	w.critter_count = 0
+	w.boss_index = -1
+	w.swarm.force[0] = 1
+	var c := w.swarm.add_clone(0, 20)
+	var origin: Vector2 = w.swarm.pos[c]
+	var rock_r := 90.0
+	w.terrain.rock_pos.append(origin)
+	w.terrain.rock_radius.append(rock_r)
+
+	w.swarm.split_hold(Rules.SPLIT_HOLD_TIME)
+	t.eq(w.swarm.count, 3, "설정: 실제로 갈라졌다")
+	var child := 2
+	t.ok(w.swarm.pos[c].distance_to(origin) >= rock_r - 0.01,
+			"밀린 부모도 바위 밖에 선다 — place()를 거치지 않으면 바위 속으로 순간이동한다 (%.2f, 반지름 %.2f)"
+					% [w.swarm.pos[c].distance_to(origin), rock_r])
+	t.ok(w.swarm.pos[child].distance_to(origin) >= rock_r - 0.01,
+			"밀린 아이도 바위 밖에 선다 (%.2f, 반지름 %.2f)"
+					% [w.swarm.pos[child].distance_to(origin), rock_r])
+
+
 # -- U16b: the peak swarm is a HIGH-WATER MARK -----------------------------------------------------------
 ## `maxi(peak_swarm, ...)` → a plain assignment is green, because `net_run`'s check reads `peak_before24`
 ## **off the world under test** — a bound taken from the thing it is checking, CLAUDE.md's named trap. The
@@ -870,6 +1129,10 @@ func _u16b_the_peak_is_a_high_water_mark(t) -> void:
 	w.setup(470)
 	_silence_food(w)
 	_clear_terrain(w)
+	# §F-10 gives the swarm 90 extra steps to rally before `V` (below) — long enough for a real critter to
+	# reach and touch a clone by chance, which this check is not about. Removed the same way the ground is.
+	w.critter_count = 0
+	w.boss_index = -1
 	t.eq(w.peak_swarm, 0, "설정: 최대 무리는 0에서 시작한다")
 
 	# Force 10 → three full holds is 8 bodies, so 7 clones. Every one lands on the spawn ring inside `V`'s
@@ -880,6 +1143,12 @@ func _u16b_the_peak_is_a_high_water_mark(t) -> void:
 	t.eq(w.swarm.count, 8, "설정: 세 번 나눠서 몸이 여덟이 됐다")
 	w.step(DT)
 	t.eq(w.peak_swarm, 7, "그 순간의 최대 무리는 분신 일곱이다")
+
+	# §F-10: 세 번 겹쳐 갈라지면 §F-10의 밀림도 세 번 겹친다 — 몇 마리는 `CLONE_SPAWN_RING` 하나만으로는
+	# 닿지 않는 56px 밖으로 밀릴 수 있다. FOLLOW 상태는 그 틈을 저절로 좁힌다(모두 호스트를 향해 걷는다) —
+	# 플레이어가 `V`를 누르기 전에 실제로 갖는 그 한 박자를, 여기서도 준다.
+	for _s in 90:
+		w.step(DT)
 
 	# Every clone home again. The LIVE count falls back to zero and the peak must not follow it.
 	var taken := w.swarm.absorb()

@@ -58,6 +58,46 @@ var atk_cd := PackedFloat32Array()
 ## gets a refusal rather than a second, quietly wrong, health bar.
 var hp := PackedInt32Array()
 
+## Seconds since this body was last hit, counted UP — the same shape `bite_show` already uses, and for the
+## same reason: counting down cannot tell "just hit" from "never hit" once it reaches zero. Opens at `INF`.
+## Row 0 is the host: `Swarm.damage()` refuses index 0 outright, so `World._contact()`'s host site is the one
+## place this row is written, matching `worn[0]`'s own -1-forever pattern for an index the swap never reaches.
+var hit_show := PackedFloat32Array()
+## Which way that hit came from (unit, or `Vector2.ZERO` before the first hit). The knockback that moves
+## `pos` and the flash the view draws both read this.
+var hit_dir := PackedVector2Array()
+## Seconds since this body last SWUNG at something, counted up the same way — and now written (§B-5):
+## `World._contact()`'s pass 1 marks it `0.0` on every clone that actually lands a hit, whether bare-handed
+## or through a worn ARC part, at the same moment it sets that clone's own `atk_cd`.
+var swing_show := PackedFloat32Array()
+## Which way that swing landed — clone toward what it hit (unit, or `Vector2.ZERO` before the first swing).
+## The short line `field_view.gd` draws for `Look.CLONE_HIT_LINE_TIME` reads this; the shape mirrors
+## `hit_dir`, one column for the hitting side instead of the hit side.
+var swing_dir := PackedVector2Array()
+
+## §B-3: which bodies died THIS frame, filled by `damage()` at the moment the row is about to be swapped
+## away — `pos` and `carried` are read on the exact same side of `remove_at()` the cargo-loss bookkeeping
+## already has to read them on (see the file header), because the row belongs to a stranger the instant the
+## swap runs. **Cleared by `begin_frame()`, never by `view`** — `view` may not write `sim` (§0-2).
+var died_this_frame: Array[Dictionary] = []
+
+## §F-7: which food spots were eaten THIS frame, filled by `_try_eat()` the moment a mouthful lands — `pos`
+## is the food's own spot (fixed, never moves) and `to` is the eater's position that same frame, so `view`
+## can draw the crumb travelling toward whichever body actually ate it rather than a fixed point. Cleared
+## by `begin_frame()`, the same shape and the same reason `died_this_frame` already has.
+var food_eaten_this_frame: Array[Dictionary] = []
+
+## §F-10: where a split happened this frame, one entry per body that actually halved — the ORIGINAL
+## position, before the two halves are shoved apart, so `view` can ring the point they came FROM rather
+## than either half's new spot. Same clear-and-read shape as the two lists above.
+##
+## ⚠ **This is the list that proved the clear could not live at the top of `step()`.** `F` is a KEY: the
+## shell fills this from `split_hold()` during its input phase, which runs BEFORE `step()`, so a clear at
+## `step()`'s top wiped the entry on the same frame it was written and the ring never reached the screen
+## once in the real game — with every check on this list green, because each one drives `split_hold()` and
+## reads the list back without a `step()` in between. See `begin_frame()`.
+var split_this_frame: Array[Dictionary] = []
+
 var count := 0
 
 ## Banked at the host: what the host bit itself, plus what returning clones handed over. This is the
@@ -152,6 +192,10 @@ func setup(rng_seed: int = 1, start: Vector2 = Rules.FIELD * 0.5) -> void:
 	worn.resize(Rules.POOL)
 	atk_cd.resize(Rules.POOL)
 	hp.resize(Rules.POOL)
+	hit_show.resize(Rules.POOL)
+	hit_dir.resize(Rules.POOL)
+	swing_show.resize(Rules.POOL)
+	swing_dir.resize(Rules.POOL)
 	count = 1
 	pos[0] = start
 	vel[0] = Vector2.ZERO
@@ -166,6 +210,16 @@ func setup(rng_seed: int = 1, start: Vector2 = Rules.FIELD * 0.5) -> void:
 	# The sentinel. `World.host_hp` is the host's health; this row exists only so the column has the same
 	# length as every other one.
 	hp[0] = -1
+	# The host is a body and it gets hit — `resize()`'s zero-fill is 0.0, not `INF`, and a host that opened
+	# already "just hit" would flash and shake on frame one of every run.
+	hit_show[0] = INF
+	hit_dir[0] = Vector2.ZERO
+	swing_show[0] = INF
+	swing_dir[0] = Vector2.ZERO
+	# §B-3/§F-7/§F-10: a fresh run has died nobody, eaten nothing and split nothing yet.
+	died_this_frame.clear()
+	food_eaten_this_frame.clear()
+	split_this_frame.clear()
 	# The one place the host's force is written from nothing. After this only splitting, absorbing, the
 	# level and WEARING A PART move it — `Body.wear()` is the fourth writer and it both adds and subtracts,
 	# in the same call, because a digested part that keeps paying is ghost force and `F` multiplies it.
@@ -222,10 +276,19 @@ func add_clone(parent: int = 0, force_value: int = 0) -> int:
 	# instead, a clone born touching a creature would wait a whole period before its first hit while the
 	# other two did not, and no check comparing hit counts across bodies could be satisfied.
 	atk_cd[i] = 0.0
-	# The floor is not decoration: `force_value` defaults to 0 and every steering net in the round calls
-	# this with no arguments. Without it those bodies are born at 0 hp — alive, drawn, and dead to the first
-	# touch, with nothing red anywhere.
-	hp[i] = maxi(Rules.BODY_HP_MIN, force_value * Rules.HP_PER_FORCE)
+	# Born FULL, through the same function the damage cap reads its ceiling from — written out here as a
+	# second copy of `force × HP_PER_FORCE`, the birth value and the cap's ceiling could drift apart and
+	# a body would be born above or below its own maximum with nothing to say so.
+	# The floor inside it is not decoration: `force_value` defaults to 0 and every steering net in the round
+	# calls this with no arguments. Without it those bodies are born at 0 hp — alive, drawn, and dead to the
+	# first touch, with nothing red anywhere.
+	hp[i] = hp_max_of(i)
+	# A constant, unconditionally — exactly why `worn[i] = -1` above is one: writing it here is what keeps
+	# `_split_fire()` from needing a fourth maintenance point of its own. **A newborn body has not been hit.**
+	hit_show[i] = INF
+	hit_dir[i] = Vector2.ZERO
+	swing_show[i] = INF
+	swing_dir[i] = Vector2.ZERO
 	return i
 
 
@@ -250,6 +313,10 @@ func remove_at(i: int) -> void:
 		worn[i] = worn[last]
 		atk_cd[i] = atk_cd[last]
 		hp[i] = hp[last]
+		hit_show[i] = hit_show[last]
+		hit_dir[i] = hit_dir[last]
+		swing_show[i] = swing_show[last]
+		swing_dir[i] = swing_dir[last]
 	count -= 1
 
 
@@ -266,6 +333,56 @@ func place(p: Vector2, r: float) -> Vector2:
 		p = terrain.push_out(p, r)
 		p = terrain.clamp_to_arena(p, r)
 	return p
+
+
+## Which radius row `i` occupies the ground with. **The host and a clone are not the same size**, and this
+## one expression is what every distance between a body and anything else is built out of — `_split_fire()`,
+## `World._enters_a_body()` and both separation passes each need it. Written out by hand at each of them it is four
+## chances for the host to quietly become clone-sized in one of the four.
+func body_radius(i: int) -> float:
+	return Rules.BODY_RADIUS if i == 0 else Rules.CLONE_BODY_RADIUS
+
+
+## Move body `i` until it stands `min_d` from `centre`, and move **nothing else**. This is the one-way half
+## of separation in one place: the clone↔host pair and both body↔creature pairs are the same correction
+## against a point that does not move, and three hand-written copies of the branch below are three chances
+## to write the epsilon that once threw a coincident pair ~80,000px.
+##
+## The coincident case is not hypothetical. `1` steers every clone at the host, the arena summon teleports
+## up to forty onto whatever is under them, and a creature can be standing dead centre on a body when this
+## runs. **The angle is deterministic from the row index** — never random, or the same overlap resolves
+## differently every run and no net can pin it. Emptying it to `Vector2.ZERO` reds five checks across two
+## nets, measured.
+##
+## ⚠ **`l = 0.0` here is a statement of intent and NOT the load-bearing line it is in `_separate()`.**
+## Measured: setting it to `0.0001` instead leaves the whole round green, because this branch assigns `dir`
+## outright and the push below never divides by `l` — the difference is a ten-thousandth of a pixel. The
+## ~80,000px throw belongs to the clone↔clone branch, where the same shape *did* divide. Written the safe
+## way anyway, so that a later edit reaching for `d / l` has nothing waiting for it.
+##
+## Through `place()`, like every other position write: separation runs after movement and is free to shove a
+## body straight back into a rock `push_out` had already cleared this frame, with nothing after it to undo
+## that. `place()` is also the whole of the answer to a body wedged between a creature and a rock — the push
+## is cancelled or slid along the rock's surface rather than honoured through it.
+##
+## ⚠ **It will move the HOST if it is called with 0.** That is deliberate — a creature must push the host —
+## and it is why the "the host is never moved by its own swarm" rule lives at `_separate()`'s guard, at the
+## call site, and not in here.
+func push_out_of(i: int, centre: Vector2, min_d: float) -> void:
+	if i < 0 or i >= count:
+		return
+	var d := pos[i] - centre
+	var l := d.length()
+	var dir := Vector2.ZERO
+	if l < 0.0001:
+		var a := float(i) * 2.3999632
+		dir = Vector2(cos(a), sin(a))
+		l = 0.0
+	else:
+		dir = d / l
+	if l >= min_d:
+		return
+	pos[i] = place(pos[i] + dir * (min_d - l), body_radius(i))
 
 
 ## `1`. **No argument: the swarm comes to the host**, and `_move_clone()` reads `pos[0]` live rather than
@@ -410,6 +527,7 @@ func _split_fire() -> void:
 		if i > 0 and hp[i] < 2:
 			continue
 		var was := hp[i]
+		var was_pos := pos[i]
 		# Integer division floors, so the child takes the smaller half and the parent the remainder.
 		var child := force[i] / 2
 		var j := add_clone(i, child)
@@ -419,6 +537,20 @@ func _split_fire() -> void:
 		if i > 0:
 			hp[j] = was / 2
 			hp[i] = was - hp[j]
+		# §F-10: the two halves shove apart, through the exact formula and the exact `place()` funnel §A-3's
+		# knockback already uses — `distance = force × Rules.KNOCKBACK_PER_FORCE`, this time the CHILD's own
+		# force, so a sliver barely moves and a big half visibly does. Direction is the offset `add_clone()`
+		# already placed the child at (`pos[j] - was_pos`), never a second random draw — the same discipline
+		# `_write_critter()`'s own comment states: a column may not cost the shared `_rng` a draw, and this
+		# is not even a column, but the habit is cheap to keep. Falls back to a fixed axis only in the
+		# zero-length edge case a net drives by hand; `add_clone()` itself never produces one.
+		var axis: Vector2 = pos[j] - was_pos
+		var dir: Vector2 = axis.normalized() if axis.length_squared() > 0.0001 else Vector2.RIGHT
+		var dist := float(child) * Rules.KNOCKBACK_PER_FORCE
+		pos[i] = place(was_pos - dir * dist, body_radius(i))
+		pos[j] = place(pos[j] + dir * dist, Rules.CLONE_BODY_RADIUS)
+		# The ring `view` draws is at the point the split happened FROM, not either half's new spot.
+		split_this_frame.append({"pos": was_pos})
 
 
 # -- V, the absorb -------------------------------------------------
@@ -447,6 +579,19 @@ func absorb() -> int:
 
 # -- taking damage -------------------------------------------------
 
+## What this body's hp was BORN at, and therefore its ceiling: `force × HP_PER_FORCE`, floored.
+## `add_clone()` writes it and `World`'s one-blow cap divides it — a function rather than a column because
+## it is a pure read of `force`, and a column would be a fourth thing `_split_fire()` has to maintain.
+##
+## ⚠ **Row 0 answers -1, the same sentinel `hp[0]` carries.** The host's maximum is `Body.hp_max(level)`,
+## which counts levels and worn parts and has nothing to do with `force[0]`; answering a plausible number
+## here would be a second, quietly wrong ceiling for the one body a run ends on.
+func hp_max_of(i: int) -> int:
+	if i <= 0 or i >= count:
+		return -1
+	return maxi(Rules.BODY_HP_MIN, force[i] * Rules.HP_PER_FORCE)
+
+
 ## Damage one body. Returns true when it **died and its row is GONE** — the caller must stop touching `i`.
 ##
 ## Everything a dying clone loses is lost by `remove_at()` swapping the last row over it: cargo, force and
@@ -458,12 +603,27 @@ func absorb() -> int:
 ##
 ## ⚠ **`maxi(0, amount)` is not defensive tidying.** Negative force is reachable — the corpse part roll
 ## subtracts a bigger part's force from a body that has since been halved — and negative damage HEALS.
-func damage(i: int, amount: int) -> bool:
+##
+## `from_dir` (not `hit_dir`, which would shadow the column of the same name) is defaulted for the same
+## reason `World._damage_critter`'s third parameter is: most callers have no direction to give.
+func damage(i: int, amount: int, from_dir: Vector2 = Vector2.ZERO) -> bool:
 	if i <= 0 or i >= count:
 		return false
-	hp[i] = maxi(0, hp[i] - maxi(0, amount))
+	var dealt := maxi(0, amount)
+	# Written FIRST, exactly like `bite_show`: the hit happened even when it does not kill, so the clock and
+	# direction have to be true before `remove_at()` can possibly swap a stranger into this row.
+	hit_show[i] = 0.0
+	hit_dir[i] = from_dir
+	# **The knockback**, through `place()` — never a bare write — so a hit next to a rock stops at its edge
+	# rather than teleporting the clone through it. `dealt`, not `amount`: healing must not also shove.
+	if dealt > 0 and from_dir.length_squared() > 0.0001:
+		pos[i] = place(pos[i] + from_dir * (float(dealt) * Rules.KNOCKBACK_PER_FORCE), Rules.CLONE_BODY_RADIUS)
+	hp[i] = maxi(0, hp[i] - dealt)
 	if hp[i] > 0:
 		return false
+	# §B-3: the burst reads `pos`/`carried` HERE — the exact same side of `remove_at()` the cargo-loss
+	# bookkeeping above already has to read them on; one line later and this would be reading a survivor's.
+	died_this_frame.append({"pos": pos[i], "carried": carried[i]})
 	remove_at(i)
 	return true
 
@@ -519,6 +679,18 @@ func bite(range_px: float, arc: float, aim: Vector2) -> bool:
 	return true
 
 
+## **The frame boundary, and it is NOT the top of `step()`.** The three lists above are read by `view`
+## AFTER `step()` and written from two places: inside `step()`, and by the shell's input phase, which runs
+## BEFORE it. A clear at `step()`'s top therefore erases every event a KEY produced on the frame it was
+## pressed — measured on `split_this_frame`, where `F` drew no ring at all in the real game. So the clear
+## sits at the one instant that is after `view`'s read and before either writer: the start of the shell's
+## frame. `World.begin_frame()` forwards here; `view` still never writes `sim` (§0-2).
+func begin_frame() -> void:
+	died_this_frame.clear()
+	food_eaten_this_frame.clear()
+	split_this_frame.clear()
+
+
 ## One frame. `food` may be null — a net that only measures steering passes nothing and pays for nothing.
 ##
 ## Order is load-bearing and is itself measurable: move, then separate, then eat, then — during the great
@@ -534,6 +706,9 @@ func step(dt: float, food: Food = null) -> void:
 	for i in count:
 		if atk_cd[i] > 0.0:
 			atk_cd[i] = maxf(0.0, atk_cd[i] - dt)
+		# Counted UP, both of them — `INF + dt == INF` needs no guard, the same property `bite_show` relies on.
+		hit_show[i] += dt
+		swing_show[i] += dt
 	_rebuild_grids(food)
 	_move_host(dt)
 	for i in range(1, count):
@@ -649,9 +824,22 @@ func _move_clone(i: int, dt: float, food: Food) -> void:
 ## Neighbour candidates come from the grid built at the START of the frame, before movement. A clone moves
 ## at most ~5.7px in a frame against a 32px cell, so the candidate set is the same set; reading current
 ## positions for the distances keeps the correction exact.
+##
+## ⚠ **Two pairs, two rules.** Clone↔clone is symmetric and each takes half. **Clone↔host is ONE-WAY: the
+## clone takes the whole overlap and `pos[0]` is never written here.** The player is not shoved by their own
+## swarm — a host ringed by forty bodies that could each push it would stop standing where the stick says.
+## See 「근접전이 안 읽힌다」's A-2 for why the host had no separation at all until now.
 func _separate(i: int) -> void:
+	# The one-way rule made structural rather than left to the caller's `range(1, count)`. Called with 0 this
+	# would otherwise compute `pos[0] - pos[0]`, take the coincident branch, and walk the host off its own
+	# coordinate — the exact thing the pair table forbids, reachable by widening one loop bound.
+	if i <= 0 or i >= count:
+		return
 	var ids := clone_grid.neighbours(pos[i], Rules.SEPARATION_MIN, Rules.NEIGHBOUR_CAP)
 	for id in ids:
+		# **Row 0 is still skipped here and it is not an omission** — the host is in `clone_grid`, but its
+		# distance is not `SEPARATION_MIN` and the query above was not asked for its radius. It gets its own
+		# block below, at its own distance, with no grid in between.
 		var j := id >> 1
 		if j <= 0 or j >= count or j == i:
 			continue
@@ -679,6 +867,35 @@ func _separate(i: int) -> void:
 		# frame — and nothing runs after it to undo that.
 		pos[i] = place(pos[i] + half, Rules.CLONE_BODY_RADIUS)
 		pos[j] = place(pos[j] - half, Rules.CLONE_BODY_RADIUS)
+	_separate_from_host(i)
+
+
+## The clone↔host half, and it moves the CLONE only. **Derived from the two radii, never a new constant**:
+## `SEPARATION_MIN` is already `2 × CLONE_BODY_RADIUS`, so "edge to edge, touching" for a clone against the
+## host is `BODY_RADIUS + CLONE_BODY_RADIUS`. A body separated to `SEPARATION_MIN` from the host would still
+## stand 6px inside its drawn radius, which is the picture the user was looking at when they said bodies
+## stand inside each other.
+##
+## **Last, after the clone↔clone loop**, so the correction that cannot be undone by moving the other body is
+## the last one this body receives in its own call. Run first, the symmetric loop is free to push a clone
+## straight back onto the host with nothing behind it.
+##
+## The coincident branch is not hypothetical: `1` steers every clone at the host and the arena summon
+## teleports up to forty onto it, both of which produce an exactly-zero offset. The angle is deterministic
+## from the index and `l` goes to **0.0** — see the clone↔clone branch above for the ~80,000px throw an
+## epsilon divisor bought there.
+##
+## ⚠ **The coincident branch fires on a LONE clone, not on the pile** — measured: in a pile the loop above
+## has already moved the body off the host by the time this runs, so `l` is non-zero and the ordinary branch
+## takes it. A check that drives forty coincident bodies is therefore not checking it; `net_grid` drives one.
+##
+## **No margin here, unlike the body↔creature pair.** `Rules.SEPARATION_CONTACT_MARGIN` exists to keep a
+## body inside `World._contact()`'s bands, and nothing about the host is a band: the host does not attack by
+## touching and its own swarm never attacks it.
+func _separate_from_host(i: int) -> void:
+	# `pos[0]` is never handed in as the row to move, only as the point to move away from — that one
+	# asymmetry is the whole of "the host is never moved by its own swarm".
+	push_out_of(i, pos[0], Rules.BODY_RADIUS + Rules.CLONE_BODY_RADIUS)
 
 
 func _try_eat(i: int, dt: float, food: Food) -> void:
@@ -695,6 +912,9 @@ func _try_eat(i: int, dt: float, food: Food) -> void:
 		return
 	if not food.consume(target):
 		return
+	# §F-7: recorded BEFORE `eat()` moves anything, at the food's own fixed spot and this body's own current
+	# position — `view` draws a dot travelling from one to the other, reusing the burst list's timer shape.
+	food_eaten_this_frame.append({"pos": food.pos[target], "to": pos[i]})
 	if i == 0:
 		# The host banks instantly. A clone's mouthful is at risk until it walks home — that difference IS
 		# the tax the GDD wanted, expressed as a speed, with no constant to tune and nothing to explain.

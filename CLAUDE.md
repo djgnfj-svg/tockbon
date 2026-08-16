@@ -74,9 +74,9 @@ species with three different hands, a corpse you stand over, forty rocks and twe
 wanders for 150 seconds and then comes, an arena, and a minimap. **What does not run**: chimeras, further
 habitats, meta, animation, and the horse's other two parts (`Parts.DROPS` keeps 말 갈기 and 말 폐활량 out of
 both pools on purpose, so the horse trait is unreachable this build).
-⚠ **The arena is not drawn at all** — the circle closes, the host is pinned inside it, the swarm is
-teleported in, and there is nothing on screen to say so. **Plan 4's own acceptance question cannot be
-answered until something draws it.**
+⚠ **The arena had no view at all for a day** — the circle closed, the host was pinned inside it, the swarm was
+teleported in, and nothing on screen said so. **Plan 5 draws it**; plan 4's own acceptance question is
+answerable now and has still not been asked.
 
 ⇒ **The user played it on 2026-08-15 and the field is now SEVEN species.** 다람쥐 · 코끼리 · 치타 · 사자
 joined the crow, the horse and the boss, and **none of the four gives a part** — `Parts.DROPS` is untouched.
@@ -96,10 +96,40 @@ screen says you were hit, that you hit anything, that a clone died, that a level
 that the boss started hunting. **[The audit](docs/design/presentation-audit-ko.md) counts nine that exist
 against twelve that do not, and the pattern is that every existing one is "something I did"** — the missing
 ones are all "something that happened to me" and "something that happened over there".
-⇒ **[Plan 5](docs/plans/1.ready/presentation-pass.md) is that, and it is what unblocks three older acceptance
-questions** — plan 4's arena, and plan 2's *does losing a fat clone hurt* / *does the hold read as an act* —
-all three unanswerable because the thing was never drawn. **One rule change rides in it** (a corpse takes
-several bites; quitting keeps what you ate) and it is marked as such.
+⇒ **[Plan 5](docs/plans/3.done/presentation-pass.md) is that, and it is built** — 22 nets, 2420 checks. It
+unblocks three older acceptance questions — plan 4's arena, and plan 2's *does losing a fat clone hurt* /
+*does the hold read as an act* — all three unanswerable because the thing was never drawn. **One rule change
+rode in it** (a corpse takes several bites; quitting keeps what you ate) and it is marked as such.
+⚠ **Nobody has looked at it.** All eight of its acceptance questions are eyes and every one is open.
+
+⇒ **Three adversarial passes over the BUILT code then found 29 more, and not one was a false report.**
+Two shapes are worth carrying: **an event list cleared at the wrong end of the frame** — `main._read_input()`
+fills `split_this_frame` *before* `run.step()`, so clearing at the top of `step()` wiped it on the frame it
+was written, 100% of the time, and `F`'s ring never once reached the screen; and **a leaf that draws two
+things when the check asks about one** — `_paint_ring` draws two circles, so the arena wall dragged a 405px
+companion circle across the boss fight while the check confirmed the 450px one. **Emptying five burst effects
+to full transparency was green**, as was collapsing the boss arrow to a point, because `size_px` was the one
+argument the net never read. ⇒ **The plan text was wrong in eight places and the doc's 「지어진 뒤」 says which.**
+
+⇒ **The user then played it and could not play it, and that turned out to be measurable.** *"도저히 게임이
+진행이 안 돼. 잡을 수가 없어요."* ⇒ `tools/look/probe_run.gd` PLAYS a whole run headless with a scripted bot
+and prints four numbers; the opening build scored **83% of the run with nothing killable on screen and a
+150-second gap between kills.** **A design complaint became a number, and that is the instrument to reach
+for next time the answer is "it isn't fun".**
+⚠ **The opening screen held zero creatures at every seed, by construction** — the opening camera's
+half-diagonal is **459px** and creatures were forbidden inside **900px**. Two separate constants had been
+justified by a half-diagonal that was **1.5× too large** (1377 where the truth is 918), and a net was holding
+the same wrong number. ⇒ **[The level curve](docs/design/level-curve-ko.md)** is the answer: four new species
+that drop no part (들쥐·토끼·들개·멧돼지), time gates, a placed opening pocket, and a hit capped at half the
+victim's maximum. Kills went **16 → 342** and the longest gap **150s → 75s**. ⚠ **It still fails its own bar**
+(61% dead air against 25%), and the failure changed character — from "nothing I can kill" to "nothing on
+screen while I walk to the next one".
+⚠ **The instrument was wrong in its owner's favour twice** — the bot modelled one-shot as `force >= hp` after
+the cap made that false, and never read `SPECIES_FLEES`. The honest number was 58%, not the 48% first
+reported. **A probe that grades its own step must be inverted like any other check.**
+⚠ **And the user's most emphatic note is unbuilt**: bodies in contact stand still through the whole attack
+cooldown — *"붙어서 가만히 있는 이 쓰레기 같은 부분이 중요해. 개잼이 없어져."* Separation made it worse, not
+better, by removing the accidental jostle. See `bodies-must-never-stand-still` in memory.
 
 ⚠ **Plan 2's keys are accepted; its picture is not** — the user played it and said the detail falls well
 short while the keys land fine. **The three questions that actually decide that plan are still unheard**
@@ -474,8 +504,8 @@ These survive **even after you confirm every mutation goes red**:
 
 ## Running the nets
 
-**Twenty-two nets, 2015 checks, 2.2 seconds** (measured after the seven-species field landed — 22/1973 after
-plan 4's leftovers were closed, 22/1889 after
+**Twenty-five nets, 3541 checks, 4.6 seconds** (measured after the level-curve pass — 22/2420 after plan 5,
+22/2015 after the seven-species field, 22/1973 after plan 4's leftovers were closed, 22/1889 after
 its repairs, 18/889 after plan 3, 16/514 after plan 2).
 A net is `tests/nets/net_*.gd` with one method, `func run(t)`,
 and `t` gives you `ok` · `eq` · `pump_frames` · `expect_error` · `root`. **The wrapper reds below five

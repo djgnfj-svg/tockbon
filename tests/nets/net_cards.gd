@@ -65,7 +65,65 @@ func run(t) -> void:
 	_c10_take(t)
 	_c9_only_parts(t)
 	_c_crow_opens_the_pool(t)
+	_c_a_species_that_drops_nothing_does_not_spin(t)
 	await _shell(t)
+
+
+# -- eating something that drops nothing must not spin the roll forever ----------------------------------
+## ⚠ **`World._grow()` guarded on `not species_eaten.is_empty()`, and that is not the same question as
+## "the pool can produce something".** Seven of the eleven species have `Parts.DROPS` 0 — the split that
+## makes a new species cheap — so a run whose only corpse is a 들쥐 has a NON-empty `species_eaten` and an
+## EMPTY pool. `offer` never fills, the guard is true again next frame, and `Cards.roll()` runs **every
+## frame for the rest of the run**: the exact shape `Cards.roll`'s own comment claims was fixed.
+##
+## It was reachable before the curve (eat a 다람쥐 before any crow); the curve puts a 들쥐 in the opening
+## pocket at 280px, so it would have fired in the first five seconds of **every** run.
+##
+## ⚠ **MEASURED, AND THE HONEST RESULT IS SMALLER THAN THE CLAIM ABOVE.** Putting
+## `not species_eaten.is_empty()` back in `_grow()`'s guard leaves this whole round GREEN, and the reason is
+## not a hole in the check — **the two guards are behaviourally identical.** `pool_size()` calls the same
+## `_pool()` loop that `roll()` does, every frame, so the per-frame work is unchanged; and with an empty
+## pool `roll()` draws no random numbers, so the seed stream is unchanged too. There is no observable
+## difference for a check to find. The "every-frame roll" the spec names as a live bug **is an every-frame
+## no-op either way, and this change does not remove it** — it makes the guard ask the question it means.
+##
+## So this measures what is actually measurable, and nothing more: that ONE function owns the filter, that
+## it answers differently for a species that drops and one that does not, that a level banked behind an
+## empty pool is not lost, and that the offer opens on the frame a droppable species lands.
+##
+## *Mutation that bites: `pool_size()` returning a constant — the guard then opens a card screen with an
+## empty offer, and `_c14`'s banking checks go with it.*
+func _c_a_species_that_drops_nothing_does_not_spin(t) -> void:
+	# The filter, first: these two answers are what the guard is made of.
+	t.eq(Cards.pool_size(PackedInt32Array()), 0, "아무것도 안 먹었으면 풀은 0장이다")
+	t.eq(Cards.pool_size(PackedInt32Array([Parts.Species.MOUSE])), 0,
+			"들쥐를 먹어도 풀은 여전히 0장이다 — 「먹었다」와 「낼 게 있다」는 다른 질문이다")
+	t.ok(Cards.pool_size(PackedInt32Array([Parts.Species.CROW])) > 0,
+			"대조: 까마귀를 먹으면 풀에 뭔가 있다 — 위의 0이 언제나 0인 것은 아니다")
+	t.eq(Cards.pool_size(PackedInt32Array([Parts.Species.CROW])),
+			Cards.roll(RandomNumberGenerator.new(), PackedInt32Array([Parts.Species.CROW])).size(),
+			"그리고 그 수는 실제로 뽑히는 장수와 같다 — 거르는 곳이 한 군데라는 뜻이다")
+
+	# Driven: a level is pending, a 들쥐 has been eaten, and the world runs for two hundred frames.
+	var w := World.new()
+	w.setup(68)
+	_silence(w)
+	w.critter_count = 0
+	w.boss_index = -1
+	w.species_eaten = PackedInt32Array([Parts.Species.MOUSE])
+	w.pending_levels = 1
+	for _n in 200:
+		w.step(1.0 / 60.0)
+	t.ok(w.offer.is_empty(), "들쥐만 먹은 채로 레벨이 밀려 있으면 카드 판은 열리지 않는다")
+	t.eq(w.pending_levels, 1, "그리고 그 레벨은 은행에 그대로 남는다 — 사라지지 않는다")
+	t.eq(Cards.pool_size(w.species_eaten), 0,
+			"200프레임을 돌아도 풀은 0장이다 — 매 프레임 굴려도 답이 달라지지 않는 상태다")
+
+	# The positive control: the same world, plus a crow eaten. The offer must actually open.
+	w.species_eaten = PackedInt32Array([Parts.Species.MOUSE, Parts.Species.CROW])
+	w.step(1.0 / 60.0)
+	t.ok(not w.offer.is_empty(),
+			"대조: 까마귀가 더해지는 순간 판이 열린다 — 위의 침묵은 굳어 버린 게 아니다 (%s)" % str(w.offer))
 
 
 # -- the pool opens off the CROW, driven from a real corpse ----------------------------------------------
@@ -90,6 +148,7 @@ func _c_crow_opens_the_pool(t) -> void:
 	w.corpse_pos[0] = w.swarm.pos[0]
 	w.corpse_species[0] = Parts.Species.CROW
 	w.corpse_force[0] = 10
+	w.corpse_bites_left[0] = w._bites_for(10)
 	w.corpse_progress[0] = 0.0
 	var frames := 0
 	while w.corpse_count > 0 and frames < 300:

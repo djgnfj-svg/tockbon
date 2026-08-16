@@ -24,7 +24,7 @@ var body := Body.new()
 var terrain := Terrain.new()
 
 ## Creatures are a flat table too, for the same reason the swarm is: nothing here needs to be a Node.
-## **Eight columns, and every one of them is written by `_spawn_at()` and swapped by `_remove_critter()`.**
+## **Ten columns, and every one of them is written by `_spawn_at()` and swapped by `_remove_critter()`.**
 ## A column that only one of those two knows about is the shape that leaks — a survivor inherits a dead
 ## creature's number and nothing goes red.
 var critter_pos := PackedVector2Array()
@@ -37,6 +37,31 @@ var critter_atk_cd := PackedFloat32Array()   ## contact-attack cooldown, the clo
 ## Seconds of crow counter left. A crow stands still until something damages it and then walks at the
 ## nearest body for `Rules.CROW_COUNTER_TIME`; without its own column that timer has nowhere to live.
 var critter_counter := PackedFloat32Array()
+## Seconds since the last hit landed, counted UP in `_step_critters()` — the same shape `Swarm.bite_show`
+## already uses and for the same reason: counting down cannot tell "just hit" from "never hit" once it
+## reaches zero. Opens at `INF`; `_damage_critter()` is the one place it goes back to `0.0`.
+var critter_hit_show := PackedFloat32Array()
+## Which way that hit came from (unit, or `Vector2.ZERO` before the first hit). The knockback that moves
+## `critter_pos` and the flash the view draws both read this, so the direction tested is the direction shown.
+var critter_hit_dir := PackedVector2Array()
+## Seconds since this creature last SWUNG, counted UP, and the direction it swung in. The mirror of
+## `Swarm.swing_show` / `swing_dir`, and it exists for the reason the user gave in one line — *"잡몹이랑 내
+## 분신들도 저 액션이 좀 없음"*: the receiving side had every mark and the attacking side had none, so a
+## creature took your health with nothing on screen ever saying it moved. **Written where
+## `critter_atk_cd` is, not where the damage is** — a swing that a grace period ate is still a swing, and
+## drawing only the ones that land makes the grace period look like the creature stopped attacking.
+var critter_swing_show := PackedFloat32Array()
+var critter_swing_dir := PackedVector2Array()
+## §B-4: which creatures died THIS frame, filled by `_damage_critter()` while row `k` still holds its own
+## values — position, species and its OWN radius, since `critter_radius(k)` cannot be recomputed once
+## `_remove_critter()` has swapped a stranger into that row.
+##
+## ⚠ **Cleared by `begin_frame()` and NOT at the top of `step()`.** The player's own kill runs through
+## `fire()` → `strike()`, which the shell dispatches from its input phase BEFORE `step()`; a clear at
+## `step()`'s top erased it on the frame it happened, so a crow killed by a clone burst and the same crow
+## killed by a key did not — the asymmetry that reads as "the burst is flaky". See `Swarm.begin_frame()`
+## for the whole sentence. Never cleared by `view`.
+var critters_died_this_frame: Array[Dictionary] = []
 var critter_count := 0
 
 ## The one boss's row, kept live through every swap. Everything about the boss reads it, so
@@ -58,19 +83,31 @@ var _watched_row := -1
 ## it came from would be reading a stranger before the frame it was born on ended: `_remove_critter()`
 ## swaps the last creature down into the dead one's index on that same call.
 ##
-## **Four columns, one removal.** `_remove_corpse()` swaps all four; miss one and a corpse inherits a
-## consumed one's progress, species or worth, which reads as a meal that finished by itself.
+## **Five columns, one removal.** `_remove_corpse()` swaps all five; miss one and a corpse inherits a
+## consumed one's progress, bite count, species or worth, which reads as a meal that finished by itself.
 var corpse_pos := PackedVector2Array()
 var corpse_species := PackedInt32Array()   ## `Parts.Species`, copied at death
 var corpse_force := PackedInt32Array()     ## what the individual was worth, copied at death
 ## 0..1, and it is **kept when the eater walks away**. Resuming is what makes interrupting a meal a cost
-## rather than an annoyance, so nothing anywhere resets this to zero.
+## rather than an annoyance, so nothing anywhere resets this to zero. **The progress of ONE BITE now**,
+## not of the whole corpse — it rolls over to 0.0 every time a bite finishes, so the ring the view draws
+## turns `corpse_bites_total(i)` times over one corpse's life instead of once.
 var corpse_progress := PackedFloat32Array()
+## Bites left before this corpse is gone. Opens at `_bites_for(force_value)` in `_add_corpse()`; each bite
+## pays its own share of the meal through `swarm.eat()`, and only the LAST one closes the row and fires
+## `species_eaten` / `stage_cleared` / the part roll — see `_step_corpses()`. **Quitting after a bite keeps
+## that bite**, because it already went through `eat()` before this column ever ticked down.
+var corpse_bites_left := PackedInt32Array()
 var corpse_count := 0
 
 var elapsed := 0.0
 var host_hp := Rules.HOST_HP
 var host_grace := 0.0
+## The force of the hit that most recently actually landed — 0 before the first one. **Not the same as
+## "was hit this frame"**: a crow bouncing off `host_grace` still sets its own `critter_atk_cd`, but only a
+## hit that clears the `host_grace <= 0.0` gate writes here. The screen shake's amplitude reads it because
+## `host_grace` alone cannot say how hard the landing hit was, only that one happened.
+var host_hit_force := 0
 
 ## The run's end. **The placeholder that set this on eating the fiercest critter is gone with the threat
 ## model it read**; what sets it now is finishing the BOSS's corpse in `_step_corpses()`, and only that. Killing
@@ -98,6 +135,14 @@ var peak_swarm := 0
 var level := 0
 var pending_levels := 0
 var offer := PackedInt32Array()
+
+## Seconds since the last level fired, counted UP — the same shape `bite_show`/`critter_hit_show` use and
+## for the same reason: `view` reads this rather than diffing `level` frame to frame, which would be
+## `view` holding state `sim` does not know about (§0-2). Opens at `INF`: a run has not levelled yet.
+## Written `0.0` inside `_grow()`'s own loop, the moment a level actually fires — never reset in `setup()`,
+## the same pattern `elapsed` already uses, because a fresh `World` opens at `INF` by
+## its declaration alone and this build never reuses one `World` across two runs.
+var level_show := INF
 
 ## True while the great absorption beat runs. `Run._begin_clear()` sets this and nothing else touches it
 ## — a fresh `World` always starts `false`, and a `World` that ever sets it is already headed to ENDING,
@@ -144,10 +189,17 @@ func setup(run_seed: int = 1) -> void:
 	critter_flees.resize(Rules.CRITTER_MAX)
 	critter_atk_cd.resize(Rules.CRITTER_MAX)
 	critter_counter.resize(Rules.CRITTER_MAX)
+	critter_hit_show.resize(Rules.CRITTER_MAX)
+	critter_hit_dir.resize(Rules.CRITTER_MAX)
+	critter_swing_show.resize(Rules.CRITTER_MAX)
+	critter_swing_dir.resize(Rules.CRITTER_MAX)
 	corpse_pos.resize(Rules.CORPSE_MAX)
 	corpse_species.resize(Rules.CORPSE_MAX)
 	corpse_force.resize(Rules.CORPSE_MAX)
 	corpse_progress.resize(Rules.CORPSE_MAX)
+	corpse_bites_left.resize(Rules.CORPSE_MAX)
+	# §B-4: a fresh run has killed nobody yet.
+	critters_died_this_frame.clear()
 	critter_count = 0
 	corpse_count = 0
 	boss_index = -1
@@ -157,9 +209,76 @@ func setup(run_seed: int = 1) -> void:
 	# it. It goes through `_spawn_herd` so an opening elephant arrives with the other two, exactly as a
 	# mid-run one does; a herd size of 1 makes that identical to the old single spawn.
 	for s in Rules.SPECIES_START.size():
+		# **The gate is read here too, not only in the roll.** A row with a non-zero start and a non-zero
+		# unlock is a contradiction, and without this line the layout would win it silently — 사자 would
+		# stand on the opening field at second zero while `_roll_species()` refused to produce one for the
+		# next 105 seconds, and no check that reads either table alone could see the disagreement.
+		if not species_unlocked(s, 0.0):
+			continue
 		for _i in int(Rules.SPECIES_START[s]):
-			_spawn_herd(s)
+			_spawn_herd(s, true)
+	_place_pocket()
 	_place_boss()
+
+
+## **Is this species allowed to exist yet**, at a given moment on the run's clock.
+##
+## ⚠ **The ONE place `Rules.SPECIES_UNLOCK_AT` is compared against a time**, and `at` is an argument rather
+## than a direct read of `elapsed` for a reason: `setup()` asks about t = 0, which is a literal and not the
+## clock's current value, and a `World` that is set up twice would otherwise lay out a different field the
+## second time. `boss_hunting()` is the precedent for writing a gate once; the trap it records is the same
+## comparison living in three places and drifting apart on the first exception anyone adds.
+func species_unlocked(s: int, at: float) -> bool:
+	return at >= float(Rules.SPECIES_UNLOCK_AT[s])
+
+
+## **The opening pocket**: `Rules.OPENING_POCKET` placed by hand, after the uniform layout and before the
+## boss. Deterministic per seed — one `randf` for the spin, then one force roll each — so the opening is the
+## same SHAPE every run and a different arrangement of it.
+##
+## It is placed rather than rolled because the uniform layout only makes creatures near the host *likely*,
+## and the first ten seconds of a run is the one stretch that cannot be left to a sampler. See
+## `Rules.OPENING_POCKET` for what each row is for.
+func _place_pocket() -> void:
+	var host: Vector2 = swarm.pos[0]
+	var spin := _rng.randf() * TAU
+	var count := Rules.OPENING_POCKET.size()
+	for i in count:
+		if critter_count >= Rules.CRITTER_MAX:
+			return
+		var row: Array = Rules.OPENING_POCKET[i]
+		var s := int(row[0])
+		var d := float(row[1])
+		var a := spin + float(i) * TAU / float(count)
+		var force_value := _rng.randi_range(int(Rules.SPECIES_FORCE_MIN[s]),
+				int(Rules.SPECIES_FORCE_MAX[s]))
+		var p := _clamp_field(host + Vector2(cos(a), sin(a)) * d)
+		_write_critter(s, terrain.push_out(p, _radius_of(s, force_value)), force_value)
+
+
+## **Has the boss started coming.** ⚠ **The ONE place `Rules.BOSS_HUNT_AT` is compared against `elapsed`,
+## and it used to be three**: `_step_critters()` (the boss walking at the host), `_step_arena()` (the arena
+## closing) and a `boss_hunt_announced` flag `step()` latched for the view all wrote the same sentence
+## separately. A value stated three times diverges on the first gate anyone adds — a reset for a second
+## stage, an early trigger, a pause that must not count — and the screen would then say "it comes" while the
+## boss kept wandering, with nothing red.
+##
+## **Derived rather than latched**, so the flag it replaced cannot fall out of step with the clock at all.
+## `elapsed` only ever grows, so this crosses false → true exactly once in a run and never reverses, which
+## is the whole property §D-1's announcement needed a flag for. The flash, the text and the shake time
+## themselves off `elapsed - Rules.BOSS_HUNT_AT` — pure functions of the same clock, so the view holds no
+## timer of its own — and this gates whether they run at all.
+func boss_hunting() -> bool:
+	return elapsed >= Rules.BOSS_HUNT_AT
+
+
+## The frame boundary — see `Swarm.begin_frame()` for why it cannot be the top of `step()`. Called by the
+## shell once per rendered frame, in EVERY phase and through every pause: a frozen `step()` refills nothing,
+## so without this the last advancing frame's events sit in the lists and `view` re-reads them at 60Hz for
+## as long as the body panel or the card offer holds — the same burst, at the same spot, forever.
+func begin_frame() -> void:
+	critters_died_this_frame.clear()
+	swarm.begin_frame()
 
 
 ## A run no longer ends on a clock — `Run.step()` is what detects the end (death or the placeholder
@@ -171,6 +290,13 @@ func step(dt: float) -> void:
 	# the first level of every run, because the pool is empty until a corpse is finished. The ecosystem being
 	# LIVE while a stack of cards waits is the other half of this rule and it is deliberate: the cards
 	# arrive as a cascade the moment the pool opens, which is the rhythm the GDD asks for.
+	# §F-9: ABOVE the offer guard, and it is the only line that is. `_grow()` writes `level_show = 0.0` and
+	# rolls the offer in the same call, so on every level that actually produces cards this clock would be
+	# frozen at 0.0 for as long as the player deliberates — the host pinned at full `LEVEL_POP_STRENGTH` and
+	# fully tinted, the bar flash and the phrase both at maximum alpha. A pop that does not pass is a state.
+	# It changes nothing that happens; it is a display clock, which is why it may advance while the world
+	# may not.
+	level_show += dt
 	if pending_levels > 0 and not offer.is_empty():
 		return
 	elapsed += dt
@@ -202,6 +328,14 @@ func step(dt: float) -> void:
 		if _next_critter <= 0.0:
 			_next_critter = Rules.CRITTER_INTERVAL
 			_spawn_critter()
+		# **LAST in the frame, and every word of that is load-bearing** — see the function itself.
+		# ⚠ **`clear_pull` as well as `beat_frozen`**, because the two are set together and cleared in
+		# different places: `Run._finish_clear()` drops `clear_pull` and nothing ever drops `beat_frozen`.
+		# This is the same guard `Swarm.step()` puts on `_separate()`, for the same reason — the great
+		# absorption steers every clone onto the host, and a pass shoving bodies apart during it is the
+		# screen and the sim disagreeing about what the beat is doing.
+		if not swarm.clear_pull:
+			_separate_from_critters()
 	_grow()
 	if host_grace > 0.0:
 		host_grace -= dt
@@ -234,6 +368,9 @@ func _step_critters(dt: float) -> void:
 		var s := critter_species[k]
 		critter_atk_cd[k] = maxf(0.0, critter_atk_cd[k] - dt)
 		critter_counter[k] = maxf(0.0, critter_counter[k] - dt)
+		# Counted UP, and `INF + dt == INF` needs no guard — see the column's own comment.
+		critter_hit_show[k] += dt
+		critter_swing_show[k] += dt
 		var p := critter_pos[k]
 		var target := -1
 		var best := Rules.CRITTER_SENSE * Rules.CRITTER_SENSE
@@ -249,7 +386,8 @@ func _step_critters(dt: float) -> void:
 
 		var dir := critter_dir[k]
 		if s == Parts.Species.BOSS:
-			if elapsed >= Rules.BOSS_HUNT_AT:
+			# ⚠ **`boss_hunting()`, never the comparison written out again** — see that function.
+			if boss_hunting():
 				# **`CRITTER_SENSE` is not consulted.** It comes to you from anywhere on the field, which is
 				# the one sentence the boss exists to make true.
 				var to: Vector2 = swarm.pos[0] - p
@@ -290,20 +428,11 @@ func _step_critters(dt: float) -> void:
 		critter_dir[k] = dir
 
 		var speed := Rules.HOST_SPEED * float(Rules.SPECIES_SPEED_MUL[s]) * terrain.speed_mul(p)
-		var next := terrain.push_out(_clamp_field(p + dir * speed * dt), critter_radius(k))
-		# ⚠ **The boss, and only the boss, is held inside the arena it closed.** The circle is the one wall
-		# the run's last act is fought inside, and nothing else here ever put the boss back in it: a boss
-		# that ends up outside walks the host's cage empty while the host cannot follow. Ordinary creatures
-		# are deliberately left free — a crow wandering out of the fight is not worth a wall.
-		if s == Parts.Species.BOSS:
-			next = terrain.clamp_to_arena(next, critter_radius(k))
-		# ⚠ **Clones are walls, and the `and not _blocked(p, k)` half is not decoration.** A predicate on the
-		# destination alone freezes any creature that is ALREADY overlapping a body — which happens the
-		# instant a clone walks onto a standing crow, and to a whole swarm at once when the arena's summon
-		# teleports it onto whatever is underneath. Every candidate near `p` would then be blocked too and
-		# the creature is stuck for the rest of the run. Blocking only moves that REDUCE clearance lets an
-		# overlapped creature walk out. `_blocked` exempts the boss outright — see its own comment.
-		if _blocked(next, k) and not _blocked(p, k):
+		var next := _place_critter(p + dir * speed * dt, k)
+		# ⚠ **Clones are walls, and what is refused is ENTERING one — per body, never a flag over all of
+		# them.** See `_enters_a_body()`: the old shape was a boolean plus a blanket exemption, and the
+		# exemption is what the separation pass turned from a rare state into a permanent one.
+		if _enters_a_body(p, next, k):
 			next = p
 		critter_pos[k] = next
 		# The return value says row `k` no longer holds the creature it held, so the index must NOT advance:
@@ -321,23 +450,84 @@ func _clamp_field(p: Vector2) -> Vector2:
 	return Vector2(clampf(p.x, 0.0, Rules.FIELD.x), clampf(p.y, 0.0, Rules.FIELD.y))
 
 
-## Is any body in the way at `p`. **This is the mechanism herding is made of** — the design says a horse
-## stops dead against a rock, a clone or the field edge, and rocks and the edge were the only two that
-## existed.
+## **The only place a creature's position is finalised** — the equivalent of `Swarm.place()`, and written
+## for the same reason: the ordinary walk in `_step_critters()` and the knockback in `_damage_critter()` both
+## need `_clamp_field` then `terrain.push_out` then, for the boss alone, `clamp_to_arena` — a second hand-
+## written copy of that sequence is exactly the place it drifts. `_clamp_field` first, `push_out` second: the
+## reverse can put a rock-pushed body back outside the field, or a field-clamped one back inside a rock.
+func _place_critter(p: Vector2, k: int) -> Vector2:
+	var placed := terrain.push_out(_clamp_field(p), critter_radius(k))
+	if critter_species[k] == Parts.Species.BOSS:
+		placed = terrain.clamp_to_arena(placed, critter_radius(k))
+	return placed
+
+
+## Would the step `from` → `to` put creature `k` inside a body it is currently OUTSIDE of. **This is the
+## mechanism herding is made of** — the design says a horse stops dead against a rock, a clone or the field
+## edge, and rocks and the edge were the only two that existed.
+##
+## ⚠ **Per body, and that is the whole repair.** It used to be `_blocked(next) and not _blocked(p)`: two
+## booleans over the WHOLE swarm, so a creature with anything at all inside its touching sum was exempted
+## from the wall entirely and could walk straight through every other body on the field. That exemption was
+## written for a state that used to be rare, and `_separate_from_critters()` made it the normal one — a body
+## comes to rest `Rules.SEPARATION_CONTACT_MARGIN` INSIDE the touching sum by design, so one clone settling
+## against a horse switched the wall off for that horse for the rest of the run. Asking the question once
+## per body keeps the wall up for the thirty-nine bodies it is not touching.
+##
+## ⚠ **A creature already inside a body may still press deeper into THAT body, and melee needs it.**
+## Measured: refusing that too (a minimum-clearance rule, which reads like the stronger version) parks a
+## countering crow one walk-step outside `_contact()`'s bare-clone band and the fight deadlocks — five hits
+## in five seconds became two, with the pair frozen 23.3px apart. `_s4` in `net_hunt` is that check.
+##
+## Nothing freezes, and it is a different argument from the old one: the only refused move is an entry, so a
+## buried creature always has its whole escape direction open — the bodies it is already inside constrain
+## nothing.
 ##
 ## ⚠ **The boss is exempt, always.** A boss walking at a host ringed by forty clones would otherwise stop
 ## on the outermost one and never reach the arena's radius: a wall of bodies, which is exactly the escape
 ## the design says does not exist. The exemption matters MORE at the deferred 0.75× speed, not less — a
 ## boss that is both slower than the host and stoppable by a ring never arrives by any route at all.
-func _blocked(p: Vector2, k: int) -> bool:
+func _enters_a_body(from: Vector2, to: Vector2, k: int) -> bool:
 	if critter_species[k] == Parts.Species.BOSS:
 		return false
 	var r := critter_radius(k)
 	for i in swarm.count:
-		var body_r := Rules.BODY_RADIUS if i == 0 else Rules.CLONE_BODY_RADIUS
-		if p.distance_to(swarm.pos[i]) < r + body_r:
+		var min_d := r + swarm.body_radius(i)
+		if to.distance_to(swarm.pos[i]) < min_d and from.distance_to(swarm.pos[i]) >= min_d:
 			return true
 	return false
+
+
+## Bodies stand out of creatures. **One-way, always: the body moves and the creature never does**, and that
+## half is the load-bearing one. Herding is this stage's hand — 「말은 몰이로 잡는다」 and the design both say
+## a horse is stopped by a rock, a clone or the edge — so a swarm that could shove a creature would turn
+## herding into pushing and change the whole hunt. Damage knockback still moves creatures; it is a different
+## mechanism and it is untouched.
+##
+## **The distance is the two radii summed, less `Rules.SEPARATION_CONTACT_MARGIN`, and neither half is
+## arbitrary.** The sum is the same number `_enters_a_body()` measures against and `_contact()` calls the
+## bare-clone attack band, so "overlapping" means one thing in this file. The margin is what keeps the rest
+## position strictly INSIDE that band in both directions — read its own comment; without it half of all
+## pairs stop being able to touch each other, silently.
+##
+## ⚠ **Last statement of the frame, and three things force it there.** `_step_arena()`'s summon teleports up
+## to forty clones onto whatever is under them, so anything earlier draws that frame's forty overlaps;
+## `_contact()` must sample the band while `swarm.step()`'s steering has had all frame to close it, not
+## right after a push; and `_enters_a_body()` reads body positions at the top of the NEXT frame, which is the
+## state this leaves it.
+##
+## ⚠ **Corpses are deliberately not in here.** A corpse has a position and a radius like everything else,
+## and eating one means standing on it — separating bodies off corpses stops the meal. See `corpse_reach()`.
+##
+## No grid: this is `swarm.count × critter_count`, at most 41 × 64, the same order `_enters_a_body()` already pays
+## every frame for every creature. Written as "for each body, walk the creatures", so a grid can replace the
+## inner loop later without changing what it computes.
+func _separate_from_critters() -> void:
+	for i in swarm.count:
+		var body_r := swarm.body_radius(i)
+		for k in critter_count:
+			swarm.push_out_of(i, critter_pos[k],
+					critter_radius(k) + body_r - Rules.SEPARATION_CONTACT_MARGIN)
 
 
 ## **The shared body of both radius functions**, and the two guards in it are each a bug that was written
@@ -399,12 +589,14 @@ func _add_corpse(p: Vector2, species: int, force_value: int) -> void:
 	corpse_species[i] = species
 	corpse_force[i] = force_value
 	corpse_progress[i] = 0.0
+	corpse_bites_left[i] = _bites_for(force_value)
 	corpse_count += 1
 
 
-## Swaps **all four** columns down, the same discipline every flat table here obeys. Without it the row a
-## finished corpse leaves behind keeps another corpse's progress, species and worth — and the number it
-## keeps is the one that just paid out, so the next meal is free.
+## Swaps **every** column down — the count is stated once, at the declaration block above, for the reason
+## `_remove_critter()`'s own note gives. The same discipline every flat table here obeys. Without it the row a
+## finished corpse leaves behind keeps another corpse's progress, bite count, species or worth — and the
+## number it keeps is the one that just paid out, so the next meal is free.
 func _remove_corpse(i: int) -> void:
 	var last := corpse_count - 1
 	if i != last:
@@ -412,7 +604,19 @@ func _remove_corpse(i: int) -> void:
 		corpse_species[i] = corpse_species[last]
 		corpse_force[i] = corpse_force[last]
 		corpse_progress[i] = corpse_progress[last]
+		corpse_bites_left[i] = corpse_bites_left[last]
 	corpse_count -= 1
+
+
+## Force → bite count for corpse `i`, re-derived from `corpse_force[i]` rather than cached anywhere but
+## `corpse_bites_left`. **Public** — `field_view` reads it too, to shrink the drawn corpse against how many
+## bites remain, without touching `corpse_radius()` (which `corpse_reach()` also reads and must not move).
+func corpse_bites_total(i: int) -> int:
+	return _bites_for(corpse_force[i])
+
+
+func _bites_for(force_value: int) -> int:
+	return maxi(Rules.CORPSE_BITES_MIN, int(float(force_value) * Rules.CORPSE_BITES_PER_FORCE))
 
 
 ## The eating beat. **Two phases, and the split is what makes the rule below true.**
@@ -455,25 +659,43 @@ func _step_corpses(dt: float) -> void:
 		# **Progress is kept, not reset.** Coming back resumes; that is the whole cost of being interrupted.
 		if eater < 0:
 			continue
-		# `EAT_TIME` is the corpse's own force × the constant, never a flat number: a crow is half a second
-		# and the boss is six, and "a crow is a mouthful, the boss is the end of the run" is the beat.
-		# The floor is for hand-written fixtures only — no spawned creature has force 0.
-		corpse_progress[ci] += dt / maxf(0.0001, float(corpse_force[ci]) * Rules.EAT_TIME_PER_FORCE)
+		# `EAT_TIME` is the corpse's own force × the constant, divided by the bite count: a crow is still
+		# half a second and the boss still six, start to finish — the total is unchanged, only how it is
+		# spent across `corpse_bites_total(ci)` separate bites moved. The floor is for hand-written fixtures
+		# only — no spawned creature has force 0.
+		var bites := corpse_bites_total(ci)
+		corpse_progress[ci] += dt / maxf(0.0001,
+				float(corpse_force[ci]) * Rules.EAT_TIME_PER_FORCE / float(bites))
 		if corpse_progress[ci] < 1.0:
 			continue
+		# A bite rolls over and **the overshoot is CARRIED, not dropped**. Written as `= 0.0` the frame's
+		# leftover fraction is thrown away once per bite instead of once per corpse, so the meal quietly grows
+		# by up to `(bites - 1) × dt` — invisible today only because every species' bite time happens to be a
+		# whole number of 60Hz frames, and therefore invisible to a net that steps in bite-sized `dt` too.
+		# `-= 1.0` is what makes "the total is unchanged" true by construction instead of by coincidence.
+		corpse_progress[ci] -= 1.0
+		corpse_bites_left[ci] -= 1
 		# ⚠ **`eat(eater, ...)`, never `eat(0, ...)`.** A clone's kill lands in `carried`, where losing the
 		# clone on the way home still costs you the meal — that is the entire cargo rule, and paying it into
 		# `banked` deletes it while every total in the round still adds up.
-		swarm.eat(eater, float(corpse_force[ci]) * Rules.EXP_PER_FORCE)
+		# **Every bite pays its own share — this is the rule change.** Quitting after this bite keeps what
+		# it just paid, because `eat()` already ran; only the row below is still gated on the last one.
+		swarm.eat(eater, float(corpse_force[ci]) * Rules.EXP_PER_FORCE / float(bites))
+		if corpse_bites_left[ci] > 0:
+			# Bites remain: the corpse stays on the table, smaller and closer to gone, but not finished.
+			continue
 		if not species_eaten.has(corpse_species[ci]):
 			# First-eaten ORDER, not a set: the ending screen prints the order it happened in. This is also
 			# the one line that opens the card pool, and the crow is what a run meets first.
+			# **The LAST bite only** — a boss met on its first mouthful must not open the card pool early.
 			species_eaten.append(corpse_species[ci])
 		if corpse_species[ci] == Parts.Species.BOSS:
-			# **The corpse ends the run, not the kill.** Killing it and walking away leaves the run open.
+			# **The corpse ends the run, not the kill — and not a partial meal of it either.** Nine bites in
+			# and walking away still leaves the run open; only the ninth closes it.
 			stage_cleared = true
 		# **Clones only**, and the caller is what enforces it: the host's parts come from cards and only
-		# from there, so `eater == 0` rolls nothing.
+		# from there, so `eater == 0` rolls nothing. **The last bite only** — a corpse must not hand out one
+		# roll per bite, or a boss pays out nine parts instead of one.
 		if eater > 0:
 			_roll_part(eater, corpse_species[ci])
 		_remove_corpse(ci)
@@ -534,7 +756,7 @@ func _step_arena() -> void:
 	# 150 seconds before it hunts, so drifting once inside `ARENA_RADIUS` closed the arena at t = 20 —
 	# permanently, with nothing drawn to explain it, around a boss that then walked back out and a host that
 	# could not follow. The whole sentence this function implements is "the run's LAST act".
-	if elapsed < Rules.BOSS_HUNT_AT:
+	if not boss_hunting():
 		return
 	# `boss_index` is -1 once the boss is dead, and the guard is what makes the ending safe: without it this
 	# reads `critter_pos` of whatever `_remove_critter()` swapped down, or a row past `critter_count`.
@@ -563,8 +785,24 @@ func _step_arena() -> void:
 ## ⚠ **`maxi(0, amount)` on the first line.** Negative damage HEALS, and a negative attacker force is
 ## reachable: the corpse part roll subtracts a bigger part's force from a body that has since been halved.
 ## `Swarm.damage()` carries the same pair for the same reason.
-func _damage_critter(k: int, amount: int) -> bool:
-	critter_hp[k] -= maxi(0, amount)
+##
+## `hit_dir` is **defaulted to `Vector2.ZERO`**, not made required: every net fixture that calls this calls
+## it with two arguments, and a required third would break every one of them for a value most of them do not
+## care about. A zero vector also means no knockback — `length_squared() > 0.0001` below is the same guard
+## `strike()`'s own angle test already relies on, so "no direction" and "no push" are the same condition.
+func _damage_critter(k: int, amount: int, hit_dir: Vector2 = Vector2.ZERO) -> bool:
+	var dealt := maxi(0, amount)
+	# Written FIRST and unconditionally, exactly like `Swarm.bite_show`: the hit happened even on a strike
+	# that does not kill, so the clock and the direction have to be true before the hp line below runs.
+	critter_hit_show[k] = 0.0
+	critter_hit_dir[k] = hit_dir
+	# **The knockback.** `dealt`, not `amount` — a negative or zero hit heals and must not also shove the
+	# creature. Through `_place_critter()`, never a bare write: the same rock-and-field safety the ordinary
+	# walk gets, or a hit next to a rock teleports the target through it instead of stopping at its edge.
+	if dealt > 0 and hit_dir.length_squared() > 0.0001:
+		critter_pos[k] = _place_critter(
+				critter_pos[k] + hit_dir * (float(dealt) * Rules.KNOCKBACK_PER_FORCE), k)
+	critter_hp[k] -= dealt
 	# **The counter is armed by damage from ANY source** — a bite, a clone's contact, a worn part's swing.
 	# That is the whole of "the crow stands and counters": walk up to it and it hits back.
 	if critter_species[k] == Parts.Species.CROW:
@@ -577,6 +815,11 @@ func _damage_critter(k: int, amount: int) -> bool:
 	#
 	# **A kill pays nothing by itself.** The 경험치, the species record and the part roll all hang off
 	# something standing here long enough to finish the corpse — that is the whole beat.
+	#
+	# §B-4: the burst reads `critter_radius(k)` HERE, while row `k` still holds its own species and force —
+	# one line later and `_remove_critter()` has already swapped a stranger into it.
+	critters_died_this_frame.append({"pos": critter_pos[k], "species": critter_species[k],
+			"r": critter_radius(k)})
 	_add_corpse(critter_pos[k], critter_species[k], critter_force[k])
 	_remove_critter(k)
 	return true
@@ -602,7 +845,11 @@ func strike(origin: Vector2, facing: Vector2, part: int, attacker_force: int) ->
 		if absf(facing.angle_to(to)) > half_arc:
 			continue
 		hits += 1
-		_damage_critter(k, attacker_force)
+		# **Per target, not the cone's shared `facing`.** A cone covers several creatures at once and each is
+		# knocked its OWN way, away from the origin — `facing` is a fallback for the one creature standing
+		# dead centre on the origin, where `to` has no direction to give.
+		var kb_dir := to.normalized() if to.length_squared() > 0.0001 else facing
+		_damage_critter(k, attacker_force, kb_dir)
 	return hits
 
 
@@ -630,13 +877,35 @@ func fire(key: int, aim: Vector2) -> bool:
 ## nothing anywhere goes red.
 ##
 ## The bookkeeping is `World`'s, which is why it cannot live on `Swarm`.
-func _damage_clone(i: int, amount: int) -> bool:
+##
+## `hit_dir` is defaulted for the same reason `_damage_critter`'s is — most callers have no direction to
+## give and a required parameter would break every one of them.
+func _damage_clone(i: int, amount: int, hit_dir: Vector2 = Vector2.ZERO) -> bool:
 	var cargo := swarm.carried[i]
-	if not swarm.damage(i, amount):
+	# ⚠ **The clone's shove shrinks with the capped number and the host's does not**, because `Swarm.damage()`
+	# pushes by what it actually dealt while the host's site writes its own push from the raw force. That is
+	# an asymmetry between the two bodies, not a design sentence — see `_capped_hit`.
+	if not swarm.damage(i, _capped_hit(amount, swarm.hp_max_of(i)), hit_dir):
 		return false
 	cargo_lost += cargo
 	clones_lost += 1
 	return true
+
+
+## **No single blow may take more than `Rules.MAX_HIT_FRACTION` of the victim's own MAXIMUM**, and this is
+## the one place that arithmetic is written — the host's landing hit and `_damage_clone()` both come through
+## here, so the host and a clone obey one rule rather than two copies of it.
+##
+## ⚠ **`hp_max` is the victim's CEILING, never its current hp.** Read off the current value the cap would
+## shrink as the body did, and the last point of health could never be taken — a body at 1 hp would take
+## `maxi(1, 0)` = 1 forever, which happens to kill it, and a body at 3 would take 1 a blow. The ceiling is
+## what makes "half a bar" mean the same thing at full health and at a sliver.
+##
+## ⚠ **Only what a creature deals to a BODY comes through here.** `_damage_critter()` deliberately does not:
+## the cap exists so a touch is survivable, not so a creature is, and routing the swarm's own damage through
+## it would put a floor under how long every creature in the field lives.
+func _capped_hit(amount: int, hp_max: int) -> int:
+	return mini(amount, maxi(1, int(float(hp_max) * Rules.MAX_HIT_FRACTION)))
 
 
 ## Returns true when row `k` no longer holds the creature it held on entry — it died, or a swap moved it —
@@ -669,12 +938,17 @@ func _contact(k: int, p: Vector2) -> bool:
 			var aim: Vector2 = p - swarm.pos[i]
 			# ⚠ **No direction, no swing — and no cooldown for one.** `Vector2.ZERO.angle_to(to)` is
 			# `atan2(0, 0)`, which is 0 for EVERY target, so a creature standing dead centre on a clone
-			# turns its cone into a full circle and the swing lands 180° behind it. Reachable: `_blocked()`
-			# deliberately lets an already-overlapped creature stand, and the arena's summon teleports up to
-			# forty clones onto whatever is underneath them. The overlap resolves on its own next frame.
+			# turns its cone into a full circle and the swing lands 180° behind it. Still reachable, and this
+			# pass runs BEFORE the two that clean up after it: `_step_arena()`'s summon teleports up to forty
+			# clones onto whatever is underneath them, and a clone can walk onto a standing crow on any frame.
+			# The overlap resolves at the end of that same frame; the guard is what covers the frame itself.
 			if aim.length_squared() < 0.0001:
 				continue
 			swarm.atk_cd[i] = Rules.CLONE_ATTACK_PERIOD
+			# §B-5: the clone's own short line, toward what it is about to swing at — the SAME direction
+			# `strike()` is dispatched with below, not a second copy of the aim.
+			swarm.swing_show[i] = 0.0
+			swarm.swing_dir[i] = aim.normalized()
 			# ⚠ `strike()` returns a HIT COUNT, never "row k died" — and the cone hits every creature it
 			# covers, so a count delta answers "somebody died". `_watched_row` is the identity: -1 when this
 			# creature died, a different index when the swap moved it, and either way every line below
@@ -687,7 +961,13 @@ func _contact(k: int, p: Vector2) -> bool:
 				return true
 		else:
 			swarm.atk_cd[i] = Rules.CLONE_ATTACK_PERIOD
-			if _damage_critter(k, swarm.force[i]):
+			var to_creature: Vector2 = p - swarm.pos[i]
+			var kb_dir := to_creature.normalized() if to_creature.length_squared() > 0.0001 else Vector2.ZERO
+			# §B-5, the bare-hand case: the same line, reusing `kb_dir` rather than a second
+			# `to_creature.normalized()` — it already points from the clone toward what it touched.
+			swarm.swing_show[i] = 0.0
+			swarm.swing_dir[i] = kb_dir
+			if _damage_critter(k, swarm.force[i], kb_dir):
 				return true
 
 	# -- pass 2: it hits back, ONCE, and the host is checked first. --
@@ -695,15 +975,40 @@ func _contact(k: int, p: Vector2) -> bool:
 		return false
 	if p.distance_to(swarm.pos[0]) <= reach + Rules.BODY_RADIUS:
 		critter_atk_cd[k] = Rules.CLONE_ATTACK_PERIOD
+		# The swing itself, before the grace check that may eat the damage — see `critter_swing_show`.
+		var swing_to: Vector2 = swarm.pos[0] - p
+		critter_swing_show[k] = 0.0
+		critter_swing_dir[k] = swing_to.normalized() if swing_to.length_squared() > 0.0001 else Vector2.ZERO
 		if host_grace <= 0.0:
-			# Its own force, in this direction exactly as in the other. Nothing gates who may hurt whom.
-			host_hp -= critter_force[k]
+			# Its own force, in this direction exactly as in the other — nothing gates who may hurt whom —
+			# and then `_capped_hit` takes the top off ONE blow. Without it 사자·코끼리·보스 all took a full
+			# 30-hp host from full health to dead on the first touch.
+			host_hp -= _capped_hit(critter_force[k], body.hp_max(level))
+			# ⚠ **The FULL force, not what the cap let through.** This is the size of the BLOW, and the
+			# screen shake reads it; the knockback three lines down reads the same raw number for the same
+			# reason. A capped hit that also shook and shoved half as hard would read as a lighter hit, and
+			# the whole point of the cap is that an elephant still hits like an elephant.
+			# See the field's own comment for why `host_grace` alone cannot say a hit landed, and
+			# `Swarm.hit_show[0]` / `hit_dir[0]` for the matching clock and direction. Row 0 is the host, and
+			# `Swarm.damage()` refuses it outright, so this is the one place its hit is written.
+			host_hit_force = critter_force[k]
+			var to_host: Vector2 = swarm.pos[0] - p
+			var kb_dir := to_host.normalized() if to_host.length_squared() > 0.0001 else Vector2.ZERO
+			swarm.hit_show[0] = 0.0
+			swarm.hit_dir[0] = kb_dir
+			if kb_dir.length_squared() > 0.0001:
+				swarm.pos[0] = swarm.place(
+						swarm.pos[0] + kb_dir * (float(critter_force[k]) * Rules.KNOCKBACK_PER_FORCE),
+						Rules.BODY_RADIUS)
 			host_grace = Rules.HOST_HIT_GRACE
 		return false
 	for i in range(swarm.count - 1, 0, -1):
 		if p.distance_to(swarm.pos[i]) > reach + Rules.CLONE_BODY_RADIUS:
 			continue
 		critter_atk_cd[k] = Rules.CLONE_ATTACK_PERIOD
+		var swing_at: Vector2 = swarm.pos[i] - p
+		critter_swing_show[k] = 0.0
+		critter_swing_dir[k] = swing_at.normalized() if swing_at.length_squared() > 0.0001 else Vector2.ZERO
 		# ⚠ **The clone is DAMAGED, not deleted** (user: 분신도 체력을 가질 거야). It loses its cargo, its
 		# force and its worn part only when its hp reaches zero, and `_damage_clone` is where the reading
 		# order that keeps the cargo honest lives.
@@ -711,7 +1016,9 @@ func _contact(k: int, p: Vector2) -> bool:
 		# ⚠ **And `_damage_clone`'s return is NOT this function's return.** `_contact` means "creature `k`
 		# died"; a clone dying does not change `k`'s row, and folding the two would make `_step_critters`
 		# skip a live creature. One character, entirely plausible, invisible in final state.
-		_damage_clone(i, critter_force[k])
+		var to_clone: Vector2 = swarm.pos[i] - p
+		var kb_dir := to_clone.normalized() if to_clone.length_squared() > 0.0001 else Vector2.ZERO
+		_damage_clone(i, critter_force[k], kb_dir)
 		return false
 	# ⚠ **One creature, one attack, one period.** The loop returns after the FIRST clone in reach, so a crow
 	# standing in a pile of forty chips one of them every period instead of attacking forty — a wide swarm
@@ -719,8 +1026,9 @@ func _contact(k: int, p: Vector2) -> bool:
 	return false
 
 
-## Swaps **all eight** columns down and then repairs `boss_index`. Eight is the whole table — a ninth added
-## without a line here lands a dead creature's number on a survivor, with nothing on screen to say so.
+## Swaps **every** column down and then repairs `boss_index` — the count itself is written once, at the
+## declaration block. A column added without a line here lands a dead creature's number on a survivor, with
+## nothing on screen to say so.
 func _remove_critter(k: int) -> void:
 	var last := critter_count - 1
 	if k != last:
@@ -732,6 +1040,10 @@ func _remove_critter(k: int) -> void:
 		critter_flees[k] = critter_flees[last]
 		critter_atk_cd[k] = critter_atk_cd[last]
 		critter_counter[k] = critter_counter[last]
+		critter_hit_show[k] = critter_hit_show[last]
+		critter_hit_dir[k] = critter_hit_dir[last]
+		critter_swing_show[k] = critter_swing_show[last]
+		critter_swing_dir[k] = critter_swing_dir[last]
 	# **Both halves, and each is its own bug.** The boss dying is what the run's ending walks through; the
 	# boss being the LAST row is what every other creature's death walks through. Missing either leaves an
 	# index pointing at a stranger, or past `critter_count` entirely.
@@ -784,13 +1096,21 @@ func _grow() -> void:
 		_level_paid += cost
 		level += 1
 		pending_levels += 1
+		# §F-9: the LAST level to fire this frame wins, the same overwrite semantics `host_hit_force` already
+		# uses — a run that earns two levels in one frame still shows one pop, not a longer one.
+		level_show = 0.0
 		swarm.force[0] += Rules.FORCE_PER_LEVEL
 		host_hp += Rules.HP_PER_LEVEL
 	# ⚠ **`offer.is_empty()` is no longer a "needs a roll" sentinel.** With banking, "levels pending and no
-	# offer" is the normal state for minutes, so this line ran `roll()` every single frame; `species_eaten`
-	# is what says the pool can actually produce something — and since the corpse beat landed, the first
-	# crow finished opens it, which is what makes "a run showed zero cards" impossible rather than unlikely.
-	if pending_levels > 0 and offer.is_empty() and not species_eaten.is_empty():
+	# offer" is the normal state for minutes, so this line ran `roll()` every single frame.
+	#
+	# ⚠ **And "something was eaten" is NOT the same question as "the pool can produce something".** Seven of
+	# the eleven species have no droppable part at all, so `species_eaten` goes non-empty and `roll()` still
+	# comes back empty — the guard stays true, and the every-frame roll this comment claims was fixed comes
+	# straight back. It was already reachable (eat a 다람쥐 before any crow); the curve makes a 들쥐 the
+	# **first corpse of every run**, so it would have gone from unlucky to certain. `Cards.pool_size()` is
+	# the one place the filter is written, so the guard and the roll cannot disagree about what is in there.
+	if pending_levels > 0 and offer.is_empty() and Cards.pool_size(species_eaten) > 0:
 		offer = Cards.roll(_rng, species_eaten)
 
 
@@ -835,19 +1155,28 @@ func _spawn_critter() -> void:
 	_spawn_herd(_roll_species())
 
 
-## Pure enough to drive: give it the rng and it walks the weight table. **Falls back to the last non-zero
-## row**, never to CROW — a fallback naming a species is a second place the table is written.
+## Pure enough to drive: give it the rng and it walks the weight table. **Falls back to the last unlocked
+## non-zero row**, never to CROW — a fallback naming a species is a second place the table is written.
+##
+## ⚠ **The divisor is summed over the UNLOCKED rows and that is the whole of the time gate.** Skipping a
+## locked row while still dividing by the full 138 is not an error anywhere: every unlocked species would
+## simply come up less often than its weight says, by exactly the locked share, and the loop would fall out
+## of its bottom into the fallback — which, written as "the last non-zero row", hands back 멧돼지 at second
+## zero. Both halves have to know about the gate or neither does.
+##
+## The unlocked sum is 108 at t = 0 and reaches 138 at 120s; `net_field._f4` asserts it at two clock values.
 func _roll_species() -> int:
 	var total := 0
-	for w in Rules.SPECIES_SPAWN_WEIGHT:
-		total += int(w)
+	for s in Rules.SPECIES_SPAWN_WEIGHT.size():
+		if species_unlocked(s, elapsed):
+			total += int(Rules.SPECIES_SPAWN_WEIGHT[s])
 	if total <= 0:
 		return int(Parts.Species.CROW)
 	var pick := _rng.randi_range(0, total - 1)
 	var last := int(Parts.Species.CROW)
 	for s in Rules.SPECIES_SPAWN_WEIGHT.size():
 		var w := int(Rules.SPECIES_SPAWN_WEIGHT[s])
-		if w <= 0:
+		if w <= 0 or not species_unlocked(s, elapsed):
 			continue
 		last = s
 		pick -= w
@@ -866,18 +1195,23 @@ func _roll_species() -> int:
 ## distance itself — so the spread has to be paid for up front, or the far side of a herd rolled at exactly
 ## `CRITTER_SPAWN_MIN_DIST` lands 220px inside the guarantee and something materialises on screen. Measured:
 ## the first run of this with a flat minimum spawned a member at 865px against the literal 900.
-func _anchor_min_dist(species: int) -> float:
+## ⚠ **`at_start` picks WHICH of the two base distances the spread is added to**, and the two are different
+## rules rather than two values of one rule: `CRITTER_SPAWN_MIN_DIST` hides a pop that only an arrival can
+## make, and `CRITTER_START_MIN_DIST` is how close the field may already be standing when the run opens.
+## Applying the arrival number to the opening is what made it impossible for anything to open on screen.
+func _anchor_min_dist(species: int, at_start: bool) -> float:
 	var extra := Rules.SPAWN_HERD_SPREAD if int(Rules.SPECIES_HERD[species]) > 1 else 0.0
-	return Rules.CRITTER_SPAWN_MIN_DIST + extra
+	var base: float = Rules.CRITTER_START_MIN_DIST if at_start else Rules.CRITTER_SPAWN_MIN_DIST
+	return base + extra
 
 
 ## Returns the number actually written, which is short of the herd size at the cap.
-func _spawn_herd(species: int) -> int:
+func _spawn_herd(species: int, at_start: bool = false) -> int:
 	var size := maxi(1, int(Rules.SPECIES_HERD[species]))
 	var born := 0
 	var anchor := Vector2(-1.0, -1.0)
 	for _m in size:
-		var k := _spawn_at(species, anchor)
+		var k := _spawn_at(species, anchor, at_start)
 		if k < 0:
 			break
 		# The FIRST member's accepted position becomes the anchor, so the rest are placed around a spot that
@@ -898,7 +1232,7 @@ func _spawn_herd(species: int) -> int:
 ## `SPAWN_HERD_SPREAD` disc around the anchor and obeys the same rock rule; it does NOT re-check the distance
 ## to the host, because the anchor already cleared it and re-checking would scatter a herd across the map
 ## whenever the host happened to stand near it.
-func _spawn_at(species: int, anchor: Vector2 = Vector2(-1.0, -1.0)) -> int:
+func _spawn_at(species: int, anchor: Vector2 = Vector2(-1.0, -1.0), at_start: bool = false) -> int:
 	if critter_count >= Rules.CRITTER_MAX:
 		return -1
 	var host: Vector2 = swarm.pos[0]
@@ -916,7 +1250,7 @@ func _spawn_at(species: int, anchor: Vector2 = Vector2(-1.0, -1.0)) -> int:
 				break
 			continue
 		p = Vector2(_rng.randf_range(0.0, Rules.FIELD.x), _rng.randf_range(0.0, Rules.FIELD.y))
-		if p.distance_to(host) >= _anchor_min_dist(species) and terrain.push_out(p, r) == p:
+		if p.distance_to(host) >= _anchor_min_dist(species, at_start) and terrain.push_out(p, r) == p:
 			break
 	# Falling through the tries uses the last sample PUSHED OUT, which is the one thing that cannot be
 	# inside a rock. Distance is the softer of the two rules and is the one that gives.
@@ -966,8 +1300,10 @@ func _boss_backstop(host: Vector2) -> Vector2:
 			inset if host.y > Rules.FIELD.y * 0.5 else Rules.FIELD.y - inset)
 
 
-## The row write both spawners share — **all eight columns, in one place**, so a new column cannot be
-## written by one path and forgotten by the other.
+## The row write both spawners share — **every column, in one place**, so a new column cannot be written by
+## one path and forgotten by the other. ⚠ **The count is stated once, at the declaration block, and nowhere
+## else**: this doc said "all eight" for a whole plan while the block said ten and `_remove_critter()` said
+## ten, and there was no way to tell from here which of the three numbers was the stale one.
 func _write_critter(species: int, p: Vector2, force_value: int) -> int:
 	var k := critter_count
 	critter_pos[k] = p
@@ -985,5 +1321,11 @@ func _write_critter(species: int, p: Vector2, force_value: int) -> int:
 	# differ, or a row born mid-run lands its first hit a full period late for a reason nothing states.
 	critter_atk_cd[k] = 0.0
 	critter_counter[k] = 0.0
+	# `INF`, never the zero-fill: a fresh row has not been hit, and `+= dt` in `_step_critters()` never
+	# reaches zero again from here — see the column's own comment for why zero cannot mean "never".
+	critter_hit_show[k] = INF
+	critter_hit_dir[k] = Vector2.ZERO
+	critter_swing_show[k] = INF
+	critter_swing_dir[k] = Vector2.ZERO
 	critter_count += 1
 	return k

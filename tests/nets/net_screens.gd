@@ -357,16 +357,28 @@ func run(t) -> void:
 	ending.queue_free()
 
 
-## Seed one corpse under the host and step the run once. 0.999, never 0.99: a meal is
+## Seed one corpse under the host and step the run to completion. 0.999, never 0.99: a meal is
 ## `corpse_force × EAT_TIME_PER_FORCE`, so a horse is 1.75s and one frame at 0.99 adds 0.019 and finishes
 ## nothing at all — the check would then measure an empty list and read as a bug in the snapshot.
+##
+## ⚠ §C floors every corpse at `CORPSE_BITES_MIN` (3) bites regardless of `corpse_progress`, so a single
+## `step()` no longer finishes it — this loops until the corpse is actually gone.
 func _finish_corpse(r: Run, species: int, force_value: int) -> void:
 	r.world.corpse_count = 1
 	r.world.corpse_pos[0] = r.world.swarm.pos[0]
 	r.world.corpse_species[0] = species
 	r.world.corpse_force[0] = force_value
+	r.world.corpse_bites_left[0] = r.world._bites_for(force_value)
 	r.world.corpse_progress[0] = 0.999
-	r.step(1.0 / 60.0)
+	var n := 0
+	while r.world.corpse_count > 0 and n < 500:
+		r.step(1.0 / 60.0)
+		# A level banked on a non-final bite must not freeze the meal behind its own card panel — cleared
+		# only while still eating, so a caller's second meal cannot get stuck behind the first's pool.
+		if r.world.corpse_count > 0:
+			r.world.pending_levels = 0
+			r.world.offer = PackedInt32Array()
+		n += 1
 
 
 func _click_at(p: Vector2) -> InputEventMouseButton:

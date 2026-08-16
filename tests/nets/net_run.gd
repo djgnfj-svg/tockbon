@@ -460,9 +460,11 @@ func run(t) -> void:
 	# never fires, since the corpse is what `_step_corpses` finishes). Every other check in this file sets
 	# `stage_cleared` by hand and therefore cannot see either.
 	#
-	# The corpse sits on the host and is written one frame short of done, so a single `world.step()` is the
-	# whole drive. `corpse_force` is a literal both times — a boss meal is six seconds and a crow's is half
-	# of one, so the two need different openings and reading either off the table would hide that.
+	# The corpse sits on the host and is written one frame short of its FIRST bite, so a short loop is the
+	# whole drive — §C floors a crow at three bites regardless of `corpse_progress`, so one `world.step()`
+	# no longer finishes it outright. `corpse_force` is a literal both times — a boss meal is six seconds and
+	# a crow's is half of one, so the two need different openings and reading either off the table would hide
+	# that.
 	var w25a := World.new()
 	w25a.setup(31)
 	_silence_food(w25a)
@@ -471,9 +473,18 @@ func run(t) -> void:
 	w25a.corpse_pos[0] = w25a.swarm.pos[0]
 	w25a.corpse_species[0] = Parts.Species.CROW
 	w25a.corpse_force[0] = 10
+	w25a.corpse_bites_left[0] = w25a._bites_for(10)
 	w25a.corpse_progress[0] = 0.999
-	w25a.step(DT)
-	t.eq(w25a.corpse_count, 0, "설정: 까마귀 시체를 실제로 다 먹었다")
+	var m25a := 0
+	while w25a.corpse_count > 0 and m25a < 60:
+		w25a.step(DT)
+		# Only WHILE still eating: a level banked on a non-final bite must not freeze the meal behind its
+		# own card panel. The FINAL bite's own offer (asserted below) is left untouched on purpose.
+		if w25a.corpse_count > 0:
+			w25a.pending_levels = 0
+			w25a.offer = PackedInt32Array()
+		m25a += 1
+	t.eq(w25a.corpse_count, 0, "설정: 까마귀 시체를 실제로 다 먹었다 (%d프레임)" % m25a)
 	t.ok(not w25a.stage_cleared, "까마귀를 다 먹어도 스테이지는 끝나지 않는다")
 	# The same finish is what writes `species_eaten`, and that array is the card pool's only lock — so this
 	# is the line that makes "한 런에 카드가 한 장도 안 나온다" impossible rather than merely unlikely.
@@ -502,9 +513,19 @@ func run(t) -> void:
 	w25a.corpse_pos[0] = w25a.swarm.pos[0]
 	w25a.corpse_species[0] = Parts.Species.CROW
 	w25a.corpse_force[0] = 10
+	w25a.corpse_bites_left[0] = w25a._bites_for(10)
 	w25a.corpse_progress[0] = 0.999
-	w25a.step(DT)
-	t.eq(w25a.corpse_count, 0, "설정: 까마귀를 한 마리 더 다 먹었다")
+	var m25a2 := 0
+	while w25a.corpse_count > 0 and m25a2 < 60:
+		w25a.step(DT)
+		# The pool already opened off the FIRST crow, so a level banked mid-meal here rolls a non-empty
+		# offer immediately — and `step()` refuses to advance while cards are on screen. Cleared every
+		# frame the meal is still going so the second meal cannot get stuck behind its own card pool.
+		if w25a.corpse_count > 0:
+			w25a.pending_levels = 0
+			w25a.offer = PackedInt32Array()
+		m25a2 += 1
+	t.eq(w25a.corpse_count, 0, "설정: 까마귀를 한 마리 더 다 먹었다 (%d프레임)" % m25a2)
 	t.eq(w25a.species_eaten.size(), 1, "같은 종을 또 먹어도 목록은 늘지 않는다")
 
 	var w25b := World.new()
@@ -515,10 +536,18 @@ func run(t) -> void:
 	w25b.corpse_pos[0] = w25b.swarm.pos[0]
 	w25b.corpse_species[0] = Parts.Species.BOSS
 	w25b.corpse_force[0] = 120
+	w25b.corpse_bites_left[0] = w25b._bites_for(120)
 	w25b.corpse_progress[0] = 0.999
 	t.ok(not w25b.stage_cleared, "설정: 먹기 전에는 스테이지가 열려 있다")
-	w25b.step(DT)
-	t.eq(w25b.corpse_count, 0, "설정: 보스 시체를 실제로 다 먹었다")
+	# §C floors the boss at nine bites (369 frames total, measured) — a single frame no longer finishes it.
+	var m25b := 0
+	while w25b.corpse_count > 0 and m25b < 500:
+		w25b.step(DT)
+		if w25b.corpse_count > 0:
+			w25b.pending_levels = 0
+			w25b.offer = PackedInt32Array()
+		m25b += 1
+	t.eq(w25b.corpse_count, 0, "설정: 보스 시체를 실제로 다 먹었다 (%d프레임)" % m25b)
 	t.ok(w25b.stage_cleared, "보스 시체를 다 먹으면 스테이지가 끝난다")
 
 	# -- RunResult.species — the ending screen's 먹은 종 line, driven from real meals -------------------
@@ -539,11 +568,18 @@ func run(t) -> void:
 	r26.world.corpse_pos[0] = r26.world.swarm.pos[0]
 	r26.world.corpse_species[0] = Parts.Species.HORSE
 	r26.world.corpse_force[0] = 35
+	r26.world.corpse_bites_left[0] = r26.world._bites_for(35)
 	# 0.999, not 0.99: a meal is `corpse_force × EAT_TIME_PER_FORCE`, so a horse is 1.75s and one frame at
 	# 0.99 adds 0.019 and finishes nothing. The check would then measure an empty list and read as a bug in
-	# the snapshot.
+	# the snapshot. ⚠ §C floors the horse at three bites, so the drive is a short loop, not one frame.
 	r26.world.corpse_progress[0] = 0.999
-	r26.step(DT)
+	var m26a := 0
+	while r26.world.corpse_count > 0 and m26a < 200:
+		r26.step(DT)
+		if r26.world.corpse_count > 0:
+			r26.world.pending_levels = 0
+			r26.world.offer = PackedInt32Array()
+		m26a += 1
 	# A finished horse pays 105 경험치, which banks a level, which rolls an offer — and `World.step()`
 	# refuses to advance while cards are on screen. Cleared by hand or the second meal never starts.
 	r26.world.pending_levels = 0
@@ -552,8 +588,15 @@ func run(t) -> void:
 	r26.world.corpse_pos[0] = r26.world.swarm.pos[0]
 	r26.world.corpse_species[0] = Parts.Species.CROW
 	r26.world.corpse_force[0] = 10
+	r26.world.corpse_bites_left[0] = r26.world._bites_for(10)
 	r26.world.corpse_progress[0] = 0.999
-	r26.step(DT)
+	var m26b := 0
+	while r26.world.corpse_count > 0 and m26b < 60:
+		r26.step(DT)
+		if r26.world.corpse_count > 0:
+			r26.world.pending_levels = 0
+			r26.world.offer = PackedInt32Array()
+		m26b += 1
 	t.eq(r26.world.species_eaten.size(), 2, "설정: 말과 까마귀를 그 순서로 실제로 다 먹었다")
 	r26.world.pending_levels = 0
 	r26.world.offer = PackedInt32Array()
@@ -703,6 +746,7 @@ func run(t) -> void:
 	rz.corpse_pos[0] = rz.swarm.pos[0]
 	rz.corpse_species[0] = Parts.Species.CROW
 	rz.corpse_force[0] = 10
+	rz.corpse_bites_left[0] = rz._bites_for(10)
 	rz.corpse_progress[0] = 0.9
 	# ⚠ **And the spawn timer is the third thing in that block.** It sat BELOW the freeze, so a crow walked
 	# onto the field mid-"you won" — the one thing the beat exists to keep the field clear of. Wound to

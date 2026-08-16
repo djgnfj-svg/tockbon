@@ -79,7 +79,51 @@ const FIELD_LEAF_CALLS := {
 	"_paint_label": 1,
 	"_paint_arc": 1,
 	"_paint_cone": 1,
-	"_paint_cell": 7,
+	# `melee-legibility-ko`'s fork, both candidates live in one build behind `Look.BODY_STYLE`. `_paint_cell`
+	# was 7 and is a DISPATCHER now: the seven moved whole into `_paint_cell_fill` (three polygons and four
+	# `draw_set_transform`) and 갈래 ㄱ's own leaf holds four (two transforms, a polyline and the nucleus).
+	# **These two counts are the last inch of the switch.** A spy sees which leaf was CALLED; only the count
+	# sees `_paint_cell_line` quietly drawing the filled body instead of the line.
+	"_paint_cell_fill": 7,
+	"_paint_cell_line": 4,
+	"_paint_cell": 0,
+	"_outline_width": 0,
+	"_outline_dot_r": 0,
+	# 갈래 ㄴ. **Every one of these is a `: 0`, and that is the claim**: the candidate adds no leaf at all —
+	# the rim reuses `_paint_outline` and the host's ground ring reuses `_paint_arc`, which is
+	# `melee-legibility-ko`'s own test for a cheap option. `_paint_clone`/`_paint_critter`/`_paint_host` are
+	# the three loops that used to sit inside `_paint`, moved whole so only their ORDER is new, and a stray
+	# `c.draw_*` in any of them is a pixel no spy on the leaves could ever see.
+	"_rimmed": 0,
+	"_paint_bodies": 0,
+	"_body_order": 0,
+	"_depth": 0,
+	"_paint_clone": 0,
+	"_paint_critter": 0,
+	# §6's per-species attack gestures. **Every one is a `: 0` and that is the claim being made**: seven new
+	# gestures cost NO new leaf — each reaches `_paint_part_line`, `_paint_disc` or `_paint_arc`, which
+	# already have their rows above and already have spies watching them in `net_paint`. A gesture that
+	# reached past them for a bare `c.draw_*` would be a pixel no spy in the round could see, and that is
+	# what these zeros forbid. `_paint_swing` is the dispatcher; `_paint_swing_lash` is the fallback the file
+	# drew for every species before this pass.
+	"_paint_swing": 0,
+	"_paint_swing_peck": 0,
+	"_paint_swing_gnaw": 0,
+	"_paint_swing_bite": 0,
+	"_paint_swing_charge": 0,
+	"_paint_swing_shove": 0,
+	"_paint_swing_pounce": 0,
+	"_paint_swing_stomp": 0,
+	"_paint_swing_lash": 0,
+	# A composer: the bloom and the wave both go through leaves that already have rows below, so it draws
+	# nothing of its own. Zero here is the assertion, not an omission.
+	"_paint_hit_bloom": 0,
+	# Pure: it returns an offset and draws nothing at all.
+	"_lunge_offset": 0,
+	"_paint_host": 0,
+	"_paint_bite_cone": 0,
+	"_paint_rim": 0,
+	"_rim_width": 0,
 	"_draw": 0,
 	"_paint": 0,
 	"_paint_body": 0,
@@ -118,6 +162,11 @@ const HUD_LEAF_CALLS := {
 	"_paint_text": 1,
 	"_paint_rect": 1,
 	"_paint_mark": 1,
+	# §D-2's edge arrow. `_paint_rect`/`_paint_mark` cannot draw a triangle, so this is a fourth leaf rather
+	# than a reuse — the residual-hole scan below (`_every_function_is_in_the_table`) is what keeps it from
+	# sitting outside every table the day it was written, the exact hole `_striking`/`_cluster` shipped
+	# through on `field_view.gd`.
+	"_paint_tri": 1,
 	"_ready": 0,
 	"_draw": 0,
 	"_process": 0,
@@ -143,9 +192,24 @@ const HUD_LEAF_CALLS := {
 ## exceptions stops being a scan. **The residual hole is named**: a parameter kept alive by a statement that
 ## does nothing with it would satisfy this.
 const LEAF_PARAMS := {
+	# ⚠ **`_paint_cell` stays on this list even though it draws nothing now.** It forwards all seven of its
+	# parameters, so the scan catches a dispatcher that quietly drops one — the same class of bug that turned
+	# forty rocks invisible through `_paint_disc`. Its two candidates are listed beside it.
+	# ⚠ **`_paint_rim` is here for the same reason `_paint_cell` is.** It draws nothing itself — it forwards
+	# a body's position, radius, corner, squash and rotation to `_paint_outline` — and a rim handed
+	# `Vector2.ONE`/`0.0` instead of the body's own transform is exactly the stroke that sits square around a
+	# stretched body. `_paint_outline`'s own row cannot see that: the parameters stay used inside the leaf.
+	# ⚠ **The nine gesture functions are here for exactly the reason `_paint_rim` is.** They draw nothing of
+	# their own — they forward a creature's lunged position, its radius, its swing direction and the swing's
+	# own progress `t` into an existing leaf — and a gesture handed a `t` it never reads is a mark that does
+	# not animate at all, which is the whole difference between 갉기 shrinking and 갉기 sitting there. The
+	# leaves' own rows cannot see that: `t` never reaches them, only the number it produced.
 	FIELD_VIEW: ["_paint_part_shape", "_paint_part_line", "_paint_outline", "_paint_dot", "_paint_disc",
-			"_paint_label", "_paint_arc", "_paint_cone", "_paint_cell"],
-	HUD: ["_paint_text", "_paint_rect", "_paint_mark"],
+			"_paint_label", "_paint_arc", "_paint_cone", "_paint_cell", "_paint_cell_fill",
+			"_paint_cell_line", "_paint_rim", "_paint_swing", "_paint_swing_peck", "_paint_swing_gnaw",
+			"_paint_swing_bite", "_paint_swing_charge", "_paint_swing_shove", "_paint_swing_pounce",
+			"_paint_swing_stomp", "_paint_swing_lash"],
+	HUD: ["_paint_text", "_paint_rect", "_paint_mark", "_paint_tri"],
 }
 
 ## **One file holds every colour, and until this scan nothing said so.** `hud.gd` declared six of its own,
@@ -210,10 +274,14 @@ func run(t) -> void:
 func _field_view_leaves(t) -> void:
 	var text := _read(FIELD_VIEW)
 	t.ok(text != "", "%s를 읽었다" % FIELD_VIEW)
-	# The literal 28, hand-written like `SCOPED_FILES.size()` above: read back off the dictionary it guards,
+	# The literal 32, hand-written like `SCOPED_FILES.size()` above: read back off the dictionary it guards,
 	# an emptied table would be `0 == 0` and every assertion below would simply stop running.
 	# **It is the whole file now, not a chosen seventeen** — see `_every_function_is_in_the_table`.
-	t.eq(FIELD_LEAF_CALLS.size(), 28, "field_view.gd에서 세는 함수는 스물여덟이다 — 그 파일의 함수 전부다")
+	# It was 28 until `melee-legibility-ko`'s fork split `_paint_cell` into a dispatcher and two candidates
+	# and added the two pure functions 갈래 ㄱ's stroke and nucleus are computed by (32), and 42 since 갈래 ㄴ
+	# cut the three body loops out of `_paint` into one ordered pass with its own rim and its own gate.
+	# **53 since §6's per-species gestures**: one dispatcher, seven gestures and the fallback.
+	t.eq(FIELD_LEAF_CALLS.size(), 53, "field_view.gd에서 세는 함수는 쉰셋이다 — 그 파일의 함수 전부다")
 	for name: String in FIELD_LEAF_CALLS:
 		var want: int = int(FIELD_LEAF_CALLS[name])
 		t.eq(_calls_in_func(text, name), want,
@@ -252,7 +320,7 @@ func _hud_leaves(t) -> void:
 	var text := _read(HUD)
 	t.ok(text != "", "%s를 읽었다" % HUD)
 	# Hand-written, exactly like the 28 above and for the same reason.
-	t.eq(HUD_LEAF_CALLS.size(), 11, "hud.gd에서 세는 함수는 열하나다 — 그 파일의 함수 전부다")
+	t.eq(HUD_LEAF_CALLS.size(), 12, "hud.gd에서 세는 함수는 열둘이다 — 그 파일의 함수 전부다")
 	for name: String in HUD_LEAF_CALLS:
 		var want: int = int(HUD_LEAF_CALLS[name])
 		t.eq(_calls_in_func(text, name), want,
@@ -332,12 +400,12 @@ func _funcs_in_file(text: String) -> PackedStringArray:
 # -- every leaf still USES what it was handed -----------------------------------------------------------
 ## The count says the draw call is there. This says the values reached it. See `LEAF_PARAMS`.
 func _every_parameter_still_reaches_a_draw(t) -> void:
-	# Twelve, hand-written: an emptied `LEAF_PARAMS` would run zero assertions and read exactly like a clean
-	# scan, which is the same trap the two `size()` literals above exist for.
+	# Hand-written, like every other count in this file: an emptied `LEAF_PARAMS` would run zero assertions
+	# and read exactly like a clean scan, which is the same trap the two `size()` literals above exist for.
 	var total := 0
 	for path: String in LEAF_PARAMS:
 		total += (LEAF_PARAMS[path] as Array).size()
-	t.eq(total, 12, "인자가 살아 있는지 보는 잎은 열둘이다 — field_view 아홉, hud 셋")
+	t.eq(total, 25, "인자가 살아 있는지 보는 잎은 스물다섯이다 — field_view 스물하나, hud 넷")
 
 	for path: String in LEAF_PARAMS:
 		var text := _read(path)

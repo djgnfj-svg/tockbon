@@ -83,10 +83,12 @@ class BodySpy extends FieldView:
 		lines.append({"a": a, "b": b, "width": width})
 		super._paint_part_line(c, a, b, width, col)
 
+	## `squash` and `rot` joined the signature with 갈래 ㄴ's rim — Godot rejects an override that does not
+	## match, so this shape is forced by the file rather than chosen.
 	func _paint_outline(c: CanvasItem, p: Vector2, r: float, corner: float, col: Color,
-			width: float) -> void:
-		outlines.append({"p": p, "r": r, "corner": corner, "width": width})
-		super._paint_outline(c, p, r, corner, col, width)
+			width: float, squash: Vector2, rot: float) -> void:
+		outlines.append({"p": p, "r": r, "corner": corner, "width": width, "squash": squash, "rot": rot})
+		super._paint_outline(c, p, r, corner, col, width, squash, rot)
 
 	func _paint_dot(c: CanvasItem, p: Vector2, r: float, col: Color) -> void:
 		dots.append({"p": p, "r": r})
@@ -104,9 +106,11 @@ class ArcSpy extends FieldView:
 
 	func _paint_arc(c: CanvasItem, p: Vector2, r: float, from: float, to: float, col: Color,
 			width: float) -> void:
-		# `col_a` rather than `col`: an assertion that the captured colour equals the constant it came from
-		# moves both sides when the constant moves, which is how `Color(0, 0, 0, 0)` stayed green.
-		arcs.append({"p": p, "r": r, "from": from, "to": to, "width": width, "col_a": col.a})
+		# `col_a` is kept SEPARATE from `col` on purpose: an assertion that the captured colour equals the
+		# constant it came from moves both sides when the constant moves, which is how `Color(0, 0, 0, 0)`
+		# stayed green. Checks that want the hue compare against a lerp of two constants computed from a
+		# value the fixture DROVE (a clone's `carried`, a creature's species), which does not move with it.
+		arcs.append({"p": p, "r": r, "from": from, "to": to, "width": width, "col_a": col.a, "col": col})
 		super._paint_arc(c, p, r, from, to, col, width)
 
 	func _paint_cone(c: CanvasItem, p: Vector2, dir: Vector2, range_px: float, arc: float,
@@ -123,6 +127,84 @@ class DiscSpy extends FieldView:
 	func _paint_disc(c: CanvasItem, p: Vector2, r: float, col: Color) -> void:
 		discs.append({"p": p, "r": r, "col": col})
 		super._paint_disc(c, p, r, col)
+
+
+## §6: the per-species attack gesture, captured across **all three leaves a gesture can reach, in one spy**.
+## A spy on a single leaf cannot answer the question this feature is: 까마귀 draws two lines, 들쥐 draws a
+## disc, 보스 draws an arc, and the whole claim is that two species swinging in the same frame do not reach
+## the screen with the same arguments. Three separate spies would give three counts and no way to say the
+## seven marks belong to seven different creatures.
+##
+## ⚠ **`_paint_cell` rides along and it is not decoration.** The LUNGE is carried by the body's own drawn
+## position and by nothing else — `Look.SPECIES_LUNGE_MUL` is the elephant's and the lion's entire gesture
+## in one of its two halves, and no gesture leaf ever sees it.
+class SwingSpy extends FieldView:
+	var lines: Array = []
+	var discs: Array = []
+	var arcs: Array = []
+	var cells: Array = []
+
+	func _paint_part_line(c: CanvasItem, a: Vector2, b: Vector2, width: float, col: Color) -> void:
+		lines.append({"a": a, "b": b, "width": width, "col": col})
+		super._paint_part_line(c, a, b, width, col)
+
+	func _paint_disc(c: CanvasItem, p: Vector2, r: float, col: Color) -> void:
+		discs.append({"p": p, "r": r, "col": col})
+		super._paint_disc(c, p, r, col)
+
+	func _paint_arc(c: CanvasItem, p: Vector2, r: float, from: float, to: float, col: Color,
+			width: float) -> void:
+		arcs.append({"p": p, "r": r, "from": from, "to": to, "width": width, "col_a": col.a})
+		super._paint_arc(c, p, r, from, to, col, width)
+
+	func _paint_cell(c: CanvasItem, p: Vector2, r: float, col: Color, squash: Vector2, rot: float = 0.0,
+			corner: float = Look.CORNER) -> void:
+		cells.append({"p": p, "r": r})
+		super._paint_cell(c, p, r, col, squash, rot, corner)
+
+	func forget() -> void:
+		lines.clear()
+		discs.clear()
+		arcs.clear()
+		cells.clear()
+
+
+## §B-1: the monster hit flash and its spark. Both go through leaves that already have spies of their own —
+## `_paint_cell` and `_paint_disc` — captured together here because the two checks (colour mixed vs. colour
+## painted, spark present vs. absent) are read off the SAME frame.
+class HitSpy extends FieldView:
+	var seen: Array = []
+	var discs: Array = []
+
+	func _paint_cell(c: CanvasItem, p: Vector2, r: float, col: Color, squash: Vector2, rot: float = 0.0,
+			corner: float = Look.CORNER) -> void:
+		seen.append({"p": p, "r": r, "col": col})
+		super._paint_cell(c, p, r, col, squash, rot, corner)
+
+	func _paint_disc(c: CanvasItem, p: Vector2, r: float, col: Color) -> void:
+		discs.append({"p": p, "r": r, "col": col})
+		super._paint_disc(c, p, r, col)
+
+
+## §E: what order things actually landed on screen in, across THREE different leaves at once. A spy on any
+## one leaf alone cannot answer "before" or "after" a different kind of draw — three separate counts of 2,
+## 1 and 1 say nothing about which came first. One shared, ordered list is what a position claim needs.
+class OrderSpy extends FieldView:
+	var order: Array = []
+
+	func _paint_disc(c: CanvasItem, p: Vector2, r: float, col: Color) -> void:
+		order.append({"kind": "disc", "p": p})
+		super._paint_disc(c, p, r, col)
+
+	func _paint_arc(c: CanvasItem, p: Vector2, r: float, from: float, to: float, col: Color,
+			width: float) -> void:
+		order.append({"kind": "arc", "p": p, "r": r, "width": width})
+		super._paint_arc(c, p, r, from, to, col, width)
+
+	func _paint_cell(c: CanvasItem, p: Vector2, r: float, col: Color, squash: Vector2, rot: float = 0.0,
+			corner: float = Look.CORNER) -> void:
+		order.append({"kind": "cell", "p": p})
+		super._paint_cell(c, p, r, col, squash, rot, corner)
 
 
 ## The number under every body. `draw_string` is native and Godot refuses to override it, so the leaf takes
@@ -178,6 +260,7 @@ func run(t) -> void:
 	await _c13_body_values(t)
 	await _p2_creatures_are_drawn_by_species(t)
 	await _p1_the_eating_ring(t)
+	await _p4_the_half_eaten_corpse_shrinks(t)
 	await _t6_the_drawn_ground_is_the_sim_s(t)
 	await _c31_c32_c33_labels(t)
 	await _p3_the_label_is_centred(t)
@@ -186,6 +269,24 @@ func run(t) -> void:
 	await _c35b_what_is_on_the_map(t)
 	await _c35c_the_camera_box_is_clipped(t)
 	await _c35d_water_is_on_the_map(t)
+	await _b1_monster_hit_flash(t)
+	await _d2_boss_pulse(t)
+	await _e_wall_reads_the_live_radius(t)
+	await _e_wall_persists_every_frame_after_closing(t)
+	await _e_draw_order_floor_before_bodies(t)
+	await _e_summon_rings_at_the_arrival_point(t)
+	await _b3_clone_hit_flash_uses_cargo_colour(t)
+	await _b3_b4_death_bursts_persist_and_fade(t)
+	await _b3_view_does_not_clear_died_this_frame(t)
+	await _b5_clone_swing_line(t)
+	await _f7_food_pop_is_small_and_travels(t)
+	await _f9_level_pop_differs_from_absorb_pop(t)
+	await _f10_split_ring_at_the_split_point(t)
+	await _f12_afterimage_gated_by_species(t)
+	await _p13_every_species_reaches_the_screen(t)
+	await _p14_every_species_reaches_the_minimap(t)
+	await _p15_every_species_swings_its_own_shape(t)
+	await _p16_the_clone_swing_is_not_a_creatures(t)
 
 
 ## ⚠ **Every term of `expect` is a literal and the world is built to make that possible.** It used to read
@@ -239,8 +340,10 @@ func _c_cells(t) -> void:
 	spy.seen.clear()
 	await t.pump_frames(1)
 
-	# 1 호스트 + 4 분신 + 3 먹이 + 2 생물 + 1 시체. Every term a literal.
-	t.eq(spy.seen.size(), 11, "호스트·분신 넷·먹이 셋·생물 둘·시체 하나가 전부 그려졌다 (1+4+3+2+1)")
+	# 1 호스트 + 4 분신 + 3 먹이 + 2 생물 + 1 시체 + 말의 잔상 셋(§F-12: HORSE_SPEED_MUL 1.15 > 1.0, 까마귀는
+	# 0.55라 잔상이 없다). Every term a literal.
+	t.eq(spy.seen.size(), 14,
+			"호스트·분신 넷·먹이 셋·생물 둘·시체 하나·말의 잔상 셋이 전부 그려졌다 (1+4+3+2+1+3)")
 
 	# The captured position must EQUAL the simulation's, not merely be non-zero: passing Vector2.ZERO for
 	# every body is the exact mutation this check exists to catch, and a count-only assertion survives it.
@@ -350,7 +453,17 @@ func _c_strike_marker(t) -> void:
 	t.ok(w.swarm.count > count_before, "설정: 손을 떼지 않은 채 분열이 실제로 일어났다")
 	spy.arcs.clear()
 	await t.pump_frames(1)
-	t.eq(spy.arcs.size(), 0, "갈라진 그 순간 감김 호가 비워진다 — 떼기를 기다리지 않는다")
+	# ⚠ **더 이상 0이 아니다 — §F-10이 갈라진 자리에 링을 하나 더 그린다** (`_paint_ring`도 `_paint_arc`를
+	# 두 번 부른다). 그래서 이 검사는 「감김 호 자체가 없다」로 좁힌다: 그 반지름
+	# (`Rules.BODY_RADIUS * Look.SPLIT_CHARGE_RING`)을 가진 호가 하나도 없으면 감김 호는 비워진 것이다 —
+	# §F-10의 새 링과 혼동하지 않는다.
+	var charge_r := Rules.BODY_RADIUS * Look.SPLIT_CHARGE_RING
+	var charge_ring_found := false
+	for e: Dictionary in spy.arcs:
+		if absf(float(e["r"]) - charge_r) < 0.01:
+			charge_ring_found = true
+	t.ok(not charge_ring_found,
+			"갈라진 그 순간 감김 호가 비워진다 — 떼기를 기다리지 않는다 %s" % str(spy.arcs))
 
 	t.root.remove_child(spy)
 	spy.queue_free()
@@ -514,7 +627,11 @@ func _c13_body_values(t) -> void:
 		t.ok(absf(float(o["width"]) - 4.0) < 0.001,
 				"그려진 테두리의 폭이 4.0px다 (%.3f)" % float(o["width"]))
 		t.ok(_near(o["p"], w.swarm.pos[0]), "테두리는 몸 자리에 그려진다")
-		t.ok(absf(float(o["r"]) - 14.0) < 0.001, "그리고 몸과 같은 반지름을 따라 그려진다")
+		# ⚠ **12.0, not 14.0, since 갈래 ㄴ's rim landed.** The stroke is centred at `r - width * 0.5`, so
+		# its OUTER edge lands exactly on the body's own 14 — a stroke centred on 14 straddles it and the
+		# drawn body ends up wider than the circle the sim collides with.
+		t.ok(absf(float(o["r"]) - 12.0) < 0.001,
+				"그리고 몸의 반지름 안쪽을 따라 그려진다 — 14 - 4/2 = 12px (리터럴) (%.3f)" % float(o["r"]))
 		t.ok(absf(float(o["corner"]) - 0.34) < 0.0001, "몸의 실루엣을 그대로 따라간다 (모서리 0.34)")
 	var hide_col: Color = _cell_col(spy, w.swarm.pos[0], 14.0)
 	t.ok(hide_col != base_col, "가죽이 몸에 실제로 칠해지는 색을 바꾼다")
@@ -524,6 +641,14 @@ func _c13_body_values(t) -> void:
 	w.body.slot_level[Parts.Slot.HIDE] = 0
 
 	# -- eyes: the one internal slot that adds marks, and the number IS the radius -----------------------
+	# ⚠ **Both drawing branches are driven here, explicitly, and neither is left to the default.** This slot
+	# is the one place the two candidates disagree about WHAT to draw rather than how: FILL puts a mirrored
+	# PAIR on the body's face, LINE puts ONE nucleus at the centre — the shape
+	# `the-body-is-a-line-drawn-by-code` decided, with the pair on that same doc's rejected list. The default
+	# is LINE since the user picked it, so reading whatever is current would leave FILL's pair unmeasured;
+	# reading only FILL is what left LINE unmeasured until the default moved and four checks went red at once.
+	var eyes_style_was := Look.BODY_STYLE
+	Look.BODY_STYLE = Look.BodyStyle.FILL
 	w.body.slot_level[Parts.Slot.EYES] = 1
 	var eye1: Dictionary = await _capture(t, spy)
 	t.ok(absf(float(eye1["dot_radius"]) - 0.17) < 0.0001,
@@ -542,6 +667,26 @@ func _c13_body_values(t) -> void:
 			"눈 Lv3이면 0.27이다 — 레벨마다 커진다 (%.4f)" % float(eye3["dot_radius"]))
 	t.ok(_has_dot(spy.dots, w.swarm.pos[0] + Vector2(5.32, 5.04), 3.78),
 			"그리고 실제로 찍힌 점이 3.78px로 커진다 (리터럴) %s" % str(spy.dots))
+
+	# The other branch: ONE dot, at the body's own centre, and the slot's level still reaches it. The radius
+	# is `_outline_dot_r(14, dot_radius)` = `max(14 × (0.22 + dot_radius), 2.0)` — pinned as literals, since
+	# written as the expression it would move with the constants it exists to hold still.
+	Look.BODY_STYLE = Look.BodyStyle.LINE
+	w.body.slot_level[Parts.Slot.EYES] = 1
+	var nuc1: Dictionary = await _capture(t, spy)
+	t.ok(absf(float(nuc1["dot_radius"]) - 0.17) < 0.0001,
+			"선 갈래에서도 같은 인자가 건너간다 (0.17) (%.4f)" % float(nuc1["dot_radius"]))
+	t.eq(spy.dots.size(), 1, "선 갈래의 눈은 한 쌍이 아니라 가운데 점 하나다 — 두 점 눈은 기각된 안이다")
+	t.ok(_has_dot(spy.dots, w.swarm.pos[0], 5.46),
+			"그 점은 몸 한가운데에 반지름 5.46px로 찍힌다 (리터럴) %s" % str(spy.dots))
+	w.body.slot_level[Parts.Slot.EYES] = 3
+	var nuc3: Dictionary = await _capture(t, spy)
+	t.ok(absf(float(nuc3["dot_radius"]) - 0.27) < 0.0001,
+			"선 갈래의 레벨도 인자로 건너간다 (0.27) (%.4f)" % float(nuc3["dot_radius"]))
+	t.ok(_has_dot(spy.dots, w.swarm.pos[0], 6.86),
+			"그리고 실제로 찍힌 점이 6.86px로 커진다 — 레벨이 화면에 닿는다 (리터럴) %s" % str(spy.dots))
+
+	Look.BODY_STYLE = eyes_style_was
 	w.body.slot_level[Parts.Slot.EYES] = 0
 
 	# -- and the SIX EXTERNAL slots actually reach the drawing side --------------------------------------
@@ -695,6 +840,16 @@ func _has_dot(list: Array, at: Vector2, r: float) -> bool:
 	return _has_shape(list, at, r)
 
 
+## The disc drawn at a given point, or an empty dictionary. **Located by position, never by index** — a hit
+## draws two discs (the bloom at the body's centre, the spark on the struck surface) and reading `discs[0]`
+## would pass unchanged if the two ever swapped places.
+func _disc_at(spy, at: Vector2) -> Dictionary:
+	for e: Dictionary in spy.discs:
+		if (e["p"] as Vector2).distance_to(at) < 0.05:
+			return e
+	return {}
+
+
 ## The colour the host's own base blob was painted with, off `_paint_cell`. Not `Look.HOST_COLOR` read
 ## back: what is being measured is the tone that reached the draw, and `col.darkened(colour_depth)`
 ## collapsing to a bare `col` is invisible to anything that reads the constant instead.
@@ -745,6 +900,161 @@ func _p2_creatures_are_drawn_by_species(t) -> void:
 	spy.queue_free()
 
 
+# -- P13: EVERY row of `SPECIES_COLOR` actually reaches the screen ---------------------------------------
+## ⚠ **`_p2` above names three species and stops, and that is how four more landed with their colours
+## measured by nothing at all.** Naming the next four would close them and leave the twelfth open on the day
+## it lands, so this walks `FieldView.SPECIES_COLOR`'s own length: **a row added to that table and never
+## painted reddens here, and so does a row that is missing from it entirely** — the missing case is an
+## index-out-of-range inside `_paint_critter`, which is a crash in play and a green round otherwise.
+##
+## Every creature is written at its species MINIMUM force, so `_radius_of`'s ramp is 0 and the drawn radius
+## is `SPECIES_RADIUS[s]` exactly — the same device `_p2` and `net_overlap._o5` use, and it is what makes
+## the radius assertable at all.
+##
+## ⚠ **Spread far enough apart that nothing overlaps anything**, because `_cell_is` matches on position and
+## the fast rows (말·치타·토끼) each drag three afterimage ghosts BEHIND themselves. A ghost sits at a
+## different position and a faded alpha, so an exact `Color ==` on the real body is what separates them.
+func _p13_every_species_reaches_the_screen(t) -> void:
+	var w := World.new()
+	w.setup(96)
+	_silence(w)
+	_clear_terrain(w)
+	var host: Vector2 = w.swarm.pos[0]
+	w.critter_count = 0
+	w.boss_index = -1
+	var rows: int = FieldView.SPECIES_COLOR.size()
+	t.eq(rows, Rules.SPECIES_RADIUS.size(),
+			"설정: 색 표와 크기 표의 길이가 같다 — 다르면 아래 반복문이 있지도 않은 종을 그리려 든다 (%d)" % rows)
+	var at: Array = []
+	for s in rows:
+		# ⚠ **340px apart, on a line that stays INSIDE the field.** `_body_order()` culls every creature
+		# outside `view_rect`, and `view_rect` is the field here — a row laid out at x = -80 is not drawn at
+		# all and this check would report the table's last species missing for a reason that is not the
+		# table's. 340 clears the biggest body (보스 48) and the longest ghost tail
+		# (말 22 × `AFTERIMAGE_GAP_RING` 0.6 × 3 = 40px) many times over.
+		var p := Vector2(60.0 + float(s) * 340.0, host.y)
+		at.append(p)
+		w._write_critter(s, p, int(Rules.SPECIES_FORCE_MIN[s]))
+	t.eq(w.critter_count, rows, "설정: 종마다 한 마리씩 세웠다")
+
+	var spy := Spy.new()
+	spy.world = w
+	spy.view_rect = Rect2(Vector2.ZERO, Rules.FIELD)
+	t.root.add_child(spy)
+	await t.pump_frames(2)
+	spy.seen.clear()
+	await t.pump_frames(1)
+
+	for s in rows:
+		var col: Color = FieldView.SPECIES_COLOR[s]
+		var r: float = float(Rules.SPECIES_RADIUS[s])
+		t.ok(_cell_is(spy, at[s], r, col),
+				"%d종은 제 종의 색으로, 제 종의 %.0fpx로 화면에 닿는다" % [s, r])
+
+	# **And the colours are distinct**, or every assertion above is satisfied by one tone for the whole field
+	# — the exact defect `_p2`'s own note was written against, at eleven rows instead of three.
+	var distinct := {}
+	for s in rows:
+		distinct[str(FieldView.SPECIES_COLOR[s])] = true
+	t.eq(distinct.size(), rows,
+			"설정: 열한 색이 서로 다 다르다 — 두 종이 같은 색이면 위의 열한 줄은 아무것도 구분하지 않는다 (%d)"
+					% distinct.size())
+
+	t.root.remove_child(spy)
+	spy.queue_free()
+
+
+# -- P14: every row of `SPECIES_COLOR` reaches the MINIMAP too --------------------------------------------
+## ⚠ **`_c35` and `_c35b` name 까마귀 · 보스 · 말 and stop**, so eight of the eleven species had never been
+## on the map in any check. `FieldView.SPECIES_COLOR` has **two** readers — `_paint_critter` in the field and
+## `Hud._minimap_marks()` in the HUD — and `_p13` above only walks the first. A colour that reaches the field
+## and not the map is green today; so is a table short by one row, which is an index-out-of-range in a
+## different file on a different frame from the one `_p13` drives.
+##
+## Driven over the table's own length, so a twelfth row reddens the day it lands — **and the length is also
+## pinned to the literal 11**, because a table emptied to zero rows makes the loop below run zero times and
+## reports a perfectly clean map. A loop whose condition is false from the start never runs the check.
+##
+## ⚠ **Every expected position is hand arithmetic on hand-written coordinates, never `_to_map` re-run.**
+## The field is 3840×2160 and the map is 240×135, so the mapping is exactly ÷16. `_to_map` rewritten to
+## `return frame.position` — every mark on one pixel — was measured green against a check that recomputed it.
+##
+## `boss_index` is left at **-1** on purpose. This asks whether the boss ROW's colour reaches the map through
+## the ordinary distance-gated path, which is a different question from "the boss is shown however far away
+## it is" — that one is `_c35`'s and it is already answered.
+func _p14_every_species_reaches_the_minimap(t) -> void:
+	const ROWS := 11
+	## 3840/240 and 2160/135 are both exactly this. `Hud._minimap_marks` scales x and y separately; the two
+	## agreeing is what makes one number legal here, and `_c35b` is where that is asserted.
+	const MAP_SCALE := 16.0
+	var w := World.new()
+	w.setup(103)
+	_silence(w)
+	_clear_terrain(w)
+	var host := Vector2(1920.0, 1080.0)
+	w.swarm.pos[0] = host
+	w.critter_count = 0
+	w.boss_index = -1
+	var rows: int = FieldView.SPECIES_COLOR.size()
+	t.eq(rows, ROWS, "설정: 색 표는 열한 줄이다 (리터럴) — 비면 아래 반복문이 한 번도 안 돌고 지도가 깨끗해 보인다")
+
+	# 200px apart on a line through the host: the farthest is 1000px away, well inside `MINIMAP_SHOW_DIST`
+	# 1600, and 200px is 12.5px on the map — six times `MINIMAP_CREATURE_R`, so no two dots are one dot.
+	# Every creature is written at its species MINIMUM force; the map's dot is a fixed radius so that does
+	# not matter here, but it keeps this fixture the same shape as `_p13`'s.
+	var at: Array = []
+	for s in rows:
+		var p := Vector2(920.0 + float(s) * 200.0, 1080.0)
+		at.append(p)
+		t.ok(host.distance_to(p) < Look.MINIMAP_SHOW_DIST,
+				"설정: %d종은 지도에 뜨는 거리 안에 서 있다 (%.0fpx)" % [s, host.distance_to(p)])
+		# The row index is asserted to equal the species index, because the control at the bottom moves one
+		# creature by `critter_pos[MOUSE]` and that is only the mouse while the two happen to coincide.
+		t.eq(w._write_critter(s, p, int(Rules.SPECIES_FORCE_MIN[s])), s,
+				"설정: %d종은 %d번 줄에 앉는다 — 아래의 대조가 그 줄을 종 번호로 집는다" % [s, s])
+	t.eq(w.critter_count, rows, "설정: 종마다 한 마리씩 세웠다")
+
+	var spy := MapSpy.new()
+	spy.world = w
+	spy.camera_rect = Rect2(1280.0, 720.0, 1280.0, 720.0)
+	t.root.add_child(spy)
+	await t.pump_frames(2)
+	spy.forget()
+	await t.pump_frames(1)
+
+	t.eq(spy.maps.size(), 1, "설정: 한 프레임에 미니맵이 한 번 그려진다")
+	if spy.maps.size() != 1:
+		t.root.remove_child(spy)
+		spy.queue_free()
+		return
+	var frame: Rect2 = spy.maps[0]["frame"]
+	t.eq(frame.size, Vector2(240.0, 135.0), "설정: 지도는 240×135다 (리터럴) — ÷16이 성립하는 근거다")
+	# Water is cleared and the swarm is one body, so the map holds exactly the eleven creatures and the host.
+	# Without this the eleven assertions below would also pass on a map that drew a hundred stray dots.
+	t.eq(spy.marks.size(), rows + 1, "지도에 찍힌 점은 열둘이다 — 종 열하나와 호스트 하나 (%d)"
+			% spy.marks.size())
+
+	for s in rows:
+		var p: Vector2 = at[s]
+		t.ok(_mark_at(spy, frame.position + p / MAP_SCALE, Look.MINIMAP_CREATURE_R,
+						FieldView.SPECIES_COLOR[s]),
+				"%d종은 제 종의 색으로 제자리에 지도에 찍힌다 — 화면과 지도는 같은 표를 읽는 두 파일이다" % s)
+
+	# **The negative control, and it is aimed at a NEW row rather than at 까마귀.** Without it "지도는 전부
+	# 그린다" satisfies all eleven lines above just as well as the gate does — and `_c35`'s control names the
+	# crow, which is row 0 and was never the row at risk.
+	var mouse := int(Parts.Species.MOUSE)
+	w.critter_pos[mouse] = host + Vector2(Look.MINIMAP_SHOW_DIST + 300.0, 0.0)
+	spy.forget()
+	await t.pump_frames(1)
+	t.eq(_marks_col(spy, FieldView.SPECIES_COLOR[mouse]), 0,
+			"대조: 그 들쥐가 1900px 밖으로 나가면 지도에서 사라진다 — 지도는 방향이지 정보가 아니다")
+	t.eq(spy.marks.size(), rows, "그래서 점은 하나 줄어 열하나다 (%d)" % spy.marks.size())
+
+	t.root.remove_child(spy)
+	spy.queue_free()
+
+
 # -- P1: the eating ring ---------------------------------------------------------------------------------
 ## A six-second boss meal with nothing on screen is the beat happening invisibly. The sweep AND the radius
 ## are both pinned: a bare radius passed to `_paint_arc` draws a ring that says nothing about the corpse.
@@ -761,6 +1071,9 @@ func _p1_the_eating_ring(t) -> void:
 	w.corpse_species[0] = Parts.Species.CROW
 	w.corpse_force[0] = 10
 	w.corpse_progress[0] = 0.5
+	# **Untouched: three of three bites left.** `resize()` zero-fills, and a corpse with 0 bites left draws at
+	# `CORPSE_SHRINK_BASE` — the literal 18.0 below is the FULL-size ring, so the fixture has to say so.
+	w.corpse_bites_left[0] = 3
 
 	var spy := ArcSpy.new()
 	spy.world = w
@@ -788,10 +1101,77 @@ func _p1_the_eating_ring(t) -> void:
 				"그 호는 실제로 보이는 알파로 그려진다 (%.2f) — 색을 상수끼리 비교하면 0도 통과한다"
 						% float(a["col_a"]))
 
+	# **The ring shrinks WITH the drawn corpse, and the literal says by how much.** One bite of three left is
+	# `0.45 + 0.55 / 3` = 0.6333, so the ring is `18 × 0.6333` = 11.4px. Left unshrunk it stays 18px around a
+	# body drawn at 7.6px — a hoop 3.3× the corpse's diameter, floating in empty grass.
+	w.corpse_bites_left[0] = 1
+	spy.arcs.clear()
+	await t.pump_frames(1)
+	t.eq(spy.arcs.size(), 1, "한 입 남은 시체에도 호는 하나다 %s" % str(spy.arcs))
+	if spy.arcs.size() == 1:
+		t.ok(absf(float(spy.arcs[0]["r"]) - 11.4) < 0.05,
+				"그 호는 줄어든 몸을 따라 11.4px로 줄어든다 (18 × (0.45 + 0.55/3), 리터럴) (%.3f)"
+						% float(spy.arcs[0]["r"]))
+
+	w.corpse_bites_left[0] = 3
 	w.corpse_progress[0] = 0.0
 	spy.arcs.clear()
 	await t.pump_frames(1)
 	t.eq(spy.arcs.size(), 0, "부정 대조: 아무도 안 먹은 시체에는 호가 없다")
+
+	t.root.remove_child(spy)
+	spy.queue_free()
+
+
+# -- P4: the half-eaten corpse shrinks, but its own `corpse_radius()` (the arc above reads it too) does not
+## §C's own line: "그 셀의 반지름만 줄어든다" — what may NOT shrink is `World.corpse_radius()` itself, because
+## `corpse_reach()` reads it and a half-eaten boss must stay as easy to keep eating as a whole one. The drawn
+## cell and the progress ring around it both shrink (`_p1` pins the ring at both sizes). A corpse at 1 of 3 bites left
+## draws smaller than a fresh one at 3 of 3, and BOTH are smaller than the bare `corpse_radius()` unless the
+## bites are all still there (`CORPSE_SHRINK_BASE + CORPSE_SHRINK_RANGE = 0.45 + 0.55 = 1.0`, full size).
+func _p4_the_half_eaten_corpse_shrinks(t) -> void:
+	var w := World.new()
+	w.setup(96)
+	_silence(w)
+	_clear_terrain(w)
+	w.critter_count = 0
+	w.boss_index = -1
+	var at: Vector2 = w.swarm.pos[0] + Vector2(300.0, 0.0)
+	w.corpse_count = 1
+	w.corpse_pos[0] = at
+	w.corpse_species[0] = Parts.Species.CROW
+	w.corpse_force[0] = 10
+	w.corpse_progress[0] = 0.0
+	var full_r: float = w.corpse_radius(0)
+	var total: int = w.corpse_bites_total(0)
+	t.eq(total, 3, "설정: 까마귀 시체는 세 입이다")
+
+	var spy := Spy.new()
+	spy.world = w
+	spy.view_rect = Rect2(Vector2.ZERO, Rules.FIELD)
+	t.root.add_child(spy)
+	await t.pump_frames(2)
+
+	# Fresh (3 of 3 bites): drawn at full size.
+	w.corpse_bites_left[0] = 3
+	spy.seen.clear()
+	await t.pump_frames(1)
+	t.ok(_cell_is(spy, at, full_r, Look.CORPSE_COLOR),
+			"설정: 아직 손 안 댄 시체는 제 크기 그대로 그려진다 (%.2f)" % full_r)
+
+	# One bite left: shrunk to the floor.
+	w.corpse_bites_left[0] = 1
+	var shrunk_r := full_r * (Look.CORPSE_SHRINK_BASE + Look.CORPSE_SHRINK_RANGE * (1.0 / 3.0))
+	spy.seen.clear()
+	await t.pump_frames(1)
+	t.ok(shrunk_r < full_r, "설정: 계산된 반지름이 실제로 더 작다 (%.2f < %.2f)" % [shrunk_r, full_r])
+	t.ok(_cell_is(spy, at, shrunk_r, Look.CORPSE_COLOR),
+			"한 입 남은 시체는 더 작게 그려진다 (%.2f)" % shrunk_r)
+	t.ok(not _cell_is(spy, at, full_r, Look.CORPSE_COLOR), "그리고 이제 제 크기로는 그려지지 않는다")
+
+	# `corpse_radius()` itself never moved — the ring in `_p1` and `corpse_reach()` both still read the
+	# WHOLE size regardless of how few bites are left.
+	t.eq(w.corpse_radius(0), full_r, "sim의 corpse_radius()는 안 바뀐다 — 줄어드는 것은 그려지는 값뿐이다")
 
 	t.root.remove_child(spy)
 	spy.queue_free()
@@ -1394,3 +1774,1461 @@ func _silence(w: World) -> void:
 	for i in w.food.alive.size():
 		w.food.alive[i] = 0
 	w.food.alive_count = 0
+
+
+# -- §E: the arena wall reads Terrain's CURRENT radius, driven directly -----------------------------------
+## **Driven, not grepped.** `terrain.arena_radius` is written by hand to two different values with
+## `arena_closed` held true, and the drawn wall has to follow BOTH — a hook that read `Rules.ARENA_RADIUS`
+## instead of `ground.arena_radius` would draw the same 900px ring either way, and one value alone could
+## not tell the two apart.
+func _e_wall_reads_the_live_radius(t) -> void:
+	var w := World.new()
+	w.setup(131)
+	_silence(w)
+	_clear_terrain(w)
+	w.critter_count = 0
+	w.boss_index = -1
+	var centre := w.swarm.pos[0] + Vector2(500.0, 0.0)
+	w.terrain.arena_centre = centre
+	w.terrain.arena_closed = true
+	w.terrain.arena_radius = 450.0
+
+	var spy := ArcSpy.new()
+	spy.world = w
+	spy.view_rect = Rect2(Vector2.ZERO, Rules.FIELD)
+	t.root.add_child(spy)
+	await t.pump_frames(2)
+	spy.arcs.clear()
+	await t.pump_frames(1)
+
+	# ⚠ **ONE circle, and the count is the assertion.** The wall went through `_paint_ring` for a plan, which
+	# is the two-circle MARKER shape (`r` and `r × 0.45`) — on the shipped 900px arena that echo is a 405px
+	# ring in the wall's own colour and width, straight across the fight, and a check that only asked "is
+	# there an arc at 450" was satisfied by it. `_paint_arc` direct is the fix; this is what holds it.
+	var at_centre := []
+	for e: Dictionary in spy.arcs:
+		if _near(e["p"], centre):
+			at_centre.append(e)
+	t.eq(at_centre.size(), 1, "아레나 벽은 원 하나다 — 표식의 안쪽 메아리 링이 따라오지 않는다 %s" % str(spy.arcs))
+	if at_centre.size() == 1:
+		var wall: Dictionary = at_centre[0]
+		t.ok(absf(float(wall["r"]) - 450.0) < 0.01,
+				"아레나 반지름을 손으로 450으로 두면 벽도 450으로 그려진다 (%.2f)" % float(wall["r"]))
+		t.ok(absf(float(wall["to"]) - float(wall["from"]) - TAU) < 0.001,
+				"그리고 한 바퀴 다 도는 원이다 — 부채꼴이 아니다")
+		t.ok(float(wall["col_a"]) > 0.1, "실제로 보이는 알파로 그려진다 (%.2f)" % float(wall["col_a"]))
+	for e: Dictionary in spy.arcs:
+		t.ok(not (_near(e["p"], centre) and absf(float(e["r"]) - 450.0 * 0.45) < 0.01),
+				"부정 대조: 반지름 202.5(= 450 × 0.45)짜리 안쪽 링은 그려지지 않는다")
+
+	# A different value on the SAME world — a radius baked into the draw call would still read 450 (or the
+	# constant 900) here; only a live read of `ground.arena_radius` follows the change.
+	w.terrain.arena_radius = 220.0
+	spy.arcs.clear()
+	await t.pump_frames(1)
+	var outer_220 := false
+	for e: Dictionary in spy.arcs:
+		if _near(e["p"], centre) and absf(float(e["r"]) - 220.0) < 0.01:
+			outer_220 = true
+	t.ok(outer_220, "반지름을 220으로 바꾸면 그려지는 벽도 220을 따라간다 — 고정된 900이 아니다 %s" % str(spy.arcs))
+	t.ok(220.0 != 450.0 and absf(220.0 - Rules.ARENA_RADIUS) > 1.0,
+			"설정: 두 값 다 ARENA_RADIUS(900)와도 서로와도 다르다 — 우연히 맞은 것이 아니다")
+
+	# The stroke's WIDTH, on the ONE arc at the centre — never an ANY over a folded pair. While the wall was
+	# two arcs, either of them could revert to the marker's default `RING_WIDTH` and the other's width kept
+	# this green: CLAUDE.md's own "a dim-check folded two alphas into one array" shape, one file over.
+	var walls_220 := []
+	for e: Dictionary in spy.arcs:
+		if _near(e["p"], centre):
+			walls_220.append(e)
+	t.eq(walls_220.size(), 1, "반지름을 바꾼 뒤에도 벽은 여전히 원 하나다 %s" % str(spy.arcs))
+	if walls_220.size() == 1:
+		t.ok(absf(float(walls_220[0]["width"]) - Look.ARENA_WALL_WIDTH) < 0.001,
+				"벽의 굵기는 Look.ARENA_WALL_WIDTH다 — 표식의 기본 굵기가 아니다 (%.2f)"
+						% float(walls_220[0]["width"]))
+		t.ok(absf(Look.ARENA_WALL_WIDTH - 2.0) > 0.5,
+				"설정: 그 굵기는 _paint_ring의 기본값(RING_WIDTH 2.0)과 실제로 다르다 — 아니면 이 검사는 공허하다")
+
+	# Negative control: the arena open again (radius 0, the default before any close) draws nothing there.
+	w.terrain.arena_closed = false
+	w.terrain.arena_radius = 0.0
+	spy.arcs.clear()
+	await t.pump_frames(1)
+	var still_there := false
+	for e: Dictionary in spy.arcs:
+		if _near(e["p"], centre):
+			still_there = true
+	t.ok(not still_there, "부정 대조: 반지름이 0으로 돌아가면 벽도 사라진다")
+
+	t.root.remove_child(spy)
+	spy.queue_free()
+
+
+# -- §E: the wall stays every frame after closing, not only the frame it appeared on -----------------------
+func _e_wall_persists_every_frame_after_closing(t) -> void:
+	var w := World.new()
+	w.setup(132)
+	_silence(w)
+	_clear_terrain(w)
+	w.critter_count = 0
+	w.boss_index = -1
+	var centre := w.swarm.pos[0] + Vector2(300.0, 0.0)
+	w.terrain.arena_centre = centre
+	w.terrain.arena_closed = true
+	w.terrain.arena_radius = Rules.ARENA_RADIUS
+
+	var spy := ArcSpy.new()
+	spy.world = w
+	spy.view_rect = Rect2(Vector2.ZERO, Rules.FIELD)
+	t.root.add_child(spy)
+	await t.pump_frames(2)
+
+	# Three SEPARATELY-cleared frames, not one capture read three times — a wall drawn once and cached would
+	# still pass a check that only ever looked once.
+	for sample in 3:
+		spy.arcs.clear()
+		await t.pump_frames(1)
+		var seen := false
+		for e: Dictionary in spy.arcs:
+			if _near(e["p"], centre) and absf(float(e["r"]) - Rules.ARENA_RADIUS) < 0.01:
+				seen = true
+		t.ok(seen, "닫힌 뒤 %d번째로 따로 잰 프레임에도 벽이 그려져 있다" % (sample + 1))
+
+	t.root.remove_child(spy)
+	spy.queue_free()
+
+
+# -- §E: the draw order is asserted by POSITION, never by the table's shape ---------------------------------
+## Water and rock through `_paint_disc`, the arena wall through `_paint_arc`, the corpse through
+## `_paint_cell` — three different leaves, so no single spy's own count can say which came first. One
+## shared, index-ordered list (`OrderSpy`) is what a "before"/"after" claim needs.
+func _e_draw_order_floor_before_bodies(t) -> void:
+	var w := World.new()
+	w.setup(133)
+	_silence(w)
+	_clear_terrain(w)
+	w.critter_count = 0
+	w.boss_index = -1
+	var host: Vector2 = w.swarm.pos[0]
+	w.terrain.rock_pos.append(host + Vector2(-500.0, 0.0))
+	w.terrain.rock_radius.append(80.0)
+	w.terrain.water_pos.append(host + Vector2(0.0, -500.0))
+	w.terrain.water_radius.append(120.0)
+	w.terrain.arena_centre = host
+	w.terrain.arena_closed = true
+	w.terrain.arena_radius = Rules.ARENA_RADIUS
+	w.corpse_count = 1
+	w.corpse_pos[0] = host + Vector2(200.0, 0.0)
+	w.corpse_species[0] = Parts.Species.CROW
+	w.corpse_force[0] = 10
+	# 0.0 on purpose: a progress ring is a SECOND `_paint_arc` call this fixture does not want to have to
+	# tell apart from the wall's.
+	w.corpse_progress[0] = 0.0
+	w.corpse_bites_left[0] = 3
+
+	var spy := OrderSpy.new()
+	spy.world = w
+	spy.view_rect = Rect2(Vector2.ZERO, Rules.FIELD)
+	t.root.add_child(spy)
+	await t.pump_frames(2)
+	spy.order.clear()
+	# A clone killed on this exact call, so the frame captured below holds a death burst as well as bodies.
+	var doomed := w.swarm.add_clone(0, 5)
+	var dead_at: Vector2 = host + Vector2(-700.0, 0.0)
+	w.swarm.pos[doomed] = dead_at
+	w.swarm.damage(doomed, 999)
+	t.eq(w.swarm.count, 1, "설정: 그 분신은 실제로 죽어 사라졌다")
+	await t.pump_frames(1)
+
+	var last_disc := -1
+	var first_arc := -1
+	var first_cell := -1
+	for i in spy.order.size():
+		var e: Dictionary = spy.order[i]
+		var kind := String(e["kind"])
+		if kind == "disc":
+			last_disc = i
+		elif kind == "arc" and first_arc < 0:
+			first_arc = i
+		elif kind == "cell" and first_cell < 0:
+			first_cell = i
+	t.ok(last_disc >= 0, "설정: 물과 바위가 실제로 그려졌다 (색인 %d)" % last_disc)
+	t.ok(first_arc >= 0, "설정: 아레나 벽도 실제로 그려졌다 (색인 %d)" % first_arc)
+	t.ok(first_cell >= 0, "설정: 시체(첫 셀)도 실제로 그려졌다 (색인 %d)" % first_cell)
+	t.ok(last_disc < first_arc,
+			"바닥(물·바위)이 아레나 벽보다 먼저 그려진다 (색인 %d < %d)" % [last_disc, first_arc])
+	t.ok(first_arc < first_cell,
+			"그리고 아레나 벽이 몸(시체부터)보다 먼저 그려진다 (색인 %d < %d)" % [first_arc, first_cell])
+
+	# ⚠ **And the death burst goes the OTHER way — over every body, not under them.** The whole `_deaths`
+	# loop used to sit up with the floor, so a clone dying inside the swarm burst at 10px underneath forty
+	# 8px bodies and could not be seen at all — which is precisely the picture plan 2's unanswered "뚱뚱한
+	# 분신을 잃는 것이 아픈가" is waiting on. A burst marks a body that is already GONE; nothing may occlude
+	# it. Asserted by index against the LAST cell, not the first: over the corpse alone is not over the swarm.
+	var last_cell := -1
+	var burst_at := -1
+	for i in spy.order.size():
+		var e: Dictionary = spy.order[i]
+		if String(e["kind"]) == "cell":
+			last_cell = i
+		elif String(e["kind"]) == "arc" and _near(e["p"], dead_at) and burst_at < 0:
+			burst_at = i
+	t.ok(burst_at >= 0, "설정: 죽은 자리의 파열이 실제로 그려졌다 (색인 %d)" % burst_at)
+	t.ok(last_cell >= 0 and burst_at > last_cell,
+			"죽음의 파열은 모든 몸보다 나중에 그려진다 — 무리 한복판의 죽음이 몸 밑에 깔리지 않는다 (색인 %d > %d)"
+					% [burst_at, last_cell])
+
+	t.root.remove_child(spy)
+	spy.queue_free()
+
+
+# -- §E: each teleported clone gets a ring at its arrival point ---------------------------------------------
+## The exact fixture shape `net_run`'s own check 15 drives `World::_step_arena` with — the boss walked to
+## `ARENA_RADIUS` and one clone parked 3000px out — so the frame this test measures is the SAME frame the
+## sim side already proves the teleport lands on.
+func _e_summon_rings_at_the_arrival_point(t) -> void:
+	var w := World.new()
+	w.setup(134)
+	_silence(w)
+	_clear_terrain(w)
+	for k in range(w.critter_count - 1, -1, -1):
+		if k != w.boss_index:
+			w._remove_critter(k)
+	w.elapsed = Rules.BOSS_HUNT_AT
+	var host: Vector2 = w.swarm.pos[0]
+	w.critter_pos[w.boss_index] = host + Vector2(Rules.ARENA_RADIUS, 0.0)
+	var cl := w.swarm.add_clone()
+	w.swarm.pos[cl] = host + Vector2(3000.0, 0.0)
+	t.ok(not w.terrain.arena_closed, "설정: 아직 아레나가 닫히기 전이다")
+
+	var spy := ArcSpy.new()
+	spy.world = w
+	spy.view_rect = Rect2(Vector2.ZERO, Rules.FIELD)
+	t.root.add_child(spy)
+	await t.pump_frames(2)
+	spy.arcs.clear()
+
+	# The one step that closes the arena AND teleports the clone — driven directly, exactly as `net_run`'s
+	# own check 15 drives `_step_arena`, so this is proven to be the same frame the sim side already covers.
+	w.step(1.0 / 60.0)
+	t.ok(w.terrain.arena_closed, "설정: 이 한 스텝에서 아레나가 실제로 닫혔다")
+	var arrival: Vector2 = w.swarm.pos[cl]
+	t.ok(arrival.distance_to(host) < Rules.ARENA_SUMMON_RING + 1.0,
+			"설정: 분신이 실제로 소환 링 안으로 순간이동했다 (%.1f)" % arrival.distance_to(host))
+
+	await t.pump_frames(1)
+	# Not an exact `r0` — one real pumped frame's `delta` has already grown it a little, and headless frame
+	# time is not pinned to any one value here. The BAND is `[r0, r0 * BURST_GROWTH]`: still on its very
+	# first frame, nowhere near fully grown.
+	var lo := Look.ARENA_SUMMON_R0
+	var hi := Look.ARENA_SUMMON_R0 * Look.BURST_GROWTH
+	var found := 0
+	for e: Dictionary in spy.arcs:
+		if not _near(e["p"], arrival):
+			continue
+		var r := float(e["r"])
+		if (r >= lo - 0.01 and r <= lo + (hi - lo) * 0.5) \
+				or (r >= lo * 0.45 - 0.01 and r <= (lo + (hi - lo) * 0.5) * 0.45):
+			found += 1
+	t.eq(found, 2, "분신의 도착 자리에 갓 태어난 링이 두 겹 그려진다 (r0=%.2f 근방, 아직 다 자라지 않았다) %s"
+			% [Look.ARENA_SUMMON_R0, str(spy.arcs)])
+
+	# ⚠ **ONE ring per clone, once — the arming EDGE, not the state.** `Terrain.arena_closed` never clears,
+	# so `if arena_closed:` without `and not _arena_was_closed` appends a fresh `ARENA_SUMMON_R0` ring for
+	# every clone on EVERY frame for the rest of the run: forty clones × the whole boss fight, and the run's
+	# last act becomes unreadable. Both mutations kept every position and radius assertion above true — MORE
+	# true — so the count of live bursts is what has to be read, and nothing was reading it.
+	t.eq(spy._deaths.size(), 1, "소환 링은 순간이동한 분신 하나당 하나다 (%d)" % spy._deaths.size())
+	for _f in 4:
+		await t.pump_frames(1)
+	t.eq(spy._deaths.size(), 1,
+			"그리고 네 프레임이 더 지나도 여전히 하나다 — 닫힌 상태가 아니라 닫히는 그 한 번이 문이다 (%d)"
+					% spy._deaths.size())
+
+	# It fades: cleared, then several more frames later the ring at that exact spot and starting size is
+	# gone — the list does not hold it forever.
+	spy.arcs.clear()
+	for _i in 40:
+		await t.pump_frames(1)
+	var still := false
+	for e: Dictionary in spy.arcs:
+		if _near(e["p"], arrival) and absf(float(e["r"]) - Look.ARENA_SUMMON_R0) < 0.05:
+			still = true
+	t.ok(not still, "그리고 시간이 지나면 그 도착 링은 사라진다 — 영원히 남지 않는다")
+
+	t.root.remove_child(spy)
+	spy.queue_free()
+
+
+# -- B-3: the clone's own hit flash, mixed FROM its cargo colour --------------------------------------------
+## The same technique `_b1_monster_hit_flash` uses — partway through `HIT_FLASH_TIME`, never at `0.0` or past
+## it, so a binary overpaint and a true `lerp` can be told apart. Two clones, one empty and one full, so
+## "the flash starts from the clone's OWN colour" is provable: an implementation that always started from the
+## flat `Look.CLONE_COLOR` regardless of cargo would make both clones read the identical flash colour.
+func _b3_clone_hit_flash_uses_cargo_colour(t) -> void:
+	var w := World.new()
+	w.setup(141)
+	_silence(w)
+	_clear_terrain(w)
+	w.critter_count = 0
+	w.boss_index = -1
+	var empty := w.swarm.add_clone(0, 5)
+	var loaded := w.swarm.add_clone(0, 5)
+	w.swarm.pos[empty] = w.swarm.pos[0] + Vector2(200.0, 0.0)
+	w.swarm.pos[loaded] = w.swarm.pos[0] + Vector2(400.0, 0.0)
+	w.swarm.carried[loaded] = Look.CLONE_LOAD_FULL
+
+	var spy := Spy.new()
+	spy.world = w
+	spy.view_rect = Rect2(Vector2.ZERO, Rules.FIELD)
+	t.root.add_child(spy)
+	await t.pump_frames(2)
+
+	spy.seen.clear()
+	await t.pump_frames(1)
+	var empty_rest := _cell_col_at(spy, w.swarm.pos[empty])
+	var loaded_rest := _cell_col_at(spy, w.swarm.pos[loaded])
+	t.ok(empty_rest != loaded_rest,
+			"설정: 빈 분신과 가득 찬 분신은 안 맞았을 때도 이미 다른 색이다 (%s / %s)"
+					% [str(empty_rest), str(loaded_rest)])
+
+	w.swarm.hit_show[empty] = Look.HIT_FLASH_TIME * 0.5
+	w.swarm.hit_show[loaded] = Look.HIT_FLASH_TIME * 0.5
+	spy.seen.clear()
+	await t.pump_frames(1)
+	var empty_hit := _cell_col_at(spy, w.swarm.pos[empty])
+	var loaded_hit := _cell_col_at(spy, w.swarm.pos[loaded])
+	t.ok(empty_hit != Look.HIT_FLASH_COLOR and loaded_hit != Look.HIT_FLASH_COLOR,
+			"섞은 것이지 덮은 것이 아니다 — 반쯤 지난 시점엔 둘 다 순백이 아니다 (%s / %s)"
+					% [str(empty_hit), str(loaded_hit)])
+	t.ok(empty_hit != loaded_hit,
+			"두 분신의 깜빡임 색이 서로 다르다 — 종 색 하나로 덮은 것이 아니라 각자의 화물 색에서 출발했다 (%s / %s)"
+					% [str(empty_hit), str(loaded_hit)])
+	# The exact formula: each clone's own cargo colour lerped toward white — never a flat base. The weight is
+	# `HIT_FLASH_STRENGTH × (1 - t/TIME)`, and the cap is not decoration: without it the weight is exactly 1.0
+	# on the frame the hit lands and the body is painted flat white, which is the state §B-1 forbids.
+	var expect_empty := Look.CLONE_COLOR.lerp(Look.HIT_FLASH_COLOR, Look.HIT_FLASH_STRENGTH * 0.5)
+	var expect_loaded := Look.CLONE_LOADED_COLOR.lerp(Look.HIT_FLASH_COLOR, Look.HIT_FLASH_STRENGTH * 0.5)
+	t.ok(_near_col(empty_hit, expect_empty),
+			"빈 분신의 깜빡임 색은 CLONE_COLOR에서 출발한 lerp다 (%s)" % str(empty_hit))
+	t.ok(_near_col(loaded_hit, expect_loaded),
+			"가득 찬 분신의 깜빡임 색은 CLONE_LOADED_COLOR에서 출발한 lerp다 — 화물 색이 기준이다 (%s)"
+					% str(loaded_hit))
+
+	# ⚠ **The frame OF the hit, `hit_show == 0.0`, which is the one every check above deliberately avoided.**
+	# `World._contact()` writes the clock to 0.0 and the view reads it before the next `+= dt`, so this frame
+	# happens on every single hit — and at weight `1 - 0/TIME` = 1.0 it was a flat white overpaint, forty at a
+	# time, the exact state §B-1 names and forbids. `HIT_FLASH_STRENGTH` is the cap that stops it.
+	w.swarm.hit_show[empty] = 0.0
+	w.swarm.hit_show[loaded] = 0.0
+	spy.seen.clear()
+	await t.pump_frames(1)
+	var empty_peak := _cell_col_at(spy, w.swarm.pos[empty])
+	var loaded_peak := _cell_col_at(spy, w.swarm.pos[loaded])
+	t.ok(not _near_col(empty_peak, Look.HIT_FLASH_COLOR),
+			"맞은 그 프레임(hit_show == 0)에도 순백으로 덮이지 않는다 (%s)" % str(empty_peak))
+	t.ok(empty_peak != loaded_peak,
+			"그 프레임에도 두 분신은 서로 다른 색이다 — 덮었다면 둘 다 똑같은 흰색이다 (%s / %s)"
+					% [str(empty_peak), str(loaded_peak)])
+	t.ok(_near_col(empty_peak, Look.CLONE_COLOR.lerp(Look.HIT_FLASH_COLOR, Look.HIT_FLASH_STRENGTH)),
+			"가장 밝은 순간의 세기는 정확히 HIT_FLASH_STRENGTH다 (%s)" % str(empty_peak))
+	t.ok(Look.HIT_FLASH_STRENGTH < 1.0,
+			"설정: 그 상한은 1.0보다 작다 — 1.0이면 이 검사는 공허하다 (%.2f)" % Look.HIT_FLASH_STRENGTH)
+
+	t.root.remove_child(spy)
+	spy.queue_free()
+
+
+# -- B-3 / B-4: a death burst outlives the body, and it leaves the list when it is done ---------------------
+## A clone and a creature, killed by hand through the REAL functions (`Swarm.damage()`, `World._damage_
+## critter()`) rather than by writing `_deaths` directly — driving the value, not the picture, is what makes
+## "the burst is still there after the body is gone" provable at all: the row is gone from `sim` by the time
+## `_process` reads `died_this_frame`/`critters_died_this_frame`, and the ring only exists because `view`'s
+## own list remembers where it happened.
+func _b3_b4_death_bursts_persist_and_fade(t) -> void:
+	var w := World.new()
+	w.setup(142)
+	_silence(w)
+	_clear_terrain(w)
+	w.critter_count = 0
+	w.boss_index = -1
+	# **Two clones, one empty and one loaded**, because "the burst is proportional to what was lost" (§B-3)
+	# cannot be read off a single body: one radius is satisfied by any constant. `CLONE_LOAD_FULL` is 8, so
+	# `carried = 4` is exactly half-loaded and the expected colour is a lerp at 0.5 — driven, not read back.
+	var empty := w.swarm.add_clone(0, 5)
+	w.swarm.pos[empty] = w.swarm.pos[0] + Vector2(300.0, 0.0)
+	w.swarm.carried[empty] = 0.0
+	var empty_pos: Vector2 = w.swarm.pos[empty]
+	var loaded := w.swarm.add_clone(0, 5)
+	w.swarm.pos[loaded] = w.swarm.pos[0] + Vector2(600.0, 0.0)
+	w.swarm.carried[loaded] = 4.0
+	var loaded_pos: Vector2 = w.swarm.pos[loaded]
+	# **A cheetah, not a crow** — §B-4 says 종 색으로, and the crow is `SPECIES_COLOR[0]`, so a burst that
+	# indexed the table with a constant zero would be right by accident on one. Force 25 is the species
+	# minimum, so `_radius_of` ramps to 0 and the radius is `SPECIES_RADIUS[CHEETAH]` exactly.
+	var beast := w._write_critter(Parts.Species.CHEETAH, w.swarm.pos[0] + Vector2(-300.0, 0.0), 25)
+	var beast_pos: Vector2 = w.critter_pos[beast]
+	var beast_r: float = w.critter_radius(beast)
+	t.ok(absf(beast_r - 15.0) < 0.01, "설정: 힘 25 치타의 반지름은 15.0이다 (리터럴) (%.2f)" % beast_r)
+
+	var spy := ArcSpy.new()
+	spy.world = w
+	spy.view_rect = Rect2(Vector2.ZERO, Rules.FIELD)
+	t.root.add_child(spy)
+	await t.pump_frames(2)
+	spy.arcs.clear()
+
+	# All three die on these exact calls, through the real damage functions — no `w.step()` in between, so
+	# nothing else (no eating, no movement) can move any position before the burst is captured.
+	w.swarm.damage(loaded, 999)
+	w.swarm.damage(empty, 999)
+	w._damage_critter(beast, 999)
+	t.eq(w.swarm.count, 1, "설정: 두 분신이 실제로 죽어 사라졌다")
+	t.eq(w.critter_count, 0, "설정: 생물도 실제로 죽어 사라졌다")
+	await t.pump_frames(1)
+
+	t.ok(_burst_r(spy, empty_pos) != INF, "몸이 이미 사라진 뒤에도 분신의 파열이 그려진다 %s" % str(spy.arcs))
+	t.ok(_burst_r(spy, beast_pos) != INF, "생물의 파열도 마찬가지다 — 둘 다 sim의 표에서는 이미 없다")
+
+	# ⚠ **The RADIUS, as a literal per body.** Nothing anywhere read one back: `CLONE_DEATH_R_BASE` → 0 and
+	# `carried × CLONE_DEATH_R_PER_LOAD` → 0 were each green, so a fat clone and an empty one burst the same
+	# size — and at radius 0 there was no burst on screen at all. The band is `[r0, r0 × 1.10]`: one real
+	# pumped frame has already grown it a little (`BURST_GROWTH` over `BURST_TIME`), and 11.0 < 18.0 keeps
+	# the two bodies bands apart.
+	_burst_r_is(t, spy, empty_pos, Look.CLONE_DEATH_R_BASE, "빈 분신의 파열은 10px에서 시작한다")
+	_burst_r_is(t, spy, loaded_pos, Look.CLONE_DEATH_R_BASE + 4.0 * Look.CLONE_DEATH_R_PER_LOAD,
+			"4를 지고 있던 분신의 파열은 18px에서 시작한다 — 잃은 만큼 크다")
+	t.ok(_burst_r(spy, loaded_pos) > _burst_r(spy, empty_pos) + 1.0,
+			"그래서 뚱뚱한 분신의 파열이 빈 분신의 것보다 실제로 크다 (%.2f > %.2f)"
+					% [_burst_r(spy, loaded_pos), _burst_r(spy, empty_pos)])
+	_burst_r_is(t, spy, beast_pos, beast_r * Look.MONSTER_DEATH_R_MUL,
+			"몬스터의 파열은 제 반지름 × MONSTER_DEATH_R_MUL(21px)에서 시작한다")
+
+	# ⚠ **And the COLOUR.** `SPECIES_COLOR[0 × species]` (every monster bursting in the crow's red) and
+	# `CLONE_COLOR.lerp(CLONE_LOADED_COLOR, 0 × load_t)` (a fat clone bursting in an empty one's tone) were
+	# both green. Compared against a lerp of two `Look` constants at a weight this fixture DROVE, RGB only —
+	# the alpha is faded from the very first frame and is asserted separately below.
+	t.ok(_rgb_matches(_burst_col(spy, empty_pos), Look.CLONE_COLOR),
+			"빈 분신의 파열은 분신의 색이다 (%s)" % str(_burst_col(spy, empty_pos)))
+	t.ok(_rgb_matches(_burst_col(spy, loaded_pos),
+					Look.CLONE_COLOR.lerp(Look.CLONE_LOADED_COLOR, 0.5)),
+			"반쯤 실은 분신의 파열은 적재 색으로 반쯤 간 색이다 — 화물이 색에도 남는다 (%s)"
+					% str(_burst_col(spy, loaded_pos)))
+	t.ok(_rgb_matches(_burst_col(spy, beast_pos), Look.CHEETAH_COLOR),
+			"몬스터의 파열은 제 종 색이다 — 까마귀의 빨강이 아니다 (%s)" % str(_burst_col(spy, beast_pos)))
+	t.ok(not _rgb_matches(Look.CHEETAH_COLOR, Look.CROW_COLOR),
+			"설정: 치타 색과 까마귀 색은 실제로 다르다 — 아니면 위 검사는 공허하다")
+
+	# ⚠ **The ALPHA, at two instants.** `col.a *= (1.0 - frac)` → `col.a *= 0.0` was green: all five burst
+	# effects fully transparent, nothing on screen at all, while every position and colour check still
+	# matched. It is asserted visible now, and asserted to actually fade — a constant alpha passes > 0.
+	var alpha_first := _burst_a(spy, empty_pos)
+	t.ok(alpha_first > 0.5, "파열은 실제로 보이는 알파로 그려진다 (%.3f)" % alpha_first)
+	spy.arcs.clear()
+	for _i in 12:
+		await t.pump_frames(1)
+	var alpha_later := _burst_a(spy, empty_pos)
+	t.ok(alpha_later > 0.0 and alpha_later < alpha_first - 0.02,
+			"그리고 시간이 지나며 실제로 흐려진다 (%.3f → %.3f)" % [alpha_first, alpha_later])
+
+	# **왜 손으로 새 프레임을 여는가**: 실제 게임에서는 셸이 매 프레임 `run.begin_frame()`을 부른다. 이
+	# 픽스처는 그것을 한 번도 부르지 않으므로, 여기서 열어 주지 않으면 아래 90프레임 내내 `_process`가 같은
+	# 죽음을 매번 새로 읽어 파열이 영원히 사라지지 않는 것처럼 보인다.
+	w.begin_frame()
+	# 39 frames to let the burst run its course, THEN clear-and-pump-one exactly the way every other check in
+	# this file isolates a single frame's draws. **Not `spy.arcs.clear()` before the whole 40**: `ArcSpy`
+	# APPENDS every frame it draws, so a clear-once-then-pump-forty would still hold every frame the burst
+	# WAS alive for — a ring visible at frame 5 and gone by frame 40 would still read "still there" from the
+	# frame-5 entry sitting in the same accumulated array.
+	# ⚠ **Measured, not assumed**: a headless pumped frame here runs closer to ~135fps than 60fps (39 frames
+	# landed `t` at 0.29s, short of `Look.BURST_TIME` 0.4), so the wait carries real margin rather than
+	# copying `_e_summon_rings_at_the_arrival_point`'s 40 verbatim.
+	for _i in 90:
+		await t.pump_frames(1)
+	spy.arcs.clear()
+	await t.pump_frames(1)
+	t.ok(_burst_r(spy, empty_pos) == INF and _burst_r(spy, beast_pos) == INF,
+			"그리고 시간이 지나면 둘 다 사라진다 — 목록에 영원히 남지 않는다")
+
+	t.root.remove_child(spy)
+	spy.queue_free()
+
+
+## The OUTER radius of the newest burst captured at `at`, or `INF` when there is none. `_paint_ring` emits
+## two circles per burst (`r` and `r × 0.45`); the outer one is the burst own size and the inner is the
+## marker echo, so a check that took either would be reading whichever came last.
+func _burst_r(spy, at: Vector2) -> float:
+	var best := INF
+	for e: Dictionary in spy.arcs:
+		if not _near(e["p"], at):
+			continue
+		if best == INF or float(e["r"]) > best:
+			best = float(e["r"])
+	return best
+
+
+func _burst_col(spy, at: Vector2) -> Color:
+	var best := -1.0
+	var out := Color(0.0, 0.0, 0.0, 0.0)
+	for e: Dictionary in spy.arcs:
+		if _near(e["p"], at) and float(e["r"]) > best:
+			best = float(e["r"])
+			out = e["col"]
+	return out
+
+
+func _burst_a(spy, at: Vector2) -> float:
+	return _burst_col(spy, at).a
+
+
+## `[r0, r0 × 1.10]` — one real pumped frame has already grown the ring a little and headless frame time is
+## not pinned to any one value, so the band is a tenth of the way up `BURST_GROWTH` rather than an equality.
+func _burst_r_is(t, spy, at: Vector2, r0: float, label: String) -> void:
+	var got := _burst_r(spy, at)
+	t.ok(got >= r0 - 0.01 and got <= r0 * 1.10, "%s (%.2f, 기대 %.2f 근방)" % [label, got, r0])
+
+
+# -- B-3: `view` reads `died_this_frame`, and it must not clear it ------------------------------------------
+## `sim` owns the clock: `Swarm.step()` clears the list at ITS own top, next frame. If `view._process()`
+## clears it instead, the very next read (by anything else, or by this same check one line later) finds it
+## already empty — `view` may not write `sim` (§0-2).
+func _b3_view_does_not_clear_died_this_frame(t) -> void:
+	var w := World.new()
+	w.setup(143)
+	_silence(w)
+	_clear_terrain(w)
+	w.critter_count = 0
+	w.boss_index = -1
+	var clone := w.swarm.add_clone(0, 5)
+	w.swarm.damage(clone, 999)
+	t.eq(w.swarm.died_this_frame.size(), 1, "설정: 분신 하나가 실제로 이번 프레임에 죽었다")
+
+	var view := FieldView.new()
+	view.world = w
+	view.view_rect = Rect2(Vector2.ZERO, Rules.FIELD)
+	t.root.add_child(view)
+	await t.pump_frames(1)
+
+	t.eq(w.swarm.died_this_frame.size(), 1,
+			"view의 _process가 한 프레임 지나도 died_this_frame은 그대로 남아 있다 — view가 지우지 않는다")
+
+	t.root.remove_child(view)
+	view.queue_free()
+
+
+# -- B-5: the clone's own short swing line ------------------------------------------------------------------
+## `BodySpy`'s `_paint_part_line` capture, reused — the swing line goes through the SAME leaf a limb already
+## uses, so no new spy is needed for it.
+func _b5_clone_swing_line(t) -> void:
+	var w := World.new()
+	w.setup(144)
+	_silence(w)
+	_clear_terrain(w)
+	w.critter_count = 0
+	w.boss_index = -1
+	var clone := w.swarm.add_clone(0, 5)
+	var p := w.swarm.pos[0] + Vector2(250.0, 0.0)
+	w.swarm.pos[clone] = p
+
+	var spy := BodySpy.new()
+	spy.world = w
+	spy.view_rect = Rect2(Vector2.ZERO, Rules.FIELD)
+	t.root.add_child(spy)
+	await t.pump_frames(2)
+
+	spy.lines.clear()
+	await t.pump_frames(1)
+	t.eq(spy.lines.size(), 0, "설정: 한 번도 휘두르지 않은 분신은 선을 그리지 않는다 — swing_show가 INF로 연다")
+
+	# Off-axis (0.6, 0.8): `_h10`가 이미 세운 이유와 같다 — 상수 방향으로는 이 값을 흉내 낼 수 없다.
+	var dir := Vector2(0.6, 0.8)
+	w.swarm.swing_show[clone] = 0.0
+	w.swarm.swing_dir[clone] = dir
+	spy.lines.clear()
+	await t.pump_frames(1)
+	t.eq(spy.lines.size(), 1, "휘두른 순간 짧은 선이 하나 그려진다 %s" % str(spy.lines))
+	if spy.lines.size() == 1:
+		var seg: Dictionary = spy.lines[0]
+		t.ok(_near(seg["a"], p), "선은 분신 자리에서 시작한다")
+		var expect_b := p + dir * (Rules.CLONE_BODY_RADIUS * Look.CLONE_HIT_LINE_RING)
+		t.ok(_near(seg["b"], expect_b),
+				"그리고 맞은 방향으로 CLONE_BODY_RADIUS의 배수만큼 뻗는다 (%s / 기대 %s)"
+						% [str(seg["b"]), str(expect_b)])
+		t.ok(absf(float(seg["width"]) - Look.CLONE_HIT_LINE_WIDTH) < 0.001,
+				"굵기는 Look.CLONE_HIT_LINE_WIDTH다")
+
+	# `Look.CLONE_HIT_LINE_TIME`을 지난 시각 — 이미 사라졌다.
+	w.swarm.swing_show[clone] = Look.CLONE_HIT_LINE_TIME + 0.01
+	spy.lines.clear()
+	await t.pump_frames(1)
+	t.eq(spy.lines.size(), 0, "부정 대조: CLONE_HIT_LINE_TIME이 지나면 선은 사라진다")
+
+	t.root.remove_child(spy)
+	spy.queue_free()
+
+
+func _cell_col_at(spy, p: Vector2) -> Color:
+	for e: Dictionary in spy.seen:
+		if _near(e["p"], p):
+			return e["col"]
+	return Color(0.0, 0.0, 0.0, 0.0)
+
+
+# -- B-1: the monster hit flash and its spark -------------------------------------------------------------
+## `critter_hit_show`/`critter_hit_dir` are written by `World._damage_critter` (§A), so this drives the
+## columns directly rather than through a real strike — the same idiom `_p1_the_eating_ring` uses for
+## `corpse_progress`.
+func _b1_monster_hit_flash(t) -> void:
+	var w := World.new()
+	w.setup(121)
+	_silence(w)
+	_clear_terrain(w)
+	w.critter_count = 0
+	w.boss_index = -1
+	var host: Vector2 = w.swarm.pos[0]
+	var a := w._write_critter(Parts.Species.CROW, host + Vector2(200.0, 0.0), 10)
+	var b := w._write_critter(Parts.Species.CROW, host + Vector2(400.0, 0.0), 10)
+
+	var spy := HitSpy.new()
+	spy.world = w
+	spy.view_rect = Rect2(Vector2.ZERO, Rules.FIELD)
+	t.root.add_child(spy)
+	await t.pump_frames(2)
+
+	# Baseline: neither has ever been hit (`critter_hit_show` opens at `INF`).
+	spy.seen.clear()
+	await t.pump_frames(1)
+	var rest_a := _species_col_at(spy, w.critter_pos[a])
+	t.ok(rest_a == Look.CROW_COLOR, "설정: 안 맞은 까마귀는 제 종 색 그대로다 (%s)" % str(rest_a))
+
+	# `a` is hit; `b` is not touched at all. **Partway through `HIT_FLASH_TIME`, not at `0.0`** — a binary
+	# overpaint ("white while `hit_t < HIT_FLASH_TIME`, else species colour") and a true `lerp` agree at the
+	# very instant of the hit (both are fully white then) and can only be told apart mid-fade, where a
+	# `lerp` sits BETWEEN the two colours and an overpaint is still flat white.
+	# Off-axis on purpose: `(0.6, 0.8)` is a unit vector no constant direction in the file can imitate, so a
+	# spark placed from a fallback or from the centre cannot land on it by coincidence.
+	w.critter_hit_show[a] = Look.HIT_FLASH_TIME * 0.5
+	w.critter_hit_dir[a] = Vector2(0.6, 0.8)
+	spy.seen.clear()
+	spy.discs.clear()
+	await t.pump_frames(1)
+	var hit_col := _species_col_at(spy, w.critter_pos[a])
+	var untouched_col := _species_col_at(spy, w.critter_pos[b])
+	t.ok(hit_col != Look.CROW_COLOR, "맞은 지 얼마 안 된 색은 종 색에서 벗어나 있다 (%s)" % str(hit_col))
+	t.ok(untouched_col == Look.CROW_COLOR,
+			"같은 프레임, 안 맞은 쪽은 그대로다 — 하나만 맞았는데 마흔 마리 전부가 하얘지지 않는다 (%s)"
+					% str(untouched_col))
+	# **Mixed toward white, not painted white outright.** Half the flash time in, the mix sits strictly
+	# BETWEEN the species colour and pure white — a binary overpaint would already read as flat white here.
+	t.ok(hit_col != Look.HIT_FLASH_COLOR,
+			"덮은 것이 아니라 섞은 것이다 — 반쯤 지난 시점에 순백은 아니다 (%s)" % str(hit_col))
+
+	# A hit now leaves TWO discs, and they are different marks: the bloom is a filled halo at the body's own
+	# centre, drawn UNDER it and growing outward, and the spark is the small bright dot on the struck
+	# surface. **They are separated by position, not by index** — a check reading `discs[0]` would pass just
+	# as happily if the two swapped and the halo started landing on the wound.
+	t.eq(spy.discs.size(), 2, "한 대 맞으면 원반이 둘이다 — 몸의 헤일로와 맞은 지점의 불꽃 %s" % str(spy.discs))
+	var bloom := _disc_at(spy, w.critter_pos[a])
+	t.ok(not bloom.is_empty(), "헤일로가 몸 한가운데에 찍힌다 %s" % str(spy.discs))
+	if not bloom.is_empty():
+		# ⚠ **Strictly larger than the body**, or the halo is inside the silhouette and invisible — which is
+		# the entire failure this mark exists to fix: a tint on 갈래 ㄱ's stroke has no area at all.
+		t.ok(float(bloom["r"]) > w.critter_radius(a),
+				"그 헤일로는 몸보다 크다 — 안쪽에 있으면 실루엣에 가려 아무것도 안 보인다 (%.2f > %.2f)"
+						% [float(bloom["r"]), w.critter_radius(a)])
+		var bloom_a := float((bloom["col"] as Color).a)
+		t.ok(bloom_a > 0.0 and bloom_a < Look.HIT_BLOOM_COLOR.a,
+				"그리고 반쯤 지난 시점에 이미 옅어져 있다 — 0과 %.3f 사이 (%.3f)"
+						% [Look.HIT_BLOOM_COLOR.a, bloom_a])
+	var d := _disc_at(spy, w.critter_pos[a] - Vector2(0.6, 0.8) * w.critter_radius(a))
+	t.ok(not d.is_empty(), "불꽃이 맞은 지점에 찍힌다 %s" % str(spy.discs))
+	if not d.is_empty():
+		t.ok(float(d["r"]) > 0.0 and float(d["r"]) <= Look.HIT_SPARK_R,
+				"불꽃의 반지름은 0과 HIT_SPARK_R 사이다 (%.2f)" % float(d["r"]))
+		# ⚠ **The exact point, not "somewhere inside the body".** A bound taken from the thing being checked
+		# proves nothing (CLAUDE.md): the centre is the most-inside point there is, so `p - hit_dir × 0 × r`
+		# satisfied "inside the body" perfectly while the spark stopped saying which side the blow came from.
+		# `critter_hit_dir` points AWAY from the attacker, so the struck surface is at `-hit_dir` from centre.
+		var want_p := w.critter_pos[a] - Vector2(0.6, 0.8) * w.critter_radius(a)
+		t.ok((d["p"] as Vector2).distance_to(want_p) < 0.05,
+				"불꽃은 맞은 지점 — 중심에서 -hit_dir 쪽 표면 — 에 정확히 찍힌다 (%s / 기대 %s)"
+						% [str(d["p"]), str(want_p)])
+		t.ok(want_p.distance_to(w.critter_pos[a]) > 1.0,
+				"설정: 그 지점은 중심과 실제로 떨어져 있다 — 아니면 위 검사는 중심과 구별되지 않는다")
+
+	# ⚠ **The frame OF the hit, `critter_hit_show == 0.0`** — the one instant every sample above deliberately
+	# avoids, and the one that happens on every single hit: `_damage_critter()` writes the clock to `0.0` and
+	# `_step_critters()` only adds `dt` on the NEXT frame. At weight `1 - 0/TIME` = 1.0 the species colour was
+	# painted out entirely, forty creatures at a time — the flat white §B-1 names and forbids. Sampling only
+	# at half the window cannot see it: 0.5 and 0.375 are both "not white and not the species colour".
+	w.critter_hit_show[a] = 0.0
+	spy.seen.clear()
+	await t.pump_frames(1)
+	var peak_col := _species_col_at(spy, w.critter_pos[a])
+	t.ok(peak_col != Look.HIT_FLASH_COLOR,
+			"맞은 그 프레임(hit_show == 0)에도 순백으로 덮이지 않는다 (%s)" % str(peak_col))
+	t.ok(_near_col(peak_col, Look.CROW_COLOR.lerp(Look.HIT_FLASH_COLOR, Look.HIT_FLASH_STRENGTH)),
+			"가장 밝은 순간의 세기는 정확히 HIT_FLASH_STRENGTH다 — 종 색이 그 밑에 남는다 (%s)" % str(peak_col))
+	t.ok(_species_col_at(spy, w.critter_pos[b]) == Look.CROW_COLOR,
+			"그 프레임에도 옆의 안 맞은 까마귀는 제 종 색 그대로다")
+
+	# 0.09초(`HIT_FLASH_TIME`)를 지난 시각 — 0.2초 뒤.
+	w.critter_hit_show[a] = 0.2
+	spy.seen.clear()
+	spy.discs.clear()
+	await t.pump_frames(1)
+	var later_col := _species_col_at(spy, w.critter_pos[a])
+	t.ok(later_col == Look.CROW_COLOR, "0.2초 뒤엔 다시 종 색이다 (%s)" % str(later_col))
+	t.ok(later_col != hit_col, "그래서 맞은 순간과 0.2초 뒤는 서로 다른 색이었다")
+	t.eq(spy.discs.size(), 0, "그리고 그때는 불꽃도 이미 사라졌다")
+
+	t.root.remove_child(spy)
+	spy.queue_free()
+
+
+func _species_col_at(spy: HitSpy, p: Vector2) -> Color:
+	for e: Dictionary in spy.seen:
+		if e["p"] == p:
+			return e["col"]
+	return Color(0.0, 0.0, 0.0, 0.0)
+
+
+# -- D2: the minimap boss dot pulses, and only while the hunt is on -----------------------------------------
+## A pure function of `elapsed` — no view timer — so the same instant sampled twice must draw the same
+## radius, and different instants must draw DIFFERENT radii, both within the documented range. Before the
+## hunt starts the boss reads exactly like any other creature mark.
+func _d2_boss_pulse(t) -> void:
+	var w := World.new()
+	w.setup(122)
+	_silence(w)
+	_clear_terrain(w)
+	w.critter_count = 0
+	w.boss_index = -1
+	var b := w._write_critter(Parts.Species.BOSS, w.swarm.pos[0] + Vector2(200.0, 0.0), 120)
+	w.boss_index = b
+
+	var spy := MapSpy.new()
+	spy.world = w
+	t.root.add_child(spy)
+	await t.pump_frames(2)
+
+	# Before the hunt: the ordinary FIXED radius, exactly — no pulse at all.
+	spy.forget()
+	await t.pump_frames(1)
+	t.ok(absf(_mark_r(spy, Look.BOSS_COLOR) - Look.MINIMAP_CREATURE_R) < 0.001,
+			"보스 사냥이 시작되기 전엔 여느 생물처럼 고정된 반지름이다 (%.3f)" % _mark_r(spy, Look.BOSS_COLOR))
+
+	# After: several instants past the crossing, each inside the documented range, and not all equal.
+	var seen := {}
+	for e in 8:
+		w.elapsed = Rules.BOSS_HUNT_AT + float(e) * 0.3
+		spy.forget()
+		await t.pump_frames(1)
+		var r := _mark_r(spy, Look.BOSS_COLOR)
+		t.ok(r != INF, "설정: 그 순간에도 보스 점을 찾았다")
+		t.ok(r >= Look.MINIMAP_CREATURE_R - 0.001
+						and r <= Look.MINIMAP_CREATURE_R * Look.MINIMAP_BOSS_PULSE_MUL + 0.001,
+				"반지름은 언제나 MINIMAP_CREATURE_R과 그 MINIMAP_BOSS_PULSE_MUL배 사이다 (%.3f)" % r)
+		seen[str(snappedf(r, 0.01))] = true
+	t.ok(seen.size() > 1, "여러 순간을 재면 반지름이 실제로 달라진다 — 고정값이 아니다 %s" % str(seen))
+
+	# The same instant, twice: the same radius both times — a pure function, never `Math.random`.
+	w.elapsed = Rules.BOSS_HUNT_AT + 1.234
+	spy.forget()
+	await t.pump_frames(1)
+	var r1 := _mark_r(spy, Look.BOSS_COLOR)
+	spy.forget()
+	await t.pump_frames(1)
+	var r2 := _mark_r(spy, Look.BOSS_COLOR)
+	t.eq(r1, r2, "같은 elapsed는 같은 반지름을 낸다 — 시계를 따로 갖지 않는다")
+
+	t.root.remove_child(spy)
+	spy.queue_free()
+
+
+## The radius of the one mark drawn in `col`, or `INF` when none was found.
+func _mark_r(spy, col: Color) -> float:
+	for e: Dictionary in spy.marks:
+		if e["col"] == col:
+			return float(e["r"])
+	return INF
+
+
+# -- §F-7: the food-eaten pop, small and travelling ------------------------------------------------------
+## ⚠ **Driven through an actual `World.step()`, never through `world.swarm.food_eaten_this_frame` written
+## by hand** — a hand-filled list would only prove `_process` reads a list, not that eating one actually
+## fills it. `w.step()` runs the real `_try_eat()` path once, with nothing else in the fixture that could
+## also touch `food_eaten_this_frame` (no critters, no clones).
+func _f7_food_pop_is_small_and_travels(t) -> void:
+	var w := World.new()
+	w.setup(320)
+	_silence(w)
+	_clear_terrain(w)
+	w.critter_count = 0
+	w.boss_index = -1
+	var host: Vector2 = w.swarm.pos[0]
+	w.food.pos[0] = host + Vector2(-6.0, 0.0)
+	w.food.alive[0] = 1
+	w.food.alive_count = 1
+	w.swarm.eat_cd[0] = 0.0
+
+	var spy := DiscSpy.new()
+	spy.world = w
+	spy.view_rect = Rect2(Vector2.ZERO, Rules.FIELD)
+	t.root.add_child(spy)
+	await t.pump_frames(2)
+	spy.discs.clear()
+	w.step(1.0 / 60.0)
+	await t.pump_frames(1)
+
+	# ⚠ **RGB only, never full `Color ==`.** The pop's alpha is faded (`col.a *= 1.0 - frac`) from the very
+	# first frame — see the branch in `_paint` — so it is never bit-identical to `Look.FOOD_COLOR` (alpha
+	# 1.0), the exact shape the afterimage check below had to be built the same way for.
+	var pop_p := Vector2.INF
+	var pop_r := 0.0
+	for e: Dictionary in spy.discs:
+		if _rgb_matches(e["col"], Look.FOOD_COLOR) and e["r"] > 0.0 and e["r"] <= Look.FOOD_POP_R + 0.01:
+			pop_p = e["p"]
+			pop_r = e["r"]
+	t.ok(pop_p != Vector2.INF, "먹은 자리에 아주 작은 원이 하나 뜬다 %s" % str(spy.discs))
+	t.ok(Look.FOOD_POP_R < Look.CLONE_DEATH_R_BASE,
+			"그 크기(FOOD_POP_R)는 분신 죽음 파열(CLONE_DEATH_R_BASE)보다 작다 — 초당 여러 번 뜨는 유일한 사건이다")
+
+	# ⚠ **`food_eaten_this_frame` cleared BY HAND before pumping further** — the identical shape and the
+	# identical reason `_b3_b4_death_bursts_persist_and_fade` already documents: nothing here calls
+	# `w.step()` again, so `Swarm.step()` never clears it, and `_process` would otherwise re-read the SAME
+	# uncleared entry every pumped frame and spawn a FRESH pop at `t=0` each time — which is exactly what
+	# happened the first time this check was written, and it is why the "travels/shrinks" half moved to its
+	# own single-cleared window rather than trusting several frames pumped in one call.
+	w.swarm.food_eaten_this_frame.clear()
+	if pop_p != Vector2.INF:
+		var d0 := pop_p.distance_to(w.swarm.pos[0])
+		spy.discs.clear()
+		await t.pump_frames(4)
+		var later_p := Vector2.INF
+		var later_r := 0.0
+		for e: Dictionary in spy.discs:
+			if _rgb_matches(e["col"], Look.FOOD_COLOR) and e["r"] > 0.0:
+				later_p = e["p"]
+				later_r = e["r"]
+		t.ok(later_p != Vector2.INF, "몇 프레임 뒤에도 아직 줄어들며 남아 있다 %s" % str(spy.discs))
+		if later_p != Vector2.INF:
+			t.ok(later_p.distance_to(w.swarm.pos[0]) < d0,
+					"그 사이 몸 쪽으로 가까워졌다 — 고정된 점이 아니라 빨려 들어간다 (%.3f → %.3f)"
+							% [d0, later_p.distance_to(w.swarm.pos[0])])
+			t.ok(later_r < pop_r, "그리고 그 사이 줄어든다 (%.3f → %.3f)" % [pop_r, later_r])
+
+	t.root.remove_child(spy)
+	spy.queue_free()
+
+
+# -- §F-9: the level pop, distinct from _absorb_pop ------------------------------------------------------
+func _f9_level_pop_differs_from_absorb_pop(t) -> void:
+	var w := World.new()
+	w.setup(321)
+	_silence(w)
+	_clear_terrain(w)
+	w.critter_count = 0
+	w.boss_index = -1
+
+	var spy := Spy.new()
+	spy.world = w
+	spy.view_rect = Rect2(Vector2.ZERO, Rules.FIELD)
+	t.root.add_child(spy)
+	await t.pump_frames(2)
+
+	spy.seen.clear()
+	await t.pump_frames(1)
+	var base := _host_entry(spy, w.swarm.pos[0])
+	t.ok(float(base.get("r", 0.0)) > 0.0, "설정: 기준 호스트를 찾았다 %s" % str(spy.seen))
+
+	# `_absorb_pop` driven exactly the way `net_shell.gd` already drives it — through the view's own field.
+	spy._absorb_pop = 1.0
+	spy.seen.clear()
+	await t.pump_frames(1)
+	var absorb_only := _host_entry(spy, w.swarm.pos[0])
+	spy._absorb_pop = 0.0
+
+	# `level_show` driven through `World`, never through a `view`-owned diff of `level` (§0-2).
+	w.level_show = 0.0
+	spy.seen.clear()
+	await t.pump_frames(1)
+	var level_only := _host_entry(spy, w.swarm.pos[0])
+	w.level_show = INF
+
+	t.eq(absorb_only.get("col"), base.get("col"),
+			"설정부터 확인한다: 흡수 팝은 색을 전혀 바꾸지 않는다")
+	t.ok(float(level_only.get("r", 0.0)) > float(base.get("r", 0.0)), "레벨 팝은 실제로 몸을 키운다")
+	t.ok(absf(float(level_only.get("r", 0.0)) - float(absorb_only.get("r", 0.0))) > 0.01,
+			"레벨 팝은 흡수 팝과 다른 세기다 (레벨 %.2f, 흡수 %.2f)"
+					% [float(level_only.get("r", 0.0)), float(absorb_only.get("r", 0.0))])
+	t.ok(level_only.get("col") != absorb_only.get("col"),
+			"레벨 팝은 흡수 팝과 다른 색이다 — 흡수는 색을 전혀 바꾸지 않으므로 이 색 자체가 다름의 증거다 (%s vs %s)"
+					% [str(level_only.get("col")), str(absorb_only.get("col"))])
+
+	t.root.remove_child(spy)
+	spy.queue_free()
+
+
+## RGB-only equality, ignoring alpha — for colours a burst or a ghost fades toward transparent, where a
+## bit-identical `Color ==` against the fully-opaque `Look` constant would never be true.
+func _rgb_matches(a: Color, b: Color) -> bool:
+	return absf(a.r - b.r) < 0.001 and absf(a.g - b.g) < 0.001 and absf(a.b - b.b) < 0.001
+
+
+## The one `Spy`-captured cell drawn exactly at `host_pos` — the host is the only body ever drawn there in
+## a fixture with no clone parked on top of it. `{}` when nothing matched.
+func _host_entry(spy, host_pos: Vector2) -> Dictionary:
+	for e: Dictionary in spy.seen:
+		if e["p"] == host_pos:
+			return e
+	return {}
+
+
+# -- §F-10: `F`'s own burst, at the point the split happened ----------------------------------------------
+func _f10_split_ring_at_the_split_point(t) -> void:
+	var w := World.new()
+	w.setup(322)
+	_silence(w)
+	_clear_terrain(w)
+	w.critter_count = 0
+	w.boss_index = -1
+	w.swarm.force[0] = 1
+	var c := w.swarm.add_clone(0, 20)
+	var origin: Vector2 = w.swarm.pos[c]
+
+	var spy := ArcSpy.new()
+	spy.world = w
+	spy.view_rect = Rect2(Vector2.ZERO, Rules.FIELD)
+	t.root.add_child(spy)
+	await t.pump_frames(2)
+
+	spy.arcs.clear()
+	w.swarm.split_hold(Rules.SPLIT_HOLD_TIME)
+	t.eq(w.swarm.count, 3, "설정: 실제로 갈라졌다")
+	await t.pump_frames(1)
+
+	# ⚠ `ArcSpy` captures only the colour's ALPHA (`"col_a"`), never the full `Color` — so the ring is
+	# identified by POSITION and by `_paint_ring`'s own two-arc shape (r and r×0.45), the same technique
+	# `_c_strike_marker` already uses, rather than a colour this spy cannot actually compare.
+	var outer := false
+	var inner := false
+	for e: Dictionary in spy.arcs:
+		if not _near(e["p"], origin):
+			continue
+		if absf(float(e["r"]) - Look.SPLIT_POP_R0) < 0.5:
+			outer = true
+		if absf(float(e["r"]) - Look.SPLIT_POP_R0 * 0.45) < 0.5:
+			inner = true
+	t.ok(outer and inner, "갈라진 그 자리에 두 겹 링이 뜬다 %s" % str(spy.arcs))
+
+	t.root.remove_child(spy)
+	spy.queue_free()
+
+
+# -- §F-12: the afterimage is gated by SPECIES, never by the frame's own velocity -------------------------
+## ⚠ **Both a positive and a negative control, driven off the real per-species table** — never grepped.
+## Reading `Rules.SPECIES_SPEED_MUL` here is the check itself asking the same question `_paint` asks.
+func _f12_afterimage_gated_by_species(t) -> void:
+	t.ok(float(Rules.SPECIES_SPEED_MUL[Parts.Species.CROW]) <= 1.0,
+			"설정: 까마귀는 1.0을 넘지 않는다 — 이 검사의 부정 대조가 실제로 부정 대조이려면 필요하다")
+	t.ok(float(Rules.SPECIES_SPEED_MUL[Parts.Species.CHEETAH]) > 1.0,
+			"설정: 치타는 1.0을 넘는다 — 이 검사의 긍정 대조다")
+	# ⚠ **The gate is a `> 1.0` on the whole table, and this fixture named two rows and stopped.** 토끼's
+	# 1.05 puts it inside the gate, which is wanted — the trail is the mark that says 저건 못 잡는다, and the
+	# rabbit is the first thing in the run that out-runs a held direction. But nothing asserted it, so the
+	# rabbit wearing or not wearing a trail was invisible to the round. Named here rather than derived:
+	# **exactly which species carry a trail is a design fact**, and the whole table is counted below.
+	t.ok(float(Rules.SPECIES_SPEED_MUL[Parts.Species.RABBIT]) > 1.0,
+			"설정: 토끼도 1.0을 넘는다 — 210px/s, 잡고 있는 방향으로는 못 잡는다는 표시다")
+	var fast: Array = []
+	for s in Rules.SPECIES_SPEED_MUL.size():
+		if float(Rules.SPECIES_SPEED_MUL[s]) > 1.0:
+			fast.append(s)
+	t.eq(str(fast), str([int(Parts.Species.HORSE), int(Parts.Species.CHEETAH),
+			int(Parts.Species.RABBIT)]),
+			"잔상을 다는 종은 말·치타·토끼 셋뿐이다 — 넷째가 생기면 이 줄이 먼저 빨강이다 %s" % str(fast))
+
+	var w := World.new()
+	w.setup(323)
+	_silence(w)
+	_clear_terrain(w)
+	w.critter_count = 0
+	w.boss_index = -1
+	var host: Vector2 = w.swarm.pos[0]
+	var crow := w._write_critter(Parts.Species.CROW, host + Vector2(300.0, 0.0), 10)
+	var cheetah := w._write_critter(Parts.Species.CHEETAH, host + Vector2(600.0, 0.0), 30)
+	var rabbit := w._write_critter(Parts.Species.RABBIT, host + Vector2(900.0, 0.0), 6)
+	# A real, nonzero heading on all three — the gate has to hold even though every row is equally "moving".
+	w.critter_dir[crow] = Vector2(1.0, 0.0)
+	w.critter_dir[cheetah] = Vector2(1.0, 0.0)
+	w.critter_dir[rabbit] = Vector2(1.0, 0.0)
+
+	var spy := Spy.new()
+	spy.world = w
+	spy.view_rect = Rect2(Vector2.ZERO, Rules.FIELD)
+	t.root.add_child(spy)
+	await t.pump_frames(2)
+	spy.seen.clear()
+	await t.pump_frames(1)
+
+	var crow_hits := 0
+	var cheetah_hits := 0
+	var rabbit_hits := 0
+	# ⚠ **RGB only, never full `Color ==`, for BOTH counts.** A ghost's alpha is faded
+	# (`Look.AFTERIMAGE_ALPHA * fade`), so it is never bit-identical to either species' fully-opaque `Look`
+	# constant. Measured the hard way: an exact `Color ==` on the crow's count first shipped here, and it
+	# stayed green even with the species gate DELETED entirely, because it could only ever see the one
+	# real, unfaded body — the mutation this check exists to catch bit it without this being RGB-only too.
+	for e: Dictionary in spy.seen:
+		if _rgb_matches(e["col"], Look.CROW_COLOR):
+			crow_hits += 1
+		if _rgb_matches(e["col"], Look.CHEETAH_COLOR):
+			cheetah_hits += 1
+		if _rgb_matches(e["col"], Look.RABBIT_COLOR):
+			rabbit_hits += 1
+	t.eq(crow_hits, 1, "까마귀는 제 자리 하나만 그려진다 — 잔상이 없다 (%d)" % crow_hits)
+	t.eq(cheetah_hits, Look.AFTERIMAGE_COUNT + 1,
+			"치타는 제 자리 하나 + 잔상 AFTERIMAGE_COUNT개가 그려진다 (%d, 기대 %d)"
+					% [cheetah_hits, Look.AFTERIMAGE_COUNT + 1])
+	t.eq(rabbit_hits, Look.AFTERIMAGE_COUNT + 1,
+			"토끼도 잔상을 단다 — 1.05는 문턱 위다 (%d, 기대 %d)"
+					% [rabbit_hits, Look.AFTERIMAGE_COUNT + 1])
+
+	# ⚠ **The ghost ALPHA, as literals.** `_rgb_matches` has to ignore alpha to see a faded ghost at all — and
+	# that is exactly what let `Look.AFTERIMAGE_ALPHA * fade` → `0.0 * ...` stay green: three fully
+	# transparent ghosts still count as three drawn ones. §F-12 is the trail that IS the information "저건 못
+	# 잡는다"; at alpha 0 there is no trail. `0.35 × (1 - n/4)` for n = 1, 2, 3 = 0.2625 / 0.175 / 0.0875,
+	# written out rather than recomputed, so zeroing the constant moves one side of the comparison only.
+	t.ok(absf(Look.AFTERIMAGE_ALPHA - 0.35) < 0.0001,
+			"설정: AFTERIMAGE_ALPHA는 0.35다 — 아래 리터럴 셋이 그 값에서 나온다")
+	t.eq(Look.AFTERIMAGE_COUNT, 3, "설정: 잔상은 셋이다 — 아래 리터럴 셋이 그 개수에서 나온다")
+	var ghost_alphas := []
+	var body_alphas := 0
+	for e: Dictionary in spy.seen:
+		if not _rgb_matches(e["col"], Look.CHEETAH_COLOR):
+			continue
+		var a: float = (e["col"] as Color).a
+		if absf(a - 1.0) < 0.001:
+			body_alphas += 1
+		else:
+			ghost_alphas.append(a)
+	t.eq(body_alphas, 1, "설정: 불투명하게 그려진 진짜 몸은 하나다 (%d)" % body_alphas)
+	ghost_alphas.sort()
+	t.eq(ghost_alphas.size(), 3, "그리고 나머지 셋은 반투명한 잔상이다 %s" % str(ghost_alphas))
+	if ghost_alphas.size() == 3:
+		for pair in [[0, 0.0875], [1, 0.175], [2, 0.2625]]:
+			var got: float = ghost_alphas[int(pair[0])]
+			t.ok(absf(got - float(pair[1])) < 0.001,
+					"잔상의 알파는 %.4f다 — 0이면 잔상은 화면에 없다 (%.4f)" % [float(pair[1]), got])
+
+	# A second, independent frame — same species, same nonzero heading, still no ghost. Repeats the negative
+	# control rather than trusting the single frame above.
+	spy.seen.clear()
+	await t.pump_frames(1)
+	var crow_hits2 := 0
+	for e: Dictionary in spy.seen:
+		if _rgb_matches(e["col"], Look.CROW_COLOR):
+			crow_hits2 += 1
+	t.eq(crow_hits2, 1, "다음 프레임에도 까마귀는 여전히 잔상이 없다 — 속도가 아니라 종이 문(gate)이다")
+
+	t.root.remove_child(spy)
+	spy.queue_free()
+
+
+# -- P15: every species swings its own shape, and two of them in one frame differ --------------------------
+## **The whole claim of §6 in one fixture**: seven creatures, seven species, all swinging on the same frame
+## with the same direction and the same progress, and every one of them reaching the leaves with different
+## arguments. Before this pass all seven drew the identical `_paint_part_line` at `r × CRITTER_SWING_RING`,
+## and nothing in the round could have told the difference.
+##
+## Every expectation is hand arithmetic from `look.gd`'s literals, never a value read back off the view:
+## `_lunge_offset` is re-derived here from the curve its own comment states (`sin(pi x) × PUSH`) rather than
+## called, because a check that asks the code under test what it did measures nothing.
+##
+## ⚠ **Each creature is written at its `SPECIES_FORCE_MIN`, so `World._radius_of`'s force ramp is exactly 0
+## and the drawn radius is the species' bare `SPECIES_RADIUS`** — 12 · 5 · 10 · 18 · 40 · 26 · 48, asserted
+## as literals below. Without that every geometry expectation would be a multiple of a number taken from the
+## thing being checked.
+func _p15_every_species_swings_its_own_shape(t) -> void:
+	var w := World.new()
+	w.setup(618)
+	_silence(w)
+	_clear_terrain(w)
+	w.critter_count = 0
+	w.boss_index = -1
+
+	var kinds := [Parts.Species.CROW, Parts.Species.MOUSE, Parts.Species.DOG, Parts.Species.BOAR,
+			Parts.Species.ELEPHANT, Parts.Species.LION, Parts.Species.BOSS]
+	var radii := [12.0, 5.0, 10.0, 18.0, 40.0, 26.0, 48.0]
+	t.eq(kinds.size(), 7, "설정: 제 몸짓을 가진 종은 일곱이다 — 나머지 넷은 아예 공격을 안 한다")
+	var rows := []
+	for i in kinds.size():
+		var s: int = kinds[i]
+		var k := w._write_critter(s, Vector2(320.0 + float(i) * 480.0, 400.0),
+				int(Rules.SPECIES_FORCE_MIN[s]))
+		rows.append(k)
+		t.ok(absf(w.critter_radius(k) - float(radii[i])) < 0.001,
+				"설정: %s의 그린 반지름은 %.1fpx다 — 힘을 최소로 썼으니 종의 바탕 크기 그대로다 (%.3f)"
+						% [String(Parts.SPECIES_NAME[s]), float(radii[i]), w.critter_radius(k)])
+	# **The negative control, and it is a creature that never attacks.** 다람쥐 carries `SPECIES_FLEES` 1, so
+	# `World._contact()` returns before writing a swing and its `critter_swing_show` stays at the `INF` it was
+	# born with. It must draw no gesture mark at all and its body must sit exactly on its sim position — the
+	# line that says the counts below are counting swings and not creatures.
+	var quiet := w._write_critter(Parts.Species.SQUIRREL, Vector2(3500.0, 400.0), 3)
+
+	# Off-axis on purpose: `(0.6, 0.8)` is a unit vector no constant direction in `field_view.gd` can imitate,
+	# so a mark placed from a fallback direction cannot land on these points by coincidence.
+	var dir := Vector2(0.6, 0.8)
+	for k: int in rows:
+		w.critter_swing_dir[k] = dir
+		w.critter_swing_show[k] = Look.CRITTER_SWING_TIME * 0.25
+	t.eq(w.critter_swing_show[quiet], INF, "설정: 다람쥐는 한 번도 휘두른 적이 없다 (INF로 태어난다)")
+
+	var spy := SwingSpy.new()
+	spy.world = w
+	spy.view_rect = Rect2(Vector2.ZERO, Rules.FIELD)
+	t.root.add_child(spy)
+	await t.pump_frames(2)
+	spy.forget()
+	await t.pump_frames(1)
+
+	# **The totals first, and they are the control for every position assertion under them.** Four lines
+	# (까마귀 둘 · 들개 하나 · 코끼리 하나), two discs (들쥐 · 사자), two arcs (멧돼지 · 보스). A gesture that
+	# drew an extra mark, or a stray `_paint_disc` from anywhere else, moves one of these three numbers.
+	t.eq(spy.lines.size(), 4,
+			"한 프레임에 선은 넷이다 — 까마귀의 두 갈래, 들개의 한 획, 코끼리의 가로 막대 (%d)" % spy.lines.size())
+	t.eq(spy.discs.size(), 2, "원반은 둘이다 — 들쥐의 갉는 점과 사자가 내려앉은 점")
+	t.eq(spy.arcs.size(), 2, "호는 둘이다 — 멧돼지의 뿔과 보스의 발밑 고리")
+	t.eq(spy.cells.size(), 9, "몸은 아홉이다 — 생물 여덟과 호스트 하나 (잔상을 그리는 종은 하나도 없다)")
+
+	var tol := 0.2
+	# -- 까마귀 쪼기: two strokes at ±SWING_PECK_ANGLE, both at full length --------------------------
+	var crow_at := _swung_at(w.critter_pos[rows[0]], dir, 0.25, Parts.Species.CROW)
+	var crow_tips := []
+	for m: float in [1.0, -1.0]:
+		var d := dir.rotated(Look.SWING_PECK_ANGLE * m)
+		var a := crow_at + d * 12.0
+		var seg := _seg_from(spy.lines, a, tol)
+		t.ok(not seg.is_empty(), "까마귀의 %+.0f°짜리 획이 몸 가장자리에서 시작한다 (%s)" % [m * 14.0, str(a)])
+		if seg.is_empty():
+			continue
+		var want_b := a + d * 18.0
+		t.ok((seg["b"] as Vector2).distance_to(want_b) < tol,
+				"그리고 그 획은 제 반지름의 1.5배만큼 더 뻗는다 (%s / 기대 %s)" % [str(seg["b"]), str(want_b)])
+		t.ok(absf(float(seg["width"]) - 5.0) < 0.001, "굵기는 5px다 (리터럴)")
+		crow_tips.append(seg["b"])
+	# ⚠ **A fork, not one line drawn twice.** Two identical strokes would satisfy every assertion above if
+	# `SWING_PECK_ANGLE` were zeroed — the tips would coincide and the crow would go back to one line.
+	t.eq(crow_tips.size(), 2, "설정: 두 획을 다 찾았다")
+	if crow_tips.size() == 2:
+		t.ok((crow_tips[0] as Vector2).distance_to(crow_tips[1]) > 10.0,
+				"두 끝은 서로 10px 넘게 떨어져 있다 — 각을 0으로 만들면 한 획이 둘로 겹친다 (%.2f)"
+						% (crow_tips[0] as Vector2).distance_to(crow_tips[1]))
+
+	# -- 들쥐 갉기: one shrinking dot at the contact point, and NO line ------------------------------
+	var mouse_at := _swung_at(w.critter_pos[rows[1]], dir, 0.25, Parts.Species.MOUSE)
+	var gnaw := _disc_from(spy.discs, mouse_at + dir * 5.0, tol)
+	t.ok(not gnaw.is_empty(), "들쥐의 점은 닿은 지점에 찍힌다 %s" % str(spy.discs))
+	if not gnaw.is_empty():
+		t.ok(absf(float(gnaw["r"]) - 1.875) < 0.001,
+				"그 반지름은 5 × 0.5 × (1 - 0.25) = 1.875px다 (리터럴) — %.4f" % float(gnaw["r"]))
+
+	# -- 들개 물어뜯기: one stroke, ROTATED away from the swing direction ----------------------------
+	var dog_at := _swung_at(w.critter_pos[rows[2]], dir, 0.25, Parts.Species.DOG)
+	var bite := _seg_from(spy.lines, dog_at, tol)
+	t.ok(not bite.is_empty(), "들개의 획은 몸 한가운데에서 시작한다 %s" % str(dog_at))
+	if not bite.is_empty():
+		var bd := dir.rotated(lerpf(-Look.SWING_BITE_SWEEP, Look.SWING_BITE_SWEEP, 0.25))
+		var want_b := dog_at + bd * 20.0
+		t.ok((bite["b"] as Vector2).distance_to(want_b) < tol,
+				"그리고 제 반지름의 2배만큼, 휘두른 방향에서 -10° 돌아간 곳으로 뻗는다 (%s / 기대 %s)"
+						% [str(bite["b"]), str(want_b)])
+		# ⚠ **The rotation is the gesture.** A stroke straight along `dir` satisfies "a line of length 20"
+		# perfectly, and that is exactly what zeroing `SWING_BITE_SWEEP` produces.
+		var straight := dog_at + dir * 20.0
+		t.ok((bite["b"] as Vector2).distance_to(straight) > 3.0,
+				"그 끝은 휘두른 방향 그대로 뻗은 자리와 3px 넘게 다르다 — 안 돌면 들개는 그냥 선 하나다 (%.2f)"
+						% (bite["b"] as Vector2).distance_to(straight))
+
+	# -- 멧돼지 들이받기: a partial arc that has not finished opening yet ----------------------------
+	var boar_at := _swung_at(w.critter_pos[rows[3]], dir, 0.25, Parts.Species.BOAR)
+	var tusk := _arc_from(spy.arcs, boar_at, tol)
+	t.ok(not tusk.is_empty(), "멧돼지의 호는 몸 자리에 있다 %s" % str(spy.arcs))
+	if not tusk.is_empty():
+		t.ok(absf(float(tusk["r"]) - 25.2) < 0.001,
+				"그 반지름은 18 × 1.4 = 25.2px다 (리터럴) — %.4f" % float(tusk["r"]))
+		var sweep := float(tusk["to"]) - float(tusk["from"])
+		t.ok(absf(rad_to_deg(sweep) - 22.5) < 0.01,
+				"창의 4분의 1 지점에서 90°의 4분의 1인 22.5°만 열려 있다 (%.3f°)" % rad_to_deg(sweep))
+		t.ok(absf(float(tusk["from"]) - (dir.angle() - deg_to_rad(45.0))) < 0.0001,
+				"그리고 그 호는 휘두른 방향에서 45° 뒤에서 시작한다 — 방향에 붙어 있다")
+
+	# -- 코끼리 밀치기: a heavy bar ACROSS the direction, and a doubled lunge ------------------------
+	var ele_at := _swung_at(w.critter_pos[rows[4]], dir, 0.25, Parts.Species.ELEPHANT)
+	var across := Vector2(-dir.y, dir.x) * 32.0
+	var mid := ele_at + dir * 40.0
+	var bar := _seg_from(spy.lines, mid - across, tol)
+	t.ok(not bar.is_empty(), "코끼리의 막대는 닿은 지점을 가운데 두고 놓인다 %s" % str(mid))
+	if not bar.is_empty():
+		t.ok((bar["b"] as Vector2).distance_to(mid + across) < tol,
+				"그 막대는 양쪽으로 40 × 0.8 = 32px씩 뻗는다 (%s / 기대 %s)"
+						% [str(bar["b"]), str(mid + across)])
+		t.ok(absf(float(bar["width"]) - 10.0) < 0.001,
+				"굵기는 5 × 2 = 10px다 — 화면에서 가장 굵은 획이다 (%.2f)" % float(bar["width"]))
+		# ⚠ **Perpendicular, and that is what makes it a shove rather than a stab.** A bar drawn ALONG `dir`
+		# would keep its length and its width and stop being a different gesture from the dog's.
+		var along := ((bar["b"] as Vector2) - (bar["a"] as Vector2)).normalized()
+		t.ok(absf(along.dot(dir)) < 0.001,
+				"그리고 그 막대는 휘두른 방향과 정확히 직각이다 (내적 %.5f)" % along.dot(dir))
+
+	# -- 사자 덮치기: one shrinking dot where the tripled lunge landed, and no line ------------------
+	var lion_at := _swung_at(w.critter_pos[rows[5]], dir, 0.25, Parts.Species.LION)
+	var pounce := _disc_from(spy.discs, lion_at + dir * 46.8, tol)
+	t.ok(not pounce.is_empty(), "사자의 점은 몸 앞 26 × 1.8 = 46.8px에 찍힌다 %s" % str(spy.discs))
+	if not pounce.is_empty():
+		t.ok(absf(float(pounce["r"]) - 12.0) < 0.001,
+				"그 반지름은 HIT_SPARK_R 16 × (1 - 0.25) = 12px다 (리터럴) — %.4f" % float(pounce["r"]))
+
+	# -- 보스 내려찍기: a full ring at its feet, at the arena wall's own weight ----------------------
+	var boss_at := _swung_at(w.critter_pos[rows[6]], dir, 0.25, Parts.Species.BOSS)
+	var stomp := _arc_from(spy.arcs, boss_at, tol)
+	t.ok(not stomp.is_empty(), "보스의 고리는 제 발밑에 있다 %s" % str(spy.arcs))
+	if not stomp.is_empty():
+		t.ok(absf(float(stomp["to"]) - float(stomp["from"]) - TAU) < 0.0001,
+				"그것은 0에서 TAU까지, 통짜 원이다 — _paint_ring이 아니라 _paint_arc를 쓴 이유가 그것이다")
+		t.ok(absf(float(stomp["r"]) - 62.4) < 0.001,
+				"반지름은 48에서 48 × 2.2로 가는 길의 4분의 1, 62.4px다 (리터럴) — %.4f" % float(stomp["r"]))
+		t.ok(absf(float(stomp["width"]) - Look.ARENA_WALL_WIDTH) < 0.001,
+				"굵기는 아레나 벽과 같은 무게다 (%.2f)" % float(stomp["width"]))
+		t.ok(float(stomp["col_a"]) < Look.CRITTER_SWING_COLOR.a - 0.05,
+				"그리고 이미 옅어져 있다 — 알파가 1 - t로 빠진다 (%.4f)" % float(stomp["col_a"]))
+
+	# -- the negative control: the one creature that is not swinging draws nothing extra ------------
+	var quiet_p := w.critter_pos[quiet]
+	t.ok(_seg_from(spy.lines, quiet_p, 60.0).is_empty()
+			and _disc_from(spy.discs, quiet_p, 60.0).is_empty()
+			and _arc_from(spy.arcs, quiet_p, 60.0).is_empty(),
+			"안 휘두른 다람쥐 둘레 60px 안에는 선도 원반도 호도 없다")
+	var quiet_cell := false
+	for e: Dictionary in spy.cells:
+		if (e["p"] as Vector2).distance_to(quiet_p) < 0.001:
+			quiet_cell = true
+	t.ok(quiet_cell, "그리고 그 몸은 sim 좌표 그대로 그려진다 — 안 휘두른 몸은 달려들지도 않는다")
+
+	# -- THE CLAIM: two species in the SAME frame did not reach the leaves with the same arguments --
+	# Compared pairwise and on the axis each pair is supposed to differ on, rather than by "the lists are not
+	# equal" — a single generic inequality is satisfied by two positions being different, which two creatures
+	# standing apart already guarantee whatever they drew.
+	if not gnaw.is_empty() and not pounce.is_empty():
+		t.ok(absf(float(gnaw["r"]) - float(pounce["r"])) > 5.0,
+				"같은 프레임에서 들쥐의 점과 사자의 점은 크기가 5px 넘게 다르다 (%.2f vs %.2f)"
+						% [float(gnaw["r"]), float(pounce["r"])])
+	if not tusk.is_empty() and not stomp.is_empty():
+		var tusk_sweep := float(tusk["to"]) - float(tusk["from"])
+		t.ok(absf((float(stomp["to"]) - float(stomp["from"])) - tusk_sweep) > 1.0,
+				"멧돼지의 호는 부분이고 보스의 호는 통짜다 — 같은 잎, 다른 인수 (%.3f vs %.3f rad)"
+						% [tusk_sweep, float(stomp["to"]) - float(stomp["from"])])
+	if not bite.is_empty() and not bar.is_empty():
+		t.ok(absf(float(bite["width"]) - float(bar["width"])) > 1.0,
+				"들개의 획과 코끼리의 막대는 굵기가 다르다 (%.2f vs %.2f)"
+						% [float(bite["width"]), float(bar["width"])])
+
+	# -- the lunge is a species value, and it is the elephant's and the lion's whole other half -----
+	# Read off `_paint_cell`'s own position, which is the ONLY place the multiplier ever appears — no gesture
+	# leaf is handed it. `sin(pi × 0.25) × 14` = 9.8995px, and the two rows that are not 1.0 have to come
+	# back at exactly two and three times that.
+	var crow_push := _drawn_push(spy, w.critter_pos[rows[0]], 12.0)
+	var ele_push := _drawn_push(spy, w.critter_pos[rows[4]], 40.0)
+	var lion_push := _drawn_push(spy, w.critter_pos[rows[5]], 26.0)
+	t.ok(absf(crow_push - 9.8995) < 0.01,
+			"까마귀는 9.8995px 달려든다 — sin(pi/4) × SWING_LUNGE_PUSH (%.4f)" % crow_push)
+	t.ok(absf(ele_push - crow_push * 2.0) < 0.02,
+			"코끼리는 그 두 배를 달려든다 (%.4f / 기대 %.4f)" % [ele_push, crow_push * 2.0])
+	t.ok(absf(lion_push - crow_push * 3.0) < 0.02,
+			"사자는 세 배를 달려든다 — 사자에게는 달려드는 것 자체가 몸짓이다 (%.4f / 기대 %.4f)"
+					% [lion_push, crow_push * 3.0])
+	t.ok(_drawn_push(spy, quiet_p, 7.0) < 0.001,
+			"안 휘두른 다람쥐는 0px 달려든다 — 배수는 휘두를 때만 붙는다")
+
+	# ================= the second frame: three quarters through the window ==========================
+	# ⚠ **`sin(pi x)` is symmetric about the middle, so the LUNGE is identical at 0.25 and 0.75.** That is
+	# what makes this frame a clean read of the gesture alone: 까마귀 and 코끼리 must come back unchanged
+	# (their shapes do not read `t` at all) and the other five must all have moved.
+	for k: int in rows:
+		w.critter_swing_show[k] = Look.CRITTER_SWING_TIME * 0.75
+	spy.forget()
+	await t.pump_frames(1)
+	t.eq(spy.lines.size(), 4, "늦은 프레임에도 선은 여전히 넷이다")
+	t.eq(spy.discs.size(), 2, "원반도 둘이다")
+	t.eq(spy.arcs.size(), 2, "호도 둘이다")
+
+	var gnaw2 := _disc_from(spy.discs, mouse_at + dir * 5.0, tol)
+	t.ok(not gnaw2.is_empty(), "들쥐의 점은 여전히 닿은 지점에 있다")
+	if not gnaw2.is_empty():
+		t.ok(absf(float(gnaw2["r"]) - 0.625) < 0.001,
+				"그런데 반지름은 5 × 0.5 × (1 - 0.75) = 0.625px로 줄었다 (리터럴) — %.4f" % float(gnaw2["r"]))
+	var pounce2 := _disc_from(spy.discs, lion_at + dir * 46.8, tol)
+	t.ok(not pounce2.is_empty(), "사자의 점도 같은 자리에 있다")
+	if not pounce2.is_empty():
+		t.ok(absf(float(pounce2["r"]) - 4.0) < 0.001,
+				"그리고 16 × (1 - 0.75) = 4px로 줄었다 (리터럴) — %.4f" % float(pounce2["r"]))
+	var bite2 := _seg_from(spy.lines, dog_at, tol)
+	t.ok(not bite2.is_empty(), "들개의 획도 여전히 몸에서 시작한다")
+	if not bite2.is_empty() and not bite.is_empty():
+		var bd2 := dir.rotated(lerpf(-Look.SWING_BITE_SWEEP, Look.SWING_BITE_SWEEP, 0.75))
+		t.ok((bite2["b"] as Vector2).distance_to(dog_at + bd2 * 20.0) < tol,
+				"그런데 이번엔 +10° 쪽으로 돌아가 있다 — 창을 가로질러 휘저은 것이다")
+		t.ok((bite2["b"] as Vector2).distance_to(bite["b"]) > 5.0,
+				"두 프레임의 끝은 5px 넘게 다르다 (%.2f)"
+						% (bite2["b"] as Vector2).distance_to(bite["b"]))
+	var tusk2 := _arc_from(spy.arcs, boar_at, tol)
+	t.ok(not tusk2.is_empty(), "멧돼지의 호도 같은 자리에 있다")
+	if not tusk2.is_empty():
+		t.ok(absf(rad_to_deg(float(tusk2["to"]) - float(tusk2["from"])) - 67.5) < 0.01,
+				"그런데 90°의 4분의 3인 67.5°까지 열렸다 (%.3f°)"
+						% rad_to_deg(float(tusk2["to"]) - float(tusk2["from"])))
+	var stomp2 := _arc_from(spy.arcs, boss_at, tol)
+	t.ok(not stomp2.is_empty(), "보스의 고리도 같은 자리에 있다")
+	if not stomp2.is_empty() and not stomp.is_empty():
+		t.ok(absf(float(stomp2["r"]) - 91.2) < 0.001,
+				"그런데 91.2px까지 자랐다 (리터럴) — %.4f" % float(stomp2["r"]))
+		t.ok(float(stomp2["col_a"]) < float(stomp["col_a"]) - 0.05,
+				"그리고 더 옅어졌다 (%.4f < %.4f)" % [float(stomp2["col_a"]), float(stomp["col_a"])])
+
+	# The two that must NOT have moved — the control that says the frame really redrew everything.
+	t.ok(not _seg_from(spy.lines, crow_at + dir.rotated(Look.SWING_PECK_ANGLE) * 12.0, tol).is_empty(),
+			"까마귀의 갈래는 늦은 프레임에도 똑같은 자리다 — 쓸어내는 것이 아니라 갈래이기 때문이다")
+	t.ok(not _seg_from(spy.lines, mid - across, tol).is_empty(),
+			"코끼리의 막대도 그대로다 — 이 둘만 t를 안 읽는다")
+
+	# ================= the fallback branch, which the shipped tables cannot reach ===================
+	# `_paint_swing`'s default arm draws the line this file drew for every species before §6, and **nothing
+	# in play can enter it**: the four species without a gesture all carry `SPECIES_FLEES` 1 and never have a
+	# swing written at all. A branch no fixture drives is a branch that can be emptied with the round green,
+	# so the squirrel is handed a swing by hand — the view reads `critter_swing_show` and knows nothing about
+	# who is allowed to attack, which is exactly what makes this drivable without touching the rules.
+	w.critter_swing_dir[quiet] = dir
+	w.critter_swing_show[quiet] = Look.CRITTER_SWING_TIME * 0.25
+	spy.forget()
+	await t.pump_frames(1)
+	t.eq(spy.lines.size(), 5, "다람쥐에게 손으로 휘두름을 쥐여 주면 선이 하나 는다 (%d)" % spy.lines.size())
+	var quiet_at := _swung_at(quiet_p, dir, 0.25, Parts.Species.SQUIRREL)
+	var lash := _seg_from(spy.lines, quiet_at, tol)
+	t.ok(not lash.is_empty(), "그 선은 대체 몸짓 — 몸 한가운데에서 시작한다 %s" % str(quiet_at))
+	if not lash.is_empty():
+		t.ok((lash["b"] as Vector2).distance_to(quiet_at + dir * 10.5) < tol,
+				"그리고 7 × CRITTER_SWING_RING 1.5 = 10.5px만큼 휘두른 방향 그대로 뻗는다 (%s / 기대 %s)"
+						% [str(lash["b"]), str(quiet_at + dir * 10.5)])
+	t.eq(spy.discs.size(), 2, "그런데 원반은 여전히 둘이다 — 대체 몸짓은 선 하나이지 여러 표시가 아니다")
+	t.eq(spy.arcs.size(), 2, "호도 여전히 둘이다")
+
+	t.root.remove_child(spy)
+	spy.queue_free()
+
+
+## The distance a body was DRAWN from where it stands. `radius_hint` picks the one cell of that exact drawn
+## radius, so two bodies near one point cannot be confused for each other.
+func _drawn_push(spy: SwingSpy, at: Vector2, radius_hint: float) -> float:
+	var best := -1.0
+	for e: Dictionary in spy.cells:
+		if absf(float(e["r"]) - radius_hint) > 0.001:
+			continue
+		var d := (e["p"] as Vector2).distance_to(at)
+		if best < 0.0 or d < best:
+			best = d
+	return maxf(0.0, best)
+
+
+## Where a creature's body is DRAWN, mid-swing: its sim position plus the lunge. **Re-derived from the curve
+## `Look.SWING_LUNGE_TIME`'s own comment states**, never read back from `_lunge_offset`.
+func _swung_at(p: Vector2, dir: Vector2, t_frac: float, s: int) -> Vector2:
+	var swing_t := Look.CRITTER_SWING_TIME * t_frac
+	return p + dir * (sin(PI * (swing_t / Look.SWING_LUNGE_TIME)) * Look.SWING_LUNGE_PUSH
+			* float(Look.SPECIES_LUNGE_MUL[s]))
+
+
+func _seg_from(list: Array, a: Vector2, tol: float) -> Dictionary:
+	for e: Dictionary in list:
+		if (e["a"] as Vector2).distance_to(a) < tol:
+			return e
+	return {}
+
+
+func _disc_from(list: Array, p: Vector2, tol: float) -> Dictionary:
+	for e: Dictionary in list:
+		if (e["p"] as Vector2).distance_to(p) < tol:
+			return e
+	return {}
+
+
+func _arc_from(list: Array, p: Vector2, tol: float) -> Dictionary:
+	for e: Dictionary in list:
+		if (e["p"] as Vector2).distance_to(p) < tol:
+			return e
+	return {}
+
+
+# -- P16: the clone's own swing is still not a creature's --------------------------------------------------
+## Both go through `_paint_part_line`, in the same frame, and they must not be the same mark. The clone's
+## line is the one thing §6 deliberately did NOT touch — forty simultaneous clone swings are a different
+## picture problem from one monster's gesture, and `melee-legibility-ko`'s §B-1 is where that argument lives.
+func _p16_the_clone_swing_is_not_a_creatures(t) -> void:
+	var w := World.new()
+	w.setup(619)
+	_silence(w)
+	_clear_terrain(w)
+	w.critter_count = 0
+	w.boss_index = -1
+
+	var dog := w._write_critter(Parts.Species.DOG, Vector2(900.0, 700.0),
+			int(Rules.SPECIES_FORCE_MIN[Parts.Species.DOG]))
+	var dir := Vector2(0.6, 0.8)
+	w.critter_swing_dir[dog] = dir
+	w.critter_swing_show[dog] = Look.CRITTER_SWING_TIME * 0.25
+
+	var clone := w.swarm.add_clone(0, 5)
+	w.swarm.pos[clone] = Vector2(2600.0, 1500.0)
+	# `0.0` on purpose: `_lunge_offset` is exactly zero at both ends of its window, so the clone's line starts
+	# at its true position and the expectation below needs no lunge term at all.
+	w.swarm.swing_show[clone] = 0.0
+	w.swarm.swing_dir[clone] = dir
+
+	var spy := SwingSpy.new()
+	spy.world = w
+	spy.view_rect = Rect2(Vector2.ZERO, Rules.FIELD)
+	t.root.add_child(spy)
+	await t.pump_frames(2)
+	spy.forget()
+	await t.pump_frames(1)
+
+	t.eq(spy.lines.size(), 2, "한 프레임에 선은 둘 — 분신 하나와 들개 하나 (%d)" % spy.lines.size())
+	var clone_seg := _seg_from(spy.lines, w.swarm.pos[clone], 0.2)
+	var dog_at := _swung_at(w.critter_pos[dog], dir, 0.25, Parts.Species.DOG)
+	var dog_seg := _seg_from(spy.lines, dog_at, 0.2)
+	t.ok(not clone_seg.is_empty(), "분신의 선을 찾았다 %s" % str(w.swarm.pos[clone]))
+	t.ok(not dog_seg.is_empty(), "들개의 획도 찾았다 %s" % str(dog_at))
+	if clone_seg.is_empty() or dog_seg.is_empty():
+		t.root.remove_child(spy)
+		spy.queue_free()
+		return
+
+	var clone_len := (clone_seg["b"] as Vector2).distance_to(clone_seg["a"])
+	var dog_len := (dog_seg["b"] as Vector2).distance_to(dog_seg["a"])
+	t.ok(absf(clone_len - 27.2) < 0.01, "분신의 선은 8 × 3.4 = 27.2px다 (리터럴) — %.3f" % clone_len)
+	t.ok(absf(dog_len - 20.0) < 0.01, "들개의 획은 10 × 2.0 = 20px다 (리터럴) — %.3f" % dog_len)
+	t.ok(absf(float(clone_seg["width"]) - 4.0) < 0.001, "분신의 굵기는 4px다 (리터럴)")
+	t.ok(absf(float(dog_seg["width"]) - 5.0) < 0.001, "들개의 굵기는 5px다 (리터럴)")
+	t.ok(absf(float(clone_seg["width"]) - float(dog_seg["width"])) > 0.5,
+			"그래서 같은 잎을 지나도 굵기가 다르다 — 분신의 타격과 몬스터의 몸짓은 여전히 다른 표시다")
+	# The clone's line runs straight along its swing direction; the dog's is rotated by the sweep. Same leaf,
+	# same frame, different geometry — which is what "still distinct" has to mean.
+	var clone_along := ((clone_seg["b"] as Vector2) - (clone_seg["a"] as Vector2)).normalized()
+	var dog_along := ((dog_seg["b"] as Vector2) - (dog_seg["a"] as Vector2)).normalized()
+	t.ok(absf(clone_along.dot(dir) - 1.0) < 0.001,
+			"분신의 선은 휘두른 방향 그대로다 — §6은 분신 쪽을 일부러 안 건드렸다")
+	t.ok(clone_along.dot(dog_along) < 0.995,
+			"들개의 획은 그 방향에서 돌아가 있다 (내적 %.5f)" % clone_along.dot(dog_along))
+
+	t.root.remove_child(spy)
+	spy.queue_free()

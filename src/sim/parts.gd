@@ -13,11 +13,15 @@ extends RefCounted
 
 enum Slot { HEAD, TORSO, BACK, FORELIMBS, HINDLIMBS, TAIL, EYES, GUT, BONE, HIDE, LUNG }
 enum Kind { PASSIVE, ACTIVE }
-## ⚠ **BOSS stays at 2 and the new species are appended after it.** Every `SPECIES_*` table in `rules.gd`
-## is indexed by this enum, so renumbering BOSS would silently re-point six tables at once; growing the tail
-## is the only edit that cannot do that. **Nothing may read `Species.size()` as "three".**
+## ⚠ **BOSS stays at 2 and every new species is appended after the tail.** Twelve `SPECIES_*` tables in
+## `rules.gd` plus `SPECIES_NAME` below plus `FieldView.SPECIES_COLOR` are indexed by this enum — fourteen
+## parallel arrays — so renumbering any member silently re-points all fourteen at once; growing the tail is
+## the only edit that cannot do that. **Nothing may read `Species.size()` as the species count**: `NONE` is
+## a member of this enum and is not a species, so the count is `size() - 1` and it is 11.
+## `net_field._c31_every_species_table_is_eleven_rows` pins every member's number as a literal.
 enum Species { NONE = -1, CROW = 0, HORSE = 1, BOSS = 2,
-	SQUIRREL = 3, ELEPHANT = 4, CHEETAH = 5, LION = 6 }
+	SQUIRREL = 3, ELEPHANT = 4, CHEETAH = 5, LION = 6,
+	MOUSE = 7, RABBIT = 8, DOG = 9, BOAR = 10 }
 enum { BITE = 0, DASH = 1, HORSE_LEGS = 2, HORSE_MANE = 3, HORSE_LUNG = 4,
 	CROW_WING = 5, CROW_BEAK = 6, CROW_FOOT = 7 }
 
@@ -25,13 +29,18 @@ enum { BITE = 0, DASH = 1, HORSE_LEGS = 2, HORSE_MANE = 3, HORSE_LUNG = 4,
 ## only reader — the snapshot walks `World.species_eaten` through it, so a member added to `Species`
 ## without a name added here prints `?` rather than reading the row next door.
 ##
-## ⚠ **This is NOT a column of the part table** and it is `Species.size()` long, not eight. `net_parts`
-## walks every array constant this file declares and asserts each is `ROWS` long; it is skipped there by
-## name.
+## ⚠ **This is NOT a column of the part table.** It is one entry per REAL species — eleven — which is
+## `Species.size() - 1`, because `NONE` is a member of that enum and is not a species. **This comment said
+## "`Species.size()` long" for two plans and it was already false by one.** `net_parts` walks every array
+## constant this file declares and asserts each is `ROWS` (8) long; this one is skipped there by name, so
+## `net_field._c31_every_species_table_is_eleven_rows` is the only thing that measures its length at all.
 ##
-## **Four species were added after the crow and the horse and none of them drops a part.** They exist to
+## **Eight species were added after the crow and the horse and none of them drops a part.** They exist to
 ## fill the field — the pools are still crow-only plus 말 다리 (`DROPS`), so eating a lion opens no card.
-const SPECIES_NAME := ["까마귀", "말", "보스", "다람쥐", "코끼리", "치타", "사자"]
+## Splitting "is on the field" from "drops a part" is what makes a species a row edit; see
+## `august-scope-two-species`.
+const SPECIES_NAME := ["까마귀", "말", "보스", "다람쥐", "코끼리", "치타", "사자",
+	"들쥐", "토끼", "들개", "멧돼지"]
 
 ## **Eleven is `Slot.size()` and nowhere else.** Two view files each held the literal as a `SLOT_COUNT`
 ## const; both are deleted and each now asks `Slot.size()` through its own `_slot_count()`, and

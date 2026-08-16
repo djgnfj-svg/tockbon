@@ -23,6 +23,15 @@ var title: TitleScreen = null
 var ending: EndingScreen = null
 var cam: Camera2D = null
 var _zoom := Look.ZOOM_NEAR
+## Where the camera would be with no shake on it. **`cam.position` is `_cam_base` plus this frame's shake,
+## recomputed whole every frame and never accumulated** — the shake used to be `+=`'d straight onto
+## `cam.position`, which made it the base of the NEXT frame's lerp: an offset added every frame while the
+## follow pulled back only ~10.9% of it, converging on ~9× the intended displacement. `Look.SHAKE_MAX` then
+## bounded the impulse and nothing bounded the picture (67.9px at 60fps, 160.4px at 144fps), and a sim frozen
+## mid-shake by the body panel parked the camera 158px off the host until the panel closed. Every check was
+## green: each reset `cam.position` by hand before pumping ONE frame, which is the one shape that
+## structurally cannot see accumulation across frames.
+var _cam_base := Vector2.ZERO
 
 
 func _ready() -> void:
@@ -68,6 +77,12 @@ func _ready() -> void:
 ## frame stale on the exact frame the death or the clear happens. Measured: `net_shell.gd`'s phase-visible
 ## check went red on that ordering (hud still shown, ending still hidden, the frame the run actually ended).
 func _process(delta: float) -> void:
+	# **The frame starts here, before anything can produce an event.** `_read_input()` below fires keys and
+	# splits, both of which fill the one-frame lists `FieldView` draws bursts from, and it runs BEFORE
+	# `run.step()` — so the sim cannot clear those lists at the top of its own step without erasing the
+	# player's own kill and the `F` ring on the frame they happened. Outside the phase branch on purpose: the
+	# lists must also be cleared while paused and on the ending screen, where nothing refills them.
+	run.begin_frame()
 	if run.phase == Run.Phase.PLAY:
 		_sync_cards()
 		if _panel_open():
@@ -94,6 +109,7 @@ func _process(delta: float) -> void:
 			# assignment being forgotten, not the repaint. Same identity shape as `_bind_world()` below.
 			ending.result = run.result
 		_follow_camera(delta)
+		_apply_shake()
 		_apply_zoom(delta)
 		view.view_rect = _camera_rect()
 		# **Two rects, two callers, and they are deliberately different.** `_camera_rect()` is padded 20%
@@ -142,7 +158,11 @@ func _bind_world() -> void:
 	# The card face says `말 다리 → Lv2` when the part is already worn, and the level comes from here.
 	cards.body = run.world.body if run.world != null else null
 	if run.world != null:
-		cam.position = run.world.swarm.pos[0]
+		# **Both, or the next frame's `_apply_shake()` snaps the camera back to the previous run's base.**
+		# `cam.position` is derived from `_cam_base` every frame, so seeding one and not the other leaves the
+		# picture on the old run's ground for exactly as long as the follow lerp takes to close.
+		_cam_base = run.world.swarm.pos[0]
+		cam.position = _cam_base
 		_zoom = Look.ZOOM_NEAR      ## snap, never lerp: a restart opens alone and must open tight
 		cam.zoom = Vector2(_zoom, _zoom)
 
@@ -264,7 +284,44 @@ func _unhandled_key_input(event: InputEvent) -> void:
 
 
 func _follow_camera(delta: float) -> void:
-	cam.position = cam.position.lerp(run.world.swarm.pos[0], 1.0 - pow(0.001, delta * CAMERA_LAG / 9.0))
+	_cam_base = _cam_base.lerp(run.world.swarm.pos[0], 1.0 - pow(0.001, delta * CAMERA_LAG / 9.0))
+
+
+## `Swarm.hit_show[0]` is the host's own up-counting hit clock — the same shape `critter_hit_show` uses —
+## so this owns no clock of its own, only the two `Look` numbers that turn it into an offset. A pure
+## function of elapsed time and the landing hit's force, so two frames at the same `t` and the same force
+## produce the SAME offset, which is what lets a net assert it rather than trusting `Math.random`.
+##
+## ⚠ **`cam.position`, never `cam.offset`.** `_camera_rect()` and `_true_camera_rect()` both derive from
+## `position`, and the minimap's camera box and `view_rect` culling both read those two — an offset shake
+## would move the picture while leaving the culled rectangle and the minimap box exactly where they were,
+## which is a body flickering at the screen's edge for a reason nothing on screen explains.
+##
+## §D-1 reuses this exact machinery for the boss-hunt announcement — "흔들림 한 번, §B-2의 기계장치를
+## 그대로 쓴다" — through the shared `_shake_offset()` below rather than by writing `host_hit_force`/
+## `hit_show[0]` for a moment that is not an actual hit: those two are read by nets that pin them to real
+## combat (`net_hunt`'s host-damage checks), and overloading them here would make "the host was just hit"
+## and "the boss just started hunting" the same signal with no way to tell them apart.
+## ⚠ **It ASSIGNS `cam.position` from `_cam_base`, it does not add to it** — see that field for the measured
+## cost of adding.
+func _apply_shake() -> void:
+	var t: float = run.world.swarm.hit_show[0]
+	var amp := minf(float(run.world.host_hit_force) * Look.SHAKE_PER_FORCE, Look.SHAKE_MAX)
+	var offset := _shake_offset(t, amp)
+	if run.world.boss_hunting():
+		var since := run.world.elapsed - Rules.BOSS_HUNT_AT
+		offset += _shake_offset(since, Look.SHAKE_MAX)
+	cam.position = _cam_base + offset
+
+
+## The shake's shape alone, pulled out of `_apply_shake()` so §D-1 can drive it off a second, unrelated
+## clock without a second copy of the formula. Zero past `Look.SHAKE_TIME`, so a caller need not guard its
+## own `t` before adding the result in.
+func _shake_offset(t: float, amp: float) -> Vector2:
+	if t >= Look.SHAKE_TIME:
+		return Vector2.ZERO
+	var decay := 1.0 - t / Look.SHAKE_TIME
+	return Vector2(sin(t * Look.SHAKE_FREQ_X), sin(t * Look.SHAKE_FREQ_Y)) * amp * decay
 
 
 ## Frame-rate independent, `1.0 - exp(-ZOOM_LERP * delta)`. Target read from `swarm.count` (bodies, host

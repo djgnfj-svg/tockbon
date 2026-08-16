@@ -17,6 +17,25 @@ const DT := 1.0 / 60.0
 const CROW := int(Parts.Species.CROW)
 const HORSE := int(Parts.Species.HORSE)
 const BOSS := int(Parts.Species.BOSS)
+## How many real species there are — `Parts.Species.NONE` is a member of the enum and is NOT one, so this is
+## `Species.size() - 1`. **A literal on purpose**: every `SPECIES_*` table is compared to this number and
+## never to another table's length, because arrays that agree with each other pass on a set where all of
+## them are short. See `_c31_every_species_table_is_eleven_rows`.
+const ROWS := 11
+
+
+## A `World` with one species held shut, so **`setup()`'s own unlock gate can be driven.**
+##
+## ⚠ **That branch is unreachable through the shipped tables** — every row with a non-zero `SPECIES_START`
+## also has `SPECIES_UNLOCK_AT` 0.0, so deleting the `continue` in `setup()` changes nothing today and stays
+## green. It is not decoration: it is what makes "a start of N and a gate of 105s" impossible to ship as a
+## contradiction the layout quietly wins. Overriding the one function the comparison lives in is the only
+## way to ask the question without a second copy of the rule.
+class LockedWorld extends World:
+	var locked := -1
+
+	func species_unlocked(s: int, at: float) -> bool:
+		return s != locked and super.species_unlocked(s, at)
 
 
 func run(t) -> void:
@@ -30,6 +49,9 @@ func run(t) -> void:
 	_u7b_a_swap_cannot_drop_a_clone_below_the_floor(t)
 	_c29_instruments(t)
 	_c30_size_never_inverts(t)
+	_c31_every_species_table_is_eleven_rows(t)
+	_c32_every_species_spawns_walks_and_dies(t)
+	await _c33_the_opening_pocket(t)
 	_f1b_a_crow_does_not_one_shot(t)
 	_f2_boss_placement(t)
 	_u12_where_the_boss_opens(t)
@@ -40,6 +62,8 @@ func run(t) -> void:
 	_g1_wandering_is_a_column(t)
 	_g2_the_lion_is_the_only_hunter(t)
 	_g3_a_herd_is_born_together(t)
+	_a3_knockback_is_proportional_and_survives_a_rock(t)
+	_d1_boss_hunt_announces_once(t)
 
 
 # -- 1: the field at t = 0 -------------------------------------------------------------------------------
@@ -48,21 +72,39 @@ func run(t) -> void:
 func _c1_opening_field(t) -> void:
 	var w := World.new()
 	w.setup(400)
-	# ⚠ **Seven counters, because the opening is now `SPECIES_START × SPECIES_HERD` and a `match` over three
+	# ⚠ **Eleven counters, because the opening is `SPECIES_START × SPECIES_HERD` and a `match` over three
 	# names silently counts a four-species field as three.** The literals below are that product written out
-	# per species — a herd count read as a head count is the exact bug this check exists to catch.
-	var per := [0, 0, 0, 0, 0, 0, 0]
+	# per species — a herd count read as a head count is the exact bug this check exists to catch. The array
+	# is sized to the whole enum rather than to what happens to spawn: a row whose `SPECIES_START` is turned
+	# on later must land in a counter that exists, not past the end of this list.
+	var per := [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+	t.eq(per.size(), ROWS, "설정: 세는 칸이 종의 수만큼 있다 — 짧으면 새 종이 배열 밖으로 떨어진다")
 	for k in w.critter_count:
 		var s := int(w.critter_species[k])
 		per[s] = int(per[s]) + 1
-	t.eq(int(per[CROW]), 8, "런은 까마귀 여덟으로 연다")
+	# ⚠ **Every number below is `START × HERD` PLUS what `OPENING_POCKET` places, written out by hand.**
+	# Derived from the tables these lines would move with whatever they check; and the pocket is exactly the
+	# part a table-derived count cannot see — it is four bodies placed after the layout loop, and asserting
+	# only the product would stay green if `_place_pocket()` were deleted outright.
+	t.eq(int(per[CROW]), 11, "런은 까마귀 열하나로 연다 — 열 무리 + 주머니의 한 마리")
 	t.eq(int(per[HORSE]), 8, "그리고 말 두 무리 — 네 마리씩 여덟")
-	t.eq(int(per[Parts.Species.SQUIRREL]), 6, "다람쥐 세 무리 — 두 마리씩 여섯")
-	t.eq(int(per[Parts.Species.ELEPHANT]), 3, "코끼리는 한 무리 셋뿐이다")
-	t.eq(int(per[Parts.Species.CHEETAH]), 2, "치타 둘 — 무리를 짓지 않는다")
-	t.eq(int(per[Parts.Species.LION]), 4, "사자 두 무리 — 둘씩 넷")
+	t.eq(int(per[Parts.Species.SQUIRREL]), 9, "다람쥐 네 무리 여덟 + 주머니의 한 마리")
+	t.eq(int(per[Parts.Species.CHEETAH]), 1, "치타 하나 — 무리를 짓지 않는다")
+	t.eq(int(per[Parts.Species.MOUSE]), 20, "들쥐 세 무리 열여덟 + 주머니의 둘 — 개막에 가장 많은 몸이다")
+	t.eq(int(per[Parts.Species.RABBIT]), 8, "토끼 두 무리 — 넷씩 여덟")
 	t.eq(int(per[BOSS]), 1, "보스는 정확히 하나다 — 주기적 스폰은 보스를 굴리지 않는다")
-	t.eq(w.critter_count, 32, "합쳐서 서른두 마리다")
+	# ⚠ **Four rows are absent from the opening on purpose, and NOT because their tables are empty.**
+	# 코끼리·사자 one-shot a fresh host and 들개·멧돼지 are the 45s and 75s beats; all four carry a non-zero
+	# `SPECIES_SPAWN_WEIGHT`, so "it has a weight" and "it is on the opening field" are two different
+	# questions and this is the line that keeps them apart. Bare zeros on purpose — read as
+	# `START × HERD` this loop passes for a species whose start was turned on and whose gate was forgotten.
+	for s in [Parts.Species.ELEPHANT, Parts.Species.LION, Parts.Species.DOG, Parts.Species.BOAR]:
+		t.eq(int(per[s]), 0,
+				"%d종은 개막에 한 마리도 없다 — 시간이 지나야 생긴다 (SPECIES_UNLOCK_AT %.0f초)"
+						% [s, float(Rules.SPECIES_UNLOCK_AT[s])])
+		t.ok(int(Rules.SPECIES_SPAWN_WEIGHT[s]) > 0,
+				"그런데 가중치는 0이 아니다 — 잠금은 「언제」고 가중치는 「얼마나 자주」다")
+	t.eq(w.critter_count, 58, "합쳐서 쉰여덟 마리다 (리터럴)")
 	t.ok(w.critter_count < Rules.CRITTER_MAX,
 			"그리고 그 서른둘은 상한 아래다 — 상한에 닿으면 이후의 도착은 전부 조용히 무시된다 (%d < %d)"
 					% [w.critter_count, Rules.CRITTER_MAX])
@@ -81,12 +123,36 @@ func _c1_opening_field(t) -> void:
 			rolled_boss += 1
 	t.eq(rolled_boss, 0, "예순 번을 더 굴려도 두 번째 보스는 나오지 않는다")
 
+	# -- `setup()` reads the gate too, driven through `LockedWorld` -----------------------------------
+	# The control first: the same subclass with nothing locked has to lay out the same field as `World`,
+	# or the fixture below is measuring the subclass rather than the gate.
+	var wc := LockedWorld.new()
+	wc.setup(400)
+	t.eq(wc.critter_count, w.critter_count,
+			"설정: 아무것도 잠그지 않은 하위 클래스는 같은 필드를 편다 (%d)" % wc.critter_count)
+	var wl := LockedWorld.new()
+	wl.locked = int(Parts.Species.MOUSE)
+	wl.setup(400)
+	var mice := 0
+	for k in wl.critter_count:
+		if int(wl.critter_species[k]) == int(Parts.Species.MOUSE):
+			mice += 1
+	# The pocket is placed by hand and does NOT consult the gate — it is the run's authored first ten
+	# seconds, not a rolled species — so two survive. The eighteen from the layout do not.
+	t.eq(mice, 2,
+			"들쥐를 잠그면 개막의 열여덟 마리가 사라진다 — 주머니의 둘만 남는다 (%d)" % mice)
+	t.ok(wl.critter_count < wc.critter_count,
+			"그래서 필드도 그만큼 작다 — 시작 칸이 켜진 채 잠긴 종은 배치가 조용히 이기지 못한다 (%d < %d)"
+					% [wl.critter_count, wc.critter_count])
 
-# -- 2: `_spawn_at` writes all eight columns ------------------------------------------------------------
+
+# -- 2: `_spawn_at` writes EVERY column ------------------------------------------------------------------
 ## ⚠ **`resize()` zero-fills**, so a dropped line is not an error — it is a creature that walks the field as
 ## species CROW at force 0 with hp 0, or one whose direction is `Vector2.ZERO` and therefore never wanders
-## and is drawn at rotation 0. Every one of the eight is asserted, because "any one of six" left `dir` and
-## `counter` uncovered.
+## and is drawn at rotation 0. Every one is asserted, because "any one of six" left `dir` and `counter`
+## uncovered — and the two columns whose opening value EQUALS the zero-fill need a vacated row to be measured
+## at all, which is the second fixture at the bottom of this function. The count itself is stated once, in
+## `world.gd`'s own declaration block, and nowhere here.
 func _c2_spawn_writes_every_column(t) -> void:
 	var w := World.new()
 	w.setup(402)
@@ -120,19 +186,94 @@ func _c2_spawn_writes_every_column(t) -> void:
 	var d: Vector2 = w.critter_dir[0]
 	t.ok(absf(d.length() - 1.0) < 0.001,
 			"방향은 길이 1짜리 단위 벡터다 — 0이면 영영 안 움직이고 회전 0으로 그려진다 (%.4f)" % d.length())
+	# `INF`는 zero-fill이 아니다 — 이 값 하나만으로도 실제로 써진 것을 잰다.
+	t.eq(w.critter_hit_show[0], INF, "피격 시계는 INF로 연다 — 아직 한 번도 안 맞았다")
+	t.eq(w.critter_swing_show[0], INF, "휘두른 시계도 INF로 연다 — 아직 한 번도 안 휘둘렀다")
 
-	# Off camera, never in your lap. Ten seeds, because one spawn landing outside the zone by luck is about
-	# a two-in-three coin flip on a single seed.
+	# ⚠ **`critter_hit_dir`는 `Vector2.ZERO`로 여는데, 그것이 zero-fill과 같아서 갓 만든 세상에서는 이 줄이
+	# 빠져도 티가 안 난다.** 그래서 그 줄을 지워도 초록이었다 — 그리고 이 검사의 주석은 "`_c3`가 대신한다"고
+	# 적어 두었지만 `_c3`가 재는 것은 제거 스왑이지 스폰 쓰기가 아니다. 미룬 부류는 아무도 안 집었다.
+	# **비워진 줄에 구분되는 값을 남긴 뒤 그 줄에 새로 태어나게 한다** — `resize()`로 잡아 둔 배열은 지워지지
+	# 않으므로, 초기화가 빠지면 새 생물이 죽은 생물의 마지막 피격 방향을 그대로 물려받는다.
+	var wr := World.new()
+	wr.setup(409)
+	_silence_food(wr)
+	_clear_terrain(wr)
+	wr.critter_count = 0
+	wr.boss_index = -1
+	var doomed := wr._write_critter(CROW, wr.swarm.pos[0] + Vector2(600.0, 0.0), 10)
+	t.eq(doomed, 0, "설정: 그 생물은 0번 줄에 태어났다")
+	wr.critter_hit_dir[0] = Vector2(0.6, 0.8)
+	wr.critter_hit_show[0] = 1.23
+	wr.critter_swing_dir[0] = Vector2(0.8, -0.6)
+	wr.critter_swing_show[0] = 2.34
+	wr._remove_critter(0)
+	t.eq(wr.critter_count, 0, "설정: 그 줄이 비었다 — 배열의 값은 그대로 남아 있다")
+	t.eq(wr.critter_hit_dir[0], Vector2(0.6, 0.8), "설정: 남은 값이 실제로 zero가 아니다")
+	var born := wr._write_critter(HORSE, wr.swarm.pos[0] + Vector2(-600.0, 0.0), 30)
+	t.eq(born, 0, "설정: 새 생물이 바로 그 줄에 태어났다")
+	t.eq(wr.critter_hit_dir[0], Vector2.ZERO,
+			"갓 태어난 생물의 피격 방향은 0이다 — 죽은 생물의 마지막 방향을 물려받지 않는다 (%s)"
+					% str(wr.critter_hit_dir[0]))
+	t.eq(wr.critter_hit_show[0], INF, "그리고 피격 시계도 INF로 다시 열린다 — 1.23이 남지 않는다")
+	t.eq(wr.critter_swing_dir[0], Vector2.ZERO,
+			"갓 태어난 생물의 휘두른 방향도 0이다 — 죽은 생물의 마지막 휘두름을 물려받지 않는다 (%s)"
+					% str(wr.critter_swing_dir[0]))
+	t.eq(wr.critter_swing_show[0], INF, "그리고 휘두른 시계도 INF로 다시 열린다 — 2.34가 남지 않는다")
+
+	# -- the two distances, and they are two different rules ------------------------------------------
+	# ⚠ **This used to drive `setup()` and assert 900, and it was measuring the wrong rule the whole time.**
+	# `CRITTER_SPAWN_MIN_DIST` is about ARRIVALS — a creature that pops into existence in your lap — and
+	# `setup()` places a field that was simply always there. Reading the opening layout through the arrival
+	# constant is what kept every creature 900px off the opening camera at every seed, forever, and bumping
+	# this literal to the arrival number would have left the check green while still measuring `setup()`.
+	#
+	# So: arrivals are driven through `_spawn_critter()`, and the opening gets its own check below.
 	var worst := INF
 	for n in 10:
 		var w3 := World.new()
 		w3.setup(403 + n)
-		for k in w3.critter_count:
-			worst = minf(worst, w3.critter_pos[k].distance_to(w3.swarm.pos[0]))
-	t.ok(worst >= 900.0, "열 판을 돌려도 스폰은 화면 밖에서 일어난다 (%.0f, 리터럴 900)" % worst)
+		w3.critter_count = 0
+		w3.boss_index = -1
+		# Eight arrivals a seed = 80 herds. **A herd, not a body**: a member is placed within
+		# `SPAWN_HERD_SPREAD` of the anchor without re-testing, so a member is the one that lands short.
+		for _r in 8:
+			w3._spawn_critter()
+			for k in w3.critter_count:
+				worst = minf(worst, w3.critter_pos[k].distance_to(w3.swarm.pos[0]))
+			w3.critter_count = 0
+	# 1450 as a LITERAL. Read back off the constant this passes at any value including zero.
+	t.ok(worst >= 950.0,
+			"열 판 × 여덟 무리를 굴려도 도착은 화면 밖에서 일어난다 (%.0f, 리터럴 950)" % worst)
+	# **And the rejection sampler actually reaches that distance**, which is a separate claim from the
+	# constant being large. `_spawn_at` gives up after `PLACE_TRIES` and takes the last rejected sample, so
+	# at the arrival distance the legal area is a fraction of the field for a herd anchor and twelve tries fell through on
+	# **7.6% of herd bodies** — measured. The count above is what says forty tries closed it; this line
+	# names the number so the next person who lowers `PLACE_TRIES` sees why it is 40.
+	t.ok(Rules.PLACE_TRIES >= 40,
+			"그리고 뽑기가 그 거리에 실제로 닿는다 — 시도가 40 미만이면 무리는 화면 안에서 태어난다 (%d)"
+					% Rules.PLACE_TRIES)
+
+	# The opening field is the OTHER rule, and it is the one the player was complaining about.
+	var opening := INF
+	for n in 10:
+		var w4 := World.new()
+		w4.setup(423 + n)
+		for k in w4.critter_count:
+			if k == w4.boss_index:
+				continue
+			opening = minf(opening, w4.critter_pos[k].distance_to(w4.swarm.pos[0]))
+	t.ok(opening >= 260.0,
+			"개막의 필드는 무릎 위에서 시작하지 않는다 (%.0f, 리터럴 260)" % opening)
+	# ⚠ **The upper bound is the whole point and it is what nothing measured for two plans.** The opening
+	# camera's half-diagonal is 700px; a floor alone is satisfied by an empty screen, which is exactly what
+	# shipped. 700 as a literal — read back off `Look.ZOOM_NEAR` it moves with whatever it is checking.
+	t.ok(opening <= 700.0,
+			"그리고 첫 화면 안에 뭔가가 서 있다 — 700px는 개막 카메라의 반대각선이다 (%.0f, 리터럴 700)"
+					% opening)
 
 
-# -- 3: the removal swap, all eight columns and `boss_index` ---------------------------------------------
+# -- 3: the removal swap, EVERY column and `boss_index` --------------------------------------------------
 ## ⚠ **The row removed is NOT the last one.** `_remove_critter(k)` only enters its swap branch when
 ## `k != last`; removing the only creature leaves every missing line green.
 ##
@@ -162,6 +303,13 @@ func _c3_removal_swap(t) -> void:
 	w.critter_flees[b] = 1
 	w.critter_atk_cd[b] = 0.75
 	w.critter_counter[b] = 1.25
+	# ⚠ **`critter_hit_dir`는 zero-fill과 같은 `Vector2.ZERO`로 열린다.** `flees`의 주석이 이미 말한 그
+	# 함정이다 — 목적지 줄이 이미 들고 있는 값을 기대하면 스왑이 빠져도 초록이다. `0.42`와 `(-1,0)`은 그
+	# 어떤 줄의 zero-fill도 아닌, 손으로 고른 값이다.
+	w.critter_hit_show[b] = 0.42
+	w.critter_hit_dir[b] = Vector2(-1.0, 0.0)
+	w.critter_swing_show[b] = 0.31
+	w.critter_swing_dir[b] = Vector2(0.0, -1.0)
 
 	w._remove_critter(0)
 	t.eq(w.critter_count, 2, "가운데가 아니라 첫 줄을 지웠고 두 줄이 남았다")
@@ -173,6 +321,13 @@ func _c3_removal_swap(t) -> void:
 	t.eq(int(w.critter_flees[0]), 1, "성향도 제 것이다 — 목적지가 이미 들고 있던 0이 아니다")
 	t.eq(w.critter_atk_cd[0], 0.75, "공격 시계도 제 것이다")
 	t.eq(w.critter_counter[0], 1.25, "반격 시계도 제 것이다")
+	# `t.eq`가 아니라 오차 비교다: `critter_hit_show`는 `PackedFloat32Array`라 0.42는 float64 리터럴과
+	# 정확히 같지 않다 — 정밀도 손실이지 스왑의 결함이 아니다.
+	t.ok(absf(w.critter_hit_show[0] - 0.42) < 0.0001, "피격 시계도 제 것이다 (%.6f)" % w.critter_hit_show[0])
+	t.eq(w.critter_hit_dir[0], Vector2(-1.0, 0.0), "피격 방향도 제 것이다")
+	t.ok(absf(w.critter_swing_show[0] - 0.31) < 0.0001,
+			"휘두른 시계도 제 것이다 (%.6f)" % w.critter_swing_show[0])
+	t.eq(w.critter_swing_dir[0], Vector2(0.0, -1.0), "휘두른 방향도 제 것이다")
 	t.eq(w.boss_index, 0, "그리고 boss_index가 따라 내려왔다 — 열이 아니라 인덱스라 따로 고쳐야 한다")
 
 
@@ -189,11 +344,28 @@ func _c4_disposition(t) -> void:
 		var s := int(w.critter_species[k])
 		var right: bool = int(w.critter_flees[k]) == int(Rules.SPECIES_FLEES[s])
 		seen[s] = bool(seen.get(s, true)) and right
-	t.eq(seen.size(), 7, "설정: 일곱 종이 다 필드에 있다")
+	# ⚠ **Seven of ELEVEN, and WHICH seven is the assertion — the count alone is not.** The set changed
+	# under this check without the number moving: 코끼리 and 사자 left the opening field and 들쥐 and 토끼
+	# took their places, six either way. A check on `seen.size()` alone was green through that swap, which
+	# is the whole of "a check that reads only final state cannot measure what changed".
+	var opens := [CROW, HORSE, BOSS, int(Parts.Species.SQUIRREL), int(Parts.Species.CHEETAH),
+			int(Parts.Species.MOUSE), int(Parts.Species.RABBIT)]
+	t.eq(opens.size(), 7, "설정: 개막에 있어야 할 종을 일곱으로 못 박는다 (리터럴)")
+	for s: int in opens:
+		t.ok(seen.has(s), "%d종은 개막의 필드에 실제로 있다" % s)
+	t.eq(seen.size(), opens.size(), "그리고 그 일곱 말고는 아무도 없다 %s" % str(seen.keys()))
+	# The other four, by the two tables that keep them out — a start of 0, or a gate above 0.
+	for s in [int(Parts.Species.ELEPHANT), int(Parts.Species.LION), int(Parts.Species.DOG),
+			int(Parts.Species.BOAR)]:
+		t.ok(not seen.has(s), "%d종은 개막에 없다" % s)
+		t.eq(int(Rules.SPECIES_START[s]), 0, "그 종의 시작 칸은 0이고")
+		t.ok(float(Rules.SPECIES_UNLOCK_AT[s]) > 0.0,
+				"잠금도 0초가 아니다 — 둘 중 하나만이면 나머지 하나가 조용히 뒤집을 수 있다 (%.0f초)"
+						% float(Rules.SPECIES_UNLOCK_AT[s]))
 	var all_right := true
 	for s: int in seen:
 		all_right = all_right and bool(seen[s])
-	t.ok(all_right, "일곱 종 모두 제 종의 성향을 들고 태어난다")
+	t.ok(all_right, "필드에 있는 일곱 종 모두 제 종의 성향을 들고 태어난다")
 
 	var w2 := World.new()
 	w2.setup(415)
@@ -256,7 +428,13 @@ func _c5_the_horse_flees_a_clone(t) -> void:
 ##
 ## ⚠ **`_step_corpses` is driven directly.** Two hundred real meals through `world.step()` is ~21,000
 ## frames; seeding `progress` one frame short is the same measurement at a two-hundredth of the cost.
+## ⚠ **§C floors every corpse at three bites regardless of `corpse_progress`.** One `_step_corpses()` call
+## used to finish all twenty at `progress = 0.999`; now it only closes their first bite, so each round loops
+## to `corpse_count == 0` instead. `_add_corpse()` replaces the hand-set rows — it is the production path and
+## sets `corpse_bites_left` for free, and `progress = 0.999` is applied straight after to keep the first bite
+## fast the same way the old fixture kept the whole meal fast.
 func _c21_drop_rate(t) -> void:
+	const BOUND := 200
 	var trials := 0
 	var wins := 0
 	for n in 10:
@@ -266,22 +444,23 @@ func _c21_drop_rate(t) -> void:
 		_clear_terrain(w)
 		w.critter_count = 0
 		w.boss_index = -1
-		w.corpse_count = 20
 		for i in 20:
 			var at := Vector2(200.0 + float(i) * 150.0, 500.0)
 			var c := w.swarm.add_clone(0, 4)
 			# Written straight into `pos`, not through `place()`: this fixture is about the roll and a body
 			# nudged off its corpse by anything would simply not eat.
 			w.swarm.pos[c] = at
-			w.corpse_pos[i] = at
-			w.corpse_species[i] = CROW
-			w.corpse_force[i] = 10
+			w._add_corpse(at, CROW, 10)
 			w.corpse_progress[i] = 0.999
 		if n == 0:
 			t.eq(w.swarm.count, 21, "설정: 분신 스무 마리를 각자 제 시체 위에 세웠다")
-		w._step_corpses(DT)
+			t.eq(w.corpse_bites_left[0], 3, "설정: 까마귀 시체는 세 입이다")
+		var m := 0
+		while w.corpse_count > 0 and m < BOUND:
+			w._step_corpses(DT)
+			m += 1
 		if n == 0:
-			t.eq(w.corpse_count, 0, "설정: 그 스무 구가 한 프레임에 전부 끝났다")
+			t.eq(w.corpse_count, 0, "설정: 그 스무 구가 (세 입씩) 전부 끝났다 (%d프레임)" % m)
 		for i in range(1, w.swarm.count):
 			trials += 1
 			if w.swarm.worn[i] >= 0:
@@ -444,6 +623,401 @@ func _c30_size_never_inverts(t) -> void:
 			"종이 없으면 반지름은 0이다 — -1은 GDScript에서 마지막 줄을 읽는 합법적인 인덱스다")
 
 
+# -- 31: FOURTEEN parallel tables, each one measured against a literal -----------------------------------
+## ⚠ **A table one row short is the silent failure of the whole species system.** The read is an
+## out-of-range index on a `const` Array, which GDScript throws at RUNTIME inside `_step_critters` or, for
+## `SPECIES_COLOR`, inside `_creature()` and `Hud._minimap_marks()` at draw time — never at parse time. So
+## the run dies on the frame the new species first walks or is first painted, and every check in this round
+## that does not happen to spawn that species stays green.
+##
+## Three things this does that a looser version would not:
+##
+## - **Each table is compared to the literal `ROWS`, never to another table's length.** Arrays compared only
+##   to each other pass on a set where every one of them is short — the same trap `net_parts` names.
+## - **The hand-written list is checked against a SCAN of the constant map**, so a twelfth `SPECIES_*` table
+##   added to `rules.gd` and forgotten here goes red by name rather than disappearing.
+## - **The scanner is inverted against synthetic tables that must fail IT**, because a scan that finds
+##   nothing at all reports a perfectly clean set — the shape of a loop whose condition is false from the
+##   start.
+##
+## `SPECIES_COLOR` had **no length assertion anywhere for two plans**, which is why it is in here and not
+## only in the view's own net: the pixel side and the rule side are one table's worth of rows.
+func _c31_every_species_table_is_eleven_rows(t) -> void:
+	# -- the enum itself, member by member. `NONE` is a member and is not a species. --
+	t.eq(Parts.Species.size(), ROWS + 1,
+			"Species는 종 열하나 + NONE 하나다 — Species.size()를 종의 수로 읽으면 안 된다 (%d)"
+					% Parts.Species.size())
+	t.eq(int(Parts.Species.NONE), -1, "NONE은 -1이다 — GDScript에서 합법적인 인덱스라 마지막 줄을 읽는다")
+	# ⚠ **Every index as a literal.** `BOSS` moving off 2 silently re-points fourteen tables at once, and a
+	# renumbering that shifted them all together would keep every "the tables agree" check green.
+	var index := {"CROW": 0, "HORSE": 1, "BOSS": 2, "SQUIRREL": 3, "ELEPHANT": 4, "CHEETAH": 5,
+			"LION": 6, "MOUSE": 7, "RABBIT": 8, "DOG": 9, "BOAR": 10}
+	t.eq(index.size(), ROWS, "설정: 이름을 붙여 세운 종이 열하나다 — 분모를 먼저 못 박는다")
+	var members: Dictionary = Parts.Species
+	for name: String in index:
+		t.ok(members.has(name), "Species.%s가 실제로 있다" % name)
+		t.eq(int(members.get(name, -99)), int(index[name]),
+				"그리고 그 번호는 %d다 (리터럴) — 뒤로만 자란다" % int(index[name]))
+
+	# -- the twelve tables in `rules.gd`, by name --
+	var tables := ["SPECIES_RADIUS", "SPECIES_FORCE_MIN", "SPECIES_FORCE_MAX", "SPECIES_SPEED_MUL",
+			"SPECIES_FLEES", "SPECIES_REACH_BONUS", "SPECIES_WANDER", "SPECIES_HUNTS", "SPECIES_HERD",
+			"SPECIES_START", "SPECIES_SPAWN_WEIGHT", "SPECIES_UNLOCK_AT"]
+	t.eq(tables.size(), 12, "설정: rules.gd의 종별 표는 열두 개다 — 손으로 세운 목록의 길이를 먼저 못 박는다")
+	var consts: Dictionary = Rules.new().get_script().get_script_constant_map()
+	t.ok(consts.has("SPECIES_RADIUS"), "설정: 상수 계기가 실제로 Rules를 읽었다 — 비면 아래가 저절로 통과한다")
+	for name: String in tables:
+		t.ok(consts.has(name), "Rules.%s가 실제로 있다" % name)
+		var arr: Array = consts[name] if consts.has(name) else []
+		t.eq(arr.size(), ROWS, "Rules.%s는 열한 줄이다 (리터럴 11)" % name)
+
+	# The scan that closes the class: a table added to `rules.gd` and not added to `tables` above.
+	var scanned := _species_tables(consts)
+	t.eq(scanned.size(), tables.size(),
+			"rules.gd가 선언한 SPECIES_ 배열의 수가 손으로 적은 목록과 같다 (%d) %s"
+					% [scanned.size(), str(scanned)])
+	t.eq(_short_species_rows(consts).size(), 0,
+			"그리고 그중 열한 줄이 아닌 것은 하나도 없다 %s" % str(_short_species_rows(consts)))
+
+	# -- the two tables that live outside `rules.gd` and are just as parallel --
+	t.eq(Parts.SPECIES_NAME.size(), ROWS,
+			"Parts.SPECIES_NAME도 열한 줄이다 — net_parts는 이 배열을 이름으로 건너뛰므로 여기 말고는 아무도 안 잰다")
+	for s in ROWS:
+		t.ok(String(Parts.SPECIES_NAME[s]) != "",
+				"%d종의 이름은 빈 문자열이 아니다 — 빈 칸은 엔딩의 먹은 종 줄에 빈 항목으로 찍힌다" % s)
+	t.eq(FieldView.SPECIES_COLOR.size(), ROWS,
+			"FieldView.SPECIES_COLOR도 열한 줄이다 — 짧으면 그리는 순간 인덱스 밖이고, 두 그림 파일이 같이 죽는다")
+	# ⚠ **`look.gd` grew a species-keyed table with §6's gestures**, and it is the same trap the two above
+	# are: read at DRAW time, out of range at draw time, never at parse time. The `SPECIES_` scan below is
+	# pointed at `Look`'s own constant map as well, so a second one added there tomorrow is not outside every
+	# check the way `SPECIES_COLOR` was for two plans.
+	t.eq(Look.SPECIES_LUNGE_MUL.size(), ROWS,
+			"Look.SPECIES_LUNGE_MUL도 열한 줄이다 — 짧으면 종이 하나 늘어난 날 그리는 순간 인덱스 밖이다")
+	var look_consts: Dictionary = Look.new().get_script().get_script_constant_map()
+	t.ok(look_consts.has("SPECIES_LUNGE_MUL"), "설정: 상수 계기가 실제로 Look을 읽었다 — 비면 아래가 저절로 통과한다")
+	var look_tables := _species_tables(look_consts)
+	t.eq(look_tables.size(), 1,
+			"look.gd가 선언한 SPECIES_ 배열은 하나다 (리터럴) %s" % str(look_tables))
+	t.eq(_short_species_rows(look_consts).size(), 0,
+			"그리고 그것도 열한 줄이다 %s" % str(_short_species_rows(look_consts)))
+
+	# ⚠ **`parts.gd` and `field_view.gd` were named by hand and NOT scanned, which is the shape CLAUDE.md
+	# closed for `net_draw_leaf`: naming a table fixes the day it is done and nothing after it.** A second
+	# `SPECIES_` array added to either file tomorrow would have been outside every check in the round, in
+	# exactly the way `SPECIES_COLOR` itself was for two plans. Both constant maps join the same scan.
+	var parts_consts: Dictionary = Parts.new().get_script().get_script_constant_map()
+	t.ok(parts_consts.has("SPECIES_NAME"), "설정: 상수 계기가 실제로 Parts를 읽었다 — 비면 아래가 저절로 통과한다")
+	t.eq(_species_tables(parts_consts).size(), 1,
+			"parts.gd가 선언한 SPECIES_ 배열은 하나다 (리터럴) %s" % str(_species_tables(parts_consts)))
+	t.eq(_short_species_rows(parts_consts).size(), 0,
+			"그리고 그것도 열한 줄이다 %s" % str(_short_species_rows(parts_consts)))
+	# ⚠ **`FieldView` is a `Node`, so the instance has to be freed by hand** — a `RefCounted` like `Rules`
+	# or `Parts` drops on its own and this one does not: left dangling it prints
+	# "1 resources still in use at exit" on stderr and the wrapper's silence check reds the whole round.
+	var view_probe := FieldView.new()
+	var view_consts: Dictionary = view_probe.get_script().get_script_constant_map()
+	view_probe.free()
+	t.ok(view_consts.has("SPECIES_COLOR"), "설정: 상수 계기가 실제로 FieldView를 읽었다 — 비면 아래가 저절로 통과한다")
+	t.eq(_species_tables(view_consts).size(), 1,
+			"field_view.gd가 선언한 SPECIES_ 배열은 하나다 (리터럴) %s" % str(_species_tables(view_consts)))
+	t.eq(_short_species_rows(view_consts).size(), 0,
+			"그리고 그것도 열한 줄이다 %s" % str(_short_species_rows(view_consts)))
+
+	# **Invert the instrument, not only the subject.** Both scanners are run against tables built to fail
+	# them, or a scanner that returned an empty array would bless every short row above.
+	var synthetic := {"SPECIES_ONE": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11], "SPECIES_TWO": [1, 2],
+			"NOT_A_SPECIES_TABLE": [1], "SPECIES_NOT_AN_ARRAY": 11}
+	var found := _species_tables(synthetic)
+	t.eq(found.size(), 2, "SPECIES_로 시작하는 배열만 스캔에 잡힌다 (계기 자가 점검) %s" % str(found))
+	var shorts := _short_species_rows(synthetic)
+	t.ok(shorts.size() == 1 and String(shorts[0]) == "SPECIES_TWO",
+			"그리고 짧은 줄은 이름으로 나온다 — 스캐너가 빈 배열을 돌려주고 있지 않다 (계기 자가 점검) %s"
+					% str(shorts))
+
+
+## Every `SPECIES_`-prefixed array constant in a constant map, sorted so the report is stable.
+func _species_tables(consts: Dictionary) -> Array:
+	var out: Array = []
+	for key: Variant in consts:
+		if not String(key).begins_with("SPECIES_"):
+			continue
+		if typeof(consts[key]) != TYPE_ARRAY:
+			continue
+		out.append(String(key))
+	out.sort()
+	return out
+
+
+func _short_species_rows(consts: Dictionary) -> Array:
+	var out: Array = []
+	for name: String in _species_tables(consts):
+		if (consts[name] as Array).size() != ROWS:
+			out.append(name)
+	return out
+
+
+# -- 32: every species, one at a time — it is born, it walks, and it can be killed -------------------------
+## ⚠ **Driven over the table's own length, never over a list of names.** Four species were added and the
+## whole risk is that one of them is a set of rows nothing ever executes: a `SPECIES_HERD` that spawns
+## nobody, a `SPECIES_SPEED_MUL` that walks nowhere, an hp of 0 that dies to the first frame. Naming the
+## four here would close them and leave the twelfth open the day it lands — this loop reddens for a row
+## added to the tables and never exercised.
+##
+## Each fixture uses `SPECIES_FORCE_MIN`, so `_radius_of`'s ramp is exactly 0 and the radius is the species'
+## own literal — the same trick `net_overlap._o5` uses, and it is what lets the radius be asserted at all.
+##
+## ⚠ **The host is parked in the far corner, outside `CRITTER_SENSE`.** With a body in sight a fleeing
+## species runs, a hunter closes and the crow's stand-still branch never runs — three different walks, and
+## the one thing under test here is what a species does with NOTHING in sight, which is `SPECIES_WANDER`.
+func _c32_every_species_spawns_walks_and_dies(t) -> void:
+	const FRAMES := 120
+	var walkers := 0
+	var standers := 0
+	for s in ROWS:
+		# -- born: a herd is `SPECIES_HERD` bodies through the production path --
+		var wh := World.new()
+		wh.setup(470 + s)
+		_silence_food(wh)
+		_clear_terrain(wh)
+		wh.critter_count = 0
+		wh.boss_index = -1
+		var born := wh._spawn_herd(s)
+		t.eq(born, int(Rules.SPECIES_HERD[s]),
+				"%d종 한 무리는 SPECIES_HERD만큼 실제로 태어난다 (%d)" % [s, born])
+		t.eq(wh.critter_count, born, "그리고 그 수가 표의 셈이다")
+		var f := int(wh.critter_force[0])
+		t.ok(f >= int(Rules.SPECIES_FORCE_MIN[s]) and f <= int(Rules.SPECIES_FORCE_MAX[s]),
+				"%d종의 힘은 제 범위 안에서 굴려진다 (%d ∈ [%d, %d])"
+						% [s, f, int(Rules.SPECIES_FORCE_MIN[s]), int(Rules.SPECIES_FORCE_MAX[s])])
+		t.eq(int(wh.critter_hp[0]), f * Rules.HP_PER_FORCE, "%d종의 체력은 제 힘 × 3이다" % s)
+		t.ok(int(wh.critter_hp[0]) > 0, "그리고 0보다 크다 — 0이면 첫 프레임에 시체다")
+		t.eq(int(wh.critter_flees[0]), int(Rules.SPECIES_FLEES[s]), "%d종은 제 성향으로 태어난다" % s)
+
+		# -- walks: its own speed, nothing in sight --
+		var w := World.new()
+		w.setup(480 + s)
+		_silence_food(w)
+		_clear_terrain(w)
+		w.swarm.pos[0] = Vector2(3800.0, 2100.0)
+		w.critter_count = 0
+		w.boss_index = -1
+		var at := Vector2(1500.0, 1100.0)
+		w._write_critter(s, at, int(Rules.SPECIES_FORCE_MIN[s]))
+		t.ok(absf(w.critter_radius(0) - float(Rules.SPECIES_RADIUS[s])) < 0.001,
+				"%d종은 제 최소 힘에서 반지름이 제 종의 수 그대로다 (%.3f)" % [s, w.critter_radius(0)])
+		t.ok(at.distance_to(w.swarm.pos[0]) > Rules.CRITTER_SENSE,
+				"설정: 호스트는 감지 밖이다 — 이 검사는 「아무것도 안 보일 때」에 관한 것이다")
+		# **Path length, not displacement.** A wanderer turns, so a straight-line measurement is a function
+		# of how the turns happened to cancel; the path is `speed × time` exactly, whatever it turned.
+		var path := 0.0
+		var prev: Vector2 = w.critter_pos[0]
+		for _n in FRAMES:
+			w._step_critters(DT)
+			path += w.critter_pos[0].distance_to(prev)
+			prev = w.critter_pos[0]
+		var want := float(Rules.SPECIES_SPEED_MUL[s]) * Rules.HOST_SPEED * (float(FRAMES) * DT)
+		if int(Rules.SPECIES_WANDER[s]) == 1:
+			walkers += 1
+			t.ok(absf(path - want) < 0.5,
+					"%d종은 2초 동안 제 걸음만큼 걷는다 (%.2fpx, 기대 %.2f) — 종의 속도가 실제로 읽힌다"
+							% [s, path, want])
+		else:
+			standers += 1
+			t.ok(path < 0.001,
+					"%d종은 아무것도 안 보이면 한 발짝도 안 걷는다 (%.4f) — 걸어가서 치는 것이다" % [s, path])
+
+		# -- dies: exactly its own hp, and it leaves a corpse of itself --
+		var hp := int(w.critter_hp[0])
+		t.ok(not w._damage_critter(0, hp - 1),
+				"%d종은 제 체력에서 하나 모자란 한 방으로는 안 죽는다 — 아래가 공짜로 통과하지 않는다" % s)
+		t.ok(w._damage_critter(0, 1), "그리고 마지막 하나에 죽는다")
+		t.eq(w.critter_count, 0, "%d종의 줄이 실제로 빠졌다" % s)
+		t.eq(w.corpse_count, 1, "그리고 시체가 하나 남았다 — 죽는 것 자체는 아무것도 안 준다")
+		t.eq(int(w.corpse_species[0]), s, "그 시체는 제 종의 것이다")
+
+	# The two counters, so a loop that silently took one branch for every row cannot pass. `SPECIES_WANDER`
+	# is 0 for the crow alone, and that is the whole of "the common creature is a thing you walk up to".
+	t.eq(standers, 1, "열한 종 중 제자리에 서는 것은 하나뿐이다 (%d)" % standers)
+	t.eq(walkers, ROWS - 1, "나머지 열은 다 걷는다 — 한 갈래만 탄 반복문이 아니다 (%d)" % walkers)
+	t.eq(int(Rules.SPECIES_WANDER[CROW]), 0, "그리고 그 하나는 까마귀다")
+
+
+# -- 33: the opening pocket — four bodies PLACED, not rolled ---------------------------------------------
+## ⚠ **The uniform layout can only make the opening likely, and the first ten seconds is not a place to
+## gamble.** `SPECIES_START`'s own comment already claims the opening is "the same SHAPE every run"; four
+## creatures at fixed distances from the host is what makes that true near the host, and nothing else in
+## `setup()` can.
+##
+## **Driven, never grepped, and never counted through `setup()` alone.** `_c1` counts heads by species, and
+## the pocket's contribution to those counts is four — so a `_place_pocket()` that placed the right species
+## at wildly wrong distances, or all four on top of each other, is invisible there. This drives the function
+## on cleared terrain so the placement is the only thing between the table and the answer.
+func _c33_the_opening_pocket(t) -> void:
+	var rows: Array = Rules.OPENING_POCKET
+	t.eq(rows.size(), 4, "설정: 주머니는 네 줄이다 (리터럴) — 분모를 먼저 못 박는다")
+	# The table's species, by NAME. Written as bare indices in `rules.gd` because a const cannot index
+	# another script's const, so this is the only place the two are tied together.
+	t.eq(int(rows[0][0]), int(Parts.Species.MOUSE), "첫 줄은 들쥐다 — 한 입에 죽고 3만 물어간다")
+	t.eq(int(rows[1][0]), int(Parts.Species.MOUSE), "둘째도 들쥐다")
+	t.eq(int(rows[2][0]), int(Parts.Species.CROW),
+			"셋째는 까마귀다 — 주머니에서 카드 판을 여는 유일한 몸이다")
+	t.eq(int(rows[3][0]), int(Parts.Species.SQUIRREL), "넷째는 다람쥐다 — 쫓아가서 잡는 것")
+	t.ok(float(rows[2][1]) < float(rows[3][1]),
+			"그리고 서 있는 까마귀가 도망치는 다람쥐보다 가깝다 — 순서를 뒤집으면 두 번째 막이 빈 풀밭 15초다")
+
+	# -- driven, on cleared ground so `push_out` cannot move anything --
+	var w := World.new()
+	w.setup(468)
+	_silence_food(w)
+	_clear_terrain(w)
+	var host: Vector2 = w.swarm.pos[0]
+	w.critter_count = 0
+	w.boss_index = -1
+	w._place_pocket()
+	t.eq(w.critter_count, rows.size(), "네 마리가 실제로 놓인다")
+	var angles: Array = []
+	for i in rows.size():
+		var p: Vector2 = w.critter_pos[i]
+		t.eq(int(w.critter_species[i]), int(rows[i][0]), "%d번째 몸은 표가 말한 종이다" % i)
+		t.ok(absf(host.distance_to(p) - float(rows[i][1])) < 0.01,
+				"그리고 표가 말한 거리에 선다 (%.1f, 기대 %.1f)" % [host.distance_to(p), float(rows[i][1])])
+		angles.append((p - host).angle())
+	# ⚠ **Spread apart, or four bodies at four distances stacked on one bearing is a single-file queue.**
+	# `TAU / 4` between consecutive rows, as a literal.
+	for i in rows.size() - 1:
+		var gap: float = fposmod(float(angles[i + 1]) - float(angles[i]), TAU)
+		t.ok(absf(gap - TAU * 0.25) < 0.001,
+				"이웃한 둘은 정확히 90도 벌어져 있다 (%.4f rad)" % gap)
+
+	# -- the same SHAPE every run, in a different arrangement --
+	# Two seeds: the distances are identical and the bearings are not. Either half alone is satisfied by a
+	# pocket that is entirely fixed, or by one that is entirely rolled.
+	var w2 := World.new()
+	w2.setup(469)
+	_silence_food(w2)
+	_clear_terrain(w2)
+	w2.critter_count = 0
+	w2.boss_index = -1
+	w2._place_pocket()
+	var same_dist := true
+	for i in rows.size():
+		same_dist = same_dist and absf(
+				w2.swarm.pos[0].distance_to(w2.critter_pos[i]) - float(rows[i][1])) < 0.01
+	t.ok(same_dist, "다른 씨앗에서도 거리는 그대로다 — 개막의 모양은 매 판 같다")
+	t.ok(absf(float(angles[0]) - (w2.critter_pos[0] - w2.swarm.pos[0]).angle()) > 0.001,
+			"그런데 방향은 다르다 — 매 판 같은 자리에 같은 것이 서 있지는 않다")
+
+	t.ok(float(rows[0][1]) >= Rules.CRITTER_START_MIN_DIST,
+			"그리고 가장 가까운 줄도 개막의 바닥 거리 밖이다 — 무릎 위에서 시작하지 않는다")
+	await _c33b_the_opening_screen_is_not_empty(t, rows)
+
+
+## **The pocket's actual purpose, driven off the camera the game actually has.**
+##
+## ⚠ **This block used to compare the table against a literal `700.0`, call it 「개막 카메라의 반대각선」 and
+## label every row 「걸어갈 필요 없이 보인다」 — and both halves were false.** `project.godot` stretches a
+## **1280x720 viewport** into a 1920x1080 window (`canvas_items`), so the window's size is not the world's:
+## at `Look.ZOOM_NEAR` 1.6 the opening camera shows **800x450 world pixels** — half-extents 400x225,
+## half-diagonal **459** — and 700 is exactly what that arithmetic gives when the window override is
+## mistaken for the viewport. Measured against the real rect over sixty seeds, 까마귀 (520px) and 다람쥐
+## (640px) were inside it in **zero** of them while that line passed all four rows. `tools/look/probe_run.gd`
+## records the same 1.5x mistake living in `probe_field.gd`.
+##
+## ⇒ **A bound on a column cannot say this and a driven rect can.** The claim is the pocket's own reason to
+## exist — 「개막이 도박이 아니다」 — so it is measured as 「every seed opens with something already on
+## screen」 over many seeds, through `main.gd`'s own `_true_camera_rect()`. Pushing any row out of the
+## camera moves the count; a literal could not see it.
+##
+## ⚠ **The rows are read off a freshly re-placed pocket, never off `critter_count - 5`.** `setup()` puts the
+## boss down after the pocket, so an index counted back from the end is one row of arithmetic away from
+## measuring the boss instead — which is what the throwaway that found this bug did on its first run.
+func _c33b_the_opening_screen_is_not_empty(t, rows: Array) -> void:
+	var m: Node = load("res://src/shell/main.gd").new()
+	t.root.add_child(m)
+	# ⚠ **Two frames, because `_ready()` does not run inside `add_child` under this runner** — every fixture
+	# in `net_shell` pumps the same two before touching `title`, and without them `m.title` is null.
+	await t.pump_frames(2)
+	# And the shell's own clock is switched off from here: nothing below wants a frame, and a shell left
+	# running would step the run between the restart and the read.
+	m.set_process(false)
+	m.set_process_unhandled_key_input(false)
+	# The real path in: `_bind_world()` snaps `_cam_base` to the host and `_zoom` to `ZOOM_NEAR`, so the
+	# opening camera is centred on the host and no field is poked by hand.
+	m.title.start_pressed.emit()
+	var box: Rect2 = m._true_camera_rect()
+	t.ok(absf(box.size.x - 800.0) < 2.0 and absf(box.size.y - 450.0) < 2.0,
+			"개막 카메라는 800x450 월드픽셀이다 (리터럴) — 1920x1080은 창이지 뷰포트가 아니다 %s"
+					% str(box.size))
+	t.ok(box.size.length() * 0.5 < 500.0,
+			"그래서 반대각선은 459px 남짓이고, 이 검사가 예전에 들고 있던 700px이 아니다 (%.0f)"
+					% (box.size.length() * 0.5))
+	t.ok(box.get_center().distance_to(m.run.world.swarm.pos[0]) < 1.0,
+			"설정: 그 사각형은 호스트를 한가운데 두고 있다 — 아니면 아래 셈은 엉뚱한 땅을 잰다")
+
+	# ⚠ **Two lines that exist because this check was inverted against ITSELF and failed twice.**
+	# `seeds := 0` made every `t.eq(count, seeds)` below read `0 == 0` and the whole block passed with the
+	# loop never entered — CLAUDE.md's "a loop whose condition is false from the start never runs the check".
+	# And swapping the loop's `_true_camera_rect()` for the padded `_camera_rect()` also stayed green,
+	# because a rectangle 20% too big only makes "something is on screen" easier: the pinned rect above
+	# proves nothing about the rect the loop actually used, so the loop's own is counted and compared.
+	var seeds := 24
+	t.ok(seeds >= 20, "설정: 판 수는 스무 판 이상이다 (%d) — 0판이면 아래 세 줄이 저절로 통과한다" % seeds)
+	var field_not_empty := 0
+	var pocket_not_empty := 0
+	var same_rect := 0
+	var per_row := [0, 0, 0, 0]
+	for n in seeds:
+		m.run.restart(3100 + n)
+		m._bind_world()
+		var w3: World = m.run.world
+		var b: Rect2 = m._true_camera_rect()
+		if b.size.is_equal_approx(box.size) and b.get_center().distance_to(w3.swarm.pos[0]) < 1.0:
+			same_rect += 1
+		for k in w3.critter_count:
+			if b.has_point(w3.critter_pos[k]):
+				field_not_empty += 1
+				break
+		# The pocket alone, re-placed onto row 0 so the indices are the table's own.
+		w3.critter_count = 0
+		w3.boss_index = -1
+		w3._place_pocket()
+		var seen := 0
+		for i in w3.critter_count:
+			if b.has_point(w3.critter_pos[i]):
+				seen += 1
+				per_row[i] = int(per_row[i]) + 1
+		if seen > 0:
+			pocket_not_empty += 1
+	t.eq(same_rect, seeds,
+			"매 판 쓴 사각형은 위에서 못 박은 그 800x450이고, 매 판 호스트를 가운데 둔다 (%d/%d)"
+					% [same_rect, seeds])
+	t.eq(field_not_empty, seeds,
+			"%d판을 돌려도 개막 화면이 빈 판은 없다 — 사용자의 「그냥 몬스터가 내 주변에 없어」가 이 줄이다"
+					% seeds)
+	t.eq(pocket_not_empty, seeds,
+			"그리고 그중 한 마리는 언제나 주머니의 것이다 — 균일 배치에 맡기지 않는 이유가 그것이다")
+	# ⚠ **Deliberately a floor and not an equality.** 520px and 640px are outside the camera at every
+	# bearing today, and pinning that as `== 0` would go red the day someone pulls them in, which is a
+	# repair and not a regression. What must never happen is the two near rows going the same way.
+	t.ok(int(per_row[0]) + int(per_row[1]) >= seeds,
+			"가까운 두 줄이 화면에 든 횟수를 합치면 판 수 이상이다 — 걸어가야 보이는 개막이 아니다 (%d/%d) %s"
+					% [int(per_row[0]) + int(per_row[1]), seeds, str(per_row)])
+	# ⚠ **The last two rows get a shape check and NOT a place on the screen.** 520px and 640px are outside
+	# the camera at every bearing today; pinning that as a fact would go red the day someone pulls them in,
+	# which is a repair and not a regression. What the pocket owes is a SEQUENCE — near enough to see, then
+	# a short walk — so that is what is measured, in the direction neither a repair nor a regression can fake.
+	var rising := true
+	for i in rows.size() - 1:
+		rising = rising and float(rows[i + 1][1]) > float(rows[i][1])
+	t.ok(rising, "네 줄의 거리는 계속 멀어진다 — 보이는 것부터 걸어가는 것까지가 한 줄기다 %s" % str(rows))
+	t.ok(float(rows[rows.size() - 1][1]) / Rules.HOST_SPEED <= 4.0,
+			"그리고 가장 먼 줄도 %.1f초 걸음이다 — 개막의 다음 막이지 원정이 아니다"
+					% (float(rows[rows.size() - 1][1]) / Rules.HOST_SPEED))
+
+	t.root.remove_child(m)
+	m.queue_free()
+
+
 # -- F1b: the crow does not one-shot the host ------------------------------------------------------------
 ## ⚠ **Nothing asserted the entire justification for the ×10.** "It does not one-shot the host" was a
 ## sentence in a design doc, and `HOST_HP` at 12 satisfies every other check in the round.
@@ -589,7 +1163,7 @@ func _f3_nothing_spawns_in_a_rock(t) -> void:
 			if w.terrain.push_out(w.critter_pos[k], r) != w.critter_pos[k]:
 				inside += 1
 	t.ok(rocks >= 30.0, "설정: 바위가 서른 개 이상 놓였다 (%.0f) — 빈 땅에서는 이 검사가 공짜로 통과한다" % rocks)
-	t.eq(checked, 320, "설정: 열 판 × 서른두 마리를 다 봤다")
+	t.eq(checked, 580, "설정: 열 판 × 쉰여덟 마리를 다 봤다 — 주머니의 넷까지 포함이다")
 	t.eq(inside, 0, "바위 안에서 태어나는 생물은 하나도 없다")
 
 
@@ -601,33 +1175,96 @@ func _f3_nothing_spawns_in_a_rock(t) -> void:
 ## roll multiplied by `SPECIES_HERD` — a horse is rolled half as often as a squirrel and arrives four at a
 ## time — so a body count is a check on two tables at once and pins neither. It was written that way for the
 ## two-species build, where every herd was 1 and the distinction did not exist.
+## ⚠ **"every non-zero weight appears" is FALSE at `elapsed` 0 once `SPECIES_UNLOCK_AT` exists**, and a
+## check that kept saying it would have to be satisfied by deleting the gate. So the roll is driven at two
+## clock values and the claim splits in two: a locked species is **impossible before its gate and possible
+## after it**, which is the behaviour, and neither half alone is it.
+##
+## ⚠ **And the DIVISOR is the whole of the gate.** Skipping a locked row while still dividing by the full
+## 138 breaks nothing visibly — every unlocked species just comes up less often than its weight says, and
+## the leftover picks fall out of the loop's bottom into the fallback. That is why the rates below are
+## measured against **108** at t = 0 and against **138** at t = 130, as two literals: written as
+## `Σ weight` either way, both sums move with whatever the code happens to do.
 func _f4_spawn_species_roll(t) -> void:
-	var w := World.new()
-	w.setup(439)
 	var rolls := 2000
-	var per := {}
 	var total_weight := 0
 	for weight in Rules.SPECIES_SPAWN_WEIGHT:
 		total_weight += int(weight)
+	t.eq(total_weight, 138, "설정: 가중치의 합은 138이다 (리터럴) — 분모를 먼저 못 박는다")
+
+	# -- t = 0: 코끼리 · 사자 · 들개 · 멧돼지 are locked, so the divisor is 108 --
+	var w := World.new()
+	w.setup(439)
+	t.eq(w.elapsed, 0.0, "설정: 갓 만든 월드의 시계는 0이다")
+	var locked := [int(Parts.Species.ELEPHANT), int(Parts.Species.LION), int(Parts.Species.DOG),
+			int(Parts.Species.BOAR)]
+	var open_sum := 0
+	for s in Rules.SPECIES_SPAWN_WEIGHT.size():
+		if not locked.has(s):
+			open_sum += int(Rules.SPECIES_SPAWN_WEIGHT[s])
+	t.eq(open_sum, 108, "설정: 그중 0초에 풀려 있는 몫은 108이다 (리터럴)")
+	var per := {}
 	for _i in rolls:
 		var s := w._roll_species()
 		per[s] = int(per.get(s, 0)) + 1
-	t.eq(total_weight, 84, "설정: 가중치의 합은 84다 (리터럴) — 분모를 먼저 못 박는다")
-
-	# Every species with a weight must actually appear, and the boss must not. A roll that can never reach
-	# the last row is a bug that looks exactly like bad luck, which is why the ZERO rows are asserted too.
 	for s in Rules.SPECIES_SPAWN_WEIGHT.size():
 		var weight := int(Rules.SPECIES_SPAWN_WEIGHT[s])
 		var got := int(per.get(s, 0))
 		if weight == 0:
 			t.eq(got, 0, "가중치 0인 %d종은 한 번도 굴려지지 않는다" % s)
 			continue
-		var want := float(weight) / float(total_weight)
+		if locked.has(s):
+			t.eq(got, 0,
+					"%d종은 %.0f초 전에는 2000번을 굴려도 한 번도 안 나온다 — 잠긴 종은 대체값으로도 새지 않는다"
+							% [s, float(Rules.SPECIES_UNLOCK_AT[s])])
+			continue
+		# **108, not `total_weight`.** Against 138 this line would be satisfied by a roll that divides by the
+		# full sum and lets the excess fall into the fallback — the exact defect the divisor exists to stop.
+		var want := float(weight) / 108.0
 		var rate := float(got) / float(rolls)
 		t.ok(absf(rate - want) < 0.04,
-				"%d종은 가중치대로 나온다 (%.3f, 기대 %.3f)" % [s, rate, want])
+				"%d종은 풀린 몫에 대한 가중치대로 나온다 (%.3f, 기대 %.3f)" % [s, rate, want])
 	t.ok(int(per.get(CROW, 0)) > int(per.get(HORSE, 0)),
 			"까마귀는 말보다 흔하다 — 말은 사건이고 까마귀는 일상이다")
+
+	# -- t = 130: every gate is open, so the divisor is the whole 138 --
+	var w2 := World.new()
+	w2.setup(440)
+	w2.elapsed = 130.0
+	var per2 := {}
+	for _i in rolls:
+		var s := w2._roll_species()
+		per2[s] = int(per2.get(s, 0)) + 1
+	for s in Rules.SPECIES_SPAWN_WEIGHT.size():
+		var weight := int(Rules.SPECIES_SPAWN_WEIGHT[s])
+		var got := int(per2.get(s, 0))
+		if weight == 0:
+			t.eq(got, 0, "가중치 0인 %d종은 시계를 돌려도 안 나온다 — 보스는 언제까지나 하나다" % s)
+			continue
+		var want := float(weight) / 138.0
+		var rate := float(got) / float(rolls)
+		t.ok(absf(rate - want) < 0.04,
+				"130초에는 %d종이 138분의 제 가중치로 나온다 (%.3f, 기대 %.3f)" % [s, rate, want])
+
+	# -- the gate itself, one species at a time, on both sides of its own second --
+	# ⚠ **Just under and just over**, or a check that only ever asks at 0 and at 130 is satisfied by a gate
+	# hardcoded to any threshold between them.
+	for s: int in locked:
+		var gate := float(Rules.SPECIES_UNLOCK_AT[s])
+		var w3 := World.new()
+		w3.setup(441)
+		w3.elapsed = gate - 0.1
+		var before := 0
+		for _i in 600:
+			if w3._roll_species() == s:
+				before += 1
+		t.eq(before, 0, "%d종은 %.0f초의 0.1초 전까지 나오지 않고" % [s, gate])
+		w3.elapsed = gate
+		var after := 0
+		for _i in 600:
+			if w3._roll_species() == s:
+				after += 1
+		t.ok(after > 0, "제 초가 되는 바로 그 순간부터 나온다 (%d번) — 경계는 이상이다" % after)
 
 
 # -- F5: one frame is one step, per creature -------------------------------------------------------------
@@ -643,6 +1280,10 @@ func _f4_spawn_species_roll(t) -> void:
 ##
 ## ⚠ **The two `설정` lines pass either way on purpose.** The kill and the swap are identical under both
 ## walks; only the distance separates them, and 3.8333 is `230px/s × 1/60` written by hand.
+##
+## ⚠ **Since §A-3, this frame carries a SECOND event.** The horse stands in the same cone as the crow, so
+## the one swing that kills the crow also knocks the horse back — `40 × KNOCKBACK_PER_FORCE` — before the
+## swap ever runs. The walk this check is actually about is the piece ON TOP of that: one step, not two.
 func _f5_each_creature_walks_once_per_frame(t) -> void:
 	var w := World.new()
 	w.setup(450)
@@ -663,9 +1304,13 @@ func _f5_each_creature_walks_once_per_frame(t) -> void:
 	w._step_critters(DT)
 	t.eq(w.critter_count, 1, "설정: 날개 한 번이 까마귀만 죽였다 (말은 체력 90)")
 	t.eq(int(w.critter_species[0]), HORSE, "설정: 빈 줄로 마지막 줄의 말이 내려왔다")
+	# `40 × KNOCKBACK_PER_FORCE`, the swing's own knockback on the horse, PLUS one walk step (3.8333). Two
+	# steps would read 39.6667 instead — the knockback is fixed, so only the walk half can double.
+	var knockback: float = 40.0 * Rules.KNOCKBACK_PER_FORCE
 	var walked: float = w.critter_pos[0].distance_to(start)
-	t.ok(absf(walked - 3.8333) < 0.05,
-			"곁의 까마귀가 죽어도 말은 한 프레임에 한 걸음만 걷는다 (%.4f — 두 걸음은 7.67)" % walked)
+	t.ok(absf(walked - (knockback + 3.8333)) < 0.05,
+			"곁의 까마귀가 죽어도 말은 밀리고, 걸음은 한 프레임에 한 번뿐이다 (%.4f, 기대 %.4f — 두 걸음이면 %.4f)"
+					% [walked, knockback + 3.8333, knockback + 2.0 * 3.8333])
 
 	# ⚠ **The bound is RE-READ, and that half was free while the direction was pinned.** The fix's own
 	# comment claims two things — forwards, over a bound re-read every iteration — and only the first is
@@ -673,9 +1318,11 @@ func _f5_each_creature_walks_once_per_frame(t) -> void:
 	# still passes: `_remove_critter(0)` swaps the horse down and shrinks the count, and the loop then runs
 	# one more iteration at the old bound over row 1, which the swap left holding the horse's own stale
 	# copy. That ghost flees the clone and walks 3.83px out of a row nobody is supposed to be in.
-	# **`start` is the horse's position on entry and row 1 must still be sitting on it.**
-	t.eq(w.critter_pos[1], start,
-			"줄어든 셈은 그 자리에서 읽힌다 — 스와프가 남긴 1번 줄은 걷지 않는다 (기대 %s)" % str(start))
+	# **`start` is the horse's position on entry. Row 1 keeps the swing's KNOCKBACK — that lands inside the
+	# same `strike()` call the swap runs from, before the row is vacated — but not the walk that follows.**
+	var ghost_expected: Vector2 = start + Vector2(knockback, 0.0)
+	t.eq(w.critter_pos[1], ghost_expected,
+			"줄어든 셈은 그 자리에서 읽힌다 — 밀림은 남아도 걸음은 아니다 (기대 %s)" % str(ghost_expected))
 
 	_f5b_the_row_past_the_end_does_not_act(t)
 
@@ -810,10 +1457,16 @@ func _g1_wandering_is_a_column(t) -> void:
 			"10초에 방향은 두 번에서 마흔 번 사이로 바뀐다 — 0은 직진이고 600은 제자리 진동이다 (%d)" % turns)
 
 
-# -- G2: the lion hunts, and it is slower than you ------------------------------------------------------
-## The only species whose `SPECIES_HUNTS` row is 1. Two halves, and the second is what keeps it from being
-## a death sentence: a hunter above `HOST_SPEED` is an unavoidable chase, which is the boss's job and the
-## boss has an arena to make it fair.
+# -- G2: who hunts, and every one of them is slower than you ---------------------------------------------
+## ⚠ **This check used to say `hunters == 1` and it is now THREE, which is a reversal and not a retune.**
+## `_step_critters()`' own comment records the refusal it reverses — 여섯 개가 타이머로 걸어오는 것은
+## 사용자가 거절한 것 — and what reopened it is the user's read after playing: 내가 때릴 수 있는 애가 없고
+## ... 그냥 몬스터가 내 주변에 없어. Bumping the number alone would have hidden a design decision inside a
+## test edit, so **each hunter is named** and the property that makes three survivable is asserted on every
+## one of them: `SPECIES_SPEED_MUL < 1.0`, so walking away is always an answer.
+##
+## A hunter above `HOST_SPEED` would be an unavoidable chase, which is the boss's job — and the boss has an
+## arena to make it fair.
 func _g2_the_lion_is_the_only_hunter(t) -> void:
 	var w := World.new()
 	w.setup(417)
@@ -834,11 +1487,23 @@ func _g2_the_lion_is_the_only_hunter(t) -> void:
 	var hunters := 0
 	for s in Rules.SPECIES_HUNTS.size():
 		hunters += int(Rules.SPECIES_HUNTS[s])
-	t.eq(hunters, 1, "그리고 사냥하는 종은 정확히 하나다 — 둘이면 필드는 추격전이 된다")
-	t.eq(int(Rules.SPECIES_HUNTS[Parts.Species.LION]), 1, "그 하나는 사자다")
-	t.ok(float(Rules.SPECIES_SPEED_MUL[Parts.Species.LION]) < 1.0,
-			"사자는 호스트보다 느리다 — 걸어서 떨어지는 것이 언제나 답이다 (%.2f × HOST_SPEED)"
-					% float(Rules.SPECIES_SPEED_MUL[Parts.Species.LION]))
+	t.eq(hunters, 3, "사냥하는 종은 정확히 셋이다 — 늘린 것은 결정이고, 이름으로 못박는다")
+	# **Named, not counted.** A count alone is satisfied by any three rows; the reversal is about WHICH three.
+	var named := [Parts.Species.MOUSE, Parts.Species.DOG, Parts.Species.LION]
+	t.eq(named.size(), hunters, "설정: 이름으로 적은 수가 표의 합과 같다 — 분모를 먼저 못 박는다")
+	for s: int in named:
+		t.eq(int(Rules.SPECIES_HUNTS[s]), 1, "%d종은 걸어온다 — 들쥐·들개·사자, 세 단계의 위협이다" % s)
+		# ⚠ **The half that makes three survivable, and it must hold for EVERY one of them.** One hunter over
+		# `HOST_SPEED` and "walking away always works" is false for the whole field, not for one row.
+		t.ok(float(Rules.SPECIES_SPEED_MUL[s]) < 1.0,
+				"그리고 %d종은 호스트보다 느리다 — 걸어서 떨어지는 것이 언제나 답이다 (%.2f × HOST_SPEED)"
+						% [s, float(Rules.SPECIES_SPEED_MUL[s])])
+	# The negative control: the count above passes on a table where a fleeing species also hunts, which would
+	# be dead data — `_contact()` returns on `SPECIES_FLEES` before it ever reaches the hunt branch.
+	for s in Rules.SPECIES_HUNTS.size():
+		if int(Rules.SPECIES_HUNTS[s]) == 1:
+			t.eq(int(Rules.SPECIES_FLEES[s]), 0,
+					"대조: 사냥하는 %d종은 도망치지 않는다 — 도망치는 사냥꾼은 절대 때리지 않는다" % s)
 	t.ok(float(Rules.SPECIES_SPEED_MUL[Parts.Species.SQUIRREL]) < 1.0,
 			"다람쥐도 호스트보다 느리다 — 쫓아가서 잡을 수 있는 유일한 것이다")
 	t.ok(float(Rules.SPECIES_SPEED_MUL[Parts.Species.CHEETAH])
@@ -886,8 +1551,162 @@ func _g3_a_herd_is_born_together(t) -> void:
 	t.ok(closest >= Rules.CRITTER_SPAWN_MIN_DIST,
 			"무리의 어느 한 마리도 화면 안에서 태어나지 않는다 (%.0f ≥ %.0f)"
 					% [closest, Rules.CRITTER_SPAWN_MIN_DIST])
-	t.ok(w._anchor_min_dist(HORSE) > w._anchor_min_dist(CROW),
+	t.ok(w._anchor_min_dist(HORSE, false) > w._anchor_min_dist(CROW, false),
 			"무리를 짓는 종의 닻은 혼자 오는 종보다 멀리서 굴려진다 — 퍼짐값을 미리 치른다")
+	# **And the two base distances are two different rules, asserted through the one function that picks
+	# between them.** Written only as literals in `net_numbers` this branch could be deleted outright —
+	# `_anchor_min_dist` ignoring `at_start` and always returning the arrival number is the mutation that
+	# re-opens 몬스터가 내 주변에 없어, and it changes no constant.
+	t.eq(w._anchor_min_dist(CROW, true), Rules.CRITTER_START_MIN_DIST,
+			"개막의 혼자 오는 종은 CRITTER_START_MIN_DIST에서 시작한다 (%.0f)"
+					% w._anchor_min_dist(CROW, true))
+	t.eq(w._anchor_min_dist(HORSE, true), Rules.CRITTER_START_MIN_DIST + Rules.SPAWN_HERD_SPREAD,
+			"개막의 무리도 제 퍼짐값을 치른다 — 480px이다 (%.0f)" % w._anchor_min_dist(HORSE, true))
+	t.ok(w._anchor_min_dist(CROW, true) < w._anchor_min_dist(CROW, false),
+			"그리고 개막은 도착보다 가깝다 — 이 부등호가 뒤집히면 첫 화면은 다시 풀밭뿐이다")
+
+
+# -- A3: the knockback is proportional to the attacker's force, and it never lands a body inside a rock ---
+## ⚠ **Distance must be MEASURED, not merely "did the position change".** A knockback that always moved a
+## body by a fixed 5px would pass a check that only asserts `pos != before`; the proportionality half is
+## what a fixed-distance mutation cannot satisfy.
+func _a3_knockback_is_proportional_and_survives_a_rock(t) -> void:
+	var w := World.new()
+	w.setup(500)
+	_silence_food(w)
+	_clear_terrain(w)
+	w.critter_count = 0
+	w.boss_index = -1
+	var at := Vector2(1500.0, 1000.0)
+	w._write_critter(CROW, at, 10)
+	var before_crow: Vector2 = w.critter_pos[0]
+	w._damage_critter(0, 10, Vector2(1.0, 0.0))
+	var moved_crow: float = w.critter_pos[0].distance_to(before_crow)
+	t.ok(absf(moved_crow - 10.0 * Rules.KNOCKBACK_PER_FORCE) < 0.01,
+			"힘 10짜리 한 방은 그 힘 × KNOCKBACK_PER_FORCE만큼 민다 (%.2f, 기대 %.2f)"
+					% [moved_crow, 10.0 * Rules.KNOCKBACK_PER_FORCE])
+
+	w.critter_count = 0
+	w.boss_index = -1
+	w._write_critter(BOSS, at, 120)
+	var before_boss: Vector2 = w.critter_pos[0]
+	w._damage_critter(0, 120, Vector2(1.0, 0.0))
+	var moved_boss: float = w.critter_pos[0].distance_to(before_boss)
+	t.ok(absf(moved_boss - 120.0 * Rules.KNOCKBACK_PER_FORCE) < 0.01,
+			"힘 120짜리 한 방은 그만큼 더 세게 민다 (%.2f, 기대 %.2f)"
+					% [moved_boss, 120.0 * Rules.KNOCKBACK_PER_FORCE])
+	t.ok(moved_boss > moved_crow * 10.0,
+			"그리고 보스가 훨씬 더 크게 밀린다 — 세기는 힘 하나에서 나온다, 상수가 아니다 (%.2f vs %.2f)"
+					% [moved_boss, moved_crow])
+
+	# `hit_dir`가 `Vector2.ZERO`거나 데미지가 0이면 밀지 않는다 — 죽지 않는 검사도 방향이 없으면 안 민다.
+	var w0 := World.new()
+	w0.setup(502)
+	_silence_food(w0)
+	_clear_terrain(w0)
+	w0.critter_count = 0
+	w0.boss_index = -1
+	w0._write_critter(CROW, at, 10)
+	var before_zero: Vector2 = w0.critter_pos[0]
+	w0._damage_critter(0, 10)
+	t.eq(w0.critter_pos[0], before_zero, "방향 없는 피해는 밀지 않는다 — 기본값 Vector2.ZERO는 안전하다")
+
+	# push_out survival: a rock sits directly in the knockback's path. Without `terrain.push_out` in the
+	# sequence the creature teleports INSIDE it — the same "not knocked back, TELEPORTED" bug §A-3 forbids.
+	var w2 := World.new()
+	w2.setup(501)
+	_silence_food(w2)
+	_clear_terrain(w2)
+	w2.critter_count = 0
+	w2.boss_index = -1
+	var at2 := Vector2(1500.0, 1000.0)
+	w2._write_critter(CROW, at2, 10)
+	var rock_r := 40.0
+	# 8px is where a force-10 hit lands (10 × 0.8) — the rock sits centred just past it, so an UNGUARDED
+	# knockback lands dead inside it.
+	w2.terrain.rock_pos.append(at2 + Vector2(8.0 + rock_r * 0.5, 0.0))
+	w2.terrain.rock_radius.append(rock_r)
+	t.ok(w2.terrain.push_out(at2 + Vector2(8.0, 0.0), w2.critter_radius(0))
+					!= at2 + Vector2(8.0, 0.0),
+			"설정: 바위를 실제로 그 밀리는 자리에 놓았다 — 안 밀어내는 자리라면 아래는 아무것도 재지 않는다")
+	w2._damage_critter(0, 10, Vector2(1.0, 0.0))
+	var final_pos: Vector2 = w2.critter_pos[0]
+	t.ok(final_pos.distance_to(w2.terrain.rock_pos[0]) >= rock_r - 0.01,
+			"밀린 자리는 바위 밖이다 — push_out을 거치지 않으면 바위 속으로 순간이동한다 (%.2f, 반지름 %.2f)"
+					% [final_pos.distance_to(w2.terrain.rock_pos[0]), rock_r])
+
+
+# -- D1: the boss-hunt announcement fires exactly once ----------------------------------------------------
+## §D-1 needs "the hunt has started" to be a single crossing, and `World.boss_hunting()` is where it is
+## written — **once, derived from `elapsed`, replacing a latched flag and two hand-written copies of the
+## same comparison** (see that function). This crosses the threshold with many small steps and counts the
+## flips: a value that could be re-armed would flash the announcement more than once, and one that reverses
+## would take the boss back to wandering with the screen still saying it comes.
+##
+## ⚠ **And it asserts the OTHER readers agree on the same frames** — the boss actually walking at the host
+## and the arena being allowed to close both used to compare `elapsed >= Rules.BOSS_HUNT_AT` on their own.
+func _d1_boss_hunt_announces_once(t) -> void:
+	var w := World.new()
+	w.setup(503)
+	_silence_food(w)
+	_clear_terrain(w)
+	t.eq(w.boss_hunting(), false, "설정: 갓 만든 세상은 아직 사냥 중이 아니다")
+
+	# Start five seconds short of the threshold and step small frames across it and well past it — the
+	# crossing itself, not merely "eventually true", is what has to be caught exactly once.
+	w.elapsed = Rules.BOSS_HUNT_AT - 5.0
+	var flips := 0
+	var was: bool = w.boss_hunting()
+	for _s in 600:
+		w.step(DT)
+		if w.boss_hunting() != was:
+			flips += 1
+			was = w.boss_hunting()
+	t.eq(flips, 1,
+			"elapsed가 BOSS_HUNT_AT을 넘는 순간은 한 번뿐이고, 사냥 여부도 딱 한 번만 뒤집힌다 (%d)" % flips)
+	t.ok(w.boss_hunting(), "그리고 넘은 뒤로는 참이다")
+
+	# Many more frames on the far side — it must never flip back, and must not flip a SECOND time either.
+	for _s in 300:
+		w.step(DT)
+	t.ok(w.boss_hunting(), "몇 초가 더 지나도 여전히 참이다 — 왔다 갔다 하지 않는다")
+
+	# **One truth, three readers.** The threshold is not restated in `_step_critters` or `_step_arena` any
+	# more, so a world one frame SHORT of it must have a wandering boss and a shut arena, and the same world
+	# one frame past it must have neither — driven, on the same fixture, either side of the same line.
+	var wb := World.new()
+	wb.setup(504)
+	_silence_food(wb)
+	_clear_terrain(wb)
+	for k in range(wb.critter_count - 1, -1, -1):
+		if k != wb.boss_index:
+			wb._remove_critter(k)
+	var host: Vector2 = wb.swarm.pos[0]
+	# Dead ahead and well inside `ARENA_RADIUS`: on the hunting side the boss closes and the arena shuts.
+	wb.critter_pos[wb.boss_index] = host + Vector2(400.0, 0.0)
+	wb.elapsed = Rules.BOSS_HUNT_AT - DT
+	t.ok(not wb.boss_hunting(), "설정: 한 프레임 모자란 세상은 아직 사냥 중이 아니다")
+	# ⚠ **The negative side is asserted on the DIRECTION, not on the distance.** A wanderer moves 2.5px a
+	# frame in whatever direction it already had, and that direction can point at the host by luck — a
+	# distance test would be a coin flip. Hunting writes exactly `(host - p).normalized()`, which here is
+	# `(-1, 0)`; a random wander landing within 0.0001 rad of it has probability ~3e-5.
+	var at_host := (host - wb.critter_pos[wb.boss_index]).normalized()
+	wb._step_critters(DT)
+	wb._step_arena()
+	t.ok(not wb.terrain.arena_closed,
+			"사냥 전이면 코앞의 보스여도 아레나는 닫히지 않는다 — _step_arena도 같은 하나를 읽는다")
+	t.ok(absf(wb.critter_dir[wb.boss_index].angle_to(at_host)) > 0.0001,
+			"그리고 배회하는 보스는 호스트 쪽을 정확히 향하지 않는다 (%s)" % str(wb.critter_dir[wb.boss_index]))
+
+	wb.elapsed = Rules.BOSS_HUNT_AT
+	t.ok(wb.boss_hunting(), "설정: 같은 세상을 한 프레임 넘기면 사냥 중이다")
+	var mid := wb.critter_pos[wb.boss_index].distance_to(host)
+	wb._step_critters(DT)
+	t.ok(wb.critter_pos[wb.boss_index].distance_to(host) < mid - 0.01,
+			"넘긴 뒤로는 보스가 호스트 쪽으로 좁힌다 — _step_critters도 같은 하나를 읽는다 (%.2f → %.2f)"
+					% [mid, wb.critter_pos[wb.boss_index].distance_to(host)])
+	wb._step_arena()
+	t.ok(wb.terrain.arena_closed, "그리고 이제 아레나가 닫힌다")
 
 
 func _silence_food(w: World) -> void:

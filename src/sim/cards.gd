@@ -26,12 +26,40 @@ extends RefCounted
 ## first minute.
 ##
 ## ⚠ **An empty offer is a legal, long-lived state, not a "needs a roll" sentinel.** `World._grow()` used
-## `offer.is_empty()` as exactly that, which becomes a roll every single frame once banking lands; it
-## checks `species_eaten` too now.
+## `offer.is_empty()` as exactly that, which becomes a roll every single frame once banking lands. It asks
+## `pool_size()` now — **not** whether anything was eaten, which is a different question and was the same
+## bug wearing a second face: seven of the eleven species drop nothing, so `species_eaten` goes non-empty
+## while this still returns empty.
 ##
 ## `BITE` and `DASH` are not in the pool. They are the actives you are handed, not things offered — they
 ## are `SPECIES = NONE` and this filter is what keeps them out with no second list to maintain.
 static func roll(rng: RandomNumberGenerator, species_eaten: PackedInt32Array) -> PackedInt32Array:
+	var pool := _pool(species_eaten)
+	var out := PackedInt32Array()
+	for _i in mini(3, pool.size()):
+		var k := rng.randi() % pool.size()
+		out.append(pool[k])
+		pool.remove_at(k)
+	return out
+
+
+## **How many distinct parts this run could be offered right now.** `World._grow()` asks before rolling.
+##
+## ⚠ **It exists because "something was eaten" is not "something can be offered".** Seven of the eleven
+## species drop nothing at all (`Parts.DROPS` 0 — the split that makes a new species cheap), so a run whose
+## only corpse is a 들쥐 has a non-empty `species_eaten` and an empty pool. A guard written on
+## `species_eaten` alone is true forever in that state, `roll()` comes back empty forever, and it is called
+## **every frame for the rest of the run** with nothing on screen to say so.
+##
+## **One function owns the filter**, so the guard and the roll can never disagree about what is in the pool
+## — a second copy of these three conditions is the shape that diverges on the first row anyone adds.
+static func pool_size(species_eaten: PackedInt32Array) -> int:
+	return _pool(species_eaten).size()
+
+
+## Every part id this run has unlocked and could be dealt: it belongs to a species, that species is
+## droppable, and that species has actually been eaten.
+static func _pool(species_eaten: PackedInt32Array) -> Array:
 	var pool: Array = []
 	for p in Parts.NAME.size():
 		if Parts.SPECIES[p] < 0:
@@ -45,9 +73,4 @@ static func roll(rng: RandomNumberGenerator, species_eaten: PackedInt32Array) ->
 		if not species_eaten.has(Parts.SPECIES[p]):
 			continue
 		pool.append(p)
-	var out := PackedInt32Array()
-	for _i in mini(3, pool.size()):
-		var k := rng.randi() % pool.size()
-		out.append(pool[k])
-		pool.remove_at(k)
-	return out
+	return pool

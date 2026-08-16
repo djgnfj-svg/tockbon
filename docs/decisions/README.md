@@ -59,6 +59,7 @@ Where it shakes if this reverses.
 | [`1` calls the swarm to the host](rally-is-to-the-host.md) | valid | The placed rendezvous the prototype shipped · one key with a modifier · keeping both the placed rendezvous and `3` |
 | [A kill leaves a corpse, and eating it takes time](eating-a-kill-takes-time.md) | valid | Contact-automatic eating · an animation over an instant grant · slow ground food · a press-to-eat key |
 | [All three keys are empty squares](every-key-is-a-square.md) | valid | A permanent basic attack on left click · the slot deciding the key · a separate skill list · drag-to-bind |
+| [Three species walk at you, not one](three-hunters-not-one.md) | valid — **narrows** the refusal recorded in `SPECIES_HUNTS`, does not overturn it | Six species marching on a timer · a hunter above `HOST_SPEED` · the boss consulting `SPECIES_HUNTS` · leaving 들쥐 as another 다람쥐 |
 | [The August build is two species](august-scope-two-species.md) | **partly reversed** by [the crow gives three parts](the-crow-gives-three-parts.md) — the species survive, the part distribution does not | Six species giving parts · ~~the crow's wings~~ · starting with the lion · one species and the boss |
 | [The run opens alone](the-run-opens-alone.md) | valid — **reverses `START_CLONES = 6` by changed premise** | Six starting clones · giving them a starting force · shrinking the field · a fixed camera zoom |
 | [Nothing gates the boss](the-boss-is-not-gated.md) | valid | A force threshold · flat 1-HP contact · gating by level or swarm size · spawning the boss late |

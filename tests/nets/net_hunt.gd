@@ -20,6 +20,22 @@ const DT := 1.0 / 60.0
 const CROW := int(Parts.Species.CROW)
 const HORSE := int(Parts.Species.HORSE)
 const BOSS := int(Parts.Species.BOSS)
+const LION := int(Parts.Species.LION)
+const ELEPHANT := int(Parts.Species.ELEPHANT)
+
+## Every literal the separation checks stand on, written out once so a reader can check the arithmetic
+## rather than trust it. **None of them is read back off the code under test** — that is the whole point.
+##
+## A force-10 crow is `SPECIES_RADIUS[CROW] 12 × (1 + 0.5 × (10−8)/(12−8))` = **15.0**.
+## A force-55 lion sits at its species' minimum, so the ramp is zero and it is **26.0** exactly.
+const CROW10_R := 15.0
+const LION55_R := 26.0
+## Where a body comes to rest against one: the two radii summed, less `SEPARATION_CONTACT_MARGIN` 1.0.
+const CROW10_CLONE_REST := 22.0    ## 15 + 8 − 1
+const LION55_CLONE_REST := 33.0    ## 26 + 8 − 1
+const LION55_HOST_REST := 39.0     ## 26 + 14 − 1
+## And the band the rest distance has to stay inside: `critter_radius + CLONE_BODY_RADIUS`, no margin.
+const CROW10_CLONE_BAND := 23.0    ## 15 + 8
 
 
 func run(t) -> void:
@@ -44,7 +60,18 @@ func run(t) -> void:
 	_h8_a_bystanders_death_is_not_the_touchers(t)
 	_h9_the_cone_has_a_ceiling(t)
 	_h10_the_clones_swing_is_aimed_at_what_it_touched(t)
+	_b5_bare_clone_swing_is_aimed_too(t)
 	_u14_the_host_can_only_be_hit_once_a_second(t)
+	_u15_host_hit_force_is_the_landing_hit_and_knocks_the_host_back(t)
+	_s1_a_body_is_pushed_out_of_a_creature(t)
+	_s2_forty_bodies_never_move_the_lion(t)
+	_s3_a_body_wedged_against_a_rock(t)
+	_s4_a_separated_clone_still_lands_every_hit(t)
+	_m1_one_blow_never_takes_more_than_half(t)
+	_m2_three_species_land_one_hit_through_a_real_frame(t)
+	_m3_how_many_blows_the_host_survives(t)
+	_m4_a_level_moves_survivability_one_way_only(t)
+	_m5_the_cap_is_symmetric_and_one_directional(t)
 
 
 # -- 7: the chain, literal to literal --------------------------------------------------------------------
@@ -227,7 +254,10 @@ func _c11_damage_is_the_attackers_force(t) -> void:
 	t.eq(w.swarm.count, 1, "설정: 무리는 호스트 하나뿐이다")
 	t.eq(w.host_hp, 30, "설정: 호스트는 체력 30으로 서 있다")
 	w._contact(0, w.critter_pos[0])
-	t.eq(w.host_hp, -90, "보스가 닿으면 제 힘 120이 그대로 들어온다 — 한 번 닿으면 런이 끝난다")
+	# ⚠ **이 줄은 -90이었다.** `MAX_HIT_FRACTION`이 들어오면서 옮겨진 초록이고, 느슨해진 것이 아니라
+	# 다시 잰 것이다 — 한 방의 크기는 이제 「최대 체력의 절반」이고 보스는 거기서 예외가 아니다.
+	t.eq(w.host_hp, 15, "보스가 닿아도 한 방은 최대 체력 30의 절반까지다 (30 → 15)")
+	t.eq(w.host_hit_force, 120, "그래도 그 한 방의 크기는 120이다 — 화면 흔들림의 세기는 깎인 피해가 아니라 힘을 읽는다")
 
 
 # -- H2: the boss out-reaches 물기 -----------------------------------------------------------------------
@@ -321,7 +351,10 @@ func _c12b_the_cargo_is_read_before_the_swap(t) -> void:
 	w.swarm.carried[2] = 1.0
 	w.swarm.carried[3] = 3.0
 	t.eq(w.swarm.count, 4, "설정: 화물 2 · 1 · 3을 실은 분신 셋을 세웠다")
-	t.ok(w._damage_clone(1, 999), "설정: 가운데 하나를 실제로 죽였다")
+	# ⚠ **999 한 방으로는 이제 안 죽는다.** 힘 4짜리 분신의 최대 체력은 12이고 `MAX_HIT_FRACTION`이 한 방을
+	# 6으로 자른다 — 두 방이 필요하다. 느슨하게 고친 것이 아니라 규칙이 바뀐 만큼 다시 잰 것이다.
+	t.ok(not w._damage_clone(1, 999), "설정: 상한 때문에 첫 방으로는 안 죽는다 (최대 12의 절반 6)")
+	t.ok(w._damage_clone(1, 999), "설정: 두 방째에 가운데 하나가 실제로 죽었다")
 	t.eq(w.cargo_lost, 2.0, "죽은 그 분신이 싣고 있던 2가 손실로 잡힌다 — 내려온 줄의 3이 아니다")
 	t.eq(w.clones_lost, 1, "잃은 분신은 하나다")
 
@@ -398,9 +431,10 @@ func _h3_a_clone_is_a_wall(t) -> void:
 
 
 # -- H3b: an ALREADY overlapping creature can still walk out ---------------------------------------------
-## ⚠ **The `and not _blocked(p, k)` half.** A predicate on the destination alone freezes any creature that
-## is already overlapping a body — which happens the instant a clone walks onto a standing crow, and to
-## forty at once when the arena's summon teleports them. H3 stays green throughout.
+## ⚠ **The half of `_clearance()` that is not the wall.** A predicate on the destination alone freezes any
+## creature that is already overlapping a body — which happens the instant a clone walks onto a standing
+## crow, and to forty at once when the arena's summon teleports them. Comparing clearances instead of
+## flags is what lets this horse leave while H3's crow is still stopped dead one function up.
 func _h3b_an_overlapped_creature_can_still_leave(t) -> void:
 	var w := World.new()
 	w.setup(67)
@@ -453,9 +487,13 @@ func _h4_the_boss_walks_through_the_ring(t) -> void:
 	for _s in 120:
 		w._step_critters(DT)
 	var after: float = w.critter_pos[b].distance_to(host)
-	# 300 = 150px/s × 2.0s, by hand. Within a pixel, because the walk is 120 float32 additions.
-	t.ok(absf((before - after) - 300.0) < 1.0,
-			"보스는 몸의 벽을 그대로 통과해 2초에 300px를 좁힌다 (%.1f → %.1f)" % [before, after])
+	# 300 = 150px/s × 2.0s, by hand.
+	# ⚠ **Since §A-3 the wall is not inert.** Each bare clone the boss touches retaliates — its own force
+	# (2) — and every landed retaliation also knocks the boss a little off its line
+	# (`force × KNOCKBACK_PER_FORCE`). Forty of those along a 300px walk add a few real pixels of drift; the
+	# tolerance widens for that. The claim under test is unchanged: nothing here meaningfully SLOWS the boss.
+	t.ok(absf((before - after) - 300.0) < 10.0,
+			"보스는 몸의 벽에 밀리긴 해도 그대로 지나가며 2초에 300px 가까이 좁힌다 (%.1f → %.1f)" % [before, after])
 	t.ok(after > Rules.ARENA_RADIUS,
 			"설정: 그 2초로는 아직 아레나 거리에 닿지 않는다 — 이 검사는 아레나를 기다리지 않는다 (%.0f)"
 					% after)
@@ -562,8 +600,8 @@ func _h6b_a_bare_clone_reaches_only_its_own_body(t) -> void:
 # -- H7: a zero-length aim is not a full circle ----------------------------------------------------------
 ## ⚠ `Vector2.ZERO.angle_to(to)` is `atan2(0, 0)`, which is **0 for every target** — so a creature standing
 ## exactly on a clone turns its cone into a circle and the swing lands on everything in range, 180° behind
-## included. Reachable in play: `_blocked()` deliberately lets an already-overlapped creature stand, and the
-## arena's summon teleports up to forty clones onto whatever is underneath them.
+## included. Reachable in play: `_contact()` runs before both separation passes, so the arena summon's forty
+## arrivals and any clone that walked onto a creature are dead centre for the length of that one frame.
 func _h7_a_dead_centre_target_does_not_open_the_cone(t) -> void:
 	var w := World.new()
 	w.setup(71)
@@ -724,11 +762,53 @@ func _h10_the_clones_swing_is_aimed_at_what_it_touched(t) -> void:
 	w.critter_atk_cd[1] = 99.0
 	t.eq(int(w.critter_hp[0]), 30, "설정: 북쪽의 까마귀는 체력 30이다")
 	t.eq(int(w.critter_hp[1]), 30, "설정: 남쪽의 까마귀도 체력 30이다")
+	t.eq(w.swarm.swing_show[c], INF, "설정: 아직 이 분신은 휘두른 적이 없다")
 	w._contact(0, w.critter_pos[0])
 	t.eq(int(w.critter_hp[0]), 25, "닿은 쪽 — 북쪽의 까마귀가 분신의 힘 5만큼 맞는다")
 	t.eq(int(w.critter_hp[1]), 30,
 			"정반대편의 까마귀는 한 점도 안 맞는다 — 휘두름은 +x가 아니라 닿은 쪽을 겨눈다")
 	t.ok(w.swarm.atk_cd[c] > 0.0, "그리고 그 휘두름에는 쿨다운이 붙었다")
+	# ⚠ **같은 검사, 밀림의 방향에 대해서.** 상수 `Vector2.RIGHT`로는 두 까마귀 다 못 가른다 — `_h10`
+	# 자신의 주석이 이미 이유를 댄다. 여기서는 북쪽 까마귀만 맞았으니 그 방향이 실제로 (0,-1)인지가 유일한
+	# 증거다.
+	t.eq(w.critter_hit_dir[0], Vector2(0.0, -1.0), "맞은 까마귀의 피격 방향은 실제로 닿은 쪽이다 — 상수가 아니다")
+	t.eq(w.critter_hit_dir[1], Vector2.ZERO, "안 맞은 까마귀의 피격 방향은 열린 값 그대로다")
+	# §B-5: 분신 쪽의 `swing_show`/`swing_dir`도 이 실제 접촉에서 함께 쓰인다 — 같은 `aim`을 재사용하므로
+	# 맞은 쪽과 정확히 같은 방향이다.
+	t.eq(w.swarm.swing_show[c], 0.0, "휘두른 분신의 시계도 0으로 열린다")
+	t.eq(w.swarm.swing_dir[c], Vector2(0.0, -1.0), "휘두른 방향도 실제로 닿은 쪽이다 — strike()가 문 aim과 같다")
+
+
+# -- B-5, the bare-hand case: no worn ARC part, `_contact` pass 1's OTHER branch ----------------------------
+## The same fixture shape as `_h10`, deliberately — the only difference is `worn == -1`, so this drives the
+## `else` branch (`kb_dir` computed by hand, no `strike()` dispatch) rather than the `swings` one.
+func _b5_bare_clone_swing_is_aimed_too(t) -> void:
+	var w := World.new()
+	w.setup(84)
+	_silence_food(w)
+	_clear_terrain(w)
+	w.swarm.pos[0] = Vector2(100.0, 100.0)
+	var at := Vector2(1500.0, 1000.0)
+	var c := w.swarm.add_clone(0, 5)
+	w.swarm.pos[c] = at
+	w.swarm.worn[c] = -1
+	w.swarm.atk_cd[c] = 0.0
+	w.critter_count = 0
+	w.boss_index = -1
+	# The bare-hand band is `critter_radius(k) + CLONE_BODY_RADIUS` (no `RANGE`), so the pair sits much
+	# closer than `_h10`'s — still off-axis (north/south), never the trivial `Vector2.RIGHT`.
+	w._write_critter(CROW, at - Vector2(0.0, 20.0), 10)
+	w._write_critter(CROW, at + Vector2(0.0, 20.0), 10)
+	w.critter_atk_cd[0] = 99.0
+	w.critter_atk_cd[1] = 99.0
+	t.ok(w.critter_pos[0].distance_to(at) <= w.critter_radius(0) + Rules.CLONE_BODY_RADIUS,
+			"설정: 맨손 접촉 밴드 안에 있다 (%.1f)" % w.critter_pos[0].distance_to(at))
+	t.eq(w.swarm.swing_show[c], INF, "설정: 아직 이 분신은 휘두른 적이 없다")
+	w._contact(0, w.critter_pos[0])
+	t.eq(int(w.critter_hp[0]), 25, "닿은 쪽 — 북쪽의 까마귀가 분신의 힘 5만큼 맞는다")
+	t.eq(int(w.critter_hp[1]), 30, "정반대편의 까마귀는 안 맞는다")
+	t.eq(w.swarm.swing_show[c], 0.0, "맨손으로 때려도 휘두름 시계는 0으로 열린다")
+	t.eq(w.swarm.swing_dir[c], Vector2(0.0, -1.0), "방향도 실제로 닿은 쪽이다 — kb_dir과 같은 값을 재사용한다")
 
 
 # -- fixtures ---------------------------------------------------------------------------------------------
@@ -835,6 +915,306 @@ func _u14_the_host_can_only_be_hit_once_a_second(t) -> void:
 	t.eq(w.host_hp, 0, "2.4초를 넘기면 세 번째 한 방이 들어온다 — 무적은 끝나는 것이지 면제가 아니다")
 
 
+# -- U15: `host_hit_force` is the force that ACTUALLY landed, and the host is knocked back by it ----------
+## ⚠ **Two SEPARATE worlds, not one with two attackers.** `_u14` already shows that among several admitted
+## attackers only ONE lands per window, and it is always the lowest row (grace and every cooldown here cycle
+## in lockstep, so the same index wins every window). Testing two forces inside one world would measure that
+## ordering, not "the value tracks whichever hit actually landed" — two independent landings, two different
+## forces, is what actually separates "records the force of THE hit" from "records a fixed row's force".
+func _u15_host_hit_force_is_the_landing_hit_and_knocks_the_host_back(t) -> void:
+	var w := World.new()
+	w.setup(84)
+	_silence_food(w)
+	_clear_terrain(w)
+	var host: Vector2 = w.swarm.pos[0]
+	w.critter_count = 0
+	w.boss_index = -1
+	w._write_critter(CROW, host + Vector2(20.0, 0.0), 10)
+	t.eq(w.host_hit_force, 0, "설정: 아직 아무도 안 맞았다")
+	t.eq(w.swarm.hit_show[0], INF, "설정: 호스트도 아직 안 맞았다")
+	w.step(DT)
+	t.eq(w.host_hp, 20, "설정: 힘 10짜리 까마귀가 붙어서 열을 깎았다")
+	t.eq(w.host_hit_force, 10, "그 한 방의 세기는 10이다 — 맞은 만큼이다")
+	t.eq(w.swarm.hit_show[0], 0.0, "그리고 호스트의 피격 시계도 그 순간 0으로 열린다")
+	# 까마귀는 host의 +x쪽에 있으니, 밀리는 방향은 -x다.
+	t.ok(w.swarm.hit_dir[0].x < -0.9, "밀리는 방향은 때린 쪽의 반대다 (%.2f)" % w.swarm.hit_dir[0].x)
+	var moved: float = w.swarm.pos[0].distance_to(host)
+	t.ok(absf(moved - 10.0 * Rules.KNOCKBACK_PER_FORCE) < 0.05,
+			"호스트도 맞은 힘 × KNOCKBACK_PER_FORCE만큼 밀린다 (%.2f, 기대 %.2f)"
+					% [moved, 10.0 * Rules.KNOCKBACK_PER_FORCE])
+
+	# 대조: 힘 35짜리 하나만 있는 독립된 세상에서, 첫 접촉이 남기는 값도 35다 — 10에 눌어붙지 않는다.
+	var w2 := World.new()
+	w2.setup(85)
+	_silence_food(w2)
+	_clear_terrain(w2)
+	w2.critter_count = 0
+	w2.boss_index = -1
+	w2._write_critter(int(Parts.Species.HORSE), w2.swarm.pos[0] + Vector2(20.0, 0.0), 35)
+	w2.critter_flees[0] = 0   ## a fleeing creature never retaliates in pass 2 — force it to stand and hit
+	var host2: Vector2 = w2.swarm.pos[0]
+	w2.step(DT)
+	# ⚠ **이 줄은 -5였다.** `MAX_HIT_FRACTION`이 들어오면서 옮겨진 초록이다.
+	t.eq(w2.host_hp, 15, "대조: 힘 35짜리 한 방도 최대 체력의 절반 15에서 멈춘다 (30 → 15)")
+	t.eq(w2.host_hit_force, 35, "그리고 세기는 35다 — 값은 깎인 피해가 아니라 때린 힘을 따라간다, 고정된 행이 아니다")
+	# ⚠ **밀림은 상한을 안 읽는다.** 피해 15가 아니라 힘 35 × 0.8 = 28px이다. 이 한 줄이 「연출은 힘,
+	# 규칙은 상한」을 가른다 — 밀림까지 15로 계산했다면 12px이 나오고, 두 숫자는 두 배 넘게 차이난다.
+	var moved2: float = w2.swarm.pos[0].distance_to(host2)
+	t.ok(absf(moved2 - 35.0 * Rules.KNOCKBACK_PER_FORCE) < 0.05,
+			"밀린 거리는 깎인 피해 15가 아니라 힘 35 × KNOCKBACK_PER_FORCE다 (%.2f, 기대 %.2f)"
+					% [moved2, 35.0 * Rules.KNOCKBACK_PER_FORCE])
+
+
+# -- S1: a body does not stand inside a creature, and the creature is not what moved -----------------------
+## The user's sentence — *"적하고 나하고 내 분신하고 겹치는 게 좀 너무 별로고"* — with the half that decides the
+## design attached: **the body moves and the creature does not.** Herding is the stage's hand, so a swarm
+## that could shove a creature would turn 「말은 몰이로 잡는다」 into pushing.
+##
+## Both branches of the push are here and they are different code: **exactly coincident** (the deterministic
+## angle, `l` forced to 0.0) and **partly overlapped** (the ordinary direction). The coincident half is not
+## contrived — the arena summon teleports up to forty clones onto whatever is under them.
+##
+## ⚠ **Both attack clocks are wound forward in the second half.** Damage carries knockback, and knockback
+## moves the creature — a check that let it fire could not tell a separation push from a hit.
+func _s1_a_body_is_pushed_out_of_a_creature(t) -> void:
+	var at := Vector2(500.0, 500.0)
+	var w := World.new()
+	w.setup(910)
+	_silence_food(w)
+	_clear_terrain(w)
+	w.swarm.pos[0] = Vector2(2000.0, 2000.0)
+	var c := w.swarm.add_clone(0, 10)
+	w.swarm.pos[c] = at
+	w.swarm.command_strike(at)
+	w.critter_count = 0
+	w.boss_index = -1
+	w._write_critter(CROW, at, 10)
+	w.critter_hp[0] = 100000
+	t.eq(w.swarm.pos[c], at, "설정: 분신이 까마귀 한가운데에 정확히 겹쳐 서 있다")
+	t.ok(absf(w.critter_radius(0) - CROW10_R) < 0.001,
+			"설정: 힘 10짜리 까마귀의 반지름은 15다 (%.3f)" % w.critter_radius(0))
+
+	w.step(DT)
+	t.eq(w.critter_pos[0], at, "한 프레임 뒤에도 까마귀는 그 좌표 그대로다 — 밀리는 것은 몸뿐이다")
+	var gap: float = w.swarm.pos[c].distance_to(at)
+	t.ok(absf(gap - CROW10_CLONE_REST) < 0.001,
+			"완전히 겹쳐 있던 분신은 한 프레임 만에 22px 밖으로 나온다 (%.3f)" % gap)
+
+	# -- the ordinary branch, with nothing but separation allowed to move anything --
+	var w2 := World.new()
+	w2.setup(911)
+	_silence_food(w2)
+	_clear_terrain(w2)
+	w2.swarm.pos[0] = Vector2(2000.0, 2000.0)
+	var c2 := w2.swarm.add_clone(0, 10)
+	w2.swarm.pos[c2] = at
+	w2.swarm.command_strike(at)
+	w2.swarm.atk_cd[c2] = 1000.0
+	w2.critter_count = 0
+	w2.boss_index = -1
+	w2._write_critter(CROW, at + Vector2(5.0, 0.0), 10)
+	w2.critter_atk_cd[0] = 1000.0
+	w2.critter_hp[0] = 100000
+	var stood: Vector2 = w2.critter_pos[0]
+	w2.step(DT)
+	t.eq(w2.critter_pos[0], stood, "5px만 파고든 경우에도 까마귀는 한 걸음도 안 움직인다")
+	var gap2: float = w2.swarm.pos[c2].distance_to(stood)
+	t.ok(absf(gap2 - CROW10_CLONE_REST) < 0.001,
+			"분신은 겹친 만큼만 밀려 22px에 선다 (%.3f)" % gap2)
+	t.ok(w2.swarm.pos[c2].x < stood.x,
+			"밀린 방향은 까마귀의 반대쪽이다 — 파고든 쪽으로 더 들어가지 않는다")
+
+	# -- and the beat that must NOT separate --
+	var w3 := World.new()
+	w3.setup(912)
+	_silence_food(w3)
+	_clear_terrain(w3)
+	w3.swarm.pos[0] = Vector2(2000.0, 2000.0)
+	var c3 := w3.swarm.add_clone(0, 10)
+	w3.swarm.pos[c3] = at
+	w3.critter_count = 0
+	w3.boss_index = -1
+	w3.swarm.atk_cd[c3] = 1000.0
+	w3._write_critter(CROW, at, 10)
+	w3.critter_atk_cd[0] = 1000.0
+	w3.critter_hp[0] = 100000
+	# `clear_pull` alone, `beat_frozen` left false: the great absorption's own guard, isolated from the
+	# ecosystem freeze that normally rides with it.
+	w3.swarm.clear_pull = true
+	w3.step(DT)
+	var pulled: float = w3.swarm.pos[c3].distance_to(at)
+	# 15px is `Rules.CLEAR_ABSORB_PULL` 900 × DT, and it is ALL of the movement: under the beat the pull is
+	# the only thing allowed to move a body, so this is both "the frame really advanced" and "nothing else
+	# touched it".
+	t.ok(absf(pulled - 15.0) < 0.01,
+			"대흡수 중에는 끌려간 15px가 전부다 — 밀어내기는 안 돈다 (%.3f)" % pulled)
+	t.ok(pulled < CROW10_CLONE_REST,
+			"화면은 빨려 들어가는데 심은 밀어내는 어긋남을 안 만든다 (%.3f < 22)" % pulled)
+
+
+# -- S2: forty bodies and a lion, and the LION is the one that does not move -------------------------------
+## **The single most important check in the separation run.** `the-horse-is-herded-not-outrun` and CLAUDE.md
+## both say a creature is stopped by rocks, clones and the edge — stopped, never shoved. If the swarm could
+## displace a creature, herding would silently become pushing and the whole hunt changes.
+##
+## ⚠ **The first half calls the pass directly**, and that is deliberate: a lion HUNTS, so inside a whole
+## frame its own walk is mixed into any displacement and "it did not move" stops being an exact claim. The
+## second half then pays that back by driving the real frame and pinning the walk to a literal.
+func _s2_forty_bodies_never_move_the_lion(t) -> void:
+	var at := Vector2(1500.0, 1500.0)
+	var w := World.new()
+	w.setup(920)
+	_silence_food(w)
+	_clear_terrain(w)
+	w.critter_count = 0
+	w.boss_index = -1
+	w._write_critter(LION, at, 55)
+	t.ok(absf(w.critter_radius(0) - LION55_R) < 0.001,
+			"설정: 힘 55짜리 사자의 반지름은 26이다 (%.3f)" % w.critter_radius(0))
+	w.swarm.pos[0] = at
+	for _i in 40:
+		var j := w.swarm.add_clone(0, 5)
+		w.swarm.pos[j] = at
+	t.eq(w.swarm.count, 41, "설정: 호스트와 분신 마흔이 전부 사자 한가운데 서 있다")
+
+	w._separate_from_critters()
+	t.eq(w.critter_pos[0], at, "마흔한 몸이 안에서 밀어내도 사자는 제자리다 — 몰이는 미는 것이 아니다")
+	var worst := INF
+	var worst_i := -1
+	for i in range(1, w.swarm.count):
+		var d: float = w.swarm.pos[i].distance_to(at)
+		if d < worst:
+			worst = d
+			worst_i = i
+	t.ok(worst >= LION55_CLONE_REST - 0.001,
+			"분신 마흔이 전부 33px 밖으로 나온다 — 가장 안쪽이 %d번, %.3f" % [worst_i, worst])
+	var host_gap: float = w.swarm.pos[0].distance_to(at)
+	t.ok(host_gap >= LION55_HOST_REST - 0.001,
+			"호스트도 제 반지름만큼 더 멀리 나온다 — 39px다 (%.3f)" % host_gap)
+
+	# -- the real frame: the lion moves EXACTLY its own walk and not one pixel more --
+	var w2 := World.new()
+	w2.setup(921)
+	_silence_food(w2)
+	_clear_terrain(w2)
+	w2.critter_count = 0
+	w2.boss_index = -1
+	w2._write_critter(LION, at, 55)
+	w2.critter_hp[0] = 1000000
+	w2.critter_atk_cd[0] = 1000.0
+	w2.swarm.pos[0] = at
+	for _i in 40:
+		var j := w2.swarm.add_clone(0, 5)
+		w2.swarm.pos[j] = at
+		# Muted for the same reason S1's second half mutes them: a hit knocks the creature back, and this
+		# check is about the ONE displacement that is not allowed to exist.
+		w2.swarm.atk_cd[j] = 1000.0
+	var before: Vector2 = w2.critter_pos[0]
+	w2.step(DT)
+	var walked: float = w2.critter_pos[0].distance_to(before)
+	# 190px/s is `HOST_SPEED 200 × SPECIES_SPEED_MUL[LION] 0.95`, the number `_c7` already pins.
+	t.ok(absf(walked - 190.0 / 60.0) < 0.01,
+			"한 프레임을 통째로 돌려도 사자가 움직인 것은 제 걸음 3.17px뿐이다 (%.3f)" % walked)
+
+
+# -- S3: a body wedged between a creature and a rock -------------------------------------------------------
+## **The one place this rule cannot deliver what its name promises, written honestly rather than hidden.**
+## `Swarm.place()` runs after the push, so a push aimed into a rock is cancelled or slid along the rock's
+## face — the body ends the frame still inside the creature. That is a wedge, and it is accepted: every
+## chasing species is slower than the host, and `1` walks a clone home at 215px/s.
+##
+## What the check refuses to accept is the two ways a wedge goes wrong: **teleporting** (the body driven
+## through the rock, or thrown by an epsilon divisor) and **oscillating** (two corrections fighting frame to
+## frame, which reads as a body vibrating in place).
+func _s3_a_body_wedged_against_a_rock(t) -> void:
+	var w := World.new()
+	w.setup(930)
+	_silence_food(w)
+	_clear_terrain(w)
+	# One rock, written by hand. Literal centre and literal radius, so the bounds below do not come from the
+	# thing under test.
+	w.terrain.rock_pos.append(Vector2(600.0, 500.0))
+	w.terrain.rock_radius.append(60.0)
+	var rock := Vector2(600.0, 500.0)
+	w.swarm.pos[0] = Vector2(2500.0, 2500.0)
+	# 68px from the rock's centre = 60 + CLONE_BODY_RADIUS 8: already touching it, on the far side.
+	var pinned := Vector2(532.0, 500.0)
+	var c := w.swarm.add_clone(0, 10)
+	w.swarm.pos[c] = pinned
+	w.swarm.command_strike(pinned)
+	w.swarm.atk_cd[c] = 1000000.0
+	w.critter_count = 0
+	w.boss_index = -1
+	# Off-axis on purpose: the push the crow asks for points INTO the rock and sideways at once, so the
+	# frame is the wedge — a straight-out push would simply be cancelled and prove nothing about sliding.
+	w._write_critter(CROW, Vector2(525.0, 495.0), 10)
+	w.critter_atk_cd[0] = 1000000.0
+	w.critter_hp[0] = 1000000
+	t.ok(absf(pinned.distance_to(rock) - 68.0) < 0.001,
+			"설정: 분신은 바위 표면에 딱 붙어 있다 (중심에서 68px = 60 + 8)")
+	t.ok(pinned.distance_to(w.critter_pos[0]) < CROW10_CLONE_REST,
+			"설정: 그런데 까마귀 안에도 들어가 있다 — 밀 곳이 바위뿐인 자리다 (%.3f < 22)"
+					% pinned.distance_to(w.critter_pos[0]))
+
+	w.step(DT)
+	var moved: float = w.swarm.pos[c].distance_to(pinned)
+	t.ok(moved > 0.5, "밀어내기는 실제로 일어난다 — 바위 면을 따라 미끄러진다 (%.3f)" % moved)
+	t.ok(moved < CROW10_CLONE_REST,
+			"그리고 순간이동은 없다 — 한 프레임 이동이 밀어내는 거리 22px 자체를 못 넘는다 (%.3f)" % moved)
+
+	var deepest := INF
+	for _s in 59:
+		w.step(DT)
+		deepest = minf(deepest, w.swarm.pos[c].distance_to(rock))
+	var settled: Vector2 = w.swarm.pos[c]
+	for _s in 60:
+		w.step(DT)
+		deepest = minf(deepest, w.swarm.pos[c].distance_to(rock))
+	# ⚠ **68 − `Terrain.TOUCH_EPS`, not 68.** `push_out()` accepts a candidate whose deepest penetration is
+	# within `TOUCH_EPS` — that tolerance is the rock's own contract and it existed before this pass. Written
+	# as a bare 68 the check reds at 67.997 and measures the rock, not the separation.
+	t.ok(deepest >= 68.0 - Terrain.TOUCH_EPS,
+			"두 초 어느 프레임에도 분신이 바위 안으로 들어간 적이 없다 (가장 깊었던 순간 %.3f)" % deepest)
+	t.eq(w.swarm.pos[c], settled, "60프레임 뒤와 120프레임 뒤가 같은 좌표다 — 끼인 몸은 떨지 않는다")
+
+
+# -- S4: the rest distance stays INSIDE the attack band ----------------------------------------------------
+## ⚠ **The failure this exists for is silent and total.** Separation and `_contact()`'s bare-clone band are
+## the same sum; rest a body ON it and half of all pairs land a float ulp outside, and **nothing steers a
+## clone toward a creature**, so it never closes the gap again. Melee simply stops, with every other check
+## in this file still green. `Rules.SEPARATION_CONTACT_MARGIN` is what holds the rest position inside, and
+## this is the check that drives it rather than reasoning about it.
+##
+## Five seconds, `Rules.CLONE_ATTACK_PERIOD` 1.2s: hits at 0.017 · 1.217 · 2.417 · 3.617 · 4.817 — five of
+## them, each for the clone's own force 10.
+func _s4_a_separated_clone_still_lands_every_hit(t) -> void:
+	var at := Vector2(1500.0, 1500.0)
+	var w := World.new()
+	w.setup(940)
+	_silence_food(w)
+	_clear_terrain(w)
+	w.swarm.pos[0] = Vector2(300.0, 300.0)
+	var c := w.swarm.add_clone(0, 10)
+	w.swarm.pos[c] = at
+	w.swarm.hp[c] = 1000000
+	w.swarm.command_strike(at)
+	w.critter_count = 0
+	w.boss_index = -1
+	w._write_critter(CROW, at + Vector2(5.0, 0.0), 10)
+	w.critter_hp[0] = 1000000
+	var hp_before: int = int(w.critter_hp[0])
+
+	for _s in 300:
+		w.step(DT)
+	t.eq(hp_before - int(w.critter_hp[0]), 50,
+			"밀려난 뒤에도 분신은 5초 동안 다섯 번 전부 문다 — 쉬는 거리가 때리는 띠 안에 있다")
+	var gap: float = w.swarm.pos[c].distance_to(w.critter_pos[0])
+	t.ok(gap < CROW10_CLONE_BAND,
+			"그 거리는 맨몸 판정 띠 23px보다 짧다 (%.3f)" % gap)
+	t.ok(gap > CROW10_CLONE_REST - 1.001,
+			"그런데 21px보다는 멀다 — 붙어 있는 것이 아니라 딱 밖에 서 있는 것이다 (%.3f)" % gap)
+
+
 func _silence_food(w: World) -> void:
 	for i in w.food.alive.size():
 		w.food.alive[i] = 0
@@ -848,3 +1228,152 @@ func _clear_terrain(w: World) -> void:
 	w.terrain.rock_radius.clear()
 	w.terrain.water_pos.clear()
 	w.terrain.water_radius.clear()
+
+
+# ========================================================================================================
+# M: 한 방의 상한 — `Rules.MAX_HIT_FRACTION`
+# ========================================================================================================
+## 사자 · 코끼리 · 보스가 체력 30짜리 호스트를 첫 접촉에 죽이던 것이 사라진 자리다. 사용자가 보스까지
+## 가지 못한 이유가 이것이었고, 그래서 여기서 재는 것은 「한 방이 얼마인가」 하나뿐이다 — 몇 초 만에 죽는가는
+## `_u14`(무적 시간)와 `_c13`(공격 주기)이 이미 잰다.
+
+
+# -- M1: 한 방은 맞는 쪽 최대 체력의 절반을 넘지 않는다 ---------------------------------------------------
+## ⚠ **네 종을 한 함수에서 재는 것이 이 검사를 물게 한다.** 까마귀는 상한 **아래**라 안 바뀌고 나머지 셋은
+## 잘리므로, 「전부 15」로도 「전부 제 힘」으로도 만족시킬 수 없다. 15는 손으로 계산한 값이다 — 최대 30의 절반.
+func _m1_one_blow_never_takes_more_than_half(t) -> void:
+	t.eq(_one_blow(700, CROW, 10, 0), 10,
+			"까마귀 10은 상한 15 아래라 그대로 10이 들어온다 — 세 방이라는 초반의 약속이 안 깨진다")
+	t.eq(_one_blow(701, LION, 62, 0), 15, "사자 62는 15에서 잘린다")
+	t.eq(_one_blow(702, ELEPHANT, 78, 0), 15,
+			"코끼리 78도 똑같이 15다 — 상한을 정하는 것은 때리는 쪽의 힘이 아니라 맞는 쪽의 최대 체력이다")
+	t.eq(_one_blow(703, BOSS, 120, 0), 15, "보스 120도 예외가 없다 — 종별 면제 칸은 만들지 않았다")
+
+
+# -- M2: 까마귀 · 말 · 사자가 진짜 프레임 안에서 한 대씩 때린다 -------------------------------------------
+## ⚠ **`_contact`를 손으로 부르는 대신 `step(DT)`를 돌린다.** M1은 규칙을, 이쪽은 그 규칙이 실제 프레임
+## 경로에 실려 있는지를 잰다. 그리고 세 종의 답이 셋 다 달라야 한다: 까마귀는 안 잘리고, 사자는 잘리고,
+## **말은 아예 안 때린다** — 도망치는 종은 `_contact` 2패스 첫 줄에서 돌아선다.
+func _m2_three_species_land_one_hit_through_a_real_frame(t) -> void:
+	t.eq(_one_hit_through_step(710, CROW, 10), 10, "까마귀 한 대는 10이다")
+	t.eq(_one_hit_through_step(711, LION, 62), 15, "사자 한 대는 15다 — 62가 아니라")
+	t.eq(_one_hit_through_step(712, HORSE, 35), 0, "말은 붙어 있어도 한 대도 안 때린다")
+	t.eq(int(Rules.SPECIES_FLEES[HORSE]), 1,
+			"그게 상한 때문이 아니라 말이 도망치는 종이기 때문이라는 것까지 못 박는다")
+	# ⚠ **계기 자신을 뒤집는 줄이다.** 위의 0은 「사거리 밖에 세웠다」로도 나온다 — 같은 자리에서 도망 칸만
+	# 눕혀 15가 들어오는 것을 보여야 0이 도망 때문이라는 증거가 된다.
+	t.eq(_one_hit_through_step(713, HORSE, 35, true), 15,
+			"같은 자리에서 도망 칸만 눕히면 15가 들어온다 — 그 자리는 사거리 안이었다")
+
+
+# -- M3: 그래서 호스트가 몇 방을 견디는가 ------------------------------------------------------------------
+## 방 수는 손으로 계산한 것이다: 최대 30, 상한 15. 까마귀 10 → 10·10·10, 나머지 셋 → 15·15.
+func _m3_how_many_blows_the_host_survives(t) -> void:
+	t.eq(_blows(720, CROW, 10, 0), 3, "레벨 0에서 까마귀는 세 방이다 (30 ÷ 10)")
+	t.eq(_blows(721, LION, 62, 0), 2, "사자는 두 방이다 (15 + 15) — 한 방이 아니다")
+	t.eq(_blows(722, ELEPHANT, 78, 0), 2, "코끼리도 두 방이다")
+	t.eq(_blows(723, BOSS, 120, 0), 2,
+			"보스도 두 방이다 — 즉사는 사라졌지만 두 번 닿으면 그대로 끝난다")
+
+
+# -- M4: 레벨은 한쪽으로만 산다 ----------------------------------------------------------------------------
+## ⚠ **상한이 비율이라는 것이 여기서만 보인다.** 레벨 10에서 사자 한 방은 15가 아니라 30으로 **커지고**,
+## 그래서 견디는 방 수는 그대로 둘이다. 레벨이 실제로 사 주는 것은 상한에 안 닿는 작은 것들뿐이다.
+func _m4_a_level_moves_survivability_one_way_only(t) -> void:
+	t.eq(_blows(730, CROW, 10, 10), 6, "레벨 10(최대 60)이면 까마귀는 여섯 방이다 — 세 방에서 두 배로 늘었다")
+	t.eq(_one_blow(731, LION, 62, 10), 30, "그런데 사자 한 방은 15가 아니라 30이 된다 — 최대 60의 절반이다")
+	t.eq(_blows(732, LION, 62, 10), 2, "그래서 사자는 레벨 10에서도 여전히 두 방이다")
+	# ⚠ **레벨 11의 최대 체력 63은 홀수다.** `int(63 × 0.5)`는 내림이라 31이고, 두 방 뒤에 1이 남는다.
+	# 보스전이 실제로 벌어지는 레벨이 이것이므로 세 방이 진짜 숫자다.
+	t.eq(_blows(733, BOSS, 120, 11), 3,
+			"레벨 11(최대 63)에서 보스는 세 방이다 — 상한 31이 내림이라 두 방 뒤에 1이 남는다")
+
+
+# -- M5: 분신도 같은 상한을 받고, 무리가 때리는 쪽에는 상한이 없다 -----------------------------------------
+## ⚠ **두 방향을 한 함수에 둔 것은 상한이 한 방향짜리이기 때문이다.** 맞는 쪽에만 걸고 때리는 쪽에 안 거는
+## 것이 규칙이고, 양쪽에 거는 것은 그럴듯한 오답이다 — 그러면 필드의 모든 생물이 절대 두 방 안에 안 죽는다.
+func _m5_the_cap_is_symmetric_and_one_directional(t) -> void:
+	var w := World.new()
+	w.setup(740)
+	_silence_food(w)
+	_clear_terrain(w)
+	var c := w.swarm.add_clone(0, 10)
+	t.eq(int(w.swarm.hp_max_of(c)), 30, "설정: 힘 10짜리 분신의 최대 체력은 30이다 (10 × 3)")
+	t.eq(int(w.swarm.hp[c]), 30, "설정: 그리고 그 최대치로 태어난다")
+	t.ok(not w._damage_clone(c, 62), "사자 힘 62짜리 한 방으로 분신이 지워지지 않는다")
+	t.eq(int(w.swarm.hp[c]), 15, "들어간 것은 62가 아니라 15다 — 상한은 호스트 전용이 아니다")
+	t.eq(w.swarm.count, 2, "무리의 수도 그대로다")
+	t.ok(w._damage_clone(c, 62), "두 방째에 죽는다 — 상한은 무적이 아니다")
+
+	# 반대 방향. 힘 10짜리 까마귀의 체력은 30이고, 그 절반은 15다 — 20짜리 한 방이 15로 잘리면 10이 아니라
+	# 15가 남는다. 다섯의 차이가 「때리는 쪽에는 상한이 없다」의 전부다.
+	var w2 := World.new()
+	w2.setup(741)
+	_silence_food(w2)
+	_clear_terrain(w2)
+	w2.critter_count = 0
+	w2.boss_index = -1
+	var k := w2._write_critter(CROW, Vector2(2000.0, 2000.0), 10)
+	t.eq(int(w2.critter_hp[k]), 30, "설정: 힘 10짜리 까마귀의 체력은 30이다")
+	w2._damage_critter(k, 20, Vector2.ZERO)
+	t.eq(int(w2.critter_hp[k]), 10,
+			"생물에게 넣은 20은 20 그대로 들어간다 — 제 최대 체력의 절반 15로 잘리지 않는다")
+
+
+# -- M의 계기 ---------------------------------------------------------------------------------------------
+## 한 마리를 호스트 위에 정확히 세우고 접촉 한 번을 돌려, 깎인 체력을 돌려준다. **좌표가 같으므로 밀림
+## 방향이 0이고 호스트는 안 움직인다** — 재려는 것이 거리가 아니라 한 방의 크기이기 때문이다.
+## `critter_flees`를 0으로 눕히는 것은 도망치는 종도 「한 방이 얼마인가」를 물을 수 있게 하기 위해서다.
+func _one_blow(seed_value: int, species: int, force_value: int, level_value: int) -> int:
+	var w := _host_at_level(seed_value, level_value)
+	w._write_critter(species, w.swarm.pos[0], force_value)
+	w.critter_flees[0] = 0
+	var before := w.host_hp
+	w._contact(0, w.critter_pos[0])
+	return before - w.host_hp
+
+
+## 같은 것을 손으로 `_contact`를 부르지 않고 진짜 한 프레임으로 잰다. 20px 앞은 세 종 모두의 판정 띠 안이다
+## (까마귀 29 · 말 41.5 · 사자 40, 전부 손으로 계산).
+func _one_hit_through_step(seed_value: int, species: int, force_value: int,
+		stand_and_fight: bool = false) -> int:
+	var w := _host_at_level(seed_value, 0)
+	w._write_critter(species, w.swarm.pos[0] + Vector2(20.0, 0.0), force_value)
+	if stand_and_fight:
+		w.critter_flees[0] = 0
+	var before := w.host_hp
+	w.step(DT)
+	return before - w.host_hp
+
+
+## 호스트가 그 종의 한 방을 몇 번 견디는가. 매번 무적 시간과 공격 시계를 도로 풀고 생물을 호스트 자리에
+## 다시 세운다 — 이 함수는 시간이 아니라 방 수를 센다.
+## ⚠ **한 대도 안 들어오면 -1을 돌려준다.** 0을 돌려주면 「맞자마자 죽었다」와 구별이 안 된다.
+func _blows(seed_value: int, species: int, force_value: int, level_value: int) -> int:
+	var w := _host_at_level(seed_value, level_value)
+	w._write_critter(species, w.swarm.pos[0], force_value)
+	w.critter_flees[0] = 0
+	var n := 0
+	while w.host_hp > 0 and n < 200:
+		w.critter_pos[0] = w.swarm.pos[0]
+		w.host_grace = 0.0
+		w.critter_atk_cd[0] = 0.0
+		var before := w.host_hp
+		w._contact(0, w.critter_pos[0])
+		if w.host_hp >= before:
+			return -1
+		n += 1
+	return n
+
+
+func _host_at_level(seed_value: int, level_value: int) -> World:
+	var w := World.new()
+	w.setup(seed_value)
+	_silence_food(w)
+	_clear_terrain(w)
+	w.critter_count = 0
+	w.boss_index = -1
+	w.level = level_value
+	# 최대 체력은 `Body`가 쓰는 그 함수에서 가져온다 — 여기 30 + 3 × level을 다시 적으면 두 번째 사본이다.
+	w.host_hp = w.body.hp_max(level_value)
+	return w

@@ -45,6 +45,16 @@ func to_title() -> void:
 	world = null
 
 
+## **The frame boundary, and it is deliberately outside every pause and every phase.** `World.begin_frame()`
+## clears the one-frame event lists `view` draws its bursts from; see `Swarm.begin_frame()` for why the top
+## of `step()` is the one place that clear cannot live. Called even while `paused`, even on TITLE and
+## ENDING — a frozen `step()` refills nothing, so a list left standing is a burst `view` re-reads every
+## frame until the panel closes.
+func begin_frame() -> void:
+	if world != null:
+		world.begin_frame()
+
+
 ## PLAY only. The end is detected here, in this order, and nowhere else: death, then clear.
 func step(dt: float) -> void:
 	if phase != Phase.PLAY or paused:
