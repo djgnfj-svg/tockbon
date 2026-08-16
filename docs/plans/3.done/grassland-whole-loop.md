@@ -1,6 +1,6 @@
 # Grassland, the whole loop — the index
 
-**Status**: `1.ready` — split into four plans on 2026-08-14. **All four are built and in `3.done`.**
+**Status**: `3.done` — ⚠ **VOID.** All four plans under it were built, and then `src/` was emptied on 2026-08-16 when the game became an autobattler with no host and no open field. **Kept for the shapes, never as a spec** — see `cell-army-gdd-ko`.
 ⚠ **Only plan 2 has been played, and nothing has been accepted.** This doc stays in `1.ready` because it is
 the index over them, not a plan anyone builds.
 

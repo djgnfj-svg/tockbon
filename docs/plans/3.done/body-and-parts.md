@@ -1,7 +1,7 @@
 # Plan 3 — the body and its parts
 
 **Status**: `3.done` — built 2026-08-15, **18 nets · 889 checks**, every mutation red. **Not accepted, and
-`verify-look` has not run.** Part of [the grassland index](../1.ready/grassland-whole-loop.md); it followed
+`verify-look` has not run.** Part of [the grassland index](grassland-whole-loop.md); it followed
 [hands and commands](hands-and-commands.md) and [the grassland field](grassland-field.md)
 follows it.
 

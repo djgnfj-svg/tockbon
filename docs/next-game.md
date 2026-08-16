@@ -1,45 +1,44 @@
 # The next game
 
-**Status**: **cells that divide and multiply.** Everything is Crab crossed with a roguelike, on minimal art.
-**Target: end of August 2026** — a finished thing, not a shippable product.
+**Status**: **a cell autobattler.** Islands on a node map, a squad of square cells, and the island's
+특산물 bolted onto the soldiers that survived it. **Target: end of August 2026** — a finished thing,
+not a shippable product.
 
-⇒ **The design lives in [the cell game GDD](design/cell-game.md), and its core loop is now playable.**
-One host, a swarm that scatters and rallies, clones that carry what they ate until they touch you, an
-ecosystem that chases or flees depending on how big the swarm has got, and a level-up card pick.
-**The user played it and confirmed the fun** — the record of that play, and the four things it caught that
-the whole verification harness did not, is in `proto-round-trip`.
+⇒ **The design lives in [세포 군대 GDD](design/cell-army-gdd-ko.md) and nothing is built yet.**
+`src/` was emptied on 2026-08-16 at the tag `v2-openfield`.
 
-⇒ **Parts and slots are built too, as of 2026-08-15** — plan 3. Eleven slots, a five-row part table that is
-the content, cards that give nothing but parts, wearing that is irreversible and can cost you a bigger part,
-and a host drawn from what it wears. ⚠ **Nobody has looked at it**: green nets, no play, no `verify-look`.
-**Still unbuilt**: the crow and the horse themselves, chimeras, bosses, habitats, meta unlocks.
-**Species currencies are gone** — card prices were deleted on 2026-08-13.
+**One line**: **먹을 것을 고르러 간다.**
 
-⇒ **The tier question is answered: there are no tiers.** A stage is a **habitat**, cleared by swallowing its
-**boss**, and the ladder runs beasts by habitat → dinosaurs → a final boss. Evolution replaced the card price,
-and force and disposition became two axes instead of one number.
-**All of it is in `stages-and-evolution`, which is newer than the GDD wherever they disagree.**
+**Why cells, still**: almost no art is needed — a square with parts drawn on it is code, not pixels — and
+the theme survived two direction changes because of that. **What did not survive** was "you steer a
+growing mass": there is no host to steer any more, the battle is automatic, and the hands are spent on
+**where to land whom** and **what to bolt onto whom**.
 
-⇒ **And on 2026-08-14 the August build was cut down to something a team can start on.** **One stage, two
-species (crow and horse), one boss** — plus a title page, an ending page, eleven slots, three bindable keys
-and a kill that leaves a corpse you have to stand over. It was **three parts** at the cut; the crow was then
-given three of its own, so the table is **eight rows of which four drop**. **Four plans built in order**,
-indexed by `grassland-whole-loop`; **all four are now in `plans/3.done/` and none of them has been played.** The engine question was reopened the same day and
-**Godot stands**: the prototype runs on it, the whole net harness is built around it, and 300 `Node2D`s cost
-0.065ms — the engine was never the wall.
+## The two resets
 
-**Why cells**: almost no art is needed, one circle is a cell, and **the hands never stop** because you are
-steering a growing mass. The user picked it on that basis.
+| | Deleted | Tag | What it was |
+|---|---|---|---|
+| 1st | 2026-08-12 | `v1-sim` | Eight months of side-view magic action + a pixel water/fire simulation. **No moment in it was fun**, and 34 features had shipped with 5 acceptance checks open |
+| 2nd | 2026-08-16 | `v2-openfield` | An open-field cell game — one host, a swarm that splits and rallies, eleven part slots, a grassland with seven species and a boss. Five plans in four days, **25 nets and 3541 green checks**, and the user played it and said *"그냥 재미가 없다"* |
 
-> ⚠ **Everything below is void.** On 2026-08-12 the direction changed five times — core defense → one-noun
-> circles → summon+build+fit → magic-circle survivors-like → cells — and **the magic circle was dropped
-> entirely** ([why](decisions/magic-circle-dropped.md)); the defense structure is shelved intact
-> ([why](decisions/defense-shelved.md)).
+⚠ **The second one was not a failure of execution.** It was built, verified, and measured. What it lacked
+was a reason for its own central mechanic — see the `why-multiply-ko` paragraph in `CLAUDE.md`, which
+records the arithmetic: **`F` cost nothing and `V` undid it for free, so splitting was never a decision.**
+
+**Do not restore code from either tag.** Both were written against constraints this design does not have.
+**The reasoning in `docs/` is the thing that carried over, and it is most of what is in there.**
+
+---
+
+> ⚠ **Everything below is void — it is the framing from before the FIRST reset**, kept because
+> `docs/decisions/` points at it. On 2026-08-12 the direction changed five times in one day
+> — core defense → one-noun circles → summon+build+fit → magic-circle survivors-like → cells — and
+> **the magic circle was dropped entirely** ([why](decisions/magic-circle-dropped.md)); the defense
+> structure is shelved intact ([why](decisions/defense-shelved.md)).
 >
-> **What survives**: why the old game was thrown away, the `tools/pixel/` notes, and above all
-> **[the planning principles](planning-principles-ko.md)** — the eight judgments that came out of the day
-> and outlive any direction. **December is replaced by end of August.**
-
+> **What survives every reset**: **[the planning principles](planning-principles-ko.md)** — the eight
+> judgments that came out of that day. The second of them, *planning cannot decide whether something is
+> fun*, is the one both resets proved.
 ---
 
 ## Void — the dropped framing, kept for context

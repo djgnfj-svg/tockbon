@@ -25,7 +25,7 @@ The second six, from the review: **an active's reach is written on the part**, n
 parts come from cards only** · **a corpse pays its own force in cells** · **nothing gates the boss —
 damage is the attacker's force both ways** · **the run opens alone** · **the camera pulls back as the swarm
 grows**, which is the answer to the field feeling small.
-**The buildable form of all of it is [the grassland plans](../plans/1.ready/grassland-whole-loop.md), and
+**The buildable form of all of it is [the grassland plans](../plans/3.done/grassland-whole-loop.md), and
 where this doc and a plan disagree about an August number, the plan is newer.**
 
 ---
@@ -365,7 +365,7 @@ The crow still is the opening's food; that turned out to be the argument *for* i
 against.
 ⇒ **The four squares of the disposition × force table are still all filled**, because disposition is rolled
 per individual: a crow that decided to attack is free food, a horse that decided to attack is a real fight.
-**Two species is not two behaviours.** See [the grassland plans](../plans/1.ready/grassland-whole-loop.md).
+**Two species is not two behaviours.** See [the grassland plans](../plans/3.done/grassland-whole-loop.md).
 
 That pulls the art in with it: **everything stage 1 needs is made** — the monsters, the body, the parts, the
 colours, the style. Nothing beyond stage 1 is drawn.

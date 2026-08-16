@@ -1,7 +1,7 @@
 # Plan 4 — the grassland field
 
 **Status**: `3.done` — implementation finished and green, **not accepted**. Part of
-[the grassland index](../1.ready/grassland-whole-loop.md).
+[the grassland index](grassland-whole-loop.md).
 
 ## What the build changed about this plan
 

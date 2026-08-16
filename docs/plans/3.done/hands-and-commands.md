@@ -1,7 +1,7 @@
 # Plan 2 — hands and commands
 
 **Status**: `3.done` — **built, and the keys are accepted; the picture is not.** Part of
-[the grassland index](../1.ready/grassland-whole-loop.md). Built after [the run shell](run-shell.md).
+[the grassland index](grassland-whole-loop.md). Built after [the run shell](run-shell.md).
 ⚠ **`3.done` means implementation finished, not acceptance passed** — see *Acceptance* at the foot of this
 file for what was heard and the three questions still open.
 

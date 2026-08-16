@@ -2,161 +2,83 @@
 
 Loaded into every session and every agent. **Keep only what applies to everyone.**
 
-## The old game was deleted on 2026-08-12. A new one started the same day and **its first loop is playable**
+## The game has been reset twice. The current one is a **cell autobattler**, and `src/` is empty
 
-Eight months of side-view magic action plus a pixel water/fire simulation were thrown away in one decision.
-**What survived is the harness that built it** — this file, `.claude/`, the net runner, `tools/pixel/`, the
-Korean font — and on top of it now sits **`src/`, a working prototype of the cell game.**
+The first — eight months of side-view magic action and a pixel water/fire simulation — was deleted on
+2026-08-12, tag `v1-sim`. The second — an **open-field cell game**, one host you drive and a swarm that
+scatters, five plans over four days — was deleted on **2026-08-16**, tag `v2-openfield`.
+**Both times the harness survived**: this file, `.claude/`, the net runner, `tools/pixel/`, the Korean
+font, and `docs/`. **Nothing else is in the tree right now.**
 
-**Read `docs/next-game.md` and the cell GDD before proposing anything.** They also record why the old game
-died, so the same call is not re-litigated from scratch.
-⚠ **And read `stages-and-evolution` in the same breath — it is newer than the GDD wherever they disagree.**
-Two planning conversations on 2026-08-13 deleted card prices and species currencies, replaced tiers with
-habitats, split force from disposition, and put swarm growth **on a key** (`F` splits everything in half,
-`V` absorbs a radius) — **the level-up no longer grows the swarm at all.**
+**Read `cell-army-gdd-ko` before proposing anything.** Its one line is **「먹을 것을 고르러 간다」** —
+an **autobattler**: a node map of islands (상자 · 전투 · 엘리트 · 보스, and **only 상자 has no fight**),
+a squad of square cells, and **the island's 특산물 bolted onto the soldiers that survived it.**
+**There is no host.** `F` and `V` are gone. Soldiers carry across islands and **a dead one is dead for
+good.** The two reference points are pinned in that doc and **the user asked that they never be dropped**:
+**Bad North** (2 people, ~790k copies, you place the squads yourself) and **Despot's Game** (100k+, the
+units are not controlled at all). **They answered the same question in opposite directions and both
+worked** — that is why both are there.
 
-⇒ **A third one on 2026-08-14 turned that into something buildable, and changed six things doing it.**
-The body is **eleven slots**, not ten (breath got its own). **`1` gathers at the host** and **`3` sends the
-swarm at the mouse point**. **All three keys — left click included — are empty squares the player binds an
-active into**; there is no fixed basic attack. **A kill leaves a corpse and eating it takes time**, standing
-still, interruptible. The August scope was **one stage, two species (crow · horse), one boss** — ⚠ **the
-field is seven species since 2026-08-15; the PART pools are still the two**, see the plan-4 paragraph — and it was
-**three parts** until the crow was given its own three — the table is **eight rows and four of them drop**
-(말 다리 · 까마귀 날개 · 까마귀 부리 · 까마귀 발). 말 갈기 and 말 폐활량 are rows and nothing else.
-**And the word "apex" is dead — say boss**; it did not survive contact with the user.
-⇒ **`grassland-whole-loop` is now an index over four plans built in order** — the run shell, hands and
-commands, the body and its parts, the grassland field. **Godot was re-examined the same day and stands.**
+### Why the second game died, and every step of it is a doc
 
-⇒ **Four adversarial reviews then found sixty-odd problems in those plans, and the pattern is worth keeping:
-the plans were dense and their JOINTS were empty.** A deletion counted in one file that lived in four · a
-net that vanishes instead of going red when a file stops parsing · a new column on a flat table with no
-matching line in `setup`, `add_clone` and the hand-written swap · a value that reads as derived making the
-mechanic it belongs to free · a check that measures a table's shape rather than a behaviour.
-**Six more answers came out of it**: an active's reach is written on the part · the host's parts come from
-cards only · a corpse pays its own force in 경험치 · **nothing gates the boss** (damage is the attacker's
-force both ways) · **the run opens alone** (`START_CLONES` 0) · **the camera pulls back as the swarm grows**,
-which is the answer to the field feeling small. **The prototype in `src/` is a reference, not a base** — the
-user's call is to write it again properly.
+The user played it: *"그냥 재미가 없다… 왜 이 지랄 하는지 모르겠다."* One conversation went six rounds
+finding out, and the rounds are worth more than the verdict:
 
-⇒ **A second, larger review the same day found 74 more. All four plans are now corrected for it.**
-Five independent reviewers; **the ranking that mattered was how many of them found the same thing alone.**
-Read **`adversarial-review-2026-08-14-ko`** anyway — not for its verdicts, which are answered, but for the
-shapes: a count claimed "across the whole repo" that was wrong three times · two nets that contradict each
-other · `EAT_RADIUS` naming a constant that does not exist, which is **the bug the user caught on the first
-play**. ⚠ **One of its fixes is superseded**: it slowed the horse so the swarm could catch it, and the design
-then made the horse uncatchable on purpose. **The plans are newer than the review.**
+- **`why-multiply-ko`** — the diagnosis inverted. Not *"the swarm has no merit"* but **"the swarm has no
+  cost."** `F` conserved force, HP **and** damage, while `MAX_HIT_FRACTION` meant a body always died in
+  three hits **whatever its size** — so splitting multiplied the hits an enemy needed and `V` undid it for
+  free. ⇒ **An advantage with no cost is not a decision, and a mechanic that is not a decision is not fun.**
+  The optimal play was "split to the cap and stay bunched", learnable once and then over
+- **`play-notes-2026-08-16-ko`** — four problems in one paragraph. The only bar on screen was **경험치, not
+  HP**; every species column said *where it walks* and none said *how it hits*; the boss out-reached your
+  bite by 14px so there was no safe place to stand; **and nobody had ever measured the boss fight** —
+  `probe_run.gd` stopped at `BOSS_HUNT_AT`, one line before the only fight that ends a run
+- **`round-by-round-soldiers-ko`** — why an open field was the wrong container. The measured failure
+  (**dead air 61% against a 25% bar**) **cannot exist** in a round: an island starts with the enemy on it.
+  Time gates, spawn weights, the no-spawn radius, the opening pocket, the minimap and the zoom curve all
+  stop being problems because they stop existing
+- **`cell-army-gdd-ko`** — the GDD that replaces `cell-game.md`
 
-⇒ **Then the design moved again, and it moved the numbers.** **`docs/design/hunting-and-the-boss-ko.md` is
-newer than the GDD, than `stages-and-evolution`, and than all four plans.** The host opens at **force 10**
-so splitting is the tutorial, and **every monster went ×10** with it (crow 10 · horse 30–40 · boss 120).
-**Size comes from the species**, force adds at most 1.5× — a strong crow is never a horse. **Say 경험치, not
-cells.** The three species are three different hands: **the crow stands still and counters** (walk up and
-hit it), **the horse out-runs even the swarm and is HERDED** into clones, rocks or the edge, and **the boss
-cannot be escaped** — it comes to you, closes an arena, and the scattered swarm is summoned into it.
-**Clones attack on contact**, so a swarm spread wide pays for it. **Rocks and water both ship and nothing
-was deferred** — the user was offered the cut twice and refused; the schedule takes it instead.
+⚠ **The conversation circled six times and the reason is worth keeping.** The problem was one sentence
+(*"분신이 왜 있는지 모르겠다"*) and **every answer offered was a new system** — 병종, 부대 지정, 합체,
+DB화 — each of which introduced its own unknowns, so nothing ever closed. ⇒ **When a complaint is one
+sentence, first ask whether a rule can answer it. A new system cannot be evaluated, only accumulated.**
+And underneath it: **there was no reference point.** Balatro's LocalThunk had never played a deckbuilder
+but he had *Luck Be a Landlord*. **Without one game to point at, every question is answered by inventing.**
 
-**What runs**: one host you drive, a swarm that scatters and rallies, clones that carry what they ate until
-you take it, an ecosystem of critters that chase or flee, a level-up card pick — **and, since plan 2 landed,
-every key the game will ever have.** Force is a stored number per body; `F` held halves the whole swarm at
-once, `V` absorbs a radius back into the host, `1` rallies at the host, `3` sends the swarm at a point, three
-active slots hang off left click · right click · `space`, and `Tab` opens the body panel and pauses.
-**A level now pays force, not clones** — the two split cards are gone.
+### Three measurement lessons that outlive both games
 
-⇒ **And since plan 3 landed the body changes.** Eleven slots, a part table that IS the content, cards that
-give nothing but parts, and the host drawn from what it wears — a limb pair, an outline, two eye dots, a
-corner radius. Wearing is irreversible and it can cost you a bigger part; **force is written on `wear()` and
-subtracted on digestion in the same call**; 갤럽 is **held**, not fired, and drains breath. **The trait is a
-deliberate placeholder.** **Species currencies and tiers are not merely unbuilt — they were cut.**
+- **A constant is not what reaches the screen.** `CLONE_BODY_RADIUS` 8 was cited in chat as "8px", and the
+  truth was **38px** — 8 is a *radius*, the camera multiplies by `ZOOM_NEAR` 1.6, and a 1280 viewport is
+  stretched into a 1920 window for another 1.5×. **A design argument was built on a number off by 4.8×.**
+  The same shape had already bitten twice: a half-diagonal of 1377 where the truth was 918
+- **A design complaint can become a number, and that is the instrument to reach for when the answer is
+  "it isn't fun".** *"도저히 진행이 안 돼"* became **83% dead air, 150s between kills** by writing a bot that
+  played a whole run headless. **The probe is deleted with the game; the move is not**
+- ⚠ **And that probe graded itself in its owner's favour twice** — it modelled one-shot as `force >= hp`
+  after a cap made that false, and never read `SPECIES_FLEES`. **A probe that grades its own step must be
+  inverted like any other check**
 
-⇒ **And since plan 4 landed there is a field to use it on, and all four plans are in `3.done`.** Three
-species with three different hands, a corpse you stand over, forty rocks and twelve ponds, a boss that
-wanders for 150 seconds and then comes, an arena, and a minimap. **What does not run**: chimeras, further
-habitats, meta, animation, and the horse's other two parts (`Parts.DROPS` keeps 말 갈기 and 말 폐활량 out of
-both pools on purpose, so the horse trait is unreachable this build).
-⚠ **The arena had no view at all for a day** — the circle closed, the host was pinned inside it, the swarm was
-teleported in, and nothing on screen said so. **Plan 5 draws it**; plan 4's own acceptance question is
-answerable now and has still not been asked.
+### Play is an instrument the harness does not contain
 
-⇒ **The user played it on 2026-08-15 and the field is now SEVEN species.** 다람쥐 · 코끼리 · 치타 · 사자
-joined the crow, the horse and the boss, and **none of the four gives a part** — `Parts.DROPS` is untouched.
-The read was that the floor was a carpet (`FOOD_SPOTS` 500 → **180**) and the field was scenery. Three new
-columns carry the behaviour: **`SPECIES_WANDER`** (only the crow stands still), **`SPECIES_HUNTS`** (only the
-lion, and it is under `HOST_SPEED` so walking away always works), **`SPECIES_HERD`** (one spawn call, N
-bodies at one spot — a herd is born together and nothing holds it together afterwards, so a straggler is a
-thing that happens). `SPAWN_CROW_CHANCE` and `CRITTER_START_*` are **deleted** for `SPECIES_SPAWN_WEIGHT` and
-`SPECIES_START`, which counts HERDS and not heads. **The minimap draws the ponds** at their real size,
-ungated by `MINIMAP_SHOW_DIST`, because a pond is terrain and not a body.
-⇒ **[The condition for this was written down before it happened](docs/decisions/august-scope-two-species.md)**
-— *"play says the field is empty; more species that give no part is the cheap fix"* — and it fired verbatim.
-**Splitting "is on the field" from "drops a part" is what made it cheap.**
+The last game shipped 34 features with 5 acceptance checks open and **no moment in eight months was fun**.
+This one shipped 25 nets and 3541 green checks and **the user could not play it**. Four things three
+rounds of adversarial verification missed were found in five minutes of play, twice over.
+⇒ **`docs/planning-principles-ko.md` is the only file that survived both resets on purpose.** Its second
+line — **planning cannot decide whether something is fun** — is why this section exists.
 
-⚠ **And the play session found what four rounds of review did not: the game has almost no 연출.** Nothing on
-screen says you were hit, that you hit anything, that a clone died, that a level happened, that `F` fired, or
-that the boss started hunting. **[The audit](docs/design/presentation-audit-ko.md) counts nine that exist
-against twelve that do not, and the pattern is that every existing one is "something I did"** — the missing
-ones are all "something that happened to me" and "something that happened over there".
-⇒ **[Plan 5](docs/plans/3.done/presentation-pass.md) is that, and it is built** — 22 nets, 2420 checks. It
-unblocks three older acceptance questions — plan 4's arena, and plan 2's *does losing a fat clone hurt* /
-*does the hold read as an act* — all three unanswerable because the thing was never drawn. **One rule change
-rode in it** (a corpse takes several bites; quitting keeps what you ate) and it is marked as such.
-⚠ **Nobody has looked at it.** All eight of its acceptance questions are eyes and every one is open.
+### The state of the tree, right now
 
-⇒ **Three adversarial passes over the BUILT code then found 29 more, and not one was a false report.**
-Two shapes are worth carrying: **an event list cleared at the wrong end of the frame** — `main._read_input()`
-fills `split_this_frame` *before* `run.step()`, so clearing at the top of `step()` wiped it on the frame it
-was written, 100% of the time, and `F`'s ring never once reached the screen; and **a leaf that draws two
-things when the check asks about one** — `_paint_ring` draws two circles, so the arena wall dragged a 405px
-companion circle across the boss fight while the check confirmed the 450px one. **Emptying five burst effects
-to full transparency was green**, as was collapsing the boss arrow to a point, because `size_px` was the one
-argument the net never read. ⇒ **The plan text was wrong in eight places and the doc's 「지어진 뒤」 says which.**
-
-⇒ **The user then played it and could not play it, and that turned out to be measurable.** *"도저히 게임이
-진행이 안 돼. 잡을 수가 없어요."* ⇒ `tools/look/probe_run.gd` PLAYS a whole run headless with a scripted bot
-and prints four numbers; the opening build scored **83% of the run with nothing killable on screen and a
-150-second gap between kills.** **A design complaint became a number, and that is the instrument to reach
-for next time the answer is "it isn't fun".**
-⚠ **The opening screen held zero creatures at every seed, by construction** — the opening camera's
-half-diagonal is **459px** and creatures were forbidden inside **900px**. Two separate constants had been
-justified by a half-diagonal that was **1.5× too large** (1377 where the truth is 918), and a net was holding
-the same wrong number. ⇒ **[The level curve](docs/design/level-curve-ko.md)** is the answer: four new species
-that drop no part (들쥐·토끼·들개·멧돼지), time gates, a placed opening pocket, and a hit capped at half the
-victim's maximum. Kills went **16 → 342** and the longest gap **150s → 75s**. ⚠ **It still fails its own bar**
-(61% dead air against 25%), and the failure changed character — from "nothing I can kill" to "nothing on
-screen while I walk to the next one".
-⚠ **The instrument was wrong in its owner's favour twice** — the bot modelled one-shot as `force >= hp` after
-the cap made that false, and never read `SPECIES_FLEES`. The honest number was 58%, not the 48% first
-reported. **A probe that grades its own step must be inverted like any other check.**
-⚠ **And the user's most emphatic note is unbuilt**: bodies in contact stand still through the whole attack
-cooldown — *"붙어서 가만히 있는 이 쓰레기 같은 부분이 중요해. 개잼이 없어져."* Separation made it worse, not
-better, by removing the accidental jostle. See `bodies-must-never-stand-still` in memory.
-
-⚠ **Plan 2's keys are accepted; its picture is not** — the user played it and said the detail falls well
-short while the keys land fine. **The three questions that actually decide that plan are still unheard**
-(does the hold read as an act · does losing a fat clone hurt · is force 10 a busy opening).
-⚠ **`Rules.FORCE_PER_THREAT` is DELETED, not merely unplayed** — the whole threat model went with it when the
-user's read was that comparing swarm force against a creature's threat was simply the wrong design. A
-creature's disposition comes from its species now and its damage is its own force in both directions.
-`net_field`'s `_c29_instruments` names every constant that went and asserts each is absent.
-
-⇒ **The user played it and confirmed the fun.** Read the acceptance section of `proto-round-trip` before
-designing anything on top of it. **Four things that three rounds of adversarial
-verification and 102 green checks did not catch were found in five minutes of play**: a swarm that started
-at zero, an eat radius smaller than the body, a Control laid out from a zero size, and a threat model that
-was simply the wrong design. **Play is an instrument the harness does not contain.**
-
-⚠ **The direction changed five times on 2026-08-12 alone**, and the magic circle was dropped at the end of
-it. **`docs/planning-principles-ko.md` is what came out of that day** — eight one-line judgments that hold
-whatever the game turns out to be. **Open it before any planning conversation.** The first of them:
-**the hands must never be idle**; the second: **planning cannot decide whether something is fun.**
-
-**Everything the old game measured is recoverable at the tag `v1-sim`.** Nothing was lost, only unloaded.
-**Do not restore code from it** — it was written against constraints (integer determinism, a 20Hz sim tick)
-that no longer apply and would quietly re-import the whole cost.
-
-⇒ **Rules below that need a game to be true have been removed rather than kept as fiction.** Folder
-contracts, tick-rate traps and simulation budgets all go back in **when the new game has folders and a
-tick**, written from what is then measured — not copied from a game that no longer exists.
+- `src/` — **gone.** `project.godot`'s `run/main_scene` is empty
+- `tests/nets/` — **only `net_citations.gd` is left.** Every other net drove deleted code
+- ⚠ **So the round does not run at all**: the wrapper's scan-broken detector reds below five nets and says
+  so. **That is correct behaviour, not a break.** It goes green again when the new game's nets land in a
+  group of five or more
+- `tools/look/` — only its `README.md`. Both probes and all three capture scripts drove the deleted shell
+- **Everything measured in either game is recoverable at `v1-sim` and `v2-openfield`.**
+  **Do not restore code from either.** `v1-sim` was written against integer determinism and a 20Hz tick;
+  `v2-openfield` was written against a host, an open field and a swarm you steer. Both would quietly
+  re-import a whole set of constraints the current design does not have
 
 ## No `git push` until 2026-08-22 (decided by the user)
 
@@ -247,19 +169,19 @@ turned out to be neither of the two options that had been on the table.** That i
 
 | Doc | Question it answers |
 |---|---|
-| `docs/next-game.md` | **What is being built now, and why the last one was thrown away** |
-| `docs/planning-principles-ko.md` | **How to judge a direction.** Survives every direction change — read it first |
+| `docs/design/cell-army-gdd-ko.md` | **The GDD. What is being built.** One line, both loops, what is decided, six things that are not, and the two reference games |
+| `docs/planning-principles-ko.md` | **How to judge a direction.** Survived both resets on purpose — read it first |
 | `docs/design/` | **What a feature looks like.** Read its README first — the newest doc wins where they disagree |
 | `docs/decisions/` | **Why something was *not* done.** The rejected branch and the reason, nothing else |
 | `docs/plans/` `1.ready` `2.active` `3.done` | **The only folder that moves.** The folder a doc sits in is its status |
-| `docs/adversarial-review-2026-08-14-ko.md` | **How four dense plans leaked at their joints**, from five independent reviewers. Its findings are answered in the plans; **it is kept for the shapes, not the verdicts** |
-| `docs/adversarial-review-2026-08-14-round3-ko.md` | ⚠ **A THIRD review, 101 findings, and this table did not list it for a day.** Plan 3 was built without it being read — its finding **H** (the card pool is empty forever, so a run offers zero cards) shipped exactly as written. **Most of the 101 are aimed at plan 4. Read it before plan 4** |
-| `docs/gap-check-2026-08-15-ko.md` | **What is left AFTER plan 4**, checked while it was being built. Five holes are open: no herding hand · nothing kills a scattered clone · the trait is unreachable · grass still beats meat · **sound appears zero times in the whole repo** |
 | `docs/how-studios-schedule-art-ko.md` | **When other studios attach the art**, with sources. Written because the user has no data of their own and said so — see the reply rule about recommendations |
 
-**All three exist and hold ~50 docs.** `docs/archive/` does **not** exist — it was deleted on 2026-08-12,
-and this table claimed the opposite of the truth on both counts for two days. **A concept never changes
-folder**; its header carries `Implemented` and `Accepted` as two separate axes.
+⚠ **Most of `docs/` now describes a deleted game**, and that is deliberate — the reasoning is worth more
+than the code was. **`docs/design/README.md`'s index says which docs are live.** `docs/next-game.md`, the
+three adversarial reviews, `gap-check-2026-08-15-ko`, `level-curve-ko` and everything in `docs/plans/3.done/`
+are all about `v2-openfield`. **Read them for shapes, never as a spec.**
+`docs/archive/` does **not** exist — deleted on 2026-08-12. **A concept never changes folder**; its header
+carries `Implemented` and `Accepted` as two separate axes.
 
 **Never state the same thing twice.** A value counted in two places will diverge.
 
@@ -330,36 +252,31 @@ before starting, not from whatever commit happened to be current earlier.
 | `src/shell/` | **The only place that reads `Input`**, and the only place that wires `sim` to `view`. It builds its children in code, so a net calling `_ready()` exercises the real wiring |
 | `src/look.gd` | **Every presentation constant, in exactly one file.** `src/sim/rules.gd` holds every constant that changes what happens |
 
-**The first of these scans now exists, and it reaches all six files under `src/view/`.** `net_draw_leaf`
-asserts that **`title_screen.gd`, `ending_screen.gd`, `body_panel.gd` and `card_panel.gd` each hold at most
-two `c.draw_` call sites**, so
-every pixel goes through `_paint_rect` or `_paint_text` and a net can assert what was drawn. It was written
-the day a hook that threw its own drawing away passed 54 checks out of 54; `body_panel.gd` joined it as it
-was born, which is the only cheap moment to join.
-⇒ **`card_panel.gd` joined that list on plan 3, and `field_view.gd` and `hud.gd` are covered by the OTHER
-shape of the same scan**: a per-function table (`FIELD_LEAF_CALLS`, `HUD_LEAF_CALLS`) pinning each function's
-`draw_*` count exactly, leaves at 1 and composers at 0. Neither can live under a file-wide bound of two.
-⚠ **A per-function table scans the functions it NAMES and nothing else, and that leaked twice — the second
-time out of the fix for the first.** For a day `FIELD_LEAF_CALLS` held nine leaves and no composers, so a
-bare `c.draw_circle(...)` at the top of `FieldView._paint` reached the screen every frame with 1414 checks
-green while the net's own header claimed the property held generally. Eight composers then got a `: 0` —
-**and that named seventeen of the file's twenty-eight functions, so eleven stayed outside.** The same circle
-at the top of `_striking()` and of `_cluster()`, both called from `_paint` every frame, was green at 1889
-checks with stderr clean. ⇒ **Adding names fixes the day it is done and nothing after it**, so the class is
-closed instead: `_every_function_is_in_the_table()` walks each file's own `func` lines and reddens on any
-name the table does not hold, in the direction the table-walk cannot see. **A function written tomorrow is
-red until it is listed.** The scan counts lines rather than calls, though: two draws separated by `;` on one
-line count as one.
-⇒ **`net_draw_leaf` also holds two scans that are not about draw counts.** One asserts that **every
-parameter a leaf is handed is still used in its body** — the count says the draw call is there and says
-nothing about what reached it, and `c.draw_circle(p, 0.0, col)` inside `_paint_disc` turned forty rocks and
-twelve ponds invisible with the round green. The other is the **colour half of the one-file rule**: not one
-`Color(` or `Color.RED` outside `look.gd`, across all eighteen other files under `src/`. It was written the
-day `hud.gd` held six of its own, `card_panel.gd` six more and `field_view.gd` one.
-⚠ **The PIXEL half is still unwritten** — `card_panel.gd` lays its cards out from literals — so a green
-there is not "no presentation constant is loose".
-**The rest are still unwritten**: grep `src/sim/` for `extends Node` · `_draw` · `Input.` · `get_node` · `$`,
-and grep `src/view/` for writes to `sim.`. Write each when its folder has enough in it to drift.
+⚠ **These four rules are the contract for the tree that is about to be written. `src/` is empty today.**
+
+**The scan that enforced the drawing half was `net_draw_leaf`, and it is deleted with the game. Rewrite it
+early** — it was written the day a hook that threw its own drawing away passed 54 checks out of 54, and
+everything it learned afterwards is worth having again on day one:
+
+- **Two shapes, because one does not fit every file.** A file-wide bound (*at most two `c.draw_` call
+  sites*) for simple panels, and a **per-function table** pinning each function's `draw_*` count exactly —
+  leaves at 1, composers at 0 — for a big view file
+- ⚠ **A per-function table scans the functions it NAMES and nothing else, and that leaked twice — the
+  second time out of the fix for the first.** A bare `c.draw_circle(...)` at the top of the view's `_paint`
+  reached the screen every frame with **1414 checks green**; naming eight more composers still left eleven
+  of twenty-eight functions outside, and the same circle was green again at **1889**. ⇒ **Adding names
+  fixes the day it is done and nothing after it.** Close the class instead: walk the file's own `func`
+  lines and redden on any name the table does not hold. **A function written tomorrow is red until listed**
+- **Count the draw calls AND check the arguments survive.** `c.draw_circle(p, 0.0, col)` inside a leaf
+  turned forty rocks and twelve ponds invisible with the round green — so also assert **every parameter a
+  leaf is handed is still used in its body**
+- **The colour half of the one-file rule**: not one `Color(` or `Color.RED` outside `look.gd`.
+  ⚠ **The PIXEL half was never written** — a panel laid its cards out from literals — so that scan's green
+  never meant "no presentation constant is loose"
+
+**The `sim`/`view` halves were never scanned at all**: grep `src/sim/` for `extends Node` · `_draw` ·
+`Input.` · `get_node` · `$`, and grep `src/view/` for writes to `sim.`. Write each when its folder has
+enough in it to drift.
 
 **The one-file rule for presentation constants is inherited and was measured**: scattering them meant the
 power doubled and **zero things changed on screen**, because the numbers that would have shown it were in
@@ -372,9 +289,11 @@ in the packed form and did not compile as written. A `const` Array is read-only 
 survives; **element typing does not**, which is why every read of `Parts.*` casts (`int(...)`, `float(...)`).
 **Every flat table this repo writes from here walks into it.**
 
-**The flat-array swarm is a correctness contract, not a performance one.** 300 `Node2D`s cost 0.065ms here
-— the engine was never the wall. `carried[i]` living in a `PackedFloat32Array` is what makes "a clone
-killed far from home loses its cargo" **structurally true**, with no code that has to remember to drop it.
+**A flat array of bodies is a correctness contract, not a performance one.** 300 `Node2D`s cost 0.065ms
+here — **the engine was never the wall.** The old swarm kept `carried[i]` in a `PackedFloat32Array`, and
+that is what made *"a body killed far from home loses its cargo"* **structurally true**, with no code that
+had to remember to drop it. ⇒ **The new game's soldiers carry parts across islands and die permanently.
+Same shape, same reason** — put the columns in flat arrays and the loss needs no bookkeeping.
 
 ## Comments
 
@@ -504,9 +423,13 @@ These survive **even after you confirm every mutation goes red**:
 
 ## Running the nets
 
-**Twenty-five nets, 3541 checks, 4.6 seconds** (measured after the level-curve pass — 22/2420 after plan 5,
-22/2015 after the seven-species field, 22/1973 after plan 4's leftovers were closed, 22/1889 after
-its repairs, 18/889 after plan 3, 16/514 after plan 2).
+⚠ **The round does not run right now, and that is correct.** `src/` was emptied on 2026-08-16 and every net
+that drove it went with it — **only `net_citations.gd` is left**, so the wrapper's scan-broken detector fires
+(`tests/nets/ 에 네트가 1개뿐이다`) and refuses the round. **It goes green again when the new game's first
+nets land in a group of five or more.**
+
+**The bar it has to get back to: 25 nets, 3541 checks, 4.6 seconds** — that was `v2-openfield` at its end
+(22/2420 after its presentation pass, 18/889 four days earlier, 16/514 the day before that).
 A net is `tests/nets/net_*.gd` with one method, `func run(t)`,
 and `t` gives you `ok` · `eq` · `pump_frames` · `expect_error` · `root`. **The wrapper reds below five
 nets** — that is the scan-broken detector, so nets land in groups, never one at a time.

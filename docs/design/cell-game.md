@@ -30,7 +30,7 @@ square); **`1` gathers the swarm at the host**, not at a placed point; **every o
 overwritable square**, `bite` included; **eating a kill takes time and leaves a corpse**, it is not
 automatic; and **the word "apex" is dead — say boss.** The August scope came down to **one stage, two
 species and one boss**. All of it is in
-[the grassland plans](../plans/1.ready/grassland-whole-loop.md), and the paragraphs below are edited where
+[the grassland plans](../plans/3.done/grassland-whole-loop.md), and the paragraphs below are edited where
 they were made false rather than left to rot.
 
 ⚠ **The prototype already changed this document once, and will again.** Predators became critters carrying
@@ -421,7 +421,7 @@ tell apart, which is a design question, not a bill.
 
 ⚠ **Narrowed again on 2026-08-14, and much further than "two tiers".** The August build is **one stage
 (grassland), two species (crow and horse), one boss**. Everything else in the ladder is content that does
-not fit in the time. [The grassland plans](../plans/1.ready/grassland-whole-loop.md) are the buildable form
+not fit in the time. [The grassland plans](../plans/3.done/grassland-whole-loop.md) are the buildable form
 of that cut, and **all four of them are built**.
 
 ⚠ **The cut said three parts — horse legs, mane and lungs — and "the crow gives no part". Both halves are
