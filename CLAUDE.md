@@ -174,6 +174,7 @@ turned out to be neither of the two options that had been on the table.** That i
 | `docs/design/` | **What a feature looks like.** Read its README first — the newest doc wins where they disagree |
 | `docs/decisions/` | **Why something was *not* done.** The rejected branch and the reason, nothing else |
 | `docs/plans/` `1.ready` `2.active` `3.done` | **The only folder that moves.** The folder a doc sits in is its status |
+| `docs/harness-todo-ko.md` | **Work on the tools, not the game.** Top item is the user's: **parallelise the build.** Says what is already parallel, what is only serial by habit, and why worktree isolation is the price |
 | `docs/how-studios-schedule-art-ko.md` | **When other studios attach the art**, with sources. Written because the user has no data of their own and said so — see the reply rule about recommendations |
 
 ⚠ **Most of `docs/` now describes a deleted game**, and that is deliberate — the reasoning is worth more
