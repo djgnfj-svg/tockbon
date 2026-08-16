@@ -1,5 +1,10 @@
 # Cell game — the GDD
 
+⚠ **SUPERSEDED on 2026-08-16 by [세포 군대 GDD](cell-army-gdd-ko.md).** The open field, the host, `F`/`V`,
+the eleven slots and "the host gets stronger" are all this document's and all of them were dropped in one
+conversation. **Where the two disagree, that one is right.** This file is kept for what it records about
+how the direction got here, not as a spec.
+
 **One line**: One square cell splits into a swarm, eats whatever it can catch, and spends what it digested
 on **real animals' body parts** — until it stands at the top of the food chain.
 
