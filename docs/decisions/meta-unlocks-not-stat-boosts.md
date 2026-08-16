@@ -1,6 +1,8 @@
 # Between-run progress unlocks content; it does not raise numbers
 
-**Status**: valid
+**Status**: ⚠ **REVERSED on 2026-08-16 by the user. Both are in: unlocks AND stat boosts.**
+The reasoning below is kept because **the trap it names did not go away** — see 「뒤집은 뒤」 at the bottom.
+It was decided for the open-field cell game, which no longer exists; the live design is `cell-army-gdd-ko`.
 
 ## What was decided
 
@@ -22,5 +24,22 @@ raise them.
 
 ## Conditions to reopen
 
-None before the core loop is playable. Reopen only if runs are complete and there is no reason to start
-another.
+~~None before the core loop is playable.~~ **Reopened and reversed before the core loop existed at all** —
+see below.
+
+---
+
+## 뒤집은 뒤 — 2026-08-16
+
+사용자: *"내용이 될 듯. 숫자도 올리고 둘 다 할 듯. 열려 있어."*
+**연구 해금이 새 내용과 숫자 둘 다를 준다.** 위 표의 첫 줄은 더 이상 거절이 아니다.
+
+⚠ **다만 그 줄이 적어 둔 함정은 그대로 남는다**: 영구 강화가 팔리려면 **헤드룸이 필요하고, 헤드룸은
+첫 런을 약하게 만들어서 만든다.** 그리고 **첫 런이 계속할지 말지를 정하는 판이다.**
+
+⇒ **그래서 이것이 조건으로 남는다: 첫 런은 아무것도 해금되지 않은 채로 그 자체로 재미있어야 한다.**
+숫자를 올릴 수 있다는 것이 첫 런을 약하게 튜닝해도 된다는 뜻이 아니다.
+**해금 0개 상태를 기준으로 밸런스를 잡고, 해금은 그 위에 얹는다.**
+
+⚠ 그리고 표의 둘째 줄 — *연구 트리를 그 자체로 하나의 시스템으로 두지 않는다* — 은 **아직 안 뒤집혔다.**
+해금이 어디에 붙는지(별도 화면인가, 타이틀의 한 칸인가)는 정해지지 않았다.
