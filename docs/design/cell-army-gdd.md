@@ -53,7 +53,7 @@ whether the player continues at all.
 ### Session loop — one run
 
 ```
-map opens → pick an island → [main loop] → one reward from that island (count · specialty · artifact) → back to the map → … → boss island → clear
+map opens → pick an island → [main loop] → that island's reward (one of the three; an elite gives two) → back to the map → … → boss island → clear
                                  ↓ lose                ↑ a chest island arrives here without a fight
                               run over
 ```
@@ -70,11 +70,11 @@ the island unfolds → land them on the coastline (where · when · who) → aut
 
 > **Drop → watch → drop again.**
 
-⚠ **In the big picture, the only thing not decided is what gates the "again."** Resource, cooldown, or
-landing-craft interval. **That one choice sets the game's tempo.**
+✓ **What gates the "again" is decided: the landing-craft interval** — see the "The boat" section.
+**That one choice sets the game's tempo.**
 
-**Decisions the player makes**: which island to go to · **where, when and who to land** · **how much to hold
-back** · who to bolt a specialty onto · which artifact to take.
+**Decisions the player makes**: which island to go to · **which dock, when, and who to land there** ·
+**how many to send out** (the "contact line" section) · who to bolt a specialty onto · which artifact to take.
 
 ---
 
@@ -90,7 +90,7 @@ back** · who to bolt a specialty onto · which artifact to take.
 | `F` / `V` | **Deleted.** No splitting in half, no absorbing |
 | Soldiers | **They carry across rounds.** Die and they are gone for good. **And HP carries too** — see its section below |
 | Start | **A lump of square cells with one leg** attached |
-| Rewards | **Three axes, and one island gives exactly one** — **count** · **specialty** (bolts onto one soldier) · **artifact** (applies to the army). See its section below |
+| Rewards | **Three axes** — **count** · **specialty** (bolts onto one soldier) · **artifact** (applies to the army). A combat island gives one, **an elite gives two** |
 | Starting force | **Ten cells** (user: *"처음에 차라리 세포 열 마리를 주고."* — *"just give ten cells at the start."*) |
 | Parts | A specialty *is* a part, and **it bolts onto a soldier** (there is no host) |
 | Theme | **Stays cellular.** A ladder climbing from mammals up to dinosaurs |
@@ -150,13 +150,94 @@ questions — deploy now or wait for the next boat · which of the five · where
 targeting is nearest-first, the landing point is the target choice.** **There are two inputs but four
 decisions, and you exercise those four once every 3–5 seconds.**
 
-> **Candidate (undecided)**: **drop the landing craft's capacity to 1 and the interval to 0.5s.**
-> Throughput per second (the total budget of the restriction) is unchanged, but **the decision rate becomes
-> 2Hz** and the hands stop idling. The evidence is already in this repo —
-> the Pikmin row in [What makes placement a decision](what-makes-placement-a-decision.md):
+> **~~Candidate: capacity 1 at a 0.5s interval~~ — the user produced a different answer. See "The boat"
+> below.**
+> That candidate's evidence was the Pikmin row in
+> [What makes placement a decision](what-makes-placement-a-decision.md) —
 > *"the real time spent throwing is itself the cost, so 'all of them on one side' is physically slow."*
-> ⇒ **And this partially pays off the "send everything" problem above too** — sending everything costs
-> physical time.
+> **That evidence survives intact inside the answer below.**
+
+### The boat — **five per trip, every 3 seconds, and the crossing takes time** (user, 2026-08-17)
+
+*"한 척에 최대 다섯 마리로 하고, 배에 태워서 보내는 거지. 3초 기다렸다가 선착장 같은 데서 내리는
+것도 있는 거지."* (*"Up to five per boat, and you load them aboard and send them. And there's waiting 3
+seconds and then unloading at something like a dock."*)
+
+| | |
+|---|---|
+| Capacity | **Up to five per boat** |
+| Interval | **3 seconds** |
+| Crossing | **It takes time.** Sending is not arriving |
+
+⚠ **This inverts the "77% dead air" calculation.** That calculation treated the whole 3 seconds as idle,
+but **filling one boat is five decisions**, so the 3 seconds is not dead air — it is **loading time.**
+⇒ **A tempo appears** — fill, send, watch them arrive, fill again.
+
+**And the crossing time creates two more things:**
+
+- **Prediction becomes a decision.** Send now and they arrive 3 seconds later, so you have to load for
+  **the situation then, not the situation now**
+- **A long crossing is dangerous.** Ranged enemies shoot the incoming boat — see the "Engagement rules"
+  section.
+  ⇒ **It is the only rule that makes landing cost something, and unlike the rejected landing tax it is
+  plausible**
+
+**Noted as meta-unlock candidates**: shorter boat travel time · higher capacity · shorter interval (the
+user proposed these).
+
+### Docks — **the island decides where you can land** (user, 2026-08-17)
+
+*"어디에 내릴지는 선마다 이미 있는 걸로 하자. 선마다 이미 있고, 무시하는 병사도 있고."*
+(*"Let where you land be something each island already has. Every one already has them, and there are
+soldiers that ignore them too."*)
+
+You pick **one of the few docks the island owns, not any point on the whole shoreline.**
+
+⇒ **"Where" shrinks from a continuum to one-of-N.** That buys three things:
+
+- **It reads.** In an autobattler the screen is everything, so it is better that the places you can pick
+  are visible
+- **It becomes level design.** Hand-authoring enemy strength is already decided, and **dock placement is
+  that hand's main tool**
+- **Pulling works at dock granularity.** "The other side" becomes **a different dock** instead of a vague
+  direction
+
+⚠ **And "a soldier type that ignores docks" is itself a build.** It overlaps naturally with the flying
+type — ignore elevation *and* ignore docks and that one type opens the whole terrain. **Which is why what
+that type costs matters** (an undecided item in the "Terrain" section).
+
+**Still undecided**: how many docks an island has. **Too few and pulling does not work; too many and the
+decision blurs.**
+
+### ⚠⚠ Three holes the third adversarial review found — **all open**
+
+**1. There is no rule for who boards the boat.** A soldier is an individual — permanent death, HP that
+carries over, and a specialty that bolts onto **one soldier**. But summoning is **by type** (one type per
+key).
+⇒ **Press `1` five times and which five board?** A 3-HP one and a 10-HP one, one carrying a specialty and
+one not, are all mixed together behind the same key. **The document answers this nowhere, and without it
+HP carryover, specialty bolting and the bench threshold in the "contact line" section are all
+unexecutable** — you can name who gets the part but you cannot name who ships out.
+> Candidate: **the key picks the type, and the highest-HP individual of that type boards automatically.**
+> One line of rule settles it and leaves room to add manual picking later.
+
+**2. The range numbers have no unit, and the island's size is not in "What is decided".**
+(The pulling section states a 40-tile island width once, but **that is an assumption inside one calculation, not a rule.**) "Range 0 · 3 · 30"
+is written down, but **if 30 is tiles it crosses the island, and one constant then deletes docks, tiers,
+ramps and pulling all at once.** If it is pixels, 3 is nothing.
+⚠ It is exactly the shape of **"a constant is not what reaches the screen"** (the 4.8× error) in
+[Lessons from two dead games](../lessons-from-two-dead-games.md).
+> Candidate: **pin the unit of range and area to "tiles", and put the island's tile count in the
+> "What is decided" table.**
+
+**3. A flying type cannot be priced.** The three candidates written down (lower health · shorter range ·
+takes more room on the boat) **are all non-prices.** If ground enemies cannot hit it, the damage taken is
+zero, so **HP carryover, permanent death and the time limit are all void**, and low health is not a price
+when nothing lands. Pricing by throughput fails too — even at 2 per boat, a force of 10 is fully deployed
+in 5 boats and 15 seconds, so **the price never once bites.**
+> Candidate: **a flying soldier ignores elevation and pathing, but is not removed from targeting.**
+> The move the document wants (gather the enemy at a ramp and fly over the top) comes from **geometry**,
+> not invulnerability, so it survives untouched.
 
 ### Controls — **bind soldier types to the 1–5 keys and press to summon** (user, 2026-08-17)
 
@@ -181,7 +262,7 @@ first/middle/last example was on that side, but **the hotkey summon is what was 
 
 ---
 
-## Rewards — **three axes, and one island gives exactly one**
+## Rewards — **three axes, and a combat island gives exactly one**
 
 The user decided: *"어떤 노드는 병사 수 증가가 있고, 어떤 노드는 병사의 붙이기가 있다. 두 개로 가자."*
 (*"Some nodes give more soldiers, some give something to bolt on. Let's go with those two."*)
@@ -196,9 +277,9 @@ everything. Split them and every fork in the map asks **which one you are short 
 |---|---|---|---|
 | Combat | **Count** | **+N** | The curve is predictable. No arithmetic required |
 | Combat | **Specialty** | **One specialty**, you pick who it bolts onto | The specialty side needs a reason to fight too |
-| Elite | **Count** | **×2 on one soldier type only** | See "Partial multiplication" below |
+| Elite | **Combat + artifact** | **The same reward a combat island gives, plus one artifact** | See "Elite" below |
 | Chest | **Artifact** | **One artifact.** It is not bolted on — **it applies to the army** | The resting square |
-| Boss | **Count** | **×2 or more — multiplier undecided** | It is the end of the run, so there is no next island |
+| Boss | — | **The run ends here. There is no reward** | There is no next island, so there is nowhere to spend it |
 
 **Combat islands split in two.** Combat islands that give count and combat islands that give a specialty —
 both involve fighting. That is what makes a fork in the map ask **"am I short of count or short of
@@ -260,94 +341,72 @@ from one line of rule.
 > Even the fact that optimal play collapses into one sentence is the same — the old game's "split to the cap
 > and stay bunched" is **"only pick elites"** here.
 >
-> ⇒ **The user produced a different answer. See "Partial multiplication" below** — instead of dropping to
-> addition, **they narrowed what multiplication reaches.**
+> ⇒ **The user produced a third answer: they deleted multiplication from the rules.** See "Elite" below.
 
-### Partial multiplication — **multiply one soldier type, not the whole army** (user, 2026-08-17)
+### Elite — **multiplication is deleted. It is a harder island that gives one more artifact** (user, 2026-08-17)
 
-*"곱셈은 사실상 특정 부분만 곱셈하게 하자. 예를 들면 근접 병사만 곱하기 2라든지, 까마귀 보스를 잡으면
-까마귀 병사만 곱하기 2라든지."* (*"Let multiplication only actually multiply a specific part. Melee soldiers
-×2, say, or kill the crow boss and only the crow soldiers ×2."*)
+*"엘리트는 그냥 조금 어려운 섬인 거지. 다른 데랑 똑같이 하고 플러스로 아티팩트를 하나 더 주자.
+그리고 엘리트 특성을 가진 병사들을 만들 수 있는 거지."* (*"An elite is just a slightly harder island.
+Same as anywhere else, plus one more artifact on top. And you get to make soldiers that have that elite's
+trait."*)
 
-**This closes the refutation above with one line of rule.** Multiplying the whole army gave a growth rate of
-`2(1−f)`, which mathematically had no livable band; **multiplying one type binds the growth rate to that
-type's share** — if melee is three of ten, 10 → 13, and **multiplication effectively becomes "addition at a
-size I chose."**
+| | Combat island | Elite island |
+|---|---|---|
+| Difficulty | Baseline | **Harder** |
+| Reward | Count **or** specialty | **The same, plus one artifact** |
+| On top | — | **You gain that elite's soldier type** — from then on you can field soldiers with that trait |
 
-⇒ **And the build decides the size of the multiply.** Collect crows and the crow elite pays big; skip them
-and it pays small. **"Which island do I go to" and "what have I collected" become, for the first time, one
-decision.** The dominant elite-only path dies with it — **not every elite is a gain, only the elite that
-matches my build.**
+⇒ **`×2` is gone from the game.** What the two refutation boxes above killed was exactly that
+multiplication, and **this decision closes it by deleting the rule rather than repairing it.** The cap on
+soldier count, the crossover point from addition to multiplication, and going all-in on a single soldier
+type **all vanish with it** — there is no exponent, so no barrier is needed.
 
-#### ⚠⚠ It is not an "extreme" — **it is an attractor.** The second adversarial review refuted it
+⚠ **And the reason to pick an elite is no longer the multiply, it is "the soldier type I want."** A fork in
+the map now asks **"do I want that type?"** on top of "am I short of count or of specialties?"
+**And "the build and the route becoming one decision" falls out here for free.** That is exactly what an
+option briefly passed through and then deleted — **partial multiplication**, the rule that put the `×2` on
+one soldier type instead of the whole army — was trying to build, and failed to build because the
+arithmetic caught it.
 
-**The share `p` is not a fixed parameter. The ×2 raises `p` directly:** `p → 2p/(1+p)`.
-That island's growth rate is `1+p`, so **the growth rate itself rises every island.**
+### So these have to be decided alongside it — **only one is left**
 
-Start 10 (melee 3 / other 7), zero casualties, melee elite six times:
+~~Whether elites are multiplication at all~~ · ~~a cap on soldier count~~ · ~~where addition hands over to
+multiplication~~ — **all three went away with multiplication.** With no exponent there is nothing to ask
+about a cap or a crossover point.
 
-| Island | Melee | Total | `p` | Growth this island |
-|---|---|---|---|---|
-| 0 | 3 | 10 | 0.300 | — |
-| 1 | 6 | 13 | 0.462 | 1.30 |
-| 2 | 12 | 19 | 0.632 | 1.46 |
-| 3 | 24 | 31 | 0.774 | 1.63 |
-| 4 | 48 | 55 | 0.873 | 1.77 |
-| 5 | 96 | 103 | 0.932 | 1.87 |
-| 6 | 192 | **199** | 0.965 | 1.93 |
-
-Six rounds of +3 gives **28**; whole-army ×2 gives **640**. **Partial multiplication only brought 640 down
-to 199, and the growth rate approaches ×2 with every island.** Even with a flat 20% casualty rate the
-explosion condition is `p > 0.25`, and **the start is 0.3, so it is above the threshold from the first
-island**; even starting at 0.2, **one elite takes it to 0.333 and over.**
-
-⚠ **This is exactly the shape the refutation box found in whole-army multiplication** — *"the threshold is a
-constant while `S` only grows."* **Only the axis moved, from `S` to `p`.**
-
-⇒ **"The player cannot choose which type an elite multiplies" is the only version that passes the
-arithmetic.** With a uniform random pick among five types, each `p` rises evenly, settles near 1/5, and the
-growth rate is bounded at `1.2`. **This is not an undecided item — it is the condition under which this rule
-holds.**
-
-> **Candidate (undecided)**: **the map decides which type an elite multiplies, and the player cannot pick.**
-
-### So these have to be decided alongside it
-
-- ⚠ **Whether elites are multiplication at all.** Read the refutation box first. Until this is settled the
-  two items below are meaningless
-- **A cap on soldier count.** The moment multiplication is in, the curve is exponential, and with no cap the
-  screen bursts mid-run — **by the arithmetic above it passes 40 on the fourth island and 136 on the sixth.**
-  What that number is, is undecided item 9
-- **Where addition hands over to multiplication.** Early addition and late multiplication means **when you
-  can first beat an elite** *is* the difficulty curve. Tune it with the depth at which elites appear on the
-  map
 - **Whether a chest gives one artifact or one of three.** One is no decision; three puts a decision in the
   resting square
 
-### ⚠ The other three the adversarial review found — all open
+### ⚠ The other three the adversarial review found — **one is half closed**
 
 **1. A missing rule: what does enemy strength scale with.** A whole section goes to reward arithmetic while
-**the number on the other side is never mentioned once.** There are only two answers and **each kills one
-axis** — scale with map depth and your soldiers are exponential against a linear enemy, so it is free from
-mid-run onward; scale with your soldier count and **×2 gives nothing at all.**
-And the sentence "that difference comes from whether you placed well" **depends entirely on how much
-placement changes casualties, and that rule is not in the document.** If the landing point moves the
-casualty count by ±1 soldier, the entire reward arithmetic is meaningless.
-> Candidate: **enemy count is fixed per island (rising only with depth), and the pressure on each of my
-> soldiers is inversely proportional to how many I have.** Fewer soldiers means a higher casualty rate, so
-> **loss genuinely compounds without any multiplication.**
+**the number on the other side is never mentioned once.**
 
-**2. A specialty's "who do I bolt it onto" is not a decision.** The first vertical slice has one soldier
-type, so items 3 and 7 are indistinguishable. The only question left is **"stack or spread", and it ends in
-arithmetic** — with survival probability `p` and K specialties, the expected surviving parts are `K·p`
-**either way**; only the variance differs, K times higher for stacking. It is an autobattler, so **there is
-no way to protect the carrier**, which makes spreading strictly dominant.
+⚠ **Half of this item's original argument went away when multiplication was deleted.** It used to say there
+are two answers and each kills one axis; the "scale with my soldier count and `×2` gives nothing" branch is
+moot now that there is no `×2`, and the "scale with map depth and soldiers are exponential against a linear
+enemy" branch **lost its premise when growth became addition.**
+
+**What is left is the problem itself: what sets enemy strength is still not written down.** And the sentence
+"that difference comes from whether you placed well" **depends entirely on how much placement changes
+casualties, and that rule is not in the document.** If the landing point moves the casualty count by ±1
+soldier, the entire reward arithmetic is meaningless.
+⇒ **The first answer is settled as "hand-authored"** (undecided item 10). **The formula becomes necessary
+only once there are more islands.**
+⇒ **And the "contact line" section already supplies one rule connecting placement to casualties** — the
+terrain sets the width, and the width sets the casualties.
+
+**2. A specialty's "who do I bolt it onto" is not a decision.** The first vertical slice has so few soldier
+types that the third soldier and the seventh are indistinguishable. The only question left is **"stack or
+spread", and it ends in arithmetic** — with survival probability `p` and K specialties, the expected
+surviving parts are `K·p` **either way**; only the variance differs, K times higher for stacking. It is an
+autobattler, so **there is no way to protect the carrier**, which makes spreading strictly dominant.
 ⚠ **The document had already spotted this trap for the artifact condition field** ("in the first vertical
 slice, with only one soldier type, a condition does nothing at all") **and had not written it down for
 specialties, where the identical sentence applies.**
 > Candidate: **each specialty also gives that soldier +1 HP.** Stacking then protects itself, the expected
 > value genuinely rises, and only then is expected value vs variance a real trade-off. The carrier gets
-> bigger, which also ties back into **the landing position.**
+> bigger, which also ties back into **the choice of dock.**
 
 **3. Only specialties evaporate, and there is no recovery path anywhere in the game.** Artifacts survive at
 100% and soldier count recovers, but at 20% casualties per island only `0.8⁸ =` **17%** of specialties
@@ -355,8 +414,8 @@ remain after eight islands. **"The path is the build" — and that build is 83% 
 boss.** One of the two things distinguishing this from Bad North is erased by arithmetic.
 And the chest was called "a resting square", but **there is nothing to rest** — Slay the Spire's campfire
 restores a resource that carries across rounds (HP), and here the resource that carries across rounds is
-**soldier count**, which the chest does not touch. There is a death spiral too: at S=4, an elite gives
-`(4−4)×2 = 0` — **a wipe.**
+**soldier count**, which the chest does not touch.
+(The death-spiral example assumed multiplication and went away with the rule.)
 > Candidate: **the chest tops your soldiers back up to the starting count.** It becomes a state-dependent
 > node that is "only strong when you are hurt right now", which creates a decision and blocks the death
 > spiral at the same time.
@@ -438,9 +497,62 @@ everyone.
 and the soldiers above saturation take no damage either; give the enemy area damage and total damage becomes
 a constant rather than rising.
 
-> **Candidate (undecided)**: **−1 HP the moment they step off the boat** — a **landing tax** unrelated to
-> the outcome of the fight. Only then is the cost `c·k`, proportional to `k`. The boat is already on screen,
-> so it is neither new UI nor a new system.
+> **~~Candidate: a landing tax of −1 HP~~ — rejected (user, 2026-08-17).**
+> **Plausibility** — an animal stepping off a boat and losing blood for it is not a picture that works. And
+> **it is not needed:**
+
+### ⇒ Decided: **do not create a reason to hold back at all** (user, 2026-08-17)
+
+The user inverted the question: *"그냥 안 아끼고 다 소환하게 하면 되잖아. 그럼 뭐가 문제가 생기는 거지?"*
+(*"Just let them not hold back and summon everything. What problem does that actually cause?"*)
+
+**The answer: only one thing is lost.** "When" and "who" drop out of the decision and **only "where"
+remains.** And **the landing-craft interval already physically prevents "everything at once"** — even if you
+decide to send everyone, they go out in the order the boats come, so the real question just becomes
+**"where do I put the ones going out first?"**
+
+**Clash Royale works exactly that way.** Nobody hoards elixir over the long run — if you can pay, you play.
+The decisions are **what · where · in what order**, not "should I hold back."
+
+⚠ **HP carryover and permanent death both stay.** They cannot be the reason to hold back, but
+**"the fight you lost stays with you into the next one"** is the skeleton of a roguelike, and that is what
+these two do.
+
+### ⚠⚠ The contact line — a reason to hold back **already exists** (third adversarial review, 2026-08-17)
+
+**`T = E/(k·d)`, which was the whole basis for "the more you send, the less HP you lose", assumes that every
+soldier sent hits and is hit at the same time.** Two rules decided on the same day break that assumption —
+**"bodies never overlap"** and **"one per tile."**
+
+⇒ **The width `w` of the contact line is a ceiling.** A soldier with range 0 can only hit `w` at a time and
+can only be hit `w` at a time. **Anyone past `k > w` adds no DPS and absorbs no damage — they just queue.**
+
+With the same figures (enemy HP 100 · enemy total DPS 5 · soldier DPS 2 · soldier HP 10), fighting at a
+2-tile ramp:
+
+| | Combat time | Total damage | Deaths |
+|---|---|---|---|
+| Open ground, all 10 in contact | 5s | 25 (2.5 each) | **0** |
+| Ramp (`w`=2), 10 committed | — | **The damage they will take is 125, over the 100 HP pool** | **Wiped at t=20s while the enemy survives on 20 HP — a defeat** |
+
+**The same enemy turns zero deaths into a defeat, on terrain alone.**
+
+⇒ **`k = w` is optimal, and holding back anyone past that is correct.**
+
+**There is a per-individual threshold on open ground too.** The HP **the whole army saves** by adding one
+more soldier is `250/(k(k+1))`, which is **2.27** at `k`=10. But **what that eleventh soldier takes
+directly** is **2.06**.
+⇒ **The death line is 2.06** — send a soldier whose HP is under it and you are trading one permanent death
+for 2.27 HP, and **above it, adding them is a net gain** (2.27 > 2.06).
+**The bench threshold exists arithmetically.**
+
+⚠ **So "do not create a reason to hold back", above, is half wrong.** The thing the user worried about —
+*"아껴서 이득 보는 점이 하나도 없는 게임"* (*"a game with no benefit at all to holding back"*) — **was already
+solved without adding a single rule.** What creates restraint is neither HP nor permanent death but **the
+width of the contact line, which the terrain sets.**
+
+⇒ **So "how many do I send" is a real question, and the answer differs per island.** Few at a narrow ramp,
+everyone on an open shore. **Hand-authored level design becomes the tool that sets that answer.**
 
 ### ⚠ And the "hold back vs the time limit" scale does not hold either
 
@@ -463,11 +575,75 @@ decision.** Solving the same formula every island is the same dead right answer 
 ⇒ **A decision needs uncertainty, and this document has no source of uncertainty at all.** If enemy count,
 placement and strength are all known before landing, `k` is always computed.
 
-> **Candidate (undecided)**: **the island's enemies are invisible until you land and your sight reaches
-> them.** `E` becomes an unknown and **"should I send more as insurance?"** becomes a question for the first
-> time.
-> ⚠ **It has to be paired with the landing tax** — add only one of the two and you fall straight back into
-> one of the two refutations above.
+> **~~Candidate: the island's enemies are invisible until you land~~ — rejected for the first stage**
+> (user, 2026-08-17). *"처음 초원은 보이는 게 맞아."* (*"For the first grassland, being able to see is
+> right."*) The combat is automatic, so take the information away too and **you cannot see why you lost**,
+> and then the roguelite does not work. ⇒ **Fog becomes a per-node/per-stage property, later**
+> (undecided item 12).
+
+### ⇒ Instead the user produced a different answer: **pulling** (2026-08-17)
+
+*"배 타고 오면 원거리 공격을 했으면 좋겠거든. 그래서 소환하면 탱커를 먼저 보내야 하는, 유저가 알아서
+학습하게 되는 그런 게 있었으면 좋겠어. 먼저 탱커들이 가면 그 섬에 있는 몬스터가 그쪽에 모일 거잖아.
+그럼 그때 반대쪽으로 병사를 보낸다거나."* (*"I want them shot at from range while they come in on the boat.
+So that when you summon, you have to send the tank first — the kind of thing the player learns on their own.
+If the tanks go in first, the monsters on that island will gather over there. And then you send soldiers to
+the opposite side."*)
+
+**That one line ties "who first" and "where" into a single decision.**
+Enemies also target the nearest, so **the first squad you land IS the aggro**, ⇒ **position becomes a tool
+for pulling rather than a tool for attacking.** The second landing point is chosen from what the first one
+pulled.
+
+**So the three that died come back:**
+
+- **"Who"** — the enemies are ranged, so landing a short-range soldier first means it takes hits the whole
+  way in. **No rule teaches you that the tank has to go first; the player learns it**
+- **"Where"** — whether the far side is empty is decided by the outcome of the first landing
+- **"When"** — you wait for the pull to take hold and then land the second wave. **Timing came back without
+  a landing tax**
+
+⚠ **The condition for this to work: the enemies must have range** — settled in the "Engagement rules"
+section.
+
+⚠ **And this is also the answer to "dead air."** The time spent watching the pull take hold is not
+spectating, it is **the input to the next decision.**
+
+#### ⚠⚠ Third adversarial review: **pulling does not oscillate. It is stable, and the stable outcome is a loss**
+
+**Oscillation first.** While the enemy walks toward dock A, its distance to A shrinks and its distance to B
+grows ⇒ **nearest-first never flips.** The moment B could become nearest is the moment B's squad has walked
+all the way to the enemy mass and stands at the same distance as A — i.e. **when it has already arrived at
+the same melee.** ⇒ **What pulling produces is not a flank, it is "delayed reinforcement."**
+
+**The model, stated** (without it the numbers do not reproduce): both sides move at **4 tiles/s**, the enemy
+starts **at the island's centre** and so **20 tiles** from each dock, the island is **40 tiles** wide, the
+docks are at either end, and the boat is **capacity 5 · interval 3s** — so massing at one dock lands the
+second five at **t=3.0s** to walk 10 tiles:
+
+| | Total damage | Combat time | Where the damage goes |
+|---|---|---|---|
+| 10 at one dock | **32.5** | 9.0s | spread over ten |
+| 5 at A + 5 at the far dock B (pulling) | **45** | 11.5s | **40 of it onto A's five** → 2 HP each |
+
+**B arrives at t=10.5s and the fight ends at 11.5s — one second of contribution.**
+⇒ ⚠ **Pulling violates "spreading the damage wide is the same thing as zero deaths" head-on.** The
+definition of pulling is "pile it all onto one squad", so **under the current rules pulling is the play that
+maximises permanent death.**
+
+**And the first squad is a sacrifice, and the answer to that is a constant** — in a first vertical slice
+with one enemy type, "send the cheapest one first" never changes.
+[Lessons from two dead games](../lessons-from-two-dead-games.md) calls this **"a fact you learn once and
+are done with"**, the shape that killed the old game.
+
+> **Candidate (undecided)**: **ranged enemies prioritise an approaching boat over soldiers already ashore.**
+> Then the price of pulling is not "B's eight seconds" but **"landing the boat intact"**, and **the choice of
+> dock has a value on every single boat.** It is nothing more than promoting the existing "ranged attacks
+> while they come in on the boat" **into one line of targeting priority.**
+
+⇒ **And the "contact line" finding above bites here too.** Pull them to a narrow dock and `w` shrinks, so the
+number of enemies that can hit at once shrinks with it. **Pulling's value may be "choosing the width you
+fight at" rather than "the flank"** — not decided yet.
 
 ### ⚠ So a recovery path is now mandatory
 
@@ -505,8 +681,14 @@ numbers stacked on top of those two:
 - **Range** — does it have to close, or does it hit from afar. **This is what turns "where do I land them"
   into a question.** Land a soldier that must close at the back and it takes hits while it walks; land a
   long-range soldier at the front and it dies first
-- **Area** — does it hit one or several. **This is what turns "bunch or spread" into a question.** Without
-  area damage, bunching is always right, and placement disappears
+- **Attack area** — how wide one hit reaches. **This is what turns "bunch or spread" into a question.**
+  Without area, bunching is always right, and placement disappears
+
+⚠ **Both are numbers, not categories like "single-target vs area"** (user, 2026-08-17: *"단일 하나라는 개념
+말고 그냥 공격 범위라는 개념이 있게 하자"* — *"instead of a 'single target' concept, let there just be an
+'attack area' concept"*). Range 0 · 3 · 30 and area 0 · 1 · 5, that sort of thing.
+⇒ **Categories run out of slots as soldier types multiply; numbers do not.** And **enemies and soldiers use
+the same table.**
 
 **These two are what actually work in TFT and what Despot's Game did not have.** The rest — speed, health,
 targeting priority — may or may not exist, but **drop either of these two and position stops being a
@@ -515,13 +697,74 @@ decision.**
 ⚠ **So "traits" is not a question of how many soldier types there are, but of whether the types are spread
 across those two axes.** Five types that are all melee single-target is the same as having one trait.
 
+### Bodies never overlap (user, 2026-08-17)
+
+*"몬스터마다 절대로 겹치면 안 되고."* (*"No monster may ever overlap another."*)
+
+**This is what makes position physical.** If they can overlap, stacking everything on one point is possible,
+and then area attacks never generate anything to punish. If they cannot, **a squad necessarily occupies
+area**, a narrow path is genuinely narrow, and **one ramp becomes a real bottleneck.**
+
+⇒ **This also solves what [melee readability](../lessons-from-two-dead-games.md) could not solve in the old
+game** — a big body swallowing a small one whole disappears structurally.
+
+### Enemies sit on the same two axes — **enemies have range** (user, 2026-08-17)
+
+**This is the condition under which pulling works.** If every enemy is melee, the first squad you land takes
+no hits, and then there is no reason to send the tank first — **"who first" dies again.**
+
+⇒ **The enemies' engagement rules are one and the same set as the soldiers'** — target the nearest, with
+range and area varying by type. **Two rule sets are not needed.**
+
+⚠ **And ranged enemies fire on the approaching boat** (user: *"배 타고 오면 원거리 공격을 했으면 좋겠거든"*
+— *"I want them shot at from range while they come in on the boat"*).
+**It is the only rule that makes landing itself cost something, and unlike the landing tax it is plausible**
+— the thing shooting is visible on screen.
+
 ⚠ **And the first vertical slice has one soldier type.** One type means one trait, which means **position is
 not a decision.** ⇒ **Either put two soldier types in the first vertical slice, or run it once with position
 not being a decision and confirm that firsthand — one of the two must be chosen.** Not chosen yet.
 
 ---
 
-## Terrain — **tiers like a staircase. But a tier's value is a "path", not a "bonus"**
+## Terrain — **a block grid. There are tiers, and a tier's value is a "path", not a "bonus"**
+
+### Decided: block grid (user, 2026-08-17)
+
+The island is **divided into tiles.** The user worried about ending up too close to Bad North, and **the
+grid was picked not because it belongs to that game but because it is the structure that hands over three
+things just decided, all at once and for free**:
+
+| What was decided | What the grid gives |
+|---|---|
+| Bodies never overlap | **One per tile.** No separate collision handling |
+| There are tiers | **One elevation per tile.** The drop is an integer |
+| Ramps are bottlenecks | **"A tile you can climb" exists as data** |
+| You only land from the shoreline | **The landable tiles are simply a list** |
+
+⚠ **Only occupancy is on the grid; movement stays continuous.** Move tile by tile and it looks angular.
+
+⚠ **The grid is not the differentiator.** What differs from Bad North is **"eating" and pulling**, and the
+grid is the floor those two stand on. **A shared floor does not make the games the same.**
+
+### ⇒ Tiers split the soldier types — **flying units do not use ramps** (user, 2026-08-17)
+
+*"새는 올라갈 필요도 없지. 그냥 위에서 이렇게 오는 거니까."* (*"A bird doesn't even need to climb. It just
+comes in over the top."*)
+
+**That one line makes elevation the third axis of the soldier-type table.** Ground types climb **only by
+ramp**; flying types **ignore elevation entirely.**
+
+⇒ **Which makes the ramp bottleneck a real decision.** Break through the bottleneck, or fly over it — and
+**flying does not trigger the pull.** Gathering the enemy at a ramp and then flying over the top is where
+this game's first "figured-out move" is going to live.
+
+**Still undecided**: what a flying type costs. If ignoring elevation is free there is no reason to field
+ground types. Candidates — lower health · shorter range · takes an extra slot on the boat.
+
+---
+
+## The rules of a tier — **no numbers are stacked on it**
 
 **Raised by the user (2026-08-17):** *"그 맵도 특성이 계단처럼 뭐가 있을 듯? 내가 참고했었던 게임 중에도
 그렇게 돼있던데."* (*"The map probably has staircase-like features too? One of the games I looked at was
@@ -644,10 +887,9 @@ of them was missing from the list entirely.** They are now written separately:
 6. **What the per-soldier-type adjustment is.** The user pushed this to *"later."* Targeting priority?
    Formation? Position?
 7. ~~Engagement rules~~ — **decided. See the "Engagement rules" section.**
-8. **Is deployment real-time or pre-set.** Pre-set makes **the preparation screen the game itself**, which
-   reorders everything. The user's first/middle/last example was on the pre-set side
+8. ~~Is deployment real-time or pre-set~~ — **decided: real time.** See the *Controls* section
 9. ~~Cap on soldier count~~ — **decided: no cap** (user, 2026-08-17, *"for now"*).
-   **Partial multiplication already flattened the exponent, so a cap does not need to be a second barrier.**
+   **Deleting multiplication removed the exponent itself, so a cap does not need to be a barrier.**
    ⚠ **But [Lessons from two dead games](../lessons-from-two-dead-games.md)' *"there is no readability cap
    anywhere"* still stands** — the decision was to not set a cap, **not a discovery of how many is readable.**
    Look at the first vertical slice and decide by eye
@@ -656,8 +898,15 @@ of them was missing from the list entirely.** They are now written separately:
     island.
     ⇒ **The first vertical slice is three islands, so this is enough, and the formula becomes necessary only
     once there are more islands**
-11. **What stops going all-in on a single soldier type.** Partial multiplication reverts to exponential in
-    exactly that case — see the "Partial multiplication" section
+11. ~~What stops going all-in on a single soldier type~~ — **gone.** Deleting multiplication removed the
+    exponent
+12. **Fog — some islands are only visible once you arrive.** As a node or stage property, **later** (user,
+    2026-08-17). **The first grassland is fully visible from the start** — the combat is automatic, so with
+    the information gone too you cannot see why you lost
+13. **Does a soldier type gained from an elite arrive as a soldier on the spot, or get added to the summon
+    list.** If the latter, the picture is the 1–5 hotkeys filling up over the course of a run
+14. **The recovery path.** HP carries across islands, and with no recovery a run is a one-way decline.
+    **The chest island doubling as it is the cheapest** — the name "resting square" only becomes true then
 
 ---
 
@@ -743,13 +992,29 @@ as `v1-sim`, and the current prototype was already written down as *"a reference
    **That is what lets you ask "is this fun?" for the first time** — the last game died because nobody ever
    ran the loop end to end
 
+   #### ⚠⚠ And **holding it to one enemy type lands in the same place even with two soldier types** (third review)
+
+   **The condition for pulling is "the enemies must have range", and with only one enemy type that one type
+   has to be the ranged one.** That leaves zero melee enemies, and **the player's melee single-target type
+   becomes a strictly inferior unit that only ever takes hits while it walks.**
+   ⇒ **Two soldier types collapse into one in practice.** There have to be two enemies as well — one melee,
+   one ranged.
+
+   ⚠ **And losing is impossible in the first vertical slice.** The only lose condition is the time limit,
+   but a fight ends in about ten seconds, and `T = E/(k·d)` **is computed before you land** ⇒ that is
+   checking arithmetic, not deciding.
+   **"It has to show why you lost" cannot be tested — because you cannot lose.**
+   ⇒ **The first vertical slice needs at least one island you can lose on.** Not decided yet.
+
    #### ⚠ Hold it to one soldier type and none of this document's claims can be verified
 
    The second adversarial review counted **eight rules that die in a one-type slice**:
    **the 1–5 hotkeys** (one type = one key) · **range** · **area** ("bunch or spread" ceases to exist) ·
-   **partial multiplication** (`p = 1`, so it is **identical to whole-army ×2** — the rule the refutation box
-   killed comes straight back) · **tiers and ramps** (with one range there is no "put the ranged soldier up
-   top") · **map forks** · a specialty's "who to bolt it onto" · the artifact condition field.
+   **tiers and ramps** (with one range there is no "put the ranged soldier up top") · **map forks** ·
+   a specialty's "who to bolt it onto" · the artifact condition field · **pulling** (there is only one thing
+   to pull with and only one alternative).
+   ⇒ **Pulling dying is the biggest of these.** It is the largest rule found today and it does nothing at
+   all in the slice.
 
    ⇒ **If it comes out unfun, you cannot tell whether that is the design's fault or the slice's.** It repeats
    the failure that killed the last game, **except this time running it doesn't even give an answer.**
