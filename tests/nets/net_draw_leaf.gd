@@ -1,0 +1,608 @@
+extends RefCounted
+## The drawing scan. It reads the text of `src/view/`, `src/shell/` and `src/`, and it measures
+## nothing at runtime — which is the point: a spy on a hook sees the HOOK, never the native call
+## inside it, so the last inch has to be pinned structurally. See lessons-from-two-dead-games.
+##
+## Four things are pinned here, and each one exists because its absence shipped a bug under a green
+## round in this repo before:
+##
+##  1. **Per-function `draw_*` counts.** A file-wide bound is not enough for a view file — a bare
+##     `draw_circle` at the top of `_draw` reached the screen every frame with 1414 checks green.
+##  2. **The class is CLOSED, not enumerated.** Every `func` line in the three view files is walked and
+##     a name the table does not hold is red. Adding names to a table fixes the day it is done and
+##     nothing after it: naming eight more composers still left eleven of twenty-eight functions
+##     outside, and the same circle was green again at 1889. A function written tomorrow is red until
+##     it is listed, on purpose.
+##  3. **Every parameter a leaf is handed is used in its body.** `draw_circle(p, 0.0, col)` inside a
+##     leaf turned forty rocks invisible with the round green — argument capture proves a value was
+##     computed and handed on, never that it was used.
+##  4. **No presentation constant is loose.** No `Color(` and no named colour outside `look.gd`, and no
+##     literal assigned to a name ending in a presentation-ish suffix. The colour half of this rule
+##     shipped once with the pixel half never written, so its green never meant what it said — and the
+##     TIME half was the same hole one layer on: **half of an effect's constants are durations**, and
+##     until the suffix list below grew, `const HIT_FLASH_SEC := 0.14` could sit in a view file with
+##     the round green about "no presentation constant is loose". `combat-juice` widened the list.
+##
+## ## The suffix list lives HERE and nowhere else, and it is read at TWO different scopes
+##
+## `look.gd`'s own header used to repeat the list; it now points at `_literal_hits` instead, because
+## a list written twice starts lying the day one copy grows. The two scopes are not tidiness:
+##
+##  - `_pixel_hits` — the SIZE-ish suffixes, swept over the whole of `src/` minus `look.gd`. A pixel
+##    number is presentation wherever it is written.
+##  - `_literal_hits` — that list plus the TIME-ish and shape-ish ones, swept over `src/view/` and
+##    `src/shell/` only. Measured, and this is why it is narrowed: run the wide list over all of
+##    `src/` and it bites `rules.gd`'s `TYPE_COUNT`, `_COL_SPEED` and `LION_WINDUP_SEC` — a table
+##    column count, a table column index and a SIM rule. `src/shell/` is not optional in that pair:
+##    `HOLD_OUTCOME_SEC`, `HOLD_BEAK_SEC` and `PANEL_FADE_SEC` are read by `game.gd`, so a scope of
+##    `src/view/` alone leaves `var _hold_sec := 0.8` hardcoded in the shell and green.
+##
+## ⚠ **The scanner is inverted too, not only the tree.** The synthetic texts below fail THIS FILE
+## rather than the game: an unlisted function holding a bare draw call, a leaf that drops one of its
+## arguments, a leaf whose count is one too many, a colour moved out of `look.gd`, a literal moved out
+## of it under every widened suffix, an ARRAY literal (`FX_GAIN`'s shape, the one hole the value side
+## of the pattern had), and clean texts that must produce nothing. Twice in one night a check was
+## written to catch a defect and shipped carrying that same defect, and neither was caught by
+## inverting the code.
+
+const VIEW_DIR := "res://src/view"
+const SHELL_DIR := "res://src/shell"
+const SRC_DIR := "res://src"
+const LOOK_PATH := "res://src/look.gd"
+
+## The size-ish half. Swept over every `.gd` under `src/` except `look.gd`.
+const PIXEL_SUFFIXES := "px|width|radius|size|margin|alpha|ratio|offset|gap|font_size"
+
+## What `combat-juice` added on top of it, for `src/view/` + `src/shell/` only.
+##
+## `deg` is here because `SPARK_SPREAD_DEG` matched none of the other twenty-two, and the name was
+## widened rather than bent: an angle is a presentation constant that will come up again, and
+## `deg_to_rad(...)` is a call rather than an assignment so it cannot be caught by accident.
+## `tiles growth squash count` are here because without them eight of the forty-four constants
+## `combat-juice` adds — `BURST_GROWTH`, `TARGET_LINE_MAX_COUNT`, `SHAKE_A_FREQ`, `SHAKE_B_FREQ`,
+## `GAIT_PERIOD_TILES`, `GAIT_SQUASH`, `WATER_MARGIN_TILES`, `FX_MAX_COUNT` — matched nothing at all.
+const TIME_SUFFIXES := "sec|dur|time|speed|freq|mul|strength|gain|tiles|growth|squash|count|deg"
+
+## The per-file, per-function `draw_*` count. It is `combat-juice`'s hook table, holding EVERY
+## function in each file — a composer at 0 is as load-bearing as a leaf at 2, because 0 is what
+## forbids a drawing call from leaking out of a hook.
+##
+## A plain function and not a `const` Dictionary: a `const` packed array is a parse error on 4.7.1 and
+## the const-expression rules around nested literals are exactly the kind of thing this repo has been
+## bitten by twice. Nothing is gained by risking it here.
+func _table() -> Dictionary:
+	return {
+		"field_view.gd": {
+			"setup": 0,
+			"_process": 0,
+			"_draw": 0,
+			"_paint_tile": 2,
+			"_paint_dock": 1,
+			"_paint_body": 2,
+			"_paint_beak": 1,
+			"_paint_hp": 2,
+			"_paint_boat": 1,
+			"_paint_shot": 1,
+			"_paint_halo": 1,
+			"_paint_ring": 1,
+			"_paint_target_line": 1,
+			"_paint_spark": 1,
+			"_tile_xy": 0,
+			"_boat_rect": 0,
+			"_hp_rects": 0,
+			"_beak_points": 0,
+			"_facing_of": 0,
+			"_rounded_square": 0,
+			"_fx_step": 0,
+			"_drain_events": 0,
+			"_shake_offset": 0,
+			"_body_offset_of": 0,
+			"_lunge_offset": 0,
+			"_knock_offset": 0,
+			"_flash_of": 0,
+			"_gait_squash": 0,
+			# draw 0 and NOT a leaf on purpose: the points are built here and handed to
+			# `_paint_spark` as an argument. Built inside the leaf they never leave it, and the
+			# unused-argument check below skips every function whose count is 0 — so a leaf holding
+			# `draw_multiline(PackedVector2Array(), ...)` would be green with nothing on screen.
+			"_spark_points": 0,
+		},
+		"hud_view.gd": {
+			"default_font": 0,
+			"type_label": 0,
+			"key_slot_count": 0,
+			"key_type_of": 0,
+			"bind": 0,
+			"reserve_count": 0,
+			"_process": 0,
+			"_draw": 0,
+			"note_key": 0,
+			"note_launch": 0,
+			"_fx_step": 0,
+			"_key_offset": 0,
+			"_key_colour": 0,
+			"_paint_timer": 1,
+			"_paint_berth": 1,
+			"_paint_load": 1,
+			"_paint_key": 2,
+			"_paint_enemies_left": 1,
+		},
+		"panel_view.gd": {
+			"bind": 0,
+			"panel_active": 0,
+			"is_reward": 0,
+			"is_finished": 0,
+			"roster_ids": 0,
+			"roster_rect_of": 0,
+			"soldier_id_at": 0,
+			"button_rect": 0,
+			"button_hit": 0,
+			"note_beak": 0,
+			"_fx_step": 0,
+			"_entry_bg": 0,
+			"_process": 0,
+			"_draw": 0,
+			"_paint_panel": 1,
+			"_paint_message": 2,
+			"_paint_roster_entry": 2,
+			"_paint_button": 2,
+			"_entry_text": 0,
+			"_message_text": 0,
+			"_message_colour": 0,
+		},
+	}
+
+
+func run(t) -> void:
+	var table := _table()
+
+	# "It is not 0" first. A directory walk that found nothing would report a perfectly clean tree and
+	# every assertion below would simply stop running.
+	var view_files := _gd_files(VIEW_DIR)
+	t.eq(view_files.size(), 3, "src/view/ 에 그릴 줄 아는 파일이 셋이다 %s" % str(view_files))
+	t.eq(table.size(), 3, "표도 파일 셋을 덮는다")
+
+	# -- 1~3. the per-function table, the closed class, and the leaf arguments ----------------------
+	var total_funcs := 0
+	var total_leaves := 0
+	for path: String in view_files:
+		var base := path.get_file()
+		t.ok(table.has(base), "%s 가 표에 있다 — 표에 없는 뷰 파일은 스캔 밖이다" % base)
+		if not table.has(base):
+			continue
+		var expect: Dictionary = table[base]
+		var text := _read(path)
+		t.ok(text.length() > 200, "%s 를 읽었다 (%d자)" % [base, text.length()])
+		var bad := _scan(text, expect)
+		t.eq(bad.size(), 0, "%s — 함수별 draw 수 · 표에 없는 함수 · 안 쓰인 인자, 전부 없다 %s" % [base, str(bad)])
+		var found := _funcs(text)
+		t.eq(found.size(), expect.size(), "%s 의 func 줄 수와 표의 항목 수가 같다" % base)
+		total_funcs += found.size()
+		for name: String in expect:
+			if int(expect[name]) > 0:
+				total_leaves += 1
+
+	# The literals are read back, never `found.size()` summed — a walk that saw nothing would agree
+	# with itself.
+	t.eq(total_funcs, 68, "세 파일의 함수는 모두 68개다 (29 + 18 + 21)")
+	t.eq(total_leaves, 20, "그중 draw 를 실제로 부르는 잎은 20개다 (11 + 5 + 4)")
+
+	# -- 4. no presentation constant loose in src/ -------------------------------------------------
+	var src_files := _gd_files_deep(SRC_DIR)
+	t.ok(src_files.size() >= 9, "src/ 전체에서 .gd 를 %d개 찾았다 (최소 9)" % src_files.size())
+	var colour_bad: Array[String] = []
+	var pixel_bad: Array[String] = []
+	var wide_bad: Array[String] = []
+	var scanned := 0
+	var wide_scanned := 0
+	for path: String in src_files:
+		if path == LOOK_PATH:
+			continue
+		scanned += 1
+		var src_text := _read(path)
+		var cols := _colour_hits(src_text)
+		if cols.size() > 0:
+			colour_bad.append("%s %s" % [path.get_file(), str(cols)])
+		var lits := _pixel_hits(src_text)
+		if lits.size() > 0:
+			pixel_bad.append("%s %s" % [path.get_file(), str(lits)])
+		# The widened list is deliberately NOT swept over `src/sim/` — see this file's header for the
+		# three rule constants it would bite there.
+		if not (path.begins_with(VIEW_DIR + "/") or path.begins_with(SHELL_DIR + "/")):
+			continue
+		wide_scanned += 1
+		var wides := _literal_hits(src_text)
+		if wides.size() > 0:
+			wide_bad.append("%s %s" % [path.get_file(), str(wides)])
+	t.ok(scanned >= 8, "look.gd 를 뺀 나머지 %d개를 실제로 훑었다" % scanned)
+	t.eq(wide_scanned, 4, "그중 뷰 셋과 셸 하나, 넷을 넓힌 목록으로 다시 훑었다 — 셸이 빠지면 hold 초가 game.gd 에 박힌다")
+	t.eq(colour_bad.size(), 0, "look.gd 밖에 Color( 도 Color. 도 없다 %s" % str(colour_bad))
+	t.eq(pixel_bad.size(), 0, "look.gd 밖에 픽셀 이름에 박힌 리터럴이 없다 %s" % str(pixel_bad))
+	t.eq(wide_bad.size(), 0, "뷰와 셸에는 시간·비율 이름에 박힌 리터럴도 없다 %s" % str(wide_bad))
+	# look.gd itself has to be where they all are, or the two scans above are green because the tree
+	# has no colours at all.
+	t.ok(_colour_hits(_read(LOOK_PATH)).size() >= 15, "그리고 look.gd 안에는 색이 실제로 들어 있다")
+	t.ok(_literal_hits(_read(LOOK_PATH)).size() >= 10, "그리고 look.gd 안에는 픽셀 상수가 실제로 들어 있다")
+
+	_invert_the_scanner(t)
+
+
+# -- the scanner turned on itself ----------------------------------------------------------------
+## Texts that must fail THIS FILE. A scanner that never matches reads exactly like a clean tree, and
+## the shapes below are the shapes the checks above exist to find — so each one is fed in directly.
+## If any of these stops biting, the real tree above goes on printing green and quiet.
+func _invert_the_scanner(t) -> void:
+	var clean := "func _paint_dot(at: Vector2, col: Color) -> void:\n\tdraw_circle(at, 3.0, col)\n"
+	var clean_expect := {"_paint_dot": 1}
+	t.eq(_scan(clean, clean_expect).size(), 0,
+		"멀쩡한 잎에는 아무것도 안 잡는다 — 전부 빨개지는 스캐너가 아니다 (스캐너 자가 점검)")
+
+	# (a) a bare draw call inside a function the table does not name. This is the shape that reached
+	# the screen every frame under 1414 green checks and again under 1889.
+	var unlisted := clean + "\n\nfunc _helper(at: Vector2) -> void:\n\tdraw_circle(at, 5.0, Color.RED)\n"
+	var hit_unlisted := false
+	for v: String in _scan(unlisted, clean_expect):
+		if v.contains("표에 없는"):
+			hit_unlisted = true
+	t.ok(hit_unlisted, "표에 없는 함수 안의 맨 draw 를 잡는다 (스캐너 자가 점검)")
+
+	# (b) the leaf that drops one of its arguments — `draw_circle(p, 0.0, col)`, the call that turned
+	# forty rocks invisible with the round green.
+	var dropped := "func _paint_dot(at: Vector2, radius: float, col: Color) -> void:\n\tdraw_circle(at, 0.0, col)\n"
+	var hit_dropped := false
+	for v: String in _scan(dropped, clean_expect):
+		if v.contains("안 쓰인 인자"):
+			hit_dropped = true
+	t.ok(hit_dropped, "잎이 인자 하나를 버리면 잡는다 (스캐너 자가 점검)")
+
+	# (b2) the SAME shape one argument further out. `_paint_body` grew a seventh parameter (`squash`)
+	# and `_paint_spark` was born taking `points`; both are exactly the kind of argument a leaf can
+	# accept and then quietly not use, and the count stays right while it does.
+	var dropped_last := "func _paint_body(at: Vector2, col: Color, squash: Vector2) -> void:\n\tdraw_polyline(PackedVector2Array([at]), col, 2.0)\n"
+	var hit_last := false
+	for v: String in _scan(dropped_last, {"_paint_body": 1}):
+		if v.contains("안 쓰인 인자 squash"):
+			hit_last = true
+	t.ok(hit_last, "잎이 마지막 인자만 버려도 잡는다 (스캐너 자가 점검)")
+
+	# (c) one draw call too many in a leaf the table pins at 1.
+	var extra := "func _paint_dot(at: Vector2, col: Color) -> void:\n\tdraw_circle(at, 3.0, col)\n\tdraw_rect(Rect2(at, at), col)\n"
+	var hit_extra := false
+	for v: String in _scan(extra, clean_expect):
+		if v.contains("draw 수"):
+			hit_extra = true
+	t.ok(hit_extra, "잎의 draw 수가 표와 다르면 잡는다 (스캐너 자가 점검)")
+
+	# (c2) the other direction: a name the table holds that the file no longer has. Without it a
+	# deleted hook would leave the totals short and nothing would say which one went.
+	var missing := "func _paint_dot(at: Vector2, col: Color) -> void:\n\tdraw_circle(at, 3.0, col)\n"
+	var hit_missing := false
+	for v: String in _scan(missing, {"_paint_dot": 1, "_paint_spark": 1}):
+		if v.contains("파일에 없는 함수"):
+			hit_missing = true
+	t.ok(hit_missing, "표에는 있는데 파일에서 사라진 함수를 잡는다 (스캐너 자가 점검)")
+
+	# (d) a colour moved out of look.gd, in both of its shapes.
+	t.ok(_colour_hits("var c := Color(0.1, 0.2, 0.3)\n").size() > 0,
+		"look.gd 밖으로 옮겨진 색 리터럴을 잡는다 (스캐너 자가 점검)")
+	t.ok(_colour_hits("\tdraw_rect(r, Color.RED)\n").size() > 0,
+		"이름 붙은 색도 잡는다 (스캐너 자가 점검)")
+	t.eq(_colour_hits("func f(bg: Color) -> Color:\n\treturn bg\n").size(), 0,
+		"타입으로 쓰인 Color 는 안 잡는다 (스캐너 자가 점검)")
+	# A comment is not code, and a scanner that reddened on prose would be turned off within a day.
+	t.eq(_colour_hits("# the old build used Color.RED here\n").size(), 0,
+		"주석 안의 색 이름은 안 잡는다 (스캐너 자가 점검)")
+
+	# (e) a pixel literal moved out of look.gd.
+	t.ok(_pixel_hits("var bar_width := 24.0\n").size() > 0,
+		"look.gd 밖의 픽셀 리터럴을 잡는다 (스캐너 자가 점검)")
+	t.ok(_pixel_hits("const HUD_MARGIN_PX := 12.0\n").size() > 0,
+		"대문자 상수 이름도 잡는다 (스캐너 자가 점검)")
+	t.ok(_pixel_hits("\tspan_size = Vector2(30.0, 18.0)\n").size() > 0,
+		"Vector2 리터럴도 잡는다 (스캐너 자가 점검)")
+	t.eq(_pixel_hits("var bar_width := Look.HP_BAR_W_PX\n").size(), 0,
+		"look.gd 에서 읽어온 값은 안 잡는다 (스캐너 자가 점검)")
+	t.eq(_pixel_hits("\tif frame_width >= 4:\n\t\tpass\n").size(), 0,
+		"비교는 대입이 아니다 — 안 잡는다 (스캐너 자가 점검)")
+
+	# (f) the widened half. **These eight names are the whole reason the list grew**: measured against
+	# the narrow list, every one of them slipped through, and `combat-juice`'s own table is where they
+	# live. A synthetic case per name, because "the list is wider now" is not a measurement.
+	for name: String in ["BURST_GROWTH", "TARGET_LINE_MAX_COUNT", "SHAKE_A_FREQ", "SHAKE_B_FREQ",
+			"GAIT_PERIOD_TILES", "GAIT_SQUASH", "WATER_MARGIN_TILES", "FX_MAX_COUNT"]:
+		t.ok(_literal_hits("const %s := 2.2\n" % name).size() > 0,
+			"넓힌 목록이 %s 를 잡는다 (스캐너 자가 점검)" % name)
+		t.eq(_pixel_hits("const %s := 2.2\n" % name).size(), 0,
+			"그리고 좁은 목록으로는 %s 가 안 잡혔다 — 목록이 넓어진 이유다 (스캐너 자가 점검)" % name)
+	# The ninth: an angle. It matched none of the other twenty-two suffixes.
+	t.ok(_literal_hits("const SPARK_SPREAD_DEG := 12.0\n").size() > 0,
+		"넓힌 목록이 SPARK_SPREAD_DEG 를 잡는다 — deg 를 빼먹으면 이 줄이 문다 (스캐너 자가 점검)")
+	# The tenth, and it is the pattern's VALUE side rather than its name side: an array literal starts
+	# with `[`, so `FX_GAIN` was the one constant of the forty-four that no suffix could ever reach.
+	# Writing "all forty-four are caught" without this case is how the one hole stays invisible.
+	t.ok(_literal_hits("const FX_GAIN := [1.0, 1.0]\n").size() > 0,
+		"넓힌 목록이 배열 리터럴도 잡는다 — FX_GAIN 이 유일한 구멍이었다 (스캐너 자가 점검)")
+	t.eq(_literal_hits("const FX_GAIN := Look.DEFAULT_GAIN\n").size(), 0,
+		"배열이 아니라 참조면 안 잡는다 (스캐너 자가 점검)")
+	# And the reason the widened sweep stops at `src/view/` + `src/shell/`: run it over `src/sim/` and
+	# it bites rule constants, which are not presentation and must not be dragged into `look.gd`.
+	t.ok(_literal_hits("const LION_WINDUP_SEC := 0.6\n").size() > 0,
+		"넓힌 목록은 sim 의 룰 상수까지 문다 — 그래서 범위가 뷰와 셸뿐이다 (스캐너 자가 점검)")
+	t.ok(_literal_hits("const TYPE_COUNT := 5\n").size() > 0,
+		"표 컬럼 수도 문다 — 같은 이유다 (스캐너 자가 점검)")
+
+	# (g) the comment stripper is the floor under every scan above: if it stopped stripping, a comment
+	# naming `draw_rect` would be counted as a call and the whole table would read as broken; if it
+	# stripped too eagerly, a `#` inside a string would cut a line of real code away unseen.
+	t.eq(_strip_comment("\tdraw_rect(r, c)  # and not draw_circle(p, 0.0, c)").strip_edges(),
+		"draw_rect(r, c)", "주석은 잘라낸다 (스캐너 자가 점검)")
+	t.eq(_strip_comment("var row := \"~~##..\"  # the wall"),
+		"var row := \"~~##..\"  ", "문자열 안의 # 는 주석이 아니다 (스캐너 자가 점검)")
+
+
+# -- the scan itself -----------------------------------------------------------------------------
+## Returns one string per violation, empty when the text matches `expect` exactly. It takes TEXT, not
+## a path, so the synthetic cases above can fail the scanner rather than the tree.
+func _scan(text: String, expect: Dictionary) -> Array[String]:
+	var bad: Array[String] = []
+	var seen := {}
+	for f: Dictionary in _funcs(text):
+		var name: String = f["name"]
+		seen[name] = true
+		# **The class is closed here.** Not "these names are checked and the rest are ignored" — the
+		# rest is the failure.
+		if not expect.has(name):
+			bad.append("표에 없는 함수 %s" % name)
+			continue
+		var want := int(expect[name])
+		var got := _draw_calls(f["body"])
+		if got != want:
+			bad.append("%s 의 draw 수 %d, 기대 %d" % [name, got, want])
+		if want <= 0:
+			continue
+		for p: String in f["params"]:
+			# A leading underscore is GDScript's own "deliberately unused" marker, so it is not a
+			# finding. No leaf in this game has one.
+			if p.begins_with("_"):
+				continue
+			if not _uses(f["body"], p):
+				bad.append("%s 의 몸통에서 안 쓰인 인자 %s" % [name, p])
+	for name: String in expect:
+		if not seen.has(name):
+			bad.append("표에는 있는데 파일에 없는 함수 %s" % name)
+	return bad
+
+
+## Every function in the text, in order: `{name, params: Array[String], body: String}`.
+## Two passes on purpose — the start lines are found first, so a function's body is "everything up to
+## the next `func`" and a helper added at the bottom of a file cannot hide inside its neighbour.
+func _funcs(text: String) -> Array:
+	var lines := text.split("\n")
+	var starts: Array[int] = []
+	for i in lines.size():
+		var head := _strip_comment(lines[i]).strip_edges()
+		if head.begins_with("func ") or head.begins_with("static func "):
+			starts.append(i)
+	var out := []
+	for k in starts.size():
+		var s: int = starts[k]
+		var e: int = starts[k + 1] if k + 1 < starts.size() else lines.size()
+		# The signature can wrap across lines, so it is closed on paren balance rather than on a
+		# newline: `_paint_key` really does declare its last parameter on the second line.
+		var sig := ""
+		var depth := 0
+		var opened := false
+		var last := s
+		for i in range(s, e):
+			var line := _strip_comment(lines[i])
+			sig += line
+			for c in line:
+				if c == "(":
+					depth += 1
+					opened = true
+				elif c == ")":
+					depth -= 1
+			last = i
+			if opened and depth <= 0:
+				break
+		var name := ""
+		var open_at := sig.find("(")
+		if open_at > 0:
+			var before := sig.substr(0, open_at)
+			var parts := before.split(" ", false)
+			if parts.size() > 0:
+				name = str(parts[parts.size() - 1]).strip_edges()
+		var params: Array[String] = []
+		if open_at >= 0:
+			params = _split_params(_inside_parens(sig, open_at))
+		var body := ""
+		for i in range(last + 1, e):
+			body += _strip_comment(lines[i]) + "\n"
+		out.append({"name": name, "params": params, "body": body})
+	return out
+
+
+func _inside_parens(sig: String, open_at: int) -> String:
+	var depth := 0
+	var out := ""
+	for i in range(open_at, sig.length()):
+		var c := sig[i]
+		if c == "(":
+			depth += 1
+			if depth == 1:
+				continue
+		elif c == ")":
+			depth -= 1
+			if depth == 0:
+				return out
+		if depth >= 1:
+			out += c
+	return out
+
+
+## Split on commas at depth 0 only — a default value like `Vector2(1, 2)` holds a comma that is not a
+## parameter break, and splitting on it would invent a parameter name nothing could ever use.
+func _split_params(text: String) -> Array[String]:
+	var out: Array[String] = []
+	var depth := 0
+	var cur := ""
+	for c in text:
+		if c == "(" or c == "[" or c == "{":
+			depth += 1
+		elif c == ")" or c == "]" or c == "}":
+			depth -= 1
+		if c == "," and depth == 0:
+			out.append(_param_name(cur))
+			cur = ""
+			continue
+		cur += c
+	if cur.strip_edges() != "":
+		out.append(_param_name(cur))
+	var clean: Array[String] = []
+	for p: String in out:
+		if p != "":
+			clean.append(p)
+	return clean
+
+
+func _param_name(raw: String) -> String:
+	var s := raw.strip_edges()
+	for cut in [":", "="]:
+		var at := s.find(cut)
+		if at > 0:
+			s = s.substr(0, at)
+	return s.strip_edges()
+
+
+## `draw_*` call sites in a body. `queue_redraw` does not match and must not: it holds "redraw", never
+## "draw_", which is why the underscore is part of the pattern rather than a word boundary alone.
+func _draw_calls(body: String) -> int:
+	var re := RegEx.new()
+	re.compile("\\bdraw_[a-z_]+\\s*\\(")
+	return re.search_all(body).size()
+
+
+func _uses(body: String, name: String) -> bool:
+	var re := RegEx.new()
+	re.compile("\\b" + name + "\\b")
+	return re.search(body) != null
+
+
+# -- the loose-constant scans --------------------------------------------------------------------
+## `Color(` and `Color.` in CODE. Comments are stripped first: a scan that reddened on prose gets
+## turned off, and what reaches the screen is the code.
+func _colour_hits(text: String) -> Array[String]:
+	var re := RegEx.new()
+	re.compile("Color\\s*[(.]")
+	var out: Array[String] = []
+	for raw in text.split("\n"):
+		var line := _strip_comment(raw)
+		for _m in re.search_all(line):
+			out.append(line.strip_edges())
+	return out
+
+
+## The SIZE-ish half, for the whole of `src/`. A pixel number is presentation wherever it is written,
+## so this one keeps the wide scope.
+func _pixel_hits(text: String) -> Array[String]:
+	return _hits_with(text, PIXEL_SUFFIXES)
+
+
+## The full list — sizes AND durations AND shape factors — for `src/view/` and `src/shell/`.
+##
+## ⚠ **The colour half of this rule shipped once with the pixel half never written**, and a panel laid
+## its cards out from bare literals while the round stayed green about "no presentation constant is
+## loose". The TIME half was the same hole again: an effect's constants are half durations, and
+## `combat-juice` names this function as the one place the list lives.
+func _literal_hits(text: String) -> Array[String]:
+	return _hits_with(text, PIXEL_SUFFIXES + "|" + TIME_SUFFIXES)
+
+
+## A number, a `Vector2` of numbers, or an ARRAY of numbers, assigned to a name ending in one of
+## `suffixes`.
+##
+## `(?i)` is load-bearing and not tidiness: every one of these names in `look.gd` is a SCREAMING_CASE
+## `const`, so a case-sensitive pattern would scan for a shape the repo does not write and report a
+## clean tree for a rule it never applied.
+##
+## The `(:=|=)` never matches `==`, `>=` or `!=`: the character after the `=` has to be a digit, a
+## minus, a `Vector2` or a `[`, and a comparison puts another `=` there. **The `[` alternative is not
+## decoration** — `FX_GAIN`'s twelve-slot array was the one constant of the forty-four that no suffix
+## could reach, because the value side demanded a digit.
+func _hits_with(text: String, suffixes: String) -> Array[String]:
+	var re := RegEx.new()
+	re.compile("(?i)[A-Za-z0-9_.]*_(" + suffixes
+		+ ")\\s*(:=|=)\\s*(-?[0-9]|Vector2\\s*\\(\\s*-?[0-9]|\\[\\s*-?[0-9])")
+	var out: Array[String] = []
+	for raw in text.split("\n"):
+		var line := _strip_comment(raw)
+		if re.search(line) != null:
+			out.append(line.strip_edges())
+	return out
+
+
+## Everything after the first `#` that is not inside a string. The string half is load-bearing even
+## though no view file needs it: `islands.gd` is in the `src/` sweep and its map rows are strings full
+## of `#`, and a naive stripper would cut most of that file away and scan the stump.
+func _strip_comment(line: String) -> String:
+	var out := ""
+	var quote := ""
+	var i := 0
+	while i < line.length():
+		var c := line[i]
+		if quote != "":
+			out += c
+			if c == "\\" and i + 1 < line.length():
+				out += line[i + 1]
+				i += 2
+				continue
+			if c == quote:
+				quote = ""
+			i += 1
+			continue
+		if c == "\"" or c == "'":
+			quote = c
+			out += c
+			i += 1
+			continue
+		if c == "#":
+			break
+		out += c
+		i += 1
+	return out
+
+
+# -- files ---------------------------------------------------------------------------------------
+func _gd_files(dir_path: String) -> Array[String]:
+	var out: Array[String] = []
+	var d := DirAccess.open(dir_path)
+	if d == null:
+		return out
+	for f: String in d.get_files():
+		if f.ends_with(".gd"):
+			out.append(dir_path.path_join(f))
+	out.sort()
+	return out
+
+
+func _gd_files_deep(dir_path: String) -> Array[String]:
+	var out: Array[String] = []
+	_walk(dir_path, out)
+	out.sort()
+	return out
+
+
+func _walk(dir_path: String, out: Array[String]) -> void:
+	var d := DirAccess.open(dir_path)
+	if d == null:
+		return
+	for f: String in d.get_files():
+		if f.ends_with(".gd"):
+			out.append(dir_path.path_join(f))
+	for sub: String in d.get_directories():
+		_walk(dir_path.path_join(sub), out)
+
+
+func _read(path: String) -> String:
+	var f := FileAccess.open(path, FileAccess.READ)
+	return "" if f == null else f.get_as_text()

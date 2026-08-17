@@ -2,13 +2,14 @@
 
 Loaded into every session and every agent. **Keep only what applies to everyone.**
 
-## The game has been reset twice. The current one is a **cell autobattler**, and `src/` is empty
+## The game has been reset twice. The current one is a **cell autobattler**, and it now runs
 
 The first — eight months of side-view magic action and a pixel water/fire simulation — was deleted on
 2026-08-12, tag `v1-sim`. The second — an **open-field cell game**, one host you drive and a swarm that
 scatters, five plans over four days — was deleted on **2026-08-16**, tag `v2-openfield`.
 **Both times the harness survived**: this file, `.claude/`, the net runner, `tools/pixel/`, the Korean
-font, and `docs/`. **Nothing else is in the tree right now.**
+font, and `docs/`. **The third game was built on top of that on 2026-08-17 and it plays** — see
+「The state of the tree」 below.
 
 **Read `cell-army-gdd-ko` before proposing anything** (English twin: `cell-army-gdd`). Its one line is
 **「먹을 것을 고르러 간다」** — an **autobattler**: a node map of islands (상자 · 전투 · 엘리트 · 보스, and
@@ -64,21 +65,58 @@ rounds of adversarial verification missed were found in five minutes of play, tw
 ⇒ **`docs/planning-principles-ko.md` is the only file that survived both resets on purpose.** Its second
 line — **planning cannot decide whether something is fun** — is why this section exists.
 
+### ⇒ **A feature is not done until its presentation is done** (decided by the user, 2026-08-17)
+
+**This is now the default for every feature, and it came from the user in as many words** after they played
+the first slice: *"원거리가 뭔가에 쏘는 연출 이런 게 다 필요할 거 같아. 지금은 너무 연출적으로 없어서"* ·
+*"액션을 보는 맛이 있어야 돼. 패끼리 싸우는 맛"* — and then, once it was in:
+**"이번 것처럼 무조건 연출까지 개발하는 게 기본임."**
+
+⇒ **A plan that ships rules and leaves the picture for later is an incomplete plan.** The first slice was
+built that way and the user could see the game but not *feel* it; twelve presentation items went in as a
+second pass that should have been part of the first.
+⇒ **So: when a feature is planned, its presentation is planned with it, in the same doc, and it ships in the
+same round.** "It works, the picture comes later" is not a milestone.
+
+⚠ **This is not a licence to gold-plate.** What it means is narrow and measurable: **every rule that changes
+state has something on screen that says it happened.** The old game died partly because *"화면에 줄어드는
+양이 하나도 없었다"* — the only evidence anything was being hit was that things eventually died.
+
+⚠ **And presentation is where green rounds lie most easily.** `_draw()` running is not anything being
+drawn; a hook spy never sees the native call inside the hook; capturing an argument proves it was computed,
+never that it was used. **See「No fake nets」— those entries were all earned here.**
+
 ### The state of the tree, right now
 
-- `src/` — **gone.** `project.godot`'s `run/main_scene` is empty
-- `tests/nets/` — **only `net_citations.gd` is left.** Every other net drove deleted code
-- ⚠ **So the round does not run at all**: the wrapper's scan-broken detector reds below five nets and says
-  so. **That is correct behaviour, not a break.** It goes green again when the new game's nets land in a
-  group of five or more
-- `tools/look/` — only its `README.md`. Both probes and all three capture scripts drove the deleted shell
+- **`src/` is built and the game runs end to end.** `run/main_scene` is `src/shell/game.tscn`.
+  `src/sim/` (rules · grid · islands · army · battle · run) · `src/view/` (field · hud · panel) ·
+  `src/shell/game.gd` · `src/look.gd` · `tools/probe/run_run.gd`
+- **The round is green: 9 nets, 725 checks, 2.2s.** `net_battle` `net_boat` `net_islands` `net_run`
+  `net_shell` `net_draw_leaf` `net_fx` `net_fx_view` `net_citations`
+- **A run plays**: three islands, boat landings, the beak reward, the lion, restart. **And the twelve
+  presentation items are in** — see `combat-juice-ko.md`
+- `tools/look/` — only its `README.md`. Both probes and all three capture scripts drove the deleted shell.
+  ⚠ **Screenshots are not automated right now**; the game is launched and the user looks
 - `docs/` — **60-odd docs were deleted on 2026-08-17** because they described the two dead games and a fresh
   session reads them as constraints. **What they measured was distilled into `lessons-from-two-dead-games`
   first.** What is left is small on purpose, and every index lists exactly what is live
-- **Everything measured in either game is recoverable at `v1-sim` and `v2-openfield`.**
+- **Everything measured in either dead game is recoverable at `v1-sim` and `v2-openfield`.**
   **Do not restore code OR docs from either.** `v1-sim` was written against integer determinism and a 20Hz
   tick; `v2-openfield` was written against a host, an open field and a swarm you steer. Both would quietly
   re-import a whole set of constraints the current design does not have
+
+### What the user said after playing it — **the open problem going into the next session**
+
+**The presentation passed**: *"연출은 좋아."*
+**The game did not**: *"게임이 좀 애매하네. 뭔가 침공하는 느낌이 전혀 없어서. 2D라서 그런 건지 너무
+단순한 느낌이야. 사실 전투는 2D나 3D나 똑같을 건데 말이지."*
+And, for the second time: *"그냥 배가 곁다리인 게 여전히 별로네."*
+
+⚠ **Read the second sentence carefully — the user answered their own 3D question inside it.**
+*"전투는 2D나 3D나 똑같을 건데"* ⇒ **the missing feeling is not a dimension problem.** It is that
+**「침공」— invading — does not read**, and the boat is the part that was supposed to carry it.
+⇒ **Next session's problem is the boat**, and the user said so: *"이걸 다음 세션에서 잡는 걸로."*
+The GDD carries it as Undecided 15 · 16 · 17.
 
 ### Korean and English are two files, and they diverge if edited apart
 
@@ -185,9 +223,12 @@ the three README indexes, it does not exist.
 | `lessons-from-two-dead-games` · `-ko` | **What two deleted games measured.** Numbers and repeating failure shapes. ⚠ **Nothing in it is a spec** |
 | `docs/planning-principles-ko.md` | **How to judge a direction.** Survived both resets on purpose — read it first |
 | `docs/decisions/` | **Why something was *not* done.** Three docs; **two are reversed and kept for that reason** |
-| `docs/plans/` `1.ready` `2.active` `3.done` | **The only folder that moves.** All three are empty right now |
+| `combat-juice` · `-ko` | **The twelve presentation items, built and accepted.** How a sim event reaches the view without `sim` growing a clock, the full closed hook table, every `look.gd` constant, and what has to break for each net to redden |
+| `docs/plans/` `1.ready` `2.active` `3.done` | **The only folder that moves.** `1.ready` and `2.active` are empty; `3.done` holds `first-slice` |
 | `docs/harness-todo-ko.md` | **Work on the tools, not the game.** Top item is the user's: **parallelise the build** |
 | `docs/how-studios-schedule-art-ko.md` | **When other studios attach the art**, with sources. Written because the user has no data of their own and said so — see the reply rule about recommendations |
+| `docs/gdd-audit-ko.md` | **A six-axis audit of the GDD and the slice plan**, run before the build. ⚠ **Its last section lists the findings that were refuted** — read that before re-raising any of them. Korean only |
+| `first-slice` (`3.done`) | **How the game was built.** Three islands, one run, end to end — files, numbers, island grids, nets, acceptance. Carries its own adversarial-review section. ⚠ **Its section 6 hook table is superseded** by `combat-juice` |
 | `docs/next-game.md` | The two resets, what carried across, and why nothing is restored from a tag |
 
 **A concept never changes folder**; its header carries `Implemented` and `Accepted` as two separate axes.
@@ -263,11 +304,12 @@ before starting, not from whatever commit happened to be current earlier.
 | `src/shell/` | **The only place that reads `Input`**, and the only place that wires `sim` to `view`. It builds its children in code, so a net calling `_ready()` exercises the real wiring |
 | `src/look.gd` | **Every presentation constant, in exactly one file.** `src/sim/rules.gd` holds every constant that changes what happens |
 
-⚠ **These four rules are the contract for the tree that is about to be written. `src/` is empty today.**
+⚠ **All four hold in the tree today, and nets enforce them.** They were written before `src/` existed and
+the tree was built to satisfy them on day one rather than retrofitted.
 
-**The scan that enforced the drawing half was `net_draw_leaf`, and it is deleted with the game. Rewrite it
-early** — it was written the day a hook that threw its own drawing away passed 54 checks out of 54, and
-everything it learned afterwards is worth having again on day one:
+**The scan that enforces the drawing half is `net_draw_leaf`, and it is rebuilt and running.** It was first
+written the day a hook that threw its own drawing away passed 54 checks out of 54, and everything it learned
+since is in the current one:
 
 - **Two shapes, because one does not fit every file.** A file-wide bound (*at most two `c.draw_` call
   sites*) for simple panels, and a **per-function table** pinning each function's `draw_*` count exactly —
@@ -431,16 +473,34 @@ These survive **even after you confirm every mutation goes red**:
 - **A tuning constant with a floor on one end and none on the other is half-measured.** One frame-count
   constant carried `>= 12`; its twin did not, so **2 through 11 were green** and the fade collapsed to a pop —
   the very thing the beat existed to remove. **One bite does not prove the range**
+- ⚠ **A ceiling with no floor passes an effect that never happens.** The presentation round found this on
+  **four items at once**: every row bounded *"the lunge never overlaps more than 6px"* and none of them said
+  *"the lunge is not always zero"*, so **deleting the whole animation stayed green.** ⇒ **Bound both ends,
+  in the same row.** The floor is the half that proves the feature exists
+- ⚠ **Mouse clicks cannot be driven through `root.push_input()` headless, and they fail silently.**
+  The headless window is **64×64**, so the stretch transform is **0.05**; `Viewport.push_input` divides the
+  incoming coordinate by it and a click aimed at a dock **arrives at (2000, 6520), hits nothing, and raises
+  no error.** Keys carry no coordinate and pass through fine — so **half an input suite can be green while
+  the other half is dead.** ⇒ Call `game._unhandled_input(ev)` directly, or multiply by
+  `root.get_final_transform()` before pushing. Measured with a spy node: the `InputEventMouseButton` itself
+  does reach `_unhandled_input`; **only the coordinate is wrong**
+- ⚠ **A `const` Array cannot be mutated at runtime, so "zero this table entry and watch it redden" is not a
+  mutation you can write.** Twelve planned net rows died on this. **Drive the accessor instead** — the
+  off-by-one in `fx_gain_of` is reachable and the raw table is not
+- **Measuring a pure function is not measuring that anything calls it — and the scanner has a hole shaped
+  exactly like that.** `net_draw_leaf._scan` skips any function with `draw` count 0, so building geometry
+  inside a helper and passing an **empty** array to the leaf reads as *1 draw call, 4/4 arguments used* —
+  green, with nothing on screen. ⇒ **Build the points in `_draw()` and hand them to the leaf as an
+  argument**, so the spy captures the geometry itself
 
 ## Running the nets
 
-⚠ **The round does not run right now, and that is correct.** `src/` was emptied on 2026-08-16 and every net
-that drove it went with it — **only `net_citations.gd` is left**, so the wrapper's scan-broken detector fires
-(`tests/nets/ 에 네트가 1개뿐이다`) and refuses the round. **It goes green again when the new game's first
-nets land in a group of five or more.**
+**Where it stands: 9 nets, 725 checks, 2.2 seconds, green.** It got there in one day from an empty `src/` —
+6 nets / 399 checks for the slice, then 9 / 725 after the presentation pass.
 
-**The bar it has to get back to: 25 nets, 3541 checks, 4.6 seconds** — that was `v2-openfield` at its end
+**The bar the old game reached: 25 nets, 3541 checks, 4.6 seconds** — `v2-openfield` at its end
 (22/2420 after its presentation pass, 18/889 four days earlier, 16/514 the day before that).
+⚠ **That is a scale marker, not a target.** Those nets drove a game that was deleted for not being fun.
 A net is `tests/nets/net_*.gd` with one method, `func run(t)`,
 and `t` gives you `ok` · `eq` · `pump_frames` · `expect_error` · `root`. **The wrapper reds below five
 nets** — that is the scan-broken detector, so nets land in groups, never one at a time.

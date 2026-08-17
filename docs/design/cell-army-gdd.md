@@ -53,7 +53,7 @@ whether the player continues at all.
 ### Session loop — one run
 
 ```
-map opens → pick an island → [main loop] → that island's reward (one of the three; an elite gives two) → back to the map → … → boss island → clear
+map opens → pick an island → [main loop] → that island's reward (one of the three; an elite gives three) → back to the map → … → boss island → clear
                                  ↓ lose                ↑ a chest island arrives here without a fight
                               run over
 ```
@@ -70,7 +70,9 @@ the island unfolds → land them on the coastline (where · when · who) → aut
 
 > **Drop → watch → drop again.**
 
-✓ **What gates the "again" is decided: the landing-craft interval** — see the "The boat" section.
+✓ **What gates the "again" is decided: the fleet count and the round trip** — see "The boat" and the
+"Updated" section under it.
+⚠ **This slot used to read ~~the landing-craft interval~~. The interval is deleted.**
 **That one choice sets the game's tempo.**
 
 **Decisions the player makes**: which island to go to · **which dock, when, and who to land there** ·
@@ -90,7 +92,7 @@ the island unfolds → land them on the coastline (where · when · who) → aut
 | `F` / `V` | **Deleted.** No splitting in half, no absorbing |
 | Soldiers | **They carry across rounds.** Die and they are gone for good. **And HP carries too** — see its section below |
 | Start | **A lump of square cells with one leg** attached |
-| Rewards | **Three axes** — **count** · **specialty** (bolts onto one soldier) · **artifact** (applies to the army). A combat island gives one, **an elite gives two** |
+| Rewards | **Three axes** — **count** · **specialty** (bolts onto one soldier) · **artifact** (applies to the army). A combat island gives one, **an elite gives three** — the combat reward, an artifact, **and that elite's soldier type** (this row said "two" and undercounted the third; see "Elite") |
 | Starting force | **Ten cells** (user: *"처음에 차라리 세포 열 마리를 주고."* — *"just give ten cells at the start."*) |
 | Parts | A specialty *is* a part, and **it bolts onto a soldier** (there is no host) |
 | Theme | **Stays cellular.** A ladder climbing from mammals up to dinosaurs |
@@ -128,7 +130,8 @@ drop opened up the entire second dimension.
 picture of it**; the user framed it that way first. **And then decided to promote the boat to the rule
 side**: *"배는 규칙이지. 일단 규칙으로 해놓자."* (*"The boat is a rule. Let's make it a rule for now."*)
 
-⇒ **So what stops simultaneous deployment is the landing-craft interval.** Not a resource, not a cooldown.
+⇒ **So what stops simultaneous deployment is the boats themselves** — ~~the landing-craft interval~~, no:
+**how many boats there are and how long the round trip takes** (updated below). Not a resource, not a cooldown.
 **No resource UI is needed, and the restriction is already drawn on the screen** — if you can see a boat you
 can deploy, if you can't you can't. One of the reasons `v2-openfield` died was that nothing on screen ever
 went down, and this restriction **is itself the picture.**
@@ -157,7 +160,10 @@ decisions, and you exercise those four once every 3–5 seconds.**
 > *"the real time spent throwing is itself the cost, so 'all of them on one side' is physically slow."*
 > **That evidence survives intact inside the answer below.**
 
-### The boat — **five per trip, every 3 seconds, and the crossing takes time** (user, 2026-08-17)
+### The boat — **five per trip, ~~every 3 seconds~~, and the crossing takes time** (user, 2026-08-17)
+
+⚠ **"Every 3 seconds" was updated the same day — the "Updated" section just below is the live rule.**
+The capacity of five and the crossing time both survive intact.
 
 *"한 척에 최대 다섯 마리로 하고, 배에 태워서 보내는 거지. 3초 기다렸다가 선착장 같은 데서 내리는
 것도 있는 거지."* (*"Up to five per boat, and you load them aboard and send them. And there's waiting 3
@@ -175,15 +181,51 @@ but **filling one boat is five decisions**, so the 3 seconds is not dead air —
 
 **And the crossing time creates two more things:**
 
-- **Prediction becomes a decision.** Send now and they arrive 3 seconds later, so you have to load for
-  **the situation then, not the situation now**
+- **Prediction becomes a decision.** Send now and they arrive 3 seconds later (a 6-second round trip), so
+  you have to load for **the situation then, not the situation now**
 - **A long crossing is dangerous.** Ranged enemies shoot the incoming boat — see the "Engagement rules"
   section.
   ⇒ **It is the only rule that makes landing cost something, and unlike the rejected landing tax it is
   plausible**
 
-**Noted as meta-unlock candidates**: shorter boat travel time · higher capacity · shorter interval (the
-user proposed these).
+**Noted as meta-unlock candidates**: shorter boat travel time · higher capacity · ~~shorter interval~~ →
+**one more boat** (the user proposed these; the last one changed when the interval went away).
+
+### ⇒ Updated: **there is no interval. The fleet is a fixed count and boats come back** (user, 2026-08-17)
+
+*"The number of boats is fixed, a boat is transport, and you use them strategically. I think one boat
+leaving per click is best."* / *"The round trip is six seconds."* / *"Two to start with."*
+
+| | |
+|---|---|
+| Fleet | **Two boats to start** |
+| Capacity | **Up to five per boat** (unchanged) |
+| Launch | **Not one readied every 3 seconds.** **Click and a boat leaves right then** |
+| Round trip | **6 seconds.** It unloads and must sail back to port before you can use that boat again |
+
+**One deployment looks like this**: load **up to five with the number keys → click a dock and that boat
+sails.**
+⚠ **Loading and launching being one action is the only reading that satisfies both the user's "one boat
+per click" and the already-decided capacity of five.** The user did not say that sentence itself.
+
+**What changing the interval into a fleet count buys:**
+
+- **The restriction is drawn on screen.** A boat in port means you can send; no boat means you cannot. The
+  "the unit of the limit is the unit of dead air" problem dissolves — **the player creates the waiting
+  themselves, by choosing to spend the fleet**
+- **Having the whole fleet at sea is the tension.** Send both to the far side, have the pull fail, and there
+  is nothing to do but wait six seconds
+- **The return trip is the rhythm.** A boat that never comes back makes a static puzzle; one that does makes
+  a beat
+
+#### ⚠ But **2 boats × capacity 5 = 10 = the entire starting force**
+
+On the first island **two clicks land everyone.** The 6-second round trip only acquires a value after that.
+⇒ **On the first island the boats do not limit throughput at all; they ask exactly one question — "which
+two docks do I split across?"** That is the same question pulling asks, so **it is the intended shape rather
+than a defect**, and the fleet only starts biting as a limit **once rewards push the army past 10.**
+⚠ **The reason to hold back still does not come from the boats.** It comes from the width of the contact
+line — see that section.
 
 ### Docks — **the island decides where you can land** (user, 2026-08-17)
 
@@ -292,7 +334,7 @@ specialties right now?"**
 
 | | Specialty | Artifact |
 |---|---|---|
-| Where from | Combat island | Chest island |
+| Where from | Combat island | Chest island **and elite island** (this row used to say chest only, and elites give one too) |
 | Where to | **Bolts onto one soldier** | **Applies to the army.** Not bolted on |
 | If that soldier dies | **It dies with them** | **It stays** |
 | The decision | Who to bolt it onto | Which artifact to take |
@@ -410,6 +452,13 @@ specialties, where the identical sentence applies.**
 > bigger, which also ties back into **the choice of dock.**
 
 **3. Only specialties evaporate, and there is no recovery path anywhere in the game.** Artifacts survive at
+⚠ **The 20% below is an input nothing in this document produces** — the live damage model gives per-soldier
+damage `A·E/(k²·d)`, which is 2.5 of 10 HP at `k`=10, and the "send everyone" table in this same file reads
+**"0 deaths."** So the paragraph's own premise contradicts the model two sections up, and it assumes eight
+islands when the map length is undecided and the first slice is three. ⇒ **Read 20% as a target the enemy
+tuning has to hit, not as a derived number.** The conclusion (a recovery path is needed) survives only if
+the target is met.
+
 100% and soldier count recovers, but at 20% casualties per island only `0.8⁸ =` **17%** of specialties
 remain after eight islands. **"The path is the build" — and that build is 83% gone by the time you reach the
 boss.** One of the two things distinguishing this from Bad North is erased by arithmetic.
@@ -508,9 +557,13 @@ The user inverted the question: *"그냥 안 아끼고 다 소환하게 하면 �
 (*"Just let them not hold back and summon everything. What problem does that actually cause?"*)
 
 **The answer: only one thing is lost.** "When" and "who" drop out of the decision and **only "where"
-remains.** And **the landing-craft interval already physically prevents "everything at once"** — even if you
-decide to send everyone, they go out in the order the boats come, so the real question just becomes
-**"where do I put the ones going out first?"**
+remains.**
+
+⚠ **A sentence that used to live here has since died**: *~~the landing-craft interval already physically
+prevents "everything at once"~~*. **Deleting the interval removed that barrier** — 2 boats × capacity 5 = 10
+= the entire starting force, and both can launch at t=0. ⇒ **Nothing prevents "everything at once" any
+more.** The fleet only becomes a limit once the army passes 10.
+⇒ The decision that remains is still real: **where do the first two boats each go?**
 
 **Clash Royale works exactly that way.** Nobody hoards elixir over the long run — if you can pay, you play.
 The decisions are **what · where · in what order**, not "should I hold back."
@@ -554,6 +607,49 @@ width of the contact line, which the terrain sets.**
 
 ⇒ **So "how many do I send" is a real question, and the answer differs per island.** Few at a narrow ramp,
 everyone on an open shore. **Hand-authored level design becomes the tool that sets that answer.**
+
+> ### ⚠⚠ The whole section above is wrong — a 4th adversarial review overturned it with arithmetic (2026-08-17)
+>
+> **1. The `w` cap was applied to my side and not the enemy's.** Two lines above it says *"can only hit `w`
+> at a time and can only be hit `w` at a time"*, and then the table lets **the enemy's full 5 DPS land.**
+> "Bodies never overlap" binds the enemy too, so **at a 2-wide ramp only two enemies can reach.** Redone:
+> 25s × 2 = **50 damage, 5 deaths, and I win at t=25s.** Not a defeat.
+> ⇒ The terrain effect is real but it is **"zero deaths becomes five deaths"**, not "zero deaths becomes a
+> defeat."
+>
+> **2. The conclusion `k = w` is exactly backwards.** If the queue takes no damage the queue is **free**,
+> and it is a reserve that replaces the front rank as it dies. On the same model `k`=6 and `k`=10 produce
+> **identical deaths**, and the extra bodies are insurance against a fight being harder than estimated.
+> ⇒ **`k = everyone` is still weakly dominant, and `k = w` is the worst play on the board.**
+> ⚠ **The dilemma is exact: if the queue absorbs no damage, holding back is pointless; if it does, this
+> section's premise is false.** Neither branch produces restraint.
+>
+> **3. The bench threshold compares two numbers that are not comparable.** 2.27 is the drop in the army's
+> **total** damage (25 → 22.7); 2.06 is the newcomer's **share of that 22.7** — a slice of it, not a cost
+> added to it. The real trade is **one permanent death against 4.4 HP saved across the other ten.** And the
+> "death line" is not a constant but `250/(k+1)²` — **0.6 at k=20** — so it evaporates as the army grows.
+>
+> **4. So this section's overturning of a user decision is void too.** *"Do not create a reason to hold
+> back"* is marked **(user, 2026-08-17)**; this section is marked **(review)**. The review's arithmetic does
+> not hold, so **the user's decision stands as the live rule.**
+> ⚠ **A review reports; it does not decide** — CLAUDE.md.
+>
+> ### ⇒ So where is the cost that grows with `k`? — **there is exactly one: area damage**
+>
+> Total damage taken = enemy DPS × T, and T is inversely proportional to `k`, so **against single-target
+> enemies sending more is always better.** The one exception is **area**: one swing lands on several, so
+> **bunching raises the total you take.**
+> ⇒ **That is the axis this document already named as one of the two that make position a decision.**
+> **Restraint comes from the enemy's attack area, not from the contact line.** In the first slice the unit
+> carrying that job is **the lion.**
+> ⚠ **Unverified.** Until the first slice is measured this is arithmetic too.
+>
+> ### ⇒ And the beak doubles `w` — nobody had computed that
+>
+> Range 1 means **the second rank can attack.** At a contact line of width `w`, a soldier with range `r`
+> engages from `r+1` ranks, so **effective width is `w × (r+1)`.**
+> ⇒ **The first slice's only specialty is the item that halves the terrain restriction.** It is the same
+> line that makes the beak the boss's answer — the plan saw the upside and neither doc saw the cost.
 
 ### ⚠ And the "hold back vs the time limit" scale does not hold either
 
@@ -628,12 +724,37 @@ second five at **t=3.0s** to walk 10 tiles:
 | 5 at A + 5 at the far dock B (pulling) | **45** | 11.5s | **40 of it onto A's five** → 2 HP each |
 
 **B arrives at t=10.5s and the fight ends at 11.5s — one second of contribution.**
-⇒ ⚠ **Pulling violates "spreading the damage wide is the same thing as zero deaths" head-on.** The
-definition of pulling is "pile it all onto one squad", so **under the current rules pulling is the play that
-maximises permanent death.**
 
-**And the first squad is a sacrifice, and the answer to that is a constant** — in a first vertical slice
-with one enemy type, "send the cheapest one first" never changes.
+> ### ⚠ This model's premise disappeared the same day — **it has to be re-measured**
+>
+> The table above rests on **the 3-second interval.** The interval is deleted; there are **two boats and
+> both can launch at t=0** (the "Updated" section). ⇒ **Ten at one dock and five-plus-five at A and B are
+> now both simultaneous landings.** "The second five lands at t=3.0s" and "B contributes one second" **no
+> longer follow from the rules.**
+> ⚠ **So "pulling is the inferior play" is currently unproven** — not refuted, but **left without its
+> evidence.** Pulling is no longer "delayed reinforcement", it is **"two directions at the same moment"**,
+> and nobody has calculated whether that is good or bad.
+> ⇒ **Recompute this table under the new rules before the first vertical slice.** The "first squad is a
+> sacrifice" paragraph and the candidate below it both ride on that calculation.
+~~⇒ ⚠ **Pulling violates "spreading the damage wide is the same thing as zero deaths" head-on.** The
+definition of pulling is "pile it all onto one squad", so **under the current rules pulling is the play that
+maximises permanent death.**~~
+
+~~**And the first squad is a sacrifice, and the answer to that is a constant** — in a first vertical slice
+with one enemy type, "send the cheapest one first" never changes.~~
+
+> ⚠⚠ **Both paragraphs above are struck, and the reason is the box above them.** They are conclusions of
+> the voided 3-second-interval model, and the premise they lean on — *"spreading the damage wide is the same
+> thing as zero deaths"* — is itself the claim the contact-line section exists to attack. **A live
+> conclusion standing on two retracted propositions is worse than no conclusion**, because the next reader
+> inherits it as settled. Striking the table and leaving its conclusions was the exact leak CLAUDE.md names.
+>
+> **What is actually known about pulling right now**: nearest-first never flips while an enemy walks toward
+> the first landing (that proof survives, it does not depend on the interval), so pulling produces
+> **delayed reinforcement, not a flank**. With both boats launchable at t=0, sequencing them is now a
+> *choice* rather than a constraint — **pulling means voluntarily leaving a loaded boat in port.**
+> ⇒ **Whether that trade is worth it is uncomputed.** And pulling is one of only two things separating this
+> game from Bad North, so it does not get to stay uncomputed for long.
 [Lessons from two dead games](../lessons-from-two-dead-games.md) calls this **"a fact you learn once and
 are done with"**, the shape that killed the old game.
 
@@ -729,6 +850,27 @@ not being a decision and confirm that firsthand — one of the two must be chose
 ---
 
 ## Terrain — **a block grid. There are tiers, and a tier's value is a "path", not a "bonus"**
+
+### ⚠ The first slice has no tiers — **stay 2D, start with no drop** (user, 2026-08-17)
+
+*"Stay 2D, and let's develop with no drop for now. No tiers for now. No tiers, but holes you fall into —
+just that much."*
+
+| | First slice | Later |
+|---|---|---|
+| Tiers / elevation | **None.** Everything is one level | The sections below come back intact |
+| Impassable tiles | **Hole tiles exist.** They are what narrows the route | Ramps and cliffs take that job over |
+| Flying types | **Meaningless** (there is no elevation to clear) | They arrive with the tiers |
+
+⇒ **The contact-line width `w` survives.** The tool that narrows it changed from a ramp to a **hole**, and
+the basis for "sending everyone costs you" is unchanged.
+
+⚠ **3D was considered and dropped.** Bad North really is 3D, but this document's own elevation table already
+holds two precedents — **Brood War and Age of Empires II are both 2D sprite games and their high
+ground reads perfectly, drawn as the side face of a cliff.** Going 3D **kills the "the body is a line drawn
+by code" decision and the whole drawing harness**, and buys one thing: a rotatable camera. ⇒ **Stay 2D.**
+
+**Everything below is the rule for the day tiers arrive. The first slice does not read it.**
 
 ### Decided: block grid (user, 2026-08-17)
 
@@ -862,6 +1004,89 @@ of an undecided item.**
 
 ---
 
+## The remaining rules, filled in so the first slice can be built — ⚠ **the user did not decide these**
+
+This is the space the user delegated: *"the goal is to keep it light and get the whole thing running. Go
+ahead."* **Everything here is a first value written on the assumption it gets fixed by playing, and none of
+it carries user approval.** When approval comes, the line moves up into the sections above.
+
+### Tile occupancy — **reserve the next tile**
+
+Movement is continuous and occupancy is a grid. The rule that joins them:
+**a unit reserves the one tile it is stepping into, then walks there. Nobody else may enter a reserved tile.
+On arrival it releases the tile behind it. If every candidate tile is taken, it stands still.**
+⇒ **"One per tile" and "bodies never overlap" both fall out of one place in the code.** There is no
+collision handling.
+
+### Enemy movement — **detect, then walk at the nearest**
+
+An enemy stands where it was placed until **a soldier enters its detection radius, at which point it moves
+toward the nearest one.** When none is left, it stops. No patrol, no leash-return.
+⇒ **Pulling comes from here.** The first landing trips detection and the mass walks that way.
+
+### Soldiers on a boat can be hit, but cannot hit
+
+This honours the user's *"I want them shot at from range while they come in on the boat"* **without adding a
+rule**: **the boat is a picture, and the soldiers aboard are simply soldiers in transit.** They are hit if
+they are in range, and **they do not attack before landing.**
+⚠ **"Ranged enemies prioritise the boat over soldiers ashore" is still not adopted.** Nearest-first stands.
+
+**A boat does trip enemy detection**, at the boat's own position — otherwise a ranged enemy would never
+begin shooting at one, and the picture the user asked for would never happen.
+**Soldiers still aboard when the island ends** stay in the roster at their current HP; they simply never
+landed.
+
+### The starting leg does nothing
+
+*"A lump of square cells with one leg"* is in "What is decided", and nothing says what the leg **does** —
+while an artifact example elsewhere reads *"soldiers with legs +2 attack"*, which implies it is a part with
+an effect. **In the first slice it is the picture of being able to move and carries no number.** If it ever
+becomes a part with an effect, the artifact condition field is where that lands.
+
+### Unloading — **a dock is one tile and a boat carries five**
+
+"One per tile" leaves four soldiers with nowhere to stand. The rule: **the first soldier takes the dock
+tile, the rest take the nearest free passable tiles by breadth-first search from it**, in the order they
+were loaded.
+⇒ **This sets the landing formation, which sets who is in the contact line.** It is not a detail.
+
+### ⚠ Two tensions this document does not resolve, recorded so the first playtest knows to look
+
+**1. An autobattler is what [planning principle 1](../planning-principles-ko.md) forbids.** That line reads
+*"the hands must not idle"*, and it is the single reason a whole defence game was scrapped. **This genre is
+defined by watching.** Working the numbers on the fleet: five key presses plus a click is about 1.9 s, two
+boats is **3.8 s of hand time for the entire starting force**, and an island that runs its full 60 s is
+**94% dead air** — worse than the 61% that killed `v2-openfield`. Shorten the island to ~15 s and it is
+~75%, but then the time limit is decoration.
+⚠ **This is not an arithmetic error that another pass can catch — it is the genre choice itself.**
+⇒ **The first slice's probe prints the dead-air number.** It is the one measurement that decides whether
+this direction survives, and no amount of design writing can settle it.
+
+**2. Every reward in the first slice is a flat stat boost**, which is what
+[planning principle 8](../planning-principles-ko.md) says is not a combination: *"order has to change the
+outcome."* Range +1 and army-wide +HP are both pure increments. **The slice cannot demonstrate principle 8
+and is not trying to** — but nobody should read a successful slice as evidence that the build axis works.
+
+## Screen — only as much as the first slice needs
+
+⚠ **The Screen section above says its own absence is a hole; this section fills that hole to exactly the
+size of the first slice.** Pixel-level layout belongs to the plan.
+
+| What | In the first slice |
+|---|---|
+| Grid | **Drawn faintly.** In a game where position is the decision, an invisible grid means you cannot pick a position |
+| Land · hole · water | Three colours. **A hole has to read as impassable at a glance** |
+| Docks | Marked on their shoreline tiles. **Where you can deploy must be visible** |
+| Bodies | Rounded square outline plus a centre dot. **Friend/foe by colour, type by size and shape** |
+| The beak | **A triangle sticking out past the body** |
+| HP | **A thin bar under the body.** One of the reasons the old game died was *"nothing on screen ever went down"* |
+| Boats | Two boat icons at the port. **A berth empties while that boat is at sea** — the limit is the picture |
+| Loading | The number currently aboard, shown beside the port |
+| Time left | Top of screen |
+| Map | Three nodes in a row, current one highlighted |
+| Reward | Click a soldier in the roster to bolt the beak onto them |
+| Win · lose | Centre text. **A loss has to show why you lost** |
+
 ## Undecided — cannot be built without picking
 
 ⚠ **The phrase "combat rules" pointed at two different things inside this document, and because of that one
@@ -880,10 +1105,15 @@ of them was missing from the list entirely.** They are now written separately:
 3. **Is a specialty fixed per island, or one of three at random.** Fixed makes route choice into build choice
 4. ~~Lose condition~~ — **decided: a time limit** (user, 2026-08-17). Each island has a clock, and failing to
    wipe them out within it loses.
-   ⇒ ⚠ **This blocks the problem that killed `v2-openfield` at the rule level.** That game's measured failure
-   was **61% dead air**, and if the time limit is the lose condition then **dead air is death**, so the design
-   cannot ignore it.
-   ⇒ And **"when do I drop" acquires a value** — hold back and you are safe, but the clock runs
+   ⇒ **And being wiped out is also a loss** (added 2026-08-17). Death is permanent and there is no recovery,
+   so **an empty roster arrives before the clock does.** Without this line you sit staring at a running timer
+   with nobody left.
+   ⚠ **The sentence that used to be here is deleted**: *~~if the time limit is the lose condition then dead
+   air is death, so the design cannot ignore it~~*. **The "the unit of the limit is the unit of dead air"
+   section in this same file already refuted it with arithmetic** — dead air is a ratio, so shortening the
+   island shrinks numerator and denominator together. **A refuted sentence was still standing in another
+   section.**
+   ⇒ What survives: **"when do I drop" acquires a value** — hold back and you are safe, but the clock runs
 5. **Map structure.** Are there branches (Slay the Spire), or is it a straight line
 6. **What the per-soldier-type adjustment is.** The user pushed this to *"later."* Targeting priority?
    Formation? Position?
@@ -908,6 +1138,19 @@ of them was missing from the list entirely.** They are now written separately:
     list.** If the latter, the picture is the 1–5 hotkeys filling up over the course of a run
 14. **The recovery path.** HP carries across islands, and with no recovery a run is a one-way decline.
     **The chest island doubling as it is the cheapest** — the name "resting square" only becomes true then
+15. **The boat does not read as a rule on screen** (user, after the first play). *"The boat feels like a
+    side-thing. It isn't needed, and it only makes the game harder."* · *"You should float a boat and it
+    goes to the nearest dock — instead it feels like 'press this button here'."*
+    ⚠ **The whole section "the boat is a rule, not a picture" hangs on this one line** — what was promoted
+    to a rule read on screen as a dock-click button. **Look again once the presentation is in.**
+16. **The sea is cramped and the terrain is one lonely shape** (user, after the first play). *"The terrain
+    could stretch out long, but it feels like a quiz with one thing plonked in it."* This is the 32×18 grid
+    and the level design of the three islands.
+17. **2D or 3D — the user reopened it** (after the first play). *"I'm wondering whether to just do 3D."*
+    ⚠ The terrain section decided **stay 2D**, and its grounds (Brood War and AoE2 both read height from
+    2D sprites; going 3D kills the "the body is a line drawn by code" decision and the whole drawing
+    harness) are untouched. **This is reopened, not overturned.** Judge it on the same screen once the
+    presentation lands.
 
 ---
 
@@ -978,18 +1221,76 @@ as `v1-sim`, and the current prototype was already written down as *"a reference
 
 ## What to do next session — **in order**
 
-1. ~~Pick the commitment limiter~~ — **decided: the landing-craft interval.** Once the boat became a rule,
-   neither a resource nor a cooldown was needed.
-   ⇒ **Building it swappable is still the spec.** All three differ by one or two constants.
-   ⚠ **What is left is the capacity and interval numbers**, and the section *"the unit of the limit is the
-   unit of dead air"* bears directly on them
+1. ~~Pick the commitment limiter~~ — **decided: the fleet.** ~~The landing-craft interval~~ was replaced the
+   same day: **2 boats · capacity 5 · one leaves per click · 6-second round trip.** Neither a resource nor a
+   cooldown was needed.
+   ⇒ **Building it swappable is still the spec.** All of them differ by one or two constants.
+   ⚠ **The numbers are now pinned, so this item is closed** — but the section *"the unit of the limit is the
+   unit of dead air"* was written against the interval and **its conclusion has not been redone for a fleet**
 2. **What do you start a run with** — force and body are under "What is decided." What is left is **whether
    you start with 0 or 1 specialty**
 3. ~~Where can't you drop~~ — **gone.** Reversing to the boat pinned the landing point to the shoreline,
    which is one-dimensional
 4. **Build the first vertical slice** — a straight-line map of three islands, all the way to a run finishing.
    ⚠ **Two soldier types — one melee single-target, one ranged area.** Everything else minimal: one
-   specialty · one enemy · no chest island, no elite island, no map branches.
+   specialty · ~~one enemy~~ **two enemies** · no chest island, no elite island, no map branches.
+
+   ##### The first slice's stage and enemies — **grassland, a crow and a bison** (user, 2026-08-17)
+
+   *"The first stage is a field, and there'd be crows and animals and horses and cattle and bison and lions.
+   But it's the first one, so let's have just the crow and the bison for now."*
+
+   | | What | Why these two are enough |
+   |---|---|---|
+   | Stage | **Grassland (open field)** | It fits a first slice with no tiers. The later ladder is mammals → dinosaurs |
+   | Enemy 1 | **Crow** | **The range side.** Pulling only works if at least one enemy has range |
+   | Enemy 2 | **Bison** | **The melee side.** Slow, large, comes straight at you |
+
+   ⇒ **This closes the third review's demand that there be two enemies.** With only a ranged enemy the
+   player's melee type is strictly inferior; with only a melee enemy pulling dies. **The crow and the bison
+   are exactly those two seats.**
+
+   ⚠ **And the open candidate "ranged enemies prioritise an approaching boat" gains its plausibility here** —
+   **crows mobbing a landing boat** needs no explanation. Not adopted yet.
+
+   ##### The grassland's specialty — **the beak** (user, 2026-08-17)
+
+   *"The beak. A bird's beak. Just that for now."*
+
+   | | |
+   |---|---|
+   | What | **The crow's beak.** It bolts onto one surviving soldier |
+   | Effect | **Range +1** — a melee soldier becomes half-ranged |
+   | Picture | **One triangle sticking out past the body**, seen from above |
+
+   ⇒ **The first specialty lands on the range axis.** As this document pins down, **the only two axes that
+   make position a decision are range and attack area** — had it been +attack, bolting it on would change
+   nothing about where you land.
+   ⇒ **And it fits "on a top-down body, only what sticks out reads"** (measured by `tools/pixel/`). A mane
+   does not read; a beak does.
+
+   ##### The three islands — **grassland · grassland · lion** (user approved, 2026-08-17)
+
+   | Island | Enemies | Reward | Time limit |
+   |---|---|---|---|
+   | 1 | **Bison only** | +N soldiers | 60s |
+   | 2 | **Bison + crow** | **The beak** | 60s |
+   | 3 | **Lion (boss)** + bison + crow | none (the run ends) | 90s |
+
+   ⇒ **The lion is the island you can lose on.** And the reason you can lose comes out of the rules —
+   **the HP the first two islands took off you carries straight in.** Losing to the boss is the first proof
+   that HP carryover does anything.
+   ⚠ **Arrive undamaged and the boss is easy too. That is not a bug, that is having played well.**
+
+   **Later candidates (user)**: an elephant, a chimera, some legendary creature. **Not in the first slice** —
+   the user's goal is *"keep it light and get the whole thing running first."*
+
+   ⚠ **One worry the user left on the record**: *"I don't know whether this will come out juicy in 2D."*
+   **Planning cannot judge that.** It gets judged by running the first slice — the second line of
+   [planning principles](../planning-principles-ko.md).
+
+   ⚠ **Still undecided**: whether a specialty also gives **+1 HP**. The adversarial review wrote that down as
+   a candidate — *without it, "who do I bolt it onto" is not a decision* — and it has not been adopted.
    **That is what lets you ask "is this fun?" for the first time** — the last game died because nobody ever
    ran the loop end to end
 
@@ -1021,6 +1322,33 @@ as `v1-sim`, and the current prototype was already written down as *"a reference
    the failure that killed the last game, **except this time running it doesn't even give an answer.**
    **Adding one more soldier type is the price.**
 5. **Nets land in groups of five or more.** Below that the wrapper refuses the round
+
+---
+
+## What the first play said — **the user ran it themselves** (2026-08-17)
+
+The first vertical slice was built and **the user launched it and played.** This section is what came out of
+that. **It is a kind of input that did not arrive once in eight months**, which makes it heavier than any
+arithmetic above it.
+
+| | What the user said | What it means for this doc |
+|---|---|---|
+| **The look** | *"I actually like what I'm seeing"* | **The body drawn by code** cleared its first gate |
+| **Presentation** | *"the ranged one shooting at something — all of that is needed. Right now there's just nothing there"* · *"there has to be a joy in watching the action. The feel of squads colliding"* | Exactly what the section "the price of going autobattler" predicted. ⇒ [combat juice](combat-juice.md) |
+| **The boat** | *"the boat feels like a side-thing… it only makes the game harder"* · *"it feels like 'press this button here'"* | ⚠ **Open as Undecided 15.** "The boat is a rule, not a picture" did not read as a rule on screen |
+| **Sea and terrain** | *"the sea feels too cramped"* · *"the terrain could stretch out long, but it feels like a quiz with one thing plonked in it"* | ⚠ **16.** The 32×18 grid and the three islands' level design |
+| **Dimension** | *"I'm wondering whether to just do 3D… but I can't picture this being fun in 2D yet either"* | ⚠ **17.** The terrain section's **stay 2D** decision is reopened |
+
+⇒ **The user deferred all three (boat · terrain · 3D) themselves**: *"leave the detail bits out — it plays
+fine, but the presentation needs to go in and be tested."*
+**Presentation first, then look again.** ⚠ **Deferred is not closed** — all three live in Undecided.
+
+⚠ **And one probe number attaches here: dead air 98.4–99.6%.** Under the "everything at once" policy the
+hand has something to press for **0.10–0.20 s per island**, with all 12–16 commands landing in the first two
+or three frames and nothing to press for the next 12–50 s.
+**That is worse than the 94% the section "the two tensions this doc cannot resolve" predicted.** The user
+played it in that state and said *"it plays fine"* — **the number and the felt experience disagree, and
+which one is right has to be asked again once the presentation is in.**
 
 ---
 

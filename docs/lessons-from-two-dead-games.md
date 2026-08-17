@@ -171,9 +171,10 @@ does not move. A time limit stops **the run dragging**, not **the hands idling.*
   Thirty-six force-10 bites into a force-120 boss produced an identical frame every time. The only bar on
   screen was **experience, not HP**, and enemy health appeared nowhere at all
 - **A flash stops being an event and becomes a state as the numbers grow.** One attacker's share of the
-  flash window is `flash 0.09s ÷ attack period 1.2s` ≈ **7.5%** ⇒ past **thirteen or fourteen** attached
-  bodies the flash never turns off and individual hits vanish. **This is the class of defect that gets worse
-  as the swarm gets bigger**
+  flash window is `flash time ÷ attack period`. **⚠ This line stood for a long time as 0.09 ÷ 1.2 ≈ 7.5%
+  ⇒ "thirteen or fourteen", and that is the number from before the flash was doubled to 0.18.** At the value
+  that actually shipped, 0.18 ÷ 1.2 = **15%**, so the ceiling is **six or seven.** Past it the flash never
+  turns off and individual hits vanish. **This is the class of defect that gets worse as the swarm gets bigger**
 - **Knockback reads against the target's radius, not in absolute pixels.** The same displacement is "it got
   flung" on a small body and "it didn't move" on a large one
 - **With no safe place to stand, it is arithmetic rather than difficulty.** The boss's reach was 132px
@@ -194,8 +195,12 @@ does not move. A time limit stops **the run dragging**, not **the hands idling.*
   the measurement is exact while the answer is wrong**
 - **The sources contradict each other.** Riot says separate by silhouette and draw **less**; Vlambeer says
   stack many small effects and put **more** in; Fatshark says distinguish **tiers**, not individuals; Sakurai
-  says **deliberately shorten hitstop in a brawl** — which is why hit-slip cannot be used on a screen with
-  forty bodies. **Citing one side turns a choice into a pitch**
+  says **deliberately shorten hitstop in a brawl** (Famitsu column Vol. 490-1).
+  ⚠ **This line used to read "which is why hit-slip cannot be used on a screen with forty bodies", and that was
+  wrong** — his stated reason is not readability but **fairness: while both parties are frozen a third player
+  moves in and hits for free.** **An autobattler has no controlling third party, so the reason does not carry
+  over.** The real reason to be careful is different — **a global freeze becomes a permanent freeze once there
+  are many bodies.** See `combat-juice`. **Citing one side turns a choice into a pitch**
 
 ---
 

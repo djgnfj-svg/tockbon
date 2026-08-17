@@ -18,15 +18,19 @@ all three folders. **Links leak every single time** — `net_citations` catches 
 
 ---
 
-## The state today — **all three folders are empty**
+## The state today
 
 | Folder | Contents |
 |---|---|
 | `1.ready` | **empty** |
 | `2.active` | **empty** |
-| `3.done` | **empty** |
+| `3.done` | [the first slice](3.done/first-slice.md) — three islands, one run, end to end. Built 2026-08-17; the round is **9 nets / 725 checks** green |
 
-**Every plan this repo ever had was deleted on 2026-08-17**, together with the design docs describing the two
+⚠ **`3.done` here does not mean the design is settled.** The slice ran and the user played it, and what they
+said afterwards is an open problem, not a tick: *"게임이 좀 애매하네. 뭔가 침공하는 느낌이 전혀 없어서"* and
+*"배가 곁다리인 게 여전히 별로네."* **The next plan is the boat**, and the GDD carries it as Undecided 15·16·17.
+
+**Every earlier plan this repo had was deleted on 2026-08-17**, together with the design docs describing the two
 games those plans built. Nothing was lost that mattered: what the plans *measured* is distilled into
 [what two dead games left behind](../lessons-from-two-dead-games.md), and the plan text itself is recoverable
 at the tags `v1-sim` and `v2-openfield`.

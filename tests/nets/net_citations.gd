@@ -23,21 +23,17 @@ extends RefCounted
 ## ⚠ **Only the line-number form.** A doc PATH is legitimate in a doc — `plans/README.md` and the design
 ## index exist to link to files, and CLAUDE.md's own table names them. What is never legitimate anywhere is
 ## a line number, because a line number is a path into a file and four lines added to a header kill ten at
-## once. The dated review files are skipped: they quote the offending citations verbatim as findings, so
-## scanning them would red the round for reporting the bug correctly.
+## once.
+##
+## ⚠ **The skip list is gone, and nothing is exempt.** It named the dated adversarial reviews, which quoted
+## offending citations verbatim as findings — and every one of those files was deleted with the two dead
+## games. An exemption that covers no file is not an exception to the scan, it is a hole in it, exactly as
+## this net already recorded when `gap-check-` was granted the same exemption and bought nothing. The two
+## checks that guarded the list went with it: they asserted a skip actually fired, and a skip that can never
+## fire cannot be asserted honestly. **Narrowing the instrument, not the subject.**
 const ROOTS := ["res://src", "res://tests", "res://tools"]
 const DOC_ROOTS := ["res://docs"]
 const LOOSE_DOCS := ["res://CLAUDE.md", "res://README.md"]
-## Substrings of a filename that take it out of the docs scan. Hand-written and hand-counted: a skip list
-## that quietly grows is a hole in the scan rather than an exception to it.
-##
-## ⚠ **`gap-check-` was in this list for a day and it bought nothing.** The justification below is true of
-## the dated adversarial reviews, which quote offending citations verbatim as findings — and false of
-## `gap-check-2026-08-15-ko.md`, which holds **zero** `.gd:NNN` citations and no line ending in `.gd` for
-## the tight-join path to reach either. An exemption that covers a doc with nothing to exempt is not an
-## exception to the scan, it is a hole in it — and it was granted to the newest doc in the tree, the one a
-## plan-5 conversation opens first. **Narrowing the instrument, not the subject.**
-const DOC_SKIP := ["adversarial-review-"]
 
 # Assembled, never written whole: a literal here would make this file its own first offender.
 const PLANS := "docs/pl" + "ans/"
@@ -108,24 +104,16 @@ func run(t) -> void:
 func _docs_carry_no_line_numbers(t, line_re: RegEx) -> void:
 	var docs := _md_files()
 	# The literal, not `docs.size()` read back: a walk that found nothing would report a perfectly clean
-	# docs tree and every assertion below would simply stop running.
-	t.ok(docs.size() >= 40, "스캔할 문서를 찾았다 (%d개, 최소 40)" % docs.size())
-	t.eq(DOC_SKIP.size(), 1, "문서 스캔에서 빼는 것은 날짜 붙은 검토 파일 하나뿐이다 — 면제는 자라면 구멍이 된다")
+	# docs tree and every assertion below would simply stop running. The floor was 40 while the tree held
+	# sixty-odd docs about two dead games; those were distilled and deleted, and 21 files are left, so the
+	# floor moved with the tree. It is still a hand-written number and never `docs.size()`.
+	t.ok(docs.size() >= 18, "스캔할 문서를 찾았다 (%d개, 최소 18)" % docs.size())
 	var bad: Array[String] = []
-	var skipped := 0
 	for f: String in docs:
-		var skip := false
-		for needle: String in DOC_SKIP:
-			if f.contains(needle):
-				skip = true
-		if skip:
-			skipped += 1
-			continue
 		for joined: String in _join_prose(_read(f)):
 			if line_re.search(joined) != null:
 				bad.append(f)
 	t.eq(bad.size(), 0, "문서에도 파일:줄번호 인용이 없다 — 이름을 부르지 줄을 세지 않는다 %s" % str(bad))
-	t.ok(skipped >= 2, "그리고 날짜 붙은 리뷰 파일은 실제로 건너뛰었다 (%d개)" % skipped)
 
 	# **Invert the instrument.** A prose joiner that never matched would read identical to a clean tree, and
 	# the skip list has to be a hole in exactly one direction.

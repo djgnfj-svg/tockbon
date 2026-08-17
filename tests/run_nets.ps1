@@ -257,8 +257,22 @@ if ($Serial) {
 $NetTimeoutSec = 120.0
 
 # -- Parallel. The number of processes alive at once is limited.
-#  One grid is 4.12M cells x four arrays, so each process eats memory. It is bounded by the core count.
-$maxParallel = [Math]::Max(2, [Math]::Min(8, [Environment]::ProcessorCount - 2))
+#  **The old ceiling (8, i.e. `ProcessorCount - 2` on this machine) was tuned for a game that is gone** —
+#  v2-openfield's grid was 4.12M cells x four arrays per process, and that memory reasoning does not apply
+#  to an empty `src/`. harness-manager measured (2026-08-17), 8-core/16-thread machine, throwaway load:
+#   · 32 cheap nets (spawn-dominated): cap 8 (4 waves) 2.36s -> cap 16 (2 waves) not retested alone, but
+#     the 49-net mixed round below carries it
+#   · 16 CPU-heavy nets (~1s of real work each): cap 8 (2 waves) 3.6s -> cap 16 (1 wave, 2x oversubscribed
+#     on 8 physical cores) 2.55s — SMT plus skipping a second wave's process-boot tax wins even against
+#     doubled per-core contention
+#   · full 49-net mixed set (33 cheap + 16 heavy + citations): cap 8 / 120ms poll 6.1s -> cap 16 / 25ms
+#     poll (see below) 3.75s
+#  ⇒ Raising the cap did not lose on any workload tried. It is bound to `ProcessorCount`, not hardcoded 16,
+#  but capped at 16 so an unusually wide machine does not spawn an unbounded pile of processes untested.
+#  **Re-measure this the day a net holds real per-process state again** (a big grid, a large asset table) —
+#  the memory ceiling that justified the old conservative number will be back, and it was never remeasured
+#  here, only removed because nothing exists yet to hit it.
+$maxParallel = [Math]::Max(2, [Math]::Min(16, [Environment]::ProcessorCount))
 Write-Host "[그물] $($nets.Count)개를 병렬로 돈다 (동시 ${maxParallel}개)"
 
 # **Queue order decides the makespan, not just per-net speed.** The slot-filling loop below starts
@@ -306,7 +320,12 @@ while ($queue.Count -gt 0 -or $running.Count -gt 0) {
         $null = $p.Handle
         $running += [PSCustomObject]@{ Net = $n; Proc = $p; Out = $o; Err = $e; Started = $sw.Elapsed.TotalSeconds }
     }
-    Start-Sleep -Milliseconds 120
+    # **120ms narrowed to 25ms.** Every wave-boundary pays up to one full poll interval before a freed slot
+    #  is noticed and the next queued net starts. With many short nets and several waves this compounds —
+    #  harness-manager measured (2026-08-17): 32 cheap throwaway nets at 4 waves, 120ms poll averaged 2.36s,
+    #  25ms poll averaged 2.23s over 3 runs each, same nets, same cap. The poll body itself is a few cheap
+    #  `HasExited` checks, so 5x more of them costs nothing worth naming.
+    Start-Sleep -Milliseconds 25
     $still = @()
     foreach ($r in $running) {
         if ($r.Proc.HasExited) {
