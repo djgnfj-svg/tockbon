@@ -1,18 +1,22 @@
 # The next game
 
-**Status**: **a cell autobattler.** Islands on a node map, a squad of square cells, and the island's
-특산물 bolted onto the soldiers that survived it. **Target: end of August 2026** — a finished thing,
-not a shippable product.
+**Status**: **a cell autobattler.** Islands on a node map, a squad of square cells landed by boat, and an
+army built out of what you ate. **Target: end of August 2026** — a finished thing, not a shippable product.
 
-⇒ **The design lives in [the cell army GDD](design/cell-army-gdd.md)** (Korean: `cell-army-gdd-ko`)
-**and nothing is built yet.** `src/` was emptied on 2026-08-16 at the tag `v2-openfield`.
+⇒ **The design lives in [the cell army GDD](design/cell-army-gdd.md)** (Korean: `cell-army-gdd-ko`).
+⚠ **This file was three sentences out of date until 2026-08-18** — it said the 특산물 bolts onto the
+soldiers who survived (**overturned by the user**) and that **nothing is built yet** (`src/` has run end to
+end since 2026-08-17: **11 nets, 967 checks**, three islands, boats, a camera). `src/` *was* emptied on
+2026-08-16 at the tag `v2-openfield`, and the third game was built on top of the surviving harness the
+next day.
 
 **One line**: **먹을 것을 고르러 간다.** (*Going out to pick what to eat.*)
 
 **Why cells, still**: almost no art is needed — a square with parts drawn on it is code, not pixels — and
 the theme survived two direction changes because of that. **What did not survive** was "you steer a
-growing mass": there is no host to steer any more, the battle is automatic, and the hands are spent on
-**where to land whom** and **what to bolt onto whom**.
+growing mass": there is no host to steer any more, and the battle is automatic.
+⚠ **And as of 2026-08-18 the hands are spent entirely before the fight starts** — the whole landing is
+planned against a start button and nothing is pressed during combat. See `plan-then-watch`.
 
 ## The two resets
 

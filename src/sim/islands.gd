@@ -147,9 +147,15 @@ const ISLAND_ROWS := [
 	],]
 
 ## Seconds per island. The clock starts when the island OPENS, not on the first landing, so waiting
-## for a full boat costs the same as a bad landing does. **Unchanged by `boat-and-landing`** — an open
-## coastline having a cost is not proven by that plan's round (its section 1), so nobody edits this
-## here.
+## for a full boat costs the same as a bad landing does.
+## ⚠⚠ **MEASURED 2026-08-18: this clock has never once bound.** The probe ran five landing policies over
+## all three islands — **15 wins out of 15**, the worst plan finishing at **49%** of its limit, and island
+## 3's entire spread between best and worst plan is **1.50 s** (30.30 vs 31.80). To discriminate there,
+## the limit would have to sit inside a window narrower than the error on the next untried plan.
+## ⇒ **Lowering these numbers cannot make the landing point a decision** — that is a level-design problem,
+## not a constant. Numbers and consequences: `plan-then-watch`.
+## ⚠ And the first sentence above dies the day a planning phase lands: planning would be free and the
+## clock would start at the start button instead.
 const TIME_LIMITS := [60.0, 60.0, 90.0]
 
 

@@ -347,6 +347,18 @@ So this item is **two layers**, and every line below states both.
 
 ### 8. Summon feedback
 
+> #### ⚠⚠ Half of this item is dead — **the summon keys were deleted** (user, 2026-08-18)
+>
+> **Deciding that the hand does not move during combat removes the 1~5 keys entirely** ⇒ **there is no key
+> to press, so there is no key-box accept/refuse feedback.** See `plan-then-watch`.
+> ⚠ **The surviving half**: the rule that **the screen says "took" or "refused" immediately** is untouched.
+> Only its carrier moves — onto **boat placement on the planning screen**, where dropping somewhere illegal
+> must visibly refuse.
+> ⚠⚠ **And something has to be relocated before this is deleted.** Through `_paint_key`, `net_shell` holds
+> **`Look.COL_BUTTON` pinned as a literal** and **both ends of the refusal-shake bound** — precisely the
+> floor-and-ceiling pair `CLAUDE.md` earned the hard way. **Deleting `_paint_key` deletes that
+> measurement.** The hook table and constants below are **to be moved, not dropped.**
+
 - **What is seen**: the pressed key box brightens toward `COL_WIN` when it took, and tints toward `COL_LOSE` and shakes sideways when it was refused. A dock click that takes makes the berth icon react the same way
 - **File / hook**: `hud_view.gd` / **the `bg`, `rect` and `at` of the existing `_paint_key`, and `_paint_berth`'s `col`. No new leaf**
 - **⚠ The shake rides on `rect` AND on the text's `at`, with the same offset.** Shake the box alone and the label falls outside it; shake the label alone and the box stands still, which reads as nothing having moved

@@ -13,11 +13,17 @@ font, and `docs/`. **The third game was built on top of that on 2026-08-17 and i
 
 **Read `cell-army-gdd-ko` before proposing anything** (English twin: `cell-army-gdd`). Its one line is
 **「먹을 것을 고르러 간다」** — an **autobattler**: a node map of islands (상자 · 전투 · 엘리트 · 보스, and
-**only 상자 has no fight**), a squad of square cells landed **by boat on the coastline**, and **the island's
-특산물 bolted onto the soldiers that survived it.**
+**only 상자 has no fight**), a squad of square cells landed **by boat on the coastline**, and **what you eat
+turned into 세포 (cells) and objects that you fit together between rounds.**
+⚠ **Two user reversals landed on 2026-08-18 and both are load-bearing.** ① The part no longer bolts onto the
+soldier who survived — a build made of what you happened to eat cannot be level-designed late (`session-loop`).
+② **The hand no longer moves during combat**: you plan the whole landing, press start, and watch. The 1~5
+summon keys are **deleted** (`plan-then-watch`). ⇒ **The combat model in the shipped build is the old one.**
 **There is no host.** `F` and `V` are gone. Soldiers carry across islands, **HP included**, and **a dead one
-is dead for good.** Combat is real time, summoned with the **1~5 hotkeys**; the loss condition is a
-**time limit**. The two reference points are pinned in that doc and **the user asked that they never be
+is dead for good.** ~~Combat is real time, summoned with the **1~5 hotkeys**~~ — **that is the shipped build,
+not the design**: since 2026-08-18 **the whole landing is planned before a start button and the hand does
+nothing during the fight** (`plan-then-watch`). The loss condition is a **time limit**, ⚠ **and the probe
+measured that it has never once bound** — 15 island-runs, worst plan at 49% of the limit. The two reference points are pinned in that doc and **the user asked that they never be
 dropped**: **Bad North** (2 people, ~790k copies) and **Despot's Game** (100k+, units not controlled at all).
 **They answered the same question in opposite directions and both worked** — that is why both are there.
 ⚠ **Bad North is NOT "place and watch"** — the developer says he lowered the *granularity* of control, not
@@ -238,7 +244,9 @@ the three README indexes, it does not exist.
 | `what-makes-placement-a-decision` · `-ko` | **Nine shipped games and the rule each used to make position a real choice**, split by whether they need unit control after commitment. With the case against each |
 | `lessons-from-two-dead-games` · `-ko` | **What two deleted games measured.** Numbers and repeating failure shapes. ⚠ **Nothing in it is a spec** |
 | `docs/planning-principles-ko.md` | **How to judge a direction.** Survived both resets on purpose — read it first |
-| `docs/decisions/` | **Why something was *not* done.** Four docs; **two are reversed and kept for that reason** |
+| `docs/decisions/` | **Why something was *not* done.** Six docs; **two are reversed and kept for that reason** |
+| `plan-then-watch` · `-ko` | **The part loop, replaced: you plan the whole landing, press start, and watch.** The hand does not move during combat. ⚠ **Newest doc, nothing built, nothing accepted** |
+| `session-loop` · `-ko` | **The run: a node map and the between-round refit.** Carries cost arithmetic that refutes itself twice. ⚠ **Half of it died the same day** — the summon-key half — **and its top box says which half.** Three adversarial reviews are recorded in it; read them before starting anything |
 | `boat-invasion` · `-ko` | **The open coastline, the fleet and the camera.** Why the dock died, what the probe measured about it afterwards, and the `Accepted` line carrying the user's verdict |
 | `combat-juice` · `-ko` | **The twelve presentation items, built and accepted.** How a sim event reaches the view without `sim` growing a clock, the full closed hook table, every `look.gd` constant, and what has to break for each net to redden |
 | `docs/plans/` `1.ready` `2.active` `3.done` | **The only folder that moves.** `1.ready` and `2.active` are empty; `3.done` holds `first-slice` and `boat-and-landing` |
@@ -377,7 +385,9 @@ Same shape, same reason** — put the columns in flat arrays and the loss needs 
   renumbering breaks again on the next edit above it. **This leak was found four separate times in one
   night, each time by someone other than whoever caused it**, including twice by the person who had just
   fixed the same thing elsewhere.
-  ⇒ **`net_citations` greps `src/`, `tests/` and `tools/` and fails on both forms.** Honour-based did not
+  ⇒ **`net_citations` greps `src/`, `tests/` and `tools/` and fails on both forms** — and it reads `docs/`
+  and `CLAUDE.md` too, **but there only for the line-number form.** ⚠ **A pathed citation inside a doc is
+  therefore NOT caught**, which is exactly where the docs cite each other most. Honour-based did not
   hold while it lasted: two citations stayed dead through *four* separate hand sweeps in one night, found
   only on the fifth. **`tools/` was outside its reach at first and widening it immediately found two more** —
   a scan scoped to where the bug was found is scoped too narrowly. **It must rejoin wrapped comment lines

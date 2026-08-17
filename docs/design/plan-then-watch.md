@@ -1,0 +1,520 @@
+# Plan it, then watch it — the hand only moves before the start
+
+**Implemented**: none. **Not one line in `src/` was written for this document.**
+**Accepted**: the ten rules under "What is decided" were **said by the user directly, 2026-08-18, and all
+ten carry a quotation.** Nothing else is confirmed — **nobody has seen a screen or checked a number,
+`unseen`.**
+
+**This is the English counterpart of `plan-then-watch-ko.md`. The two must be edited together or they will
+diverge** — a fact corrected in one and not the other is worse than no English file at all.
+
+**One line**
+
+> **You lay out the whole landing, press start, and watch the island get taken.**
+
+⚠ **This line is derived.** The user did not say it; it joins two things they did say —
+*"이렇게 이렇게 시작합니다"* (*"we start like this, and like this"*) and *"쫙 움직이면서 점령을 하는
+느낌"* (*"the feeling of everything sweeping out and taking the place"*).
+
+---
+
+## This is the **part loop** — and it replaces how that loop is played
+
+The user renamed the loops; outside in it is **main → session → part**.
+[The session loop](session-loop.md) holds that table — it is not repeated here.
+
+| Loop | This doc |
+|---|---|
+| Main (outside a run) | not covered |
+| Session (one run) | not covered — [the session loop](session-loop.md) carries it |
+| **Part (one island)** | ✅ **this document, replacing what is built** |
+
+**The part loop as built**: an island opens, the clock starts, the player boards soldiers with number keys
+*during the fight* and drags boats out, watches the auto-battle, boards again, sends again.
+
+**The part loop in this document**: an island opens, **the clock is not running**, the player fills every
+boat, places every one of them, sets the order they go in, **presses start** — and then **does nothing.**
+
+⇒ **What changes is not what gets decided but when.** *Where*, *who* and *in what order* are questions the
+shipped game already asks; this document moves all three **in front of the start button.**
+
+---
+
+## Why this document exists
+
+The user played the [boat and landing](boat-invasion.md) round and said
+*"참 애매하네. 그래도 그동안 중에서 제일 평범하네."* (*"really ambiguous — still the most ordinary of
+them so far."*)
+
+**[The session loop](session-loop.md) was the first attempt at that sentence, and half of it died today.**
+It tried to build what sits **above and below** the part loop — the map, the refit, cells, objects — and
+left the part loop as built. **Today the user replaced the part loop itself.**
+
+⇒ **So this document does not replace the session loop; it replaces the floor underneath it.** What died
+and what survived is written in the refutation box at the head of that document.
+
+---
+
+## ⚠⚠ An adversarial review ran the probe — **the plan is neither a decision nor a calculation. It is indifference** (2026-08-18)
+
+**This is the most important section in the document. Read it before building anything below.**
+Every number here comes from actually running `tools/probe/run_run.gd` against the current tree, and **the
+main session ran it a second time to confirm.** None of it is derived.
+
+**Five policies × three islands = fifteen island-runs. All fifteen won.**
+
+| Policy | Island 1 damage / time | Island 2 | Island 3 |
+|---|---|---|---|
+| everything at once | 29.0 / 22.7 s | 26.0 / 15.8 s | 52.0 / 30.3 s |
+| one boat at a time | 24.0 / 17.9 s | 32.0 / 16.6 s | 52.0 / 31.7 s |
+| the far shore | 21.0 / 22.5 s | 28.5 / 24.2 s | 74.0 / 31.5 s |
+| the quiet shore | 32.0 / 29.1 s | 26.0 / 23.9 s | 62.5 / 31.8 s |
+
+- **The worst plan finishes at 49% of the limit** (island 1, 29.1/60). Island 3 sits at **35%** (31.8/90).
+- **Island 3's entire spread is 1.50 s.** To discriminate, `TIME_LIMITS[2]` would have to land inside
+  (30.30, 31.80] — **narrower than the error on the next plan nobody has run yet.** ⇒ **the clock cannot be
+  given discriminating power by tuning.**
+- **`src/sim/` contains zero randomness** (grep: zero hits; two control runs identical to the decimal).
+  ⇒ **three fixed islands + no randomness + one commit + no preview = a three-level puzzle, and the probe
+  has already solved it.**
+- **Clearing island 3 ends the run as `WON`, so leftover HP has nothing to spend itself on** — finishing on
+  a pool of 28.5 scores the same as 45.0. **Both currencies are dead.**
+
+### ⇒ What that breaks — four items
+
+1. **Over-boarding is free.** No upkeep, no per-body cost, and an unhit soldier carries to the next island
+   at zero HP loss. The only bunching penalty is the lion's `area 1.5`, and **splash saturates around five
+   bodies while DPS grows linearly with N.** Ranged bypasses it outright — reach `4 + 1.5 = 5.5` against the
+   lion's `detect 2.0`, so **the lion never sees them, never moves and never swings.**
+   ⇒ **"everything, at the cheapest beach, in one wave" dominates.**
+2. ⚠⚠ **Boat order is completely inert.** Arrival time, aggro, tile reservation and pathing — **none of the
+   four reads order.** `launch` has no departure-time field and `setup` puts both boats at the same harbour,
+   so **a committed plan sails on the same frame.** The one thing order does is backwards:
+   `_phase_landings` iterates in reverse, so **the boat that launched later unloads first and takes the tile
+   nearer the target.** ⇒ **decided rule 2's "in what order" has no referent in the sim.**
+3. **Island 1 admits exactly one plan.** Of the four bison's `detect 6.0` circles, only the pair 11.05 apart
+   can ever overlap, and that lens is **3.0 tiles²** against 744 land tiles — **0.4%.** Soldiers have no
+   detect radius (`NO_DETECT`), so **wherever you land you meet the same bison one at a time, in an order
+   geometry already fixed.**
+4. **There are about 8 things to plan against in a whole run, not 15** (island 1: 1 · island 2: ~3 ·
+   island 3: ~4). ⇒ **More of the same enemy adds kills, not plans. What adds plans is enemy types whose
+   `range`, `area` and `detect` differ, and terrain that separates them.** There are three types today.
+
+### ⚠ All three replacement health metrics improve as the game gets worse
+
+- **Time to reach maximum speed** — max speed at t=0 could mean "boring" or "the plan reads and I already
+  know the outcome". **Success and failure score identically**, and lowering the speed cap scores full marks.
+- **Planning time and actions taken** — **the sign is inverted.** The score rises the *less* readable the
+  planning screen is. Deliberation and confusion are the same number.
+- **Pause presses** — deleting the button scores full marks, and it **moves opposite to the first one**
+  ⇒ **no design satisfies all three, and the one that satisfies the first is the bad one.**
+
+### ⚠ Correction — **the boat already makes return trips**
+
+Both this document and the conversation carried *"capacity 4+2 = 6, so four soldiers can never land."*
+**That is not a property of the sim.** `_phase_landings`' RETURNING branch restores `boat_at` and removes the
+boat from `boats`, so it becomes loadable again, and **the probe launches 4–5 times an island and lands all
+10–13 soldiers.**
+⇒ **The shortfall is true only if "the hand does not move" ships without automatic re-launch.** And automatic
+re-launch bites from the other side: 13 soldiers is 3 waves, and a sailing clock of
+`(2w−1)·t_c ≈ **19.5 s`** then **runs on a schedule the player cannot express.** ⇒ that is undecided 8.
+
+### ⇒ What did not break
+
+- **Step 4's axis argument survives** — island 3 pairs a crow (range 3) with a lion (area 1.5), so two
+  templates are genuinely needed.
+- **The sim is deterministic** — zero randomness, two control runs identical, and the probe's own inversion
+  (one soldier at 1 HP) really did lose.
+- **Permadeath is structurally true** — `Army` never compacts a dead row.
+
+⚠ **This section does not reject the design. It shows that what the design hangs on is not a rule but an
+island you can lose on** — and the tree does not contain one.
+
+---
+
+## What is decided — **all ten said by the user, 2026-08-18**
+
+| # | Rule | The user's words |
+|---|---|---|
+| 1 | **The hand does not move during combat.** Everything is decided before the fight starts | *"전투 중에 손이 움직이는 거, 안 움직일 거 같은데."* (*"the hand moving during combat — I don't think it will."*) |
+| 2 | **You plan on the map and press start.** The map is laid out, there is a region you may place into, **you drag boats onto it and set the order they go in**, and **the plan is visible before you commit** | *"이렇게 이렇게 시작합니다"*, and once started, *"쫙 움직이면서 점령을 하는 느낌"* |
+| 3 | **Before the start the boat is free.** Loading and placing are unrestricted | *"배는 언제든지 내가 태울 수 있는 거지. 언제든지 시작하기 전에 어디서든지 내가 넣을 수 있는 느낌."* (*"I can load a boat any time, put it anywhere, any time before the start."*) |
+| 4 | **Pause exists during execution, and you can do nothing with it** | *"이시정지가 있긴 한데 이시정지 한다고 해서 내가 또 뭔가를 해줄 수는 없어."* (*"there's a pause, but pausing doesn't let me do anything more."*) |
+| 5 | **No pre-run simulation and no preview of the outcome** | *"미리 보긴 없고."* (*"no previewing."*) |
+| 6 | **If you get wrecked, you lose. That is all** | *"딱 시작을 했는데 이제 개털리면 지는 거지. 그냥 지면 지는 거야."* |
+| 7 | **"When do you find out you were wrong" is not a question.** The user closed it themselves | *"지면 틀린 거거든. 그래서 이건 뭐 틀린 걸 언제 알았을 필요는 없지."* (*"losing is being wrong, so there is no need to know when you were wrong."*) |
+| 8 | **A fight is around a minute.** It may run longer, and **there is a speed-up** | *"싸움 자체가 일 분은 안 넘어갈 거 같은데. 넘어가도 되는데 배속이 있을 거 같고."* |
+| 9 | **The 1~5 summon keys are dead.** They existed because boat capacity forced "who goes first", and that question moved into the plan | The user asked directly: *"근데 칸을 왜 눌러? 이거 배 때문에 칸 누르는 거 맞아?"* (*"why am I pressing a slot at all? is it because of the boat?"*) — **the answer was yes, and the key went with it** |
+| 10 | **Variety is a later problem.** Parked, not solved | *"다양성이나 이런 건데 이건 추후에 계속해서 생각해 보자고."* |
+
+⚠ **Rule 9 is the most expensive line here.** On its own it pulls the floor out from under
+[the session loop](session-loop.md)'s central feature, *"you design five slots"* — **there were five slots
+because there are five fingers, and there is no finger left to press.** What survives is undecided 1 below.
+
+⚠ **Rules 1, 4 and 5 are one block that props itself up.** All three say *nothing exists after the commit*.
+Soften any one of them and the other two collapse — which is what the counter-case box below is about.
+
+---
+
+## ⚠⚠ **Both reference games hand the player exactly what this design refuses**
+
+**This is the strongest case against this document, which is why it is near the top and not buried.**
+
+Two shipped games succeeded on "plan it, then execute it". **Both give the player one safety net after the
+commit.**
+
+| Game | The safety net | This design |
+|---|---|---|
+| **[Frozen Synapse](https://en.wikipedia.org/wiki/Frozen_Synapse)** | **You simulate the outcome before committing** — *"The game provides a facility to review all previous turns and simulate the projected results of the current turn, assuming that enemy forces maintain their current strategies, allowing the player to refine their actions."* And a turn resolves over about **5 seconds** | **Decided 5 deletes the preview.** And a fight is not 5 seconds but **a minute** (decided 8) |
+| **[Door Kickers](https://en.wikipedia.org/wiki/Door_Kickers)** | **You go back to planning mid-execution** — *"the player can still draw paths during the engagement stage, and can switch between engagement and planning at any time."* | **Decided 4 deletes it.** The pause carries no verb |
+
+⇒ **So this design cannot cite either of them as evidence for itself.** Both hold something a player can do
+the moment they realise the plan is wrong. This one holds nothing.
+
+### ⇒ Then what has to stand in its place — **there is exactly one answer**
+
+**The plan has to be readable before the commit.** Frozen Synapse reads it out with a simulation; Door
+Kickers lets execution read it out and then lets you go back. **This design has one screen before the commit
+and no other source of information at all.**
+
+⇒ **That makes the planning-screen section a condition of this design working, not decoration.** If the
+screen does not read, the player is not deciding but **guessing**, and decided 6 (*"you lose, that's it"*)
+stops being a design and becomes a **punishment**.
+
+⚠ **The user already accepted half of that risk in decided 7** — *"losing is being wrong."*
+**What they accepted is "when did I find out", not "could I have known."** The second is still open, and it
+is this document's job to answer it.
+
+---
+
+## What the pause is for — **honestly**
+
+**Decided 4 creates a button with no verb.** Such a button can do exactly three things, and there is no
+third:
+
+1. **Reading.** It freezes a moving picture so the eye can catch up. That information **cannot change this
+   fight**; it feeds the plan for the next one. ⇒ **the pause's output is the next island, not this one**
+2. **Interrupting.** The phone rings. A comfort feature, not a design one
+3. **Nothing.** A decision needs an action, and it was decided there is none
+
+### Is it a different widget from the speed control — **on what is known, it is the same axis**
+
+Speed-up and pause are **one time multiplier**: 0× · 1× · 2× · … ⇒ **pause is 0×, and there is no
+mechanical reason to build it separately.** Only the reason for pressing differs — **speed-up is pressed
+when there is nothing to read, pause when there is too much.** ⇒ whether they are separate widgets is
+**undecided 4**.
+
+### ⚠ And this button is the door through which the whole design gets undone
+
+**A verbless pause is exactly where "well, while we're stopped, let it turn one boat around" walks in.**
+The moment that line lands, decided 1 is dead and this document has become Door Kickers.
+⇒ **The pause has no verb. That sentence is the rule.**
+
+### ⇒ Instead the button becomes an instrument — **derived**
+
+**How often the player presses pause is evidence that execution does not read at 1×.** Never pressed, it
+costs nothing; pressed constantly, it is not a comfort feature but **a measurement of a legibility fault.**
+⚠ **Derived, not measured.** This repo has never once counted that number.
+
+---
+
+## ⚠ This design breaks [planning principle](../planning-principles-ko.md) 1 **on purpose**
+
+> **1. The hand must not idle** — *"time spent watching something roll on automatically makes a game
+> frustrating. That one line is the whole reason defence was scrapped."*
+
+**That is the first line of the one five-page document deliberately carried across two resets.** This design
+makes **100% of combat time watching**, up from today's 46–72%. **There is nowhere to hide it, so this
+section exists.**
+
+### What pays for it — **three candidates, none of them proven**
+
+1. **The hand works before the fight instead of during it.** Today's dead-air figure is a ratio measured
+   **inside the island's clock**, and that denominator is combat time. If planning is real work the
+   denominator should be **plan + execute**.
+   ⚠ **And that fixes the metric, not the problem** — precisely the shape
+   [the session loop](session-loop.md)'s adversarial review caught in that document
+   (*the metric improves while what it proxies does not*). **Changing the denominator is not evidence**
+2. **What principle 1 actually measured was frustration, not actions per second.** Defence was scrapped
+   because it was frustrating, not because of an input rate. ⇒ **whether watching a plan you authored is
+   the same experience as watching something you did not author is unknown.** This repo has never measured
+   that difference
+3. **A fight is short** (decided 8, about a minute) **and there is a speed-up.** The dead game's 61% sat on
+   top of **150-second gaps**; a 60-second execution at 4× is 15 real seconds.
+   ⚠ **But "short is fine" is a sentence this repo has already refuted** —
+   [what two dead games left behind](../lessons-from-two-dead-games.md): *dead air is a ratio, so shortening
+   the round shrinks numerator and denominator together.* **Shortening does not move the ratio.** This
+   candidate only survives if the problem is **absolute time rather than proportion**, and which it is has
+   not been decided
+
+### What would tell you it did not pay — **the metric is not deleted without a replacement**
+
+⚠ **"Dead-air ratio" becomes the constant 100% under this design and therefore stops being an instrument.**
+**Deleting a metric without standing one up in its place is how a repo starts lying to itself.**
+⇒ **Three replacements. All derived; the targets are the user's to set:**
+
+| Replacement | What it measures | Who can measure it |
+|---|---|---|
+| **Time until maximum speed is pressed** | If maximum speed is pressed at t=0 every fight, **execution is not being watched, it is being endured.** That is principle 1 failing | A person. **A probe never presses the speed-up** |
+| **Time spent planning, and actions taken while planning** | If planning takes 3 seconds the hand works **nowhere**, and the 100% bought nothing | ⚠ **A person only.** A bot plans instantly — [the boat and landing](boat-invasion.md)'s *"a probe cannot measure the time a human spends looking"* binds here |
+| **Pause press count** | The pause section above — a legibility instrument | A person |
+
+⚠ **All three are human numbers.** ⇒ **This design is not verifiable by probe.** That is a weakness of the
+document, not of the probe, and it is the place [planning principles](../planning-principles-ko.md) line two
+predicted.
+
+---
+
+## Screens — **fewer glyphs, larger targets**
+
+⚠ **A correction first**: [the session loop](session-loop.md) wrote *"no more than two numbers on screen"*,
+and **the user never said two.** What they said is *"글자가 너무 많고 조금 더 단순하게 해줄래? 아니면 좀
+UI를 크게 해서"* and nothing else. ⇒ **no number is invented here.**
+
+**Three constraints on every screen:**
+
+1. **A picture before a glyph.** Whatever glyphs remain get counted and written down — there is an
+   acceptance row for it
+2. **Anything you press is visibly larger than today's HUD key boxes**
+3. **No sentences.** Prose belongs in documents
+
+### The planning screen — **in front of the start button**
+
+**This screen is the whole of what the player will ever know.** There is no preview (decided 5) and nowhere
+to go back to (decided 4).
+
+| What | How |
+|---|---|
+| **The whole island** | Fits one screen. **The camera already exists** — [the boat and landing](boat-invasion.md)'s zoom-out holds all of 48×32 |
+| **The enemies** | **Visible.** The GDD already decided 「첫 초원은 처음부터 다 보인다」, and its reason — an autobattler with no information makes the loss unreadable — is at its maximum here. ⚠ **Fog is a later node property** and not this round |
+| **The placeable region** | Where a boat may be put shows **before** you put it. ⚠ **Where and how large is undecided 7** |
+| **Boats** | Dragged into place. **The drag is already built**, so nothing new is learned |
+| **Who is aboard** | Each boat's cargo is visible. Loading is unrestricted (decided 3) |
+| **Order** | **One large number per placed boat** — first, second, third. ⚠ **How it is assigned is undecided 11** |
+| **Routes** | One line per boat, harbour to landing. **The whole plan on one page** |
+| **Start** | **One large button.** From the moment it is pressed there is nothing to press |
+
+**On screen at the moment of commit**: the island · every enemy · every landing point · every order number ·
+every boat's cargo. **And that is all of it.**
+
+⚠ **What is *not* there is this design's core risk**: no projected outcome, no projected engagements, no
+signal at all about whether the plan is any good.
+
+### The execution screen — **behind the start button**
+
+| What | How |
+|---|---|
+| **The plan runs as drawn** | The lines drawn while planning become the actual crossings. **A different picture means the plan lied** |
+| **Boats that have not gone yet** | ⚠ **The unspent part of the plan has to stay on screen.** Without it "why has the third boat not left" is nowhere, and **decided 6's loss becomes an unreadable loss** |
+| **What can be pressed** | **The speed control and the pause. Nothing else** (decided 1 · 4 · 8) |
+| **The clock** | As today |
+| **The twelve pieces of [combat juice](combat-juice.md)** | **All of them live.** Every one is view-side and driven by `Battle.events`, so removing the controls kills none of them |
+
+---
+
+## The speed-up — **it is `step(delta × k)` and it is not free**
+
+⚠ **Derived by reading the code. Not measured.**
+
+`battle.gd`'s `_phase_attacks` lets a unit strike **at most once per `step`**, and on a strike it resets the
+cooldown to **the whole period** — the overshoot is not carried. ⇒ the real blow-to-blow interval is
+`ceil(period / dt) × dt`, **up to one frame longer than the period.**
+
+| At 60 fps | `dt` | Worst-case loss on a 1.0 s period |
+|---|---|---|
+| 1× | 16.7 ms | **1.7%** |
+| 4× | 66.7 ms | **6.7%** |
+| 8× | 133 ms | **13%** |
+
+⇒ **The speed-up does not create the fault; it multiplies an existing one by `k`.**
+And **the loss is asymmetric** — it scales as `dt/period`, so the bison (period 2.0) loses **half** of what
+everything on a 1.0 s period loses. ⇒ **the same plan can win at 1× and lose at 8×.**
+
+⚠ **`CLAUDE.md`'s "where two clocks meet" is exactly this shape.** There is only one clock here, so the five
+defects that section names are absent — **but a multiplier produces the same class of error without needing
+a second clock.**
+
+### ⇒ And the telegraph sets the ceiling on the speed-up — derived
+
+`rules.gd`'s `LION_WINDUP_SEC` is 0.6 s, and the comment beside it records that **this repo measured a beat
+under five frames going entirely unseen.**
+At 60 fps, 0.6 s falls to five frames at **`k = 0.6 × 60 / 5 = 7.2`.**
+
+⇒ **Past 7× the lion's telegraph stops being visible.** And that telegraph is the item **the user chose
+knowing it costs the boss 29% of its damage** ([combat juice](combat-juice.md)).
+⇒ **Derived constraint: maximum speed ≤ 7×, or the telegraph gets a floor of its own for high speeds.**
+
+---
+
+## What this touches in code — **inside the folder contracts**
+
+⚠ **This document writes no code.** Below is the list a plan fills in, and **"dies" and "its meaning dies"
+are kept apart** — the second kind is what breaks silently.
+
+### Dies outright — **everything the key dragged with it**
+
+| File | What |
+|---|---|
+| `src/shell/game.gd` | **The whole of `_on_key`.** `_unhandled_input`'s `InputEventKey` branch empties, and start / pause / speed take its place. **The contract that this is the only file reading `Input` is untouched** |
+| `src/view/hud_view.gd` | `KEY_TYPES` · `key_slot_count` · `key_type_of` · `note_key` · `_key_fx` · `_key_offset` · `_key_colour` · `_paint_key` · `reserve_count`. ⚠ `TYPE_LABELS` **survives** — `panel_view` reads it |
+| `src/look.gd` | `HUD_KEY_ORIGIN_PX` · `HUD_KEY_SIZE_PX` · `HUD_KEY_GAP_PX` · `HUD_KEY_TEXT_OFFSET_PX` · `key_rect_px` · `KEY_FX_SEC`. ⚠ **`KEY_REFUSE_SHAKE_PX` survives** — `_berth_offset` reads it too, and deleting it kills the berth shake with it |
+| `tests/nets/net_shell` | The key-slot check. ⚠ **Correction (measured): losing it costs a lot.** Only the count check measures itself; **eleven other sites index `hs.keys[0]`/`[1]` literally**, so emptying `KEY_TYPES` **crashes the net rather than passing it** — and what disappears with it is `Look.COL_BUTTON` pinned as a literal and **both ends of item 8's refusal-shake bound**, which is exactly the floor-and-ceiling pair `CLAUDE.md` earned the hard way. **Re-pin those elsewhere before deleting the key HUD** |
+| [Combat juice](combat-juice.md) item 8 | **Half of it.** The key half dies; **the berth half (`note_launch`) survives and becomes a planning gesture** |
+
+⚠ **`net_draw_leaf`'s per-function table names `_paint_key`.** That scanner is closed against **names the
+table does not hold**; a name the table holds that no longer exists is **not the direction it was built to
+catch.** ⇒ **invert the instrument** — the exact move this repo named as *invert the instrument, not only
+the subject*.
+
+### Its meaning dies — **the quiet half**
+
+| File | What changes | ⚠ Why it is quiet |
+|---|---|---|
+| `src/sim/battle.gd` `load_soldier` | From an in-combat action to a **planning-time action**. Same domain, same return | **Every old call site stays green.** What becomes wrong is *when it may be called*, and **`battle` knows nothing about a planning phase** ⇒ a net that calls it mid-`step` still passes. **Unless a state forbids it, the rule lives only inside `game.gd` and every other caller breaks it silently** |
+| `src/sim/battle.gd` `launch` | From "sails immediately" to **"queued to sail"** | Today a successful `launch` puts the boat at sea on that frame. Planning needs a **placed-but-not-sailing** state, and **there is no such state** |
+| `src/sim/battle.gd` `setup` / `step` | **There is no before-the-start state.** `step` straight after `setup` is combat | Without a new state, "planning" exists only as *the shell not calling `step`* — which is a calling habit, not a rule |
+| `src/sim/islands.gd` `TIME_LIMITS` | **The clock has to start at the start button, not when the island opens** | The comment beside that constant says *the clock starts when the island OPENS, so waiting for a full boat costs the same as a bad landing.* **Decided 3 deletes that reasoning** — planning is unlimited, so waiting is free. ⇒ **fix the comment and the rule in one edit** |
+| `src/sim/run.gd` | `State` gains a planning state | ⇒ see the next row |
+| `src/view/panel_view.gd` | — | ⚠⚠ **`panel_active()` is `run.state() != BATTLE`.** Adding a planning state makes it true, every branch of `_message_text()` falls through, and **a red 「패배」 paints over the planning screen.** ⚠ **Correction (measured): nets DO watch it.** `net_shell` drives `panel_active()` from both sides — false during combat, true on the panel — and pins `MSG_LOST` as a literal. **It is not silent**, though the false-side check sits after the start press and could still stay green, so treat it as loud-but-not-guaranteed. ⇒ **Fix as an allowlist (`REWARD or finished`), never a denylist** |
+| `src/shell/game.gd` `_process` | `battle.step(delta)` → `battle.step(delta × speed)` | The whole speed-up section above hangs off this one line |
+| `tools/probe/run_run.gd` | From summon-and-send mid-fight to **plan, then run** | ⚠ **And the probe cannot measure planning time** — a bot plans instantly |
+
+### What grows
+
+| Folder | What | The contract |
+|---|---|---|
+| `src/sim/` | **One planning state** — which boat goes where, in what order. **Flat arrays**, `RefCounted`, built with `.new()` | no `Node` · no `_draw` · no `Input` · no `$` |
+| `src/sim/rules.gd` | Speed-up steps, and any constant the placement region needs | **Every constant that changes what happens, in one file** |
+| `src/view/` | The planning overlay — routes, order numbers, the placeable region | ⚠ **`net_draw_leaf` reddens any function its per-function table does not name.** A new function opens the table in the same edit |
+| `src/look.gd` | Every size and colour of the overlay, the start button, the speed widget | **Every presentation constant, one file** |
+| `tests/nets/` | The planning state · `step` doing nothing before the commit · the order being honoured · a 1× control for the speed-up · the new leaves | **Under five nets the wrapper refuses the round.** ⚠ **Every row gets a floor as well as a ceiling** |
+
+---
+
+## Inherited findings — **only the ones that survive**
+
+⚠ **Of [the session loop](session-loop.md)'s three adversarial reviews, everything hanging off the summon
+key died with the key** (five slots collapsing into one, `load_soldier`'s domain clash, the HUD key boxes
+running off screen). **That document's own head records what died.** Below survived, and some got
+**more** important.
+
+| Finding | What it means here |
+|---|---|
+| **A whole run contains 15 kills** — counted from `islands.gd`: island 1 = **4** · island 2 = **6** · island 3 = **5** | ⚠ **It stopped being an economy fact and became a planning fact.** Four enemies on an island means **four things to plan against.** ⇒ the review's economy fix — **30 to 40 enemies an island** — is the same lever that gives the planning screen anything to plan about. **Two problems, one answer** |
+| **Ten starting cells cannot win island 1** — 4 bison = 80 HP at 6.0 total DPS; a bare cell is 14 HP at 2.0 DPS ⇒ `14N > 240/N` ⇒ **`N ≥ 5`** | **Dormant.** This document settles no economy, so nothing collides yet. ⚠ **It comes straight back the day a cell economy lands** — do not forget it and re-derive it |
+| **The clock does not bind** — twelve controlled runs all won inside half the limit, 46–72% of each island empty | ⚠⚠ **Empty time is now 100% by design and is not a defect. What it stops being is an instrument** — the three replacements above take its place. **And a clock that does not bind means decided 6's loss is effectively a wipe and nothing else**: the time limit is close to decoration, and **`TIME_LIMITS` went to the user as [the boat and landing](boat-invasion.md)'s undecided 15 and was never answered** |
+| **`panel_view.panel_active()` is `run.state() != BATTLE`** | See the code table. **This design adds a state, so it walks straight into it** |
+| **The only axes that make position a decision are range and area** (the GDD) | ⚠⚠ **At its maximum here.** With zero control after commit, **position is the only decision left**, and [what makes placement a decision](what-makes-placement-a-decision.md) pins that one difference as the reason **TFT and Despot's Game share a rule and land in opposite places.** **Both axes exist in shipped code** — melee (range 0, area 0) and ranged (range 4, area 1). **This design stands on the TFT side by one thread, and the thread is having two soldier types** |
+| **The landing point already picks which enemies engage** — soldiers have no detect radius and enemies do (bison 6, crow 12, lion 2) | ⚠ **This is the one hidden rule the planning screen ought to show.** [The boat and landing](boat-invasion.md)'s section 1-A measured it: the structure is real and **nobody pays for it.** ⇒ **whether detect radii are drawn while planning is undecided 6**, and drawing them turns an invisible rule into a readable one |
+
+### ⚠ And the GDD rejected this branch once — **the user has come back to it**
+
+**[The cell army GDD](cell-army-gdd.md)'s controls section wrote this down:**
+*"the other branch — commit everything before the fight (first, middle, last) and watch — is deeper as a
+decision but leaves the hand idle during combat. The user's own first/middle/last example was on that side,
+**but the hotkey summon is what was decided.**"*
+
+⇒ **This document is that branch.** And **it is the side the user originally exampled.**
+⚠ **The stated grounds for rejecting it (the hand idles during combat) were not refuted — the user has
+chosen to pay them.** What pays them back is the whole "the hand must not idle" section above, and **none of
+the three candidates is proven.**
+
+---
+
+## Undecided — **cannot be built without picking**
+
+1. ⚠⚠ **What does an object bolt onto now.** Decided 9 **deleted the grounds for five slots** — there were
+   five because there are five fingers. The phrase **「배가 칸이 된다」** (*the boat becomes the slot*) was
+   used in conversation, and **the user did not confirm it.**
+   ⇒ Three candidates: **onto a soldier** (the value before the GDD overturned it) · **onto a boat** ·
+   **onto some slot still.** **The whole of [the session loop](session-loop.md)'s arithmetic hangs on this**
+2. **What cells buy, and whether the session loop's cost curve survives at all.** With no summon there is
+   no summon cost
+3. **How many boats, and whether they still differ in capacity and speed.** Decided 3 (unrestricted loading)
+   changes what capacity means
+4. **Whether pause is a separate widget or the same one at 0×**
+5. **Node count, branch shape, and whether there are node kinds beyond the GDD's four**
+6. **How much of the enemy is visible while planning.** ✅ The GDD already decided 「첫 초원은 처음부터 다
+   보인다」 and **fog is a later node property** — that is carried unchanged.
+   ⚠ **What is open is the layer above: whether detect radii are shown.** See the last inherited finding
+7. **Where the placement region is and how large.** ⚠ **One already exists in shipped code** —
+   `grid.can_land_at(harbour, tile)` picks **38–47** of an island's 76–82 landable tiles. Whether the new
+   region is that one or something else is unsettled
+8. ⚠⚠ **Whether the order carries timing.** **Decided 2 settled *in what order* and left *when the next boat
+   leaves* alone.** As soon as the one in front unloads? Only once a boat is back at a harbour? At a fixed
+   time? **In shipped code a boat must physically return before it can carry again** ⇒ left as is, **the
+   order is whatever the round trip produces**, not something the player set
+9. **When the clock starts** — when the island opens, or when start is pressed. `islands.gd`'s comment says
+   the former today and its grounds are gone (see the code table)
+10. **The speed-up's multipliers and steps.** The section above derives a **ceiling of 7×**; the steps are
+    unsettled
+11. **How the order is assigned** — is the placing sequence the order, or is there a separate handle
+12. **Whether a plan can be undone before the commit.** Decided 3 only says you may *put things in* any
+    time. **It never says you may take them out or move them.** ⚠ A trap this repo has already named lands
+    here — *if undo is free, the choice before it was free too*
+13. **The session loop's open items that were not hanging off the summon key** — do cells come back on
+    death · do levels attach to the individual or the slot · what the families are · drop frequency · the
+    ratio of cells to cost · what a run starts with. **That document holds them and they are not copied
+    here**
+
+---
+
+## Not this round
+
+- **Variety** — the user parked it themselves (decided 10). **Parked, not solved**
+- **The whole cell / object economy** — nothing can be built until undecided 1 is answered
+- **The node map and the refit screen** — [the session loop](session-loop.md) holds them, and with only
+  three islands authored the map has no islands to offer
+- **Artifacts** · **main-loop unlocks** · **fog** · **3D**
+- **Mid-crossing redirect** — [the boat and landing](boat-invasion.md) parked it by name, and **decided 1
+  now forbids it as a rule**
+- **Squad assignment** — `CLAUDE.md` names it as one of the four systems that circled a conversation six
+  times without closing. ⇒ **decided 1 closes it too** — with nothing to command after the commit there is
+  nothing to assign a squad for
+
+---
+
+## Acceptance — **written so it cannot pass by inference**
+
+⚠ **No row closes on "the round is green", "the effect was built", or "an agent walked through it".**
+`CLAUDE.md`: *acceptance is written down when it is heard.*
+
+| What must be true | How it is known | ⚠ What does not pass it |
+|---|---|---|
+| **The plan reads before the commit** | The user **describes what is about to happen before pressing start, and the description matches what happens.** Open until one or the other is written here | The overlay having been built |
+| **Planning takes time** | **A person times the gap from the island opening to start being pressed, and counts the actions in between.** Today's counterpart is "last command at 7.4–12.9 s" | ⚠ **A probe figure.** A bot plans instantly |
+| **Execution is watched, not endured** | **Measure when maximum speed gets pressed.** Every fight at t=0 is a failure | ⚠ **Writing "there's a speed-up so it isn't boring."** Nothing is fixed before it is measured |
+| **The pause is not needed** | **Count the presses.** Frequent presses mean execution does not read at 1× | "We added a pause" |
+| **The speed-up does not change the game** | **Run the same plan at 1× and at maximum and print casualties, outcome and duration side by side** | ⚠ **The arithmetic in the speed-up section.** It is derived, not measured. **If they differ, the rule is wrong, not the multiplier** |
+| **Order is a decision** | The user **plans the same island twice in different orders and says why** | The probe producing two different orders — a proxy. ⚠⚠ **And as of today this row cannot pass** — order is inert in the sim (probe section, item 2), so there is no reason to plan it differently. **Order needs a referent before this row can be scored at all** |
+| **Glyph count fell** | **Count the glyphs per screen and write the number** | "It looks simpler" |
+| **⚠ Final verdict** | **The user does not say "ambiguous" again** (GDD undecided 18) | All seven rows above are proxies |
+
+---
+
+## Sources — **and the case against each**
+
+`CLAUDE.md`: *name checkable sources, several that disagree with each other, and give the argument against
+your own recommendation.*
+
+| Game | What was borrowed | ⚠ The case against |
+|---|---|---|
+| **[Door Kickers](https://en.wikipedia.org/wiki/Door_Kickers)** | **Routes, breach points and go-conditions drawn onto a top-down floor plan before execution.** The picture of a planning screen that *is* the game | ⚠⚠ **That game goes back to planning mid-execution** — *"can switch between engagement and planning at any time."* **Decided 4 deletes it.** This design cannot borrow its success |
+| **[Frozen Synapse](https://en.wikipedia.org/wiki/Frozen_Synapse)** | **Lay out waypoints, commit, and both sides resolve simultaneously.** A shipped case of zero control after commit | ⚠⚠ **You can simulate the result before committing, and decided 5 deletes that.** And a turn there is **5 seconds** — decided 8's **minute** is twelve times that, **so a wrong plan is endured twelve times as long** |
+| **[Despot's Game](https://gamecritics.com/eugene-sax/despots-game-dystopian-army-builder-review/)** | **Compose before the round, zero control.** The only shipped game standing where this design stands | ⚠ **It failed at exactly this spot.** Reviewers named the **absence of player agency**, and the studio shipped an **auto-arrange button** — when placement is not a decision, players ask for placement to be automated |
+| **[Bad North](https://bad-north.fandom.com/wiki/Commander)** | **More landing points than squads**, which is what makes "what do I give up" a decision | ⚠ **That game keeps moving squads after the commit.** The developer says he did not remove control but **lowered its granularity** ⇒ **this design's zero control cannot be justified with Bad North** |
+| **Clash Royale** | **The real-time-commit branch.** Decided 1 took the other one | ⚠ **The user rejected it, and the reason is recorded: they were worried the game would look like it.** ⚠ **No link** — a user-rejected row, so it carries no weight in this table |
+
+⚠ **Three of the five stand against this design** (Door Kickers · Frozen Synapse · Despot's Game).
+**That is the only evidence this table is an honest one, so do not trim it.**
+
+---
+
+## What this document cannot answer
+
+**Whether any of it is fun.** [Planning principles](../planning-principles-ko.md), line two.
+
+⚠ **And one thing on top of that: this design is not verifiable by probe.** All three replacement metrics
+are human numbers, and the decisive one — **whether watching your own plan execute is frustrating** — has
+no instrument at all.
+**The second game died with 25 nets and 3541 green checks.** The tables above are weaker evidence than that.

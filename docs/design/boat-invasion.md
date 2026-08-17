@@ -82,13 +82,15 @@ reason to reread this doc at all.
 | 7 | **A cliff is just a wall this round.** No landing, no climbing. **Except that some cliffs have ramps you can climb** | *"일단은 그냥 못 가는 것뿐이야."* · *"램프가 있어서 올라갈 수 있는 절벽도 있는 거고"* |
 | 8 | **The boat is drawn bigger and the soldiers aboard are visible** | *"내가 뭐를 보내는지도 보이고, 어디로 보내는지도 보이고"* |
 | 9 | **The clock is not touched this round.** A bigger grid lengthens every walk on its own, so `TIME_LIMITS` is re-tuned **after the build, from probe measurements** | told to the user, not objected to |
-| 10 | **Redirecting a boat mid-crossing is deferred — a named TODO** | *"중간에 바꿀 수도 있을 거 같은데"* → *"이건 추후에 투두로 남겨두고"* |
+| 10 | **Redirecting a boat mid-crossing is deferred — a named TODO.** ⚠⚠ **On 2026-08-18 it stopped being a TODO and became forbidden** — "the hand does not move during combat" rules it out. [Plan it, then watch it](plan-then-watch.md) | *"중간에 바꿀 수도 있을 거 같은데"* → *"이건 추후에 투두로 남겨두고"* |
 
 ### Deferred by name — **parked, not closed**
 
 - **How soldiers are loaded onto a boat.** The 1~5 hotkeys stay for now, and the user marked that temporary:
   *"병사 태우는 게 숫자 키인 게 좀 별로야 근데 일단은 저렇게 하고 나중에 이건 조작감은 나중에 개선해야
-  했듯"* ⇒ **a feel item, not a rule item**
+  했듯"* ⇒ ~~**a feel item, not a rule item**~~
+  ⚠⚠ **Closed (user, 2026-08-18): those keys were deleted.** Loading moved into **planning time** and is
+  unrestricted. **It turned out to be a rule item after all** — [plan it, then watch it](plan-then-watch.md)
 - **A unit type that ignores cliffs.** Parked together with decided #7's "a wall and nothing more this round"
 - **An enemy keeping watch from a clifftop** (*"저 절벽에서 망본 애가 있을 수도 있어"*).
   ⚠ **So "a cliff-top archer shoots down" is NOT in this round** — it has been removed from the proposals

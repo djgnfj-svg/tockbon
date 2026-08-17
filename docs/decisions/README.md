@@ -31,16 +31,18 @@ Where it shakes if this reverses.
 
 ## Index
 
-**Four decisions survive. Everything else was deleted on 2026-08-17** — see the note below.
+**Six decisions survive. Everything else was deleted on 2026-08-17** — see the note below.
 
 | Decision | Status | Rejected |
 |---|---|---|
+| [Commit before the fight, not during it](commit-before-the-fight-not-during.md) | valid — **and it overturns the GDD's "deployment is real-time" (its undecided 8), plus the 1~5 summon keys the shipped game runs on** | Real-time commitment — pressing 1~5 during the fight (rejected twice over: *"the hand won't move during combat"*, **and the user's own worry that the game would look like Clash Royale**) · partial intervention after the commit, i.e. re-planning while paused (Door Kickers' own rule) · a pre-commit outcome preview (Frozen Synapse's own rule) |
+| [The build is designed, not inherited](build-is-designed-not-inherited.md) | valid — **and it overturns the GDD's "the path is the build"** | What you ate becoming the build (rejected on level-design cost, in the user's own words) · the island deciding what drops (rejected as too expensive to author — one drop table per island type, growing with every island) |
 | [Land anywhere on the coastline, not at N fixed docks](open-coastline-over-fixed-docks.md) | valid — **and it reverses the same user's earlier "docks" decision** | N fixed docks per island, and its three arguments: it reads · it becomes level design · pulling works at dock granularity |
 | [Meta unlocks, never stat boosts](meta-unlocks-not-stat-boosts.md) | ⚠ **REVERSED by the user on 2026-08-16 — unlocks AND stat boosts are both in** | Permanent rate upgrades · a research tree · no meta layer |
 | [Dropped from the sky, not landed by boat](dropped-from-the-sky-not-landed-by-boat.md) | ⚠ **REVERSED by the user on 2026-08-17 — the boat is back, and it is a rule, not just a picture** | Beach landing · a boat that limits the drop point · an edge-only insertion |
-| [The body is an outline drawn by code](the-body-is-a-line-drawn-by-code.md) | valid — **the only decision here that was never reversed and still binds** | Two eyes · no dot · a filled body · body sprites · generating whole creatures · every part as a sprite · parts keeping the prey’s colours |
+| [The body is an outline drawn by code](the-body-is-a-line-drawn-by-code.md) | valid — **the oldest one still binding.** ⚠ It was "the only one never reversed" until 2026-08-18 put three more valid decisions in this table | Two eyes · no dot · a filled body · body sprites · generating whole creatures · every part as a sprite · parts keeping the prey’s colours |
 
-⚠ **Two of the four are reversed, and they are kept for exactly that reason.** A reversed decision is not
+⚠ **Two of the six are reversed, and they are kept for exactly that reason.** A reversed decision is not
 waste: it records the fork, the ground the first answer stood on, and the argument that knocked it over.
 Deleting one means the same options get laid out from scratch months later — which this project has now
 lived through twice.

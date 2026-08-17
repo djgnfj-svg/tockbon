@@ -19,8 +19,13 @@ arithmetic behind that diagnosis is in the same document.
 
 > **You go and pick what to eat.**
 
-You start as one lump of square cells, eat the islands one at a time, **bolt each island's specialty onto
-your bodies** to build your own army, and fight an opposing army at the end.
+You start as one lump of square cells, eat the islands one at a time, **build your own army out of what you
+ate**, and fight an opposing army at the end.
+
+⚠ **~~"bolt each island's specialty onto your bodies"~~ was overturned by the user on 2026-08-18.** A part
+does not bolt onto the soldier who survived; **what it bolts onto is open again** (`plan-then-watch`,
+undecided 1). **This paragraph was the ninth place that reversal failed to reach, and it is the one
+`CLAUDE.md` points at with "read this before proposing anything."**
 
 ⚠ **This line came out of the user's mouth as it stands** — *"얘도 먹어보고 싶고, 쟤는 먹을까 하고 먹어보러
 가는 거지."* (*"I want to try eating this one, and I go over to that one wondering whether to eat it too."*)
@@ -32,7 +37,16 @@ this line inverts that.
 
 ## The loop is three deep
 
-### Meta loop — outside a run
+> ### ⚠ The user renamed these (user, 2026-08-18)
+>
+> **This section said "meta · session · main"; the user calls them something else, and their names win.**
+> Outside in it is **main → session → part** — the outermost is the **main loop**, one run is the
+> **session loop**, one island is the **part loop**. They corrected a diagram that had the session loop
+> containing the main loop, in as many words.
+> **The three headings below carry the new names.** The session loop's detail is
+> [the session loop](session-loop.md).
+
+### Main loop — outside a run
 
 ```
 start → begin the adventure with unlocks applied → [session loop] → die or clear
@@ -53,12 +67,15 @@ whether the player continues at all.
 ### Session loop — one run
 
 ```
-map opens → pick an island → [main loop] → that island's reward (one of the three; an elite gives three) → back to the map → … → boss island → clear
+map opens → pick an island → [part loop] → that island's reward (one of the three; an elite gives three) → back to the map → … → boss island → clear
                                  ↓ lose                ↑ a chest island arrives here without a fight
                               run over
 ```
 
-### Main loop — one island
+⚠ **There is no refit in that diagram, and that absence was the hole.** A stretch of time goes between two
+nodes — [the session loop](session-loop.md).
+
+### Part loop — one island
 
 ```
 the island unfolds → land them on the coastline (where · when · who) → auto-battle → a dead soldier is dead for good
@@ -68,15 +85,21 @@ the island unfolds → land them on the coastline (where · when · who) → aut
 
 **And the smallest unit that repeats, at the innermost level, is this:**
 
-> **Drop → watch → drop again.**
+> ~~**Drop → watch → drop again.**~~
+> ⚠⚠ **Replaced on 2026-08-18: plan → start → watch.** There is no "again" —
+> [plan it, then watch it](plan-then-watch.md).
 
-✓ **What gates the "again" is decided: the fleet count and the round trip** — see "The boat" and the
+✓ ~~**What gates the "again" is decided: the fleet count and the round trip**~~ — see "The boat" and the
 "Updated" section under it.
+⚠ **With the "again" gone there is nothing left for that sentence to gate.** The fleet count and the round
+trip now decide **how many waves a plan splits into.**
 ⚠ **This slot used to read ~~the landing-craft interval~~. The interval is deleted.**
 **That one choice sets the game's tempo.**
 
-**Decisions the player makes**: which island to go to · **which dock, when, and who to land there** ·
-**how many to send out** (the "contact line" section) · who to bolt a specialty onto · which artifact to take.
+**Decisions the player makes**: which island to go to · **where on the coastline, when, and who to land** ·
+**how many to send out** (the "contact line" section) · where to bolt an object · which artifact to take.
+⚠ **2026-08-18: none of those went away — they all moved in front of the start button** —
+[plan it, then watch it](plan-then-watch.md).
 
 ---
 
@@ -92,9 +115,9 @@ the island unfolds → land them on the coastline (where · when · who) → aut
 | `F` / `V` | **Deleted.** No splitting in half, no absorbing |
 | Soldiers | **They carry across rounds.** Die and they are gone for good. **And HP carries too** — see its section below |
 | Start | **A lump of square cells with one leg** attached |
-| Rewards | **Three axes** — **count** · **specialty** (bolts onto one soldier) · **artifact** (applies to the army). A combat island gives one, **an elite gives three** — the combat reward, an artifact, **and that elite's soldier type** (this row said "two" and undercounted the third; see "Elite") |
+| Rewards | **Three axes** — **cells** (eating grows the cell pool, not the soldier count) · **objects** (~~they fit into slots 1~5~~ ⚠ **what they fit into reopened on 2026-08-18** — see the Parts row below) · **artifact** (applies to the army). A combat island gives one, **an elite gives three** — the combat reward, an artifact, **and that elite's soldier type** (this row said "two" and undercounted the third; see "Elite"). ⚠ **The user replaced the first two axes on 2026-08-18** — they used to read "count" and "specialty (bolts onto one soldier)". See `session-loop` |
 | Starting force | **Ten cells** (user: *"처음에 차라리 세포 열 마리를 주고."* — *"just give ten cells at the start."*) |
-| Parts | A specialty *is* a part, and **it bolts onto a soldier** (there is no host) |
+| Parts | An object *is* a part. ~~**It bolts onto one of the five slots.**~~ ⚠⚠ **Reopened later the same day (user, 2026-08-18)** — **deleting the summon key removed the grounds for five slots (there were five because there are five fingers).** Three candidates (a soldier · a boat · some slot still) are undecided 1 of [plan it, then watch it](plan-then-watch.md). ⚠ **The reason ~~it bolts onto a soldier~~ was overturned still stands** — five slots are distinguishable from each other and the third soldier is not distinguishable from the seventh |
 | Theme | **Stays cellular.** A ladder climbing from mammals up to dinosaurs |
 | Art | **Shapes drawn by code.** A square plus bolted-on parts. The original reason for picking cells survives intact |
 
@@ -293,7 +316,23 @@ in 5 boats and 15 seconds, so **the price never once bites.**
 > The move the document wants (gather the enemy at a ramp and fly over the top) comes from **geometry**,
 > not invulnerability, so it survives untouched.
 
-### Controls — **bind soldier types to the 1–5 keys and press to summon** (user, 2026-08-17)
+### Controls — ~~**bind soldier types to the 1–5 keys and press to summon**~~ (user, 2026-08-17)
+
+> ### ⚠⚠ This whole section was overturned (user, 2026-08-18)
+>
+> **The quote above is from 2026-08-17 and this is later**: *"전투 중에 손이 움직이는 거, 안 움직일 거
+> 같은데."* (*"the hand moving during combat — I don't think it will."*) ⇒ **Nothing is pressed during
+> combat. The plan is finished in front of the start button.**
+> **The 1~5 summon keys are deleted** — the user asked directly: *"근데 칸을 왜 눌러? 이거 배 때문에 칸
+> 누르는 거 맞아?"* **The answer was yes.**
+>
+> ⚠ **And the "pre-set orders" branch this section rejects below is exactly what was chosen.** It wrote
+> *"the user's own first/middle/last example was on that side, but the hotkey summon is what was decided"* —
+> **the user has come back to their own first example.** The stated ground for rejecting it (hands idle
+> during combat) **was not refuted; the user chose to pay it.**
+>
+> ⇒ Rules and screens belong to [plan it, then watch it](plan-then-watch.md).
+> The rejected fork is [commit before the fight, not during it](../decisions/commit-before-the-fight-not-during.md).
 
 *"내가 얻은 몬스터들을 1, 2, 3, 4, 5 단축키에 넣어두고 그 몬스터들을 소환하는 게 맞을 듯."*
 (*"I think the right thing is to put the monsters I've collected on the 1, 2, 3, 4, 5 hotkeys and summon
@@ -317,6 +356,21 @@ first/middle/last example was on that side, but **the hotkey summon is what was 
 ---
 
 ## Rewards — **three axes, and a combat island gives exactly one**
+
+> ### ⚠⚠ Two of the axes changed (user, 2026-08-18) — **do not read the table below as it stands**
+>
+> | This section's axis | Now |
+> |---|---|
+> | **Count** — soldiers +N | **Cells.** Eating grows cells, **not the soldier count** (user, decided 1) |
+> | **Specialty** — bolts onto one soldier | **An object.** It bolts onto a **slot, `1`–`5`**, not onto a soldier |
+> | **Artifact** — applies to the army | **Unchanged.** Just not built in the first round |
+>
+> ⇒ **And adversarial review item 2 below — "who to bolt a specialty onto is not a decision" — closes on
+> this change.** Soldier three and soldier seven are indistinguishable; **slot 1 and slot 4 are not.**
+> **It was not solved; it stopped existing.**
+> ⚠ **A new load appears in its place**: "every object makes that slot dearer" is only a decision if the
+> arithmetic works, and **it is proved not to under a linear cost.** Rules and arithmetic belong to
+> [the session loop](session-loop.md).
 
 The user decided: *"어떤 노드는 병사 수 증가가 있고, 어떤 노드는 병사의 붙이기가 있다. 두 개로 가자."*
 (*"Some nodes give more soldiers, some give something to bolt on. Let's go with those two."*)
@@ -407,7 +461,7 @@ trait."*)
 | | Combat island | Elite island |
 |---|---|---|
 | Difficulty | Baseline | **Harder** |
-| Reward | Count **or** specialty | **The same, plus one artifact** |
+| Reward | Cells **or** an object | **The same, plus one artifact** |
 | On top | — | **You gain that elite's soldier type** — from then on you can field soldiers with that trait |
 
 ⇒ **`×2` is gone from the game.** What the two refutation boxes above killed was exactly that
@@ -461,6 +515,12 @@ specialties, where the identical sentence applies.**
 > Candidate: **each specialty also gives that soldier +1 HP.** Stacking then protects itself, the expected
 > value genuinely rises, and only then is expected value vs variance a real trade-off. The carrier gets
 > bigger, which also ties back into **the choice of dock.**
+>
+> ⇒ **This review item closed on 2026-08-18 — not solved, dissolved.** An object bolts onto a **slot**, not
+> onto a soldier, so the question "onto whom" has no referent any more. See `session-loop`.
+> ⚠ **The candidate above did not die with it.** "Does an object also give HP" is the value that **flips the
+> sign between stacking and spreading** in `session-loop`'s arithmetic, and its adversarial review found the
+> doc carries no entry for it at all. **This paragraph is the oldest form of that question.**
 
 **3. Only specialties evaporate, and there is no recovery path anywhere in the game.** Artifacts survive at
 ⚠ **The 20% below is an input nothing in this document produces** — the live damage model gives per-soldier
@@ -473,6 +533,19 @@ the target is met.
 100% and soldier count recovers, but at 20% casualties per island only `0.8⁸ =` **17%** of specialties
 remain after eight islands. **"The path is the build" — and that build is 83% gone by the time you reach the
 boss.** One of the two things distinguishing this from Bad North is erased by arithmetic.
+
+> #### ⇒ This paragraph went void on 2026-08-18 — **its premise is gone**
+>
+> **Parts bolt onto slots, not soldiers, so a soldier dying does not take a part with it.** The `0.8⁸`
+> above rests entirely on "a part dies with its soldier", and that rule no longer exists.
+> ⇒ **The missing-recovery-path complaint (undecided 14) is still alive**, but it is now about soldier
+> count and HP, not about the build.
+> ⚠ **And the conclusion — "one of the two differences is erased" — is void too**: the user dropped
+> "the path is the build" outright. What distinguishes this now is **building the army yourself out of what
+> you were handed.** ⚠ **This read "designing the five slots", and later the same day the summon keys were
+> deleted — taking the grounds for five (five fingers) with them.** What the parts attach to is undecided 1
+> of `plan-then-watch`.
+> See `session-loop`.
 And the chest was called "a resting square", but **there is nothing to rest** — Slay the Spire's campfire
 restores a resource that carries across rounds (HP), and here the resource that carries across rounds is
 **soldier count**, which the chest does not touch.
@@ -1076,7 +1149,12 @@ were loaded.
 
 **1. An autobattler is what [planning principle 1](../planning-principles-ko.md) forbids.** That line reads
 *"the hands must not idle"*, and it is the single reason a whole defence game was scrapped. **This genre is
-defined by watching.** Working the numbers on the fleet: five key presses plus a click is about 1.9 s, two
+defined by watching.**
+⚠⚠ **And on 2026-08-18 the user answered this tension by maximising it rather than resolving it** — with
+zero control during combat, dead air becomes **100% by design.** **The 94% below was written as a bad
+number; it is now the target.** [Plan it, then watch it](plan-then-watch.md) carries what pays for it and
+the **three replacement metrics.**
+Working the numbers on the fleet: five key presses plus a click is about 1.9 s, two
 boats is **3.8 s of hand time for the entire starting force**, and an island that runs its full 60 s is
 **94% dead air** — worse than the 61% that killed `v2-openfield`. Shorten the island to ~15 s and it is
 ~75%, but then the time limit is decoration.
@@ -1098,15 +1176,16 @@ size of the first slice.** Pixel-level layout belongs to the plan.
 |---|---|
 | Grid | **Drawn faintly.** In a game where position is the decision, an invisible grid means you cannot pick a position |
 | Land · hole · water | Three colours. **A hole has to read as impassable at a glance** |
-| Docks | Marked on their shoreline tiles. **Where you can deploy must be visible** |
+| ~~Docks~~ | **Dead** — the whole shoreline is landable now. See `boat-invasion` |
 | Bodies | Rounded square outline plus a centre dot. **Friend/foe by colour, type by size and shape** |
 | The beak | **A triangle sticking out past the body** |
 | HP | **A thin bar under the body.** One of the reasons the old game died was *"nothing on screen ever went down"* |
 | Boats | Two boat icons at the port. **A berth empties while that boat is at sea** — the limit is the picture |
 | Loading | The number currently aboard, shown beside the port |
 | Time left | Top of screen |
-| Map | Three nodes in a row, current one highlighted |
-| Reward | Click a soldier in the roster to bolt the beak onto them |
+| Map | ~~Three nodes in a row~~ → **a branching node map** (user, 2026-08-18: *"두 줄로 떠서 양쪽에서 하나씩 선택하는"* — two rows offered, pick one from each). See `session-loop` |
+| Reward | ~~Click a soldier in the roster to bolt the beak onto them~~ → **fit objects in on the refit screen** (user, 2026-08-18). ⚠ ~~into slots 1~5~~ — **what they are fitted into reopened the same day**; see the Parts row of "What is decided" |
+| Plan · execute | ⚠ **New (user, 2026-08-18)** — a **planning screen** showing the whole island and every enemy, where boats are placed and ordered before start is pressed, and an **execution screen where the only things pressable are the speed control and the pause.** [Plan it, then watch it](plan-then-watch.md) |
 | Win · lose | Centre text. **A loss has to show why you lost** |
 
 ## Undecided — cannot be built without picking
@@ -1121,10 +1200,23 @@ of them was missing from the list entirely.** They are now written separately:
   be used as a condition comes out of the engagement rules
 
 1. ~~When and how do soldiers increase~~ — **decided. See the "Rewards" section.**
-2. **Is there any intervention after the drop.** At exactly zero it becomes a game you only watch. Despot's
-   Game kept potions and formation adjustment. The first line of
-   [planning principles](../planning-principles-ko.md) is *"the hands must not idle."*
-3. **Is a specialty fixed per island, or one of three at random.** Fixed makes route choice into build choice
+2. ~~**Is there any intervention after the drop.**~~ — **decided: none** (user, 2026-08-18).
+   *"전투 중에 손이 움직이는 거, 안 움직일 거 같은데."* **A pause exists and it does nothing either** —
+   *"이시정지 한다고 해서 내가 또 뭔가를 해줄 수는 없어."*
+   ⚠ **So the worry originally written here comes true: at exactly zero it is a game you only watch.**
+   Despot's Game kept potions and formation adjustment; **this game keeps nothing.**
+   The first line of [planning principles](../planning-principles-ko.md), *"the hands must not idle"*, is
+   **broken on purpose** — what pays for it is the section of that name in
+   [plan it, then watch it](plan-then-watch.md), and **not one of its three candidates is proven**
+3. **Is a specialty fixed per island, or one of three at random.** ~~Fixed makes route choice into build
+   choice~~
+   ⚠ **Those grounds are dead (user, 2026-08-18).** The user **rejected "what you ate becomes the build"**,
+   on level-design cost. **Fixed or random, the build is settled on the refit screen.**
+   Rejected in the same breath: **"the island decides what drops"** (eat a swamp and amphibian parts get
+   likelier). The fork is in
+   [the build is designed, not inherited](../decisions/build-is-designed-not-inherited.md).
+   ⇒ **The question itself survives** — random or fixed is still unpicked, and
+   **[the session loop](session-loop.md) puts an inequality on the total drops in a run**
 4. ~~Lose condition~~ — **decided: a time limit** (user, 2026-08-17). Each island has a clock, and failing to
    wipe them out within it loses.
    ⇒ **And being wiped out is also a loss** (added 2026-08-17). Death is permanent and there is no recovery,
@@ -1136,11 +1228,17 @@ of them was missing from the list entirely.** They are now written separately:
    island shrinks numerator and denominator together. **A refuted sentence was still standing in another
    section.**
    ⇒ What survives: **"when do I drop" acquires a value** — hold back and you are safe, but the clock runs
-5. **Map structure.** Are there branches (Slay the Spire), or is it a straight line
+5. **Map structure.** ~~Are there branches (Slay the Spire), or is it a straight line~~ — **branches, decided**
+   (user, 2026-08-18: *"두 줄로 떠서 양쪽에서 하나씩 선택하는"*).
+   ⚠ **Branch count and depth are still open, and the user's "two rows" reads two ways** —
+   [the session loop](session-loop.md) records both readings
 6. **What the per-soldier-type adjustment is.** The user pushed this to *"later."* Targeting priority?
    Formation? Position?
 7. ~~Engagement rules~~ — **decided. See the "Engagement rules" section.**
-8. ~~Is deployment real-time or pre-set~~ — **decided: real time.** See the *Controls* section
+8. ~~Is deployment real-time or pre-set~~ — ~~**decided: real time.**~~
+   ⚠⚠ **Overturned: pre-set** (user, 2026-08-18). **The whole landing is laid out, then start is pressed.**
+   [Plan it, then watch it](plan-then-watch.md) ·
+   the rejected fork is [commit before the fight, not during it](../decisions/commit-before-the-fight-not-during.md)
 9. ~~Cap on soldier count~~ — **decided: no cap** (user, 2026-08-17, *"for now"*).
    **Deleting multiplication removed the exponent itself, so a cap does not need to be a barrier.**
    ⚠ **But [Lessons from two dead games](../lessons-from-two-dead-games.md)' *"there is no readability cap
@@ -1157,7 +1255,14 @@ of them was missing from the list entirely.** They are now written separately:
     2026-08-17). **The first grassland is fully visible from the start** — the combat is automatic, so with
     the information gone too you cannot see why you lost
 13. **Does a soldier type gained from an elite arrive as a soldier on the spot, or get added to the summon
-    list.** If the latter, the picture is the 1–5 hotkeys filling up over the course of a run
+    list.** ~~If the latter, the picture is the 1–5 hotkeys filling up over the course of a run~~
+    ⚠ **The question changed (user, 2026-08-18).** Once **the player designs slots `1`–`5`**, there is no
+    summon list for the game to fill.
+    ⇒ **What an elite hands over has to be material for a slot (an object), not a row in a list**, or the
+    two rules contradict. **Not settled; [the session loop](session-loop.md) carries it**
+    ⚠ **2026-08-18, later the same day: the slot itself reopened** — deleting the summon key removed the
+    grounds for five slots. **This item is deferred behind undecided 1 of
+    [plan it, then watch it](plan-then-watch.md)**
 14. **The recovery path.** HP carries across islands, and with no recovery a run is a one-way decline.
     **The chest island doubling as it is the cheapest** — the name "resting square" only becomes true then
 15. ~~**The boat does not read as a rule on screen**~~ — **closed (user, played it 2026-08-18).**
@@ -1197,6 +1302,16 @@ of them was missing from the list entirely.** They are now written separately:
     [what two dead games left behind](../lessons-from-two-dead-games.md): *when a complaint is one
     sentence, first ask whether a rule can answer it.*
     **Next session's first act is turning "ambiguous" into a number, not choosing what to add.**
+    ⇒ **2026-08-18: the diagnosis came back, and it named a place rather than a system** — **the part loop
+    (one island) is built and everything above and below it is missing.** No map, no time between rounds,
+    no way to build anything. [The session loop](session-loop.md) takes that place.
+    ⚠ **That document is an attempt, not an answer, and this item stays open until the user launches it
+    again and says so.**
+    ⇒ **2026-08-18, later the same day: the user replaced the part loop itself** — the hand does not move
+    during combat and the plan finishes in front of the start button.
+    [Plan it, then watch it](plan-then-watch.md)
+    ⚠ **Half of the session loop died at that moment** (the 1~5 summon keys · its arithmetic section's
+    variables · its in-combat bar). **Both documents are attempts, and this item is still open.**
 
 ---
 
@@ -1210,11 +1325,24 @@ terrain, auto-combat. It's so similar right now that I'm a bit worried."*)
 | | Bad North | This game |
 |---|---|---|
 | Verb | **Defend.** Waves come and you hold the island | **Eat.** I go and take it |
-| Upgrades | Fixed tree (sword · spear · archer) | **The specialty of the island you ate** — the path is the build |
+| Upgrades | Fixed tree (sword · spear · archer) | ~~**The specialty of the island you ate** — the path is the build~~ ⇒ **eating yields cells and objects; the build is assembled on the refit screen** |
 | Units | Human squads, fixed classes | Cells plus bolted parts, **combinations open** |
 
-⇒ **The whole differentiation rests on one word: "eat."** If that verb does not read on screen, this game
-really is a worse Bad North. **The moment of eating is this game's face.**
+~~⇒ **The whole differentiation rests on one word: "eat."**~~
+
+> ### ⚠⚠ Half of that line survives (user, 2026-08-18)
+>
+> **The user rejected "what you ate becomes the build"** — *"먹은 걸로 빌드를 짜게 되면 중반 후반에 레벨
+> 디자인을 하기가 어려워서"* (*level design gets hard mid- and late-run*). ⇒ **the load the upgrade row was
+> carrying moves off it entirely.**
+>
+> **"Eat" survives as the verb** — cells and objects both come out of it, and **the moment of eating is
+> still this game's face.** What changed is that **the verb no longer carries the differentiation alone**;
+> the other half is carried by **"you build the army yourself out of what you were handed"** —
+> [the session loop](session-loop.md). ⚠ **This said "five slots", a number the summon keys set and the same
+> day deleted** — what gets designed is now undecided 1 of `plan-then-watch`.
+> The fork is in
+> [the build is designed, not inherited](../decisions/build-is-designed-not-inherited.md).
 
 ⚠ And having exactly one reference point is not a problem — Balatro's LocalThunk also
 [started from Luck Be a Landlord alone](https://www.shacknews.com/article/139116/balatro-inspiration-luck-be-a-landlord-reddit-ama).
@@ -1357,7 +1485,8 @@ as `v1-sim`, and the current prototype was already written down as *"a reference
    #### ⚠ Hold it to one soldier type and none of this document's claims can be verified
 
    The second adversarial review counted **eight rules that die in a one-type slice**:
-   **the 1–5 hotkeys** (one type = one key) · **range** · **area** ("bunch or spread" ceases to exist) ·
+   ~~**the 1–5 hotkeys** (one type = one key)~~ ⚠ **void — the keys themselves were deleted on
+   2026-08-18** · **range** · **area** ("bunch or spread" ceases to exist) ·
    **tiers and ramps** (with one range there is no "put the ranged soldier up top") · **map forks** ·
    a specialty's "who to bolt it onto" · the artifact condition field · **pulling** (there is only one thing
    to pull with and only one alternative).
