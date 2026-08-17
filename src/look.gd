@@ -27,22 +27,33 @@ extends RefCounted
 # ---------------------------------------------------------------------------------------------
 
 ## EVERY PX IN THIS FILE IS A CANVAS PIXEL, AND THE GLASS IS NOT THE CANVAS.
-## An earlier version of this comment said "no camera zoom, no window stretch". The zoom half is
-## true — `CAMERA_ZOOM` is 1.0 and nothing reads it. **The stretch half was false**: project.godot
-## carries `window/stretch/mode="canvas_items"`, so a canvas pixel reaches the screen multiplied by
-## `window width / 1280` (1.5x in a 1920 window), and the shell measured that transform at 0.05 in a
-## 64px headless window. What survives the multiplier is everything relative — ratios, overlaps, and
-## the 2.0 px snap floor, since snapping happens in canvas space BEFORE the stretch. What does not
-## survive is any absolute claim about size on the glass. That distinction is exactly what the last
-## game got wrong when a radius was read as a diameter and then multiplied.
-## 32 x 40 = 1280 and 18 x 40 = 720, so the grid exactly fills the viewport. If a zoom is ever
-## added, every px comment in this file becomes a lie silently — change them in the same edit.
+## An earlier version of this comment said "no camera zoom, no window stretch". **Both halves are now
+## false, and on purpose.** `boat-and-landing` grew the grid to 48 x 32 = 1536 tiles (1920 x 1280
+## canvas px), deliberately larger than the 1280 x 720 viewport, and gave `field_view` a real zoom —
+## see `ZOOM_MIN` / `ZOOM_MAX` / `ZOOM_STEP` below. The stretch half was already false before that:
+## project.godot carries `window/stretch/mode="canvas_items"`, so a canvas pixel reaches the screen
+## multiplied by `window width / 1280` (1.5x in a 1920 window), and the shell measured that transform
+## at 0.05 in a 64px headless window. What survives either multiplier is everything relative —
+## ratios, overlaps, and the 2.0 px snap floor, since snapping happens in canvas space BEFORE both.
+## What does not survive is any absolute claim about size on the glass — every px comment in this
+## file describes canvas space, "at zoom 1.0", unless it says otherwise.
 const VIEWPORT_W_PX := 1280.0
 const VIEWPORT_H_PX := 720.0
 const TILE_PX := 40.0
-const GRID_W := 32
-const GRID_H := 18
-const CAMERA_ZOOM := 1.0
+const GRID_W := 48
+const GRID_H := 32
+
+## `field_view`'s own `zoom` is a runtime float, not a constant — the wheel changes it. These are its
+## bounds. Both ends measured against the 48 x 32 grid:
+##   ZOOM_MIN — at 0.5625 the visible world is exactly wide enough to show the full 1920 px map width
+##     (1280 / 0.5625 = 2275). Below 0.4 a 14 px body is under 6 px and unreadable.
+##   ZOOM_MAX — at 1.0 one tile is 40 px, today's scale (never zoom IN past that — nothing is gained
+##     and it breaks the "island fits on screen" survey read). Ceiling 1.5.
+##   ZOOM_STEP — per wheel notch. Above 1.05 or a notch does nothing perceptible; below 1.4 or two
+##     notches cross the whole range.
+const ZOOM_MIN := 0.5625
+const ZOOM_MAX := 1.0
+const ZOOM_STEP := 1.15
 
 ## A faint grid, because in a game where position is the decision an invisible grid means the
 ## player cannot pick a position. It is drawn low-alpha, not thin-and-bright.
@@ -53,12 +64,23 @@ const GRID_LINE_WIDTH_PX := 1.0
 # Colours — the only `Color(` literals in the tree
 # ---------------------------------------------------------------------------------------------
 
-# Terrain. Three tones plus the dock, and the hole has to read as "cannot walk here" at a glance.
+# Terrain. Three tones plus the harbour marker, and the hole has to read as "cannot walk here" at a
+# glance. `boat-and-landing` renamed the dock to a harbour (water a boat sails from, not a fixed
+# port) and deleted the `D` legend character; the colour is the same value under its new name.
 const COL_WATER := Color(0.086, 0.145, 0.255)
 const COL_LAND := Color(0.203, 0.259, 0.184)
 const COL_HOLE := Color(0.055, 0.067, 0.078)
-const COL_DOCK := Color(0.553, 0.443, 0.243)
+const COL_HARBOUR := Color(0.553, 0.443, 0.243)
 const COL_GRID_LINE := Color(1.0, 1.0, 1.0, 0.07)
+
+# Cliff and ramp (`boat-and-landing` stage 5, P10). `^` gets its OWN fill now instead of reusing
+# COL_HOLE — 3.2 still holds (a cliff is exactly as impassable as a hole), only the picture stops
+# saying the two are the same terrain. `COL_CLIFF_FACE` is the seaward-edge line, one tone darker so
+# it reads as a drop rather than a second outline. `/` (ramp) is passable land with its own tint so
+# the one doorway through a cliff wall does not read as ordinary ground.
+const COL_CLIFF := Color(0.098, 0.098, 0.114)
+const COL_CLIFF_FACE := Color(0.020, 0.020, 0.027)
+const COL_RAMP := Color(0.361, 0.310, 0.235)
 
 # Bodies. Friend and foe are told apart by COLOUR; the unit type is told apart by SIZE and by how
 # round its corners are — see BODY_RADIUS_RATIO and BODY_CORNER_RATIO.
@@ -75,6 +97,19 @@ const COL_HP_EMPTY := Color(0.118, 0.141, 0.141, 0.851)
 # is the picture, so the thing missing from the harbour must be recognisable as the thing at sea.
 const COL_BOAT := Color(0.851, 0.780, 0.600)
 const COL_BERTH_EMPTY := Color(0.302, 0.322, 0.341, 0.600)
+
+# P7 — a boat that has arrived and cannot unload is drawn waiting, blended toward this on a blink
+# rather than a flat tint, so a stalled boat never reads as merely "differently coloured."
+const COL_HULL_WAIT := Color(1.0, 0.780, 0.302)
+
+# The drag overlay (`boat-and-landing` stage 4, P8). Reach is per harbour (3.4), so this tints
+# whichever coast the dragged boat's OWN harbour can reach — the same tone as the boat itself,
+# read through `DROP_TINT_ALPHA` rather than baked in, since the tile fill and a future full-alpha
+# use of the same tone must be able to move independently.
+# ⚠ `COL_DROP_OK` / `COL_DROP_NO` deliberately reuse `COL_WIN` / `COL_LOSE` below — the same
+# accept/refuse pair the key boxes already use. One concept, one value.
+const COL_SENDABLE := Color(0.851, 0.780, 0.600)
+const COL_ROUTE := Color(0.851, 0.780, 0.600, 0.55)
 
 # HUD and panel.
 const COL_HUD_TEXT := Color(0.918, 0.937, 0.961)
@@ -139,9 +174,25 @@ const HP_BAR_W_PX := 24.0
 const HP_BAR_H_PX := 3.0
 const HP_BAR_GAP_PX := 4.0
 
-## The boat drawn on the water while it crosses.
-const BOAT_W_PX := 26.0
-const BOAT_H_PX := 14.0
+## The hull (`boat-and-landing` stage 5, P2) — sized by the boat's OWN capacity, so the big boat and
+## the fast boat read apart without anyone reading a number. `_hull_rect` (field_view.gd) computes
+## `cap * BOAT_SLOT_PX + 2 * BOAT_HULL_PAD_PX`: the big boat (cap 4) comes out 124 px wide, the fast
+## boat (cap 2) 72 px — both wider than one 40 px tile, and 124 against 72 is unmistakable at a
+## glance. `HULL_BERTH_OFFSET_PX` is how far a SECOND hull at the same harbour is shifted sideways so
+## the two never overlap.
+const BOAT_SLOT_PX := 26.0            # >= 24 (a 14 px melee body plus air); <= 40 (stays under 3.5
+                                      # tiles for a 4-slot hull)
+const BOAT_HULL_PAD_PX := 10.0        # >= 4 (a visible gunwale); <= 20
+const BOAT_HULL_H_PX := 56.0          # > 40, taller than a tile (decided #8); <= 80
+## ⚠ MEASURED, not guessed: the two hulls are centred `HULL_BERTH_OFFSET_PX` apart, so they clear
+## each other only once the offset exceeds HALF of each hull's own width summed —
+## `(124 + 72) / 2 = 98`. A first value of 30 here (floor comment claiming ">= 28" against an actual
+## requirement of 98) shipped a 68 px overlap — 94% of the fast boat's own width — at every island's
+## OPENING frame, since `battle.setup` parks both boats at `start_harbour` before anything ever
+## launches. 110 clears it with 12 px of air.
+const HULL_BERTH_OFFSET_PX := 110.0   # >= 98 (98 = (124 + 72) / 2, the two hulls' own half-widths
+                                      # summed — anything under this overlaps); <= 160 (or the second
+                                      # hull walks off a narrow harbour's own coastline)
 
 
 # ---------------------------------------------------------------------------------------------
@@ -155,12 +206,16 @@ const HUD_MARGIN_PX := 12.0
 ## Remaining time, top centre.
 const HUD_TIMER_POS_PX := Vector2(600.0, 38.0)
 
-## Two berth icons top left, then the number currently loaded beside them. A berth drawn empty IS
-## the resource meter — there is no separate bar anywhere.
+## Two berth icons, top left, one per boat, STACKED vertically (`boat-and-landing` stage 4, P9 —
+## each box grew a label of its own, so two boxes side by side ran their labels into each other).
+## A berth drawn empty IS the resource meter — there is no separate bar anywhere. The label beside
+## each box is drawn through `HudView._paint_load`, reused rather than duplicated, at
+## `berth_rect_px(b).position + HUD_BERTH_LABEL_OFFSET_PX` — the SAME rect the box itself just used,
+## after any refuse-shake offset, so the two can never read two different boats.
 const HUD_BERTH_ORIGIN_PX := Vector2(16.0, 20.0)
 const HUD_BERTH_SIZE_PX := Vector2(30.0, 18.0)
-const HUD_BERTH_GAP_PX := 10.0
-const HUD_LOAD_POS_PX := Vector2(96.0, 34.0)
+const HUD_BERTH_ROW_PX := 26.0            # box height 18 + an 8 px gap between boats
+const HUD_BERTH_LABEL_OFFSET_PX := Vector2(38.0, 14.0)   # to the right of the box, same row
 
 ## The 1 / 2 key roster, bottom left, one box per summonable type.
 const HUD_KEY_ORIGIN_PX := Vector2(12.0, 640.0)
@@ -305,6 +360,20 @@ const LAND_RING_SEC := 0.40
 const LAND_RING_R_PX := 20.0
 const LAND_RING_WIDTH_PX := 2.0
 
+## The drag overlay (`boat-and-landing` stage 4, P8) — not one of the twelve combat items, but the
+## same "every number is a first value" rule applies. `TARGET_RING_R_PX` is the candidate ring on
+## the tile under the cursor; `ROUTE_WIDTH_PX` the line from that boat's harbour to it.
+const DROP_TINT_ALPHA := 0.18         # > 0.06 or the tint is invisible; < 0.4 or the terrain under
+                                      # it is not
+const ROUTE_WIDTH_PX := 3.0
+const TARGET_RING_R_PX := 18.0        # >= 12; <= 20 or two adjacent rings would overlap
+
+## The fleet as a picture (`boat-and-landing` stage 5). `CLIFF_FACE_WIDTH_PX` is P10's seaward-edge
+## line; at `ZOOM_MIN` it is 2.25 px, so the floor of 3 is what it has to clear to still read zoomed
+## out. `HULL_WAIT_BLINK_SEC` is P7's stalled-boat blink — a full on/off cycle, not a half.
+const CLIFF_FACE_WIDTH_PX := 4.0      # >= 3 (2.25 px at ZOOM_MIN); <= 8
+const HULL_WAIT_BLINK_SEC := 0.5      # >= 0.3 (under 5 frames at 60fps is unseen); <= 1.0
+
 ## 8 — summon feedback, inside 100 ms because that is Swink's bound on input-to-response in a
 ## real-time game. ⚠ The refusal shake rides BOTH the box rect and the glyph position with the same
 ## offset: shake only the box and the text walks out of it, shake only the text and the box sits
@@ -324,25 +393,31 @@ const HOLD_OUTCOME_SEC := 0.80
 const HOLD_BEAK_SEC := 0.50
 
 ## 11 — screen shake, amplitude proportional to damage.
-## ⚠ THERE IS NO `Camera2D` IN THE TREE AND NONE MAY BE ADDED. The shell hit-tests dock clicks
-## against absolute canvas rectangles, so a camera would break that arithmetic across the whole
-## screen at once and silently falsify every px comment in this file. CAMERA_ZOOM stays unread.
+## ⚠ THERE IS STILL NO `Camera2D` IN THE TREE. `boat-and-landing` added a real pan and zoom, but
+## `field_view` composes them itself (`position = -cam_px * zoom + shake_offset()`, `scale = zoom`) —
+## a `Camera2D` node would be a SECOND place that transform lives, and the two would drift the first
+## time one changed without the other. `field_view.screen_to_world_px` (and `world_to_tile` beside it)
+## is that ONE function, and `boat-and-landing` stage 4's drag is what finally calls it —
+## `game.gd::_tile_at` converts a press, a motion and a release through it, so the hit test a boat
+## drag needs and the pan that never needed one go through the same conversion.
 ## ⚠ THE OFFSET IS ASSIGNED TO `position`, NEVER `+=`. In the last game `+=` became the basis of the
 ## next frame's lerp and compounded roughly 9x, so a 28 px cap stopped nothing: 67.9 px at 60fps and
 ## 160.4 px at 144. Keep the unshaken position separately and assign.
 const SHAKE_SEC := 0.30
 const SHAKE_PER_DAMAGE_PX := 1.2      # damage 2 -> 2.4 px, the lion's 4 -> 4.8 px
 const SHAKE_MAX_PX := 6.0             # also the width of the bare band a shake exposes, and the
-                                      # size of the dock-click error if the shell fails to subtract
-                                      # the offset — 6 px on a 40 px tile is 15% of its edge
+                                      # size of the click error if the shell fails to subtract the
+                                      # offset — 6 px on a 40 px tile is 15% of its edge
 const SHAKE_A_FREQ := 61.0            # deterministic `sin`: a random shake cannot be measured
 const SHAKE_B_FREQ := 47.0
 
-## The grid fills the viewport exactly, so any shake exposes bare ground at the edges. The terrain
-## loop runs this many tiles wider on every side and paints the outside with COL_WATER DIRECTLY —
-## `terrain_colour_of_char` takes a legend character and there is no legend outside the grid, so
-## inventing one would put the island legend in two places.
-const WATER_MARGIN_TILES := 1         # 34 x 20 = 680 tiles painted, up from 576
+## At `ZOOM_MIN` the visible world is 2275 px wide against a 1920 px map — 4.45 tiles of bare ground
+## on each side even before any shake. The terrain loop runs this many tiles wider on every side and
+## paints the outside with COL_WATER DIRECTLY — `terrain_colour_of_char` takes a legend character and
+## there is no legend outside the grid, so inventing one would put the island legend in two places.
+## `boat-and-landing` raised this from 1 (which only had to cover the shake on a grid that filled the
+## viewport exactly) to 5, which covers the zoomed-out camera as well.
+const WATER_MARGIN_TILES := 5         # 58 x 42 = 2436 tiles painted, up from the grid's own 1536
 
 ## 12 — gait. Phase turns on DISTANCE TRAVELLED, not on time, and that is the whole of "it must not
 ## slide": a body that does not move does not animate. Squash is a Vector2 and not a scalar —
@@ -406,21 +481,41 @@ static func body_colour_of(is_enemy: bool) -> Color:
 	return COL_ENEMY if is_enemy else COL_ALLY
 
 
+## `COL_SENDABLE` at `DROP_TINT_ALPHA` — split into two constants (7.2 of `boat-and-landing`) so the
+## tone and the ratio can be re-measured independently; combined here, in the one place, so the
+## overlay and any future full-alpha use of the same tone cannot silently diverge.
+static func sendable_tint() -> Color:
+	var c := COL_SENDABLE
+	c.a = DROP_TINT_ALPHA
+	return c
+
+
 static func hp_bar_colour(filled: bool) -> Color:
 	return COL_HP_FULL if filled else COL_HP_EMPTY
 
 
 ## Keyed by the island legend character in islands.gd, because the grid keeps passability as a
 ## byte and cannot tell water from a hole — both are impassable and they must not look alike.
-## B, C and L are land with something standing on it, so they fall through to land.
+## `B` `C` `L` are all passable land and fall through to `COL_LAND`.
+##
+## ⚠ `H` (harbour) is water, functionally, so it gets the water tone here — the harbour MARKER is a
+## separate outline drawn on top, the same way the old dock outline worked. `^` (cliff) is exactly as
+## impassable as `#` (3.2 of `boat-and-landing`) but P10 (stage 5) gives it its OWN fill —
+## `field_view._draw()` adds a face line along its seaward edge on top of this, which is what turns
+## "coloured like a hole" into "reads as height" with no elevation axis at all. `/` (ramp) is
+## passable land, the one doorway through a cliff wall, and gets its own tint for the same reason.
 static func terrain_colour_of_char(c: String) -> Color:
 	match c:
 		"~":
 			return COL_WATER
+		"H":
+			return COL_WATER
 		"#":
 			return COL_HOLE
-		"D":
-			return COL_DOCK
+		"^":
+			return COL_CLIFF
+		"/":
+			return COL_RAMP
 		_:
 			return COL_LAND
 
@@ -457,8 +552,8 @@ static func hp_bar_size_px() -> Vector2:
 
 
 static func berth_rect_px(berth_index: int) -> Rect2:
-	var x := HUD_BERTH_ORIGIN_PX.x + berth_index * (HUD_BERTH_SIZE_PX.x + HUD_BERTH_GAP_PX)
-	return Rect2(Vector2(x, HUD_BERTH_ORIGIN_PX.y), HUD_BERTH_SIZE_PX)
+	var y := HUD_BERTH_ORIGIN_PX.y + berth_index * HUD_BERTH_ROW_PX
+	return Rect2(Vector2(HUD_BERTH_ORIGIN_PX.x, y), HUD_BERTH_SIZE_PX)
 
 
 static func key_rect_px(slot_index: int) -> Rect2:

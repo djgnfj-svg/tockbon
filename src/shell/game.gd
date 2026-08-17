@@ -30,6 +30,17 @@ var field_view: FieldView = null
 var hud_view: HudView = null
 var panel_view: PanelView = null
 
+## True while a left-button drag on the FIELD (not the panel, not a boat) is moving the camera.
+## Mutually exclusive with `_drag_boat` below — a press grabs a boat XOR begins a pan, never both
+## (`boat-and-landing`, section 6).
+var _panning := false
+
+## The boat a left-drag is currently sending, or -1. Set by `_on_left_press` when the press landed on
+## a loaded, at-harbour boat (its hull on the map, or its HUD berth icon — two grab targets that read
+## as one control, `boat-and-landing` section 6, decided #8), cleared by `_on_left_release` or by the
+## hold guard below.
+var _drag_boat := -1
+
 ## Seconds the shell is standing still, holding a moment on screen before it walks the run forward.
 ## Two things ride it — the verdict pause and the beak stain — and they never overlap, because a hold
 ## does not call `step` and so cannot see a second outcome, and `_release_hold` moves the state on the
@@ -68,6 +79,12 @@ func _ready() -> void:
 ## to stay drawable. The views are still re-bound, because the panel reads `run.state()` and has to
 ## learn that the island it is sitting on top of is finished.
 func _open_island() -> void:
+	# A drag in flight on the island that just ended must not survive onto the one that just opened —
+	# its boat id would now name a stranger on the new island's fleet. Cleared unconditionally, not
+	# only when a new island actually opens: a REWARD transition (`opened == null`) still has to drop
+	# a drag that was in flight when the panel came up.
+	_drag_boat = -1
+	field_view.set_drag(-1, -1)
 	var opened := run.begin_island()
 	if opened != null:
 		battle = opened
@@ -160,9 +177,18 @@ func _unhandled_input(event: InputEvent) -> void:
 	# One line closes the door on all three inputs during a hold, instead of three state tests spread
 	# across the handlers below. It has to be here and not in them: during an outcome hold
 	# `finish_island` has not run yet, so `run.state()` is still BATTLE and every guard downstream
-	# waves the press through — 1/2 would keep boarding soldiers onto a won island, and a boat
-	# launched into a sim that is not stepping would be thrown away by `_close_island`.
+	# waves the press through — 1/2 would keep boarding soldiers onto a won island, and a pan or a
+	# zoom started into a sim that is not stepping would leave the camera moving over a frozen frame.
+	#
+	# ⚠ A drag in flight is CANCELLED here, not merely suppressed: `_panning` and `_drag_boat` are
+	# cleared on every event that arrives while a hold is active, not just left alone. Without this
+	# line the hold only blocks the MOTION events that would have kept panning or dragging — the flag
+	# itself survives the hold, and once it ends with the mouse button still down, the very next
+	# motion resumes the gesture the plan says must have been cancelled.
 	if _hold_sec > 0.0:
+		_panning = false
+		_drag_boat = -1
+		field_view.set_drag(-1, -1)
 		return
 	if event is InputEventKey:
 		var key := event as InputEventKey
@@ -176,9 +202,28 @@ func _unhandled_input(event: InputEvent) -> void:
 		_on_key(code)
 	elif event is InputEventMouseButton:
 		var click := event as InputEventMouseButton
-		if click.button_index != MOUSE_BUTTON_LEFT or not click.pressed:
+		if click.button_index == MOUSE_BUTTON_WHEEL_UP and click.pressed:
+			_on_wheel(click.position, Look.ZOOM_STEP)
+		elif click.button_index == MOUSE_BUTTON_WHEEL_DOWN and click.pressed:
+			_on_wheel(click.position, 1.0 / Look.ZOOM_STEP)
+		elif click.button_index == MOUSE_BUTTON_LEFT:
+			if click.pressed:
+				_on_left_press(click.position)
+			else:
+				_on_left_release(click.position)
+	elif event is InputEventMouseMotion:
+		var motion := event as InputEventMouseMotion
+		# The panel is asked here too, and not only on press: a drag begun on the field before the
+		# panel opened must not keep panning (or sending) behind it once it does — `panel_active()`
+		# becoming true mid-drag is what `_on_left_press` alone cannot catch.
+		if panel_view.panel_active():
 			return
-		_on_left_click(click.position)
+		if _drag_boat >= 0:
+			# The overlay's candidate tile tracks the cursor; `battle.launch` is not called until the
+			# release, so a drag that never releases over land never touches the sim at all.
+			field_view.set_drag(_drag_boat, _tile_at(motion.position))
+		elif _panning:
+			field_view.pan_by(motion.relative)
 
 
 ## `1` and `2` load the highest-HP living soldier of that type **still in reserve** onto the boat that
@@ -198,17 +243,98 @@ func _on_key(code: int) -> void:
 	# and the shell is the only place both facts exist at once. Refusals are not told apart by reason:
 	# a bool cannot carry three, and widening it to an enum would move existing checks in two nets for
 	# a distinction the screen does not draw. `combat-juice`, item "소환 피드백".
-	hud_view.note_key(slot, battle.load_soldier(HudView.key_type_of(slot)))
+	#
+	# `load_soldier` now returns the boat it boarded, or -1 — `>= 0` is the bool the HUD still wants.
+	hud_view.note_key(slot, battle.load_soldier(HudView.key_type_of(slot)) >= 0)
 
 
 ## The panel is asked first, and it is asked through `panel_active()` rather than through a state
 ## check written out again here. Its rectangles exist whether it is drawn or not, so routing a click
 ## into the roster during a battle would bolt the beak on from an invisible list.
-func _on_left_click(at: Vector2) -> void:
+##
+## Off the panel, a press on a loaded, at-harbour boat grabs it; anywhere else on the field begins a
+## camera pan (`boat-and-landing`, section 6 — both are left-drags, and where the press LANDED is the
+## only thing that tells them apart).
+func _on_left_press(at: Vector2) -> void:
 	if panel_view.panel_active():
 		_click_panel(at)
-	else:
-		_click_dock(at)
+		return
+	if battle != null:
+		var boat := _boat_hit_at(at)
+		if boat >= 0:
+			_drag_boat = boat
+			field_view.set_drag(boat, _tile_at(at))
+			return
+	_panning = true
+
+
+## Ends whichever gesture was in flight. A boat drag either launches — `battle.launch` is the single
+## source of truth `grid.can_land_at` already agrees with, so the overlay can never promise a tile the
+## sim then refuses — or cancels with the same shake a refused key gets (`hud_view.note_launch`, item
+## 8 extended to the berth box). A release while the panel is up (the panel opened mid-drag, exactly
+## the gap `_unhandled_input`'s motion branch also guards) cancels silently: no launch, no shake,
+## because the sim is not the thing the player is looking at any more.
+func _on_left_release(at: Vector2) -> void:
+	if _drag_boat >= 0:
+		var boat := _drag_boat
+		_drag_boat = -1
+		field_view.set_drag(-1, -1)
+		if not panel_view.panel_active():
+			var tile := _tile_at(at)
+			var ok := tile >= 0 and battle != null and battle.launch(boat, tile)
+			hud_view.note_launch(boat, ok)
+	_panning = false
+
+
+## Which boat (if any) a press at `at` should grab, checked before falling through to a camera pan.
+## Two grab targets read as one control: the HUD berth box and the harbour tile a boat is actually
+## sitting at are two renderings of the same boat (`boat-and-landing`, section 6, decided #8), so
+## whichever one the press landed on returns the same boat, the same way. Only a boat that is loaded
+## and at a harbour (not at sea) is grabbable — an empty or busy boat has nothing a drag could send.
+func _boat_hit_at(at: Vector2) -> int:
+	for b in Rules.boat_count():
+		if _boat_grabbable(b) and Look.berth_rect_px(b).has_point(at):
+			return b
+	# The hull itself, not the tile it happens to sit on — `field_view.idle_hull_rect` is the SAME
+	# rect `_draw()` just painted, converted through the camera the same way a click always is
+	# (`screen_to_world_px`). Testing the tile index instead once left ~70% of a hull dead to a
+	# press (only its centre tile was live) and let two boats sharing a harbour both answer to the
+	# same press — the drawn rects are disjoint even when the tile beneath them is not.
+	var world := field_view.screen_to_world_px(at)
+	for b in Rules.boat_count():
+		if not _boat_grabbable(b):
+			continue
+		if field_view.idle_hull_rect(b).has_point(world):
+			return b
+	return -1
+
+
+func _boat_grabbable(b: int) -> bool:
+	if battle.boat_busy(b):
+		return false
+	var cargo: PackedInt32Array = battle.pending[b]
+	return not cargo.is_empty()
+
+
+## A screen press converted to the tile it landed on, or -1 off the grid — the one function every
+## boat hit-test and every drag update goes through, so a click and the overlay it is compared against
+## can never disagree about which tile the cursor is over.
+func _tile_at(at: Vector2) -> int:
+	if battle == null or battle.grid == null:
+		return -1
+	var world := field_view.screen_to_world_px(at)
+	var tv := field_view.world_to_tile(world)
+	if tv.x < 0 or tv.y < 0 or tv.x >= battle.grid.w or tv.y >= battle.grid.h:
+		return -1
+	return battle.grid.tile_index(tv.x, tv.y)
+
+
+## Zooms the field about `at`, keeping the world point under the cursor fixed
+## (`field_view.zoom_at`). Refused while the panel is up, same as the drag.
+func _on_wheel(at: Vector2, factor: float) -> void:
+	if panel_view.panel_active():
+		return
+	field_view.zoom_at(at, factor)
 
 
 ## Reward pick and restart, both of which the panel resolves. `soldier_id_at` returns -1 outside the
@@ -238,40 +364,7 @@ func _click_panel(at: Vector2) -> void:
 		run.restart()
 		_open_island()
 
-
-## Launches the pending boat at whichever dock was clicked.
-##
-## The event position needs no zoom conversion because there is no camera: `Look.CAMERA_ZOOM` is 1.0
-## and nothing here owns a `Camera2D`, so a viewport pixel and a world pixel are the same number. Add
-## one and this line is wrong everywhere on screen at once, which is at least loud. **The one offset
-## that does apply is the field's own shake** — see inside.
-##
-## The window stretch is already accounted for and needs no code: `Viewport.push_input` divides an
-## incoming position by the stretch transform before delivery, so what arrives is canvas space
-## whatever size the window is. **Measured, and it bites the other way round in a check**: headless
-## the window is 64x64, the transform is 0.05, and a click pushed at the dock's own pixel arrives at
-## (2000, 6520) and hits nothing — with no error anywhere. A net that drives a click must either call
-## this handler directly or multiply by `root.get_final_transform()` first. Keys are unaffected;
-## they carry no position, which is why one half of an input check can pass while the other is dead.
-func _click_dock(at: Vector2) -> void:
-	if battle == null or battle.grid == null:
-		return
-	# The row width comes from the grid, never from `Look.GRID_W`: the tile index is the sim's, and a
-	# second copy of the width here would decode every tile past the first row wrongly the day the two
-	# disagree — with the docks landing somewhere plausible rather than nowhere.
-	var w := battle.grid.w
-	if w <= 0:
-		return
-	# The screen shake moves the drawn field and leaves `tile_rect_px` where it was, so at 6px of
-	# shake the edge of a 40px tile is a 15% band that is visible but not clickable — and another band
-	# beside it that is clickable but not visible. `field_view.position` IS the shake offset (it is
-	# assigned, never accumulated), so subtracting it converts the click back into the space those
-	# rectangles are written in. Same failure the "no Camera2D" warning is about, one layer down.
-	var world := at - field_view.position
-	for d in battle.dock_count():
-		var tile := battle.dock_tile(d)
-		if tile < 0:
-			continue
-		if Look.tile_rect_px(tile % w, tile / w).has_point(world):
-			hud_view.note_launch(d, battle.launch(d))
-			return
+# ⚠ `_click_dock` is gone whole — a fixed dock no longer exists to click. `boat-and-landing` stage 4
+# replaces it with a drag: `_on_left_press` grabs a boat's hull or its HUD icon, the motion branch of
+# `_unhandled_input` tracks the candidate tile, and `_on_left_release` calls `battle.launch(boat,
+# tile)` or cancels — see those three for the whole of it.

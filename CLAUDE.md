@@ -91,10 +91,14 @@ never that it was used. **See「No fake nets」— those entries were all earned
 - **`src/` is built and the game runs end to end.** `run/main_scene` is `src/shell/game.tscn`.
   `src/sim/` (rules · grid · islands · army · battle · run) · `src/view/` (field · hud · panel) ·
   `src/shell/game.gd` · `src/look.gd` · `tools/probe/run_run.gd`
-- **The round is green: 9 nets, 725 checks, 2.2s.** `net_battle` `net_boat` `net_islands` `net_run`
-  `net_shell` `net_draw_leaf` `net_fx` `net_fx_view` `net_citations`
+- **The round is green: 11 nets, 967 checks, 2.8s.** `net_battle` `net_boat` `net_islands` `net_run`
+  `net_shell` `net_draw_leaf` `net_fx` `net_fx_view` `net_citations` `net_camera` `net_coast`
 - **A run plays**: three islands, boat landings, the beak reward, the lion, restart. **And the twelve
   presentation items are in** — see `combat-juice-ko.md`
+- **The boat round shipped on 2026-08-18** — a **48×32** grid, an **open coastline** (any unblocked beach,
+  no docks), **three harbours an island** with a fleet that relocates to the nearest one that can still see
+  where it landed, **two boats** (big 4 @ 3.0 tiles/s · fast 2 @ 5.0), cliffs and ramps, and a **pan/zoom
+  camera** — see `boat-invasion-ko`. The plan is `boat-and-landing`, in `3.done`
 - `tools/look/` — only its `README.md`. Both probes and all three capture scripts drove the deleted shell.
   ⚠ **Screenshots are not automated right now**; the game is launched and the user looks
 - `docs/` — **60-odd docs were deleted on 2026-08-17** because they described the two dead games and a fresh
@@ -107,16 +111,28 @@ never that it was used. **See「No fake nets」— those entries were all earned
 
 ### What the user said after playing it — **the open problem going into the next session**
 
-**The presentation passed**: *"연출은 좋아."*
-**The game did not**: *"게임이 좀 애매하네. 뭔가 침공하는 느낌이 전혀 없어서. 2D라서 그런 건지 너무
-단순한 느낌이야. 사실 전투는 2D나 3D나 똑같을 건데 말이지."*
-And, for the second time: *"그냥 배가 곁다리인 게 여전히 별로네."*
+**2026-08-17, after the first slice**: *"연출은 좋아."* — and then *"게임이 좀 애매하네. 뭔가 침공하는
+느낌이 전혀 없어서"* and, for the second time, *"그냥 배가 곁다리인 게 여전히 별로네."*
+⇒ That became `boat-invasion`, and it was built.
 
-⚠ **Read the second sentence carefully — the user answered their own 3D question inside it.**
-*"전투는 2D나 3D나 똑같을 건데"* ⇒ **the missing feeling is not a dimension problem.** It is that
-**「침공」— invading — does not read**, and the boat is the part that was supposed to carry it.
-⇒ **Next session's problem is the boat**, and the user said so: *"이걸 다음 세션에서 잡는 걸로."*
-The GDD carries it as Undecided 15 · 16 · 17.
+**2026-08-18, after playing the boat round**: ***"참 애매하네. 그래도 그동안 중에서 제일 평범하네."***
+
+⚠ **Two things happened in that sentence and they must not be collapsed into one.**
+
+- **「배가 곁다리다」 did not come back.** It had been said twice; the third time it was not.
+  **The boat round hit what it aimed at**, and `boat-invasion`'s `Accepted` line records it
+- **「애매하다」 came back anyway**, and it is now the whole of the open problem. The GDD carries it as
+  **Undecided 18**; 15 and 16 are closed, and 17 (2D or 3D) **was not raised this time, which is not
+  the same as closed**
+
+⇒ **Read *"제일 평범하네"* against the two verdicts before it** — eight months of *not one fun moment*,
+then *"그냥 재미가 없다"*. **"Ordinary" is the highest mark anything in this repo has been given, and it
+is still not "fun".** That is the distance left.
+
+⚠ **The named trap is here, not somewhere else.** The last one-sentence complaint went six rounds because
+**every answer offered was a new system.** *"애매하다"* is one sentence. ⇒ **Turn it into a number before
+choosing what to add** — the move that produced *83% dead air, 150s between kills* is in
+`lessons-from-two-dead-games`, and the probe that does it already exists at `tools/probe/run_run.gd`.
 
 ### Korean and English are two files, and they diverge if edited apart
 
@@ -222,9 +238,10 @@ the three README indexes, it does not exist.
 | `what-makes-placement-a-decision` · `-ko` | **Nine shipped games and the rule each used to make position a real choice**, split by whether they need unit control after commitment. With the case against each |
 | `lessons-from-two-dead-games` · `-ko` | **What two deleted games measured.** Numbers and repeating failure shapes. ⚠ **Nothing in it is a spec** |
 | `docs/planning-principles-ko.md` | **How to judge a direction.** Survived both resets on purpose — read it first |
-| `docs/decisions/` | **Why something was *not* done.** Three docs; **two are reversed and kept for that reason** |
+| `docs/decisions/` | **Why something was *not* done.** Four docs; **two are reversed and kept for that reason** |
+| `boat-invasion` · `-ko` | **The open coastline, the fleet and the camera.** Why the dock died, what the probe measured about it afterwards, and the `Accepted` line carrying the user's verdict |
 | `combat-juice` · `-ko` | **The twelve presentation items, built and accepted.** How a sim event reaches the view without `sim` growing a clock, the full closed hook table, every `look.gd` constant, and what has to break for each net to redden |
-| `docs/plans/` `1.ready` `2.active` `3.done` | **The only folder that moves.** `1.ready` and `2.active` are empty; `3.done` holds `first-slice` |
+| `docs/plans/` `1.ready` `2.active` `3.done` | **The only folder that moves.** `1.ready` and `2.active` are empty; `3.done` holds `first-slice` and `boat-and-landing` |
 | `docs/harness-todo-ko.md` | **Work on the tools, not the game.** Top item is the user's: **parallelise the build** |
 | `docs/how-studios-schedule-art-ko.md` | **When other studios attach the art**, with sources. Written because the user has no data of their own and said so — see the reply rule about recommendations |
 | `docs/gdd-audit-ko.md` | **A six-axis audit of the GDD and the slice plan**, run before the build. ⚠ **Its last section lists the findings that were refuted** — read that before re-raising any of them. Korean only |
@@ -495,8 +512,8 @@ These survive **even after you confirm every mutation goes red**:
 
 ## Running the nets
 
-**Where it stands: 9 nets, 725 checks, 2.2 seconds, green.** It got there in one day from an empty `src/` —
-6 nets / 399 checks for the slice, then 9 / 725 after the presentation pass.
+**Where it stands: 11 nets, 967 checks, 2.8 seconds, green.** It got there in two days from an empty `src/` —
+6 nets / 399 checks for the slice, 9 / 725 after the presentation pass, 11 / 967 after the boat round.
 
 **The bar the old game reached: 25 nets, 3541 checks, 4.6 seconds** — `v2-openfield` at its end
 (22/2420 after its presentation pass, 18/889 four days earlier, 16/514 the day before that).

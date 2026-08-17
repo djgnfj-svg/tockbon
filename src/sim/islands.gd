@@ -1,105 +1,155 @@
 class_name Islands
-## The three islands of the first slice, and the lookups that turn one into a fight.
+## The three islands, and the lookups that turn one into a fight.
 ##
-## Format: each island is 18 strings of EXACTLY 32 characters. 32 x 18 tiles at 40 px fills a
-## 1280 x 720 viewport with no multiplier anywhere, which is the pairing that keeps a tile count and
-## a pixel count from drifting apart.
+## Format: each island is 32 strings of EXACTLY 48 characters. 48 x 32 = 1536 tiles, 40 px each =
+## 1920 x 1280 canvas px — deliberately larger than the 1280x720 viewport, which is the whole reason
+## `boat-and-landing` adds a camera (section 7.1). There is no multiplier hidden anywhere else.
 ##
-## Legend:
-##   `~` water — impassable, not landable
+## Legend (`boat-and-landing`, section 3.1):
+##   `~` water — impassable to a soldier, not landable
+##   `H` harbour — water, AND a tile a boat may sail from and return to. **Several per island, no
+##       single exact launch point** — the user's own correction to the first draft of the plan.
 ##   `.` land
-##   `#` hole — impassable land. Attacks pass over it; only movement is blocked
-##   `D` dock — land, and the only tile a boat may be sent to
+##   `#` hole — impassable land, inland. Attacks pass over it; only movement is blocked
+##   `^` cliff — impassable land, AT THE COAST. Exactly as impassable as `#`; it differs only in the
+##       character the view reads to colour it. There is no elevation axis this round: a cliff blocks
+##       simply by making the land behind it not orthogonally adjacent to water, so it is never
+##       landable — no code has to remember that separately.
+##   `/` ramp — passable land, the only doorway through a cliff wall. A doorway, not a climb.
 ##   `B` `C` `L` land, with a bison / crow / lion starting there
 ##
-## Dock index is the order a `D` is met scanning row-major, top-left first, so `battle.launch(0)` is
-## the first `D` in that order. grid.gd is what records it; this file only holds the characters.
+## **`D` (dock) is gone.** The old fixed-dock legend is deleted along with `Grid.DOCK_CHAR` and
+## `grid.dock_tiles` — an open coastline replaces it, and `grid.gd`'s `landable` / `sendable` /
+## `can_land_at` are what decide where a boat may go now.
 ##
-## Enemy placement here is measured, not eyeballed. Island 2's west crow sits where it can actually
-## shoot a boat arriving at the north dock (the first draft put it 6.1 tiles away, where it could
-## never fire), and island 3's ring interior was shrunk until the doorway became a front instead of
-## a corridor. See the first slice plan, "The islands".
+## Harbour index is the order an `H` is met scanning row-major, top-left first, so `battle.launch(0,
+## tile)` means "the boat sitting at the first harbour met in that order" — `grid.gd` is what records
+## it; this file only holds the characters.
+##
+## Enemy placement here is measured, not eyeballed: see `boat-and-landing`, section 5, for the coast
+## counts, the narrowest column cut, and the crossing distances measured off these exact rows.
 
 
 ## `const X := PackedInt32Array([...])` is a parse error in GDScript 4.7, so this is a plain const
 ## Array of const Arrays and every read casts.
 const ISLAND_ROWS := [
-	# Island 1 — open grassland, 2 docks, 4 bison. Narrowest cut 9.
-	# Nothing constrains you here; it is the baseline island 2 is measured against.
+	# Island 1 -- open, one bay, 4 bison. Narrowest cut 15. Deliberately no headland: a draft put two
+	# cliff promontories on it and they shadowed 50 of its 74 coast tiles, which is not a baseline.
 	[
-		"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
-		"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
-		"~~............................~~",
-		"~~............................~~",
-		"~~............####............~~",
-		"~~............####............~~",
-		"~~..........B......B..........~~",
-		"~~............................~~",
-		"~~D..........................D~~",
-		"~~............................~~",
-		"~~..........B......B..........~~",
-		"~~............####............~~",
-		"~~............####............~~",
-		"~~............................~~",
-		"~~............................~~",
-		"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
-		"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
-		"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
+		"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
+		"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
+		"~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^~~",
+		"~~............................................~~",
+		"~~............................................~~",
+		"~~............................................~~",
+		"~~............................................~~",
+		"~~............................................~~",
+		"~~...........####..............####...........~~",
+		"~~...........####..............####...........~~",
+		"~~...........####..............####...........~~",
+		"~~............................................~~",
+		"~~............................................~~",
+		"~~................B...........B...............~~",
+		"~~.....B.................................B....~~",
+		"~~............................................~~",
+		"~~............................................~~",
+		"~~............................................~~",
+		"~~..................~~~~~~~~..................~~",
+		"~~..................~~~~~~~~..................~~",
+		"~~..................~~~~~~~~..................~~",
+		"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
+		"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
+		"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
+		"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
+		"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
+		"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
+		"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~H~~~~~~",
+		"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
+		"~~~~~~H~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
+		"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
+		"~~~~~~~~~~~~~~~~~~~~~~~~H~~~~~~~~~~~~~~~~~~~~~~~",
 	],
-	# Island 2 — a wall at columns 15-16 with a 2-tile neck, open on rows 8 and 9 only.
-	# Narrowest cut 2. Four bison are parked just east of the neck, not further east: the garrison
-	# has to be able to trade with the width of the front or the bottleneck constrains nobody.
+	# Island 2 -- a cliff ridge into the sea, one 2-tile ramp. Narrowest cut 2. The ridge shadows
+	# columns 20-21, splitting the shore into a west beach (2-19) and an east beach (24-45): the
+	# island where plural harbours pay for themselves, because the start harbour sees both shores and
+	# the west/east harbours each see only their own side.
 	[
-		"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
-		"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
-		"~~.............##.............~~",
-		"~~.............##.............~~",
-		"~~..C..........##.........C...~~",
-		"~~.............##.............~~",
-		"~~D............##.............~~",
-		"~~.............##.B...........~~",
-		"~~............................~~",
-		"~~.................B..........~~",
-		"~~.............##.B...........~~",
-		"~~D............##.............~~",
-		"~~.............##.B...........~~",
-		"~~.............##.............~~",
-		"~~.............##.............~~",
-		"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
-		"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
-		"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
+		"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
+		"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
+		"~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^~~",
+		"~~....................^^......................~~",
+		"~~....................^^......................~~",
+		"~~....................^^......................~~",
+		"~~....................^^......................~~",
+		"~~....................^^......................~~",
+		"~~....................^^......................~~",
+		"~~....................^^......................~~",
+		"~~....................^^..B...................~~",
+		"~~....................^^.....B................~~",
+		"~~....................//......................~~",
+		"~~....................//......................~~",
+		"~~....................^^..B...................~~",
+		"~~....................^^......B...............~~",
+		"~~....................^^......................~~",
+		"~~....................^^......................~~",
+		"~~......C.......C.....^^......................~~",
+		"~~....................^^......................~~",
+		"~~....................^^......................~~",
+		"~~~~~~~~~~~~~~~~~~~~~~^^~~~~~~~~~~~~~~~~~~~~~~~~",
+		"~~~~~~~~~~~~~~~~~~~~~~^^~~~~~~~~~~~~~~~~~~~~~~~~",
+		"~~~~~~~~~~~~~~~~~~~~~~^^~~~~~~~~~~~~~~~~~~~~~~~~",
+		"~~~~~~~~~~~~~~~~~~~~~~^^~~~~~~~~~~~~~~~~~~~~~~~~",
+		"~~~~~~~~~~~~~~~~~~~~~~^^~~~~~~~~~~~~~~~~~~~~~~~~",
+		"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
+		"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
+		"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~H~~~~~~~~~",
+		"~~~~~~~~~~H~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
+		"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
+		"~~~~~~~~~~~~~~~~~~~~~~~~~~H~~~~~~~~~~~~~~~~~~~~~",
 	],
-	# Island 3 — a small ring with two 3-tile doorways, one per side. Narrowest cut 9.
-	# The second doorway is not decoration: with only the left one the east dock spent 68.7 s of a
-	# 90 s limit walking around the ring, a timeout trap nothing in the plan mentioned.
-	#
-	# Row 14 used to end in a `,` as bait for net_islands' legend-only check. The net was confirmed
-	# red on it first — `섬 3 에 범례 밖 글자가 없다 ["(29,14)=','"]` — and only then fixed to `.`.
-	# The check keeps a synthetic failing case of its own, so it is still one that has been seen bite.
+	# Island 3 -- a cliff ring with two ramp doors, behind a bay. Narrowest cut 10. Lion at the centre,
+	# a crow and a bison inside, a bison and a crow outside. Under "nearest harbour, full stop"
+	# landing at (18,18) or (17,19) would strand the beachhead -- Grid.home_harbour_for visibility
+	# filter is what fixes it.
 	[
-		"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
-		"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
-		"~~............................~~",
-		"~~............................~~",
-		"~~............................~~",
-		"~~.........########...........~~",
-		"~~.........#..C...#...........~~",
-		"~~............................~~",
-		"~~D...........L..............D~~",
-		"~~........................C...~~",
-		"~~.........#..B...#...........~~",
-		"~~.........########...........~~",
-		"~~............................~~",
-		"~~..........B.................~~",
-		"~~............................~~",
-		"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
-		"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
-		"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
-	],
-]
+		"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
+		"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
+		"~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^~~",
+		"~~............................................~~",
+		"~~............................................~~",
+		"~~............................................~~",
+		"~~.............^^^^^^^^^^^^^^^^^^^............~~",
+		"~~.............^.................^............~~",
+		"~~.............^....C............^............~~",
+		"~~.............^.................^............~~",
+		"~~............./........L......../............~~",
+		"~~............./................./............~~",
+		"~~.............^.................^............~~",
+		"~~.............^............B....^............~~",
+		"~~.............^.................^............~~",
+		"~~.............^^^^^^^^^^^^^^^^^^^............~~",
+		"~~............................................~~",
+		"~~......B...............................C.....~~",
+		"~~............................................~~",
+		"~~................~~~~~~~~~~~~~...............~~",
+		"~~................~~~~~~~~~~~~~...............~~",
+		"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
+		"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
+		"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
+		"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
+		"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
+		"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
+		"~~~~~~~H~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
+		"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
+		"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~H~~~~~~~",
+		"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
+		"~~~~~~~~~~~~~~~~~~~~~~~~H~~~~~~~~~~~~~~~~~~~~~~~",
+	],]
 
 ## Seconds per island. The clock starts when the island OPENS, not on the first landing, so waiting
-## for a full boat costs the same as a bad landing does.
+## for a full boat costs the same as a bad landing does. **Unchanged by `boat-and-landing`** — an open
+## coastline having a cost is not proven by that plan's round (its section 1), so nobody edits this
+## here.
 const TIME_LIMITS := [60.0, 60.0, 90.0]
 
 

@@ -130,6 +130,60 @@ Three things it measured:
 진행 불가 (surviving nothing is not playing), a ring of eight lions must come back 죽었다, and one squirrel
 at a time must come back 진행 가능. A probe that can only ever say 「못 한다」 passes the first two.
 
+## `capture_map.gd` — the fourth one, and the only one that still runs
+
+**Everything above this line drove the swarm game and was deleted with it.** `capture.gd`,
+`capture_bodies.gd` and `probe_run.gd` are gone; their sections are kept because what they *measured*
+outlived them, and this file was written against those measurements rather than by rediscovering them.
+
+```
+.\Godot_v4.7.1-stable_win64.exe --path . --script res://tools/look/capture_map.gd -- <output-dir>
+```
+
+Seven frames — a calibration shot and six of the map — in about ten seconds, and it quits on its own.
+It answers one question, the one `boat-and-landing` stage 3 puts on screen: **can the player read the
+island before sending a boat.** Written 2026-08-17, when the session had **no `godot_*` tool at all** —
+not a bridge held by another client, but an MCP server absent from the session, with nothing listening
+on 6550 and no editor running.
+
+**All three rules at the top of this file held unchanged**, and the `--headless` one was re-measured
+rather than trusted: the guard barks `--headless 로는 픽셀을 못 읽는다` and exits 1, which is also the
+cheapest way to prove the script parses without opening a window.
+
+### What it calibrates against, and why that shot is first
+
+The trap this file records — a close-up that came back at play scale because `_apply_zoom()` rewrote
+the camera before the shot, silently — **has a current shape**: `FieldView.setup()` opens every island
+at `Look.ZOOM_MIN` with the camera home, and `_clamp_cam()` re-centres whichever axis the map is
+narrower than. Either can quietly undo a staged camera between the write and the shutter.
+
+⇒ **`00_known_answer_island1_topleft.png` is taken before anything else.** Island 1 carries `####` at
+columns 13-16 and 31-34 of rows 8-10 and nothing else on those rows, so at `ZOOM_MAX` with the camera
+at the map origin those two blocks **must** land at x 520-680 and x 1240-1280, and the `^` row 2 must
+be a dark band at y 80-120. Measured: they do, to the pixel. **If that frame is wrong every frame after
+it is unreadable**, and the failure looks exactly like a camera that had no effect.
+
+Two things that made the staging honest, both learned from the sections above:
+
+- **The shell's `_process` is switched off** (`game.set_process(false)`), so `battle.step` cannot walk
+  the units between shots and a survey frame photographs an opening rather than a fight. `FieldView`
+  has its own `_process` and keeps composing the transform and redrawing, so the picture is still the
+  game's own `_draw()`.
+- **The camera is staged by writing `cam_px`/`zoom` and letting `FieldView._process` compose them**,
+  never by writing `position` — that node's own comment reserves `position = -cam_px * zoom +
+  _shake_offset()` as the single composition point, and a second writer is the bug it exists to stop.
+- **The survey shots re-open the island instead of setting `zoom = ZOOM_MIN` by hand.** `setup()` is
+  what produces the opening state, so writing the zoom directly would photograph a state the game
+  never actually shows.
+
+The pan and the clamp are driven as real gestures — `InputEventMouseButton` press, a run of
+`InputEventMouseMotion`, then release, handed to `game._unhandled_input`. Not through
+`root.push_input()`: this window is a real 1280x720 so the stretch transform is 1.0 and the coordinate
+would survive, but `_unhandled_input` is the path `net_shell` drove this gesture with when this file
+was written. `boat-and-landing` stage 4's boat-drag suite in `net_shell` since switched to
+`root.push_input(ev, true)` for that specific gesture (its own correction, section 6) — nothing here
+drags a boat, so this file's simpler direct call still proves what it always proved.
+
 ## What it is not
 
 It cannot judge. It produces frames; a person or an agent looks at them, and **only the conclusions leave**

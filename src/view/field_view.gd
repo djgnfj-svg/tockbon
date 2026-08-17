@@ -11,8 +11,10 @@ extends Node2D
 ## decoration would rewrite the rules it exists to decorate.
 ##
 ## **`_draw()` calls the `_paint_*` hooks and nothing else**, and every `draw_*` call in the file
-## lives inside one of those eleven hooks, in the exact per-function counts `combat-juice` pins under
-## "Every hook table". A net overrides a hook and reads its arguments back; the per-function count is
+## lives inside one of those fourteen hooks, in the exact per-function counts `net_draw_leaf._table()`
+## pins (`combat-juice`'s original eleven, plus `_paint_overlay` / `_paint_route` for stage 4's drag
+## and `_paint_hull` / `_paint_cliff_face` for stage 5's fleet — `_paint_boat` is gone, replaced by
+## `_paint_hull`). A net overrides a hook and reads its arguments back; the per-function count is
 ## what stops a hook from quietly throwing its drawing away, because **argument capture proves a
 ## value was computed and handed on, never that it was used** — a `draw_circle(p, 0.0, col)` inside
 ## a leaf once turned forty rocks invisible with the whole round green. See
@@ -84,6 +86,28 @@ var _body: Dictionary = {}
 var _shake_amp := 0.0
 var _shake_left := 0.0
 
+## The camera. `cam_px` is the world-space (canvas px) top-left corner of what is visible; `zoom` is
+## the runtime float `Look.ZOOM_MIN`..`Look.ZOOM_MAX` the wheel changes. **There is still no
+## `Camera2D`** — this node composes the whole transform itself in one expression
+## (`position = -cam_px * zoom + shake_offset()`, `scale = Vector2(zoom, zoom)`), which is what keeps
+## every screen->world conversion going through the one function beside it
+## (`screen_to_world_px`) instead of a second copy drifting somewhere else on screen at once.
+var cam_px := Vector2.ZERO
+var zoom := 1.0
+
+## The boat drag (`boat-and-landing` stage 4, P8). `_drag_boat` is -1 while nothing is being dragged;
+## `_drag_tile` is the tile under the cursor while one is. Both are set by `game.gd` through
+## `set_drag`, the one call site "a drag started", "a drag moved" and "a drag ended" all go through —
+## the two states can never disagree about whether the overlay should be showing.
+var _drag_boat := -1
+var _drag_tile := -1
+
+## P7's stalled-boat blink clock (`boat-and-landing` stage 5). A boat's OWN age is not the right
+## clock for this — a boat that just arrived and a boat that has been stuck for ten seconds must
+## blink in the same phase, or the mark would read as counting something instead of as a warning.
+## One shared clock, like `_shake_offset`'s own, deterministic so a net can drive it by hand.
+var _wait_clock := 0.0
+
 
 @warning_ignore("shadowed_variable")
 func setup(battle: Battle, army: Army, rows: Array) -> void:
@@ -96,7 +120,18 @@ func setup(battle: Battle, army: Army, rows: Array) -> void:
 	_body = {}
 	_shake_amp = 0.0
 	_shake_left = 0.0
-	position = Vector2.ZERO
+	# A drag in flight on the island that just ended must not survive onto the one that just opened —
+	# its boat id would now name a stranger on the new island's fleet.
+	_drag_boat = -1
+	_drag_tile = -1
+	_wait_clock = 0.0
+	# The survey: an island opens zoomed all the way out, so the whole thing is on screen before the
+	# first boat leaves (`boat-and-landing`, section 9's acceptance table).
+	zoom = Look.ZOOM_MIN
+	cam_px = Vector2.ZERO
+	_clamp_cam()
+	position = _compose_position()
+	scale = Vector2(zoom, zoom)
 	queue_redraw()
 
 
@@ -111,8 +146,76 @@ func setup(battle: Battle, army: Army, rows: Array) -> void:
 func _process(delta: float) -> void:
 	_fx_step(delta)
 	_drain_events()
-	position = _shake_offset()
+	_wait_clock += delta
+	position = _compose_position()
+	scale = Vector2(zoom, zoom)
 	queue_redraw()
+
+
+# --- the camera: one transform, in one place ------------------------------------------------------
+
+## `position = -cam_px * zoom + shake_offset()` — the pan, the zoom and the shake compose in exactly
+## this one expression, and nothing else in the tree may write `position` for this node.
+func _compose_position() -> Vector2:
+	return -cam_px * zoom + _shake_offset()
+
+
+## The inverse of the node's own transform: a screen (viewport) px back to world (canvas) px. Every
+## click, and every future drag, goes through this rather than a second hand-rolled conversion.
+func screen_to_world_px(at: Vector2) -> Vector2:
+	return (at - position) / zoom
+
+
+func world_to_tile(world: Vector2) -> Vector2i:
+	return Vector2i(int(floor(world.x / Look.TILE_PX)), int(floor(world.y / Look.TILE_PX)))
+
+
+## Moves the camera by a SCREEN-space delta (e.g. mouse motion) and re-clamps.
+func pan_by(delta_screen: Vector2) -> void:
+	cam_px -= delta_screen / zoom
+	_clamp_cam()
+
+
+## Multiplies `zoom` by `factor` (clamped to `Look.ZOOM_MIN`..`Look.ZOOM_MAX`) while keeping the WORLD
+## point under `at` fixed on screen — `boat-and-landing`, 7.1: `position' = at - (at - position) *
+## zoom' / zoom`. Computed against the UNSHAKEN position deliberately: locking the zoom centre to a
+## jittering shake offset would make the zoom itself judder while nothing is being zoomed.
+func zoom_at(at: Vector2, factor: float) -> void:
+	var new_zoom := clampf(zoom * factor, Look.ZOOM_MIN, Look.ZOOM_MAX)
+	if new_zoom == zoom:
+		return
+	var unshaken := -cam_px * zoom
+	var world_at := (at - unshaken) / zoom
+	zoom = new_zoom
+	cam_px = world_at - at / new_zoom
+	_clamp_cam()
+
+
+## `cam_px` clamped per axis to `[0, map_px - viewport_px / zoom]`; an axis where the map is narrower
+## than the visible world (every zoom below 0.667 horizontally, and always vertically at these
+## dimensions) is CENTRED on that axis instead of clamped to an empty range.
+func _clamp_cam() -> void:
+	var map_px := Vector2(Look.GRID_W, Look.GRID_H) * Look.TILE_PX
+	var visible := Look.viewport_size_px() / zoom
+	var out := cam_px
+	for axis in 2:
+		if map_px[axis] < visible[axis]:
+			out[axis] = (map_px[axis] - visible[axis]) * 0.5
+		else:
+			out[axis] = clampf(out[axis], 0.0, map_px[axis] - visible[axis])
+	cam_px = out
+
+
+func _visible_world_rect() -> Rect2:
+	return Rect2(cam_px, Look.viewport_size_px() / zoom)
+
+
+## Called by `game.gd` on every press, motion and release of a boat drag. `boat == -1` clears the
+## overlay outright — the SAME call a press starts a drag with is the one a release ends it with, so
+## "a drag is showing" and "`_drag_boat >= 0`" can never read two different answers.
+func set_drag(boat: int, tile: int) -> void:
+	_drag_boat = boat
+	_drag_tile = tile
 
 
 func _draw() -> void:
@@ -122,10 +225,12 @@ func _draw() -> void:
 		return
 
 	# --- 1. terrain, one margin ring wider than the grid ----------------------------------------
-	# The grid fills the viewport exactly (32 x 40 = 1280, 18 x 40 = 720), so any shake would expose
-	# bare ground at the edges. The margin tiles are painted COL_WATER DIRECTLY rather than through
-	# `terrain_colour_of_char`: that lookup takes a legend character and there is no legend outside
-	# the grid, so inventing one would put the island legend in two places.
+	# The grid is deliberately SMALLER than the zoomed-out visible world now (48 x 32 tiles against
+	# up to 2275 px of view at ZOOM_MIN), so the margin has to cover the whole zoomed-out edge, not
+	# just a shake — `Look.WATER_MARGIN_TILES` is 5 for exactly that reason. The margin tiles are
+	# painted COL_WATER DIRECTLY rather than through `terrain_colour_of_char`: that lookup takes a
+	# legend character and there is no legend outside the grid, so inventing one would put the island
+	# legend in two places.
 	var margin := Look.WATER_MARGIN_TILES
 	for ty in range(-margin, Look.GRID_H + margin):
 		for tx in range(-margin, Look.GRID_W + margin):
@@ -140,17 +245,98 @@ func _draw() -> void:
 				Look.COL_GRID_LINE,
 				Look.GRID_LINE_WIDTH_PX)
 
-	# --- 2. docks ------------------------------------------------------------------------------
-	# The tile under a dock is already dock-coloured by the terrain pass, so the marker is an
-	# outline rather than a fill: it has to still say "a boat may be sent here" with a soldier
-	# standing on it. It is drawn in the boat's colour on purpose — look.gd keeps the berth icon and
-	# the boat the same tone so the thing missing from the harbour is recognisable at sea.
-	for d in battle.dock_count():
-		var dock := battle.dock_tile(d)
-		if dock < 0:
+	# --- 1b. cliff faces (boat-and-landing stage 5, P10) --------------------------------------------
+	# A line along a cliff tile's SEAWARD edge — whichever ortho side touches water — the only thing
+	# that turns "coloured like a hole" into "reads as height" with no elevation axis at all (3.2: a
+	# cliff is exactly as impassable as a hole and differs only in how it is drawn).
+	#
+	# The geometry is built HERE and handed to the leaf as ONE FLAT ARRAY, consecutive pairs being one
+	# segment's two endpoints — the same shape `_paint_spark` already uses for its six shards, drawn
+	# with a SINGLE `draw_multiline` call rather than a loop of `draw_line`. That shape is not a style
+	# choice: a loop indexing `seg[0]` / `seg[1]` inside the leaf can drop the second endpoint
+	# (`draw_line(seg[0], seg[0], …)`, every face collapsed to a point) and no scanner catches it —
+	# `segments` reads as "used" the moment `seg[0]` appears once, and a spy overriding the whole leaf
+	# never runs its body at all. A flat array hands `draw_multiline` everything in one native call;
+	# there is no per-segment indexing left inside the leaf for that mutation to hide in.
+	var cliff_points := PackedVector2Array()
+	for ty2 in Look.GRID_H:
+		var row2: String = rows[ty2] if ty2 < rows.size() else ""
+		for tx2 in Look.GRID_W:
+			if tx2 >= row2.length() or row2[tx2] != "^":
+				continue
+			var crect := Look.tile_rect_px(tx2, ty2)
+			for k in Grid.ORTHO.size():
+				var dx := int(Grid.ORTHO[k][0])
+				var dy := int(Grid.ORTHO[k][1])
+				var nx := tx2 + dx
+				var ny := ty2 + dy
+				if nx < 0 or ny < 0 or nx >= battle.grid.w or ny >= battle.grid.h:
+					continue
+				if battle.grid.water[ny * battle.grid.w + nx] == 0:
+					continue
+				if dy == -1:
+					cliff_points.append(crect.position)
+					cliff_points.append(crect.position + Vector2(crect.size.x, 0.0))
+				elif dy == 1:
+					cliff_points.append(crect.position + Vector2(0.0, crect.size.y))
+					cliff_points.append(crect.end)
+				elif dx == -1:
+					cliff_points.append(crect.position)
+					cliff_points.append(crect.position + Vector2(0.0, crect.size.y))
+				else:
+					cliff_points.append(crect.position + Vector2(crect.size.x, 0.0))
+					cliff_points.append(crect.end)
+	_paint_cliff_face(cliff_points, Look.COL_CLIFF_FACE, Look.CLIFF_FACE_WIDTH_PX)
+
+	# --- 2. harbours -----------------------------------------------------------------------------
+	# The tile under a harbour is already water-coloured by the terrain pass, so the marker is an
+	# outline rather than a fill: it has to still say "a boat may be sent from here" against open
+	# water, whether or not a hull happens to be sitting there right now (both boats can be at sea
+	# at once, leaving every harbour on the island empty). It is drawn in the boat's colour on
+	# purpose, exactly as the old dock outline was.
+	for h in battle.harbour_count():
+		var harbour := battle.harbour_tile(h)
+		if harbour < 0:
 			continue
-		var at := _tile_xy(dock)
+		var at := _tile_xy(harbour)
 		_paint_dock(Look.tile_rect_px(at.x, at.y), Look.COL_BOAT, Look.BODY_OUTLINE_WIDTH_PX)
+
+	# --- 2c. idle hulls, at whichever harbour each boat is actually sitting at (P2) -----------------
+	# The rect itself comes from `idle_hull_rect`, not from re-deriving anchor + slot here — `game.gd`'s
+	# hit test needs the EXACT rect that reaches the screen (a defect this repo already shipped once:
+	# a hand-rolled hit test that tested a tile index instead of the drawn rect left ~70% of a hull
+	# dead to a press), so there is exactly one place this geometry is computed.
+	for b in Rules.boat_count():
+		var rect := idle_hull_rect(b)
+		if rect.size == Vector2.ZERO:
+			continue
+		_paint_hull(rect, Look.COL_BOAT, Look.BODY_OUTLINE_WIDTH_PX)
+
+	# --- 2b. the drag overlay (boat-and-landing stage 4, P8) -------------------------------------
+	# Reach is PER HARBOUR (3.4): which coast the dragged boat can be sent to depends on which
+	# harbour IT is sitting at, so this reads `battle.boat_at[_drag_boat]` fresh every frame a drag
+	# is in flight, never a tile cached when the drag began.
+	#
+	# The geometry is built HERE, never inside a leaf: `_paint_overlay` and `_paint_route` below take
+	# fully-built rects and points, because a leaf that builds its own geometry can be handed an EMPTY
+	# argument and still read as "1 draw call, arguments used" — see lessons-from-two-dead-games.
+	if _drag_boat >= 0 and battle != null and battle.grid != null:
+		var drag_hb := int(battle.boat_at[_drag_boat])
+		if drag_hb >= 0 and drag_hb < battle.grid.sendable.size():
+			var reach: PackedByteArray = battle.grid.sendable[drag_hb]
+			var reach_rects: Array = []
+			for rt in reach.size():
+				if reach[rt] != 0:
+					reach_rects.append(Look.tile_rect_px(rt % battle.grid.w, rt / battle.grid.w))
+			_paint_overlay(reach_rects, Look.sendable_tint())
+			if _drag_tile >= 0 and _drag_tile < reach.size():
+				var accept := reach[_drag_tile] != 0
+				var ring_col := Look.COL_WIN if accept else Look.COL_LOSE
+				var candidate_px := Look.tile_point_px(battle.grid.tile_point(_drag_tile))
+				_paint_ring(candidate_px, Look.TARGET_RING_R_PX, ring_col, Look.AREA_RING_WIDTH_PX)
+				var harbour_px := Look.tile_point_px(
+					battle.grid.tile_point(int(battle.harbour_tile(drag_hb))))
+				_paint_route(harbour_px, candidate_px, Look.COL_ROUTE, Look.ROUTE_WIDTH_PX)
 
 	# --- 3. target lines -----------------------------------------------------------------------
 	# ENEMY side only, and none at all above the count: this is the one effect of the twelve that
@@ -220,6 +406,26 @@ func _draw() -> void:
 				land_col,
 				Look.LAND_RING_WIDTH_PX)
 
+	# --- transit deck positions, computed ONCE (P3/P4, boat-and-landing stage 5) --------------------
+	# Where each boarded soldier stands on its OWN boat's deck — `_deck_slots` spread across the
+	# hull, never all stacked at the boat's single shared `soldier_pos`. Computed here, before the
+	# halo pass, and read by BOTH the halo loop right below and the passenger body loop in layer 6:
+	# split across two call sites this is exactly the bug `_body_offset_of`'s own comment already
+	# warns about — one of them eventually disagrees with the other and the halo stops lining up.
+	var transit_pos := {}
+	for raw_tb in battle.boats:
+		var tboat: Dictionary = raw_tb
+		var tsoldiers: Array = tboat["soldiers"]
+		if tsoldiers.is_empty():
+			continue
+		var tbidx := int(tboat["boat"])
+		var tanchor := Look.tile_point_px(Vector2(tboat["pos"]))
+		var thull := _hull_rect(tbidx, tanchor, 0)
+		var tslots := _deck_slots(thull, Rules.cap_of(tbidx))
+		for k in tsoldiers.size():
+			var tid := int(tsoldiers[k])
+			transit_pos[tid] = tslots[k] if k < tslots.size() else tanchor
+
 	# --- 5. hit halos, ALL of them, before any body -----------------------------------------------
 	# A body here is a 2 px outline plus a 3 px dot, so a white tint has no AREA to paint and reads
 	# as no flash at all — the halo is what makes item 3 exist. It has to be under EVERY body and not
@@ -244,13 +450,77 @@ func _draw() -> void:
 			Look.tile_point_px(battle.soldier_pos[hi]) + _body_offset_of(shalo_key),
 			Look.body_radius_of(int(army.type_id[hi])) * Look.HIT_HALO_MUL,
 			Look.COL_HIT_HALO)
+	# A soldier still aboard a boat is `is_hittable` (a coastal crow already reaches it) and the
+	# tracer already flies to it — P4's whole fix is that the body finally has somewhere to catch
+	# the flash it was always tracking. Same halo, same trigger, only the position is a deck slot.
+	for raw_tid in battle.transit_ids():
+		var ti := int(raw_tid)
+		var thalo_key := "s%d" % ti
+		if _flash_of(thalo_key) <= 0.0:
+			continue
+		var thalo_at: Vector2 = transit_pos.get(ti, Look.tile_point_px(battle.soldier_pos[ti]))
+		_paint_halo(
+			thalo_at + _body_offset_of(thalo_key),
+			Look.body_radius_of(int(army.type_id[ti])) * Look.HIT_HALO_MUL,
+			Look.COL_HIT_HALO)
 
-	# --- 6. boats ---------------------------------------------------------------------------------
-	# A soldier in TRANSIT sits at its boat's position, so drawing both would stack a body on the
-	# hull. The boat IS the cargo on screen; the roster count is the HUD's job.
+	# --- 6. boats: the hull, the crossing's destination marker, and who is aboard (P2/P3/P5/P6/P7) --
 	for raw_boat in battle.boats:
 		var boat: Dictionary = raw_boat
-		_paint_boat(_boat_rect(boat["pos"]), Look.COL_BOAT)
+		var bidx := int(boat["boat"])
+		var anchor := Look.tile_point_px(Vector2(boat["pos"]))
+		var hull_rect := _hull_rect(bidx, anchor, 0)
+		var phase := int(boat["phase"])
+		# "Waiting" is read from state that already exists — arrived, but still OUTBOUND means
+		# `_try_unload` refused this frame and will try again next frame (4.5) — no new sim field.
+		var arrived := float(boat["t"]) * float(boat["speed"]) + Rules.EPS >= float(boat["dist"])
+		var waiting := phase == Battle.Phase.OUTBOUND and arrived
+		var hull_col := Look.COL_BOAT
+		if waiting:
+			hull_col = hull_col.lerp(Look.COL_HULL_WAIT, _wait_blend())
+		_paint_hull(hull_rect, hull_col, Look.BODY_OUTLINE_WIDTH_PX)
+
+		# P5 / P6: the whole crossing is on screen, both legs, not only the outbound one — without
+		# this the fleet TELEPORTS home and the player never learns 4.3's relocation rule exists.
+		if phase == Battle.Phase.OUTBOUND:
+			var target_px := Look.tile_point_px(battle.grid.tile_point(int(boat["target"])))
+			_paint_ring(target_px, Look.TARGET_RING_R_PX, Look.COL_ROUTE, Look.AREA_RING_WIDTH_PX)
+			_paint_route(anchor, target_px, Look.COL_ROUTE, Look.ROUTE_WIDTH_PX)
+		else:
+			var home_tile := battle.harbour_tile(int(boat["home"]))
+			if home_tile >= 0:
+				var home_px := Look.tile_point_px(battle.grid.tile_point(home_tile))
+				_paint_route(anchor, home_px, Look.COL_ROUTE, Look.ROUTE_WIDTH_PX)
+
+		# P3: every passenger, on deck, with its own HP bar — RETURNING boats carry nobody, so this
+		# loop is a no-op for them, which is itself half of what draws the return leg as empty.
+		var soldiers: Array = boat["soldiers"]
+		for k in soldiers.size():
+			var i := int(soldiers[k])
+			var st := int(army.type_id[i])
+			var skey := "s%d" % i
+			var sradius := Look.body_radius_of(st)
+			# The fallback is written the SAME way the halo loop's is (`Look.tile_point_px(battle.
+			# soldier_pos[id])`, not `anchor`) even though the two are always numerically equal for a
+			# TRANSIT soldier (`soldier_pos[id] == boat["pos"]`, which `anchor` is built from) —
+			# `transit_pos` is guaranteed to hold every id `battle.transit_ids()` names, so neither
+			# fallback should ever fire, but one fact written two different ways is the shape this
+			# file's own `_body_offset_of` comment warns about.
+			var slot_pos: Vector2 = transit_pos.get(i, Look.tile_point_px(battle.soldier_pos[i]))
+			var scentre := slot_pos + _body_offset_of(skey)
+			_paint_body(
+				scentre,
+				sradius,
+				Look.body_corner_radius_of(st),
+				Look.body_colour_of(false).lerp(Look.COL_FLASH, _flash_of(skey)),
+				Look.BODY_OUTLINE_WIDTH_PX,
+				Look.BODY_DOT_RADIUS_PX,
+				_gait_squash(skey))
+			if army.has_beak[i] != 0:
+				var ttri := _beak_points(scentre, sradius, _facing_of(i, false))
+				_paint_beak(ttri[0], ttri[1], ttri[2], Look.COL_BEAK)
+			var tbars := _hp_rects(scentre, st, army.hp[i] / Rules.hp_of(st))
+			_paint_hp(tbars[0], Look.hp_bar_colour(false), tbars[1], Look.hp_bar_colour(true))
 
 	# --- 7. enemies ------------------------------------------------------------------------------
 	# Drawn before the soldiers so an ally on the same tile reads on top of what it is fighting.
@@ -370,7 +640,9 @@ func _paint_tile(rect: Rect2, fill: Color, line_colour: Color, line_width: float
 	draw_rect(rect, line_colour, false, line_width)
 
 
-## 1 call. An outline, not a fill — see the dock comment in `_draw`.
+## 1 call. An outline, not a fill — see the harbour comment in `_draw`. The name is unchanged from
+## the old dock hook even though the concept moved to a harbour in `boat-and-landing`; stage 5 draws
+## a hull with `_paint_hull` on top of this marker when a boat is actually sitting there.
 func _paint_dock(rect: Rect2, colour: Color, outline_width: float) -> void:
 	draw_rect(rect, colour, false, outline_width)
 
@@ -407,9 +679,38 @@ func _paint_hp(back: Rect2, back_colour: Color, fill: Rect2, fill_colour: Color)
 	draw_rect(fill, fill_colour)
 
 
-## 1 call.
-func _paint_boat(rect: Rect2, colour: Color) -> void:
-	draw_rect(rect, colour)
+## 2 calls: the filled hull, then a darker outline so its edge reads even sitting on same-toned
+## water. `colour.darkened(...)` is a METHOD CALL on the argument, not a new stored literal — it
+## matches neither half of the "no `Color(` / no `Color.`" rule the rest of this file lives under.
+## Replaces `_paint_boat` (`boat-and-landing` stage 5, 7.3): a flat rect said nothing about which
+## boat this was or whether it was carrying anyone.
+func _paint_hull(rect: Rect2, colour: Color, outline_width: float) -> void:
+	draw_rect(rect, colour, true)
+	draw_rect(rect, colour.darkened(0.35), false, outline_width)
+
+
+## 1 call, over every rect the caller built — one `draw_rect` call SITE, however many tiles are in
+## `rects`, the same shape `_paint_spark` uses for its six shards. The drag overlay (P8): which coast
+## the dragged boat's own harbour can reach.
+func _paint_overlay(rects: Array, colour: Color) -> void:
+	for r: Rect2 in rects:
+		draw_rect(r, colour)
+
+
+## 1 call. The line from a harbour to the candidate tile while a drag is in flight (P8), and now also
+## the hull -> target line while a boat crosses, and the hull -> home-harbour line on the return leg
+## (P5 / P6, `boat-and-landing` stage 5) — one hook, three call sites in `_draw()`, same shape.
+func _paint_route(from: Vector2, to: Vector2, colour: Color, width: float) -> void:
+	draw_line(from, to, colour, width)
+
+
+## 1 call. `draw_multiline` — the same shape `_paint_spark` uses, and for the same reason: a loop
+## indexing pairs INSIDE the leaf can drop the second endpoint of one pair with no scanner catching
+## it, and a flat array handed straight to one native call leaves no index inside the leaf to drop.
+## P10: a line along each SEAWARD edge of a cliff tile (whichever ortho side touches water), the only
+## thing that reads as height with no elevation axis at all (3.2).
+func _paint_cliff_face(points: PackedVector2Array, colour: Color, width: float) -> void:
+	draw_multiline(points, colour, width)
 
 
 ## 1 call. The tracer stub for item 1.
@@ -447,9 +748,58 @@ func _tile_xy(tile: int) -> Vector2i:
 	return Vector2i(tile % w, tile / w)
 
 
-func _boat_rect(pos: Vector2) -> Rect2:
-	var span := Vector2(Look.BOAT_W_PX, Look.BOAT_H_PX)
-	return Rect2(Look.tile_point_px(pos) - span * 0.5, span)
+## The hull rectangle for `boat`, centred on world point `at` (a harbour's tile centre while idle, or
+## `boat["pos"]` while at sea), sized by that boat's OWN capacity — `cap * BOAT_SLOT_PX + 2 *
+## BOAT_HULL_PAD_PX` — so the big boat and the fast boat read apart at a glance (P2). `slot` shifts a
+## SECOND boat sharing the same anchor sideways by `HULL_BERTH_OFFSET_PX` so two hulls at one harbour
+## never overlap; 0 for the common case of one boat at that anchor.
+func _hull_rect(boat: int, at: Vector2, slot: int) -> Rect2:
+	var w := float(Rules.cap_of(boat)) * Look.BOAT_SLOT_PX + 2.0 * Look.BOAT_HULL_PAD_PX
+	var h := Look.BOAT_HULL_H_PX
+	var centre := at + Vector2(float(slot) * Look.HULL_BERTH_OFFSET_PX, 0.0)
+	return Rect2(centre - Vector2(w, h) * 0.5, Vector2(w, h))
+
+
+## Where `boat`'s hull is drawn while it is idle at a harbour — anchor at that harbour's tile centre,
+## offset by how many OTHER idle boats at the SAME harbour have a LOWER index (nothing in this round
+## makes two boats queue, so at most one other). `Rect2()` (zero size) if the boat is busy or has no
+## harbour — `_draw()`'s idle-hull pass and `game.gd`'s hit test BOTH call this rather than either one
+## re-deriving the anchor and the slot a second time: a hand-rolled hit test that tested a tile index
+## instead of the drawn rect once left ~70% of a hull dead to a press, with a camera pan starting
+## silently in its place.
+func idle_hull_rect(boat: int) -> Rect2:
+	if battle == null or battle.grid == null or battle.boat_busy(boat):
+		return Rect2()
+	var hb := int(battle.boat_at[boat])
+	if hb < 0:
+		return Rect2()
+	var harbour_tile := battle.harbour_tile(hb)
+	if harbour_tile < 0:
+		return Rect2()
+	var slot := 0
+	for b2 in boat:
+		if not battle.boat_busy(b2) and int(battle.boat_at[b2]) == hb:
+			slot += 1
+	var anchor := Look.tile_point_px(battle.grid.tile_point(harbour_tile))
+	return _hull_rect(boat, anchor, slot)
+
+
+## `cap` points evenly spaced along `hull`'s width, inset half a slot from each end so a passenger's
+## own outline never crosses the hull's edge — where each of that boat's passengers stands on deck
+## (P3). Index `k` is the SAME index `boat["soldiers"][k]` uses, so a soldier's slot never has to be
+## looked up twice and never disagrees with itself between the halo pass and the body pass.
+func _deck_slots(hull: Rect2, cap: int) -> Array:
+	var out: Array = []
+	if cap <= 0:
+		return out
+	var y := hull.position.y + hull.size.y * 0.5
+	if cap == 1:
+		out.append(Vector2(hull.position.x + hull.size.x * 0.5, y))
+		return out
+	var step := hull.size.x / float(cap)
+	for k in cap:
+		out.append(Vector2(hull.position.x + step * (float(k) + 0.5), y))
+	return out
 
 
 ## Back rectangle first, filled rectangle second. The fill shrinks from the right, so the bar's left
@@ -750,6 +1100,13 @@ func _shake_offset() -> Vector2:
 		return Vector2.ZERO
 	var raw := Vector2(sin(age * Look.SHAKE_A_FREQ), sin(age * Look.SHAKE_B_FREQ))
 	return (raw * mag).limit_length(mag)
+
+
+## P7. 0..1, one full on/off cycle every `HULL_WAIT_BLINK_SEC` — a raised cosine rather than a raw
+## sine, so it sits at exactly 0 and 1 at the ends of each half-cycle instead of sweeping through
+## every value with no rest, which reads as a pulse rather than a smear.
+func _wait_blend() -> float:
+	return 0.5 - 0.5 * cos(TAU * _wait_clock / Look.HULL_WAIT_BLINK_SEC)
 
 
 ## The one place a body's drawing offset is computed, so the body, the halo, the beak and the HP bar

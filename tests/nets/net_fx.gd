@@ -203,9 +203,10 @@ func _death_events_come_after_the_attacks_that_caused_them(t) -> void:
 func _land_events(t) -> void:
 	var army := _army_of([Rules.CELL_MELEE, Rules.CELL_MELEE])
 	var b := _battle_of(_port(), army, [_spawn(ARENA_W, Rules.LION, 20, 9)], 999.0)
-	t.ok(b.load_soldier(Rules.CELL_MELEE), "병사 하나를 태웠다")
-	t.ok(b.load_soldier(Rules.CELL_MELEE), "병사 둘을 태웠다")
-	t.ok(b.launch(0), "배가 떴다")
+	t.ok(b.load_soldier(Rules.CELL_MELEE) >= 0, "병사 하나를 태웠다")
+	t.ok(b.load_soldier(Rules.CELL_MELEE) >= 0, "병사 둘을 태웠다")
+	var landing := int(_PORT_LANDING.y) * ARENA_W + int(_PORT_LANDING.x)
+	t.ok(b.launch(0, landing), "배가 떴다")
 
 	var lands := []
 	var frames := 0
@@ -229,7 +230,7 @@ func _land_events(t) -> void:
 			off += 1
 	t.eq(off, 0, "LAND 가 난 병사의 자리는 이미 격자 위다 — 뷰가 soldier_pos 로 링을 놓는다")
 	t.ok(b.soldier_pos[0].distance_to(b.soldier_pos[1]) <= 1.5,
-			"둘이 붙어 내렸다 (부두에서 BFS) — 링 반지름 20 이 그래서 타일 반 칸이다")
+			"둘이 붙어 내렸다 (상륙지에서 BFS) — 링 반지름 20 이 그래서 타일 반 칸이다")
 
 
 # -- begin_frame -----------------------------------------------------------------------------------
@@ -524,10 +525,15 @@ func _split() -> Array:
 	return rows
 
 
-## The open arena with one dock at (2,5). The boat sails from border water (0,5).
+## A bay: rows 3-7 are water for the first six columns, land from column 6 on, one harbour at (2,5).
+## `_PORT_LANDING` (6,5) is the coast the harbour can see, straight across open water.
+const _PORT_LANDING := Vector2(6, 5)
+
 func _port() -> Array:
 	var rows := _open(ARENA_W, ARENA_H)
-	rows[5] = "~.D" + ".".repeat(ARENA_W - 4) + "~"
+	for y in range(3, 8):
+		rows[y] = "~~~~~~" + ".".repeat(ARENA_W - 7) + "~"
+	rows[5] = "~~H~~~" + ".".repeat(ARENA_W - 7) + "~"
 	return rows
 
 

@@ -13,18 +13,22 @@ extends Node2D
 ## pins each hook's `draw_*` count exactly AND reddens any function in this file it does not name,
 ## so a helper added tomorrow is red until it is listed — adding names only fixes the day it is done.
 ##
-## The berth rectangle IS the resource meter. A boat at sea leaves its berth drawn empty, so the
-## restriction is the picture rather than a number beside one — see cell-army-gdd, section Screen.
-## Replacing it with a readout deletes the one thing v2-openfield died for the want of: something on
-## screen that visibly goes down.
+## The berth box IS half of the resource meter, and `boat-and-landing` stage 5's idle hull (drawn at
+## a harbour only while that boat is NOT at sea, `field_view.idle_hull_rect`) is the other half: a
+## boat at sea leaves both its berth box tinted `COL_BERTH_EMPTY` AND its hull missing from the map,
+## so the restriction is the picture in two places at once rather than a number beside one — see
+## cell-army-gdd, section Screen. Replacing either with a readout deletes the one thing v2-openfield
+## died for the want of: something on screen that visibly goes down.
 ##
 ## Enemies-left is drawn from `battle.enemies_left()` and survives onto the lose screen on purpose:
 ## "the timer ran out with four alive" is a different loss from a wipe, and the player has to be able
 ## to tell which one happened.
 ##
 ## Item 8 of combat-juice (summon feedback) lives here, and it is the one effect the sim knows
-## NOTHING about: `battle.load_soldier` and `battle.launch` already return a bool and the shell used
-## to throw it away. The shell pushes it in through `note_key` / `note_launch`; nothing is polled.
+## NOTHING about: `battle.load_soldier` and `battle.launch` already return a value the shell can push
+## in rather than poll. `note_key` is wired — the shell calls it on every `1`/`2` press. `note_launch`
+## is wired too, as of `boat-and-landing` stage 4 — `game.gd::_on_left_release` calls it on every drag
+## that ends, whether `battle.launch` accepted the tile or refused it.
 ## The clock is this node's own — see combat-juice, section B: `battle.step()` is skipped entirely
 ## while a panel is up, so an effect hung off sim time freezes behind the win screen.
 
@@ -38,6 +42,11 @@ const TYPE_LABELS := ["근접", "원거리", "들소", "까마귀", "사자"]
 ## The summonable types in hotkey order: slot 0 is key `1`. The shell binds the keys from this same
 ## array, so a third soldier type appears on screen and on the keyboard in one edit.
 const KEY_TYPES := [Rules.CELL_MELEE, Rules.CELL_RANGED]
+
+## Display names for `Rules.BOATS`, indexed the same way `TYPE_LABELS` indexes `rules.gd`'s soldier
+## table — `Rules.boat_name_of` returns the table's IDENTIFIER ("BIG", "FAST"), not text the Korean
+## player reads.
+const BOAT_LABELS := ["큰 배", "빠른 배"]
 
 var battle: Battle = null
 
@@ -74,6 +83,10 @@ static func default_font() -> Font:
 
 static func type_label(type_id: int) -> String:
 	return str(TYPE_LABELS[type_id])
+
+
+static func boat_label(boat: int) -> String:
+	return str(BOAT_LABELS[boat])
 
 
 static func key_slot_count() -> int:
@@ -126,29 +139,15 @@ func note_key(slot: int, ok: bool) -> void:
 	_key_fx[slot] = {"sec": Look.KEY_FX_SEC, "ok": ok}
 
 
-## The same, for a dock click. The parameter is the DOCK the shell clicked, but the picture is on the
-## berth, because the berth rectangle is this screen's resource meter.
-##
-## `battle.launch` picks the berth itself and returns only a bool, so the berth it just took is read
-## back rather than plumbed out: `launch` sets that berth's timer to a full crossing on this very
-## frame while every other berth has already been counted down, so the highest one is it. A refusal
-## takes no berth at all — the fleet as a whole is what said no — so every berth answers.
-func note_launch(dock: int, ok: bool) -> void:
-	if battle == null or dock < 0 or dock >= battle.dock_count():
+## The same, for a launch. `boat` is the boat the shell tried to send — the caller already knows it,
+## since `battle.launch(boat, tile)` takes it as an argument, so there is no berth to guess back from
+## a bool any more. A refusal stains ONLY that boat's berth rectangle now: with per-boat cargo a
+## refusal is a fact about that one boat (empty, at sea, or the tile out of its reach), never about
+## the fleet as a whole the way it was when both berths shared one timer.
+func note_launch(boat: int, ok: bool) -> void:
+	if battle == null or boat < 0 or boat >= Rules.boat_count():
 		return
-	if not ok:
-		for b in battle.berth_free_in.size():
-			_berth_fx[b] = {"sec": Look.BERTH_FX_SEC, "ok": false}
-		return
-	var taken := -1
-	var longest := -1.0
-	for b in battle.berth_free_in.size():
-		if battle.berth_free_in[b] > longest:
-			longest = battle.berth_free_in[b]
-			taken = b
-	if taken < 0:
-		return
-	_berth_fx[taken] = {"sec": Look.BERTH_FX_SEC, "ok": true}
+	_berth_fx[boat] = {"sec": Look.BERTH_FX_SEC, "ok": ok}
 
 
 ## Ages both drawers and drops what has run out. `keys()` hands back a copy, so erasing inside the
@@ -189,6 +188,20 @@ func _key_offset(slot: int) -> Vector2:
 	return Vector2(amp * cos(p * TAU), 0.0)
 
 
+## The same shake, for a berth refused a launch — `boat-and-landing`, section 6: "the boat's icon
+## shakes, exactly as a refused key does." Same shape, same constants, so the two effects genuinely
+## read as one rule rather than two effects that happen to look alike today and drift apart later.
+func _berth_offset(boat: int) -> Vector2:
+	if not _berth_fx.has(boat):
+		return Vector2.ZERO
+	var fx: Dictionary = _berth_fx[boat]
+	if bool(fx["ok"]):
+		return Vector2.ZERO
+	var p := clampf(1.0 - float(fx["sec"]) / Look.BERTH_FX_SEC, 0.0, 1.0)
+	var amp := Look.KEY_REFUSE_SHAKE_PX * (1.0 - p) * Look.fx_gain_of(8)
+	return Vector2(amp * cos(p * TAU), 0.0)
+
+
 ## The key box's background: `COL_BUTTON` at rest, pulled all the way to `COL_WIN` or `COL_LOSE` on
 ## the frame of the press and easing back over `KEY_FX_SEC`. Gain 0 collapses the whole lerp to
 ## `COL_BUTTON` — that is what combat-juice's `FX_GAIN[8]` row measures.
@@ -212,20 +225,27 @@ func _draw() -> void:
 		Look.HUD_TIMER_FONT_SIZE_PX, Look.COL_HUD_TEXT)
 
 	# The berth's own two states stay the base colour; item 8 only tints on top of whichever one is
-	# showing, so "a boat is at sea" is never overwritten by "that click landed".
-	for b in battle.berth_free_in.size():
-		var free := battle.berth_free_in[b] <= 0.0
+	# showing, so "a boat is at sea" is never overwritten by "that click landed". One rectangle per
+	# boat, stacked (P9, `boat-and-landing` stage 4), each carrying its OWN load and capacity — a
+	# summed total cannot say which of the two boats still has room.
+	#
+	# The shake rides on `rect.position`, and the label's `at` is derived FROM the shifted rect,
+	# exactly the way the key box does it below — shake the box alone and the label walks out of it.
+	for b in Rules.boat_count():
+		var free := not battle.boat_busy(b)
 		var berth_col: Color = Look.COL_BOAT if free else Look.COL_BERTH_EMPTY
 		if _berth_fx.has(b):
 			var bfx: Dictionary = _berth_fx[b]
 			var bp := clampf(1.0 - float(bfx["sec"]) / Look.BERTH_FX_SEC, 0.0, 1.0)
 			var bgoal: Color = Look.COL_WIN if bool(bfx["ok"]) else Look.COL_LOSE
 			berth_col = berth_col.lerp(bgoal, (1.0 - bp) * Look.fx_gain_of(8))
-		_paint_berth(Look.berth_rect_px(b), berth_col)
-
-	_paint_load(face, Look.HUD_LOAD_POS_PX,
-		"탑승 %d/%d" % [battle.pending.size(), Rules.CAP],
-		Look.HUD_FONT_SIZE_PX, Look.COL_HUD_TEXT)
+		var rect := Look.berth_rect_px(b)
+		rect.position += _berth_offset(b)
+		_paint_berth(rect, berth_col)
+		var here: PackedInt32Array = battle.pending[b]
+		_paint_load(face, rect.position + Look.HUD_BERTH_LABEL_OFFSET_PX,
+			"%s %d/%d" % [boat_label(b), here.size(), Rules.cap_of(b)],
+			Look.HUD_FONT_SIZE_PX, Look.COL_HUD_TEXT)
 
 	# The shake rides on `rect.position`, and the label's `at` is derived FROM the shifted rect rather
 	# than from the resting one. Shaking the box alone walks the glyphs out of it; shaking the glyphs

@@ -24,11 +24,15 @@ all three folders. **Links leak every single time** — `net_citations` catches 
 |---|---|
 | `1.ready` | **empty** |
 | `2.active` | **empty** |
-| `3.done` | [the first slice](3.done/first-slice.md) — three islands, one run, end to end. Built 2026-08-17; the round is **9 nets / 725 checks** green |
+| `3.done` | [the boat and the landing](3.done/boat-and-landing.md) — an open coastline, a fleet that moves between several harbours, a camera. Built 2026-08-18; the round is **11 nets / 967 checks** green |
+| | [the first slice](3.done/first-slice.md) — three islands, one run, end to end. Built 2026-08-17; the round was **9 nets / 725 checks** green |
 
-⚠ **`3.done` here does not mean the design is settled.** The slice ran and the user played it, and what they
-said afterwards is an open problem, not a tick: *"게임이 좀 애매하네. 뭔가 침공하는 느낌이 전혀 없어서"* and
-*"배가 곁다리인 게 여전히 별로네."* **The next plan is the boat**, and the GDD carries it as Undecided 15·16·17.
+⚠ **`3.done` here does not mean the design is settled, and both rows prove it.** The user played the slice
+and said *"게임이 좀 애매하네. 뭔가 침공하는 느낌이 전혀 없어서"* and *"배가 곁다리인 게 여전히 별로네."*
+**The boat plan answered the second sentence and not the first**: the user launched the finished build on
+2026-08-18 and said *"참 애매하네. 그래도 그동안 중에서 제일 평범하네."* — 「곁다리」 is gone, 「애매하다」
+is not. Both design docs carry it, [the boat and the landing](../design/boat-invasion.md)
+(Korean: `boat-invasion-ko`) in its `Accepted` line; the GDD carries what is left as **Undecided 18**.
 
 **Every earlier plan this repo had was deleted on 2026-08-17**, together with the design docs describing the two
 games those plans built. Nothing was lost that mattered: what the plans *measured* is distilled into

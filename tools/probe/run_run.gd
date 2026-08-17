@@ -3,15 +3,19 @@ extends SceneTree
 ## soldiers lost, HP pool in and out, fight duration, and the share of the island's seconds in
 ## which the hand actually had something to press.
 ##
-## The first-slice plan's section "Phase A is not finished until the probe closes these numbers"
-## is what this file answers. It is not a net: nothing here asserts, everything here reports.
-## A number that comes out wrong is a design answer, not a red round.
+## `boat-and-landing`, section 11, is what this file answers now — the open coastline replaced the
+## fixed dock, so "which dock" stopped being a question and "where on the coast" started being one.
+## It is not a net: nothing here asserts, everything here reports. A number that comes out wrong is
+## a design answer, not a red round. **This round's job is to REPORT, not to tune** — `TIME_LIMITS`
+## and every other rule constant are read as they stand; a probe that adjusts a constant to make its
+## own run look better is grading itself.
 ##
 ## **The last probe this repo had graded itself in its owner's favour twice** — it modelled
-## one-shot as `force >= hp` after a cap had made that false, and it never read the flee table.
-## So the last thing this file does is feed itself a run that MUST be reported as a loss (one
-## soldier, one HP). A probe that only ever runs the cases its author expects to pass measures
-## its author.
+## one-shot as `force >= hp` after a cap had made that false, and it never read the flee table. So
+## the last thing this file does is feed itself a run that MUST be reported as a loss (one soldier,
+## one HP), and the landing-point pair below carries its OWN inversion too: two runs landing by the
+## SAME strategy must produce identical numbers, or the near/far and near/quiet comparisons above it
+## are noise rather than a measurement of the landing point.
 ##
 ## Run it with:
 ##   Godot.exe --headless --path <project> --script res://tools/probe/run_run.gd
@@ -30,10 +34,6 @@ const DT := 0.05
 ## disarmed a whole net in this repo once.
 const MAX_STEPS := 4000
 
-## What fraction of full health the army is chipped to before the boss, for the policy that asks
-## whether arriving hurt can lose. The plan's own sweep is what named 60%.
-const CHIPPED := 0.6
-
 
 func _initialize() -> void:
 	print("[프로브] 헤드리스 런 — dt %.2fs, 섬마다 한 줄" % DT)
@@ -41,30 +41,32 @@ func _initialize() -> void:
 
 	var all_rows := _policy_all()
 	var dribble_rows := _policy_dribble()
-	var ranged := _policy_ranged()
-	var chipped := _policy_chipped_boss()
-	_policy_two_doors()
+	var near_rows := _policy_landing("near")
+	var far_rows := _policy_landing("far")
+	var quiet_rows := _policy_landing("quiet")
+	_same_beach_is_a_control(near_rows)
 	_inverted_must_lose()
 
-	_verdicts(all_rows, dribble_rows, ranged, chipped)
+	_verdicts(all_rows, dribble_rows, near_rows, far_rows, quiet_rows)
 
 	print("")
 	print("[프로브] 끝.")
 	quit(0)
 
 
-## The plan's four required numbers, graded out loud. A probe whose output has to be eyeballed
-## gets eyeballed in its author's favour — this repo's last one did, twice — so each row says what
-## it wanted, what it got, and which of the two won. **Nothing here is fixed up to pass.**
-func _verdicts(all_rows: Array, dribble_rows: Array, ranged: Dictionary, chipped: Array) -> void:
+## The plan's required numbers (section 11), graded out loud. A probe whose output has to be
+## eyeballed gets eyeballed in its author's favour — this repo's last one did, twice — so each row
+## says what it wanted, what it got, and which of the two won. **Nothing here is fixed up to pass.**
+func _verdicts(all_rows: Array, dribble_rows: Array, near_rows: Array, far_rows: Array,
+		quiet_rows: Array) -> void:
 	print("")
-	print("=== 계획서가 요구한 숫자, 그대로 채점 ===")
+	print("=== 계획서(boat-and-landing, 11절)가 요구한 숫자, 그대로 채점 ===")
 
 	var all_won := all_rows.size() == Islands.count()
 	for row: Dictionary in all_rows:
 		if not bool(row["won"]):
 			all_won = false
-	print("  1. 전부 한 번에 세 섬을 다 이긴다: %s" % _mark(all_won))
+	print("  1. 전부 한 번에 세 섬을 다 이긴다 (제한 시간 안에): %s" % _mark(all_won))
 
 	# Per island, because "loses more HP" is a claim about every island and a total would let one
 	# island's blowout pay for another island's free ride.
@@ -78,146 +80,114 @@ func _verdicts(all_rows: Array, dribble_rows: Array, ranged: Dictionary, chipped
 		print("     섬 %d — 전부 %.1f vs 한 척씩 %.1f: %s" % [i + 1, a, d, _mark(worse)])
 	print("  2. 한 척씩이 모든 섬에서 HP 를 더 잃는다: %s" % _mark(dribble_worse))
 
-	var solo: Array = ranged["a"]
-	var after: Array = ranged["b"]
-	var wiped_1 := solo.size() >= 1 and not bool((solo[0] as Dictionary)["won"])
-	print("  3a. 원거리만이 섬 1 에서 진다: %s" % _mark(wiped_1))
-	var cleared_2 := after.size() >= 2 and bool((after[1] as Dictionary)["won"])
-	print("  3b. 원거리만이 섬 2 를 깬다: %s" % _mark(cleared_2))
+	print("  3. 같은 섬, 두 해안(가까운 곳 vs 먼 곳) — 사상자와 시간이 달라야 한다")
+	var landing_matters := near_rows.size() >= 1 and near_rows.size() == far_rows.size()
+	for i in mini(near_rows.size(), far_rows.size()):
+		var n := near_rows[i] as Dictionary
+		var f := far_rows[i] as Dictionary
+		var differ := absf(float(n["damage"]) - float(f["damage"])) > 0.01 \
+				or absf(float(n["dur"]) - float(f["dur"])) > 0.01
+		if not differ:
+			landing_matters = false
+		print("     섬 %d — 가까운 곳 피해 %.1f / %.1fs · 먼 곳 피해 %.1f / %.1fs: %s" % [
+			i + 1, float(n["damage"]), float(n["dur"]), float(f["damage"]), float(f["dur"]),
+			_mark(differ)])
+	print("  3 결과: %s — 다르면 착륙 지점이 진짜 결정이고, 같으면 그림만 산 것이다"
+			% _mark(landing_matters))
 
-	var boss_won := false
-	if chipped.size() == Islands.count():
-		boss_won = bool((chipped[chipped.size() - 1] as Dictionary)["won"])
-	# The plan writes in its own words that this row fails today: the lion keeps range 0, so a
-	# chipped army still clears the boss. A WIN here is the plan being right, not the probe passing.
-	print("  4. 풀 60%%로 보스에 들어가면 진다: %s (계획서는 지금은 이긴다고 적어뒀다)" % _mark(not boss_won))
+	# 4.6's own question. "가까운 곳" reruns the SAME nearest-tile choice every launch, which is
+	# what a relocated fleet settles into — the plan's own "steady-state cheap" beach — so it does
+	# not need a separate policy from row 3's.
+	print("  4. 항구 옆(정착 후 최저가) vs 적이 없는 곳 — 4.6 의 질문")
+	var near_dominant := 0
+	var quiet_dominant := 0
+	var split := 0
+	var pairs := mini(near_rows.size(), quiet_rows.size())
+	for i in pairs:
+		var n := near_rows[i] as Dictionary
+		var q := quiet_rows[i] as Dictionary
+		var near_wins_dmg := float(n["damage"]) <= float(q["damage"])
+		var near_wins_dur := float(n["dur"]) <= float(q["dur"])
+		if near_wins_dmg and near_wins_dur:
+			near_dominant += 1
+		elif not near_wins_dmg and not near_wins_dur:
+			quiet_dominant += 1
+		else:
+			split += 1
+		print("     섬 %d — 항구 옆 피해 %.1f / %.1fs · 적 없는 곳 피해 %.1f / %.1fs" % [
+			i + 1, float(n["damage"]), float(n["dur"]), float(q["damage"]), float(q["dur"])])
+	if pairs > 0 and near_dominant == pairs:
+		print("  4 결과: 항구 옆이 사상자·시간 둘 다 이긴다 — 「항상 항구 옆」이 지배적이다 (재개봉 조건 발동, GDD 참고)")
+	elif pairs > 0 and quiet_dominant == pairs:
+		print("  4 결과: 적이 없는 곳이 둘 다 이긴다 — 거리보다 교전 회피가 더 크다")
+	else:
+		print("  4 결과: 섬마다 갈린다 — %d/%d 항구 옆 완승, %d/%d 적 없는 곳 완승, %d 갈림 (어느 쪽도 일방적이지 않다)"
+				% [near_dominant, pairs, quiet_dominant, pairs, split])
+
+	print("")
+	print("  5. 빈 시간(_input_open) — 배가 나가 있으면 다시 못 태운다(4.4), 그래서 누를 손이 줄어야 한다.")
+	print("     이건 판정이 아니라 지켜볼 숫자다 — 각 섬 줄의 '입력 가능 …%' 항목을 보라.")
 
 
 func _mark(ok: bool) -> String:
 	return "충족" if ok else "미달"
 
 
-# --- the five policies ---------------------------------------------------------------------------
+# --- the policies ----------------------------------------------------------------------------------
 
-## Everything at once: fill every boat to capacity, launch the moment a berth is free, one dock.
-## The plan calls this the baseline the other four are measured against, and it is the row that
-## has to win all three islands from full health or the enemies are too strong.
+## Everything at once: fill every boat to its own capacity, launch the moment it is loaded and not
+## at sea, landing at the nearest reachable coast. The baseline the other policies are measured
+## against — has to win all three islands from full health or the enemies are too strong.
 func _policy_all() -> Array:
-	return _play_run("정책 1 — 전부 한 번에 (기준선)", [_all_cfg(), _all_cfg(), _all_cfg()], 0.0)
+	return _play_run("정책 1 — 전부 한 번에 (기준선)", [_all_cfg(), _all_cfg(), _all_cfg()], true)
 
 
-## One boat at a time, waiting out the whole round trip before the next launch. Has to lose more
-## HP than policy 1 on every island; if it does not, dribbling is free and "when do I commit" is
-## not a decision.
+## One boat at a time, waiting out the WHOLE round trip (`boat_busy`, both legs) before the next
+## launch. Has to lose more HP than policy 1 on every island; if it does not, dribbling is free and
+## "when do I commit" is not a decision.
 func _policy_dribble() -> Array:
-	var c := _cfg([Rules.CELL_MELEE, Rules.CELL_RANGED], true, [0], [])
-	return _play_run("정책 2 — 한 척씩, 기다리며", [c, c, c], 0.0)
+	var c := _cfg([Rules.CELL_MELEE, Rules.CELL_RANGED], true, "near")
+	return _play_run("정책 2 — 한 척씩, 왕복 끝까지 기다리며", [c, c, c], true)
 
 
-## Ranged only. The plan asks for one exact pair — wiped on island 1, clears island 2 — and those
-## are two different armies, so they are two different runs. A single sequential run cannot show
-## both: an army wiped on island 1 never reaches island 2.
-func _policy_ranged() -> Dictionary:
-	var r := _cfg([Rules.CELL_RANGED], false, [0], [])
-	var solo := _play_run("정책 3a — 원거리만, 처음부터 (섬 1 에서 전멸해야 한다)", [r, r, r], 0.0)
-	var after := _play_run("정책 3b — 섬 1 은 전부, 섬 2 부터 원거리만 (섬 2 를 깨야 한다)",
-			[_all_cfg(), r, r], 0.0)
-	return {"a": solo, "b": after}
+## One landing strategy, played on all three islands. `kind` is "near" (= the nearest reachable
+## tile from wherever the boat is CURRENTLY sitting — the steady-state cheap beach once the fleet
+## has relocated at least once), "far" (the farthest reachable tile), or "quiet" (the reachable
+## tile farthest from every living enemy at launch time).
+func _policy_landing(kind: String, verbose := true) -> Array:
+	var c := _cfg([Rules.CELL_MELEE, Rules.CELL_RANGED], false, kind)
+	var label: String = {"near": "가까운 해안", "far": "먼 해안", "quiet": "적이 없는 해안"}[kind]
+	return _play_run("정책 — 착륙 지점: %s" % label, [c, c, c], verbose)
 
 
-## Everything, but the army is cut to 60% of full health on the way into the boss. The plan
-## predicts this WINS today and says so in writing — the lion keeps range 0 until the user
-## decides, and this row fails on purpose rather than being quietly retired.
-func _policy_chipped_boss() -> Array:
-	var rows := _play_run("정책 4 — 전부, 보스에 풀의 %d%% 로 진입" % int(CHIPPED * 100.0),
-			[_all_cfg(), _all_cfg(), _all_cfg()], CHIPPED)
-	_boss_sweep()
-	return rows
-
-
-## One number is not a band. **This is the inversion of policy 4**: if 60% winning is a real
-## answer rather than the probe agreeing with itself, then SOME entering pool has to lose — so the
-## sweep walks it down to 5% and reports where the flip is, or that there is none. The plan's own
-## sweep found no flip at all with the lion on range 0, which is why it left that row failing on
-## purpose instead of retiring it. This is that claim re-measured against the real sim.
-func _boss_sweep() -> void:
+## ⚠ The inversion for the landing-point pair itself: **two runs choosing the SAME strategy must
+## produce IDENTICAL numbers**, since the sim is deterministic and every landing-tile picker here is
+## a pure function of grid + enemy state. If they do not match, the near/far and near/quiet rows in
+## `_verdicts` are measuring run-to-run noise, not the landing point — the same shape as the design
+## doc's own "two runs at the same beach" requirement (11절).
+func _same_beach_is_a_control(near_rows: Array) -> void:
+	var repeat := _policy_landing("near", false)
 	print("")
-	print("=== 보스 밴드 스윕 — 섬 1·2 는 동일, 섬 3 에 들어가는 풀만 바꾼다 ===")
-	for frac: float in [1.0, 0.8, 0.6, 0.4, 0.2, 0.1, 0.05]:
-		var rows := _play_run("", [_all_cfg(), _all_cfg(), _all_cfg()], frac, false)
-		if rows.size() != Islands.count():
-			print("  풀 %3d%% -> 보스에 도달하지 못했다" % int(frac * 100.0))
-			continue
-		var last: Dictionary = rows[rows.size() - 1]
-		print("  풀 %3d%% (%6.1f) -> %s · %5.1fs · 사망 %d · 피해 %.1f" % [
-			int(frac * 100.0), float(last["pool_in"]),
-			"승" if bool(last["won"]) else "패", float(last["dur"]),
-			int(last["lost"]), float(last["damage"])])
-
-
-## Island 3's two doorways. Both runs play islands 1 and 2 identically — the policies are
-## deterministic, so both armies reach the boss in the same state — and differ only on the last
-## island. Cloning the army instead would need a second copy of what `Army` holds, and a copy
-## that drifts from the real roster measures the copy.
-func _policy_two_doors() -> void:
-	# Two soldiers to the west dock first, everyone else to the east dock: one door baited, the
-	# rest of the force through the other.
-	var bait := _cfg([Rules.CELL_MELEE, Rules.CELL_RANGED], false, [0, 1, 1, 1], [2, 5, 5, 5])
-	var one_door := _cfg([Rules.CELL_MELEE, Rules.CELL_RANGED], false, [0], [])
-	var split := _play_run("정책 5a — 섬 3, 서쪽 문으로 2명 유인 · 나머지는 동쪽 문",
-			[_all_cfg(), _all_cfg(), bait], 0.0)
-	var single := _play_run("정책 5b — 섬 3, 한 문(서쪽)에 전부",
-			[_all_cfg(), _all_cfg(), one_door], 0.0)
-	print("")
-	print("=== 정책 5 비교 — 섬 3 만 ===")
-	_compare_last(" 5a 유인/분산", split)
-	_compare_last(" 5b 한 문 전부", single)
-
-
-func _compare_last(label: String, rows: Array) -> void:
-	if rows.is_empty():
-		print("  %s: 섬 3 에 도달하지 못했다" % label)
-		return
-	var last: Dictionary = rows[rows.size() - 1]
-	if int(last["island"]) != 2:
-		print("  %s: 섬 3 에 도달하지 못했다 (마지막 섬 %d)" % [label, int(last["island"]) + 1])
-		return
-	print("  %s: 총 피해 %.1f · 사망 %d · %s · %.1fs" % [
-		label, float(last["damage"]), int(last["lost"]),
-		"승" if bool(last["won"]) else "패", float(last["dur"])])
-
-
-# --- the inversion -------------------------------------------------------------------------------
-
-## Fed a run that cannot be won: one soldier, one HP, four bison. If this reports anything but a
-## loss the probe is grading in its own favour and every number above it is worth nothing.
-func _inverted_must_lose() -> void:
-	print("")
-	print("=== 뒤집기 — 반드시 져야 하는 런 (병사 1명, 1 HP) ===")
-	var run := Run.new()
-	for i in range(1, run.army.alive.size()):
-		run.army.kill(i)
-	var h := run.army.hp
-	h[0] = 1.0
-	run.army.hp = h
-	print("  살아 있는 병사 %d명, 풀 %.1f" % [run.army.living_count(), _pool(run.army)])
-
-	var battle := run.begin_island()
-	var res := _play_island(battle, _all_cfg())
-	var verdict := _outcome_name(battle)
-	print("  섬 1 결과: %s · 남은 적 %d · %.1fs · %d 스텝" % [
-		verdict, battle.enemies_left(), battle.elapsed, int(res["steps"])])
-	if battle.outcome() == Battle.Outcome.LOST:
-		print("  [OK] 져야 할 런이 실제로 졌다 — 위 숫자들을 믿어도 된다")
-	else:
-		print("  [!!] 져야 할 런이 지지 않았다 — 이 프로브의 모든 숫자를 믿지 마라")
+	print("=== 통제 — 같은 착륙 전략을 두 번 돌리면 숫자가 완전히 같아야 한다 ===")
+	var same := near_rows.size() > 0 and near_rows.size() == repeat.size()
+	for i in mini(near_rows.size(), repeat.size()):
+		var a := near_rows[i] as Dictionary
+		var b := repeat[i] as Dictionary
+		var match_ok := absf(float(a["damage"]) - float(b["damage"])) < 0.01 \
+				and absf(float(a["dur"]) - float(b["dur"])) < 0.01
+		if not match_ok:
+			same = false
+		print("  섬 %d — 1회차 %.2f / %.2fs · 2회차 %.2f / %.2fs: %s" % [
+			i + 1, float(a["damage"]), float(a["dur"]), float(b["damage"]), float(b["dur"]),
+			_mark(match_ok)])
+	print("  통제 결과: %s — 실패하면 위 3·4번 비교는 착륙 지점이 아니라 잡음을 재는 것이다" % _mark(same))
 
 
 # --- the driver ----------------------------------------------------------------------------------
 
 ## Plays one whole run and prints a line per island. Returns the per-island rows so a caller can
 ## compare two runs without re-reading the console.
-func _play_run(label: String, cfgs: Array, chip: float, verbose := true) -> Array:
+func _play_run(label: String, cfgs: Array, verbose := true) -> Array:
 	if verbose:
 		print("")
 		print("=== %s ===" % label)
@@ -231,10 +201,6 @@ func _play_run(label: String, cfgs: Array, chip: float, verbose := true) -> Arra
 		var st := run.state()
 		if st == Run.State.BATTLE:
 			var idx := run.island_index
-			if idx == Islands.count() - 1 and chip > 0.0:
-				_chip_to(run.army, chip)
-				if verbose:
-					print("  보스 직전에 풀을 %d%% 로 맞췄다 -> %.1f" % [int(chip * 100.0), _pool(run.army)])
 			var battle := run.begin_island()
 			if battle == null:
 				print("  [!!] begin_island 가 null 을 돌려줬다 (상태 %d)" % st)
@@ -324,9 +290,8 @@ func _print_survivors(battle: Battle) -> void:
 ## is felt this frame — the shell will do the same, since input arrives before `_physics_process`.
 func _play_island(battle: Battle, cfg: Dictionary) -> Dictionary:
 	var types: Array = cfg["types"]
-	var docks: Array = cfg["docks"]
-	var sizes: Array = cfg["sizes"]
 	var dribble: bool = cfg["dribble"]
+	var landing: String = cfg["landing"]
 
 	var launches := 0
 	var open_s := 0.0
@@ -351,22 +316,36 @@ func _play_island(battle: Battle, cfg: Dictionary) -> Dictionary:
 		if _input_open(battle):
 			open_s += DT
 		if not (dribble and _fleet_busy(battle)):
-			var want: int = int(sizes[launches]) if launches < sizes.size() else Rules.CAP
-			want = mini(want, Rules.CAP)
-			while battle.pending.size() < want:
-				var loaded := false
+			# Load whichever boat `load_soldier` picks (lowest-index boat with room), round-robin
+			# the roster types, until a full pass over the types loads nobody — either every boat
+			# is full/at sea, or the reserve is empty.
+			var loaded_any := true
+			while loaded_any:
+				loaded_any = false
 				for k in types.size():
 					var slot := (next_type + k) % types.size()
-					if battle.load_soldier(int(types[slot])):
+					var boat := battle.load_soldier(int(types[slot]))
+					# `load_soldier` returns the BOARDED BOAT'S INDEX, or -1 — never a bool.
+					# `if 0:` is falsy in GDScript, so reading this as a bool would report boat 0
+					# boarding successfully as a failure. This is one of the two silent breakages
+					# `boat-and-landing` 11절 names by name; the other is `pending.size()` below.
+					if boat >= 0:
 						next_type = (slot + 1) % types.size()
-						loaded = true
 						cmds += 1
+						loaded_any = true
 						break
-				if not loaded:
-					break
-			if battle.pending.size() > 0:
-				var d := int(docks[launches]) if launches < docks.size() else int(docks[docks.size() - 1])
-				if battle.launch(d):
+			# Launch every boat that is loaded and not at sea — `pending` is an Array of one
+			# `PackedInt32Array` PER BOAT now, never a flat cargo count, so each boat's own array is
+			# read directly rather than through `.size()` on the outer Array.
+			for b in Rules.boat_count():
+				if battle.boat_busy(b):
+					continue
+				var cargo: PackedInt32Array = battle.pending[b]
+				if cargo.is_empty():
+					continue
+				var hb := int(battle.boat_at[b])
+				var tile := _pick_tile(battle, hb, landing)
+				if tile >= 0 and battle.launch(b, tile):
 					launches += 1
 					cmds += 1
 		# Every driver of `Battle` clears last frame's facts before the next step — the shell, the nets
@@ -438,41 +417,151 @@ func _stalls(battle: Battle, prev_s: Array, stall_s: PackedFloat32Array,
 	return worst
 
 
-## Could the hand press anything at all this frame? A launch when something is loaded and a berth
-## is free, or a load when the boat has room and a soldier is still in reserve. Nothing here reads
-## the policy, so the number is comparable between two policies on the same island.
+## Could the hand press anything at all this frame? A launch when some boat is loaded and not at
+## sea, or a load when some boat has room and a soldier is still in reserve. Nothing here reads the
+## policy, so the number is comparable between two policies on the same island.
+##
+## ⚠ Per `boat-and-landing` 4.4: a boat at sea can no longer be loaded at all — there is no queue for
+## a load to join while every boat is out, unlike the old shared berth. So this genuinely has LESS
+## to say yes to than the first-slice probe's own version did, which is exactly item 5's own number.
 func _input_open(battle: Battle) -> bool:
-	if battle.pending.size() > 0:
-		for b in battle.berth_free_in.size():
-			if battle.berth_free_in[b] <= Rules.EPS:
-				return true
-	if battle.pending.size() >= Rules.CAP:
-		return false
-	for i in battle.soldier_state.size():
-		if battle.soldier_state[i] == Battle.SoldierState.RESERVE and battle.army.alive[i] != 0:
+	for b in Rules.boat_count():
+		if battle.boat_busy(b):
+			continue
+		var cargo: PackedInt32Array = battle.pending[b]
+		if not cargo.is_empty():
 			return true
+		if cargo.size() < Rules.cap_of(b):
+			for i in battle.soldier_state.size():
+				if battle.soldier_state[i] == Battle.SoldierState.RESERVE and battle.army.alive[i] != 0:
+					return true
 	return false
 
 
-## True while any boat is at sea or any berth is still counting down. Both halves are needed: a
-## boat is dropped from `boats` on unload, but its berth stays busy for the return leg.
+## True while ANY boat is at sea — `boat_busy` already covers both legs (`boat-and-landing` 4.2
+## deleted the old berth timer outright specifically so membership in `boats` IS the whole state),
+## so "wait out the whole round trip" for the dribble policy is just this, unlike the old version
+## which also had to check a separate berth countdown.
 func _fleet_busy(battle: Battle) -> bool:
-	if not battle.boats.is_empty():
-		return true
-	for b in battle.berth_free_in.size():
-		if battle.berth_free_in[b] > Rules.EPS:
+	for b in Rules.boat_count():
+		if battle.boat_busy(b):
 			return true
 	return false
 
 
-# --- policy configs ------------------------------------------------------------------------------
+## The tile `launch` should aim boat `boat`'s current harbour `hb` at, for one of three landing
+## strategies. Returns -1 (refuse) if `hb` has no reachable coast at all, which a caller must not
+## treat as "wait", or a boat sitting at a harbour with no sendable tile would spin forever trying.
+func _pick_tile(battle: Battle, hb: int, kind: String) -> int:
+	match kind:
+		"far":
+			return _farthest_tile(battle, hb)
+		"quiet":
+			return _quietest_tile(battle, hb)
+		_:
+			return _nearest_tile(battle, hb)
 
-func _cfg(types: Array, dribble: bool, docks: Array, sizes: Array) -> Dictionary:
-	return {"types": types, "dribble": dribble, "docks": docks, "sizes": sizes}
+
+## Every tile `grid.sendable[hb]` marks reachable — the SAME predicate the drag overlay and
+## `battle.launch` both answer to (3.4), so a probe policy can never choose a tile the real game
+## would have refused.
+func _reachable_tiles(battle: Battle, hb: int) -> PackedInt32Array:
+	var out := PackedInt32Array()
+	if battle.grid == null or hb < 0 or hb >= battle.grid.sendable.size():
+		return out
+	var arr: PackedByteArray = battle.grid.sendable[hb]
+	for t in arr.size():
+		if arr[t] != 0:
+			out.append(t)
+	return out
+
+
+## The reachable tile CLOSEST to harbour `hb` — "just land right here". This is also 4.6's
+## "steady-state cheap" beach: called fresh every launch off `boat_at[boat]`'s CURRENT harbour, so
+## once the fleet relocates this keeps picking the nearest tile from wherever it actually is now.
+func _nearest_tile(battle: Battle, hb: int) -> int:
+	var best := -1
+	var best_d := 0.0
+	var origin := battle.grid.tile_point(int(battle.grid.harbour_tiles[hb]))
+	for raw in _reachable_tiles(battle, hb):
+		var t := int(raw)
+		var d: float = origin.distance_squared_to(battle.grid.tile_point(t))
+		if best == -1 or d < best_d:
+			best = t
+			best_d = d
+	return best
+
+
+## The reachable tile FARTHEST from harbour `hb` — the far flank.
+func _farthest_tile(battle: Battle, hb: int) -> int:
+	var best := -1
+	var best_d := -1.0
+	var origin := battle.grid.tile_point(int(battle.grid.harbour_tiles[hb]))
+	for raw in _reachable_tiles(battle, hb):
+		var t := int(raw)
+		var d: float = origin.distance_squared_to(battle.grid.tile_point(t))
+		if d > best_d:
+			best = t
+			best_d = d
+	return best
+
+
+## The reachable tile whose NEAREST living enemy is farthest away — "land where the enemy is not",
+## 4.6's other half. Read from the SIM's own `enemy_alive` / `enemy_pos` at call time, never
+## re-derived from what this probe expects to see there — a probe that grades its own step by
+## modelling the enemy instead of reading it is the exact shape the last one's flee-table miss was.
+func _quietest_tile(battle: Battle, hb: int) -> int:
+	var best := -1
+	var best_min_d := -1.0
+	for raw in _reachable_tiles(battle, hb):
+		var t := int(raw)
+		var p := battle.grid.tile_point(t)
+		var nearest_enemy := 1e30
+		for e in battle.enemy_alive.size():
+			if battle.enemy_alive[e] == 0:
+				continue
+			var d: float = p.distance_squared_to(battle.enemy_pos[e])
+			nearest_enemy = minf(nearest_enemy, d)
+		if nearest_enemy > best_min_d:
+			best_min_d = nearest_enemy
+			best = t
+	return best
+
+
+# --- the inversion -------------------------------------------------------------------------------
+
+## Fed a run that cannot be won: one soldier, one HP, four bison. If this reports anything but a
+## loss the probe is grading in its own favour and every number above it is worth nothing.
+func _inverted_must_lose() -> void:
+	print("")
+	print("=== 뒤집기 — 반드시 져야 하는 런 (병사 1명, 1 HP) ===")
+	var run := Run.new()
+	for i in range(1, run.army.alive.size()):
+		run.army.kill(i)
+	var h := run.army.hp
+	h[0] = 1.0
+	run.army.hp = h
+	print("  살아 있는 병사 %d명, 풀 %.1f" % [run.army.living_count(), _pool(run.army)])
+
+	var battle := run.begin_island()
+	var res := _play_island(battle, _all_cfg())
+	var verdict := _outcome_name(battle)
+	print("  섬 1 결과: %s · 남은 적 %d · %.1fs · %d 스텝" % [
+		verdict, battle.enemies_left(), battle.elapsed, int(res["steps"])])
+	if battle.outcome() == Battle.Outcome.LOST:
+		print("  [OK] 져야 할 런이 실제로 졌다 — 위 숫자들을 믿어도 된다")
+	else:
+		print("  [!!] 져야 할 런이 지지 않았다 — 이 프로브의 모든 숫자를 믿지 마라")
+
+
+# --- policy configs --------------------------------------------------------------------------------
+
+func _cfg(types: Array, dribble: bool, landing_kind: String) -> Dictionary:
+	return {"types": types, "dribble": dribble, "landing": landing_kind}
 
 
 func _all_cfg() -> Dictionary:
-	return _cfg([Rules.CELL_MELEE, Rules.CELL_RANGED], false, [0], [])
+	return _cfg([Rules.CELL_MELEE, Rules.CELL_RANGED], false, "near")
 
 
 # --- army helpers --------------------------------------------------------------------------------
@@ -483,19 +572,6 @@ func _pool(army: Army) -> float:
 		if army.alive[i] != 0:
 			total += army.hp[i]
 	return total
-
-
-## Scales every living soldier to `frac` of its own maximum, so the pool lands on `frac` of the
-## living maximum without a second copy of anyone's max HP living here.
-##
-## The write is read-modify-write through a local: `PackedFloat32Array` is copy-on-write, and
-## indexing straight through the property would land in a temporary and change nothing at all.
-func _chip_to(army: Army, frac: float) -> void:
-	var h := army.hp
-	for i in h.size():
-		if army.alive[i] != 0:
-			h[i] = maxf(1.0, Rules.hp_of(int(army.type_id[i])) * frac)
-	army.hp = h
 
 
 ## The beak goes on the healthiest living melee, falling back to ranged. `living_ids_of_type` is

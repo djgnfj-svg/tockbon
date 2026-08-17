@@ -75,20 +75,40 @@ func _table() -> Dictionary:
 		"field_view.gd": {
 			"setup": 0,
 			"_process": 0,
+			# `boat-and-landing`'s camera. One transform, composed in `_compose_position`, and every
+			# screen<->world conversion goes through `screen_to_world_px` beside it — all of them pure.
+			# `screen_to_world_px` and `world_to_tile` (below) are now called from `game.gd::_tile_at`
+			# too, as of stage 4's drag — still 0 draws here, because "pure" and "used" are different
+			# claims and this table only ever measures the first.
+			"_compose_position": 0,
+			"screen_to_world_px": 0,
+			"world_to_tile": 0,
+			"pan_by": 0,
+			"zoom_at": 0,
+			"_clamp_cam": 0,
+			"_visible_world_rect": 0,
+			# boat-and-landing stage 4 drag (P8): set_drag is the one state setter a press-start and
+			# a release-end both go through, so it is pure, like the camera functions above it.
+			"set_drag": 0,
 			"_draw": 0,
 			"_paint_tile": 2,
 			"_paint_dock": 1,
 			"_paint_body": 2,
 			"_paint_beak": 1,
 			"_paint_hp": 2,
-			"_paint_boat": 1,
 			"_paint_shot": 1,
 			"_paint_halo": 1,
 			"_paint_ring": 1,
 			"_paint_target_line": 1,
 			"_paint_spark": 1,
+			"_paint_overlay": 1,
+			"_paint_route": 1,
+			"_paint_hull": 2,
+			"_paint_cliff_face": 1,
 			"_tile_xy": 0,
-			"_boat_rect": 0,
+			"_hull_rect": 0,
+			"idle_hull_rect": 0,
+			"_deck_slots": 0,
 			"_hp_rects": 0,
 			"_beak_points": 0,
 			"_facing_of": 0,
@@ -96,6 +116,7 @@ func _table() -> Dictionary:
 			"_fx_step": 0,
 			"_drain_events": 0,
 			"_shake_offset": 0,
+			"_wait_blend": 0,
 			"_body_offset_of": 0,
 			"_lunge_offset": 0,
 			"_knock_offset": 0,
@@ -114,6 +135,7 @@ func _table() -> Dictionary:
 			"key_type_of": 0,
 			"bind": 0,
 			"reserve_count": 0,
+			"boat_label": 0,
 			"_process": 0,
 			"_draw": 0,
 			"note_key": 0,
@@ -121,6 +143,9 @@ func _table() -> Dictionary:
 			"_fx_step": 0,
 			"_key_offset": 0,
 			"_key_colour": 0,
+			# `boat-and-landing` stage 4, P9's berth shake — the same shape as `_key_offset`, mirrored
+			# rather than shared because the two boxes' rects come from different `look.gd` functions.
+			"_berth_offset": 0,
 			"_paint_timer": 1,
 			"_paint_berth": 1,
 			"_paint_load": 1,
@@ -183,9 +208,14 @@ func run(t) -> void:
 				total_leaves += 1
 
 	# The literals are read back, never `found.size()` summed — a walk that saw nothing would agree
-	# with itself.
-	t.eq(total_funcs, 68, "세 파일의 함수는 모두 68개다 (29 + 18 + 21)")
-	t.eq(total_leaves, 20, "그중 draw 를 실제로 부르는 잎은 20개다 (11 + 5 + 4)")
+	# with itself. `boat-and-landing`'s camera added 7 pure functions to field_view.gd (29 -> 36);
+	# stage 4's drag added 3 more there and 2 in hud_view.gd (36 -> 39, 18 -> 20); stage 5's fleet
+	# added `_paint_hull` / `_paint_cliff_face` / `_hull_rect` / `_deck_slots` / `_wait_blend` and
+	# removed `_paint_boat` / `_boat_rect` in field_view.gd (39 -> 42, net +3); the verify-read pass
+	# on stages 4/5 added `idle_hull_rect`, shared between `_draw()` and `game.gd`'s hit test so
+	# neither one re-derives the anchor and the slot a second time (42 -> 43).
+	t.eq(total_funcs, 84, "세 파일의 함수는 모두 84개다 (43 + 20 + 21)")
+	t.eq(total_leaves, 23, "그중 draw 를 실제로 부르는 잎은 23개다 (14 + 5 + 4)")
 
 	# -- 4. no presentation constant loose in src/ -------------------------------------------------
 	var src_files := _gd_files_deep(SRC_DIR)

@@ -463,14 +463,24 @@ func _unhandled_input(event):
 
 ⚠ **The draft had no such table and an implementer stops dead here.** Item 3 said the halo goes "under the body" and item 4 said the burst goes "above every body"; the other six had no layer at all. Today `_draw` is a **single pass** — terrain → docks → boats → enemies → soldiers — so "walk `_fx` more than once" is itself a decision that has to be written down.
 
+> ### ⚠ Rewritten by `boat-and-landing` (2026-08-18) — **this table is the current tree**
+>
+> `_paint_boat` **no longer exists**; the boat is `_paint_hull`. Three layers were inserted and the
+> terrain count moved. **The pre-boat order is in git, not here** — a layer table that describes a tree
+> nobody is running is not history, it is a wrong instruction. **Section D below is the opposite case
+> and is deliberately left as written.**
+
 | layer | what | hook | why here |
 |---|---|---|---|
-| 1 | terrain (680 tiles, water margin included) | `_paint_tile` | the ground |
-| 2 | docks | `_paint_dock` | above terrain, below events |
+| 1 | terrain (**2436** tiles, 58 × 42, water margin **5** included) | `_paint_tile` | the ground |
+| 1b | **cliff faces** | `_paint_cliff_face` | a line along a cliff tile's seaward edge, so height reads in 2D |
+| 2 | harbours | `_paint_dock` | above terrain, below events. ⚠ **The hook kept its name and the thing it draws did not** — harbours replaced docks |
+| 2c | **idle hulls, each at the harbour its boat is actually sitting at** | `_paint_hull` | part of the ground until it sails |
+| 2b | **the drag overlay and its route** | `_paint_overlay` · `_paint_route` | over the ground it describes, under everything that moves. **Drawn after 2c on purpose** — the overlay must not be hidden by the hull you are dragging |
 | 3 | **6 target lines** | `_paint_target_line` | crossing a body is what turns it into the cloud |
 | 4 | **5 area rings · 7 landing rings** | `_paint_ring` | these are marks on the ground |
 | 5 | **3② halos (every hit body)** | `_paint_halo` | must be under **every** body, so it is its own pass ahead of them |
-| 6 | boats | `_paint_boat` | |
+| 6 | **boats at sea: the hull, the destination route, and the passengers aboard** | `_paint_hull` · `_paint_route` · `_paint_body` · `_paint_hp` | ⚠ **the passengers are drawn now**, which is what finally lets item 3's flash and flinch paint at sea |
 | 7 | enemy bodies + HP | `_paint_body` · `_paint_hp` | |
 | 8 | soldier bodies + beaks + HP | `_paint_body` · `_paint_beak` · `_paint_hp` | an ally on the same tile reads on top (existing rule) |
 | 9 | **1 tracers** | `_paint_shot` | a bullet passes over bodies |
@@ -498,6 +508,28 @@ The computation lives in one place: `_body_offset_of(key) = _lunge_offset(key) +
 
 ## D. The whole hook table
 
+> ### ⚠⚠ Superseded in part by `boat-and-landing` (2026-08-18) — **and kept as written on purpose**
+>
+> **`net_draw_leaf._table()` is the authority. This section is not, and was not even when it shipped.**
+> What changed underneath it:
+>
+> - **`_paint_boat` was deleted.** The boat is **`_paint_hull` (2 draws)** — a hull sized from the
+>   boat's capacity, with its passengers drawn on deck as real bodies.
+> - **Four leaves were added** on top of juice's eleven: `_paint_hull` · `_paint_overlay` ·
+>   `_paint_route` · `_paint_cliff_face`.
+> - **The totals moved from 68 / 20 to 84 functions (43 + 20 + 21) and 23 leaves (14 + 5 + 4).**
+> - Nine pure functions came with the camera and the drag (`_compose_position` · `screen_to_world_px` ·
+>   `world_to_tile` · `pan_by` · `zoom_at` · `_clamp_cam` · `_visible_world_rect` · `set_drag` ·
+>   `idle_hull_rect`), all at 0 draws — **and 0 is as load-bearing as a leaf's count**, because it is
+>   what forbids a draw call leaking out of a hook.
+> - The terrain pass paints **2436 tiles (58 × 42)**: the grid is 48 × 32 and `WATER_MARGIN_TILES` is 5.
+>
+> ⚠ **The table and the ripple list below are left unedited, and that is deliberate.** They are the
+> record of what *this* feature's build had to do, and they were correct instructions for the build
+> that ran. Rewriting them to today's tree would falsify a build that already happened, and it would
+> put the hook table in a fourth place. **C-2 above is the opposite case** — a layer table is a claim
+> about the tree that is running, so it was rewritten rather than annotated.
+
 ⚠ **`net_draw_leaf` is a closed class.** It walks **every `func` line** in the three view files and reddens on any name the table does not hold. **So the existing functions are restated in full.** Bold rows are new.
 
 ### `src/view/field_view.gd` — 29 functions, 11 leaves
@@ -514,7 +546,7 @@ The computation lives in one place: `_body_offset_of(key) = _lunge_offset(key) +
 | `_paint_body` | 2 | `_rounded_square` | 0 |
 | `_paint_beak` | 1 | **`_drain_events`** | **0** |
 | `_paint_hp` | 2 | **`_fx_step`** | **0** |
-| `_paint_boat` | 1 | **`_shake_offset`** | **0** |
+| ~~`_paint_boat`~~ **→ `_paint_hull`, 2** | ~~1~~ | **`_shake_offset`** | **0** |
 | **`_paint_shot`** | **1** | **`_body_offset_of`** | **0** |
 | **`_paint_halo`** | **1** | **`_lunge_offset`** | **0** |
 | **`_paint_ring`** | **1** | **`_knock_offset`** | **0** |
@@ -682,7 +714,7 @@ Eight of the draft's names (`BURST_GROWTH` · `TARGET_LINE_MAX` · `SHAKE_FREQ_A
 | `PANEL_FADE_SEC` | `0.25` | |
 | `HOLD_OUTCOME_SEC` | `0.80` | how long the shell sits still before opening the next island |
 | `HOLD_BEAK_SEC` | `0.50` | **also item 9's tint duration. There is no second constant for it** |
-| `WATER_MARGIN_TILES` | `1` | width of `COL_WATER` painted outside the legend ⇒ **680 tiles** |
+| `WATER_MARGIN_TILES` | ~~`1`~~ **`5`** | width of `COL_WATER` painted outside the legend ⇒ ~~680~~ **2436 tiles (58 × 42)**. ⚠ **Raised by `boat-and-landing`, and not for the shake**: at `ZOOM_MIN` the visible world is 4.45 tiles wider than the map on each side, so a margin of 1 exposes bare ground the moment you zoom out |
 | `FX_MAX_COUNT` | `256` | **caps the pass-through store only.** Body-attached effects do not live there — see B |
 | `FX_GAIN` | `[1.0] × 12` | **per-item strength.** Below |
 

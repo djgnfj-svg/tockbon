@@ -293,9 +293,10 @@ func _death_is_permanent(t) -> void:
 
 	var next_island := _battle_of(_lane(), army, [_spawn(LANE_W, Rules.BISON, 18, 2)], 999.0)
 	t.eq(next_island.soldier_state[0], Battle.SoldierState.DEAD, "다음 섬에서도 예비가 아니라 DEAD 로 선다")
-	t.ok(next_island.load_soldier(Rules.CELL_MELEE), "살아남은 병사는 태워진다")
-	t.eq(next_island.pending[0], 1, "태워진 것은 살아남은 1번이다")
-	t.ok(not next_island.load_soldier(Rules.CELL_MELEE), "죽은 병사는 다시 태워지지 않는다")
+	t.ok(next_island.load_soldier(Rules.CELL_MELEE) >= 0, "살아남은 병사는 태워진다")
+	var boarded: PackedInt32Array = next_island.pending[0]
+	t.eq(int(boarded[0]), 1, "태워진 것은 살아남은 1번이다")
+	t.ok(next_island.load_soldier(Rules.CELL_MELEE) < 0, "죽은 병사는 다시 태워지지 않는다")
 
 
 # -- the phase order is a contract -----------------------------------------------------------------
@@ -307,9 +308,13 @@ func _phase_order(t) -> void:
 	var ferry_army := _army_of([Rules.CELL_MELEE])
 	var ferry := _battle_of(_port(), ferry_army, [_spawn(ARENA_W, Rules.LION, 20, 9)], 999.0)
 	ferry.load_soldier(Rules.CELL_MELEE)
-	ferry.launch(0)
+	var landing := int(_PORT_LANDING.y) * ARENA_W + int(_PORT_LANDING.x)
+	t.ok(ferry.launch(0, landing), "부두 없는 항구에서도 배가 뜬다")
+	# `Rules.CROSSING` is gone — a crossing's length is `boat.dist / boat.speed` now, read back off
+	# the boat that was just launched rather than assumed.
+	var cross_t: float = float(ferry.boats[0]["dist"]) / float(ferry.boats[0]["speed"])
 	ferry.begin_frame()
-	ferry.step(Rules.CROSSING)
+	ferry.step(cross_t)
 	t.eq(ferry.soldier_state[0], Battle.SoldierState.ASHORE,
 			"배가 도착한 그 프레임에 내린다 — 보트가 상륙보다 먼저 돈다")
 
@@ -363,14 +368,42 @@ func _phase_order(t) -> void:
 
 ## A soldier still aboard is shot at and cannot shoot back, and the enemies that CAN walk stay put,
 ## because chasing a target standing on water asks `flow_field` for a path to an impassable tile.
+##
+## ⚠ **Pinned from both sides, per `boat-and-landing` 4.7 / 8.6 — and pinned so the two sides cannot
+## collapse into the same final state.** An earlier version of this fixture gave the bison ONLY the
+## boat in range: under the correct rule it has no valid target and stands; under an
+## `ashore_only = true -> false` mutation it targets the boat, asks `flow_field` for a path to a water
+## tile, gets `UNREACHABLE` everywhere, and `step_toward` returns its own position — so it ALSO stands,
+## at the exact same tile. "Excluded from the scan" and "frozen by an unreachable field" read
+## identically in final position, and the mutation stayed green.
+##
+## The bison below has BOTH a boat (nearer, moving) and a real ashore soldier (farther, at a NAMED
+## tile) inside its detect radius at once. Under the correct rule it can only ever see the ashore
+## soldier and walks toward THAT tile. Under the mutation the boat is nearer than the ashore soldier
+## from the very first frame (measured: ~4.8 tiles against the ashore soldier's constant 5.0), so the
+## bison targets it instead, asks `flow_field` for a path to water, and freezes at its start tile for
+## the whole window — two different, checkable outcomes, not the same one twice.
+##
+## ⚠ **The ashore soldier is RANGED, not melee, and that is load-bearing.** A melee ashore soldier
+## advances on ITS OWN nearest enemy — this bison — independent of anything under test here, which
+## moves the "static, named tile" the assertions below are built on and corrupted an earlier draft of
+## this fixture (measured: a melee stand-in closed enough distance in 0.3s to occasionally overtake the
+## boat as nearest even under the CORRECT rule, and the check passed by accident). Placed within its
+## own 5.5-tile reach of the bison, a ranged soldier stops and shoots instead of walking, so it never
+## moves at all — the fixed point the rest of this test needs.
 func _in_transit_is_hit_but_cannot_hit(t) -> void:
-	var army := _army_of([Rules.CELL_RANGED])
+	var army := _army_of([Rules.CELL_RANGED, Rules.CELL_RANGED])
 	var b := _battle_of(_port(), army, [
-		_spawn(ARENA_W, Rules.CROW, 3, 4),    # 3.0 tiles from the boat's water, inside a crow's 4.5 reach
-		_spawn(ARENA_W, Rules.BISON, 5, 5),   # inside detect 6, so only the movement rule keeps it home
+		_spawn(ARENA_W, Rules.CROW, 3, 2),    # ~3.0 tiles from the boat 0.3s into a 1.33s crossing
+		_spawn(ARENA_W, Rules.BISON, 7, 4),   # sees BOTH the boat and the ashore soldier below
 	], 999.0)
+	var ashore_target := Vector2(7, 9)   # 5.0 tiles from the bison, inside its detect 6 and the
+	                                      # ranged soldier's own 5.5-tile reach of the bison — it stops
+	_ashore(b, 1, ashore_target)
+	var bison_start: Vector2 = b.enemy_pos[1]
 	b.load_soldier(Rules.CELL_RANGED)
-	b.launch(0)
+	var landing := int(_PORT_LANDING.y) * ARENA_W + int(_PORT_LANDING.x)
+	b.launch(0, landing)
 	for _f in 3:
 		b.begin_frame()
 		b.step(0.1)
@@ -379,7 +412,12 @@ func _in_transit_is_hit_but_cannot_hit(t) -> void:
 	t.eq(army.hp[0], Rules.hp_of(Rules.CELL_RANGED) - Rules.damage_of(Rules.CROW),
 			"까마귀가 배 위의 병사를 실제로 쐈다")
 	t.eq(b.enemy_hp[0], Rules.hp_of(Rules.CROW), "배 위의 병사는 사거리 안이어도 못 때린다")
-	t.eq(b.enemy_pos[1], Vector2(5, 5), "들소는 배를 쫓아 물로 걸어가지 않는다 — 이동 타겟팅에서 빠진다")
+	t.ok(b.enemy_pos[1].distance_to(bison_start) > 0.1,
+			"그리고 들소는 실제로 움직였다 (%.2f칸) — 배를 쫓다 얼어붙은 게 아니라는 증거다"
+			% b.enemy_pos[1].distance_to(bison_start))
+	t.ok(b.enemy_pos[1].distance_to(ashore_target) < ashore_target.distance_to(bison_start) - 0.3,
+			"움직인 방향이 상륙한 병사 쪽이다 (남은 거리 %.2f칸, 시작 5.00칸) — 배 쪽으로 얼어붙지 않고 이름 붙은 그 칸을 향해 실제로 걸었다는 뜻이다"
+			% b.enemy_pos[1].distance_to(ashore_target))
 
 
 # -- fixtures --------------------------------------------------------------------------------------
@@ -443,10 +481,19 @@ func _lane() -> Array:
 	return rows
 
 
-## The open arena with one dock at (2,5). The boat sails from border water (0,5).
+## The open arena with a bay on its west side: rows 3-7 are open water for the first six columns, one
+## harbour tile sitting inside it at (2,5). The coast begins at column 6 — `_PORT_HARBOUR` (2,5) and
+## `_PORT_LANDING` (6,5) are 4.0 tiles apart across open water the whole way, which is what makes
+## `boat.dist` / `boat.speed` (never `Rules.CROSSING` — that constant is gone) the right way to time
+## a crossing here.
+const _PORT_HARBOUR := Vector2(2, 5)
+const _PORT_LANDING := Vector2(6, 5)
+
 func _port() -> Array:
 	var rows := _open(ARENA_W, ARENA_H)
-	rows[5] = "~.D" + ".".repeat(ARENA_W - 4) + "~"
+	for y in range(3, 8):
+		rows[y] = "~~~~~~" + ".".repeat(ARENA_W - 7) + "~"
+	rows[5] = "~~H~~~" + ".".repeat(ARENA_W - 7) + "~"
 	return rows
 
 

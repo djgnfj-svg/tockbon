@@ -142,9 +142,51 @@ const BEAK_RANGE := 1.0
 
 
 # --- The boats -----------------------------------------------------------------------------------
-## Two boats, five soldiers each, and a crossing that is constant in both directions — so a berth
-## frees 2 * CROSSING after launch. Constant means the far dock is free, which is deliberate and is
-## the first thing to change if "which dock" turns out not to be a decision.
-const FLEET := 2
-const CAP := 5
-const CROSSING := 3.0
+## `boat-and-landing` replaces the two-boat, fixed-crossing fleet with per-boat capacity and speed,
+## since the coastline is open now and a crossing's length is a property of the (harbour, landing)
+## pair, not a constant. Columns: name, capacity, speed (tiles/s).
+##
+## The inequality is an acceptance condition, not a comment: round-trip throughput is
+## `cap * speed / (2 * distance)`, so the fast boat must LOSE on throughput and win on latency or it
+## dominates every send. `cap_fast * speed_fast < cap_big * speed_big` -> `2 * 5.0 = 10 < 4 * 3.0 = 12`.
+## Exactly 2x would be a tie ("빠른 배가 두 배 빠르다" could not be used) — the margin here is 20%.
+## Distance cancels out of that comparison, so plural harbours do not touch it.
+const BOATS := [
+	["BIG", 4, 3.0],
+	["FAST", 2, 5.0],
+]
+
+const _BOAT_COL_NAME := 0
+const _BOAT_COL_CAP := 1
+const _BOAT_COL_SPEED := 2
+
+
+static func boat_count() -> int:
+	return BOATS.size()
+
+
+static func boat_name_of(boat: int) -> String:
+	return str(BOATS[boat][_BOAT_COL_NAME])
+
+
+static func cap_of(boat: int) -> int:
+	return int(BOATS[boat][_BOAT_COL_CAP])
+
+
+static func boat_speed_of(boat: int) -> float:
+	return float(BOATS[boat][_BOAT_COL_SPEED])
+
+
+# --- The coastline ---------------------------------------------------------------------------------
+## `grid.gd`'s straight-line sampler, in tiles. This is a rule constant and not a `Grid` constant
+## and not a `look.gd` one: a coarser step ACCEPTS targets a finer one refuses (measured — widening
+## it to 1.0 tile lets a boat sail through a wall the 0.05 step catches), so it changes what happens
+## rather than how it is drawn. `net_coast` pins both directions.
+const LINE_SAMPLE_STEP := 0.05
+
+## Samples within this Chebyshev distance of the LANDING end are exempt from the water test, or a
+## shallow approach rounds onto the beach tile next door to its target and refuses a legitimate
+## landing — measured on a draft of island 1, where it refused 20 of 36 beaches for grazing the sand
+## beside them. Also a rule constant for the same reason as the step above: 0 vs 1 changes which
+## tiles a boat may be sent to.
+const LINE_SAMPLE_EXEMPT_CHEBYSHEV := 1

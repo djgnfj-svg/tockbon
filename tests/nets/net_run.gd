@@ -40,11 +40,11 @@ func _starting_state(t) -> void:
 	# Identity, not equality of contents. A `begin_island` that handed the fight a fresh roster of the
 	# same size would satisfy every count above and this is the only line that sees it.
 	t.ok(b.army == r.army, "전투는 런의 로스터 객체 그 자체를 쓴다 — 복사본이 아니다")
-	t.eq(b.grid.w, 32, "격자 폭은 32")
-	t.eq(b.grid.h, 18, "격자 높이는 18")
+	t.eq(b.grid.w, 48, "격자 폭은 48")
+	t.eq(b.grid.h, 32, "격자 높이는 32")
 	t.eq(b.enemies_left(), Islands.spawns_of(0).size(), "첫 섬의 적 수는 스폰 표와 같다")
 	t.eq(b.time_limit, Islands.time_limit_of(0), "제한 시간은 islands.gd 가 준 값이다")
-	t.eq(b.dock_count(), 2, "첫 섬의 부두는 둘이다")
+	t.eq(b.harbour_count(), 3, "첫 섬의 항구는 셋이다")
 
 
 # -- the one that the plan names a mutation for ------------------------------------------------------

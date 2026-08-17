@@ -244,6 +244,17 @@ You pick **one of the few docks the island owns, not any point on the whole shor
 - **Pulling works at dock granularity.** "The other side" becomes **a different dock** instead of a vague
   direction
 
+> ### ⚠⚠ The user reversed this decision themselves (user, 2026-08-17)
+>
+> **The quote above is from 2026-08-17 and this one is later**: *"완전히 막혀있는 데가 아니면 어디든지 보낼
+> 수 있게"* (*let me send them anywhere that isn't completely blocked*).
+> ⇒ **The whole unblocked coastline is a landing point. The one-of-N dock rule is dead.**
+>
+> **Play refuted the first argument (it reads)** — the docks were visible and **read as buttons**:
+> *"그냥 버튼 여기 누르세요 이런 느낌"*. The other two survive and **blocked (cliff) coastline takes them
+> over.** ⇒ The rules and the arithmetic live in [the boat and the landing](boat-invasion.md); the rejected
+> branch is in [open coastline over fixed docks](../decisions/open-coastline-over-fixed-docks.md).
+
 ⚠ **And "a soldier type that ignores docks" is itself a build.** It overlaps naturally with the flying
 type — ignore elevation *and* ignore docks and that one type opens the whole terrain. **Which is why what
 that type costs matters** (an undecided item in the "Terrain" section).
@@ -856,6 +867,17 @@ not being a decision and confirm that firsthand — one of the two must be chose
 *"Stay 2D, and let's develop with no drop for now. No tiers for now. No tiers, but holes you fall into —
 just that much."*
 
+> ### ⚠⚠ "No tiers" was reversed by the user (user, 2026-08-17)
+>
+> **The quote above is from 2026-08-17 and this one is later**: *"격자로 보니까 살짝 이 층이 있어도 될 거
+> 같아"* (*seeing it on a grid, I think a bit of elevation would be fine*).
+> ⇒ **A second level (cliffs) comes in.** The reason is the boat, not the terrain — **cliff coastline is what
+> "blocked" means**, and it is the only tool that attaches a cost to a landing point once the whole shoreline
+> is open.
+> ⚠ **"Stay 2D" was NOT reversed.** Elevation happens inside 2D — the Brood War / AoE2 grounds below stand.
+> ⇒ **The tier sections below are now current rules, not "later".** Details in
+> [the boat and the landing](boat-invasion.md).
+
 | | First slice | Later |
 |---|---|---|
 | Tiers / elevation | **None.** Everything is one level | The sections below come back intact |
@@ -1138,19 +1160,43 @@ of them was missing from the list entirely.** They are now written separately:
     list.** If the latter, the picture is the 1–5 hotkeys filling up over the course of a run
 14. **The recovery path.** HP carries across islands, and with no recovery a run is a one-way decline.
     **The chest island doubling as it is the cheapest** — the name "resting square" only becomes true then
-15. **The boat does not read as a rule on screen** (user, after the first play). *"The boat feels like a
-    side-thing. It isn't needed, and it only makes the game harder."* · *"You should float a boat and it
-    goes to the nearest dock — instead it feels like 'press this button here'."*
-    ⚠ **The whole section "the boat is a rule, not a picture" hangs on this one line** — what was promoted
-    to a rule read on screen as a dock-click button. **Look again once the presentation is in.**
-16. **The sea is cramped and the terrain is one lonely shape** (user, after the first play). *"The terrain
-    could stretch out long, but it feels like a quiz with one thing plonked in it."* This is the 32×18 grid
-    and the level design of the three islands.
+15. ~~**The boat does not read as a rule on screen**~~ — **closed (user, played it 2026-08-18).**
+    The original complaint was *"The boat feels like a side-thing. It isn't needed, and it only makes the
+    game harder."* · *"You should float a boat and it goes to the nearest dock — instead it feels like
+    'press this button here'."*
+    ⇒ **[The boat and the landing](boat-invasion.md) carried this item in full and was built. It replaces
+    the 「선착장」 section above as well as 「지형」's "no elevation in the first slice"** (the user decided
+    on a fully landable coastline and a second level).
+    ⇒ **The user launched it again and "side dish" did not come back.** What came instead:
+    *"참 애매하네. 그래도 그동안 중에서 제일 평범하네."* — *"it's really ambiguous. Still, the most
+    ordinary of them so far."*
+    ⚠ **This item closing and the game being fun are two different sentences.** "Ambiguous" is still
+    open, and it is carried by the new item below, not by this number.
+16. ~~**The sea is cramped and the terrain is one lonely shape**~~ — **decided: a 48×32 grid** (user,
+    *"양쪽 다 키워봐"* — *grow both sides*). The original complaint was *"The terrain could stretch out long,
+    but it feels like a quiz with one thing plonked in it."*
+    ⇒ **The level design of the three islands is carried by [the boat and the landing](boat-invasion.md)** —
+    the current three are 32×18-only, so every coordinate in them dies.
 17. **2D or 3D — the user reopened it** (after the first play). *"I'm wondering whether to just do 3D."*
     ⚠ The terrain section decided **stay 2D**, and its grounds (Brood War and AoE2 both read height from
     2D sprites; going 3D kills the "the body is a line drawn by code" decision and the whole drawing
     harness) are untouched. **This is reopened, not overturned.** Judge it on the same screen once the
     presentation lands.
+    ⇒ **2026-08-18: the user saw the 48×32 grid and the camera, and did not bring 3D up.**
+    ⚠ **Not raised is not closed.** They judged nothing here; they said something else.
+
+18. ⚠⚠ **"Ambiguous" — the one large item still open** (user, after playing 2026-08-18).
+    *"참 애매하네. 그래도 그동안 중에서 제일 평범하네."* — *"it's really ambiguous. Still, the most
+    ordinary of them so far."*
+    **This is what is left once 15 closed.** It only means something read against the two verdicts before it:
+    - the first game, eight months — **not one moment was fun**
+    - the second game — *"it just isn't fun… I don't know why I'm doing this"*
+    - **this one — *"the most ordinary of them so far"***
+    ⇒ **"Ordinary" is the highest mark this repo has ever received, and it is still not fun.**
+    ⚠ **Proposing a new system here is the failure this repo has circled six times** — see
+    [what two dead games left behind](../lessons-from-two-dead-games.md): *when a complaint is one
+    sentence, first ask whether a rule can answer it.*
+    **Next session's first act is turning "ambiguous" into a number, not choosing what to add.**
 
 ---
 

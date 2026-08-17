@@ -71,7 +71,8 @@ func _reset() -> void:
 ## fight on an island the army has already left.
 ##
 ## The `Grid` is new every time. `load_rows` does clear reservations, but a grid built here can never
-## be one another `Battle` still holds unit ids inside, and that costs 576 tiles once per island.
+## be one another `Battle` still holds unit ids inside, and that costs 1536 tiles once per island
+## (`boat-and-landing`'s 48 x 32 grid, up from 576).
 func begin_island() -> Battle:
 	if _state != State.BATTLE:
 		return null

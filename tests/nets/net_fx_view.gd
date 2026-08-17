@@ -53,10 +53,13 @@ class FieldSpy extends FieldView:
 	var tiles_on := false
 	var tiles := []
 	var docks := []
+	var hulls := []
+	var cliff_faces := []
 	var bodies := []
 	var beaks := []
 	var hps := []
-	var boats_seen := []
+	var overlays := []
+	var routes := []
 	var shots := []
 	var halos := []
 	var rings := []
@@ -67,10 +70,13 @@ class FieldSpy extends FieldView:
 		seq = 0
 		tiles.clear()
 		docks.clear()
+		hulls.clear()
+		cliff_faces.clear()
 		bodies.clear()
 		beaks.clear()
 		hps.clear()
-		boats_seen.clear()
+		overlays.clear()
+		routes.clear()
 		shots.clear()
 		halos.clear()
 		rings.clear()
@@ -104,8 +110,20 @@ class FieldSpy extends FieldView:
 			"fill_colour": fill_colour, "seq": seq})
 		seq += 1
 
-	func _paint_boat(rect: Rect2, colour: Color) -> void:
-		boats_seen.append({"rect": rect, "colour": colour, "seq": seq})
+	func _paint_hull(rect: Rect2, colour: Color, outline_width: float) -> void:
+		hulls.append({"rect": rect, "colour": colour, "width": outline_width, "seq": seq})
+		seq += 1
+
+	func _paint_cliff_face(points: PackedVector2Array, colour: Color, width: float) -> void:
+		cliff_faces.append({"points": points, "colour": colour, "width": width, "seq": seq})
+		seq += 1
+
+	func _paint_overlay(rects: Array, colour: Color) -> void:
+		overlays.append({"rects": rects, "colour": colour, "seq": seq})
+		seq += 1
+
+	func _paint_route(from: Vector2, to: Vector2, colour: Color, width: float) -> void:
+		routes.append({"from": from, "to": to, "colour": colour, "width": width, "seq": seq})
 		seq += 1
 
 	func _paint_shot(from: Vector2, to: Vector2, colour: Color, width: float) -> void:
@@ -135,6 +153,9 @@ class FieldSpy extends FieldView:
 
 func run(t) -> void:
 	await _the_engine_really_drives_it(t)
+	await _transit_body_is_drawn_and_can_flash(t)
+	await _hull_waits_and_blinks(t)
+	await _destination_marker_both_legs(t)
 	await _contact(t)
 	await _tracer(t)
 	await _the_reaction_waits_for_the_bullet(t)
@@ -221,11 +242,224 @@ func _the_engine_really_drives_it(t) -> void:
 	fv.tiles_on = true
 	fv._process(0.001)
 	await t.pump_frames(2)
-	var want_tiles := (Look.GRID_W + 2 * Look.WATER_MARGIN_TILES) \
-		* (Look.GRID_H + 2 * Look.WATER_MARGIN_TILES)
-	t.eq(fv.tiles.size(), want_tiles,
-			"지형을 물 여백 한 칸까지 %d칸 그렸다 — 흔들려도 가장자리에 맨바닥이 안 드러난다" % want_tiles)
+	# The literal, not `(Look.GRID_W + 2*margin) * (Look.GRID_H + 2*margin)` — a check whose bound
+	# comes from the constants it is checking shrinks with them. 58 x 42 = 2436 (48+10, 32+10).
+	t.eq(fv.tiles.size(), 2436,
+			"지형을 물 여백까지 2436칸 그렸다 — 줌 아웃해도 가장자리에 맨바닥이 안 드러난다")
 	fv.tiles_on = false
+	_drop(t, fv)
+
+
+# -- P4: a soldier at sea is finally drawn, and can finally flash -----------------------------------
+
+## `boat-and-landing` stage 5, P4. `battle.is_hittable` already returned true for a TRANSIT soldier
+## and the ATTACK tracer already flew to the boat — the rule existed with nothing on screen for it to
+## land on. This proves the body now exists to hit: two bodies while boarded (not one), the ally
+## coloured one sitting inside its OWN boat's hull rectangle, and — once a crow actually lands a
+## hit — the white mix and the halo that item 3 has always produced for anyone else `is_hittable`.
+func _transit_body_is_drawn_and_can_flash(t) -> void:
+	# TWO passengers, not one — a single passenger on a cap-4 hull still sits in ITS deck slot rather
+	# than the hull's centre, so a fallback bug (halo reading the boat's raw `pos` instead of the
+	# shared `transit_pos` slot) can hide behind one passenger without ever being exercised the way a
+	# real 4-slot hull is. Measured: with one passenger, swapping the halo's position source for
+	# `battle.soldier_pos[ti]` stayed green; with two, it moves the halo 46.5 px off its own body.
+	var army := _army_of([Rules.CELL_RANGED, Rules.CELL_RANGED])
+	# 3.0 tiles from the harbour's own water, inside a crow's 4.5-tile reach — the same distance
+	# `net_battle`'s TRANSIT fixture already measured for "the crow can hit a boat this far out".
+	var b := _battle_of(_port(), army, [_spawn(Rules.CROW, 2, 2)], 999.0)
+	var fv := _view_of(t, b, army)
+
+	b.load_soldier(Rules.CELL_RANGED)
+	b.load_soldier(Rules.CELL_RANGED)
+	var landing := int(_PORT_LANDING.y) * ARENA_W + int(_PORT_LANDING.x)
+	t.ok(b.launch(0, landing), "배를 띄웠다 (자가 점검)")
+
+	await _frame(t, b, fv, TICK_STILL, 0.001)
+	t.eq(b.soldier_state[0], Battle.SoldierState.TRANSIT, "병사 둘 다 아직 배 위에 있다 (자가 점검)")
+	t.eq(b.soldier_state[1], Battle.SoldierState.TRANSIT, "(자가 점검, 두 번째 병사)")
+	t.eq(fv.bodies.size(), 3, "적 하나 + 배 위의 병사 둘, 몸 셋을 그렸다 — 예전엔 하나(적)뿐이었다")
+	# 층 6(배)이 층 7(적)보다 먼저 그려지므로 배 위의 병사 둘이 인덱스 0·1이다.
+	var body0 := _at(fv.bodies, 0)
+	var body1 := _at(fv.bodies, 1)
+	t.eq(_col(body0, "colour"), Look.body_colour_of(false), "1번 병사도 자기 편 색이다")
+	t.eq(_col(body1, "colour"), Look.body_colour_of(false), "2번 병사도 자기 편 색이다")
+	var hull_w := 124.0   # boat 0's own width, LITERAL — see net_shell's own note on this shape
+	var hull_rect := Rect2(
+		Look.tile_point_px(Vector2(b.boats[0]["pos"])) - Vector2(hull_w, Look.BOAT_HULL_H_PX) * 0.5,
+		Vector2(hull_w, Look.BOAT_HULL_H_PX))
+	t.ok(hull_rect.has_point(_pt(body0, "centre")) and hull_rect.has_point(_pt(body1, "centre")),
+			"둘 다 그 배 자신의 선체 사각형 안에서 그려졌다 — 갑판 위다")
+	t.eq(fv.hps.size(), 3, "몸마다 HP 막대도 하나씩이다 — 배 위에서도 막대가 있다")
+
+	# F: the two passengers must not be drawn on top of each other. `_deck_slots` spreads `cap`
+	# points across the hull's width; a mutation collapsing every slot to the SAME point (`step *
+	# 0.5` instead of `step * (k + 0.5)`) stayed green under every check that only asked "is it
+	# somewhere inside the hull rect" — two stacked bodies satisfy that just as well as two spread
+	# ones. A body diameter is the floor: closer than that and the two outlines would overlap.
+	var one_diameter := Look.body_radius_of(Rules.CELL_RANGED) * 2.0
+	t.ok(_pt(body0, "centre").distance_to(_pt(body1, "centre")) >= one_diameter,
+		"두 병사의 갑판 자리가 적어도 몸 지름만큼 떨어져 있다 (%.1f px, 지름 %.1f px)"
+		% [_pt(body0, "centre").distance_to(_pt(body1, "centre")), one_diameter])
+
+	# Real sim time now, until the crow actually lands a hit on ONE of the boarded soldiers.
+	var before_hp0 := army.hp[0]
+	var before_hp1 := army.hp[1]
+	var hit_id := -1
+	for _f in 60:
+		await _frame(t, b, fv, 0.05, 0.05)
+		if army.hp[0] < before_hp0:
+			hit_id = 0
+			break
+		if army.hp[1] < before_hp1:
+			hit_id = 1
+			break
+	t.ok(hit_id >= 0, "까마귀가 실제로 배 위의 한 병사를 맞췄다 (자가 점검)")
+
+	# The reaction is delayed by SHOT_SEC (already proven elsewhere in this file) — a few more frames
+	# clear it, and this asks two things at once: does the white mix and the halo exist AT ALL for a
+	# body that, before this round, was never drawn to receive them (G's headline), AND does the halo
+	# land where THAT soldier's own body is, not merely somewhere on the boat (G's actual gap — the
+	# halo's fallback path used to read `battle.soldier_pos[ti]`, the boat's shared raw position,
+	# while the body read the deck slot; the two only ever agreed by coincidence in a one-passenger
+	# fixture where the slot happened to be close to the boat's own point).
+	await _frame(t, b, fv, 0.001, Look.SHOT_SEC + 0.02)
+	var flash_col := Look.body_colour_of(false).lerp(Look.COL_FLASH, Look.HIT_FLASH_STRENGTH)
+	var hit_body := {}
+	for raw: Dictionary in fv.bodies:
+		if raw["colour"] == flash_col:
+			hit_body = raw
+	t.ok(not hit_body.is_empty(),
+		"맞은 뒤 그 몸에 흰색이 실제로 섞였다 — 그릴 몸이 없던 예전에는 있을 수 없던 일이다")
+	t.eq(fv.halos.size(), 1, "헤일로가 정확히 하나 떴다 — 안 맞은 병사에는 안 뜬다")
+	t.ok(not hit_body.is_empty() and fv.halos.size() > 0
+			and _pt(hit_body, "centre").distance_to(_pt(_at(fv.halos, 0), "centre")) < NEAR_PX,
+		"그리고 그 헤일로가 맞은 그 몸의 정확한 자리에 떴다 — 배의 대표 위치가 아니라 그 병사의 갑판 자리다")
+	_drop(t, fv)
+
+
+## `Color` has no `distance_to` — Euclidean distance over r/g/b, alpha ignored (every colour here is
+## opaque anyway).
+func _col_dist(a: Color, b: Color) -> float:
+	return Vector3(a.r - b.r, a.g - b.g, a.b - b.b).length()
+
+
+## The colour of the hull whose width matches `want_w` (boat 0's own, cap 4), or `Look.COL_HULL_WAIT`
+## itself if none is found — a sentinel no rest-state hull could ever equal, so a missing capture
+## reddens the check that wanted it rather than passing by accident.
+func _hull_colour(fv: FieldSpy, want_w: float) -> Color:
+	for raw: Dictionary in fv.hulls:
+		if absf((raw["rect"] as Rect2).size.x - want_w) < 0.01:
+			return raw["colour"]
+	return Look.COL_HULL_WAIT
+
+
+## P7 (`boat-and-landing` stage 5). `boat["t"]` is poked directly to force "arrived, still OUTBOUND"
+## — the exact shape `_try_unload` leaves a boat in when the shore has fewer free tiles than cargo.
+## `net_boat._boat_waits_for_shore` already proves the SIM half; this only asks whether the VIEW
+## paints it, and paints it as a BLINK — bound at both ends, or a static tint would pass this too.
+func _hull_waits_and_blinks(t) -> void:
+	var army := _army_of([Rules.CELL_MELEE])
+	var b := _battle_of(_port(), army, [_spawn(Rules.BISON, 20, 9)], 999.0)
+	var fv := _view_of(t, b, army)
+	b.load_soldier(Rules.CELL_MELEE)
+	var landing := int(_PORT_LANDING.y) * ARENA_W + int(_PORT_LANDING.x)
+	t.ok(b.launch(0, landing), "배를 띄웠다 (자가 점검)")
+	# The sim is frozen from here (`sim_dt` 0.0 in every `_frame` call below) — with the coast wide
+	# open in `_port()`, a real `_phase_landings` would unload this boat for real on the very next
+	# `step` and silently resolve the forced state before the view ever saw "waiting" at all.
+	var boat: Dictionary = b.boats[0]
+	boat["t"] = float(boat["dist"]) / float(boat["speed"])
+	b.boats[0] = boat
+
+	var hull_w := 124.0   # boat 0's own width, LITERAL — see `net_shell`'s own note on this shape
+	# A tolerance, not `==`: the clock has already moved 0.001s off zero, so the blend is a hair
+	# above 0.0 rather than exactly it — the floor this row measures is "still near COL_BOAT", not
+	# "bit-identical to it".
+	await _frame(t, b, fv, 0.0, 0.001)
+	t.ok(_col_dist(_hull_colour(fv, hull_w), Look.COL_BOAT) < 0.01,
+		"깜빡임 시계가 막 시작해 아직 기본색에 가깝다 (바닥)")
+
+	# ⚠ LITERAL seconds from here, never a fraction of `Look.HULL_WAIT_BLINK_SEC` — a check that steps
+	# "a quarter of whatever the constant is" cannot catch the constant itself moving (measured:
+	# `HULL_WAIT_BLINK_SEC` 0.5 -> 0.02 stayed green under the derived form). At the real 0.5s period,
+	# 0.25s in is the PEAK (`cos(pi) = -1`) and 0.5s in is back at rest (`cos(2*pi) = 1`); at 0.02s
+	# those two checkpoints land many cycles later, at an unpredictable phase.
+	await _frame(t, b, fv, 0.0, 0.249)   # cumulative ~0.25s
+	var peak := _hull_colour(fv, hull_w)
+	t.ok(_col_dist(peak, Look.COL_HULL_WAIT) < 0.05,
+		"0.25초(리터럴) 뒤엔 대기색에 거의 닿아 있다 — 주기가 진짜 0.5초일 때만 맞는 위상이다 (%.3f 차)"
+		% _col_dist(peak, Look.COL_HULL_WAIT))
+	t.ok(_col_dist(peak, Look.COL_BOAT) > 0.3, "그리고 기본색과는 확실히 멀다 (%.3f 차)" % _col_dist(peak, Look.COL_BOAT))
+
+	await _frame(t, b, fv, 0.0, 0.25)   # cumulative ~0.5s
+	var full := _hull_colour(fv, hull_w)
+	t.ok(_col_dist(full, Look.COL_BOAT) < 0.05,
+		"0.5초(리터럴) 뒤엔 다시 기본색 가까이 돌아온다 — 한 바퀴를 정확히 돌았다, 고정 틴트가 아니다")
+	_drop(t, fv)
+
+
+## P5 / P6 (`boat-and-landing` stage 5). The whole crossing is on screen, both legs: a ring on the
+## target tile and a route line from the hull to it while OUTBOUND, and — without which the fleet
+## TELEPORTS home and 4.3's relocation rule never reaches the screen — the SAME route line pointing
+## at the new harbour while RETURNING, no ring, no passengers.
+##
+## `boat["phase"]`/`["home"]`/`["soldiers"]` are poked directly into the RETURNING shape
+## `_phase_landings` itself produces on a real arrival — `net_boat` already proves the sim transition;
+## this only asks whether the view reads the field it changed.
+func _destination_marker_both_legs(t) -> void:
+	var army := _army_of([Rules.CELL_MELEE])
+	var b := _battle_of(_port(), army, [_spawn(Rules.BISON, 20, 9)], 999.0)
+	var fv := _view_of(t, b, army)
+	b.load_soldier(Rules.CELL_MELEE)
+	var landing := int(_PORT_LANDING.y) * ARENA_W + int(_PORT_LANDING.x)
+	t.ok(b.launch(0, landing), "배를 띄웠다 (자가 점검)")
+
+	await _frame(t, b, fv, TICK_STILL, 0.001)
+	var target_px := Look.tile_point_px(b.grid.tile_point(landing))
+	var ring_found := false
+	for raw: Dictionary in fv.rings:
+		if _pt(raw, "centre").distance_to(target_px) <= NEAR_PX:
+			ring_found = true
+	t.ok(ring_found, "가는 중에는 목표 칸에 도착 링이 떠 있다")
+	t.eq(fv.routes.size(), 1, "항로 선도 하나 그렸다")
+	t.eq(_pt(_at(fv.routes, 0), "to"), target_px, "그 선이 목표 칸을 향한다")
+	t.eq(_pt(_at(fv.routes, 0), "from"), Look.tile_point_px(Vector2(b.boats[0]["pos"])),
+		"그리고 배 자신의 자리에서 출발한다 (from 도 잰다 — to 만 재면 collapsed line 이 안 잡힌다)")
+
+	# `sim_dt` 0.0 from here — `to`/`dist`/`t` still hold the OUTBOUND leg's own values (the view
+	# never reads them for a RETURNING boat, only `home`), so a real `step` would misread `arrived`
+	# against them and could remove the boat from `battle.boats` before the view ever saw it.
+	# `pos` is also moved to the landing tile — the real position a RETURNING boat actually starts
+	# from (`_phase_landings` sets `boat["from"] = _point_of_tile(target)`). `_port()` has only ONE
+	# harbour, so leaving `pos` where it was (still near the harbour, from the tiny `t` above) would
+	# make "home" and "here" nearly the same point and the from/to-apart check below couldn't tell a
+	# real line from a collapsed one — the fixture's own fault, not a control worth keeping.
+	var home_hb := b.grid.start_harbour
+	var boat: Dictionary = b.boats[0]
+	boat["phase"] = Battle.Phase.RETURNING
+	boat["soldiers"] = []
+	boat["home"] = home_hb
+	boat["pos"] = Vector2(_PORT_LANDING)
+	b.boats[0] = boat
+
+	await _frame(t, b, fv, 0.0, 0.001)
+	var home_px := Look.tile_point_px(b.grid.tile_point(int(b.grid.harbour_tiles[home_hb])))
+	var ring_gone := true
+	for raw: Dictionary in fv.rings:
+		if _pt(raw, "centre").distance_to(target_px) <= NEAR_PX:
+			ring_gone = false
+	t.ok(ring_gone, "돌아가는 중에는 도착 링이 사라진다 — 더는 노리는 칸이 없다")
+	t.eq(fv.routes.size(), 1, "항로 선은 여전히 하나다")
+	t.eq(_pt(_at(fv.routes, 0), "to"), home_px, "이제는 새 항구를 향한다 — 배가 순간이동하지 않는다")
+	# ⚠ `to` alone passes a line collapsed to a point (`_paint_route(anchor, home_px)` mutated to
+	# `_paint_route(home_px, home_px)`) — measured green under a check that only read `to`. `from`
+	# has to be the boat's OWN position (still near the landing, nowhere near `home_px` in this
+	# fixture), and the two ends have to actually be apart.
+	t.eq(_pt(_at(fv.routes, 0), "from"), Look.tile_point_px(Vector2(b.boats[0]["pos"])),
+		"그리고 여전히 배 자신의 자리에서 출발한다 — from 이 조용히 to 로 무너지지 않았다")
+	t.ok(_pt(_at(fv.routes, 0), "from").distance_to(_pt(_at(fv.routes, 0), "to")) > 1.0,
+		"두 끝점이 실제로 떨어져 있다 (자가 점검 아님 — from 이 무너지면 여기서 문다)")
+	t.eq(fv.bodies.size(), 1, "화물칸이 비었으니 배 위의 몸이 없다 — 적 하나만 남는다")
 	_drop(t, fv)
 
 
@@ -476,7 +710,9 @@ func _contact(t) -> void:
 	fv.setup(b, army, _open())
 	t.eq(fv._fx.size(), 0, "setup 이 스쳐 가는 서랍을 비웠다")
 	t.eq(fv._body.size(), 0, "setup 이 몸 서랍도 비웠다")
-	t.eq(fv.position, Vector2.ZERO, "setup 이 흔들림 오프셋도 0으로 돌렸다")
+	# `position` now also carries the camera's own pan (`boat-and-landing`), so only the SHAKE
+	# component of it is asserted here — `_shake_component` subtracts the camera's own contribution.
+	t.eq(_shake_component(fv), Vector2.ZERO, "setup 이 흔들림 오프셋도 0으로 돌렸다")
 	await _frame(t, b, fv, TICK_STILL, 0.001)
 	t.eq(fv.rings.size(), 0, "다시 연 첫 프레임에 링 호출이 0이다")
 	t.eq(fv.halos.size(), 0, "헤일로 호출도 0이다")
@@ -706,7 +942,8 @@ func _landing_rings(t) -> void:
 	var fv := _view_of(t, b, army)
 	b.load_soldier(Rules.CELL_MELEE)
 	b.load_soldier(Rules.CELL_MELEE)
-	b.launch(0)
+	var landing := int(_PORT_LANDING.y) * ARENA_W + int(_PORT_LANDING.x)
+	b.launch(0, landing)
 	var sailed := 0
 	while sailed < 80 and b.ashore_ids().size() < 2:
 		sailed += 1
@@ -781,11 +1018,17 @@ func _shake_peak(t, stype: int, spot: Vector2, etype: int, espot: Vector2) -> Di
 	var peak := 0.0
 	for _f in 20:
 		await _frame(t, b, fv, TICK_STILL, Look.SHAKE_SEC / 20.0)
-		peak = maxf(peak, fv.position.length())
+		peak = maxf(peak, _shake_component(fv).length())
 	await _frame(t, b, fv, TICK_STILL, 0.02)
-	var out := {"peak": peak, "rest": fv.position}
+	var out := {"peak": peak, "rest": _shake_component(fv)}
 	_drop(t, fv)
 	return out
+
+
+## `position` composes `-cam_px * zoom + shake_offset()` now (`boat-and-landing`'s camera), so
+## isolating the shake means subtracting the camera's own (non-shake) contribution back out.
+func _shake_component(fv: FieldSpy) -> Vector2:
+	return fv.position + fv.cam_px * fv.zoom
 
 
 # -- item 12: the gait --------------------------------------------------------------------------------
@@ -1043,10 +1286,15 @@ func _open() -> Array:
 	return rows
 
 
-## The same arena with one dock at (2,5); the boat sails from the border water at (0,5).
+## The same arena with a bay: rows 3-7 water for the first six columns, land from column 6 on, one
+## harbour at (2,5). `_PORT_LANDING` (6,5) is the coast it can see straight across open water.
+const _PORT_LANDING := Vector2(6, 5)
+
 func _port() -> Array:
 	var rows := _open()
-	rows[5] = "~.D" + ".".repeat(ARENA_W - 4) + "~"
+	for y in range(3, 8):
+		rows[y] = "~~~~~~" + ".".repeat(ARENA_W - 7) + "~"
+	rows[5] = "~~H~~~" + ".".repeat(ARENA_W - 7) + "~"
 	return rows
 
 

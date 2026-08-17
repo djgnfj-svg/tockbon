@@ -29,6 +29,12 @@ enum Lose { NONE, TIMEOUT, WIPED }
 ## rule someone has to remember in `load_soldier`.
 enum SoldierState { RESERVE, LOADED, TRANSIT, ASHORE, DEAD }
 
+## Which leg of the round trip a boat at sea is on. OUTBOUND carries cargo toward `target`;
+## RETURNING is the empty hull sailing to its new harbour, `home`. There is no third state — a boat
+## that has arrived but cannot unload is OUTBOUND with `t` already past arrival (4.5 of
+## `boat-and-landing`).
+enum Phase { OUTBOUND, RETURNING }
+
 ## What happened inside one `step()`. **Three kinds and no more** — the view turns each into a
 ## picture and decides on its own how long and in what colour, because a duration in this file would
 ## be a rule that changes what happens. `combat-juice`, section "How an event crosses from sim to
@@ -43,10 +49,10 @@ enum Event { ATTACK, DEATH, LAND }
 ## symptom is a soldier walking through a bison with every check about reservation still green.
 const ENEMY_UID_BASE := 1 << 20
 
-## A flow field older than this is thrown away and rebuilt on the next request. The grid is 576
-## tiles, so one BFS is ~576 operations and twenty units at 2 Hz is ~23k operations a second: the
-## cache exists to stop the same field being rebuilt twenty times in one frame, not because the
-## engine could not afford it.
+## A flow field older than this is thrown away and rebuilt on the next request. The grid is 1536
+## tiles (`boat-and-landing`'s 48 x 32), so one BFS is ~1536 operations and twenty units at 2 Hz is
+## ~61k operations a second: the cache exists to stop the same field being rebuilt twenty times in
+## one frame, not because the engine could not afford it.
 const FIELD_TTL := 0.5
 
 ## Ceiling on tiles crossed in one `_walk` call. A unit at speed 6 with a 0.1 s frame moves 0.6
@@ -107,16 +113,22 @@ var _soldier_cd := PackedFloat32Array()
 var _soldier_goal: Array = []
 var _soldier_stale := PackedByteArray()
 
-# --- boats ---------------------------------------------------------------------------------------
-## Soldier ids loaded onto the boat that has not sailed yet. At most `Rules.CAP`.
-var pending := PackedInt32Array()
-## Seconds until each berth is free again. 0.0 means free now.
-var berth_free_in := PackedFloat32Array()
-## Boats at sea or waiting at a dock. Each is
-## `{soldiers, dock, dock_index, berth, t, from, to, pos}` with `from`/`to`/`pos` in tile units.
+# --- boats -----------------------------------------------------------------------------------------
+## Which harbour each boat is sitting at, indexed by boat (`Rules.boat_count()` of them). Meaningless
+## while a boat is in `boats` — see `pending` below for why there is no third "berth" state.
+var boat_at := PackedInt32Array()
+## Soldier ids loaded onto each boat that has not sailed yet — one `PackedInt32Array` per boat,
+## capped at `Rules.cap_of(boat)`.
+var pending: Array = []
+## Boats at sea. **A boat is busy IFF it is in here** — `boat-and-landing`, 4.2, deletes the old berth
+## timer outright rather than indexing it per boat: the return leg is now simulated and drawn, so a
+## timer running in parallel with it would be a second copy of the same fact, and two clocks drift.
+## Each entry is `{boat, phase, speed, from, to, dist, t, soldiers, target, home}`, with `from` / `to`
+## in tile units. `phase` is `Phase.OUTBOUND` (soldiers aboard, sailing to `target`) or
+## `Phase.RETURNING` (empty, sailing to harbour `home`). Waiting-to-unload is OUTBOUND with `t` past
+## arrival — there is no separate waiting state.
 var boats: Array = []
 
-var _dock_origin: Array = []              # dock_index -> the border water tile its boat sails from
 var _fields := {}                         # target tile -> PackedInt32Array
 var _field_age := {}                      # target tile -> seconds since it was built
 var _outcome := Outcome.RUNNING
@@ -140,10 +152,16 @@ func setup(grid: Grid, army: Army, spawns: Array, time_limit: float) -> void:
 	_fields = {}
 	_field_age = {}
 	boats = []
-	pending = PackedInt32Array()
-	berth_free_in = PackedFloat32Array()
-	berth_free_in.resize(Rules.FLEET)
-	berth_free_in.fill(0.0)
+	pending = []
+	for _b in Rules.boat_count():
+		pending.append(PackedInt32Array())
+	# Every boat starts at the same harbour — the one `grid.load_rows` derived as farthest from its
+	# own reachable coast (`boat-and-landing`, section 5), so the run opens with the fleet out at sea
+	# and the longest crossing it will ever face.
+	boat_at = PackedInt32Array()
+	boat_at.resize(Rules.boat_count())
+	if grid != null:
+		boat_at.fill(grid.start_harbour)
 
 	if grid == null or grid.w <= 0 or grid.h <= 0:
 		# Not swallowed: a battle on an unloaded grid has no tiles, so every unit would stand still
@@ -212,72 +230,98 @@ func setup(grid: Grid, army: Army, spawns: Array, time_limit: float) -> void:
 		soldier_pos.append(OFFMAP)
 		_soldier_goal.append(OFFMAP)
 
-	_dock_origin = []
-	for d in grid.dock_tiles.size():
-		_dock_origin.append(_border_water_near(int(grid.dock_tiles[d])))
 
-
-## Puts one soldier of `type_id` on the boat that has not sailed. **The highest-HP living soldier of
+## Puts one soldier of `type_id` on a boat that has not sailed. **The highest-HP living soldier of
 ## that type still in reserve** — `army.living_ids_of_type` is already sorted that way and breaks
 ## ties on the smaller id, so two runs from identical state board identically.
 ##
-## False when the boat is full or no such soldier exists. Loading is allowed while both boats are at
-## sea: the load goes out on whichever berth frees first, and only on a click.
-func load_soldier(type_id: int) -> bool:
+## **Which boat**: the lowest-index boat that is not at sea and still has room — the big boat first,
+## the fast boat once the big one is full or at sea. Returns that boat's index so the caller (the HUD)
+## can mark the right one, or **-1** when every boat is at sea or no such soldier exists. This is a
+## feel item and the user marked it temporary (`boat-and-landing`, 4.4) — it is a rule only because
+## per-boat capacity forces the question of who boards where.
+##
+## ⚠ **A boat at sea can no longer be loaded** — `boat-and-landing`, 4.4. With per-boat cargo there is
+## no queue for a load to join while every boat is out; a harbour drawn empty then means exactly one
+## thing: nothing to load, nothing to send.
+func load_soldier(type_id: int) -> int:
 	if army == null:
-		return false
-	if pending.size() >= Rules.CAP:
-		return false
+		return -1
+	var boat := -1
+	for b in Rules.boat_count():
+		if boat_busy(b):
+			continue
+		var here: PackedInt32Array = pending[b]
+		if here.size() >= Rules.cap_of(b):
+			continue
+		boat = b
+		break
+	if boat == -1:
+		return -1
 	for raw in army.living_ids_of_type(type_id):
 		var i := int(raw)
 		if soldier_state[i] != SoldierState.RESERVE:
 			continue
 		soldier_state[i] = SoldierState.LOADED
-		pending.append(i)
-		return true
+		var loaded: PackedInt32Array = pending[boat]
+		loaded.append(i)
+		pending[boat] = loaded
+		return boat
+	return -1
+
+
+## True while `boat` is at sea (outbound with cargo, or returning empty) — the state that makes it
+## unloadable and undraggable. There is no separate berth timer; membership in `boats` IS the state
+## (`boat-and-landing`, 4.2).
+func boat_busy(boat: int) -> bool:
+	for raw in boats:
+		var bo: Dictionary = raw
+		if int(bo["boat"]) == boat:
+			return true
 	return false
 
 
-## Sends the loaded boat to dock `dock_index`. False and **nothing happens at all** when the boat is
-## empty, the dock does not exist, or every berth is still at sea — the click is simply refused.
-##
-## The berth frees `2 * Rules.CROSSING` after this call, measured from the launch and not from the
-## unload: a boat that has to wait at a crowded dock does not also hold its berth hostage.
-func launch(dock_index: int) -> bool:
-	if grid == null or pending.is_empty():
+## Sends `boat` — sitting loaded at whichever harbour `boat_at[boat]` names — to `tile`. False and
+## **nothing happens at all** when the boat index is out of range, the boat is empty, the boat is
+## already at sea, or `tile` is not a coast that boat's OWN harbour can reach
+## (`grid.can_land_at(boat_at[boat], tile)` — the one predicate the drag overlay and this call both
+## answer to, so the screen can never disagree with the rule).
+func launch(boat: int, tile: int) -> bool:
+	if grid == null or boat < 0 or boat >= Rules.boat_count():
 		return false
-	if dock_index < 0 or dock_index >= grid.dock_tiles.size():
+	if boat_busy(boat):
 		return false
-	var berth := -1
-	for b in berth_free_in.size():
-		if berth_free_in[b] <= Rules.EPS:
-			berth = b
-			break
-	if berth == -1:
+	var cargo: PackedInt32Array = pending[boat]
+	if cargo.is_empty():
+		return false
+	var harbour_idx := int(boat_at[boat])
+	if not grid.can_land_at(harbour_idx, tile):
 		return false
 
-	var dock := int(grid.dock_tiles[dock_index])
-	# The boat sails from the border water nearest the dock, never from a fixed port tile. A single
-	# port sends boats across 58-77% dry land on all three of these islands, and it also puts the
-	# boat where no coastal enemy can ever reach it — the first slice plan measured both.
-	var from: Vector2 = _dock_origin[dock_index]
+	var from: Vector2 = _point_of_tile(int(grid.harbour_tiles[harbour_idx]))
+	var to: Vector2 = _point_of_tile(tile)
 	var carried := []
-	for raw in pending:
+	for raw in cargo:
 		var i := int(raw)
 		soldier_state[i] = SoldierState.TRANSIT
 		soldier_pos[i] = from
 		carried.append(i)
-	pending = PackedInt32Array()
-	berth_free_in[berth] = 2.0 * Rules.CROSSING
+	pending[boat] = PackedInt32Array()
 	boats.append({
-		"soldiers": carried,
-		"dock": dock,
-		"dock_index": dock_index,
-		"berth": berth,
-		"t": 0.0,
+		"boat": boat,
+		"phase": Phase.OUTBOUND,
+		"speed": Rules.boat_speed_of(boat),
 		"from": from,
-		"to": _point_of_tile(dock),
+		"to": to,
+		"dist": maxf(from.distance_to(to), Rules.EPS),
+		"t": 0.0,
+		# `pos` is also set here, not only by the first `_phase_boats` call — the view reads
+		# `boat["pos"]` on layer 6 and nothing steps between `launch` and the first `_draw()` unless
+		# the caller does so on purpose (a net proving the drag overlay before the first frame, say).
 		"pos": from,
+		"soldiers": carried,
+		"target": tile,
+		"home": -1,
 	})
 	return true
 
@@ -329,14 +373,15 @@ func time_left() -> float:
 	return maxf(0.0, time_limit - elapsed)
 
 
-func dock_count() -> int:
-	return 0 if grid == null else grid.dock_tiles.size()
+## Docks are gone; every harbour lookup goes through `grid` (`boat-and-landing`, 4.4's call table).
+func harbour_count() -> int:
+	return 0 if grid == null else grid.harbour_tiles.size()
 
 
-func dock_tile(dock_index: int) -> int:
-	if grid == null or dock_index < 0 or dock_index >= grid.dock_tiles.size():
+func harbour_tile(h: int) -> int:
+	if grid == null or h < 0 or h >= grid.harbour_tiles.size():
 		return -1
-	return int(grid.dock_tiles[dock_index])
+	return int(grid.harbour_tiles[h])
 
 
 ## Soldiers standing on the island right now. The view draws these and nothing else on the ground.
@@ -344,6 +389,18 @@ func ashore_ids() -> Array:
 	var out := []
 	for i in soldier_state.size():
 		if soldier_state[i] == SoldierState.ASHORE:
+			out.append(i)
+	return out
+
+
+## Soldiers aboard a boat at sea right now — `boat-and-landing` stage 5, P4: these are `is_hittable`
+## and share their boat's `soldier_pos`, so a crow can already hit one and the tracer already flies
+## to it. This is the read the view needs to finally draw them there instead of leaving the hit with
+## nothing on screen to land on.
+func transit_ids() -> Array:
+	var out := []
+	for i in soldier_state.size():
+		if soldier_state[i] == SoldierState.TRANSIT:
 			out.append(i)
 	return out
 
@@ -361,30 +418,51 @@ func is_hittable(i: int) -> bool:
 
 # --- phases --------------------------------------------------------------------------------------
 
-## Berth timers and boat crossings. Soldiers aboard are dragged along so an enemy on the coast can
-## target them where the boat actually is.
+## Boat crossings, both legs. Soldiers aboard an OUTBOUND boat are dragged along with it so an enemy
+## on the coast can target them where the boat actually is; a RETURNING boat carries nobody, so the
+## loop below is a no-op for it and only its own `pos` moves — which is what P6 (the return leg drawn
+## empty) reads off `pos` and `soldiers.is_empty()`.
 func _phase_boats(dt: float) -> void:
-	for b in berth_free_in.size():
-		if berth_free_in[b] > 0.0:
-			berth_free_in[b] = maxf(0.0, berth_free_in[b] - dt)
 	for raw in boats:
 		var boat: Dictionary = raw
 		boat["t"] = float(boat["t"]) + dt
-		var f := clampf(float(boat["t"]) / Rules.CROSSING, 0.0, 1.0)
+		var dist := float(boat["dist"])
+		var f := clampf(float(boat["t"]) * float(boat["speed"]) / dist, 0.0, 1.0)
 		var here: Vector2 = Vector2(boat["from"]).lerp(Vector2(boat["to"]), f)
 		boat["pos"] = here
 		for sid in boat["soldiers"]:
 			soldier_pos[int(sid)] = here
 
 
-## Boats that have finished the crossing put their cargo ashore. **If there are fewer free tiles
-## than soldiers aboard the whole boat waits** — landing part of a load would silently reorder the
-## deployment the player chose, and the waiting boat is the visible signal that the shore is full.
+## Boats that have finished a leg act on it. **OUTBOUND** tries to unload — if there are fewer free
+## tiles than soldiers aboard the whole boat waits (landing part of a load would silently reorder the
+## deployment the player chose), and only on success does it turn RETURNING and sail to
+## `grid.home_harbour_for(target)` — the harbour nearest the landing among the ones that can still see
+## it, never simply the nearest, or a beachhead behind a headland strands itself (`boat-and-landing`,
+## 4.3). **RETURNING** leaves `boats` on arrival and hands the harbour back to `boat_at`, which is the
+## whole of what makes a boat loadable and draggable again.
 func _phase_landings() -> void:
 	var i := boats.size() - 1
 	while i >= 0:
 		var boat: Dictionary = boats[i]
-		if float(boat["t"]) + Rules.EPS >= Rules.CROSSING and _try_unload(boat):
+		var arrived := float(boat["t"]) * float(boat["speed"]) + Rules.EPS >= float(boat["dist"])
+		if not arrived:
+			i -= 1
+			continue
+		if int(boat["phase"]) == Phase.OUTBOUND:
+			if _try_unload(boat):
+				var target := int(boat["target"])
+				var home := grid.home_harbour_for(target)
+				boat["phase"] = Phase.RETURNING
+				boat["soldiers"] = []
+				boat["home"] = home
+				boat["from"] = _point_of_tile(target)
+				boat["to"] = _point_of_tile(int(grid.harbour_tiles[home]))
+				boat["dist"] = maxf(Vector2(boat["from"]).distance_to(Vector2(boat["to"])), Rules.EPS)
+				boat["t"] = 0.0
+				boats[i] = boat
+		else:
+			boat_at[int(boat["boat"])] = int(boat["home"])
 			boats.remove_at(i)
 		i -= 1
 
@@ -393,7 +471,7 @@ func _try_unload(boat: Dictionary) -> bool:
 	var carried: Array = boat["soldiers"]
 	if carried.is_empty():
 		return true
-	var spots := _free_tiles_from(int(boat["dock"]), carried.size())
+	var spots := _free_tiles_from(int(boat["target"]), carried.size())
 	if spots.size() < carried.size():
 		return false
 	var claimed := grid.reserved
@@ -406,10 +484,10 @@ func _try_unload(boat: Dictionary) -> bool:
 		_soldier_goal[sid] = here
 		_soldier_stale[sid] = 0
 		claimed[tile] = sid
-		# The id and nothing else. There are two tiles in scope here — the dock the boat aimed at and
-		# the spot this soldier actually stands on — and they are different tiles, so carrying "the"
-		# tile would be carrying an ambiguity. `soldier_pos[id]` was written one line up and is the
-		# answer.
+		# The id and nothing else. There are two tiles in scope here — the coast tile the boat aimed
+		# at and the spot this soldier actually stands on — and they are different tiles, so carrying
+		# "the" tile would be carrying an ambiguity. `soldier_pos[id]` was written one line up and is
+		# the answer.
 		events.append({"kind": Event.LAND, "id": sid})
 	grid.reserved = claimed
 	return true
@@ -832,22 +910,22 @@ func _tile_of(pos: Vector2) -> int:
 	return ty * grid.w + tx
 
 
-## Free tiles nearest `dock_tile`, breadth-first, in visit order — so the dock itself comes first
-## when it is free and the load lands in the order it boarded.
+## Free tiles nearest `target_tile`, breadth-first, in visit order — so the landing tile itself comes
+## first when it is free and the load lands in the order it boarded.
 ##
 ## The search WALKS OVER reserved tiles and only COLLECTS unreserved ones. A search that refused to
 ## cross an occupied tile would be sealed in by the first soldier to land, and the boat behind it
-## would wait out the island at a dock with an empty beach two tiles away.
-func _free_tiles_from(dock_tile: int, wanted: int) -> PackedInt32Array:
+## would wait out the island at a coast with an empty beach two tiles away.
+func _free_tiles_from(target_tile: int, wanted: int) -> PackedInt32Array:
 	var out := PackedInt32Array()
 	var n := grid.w * grid.h
-	if n == 0 or dock_tile < 0 or dock_tile >= n or wanted <= 0:
+	if n == 0 or target_tile < 0 or target_tile >= n or wanted <= 0:
 		return out
 	var seen := PackedByteArray()
 	seen.resize(n)
 	var queue := PackedInt32Array()
-	queue.append(dock_tile)
-	seen[dock_tile] = 1
+	queue.append(target_tile)
+	seen[target_tile] = 1
 	var head := 0
 	while head < queue.size() and out.size() < wanted:
 		var t := queue[head]
@@ -869,28 +947,6 @@ func _free_tiles_from(dock_tile: int, wanted: int) -> PackedInt32Array:
 	return out
 
 
-## The border water tile nearest a dock, ties going to the lowest tile index so the same dock always
-## produces the same boat.
-func _border_water_near(dock_tile: int) -> Vector2:
-	var target := _point_of_tile(dock_tile)
-	var best := -1
-	var best_d := 0.0
-	for y in grid.h:
-		for x in grid.w:
-			if x != 0 and y != 0 and x != grid.w - 1 and y != grid.h - 1:
-				continue
-			var t := y * grid.w + x
-			if grid.passable[t] != 0:
-				continue
-			var d: float = Vector2(x, y).distance_squared_to(target)
-			if best == -1 or d < best_d - Rules.EPS:
-				best = t
-				best_d = d
-	# An island with no water on its border cannot be reached by boat at all; sailing from the dock
-	# itself is the only answer that still lands the force instead of hanging the island.
-	return target if best == -1 else _point_of_tile(best)
-
-
 # --- bookkeeping ---------------------------------------------------------------------------------
 
 func _drop_from_boats(sid: int) -> void:
@@ -903,8 +959,12 @@ func _drop_from_boats(sid: int) -> void:
 
 
 ## A LOADED soldier cannot be attacked, so this only ever fires if a future rule lets one die at the
-## quayside. It is one line and it keeps a dead id out of the next launch.
+## quayside. It is one line per boat and it keeps a dead id out of the next launch.
 func _drop_from_pending(sid: int) -> void:
-	var at := pending.find(sid)
-	if at != -1:
-		pending.remove_at(at)
+	for b in pending.size():
+		var here: PackedInt32Array = pending[b]
+		var at := here.find(sid)
+		if at != -1:
+			here.remove_at(at)
+			pending[b] = here
+			return
