@@ -146,6 +146,28 @@ never that it was used. **See「No fake nets」— those entries were all earned
   **Undecided 18**; 15 and 16 are closed, and 17 (2D or 3D) **was not raised this time, which is not
   the same as closed**
 
+**2026-08-19, after playing the title, the map and the plan-then-watch part loop**:
+first ***"뭐 어떻게 동작시키는지 전혀모르겠는데?"*** and ***"조작감이 너무 ㅈ같음"***, then — after the map's
+readability pass shipped — ***"싸움이 좀 아직은 별로네? 일단 다음 세션에서 꽉 잡아봐야겠다"***.
+
+⚠ **Three separate verdicts and they must not be collapsed.**
+
+- **The title and the map were NOT complained about.** The user looked at both, named two defects
+  (reachable nodes indistinguishable at rest, glyphs too small), and after those were fixed said nothing
+  further about them. **That is the closest thing to a pass this repo has recorded**, and it is recorded
+  in `title-and-map`'s own header rather than here
+- **「조작감이 ㅈ같음」 is about the PART loop and it is measurable**, not a taste judgement: the drag source
+  is a ~10px stack in open water, the droppable coast is alpha 0.18 over dark green, and the probe counts
+  **10–13 separate precision drags an island**. ⇒ **The hand is aiming, not deciding.** A rule can answer
+  this — what ONE drag places — and a new system cannot
+- **「싸움이 아직은 별로네」 is the fight itself**, and it is NEW. Every earlier verdict was about the frame
+  around the fight (배가 곁다리 · 침공하는 느낌이 없다 · 애매하다). **This one is about what happens after the
+  start button**, which is the half nobody has attacked yet. The user parked it themselves for the next
+  session — **parked, not answered**
+
+⚠ **「애매하다」 did not come back this time. That is not the same as closed** — the same shape as
+「배가 곁다리」 in the round before, and it was only really gone once it stayed gone twice.
+
 ⇒ **Read *"제일 평범하네"* against the two verdicts before it** — eight months of *not one fun moment*,
 then *"그냥 재미가 없다"*. **"Ordinary" is the highest mark anything in this repo has been given, and it
 is still not "fun".** That is the distance left.

@@ -7,10 +7,20 @@ camera pulled back to `ZOOM_MIN` 0.45, and the enemy counts raised to **8 · 12 
 `TARGET_LINE_MAX_COUNT` at 14. The 1/2 keys are deleted. The round is **12 nets / 1328 checks**, and
 `tools/probe/run_run.gd` plans-commits-watches. ⚠ **Not built, on purpose**: any brake on the boats
 (「infinite is free」 at the top) and any mother ship (undecided 14).
-**Accepted**: the ten rules under "What is decided" were **said by the user directly, 2026-08-18, and all
-ten carry a quotation.** Nothing else is confirmed — **nobody has seen a screen or checked a number,
-`unseen`.** ⚠ **Being built is not being accepted**: every row of the plan's acceptance table that is
-scored 「user only」 is still open, including the final one (the user does not say 「애매하다」 again).
+**Accepted**: ⚠ **No. The user played it on 2026-08-19 and it failed twice.**
+① They could not find the controls at all — *"뭐 어떻게 동작시키는지 전혀모르겠는데?"* (*"I have no idea
+how to even operate this"*) and *"조작감이 너무 ㅈ같음"* (*"the controls feel like shit"*).
+⇒ **The first acceptance row — 「계획이 커밋 전에 읽힌다」, the plan reads before the commit — failed on
+contact with a human**, and by this doc's own 「two reference games」 section that row is not decoration
+but the condition on which the whole design stands. Measured: the drag source is a ~10px stack in open
+water, the droppable coast is alpha 0.18 over dark green, and the probe counts **10–13 separate
+precision drags per island**.
+② Then *"싸움이 좀 아직은 별로네? 일단 다음 세션에서 꽉 잡아봐야겠다"* (*"the fighting still isn't good;
+I'll get a proper grip on it next session"*) — **the first verdict on what happens AFTER the start button.**
+Every complaint before this one was about the frame around the fight. **The user parked it themselves;
+parked is not answered.**
+The ten 「decided」 lines below are still the user's own words from 2026-08-18 and each carries its quote.
+Nothing else is confirmed.
 
 **This is the English counterpart of `plan-then-watch-ko.md`. The two must be edited together or they will
 diverge** — a fact corrected in one and not the other is worse than no English file at all.
